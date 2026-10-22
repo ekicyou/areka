@@ -2,19 +2,19 @@
 
 ## Overview
 
-**Purpose**: 本 spec は、ゴースト「窓際のぱすたさん」（以下ぱすた）を SSP 2.9.18 で測った基準と、areka で最初に動かした結果を同じ物差しで並べ、崩れた所を 1 件ずつ原因と扱いつきで残す。持ち主の居ない小さい崩れ（α が小さい画素の当たり）は本 spec の中で直し、兄弟の spec の着地の後に「SSP と同じレベル」を確かめ直せる実機の手順を、spec のフォルダの外に残す。
+**Purpose**: 本 spec は、ゴースト「窓際のぱすたさん」（以下ぱすた）を SSP 2.9.18 で測った基準と、areka で最初に動かした結果を同じ物差しで並べ、崩れた所を 1 件ずつ原因と扱いつきで残す。持ち主の居ない小さい崩れは本 spec の中で直し、兄弟の spec の着地の後に「SSP と同じレベル」を確かめ直せる実機の手順を、spec のフォルダの外に残す。
 
 **Users**: areka の開発者と、実装・走行を受け持つ AI。AI は測り・走行・撮影・記録を行い、開発者は目視の判定と、SSP への書庫の入れ込み・読み直し・SendInput の許可を受け持つ。
 
-**Impact**: コードの変更は小さい。必ず足すのは、取り寄せたぱすたの書庫の中身を見る自動テスト 1 本と、マウスの送り込みと画面の撮影をする道具 1 本だけ。α の当たりのしきい値は、測りの結果が今と違うときだけ変える（変えないときはコードの変更 0）。残りは文書（測りの記録・検証の記録・手順）と網羅台帳の行の直し。
+**Impact**: コードの変更は小さい。必ず足すのは、取り寄せたぱすたの書庫の中身を見る自動テスト 1 本と、マウスの送り込みと画面の撮影をする道具 1 本だけ。α の当たりのしきい値は変えない（α が 0.5 以上の画素だけを当たりにする今の決まりを保ち、SSP には合わせない・コードの変更 0）。残りは文書（測りの記録・検証の記録・手順）と網羅台帳の行の直し。
 
 ### Goals
 
-- SSP 2.9.18 で α の当たりの線と、ぱすたの全体の通しの基準を、根拠つきで残す（1.1〜1.9）。
+- SSP 2.9.18 で、ぱすたの全体の通しの基準を根拠つきで残す（1.1〜1.9）。
 - 取り寄せた書庫が縦書きのバルーンをゴーストのフォルダの直下に入れることを、自動テストで見張る（2.1〜2.7）。
 - 7 段の実機の最初の走行を回し、段ごとに「同じ」「違う」「回せなかった」を残す（3.1〜3.10・4.1〜4.9）。
 - 崩れた所を全部、症状・根拠・原因・扱いで残し、引き取る spec か方針の裁定を必ずつける（5.1〜5.8）。
-- α の当たりを SSP の線に合わせる（線が 1 つに定まるとき・7.1〜7.7）。
+- α の当たりと描き方の今の決まりを保ち、ukadoc が黙る所の areka の決めとして記録と台帳に残す（7.1〜7.5・9.3）。
 - 何度でも回せる手順を `doc/` に置き、v0.1.0 の版の門から辿れるようにする（8.1〜8.7）。
 - 網羅台帳のぱすたが使う行を、記録と食い違わない形にする（9.1〜9.4）。
 
@@ -22,7 +22,8 @@
 
 - 兄弟の spec が引き取る崩れの直し（Out of Boundary の一覧）。
 - 「SSP と同じレベル」の最後の確かめ（兄弟の着地の後・本 spec の外）。
-- α の描き方の変更（areka は α が 1 以上の画素をすべて描く。今のまま・7.6）。
+- α の描き方の変更（areka は α が 1 以上の画素をすべて描く。今のまま・7.2）。
+- α の当たりのしきい値の変更と、SSP での α の当たりの線の測り（7.1・1.2）。
 - 手順を自動の試験（`real-run-kit` の試験）にすること。7 段の多くは画面の操作と目視が要り、道具にしても人の手が残るため。
 - ぱすたの辞書・書庫の書き換え、検体の登記の変更、`C:\home\maz\git\ghost_dev` への書き込み。
 
@@ -30,11 +31,11 @@
 
 ### This Spec Owns
 
-- SSP 2.9.18 での α の項目の測りと全体の通しの測り、その記録 `ssp-measurement.md`（本 spec のフォルダ）。
+- SSP 2.9.18 での全体の通しの測りと、その記録 `ssp-measurement.md`（本 spec のフォルダ）。
 - 取り寄せたぱすたの書庫の中身の自動テスト `crates/sample-ghost-kit/tests/pasta_inner_balloon_test.rs`（判定 1 つ・本物の書庫に当てる 1 本・固定入力の較正 1 本）。
 - 実機の走行と測りで使う、マウスの送り込みと画面の撮影の道具 `tools/mouse-input.ps1`。
 - 実機の最初の走行と、その記録 `verification.md`（本 spec のフォルダ）。崩れた所の表と申し送りの記録を含む。
-- α が小さい画素の当たりのしきい値（測りが今と違い、SSP の線が 1 つに定まるときだけ）。値は `alpha_mask.rs` の 1 か所に置き、`hit_test/mod.rs` はそこから作る。
+- α が小さい画素の当たりの決まり（α が 0.5 以上だけが当たる・変更 0）を、網羅台帳の行と `doc/COMPAT_ARCHITECTURE.md` §8 に書くこと（9.3）。
 - 何度でも回せる実機の手順 `doc/pasta-real-run.md` と、版の段からその手順への 1 行の道しるべ。
 - 網羅台帳の、ぱすたが使う項目の行のうち記録と食い違うもの。
 - 走行で見つかった、引き取る spec の居ない areka 側の小さい崩れ（1 タスクで閉じるもの）の根本の直し（6.1）。
@@ -54,7 +55,7 @@
   - 完了 `zorder-scope-inversion`: バルーン込みの重なりの指定（本 spec は着地した結果として確かめるだけ）
 - 範囲の外の機能: `balloon.syncscale`・`OnShellScaling`／`OnBalloonScaling`・スクロールの矢印・`communicatebox`・`\![reload,shiori]`・禁則と縦中横・SSP の作りの癖の写し・ぱすたのデバッグの待受（127.0.0.1:9276）のぶつかりの直し。
 - 検体の登記の行・登記の数（9）・取り寄せの段 `tools/sample-fetch.ps1`・窓口 `crates/sample-ghost-kit/src/`（変更 0）。
-- α の描き方（`areka-emo-atlas` の正規化・合成。変更 0）。
+- α の描き方（`areka-emo-atlas` の正規化・合成。変更 0）と、当たりのしきい値（`alpha_mask.rs`・`hit_test/mod.rs`。変更 0）。
 - 網羅台帳の、ぱすたが使わない項目の行（変更 0）。
 
 ### Allowed Dependencies
@@ -63,12 +64,11 @@
 - 取り寄せの段 `tools/sample-fetch.ps1`・検体のパスを出すコマンド `nar-sample-path`・`tools/sync-i686-helper.ps1`・areka の起動オプション `--ghost`（絶対パス）。
 - 机 `areka-impl-watch`（排他テストの机・`doc/impl-watch.md`）。
 - SSP の MCP（`get_property`・`raise_event`・`sakurascript`・`dump_surface`・`get_log`・`reload`）と areka の MCP（`get_status`・`get_active_ghost_list`・`raise_event`・`dump_surface`・`dump_balloon`・`get_log`）。どちらもこのセッションの MCP から呼ぶ。
-- Windows の user32（`SetProcessDpiAwarenessContext`・`SetCursorPos`・`GetCursorPos`・`SendInput`）と .NET の画面の写し（`System.Drawing.Graphics.CopyFromScreen`）・WIC の画像の読み（`System.Windows.Media.Imaging.BitmapDecoder`）。新しいクレートや外の道具は足さない。
+- Windows の user32（`SetProcessDpiAwarenessContext`・`SetCursorPos`・`GetCursorPos`・`SendInput`）と .NET の画面の写し（`System.Drawing.Graphics.CopyFromScreen`）。新しいクレートや外の道具は足さない。
 - 依存の向き: 記録と手順 → 道具とテスト → 既存の部品。既存の部品から本 spec の文書や道具を読むことはしない。
 
 ### Revalidation Triggers
 
-- α のしきい値を変えたとき: すべてのゴーストのシェルとバルーンの当たりが変わる。`alpha_mask.rs`・`hit_test/mod.rs` を触る `hit-id-pass`・`compose-f16-precision`・`wintf-d2d-composite-rules`（v0.2.0）・`balloon-element-order` は、着手のときに新しい値を前提に読み直す。
 - 兄弟の spec が着地したとき: 手順の段ごとの「引き取る spec」の欄の段が変わるはず。最後の確かめで回し直す。
 - 検体の登記の行・窓口の読み口・取り寄せの段の形が変わったとき: 中身の自動テストと手順の最初の段を読み直す。
 - ぱすたの書庫の中身の形が変わったとき（縦書きのバルーンの置き場・名前）: 中身の自動テストが赤になる。登記の持ち主と「ぱすた開発」へ確かめる。
@@ -88,8 +88,7 @@
 graph TB
     Fetch[sample fetch] --> Nar[fetched pasta nar]
     Nar --> ContentTest[inner balloon test]
-    GhostDev[ghost_dev alpha8 nar read only] --> SspMeasure[SSP measurement]
-    SspMcp[SSP MCP] --> SspMeasure
+    SspMcp[SSP MCP] --> SspMeasure[SSP measurement]
     MouseInput[mouse input tool] --> SspMeasure
     SspMeasure --> MeasureRecord[ssp-measurement record]
     Nar --> FirstRun[first real run]
@@ -97,8 +96,6 @@ graph TB
     MouseInput --> FirstRun
     MeasureRecord --> FirstRun
     FirstRun --> VerifyRecord[verification record]
-    MeasureRecord --> AlphaDecision[alpha threshold decision]
-    AlphaDecision --> AlphaFix[wintf hit threshold]
     VerifyRecord --> Triage[breakage triage]
     Triage --> SiblingBriefs[sibling briefs]
     Triage --> InSpecFix[small in spec fixes]
@@ -109,8 +106,8 @@ graph TB
 ```
 
 **Architecture Integration**:
-- 選んだ形: 既存の部品に「足すだけ」を土台にし、ずれやすい所（しきい値の 3 か所）だけを 1 つの値に集める（research.md の案 C）。
-- 境目: 測り（SSP 側）と走行（areka 側）は同じ時間に回さない。記録は spec のフォルダ、何度でも回す手順は `doc/`。コードの変更は `sample-ghost-kit/tests/`（新しいファイル）・`tools/`（新しいファイル）・しきい値の 3 か所（条件つき）だけ。
+- 選んだ形: 既存の部品に「足すだけ」（research.md の案 A）。α の当たりのしきい値は変えないので、3 か所を 1 つに集める案 B・C の手は要らなくなった。
+- 境目: 測り（SSP 側）と走行（areka 側）は同じ時間に回さない。記録は spec のフォルダ、何度でも回す手順は `doc/`。コードの変更は `sample-ghost-kit/tests/`（新しいファイル）・`tools/`（新しいファイル）だけ。
 - 守る既存の形: 検体の窓口の読み口・検体のパスの綴りの番人・えみりの記録の型・机の決まり・`target\` の下だけの根。
 - 新しい部品の理由: 中身のテストは要件 2 そのもの。`mouse-input.ps1` は、毎回のシェルで同じ DPI の扱いと自己確かめをもって SendInput を送るため（ツールのシェルは呼び出しごとに状態を持たない）。
 - ステアリング: ukadoc が黙る所は SSP を二次参照して areka が決め、記録に残す（沈黙ルール）。失敗はゴーストの台詞で伝え、記録の無い失敗を作らない。
@@ -120,8 +117,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | テスト | Rust（ワークスペースの版）・`sample-ghost-kit`・`areka-nar` | 書庫の中身の自動テスト | 新しい依存なし |
-| 当たり | `wintf`（`alpha_mask.rs`・`hit_test/mod.rs`） | しきい値の値（条件つき） | 新しい依存なし |
-| 道具 | PowerShell 7（`pwsh`）・user32・`System.Drawing`・WIC | マウスの送り込み・画面の撮影・α の数え | `tools/encoding-check.ps1` の静的な決まりに従う（端末へ出す文は ASCII だけ） |
+| 道具 | PowerShell 7（`pwsh`）・user32・`System.Drawing` | マウスの送り込み・画面の撮影 | `tools/encoding-check.ps1` の静的な決まりに従う（端末へ出す文は ASCII だけ） |
 | 実機 | debug 版 `areka.exe`・i686 の `shiori-host32-helper.exe`・SSP 2.9.18 | 走行と測り | 根・書庫・一時のフォルダはワークツリーの `target\` の下だけ |
 | 文書 | Markdown・TOML（網羅台帳） | 記録・手順・台帳 | 台帳は `cargo test -p ukadoc-survey` と `report` で検査と作り直し |
 
@@ -137,7 +133,7 @@ tools/
 doc/
 └── pasta-real-run.md               # 新: 何度でも回せる実機の手順（条件・7 段・SSP の基準・引き取る spec）
 .kiro/specs/areka-P0-pasta-in-windows-verification/
-├── ssp-measurement.md              # 新: SSP 2.9.18 の測りの記録（α の項目と全体の通し）
+├── ssp-measurement.md              # 新: SSP 2.9.18 の測りの記録（全体の通し）
 └── verification.md                 # 新: 検証の記録（同定・構成・走行・崩れた所の表・申し送り・台帳の突き合わせ）
 ```
 
@@ -147,15 +143,10 @@ doc/
 - `doc/ukadoc-coverage/ledger/*.toml` — ぱすたが使う項目の行のうち、検証の記録と食い違う行の `owner`・`status`・`note`（9.1・9.2）。直した後に `cargo run -p ukadoc-survey -- report` と `report-summary` で `doc/ukadoc-coverage/report/` を作り直す（手で直さない）。
 - 兄弟の spec の `brief.md`（`.kiro/specs/<兄弟>/brief.md`）— 末尾に「本 spec からの申し送り」の節を足す（5.5・1.4）。兄弟が完了済みなら書かず、`/kiro-discovery` で起票する。
 
-条件つき（α のしきい値を変えるときだけ・7.2）:
+- `doc/ukadoc-coverage/ledger/assets.toml` — シェルの `seriko.use_self_alpha` の行の `note` に、当たりの決まり（α が 0.5 以上の画素だけが当たる・SSP には合わせない）と裁定（2026-10-22 開発者）を足す（9.3）。
+- `doc/COMPAT_ARCHITECTURE.md` — §8「沈黙ルール対応表」に「α が小さい画素の当たり」の行を 1 つ足す（ukadoc が黙る所の areka の決め・SSP は α が 0 でなければ当たる見込みで、areka は合わせない）。
 
-- `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs` — 私有の `ALPHA_THRESHOLD: u8 = 128` を `pub(crate) const HIT_ALPHA_MIN: u8 = <測った値>` に替える。中のテストのうち 128 を境に置くもの（α < 128／≧ 128・`test_threshold_boundary_128`）は古くなるので、境に依らない形（α 0 は当たらない・α 255 は当たる）に直すか、境のテストを下の新しいファイルへ移す。
-- `crates/wintf/src/ecs/widget/bitmap_source/mod.rs` — `pub(crate) use alpha_mask::HIT_ALPHA_MIN;` を足す。
-- `crates/wintf/src/ecs/layout/hit_test/mod.rs` — 2 か所の局所の `ALPHA_THRESHOLD: f32 = 128.0 / 255.0` を消し、モジュールの定数 `HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0` 1 つを使う。
-- `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask_threshold_tests.rs` — 新: 画素の α の境のテスト（`alpha_mask.rs` から `#[path]` で宣言）。
-- `crates/wintf/src/ecs/layout/hit_test/tests_ex/opacity.rs` — 既存の、不透明度 × 塗りの α の境を 128/255 で固定するテスト（不透明度 0.502 は当たる・0.501 と 0.4 は当たらない）を、新しい値 `T` の前後に書き直す。新しいテストのファイルは作らない。
-- `doc/ukadoc-coverage/ledger/assets.toml` — シェルの `seriko.use_self_alpha` の行の `note` に、当たりの決まり（α ≧ 新しい値）と根拠（測りの記録）を足す（9.3）。
-- `doc/COMPAT_ARCHITECTURE.md` — §8「沈黙ルール対応表」に「α が小さい画素の当たり」の行を 1 つ足す（ukadoc が黙る所の areka の決め）。
+α の当たりのしきい値（`alpha_mask.rs`・`hit_test/mod.rs`）は触らない（7.1）。
 
 条件つき（走行で、引き取る spec の居ない小さい崩れが見つかったとき・6.1）:
 
@@ -170,10 +161,10 @@ sequenceDiagram
     participant SSP as SSP 2.9.18
     participant Areka as areka debug
     participant Rec as Records
-    Dev->>SSP: install alpha8 nar and boot pasta
+    Dev->>SSP: boot latest pasta
     AI->>SSP: MCP get_property raise_event dump_surface
-    AI->>SSP: mouse-input sweep with permission
-    AI->>Rec: ssp-measurement alpha line and baseline
+    AI->>SSP: seven stages with mouse-input and permission
+    AI->>Rec: ssp-measurement baseline
     Dev->>SSP: close pasta in SSP
     AI->>Areka: start with ghost absolute path
     AI->>Areka: seven stages with MCP and mouse-input
@@ -182,7 +173,7 @@ sequenceDiagram
     AI->>Rec: forward to sibling briefs
 ```
 
-- 順の決まり: 測り（1 章）→ 中身のテスト（2 章・いつでも）→ 最初の走行（4 章）→ α の直し（7 章・測りの後）→ 直した段の回し直し（8.5）→ 台帳（9 章）→ 手順の清書（8 章）。α の直しは測りの後でなければ始めない（7.1）。
+- 順の決まり: 測り（1 章）→ 中身のテスト（2 章・いつでも）→ 最初の走行（4 章）→ 直した段の回し直し（8.5）→ 台帳と α の決まりの書き込み（9 章・7.5）→ 手順の清書（8 章）。
 - ぱすたを起こすのは、SSP か areka（1 つのプロセス）のどちらか 1 つだけ（3.7）。SSP の測りが終わったら、開発者が SSP のぱすたを閉じてから areka を起こす。
 - 測りも走行も画面を操作するので、排他テストの机を取ってから始め、区切りが済んだらすぐ返す（3.6）。
 
@@ -191,7 +182,7 @@ sequenceDiagram
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
 | 1.1 | SSP の MCP で測る・ゴーストの名前を渡す | SSP の測り | SSP の MCP | 測り |
-| 1.2 | α の 3 帯の当たり・alpha8 で測る・最新の書庫の α の数 | SSP の測り・α の数え | `mouse-input.ps1`・α の数えの命令 | 測り |
+| 1.2 | α の当たりの線と描き方は測らない | SSP の測り | — | 測り |
 | 1.3 | 全体の通しの基準（台本の原文と面） | SSP の測り | `raise_event`・`dump_surface`・`shot` | 測り |
 | 1.4 | 兄弟の問いの答えを申し送る | SSP の測り・申し送り | 兄弟の brief | 測り |
 | 1.5 | 読み直しは毎回許可 | SSP の測り | `reload` | 測り |
@@ -241,13 +232,11 @@ sequenceDiagram
 | 6.6 | 完了 spec の要件を黙って変えない | 本 spec の直し | 直す線 | — |
 | 6.7 | ぱすたを書き換えない | 本 spec の直し | — | — |
 | 6.8 | 記録の無い失敗を作らない・台詞で伝える | 本 spec の直し | 直す線 | — |
-| 7.1 | 測りの後に始める | α の当たり | 順の決まり | 測り |
-| 7.2 | 線が 1 つなら合わせ、定まらなければ仰ぐ | α の当たり | 線の決め方 | — |
-| 7.3 | 同じなら変えない | α の当たり | 線の決め方 | — |
-| 7.4 | 画素の α と不透明度の α で同じ値 | α の当たり | `HIT_ALPHA_MIN` | — |
-| 7.5 | 境のすぐ下と上のテスト | α の当たり | 境のテスト 2 本 | — |
-| 7.6 | α はすべて描く（変更 0） | α の当たり | — | — |
-| 7.7 | 記録に書く | 検証の記録 | α の節 | — |
+| 7.1 | α が 0.5 以上だけが当たる決まりを保つ（変更 0） | α の決まり | 既存の `alpha_mask.rs`・`hit_test/mod.rs` | — |
+| 7.2 | α はすべて描く（変更 0） | α の決まり | — | — |
+| 7.3 | 薄い所の当たりの違いは「方針で受けない」 | 検証の記録 | 崩れた所の表 | 走行 |
+| 7.4 | SSP の当たりは見立てとして書く | 検証の記録 | α の節 | — |
+| 7.5 | 決まりと裁定を記録に書く | 検証の記録 | α の節 | — |
 | 8.1 | 記録を読まずに回せる | 手順 | 手順の形 | — |
 | 8.2 | 絶対パスの命令 | 手順 | 起動の命令 | — |
 | 8.3 | 段ごとに基準と引き取る spec | 手順 | 段の表 | — |
@@ -257,7 +246,7 @@ sequenceDiagram
 | 8.7 | spec の外に置き、版の門から辿れる | 手順・道しるべ | `roadmap.md` の 1 行 | — |
 | 9.1 | 食い違う行を 0 件に | 台帳の追随 | 突き合わせの表 | — |
 | 9.2 | 引き取る spec の名前を書く | 台帳の追随 | `owner` 欄 | — |
-| 9.3 | 当たりを変えたら決まりの行に書く | 台帳の追随 | `seriko.use_self_alpha` の行 | — |
+| 9.3 | 当たりの決まりと裁定を行に書く | 台帳の追随 | `seriko.use_self_alpha` の行・COMPAT §8 | — |
 | 9.4 | 使わない行は変えない | 台帳の追随 | 突き合わせの表 | — |
 
 ## Components and Interfaces
@@ -266,12 +255,12 @@ sequenceDiagram
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | 中身のテスト | 検体のテスト | 縦書きのバルーンの置き場と `balloon/` 0 件を見張る | 2.1〜2.7 | `SampleRoot`（P0）・`NarBuilder`・`areka-nar`（P1） | Service |
 | マウスと撮影の道具 | 道具 | SendInput の操作と画面の写しを、DPI と自己確かめつきで | 1.9・3.8・4.3 | user32（P0） | Batch |
-| SSP の測り | 測り | α の線と全体の通しの基準を測る | 1.1〜1.9・3.7・7.1 | SSP の MCP（P0）・道具（P0） | Batch |
+| SSP の測り | 測り | 全体の通しの基準を測る | 1.1〜1.9・3.7 | SSP の MCP（P0）・道具（P0） | Batch |
 | 測りの記録 | 文書 | 測りの根拠を残す | 1.4・1.7・1.8 | — | State |
 | 実機の走行 | 走行 | 7 段を回し撮る | 3.1〜3.10・4.1〜4.9・8.5 | areka の MCP（P0）・道具（P0）・机（P0） | Batch |
-| 検証の記録 | 文書 | 段の結果・崩れた所・申し送り・台帳の突き合わせ | 4.2・4.5・4.7・4.8・5.1〜5.8・7.7・8.6・9.1 | — | State |
+| 検証の記録 | 文書 | 段の結果・崩れた所・申し送り・台帳の突き合わせ | 4.2・4.5・4.7・4.8・5.1〜5.8・7.3〜7.5・8.6・9.1 | — | State |
 | 仕分けと申し送り | 運用 | 崩れごとに扱いを決め、兄弟と起票へ渡す | 1.4・5.3〜5.5・5.8・6.1〜6.8 | 兄弟の brief（P1）・`/kiro-discovery`（P1） | — |
-| α の当たり | wintf の当たり | しきい値を 1 つの値に集め測った線に合わせる | 7.1〜7.7 | 測りの記録（P0） | Service |
+| α の決まり | wintf の当たり（変更 0） | α が 0.5 以上だけが当たる・すべて描く、の今の決まりを保つ | 7.1・7.2 | 既存の `wintf` | — |
 | 手順 | 文書 | 何度でも回せる形 | 8.1〜8.7 | 上の全部（P0） | Batch |
 | 台帳の追随 | 文書 | ぱすたが使う行を記録に合わせる | 9.1〜9.4 | `ukadoc-survey`（P1） | State |
 
@@ -353,39 +342,21 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 - Validation: 書いた後に 1 度、`move` を主の画面と 2 つ目の画面の点へ送り、出力の座標と `GetCursorPos` が合うことを確かめる（自己確かめが効くこと）。
 - Risks: 他のセッションの窓へ送らないよう、排他テストの机を持つ間だけ使う。
 
-#### α の数え（測りの記録の中の命令）
-
-- 道具にはしない（測りで 1 度だけ使う）。命令は `ssp-measurement.md` に書いた形で、ワークツリーの `target\pasta-verify\` の下に展開した書庫の絵を読む。
-- 読み方: `Add-Type -AssemblyName PresentationCore` の `BitmapDecoder` で PNG と WebP（動く WebP は全部のフレーム）を読み、`FormatConvertedBitmap` で Bgra32 に揃えて画素を写し、α を「0」「1〜8」「9〜127」「128〜254」「255」の 5 つに数える。絵ごとに 1 行。
-- WebP の読みが断られた絵は、「数えられなかった」として理由と一緒に記録し、開発者に知らせる（黙って飛ばさない）。
-- `pasta-in-windows-test-alpha8.nar` は ghost_dev から読むだけ。数えるときは `target\pasta-verify\alpha8\` へ写してから展開する。
-
 ### 測り
 
 #### SSP の測り（記録は `ssp-measurement.md`）
 
 | Field | Detail |
 |-------|--------|
-| Intent | SSP 2.9.18 での α の当たりの線と、7 段の通しの基準を、根拠つきで測る |
-| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 3.7, 7.1 |
+| Intent | SSP 2.9.18 での 7 段の通しの基準を、根拠つきで測る |
+| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 3.7 |
 
 **Responsibilities & Constraints**
-- 測る前に開発者へ頼むこと: alpha8 の書庫を SSP に入れて起こす・areka でぱすたを起こさない・SendInput の許可（この測りのあいだだけ）・読み直しが要るときはその都度の許可（1.5）。
-- SSP の道具には、`get_active_ghost_list` で得たぱすた（または alpha8 のゴースト）の名前を、どの呼び出しにも渡す（1.1）。
+- 測る前に開発者へ頼むこと: SSP で最新のぱすたを起こす・areka でぱすたを起こさない・SendInput の許可（この測りのあいだだけ）・読み直しが要るときはその都度の許可（1.5）。
+- SSP の道具には、`get_active_ghost_list` で得たぱすたの名前を、どの呼び出しにも渡す（1.1）。
+- α の当たりの線と描き方は測らない（1.2。areka の決まりは 7.1・7.2 で定まっている）。
 - SSP の本体・設定・SSP が保存する記録を手で書き換えない。SSP が自分で書く `data\profile\mcp_*.dat` と `ssp_shiori_log.txt` は数えない（1.6）。
 - 兄弟の問い（バルーンの見つけ方・`\1\v`・`\![*]`・`OnShellScaling`・`balloon.dontmove`）を、本 spec のために改めて測らない。通しの途中で見えた答えだけを書いて申し送る（1.4）。
-
-**SSP で「当たる」を見るやり方（決め）**
-- 当たりの印は `OnMouseMove`。ukadoc は Reference0・1 を「マウスカーソルの x 座標（ローカル座標）」「y 座標（ローカル座標）」と書く（https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseMove ）。SSP が窓の上の点と見なしたときだけ、ゴーストへこのイベントが来る。
-- 見る場所は `ghost\master\ssp_shiori_log.txt`。点ごとに、送る前の大きさ（バイト）を控え、送った後に増えた分だけを読む。
-- 手順:
-  1. 測る面を決める: α の数えで、α の帯（1〜8・9〜127・128 以上）の画素を持つ面と、その面の element の絵を選ぶ。α の値は SSP の `dump_surface` の絵から読む。返る絵が α を持たないときは、その場所に重なる element が 1 枚だけの所を選び、元の絵から読む。
-  2. 測る点を決める: 帯ごとに、まわり 5×5 の画素が同じ α の値を持つ点を選ぶ（拡大と補間で境がにじんでも、その値の当たりを測れるように）。面に現れる α の値ごとに 1 点以上（少なくとも帯ごとに 3 点）。
-  3. 座標の対応を決める（較正）: α 255 の点を 2 つ以上 `move` で撫で、来た `OnMouseMove` の Reference0・1 と画面の座標から、ローカル座標と画面の画素の対応（原点と倍率）を求める。
-  4. 測る: 点ごとに、窓の外の点へ `move` してから狙いの点へ `move` し、`OnMouseMove` が来たか（来たなら Reference0・1・3・4）を控える。ぱすたは本体の窓の奥に相方の窓（窓の枠）を重ねるので、測る窓と違う Reference3 で来たイベントは「測る窓には当たらなかった（奥へ抜けた）」と数える。点はなるべく奥に別の窓が重ならない所から選ぶ。同じ点を 2 回測り、食い違えば 3 回目で多い方を採り、食い違いも書く。
-  5. 詰める: 4 の荒い測りで「当たらなかった α の最大」と「当たった α の最小」の間に、測る絵に在る α の値が残っていれば、その値ごとに 2 と同じ選び方で点を選び、4 と同じやり方で 1 つずつ測って間を詰める（間が無くなるか、間の値が絵に無くなるまで）。
-- 線の決め方: 「当たった点の α の最小」と「当たらなかった点の α の最大」を並べる。最大 + 1 = 最小なら、SSP の線は 1 つの値（その最小の値以上で当たる）に定まる。詰め切っても間が空く（間の α の値が絵に無い）ときは「a〜b の間」と幅で記録する。幅が残る・逆転する・ゴーストや絵で違うときは「定まらない」とし、測りの結果を添えて開発者の決めを仰ぐ（7.2）。
-- 最新の書庫は当たりを測らず、α が 1〜127 の画素がどの絵にいくつあるかだけを書く（1.2）。
 
 **全体の通しの基準（1.3）**
 - ふだん SSP に入っている最新のぱすたで、Requirement 4 の 7 段を同じ順で回す。段ごとに、`raise_event` で返る台本の原文（その段で台本が出る所）・`dump_surface`・`shot` の画面を残す。起動の段は、SSP が送ったのが `OnBoot` か `OnFirstBoot` かを `ssp_shiori_log.txt` から書く（areka の走行は空の記憶で起こすので `OnFirstBoot` になる。比べるのは面・窓・バルーン・重なりと「台詞が出ること」で、台詞の文の違いは起動イベントの違いとして分けて書く）。
@@ -395,7 +366,7 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 
 ##### Batch / Job Contract
 - Trigger: 本 spec の最初のタスク。排他テストの机を取ってから。
-- Input / validation: SSP 2.9.18・alpha8 の書庫（開発者が入れる）・最新のぱすた（ふだんの SSP）。
+- Input / validation: SSP 2.9.18・最新のぱすた（ふだんの SSP）。
 - Output / destination: `ssp-measurement.md`（項目ごとに: 測った日時（日本時間）・SSP の版・書庫の同定（`.sha256` の値）・道具と引数・結果・根拠（逐語の応答か撮った面の名前）・ukadoc の URL と逐語の引用と食い違い）。
 - Idempotency & recovery: 測りは SSP の状態を変えない（読み直しは許可つきの例外）。途中で切れたら、記録の済んだ点から続ける。
 
@@ -447,14 +418,12 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 | Field | Detail |
 |-------|--------|
 | Intent | 測りと走行の根拠を、後から読み直せる形で残す |
-| Requirements | 1.4, 1.7, 1.8, 4.2, 4.5, 4.7, 4.8, 5.1〜5.8, 7.7, 8.6, 9.1 |
+| Requirements | 1.4, 1.7, 1.8, 4.2, 4.5, 4.7, 4.8, 5.1〜5.8, 7.3, 7.4, 7.5, 8.6, 9.1 |
 
 **`ssp-measurement.md` の節**
 1. 測りの条件（SSP の版・机・許可の日時・ゴーストの名前・書庫の同定）
-2. α の数え（最新の書庫と alpha8 の書庫・絵ごとの 5 帯の数・命令）
-3. α の当たり（較正の点・測った点の表〔面・画面の座標・ローカル座標・α・来たか〕・線・ukadoc の引用）
-4. 全体の通しの基準（7 段・段ごとの原文と撮った物）
-5. 兄弟の問いで見えた答え（根拠と申し送り先）
+2. 全体の通しの基準（7 段・段ごとの原文と撮った物）
+3. 兄弟の問いで見えた答え（根拠と申し送り先）
 
 **`verification.md` の節**（えみりの記録の型に、SSP の基準の欄と申し送りの節を足した物）
 1. 同定（コミット・debug 版・書庫の `.sha256` の値）
@@ -463,7 +432,7 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 4. 走行（起動の命令・走行ごとの日時〔日本時間〕・流れ・段の表・ERROR と WARN の数・panic と致命の数・撮った物）
 5. 崩れた所の表（番号・症状・根拠・原因〔file:line か方針の裁定〕・扱い〔直した／方針で受けない／引き取る spec〕・引き取る spec の名前か裁定の日付と出どころ）。どちらも無い件は 0 件にする（5.3）。範囲の外の機能に由来する見た目の違いは別の表（4.8）。
 6. 直しの見積もりと 20 本の線（6.3）・直した結果と、手順で回し直した段の結果（8.5）
-7. α の当たり（測りの要点・値の扱い〔合わせた値か開発者の決め〕・直した結果か変えなかった理由・7.7）
+7. α の決まり（当たりは α が 0.5 以上・すべて描く・SSP は α が 0 でなければ当たる見込み〔開発者の見立て・未測定〕・裁定の日付と出どころ・7.4・7.5）
 8. 申し送り（兄弟の brief へ書いた日と要点・起票した spec・「ぱすた開発」へ待受のぶつかりを送った日と答え・5.8）
 9. 手順の置き場（`doc/pasta-real-run.md`）と、最後の確かめは兄弟の着地の後に本 spec の外で回すこと（8.6）
 10. 網羅台帳との突き合わせ（下の台帳の追随）
@@ -479,7 +448,7 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 
 **直す線（決め）**
 - 兄弟の持ち分（Out of Boundary の一覧で決める）→ 本 spec では直さない。その spec の `brief.md` の末尾に「本 spec からの申し送り（日付）」の節を足し、症状・根拠・測りの答えを書く。兄弟が完了済みなら `/kiro-discovery` で起票する（触る場所が同じ既存の brief があれば件として足す）。
-- 持ち主が居ない・areka 側・1 タスクで閉じる → 本 spec で根本から直す。直す前に赤・直した後に緑の決定論のテストを兄弟の `*_tests.rs` に置く。すべてのゴーストの見え方・当たり・SHIORI へ渡すものを変える直しは、直す前に開発者の決めを仰ぐ（α の当たりは 7.2 で前もって承認済み）。
+- 持ち主が居ない・areka 側・1 タスクで閉じる → 本 spec で根本から直す。直す前に赤・直した後に緑の決定論のテストを兄弟の `*_tests.rs` に置く。すべてのゴーストの見え方・当たり・SHIORI へ渡すものを変える直しは、直す前に開発者の決めを仰ぐ。
 - 持ち主が居ない・1 タスクで閉じない → 直さず `/kiro-discovery` で起票。
 - 直しを足して本 spec のタスクが 20 を超える見込み → 進める前に、残りの崩れの一覧と見積もりを添えて開発者の決めを仰ぐ。
 - 完了 spec の要件を上書きする直しは、上書きした要件の番号を記録に書く。ぱすたの辞書・書庫は書き換えない。直しは記録の無い失敗の道を作らず、利用者へ伝える失敗はゴーストの台詞で伝える。
@@ -488,46 +457,18 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 
 ### wintf の当たり
 
-#### α の当たり（条件つき）
+#### α の決まり（変更 0）
 
 | Field | Detail |
 |-------|--------|
-| Intent | 画素の α と、見た目の不透明度を重ねた α の両方で、同じ 1 つのしきい値を使い、その値を SSP の線に合わせる |
-| Requirements | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7 |
+| Intent | 画素の α が 0.5 以上（128 以上）の所だけを当たりにし、α が 1 以上の画素はすべて描く、という今の決まりを保つ |
+| Requirements | 7.1, 7.2 |
 
 **Responsibilities & Constraints**
-- 始めるのは測りの後（7.1）。測りが今の線（α ≧ 128）と同じなら、コードは変えず記録に書く（7.3・変更 0）。
-- SSP の線が 1 つの値 `T` に定まり 128 と違うとき（7.2）: 値を `alpha_mask.rs` の 1 か所に置き、`hit_test/mod.rs` はそこから小数を作る（7.4。3 か所が別々に動く道を構造で消す）。定まらないときは変えず、開発者の決めを待つ。
-- 描き方は変えない（7.6）。アトラスの切り詰め（`trim.rs` の α > 0）は当たりと別の意味で、触らない。
-
-**Contracts**: Service [x]
-
-##### Service Interface
-
-```rust
-// crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs
-/// 画素が当たる α の下限（この値以上で当たる）。SSP 2.9.18 の測り
-/// （areka-P0-pasta-in-windows-verification の ssp-measurement.md）で決めた値。
-pub(crate) const HIT_ALPHA_MIN: u8 = T;
-
-// crates/wintf/src/ecs/layout/hit_test/mod.rs
-/// 不透明度 × 塗りの α を比べる小数のしきい値。画素の当たりと同じ値から作る。
-const HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0;
-```
-
-- Preconditions: `T` は測りの記録の線（1〜255）。
-- Postconditions: `pack_pbgra32_alpha` は `alpha >= HIT_ALPHA_MIN` の画素だけを当たりにする。`HitTestMode::Bounds` は `composite_alpha < HIT_ALPHA_MIN_F32` を透けるとする（今の比べ方のまま）。
-- Invariants: しきい値の値を書く場所は `HIT_ALPHA_MIN` の 1 つだけ。
-
-**境のテスト（7.5）**
-- `alpha_mask_threshold_tests.rs`: α = `T - 1` の画素は当たらず、α = `T` の画素は当たる（`from_pbgra32` と `regenerate_from_pbgra32` の両方）。期待の値は測った数をそのまま書く（定数を参照しない）。こうすると直す前（128）は赤、直した後は緑になる。
-- 既存の `hit_test/tests_ex/opacity.rs`: 128/255 の前後に置いた境のテストを、`(T - 1) / 255` は当たらず `T / 255` は当たる形に書き直す（期待の値は測った数をそのまま書く）。`T` が 1 のときは「α 0 は当たらない」を下の側に使う。境に依らない不透明度 0.4 のテストは、`T` が 102 以下だと「当たる」側へ変わるので、境から離れた値（α 0 と 1.0）に直す。
-- `alpha_mask.rs` の中の 128 を境に置く既存のテストは古くなるので、境に依らない形（α 0 は当たらない・α 255 は当たる）に直す。
-
-**Implementation Notes**
-- Integration: すべてのゴーストのシェルとバルーンの当たりが変わる（2026-10-22 に前もって承認済み）。`hit-id-pass` などの v0.2.0 の spec は新しい値を前提に読む（Revalidation Triggers）。
-- Validation: `cargo test -p wintf` の当たりのテスト。走行の段 3（撫で）を手順で回し直し、結果を記録に書く（8.5）。
-- Risks: 値を下げると、薄い影や縁で当たる面が広がる。ほかの検体（emo2・えみり）の撫での当たりが SSP と同じ側へ寄ることは、測りの根拠で説明できる。
+- `alpha_mask.rs` の `ALPHA_THRESHOLD: u8 = 128` と `hit_test/mod.rs` の `128.0 / 255.0` の 2 か所は、どれも α 0.5 を線にしていて、決まりどおり。触らない（7.1）。
+- SSP は α が 0 でなければ当たる見込み（開発者の見立て・未測定）だが、合わせない。当たりの決まりは wintf の当たりの決め全体に効き、α が 0.5 未満の領域はそもそも当たりにすべきでない（2026-10-22 開発者の裁定）。
+- 描き方も変えない（7.2）。アトラスの切り詰め（`trim.rs` の α > 0）は当たりと別の意味で、触らない。
+- 走行で SSP とこの違いが見えたら（薄い影や縁を撫でても反応しない等）、崩れた所の表に「方針で受けない」として裁定つきで書く（7.3）。
 
 ### 文書（手順）
 
@@ -573,8 +514,7 @@ const HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0;
 - 直した後に `cargo test -p ukadoc-survey`・`cargo run -p ukadoc-survey -- check`・`report`・`report-summary` を回す。報告は手で直さない。
 
 **α の決まりの書き場所（決め）**
-- 当たりを変えたとき（9.3）: シェルの `seriko.use_self_alpha` の行（シェルの α の扱いを述べる行）の `note` に「当たりは α ≧ `T` の画素・根拠は本 spec の `ssp-measurement.md`」を足す。台帳の形式は凍結されているので新しい行は作らない。ukadoc が黙る所の areka の決めとして、`doc/COMPAT_ARCHITECTURE.md` §8 の表にも 1 行足す（沈黙ルール）。
-- 変えないとき: 台帳もその表も変えない（決めは検証の記録の α の節に書く）。
+- 9.3: シェルの `seriko.use_self_alpha` の行（シェルの α の扱いを述べる行）の `note` に「当たりは α が 0.5 以上の画素だけ・SSP には合わせない（2026-10-22 開発者の裁定）」を足す。台帳の形式は凍結されているので新しい行は作らない。ukadoc が黙る所の areka の決めとして、`doc/COMPAT_ARCHITECTURE.md` §8 の表にも 1 行足す（沈黙ルール）。
 
 ## Data Models
 
@@ -601,12 +541,11 @@ const HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0;
   - `fetched_pasta_puts_the_vertical_balloon_inside_its_ghost_folder`: 取り寄せた本物の書庫で、ゴーストのフォルダの直下の `pasta_tategaki/descript.txt` が名前を名乗り、`balloon/` が 0 件（2.1・2.2）。
   - `a_vertical_balloon_outside_the_ghost_folder_is_rejected`: 縦書きのバルーンを `ghost/master/` の下に置いた固定入力で判定が赤（2.7）。
   - 既存の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` と `sample_path_guard_test` が緑のまま（2.6）。
-  - （条件つき）`alpha_mask_threshold_tests.rs`: α = `T - 1` は当たらず `T` は当たる（新規の作りと作り直しの両方・7.5）。
-  - （条件つき）既存の `hit_test/tests_ex/opacity.rs` を書き直したもの: 不透明度を重ねた α で同じ境（7.4・7.5）。
+  - α の当たりの既存の境のテスト（`alpha_mask.rs` の `test_threshold_boundary_128`・`hit_test/tests_ex/opacity.rs`）は変えず、緑のまま（7.1）。
 - 道具の自己確かめ: `mouse-input.ps1` は動かした後に `GetCursorPos` で確かめる。書いた後に 2 つの画面で 1 度ずつ試す。
 - 実機（手で回す・排他テストの机）:
-  - SSP の α の当たりの測り（1.2）と全体の通し（1.3）。
+  - SSP の全体の通し（1.3）。
   - areka の 7 段の最初の走行（4.1）。段 1・2 の重なり（4.3）・段 7 の終了コード 0（4.4）。
-  - 直した件の該当の段の回し直し（8.5）。α を変えたなら段 3（撫で）。
+  - 直した件の該当の段の回し直し（8.5）。
 - 台帳: `cargo test -p ukadoc-survey` と `check`（9.1）。
 - 回す範囲: 触ったクレート（`sample-ghost-kit`・条件つきで `wintf`）と `log-capture-kit`・`ukadoc-survey`。全体テストは完了の段で 1 回。
