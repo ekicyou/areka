@@ -77,7 +77,7 @@
   - _Depends: 1.1, 2.1, 3.1_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8_
 
-- [ ] 4. `\![move]` で組の相手を連れ動かし、`ignore-sticky-window` を効かせる（結合のタスク）
+- [x] 4. `\![move]` で組の相手を連れ動かし、`ignore-sticky-window` を効かせる（結合のタスク）
   - `sticky_follow.rs` には 3.1 の関数を変えずに足すだけにし、今の位置から相手ごとに `partner_target` を出して `move_window_to`（経路 `MoveCue`・バルーンも付いて動き記憶に書かない）で置く `follow_sticky_move` と、相手がいるときだけ `sticky_follow_ignored` を記録する `log_sticky_ignored` を作る。量が 0・相手なしなら何もせず、窓の無い相手は `sticky_member_absent` で外し、動かしたら `sticky_follow`（move）を記録する
   - `emo2_boot/move_cue_place.rs` の `apply_move_directive` で、窓を書けた後に実際に動いた量を求め、`ignore_sticky_window` が偽なら連れ動かし、真なら記録だけにする（書けなければ何もしない）。「読まない」の注記を改める
   - `move_cue_apply_move` 系の兄弟のテストで、相手が実際に動いた量だけ動く・相手の吸着の軸は動かない・`ignore-sticky-window` で相手が動かず組が残り、その後の `\![move]` で新しい関係のまま組で動く・相手を記憶に書かない・時間つきでも即時・組の無い窓は今のまま、が緑になる

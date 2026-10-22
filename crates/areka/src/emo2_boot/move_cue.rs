@@ -304,5 +304,9 @@ mod move_sink_tests;
 mod apply_move_tests;
 
 #[cfg(test)]
+#[path = "move_cue_apply_move_sticky_tests.rs"]
+mod apply_move_sticky_tests;
+
+#[cfg(test)]
 #[path = "move_cue_move_severity_log_tests.rs"]
 mod move_severity_log_tests;

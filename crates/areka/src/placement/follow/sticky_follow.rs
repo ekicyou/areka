@@ -8,6 +8,8 @@
 //!   ドラッグした窓と組の相手の始めの位置・始めの向き・書き手を控え、途中
 //!   （[`follow_partners_on_drag`]）と終わり（[`finish_char_drag`]）は「始めからの量」で相手を
 //!   動かす（設計の決め 4）。wintf の `DraggingState` は読まない
+//! - [`follow_sticky_move`]／[`log_sticky_ignored`] は `\![move]` の連れ動きと、
+//!   `ignore-sticky-window` で連れ動かさなかったことの記録（5.1〜5.5・9.3・9.4）
 
 use bevy_ecs::prelude::*;
 use tracing::{info, warn};
@@ -19,7 +21,7 @@ use super::super::sticky_group_ledger::StickyGroupLedger;
 use super::{
     Anchor, Anchored, BalloonFollowTrigger, CharWindowMarker, MonitorSnapshot, PlacementRoute,
     PointPx, SizePx, char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos,
-    follow_balloon, persist_entries, project_anchor, resize_window_to,
+    follow_balloon, move_window_to, persist_entries, project_anchor, resize_window_to,
 };
 
 /// 相手の新しい位置（純）: 始めの位置＋量を、相手の向きで射影する（4.2・5.2）。
@@ -309,5 +311,77 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
     {
         let size = size_px(world, dragged);
         resize_window_to(world, dragged, size, PlacementRoute::MoveCue);
+    }
+}
+
+/// `\![move]` の連れ動き: 動かした窓が実際に動いた量 `delta` で、組の相手を今の位置から
+/// 動かす（5.1・5.2・5.4）。経路は `MoveCue`（バルーンは付いて動き、記憶に書かない）。
+/// 時間つきでも即時（5.5）。量が 0・相手なしなら何もしない（5.7）。
+pub fn follow_sticky_move(world: &mut World, target_scope: u32, delta: PointPx) {
+    if delta == (PointPx { x: 0, y: 0 }) {
+        return;
+    }
+    let mut moved = Vec::new();
+    for want in ledger_partners(world, target_scope as usize) {
+        let Some(window) = world
+            .query::<(Entity, &CharWindowMarker)>()
+            .iter(world)
+            .find(|(_, m)| u32::try_from(m.scope) == Ok(want))
+            .map(|(e, _)| e)
+        else {
+            warn!(
+                event = "sticky_member_absent",
+                scope = want,
+                when = "move",
+                "sticky: 組に窓の無いスコープがある（連れ動きから外す）"
+            );
+            continue;
+        };
+        let (Some(anchor), Some(start)) = (
+            world.get::<Anchored>(window).map(|a| a.0),
+            position_px(world, window),
+        ) else {
+            warn!(
+                scope = want,
+                entity = ?window,
+                "sticky: 組の相手の向きか位置が読めないので動かさない"
+            );
+            continue;
+        };
+        let target = partner_target(
+            start,
+            delta,
+            anchor,
+            size_px(world, window),
+            world.get_resource::<MonitorSnapshot>(),
+        );
+        if move_window_to(world, window, target.x, target.y) {
+            moved.push(want);
+        }
+    }
+    if !moved.is_empty() {
+        info!(
+            event = "sticky_follow",
+            trigger = "move",
+            scope = target_scope,
+            partners = ?moved,
+            dx = delta.x,
+            dy = delta.y,
+            "sticky: 組の相手を \\![move] に連れ動かした"
+        );
+    }
+}
+
+/// `ignore-sticky-window` で組の相手を動かさなかったことを、相手がいるときだけ記録する（5.3・9.4）。
+/// 組は解かない。
+pub fn log_sticky_ignored(world: &World, target_scope: u32) {
+    let partners = ledger_partners(world, target_scope as usize);
+    if !partners.is_empty() {
+        info!(
+            event = "sticky_follow_ignored",
+            scope = target_scope,
+            partners = ?partners,
+            "sticky: ignore-sticky-window なので組の相手を動かさない（組は残す）"
+        );
     }
 }

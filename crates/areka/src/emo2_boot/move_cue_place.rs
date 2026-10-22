@@ -19,7 +19,8 @@ use areka_emo_compose::ScaleRatio;
 use super::geometry::{BaseFrame, FrameNote, compute_move_target};
 use super::{BaseposResolver, CanonDefaultBasepos, MoveBase, MoveDirective};
 use crate::placement::follow::{
-    Anchored, MonitorSnapshot, move_window_to, project_anchor, work_area_for_window,
+    Anchored, MonitorSnapshot, follow_sticky_move, log_sticky_ignored, move_window_to,
+    project_anchor, work_area_for_window,
 };
 use crate::placement::primary_monitor;
 use crate::placement::resolver::{PointPx, RectPx, SizePx};
@@ -100,7 +101,9 @@ fn resolve_frame(
 ///
 /// 動かせなかったときは `warn!` のうえ `false`（トークは止めない）。`k` は対象のスコープの
 /// シェルに今かかっている拡大率で、台本の X・Y（作者基準）を物理 px へ写すのにだけ使う。
-/// `ignore_sticky_window` は読まない（要件 1.9）。`Anchored` は読むだけで書かない。
+/// 書けたら、組の相手を実際に動いた量だけ連れ動かす（`ignore_sticky_window` が真なら連れ動かさず
+/// 記録だけ・areka-P0-window-link-directives 要件 5.1・5.3）。書けなければ連れ動かさない。
+/// `Anchored` は読むだけで書かない。
 pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: ScaleRatio) -> bool {
     let scope = directive.scope;
     let skipped = |reason: &str| {
@@ -198,6 +201,16 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         to_y = to.y,
         "\\![move] で窓を動かした"
     );
+    // 組の相手は、動かした窓が実際に動いた量だけ連れ動かす（要件 5.1）。
+    let delta = PointPx {
+        x: to.x.saturating_sub(target_rect.left),
+        y: to.y.saturating_sub(target_rect.top),
+    };
+    if directive.ignore_sticky_window {
+        log_sticky_ignored(world, scope);
+    } else {
+        follow_sticky_move(world, scope, delta);
+    }
     true
 }
 

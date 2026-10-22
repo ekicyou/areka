@@ -405,3 +405,30 @@ fn boot_prepare_carries_the_default_placement_basis() {
         assert_eq!(cfg.zorder_raw, p.zorder_raw, "同じ読取の値");
     });
 }
+
+/// areka-P0-window-link-directives 要件 4.7・5.6: 組 {0,1} があっても、並べ直しは各窓を
+/// それぞれの既定の位置へ置き（相手の動いた量で相手をずらさない）、組は解かない。
+#[test]
+fn grouped_windows_each_return_to_their_own_default_and_the_group_stays() {
+    use crate::placement::sticky_group_ledger::{
+        StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
+    };
+    let mut rig = Rig::new();
+    seed_sticky_descript(&mut rig.world, None);
+    assert!(apply_set_sticky(
+        &mut rig.world,
+        &["0".to_string(), "1".to_string()]
+    ));
+
+    assert!(reset_window_positions(&mut rig.world));
+
+    for (scope, want) in EXPECTED.iter().enumerate() {
+        assert_eq!(rig.char_pos(scope), *want, "scope {scope} の位置");
+    }
+    assert_eq!(
+        rig.world.resource::<StickyGroupLedger>().partners_of(0),
+        vec![1],
+        "組は解かない"
+    );
+    rig.finish();
+}

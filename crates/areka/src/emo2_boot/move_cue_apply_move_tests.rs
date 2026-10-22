@@ -65,7 +65,7 @@ fn attach_fake_handles(world: &mut World, gw: &GhostWindows) {
 
 /// base=scope0 (1000,500,400,687)・target=scope1 (1200,800,300,434) の headless World＋
 /// GhostWindows（全窓に偽 WindowHandle 付与済み）。
-fn move_world() -> (World, GhostWindows) {
+pub(super) fn move_world() -> (World, GhostWindows) {
     let placements = vec![
         placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 }),
         placement(1, 1200, 800, 300, 434, PointPx { x: 285, y: -19 }),
@@ -80,7 +80,7 @@ fn move_world() -> (World, GhostWindows) {
     (world, gw)
 }
 
-fn pos_of(world: &World, e: Entity) -> Point {
+pub(super) fn pos_of(world: &World, e: Entity) -> Point {
     world
         .get::<WindowPos>(e)
         .expect("WindowPos があるはず")

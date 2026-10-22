@@ -421,6 +421,12 @@ mod work_area_sync_tests;
 #[path = "frame_work_area_resnap_tests.rs"]
 mod work_area_resnap_tests;
 
+// 組の相手を連れ動かさない道（当て直し・大きさの変化・作業領域の変化）の檻
+// （areka-P0-window-link-directives task 4・要件 4.7）。
+#[cfg(test)]
+#[path = "frame_sticky_no_follow_tests.rs"]
+mod sticky_no_follow_tests;
+
 // 拡大率と表の整合待ち（task 5.4）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
 // 接続する（常時テストに x86 を用いない・要件 7.5）。
 #[cfg(all(test, target_pointer_width = "64"))]
