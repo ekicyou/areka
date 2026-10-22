@@ -42,8 +42,8 @@ pub mod resolver;
 pub(crate) mod script_alignment;
 pub mod source;
 pub mod spawn;
-/// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿（純）。
-// shortcut: 本番の消費者（World の側の薄い関数）は task 2.1 で来る。来たら許可属性を外す。
+/// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿と World の側の関数。
+// shortcut: 本番の呼び手（起動の据え付け・シェルの切り替え・取り出しの相）は task 5.1・5.2・6 で来る。来たら許可属性を外す。
 #[allow(dead_code)]
 pub(crate) mod sticky_group_ledger;
 pub mod transition_diag;

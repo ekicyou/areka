@@ -30,7 +30,7 @@
   - _Requirements: 7.4_
 
 - [ ] 2. 吸着の指令・組の指令・バルーン位置初期化・キーの受け口を、それぞれの持ち場で作る
-- [ ] 2.1 (P) 組の指令と descript の組を World に当て、記録を出す
+- [x] 2.1 (P) 組の指令と descript の組を World に当て、記録を出す
   - 帳簿の World の側の薄い関数（台本の組を作る・台本の組を解く・起動で descript の組を据える・シェルの切り替えで descript の組を取り替える）を `sticky_group_ledger.rs` に作る。descript の値は `,` で区切って同じ規則で読む
   - 作成・解除・据え付け・取り替え・拒否のたびに、その時点のすべての組の中身と出どころを `sticky_groups` の `info!` に、拒否を `sticky_group_rejected` の `warn!`（出どころ・受け取った引数・理由）に、窓の無いスコープを含む組を受け付けたときは `sticky_member_absent` の `warn!` に出し、どの関数も最後に 1.3 の書き手で `DragConfig.move_window` を付け直す。帳簿が無いときは `warn!` で捨てる
   - 兄弟のテストで、各関数の帳簿の変化・記録の中身（`log-capture-kit` で取る）・窓の無いスコープの受け付け・付け直された `move_window` が緑になる
@@ -154,3 +154,4 @@
 - 1.2: `placement/mod.rs` の `sticky_group_ledger` 宣言に一時の `#[allow(dead_code)]`。2.1 で本番の消費者が来たら外す。`try_add_script_group` は 2 未満を自分で検査しないので、必ず `parse_sticky_tokens` を通してから呼ぶ。
 - 1.3: `placement/follow.rs` の `mod sticky_follow` に一時の `#[allow(dead_code)]`。本番の呼び出しが来たら外す。`follow/` の下のモジュールのテストは `placement/follow_<名>_tests.rs`（`#[path]` で follow.rs から読む）。
 - 1.4: `DefaultPlacementBasis` は `{ source: DescriptSource, balloon: BalloonPlacementInputs }`。`placement/spawn.rs:183` の注記は「設定ごと置く」のままで古い。触るついでに直す。
+- 2.1: 帳簿が無いときの記録は `sticky_skipped`（reason=no_ledger）の `warn!`。design.md の記録の表に無いので、完了までに表へ 1 行足す。

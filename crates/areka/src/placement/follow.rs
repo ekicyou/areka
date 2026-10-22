@@ -37,7 +37,7 @@ mod keyword_base;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
 // 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
-// shortcut: 本番の消費者（吸着・組の指令の適用とドラッグ）は task 2.1 以降で来る。来たら許可属性を外す。
+// shortcut: 本番の消費者（吸着・組の指令の適用とドラッグ）は task 2.2・3.1 以降で来る。来たら許可属性を外す。
 #[allow(dead_code)]
 mod sticky_follow;
 mod visibility;
@@ -131,7 +131,9 @@ pub use self::window_move::{
 // この 2 項目だけは私有再束縛から crate 内公開へ格上げする。areka は bin crate であり
 // `pub(crate)` はクレート内に留まるので、外部 API 面は増えない。
 pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
+// 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
 use self::keyword_base::rederive_keyword_balloon_offset;
+pub(crate) use self::sticky_follow::sync_drag_writer;
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard, rect_at,
     route_applies_visibility_guard,

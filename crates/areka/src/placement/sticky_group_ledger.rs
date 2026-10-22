@@ -11,7 +11,10 @@
 use std::collections::BTreeSet;
 
 use bevy_ecs::prelude::*;
+use tracing::{info, warn};
 
+use super::follow::sync_drag_writer;
+use super::spawn::CharWindowMarker;
 use super::zorder_group_ledger::parse_scope_id;
 
 /// 組の出どころ。
@@ -162,6 +165,142 @@ impl StickyGroupLedger {
     }
 }
 
+// ---- World の側の薄い関数（記録を出す・設計「StickyGroupLedger」） ----
+//
+// 記録はここだけで出す（帳簿は拒否を値で返す）。どの関数も最後に `DragConfig.move_window` を
+// 付け直す（設計の決め 12）。
+
+/// 組を変えた／変えようとした後の共通の後始末: その時点のすべての組を記録し、書き手を付け直す（9.2）。
+fn log_groups_and_resync(world: &mut World, action: &'static str) {
+    if let Some(ledger) = world.get_resource::<StickyGroupLedger>() {
+        info!(
+            event = "sticky_groups",
+            action,
+            groups = ?ledger.groups(),
+            "sticky: 窓の組の一覧"
+        );
+    }
+    sync_drag_writer(world);
+}
+
+/// 拒否を記録する（3.4・3.5・3.9・6.5・9.2）。
+fn warn_rejected<S: AsRef<str> + std::fmt::Debug>(
+    source: &'static str,
+    tokens: &[S],
+    reason: &StickyReject,
+) {
+    warn!(
+        event = "sticky_group_rejected",
+        source,
+        tokens = ?tokens,
+        reason = ?reason,
+        "sticky: 窓の組を作らずに捨てた"
+    );
+}
+
+/// 受け付けた組のうち窓の無いスコープを記録する（受け付けたまま・3.6）。
+fn warn_absent_members(world: &mut World, members: &BTreeSet<u32>, when: &'static str) {
+    let present: BTreeSet<u32> = world
+        .query::<&CharWindowMarker>()
+        .iter(world)
+        .filter_map(|marker| u32::try_from(marker.scope).ok())
+        .collect();
+    for &scope in members.difference(&present) {
+        warn!(
+            event = "sticky_member_absent",
+            scope, when, "sticky: 組に窓の無いスコープがある（受け付けたまま）"
+        );
+    }
+}
+
+/// 帳簿が無いときの指令を捨てる記録（取り出しの相は窓が無いと読まないので、起きないはず）。
+fn warn_no_ledger(directive: &'static str) {
+    warn!(
+        event = "sticky_skipped",
+        directive,
+        reason = "no_ledger",
+        "sticky: 窓の組の帳簿が無いので捨てた"
+    );
+}
+
+/// 台本の `\![set,sticky-window,ID,ID,...]` を当てる。組を作れば真（3.1・3.4〜3.6）。
+pub fn apply_set_sticky(world: &mut World, tokens: &[String]) -> bool {
+    let Some(mut ledger) = world.get_resource_mut::<StickyGroupLedger>() else {
+        warn_no_ledger("set");
+        return false;
+    };
+    let added = parse_sticky_tokens(tokens).and_then(|members| {
+        ledger.try_add_script_group(members.clone())?;
+        Ok(members)
+    });
+    let ok = match added {
+        Ok(members) => {
+            warn_absent_members(world, &members, "set");
+            true
+        }
+        Err(reason) => {
+            warn_rejected("script", tokens, &reason);
+            false
+        }
+    };
+    log_groups_and_resync(world, "set");
+    ok
+}
+
+/// 台本の `\![reset,sticky-window]` を当てる（台本の組だけを解く・3.7）。帳簿があれば真。
+pub fn apply_reset_sticky(world: &mut World) -> bool {
+    let Some(mut ledger) = world.get_resource_mut::<StickyGroupLedger>() else {
+        warn_no_ledger("reset");
+        return false;
+    };
+    ledger.reset_to_descript();
+    log_groups_and_resync(world, "reset");
+    true
+}
+
+/// 帳簿の descript の組を取り替え、拒否と窓の無いスコープを記録する（3.6・3.8・3.9・6.5）。
+fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
+    let result = world
+        .resource_mut::<StickyGroupLedger>()
+        .replace_descript(raw);
+    match result {
+        Ok(()) => {
+            let members = world
+                .resource::<StickyGroupLedger>()
+                .groups()
+                .iter()
+                .find(|group| group.source == StickySource::Descript)
+                .map(|group| group.members.clone());
+            if let Some(members) = members {
+                warn_absent_members(world, &members, "seed");
+            }
+        }
+        Err(reason) => {
+            let tokens: Vec<&str> = raw.unwrap_or_default().split(',').collect();
+            warn_rejected("descript", &tokens, &reason);
+        }
+    }
+    log_groups_and_resync(world, action);
+}
+
+/// 起動で帳簿を据え、descript の `seriko.sticky-window` の組を入れる（3.8・3.9）。
+pub fn seed_sticky_descript(world: &mut World, raw: Option<&str>) {
+    world.insert_resource(StickyGroupLedger::default());
+    apply_descript(world, raw, "descript_seed");
+}
+
+/// シェルの切り替えで descript の組だけを取り替える（台本の組は保つ・6.5）。
+pub fn replace_sticky_descript(world: &mut World, raw: Option<&str>) {
+    if !world.contains_resource::<StickyGroupLedger>() {
+        warn_no_ledger("descript_replace");
+        return;
+    }
+    apply_descript(world, raw, "descript_replace");
+}
+
 #[cfg(test)]
 #[path = "sticky_group_ledger_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "sticky_group_ledger_world_tests.rs"]
+mod world_tests;
