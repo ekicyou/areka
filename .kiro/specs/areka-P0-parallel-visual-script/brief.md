@@ -70,7 +70,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新しい spec）。
-- **Adjacent**: `shell-hover-animation`（同じ困りごとのシェルの側）・`sakura-time-critical`（マウス系の通知を止める側・`steady.rs` を触る）・`talk-fast-forward`（`drive.rs`・`dispatcher.rs`）・`talk-anchor-interrupt-ticks`（同）・`seriko-talk-clock-fidelity`（seriko の時間の起点の見積もり）・`seriko-script-triggers`（`\i`）・`script-security-level`・`script-impact-tiers`（台本の出どころ・`StartTalk` の約束）・`multi-ghost-runtime`（dispatcher はゴーストごと）・`audit-kanade`・`audit-seriko`（v0.1.1 の見直し・同じファイル）。
+- **Adjacent**: `shell-hover-animation`（同じ困りごとのシェルの側）・`sakura-time-critical`（マウス系の通知を止める側・`steady.rs` を触る）・`talk-fast-forward`（`drive.rs`・`dispatcher.rs`）・`talk-anchor-interrupt-ticks`（同）・`seriko-talk-clock-fidelity`（seriko の時間の起点の見積もり）・`seriko-script-triggers`（`\i`）・`script-security-level`・`script-impact-tiers`（台本の出どころ・`StartTalk` の約束）・`multi-ghost-runtime`（dispatcher はゴーストごと）・`audit-kanade`・`audit-seriko`（v0.1.0 の後の隙間の見直し・同じファイル）。
 
 ## Constraints
 

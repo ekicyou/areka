@@ -77,7 +77,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: v0.1.1 の `audit-wintf-graphics-world`（`ecs/visual/` を受け持つ）・`audit-wintf-runtime`（`numerics` を受け持つ）が先に着地する。どちらにも「`ecs/visual/` と、そこからだけ使われる `numerics` の働きを、未使用を理由に消さない」と書き足した（2026-10-21）。今の描画の道（`ecs/graphics/systems/{render,surface}.rs`・`com/wuc.rs`・`com/d2d/`）。
+- **Upstream**: 見直し（v0.2.0 と重なる分＝本 spec より先に取る）の `audit-wintf-graphics-world`（`ecs/visual/` を受け持つ）・`audit-wintf-runtime`（`numerics` を受け持つ）が先に着地する。どちらにも「`ecs/visual/` と、そこからだけ使われる `numerics` の働きを、未使用を理由に消さない」と書き足した（2026-10-21）。今の描画の道（`ecs/graphics/systems/{render,surface}.rs`・`com/wuc.rs`・`com/d2d/`）。
 - **Downstream**: `wintf-d2d-composite-rules`（合成の規則の型を `VisualDrawContent` の側に置く・ブレンドと不透明度と自前の入れ物を足す）→ `draw-methods-canon`（emo の合成を描画の木へ移す）→ `draw-methods-blend`・`element-clipping-option`（`--clipping` を `VisualClip` で描く）。`wintf-visual-damage-redraw`（`WorldVisual`・`VisualVersion`・`DrawCommand` の列を使う）。v0.4.0 の `shell-balloon-scale-setting`（変形の掛け合わせ）。
 
 ## Existing Spec Touchpoints
@@ -85,7 +85,7 @@
 - **Extends**: なし（新しい spec）。`wintf-d2d-composite-rules` の議題 1 の答えを、この spec が先に形にする。
 - **Adjacent**:
   - `wintf-d2d-composite-rules` — 本 spec の後。合成の規則の型（重ね方・補間）は本 spec が `VisualDrawContent` のまま本番へ上げ、ブレンド・不透明度・自前の入れ物・読み戻しはあちら。WARP の足場は本 spec が作り、あちらが使う。
-  - `audit-wintf-graphics-world`・`audit-wintf-runtime`（v0.1.1）— 同じファイルを先に見直す。直しが `ecs/visual/` に及んだら、本 spec の傷の一覧と突き合わせる。
+  - `audit-wintf-graphics-world`・`audit-wintf-runtime`（見直し・本 spec より先）— 同じファイルを先に見直す。直しが `ecs/visual/` に及んだら、本 spec の傷の一覧と突き合わせる。
   - `compose-f16-precision` — 途中の入れ物の精度。本 spec は描画面の形式を変えない。
 
 ## Constraints

@@ -68,7 +68,7 @@ SHIORI を通す形には、トークの最中に動かせないという穴が�
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新しい spec）。
-- **Adjacent**: `mouse-click-wheel-events`・`shell-mouse-cursor`・`shell-tooltip`（同じ追跡を使う）・`seriko-interval-combinations`・`seriko-script-triggers`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`（seriko の同じファイル）・`balloon-link-hover`（バルーンのホバー＝別物）・`audit-seriko`（v0.1.1 の見直し・同じファイル）。
+- **Adjacent**: `mouse-click-wheel-events`・`shell-mouse-cursor`・`shell-tooltip`（同じ追跡を使う）・`seriko-interval-combinations`・`seriko-script-triggers`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`（seriko の同じファイル）・`balloon-link-hover`（バルーンのホバー＝別物）・`audit-seriko`（v0.1.0 の後の隙間の見直し・同じファイル）。
 
 ## Constraints
 
