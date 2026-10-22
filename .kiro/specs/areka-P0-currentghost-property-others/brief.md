@@ -84,3 +84,9 @@
 - **ファイルの重なり**: `system-property-values`・`property-catalog-lists`・`zorder-property`（`dotted.rs`・`emo2_boot/mod.rs`）と、`emo2_boot` の結線の列の全員。`system-property-values` とは働きの依存が無く、ファイルを分け合うだけ。
 - **優先度の区分**: C（ukadoc の `currentghost.*` の拾い残し）。**要件定義のモデル**: Opus（口の形と scope の数え方は前の spec が決める）。
 - **見つけた穴・古くなった記述**: 上の「値の源が無い 10 行」。`get_property_tests.rs` の `currentghost.name` の期待は今もそのまま（着地のときに直す・今は直さない）。
+
+## どっとさくらで見えた事実（2026-10-23 `areka-P0-dot-sakura-specimen` の実機の 1 回）
+
+- MCP の `get_property` で、ゴースト・シェル・バルーンの名前（`currentghost.*`）がどれも `NG:Cannot find such property name.` だった。答えたのは `baseware.name`=`areka` だけ。ゴーストの名前は `get_active_ghost_list`（`．さくら`）で取れた。
+- 名前の項目は本 spec の `currentghost.汎用` に入る（`currentghost-property-tree` の 19 項目ではない）。開発者（2026-10-23）が持ち主を本 spec と決めた。版の段は今のまま（roadmap は触らない）。
+- 根拠: `.kiro/specs/areka-P0-dot-sakura-specimen/verification.md` の 4 節と 8 節の件 6。
