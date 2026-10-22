@@ -10,6 +10,13 @@
 //! - 1.7: 変換アダプタによる二重定義を作らず、物理的に単一の型定義として実現する。
 //! - 5.1 / 5.6: 選択待ちバリアの解決指示を[`TalkCommand`]（再生層の正規入力経路）で運ぶ。
 //! - 7.1: 選択待ち成立の事実と表示完了時刻を[`ChoiceWaiting`]で再生層から返す。
+//!
+//! 台本とイベントの出どころの語彙（[`ScriptOrigin`] ほか）も依存ゼロのここに置く
+//! （areka-P0-script-security-level 1.8, 2.7, 3.2, 3.3）。
+
+mod origin;
+
+pub use origin::{ScriptOrigin, SecurityLevel, SenderHead, SenderType, SenderWord, SstpKind};
 
 /// talk の一意識別子（kanade が単調増番で採番・再利用しない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

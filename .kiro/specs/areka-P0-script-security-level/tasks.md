@@ -5,7 +5,7 @@
 - 記録の種別の表示（`Ghost`・`SSTP(Local,Auth)` など）・`ActiveTalk::origin`・`StrictNote` は変えない（要件 5.1・research §8.2 の 9）。
 
 - [ ] 1. 出どころの語彙と台本の起動の約束
-- [ ] 1.1 出どころの型を依存 0 のクレートに置く
+- [x] 1.1 出どころの型を依存 0 のクレートに置く
   - `SenderType` の 9 語を「先頭の 2 語」と「残りの 7 語」に分けて持ち、先頭が必ず 1 つ在ることを型で保つ。Owned かどうかは SSTP 系の出どころだけが持つ 3 値、セキュリティレベルは `local`／`external` の 2 値で表す。
   - ゴースト自身・MCP の SEND・MCP の NOTIFY の 3 つの定数、語のつなぎ方（`internal`／`external` を先頭にカンマでつなぐ）、大文字小文字を区別しないレベルの読み、下げるだけの重ね方、「外部扱い」と「SSTP 系か」の判定を用意する。
   - 兄弟のテストで、つなぎ方（`internal`・`external,sstp`・`internal,raise`）・レベルの読み（`LOCAL`・`External`・前後の空白・読めない値で無し）・重ね方の 4 通り（`external` から上がらない）・3 定数と Owned でない SSTP の判定の真理表が緑になる。
