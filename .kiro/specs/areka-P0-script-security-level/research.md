@@ -235,3 +235,8 @@
 - 運ぶ道（kanade → talk → 配送 → 受け口）のどこかで既定の `GHOST` に落ちても黙って通る。通しのテスト（`script_security_e2e_tests.rs`）を 1 本必ず置く。
 - 機械的な追随が広い（`ShioriOutcome::Value` 133・`StartTalk` 85・`TranslateDone` 30）。どれも型の変更でコンパイラが全部を挙げるので、見落としは起きない。`schedule/steady.rs`（957 行）は型の追随だけで行を増やさない。
 - 1,000 行の上限: 新しい処理は新しいファイル（`origin.rs`・`request_headers.rs`・`request_origin.rs`・`talk_origin.rs`・`script_restriction.rs`）へ出す。`shiori3.rs`（821）・`client.rs`（775）・`actor.rs`（837）・`spine.rs`（940）は足す量が小さいか触らない（通しのテストは `spine.rs` を使わず、`runtime_boot_tests.rs` と同じ組み方で書く）。
+
+## 9. 設計の討議の結果（2026-10-22）
+
+- 自明な直し 3 件: 判定の表の照合を旗だけでなく受け口の振る舞いで確かめる（要件 4.7）・中身へ渡す包み 4 つ（`Recorder<B>`・テストの `BoxedBackend` 3 つ）も新しい 2 メソッドを渡す（`ShioriBackend` の実装は 22）・roadmap の「`consumer_ledger.rs` に行を足す鎖」から本 spec を外す。
+- 議題 1（開発者「承認」）: 実機の確かめを 1 本足す（`crates/areka/tests/script_security_real_run.rs`・`real-run-kit`）。理由: 偽の SHIORI の檻は本物の pasta.dll の結線で出どころが既定の値に落ちる欠陥を隠しうる。この spec の肝は SSP の実測と同じヘッダが出ることなので、本物の起動の道で 1 度は見る。決定論のテストは置いたまま。見立ては 18 タスク（予備で 18〜20）。

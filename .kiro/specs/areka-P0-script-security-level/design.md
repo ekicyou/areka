@@ -158,6 +158,8 @@ crates/
     ├── script_restriction_tests.rs       # 新規: 表の固定（4.8）・台帳と読みとの照合（4.7）・判定の真理表
     ├── user_break_cue_origin_tests.rs    # 新規: 外部扱いで enter を止める・leave は止めない・記録（4.2〜4.5）
     └── script_security_e2e_tests.rs      # 新規: 偽の SHIORI が external を返すと区間に入らない・local では今のまま
+crates/areka/tests/
+└── script_security_real_run.rs           # 新規: 本物の起動の道で 4 つのヘッダの記録と MCP の台本の区間を確かめる（real-run-kit）
 ```
 
 ### Modified Files
@@ -689,6 +691,11 @@ pub(crate) fn permits(row: &RestrictionRow, origin: &ScriptOrigin) -> bool;
 - `script_security_e2e_tests.rs`: `runtime_boot_tests.rs` と同じ組み方（`ShioriWiring::Custom` に偽の backend・受け口は `NoUserBreakCueSink`）で起動し、`OnBoot` の台本 `\![enter,nouserbreakmode]…` を ⑴ 応答の `SecurityLevel: external` つきで返すと線に `Enter` が出ない ⑵ `local`（または無し）では今どおり `Enter` が出る。kanade → talk → 配送 → 受け口の運ぶ道が既定の値に落ちていないことを 1 本で確かめる（1.4・3.1・4.2・4.3）。`external` の応答は、このテストのファイルの中で `ScriptedShioriBackend` を包み、`get_with_headers` だけを上書きして `OnBoot` の応答に `security_level: Some("external")` を添えて作る（`spine.rs` は触らない）。
 - 既存の全体テスト（記録の種別の表示・`Status`・翻訳・MCP の 2 つの道）が緑のままであること（2.9・3.5・5.1）。
 
+### 実機の確かめ（本物の起動の道・2026-10-22 設計の討議で足した）
+
+- `crates/areka/tests/script_security_real_run.rs`（新規）: 窓口 `real-run-kit` で書く（手引き `doc/testing.md`・先例 `crates/areka/tests/mcp_get_log_real_run.rs`）。`Launch::Sample { name: "emo2", .. }` を `RUST_LOG` で `kanade=trace` を開けて起こし、⑴ MCP の `raise_event` で送ったイベントの `shiori_request` の記録が `sender=MCP`・`sender_type=external,sstp`・`security_level=local` ⑵ MCP の `sakurascript` の `OnTranslate` の記録が `sender=MCP`・`sender_type=internal` ⑶ 起動の道のゴースト自身のイベントが `sender=areka`・`sender_type=internal` ⑷ MCP の `sakurascript` で流した `\![enter,nouserbreakmode]` が今どおり区間に入る（MCP は Owned＝`local`）ことを、記録を読んで確かめて閉じる。記録は `get_log` か子の出力のどちらか、窓口が読める方で読む。
+- 狙い: 偽の SHIORI の檻では見えない、本物の pasta.dll（同じプロセスの経路の `InProcBackend`）の結線で、出どころが既定の値に落ちていないこと。SSP の実測（要件の出典）と同じ値が本物の道で出ることを 1 本で確かめる。決定論のテストの代わりではない（両方を置く）。
+
 ## Security Considerations
 
 - 守るのは「外から流された台本にゴーストの操作を奪われない」こと。今の areka で外部扱いの台本が生じる道は SHIORI の応答の `SecurityLevel: external` だけ（MCP は SSP と同じく Owned SSTP 相当＝`local`）。
@@ -716,8 +723,9 @@ pub(crate) fn permits(row: &RestrictionRow, origin: &ScriptOrigin) -> bool;
 | 13 | `NoUserBreakCueSink` の止めと単体テスト | 1 |
 | 14 | 通しのテスト（偽の SHIORI の external／local） | 1 |
 | 15 | 網羅台帳 2 つと §8 | 1 |
+| 16 | 実機の確かめ（`real-run-kit`・本物の起動の道） | 1 |
 
-- 合計 **17**（予備を見て 17〜19）。20 を超えない見込みなので切らない。数え直して 20 を超えたら、brief の切り方（⒜ 1・3〜8＝ヘッダと応答の読み取り・入れ物 → ⒝ 2・9〜15＝台本の印とタグの止め）で切る。
+- 合計 **18**（予備を見て 18〜20）。20 を超えない見込みなので切らない。数え直して 20 を超えたら、brief の切り方（⒜ 1・3〜8＝ヘッダと応答の読み取り・入れ物 → ⒝ 2・9〜15＝台本の印とタグの止め）で切る。
 
 ### 網羅台帳と §8 に書くこと
 
