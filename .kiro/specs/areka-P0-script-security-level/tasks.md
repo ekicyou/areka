@@ -40,7 +40,7 @@
   - _Requirements: 2.1, 2.8, 3.1_
   - _Depends: 2.2_
 
-- [ ] 3.2 要求の出どころの規則と、翻訳の要求のカテゴリ
+- [x] 3.2 要求の出どころの規則と、翻訳の要求のカテゴリ
   - 送り手の名前（`areka`／`MCP`）と出どころの組を持ち、送るイベントの出所カテゴリから要求の出どころ・応答の台本の基本の出どころ・翻訳の要求の出どころを導く規則と、4 つのヘッダの文字列への写し（`SecurityOrigin` は常に `null`）を置く。32bit の仲介の型は使わず、カテゴリの `match` に既定の腕を置かない。
   - 応答の生のレベルの解釈を置く: 無い → `local`／`local`・`external`（大小無視）→ その値／それ以外 → イベントの ID と値を warn（`response_security_level_unreadable`）に残して `local`。
   - イベントの出所カテゴリに「翻訳（元の要求の出どころを抱える）」を足し、名前は `OnTranslate`、受理の判定・欠番の印・記録の名札は今の `OnTranslate` と同じに扱う。翻訳の要求は 5.1 まで文字列のカテゴリ（`Static("OnTranslate")`）で作られるので、欠番の印を通す判定（`actor.rs` の `replace_absent_markers`）は `Static("OnTranslate")` と翻訳のカテゴリの両方を受け、記録の名札の `match` と受理の判定の `match` にも翻訳のカテゴリの腕を足す。

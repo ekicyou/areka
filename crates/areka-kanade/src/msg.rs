@@ -320,6 +320,10 @@ pub enum EventId {
     Choice(String),
     /// 外から頼まれた任意の名前（`schedule::events::sstp_notify` だけが作る・逐語）。
     Sstp(String),
+    /// 翻訳の要求（`OnTranslate`）。元の要求の出どころを抱える（`schedule::events` の
+    /// `on_translate`・`on_translate_sstp` だけが作る）。受理の判定・欠番の印・記録の名札は
+    /// `Static("OnTranslate")` と同じに扱う。
+    Translate(crate::request_origin::RequestOrigin),
 }
 
 impl EventId {
@@ -329,6 +333,7 @@ impl EventId {
             EventId::Static(id) => id,
             EventId::Choice(name) => name.as_str(),
             EventId::Sstp(name) => name.as_str(),
+            EventId::Translate(_) => "OnTranslate",
         }
     }
 }
