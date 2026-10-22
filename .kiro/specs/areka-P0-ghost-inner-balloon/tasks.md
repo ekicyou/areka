@@ -110,7 +110,7 @@
   - _Boundary: InstalledItemsName_
   - _Depends: 1.2, 4.2_
 
-- [ ] 5.2 (P) バルーンだけの書庫が今のゴーストで隠れることを記録する
+- [x] 5.2 (P) バルーンだけの書庫が今のゴーストで隠れることを記録する
   - `install/desk.rs` の `InstallKind::Balloon` の枝の後で、`balloons_for(roots, &ctx.current.ghost.dir).hidden` から `same_folder_name` で入れたフォルダ名のものを探し、在れば info `installed_balloon_hidden_by_ghost`（`folder`・`installed`・`by`）を 1 件残す。控え（`lastinstalled`）と記憶の書き方は変えない。起動の文脈が無いときは何もしない
   - `desk_record_tests.rs` に、バルーンだけの書庫は根へ入る・今のゴーストの中に同じフォルダ名が在れば記録 1 件・無ければ 0 件、を足して緑
   - _Requirements: 3.5, 7.4, 10.1_
