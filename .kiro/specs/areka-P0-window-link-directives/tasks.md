@@ -62,7 +62,7 @@
   - _Requirements: 8.1, 8.2, 8.4_
 
 - [ ] 3. ドラッグで組の相手を連れ動かす
-- [ ] 3.1 ドラッグの控えと、相手を同じ量だけ動かす手続きを作る
+- [x] 3.1 ドラッグの控えと、相手を同じ量だけ動かす手続きを作る
   - `sticky_follow.rs` に資源 `CharDragSession`（ドラッグした窓・その始めの位置・このドラッグで wintf が窓を動かすか・始めの向き・窓のある相手とその始めの位置）と、始め（`begin_char_drag`）・縛りの向き（`drag_anchor`）・書き手（`drag_wintf_moves`）・途中（`follow_partners_on_drag`）・終わり（`finish_char_drag`）を作る。wintf の `DraggingState` は読まない
   - 途中は「今の位置−始めの位置」の量で相手ごとに `partner_target` を出し、経路なしで書いてバルーンを付いて動かす（1 回ごとは記録しない）。控えが無い・別の窓の控えなら相手を動かさず、組の相手がいるときだけ `sticky_follow_skipped` を記録する。窓の無い相手は始めに `sticky_member_absent` で外す
   - 終わりは最終の量で相手を書き、相手ごとに `saved_form_anchor` の形で位置を記憶へ書き、`sticky_follow`（drag・相手・量）を 1 行記録して控えを外す。控えた向きと今の向きが違えば今の向きで当て直す
@@ -158,3 +158,4 @@
 - 2.2: `parse_alignment_word` は `args: &[&str]`（先頭が向き、3 つ目以降の引数を debug! するため）。design.md の署名の行は完了までに直す。6 の呼び手は `tokens[1..]` をそのまま渡す。空や空白だけの値は欠けた値（1.9）として扱い、COMPAT §8 の行（8）にも書く。記録の表に `alignment_extra_args`（debug）と `alignment_skipped` の reason（missing_value・no_ghost_windows・no_char_window・no_anchor_source）を完了までに足す。`placement/mod.rs` の `script_alignment` に一時の `#[allow(dead_code)]`（6 で外す）。
 - 2.3: `balloon_pos_reset_skipped` に `trigger` の欄、reason は no_default_basis・no_ghost_windows・not_resolved（スコープ単位）。design.md の記録の表へ完了までに足す。`placement/mod.rs` の `reset_balloon_pos` に一時の `#[allow(dead_code)]`（6・7.2・7.3 で外す）。
 - 2.4: wintf の `deliver_key_down` は WM_KEYDOWN と WM_SYSKEYDOWN で共通。記録の文の札は `[WM_KEYDOWN]` のまま（構造の欄 `event` は正しい）。F10 の消費で SC_KEYMENU が止まるかは 9.2 の実機で確かめる。
+- 3.1: `finish_char_drag` が記憶へ書くのは相手だけ。ドラッグした窓の記憶の形は 3.2 で `on_char_drag_end` が `saved_form_anchor` で決める。テストは `placement/follow_sticky_follow_drag_tests.rs`。
