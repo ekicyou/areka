@@ -6,7 +6,8 @@
 use real_run_kit::{Ended, EndedBy, Launch, McpError, RealRun, Run, ToolReply};
 use std::time::{Duration, Instant};
 
-/// 保険の自動終了。印までの最大（混んだ時間 6.82 秒）＋別れの台詞（約 22 秒）＝約 29 秒に余りを足した値（1.5）。
+/// 保険の自動終了（1.5）。測った「wrap の最大 8.7 秒＋閉じるまでの最大 24.6 秒」＝33.3 秒が 35 秒の線の内側なので
+/// 45 秒のまま（余りは 1.7 秒と小さい。spec の verification.md の保険の自動終了の節）。
 pub const SAFETY_EXIT: Duration = Duration::from_secs(45);
 /// 締切（待ちごと）。
 pub const DEADLINE: Duration = Duration::from_secs(120);

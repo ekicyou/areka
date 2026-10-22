@@ -137,3 +137,4 @@
 - 1 回の走りの行の読みは窓口が子に `NO_COLOR=1` を渡す前提（real-run-kit/src/launch.rs:212）
 - `tools/sync-i686-helper.ps1` は隣が既に i686 なら写さないので、仲介の源を変えた後は `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` を `target\debug\` へ直接写して置き替える（4.3: 源 23:45:21 → 建て 23:45:48 → 隣へ 10-23 00:00:58 に写し、cmp で同一・`last_error` の綴りを含む）
 - 範囲外（棚卸へ）: 環境変数なしの `cargo test -p areka` でも `tests/mcp_get_log_real_run.rs` が 22 秒かけて子を起こしているように見える（明示の門が無い実機の試験なら、常時のテストで机なしに窓を立てている）。この spec では触っていない
+- 完了時の棚卸（10-23）: その場で解決 1 件・起票 0 件。解決＝`common.rs` の `SAFETY_EXIT` の doc を設計の見込み（約 29 秒）から測った値（33.3 秒・余り 1.7 秒）へ。除いたもの＝`mcp_get_log_real_run.rs` が門なしに子を起こすのは `areka-P0-mcp-log-history` の設計どおり（常時のテストで回す実走の 1 本・回帰の記録にも 1 通過で載る）／`sync-i686-helper.ps1` が i686 の古い写しを替えないのは `areka-P0-dev-helper-x64-clobber` の要件 1.3 の裁定どおり／clippy の既存の lint は `areka-P0-clippy-199-lints` で起票済み
