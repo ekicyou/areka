@@ -809,6 +809,8 @@ fn the_containment_walk_catches_a_plan_that_leaves_the_root() {
         skip_top_level_install_txt: false,
         files: vec![(0, "../../evil.txt".to_owned())],
         dirs: vec!["ok".to_owned()],
+        carve_out: Vec::new(),
+        within_body: false,
     }];
     let (outside, checked) = escapes(&root, &planted);
     assert_eq!(checked, 3, "3 本とも検査していない");
@@ -833,6 +835,8 @@ fn the_containment_walk_catches_a_plan_that_leaves_the_root() {
         skip_top_level_install_txt: false,
         files: vec![(0, "ghost/master/descript.txt".to_owned())],
         dirs: vec!["ghost".to_owned()],
+        carve_out: Vec::new(),
+        within_body: false,
     }];
     assert_eq!(escapes(&root, &honest), (Vec::new(), 3));
 }

@@ -284,13 +284,19 @@ pub(crate) fn stage_placement(
     at(stage, std::fs::create_dir_all(stage))?;
 
     let existing = if placement.destination.is_dir() {
+        // 入れ子の同梱の場所は同梱自身が組み上げるので、本体の下敷きには写さない。
+        let carve: Vec<PathBuf> = placement
+            .carve_out
+            .iter()
+            .map(|relative| placement.destination.join(relative))
+            .collect();
         match &placement.existing {
             ExistingPolicy::Overlay => {
-                copy_existing(&placement.destination, stage, None)?;
+                copy_existing(&placement.destination, stage, None, &carve)?;
                 ExistingState::Overlaid
             }
             ExistingPolicy::Replace { keep } => {
-                copy_existing(&placement.destination, stage, Some(keep))?;
+                copy_existing(&placement.destination, stage, Some(keep), &carve)?;
                 ExistingState::Refreshed
             }
         }
@@ -323,16 +329,31 @@ pub(crate) fn stage_placement(
 /// `keep` が `None` なら空フォルダも含めて丸ごと（要件 6.1）。`Some` なら、ファイル名が
 /// 挙がっているファイルだけを**同じ相対位置**へ（要件 6.2）。後者では残すファイルを
 /// 1 つも含まないフォルダは作らない——「全消去してから mask の名前だけ戻す」と同じ形。
-fn copy_existing(from: &Path, to: &Path, keep: Option<&[String]>) -> Result<(), StageError> {
+///
+/// `carve` に挙がったフォルダ（絶対パス）の下は、空フォルダも含めて写さない。突き合わせは
+/// 残す名前と同じく ASCII の大小を無視する。
+fn copy_existing(
+    from: &Path,
+    to: &Path,
+    keep: Option<&[String]>,
+    carve: &[PathBuf],
+) -> Result<(), StageError> {
     for child in at(from, std::fs::read_dir(from))? {
         let child = at(from, child)?;
         let source = child.path();
         let target = to.join(child.file_name());
         if at(&source, child.file_type())?.is_dir() {
+            let spelled = source.to_string_lossy();
+            if carve
+                .iter()
+                .any(|folder| folder.to_string_lossy().eq_ignore_ascii_case(&spelled))
+            {
+                continue;
+            }
             if keep.is_none() {
                 at(&target, std::fs::create_dir_all(&target))?;
             }
-            copy_existing(&source, &target, keep)?;
+            copy_existing(&source, &target, keep, carve)?;
         } else if kept(keep, &child.file_name()) {
             // 残す物が出てきて初めて親を作る（`keep` の側で空フォルダが生えない）。
             at(to, std::fs::create_dir_all(to))?;
@@ -498,6 +519,10 @@ pub(crate) fn commit_all(
 /// 宛先」の 2 手で、2 手目が失敗したら退避を戻す（その戻しは [`roll_back`] が積み上がった
 /// [`Undo`] を解く形で行う——1 配置目の戻しと同じ一言を通す）。
 ///
+/// 入れ子の同梱（`within_body`）は、組み上げのときの別に関わらず「作業フォルダ → 宛先」の
+/// 1 手で置き、戻しは「消す」。先に確定した本体が、古い同梱の場所を外した木で宛先を
+/// 入れ替えているので、宛先はここで必ず空いている（古い同梱は本体の退避の中に居る）。
+///
 /// 元へ戻す手は**成功した後**に積む。先に積むと、宛先が既に在るのに `New` として来た
 /// （組み上げから確定までの間に誰かが作った）ときに、自分が作っていない木を消してしまう。
 fn commit_one(
@@ -514,7 +539,7 @@ fn commit_one(
         .expect("宛先は必ず格納先の下にあるので親がある");
     at(parent, std::fs::create_dir_all(parent))?;
 
-    if existing == ExistingState::New {
+    if existing == ExistingState::New || placement.within_body {
         at(dest, rename_patiently(&area.stage(k), dest))?;
         undo.push(Undo::Remove(dest.clone()));
         return Ok(());

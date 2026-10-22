@@ -81,7 +81,7 @@
   - _Boundary: 更新の書く先（roots/user_root・update/worker・areka-update manifest）_
 
 - [ ] 4. インストール: 同梱の宛先と入れ子の確定（`areka-nar`・`areka` のインストールの側の期待値）
-- [ ] 4.1 入れ子の配置の組み上げと確定の手を足す（`install.rs` が中心・`plan.rs` の判断は触らない）
+- [x] 4.1 入れ子の配置の組み上げと確定の手を足す（`install.rs` が中心・`plan.rs` の判断は触らない）
   - `Placement` に `carve_out: Vec<String>` と `within_body: bool` を足す（crate の中だけ）。`plan.rs` で配置を組む所には既定の値（空と偽）を足すだけにし、宛先と項目の判断は 1 つも変えない
   - 本体の組み上げで、下敷き（`Overlay`・`Replace{keep}`）を写すとき `carve_out` の相対のフォルダの下を写さない（比べ方は今の残す名前と同じ ASCII の大文字小文字を区別しない）
   - `within_body` の配置は、確定で組み上げのときの `ExistingState` に関わらず「無い所へ置く」1 手（親を作る → `rename` → 戻しは「消す」）にし、`ExistingState` は入れた物の報告にそのまま使う。戻しは今の逆順（後の配置を消す → 本体を戻す）のまま。`within_body` が偽の配置は今の確定のまま
@@ -152,3 +152,4 @@
 - 1.1: `scan_ghost_balloons` は呼び手が来るまで `#[cfg_attr(not(test), expect(dead_code, ...))]` を付けてある。1.2 で `balloons_for` から呼ぶときに外す（外し忘れは unfulfilled_lint_expectations の警告になる）。
 - 範囲外: `cargo clippy -p areka-ghost --all-targets -- -D warnings` は依存の `dola` の既存の lint（`resolve.rs`・`conflict_resolver.rs` など）で止まり、このクレートまで届かない（完了の棚卸で扱う）。
 - 2.1: `cargo test -p areka` の統合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は i686 の helper が要る。ワークツリーで先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を建てる（建て済み）。テストを書く道具が `\b`・`\n` を化かすことがあるので、書いたらバイトで確かめる。
+- 4.1: 入れ子の確定のテストは `install_commit_tests.rs` が 1,000 行を超えるため兄弟の `install_nested_tests.rs`（`install_commit_tests.rs` から `#[path] mod nested`）に置いた。`carve_out` の綴りは `\` 区切り（`balloon\<dir>`）でないと当たらない。

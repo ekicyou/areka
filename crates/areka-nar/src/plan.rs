@@ -68,6 +68,11 @@ pub(crate) struct Placement {
     /// 作るフォルダの相対パス。名前順で、親は必ず子より前に並ぶ（親は子の接頭辞
     /// なので名前順がそのまま作れる順になる）。ファイルの親も全段そろう（要件 4.9）。
     pub dirs: Vec<String>,
+    /// 本体の下敷きから外す相対のフォルダ（`\` 区切り・例 `balloon\kaku`）。
+    /// 宛先の下に入れ子で置く同梱の場所で、本体の確定がそこへ古い木を持ち込まない。
+    pub carve_out: Vec<String>,
+    /// 宛先が、先に確定する本体の宛先の下に在る（入れ子の同梱）。確定は「無い所へ置く」1 手。
+    pub within_body: bool,
 }
 
 /// マニフェストとエントリ列と要求から配置計画を組む。
@@ -179,6 +184,8 @@ fn body_placement(
         skip_top_level_install_txt: skip_install_txt,
         files,
         dirs,
+        carve_out: Vec::new(),
+        within_body: false,
     })
 }
 
@@ -216,6 +223,8 @@ fn companion_placement(
         skip_top_level_install_txt: false,
         files,
         dirs,
+        carve_out: Vec::new(),
+        within_body: false,
     })
 }
 

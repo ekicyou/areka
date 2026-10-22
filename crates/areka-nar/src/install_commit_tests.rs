@@ -22,6 +22,10 @@ use super::*;
 use crate::error::{ElementKind, SurvivingTree};
 use std::os::windows::fs::OpenOptionsExt;
 
+/// 入れ子の同梱の確定の兄弟テスト。1,000 行の上限に収めるために分けた。
+#[path = "install_nested_tests.rs"]
+mod nested;
+
 // ---- 助手 ----
 
 /// 読むことだけを共有して開いたまま持つ（起動中のゴーストの `shiori.dll` と同じ状態）。
