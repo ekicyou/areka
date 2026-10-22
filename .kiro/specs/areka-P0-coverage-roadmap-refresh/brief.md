@@ -249,3 +249,8 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - 要件定義のモデル: Opus（棚卸㉖のまま）。
 - 分割の案: 棚卸㉖のまま（要件で 20 を超えたら「数を道具の出力にする」と「台帳の行と文書の撮り直し」に分ける）。
 - 見つけた穴・古くなった記述: v0.1.0 の後の見直し `audit-ukadoc-survey` が `crates/ukadoc-survey/` の全部を持つ＝同じウェーブに置かない。この spec が見張りを足すので、見直しは後のほうが二度手間が無い（どちらを先にするかは、見直しを並べる棚卸で決める）。
+
+## 2026-10-22 `ukadoc-catalog-refresh` の起票（`/kiro-discovery`）
+
+- 本 spec が範囲外とする「ukadoc のカタログの更新」は、新しく起票した `ukadoc-catalog-refresh` が持つ（`script-security-level` の要件討議の議題 3）。
+- 並び: `ukadoc-catalog-refresh` を先に着地させる。写しを新しくしてから手書きの数と持ち主を数え直す方が安い。席の条件は本 spec と同じ。
