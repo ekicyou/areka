@@ -61,7 +61,7 @@
   - 記憶・記録・撮った物の置き場を `target\dot-sakura-verify\` の下に作る
   - 終わった状態: 2 つのビルドが通り、根の絶対パスと中身の数が控えてある
   - _Requirements: 5.1_
-- [ ] 4.2 排他テストの机を取り、設計の環境変数で 1 回起こして観察し、終わらせて机を返す
+- [x] 4.2 排他テストの机を取り、設計の環境変数で 1 回起こして観察し、終わらせて机を返す
   - 机を取ってから、起動の直前に `sync-i686-helper.ps1` を回して終了コード 0 と `helper is i686` を控える（待つ間に他のセッションの全体テストが x64 版へ替えることがあるため）。i686 でなければ回し直し、直らなければ起こさずに机を返して報告する
   - 設計の環境変数の表のとおりに置き（`AREKA_USER_ROOT` は消す）、絶対パスの命令で裏で起こして番号を控え、終了コードをファイルに書く
   - MCP で `get_active_ghost_list`（`dot_sakura` が返ること）・`get_status`・`get_property`・`dump_surface`（1 人目・2 人目）・`dump_balloon` を取る
@@ -100,3 +100,4 @@ ar-samplesetched\` に無かった・本 spec と無関係の準備）。
 - 控え 2.3（`697c7c9a` の上・2026-10-22）: `cargo test -p sample-ghost-kit` は終了コード 0（単体 83・`nar-sample-path` の bin 0・結合 `nar_sample_path_test` 6・ほか 5・3 本、全部緑）。`cargo test -p log-capture-kit --test sample_path_guard_test` は終了コード 0（21 本緑）。書庫は断られず（2.7 の枝に入らない）、同梱 `bottle` も入り、見張りも緑（2.5・2.6 の枝に入らない）。
 - 控え 4.1（`10893218` の上）: `cargo build -p areka` 終了コード 0・`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` 終了コード 0。`nar-sample-path dot_sakura` 終了コード 0、`root=C:\home\maz\gitreka\.claude\worktreesreka-p0-dot-sakura-specimen-0f24e9	arget
 ar-samples\manual\dot_sakura`。根の下は `ghost\dot_sakura`（ファイル 158）と `balloonottle`（ファイル 38）だけ・計 196。一番深いファイルの絶対パスは 173 文字（`...\ghost\dot_sakura\ghost\master\dotvent_OpeningTalkDebug.txt`）。`target\dot-sakura-verify\{profile,logs,shots}` を作った。
+- 控え 4.2（コミット `59b99e54`・2026-10-22）: 机は 23:36:35 頃に `granted test`、23:39:16 に `returned test`。起動の直前の `tools\sync-i686-helper.ps1` は終了コード 0・`helper is i686: target\debug\shiori-host32-helper.exe`。起動の命令は `target\dot-sakura-verify\run1.ps1`（設計の環境変数の表どおり・`AREKA_USER_ROOT` を消す）、番号 37048、起動 23:36:52、終了 23:39:06、終了コード 0（`logs\run1.exitcode.txt`）。記録は `logs\run1.stdout.log`・`run1.stderr.log`（補助プログラムの 1 行）。経路はゴースト `Only`・バルーン `Companion`（`bottle`）。MCP: `get_active_ghost_list` は `．さくら`、`get_status` は空（待機）、`get_property` は `baseware.name`=`areka` だけ答え `currentghost.*` は `NG:Cannot find such property name.`（areka の MCP の今の作り）、`dump_surface` は 1 人目・2 人目とも `NG:No surface has been shown in this scope yet`、`dump_balloon` は 1 人目・2 人目とも `bottle` の枠（瓶の絵・文字なし・`shots\01`・`02`）。SHIORI へのすべての要求（`username`・`homeurl`・`OnFirstBoot`・`OnBoot`・`OnSecondChange`×121・`OnClose`）が状態 400（`shiori_error_response` 124 件）→ 設計の 3 段の ⑵「2.x だけの見込み」で 5.8 の枝。`raise_event OnClose` は「the ghost returned no script」（`\-` 無し）、`sakurascript` で `\-` を送って `talk_done_quit`・`app_exit` で終わった。WARN の大半は `cursor.blendmethod ROP 系は MN 未対応` の 16,403 件（毎フレーム級の繰り返し）、ほかに未知の合成メソッド `move` 22・`alternativestart` 5、バルーン面の縮退 6、全透明の element 4 など。
