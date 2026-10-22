@@ -22,10 +22,7 @@ use std::path::{Component, Path};
 // ---- 助手 ----
 
 /// 書庫を読取 → 名前の検証 → マニフェストの解釈まで通してから計画を組む。
-fn planned(
-    builder: NarBuilder,
-    request: &InstallRequest<'_>,
-) -> Result<(Vec<Placement>, Vec<SkippedCompanion>), RefuseReason> {
+fn planned(builder: NarBuilder, request: &InstallRequest<'_>) -> Result<Planned, RefuseReason> {
     let bytes = builder.bytes();
     let raw = read_central_directory(&bytes).expect("書庫そのものは無傷");
     let names = validate_entry_names(&raw).expect("名前は安全");
@@ -42,6 +39,12 @@ fn plan_and_skipped_of(
     builder: NarBuilder,
     request: &InstallRequest<'_>,
 ) -> (Vec<Placement>, Vec<SkippedCompanion>) {
+    let (plan, skipped, _overridden) = accepted(builder, request);
+    (plan, skipped)
+}
+
+/// 受理された計画を 3 つの列のまま取り出す。拒否されたら主張ごと落とす。
+fn accepted(builder: NarBuilder, request: &InstallRequest<'_>) -> Planned {
     match planned(builder, request) {
         Ok(planned) => planned,
         Err(reason) => panic!("受理されるはずの書庫が拒否された: {reason}"),
@@ -56,7 +59,7 @@ fn plan_of(builder: NarBuilder, request: &InstallRequest<'_>) -> Vec<Placement> 
 /// 拒否だけを取り出す。受理されたら主張ごと落とす。
 fn refusal_of(builder: NarBuilder, request: &InstallRequest<'_>) -> RefuseReason {
     match planned(builder, request) {
-        Ok((plan, _skipped)) => panic!(
+        Ok((plan, _skipped, _overridden)) => panic!(
             "拒否されるはずの書庫が受理された: {:?}",
             plan.iter().map(|p| &p.destination).collect::<Vec<_>>()
         ),
@@ -357,10 +360,21 @@ fn a_companion_balloon_goes_to_the_balloon_folder_with_its_prefix_stripped() {
         companion.name, "test-balloon",
         "同梱バルーンの名前は directory"
     );
+    let ghost = root.path().join("ghost").join("test-ghost");
     assert_eq!(
         companion.destination,
-        root.path().join("balloon").join("test-balloon")
+        ghost.join("balloon").join("test-balloon"),
+        "同梱はゴーストの中（要件 7.1）"
     );
+    assert_eq!(companion.root, root.path(), "根は本体の根");
+    assert!(companion.within_body, "本体の宛先の下に入れ子で置く");
+    assert!(companion.carve_out.is_empty());
+    assert_eq!(
+        plan[0].carve_out,
+        vec![r"balloon\test-balloon".to_owned()],
+        "本体の下敷きから同梱の場所を外す"
+    );
+    assert!(!plan[0].within_body);
     assert_eq!(companion.target_ghost, None);
     assert_eq!(companion.existing, ExistingPolicy::Overlay);
     assert!(!companion.skip_top_level_install_txt);
@@ -440,7 +454,11 @@ fn the_companion_source_name_may_differ_from_its_destination() {
     assert_eq!(relative_files(&plan[0]), vec!["install.txt"]);
     assert_eq!(
         plan[1].destination,
-        root.path().join("balloon").join("installed-name")
+        root.path()
+            .join("ghost")
+            .join("test-ghost")
+            .join("balloon")
+            .join("installed-name")
     );
     assert_eq!(relative_files(&plan[1]), vec!["descript.txt"]);
 }

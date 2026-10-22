@@ -10,8 +10,8 @@ use super::*;
 
 /// 同梱を `<ゴースト>\balloon\test-balloon` へ入れ子に置く形へ組み替え、その宛先を返す。
 ///
-/// 計画の側の組み替え（タスク 4.2）を待たずに、確定の手だけを手で組んだ配置で測る。
-/// 外す綴りは大小を変えておき、比べ方が ASCII の大小を無視することも同時に踏む。
+/// 計画も同じ形に組むが、ここでは外す綴りの大小を変えて上書きし、比べ方が ASCII の
+/// 大小を無視することも同時に踏む。
 fn nest(prepared: &mut Prepared, ghost: &Path) -> PathBuf {
     let inner = ghost.join("balloon").join("test-balloon");
     prepared.plan[0].carve_out = vec![r"Balloon\Test-Balloon".to_owned()];

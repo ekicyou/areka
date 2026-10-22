@@ -174,13 +174,15 @@ fn tree(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     out
 }
 
-/// 新しいゴーストは先頭の根へ、同梱のバルーンは見えている別の根へ入り、要素ごとに `install_placed`。
+/// 新しいゴーストは先頭の根へ、同梱のバルーンはそのゴーストの中へ入り、要素ごとに `install_placed`。
+/// 別の根に在る同じフォルダ名のバルーンには触らない（areka-P0-ghost-inner-balloon 要件 7.1・7.3）。
 #[test]
-fn new_ghost_goes_to_head_and_companion_balloon_to_its_own_root() {
+fn new_ghost_goes_to_head_and_companion_balloon_inside_it() {
     let tmp = TempPath::under_target("install-into-companion");
     let (one, two) = (tmp.child("one"), tmp.child("two"));
     std::fs::create_dir_all(&one).expect("根 1");
     put_balloon(&two, "kaku");
+    let below = tree(&two);
     let archive = ghost_nar(&tmp, "fresh", true);
 
     let (result, events) =
@@ -192,12 +194,17 @@ fn new_ghost_goes_to_head_and_companion_balloon_to_its_own_root() {
     );
     assert!(
         !one.join("balloon").exists(),
-        "先頭の根にバルーンを作らない"
+        "先頭の根の置き場にバルーンを作らない"
     );
     assert_eq!(
-        std::fs::read(two.join("balloon/kaku/descript.txt")).expect("上書き"),
+        std::fs::read(one.join("ghost/fresh/balloon/kaku/descript.txt")).expect("入る"),
         b"charset,UTF-8\r\nname,K\r\n",
-        "同梱のバルーンは見えている根で上書き"
+        "同梱のバルーンはゴーストの中"
+    );
+    assert_eq!(
+        tree(&two),
+        below,
+        "別の根の同じフォルダ名は 1 バイトも変わらない"
     );
     let placed: Vec<_> = events
         .iter()
@@ -213,7 +220,7 @@ fn new_ghost_goes_to_head_and_companion_balloon_to_its_own_root() {
         placed,
         [
             (Some(one.display().to_string()), Some("fresh".to_owned())),
-            (Some(two.display().to_string()), Some("kaku".to_owned())),
+            (Some(one.display().to_string()), Some("kaku".to_owned())),
         ]
     );
 }
@@ -236,51 +243,34 @@ fn existing_ghost_is_overwritten_in_its_root_and_the_hidden_one_is_untouched() {
     assert_eq!(tree(&two), below, "下の根の同じ名前は 1 バイトも変わらない");
 }
 
-/// 根をまたぐ書庫で 2 つ目の配置（別の根の同梱のバルーン）の確定に失敗すると、全部が元に戻る。
+/// 別の根の同じフォルダ名のバルーンが使用中（掴まれている）でも、同梱はゴーストの中へ入り、
+/// 掴まれたほうは 1 バイトも変わらない（同梱は根の置き場を宛先にしない＝要件 7.3）。
 #[test]
-fn failure_in_the_second_root_restores_both_roots() {
-    let tmp = TempPath::under_target("install-into-rollback");
+fn a_held_root_balloon_of_the_same_name_does_not_block_the_companion() {
+    let tmp = TempPath::under_target("install-into-held-root-balloon");
     let (one, two) = (tmp.child("one"), tmp.child("two"));
     std::fs::create_dir_all(&one).expect("根 1");
     put_balloon(&two, "kaku");
-    let (first, second) = (tree(&one), tree(&two));
+    let second = tree(&two);
     let archive = ghost_nar(&tmp, "fresh", true);
-    // 読みだけを共有して掴む＝確定の入れ替えが失敗する（areka-nar の檻と同じ型）。
+    // 読みだけを共有して掴む（areka-nar の檻と同じ型）。宛先なら確定の入れ替えが失敗する。
     let handle = std::fs::OpenOptions::new()
         .read(true)
         .share_mode(1 /* FILE_SHARE_READ */)
         .open(two.join("balloon/kaku/descript.txt"))
         .expect("掴める");
 
-    let error = install_into(&list(&[one.clone(), two.clone()]), &archive, None, None)
-        .expect_err("使用中なので確定できない");
+    let outcome = install_into(&list(&[one.clone(), two.clone()]), &archive, None, None);
     drop(handle);
-    assert!(
-        matches!(
-            error,
-            NarError::Io {
-                phase: IoPhase::Commit,
-                rolled_back: true,
-                ..
-            }
-        ),
-        "{error:?}"
-    );
-    assert_eq!(
-        tree(&one)
-            .into_keys()
-            .filter(|p| !p.starts_with(".nar-work"))
-            .count(),
-        first.len(),
-        "先頭の根のゴーストも元に戻る"
-    );
+    outcome.expect("同梱の宛先は掴まれたバルーンではない");
+    assert!(one.join("ghost/fresh/balloon/kaku/descript.txt").is_file());
     assert_eq!(
         tree(&two)
             .into_iter()
             .filter(|(p, _)| !p.starts_with(".nar-work"))
             .collect::<BTreeMap<_, _>>(),
         second,
-        "2 つ目の根の宛先は元のまま"
+        "2 つ目の根の同じフォルダ名は元のまま"
     );
 }
 

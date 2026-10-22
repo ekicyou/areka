@@ -80,7 +80,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 10.1, 10.3_
   - _Boundary: 更新の書く先（roots/user_root・update/worker・areka-update manifest）_
 
-- [ ] 4. インストール: 同梱の宛先と入れ子の確定（`areka-nar`・`areka` のインストールの側の期待値）
+- [x] 4. インストール: 同梱の宛先と入れ子の確定（`areka-nar`・`areka` のインストールの側の期待値）
 - [x] 4.1 入れ子の配置の組み上げと確定の手を足す（`install.rs` が中心・`plan.rs` の判断は触らない）
   - `Placement` に `carve_out: Vec<String>` と `within_body: bool` を足す（crate の中だけ）。`plan.rs` で配置を組む所には既定の値（空と偽）を足すだけにし、宛先と項目の判断は 1 つも変えない
   - 本体の組み上げで、下敷き（`Overlay`・`Replace{keep}`）を写すとき `carve_out` の相対のフォルダの下を写さない（比べ方は今の残す名前と同じ ASCII の大文字小文字を区別しない）
@@ -91,7 +91,7 @@
   - _Requirements: 7.7, 8.1, 10.1, 10.3_
   - _Boundary: NestedCommit_
 
-- [ ] 4.2 同梱のバルーンの宛先をゴーストの中へ替え、入れ子の配置へつなぐ（統合）
+- [x] 4.2 同梱のバルーンの宛先をゴーストの中へ替え、入れ子の配置へつなぐ（統合）
   - `companion_placement` の宛先を `<ゴーストのフォルダ>\balloon\<companion.directory>`、`root` を本体の根にする。ゴーストのフォルダは、ゴーストの書庫では本体の宛先、シェルの書庫では `existing_target_ghost` が確かめた対象のゴースト。同梱のために `request.roots.balloon_root` を呼ばない（バルーンだけの書庫の道には残す）
   - ゴーストの書庫で置く同梱（飛ばした同梱は含めない）ごとに、本体の項目から書庫の `balloon/<companion.directory>/` の下も除き、本体の `carve_out` に `balloon\<dir>` を足し、同梱の `within_body` を真にする。除いた項目のうちどの同梱の取り出し元の中にも無いものが 1 つでも在るときだけ warn `companion_overrides_archive_folder`（`directory`）を 1 件残す
   - 名指しされない `balloon\<名>\` は今どおり本体の項目に残す。`install.txt` の鍵の読み方（`manifest.rs`）は変えない。`plan.rs` の頭の説明の宛先の形の約束を「`root.join("ghost"|"balloon").join(名)`、またはそのゴーストの宛先の下の `shell\<名>`・`balloon\<名>`」へ直す
@@ -103,7 +103,7 @@
   - _Boundary: CompanionPlan, NestedCommit, install destination tests (integration)_
 
 - [ ] 5. インストールの側（`areka`）
-- [ ] 5.1 (P) 同梱の表示名を入れたゴーストの中から引く
+- [x] 5.1 (P) 同梱の表示名を入れたゴーストの中から引く
   - `install/procedure.rs` の `installed_items` で、同梱（先頭より後のバルーン）の名前を、根だけの `find_balloon` でなく、`element.path` の 2 段上を `ghost_dir` として `balloons_for(&facts.roots, ghost_dir).listed` からフォルダ名で引く。見つからない・`name` が無いときは今どおりフォルダ名。`OnInstallCompleteEx` の Reference2・`skipped_notice`・`installed_record` は変えない
   - `procedure_tests.rs` に、同梱の表示名がゴーストの中の `name` で、根の同じフォルダ名の別の `name` を取らない、を足して緑
   - _Requirements: 7.6, 10.1_
@@ -153,3 +153,4 @@
 - 範囲外: `cargo clippy -p areka-ghost --all-targets -- -D warnings` は依存の `dola` の既存の lint（`resolve.rs`・`conflict_resolver.rs` など）で止まり、このクレートまで届かない（完了の棚卸で扱う）。
 - 2.1: `cargo test -p areka` の統合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は i686 の helper が要る。ワークツリーで先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を建てる（建て済み）。テストを書く道具が `\b`・`\n` を化かすことがあるので、書いたらバイトで確かめる。
 - 4.1: 入れ子の確定のテストは `install_commit_tests.rs` が 1,000 行を超えるため兄弟の `install_nested_tests.rs`（`install_commit_tests.rs` から `#[path] mod nested`）に置いた。`carve_out` の綴りは `\` 区切り（`balloon\<dir>`）でないと当たらない。
+- 4.2/5.1: 4.2 の「`cargo test -p areka` が緑」は 5.1（同梱の表示名）の直しを待つため、5.1 を 4.2 と同じ変更・同じコミットで進めた。同梱の確定の失敗の検体は NTFS の大文字小文字の折りたたみ（古い `balloon\Ω` に同梱 `ω`）で本当に rename を落とす。

@@ -338,7 +338,7 @@ fn install_does_not_inflate_a_second_time() {
         "deflate のエントリの中身が元のまま戻る"
     );
     assert_eq!(
-        fs::read(root.join("balloon/kaku/balloon.txt")).expect("読める"),
+        fs::read(root.join("ghost/tester/balloon/kaku/balloon.txt")).expect("読める"),
         b"kaku\r\n"
     );
 }
@@ -462,51 +462,52 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
     drop(handle);
 }
 
-// ---- 根をまたぐインストール（本仕様 要件 5.5・5.9） ----
+// ---- 入れ子の同梱の確定の失敗（本仕様 要件 7.7・10.3） ----
 
-/// ゴーストは `ghost`、バルーンは `balloon` の根を答える。
-struct TwoRoots<'a> {
-    ghost: &'a Path,
-    balloon: &'a Path,
-}
-
-impl InstallRoots for TwoRoots<'_> {
-    fn ghost_root(&self, _folder: &str) -> PathBuf {
-        self.ghost.to_path_buf()
-    }
-
-    fn balloon_root(&self, _folder: &str) -> PathBuf {
-        self.balloon.to_path_buf()
-    }
-}
-
-/// 2 つの根にまたがる `.nar` で 2 つ目の配置（別の根の同梱バルーン）の確定が失敗すると、
-/// 1 つ目の根に確定済みのゴーストも元に戻り、記録の `work` に 2 つの根の作業フォルダが
-/// `; ` でつないで載る。
+/// ゴーストの書庫の同梱はゴーストの中へ入れ子に置かれ、その確定が失敗すると本体も元へ戻る。
+/// 作業フォルダは本体の根 1 つだけで、根の置き場（`<根>\balloon`）へは何も入らず、失敗の
+/// 記録が 1 件残る。
+///
+/// 失敗は公開の入口から本当に起こす。古いゴーストの中に `balloon\Ω` を置き、同梱の宛先を
+/// `ω` にする。外す場所の比べ方は ASCII の大小だけを無視するので `Ω` は本体の下敷きへ
+/// 写り、ファイルシステムは大小を区別しないので、同梱の `rename` が宛先の在ることで落ちる
+/// （設計「実装の注意」の道）。
 #[test]
-fn a_failure_in_the_second_root_rolls_back_the_first_root_and_records_both_work_folders() {
-    let ghost_dir = WorkDir::new().expect("根を借りられる");
-    let balloon_dir = WorkDir::new().expect("根を借りられる");
-    let (ghost_root, balloon_root) = (ghost_dir.path(), balloon_dir.path());
-    let destination = balloon_root.join("balloon").join("kaku");
-    fs::create_dir_all(&destination).expect("宛先を掘れる");
-    fs::write(destination.join("balloon.txt"), b"old kaku").expect("置ける");
-    let ghost_before = tree(&ghost_root.join("ghost"));
-    let balloon_before = tree(&destination);
-    let path = put(ghost_root, "ghost.nar", &ghost_with_balloon());
-    let archive = NarArchive::open(&path).expect("開ける");
-    let handle = hold(&destination.join("balloon.txt"));
+fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let root = work.path();
+    let ghost = root.join("ghost").join("tester");
+    fs::create_dir_all(ghost.join("balloon").join("Ω")).expect("古いゴーストを置ける");
+    fs::write(ghost.join("descript.txt"), b"old descript").expect("置ける");
+    fs::write(ghost.join("balloon").join("Ω").join("old.txt"), b"old").expect("置ける");
+    let before = tree(&root.join("ghost"));
+    let shelf = WorkDir::new().expect("書庫の置き場を借りられる");
+    let nar = NarBuilder::new()
+        .file(
+            "install.txt",
+            &install_txt(&[
+                "charset,UTF-8",
+                "type,ghost",
+                "name,テスト",
+                "directory,tester",
+                "balloon.directory,ω",
+                "balloon.source.directory,kaku",
+            ]),
+        )
+        .done()
+        .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
+        .done()
+        .file("kaku/balloon.txt", b"kaku\r\n")
+        .done();
+    let archive = NarArchive::open(&put(shelf.path(), "ghost.nar", &nar)).expect("開ける");
 
     let (result, records) = capture(|| {
         archive.install(&InstallRequest {
-            roots: &TwoRoots {
-                ghost: ghost_root,
-                balloon: balloon_root,
-            },
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
     });
-    let error = result.expect_err("使用中なので確定できない");
+    let error = result.expect_err("同梱の宛先が在るので確定できない");
 
     let NarError::Io {
         phase,
@@ -518,45 +519,40 @@ fn a_failure_in_the_second_root_rolls_back_the_first_root_and_records_both_work_
         panic!("I/O の失敗のはず: {error:?}");
     };
     assert_eq!(*phase, IoPhase::Commit, "確定の段で失敗した");
-    assert_eq!(failed, &destination, "対象は 2 つ目の根の掴んだ宛先");
+    assert_eq!(
+        failed,
+        &ghost.join("balloon").join("ω"),
+        "対象はゴーストの中の同梱の宛先"
+    );
     assert!(*rolled_back, "巻き戻し済み");
     assert_eq!(
-        tree(&ghost_root.join("ghost")),
-        ghost_before,
-        "1 つ目の根のゴーストも元に戻る"
+        tree(&root.join("ghost")),
+        before,
+        "確定したゴーストも元に戻る"
     );
-    assert_eq!(
-        tree(&destination),
-        balloon_before,
-        "2 つ目の根の宛先は元のまま"
-    );
+    assert!(!root.join("balloon").exists(), "根の置き場へは何も入らない");
 
     let errors: Vec<_> = records
         .iter()
         .filter(|event| event.level == tracing::Level::ERROR)
         .collect();
     assert_eq!(errors.len(), 1, "失敗 1 回につき記録 1 件: {records:?}");
-    let recorded: Vec<&Path> = errors[0]
-        .field("work")
-        .expect("work の欄がある")
-        .split("; ")
-        .map(Path::new)
-        .collect();
-    assert_eq!(
-        recorded.len(),
-        2,
-        "根ごとに作業フォルダが 1 つ: {recorded:?}"
+    let recorded = errors[0].field("work").expect("work の欄がある");
+    assert!(
+        !recorded.contains("; "),
+        "作業フォルダは根 1 つに 1 つ: {recorded}"
     );
-    for (work, root) in recorded.iter().zip([ghost_root, balloon_root]) {
-        assert!(work.is_dir(), "work が実在しない: {}", work.display());
-        assert!(
-            work.starts_with(root.join(".nar-work")),
-            "{} が根 {} の .nar-work の配下にない（計画の順に積む）",
-            work.display(),
-            root.display()
-        );
-    }
-    drop(handle);
+    let recorded = Path::new(recorded);
+    assert!(
+        recorded.is_dir(),
+        "work が実在しない: {}",
+        recorded.display()
+    );
+    assert!(
+        recorded.starts_with(root.join(".nar-work")),
+        "work が本体の根の .nar-work の配下にない: {}",
+        recorded.display()
+    );
 }
 
 // ---- 何度呼んでも同じ結果（設計 `install`） ----
@@ -693,14 +689,21 @@ pub(super) fn files_under(root: &Path) -> Vec<String> {
         .collect()
 }
 
-/// どのファイルも、本体か同梱の宛先のどれかの配下に在る。外れたものを返す。
+/// どのファイルも、本体（ゴーストの中の `balloon/` を除く）か、ゴーストの中の同梱の宛先の
+/// どれかの配下に在る。外れたものを返す。
 fn files_outside(files: &[String], body: &str, companions: &[&str]) -> Vec<String> {
-    let homes: Vec<String> = std::iter::once(format!("ghost/{body}/"))
-        .chain(companions.iter().map(|name| format!("balloon/{name}/")))
+    let body_home = format!("ghost/{body}/");
+    let shelf = format!("{body_home}balloon/");
+    let homes: Vec<String> = companions
+        .iter()
+        .map(|name| format!("{shelf}{name}/"))
         .collect();
     files
         .iter()
-        .filter(|file| !homes.iter().any(|home| file.starts_with(home.as_str())))
+        .filter(|file| {
+            let in_body = file.starts_with(&body_home) && !file.starts_with(&shelf);
+            !in_body && !homes.iter().any(|home| file.starts_with(home.as_str()))
+        })
         .cloned()
         .collect()
 }
@@ -777,7 +780,7 @@ fn eleven_numbered_companions_install_in_number_order_under_their_homes() {
     );
     for n in &numbers {
         assert_eq!(
-            fs::read(root.join(format!("balloon/b{n}/balloon.txt"))).expect("読める"),
+            fs::read(root.join(format!("ghost/tester/balloon/b{n}/balloon.txt"))).expect("読める"),
             n.as_bytes(),
             "balloon{n} の中身が自分の取り出し元から来ていない"
         );
@@ -839,8 +842,8 @@ fn a_cleaned_hierarchical_source_installs_stripped_and_records_in_order() {
     assert_eq!(
         files_under(root),
         vec![
-            "balloon/b0/descript.txt".to_owned(),
-            "balloon/b0/sub/s0.png".to_owned(),
+            "ghost/tester/balloon/b0/descript.txt".to_owned(),
+            "ghost/tester/balloon/b0/sub/s0.png".to_owned(),
             "ghost/tester/ghost/master/descript.txt".to_owned(),
             "ghost/tester/install.txt".to_owned(),
         ],
@@ -855,9 +858,53 @@ fn a_cleaned_hierarchical_source_installs_stripped_and_records_in_order() {
         "本体に空の extra フォルダが残った"
     );
     assert!(
-        !root.join("balloon/b2").exists(),
+        !root.join("ghost/tester/balloon/b2").exists(),
         "balloon2 の宛先が作られた"
     );
+}
+
+/// 書庫の `balloon/kaku/` を名指しされた同梱 `kaku` が本体から除くと、warn
+/// `companion_overrides_archive_folder` が 1 件残り、ゴーストの中の `balloon\kaku` は
+/// 同梱の中身だけになる（本仕様 要件 7.5・10.3）。
+#[test]
+fn an_overridden_archive_folder_is_recorded_once() {
+    let nar = NarBuilder::new()
+        .file(
+            "install.txt",
+            &install_txt(&[
+                "type,ghost",
+                "name,Tester",
+                "directory,tester",
+                "balloon.directory,kaku",
+                "balloon.source.directory,bal1",
+            ]),
+        )
+        .done()
+        .file("bal1/balloon.txt", b"kaku\r\n")
+        .done()
+        .file("balloon/kaku/old.txt", b"old")
+        .done();
+    let work = WorkDir::new().expect("根を借りられる");
+    let root = work.path();
+
+    let (outcome, records) = capture(|| install_into_empty_root(&nar, root));
+
+    assert_eq!(outcome.installed.len(), 2);
+    assert_eq!(
+        files_under(root),
+        vec![
+            "ghost/tester/balloon/kaku/balloon.txt".to_owned(),
+            "ghost/tester/install.txt".to_owned(),
+        ],
+        "書庫の balloon/kaku/ は本体に入らない"
+    );
+    let overrides: Vec<_> = records
+        .iter()
+        .filter(|event| event.field_str("event") == Some("companion_overrides_archive_folder"))
+        .collect();
+    assert_eq!(overrides.len(), 1, "警告は 1 件: {records:?}");
+    assert_eq!(overrides[0].level, tracing::Level::WARN);
+    assert_eq!(overrides[0].field_str("directory"), Some("kaku"));
 }
 
 // ---- 1,000 行（要件 10.8） ----

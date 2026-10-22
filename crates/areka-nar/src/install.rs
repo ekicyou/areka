@@ -393,7 +393,7 @@ fn kept(keep: Option<&[String]>, name: &OsStr) -> bool {
 /// 取り出し元が書庫に無いので置かなかった同梱のバルーン 1 つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkippedCompanion {
-    /// `*.directory` の値（置くはずだった `<根>/balloon/<directory>/` の名前）。
+    /// `*.directory` の値（置くはずだった `<ゴースト>/balloon/<directory>/` の名前）。
     pub directory: String,
     /// 取り出し元を決めた鍵。`*.source.directory` が書かれていればその鍵、無ければ `*.directory` の鍵。
     pub key: String,
