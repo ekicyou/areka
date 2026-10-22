@@ -16,7 +16,7 @@ use super::{
     spawn_ghost_windows,
 };
 use crate::placement::diag::{ZORDER_PAIR_DECLARED_TAG, zorder_pair_declared_line};
-use crate::placement::follow::{Anchored, BalloonFollow};
+use crate::placement::follow::{AnchorSource, Anchored, BalloonFollow};
 use crate::placement::resolver::Anchor;
 use crate::placement::source::GhostTitles;
 use crate::placement::test_support::capture_logs;
@@ -277,6 +277,38 @@ fn anchored_attached_to_all_char_windows_with_resolved_anchor() {
                 .get::<Anchored>(gw.balloon_window(scope).unwrap())
                 .is_none(),
             "scope{scope}: バルーン窓には Anchored を付けない"
+        );
+    }
+}
+
+/// areka-P0-window-link-directives 1.1（要件 6.1／6.2）: 作った全 char 窓に、`Anchored` と同じ
+/// descript の向き・台本の印なしの `AnchorSource` が付く。バルーン窓には付けない。
+#[test]
+fn anchor_source_attached_to_all_char_windows_with_descript_anchor() {
+    let mut world = World::new();
+    let mut placements = two_scope_placements();
+    placements[1].anchor = Anchor::Free;
+
+    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+
+    for p in &placements {
+        assert_eq!(
+            world
+                .get::<AnchorSource>(gw.char_window(p.scope).unwrap())
+                .copied(),
+            Some(AnchorSource {
+                descript: p.anchor,
+                by_script: false,
+            }),
+            "scope{}: AnchorSource は descript の向き・印なし",
+            p.scope
+        );
+        assert!(
+            world
+                .get::<AnchorSource>(gw.balloon_window(p.scope).unwrap())
+                .is_none(),
+            "scope{}: バルーン窓には AnchorSource を付けない",
+            p.scope
         );
     }
 }

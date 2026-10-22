@@ -97,7 +97,8 @@ use wintf::ecs::{
 use super::config::BalloonXMode;
 use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
-    Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
+    AnchorSource, Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag,
+    on_char_drag_end,
 };
 use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
@@ -486,6 +487,12 @@ pub fn spawn_ghost_windows(
                 // Anchored を読むため。二値吸着フラグ（旧 BottomSnap marker）は廃し、
                 // ドラッグ／リサイズはこの単一値を読んで射影 T を分岐する（Req1.6・DD15 v2）。
                 Anchored(p.anchor),
+                // 向きの出どころ（descript の向き・台本の印なし）を Anchored と同じ時に付ける
+                // （areka-P0-window-link-directives 設計の決め 5・要件 6.1／6.2）。
+                AnchorSource {
+                    descript: p.anchor,
+                    by_script: false,
+                },
                 // 非 Free アンカー（Bottom/Top/Left/Right）のキャラ窓は
                 // move_window=false＝wndproc は窓を動かさず on_char_drag が単一ライター
                 // （DD15 v2・4.7・task 8.2R）。Free は従来どおり wndproc 直接移動（4.1）。

@@ -29,11 +29,14 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
+use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
 
-use super::follow::{Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
+use super::follow::{
+    AnchorSource, Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window,
+};
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::spawn::GhostWindows;
 
@@ -76,6 +79,20 @@ pub fn char_pos_from_origin_x(anchor: Anchor, pos: PointPx, char_size: SizePx) -
             y: pos.y,
         },
         _ => pos,
+    }
+}
+
+/// キャラ窓の位置を記憶へ書くときの形を決める向き（areka-P0-window-link-directives 要件 4.8・
+/// 設計の決め 6）。
+///
+/// 次の起動はこの窓を descript の向きで読み戻すので、今の向き（台本で変えたかもしれない）では
+/// なく [`AnchorSource`]`.descript` で書く。射影（ドラッグの縛り）には今の向きを使い、形にだけ
+/// これを使う。`AnchorSource` が無い窓（テストの組み立てなど）は [`Anchored`] を使い、どちらも
+/// 無ければ `None`。
+pub fn saved_form_anchor(world: &World, window: Entity) -> Option<Anchor> {
+    match world.get::<AnchorSource>(window) {
+        Some(source) => Some(source.descript),
+        None => world.get::<Anchored>(window).map(|a| a.0),
     }
 }
 
@@ -597,7 +614,8 @@ pub fn persist_unremembered_char_positions(world: &World) {
             skip("大きさ");
             continue;
         };
-        let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
+        // 形は次の起動の読み戻しと同じ descript の向きで決める（要件 4.8）。
+        let Some(anchor) = saved_form_anchor(world, entity) else {
             skip("揃え方");
             continue;
         };
@@ -640,3 +658,6 @@ mod restore_offset_base_tests;
 #[cfg(test)]
 #[path = "persist_restore_tests.rs"]
 mod restore_tests;
+#[cfg(test)]
+#[path = "persist_saved_form_tests.rs"]
+mod saved_form_tests;

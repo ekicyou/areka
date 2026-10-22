@@ -60,7 +60,7 @@ use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, Gh
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
 use super::spawn::BalloonLimit;
 
-pub use self::anchor::{Anchored, project_anchor};
+pub use self::anchor::{AnchorSource, Anchored, project_anchor};
 pub(crate) use self::drag_follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };

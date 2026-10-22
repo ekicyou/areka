@@ -3,7 +3,7 @@
 > 設計は `design.md`（設計の決め 1〜12）、調べの記録は `research.md`（SSP の測りは 1.10・設計ディスカッションの結果は末尾）。テストはすべて実際の画面を使わない x64 の決定論テストで、実装の隣の兄弟ファイル（`*_tests.rs`）に置く。実機の根・検体・ログは作業ツリーの `target\` の下だけ。新しい `PlacementRoute` の語は足さず、`placement/follow/window_move.rs`・`placement/diag.rs`・`placement/chain_realign.rs`・`placement/work_area_sync.rs` には、どのタスクも触らない。`DragConfig.move_window` を書くのは 1.3 の書き手だけにする（設計の決め 12）。`drag_follow.rs`（937 行）は呼び出しの数行だけを足し、1,000 行を超えそうなら本番の側をファサードの形で分ける。
 
 - [ ] 1. 吸着の出どころ・窓の組の帳簿・連れ動きの計算・初期化の材料という土台を作る
-- [ ] 1.1 キャラクターの窓に吸着の向きの出どころを持たせ、記憶へ書く形を descript の向きにそろえる
+- [x] 1.1 キャラクターの窓に吸着の向きの出どころを持たせ、記憶へ書く形を descript の向きにそろえる
   - 窓ごとの部品 `AnchorSource { descript, by_script }` を `placement/follow/anchor.rs` に足して `follow.rs` から公開し、窓を作るとき（`spawn.rs`）に `Anchored` と同じ時に descript の向き・印なしで付ける
   - 記憶へ書く形を決める `saved_form_anchor`（`AnchorSource.descript`、無ければ `Anchored`、どちらも無ければ無し）を `persist.rs` に足し、並べ終えた時点の保存（`persist_unremembered_char_positions`）もこれで形を決める
   - 兄弟のテストで、descript が下・今の向きが `free` の窓の保存値を次の起動の読み戻し（`char_pos_from_origin_x`＋`project_restore`）へ通すと x が書いた位置に戻ること、部品の無い窓は `Anchored` の形で書かれること、作った窓に `AnchorSource` が付くことが緑になる
@@ -148,3 +148,6 @@
   - ぱすたの窓をクリックしてから 2 つの近道を押し、`balloon_pos_reset`（trigger=shortcut）と `reset_pos_menu_outcome` が出ることで、F10 の届き方と入力先を確かめる。起動の連鎖の確定と記憶の寄せ直しで食い違いが出たら、原因をこの spec の中で直すか、持ち主の spec を確かめて `/kiro-discovery` で起票する
   - 結果・記録の抜粋・申し送り先を `.kiro/specs/areka-P0-window-link-directives/signoff.md` に残し、各判定の行が載る
   - _Requirements: 9.7, 9.8_
+
+## Implementation Notes
+- areka は bin クレート。クレートのテストは `cargo test -p areka --bin areka`（`--lib` は無い）。
