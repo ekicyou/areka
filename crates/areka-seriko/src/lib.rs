@@ -47,8 +47,8 @@ pub use actor::{
     SerikoClock, SerikoMsg, SerikoReplace, SerikoSink, spawn_seriko, spawn_seriko_clocked,
 };
 pub use bind::{
-    BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, accumulate,
-    build_static_bindset, parse_bind_directive, scope_namespace,
+    BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, DefaultBinds,
+    accumulate, build_static_bindset, parse_bind_directive, scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};

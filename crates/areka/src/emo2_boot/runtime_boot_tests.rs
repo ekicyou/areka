@@ -53,7 +53,7 @@ fn rig() -> Rig {
     let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (surface, _seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        areka_emo_compose::BindSet::default(),
+        areka_seriko::DefaultBinds::uniform(areka_emo_compose::BindSet::default()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         PresentBridge::new(present_tx),

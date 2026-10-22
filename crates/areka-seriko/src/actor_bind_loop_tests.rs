@@ -1088,7 +1088,9 @@ mod tick_loop_tests {
 
     /// 表示中シェル面 surface `sid`・静的 binds{1100,1207} の scope "0" 状態を組む。
     fn shown_shell_states(sid: u32) -> (ScopeStates, ActorKey) {
-        let mut states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
+        let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+            1100, 1207,
+        ])));
         let scope = ActorKey::from("0");
         states.apply(&scope, SurfaceTarget::Show(sid));
         (states, scope)
@@ -1105,7 +1107,9 @@ mod tick_loop_tests {
         // 表は live（surface 10 に常時発火アニメ）だが、Show していない＝表示中 slot 皆無。
         let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
         let mut loop_runtime = LoopRuntime::new(live_cfg(table, always_fire()));
-        let mut states = ScopeStates::new(BindSet::from_ids([1100, 1207])); // Show なし
+        let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+            1100, 1207,
+        ]))); // Show なし
         let mut out = MockSurfaceOutput::new();
         let records = out.records();
 
@@ -1197,7 +1201,7 @@ mod tick_loop_tests {
         let out = MockSurfaceOutput::new();
         let (sink, handle) = spawn_seriko(
             tiny_resolver(),
-            BindSet::from_ids([1100, 1207]),
+            crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
             BindResolver::empty(),
             SerikoLoopConfig::disabled(),
             out,

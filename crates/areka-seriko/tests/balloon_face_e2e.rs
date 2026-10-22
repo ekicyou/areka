@@ -82,7 +82,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     let records = out.records();
     let (seriko_sink, seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::from_ids([]),
+        areka_seriko::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,

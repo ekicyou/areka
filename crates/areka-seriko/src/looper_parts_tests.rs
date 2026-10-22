@@ -64,7 +64,7 @@ const CHILD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 #[test]
 fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     let mut rt = LoopRuntime::new(cfg(table_of(CHILD), always_fire()));
-    let mut states = ScopeStates::new(no_binds());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(0));
 
@@ -83,7 +83,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     assert_eq!(rt.parts.clock(&scope, 100, 0), playing);
 
     // シェルの表の差し替え: 部品の時計を捨てる。
-    states.rebase_shell(no_binds());
+    states.rebase_shell(crate::DefaultBinds::uniform(no_binds()));
     rt.replace_shell_table(table_of(CHILD));
     assert!(rt.parts.is_empty(), "差し替えの後に部品の時計が空");
 }
@@ -94,7 +94,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
 fn refresh_reloads_part_frames_at_last_tick_time() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table_of(CHILD), rng));
-    let mut states = ScopeStates::new(no_binds());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
     let scope = ActorKey::from("0");
 
     assert_eq!(
@@ -159,7 +159,7 @@ fn table_without_animated_parts_never_enters_part_path() {
     assert!(!table.has_animated_parts(), "前提: 動く部品が無い表");
     let (rng, probe) = counting_rng(&[0; 16]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(no_binds());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(0));
 
@@ -215,7 +215,7 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
         0
     });
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(no_binds());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
     let sakura = ActorKey::from("0");
     let kero = ActorKey::from("1");
     states.apply(&kero, SurfaceTarget::Show(0));

@@ -83,7 +83,7 @@ fn run(
     let records = out.records();
     let (mut sink, handle) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        static_binds,
+        areka_seriko::DefaultBinds::uniform(static_binds),
         BindResolver::empty(),
         loop_config,
         out,

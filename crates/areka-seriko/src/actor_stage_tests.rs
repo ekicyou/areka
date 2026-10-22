@@ -53,7 +53,7 @@ impl Rig {
         let records = out.records();
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
-            states: ScopeStates::new(BindSet::from_ids([])),
+            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([]))),
             rt: LoopRuntime::new(config),
             out,
             records,
@@ -259,7 +259,7 @@ fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
     let records = out.records();
     let (sink, handle) = spawn_seriko_clocked(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::from_ids([]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         SerikoLoopConfig {
             shell_table: AnimationTable::empty(),

@@ -147,7 +147,9 @@ fn build_boot_assets_from_emo2_fixture() {
 
     // --- static_binds: DD-8 の emo2 default==1 集合（昇順） ---
     assert_eq!(
-        boot.static_binds.ids(),
+        boot.static_binds
+            .for_scope(&areka_sakura::ActorKey::from("0"))
+            .ids(),
         &[1100, 1207, 1302, 1500, 1800],
         "shell descript の sakura.bindgroup{{N}}.default==1（DD-8）"
     );

@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
-use areka_seriko::{BIND_COMMAND, BindChoicePolicy, BindResolver, scope_namespace};
+use areka_seriko::{BIND_COMMAND, BindChoicePolicy, BindResolver, DefaultBinds, scope_namespace};
 use bevy_ecs::world::World;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
@@ -40,7 +40,7 @@ pub(crate) struct ShellCarry {
     surfaces: BTreeMap<u32, u32>,
     binds: BTreeMap<u32, BindSet>,
     /// 読み直しの前のシェルの静的な着せ替えの既定（控えた着せ替えとの差が台本で着た・脱いだ分）。
-    old_static: BindSet,
+    old_static: DefaultBinds,
 }
 
 impl ShellCarry {
@@ -55,7 +55,7 @@ impl ShellCarry {
     }
 
     /// 読み直しの前のシェルの静的な着せ替えの既定。
-    pub(crate) fn old_static(&self) -> &BindSet {
+    pub(crate) fn old_static(&self) -> &DefaultBinds {
         &self.old_static
     }
 }
@@ -183,7 +183,7 @@ pub(crate) fn snapshot(
     scopes: impl IntoIterator<Item = u32>,
     current: impl Fn(u32) -> Option<u32>,
     binds: impl Fn(u32) -> Option<BindSet>,
-    old_static: BindSet,
+    old_static: DefaultBinds,
 ) -> ShellCarry {
     let mut carry = ShellCarry {
         old_static,

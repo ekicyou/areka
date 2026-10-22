@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
-use areka_emo_compose::{BindSet, ComposeError, EmoWorld};
+use areka_emo_compose::{ComposeError, EmoWorld};
 use areka_emo_present::PresentError;
 use areka_emo_present::balloon::{
     build_balloon_target_from_faces, load_balloon_use_self_alpha, load_scope_balloon_model,
@@ -28,7 +28,8 @@ use areka_parsers::kv::parse_kv;
 use areka_parsers::package::resolve_with_shell;
 use areka_sakura::ActorKey;
 use areka_seriko::{
-    AnimationTable, BindOptionDecls, BindResolver, SurfaceResolver, build_static_bindset,
+    AnimationTable, BindOptionDecls, BindResolver, DefaultBinds, SurfaceResolver,
+    build_static_bindset,
 };
 use tracing::error;
 
@@ -192,7 +193,7 @@ pub struct BootAssets {
     /// `Emote{key}` → surface 解決器（`EmoWorld::alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
     /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`・DD-8）。
-    pub static_binds: BindSet,
+    pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
     /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
     pub bind_resolver: BindResolver,
@@ -319,7 +320,7 @@ pub struct ShellAssets {
     /// `Emote{key}` → surface 解決器（先頭 World の `alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
     /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`）。
-    pub static_binds: BindSet,
+    pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` 由来）。
     pub bind_resolver: BindResolver,
     /// シェル面のループ表（先頭 World から・scope 資産不在なら空表）。
@@ -442,7 +443,8 @@ pub fn build_shell_assets(
             });
         }
     };
-    let static_binds = build_static_bindset(&default_bind_ids(&shell_kv));
+    // この段では `sakura.*` の組をどのスコープにも同じ組として持つ（今の振る舞い）。
+    let static_binds = DefaultBinds::uniform(build_static_bindset(&default_bind_ids(&shell_kv)));
 
     // シェル面のループ表（面種非依存＝裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
     // 全 scope が同一 `Shell` から build 済みゆえ内容は scope 非依存＝先頭 World から 1 度だけ

@@ -87,7 +87,7 @@ fn idempotent_repeat_surface_no_reemit() {
 
     let (mut sink, handle) = spawn_seriko(
         resolver,
-        binds.clone(),
+        areka_seriko::DefaultBinds::uniform(binds.clone()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         mock,
@@ -148,7 +148,7 @@ fn unresolved_mixed_still_processes_following() {
 
     let (mut sink, handle) = spawn_seriko(
         resolver,
-        binds.clone(),
+        areka_seriko::DefaultBinds::uniform(binds.clone()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         mock,
@@ -203,7 +203,7 @@ fn emo2_alias_single_and_multi_classification() {
 
     let (mut sink, handle) = spawn_seriko(
         resolver,
-        binds.clone(),
+        areka_seriko::DefaultBinds::uniform(binds.clone()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         mock,

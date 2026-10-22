@@ -71,7 +71,7 @@ impl Rig {
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
             bind_resolver: BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default()),
-            states: ScopeStates::new(static_binds),
+            states: ScopeStates::new(crate::DefaultBinds::uniform(static_binds)),
             rt: LoopRuntime::new(cfg(table, always_fire())),
             out,
             records,

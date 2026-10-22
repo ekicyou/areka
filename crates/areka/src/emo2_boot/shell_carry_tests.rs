@@ -93,7 +93,7 @@ fn snapshot_keeps_only_the_shown_scopes() {
             _ => None,
         },
         |scope| (scope != 2).then(|| set(&[scope + 100])),
-        set(&[100]),
+        areka_seriko::DefaultBinds::uniform(set(&[100])),
     );
     assert_eq!(carry.surface(0), Some(1000));
     assert_eq!(carry.surface(1), None);
@@ -102,7 +102,10 @@ fn snapshot_keeps_only_the_shown_scopes() {
     assert_eq!(carry.binds(0), Some(&set(&[100])));
     assert_eq!(carry.binds(1), Some(&set(&[101])));
     assert_eq!(carry.binds(2), None);
-    assert_eq!(carry.old_static(), &set(&[100]));
+    assert_eq!(
+        carry.old_static(),
+        &areka_seriko::DefaultBinds::uniform(set(&[100]))
+    );
 }
 
 /// ⑶ 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
@@ -237,7 +240,7 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
     let records = out.records();
     let (sink, seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        set(&[100]),
+        areka_seriko::DefaultBinds::uniform(set(&[100])),
         names(&[]),
         SerikoLoopConfig::disabled(),
         out,

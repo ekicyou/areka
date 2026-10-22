@@ -26,7 +26,9 @@ pub(super) fn tiny_resolver() -> SurfaceResolver {
 
 /// 非空の静的 bind 集合を持つ空スコープ状態。
 pub(super) fn fresh_states() -> ScopeStates {
-    ScopeStates::new(BindSet::from_ids([1100, 1207]))
+    ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1100, 1207,
+    ])))
 }
 
 /// 不活性なループ統括器（空表＋ダミー乱数）。cue/bind/balloon の同期 `handle_message` 檻で
@@ -58,7 +60,7 @@ impl ClockRig {
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
             bind_resolver: BindResolver::empty(),
-            states: ScopeStates::new(BindSet::from_ids([])),
+            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([]))),
             rt: LoopRuntime::new(config)
                 .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),
             out,

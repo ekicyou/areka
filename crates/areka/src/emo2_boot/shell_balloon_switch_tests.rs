@@ -66,7 +66,7 @@ fn write_descript(dir: &Path, body: &str) {
 fn test_seriko_sink() -> SerikoSink {
     spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::default(),
+        areka_seriko::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         MockSurfaceOutput::new(),
@@ -90,7 +90,7 @@ fn headless_wiring() -> Emo2Wiring {
             shells: Vec::new(),
             balloons: Vec::new(),
             resolver: SurfaceResolver::new(BTreeMap::new()),
-            static_binds: BindSet::default(),
+            static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
             bind_resolver: BindResolver::empty(),
             loop_tables: LoopTables {
                 shell: AnimationTable::empty(),

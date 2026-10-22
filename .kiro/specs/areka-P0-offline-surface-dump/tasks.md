@@ -25,7 +25,7 @@
   - _Requirements: 2.6, 7.2_
 
 - [ ] 2. 着せ替えの型の付け替え（areka-seriko と画面）・スコープごとの名前の表・名前で当てる 1 つの決め方・時点 T まで進める口
-- [ ] 2.1 既定の着せ替えの型を「スコープごとの組」に付け替える（振る舞いは変えない）
+- [x] 2.1 既定の着せ替えの型を「スコープごとの組」に付け替える（振る舞いは変えない）
   - スコープの番号ごとに組を持つ型（DefaultBinds）を足す: どのスコープにも同じ組を返す作り方・1 つのスコープだけに組を持つ作り方・スコープで引く口（書かれていない・数でないスコープは空の組）
   - スコープの状態の作り方・SERIKO の起こし方（時計つきを含む）・シェルの差し替えの合図の既定の組の型を新しい型にし、動的な組が無いときはスコープで引いた組へ戻る
   - areka-seriko の試験 27 本（`src/` の 22 本・`tests/` の 5 本、design の Modified Files の一覧と同じ。2026-10-22 に数え直して 41 本中の 27 本・約 100 か所）を「どのスコープにも同じ組」で包むだけにする（期待は変えない）
@@ -34,7 +34,7 @@
   - `cargo test -p areka-seriko` が期待を 1 つも変えずに緑（`cue_sequence.rs` の scope "1" → `binds:<static>` を含む）
   - _Requirements: 14.3_
 
-- [ ] 2.2 画面の着せ替えの型を付け替える（振る舞いは変えない・2.1 と続けて行う）
+- [x] 2.2 画面の着せ替えの型を付け替える（振る舞いは変えない・2.1 と続けて行う）
   - 既定の組を持ち回る areka の本番 7 本（`assets.rs`・`emo2_boot/mod.rs`・`spine.rs`・`shell_carry.rs`・`frame/attach.rs`・`frame/switch.rs`・`frame/wiring.rs`。design の本番 9 本のうち残りの `actor.rs`・`state.rs` は 2.1）を新しい型にし、組が要る所はスコープで引く。`assets.rs` はこの段では今の `sakura.*` の組を「どのスコープにも同じ組」で包む
   - areka の試験 14 本（`emo2_boot/` の 13 本・`input_events/balloon_test_support.rs`、design の Modified Files の一覧どおり・約 28 か所）を「どのスコープにも同じ組」で包むだけにする（期待は変えない）
   - 2.1 の後は areka のクレートが建たないので、2.1 と同じ実装係の同じ流れでこの段まで続けて行い、ワークスペースを建つ状態へ戻す（あいだに `crates/areka` を触る (P) のタスクを置かない）
@@ -263,3 +263,4 @@
 ## Implementation Notes
 
 - 1.2: `char*` の欄は `BindGroupDefaults` の pub の BTreeMap 4 本（`char_default_on`・`char_names`・`char_mustselect`・`char_multiple`）。スコープごとの名前を引く `names()` は private なので、2.3 は `char_names` を直に読み、名前・既定・option のどれかを持つスコープを拾うには 4 本の鍵を合わせて見る。`Char(0)`／`Char(1)` は空を返す
+- 2.1/2.2: `DefaultBinds`（`areka-seriko/src/bind.rs`）は `uniform`・`single`・`Default`・`for_scope`。試験 3 か所（assets_tests:150・switch_tests:795・frame_attach_carry_tests:123）は `.ids()` を `for_scope("0")` で読む＝2.3／5.1 で既定がスコープごとになったら見直す。`cargo test -p areka` の real-run 統合試験（mcp_get_log_real_run・smoke_boot_loop_exit）は i686 の helper を先に建てないと赤（`tools/test-all.ps1` は先に建てる）。単体は `cargo test -p areka --bins`

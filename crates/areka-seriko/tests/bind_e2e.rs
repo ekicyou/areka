@@ -158,7 +158,7 @@ fn run_core(
     let records = out.records();
     let (seriko_sink, seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        static_binds,
+        areka_seriko::DefaultBinds::uniform(static_binds),
         resolver,
         SerikoLoopConfig::disabled(),
         out,

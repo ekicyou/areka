@@ -685,3 +685,47 @@ fn accumulate_off_absent_is_noop() {
         "存在しない ID の off は入力集合と同値（no-op）"
     );
 }
+
+/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（今の振る舞い・要件 14.3）。
+#[test]
+fn default_binds_uniform_returns_same_set_for_every_scope() {
+    let set = areka_emo_compose::BindSet::from_ids([1100, 1207]);
+    let binds = DefaultBinds::uniform(set.clone());
+    for scope in ["0", "1", "2", "x"] {
+        assert_eq!(
+            binds.for_scope(&ActorKey::from(scope)),
+            &set,
+            "scope {scope}"
+        );
+    }
+}
+
+/// `DefaultBinds::single` はそのスコープだけに組を持ち、ほかのスコープ・数でないスコープは空（要件 14.3）。
+#[test]
+fn default_binds_single_holds_one_scope_and_others_are_empty() {
+    let set = areka_emo_compose::BindSet::from_ids([3000]);
+    let binds = DefaultBinds::single(1, set.clone());
+    assert_eq!(binds.for_scope(&ActorKey::from("1")), &set);
+    let empty = areka_emo_compose::BindSet::default();
+    for scope in ["0", "2", "x"] {
+        assert_eq!(
+            binds.for_scope(&ActorKey::from(scope)),
+            &empty,
+            "scope {scope}"
+        );
+    }
+}
+
+/// `DefaultBinds::default` はどのスコープにも空の組を返す（要件 14.3）。
+#[test]
+fn default_binds_default_is_empty_for_every_scope() {
+    let binds = DefaultBinds::default();
+    let empty = areka_emo_compose::BindSet::default();
+    for scope in ["0", "1", "x"] {
+        assert_eq!(
+            binds.for_scope(&ActorKey::from(scope)),
+            &empty,
+            "scope {scope}"
+        );
+    }
+}

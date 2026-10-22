@@ -23,6 +23,47 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::ActorKey;
 
+/// スコープの番号ごとの既定の着せ替えの組（spec: areka-P0-offline-surface-dump 要件 14.3）。
+///
+/// [`DefaultBinds::uniform`] はどのスコープにも同じ組を返す（1 組を全スコープで共有する今の
+/// 振る舞い）。[`DefaultBinds::single`] は 1 つのスコープだけに組を持つ。[`DefaultBinds::for_scope`]
+/// は書かれていないスコープ・数でないスコープに空の組（`uniform` なら共有の組）を返す。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DefaultBinds {
+    /// スコープの番号ごとの組。
+    by_scope: BTreeMap<u32, areka_emo_compose::BindSet>,
+    /// `by_scope` に無いスコープへ返す組（`uniform` だけが空でない組を持つ）。
+    fallback: areka_emo_compose::BindSet,
+}
+
+impl DefaultBinds {
+    /// どのスコープにも同じ組（今の振る舞い）。
+    pub fn uniform(binds: areka_emo_compose::BindSet) -> Self {
+        Self {
+            by_scope: BTreeMap::new(),
+            fallback: binds,
+        }
+    }
+
+    /// そのスコープだけに組を持つ（ほかのスコープは空の組）。
+    pub fn single(scope: u32, binds: areka_emo_compose::BindSet) -> Self {
+        Self {
+            by_scope: BTreeMap::from([(scope, binds)]),
+            fallback: areka_emo_compose::BindSet::default(),
+        }
+    }
+
+    /// スコープで引く。書かれていないスコープ・数でないスコープは `fallback`（`uniform` 以外は空）。
+    pub fn for_scope(&self, scope: &ActorKey) -> &areka_emo_compose::BindSet {
+        scope
+            .as_str()
+            .parse::<u32>()
+            .ok()
+            .and_then(|n| self.by_scope.get(&n))
+            .unwrap_or(&self.fallback)
+    }
+}
+
 /// bind 名前解決の**名前空間**（本体側＝sakura／相方側＝kero を型で峻別する・D7）。
 ///
 /// scope（`ActorKey`）から [`scope_namespace`] が写像し、[`BindResolver::resolve`] が

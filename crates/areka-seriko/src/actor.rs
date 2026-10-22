@@ -88,7 +88,7 @@ pub enum SerikoReplace {
     Shell {
         epoch: u64,
         resolver: SurfaceResolver,
-        static_binds: areka_emo_compose::BindSet,
+        static_binds: crate::bind::DefaultBinds,
         bind_resolver: BindResolver,
         shell_table: AnimationTable,
     },
@@ -258,7 +258,7 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// ループを殺さず継続する（silent failure 禁止・入力起因では panic しない）。
 pub fn spawn_seriko<O>(
     resolver: SurfaceResolver,
-    static_binds: areka_emo_compose::BindSet,
+    static_binds: crate::bind::DefaultBinds,
     bind_resolver: BindResolver,
     loop_config: SerikoLoopConfig,
     out: O,
@@ -286,7 +286,7 @@ pub type SerikoClock = std::sync::Arc<dyn Fn() -> u64 + Send + Sync>;
 /// 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
 pub fn spawn_seriko_clocked<O>(
     resolver: SurfaceResolver,
-    static_binds: areka_emo_compose::BindSet,
+    static_binds: crate::bind::DefaultBinds,
     bind_resolver: BindResolver,
     loop_config: SerikoLoopConfig,
     out: O,
@@ -368,8 +368,8 @@ fn rebased(
     extra: Vec<ActorKey>,
 ) -> DisplayCommand {
     let (slot, binds) = match kind {
-        RebaseKind::Shell => (Slot::Shell, states.binds().clone()),
-        RebaseKind::Balloon => (Slot::Balloon, areka_emo_compose::BindSet::default()),
+        RebaseKind::Shell => (Slot::Shell, Some(states.binds())),
+        RebaseKind::Balloon => (Slot::Balloon, None),
     };
     let mut surfaces: BTreeMap<ActorKey, Option<u32>> =
         states.current_surfaces(slot).into_iter().collect();
@@ -379,12 +379,15 @@ fn rebased(
     let shows = surfaces
         .into_iter()
         .map(|(scope, surface_id)| RebasedShow {
+            // シェルはスコープで引いた新しい既定・バルーンは空。
+            binds: binds
+                .map(|defaults| defaults.for_scope(&scope).clone())
+                .unwrap_or_default(),
             scope,
             surface_id: match kind {
                 RebaseKind::Shell => surface_id,
                 RebaseKind::Balloon => surface_id.or(Some(0)),
             },
-            binds: binds.clone(),
         })
         .collect();
     DisplayCommand::Rebased { epoch, kind, shows }

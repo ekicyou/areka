@@ -22,7 +22,7 @@ pub(super) fn shell_runtime(text: &str) -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
     (
         LoopRuntime::new(cfg(table_of(text), rng)),
-        ScopeStates::new(BindSet::default()),
+        ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default())),
     )
 }
 
