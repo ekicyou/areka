@@ -189,3 +189,20 @@
 - 古い注記の直し（`window_move.rs:533` の「本番では未結線」と、`anchor.rs:174` の「seriko が書き換える」）は、`AnchorChange` の扱いを決めるときに一緒に直す。
 - 要件 7.4 を満たすには、バルーン位置初期化より先に `DefaultPlacementBasis` の中身をそろえる（move-canon の申し送り 2.2）。
 - 同じウェーブに置けない相手（brief の 2026-10-22 の再測定）: `descript-window-keys`（`config.rs`・`drag_follow.rs`）・`dpi-realign-remembered-chain`（働きでもこちらが先）・受け手の表に行を足す v0.1.0 の各 spec。
+
+### 1.10 SSP での測り（2026-10-22・要件ディスカッションの前）
+
+開発者の機械の SSP（MCP）で、ゴースト「悪役令嬢クローディア」（シェルの descript は `sakura.seriko.alignmenttodesktop,free`・`kero.…,free`）に台本を送り、窓の矩形を `currentghost.scope(0).rect` で読んだ。読み直し・シェルの切り替え・設定の変更はしていない。途中で SSP のゴーストが別の作業で「窓際のぱすたさん」へ切り替わったため、窓の組の測りの結果は読めず、そこで止めた。
+
+| 送った台本（`\0` で） | 窓の上下（top–bottom） | 読み取り |
+|---|---|---|
+| 測る前 | 1204–1704 | 1704 が作業領域の下端 |
+| `\![set,alignmenttodesktop,bottom]`（上へずらした後） | 1104–1604 → 1204–1704 | 下を指定するとすぐ下端へ沿う（要件 1.1 と合う） |
+| `bottom` の後に `\![move,--X=0,--Y=-100,--base=me,--time=0]` | 1204–1704 のまま | 下の吸着は `\![move]` の縦を受けない |
+| `bottom` の後に `\![set,alignmenttodesktop,foo]` → 同じ `\![move]` | 1104–1604 へ動いた | **読めない語は吸着を外す**（なし、または descript の向き。この検体は descript がなしなので見分けられない）。窓はその場に留まる |
+| `bottom` の後に `\![set,alignmenttodesktop]`（値なし）→ 同じ `\![move]` | 1204–1704 のまま | **値が欠けた指令は何も変えない** |
+| `\![set,alignmentondesktop,free]` → 同じ `\![move]` | 1104–1604 へ動いた | 古い綴りも効く（要件 1.4 と合う） |
+| `\![set,alignmenttodesktop,default]`（descript がなし） | 動かない | descript の向きがなしなら沿わせない（要件 1.3 と合う） |
+
+- どの台本でも、strict のエラーの記録は 0 件（読めない語も値なしも、エラーとしては扱われない）。
+- 測れなかった点: 窓の組（`\![set,sticky-window]` の連れ動き・重なった ID の扱い）、ゴーストの読み直し・シェルの切り替えでの寿命、組の相手のバルーンがドラッグで付いてくるか。読み直しとシェルの切り替えは開発者の許可が要る。
