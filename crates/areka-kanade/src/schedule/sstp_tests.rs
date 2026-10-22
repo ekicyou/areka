@@ -88,7 +88,10 @@ fn on_translate_sstp_has_reference0_and_reference1_only() {
             references,
             status: got,
         } => {
-            assert_eq!(id, EventId::Static("OnTranslate"));
+            assert_eq!(
+                id,
+                EventId::Translate(crate::request_origin::RequestOrigin::MCP_SEND_TRANSLATE)
+            );
             assert_eq!(
                 references,
                 vec![

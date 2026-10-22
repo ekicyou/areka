@@ -548,7 +548,7 @@ fn translate_references_for_send_and_returned_script() {
     };
     let refs_of = |call: ShioriCall| match call {
         ShioriCall::Get { id, references, .. } => {
-            assert_eq!(id, EventId::Static("OnTranslate"));
+            assert!(matches!(id, EventId::Translate(_)), "{id:?}");
             references
         }
         ShioriCall::Notify { .. } => panic!("OnTranslate は GET"),

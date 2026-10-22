@@ -714,8 +714,7 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
 fn replace_absent_markers(call: &mut ShioriCall) {
     let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) = call;
     for (index, value) in references.iter_mut().enumerate() {
-        // 翻訳の要求は 5.1 まで `Static("OnTranslate")` でも作られるので両方を通す。
-        let translate = matches!(id, EventId::Static("OnTranslate") | EventId::Translate(_));
+        let translate = matches!(id, EventId::Translate(_));
         if value != ABSENT_REFERENCE || (index == 1 && translate) {
             continue;
         }

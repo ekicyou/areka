@@ -48,3 +48,7 @@ pub(crate) fn run_translate(
 #[cfg(test)]
 #[path = "actor_translate_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "actor_translate_origin_tests.rs"]
+mod origin_tests;
