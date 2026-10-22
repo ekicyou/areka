@@ -25,7 +25,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 3.3, 3.4, 3.5, 4.1, 4.2, 5.1, 5.2_
 
 - [ ] 2. 読む口 2 つの答えを決定論テストで固定する
-- [ ] 2.1 (P) MCP の `get_property` を実行系ごと通す檻に大文字の名前を足す
+- [x] 2.1 (P) MCP の `get_property` を実行系ごと通す檻に大文字の名前を足す
   - 既存の実行系を立てる檻の聞く名前の並びに `BASEWARE.NAME` を足し、`areka`（`isError: false`）を期待する。既存の ` baseware.name` →「無い名前」はそのまま残す
   - 冒頭の説明の「英字の大小を混ぜた名前は使わない」を、本 spec で大小違いの 1 つを足したことへ直す
   - 完了の状態: その檻が緑で、既存の 7 つの名前の期待は変わらない
@@ -61,3 +61,7 @@
   - 完了の状態: 2 つの文書にその行と注記があり、表の列の数が他の行と同じ
   - _Boundary: 記録の文書_
   - _Requirements: 6.2, 6.3_
+
+## Implementation Notes
+
+- 範囲外（10-22）: rustc 1.99.1 の clippy で `cargo clippy -p areka --all-targets -- -D warnings` が本 spec の外のクレートで赤（dola の resolve.rs:284 too_many_arguments・conflict_resolver.rs:42 collapsible_if・facade.rs:323 doc_lazy_continuation、areka-kanade もビルド止まり）。clippy は test-all と CI の関門ではないので本 spec では扱わない。完了の棚卸で起票する。
