@@ -2542,7 +2542,7 @@ areka はバルーンの初期表示面の宣言を受け取る経路を持た�
 [entry."ukadoc:descript_ghost:balloon.dontmove_2ctrue:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-descript-window-keys"
 priority = "A2"
 values = []
 links = []
@@ -2552,7 +2552,7 @@ areka はバルーンの位置合わせを切る宣言を受け取る経路を�
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka のバルーンは常に本体の窓に付いて動く（areka の placement::follow が本体の移動をバルーンへ伝える）。切ると書いても付いて動くので、作者が意図した見え方にはならない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は areka-P0-descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3417,7 +3417,7 @@ note = """
 [entry."ukadoc:descript_ghost:sakura.seriko.defaultsurface_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-descript-window-keys"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -3427,7 +3427,7 @@ areka は本体側の初期サーフェス番号の宣言を受け取る経路�
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は areka-P0-descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -4987,7 +4987,7 @@ note = """
 [entry."ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -4997,14 +4997,14 @@ areka には作り付けのメニューが無く、その背景に敷く画像�
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5015,14 +5015,14 @@ areka には作り付けのメニューが無く、その背景に敷く画像�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5033,14 +5033,14 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5051,14 +5051,14 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5069,14 +5069,14 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.disable.font.color.b:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5087,14 +5087,14 @@ areka には作り付けのメニューが無く、その選べない項目の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.disable.font.color.g:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5105,14 +5105,14 @@ areka には作り付けのメニューが無く、その選べない項目の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.disable.font.color.r:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5123,7 +5123,7 @@ areka には作り付けのメニューが無く、その選べない項目の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5166,7 +5166,7 @@ areka には作り付けのメニューが無く、その書体を決めるこ�
 [entry."ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5176,14 +5176,14 @@ areka には作り付けのメニューが無く、その手前に重ねる画�
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5194,14 +5194,14 @@ areka には作り付けのメニューが無く、その手前に重ねる画�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5212,14 +5212,14 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5230,14 +5230,14 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5248,14 +5248,14 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.frame.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.5.41"
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5266,14 +5266,14 @@ areka には作り付けのメニューが無く、その枠の色の青の成�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.frame.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.5.41"
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5284,14 +5284,14 @@ areka には作り付けのメニューが無く、その枠の色の緑の成�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.frame.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.5.41"
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5302,14 +5302,14 @@ areka には作り付けのメニューが無く、その枠の色の赤の成�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5320,14 +5320,14 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5338,14 +5338,14 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5356,14 +5356,14 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5373,14 +5373,14 @@ areka には作り付けのメニューが無く、その脇に置く画像を�
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5391,7 +5391,7 @@ areka には作り付けのメニューが無く、その脇に置く画像の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5745,7 +5745,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 [entry."ukadoc:descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5756,7 +5756,7 @@ areka には着せ替えのメニューが無く、その出しかたを決め�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5915,13 +5915,13 @@ areka は透過色の残る場所を黒で塗るかどうかの宣言を読む�
 [entry."ukadoc:descript_shell:seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka の placement::config::build_placement_config が `sticky_window_raw` へ生のまま持ち上げるが、この欄を読む経路が 1 つも無い（定義の doc にも「実挙動なし」と書かれている）。
-担当は決まっていない。重なり順を受け持つ areka-P0-scope-zorder-pinning の brief は、自分の範囲を重なり順の読み口までとしており、貼り付きの欄を挙げていない。窓の置き方を建てた areka-P0-window-placement の brief は、この欄を差し替えできる形だけ残すと書いている。
+担当 spec は areka-P0-window-link-directives。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。重なり順を受け持つ areka-P0-scope-zorder-pinning の brief は、自分の範囲を重なり順の読み口までとしており、貼り付きの欄を挙げていない。窓の置き方を建てた areka-P0-window-placement の brief は、この欄を差し替えできる形だけ残すと書いている。
 束: 窓の置き場所・名前だけ受けて使わない（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 61——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7198,7 +7198,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
@@ -7210,6 +7210,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 見出しの `*` は 1 個以上の数字。
 束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -7711,7 +7712,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:system_3ahand:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
@@ -7722,6 +7723,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
 この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3ahelp:1"]

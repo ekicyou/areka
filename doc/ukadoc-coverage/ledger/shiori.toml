@@ -3653,7 +3653,7 @@ absent のまま変わらない。
 [entry."ukadoc:list_shiori_event:OnMouseClick:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = [
@@ -3672,6 +3672,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 触られたことが届かず、撫でてもつついても何も返らない。
+担当 spec は areka-P0-mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseClickEx:1"]
@@ -3834,7 +3835,7 @@ crates/areka-kanade/src/schedule/steady.rs の on_mouse）。右ボタンのド�
 [entry."ukadoc:list_shiori_event:OnMouseEnter:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
@@ -3851,6 +3852,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 頭や胸といった当たり判定に触れ始めたことが届かず、どこを触られたかに応えられない。
+担当 spec は areka-P0-mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseEnterAll:1"]
@@ -3928,7 +3930,7 @@ absent のまま変わらない。
 [entry."ukadoc:list_shiori_event:OnMouseLeave:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
@@ -3945,6 +3947,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 当たり判定から手が離れたことが届かず、触り終わりに応えられない。
+担当 spec は areka-P0-mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseLeaveAll:1"]

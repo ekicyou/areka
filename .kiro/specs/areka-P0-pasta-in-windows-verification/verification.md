@@ -106,3 +106,170 @@ ukadoc が書いていない所（絵の薄い画素の当たり）について�
 | `cargo test -p wintf --lib hit_test::tests_ex::opacity` | `opacity.rs` の全部 | 6 件 ok・失敗 0 |
 
 `alpha_mask.rs` と `hit_test/mod.rs` の `main` との差分は 0 行（`git diff main -- <2 つのファイル>` の出力が空）。
+
+## 10. 網羅台帳との突き合わせ
+
+ぱすたが使う項目を、取り寄せた書庫を展開した木（`target\pasta-verify\root\ghost\pasta-in-windows`。1 節の `.sha256` の書庫と同じ中身）から拾い、網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の行と突き合わせた（2026-10-23・タスク 7.1・要件 9.1・9.2・9.4）。突き合わせた相手は、測りの記録 `ssp-measurement.md`・最初の走行の控え `target\pasta-verify\shots\run1\notes.md` と記録 `target\pasta-verify\logs\run1.*`・この記録の 1〜3 節と 7 節である。崩れた所の表（5 節）はまだ無いので、原因が記録に書かれていない崩れは 5.1 の仕分けへ渡し、台帳は変えていない。
+
+### 拾いの命令（使い捨て・道具にはしない）
+
+ワークツリーの根で Git Bash から回した。台本のタグは、`.pasta` の辞書の中の生の台本だけでは辞書の言語が組み立てるタグ（`\n[数値]`・`\q`・`\_l` など）が拾えないので、走行と測りで実際に出た台本（ぱすたの記録の `Value:` の行と `raise_event` の答えの `Script:` の行）からも拾った。逆斜線は `\x5c` で書いている。
+
+```
+R=target/pasta-verify/root/ghost/pasta-in-windows
+# descript の鍵（install.txt・ゴースト・シェル・縦書きのバルーン）
+for f in install.txt ghost/master/descript.txt shell/master/descript.txt pasta_tategaki/descript.txt; do
+  rg -v '^\s*(//|$)' $R/$f | cut -d, -f1 | sed -E 's/[0-9]+/N/' | sort -u; done
+# surfaces.txt のブレスと element 定義・当たり・アニメの鍵
+rg -v '^\s*(//|$)' $R/shell/master/surfaces.txt | rg -o '^\s*[a-z.*]+[0-9]*(\.[a-z]+[0-9]*)?(,[a-z+]+)?' \
+  | sed -E 's/[0-9]+/N/g;s/^\s+//' | sort | uniq -c
+# さくらスクリプトのタグ（辞書と Lua の台本）
+rg -o --no-filename '\x5c(!\[[a-z_-]+(,[a-z_-]+)?|_[a-z]|[a-z0-9*-])' $R/ghost/master/dic $R/ghost/master/scripts | sort | uniq -c
+# さくらスクリプトのタグ（走行と測りで出た台本）
+T=target/pasta-verify
+rg --no-filename '^\s*(Value|Script):' $T/ssp/stage*-pasta-log.txt $T/logs/run1.pasta.log $T/ssp/stage2-script.txt $T/shots/run1/1-boot-getlog.txt \
+  | rg -o '\x5c(![\[][a-z_*-]+(,[a-z_-]+)?|_[a-z]|[a-z0-9*-])([\[][^\],]*)?' | sed -E 's/\[[0-9-]+$/[N/' | sort | uniq -c
+# イベントの名前（辞書が受ける名前と、走行と測りで届いた要求）
+rg -o --no-filename '\bOn[A-Z][A-Za-z]+' $R/ghost/master/dic $R/ghost/master/scripts | sort | uniq -c
+rg -o --no-filename '^ID: [^ \r]+' $T/ssp/stage*-pasta-log.txt $T/logs/run1.pasta.log | sort | uniq -c
+```
+
+台帳の行は、拾った鍵とタグとイベントの名前をカタログ `doc/ukadoc-coverage/catalog.toml` の見出し（`title`）と照らして id を引いた（使い捨ての Python の数行。台帳の id はカタログから写した物だけを使った）。
+
+### 拾った一覧
+
+- **install.txt**（4）: `charset`（ファイルの綴りは `Charset`）・`type`・`name`・`directory`
+- **ゴーストの descript**（16）: `charset`・`type`・`id`・`name`・`sakura.name`・`kero.name`・`sakura.seriko.defaultsurface`・`balloon`・`balloon.dontmove`・`balloon.syncscale`・`shiori`・`craftman`・`craftmanw`・`craftmanurl`・`icon`・`homeurl`
+- **シェルの descript**（38）: `charset`・`type`・`name`・`craftman`・`craftmanw`・`craftmanurl`・`seriko.use_self_alpha`・`seriko.alignmenttodesktop`・`sakura.defaultx`・`sakura.balloon.alignment`・`seriko.sticky-window`・`sakura.balloon.offsetx`・`sakura.balloon.offsety`・`menu.*` の 21（`background`・`foreground` の `bitmap.filename`・`alignment`・`font.color.r/g/b`、`sidebar` の `bitmap.filename`・`alignment`、`disable.font.color.r/g/b`・`separator.color.r/g/b`・`frame.color.r/g/b`）・`sakura.bindgroup*.name`・`sakura.bindgroup*.default`・`sakura.bindoption*.group`・`sakura.menu`
+- **縦書きのバルーンの descript**（`pasta_tategaki`・48）: `charset`・`type`・`name`・`craftman`・`craftmanw`・`use_self_alpha`・`vertical`・`origin.x/y`・`validrect.left/top/right/bottom`・`wordwrappoint.y`・`font.name`・`font.height`・`font.color.r/g/b`・`font.shadowcolor.r/g/b`・`anchor.font.color.r/g/b`・`cursor.style`・`cursor.blendmethod`・`cursor.brush.color.r/g/b`・`cursor.pen.color.r/g/b`・`cursor.font.color.r/g/b`・`cursor.notselect.style`・`cursor.notselect.font.color.r/g/b`・`arrow0.x/y`・`arrow1.x/y`・`communicatebox.x/y/width/height`
+- **surfaces.txt**: `charset`・descript ブレス（`version`）・surface*ブレス 34 個・`sakura.cursor` ブレス（`mouseup*` 20 行・値は `system:hand`）・element 定義 `element*`（描画メソッドは `overlay` だけ・50 行）・`collision*`（26 行）・`animation*.interval`（`bind` 27・`bind+random,4` 2）・`animation*.pattern*`（描画メソッドは `overlay` だけ・32 行）
+- **さくらスクリプトのタグ**（24）: `\0`・`\1`・`\s[ID]`・`\e`・`\-`・`\c`・`\n`・`\n[数値]`・`\p[ID]`・`\w5`／`\w8`・`\_w[時間]`・`\_u[0x3000]`・`\_l[x,y]`・`\f[default]`・`\f[color,…]`・`\q[タイトル,ID,r2]`・`\![*]`・`\![bind,…]`・`\![bind-noevent,…]`・`\![set,zorder,…]`・`\![reset,zorder]`・`\![set,windowstate,!stayontop]`・`\![move,…]`・`\![get,property,…]`。`\v` は辞書の注釈の中にだけ在り、台本には出ない（使わない項目として数えない）。
+- **イベントとリソース**（13）: `OnBoot`・`OnFirstBoot`・`OnChoiceSelectEx`・`OnSecondChange`・`OnMouseMove`・`OnMouseEnter`・`OnMouseLeave`・`OnMouseClick`・`OnMouseDoubleClick`・`OnMouseDragEnd`・`OnShellScaling`・`OnBalloonScaling`・リソース `sakura.recommendsites`。areka が送ったが辞書に受け口の無い `OnClose`・`OnBalloonTimeout` は数えない。
+
+台帳に行の無いもの（突き合わせの相手が無いので数えない）: surface*ブレス・descript ブレス・`sakura.cursor` ブレスそのもの（中の鍵は上の行で見る）・ぱすた独自のイベント `OnTalk`・`OnPastaShellScale`・`OnPastaScaleCheck`・`raise_event` で出した `選択肢テスト`・`縦書き試作`。
+
+### 突き合わせの表
+
+「今の値」は突き合わせる前の `status`・`owner`。「台帳の行」は id の頭の `ukadoc:` を省いた。値の同じ行は 1 つの欄にまとめた（台帳の行は 154、表の欄は 101）。引き取る spec の名前は、設計の Out of Boundary・要件の Adjacent expectations・手順 `doc/pasta-real-run.md` 5 節の表の兄弟の spec から取った。
+
+| 項目 | 台帳の行 | 今の値 | 記録の結果 | 食い違い | 直した値 |
+|---|---|---|---|---|---|
+| ゴースト `charset` | `descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1` | implemented・（空） | UTF-8 で読めた（文字化け 0） | なし | — |
+| ゴースト `type` | `descript_ghost:type_2c_7a2e_5225:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| ゴースト `id` | `descript_ghost:id_2cID_540d:1` | implemented・areka-P0-baseware-root-layout | 走行と測りに崩れの記録なし | なし | — |
+| ゴースト `name` | `descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1` | implemented・areka-P0-baseware-root-layout | 起動の記録 `ghost_resolved` でぱすたを起こした | なし | — |
+| ゴースト `sakura.name` | `descript_ghost:sakura.name_2c_540d_524d:1` | implemented・areka-P0-package-mount | 走行と測りに崩れの記録なし | なし | — |
+| ゴースト `kero.name` | `descript_ghost:kero.name_2c_540d_524d:1` | implemented・areka-P0-package-mount | 走行と測りに崩れの記録なし | なし | — |
+| ゴースト `sakura.seriko.defaultsurface` | `descript_ghost:sakura.seriko.defaultsurface_2c_6570_5024:1` | absent・（空） | SSP は `\0` が面 1000。areka は読む経路が無い（手順 5 節の段 1 の引き取り先 `descript-window-keys`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-descript-window-keys"`・`note` に引き取りの 1 行 |
+| ゴースト `balloon` | `descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1` | implemented・areka-P0-ghost-standard-balloon | areka は `descript_balloon_not_found` を記録して既定のバルーンへ進んだ。行の `note` はこの場合の記録とゴーストの中を探さないこと（`areka-P0-ghost-inner-balloon`）を既に書いている | なし | — |
+| ゴースト `balloon.dontmove` | `descript_ghost:balloon.dontmove_2ctrue:1` | absent・（空） | SSP はバルーンがぱすたに付いて動いた。areka は読む経路が無い（引き取り先 `descript-window-keys`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-descript-window-keys"`・`note` に引き取りの 1 行 |
+| ゴースト `balloon.syncscale` | `descript_ghost:balloon.syncscale_2ctrue:1` | absent・（空） | 本 spec の範囲の外（倍率の連動）。走行では見ていない | なし | — |
+| ゴースト `shiori` | `descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1` | implemented・areka-P0-package-mount | `pasta.dll` を読み込み、要求に答えた | なし | — |
+| ゴースト `craftman` | `descript_ghost:craftman_2c_4f5c_8005_540d:1` | implemented・areka-P0-baseware-root-layout | 走行と測りに崩れの記録なし | なし | — |
+| ゴースト `craftmanw` | `descript_ghost:craftmanw_2c_4f5c_8005_540d:1` | implemented・areka-P0-baseware-root-layout | 走行と測りに崩れの記録なし | なし | — |
+| ゴースト `craftmanurl` | `descript_ghost:craftmanurl_2cURL:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| ゴースト `icon` | `descript_ghost:icon_2c_30d5_30a1_30a4_30eb_540d:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| ゴースト `homeurl` | `descript_ghost:homeurl_2cURL:1` | implemented・areka-P0-network-update | ネットワーク更新は回していない。走行と測りに崩れの記録なし | なし | — |
+| install.txt `charset`・`type`・`name`・`directory` | `descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1`<br>`descript_install:type_2c_7a2e_5225:1`<br>`descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1`<br>`descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` | implemented・areka-P0-nar-install | 書庫の中身のテスト（1.2）と走行の根の組み立てで読めた | なし | — |
+| シェル `charset` | `descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1` | implemented・（空） | UTF-8 で読めた | なし | — |
+| シェル `type` | `descript_shell:type_2c_7a2e_5225:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| シェル `name` | `descript_shell:name_2c_30b7_30a7_30eb_540d:1` | implemented・areka-P0-ghost-setup | メニューのシェルの下に「パスタ」が出た | なし | — |
+| シェル `craftman`・`craftmanw` | `descript_shell:craftman_2c_4f5c_8005_540d:1`<br>`descript_shell:craftmanw_2c_4f5c_8005_540d:1` | implemented・areka-P0-baseware-root-layout | 走行と測りに崩れの記録なし | なし | — |
+| シェル `craftmanurl` | `descript_shell:craftmanurl_2cURL:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| シェル `seriko.use_self_alpha` | `descript_shell:seriko.use_self_alpha_2c_5024:1` | degraded・areka-P0-self-alpha-declaration | α の決まりは 7 節。行の `note` は 7.2 で当たりの決まりを書いた | なし | — |
+| シェル `seriko.alignmenttodesktop` | `descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1` | absent・（空） | areka のぱすたの窓は画面の下端を越えた（段 1）。読む経路が無いことと合う。崩れの仕分けは 5.1 | なし | — |
+| シェル `sakura.defaultx` | `descript_shell:sakura.defaultx_2cX_5ea7_6a19:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| シェル `sakura.balloon.alignment` | `descript_shell:sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1` | implemented・（空） | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| シェル `sakura.balloon.offsetx`・`offsety` | `descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1`<br>`descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1` | absent・（空） | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| シェル `seriko.sticky-window` | `descript_shell:seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1` | vocabulary-only・（空） | SSP は 2 つの窓が揃って動いた。areka は窓の枠（`\1`）が別の画面に出て、ドラッグでも付いてこなかった（段 1・4・5。引き取り先 `window-link-directives`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-window-link-directives"`・`note` に引き取りの 1 行 |
+| シェル `menu.background.*`（絵・位置・文字の色） | `descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1`<br>`descript_shell:menu.background.alignment_2c_4f4d_7f6e:1`<br>`descript_shell:menu.background.font.color.r_2c_6570_5024:1`<br>`descript_shell:menu.background.font.color.g_2c_6570_5024:1`<br>`descript_shell:menu.background.font.color.b_2c_6570_5024:1` | absent・（空） | areka は普通の Windows のメニューで、シェルの絵と色を使わない（段 6。引き取り先 `popup-menu-shell-look`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| シェル `menu.foreground.*`（絵・位置・文字の色） | `descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1`<br>`descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1`<br>`descript_shell:menu.foreground.font.color.r_2c_6570_5024:1`<br>`descript_shell:menu.foreground.font.color.g_2c_6570_5024:1`<br>`descript_shell:menu.foreground.font.color.b_2c_6570_5024:1` | absent・（空） | 同上（段 6） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| シェル `menu.sidebar.*`（絵・位置） | `descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1`<br>`descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1` | absent・（空） | 同上（段 6） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| シェル `menu.disable.font.color.*` | `descript_shell:menu.disable.font.color.r:1`<br>`descript_shell:menu.disable.font.color.g:1`<br>`descript_shell:menu.disable.font.color.b:1` | absent・（空） | 同上（段 6） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| シェル `menu.separator.color.*` | `descript_shell:menu.separator.color.r_2c_6570_5024:1`<br>`descript_shell:menu.separator.color.g_2c_6570_5024:1`<br>`descript_shell:menu.separator.color.b_2c_6570_5024:1` | absent・（空） | 同上（段 6） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| シェル `menu.frame.color.*` | `descript_shell:menu.frame.color.r_2c_6570_5024:1`<br>`descript_shell:menu.frame.color.g_2c_6570_5024:1`<br>`descript_shell:menu.frame.color.b_2c_6570_5024:1` | absent・（空） | 同上（段 6） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| シェル `sakura.bindgroup*.name` | `descript_shell:sakura.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1` | implemented・areka-P0-mayuna-compose | 台本の `\![bind]` で部位が着せ替わった。着せ替えのメニューが無いのは `sakura.menu` の行 | なし | — |
+| シェル `sakura.bindgroup*.default` | `descript_shell:sakura.bindgroup_2a.default_2c_6570_5024:1` | implemented・areka-P0-mayuna-compose | 走行と測りに崩れの記録なし | なし | — |
+| シェル `sakura.bindoption*.group` | `descript_shell:sakura.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1` | implemented・areka-P0-bindoption-exclusivity | `mustselect` の部位を外す指示を正典どおり無視した（WARN 96 行。崩れではない） | なし | — |
+| シェル `sakura.menu` | `descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1` | absent・（空） | SSP は着せ替えのメニューが出た。areka はメニューに「着せ替え」が無い（段 6。引き取り先 `popup-menu-shell-look`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-popup-menu-shell-look"`・`note` に引き取りの 1 行 |
+| バルーン `charset` | `descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1` | implemented・（空） | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `type`・`name`・`craftman`・`craftmanw` | `descript_balloon:type_2c_7a2e_5225:1`<br>`descript_balloon:name_2c_30d0_30eb_30fc_30f3_540d:1`<br>`descript_balloon:craftman_2c_4f5c_8005_540d:1`<br>`descript_balloon:craftmanw_2c_4f5c_8005_540d:1` | implemented・areka-P0-baseware-root-layout | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `use_self_alpha` | `descript_balloon:use_self_alpha_2c_5024:1` | degraded・areka-P0-self-alpha-declaration | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `vertical` | `descript_balloon:vertical_2c0_2f1:1` | degraded・areka-P0-balloon-vertical-canon | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `origin.x` | `descript_balloon:origin.x_2c_5ea7_6a19_20_2a1:1` | implemented・areka-P0-balloon-vertical-canon | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `origin.y` | `descript_balloon:origin.y_2c_5ea7_6a19_20_2a1:1` | implemented・areka-P0-balloon-parse | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `validrect.*` | `descript_balloon:validrect.left_2c_5ea7_6a19_20_2a1:1`<br>`descript_balloon:validrect.top_2c_5ea7_6a19_20_2a1:1`<br>`descript_balloon:validrect.right_2c_5ea7_6a19_20_2a1:1`<br>`descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1` | implemented・areka-P0-balloon-parse | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `wordwrappoint.y` | `descript_balloon:wordwrappoint.y_2c_5ea7_6a19_20_2a1:1` | implemented・areka-P0-balloon-vertical-canon | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `font.name` | `descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1` | degraded・areka-P0-balloon-font-descript-keys | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `font.height`・`font.color.*` | `descript_balloon:font.height_2c_6570_5024:1`<br>`descript_balloon:font.color.r_2c_6570_5024:1`<br>`descript_balloon:font.color.g_2c_6570_5024:1`<br>`descript_balloon:font.color.b_2c_6570_5024:1` | implemented・areka-P0-text-decoration-canon | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `font.shadowcolor.*` | `descript_balloon:font.shadowcolor.r_2c_6570_5024:1`<br>`descript_balloon:font.shadowcolor.g_2c_6570_5024:1`<br>`descript_balloon:font.shadowcolor.b_2c_6570_5024:1` | vocabulary-only・areka-P0-text-align-shadow-canon | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `anchor.font.color.*` | `descript_balloon:anchor.font.color.r_2c_6570_5024:1`<br>`descript_balloon:anchor.font.color.g_2c_6570_5024:1`<br>`descript_balloon:anchor.font.color.b_2c_6570_5024:1` | absent・areka-P0-anchor-style-canon | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `cursor.style` | `descript_balloon:cursor.style_2c_5f62_72b6:1` | absent・areka-P0-choice-marker-styling | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `cursor.blendmethod`・`cursor.pen.color.*` | `descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1`<br>`descript_balloon:cursor.pen.color.r_2c_6570_5024:1`<br>`descript_balloon:cursor.pen.color.g_2c_6570_5024:1`<br>`descript_balloon:cursor.pen.color.b_2c_6570_5024:1` | vocabulary-only・areka-P0-choice-marker-styling | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `cursor.brush.color.*`・`cursor.font.color.*` | `descript_balloon:cursor.brush.color.r_2c_6570_5024:1`<br>`descript_balloon:cursor.brush.color.g_2c_6570_5024:1`<br>`descript_balloon:cursor.brush.color.b_2c_6570_5024:1`<br>`descript_balloon:cursor.font.color.r_2c_6570_5024:1`<br>`descript_balloon:cursor.font.color.g_2c_6570_5024:1`<br>`descript_balloon:cursor.font.color.b_2c_6570_5024:1` | implemented・areka-P0-choice-marker-styling | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `cursor.notselect.style`・`cursor.notselect.font.color.*` | `descript_balloon:cursor.notselect.style_2c_5f62_72b6:1`<br>`descript_balloon:cursor.notselect.font.color.r_2c_6570_5024:1`<br>`descript_balloon:cursor.notselect.font.color.g_2c_6570_5024:1`<br>`descript_balloon:cursor.notselect.font.color.b_2c_6570_5024:1` | absent・areka-P0-choice-marker-styling | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
+| バルーン `arrow0.*`・`arrow1.*` | `descript_balloon:arrow0.x_2c_5ea7_6a19_20_2a1:1`<br>`descript_balloon:arrow0.y_2c_5ea7_6a19_20_2a1:1`<br>`descript_balloon:arrow1.x_2c_5ea7_6a19_20_2a1:1`<br>`descript_balloon:arrow1.y_2c_5ea7_6a19_20_2a1:1` | absent・areka-P0-balloon-canon-residue | 本 spec の範囲の外（スクロールの矢印） | なし | — |
+| バルーン `communicatebox.*` | `descript_balloon:communicatebox.x_2c_5ea7_6a19:1`<br>`descript_balloon:communicatebox.y_2c_5ea7_6a19:1`<br>`descript_balloon:communicatebox.width_2c_30b5_30a4_30ba:1`<br>`descript_balloon:communicatebox.height_2c_30b5_30a4_30ba:1` | absent・（空） | 本 spec の範囲の外（`communicatebox`） | なし | — |
+| surfaces `charset` | `descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1` | implemented・areka-P0-charset-canon | UTF-8 で読めた | なし | — |
+| surfaces の descript ブレスの `version` | `descript_shell_surfaces:version_2c_2a:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
+| element 定義 `element*` | `descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1` | degraded・areka-P0-draw-methods-canon | 面が組み上がった。`pasta/null.png`（全透明）が切り詰めで 0 寸になる WARN 2 行（崩れではない） | なし | — |
+| element 定義の描画メソッド `overlay`（element・pattern） | `descript_shell_surfaces:overlay:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `collision*` | `descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1` | degraded・areka-P0-shell-parse | ボールと × の当たりは取れた（`hit_test` の記録） | なし | — |
+| `animation*.interval` の値 `bind` | `descript_shell_surfaces:bind:1` | vocabulary-only・（空） | 着せ替えは静的に重なった。× の赤（animation1500）は `OnMouseEnter` が無いので出ない（`mouse-click-wheel-events` の件） | なし | — |
+| `animation*.interval` の値 `random`（`bind+random,4`） | `descript_shell_surfaces:random_2c_6570_5024:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `animation*.interval` | `descript_shell_surfaces:animation_2a.interval_2c_30a4_30f3_30bf_30fc_30d0_30eb:1` | degraded・areka-P0-shell-parse | 走行と測りに崩れの記録なし | なし | — |
+| `animation*.pattern*` | `descript_shell_surfaces:animation_2a.pattern_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30b5_30fc_30d5_30a7_30b9_756a_53f7_2c_30a6_30a7_30a4_30c8_2c:1` | degraded・areka-P0-shell-parse | 走行と測りに崩れの記録なし | なし | — |
+| `sakura.cursor` ブレスの `mouseup*` | `descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1` | absent・（空） | SSP は身体で `system:hand` の形が出た。areka はマウスの形を読んでいない（段 3。引き取り先 `shell-mouse-cursor`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-shell-mouse-cursor"`・`note` に引き取りの 1 行 |
+| カーソルの形 `system:hand` | `descript_shell_surfaces:system_3ahand:1` | absent・（空） | 同上（段 3） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-shell-mouse-cursor"`・`note` に引き取りの 1 行 |
+| `\0` | `list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1` | implemented・areka-P0-kero-balloon | 走行と測りに崩れの記録なし | なし | — |
+| `\1` | `list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1` | implemented・areka-P0-kero-balloon | `\1` は面 10 になった。窓の枠が別の画面に出たのは `seriko.sticky-window` の行 | なし | — |
+| `\s[ID]` | `list_sakura_script:_5cs_5bID_756a_53f7_5d:1` | implemented・（空） | 台本どおりの面になった（最後の `\s[1002]` で身体の無い面） | なし | — |
+| `\e` | `list_sakura_script:_5ce:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `\-` | `list_sakura_script:_5c-:1` | implemented・（空） | areka では × の `OnMouseClick` が無く、終わりの台本は出なかった（`mouse-click-wheel-events` の件） | なし | — |
+| `\c` | `list_sakura_script:_5cc:1` | implemented・areka-P0-cursor-tag-canon | `縦書き試作` の 2 ページ目が消して書き直された | なし | — |
+| `\n` | `list_sakura_script:_5cn:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `\n[数値]` | `list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `\p[ID]` | `list_sakura_script:_5cp_5bID_756a_53f7_5d:1` | degraded・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `\w5`・`\w8` | `list_sakura_script:_5cw_6642_9593:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `\_w[時間]` | `list_sakura_script:_5c_w_5b_6642_9593_5d:1` | implemented・（空） | 走行と測りに崩れの記録なし | なし | — |
+| `\_u[0x3000]` | `list_sakura_script:_5c_u_5b0x0000_5d:1` | absent・（空） | 台本に在る。areka は文字にしない（引き取り先 `script-small-tags`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-script-small-tags"`・`note` に引き取りの 1 行 |
+| `\_l[x,y]` | `list_sakura_script:_5c_l_5bx_2cy_5d:1` | implemented・areka-P0-cursor-tag-canon | 横書きの既定のバルーンで、`\_l[-283,0]` の後の段が前の行に重なった。縦書きのバルーンで出なかったための重なりで、`\_l` の読みの崩れとは記録から言えない（縦書きのバルーンは `ghost-inner-balloon` の件） | なし | — |
+| `\f[default]`・`\f[color,…]` | `list_sakura_script:_5cf_5bdefault_5d:1`<br>`list_sakura_script:_5cf_5bcolor_2c_8272_6307_5b9a_5d:1` | implemented・areka-P0-text-decoration-canon | 走行と測りに崩れの記録なし | なし | — |
+| `\q[タイトル,ID,r2]` | `list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1` | implemented・（空） | 選択肢が出て、押すと `OnChoiceSelectEx` が届き続きが出た（段 2） | なし | — |
+| `\![*]` | `list_sakura_script:_5c_21_5b_2a_5d:1` | absent・（空） | SSP は選択肢の前に印が出た。areka は印が見えない（段 2。引き取り先 `script-small-tags`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-script-small-tags"`・`note` に引き取りの 1 行 |
+| `\![bind,…]` | `list_sakura_script:_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1` | implemented・（空） | 部位が着せ替わった。`mustselect` の部位を外す指示は正典どおり無視（WARN 96 行） | なし | — |
+| `\![bind-noevent,…]` | `list_sakura_script:_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1` | absent・（空） | 台本に在る。areka は受け手が無い（引き取り先 `script-small-tags`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-script-small-tags"`・`note` に引き取りの 1 行 |
+| `\![set,zorder,…]` | `list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1` | implemented・areka-P0-scope-zorder-pinning | 窓の枠が別の画面に出たので重なりの順は主画面で見えない（`seriko.sticky-window` の行） | なし | — |
+| `\![reset,zorder]` | `list_sakura_script:_5c_21_5breset_2czorder_5d:1` | implemented・areka-P0-scope-zorder-pinning | 同上 | なし | — |
+| `\![set,windowstate,!stayontop]` | `list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1` | absent・（空） | 台本に在る。areka は受け手が無い（引き取り先 `stay-on-top-directives`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-stay-on-top-directives"`・`note` に引き取りの 1 行 |
+| `\![move,…]` | `list_sakura_script:_5c_21_5bmove_5d:1` | degraded・areka-P0-move-canon | `--option=ignore-sticky-window` 付きで `\0` を動かした。窓の枠が付いてこないのは `seriko.sticky-window` の行 | なし | — |
+| `\![get,property,…]` | `list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1` | absent・areka-P0-property-query-channels | 走行と測りに崩れの記録なし（受け手が無いことと合う。本 spec の範囲の外の倍率の連動に使う） | なし | — |
+| `OnBoot` | `list_shiori_event:OnBoot:1` | implemented・（空） | SSP は記憶のある起動で `OnBoot`。areka は空の記憶で `OnFirstBoot` を先に送り、`OnBoot` は飛ばした（正典どおり） | なし | — |
+| `OnFirstBoot` | `list_shiori_event:OnFirstBoot:1` | implemented・（空） | 届いて台本が返った（段 1） | なし | — |
+| `OnChoiceSelectEx` | `list_shiori_event:OnChoiceSelectEx:1` | implemented・（空） | 届いて続きの台本が返った（段 2） | なし | — |
+| `OnSecondChange` | `list_shiori_event:OnSecondChange:1` | implemented・（空） | SSP は毎秒届いた。areka の走行ではぱすたの記録に要求の行が 0 で、自然なトークも出なかった。areka の記録の水準では送出の行（trace）が見えず、届かなかったのか送ったのかは記録から決められない。崩れの仕分けは 5.1 で行い、原因が分かったら台帳を直す | なし | — |
+| `OnMouseMove` | `list_shiori_event:OnMouseMove:1` | implemented・（空） | 面 1002 に身体が無く、撫でる入力は窓を素通りした（段 3）。送出の崩れとは記録から言えない | なし | — |
+| `OnMouseEnter`・`OnMouseLeave` | `list_shiori_event:OnMouseEnter:1`<br>`list_shiori_event:OnMouseLeave:1` | absent・（空） | SSP は × で届いて赤くなった。areka は送らない（段 3・7。引き取り先 `mouse-click-wheel-events`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-mouse-click-wheel-events"`・`note` に引き取りの 1 行 |
+| `OnMouseClick` | `list_shiori_event:OnMouseClick:1` | absent・（空） | SSP はボールと × で届いた。areka は窓に当たったが送らない（段 3・7。引き取り先 `mouse-click-wheel-events`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-mouse-click-wheel-events"`・`note` に引き取りの 1 行 |
+| `OnMouseDoubleClick` | `list_shiori_event:OnMouseDoubleClick:1` | implemented・（空） | 走行で回していない。走行と測りに崩れの記録なし | なし | — |
+| `OnMouseDragEnd` | `list_shiori_event:OnMouseDragEnd:1` | implemented・areka-P0-mouse-drag-events | 走行で回していない（ドラッグは記録 `DragEnd 保存` まで）。走行と測りに崩れの記録なし | なし | — |
+| `OnShellScaling`・`OnBalloonScaling` | `list_shiori_event:OnShellScaling:1`<br>`list_shiori_event:OnBalloonScaling:1` | absent・（空） | 本 spec の範囲の外（倍率の連動）。SSP も倍率が変わらず送らなかった | なし | — |
+| リソース `sakura.recommendsites` | `list_shiori_resource:sakura.recommendsites:1` | vocabulary-only・（空） | SSP はメニューを組むときに求めた。areka は求めない（語彙のみと合う） | なし | — |
+
+### 直したことと残り
+
+- 直した台帳の行は **34 行**（`assets.toml` 27・`sakura-script.toml` 4・`shiori.toml` 3）。どれも宛先（`owner`）が空で、崩れが兄弟の spec の持ち分だった行で、`owner` に引き取る spec の名前を書き、`note` の「担当は決まっていない。」をその名前の 1 行に替えた（その句が無い行は `note` の終わりに同じ 1 行を足した）。`status` は 1 行も変えていない（どの行も、今の値が記録と合っていた）。
+  - `areka-P0-descript-window-keys` 2・`areka-P0-window-link-directives` 1・`areka-P0-popup-menu-shell-look` 22・`areka-P0-shell-mouse-cursor` 2・`areka-P0-script-small-tags` 3・`areka-P0-stay-on-top-directives` 1・`areka-P0-mouse-click-wheel-events` 3。
+- 台帳の宛先は、`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に名前が在ることを検査が求める（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 c と腕 f）。7 本はどれも表に無かったので、`none = true`（束はまだ割り当てない）と理由と件数の行を 7 行足し、`[briefs].count` を 52 から 59 へ、`snapshot_on` を 2026-10-23 へ直した（同じ文書の「2026-10-23 の追加」の段落）。あわせて、34 項目が `linkage.md` の束の `members` で属する 8 つの束（「メニュー」22・「窓の配置と重なり」3・「撫で」3・「マウスの矢印」2・「descript の転記」「選択肢の目印」「切替」「バルーンの文字」1 件ずつ）の段階の表の行と、節を持つ 2 つの束の節の「依存する既存 spec」に、7 本を件数付きで足した。候補 spec 名の案はどの束でも ⑴（全数）にも ⑵（過半）にも当たらないので変えていない。
+- 引き取る spec が台帳に既に書かれていた行（ゴーストの `balloon` の `note` の `areka-P0-ghost-inner-balloon`）と、本 spec の範囲の外の行（`balloon.syncscale`・`OnShellScaling`・`OnBalloonScaling`・スクロールの矢印・`communicatebox`）は変えていない。ぱすたが使わない行は 1 行も変えていない（要件 9.4。差分は上の 34 行だけ）。
+- `OnSecondChange` は、走行でぱすたの記録に要求の行が 0 だったが、areka の記録の水準では送ったかどうかが分からないので、台帳の「実装済み」と食い違うとは記録から言えない。5.1 の崩れた所の表で仕分け、原因が分かって台帳と食い違えば、そのときに直す。
+- **食い違いの残りは 0 件**（ぱすたが使う項目の行 154 のうち、記録と食い違う行は 0）。
+
+### 確かめ（2026-10-23）
+
+| 命令 | 結果 |
+|---|---|
+| `cargo test -p ukadoc-survey`（宛先だけを書き、`roadmap-draft.md` の行を足す前） | 赤。`spec_checks::the_spec_table_agrees_with_the_directories_the_ledgers_and_the_bundles` ほか 1 件が FAILED で、「宛先 areka-P0-descript-window-keys が … roadmap-draft.md の [[spec]] にも … [[owner_completed]] にも無い（要件 7.4 ⑶）」などを 7 本の名前で出した |
+| `cargo test -p ukadoc-survey`（7 行を足した後） | 緑（601・6・113・5 件 ok・失敗 0） |
+| `cargo run -p ukadoc-survey -- check` | 終了コード 0・「食い違い 0 件」 |
+| `cargo run -p ukadoc-survey -- report` と `report-summary` | 作り直した。`doc/ukadoc-coverage/report/` の中身の差分は 0（報告は `owner` を載せない） |
