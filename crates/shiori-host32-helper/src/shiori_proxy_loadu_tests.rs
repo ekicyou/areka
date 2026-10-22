@@ -269,6 +269,7 @@ fn testdll_loadu_is_called_with_utf8_and_load_is_not() {
 }
 
 /// D-2: `loadu` が偽を返すと「初期化が偽を返した」失敗になり、`load` へは落ちない（要件 6.7）。
+/// 失敗の型には fixture が 0 を返す直前に置いた最後のエラー（アクセス拒否 5）が載る（要件 5.5）。
 #[test]
 #[cfg_attr(
     not(target_arch = "x86"),
@@ -277,7 +278,10 @@ fn testdll_loadu_is_called_with_utf8_and_load_is_not() {
 fn testdll_loadu_false_is_load_returned_false_without_falling_back() {
     let (result, text, _) = load_loadu_testdll(true);
     match result {
-        Err(ProxyError::LoadReturnedFalse) => {}
+        Err(ProxyError::LoadReturnedFalse { last_error }) => assert_eq!(
+            last_error, 5,
+            "最後のエラーは fixture が置いたアクセス拒否（5）のはず（記録: {text:?}）"
+        ),
         Err(e) => panic!("expected LoadReturnedFalse, got {e:?}（記録: {text:?}）"),
         Ok(()) => panic!("loadu の偽返却を注入したのに確立が成功した（記録: {text:?}）"),
     }
