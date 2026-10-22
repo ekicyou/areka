@@ -21,6 +21,9 @@
 //! design §key.rs 裁定）。括弧内に `.` を含む名前は非対応（分割規則が優先・design 明記の単純分割）。
 
 /// 点付き key の正準表現（セレクタ 5 形を完全収容・R1.3）。
+///
+/// 名前（[`PathSeg::name`] と [`Selector::ByName`] の中身）の半角の英字は小文字
+/// （[`parse_dotted`] が畳む）。手で組むときも小文字で組む。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PropPath {
     pub segs: Vec<PathSeg>,
@@ -101,6 +104,9 @@ pub enum KeyParseError {
 }
 
 /// 点付き key 文字列 → [`PropPath`]。純粋・no I/O・同一入力→同一 Ok/Err（決定論・R2.5）。
+///
+/// 名前の半角の英字だけを小文字へ畳む（全角の英字・かな・空白はそのまま・前後の空白も削らない）。
+/// `index` の見分けも畳んだ名前で行うので、大文字だけが違う入力は同じ Ok か同じ Err になる。
 pub fn parse_dotted(input: &str) -> Result<PropPath, KeyParseError> {
     if input.is_empty() {
         return Err(KeyParseError::Empty);
@@ -116,13 +122,13 @@ pub fn parse_dotted(input: &str) -> Result<PropPath, KeyParseError> {
 fn parse_seg(seg: &str, at: usize) -> Result<PathSeg, KeyParseError> {
     match seg.find('(') {
         Some(open) => {
-            // 括弧付き: 末尾が ')' でなければ未閉。
+            // 括弧付き: 末尾が ')' でなければ未閉。名前と括弧の中は半角の英字だけ小文字へ畳む。
             if !seg.ends_with(')') {
                 return Err(KeyParseError::UnclosedParen { at });
             }
-            let name = &seg[..open];
+            let name = seg[..open].to_ascii_lowercase();
             // open の '(' と末尾の ')' を除いた内容。
-            let inner = &seg[open + 1..seg.len() - 1];
+            let inner = seg[open + 1..seg.len() - 1].to_ascii_lowercase();
             if name.is_empty() {
                 return Err(KeyParseError::EmptySegment { at });
             }
@@ -137,10 +143,10 @@ fn parse_seg(seg: &str, at: usize) -> Result<PathSeg, KeyParseError> {
                 // index(...) は数値必須（非数値 index → BadIndex・design §key.rs 裁定）。
                 return Err(KeyParseError::BadIndex { at });
             } else {
-                Selector::ByName(inner.to_string())
+                Selector::ByName(inner)
             };
             Ok(PathSeg {
-                name: name.to_string(),
+                name,
                 selector: Some(selector),
             })
         }
@@ -149,12 +155,16 @@ fn parse_seg(seg: &str, at: usize) -> Result<PathSeg, KeyParseError> {
                 return Err(KeyParseError::EmptySegment { at });
             }
             Ok(PathSeg {
-                name: seg.to_string(),
+                name: seg.to_ascii_lowercase(),
                 selector: None,
             })
         }
     }
 }
+
+#[cfg(test)]
+#[path = "key_case_fold_tests.rs"]
+mod case_fold_tests;
 
 #[cfg(test)]
 mod tests {
