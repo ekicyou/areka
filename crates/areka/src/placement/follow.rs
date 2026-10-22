@@ -10,11 +10,11 @@
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
 //! - [`DragPositionPolicy`]／[`BottomSnapPolicy`]: bottom 吸着ドラッグ（4.7・
 //!   DD15 v2・task 8.2R）の核——「生ドラッグ座標→実窓位置」の純粋写像トレイトと
-//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。非 Free
-//!   アンカーのキャラ窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
-//!   [`on_char_drag`]／[`on_char_drag_end`] が [`Anchored`] を読んで [`project_anchor`]
-//!   適用済み座標を**単一ライター**として書く（v1 の事後再釘付けは wndproc と
-//!   競合し振動→撤去）
+//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。吸着した窓と組に
+//!   入った窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
+//!   [`on_char_drag`]／[`on_char_drag_end`] がドラッグの始めに控えた向きで
+//!   [`project_anchor`] 適用済み座標を**単一ライター**として書く（組に入った Free は恒等・
+//!   設計の決め 12。v1 の事後再釘付けは wndproc と競合し振動→撤去）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: 全モニタ work area 集合の
 //!   Resource と窓中心→モニタ解決の純粋ヘルパ（task 8.1・ポリシーの入力）
 //!
@@ -37,8 +37,6 @@ mod keyword_base;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
 // 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
-// shortcut: 本番の消費者（ドラッグの受け手と `\![move]`）は task 3.2・4 で来る。来たら許可属性を外す。
-#[allow(dead_code)]
 mod sticky_follow;
 mod visibility;
 mod window_move;
@@ -134,6 +132,10 @@ pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
 use self::keyword_base::rederive_keyword_balloon_offset;
 pub(crate) use self::sticky_follow::sync_drag_writer;
+// ドラッグの始めの控え。呼び手は `input_events::drag` だけで、`#[path]` で src を取り込む
+// examples には input_events が無いので、そちらのビルドでは未使用に見える。
+#[allow(unused_imports)]
+pub(crate) use self::sticky_follow::begin_char_drag;
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard, rect_at,
     route_applies_visibility_guard,

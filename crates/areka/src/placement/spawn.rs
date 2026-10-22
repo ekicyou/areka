@@ -24,7 +24,7 @@
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
 //!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
 //!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
-//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
+//!   委譲。組に入った窓は直後の `sync_drag_writer` が Free でも false に付け直す・設計の決め 12）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
 //!   さらに `OnDragEnd(on_char_drag_end)` を持つ（最終カーソル位置への同写像適用＋
 //!   確定位置の永続 write-through・非 Free は最終再固定・Free は保存専用アーム・
 //!   DD15 v2 (3)・1.1・task 2.2）。

@@ -1,6 +1,7 @@
 use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
+use wintf::ecs::drag::DragConfig;
 use wintf::ecs::pointer::Phase;
 
 use super::test_support::{
@@ -236,6 +237,11 @@ fn on_char_drag_free_window_stays_wndproc_delegated() {
             fake_handle(0x1000),
             window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
             Anchored(Anchor::Free),
+            // 書き手の分かれ目は向きでなく move_window（組に無い吸着なしの窓＝wintf が書く・設計の決め 12）
+            DragConfig {
+                move_window: true,
+                ..Default::default()
+            },
             BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             // DraggingState が居ても free 経路は写像を使わない檻（実 flow でも挿入される）
             dragging_state((999, 888), (0, 0)),

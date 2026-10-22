@@ -320,3 +320,26 @@ fn anchor_change_during_drag_keeps_start_until_finish_then_reanchors() {
     assert!(!drag_wintf_moves(&world, dragged.char));
     finish(world);
 }
+
+/// 始めに向きか位置が読めなければ控えを作らず、同じ窓の前のドラッグの控えも外す（使い回さない）。
+#[test]
+fn unreadable_begin_clears_a_stale_session() {
+    let mut world = world_with_snapshot();
+    let dragged = spawn_char(&mut world, 0, Anchor::Bottom, (500, WA_BOTTOM - H));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    group(&mut world, &["0", "1"]);
+
+    begin_char_drag(&mut world, dragged.char);
+    assert!(
+        world.contains_resource::<CharDragSession>(),
+        "前提: 前の控えがある"
+    );
+    world.entity_mut(dragged.char).remove::<Anchored>();
+    begin_char_drag(&mut world, dragged.char);
+
+    assert!(!world.contains_resource::<CharDragSession>());
+    // 控えが無いので、ドラッグの途中でも相手は動かない。
+    follow_partners_on_drag(&mut world, dragged.char, point(600, WA_BOTTOM - H));
+    assert_eq!(position_of(&world, partner.char), Point { x: 900, y: 150 });
+    finish(world);
+}

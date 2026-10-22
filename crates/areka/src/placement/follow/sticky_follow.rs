@@ -138,6 +138,8 @@ pub(crate) fn begin_char_drag(world: &mut World, dragged: Entity) {
             entity = ?dragged,
             "sticky: ドラッグした窓の向きか位置が読めないので控えを作らない"
         );
+        // 前のドラッグの控えを使い回さない。
+        world.remove_resource::<CharDragSession>();
         return;
     };
     let wintf_moves = world
