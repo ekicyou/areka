@@ -18,7 +18,7 @@ use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv;
 
 use super::model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
-use super::resolve::read_bindgroup_defaults;
+use super::resolve_bind::read_bindgroup_defaults;
 
 /// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。
 const GHOST_MASTER: &str = "ghost/master";

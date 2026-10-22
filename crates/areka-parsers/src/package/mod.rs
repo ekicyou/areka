@@ -24,6 +24,10 @@ mod resolve;
 #[cfg(test)]
 mod resolve_tests;
 
+mod resolve_bind;
+#[cfg(test)]
+mod resolve_bind_tests;
+
 mod resolve_shell;
 #[cfg(test)]
 mod resolve_shell_tests;

@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. areka-parsers: 着せ替えの読みをスコープごとにし、ゴーストの名前だけを読む口を足す
-- [ ] 1.1 着せ替えの読みを兄弟の新しいファイルへ移す（振る舞いは変えない）
+- [x] 1.1 着せ替えの読みを兄弟の新しいファイルへ移す（振る舞いは変えない）
   - 着せ替えの読み（定数・既定の読み・bindoption の分解・番号と名前の読み）を `resolve.rs` から `resolve_bind.rs` へそのまま移し、`resolve.rs` の中の試験 2 つ（名前の転記・bindoption の分解）を `resolve_bind_tests.rs` へ中身を変えずに移す
   - シェルの読み（`resolve_shell.rs`）は移した先から着せ替えの読みを引く
   - 移しただけで、`resolve.rs` が約 100 行になり、`cargo test -p areka-parsers` が移す前と同じ件数で緑になる
