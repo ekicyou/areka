@@ -54,7 +54,7 @@
   - _Depends: 1.4_
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 9.5_
 
-- [ ] 2.4 (P) wintf に、キーの押下をアプリへ知らせる口を作る
+- [x] 2.4 (P) wintf に、キーの押下をアプリへ知らせる口を作る
   - wintf の窓の部品に `KeyDown`（仮想キー・Ctrl・Shift・Alt・繰り返し）と `OnKeyDown` を `OnFilesDropped` と同じ形で足し、`WM_KEYDOWN` は今の Esc の取り消しの後で受け渡し、`WM_SYSKEYDOWN` を振り分け表に足して同じ受け渡しを通す。修飾キーは窓の手続きの入口で読み、受け渡しの関数には値で渡す
   - 受け渡しは World が使用中なら `key_down_dropped` の `warn!` で渡さない、窓が消えていれば `debug!`、部品が無ければ渡さない、真を返せば押下を消費して `DefWindowProc` へ渡さない
   - `keyboard_tests.rs` で、2 つのメッセージで部品が呼ばれ真なら消費・偽や部品なしなら素通し・World の使用中は記録して渡さない・Esc の取り消しが今どおり、が緑になり、wintf のテストが緑のまま
@@ -157,3 +157,4 @@
 - 2.1: 帳簿が無いときの記録は `sticky_skipped`（reason=no_ledger）の `warn!`。design.md の記録の表に無いので、完了までに表へ 1 行足す。
 - 2.2: `parse_alignment_word` は `args: &[&str]`（先頭が向き、3 つ目以降の引数を debug! するため）。design.md の署名の行は完了までに直す。6 の呼び手は `tokens[1..]` をそのまま渡す。空や空白だけの値は欠けた値（1.9）として扱い、COMPAT §8 の行（8）にも書く。記録の表に `alignment_extra_args`（debug）と `alignment_skipped` の reason（missing_value・no_ghost_windows・no_char_window・no_anchor_source）を完了までに足す。`placement/mod.rs` の `script_alignment` に一時の `#[allow(dead_code)]`（6 で外す）。
 - 2.3: `balloon_pos_reset_skipped` に `trigger` の欄、reason は no_default_basis・no_ghost_windows・not_resolved（スコープ単位）。design.md の記録の表へ完了までに足す。`placement/mod.rs` の `reset_balloon_pos` に一時の `#[allow(dead_code)]`（6・7.2・7.3 で外す）。
+- 2.4: wintf の `deliver_key_down` は WM_KEYDOWN と WM_SYSKEYDOWN で共通。記録の文の札は `[WM_KEYDOWN]` のまま（構造の欄 `event` は正しい）。F10 の消費で SC_KEYMENU が止まるかは 9.2 の実機で確かめる。

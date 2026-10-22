@@ -82,6 +82,7 @@ pub(crate) fn dispatch_window_message(
         WM_MOUSEWHEEL => mouse_dblclick_wheel::WM_MOUSEWHEEL(world, entity, hwnd, wparam, lparam),
         WM_MOUSEHWHEEL => mouse_dblclick_wheel::WM_MOUSEHWHEEL(world, entity, hwnd, wparam, lparam),
         WM_KEYDOWN => keyboard::WM_KEYDOWN(world, entity, hwnd, wparam, lparam),
+        WM_SYSKEYDOWN => keyboard::WM_SYSKEYDOWN(world, entity, hwnd, wparam, lparam),
         WM_CANCELMODE => keyboard::WM_CANCELMODE(world, entity, hwnd, wparam, lparam),
         WM_ACTIVATE => keyboard::WM_ACTIVATE(world, entity, hwnd, wparam, lparam),
         WM_CAPTURECHANGED => keyboard::WM_CAPTURECHANGED(world, entity, hwnd, wparam, lparam),
