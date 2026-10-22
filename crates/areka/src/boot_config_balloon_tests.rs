@@ -2,7 +2,8 @@
 //! （`areka-P0-ghost-standard-balloon` タスク 3・要件 2.5・3.2・4.1・5.1・7.4・7.7）。
 //!
 //! 段の並びと突き合わせの判断は I/O なしの `boot_resolve_balloon_tests.rs` が固定する。ここで見るのは
-//! 「読んだ 2 鍵が鎖へ届くこと」「ゴーストの中の `balloon/` を読まないこと」「引数の腕は読まないこと」と
+//! 「読んだ 2 鍵が鎖へ届くこと」「ゴーストの中の `balloon\` が根より先に候補へ入ること
+//! （areka-P0-ghost-inner-balloon 要件 1.4・3.2・4.1〜4.5・4.7）」「引数の腕は読まないこと」と
 //! 記録の件数だけ。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
 
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
@@ -65,12 +66,19 @@ fn put_memory(ghost: &Path, folder: &str) {
 /// 入力を集める口を呼び、(段, フォルダ名) と記録を返す。決まったバルーンの場所が
 /// `<根>/balloon/<フォルダ名>` であることもここで確かめる。
 fn resolve(tmp: &TempPath, ghost: &Path) -> ((BalloonRoute, String), Vec<CapturedEvent>) {
+    let ((route, dir), events) = resolve_dir(tmp, ghost);
+    let folder = dir.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(dir, tmp.child("balloon").join(&folder));
+    ((route, folder), events)
+}
+
+/// 入力を集める口を呼び、(段, 決まったバルーンの場所) と記録を返す（ゴーストの中に当たる場面用）。
+fn resolve_dir(tmp: &TempPath, ghost: &Path) -> ((BalloonRoute, PathBuf), Vec<CapturedEvent>) {
     let root = areka_ghost::BasewareRoots::single(tmp.path().to_path_buf());
     let (got, events) = capture(|| resolve_balloon_for_ghost(&root, ghost, no_pick));
     let got = got.expect("決まる");
-    let folder = got.folder.expect("引数以外はフォルダ名が在る");
-    assert_eq!(got.dir, tmp.child("balloon").join(&folder));
-    ((got.route, folder), events)
+    assert!(got.folder.is_some(), "引数以外はフォルダ名が在る");
+    ((got.route, got.dir), events)
 }
 
 fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
@@ -120,15 +128,40 @@ fn descript_balloon_wins_over_unnumbered_companion() {
     assert!(warnings(&events).is_empty(), "{events:?}");
 }
 
-/// `default.balloon.path` と同じ名前のフォルダがゴーストの中の `balloon/` にだけ在る → 当たらず
-/// 警告 1 件で次の段へ（入力を集める口は根の置き場だけを列挙する・要件 2.5）。
+/// `default.balloon.path` と同じ名前のフォルダがゴーストの中の `balloon\` にだけ在る → descript の段で
+/// ゴーストの中に当たり、警告は 0 件（要件 4.2）。
 #[test]
-fn default_balloon_path_does_not_see_ghost_inner_balloon() {
+fn default_balloon_path_hits_ghost_inner_balloon() {
     let tmp = TempPath::under_target("cfg-balloon-inner");
     let ghost = fixture(&tmp, "default.balloon.path,inner\n", &[("b1", "First")]);
     put_balloon(&ghost.join("balloon").join("inner"), "Inner");
-    let (got, events) = resolve(&tmp, &ghost);
-    assert_eq!(got, (BalloonRoute::Default, "StayseeBalloon".to_owned()));
+    let (got, events) = resolve_dir(&tmp, &ghost);
+    assert_eq!(
+        got,
+        (BalloonRoute::Descript, ghost.join("balloon").join("inner"))
+    );
+    assert!(warnings(&events).is_empty(), "{events:?}");
+}
+
+/// `balloon/claudia` は `<ゴースト>\balloon\claudia` が在っても当たらない（フォルダ名の突き合わせ）。
+/// `descript_balloon_not_found` が今の欄（`balloon_store` は根の置き場だけ）で 1 件（要件 4.3・4.7）。
+#[test]
+fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
+    let tmp = TempPath::under_target("cfg-balloon-inner-prefixed");
+    let ghost = fixture(
+        &tmp,
+        "default.balloon.path,balloon/claudia\n",
+        &[("b1", "First")],
+    );
+    put_balloon(&ghost.join("balloon").join("claudia"), "Claudia");
+    let (got, events) = resolve_dir(&tmp, &ghost);
+    assert_eq!(
+        got,
+        (
+            BalloonRoute::Default,
+            tmp.child("balloon").join("StayseeBalloon")
+        )
+    );
     let warned = warnings(&events);
     assert_eq!(warned.len(), 1, "{events:?}");
     let store = tmp.child("balloon").display().to_string();
@@ -142,10 +175,83 @@ fn default_balloon_path_does_not_see_ghost_inner_balloon() {
         (
             Some("descript_balloon_not_found"),
             Some("default.balloon.path"),
-            Some("inner"),
+            Some("balloon/claudia"),
             Some(store.as_str()),
         )
     );
+}
+
+/// 同梱の段（`install.txt` の `balloon.directory`）がゴーストの中に当たる（要件 4.4）。
+#[test]
+fn companion_hits_ghost_inner_balloon() {
+    let tmp = TempPath::under_target("cfg-balloon-inner-companion");
+    let ghost = fixture(&tmp, "", &[("b1", "First")]);
+    put_balloon(&ghost.join("balloon").join("bundled"), "Bundled");
+    put_install(&ghost, "balloon.directory,bundled\n");
+    let (got, events) = resolve_dir(&tmp, &ghost);
+    assert_eq!(
+        got,
+        (
+            BalloonRoute::Companion,
+            ghost.join("balloon").join("bundled")
+        )
+    );
+    assert!(warnings(&events).is_empty(), "{events:?}");
+}
+
+/// 根の置き場にバルーンが 1 つも無くても、ゴーストの中に在ればそれで決まり `NoBalloon` にならない（要件 4.5）。
+#[test]
+fn empty_root_store_resolves_from_ghost_inner_balloon() {
+    let tmp = TempPath::under_target("cfg-balloon-inner-only");
+    let ghost = fixture(&tmp, "", &[]);
+    std::fs::remove_dir_all(tmp.child("balloon")).expect("根のバルーンを消す");
+    put_balloon(&ghost.join("balloon").join("inner"), "Inner");
+    let (got, events) = resolve_dir(&tmp, &ghost);
+    assert_eq!(
+        got,
+        (BalloonRoute::Only, ghost.join("balloon").join("inner"))
+    );
+    assert!(warnings(&events).is_empty(), "{events:?}");
+}
+
+/// 根の同じフォルダ名を隠した 1 件ごとに info `ghost_balloon_hides_root` が 1 件（欄は
+/// `folder`・`hidden`＝根の場所・`by`＝ゴーストの中の場所）。根に無いゴーストの中のバルーンは数えない（要件 3.2）。
+#[test]
+fn ghost_balloon_hides_root_once_per_hidden_entry() {
+    let tmp = TempPath::under_target("cfg-balloon-inner-hides");
+    let ghost = fixture(&tmp, "", &[("b1", "First"), ("b2", "Second")]);
+    for folder in ["b1", "B2", "own"] {
+        put_balloon(&ghost.join("balloon").join(folder), folder);
+    }
+    let (_, events) = resolve_dir(&tmp, &ghost);
+    let mut got: Vec<_> = named(&events, "ghost_balloon_hides_root")
+        .iter()
+        .map(|e| {
+            assert_eq!(e.level, tracing::Level::INFO);
+            (
+                e.field_str("folder").map(str::to_owned),
+                e.field("hidden").map(str::to_owned),
+                e.field("by").map(str::to_owned),
+            )
+        })
+        .collect();
+    got.sort();
+    let row = |root_folder: &str, inner_folder: &str| {
+        (
+            Some(root_folder.to_owned()),
+            Some(tmp.child("balloon").join(root_folder).display().to_string()),
+            Some(
+                ghost
+                    .join("balloon")
+                    .join(inner_folder)
+                    .display()
+                    .to_string(),
+            ),
+        )
+    };
+    let mut want = vec![row("b1", "b1"), row("b2", "B2")];
+    want.sort();
+    assert_eq!(got, want, "{events:?}");
 }
 
 /// 起動の入口を呼ぶ（記憶の置き場は空のフォルダ・印も最後のゴーストも無い）。
@@ -235,4 +341,29 @@ fn boot_with_argv_balloon_reads_no_ghost_balloon_keys() {
     .collect();
     assert!(missed.is_empty(), "引数の腕が読んだ痕跡: {missed:?}");
     assert_eq!(named(&events, "balloon_resolved").len(), 1, "{events:?}");
+}
+
+/// 引数で渡したゴースト（位置の引数・`--ghost`）でも、そのゴーストのフォルダの中のバルーンを数える（要件 1.4）。
+#[test]
+fn argv_ghost_counts_its_inner_balloons() {
+    for (case, flag) in [("pos", None), ("opt", Some(Path::new("--ghost")))] {
+        let tmp = TempPath::under_target(&format!("cfg-balloon-inner-argv-{case}"));
+        fixture(&tmp, "", &[("b1", "First")]);
+        let dev = tmp.child("ext").join("dev");
+        std::fs::create_dir_all(dev.join("ghost").join("master")).expect("フォルダを組む");
+        std::fs::write(
+            dev.join("ghost").join("master").join("descript.txt"),
+            "charset,UTF-8\ndefault.balloon.path,inner\n",
+        )
+        .expect("descript");
+        put_balloon(&dev.join("balloon").join("inner"), "Inner");
+        let args: Vec<&Path> = flag.into_iter().chain([dev.as_path()]).collect();
+        let (route, dir, events) = boot(&tmp, &args);
+        assert_eq!(
+            (route, dir),
+            (BalloonRoute::Descript, dev.join("balloon").join("inner")),
+            "{case}"
+        );
+        assert!(warnings(&events).is_empty(), "{case}: {events:?}");
+    }
 }

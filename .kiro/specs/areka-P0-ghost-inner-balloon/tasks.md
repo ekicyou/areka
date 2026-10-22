@@ -31,7 +31,7 @@
   - _Requirements: 1.5, 2.2, 2.5, 3.1, 3.4, 6.1, 6.2, 6.4, 8.4, 10.1_
 
 - [ ] 2. 起動とゴースト切替の決め方（`areka`）
-- [ ] 2.1 起動とゴースト切替の候補を `balloons_for` で作り、隠れを記録する
+- [x] 2.1 起動とゴースト切替の候補を `balloons_for` で作り、隠れを記録する
   - `boot_config.rs` の `resolve_balloon_for_ghost` の一覧を `balloons_for(roots, ghost_dir).listed` に替える。記憶・descript の 2 鍵・同梱の読み方と `resolve_balloon` の段は変えない。引数のバルーン（段 1）は一覧を読まないまま
   - `hidden` の 1 件ごとに info `ghost_balloon_hides_root`（`folder`・`hidden`・`by`）を残す。メニュー・タグ・開く・更新では残さない
   - 「当たらなかった」記録（`last_balloon_not_found`・`descript_balloon_not_found`・`companion_balloon_not_found`）と `NoBalloon` の告知は、事象名・欄・`balloon_store`／`balloon_stores`（根の置き場の列だけ）を変えず、記録の文だけを「根にもゴーストの中にも見つからない」へ直す
@@ -151,3 +151,4 @@
 
 - 1.1: `scan_ghost_balloons` は呼び手が来るまで `#[cfg_attr(not(test), expect(dead_code, ...))]` を付けてある。1.2 で `balloons_for` から呼ぶときに外す（外し忘れは unfulfilled_lint_expectations の警告になる）。
 - 範囲外: `cargo clippy -p areka-ghost --all-targets -- -D warnings` は依存の `dola` の既存の lint（`resolve.rs`・`conflict_resolver.rs` など）で止まり、このクレートまで届かない（完了の棚卸で扱う）。
+- 2.1: `cargo test -p areka` の統合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は i686 の helper が要る。ワークツリーで先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を建てる（建て済み）。テストを書く道具が `\b`・`\n` を化かすことがあるので、書いたらバイトで確かめる。
