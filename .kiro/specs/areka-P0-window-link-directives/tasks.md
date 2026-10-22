@@ -109,7 +109,7 @@
   - _Requirements: 1.4, 1.7, 1.9, 3.1, 3.5, 3.7, 7.1_
 
 - [ ] 7. 右クリックのメニューの「バルーン位置初期化」と、位置初期化の近道を入れる
-- [ ] 7.1 (P) kanade の許可表に `resetballoonpositionbutton.caption` を足す
+- [x] 7.1 (P) kanade の許可表に `resetballoonpositionbutton.caption` を足す
   - `areka-kanade` の SHIORI リソースの許可表に 1 名足し（13 → 14 名）、数と一覧の檻を合わせる
   - `areka-kanade` のテストが緑になり、ゴーストがこの名前を返したときに引けることが檻で確かめられる
   - _Boundary: areka-kanade resources_
@@ -161,3 +161,4 @@
 - 3.1: `finish_char_drag` が記憶へ書くのは相手だけ。ドラッグした窓の記憶の形は 3.2 で `on_char_drag_end` が `saved_form_anchor` で決める。テストは `placement/follow_sticky_follow_drag_tests.rs`。
 - 3.2: ドラッグ中に向きを変えた窓の記憶は離した位置（当て直した位置ではない）。COMPAT §8 の行（8）に一言足す。ドラッグ中に `apply_script_alignment` が走ると、その回だけ窓が辺へ飛び次の `OnDrag` で始めの向きへ戻る（1 フレームのちらつき）。檻なし。完了の棚卸で扱いを決める。
 - 6: `consumer_ledger.rs` の ukadoc の錨は新旧の形が混ざる（新しい行は今の MCP の `#_!_…` 形）。全 variant を揃えるなら別の機会に一括で。`reset_balloon_pos` の一時の `#[allow(dead_code)]` は 7.2・7.3 で外す。
+- 7.1（範囲外）: `cargo clippy -p areka-kanade --all-targets` が `actor_raise_reply_tests.rs:95` の `clippy::never_loop`（既定で deny）で止まる。この spec の前から（66eaa2b5）。完了の棚卸で扱う。
