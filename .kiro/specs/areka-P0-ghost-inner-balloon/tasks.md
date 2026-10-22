@@ -47,7 +47,7 @@
   - `emo2_boot/ghost_switch_reload_tests.rs`: ゴーストの中のバルーンを使っているときのゴーストの読み直し（自分への切替）で、記憶の段から同じ `<ゴースト>\balloon\<名>` が出ることを足して緑
   - _Requirements: 2.3, 4.6, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 8.5, 10.1_
 
-- [ ] 3. 実行中の呼び手（`areka`）
+- [x] 3. 実行中の呼び手（`areka`）
 - [x] 3.1 (P) バルーンの切替と `\![open,explorer,…]` の候補を今のゴーストで引く
   - `shell_balloon_resolve.rs` の `balloon_candidates` にゴーストのフォルダの引数を足して `balloons_for(..).listed` を使い、呼び手 2 か所を直す: `shell_balloon_switch.rs` の切替の候補は `balloon_candidates(&ctx.roots, &ctx.ghost_dir)`、`readme/opener.rs` の `named_folder` は `ctx.baseware` から取り出した `root` を使って `balloon_candidates(root, &ctx.ghost_dir)`
   - `name` の引き方（`resolve_skin_target`・`skin_by_name`）と切替の記憶の書き方は変えない
@@ -71,7 +71,7 @@
   - _Boundary: RuntimeCallers（更新の受付）_
   - _Depends: 1.2_
 
-- [ ] 3.4 (P) ゴーストの中のバルーンの更新で書く先をテストで固める
+- [x] 3.4 (P) ゴーストの中のバルーンの更新で書く先をテストで固める
   - `roots/user_root_tests.rs`: ゴーストの中のバルーンの場所（親が `<実行ファイルの隣>\balloon` でない）で `plan_copy` が写さずそのまま（`AsIs`）を返すことを固める
   - `update/worker_tests.rs`（`prepare_targets`）: 起動のときのゴーストが実行ファイルの隣の根に在るとき、書ける根へ写されてから動くか（写されるならゴーストの中のバルーンの更新は写しの中を書く）を固める。写されない場合の扱いはゴーストそのものと同じでよいことをテストの説明に書く
   - 写されない道が見つかり書く先が記録に出ないときは、その道で書く先を記録に残す 1 行を足す（記録の無い失敗を作らない）

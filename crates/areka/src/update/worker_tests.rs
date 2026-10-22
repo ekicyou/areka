@@ -660,10 +660,15 @@ name,B
 /// 同梱のバルーン 1 つを対象にした台本からの依頼でスレッドを走らせ、対象の始まりのイベントの
 /// Reference1（対象のフォルダ）を返す。返す時点で取り込み（エンジン）にはまだ入っていない。
 fn balloon_begin_dir(roots: BasewareRoots, exe: &Path) -> String {
+    balloon_dir_begin_dir(roots, exe, exe.join("balloon").join("b1"))
+}
+
+/// [`balloon_begin_dir`] の対象のフォルダを `dir` にしたもの。
+fn balloon_dir_begin_dir(roots: BasewareRoots, exe: &Path, dir: PathBuf) -> String {
     let mut order = empty_order(UpdateReason::Script);
     order.targets.push(TargetSpec {
         kind: TargetKind::Balloon,
-        dir: exe.join("balloon").join("b1"),
+        dir,
         name: "B".to_owned(),
         descript_homeurl: Some(HOMEURL.to_owned()),
     });
@@ -821,6 +826,41 @@ fn unmarked_list_does_not_copy_the_balloon_target() {
         "同梱のフォルダのまま"
     );
     assert!(!user.join("balloon").exists(), "写さない");
+}
+
+/// ゴーストの中のバルーンは、印の付いた並びでも写さずに今のフォルダのまま書く（spec:
+/// areka-P0-ghost-inner-balloon 要件 8.1・8.3）。起動のときのゴーストが実行ファイルの隣の根に在れば
+/// 起動が書ける根へ写してから動かす（`boot_config_copy_tests`）ので、対象のフォルダは写しの中で、
+/// 更新は写しの中を書く。写されずに隣の根のまま動いたゴースト（写しの失敗など）では、ゴーストそのもの
+/// （`prepare_targets` が通さない）と同じく隣の根のゴーストの中を書く。どちらも書く先は
+/// `update_target_begin` の `dir` に残る。
+#[test]
+fn ghost_inner_balloon_target_is_written_in_place() {
+    let (tmp, user, exe) = bundled_balloon("update-worker-balloon-ghost-inner");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let copied = user
+        .join("ghost")
+        .join("emo2")
+        .join("balloon")
+        .join("inner");
+    let not_copied = exe.join("ghost").join("emo2").join("balloon").join("inner");
+    for dir in [&copied, &not_copied] {
+        std::fs::create_dir_all(dir).expect("ゴーストの中のバルーン");
+        let got = balloon_dir_begin_dir(roots.clone(), &exe, dir.clone());
+        assert_eq!(
+            got,
+            std::path::absolute(dir)
+                .expect("絶対")
+                .display()
+                .to_string(),
+            "ゴーストの中のフォルダのまま"
+        );
+    }
+    assert!(!user.join("balloon").exists(), "根の置き場へ写さない");
+    drop(tmp);
 }
 
 // ---------------------------------------------------------------- 字面の検査
