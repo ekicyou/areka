@@ -87,7 +87,32 @@
 
 ## 5. 仲介で拾える手がかり
 
-後のタスクで埋める。
+コードを読んで調べた記録（机は使っていない・要件 5.4）。
+
+**今の記録は `LoadReturnedFalse` だけだった**
+
+- 元の失敗の回で仲介が標準エラーへ出したのは `[helper] SHIORI 初期化の入口: loadu` と `[helper] LOAD 失敗（観測・ack[0]）: LoadReturnedFalse` の 2 行だけ。失敗の行は `crates/shiori-host32-helper/src/main.rs:339` の `eprintln!("[helper] LOAD 失敗（観測・ack[0]）: {e:?}")` で、直す前の `ProxyError::LoadReturnedFalse` は中身を持たなかったので、行には型の名前しか出なかった
+- SHIORI の初期化の入口（`loadu`／`load`）は真偽しか返さない。仲介が受け取れるのは戻り値が 0 だったことだけ
+
+**`HRESULT(0x80004005)` は仲介の手がかりではない**
+
+- 元の回の標準エラーの `Error: Error { code: HRESULT(0x80004005), message: "エラーを特定できません" }` は、仲介ではなく areka.exe の行
+- areka.exe の入口は `fn main() -> Result<()>`（`crates/areka/src/main.rs:154`・`windows::core::Result`）。失敗で終わるときは決まった値 `E_FAIL`（0x80004005）を返す（`crates/areka/src/main.rs:198` 起動前の解決の失敗・`:290` 開始の窓の失敗・`:413` `finish_after_run` の失敗の印）。Rust は `main` が `Err` を返すと `Error: {:?}` を標準エラーへ出し、終了コード 1 で終える
+- よってこの行は「areka.exe が終了コード 1 で終わった」ことを言うだけで、なぜ LOAD が断られたかの手がかりは何も持たない
+
+**足した手がかり: OS の最後のエラー**
+
+- コミット `3c8d5cc6`: 失敗の型を `LoadReturnedFalse { last_error: u32 }` にした（`crates/shiori-host32-helper/src/shiori_proxy.rs:121`）。初期化の入口が 0 を返した直後、ほかの関数（`eprintln!`・`FreeLibrary`）を呼ぶ前に `GetLastError` を読んで載せる（`crates/shiori-host32-helper/src/shiori_proxy.rs:285`〜`286`）。記録の行（`main.rs:339`）の綴りは変えておらず、`{e:?}` によって `LoadReturnedFalse { last_error: 5 }` の形で出る。ack は `last_error` の値に依らず 0（`crates/shiori-host32-helper/src/main_load_ack_tests.rs:19`）
+- コミット `86faa363`: 試験用の DLL の失敗の注入（`HOST32_TESTDLL_LOADU_FAIL=1`）で、0 を返す直前に最後のエラーへアクセス拒否（5）を置くようにした（`crates/shiori-host32-testdll-loadu/src/lib.rs:76`）。i686 の試験 `testdll_loadu_false_is_load_returned_false_without_falling_back` が `last_error == 5` を確かめる（`crates/shiori-host32-helper/src/shiori_proxy_loadu_tests.rs:281`〜`282`）
+
+**限り（約束のない手がかり）**
+
+- SHIORI の約束に「失敗したら最後のエラーを置く」は無い。SHIORI の DLL（pasta.dll など）には置く義務が無い
+- 読めるのは、DLL の中で最後に呼ばれた OS の関数の結果がたまたま残っていたときだけ。DLL が失敗の後に記録のファイルへ書くなどほかの関数を呼べば上書きされ、0 や失敗の原因と無関係の値になりうる
+- そのため `last_error` は「名前替えの失敗（5＝アクセス拒否・32＝共有違反）などがそのまま残っていれば強い手がかり」として読み、0 や無関係に見える値を「OS の失敗ではない」証拠とは読まない。原因の確かめは、残した写しの中の SHIORI 自身の記録（要件 5.1）を合わせて読む
+- 型の説明にもこの限りを書いてある（`crates/shiori-host32-helper/src/shiori_proxy.rs:117`〜`120`）
+
+まとめ: 仲介が今より多く拾えるのは OS の最後のエラー 1 つだけで、それを LOAD の失敗の記録の行に足した（要件 5.5）。ほかに仲介の側で拾える手がかりは無い。
 
 ## 6. くり返しの結果
 
