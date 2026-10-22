@@ -16,6 +16,7 @@ use super::{Action, Input, Phase, State};
 use crate::msg::{ShioriCall, ShioriFailure, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStatus;
 use crate::talk::TalkId;
+use areka_talk::SecurityLevel;
 
 /// 台本の出どころ（翻訳の組み立てと script 種別の記録の表示の語の素）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,13 +68,34 @@ pub(crate) struct TranslateRequest {
 }
 
 /// 殻が運行表へ戻す翻訳の結果（`Input::TranslateDone` の中身）。`Err` は輸送路の失敗だけ。
-pub(crate) type TranslateResult = Result<String, ShioriFailure>;
+pub(crate) type TranslateResult = Result<Translated, ShioriFailure>;
+
+/// 翻訳の結果の中身: MAKOTO の口を通した最終の台詞と、`OnTranslate` の応答のレベル
+/// （204・エラー応答・起きない結果では `Local`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Translated {
+    /// 最終の台詞。
+    pub script: String,
+    /// 翻訳の応答のレベル（預けたトークの出どころを下げる材料）。
+    pub level: SecurityLevel,
+}
+
+#[cfg(test)]
+impl Translated {
+    /// テスト用: 応答のレベルが `Local` の翻訳の結果。
+    pub(crate) fn local(script: impl Into<String>) -> Self {
+        Self {
+            script: script.into(),
+            level: SecurityLevel::Local,
+        }
+    }
+}
 
 /// `OnTranslate` の応答の読み（[`read_reply`] の返り値）。
 #[derive(Debug)]
 pub(crate) enum ReplyReading {
-    /// MAKOTO の口へ渡す台詞。
-    Proceed(String),
+    /// MAKOTO の口へ渡す台詞と、翻訳の応答のレベル（応答の台詞でなければ `Local`）。
+    Proceed(String, SecurityLevel),
     /// 輸送路の失敗（記録は運行表が結果を受けたときに残す）。
     Failed(ShioriFailure),
 }
@@ -205,35 +227,36 @@ pub(crate) fn read_reply(
     outcome: ShioriOutcome,
 ) -> ReplyReading {
     match outcome {
-        ShioriOutcome::Value(script, _) => {
+        ShioriOutcome::Value(script, level) => {
             let kind = if script.is_empty() {
                 "empty"
             } else {
                 "replaced"
             };
             tracing::info!(target: "kanade", event = "translate_reply", source = %source, kind, "OnTranslate の台詞を採る");
-            ReplyReading::Proceed(script)
+            ReplyReading::Proceed(script, level)
         }
         ShioriOutcome::NoContent => {
             tracing::info!(target: "kanade", event = "translate_reply", source = %source, kind = "no_content", "OnTranslate は 204——展開済みの元の台詞で進む");
-            ReplyReading::Proceed(expanded)
+            ReplyReading::Proceed(expanded, SecurityLevel::Local)
         }
         ShioriOutcome::Failed(ShioriFailure::Shiori(error)) => {
             tracing::warn!(target: "kanade", event = "translate_reply", source = %source, kind = "error_response", error = %error, "OnTranslate がエラー応答——展開済みの元の台詞で進む");
-            ReplyReading::Proceed(expanded)
+            ReplyReading::Proceed(expanded, SecurityLevel::Local)
         }
         ShioriOutcome::Failed(failure) => ReplyReading::Failed(failure),
         ShioriOutcome::Notified | ShioriOutcome::Unloaded => {
             tracing::warn!(target: "kanade", event = "translate_reply", source = %source, kind = "unexpected", "GET では起きない結果——204 と同じに展開済みの元の台詞で進む");
-            ReplyReading::Proceed(expanded)
+            ReplyReading::Proceed(expanded, SecurityLevel::Local)
         }
     }
 }
 
 /// `route` の `Input::TranslateDone` の腕。
 ///
-/// - `Ok(script)`: 預けた一括の再生の開始の台詞だけを `script` に差し替えて返す（起動の記録の
-///   後ろ書き＝`epilogue` は触らない）。控え（再生中の台詞・切替の台詞）も書き換える
+/// - `Ok(Translated { script, level })`: 預けた一括の再生の開始の台詞だけを `script` に差し替えて
+///   返す（起動の記録の後ろ書き＝`epilogue` は触らない）。同じ所で出どころを `level` で下げる
+///   （上げない・要件 1.5・3.1・3.2）。控え（再生中の台詞・切替の台詞）も書き換える
 ///   （[`rewrite_notes`]）。
 /// - `Err`（輸送路の失敗）: `translate_failed` を残して預けた一括を捨て、既存の故障の遷移へ。
 ///   切替の送り出しの台詞なら、表示しなかった台詞を次のゴーストへ渡さないよう切替の台詞を空にする。
@@ -248,8 +271,8 @@ pub(super) fn on_done(mut state: State, result: TranslateResult) -> (State, Vec<
         tracing::warn!(target: "kanade", event = "translate_done_unexpected", ok = result.is_ok(), "帳簿が無いのに翻訳の結果が届いた——捨てる");
         return (state, Vec::new());
     };
-    let script = match result {
-        Ok(script) => script,
+    let Translated { script, level } = match result {
+        Ok(translated) => translated,
         Err(failure) => {
             tracing::error!(target: "kanade", event = "translate_failed", source = %source, talk_id = talk_id.0, error = %failure, "OnTranslate の輸送路が失敗——預けた一括を捨てて終了系列（Fault）へ");
             if matches!(state.phase, Phase::ChangeTalkWait { talk_id: t, .. } if t == talk_id)
@@ -267,6 +290,11 @@ pub(super) fn on_done(mut state: State, result: TranslateResult) -> (State, Vec<
         {
             changed = start.script != script;
             start.script.clone_from(&script);
+            let lowered = start.origin.lowered_by(level);
+            if lowered.level != start.origin.level {
+                tracing::info!(target: "kanade", event = "script_security_lowered", talk_id = talk_id.0, by = "translate", "翻訳の応答の SecurityLevel で台本を外部扱いへ下げる");
+            }
+            start.origin = lowered;
         }
     }
     rewrite_notes(&mut state, talk_id, script);
@@ -298,3 +326,7 @@ fn rewrite_notes(state: &mut State, talk_id: TalkId, script: String) {
 #[cfg(test)]
 #[path = "translate_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "translate_level_tests.rs"]
+mod level_tests;

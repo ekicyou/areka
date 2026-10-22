@@ -11,7 +11,7 @@ use crate::actor::round_trip_raw;
 use crate::msg::ShioriMsg;
 use crate::schedule::events::{on_translate, on_translate_sstp};
 use crate::schedule::translate::{
-    ReplyReading, ScriptSource, TranslateRequest, TranslateResult, read_reply,
+    ReplyReading, ScriptSource, TranslateRequest, TranslateResult, Translated, read_reply,
 };
 use crate::translate::TranslateSeams;
 
@@ -40,7 +40,10 @@ pub(crate) fn run_translate(
     };
     let outcome = round_trip_raw(shiori, call);
     match read_reply(&source, expanded, outcome) {
-        ReplyReading::Proceed(text) => Ok((seams.makoto)(&text, source.makoto_id())),
+        ReplyReading::Proceed(text, level) => Ok(Translated {
+            script: (seams.makoto)(&text, source.makoto_id()),
+            level,
+        }),
         ReplyReading::Failed(failure) => Err(failure),
     }
 }

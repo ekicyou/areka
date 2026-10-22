@@ -236,7 +236,9 @@ fn send_in_idle_steady_starts_a_new_talk_and_notes_strict() {
         // 翻訳の結果で預けた再生の開始が返る（ゴースト自身の台本と同じ道）。
         let (_, actions) = step(
             state,
-            Input::TranslateDone(Ok("\\h訳\\e".into())),
+            Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+                "\\h訳\\e",
+            ))),
             &config(),
         );
         assert!(matches!(
@@ -321,7 +323,9 @@ fn send_during_choice_clears_the_ledger_and_no_choice_events_follow() {
     assert!(state.choice.is_none(), "選択肢の帳簿は消えるはず");
     let (state, _) = step(
         state,
-        Input::TranslateDone(Ok("\\h割り込み\\e".into())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h割り込み\\e",
+        ))),
         &cfg,
     );
     // 帳簿が残っていても下流の番号の照合が送出を止めるので、送出の 0 回に加えて
@@ -444,7 +448,13 @@ fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
         s,
         ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
     ); // → BootVersion{挨拶}
-    let (s, _) = step(s, Input::TranslateDone(Ok("\\h挨拶\\e".into())), cfg);
+    let (s, _) = step(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h挨拶\\e",
+        ))),
+        cfg,
+    );
     let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
     assert!(
         matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == BOOT_GREETING_ORIGIN),

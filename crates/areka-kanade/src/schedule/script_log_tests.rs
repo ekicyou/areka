@@ -67,7 +67,9 @@ fn answer(state: State, script: &str, translated: &str) -> State {
     );
     let (state, actions) = step(
         state,
-        Input::TranslateDone(Ok(translated.to_string())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            translated,
+        ))),
         &config(),
     );
     assert!(
@@ -216,7 +218,9 @@ fn sstp_send_is_logged_once_after_translate() {
         assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
         let (_, actions) = step(
             s,
-            Input::TranslateDone(Ok("\\h訳した外\\e".into())),
+            Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+                "\\h訳した外\\e",
+            ))),
             &config(),
         );
         assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));

@@ -170,7 +170,9 @@ fn unlisted_name_goes_out_verbatim_and_its_script_starts_a_talk() {
     );
     let (_, actions) = step(
         state,
-        Input::TranslateDone(Ok("\\h訳\\e".into())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h訳\\e",
+        ))),
         &config(),
     );
     assert!(matches!(
@@ -297,7 +299,9 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
     assert!(state.choice.is_none(), "選択肢の帳簿は消えるはず");
     let (state, _) = step(
         state,
-        Input::TranslateDone(Ok("\\h割り込み\\e".into())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h割り込み\\e",
+        ))),
         &cfg,
     );
     let mut out = None;
@@ -456,7 +460,13 @@ fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
         s,
         ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
     ); // → BootVersion{挨拶}
-    let (s, _) = step(s, Input::TranslateDone(Ok("\\h挨拶\\e".into())), cfg);
+    let (s, _) = step(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h挨拶\\e",
+        ))),
+        cfg,
+    );
     let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
     assert!(
         matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == super::BOOT_GREETING_ORIGIN),

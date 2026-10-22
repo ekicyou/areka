@@ -137,7 +137,10 @@ fn b3_reply_script_is_translated_and_204_stays_steady() {
             if matches!(&req.source, ScriptSource::Event(e) if e.id.as_str() == "OnBalloonBreak")),
         "台本の応答は元のイベント OnBalloonBreak として翻訳へ預ける"
     );
-    let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        &mut s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     let (next, script) = started(&actions);
     assert_ne!(next, talk, "新しい番号のトークが始まる");
     assert_eq!(script, FINAL);
@@ -312,7 +315,10 @@ fn accept_change(s: &mut State) {
 fn reply_and_start(s: &mut State, origin: &'static str) -> TalkId {
     let actions = reply_value(s, ORIGINAL, origin);
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     started(&actions).0
 }
 

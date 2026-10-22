@@ -192,7 +192,11 @@ fn every_reply_kind_passes_through_makoto_once_with_source_id() {
     for (reply, text, kind, level) in cases {
         let observed = run(reply(), &[]);
         match &observed.result {
-            Ok(script) => assert_eq!(script, &format!("{text}#makoto"), "{kind}: 口の結果を返す"),
+            Ok(done) => assert_eq!(
+                done.script,
+                format!("{text}#makoto"),
+                "{kind}: 口の結果を返す"
+            ),
             Err(failure) => panic!("{kind}: 輸送路の失敗でないのに Err（{failure}）"),
         }
         assert_eq!(
@@ -308,7 +312,10 @@ fn sstp_send_source_uses_sstp_send_owned_reference1() {
         "Reference1 は sstp-send,owned・2 と 3 は欠番（列を Reference1 で止める）"
     );
     assert_eq!(status, talking_status(), "Status は依頼に載った値");
-    assert_eq!(observed.result.ok().as_deref(), Some("翻訳後#makoto"));
+    assert_eq!(
+        observed.result.ok().map(|done| done.script).as_deref(),
+        Some("翻訳後#makoto")
+    );
     assert_eq!(
         observed.makoto,
         vec![("翻訳後".to_string(), String::new())],
@@ -320,4 +327,34 @@ fn sstp_send_source_uses_sstp_send_owned_reference1() {
         hits[0].fields.get("source").map(String::as_str),
         Some("sstp-send")
     );
+}
+
+#[test]
+fn translate_reply_level_rides_on_the_result_and_makoto_gets_only_the_script() {
+    use areka_talk::SecurityLevel;
+    let cases = [
+        (
+            ShioriOutcome::Value("訳".to_string(), SecurityLevel::External),
+            SecurityLevel::External,
+        ),
+        (
+            ShioriOutcome::Value("訳".to_string(), SecurityLevel::Local),
+            SecurityLevel::Local,
+        ),
+        (ShioriOutcome::NoContent, SecurityLevel::Local),
+        (
+            ShioriOutcome::Failed(ShioriFailure::Shiori("500 Internal Server Error".into())),
+            SecurityLevel::Local,
+        ),
+    ];
+    for (reply, level) in cases {
+        let observed = run(reply, &[]);
+        let done = observed.result.expect("輸送路の失敗ではない");
+        assert_eq!(done.level, level, "翻訳の応答のレベル（204・誤りは local）");
+        assert_eq!(
+            observed.makoto.len(),
+            1,
+            "MAKOTO の口は台詞だけを 1 回受ける"
+        );
+    }
 }

@@ -107,7 +107,9 @@ impl Drive {
             "OnSecondChange",
         );
         if let [Action::Translate(_)] = actions.as_slice() {
-            actions = self.feed(Input::TranslateDone(Ok(shown.to_string())));
+            actions = self.feed(Input::TranslateDone(Ok(
+                crate::schedule::translate::Translated::local(shown),
+            )));
         }
         started(&actions).talk_id
     }
@@ -278,7 +280,9 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
     assert!(d.s.translate.is_some(), "帳簿を置く");
 
     // ⑵ 預けた一括を最終の台詞で返す。
-    let resumed = d.feed(Input::TranslateDone(Ok(FINAL.into())));
+    let resumed = d.feed(Input::TranslateDone(Ok(
+        crate::schedule::translate::Translated::local(FINAL),
+    )));
     assert_eq!(kinds(&resumed), expected, "預けた一括を順序どおり返す");
     let start = started(&resumed);
     assert_eq!(start.script, FINAL, "再生の開始の台詞は最終の台詞");
@@ -298,7 +302,9 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
         ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
         origin,
     );
-    let same = t.feed(Input::TranslateDone(Ok(ORIGINAL.into())));
+    let same = t.feed(Input::TranslateDone(Ok(
+        crate::schedule::translate::Translated::local(ORIGINAL),
+    )));
     let (b, origin) = prepare();
     let reply = Input::ShioriReply {
         outcome: ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
