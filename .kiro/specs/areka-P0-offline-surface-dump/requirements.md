@@ -85,7 +85,7 @@ SSP のヘルプ「起動オプション一覧」の「オフラインサーフ�
 1. When `--offline-dump` の値がゴーストのフォルダであるとき, the areka shall そのフォルダの `ghost\master\descript.txt` を読み、置き場の並びに関わらずそのゴーストのシェルを書き出しの対象にする。末尾の `\` の有無で結果を変えない。
 2. When `--offline-dump`・`--dump-output-dir`・`--dump-error-log` の値が相対パスであるとき, the areka shall areka を起動したときの今のフォルダを基準にして読む。
 3. While `--dump-shell` が渡されていないあいだ, the areka shall 既定のシェルを書き出しの対象にし、利用者が最後に選んだシェルの記憶を使わない。
-4. When `--dump-shell` が渡されたとき, the areka shall その値を `shell\` の下のフォルダ名か、シェルの名前として探し、見つかったシェルを書き出しの対象にする（名前とフォルダ名の突き合わせの順は、名前でシェルを切り替えるときの今の決まりと同じ）。
+4. When `--dump-shell` が渡されたとき, the areka shall その値を `shell\` の下のフォルダ名か、シェルの名前として探し、見つかったシェルを書き出しの対象にする（名前とフォルダ名の突き合わせの順は、名前でシェルを切り替えるときの今の決まりと同じ。ただし `random`・`lastinstalled` は特別な名前として解かず、ただの名前として探す＝書き出しの絵が走るたびに変わらないように）。
 5. If `--dump-shell` で指したシェルが見つからない場合, then the areka shall 既定のシェルに代えず、面を 1 枚も書き出さず、見つからなかったことを Error のレベルで書き出しの記録に残す。
 6. If ゴーストの読み込みそのものに失敗した（フォルダが無い・`ghost\master\descript.txt` が無いか読めない）場合, then the areka shall 面を書き出さず、CSV を作らず、終了コード 0 で終え、失敗したことを areka の記録には error で残す（正典「ログは出力されず終了コードも0になる」）。
 7. If シェルの読み込みに失敗した（シェルのフォルダが読めない・面が 1 つも無いなど）場合, then the areka shall 面を書き出さず、失敗したことを Error のレベルで書き出しの記録に残す。
@@ -129,9 +129,9 @@ SSP のヘルプ「起動オプション一覧」の「オフラインサーフ�
 #### Acceptance Criteria
 
 1. When `--dump-bind` が渡されたとき, the areka shall セミコロンで区切られた各指定を `カテゴリ名,パーツ名,ON/OFF` として読み、書かれた順に、既定の着せ替えへ `\![bind]` と同じ意味（排他のカテゴリでパーツを ON にすると、同じカテゴリのほかのパーツは OFF）で重ねる。
-2. When 指定のパーツ名が空か `__ALL__` であるとき, the areka shall そのカテゴリのすべてのパーツを対象にする。
+2. When 指定のパーツ名が空か `__ALL__` であるとき, the areka shall そのカテゴリのすべてのパーツを、シェルの descript.txt に書かれた順に 1 つずつ対象にする（排他のカテゴリを ON にすると最後のパーツだけが残る。SSP 2.9.23 の測りと同じ・research.md §10）。
 3. When 指定の ON/OFF が `1` か `true` であるか省かれたとき, the areka shall そのパーツを ON にする（`\![bind]` と違い、省いても反転しない）。
-4. When 指定の ON/OFF が `0` か `false` であるとき, the areka shall そのパーツを OFF にする。
+4. When 指定の ON/OFF が `0` か `false` であるとき, the areka shall そのパーツを OFF にする。ただし `mustselect` のカテゴリのパーツは `\![bind]` と同じく外さず、外さなかったことを info で areka の記録に残す（書き出しの記録には入れない＝終了コードは変わらない。SSP 2.9.23 も黙って無視し終了コード 0）。
 5. The areka shall カテゴリ名とパーツ名の前後の空白を取り除かずに突き合わせる。
 6. If 指定のカテゴリかパーツがそのスコープのシェルに無い場合, then the areka shall その指定だけを無視し、Warning のレベルで書き出しの記録に残し、書き出しを続ける。
 7. If 指定の書き方が読めない（ON/OFF が `1`・`true`・`0`・`false` のどれでもないなど）場合, then the areka shall その指定だけを無視し、Warning のレベルで書き出しの記録に残し、書き出しを続ける。
@@ -150,6 +150,7 @@ SSP のヘルプ「起動オプション一覧」の「オフラインサーフ�
 5. When 書き出す先に同じ名前のファイルがあるとき, the areka shall そのファイルを書き出した絵で置き換える。
 6. If 面のファイルを書き出せなかった（フォルダを作れない・書き込めない・名前にファイル名として使えない文字が入るなど）場合, then the areka shall その面を書き出せなかったことを Error のレベルで書き出しの記録に残し、ほかの面の書き出しを続ける。
 7. The areka shall スコープの番号をファイル名に入れない（SSP と同じ名前）。
+8. When `--dump-output-prefix` の値にフォルダの区切り（`\`・`/`）が入るとき, the areka shall 書き出し先のフォルダからの相対の道として扱い、その下のフォルダへ書き出す（無いフォルダは作らず、書けなければ 6.6 の Error。SSP 2.9.23 は無いフォルダのとき黙って書かないが、areka は記録の無い失敗を作らない）。
 
 ### Requirement 7: 書き出しの記録の CSV（`--dump-error-log`）
 
@@ -158,10 +159,10 @@ SSP のヘルプ「起動オプション一覧」の「オフラインサーフ�
 #### Acceptance Criteria
 
 1. When `--dump-error-log` にファイルが渡され、書き出しの記録が 1 件以上あるとき, the areka shall その記録をそのファイルへ、BOM 付きの UTF-8・改行 CRLF・1 行 1 件・各列を `"` で囲み列の中の `"` を `""` にした CSV で書く。
-2. The areka shall CSV の各行を `"時刻","ゴースト名","レベル","内容"` の 4 列にし、時刻はその記録を残した時刻の `HH:MM:SS`（その PC の時刻）、ゴースト名はゴーストの `descript.txt` の `name`、内容は areka の記録の本文とする。
+2. The areka shall CSV の各行を `"時刻","ゴースト名","レベル","内容"` の 4 列にし、時刻はその記録を残した時刻の `HH:MM:SS`（その PC の時刻）、ゴースト名はゴーストの `descript.txt` の `name`（無ければ空の `""`。SSP 2.9.23 と同じ）、内容は areka の記録の本文とする。
 3. The areka shall 書き出しの記録に、オフラインの書き出しのあいだのシェルの読み込み・面の組み立て・PNG の書き出し・`--dump-shell`／`--dump-scope`／`--dump-surface-list`／`--dump-bind` の値の扱いで areka が残した warn と error の記録を、残した順にすべて入れる。起動オプションの名前の読み取りの記録（知らない名前・扱わない名前）は入れない。
 4. The areka shall areka の warn の記録をレベル `Warning`、error の記録をレベル `Error` として書き、info の記録は CSV に入れない。
-5. The areka shall 書き出しの記録を要約したり間引いたりせず、少なくとも 10,000 件までは 1 件ずつ CSV に書く。
+5. The areka shall 書き出しの記録を要約したり間引いたりせず、少なくとも 10,000 件までは 1 件ずつ CSV に書く。ただし 1 つの誤りを、areka が内部で同じ表を組み直したために 2 度書くことはしない（1 つの誤りは 1 行。SSP 2.9.23 でも同じ行が 2 度出ることは無かった）。
 6. If 書き出しの記録が 1 件も無い場合, then the areka shall CSV のファイルを作らず、同じパスに既にあるファイルを上書きも削除もしない。
 7. If CSV のファイルを書けなかった場合, then the areka shall そのことを areka の記録に error で残し、終了コードは要件 8 の段のまま返す。
 8. While `--dump-error-log` が渡されていないあいだ, the areka shall CSV を書かず、書き出しの記録は areka の記録にだけ残す。
