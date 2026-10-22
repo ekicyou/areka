@@ -35,7 +35,7 @@
   - _Requirements: 1.4, 1.7, 1.8_
 
 - [ ] 3. 手順の初版と走行の準備
-- [ ] 3.1 何度でも回せる実機の手順の初版を書く
+- [x] 3.1 何度でも回せる実機の手順の初版を書く
   - `doc/` に、何を確かめるか・前に要るもの・準備の命令・起動の命令・7 段の表・撮り方と数え方・結果の書き方と片付け、の節で書く
   - 命令はすべて絶対パスで、先頭の 1 行のワークツリーのパスだけを替えればどのフォルダからでも動く形にする。書庫の版は固定せず取り寄せから始める
   - 7 段の表には、段ごとの SSP の基準（要点の文と測りの記録の項目への参照）と、今の引き取る spec と、その着地で変わるはずの所を書く
@@ -134,3 +134,4 @@
 ## Implementation Notes
 - 1.2: 置き場の書庫の同定は `ad473d5dd1f142c168092e71b436419270b1cd16331ce19cc24f92a0c04a43a6  pasta-in-windows.nar`（`ghost/master/pasta.toml` の `version = "1.0.0"`。descript に版の行は無い）。較正: 判定を「根から再帰して最初の `pasta_tategaki/descript.txt`」へ緩めると `a_vertical_balloon_outside_the_ghost_folder_is_rejected ... FAILED`（`1 passed; 1 failed`）、元に戻して緑。3.2 で検証の記録へ載せる
 - 1.2: 固定入力の `install.txt` には設計の 2 行に `name,` を足さないと `NarArchive::open` が `MissingRequiredKey { key: "name" }` で断る
+- 3.1 のレビューの宿題（8.1 の清書で手順へ戻す）: 机の命令の `<識別>`・`<リポジトリ>`（ここでは `areka-p0-pasta-windows-d4ed7a`・`areka`）を `git rev-parse` から求める 1 行に替え、`request` の前に `watch` を立てる旨を添える。段 1 の「SSP は `OnBoot`」は測りの記録 段 1 の値で置き換える。段 5 の SSP の基準の要点は 2.2 の後に埋める
