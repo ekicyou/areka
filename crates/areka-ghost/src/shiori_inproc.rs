@@ -60,7 +60,7 @@ use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN, SHI
 use shiori_abi::interface::{IShiori, IShioriFactory, IShioriHost, IShioriHost_Impl};
 use shiori_host32_host::{
     Charset, CharsetPolicy, ExitKind, HelperStatus, Method, RequestError, RequestHeaders,
-    ShioriError, ShioriRequest, ShutdownError, build_request, parse_response,
+    ShioriError, ShutdownError, ValueReply, build_request, parse_response, request_of,
 };
 use tracing::{error, warn};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
@@ -346,7 +346,10 @@ const SENDER: &str = "areka";
 /// **語彙不変**（D-7）: `RequestError`/`ShioriError` へ新 variant を足さず、解釈不能はすべて
 /// `ShioriError::Parse` へ集約する（詳細は log が正本）。総和的な純関数で **panic しない**——
 /// COM を要さず全分岐を単体テストできる。
-fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>, RequestError> {
+///
+/// Value つきの応答は応答の `SecurityLevel` の生の値も [`ValueReply`] で返す（解釈は kanade・
+/// areka-P0-script-security-level 要件 3.1）。
+fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<ValueReply>, RequestError> {
     // 遅延応答（SHIORI_S_PENDING）は「成功」コードだが M1 InProc は非対応。S_OK 判定より先に弾く
     // （防衛線・設計上テスト DLL では到達しない・要件 7.4・§7.4）。
     if hr == SHIORI_S_PENDING {
@@ -391,8 +394,12 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>,
     if parsed.status == 204 {
         return Ok(None);
     }
-    // ③ 200・その他の許容 status は Value をそのまま返す（欠落は None）。
-    Ok(parsed.value)
+    // ③ 200・その他の許容 status は Value をそのまま返す（欠落は None）。応答のレベルは生のまま添える。
+    let security_level = parsed.security_level;
+    Ok(parsed.value.map(|value| ValueReply {
+        value,
+        security_level,
+    }))
 }
 
 /// GET/NOTIFY 共通の request 組み立て（`build_request` → HSTRING）。
@@ -400,18 +407,24 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>,
 /// `build_request` は `charset` に渡された文字コードで符号化する（areka-P0-charset-canon
 /// 要件 3.1）。本呼出点は [`Charset::UTF_8`] 固定ゆえ——SHIORI/4 in-proc は文字コード交渉を
 /// 持たない——出力は常に有効な UTF-8 であり、下の `from_utf8_lossy` は逐語一致し panic しない。
-/// 追加のヘッダは暫定で [`RequestHeaders::internal`]（`Sender` は [`SENDER`]＝`"areka"`）固定
-/// （要求の出どころから組む共通の手へ移すのは areka-P0-script-security-level タスク 4.1）。`status` は kanade が render 済みの wire 値で、
+/// 要求は 32bit の経路と同じ共通の手 [`request_of`] で組む（同じヘッダを同じ順・
+/// areka-P0-script-security-level 要件 2.8）。`status` は kanade が render 済みの wire 値で、
 /// 解釈せず codec へ verbatim 透過する（DD-IT-1 語彙非漏洩）。
-fn build_input(method: Method, id: &str, references: &[String], status: Option<&str>) -> HSTRING {
-    let bytes = build_request(&ShioriRequest {
+fn build_input(
+    method: Method,
+    id: &str,
+    references: &[String],
+    status: Option<&str>,
+    headers: RequestHeaders<'_>,
+) -> HSTRING {
+    let bytes = build_request(&request_of(
         method,
         id,
         references,
-        headers: RequestHeaders::internal(SENDER),
         status,
-        charset: Charset::UTF_8,
-    })
+        headers,
+        Charset::UTF_8,
+    ))
     .bytes;
     HSTRING::from(String::from_utf8_lossy(&bytes).as_ref())
 }
@@ -439,15 +452,37 @@ pub(crate) struct InProcBackend {
 }
 
 impl ShioriBackend for InProcBackend {
-    /// 応答を要するイベント（GET）を組み立て `IShiori::Get` を呼び、観測を [`map_get_outcome`] で既存
-    /// 語彙へ写す（要件 3.2）。
+    /// ゴースト自身の既定のヘッダ（`Sender` は [`SENDER`]）で [`Self::get_with_headers`] を呼び、値だけを返す。
     fn get(
         &mut self,
         id: &str,
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
-        let input = build_input(Method::Get, id, references, status);
+        self.get_with_headers(id, references, status, &RequestHeaders::internal(SENDER))
+            .map(|reply| reply.map(|r| r.value))
+    }
+
+    /// ゴースト自身の既定のヘッダ（`Sender` は [`SENDER`]）で [`Self::notify_with_headers`] を呼ぶ。
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<(), RequestError> {
+        self.notify_with_headers(id, references, status, &RequestHeaders::internal(SENDER))
+    }
+
+    /// 応答を要するイベント（GET）を組み立て `IShiori::Get` を呼び、観測を [`map_get_outcome`] で既存
+    /// 語彙へ写す（要件 3.2）。応答のレベルは生のまま返す（areka-P0-script-security-level 要件 3.1）。
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        let input = build_input(Method::Get, id, references, status, *headers);
         let Some(shiori) = self.shiori.as_ref() else {
             // unload 後の呼び出しは構造上起きない（run_shiori_loop は unload 後 get しない）が、panic
             // せず log-first で失敗化する（要件 3.5・areka-log-first-no-silent-failure）。
@@ -467,13 +502,14 @@ impl ShioriBackend for InProcBackend {
     /// 片道イベント（NOTIFY）を組み立て `IShiori::Notify` を呼ぶ（要件 3.2）。応答は運ばない片道性で、
     /// `Err` は `error!`＋`Err(RequestError::Shiori(ShioriError::Parse))`（`Shiori3Client::notify` が
     /// 応答を破棄するのと同水準・D-7 語彙不変）。
-    fn notify(
+    fn notify_with_headers(
         &mut self,
         id: &str,
         references: &[String],
         status: Option<&str>,
+        headers: &RequestHeaders<'_>,
     ) -> Result<(), RequestError> {
-        let input = build_input(Method::Notify, id, references, status);
+        let input = build_input(Method::Notify, id, references, status, *headers);
         let Some(shiori) = self.shiori.as_ref() else {
             error!(target: LOG_TARGET, id, "unload 済み backend への NOTIFY（IShiori 不在・Parse へ集約）");
             return Err(RequestError::Shiori(ShioriError::Parse));
@@ -618,3 +654,7 @@ mod host_tests;
 #[cfg(test)]
 #[path = "shiori_inproc_adapter_tests.rs"]
 mod adapter_tests;
+
+#[cfg(test)]
+#[path = "shiori_inproc_headers_tests.rs"]
+mod headers_tests;

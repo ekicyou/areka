@@ -62,7 +62,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.4_
 
 - [ ] 4. 同じプロセスの経路と、中身へ渡す包み
-- [ ] 4.1 同じプロセスの SHIORI の受け手と、中身へ渡す包み 4 つが新しいメソッドを通す
+- [x] 4.1 同じプロセスの SHIORI の受け手と、中身へ渡す包み 4 つが新しいメソッドを通す
   - 同じプロセスの受け手が 2 つのメソッドを上書きし、要求を 32bit の経路と同じ共通の手（UTF-8）で組む。GET の結果の写しは応答の生のレベルも返す。HRESULT と誤りの写しは変えない。今の GET・NOTIFY は `areka` の既定のヘッダで新しい手を呼ぶ。
   - 中身へ渡す包み（記録の包み 1 つとテストの包み 3 つ）が、新しい 2 メソッドも中身へそのまま渡す（既定のままにすると本物の pasta を通すテストでヘッダと応答のレベルが黙って落ちるため）。
   - 兄弟のテストで、同じヘッダから同じプロセスの経路が組んだ入力と、共通の手から組んだ要求の文のバイト列が一致し、結果の写しが生のレベルを返すことが緑になる。本物の pasta を通す既存のテストも緑のままになる。
@@ -157,3 +157,4 @@
 - （範囲外・1.2 のレビューで発見）`areka-sakura` の `drive::delivery_tests::same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times` が有界の `try_recv`／`yield_now` の空回しで時間に依存し、まれに赤になる。
 - `cargo test -p shiori-host32-host` は先に `cargo build -p shiori-host32-testdll -p shiori-host32-helper --target i686-pc-windows-msvc` が要る（無いと統合テスト 1 本が前提不足で赤）。
 - `crates/areka-kanade/src/actor_tests.rs` は 3.4 の後 983 行。これ以上足すなら兄弟のテストのファイルへ。
+- （範囲外・4.1 のレビューで発見）`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は main で既に 1,135 行（行数の番人の許可表に載っている）。同じ `BoxedBackend` の写しが 3 つのテストのファイルにある。
