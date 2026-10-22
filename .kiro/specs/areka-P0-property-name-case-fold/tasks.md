@@ -24,7 +24,7 @@
   - 完了の状態: `cargo test -p areka-sylphya` で 4〜12 の檻がすべて緑
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 3.3, 3.4, 3.5, 4.1, 4.2, 5.1, 5.2_
 
-- [ ] 2. 読む口 2 つの答えを決定論テストで固定する
+- [x] 2. 読む口 2 つの答えを決定論テストで固定する
 - [x] 2.1 (P) MCP の `get_property` を実行系ごと通す檻に大文字の名前を足す
   - 既存の実行系を立てる檻の聞く名前の並びに `BASEWARE.NAME` を足し、`areka`（`isError: false`）を期待する。既存の ` baseware.name` →「無い名前」はそのまま残す
   - 冒頭の説明の「英字の大小を混ぜた名前は使わない」を、本 spec で大小違いの 1 つを足したことへ直す
@@ -33,7 +33,7 @@
   - _Depends: 1.1_
   - _Requirements: 2.1, 2.3, 5.3_
 
-- [ ] 2.2 (P) SHIORI の `GetProperty` に大小違いの名前を渡す檻を足す
+- [x] 2.2 (P) SHIORI の `GetProperty` に大小違いの名前を渡す檻を足す
   - SHIORI の受け口のファイルには兄弟のテストの接続宣言だけを足し、本体のコードは変えない
   - 新しい兄弟のテストのファイルで、テスト用の sylphya を立てて `baseware.name = areka` と自由な名前 `path.to.key = some-value` を載せ、`BASEWARE.NAME`・`Baseware.Name` → `areka`、`PATH.TO.KEY` → `some-value`、` baseware.name` と `NO.SUCH.KEY` →「プロパティが無い」の失敗を固定する
   - 完了の状態: `cargo test -p areka` でその檻が緑。2 つの口が同じ読み手の関数を名前を手直しせずに呼ぶ形が変わっていないことを差分で確かめる
