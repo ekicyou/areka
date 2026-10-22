@@ -14200,25 +14200,22 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:resetballoonpositionbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「バルーン位置初期化」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「バルーン位置初期化」枠へ項目を登記するのは本仕様（crates/areka/src/menu/reset_balloon_pos_frame.rs の register）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「バルーン位置初期化」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS（正典 URL の注記が
+ある）と crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「バルーン位置初期化の名称」とされ、その項
 目に出る言葉である。
-無いと失うもの: 右クリックのメニューの「バルーン位置初期化」の項目が、そのゴーストらしい言い回しにな
-らず、areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:resettodefaultbutton.caption:1"]

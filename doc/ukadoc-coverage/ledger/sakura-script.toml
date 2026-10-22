@@ -1448,16 +1448,18 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cresetballoonpos_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.7.41"
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの位置を既定へ戻せず、ずらしたままになる）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。そのゴーストのすべてのバルーンの窓を、各キャラクターの窓に対する標準の位置（起動とシェルの切り替えと同じ材料と計算を、今の拡大率で解いたもの）へ戻し、戻したずらしを位置の記憶へ書く（次の起動でも標準の位置に出る）。キャラクターの窓は動かさず、吸着の向きと窓の組も変えない。
+正典に対のイベントは無いので、ゴーストへ知らせは送らない。右クリックのメニューの「バルーン位置初期化」と近道 Ctrl＋Shift＋F10 も同じ初期化を行う。
+壊れ方: 無い。標準の位置の材料や窓の組が無いときは何もしない。
+ログ: 戻したら info! の balloon_pos_reset にスコープ・位置・ずらし・きっかけを残す。材料が無いときやスコープを解けなかったときは warn! の balloon_pos_reset_skipped に理由ときっかけを残す。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetballoonpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、初期化は crates/areka/src/placement/reset_balloon_pos.rs の reset_balloon_positions。
 [群: 窓の位置の初期化]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![execute。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![executesntp の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2819,16 +2821,17 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2csticky-window_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.3.77"
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、くっつけた関係を解く指定も届かない。付ける側も効かないので、解く相手がそもそも無い）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。台本で作ったすべての組を解き、組を descript の `seriko.sticky-window` で作った組だけに戻す。
+壊れ方: 無い。
+ログ: info! の sticky_groups（action が reset）に残った組を残す。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reset, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka/src/placement/sticky_group_ledger.rs。
 [群: 窓の位置と見え方]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reset。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2922,47 +2925,53 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面の上端と下端のどちらへ立たせるかを選べず、既定のままになる）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。`\\![set,alignmenttodesktop,方向]` と同じに扱う（同じ受け口・同じ語の読み・同じ寿命）。`bottom` と `top` のほか、`left`・`right`・`free`・`default` も同じに受ける。
+壊れ方: 無い。
+ログ: `\\![set,alignmenttodesktop,方向]` の項と同じ。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka/src/placement/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面の縁へ吸い付かせる向きを指定できず、吸い付かない）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。指令の位置の現スコープのキャラクターの窓を、その窓がいるモニタの作業領域の指定した辺（`top`・`bottom`・`left`・`right`）へすぐ沿わせ、沿わせない方の軸の位置は保つ。`free` は吸着を外して窓を今の位置に留め、`default` は descript の向きへ戻す（辺の向きならその辺へ沿わせる）。語の前後の空白は除き、大文字小文字は区別しない。
+変えた向きは、以後のドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・作業領域が変わったとき・`\\![move]` で、descript に同じ向きを書いたときと同じに効く（作業領域が変わったときに辺へ沿わせ直すのは、descript でも台本でも下端の向きだけ）。ドラッグの途中で向きが変わったときは、そのドラッグの終わりまで始めの向きで縛る。バルーンは窓に付いて動き、窓の位置は位置の記憶に書かない。
+変えた向きはゴーストが終わるまで保つ（シェルの切り替えと SHIORI だけの読み直しでも保つ）。次の起動とゴーストの読み直しでは descript の向きから始める（記憶に持ち越さない）。
+読めない語は `free` と同じに吸着を外して窓を今の位置に留める（SSP 2.9.18 の測りに合わせる）。値が欠けているとき（空や空白だけの値を含む）は何も変えない。どちらもトークは止めない。
+壊れ方: 無い。
+ログ: 向きを変えたら info! の alignment_changed。読めない語は warn! の alignment_unknown_word、値が欠けたときや窓が無いときは warn! の alignment_skipped に理由を残す。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka/src/placement/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、吸い付きを解いて自由に置く指定も届かない。吸い付かせる側も効かないので、解く相手がそもそも無い）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。現スコープのキャラクターの窓の吸着を外し、窓を今の位置に留める（以後のドラッグは上下左右に自由）。`\\![set,alignmenttodesktop,方向]` の項と同じ受け口・同じ語の読み・同じ寿命（ゴーストが終わるまで保つ）。
+壊れ方: 無い。
+ログ: info! の alignment_changed（to が free）。窓が無いときは warn! の alignment_skipped。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka/src/placement/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -3271,16 +3280,20 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.3.77"
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓どうしをくっつけて一緒に動かす指定が効かず、別々に動く）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。異なる 2 つ以上のスコープ ID の窓を 1 つの組に結ぶ。ID の並び順に意味は無く、組は複数持てる。
+組のどれかの窓を利用者がドラッグすると、ドラッグの途中から組の相手も同じ量だけ同じ向きに動き（相手が吸着していれば吸着していない軸だけ）、ドラッグの終わりにドラッグした窓と相手の位置を位置の記憶に書く。瞬間の `\\![move]` で組の窓を動かすと、相手も実際に動いた量だけ動く（記憶には書かない）。`--option=ignore-sticky-window` を付けた `\\![move]` は動かす窓だけを動かし、組は残す。吸着の当て直し・大きさの変化・作業領域の変化・位置の初期化では相手を動かさない。
+台本で作った組はゴーストが終わるまで保つ（シェルの切り替えと SHIORI だけの読み直しでも保つ）。次の起動とゴーストの読み直しでは descript の組だけから始める。
+ID のどれかが既にほかの組（descript の組を含む）に入っている・異なる ID が 2 つ未満・同じ ID の重ね書き・数として読めない ID のときは、その指令では組を作らず、ほかの組は変えない。今は窓が無い ID は受けて、連れ動かす相手から外す。どれもトークは止めない。
+壊れ方: 無い。
+ログ: 組を作ったら info! の sticky_groups、捨てたら warn! の sticky_group_rejected に引数と理由、窓が無い ID は warn! の sticky_member_absent。連れ動いたら info! の sticky_follow（ドラッグの途中の 1 回ごとには残さない）、`ignore-sticky-window` で動かさなかったら info! の sticky_follow_ignored。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka/src/placement/sticky_group_ledger.rs（parse_sticky_tokens と StickyGroupLedger）、連れ動きは crates/areka/src/placement/follow/sticky_follow.rs。
 [群: 窓の位置と見え方]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """

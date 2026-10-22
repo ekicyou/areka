@@ -133,6 +133,7 @@ pub fn build_placement_config(
         // シーム転記の所在は shell descript（正典表・5.2/DD11）。ghost 側同名キーは対象外。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         zorder_raw: shell_kv.get("seriko.zorder").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         sticky_window_raw: shell_kv.get("seriko.sticky-window").cloned(),
         shell_dpi_raw: shell_kv.get("seriko.dpi").cloned(),
     }

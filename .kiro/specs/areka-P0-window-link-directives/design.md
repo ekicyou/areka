@@ -390,9 +390,10 @@ pub enum AlignmentWord {
     Missing,
 }
 
-/// 最初の引数（`alignmenttodesktop`）の次の引数を読む。前後の空白を除き、大文字小文字は
-/// 区別しない（descript の読み `Anchor::from_alignment` と同じ）。3 つ目以降の引数は `debug!`。
-pub fn parse_alignment_word(arg: Option<&str>) -> AlignmentWord;
+/// 最初の引数（`alignmenttodesktop`）より後ろの引数を受け、先頭を向きとして読む。前後の空白を除き、
+/// 大文字小文字は区別しない（descript の読み `Anchor::from_alignment` と同じ）。空や空白だけの値は
+/// 欠けた値（1.9）。2 つ目以降（指令の 3 つ目以降の引数）は `debug!(alignment_extra_args)`。
+pub fn parse_alignment_word(args: &[&str]) -> AlignmentWord;
 
 /// 現スコープの窓へ当てる。当てたら真。
 pub fn apply_script_alignment(world: &mut World, scope: u32, word: &AlignmentWord) -> bool;
@@ -680,16 +681,18 @@ pub(crate) fn attach_shortcut_receivers(world: &mut World);
 |---|---|---|---|
 | `alignment_changed` | info | scope, from, to, source（script／descript／shell_switch） | 9.1 |
 | `alignment_unknown_word` | warn | scope, word | 1.7 |
-| `alignment_skipped` | warn | scope, reason（missing_value／no_ghost_windows／no_char_window） | 1.8・1.9 |
+| `alignment_skipped` | warn | scope, reason（missing_value／no_ghost_windows／no_char_window／no_anchor_source） | 1.8・1.9 |
+| `alignment_extra_args` | debug | extra（指令の 3 つ目以降の引数） | 1.9 |
 | `alignment_reanchor_skipped` | warn | scope, reason（char_size_unknown） | 1.1 |
 | `sticky_groups` | info | action（set／reset／descript_seed／descript_replace）, groups（中身と出どころ） | 9.2 |
 | `sticky_group_rejected` | warn | source, tokens, reason | 3.4・3.5・3.9・6.5・9.2 |
+| `sticky_skipped` | warn | directive, reason（no_ledger） | 9.2 |
 | `sticky_member_absent` | warn | scope, when（set／seed／drag／move） | 3.6 |
 | `sticky_follow` | info | trigger（drag／move）, scope, partners, dx, dy | 9.3 |
 | `sticky_follow_ignored` | info | scope, partners | 9.4 |
 | `sticky_follow_skipped` | warn | scope, reason（no_session／other_window） | 4.1 |
 | `balloon_pos_reset` | info | scope, to_x, to_y, offset_x, offset_y, trigger | 9.5 |
-| `balloon_pos_reset_skipped` | warn | reason／scope | 7.1 |
+| `balloon_pos_reset_skipped` | warn | reason（no_default_basis／no_ghost_windows／not_resolved＝スコープ単位で scope 付き）, trigger（script／menu／shortcut） | 7.1 |
 | `position_shortcut_ignored` | info | shortcut, reason | 8.3 |
 | `key_down_dropped`（wintf） | warn | vk, reason（world_busy） | 8.1 |
 

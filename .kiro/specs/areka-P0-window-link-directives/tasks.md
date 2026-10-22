@@ -129,7 +129,7 @@
   - _Depends: 2.4, 7.2_
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 9.5_
 
-- [ ] 8. 互換の対応表と網羅台帳を新しい振る舞いに合わせる
+- [x] 8. 互換の対応表と網羅台帳を新しい振る舞いに合わせる
   - `doc/COMPAT_ARCHITECTURE.md` §8 に、読めない向きは外す・欠けた値は変えない／組の捨て方／連れ動きはドラッグと瞬間の `\![move]` だけ／ドラッグの相手も記憶に書き、書く形は descript の向き／寿命（`\![set,zorder]` の組との食い違いを含む）／バルーン位置初期化は記憶に書き対のイベントは無い／近道はゴーストの窓が入力先のときだけ／ドラッグ中に向きが変わればそのドラッグの終わりまで始めの向き／組に入った吸着なしの窓はドラッグで areka が書く、の行を足す
   - 台帳 `sakura-script.toml` の吸着の 3 行・組の 2 行・`execute,resetballoonpos`、`shiori.toml` の `resetballoonpositionbutton.caption`、`assets.toml` の `seriko.sticky-window` と `seriko.alignmenttodesktop` 系を実装済みと持ち主に改め、`property.toml` の `currentghost.seriko.sticky-window` は変えない
   - `ukadoc-survey` の `report` と `report-summary` で生成物を作り直し、`ukadoc-survey` のテストが緑のまま、台帳と生成物が同じコミットに入る。`\![set,zorder]` の食い違いの起票（要件 10.6）は完了の作業（`/kiro-complete` の棚卸）で `/kiro-discovery` を使って行う旨を COMPAT の行に添える
@@ -162,3 +162,4 @@
 - 3.2: ドラッグ中に向きを変えた窓の記憶は離した位置（当て直した位置ではない）。COMPAT §8 の行（8）に一言足す。ドラッグ中に `apply_script_alignment` が走ると、その回だけ窓が辺へ飛び次の `OnDrag` で始めの向きへ戻る（1 フレームのちらつき）。檻なし。完了の棚卸で扱いを決める。
 - 6: `consumer_ledger.rs` の ukadoc の錨は新旧の形が混ざる（新しい行は今の MCP の `#_!_…` 形）。全 variant を揃えるなら別の機会に一括で。`reset_balloon_pos` の一時の `#[allow(dead_code)]` は 7.2・7.3 で外す。
 - 7.1（範囲外）: `cargo clippy -p areka-kanade --all-targets` が `actor_raise_reply_tests.rs:95` の `clippy::never_loop`（既定で deny）で止まる。この spec の前から（66eaa2b5）。完了の棚卸で扱う。
+- 8: 台帳 `assets.toml` の `seriko.alignmenttodesktop` 系は design.md の「実装済みに改める」と違い `degraded`・持ち主なし。起動の初めの位置は top/left/right でも下として解く（`placement/resolver.rs` の `resolve_placement`）ままで、この spec の要件にその起動の位置は無い（10.4 は今の状態に合わせる）。作業領域が変わったときの当て直しも下だけ。完了の棚卸で `/kiro-discovery` の起票を決める。`consumer_ledger.rs` の ukadoc の錨は `check` が求める目録の形に直した（6 の注記は古い）。
