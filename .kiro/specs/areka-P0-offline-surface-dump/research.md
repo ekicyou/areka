@@ -220,3 +220,169 @@
 - 推しの形は **案 B（新しいモジュール）を骨にし、議題 3 の答え次第で案 C の共有を足す**。runonce は **R2**（同じスレッドで `handle_message` を回す公開の関数）が、画面と同じ道を通り、記録の取り込みも同じスレッドで済むので素直。ただし決めるのは要件の討議（上の議題 1〜16）。
 - 設計の前に 7 節の 1〜4 を SSP で測ると、議題 1・2・3・5・6 の答えが測りで決まる。
 - 触るファイルの見立て: 新 `crates/areka/src/offline_dump/`（`mod.rs`・`run.rs`・`surface_list.rs`・`bind_spec.rs`・`csv.rs`・兄弟のテスト）・新 共有の PNG の置き場（例 `crates/areka/src/png_image.rs`）・`crates/areka/src/mcp/dump_surface_image.rs` とそのテスト・`cli/mod.rs`・`cli/parse.rs`・新しい兄弟のテスト・`main.rs`（数行）・`crates/areka-seriko/src/`（新しいファイル 1 つ＋`lib.rs` の `pub use`）・`dist/README.txt`・比べる道具の置き場。読むだけ: `shell_target.rs`・`areka-emo-compose`・`emo2_boot/assets.rs`・`shell_balloon_resolve.rs`・`resolve_shell.rs`。
+
+---
+
+## 10. SSP の測り（2026-10-22・SSP 2.9.23 の --offline-dump）
+
+### 10.0 測り方
+
+- SSP: `C:\wintools\ssp\ssp.exe`（2.9.23.3000）。起動中の SSP には何も送っていない（SSP の MCP も使っていない）。
+- 回し方（毎回同じ形・絶対パス）: `ssp.exe --option bootunlock,standalone,readonly --offline-dump "<検体>" --dump-output-dir "<出力>" --dump-error-log "<出力>\log.csv" <下の各項の指定>`。PowerShell の `Start-Process -PassThru` で起こし、30 秒の見張りで終わりを待って終了コードを取った。全 40 回ほど、どれも 1〜2 秒で自分で終わり、止まったものは無い。
+- 検体と出力: ワークツリーの `target\offline-dump-survey\` の下（検体 `g0`・`g_noname`・`g_anim`・`g_time`・`g_size`・`g_scope`・`g_bind`・`g_bind10`・`g_warn`、出力は `out\<回の名前>\`）。絵はすべて 1 色塗りの RGBA の PNG（α 255）で、シェルの descript に `seriko.use_self_alpha,1` を書いた。結果は出た PNG の画素の値を読んで決めた（目では見ていない）。
+- 出る PNG は RGBA 8 ビット（色の型 6）。何も描かれない所は `(0,0,0,0)`。
+- 色の符号: 灰 `(128,128,128)`＝土台。赤 `(255,0,0)`・緑 `(0,255,0)`・青 `(0,0,255)`＝面 100・101・102。`g_time` の always は 40 コマ×10ms でコマ i の色を `(6i,0,200)`、APNG は 40 コマ×10ms でコマ i の色を `(0,6i,100)` にし、画素から何コマ目かを読めるようにした。
+- **どの検体にも出る行**: 面 10 が無いシェルでは毎回 `"…","<名前>","Warning","[SERIKO] Surface=10 存在していません。"` が出て、終了コードが 1 になる（スコープ 0 だけを書き出しても出る）。どこからも指されていない面には `Notice` の `[SERIKO] Surface=110 どこからも使われていません。` の形の行が出る（Notice なので終了コードは 0 のまま）。終了コードを比べる回は、面 10 を足した `g_bind10` で確かめた。
+
+### 10.1 runonce とほかの interval の時点（7 節の 1）
+
+検体 `g_anim`（土台 16×8 の灰・runonce は左の 8×8、always は右の 8×8）:
+
+```
+surface0 { animation0.interval,runonce
+           animation0.pattern0,overlay,100,100,0,0   ← 赤
+           animation0.pattern1,overlay,101,100,0,0   ← 緑
+           animation0.pattern2,overlay,102,100,0,0 } ← 青
+surface1 { 同じ＋ animation0.pattern3,overlay,-1,100,0,0 }
+surface2 { animation0.interval,always ＋ pattern0〜7（各 50ms・8,0 に 8 色） }
+surface3 { animation0.interval,random,1 ＋ animation0.pattern0,overlay,100,100,0,0 }
+surface4 { animation0.interval,periodic,1 ＋ 同じ }
+surface5 { surface0 の runonce ＋ surface2 の always（animation1） }
+```
+
+指定 `--dump-surface-list 0-5`。結果（3 回回して 6 枚ともファイルのハッシュが同じ＝決定論）:
+
+| 面 | 出た絵 |
+|---|---|
+| 0 runonce | 左が青（最後のコマが残る） |
+| 1 runonce の最後が -1 | 灰だけ（土台に戻る） |
+| 2 always だけ | 灰だけ（always は何も出ていない） |
+| 3 random,1 | 灰だけ |
+| 4 periodic,1 | 灰だけ |
+| 5 runonce＋always | 左が青・右が always のコマ 5（`(160,200,50)`） |
+
+細かく測るために `g_time`（always・APNG とも 10ms 刻み）で回した（`--dump-surface-list 0-6`・`7,8`・`9,11`）:
+
+| 面 | 中身 | always | APNG | 読み |
+|---|---|---|---|---|
+| 0 | runonce 1 コマ（待ち 100） | コマ 9 | コマ 10 | 時点 100ms |
+| 1 | runonce 1 コマ（待ち 250） | コマ 24 | コマ 25 | 時点 250ms |
+| 2 | runonce なし | 出ていない | コマ 0 | 時点 0 |
+| 5 | runonce 2 本（100 と 100＋200） | コマ 29 | — | 時点 300ms＝長いほう |
+| 9 | runonce（待ち 400） | コマ 39 | コマ 39 | 時点 400ms（APNG はちょうど 1 周の時点で最後のコマのまま） |
+| 11 | runonce（待ち 405） | コマ 39 | コマ 0 | 時点 405ms（APNG は 1 周を越えて頭へ戻る） |
+| 7・8 | runonce（待ち 1000・450）＋APNG | — | コマ 20・コマ 5 | APNG は繰り返す（1000−800・450−400） |
+| 3 | runonce 3 コマ×1000＋random,1 | — | — | random は出ていない |
+| 4 | runonce 3 コマ×1000＋periodic,1 | — | — | periodic は出ている（緑） |
+| 6 | runonce 3×100＋always（緑 100・-1 100） | 緑 | — | 時点 300ms で always の 2 周目の緑 |
+
+- 読み取れる決まり: 書き出しの時点 T は「その面の runonce のうち、待ちの合計がいちばん長いものの合計」（runonce が無ければ 0）。pattern の待ちは **出す前に待つ時間**（コマ k は待ち 0〜k の合計の時刻に出る）。always と periodic は T まで進み、random は進まない（出ない）。
+- **議題 1 への含み**: 5 節の R2（同じスレッドで `handle_message` を回す）で、時計を T まで刻み、always・periodic はそのまま進め、random は抽選を起こさない形にすれば SSP と同じ絵になる。areka の `frame_at` の待ちの数え方（出す前に待つか）が同じかは設計で確かめる。R0（経過 0）は面 0・1・5 で SSP と違う絵になる。
+
+### 10.2 動く絵の element のコマ（7 節の 2）
+
+検体 `g_anim`:
+
+```
+surface10 { element0,overlay,base16.png,0,0  element1,overlay,anim.png,0,0 }   ← APNG 赤100・緑100・青100ms
+surface11 { 同じで anim0.png }                                                 ← APNG 赤0・緑100・青100ms
+surface12 { element1,overlay,anim.png,8,0 ＋ surface0 の runonce }
+surface13 { 同じで anim.webp }                                                 ← 動く WebP 赤100・緑100・青100ms
+```
+
+- 面 10: 赤（1 枚目）。面 11（1 枚目の待ち 0）: 赤（1 枚目のまま・飛ばさない）。面 13（動く WebP）: 赤（1 枚目）。面 12: APNG は青（T=300 がちょうど 1 周の長さなので最後のコマのまま・10.1 の面 9 と同じ）。
+- `g_time` の面 0・1・7・8・9・11（10.1 の表）: APNG のコマは T の時点のもので、繰り返す。ちょうど 1 周の時刻では最後のコマ、それを越えると頭へ戻る。
+- **議題 2 への含み**: 動く絵の子も議題 1 と同じ時点 T のコマ（runonce が無ければ 1 枚目）。areka の `push_film_op` は「1 枚目の待ちが 0 なら次のコマ」を描くが、SSP は待ち 0 の 1 枚目を描く＝ここは SSP と違う。
+
+### 10.3 スコープごとの既定の着せ替え（7 節の 3）
+
+検体 `g_scope`（土台 24×8 の灰・面 0 に bind のアニメーション 3 本: 10＝左の赤・11＝中の緑・12＝右の青）。シェルの descript:
+
+```
+sakura.bindgroup10.default,1  kero.bindgroup10.default,0  char2.bindgroup10.default,0
+sakura.bindgroup11.default,0  kero.bindgroup11.default,1  char2.bindgroup11.default,0
+sakura.bindgroup12.default,0  kero.bindgroup12.default,0  char2.bindgroup12.default,1
+（名前は sakura・kero・char2 の 3 つとも bindgroup10〜12.name を書いた）
+```
+
+| 指定 | 出た絵 |
+|---|---|
+| `--dump-scope 0` | 赤だけ（`sakura.*` の既定） |
+| `--dump-scope 1` | 緑だけ（`kero.*` の既定） |
+| `--dump-scope 2` | 青だけ（`char2.*` の既定） |
+| `--dump-scope 3`（char3 の定義なし） | 灰だけ（どれも着ない） |
+
+- **議題 3 への含み**: SSP の書き出しはスコープごとの既定を使う（正典 `--dump-bind` の「sakura.bindgroup*.default」はスコープ 0 を例に書いたものと読める）。要件 3.9 の用語どおりで、画面（全スコープ `sakura.*`）とは違う。書き出しを SSP に合わせつつ要件 4.5（画面と同じ）を守るには ⑶（画面も直す）になる。
+
+### 10.4 `--dump-bind` の細部（7 節の 4）
+
+検体 `g_bind`（土台 56×8 の灰・8 マスに 1 パーツずつ）。シェルの descript:
+
+```
+sakura.bindoption0.group,head,mustselect
+sakura.bindoption1.group,acc,multiple
+cloth: uniform（既定 1・赤）casual（0・緑）swim（0・青）   ← bindoption なし＝排他
+head : hat（1・水色）ribbon（0・赤紫）                    ← mustselect
+acc  : a（1・黄）b（1・白）                               ← multiple
+```
+
+既定（指定なし）: uniform・hat・a・b を着ている。各回 `--dump-surface-list 0 --dump-bind "<指定>"`:
+
+| 指定 | 着ているもの | 記録 | 終了コード（`g_bind10`） |
+|---|---|---|---|
+| `cloth,__ALL__,1` | swim だけ（cloth の最後のパーツ） | なし | 0 |
+| `cloth,,1` | swim だけ（`__ALL__` と同じ） | なし | — |
+| `cloth,casual`（ON/OFF 省略） | casual（uniform は外れる） | なし | — |
+| `cloth,uniform,0` | cloth は何も着ない | なし | — |
+| `head,hat,0`（mustselect の OFF） | hat のまま（変わらない） | **なし** | 0 |
+| `head,__ALL__,0` | hat のまま | なし | — |
+| `head,ribbon,1` | ribbon（hat は外れる） | なし | — |
+| `acc,__ALL__,0` | a・b とも外れる | なし | — |
+| `acc,a,false;cloth,swim,true` | b と swim（`false`・`true` と `;` が効く） | なし | — |
+| `cloth, casual,1`（前に空白） | 変わらない | `"…","g_bind","Warning","[DUMP] bind cloth, casual 存在していません。"` | — |
+| `cloth,casual ,1`（後ろに空白） | 変わらない | `"…","g_bind","Warning","[DUMP] bind cloth,casual  存在していません。"`（空白 2 つ） | — |
+| `nosuch,x,1`（無いカテゴリ） | 変わらない | `"…","g_bind","Warning","[DUMP] bind nosuch,x 存在していません。"` | 1 |
+| `cloth,nosuchpart,1`（無いパーツ） | 変わらない | `"…","g_bind","Warning","[DUMP] bind cloth,nosuchpart 存在していません。"` | — |
+
+- 「—」の回は `g_bind`（面 10 なし）で回したので、終了コードは Surface=10 の Warning で 1 になり、指定の分は読めない。
+- 排他のカテゴリで `__ALL__`（空欄）を ON にすると、パーツを書いた順に 1 つずつ ON にした結果になり、最後のパーツだけが残る。
+- **議題 5 への含み**: SSP は mustselect の OFF を **黙って無視** する（Warning も出さず終了コード 0）。画面の `\![bind]`（無視）と同じ。要件 5.4（OFF にする）は SSP とも画面とも違う。
+- **議題 6 への含み**: 排他で `__ALL__` を ON は「最後のパーツだけ」。空白は削らず、名前の照合に失敗して「無い」の Warning になる（文には空白がそのまま入る）。
+
+### 10.5 CSV の細部（7 節の 5）
+
+ファイルは先頭が BOM（`EF BB BF`）、改行は CRLF。1 回の走りの行は時刻がすべて同じ秒だった。
+
+| 回 | 指定 | 終了コード | PNG | CSV の行（逐語） |
+|---|---|---|---|---|
+| シェルが無い | `g0` に `--dump-shell nonexist` | 2 | 出ない | `"22:38:18","g0","Warning","[SERIKO] Surface=10 存在していません。"`・`"22:38:18","g0","Error","[DUMP] shell nonexist 存在していません。"` |
+| 単独の番号の面が無い | `g0` に `--dump-surface-list "0,99,5-7"` | 1 | surface0 だけ | `"22:38:22","g0","Warning","[SERIKO] Surface=10 存在していません。"`・`"22:38:22","g0","Warning","[DUMP] surface99 存在していません。"`（範囲 5-7 の欠番は行なし） |
+| element の絵が無い（面 0 に 2 か所・面 1 に 1 か所） | `g_warn` に `--dump-surface-list "0,1"` | 2 | 2 枚とも出る | `"22:38:24","g_warn","Error","[SERIKO] shell\master\surfaces.txt:Line=10:Surface=0 Element0 存在していません。:nofile.png"`・同じ形で `Line=11:Surface=0 Element1`・`Line=16:Surface=1 Element0`・Surface=10 の Warning |
+| 別のシェル（フォルダ名） | `g_warn` に `--dump-shell second` | 2 | 出る | 上と同じ 3 行で `shell\second\surfaces.txt` |
+| 面の指定なし | `g_warn`（`--dump-surface-list` なし） | 2 | 出ない | 上と同じ 4 行（記録は出る） |
+| ゴーストのフォルダが無い | 無いフォルダ | 0 | 出ない | CSV のファイルも作られない |
+
+- 同じ中身の行が 2 度出ることは無かった（どの行も 1 度ずつ。シェルを 2 度読む・スコープの数だけ読むといった重なりは SSP の CSV には現れない）。element の絵が無いのは Error だが、その面の書き出しは続く。
+- **議題 8 への含み**: SSP の CSV に同じ行の重なりは無い。areka で面の表を 2 度組むと同じ warn が 2 行になる（2.3）ので、組む回数を 1 度にするか、同じ行を 1 つにする必要がある。
+
+### 10.6 絵の大きさ（7 節の 6）
+
+検体 `g_anim` の面 20〜23（土台 8×8 の灰）:
+
+```
+surface20 { element0,overlay,base8.png,0,0  element1,overlay,red4.png,-2,-2  element2,overlay,green4.png,6,6 }
+surface21 { base8＋green4 を 6,6 }   surface22 { base8＋red4 を -2,-2 }
+surface23 { base8＋runonce の 8×8 を 4,4 }
+```
+
+- 結果: **4 枚とも 18×14**。しかも同じシェルの面 0〜5・10〜13（土台 16×8 ではみ出しなし）も **すべて 18×14** で、絵は (2,2) からずらして置かれ、周りは透明。
+- 18×14 は、シェルの全部の面の element と animation の pattern の外形を合わせた範囲（x −2〜16・y −2〜12）に一致する（y の 12 は面 23 の runonce の pattern 4+8 から来る）。
+- 確かめ（検体 `g_size`）: 面 0 は 8×8 の土台だけ、面 1 は −2,−3 に 4×4、面 2 は `interval,never` の pattern を 6,7 に 4×4。**面 0 だけ** を書き出しても 12×14（x −2〜10・y −3〜11）で、土台は (2,3) に置かれた。never のアニメーションの pattern も範囲に入る。
+- はみ出しの無いシェル（`g0`・`g_scope`・`g_bind`）は土台の大きさのまま（4×4・24×8・56×8）。
+- **含み（6 節に無い新しい議題）**: SSP の書き出しの大きさと置き場所は **シェル全体で 1 つ**（全部の面の element と pattern の外形の和）。areka の合成は面ごとに広がる（`extent-element-offset`）ので、はみ出しのある面を持つシェルでは、はみ出しの無い面も含めて大きさと位置がずれる。要件 13（比べる道具）と下流の `pasta-in-windows-verification` は、この差を知って比べる必要がある。
+
+### 10.7 そのほか
+
+- **頭の文字列に `\`**（`--dump-output-prefix "sub\x_"`）: 出力の下に `sub` が **無い** と、PNG は出ず、CSV にも何の行も出ない（黙って書けない・終了コードは他の行で決まる＝この回は Surface=10 の Warning で 1）。`sub` を先に作っておくと `sub\x_0.png` に書かれる。→ **議題 12**: SSP は下のフォルダへの書き出しを許し、フォルダを作らず、失敗を記録しない。areka が要件 6.6 どおり Error にすると、SSP より厳しい側に倒すことになる。
+- **`name` の無いゴースト**（`g_noname`）: CSV のゴースト名の列は空（`"22:38:30","","Warning","[DUMP] surface99 存在していません。"`）。→ **議題 13**: SSP は空。フォルダ名で埋めない。
+- **`--dump-shell` をフォルダ名で**（`second`）: そのシェルで書き出した。`random`・`lastinstalled` は測っていない（議題 9 は残る）。
