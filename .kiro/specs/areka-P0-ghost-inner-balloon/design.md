@@ -441,7 +441,7 @@ fn companion_placement(companion: &Companion, names: &[EntryName], body: &Placem
 - 組み上げ: 本体の下敷き（`Overlay`＝古い木を丸ごと・`Replace{keep}`＝残す名前だけ）を写すとき、`carve_out` の相対のフォルダの下は写さない。比べ方は今の残す名前の比べ方と同じ（ASCII の大文字小文字を区別しない）。同梱の組み上げは今どおり、古い `<ゴースト>\balloon\<dir>` を見て自分の `balloon.refresh`・`balloon.refreshundeletemask` で下敷きを作り、`ExistingState`（新しい・重ねた・入れ替えた）を決める。
 - 確定: `within_body` の配置は、組み上げのときの `ExistingState` に関わらず「無い所へ置く」1 手（親を作る → `rename(stage, dest)` → 戻しの手は「消す」）。`ExistingState` は入れた物の報告にそのまま使う。
 - 戻し: 今の逆順のまま。同梱を消す → 本体を戻す。退避は今どおり根の作業の場所（`<根>\.nar-work\…\old-<k>`）で、ゴーストの木に漏れない。
-- 本体の `refresh` と同梱の `balloon.refresh` の関係: 名指しされない `<ゴースト>\balloon\<名>\` は本体の `refresh`・`refreshundeletemask` で替わる。名指しされた同梱は、本体の `refresh` に関わらず自分の `balloon.refresh`・`balloon.refreshundeletemask` で替わる（ukadoc の鍵の意味のまま・要件 7.2）。
+- 本体の `refresh` と同梱の `balloon.refresh` の関係: 名指しされない `<ゴースト>\balloon\<名>\` は本体の `refresh`・`refreshundeletemask` で替わる。名指しされた同梱は、本体の `refresh` に関わらず自分の `balloon.refresh`・`balloon.refreshundeletemask` で替わる（ukadoc の鍵の意味のまま・要件 7.2・8.1 の但し書き）。本体が `refresh,1` で同梱に `balloon.refresh` が無ければ、同梱の古いファイルは残り新しいものが重なる。作り直したい作者は `balloon.refresh,1` を書く（2026-10-22 設計の討議で確定）。
 - シェルの書庫は入れ子にならないので `carve_out` は空・`within_body` は偽で、今の確定のまま。
 
 **決めた理由**: 本体に同梱を混ぜる形（gap 分析の形 B）は、木の一部ごとに違う `refresh` と在る・無いを持つ組み上げと、入れた物の数え方の変更が要り、シェルの書庫は別の道が残る。確定の直前に在る・無いを見直す形（形 C）は、組み上げと確定の間に作られた木を消さない今の約束とぶつかる。形 A は欄 2 つと分かれ 2 つで済む。
