@@ -206,3 +206,71 @@
 
 - どの台本でも、strict のエラーの記録は 0 件（読めない語も値なしも、エラーとしては扱われない）。
 - 測れなかった点: 窓の組（`\![set,sticky-window]` の連れ動き・重なった ID の扱い）、ゴーストの読み直し・シェルの切り替えでの寿命、組の相手のバルーンがドラッグで付いてくるか。読み直しとシェルの切り替えは開発者の許可が要る。
+
+## 2. 設計の段の調べ（2026-10-22・基準 `c2bc9727`）
+
+### 2.1 調べの種類と範囲
+
+- 種類: **軽い調べ（既存の仕組みの拡張）**。新しい外部のクレート・外部の API は無い。調べはコードを読む 3 本（ドラッグと `\![move]` の道・受け口と寿命とメニュー・wintf のキー入力）を並べて行った。
+- 使った手引き: `kiro-spec-design` の決まり（調べ・まとめ・設計の関門）と設計の雛形だけ。画面の作り・利用しやすさの手引きは、この機能（窓の位置の振る舞い）に当てはまる項目が無いので使っていない。
+
+### 2.2 1.7 の調べへの答え
+
+| # | 調べ | 答え | どこで |
+|---|---|---|---|
+| 1 | キーボードの入力先 | 窓は `WS_EX_NOACTIVATE` を持たず、`WM_MOUSEACTIVATE` も受けないので、不透明な所をクリックすると窓が入力先になる（透過の所は `WS_EX_TRANSPARENT` で抜ける）。メニューも `SetForegroundWindow` でキャラクターの窓を前に出してから開く。実機の確かめは実装の段の実機の項目に回す | `placement/spawn.rs:588`・`wintf/src/ecs/clickthrough/win_style.rs:353`・`menu/win32.rs:36` |
+| 2 | Ctrl＋Shift＋F10 の届き方 | コードには手がかりが無い。Windows の決まりでは F10 単独は `WM_SYSKEYDOWN`、Ctrl と一緒なら `WM_KEYDOWN` の見込み（確かさは中）。**設計は両方で受けて消費する**ので、どちらで届いても効き、`SC_KEYMENU`・Shift＋F10 の `WM_CONTEXTMENU` も起きない。実機の確かめは実装の段 | `wintf/src/ecs/window_proc/mod.rs:34-91`（`WM_SYSKEYDOWN` は今は受けていない） |
+| 3 | なしの窓のドラッグでの位置の書き換えの時機 | wintf は `WM_MOUSEMOVE` の中で窓を動かし、`WM_WINDOWPOSCHANGED` で `WindowPos` を先に書く。`OnDrag` はその後のフレームの `Input` の予定表で、何回分かの動きをまとめて 1 回届く。**`on_char_drag` が呼ばれるとき `WindowPos` はもう新しい**。ドラッグの事件は絶対の位置（始めと今）を運び、差は運ばない | `wintf/src/ecs/window_proc/mouse_move.rs:258-313`・`window_pos.rs:143-150`・`ecs/drag/dispatch.rs:340-381` |
+| 4 | SSP で測る点 | 本設計では測っていない（SSP と開発者の機械の状態には触らない）。答えは要件の段の裁定に既にあり、設計はそれに従う | — |
+| 5・6 | 検体の中身・起動の連鎖と記憶の寄せ直し | 本設計では取り寄せていない。実機の確かめ（要件 9.7）の段で見る項目として設計の Testing Strategy に置いた | — |
+
+### 2.3 新しく分かったこと（設計に効いたもの）
+
+- `DragConfig.move_window` は wintf がドラッグの始め（`dispatch_drag_events` の `Started`）にだけ読む。同じ回に `OnDragStart` が呼ばれるので、areka はそこで「始めの向き」を控えられる。今の `on_char_drag` は毎回 `Anchored` を読むので、ドラッグ中に向きが変わると、wintf の書き手と areka の書き手がずれる（シェルの切り替えでも同じ穴がある）。設計は控えた向きで縛ることで要件 2.4 を満たす。
+- `DraggingState.initial_inset` はドラッグを始めたときの窓の位置（窓の座標）。ドラッグした窓の「始めからの量」はこれで取れる。
+- 経路の語: `MoveCue` は可視の見張り・既定の位置の追従・拡大率の整合待ちの監視のどれも掛からない。`AnchorChange` は 3 つとも掛かり、整合待ちの窓へ書くと `debug_assert` が鳴る（`window_move.rs:507-557`・`677-692`）。ドラッグは経路なし（`None`）で、こちらも整合待ちの監視の外。
+- `enqueue_window_set_pos` は `follow` の中だけで使える（`pub(super)`）。組の相手をドラッグと同じ経路なしで書くには、連れ動きのファイルを `placement/follow/` に置く必要がある。
+- `resolve_placement` のキャラクターの窓の位置（P1〜P4）はバルーンの欄（ずらし・`balloon_limit`・`balloon_x_mode`）を読まない（バルーンの欄は P5 だけ）。だから `DefaultPlacementBasis` を「descript の値そのまま」に揃えても、並べ直しの結果は変わらない。
+- 起動の準備（`prepare_stages_for_shell`）は `DescriptSource`・バルーンの `windowposition`・作者の DPI を全部読んでいる。シェルの切り替えも同じ 3 つを背景で読んで UI へ運ぶ。これを材料として置けば、起動とシェルの切り替えで材料が同じになる。
+- `persist_unremembered_char_positions` も今の `Anchored` で記憶の形を決めている。台本で `free` にしてその場に留まった窓は既定の位置のままなので、ここで書かれて次の起動でずれる。ドラッグの終わりと同じ規則（descript の向き）にする必要がある。
+- 受け手の表の突き合わせの試験は、表の名前×最初の引数の掛け合わせ（例 `reset,alignmenttodesktop`）がどこにも届かないことも確かめる。`MoveCueSink` の選び方は組ごとに完全一致で書く。
+- `ZOrderCueSink` の「自分宛の警告」は、開けない形の `set`／`reset` の荷物にだけ出る。正しい形の `set,alignmenttodesktop` などは届かない（`_` の腕で `debug!`）。`MoveCueSink` が新しい組を受けても警告は二重にならない。
+- wintf にはキーの押下をアプリへ知らせる口が無いが、窓の手続きの中で呼ぶコールバックの部品の型（`OnFilesDropped`）があり、areka はそれをゴーストのすべての窓に付けている（`input_events/file_drop.rs`）。キーも同じ型で足せる。修飾キーは `WM_KEYDOWN` の引数に入らないので、窓の手続きの入口で読み、判定は値を受ける純関数に置く（決定論のテストのため）。
+
+### 2.4 まとめ（一般化・作るか使うか・簡素化）
+
+- **一般化**: 「組の相手を、ある量だけ、相手の向きで射影して動かす」はドラッグと `\![move]` に共通なので、純関数 `partner_target` を 1 つにした。書き込みの経路だけが呼び手で違う（ドラッグは経路なし・`\![move]` は `MoveCue`）。バルーン位置初期化とシェルの切り替えは「記憶を重ねるか」だけが違う同じ解決なので、`resolve_standard_scopes` を共有した。台本・メニュー・近道の 3 つの入口は同じ `reset_balloon_positions` を呼ぶ。
+- **作るか使うか**: 新しい外部のクレートは不要。窓の組の帳簿は重なりの帳簿 `ZOrderGroupLedger` と寿命・単位・置き場が違う（研究 1.1）ので型の流儀だけを写し、ID の読み `parse_scope_id` は `pub(crate)` にして使い回す（写さない）。キーは Windows の全体の近道（`RegisterHotKey`）を使わず、窓の手続きで受ける（裁定 9 がそのまま形になる）。
+- **簡素化**: 新しい経路の語・新しい受け口・新しい線・`anchor_changed_system` の結線は足さない。帳簿の World 側の関数は帳簿のファイルに置き、ドラッグの控えは連れ動きのファイルに置いて、新しいファイルを 6 本（テストを除く）に抑えた。`window_move.rs`・`diag.rs`・`chain_realign.rs`・`work_area_sync.rs` には触れない。
+
+### 2.5 設計の決め（1.6 の 11 議題の答え）
+
+設計の「設計の決め」の表が正本。要点:
+
+1. 帳簿は World の資源（`close_windows_for_restart` で外す）。
+2. 吸着の指令の当て直しは `resize_window_to(…, MoveCue)`。
+3. ドラッグの相手は経路なし、`\![move]` の相手は `MoveCue`。
+4. 「始めからの量」。始めの位置と始めの向きは `OnDragStart` で控える（資源 `CharDragSession`）。
+5. 窓の部品 `AnchorSource { descript, by_script }`。
+6. 記憶へ書く形は descript の向き（3 か所）。
+7. `DefaultPlacementBasis` を「descript の値＋バルーンの材料」に揃え、シェルの切り替えと同じ解決を記憶なしで通す。
+8. `MoveCueSink` に相乗り。`zorder_cue.rs` は注記だけ。
+9. wintf に一般の `OnKeyDown`（`WM_KEYDOWN`・`WM_SYSKEYDOWN`）。判定は areka の純関数。
+10. 新しい枠を「シェル位置初期化」のすぐ後へ。
+11. ID の上限は置かない。
+
+### 2.6 危険と手当て
+
+| 危険 | 手当て |
+|---|---|
+| ドラッグ中に台本が向きを変えると、離した後に窓が辺へ飛ぶ | 正典が黙る点として COMPAT §8 に書く。テストで固定する |
+| F10 の届き方・入力先の当たり方が実機で違う | 両方のメッセージで受けて消費する。実機の確かめの項目に近道を入れる |
+| `drag_follow.rs`（937 行）が 1,000 行に近い | 呼び出し数行だけを足し、中身は `sticky_follow.rs` へ |
+| `DefaultPlacementBasis` の形の変更が並べ直しのテストに触れる | P1〜P4 がバルーンの欄を読まないことを確かめた。並べ直しのテストを通し直す |
+| 起動の連鎖・記憶の寄せ直しが重ねた 2 つの窓を離す | 実機の確かめで見る（研究 1.7 の調べ 5・6）。食い違いはこの spec で直すか持ち主を確かめて起票 |
+
+### 2.7 境目と後の spec への影響
+
+- 読む口 `StickyGroupLedger::group_of`／`partners_of` は `areka-P0-dpi-realign-remembered-chain` が詰め直しから組の窓を外すときに使う。形を変えたら向こうが読み直す。
+- `AnchorSource` と記憶の形の規則は `areka-P0-window-snap`（吸着の相手を広げる）の土台になる。
+- `PositionCue` の種類と受け手の表の 5 行は、`move_cue*.rs`・`consumer_ledger.rs` を触る後の spec と同じウェーブに置けない。
