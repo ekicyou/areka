@@ -409,7 +409,7 @@ info!(event = "ghost_balloon_hides_root", folder, hidden = %path, by = %path,
 - ゴーストの書庫: ゴーストのフォルダ＝本体の宛先 `<根>\ghost\<manifest.directory>`。シェルの書庫: ゴーストのフォルダ＝`existing_target_ghost` が確かめた `<根>\ghost\<対象>`。同梱の宛先＝`<ゴーストのフォルダ>\balloon\<companion.directory>`、`root`＝本体の根（作業の場所 `.nar-work` が同じ根になり、`rename` が同じボリュームで済む）。
 - 同梱のために `request.roots.balloon_root` を呼ばない。これで `CatalogDestinations::copied_root` が根の同じフォルダ名のバルーンを写す道が無くなる（要件 7.3・8.2）。`balloon_root` はバルーンだけの書庫のために残す。
 - ゴーストの書庫で置く同梱（飛ばした同梱は含めない）ごとに:
-  - 本体の `accept` は、今の「取り出し元の中」に加えて、書庫の `balloon/<companion.directory>/` の下の項目も除く（名指しされた同梱が名指しされないフォルダより先＝同じ宛先の取り合いを起こさない）。除いた項目が 1 つでも在れば warn `companion_overrides_archive_folder`（`directory`）を 1 件残す。
+  - 本体の `accept` は、今の「取り出し元の中」に加えて、書庫の `balloon/<companion.directory>/` の下の項目も除く（名指しされた同梱が名指しされないフォルダより先＝同じ宛先の取り合いを起こさない）。warn `companion_overrides_archive_folder`（`directory`）は、この追加の除外で除いた項目のうち、**どの同梱の取り出し元の中にも無い**ものが 1 つでも在るときだけ 1 件残す。取り出し元がその `balloon/<dir>/` 自身の書庫（例 `balloon.source.directory,balloon/kaku`＋`balloon.directory,kaku`）は、項目が今の決まりで既に除かれているので警告しない。
   - 本体の配置の `carve_out` に `balloon\<companion.directory>` を足す。
   - 同梱の配置の `within_body` を真にする。
 - 名指しされない `balloon\<名>\` は今どおり本体の項目としてゴーストの中へ入る（要件 7.5）。
@@ -501,9 +501,10 @@ fn companion_placement(companion: &Companion, names: &[EntryName], body: &Placem
 
 ### ネットワーク更新（`areka-update`）
 - `manifest_tests.rs`: ゴーストの更新の一覧の `balloon/<名>/descript.txt` のような下の段のパスを拒まない（8.1・8.2）。今のテストで固まっていれば足さない。
+- 書く先（`areka` の `update/worker.rs` の `prepare_targets` と `roots/user_root.rs` の `plan_copy` の兄弟テスト）: ゴーストの中のバルーン（親が `<実行ファイルの隣>\balloon` でない）の更新で `plan_copy` が写さずそのまま（`AsIs`）を返すこと、起動のときのゴーストが実行ファイルの隣の根に在るとき書ける根へ写されてから動くか（写されるなら、その中のバルーンの更新は写しの中を書く）を、テストで固める（8.1・8.3）。写されない道が見つかったら、その道で書く先を記録に残すことを実装の段で足す（記録の無い失敗を作らない・10.3）。
 
 ### インストール（`areka-nar`・`areka`）
-- `plan_tests.rs`・`plan_roots_tests.rs`・`plan_source_path_tests.rs`: ゴーストの書庫とシェルの書庫の同梱の宛先が `<ゴースト>\balloon\<dir>`、`root` が本体の根、`balloon_root` が同梱で呼ばれない、書庫の `balloon/<dir>/` の項目は本体から除かれ警告 1 件、名指しされない `balloon\<名>\` は本体に残る、全ての宛先が根の下（7.1・7.5・7.8）。
+- `plan_tests.rs`・`plan_roots_tests.rs`・`plan_source_path_tests.rs`: ゴーストの書庫とシェルの書庫の同梱の宛先が `<ゴースト>\balloon\<dir>`、`root` が本体の根、`balloon_root` が同梱で呼ばれない、書庫の `balloon/<dir>/` の項目は本体から除かれ警告 1 件・取り出し元がその `balloon/<dir>/` 自身の書庫は警告 0 件、名指しされない `balloon\<名>\` は本体に残る、全ての宛先が根の下（7.1・7.5・7.8）。
 - `install_commit_tests.rs`・`install_tests.rs`: 本体 `refresh,1`＋古い同梱在り・本体 `Overlay`＋同梱 `balloon.refresh,1`・初めてのゴースト・2 回目の失敗で全体が戻る（同梱を消してから本体を戻し、古い同梱が元のまま）・同梱の確定の失敗で根の置き場へ何も入らない（7.7・8.1・8.2）。`lib_tests.rs` の「2 つ目の根で失敗したら 1 つ目を戻す」は、同梱が別の根へ行かなくなるので、入れ子の戻しのテストへ置き換える（陳腐化したテストは置き換える方針）。
 - `destination_tests.rs`: 実行ファイルの隣の根に同じフォルダ名のバルーンが在っても写されず・上書きされない（7.3・8.2）。以前に根へ入れた同梱は根のまま候補に出る（6.4）。
 - `procedure_tests.rs`・`procedure_skip_tests.rs`: 同梱の表示名がゴーストの中の `name` で、根の同じフォルダ名の別の `name` を取らない（7.6）。
