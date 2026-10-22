@@ -64,4 +64,4 @@
 
 ## Implementation Notes
 
-- 範囲外（10-22）: rustc 1.99.1 の clippy で `cargo clippy -p areka --all-targets -- -D warnings` が本 spec の外のクレートで赤（dola の resolve.rs:284 too_many_arguments・conflict_resolver.rs:42 collapsible_if・facade.rs:323 doc_lazy_continuation、areka-kanade もビルド止まり）。clippy は test-all と CI の関門ではないので本 spec では扱わない。完了の棚卸で起票する。
+- 範囲外（10-22）: rustc 1.99.1 の clippy で `cargo clippy -p areka --all-targets -- -D warnings` が本 spec の外のクレートで赤（dola の resolve.rs:284 too_many_arguments・conflict_resolver.rs:42 collapsible_if・facade.rs:323 doc_lazy_continuation、areka-kanade もビルド止まり）。clippy は test-all と CI の関門ではないので本 spec では扱わない。完了の棚卸で、既存の起票 `areka-P0-clippy-199-lints` の範囲と確かめ、その brief に再観測の 1 行を足した（新しい起票は 0 件・その場で解決は 0 件）。
