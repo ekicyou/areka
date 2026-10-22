@@ -14,8 +14,9 @@
 use super::events::SourceEvent;
 use super::{Action, Input, Phase, State};
 use crate::msg::{ShioriCall, ShioriFailure, ShioriFault, ShioriOutcome};
+use crate::request_origin::RequestOrigin;
 use crate::status::ExecutionStatus;
-use crate::talk::TalkId;
+use crate::talk::{ScriptOrigin, TalkId};
 use areka_talk::SecurityLevel;
 
 /// 台本の出どころ（翻訳の組み立てと script 種別の記録の表示の語の素）。
@@ -106,6 +107,8 @@ pub(super) struct Replied {
     script: Option<String>,
     /// 応答を待っていた GET の元のイベント（控えから取り出したもの）。
     source: Option<SourceEvent>,
+    /// 台詞の応答の `SecurityLevel`（台詞の応答でなければ `Local`）。
+    level: SecurityLevel,
 }
 
 impl Replied {
@@ -114,6 +117,14 @@ impl Replied {
         self.script.as_ref()?;
         self.source.clone().map(ScriptSource::Event)
     }
+
+    /// 台詞の応答で元のイベントが分かるときだけ、元のイベントの基本の出どころを応答のレベルで
+    /// 下げた値（要件 1.1・1.3・3.1）。
+    pub(super) fn reply_origin(&self) -> Option<ScriptOrigin> {
+        self.script.as_ref()?;
+        let source = self.source.as_ref()?;
+        Some(RequestOrigin::base_of(&source.id).lowered_by(self.level))
+    }
 }
 
 /// [`step`](super::step) が `route` の前に呼ぶ。入力が SHIORI の応答なら、応答を待っていた GET の
@@ -121,16 +132,21 @@ impl Replied {
 /// 他の入力では控えに触れない。
 pub(super) fn before(state: &mut State, input: &Input) -> Replied {
     match input {
-        Input::ShioriReply { outcome, .. } => Replied {
-            script: match outcome {
-                ShioriOutcome::Value(script, _) => Some(script.clone()),
-                _ => None,
-            },
-            source: state.reply_source.take(),
-        },
+        Input::ShioriReply { outcome, .. } => {
+            let (script, level) = match outcome {
+                ShioriOutcome::Value(script, level) => (Some(script.clone()), *level),
+                _ => (None, SecurityLevel::Local),
+            };
+            Replied {
+                script,
+                source: state.reply_source.take(),
+                level,
+            }
+        }
         _ => Replied {
             script: None,
             source: None,
+            level: SecurityLevel::Local,
         },
     }
 }

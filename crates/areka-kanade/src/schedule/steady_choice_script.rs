@@ -7,7 +7,7 @@
 use super::super::choice::script_body;
 use super::super::{Action, State, start_talk};
 use crate::msg::ChoiceInput;
-use crate::talk::TalkId;
+use crate::talk::{ScriptOrigin, TalkId};
 
 /// `script:` の選択肢を受け付けた後の結末を決める。
 ///
@@ -46,7 +46,13 @@ pub(in crate::schedule) fn begin(
         );
         return None;
     }
-    let (talk_id, action) = start_talk(state, "choice_script", script.to_string());
+    // 仮にゴースト自身（元のトークの出どころの引き継ぎは 5.4 で替える）。
+    let (talk_id, action) = start_talk(
+        state,
+        "choice_script",
+        script.to_string(),
+        ScriptOrigin::GHOST,
+    );
     state.choice_prev_talk = Some(prev_talk_id);
     tracing::info!(
         target: "kanade",
