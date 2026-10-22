@@ -48,7 +48,7 @@
   - _Requirements: 2.3, 4.6, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 8.5, 10.1_
 
 - [ ] 3. 実行中の呼び手（`areka`）
-- [ ] 3.1 (P) バルーンの切替と `\![open,explorer,…]` の候補を今のゴーストで引く
+- [x] 3.1 (P) バルーンの切替と `\![open,explorer,…]` の候補を今のゴーストで引く
   - `shell_balloon_resolve.rs` の `balloon_candidates` にゴーストのフォルダの引数を足して `balloons_for(..).listed` を使い、呼び手 2 か所を直す: `shell_balloon_switch.rs` の切替の候補は `balloon_candidates(&ctx.roots, &ctx.ghost_dir)`、`readme/opener.rs` の `named_folder` は `ctx.baseware` から取り出した `root` を使って `balloon_candidates(root, &ctx.ghost_dir)`
   - `name` の引き方（`resolve_skin_target`・`skin_by_name`）と切替の記憶の書き方は変えない
   - `shell_balloon_resolve.rs` の頭の説明の「フォルダ名（大文字小文字を区別）」を「フォルダ名（`same_folder_name`＝区別しない・`name` は区別する）」へ、「バルーンは根の目録」を「今のゴーストの中と根の目録」へ直す

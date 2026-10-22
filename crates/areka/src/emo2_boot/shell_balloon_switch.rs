@@ -258,7 +258,10 @@ pub(crate) fn request_skin_switch_with(
     };
     let (candidates, current) = match req.kind {
         SkinKind::Shell => (shell_candidates(&ctx.ghost_dir), ctx.current_shell.clone()),
-        SkinKind::Balloon => (balloon_candidates(&ctx.roots), ctx.current_balloon.clone()),
+        SkinKind::Balloon => (
+            balloon_candidates(&ctx.roots, &ctx.ghost_dir),
+            ctx.current_balloon.clone(),
+        ),
     };
     let installed = installed_for(world, req.kind, &ctx.ghost_dir);
     let target = match resolve_skin_target(
