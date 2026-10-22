@@ -1,6 +1,6 @@
 //! 右クリックメニュー（areka-P0-popup-menu-minimal）。
 //!
-//! このファイルは登記の口を持つ: 枠 11 種とその並び（[`Frame::ORDER`]）、登記の単位
+//! このファイルは登記の口を持つ: 枠 12 種とその並び（[`Frame::ORDER`]）、登記の単位
 //! （[`MenuItem`]）、枠ごとに 1 つだけ持つ供給関数（[`Supplier`]）、登記・取り消し・写しの
 //! 取得（[`MenuRegistry`]）。列挙・切替・インストール・更新の各 spec はメニュー本体を
 //! 触らず、自分の枠へ供給関数を登記して項目を足している（要件 6.1・登記者は `*_frame.rs`）。
@@ -14,13 +14,15 @@
 //! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）・
 //! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）・
 //! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数・areka-P0-baseware-root-list）・
-//! [`reset_pos_frame`]（「シェル位置初期化」枠の供給関数・areka-P0-move-canon）。
+//! [`reset_pos_frame`]（「シェル位置初期化」枠の供給関数・areka-P0-move-canon）・
+//! [`reset_balloon_pos_frame`]（「バルーン位置初期化」枠の供給関数・areka-P0-window-link-directives）。
 
 pub(crate) mod balloon_frame;
 pub(crate) mod captions;
 pub(crate) mod ghost_frame;
 pub(crate) mod install_frame;
 pub(crate) mod plan;
+pub(crate) mod reset_balloon_pos_frame;
 pub(crate) mod reset_pos_frame;
 pub(crate) mod roots_frame;
 pub(crate) mod shell_frame;
@@ -44,7 +46,7 @@ use crate::placement::spawn::CharWindowMarker;
 use crate::readme;
 use trigger::PendingQuery;
 
-/// メニューの枠。宣言順がそのまま並び順（①〜⑪・要件 2.1）で、判別値を登記の添字に使う。
+/// メニューの枠。宣言順がそのまま並び順（①〜⑫・要件 2.1）で、判別値を登記の添字に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Frame {
     /// ① ゴースト
@@ -55,29 +57,32 @@ pub(crate) enum Frame {
     Balloon,
     /// ④ シェル位置初期化（areka-P0-move-canon 要件 8.1）
     ResetPosition,
-    /// ⑤ ネットワーク更新
+    /// ⑤ バルーン位置初期化（areka-P0-window-link-directives 要件 7.5）
+    ResetBalloonPosition,
+    /// ⑥ ネットワーク更新
     Update,
-    /// ⑥ インストール
+    /// ⑦ インストール
     Install,
-    /// ⑦ 置き場を追加（areka-P0-baseware-root-list 要件 6.1）
+    /// ⑧ 置き場を追加（areka-P0-baseware-root-list 要件 6.1）
     RootAdd,
-    /// ⑧ 置き場を先頭へ（areka-P0-user-data-root 要件 3.8）
+    /// ⑨ 置き場を先頭へ（areka-P0-user-data-root 要件 3.8）
     RootFront,
-    /// ⑨ 置き場を外す（areka-P0-baseware-root-list 要件 7.1）
+    /// ⑩ 置き場を外す（areka-P0-baseware-root-list 要件 7.1）
     RootRemove,
-    /// ⑩ 説明書
+    /// ⑪ 説明書
     Readme,
-    /// ⑪ 終了
+    /// ⑫ 終了
     Close,
 }
 
 impl Frame {
     /// 枠の並び順。並びを決める場所はここだけで、写しも計画もこの順に従う。
-    pub(crate) const ORDER: [Frame; 11] = [
+    pub(crate) const ORDER: [Frame; 12] = [
         Frame::Ghost,
         Frame::Shell,
         Frame::Balloon,
         Frame::ResetPosition,
+        Frame::ResetBalloonPosition,
         Frame::Update,
         Frame::Install,
         Frame::RootAdd,
@@ -316,7 +321,7 @@ pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     wiring.registry.register(frame, supplier);
 }
 
-/// ⑩「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
+/// ⑪「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
 /// （要件 4.3・6.2・11.4）。項目名とリソース名は [`captions::FRAME_CAPTIONS`] から引く。
 fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
@@ -333,7 +338,7 @@ fn open_readme(world: &mut World, _ctx: &MenuContext) {
     readme::open_from_world(world, readme::MENU_TAG);
 }
 
-/// ⑪「終了」の供給関数。常に選べる（要件 2.2）。
+/// ⑫「終了」の供給関数。常に選べる（要件 2.2）。
 fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Close).to_string(),

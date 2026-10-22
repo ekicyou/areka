@@ -34,7 +34,7 @@ pub mod persist;
 /// （areka-P0-shell-balloon-switch 要件 2.7）。
 pub(crate) mod reseed;
 /// バルーン位置初期化（areka-P0-window-link-directives 要件 7.1〜7.4）。
-// shortcut: 台本の腕（task 6）は来たが、きっかけ `Menu`・`Shortcut` の呼び手（メニューの枠・近道）は task 7.2・7.3 で来る。来たら許可属性を外す。
+// shortcut: 台本の腕（task 6）とメニューの枠（task 7.2）は来たが、きっかけ `Shortcut` の呼び手（近道）は task 7.3 で来る。来たら許可属性を外す。
 #[allow(dead_code)]
 pub(crate) mod reset_balloon_pos;
 /// 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・design ResetPos）。

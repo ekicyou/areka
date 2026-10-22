@@ -115,7 +115,7 @@
   - _Boundary: areka-kanade resources_
   - _Requirements: 7.6_
 
-- [ ] 7.2 「バルーン位置初期化」の枠をメニューへ登記して項目として出す
+- [x] 7.2 「バルーン位置初期化」の枠をメニューへ登記して項目として出す
   - `menu/reset_balloon_pos_frame.rs` に枠を作り、`Frame::ResetBalloonPosition` を「シェル位置初期化」のすぐ後・同じ群に置く（`ORDER` は 12 個）。項目名の表に既定「バルーン位置初期化」と SHIORI の名前を足し、枠を `ghost_session_runtime.rs` で登記する
   - 選べる場面は窓の組と材料が在るとき（`reset_balloon_enabled`）。`menu/reset_pos_frame.rs` の選べる式を `reset_position_enabled` として切り出す。選んだら 2.3 の関数をきっかけ「メニュー」で呼び、ゴーストへ知らせを送らない
   - 兄弟のテストで、12 個の枠の並び・項目名の既定と SHIORI の名前・選べる場面と選べない場面・選ぶと初期化しゴーストへ何も送らない、が緑になり、`captions_tests.rs` の数が 12 に合う

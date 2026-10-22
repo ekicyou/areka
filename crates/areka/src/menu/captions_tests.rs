@@ -81,7 +81,7 @@ fn visibility_of(outcome: ResourceOutcome) -> (Visibility, Vec<String>) {
 /// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組と、置き場の 3 枠
 /// （SHIORI のリソース名を持たない・areka-P0-baseware-root-list 要件 6.1・7.1）を並べる。
 #[test]
-fn frame_captions_table_is_the_eleven_rows() {
+fn frame_captions_table_is_the_twelve_rows() {
     assert_eq!(
         FRAME_CAPTIONS.len(),
         Frame::ORDER.len(),
@@ -101,6 +101,11 @@ fn frame_captions_table_is_the_eleven_rows() {
                 Some("switchmovetodefaultpositionbutton.caption"),
                 Frame::ResetPosition,
                 "シェル位置初期化",
+            ),
+            (
+                Some("resetballoonpositionbutton.caption"),
+                Frame::ResetBalloonPosition,
+                "バルーン位置初期化",
             ),
             (
                 Some("updatebutton.caption"),
@@ -139,6 +144,14 @@ fn resource_for_and_default_label_read_the_table() {
         Some("switchmovetodefaultpositionbutton.caption")
     );
     assert_eq!(default_label(Frame::ResetPosition), "シェル位置初期化");
+    assert_eq!(
+        resource_for(Frame::ResetBalloonPosition),
+        Some("resetballoonpositionbutton.caption")
+    );
+    assert_eq!(
+        default_label(Frame::ResetBalloonPosition),
+        "バルーン位置初期化"
+    );
     assert_eq!(resource_for(Frame::RootAdd), None);
     assert_eq!(default_label(Frame::RootAdd), "置き場を追加…");
     assert_eq!(resource_for(Frame::RootFront), None);
