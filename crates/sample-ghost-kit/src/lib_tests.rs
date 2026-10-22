@@ -1,15 +1,17 @@
 //! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
 //! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。`emily4` の 1 本は spec:
-//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3）。
+//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3。`dot_sakura` の 1 本は spec:
+//! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
-//! だから主張は 8 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
+//! だから主張は 9 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
 //! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 10 個を
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
 //! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
 //! 取得した根へ書いた起動記録が次に取得した根に現れない／取り出し元の無い同梱を名乗る
-//! `emily4` の `.nar` は同梱を飛ばしてゴーストだけを入れる。
+//! `emily4` の `.nar` は同梱を飛ばしてゴーストだけを入れる／`dot_sakura` の `.nar` は
+//! 警告も飛ばした同梱も無くゴーストと同梱を入れ、最上位の普通のファイルを本体の直下に置く。
 //!
 //! 「借用しか返さないので取得した値を捨てるとコンパイルできない」ことは、コンパイル自体を
 //! 判定に使うので rustdoc の `compile_fail` 例（[`SampleRoot::root`](super::SampleRoot::root)・
@@ -578,6 +580,54 @@ fn emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion() {
             source: "balloon".to_owned(),
         }],
         "飛ばした同梱は 1 件"
+    );
+}
+
+/// `dot_sakura.nar` は同梱の宛先だけを書き、取り出し元は宛先と同じ名前のフォルダ
+/// で書庫の最上位に在る。空の根へ入れると警告 0・飛ばした同梱 0 で、最上位の `delete.txt`・
+/// `updates.txt` は本体の直下に普通のファイルとして置かれる（spec: areka-P0-dot-sakura-specimen
+/// 要件 2.4・5.7）。
+#[test]
+fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings() {
+    // 同梱の名は登記の行から引く（綴りを直書きしない）。
+    let balloon = SAMPLES
+        .iter()
+        .find(|sample| sample.name == "dot_sakura")
+        .expect("dot_sakura は登記済み")
+        .balloons[0];
+    let root = WorkDir::new().expect("空の根は取れるはず");
+    let nar = devroot::nar_dir().join("dot_sakura.nar");
+    let outcome = areka_nar::NarArchive::open(&nar)
+        .expect("dot_sakura.nar は受理されるはず")
+        .install(&areka_nar::InstallRequest {
+            roots: &areka_nar::SingleRoot(root.path()),
+            target_ghost: None,
+        })
+        .expect("dot_sakura.nar は空の根へ入るはず");
+
+    assert_eq!(outcome.installed.len(), 2, "入るのは本体と同梱 1 つの 2 件");
+    assert_eq!(outcome.skipped.len(), 0, "飛ばした同梱は 0 件");
+    assert_eq!(outcome.warnings.len(), 0, "警告は 0 件");
+    assert_eq!(outcome.leftovers.len(), 0, "残った作業フォルダは 0 件");
+
+    let body = root.path().join("ghost").join("dot_sakura");
+    for top_level_file in ["delete.txt", "updates.txt"] {
+        assert!(
+            body.join(top_level_file).is_file(),
+            "最上位の {top_level_file} は本体の直下に普通のファイルとして在るはず"
+        );
+    }
+    assert!(
+        !body.join(balloon).exists(),
+        "取り出し元のフォルダは本体の直下に残らないはず"
+    );
+    assert!(
+        root.path()
+            .join("balloon")
+            .join(balloon)
+            .join("descript.txt")
+            .is_file(),
+        "同梱の descript.txt が在るはず"
     );
 }
 
