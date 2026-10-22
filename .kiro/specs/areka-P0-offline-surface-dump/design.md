@@ -189,7 +189,9 @@ crates/surface-compare/        # 新クレート（publish = false）
 - `crates/areka-parsers/src/package/mod.rs` — `mod resolve_bind;`。
 - `crates/areka-parsers/src/package/resolve_shell.rs` — `read_bindgroup_defaults` を `resolve_bind` から引く・`read_ghost_names` の切り出し。
 - `crates/areka-emo-present/src/shell_target.rs` — 読み込みで組んだ面の表を `ShellTarget` に `Option<EmoWorld>` で持たせ、`take_world` で 1 度だけ渡す。`EmoWorld` は `Debug` を持たないので、`#[derive(Debug)]` をやめて `Debug` を手で書く（面の表は有無だけを出す）。
-- `crates/areka-emo-compose/src/lib.rs` — `plan_bounds` の `pub use`。
+- `crates/areka-emo-compose/src/lib.rs` — `plan_bounds` と形の誤りを集める関数の `pub use`。
+- `crates/areka-emo-compose/src/plan.rs`・`plan_extent.rs`・`blit.rs` — 面を組むたびの形の誤りの warn 6 か所を `debug!` に下げる（ShapeIssuesOnce）。形の誤りを集める純粋な関数は新しい兄弟のファイル（例 `plan_issues.rs`＋`plan_issues_tests.rs`）に置く。
+- `crates/areka-emo-present/src/shell_target.rs`（上と同じファイル）— 集めた形の誤りを、読み込みの知らせと並べて 1 件ずつ warn で出す。
 - `crates/areka/Cargo.toml` — `[dev-dependencies]` に `image`（0.25.10・`png` のみ・ワークスペースに既在の版）。
 - `dist/README.txt` — 「■ 起動オプション」の節（効く起動オプションに `--offline-dump`、`--dump-*` の働き・名前・CSV・終了コード・例・まだ扱わない 2 つ）。
 - `.kiro/steering/structure.md` — 新クレート `surface-compare` の項と、`offline_dump` の許す依存。
@@ -259,7 +261,7 @@ sequenceDiagram
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9 | `--dump-bind` | BindSpecApplier, ShellBindSetup | `read_bind_specs`・`apply_bind_specs`・`apply_named_bind` | 面の段の前 |
 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8 | ファイル名と置き場 | SurfaceRenderer | `png_path`・`write_png` | 面の段 |
 | 7.1, 7.2, 7.4, 7.6, 7.7, 7.8 | CSV の形と書き方 | DumpReport | `csv_bytes`・`write_csv` | 終わり |
-| 7.3, 7.5 | 入れる記録・1 つの誤りは 1 行 | RecordCapture, ShellWorldOnce | `capture_begin`・`take_world` | 写しの間 |
+| 7.3, 7.5 | 入れる記録・1 つの誤りは 1 行 | RecordCapture, ShellWorldOnce, ShapeIssuesOnce | `capture_begin`・`take_world`・形の誤りを集める関数 | 写しの間 |
 | 8.1, 8.2, 8.3 | 終了コードの段 | DumpReport, RecordCapture | `exit_code` | 終わり |
 | 8.4 | ゴーストの読み込みの失敗は 0 | OfflineDumpRun | 0 を返す | ゴーストの失敗 |
 | 9.1, 9.2, 9.3, 9.4 | 書かない | MainEntry, OfflineDumpRun | Allowed Dependencies の禁止の一覧 | 全体 |
@@ -593,7 +595,7 @@ pub(crate) fn capture_finish() -> Vec<CapturedRecord>;
 
 **Implementation Notes**
 - Integration: `log_history.rs` は 424 行。足すのは 90 行ほど（約 515 行）。層の `on_event` は本文を組んで積む口（窓とスレッドの番号を確かめて積む関数）を呼ぶだけにし、その口と純粋な部分（`body_text`・レベルの絞り）のテストは `log_history_capture_tests.rs`。窓はプロセスに 1 つなので、窓を触るテストはそのファイルの中の排他 1 つで順に回す。層を通った写しは exe の試験で確かめる（単体テストはプロセスの受け口を据えない）。
-- Risks: 書き出しの間の 1 つの誤りが 2 行にならないことは、面の表を 1 度だけ組むこと（ShellWorldOnce）と `AnimationTable` を 1 度だけ作ることで守る。exe の試験で同じ本文の行が無いことを確かめる。
+- Risks: 書き出しの間の 1 つの誤りが 2 行にならないことは、面の表を 1 度だけ組むこと（ShellWorldOnce）・`AnimationTable` を 1 度だけ作ること・形の誤りを読み込みのときに 1 度だけ出し、組むたびの知らせを debug に下げること（ShapeIssuesOnce）の 3 つで守る。写しの層では重なりを消さない（まとめる処理を置かない）。exe の試験で、入れ子を持つ検体でも同じ誤りの行が 1 行だけであることを確かめる。
 
 #### PngEncoder
 
@@ -703,6 +705,28 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds;
 **Implementation Notes**
 - Integration: 今の `compute_extent`（`plan_extent.rs`）の辿り方（入れ子・循環の避け方）を写し、座標を符号つきで持つ。`compute_extent` は変えない。
 - Validation: SSP の測り（research.md §10.6・面 20〜23 で 18×14、`never` を含む 12×14）と同じ形の検体で数を固める。
+
+#### ShapeIssuesOnce（areka-emo-compose・areka-emo-present）
+
+| Field | Detail |
+|-------|--------|
+| Intent | シェルの定義の形の誤りを、読み込みのときにシェルごとに 1 度だけ warn で出し、面を組むたびの同じ知らせを debug に下げる |
+| Requirements | 7.5 |
+
+**Responsibilities & Constraints**
+- 対象は、面を組むたびに今 warn で出ている、定義だけで決まる形の誤り:
+  - 入れ子の循環: `plan.rs` 360 行目・`plan_extent.rs` 78 行目。
+  - 知らない `animation-sort`: `plan.rs` 433 行目。
+  - 描かない method の pattern: `plan.rs` 465 行目・534 行目。
+  - 描かない method の element: `blit.rs` 90 行目。
+- 読み込みの知らせ（`shell_target.rs` の `log_nest_issue`・描かない element の行など）が既に同じ誤りを出しているものは、そのまま使う。出していないもの（少なくとも知らない sort と、描かない method の pattern）は、areka-emo-compose に足す純粋な関数で面の表から集め、`shell_target.rs` が読み込みの知らせと並べて 1 件ずつ warn で出す（`surface_id`・`animation_id` などの欄を付ける）。
+- 面を組むときの上の 6 か所は `debug!` に下げる（打ち切り・skip の振る舞いは変えない）。
+- 形の誤りでない知らせは warn のまま残す（`blit.rs` 106 行目の「転写元アトラス頁が存在しない」は内部の食い違いで、定義からは決まらない）。
+- 画面にも効く。今は面を組むたびに同じ warn が積み重なっているが、直した後はシェルを読むときの 1 度だけになる。
+
+**Implementation Notes**
+- Integration: 足す関数は `plan.rs` の辿り方と同じ判定を使う（判定を写さず、同じ関数から引く）。読み込みの知らせとの重なりは、実装の段でどの誤りが既にどこで出ているかを突き合わせて決める（同じ誤りを 2 か所で warn にしない）。
+- Validation: 入れ子の循環・知らない sort・描かない method を持つ検体で、⑴ 読み込みの warn がそれぞれ 1 件、⑵ 何面を組んでも合成の warn が増えない、⑶ exe の試験で CSV に同じ誤りの行が 1 行だけ、を確かめる。
 
 #### ShellWorldOnce（areka-emo-present）
 
