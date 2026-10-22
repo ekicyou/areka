@@ -46,7 +46,7 @@
   - _Depends: 1.1, 1.3_
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 1.7, 1.8, 1.9, 2.4, 9.1_
 
-- [ ] 2.3 (P) バルーン位置初期化の関数を作る
+- [x] 2.3 (P) バルーン位置初期化の関数を作る
   - `placement/reset_balloon_pos.rs` に、きっかけ（台本・メニュー・近道）を受ける `reset_balloon_positions` を作る。材料と窓の組が無ければ `balloon_pos_reset_skipped` を記録して何もしない
   - `resolve_standard_scopes` の結果ごとに、バルーンの付き方を標準のずらしで入れ直し、キーワードのバルーンの素材を結果どおりに入れるか外し、バルーンを経路 `Restore` で置き、標準のずらしを位置の記憶へ書き、`balloon_pos_reset`（スコープ・位置・ずらし・きっかけ）を記録する。キャラクターの窓・吸着の向き・組には触らない
   - 兄弟のテストで、ドラッグでずらしたバルーンが標準の位置へ戻る・キャラクターの窓と向きと組が変わらない・記憶に標準のずらしが届く・起動で置いた材料とシェルの切り替えで置いた材料で同じ位置になる・キーワードの素材が戻る・材料が無いと記録だけ、が緑になる
@@ -156,3 +156,4 @@
 - 1.4: `DefaultPlacementBasis` は `{ source: DescriptSource, balloon: BalloonPlacementInputs }`。`placement/spawn.rs:183` の注記は「設定ごと置く」のままで古い。触るついでに直す。
 - 2.1: 帳簿が無いときの記録は `sticky_skipped`（reason=no_ledger）の `warn!`。design.md の記録の表に無いので、完了までに表へ 1 行足す。
 - 2.2: `parse_alignment_word` は `args: &[&str]`（先頭が向き、3 つ目以降の引数を debug! するため）。design.md の署名の行は完了までに直す。6 の呼び手は `tokens[1..]` をそのまま渡す。空や空白だけの値は欠けた値（1.9）として扱い、COMPAT §8 の行（8）にも書く。記録の表に `alignment_extra_args`（debug）と `alignment_skipped` の reason（missing_value・no_ghost_windows・no_char_window・no_anchor_source）を完了までに足す。`placement/mod.rs` の `script_alignment` に一時の `#[allow(dead_code)]`（6 で外す）。
+- 2.3: `balloon_pos_reset_skipped` に `trigger` の欄、reason は no_default_basis・no_ghost_windows・not_resolved（スコープ単位）。design.md の記録の表へ完了までに足す。`placement/mod.rs` の `reset_balloon_pos` に一時の `#[allow(dead_code)]`（6・7.2・7.3 で外す）。
