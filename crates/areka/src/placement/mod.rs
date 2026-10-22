@@ -34,21 +34,17 @@ pub mod persist;
 /// （areka-P0-shell-balloon-switch 要件 2.7）。
 pub(crate) mod reseed;
 /// バルーン位置初期化（areka-P0-window-link-directives 要件 7.1〜7.4）。
-// shortcut: 本番の呼び手（取り出しの相の腕・メニューの枠・近道）は task 6・7.2・7.3 で来る。来たら許可属性を外す。
+// shortcut: 台本の腕（task 6）は来たが、きっかけ `Menu`・`Shortcut` の呼び手（メニューの枠・近道）は task 7.2・7.3 で来る。来たら許可属性を外す。
 #[allow(dead_code)]
 pub(crate) mod reset_balloon_pos;
 /// 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・design ResetPos）。
 pub(crate) mod reset_pos;
 pub mod resolver;
 /// 台本からの吸着の向きの変更（areka-P0-window-link-directives 要件 1）。
-// shortcut: 本番の呼び手（取り出しの相の腕・`MoveCueSink` の語の読み）は task 6 で来る。来たら許可属性を外す。
-#[allow(dead_code)]
 pub(crate) mod script_alignment;
 pub mod source;
 pub mod spawn;
 /// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿と World の側の関数。
-// shortcut: 起動の据え付け（5.1）とシェルの切り替え（5.2）は来たが、台本の組を作る・解く（取り出しの相）の呼び手は task 6 で来る。来たら許可属性を外す。
-#[allow(dead_code)]
 pub(crate) mod sticky_group_ledger;
 pub mod transition_diag;
 /// 遷移観測ログの判定器（純関数・I/O 無し）。

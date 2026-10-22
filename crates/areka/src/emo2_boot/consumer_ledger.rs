@@ -38,13 +38,14 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 31 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 36 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
 //! `(execute,install)`・`(execute,resetwindowpos)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
 //! `areka.prop.set`・`(set,balloontimeout)`・`(reload,ghost|shiori|shell|balloon|descript)`・
-//! `reloadsurface`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `reloadsurface`・`(set,alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset,sticky-window)`・
+//! `(execute,resetballoonpos)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -74,7 +75,9 @@ type LedgerKey = (String, Option<String>);
 /// - [`MoveSink`](CommandConsumer::MoveSink): 窓の位置の指令（`\![move]` と
 ///   `\![execute,resetwindowpos]`）を消費する [`MoveCueSink`](super::move_cue::MoveCueSink)
 ///   （talk スレッド側名前選別 sink）。正準台帳が `move` と `(execute, resetwindowpos)` の 2 行を
-///   登記する（areka-P0-move-canon 要件 8.7）。
+///   登記する（areka-P0-move-canon 要件 8.7）。吸着・窓の組・バルーン位置初期化の 5 行
+///   （`(set, alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset, sticky-window)`・
+///   `(execute, resetballoonpos)`）も同じ受け口に登記する（areka-P0-window-link-directives）。
 /// - [`Seriko`](CommandConsumer::Seriko): `\![bind]`（着せ替え）を消費する表示系 seriko。
 ///   正準台帳（[`ConsumerLedger::canonical`]）が `bind` → `Seriko` を登記する（task 7.2）。
 /// - [`ZOrderSink`](CommandConsumer::ZOrderSink): 重なり指定・重なり解除を消費する
@@ -117,9 +120,14 @@ type LedgerKey = (String, Option<String>);
 ///   要件 11.1）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
-    /// 窓の位置の指令（`\![move]` と `\![execute,resetwindowpos]`）の担当消費者
-    /// （[`MoveCueSink`](super::move_cue::MoveCueSink)）。
+    /// 窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`・`\![set,alignmenttodesktop,方向]`
+    /// （`alignmentondesktop` も同じ）・`\![set,sticky-window,…]`・`\![reset,sticky-window]`・
+    /// `\![execute,resetballoonpos]`）の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetwindowpos_5d:1
+    /// ukadoc（`alignmentondesktop` も同じ項）: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_set%2Calignmenttodesktop%2C%E6%96%B9%E5%90%91_
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_set%2Csticky-window%2C%E3%82%B9%E3%82%B3%E3%83%BC%E3%83%97ID%2C%E3%82%B9%E3%82%B3%E3%83%BC%E3%83%97ID%2C_
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_reset%2Csticky-window_
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_execute%2Cresetballoonpos_
     MoveSink,
     /// `\![bind]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する（task 7.2）。
     Seriko,
@@ -354,7 +362,9 @@ impl ConsumerLedger {
     /// [`CommandConsumer::ScriptCompile`]・運搬名 `areka.prop.set` →
     /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
     /// [`CommandConsumer::LifecycleSink`]・`(reload, ghost|shiori|shell|balloon|descript)` と
-    /// `reloadsurface` → [`CommandConsumer::ReloadSink`]）。
+    /// `reloadsurface` → [`CommandConsumer::ReloadSink`]・`(set, alignmenttodesktop|alignmentondesktop|
+    /// sticky-window)`・`(reset, sticky-window)`・`(execute, resetballoonpos)` →
+    /// [`CommandConsumer::MoveSink`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -459,6 +469,18 @@ impl ConsumerLedger {
         ledger
             .try_register("reloadsurface", None, CommandConsumer::ReloadSink)
             .expect("正準台帳: 'reloadsurface'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        // 吸着・窓の組・バルーン位置初期化（areka-P0-window-link-directives 要件 1・3・7）。
+        for (name, selector) in [
+            ("set", "alignmenttodesktop"),
+            ("set", "alignmentondesktop"),
+            ("set", "sticky-window"),
+            ("reset", "sticky-window"),
+            ("execute", "resetballoonpos"),
+        ] {
+            ledger
+                .try_register(name, Some(selector), CommandConsumer::MoveSink)
+                .expect("正準台帳: 吸着・組・バルーン位置初期化の 5 組は一意（重複・排他違反は編集ミス）");
+        }
         ledger
     }
 }

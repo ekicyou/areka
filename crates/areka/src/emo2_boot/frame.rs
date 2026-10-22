@@ -475,6 +475,11 @@ mod work_area_resnap_hold_tests;
 #[path = "frame_move_order_tests.rs"]
 mod move_order_tests;
 
+// 窓の組・吸着・バルーン位置初期化の指令が位置の線で当たる檻（areka-P0-window-link-directives task 6）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_window_link_drain_tests.rs"]
+mod window_link_drain_tests;
+
 // 終了相の判断（areka-P0-emo2-conformance-e2e タスク 6.9・R15.4）。GPU も実窓も要らない。
 #[cfg(test)]
 #[path = "frame_ghost_quit_tests.rs"]

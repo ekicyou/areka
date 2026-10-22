@@ -101,7 +101,7 @@
   - _Depends: 1.4, 2.1_
   - _Requirements: 6.4, 6.5, 9.1, 9.2_
 
-- [ ] 6. 台本の指令を、窓の位置の線に載せて画面の側で当てる（結合のタスク）
+- [x] 6. 台本の指令を、窓の位置の線に載せて画面の側で当てる（結合のタスク）
   - `emo2_boot/move_cue.rs` の `PositionCue` に吸着・組を作る・組を解く・バルーン位置初期化の 4 種類を足し、`set,alignmenttodesktop`・`set,alignmentondesktop`・`set,sticky-window`・`reset,sticky-window`・`execute,resetballoonpos` の 5 組を選ぶ。吸着の実行者は `move` と同じ道で数として読み（読めなければ `warn!` で捨てる）、組の ID は読まずに運ぶ
   - `frame/drain_resnap.rs` の取り出しの相に 4 つの腕（各 1 行で 2.1・2.2・2.3 の関数を呼ぶ）を足す。`consumer_ledger.rs` に 5 行を `MoveSink` で登記し（31 → 36 行）、`consumer_ledger_tests.rs`・`consumer_ledger_agreement_tests.rs` を合わせる。`zorder_cue.rs` は警告の持ち主が 1 つのままである旨の注記だけを改める
   - 兄弟のテストで、5 組が `MoveSink` に届きほかの受け口に届かない・掛け合わせの組（`reset,alignmenttodesktop` など）がどこにも届かない・同じ台本の `\![set,sticky-window,0,1]` の後の `\![move]` が届いた順に当たり相手が連れ動く・`\![execute,resetballoonpos]` でバルーンが戻る、が緑になる
@@ -160,3 +160,4 @@
 - 2.4: wintf の `deliver_key_down` は WM_KEYDOWN と WM_SYSKEYDOWN で共通。記録の文の札は `[WM_KEYDOWN]` のまま（構造の欄 `event` は正しい）。F10 の消費で SC_KEYMENU が止まるかは 9.2 の実機で確かめる。
 - 3.1: `finish_char_drag` が記憶へ書くのは相手だけ。ドラッグした窓の記憶の形は 3.2 で `on_char_drag_end` が `saved_form_anchor` で決める。テストは `placement/follow_sticky_follow_drag_tests.rs`。
 - 3.2: ドラッグ中に向きを変えた窓の記憶は離した位置（当て直した位置ではない）。COMPAT §8 の行（8）に一言足す。ドラッグ中に `apply_script_alignment` が走ると、その回だけ窓が辺へ飛び次の `OnDrag` で始めの向きへ戻る（1 フレームのちらつき）。檻なし。完了の棚卸で扱いを決める。
+- 6: `consumer_ledger.rs` の ukadoc の錨は新旧の形が混ざる（新しい行は今の MCP の `#_!_…` 形）。全 variant を揃えるなら別の機会に一括で。`reset_balloon_pos` の一時の `#[allow(dead_code)]` は 7.2・7.3 で外す。

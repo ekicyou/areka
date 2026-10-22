@@ -17,9 +17,12 @@ use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
 use crate::placement::persist::persist_unremembered_char_positions;
+use crate::placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use crate::placement::reset_pos::reset_window_positions;
 use crate::placement::resolver::{PointPx, SizePx};
+use crate::placement::script_alignment::apply_script_alignment;
 use crate::placement::spawn::GhostWindows;
+use crate::placement::sticky_group_ledger::{apply_reset_sticky, apply_set_sticky};
 
 use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 
@@ -67,7 +70,8 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 /// R5.1/5.3/5.5/R6・task 9.2）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`PositionCue`]
 /// を非ブロックで FIFO 全件 drain し、UI スレッド上で種類ごとに適用する——`Move` は
 /// [`apply_move_directive`]、`ResetWindowPos` は [`reset_window_positions`]（`OnResetWindowPos` は
-/// 送らない・areka-P0-move-canon 要件 8.7）。
+/// 送らない・areka-P0-move-canon 要件 8.7）、吸着・組を作る・組を解く・バルーン位置初期化は
+/// `placement` の各関数（areka-P0-window-link-directives）。
 ///
 /// `PresentBridge`（[`run_drain_phase`]）と同型の跨ぎパターンだが、ゲートは `attached`（GPU）でなく
 /// **`GhostWindows` の存在**である——move は GPU 表示層でなくキャラ窓 entity（`GhostWindows` が spawn 時
@@ -95,6 +99,24 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
             // research §13 議題 1）。失敗は関数内で warn! 済みゆえ戻り値を捨てて次へ進む。
             PositionCue::ResetWindowPos => {
                 reset_window_positions(world);
+                continue;
+            }
+            // 吸着・組・バルーン位置初期化（areka-P0-window-link-directives）。記録は各関数の中ゆえ
+            // 戻り値を捨てる。台本の並び（組を作ってから `\![move]`）はこの 1 本の線の順で保たれる。
+            PositionCue::SetAlignment { scope, word } => {
+                apply_script_alignment(world, scope, &word);
+                continue;
+            }
+            PositionCue::SetSticky { tokens } => {
+                apply_set_sticky(world, &tokens);
+                continue;
+            }
+            PositionCue::ResetSticky => {
+                apply_reset_sticky(world);
+                continue;
+            }
+            PositionCue::ResetBalloonPos => {
+                reset_balloon_positions(world, BalloonResetTrigger::Script);
                 continue;
             }
         };

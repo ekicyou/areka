@@ -17,6 +17,8 @@ use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 use wintf::ecs::world::tick_wake;
 
+use crate::placement::script_alignment::{AlignmentWord, parse_alignment_word};
+
 #[path = "move_cue_args.rs"]
 mod args;
 pub use args::parse_move_directive;
@@ -39,6 +41,15 @@ pub enum PositionCue {
     /// `\![execute,resetwindowpos]`——すべての窓を既定の位置へ並べ直す
     /// （`placement::reset_pos::reset_window_positions`・`OnResetWindowPos` は送らない＝要件 8.7）。
     ResetWindowPos,
+    /// `\![set,alignmenttodesktop,方向]`／`\![set,alignmentondesktop,方向]`——実行者のスコープの
+    /// キャラクターの窓の吸着の向きを変える（`placement::script_alignment`・要件 1）。
+    SetAlignment { scope: u32, word: AlignmentWord },
+    /// `\![set,sticky-window,…]`——ID の並びを読まずに運ぶ（読みと拒否は帳簿が持つ・要件 3.1）。
+    SetSticky { tokens: Vec<String> },
+    /// `\![reset,sticky-window]`——台本で作った組を解く（要件 3.5）。
+    ResetSticky,
+    /// `\![execute,resetballoonpos]`——すべてのバルーンを標準の位置へ戻す（要件 7.1）。
+    ResetBalloonPos,
 }
 
 /// `\![move]` の 1 件の意味（design.md「MoveArgs」）。
@@ -60,7 +71,7 @@ pub struct MoveDirective {
     pub base_offset: RefPoint,
     /// 自窓側の参照点（省略=left.top）。
     pub move_offset: RefPoint,
-    /// `--option=ignore-sticky-window`。今は誰も読まない（window-link-directives が意味を持たせる）。
+    /// `--option=ignore-sticky-window`。真なら組の相手を連れ動かさない（`move_cue_place.rs`）。
     pub ignore_sticky_window: bool,
 }
 
@@ -243,9 +254,34 @@ impl dola::cue::CueSink for MoveCueSink {
         //    dola は名前語彙を持たず、一意性（1 名前=高々 1 消費者）は areka 消費者台帳（task 2.5）
         //    が保証する——本 sink は中央権威表に依存せず自らの名前で自己選別する（R4.5）。
         //    並べ直しは残りの引数を読まず、scope も使わない（全スコープが対象・要件 8.7）。
-        if name == "execute" && tokens.first() == Some(&"resetwindowpos") {
-            self.send(PositionCue::ResetWindowPos);
-            return;
+        //    窓の組・吸着・バルーン位置初期化の 5 組もここで選ぶ（1 本の線で台本の並びを保つ・設計 議題 8）。
+        //    組と初期化は実行者を読まない。吸着だけは実行者のスコープへ当てる（`move` と同じ読み）。
+        match (name, tokens.first().copied()) {
+            ("execute", Some("resetwindowpos")) => {
+                self.send(PositionCue::ResetWindowPos);
+                return;
+            }
+            ("execute", Some("resetballoonpos")) => {
+                self.send(PositionCue::ResetBalloonPos);
+                return;
+            }
+            ("set", Some("sticky-window")) => {
+                let tokens = tokens[1..].iter().map(|s| s.to_string()).collect();
+                self.send(PositionCue::SetSticky { tokens });
+                return;
+            }
+            ("reset", Some("sticky-window")) => {
+                self.send(PositionCue::ResetSticky);
+                return;
+            }
+            ("set", Some(selector @ ("alignmenttodesktop" | "alignmentondesktop"))) => {
+                if let Some(scope) = actor_scope(&cue, &format!("set,{selector}")) {
+                    let word = parse_alignment_word(&tokens[1..]);
+                    self.send(PositionCue::SetAlignment { scope, word });
+                }
+                return;
+            }
+            _ => {}
         }
         if name != "move" {
             debug!(
@@ -256,15 +292,8 @@ impl dola::cue::CueSink for MoveCueSink {
         }
 
         // 3) scope は cue.actor（"0"/"1"）の u32 parse。非数値は warn＋スキップ（design「破損・異常」）。
-        let scope = match cue.actor.as_str().parse::<u32>() {
-            Ok(scope) => scope,
-            Err(_) => {
-                warn!(
-                    actor = cue.actor.as_str(),
-                    "MoveCueSink: cue.actor が非数値 scope のため \\![move] をスキップ（R5.5）"
-                );
-                return;
-            }
+        let Some(scope) = actor_scope(&cue, "move") else {
+            return;
         };
 
         // 4) 純粋な読み（決定論・no I/O）。常に指令を返し、置き換えは 1 件ずつ記録する（要件 4.7・5.1）。
@@ -280,6 +309,19 @@ impl dola::cue::CueSink for MoveCueSink {
         }
         self.send(PositionCue::Move(parsed.directive));
     }
+}
+
+/// 実行者（`cue.actor` の `"0"`/`"1"`）をスコープの数として読む。数でなければ `warn!` で捨てる
+/// （design「破損・異常」・R5.5）。`tag` は記録に出す指令の名前。
+fn actor_scope(cue: &TalkCue, tag: &str) -> Option<u32> {
+    let scope = cue.actor.as_str().parse::<u32>().ok();
+    if scope.is_none() {
+        warn!(
+            actor = cue.actor.as_str(),
+            tag, "MoveCueSink: cue.actor が非数値 scope のため指令をスキップ（R5.5）"
+        );
+    }
+    scope
 }
 
 impl MoveCueSink {
