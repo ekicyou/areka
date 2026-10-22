@@ -26,7 +26,7 @@ use std::time::Duration;
 use areka_actor::{ActorHandle, spawn_actor};
 use shiori_host32_host::{
     CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow, RequestError,
-    Shiori3Client, ShutdownError,
+    RequestHeaders, Shiori3Client, ShutdownError, ValueReply,
 };
 
 use super::probe::{ShioriBusy, ShioriProbe, ShioriUnblock};
@@ -80,6 +80,32 @@ pub trait ShioriBackend {
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError>;
+    /// ヘッダつきの GET（追加のヘッダを渡し、応答の `SecurityLevel` の生の値を受け取る・要件 2.1・3.1）。
+    ///
+    /// 既定はヘッダを使わず [`Self::get`] を呼び、応答のレベルは無し（テストの偽物・中身なしの
+    /// 受け手は既定のまま今と同じに動く）。ヘッダを線へ載せる受け手だけが上書きする。
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        _headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        Ok(self.get(id, references, status)?.map(|value| ValueReply {
+            value,
+            security_level: None,
+        }))
+    }
+    /// ヘッダつきの NOTIFY（要件 2.1）。既定はヘッダを使わず [`Self::notify`] を呼ぶ。
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        _headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        self.notify(id, references, status)
+    }
     /// 正規 clean shutdown（unload → helper 正常終了観測）。
     fn unload(&mut self) -> Result<ExitKind, ShutdownError>;
     /// 非ブロッキング死活問い合わせ（sticky）。
@@ -129,6 +155,29 @@ impl ShioriBackend for ShioriConnection {
     ) -> Result<(), RequestError> {
         // GET と同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
         Shiori3Client::new(&self.window, &mut self.negotiator).notify(id, references, status)
+    }
+
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade・要件 3.5）。
+        Shiori3Client::new(&self.window, &mut self.negotiator)
+            .get_with_headers(id, references, status, headers)
+    }
+
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        Shiori3Client::new(&self.window, &mut self.negotiator)
+            .notify_with_headers(id, references, status, headers)
     }
 
     fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
@@ -448,3 +497,7 @@ mod idle_tests;
 #[cfg(test)]
 #[path = "real_probe_tests.rs"]
 mod probe_tests;
+
+#[cfg(test)]
+#[path = "real_headers_tests.rs"]
+mod headers_tests;
