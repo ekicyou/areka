@@ -667,7 +667,7 @@ pub(crate) fn permits(row: &RestrictionRow, origin: &ScriptOrigin) -> bool;
 
 ## Testing Strategy
 
-すべて x64 の偽の境界で決定論（実 GPU・実 SHIORI・32bit の仲介を要さない）。
+決定論のテストはすべて x64 の偽の境界で書く（実 GPU・実 SHIORI・32bit の仲介を要さない）。本物の起動の道を通すのは、末尾の「実機の確かめ」の 1 本だけ。
 
 ### Unit Tests
 
