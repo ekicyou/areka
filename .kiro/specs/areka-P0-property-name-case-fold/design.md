@@ -103,7 +103,7 @@ graph TB
 | 4 | 効果・記録・`RuntimeCommandSink` へ渡す名前の綴り | **書かれた綴りのまま**（`NotSettable`・`RuntimeCommandReserved` の `key` と `warn!`）。`StoreWrite` の鍵と `debug!` は畳んだ正準の綴り | 受け手（sink）は未配線で、今は綴りで答えが変わらない。記録に書かれた綴りが残るので、大文字で迂回を試みた書き込みを後から見分けられる。sink を配線する spec が振り分けの比べを決める |
 | 5 | `InProcHost` | **範囲の外**（要件ディスカッションで確定）。§8 の行に「sylphya の外の自前の表で対象外」と書く | 本番の結線で使われず、ネイティブの SHIORI を使う段で作り直す |
 | 6 | SHIORI の `GetProperty`（要件 2.2）の証拠 | **`ShioriHostSink` を立てる決定論テスト（5.4）＋2 つの口が同じ `resolve_dotted_str` を手直し無しで呼ぶ静的な構造**。実機の確認は MCP だけ | 本番の結線（32bit の中継）には sylphya へ届く `GetProperty` が無い |
-| 7 | 要件 6.1 の実機確認の書き方 | **配布形を手で起こし curl で当てる 1 回の確認を、spec の `verification/signoff.md` に記録する**（`mcp-get-property` と同じ手順）。`real-run-kit` の常設の試験は足さない | 要件が配布形を求める（窓口が起こすのは `cargo` が作った実行ファイル）。同じ答えは 5.3 が実行系ごと常に固定しており、常設にすると全体のテストのたびに約 30 秒を足すだけになる |
+| 7 | 要件 6.1 の実機確認の書き方 | **配布形を手で起こし curl で当てる 1 回の確認を、spec の `verification/signoff.md` に記録する**（`mcp-get-property` と同じ手順）。`real-run-kit` の常設の試験は足さない | 要件が配布形を求める（窓口が起こすのは `cargo` が作った実行ファイル）。同じ答えは 5.3 が実行系ごと常に固定しており、常設にすると全体のテストのたびに約 30 秒を足すだけになる。`doc/testing.md` の「実機の試験は `real-run-kit` で書く」は常設の試験を書くときの窓口の決まりで、1 回きりの確認の記録には及ばない（2026-10-22 設計ディスカッションで開発者が承認） |
 
 ### Technology Stack
 
