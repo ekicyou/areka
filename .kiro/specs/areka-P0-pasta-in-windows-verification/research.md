@@ -166,3 +166,43 @@
 
 - この分析を要件の話し合い（`/kiro-requirements-discussion areka-P0-pasta-in-windows-verification`）で読み、8 節の決めごとを決める。
 - その後 `/kiro-design areka-P0-pasta-in-windows-verification` で設計へ進む。
+
+## 10. 設計の段の調べと決め（2026-10-22・`/kiro-spec-design -y`）
+
+- 調べの種類: 軽い調べ（既存の仕組みへの足し）。新しい依存・外の API は無いので、外の文書の調べは ukadoc の 1 項目（`OnMouseMove`）だけ。
+- 読んだもの: `requirements.md`・本ファイル 1〜9 節・`brief.md`（α 8 以下を描かない前提は 2026-10-22 の裁定で古い）・ステアリング（product・tech・structure の要る所）・スキル `kiro-spec-design` の決まり（設計の原則・軽い調べ・統合・見直しの門）・完了 `emily-ghost-verification` の `verification.md`・`doc/testing.md`・`doc/impl-watch.md`・`doc/ukadoc-coverage/README.md`・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ssp-mcp/bridge-diff-areka.md`。
+- コードで確かめたこと:
+  - `alpha_mask.rs` の `mod alpha_mask` は `bitmap_source/mod.rs` で私有。`hit_test/mod.rs` から読ませるには `pub(crate) use` が要る。テストは `#[path = "..._tests.rs"]` で兄弟のファイルに置く形がもう在る（`alpha_mask_regenerate_tests.rs`・`hit_test_shared_mask_tests.rs`）。
+  - `hit_test/mod.rs` の 2 か所は `composite_alpha < ALPHA_THRESHOLD` の比べ方。値を `HIT_ALPHA_MIN as f32 / 255.0` から作れば、比べ方は変えずに 1 つの値へ集まる。
+  - `sample-ghost-kit` の `tests/` は結合テストで、窓口の公開の読み口と通常の依存 `areka-nar`（`NarArchive::open`・`install`・`SingleRoot`）が使える。窓口自身の展開も同じ呼び方（`devroot.rs` 395 行目）。
+  - areka の起動オプションに `--ghost`（`crates/areka/src/cli/parse.rs` 56 行目）。
+  - areka の MCP の中継は 20 候補を探し、`areka-mcp-server` と名乗る相手にだけ送る（`doc/ssp-mcp/bridge-diff-areka.md`）。SSP が 9801 に居ても、このセッションの areka の道具は areka に届く。ほかの areka が立っていると先の 1 つに決まるので、排他テストの机で防ぐ。
+  - SendInput の型の定義は `tools/perf/invoke-followup-checks.ps1` に実機で通った物がある（余分な欄で 87 になる注意つき）。
+  - 網羅台帳には当たりの α を述べる行が無い。近い行はシェルの `seriko.use_self_alpha`（`assets.toml` 5928 行目）とバルーンの `use_self_alpha`（2356 行目）。
+- ukadoc: `OnMouseMove` の Reference0・1 は「マウスカーソルの x／y 座標（ローカル座標）」、Reference3 は本体 0・相方 1、Reference4 は当たり判定の識別子（https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseMove ）。当たりのしきい値は書いていない。
+
+### 10.1 8.1 節で設計へ回された決めごとの答え
+
+| 決めごと | 決め | 理由 |
+|---|---|---|
+| 2 SSP で当たりを見るやり方 | 点ごとに `move` を SendInput で送り、`ssp_shiori_log.txt` に増えた分の `OnMouseMove` を見る。座標の対応は α 255 の点で較正。測る窓と違う Reference3 のイベントは「奥へ抜けた」と数える。点は 5×5 が同じ α の所。2 回測る | SSP の当たりを外から見られる印はゴーストへのイベントだけ。ローカル座標で絵の画素へ戻せる。ぱすたは奥に相方の窓を重ねるので、抜けた先の窓のイベントを当たりと取り違えないため |
+| 2' 線の決め方 | 当たった α の最小と当たらなかった α の最大が隣り合えば 1 つの値。そうでなければ「定まらない」で開発者へ | 要件 7.2 の「1 つの値に定まる」を機械的に読める形にした |
+| 4 しきい値の持ち方 | 変えるときだけ `alpha_mask.rs` の `pub(crate) const HIT_ALPHA_MIN: u8` 1 つに集め、`hit_test/mod.rs` は `HIT_ALPHA_MIN as f32 / 255.0` から作る。変えないならコードは 0 行 | 要件 7.4 は変えるときの決まり。値を書く場所を 1 つにすれば 3 か所がずれる道が無くなる。変えないときに触ると v0.2.0 の 3 本との重なりを無駄に作る |
+| 6 自動テストの深さと較正 | 名前は descript.txt の行を文字列で見る。較正は「ゴーストのフォルダの外（`ghost/master/` の下）に置いた書庫」1 つ | 名前で見つけるのは `ghost-inner-balloon` の持ち分で、本テストは書庫の形を見る。本物の読み手を通すと葉のクレートに本体の依存が入る。「外に置いた」は「抜いた」より厳しく、置き場を見ない緩い判定も赤にできる |
+| 7 根の形と代わりのバルーン | 配布物と同じ形の根（emo2・emo2-kakukaku・StayseeBalloon）にぱすたを足し、`--ghost` の絶対パスで起こす。根にバルーンを足さず、代わりに使われたバルーンを記録する。縦書きの崩れを早く見るための「補いの走り」（`pasta_tategaki` を `balloon\` へ写した別の根で段 1〜2）を 1 回だけ許し、結果は数と分ける | 利用者が見るのと同じ代わりのバルーンで判定する。インストールは 7 段に無い。補いの走りは要件 4.9 の「持ち主の居ない崩れを早く見つける」のため。本走行の判定には混ぜない |
+| 8 手順の置き場 | `doc/pasta-real-run.md`。`.kiro/steering/roadmap.md` の「版の段」の表の直後に 1 行の道しるべ | 完了で動かない。版の門の正本は roadmap の版の段で、表の行を書き換えずに済む 1 行にした |
+| 9 どこまで道具にするか | 文書の手順（えみりの型）＋ `tools/mouse-input.ps1` 1 本（move・click・rightclick・doubleclick・drag・shot）。`real-run-kit` の試験にはしない。α の数えは記録の中の使い捨ての命令 | 7 段の多くは画面の操作と目視が要る。ツールのシェルは呼び出しごとに状態を持たないので、DPI の扱いと自己確かめを毎回同じにする小さい台本だけを置く |
+| 10 台帳の数え方と α の決まりの書き場所 | 展開した木から `rg` の使い捨ての命令で拾い、命令と一覧を記録に残す。α を変えたときだけ、シェルの `seriko.use_self_alpha` の行の `note` と `doc/COMPAT_ARCHITECTURE.md` §8 に書く | 台帳の形式は凍結で新しい行は作れない。当たりの α に最も近い行はシェルの α の扱いの行。ukadoc が黙る所の areka の決めは §8 が正本（沈黙ルール） |
+
+### 10.2 統合の段（一般化・作るか使うか・削る）
+
+- 一般化: 測りと走行の「画面を操作して撮る」は、どちらも同じ道具 1 本で足りる。段の表の型（基準・結果・根拠・3 値・判定した人・引き取る spec）は、最初の走行と最後の確かめで同じ物を使う。
+- 作るか使うか: 書庫の取り寄せ・照合・展開・パスの出力・i686 の揃え・机・記録の型は全部既存の物を使う。新しく作るのは、要件 2 のテスト（要件そのもの）と、SendInput の小さい台本（既存の型の定義を写す）だけ。α の数えは WIC（OS の機能）を使い、クレートや外の道具を足さない。
+- 削った物: `real-run-kit` の試験にする案（目視が残り、タスクが増える）・しきい値を変えないときの 1 か所への集約（重なりを無駄に作る）・較正の固定入力を 2 つにする案（厳しい方 1 つで足りる）・α の数えの道具化（1 度しか使わない）。
+
+### 10.3 危うい所
+
+- alpha8 の書庫の影に、α の値が隣り合う形で揃っていないと、線が「定まらない」になる。そのときは測りの結果を添えて開発者へ（要件 7.2 の道）。
+- SSP がシェルを画面の拡大率で大きくしていると、境がにじむ。5×5 が同じ α の点と、α 255 の点での較正で抑える。
+- 縦書きのバルーンが見つからない間は、段 1・2 の多くが「違う」になる。補いの走りで、持ち主の居ない縦書きの崩れだけを先に拾う。
+- WIC が動く WebP を読めない机では、その絵を「数えられなかった」と書いて開発者へ知らせる。
