@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 // scope 写像（scope_namespace）→ 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）
 // → 適用（apply_bind_exclusive／apply_bind／mustselect 脱衣は無視・bindopt 2.1/3.1/3.2）→ 単一発行点
 // （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide=warn／
-// ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug／⑤scope 写像なし=warn）を
+// ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug／⑤scope 写像なし（数でない scope）=warn）を
 // 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で決定論的に檻化する。
 // 全 severity 枝は正カウント assert（優しい縮退の非空虚化・deterministic-test-coverage mandate）。
 // ─────────────────────────────────────────────────────────────────────
@@ -789,7 +789,8 @@ fn bind_malformed_errors_no_emit() {
     }
 }
 
-/// ケース20（D7・D8⑤）: scope 写像なし（"2"）の Apply は warn! を 1 回残し発行しない。
+/// ケース20（D7・D8⑤）: scope 写像なし（数でない "x"）の Apply は warn! を 1 回残し発行しない。
+/// scope "2" 以降は char{N} の名前表を引く（要件 14.2・`scope_namespace` の試験）ので写像なしにならない。
 #[test]
 fn bind_scope_unmapped_warns_no_emit() {
     let resolver = tiny_resolver();
@@ -806,7 +807,7 @@ fn bind_scope_unmapped_warns_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("2", &["腕", "伸び", "1"])),
+            SerikoMsg::Cue(bind_carrier_cue("x", &["腕", "伸び", "1"])),
         )
     });
 
@@ -814,7 +815,7 @@ fn bind_scope_unmapped_warns_no_emit() {
     assert_eq!(
         flow.0.matches("level=WARN").count(),
         1,
-        "scope 写像なし（\"2\"）は warn! を 1 回残す（M-dual 拡張シーム・D7・D8⑤）: {}",
+        "scope 写像なし（\"x\"）は warn! を 1 回残す（D7・D8⑤）: {}",
         flow.0
     );
     assert!(

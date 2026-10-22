@@ -42,7 +42,7 @@
   - _Boundary: ShellBindSetup（areka emo2_boot）_
   - _Requirements: 14.3_
 
-- [ ] 2.3 スコープ 2 以上の名前の表と、シェルの読みからの既定と名前の表の作り方
+- [x] 2.3 スコープ 2 以上の名前の表と、シェルの読みからの既定と名前の表の作り方
   - 着せ替えの名前の空間に「3 人目以降（番号つき）」を足し、スコープ "0"→本体・"1"→相方・2 以上の数→3 人目以降・ほかは無しにする
   - 名前の表をシェルの着せ替えの読み（1.2）から 3 種類のスコープ分作る口と、カテゴリのパーツ名を descript.txt に書かれた順（同じ名前は 1 度・無いカテゴリは空）で返す口を足す。今のテスト用の作り方は残す
   - 既定の組をシェルの着せ替えの読みから作る口（スコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*`・書かれていないスコープは空）を足す
@@ -264,3 +264,4 @@
 
 - 1.2: `char*` の欄は `BindGroupDefaults` の pub の BTreeMap 4 本（`char_default_on`・`char_names`・`char_mustselect`・`char_multiple`）。スコープごとの名前を引く `names()` は private なので、2.3 は `char_names` を直に読み、名前・既定・option のどれかを持つスコープを拾うには 4 本の鍵を合わせて見る。`Char(0)`／`Char(1)` は空を返す
 - 2.1/2.2: `DefaultBinds`（`areka-seriko/src/bind.rs`）は `uniform`・`single`・`Default`・`for_scope`。試験 3 か所（assets_tests:150・switch_tests:795・frame_attach_carry_tests:123）は `.ids()` を `for_scope("0")` で読む＝2.3／5.1 で既定がスコープごとになったら見直す。`cargo test -p areka` の real-run 統合試験（mcp_get_log_real_run・smoke_boot_loop_exit）は i686 の helper を先に建てないと赤（`tools/test-all.ps1` は先に建てる）。単体は `cargo test -p areka --bins`
+- 2.3: 画面は 5.1 までスコープ 2 の `\![bind]` を error（名前を解決できない）で読み飛ばす＝5.1 で `assets.rs` を `BindResolver::from_groups` へ替えて閉じる。`BindGroupName` は areka-parsers の外から名指せないので `from_groups` は pub の欄を `decls!` マクロで開く

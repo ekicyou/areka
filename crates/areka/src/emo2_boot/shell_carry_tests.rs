@@ -6,7 +6,8 @@
 //! ⑶ 読み直しでなければ控えない（印が無い World は `None`）
 //! ⑷ 着せ替えの決め方（読み直しの前の既定との差だけを持ち越す）: 着ていたものは着る／名前の無くなった
 //!    ものは落とす／違いが無ければ何も送らない／脱いでいた既定は脱ぐ（同じカテゴリを着る排他の置き換え
-//!    があれば送らない）／scope 2 以降は落とす／descript の既定の書き換え（1→0・0→1）は持ち越さない
+//!    があれば送らない）／scope 2 以降は自分（`char{N}`）の名前表で引く／descript の既定の書き換え
+//!    （1→0・0→1）は持ち越さない
 //! ⑸ 送り方: 置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図が着せ替えから先に届き、
 //!    seriko の最初の `Show` がもう着せ替えた集合を載せる
 
@@ -172,12 +173,41 @@ fn decide_binds_sheds_a_removed_default_unless_an_exclusive_wear_covers_it() {
     );
 }
 
-/// ⑷ seriko が着せ替えを扱えないスコープ（2 以降）は、違いを全部落とす。
+/// `char2.*` だけに服 B（101）の名前を持つシェルの着せ替えの名前表（作業フォルダ＝`target\\` の下に
+/// ゴーストを組み、シェルの読みから作る）。服 A（100）の名前は持たない。
+fn char2_names() -> BindResolver {
+    let work = sample_ghost_kit::WorkDir::new().expect("作業フォルダを取れる");
+    let master = work.path().join("ghost").join("master");
+    std::fs::create_dir_all(&master).expect("ghost/master を作る");
+    std::fs::write(master.join("descript.txt"), "charset,UTF-8\r\nname,t\r\n")
+        .expect("ゴーストの descript.txt を書く");
+    let shell = work.path().join("shell").join("master");
+    std::fs::create_dir_all(&shell).expect("shell/master を作る");
+    std::fs::write(
+        shell.join("descript.txt"),
+        "charset,UTF-8\r\nchar2.bindgroup101.name,服,B\r\n",
+    )
+    .expect("シェルの descript.txt を書く");
+    let model = areka_parsers::package::resolve_with_shell(
+        work.path(),
+        areka_parsers::charset::DefaultEncoding::Utf8,
+        None,
+    )
+    .expect("検体のシェルは解決できる");
+    BindResolver::from_groups(&model.bindgroups)
+}
+
+/// ⑷ スコープ 2 は自分（`char2`）の名前表で引く: 名前の在る着た服 B は着る、`char2` に名前の無い
+/// 脱いだ服 A は落とす（本体側の名前表は引かない・要件 14.2）。
 #[test]
-fn decide_binds_drops_everything_for_a_scope_without_a_namespace() {
-    let decided = decide_binds(2, &set(&[101]), &set(&[100]), &set(&[100]), &names(&[]));
-    assert!(decided.replays.is_empty());
-    assert_eq!(decided.dropped, vec![101, 100]);
+fn decide_binds_looks_up_a_char_scope_in_its_own_names() {
+    let decided = decide_binds(2, &set(&[101]), &set(&[100]), &set(&[100]), &char2_names());
+    assert_eq!(decided.replays, vec![wear("服", "B", true)]);
+    assert_eq!(decided.dropped, vec![100]);
+    // 本体側の名前表だけでは、スコープ 2 の名前は引けない（名前空間が分かれている）。
+    let sakura_only = decide_binds(2, &set(&[101]), &set(&[100]), &set(&[100]), &names(&[]));
+    assert!(sakura_only.replays.is_empty());
+    assert_eq!(sakura_only.dropped, vec![101, 100]);
 }
 
 /// ⑷ 台本で触っていない既定を descript で書き換えた（帽子 C の既定 1→0・服 B の既定 0→1）なら、

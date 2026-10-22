@@ -562,14 +562,14 @@ fn handle_message<O: SurfaceOutput>(
                         }
                     };
 
-                    // (step 4) scope→名前空間（D7）。"0"→sakura・"1"→kero・"2"+/非数値→写像なし。
+                    // (step 4) scope→名前空間（D7）。"0"→sakura・"1"→kero・2 以上の数→char{N}・非数値→写像なし。
                     let ns = match scope_namespace(&cue.actor) {
                         Some(ns) => ns,
                         None => {
-                            // 写像なし（char2+ は M1 未取込・M-dual 拡張シーム・D7・D8⑤）。
+                            // 写像なし（数でない scope・D7・D8⑤）。
                             tracing::warn!(
                                 scope = %cue.actor,
-                                "seriko: bind の scope 写像なし（scope 2 以降・非数値）で読み飛ばす（M-dual 拡張シーム・D7・D8⑤）"
+                                "seriko: bind の scope 写像なし（数でない scope）で読み飛ばす（D7・D8⑤）"
                             );
                             return ControlFlow::Continue(());
                         }
