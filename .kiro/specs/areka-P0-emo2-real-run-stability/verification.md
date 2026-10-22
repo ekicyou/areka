@@ -63,7 +63,27 @@
 
 ## 4. 200% と 100% 相当の確かめ
 
-後のタスクで埋める。
+新しい形の試験を、200% のまま 3 回、100% 相当（互換モード）で 3 回回した記録。
+
+- コミット: `4efab284`（コードは変えずに回した）
+- 作り方: debug（`AREKA_EMO2_REAL_RUN=1 cargo test -p areka --test emo2_real_run -- --nocapture`）
+- 画面の拡大率: 200%（OS の表示の設定は替えていない）
+- 100% 相当の作り方: `AREKA_EMO2_COMPAT_LAYER=DPIUNAWARE` を置き、`common::spawn_emo2` が子の `__COMPAT_LAYER` にだけ渡した。初めの値で 3 回とも時間の 1 行が `primary_dpi=96` になったので、予備の値（`GDIDPISCALING DPIUNAWARE`）は回していない
+- 回した日: 2026-10-23（排他テストの机を借りて回した）
+- 32bit の仲介: `target\debug\shiori-host32-helper.exe`
+
+| 画面 | 回 | 結果 | `wrap_ms` | `primary_dpi` | 時間の 1 行 |
+|---|---|---|---|---|---|
+| 200% | 1 | 緑（`test result: ok`・終了コード 0・22.03 秒） | 2294 | 192 | `emo2_real_run: wire_ms=764 attach_ms=959 wrap_ms=2294 close_ms=19521 talk_to_wrap_ms=72 attach_to_talk_ms=1277 primary_dpi=192` |
+| 200% | 2 | 緑（`test result: ok`・終了コード 0・25.47 秒） | 2309 | 192 | `emo2_real_run: wire_ms=921 attach_ms=1116 wrap_ms=2309 close_ms=22915 talk_to_wrap_ms=62 attach_to_talk_ms=1145 primary_dpi=192` |
+| 200% | 3 | 緑（`test result: ok`・終了コード 0・22.05 秒） | 2355 | 192 | `emo2_real_run: wire_ms=870 attach_ms=1146 wrap_ms=2355 close_ms=19478 talk_to_wrap_ms=78 attach_to_talk_ms=1190 primary_dpi=192` |
+| 100% 相当（`DPIUNAWARE`） | 1 | 緑（`test result: ok`・終了コード 0・24.35 秒） | 2375 | 96 | `emo2_real_run: wire_ms=924 attach_ms=1175 wrap_ms=2375 close_ms=21755 talk_to_wrap_ms=80 attach_to_talk_ms=1129 primary_dpi=96` |
+| 100% 相当（`DPIUNAWARE`） | 2 | 緑（`test result: ok`・終了コード 0・25.80 秒） | 2588 | 96 | `emo2_real_run: wire_ms=1068 attach_ms=1396 wrap_ms=2588 close_ms=22910 talk_to_wrap_ms=44 attach_to_talk_ms=1128 primary_dpi=96` |
+| 100% 相当（`DPIUNAWARE`） | 3 | 緑（`test result: ok`・終了コード 0・24.91 秒） | 2936 | 96 | `emo2_real_run: wire_ms=1411 attach_ms=1661 wrap_ms=2936 close_ms=21700 talk_to_wrap_ms=148 attach_to_talk_ms=1128 primary_dpi=96` |
+
+赤の回: 0 回（6 回とも緑）。
+
+まとめ: 200% と 100% 相当のどちらでも 3 回続けて緑だった。`wrap_ms` の最大は 200% で 2355 ms、100% 相当で 2936 ms。`close_ms` の最大は 22915 ms（200% の 2 回目）。
 
 ## 5. 仲介で拾える手がかり
 
