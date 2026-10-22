@@ -422,7 +422,7 @@ fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings();
 
 - 起動（5.1・5.4）: `Start-Process -FilePath <ワークツリー>\target\debug\areka.exe -WorkingDirectory <ワークツリー>\target\dot-sakura-verify -RedirectStandardOutput ...\logs\run1.stdout.log -RedirectStandardError ...\logs\run1.stderr.log -PassThru` で起こし、番号を控え、同じ呼び出しの中で `WaitForExit` して終了コードを `logs\run1.exitcode.txt` に書く（えみりの 1 回目で終了コードを取り損ねた反省）。この呼び出しは道具の上限（10 分）を超えて待つことがあるので、裏で回す。命令は `emily-ghost-verification` の `verification.md` と同じく、絶対パスだけで組んだ形を記録に写す。
 - 観察: 起動してから、MCP の `get_active_ghost_list`（`dot_sakura` が返ることを「この走行の areka につながった」確かめとして記録に書く）・`get_status`・`get_property`（ゴースト・シェル・バルーンの名前）・`dump_surface`（1 人目・2 人目）・`dump_balloon` を取る。
-- 終わり（5.4）: MCP の `raise_event` で `OnClose` を送る。台詞の後に終わったことを記録の行（`talk_done_quit`・`app_exit`）で見る。終わらないときは上の流れの「実機の 1 回」の注のとおり。最後に控えた番号のプロセスが無いことを `Get-Process -Id` で確かめる。
+- 終わり（5.4）: MCP の `raise_event` で `OnClose` を送る。`raise_event` は外から頼まれたイベントの道（`schedule/sstp.rs` の `on_notify`）を通り、メニューの終了の道（`close.rs`）には入らないので、終わるのは台本が `\-` を持つときだけである。返った台本に `\-` が在るかを記録に書く。在れば台詞の後に終わったことを記録の行（`talk_done_quit`・`app_exit`）で見る。無ければ MCP の `sakurascript` で `\-` を送って終わらせる（台本の正規の終了の道）。どちらの場合も記録に「メニューの終了の道は確かめていない」と書き、`OnClose` の台本に `\-` が無いことは崩れに数えない（ゴーストの側の作り）。それでも終わらないときは上の流れの「実機の 1 回」の注のとおり。最後に控えた番号のプロセスが無いことを `Get-Process -Id` で確かめる。
 - 机（5.5）: 起動の前に `areka-impl-watch request --desk test --wait`、終わったらすぐ `return`。
 - しないこと: ネットワーク更新（メニューも `\![updatebymyself]` も送らない・5.11）、メニューからのインストール、SendInput や画面のクリック、撮った物を文書と PR に貼ること（5.9）。撮った物は `target\dot-sakura-verify\shots\` に置くだけで、記録には文で書く。
 
@@ -450,7 +450,7 @@ fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings();
 | 1 人目と 2 人目の窓にシェル `master` の面 | MCP の `get_property`（シェルの名前）・`dump_surface`（1 人目・2 人目）を文で説明。面の番号と見え方 |
 | α の無い絵の抜き色の透過 | `dump_surface` の四隅が透けているかの文での説明（絵は貼らない） |
 | 同梱バルーン `bottle` が採られて出たか | 記録の行（バルーンの経路）と MCP の `dump_balloon`・`get_property`（バルーンの名前） |
-| 終了まで通ったか | 記録の行（`OnClose` の台詞・`talk_done_quit`・`app_exit`）と終了コード |
+| 終了まで通ったか | 記録の行（`OnClose` の台詞・`talk_done_quit`・`app_exit`）と終了コード。`OnClose` の台本に `\-` が在ったか、`sakurascript` の `\-` で終わらせたかを書き、メニューの終了の道は「確かめていない」と書く |
 | ネットワーク更新 | 「確かめていない」。`updateurl` は開発者の古いサイトを指し、外へ出る操作は本 spec の目的の外（5.11） |
 
 6. **SHIORI が読めない・2.x だけのとき**（5.8）: その旨と根拠を書き、残りの項目を「確かめていない」とする。本 spec の中で直さない。
