@@ -432,7 +432,7 @@ fn on_stage<O: SurfaceOutput>(
 ///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
 ///   `cue_target_of == None` 枝の内側（Wait 判定より前・D1）に `\![bind]` 名前自己選別分岐を持ち、
 ///   `name == "bind"` のキャリアのみ `bind_resolver` で名前解決し [`ScopeStates::apply_bind`] を通す。
-fn handle_message<O: SurfaceOutput>(
+pub(crate) fn handle_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     bind_resolver: &BindResolver,
     states: &mut ScopeStates,
