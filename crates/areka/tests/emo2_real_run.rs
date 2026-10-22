@@ -48,6 +48,11 @@
 use real_run_kit::{Launch, RealRun};
 use std::time::Duration;
 
+// 片方の試験でだけ使う関数の警告を抑える。
+#[allow(dead_code)]
+#[path = "emo2_real_run/common.rs"]
+mod common;
+
 /// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・R9.2・DoD 非前提）。
 const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 
