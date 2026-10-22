@@ -21,6 +21,7 @@
 //! - `shiori.file` / `names.*` は `Option` で欠落を保持し、既定値は推測しない
 //!   （`shell.dir` の `master` フォールバックのみ ukadoc 既定で例外）。
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// 解決済みゴーストマウントモデル（下流 I/O 契約の正本）。
@@ -79,6 +80,14 @@ pub struct BindGroupDefaults {
     /// `kero.bindoption*.group` のオプション欄に `multiple` が現れたカテゴリ名
     /// （相方側・本体側と区別・bindopt 1.1）。
     pub kero_multiple: Vec<String>,
+    /// `char{N}.bindgroup*.default,1` の bindgroup 番号（N は 2 以上・N ごと・保持は転記順）。
+    pub char_default_on: BTreeMap<u32, Vec<u32>>,
+    /// `char{N}.bindgroup*.name,…` の名前宣言転記（N は 2 以上・N ごと）。
+    pub char_names: BTreeMap<u32, Vec<BindGroupName>>,
+    /// `char{N}.bindoption*.group` に `mustselect` が現れたカテゴリ名（N ごと）。
+    pub char_mustselect: BTreeMap<u32, Vec<String>>,
+    /// `char{N}.bindoption*.group` に `multiple` が現れたカテゴリ名（N ごと）。
+    pub char_multiple: BTreeMap<u32, Vec<String>>,
 }
 
 /// bindgroup 名前宣言 1 件の忠実転記（不透明文字列・ID 非生成・Req 1.5）。
@@ -98,6 +107,8 @@ pub struct BindGroupName {
     pub part: String,
     /// 第 3 フィールド以降の残余（サムネイル名・M1 不使用・保持のみ）。
     pub thumbnail: Option<String>,
+    /// この名前を決めた shell descript.txt の行の番号（1 始まり・同じキーは後の行）。
+    pub line: usize,
 }
 
 /// 名前空間選択（sakura=本体／kero=相方・Req 1.2）。
@@ -107,15 +118,43 @@ pub enum BindScope {
     Sakura,
     /// 相方側（`kero.bindgroup*`）。
     Kero,
+    /// 3 人目以降（`char{N}.bindgroup*`・N は 2 以上。0・1 を渡しても空）。
+    Char(u32),
+}
+
+/// スコープの欄を引く（`char*` は N ごとの表・無ければ空）。
+fn pick<'a, T>(
+    scope: BindScope,
+    sakura: &'a [T],
+    kero: &'a [T],
+    chars: &'a BTreeMap<u32, Vec<T>>,
+) -> &'a [T] {
+    match scope {
+        BindScope::Sakura => sakura,
+        BindScope::Kero => kero,
+        BindScope::Char(n) => chars.get(&n).map_or(&[], Vec::as_slice),
+    }
 }
 
 impl BindGroupDefaults {
+    /// そのスコープの `default,1` の bindgroup 番号（保持は転記順・無ければ空）。
+    pub fn default_on(&self, scope: BindScope) -> &[u32] {
+        pick(
+            scope,
+            &self.sakura_default_on,
+            &self.kero_default_on,
+            &self.char_default_on,
+        )
+    }
+
     /// スコープに対応する名前宣言スライスを返す（内部ヘルパ）。
     fn names(&self, scope: BindScope) -> &[BindGroupName] {
-        match scope {
-            BindScope::Sakura => &self.sakura_names,
-            BindScope::Kero => &self.kero_names,
-        }
+        pick(
+            scope,
+            &self.sakura_names,
+            &self.kero_names,
+            &self.char_names,
+        )
     }
 
     /// (カテゴリ名, パーツ名) → 着せ替え ID。未宣言は None（捏造しない・Req 1.3/1.4）。
@@ -147,10 +186,12 @@ impl BindGroupDefaults {
 
     /// スコープに対応する mustselect カテゴリ名スライスを返す（内部ヘルパ）。
     fn mustselect(&self, scope: BindScope) -> &[String] {
-        match scope {
-            BindScope::Sakura => &self.sakura_mustselect,
-            BindScope::Kero => &self.kero_mustselect,
-        }
+        pick(
+            scope,
+            &self.sakura_mustselect,
+            &self.kero_mustselect,
+            &self.char_mustselect,
+        )
     }
 
     /// 当該スコープで `category` が `mustselect` と**宣言されているか**（転写所属照会・bindopt D5）。
@@ -165,10 +206,12 @@ impl BindGroupDefaults {
 
     /// スコープに対応する multiple カテゴリ名スライスを返す（内部ヘルパ）。
     fn multiple(&self, scope: BindScope) -> &[String] {
-        match scope {
-            BindScope::Sakura => &self.sakura_multiple,
-            BindScope::Kero => &self.kero_multiple,
-        }
+        pick(
+            scope,
+            &self.sakura_multiple,
+            &self.kero_multiple,
+            &self.char_multiple,
+        )
     }
 
     /// 当該スコープで `category` が `multiple` と**宣言されているか**（転写所属照会・bindopt 1.1）。
@@ -261,6 +304,7 @@ mod bindgroup_name_tests {
             category: category.to_string(),
             part: part.to_string(),
             thumbnail: None,
+            line: 0,
         }
     }
 

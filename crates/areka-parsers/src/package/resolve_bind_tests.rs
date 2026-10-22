@@ -559,3 +559,124 @@ mod bindoption_options_tests {
         assert!(defaults.kero_mustselect.is_empty());
     }
 }
+
+#[cfg(test)]
+mod char_scope_and_line_tests {
+    //! `char{N}.*`（N は 2 以上）の読みと、名前を決めた行の番号（offline-surface-dump 1.2）。
+
+    use std::fs;
+
+    use temp_path_kit::TempPath;
+
+    use crate::charset::DefaultEncoding;
+    use crate::package::model::BindScope;
+
+    use super::read_bindgroup_defaults;
+    use crate::package::resolve_bind::parse_kv_with_line;
+
+    fn shell_with_descript(tag: &str, descript_body: &str) -> TempPath {
+        let dir = TempPath::new(&format!("parsers-bind-char-{}", tag.replace('_', "-")));
+        fs::write(dir.path().join("descript.txt"), descript_body.as_bytes())
+            .expect("write descript.txt");
+        dir
+    }
+
+    /// 値とキーの前後の空白を取り、1 始まりの行の番号を添える。
+    #[test]
+    fn line_read_trims_key_and_value() {
+        let map = parse_kv_with_line("charset,UTF-8\n  a  ,  x y  \n");
+        assert_eq!(map.get("a"), Some(&("x y".to_string(), 2)));
+    }
+
+    /// 同じキーが 2 行あれば後の行の値と行の番号になる。カンマの無い行・キーが空の行も数える。
+    #[test]
+    fn line_read_same_key_takes_later_line() {
+        let map = parse_kv_with_line("a,1\nno comma\n,empty key\na,3\n");
+        assert_eq!(map.get("a"), Some(&("3".to_string(), 4)));
+        assert_eq!(map.len(), 1);
+    }
+
+    /// CRLF でも行の番号がずれず、値に CR が残らない。
+    #[test]
+    fn line_read_crlf_keeps_line_numbers() {
+        let map = parse_kv_with_line("a,1\r\n\r\nb,2\r\n");
+        assert_eq!(map.get("a"), Some(&("1".to_string(), 1)));
+        assert_eq!(map.get("b"), Some(&("2".to_string(), 3)));
+    }
+
+    /// 名前には決めた行の番号（同じキーは後の行・CRLF でもずれない）が付く。
+    #[test]
+    fn names_carry_deciding_line() {
+        let temp = shell_with_descript(
+            "name_line",
+            "charset,UTF-8\r\n\
+             sakura.bindgroup10.name,腕,伸び\r\n\
+             kero.bindgroup20.name,尾,長い\r\n\
+             sakura.bindgroup10.name,腕,曲げ\r\n",
+        );
+        let defaults = read_bindgroup_defaults(temp.path(), DefaultEncoding::Utf8);
+        assert_eq!(defaults.sakura_names.len(), 1);
+        assert_eq!(defaults.sakura_names[0].part, "曲げ");
+        assert_eq!(defaults.sakura_names[0].line, 4);
+        assert_eq!(defaults.kero_names[0].line, 3);
+    }
+
+    /// `char2.*` の既定・名前・bindoption が引け、sakura・kero と混ざらない。
+    #[test]
+    fn char2_defaults_names_and_options_resolve() {
+        let temp = shell_with_descript(
+            "char2",
+            "charset,UTF-8\n\
+             sakura.bindgroup1.default,1\n\
+             kero.bindgroup2.default,1\n\
+             char2.bindgroup30.default,1\n\
+             char2.bindgroup31.default,0\n\
+             char2.bindgroup30.name,帽子,赤,thumb\n\
+             char2.bindgroup31.name,帽子,青\n\
+             char2.bindoption0.group,帽子,mustselect+multiple\n",
+        );
+        let d = read_bindgroup_defaults(temp.path(), DefaultEncoding::Utf8);
+        let c2 = BindScope::Char(2);
+
+        assert_eq!(d.default_on(BindScope::Sakura), &[1]);
+        assert_eq!(d.default_on(BindScope::Kero), &[2]);
+        assert_eq!(d.default_on(c2), &[30]);
+        assert_eq!(d.resolve_name(c2, "帽子", "赤"), Some(30));
+        assert_eq!(d.resolve_name(c2, "帽子", "青"), Some(31));
+        assert_eq!(d.category_ids(c2, "帽子"), vec![30, 31]);
+        assert!(d.is_mustselect(c2, "帽子"));
+        assert!(d.is_multiple(c2, "帽子"));
+        let lines: Vec<usize> = d.char_names[&2].iter().map(|n| n.line).collect();
+        assert_eq!(lines, vec![6, 7]);
+        // ほかのスコープへ漏れない。
+        assert_eq!(d.resolve_name(BindScope::Sakura, "帽子", "赤"), None);
+        assert!(!d.is_mustselect(BindScope::Kero, "帽子"));
+    }
+
+    /// `char3` の定義が無ければ、そのスコープの照会はすべて空。`char0`・`char1` は読まない。
+    #[test]
+    fn char3_without_definitions_is_empty() {
+        let temp = shell_with_descript(
+            "char3",
+            "charset,UTF-8\n\
+             char2.bindgroup30.default,1\n\
+             char2.bindgroup30.name,帽子,赤\n\
+             char1.bindgroup40.default,1\n\
+             char0.bindgroup41.name,帽子,赤\n",
+        );
+        let d = read_bindgroup_defaults(temp.path(), DefaultEncoding::Utf8);
+        let c3 = BindScope::Char(3);
+
+        assert!(d.default_on(c3).is_empty());
+        assert_eq!(d.resolve_name(c3, "帽子", "赤"), None);
+        assert!(d.category_ids(c3, "帽子").is_empty());
+        assert!(!d.is_mustselect(c3, "帽子"));
+        assert!(!d.is_multiple(c3, "帽子"));
+        assert!(d.sakura_default_on.is_empty() && d.kero_default_on.is_empty());
+        assert!(d.sakura_names.is_empty() && d.kero_names.is_empty());
+        assert_eq!(
+            d.char_default_on.keys().copied().collect::<Vec<_>>(),
+            vec![2]
+        );
+    }
+}

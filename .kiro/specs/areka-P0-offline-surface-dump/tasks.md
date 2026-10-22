@@ -8,7 +8,7 @@
   - _Boundary: ShellBindSetup（areka-parsers）_
   - _Requirements: 14.1_
 
-- [ ] 1.2 `char*` の既定と名前、名前を決めた行の番号を読む
+- [x] 1.2 `char*` の既定と名前、名前を決めた行の番号を読む
   - 行の番号つきの読みを着せ替えの読みの中だけに足す（切り方は今の key-value の読みと同じ・同じキーは後の行の値と行の番号・今の読みは変えない）
   - `char{N}.bindgroup{M}.default`・`.name`・`char{N}.bindoption{M}.group`（N は 2 以上）を読み、スコープ 0・1・2 以上の 3 種類で今の照会（名前・カテゴリ・mustselect・multiple）と新しい「そのスコープの既定 ON の番号」が引けるようにする。名前ごとに決めた行の番号を持たせる
   - 試験: 値の前後の空白を取ること・同じキー 2 行で後の行の値と行の番号になること・CRLF で行の番号がずれないこと・`char2.*` の既定と名前が引けること・`char3` の定義が無ければ空
@@ -259,3 +259,7 @@
   - 回す前後で、ゴーストのフォルダの木・書ける根の木・記憶の置き場の木（名前・大きさ・更新時刻）を比べて同じであること、出力先に書かれたのが PNG と CSV だけであることを確かめる
   - 上の試験が緑
   - _Requirements: 1.2, 1.3, 1.4, 9.1, 9.2, 9.3, 9.4, 12.5, 12.6_
+
+## Implementation Notes
+
+- 1.2: `char*` の欄は `BindGroupDefaults` の pub の BTreeMap 4 本（`char_default_on`・`char_names`・`char_mustselect`・`char_multiple`）。スコープごとの名前を引く `names()` は private なので、2.3 は `char_names` を直に読み、名前・既定・option のどれかを持つスコープを拾うには 4 本の鍵を合わせて見る。`Char(0)`／`Char(1)` は空を返す

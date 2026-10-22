@@ -2,25 +2,28 @@
 //!
 //! `resolve.rs` から移した（振る舞いは変えない）。`read_bindgroup_defaults` は
 //! シェル名つきの解決 `resolve_shell::resolve_with_shell` から呼ばれる。
-//! charset 判定・KV 分割は foundation へ委譲し再実装しない（Req 1.5）。
+//! charset 判定は foundation へ委譲する（Req 1.5）。KV 分割は行の番号を添えるため
+//! `parse_kv` と同じ切り方の `parse_kv_with_line` をここだけで持つ。
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::charset::{DefaultEncoding, decode};
-use crate::kv::parse_kv;
 
-use super::model::{BindGroupDefaults, BindGroupName};
+use super::model::{BindGroupDefaults, BindGroupName, BindScope};
 
-/// bindgroup 番号を含むキーが `default,1` のときに番号を取り出す接頭辞集合。
-const SAKURA_BINDGROUP_PREFIX: &str = "sakura.bindgroup";
-const KERO_BINDGROUP_PREFIX: &str = "kero.bindgroup";
+/// スコープを決めるキーの頭（`char` は後ろに 2 以上の数と `.` が続く）。
+const SAKURA_SCOPE_PREFIX: &str = "sakura.";
+const KERO_SCOPE_PREFIX: &str = "kero.";
+const CHAR_SCOPE_PREFIX: &str = "char";
+/// スコープの頭を除いた bindgroup キーの接頭辞（`bindgroupNNNN.default` の先頭）。
+const BINDGROUP_PREFIX: &str = "bindgroup";
 /// bindgroup 番号キーの接尾辞（`sakura.bindgroupNNNN.default` の末尾）。
 const BINDGROUP_DEFAULT_SUFFIX: &str = ".default";
 /// bindgroup 名前宣言キーの接尾辞（`sakura.bindgroupNNNN.name` の末尾・task 1.2）。
 const BINDGROUP_NAME_SUFFIX: &str = ".name";
-/// bindoption 宣言キーの接頭辞（`sakura.bindoptionN.group` の先頭・task 10.1）。
-const SAKURA_BINDOPTION_PREFIX: &str = "sakura.bindoption";
-const KERO_BINDOPTION_PREFIX: &str = "kero.bindoption";
+/// スコープの頭を除いた bindoption 宣言キーの接頭辞（`bindoptionN.group` の先頭・task 10.1）。
+const BINDOPTION_PREFIX: &str = "bindoption";
 /// bindoption 宣言キーの接尾辞（`sakura.bindoptionN.group` の末尾・task 10.1）。
 const BINDOPTION_GROUP_SUFFIX: &str = ".group";
 /// ちょうど 1 個（解除不可）を宣言するオプション語（オプション欄の 1 語・bindopt 1.2）。
@@ -38,13 +41,14 @@ const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 ///
 /// 同一走査で 2 種のサフィックスを転記する（task 1.2）:
 /// - `<prefix>NNNN.default`: **値が `1`**（= 起動時オン）のものについて `NNNN` を u32
-///   として本体／相方スコープ別に収集する（従来挙動・無改変・R1.6）。
+///   としてスコープ別に収集する（従来挙動・無改変・R1.6）。
 /// - `<prefix>NNNN.name`: 値 `カテゴリ名,パーツ名,サムネイル名` を `splitn(3, ',')` で
-///   再分割・各フィールド trim し、`BindGroupName` として本体／相方スコープ別に転記する。
+///   再分割・各フィールド trim し、`BindGroupName`（決めた行の番号つき）としてスコープ別に転記する。
 ///   パーツ名（第 2 フィールド）欠落/空の行は `warn!` の上転記対象外（正典上不完全・R1.5）。
 ///
 /// **転記のみ・展開しない**（範囲展開・surface 解決はしない・parsers 転写層原則）。
-/// 走査は `parse_kv` の `BTreeMap` 反復順（キー昇順）で決定的。名前は転記順（キー昇順）に
+/// スコープは `sakura.`（0）・`kero.`（1）・`char{N}.`（N は 2 以上）の 3 種類。
+/// 走査は `parse_kv_with_line` の `BTreeMap` 反復順（キー昇順）で決定的。名前は転記順（キー昇順）に
 /// push され、重複 (カテゴリ, パーツ) はアクセサ側の後勝ち（`resolve_name` の逆順走査・D2）
 /// と整合する。shell descript が不在・読取不能なら空を返す（致命でない）。
 pub(super) fn read_bindgroup_defaults(
@@ -58,42 +62,44 @@ pub(super) fn read_bindgroup_defaults(
     };
 
     let text = decode(&bytes, default_encoding);
-    let map = parse_kv(&text);
+    let map = parse_kv_with_line(&text);
 
     let mut defaults = BindGroupDefaults::default();
-    for (key, value) in &map {
+    for (key, (value, line)) in &map {
+        let Some((scope, rest)) = split_scope(key) else {
+            continue;
+        };
         // --- .default 経路（従来挙動・値 "1" のみ・無改変・R1.6）---
-        if value == "1" {
-            if let Some(id) =
-                // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.default_2c_6570_5024:1
-                parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
-            {
-                defaults.sakura_default_on.push(id);
-                continue;
-            } else if let Some(id) =
-                parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
-            {
-                defaults.kero_default_on.push(id);
-                continue;
-            }
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.default_2c_6570_5024:1
+        if value == "1"
+            && let Some(id) = parse_bindgroup_id(rest, BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
+        {
+            scope_vec(
+                scope,
+                &mut defaults.sakura_default_on,
+                &mut defaults.kero_default_on,
+                &mut defaults.char_default_on,
+            )
+            .push(id);
+            continue;
         }
         // --- .name 経路（task 1.2・値はカテゴリ,パーツ[,サムネ] 文字列）---
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
-        if let Some(id) = parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX)
-            && let Some(name) = parse_bindgroup_name(id, value)
-        {
-            defaults.sakura_names.push(name);
-            continue;
-        } else if let Some(id) =
-            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
-            parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX)
-            && let Some(name) = parse_bindgroup_name(id, value)
-        {
-            defaults.kero_names.push(name);
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
+        if let Some(id) = parse_bindgroup_id(rest, BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX) {
+            if let Some(name) = parse_bindgroup_name(id, value, *line) {
+                scope_vec(
+                    scope,
+                    &mut defaults.sakura_names,
+                    &mut defaults.kero_names,
+                    &mut defaults.char_names,
+                )
+                .push(name);
+            }
             continue;
         }
         // --- bindoption.group 経路（値はカテゴリ,オプション[+オプション...] 文字列）---
-        // `sakura/kero.bindoptionN.group,カテゴリ名,オプション` のオプション欄を `+` で分解し、
+        // `<scope>.bindoptionN.group,カテゴリ名,オプション` のオプション欄を `+` で分解し、
         // 認識できた語（`mustselect`／`multiple`）の**所属**をスコープ別に忠実転記する。
         // 併記（`mustselect+multiple`）は両方の集合へ push し、併記の情報を落とさない
         // （優先則は下流 seriko の解釈・bindopt D4）。どちらの集合にも入らないカテゴリが
@@ -102,28 +108,83 @@ pub(super) fn read_bindgroup_defaults(
         // インデックス `N`（`parse_bindgroup_id` が検証する）は M1 不使用＝キー形の妥当性
         // 検査にのみ用いる（転記のみ・展開しない）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1
-        if parse_bindgroup_id(key, SAKURA_BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
-            && let Some(decl) = parse_bindoption_options(value)
-        {
-            if decl.mustselect {
-                defaults.sakura_mustselect.push(decl.category.clone());
-            }
-            if decl.multiple {
-                defaults.sakura_multiple.push(decl.category);
-            }
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1
-        } else if parse_bindgroup_id(key, KERO_BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
+        if parse_bindgroup_id(rest, BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
             && let Some(decl) = parse_bindoption_options(value)
         {
             if decl.mustselect {
-                defaults.kero_mustselect.push(decl.category.clone());
+                scope_vec(
+                    scope,
+                    &mut defaults.sakura_mustselect,
+                    &mut defaults.kero_mustselect,
+                    &mut defaults.char_mustselect,
+                )
+                .push(decl.category.clone());
             }
             if decl.multiple {
-                defaults.kero_multiple.push(decl.category);
+                scope_vec(
+                    scope,
+                    &mut defaults.sakura_multiple,
+                    &mut defaults.kero_multiple,
+                    &mut defaults.char_multiple,
+                )
+                .push(decl.category);
             }
         }
     }
     defaults
+}
+
+/// キーの頭（`sakura.`・`kero.`・`char{N}.`＝N は 2 以上の数字だけ）からスコープを決め、残りを返す。
+/// どれでもないキー（`char0.`・`char1.` を含む）は `None`（読まない）。
+fn split_scope(key: &str) -> Option<(BindScope, &str)> {
+    if let Some(rest) = key.strip_prefix(SAKURA_SCOPE_PREFIX) {
+        return Some((BindScope::Sakura, rest));
+    }
+    if let Some(rest) = key.strip_prefix(KERO_SCOPE_PREFIX) {
+        return Some((BindScope::Kero, rest));
+    }
+    let (number, rest) = key.strip_prefix(CHAR_SCOPE_PREFIX)?.split_once('.')?;
+    if number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let n = number.parse::<u32>().ok().filter(|n| *n >= 2)?;
+    Some((BindScope::Char(n), rest))
+}
+
+/// スコープの欄（`char*` は N ごとの表に作る）を書き込み用に引く。
+fn scope_vec<'a, T>(
+    scope: BindScope,
+    sakura: &'a mut Vec<T>,
+    kero: &'a mut Vec<T>,
+    chars: &'a mut BTreeMap<u32, Vec<T>>,
+) -> &'a mut Vec<T> {
+    match scope {
+        BindScope::Sakura => sakura,
+        BindScope::Kero => kero,
+        BindScope::Char(n) => chars.entry(n).or_default(),
+    }
+}
+
+/// 行の番号つきの key-value の読み（着せ替えの読みの中だけで使う）。
+///
+/// 切り方は `parse_kv` と同じ（`lines()`・最初の `,` で分ける・キーと値の前後の空白を
+/// 取る・キーが空の行とカンマの無い行を飛ばす）で、値に 1 始まりの行の番号を添える。
+/// 同じキーは後勝ちで、行の番号も後の行になる。`parse_kv` はほかの読み手すべてに効く
+/// ので変えない。
+pub(super) fn parse_kv_with_line(text: &str) -> BTreeMap<String, (String, usize)> {
+    let mut map = BTreeMap::new();
+    for (index, line) in text.lines().enumerate() {
+        let Some((raw_key, raw_value)) = line.split_once(',') else {
+            continue;
+        };
+        let key = raw_key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        map.insert(key.to_owned(), (raw_value.trim().to_owned(), index + 1));
+    }
+    map
 }
 
 /// `bindoption*.group` の値 1 行を分解した宣言（カテゴリ名と、認識できたオプション語の所属）。
@@ -194,7 +255,7 @@ fn parse_bindgroup_id(key: &str, prefix: &str, suffix: &str) -> Option<u32> {
 /// サムネイル名として不透明保持）。第 2 フィールド（パーツ名）が欠落／trim 後に空なら
 /// **転記対象外**（`warn!` を残し `None` を返す・捏造しない・R1.5）。第 3 フィールドが
 /// 欠落／空なら `thumbnail == None`。展開・alias 解決はしない（転写層原則）。
-fn parse_bindgroup_name(id: u32, value: &str) -> Option<BindGroupName> {
+fn parse_bindgroup_name(id: u32, value: &str, line: usize) -> Option<BindGroupName> {
     let mut fields = value.splitn(3, ',');
     let category = fields.next().unwrap_or("").trim();
     let part = fields.next().map(str::trim).unwrap_or("");
@@ -221,5 +282,6 @@ fn parse_bindgroup_name(id: u32, value: &str) -> Option<BindGroupName> {
         category: category.to_owned(),
         part: part.to_owned(),
         thumbnail,
+        line,
     })
 }
