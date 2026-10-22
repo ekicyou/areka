@@ -85,7 +85,7 @@
 2. When areka の中で起きたイベントを SHIORI へ送る, the areka shall `SecurityLevel: local`・`SecurityOrigin: null`・`Sender: areka`・`SenderType: internal` を付ける。
 3. When MCP の `raise_event` のイベントを SHIORI へ送る, the areka shall `SecurityLevel: local`・`SecurityOrigin: null`・`Sender: MCP`・`SenderType: external,sstp` を付ける。
 4. When MCP の `sakurascript` の台本を OnTranslate へ送る, the areka shall `SecurityLevel: local`・`SecurityOrigin: null`・`Sender: MCP`・`SenderType: internal`・`Reference1: sstp-send,owned` を付ける。
-5. When SHIORI の応答の台本を OnTranslate へ送る, the areka shall 翻訳の元のイベントの `SenderType` と `SecurityLevel` を引き継ぎ、`Sender: areka`・`SecurityOrigin: null` を付け、`Reference1` を出どころから導く（ゴースト自身の台本では今と同じく空）。
+5. When SHIORI の応答の台本を OnTranslate へ送る, the areka shall 翻訳の元のイベントの要求の `SenderType` と `SecurityLevel` を引き継ぎ（元の応答の `SecurityLevel` で下がる前の値。台本の実効のセキュリティレベルは要件 3 で決まる）、`Sender: areka`・`SecurityOrigin: null` を付け、`Reference1` を出どころから導く（ゴースト自身の台本では今と同じく空）。
 6. When MCP の `raise_event` の応答の台本を OnTranslate へ送る, the areka shall `SenderType: external,sstp`・`SecurityLevel: local` を付け、`Reference1` を空のままにする（SSP の実測と同じ）。
 7. Where 出どころが `SenderType` の語を 2 つ以上持つ, the areka shall それらを ukadoc の見本（`internal,raise`）の形で、`internal`／`external` を先頭にしてカンマでつなぐ。
 8. The areka shall 32bit の SHIORI の仲介を通る経路と、同じプロセスで SHIORI を呼ぶ経路で、同じ要求に同じヘッダを同じ順で付ける。
