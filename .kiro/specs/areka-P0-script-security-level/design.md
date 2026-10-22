@@ -71,7 +71,7 @@
 - kanade は送るイベントの出所カテゴリを `EventId`（`Static`＝運行表・`Choice`＝選択肢とアンカー・`Sstp`＝MCP の `raise_event`）で既に区別している（DD-1）。翻訳の出どころは `ScriptSource`（`Event`／`SstpSend`）で区別し、`OnTranslate` の Reference1 は既に要件 2.4〜2.6 のとおりに出ている。
 - SHIORI の応答で始まるトークは、運行表の `step` の出口（`schedule/translate.rs` の `before`／`after`）で 1 か所に捕まえられる。腕ごとの再生の開始（`boot.rs`・`change.rs`・`close.rs`・`steady.rs`）に触らずに済む。
 - 配送（`crates/areka-ghost/src/dispatcher.rs` の `on_start`）はトークごとに受け口を複製し、`BootCueSink::begin_talk` を 1 回呼ぶ。番号の要る受け口は `Clone` を持たず `BootCueSink` を自分で実装する（先例 `BalloonLifecycleSink`）。
-- `ShioriBackend` には既定の実装を持つメソッドの先例が 2 つある（`on_idle`・`unblock_handle`）。実装は 21 か所（本物 2・中身なしの `EmptyShiori`・残りはテストの偽物）。
+- `ShioriBackend` には既定の実装を持つメソッドの先例が 2 つある（`on_idle`・`unblock_handle`）。実装は 22 か所（本物 2・中身なしの `EmptyShiori`・中身へ渡す包み 4＝`crates/areka-ghost/tests/ghost/recorder.rs` の `Recorder<B>` と `inproc_e2e_test.rs`・`snapshot_capture_test.rs`・`real_pasta_online.rs` の `BoxedBackend`・残りはテストの偽物）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -179,6 +179,7 @@ crates/
 - `crates/areka-kanade/src/lib.rs` — `mod request_origin`。
 - `crates/areka-ghost/src/sink.rs` — `BootCueSink::begin_talk` に出どころを足す。`dispatcher.rs` — `StartTalk` の出どころを渡す。
 - `crates/areka-ghost/src/shiori_inproc.rs` — `InProcBackend` が新しい 2 メソッドを上書き。`build_input` が入れ物を受ける。`map_get_outcome` が応答の生の値も返す。
+- `crates/areka-ghost/tests/ghost/recorder.rs`（`Recorder<B>`）・`crates/areka-ghost/tests/ghost/{inproc_e2e_test,snapshot_capture_test}.rs`・`crates/areka-ghost/tests/real_pasta_online.rs`（`BoxedBackend`）— 新しい 2 メソッドを中身へ渡す。
 - `crates/areka/src/emo2_boot/user_break_cue.rs` — `Clone` をやめて `BootCueSink` を自分で実装し、出どころを控えて止める。`talk_lifecycle.rs` — `begin_talk` の形の追随。`mod.rs` — 新しいモジュールの宣言。
 - 機械的な追随（テストの字面）: `ShioriOutcome::Value(` の 133 か所・`StartTalk {` の約 85 か所・`TranslateDone(` の約 30 か所・`ShioriRequest {` の約 20 か所・`ParsedResponse {` の 11 か所・`begin_talk(` の 6 か所・`ShownTalk {` の 7 か所・`EventId::Static("OnTranslate")` を確かめるテスト 4 か所・`user_break_cue_tests.rs` の `.clone()` 5 か所。`schedule/steady.rs`（957 行）は `ShioriOutcome::Value` の 4 か所の型の追随だけで、行は増やさない。
 - `doc/ukadoc-coverage/ledger/shiori.toml`・`doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
@@ -435,7 +436,7 @@ pub trait ShioriBackend {
     }
 }
 ```
-- 上書きするのは本物の 2 つ（`ShioriConnection`・`InProcBackend`）だけ。テストの偽物と `EmptyShiori`（常に 204）は既定のまま＝振る舞いは今と同じ。
+- 上書きするのは本物の 2 つ（`ShioriConnection`・`InProcBackend`）と、中身へ渡す包み 4 つ（`Recorder<B>`・テストの `BoxedBackend` 3 つ）。包みは新しい 2 メソッドも中身へそのまま渡す。既定のままだと、本物の pasta を通すテスト（`real_pasta_online.rs`・`inproc_e2e_test.rs`）でヘッダと応答のレベルが黙って落ちるため。テストの偽物と `EmptyShiori`（常に 204）は既定のまま＝振る舞いは今と同じ。
 - `handle_call` は今後この 2 メソッドだけを呼ぶ。
 
 #### RequestOrigin（`crates/areka-kanade/src/request_origin.rs`）
@@ -681,10 +682,11 @@ pub(crate) fn permits(row: &RestrictionRow, origin: &ScriptOrigin) -> bool;
 - `shiori_inproc_headers_tests.rs`: 同じヘッダで `build_input` の出力と `request_of(.., UTF-8)` を `build_request` したバイト列が一致（2.8）。`map_get_outcome` が応答の生の値を返す（3.1）。
 - `user_break_cue_origin_tests.rs`: `begin_talk` で `External` を渡した複製は `Enter` を送らず `script_tag_refused` の warn が 1 件・`TalkStarted`／`Leave`／`TalkEnded` は今どおり。`GHOST`・`MCP_SEND`・`MCP_NOTIFY` では今どおり `Enter`（4.2〜4.5）。記録の捕捉は `log-capture-kit` を通す。
 - `script_restriction_tests.rs` の照合: `Command` の行は `ConsumerLedger::canonical().consumer_of(name, Some(selector)).is_some()` と `enforced` が一致。`Umsg` の行は `areka-parsers` の台本の読みで `\m[umsg,0,0]` が `Instruction::Raw` になること（未実装）と `enforced == false` が一致。食い違えば赤（4.6・4.7）。
+- 同じファイルの振る舞いの照合（4.7 を旗だけで済ませない）: `enforced` が真の行ごとに、台帳が返す担当の組から受け口を作り、`begin_talk` で外部扱いの出どころを渡してその行のタグを流し、そのタグの合図が出ないことを確かめる。担当の組 → 受け口の `match` には既定の腕を置かない（後の spec が行を実装済みにしたら、受け口の照合を足すまでコンパイルが通らない）。`consumer_ledger.rs` は読むだけ（先例 `consumer_ledger_agreement_tests.rs`）。
 
 ### E2E（x64 の偽の SHIORI）
 
-- `script_security_e2e_tests.rs`: `runtime_boot_tests.rs` と同じ組み方（`ShioriWiring::Custom` に偽の backend・受け口は `NoUserBreakCueSink`）で起動し、`OnBoot` の台本 `\![enter,nouserbreakmode]…` を ⑴ 応答の `SecurityLevel: external` つきで返すと線に `Enter` が出ない ⑵ `local`（または無し）では今どおり `Enter` が出る。kanade → talk → 配送 → 受け口の運ぶ道が既定の値に落ちていないことを 1 本で確かめる（1.4・3.1・4.2・4.3）。
+- `script_security_e2e_tests.rs`: `runtime_boot_tests.rs` と同じ組み方（`ShioriWiring::Custom` に偽の backend・受け口は `NoUserBreakCueSink`）で起動し、`OnBoot` の台本 `\![enter,nouserbreakmode]…` を ⑴ 応答の `SecurityLevel: external` つきで返すと線に `Enter` が出ない ⑵ `local`（または無し）では今どおり `Enter` が出る。kanade → talk → 配送 → 受け口の運ぶ道が既定の値に落ちていないことを 1 本で確かめる（1.4・3.1・4.2・4.3）。`external` の応答は、このテストのファイルの中で `ScriptedShioriBackend` を包み、`get_with_headers` だけを上書きして `OnBoot` の応答に `security_level: Some("external")` を添えて作る（`spine.rs` は触らない）。
 - 既存の全体テスト（記録の種別の表示・`Status`・翻訳・MCP の 2 つの道）が緑のままであること（2.9・3.5・5.1）。
 
 ## Security Considerations
