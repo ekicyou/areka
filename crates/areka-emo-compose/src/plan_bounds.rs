@@ -38,8 +38,8 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds {
     for id in world.surface_ids() {
         walk(&mut acc, &mut visited, world, atlas, id, 0, 0);
         // 合成の絵の大きさ（`compute_extent`）は描画メソッドを問わず bind の pattern0・`always` の
-        // pattern を数えるので、右下はそれも収める（Invariants）。bind・`always` の循環があると
-        // `compute_extent` が warn を 1 行出す（task 3.2 で debug へ下げるまで）。
+        // pattern を数えるので、右下はそれも収める（Invariants）。bind・`always` の循環の知らせは
+        // `compute_extent` の debug だけ。
         let extent = compute_extent(&mut visited, world, atlas, id);
         acc[2] = acc[2].max(extent.w as i64);
         acc[3] = acc[3].max(extent.h as i64);
@@ -63,7 +63,7 @@ fn walk(
     ox: i64,
     oy: i64,
 ) {
-    // 循環は黙って打ち切る（warn は読み込みと合成の経路が出す）。
+    // 循環は黙って打ち切る（warn は読み込みが出す）。
     if visited.contains(&surface_id) {
         return;
     }

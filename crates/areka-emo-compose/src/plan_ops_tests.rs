@@ -1022,7 +1022,7 @@ fn bind_anim_method(id: u32, ref_surface_id: i64, method: &str) -> Animation {
 /// （koma）method=Replace（非 Overlay）。コマは非駆動で不描画・pattern0(part1) も置換で不描画ゆえ、
 /// 残るは base のみ。warn は method=Replace を載せる。
 #[test]
-fn non_overlay_koma_warns_and_is_not_drawn_replacing_pattern0() {
+fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["base.png", "part1.png", "koma.png"]);
     let map = id_to_path(&atlas, &["base.png", "part1.png", "koma.png"]);
@@ -1063,8 +1063,8 @@ fn non_overlay_koma_warns_and_is_not_drawn_replacing_pattern0() {
     );
     // warn! が method 名込みで発火する（要件 8.4・完全形保持のまま非駆動）。
     assert!(
-        logs.contains("level=WARN"),
-        "非 Overlay コマは WARN: {logs}"
+        logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
+        "非 Overlay コマは DEBUG（組むたびの知らせ）: {logs}"
     );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(
@@ -1083,7 +1083,7 @@ fn non_overlay_koma_warns_and_is_not_drawn_replacing_pattern0() {
 /// host=1000 は静的 base ＋ bind id=1 の pattern0 method="replace"→part1。空 PatternState。
 /// pattern0 は非 Overlay ゆえ不描画（warn method=Replace）で、残るは base のみ。
 #[test]
-fn non_overlay_pattern0_warns_and_is_not_drawn() {
+fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["base.png", "part1.png"]);
     let map = id_to_path(&atlas, &["base.png", "part1.png"]);
@@ -1119,8 +1119,8 @@ fn non_overlay_pattern0_warns_and_is_not_drawn() {
         "非 Overlay pattern0 は不描画（残るは base）"
     );
     assert!(
-        logs.contains("level=WARN"),
-        "非 Overlay pattern0 は WARN: {logs}"
+        logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
+        "非 Overlay pattern0 は DEBUG（組むたびの知らせ）: {logs}"
     );
     assert!(
         logs.contains("method=Replace"),

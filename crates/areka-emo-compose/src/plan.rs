@@ -254,7 +254,7 @@ pub(crate) fn push_static_element_ops(
 /// # 循環検出（要件 7.1/7.2/7.3・design 決定2）
 ///
 /// 入れ子参照の再帰は visited 祖先スタック（`Vec<u32>`）で保護する。既に**現在の祖先経路**に
-/// 存在する surface を再訪すると（自己参照・相互参照の循環）、`warn!` の上その枝のみを打ち切って
+/// 存在する surface を再訪すると（自己参照・相互参照の循環）、`debug!` の上その枝のみを打ち切って
 /// 部分結果を残す（パニックしない・スタック深度に依存しない構造的停止保証）。visited は枝離脱時
 /// に pop する祖先スタック規律ゆえ、非循環の重複参照（DAG の共有子）は各経路で正しく展開される。
 ///
@@ -313,7 +313,7 @@ pub(crate) fn derive_ops(
 /// 記録）。将来 BindSet のスコープ設計を入れ子ごとに分ける必要が生じた場合はシーム再検討。
 ///
 /// visited は祖先スタック: 入口で `surface_id` を push、出口で pop。既訪問（＝現在の祖先経路に
-/// 存在）なら循環ゆえ `warn!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
+/// 存在）なら循環ゆえ `debug!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
 ///
 /// # 合成合流と method ゲート（task 7.2・要件 4.2/4.6/5.3/8.4）
 ///
@@ -325,7 +325,7 @@ pub(crate) fn derive_ops(
 /// animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。各 id で現在コマが
 /// あれば**コマが pattern0 静的寄与を置換**する（4.2「各コマは直前コマをリセットしてベースへ」）。
 /// コマ・pattern0 いずれも method ゲート（[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
-/// 非 Overlay は `warn!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。一番上と部品の段は
+/// 非 Overlay は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。一番上と部品の段は
 /// 読む欄だけが違い、規則は同じ 1 本の経路を通る（surface-element-nesting 要件 5.1・5.10・5.12）。
 ///
 /// # bind 非所属コマの合流拒否（bindopt D9-3・最後の砦・bindopt 7.1/7.4）
@@ -355,9 +355,10 @@ fn flatten_surface(
     offset_y: i64,
     is_top_level: bool,
 ) {
-    // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（warn・非パニック）。
+    // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（非パニック）。定義だけで決まる
+    // 誤りなので、組むたびの知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
     if visited.contains(&surface_id) {
-        tracing::warn!(
+        tracing::debug!(
             target: "areka_emo_compose",
             surface_id,
             "入れ子参照の循環を検出・枝を打ち切り"
@@ -428,9 +429,10 @@ fn flatten_surface(
         match world.animation_sort() {
             SortOrder::Descend => merged_ids.sort_unstable(),
             SortOrder::Ascend => merged_ids.sort_unstable_by(|a, b| b.cmp(a)),
-            // `SortOrder` は `#[non_exhaustive]`。未知値は既定 Descend（id 昇順描画）へ倒す（非パニック）。
+            // 知らない値（`Other`・`#[non_exhaustive]` の先）は既定 Descend（id 昇順描画）へ倒す。
+            // 1 シェル 1 度の warn は読み込み側が `shape_issues` で出す。
             other => {
-                tracing::warn!(
+                tracing::debug!(
                     target: "areka_emo_compose",
                     surface_id,
                     sort = ?other,
@@ -461,8 +463,9 @@ fn flatten_surface(
                         false,
                     );
                 } else {
-                    // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画（warn・要件 8.4）。
-                    tracing::warn!(
+                    // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画（要件 8.4）。組むたびの
+                    // 知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
+                    tracing::debug!(
                         target: "areka_emo_compose",
                         surface_id,
                         animation_id = id,
@@ -527,11 +530,11 @@ fn flatten_surface(
 
             // pattern0 静的経路にも同じ method ゲート（D-5 是正）: parser の overlay フィルタ撤去
             //   （task 1.2）で非 overlay pattern0 がモデルへ流入し得るため、原文 method を解決して
-            //   Overlay のみ駆動する。非 Overlay は warn!（method 名込み）＋不描画（8.4）。emo2 は
-            //   全 overlay ゆえ golden byte 不変。
+            //   Overlay のみ駆動する。非 Overlay は debug!（method 名込み・warn は読み込みが 1 度だけ）
+            //   ＋不描画（8.4）。emo2 は全 overlay ゆえ golden byte 不変。
             let p0_method = ComposeMethod::from_name(pattern0.method.as_str());
             if !p0_method.is_implemented() {
-                tracing::warn!(
+                tracing::debug!(
                     target: "areka_emo_compose",
                     surface_id,
                     animation_id = id,

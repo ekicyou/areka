@@ -75,7 +75,7 @@
   - _Boundary: ShellCanvasBounds_
   - _Requirements: 4.3_
 
-- [ ] 3.2 定義だけで決まる形の誤りを集める関数と、組むたびの知らせを debug に下げる
+- [x] 3.2 定義だけで決まる形の誤りを集める関数と、組むたびの知らせを debug に下げる
   - 入れ子の循環・知らない `animation-sort`・描かない method の pattern を面の表から集める純粋な関数を、合成の辿り方と同じ判定から引く形で足す（判定を写さない）
   - 面を組むたびの warn 6 か所（`plan.rs` 360・433・465・534 行目、`plan_extent.rs` 78 行目、`blit.rs` 90 行目＝2026-10-22 に行を確かめた）を debug に下げる。打ち切り・飛ばしの振る舞いは変えない。`blit.rs` 106 行目（アトラス頁が無い）は warn のまま
   - 試験: 循環・知らない sort・描かない method を持つ検体で、集める関数がそれぞれ 1 件ずつ返し、同じ面を何度組んでも合成の warn が増えない（`log-capture-kit` で数える）
@@ -267,3 +267,4 @@
 - 2.3: 画面は 5.1 までスコープ 2 の `\![bind]` を error（名前を解決できない）で読み飛ばす＝5.1 で `assets.rs` を `BindResolver::from_groups` へ替えて閉じる。`BindGroupName` は areka-parsers の外から名指せないので `from_groups` は pub の欄を `decls!` マクロで開く
 - 2.4: `apply_named_bind` の結果は design の形と違い `Applied { id, outcome }`・`MustSelectKept { id }` と id を持つ（画面の記録「bind 適用」「mustselect カテゴリの脱衣指示を無視」が欄 `id` を出すため）。7.3 は id を使わなくてよい
 - 3.1: `shell_bounds` は右下に面ごとの `compute_extent` も重ねる（非 overlay のメソッドの pattern も合成の絵を広げるため）。`tracing::subscriber::with_default` は本番で使えない（`log-capture-kit` の `with_default_guard_test` が見張る）。bind／always の pattern が循環するシェルでは `compute_extent`（`plan_extent.rs:78`）が warn を出す＝3.2 で debug に下げ、循環する bind の検体で `shell_bounds` が黙ることも 3.2 で確かめる
+- 3.2: 転記層は知らない `animation-sort`／`collision-sort` を `SortOrder::Other(Box<str>)` として残す（前は記録なしで捨てていた＝設計の前提と合わず、記録の無い失敗の道を作らない決まりで根本を直した）。`ShapeIssue::UnknownAnimationSort { value }` はシェル全体で 1 件・面と animation の欄なし＝3.3 はその欄なしで出す。`move` は `nesting.rs::pattern_edge` で辺にしない（NestReport と共有）。描かない method で親へ戻る pattern は `Cycle` と `UndrawnPattern` の 2 件になる＝3.3 の突き合わせで 1 誤り 1 行に寄せる

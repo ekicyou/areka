@@ -73,9 +73,10 @@ fn flatten_extent(
     offset_x: i64,
     offset_y: i64,
 ) {
-    // 循環検出（ops 経路と同一規律・要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り。
+    // 循環検出（ops 経路と同一規律・要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（知らせは
+    // ops 経路と同じく debug）。
     if visited.contains(&surface_id) {
-        tracing::warn!(
+        tracing::debug!(
             target: "areka_emo_compose",
             surface_id,
             "外形算出: 入れ子参照の循環を検出・枝を打ち切り"
@@ -89,7 +90,7 @@ fn flatten_extent(
         for (i, element) in master.elements.iter().enumerate() {
             // element定義の子（surface-element-nesting 要件 2.5）: 位置を足して子へ再帰する。範囲を
             // 超える数・先祖は黙って飛ばし、面の表に無い子は再帰先で何も足さない。記録は命令の経路の
-            // debug! が合成 1 回につき 1 度出す（先祖へ再帰すると循環の warn! になるので入口の前で見る）。
+            // debug! が合成 1 回につき 1 度出す（先祖へ再帰すると循環の知らせが重なるので入口の前で見る）。
             if let ElementKind::Surface(child) = element.kind {
                 if !visited.contains(&child) {
                     let (ex, ey) = element.transform.offset();
@@ -156,8 +157,7 @@ fn flatten_extent(
                 if pattern.surface_id < 0
                     || (always
                         && (targets_animation_id(pattern.method.as_str())
-                            || crate::method::canonical_method_name(pattern.method.as_str())
-                                == "move"))
+                            || crate::method::is_move_name(pattern.method.as_str())))
                 {
                     continue;
                 }

@@ -163,7 +163,7 @@ fn shell_without_overflow_is_base_size() {
 /// 入れ子（element定義の子・pattern の先の面がさらに pattern を持つ）は位置を足して数え、負の番号と
 /// 描かないメソッドの pattern は数えず、循環（element定義も pattern も）は黙って打ち切る（記録を出さない）。
 /// pattern の循環は `sometimes` に置く: `walk` はどの interval も辿るが、`compute_extent` は bind・`always`
-/// だけを辿るので、bind・`always` の循環なら出る warn（task 3.2 まで）がここでは出ない。
+/// だけを辿る（bind の循環でも記録を出さないことは `bind_cycle_emits_no_warn`）。
 #[test]
 fn nesting_adds_offsets_and_skips_non_drawing() {
     let (world, atlas) = world_of(
@@ -218,4 +218,24 @@ fn always_pattern_non_overlay_still_fits() {
     );
     let b = shell_bounds(&world, &atlas);
     assert_every_surface_fits(&world, &atlas, b);
+}
+
+/// bind の pattern が循環するシェルでも、外形は記録を出さない（`compute_extent` の循環の知らせは
+/// debug・task 3.2）。
+#[test]
+fn bind_cycle_emits_no_warn() {
+    let (world, atlas) = world_of(
+        "charset,UTF-8\r\n\
+         surface0\r\n{\r\nelement0,overlay,base8.png,0,0\r\n\
+         animation0.interval,bind\r\nanimation0.pattern0,overlay,10,0,0,0\r\n}\r\n\
+         surface10\r\n{\r\nelement0,overlay,red4.png,0,0\r\n\
+         animation0.interval,bind\r\nanimation0.pattern0,overlay,0,0,0,0\r\n}\r\n",
+    );
+    let mut b = None;
+    let logs = capture_logs(|| b = Some(shell_bounds(&world, &atlas)));
+    assert!(
+        !logs.contains("level=WARN"),
+        "外形は warn を出さない: {logs}"
+    );
+    assert_every_surface_fits(&world, &atlas, b.expect("外形"));
 }
