@@ -47,7 +47,7 @@ pub(crate) mod script_alignment;
 pub mod source;
 pub mod spawn;
 /// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿と World の側の関数。
-// shortcut: 起動の据え付け（5.1）は来たが、シェルの切り替え（5.2）と取り出しの相（6）の呼び手がまだ無い。両方が来たら許可属性を外す。
+// shortcut: 起動の据え付け（5.1）とシェルの切り替え（5.2）は来たが、台本の組を作る・解く（取り出しの相）の呼び手は task 6 で来る。来たら許可属性を外す。
 #[allow(dead_code)]
 pub(crate) mod sticky_group_ledger;
 pub mod transition_diag;

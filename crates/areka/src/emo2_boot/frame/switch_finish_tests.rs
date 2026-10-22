@@ -46,6 +46,9 @@ use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::reseed::tests as reseed_tests;
 use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::source::{DescriptSource, GhostTitles};
+use crate::placement::sticky_group_ledger::{
+    StickyGroup, StickyGroupLedger, StickySource, apply_set_sticky, seed_sticky_descript,
+};
 use crate::placement::zorder_group_ledger::GroupSource;
 
 // ---------------------------------------------------------------- 土台
@@ -664,6 +667,67 @@ fn shell_finish_replaces_the_default_placement_basis() {
         rig.world.get_resource::<DefaultPlacementBasis>(),
         Some(&new),
         "材料は新しいシェルの値"
+    );
+}
+
+/// シェルの切り替えは descript の組だけを新しいシェルの `seriko.sticky-window` へ取り替え、台本の組は
+/// 保つ（areka-P0-window-link-directives 要件 6.5・9.2）。起動の descript の組 `{0,1}` は、値の無い
+/// シェルへ替えると消える。台本の組 `{0,1}` は残り、新しいシェルの重なる組 `0,1` は作られずに記録される。
+#[test]
+fn shell_finish_replaces_only_the_descript_sticky_group() {
+    let finish = |sticky: Option<&str>| SwapFinish::Shell {
+        source: reseed_tests::new_shell(
+            &sticky
+                .map(|v| vec![("seriko.sticky-window", v)])
+                .unwrap_or_default(),
+        ),
+        balloon: BalloonPlacementInputs {
+            author_dpi: 96,
+            windowpositions: BTreeMap::new(),
+        },
+        restored: Vec::new(),
+        boxes: ShellBoxAssets::default(),
+    };
+    let run = |setup: &dyn Fn(&mut World), sticky: Option<&str>| {
+        let (mut world, _windows) = reseed_tests::booted_world(96);
+        setup(&mut world);
+        let mut rig = rig_on(world, SkinKind::Shell, false, finish(sticky));
+        answer(&mut rig, 0, Ok(()));
+        answer(&mut rig, 1, Ok(()));
+        let events = frame(&mut rig);
+        let groups = rig.world.resource::<StickyGroupLedger>().groups().to_vec();
+        (groups, events)
+    };
+
+    let (groups, events) = run(&|w| seed_sticky_descript(w, Some("0,1")), None);
+    assert_eq!(
+        groups,
+        Vec::new(),
+        "descript の組は新しいシェルの値（無し）へ"
+    );
+    assert_eq!(
+        count(&events, "sticky_groups", Level::INFO),
+        1,
+        "{events:?}"
+    );
+
+    let script = |w: &mut World| {
+        seed_sticky_descript(w, None);
+        assert!(apply_set_sticky(w, &["0".to_owned(), "1".to_owned()]));
+    };
+    let (groups, events) = run(&script, Some("0,1"));
+    assert_eq!(
+        groups,
+        vec![StickyGroup {
+            members: [0, 1].into(),
+            source: StickySource::Script,
+        }],
+        "台本の組は残り、重なる descript の組は作られない"
+    );
+    assert_eq!(
+        count(&events, "sticky_group_rejected", Level::WARN),
+        1,
+        "{events:?}"
     );
 }
 

@@ -19,18 +19,17 @@ use areka_emo_compose::ScaleRatio;
 use areka_sylphya::PersistKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use tracing::{debug, warn};
-use wintf::ecs::drag::DragConfig;
+use tracing::{debug, info, warn};
 use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
 use super::follow::{
-    Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
-    resize_window_to, work_area_for_window,
+    AnchorSource, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
+    resize_window_to, sync_drag_writer, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
-use super::resolver::{RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
+use super::resolver::{Anchor, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, GhostWindows};
 use super::{ScopeWindowPositions, apply_author_balloon_offset_scale, merge_scope_windowpositions};
@@ -76,14 +75,11 @@ pub(crate) fn apply_shell_descript(
         };
 
         let c = running.char_window;
-        world.entity_mut(c).insert((
-            Anchored(p.anchor),
-            BalloonFollow::new(running.balloon_window, p.balloon_offset_base),
+        replace_anchor(world, c, scope, p.anchor);
+        world.entity_mut(c).insert(BalloonFollow::new(
+            running.balloon_window,
+            p.balloon_offset_base,
         ));
-        // ドラッグの単一ライターは揃え方から導く（spawn と同じ規則）。
-        if let Some(mut drag) = world.get_mut::<DragConfig>(c) {
-            drag.move_window = p.anchor.is_free();
-        }
         match p.balloon_keyword_base {
             Some((mode, adjust)) => {
                 world
@@ -100,6 +96,35 @@ pub(crate) fn apply_shell_descript(
             c,
             running.char_pos,
             BalloonFollowTrigger::Placement(PlacementRoute::Restore),
+        );
+    }
+    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す（設計の決め 12）。
+    sync_drag_writer(world);
+}
+
+/// 吸着の向きの出どころを新しいシェルの向きにし、台本の印の無い窓だけ `Anchored` を取り替える
+/// （areka-P0-window-link-directives 要件 6.4・9.1）。向きが変われば `alignment_changed` を記録する。
+fn replace_anchor(world: &mut World, c: Entity, scope: usize, descript: Anchor) {
+    let by_script = world.get::<AnchorSource>(c).is_some_and(|s| s.by_script);
+    world.entity_mut(c).insert(AnchorSource {
+        descript,
+        by_script,
+    });
+    if by_script {
+        return;
+    }
+    let from = world.get::<Anchored>(c).map(|a| a.0);
+    world.entity_mut(c).insert(Anchored(descript));
+    if let Some(from) = from
+        && from != descript
+    {
+        info!(
+            event = "alignment_changed",
+            scope,
+            from = ?from,
+            to = ?descript,
+            source = "shell_switch",
+            "吸着の向きを変えた"
         );
     }
 }

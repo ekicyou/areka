@@ -94,7 +94,7 @@
   - _Depends: 2.1_
   - _Requirements: 3.8, 3.9, 6.1, 6.2, 6.3_
 
-- [ ] 5.2 シェルの切り替えで、台本で変えた向きと組を保ち、descript の分だけを取り替える
+- [x] 5.2 シェルの切り替えで、台本で変えた向きと組を保ち、descript の分だけを取り替える
   - `apply_shell_descript` で、`Anchored` と `BalloonFollow` の入れ方を分け、どのスコープでも `AnchorSource.descript` を新しい値にし、台本の印の無いスコープだけ `Anchored` を取り替えて向きが変わったら `alignment_changed`（shell_switch）を記録する。`DragConfig.move_window` の直書きを書き手の 1 回の呼び出しに置き換える（`BalloonFollow`・キーワードの素材・バルーンの置き直しは今どおりどのスコープにも行う）
   - シェルの切り替えの後始末（`frame/switch.rs`）で、新しいシェルの `seriko.sticky-window` で descript の組を取り替える
   - 兄弟のテストで、台本の印のある窓の向きが残り印の無い窓が新しい向きになる・どの窓も `AnchorSource.descript` が新しい値になる・台本の組が残り descript の組だけが取り替わり、重なる descript の組は作られずに記録される・`move_window` が書き手どおり、が緑になる
