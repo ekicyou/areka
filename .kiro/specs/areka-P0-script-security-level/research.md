@@ -185,3 +185,53 @@
 ## 7. 次の段
 
 - 要件の討議（`/kiro-requirements-discussion areka-P0-script-security-level`）で上の議題 1〜8 のうち答えで作業が変わるものを扱い、その後 `/kiro-design areka-P0-script-security-level` へ進む。
+
+---
+
+## 8. 設計の段の調べと決め事（2026-10-22）
+
+### 8.1 調べ方
+
+- 種類: **軽い調べ（既存のしくみへの追加）**。新しい外部のライブラリは無いので、外の調べ（Web）は要らなかった。
+- 使った手引き: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、設計書の型（`.kiro/settings/templates/specs/design.md`）、steering の `logging.md`（記録の段の基準）。
+- コードは作業ツリーで読み直した。数え直した数（2026-10-22）: `ShioriOutcome::Value(` 133（製品 23）・`Input::ShioriReply` 151・`StartTalk {` 85・`StartTalk::new(` 26・`ActiveTalk {` 61・`impl ShioriBackend for` 21・`ShioriMsg::Request {` 31・`TranslateDone(` 30・`ShownTalk {` 7・`ShioriRequest {` 約 20・`ParsedResponse {` 11・`begin_talk(` 6・`EventId::Sstp(` の網羅の `match` 3。
+
+### 8.2 申し送り（§6）の議題への答え
+
+| # | 議題 | 決め | 理由 |
+|---|---|---|---|
+| 1 | 出どころの型の置き場と形 | `areka-talk` の新しいファイル `origin.rs`。`SenderType` は「先頭の 2 語（`SenderHead`）＋残りの 7 語（`&'static [SenderWord]`）」、Owned は `SstpKind` の 3 値、`SecurityLevel` の 2 値。`Sender` の名前は型に入れず、kanade の `RequestOrigin` が持つ | 依存 0 で全員から見える。先頭の語が必ず在ることを型で保つ（2.7）。`raise_event` の要求とその応答の `OnTranslate` は出どころが同じで `Sender` だけが違う（`MCP`／`areka`）ので、`Sender` は出どころの外に置く |
+| 2 | `SenderType`・`Sender` を決める場所 | ⒜ 送るイベントの出所カテゴリ `EventId` から導く。翻訳の要求だけは新しいカテゴリ `EventId::Translate(RequestOrigin)` が元の要求の出どころを抱える | `EventId` は既に「出所カテゴリを型で保持」する型（DD-1）。`ShioriCall`（製品 50 か所）も `ShioriMsg`（31 か所）も形を変えずに済み、`EventId::Static("OnTranslate")` を確かめるテストは 4 か所だけ |
+| 3 | 応答の `SecurityLevel` を運行表へ運ぶ道 | ⒝ `ShioriOutcome::Value(String)` を `Value(String, SecurityLevel)` にする | 応答のレベルは台詞（Value）の属性そのもの。⒜（`Input::ShioriReply` の欄・151）より出現が少なく、⒞（殻が `State` に置く）は応答ごとの値を裏口で運ぶ形になる。返信の線（`ReplySender<ShioriOutcome>`）は応答の型が運ぶしかなく、型を変えればコンパイラが全部の場所を挙げる（黙って既定に落ちない） |
+| 4 | `OnTranslate` の要求のレベル | 要件の討議で確定済み（元の**要求**の値）。設計では `RequestOrigin::for_translated` が元のイベントのカテゴリから作る | — |
+| 5 | トークに付ける場所 | 運行表の出口（`step` の `route` の後・`translate::after` の前）で、台詞の応答の一括の `StartTalk` 全部へ付ける（新しいファイル `schedule/talk_origin.rs`） | 腕（`boot.rs`・`change.rs`・`close.rs`・`steady.rs`）を触らない。`steady.rs`（957 行）に行を足さない。翻訳の出口の規則と同じ前提に立つ |
+| 6 | 止める判断の場所 | ⒜ 受け口。`BootCueSink::begin_talk` に出どころの引数を足し、`NoUserBreakCueSink` が自分で止める | 「`\!` は汎用キャリア 1 本・消費側が名前で選ぶ」に沿う。sakura が `\!` の名前を知らずに済む。`begin_talk` を上書きするのは 1 つ（`BalloonLifecycleSink`）だけで、引数を足す追随は小さい |
+| 7 | 表の置き場と照合のテスト | 表は受け口の隣（`crates/areka/src/emo2_boot/script_restriction.rs`）。照合は新しいテストファイルが `ConsumerLedger::canonical().consumer_of` を読むだけ。`\m[…]` は `\!` ではないので、`areka-parsers` の読みで `Instruction::Raw` になること（未実装）と照らす | 表を使うのは `areka` の受け口だけ（今も将来の `\![execute,…]` の受け手も同じクレート）。C10 の約束で台帳のファイルに触らない。本 spec は受け口を新しく足さないので台帳の行も足さない（roadmap の「台帳に行を足す spec は 1 本ずつ」の列に載っているが、実際には行を足さない） |
+| 8 | 外部扱いで enter を止めたときの leave | 今の UI の旗の畳み込み（`crates/areka/src/input_events/user_break.rs` の `fold_no_user_break`）が区間外の leave を「旗を変えず `debug!` 1 件」で無害に扱うことを確かめた | 設計の変更は要らない |
+| 9 | `mcp-kanade-tools` の記録用の控えとの照合 | 置き換えない。記録の種別の表示は今の `ScriptSource` から導くまま（要件 5.1）。`ActiveTalk::origin` と `StrictNote` も触らない | 要件 5.1 が表示の文字を変えないと決めている。出どころを使う下流（`script-impact-tiers`）は `StartTalk.origin` を読めばよい |
+| 10 | 規模 | 17（予備を見て 17〜19）。20 を超えないので切らない | 設計書「規模の見立て」の表 |
+
+### 8.3 調べが要る点（§6）への答え
+
+- **網羅台帳に `\![execute,…]` の 3 行が無い件**: 要件の討議で `areka-P0-ukadoc-catalog-refresh` の持ち物と決まった。判定の表の出典は ukadoc の URL で書く。
+- **`external` を返す SHIORI**: 実物は要らない。x64 の偽の backend（新しいメソッドを上書きして `security_level: Some("external")` を返す）で運行表から受け口まで通せる。32bit の仲介と同じプロセスの経路は、線の書き読みの純粋な関数（`build_request`・`parse_response`・`map_get_outcome`・共通の組み立て `request_of`）の単体テストで足りる。試験用 DLL（`shiori-host32-testdll`・`shiori4-testdll`）は直さない。手元の検体（pasta）は応答に常に `SecurityLevel: local` を付けるので、実機の振る舞いは変わらない。
+- **MCP の台本の出どころの SSP との突き合わせ**: 値は要件が SSP の実測（10-21）で決めている。テストで値を固定し、加えて送る直前の記録 `shiori_request`（`trace!`）に `sender`・`sender_type`・`security_level` を載せて、実機でも同じヘッダが出たことを記録で確かめられるようにする。
+
+### 8.4 合成（一般化・作るか採るか・削り）
+
+- **一般化**: 要求のヘッダ（2.x）と台本の実効のレベル（1.x・3.x）と止めの判定（4.x）は、どれも「出どころ」という 1 つの値の見え方の違いだった。`ScriptOrigin` 1 つから 3 つとも導く。要求の側は `Sender` の名前を足した `RequestOrigin`。
+- **一般化（入れ物）**: 追加のヘッダの入れ物 `RequestHeaders` は、本 spec の 4 つの欄だけを持つ構造体にした。後続の `mcp-shiori-query`（`X-MCP-PassThru-*`）・`property-query-channels`（`SenderType: internal,property`）は欄か語の組を足すだけで、`ShioriBackend` の新しいメソッドの形は変えずに済む。
+- **作るか採るか**: 外のもので代わりになるものは無い（伺かの正典のヘッダの語彙そのもの）。SHIORI の線のコードは既存の `shiori-host32-host` の codec に足す。
+- **削り**:
+  - `ShioriCall` に欄を足す案（製品 50 か所）と `ShioriMsg` に欄を足す案（31 か所）は採らない。`EventId` の出所カテゴリで足りる。
+  - `Input::ShioriReply` に欄を足す案は採らない（応答の型 `ShioriOutcome` で運ぶ）。
+  - `ActiveTalk` に欄を足す案（61 か所）は採らない。選択肢の `script:` の引き継ぎは「最後に再生を始めたトークの控え」`ShownTalk`（7 か所）に出どころを足して読む。
+  - 再生の層（sakura）での止めは採らない（sakura が `\!` の名前を知ることになる）。
+  - `check_script` の診断・`\![execute,…]` の台帳の行・SSTP の `SecurityOrigin` の値は範囲外（要件で確定）。
+
+### 8.5 危うさと手当て
+
+- ヘッダの並びを変えると、要求の文の字面を固定したテスト（`shiori3.rs` の中・`shiori3_charset_tests.rs`・kanade の `tests/kanade/translate_test.rs`）が一斉に赤になる。意図した変更なので書き換える。
+- 運ぶ道（kanade → talk → 配送 → 受け口）のどこかで既定の `GHOST` に落ちても黙って通る。通しのテスト（`script_security_e2e_tests.rs`）を 1 本必ず置く。
+- 機械的な追随が広い（`ShioriOutcome::Value` 133・`StartTalk` 85・`TranslateDone` 30）。どれも型の変更でコンパイラが全部を挙げるので、見落としは起きない。`schedule/steady.rs`（957 行）は型の追随だけで行を増やさない。
+- 1,000 行の上限: 新しい処理は新しいファイル（`origin.rs`・`request_headers.rs`・`request_origin.rs`・`talk_origin.rs`・`script_restriction.rs`）へ出す。`shiori3.rs`（821）・`client.rs`（775）・`actor.rs`（837）・`spine.rs`（940）は足す量が小さいか触らない（通しのテストは `spine.rs` を使わず、`runtime_boot_tests.rs` と同じ組み方で書く）。
