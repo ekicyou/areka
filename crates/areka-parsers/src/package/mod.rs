@@ -37,4 +37,4 @@ mod validation_tests;
 
 pub use model::{BindGroupDefaults, GhostNames, MountError, MountModel, ShellMount, ShioriMount};
 pub use resolve::resolve;
-pub use resolve_shell::resolve_with_shell;
+pub use resolve_shell::{read_ghost_names, resolve_with_shell};

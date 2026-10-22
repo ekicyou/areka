@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. areka-parsers: 着せ替えの読みをスコープごとにし、ゴーストの名前だけを読む口を足す
+- [x] 1. areka-parsers: 着せ替えの読みをスコープごとにし、ゴーストの名前だけを読む口を足す
 - [x] 1.1 着せ替えの読みを兄弟の新しいファイルへ移す（振る舞いは変えない）
   - 着せ替えの読み（定数・既定の読み・bindoption の分解・番号と名前の読み）を `resolve.rs` から `resolve_bind.rs` へそのまま移し、`resolve.rs` の中の試験 2 つ（名前の転記・bindoption の分解）を `resolve_bind_tests.rs` へ中身を変えずに移す
   - シェルの読み（`resolve_shell.rs`）は移した先から着せ替えの読みを引く
@@ -16,7 +16,7 @@
   - 上の分岐の試験が `resolve_bind_tests.rs` で緑になり、`sakura.*`・`kero.*` の今の試験は期待を変えずに緑のまま
   - _Requirements: 5.2, 5.9, 14.1_
 
-- [ ] 1.3 (P) ゴーストの descript.txt だけを読む口を切り出す
+- [x] 1.3 (P) ゴーストの descript.txt だけを読む口を切り出す
   - シェルの解決の中のゴーストの名前の読みを、単独で呼べる公開の関数に切り出し、シェルの解決はそれを使う（失敗の種類は今と同じ「無い」「読めない」）
   - 公開は `package/mod.rs` の今の行 `pub use resolve_shell::resolve_with_shell;` に `read_ghost_names` を足す 1 か所だけ（触るのは `resolve_shell.rs` とこの行）
   - 試験: 名前の在るゴースト・`name` の無いゴースト（空）・descript.txt が無い・フォルダが無い
