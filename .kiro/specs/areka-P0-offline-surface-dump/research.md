@@ -386,3 +386,48 @@ surface23 { base8＋runonce の 8×8 を 4,4 }
 - **頭の文字列に `\`**（`--dump-output-prefix "sub\x_"`）: 出力の下に `sub` が **無い** と、PNG は出ず、CSV にも何の行も出ない（黙って書けない・終了コードは他の行で決まる＝この回は Surface=10 の Warning で 1）。`sub` を先に作っておくと `sub\x_0.png` に書かれる。→ **議題 12**: SSP は下のフォルダへの書き出しを許し、フォルダを作らず、失敗を記録しない。areka が要件 6.6 どおり Error にすると、SSP より厳しい側に倒すことになる。
 - **`name` の無いゴースト**（`g_noname`）: CSV のゴースト名の列は空（`"22:38:30","","Warning","[DUMP] surface99 存在していません。"`）。→ **議題 13**: SSP は空。フォルダ名で埋めない。
 - **`--dump-shell` をフォルダ名で**（`second`）: そのシェルで書き出した。`random`・`lastinstalled` は測っていない（議題 9 は残る）。
+
+---
+
+## 11. 設計の段の調べと決めたこと（2026-10-22・`/kiro-spec-design -y`）
+
+- 調べの種類: 軽い調べ（既存の部品へ足す拡張）。外の調べ（ウェブ）は要らない（新しい外の依存なし・`image` はワークスペースに既在の 0.25.10）。使った手引き: `kiro-spec-design` の規則（design-principles・design-discovery-light・design-synthesis・design-review-gate）と steering の `structure.md`・`logging.md`・`tech.md`。
+- コードの調べ（読むだけ・2 つの調べ係に分けた）:
+  - areka-seriko: `handle_message`（`actor.rs:432`・crate の中・同期）・`LoopRuntime`（`pub(crate)`）・`SerikoClock`（注入の時計）・`LoopRng`（注入の乱数・`should_fire = rng(k)==0`・1000ms の境で random と BindRandom だけが使う）・periodic は乱数を使わず `lap_of` で決まる・1 回の刻みは最後の周だけを鳴らすので、本番の刻み 16ms（`areka-ghost/src/ticker.rs:262`）で進めないと periodic の絵が変わりうる・`frame_at` はコマ k を待ち 0〜k の合計の時刻に出す（SSP の測りと同じ数え方）・`states.current_pattern(scope, Slot::Shell)` が公開・`AnimationTable` は `Clone`（作り直すと表の warn が重なる）・テストの `ClockRig`（`actor_test_support.rs`）が同じ順で送っている。
+  - 着せ替え: `ScopeStates::current_binds` は動的な組が無ければ 1 つの `static_binds` へ後退（全スコープ共通）・`default_bind_ids` は `sakura.*` だけ・`scope_namespace` は 2 以上で `None`・areka-parsers の `read_bindgroup_defaults` は `kero.*` の既定も読んでいるが使われていない・`parse_kv` は値の前後の空白を取る（`default_bind_ids` の `trim` と同じ）・`parse_kv` は `BTreeMap` で書かれた順を失う（`--dump-bind` の `__ALL__` の順のために `BindGroupName::line` を足す）。
+  - シェル: `load_shell_target` は中で面の表（probe）を組んで捨て、`build_world` でもう 1 度組む（畳み込みの warn が 2 度）・probe は `build_world` と同じ入力から組む・`Composer` の絵は原点 (0,0) 固定で負の座標を切り捨て、大きさは面ごとで `never`・`runonce` を数えない（`compute_extent` は `pub(crate)`）・動く絵の子は `PatternState` の欄でコマが決まり、既定なら経過 0 のコマ（1 枚目の待ちが 0 なら 2 枚目）。
+  - 入口と記録: `--help` の直後なら記憶・MCP・窓に触れない・`log_history` の履歴は分まで・1,000 件・4,096 字・本番で受け口を差し替える `with_default` などは見張り（`with_default_guard_test.rs`）が禁じる・履歴の層は warn 以上の出来事に `always` を返しているので、3 つ目の層を足しても受け口の関心の判定は変わらない。
+
+### 決めたこと（6 節の議題のうち要件で決まらなかったもの）
+
+| 議題 | 決めたこと | 理由 |
+|---|---|---|
+| 7 記録の取り込み | `log_history::init` に 3 つ目の層（写しの窓）を足し、`capture_begin`／`capture_finish` で開け閉めする | 本番で受け口を差し替えない（見張りの外に出ない）・同じスレッドで走るので届く・本文は履歴と同じ組み方を切らずに使う |
+| 8 同じ記録の重なり | 面の表を 1 度だけ組む（`ShellTarget::take_world`）・`AnimationTable` を 1 度だけ作る・下の層が `error!` を出した失敗に上の層は info だけ重ねる | 「1 つの誤りは 1 行」（要件 7.5）を、行を消す後始末でなく組む回数で守る |
+| 10 値の解釈の置き場 | `cli` は生の文字列を持つだけ・解釈と Warning は窓の中の `offline_dump` | 要件 7.3（値の扱いは CSV に入れ、名前の読みは入れない）を順番で満たす |
+| 11 終了コードの返し方 | `main` は型を変えず `std::process::exit(offline_dump::run(..))` | 足すのは 3 行・ほかの早い戻りに響かない・`exit` は標準出力を流してから終わる |
+| 14 比べる道具の置き場 | 新クレート `crates/surface-compare/`（lib＋bin・`publish = false`） | 要件 13.5 を Rust の決定論のテストで書ける・`image` はワークスペースに既在・SSP の PNG を乗算していない RGBA で読める |
+| 15 説明書の例 | `start "" /wait areka.exe --offline-dump …` と `echo %ERRORLEVEL%` | リリースの exe は窓の exe で、コマンドプロンプトは終わりを待たない |
+| 16 シェルの組み立ての共有 | 既定の組と名前の表だけを共有（`DefaultBinds::from_groups`・`BindResolver::from_groups`）。シェルの資産の組み立て一式（`build_shell_assets`）は共有しない | 要件 14.3 は着せ替えの決め方の一致を求める・`build_shell_assets` は箱やフォントなど書き出しに要らないものを作る |
+| runonce の時点（R2） | areka-seriko に `settle_surface`（同じスレッドで `handle_message` を回す・16ms ごとの刻み・乱数は当たらない列）と `settle_time` を足す | 画面と同じ道（要件 4.5）・スレッドを起こさないので写しの窓に届く |
+| T の数え方 | その面の surface*ブレスに書かれた runonce の待ちの合計の最大。部品の runonce は T を決めない | 要件 4.1「その面の runonce」・SSP の測りは一番上の runonce だけ |
+| 下地 | areka-emo-compose に `shell_bounds`（符号つき・全 interval・負の番号と描かないメソッドは数えない）を足し、組んだ絵を `(-left,-top)` に置く | 要件 4.3・4.5（合成そのものは変えない） |
+| 要件 4.8 の読み | 「面の組み立てに失敗」＝`Composer::compose` が `Err`。画像が読めないのは読み込みの Error で、面は書き出す | 画面と同じ絵（4.5）・SSP 2.9.23 も Error を残して書き出す（§10.5） |
+| `--dump-shell` の照合 | `resolve_skin_target` の「名前 → フォルダ名」の段を `find_by_name_or_folder` に切り出し、特別な名前を解かずに呼ぶ | 要件 2.4（同じ決まり・`random`／`lastinstalled` はただの名前） |
+| ゴーストの名前 | areka-parsers に `read_ghost_names` を切り出す | `--dump-shell` が見つからなくても CSV のゴースト名が要る・`ShellDirMissing` は名前を持たない |
+| `--dump-*` の値なし | `--offline-dump` があるときは `MissingValue`（warn・`[cli]`）を出し、値なしとして扱う | 読み方の決まり（空の値は値なし）のまま・黙って捨てない |
+| `assets.rs` の shell の descript.txt | 読めないときの `BootWiringError::ShellRead` は今の起動の約束として残す（既定の組は共有の決め方から作る） | 画面の起動の失敗の扱いを、この spec の範囲で変えない |
+| 書き出しの順 | 面の番号の昇順 | 重ねの除去と同じ集まりから自然に決まる・正典は順を言わない |
+
+### 合成の見直し（design-synthesis）
+
+- 一般化: 「面 1 つを、見せ始めてから時刻 T まで画面と同じ道で進めた状態」は `settle_surface` 1 つで、runonce・always・periodic・部品・動く絵の子をまとめて扱う（それぞれの写しを持たない＝5 節の R3 を採らない）。「着せ替えの名前で 1 パーツを当てる」は `apply_named_bind` 1 つで、画面の `\![bind]` と `--dump-bind` が共有する。
+- 作るか採るか: PNG は今の手書きの関数を共有の場所へ動かすだけ（新しい依存なし）。比べる道具の PNG の読みは `image`（既在）を採る（PNG のフィルタと乗算していない色を自前で書かない）。CSV は標準の文字列で書く。
+- 削ったもの: 書き出しのための別のシェルの組み立て一式・CSV の重ねの除去の後始末・記録の受け口の差し替え・`--dump-shell` の特別な名前の扱い・CSV の件数の上限。
+
+### 危うさと手当て
+
+- スコープ 1 以上の初めの着せ替えが画面で変わる（`kero.*` を書いていないシェルの相方は何も着ない）→ 正典どおり。Revalidation Triggers に書き、14.4 のテストで画面と書き出しの両方を固める。
+- `static_binds` の型の付け替えが `emo2_boot` の 6 ファイルに及ぶ → parsers → seriko → 画面 → 書き出しの順に段を分ける。
+- 合成が負の座標を切り捨てるので、そういう面は SSP の絵と左上の切れ端が違う → `extent-element-offset` の範囲。比べる道具は差の数を出すだけで、許す大きさは使う試験が決める。
+- 写しの窓はプロセス全体 → 書き出しのあいだにスレッドを起こさない（今の部品は呼んだスレッドの上だけで走る）。
