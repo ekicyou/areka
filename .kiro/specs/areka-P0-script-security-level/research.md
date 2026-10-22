@@ -170,6 +170,9 @@
 7. **止めるタグの表の置き場と、照合のテストの形**。表は出どころの型の隣（`areka-talk`）か `areka` の受け手の隣か。4.7 の照合は `consumer_ledger.rs` を**読むだけ**の新しいテストファイルで書く（C10 の約束で台帳のファイルには触らない）。
 8. **`\![leave,nouserbreakmode]` と区間の閉じ忘れの扱いの確認**。外部扱いのトークで `enter` を止めたとき、同じトークの `leave` は今どおり UI へ流す（4.5）。UI の旗は「区間外の leave」を既に無害に扱うか、設計で確かめる（`crates/areka/src/input_events/user_break.rs` の `fold_no_user_break`）。
 
+9. **`mcp-kanade-tools` の記録用の控えとの照合**（brief 棚卸㉗）。`StartTalk` に出どころを載せるなら、`ActiveTalk::origin`・`StrictNote` の控えから記録の `label` を引く所を、本 spec の出どころから引く形へ置き換える 1 か所が増えるか。
+10. **規模の数え直しと分割の判断**。ギャップ分析の見立ては 16〜20。設計で数え直して 20 を超えたら、brief の切り方（⒜ ヘッダと応答の読み取り → ⒝ 台本の印とタグの止め）で切る。
+
 ### 調べが要る点（Research Needed）
 
 - **網羅台帳に `\![execute,filewatch]`・`schedule-add`・`schedule-delete` の行が無い**。ukadoc では `schedule-delete` に「2.8.91」の版の印があり、台帳の元になった ukadoc の写しがこれより古いとみられる。要件 5.3 は `nouserbreakmode` と `\m` の行だけを直すので本 spec の範囲で行を足す必要はないが、表（4.1）の注記の出典は ukadoc の URL で書く。台帳の写しの更新は別件として起票するかを判断する。
