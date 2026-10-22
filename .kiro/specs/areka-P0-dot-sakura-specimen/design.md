@@ -20,7 +20,7 @@
 - どっとさくらを起動・会話・メニューまで通すための areka の直し（起票した先が持つ）。
 - 華和梨・SHIORI 2.x への対応、印（矢印・オンライン・SSTP）の表示、入力の箱 `balloonc*`、縮小版シェル 2 つの見た目。
 - 書庫の畳み直し、URL の行への切り替え、配布物への同梱。
-- 実機の 1 回でのネットワーク更新、メニューからのインストール（下の「決めたこと 4」）。
+- 実機の 1 回でのネットワーク更新、メニューからのインストール（`research.md` 10 節の議題 8）。
 - 実機の試験の窓口（`real-run-kit`）での繰り返せる試験（要件 5 は 1 回の記録を求める）。
 
 ## Boundary Commitments
@@ -336,7 +336,7 @@ Sample {
 **Service Interface**
 
 ```rust
-/// `dot_sakura.nar` は `balloon.directory,bottle` だけを書き、取り出し元も宛先と同じ `bottle/`
+/// `dot_sakura.nar` は同梱の宛先だけを書き、取り出し元は宛先と同じ名前のフォルダ
 /// で書庫の最上位に在る。空の根へ入れると警告 0・飛ばした同梱 0 で、最上位の `delete.txt`・
 /// `updates.txt` は本体の直下に普通のファイルとして置かれる（spec: areka-P0-dot-sakura-specimen
 /// 要件 2.4・5.7）。
@@ -420,8 +420,8 @@ fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings();
 | `AREKA_NO_ALERT` | `1` | 失敗の告知のダイアログで走行が止まらないようにする（告知は記録に残る）。メニューからのインストールをしないので、インストールの警告を画面で見る必要が無い |
 | `AREKA_USER_ROOT` | 設定しない（起動の前に消す） | 本物の `%LOCALAPPDATA%\areka` に触らない |
 
-- 起動（5.1・5.4）: `Start-Process -FilePath <ワークツリー>\target\debug\areka.exe -WorkingDirectory <ワークツリー>\target\dot-sakura-verify -RedirectStandardOutput ...\logs\run1.stdout.log -RedirectStandardError ...\logs\run1.stderr.log -PassThru` で起こし、番号を控え、同じ呼び出しの中で `WaitForExit` して終了コードを `logs\run1.exitcode.txt` に書く（えみりの 1 回目で終了コードを取り損ねた反省）。命令は `emily-ghost-verification` の `verification.md` と同じく、絶対パスだけで組んだ形を記録に写す。
-- 観察: 起動してから、MCP の `get_active_ghost_list`・`get_status`・`get_property`（ゴースト・シェル・バルーンの名前）・`dump_surface`（1 人目・2 人目）・`dump_balloon` を取る。
+- 起動（5.1・5.4）: `Start-Process -FilePath <ワークツリー>\target\debug\areka.exe -WorkingDirectory <ワークツリー>\target\dot-sakura-verify -RedirectStandardOutput ...\logs\run1.stdout.log -RedirectStandardError ...\logs\run1.stderr.log -PassThru` で起こし、番号を控え、同じ呼び出しの中で `WaitForExit` して終了コードを `logs\run1.exitcode.txt` に書く（えみりの 1 回目で終了コードを取り損ねた反省）。この呼び出しは道具の上限（10 分）を超えて待つことがあるので、裏で回す。命令は `emily-ghost-verification` の `verification.md` と同じく、絶対パスだけで組んだ形を記録に写す。
+- 観察: 起動してから、MCP の `get_active_ghost_list`（`dot_sakura` が返ることを「この走行の areka につながった」確かめとして記録に書く）・`get_status`・`get_property`（ゴースト・シェル・バルーンの名前）・`dump_surface`（1 人目・2 人目）・`dump_balloon` を取る。
 - 終わり（5.4）: MCP の `raise_event` で `OnClose` を送る。台詞の後に終わったことを記録の行（`talk_done_quit`・`app_exit`）で見る。終わらないときは上の流れの「実機の 1 回」の注のとおり。最後に控えた番号のプロセスが無いことを `Get-Process -Id` で確かめる。
 - 机（5.5）: 起動の前に `areka-impl-watch request --desk test --wait`、終わったらすぐ `return`。
 - しないこと: ネットワーク更新（メニューも `\![updatebymyself]` も送らない・5.11）、メニューからのインストール、SendInput や画面のクリック、撮った物を文書と PR に貼ること（5.9）。撮った物は `target\dot-sakura-verify\shots\` に置くだけで、記録には文で書く。
@@ -445,7 +445,7 @@ fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings();
 |---|---|
 | インストールの結果と警告（`delete.txt`・`updates.txt` の扱い） | 窓口の根の一覧（`ghost\dot_sakura\` の直下の `delete.txt`・`updates.txt`・`readme.txt`、`balloon\bottle\`）と、起動の記録の行（ゴーストが経路 `Only` で `dot_sakura`、バルーンが同梱の `bottle`）の逐語。警告は専用のテスト `dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings` が `skipped`・`warnings` を 0 と固定していることと、そのテストを走行の前に回した結果。ダイアログは `skipped` が空のときは出ない手続きであることを書く |
 | 華和梨の SHIORI を 32 ビットの載せ台が読めたか | `shiori-host32`・`ghost-boot` の記録の行（補助プログラムの起動・`load` の成否・`helper_not_i686` が 0 件） |
-| SHIORI の版（2.x か 3.0 か） | areka は `GET ... SHIORI/3.0` だけを送る。起動のイベントへの応答が 200 で台本を返して再生されたら 3.0 で話せた、と記録の行（台詞の再生の始まり）と MCP の `raise_event` が返した台本の文で書く。応答が 400 やエラーばかりで台本が 1 つも再生されなければ 2.x だけの見込みと書き、その行を引く。`upx` で `shiori.dll` を開いて読むことはしない |
+| SHIORI の版（2.x か 3.0 か） | areka は `GET ... SHIORI/3.0` だけを送り、応答の状態の行の版の字は読まず記録にも残さない（`shiori-host32-host` の `parse_response`）。そこで 3 段で決める。⑴ 起動のイベントか MCP の `raise_event` で台本が返って再生されたら「3.0 で話せた」（記録の行と返った台本の文）。⑵ 返らなければ、`shiori_error_response` の行の状態の数字と、読めない応答（`Parse`）の行の有無を引く。全部の要求が 400 か読めない応答なら「2.x だけの見込み」。⑶ 204 だけ・混在などで決まらなければ版は「確かめていない」とし理由を書く。5.8 の枝に入るのは ⑵ で「2.x だけの見込み」となったときか、SHIORI を読めなかったときだけ。`upx` で `shiori.dll` を開いて読むことはしない |
 | 起動したか（起動のイベントの台詞） | 記録の行（起動のイベントと台詞の再生）と MCP の `get_status` |
 | 1 人目と 2 人目の窓にシェル `master` の面 | MCP の `get_property`（シェルの名前）・`dump_surface`（1 人目・2 人目）を文で説明。面の番号と見え方 |
 | α の無い絵の抜き色の透過 | `dump_surface` の四隅が透けているかの文での説明（絵は貼らない） |
