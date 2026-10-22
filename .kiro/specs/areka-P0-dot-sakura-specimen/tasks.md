@@ -4,14 +4,14 @@
 - 各タスクは自分の成果をコミットして終わる（レビューの取り出しで未コミットの作業が消えないように）。控えた値は 4.3 で `verification.md` に写す。
 - 本 spec で `crates/` の下を変えてよいのは `crates/sample-ghost-kit/src/` の `lib.rs`（`SAMPLES` の 1 行）・`lib_tests.rs`・`devroot_fetched_tests.rs` だけ（2.6 の枝のときは見張りも）。areka の本番のコードは変えない。
 
-- [ ] 1. 検体の書庫を受け取ったバイト列のまま置く
+- [x] 1. 検体の書庫を受け取ったバイト列のまま置く
 - [x] 1.1 書庫を取り寄せて、大きさと SHA-256 を brief の値と照らす
   - 開発者のサイトの書庫を、ワークツリーの `target\` の下の取り寄せ用のフォルダへ取る
   - 大きさ 1,425,534 バイトと SHA-256 `0c602c6a…b7a472` の両方を測り、測った値を控える
   - どちらかが違えば、リポジトリへ写さずに止め、測った値を開発者へ伝える
   - 終わった状態: 両方の値が brief と一致したことが控えに残っている（違えば作業が止まっている）
   - _Requirements: 1.1, 1.2_
-- [ ] 1.2 書庫をリポジトリの検体の置き場へ写し、改行の変換が効かないことと配布物に入らないことを確かめる
+- [x] 1.2 書庫をリポジトリの検体の置き場へ写し、改行の変換が効かないことと配布物に入らないことを確かめる
   - 取った書庫をバイトのまま検体の置き場へ写す。畳み直し（`fold-samples`）は通さない
   - 検体の置き場の属性で、この書庫の改行の変換が止まっている（`text` が `unset`）ことを確かめる
   - 配布物を組む道具に `dot_sakura` の綴りが 0 件であることを確かめ、控える
@@ -93,3 +93,4 @@
 ## Implementation Notes
 
 - 控え 1.1: 2026-10-22T23:08:02+09:00 に `target\dot-sakura-fetch\dot_sakura.nar` へ取り寄せ。大きさ 1,425,534 バイト・SHA-256 `0c602c6a431dcbec48c02d934d98e342337d2db9628095e0a6f90d3e83b7a472`（brief と一致）。
+- 控え 1.2: 書庫は `5dc6288e` で書庫だけをコミット。`git check-attr text` は `unset`。Git Bash の `git cat-file -p HEAD:vendors/sample_ghost/dot_sakura.nar | sha256sum` は `0c602c6a…b7a472`（1.1 と一致・1,425,534 バイト）。`grep -rn dot_sakura tools/` は 0 件（`package.ps1` が検体から取るのは `emo2` と `StayseeBalloon` だけ）。
