@@ -41,14 +41,14 @@
   - _Depends: 1.1_
   - _Requirements: 2.2, 2.3, 2.4, 5.4_
 
-- [ ] 3. 既存の期待の確認・実機確認・記録
+- [x] 3. 既存の期待の確認・実機確認・記録
 - [x] 3.1 既存のテストを期待を変えずに通し、保存の側に差分が無いことを確かめる
   - `areka-sylphya` の全テストと、`areka` のうち SHIORI の受け口・MCP の `get_property`・重なり指定の延期の檻を回す
   - 保存（`persist/`）・読み手・読む口 2 つの本体のコードに差分が無いことを `git diff` の pathspec で確かめる（pathspec が実在することを先に確かめる）
   - 完了の状態: 回したテストがすべて緑で、既存のテストの期待の行に差分が無く、保存の側の差分が 0
   - _Requirements: 2.4, 4.3, 5.5_
 
-- [ ] 3.2 配布形で MCP の `get_property` を当て、記録を残す
+- [x] 3.2 配布形で MCP の `get_property` を当て、記録を残す
   - design の「実機確認（6.1）」の手順どおり、配布形を作ってワークツリーの `target\` の下へ展開し、有界の自動終了を付けて起こす
   - `baseware.name`・`BASEWARE.NAME`・` baseware.name` を順に渡し、`areka`・`areka`・`NG:Cannot find such property name.`（`isError: true`）を確かめる
   - 版・環境変数・URL の行・3 回の要求と答えの全文・ツールに答えた記録の行・`ERROR` の行の数・終わり方を spec の `verification/signoff.md` に書く。自分で起こしたプロセス以外は止めない
