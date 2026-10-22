@@ -126,7 +126,7 @@
   - _Depends: 7.6_
   - _Requirements: 7.1, 7.2, 7.3, 8.4, 8.5_
 
-- [ ] 9. 常時のテストで素通りすることと全体の確かめ
+- [x] 9. 常時のテストで素通りすることと全体の確かめ
   - 環境変数を置かない `cargo test -p areka` で 2 本とも子を起こさずに終わり、純粋な試験が緑
   - 整形・clippy の確かめを通し、i686 の仲介の試験を今の回し方で回して緑
   - 終わった姿: 上の 3 つがすべて緑で、`real-run-kit` に差分が無い
@@ -136,3 +136,4 @@
 - `cargo clippy -p areka --tests -- -D warnings` は触っていない依存（dola・areka-kanade）の既存の lint で赤になる。変えたファイルの警告 0 を -D なしの clippy で見る
 - 1 回の走りの行の読みは窓口が子に `NO_COLOR=1` を渡す前提（real-run-kit/src/launch.rs:212）
 - `tools/sync-i686-helper.ps1` は隣が既に i686 なら写さないので、仲介の源を変えた後は `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` を `target\debug\` へ直接写して置き替える（4.3: 源 23:45:21 → 建て 23:45:48 → 隣へ 10-23 00:00:58 に写し、cmp で同一・`last_error` の綴りを含む）
+- 範囲外（棚卸へ）: 環境変数なしの `cargo test -p areka` でも `tests/mcp_get_log_real_run.rs` が 22 秒かけて子を起こしているように見える（明示の門が無い実機の試験なら、常時のテストで机なしに窓を立てている）。この spec では触っていない
