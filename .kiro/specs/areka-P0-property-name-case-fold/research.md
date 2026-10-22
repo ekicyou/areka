@@ -168,3 +168,80 @@
 
 - **Research Needed（任意）**: SSP が全角の英字（`Ａ`／`ａ`）の大小を同じとみなすか。survey §7.1 の実測は半角の英字だけ。確かめるには全角の英字を名前に含むゴースト（括弧の中の名前）が要り、手近な手段が無い。細部 1 は「半角だけ」で決めており、外れても「SSP で当たる名前が areka で外れる」側に倒れる（逆の危険は無い）。
 - そのほかに外部の依存・版の調べ物は無い。
+
+---
+
+# 設計の段の記録（2026-10-22・`/kiro-spec-design -y`）
+
+> ここから下は設計の段で足した。上のギャップ分析は手を入れずに残す。決めたことの正本は [design.md](design.md)「設計で決めたこと」。
+
+## Summary
+- **Feature**: `areka-P0-property-name-case-fold`
+- **Discovery Scope**: Extension（既存のプロパティシステムの小さな広げ）＝軽い調べ（`design-discovery-light`）。外の依存・版の調べ物は無い（標準ライブラリだけ）。
+- **Key Findings**:
+  - 鏡像の点付きの区画へ書く道と読む道は、保存の投影を除いてすべて `parse_dotted` → `to_canonical_string` を通る（ギャップ分析 §2.1 を実物で引き直して同じ）。`parse_dotted` の呼び手は `areka-sylphya` の中だけで、手で組んだ `PropPath` を使うのはクレートの中のテスト（すべて小文字）だけ。
+  - 仕分け `classify_set` で生の文字列を見るのは 1 段目（`SET_EFFECTIVE`）だけ。2 段目は `parse_dotted` の結果を見るので畳みが自動で届く。
+  - 語彙の表 3 つと保存の名前の英字はすべて小文字。保存の名前の往復の不変は既存の檻 `canonical_key_round_trips_with_to_canonical_string` が守っており、畳みの後は「保存の名前は小文字でなければならない」の見張りにもなる。
+
+## Research Log
+
+### 名前を鍵にする所の引き直し
+- **Context**: 設計の前に、ギャップ分析の事実（2026-10-22 の同じ版）が崩れていないかを確かめた。
+- **Sources Consulted**: `crates/areka-sylphya/src/{key,actor,reader,lib}.rs`・`vocab/dotted.rs`・`actor_actor_integration_tests.rs`・`actor_tests.rs`・`test_log_capture.rs`、`crates/areka/src/shiori_host.rs`・`mcp/get_property_tests.rs`、`doc/testing.md`、`.kiro/specs/completed/areka-P0-mcp-get-property/verification/signoff.md`、`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ssp-mcp/survey.md` §7.3、`.kiro/steering/{structure,roadmap}.md`。
+- **Findings**:
+  - `parse_seg` の `index` の見分けは `name == "index"`。畳んだ名前で比べれば `INDEX(abc)` も `BadIndex`。
+  - `classify_set` の 1 段目は `SET_EFFECTIVE.iter().any(|(k, _)| *k == key)`。`eq_ignore_ascii_case` に変えるだけで足りる（表の綴りは小文字の ASCII と記号だけ）。
+  - `shiori_host.rs` の既存のテストは本体の中の `mod tests`。新しい檻は兄弟のファイルへ置き、`spawn_test_sylphya_sink` の `publisher` と `IShioriHost::get_property` だけで書ける（`mod tests` の中の `host_inner` は要らない）。
+  - 書けない名前への書き込みの `warn!` を捕まえる既存の形（`crate::test_log_capture::capture`）が `actor_tests.rs` にある。
+  - 大文字を混ぜた点付きの名前を渡す既存のテストは 0（`crates/areka-sylphya/src` を grep）。
+- **Implications**: 本体の変更は `key.rs` と `actor.rs` の数行で、`reader.rs`・`persist/`・読む口のコードは 0 行。
+
+### 実機確認の書き方（ギャップ分析 §8 の 7）
+- **Context**: 要件 6.1 は「配布形の areka を起動し」「呼び方と答えを記録に残す」。実機の試験の窓口 `real-run-kit`（`doc/testing.md`）を使うか、`mcp-get-property` の手順（配布形を展開して curl）を踏むか。
+- **Findings**: `real-run-kit` は `env!("CARGO_BIN_EXE_areka")`（`cargo` が作った実行ファイル）を起こすので配布形ではない。`crates/areka/tests/` の実機の試験は `#[ignore]` でなく全体のテストに入り、emo2 では閉じる知らせの後の別れの台詞に約 22 秒かかる（`mcp_get_log_real_run` の実績）。同じ答え（`BASEWARE.NAME` → `areka`・前に空白 → 無い名前）は 5.3 の檻が実行系ごと固定する。
+- **Implications**: 配布形を手で起こす 1 回の確認を spec の `verification/signoff.md` に残す。常設の実機の試験は足さない。「新しい実機の試験は窓口を使う」の決まりは常設の試験についての決まりで、本件は要件が配布形を名指しする 1 回の確認なので当たらない。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| A: `parse_dotted` の中で畳む | `parse_seg` で名前と括弧の中の名前を `to_ascii_lowercase` | 畳む所が 1 か所。読み・自由な名前・正準語彙・`index` の見分けが自動でそろう | `PropPath` から元の綴りが消える（今は使う所が無い） | **採用** |
+| B: `to_canonical_string` だけで畳む | 鍵の文字列を作る所だけ | `PropPath` に元の綴りが残る | 比べる所が 3 か所に割れる（`index` の見分け・正準語彙の判定を別に畳む） | 不採用 |
+| C: 入口ごとに畳む | `resolve_dotted_str`・`classify_set`・`canonicalize_or_raw` で文字列を畳む | 関数の意味を変えない | 入口が 4 か所以上。口が増えるたびに畳みを足す（brief の「読み手の側の 1 か所」に反する） | 不採用 |
+
+## Design Decisions
+
+### Decision: 畳む所は `parse_seg` の 1 か所＋仕分けの 1 段目
+- **Context**: 要件 1・3・4 を、読む口ごとのずれなく満たす。
+- **Alternatives Considered**: 上の表の B・C。
+- **Selected Approach**: 案 A。仕分けの 1 段目だけは生の文字列を見るので `eq_ignore_ascii_case` に変える。
+- **Rationale**: 鍵を作る道がもともと 1 本で、そこを畳めば全部がそろう。足す部品は無い。
+- **Trade-offs**: `PropPath` が元の綴りを持たなくなる。`shiori.変数名` の値を足す spec が元の綴りを要るなら、読む口の生の文字列を使う。
+- **Follow-up**: 語彙の表の小文字の不変を本 spec のテストで固定する（表に大文字を足すと畳んだ名前と当たらなくなるため）。
+
+### Decision: 効果と記録の名前は書かれた綴りのまま
+- **Context**: `NotSettable`・`RuntimeCommandReserved` の効果と `warn!` が運ぶ名前（ギャップ分析 §5 の端 3）。
+- **Alternatives Considered**: 1. 書かれた綴り（今のまま）2. 正準の綴り（畳んだ名前か `SET_EFFECTIVE` の綴り）
+- **Selected Approach**: 1。
+- **Rationale**: 受け手の `RuntimeCommandSink` は未配線で、今は綴りで答えが変わらない。書かれた綴りが記録に残るほうが、大文字で迂回を試みた書き込みを見分けられる。コードの変更も 0。
+- **Trade-offs**: sink を配線する spec は、振り分けで大小を区別せずに比べるか、受ける前に綴りを直す（design の Revalidation Triggers）。
+
+### Decision: 要件 2.2 の証拠は決定論テスト＋静的な構造
+- **Context**: 本番の結線には sylphya へ届く `GetProperty` が無い。
+- **Selected Approach**: `ShioriHostSink` を立てる檻（5.4）と、2 つの口が同じ `resolve_dotted_str` を手直し無しで呼ぶこと（要件 2.4 の根拠）。
+
+## Synthesis（設計の段の 3 つの見方）
+- **一般化**: 「名前 → 鍵」を 1 か所に持つ既存の形をそのまま使い、畳みはその 1 か所の性質として足した。読む口・書く口が増えても、`resolve_dotted_str`／`classify_set` を通る限り追加の作業は無い。
+- **作るか借りるか**: 標準ライブラリの `to_ascii_lowercase`／`eq_ignore_ascii_case` を使う。兄弟の決まり `mcp-ghost-name-match` と同じ道具。新しい依存は足さない。
+- **削ったもの**: 新しい関数・型・モジュール（畳み専用の関数など）は作らない。`reader.rs`・読む口・`persist/` には触らない。常設の実機の試験は足さない（1 回の確認と記録で要件 6.1 を満たす）。効果の綴りの書き換えはしない。
+
+## Risks & Mitigations
+- `to_lowercase`（Unicode）と取り違えて全角の英字まで畳む — 全角の英字の檻（解釈の段とアクターの段の両方）が赤で捕まえる。
+- 仕分けの 1 段目を畳み忘れて `MENU` が書けない名前になる — `MENU`・`Surface.Num` の檻が捕まえる。
+- 前後の空白まで削ってしまう — `get_property_tests.rs` の ` baseware.name` とアクターの檻 6 が捕まえる。
+- 後で語彙の表や保存の名前に大文字が入る — 語彙の不変の檻と既存の往復の檻が捕まえる。
+- §8 の表の末尾への追記が同じウェーブの `window-link-directives`・`ghost-inner-balloon` と重なる — 行の追加どうしなので、後に着地する側が並べ直す。
+
+## 参照したスキルと手引き
+- `kiro-spec-design`（本スキル）と、その決まり `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。設計の段の確かめ（要件の番号の全数・境界の節・ファイルの計画・孤立した部品）は 2 回目までで通った（1 回目で「決めたこと」の表と全角の檻の正の確認を足した）。
+- 実機の試験の手引き `doc/testing.md`（`real-run-kit` を使わない理由を上に記録）・`structure.md` のテストの置き場と 1,000 行の目安。
