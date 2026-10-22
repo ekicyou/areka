@@ -164,7 +164,11 @@ sequenceDiagram
 
 - 待つ順は wire 成立 → 装着 → `wrap=BudouxWordWrap`。どれも窓口の `wait_for` で、見えた時の経過時間を取る。
 - 印の前に子が終われば（`Err(ChildExited)`）、`wait_exit` で終わり方を取ってから panic する（1.7）。締切なら窓口が「待っていた印・待った時間・ファイルの場所」で panic する（1.6）。どちらも panic の途中で取っ手が捨てられ、証拠が残る。
-- MCP を呼ぶ形（くり返しの基本の条件）では、`wrap` が見えるまで `dump_surface` と `dump_balloon` を 1 回ずつ呼び、0.5 秒あけて繰り返す。呼び出しが `ChildExited` を返したら輪を抜け、後の `wait_for` が終わりを報告する。輪は締切 120 秒を過ぎても抜ける。
+- MCP を呼ぶ形（くり返しの基本の条件）では、`wrap` が見えるまで `dump_surface` と `dump_balloon` を引数 `{}` で 1 回ずつ呼び、0.5 秒あけて繰り返す。呼び出しの扱い:
+  - 答えが返れば、中身が `NG:` の答え（窓口の `ToolReply { is_error: true }`。wire の前は必ずこうなる）でも失敗にしない。呼ぶのは負荷を掛けるためで、答えの中身は確かめない。
+  - `McpError::ChildExited` なら輪を抜け、後の `wait_for` が終わりを報告する。
+  - `McpError::ListenFailed`・`McpError::Unreachable` だけを「ほかの失敗」として panic する。
+  - 輪は締切 120 秒を過ぎても抜ける。
 
 ### くり返し
 
@@ -302,12 +306,15 @@ pub struct Times {
     pub close: Duration,
     /// 記録の時刻で読んだ `BOOT_TALK` の行から `WRAP` の行まで。どちらかの行が無ければ None。
     pub talk_to_wrap: Option<Duration>,
+    /// 記録の時刻で読んだ `ATTACH` の行から `BOOT_TALK` の行までのミリ秒。正なら最初の台詞が後、負なら装着が後
+    /// （SHIORI の読み込みは装着と並んで走るので、どちらが後かは回ごとに変わる）。どちらかの行が無ければ None。
+    pub attach_to_talk_ms: Option<i64>,
     /// 主のモニタの DPI。行が無ければ None。
     pub primary_dpi: Option<u32>,
 }
 
 impl Times {
-    /// ASCII の 1 行。例: `emo2: wire_ms=812 attach_ms=1540 wrap_ms=6260 close_ms=22104 talk_to_wrap_ms=310 primary_dpi=192`
+    /// ASCII の 1 行。例: `emo2: wire_ms=812 attach_ms=1540 wrap_ms=6260 close_ms=22104 talk_to_wrap_ms=310 attach_to_talk_ms=4410 primary_dpi=192`
     pub fn line(&self, who: &str) -> String;
 }
 
@@ -321,13 +328,15 @@ pub fn spawn_emo2(wait_after_copy: Option<Duration>) -> (Run, Instant);
 ///
 /// # Panics
 /// 印の前に子が終わった（終了コードと終わり方）・締切（窓口の文）・終わり方が利用者と同じ閉じ方でない
-/// （保険の自動終了ならその旨）・終了コードが 0 でない・MCP の呼び出しが子の終わり以外で失敗した。
+/// （保険の自動終了ならその旨）・終了コードが 0 でない・MCP の呼び出しが `ListenFailed`／`Unreachable` で失敗した
+/// （`NG:` の答えは失敗にしない）。
 pub fn boot_and_close(run: Run, started: Instant, mcp_while_waiting: bool) -> Times;
 
 /// 出力の中の `[initialize_layout_root] Creating Monitor entity` の行のうち `is_primary=true` の `dpi=` の値。
 pub fn primary_dpi(output: &str) -> Option<u32>;
-/// 2 つの綴りを含む最初の行どうしの、行頭の記録の時刻（`…THH:MM:SS.ffffff…`）の差。読めなければ None。
-pub fn log_gap(output: &str, from: &str, to: &str) -> Option<Duration>;
+/// 2 つの綴りを含む最初の行どうしの、行頭の記録の時刻（`…THH:MM:SS.ffffff…`）の差のミリ秒（`to` − `from`。
+/// `to` が先なら負）。読めなければ None。
+pub fn log_gap_ms(output: &str, from: &str, to: &str) -> Option<i64>;
 /// 落ちた回の出力が「LOAD の失敗」か（`LOAD_RETURNED_FALSE` を含むか）。
 pub fn is_load_returned_false(output: &str) -> bool;
 ```
@@ -338,7 +347,7 @@ pub fn is_load_returned_false(output: &str) -> bool;
 
 **Implementation Notes**
 - 統合: `boot_and_close` の確かめの順は ⑴ 印を順に待つ（`Err(ChildExited)` なら `run.wait_exit()` の `Ended` を添えて panic）→ ⑵ `close()` の前後で時間を取る → ⑶ `by == EndedBy::UserClose`（`SafetyExit` なら「保険の自動終了（45 秒）で終わった」と書く）→ ⑷ `status.success()`。失敗の文には `run.output()` を添える。
-- 検証: 純粋な関数 3 つ（`primary_dpi`・`log_gap`・`is_load_returned_false`）と条件の読み（`Condition::parse`・型はくり返しの試験の節に示すが、置き場はこのファイル）は `common_tests.rs` で固定する。
+- 検証: 純粋な関数 3 つ（`primary_dpi`・`log_gap_ms`・`is_load_returned_false`）と条件の読み（`Condition::parse`・型はくり返しの試験の節に示すが、置き場はこのファイル）は `common_tests.rs` で固定する。
 - 危うさ: MCP を呼ぶ形では、wire と装着の時間は呼び出しの間隔ぶん粗くなる（くり返しの時間は参考で、測りは件 1 の試験で取る）。
 
 #### 件 1 の試験（`crates/areka/tests/emo2_real_run.rs`）
@@ -430,7 +439,7 @@ pub enum ProxyError {
 
 1. **件 1 の再現**: 直す前の試験を 200% の debug 版で回した回数と結果（2.1）。
 2. **件 1 の測りと切り分け**: 時間の 1 行の値（各回）・最大・結論（2.2）。切り分けの規則は下の「確かめの手順」。2.3 が掛かったら直した後の値も同じ節に（2.3）。
-3. **保険の自動終了の値の確かめ**: 「印までの最大＋閉じるまでの最大」と 45 秒の比べ（1.5）。
+3. **保険の自動終了の値の確かめ**: 「印までの最大＋閉じるまでの最大」と 45 秒の比べ（1.5）。件 1 の試験の回とくり返しの成功の回の両方の値で比べる。
 4. **200% と 100% 相当の確かめ**: 拡大・作り方（互換モードの値か、開発者が拡大率を替えたか）・版（debug）・回数・結果・`wrap_ms`・`primary_dpi`（3.1〜3.3）。
 5. **仲介で拾える手がかり**: 調べた結果（`LoadReturnedFalse` だけだったこと・`HRESULT(0x80004005)` は areka.exe の終了コード 1 の決まった値で仲介の手がかりでないこと・OS の最後のエラーを足したこととその限り）（5.4）。
 6. **くり返しの結果**: 条件ごとの回数・各々の数・落ちた回の置き場と読んだこと（4.5・6.1）。回す前に示した回数と所要時間の見込み（8.5）。
@@ -473,7 +482,8 @@ pub enum ProxyError {
 | 印の前に子が終わった | `wait_exit` で終わり方を取って panic（1.7） | 待っていた印・終了コード・終わり方 |
 | 保険の自動終了で終わった | panic（1.3） | 「保険の自動終了（45 秒）で終わった」・出力 |
 | 利用者と同じ閉じ方で終わったが終了コードが 0 でない | panic（1.2） | 終了コード・出力 |
-| MCP の呼び出しが子の終わり以外で失敗 | panic（ほかの失敗） | 窓口の `McpError` の文・出力 |
+| MCP の呼び出しが `ListenFailed`・`Unreachable` で失敗 | panic（ほかの失敗） | 窓口の `McpError` の文・出力 |
+| MCP の答えが `NG:`（`is_error: true`） | 失敗にしない（負荷のための呼び出し） | — |
 | 閉じる知らせで締切までに終わらない | 窓口の `close` が子を止めて panic | 窓口の文 |
 | 環境変数の値が読めない | 子を起こさずに panic | 変数の名前・値・受ける値の一覧 |
 | 写しが取れない・仲介が揃わない | 窓口の panic（くり返しごと赤） | 窓口の文 |
@@ -489,7 +499,7 @@ pub enum ProxyError {
 ### 純粋な関数の試験（常時のテストで走る・子を起こさない・`common_tests.rs`）
 
 - `primary_dpi`: 主と主でないモニタの 2 行から主の `dpi=192` を取る。行が無ければ None。
-- `log_gap`: 2 行の時刻の差を取る（例 `…T13:18:16.000100Z` → `…T13:18:16.310100Z` で 310 ミリ秒）。片方の行が無い・時刻が読めなければ None。
+- `log_gap_ms`: 2 行の時刻の差を取る（例 `…T13:18:16.000100Z` → `…T13:18:16.310100Z` で 310、逆の順なら −310）。片方の行が無い・時刻が読めなければ None。
 - `is_load_returned_false`: `LoadReturnedFalse { last_error: 5 }` の行で真。`LoadLibraryFailed(..)` の `LOAD 失敗` の行と `event="connect_failed"` だけの出力で偽。
 - `Condition::parse`: 空・空白＝Basic、3 つの値、知らない値は Err。
 
@@ -509,8 +519,11 @@ pub enum ProxyError {
 1. **机**: 実機の走行の間は排他テストの机を借りる（`doc/impl-watch.md`）。負荷の走行と重ねない（8.4）。
 2. **件 1 の再現（2.1）**: 直す前の試験（保険の自動終了 3 秒の形）を 200% の debug 版で回し、赤が出るかを記録する。
 3. **件 1 の直しと測り（2.1・2.2）**: 新しい形の試験を 200% の debug 版で回し、時間の 1 行を取る（混んだ時間の値も含める）。旧い形では閉じるまでの時間が取れないので、測りは新しい形で取る。
-4. **切り分けの規則（2.2）**: 「areka 自身の時間」＝ `attach_ms` ＋ `talk_to_wrap_ms`、「SHIORI の読み込みの待ち」＝ `wrap_ms` − areka 自身の時間。areka 自身の時間が旧い保険の自動終了 3 秒を超えた回が在れば「装着そのもの」（2.3 へ）。超えなければ「待ち方」で、直しは待ち方の変更で足りる。
-5. **値の確かめ（1.5）**: 「`wrap_ms` の最大＋`close_ms` の最大」が 35 秒以下なら 45 秒のまま。超えたら、その和＋10 秒以上・120 秒未満へ上げ、記録に書く。
+4. **切り分けの規則（2.2）**: SHIORI の読み込みは装着と並んで走るので、装着の印と最初の台詞（`boot_talk`）のうち後に来た方が `wrap` を遅らせた元とみる（`attach_to_talk_ms` の符号で読む）。
+   - 最初の台詞が後（正）: 「areka 自身の時間」＝ `talk_to_wrap_ms`。それより前は SHIORI の読み込みの待ち。
+   - 装着が後（負）: SHIORI の読み込みは装着より先に済んでいたので、「areka 自身の時間」＝ `wrap_ms`。
+   - areka 自身の時間が旧い保険の自動終了 3 秒を超えた回が在れば「装着そのもの」（2.3 へ）。超えなければ「待ち方」で、直しは待ち方の変更で足りる。値が `none` の回は切り分けに使わず、その旨を記録に書く。
+5. **値の確かめ（1.5）**: 件 1 の試験の回と、くり返しの成功の回（MCP を呼ぶ形は印も閉じるのも遅れうる）の両方の時間の 1 行から、「`wrap_ms` の最大＋`close_ms` の最大」を取る。35 秒以下なら 45 秒のまま。超えたら、その和＋10 秒以上・120 秒未満へ上げ、記録に書く。くり返しで保険の自動終了で終わった回（ほかの失敗）が出たら、値が足りないことを先に疑い、上げてからその条件を回し直す。
 6. **200% と 100% 相当（3.1〜3.3）**: 200% で 3 回続けて回す。続いて `AREKA_EMO2_COMPAT_LAYER` に互換モードの値（まず `DPIUNAWARE`、効かなければ `GDIDPISCALING DPIUNAWARE`）を置いて 3 回回し、`primary_dpi=96` を確かめる。96 にならなければ、確かめの間だけ開発者に表示の拡大率を 100% へ替えてもらって回す（AI は替えない）。
 7. **くり返し（4.5・8.5）**: 回す前に回数と所要時間の見込みを示す。基本の条件で 20 回以上。
 8. **比べ（6.1）**: LOAD の失敗が 1 回以上出たら、`gap`・`copy-wait`・`no-mcp` を基本と同じ回数ずつ回し、失敗の数を比べる。落ちた回の証拠を手引きの順で読む。
