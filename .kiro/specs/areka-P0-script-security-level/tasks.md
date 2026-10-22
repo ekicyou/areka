@@ -55,7 +55,7 @@
   - ワークスペース全体がビルドでき、既存のテストが緑のままになる。
   - _Requirements: 3.1_
 
-- [ ] 3.4 SHIORI の呼び出しが入れ物を渡し、応答のレベルを結果へ載せる
+- [x] 3.4 SHIORI の呼び出しが入れ物を渡し、応答のレベルを結果へ載せる
   - GET・NOTIFY の両方で、要求の出どころの規則から入れ物を作ってヘッダつきのメソッドだけを呼ぶ。台詞の応答では生のレベルを解釈して結果に載せる。204・誤りの扱いと NOTIFY の応答を読まない扱いは今のまま。
   - 送る直前の trace の記録 `shiori_request` に `sender`・`sender_type`・`security_level` を足す（同じ規則から導く）。
   - ヘッダを記録する偽の受け手を SHIORI の回り役に挿す兄弟のテストで、運行表・選択肢・`raise_event`・翻訳の 4 つのカテゴリの要求で渡った入れ物が要件の値と一致し、偽の受け手が `external` を返すと結果のレベルが `external` になることが緑になる。
@@ -156,3 +156,4 @@
 - （範囲外・1.2 で発見）`crates/areka-kanade/src/actor_raise_reply_tests.rs:95` に clippy の `never_loop` の誤りが既にあり、kanade の lib test の clippy を落とす。
 - （範囲外・1.2 のレビューで発見）`areka-sakura` の `drive::delivery_tests::same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times` が有界の `try_recv`／`yield_now` の空回しで時間に依存し、まれに赤になる。
 - `cargo test -p shiori-host32-host` は先に `cargo build -p shiori-host32-testdll -p shiori-host32-helper --target i686-pc-windows-msvc` が要る（無いと統合テスト 1 本が前提不足で赤）。
+- `crates/areka-kanade/src/actor_tests.rs` は 3.4 の後 983 行。これ以上足すなら兄弟のテストのファイルへ。

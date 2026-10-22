@@ -682,6 +682,8 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
     }
 
     // 送出前の wire 証跡（Req6.2）。status=None は Status ヘッダ欠落として観測可能（DD-IT-5）。
+    // 出どころの 3 項目は SHIORI の回り役が入れ物を作るのと同じ規則から導く（要件 2.1〜2.6）。
+    let origin_wire = crate::request_origin::RequestOrigin::of_event(event_id).wire();
     tracing::trace!(
         target: "kanade",
         event = "shiori_request",
@@ -689,6 +691,9 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
         id = %id,
         references = ?references,
         status = ?status_wire,
+        sender = origin_wire.sender,
+        sender_type = %origin_wire.sender_type,
+        security_level = origin_wire.security_level,
         "SHIORI 送出"
     );
 

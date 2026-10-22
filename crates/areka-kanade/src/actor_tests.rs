@@ -456,6 +456,15 @@ fn allowed_event_id_is_sent_and_wire_trace_logged() {
     );
     // Method・ID・参照値・実行状態の wire 証跡（Req6.2・DD-IT-7）。
     assert_logged(&events, Level::TRACE, "shiori_request");
+    // 出どころの 3 項目（運行表のイベント＝areka・internal・local・要件 2.2）。
+    let request = events
+        .iter()
+        .find(|e| e.event.as_deref() == Some("shiori_request"))
+        .expect("shiori_request");
+    let field = |name: &str| request.fields.get(name).map(String::as_str);
+    assert_eq!(field("sender"), Some("areka"));
+    assert_eq!(field("sender_type"), Some("internal"));
+    assert_eq!(field("security_level"), Some("local"));
 
     drop(shiori_tx);
     drop(shiori_handle);
