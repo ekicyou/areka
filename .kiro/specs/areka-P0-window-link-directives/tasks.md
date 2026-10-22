@@ -9,7 +9,7 @@
   - 兄弟のテストで、descript が下・今の向きが `free` の窓の保存値を次の起動の読み戻し（`char_pos_from_origin_x`＋`project_restore`）へ通すと x が書いた位置に戻ること、部品の無い窓は `Anchored` の形で書かれること、作った窓に `AnchorSource` が付くことが緑になる
   - _Requirements: 4.8, 6.1, 6.2_
 
-- [ ] 1.2 窓の組の帳簿を、拒否を値で返す純粋な核として作る
+- [x] 1.2 窓の組の帳簿を、拒否を値で返す純粋な核として作る
   - `placement/sticky_group_ledger.rs` に組（中身は並びに意味の無い ID の集まり・出どころは台本か descript か）・拒否の型・World の資源 `StickyGroupLedger` を作る。重なりの組の帳簿の私有の ID の読み（`parse_scope_id`）を crate の中へ開ける（1 語）
   - ID の並びの読みは、前後の空白を除いて数でない → 同じ ID の重ね書き → 異なる ID が 2 つ未満の順に検査して拒否し、上限は置かない
   - 台本の組を足す（重なれば何も変えずに拒否）・台本の組だけを解く・descript の組を取り替える（値なし・空なら組なし・台本の組と重なれば作らず拒否・台本の組は触らない）・組の一覧・「この ID はどの組か」・組の相手（自分を除く昇順）の口を持つ
@@ -151,3 +151,4 @@
 
 ## Implementation Notes
 - areka は bin クレート。クレートのテストは `cargo test -p areka --bin areka`（`--lib` は無い）。
+- 1.2: `placement/mod.rs` の `sticky_group_ledger` 宣言に一時の `#[allow(dead_code)]`。2.1 で本番の消費者が来たら外す。`try_add_script_group` は 2 未満を自分で検査しないので、必ず `parse_sticky_tokens` を通してから呼ぶ。

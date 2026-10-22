@@ -38,6 +38,10 @@ pub(crate) mod reset_pos;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
+/// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿（純）。
+// shortcut: 本番の消費者（World の側の薄い関数）は task 2.1 で来る。来たら許可属性を外す。
+#[allow(dead_code)]
+pub(crate) mod sticky_group_ledger;
 pub mod transition_diag;
 /// 遷移観測ログの判定器（純関数・I/O 無し）。
 ///
