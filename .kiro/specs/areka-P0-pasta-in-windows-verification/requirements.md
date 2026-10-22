@@ -79,9 +79,10 @@ SSP で測る項目の分け方は、次のとおりとする（brief の 2026-1
 3. The 測り shall ぱすたの全体の通しを、Requirement 4 の流れと同じ段の順で測り、段ごとに台本の原文（イベントの発火で返る応答）と面の撮影を残す。これを areka の結果と比べる基準とする。
 4. When 全体の通しの途中で、兄弟の spec が自分の要件の段で測る問い（Introduction の一覧）の答えが見えたとき, the 測りの記録 shall それを根拠つきで書き、持ち主の spec の brief へ申し送る。兄弟の spec の問いを、本 spec のために改めて測ることはしない。
 5. If 測りで SSP の読み直しを打つ必要があるとき, then the 測る者 shall 打つたびに、開発者の許可を先に得る。
-6. The 測り shall SSP の外の物（SSP の本体・SSP の設定・SSP が保存する記録）を、測りのために書き換えない。
+6. The 測る者 shall SSP の外の物（SSP の本体・SSP の設定・SSP が保存する記録）を、測りのために手で書き換えない。SSP が自分の動きとして書く記録（MCP の答えの保存 `data\profile\mcp_*.dat`・SHIORI への要求の記録 `ssp_shiori_log.txt`）は、この「書き換え」に数えない。
 7. The 測りの記録 shall この spec のフォルダの中に置き、項目ごとに、測った日時（日本時間）・SSP の版・ぱすたの書庫の同定（取り寄せた `.sha256` の値）・使った道具と引数・結果・根拠（逐語の応答か撮った面）を書く。
 8. If ukadoc が測った項目について書いているとき, then the 測りの記録 shall ukadoc の URL と逐語の引用を添え、測りと ukadoc が食い違えばその食い違いを書く。
+9. The 測り shall SSP の窓への撫で・クリック・ドラッグ・右クリックなどの操作を、Requirement 3 の 8 項と同じ扱い（操作は AI・SendInput は開発者の許可を得てその測りのあいだだけ）で行い、Requirement 3 の 7 項のとおり、測りのあいだは areka でぱすたを起こさない。
 
 ### Requirement 2: 検体の中身の自動テスト
 
