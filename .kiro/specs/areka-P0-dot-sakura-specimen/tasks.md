@@ -55,7 +55,7 @@
   - _Requirements: 4.1, 4.3_
 
 - [ ] 4. 実機で 1 回起こして記録する
-- [ ] 4.1 実機の 1 回の支度をする（ビルドと根）
+- [x] 4.1 実機の 1 回の支度をする（ビルドと根）
   - debug 版の `areka` と i686 の補助プログラム（`--target i686-pc-windows-msvc`）をビルドする
   - `nar-sample-path dot_sakura` で手で使う根を作り直し、根の下が `ghost\dot_sakura` と `balloon\bottle` だけで、一番深いファイルの絶対パスが 260 文字に収まることを確かめる
   - 記憶・記録・撮った物の置き場を `target\dot-sakura-verify\` の下に作る
@@ -98,3 +98,5 @@
 - 2.1: ワークツリーで `sample-ghost-kit` の取り寄せ形のテストを緑にするには `pwsh -NoProfile -File tools/sample-fetch.ps1` を 1 回回す要がある（`pasta-in-windows` の書庫が `target
 ar-samplesetched\` に無かった・本 spec と無関係の準備）。
 - 控え 2.3（`697c7c9a` の上・2026-10-22）: `cargo test -p sample-ghost-kit` は終了コード 0（単体 83・`nar-sample-path` の bin 0・結合 `nar_sample_path_test` 6・ほか 5・3 本、全部緑）。`cargo test -p log-capture-kit --test sample_path_guard_test` は終了コード 0（21 本緑）。書庫は断られず（2.7 の枝に入らない）、同梱 `bottle` も入り、見張りも緑（2.5・2.6 の枝に入らない）。
+- 控え 4.1（`10893218` の上）: `cargo build -p areka` 終了コード 0・`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` 終了コード 0。`nar-sample-path dot_sakura` 終了コード 0、`root=C:\home\maz\gitreka\.claude\worktreesreka-p0-dot-sakura-specimen-0f24e9	arget
+ar-samples\manual\dot_sakura`。根の下は `ghost\dot_sakura`（ファイル 158）と `balloonottle`（ファイル 38）だけ・計 196。一番深いファイルの絶対パスは 173 文字（`...\ghost\dot_sakura\ghost\master\dotvent_OpeningTalkDebug.txt`）。`target\dot-sakura-verify\{profile,logs,shots}` を作った。
