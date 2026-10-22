@@ -150,6 +150,10 @@ crates/areka-emo-compose/src/
 ├── plan_bounds.rs             # shell_bounds（シェル全体の外形・負の座標と never を含む）
 └── plan_bounds_tests.rs
 
+crates/areka-parsers/src/package/
+├── resolve_bind.rs            # resolve.rs から移す着せ替えの読み（read_bindgroup_defaults ほか）＋行の番号つきの読み＋char* の読み（約 340 行）
+└── resolve_bind_tests.rs      # resolve.rs の中の試験 2 つ（.name の転記・bindoption の分解）を移し、char* と行の番号の分岐を足す（約 700 行）
+
 crates/surface-compare/        # 新クレート（publish = false）
 ├── Cargo.toml                 # image（png のみ）・dev: temp-path-kit
 └── src/
@@ -163,18 +167,28 @@ crates/surface-compare/        # 新クレート（publish = false）
 - `crates/areka/src/cli/mod.rs` — `StartupOptions.offline: Option<OfflineDumpRequest>` と型 `OfflineDumpRequest` を足す。
 - `crates/areka/src/cli/parse.rs` — 表の `offline-dump` を効く行へ、`dump-*` の 7 つを値の欄へ、`dump-surface-option`・`dump-animation` を「まだ扱わない」へ。`ParseNote` に `OfflineIgnored`・`DumpPending`・`DumpWithoutOffline` を足し、`MissingValue` を `dump-*` の値なしで使う。
 - `crates/areka/src/cli/parse_offline_tests.rs`（新・`parse.rs` の兄弟）— 要件 12.1 の読みの分岐（`parse_tests.rs` は 679 行なので別のファイル）。
-- `crates/areka/src/main.rs` — `mod offline_dump; mod png_image;` と、`--help` の直後の分岐 3 行。
-- `crates/areka/src/log_history.rs` — 本文を組む部分を切らない関数 `body_text` に分け、写しの層 `CaptureLayer`＋`CaptureFilter` と `capture_begin`／`capture_finish` を足し、`init` で 3 つ目の層として重ねる。
+- `crates/areka/src/main.rs` — `mod offline_dump; mod png_image;` と、`--help` の直後の分岐 3 行（965 → 約 970 行・1,000 行の内で余りは 30 行ほど）。分岐は数行に留め、中身はすべて `offline_dump/` に置く。
+- `crates/areka/src/log_history.rs` — 本文を組む部分を切らない関数 `body_text` に分け、写しの層 `CaptureLayer`＋`CaptureFilter` と `capture_begin`／`capture_finish` を足し、`init` で 3 つ目の層として重ねる。窓は開けたスレッドの番号を覚え、ほかのスレッドの記録は写さない。
 - `crates/areka/src/mcp/dump_surface_image.rs`・`dump_surface_image_tests.rs` — `unpremultiply`・`png` を `png_image.rs` へ移し、`png_base64` は `base64(png_image::encode_png(..))` だけにする。
 - `crates/areka/src/emo2_boot/shell_balloon_resolve.rs` — 「名前の一致 → フォルダ名の一致」の段を `pub(crate) fn find_by_name_or_folder` に分け、`resolve_skin_target` は特別な名前の後にそれを呼ぶ（振る舞いは変えない）。
-- `crates/areka/src/emo2_boot/assets.rs` — 既定の組と名前の表を `DefaultBinds::from_groups`・`BindResolver::from_groups` で作る。`default_bind_ids` とその検査を消す。`ShellAssets.static_binds` を `DefaultBinds` に。shell の descript.txt が読めないときの `BootWiringError::ShellRead` は今の起動の約束として残す（読めるかの確かめだけにする）。
+- `crates/areka/src/emo2_boot/assets.rs` — 既定の組と名前の表を `DefaultBinds::from_groups`・`BindResolver::from_groups` で作る。`default_bind_ids` とその検査を消す。`ShellAssets.static_binds` を `DefaultBinds` に。shell の descript.txt が読めないときの `BootWiringError::ShellRead` は今の起動の約束として残す（読めるかの確かめだけにする）。`take_world` は呼ばない（画面は今までどおり scope ごとに `build_world` で組む。絵と記録の数は変えない）。
 - `crates/areka/src/emo2_boot/{mod.rs, spine.rs, shell_carry.rs, frame/attach.rs, frame/switch.rs, frame/wiring.rs}` — `static_binds` の型を `DefaultBinds` に付け替え、`BindSet` が要る所は `for_scope(scope)` で引く。
-- `crates/areka-seriko/src/bind.rs` — `BindNamespace::Char(u32)`・`scope_namespace` の 2 以上・`BindResolver` の `char*` の表と `from_groups`・`category_parts_in_order`・`DefaultBinds`・`apply_named_bind`。
+- 既定の組（`BindSet`）を `ScopeStates::new`・`spawn_seriko(_clocked)`・`SerikoReplace::Shell`・`static_binds` へ渡している試験のファイル（41 本）— `DefaultBinds::uniform(..)` で包むだけにする（期待は変えない）。
+  - areka-seriko の `src/`（22 本）: `actor_bind_loop_tests.rs`・`actor_clock_tests.rs`・`actor_dispatch_tests.rs`・`actor_parts_tests.rs`・`actor_replace_tests.rs`・`actor_stage_tests.rs`・`actor_talk_tests.rs`・`actor_test_support.rs`・`actor_trigger_fixture_tests.rs`・`looper_always_tests.rs`・`looper_balloon_tests.rs`・`looper_film_count_tests.rs`・`looper_parts_emo2_tests.rs`・`looper_parts_tests.rs`・`looper_replace_tests.rs`・`looper_talk_tests.rs`・`looper_test_support.rs`・`looper_tests.rs`・`looper_trigger_tests.rs`・`state_bind_pattern_tests.rs`・`state_surface_tests.rs`・`state_test_support.rs`。
+  - areka-seriko の `tests/`（5 本）: `balloon_face_e2e.rs`・`bind_e2e.rs`・`cue_sequence.rs`・`loop_integration.rs`・`regression.rs`。
+  - areka の `src/emo2_boot/`（13 本）: `assets_tests.rs`・`balloon_visibility_lifecycle_e2e_tests.rs`・`balloon_visibility_phase_tests.rs`・`film_playback_e2e_tests.rs`・`frame/status_report_stage_tests.rs`・`frame/switch_tests.rs`・`frame_attach_carry_tests.rs`・`frame_test_support.rs`・`reload_skin_tests.rs`・`runtime_boot_tests.rs`・`shell_balloon_switch_tests.rs`・`shell_carry_tests.rs`・`spine_display_tests.rs`。
+  - areka の `src/input_events/balloon_test_support.rs`（1 本）。
+  - 数えた方: `ScopeStates::new(`・`spawn_seriko(`・`spawn_seriko_clocked(`・`SerikoReplace::Shell`・`static_binds`（`build_static_bindset` を除く）を含むファイルを grep で拾い、本番のファイル 9 本と、注記だけで触れている `emo2_boot/adapter.rs`・`crates/areka/tests/emo2_real_run.rs` を除いた。
+- `crates/areka-seriko/src/bind.rs` — `BindNamespace::Char(u32)`・`scope_namespace` の 2 以上・`BindResolver` の `char*` の表と `from_groups`・`category_parts_in_order`・`DefaultBinds`（`from_groups`・`uniform`・`single`・`for_scope`）・`apply_named_bind`（375 → 約 575 行）。
+- `crates/areka-seriko/src/bind_tests.rs` — `scope_namespace_maps_zero_one_only` を書き直す（2 以上が `Char(n)` になる＝期待の変更）。
 - `crates/areka-seriko/src/state.rs` — `ScopeStates::new(DefaultBinds)`・`current_binds` は `DefaultBinds::for_scope` へ後退。
 - `crates/areka-seriko/src/actor.rs` — `SerikoReplace::Shell.static_binds`・`spawn_seriko(_clocked)` の型を `DefaultBinds` に。`\![bind]` の名前の解決と当て方を `apply_named_bind` 経由に（記録の文は今のまま）。
 - `crates/areka-seriko/src/lib.rs` — `settle_surface`・`settle_time`・`SETTLE_TICK_MS`・`DefaultBinds`・`apply_named_bind`・`NamedBindResult` を `pub use`。
-- `crates/areka-parsers/src/package/model.rs`・`resolve.rs`・`resolve_shell.rs` — `BindScope::Char(u32)`・`char*` の欄・`BindGroupName::line`・`read_ghost_names` の切り出し。
-- `crates/areka-emo-present/src/shell_target.rs` — 読み込みで組んだ面の表を `ShellTarget` に持たせ、`take_world` で 1 度だけ渡す。
+- `crates/areka-parsers/src/package/model.rs` — `BindScope::Char(u32)`・`char*` の欄・`BindGroupName::line`（中の試験の組み立て `name(..)` にも `line` を足す）。
+- `crates/areka-parsers/src/package/resolve.rs` — 着せ替えの読み（定数・`read_bindgroup_defaults`・`parse_bindoption_options`・`parse_bindgroup_id`・`parse_bindgroup_name`）と中の試験 2 つを `resolve_bind.rs`・`resolve_bind_tests.rs` へ移す（866 → 約 100 行）。
+- `crates/areka-parsers/src/package/mod.rs` — `mod resolve_bind;`。
+- `crates/areka-parsers/src/package/resolve_shell.rs` — `read_bindgroup_defaults` を `resolve_bind` から引く・`read_ghost_names` の切り出し。
+- `crates/areka-emo-present/src/shell_target.rs` — 読み込みで組んだ面の表を `ShellTarget` に `Option<EmoWorld>` で持たせ、`take_world` で 1 度だけ渡す。`EmoWorld` は `Debug` を持たないので、`#[derive(Debug)]` をやめて `Debug` を手で書く（面の表は有無だけを出す）。
 - `crates/areka-emo-compose/src/lib.rs` — `plan_bounds` の `pub use`。
 - `crates/areka/Cargo.toml` — `[dev-dependencies]` に `image`（0.25.10・`png` のみ・ワークスペースに既在の版）。
 - `dist/README.txt` — 「■ 起動オプション」の節（効く起動オプションに `--offline-dump`、`--dump-*` の働き・名前・CSV・終了コード・例・まだ扱わない 2 つ）。
@@ -358,7 +372,7 @@ if let Some(req) = &opts.offline {
 - Invariants: `help` が真ならオフラインは走らない（10.2）。
 
 **Implementation Notes**
-- Integration: `main.rs` は 965 行。足すのは `mod` 2 行と分岐 3 行。
+- Integration: `main.rs` は 965 行。足すのは `mod` 2 行と分岐 3 行で約 970 行（1,000 行の内・余りは 30 行ほど）。分岐は上の数行に留め、判断や記録はすべて `offline_dump/` に置く（`main.rs` にこれ以上足すなら先に分ける）。
 - Risks: リリースの exe は GUI のサブシステムなので、コマンドプロンプトは終わりを待たない（説明書の例で `start "" /wait` を使う）。
 
 ### areka: オフラインの書き出し
@@ -404,7 +418,7 @@ struct DumpTally { written: usize, failed: usize }
 **Implementation Notes**
 - Integration: COM は `CoInitializeEx(None, COINIT_MULTITHREADED)` を run の中で 1 度。プロセスはすぐ終わるので戻しは呼ばない。
 - Validation: 始めの info（1.6）は欄 `ghost`・`shell`・`scope`・`surfaces`・`output_dir`・`error_log` を生の値で。終わりの info（1.7）は `written`・`failed`・`worst`（`none`／`Warning`／`Error`）・`exit_code`。
-- Risks: 写しの窓はプロセス全体なので、書き出しのあいだに別のスレッドを起こさない（今の部品は呼んだスレッドの上だけで走る）。
+- Risks: 写しの窓はプロセス全体なので、書き出しのあいだに別のスレッドを起こさない（今の部品は呼んだスレッドの上だけで走る）。将来ほかの部品がスレッドを使っても CSV が汚れないよう、窓は開けたスレッドの記録だけを写す（RecordCapture）。
 
 #### SurfaceListReader
 
@@ -554,6 +568,7 @@ pub(crate) fn write_csv(path: &Path, ghost_name: &str, records: &[CapturedRecord
 **Responsibilities & Constraints**
 - `log_history::init` が重ねる 3 つ目の層。`CaptureFilter::callsite_enabled` は「出来事で warn 以上」だけ `always`、ほかは `never`。出来事でない問い合わせは `enabled` で通す（履歴の層と同じ理由＝`passes` の注記）。warn 以上は履歴の層が既に `always` なので、受け口の関心の判定は変わらない。
 - 窓が閉じているあいだは何もしない（普段の起動の費用はロック 1 つの確かめだけ）。窓はプロセス全体で 1 つ。
+- `capture_begin` は呼んだスレッドの番号（`std::thread::current().id()`）を窓に覚え、ほかのスレッドが出した記録は写さない。今の部品は書き出しのあいだにスレッドを起こさないが、将来 WIC やほかの部品がスレッドを使っても CSV と終了コードが汚れないための守りである。
 - 本文は履歴と同じ組み方（`message` の後に ` 名前=値`）を切らずに使う（`body_text` を `draft` と共有し、`draft` だけが 4,096 字で切る）。時刻は `GetLocalTime` の時・分・秒。
 - 本番で受け口を差し替えない（`with_default` などは使わない＝見張りの外に出ない）。
 
@@ -568,16 +583,16 @@ pub(crate) struct Hms { pub hour: u8, pub minute: u8, pub second: u8 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CapturedRecord { pub at: Hms, pub level: tracing::Level, pub body: String }
 
-/// 窓を開ける（開いていれば中身を空にして開け直す）。
+/// 窓を開ける（開いていれば中身を空にして開け直す）。呼んだスレッドの番号を覚える。
 pub(crate) fn capture_begin();
 /// 窓を閉じて、写した記録を残した順に返す（開いていなければ空）。
 pub(crate) fn capture_finish() -> Vec<CapturedRecord>;
 ```
-- Persistence & consistency: プロセスに 1 つの `Mutex<Option<Vec<CapturedRecord>>>`。排他の中で tracing のマクロを呼ばない（履歴の置き場と同じ約束）。
-- Concurrency strategy: 出したスレッドの上で同期に積む。
+- Persistence & consistency: プロセスに 1 つの `Mutex<Option<(ThreadId, Vec<CapturedRecord>)>>`（窓を開けたスレッドの番号と写した記録）。排他の中で tracing のマクロを呼ばない（履歴の置き場と同じ約束）。
+- Concurrency strategy: 出したスレッドの上で同期に積む。出したスレッドの番号が窓の番号と違えば積まない。
 
 **Implementation Notes**
-- Integration: `log_history.rs` は 424 行。足すのは 90 行ほど。純粋な部分（`body_text`・レベルの絞り）のテストは `log_history_capture_tests.rs`。層を通った写しは exe の試験で確かめる（単体テストはプロセスの受け口を据えない）。
+- Integration: `log_history.rs` は 424 行。足すのは 90 行ほど（約 515 行）。層の `on_event` は本文を組んで積む口（窓とスレッドの番号を確かめて積む関数）を呼ぶだけにし、その口と純粋な部分（`body_text`・レベルの絞り）のテストは `log_history_capture_tests.rs`。窓はプロセスに 1 つなので、窓を触るテストはそのファイルの中の排他 1 つで順に回す。層を通った写しは exe の試験で確かめる（単体テストはプロセスの受け口を据えない）。
 - Risks: 書き出しの間の 1 つの誤りが 2 行にならないことは、面の表を 1 度だけ組むこと（ShellWorldOnce）と `AnimationTable` を 1 度だけ作ることで守る。exe の試験で同じ本文の行が無いことを確かめる。
 
 #### PngEncoder
@@ -659,7 +674,9 @@ pub fn settle_surface(table: &AnimationTable, scope: u32, binds: &BindSet, surfa
 
 **Implementation Notes**
 - Integration: `actor_test_support.rs` の `ClockRig` と同じ順で送る。`SurfaceResolver::new(BTreeMap::new())`（番号の合図は別名なしで解ける）と `BindResolver::empty()` を使う。出力は捨てる（`MockSurfaceOutput` か中の空の出力）。
-- Validation: 測りの表（runonce が最後のコマを残す・`-1` で土台に戻る・always だけは T=0 で何も出ない・random は出ない・periodic は出る・runonce＋always は T の時点の always のコマ・2 本の runonce は長い方・動く絵の子は T の時点のコマで繰り返す）を `settle_tests.rs` に写す。
+- Validation: 測りの表（runonce が最後のコマを残す・`-1` で土台に戻る・always だけは T=0 で何も出ない・random は出ない（`random,1` でも出ない）・periodic は出る・runonce＋always は T の時点の always のコマ・2 本の runonce は長い方・動く絵の子は T の時点のコマで繰り返す）を `settle_tests.rs` に写す。
+- 刻みの位相: 書き出しは `\s[N]` の合図の直後の刻みを位相 0（合図と同じ時刻 0 から 16ms ごと）に固定する。画面の刻みは絶対の格子（`BoundarySchedule`）に揃うので、合図から最初の刻みまでは 0〜16ms のどれかになる。runonce の最後のコマはどちらでも同じだが、periodic の鳴る刻みは画面とずれうる。`settle_tests.rs` の periodic の行は「書き出しの決め方」（位相 0）を固定するものとして書く。
+- `random,1`: 画面では `random,1` は 1 秒ごとに必ず鳴るので、その面だけは画面の 1 秒後の絵と違う。書き出しは SSP 2.9.23 の測り（research.md §10.1 の面 3・random は出ない）に合わせて出さない。
 - Risks: T がとても長い面（数分の runonce）は刻みの数が増えるが、1 刻みは軽いので数千回でも 1 秒に届かない。
 
 #### ShellCanvasBounds（areka-emo-compose）
@@ -702,7 +719,9 @@ impl ShellTarget {
     pub fn take_world(&mut self) -> EmoWorld;
 }
 ```
-- 読み込みで組む面の表（`probe`）は `build_world` と同じ入力（`shell`・`images`）から組んでいるので中身は同じ。`ShellTarget` に `Option<EmoWorld>` として持たせる。画面の `assets.rs` は今までどおり `build_world` を呼ぶ（画面の記録の数は変えない）。
+- 読み込みで組む面の表（`probe`）は `build_world` と同じ入力（`shell`・`images`）から組んでいるので中身は同じ。`ShellTarget` に `Option<EmoWorld>` として持たせる。
+- `ShellTarget` は今 `#[derive(Debug)]` だが、`EmoWorld` は `Debug` を持たない。`Debug` を手で書き、面の表は有無（`is_some()`）だけを出す（ほかの欄は今の derive と同じに出す）。
+- 画面の `assets.rs` は `take_world` を呼ばず、面の表は今までどおり scope ごとに `build_world` で組む（画面の絵と記録の数は変えない）。読み込みの面の表は `ShellTarget` ごと `build_boot_assets` の終わりで捨てられるので、画面に手を足さない。
 
 #### GhostNamesReader（areka-parsers）
 
@@ -726,10 +745,13 @@ pub fn read_ghost_names(ghost_root: &Path, default_encoding: DefaultEncoding) ->
 
 **Responsibilities & Constraints**
 - areka-parsers: `read_bindgroup_defaults` が `char{N}.bindgroup{M}.default`・`char{N}.bindgroup{M}.name`・`char{N}.bindoption{M}.group`（N は 2 以上）も読む。`BindScope::Char(u32)` を足し、今の照会（`resolve_name`・`category_ids`・`is_mustselect`・`is_multiple`）と新しい `default_on(scope)` が 3 種類のスコープを引く。`BindGroupName::line` に、その名前を決めた descript.txt の行の番号（後勝ちの行）を持つ。
+  - 着せ替えの読みの置き場: `resolve.rs` は今 866 行で、`char*` の読みと行の番号を足すと 1,000 行の番人に近づくので、着せ替えの読み（定数・`read_bindgroup_defaults`・`parse_bindoption_options`・`parse_bindgroup_id`・`parse_bindgroup_name`）を兄弟の新しいファイル `crates/areka-parsers/src/package/resolve_bind.rs` に移してから `char*` を足す。`resolve.rs` の中の試験 2 つ（`bindgroup_name_transcription_tests`・`bindoption_options_tests`）は `resolve_bind_tests.rs` へ移す（中身は変えない）。`resolve.rs` は約 100 行・`resolve_bind.rs` は約 340 行・`resolve_bind_tests.rs` は約 700 行になる。
+  - 行の番号の出どころ: 今の `read_bindgroup_defaults` は `parse_kv`（`BTreeMap`・キーの昇順）を回すので、行の番号は失われている。`parse_kv` は変えず（ほかの読み手すべてに効くため）、`resolve_bind.rs` の中だけで使う行の番号つきの読み（例 `parse_kv_with_line(text) -> BTreeMap<String, (String, usize)>`）を足す。切り方は `parse_kv` と同じ（`lines()`・最初の `,` で分ける・キーと値の前後の空白を取る・キーが空の行とカンマの無い行を飛ばす）で、値に 1 始まりの行の番号を添える。同じキーは後勝ちで、行の番号も後の行になる。回す順は今と同じキーの昇順なので、転記の順と後勝ちの振る舞いは変わらない。
+  - 試験の分岐（`resolve_bind_tests.rs`）: 値の前後の空白を取ること・同じキーが 2 行あれば後の行の値と行の番号になること・CRLF でも行の番号がずれないこと。
 - areka-seriko:
   - `BindNamespace::Char(u32)`。`scope_namespace` は `"0"` → Sakura・`"1"` → Kero・2 以上の数 → `Char(n)`・ほか `None`（14.2）。
   - `BindResolver::from_groups(&BindGroupDefaults)`: 3 種類のスコープの名前の表と `mustselect`／`multiple` を持つ。`category_parts_in_order(ns, category)` はそのカテゴリのパーツ名を、シェルの descript.txt に書かれた順（`line` の順・同じパーツ名は 1 度）で返す。今の `BindResolver::new` はテストのために残す。
-  - `DefaultBinds`: スコープの番号 → `BindSet`。`from_groups` はスコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*` の既定を当て、書かれていないスコープは空（14.1。SSP 2.9.23 でスコープ 3 は何も着ない）。
+  - `DefaultBinds`: スコープの番号 → `BindSet`。`from_groups` はスコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*` の既定を当て、書かれていないスコープは空（14.1。SSP 2.9.23 でスコープ 3 は何も着ない）。`uniform(BindSet)` はどのスコープにも同じ組を返す（今の振る舞い＝1 組を全スコープで共有）。今の試験はこれで移すので期待は変わらない（例 `tests/cue_sequence.rs` の「`"10"` @ scope "1" → `binds:<static>`」）。
   - `ScopeStates::new(DefaultBinds)`。`current_binds(scope)` は動的な組が無ければ `DefaultBinds::for_scope(scope)`。
   - `apply_named_bind`: 名前の解決 → 方針 → 当てる（排他・`multiple`・`mustselect` の OFF は外さない）を 1 か所に。画面の actor の `\![bind]` と書き出しの `--dump-bind` が同じ関数を呼ぶ（記録は呼び手が出す）。
 - areka（画面）: `assets.rs` は `DefaultBinds::from_groups(&model.bindgroups)` と `BindResolver::from_groups(&model.bindgroups)` で作る（14.3）。`static_binds` を持ち回る所（`mod.rs`・`spine.rs`・`shell_carry.rs`・`frame/attach.rs`・`frame/switch.rs`・`frame/wiring.rs`）は `DefaultBinds` を持ち、`BindSet` が要る所でスコープを引く。
@@ -746,6 +768,8 @@ pub enum BindNamespace { Sakura, Kero, Char(u32) }
 pub struct DefaultBinds { /* BTreeMap<u32, BindSet> */ }
 impl DefaultBinds {
     pub fn from_groups(groups: &BindGroupDefaults) -> Self;
+    /// どのスコープにも同じ組（今の振る舞い。今の試験の移し替えが使う）。
+    pub fn uniform(binds: BindSet) -> Self;
     /// そのスコープだけに組を持つ（settle_surface とテストが使う）。
     pub fn single(scope: u32, binds: BindSet) -> Self;
     /// 書かれていないスコープ・数でないスコープは空の組。
@@ -777,7 +801,9 @@ pub fn apply_named_bind(
 - `ScopeStates` が持つ既定の組は `DefaultBinds` 1 つ。シェルの切り替え（`SerikoReplace::Shell`）は新しいシェルの `DefaultBinds` に置き換える。
 
 **Implementation Notes**
-- Integration: 型の付け替えは機械的だが触るファイルが多いので、areka-parsers → areka-seriko → areka（画面）→ 書き出しの順に段を分ける。
+- Integration: 型の付け替えは機械的だが触るファイルが多い（本番 9 本・試験 41 本＝Modified Files）ので、areka-parsers → areka-seriko → areka（画面）→ 書き出しの順に段を分ける。実装は少なくとも次の 2 つのタスクに分ける。
+  - (a) 型の付け替え: `DefaultBinds`（`uniform` を含む）を足し、`ScopeStates::new`・`spawn_seriko(_clocked)`・`SerikoReplace::Shell`・`static_binds` の型を替える。本番の `assets.rs` も試験もすべて `DefaultBinds::uniform(..)` で包む。振る舞いは変わらず、すべての試験がそのまま緑。
+  - (b) 画面の既定をスコープごとにする: `assets.rs` を `DefaultBinds::from_groups`・`BindResolver::from_groups` に替え、`scope_namespace` の 2 以上を `Char(n)` にする。期待が意図して変わる試験はこのタスクで直す（`bind_tests.rs` の `scope_namespace_maps_zero_one_only` の書き直し・画面の資産を通る試験でスコープ 1 の組を見ているものは `kero.*` へ）と新しい試験（14.4 の検体・`assets_tests.rs` のスコープ 1 が `kero.*`）。
 - Validation: 14.4 の検体（research.md §10.3 の `g_scope` と同じ形）で、画面の組（`ScopeStates` の `current_binds` と、スコープ 1・2 への `\![bind]`）と書き出しの組（`DefaultBinds`＋`apply_bind_specs`）の両方を確かめる。
 - Risks: `kero.*` を書いていないシェルの相方は、画面で初めに何も着なくなる（正典どおり・Revalidation Triggers に書いた）。
 
@@ -887,9 +913,10 @@ pub fn compare_dirs(ssp_dir: &Path, areka_dir: &Path) -> std::io::Result<Vec<Fil
 - `offline_dump/surface_list_tests.rs`: `surface` の頭の有無・範囲・除外・除外の範囲・読めない要素・単独の無い面と範囲の欠番・重ね・空白（3.1〜3.5・3.7）。記録は `log-capture-kit` で数える。
 - `offline_dump/bind_spec_tests.rs`: research.md §10.4 の 13 通り（`__ALL__`・空のパーツ・省略・OFF・mustselect の OFF・`multiple`・`true`／`false`・`;`・前後の空白・無いカテゴリ・無いパーツ・読めない ON/OFF）とスコープ 0・1・2 の名前の表（5.1〜5.9）。
 - `offline_dump/report_tests.rs`: 終了コードの段（空・Warning・Error・混ざり）・CSV の BOM・CRLF・`""`・4 列・レベルの語・ゴースト名が空・空なら作らず在るファイルを残す・10,001 件を間引かない・書けないときの error（7.1〜7.8・8.1〜8.3）。
-- `areka-seriko/src/settle_tests.rs`: `settle_time` と、research.md §10.1・§10.2 の表（runonce の最後のコマ・`-1`・always だけ・random・periodic・runonce＋always・2 本の runonce・動く絵の子が T のコマで繰り返す）・2 度で同じ（4.1・4.7・4.9）。
+- `areka-seriko/src/settle_tests.rs`: `settle_time` と、research.md §10.1・§10.2 の表（runonce の最後のコマ・`-1`・always だけ・`random,1` は出ない・periodic・runonce＋always・2 本の runonce・動く絵の子が T のコマで繰り返す）・2 度で同じ（4.1・4.7・4.9）。書き出しは `\s[N]` の後の刻みの位相を 0 に固定する（画面は絶対の格子に揃うので 0〜16ms のどれか）。runonce の最後のコマはどちらでも同じなので画面と同じ絵の確かめになるが、periodic の行は書き出しの決め方（位相 0）を固定するものである。
+- `log_history_capture_tests.rs`: `body_text` が切らないこと・warn 以上だけ写すこと・窓を開けたスレッドと違うスレッドから積む口を呼んでも `capture_finish` に入らないこと（同じスレッドからなら入る）・閉じた窓には積まないこと（7.3・7.5）。
 - `areka-emo-compose/src/plan_bounds_tests.rs`: 負の座標の element・`never` の pattern・runonce の pattern・入れ子・はみ出しの無いシェルは土台のまま（4.3）。
-- `areka-seriko`（`bind_tests.rs`・`state_*_tests.rs` に足す）と `areka-parsers`（`resolve` のテストに足す）: `char*` の読み・`DefaultBinds::from_groups`・`for_scope` の空・`scope_namespace` の 2 以上・`category_parts_in_order` が書かれた順・`apply_named_bind` の 4 つの結果（14.1・14.2・14.3）。
+- `areka-seriko`（`bind_tests.rs`・`state_*_tests.rs` に足す）と `areka-parsers`（`resolve_bind_tests.rs` に足す）: `char*` の読み・行の番号つきの読み（空白・後勝ちの行・CRLF）・`DefaultBinds::uniform` がどのスコープにも同じ組・`DefaultBinds::from_groups`・`for_scope` の空・`scope_namespace` の 2 以上・`category_parts_in_order` が書かれた順・`apply_named_bind` の 4 つの結果（14.1・14.2・14.3）。
 
 ### Integration Tests
 
