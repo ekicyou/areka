@@ -307,6 +307,9 @@ pub(crate) fn prepare_ghost_windows(
         // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す（areka-P0-file-drop・
         // 要件 1.1・1.2）。起こし直しもこの閉包を通るので、回数によらず新しい窓に差さる。
         input_events::file_drop::attach_file_drop_receivers(world);
+        // 位置初期化の近道の受け手も同じ窓へ差す（areka-P0-window-link-directives 要件 8.1〜8.4）。
+        // 窓がキーの入力先のときだけ届くので、ほかのアプリの同じキーは横取りしない。
+        input_events::shortcut::attach_shortcut_receivers(world);
         let scopes: Vec<usize> = windows.scopes().collect();
         tracing::info!(
             ?scopes,
