@@ -588,3 +588,43 @@ fn descript_ghost_replaces_names_and_readme_then_reserves_the_current_shell() {
         "(定常, 判定, さくらの名前, readme の置き場, 印の段, 予約, 降ろせた)"
     );
 }
+
+/// ゴーストの中のバルーン（`<ゴースト>\balloon\<名>`）を使っているときの balloon の読み直し（`\![reload,balloon]`・
+/// MCP の読み直しと同じ窓口）は、同じ場所とフォルダ名で予約し、根の同じ名前へ組み直さない
+/// （areka-P0-ghost-inner-balloon 要件 5.7）。
+///
+/// # 非空虚性
+/// 今のバルーンをフォルダ名から根で組み直すと、予約の鍵と切替先が `balloon\inner` になって赤。
+#[test]
+fn balloon_reload_keeps_the_ghost_inner_balloon_in_place() {
+    let mut rig = rig("areka-reload-skin-ghost-inner-balloon");
+    let inner = rig.root.ghost_dir("A").join("balloon").join("inner");
+    rig.world.resource_mut::<BootContext>().current.balloon = BalloonDecision {
+        route: BalloonRoute::Memory,
+        dir: inner.clone(),
+        folder: Some("inner".to_owned()),
+    };
+    let verdict = request_reload(&mut rig.world, req(ReloadTarget::Balloon));
+    assert_eq!(
+        (
+            verdict,
+            skin_in_flight(&rig.world),
+            rig.world
+                .get_non_send::<SkinSwitchInFlight>()
+                .map(|f| (f.target.dir.clone(), f.target.folder.clone())),
+            skin_is_reload(&rig.world, SkinKind::Balloon, &inner),
+            skin_is_reload(
+                &rig.world,
+                SkinKind::Balloon,
+                &rig.root.balloon_dir("inner")
+            ),
+        ),
+        (
+            ReloadVerdict::Accepted,
+            Some((SkinKind::Balloon, inner.clone())),
+            Some((inner, "inner".to_owned())),
+            true,
+            false,
+        )
+    );
+}
