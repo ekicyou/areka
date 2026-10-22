@@ -368,8 +368,8 @@ pub enum ShioriCall {
 
 /// shiori 呼出の結果（NOTIFY は Value を運べない＝talk 非生成の構造的保証）。
 pub enum ShioriOutcome {
-    /// GET 200: Value（スクリプト文字列・不透明）。
-    Value(String),
+    /// GET 200: Value（スクリプト文字列・不透明）と、応答から導いた実効のセキュリティレベル（要件 3.1）。
+    Value(String, areka_talk::SecurityLevel),
     /// GET 204: Value なし。
     NoContent,
     /// NOTIFY 完了（応答は破棄済み）。

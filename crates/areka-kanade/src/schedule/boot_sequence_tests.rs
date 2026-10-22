@@ -77,7 +77,10 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         step(
             s,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("greeting".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "greeting".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "test",
             },
             &cfg,
@@ -177,7 +180,10 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
         step(
             s,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("earlygreet".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "earlygreet".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "test",
             },
             &cfg,
@@ -295,7 +301,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
     let (s1, actions1) = step(
         s1,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("a".to_string()),
+            outcome: ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
             origin: "test",
         },
         &cfg,
@@ -329,7 +335,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
     let (s2, actions2) = step(
         s2,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("b".to_string()),
+            outcome: ShioriOutcome::Value("b".to_string(), areka_talk::SecurityLevel::Local),
             origin: "test",
         },
         &cfg,
@@ -502,7 +508,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
     let (_, actions) = step(
         greeting,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("hi".to_string()),
+            outcome: ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
             origin: "test",
         },
         &cfg,
@@ -596,7 +602,10 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
         step(
             s,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("greeting".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "greeting".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "test",
             },
             &cfg,

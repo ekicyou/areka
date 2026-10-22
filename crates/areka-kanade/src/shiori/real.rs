@@ -249,7 +249,7 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
             let status_wire = status.render();
             // wire 形（`as_str()`）のみを backend へ渡す——出所カテゴリは境界を跨がない（DD-1）。
             match backend.get(id.as_str(), &references, status_wire.as_deref()) {
-                Ok(Some(value)) => ShioriOutcome::Value(value),
+                Ok(Some(value)) => ShioriOutcome::Value(value, areka_talk::SecurityLevel::Local),
                 Ok(None) => ShioriOutcome::NoContent,
                 Err(e) => ShioriOutcome::Failed(map_error(e)),
             }

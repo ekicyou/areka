@@ -101,7 +101,7 @@ pub(super) fn before(state: &mut State, input: &Input) -> Replied {
     match input {
         Input::ShioriReply { outcome, .. } => Replied {
             script: match outcome {
-                ShioriOutcome::Value(script) => Some(script.clone()),
+                ShioriOutcome::Value(script, _) => Some(script.clone()),
                 _ => None,
             },
             source: state.reply_source.take(),
@@ -205,7 +205,7 @@ pub(crate) fn read_reply(
     outcome: ShioriOutcome,
 ) -> ReplyReading {
     match outcome {
-        ShioriOutcome::Value(script) => {
+        ShioriOutcome::Value(script, _) => {
             let kind = if script.is_empty() {
                 "empty"
             } else {

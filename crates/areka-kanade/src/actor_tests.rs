@@ -168,7 +168,9 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
         // OnFirstBoot(GET)→204、OnBoot(GET)→Value でグリーティング talk を起こす。
-        Recorded::Get(id) if id == "OnBoot" => ShioriOutcome::Value(r"\0hi\e".to_string()),
+        Recorded::Get(id) if id == "OnBoot" => {
+            ShioriOutcome::Value(r"\0hi\e".to_string(), areka_talk::SecurityLevel::Local)
+        }
         Recorded::Get(_) => ShioriOutcome::NoContent,
         Recorded::Close => ShioriOutcome::Notified,
     });
@@ -604,7 +606,9 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
-        Recorded::Get(id) if id == "username" => ShioriOutcome::Value("bob".to_string()),
+        Recorded::Get(id) if id == "username" => {
+            ShioriOutcome::Value("bob".to_string(), areka_talk::SecurityLevel::Local)
+        }
         Recorded::Get(_) => ShioriOutcome::NoContent,
         Recorded::Close => ShioriOutcome::Notified,
     });

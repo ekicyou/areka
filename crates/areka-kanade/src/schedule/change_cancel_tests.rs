@@ -159,7 +159,10 @@ fn close_request_while_waiting_changing_reply_waits_for_it_then_closes() {
     let (s, again) = close_request(s);
     assert_eq!(cancel_notices(&again, CancelReason::CloseRequest), 0);
     assert!(again.is_empty());
-    let (s, actions) = reply(s, ShioriOutcome::Value("bye".to_string()));
+    let (s, actions) = reply(
+        s,
+        ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),
+    );
     assert!(
         matches!(actions.as_slice(), [Action::StartTalk(t)] if t.talk_id == TalkId(5) && t.script == "bye")
     );
@@ -226,7 +229,10 @@ fn close_request_after_change_on_close_was_sent_never_sends_it_again() {
             reason: CloseReason::User { scope: 0 }
         }
     ));
-    let (s, a1) = reply(s, ShioriOutcome::Value("bye".to_string()));
+    let (s, a1) = reply(
+        s,
+        ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),
+    );
     let Phase::CloseTalkWait { talk_id, .. } = s.phase else {
         panic!("別れの台詞の待ちへ進むはず");
     };

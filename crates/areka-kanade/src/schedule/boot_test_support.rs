@@ -73,7 +73,10 @@ pub(super) fn boot_until_version_with_greeting(
     }
     let s = reply(s, ShioriOutcome::Notified); // BootInit→BootPrefetch（username GET）
     let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch→BootType（初回起動＝OnFirstBoot GET）
-    let s = reply(s, ShioriOutcome::Value("greeting".to_string())); // BootType(Value)→BootVersion{talk: Some(id=1)}（OnBoot を飛ばす）
+    let s = reply(
+        s,
+        ShioriOutcome::Value("greeting".to_string(), areka_talk::SecurityLevel::Local),
+    ); // BootType(Value)→BootVersion{talk: Some(id=1)}（OnBoot を飛ばす）
 
     assert!(
         matches!(

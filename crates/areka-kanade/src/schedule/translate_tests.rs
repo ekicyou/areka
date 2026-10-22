@@ -62,14 +62,20 @@ fn proceeded(reading: ReplyReading) -> String {
 
 #[test]
 fn value_with_text_is_adopted_as_replaced() {
-    let (reading, ev) = read(ShioriOutcome::Value("\\0翻訳した台詞\\e".to_string()));
+    let (reading, ev) = read(ShioriOutcome::Value(
+        "\\0翻訳した台詞\\e".to_string(),
+        areka_talk::SecurityLevel::Local,
+    ));
     assert_eq!(proceeded(reading), "\\0翻訳した台詞\\e");
     assert_reply_logged(&ev, Level::INFO, "replaced");
 }
 
 #[test]
 fn empty_value_is_adopted_as_empty() {
-    let (reading, ev) = read(ShioriOutcome::Value(String::new()));
+    let (reading, ev) = read(ShioriOutcome::Value(
+        String::new(),
+        areka_talk::SecurityLevel::Local,
+    ));
     assert_eq!(
         proceeded(reading),
         "",
@@ -652,8 +658,11 @@ fn talking() -> State {
 
 #[test]
 fn shiori_script_is_captured_into_a_single_translate_action() {
-    let (s, actions, ev) =
-        raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::Value(ORIGINAL.into()));
+    let (s, actions, ev) = raise_get_and_reply(
+        talking(),
+        "OnBoot",
+        ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+    );
     let [Action::Translate(req)] = actions.as_slice() else {
         panic!("一括は翻訳の行動 1 つだけのはず: {} 件", actions.len());
     };
@@ -691,8 +700,11 @@ fn shiori_script_is_captured_into_a_single_translate_action() {
 
 #[test]
 fn empty_script_is_played_without_translation() {
-    let (s, actions, ev) =
-        raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::Value(String::new()));
+    let (s, actions, ev) = raise_get_and_reply(
+        talking(),
+        "OnBoot",
+        ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
+    );
     assert!(matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script.is_empty()));
     assert!(s.translate.is_none());
     let hit = logged_once(&ev, Level::TRACE, "translate_skipped_empty");
@@ -705,7 +717,7 @@ fn reply_to_on_translate_is_played_without_translation() {
     let (s, actions, ev) = raise_get_and_reply(
         talking(),
         "OnTranslate",
-        ShioriOutcome::Value(ORIGINAL.into()),
+        ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
     );
     assert!(matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script == ORIGINAL));
     assert!(
@@ -732,7 +744,7 @@ fn missing_source_plays_the_script_with_an_error() {
         out = Some(step(
             s,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value(ORIGINAL.into()),
+                outcome: ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
                 origin: "raise",
             },
             &cfg(),

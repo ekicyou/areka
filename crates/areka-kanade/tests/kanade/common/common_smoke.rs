@@ -39,7 +39,7 @@ fn mock_shiori_replies_and_records_onboot() {
         .recv_timeout(DEFAULT_TIMEOUT)
         .expect("mock shiori should reply immediately");
     match outcome {
-        ShioriOutcome::Value(script) => assert_eq!(script, FIXED_BOOT_SCRIPT),
+        ShioriOutcome::Value(script, _) => assert_eq!(script, FIXED_BOOT_SCRIPT),
         // ShioriOutcome は Debug 非実装ゆえ、非 Value は総称メッセージで報告する。
         _ => panic!("expected Value(boot script) from mock shiori OnBoot"),
     }
@@ -228,7 +228,7 @@ fn mock_shiori_injects_mouse_response() {
         .recv_timeout(DEFAULT_TIMEOUT)
         .expect("mock shiori should reply immediately");
     match outcome {
-        ShioriOutcome::Value(script) => assert_eq!(script, MOUSE_SCRIPT),
+        ShioriOutcome::Value(script, _) => assert_eq!(script, MOUSE_SCRIPT),
         _ => panic!("expected injected Value(script) for OnMouseMove"),
     }
 

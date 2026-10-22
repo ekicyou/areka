@@ -20,7 +20,7 @@ fn inactive_status() -> ExecutionStatus {
 /// 不変ゆえ、assert 失敗メッセージ用に variant を局所的に説明する）。
 fn describe(outcome: &ShioriOutcome) -> &'static str {
     match outcome {
-        ShioriOutcome::Value(_) => "Value",
+        ShioriOutcome::Value(_, _) => "Value",
         ShioriOutcome::NoContent => "NoContent",
         ShioriOutcome::Notified => "Notified",
         ShioriOutcome::Unloaded => "Unloaded",
@@ -214,7 +214,7 @@ fn get_ok_some_maps_to_value() {
         },
     );
     assert!(
-        matches!(outcome, ShioriOutcome::Value(ref s) if s == r"\0hi\e"),
+        matches!(outcome, ShioriOutcome::Value(ref s, _) if s == r"\0hi\e"),
         "Ok(Some) は Value へ: got {}",
         describe(&outcome)
     );

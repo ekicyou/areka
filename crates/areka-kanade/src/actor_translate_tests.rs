@@ -165,13 +165,13 @@ type ReplyCase = (fn() -> ShioriOutcome, &'static str, &'static str, Level);
 fn every_reply_kind_passes_through_makoto_once_with_source_id() {
     let cases: [ReplyCase; 4] = [
         (
-            || ShioriOutcome::Value("太郎くん".into()),
+            || ShioriOutcome::Value("太郎くん".into(), areka_talk::SecurityLevel::Local),
             "太郎くん",
             "replaced",
             Level::INFO,
         ),
         (
-            || ShioriOutcome::Value(String::new()),
+            || ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
             "",
             "empty",
             Level::INFO,
@@ -297,7 +297,7 @@ fn absent_marker_from_outside_is_replaced_on_existing_send_path() {
 #[test]
 fn sstp_send_source_uses_sstp_send_owned_reference1() {
     let observed = run_from(
-        ShioriOutcome::Value("翻訳後".to_string()),
+        ShioriOutcome::Value("翻訳後".to_string(), areka_talk::SecurityLevel::Local),
         ScriptSource::SstpSend,
     );
     let (id, references, status) = received_get(observed.received);

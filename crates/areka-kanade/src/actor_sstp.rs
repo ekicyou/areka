@@ -25,10 +25,10 @@ pub(crate) enum FirstReply {
 /// `Unloaded` は通知の入口の往復からは生じないが、写しの表を閉じるため返事なしに置く。
 pub(crate) fn first_reply_of(outcome: &ShioriOutcome) -> FirstReply {
     match outcome {
-        ShioriOutcome::Value(script) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
             FirstReply::Script(script.clone())
         }
-        ShioriOutcome::Value(_)
+        ShioriOutcome::Value(_, _)
         | ShioriOutcome::NoContent
         | ShioriOutcome::Notified
         | ShioriOutcome::Unloaded => FirstReply::NoReply,

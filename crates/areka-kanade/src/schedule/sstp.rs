@@ -119,7 +119,7 @@ pub(super) fn on_notify_reply(
         return super::on_shiori_reply(state, outcome, origin, config);
     }
     match outcome {
-        ShioriOutcome::Value(script) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
             super::clear_choice_ledger(&mut state, "sstp_notify");
             state.choice_prev_talk = None;
             let (talk_id, start) = super::start_talk(&mut state, NOTIFY_ORIGIN, script);
@@ -127,7 +127,7 @@ pub(super) fn on_notify_reply(
             tracing::info!(target: "kanade", event = "sstp_notify_talk", talk_id = talk_id.0, strict = ?strict, "外から頼まれたイベントの台本を新しいトークとして始める");
             (state, vec![start])
         }
-        ShioriOutcome::Value(_) | ShioriOutcome::NoContent => {
+        ShioriOutcome::Value(_, _) | ShioriOutcome::NoContent => {
             tracing::debug!(target: "kanade", event = "sstp_notify_no_script", "外から頼まれたイベントは台本を返さなかった——今のトークを続ける");
             (state, Vec::new())
         }

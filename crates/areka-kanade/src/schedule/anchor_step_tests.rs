@@ -77,7 +77,10 @@ fn no_content(origin: &'static str) -> (ShioriOutcome, &'static str) {
 }
 
 fn script(origin: &'static str) -> (ShioriOutcome, &'static str) {
-    (ShioriOutcome::Value("\\0やあ\\e".to_string()), origin)
+    (
+        ShioriOutcome::Value("\\0やあ\\e".to_string(), areka_talk::SecurityLevel::Local),
+        origin,
+    )
 }
 
 /// 話している最中（トーク 3）で、選択待ちの帳簿もある。

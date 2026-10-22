@@ -158,14 +158,16 @@ fn spawn_rig(spec: WireSpec) -> Rig {
                             sent_while_held =
                                 !matches!(shiori_rx.try_recv(), Err(TryRecvError::Empty));
                         }
-                        translated
-                            .clone()
-                            .map_or(ShioriOutcome::NoContent, ShioriOutcome::Value)
+                        translated.clone().map_or(ShioriOutcome::NoContent, |s| {
+                            ShioriOutcome::Value(s, areka_talk::SecurityLevel::Local)
+                        })
                     } else {
                         scripts
                             .get(id.as_str())
                             .cloned()
-                            .map_or(ShioriOutcome::NoContent, ShioriOutcome::Value)
+                            .map_or(ShioriOutcome::NoContent, |s| {
+                                ShioriOutcome::Value(s, areka_talk::SecurityLevel::Local)
+                            })
                     };
                     seen.push(Seen::Call(recorded));
                     let _ = reply.send(outcome);

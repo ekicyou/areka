@@ -437,7 +437,10 @@ fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
     let (s, _) = step(State::initial(), Input::Boot, cfg);
     let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
     let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
-    let s = reply(s, ShioriOutcome::Value("\\h挨拶\\e".to_string())); // → BootVersion{挨拶}
+    let s = reply(
+        s,
+        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
+    ); // → BootVersion{挨拶}
     let (s, _) = step(s, Input::TranslateDone(Ok("\\h挨拶\\e".into())), cfg);
     let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
     assert!(

@@ -102,7 +102,10 @@ impl Drive {
         self.feed(Input::Tick {
             now: MonotonicMs(now),
         });
-        let mut actions = self.reply(ShioriOutcome::Value(ORIGINAL.into()), "OnSecondChange");
+        let mut actions = self.reply(
+            ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+            "OnSecondChange",
+        );
         if let [Action::Translate(_)] = actions.as_slice() {
             actions = self.feed(Input::TranslateDone(Ok(shown.to_string())));
         }
@@ -254,7 +257,10 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
     // ⑴ 捕まえる。
     let (mut d, origin) = prepare();
     let sent = d.sent.clone().expect("元のイベントの GET を送ってある");
-    let actions = d.reply(ShioriOutcome::Value(ORIGINAL.into()), origin);
+    let actions = d.reply(
+        ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+        origin,
+    );
     let [Action::Translate(req)] = actions.as_slice() else {
         panic!("一括は翻訳の行動 1 つだけのはず: {:?}", shapes(&actions));
     };
@@ -288,11 +294,14 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
 
     // ⑶ 元の台詞のまま返る翻訳は、翻訳なしと同じ状態と一括になる（要件 5.5）。
     let (mut t, origin) = prepare();
-    t.reply(ShioriOutcome::Value(ORIGINAL.into()), origin);
+    t.reply(
+        ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+        origin,
+    );
     let same = t.feed(Input::TranslateDone(Ok(ORIGINAL.into())));
     let (b, origin) = prepare();
     let reply = Input::ShioriReply {
-        outcome: ShioriOutcome::Value(ORIGINAL.into()),
+        outcome: ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
         origin,
     };
     let (base, base_actions) = step_untranslated(b.s, reply, &b.cfg);
@@ -554,7 +563,12 @@ fn empty_greeting_is_not_translated() {
     // SHIORI が 200 で 0 文字の台詞を返した（起動の記録は後ろに付く）。
     let (mut d, origin) = boot_first();
     let mut actions = Vec::new();
-    let ev = capture(|| actions = d.reply(ShioriOutcome::Value(String::new()), origin));
+    let ev = capture(|| {
+        actions = d.reply(
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
+            origin,
+        )
+    });
     assert_eq!(kinds(&actions), ["StartTalk", "Notify:basewareversion"]);
     assert_eq!(started(&actions).script, "");
     assert_eq!(started(&actions).epilogue, epilogue());
@@ -575,7 +589,12 @@ fn reply_to_on_translate_asked_through_the_talk_gap_is_not_translated() {
         }),
     });
     let mut actions = Vec::new();
-    let ev = capture(|| actions = d.reply(ShioriOutcome::Value(ORIGINAL.into()), "OnTranslate"));
+    let ev = capture(|| {
+        actions = d.reply(
+            ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+            "OnTranslate",
+        )
+    });
     assert_eq!(kinds(&actions), ["StartTalk"]);
     assert_eq!(started(&actions).script, ORIGINAL);
     assert!(
@@ -603,7 +622,10 @@ fn marked_talk_is_followed_through_the_translation() {
 
     // 捕まえた時点（翻訳の結果の前）で、見張りは既に印の台詞を追っている。
     let (mut d, origin) = marked_shell_changing();
-    d.reply(ShioriOutcome::Value(ORIGINAL.into()), origin);
+    d.reply(
+        ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+        origin,
+    );
     let waiting = d.s.translate.as_ref().expect("帳簿を置く").talk_id;
     let watch = d.s.talk_gap.as_ref().expect("見張りが在る");
     assert!(matches!(watch.marked, Marked::Talk(t) if t == waiting));
@@ -630,7 +652,10 @@ fn choice_timeout_reference0_is_the_final_script() {
 #[test]
 fn transport_failure_after_a_choice_chain_goes_to_fault() {
     let (mut d, origin) = choice_cascade();
-    let actions = d.reply(ShioriOutcome::Value(ORIGINAL.into()), origin);
+    let actions = d.reply(
+        ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
+        origin,
+    );
     assert_eq!(kinds(&actions), ["Translate"]);
     let mut actions = Vec::new();
     let ev = capture(|| {

@@ -50,7 +50,7 @@ pub(super) fn reply_value(s: &mut State, script: &str, origin: &'static str) -> 
     feed(
         s,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(script.to_string()),
+            outcome: ShioriOutcome::Value(script.to_string(), areka_talk::SecurityLevel::Local),
             origin,
         },
     )
