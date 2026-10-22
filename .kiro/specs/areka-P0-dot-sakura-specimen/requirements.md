@@ -28,7 +28,7 @@
   - 書庫 `vendors/sample_ghost/dot_sakura.nar` を、受け取ったバイト列のまま置くこと。
   - 検体の登記表の 1 行（ゴースト `dot_sakura`・同梱バルーン `bottle`）と、登記の数を持つ自動テストと文書の数（登記の数 9 → 10・書庫を置く行の数 8 → 9）。
   - `vendors/sample_ghost/README.md` の表と節。
-  - steering（`product.md` の検体の表・`structure.md` の検体の顔ぶれ）と、根の `README.md` の動作を確かめているゴーストの表への `dot_sakura` の 1 行。
+  - steering（`product.md` の検体の表＝`dot_sakura` と、欠けていた `emily4`・`pasta-in-windows` の行・`structure.md` の検体の顔ぶれ）と、根の `README.md` の動作を確かめているゴーストの表への `dot_sakura` の 1 行。
   - 実機で 1 回起こした記録（本 spec のフォルダの中）と、崩れの起票。
 - **Out of scope**（本 spec では行わない）:
   - どっとさくらの起動・会話・メニューを通すための areka の直し（起票した先が持つ）。
@@ -40,7 +40,7 @@
   - 書庫のバイト列の変更（畳み直し・改行の変換・中のファイルの足し引き）。
   - 書庫を URL の行で引く形への切り替え（取り寄せ先にハッシュのファイルが置かれた後の話）。
   - 根の `README.md` の表への `pasta-in-windows` の行（この表は「動作を確かめているゴースト」の表で、窓際のぱすたさんの確かめは `areka-P0-pasta-in-windows-verification` が持つ）。`emily4` の行は既に在る。
-  - steering の `product.md` の検体の表に欠けている、ほかの検体（`emily4`・`pasta-in-windows`）の行の補い。
+  - 実機の 1 回でのネットワーク更新（要件 5.11）。
 - **Adjacent expectations**:
   - `.nar` のインストール（`areka-nar`）・32 ビットの SHIORI の載せ台（`shiori-host32`）・表示の経路は、今のまま使う（変更 0）。崩れは起票する。
   - 既定のバルーン（`StayseeBalloon`）と、その解決の決まりには触らない（`areka-P0-default-balloon-selfmade` が持つ）。同梱バルーンを持つゴーストは、起動で同梱の 1 個目が既定より先に採られる（完了 `areka-P0-ghost-standard-balloon` の決まり・変更 0）。
@@ -97,7 +97,7 @@
 
 1. The steering の `structure.md` shall 検体の顔ぶれを 10 本（ゴースト 7 体・バルーン 3 本）とし、`dot_sakura`（華和梨・32 ビット・同梱バルーン `bottle`・受け取ったバイト列のまま・配布物へ入れない）を載せ、SHIORI の系統を華和梨を含む 4 つとする。
 2. The 根の `README.md` shall 動作を確かめているゴーストの表に `dot_sakura` の 1 行を持ち、備考に、実機の 1 回で分かったこと（起動まで通ったか、通らなければその旨と起票先）と、開発用の検体としてだけ使い配布物には入れないことを書く。
-3. The steering の `product.md` shall 適合の検体の表に `dot_sakura`（華和梨・32 ビット）の 1 行を持ち、表の前の「SHIORI 3 系統」の言い方を、華和梨を含む 4 系統に合わせる。
+3. The steering の `product.md` shall 適合の検体の表に `dot_sakura`（華和梨・32 ビット）の 1 行を持ち、今欠けている `emily4` と `pasta-in-windows` の行も補い、見出しと表の前の「SHIORI 3 系統」の言い方を、華和梨を含む 4 系統と本 spec の時点の日付に合わせる。
 
 ### Requirement 5: 実機で 1 回起こす
 
@@ -127,6 +127,7 @@
 8. If 華和梨の SHIORI を読み込めないとき、または SHIORI の版が 2.x だけのとき, then the 実機の記録 shall その旨と根拠を書き、7 項の残りの項目を「確かめていない」とし、本 spec の中で直さない。
 9. The 実機の記録 shall シェルとバルーンの絵の撮影（スクリーンショット・面の画像）を、文書と PR に貼らない。貼るのは、開発者が許したときだけとする（シェルは第三者の絵を含むため）。
 10. The 本 spec shall どっとさくらを動かすための areka のコードの変更を含まない（変更 0）。
+11. The 実機の走行 shall ネットワーク更新を行わない（`updateurl` は開発者の古いサイトを指し、外へ出る操作は本 spec の目的の外のため）。The 実機の記録 shall ネットワーク更新を「確かめていない」とし、その理由を書く。
 
 ### Requirement 6: 崩れの起票
 
