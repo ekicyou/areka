@@ -39,6 +39,8 @@ pub(crate) mod reset_balloon_pos;
 pub(crate) mod reset_pos;
 pub mod resolver;
 /// 台本からの吸着の向きの変更（areka-P0-window-link-directives 要件 1）。
+// shortcut: 本番の呼び手（取り出しの相の腕・`MoveCueSink` の語の読み）は task 6 で来る。来たら許可属性を外す。
+#[allow(dead_code)]
 pub(crate) mod script_alignment;
 pub mod source;
 pub mod spawn;

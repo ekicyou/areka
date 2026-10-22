@@ -38,7 +38,7 @@
   - _Depends: 1.2, 1.3_
   - _Requirements: 3.1, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 6.5, 9.2_
 
-- [ ] 2.2 (P) 台本の吸着の語を読み、現スコープの窓へ当てる
+- [x] 2.2 (P) 台本の吸着の語を読み、現スコープの窓へ当てる
   - `placement/script_alignment.rs` に語の読み（`top`・`bottom`・`left`・`right`・`free`・`default`・読めない値・欠けた値。前後の空白を除き大文字小文字を区別しない。3 つ目以降の引数は `debug!`）と、窓への適用を作る
   - 適用は、欠けた値なら何も変えずに記録、窓や `AnchorSource` が無ければ記録して何もしない、読めない語は記録して `free` と同じ、`default` は descript の向きへ戻して印を外す。`Anchored` と印を書き、1.3 の書き手で `move_window` を付け直し、今の窓の大きさで `resize_window_to` を経路 `MoveCue` で呼んで辺へ沿わせ（バルーンは付いて動き記憶には書かない）、`alignment_changed` を出どころ付きで記録する。大きさが読めなければ向きだけ変えて記録する
   - 兄弟のテストで、6 つの語と綴りの揺れ・読めない語・欠けた値の読み、下から上・左・右へ変えると窓が辺へ沿いもう一方の軸が残る・`free` で動かない・`default` で descript の向きへ戻る・窓の無いスコープ・`move_window` の切り替わり・バルーンが付いて動き記憶に書かれないこと、が緑になる
@@ -155,3 +155,4 @@
 - 1.3: `placement/follow.rs` の `mod sticky_follow` に一時の `#[allow(dead_code)]`。本番の呼び出しが来たら外す。`follow/` の下のモジュールのテストは `placement/follow_<名>_tests.rs`（`#[path]` で follow.rs から読む）。
 - 1.4: `DefaultPlacementBasis` は `{ source: DescriptSource, balloon: BalloonPlacementInputs }`。`placement/spawn.rs:183` の注記は「設定ごと置く」のままで古い。触るついでに直す。
 - 2.1: 帳簿が無いときの記録は `sticky_skipped`（reason=no_ledger）の `warn!`。design.md の記録の表に無いので、完了までに表へ 1 行足す。
+- 2.2: `parse_alignment_word` は `args: &[&str]`（先頭が向き、3 つ目以降の引数を debug! するため）。design.md の署名の行は完了までに直す。6 の呼び手は `tokens[1..]` をそのまま渡す。空や空白だけの値は欠けた値（1.9）として扱い、COMPAT §8 の行（8）にも書く。記録の表に `alignment_extra_args`（debug）と `alignment_skipped` の reason（missing_value・no_ghost_windows・no_char_window・no_anchor_source）を完了までに足す。`placement/mod.rs` の `script_alignment` に一時の `#[allow(dead_code)]`（6 で外す）。
