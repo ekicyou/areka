@@ -159,7 +159,8 @@
 2. **`PropPath` に元の綴りを残すか**（細部 7 の `shiori.変数名` の余地）。残すなら案 B か C。残さないなら案 A で、後の spec は生の文字列を別に持つ。
 3. **`index(…)` の見分けを大小を区別せずに行うか**。要件 1.6 の例（`INDEX(abc)`）の一致はこれで決まる（案 A は自然に、案 B は別に直す）。
 4. **書き込みの仕分けの記録・効果・`RuntimeCommandSink` へ渡す名前の綴り**（書かれた綴りか正準の綴りか）。答えで `apply` の効果を突き合わせるテストの期待が変わる。
-5. **3 つ目の `GetProperty`（`InProcHost`・sylphya の外の自前の店）を範囲に入れるか**。要件の実物 1「今ある読む口は 2 つ」と食い違う事実。範囲の外なら Boundary Context の Out of scope に 1 行と、§8 の行に「`InProcHost` は別の店で対象外」を書く。入れるなら `areka-ghost` の `shiori_inproc.rs` に触る（本番では未使用の結線）。
+5. **3 つ目の `GetProperty`（`InProcHost`・sylphya の外の自前の店）を範囲に入れるか**。要件の実物 1「今ある読む口は 2 つ」と食い違う事実。範囲の外なら Boundary Context の Out of scope に 1 行と、§8 の行に「`InProcHost` は別の店で対象外」を書く。入れるなら `areka-ghost` の `shiori_inproc.rs` に触る（本番では未使用の結線）。→ **要件ディスカッションで範囲の外に確定**（実物 1 と Out of scope に 1 行ずつ足した）。§8 の行に「`InProcHost` は別の店で対象外」と書くのは設計で。
+   - 6 も同じく実物 1 に「要件 2.2 は決定論テストで確かめる」と書いた。
 6. **SHIORI の `GetProperty` の確かめは決定論テストだけでよいか**。本番の結線（`Helper`）には sylphya へ届く `GetProperty` が無く、`ShioriHostSink` はデモとテストの入口だけが使う。要件 6.1 は MCP だけなので変わらないが、要件 2.2 の「ゴーストの SHIORI が」を満たす証拠の種類（決定論テストのみ）を設計に明記する。
 7. **要件 6.1 の実機確認の書き方**: `mcp-get-property` の `verification/signoff.md` の curl の手順を踏む手作業の記録か、`real-run-kit`（`doc/testing.md`・`#[ignore]` の実機テスト）で書くか。
 

@@ -33,7 +33,7 @@
 
 ### 実物で引き直して確かめた点（2026-10-22）
 
-1. **今ある読む口は 2 つ。** MCP の `get_property`（`crates/areka/src/mcp/get_property.rs` の `handle`）と SHIORI の `GetProperty`（`crates/areka/src/shiori_host.rs` の `ShioriHostSink` の `GetProperty`）は、どちらも名前を手直しせず `SylphyaReader::resolve_dotted_str` へ渡す。値が無ければ前者は `NG:Cannot find such property name.`、後者は「プロパティが無い」の失敗で答える。台本の `%property[]` は語彙台帳の構文記録（`crates/areka-sylphya/src/vocab/flat.rs` の `SYNTAX_RECORDS`）に載るだけで、読む口はまだ無い。`\![get,property]` も無い（どちらも `property-query-channels` の持ち物）。
+1. **今ある読む口は 2 つ。** MCP の `get_property`（`crates/areka/src/mcp/get_property.rs` の `handle`）と SHIORI の `GetProperty`（`crates/areka/src/shiori_host.rs` の `ShioriHostSink` の `GetProperty`）は、どちらも名前を手直しせず `SylphyaReader::resolve_dotted_str` へ渡す。値が無ければ前者は `NG:Cannot find such property name.`、後者は「プロパティが無い」の失敗で答える。台本の `%property[]` は語彙台帳の構文記録（`crates/areka-sylphya/src/vocab/flat.rs` の `SYNTAX_RECORDS`）に載るだけで、読む口はまだ無い。`\![get,property]` も無い（どちらも `property-query-channels` の持ち物）。なお、本番のゴーストは SHIORI を 32bit の中継（`ShioriWiring::Helper`）越しに呼び、その道には sylphya へ届く `GetProperty` が無い。`ShioriHostSink` を使うのは環境変数で開くデモ（`crates/areka/src/shiori_demo.rs`）とテストの入口だけ＝要件 2.2 は決定論テスト（要件 5.4）で確かめ、実機確認（要件 6.1）は MCP だけで行う。もう 1 つの `GetProperty` の実装 `InProcHost`（`crates/areka-ghost/src/shiori_inproc.rs`）は sylphya を読まず自前の表を引く最小の host で、本番では使われない（範囲の外）。
 2. **書き込みの仕分けは 3 通り。** `classify_set` は ⑴ 書ける名前の表 `SET_EFFECTIVE` に完全一致 → 運行の値への書き込み（今の段では実際には書かず記録だけ）、⑵ 根が `DOTTED_ROOTS` に入るか葉が `GENERIC_PROP_NAMES` に入る（`contains` の完全一致）→ 書けない名前（書かずに記録・呼び出しは失敗にしない）、⑶ それ以外 → 自由な名前としてゴーストごとの区画へ保存、の順。`CURRENTGHOST.NAME` は ⑵ をすり抜けて ⑶ へ、`MENU` は ⑴ を外れて ⑶ へ落ちる。今の書き込みの入口は SHIORI の `SetProperty`（環境変数で開くデモ）と `ShioriHostSink::set_property_value` だけ。カウンタの名前の族を書く `PropSetCueSink` は型の決まった名前で保存へ書き、仕分けを通らない。
 3. **語彙の表はすべて小文字。** `DOTTED_ROOTS`・`GENERIC_PROP_NAMES`・`SET_EFFECTIVE`（`crates/areka-sylphya/src/vocab/dotted.rs`）の英字はすべて小文字。
 4. **保存された名前は小文字だけ。** 保存の名前 `PersistKey::to_canonical_key`（`crates/areka-sylphya/src/persist/mod.rs`）が作る名前（`areka.window.scope(0).x`・`areka.boot.count`・`areka.last.ghost` など）はどれも英字が小文字で、保存ファイルは型の決まった項目として読み戻される（自由な名前は保存ファイルに入らない）。＝読む側で畳めば、保存ファイルの中身と読み戻しを変えずに大小違いの名前で引ける。
@@ -67,6 +67,7 @@
   - `%` で始まる台本の変数（`%username` など・点の無い名前）の大小。
   - 台本の `%property[]`・`\![get,property]`・`\![set,property]` の口を開くこと（`property-query-channels` の持ち物）。
   - 保存ファイルの形・保存する名前の綴りの変更。
+  - `InProcHost`（`crates/areka-ghost/src/shiori_inproc.rs`）の `GetProperty`／`SetProperty`（sylphya の外の自前の表・本番では使われない・ネイティブの SHIORI を使う段で作り直す）。
   - 書式として読めない名前（空・連続した点・閉じない括弧）を「無い名前」とする今の扱いの変更。
 - **Adjacent expectations**:
   - MCP の `get_property` と SHIORI の `GetProperty` は、名前を手直しせずに読み手へ渡すまま変えない（`mcp-get-property` 要件 1.4「名前を手直ししない」と、その申し送り）。大小を畳むのは読み手の側の 1 か所で、2 つの口は何も変えずに追従する。
