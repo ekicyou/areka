@@ -626,7 +626,7 @@ pub fn boot_with_origin(
     // （`FsPersistIo::commit` も commit 時に `create_dir_all` する二重の安全網）。失敗しても boot は
     // 止めない（warn＋継続・log-first・6.3——FsPersistIo が commit 時に再試行する）。
     if let Some(ghost_root) = scope_roots.ghost.as_ref() {
-        if let Err(err) = std::fs::create_dir_all(ghost_root) {
+        if let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root) {
             tracing::warn!(
                 target: "ghost-boot",
                 path = %ghost_root.display(),
