@@ -213,24 +213,24 @@ $p.WaitForExit()
 
 ## 8. 崩れた所
 
-扱いの欄の「（5.1 で確かめる）」は、タスク 5.1 で開発者と回して、起票した spec の名前か足した brief を書き込む所。見込みの持ち主は `.kiro/specs/` の `brief.md` を引いて挙げた。
+扱いの欄は、タスク 5.1 で開発者と回して決めた持ち主（2026-10-23）。roadmap.md は開発者の指示で触っていない。
 
 | 番号 | 症状 | 根拠 | 原因の見立て | 扱い |
 |---|---|---|---|---|
-| 1 | ゴーストが何も話さない。起動・時間の通知・`OnClose`・`OnTranslate` のどれにも台本が返らない | `shiori_error_response` 132 行（全部 `status 400`）と `translate_reply` 1 行（5 節）。`epilogue-only … 挨拶トーク皆無`（14:36:58.962）。MCP の `raise_event OnClose` が `OK:the ghost returned no script.` | 華和梨 7.4 は SHIORI/2.x の口だけを持ち、areka は SHIORI/3.0 の要求だけを送るので、全部を 400 で断られる見込み（設計の 3 段の ⑵）。華和梨・SHIORI 2.x への対応は本 spec の範囲の外 | 起票した（見込み・5.1 で確かめる）。`.kiro/specs/` の brief に SHIORI 2.x の口を持つ spec は無い（`SHIORI ?/?2`・`華和梨` で引いて、当たりは `areka-P0-makoto-dll-host` の「wire は SHIORI/2.x 風」の説明と `areka-P0-coverage-roadmap-refresh` の数の説明だけで、どちらも持ち主ではない） |
-| 2 | `cursor.blendmethod ROP 系は M1 未対応` の WARN が毎フレーム出て、記録の 98% を占める（2 分 12 秒で 20,764 行） | 7 節の 1 行目。`crates/areka-emo-text/src/choice.rs` の注記は「`cursor.blendmethod` が ROP 系（`none` 以外）→ warn-once（解決時 1 回）」 | 解決が毎フレーム走り、1 回だけ出すはずの警告が毎回出ている（areka の側）。`mergepennot` を描けないこと自体は決めた縮退 | 既存の spec の brief に足した（見込み・5.1 で確かめる）。持ち主の候補は `areka-P0-real-run-log-noise`（毎フレームの記録の行を減らす spec）と `areka-P0-choice-marker-styling`（`cursor.blendmethod` の縮退が議題） |
-| 3 | バルーン `bottle` の文字の描画範囲が幅 0 に潰れ、このバルーンには文字が描かれない作りになった（台詞が来ないので画面では見ていない） | 7 節の文字の範囲の 3 種（14:36:59.349〜.373）。`… left=0.0 top=0.0 right=0.0 bottom=149.0 image_size=(326.0, 169.0)`。`bottle` の `descript.txt` は `validrect.left,0`・`validrect.right,0`・`validrect.bottom,-20` | areka は `validrect` の負の値を反対の辺からの距離と読み、0 は左端の 0 と読む（`crates/areka-emo-text/src/region.rs`）。`bottom,-20` は 149 に解けたが、`right,0` は 0 のまま。正典で 0 が右端を指すかは ukadoc に書かれておらず（`validrect.right` の既定は「不明」）、確かめていない | 既存の spec の brief に足した（見込み・5.1 で確かめる）。候補は `areka-P0-default-balloon-selfmade`（`bottle` の `validrect` をそのまま引き継ぐと brief に書いている）と `areka-P0-balloon-canon-residue`（`validrect` の読みの残り）。正典の読みが areka と同じなら「ゴーストの側の作り」に替わる |
-| 4 | シェル `master` の pattern定義の `move` が未知の合成メソッドとして読み捨てられる | 7 節の `method=move` 22 行（14:36:57.902〜）。`surfaces.txt` の `animation0.pattern1,move,0,10,0,6` など | areka の合成メソッドの表に `move`（位置の語）が無い | 既存の spec の brief に足した（見込み・5.1 で確かめる）。`areka-P0-draw-methods-canon` の brief が「`move`（位置の語）を範囲に入れるか」を議題に持つ |
-| 5 | シェル `master` の pattern定義の `alternativestart` が未知の合成メソッドとして読み捨てられる | 7 節の `method=alternativestart` 5 行（14:36:57.897〜）。`surfaces.txt` の `animation2.pattern0,alternativestart,(0,1)` など | areka は、アニメーションから別のアニメーションを呼ぶ語（`alternativestart` の族）を持たない | 起票した（見込み・5.1 で確かめる）。`areka-P0-seriko-script-triggers` の brief はこの族を範囲の外と書くので、そこへは足さない（設計の決め） |
-| 6 | MCP の `get_property` で `currentghost.*`（ゴースト・シェル・バルーンの名前）が `NG:Cannot find such property name.` | 4 節の MCP の表。答えたのは `baseware.name`=`areka` だけ | areka のプロパティに `currentghost.*` の値がまだ無い | 既存の spec の brief に足した（見込み・5.1 で確かめる）。持ち主は `areka-P0-currentghost-property-tree`（`currentghost.*` の枝の最初の実の値）と `areka-P0-currentghost-property-others` |
-| 7 | キャラクターの窓に面が 1 度も出ない（`dump_surface` が 1 人目・2 人目とも `NG:No surface has been shown in this scope yet`） | 4 節の MCP の表。記録の `apply(ShowSurface)` はバルーンの窓の 2 行だけ | 面を出すのが台本の `\s` だけで、台本が来ないと何も出ない見込み。SHIORI が何も返さないときに既定の面を出すかの正典は、この走行では確かめていない。1 が直れば見えなくなる見込みが高い | 起票した（見込み・5.1 で確かめる）。1 の起票に「件 N」で足すか、正典を確かめて「ゴーストの側の作り」とするかを 5.1 で決める |
+| 1 | ゴーストが何も話さない。起動・時間の通知・`OnClose`・`OnTranslate` のどれにも台本が返らない | `shiori_error_response` 132 行（全部 `status 400`）と `translate_reply` 1 行（5 節）。`epilogue-only … 挨拶トーク皆無`（14:36:58.962）。MCP の `raise_event OnClose` が `OK:the ghost returned no script.` | 華和梨 7.4 は SHIORI/2.x の口だけを持ち、areka は SHIORI/3.0 の要求だけを送るので、全部を 400 で断られる見込み（設計の 3 段の ⑵）。華和梨・SHIORI 2.x への対応は本 spec の範囲の外 | 起票した: `areka-P0-shiori2-protocol` の件 1（2026-10-23 開発者と `/kiro-discovery`・開発者の条件は v0.1.0 までに治すこと・版の段は次の棚卸で決める） |
+| 2 | `cursor.blendmethod ROP 系は M1 未対応` の WARN が毎フレーム出て、記録の 98% を占める（2 分 12 秒で 20,764 行） | 7 節の 1 行目。`crates/areka-emo-text/src/choice.rs` の注記は「`cursor.blendmethod` が ROP 系（`none` 以外）→ warn-once（解決時 1 回）」 | 解決が毎フレーム走り、1 回だけ出すはずの警告が毎回出ている（areka の側）。`mergepennot` を描けないこと自体は決めた縮退 | 既存の spec の brief に足した: `areka-P0-real-run-log-noise`（「どっとさくらで見えた事実」の節・開発者の条件は v0.1.0 までに治すこと） |
+| 3 | バルーン `bottle` の文字の描画範囲が幅 0 に潰れ、このバルーンには文字が描かれない作りになった（台詞が来ないので画面では見ていない） | 7 節の文字の範囲の 3 種（14:36:59.349〜.373）。`… left=0.0 top=0.0 right=0.0 bottom=149.0 image_size=(326.0, 169.0)`。`bottle` の `descript.txt` は `validrect.left,0`・`validrect.right,0`・`validrect.bottom,-20` | areka は `validrect` の負の値を反対の辺からの距離と読み、0 は左端の 0 と読む（`crates/areka-emo-text/src/region.rs`）。`bottom,-20` は 149 に解けたが、`right,0` は 0 のまま。正典で 0 が右端を指すかは ukadoc に書かれておらず（`validrect.right` の既定は「不明」）、確かめていない | 既存の spec の brief に足した: `areka-P0-default-balloon-selfmade`（「どっとさくらで見えた事実」の節・正典の読みは要件の段で SSP の MCP で測る） |
+| 4 | シェル `master` の pattern定義の `move` が未知の合成メソッドとして読み捨てられる | 7 節の `method=move` 22 行（14:36:57.902〜）。`surfaces.txt` の `animation0.pattern1,move,0,10,0,6` など | areka の合成メソッドの表に `move`（位置の語）が無い | 起票した: `areka-P0-seriko-pattern-calls` の件 2（`areka-P0-draw-methods-canon` の brief の議題から移した旨をあちらの brief に追記） |
+| 5 | シェル `master` の pattern定義の `alternativestart` が未知の合成メソッドとして読み捨てられる | 7 節の `method=alternativestart` 5 行（14:36:57.897〜）。`surfaces.txt` の `animation2.pattern0,alternativestart,(0,1)` など | areka は、アニメーションから別のアニメーションを呼ぶ語（`alternativestart` の族）を持たない | 起票した: `areka-P0-seriko-pattern-calls` の件 1（アニメーションを呼ぶ 7 語の族ごと） |
+| 6 | MCP の `get_property` で `currentghost.*`（ゴースト・シェル・バルーンの名前）が `NG:Cannot find such property name.` | 4 節の MCP の表。答えたのは `baseware.name`=`areka` だけ | areka のプロパティに `currentghost.*` の値がまだ無い | 既存の spec の brief に足した: `areka-P0-currentghost-property-others`（名前は `currentghost.汎用`＝開発者が持ち主を決めた・版の段は今のまま） |
+| 7 | キャラクターの窓に面が 1 度も出ない（`dump_surface` が 1 人目・2 人目とも `NG:No surface has been shown in this scope yet`） | 4 節の MCP の表。記録の `apply(ShowSurface)` はバルーンの窓の 2 行だけ | 面を出すのが台本の `\s` だけで、台本が来ないと何も出ない見込み。SHIORI が何も返さないときに既定の面を出すかの正典は、この走行では確かめていない。1 が直れば見えなくなる見込みが高い | 起票した: `areka-P0-shiori2-protocol` の件 2（件 1 が直った後に実機で確かめる） |
 
-扱いごとの件数（見込み・5.1 で確かめる）:
+扱いごとの件数（2026-10-23 確定）:
 
 | 扱い | 件数 |
 |---|---|
-| 起票した | 3（1・5・7） |
-| 既存の spec の brief に足した | 4（2・3・4・6） |
+| 起票した | 4（1・4・5・7＝新しい spec 2 本） |
+| 既存の spec の brief に足した | 3（2・3・6） |
 | 方針で受けない | 0 |
 | ゴーストの側の作り（繕わない） | 0 |
 
