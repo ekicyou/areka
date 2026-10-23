@@ -63,7 +63,12 @@ pub struct ChainFinalized;
 /// （`persist::persist_unremembered_char_positions`）で、印の付いた窓は引き戻さず、記憶にも書かない。
 /// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
 /// 戻した窓からも外す。
+///
+/// 差し込み（付け直しを含む）は拡大率の後の詰め直しへ知らせる——武装中なら「武装の後に台本が
+/// 置いた窓」として記録される（`dpi-realign-remembered-chain` 要件 3.1）。本モジュールの判定は
+/// その記録を読まない。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[component(on_insert = super::chain_realign::note_script_placed_after_arm)]
 pub struct ScriptPlaced;
 
 /// 連鎖再解決の入力（スコープ 1 件ぶん・物理 px）。

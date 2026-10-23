@@ -48,8 +48,9 @@
 //! [`GhostWindows::set_default_char_pos`]: super::spawn::GhostWindows::set_default_char_pos
 
 use bevy_ecs::entity::Entity;
+use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::Resource;
-use bevy_ecs::world::World;
+use bevy_ecs::world::{DeferredWorld, World};
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
 
@@ -161,6 +162,22 @@ pub fn arm_chain_realign(world: &mut World, before: Vec<(usize, ChainRect)>) {
     if transition_diag::is_enabled() {
         let scopes = scope_count(world);
         transition_diag::log_chain(world, CHAIN_STAGE_ARMED, scopes, 0, None);
+    }
+}
+
+/// `ScriptPlaced` の差し込みの口（`on_insert`・付け直しでも走る）。武装中なら窓を
+/// `script_moved` に積む（`dpi-realign-remembered-chain` 要件 3.1）。武装していなければ何もしない。
+pub(super) fn note_script_placed_after_arm(mut world: DeferredWorld, hook: HookContext) {
+    if let Some(mut pending) = world.get_resource_mut::<ChainRealignPending>() {
+        pending.script_moved.push(hook.entity);
+    }
+}
+
+/// 台本が印を外して窓を置いたとき（`\![execute,resetwindowpos]`＝`reset_pos.rs`）に呼ぶ受け口。
+/// 武装中なら窓を `script_moved` に積む（要件 3.1）。武装していなければ何もしない。
+pub fn note_script_moved(world: &mut World, char_window: Entity) {
+    if let Some(mut pending) = world.get_resource_mut::<ChainRealignPending>() {
+        pending.script_moved.push(char_window);
     }
 }
 
@@ -289,3 +306,7 @@ fn defer_chain_realign(world: &mut World, reason: ChainDeferReason) {
         "chain_realign: 遷移後の連鎖の解き直しが続けて見送られている（隣接が崩れたままの可能性・要件 6.3）"
     );
 }
+
+#[cfg(test)]
+#[path = "chain_realign_script_moved_tests.rs"]
+mod chain_realign_script_moved_tests;
