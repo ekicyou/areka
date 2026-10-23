@@ -151,3 +151,8 @@
 - **決定論のテスト**: 合成の答え（画素）のテストは D2D を CPU の描き手（WARP）で動かして固定する（開発者 2026-10-15「画像合成に関するテストは、CPUに切り替えるべき」）。今の CPU の整数の合成の檻（`golden_tests_*.rs`）の扱い（見本として残すか、WARP の見本へ移すか）は要件で決める。
 - **CPU の画素に頼っている読み手の出どころが変わる**: 当たり判定の α マスク（`presenter/budget.rs`・`cache.rs`）・MCP の `dump_surface`（`presenter/read.rs`）・バルーンの背景色（`emo2_boot/balloon_background.rs`）。α は `wintf-d2d-composite-rules` の 1 ピクセルの読み戻し（開発者 2026-10-15「座標さえわかれば、１ピクセルだけGPUから書き戻すようなことはできないか？」）、`dump_surface` と背景色は全体の読み戻しへ替える見込み。どちらが受け持つかは両 spec の要件で決める。
 - **規模**: D2D の道で測り直す（着手のとき）。wintf の分は外へ出したので、分割の節の「30 を超える」より小さくなる見込み。一度切り出した spec なので、上限 20 を少しまたぐ程度ではさらに削らない。
+
+## 2026-10-23 `move` の持ち主の移し替え（`areka-P0-dot-sakura-specimen` のタスク 5.1）
+
+- 上の議題「`move`（位置の語）を範囲に入れるか」は、開発者と決めて新しい spec `areka-P0-seriko-pattern-calls` へ移した（アニメーションを呼ぶ 7 語と一緒に、pattern の働きとして SERIKO の再生が受ける）。本 spec は重ね方の合成メソッドだけを持つ＝この議題はもう出さない。
+- 根拠: どっとさくらのシェル `master` の `animation0.pattern1,move,0,10,0,6` などが `未知の合成メソッド名` の WARN 22 行になった（`.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 8 節の件 4）。
