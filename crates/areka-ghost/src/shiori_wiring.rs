@@ -10,7 +10,7 @@
 //! `send_request(MsgTag::Load, ..)` ack 確認）を本番結線へ昇格したものであり、
 //! host-32 の語彙・IPC・プロトコルは変更せず消費のみ行う（要件 3.5）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use areka_kanade::{ShioriBackend, ShioriConnection};
@@ -19,7 +19,7 @@ use areka_parsers::package::ShioriMount;
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{
     Charset, CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow,
-    RequestError, ShutdownError, spawn,
+    RequestError, Shiori3Client, ShioriVersion, ShutdownError, VersionVerdict, spawn,
 };
 use shiori_host32_ipc::MsgTag;
 
@@ -116,6 +116,8 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 /// 3. `spawn(helper_exe, load_dir, shiori_name, parent_hwnd)` で i686 helper を起動する。
 /// 4. `pump_until_hello_or(HANDSHAKE_TIMEOUT)` で HELLO 受領（ハンドシェイク完了）を観測する。
 /// 5. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を発行し ack `[1]` を確認する。
+/// 6. 版の確かめを 1 往復し、[`record_version`] で記録して決めた版を接続へ渡す
+///    （確かめの失敗は 3.0 とみなすだけで、接続を失敗にしない・要件 2.1・2.5）。
 ///
 /// いずれかの段で失敗すれば `Err(String)`（呼び出し側で `ShioriDown` へ写る）。成功時は
 /// `Box<dyn ShioriBackend>`（実体は `ShioriConnection { window, helper, negotiator }`）を返す。
@@ -176,6 +178,12 @@ pub fn real_connect(
             ));
         }
 
+        // 6. 版の確かめ（SSP と同じ GET Version の 1 往復）。読み込みのたびにこの閉包が
+        //    走るので、読み直しで確かめ直す。失敗しても 3.0 とみなして接続は続ける（要件 2.5）。
+        let mut negotiator = negotiator;
+        let verdict = Shiori3Client::new(&window, &mut negotiator).probe_version();
+        let version = record_version(&ghost_label(&load_dir), verdict);
+
         Ok(Box::new(ShioriConnection {
             window,
             helper: HelperLifecycle::new(helper),
@@ -201,10 +209,54 @@ pub fn real_connect(
             // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
             // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
             negotiator,
-            // 版の確かめはタスク 4.2 で入る。それまでは今と同じ 3.0。
-            version: shiori_host32_host::ShioriVersion::Shiori3,
+            version,
         }) as Box<dyn ShioriBackend>)
     }
+}
+
+/// 版の確かめの結果を 1 行記録し、話す版を返す（要件 2.4・2.5）。
+///
+/// 決めたら INFO、決められなければ WARN を出して 3.0 とみなす。
+fn record_version(ghost: &str, verdict: VersionVerdict) -> ShioriVersion {
+    match verdict {
+        VersionVerdict::Decided { version, evidence } => {
+            tracing::info!(
+                target: LOG_TARGET,
+                event = "shiori_version_decided",
+                ghost,
+                version = version.as_str(),
+                evidence = evidence.as_str(),
+                "SHIORI の版を確かめた"
+            );
+            version
+        }
+        VersionVerdict::Undecided { reason } => {
+            tracing::warn!(
+                target: LOG_TARGET,
+                event = "shiori_version_undecided",
+                ghost,
+                reason = reason.as_str(),
+                assumed = "SHIORI/3.0",
+                "SHIORI の版を決められない——3.0 とみなして話す"
+            );
+            ShioriVersion::Shiori3
+        }
+    }
+}
+
+/// 記録に書くゴーストの名前＝`ghost\master` の 2 つ上のフォルダ名（取れなければ表示）。
+///
+/// `real_connect` は descript の `name` を受け取らないので、areka がゴーストを見分ける
+/// フォルダ名を使う。
+fn ghost_label(master_dir: &Path) -> String {
+    master_dir
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .map_or_else(
+            || master_dir.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        )
 }
 
 /// 何を聞かれても中身なしで答える SHIORI（`--option dontloadmodule`・要件 7.2〜7.5）。
@@ -349,3 +401,7 @@ mod shiori_wiring_charset_tests;
 #[cfg(test)]
 #[path = "shiori_wiring_empty_tests.rs"]
 mod shiori_wiring_empty_tests;
+
+#[cfg(test)]
+#[path = "shiori_wiring_version_tests.rs"]
+mod shiori_wiring_version_tests;
