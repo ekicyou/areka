@@ -842,6 +842,8 @@ fn boot_wired(
         descript.zorder_raw.as_deref(),
         kanade_stop.clone(),
         shell,
+        // shortcut: 組み込みの値のまま。descript-window-keys task 3.3 で準備の値（descript.default_surfaces）に替える。
+        &placement::DefaultSurfaces::builtin(),
     );
     if !outcome.wired {
         return Err(BootWiringFailed);

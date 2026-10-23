@@ -28,7 +28,6 @@ pub struct DefaultSurfaces {
 
 impl DefaultSurfaces {
     /// どのスコープも書かれていない値（`Default` と同じ・テストと手本の入口）。
-    #[cfg_attr(not(test), allow(dead_code))] // 本番の呼び手は資産の入口（descript-window-keys task 3.1）
     pub fn builtin() -> Self {
         Self::default()
     }

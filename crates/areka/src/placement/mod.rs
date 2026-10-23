@@ -25,7 +25,7 @@ pub mod chain_finalize;
 pub mod chain_realign;
 pub mod config;
 /// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び（descript-window-keys）。
-mod descript_window_keys;
+pub(crate) mod descript_window_keys;
 pub use self::descript_window_keys::DefaultSurfaces;
 pub mod diag;
 /// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。

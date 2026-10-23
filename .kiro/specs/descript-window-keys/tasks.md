@@ -30,7 +30,7 @@
   - _Requirements: 2.1, 2.2, 2.5, 4.1_
 
 - [ ] 3. 資産と読み直しの戻り先
-- [ ] 3.1 シェルの資産の最初の面を descript の既定の面にする
+- [x] 3.1 シェルの資産の最初の面を descript の既定の面にする
   - シェルの資産を組む関数と、起動の資産を組む流れ（起動の結線の入口まで）に既定の面の引数を通し、各スコープの最初の面をその値にする。テストと手本の入口は組み込みの値を渡す
   - 起動の結線の本番の呼び手（ゴーストのセッション）は、3.3 で準備の値に替えるまで組み込みの値を渡し、組み立てが通る状態を保つ
   - シェルの切り替えの資産づくりは、同じゴーストの descript から同じ関数で既定の面を読み直す
@@ -127,3 +127,4 @@
 ## Implementation Notes
 
 - 2.1: `crates/areka/src/placement/measure_tests.rs` はちょうど 1,000 行。これ以上足すなら新しい兄弟のテストファイルへ。`mod descript_window_keys` の `#[allow(dead_code)]` は本番の呼び手がつながったら外す。
+- 3.1: `cargo test -p areka` で `script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` が i686 ヘルパーの初回 LOAD 失敗（LoadReturnedFalse）で 2 回赤・単独では緑。本番の値は変わらない差分なので範囲外の揺れとして完了の棚卸へ。
