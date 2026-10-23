@@ -1,7 +1,7 @@
 ---
 inclusion: fileMatch
 fileMatchPattern: '.kiro/specs/**'
-updated_at: 2026-03-07
+updated_at: 2026-10-23
 ---
 
 # Kiro spec.json スキーマ定義
@@ -100,12 +100,14 @@ updated_at: 2026-03-07
   "parent_spec": "string",           // 親仕様の feature_name
   "parent_requirements": ["1.1", "1.2"],  // 対応する親要件ID
   "tier": 1,                         // 依存階層（1=基盤, 2=基盤依存, ...）
-  "priority": "P0|P1|P2|P3",         // 優先度
+  "priority": "P0|P1|P2|P3",         // 優先度（旧・新しい spec には書かない）
   "dependencies": ["other-spec"]     // 依存する他仕様のリスト
 }
 ```
 
 ### priority の定義
+
+> **新しい spec.json には書かない**（2026-10-23 時点で `priority` を持つのは `completed/` の古い spec だけ・名前の `P0` も同じ日に廃止＝下の「命名規則」）。着手の並びの正本は `roadmap.md` の区分 A〜D と版の段。下の表は古い spec を読むためのもの。
 
 | 値 | 意味 | 説明 |
 | ---- | ---- | ---- |
@@ -182,7 +184,7 @@ updated_at: 2026-03-07
 
 ```json
 {
-  "feature_name": "wintf-P0-example",
+  "feature_name": "wintf-example",
   "created_at": "2025-01-01T00:00:00Z",
   "updated_at": "2025-01-01T00:00:00Z",
   "language": "ja",
@@ -196,7 +198,6 @@ updated_at: 2026-03-07
   "ready_for_implementation": false,
   "parent_requirements": ["1.1"],
   "tier": 1,
-  "priority": "P0",
   "dependencies": []
 }
 ```

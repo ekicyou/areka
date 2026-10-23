@@ -48,10 +48,12 @@ Kiro-style Spec-Driven Development on an agentic SDLC
   - `/kiro-validate-impl {feature}` (standalone re-validation)
 - Completion (explicit approval required): `/kiro-complete {feature}` — static DoD gate → archive to `completed/` → one full test run after the archive (docs updated in parallel while it runs) → final commit → **PR create + squash merge** (the only path into `main`). Use only when the developer explicitly approves.
 - Release (only when the developer types it): `/release [X.Y.Z]` — runs one release from the skill's own procedure without approval stops (version bump PR → squash merge → tag → watch → final report with the highlights). Not `/kiro-complete`.
+- Roadmap inventory and next wave: `/kiro-next [extra instructions]` — after `main` advances, re-measures every unfinished brief against current `main`, rebuilds the dependency tree, and picks the next wave (up to 8 non-overlapping specs, current version first); commits on the worktree branch, PR + squash merge only after the developer approves
+- Wave launch: `/kiro-wave [spec names]` — starts one separate session (own worktree, `/kiro-start <name>`) per Opus spec of the wave `/kiro-next` recommended; Fable specs are excluded with a warning and handed back as `/kiro-start` commands; first lands this worktree's own changes by PR → squash merge
 - Progress check: `/kiro-spec-status {feature}` (use anytime)
 
 ## Skills Structure
-Skills are located in `.claude/skills/kiro-*/SKILL.md`
+Skills are located in `.claude/skills/*/SKILL.md` (mostly `kiro-*`)
 - Each skill is a directory with a `SKILL.md` file
 - Skills run inline with access to conversation context
 - Skills may delegate parallel research to subagents for efficiency
@@ -64,6 +66,9 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - `kiro-verify-completion` — fresh-evidence gate before success or completion claims
 - `release` — one release (`/release [X.Y.Z]`); the procedure lives in the skill (`SKILL.md` + `procedure.md`) and runs in the main context without approval stops; it stops only on a failed check, a red run, a state the procedure does not cover, or a refused command
 - `kiro-watch-clear` — clears every record of the impl-watch desks (`areka-impl-watch.exe clear`, then `status`); run only when the developer asks for a full clear (runbook: `doc/impl-watch.md`)
+- `kiro-next` — roadmap inventory ("棚卸") and next-wave planning (rewrites `roadmap.md` / `roadmap-history.md` / `focus.md` on the worktree branch; PR + squash merge only behind an explicit approval)
+- `kiro-wave` — launches the wave `/kiro-next` recommended as separate sessions (Opus specs only; Fable specs excluded with a warning); lands this worktree's changes by PR → squash merge first
+- `perf-loop-iteration` — one turn of the self-driving performance-improvement loop (`<goal-name>`; advances the ledger's phase, prints a `PERF-LOOP STATUS` line); one-off measurement calls `tools/perf/perf-loop.ps1` directly
 - Use skills explicitly requested by the user and skills relevant to the task's domain, including design, accessibility, and UX.
 - Select skills from their descriptions or metadata first, then read only the selected skills and the references needed for the task.
 - Follow explicit host and project rules and retain required workflow checks. Do not skip relevant skills just because the task is small.
