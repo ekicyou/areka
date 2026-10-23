@@ -34,7 +34,7 @@
 - **時間をかける移動も動いていない**。`\![move]` は時間を読むが最終位置へ即時に置く（持ち主は `sakura-time-directives` だが範囲から外した D 群）。`\![moveasync]`・`\![set,alignmenttodesktop]`・`\![set,sticky-window]`・`\4`・`\5` は網羅台帳で absent。
 - **3 人目からの窓は無い**（`emo2_boot/mod.rs` の `derive_scopes()` が 0 と 1 だけ・持ち主は `extra-character-windows`）。ほかのゴーストを同時に出す仕組み（多重ゴースト）は roadmap の「予約」。
 - **シェルの定義は ukadoc のテキスト形式だけ**（`areka-parsers/src/shell/` が surfaces.txt、`kv/` が descript）。YAML のシェルの定義は無い（`dola-yaml-backend` は dola の任意機能の YAML の依存を外す話で、シェルの定義とは無関係）。
-- **起票時に見つけた台帳の古い行**: 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` は descript の `seriko.alignmenttodesktop` の行（8 行）を `status = "absent"`・持ち主なしと書くが、コードは読んで使っている（上の `config.rs`・`Anchor`）。直すのは網羅台帳を整える spec（`coverage-roadmap-refresh`）か、本 spec の着手のとき。
+- **起票時に見つけた台帳の古い行**（2026-10-23 に改めた）: 起票のときは、網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` が descript の `seriko.alignmenttodesktop` の行（8 行）を `status = "absent"`・持ち主なしと書いていた。完了 `window-link-directives` が 8 行を今の実装に合わせて `status = "degraded"`・持ち主なしに改めた（`bottom` と `free` は正典どおり・`top`／`left`／`right` は起動の位置だけが下として解かれる）＝もう古くない。残る崩れは下の件 1。
 
 ## Desired Outcome
 
@@ -118,3 +118,13 @@
 5. **どの窓を相手にするか**: 最大化した窓・全画面のアプリ・ツールの窓・タスクバー・ほかの areka のマスコットの扱い。
 6. **覗きの重なり**: 自分の窓をほかのアプリの窓の後ろへ置くと、そのアプリが前へ出たとき・利用者が別の窓を触ったときにどうなるか（隠れたままにするか、床へ戻すか）。
 7. **複数のモニタ**: 窓がモニタをまたぐとき・吸着の先が別のモニタへ移ったとき。
+
+## 追記（2026-10-23 `areka-P0-window-link-directives` の完了の棚卸）
+
+- **件 1: descript の `seriko.alignmenttodesktop` の `top`／`left`／`right` が、起動の位置と作業領域の変化で正典どおりに効かない**（区分 C＝ukadoc の拾い残し）。
+  - 正典（ukadoc・2026-10-23 に MCP で引き直した）: descript の `seriko.alignmenttodesktop` は「全体のサーフェスのデフォルト※表示位置情報」（既定 `bottom`）。値は台本の `\![set,alignmenttodesktop,方向]` と同じく `top`（上部に吸着）・`bottom`（下部に吸着）・`left`（左部に吸着）・`right`（右部に吸着）・`free`（吸着なし）。
+  - areka の今: 吸着の向きとしては効く（ドラッグの縛り・窓の大きさの変化・`\![move]` で辺へ沿わせる）。ただし起動で窓を最初に置く位置は `top`／`left`／`right` でも下として解き、警告の記録を残す（`crates/areka/src/placement/resolver.rs` の `resolve_placement`・`placement/config.rs` の `Alignment::Seam`）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのも下端に吸着した窓だけ（`crates/areka/src/emo2_boot/frame/work_area_sync.rs` の `resnap_for_work_area_change`）。網羅台帳 `assets.toml` の 8 行は `degraded`・持ち主なし。
+  - 直す形: 起動の位置を 4 つの辺それぞれで解き、作業領域が変わったときも 4 つの辺で沿わせ直す。網羅台帳の 8 行を `implemented` にし、持ち主を書く。
+  - 起票の理由: 触る場所（吸着の向き `Anchor` と、作業領域に沿わせる所）が本 spec の「推す形」の 1 段目の土台と同じで、議題 1（土台の持ち主）の答えに含まれる。夢の段のまま待たせたくないときは、着手のときに本 spec の最初の段として切り出す（要件の段で決める）。
+  - 接する spec: `window-work-area-clamp`（起動の並べ直しと記憶から戻す所を作業領域へ寄せる・`resolver.rs` の近く）。
+- 本文 Current State の「`\![set,alignmenttodesktop]`・`\![set,sticky-window]`・… は網羅台帳で absent」は古い。完了 `window-link-directives`（2026-10-23）がこの 2 つを実装した（網羅台帳 `sakura-script.toml` は `implemented`）。本文 議題 1 の「どれも未実装」も、残るのは時間をかける `\![move]`／`\![moveasync]` だけ。

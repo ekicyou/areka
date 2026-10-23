@@ -41,6 +41,11 @@ pub(crate) const FRAME_CAPTIONS: &[(Option<&str>, Frame, &str)] = &[
         "シェル位置初期化",
     ),
     (
+        Some("resetballoonpositionbutton.caption"),
+        Frame::ResetBalloonPosition,
+        "バルーン位置初期化",
+    ),
+    (
         Some("updatebutton.caption"),
         Frame::Update,
         "ネットワーク更新",

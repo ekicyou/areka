@@ -15,7 +15,9 @@ use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
 use super::{BalloonPlacementInputs, apply_shell_descript};
 use crate::placement::config::BalloonXMode;
-use crate::placement::follow::{Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
+use crate::placement::follow::{
+    AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase,
+};
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::shared_test_support::{
     TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
@@ -25,7 +27,7 @@ use crate::placement::source::{load_balloon_author_dpi, load_descript_source_for
 use crate::placement::spawn::{
     BalloonKeywordBase, CharWindowMarker, GhostWindows, spawn_ghost_windows,
 };
-use crate::placement::test_support::capture_logs;
+use crate::placement::test_support::{ExpectField, capture_logs};
 use crate::placement::{load_scope_windowpositions, prepare_ghost_windows_with_work_area};
 
 const CHAR0: SizePx = SizePx { w: 434, h: 687 };
@@ -425,4 +427,97 @@ fn t_rs05_reseed_matches_boot_for_the_same_inputs() {
             }
         }
     });
+}
+
+fn anchor_of(world: &World, windows: &GhostWindows, scope: usize) -> (Anchor, AnchorSource, bool) {
+    let c = windows.char_window(scope).unwrap();
+    (
+        world.get::<Anchored>(c).unwrap().0,
+        *world.get::<AnchorSource>(c).unwrap(),
+        world.get::<DragConfig>(c).unwrap().move_window,
+    )
+}
+
+/// シェルの切り替えは台本で変えた向きを保つ（areka-P0-window-link-directives 要件 6.4・9.1）:
+/// 台本の印のある窓（scope 0・`free`）は向きが残り、印の無い窓（scope 1）は新しいシェルの向き
+/// （`top`）になる。どの窓も `AnchorSource.descript` は新しい値。向きが変わった窓だけ
+/// `alignment_changed`（shell_switch）が出て、`move_window` は書き手どおり（組なし・`free` だけ真）。
+#[test]
+fn t_rs06_script_alignment_survives_and_unmarked_scopes_take_the_new_shell() {
+    let (mut world, windows) = booted_world(96);
+    let c0 = windows.char_window(0).unwrap();
+    world.entity_mut(c0).insert((
+        Anchored(Anchor::Free),
+        AnchorSource {
+            descript: Anchor::Bottom,
+            by_script: true,
+        },
+    ));
+
+    let ((), events) = capture_logs(|| {
+        apply_shell_descript(
+            &mut world,
+            &windows,
+            &new_shell(&[("seriko.alignmenttodesktop", "top")]),
+            &no_balloon(),
+            &[],
+        )
+    });
+
+    let source = |by_script| AnchorSource {
+        descript: Anchor::Top,
+        by_script,
+    };
+    assert_eq!(
+        (
+            anchor_of(&world, &windows, 0),
+            anchor_of(&world, &windows, 1)
+        ),
+        (
+            (Anchor::Free, source(true), true),
+            (Anchor::Top, source(false), false)
+        ),
+        "(向き, 出どころ, move_window) の scope 0・1"
+    );
+    let changed: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("alignment_changed"))
+        .map(|e| {
+            (
+                e.level,
+                e.expect_field("scope"),
+                e.expect_field("from"),
+                e.expect_field("to"),
+                e.field_str("source"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        changed,
+        vec![(
+            tracing::Level::INFO,
+            "1",
+            "Bottom",
+            "Top",
+            Some("shell_switch")
+        )],
+        "{events:?}"
+    );
+}
+
+/// `move_window` は書き手（帳簿と向き）から付け直す（設計の決め 12）: 組 `{0,1}` の窓は、新しい
+/// シェルが `free` でも wintf に動かさせない。
+#[test]
+fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
+    let (mut world, windows) = booted_world(96);
+    crate::placement::sticky_group_ledger::seed_sticky_descript(&mut world, Some("0,1"));
+
+    apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[]);
+
+    let got: Vec<_> = windows
+        .scopes()
+        .map(|s| anchor_of(&world, &windows, s))
+        .map(|(anchor, _, moves)| (anchor, moves))
+        .collect();
+    assert_eq!(got, vec![(Anchor::Free, false), (Anchor::Free, false)]);
 }

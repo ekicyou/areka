@@ -103,7 +103,8 @@ pub struct PlacementConfig {
     /// `emo2_boot::frame::wiring::seed_zorder_descript_base` を通って起動時の基底グループになる
     /// （解釈器はタグ入口と共通・`emo2_boot::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
-    /// shell `seriko.sticky-window` の生転記（実挙動なし・5.2）。
+    /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
+    /// areka-P0-window-link-directives 要件 3.8）。
     pub sticky_window_raw: Option<String>,
     /// shell `seriko.dpi` の生転記（96 素通しシーム・DD11）。
     pub shell_dpi_raw: Option<String>,
@@ -132,6 +133,7 @@ pub fn build_placement_config(
         // シーム転記の所在は shell descript（正典表・5.2/DD11）。ghost 側同名キーは対象外。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         zorder_raw: shell_kv.get("seriko.zorder").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         sticky_window_raw: shell_kv.get("seriko.sticky-window").cloned(),
         shell_dpi_raw: shell_kv.get("seriko.dpi").cloned(),
     }

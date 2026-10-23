@@ -21,9 +21,11 @@ use crate::input_events::MouseWiring;
 use crate::placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
 use crate::placement::chain_realign::ChainRealignPending;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
+use crate::placement::follow::CharDragSession;
 use crate::placement::spawn::{
     BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
 };
+use crate::placement::sticky_group_ledger::StickyGroupLedger;
 
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///
@@ -175,6 +177,9 @@ impl WindowsClosed {
 ///   撤去すべき繋ぎも残らないので、グループが無ければ受け口も無い初回の状態へ戻す。
 /// - `ZOrderAbsentReports`（窓の無かった宣言要素の報告の控え）: 残すと次の一式で同じ不在が
 ///   報告されない。
+/// - `StickyGroupLedger`（窓の組の帳簿）・`CharDragSession`（ドラッグの控え）: 台本の組と消した窓の
+///   `Entity` を次の一式へ持ち越さない（areka-P0-window-link-directives 要件 6.2）。SHIORI だけの
+///   読み直しはここを通らないので残る（要件 6.3）。
 ///
 /// 外さないもの（プロセスに属する・または起こすたびに差し替わる）:
 /// - [`WindowsEpoch`]: 閉じた回数。投函済みの古い窓を作らない照合に使うので、進めて残す。
@@ -193,6 +198,8 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     world.remove_resource::<ChainRealignPending>();
     world.remove_resource::<ZOrderChainPlan>();
     world.remove_resource::<ZOrderAbsentReports>();
+    world.remove_resource::<StickyGroupLedger>();
+    world.remove_resource::<CharDragSession>();
     tracing::info!(
         event = "windows_closed_for_restart",
         closed,

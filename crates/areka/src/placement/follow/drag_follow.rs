@@ -16,6 +16,11 @@ use super::{
     limit_correction, persist_entries, project_anchor, rect_at, route_applies_visibility_guard,
     work_area_for_window,
 };
+// 組の連れ動き（areka-P0-window-link-directives・設計の決め 4・6・12）。
+use super::super::persist::saved_form_anchor;
+use super::sticky_follow::{
+    drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
+};
 
 /// バルーン単独ドラッグで確定した相対位置を、キャラ窓の表示 DPI を読めないまま
 /// **未係留**の基準として確立したときの記録タグ（areka-P0-balloon-offset-dpi・
@@ -32,27 +37,26 @@ pub(super) const BALLOON_DRAG_BASE_UNPINNED_TAG: &str = "[balloon-drag] BaseUnpi
 /// （ハードニング・DD15 v2 (6)。wintf のドラッグ対象は `DragConfig` を持つ
 /// 窓 entity 自身なので、実 flow では常に一致する）。
 ///
-/// # 非 Free アンカーのキャラ窓（4.7/1.6・DD15 v2・単一ライター）
+/// # areka が書く窓（吸着した窓・組に入った窓・4.7/1.6・DD15 v2・単一ライター）
 ///
-/// 分岐は [`Anchored`]（drag／resize が読む単一真実源）で判定する。非 `Free`
-/// （`Bottom` 等）のキャラ窓は `DragConfig { move_window: false }` で spawn され、
-/// wndproc は窓を動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
+/// 縛りの向きは [`drag_anchor`]（ドラッグの始めに控えた向き・2.4）、書き手は
+/// [`drag_wintf_moves`]（始めに控えた `DragConfig.move_window`）で決める。吸着した窓と
+/// 組に入った窓（吸着なしでも・設計の決め 12）は `move_window: false` で、wndproc は窓を
+/// 動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
 /// DragEvent のカーソル座標から生ドラッグ座標を復元し（[`policy_mapped_position`]）、
 /// [`project_anchor`] 適用済み（`Bottom` は [`BottomSnapPolicy`] へ委譲）の座標を
 /// **一度だけ**書く——反映段階で既に正しい座標が確定しているため、v1 の
 /// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。ドラッグと
 /// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（Req1.6）。
-/// モニタ跨ぎ再吸着は射影の live 算出が担う。
+/// モニタ跨ぎ再吸着は射影の live 算出が担う。組に入った Free の窓は射影が恒等。
 ///
-/// # Free キャラ窓／`Anchored` 不在（挙動不変・wndproc 委譲）
+/// # wintf が書く窓（組に無い Free・向き不在）
 ///
-/// `Anchored(Free)`（および安全側フォールバックとして `Anchored` 不在）のキャラ窓は
-/// `DragConfig { move_window: true }` のまま wndproc レベルで移動済み。本ハンドラは
-/// wndproc が更新した `WindowPos.position`（物理 px）を読むだけで窓を書かない
-/// （wndproc の領分）。
+/// `move_window: true` の窓（および安全側フォールバックとして向き不在）は wndproc
+/// レベルで移動済み。本ハンドラは `WindowPos.position`（物理 px）を読むだけで窓を書かない。
 ///
-/// どちらの経路でも、バルーン追従は**確定後のキャラ窓座標**へ
-/// `BalloonFollow.offset` を加算して enqueue する（再スケールなし・U4）。
+/// どちらの経路でも、**確定後のキャラ窓座標**へバルーンを追従させ（再スケールなし・U4）、
+/// その後に組の相手を [`follow_partners_on_drag`] で同じ量だけ動かす（4.1〜4.4）。
 /// イベントは消費しない（常に `false`＝伝播続行。donor on_shell_drag と同じ規約）。
 pub(crate) fn on_char_drag(
     world: &mut World,
@@ -67,12 +71,12 @@ pub(crate) fn on_char_drag(
                 return false;
             }
 
-            // 分岐は Anchored（drag／resize が読む単一真実源）で判定する（Req1.6）。
-            // 非 Free → project_anchor 単一ライター／Free・Anchored 不在 → wndproc 委譲
-            // （不在も Free と同じく wndproc へ倒す＝旧「marker 無し＝Free」意味論の保存・安全側）。
-            let anchor = world.get::<Anchored>(entity).map(|a| a.0);
+            // 縛りの向きはドラッグの始めの向き、分かれ目はこのドラッグの書き手（始めに控えた値）。
+            // areka が書く（吸着か組に入った窓）→ project_anchor 単一ライター（Free は恒等）／
+            // wintf が書く・向き不在 → wndproc 委譲（不在は旧「marker 無し＝Free」意味論の保存・安全側）。
+            let anchor = drag_anchor(world, entity);
             let pos = match anchor {
-                Some(anchor) if anchor != Anchor::Free => {
+                Some(anchor) if !drag_wintf_moves(world, entity) => {
                     // 単一ライター経路: 生ドラッグ座標→アンカー射影 T 適用済み座標を書く
                     let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position)
                     else {
@@ -95,6 +99,7 @@ pub(crate) fn on_char_drag(
 
             // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
             follow_balloon(world, entity, pos, BalloonFollowTrigger::Drag);
+            follow_partners_on_drag(world, entity, PointPx { x: pos.x, y: pos.y });
             false
         }
     }
@@ -102,7 +107,7 @@ pub(crate) fn on_char_drag(
 
 /// `OnDragEnd` ハンドラ: **全アンカー種別**のキャラ窓の最終カーソル位置へ同写像を
 /// 適用し、確定位置を永続へ write-through する（4.7/1.6・1.1/1.9・DD15 v2 (3)・
-/// design C2）。分岐は [`Anchored`] で判定する。
+/// design C2）。分岐は [`drag_anchor`]（ドラッグの始めに控えた向き）で判定する。
 ///
 /// wintf の accumulator は LBUTTONUP で `current_dragging_entity` を先にクリア
 /// するため、最終カーソル位置の DragEvent は配送されない（debug 調査 2026-07-11）。
@@ -124,10 +129,16 @@ pub(crate) fn on_char_drag(
 /// 本ハンドラがそのまま**保存専用アーム**として働く。[`Anchored`] 不在（防御）は生
 /// ドラッグ座標を復元する基準アンカーが無いため skip する（Req1.6）。
 ///
+/// # 組の相手（4.5・2.4）
+///
+/// 窓を書いた後に [`finish_char_drag`] が最終の量で相手を書いて記憶へ書き、控えを外し、
+/// ドラッグ中に向きが変わっていれば今の向きで当て直す。
+///
 /// # 保存フック（1.1/1.9/7.1・design C2）
 ///
 /// `mapped` 確定・`enqueue_window_set_pos`・`follow_balloon` の**後**に、当該窓の
-/// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`char_pos_entries`]→
+/// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`saved_form_anchor`]
+/// （descript の向き＝次の起動の読み戻しの向き・4.8）の形にして [`char_pos_entries`]→
 /// [`persist_entries`] へ渡し、Ghost 永続スコープへ即時 write-through する（fire-and-forget・
 /// 非ブロッキング）。marker 不在（防御）は `debug!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
 /// このドラッグの確定と、起動の最後に並べ終えた時点（[`crate::placement::persist::persist_unremembered_char_positions`]）の
@@ -149,7 +160,7 @@ pub(crate) fn on_char_drag_end(
             // 再固定し、Free は identity 射影ゆえ mapped＝wndproc 確定位置を素通しする
             // （保存専用アーム・射影段は無害通過）。Anchored 不在（防御）は生座標を
             // 復元する基準アンカーが無いため skip する（Req1.6）。
-            let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
+            let Some(anchor) = drag_anchor(world, entity) else {
                 return false;
             };
             // 最終位置の第一義は DraggingState からの生座標再導出（最終 DragEvent 欠落の穴埋め・
@@ -180,6 +191,14 @@ pub(crate) fn on_char_drag_end(
             }
             // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
             follow_balloon(world, entity, mapped, BalloonFollowTrigger::Drag);
+            finish_char_drag(
+                world,
+                entity,
+                PointPx {
+                    x: mapped.x,
+                    y: mapped.y,
+                },
+            );
 
             // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
             // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
@@ -199,9 +218,11 @@ pub(crate) fn on_char_drag_end(
                                 w: s.width,
                                 h: s.height,
                             });
+                    // 形は descript の向き（次の起動はそれで読み戻す・4.8）。
+                    let form = saved_form_anchor(world, entity).unwrap_or(anchor);
                     let saved = match char_size {
                         Some(size) => char_pos_to_origin_x(
-                            anchor,
+                            form,
                             PointPx {
                                 x: mapped.x,
                                 y: mapped.y,

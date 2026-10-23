@@ -990,8 +990,8 @@ not_applicable = 0
 
 [[barrier]]
 page = "list_shiori_resource"
-implemented = 13
-vocabulary_only = 146
+implemented = 14
+vocabulary_only = 145
 degraded = 0
 absent = 0
 alias = 0
@@ -1013,14 +1013,15 @@ not_applicable = 0
 `seriko.use_self_alpha` を未対応から縮退へ移したもの、`descript_ghost` の 1 は 2026-10-07 に
 `areka-P0-ghost-standard-balloon` が `default.balloon.path` を縮退として登記したもので、どちらもそれまでは 0 だった。
 `descript_ghost` はその後、2026-10-17 に `areka-P0-emily-ghost-verification` が `char*.name` を実装済みから縮退へ移して 2 になった（3 人目以降の窓を作らなくなり、名前が画面に出ないため）。
+2026-10-23 に `areka-P0-window-link-directives` が両ページの `seriko.alignmenttodesktop` 系（各 4 項目）を未対応から縮退へ移し、`descript_ghost` は 6・`descript_shell` は 5 になった（areka はこの欄を読んでいて、`top`・`left`・`right` は起動の直後の既定の位置だけが `bottom` と同じになるため）。同じ spec が `descript_shell` の `seriko.sticky-window` を語彙のみから実装済みへ、`list_shiori_resource` の `resetballoonpositionbutton.caption` を語彙のみから実装済みへ移した。
 
 ```toml
 [[barrier]]
 page = "descript_ghost"
 implemented = 16
 vocabulary_only = 0
-degraded = 2
-absent = 56
+degraded = 6
+absent = 52
 alias = 0
 not_applicable = 0
 
@@ -1035,10 +1036,10 @@ not_applicable = 0
 
 [[barrier]]
 page = "descript_shell"
-implemented = 17
-vocabulary_only = 2
-degraded = 1
-absent = 82
+implemented = 18
+vocabulary_only = 1
+degraded = 5
+absent = 78
 alias = 0
 not_applicable = 0
 
