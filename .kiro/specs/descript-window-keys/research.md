@@ -218,3 +218,45 @@
 - **裁定 5（lock の寿命）**: `\1` の lock の後、lock・unlock を含まない別の台本を送ってから `\1` のバルーンをドラッグしても、動かなかった。＝トークの終わりでは解けない（推奨のとおり）。
 - strict の誤りの記録は、どの台本でも 0 件。後片づけ: Emily で `\0\![unlock,balloonmove]\1\![unlock,balloonmove]\-` を送って Emily を閉じた。ぱすたは残した。
 - しくじり: 最初の 1 回は SSP の rect を確かめないまま (1274,500) から (-300,+150) ドラッグし、マウスの下はデスクトップ（explorer の `SysListView32`）だった。デスクトップのアイコンが動いたかもしれない。以後は窓を確かめてから押す形にした。
+
+## 11. 設計の段の調べと決め（2026-10-23・`/kiro-spec-design -y`）
+
+### 11.1 まとめ
+
+- **調べの種類**: 既存の仕組みの延長（light）。外の依存は足さないので、ウェブの調べはしていない。ワークツリー `d545bb70` で行番号と行数を測り直した（`placement/mod.rs` 939・`ghost_session.rs` 917・`drag_follow.rs` 958・`measure_tests.rs` 993・`areka-seriko/src/state.rs` 728・`actor.rs` 768）。
+- **使った手引き**: `kiro-spec-design` の `rules/design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`、`.kiro/steering/{structure,logging}.md`。
+- **SSP・areka の MCP・画面の操作は使っていない**（他のセッションが持っていた）。残る確かめは `design.md` の「調べること」I1〜I5 へ回した。
+
+### 11.2 調べの答え
+
+- **R2（測りに着せ替えを載せるか）**: ぱすたの `shell/master/surfaces.txt`（`<w>\target\pasta-verify\root\ghost\pasta-in-windows\`・読むだけ）の `surface1000` は、着せ替えなしの要素だけで `window/canvas.png`（516×656）＋影 `part_pasta_shadow.png`（38,28）＝554×684 になる（同じファイルの 266 行目の作者の注記も 554×684 と書く）。着せ替えの部品は枠の中に重なる。＝着せ替えなしの測りで表示と同じ大きさになる。**議題 7 は「載せない」**（今の `compose_size` の `BindSet::default()` のまま）。ぱすたの descript は `sakura.seriko.defaultsurface,1000`（9 行目）と `balloon.dontmove,true`（11 行目）を書く。
+- **R3（案 1 の食い違い）**: 案 1 だと seriko は無い面を「今の面」として持ち続け、次の着せ替えやパターンの変化で無い面の `Show` を出し直して `apply_show` の `error!` になる。**案 2（seriko の中で戻り先を決める）を採る**。`SerikoReplace::Shell` に戻り先の並びと新しいシェルの面の番号の集合を載せ、`rebase_shell` の直後に seriko の状態を書き換えてから `Rebased` を出す。`rebase_shell` の呼び出し 6 か所（テスト）は変えないよう、書き換えは別の関数にする。
+- **R4（`WindowDragging`）**: areka の中で `WindowDragging` を読むのは `balloon_visibility_phase.rs` だけ（ドラッグ中はバルーンを消さない）。止めたドラッグでも利用者は触っているので、今と同じ扱いで害は無い見込み（I1 で静的に確かめる）。
+- **R5（「在る」の基準）**: 測りの側にも `shell_world`（`EmoWorld`）が手元にあるので、3 つの使い手を「面の表に番号が在る」（`EmoWorld::surface(id).is_some()`・`ShellBoxAssets.surface_ids` は同じ源）にそろえる。在るのに合成が通らない面は、今の測りの失敗の扱い（本体側は失敗・相方側は本体側の大きさ）に任せる。
+- **wintf の控え**: `WindowDragContextResource` は `dispatch_drag_events` の `Started` で書かれ（`drag/dispatch.rs` 143〜153 行目）、`DragEnd` の処理の終わりで消される（329〜334 行目）。`on_balloon_drag_end` の時点では消えている見込みなので、areka の側にドラッグの控え（`BalloonDragSession`）を `OnDragStart` で据える（先例 `CharDragSession`）。控えを据えるときは wintf の控えを読み、無ければ今の `DragConfig` へ縮退する（I2 で順を確かめる）。
+- **⑥ との調整（議題 4）**: ⑥ `dpi-realign-remembered-chain` が道 P を認めた（2026-10-23・コントローラ経由）。`run_move_drain_phase` の腕と `PositionCue` の腕は本 spec、`drain_resnap.rs` の別の関数と `frame.rs` のテストの宣言は ⑥。`frame.rs` の呼び順は変わらない。着地の順は問わない。
+
+### 11.3 統合（design-synthesis）
+
+- **一般化**: 測り（2.3）・読み直しの戻り先（3.1・3.3）・シェルの切り替えの戻り先（3.2・3.3）は、どれも「候補の並び（今の面・descript の既定の面・組み込みの既定の面）から在る最初の面を選ぶ」同じ問題。並びを作る関数（`fallback_candidates`）と選ぶ関数（`first_existing`）を 1 つずつ置き、3 つの使い手が呼ぶ。seriko は `areka` を知らないので、並びを素の番号の列で受け取り、同じ選び方を自分の 1 関数で行う。
+- **作るか借りるか**: 帳簿・書き手 1 か所・ドラッグの控えは、窓の組（`sticky_group_ledger.rs`・`sticky_follow.rs`）の型をそのまま写す。wintf の `DragConfig.move_window` と `WindowDragContextResource` を借り、wintf は触らない。ドラッグを止める仕組みは仕組み Y（`move_window: false`＋入口の見張り）。仕組み X（`enabled: false`）は要件 6.6 の記録の時機が無く、閾値を越えた後の放しがクリックとして届きうる。
+- **削ったもの**: 既定の面と動かせない指定をまとめる型（`DescriptWindowKeys`）は作らず、`PreparedPlacement` の欄 2 つにした。台本の lock の腕は `lock`・`unlock` の 2 つにせず `BalloonMoveLock { locked }` の 1 つにした。`drain_resnap.rs` の 1 腕は配線なので別の檻を作らない（照合は網羅）。測りに着せ替えを載せる仕組みは作らない（R2）。
+
+### 11.4 議題の行方（9 節）
+
+| 議題 | 決め |
+|---|---|
+| 1 シェルの切り替えの戻り先 | 案 2（seriko の中）。R3 |
+| 2 起動の資産への運び方 | `PreparedPlacement` → `StartupDescriptValues` → `wire_emo2_boot` の引数で運ぶ（読み直さない）。テストの手書き 9 か所に 1 行ずつ |
+| 3 ドラッグを止める仕組み | 仕組み Y・書き手は `placement/balloon_lock.rs` の 1 か所 |
+| 4 台本の lock の運び | 道 P（⑥ と調整済み） |
+| 7 測りに着せ替えを載せるか | 載せない（R2） |
+| 8 `measure.rs` の n≥2 の `warn!` | 外す（ukadoc は既定 10・新しい決め方が既定を持つ） |
+| 9 手本の定数 | 外し、準備の戻り値の `default_surfaces` を使う |
+| 10 「在る」の基準 | 面の表に番号が在る、にそろえる（R5） |
+
+### 11.5 危うさ
+
+- `drag_follow.rs`（958 行）は入口に 4 行ほどだけ。足す本体は `balloon_lock.rs` に置く。
+- `areka-seriko` の公開の型が変わる（`SerikoReplace::Shell`）。同じウェーブでこの型を組む spec は無い（C11 の表に持ち主なし）。
+- バルーンの窓に `OnDragStart` を付ける。ゴーストへ知らせない決まり（完了 `areka-P0-mouse-drag-events` 要件 3.3）は保つが、`input_events/drag_tests.rs` 161 行目の檻の組み立てを I4 で確かめる。
