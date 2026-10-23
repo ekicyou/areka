@@ -6,6 +6,7 @@
 //! （許す違いの大きさは使う試験が決める・13.4）。フォルダは読むだけで、SSP は起こさない（13.3）。
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// どちらのフォルダか。
@@ -124,6 +125,93 @@ fn compare_files(ssp_path: &Path, areka_path: &Path) -> Verdict {
             max_alpha,
         }
     }
+}
+
+/// 実行ファイルの引数（プログラム名の後）→ （SSP のフォルダ・areka のフォルダ）。2 つでなければ Err(2)。
+pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<(PathBuf, PathBuf), i32> {
+    let args: Vec<OsString> = args.into_iter().collect();
+    match <[OsString; 2]>::try_from(args) {
+        Ok([ssp, areka]) => Ok((ssp.into(), areka.into())),
+        Err(_) => Err(2),
+    }
+}
+
+/// 比べた結果 → 出す行と終了コード。比べ終えたら 1 組 1 行と件数のまとめで 0、フォルダが読めなければ 2。
+/// 行は ASCII だけ（ASCII でない字と制御文字は `\u{..}` に逃がす）。
+pub fn report(result: std::io::Result<Vec<FileVerdict>>) -> (Vec<String>, i32) {
+    let verdicts = match result {
+        Ok(v) => v,
+        Err(err) => {
+            let msg = ascii(&err.to_string());
+            return (vec![format!("error: cannot read folder: {msg}")], 2);
+        }
+    };
+    // same・size-differs・pixels-differ・only-in-ssp・only-in-areka・unreadable の件数。
+    let mut n = [0usize; 6];
+    let mut lines: Vec<String> = verdicts
+        .iter()
+        .map(|FileVerdict { name, verdict }| {
+            let name = ascii(name);
+            match verdict {
+                Verdict::Same => {
+                    n[0] += 1;
+                    format!("same {name}")
+                }
+                Verdict::SizeDiffers { ssp, areka } => {
+                    n[1] += 1;
+                    format!(
+                        "size-differs {name} ssp={}x{} areka={}x{}",
+                        ssp.0, ssp.1, areka.0, areka.1
+                    )
+                }
+                Verdict::PixelsDiffer {
+                    count,
+                    max_color,
+                    max_alpha,
+                } => {
+                    n[2] += 1;
+                    format!(
+                        "pixels-differ {name} count={count} max_color={max_color} max_alpha={max_alpha}"
+                    )
+                }
+                Verdict::OnlyIn(Side::Ssp) => {
+                    n[3] += 1;
+                    format!("only-in-ssp {name}")
+                }
+                Verdict::OnlyIn(Side::Areka) => {
+                    n[4] += 1;
+                    format!("only-in-areka {name}")
+                }
+                Verdict::Unreadable { side, message } => {
+                    n[5] += 1;
+                    let side = match side {
+                        Side::Ssp => "ssp",
+                        Side::Areka => "areka",
+                    };
+                    format!("unreadable {name} side={side} message={}", ascii(message))
+                }
+            }
+        })
+        .collect();
+    let [same, size, pixels, only_ssp, only_areka, unreadable] = n;
+    lines.push(format!(
+        "total={} same={same} size-differs={size} pixels-differ={pixels} only-in-ssp={only_ssp} only-in-areka={only_areka} unreadable={unreadable}",
+        verdicts.len()
+    ));
+    (lines, 0)
+}
+
+/// 端末へ出す文は ASCII だけ。ASCII でない字（日本語の名前・OS の訳された誤り）と制御文字は `\u{..}` に。
+fn ascii(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_ascii() && !c.is_ascii_control() {
+            out.push(c);
+        } else {
+            out.extend(c.escape_unicode());
+        }
+    }
+    out
 }
 
 #[cfg(test)]

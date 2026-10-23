@@ -116,3 +116,75 @@ fn missing_dir_is_err() {
     let (ssp, _areka) = dirs();
     assert!(compare_dirs(ssp.path(), &ssp.child("no-such-dir")).is_err());
 }
+
+// ---- 実行ファイルの引数と出す行（要件 13.1〜13.4）----
+
+fn os_args(args: &[&str]) -> Vec<std::ffi::OsString> {
+    args.iter().map(std::ffi::OsString::from).collect()
+}
+
+#[test]
+fn args_other_than_two_are_exit_2() {
+    for args in [vec![], vec!["a"], vec!["a", "b", "c"]] {
+        assert_eq!(parse_args(os_args(&args)), Err(2), "{args:?}");
+    }
+}
+
+#[test]
+fn two_args_are_the_ssp_and_areka_dirs() {
+    let got = parse_args(os_args(&["ssp-dir", "areka-dir"]));
+    assert_eq!(
+        got,
+        Ok((PathBuf::from("ssp-dir"), PathBuf::from("areka-dir")))
+    );
+}
+
+#[test]
+fn unreadable_dir_is_exit_2() {
+    let (ssp, _areka) = dirs();
+    let (lines, code) = report(compare_dirs(ssp.path(), &ssp.child("no-such-dir")));
+    assert_eq!(code, 2);
+    assert_eq!(lines.len(), 1);
+    assert!(
+        lines[0].starts_with("error: cannot read folder: "),
+        "{lines:?}"
+    );
+    assert!(lines[0].is_ascii(), "{lines:?}");
+}
+
+#[test]
+fn compared_pairs_are_one_ascii_line_each_and_a_summary_with_exit_0() {
+    let (ssp, areka) = dirs();
+    write_png(&ssp, "surface0.png", 1, 1, [1, 2, 3, 255]);
+    write_png(&areka, "surface0.png", 1, 1, [1, 2, 3, 255]);
+    write_png(&ssp, "surface1.png", 2, 1, [0, 0, 0, 255]);
+    write_png(&areka, "surface1.png", 1, 2, [0, 0, 0, 255]);
+    write_png(&ssp, "surface2.png", 1, 1, [10, 20, 30, 255]);
+    write_png(&areka, "surface2.png", 1, 1, [13, 20, 30, 250]);
+    write_png(&ssp, "surface3.png", 1, 1, [0, 0, 0, 255]);
+    std::fs::write(areka.child("surface3.png"), b"not a png").unwrap();
+    write_png(&ssp, "surface4.png", 1, 1, [0, 0, 0, 0]);
+    write_png(&areka, "surface5.png", 1, 1, [0, 0, 0, 0]);
+    write_png(&areka, "面6.png", 1, 1, [0, 0, 0, 0]);
+    let (lines, code) = report(compare_dirs(ssp.path(), areka.path()));
+    assert_eq!(code, 0);
+    assert!(lines.iter().all(|l| l.is_ascii()), "{lines:?}");
+    assert_eq!(lines[0], "same surface0.png");
+    assert_eq!(lines[1], "size-differs surface1.png ssp=2x1 areka=1x2");
+    assert_eq!(
+        lines[2],
+        "pixels-differ surface2.png count=1 max_color=3 max_alpha=5"
+    );
+    assert!(
+        lines[3].starts_with("unreadable surface3.png side=areka "),
+        "{lines:?}"
+    );
+    assert_eq!(lines[4], "only-in-ssp surface4.png");
+    assert_eq!(lines[5], "only-in-areka surface5.png");
+    assert_eq!(lines[6], "only-in-areka \\u{9762}6.png");
+    assert_eq!(
+        lines[7],
+        "total=7 same=1 size-differs=1 pixels-differ=1 only-in-ssp=1 only-in-areka=2 unreadable=1"
+    );
+    assert_eq!(lines.len(), 8);
+}

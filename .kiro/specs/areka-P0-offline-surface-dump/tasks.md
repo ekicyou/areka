@@ -91,7 +91,7 @@
   - 上の試験が緑で、`cargo test -p areka-emo-present` と `cargo test -p areka` が緑（画面の記録の数の期待が変わる試験があればこの段で直す）、`shell_target.rs` が 1,000 行の内に収まる
   - _Requirements: 7.5_
 
-- [ ] 4. 比べる道具の新しいクレート `surface-compare`
+- [x] 4. 比べる道具の新しいクレート `surface-compare`
 - [x] 4.1 (P) 2 つのフォルダの同じ名前の PNG を画素で比べるライブラリ
   - クレートを立てる。`Cargo.toml` は `temp-path-kit` と同じ形（`workspace = "../.."`・`version`／`edition`／`authors`／`license`／`repository` は `.workspace = true`・行頭から `publish = false # <理由>`）。ワークスペースは `members = ["crates/*"]` なので登録の作業は要らない
   - 依存はワークスペースに既に在る版の `image`（png だけ）と dev の `temp-path-kit` だけにする
@@ -101,7 +101,7 @@
   - _Boundary: SurfaceCompareTool_
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [ ] 4.2 比べる道具の実行ファイル
+- [x] 4.2 比べる道具の実行ファイル
   - 引数 2 つ（SSP の書き出したフォルダ・areka の書き出したフォルダ）を受け、1 組 1 行の ASCII（例 `same surface0.png`）と最後に件数のまとめ 1 行を出す。比べ終えたら 0、フォルダが読めない・引数が違うときは 2 で終える。どちらのフォルダにも書かない
   - 「引数の列 → 比べる 2 つのフォルダか、終了コード 2」と「比べた結果 → 出す行と終了コード」を `main.rs` の外のライブラリの純粋な関数に置き、`main.rs` はそれを呼んで出すだけにする（クレートの中に閉じるので design の境は越えない）
   - 試験（`lib_tests.rs` か兄弟のテーマのファイル）: 引数が 0 個・1 個・3 個で 2、読めないフォルダで 2、比べ終えたら 0 と ASCII の行とまとめの行
@@ -268,3 +268,4 @@
 - 2.4: `apply_named_bind` の結果は design の形と違い `Applied { id, outcome }`・`MustSelectKept { id }` と id を持つ（画面の記録「bind 適用」「mustselect カテゴリの脱衣指示を無視」が欄 `id` を出すため）。7.3 は id を使わなくてよい
 - 3.1: `shell_bounds` は右下に面ごとの `compute_extent` も重ねる（非 overlay のメソッドの pattern も合成の絵を広げるため）。`tracing::subscriber::with_default` は本番で使えない（`log-capture-kit` の `with_default_guard_test` が見張る）。bind／always の pattern が循環するシェルでは `compute_extent`（`plan_extent.rs:78`）が warn を出す＝3.2 で debug に下げ、循環する bind の検体で `shell_bounds` が黙ることも 3.2 で確かめる
 - 3.2: 転記層は知らない `animation-sort`／`collision-sort` を `SortOrder::Other(Box<str>)` として残す（前は記録なしで捨てていた＝設計の前提と合わず、記録の無い失敗の道を作らない決まりで根本を直した）。`ShapeIssue::UnknownAnimationSort { value }` はシェル全体で 1 件・面と animation の欄なし＝3.3 はその欄なしで出す。`move` は `nesting.rs::pattern_edge` で辺にしない（NestReport と共有）。描かない method で親へ戻る pattern は `Cycle` と `UndrawnPattern` の 2 件になる＝3.3 の突き合わせで 1 誤り 1 行に寄せる
+- 4.2: surface-compare の行の形は `same|size-differs|pixels-differ|only-in-ssp|only-in-areka|unreadable <名前> ...` とまとめ `total=.. ...`。フォルダが読めないときの行はどちらのフォルダかを言わない（要件の外・直すなら `compare_dirs` の `list_pngs` の `?` を `map_err` で側と道筋つきに）
