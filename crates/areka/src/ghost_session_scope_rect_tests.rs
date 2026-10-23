@@ -89,3 +89,150 @@ fn os_window_rect_invalid_handle_is_none_and_restores_dpi_context() {
     let after = unsafe { GetThreadDpiAwarenessContext() };
     assert!(unsafe { AreDpiAwarenessContextsEqual(before, after) }.as_bool());
 }
+
+// ---- 表の出し方（結線と系）----
+
+mod wiring {
+    use super::super::*;
+    use super::LEFT_SCREEN;
+    use crate::placement::follow::OffsetBase;
+    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use crate::placement::source::GhostTitles;
+    use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+    use areka_sylphya::{AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror};
+    use bevy_ecs::schedule::Schedule;
+    use windows::Win32::Foundation::{HINSTANCE, HWND};
+
+    fn fake_handle(raw: usize) -> WindowHandle {
+        WindowHandle {
+            hwnd: HWND(raw as *mut _),
+            instance: HINSTANCE::default(),
+        }
+    }
+
+    fn placement() -> ScopePlacement {
+        ScopePlacement {
+            scope: 0,
+            char_pos: PointPx { x: 1483, y: 733 },
+            char_size: SizePx { w: 434, h: 687 },
+            balloon_pos: PointPx { x: 1071, y: 708 },
+            balloon_size: SizePx { w: 223, h: 158 },
+            balloon_offset: PointPx { x: -412, y: -25 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
+            balloon_limit: true,
+            anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
+        }
+    }
+
+    /// スコープ 0 の窓を組み、キャラクターの窓にだけ印（0x10）を付けた World。
+    fn world_with_character_handle() -> (World, GhostWindows) {
+        let mut world = World::new();
+        let gw = spawn_ghost_windows(
+            &mut world,
+            &[placement()],
+            &GhostTitles::from_scope_titles([(0, "s".to_string())]),
+        );
+        let ch = gw.char_window(0).unwrap();
+        world.entity_mut(ch).insert(fake_handle(0x10));
+        (world, gw)
+    }
+
+    fn table(world: &World) -> ScopeWindowTable {
+        world
+            .resource::<ScopeRectWiring>()
+            .table
+            .read()
+            .unwrap()
+            .clone()
+    }
+
+    fn keys(character: Option<isize>, balloon: Option<isize>) -> ScopeWindowKeys {
+        ScopeWindowKeys {
+            character: character.map(WindowKey),
+            balloon: balloon.map(WindowKey),
+        }
+    }
+
+    fn reader() -> SylphyaReader {
+        SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())))
+    }
+
+    fn resolve(reader: &SylphyaReader, name: &str) -> DottedResolution {
+        let asker = AskerContext {
+            asker: AskerId::new("test"),
+        };
+        reader.resolve_dotted_str(&asker, name)
+    }
+
+    /// 表は窓の一式のスコープごとに窓の印を引き、印の無い窓は空にする（要件 3.3）。
+    #[test]
+    fn wire_builds_the_table_from_ghost_windows_and_handles() {
+        let (mut world, _) = world_with_character_handle();
+        wire_reader(&mut world, &reader());
+        assert_eq!(table(&world).0.get(&0), Some(&keys(Some(0x10), None)));
+    }
+
+    /// 結線は差し替え口の読み取りで 2 つの形へ読み手を登録する（要件 3.5・7.6）。
+    #[test]
+    fn wire_registers_both_shapes_with_the_seam() {
+        let (mut world, _) = world_with_character_handle();
+        world.insert_resource(ScopeRectReadSeam(Arc::new(|_| Some(LEFT_SCREEN))));
+        let r = reader();
+        wire_reader(&mut world, &r);
+        assert_eq!(
+            resolve(&r, "currentghost.scope(0).rect"),
+            DottedResolution::Value("-782,201,49,1227".into())
+        );
+        // バルーンの窓には印がまだ無い＝値なし。
+        assert_eq!(
+            resolve(&r, "currentghost.balloon.scope(0).rect"),
+            DottedResolution::NotFound
+        );
+    }
+
+    /// 系は窓の印が付いた時だけ表を組み直し、変わらないフレームでは触らない（要件 6.1・6.2・7.7）。
+    #[test]
+    fn sync_rebuilds_only_when_handles_or_windows_change() {
+        let (mut world, gw) = world_with_character_handle();
+        wire_reader(&mut world, &reader());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(sync_scope_window_table);
+        // 1 回目は結線の前に付いた印の Added で起きるが、中身は同じ。
+        schedule.run(&mut world);
+        assert_eq!(table(&world).0.get(&0), Some(&keys(Some(0x10), None)));
+
+        // 変わらないフレームでは組み直さない（置き場へ置いた目印が残る）。
+        let marker = ScopeWindowTable(BTreeMap::from([(9, keys(Some(9), Some(9)))]));
+        *world.resource::<ScopeRectWiring>().table.write().unwrap() = marker.clone();
+        schedule.run(&mut world);
+        assert_eq!(table(&world), marker);
+
+        // バルーンの窓に印が付いたら組み直す。
+        let ba = gw.balloon_window(0).unwrap();
+        world.entity_mut(ba).insert(fake_handle(0x20));
+        schedule.run(&mut world);
+        assert_eq!(
+            table(&world).0,
+            BTreeMap::from([(0, keys(Some(0x10), Some(0x20)))])
+        );
+
+        // 印が外れたら組み直す。
+        world.entity_mut(ba).remove::<WindowHandle>();
+        schedule.run(&mut world);
+        assert_eq!(
+            table(&world).0,
+            BTreeMap::from([(0, keys(Some(0x10), None))])
+        );
+    }
+
+    /// 置き場が無い（実行系が無い）なら系は何もしない。
+    #[test]
+    fn sync_without_wiring_does_nothing() {
+        let (mut world, _) = world_with_character_handle();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(sync_scope_window_table);
+        schedule.run(&mut world);
+        assert!(!world.contains_resource::<ScopeRectWiring>());
+    }
+}

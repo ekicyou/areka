@@ -3,13 +3,18 @@
 //! `currentghost.scope(ID).rect`・`currentghost.balloon.scope(ID).rect` は、読まれた時に
 //! スコープ → 窓の印の表で窓を引き、OS に 1 回だけ今の矩形を聞いて「左,上,右,下」で答える。
 //! 値は写しにも保存にも載せない（プル）。画面に出ているかは見ない（要件 1.8・2.4）。
-// 呼び手（結線と系の登録）は 3.1 で付く。それまで本番のビルドでは使われない。
-#![cfg_attr(not(test), allow(dead_code))]
+// 呼び手（結線と系の登録）は 3.1 で付く。それまで `wire`・`register` はどのビルドでも使われない。
+#![allow(dead_code)]
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
-use areka_sylphya::{PropPath, PullSource, Selector};
+use areka_ghost::GhostRuntime;
+use areka_sylphya::{PropPath, PullShape, PullSource, Selector, SylphyaReader};
+use bevy_ecs::prelude::*;
+use wintf::ecs::{FrameFinalize, WindowHandle};
+
+use crate::placement::spawn::GhostWindows;
 
 /// 窓の印（HWND の生の値）。HWND はスレッドをまたいで送れないので値で持つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,7 +48,111 @@ pub(crate) struct ScopeWindowKeys {
 
 /// スコープ → 窓の印の表（可視の欄は持たない）。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct ScopeWindowTable(pub(crate) BTreeMap<usize, ScopeWindowKeys>);
+pub(crate) struct ScopeWindowTable(BTreeMap<usize, ScopeWindowKeys>);
+
+impl ScopeWindowTable {
+    /// `GhostWindows` の各スコープについて、窓の entity から窓の印を引いて組む（純粋）。
+    pub(crate) fn build(
+        windows: &GhostWindows,
+        key_of: impl Fn(Entity) -> Option<WindowKey>,
+    ) -> Self {
+        Self(
+            windows
+                .scopes()
+                .map(|scope| {
+                    let keys = ScopeWindowKeys {
+                        character: windows.char_window(scope).and_then(&key_of),
+                        balloon: windows.balloon_window(scope).and_then(&key_of),
+                    };
+                    (scope, keys)
+                })
+                .collect(),
+        )
+    }
+}
+
+/// 窓の印を値で写す。
+fn window_key(handle: &WindowHandle) -> WindowKey {
+    WindowKey(handle.hwnd.0 as isize)
+}
+
+/// 今の実行系の読み手と共有する置き場（`wire` が実行系ごとに作り直す）。
+#[derive(Resource)]
+pub(crate) struct ScopeRectWiring {
+    table: Arc<RwLock<ScopeWindowTable>>,
+}
+
+/// テスト用の OS の読み取りの差し替え口（本番は入れない＝本物の `os_window_rect`）。
+#[derive(Resource, Clone)]
+pub(crate) struct ScopeRectReadSeam(pub(crate) WindowRectFn);
+
+/// 実行系に読み手を登録し、今の窓の一式から表を組む（`rewire_runtime_consumers` から・同期）。
+pub(crate) fn wire(world: &mut World, runtime: &GhostRuntime) {
+    wire_reader(world, runtime.sylphya_reader());
+}
+
+/// `wire` の中身（テストは sylphya の読み口を直に渡せる）。
+pub(crate) fn wire_reader(world: &mut World, reader: &SylphyaReader) {
+    let table = match world.get_resource::<GhostWindows>() {
+        Some(windows) => {
+            ScopeWindowTable::build(windows, |e| world.get::<WindowHandle>(e).map(window_key))
+        }
+        None => ScopeWindowTable::default(),
+    };
+    let table = Arc::new(RwLock::new(table));
+    let read_rect: WindowRectFn = match world.get_resource::<ScopeRectReadSeam>() {
+        Some(seam) => seam.0.clone(),
+        None => Arc::new(os_window_rect),
+    };
+    for (target, pattern) in [
+        (RectTarget::Character, "currentghost.scope(*).rect"),
+        (RectTarget::Balloon, "currentghost.balloon.scope(*).rect"),
+    ] {
+        let shape = PullShape::parse(pattern).expect("固定の形は読める");
+        let source = ScopeRectSource::new(target, table.clone(), read_rect.clone());
+        reader.register_pull(shape, Arc::new(source));
+    }
+    world.insert_resource(ScopeRectWiring { table });
+}
+
+/// 表を出す系（`FrameFinalize`）。窓の一式の入れ直し・窓の印の付け外しの時だけ組む（プッシュ）。
+pub(crate) fn sync_scope_window_table(
+    windows: Option<Res<GhostWindows>>,
+    handles: Query<&WindowHandle>,
+    added: Query<(), Added<WindowHandle>>,
+    mut removed: RemovedComponents<WindowHandle>,
+    wiring: Option<Res<ScopeRectWiring>>,
+) {
+    // 外れた印は毎回読み捨てる（置き場が無い間の分を後へ持ち越さない）。
+    let any_removed = removed.read().count() > 0;
+    let changed = windows.as_ref().is_some_and(|w| w.is_changed());
+    if !(changed || any_removed || !added.is_empty()) {
+        return;
+    }
+    let Some(wiring) = wiring else {
+        return;
+    };
+    let table = match windows.as_deref() {
+        Some(windows) => ScopeWindowTable::build(windows, |e| handles.get(e).ok().map(window_key)),
+        None => ScopeWindowTable::default(),
+    };
+    let mut current = wiring.table.write().unwrap_or_else(|e| e.into_inner());
+    if *current != table {
+        tracing::debug!(
+            event = "scope_rect_table_updated",
+            scopes = table.0.len(),
+            "スコープ → 窓の印の表を差し替えた"
+        );
+        *current = table;
+    }
+}
+
+/// 系をプロセスに 1 回だけ載せる（`ghost_session::register_systems` から）。
+pub(crate) fn register(world: &mut World) {
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(FrameFinalize, sync_scope_window_table);
+}
 
 /// 窓の矩形の読み手（キャラクター用とバルーン用で 1 つずつ登録する）。
 pub(crate) struct ScopeRectSource {
