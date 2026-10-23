@@ -19,15 +19,16 @@
 //!
 //! - **先頭スコープは動かさない**（連鎖の起点・接地点は不変・7.2）。
 //! - **Y は扱わない**（下端吸着は各窓の再アンカーが既に保っている・7.2）。
-//! - **明示的に再配置されたスコープは対象外**（7.3）。判定は「現在位置が既定位置と一致するか」
-//!   で行う——利用者のドラッグで動いた窓は一致しなくなるため除外できる。ゴースト台本の
+//! - **明示的に再配置されたスコープは対象外**（7.3）。起動時の確定の判定は「現在位置が既定位置と
+//!   一致するか」で行う——利用者のドラッグで動いた窓は一致しなくなるため除外できる。ゴースト台本の
 //!   `\![move]` が置いた窓（連れ動いた組の相手を含む）は、x が既定のまま（縦にだけ動いた・
 //!   ちょうど既定へ置いた）でも一致してしまうので、移動側が印 [`ScriptPlaced`] を付け、起動時の
 //!   確定はその窓の既定を `None` にして除外する。除外したスコープの**実位置**は以後の連鎖の基準
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
-//!   既定位置は起動時に固定されるのではなく、**システム由来の再アンカー**で書込先へ追随する
-//!   （`areka-P0-dpi-transition-atomicity` D9／D16・要件 6.2）——拡大率の遷移で全スコープの
-//!   位置が動いても、明示操作をしていないスコープは一致したまま対象に残る。
+//! - 解きの核は組ごとの決め（[`PairDecision`]）を受け取る [`resolve_chain`] で、起動時の確定
+//!   （[`finalize_chain`]）は既定位置との一致から決めを作ってこれに渡す。拡大率の後の詰め直しは
+//!   変わる直前の隣り合い（[`judge_adjacency`]）から決めを作る（`chain_realign`・
+//!   dpi-realign-remembered-chain 要件 1）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
 //!   （`emo2_boot::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
@@ -74,13 +75,10 @@ pub struct ScopeChainState {
     pub current_x: i32,
     /// 現在のキャラ窓幅（実表示サーフェスの物理寸）。
     pub width: i32,
-    /// 既定キャラ位置 X（未接触判定の基準）。
+    /// 既定キャラ位置 X（起動時の確定の未接触判定の基準）。
     ///
-    /// 初期値は spawn 時の resolver 出力だが、**システム由来の再アンカー**（拡大率の再射影・
-    /// 作業領域の再スナップ等）で位置が動いたときは単一の窓書込口が同じ量を運ぶため、値は
-    /// 「最後にシステムが置いた既定位置」である（`areka-P0-dpi-transition-atomicity`
-    /// D9／D16・要件 6.2）。運ばないと拡大率の遷移で全スコープが「明示的に動かされた」へ
-    /// 倒れ、本判定が空振りする。
+    /// 初期値は spawn 時の resolver 出力で、システム由来の再アンカーで位置が動いたときは
+    /// 単一の窓書込口が同じ量を運ぶ（値は「最後にシステムが置いた既定位置」）。
     ///
     /// **`None` は「そもそも既定配置ではない」**（保存位置が復元されたスコープ）。
     /// この場合は現在位置に関わらず**常に対象外**とする（scg 7.3）。
@@ -121,37 +119,22 @@ pub struct ChainMove {
 ///
 /// 空入力・単一スコープでは常に空列（動かす相手が居ない）。飽和演算ゆえ極端入力でも panic しない。
 pub fn finalize_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
-    let mut moves = Vec::new();
-    let mut prev_x: Option<i32> = None;
-
-    for s in states {
-        let resulting_x = match prev_x {
-            // 先頭スコープ＝連鎖の起点。実位置をそのまま基準にする（動かさない・7.2）。
-            None => s.current_x,
-            Some(base_x) => {
-                if s.width <= 0 || s.default_x != Some(s.current_x) {
-                    // 動かさない 3 通り——非正寸（縮退入力）／既定配置から動かされている
-                    // （`Some(d)` かつ `d != current_x`）／そもそも既定配置ではない
-                    // （`None`＝保存位置の復元）。いずれも 7.3 の「明示された位置へ
-                    // 引き戻さない」に属し、その実位置を以後の連鎖基準にする
-                    // （実配置基準の原則・2.7 と同型）。
-                    s.current_x
-                } else {
-                    let new_x = base_x.saturating_sub(s.width);
-                    if new_x != s.current_x {
-                        moves.push(ChainMove {
-                            scope: s.scope,
-                            new_x,
-                        });
-                    }
-                    new_x
-                }
-            }
-        };
-        prev_x = Some(resulting_x);
-    }
-
-    moves
+    // 既定配置のままのスコープだけを左へ付け、それ以外（動かされた・`None`＝保存位置の復元）は
+    // 実位置を次の基準にする。非正寸の扱いと飽和演算は解き（resolve_chain）が持つ。
+    let slots: Vec<ChainSlot> = states
+        .iter()
+        .map(|s| ChainSlot {
+            scope: s.scope,
+            current_x: s.current_x,
+            width: s.width,
+            decision: if s.default_x == Some(s.current_x) {
+                PairDecision::JoinLeft
+            } else {
+                PairDecision::Keep(KeepReason::ExplicitlyPlaced)
+            },
+        })
+        .collect();
+    resolve_chain(&slots)
 }
 
 /// 再解決後の既定位置（[`ChainMove`] を反映した [`PointPx`]）を組む補助。
@@ -261,6 +244,134 @@ impl AdjacencyMark {
             Adjacency::Right { .. } => Self::Right,
             Adjacency::Apart { .. } | Adjacency::Overlapped { .. } => Self::Separate,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 組ごとの決めからの解き（dpi-realign-remembered-chain 要件 1.3・1.5・6.3・6.4）
+// ---------------------------------------------------------------------------
+
+/// 組 (n−1, n) をどうするか（先頭のスコープの値は読まない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PairDecision {
+    /// n を n−1 の左に付ける（new_x = base_x − width(n)）。
+    JoinLeft,
+    /// n を n−1 の右に付ける（new_x = base_x + width(n−1)）。
+    JoinRight,
+    /// 動かさない（理由つき）。
+    Keep(KeepReason),
+}
+
+/// 動かさない理由（ログの語は [`KeepReason::as_str`] の固定語）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeepReason {
+    /// 変わる直前に離れていた（2.1）。
+    Apart { gap: i32 },
+    /// 変わる直前に重なっていた（2.2）。
+    Overlapped { gap: i32 },
+    /// 組の窓が組にかかわる（2.3）。
+    StickyGroup { scope: usize },
+    /// ドラッグ中の窓が組にかかわる（2.4）。
+    Dragging { scope: usize },
+    /// 武装の後に台本が置いた窓が組にかかわる（3.1）。
+    ScriptMovedAfterArm { scope: usize },
+    /// 控えに無い・矩形が読めない窓が組にかかわる。
+    Unreadable { scope: usize },
+    /// 起動: 既定から動かされた・台本の印・保存位置の復元。
+    ExplicitlyPlaced,
+    /// 起動: 記憶の印が `none`。
+    RememberedSeparate,
+    /// 起動: 印の無い古い記憶。
+    NoRememberedMark,
+    /// 幅が 0 以下（縮退入力）。
+    NonPositiveWidth,
+}
+
+impl KeepReason {
+    /// ログに載せる固定語。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Apart { .. } => "apart",
+            Self::Overlapped { .. } => "overlapped",
+            Self::StickyGroup { .. } => "sticky-group",
+            Self::Dragging { .. } => "dragging",
+            Self::ScriptMovedAfterArm { .. } => "script-moved",
+            Self::Unreadable { .. } => "unreadable",
+            Self::ExplicitlyPlaced => "explicitly-placed",
+            Self::RememberedSeparate => "remembered-separate",
+            Self::NoRememberedMark => "no-remembered-mark",
+            Self::NonPositiveWidth => "non-positive-width",
+        }
+    }
+}
+
+/// 解きの入力（スコープ 1 件・昇順に並べる）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChainSlot {
+    /// スコープ番号。
+    pub scope: usize,
+    /// 今のキャラ窓左上 X（物理 px）。
+    pub current_x: i32,
+    /// 今のキャラ窓幅（物理 px）。
+    pub width: i32,
+    /// 組 (scope−1, scope) の決め（先頭では読まない）。
+    pub decision: PairDecision,
+}
+
+/// 本体から昇順に解き、動かす窓と新しい x を返す（今の x と同じものは含めない）。
+///
+/// 組の基準は前の窓の**解いた後の** x（1.5）。
+/// JoinLeft: new_x = base_x − width(n)。JoinRight: new_x = base_x + width(n−1)。
+/// Keep・幅が非正（n、JoinRight では n−1 も）: 動かさず、今の x を次の基準にする。
+/// y は扱わない。飽和演算ゆえ極端な入力でも panic しない。
+///
+/// 事後条件: 返した指示を全部当てると、`JoinLeft` の組は `x(n−1) == x(n) + w(n)`、
+/// `JoinRight` の組は `x(n) == x(n−1) + w(n−1)` が今の幅で成り立つ。
+pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
+    let mut moves = Vec::new();
+    // (前の窓の解いた後の x, 前の窓の幅)
+    let mut prev: Option<(i32, i32)> = None;
+
+    for s in slots {
+        let target = match (prev, s.decision) {
+            (Some((base_x, _)), PairDecision::JoinLeft) if s.width > 0 => {
+                Some(base_x.saturating_sub(s.width))
+            }
+            // 前の窓の幅を足す式なので、前の窓の幅が非正なら式が立たない。
+            (Some((base_x, prev_w)), PairDecision::JoinRight) if s.width > 0 && prev_w > 0 => {
+                Some(base_x.saturating_add(prev_w))
+            }
+            // 先頭（本体）・Keep・非正寸は動かさない。
+            _ => None,
+        };
+        let resulting_x = match target {
+            Some(new_x) => {
+                if new_x != s.current_x {
+                    moves.push(ChainMove {
+                        scope: s.scope,
+                        new_x,
+                    });
+                }
+                new_x
+            }
+            None => s.current_x,
+        };
+        prev = Some((resulting_x, s.width));
+    }
+
+    moves
+}
+
+/// 起動の並べ直しで記憶から戻したスコープに当てる決め（6.3・6.4）。
+///
+/// Left→JoinLeft・Right→JoinRight・Separate→Keep(RememberedSeparate)・
+/// None（印の無い古い記憶）→Keep(NoRememberedMark)。
+pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
+    match mark {
+        Some(AdjacencyMark::Left) => PairDecision::JoinLeft,
+        Some(AdjacencyMark::Right) => PairDecision::JoinRight,
+        Some(AdjacencyMark::Separate) => PairDecision::Keep(KeepReason::RememberedSeparate),
+        None => PairDecision::Keep(KeepReason::NoRememberedMark),
     }
 }
 
@@ -432,3 +543,7 @@ mod chain_finalize_tests;
 #[cfg(test)]
 #[path = "chain_finalize_adjacency_tests.rs"]
 mod chain_finalize_adjacency_tests;
+
+#[cfg(test)]
+#[path = "chain_finalize_resolve_tests.rs"]
+mod chain_finalize_resolve_tests;

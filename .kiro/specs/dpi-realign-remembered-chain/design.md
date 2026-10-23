@@ -369,7 +369,7 @@ pub struct ChainSlot { pub scope: usize, pub current_x: i32, pub width: i32, pub
 
 /// 本体から昇順に解き、動かす窓と新しい x を返す（今の x と同じものは含めない）。
 /// JoinLeft: new_x = base_x − width(n)。JoinRight: new_x = base_x + width(n−1)。
-/// Keep・幅が非正（n または n−1）: 動かさず、今の x を次の基準にする。
+/// Keep・幅が非正（n、JoinRight では n−1 も。式が使う幅だけを見る）: 動かさず、今の x を次の基準にする。
 pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove>;
 
 /// 起動の並べ直しで記憶から戻したスコープに当てる決め（Left→JoinLeft・Right→JoinRight・
