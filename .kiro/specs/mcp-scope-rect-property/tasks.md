@@ -90,7 +90,7 @@
   - 完了の状態: `cargo test -p areka mcp::get_property` で新しいテストが緑
   - _Requirements: 3.4, 6.3, 6.6, 7.4, 8.3_
 
-- [ ] 4. 台帳・手順書・実機の確かめ
+- [x] 4. 台帳・手順書・実機の確かめ
 - [x] 4.1 (P) 網羅台帳の 2 行を改め、報告を生成し直す
   - `currentghost.scope_28ID_29.rect`・`currentghost.balloon.scope_28ID_29.rect` を実装済みの状態へ改め、note に実装の場所とテストを書く（証拠は 2.2 の `// ukadoc:` の行）
   - 領域の報告は `cargo run -p ukadoc-survey -- report` で作り直す（手で書き換えない・全体の summary は触らない）
@@ -105,7 +105,7 @@
   - _Boundary: doc/pasta-real-run.md_
   - _Requirements: 9.5_
 
-- [ ] 4.3 実機で MCP の読みを確かめて記録する
+- [x] 4.3 実機で MCP の読みを確かめて記録する
   - 排他テストの机を取ってから areka（窓際のぱすたさん）を起こし、終わったらすぐ返す。2.5 の `#[ignore]` テストもこの机の中で回す
   - 手順書の段 1（起動）・段 4（同じ画面でのドラッグ）・段 5（拡大率の違う画面への移動）で、MCP の `get_property` に `currentghost.scope(0).rect`・`currentghost.scope(1).rect`・`currentghost.balloon.scope(0).rect` を聞き、areka の記録の窓の位置と大きさと比べる。`currentghost.scope(2).rect`（`0,0,0,0`）と `currentghost.balloon.scope(2).rect`（`NG`）も聞く
   - SSP の基準と並べ、数の形・座標の系・無いときの答えが同じこと、大きさの違いが拡大率への追従の方針によることを分けて検証の記録に書く
