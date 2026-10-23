@@ -222,9 +222,10 @@ fn test_dispatch_tunnel_order_is_root_to_sender() {
 }
 
 #[test]
-fn test_dispatch_pressed_gating_requires_main_button() {
-    // OnPointerPressed は left/right/middle のいずれかが down のときのみ発火する。
-    // XButton1/XButton2 だけでは発火しない（dispatch/mod.rs:231 のゲート条件）。
+fn test_dispatch_pressed_fires_for_every_button() {
+    // OnPointerPressed は left/right/middle/XButton1/XButton2 のいずれかが down のとき発火する
+    // （拡張ボタン 1・2 だけの押下でも届く・mouse-click-wheel-events 要件 2.1）。
+    // どのボタンも down でなければ発火しない。
     use std::sync::atomic::{AtomicU32, Ordering};
     static PRESSED_COUNT: AtomicU32 = AtomicU32::new(0);
 
@@ -240,43 +241,45 @@ fn test_dispatch_pressed_gating_requires_main_button() {
         false
     }
 
-    // ケース1: XButton1 のみ down → 発火しない
-    PRESSED_COUNT.store(0, Ordering::SeqCst);
-    {
+    fn count_after(state: PointerState) -> u32 {
+        PRESSED_COUNT.store(0, Ordering::SeqCst);
         let mut world = World::new();
-        world.spawn((
-            PointerState {
-                xbutton1_down: true,
-                ..Default::default()
-            },
-            OnPointerPressed(pressed_handler),
-        ));
+        world.spawn((state, OnPointerPressed(pressed_handler)));
         dispatch_pointer_events(&mut world);
-        assert_eq!(
-            PRESSED_COUNT.load(Ordering::SeqCst),
-            0,
-            "XButton のみでは Pressed 不発火"
-        );
+        PRESSED_COUNT.load(Ordering::SeqCst)
     }
 
-    // ケース2: Left down → 発火
-    PRESSED_COUNT.store(0, Ordering::SeqCst);
-    {
-        let mut world = World::new();
-        world.spawn((
+    let cases = [
+        (
+            "Left",
             PointerState {
                 left_down: true,
                 ..Default::default()
             },
-            OnPointerPressed(pressed_handler),
-        ));
-        dispatch_pointer_events(&mut world);
-        assert_eq!(
-            PRESSED_COUNT.load(Ordering::SeqCst),
-            1,
-            "Left down で Pressed 発火"
-        );
+        ),
+        (
+            "XButton1",
+            PointerState {
+                xbutton1_down: true,
+                ..Default::default()
+            },
+        ),
+        (
+            "XButton2",
+            PointerState {
+                xbutton2_down: true,
+                ..Default::default()
+            },
+        ),
+    ];
+    for (name, state) in cases {
+        assert_eq!(count_after(state), 1, "{name} だけの down で Pressed 発火");
     }
+    assert_eq!(
+        count_after(PointerState::default()),
+        0,
+        "どのボタンも down でなければ Pressed 不発火"
+    );
 }
 
 #[test]

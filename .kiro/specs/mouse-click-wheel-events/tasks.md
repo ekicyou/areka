@@ -7,7 +7,7 @@
   - 移しのテストの塊に、子へ移って溜めが空になる・2 回目の移しで量が増えない・持ち主の居ない窓の溜めが捨てられる・別の窓の受け手へ移らない、の 4 件が足され、wintf のテストが通る
   - _Boundary: WintfHoles（pointer/buffers.rs）_
   - _Requirements: 6.2, 6.10, 11.5_
-- [ ] 1.2 (P) 拡張ボタン 1・2 の押下も押下の知らせとして配る
+- [x] 1.2 (P) 拡張ボタン 1・2 の押下も押下の知らせとして配る
   - 押下を配る条件に拡張ボタン 1・2 を足す（今の押下の受け手は左しか見ないので、中ボタンと同じに何もしない）
   - 配りのテストに「拡張ボタン 1 だけ・2 だけの押下で押下の知らせが届く」が足されて通る
   - _Boundary: WintfHoles（pointer/dispatch/mod.rs）_
@@ -113,3 +113,7 @@
   - ぱすたの記録の `OnMouseEnter`・`OnMouseLeave`・`OnMouseClick` の行と areka の `mouse_event_sent` の行を、撮った絵と並べた `verification.md` が spec のフォルダにある（撮った物は `target\` の下）
   - _Depends: 4.2_
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+
+## Implementation Notes
+
+- 1.2: `pointer/dispatch/tests.rs` の `test_dispatch_pressed_gating_requires_main_button`（拡張ボタンだけでは押下が届かない）を `test_dispatch_pressed_fires_for_every_button` に置き換えた。design の WintfHoles（dispatch/mod.rs）が変える動きそのものを固定していたテストで、4.2 の「今のテストを直していない」の差分の説明ではこの置き換えを例外として明記する。
