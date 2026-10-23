@@ -236,7 +236,7 @@
   - 説明書に 11.1〜11.3 の各項が在り、`help_tests.rs` が緑
   - _Requirements: 11.1, 11.2, 11.3_
 
-- [ ] 10. 建った areka.exe での決定論の試験
+- [x] 10. 建った areka.exe での決定論の試験
 - [x] 10.1 書き出しの成功と CSV の中身
   - `crates/areka/tests/offline_dump_exe_test.rs` を足し、建った `areka.exe` を `std::process::Command` で回して終了コードとファイルを読む（根・検体・出力はすべて `temp-path-kit` で `target\` の下）
   - areka は bin だけのクレートなので、統合の試験から `#[cfg(test)]` の `offline_dump_test_support` は使えない。検体は統合の試験の側で `temp-path-kit`・`image`（dev）・`std` だけで組む（`structure.md` の `tests/` の決まりどおり、入口の `tests/offline_dump_exe_test.rs` は `#[path]` の宣言だけにし、試験の本体はテーマごとに `tests/offline_dump_exe_test/` の下へ、共有の部品は `tests/offline_dump_exe_test/common/mod.rs` に置く）。試験のファイルは 1,000 行の内で、超えるならテーマで分ける
@@ -254,7 +254,7 @@
   - 上の各分岐の試験が緑
   - _Requirements: 1.8, 2.1, 2.2, 2.5, 2.6, 2.7, 3.6, 4.8, 8.2, 8.4, 12.4, 12.6_
 
-- [ ] 10.3 書かないことの試験
+- [x] 10.3 書かないことの試験
   - 環境変数 `AREKA_USER_ROOT`（書ける根）と `AREKA_PROFILE_DIR`（記憶の置き場＝`areka-user-data/src/lib.rs` 18〜20 行目）をそれぞれ `target\` の下の空の根に向け、`AREKA_ROOT`（置き場の並び）も読まれるなら同じく空の根に向ける
   - 回す前後で、ゴーストのフォルダの木・書ける根の木・記憶の置き場の木（名前・大きさ・更新時刻）を比べて同じであること、出力先に書かれたのが PNG と CSV だけであることを確かめる
   - 上の試験が緑

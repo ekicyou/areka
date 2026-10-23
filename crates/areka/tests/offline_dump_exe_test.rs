@@ -11,3 +11,5 @@ mod dump_success_test;
 mod error_log_test;
 #[path = "offline_dump_exe_test/failure_branches_test.rs"]
 mod failure_branches_test;
+#[path = "offline_dump_exe_test/no_side_write_test.rs"]
+mod no_side_write_test;

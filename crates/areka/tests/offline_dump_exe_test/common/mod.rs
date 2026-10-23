@@ -4,6 +4,7 @@
 //! 検体はここで `temp-path-kit`・`image`・`std` だけで組む（形は同じ: 3 つのテキストは
 //! `charset,UTF-8` を先頭に CRLF、シェルの descript.txt には `seriko.use_self_alpha,1`）。
 
+use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Command;
 
@@ -116,8 +117,14 @@ fn write_lines(path: &Path, head: &[&str], lines: &[&str]) {
 /// 建った `areka.exe` を `cwd` で `args` を付けて回し、終わるまで待って終了コードと標準エラーを返す。
 /// 告知のモーダルで止まらないよう `AREKA_NO_ALERT=1` を渡す。
 pub fn run_areka(cwd: &Path, args: &[&str]) -> (i32, String) {
+    run_areka_with_env(cwd, args, &[])
+}
+
+/// [`run_areka`] に環境変数 `envs` を足して回す。
+pub fn run_areka_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &OsStr)]) -> (i32, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_areka"))
         .args(args)
+        .envs(envs.iter().copied())
         .current_dir(cwd)
         .env("AREKA_NO_ALERT", "1")
         .env("NO_COLOR", "1")
