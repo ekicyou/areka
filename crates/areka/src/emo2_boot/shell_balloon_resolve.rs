@@ -180,12 +180,26 @@ pub(crate) fn resolve_skin_target(
                 .cloned()
                 .ok_or(NotFoundReason::LastInstalledMissing);
         }
-        SkinSpec::Name(want) => candidates
-            .iter()
-            .find(|c| c.name.as_deref() == Some(want.as_str()))
-            .or_else(|| by_folder(want)),
+        SkinSpec::Name(want) => find_by_name_or_folder(candidates, want),
     };
     hit.cloned().ok_or(NotFoundReason::NoMatch)
+}
+
+/// 特別な名前（random・lastinstalled）を解かない「名前の一致 → フォルダ名の一致」。
+///
+/// `name` は大文字小文字を区別し、フォルダ名は `same_folder_name` で比べる。
+pub(crate) fn find_by_name_or_folder<'a>(
+    candidates: &'a [SkinCandidate],
+    value: &str,
+) -> Option<&'a SkinCandidate> {
+    candidates
+        .iter()
+        .find(|c| c.name.as_deref() == Some(value))
+        .or_else(|| {
+            candidates
+                .iter()
+                .find(|c| same_folder_name(&c.folder, value))
+        })
 }
 
 /// `random`: 隠しと今のものを除いて 1 つ選ぶ。候補 0 なら今のもの（要件 1.9・裁定 4）。

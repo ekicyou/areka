@@ -318,3 +318,33 @@ fn balloon_lastinstalled_resolves_only_when_in_the_catalog() {
     record_installed_balloon(&mut world, "gone".to_owned());
     assert_eq!(resolve(&world), Err(NotFoundReason::LastInstalledMissing));
 }
+
+/// 特別な名前を解かない「名前 → フォルダ名」の突き合わせ（`--dump-shell` が使う・要件 2.4）。
+#[test]
+fn find_by_name_or_folder_ignores_special_names() {
+    let cands = [
+        cand("alpha", Some("beta"), false),
+        cand("beta", Some("ガンマ"), false),
+        cand("random", None, false),
+        cand("other", Some("lastinstalled"), false),
+    ];
+    let find = |value: &str| find_by_name_or_folder(&cands, value).map(|c| c.folder.as_str());
+    assert_eq!(find("ガンマ"), Some("beta"), "名前で見つかる");
+    assert_eq!(find("alpha"), Some("alpha"), "フォルダ名で見つかる");
+    assert_eq!(
+        find("beta"),
+        Some("alpha"),
+        "名前を先に見る（フォルダ名 beta より名前 beta）"
+    );
+    assert_eq!(
+        find("random"),
+        Some("random"),
+        "random はただのフォルダ名として探す"
+    );
+    assert_eq!(
+        find("lastinstalled"),
+        Some("other"),
+        "lastinstalled はただの名前として探す"
+    );
+    assert_eq!(find("none"), None, "見つからない");
+}
