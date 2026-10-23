@@ -1,4 +1,4 @@
-//! オフラインの書き出しの欄（areka-P0-offline-surface-dump 要件 1.8・2.2・10.2・12.1）。
+//! オフラインの書き出しの欄（areka-P0-offline-surface-dump 要件 1.8・2.2・10.1〜10.4・12.1）。
 
 use super::*;
 use crate::cli::OfflineDumpRequest;
@@ -27,6 +27,18 @@ fn missing(name: &str) -> ParseNote {
 
 fn repeated(name: &str) -> ParseNote {
     ParseNote::Repeated { name: s(name) }
+}
+
+fn not_applied(name: &str) -> ParseNote {
+    ParseNote::OfflineIgnored { name: s(name) }
+}
+
+fn pending(name: &str) -> ParseNote {
+    ParseNote::DumpPending { name: s(name) }
+}
+
+fn without_offline(name: &str) -> ParseNote {
+    ParseNote::DumpWithoutOffline { name: s(name) }
 }
 
 fn ghost(dir: &str) -> OfflineDumpRequest {
@@ -146,8 +158,11 @@ fn empty_dump_value_is_missing() {
             missing("dump-bind"),
         ]
     );
-    // `--offline-dump` が無ければ値なしの記録は出さない
-    assert_eq!(notes(&run(&["--dump-scope"])), NONE);
+    // `--offline-dump` が無ければ値なしの記録は出さず、効かない記録だけ（10.4）
+    assert_eq!(
+        notes(&run(&["--dump-scope"])),
+        &[without_offline("dump-scope")]
+    );
 }
 
 /// 重なりは後勝ちと `Repeated`。後が値なしなら値なし。
@@ -200,6 +215,16 @@ fn relative_paths_carried_raw() {
     assert_eq!(o.error_log.as_deref(), Some("log/x.csv"));
 }
 
+/// 10.2: `--help` は効く側に残る（説明書を開いて終わる）。
+#[test]
+fn help_with_offline_stays_effective() {
+    let parsed = run(&["--offline-dump", "G", "--help"]);
+    let Some(ParseNote::Summary { effective, .. }) = parsed.notes.last() else {
+        panic!("まとめが最後");
+    };
+    assert_eq!(effective, &vec![s("offline-dump"), s("help")]);
+}
+
 /// 10.2: `--help` と一緒なら両方が立つ（どちらを行うかは main が決める）。
 #[test]
 fn help_and_offline_both_set() {
@@ -225,12 +250,10 @@ fn dump_pending_and_other_dump_names() {
     ]);
     assert_eq!(parsed.options.offline, Some(ghost("G")));
     assert_eq!(parsed.options.boot.positional_ghost, None);
-    assert!(
-        !notes(&parsed)
-            .iter()
-            .any(|n| matches!(n, ParseNote::Unsupported { .. })),
-        "{:?}",
-        parsed.notes
+    // 10.3: 1 件ずつ・扱わない名前の記録にはしない
+    assert_eq!(
+        notes(&parsed),
+        &[pending("dump-surface-option"), pending("dump-animation")]
     );
 
     let parsed = run(&["--offline-dump", "G", "--dump-surface", "d"]);
@@ -260,4 +283,95 @@ fn summary_lists_offline_names() {
     };
     assert_eq!(effective, &vec![s("offline-dump"), s("dump-scope")]);
     assert_eq!(ignored, &vec![s("dump-animation")]);
+}
+
+/// 10.1: `--offline-dump` と一緒の起動オプションは効かせなかった記録を 1 件ずつ。`--option` の語の記録はそのまま。
+#[test]
+fn other_options_with_offline_not_applied() {
+    let parsed = run(&[
+        "pos",
+        "--offline-dump",
+        "G",
+        "--ghost",
+        "A",
+        "--random",
+        "--option",
+        "kiosk",
+        "--sstp-listen",
+        "--random",
+        "pos2",
+    ]);
+    assert_eq!(parsed.options.offline, Some(ghost("G")));
+    let got = notes(&parsed);
+    assert!(
+        got.contains(&ParseNote::WordPending { word: s("kiosk") }),
+        "{got:?}"
+    );
+    let ignored: Vec<&ParseNote> = got
+        .iter()
+        .filter(|n| matches!(n, ParseNote::OfflineIgnored { .. }))
+        .collect();
+    assert_eq!(
+        ignored,
+        [
+            &not_applied("positional"),
+            &not_applied("ghost"),
+            &not_applied("random"),
+            &not_applied("option"),
+            &not_applied("sstp-listen"),
+        ]
+    );
+    // まとめでは無視の側
+    let Some(ParseNote::Summary {
+        effective, ignored, ..
+    }) = parsed.notes.last()
+    else {
+        panic!("まとめが最後");
+    };
+    assert_eq!(effective, &vec![s("offline-dump")]);
+    for n in ["ghost", "random", "sstp-listen"] {
+        assert!(ignored.contains(&s(n)), "{n} {ignored:?}");
+    }
+    // `--offline-dump` が無ければ記録しない
+    assert!(
+        !notes(&run(&["--random", "--option", "kiosk"]))
+            .iter()
+            .any(|n| matches!(n, ParseNote::OfflineIgnored { .. }))
+    );
+}
+
+/// 10.4: `--offline-dump` なしの `--dump-*`（まだ扱わない 2 つを含む）は 1 件ずつ・まとめでは無視の側。
+#[test]
+fn dump_without_offline_noted_each() {
+    let parsed = run(&[
+        "--random",
+        "--dump-shell",
+        "sh",
+        "--dump-scope=1",
+        "--dump-animation",
+        "--dump-scope",
+        "2",
+    ]);
+    assert_eq!(parsed.options.offline, None);
+    assert!(parsed.options.boot.random);
+    assert_eq!(
+        notes(&parsed),
+        &[
+            repeated("dump-scope"),
+            without_offline("dump-shell"),
+            without_offline("dump-scope"),
+            without_offline("dump-animation"),
+        ]
+    );
+    let Some(ParseNote::Summary {
+        effective, ignored, ..
+    }) = parsed.notes.last()
+    else {
+        panic!("まとめが最後");
+    };
+    assert_eq!(effective, &vec![s("random")]);
+    assert_eq!(
+        ignored,
+        &vec![s("dump-animation"), s("dump-shell"), s("dump-scope")]
+    );
 }

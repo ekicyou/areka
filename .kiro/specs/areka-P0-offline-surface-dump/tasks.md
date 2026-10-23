@@ -122,7 +122,7 @@
   - 上の試験が緑（14.4 の画面の側）で、検体の部品が 7.8 から呼べる可視性で置かれている
   - _Requirements: 14.1, 14.2, 14.4_
 
-- [ ] 6. areka の共有の部品と起動オプションの欄
+- [x] 6. areka の共有の部品と起動オプションの欄
 - [x] 6.1 (P) PNG にする関数を共有の置き場へ移す
   - 色の戻しと PNG の組み立てを MCP の書き出しの中から `png_image.rs` へ中身を変えずに移し、MCP の base64 の関数は移した関数の結果を base64 にするだけにする（`mod png_image;` を `main.rs` に足す）
   - 色の戻しと PNG の形の試験を `png_image_tests.rs` へ移し、base64 の試験は残す
@@ -153,7 +153,7 @@
   - _Boundary: CliOfflineFields_
   - _Requirements: 1.8, 2.2, 10.2, 12.1_
 
-- [ ] 6.5 オフラインと一緒に来た起動オプションの記録
+- [x] 6.5 オフラインと一緒に来た起動オプションの記録
   - 列を読み終えた後に、`--offline-dump` があるときの `--ghost`・`--random`・`--option`・`--sstp-listen`・位置の引数を「効かせなかった」、`dump-surface-option`・`dump-animation` を「まだ扱わない」、`--offline-dump` が無いときの `dump-*`（まだ扱わない 2 つを含む）を「`--offline-dump` なしでは効かない」として、1 件ずつ warn（`[cli]`）で出す。`--option` の語ごとの今の記録はそのまま
   - `parse_offline_tests.rs` に 3 種類の記録の分岐を足して緑
   - _Requirements: 10.1, 10.3, 10.4, 12.1_

@@ -228,6 +228,12 @@ pub(crate) enum ParseNote {
     NonUtf8 { lossy: String },
     /// `--help` の値（使わない＝9.4）。warn
     HelpValueIgnored { value: String },
+    /// `--offline-dump` があるので効かせない起動オプション（`positional` は位置の引数＝offline 10.1）。warn
+    OfflineIgnored { name: String },
+    /// `--offline-dump` と一緒の、まだ扱わない `--dump-*`（offline 10.3）。warn
+    DumpPending { name: String },
+    /// `--offline-dump` なしの `--dump-*`（offline 10.4）。warn
+    DumpWithoutOffline { name: String },
     /// `--sstp-listen` の待ち受け先の注記（8.5・8.6）。warn
     Listen(ListenNote),
     /// 読み終えたまとめ（1.12・最後に 1 件）。info
@@ -261,12 +267,21 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
     let mut help_value: Option<String> = None;
     let mut offline_given = false;
     let mut offline = OfflineDumpRequest::default();
+    // `--offline-dump` の有無で記録が変わる名前（出てきた順・重ねは 1 つ＝offline 10.1・10.3・10.4）。
+    let mut others: Vec<String> = Vec::new();
+    let mut dumps: Vec<String> = Vec::new();
+    let seen = |list: &mut Vec<String>, name: &str| {
+        if !list.iter().any(|n| n == name) {
+            list.push(name.to_owned());
+        }
+    };
 
     let mut i = 1;
     while i < args.len() {
         let arg = &args[i];
         i += 1;
         if !is_option(arg) {
+            seen(&mut others, "positional");
             positional.push(arg.clone());
             continue;
         }
@@ -308,6 +323,13 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
             }
         }
         let first = !effective.contains(&name);
+        match kind {
+            Kind::Ghost | Kind::Random | Kind::Option | Kind::SstpListen => {
+                seen(&mut others, &name)
+            }
+            Kind::DumpValue(_) | Kind::DumpPending => seen(&mut dumps, &name),
+            _ => {}
+        }
         match kind {
             Kind::Unsupported => {
                 notes.push(ParseNote::Unsupported { name: name.clone() });
@@ -433,7 +455,35 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                 notes.push(ParseNote::MissingValue { name: name.clone() });
             }
         }
+        for name in dumps {
+            if lookup_long(&name).is_some_and(|(_, _, k)| k == Kind::DumpPending) {
+                notes.push(ParseNote::DumpPending { name });
+            }
+        }
+        notes.extend(
+            others
+                .into_iter()
+                .map(|name| ParseNote::OfflineIgnored { name }),
+        );
         options.offline = Some(offline);
+        // まとめの効く側はオフラインの名前と `--help`（10.2）だけ（ほかは効かせなかった＝無視の側）。
+        let (keep, moved): (Vec<String>, Vec<String>) = effective.into_iter().partition(|n| {
+            matches!(
+                lookup_long(n),
+                Some((_, _, Kind::OfflineDump | Kind::DumpValue(_) | Kind::Help))
+            )
+        });
+        effective = keep;
+        ignored.extend(moved);
+    } else {
+        // `--offline-dump` なしの `--dump-*` は効かない（まとめでも無視の側）。
+        effective.retain(|n| !dumps.contains(n));
+        for name in dumps {
+            if !ignored.contains(&name) {
+                ignored.push(name.clone());
+            }
+            notes.push(ParseNote::DumpWithoutOffline { name });
+        }
     }
 
     if let Some(value) = help_value {
@@ -550,6 +600,21 @@ impl ParseNote {
                 event = "help_value_ignored",
                 value = %value,
                 "[cli] --help の値は使わない"
+            ),
+            Self::OfflineIgnored { name } => warn!(
+                event = "offline_option_ignored",
+                name = %name,
+                "[cli] --offline-dump があるので、この起動オプションを効かせない"
+            ),
+            Self::DumpPending { name } => warn!(
+                event = "dump_option_pending",
+                name = %name,
+                "[cli] この --dump-* の起動オプションはまだ扱わないので、値を使わない"
+            ),
+            Self::DumpWithoutOffline { name } => warn!(
+                event = "dump_option_without_offline",
+                name = %name,
+                "[cli] --dump-* の起動オプションは --offline-dump なしでは効かないので、使わない"
             ),
             Self::Listen(note) => note.log(),
             Self::Summary {
