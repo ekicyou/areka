@@ -78,7 +78,7 @@
 
 ### Existing Architecture Analysis
 
-- 検体は登記表 `SAMPLES`（9 本）の URL の行として登記済みで、取り寄せの段が `target\nar-samples\fetched\` の置き場へ最新を取り寄せ、窓口が `.sha256` と照合してから空の根へ展開する。登記どおりに「ゴースト 1 つ・同梱のバルーン 0」が入ることは、既存の自動テストが見ている。本 spec はこの上に「縦書きのバルーンがゴーストのフォルダの直下に在る」の 1 点を足す。
+- 検体は登記表 `SAMPLES`（設計の時点は 9 本。main の PR#359〔`b6a27e57`〕が `dot_sakura` を足して今は 10 本＝`crates/sample-ghost-kit/src/lib.rs` の `name` 10 行・`lib_tests.rs` の `assert_eq!(SAMPLES.len(), 10, "登記は検体 10 個")`）の URL の行として登記済みで、取り寄せの段が `target\nar-samples\fetched\` の置き場へ最新を取り寄せ、窓口が `.sha256` と照合してから空の根へ展開する。登記どおりに「ゴースト 1 つ・同梱のバルーン 0」が入ることは、既存の自動テストが見ている。本 spec はこの上に「縦書きのバルーンがゴーストのフォルダの直下に在る」の 1 点を足す。
 - シェルとバルーンの当たりは、合成した絵の PBGRA の α から `AlphaMask::from_pbgra32` でマスクを作り、`pack_pbgra32_alpha` の 1 か所で `alpha >= 128` を当たりにする。ウィジェットの当たり（`HitTestMode::Bounds`）は、`hit_test/mod.rs` の 2 か所で「見た目の不透明度 × 塗りの α」を小数 `128/255` と比べる。今は同じ値を 3 回書いている。
 - 実機の走行の型は、完了 `emily-ghost-verification` の記録（環境変数の表・起動の命令・流れの表・項目ごとの結果・ERROR と WARN の数・崩れた所の表）をそのまま使う。
 
