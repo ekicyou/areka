@@ -122,3 +122,23 @@ INFO actor{actor=shiori}: ghost-boot: SHIORI の版を確かめた event="shiori
 - 受け口の無いイベントの 400（別に数える）: **3**。どれも `OnTranslate`（2.x では `TRANSLATE Sentence SHIORI/2.6`）への `SHIORI error status 400` で、`kanade: OnTranslate がエラー応答——展開済みの元の台詞で進む event="translate_reply" kind="error_response"` の WARN として出た（翻訳の道は `shiori_error_response` を出さない）。華和梨に `OnTranslate` の受け口が無いため（研究記録 4 節・SSP の 10.2 節でも翻訳の 2 本は 400）。台本はそのまま再生された。
 
 **load のパスの形（4.4）**: 整えたパスそのものは記録に出ない（4.4 は記録の行を足していない・helper の標準エラーは `[helper] SHIORI 初期化の入口: load` だけ）。整えた形が効いたことは、同じ根と同じ検体で run1 が辞書を読めず run2 が台本と資源の値を返したことで見ている。
+
+## 5.2 3.0 の検体で版の確かめを見る（要件 6.1・6.3・6.4）
+
+2026-10-24・机を持って 1 回ずつ（00:43〜00:47・4.4 の後の `HEAD`）。置き場はすべて `target\s2p-5-2\` の下で、根（`root\ghost\emo2`・`root\ghost\R_POST_and_KOMAINU`・`root\ghost\konnoyayame`・`root\balloon\emo2-kakukaku`・`root\balloon\StayseeBalloon`）は `nar-sample-path` で開いた検体の写し。記憶は検体ごとに空のフォルダ（`profile\<名>`）で、起動はどれも `OnFirstBoot`。起動は 5.1 と同じ形（`--ghost` に絶対パス・`AREKA_APP_SMOKE_EXIT_MS=300000`・`RUST_LOG=info,ghost-boot=info,shiori2=debug`）。終わりは MCP の `raise_event OnClose` で、どれも外から止めずに終了コード 0 で終わった。記録: `target\s2p-5-2\logs\<名>.*`。
+
+| 検体（SHIORI） | 版の INFO の行（抜き書き） | 起動 | 面（`dump_surface` scope 0） | `OnClose` と終了 |
+|---|---|---|---|---|
+| emo2（`pasta.dll`） | `ghost="emo2" version="SHIORI/3.0" evidence="SHIORI/3.0 204 No Content"` | 挨拶を再生（00:43:50〜00:44:08・`はじめましてや！！…`） | `OK:scope 0, surface 1000 …` | 台本（`…ほな、\_w[450]またな！…\-\e`）→ 終了コード 0 |
+| 里々（`satori.dll`・Ｒポストと狛犬） | `ghost="R_POST_and_KOMAINU" version="SHIORI/3.0" evidence="SHIORI/3.0 200 OK"` | 挨拶を再生（00:45:35〜00:45:41・`はじめまして。…里々のサンプルゴースト「ポスト」と申します。…`） | `OK:scope 0, surface 0 …` | 台本（`…\1\_w[36]またな。\-`）→ 終了コード 0 |
+| YAYA（`yaya.dll`・紺野ややめ） | `ghost="konnoyayame" version="SHIORI/3.0" evidence="SHIORI/3.0 204 No Content"` | 挨拶を再生（00:46:18〜00:46:38・`初めまして。…紺野ややめだよ。…`） | `OK:scope 0, surface 6 …` | 台本（`…ぷー。\w9\w9\-\e`）→ 終了コード 0 |
+
+- 3 本とも版は 3.0 に決まった。2.x に決まった 3.0 の検体は無い（要件 6.1・6.3）。どの記録にも `shiori2` の行・`shiori_version_undecided`・`LoadReturnedFalse`／`LOAD 失敗` は 0。
+- 4.4 で整えた `load` のパスの形（絶対パス・`\` の区切り・末尾に `\` が 1 つ）で、3 本とも今までどおり読み込み・挨拶・面・終了まで通った（要件 6.4）。各記録に `unload_clean`（unload が正常終了を返した）が 1 件。
+- MCP の `get_status` は 3 本とも挨拶の最中に `talking,balloon(0=0/1=0)`。emo2 は挨拶の最中に送った最初の `raise_event OnClose` が `NG:the ghost cannot accept a script now` で断られ、挨拶の後（`balloon(0=0/1=0)`）に送り直して通った（断りは台詞の最中の正しい振る舞い）。
+- `evidence` の状態の番号は検体で違う（ぱすたと YAYA は 204、里々は 200）が、どれも先頭の行の版の字 `SHIORI/3.0` で 3.0 に決まっている（研究記録 10.1 節の測 2 のとおり）。
+
+### 4.1 と 4.3 で変えたテストの名前
+
+- 4.1（`ShioriConnection` の書き下しに `version: ShioriVersion::Shiori3` の 1 行を足しただけ）: `crates/areka-kanade/tests/kanade/common/common_window_actor.rs`・`crates/areka-kanade/tests/kanade/idle_pump_test.rs`・`crates/areka-kanade/tests/kanade/real_helper_test.rs`
+- 4.3: なし
