@@ -618,11 +618,12 @@ fn nonexistent_append_target_warn_fires_with_id() {
     assert!(logs.contains("未存在"), "未存在メッセージ: {logs}");
 }
 
-// ── 4.3: 未束縛 element warn（atlas_bind.rs bind_atlas）───────────────────────────────
+// ── 4.3: 未束縛 element debug（atlas_bind.rs bind_atlas）───────────────────────────────
 
-/// 要件 4.3: atlas に無い element path を bind すると WARN（path つき）が発火し、AtlasBinding は None。
+/// 要件 4.3: atlas に無い element path を bind すると DEBUG（path つき）が発火し、AtlasBinding は None。
+/// 脱落の知らせは読み込みの入口の error が 1 度出すので、ここは warn にしない（1 誤り 1 行）。
 #[test]
-fn unbound_element_warn_fires_with_path() {
+fn unbound_element_debug_fires_with_path() {
     let base = Path::new("shell/master");
     // atlas には known.png のみ。bogus.png は未束縛＝None になる。
     let atlas = bake_atlas(base, &["known.png"]);
@@ -656,10 +657,14 @@ fn unbound_element_warn_fires_with_path() {
         .expect("bogus element");
     assert_eq!(binding.0[bogus_idx], None, "未束縛 element は None");
 
-    // ログ: WARN・target・path を同時に突く。
+    // ログ: DEBUG・target・path を同時に突き、WARN 以上は出ない。
     assert!(
-        logs.contains("level=WARN"),
-        "未束縛 element は WARN: {logs}"
+        logs.contains("level=DEBUG"),
+        "未束縛 element は DEBUG: {logs}"
+    );
+    assert!(
+        !logs.contains("level=WARN") && !logs.contains("level=ERROR"),
+        "未束縛 element は WARN 以上を出さない: {logs}"
     );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(

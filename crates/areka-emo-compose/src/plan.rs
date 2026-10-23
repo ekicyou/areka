@@ -87,7 +87,7 @@ pub struct Extent {
 ///
 /// 指定 surface の [`SurfaceMaster`] と平行な [`AtlasBinding`] を World から読み、element を
 /// **layer 昇順・同 layer は登場順**（安定ソート）で列挙する。束縛が `Some(ElementId)` の
-/// element のみ [`BlitOp`] を積み、`None`（未解決・bind 時に warn 済み）の element はスキップ
+/// element のみ [`BlitOp`] を積み、`None`（未解決・bind 時に debug・脱落は読み込みの error 済み）の element はスキップ
 /// する（要件 4.3）。さらに束縛済み element でも [`AtlasTable::entry`] の `placement` が None
 /// （全透明＝空エントリ）なら命令化せずスキップする（要件 6.3・通常系ゆえ warn しない）。
 /// element の [`Transform`]（転記 x,y の行列表現・要件 4.2）と [`ComposeMethod`] をそのまま
@@ -196,14 +196,14 @@ pub(crate) fn push_static_element_ops(
             );
             continue;
         }
-        // 束縛が Some の画像のみ命令化する。None（画像の解決に失敗・bind 時に warn 済み）はスキップ。
+        // 束縛が Some の画像のみ命令化する。None（画像の解決に失敗・bind 時に debug・脱落は読み込みの error 済み）はスキップ。
         let Some(element_id) = binding.0.get(i).copied().flatten() else {
             tracing::trace!(
                 target: "areka_emo_compose",
                 surface_id,
                 layer = element.layer,
                 path = element.path.as_str(),
-                "未束縛の画像 element を静的命令からスキップ（画像の解決に失敗・bind 時 warn 済み）"
+                "未束縛の画像 element を静的命令からスキップ（画像の解決に失敗・bind 時 debug 済み）"
             );
             continue;
         };

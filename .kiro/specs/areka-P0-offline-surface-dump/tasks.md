@@ -237,7 +237,7 @@
   - _Requirements: 11.1, 11.2, 11.3_
 
 - [ ] 10. 建った areka.exe での決定論の試験
-- [ ] 10.1 書き出しの成功と CSV の中身
+- [x] 10.1 書き出しの成功と CSV の中身
   - `crates/areka/tests/offline_dump_exe_test.rs` を足し、建った `areka.exe` を `std::process::Command` で回して終了コードとファイルを読む（根・検体・出力はすべて `temp-path-kit` で `target\` の下）
   - areka は bin だけのクレートなので、統合の試験から `#[cfg(test)]` の `offline_dump_test_support` は使えない。検体は統合の試験の側で `temp-path-kit`・`image`（dev）・`std` だけで組む（`structure.md` の `tests/` の決まりどおり、入口の `tests/offline_dump_exe_test.rs` は `#[path]` の宣言だけにし、試験の本体はテーマごとに `tests/offline_dump_exe_test/` の下へ、共有の部品は `tests/offline_dump_exe_test/common/mod.rs` に置く）。試験のファイルは 1,000 行の内で、超えるならテーマで分ける
   - 面の画像の欠けの面にはほかに描ける層を、合成の失敗の面は中身の無いブレスだけで画像を置かない形にする（7.1 と同じ決まり）
@@ -280,3 +280,4 @@
 - 7.8: 面の段の順は「SERIKO の表・下地（面の指定が無くても作る＝表の warn を CSV に残す）→ 面の指定が無ければここで閉じる → 既定の組と `--dump-bind` → 面の指定の展開 → 1 面ずつ書く」。出力先のパスを絶対にできないときは error 1 行で指定の面を全部「書けなかった」に数える（実装係の足した最小の道）。`RenderError::Write` の欄の `#[allow(dead_code)]` は Debug でだけ読むため残す
 - 9: `offline_dump` は design の許す依存の一覧に無い `areka-sakura` を `ActorKey` の型だけ使う（`ScopeStates::current_binds`・`apply_named_bind` が要る・areka は前から依存）。structure.md には実際どおり載せた
 - 8: 机を持った 1 回の走り（`--offline-dump ghost8 --dump-surface-list 0-200`）は終了コード 0・5.7 秒・窓なし・PNG 3 枚・誤り無しで CSV なし。範囲外: `cargo test -p areka --bins` で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が待ち時間の切れで 1 度赤（単独では緑・触っていない場所）＝完了の棚卸で扱う
+- 10.1: `areka-emo-compose/src/atlas_bind.rs` の「atlas 未束縛 element: resolve 失敗」を warn から debug に下げた（要件 7.5 の 1 誤り 1 行・3.2 と同じ考え）。根拠: `bind_atlas` の本番の呼び手は shell_target の build_world／take_world と balloon.rs の 2 か所で、bake が鍵を落とすのは読めない絵だけ＝シェルは読み込みで error 1 行・バルーンは bake の誤りで bind の前に止まる。画面の記録もこの行は debug になる。exe の試験は常時の試験で、回すには排他テストの机が要る
