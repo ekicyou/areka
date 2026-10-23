@@ -289,6 +289,23 @@ pub(crate) fn summary_refs(kind: SummaryKind, ends: &[(&TargetSpec, &TargetEnd)]
         .collect()
 }
 
+/// 読み取りだけの断りの総括: 対象ごとに `[名前（ResultEx のときだけ）, 種別, ""]` を区切りでつなぐ
+/// （readonly の SSP の測りと同じ字・成否の欄が空）。
+// 初めて呼ぶのは 4.4（`update/readonly_refusal.rs`）。そこで外す。
+#[allow(dead_code)]
+pub(crate) fn readonly_summary_refs(kind: SummaryKind, targets: &[TargetSpec]) -> Vec<String> {
+    targets
+        .iter()
+        .map(|spec| {
+            let kind_str = spec.kind.as_ref_str();
+            match kind {
+                SummaryKind::Result => [kind_str, ""].join(SEPARATOR),
+                SummaryKind::ResultEx => [spec.name.as_str(), kind_str, ""].join(SEPARATOR),
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "refs_tests.rs"]
 mod tests;

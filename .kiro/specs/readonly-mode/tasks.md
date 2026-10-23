@@ -124,7 +124,7 @@
   - 終わった形: 兄弟の試験で、読み取りだけの取得の口を渡した `url` の腕が要求を送らずに記録を出すことが確かめられ、今の試験が緑のまま
   - _Boundary: InstallCueReadonly_
   - _Requirements: 7.1, 7.2, 7.4_
-- [ ] 4.3 (P) 更新の断りで送る総括の字を作る
+- [x] 4.3 (P) 更新の断りで送る総括の字を作る
   - 対象ごとに、`名前`（ResultEx のときだけ）・`種別`・空の欄を `\u{1}` でつないだ総括を作る関数を足す
   - 送らない 7 語の檻に、この関数の出力を足す
   - 終わった形: 試験で次の 3 つが確かめられる
@@ -222,3 +222,4 @@
 - `crates/areka` の clippy は依存・examples・触っていないファイルの前からの lint で `-D warnings` を通らない。触ったファイルに新しい警告が無いことだけを見る。
 - 3.2: `areka-user-data` の dev-dependencies に `log-capture-kit` を足した。記録の確かめは `log_capture_kit::capture` で行う（ログの確かめは理由を付けて省かない）。
 - 4.2: `InstallCueSink::new` は作るときに 1 度だけ `readonly::is_on()` を読む。5.1 では `engage` を runtime の起動（受け口を作る所）より前に呼ぶこと。
+- 4.3: `update::refs::readonly_summary_refs` に一時の `#[allow(dead_code)]` が付いている。4.4 で外す。
