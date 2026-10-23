@@ -667,7 +667,7 @@ fn dialog_options(base: FILEOPENDIALOGOPTIONS, readonly: bool) -> FILEOPENDIALOG
 |---|---|---|---|
 | `readonly_engaged` | info | `readonly.rs` | 起動のはじめに 1 件 |
 | `persist_withheld` | debug | `persist/mod.rs` | 保存を控えるたび |
-| `persist_root_dir_withheld` | debug | `persist/withhold.rs` | ゴーストの記憶のフォルダを作らなかった |
+| `persist_root_dir_withheld` | debug | `persist/io.rs`（`ensure_root_dir`） | ゴーストの記憶のフォルダを作らなかった |
 | `session_mark_withheld`・`switch_drop_withheld`・`session_mark_clear_withheld` | info | `boot_resolve.rs` | 印の 3 つの書き手 |
 | `session_mark_kept`（`readonly = true`） | info | `boot_resolve.rs` | きれいに終わらなかった後始末 |
 | `readonly_boot_check_skipped` | info | `write_failure.rs` | 起動の前の確かめ |
