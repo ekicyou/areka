@@ -3,6 +3,8 @@
 //! 名前なし（`None`）は今日の規則（`seriko.defaultsurfacedirectoryname` → `master`）と
 //! 同じマウントを返し、名前あり（`Some("B")`）は `shell/B` と B の `descript.txt` の
 //! bindgroup を返し、名前の先が無ければ今日と同じ `ShellDirMissing` になることを固定する。
+//! ゴーストの名前だけを読む `read_ghost_names` は単独で名前を返し、起点の不在は
+//! `StartPointMissing` になることも固定する。
 //! 一時ツリーは共通窓口 `temp-path-kit` 経由で組む（プロセス間でも一意・破棄で消える）。
 
 use std::fs;
@@ -12,7 +14,7 @@ use temp_path_kit::TempPath;
 
 use crate::charset::DefaultEncoding;
 
-use super::{MountError, resolve, resolve_with_shell};
+use super::{GhostNames, MountError, read_ghost_names, resolve, resolve_with_shell};
 
 /// ghost/master の descript.txt と、`shell/A`（bindgroup 1100 が既定オン）・
 /// `shell/B`（bindgroup 2200 が既定オン）の 2 つのシェルを持つ一時ツリーを作る。
@@ -109,6 +111,84 @@ fn named_shell_missing_dir_is_shell_dir_missing() {
         err,
         MountError::ShellDirMissing {
             expected: root.join("shell").join("Z"),
+        }
+    );
+}
+
+/// ghost/master/descript.txt だけを `body` で書いた一時ツリーを作る（シェルは置かない）。
+fn ghost_only(tag: &str, body: &str) -> TempPath {
+    let root = TempPath::new(&format!("parsers-ghost-names-{tag}"));
+    let master = root.path().join("ghost").join("master");
+    fs::create_dir_all(&master).expect("create ghost/master");
+    fs::write(master.join("descript.txt"), body.as_bytes()).expect("write ghost descript.txt");
+    root
+}
+
+/// 名前の在るゴーストは、シェルが無くても descript.txt の名前を単独で返す。
+#[test]
+fn read_ghost_names_returns_names_without_shell() {
+    let temp = ghost_only(
+        "present",
+        "charset,UTF-8
+name,テスト
+sakura.name,さくら
+sakura.name2,さくら2
+kero.name,うにゅう
+",
+    );
+
+    let names = read_ghost_names(temp.path(), DefaultEncoding::Utf8).expect("read ok");
+
+    assert_eq!(names.name.as_deref(), Some("テスト"));
+    assert_eq!(names.sakura_name.as_deref(), Some("さくら"));
+    assert_eq!(names.sakura_name2.as_deref(), Some("さくら2"));
+    assert_eq!(names.kero_name.as_deref(), Some("うにゅう"));
+}
+
+/// `name` の無いゴーストは失敗せず、空の名前（全部 None）を返す。
+#[test]
+fn read_ghost_names_without_name_is_empty() {
+    let temp = ghost_only(
+        "empty",
+        "charset,UTF-8
+shiori,x.dll
+",
+    );
+
+    let names = read_ghost_names(temp.path(), DefaultEncoding::Utf8).expect("read ok");
+
+    assert_eq!(names, GhostNames::default());
+}
+
+/// descript.txt が無ければ `StartPointMissing`。
+#[test]
+fn read_ghost_names_missing_descript_is_start_point_missing() {
+    let temp = TempPath::new("parsers-ghost-names-no-descript");
+    let master = temp.path().join("ghost").join("master");
+    fs::create_dir_all(&master).expect("create ghost/master");
+
+    let err = read_ghost_names(temp.path(), DefaultEncoding::Utf8).expect_err("must fail");
+
+    assert_eq!(
+        err,
+        MountError::StartPointMissing {
+            expected: master.join("descript.txt"),
+        }
+    );
+}
+
+/// ゴーストのフォルダが無ければ `StartPointMissing`。
+#[test]
+fn read_ghost_names_missing_folder_is_start_point_missing() {
+    let temp = TempPath::new("parsers-ghost-names-no-folder");
+    let root = temp.path().join("nothing-here");
+
+    let err = read_ghost_names(&root, DefaultEncoding::Utf8).expect_err("must fail");
+
+    assert_eq!(
+        err,
+        MountError::StartPointMissing {
+            expected: root.join("ghost").join("master").join("descript.txt"),
         }
     );
 }

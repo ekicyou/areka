@@ -51,7 +51,7 @@ fn source_over_channel(src_c: u8, dst_c: u8, inv_src_a: u32) -> u8 {
 ///
 /// 各命令は合成前に [`crate::method::ComposeMethod::is_implemented`] で dispatch する。M1 の実装対象は
 /// [`crate::method::ComposeMethod::Overlay`]（＝SourceOver）のみゆえ、`is_implemented() == false` の
-/// 未実装メソッド命令はパニックせず `warn!`（メソッド名・element id 付き）を発してその命令のみ
+/// 未実装メソッド命令はパニックせず `debug!`（メソッド名・element id 付き）を発してその命令のみ
 /// skip し、処理を継続する（要件 8.4・design「Method Registry」Postcondition／Error Handling 表）。
 ///
 /// # 整数専用（要件 10.2）
@@ -82,12 +82,12 @@ pub(crate) fn execute(
 
     // (2) 命令を順に転写（画家のアルゴリズム・下層から上層）。
     for op in ops {
-        // 未実装メソッド命令はパニックせず warn＋skip して処理を継続する（要件 8.4・design
-        // 「Method Registry」Postcondition／Error Handling 表 `warn!(method)`）。M1 の実装対象は
+        // 未実装メソッド命令はパニックせず debug＋skip して処理を継続する（要件 8.4。組むたびの
+        // 知らせなので debug・areka-P0-offline-surface-dump design ShapeIssuesOnce）。M1 の実装対象は
         // `Overlay`（SourceOver）のみ。`BlitOp` は surface id を保持しない（design Contracts）ため、
         // 命令化されている行動可能フィールド＝method（＋element id）をログに載せる。
         if !op.method.is_implemented() {
-            tracing::warn!(
+            tracing::debug!(
                 target: "areka_emo_compose",
                 method = ?op.method,
                 element = op.element.0,

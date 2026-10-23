@@ -31,7 +31,7 @@ fn place(ports: &FakePorts, relative: &str) -> String {
 
 /// 本物の書庫 1 本を偽の口で一周させる。
 fn run_one(ports: &mut FakePorts, builder: sample_ghost_kit::NarBuilder) -> Vec<ArchiveEnd> {
-    let dir = TempPath::new("install-procedure-nar");
+    let dir = TempPath::under_target("install-procedure-nar");
     let nar = write_nar(&dir, "archive.nar", builder);
     run_order(&order_of(&[&nar]), ports)
 }
@@ -106,7 +106,7 @@ fn ghost_with_balloon_lists_body_first_then_the_companion() {
         run_one(&mut ports, ghost_with_balloon_nar());
 
         let ghost_at = place(&ports, "ghost/newbie");
-        let balloon_at = place(&ports, "balloon/kaku");
+        let balloon_at = place(&ports, "ghost/newbie/balloon/kaku");
         let mut expected = vec![
             ("OnInstallBegin", Vec::new()),
             (
@@ -132,7 +132,11 @@ fn ghost_with_balloon_lists_body_first_then_the_companion() {
                 .all(|r| !r.contains("with")),
             "`ghost with balloon` は送らない（2.5）"
         );
-        assert!(ports.under_root("balloon/kaku/descript.txt").is_file());
+        assert!(
+            ports
+                .under_root("ghost/newbie/balloon/kaku/descript.txt")
+                .is_file()
+        );
     }
 }
 
@@ -153,6 +157,37 @@ fn companion_balloon_without_a_name_falls_back_to_its_folder_name() {
     assert_eq!(
         raised[2],
         ("OnInstallComplete", refs(&["ghost", "あたらしい", "kaku"]))
+    );
+}
+
+/// 同梱の表示名は入れたゴーストの中のバルーンの `name` で、根の置き場の同じフォルダ名の
+/// 別の `name` を取らない（areka-P0-ghost-inner-balloon 要件 7.6）。
+#[test]
+fn companion_name_comes_from_inside_the_ghost_not_the_root_of_the_same_folder() {
+    let mut ports = FakePorts::new();
+    let root_kaku = ports.under_root("balloon/kaku");
+    std::fs::create_dir_all(&root_kaku).expect("根のバルーンを置ける");
+    std::fs::write(
+        root_kaku.join("descript.txt"),
+        "charset,UTF-8\r\nname,RootKaku\r\n",
+    )
+    .expect("根のバルーンの descript.txt を置ける");
+    run_one(&mut ports, ghost_with_balloon_nar());
+
+    let raised = ports.raised();
+    assert_eq!(raised[1].0, "OnInstallCompleteEx");
+    assert_eq!(
+        raised[1].1[1],
+        joined(&["あたらしい", "Kaku"]),
+        "ゴーストの中の name（根の RootKaku ではない）"
+    );
+    assert_eq!(
+        raised[1].1[2],
+        joined(&[
+            &place(&ports, "ghost/newbie"),
+            &place(&ports, "ghost/newbie/balloon/kaku")
+        ]),
+        "入れた場所はゴーストの中のまま"
     );
 }
 

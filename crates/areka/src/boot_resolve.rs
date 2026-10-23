@@ -4,7 +4,7 @@
 //! 無作為・0）を「argv・記憶の値・ゴーストの descript の 2 鍵・同梱の名・列挙の素性」だけから
 //! 決める。判断は I/O・時計・乱数源を持たず、無作為は「候補数 → 添字」の関数を注入する
 //! （本番は [`pick_index`]）。列挙の並びは判断に使わない（裁定 3）。ただ 1 点、descript の
-//! `balloon` に `name` が一致するバルーンが複数在るときだけ、列挙の並び（フォルダ名の昇順）で
+//! `balloon` に `name` が一致するバルーンが複数在るときだけ、列挙の並び（ゴーストの中が先、それぞれフォルダ名の昇順）で
 //! 最初のものにする（areka-P0-ghost-standard-balloon 要件 2.6）。
 //!
 //! 既定の定数 [`DEFAULT_GHOST_FOLDER`]／[`DEFAULT_BALLOON_FOLDER`] はこのファイルだけが持ち、
@@ -118,7 +118,7 @@ pub(crate) struct BalloonInputs<'a> {
     pub balloon_name: Option<&'a str>,
     /// `<ゴースト>/install.txt` の同梱の最初の 1 個（無印 → `balloon0`）の `*.directory`
     pub companion: Option<&'a str>,
-    /// 和の `list_balloons`（フォルダ名の昇順）
+    /// `balloons_for` の一覧（ゴーストの中が先、それぞれフォルダ名の昇順）
     pub listed: &'a [BalloonEntry],
     /// 見つかる根の `balloon\`（上から・記録と 0 の失敗に載せる）
     pub stores: &'a [PathBuf],
@@ -147,7 +147,7 @@ fn find_balloon<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'a Balloo
         .find(|e| same_folder_name(&e.identity.folder, name))
 }
 
-/// descript の `balloon` の突き合わせ: `name` が一致する最初（列挙の並び＝フォルダ名の昇順）、
+/// descript の `balloon` の突き合わせ: `name` が一致する最初（列挙の並び＝ゴーストの中が先、それぞれフォルダ名の昇順）、
 /// 1 つも無いときに限りフォルダ名（実行中の `\![change,balloon,名前]` のふつうの名前と同じ・要件 2.6）。
 fn find_balloon_by_name<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'a BalloonEntry> {
     listed
@@ -274,7 +274,7 @@ pub(crate) fn resolve_balloon(
                 event = "last_balloon_not_found",
                 memory,
                 balloon_store = %store,
-                "[boot_resolve] 前回のバルーンが根に見つからないので次の候補へ進みます"
+                "[boot_resolve] 前回のバルーンが根にもゴーストの中にも見つからないので次の候補へ進みます"
             ),
         }
     }
@@ -298,7 +298,7 @@ pub(crate) fn resolve_balloon(
                 key,
                 value,
                 balloon_store = %store,
-                "[boot_resolve] ゴーストの descript.txt が指すバルーンが根に見つからないので次の候補へ進みます"
+                "[boot_resolve] ゴーストの descript.txt が指すバルーンが根にもゴーストの中にも見つからないので次の候補へ進みます"
             ),
         }
     }
@@ -310,7 +310,7 @@ pub(crate) fn resolve_balloon(
                 event = "companion_balloon_not_found",
                 companion,
                 balloon_store = %store,
-                "[boot_resolve] ゴーストの同梱バルーンが根に見つからないので次の候補へ進みます"
+                "[boot_resolve] ゴーストの同梱バルーンが根にもゴーストの中にも見つからないので次の候補へ進みます"
             ),
         }
     }

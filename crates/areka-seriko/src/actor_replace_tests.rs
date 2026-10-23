@@ -85,7 +85,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
     let records = out.records();
     let (mut sink, handle) = spawn_seriko(
         resolver_of("通常", 2100),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         arm_resolver(),
         cfg(old, always_fire()),
         out,
@@ -100,7 +100,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
     assert!(sink.send_replace(SerikoReplace::Shell {
         epoch: 7,
         resolver: resolver_of("笑顔", 2200),
-        static_binds: BindSet::from_ids([1500]),
+        static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([1500])),
         bind_resolver: BindResolver::empty(),
         shell_table: new,
     }));
@@ -171,7 +171,7 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
     let records = out.records();
     let (mut sink, handle) = spawn_seriko(
         resolver_of("通常", 2100),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         arm_resolver(),
         cfg(shell, always_fire()),
         out,
@@ -235,7 +235,7 @@ fn balloon_replace_reports_unseen_scopes_from_new_tables_with_surface_zero() {
     let records = out.records();
     let (mut sink, handle) = spawn_seriko(
         resolver_of("通常", 2100),
-        BindSet::default(),
+        crate::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,

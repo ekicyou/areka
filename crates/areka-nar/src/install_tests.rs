@@ -58,7 +58,8 @@ fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
         .iter()
         .map(|entry| inflate_entry(&bytes, entry).expect("エントリを伸長できる"))
         .collect();
-    let (plan, _skipped) = build_plan(&manifest, &names, request).expect("計画は組める");
+    let (plan, _skipped, _overridden) =
+        build_plan(&manifest, &names, request).expect("計画は組める");
     Prepared {
         manifest,
         plan,
@@ -362,7 +363,12 @@ fn a_companion_balloon_follows_its_own_prefixed_refresh_keys() {
         &[("profile/ghost.dat", b"ghost state")],
     );
     make_tree(
-        &work.path().join("balloon").join("test-balloon"),
+        &work
+            .path()
+            .join("ghost")
+            .join("test-ghost")
+            .join("balloon")
+            .join("test-balloon"),
         &[("keep.dat", b"kept"), ("gone.dat", b"gone")],
     );
     let request = InstallRequest {

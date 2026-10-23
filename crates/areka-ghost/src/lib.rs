@@ -57,7 +57,8 @@ pub use catalog::{
 };
 // baseware-root-list: 根の並びと、フォルダ名・根の比べ方。
 pub use catalog_roots::{
-    BasewareRoots, Hidden, InstallRoot, StoreKind, Survey, fold_key, same_folder_name, same_root,
+    BasewareRoots, GhostBalloons, Hidden, InstallRoot, StoreKind, Survey, fold_key,
+    same_folder_name, same_root,
 };
 // task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と α 後の直接利用に供する）。
 pub use shiori_inproc::inproc_connect;

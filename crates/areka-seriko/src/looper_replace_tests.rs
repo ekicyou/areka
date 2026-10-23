@@ -14,7 +14,7 @@ fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     // 古い表: 2106 → 150ms 後に 2110（再生が続く）。
     let old = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);
     let mut rt = LoopRuntime::new(cfg(old, always_fire()));
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(10));
 
@@ -23,7 +23,7 @@ fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     assert_eq!(pattern_of(&c1[0]).get(0).unwrap().surface_id, 2106);
 
     // 差し替え（アクターの順: 状態 → 表）。
-    states.rebase_shell(BindSet::from_ids([]));
+    states.rebase_shell(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let new = table_single(10, 0, Interval::Random { k: 4 }, &[(3000, 0)]);
     rt.replace_shell_table(new);
 
@@ -50,7 +50,7 @@ fn replace_balloon_tables_keeps_shell_loop() {
         balloon_tables: BTreeMap::from([(scope.clone(), balloon)]),
         rng: always_fire(),
     });
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     states.apply(&scope, SurfaceTarget::Show(10));
     states.apply_balloon(&scope, SurfaceTarget::Show(20));
 

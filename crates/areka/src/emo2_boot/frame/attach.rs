@@ -312,11 +312,15 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         attached_count += 1;
         carried_shows.extend(carried.map(|show| (scope, show)));
         if let Some(binds) = carry.as_ref().and_then(|c| c.binds(scope)) {
+            let key = ActorKey::from(scope.to_string());
             let decided = shell_carry::decide_binds(
                 scope,
                 binds,
-                carry.as_ref().map_or(&static_binds, |c| c.old_static()),
-                &static_binds,
+                carry
+                    .as_ref()
+                    .map_or(&static_binds, |c| c.old_static())
+                    .for_scope(&key),
+                static_binds.for_scope(&key),
                 &bind_resolver,
             );
             carried_binds.push((scope, decided));

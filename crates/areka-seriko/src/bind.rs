@@ -21,18 +21,78 @@ pub fn build_static_bindset(default_on: &[u32]) -> areka_emo_compose::BindSet {
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use areka_parsers::package::BindGroupDefaults;
 use areka_sakura::ActorKey;
+
+/// スコープの番号ごとの既定の着せ替えの組（spec: areka-P0-offline-surface-dump 要件 14.3）。
+///
+/// [`DefaultBinds::uniform`] はどのスコープにも同じ組を返す（1 組を全スコープで共有する今の
+/// 振る舞い）。[`DefaultBinds::single`] は 1 つのスコープだけに組を持つ。[`DefaultBinds::for_scope`]
+/// は書かれていないスコープ・数でないスコープに空の組（`uniform` なら共有の組）を返す。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DefaultBinds {
+    /// スコープの番号ごとの組。
+    by_scope: BTreeMap<u32, areka_emo_compose::BindSet>,
+    /// `by_scope` に無いスコープへ返す組（`uniform` だけが空でない組を持つ）。
+    fallback: areka_emo_compose::BindSet,
+}
+
+impl DefaultBinds {
+    /// どのスコープにも同じ組（今の振る舞い）。
+    pub fn uniform(binds: areka_emo_compose::BindSet) -> Self {
+        Self {
+            by_scope: BTreeMap::new(),
+            fallback: binds,
+        }
+    }
+
+    /// そのスコープだけに組を持つ（ほかのスコープは空の組）。
+    pub fn single(scope: u32, binds: areka_emo_compose::BindSet) -> Self {
+        Self {
+            by_scope: BTreeMap::from([(scope, binds)]),
+            fallback: areka_emo_compose::BindSet::default(),
+        }
+    }
+
+    /// シェルの着せ替えの読みから、スコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*` の
+    /// `default,1` を当てる。書かれていないスコープは空の組（要件 14.1）。
+    pub fn from_groups(groups: &BindGroupDefaults) -> Self {
+        let mut by_scope = BTreeMap::from([
+            (0, build_static_bindset(&groups.sakura_default_on)),
+            (1, build_static_bindset(&groups.kero_default_on)),
+        ]);
+        for (n, ids) in &groups.char_default_on {
+            by_scope.insert(*n, build_static_bindset(ids));
+        }
+        Self {
+            by_scope,
+            fallback: areka_emo_compose::BindSet::default(),
+        }
+    }
+
+    /// スコープで引く。書かれていないスコープ・数でないスコープは `fallback`（`uniform` 以外は空）。
+    pub fn for_scope(&self, scope: &ActorKey) -> &areka_emo_compose::BindSet {
+        scope
+            .as_str()
+            .parse::<u32>()
+            .ok()
+            .and_then(|n| self.by_scope.get(&n))
+            .unwrap_or(&self.fallback)
+    }
+}
 
 /// bind 名前解決の**名前空間**（本体側＝sakura／相方側＝kero を型で峻別する・D7）。
 ///
 /// scope（`ActorKey`）から [`scope_namespace`] が写像し、[`BindResolver::resolve`] が
-/// どちらの名前表を引くかを選ぶ。M1 では `char2+`（`char*.bindgroup`）の名前空間は持たない。
+/// どの名前表を引くかを選ぶ。3 人目以降（`char{N}.bindgroup`）は番号つきの [`BindNamespace::Char`]。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindNamespace {
     /// 本体側（scope `"0"`・shell の `sakura.bindgroup`）。
     Sakura,
     /// 相方側（scope `"1"`・shell の `kero.bindgroup`）。M1 では名前表まで持つが機構は scope 非依存。
     Kero,
+    /// 3 人目以降（scope `"N"`・N は 2 以上・shell の `char{N}.bindgroup`・要件 14.2）。
+    Char(u32),
 }
 
 /// カテゴリの着せ替え選択ポリシー（ukadoc 正典の 3 値・bindopt 設計 D2）。
@@ -78,19 +138,61 @@ pub struct BindOptionDecls {
 /// （`BTreeMap<(String,String),u32>` は `Send`）。
 ///
 /// [`SurfaceResolver`]: crate::SurfaceResolver
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct BindResolver {
-    /// 本体側（sakura）: `(カテゴリ, パーツ)` → 着せ替え ID。
-    sakura: BTreeMap<(String, String), u32>,
-    /// 相方側（kero）: `(カテゴリ, パーツ)` → 着せ替え ID。emo2 では空（Risks）。
-    kero: BTreeMap<(String, String), u32>,
-    /// `bindoption*.group` 宣言のスコープ別カテゴリ名集合（bindopt 設計 D2/D3）。
-    ///
-    /// [`policy`] が 3 値ポリシーを導出する唯一の材料。全集合空＝全カテゴリが正典の既定
-    /// （[`BindChoicePolicy::Default`]）。
-    ///
-    /// [`policy`]: BindResolver::policy
-    options: BindOptionDecls,
+    /// 本体側（sakura）の名前表。
+    sakura: ScopeNames,
+    /// 相方側（kero）の名前表。emo2 では空（Risks）。
+    kero: ScopeNames,
+    /// 3 人目以降（`char{N}`）の名前表（N ごと・要件 14.2）。
+    chars: BTreeMap<u32, ScopeNames>,
+}
+
+/// 1 つの名前空間の名前表と `bindoption*.group` 宣言（bindopt 設計 D2/D3）。
+///
+/// `mustselect`／`multiple` は [`BindResolver::policy`] が 3 値ポリシーを導出する唯一の材料。
+/// 全集合空＝全カテゴリが正典の既定（[`BindChoicePolicy::Default`]）。
+#[derive(Clone, Default)]
+struct ScopeNames {
+    /// `(カテゴリ, パーツ)` → 着せ替え ID。
+    table: BTreeMap<(String, String), u32>,
+    /// `(行の番号, カテゴリ, パーツ)` を descript.txt の行の順に（[`BindResolver::from_groups`] だけが持つ）。
+    written: Vec<(usize, String, String)>,
+    /// `mustselect` と宣言されたカテゴリ名。
+    mustselect: BTreeSet<String>,
+    /// `multiple` と宣言されたカテゴリ名。
+    multiple: BTreeSet<String>,
+}
+
+/// 名前表の無い `char{N}` へ返す空の表。
+static NO_NAMES: ScopeNames = ScopeNames {
+    table: BTreeMap::new(),
+    written: Vec::new(),
+    mustselect: BTreeSet::new(),
+    multiple: BTreeSet::new(),
+};
+
+impl ScopeNames {
+    /// 1 つのスコープの名前宣言 `(ID, カテゴリ, パーツ, 行の番号)`（転記順）と `mustselect`／`multiple`
+    /// の転記から組む。転記順に入れるので同じ `(カテゴリ, パーツ)` は後の宣言が勝つ（parsers と同じ）。
+    fn read<'a>(
+        names: impl IntoIterator<Item = (u32, &'a str, &'a str, usize)>,
+        mustselect: Option<&Vec<String>>,
+        multiple: Option<&Vec<String>>,
+    ) -> Self {
+        let mut out = Self {
+            mustselect: mustselect.into_iter().flatten().cloned().collect(),
+            multiple: multiple.into_iter().flatten().cloned().collect(),
+            ..Self::default()
+        };
+        for (id, category, part, line) in names {
+            out.table.insert((category.to_owned(), part.to_owned()), id);
+            out.written
+                .push((line, category.to_owned(), part.to_owned()));
+        }
+        out.written.sort_by_key(|(line, _, _)| *line);
+        out
+    }
 }
 
 impl BindResolver {
@@ -108,10 +210,83 @@ impl BindResolver {
         options: BindOptionDecls,
     ) -> Self {
         Self {
-            sakura,
-            kero,
-            options,
+            sakura: ScopeNames {
+                table: sakura,
+                mustselect: options.sakura_mustselect,
+                multiple: options.sakura_multiple,
+                ..ScopeNames::default()
+            },
+            kero: ScopeNames {
+                table: kero,
+                mustselect: options.kero_mustselect,
+                multiple: options.kero_multiple,
+                ..ScopeNames::default()
+            },
+            chars: BTreeMap::new(),
         }
+    }
+
+    /// シェルの着せ替えの読み（`sakura.*`・`kero.*`・`char{N}.*`）から 3 種類のスコープの名前表と
+    /// `mustselect`／`multiple` を組む（要件 14.2・14.3）。
+    pub fn from_groups(groups: &BindGroupDefaults) -> Self {
+        // 名前宣言の型は parsers の外から名指せないので、欄をその場で組に開く。
+        macro_rules! decls {
+            ($names:expr) => {
+                $names
+                    .into_iter()
+                    .flatten()
+                    .map(|n| (n.id, n.category.as_str(), n.part.as_str(), n.line))
+            };
+        }
+        let mut chars = BTreeMap::new();
+        for n in groups
+            .char_names
+            .keys()
+            .chain(groups.char_mustselect.keys())
+            .chain(groups.char_multiple.keys())
+        {
+            chars.entry(*n).or_insert_with(|| {
+                ScopeNames::read(
+                    decls!(groups.char_names.get(n)),
+                    groups.char_mustselect.get(n),
+                    groups.char_multiple.get(n),
+                )
+            });
+        }
+        Self {
+            sakura: ScopeNames::read(
+                decls!(Some(&groups.sakura_names)),
+                Some(&groups.sakura_mustselect),
+                Some(&groups.sakura_multiple),
+            ),
+            kero: ScopeNames::read(
+                decls!(Some(&groups.kero_names)),
+                Some(&groups.kero_mustselect),
+                Some(&groups.kero_multiple),
+            ),
+            chars,
+        }
+    }
+
+    /// 名前空間 `ns` の表（`char{N}` の表が無ければ空）。
+    fn scope(&self, ns: BindNamespace) -> &ScopeNames {
+        match ns {
+            BindNamespace::Sakura => &self.sakura,
+            BindNamespace::Kero => &self.kero,
+            BindNamespace::Char(n) => self.chars.get(&n).unwrap_or(&NO_NAMES),
+        }
+    }
+
+    /// カテゴリのパーツ名を、シェルの descript.txt に書かれた順（行の順・同じパーツ名は 1 度）で返す。
+    /// 無いカテゴリは空（要件 5.2・5.9）。[`BindResolver::new`] で組んだ表は行を持たないので空。
+    pub fn category_parts_in_order(&self, ns: BindNamespace, category: &str) -> Vec<String> {
+        let mut parts: Vec<String> = Vec::new();
+        for (_line, cat, part) in &self.scope(ns).written {
+            if cat == category && !parts.contains(part) {
+                parts.push(part.clone());
+            }
+        }
+        parts
     }
 
     /// 空リゾルバ（本体側・相方側とも空表・`bindoption` 宣言も空）。
@@ -127,11 +302,7 @@ impl BindResolver {
     /// [`policy`]: BindResolver::policy
     /// [`resolve`]: BindResolver::resolve
     pub fn empty() -> Self {
-        Self {
-            sakura: BTreeMap::new(),
-            kero: BTreeMap::new(),
-            options: BindOptionDecls::default(),
-        }
+        Self::default()
     }
 
     /// `(カテゴリ名, パーツ名)` を名前空間 `ns` の表から引き、着せ替え ID を返す（純粋・副作用なし）。
@@ -140,10 +311,7 @@ impl BindResolver {
     /// 名前空間は隔離され、`Sakura` で引くのは sakura 表のみ、`Kero` は kero 表のみ。解決不能の
     /// `error!`＋skip は呼び手（actor）の責務（R3.7）。
     pub fn resolve(&self, ns: BindNamespace, category: &str, part: &str) -> Option<u32> {
-        let table = match ns {
-            BindNamespace::Sakura => &self.sakura,
-            BindNamespace::Kero => &self.kero,
-        };
+        let table = &self.scope(ns).table;
         // タプルキー `(String, String)` は借用キーでの直接引きができない（`Borrow` が
         // `(&str, &str)` を導かない）ため、引きキーを組んで引く。bind cue は低頻度ゆえ許容。
         table
@@ -160,16 +328,10 @@ impl BindResolver {
     /// 正典の既定＝`Default`。名前空間は隔離され、`Sakura` は sakura 集合のみ、`Kero` は
     /// kero 集合のみを見る。
     pub fn policy(&self, ns: BindNamespace, category: &str) -> BindChoicePolicy {
-        let (mustselect, multiple) = match ns {
-            BindNamespace::Sakura => (
-                &self.options.sakura_mustselect,
-                &self.options.sakura_multiple,
-            ),
-            BindNamespace::Kero => (&self.options.kero_mustselect, &self.options.kero_multiple),
-        };
-        if multiple.contains(category) {
+        let names = self.scope(ns);
+        if names.multiple.contains(category) {
             BindChoicePolicy::Multiple
-        } else if mustselect.contains(category) {
+        } else if names.mustselect.contains(category) {
             BindChoicePolicy::MustSelect
         } else {
             BindChoicePolicy::Default
@@ -186,11 +348,8 @@ impl BindResolver {
     /// カテゴリの宣言形に依存しない（名前表のみを引く）。宣言のないカテゴリは空 `Vec`。
     /// `BTreeSet` 経由で dedup＋昇順を保証する（emo2 は約 30 宣言ゆえ全走査で足りる）。
     pub fn category_ids(&self, ns: BindNamespace, category: &str) -> Vec<u32> {
-        let table = match ns {
-            BindNamespace::Sakura => &self.sakura,
-            BindNamespace::Kero => &self.kero,
-        };
-        table
+        self.scope(ns)
+            .table
             .iter()
             .filter(|((cat, _part), _id)| cat == category)
             .map(|(_key, id)| *id)
@@ -206,11 +365,8 @@ impl BindResolver {
     ///
     /// [`resolve`]: BindResolver::resolve
     pub fn name_of(&self, ns: BindNamespace, id: u32) -> Option<(&str, &str)> {
-        let table = match ns {
-            BindNamespace::Sakura => &self.sakura,
-            BindNamespace::Kero => &self.kero,
-        };
-        table
+        self.scope(ns)
+            .table
             .iter()
             .find(|(_key, v)| **v == id)
             .map(|((cat, part), _id)| (cat.as_str(), part.as_str()))
@@ -219,10 +375,9 @@ impl BindResolver {
 
 /// scope（`ActorKey`）→ bind 名前空間の写像（D7・純関数）。
 ///
-/// `"0"` → [`Some(BindNamespace::Sakura)`]、`"1"` → [`Some(BindNamespace::Kero)`]、
-/// それ以外（`"2"` 以降・非数値）→ `None`（写像なし＝判定なし・該当しないスコープ）。一般の
-/// `u32` parse ではなく**明示的な `"0"`/`"1"`**のみを写す（`char2+` の bindgroup は M1 未取込
-/// ゆえ写像なしが正直。M-dual が写像表を拡張する）。写像なしは呼び手で自然に解決不能へ落ちる。
+/// `"0"` → [`Some(BindNamespace::Sakura)`]、`"1"` → [`Some(BindNamespace::Kero)`]、2 以上の数 →
+/// `Some(BindNamespace::Char(n))`（要件 14.2）、それ以外（非数値）→ `None`（写像なし＝判定なし）。
+/// 写像なしは呼び手で自然に解決不能へ落ちる。
 ///
 /// [`Some(BindNamespace::Sakura)`]: BindNamespace::Sakura
 /// [`Some(BindNamespace::Kero)`]: BindNamespace::Kero
@@ -230,7 +385,11 @@ pub fn scope_namespace(scope: &ActorKey) -> Option<BindNamespace> {
     match scope.as_str() {
         "0" => Some(BindNamespace::Sakura),
         "1" => Some(BindNamespace::Kero),
-        _ => None,
+        other => other
+            .parse::<u32>()
+            .ok()
+            .filter(|n| *n >= 2)
+            .map(BindNamespace::Char),
     }
 }
 
@@ -340,6 +499,51 @@ pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
     }
 }
 
+/// [`apply_named_bind`] の結果（記録は呼び手が出す・spec: areka-P0-offline-surface-dump 要件 5.1・5.3・5.4）。
+#[derive(Clone, Debug, PartialEq)]
+pub enum NamedBindResult {
+    /// 名前を解決して当てた（`id` は解決した着せ替え ID）。
+    Applied {
+        id: u32,
+        outcome: crate::state::BindApplyOutcome,
+    },
+    /// scope に名前の空間が無い（数でない scope・D7）。
+    NoNamespace,
+    /// (カテゴリ, パーツ) が宣言に無い（R3.7）。
+    NotFound,
+    /// mustselect のカテゴリの脱衣は外さない（正典・解除不可・bindopt 3.2）。
+    MustSelectKept { id: u32 },
+}
+
+/// 名前で 1 パーツを当てる決め方（名前の解決 → 方針 → 当てる）。画面の `\![bind]` と
+/// `--dump-bind` が共有する（要件 14.2）。複数可でないカテゴリの着衣は排他置換（bindopt 2.1/3.1）、
+/// 複数可の着衣は加算・mustselect 以外の脱衣は除去（bindopt 2.2/3.3）、mustselect の脱衣は外さない。
+pub fn apply_named_bind(
+    states: &mut crate::state::ScopeStates,
+    resolver: &BindResolver,
+    scope: &ActorKey,
+    category: &str,
+    part: &str,
+    on: bool,
+) -> NamedBindResult {
+    let Some(ns) = scope_namespace(scope) else {
+        return NamedBindResult::NoNamespace;
+    };
+    let Some(id) = resolver.resolve(ns, category, part) else {
+        return NamedBindResult::NotFound;
+    };
+    let policy = resolver.policy(ns, category);
+    if !on && policy == BindChoicePolicy::MustSelect {
+        return NamedBindResult::MustSelectKept { id };
+    }
+    let outcome = if on && policy != BindChoicePolicy::Multiple {
+        states.apply_bind_exclusive(scope, &resolver.category_ids(ns, category), id)
+    } else {
+        states.apply_bind(scope, id, on)
+    };
+    NamedBindResult::Applied { id, outcome }
+}
+
 /// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・design 行 322）。
 ///
 /// 現在の着せ替え集合 `current` に対し、対象 animation ID `id` を `on` に従って積算した
@@ -373,3 +577,7 @@ pub fn accumulate(
 #[cfg(test)]
 #[path = "bind_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "bind_named_tests.rs"]
+mod named_tests;

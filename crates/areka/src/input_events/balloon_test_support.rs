@@ -87,7 +87,7 @@ fn synth_boot_assets() -> BootAssets {
             name: String::new(),
         }],
         resolver: SurfaceResolver::new(BTreeMap::new()),
-        static_binds: BindSet::default(),
+        static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
         bind_resolver: BindResolver::empty(),
         shell_author_dpi: 96,
         balloon_author_dpi: 96,

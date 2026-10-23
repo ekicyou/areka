@@ -43,7 +43,7 @@ use std::ops::ControlFlow;
 use areka_sakura::{ActorKey, CueCommand, CueTarget, TalkCue, cue_target_of};
 
 use crate::bind::{
-    BindChoicePolicy, BindDirective, BindResolver, parse_bind_directive, scope_namespace,
+    BindDirective, BindResolver, NamedBindResult, apply_named_bind, parse_bind_directive,
 };
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
@@ -88,7 +88,7 @@ pub enum SerikoReplace {
     Shell {
         epoch: u64,
         resolver: SurfaceResolver,
-        static_binds: areka_emo_compose::BindSet,
+        static_binds: crate::bind::DefaultBinds,
         bind_resolver: BindResolver,
         shell_table: AnimationTable,
     },
@@ -258,7 +258,7 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// ループを殺さず継続する（silent failure 禁止・入力起因では panic しない）。
 pub fn spawn_seriko<O>(
     resolver: SurfaceResolver,
-    static_binds: areka_emo_compose::BindSet,
+    static_binds: crate::bind::DefaultBinds,
     bind_resolver: BindResolver,
     loop_config: SerikoLoopConfig,
     out: O,
@@ -286,7 +286,7 @@ pub type SerikoClock = std::sync::Arc<dyn Fn() -> u64 + Send + Sync>;
 /// 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
 pub fn spawn_seriko_clocked<O>(
     resolver: SurfaceResolver,
-    static_binds: areka_emo_compose::BindSet,
+    static_binds: crate::bind::DefaultBinds,
     bind_resolver: BindResolver,
     loop_config: SerikoLoopConfig,
     out: O,
@@ -368,8 +368,8 @@ fn rebased(
     extra: Vec<ActorKey>,
 ) -> DisplayCommand {
     let (slot, binds) = match kind {
-        RebaseKind::Shell => (Slot::Shell, states.binds().clone()),
-        RebaseKind::Balloon => (Slot::Balloon, areka_emo_compose::BindSet::default()),
+        RebaseKind::Shell => (Slot::Shell, Some(states.binds())),
+        RebaseKind::Balloon => (Slot::Balloon, None),
     };
     let mut surfaces: BTreeMap<ActorKey, Option<u32>> =
         states.current_surfaces(slot).into_iter().collect();
@@ -379,12 +379,15 @@ fn rebased(
     let shows = surfaces
         .into_iter()
         .map(|(scope, surface_id)| RebasedShow {
+            // シェルはスコープで引いた新しい既定・バルーンは空。
+            binds: binds
+                .map(|defaults| defaults.for_scope(&scope).clone())
+                .unwrap_or_default(),
             scope,
             surface_id: match kind {
                 RebaseKind::Shell => surface_id,
                 RebaseKind::Balloon => surface_id.or(Some(0)),
             },
-            binds: binds.clone(),
         })
         .collect();
     DisplayCommand::Rebased { epoch, kind, shows }
@@ -429,7 +432,7 @@ fn on_stage<O: SurfaceOutput>(
 ///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
 ///   `cue_target_of == None` 枝の内側（Wait 判定より前・D1）に `\![bind]` 名前自己選別分岐を持ち、
 ///   `name == "bind"` のキャリアのみ `bind_resolver` で名前解決し [`ScopeStates::apply_bind`] を通す。
-fn handle_message<O: SurfaceOutput>(
+pub(crate) fn handle_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     bind_resolver: &BindResolver,
     states: &mut ScopeStates,
@@ -559,23 +562,27 @@ fn handle_message<O: SurfaceOutput>(
                         }
                     };
 
-                    // (step 4) scope→名前空間（D7）。"0"→sakura・"1"→kero・"2"+/非数値→写像なし。
-                    let ns = match scope_namespace(&cue.actor) {
-                        Some(ns) => ns,
-                        None => {
-                            // 写像なし（char2+ は M1 未取込・M-dual 拡張シーム・D7・D8⑤）。
+                    // (step 4〜6) scope→名前空間（D7）→ 名前解決（R3.7）→ カテゴリの 3 値ポリシーで当てる
+                    // （bindopt 設計 D1/D2）。決め方は `--dump-bind` と共有の [`apply_named_bind`]（要件 14.2）。
+                    // ここは結果ごとの記録と発行だけを持つ。
+                    let (id, outcome) = match apply_named_bind(
+                        states,
+                        bind_resolver,
+                        &cue.actor,
+                        &category,
+                        &part,
+                        on,
+                    ) {
+                        NamedBindResult::Applied { id, outcome } => (id, outcome),
+                        NamedBindResult::NoNamespace => {
+                            // 写像なし（数でない scope・D7・D8⑤）。
                             tracing::warn!(
                                 scope = %cue.actor,
-                                "seriko: bind の scope 写像なし（scope 2 以降・非数値）で読み飛ばす（M-dual 拡張シーム・D7・D8⑤）"
+                                "seriko: bind の scope 写像なし（数でない scope）で読み飛ばす（D7・D8⑤）"
                             );
                             return ControlFlow::Continue(());
                         }
-                    };
-
-                    // (step 5) 名前解決（未宣言は捏造せず None・R3.7）。解決不能は error!＋skip・状態不変・発行なし。
-                    let id = match bind_resolver.resolve(ns, &category, &part) {
-                        Some(id) => id,
-                        None => {
+                        NamedBindResult::NotFound => {
                             tracing::error!(
                                 scope = %cue.actor,
                                 category = %category,
@@ -584,39 +591,20 @@ fn handle_message<O: SurfaceOutput>(
                             );
                             return ControlFlow::Continue(());
                         }
-                    };
-
-                    // (step 6) 適用＋発行（bindopt 設計 D1/D2）。カテゴリの 3 値ポリシーで分岐する:
-                    // 複数可（Multiple）でないカテゴリ——mustselect（bindopt 3.1）と既定（非宣言・
-                    // 高々 1 個・bindopt 2.1）——の着衣（on=true）は排他置換（同カテゴリ他パーツを
-                    // 自動 off）、複数可の着衣は加算（bindopt 3.3）、mustselect 以外の脱衣は除去
-                    // （bindopt 2.2/3.3）。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
-                    let policy = bind_resolver.policy(ns, &category);
-
-                    // mustselect の脱衣は正典「解除不可」: 集合を変えず読み流し、痕跡を warn! で
-                    // 残す（bindopt 3.2・bindopt D1）。無言の握り潰しにしないため実機の既定ログ水準（info）で
-                    // 見える warn を選ぶ。
-                    if !on && policy == BindChoicePolicy::MustSelect {
-                        tracing::warn!(
-                            scope = %cue.actor,
-                            category = %category,
-                            part = %part,
-                            id,
-                            on,
-                            "seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"
-                        );
-                        return ControlFlow::Continue(());
-                    }
-
-                    let outcome = if on && policy != BindChoicePolicy::Multiple {
-                        // MustSelect（従来どおり・bindopt 3.1）／Default（本 spec の是正・bindopt 2.1）
-                        // の着衣は排他置換。
-                        let cat_ids = bind_resolver.category_ids(ns, &category);
-                        states.apply_bind_exclusive(&cue.actor, &cat_ids, id)
-                    } else {
-                        // Multiple の着衣＝加算（bindopt 3.3）／MustSelect 以外の脱衣＝除去
-                        // （bindopt 2.2/3.3）。
-                        states.apply_bind(&cue.actor, id, on)
+                        NamedBindResult::MustSelectKept { id } => {
+                            // mustselect の脱衣は正典「解除不可」: 集合を変えず読み流し、痕跡を warn! で
+                            // 残す（bindopt 3.2・bindopt D1）。無言の握り潰しにしないため実機の既定ログ水準（info）で
+                            // 見える warn を選ぶ。
+                            tracing::warn!(
+                                scope = %cue.actor,
+                                category = %category,
+                                part = %part,
+                                id,
+                                on,
+                                "seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"
+                            );
+                            return ControlFlow::Continue(());
+                        }
                     };
                     match outcome {
                         BindApplyOutcome::Changed(command) => {

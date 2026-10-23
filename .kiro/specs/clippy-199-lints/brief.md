@@ -154,3 +154,7 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
   - v0.1.0 の後に取る見直しの spec が同じファイルを持つ（段 1 は `audit-dola`・`audit-shiori-host32`、段 2 は `audit-kanade`・`audit-parsers-sakura`・`audit-areka-*` ほか）。見直しは指摘を全部直すので、clippy の直しを先に済ませれば見直しの差分が小さくなる。後に回すなら見直しの着地を待つ（同じファイル）。
   - 本文の「`areka` 約 19」は古い（棚卸㉓のとおり、実数は数倍の見込み）。
 - 2026-10-23 `property-name-case-fold` の完了の棚卸で再観測（rustc 1.99.1）: `cargo clippy -p dola -p areka-kanade --all-targets -- -D warnings` が `collapsible_if` 19・`type_complexity` 4・`manual_range_contains` 2・`never_loop` 1・`too_many_arguments` 2（8/7・15/7）・`doc_lazy_continuation` 1 で止まる。どれも本 brief の列挙の範囲（dola・kanade）なので新しい起票はしない。
+
+## 2026-10-23 `shiori4-api` からの申し送り
+
+- 開発者の決定（10-23「COM-SHIORI インターフェースの作りかけは排除し、shiori4 に完全移行」）で、`crates/shiori-abi/`（COM の面）と `crates/shiori4-testdll/` は `shiori4-api` が消す。この spec が着手するときに、まだ残っていれば受け持ちから外してよい（直しても消えるファイル）。

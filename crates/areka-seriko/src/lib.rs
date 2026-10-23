@@ -30,6 +30,8 @@ mod output;
 // 部品の時計（spec: areka-P0-surface-element-nesting）。持ち主は looper。
 mod parts;
 mod resolve;
+// 面 1 つを時点 T まで進める口（spec: areka-P0-offline-surface-dump）。
+mod settle;
 mod state;
 mod table;
 // 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上の面の配線。
@@ -47,12 +49,14 @@ pub use actor::{
     SerikoClock, SerikoMsg, SerikoReplace, SerikoSink, spawn_seriko, spawn_seriko_clocked,
 };
 pub use bind::{
-    BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, accumulate,
-    build_static_bindset, parse_bind_directive, scope_namespace,
+    BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, DefaultBinds,
+    NamedBindResult, accumulate, apply_named_bind, build_static_bindset, parse_bind_directive,
+    scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
 pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
+pub use settle::{SETTLE_TICK_MS, settle_surface, settle_time};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
 };

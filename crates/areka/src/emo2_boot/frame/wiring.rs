@@ -165,7 +165,7 @@ pub struct Emo2Wiring {
     pub(in crate::emo2_boot) shell_carry: Option<ShellCarry>,
     /// 今のシェルの静的な着せ替えの既定（起動の資産から・シェルの差し替えで置き直す）。ghost の読み直しで
     /// 控える着せ替えを「この既定との差」にするのに使う（areka-P0-mcp-reload 要件 3.8）。
-    pub(in crate::emo2_boot) static_binds: areka_emo_compose::BindSet,
+    pub(in crate::emo2_boot) static_binds: areka_seriko::DefaultBinds,
 }
 
 impl Emo2Wiring {

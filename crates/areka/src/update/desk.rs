@@ -6,8 +6,8 @@
 //! 終了が始まったら [`discard_for_exit`] が照会の返事待ちを捨てる（走っている依頼は門が待つ）。
 //!
 //! 対象の解決 [`resolve_targets`] は、置き場のゴーストのフォルダ・起動時に解いたシェルとバルーンの
-//! フォルダから今の 3 つを、ゴーストのシェルの目録と根のバルーンの目録の `name` から `updateother`
-//! の名前を引く（要件 1.4・1.7）。
+//! フォルダから今の 3 つを、ゴーストのシェルの目録と今のゴーストのバルーンの一覧（ゴーストの中が先・
+//! 根が後）の `name` から `updateother` の名前を引く（要件 1.4・1.7）。
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -16,7 +16,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use areka_actor::ReplyReceiver;
 use areka_ghost::BasewareRoots;
 use areka_ghost::catalog::{descript_name, homeurl, list_shells};
-use areka_ghost::catalog_roots::list_balloons;
+use areka_ghost::catalog_roots::balloons_for;
 use areka_kanade::online::OnlineCounter;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{ChangeOrigin, KanadeMsg, ShioriMethod};
@@ -608,8 +608,9 @@ fn here(world: &World) -> Option<Here> {
 
 /// 生の要求を対象の列へ（並んだ順）。今の 3 つ: ゴーストは置き場のフォルダ（名前は実行系の名前 →
 /// `descript.txt` の `name` → フォルダ名）、シェル・バルーンは起動時に解いたフォルダ（名前は
-/// `descript.txt` の `name` → フォルダ名）。`updateother` はゴーストのシェルの目録と根のバルーンの
-/// 目録の `name` に完全一致（大文字小文字を区別）で引く（隠しシェルは目録に無い）。
+/// `descript.txt` の `name` → フォルダ名）。`updateother` はゴーストのシェルの目録と今のゴーストの
+/// バルーンの一覧（ゴーストの中が先・根が後・`balloons_for`）の `name` に完全一致（大文字小文字を
+/// 区別）で引く（隠しシェルは目録に無い・同じ `name` はゴーストの中が当たる）。
 fn resolve(here: &Here, raw: &RawUpdateRequest) -> Vec<TargetSpec> {
     match raw {
         RawUpdateRequest::Current(kinds) => kinds
@@ -632,7 +633,8 @@ fn resolve(here: &Here, raw: &RawUpdateRequest) -> Vec<TargetSpec> {
                         .into_iter()
                         .find(|e| named(&e.identity.name))
                         .map(|e| e.dir),
-                    TargetKind::Balloon => list_balloons(&here.roots)
+                    TargetKind::Balloon => balloons_for(&here.roots, &here.ghost_dir)
+                        .listed
                         .into_iter()
                         .find(|e| named(&e.identity.name))
                         .map(|e| e.dir),

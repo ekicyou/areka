@@ -200,7 +200,7 @@ fn spawned_actor_plays_the_three_words_of_the_fixture() {
     let records = out.records();
     let (mut sink, handle) = spawn_seriko_clocked(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::from_ids([]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         config(),
         out,

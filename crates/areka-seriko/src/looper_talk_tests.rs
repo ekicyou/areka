@@ -34,7 +34,7 @@ impl Stage {
         Stage {
             rt: LoopRuntime::new(config)
                 .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),
-            states: ScopeStates::new(BindSet::default()),
+            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default())),
             clock,
         }
     }

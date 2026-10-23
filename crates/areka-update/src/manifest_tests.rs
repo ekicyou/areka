@@ -113,6 +113,25 @@ fn dau_charset_only_honoured_as_last_field_of_first_entry() {
     assert!(w.is_empty());
 }
 
+/// ゴーストの更新の一覧に載ったゴーストの中のバルーンのファイル（`balloon/<名>/...`）は、他の下の段の
+/// パスと同じく拒まない（spec: areka-P0-ghost-inner-balloon 要件 8.1・8.2）。
+#[test]
+fn ghost_inner_balloon_paths_are_accepted() {
+    let lines: &[&[&str]] = &[
+        &["ghost/master/a.dic", M1],
+        &["balloon/inner/descript.txt", M2],
+    ];
+    let (m, w) = parse(ManifestName::Updates2Dau, &dau(lines, true));
+    assert_eq!(
+        rows(&m),
+        vec![
+            (1, "ghost/master/a.dic", M1),
+            (2, "balloon/inner/descript.txt", M2)
+        ]
+    );
+    assert!(w.is_empty());
+}
+
 #[test]
 fn crlf_and_lf_read_the_same() {
     let lines: &[&[&str]] = &[&["a.txt", M1], &["b/c.txt", M2, "size=2"]];

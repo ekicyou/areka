@@ -50,14 +50,17 @@ fn rebase_shell_keeps_surfaces_and_resets_binds_and_shell_patterns() {
     assert!(!states.current_pattern(&s0, Slot::Shell).is_empty());
 
     let new_default = BindSet::from_ids([2001]);
-    states.rebase_shell(new_default.clone());
+    states.rebase_shell(crate::DefaultBinds::uniform(new_default.clone()));
 
     // 今の面は保たれる。
     assert_eq!(states.scopes.get(&s0), Some(&ScopeState::Shown(5)));
     assert_eq!(states.scopes.get(&s1), Some(&ScopeState::Hidden));
     assert_eq!(states.balloon.get(&s0), Some(&ScopeState::Shown(2)));
     // 着せ替えは新しい既定へ戻る（動的な着せ替えは消える）。
-    assert_eq!(states.binds(), &new_default);
+    assert_eq!(
+        states.binds(),
+        &crate::DefaultBinds::uniform(new_default.clone())
+    );
     assert_eq!(states.current_binds(&s0), &new_default);
     assert_eq!(states.current_binds(&s1), &new_default);
     // シェル側のパターンの進行は消え、バルーン側は残る。
@@ -80,7 +83,10 @@ fn rebase_balloon_clears_only_balloon_patterns() {
 
     assert_eq!(states.scopes.get(&s0), Some(&ScopeState::Shown(5)));
     assert_eq!(states.balloon.get(&s0), Some(&ScopeState::Shown(2)));
-    assert_eq!(states.binds(), &binds_1100_1207());
+    assert_eq!(
+        states.binds(),
+        &crate::DefaultBinds::uniform(binds_1100_1207())
+    );
     assert_eq!(
         states.current_binds(&s0),
         &BindSet::from_ids([1100, 1207, 1302])

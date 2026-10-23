@@ -97,3 +97,9 @@
 - **先に要るもの**: なし。1 段目はどの spec とも重ならない。
 - **優先度の区分**: D（据え置き）。**要件定義のモデル**: 着手するなら Fable（正典に無い道の読みと 2 案の裁定）。
 - **見つけた穴・古くなった記述**: 網羅台帳 `shiori.toml` の `property.get:1`・`property.set:1` の持ち主は今も `property-query-channels` のまま（この棚卸では台帳を直していない）。本 spec の 1 段目か、先にその行を触る spec が、数の欄と一緒に本 spec へ直す。
+
+## 2026-10-23 `shiori4-api` の書き直しによる持ち分の変更
+
+- SHIORI4 の正本が COM の `IShioriHost`（`crates/shiori-abi/src/interface.rs` の `GetProperty`／`SetProperty`）から、C ABI の `ekicyou/shiori4` の `host.request`（`ID: getproperty`／`ID: setproperty`・合意した推奨で確定は開発者）へ移った。`crates/shiori-abi/` は `shiori4-api` で消す案（開発者の判断待ち）。
+- **持ち分**: 同じプロセスの v4 DLL のプロパティの読み書きは `shiori4-api` が持つ。この spec は **32bit の SHIORI/3.0 の DLL（helper の道）の、台本を通さない読み取りの輸送**だけを持つ。上の「`IShioriHost` の本番実装」「`crates/shiori-abi/src/interface.rs`」を触る見込みは外れる。輸送を作るなら、helper の側の受け口は shiori4 の `getproperty`／`setproperty` と同じ名前と応答の形に揃えるのが筋（着手のときに決める）。
+- **同日の追記（別プロセス）**: 開発者の決定「SHIORIの実体は別プロセスで動かすこと」で、v4 の SHIORI も helper のプロセスで動く。`shiori4-api` は helper と親の間の IPC に、同期の問い合わせ（`getproperty`／`setproperty` など）とその答え・post・log の札を足す。この spec が輸送を作ることになったら、その札と問い合わせの形を使う（先に着手した方が札の番号と形を決め、後の方はそれに乗る）。

@@ -7,7 +7,8 @@
 //!
 //! # 宛先は継ぎ足しでしか組まない（要件 4.8）
 //!
-//! 宛先は必ず `root.join("ghost"|"balloon").join(<1 階層の名前>)` の形で組む。
+//! 宛先は必ず `root.join("ghost"|"balloon").join(<1 階層の名前>)`、またはそのゴーストの
+//! 宛先の下の `shell\<1 階層の名前>`・`balloon\<1 階層の名前>`（同梱）の形で組む。
 //! 継ぎ足す名前は 3 つの出どころしかなく、いずれも**先に検証されている**:
 //!
 //! - アーカイブ内の相対パス → [`crate::names::validate_entry_names`] が
@@ -32,7 +33,10 @@ use crate::install::{InstallRequest, SkippedCompanion};
 use crate::manifest::{Companion, ExistingPolicy, INSTALL_TXT, InstallKind, InstallManifest};
 use crate::names::{EntryName, is_valid_one_level_name};
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// 計画の答え: 置く配置・飛ばした同梱・書庫の `balloon/<dir>/` を本体から除いた同梱の名前。
+pub(crate) type Planned = (Vec<Placement>, Vec<SkippedCompanion>, Vec<String>);
 
 /// 根の直下のゴースト格納先（ukadoc「全体の構成」）。
 const GHOST_STORE: &str = "ghost";
@@ -68,6 +72,11 @@ pub(crate) struct Placement {
     /// 作るフォルダの相対パス。名前順で、親は必ず子より前に並ぶ（親は子の接頭辞
     /// なので名前順がそのまま作れる順になる）。ファイルの親も全段そろう（要件 4.9）。
     pub dirs: Vec<String>,
+    /// 本体の下敷きから外す相対のフォルダ（`\` 区切り・例 `balloon\kaku`）。
+    /// 宛先の下に入れ子で置く同梱の場所で、本体の確定がそこへ古い木を持ち込まない。
+    pub carve_out: Vec<String>,
+    /// 宛先が、先に確定する本体の宛先の下に在る（入れ子の同梱）。確定は「無い所へ置く」1 手。
+    pub within_body: bool,
 }
 
 /// マニフェストとエントリ列と要求から配置計画を組む。
@@ -78,6 +87,9 @@ pub(crate) struct Placement {
 /// 列へ探索の順で積む（要件 1.1〜1.3）。2 つの列を足すと、本体 1 つと同梱の全部になる。
 /// 組み上げも確定もこの順で行い、巻き戻しは逆順になる（タスク 4.3）。
 ///
+/// 3 つ目の列は、書庫の `balloon/<directory>/` の項目（取り出し元の外）を本体から除いた
+/// 同梱の名前（記録は公開面が出す）。
+///
 /// # Errors
 ///
 /// 宛先ゴーストが渡されない・1 階層の名前でない・根に実在しないとき
@@ -86,17 +98,56 @@ pub(crate) fn build_plan(
     manifest: &InstallManifest,
     names: &[EntryName],
     request: &InstallRequest<'_>,
-) -> Result<(Vec<Placement>, Vec<SkippedCompanion>), RefuseReason> {
-    let mut placements = Vec::with_capacity(1 + manifest.companions.len());
+) -> Result<Planned, RefuseReason> {
+    let mut body = body_placement(manifest, names, request)?;
+    // 同梱の入るゴースト: ゴーストの書庫は本体の宛先、シェルの書庫は確かめた宛先のゴースト。
+    let ghost_dir = match &body.target_ghost {
+        Some(target) => body.root.join(GHOST_STORE).join(target),
+        None => body.destination.clone(),
+    };
+    // ゴーストの書庫の同梱は本体の宛先の下に入れ子で置く（シェルの宛先の下ではない）。
+    let nested = manifest.kind == InstallKind::Ghost;
+    let mut companions = Vec::with_capacity(manifest.companions.len());
     let mut skipped = Vec::new();
-    placements.push(body_placement(manifest, names, request)?);
+    let mut overridden = Vec::new();
     for companion in &manifest.companions {
-        match companion_placement(companion, names, request) {
-            Some(placement) => placements.push(placement),
-            None => skipped.push(skipped_companion(companion)),
+        let Some(mut placement) = companion_placement(companion, names, &body, &ghost_dir) else {
+            skipped.push(skipped_companion(companion));
+            continue;
+        };
+        if nested {
+            // 名指しされた同梱が書庫の同じ名前のフォルダより先（同じ宛先を取り合わない＝要件 7.5）。
+            // ここで除くのは取り出し元の外の項目だけ（取り出し元の中は本体が既に除いている）。
+            let home = format!("{BALLOON_STORE}/{}", companion.directory);
+            let files_before = body.files.len();
+            let dirs_before = body.dirs.len();
+            body.files
+                .retain(|(_, relative)| !path_in_folder(relative, &home));
+            body.dirs
+                .retain(|relative| !path_in_folder(relative, &home));
+            if body.files.len() != files_before || body.dirs.len() != dirs_before {
+                overridden.push(companion.directory.clone());
+            }
+            body.carve_out
+                .push(format!("{BALLOON_STORE}\\{}", companion.directory));
+            placement.within_body = true;
         }
+        companions.push(placement);
     }
-    Ok((placements, skipped))
+    let mut placements = Vec::with_capacity(1 + companions.len());
+    placements.push(body);
+    placements.extend(companions);
+    Ok((placements, skipped, overridden))
+}
+
+/// `/` 区切りの相対パスが `folder` そのもの、またはその配下か（ASCII の大小は無視）。
+fn path_in_folder(relative: &str, folder: &str) -> bool {
+    let mut parts = relative.split('/');
+    folder.split('/').all(|segment| {
+        parts
+            .next()
+            .is_some_and(|part| part.eq_ignore_ascii_case(segment))
+    })
 }
 
 /// 飛ばした同梱 1 件の値を組む（要件 1.4）。`*.source.directory` が書かれていれば
@@ -179,10 +230,16 @@ fn body_placement(
         skip_top_level_install_txt: skip_install_txt,
         files,
         dirs,
+        carve_out: Vec::new(),
+        within_body: false,
     })
 }
 
-/// 同梱バルーン 1 件の配置を組む（要件 5.3・6.3）。取り出し元が書庫に無ければ `None`。
+/// 同梱バルーン 1 件の配置を組む（要件 5.3・6.3・7.1・7.8）。取り出し元が書庫に無ければ `None`。
+///
+/// 宛先は `ghost_dir`（同梱の入るゴースト）の下の `balloon\<directory>`、根は本体の根。
+/// バルーンの根は尋ねない——根の置き場の同じフォルダ名に触れない（要件 7.3・8.2）。
+/// 入れ子にするか（`within_body`）は呼び手が決める。
 ///
 /// 取り出し元の全ての段を剥がしてバルーン格納先へ写す（要件 2.2）。宛先のパスには
 /// 取り出し元の値を継ぎ足さない——置く相対パスは検証済みのエントリ名の尾だけになる。
@@ -191,7 +248,8 @@ fn body_placement(
 fn companion_placement(
     companion: &Companion,
     names: &[EntryName],
-    request: &InstallRequest<'_>,
+    body: &Placement,
+    ghost_dir: &Path,
 ) -> Option<Placement> {
     // `in_folder` が通したエントリは取り出し元の段数以上を持つので、剥がしは範囲を外れない。
     let (files, dirs) = collect_tree(
@@ -204,18 +262,18 @@ fn companion_placement(
     if files.is_empty() && dirs.is_empty() {
         return None;
     }
-    // 同梱のバルーンも 1 つずつ尋ねる（ゴーストと別の根へ入ることがある＝要件 5.5）。
-    let root = request.roots.balloon_root(&companion.directory);
     Some(Placement {
         kind: ElementKind::Balloon,
         name: companion.directory.clone(),
-        destination: root.join(BALLOON_STORE).join(&companion.directory),
-        root,
+        destination: ghost_dir.join(BALLOON_STORE).join(&companion.directory),
+        root: body.root.clone(),
         target_ghost: None,
         existing: companion.existing.clone(),
         skip_top_level_install_txt: false,
         files,
         dirs,
+        carve_out: Vec::new(),
+        within_body: false,
     })
 }
 

@@ -113,7 +113,7 @@ fn single_cue_emits_one_display_command() {
     // アクター起動→単純な Shell 系 Emote 1 件を emit→Close→join で終了同期。
     let (mut sink, handle) = spawn_seriko(
         resolver,
-        binds.clone(),
+        crate::DefaultBinds::uniform(binds.clone()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,
@@ -202,7 +202,7 @@ fn close_stops_normally() {
     let out = MockSurfaceOutput::new();
     let (sink, handle) = spawn_seriko(
         tiny_resolver(),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,
@@ -226,7 +226,7 @@ fn disconnect_stops_normally() {
     let out = MockSurfaceOutput::new();
     let (sink, handle) = spawn_seriko(
         tiny_resolver(),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,
@@ -294,7 +294,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
     let records2 = out2.records();
     let (mut sink, handle) = spawn_seriko(
         tiny_resolver(),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out2,
@@ -377,7 +377,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
     let out = MockSurfaceOutput::new();
     let (mut sink, handle) = spawn_seriko(
         tiny_resolver(),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,
@@ -818,7 +818,7 @@ fn non_shell_and_wait_are_no_op_then_shell_cue_still_emits() {
     let records = out.records();
     let (mut sink, handle) = spawn_seriko(
         tiny_resolver(),
-        BindSet::from_ids([1100, 1207]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,

@@ -52,7 +52,7 @@ fn empty_assets() -> BootAssets {
         shells: Vec::new(),
         balloons: Vec::new(),
         resolver: SurfaceResolver::new(BTreeMap::new()),
-        static_binds: BindSet::default(),
+        static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
         bind_resolver: BindResolver::empty(),
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),

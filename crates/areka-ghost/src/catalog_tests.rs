@@ -329,7 +329,8 @@ fn temp_root_lists_requirement_8_1_layout() {
     assert!(!is_ghost_dir(&root.balloon_dir("kaku")));
 }
 
-/// 検体の根（emo2＝ゴースト 1・バルーン 1・同梱の install.txt）。期待値は
+/// 検体の根（emo2＝ゴースト 1・バルーン 1・同梱の install.txt）。同梱バルーンはゴーストの中の
+/// `balloon\` に入るので根の `balloon\` は空（areka-P0-ghost-inner-balloon 要件 7.1）。期待値は
 /// `vendors/sample_ghost/emo2.nar` の実物から取った（ゴーストの descript の `id.emo2` は
 /// カンマが無いので `id` は無し）。
 #[test]
@@ -340,11 +341,13 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
     let kaku = emo2.balloon("emo2-kakukaku").expect("同梱").to_path_buf();
 
     let mut ghosts = Vec::new();
+    let mut root_balloons = Vec::new();
     let mut balloons = Vec::new();
     let mut shells = Vec::new();
     let events = capture(|| {
         ghosts = scan_ghosts(&root);
-        balloons = scan_balloons(&root);
+        root_balloons = scan_balloons(&root);
+        balloons = scan_ghost_balloons(&ghost);
         shells = list_shells(&ghost);
     });
 
@@ -364,10 +367,11 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
             },
         }]
     );
+    assert_eq!(root_balloons, []);
     assert_eq!(
         balloons,
         [BalloonEntry {
-            root: emo2.root().to_path_buf(),
+            root: ghost.clone(),
             dir: kaku.clone(),
             identity: Identity {
                 folder: "emo2-kakukaku".into(),

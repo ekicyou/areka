@@ -19,6 +19,21 @@ pub(crate) struct StartupOptions {
     pub modules: ModulePolicy,
     /// `--help` が渡された（値は使わない）。
     pub help: bool,
+    /// `--offline-dump` が（値の有無に関わらず）渡されたら Some。
+    pub offline: Option<OfflineDumpRequest>,
+}
+
+/// オフラインの書き出しの生の値（空の値は None）。解釈は offline_dump が写しの中で行う。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct OfflineDumpRequest {
+    pub ghost_dir: Option<String>,
+    pub shell: Option<String>,
+    pub scope: Option<String>,
+    pub surface_list: Option<String>,
+    pub output_dir: Option<String>,
+    pub output_prefix: Option<String>,
+    pub error_log: Option<String>,
+    pub bind: Option<String>,
 }
 
 /// 起動の求め（起動の解決へ渡す）。

@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
-use areka_seriko::{BIND_COMMAND, BindChoicePolicy, BindResolver, scope_namespace};
+use areka_seriko::{BIND_COMMAND, BindChoicePolicy, BindResolver, DefaultBinds, scope_namespace};
 use bevy_ecs::world::World;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
@@ -40,7 +40,7 @@ pub(crate) struct ShellCarry {
     surfaces: BTreeMap<u32, u32>,
     binds: BTreeMap<u32, BindSet>,
     /// 読み直しの前のシェルの静的な着せ替えの既定（控えた着せ替えとの差が台本で着た・脱いだ分）。
-    old_static: BindSet,
+    old_static: DefaultBinds,
 }
 
 impl ShellCarry {
@@ -55,7 +55,7 @@ impl ShellCarry {
     }
 
     /// 読み直しの前のシェルの静的な着せ替えの既定。
-    pub(crate) fn old_static(&self) -> &BindSet {
+    pub(crate) fn old_static(&self) -> &DefaultBinds {
         &self.old_static
     }
 }
@@ -123,7 +123,8 @@ pub(crate) fn decide(carried: u32, initial: u32, exists: impl Fn(u32) -> bool) -
 /// - 台本で脱いだ ID（`old_static − carried`）のうち新しい既定にあるもの → 名前があれば脱ぐ（`off`）・
 ///   無ければ落とす。ただし同じカテゴリを着る合図があり、そのカテゴリが複数可（`multiple`）でなければ
 ///   送らない（着る方の排他の置き換えが外す・mustselect の脱衣の警告を出さない）。
-/// - スコープに名前空間が無い（scope 2 以降）→ 違いは全部落とす（seriko が着せ替えを扱えない）。
+/// - 名前は scope の名前空間（0＝`sakura.*`・1＝`kero.*`・2 以上＝`char{N}.*`）の表で引く。名前空間が
+///   無ければ違いは全部落とす（数の scope は必ず名前空間を持つので、今は起きない）。
 pub(crate) fn decide_binds(
     scope: u32,
     carried: &BindSet,
@@ -183,7 +184,7 @@ pub(crate) fn snapshot(
     scopes: impl IntoIterator<Item = u32>,
     current: impl Fn(u32) -> Option<u32>,
     binds: impl Fn(u32) -> Option<BindSet>,
-    old_static: BindSet,
+    old_static: DefaultBinds,
 ) -> ShellCarry {
     let mut carry = ShellCarry {
         old_static,

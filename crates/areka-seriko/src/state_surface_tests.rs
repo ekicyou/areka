@@ -155,7 +155,9 @@ fn recovery_from_hidden_to_shown() {
 /// bind 同梱（要件 4.2/5.1）: Changed(Show) の binds は `new` で渡した静的集合と一致する。
 #[test]
 fn show_command_carries_static_binds() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1100, 1207,
+    ])));
     let scope = ActorKey::from("0");
 
     let outcome = states.apply(&scope, SurfaceTarget::Show(2100));
@@ -170,18 +172,28 @@ fn show_command_carries_static_binds() {
 /// binds() アクセサ（要件 4.3/4.4）: 静的集合を返し、切替 API を持たない（不変）。
 #[test]
 fn binds_accessor_returns_static_set() {
-    let states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
-    assert_eq!(states.binds(), &BindSet::from_ids([1100, 1207]));
+    let states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1100, 1207,
+    ])));
+    assert_eq!(
+        states.binds(),
+        &crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207]))
+    );
 
     // 空 bind でも accessor は静的値を返す。
-    let empty = ScopeStates::new(BindSet::from_ids([]));
-    assert_eq!(empty.binds(), &BindSet::from_ids([]));
+    let empty = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    assert_eq!(
+        empty.binds(),
+        &crate::DefaultBinds::uniform(BindSet::from_ids([]))
+    );
 }
 
 /// current_binds 既定フォールバック（要件 3.1）: 動的 bind 未適用の scope は静的既定集合を返す。
 #[test]
 fn current_binds_unbound_scope_returns_static_default() {
-    let states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
+    let states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1100, 1207,
+    ])));
     let scope = ActorKey::from("0");
     // 動的 bind を一切適用していない scope は `new` で渡した既定集合（初期値）を返す。
     assert_eq!(
@@ -202,7 +214,7 @@ fn current_binds_unbound_scope_returns_static_default() {
 #[test]
 fn show_carries_static_default_when_no_dynamic_bind_applied() {
     let static_set = BindSet::from_ids([1100, 1207]);
-    let mut states = ScopeStates::new(static_set.clone());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(static_set.clone()));
     let scope = ActorKey::from("0");
 
     let outcome = states.apply(&scope, SurfaceTarget::Show(2100));

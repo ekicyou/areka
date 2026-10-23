@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-10-08
+updated_at: 2026-10-23
 ---
 
 # Project Structure
@@ -121,6 +121,7 @@ updated_at: 2026-10-08
 - `win_state.rs` - ウィンドウ状態管理
 - `win_style.rs` - ウィンドウスタイル定義
 - `api.rs` - Windows API safeラッパー
+- `numerics/` - 2D の数値の型（`point2.rs`・`aabb.rs`・`matrix3x2.rs`・`transform2d.rs`・`calc_hash.rs`・2026-08-19 追加）
 
 > **注意**: 旧 deprecated モジュール（`winproc.rs` / `win_message_handler.rs` / `win_thread_mgr.rs` / `process_singleton.rs`）は spec `wintf-winmsg-executor` の完了に伴い**撤去済み**。メッセージ配送は `ecs/window_proc/` 配下の `dispatch_window_message` ＋ 種別別ハンドラ、UI スレッド基盤は `runtime/` の `WinApp` facade を用いること。クラス登録・HINSTANCE はライブラリ（`wintf-winmsg-executor`）が担う。
 
@@ -266,18 +267,21 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Status**: M1 完成（2026-09-11）・α（M2）完成（2026-10-02）。`areka.exe <ghost root> [<balloon root>]` の位置引数で実ゴーストを起動する（構成入力の解決は `boot_config.rs`・本番 env は `AREKA_` 冠）。SSP と同じ書き方の起動オプション（`--ghost`・`--random`・`--option`・`--sstp-listen`・`--help`）も読む（`areka-P0-startup-options-core` 2026-10-19）。SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）も同居  
 **Modules（役割のパターン）**:
 - `emo2_boot/` - **統合の背骨**（エンジン群の実 sink 差し替え・窓装着・毎フレーム駆動 `frame.rs`・起動〜終了の `spine.rs`）。名前は M-boot の経緯で、今は emo2 専用ではない（検体 3 体が同じ経路を通る）
-  - **cue の受け口は `*_cue.rs` の同型**（`zorder_cue`／`move_cue`／`readme_cue`）: 台本の cue は全員へ配られるので、受け口は ⑴ **自己選別**（自分の担当のコマンド名だけ受理・他は良性の読み飛ばし）と ⑵ **送り出し**（UI 側へ要求を運ぶだけ）に限る。担当の重複・取りこぼしは `consumer_ledger.rs`（消費者台帳）が見張る。新しい `\!` コマンドの消費者を足すときはこの型に倣う
+  - **cue の受け口は `*_cue.rs` の同型**（`zorder_cue`／`move_cue`／`readme_cue` ほか `switch_cue`・`install_cue`・`update_cue`・`reload_cue`・`change_cue`・`user_break_cue`）: 台本の cue は全員へ配られるので、受け口は ⑴ **自己選別**（自分の担当のコマンド名だけ受理・他は良性の読み飛ばし）と ⑵ **送り出し**（UI 側へ要求を運ぶだけ）に限る。担当の重複・取りこぼしは `consumer_ledger.rs`（消費者台帳）が見張る。新しい `\!` コマンドの消費者を足すときはこの型に倣う
 - `placement/` - 窓の生成・既定位置・ドラッグ・バルーン追従・DPI 追従（`follow.rs` はファサード形式の代表例）
 - `input_events/` - ポインタ入力 → SHIORI マウスイベント／メニューの引き金
 - `menu/` - 右クリックメニュー（`areka-P0-popup-menu-minimal` 2026-09-19）。**枠 7 種に供給関数を登記する口**（`MenuRegistry`）を持ち、列挙・切替・インストール・更新の各 spec は**メニュー本体を触らず自分の枠へ登記して**項目を足している（登記者は `*_frame.rs`）。`plan`（構造の計算・純粋）／`captions`（項目名の SHIORI リソース照会）／`trigger`（引き金と段取り）／`win32`（`TrackPopupMenuEx`＝OS ネイティブ・自前窓なし・**`unsafe` はこのファイルに閉じる**）
-- `readme.rs` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）
-- `cli/` - 起動オプションの読み取り（`areka-P0-startup-options-core` 2026-10-19）。`parse.rs`（名前と値の読み方・純粋）／`listen.rs`（`--sstp-listen` から MCP の待受を決める）／`help.rs`（`--help` で説明書を開く）。`fn main()` が記録の初期化の後に 1 回だけ読み、結果を `boot_config.rs`・`boot_resolve.rs` へ渡す。`--ghost` の絶対パスの親は、その起動のあいだだけの一時の置き場（`areka-ghost` の `RootMark::Temporary`）として並びの先頭に足す。後に続く起動オプションの spec（`offline-surface-dump`・`readonly-mode`・`startup-install-option`）もここへ足す
+- `readme.rs` ＋ `readme/` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）。`readme/` は開く系の要求の置き場（`areka-P0-open-external-tags` 2026-10-06＝`\j`・`\![open,…]`）で、開く先の決め方 `destination.rs`・開く処理の 1 か所 `opener.rs`（`submit`・説明書もここを通る）・OS の口 `os_port.rs`
+- `roots/` - ベースウェアの根（ゴーストとバルーンの置き場）の並び（`areka-P0-baseware-root-list` 2026-10-16）。起動時の並びの決め方 `resolve.rs`（純粋）・追加／外す／先頭へ動かすの判断 `edit.rs`（純粋）・フォルダを選ぶ画面 `pick.rs`（OS 標準のフォルダ選択）とその受け口 `desk.rs`（短命のスレッドで出し UI スレッドを塞がない）・記録 `report.rs`。書ける根を使う形と写す判断 `user_root.rs` は `areka-P0-user-data-root` 2026-10-17（下の「User Data Crate」）
+- 起動と終了の最上位のファイル（主なもの）: `boot_resolve.rs`（起動するゴーストとバルーンの純粋な判断）と `alert.rs`（起動を止める場面の告知）＝`areka-P0-baseware-root-layout` 2026-09-24／`app_exit.rs`（終了の統合操作 `quit_app`・`areka-P0-app-lifetime-separation` 2026-09-23）／`ghost_session.rs`（同じプロセスでゴーストを降ろして起こし直す単位・`areka-P0-ghost-restart-unit` 2026-09-26）／`session_end.rs`（OS のセッションの終了の受け手・`areka-P0-ghost-shell-balloon-switch` 2026-09-27）／`exit_wait.rs`（終了の後始末が背景の仕事を上限つきで待つ口・`areka-P0-ghost-install` 2026-09-29）／`write_failure.rs`（記憶を書けない失敗を 1 つの道へ集める・`areka-P0-write-failure-notice` 2026-10-17）
+- `cli/` - 起動オプションの読み取り（`areka-P0-startup-options-core` 2026-10-19）。`parse.rs`（名前と値の読み方・純粋）／`listen.rs`（`--sstp-listen` から MCP の待受を決める）／`help.rs`（`--help` で説明書を開く）。`fn main()` が記録の初期化の後に 1 回だけ読み、結果を `boot_config.rs`・`boot_resolve.rs` へ渡す。`--ghost` の絶対パスの親は、その起動のあいだだけの一時の置き場（`areka-ghost` の `RootMark::Temporary`）として並びの先頭に足す。`--offline-dump` と `--dump-*` の 7 つも読み、値の欄を `OfflineDumpRequest` に入れて `offline_dump` へ渡す（`areka-P0-offline-surface-dump`）。後に続く起動オプションの spec（`readonly-mode`・`startup-install-option`）もここへ足す
+- `offline_dump/` - `--offline-dump` の面の書き出し（`areka-P0-offline-surface-dump`）。`fn main()` が窓・SHIORI・MCP を作る前に `offline_dump::run(&OfflineDumpRequest) -> i32` を呼び、その終了コードで終える。`mod.rs`（走り・面の段）／`surface_list.rs`（`--dump-surface-list` の読みと展開）／`bind_spec.rs`（`--dump-bind`）／`render.rs`（面を組んでシェル全体の下地に置き PNG に書く）／`report.rs`（CSV と終了コード）。書き出しの記録は `log_history` の写しの窓で集める。**使ってよいもの**: `cli`（`OfflineDumpRequest` の型だけ）・`log_history`（写しの窓）・`png_image`・`emo2_boot::shell_balloon_resolve`（純粋な名前の突き合わせだけ。`shell_candidates` は内側で `areka-ghost` の catalog を読むが、シェルのフォルダを読むだけで書かない）・`areka-parsers`・`areka-sakura`（`ActorKey` の型だけ）・`areka-emo-present`（`load_shell_target`・`ShellTarget`）・`areka-emo-atlas`（`WicDecoderArm`）・`areka-emo-compose`（`Composer`・`shell_bounds`・`BindSet`）・`areka-seriko`（`settle_surface`・`settle_time`・`AnimationTable`・`DefaultBinds`・`BindResolver`・`ScopeStates`・`apply_named_bind`）・`windows`（COM の初期化と現地時刻）・`std`。**使ってはならないもの**: `emo2_boot` のほかの部品（結線・`assets.rs`・`spine`）・`boot_resolve`・`boot_config`・`ghost_session`・`session_end`・`write_failure`・`mcp`・`install`・`update`・`areka-user-data`・`wintf`・`areka-kanade`・`areka-ghost`（直に）。これが「記憶・置き場・ゴーストのフォルダに書かない」の構造の上の担保
 - `install/` - `.nar` のインストールの結線（`areka-P0-ghost-install` 2026-09-29・窓への投げ込みは `input_events/file_drop.rs`＝`areka-P0-file-drop`）。UI 側の窓口 `desk.rs`・背景スレッド `worker.rs`・純粋な手続き `procedure.rs`・行き先の判断 `judge.rs`・利用条件 `terms.rs`・ファイルを選ぶ画面 `pick.rs`・起動中のゴーストへの上書き `overwrite.rs`・台本の指示で取ってくる `fetch_url.rs`・置換語の値 `names.rs`。エンジンは `areka-nar`
 - `update/` - ネットワーク更新の結線（`areka-P0-network-update` 2026-09-30）。`install/` と同じ形＝UI 側の窓口 `desk.rs`（受付・段・預かり 1 枠・対象の解決・読み直しと後送りの列）・背景スレッド `worker.rs`（本物の口・門）・純粋な手続き `procedure.rs`（口 `UpdatePorts`・偽の口で決定論テスト）・写し `refs.rs`（イベント名 19 語・Reference・失敗の語）。エンジンは `areka-update`。成功の `OnUpdateComplete` と総括は再起動の後の新しいゴーストへ（kanade `BootOrigin::Updated`）
 - `mcp/` - MCP のツールの結線（`areka-P0-mcp-tool-entrances` 2026-10-03）。`fn main()` が受け口を `install`／`close` し、`Input` 段の汲む系（`drain`）が要求を毎フレーム取り出して `ghost_name` を解決（`resolve.rs`）してからツールごとのファイルの `handle` へ振り分ける。UI スレッドで待たない＝別スレッドに問うツールは `later` に預けて毎フレーム覗く。重い仕事を抱えるツールは、UI スレッドでは写しまでにして別のスレッドから `ReplyTo` で直接答える（`dump_surface`／`dump_balloon` の PNG の符号化・`areka-P0-mcp-dump-images` 2026-10-05）。台本の検査 `check_script`（areka 独自のツール・`areka-P0-mcp-author-tools` 2026-10-08）は `check_script.rs`（処理）と `check_script_judge.rs`（読み取りの列と事実から診断を決める純粋な判断）。`sakurascript`／`raise_event`（`areka-P0-mcp-kanade-tools` 2026-10-19）と `reload`（台本の `\![reload,…]` と同じ入口 `request_reload`・`areka-P0-mcp-reload` 2026-10-22）も同じ形でツールごとのファイルに置く。3 段目の spec は自分のツールのファイルだけを書き換える（独自のツールを足す spec は `doc/ssp-mcp/areka-tools.md` の「⑹ あとからツールを 1 本足す手順」のファイルも触る）
 - `log_history.rs` - `get_log` の履歴の層（`areka-P0-mcp-log-history` 2026-10-05）。`main.rs` の `log_history::init()` の 1 行で tracing に差し込み、info 以上の出来事を `RUST_LOG` と独立に 5 種別へ積む。出す側との取り決めの正本は `doc/ssp-mcp/log-convention.md`
 **ソースの外**: `icon/`＝アプリ用（組 1）と通知領域用（組 2）のアイコン（`areka-P0-app-icon` 2026-10-16）。寸法ごとの PNG 16 枚と、そこから組んだ `app.ico`・`tray.ico`・`icons.res`（どれもコミット済み・作り直しは `tools/app-icon.ps1`）。資源の番号の表と絵の出どころ・権利は `icon/README.md`。`build.rs` は `icons.res` をリンカへ渡すだけで、組み立ての依存は無い
-**Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
+**Dependencies**: wintf, dola, shiori-abi, ワークスペースの areka 系（`areka-actor`・`areka-parsers`・`areka-sylphya`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・emo 4 段・`areka-nar`・`areka-update`・`areka-mcp`・`areka-user-data`）, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, miniz_oxide, windows, windows-core
 
 ### Parser Crate
 **Location**: `/crates/areka-parsers/`
@@ -347,7 +351,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 
 ### Update Engine Crate（areka-update）
 **Location**: `/crates/areka-update/`
-**Purpose**: ネットワーク更新の**本番**クレート（`areka-P0-update-engine` 2026-09-23）。更新定義ファイル（`updates2.dau`／`updates.txt`）を読み、ローカルの木との差分を MD5 で導き、要るファイルだけを取得・照合してファイル単位で置き換える（失敗したら置いた分を元へ戻す）。`delete.txt` による削除も同じ一周で行う。入口は `run` 1 つで、呼び出し側（`network-update`）は `run`・`WinHttpFetch`・`Progress`・`UpdateOutcome`・`UpdateError` だけを使う。
+**Purpose**: ネットワーク更新の**本番**クレート（`areka-P0-update-engine` 2026-09-23）。更新定義ファイル（`updates2.dau`／`updates.txt`）を読み、ローカルの木との差分を MD5 で導き、要るファイルだけを取得・照合してファイル単位で置き換える（失敗したら置いた分を元へ戻す）。`delete.txt` による削除も同じ一周で行う。入口は `run` 1 つで、呼び出し側（`areka-P0-network-update`）は `run`・`WinHttpFetch`・`Progress`・`UpdateOutcome`・`UpdateError` だけを使う。
 **Modules**: `lib.rs`（入口と記録）／`error.rs`・`outcome.rs`（失敗と結果の語彙）／`fetch.rs`（取得口の trait）・`winhttp.rs`（その本物の実装）／`urlpath.rs`（パスのパーセント符号化の判定・復号・符号化）・`paths.rs`（定義の相対パスとローカルパスの橋渡し）／`md5.rs`（CNG で MD5）／`manifest.rs`（定義ファイルの読み手）・`diff.rs`（差分）／`work.rs`（作業フォルダ）・`commit.rs`（確定と戻し）・`delete.rs`（`delete.txt`）。テストは各ファイルの隣の `*_tests.rs`（`testkit.rs` はテスト専用の部品）
 **Dependencies**: `encoding_rs`・`thiserror`・`tracing`・`windows`（`Win32_Networking_WinHttp`・`Win32_Security_Cryptography` を自分の `Cargo.toml` で上乗せ）。外部クレートの追加は 0（`tech.md` の登記を参照）。`areka-nar` の部品は使わない（考え方と語彙だけを写す）
 **規律**: 本番ソースで記録（`tracing::`）を綴るのは `lib.rs` だけ・失敗の記録（`tracing::error!`）は 1 か所、WinHTTP の API を綴るのは `winhttp.rs` だけ、`unsafe` を綴るのは `winhttp.rs` と `md5.rs` だけ——`src/lib_tests.rs` が本番ソースの字面で見張る。本物のネットワークを通すテストは `#[ignore]`（`winhttp_real_tests.rs`）で、常時テストは偽の取得口で回す。
@@ -369,7 +373,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### User Data Crate（areka-user-data）
 **Location**: `/crates/areka-user-data/`
 **Purpose**: 書ける根（利用者ごとの置き場・既定 `%LOCALAPPDATA%\areka\`・`AREKA_USER_ROOT` で替えられる）を使う形の判断・場所・areka の記憶の置き場と、その手続き（書ける根を作る・隣の記憶の引き継ぎ・木を半端なく写す）を、areka 本体と中継 `areka-mcp-bridge` が共有する**葉の本番クレート**（`areka-P0-user-data-root` 2026-10-17）。形は `AREKA_USER_ROOT` → winget の控え（入れ先の `Areka.Areka.Portable_<出どころ>.db`）→ 実行ファイルのフォルダに書けない、の順で決まる。プロセスに 1 つの形を覚える・並びへ差し込む（`AREKA_ROOT` の扱いを含む）・写す判断は areka の側（`crates/areka/src/roots/user_root.rs`）が持つ。
-**Modules**: `lib.rs`（定数・型・形の判断 `decide`〔純粋〕・記憶の置き場 `app_profile_dir`〔純粋〕）／`establish.rs`（見分け `probe`〔薄い I/O〕・1 プロセス 1 回の準備と引き継ぎ `establish`・書けるかの確かめの唯一の部品 `open_dir_for_add`〔「物を足す」権限でハンドルを開いて閉じるだけ・何も作らない・`write-failure-notice` も自前の確かめを作らずこれを呼ぶ約束〔あちらの着地待ち〕〕）／`copy.rs`（`copy_tree_atomic`＝`.copy-work` の作業フォルダで組んで `rename`・半端を残さない）。テストは隣の `lib_tests.rs`・`establish_tests.rs`・`copy_tests.rs`
+**Modules**: `lib.rs`（定数・型・形の判断 `decide`〔純粋〕・記憶の置き場 `app_profile_dir`〔純粋〕）／`establish.rs`（見分け `probe`〔薄い I/O〕・1 プロセス 1 回の準備と引き継ぎ `establish`・書けるかの確かめの唯一の部品 `open_dir_for_add`〔「物を足す」権限でハンドルを開いて閉じるだけ・何も作らない・`areka-P0-write-failure-notice`〔2026-10-17 着地〕の `crates/areka/src/write_failure.rs` も自前の確かめを作らずこれを呼ぶ〕）／`copy.rs`（`copy_tree_atomic`＝`.copy-work` の作業フォルダで組んで `rename`・半端を残さない）。テストは隣の `lib_tests.rs`・`establish_tests.rs`・`copy_tests.rs`
 **Public API**: 定数 `USER_ROOT_ENV`・`PROFILE_DIR_ENV`・`WINGET_MARKER_PREFIX`・`USER_ROOT_DIR_NAME`・`COPY_WORK`／型 `Writability`・`Signals`・`UserRootOrigin`・`UserRoot`・`Reason`・`Unlocatable`・`Decision`・`Layout`・`CopyStats`・`CopyError`・`CopyDone`／関数 `decide`・`app_profile_dir`・`probe`・`establish`・`open_dir_for_add`・`copy_tree_atomic`
 **Dependencies**: `std` と `tracing` だけ（記録の文は ASCII＝中継が標準エラーへ出すため）・`publish = false`。dev は `temp-path-kit`。ワークスペース内の本番 crate への依存は 0。依存の向きは主に `areka-user-data` → `areka::roots::user_root` → 呼び手（`boot_config`・`roots`・`menu`・`install`・`update`・`emo2_boot`）で、`boot_config.rs`（`app_profile_dir`・`PROFILE_DIR_ENV`）と `roots/resolve.rs`（型 `UserRoot`・`UserRootOrigin`）は `areka-user-data` を直に使う。中継は `areka-mcp-bridge` → `areka-user-data`
 **規律**: テストはプロセスの形（`areka::roots::user_root::layout()`）や本物の `%LOCALAPPDATA%` に頼らず、値を組んで判断の関数を直接呼ぶ（写しと引き継ぎの根は `target\` の下）。
@@ -413,7 +417,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Pattern**: 名前は `areka-{札}-{プロセス識別子}-{連番}` を組む内部関数 1 つで作り、実際に作る入口がその関数を通る。**一意性と後始末は別の性質**で、識別子があっても破棄が無ければ `%TEMP%` に積み上がる（実例あり）ので、破棄は型が持つ。宛先の種類は増やさず、単一ファイルはディレクトリの下に取る。置き場は 2 つ＝`TempPath::new`（OS の一時フォルダ）と `TempPath::under_target`（ワークスペースの `target\test-roots\`・実機の根・検体・一時フォルダをワークツリーの `target\` の下だけに作ると決めたテストが使う・2026-10-07 `areka-P0-ghost-standard-balloon`）。名前・一意性・破棄はどちらも同じ内部関数を通る。
 **Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
 **Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
-**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`・`areka-impl-watch`・`areka-mcp-bridge`・`areka-user-data`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
+**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`・`areka-impl-watch`・`areka-mcp-bridge`・`areka-user-data`・`real-run-kit`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
 
 ### Sample Ghost Kit Crate（sample-ghost-kit）
 **Location**: `/crates/sample-ghost-kit/`
@@ -431,6 +435,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `launch.rs`（起動の指定・子へ渡す形を綴る唯一の場所）／`run.rs`（取っ手・既定の時間 `Limits`・破棄の順）／`output.rs`（出力の待ち）／`mcp.rs`（MCP の呼び出しと失敗の見分け）／`close.rs`（閉じ方と終わり方の読み分け）／`evidence.rs`（回の置き場と証拠）／`i686.rs`（32bit の仲介）
 **Dependencies**: `sample-ghost-kit`・`temp-path-kit`・`areka-mcp-bridge`・`areka-mcp`（偽の子だけが使う）・`areka-user-data`・`rmcp`（`client`）・`tokio`・`serde_json`・`windows`・`tracing`・`tracing-subscriber`（新しい外の依存 0）・`publish = false`
 **Consumers**: テスト専用（`[dev-dependencies]`）で `areka`。**`[dependencies]` へは決して置かない**（`log-capture-kit/tests/sample_path_guard_test.rs` が、`sample-ghost-kit` を引く例外の 1 件として載せたうえで、このクレートがどの本番の依存にも現れないことを判定する＝間接の道も赤にする）
+
+### Surface Compare Crate（surface-compare）
+**Location**: `/crates/surface-compare/`
+**Purpose**: SSP の `--offline-dump` と areka の `--offline-dump` が書き出した 2 つのフォルダの、同じ名前の PNG を画素で比べ、違いの数を返す**開発の道具**（`areka-P0-offline-surface-dump` 要件 13）。合否は決めない（許す違いの大きさは使う試験が決める）。SSP を起こさず、SSP のフォルダには読むだけで書かない。**areka の実行時コードからは 1 行も参照されない leaf**・配布物に入れない。
+**Pattern**: 判断はライブラリ（`lib.rs` の `compare_dirs`・`parse_args`・`report`）、exe（`main.rs`・`surface-compare <ssp-dir> <areka-dir>`）は出すだけ。両方のフォルダの直下の `*.png` を名前（大文字小文字を区別しない）で組にし、組ごとに `Same`・`SizeDiffers`・`PixelsDiffer { count, max_color, max_alpha }`・`OnlyIn(Side)`・`Unreadable { side, message }` を返す。exe は 1 組 1 行の ASCII と件数のまとめ 1 行を出し、比べ終えたら 0、フォルダが読めなければ 2 で終える。
+**Tests**: 兄弟の `lib_tests.rs`（同じ・大きさ違い・画素違い・片方だけ・読めない）。
+**Dependencies**: `image`（0.25.10・`png` の機能だけ・`areka-emo-atlas` と同じ版）。dev は `temp-path-kit`。ワークスペース内の本番 crate への依存は 0・`publish = false`
 
 ### ukadoc Survey Toolkit Crate（ukadoc-survey）
 **Location**: `/crates/ukadoc-survey/`（データは `/doc/ukadoc-coverage/`）

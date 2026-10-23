@@ -22,6 +22,10 @@ use super::*;
 use crate::error::{ElementKind, SurvivingTree};
 use std::os::windows::fs::OpenOptionsExt;
 
+/// 入れ子の同梱の確定の兄弟テスト。1,000 行の上限に収めるために分けた。
+#[path = "install_nested_tests.rs"]
+mod nested;
+
 // ---- 助手 ----
 
 /// 読むことだけを共有して開いたまま持つ（起動中のゴーストの `shiori.dll` と同じ状態）。
@@ -54,6 +58,18 @@ fn stage_into(area: &WorkArea, prepared: &Prepared) -> Vec<ExistingState> {
             stage_placement(&area.stage(k), placement, &prepared.contents).expect("組み上げられる")
         })
         .collect()
+}
+
+/// 同梱を本体の宛先の外（`<根>\balloon\test-balloon`）の入れ子でない配置へ戻し、その宛先を返す。
+///
+/// 入れ子でない 2 つ目の配置の確定（シェルの書庫の同梱と同じ「退避 → 入れ替え」の手）を、
+/// ゴーストの書庫の固定入力のまま測るための組み替え。
+fn flat(prepared: &mut Prepared, root: &Path) -> PathBuf {
+    let home = root.join("balloon").join("test-balloon");
+    prepared.plan[0].carve_out.clear();
+    prepared.plan[1].destination = home.clone();
+    prepared.plan[1].within_body = false;
+    home
 }
 
 /// 作業フォルダを作り、組み上げてから確定まで通す。
@@ -129,7 +145,7 @@ fn committing_moves_every_placement_into_place_and_returns_the_element_list() {
     let extra = ["accept,test-accept", "nonsense,1"];
     let prepared = prepare(ghost_archive(&extra), &request);
     let ghost = work.path().join("ghost").join("test-ghost");
-    let balloon = work.path().join("balloon").join("test-balloon");
+    let balloon = ghost.join("balloon").join("test-balloon");
 
     let (area, outcome) = install(work.path(), &prepared);
     let outcome = outcome.expect("確定できる");
@@ -183,6 +199,13 @@ fn committing_moves_every_placement_into_place_and_returns_the_element_list() {
             ("shell/", b""),
             ("shell/master/", b""),
             ("shell/master/surface0.png", b"png"),
+            // 同梱はゴーストの中に入れ子で入る（要件 7.1）。
+            ("balloon/", b""),
+            ("balloon/test-balloon/", b""),
+            ("balloon/test-balloon/balloon/", b""),
+            ("balloon/test-balloon/balloon/s0.png", b"s0"),
+            ("balloon/test-balloon/descript.txt", b"balloon descript"),
+            ("balloon/test-balloon/install.txt", b"type,balloon"),
         ]),
         "ゴースト側は書庫のバイト列そのもの"
     );
@@ -287,7 +310,7 @@ fn all_three_existing_states_are_judged_before_the_swap() {
 
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
-    let balloon = work.path().join("balloon").join("test-balloon");
+    let balloon = ghost.join("balloon").join("test-balloon");
     make_tree(&ghost, &[("profile/ghost.dat", b"ghost state")]);
     make_tree(&balloon, &[("keep.dat", b"kept"), ("gone.dat", b"gone")]);
     let request = InstallRequest {
@@ -483,7 +506,8 @@ fn a_failure_on_the_second_placement_rolls_the_first_one_back() {
         roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
-    let prepared = prepare(ghost_archive(&[]), &request);
+    let mut prepared = prepare(ghost_archive(&[]), &request);
+    flat(&mut prepared, work.path());
     let handle = hold(&balloon.join("shiori.dll"));
 
     let (_, outcome) = install(work.path(), &prepared);
@@ -527,7 +551,8 @@ fn a_placement_that_was_new_is_removed_again_when_a_later_one_fails() {
         roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
-    let prepared = prepare(ghost_archive(&[]), &request);
+    let mut prepared = prepare(ghost_archive(&[]), &request);
+    flat(&mut prepared, work.path());
     let handle = hold(&balloon.join("shiori.dll"));
 
     let (_, outcome) = install(work.path(), &prepared);

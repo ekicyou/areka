@@ -70,7 +70,7 @@ const TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
 fn top_always_starts_without_lottery_and_restarts_from_head_on_switch() {
     let (rng, probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table_of(TOP_ALWAYS), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     assert!(rt.on_tick(0, &mut states).is_empty());
     let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0)).expect("切り替えの Show");
@@ -158,7 +158,7 @@ fn adding_always_keeps_random_fire_times() {
     let run = |text: &str| {
         let (rng, probe) = counting_rng(&draws);
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
-        let mut states = ScopeStates::new(BindSet::default());
+        let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
         rt.on_tick(0, &mut states);
         switch(&mut rt, &mut states, SurfaceTarget::Show(0));
         let mut seen = Vec::new();
@@ -194,7 +194,7 @@ fn adding_always_keeps_random_fire_times() {
 fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(film_table(), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(3));
@@ -232,7 +232,7 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
 fn hiding_top_drops_finite_shell_clocks_only() {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(film_table(), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(1));
@@ -263,7 +263,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng: loop_rng,
     });
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(1));
@@ -303,7 +303,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
 fn event_time_is_not_fed_into_tick_guard() {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table_of(TOP_ALWAYS), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(400, &mut states);
     states.apply(&scope(), SurfaceTarget::Show(0));
@@ -324,7 +324,7 @@ fn event_time_is_not_fed_into_tick_guard() {
 fn top_always_is_born_on_the_tick_when_no_event_time_is_known() {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table_of(TOP_ALWAYS), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     // 刻みの前に表示: 出来事の時刻が無いので再生は生まれない。
     switch(&mut rt, &mut states, SurfaceTarget::Show(0));
@@ -335,7 +335,7 @@ fn top_always_is_born_on_the_tick_when_no_event_time_is_known() {
     assert_eq!(top_cell(&states), Some(102), "1000 から 100ms");
 
     // 表の差し替え: 再生を捨て、次の刻み 1150 で生まれ直す。
-    states.rebase_shell(BindSet::default());
+    states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
     rt.replace_shell_table(table_of(TOP_ALWAYS));
     assert!(rt.playback.is_empty(), "差し替えで再生を捨てる");
     rt.on_tick(1150, &mut states);
@@ -353,7 +353,7 @@ fn always_draws_no_rng_even_when_unborn_at_the_boundary() {
     let run = |text: &str| {
         let (rng, probe) = counting_rng(&draws);
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
-        let mut states = ScopeStates::new(BindSet::default());
+        let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
         rt.on_tick(0, &mut states);
         switch(&mut rt, &mut states, SurfaceTarget::Show(0));
         let mut seen = Vec::new();
@@ -361,7 +361,7 @@ fn always_draws_no_rng_even_when_unborn_at_the_boundary() {
         while now <= 9000 {
             if now % 1000 == 0 {
                 // 境界を跨ぐ刻みの直前に差し替える＝抽選の時点で `always` の再生が無い。
-                states.rebase_shell(BindSet::default());
+                states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
                 rt.replace_shell_table(table_of(text));
             }
             rt.on_tick(now, &mut states);
@@ -412,7 +412,7 @@ surface103
     );
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     let cell =
         |states: &ScopeStates| match states.current_pattern(&scope(), Slot::Shell).cell(None, 0) {
             Cell::Rest => "rest",

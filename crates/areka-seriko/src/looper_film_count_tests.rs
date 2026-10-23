@@ -48,7 +48,7 @@ fn one_film_table() -> AnimationTable {
 fn shown() -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(one_film_table(), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     let scope = ActorKey::from("0");
     assert!(rt.on_tick(0, &mut states).is_empty());
     let crate::state::ApplyOutcome::Changed(_) = states.apply(&scope, SurfaceTarget::Show(0))
