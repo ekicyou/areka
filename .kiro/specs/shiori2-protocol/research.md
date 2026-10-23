@@ -403,3 +403,7 @@ Charset: Shift_JIS
 
 - 3.0 の検体のうち確かめへの答えを測ったのはぱすただけ（`SHIORI/3.0 204`）。emo2・里々・YAYA は実機の 1 回で版の INFO の行を見る。2.x に決まる 3.0 の検体があれば止めて報告する（SSP と同じ規則なので SSP でも同じに振る舞うはずだが、要件 6 と当たる）。
 - `OnClose` の 2.x の形は測っていない（10.5 節）。実機の 1 回で areka が送った形と答えを記録する。
+
+### 11.x 設計の話し合いでの直し（2026-10-23）
+
+- 資源の問い合わせかどうかを「名前が `On` で始まるか」で分ける案をやめ、kanade の正本の一覧（`schedule::resources::is_allowed_resource_id`）を kanade の `shiori/real.rs` が引いて `Shiori3Client::for_resource` で渡す形にした（設計の検証の問題 1）。SSP は `installedghostname`・`hwnd` など `On` で始まらないイベントも `GET Sentence` で送っており（10.2 節）、名前の形では分けられない。SSTP や MCP の `raise_event` から頼まれた任意の名前のイベントも `GET Sentence` になる。

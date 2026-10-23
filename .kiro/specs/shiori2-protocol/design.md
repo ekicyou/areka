@@ -35,7 +35,7 @@
 
 ### Out of Boundary
 - 同じプロセスの道（`ShioriWiring::InProc`）と SHIORI4 の口。
-- kanade の `msg.rs`・`schedule/`（`ShioriCall` の形・起動の運行・許可の表）。イベントの種類はここから受け取らず、下の層がイベント名と GET／NOTIFY の別から決める。
+- kanade の `msg.rs`・`schedule/`（`ShioriCall` の形・起動の運行・許可の表）。`ShioriCall` の形は変えない。資源の問い合わせかどうかは、kanade の `shiori/real.rs` が `schedule::resources::is_allowed_resource_id`（`actor.rs` の送出の関門と同じ正本の一覧）を読むだけで決める（`schedule/` のファイルは直さない）。
 - kanade の `actor.rs`（往復の関門と `shiori_error_response` の WARN）。2.x の 400・500 は今の 3.0 と同じ誤りの値になって、今の関門をそのまま通る。
 - `crates/areka-ghost/src/runtime.rs`（結線の種類・`real_connect` の呼び方）。`real_connect` の引数は変えない。
 - 文字コードの採用規則（`CharsetNegotiator`）。2.x の要求も今の決め方の文字コードで符号化する。
@@ -44,7 +44,7 @@
 ### Allowed Dependencies
 - `shiori2.rs` → `crate::charset`（`Charset`・`CharsetPolicy`）・`crate::shiori3`（`Method`・`ShioriRequest`・`EncodedRequest`・`ParsedResponse`・`ABSENT_REFERENCE`・`parse_response_with`）・`crate::error::ShioriError`。窓・IPC・`windows` に依存しない（純粋・決定的）。
 - `client.rs` → `shiori2`（組み立て・読み・確かめの要求と判定）。
-- kanade `shiori/real.rs` → `shiori_host32_host::ShioriVersion`（kanade の中で host32 の型を使ってよい唯一の場所という今の決めのまま）。
+- kanade `shiori/real.rs` → `shiori_host32_host::ShioriVersion`（kanade の中で host32 の型を使ってよい唯一の場所という今の決めのまま）・`crate::schedule::resources::is_allowed_resource_id`（読むだけ）。
 - `areka-ghost` の `shiori_wiring.rs` → `Shiori3Client::probe_version`・`ShioriVersion`・`VersionVerdict`。
 - 依存の向き: `charset` → `shiori3` → `shiori2` → `client` → kanade `shiori/real.rs` → `areka-ghost` `shiori_wiring.rs`。逆向きの import は誤りとする。
 - 新しいクレートの依存は足さない。
@@ -53,7 +53,8 @@
 - `ShioriConnection` の欄の増減（kanade の結合テストが構造体の書き下しで組んでいる）。
 - `Shiori3Client` の公開の手（`probe_version`・`with_version`）の形の変更。
 - `ShioriCall` の形や GET／NOTIFY の選び方が kanade で変わったとき（組み替えの表は「GET／NOTIFY の別＋イベント名」に頼る）。
-- `basewareversion` 以外に areka が NOTIFY で送る資源名に似た名前のイベントを足すとき（表の行を足すか確かめる）。
+- kanade の資源の一覧（`ALLOWED_RESOURCE_IDS`）の判定の手 `is_allowed_resource_id` の名前や意味が変わるとき。
+- `basewareversion` 以外に、SSP が 2.x の相手へ送らない NOTIFY を areka が足すとき（表の行を足すか確かめる）。
 - `shiori4-api` で中継が乗り換わるとき（版の確かめは 64 ビットの側に残る形のまま移す）。
 - 文字コードの採用規則を変えるとき（確かめの答えを採用の根拠にしない決めと絡む）。
 
@@ -167,8 +168,8 @@ flowchart TB
     V -->|Shiori3| S3[shiori3 build_request unchanged]
     V -->|Shiori2| R{method and id}
     R -->|GET OnTranslate| T[TRANSLATE Sentence SHIORI/2.6]
-    R -->|GET id starts with On| GS[GET Sentence SHIORI/2.2]
-    R -->|GET other id| GT[GET String SHIORI/2.5]
+    R -->|GET resource id in kanade list| GT[GET String SHIORI/2.5]
+    R -->|GET other id| GS[GET Sentence SHIORI/2.2]
     R -->|NOTIFY basewareversion| N[not sent DEBUG]
     R -->|NOTIFY other| GS
 ```
@@ -194,7 +195,7 @@ flowchart TB
 | 3.4 | 翻訳 | 同上の `TRANSLATE Sentence` | 同上 | 組み替え |
 | 3.5 | SSP が送らないイベント | `basewareversion` を送らない・`encode2_and_note` の DEBUG `shiori2_event_not_sent` | 同上（`None`） | 組み替え |
 | 3.6 | `Charset`・`Sender`・`SecurityLevel` | 3.0 と同じ値を書く。`SecurityOrigin` は `GET String`・`TRANSLATE` だけ。`SenderType` は書かない | 同上 | — |
-| 3.7 | 表を 1 つ持ち §8 に記録 | `shiori2` の `route` の 1 か所・§8 の表 | — | — |
+| 3.7 | 表を 1 つ持ち §8 に記録 | `shiori2` の `route` の 1 か所・§8 の表。資源かどうかは kanade の正本の一覧で決める | `for_resource` | — |
 | 4.1 | 台本を再生 | `shiori2::parse_response`（`Sentence` → `value`）→ 既存の `map_get_reply` | `parse_response` | — |
 | 4.2 | 値を使う | 同上（`String` → `value`） | 同上 | — |
 | 4.3 | 翻訳の結果 | 同上（`TRANSLATE` の答えの `Sentence` → `value`） | 同上 | — |
@@ -276,7 +277,8 @@ pub fn version_probe_request(charset: Charset, sender: &str) -> Vec<u8>;
 pub fn decide_version(reply: &[u8]) -> VersionVerdict;
 
 /// 3.0 の要求の材料から 2.x の要求を組む。None は「2.x の相手へは送らない」。
-pub fn build_request(req: &ShioriRequest<'_>) -> Option<EncodedRequest>;
+/// is_resource は呼び手（kanade の正本の一覧）が決めた「資源の問い合わせか」。
+pub fn build_request(req: &ShioriRequest<'_>, is_resource: bool) -> Option<EncodedRequest>;
 
 /// 2.x の答えを読む。要求の種類で値の見出し（Sentence／String）を選び、
 /// 2.x に無い見出し（ErrorLevel・ErrorDescription・SecurityLevel）は読まない。
@@ -296,12 +298,12 @@ pub fn parse_response(
 | 入力（版＝2.x） | 経路 | 答えの値の見出し |
 |---|---|---|
 | `Method::Get` かつ `id == "OnTranslate"` | `TRANSLATE Sentence SHIORI/2.6` | `Sentence` |
-| `Method::Get` かつ `id` が `On` で始まる | `GET Sentence SHIORI/2.2` | `Sentence` |
-| `Method::Get` かつそれ以外（資源の名前） | `GET String SHIORI/2.5` | `String` |
+| `Method::Get` かつ `is_resource`（kanade の資源の一覧に載る名前） | `GET String SHIORI/2.5` | `String` |
+| `Method::Get` かつそれ以外（台本を求めるイベント・SSTP や MCP の `raise_event` から頼まれた任意の名前のイベントを含む） | `GET Sentence SHIORI/2.2` | `Sentence` |
 | `Method::Notify` かつ `id == "basewareversion"` | 送らない | — |
 | `Method::Notify` かつそれ以外 | `GET Sentence SHIORI/2.2`（答えは捨てる） | — |
 
-決めた根拠: ukadoc のイベントの名前はどれも `On` で始まり、資源の名前（`username`・`homeurl`・`*.caption`・`*.popupmenu.visible` など、kanade の `ALLOWED_RESOURCE_IDS` の 14 名）はどれも `On` で始まらない。SSP もこの線で分けて送っていた（研究記録 10.2 節: `OnFirstBoot` などは `GET Sentence`、`username`・`version`・`name` などは `GET String`）。種類を kanade から運ぶ形は `ShioriCall`（kanade の `msg.rs`・ウェーブの約束で触れない）と `ShioriBackend` の口と偽物の全部に波及するので採らない。
+決めた根拠: SSP は資源の名前（`username`・`version`・`name` など）を `GET String`、それ以外のイベントを `On` で始まらない名前（`installedghostname`・`hwnd`・`rateofusegraph` など）も含めて `GET Sentence` で送っていた（研究記録 10.2 節）。資源かどうかは名前の形でなく一覧で決まる。そこで、kanade が持つ正本の一覧（`ALLOWED_RESOURCE_IDS`・判定の手 `is_allowed_resource_id`＝`actor.rs` の送出の関門と同じ）を kanade の `shiori/real.rs` が引いて `Shiori3Client::for_resource` で渡す。「名前が `On` で始まるか」で分ける案は、SSTP の NOTIFY や MCP の `raise_event` から頼まれた `On` で始まらない名前のイベントを資源の問い合わせとして送ってしまい、資源の一覧も暗黙の規則でもう一度持つことになるので採らない（設計の検証の問題 1）。種類を `ShioriCall` に載せて運ぶ形は kanade の `msg.rs`（ウェーブの約束で触れない）と `ShioriBackend` の口と偽物の全部に波及するので採らない。
 
 #### Shiori3Client（改）
 
@@ -319,6 +321,11 @@ impl<'a> Shiori3Client<'a> {
     #[must_use]
     pub fn with_version(self, version: ShioriVersion) -> Self;
 
+    /// この往復が資源の問い合わせであると印を付ける（2.x では GET String で送る）。
+    /// 3.0 では何も変えない。既定は印なし。
+    #[must_use]
+    pub fn for_resource(self) -> Self;
+
     /// GET Version SHIORI/2.6 を 1 本送り、答えから版を決める。
     /// 符号化は今の文字コード（negotiator.current()）。答えは文字コードの採用の根拠にしない。
     /// 往復の失敗は Undecided（理由は RequestError の表示）。panic しない。
@@ -327,13 +334,13 @@ impl<'a> Shiori3Client<'a> {
 ```
 - `get_with_headers`: `Shiori3` は今の行をそのまま通す（`encode_and_note` → `send_request` → `parse_and_note` → `map_get_reply`）。`Shiori2` は `encode2_and_note`（`shiori2::build_request`＋`note_request`）→ `send_request` → `parse2_and_note`（`shiori2::parse_response`＋`note_response`）→ 同じ `map_get_reply`。`encode2_and_note` が `None` なら送らず `Ok(None)`（表では GET に `None` は無いが、口は 1 つの形にそろえる）。
 - `notify_with_headers`: `Shiori3` は今の `encode_and_note(` をそのまま呼ぶ。`Shiori2` は `encode2_and_note` を呼び、`None` なら送らず `Ok(())`。答えは今と同じく捨てる。本文とコメントに採用の経路の名前を書かない（既存の構造の検査を緑に保つ）。
-- `encode2_and_note` は `None` のとき DEBUG を 1 行出す: `target: "shiori2"`, `event = "shiori2_event_not_sent"`, `id`。
+- `encode2_and_note` は `shiori2::build_request(req, self.resource)` を呼ぶ。`None` のとき DEBUG を 1 行出す: `target: "shiori2"`, `event = "shiori2_event_not_sent"`, `id`。
 - 状態: `version` は client が持つ写し（`Copy`）。続く状態は接続が持つ（下の `ShioriConnection`）。
 
 **Implementation Notes**
 - 確かめの答えを `note_response` へ回さない理由: 回すと、宣言の無い UTF-8 の 3.0 ゴースト（emo2 の pasta）で、今は `Shift_JIS` で出ている `OnInitialize` と `username` の要求の `Charset` の値が `UTF-8` に変わり、要件 6.1（3.0 の要求のバイトを今と同じに）に反する。採用は今どおり最初の GET の答えから起きる。
 - 確かめの要求は ASCII だけなので、置換の記録（`note_request`）は要らない。
-- 待ちの上限は今の要求と同じ（`effective_timeout`＝既定 60 秒・`AREKA_SHIORI_REQUEST_TIMEOUT_MS`）。確かめに答えない SHIORI は上限まで待って `Undecided` になる（LOAD の待ちと同じ種類の危うさで、新しい待ちの仕組みは足さない）。
+- 待ちの上限は今の要求と同じ（`effective_timeout`＝既定 60 秒・`AREKA_SHIORI_REQUEST_TIMEOUT_MS`）。確かめに答えない SHIORI は上限まで待って `Undecided` になる（LOAD の待ちと同じ種類の危うさで、新しい待ちの仕組みは足さない）。SHIORI が止まっていれば次の要求も上限まで待つので、起動の失敗に気づくまでが今より最大で上限 1 回分（既定 60 秒）延びる。
 - `client.rs` は今 858 行で、足すのは 50 行ほど（約 910 行・1,000 行の目安の内）。テストは兄弟の `client_shiori2_tests.rs` へ置き、`client.rs` の中のテストは増やさない。
 
 #### shiori3::parse_response_with（改）
@@ -346,7 +353,7 @@ impl<'a> Shiori3Client<'a> {
 
 **Contracts**: State [x]
 - 欄 `pub version: ShioriVersion` を足す。値は `real_connect` が確かめで決めたもの。接続（load から unload まで）のあいだ変わらず、要求のたびに確かめ直さない（要件 2.2）。
-- 4 つの手（`get`・`notify`・`get_with_headers`・`notify_with_headers`）で `Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version)` とする。
+- 4 つの手（`get`・`notify`・`get_with_headers`・`notify_with_headers`）で `Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version)` とする。`get`・`get_with_headers` は、`crate::schedule::resources::is_allowed_resource_id(id)` が真なら `.for_resource()` を足す（NOTIFY には足さない）。
 - 読み直しは新しい接続（新しい `real_connect` の閉包）を作るので、前の版は残らない（要件 2.3）。
 
 ### 結線の層
@@ -370,10 +377,10 @@ impl<'a> Shiori3Client<'a> {
 | 3.0 での種類 | 2.x の要求の行 | 見出し（この並び） | SSP との違い |
 |---|---|---|---|
 | 版の確かめ（areka が足す） | `GET Version SHIORI/2.6` | `Charset`・`Sender` | `Charset` は今の文字コード（SSP は `UTF-8` 固定）・`Sender: areka`（SSP を名乗らない今の決め） |
-| 台本を求めるイベント（GET・`On…`） | `GET Sentence SHIORI/2.2` | `Charset`・`SecurityLevel`・`Sender`・`Event`・`[Status]`・`Reference0…` | `BaseEvent` は書かない（areka は 3.0 でも `BaseID` を送っていない） |
+| 台本を求めるイベント（GET・資源の一覧に無い名前） | `GET Sentence SHIORI/2.2` | `Charset`・`SecurityLevel`・`Sender`・`Event`・`[Status]`・`Reference0…` | `BaseEvent` は書かない（areka は 3.0 でも `BaseID` を送っていない） |
 | 通知だけのイベント（NOTIFY） | `GET Sentence SHIORI/2.2` | 上と同じ | 答えは今の NOTIFY と同じく捨てる |
 | `basewareversion`（NOTIFY） | 送らない（DEBUG） | — | SSP も 2.x の相手へ送らなかった（測 5） |
-| 資源の問い合わせ（GET・`On` で始まらない名前） | `GET String SHIORI/2.5` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`ID`・`[Status]`・`Reference0…` | Reference の付く資源（`homeurl` など）は SSP の記録に無い。3.0 と同じ値を同じ番号で `Status` の後に書く |
+| 資源の問い合わせ（GET・kanade の資源の一覧に載る名前） | `GET String SHIORI/2.5` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`ID`・`[Status]` | 今の areka は資源の問い合わせに References を付けない（14 名とも）。付く資源ができたら、3.0 と同じ値を同じ番号で `Status` の後に書く（SSP では測っていない） |
 | 台本の翻訳（GET・`OnTranslate`） | `TRANSLATE Sentence SHIORI/2.6` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`[Status]`・`Sentence` | `Sentence` の値は 3.0 の `Reference0`。References は書かない（SSP も書かない） |
 
 areka が今送っていないので組まない行（表には「送らない」と記録する）: `NOTIFY OwnerGhostName SHIORI/2.3`（`Ghost` 見出し）・`NOTIFY OtherGhostName SHIORI/2.3`・`capability`。
@@ -416,7 +423,7 @@ areka が今送っていないので組まない行（表には「送らない�
 ## Testing Strategy
 
 ### 単体（`shiori2_tests.rs`・常時）
-- 表の各行の要求の全文のバイト: `GET Sentence`（`OnFirstBoot`・References と欠番あり／`Status` あり・なし）、通知の `OnInitialize`（NOTIFY → `GET Sentence`）、`GET String`（`username`・Reference なし／`homeurl`・Reference あり）、`TRANSLATE Sentence`（`Status: talking`・`Sentence` は Reference0・References を書かない）、`basewareversion` は `None`、確かめの要求（要件 7.1・3.1〜3.6）。期待値は研究記録 10.2 節の抜き書きを手で写した定数（符号化器から導かない）。
+- 表の各行の要求の全文のバイト: `GET Sentence`（`OnFirstBoot`・References と欠番あり／`Status` あり・なし／`On` で始まらない外からのイベント名でも `is_resource` が偽なら `GET Sentence`）、通知の `OnInitialize`（NOTIFY → `GET Sentence`）、`GET String`（`username`・`is_resource` が真）、`TRANSLATE Sentence`（`Status: talking`・`Sentence` は Reference0・References を書かない）、`basewareversion` は `None`、確かめの要求（要件 7.1・3.1〜3.6）。期待値は研究記録 10.2 節の抜き書きを手で写した定数（符号化器から導かない）。
 - Shift_JIS の値（2 バイト文字の `Sentence`）が全文 1 本の経路で符号化されること（要件 3.6）。
 - 答えの読み: `Sentence` 付き 200・`String` 付き 200・204・見出しの無い 200・400・500・状態の行の無い答え。`Value` だけの 2.x の答えは値なし、`ErrorLevel`・`SecurityLevel` を付けた 2.x の答えでもそれらは `None`（要件 7.2・4.1〜4.7）。
 - 版の判定の 3 通り: `SHIORI/3.0 204 No Content`・`SHIORI/3.0 400 Bad Request` → `Shiori3`、研究記録 10.1 節の華和梨の答え → `Shiori2`、空・`garbage`・`SHIORI/1.1 200 OK` → `Undecided`（要件 7.3）。
@@ -430,6 +437,7 @@ areka が今送っていないので組まない行（表には「送らない�
 - `record_version`: `Decided` で INFO 1 行（`ghost`・`version`・`evidence`）、`Undecided` で WARN 1 行（`assumed = "SHIORI/3.0"`）と `Shiori3` の戻り（要件 2.4・2.5・7.3）。
 - 構造の検査（先例 `the_connection_receives_the_already_decided_negotiator` と同じ理由＝接続の値は中継が無いと組めない）: `shiori_wiring.rs` の中で `probe_version(` は 1 回だけ、`real_connect` の閉包の中の `MsgTag::Load` の後かつ `ShioriConnection {` の前にあり、版を閉包の外に置かない（閉包が接続ごとに 1 回走る＝読み直しで確かめ直す・要件 2.3・7.4）。
 - `ghost_label` が `…\dot_sakura\ghost\master` から `dot_sakura` を返す。
+- 要件 2.4 の「ゴーストの名前」はフォルダ名で残す（`verification.md` にもそう書く）。
 
 ### 3.0 のテスト（要件 6.3）
 - 今の決定論のテストはそのまま緑。変えるのは `ShioriConnection` の書き下しに欄を 1 行足す 3 ファイル（`crates/areka-kanade/tests/kanade/common/common_window_actor.rs`・`idle_pump_test.rs`・`real_helper_test.rs`）だけ。どれも確かめを送らず、要求のバイトも数も変わらない。名前を `verification.md` に挙げる。

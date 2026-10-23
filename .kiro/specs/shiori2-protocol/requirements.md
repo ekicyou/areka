@@ -73,7 +73,7 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 1. When SHIORI を読み込んだとき（起動・ゴーストの切り替え・SHIORI の読み直しのどれでも）, the areka shall 相手が SHIORI/3.0 か SHIORI/2.x かを要件 1 で測った SSP と同じ確かめ方で決め、起動の通知と台本を求めるイベント（`OnInitialize`・`OnBoot` など）が版の違いのために断られたまま失われないようにする。
 2. While 同じ読み込みが続いている, the areka shall 決めた版をその読み込みのあいだ覚えて使い、要求のたびに確かめ直さない。
 3. When SHIORI を降ろして読み込み直したとき, the areka shall 前の読み込みで決めた版を使わず、要件 2.1 の確かめをやり直す。
-4. When 版を決めたとき, the areka shall ゴーストの名前・決めた版・決めた根拠（相手の答えた版の文字列、または 400 などの状態）を INFO の記録に 1 行残す。
+4. When 版を決めたとき, the areka shall ゴーストの名前（ゴーストのフォルダ名・areka がゴーストを見分ける名前）・決めた版・決めた根拠（相手の答えた版の文字列、または 400 などの状態）を INFO の記録に 1 行残す。
 5. If 確かめの答えから版を決められない（答えが無い・読めない）なら, the areka shall 今と同じ SHIORI/3.0 として話し、その旨を WARN の記録に 1 行残す。
 6. The areka shall 版の確かめと 2.x の書き方を、SHIORI を別プロセス（中継）で動かす道にだけ持たせ、同じプロセスで DLL を読む道（`ShioriWiring::InProc`・SHIORI4 の DLL 専用）には足さない（2026-10-23 開発者の決め「SHIORI はすべて別プロセスで動かす・今の SHIORI4 の口は破棄する」＝`shiori4-api` の決定 3。その道は `shiori4-api` で消える）。
 
