@@ -1,6 +1,6 @@
 //! descript の既定の面の読みと戻り先の候補の並びの決定論のテスト（descript-window-keys 要件 7.1）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;
 use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
@@ -140,4 +140,89 @@ fn first_existing_picks_the_first_present_candidate() {
     assert_eq!(first_existing(&[10, 0], exists), Some(10));
     assert_eq!(first_existing(&[12, 10], exists), Some(10));
     assert_eq!(first_existing(&[12, 13], exists), None);
+}
+
+/// シェルのスコープ個別 `0` がゴーストの `true` に勝つ（要件 4.1・4.2）。
+#[test]
+fn shell_scope_value_beats_ghost_balloon_dontmove() {
+    let ghost = kv(&[("balloon.dontmove", "true")]);
+    let shell = kv(&[("sakura.balloon.dontmove", "0")]);
+    let (locked, events) = capture_logs(|| read_balloon_dontmove(&ghost, &shell, &[0, 1]));
+    assert_eq!(
+        locked,
+        BTreeSet::from([1]),
+        "本体側はシェルの 0、相方側はゴーストの true"
+    );
+    assert!(events.is_empty(), "{events:?}");
+}
+
+/// シェルの別名 `char1.` が相方側に効き、`kero.` が `char1.` に勝つ（要件 4.2）。
+#[test]
+fn shell_alias_char1_applies_to_partner_scope() {
+    let none = kv(&[]);
+    let alias = kv(&[("char1.balloon.dontmove", "1")]);
+    assert_eq!(
+        read_balloon_dontmove(&none, &alias, &[0, 1]),
+        BTreeSet::from([1])
+    );
+    let both = kv(&[
+        ("kero.balloon.dontmove", "false"),
+        ("char1.balloon.dontmove", "1"),
+    ]);
+    assert_eq!(
+        read_balloon_dontmove(&none, &both, &[0, 1]),
+        BTreeSet::new()
+    );
+    let char2 = kv(&[("char2.balloon.dontmove", "true")]);
+    assert_eq!(
+        read_balloon_dontmove(&none, &char2, &[0, 1, 2]),
+        BTreeSet::from([2])
+    );
+}
+
+/// ゴーストだけが書いていれば全スコープに効く（要件 4.1）。
+#[test]
+fn ghost_only_locks_every_scope() {
+    let ghost = kv(&[("balloon.dontmove", "1")]);
+    assert_eq!(
+        read_balloon_dontmove(&ghost, &kv(&[]), &[0, 1]),
+        BTreeSet::from([0, 1])
+    );
+}
+
+/// どちらにも指定が無ければ禁止しない（要件 4.3）。
+#[test]
+fn nothing_written_locks_nothing() {
+    let (locked, events) =
+        capture_logs(|| read_balloon_dontmove(&kv(&[("name", "x")]), &kv(&[]), &[0, 1]));
+    assert!(locked.is_empty());
+    assert!(events.is_empty(), "{events:?}");
+}
+
+/// シェルの値が読めなければ記録 1 件を残してゴーストの値へ進む（要件 4.5）。
+#[test]
+fn unreadable_shell_value_falls_through_to_ghost() {
+    let ghost = kv(&[("balloon.dontmove", "true")]);
+    let shell = kv(&[("char0.balloon.dontmove", "yes")]);
+    let (locked, events) = capture_logs(|| read_balloon_dontmove(&ghost, &shell, &[0]));
+    assert_eq!(locked, BTreeSet::from([0]));
+    assert_eq!(events.len(), 1, "{events:?}");
+    let ev = expect_one(&events, "descript_value_unreadable");
+    assert_eq!(ev.level, tracing::Level::WARN);
+    assert_eq!(ev.expect_field("scope"), "0");
+    assert_eq!(ev.expect_field("key"), "char0.balloon.dontmove");
+    assert_eq!(ev.expect_field("value"), "yes");
+}
+
+/// ゴーストの値も読めなければ禁止しない。読めない段ごとに記録を 1 件残す（要件 4.3・4.5）。
+#[test]
+fn unreadable_ghost_value_locks_nothing() {
+    let ghost = kv(&[("balloon.dontmove", "2")]);
+    let shell = kv(&[("kero.balloon.dontmove", "")]);
+    let (locked, events) = capture_logs(|| read_balloon_dontmove(&ghost, &shell, &[1]));
+    assert!(locked.is_empty());
+    assert_eq!(events.len(), 2, "{events:?}");
+    let keys: Vec<&str> = events.iter().map(|e| e.expect_field("key")).collect();
+    assert_eq!(keys, ["kero.balloon.dontmove", "balloon.dontmove"]);
+    assert!(events.iter().all(|e| e.expect_field("scope") == "1"));
 }

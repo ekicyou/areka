@@ -1,11 +1,11 @@
 //! descript の既定の面（`*.seriko.defaultsurface`）の読みと、戻り先の候補の並び
-//! （descript-window-keys 要件 1・2.6）。
+//! （descript-window-keys 要件 1・2.6）と、バルーンの動かせない指定（`*.balloon.dontmove`）の読み（要件 4）。
 //!
 //! 組み込みの既定の面（本体側 0・それ以外 10）を持つのはこのモジュールだけ。
 //! 既定の面はゴーストの descript だけから読む（シェルの KV を引数に持たない＝要件 1.6 を型で守る）。
 //! I/O を持たず、`crate::` を参照しない（手本の `#[path]` 取り込みでも組める）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use tracing::warn;
 
@@ -67,16 +67,7 @@ pub fn read_default_surfaces(ghost_kv: &BTreeMap<String, String>) -> DefaultSurf
     let mut written = BTreeMap::new();
     // 本体側・相方側は別名つき（配置の設定のほかのキーと同じ読み）。
     for scope in [0usize, 1] {
-        if let Some(raw) = scoped_value(ghost_kv, scope, &[DEFAULT_SURFACE_SUFFIX]) {
-            let (canon, alias) = scope_prefixes(scope);
-            // 記録には実際に書かれていた綴りを載せる（正典の綴りが在ればそれが読まれている）。
-            let canon_key = format!("{canon}{DEFAULT_SURFACE_SUFFIX}");
-            let key = match alias {
-                Some(alias) if !ghost_kv.contains_key(&canon_key) => {
-                    format!("{alias}{DEFAULT_SURFACE_SUFFIX}")
-                }
-                _ => canon_key,
-            };
+        if let Some((key, raw)) = scoped_entry(ghost_kv, scope, DEFAULT_SURFACE_SUFFIX) {
             insert_readable(&mut written, scope, &key, raw);
         }
     }
@@ -97,6 +88,69 @@ pub fn read_default_surfaces(ghost_kv: &BTreeMap<String, String>) -> DefaultSurf
         }
     }
     DefaultSurfaces { written }
+}
+
+/// バルーンの動かせない指定のキーのスコープの後ろの綴り（ゴーストの段はこの綴りそのもの）。
+const BALLOON_DONTMOVE: &str = "balloon.dontmove";
+
+/// スコープ別キーの値と、実際に書かれていた綴り（正典の綴りが在ればそれが読まれている）。
+fn scoped_entry<'a>(
+    kv: &'a BTreeMap<String, String>,
+    scope: usize,
+    suffix: &str,
+) -> Option<(String, &'a str)> {
+    let raw = scoped_value(kv, scope, &[suffix])?;
+    let (canon, alias) = scope_prefixes(scope);
+    let canon_key = format!("{canon}{suffix}");
+    let key = match alias {
+        Some(alias) if !kv.contains_key(&canon_key) => format!("{alias}{suffix}"),
+        _ => canon_key,
+    };
+    Some((key, raw))
+}
+
+/// `scopes` のうち、descript の段が利用者のドラッグを禁止するスコープ。
+/// 段の優先: シェルの `<スコープ>.balloon.dontmove`（`sakura.`＞`char0.`・`kero.`＞`char1.`・`char<n>.`）
+/// ＞ ゴーストの `balloon.dontmove` ＞ 禁止しない。値は `0`・`1`・`true`・`false` だけを読む。
+pub fn read_balloon_dontmove(
+    ghost_kv: &BTreeMap<String, String>,
+    shell_kv: &BTreeMap<String, String>,
+    scopes: &[usize],
+) -> BTreeSet<u32> {
+    let mut locked = BTreeSet::new();
+    for &scope in scopes {
+        // 読めない段は書かれていないものとして次の段へ進む（要件 4.5）。
+        let shell = scoped_entry(shell_kv, scope, BALLOON_DONTMOVE)
+            .and_then(|(key, raw)| read_flag(scope, &key, raw));
+        let ghost = || {
+            ghost_kv
+                .get(BALLOON_DONTMOVE)
+                .and_then(|raw| read_flag(scope, BALLOON_DONTMOVE, raw))
+        };
+        if shell.or_else(ghost).unwrap_or(false) {
+            // スコープ番号は u32 に収まる（窓のスコープは数個）。
+            locked.insert(scope as u32);
+        }
+    }
+    locked
+}
+
+/// 動かせない指定の値を読む（`0`・`false` → 許す・`1`・`true` → 禁止・それ以外は記録して読めない）。
+fn read_flag(scope: usize, key: &str, raw: &str) -> Option<bool> {
+    match raw.trim() {
+        "0" | "false" => Some(false),
+        "1" | "true" => Some(true),
+        _ => {
+            warn!(
+                event = "descript_value_unreadable",
+                scope,
+                %key,
+                value = %raw,
+                "descript_value_unreadable: 動かせない指定が 0・1・true・false のどれでもない——次の段で決める"
+            );
+            None
+        }
+    }
 }
 
 /// 値を `u32` として読めれば入れ、読めなければ組み込みの面のまま記録を 1 件残す（要件 1.5）。
