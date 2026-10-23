@@ -281,8 +281,8 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
 }
 
 /// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形（要件 1.7）。
-/// 帯は厚み＝列の em 10・寄せは右から左 −round(0.4545·3.3)＝−1・左から右 round(0.5303·3.3)＝2
-/// （列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。期待値を数で書くので、`line_bands` の縦書きの枝を
+/// 帯は厚み＝列の em 10・寄せは em の箱を列の箱の真ん中に置いた値の丸め＝右から左 round(−1.65)＝−2・
+/// 左から右 round(1.65)＝2（列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。期待値を数で書くので、`line_bands` の縦書きの枝を
 /// 戻すと赤になる。
 #[test]
 fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
@@ -290,7 +290,7 @@ fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
     let anchor = applied(&[text("か"), open("x"), text("あいう"), close(), text("き")]);
     let as_choice = applied(&[text("か"), choice("x", "あいう"), text("き")]);
     for (mode, want) in [
-        (WritingMode::VerticalRl, (29.0, 39.0)),
+        (WritingMode::VerticalRl, (28.0, 38.0)),
         (WritingMode::VerticalLr, (2.0, 12.0)),
     ] {
         let (_, a) = hit_in(&anchor, 0.0, mode);

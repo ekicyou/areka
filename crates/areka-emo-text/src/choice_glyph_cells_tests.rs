@@ -288,7 +288,7 @@ fn every_choice_hit_row_lies_inside_the_glyph_cells() {
         );
         let bands = line_bands(&lines, mode, &FixedMetrics);
         // 前提: 帯が行矩形の外へ出る（出なければこの檻は何も確かめない）。em 28・s 9.24 で
-        // 右から左は寄せ −4（左へ出る）、左から右は寄せ 5（右へ出る）、横書きは寄せ 4・丈 30。
+        // 右から左は寄せ −5（左へ出る）、左から右は寄せ 5（右へ出る）、横書きは寄せ 4・丈 30。
         assert!(
             lines.iter().zip(&bands).all(|(l, b)| {
                 let em = match mode {

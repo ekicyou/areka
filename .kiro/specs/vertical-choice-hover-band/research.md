@@ -499,3 +499,36 @@
 ### 17.7 検査のファイルの大きさ（5.3 への申し送り）
 
 - `viewbox_draw_choice_hover_tests.rs` は本タスクの記録の検査を足して 997 行（上限 1,000 行まで 3 行）。5.3 で読み戻し R にぱすたの候補列を足す仕事は、このファイルに書き足せないので兄弟のテストファイルへ置く（2.2 で `viewbox_draw_vertical_band_scroll_tests.rs` を分けたのと同じ扱い）。
+
+## 18. 字の寸法の口に em の箱の置き場を足し、割合の定数を消した（タスク 5.2・2026-10-24）
+
+- **直したコード**:
+  - `crates/areka-emo-text/src/layout.rs`: `GlyphMetrics::vertical_em_box_left(font_height, mode)` を既定の実装つきで足した（列の箱の真ん中＝右から左 −s/2・左から右 ＋s/2・横書き 0、s ＝ `max(0, line_box_height − em)`）。式は自由関数 `column_centred_em_box_left` に 1 つだけ置き、`DWriteMetrics` の縮退も同じ式を使う。`FixedMetrics` と試験の偽の実装は書き換えていない。
+  - `crates/areka-emo-text/src/draw_metrics.rs`: `new_shared` の中、行の箱の比を測るのと同じ所で 1 度だけ、束縛した書式と幅 em の「あ」1 字の TextLayout から比 r ＝（`GetMetrics().left` ＋ `GetLineMetrics()[0].baseline` − em/2）÷ em（17 節の式 A）を測って `vertical_em_box_left_ratio` に持つ。問われた向きが束縛した向きと同じなら `r × font_height`、そうでなければ既定の式。横書きに束縛した物は測らない（記録もしない）。縦書きで測れない（TextLayout が作れない・行が 0 本・値が有限でない）ときは `warn!`（書体の名前・向き）を出して既定の式へ縮退する。
+  - `crates/areka-emo-text/src/choice.rs`: `line_bands` の縦書きの枝を「厚み＝em・寄せ＝`metrics.vertical_em_box_left(em, mode).round()`」に替え、`VERTICAL_RL_EM_BOX_LEFT_SHARE`・`VERTICAL_LR_EM_BOX_LEFT_SHARE` とその説明を消した。`LineBand.offset` の説明を新しい式に直した。横書きの腕（`WritingMode::HorizontalTb => { … }`）は 1 文字も変えていない。
+- **足した検査**:
+  - P5 `choice_decorate_tests.rs` `vertical_em_box_left_default_centres_the_em_box_in_the_column_box`（em 10・20・28・40 で −s/2・＋s/2・0、比 1 の偽の metrics で 0）。
+  - P6 `choice_decorate_tests.rs` `vertical_line_bands_read_the_em_box_from_metrics`（右から左 −7.4・左から右 ＋0.6 を返す偽の metrics で、em 28 の帯の寄せが −7・1。横書きの帯は `FixedMetrics` と同じ）。
+  - M `draw_metrics_styled_tests.rs` `vertical_em_box_left_is_measured_from_the_column_baseline`（Yu Gothic UI 20 で ∓3.30・ＭＳ ゴシックで 0・ぱすたの候補列で −0.3013／＋0.3008 × 20、いずれも 0.05 以内。20 と 28 で比が同じ〔1e-3 以内〕。横書きに束縛した物は既定の式と同じ値）。
+
+### 18.1 書き換えた檻（消さない・ゆるめない。`FixedMetrics`＝比 1.33・既定の実装＝列の箱の真ん中）
+
+| 検査 | 2.1 の期待値（c の定数） | 5.2 の期待値 |
+|---|---|---|
+| `choice_tests.rs` `line_bands_read_the_block_axis_in_vertical_modes` | 右から左・em 40 の寄せ −6（−round(0.4545 × 13.2)） | −7（round(−6.6)）。説明の式も書き換えた |
+| `choice_tests.rs` `hit_row_vertical_block_band_uses_band_extent_from_left_edge` | 右から左 x 376..386・左から右 x 379..389 | 右から左 x 375..385（round(−1.65) ＝ −2）・左から右 x 379..389（round(1.65) ＝ 2・変わらない） |
+| `choice_tests.rs` `derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis` | 明示の帯（寄せ −1・2）で足し算だけを見る | 数は変えない（`line_bands` を読まない）。説明の「round(c·s)」を消した |
+| `choice_decorate_tests.rs` P1 `vertical_baked_band_equals_hit_rect_block_range` | em 28: 右から左 −4・左から右 5 | 右から左 −5（round(−4.62)）・左から右 5（変わらない） |
+| `choice_decorate_tests.rs` P3 `vertical_big_glyph_column_band_is_40_and_overlap_is_fixed` | 右から左: 寄せ −3・−6・−3、重なり（雨だよ −5・曇ってる 1）／左から右: 寄せ 3・7・3、重なり（−6・2） | 右から左: 寄せ −3・−7・−3、重なり（−6・2）／左から右は変わらない（−6・2）。2 つの向きで同じ量になった |
+| `choice_anchor_tests.rs` `vertical_anchor_band_has_the_same_shape_as_a_choice` | 右から左 (29, 39)・左から右 (2, 12) | 右から左 (28, 38)・左から右 (2, 12)（変わらない） |
+| `choice_glyph_cells_tests.rs` `block_axis_is_union_of_line_rect_and_band`・`every_choice_hit_row_lies_inside_the_glyph_cells` | em 20 の寄せ ∓3・em 28 の寄せ −4／5 | 数は変わらない（em 20 は round(∓3.3) ＝ ∓3、em 28 の −5／5 でも前置き「帯が行矩形の外へ出る」を満たす）。説明の「寄せ −4」を −5 へ |
+| `viewbox_draw_vertical_band_scroll_tests.rs` S | 期待値は `line_bands` から取る | 数は変えない。説明の「寄せ −4」を −5（Yu Gothic UI 28 の測った値 round(−4.62)）へ |
+
+- 丸めの境: em 10 の ∓1.65 は −2・2 に丸まった（設計の見込みのとおり）。ほかに c の値を固めていた縦書きの期待値は見つからなかった。
+- 実フォントの読み戻し `vertical_band_covers_column_ink_readback`（Yu Gothic UI・無視の印なし）は新しい式でそのまま緑。Yu Gothic UI は測った比 ∓0.1650 が既定の式（列の箱の真ん中）と同じ値なので、帯は 2.1 の c の式と 20 で同じ・28 の右から左で 1 論理画素左（−4 → −5）。
+
+### 18.2 機能の旗の赤と緑
+
+- 旗（`choice.rs` の一時の定数。切ると `line_bands` は 2.1 の c の式のまま・`DWriteMetrics` は上書きせず既定の式）を切って `cargo test -p areka-emo-text`: lib 1051 件通過・**7 件赤**（`line_bands_read_the_block_axis_in_vertical_modes`〔−6 ≠ −7〕・`hit_row_vertical_block_band_uses_band_extent_from_left_edge`・`vertical_baked_band_equals_hit_rect_block_range`〔焼いた寄せ〕・`vertical_big_glyph_column_band_is_40_and_overlap_is_fixed`〔雨だよとの重なり〕・`vertical_anchor_band_has_the_same_shape_as_a_choice`・P6〔寄せ −4 ≠ −7〕・M〔游ゴシック 20 右から左で −2.871 ≠ −6.026＝行の箱の比から出た既定の式の値〕）。
+- P5 は旗を切っても緑（既定の実装そのものを見る検査で、旗が切り替えるのは `line_bands` と `DWriteMetrics` の上書きだけのため）。
+- 旗を入れて同じコマンドで全部緑（lib 1058 件・無視 4・統合テストも全部緑）。旗を外して（定数ごと消して）もう 1 度全部緑。

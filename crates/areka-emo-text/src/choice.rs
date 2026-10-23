@@ -177,25 +177,6 @@ pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
     ((line_box_height - band_extent).max(0.0) / 2.0).round()
 }
 
-/// 縦書きの右から左（`VerticalRl`）で、列の箱が em を越える分 s のうち em の箱の**左**に乗る割合 c。
-///
-/// 縦書きの帯は厚み＝列の em で、寄せ＝`−round((1 − c)·s)`（行矩形の左辺からの符号つきの量・負）。
-/// DirectWrite は右から左の列の箱を行矩形の右辺に揃え、左へ s はみ出させる。値は実フォントの
-/// 読み戻し（spec `vertical-choice-hover-band` の research.md 12・13 節・Yu Gothic UI）で、
-/// 4 つの選択肢の列（仮名と漢字）のインクを大きさ 20・28 × 拡大率 1・2 の全部で覆う範囲
-/// 0.4697 ＜ c ≦ 0.6212（1 − 3.5/6.6 ＜ c ≦ 1 − 2.5/6.6）の真ん中。寄せは 20 で −3・28 で −4
-/// （s は 6.60・9.24）。横倒しの欧文（"Ag"）は帯の左へ 3〜10 画素出るが、開発者の決め
-/// （2026-10-23・案 A）で受け入れる。
-pub const VERTICAL_RL_EM_BOX_LEFT_SHARE: f32 = 0.5455;
-
-/// 縦書きの左から右（`VerticalLr`）で、列の箱が em を越える分 s のうち em の箱の**左**に乗る割合 c。
-///
-/// 寄せ＝`round(c·s)`（行矩形の左辺からの量・0 以上）。DirectWrite は左から右の列の箱を行矩形の
-/// 左辺に揃え、右へ s はみ出させる。覆う範囲 0.3788 ≦ c ＜ 0.6818（2.5/6.6 ≦ c ＜ 4.5/6.6）の
-/// 真ん中で、寄せは 20 で 3・28 で 5。20 では 0.5303 × 6.6 ＝ 3.49998 と丸めの境に乗るが、
-/// 寄せ 3 も 4 もインクを覆うので、真ん中をこの 4 桁のまま書く（research.md 13.2 節）。
-pub const VERTICAL_LR_EM_BOX_LEFT_SHARE: f32 = 0.5303;
-
 /// 1 行分のハイライト帯／ヒット帯（丈と寄せ量・**描画とヒットの単一の源**）。
 ///
 /// 帯のブロック軸の範囲は、どの向きでも `[辺 + offset, 辺 + offset + extent]`
@@ -205,10 +186,9 @@ pub struct LineBand {
     /// 帯のブロック軸の丈。横書き＝[`highlight_band_extent`] の出力・縦書き＝列の em。
     pub extent: f32,
     /// 行矩形の左辺（横書きは上辺）から帯の起点までの**符号つき**の量。横書き＝
-    /// [`highlight_band_offset`] の出力（0 以上）・縦書きの左から右＝`round(c·s)`・
-    /// 縦書きの右から左＝`−round((1 − c)·s)`（負になり得る＝帯は行矩形の左へ出る）。
-    /// c は [`VERTICAL_LR_EM_BOX_LEFT_SHARE`]／[`VERTICAL_RL_EM_BOX_LEFT_SHARE`]、
-    /// s は列の箱が em を越える分（0 で頭打ち）。
+    /// [`highlight_band_offset`] の出力（0 以上）・縦書き＝
+    /// `round(metrics.vertical_em_box_left(em, mode))`（em の箱を書体の縦書きの基線に中央で
+    /// 重ねた所・右から左は負になり得る＝帯は行矩形の左へ出る）。
     pub offset: f32,
 }
 
@@ -244,17 +224,11 @@ pub fn line_bands<M: GlyphMetrics + ?Sized>(
                 }
             };
             let line_box_height = metrics.line_box_height(em);
-            // 縦書き: 厚み＝列の em、寄せ＝列の箱の余り s のうち em の箱の左に乗る分（符号つき）。
-            let s = (line_box_height - em).max(0.0);
             match mode {
-                WritingMode::VerticalLr => LineBand {
+                // 縦書き: 厚み＝列の em、寄せ＝書体の縦書きの基線に中央で重ねた em の箱の左（符号つき）。
+                WritingMode::VerticalLr | WritingMode::VerticalRl => LineBand {
                     extent: em,
-                    offset: (VERTICAL_LR_EM_BOX_LEFT_SHARE * s).round(),
-                },
-                // 列の箱は行矩形の右辺に揃って左へ s はみ出すので、寄せは負（帯は列の左へ出る）。
-                WritingMode::VerticalRl => LineBand {
-                    extent: em,
-                    offset: -((1.0 - VERTICAL_RL_EM_BOX_LEFT_SHARE) * s).round(),
+                    offset: metrics.vertical_em_box_left(em, mode).round(),
                 },
                 WritingMode::HorizontalTb => {
                     let extent = highlight_band_extent(em, line_box_height, metrics.line_pitch(em));

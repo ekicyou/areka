@@ -555,9 +555,10 @@ fn two_choice_columns(mode: WritingMode) -> Columns {
 /// 較正: `line_bands` の縦書きの枝を横書きの式（丈 30・寄せ 4）へ戻すと、厚み・寄せの数で赤。
 #[test]
 fn vertical_baked_band_equals_hit_rect_block_range() {
-    // em 28・s ＝ 28 × 0.33 ＝ 9.24: 右から左 −round(0.4545 × 9.24) ＝ −4・左から右 round(0.5303 × 9.24) ＝ 5。
+    // em 28・s ＝ 28 × 0.33 ＝ 9.24: em の箱は列の箱の真ん中（既定の実装）で右から左 round(−4.62) ＝ −5・
+    // 左から右 round(4.62) ＝ 5。
     for (mode, want_offset) in [
-        (WritingMode::VerticalRl, -4.0),
+        (WritingMode::VerticalRl, -5.0),
         (WritingMode::VerticalLr, 5.0),
     ] {
         let (region, lines, bands, segments) = two_choice_columns(mode);
@@ -678,11 +679,12 @@ fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
         }
     }
     // (向き, 大きい列と「雨だよ」の帯の重なり, 大きい列と「曇ってる」の帯の重なり)。
-    // 右から左: 行矩形 x370..390・328..368・306..326 → 帯 367..387・322..362・303..323（寄せ −3・−6・−3）。
+    // 右から左: 行矩形 x370..390・328..368・306..326 → 帯 367..387・321..361・303..323（寄せ −3・−7・−3）。
     // 左から右: 行矩形 x10..30・32..72・74..94 → 帯 13..33・39..79・77..97（寄せ 3・7・3）。
-    // 大きい列の帯は後ろ隣（字の進む側）の列の帯へ 1〜2 画素食い込み、前の列とは間が空く。
+    // em の箱は列の箱の真ん中（既定の実装）なので 2 つの向きで同じ量: 大きい列の帯は後ろ隣（字の
+    // 進む側）の列の帯へ 2 画素食い込み、前の列とは 6 画素の間が空く。
     for (mode, want_prev, want_next) in [
-        (WritingMode::VerticalRl, -5.0, 1.0),
+        (WritingMode::VerticalRl, -6.0, 2.0),
         (WritingMode::VerticalLr, -6.0, 2.0),
     ] {
         let region = vregion(mode);
@@ -726,6 +728,96 @@ fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
             overlap(span(1), span(2)),
             want_next,
             "{mode:?}: 曇ってるとの帯の重なり"
+        );
+    }
+}
+
+/// P5（要件 4.2）: `vertical_em_box_left` の既定の実装（`FixedMetrics` は上書きしない）は em の箱を
+/// 列の箱の真ん中に置く: 右から左 −s/2・左から右 ＋s/2・横書き 0（s ＝ 行の箱 − em）。比 1 の
+/// 書体（行の箱 ＝ em）では 0。
+#[test]
+fn vertical_em_box_left_default_centres_the_em_box_in_the_column_box() {
+    use crate::layout::{FixedMetrics, GlyphMetrics};
+    for em in [10.0f32, 20.0, 28.0, 40.0] {
+        let half = (FixedMetrics.line_box_height(em) - em) / 2.0;
+        assert_eq!(
+            FixedMetrics.vertical_em_box_left(em, WritingMode::VerticalRl),
+            -half,
+            "em {em}: 右から左"
+        );
+        assert_eq!(
+            FixedMetrics.vertical_em_box_left(em, WritingMode::VerticalLr),
+            half,
+            "em {em}: 左から右"
+        );
+        assert_eq!(
+            FixedMetrics.vertical_em_box_left(em, WritingMode::HorizontalTb),
+            0.0,
+            "em {em}: 横書き"
+        );
+    }
+    // 字義の値（em 20 で ∓3.3）。
+    assert!((FixedMetrics.vertical_em_box_left(20.0, WritingMode::VerticalRl) + 3.3).abs() < 1e-4);
+
+    /// 行の箱 ＝ em の書体（ＭＳ ゴシックの形）。
+    struct RatioOne;
+    impl GlyphMetrics for RatioOne {
+        fn advance(&self, text: &str, h: f32) -> f32 {
+            FixedMetrics.advance(text, h)
+        }
+        fn line_pitch(&self, h: f32) -> f32 {
+            FixedMetrics.line_pitch(h)
+        }
+        fn line_box_height(&self, h: f32) -> f32 {
+            h
+        }
+    }
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        assert_eq!(RatioOne.vertical_em_box_left(28.0, mode), 0.0, "{mode:?}");
+    }
+}
+
+/// P6（要件 4.2）: `vertical_em_box_left` だけを真ん中から外した偽の metrics（行の箱は `FixedMetrics`
+/// と同じ）で、`line_bands` の縦書きの寄せがその値の丸め（−7.4 → −7・＋0.6 → 1）になる——行の箱の
+/// 比からは出ない（`FixedMetrics` の真ん中なら em 28 で −5／5）。横書きの出力は `FixedMetrics` と同じ。
+///
+/// 較正: `line_bands` の縦書きの枝を 2.1 の割合の定数の式へ戻すと −4／5 で赤。
+#[test]
+fn vertical_line_bands_read_the_em_box_from_metrics() {
+    use crate::layout::{FixedMetrics, GlyphMetrics};
+    struct OffCentre;
+    impl GlyphMetrics for OffCentre {
+        fn advance(&self, text: &str, h: f32) -> f32 {
+            FixedMetrics.advance(text, h)
+        }
+        fn line_pitch(&self, h: f32) -> f32 {
+            FixedMetrics.line_pitch(h)
+        }
+        fn line_box_height(&self, h: f32) -> f32 {
+            FixedMetrics.line_box_height(h)
+        }
+        fn vertical_em_box_left(&self, _h: f32, mode: WritingMode) -> f32 {
+            match mode {
+                WritingMode::VerticalRl => -7.4,
+                WritingMode::VerticalLr => 0.6,
+                WritingMode::HorizontalTb => 99.0,
+            }
+        }
+    }
+    for (mode, want) in [
+        (WritingMode::VerticalRl, -7.0),
+        (WritingMode::VerticalLr, 1.0),
+    ] {
+        let (_, lines, _, _) = two_choice_columns(mode);
+        let bands = line_bands(&lines, mode, &OffCentre);
+        assert!(
+            bands.iter().all(|b| b.offset == want && b.extent == 28.0),
+            "{mode:?}: 寄せは metrics の値の丸め {want}・厚みは em: {bands:?}"
+        );
+        assert_eq!(
+            line_bands(&lines, WritingMode::HorizontalTb, &OffCentre),
+            line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics),
+            "{mode:?}: 横書きの帯は vertical_em_box_left を読まない"
         );
     }
 }
