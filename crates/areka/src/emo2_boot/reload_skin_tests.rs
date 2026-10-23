@@ -80,7 +80,7 @@ fn headless_wiring() -> Emo2Wiring {
 
 /// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`）・置き場・結線・窓口の登録をそろえた World。
 fn rig(label: &str) -> Rig {
-    let temp = TempPath::new(label);
+    let temp = TempPath::under_target(label);
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let mut world = World::new();
     world.init_resource::<Schedules>();

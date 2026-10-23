@@ -31,7 +31,7 @@ fn place(ports: &FakePorts, relative: &str) -> String {
 
 /// 本物の書庫 1 本を偽の口で一周させる。
 fn run_one(ports: &mut FakePorts, builder: sample_ghost_kit::NarBuilder) -> Vec<ArchiveEnd> {
-    let dir = TempPath::new("install-procedure-nar");
+    let dir = TempPath::under_target("install-procedure-nar");
     let nar = write_nar(&dir, "archive.nar", builder);
     run_order(&order_of(&[&nar]), ports)
 }
