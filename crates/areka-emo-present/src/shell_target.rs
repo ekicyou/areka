@@ -32,7 +32,8 @@
 //! （spec: areka-P0-self-alpha-declaration 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の
 //! 宛先で 1 行）、画像だけで面を組んだ `info!`（同 要件 7.3）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
-//! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
+//! 形の誤り（[`shape_issues`]）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
+//! ここで 1 度だけ出す。[`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
 //! 宛先は既定の target（`areka_emo_present::shell_target`）、文言はスコープの接頭辞 `shell:`
 //! で始め、値は構造化フィールドで渡す（steering `logging.md`・design「Monitoring」）。
@@ -46,7 +47,7 @@ use areka_emo_atlas::{
 };
 use areka_emo_compose::{
     BaseImageReport, BoxIssue, BoxLayout, BoxReport, ElementKind, EmoWorld, NestIssue, NestReport,
-    element_kind, fold_boxes,
+    ShapeIssue, element_kind, fold_boxes, shape_issues,
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
@@ -177,10 +178,10 @@ pub enum ShellLoadError {
 
 /// 読み込み済みのシェル——焼いた絵と、面の表を必要な数だけ組むのに要るものの一式。
 ///
-/// 面の表（[`EmoWorld`]）は複製できず装着で消費されるため、値としては持たず
-/// [`ShellTarget::build_world`] が呼ばれるたびに組み直す。入力（`surfaces.txt` の解析結果と
-/// 「番号 → 面の画像」の対応）は読み込みの間ずっと変わらないので、何度組んでも結果は同じである。
-#[derive(Debug)]
+/// 面の表（[`EmoWorld`]）は複製できないため、読み込みで組んだ 1 つだけを持ち
+/// （[`ShellTarget::take_world`] が 1 度だけ渡す）、他は [`ShellTarget::build_world`] が呼ばれるたびに
+/// 組み直す。入力（`surfaces.txt` の解析結果と「番号 → 面の画像」の対応）は読み込みの間ずっと
+/// 変わらないので、何度組んでも結果は同じである。
 pub struct ShellTarget {
     /// `surfaces.txt` の解析結果（面の表を組むたびに読み直さない）。
     shell: Shell,
@@ -209,6 +210,28 @@ pub struct ShellTarget {
     /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
     /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
     pub(crate) ignored_pna: usize,
+    /// 読み込みで組んだ面の表（atlas は未装着・[`ShellTarget::take_world`] が 1 度だけ渡す）。
+    world: Option<EmoWorld>,
+}
+
+// `EmoWorld` は `Debug` を持たないので手で書く（面の表は有無だけを出す）。
+impl std::fmt::Debug for ShellTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShellTarget")
+            .field("shell", &self.shell)
+            .field("images", &self.images)
+            .field("atlas", &self.atlas)
+            .field("bake_errors", &self.bake_errors)
+            .field("base_images", &self.base_images)
+            .field("dangling", &self.dangling)
+            .field("boxes", &self.boxes)
+            .field("box_report", &self.box_report)
+            .field("box_surfaces", &self.box_surfaces)
+            .field("nest_report", &self.nest_report)
+            .field("ignored_pna", &self.ignored_pna)
+            .field("world", &self.world.as_ref().map(|_| "EmoWorld"))
+            .finish()
+    }
 }
 
 impl ShellTarget {
@@ -237,6 +260,18 @@ impl ShellTarget {
         let mut world = EmoWorld::build_with_images(&self.shell, &self.images);
         world.bind_atlas(&self.atlas, SetId(0));
         world
+    }
+
+    /// 1 度目は読み込みで組んだ面の表に atlas を装着して渡す（組み直さないので畳み込みの記録が
+    /// 重ならない・要件 7.5）。2 度目からは [`ShellTarget::build_world`] と同じ。
+    pub fn take_world(&mut self) -> EmoWorld {
+        match self.world.take() {
+            Some(mut world) => {
+                world.bind_atlas(&self.atlas, SetId(0));
+                world
+            }
+            None => self.build_world(),
+        }
     }
 }
 
@@ -374,6 +409,9 @@ pub fn load_shell_target(
     for issue in &target.nest_report.issues {
         log_nest_issue(issue);
     }
+    if let Some(world) = &target.world {
+        log_shape_issues(&shape_issues(world));
+    }
     for issue in &target.box_report.issues {
         log_box_issue(issue);
     }
@@ -457,7 +495,7 @@ pub fn build_shell_target_with_boxes(
     let images = selection.images;
 
     // どの画像を土台に使うかは面の表を組んで初めて決まる（`element0` が在る面では使わない）。
-    // ここで組む面の表は「使う画像と、相手の無いコマを聞く」ためだけのもので、装着せずに捨てる。
+    // ここで組む面の表で「使う画像と、相手の無いコマ」を聞き、捨てずに持つ（`take_world` が 1 度渡す）。
     // 入口が記録に使う事実もここで採る（記録のために組み直さないため）。
     let probe = EmoWorld::build_with_images(&shell, &images);
     let base_images = probe.base_images().clone();
@@ -503,6 +541,7 @@ pub fn build_shell_target_with_boxes(
         box_surfaces,
         nest_report,
         ignored_pna: baked.ignored_pna,
+        world: Some(probe),
     }
 }
 
@@ -529,6 +568,61 @@ fn log_nest_issue(issue: &NestIssue) {
             target = *target,
             "shell: element定義の参照が循環するので、先祖へ戻る参照を置かない"
         ),
+    }
+}
+
+/// 形の誤り（pattern定義の辺の循環・描かないメソッドの pattern・知らない sort）を 1 件 1 行の
+/// `warn!` にする（要件 7.5）。element定義の循環は [`log_nest_issue`]、描かない element定義は
+/// 読み込みの行が出す。描かないメソッドの pattern は合成がその先へ進まないので、同じ pattern の
+/// 循環は描かない 1 行に寄せる（1 つの誤りは 1 行）。
+fn log_shape_issues(issues: &[ShapeIssue]) {
+    let undrawn: BTreeSet<(u32, u32, u32)> = issues
+        .iter()
+        .filter_map(|i| match i {
+            ShapeIssue::UndrawnPattern {
+                surface,
+                animation,
+                pattern,
+                ..
+            } => Some((*surface, *animation, *pattern)),
+            _ => None,
+        })
+        .collect();
+    for issue in issues {
+        match issue {
+            ShapeIssue::UnknownAnimationSort { value } => tracing::warn!(
+                value = value.as_str(),
+                "shell: animation-sort の値が ascend／descend でないので descend として組む"
+            ),
+            ShapeIssue::Cycle {
+                surface,
+                animation,
+                pattern,
+                target,
+            } => {
+                if !undrawn.contains(&(*surface, *animation, *pattern)) {
+                    tracing::warn!(
+                        surface_id = *surface,
+                        animation_id = *animation,
+                        pattern = *pattern,
+                        target = *target,
+                        "shell: pattern の参照が循環するので、先祖へ戻る参照を置かない"
+                    );
+                }
+            }
+            ShapeIssue::UndrawnPattern {
+                surface,
+                animation,
+                pattern,
+                method,
+            } => tracing::warn!(
+                surface_id = *surface,
+                animation_id = *animation,
+                pattern = *pattern,
+                method = method.as_str(),
+                "shell: areka が描けない描画メソッドの pattern を描かない"
+            ),
+        }
     }
 }
 
@@ -755,3 +849,7 @@ mod image_only_tests;
 #[cfg(test)]
 #[path = "shell_target_element_base_tests.rs"]
 mod element_base_tests;
+
+#[cfg(test)]
+#[path = "shell_target_shape_issues_tests.rs"]
+mod shape_issues_tests;
