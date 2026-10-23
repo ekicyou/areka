@@ -369,5 +369,8 @@ mod scroll_retain_tests;
 #[path = "viewbox_draw_test_support.rs"]
 mod test_support;
 #[cfg(test)]
+#[path = "viewbox_draw_vertical_band_readback_tests.rs"]
+mod vertical_band_readback_tests;
+#[cfg(test)]
 #[path = "viewbox_draw_vertical_band_scroll_tests.rs"]
 mod vertical_band_scroll_tests;

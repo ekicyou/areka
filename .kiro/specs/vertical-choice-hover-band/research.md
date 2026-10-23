@@ -532,3 +532,74 @@
 - 旗（`choice.rs` の一時の定数。切ると `line_bands` は 2.1 の c の式のまま・`DWriteMetrics` は上書きせず既定の式）を切って `cargo test -p areka-emo-text`: lib 1051 件通過・**7 件赤**（`line_bands_read_the_block_axis_in_vertical_modes`〔−6 ≠ −7〕・`hit_row_vertical_block_band_uses_band_extent_from_left_edge`・`vertical_baked_band_equals_hit_rect_block_range`〔焼いた寄せ〕・`vertical_big_glyph_column_band_is_40_and_overlap_is_fixed`〔雨だよとの重なり〕・`vertical_anchor_band_has_the_same_shape_as_a_choice`・P6〔寄せ −4 ≠ −7〕・M〔游ゴシック 20 右から左で −2.871 ≠ −6.026＝行の箱の比から出た既定の式の値〕）。
 - P5 は旗を切っても緑（既定の実装そのものを見る検査で、旗が切り替えるのは `line_bands` と `DWriteMetrics` の上書きだけのため）。
 - 旗を入れて同じコマンドで全部緑（lib 1058 件・無視 4・統合テストも全部緑）。旗を外して（定数ごと消して）もう 1 度全部緑。
+
+## 19. 実フォントの読み戻しを 2 つの書体で緑にし、直しを外すと赤になるのを確かめた（タスク 5.3・2026-10-24）
+
+- **検査の置き場**: 読み戻し R（`vertical_band_covers_column_ink_readback`）を、`bgra_y_span`・`vertical_band_case`・R の定数ごと `viewbox_draw_choice_hover_tests.rs`（997 行）から兄弟のテストファイル `crates/areka-emo-text/src/viewbox_draw_vertical_band_readback_tests.rs`（新・347 行）へ移した（17.7 節の申し送り・2.2 の `viewbox_draw_vertical_band_scroll_tests.rs` と同じ扱い）。`viewbox_draw.rs` に `#[cfg(test)]`＋`#[path]` で登録し、`lib.rs` の `SOURCES_OUTSIDE_THE_PURE_SCAN` に足した。`bgra_x_span` は元のファイルに残して `pub(super)` にし、元のファイルに残る記録の検査 2 本（1.2・5.1）は R の定数を新しいファイルから読む。元のファイルは 717 行。
+- **足した確かめ**:
+  - 書体 `R_FONTS` を「候補列・引けるはずの名前」の組にした: Yu Gothic UI → Yu Gothic UI、ぱすたの `pasta_tategaki` の `font.name`（`游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ` を字のまま）→ 游ゴシック（17.1 節）。本番と同じ `ResolvedFont::resolve` と `FontCatalog::pick` で引いた名前が違えば赤。
+  - 塗りの中心と、測った em の箱の中心（行矩形の左辺 ＋ `DWriteMetrics::vertical_em_box_left(em, mode)` ＋ em/2 を物理へ写した所）の差が 1 物理画素を超えれば赤。物理への写像の足し分（領域の原点 × k ＋ committed）は、当たりの四角の左から帯の寄せを引いて取る（帯の式に依らない）。
+  - 横倒しの "Ag" の列のインクの、同じ式で置いた帯からのはみ出しを記録だけ出す（合否に入れない・2026-10-23 の決め〔案 A〕のとおり）。
+- **緑**: `cargo test -p areka-emo-text --lib vertical_band_covers_column_ink_readback -- --nocapture`（無視の印なし・ふつうの crate のテスト・机なし）。2 書体 × 大きさ 20・28 × 右から左・左から右 × 拡大率 1・2 の 16 組・4 選択肢で赤 0（2.62 秒）。出力の全文は作業ツリーの `target\vcband\r53-green.txt`。
+
+### 19.1 塗りの中心と測った em の箱の中心の差（組ごとの 4 選択肢の最大・物理画素）
+
+| 書体 | 大きさ | 向き | 測った em の箱の左 | k 1 | k 2 |
+|---|---|---|---|---|---|
+| Yu Gothic UI | 20 | 右から左 | −3.30 | 0.30 | 0.60 |
+| Yu Gothic UI | 20 | 左から右 | ＋3.30 | 0.30 | 0.60 |
+| Yu Gothic UI | 28 | 右から左 | −4.62 | 0.38 | 0.76 |
+| Yu Gothic UI | 28 | 左から右 | ＋4.62 | 0.38 | 0.76 |
+| 游ゴシック | 20 | 右から左 | −6.03 | 0.03 | 0.05 |
+| 游ゴシック | 20 | 左から右 | ＋6.02 | 0.02 | 0.03 |
+| 游ゴシック | 28 | 右から左 | −8.44 | 0.44 | 0.87 |
+| 游ゴシック | 28 | 左から右 | ＋8.42 | 0.42 | 0.84 |
+
+- 差は寄せの丸め（0.5 論理画素以下）× k だけで、どの組も 1 物理画素以内。游ゴシック 20・右から左・k 2 の雨だよは、インク x170..205 を塗り x168..207 が左右 2 画素の余りで覆う（17.3 節の見込みどおり）。
+
+### 19.2 "Ag" の列（記録だけ・17.5 節の書き直し）
+
+インクと帯（物理画素・面の座標）と、はみ出し（正ならインクが帯の外へ出る画素の数・負は帯の余り）。
+
+| 書体 | 大きさ | 向き | k | インク | 帯 | はみ出し 左 | 右 |
+|---|---|---|---|---|---|---|---|
+| Yu Gothic UI | 20 | 右から左 | 1 | 17..35 | 21..40 | 4 | −5 |
+| Yu Gothic UI | 20 | 右から左 | 2 | 36..72 | 42..81 | 6 | −9 |
+| Yu Gothic UI | 20 | 左から右 | 1 | 88..106 | 91..110 | 3 | −4 |
+| Yu Gothic UI | 20 | 左から右 | 2 | 177..213 | 182..221 | 5 | −8 |
+| Yu Gothic UI | 28 | 右から左 | 1 | 24..49 | 27..54 | 3 | −5 |
+| Yu Gothic UI | 28 | 右から左 | 2 | 46..98 | 54..109 | 8 | −11 |
+| Yu Gothic UI | 28 | 左から右 | 1 | 121..146 | 125..152 | 4 | −6 |
+| Yu Gothic UI | 28 | 左から右 | 2 | 240..292 | 250..305 | 10 | −13 |
+| 游ゴシック | 20 | 右から左 | 1 | 18..35 | 18..37 | 0 | −2 |
+| 游ゴシック | 20 | 右から左 | 2 | 35..71 | 36..75 | 1 | −4 |
+| 游ゴシック | 20 | 左から右 | 1 | 94..111 | 94..113 | 0 | −2 |
+| 游ゴシック | 20 | 左から右 | 2 | 187..223 | 188..227 | 1 | −4 |
+| 游ゴシック | 28 | 右から左 | 1 | 23..48 | 24..51 | 1 | −3 |
+| 游ゴシック | 28 | 右から左 | 2 | 47..97 | 48..103 | 1 | −6 |
+| 游ゴシック | 28 | 左から右 | 1 | 128..153 | 128..155 | 0 | −2 |
+| 游ゴシック | 28 | 左から右 | 2 | 257..307 | 256..311 | −1 | −4 |
+
+- はみ出しはどの組も左だけ（"Ag" のインクが列の箱の左寄り＝基線が列の箱の半分でない・17.2 節）。Yu Gothic UI は 3〜10 物理画素（13 節の「帯の左へ 3〜10 画素」と同じ量）、游ゴシックは 0〜1 物理画素。17.5 節の游ゴシックの記録（20 の両向き k 2 と 28 の右から左で 1 画素）と同じ組が 1 画素で、量も同じ。
+
+### 19.3 直しを外すと赤（縦書きの枝を 2.1 の割合の定数の式へ一時的に戻した）
+
+- 戻し方: `crates/areka-emo-text/src/choice.rs` の `line_bands` の縦書きの腕の `offset` を、一時的に 2.1 の式（右から左 `−round((1 − 0.5455) × s)`・左から右 `round(0.5303 × s)`、s ＝ `max(0, 行の箱 − em)`）へ替え、2 本だけ回した: `cargo test -p areka-emo-text --lib -- vertical_band_covers_column_ink_readback vertical_line_bands_read_the_em_box_from_metrics --nocapture`（出力は `target\vcband\r53-revert.txt`）。
+
+| 検査 | 赤か | 赤の値 |
+|---|---|---|
+| R `vertical_band_covers_column_ink_readback` | **赤（82 件）** | 游ゴシック: 1.1/1.2（インクが塗りの外）32 件＝8 組 × 4 選択肢の全部・5.3（中心の差）32 件＝全部・1.4（隣の列のインクにかかる）10 件。Yu Gothic UI: 5.3 だけ 8 件（20・左から右・k 2 で差 1.40〔2.1 の寄せ 4・測った 3.30〕、28・右から左・k 2 で差 1.24〔2.1 の寄せ −4・測った −4.62〕）・インクの覆いは緑のまま |
+| P6 `vertical_line_bands_read_the_em_box_from_metrics` | **赤** | `choice_decorate_tests.rs:813`: 右から左（em 28）の寄せが −4（2.1 の式・`FixedMetrics` の比 1.33 で s 9.24）で、metrics の値の丸め −7 でない |
+
+- 赤の例（游ゴシック 20・右から左・k 2）: 雨だよのインク x170..205 が塗り x174..213 の外へ出る（左 4・右 −8）・塗りの中心 194.00 が測った em の箱の中心 187.95 から 6.05 離れる（4.2 の実機の「帯の中心がインクの中心より 6 物理画素右」〔16.2 節〕と同じ量）。1.4 の例: 游ゴシック 28・右から左・k 1 で曇ってるの塗り x88..115 が隣の雨だよのインク x115..140 にかかる。
+- 戻し: `git checkout -- crates/areka-emo-text/src/choice.rs`（`choice.rs` には本タスクの前から作業ツリーの変わりが無いのを `git diff --quiet` で確かめてから替えた）。戻した後の `git status` に `choice.rs` は出ない。戻した後に下の crate のテストの全部が緑。
+
+### 19.4 横書きと既定フォントのバイトの一致（1 本も変えずに通す）
+
+| コマンド | 結果 |
+|---|---|
+| `cargo test -p areka-emo-text` | 緑。lib 1058 件通過・無視 4（記録だけの `--ignored` 物）・統合テストも全部緑（`ok` の行は計 1169・赤 0）。既定フォントのバイト一致の檻 `hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`・`invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_cage`・`choice_rows_render_at_indented_positions_readback_pixel_cage` と、スクロールの檻 `to_window_physical_*`（5 本）も緑 |
+| `cargo test -p areka --bins input_events::balloon` | 緑。77 件通過・赤 0（帯の中の点で選ぶ檻） |
+
+- 横書きの検査・既定フォントの檻・`choice.rs` は本タスクで書き換えていない（変えたのは R の置き場と R の中身・`viewbox_draw.rs` の登録・`lib.rs` の一覧だけ）。
+- `cargo fmt --all -- --check` は緑。`cargo clippy -p areka-emo-text --all-targets` は、本タスクで触ったファイルに警告 0（tests の deny は本ブランチ以前からの物・Implementation Notes 2.2〔範囲外〕のとおり）。
