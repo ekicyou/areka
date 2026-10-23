@@ -48,14 +48,11 @@ impl PullShape {
 }
 
 /// 形 → 読み手の表（読み口の複製どうしで共有する）。表を書くのは登録の時だけ。
-// task 1.2 で SylphyaReader が持つまでは crate の中のテストだけが使う。
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Default)]
 pub(crate) struct PullRegistry {
     inner: Arc<RwLock<BTreeMap<PullShape, Arc<dyn PullSource>>>>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 impl PullRegistry {
     /// 同じ形への 2 度目の登録は前の読み手を置き換える（実行系の作り直しで登録し直すため）。
     pub(crate) fn register(&self, shape: PullShape, source: Arc<dyn PullSource>) {

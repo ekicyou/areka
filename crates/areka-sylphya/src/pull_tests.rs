@@ -94,3 +94,44 @@ fn registry_survives_poison() {
     let path = parse_dotted("a.b(3)").unwrap();
     assert_eq!(reg.find(&path).unwrap().read(&path).as_deref(), Some("v"));
 }
+
+#[test]
+fn reader_asks_registry_only_when_mirror_lacks_name() {
+    use crate::asker::{AskerContext, AskerId};
+    use crate::mirror::{MirrorImage, SharedMirror};
+    use crate::reader::SylphyaReader;
+    use crate::value::DottedResolution;
+
+    let a = AskerId::new("ghost/a");
+    let mut img = MirrorImage::empty();
+    img.dotted_per_asker
+        .entry(a.clone())
+        .or_default()
+        .insert("x.s(0)".into(), "MIRROR".into());
+    let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
+    // 複製へ登録しても元の読み口から引ける（表は共有）。
+    reader
+        .clone()
+        .register_pull(PullShape::parse("x.s(*)").unwrap(), Arc::new(Fixed("PULL")));
+    let ctx = AskerContext { asker: a };
+
+    // 写しに在る名前は写しの値（読み手を引かない）。
+    assert_eq!(
+        reader.resolve_dotted_str(&ctx, "x.s(0)"),
+        DottedResolution::Value("MIRROR".into())
+    );
+    // 写しに無い名前は読み手の答え（文字・読んだ名前の両方の入口）。
+    assert_eq!(
+        reader.resolve_dotted_str(&ctx, "x.s(1)"),
+        DottedResolution::Value("PULL".into())
+    );
+    assert_eq!(
+        reader.resolve_dotted(&ctx, &parse_dotted("x.s(2)").unwrap()),
+        DottedResolution::Value("PULL".into())
+    );
+    // 形の合わない名前は今までどおり NotFound。
+    assert_eq!(
+        reader.resolve_dotted_str(&ctx, "x.t(1)"),
+        DottedResolution::NotFound
+    );
+}
