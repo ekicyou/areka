@@ -369,3 +369,50 @@
 | 3.1 の P1 `vertical_baked_band_equals_hit_rect_block_range` | **赤** | 右から左（em 28）で焼いた厚み 30.0 が列の em 28.0 でない（`choice_decorate_tests.rs:581`） |
 
 - 戻し: `git checkout -- crates/areka-emo-text/src/choice.rs` で戻し、`git status` と `git diff` が空（コードの変わりなし）であることを見た。戻した後に同じ 2 本を回して緑（2 件通過）。
+
+## 16. 実機の確かめ（タスク 4.2・2026-10-23）と開発者の判定・設計の改め
+
+### 16.1 走らせた物
+
+- **areka**: デバッグビルド（ブランチの先頭 `fe124020`＝4.1 まで済んだ形・2.1 の定数 c の式）。実機の根・ログ・撮った物は作業ツリーの `target\vcband\rr\`（`root\`・`profile\`・`logs\rr1.stdout.log`・`shots\`）。
+- **ぱすた**: 新しい書庫（sha256 `4c354864760c107a88f7ffd32df875bfbc6af4e22d778d54fb2ce68f1189c12b`）。`nar-sample-path pasta-in-windows` の登録表と合わず終了コード 2 で落ちるので、書庫を手で開いて根へ置いた（tasks.md の Implementation Notes 4.2〔範囲外〕）。バルーンは `pasta_tategaki`（`vertical,1`・`font.height,20`・`cursor.style,square`）。
+- **台本と操作**: 9 節と同じ台本を areka の MCP（待受 9801）の `sakurascript` で出し、マウスは `tools/mouse-input.ps1`（SendInput）で「雨だよ」と「晴れてる」に乗せた。画面の拡大率は 200%（k ＝ 2）。
+- **撮った物**（`evidence/`）: `areka-choice-nohover.png`（乗せていない）・`areka-choice-hover-amedayo.png`（「雨だよ」に乗せた）・`areka-choice-hover-hareteru.png`（「晴れてる」に乗せた）。並べた SSP の物は 9 節の `ssp-choice-*.jpg`。元の撮った物（拡大の前を含む）は `target\vcband\rr\shots\`。
+
+### 16.2 数えた値（物理画素・200%）
+
+| 物 | x の範囲 | 幅 |
+|---|---|---|
+| 「雨だよ」のインク（乗せた列） | 680..715 | 36 |
+| 「雨だよ」に乗せた帯 | 684..723 | 40（＝em 20 × k 2） |
+
+- 帯の厚みは em × k で、要件 4.2 の厚みは合っている。帯はインクより**右**へ寄り、インクの左の 4 物理画素（680..683）が帯の外に出て、帯の色で塗られず切れて見える。帯の右はインクより 8 物理画素余る。帯の中心 703.5・インクの中心 697.5（6 物理画素＝約 3 論理画素の差）。
+- 「晴れてる」に乗せた物も、目視では同じ向き（字の左が帯の左端にかかる・帯の右が余る）。画素は数えていない。
+
+### 16.3 開発者の判定（2026-10-23・逐語）
+
+> 判定は「違う」。ただ、SSPも完ぺきではないのでひきづられないように。フォントに対して中央になるのが正しい。案 1（書体ごとに em の箱の置き場を DirectWrite で測る形へ設計を直す）で進めて
+
+- 要件 6.6 のとおり完了とせず、要件 4（目当て）・6.3・6.5・6.6 を改め、設計の行き止まり「c が決まらない」に当たったものとして設計を直した（design.md の「改め」・VerticalEmBoxSource・VerticalEmBoxProbe・Testing Strategy の 5.2 の書き換えの表）。tasks.md に 5（5.1〜5.3）を足し、4.2 は 5.3 の後に撮り直す。
+
+### 16.4 ずれの原因の見立て（コードと書体の表から・確かめていない＝5.1 で測る）
+
+- **ぱすたの書体は ＭＳ ゴシックではない見込み**: 実機のバルーンの `font.name` は候補列 `游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ`（`target\vcband\rr\root\balloon\pasta_tategaki\descript.txt` の 35 行）。`FontCatalog::family_for`（`crates/areka-emo-text/src/draw_catalog.rs`）は記述順に最初に在る名前を取り、全滅のときだけ「フォントの候補が 1 つも見つからない」を `warn!` で出して ＭＳ ゴシック（`DEFAULT_FONT_NAME`）に戻す。4.2 のログ（`rr1.stdout.log`・WARN は 68 行出ている＝警告は記録される設定）にこの行は無い＝**候補列のどれかに引けている**。12.4 節の「ＭＳ ゴシックへ縮退」は、1.1 の検査が 1 つ目の名前だけで引いたときの話で、本番のバルーンには当たらない（12.4 節の「本番のぱすたも ＭＳ ゴシック」は誤り。訂正をここに残す）。DirectWrite のシステムのフォント集は「游ゴシック Medium」を引けない（12.4 節）ので、「游ゴシック」か「Yu Gothic」（書式の太さは NORMAL＝Regular）に引けている見込み。どれに引けたかは 5.1 で確かめる。
+- **その書体は行間（lineGap）を持つ**: 書体のファイルの表を読んだ値（`C:\Windows\Fonts`・upem 2048）:
+
+| 書体（ファイル） | hhea の ascender／descender／lineGap | OS/2 の winAscent／winDescent |
+|---|---|---|
+| Yu Gothic（`YuGothR.ttc`・Regular） | 1802／−455／**1024** | 2017／619 |
+| Yu Gothic Medium（`YuGothM.ttc`） | 1802／−455／**1024** | 2028／608 |
+| Yu Gothic UI（`YuGothR.ttc`・`YuGothM.ttc` の 2 つ目） | 2210／−514／0 | 2210／514 |
+| ＭＳ ゴシック（`msgothic.ttc`・upem 256） | 220／−36／0 | 220／36 |
+
+- `DWriteMetrics` の行の箱の比（`measure_line_box_ratio`）は `(ascent + descent) ÷ upem` だけで、行間を数えない。Yu Gothic UI は行間 0 なので比と DirectWrite の行の高さが合い（12.3 節: 26.60）、c もそこで合わせた。areka は書式に行の間隔を設定していない（`create_text_format`・`DirectionRecipe` に `SetLineSpacing` が無い）ので、行間を持つ書体では DirectWrite が組む列の箱が比の値より広く、基線（列の中心）の位置も比と c から出した所とずれる見込み。帯は 2.1 の式（比と c）で置かれるので、字（DirectWrite が基線に置く）と帯が離れる。向きは 4.2 の撮った物（帯が右＝右から左で寄せが足りない）と合う。量は 5.1 で測る。
+- **同じ見立てからの帰結**: 横書きの帯（`highlight_band_extent`・`highlight_band_offset`）も同じ比を読むので、行間を持つ書体では横書きでもずれている見込みがある。本 spec の外（要件 5＝横書きは変えない）。5.1 で縦書きの数を測るとき、確かめられたら完了の棚卸で起票する。
+
+### 16.5 改めた向き
+
+- 帯の目当て: 列の字の em の箱を、その書体と大きさについて DirectWrite が測った縦書きの基線（列の中心）に中央で重ねた所（厚み em）。SSP は参考で、SSP と違う所では合わせない（要件 4.2 の改め）。
+- 置き場の出し方: `GlyphMetrics` に既定の実装つきのメソッド `vertical_em_box_left(font_height, mode)` を足す（既定＝列の箱の真ん中＝右から左 −s/2・左から右 ＋s/2）。`DWriteMetrics` は生成のとき 1 度だけ、束縛した書式から試しの TextLayout を作って `GetMetrics`（left・width）と `GetLineMetrics`（baseline）で基線の位置を測り、比で持って上書きする（push／pull の決まり: 書体の寸法は変わらない値なので 1 度測って持つ・毎フレーム測らない）。`line_bands` の縦書きの寄せは `round(vertical_em_box_left(em, mode))`。2.1 の 2 つの定数 c は消す。
+- Yu Gothic UI での見込み（12.3 節の記録から）: 大きさ 20 で右から左 −6.60 ＋ 13.30 − 10 ＝ −3.30（寄せ −3）・左から右 ＋3.30（3）、28 で −4.62（−5）・＋4.62（5）。2.1 の c の値（−3・3・−4・5）とは 28・右から左だけが 1 違い、どれも 13.1 節の「インクを覆う寄せの範囲」の中。基線が列の箱のちょうど半分（13.30 ＝ 26.60 ÷ 2）なので、Yu Gothic UI では「列の箱の中心」と「基線」が同じ所になり、2.1 の c の真ん中（0.5455・0.5303）が 0.5 に近かったこととも合う。
+- 測りで残る問い（5.1 で決める）: 右から左の基線を列の箱のどちらの辺から測るか（基線が半分でない書体でだけ分かれる）・ぱすたの書体でも em の箱がインクを覆うか（覆わなければ設計の行き止まり＝開発者へ）・大きさに比例するか・ＭＳ ゴシックで 0 か。
