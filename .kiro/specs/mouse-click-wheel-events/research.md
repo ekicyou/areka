@@ -268,3 +268,5 @@ C11 の表が本 spec に挙げていない触る先: **wintf の `pointer/buffe
 | 右クリック | 腰で右を押して放す（ぱすたはメニューを抑えない） | `OnMouseDown`(1) → `OnMouseUp`(1) → `OnMouseClick`(1) → メニューの照会（`sakura.popupmenu.visible` ほか）→ メニューが出る → `OnMouseLeave`(腰)・`OnMouseLeaveAll`(腰)（メニューが窓を覆ったため） | **メニューが出るときも、右の `OnMouseUp`／`OnMouseClick` をメニューより先に送る**。要件 5.1（メニューが有効な間は送らない・完了 `popup-menu-minimal` 1.5）と違う |
 
 ほかに見えたこと（本 spec の範囲の外）: SSP は `OnMouseDown`・`OnMouseDownEx` を送る（brief の Out）。止まって約 0.5 秒で `OnMouseHover` と `tooltip` の照会を送る（`OnMouseHover` は Out・ツールチップは後の `shell-tooltip`）。
+
+測りの答えを受けた要件の改め（2026-10-23・開発者が推奨の案で承認）: 差 1 ダブルクリックの 2 回目の解放は `OnMouseUp` だけ・差 2 中ボタンは `Ex` の 2 段に返事が無いときだけ互換の 2 段を続ける・差 3 右のクリックは放した時点でメニューより先に送る・差 4 窓の外へ出たときの Reference は要件のまま（§8 に違いを書く）。これで「決めの項目」の 3（右のクリックの遅れ）は無くなり、`menu/trigger.rs` の `decide`／`poll_once` に右クリックの預かりを足す必要も無くなった。4（解放の受け手は 1 窓に 1 つで、今はメニューが持つ）は残る＝`menu/mod.rs` の装着の替え方は設計で決める。
