@@ -103,7 +103,7 @@ areka が意味を与えているタグ——1 文字 bare（`\e` `\c` `\-` `\n`
   - 完了済み `areka-P0-sakura-parse`——違反している契約（R13.1）の出所。アーカイブ済みゆえ非改変とし、穴があった事実を本 spec 側に登記する。
 - **Downstream**:
   - `areka-P0-ukadoc-survey-sakura-script`——タグ語彙の正本を生む。案 A（語彙表）へ進むならその後。
-  - `areka-P0-property-query-channels`・`areka-P0-text-decoration-canon`——同じ字句・意味写像へ後から触れる。
+  - `property-query-channels`・`areka-P0-text-decoration-canon`——同じ字句・意味写像へ後から触れる。
 
 ## Existing Spec Touchpoints
 
@@ -111,7 +111,7 @@ areka が意味を与えているタグ——1 文字 bare（`\e` `\c` `\-` `\n`
 - **Adjacent**:
   - `areka-P0-sakura-bare-tag-lexer`（同一関数・先行着地）
   - `areka-P0-ukadoc-survey-sakura-script`（タグ語彙の網羅・案 A の上流）
-  - `areka-P0-anchor-tag-canon`・`areka-P0-sakura-time-directives`（`\_a`／`\_q` の意味付け所有・本 spec は触れない）
+  - `areka-P0-anchor-tag-canon`・`sakura-time-directives`（`\_a`／`\_q` の意味付け所有・本 spec は触れない）
 
 ## Constraints
 

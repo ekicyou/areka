@@ -20,7 +20,7 @@
 - 根の置き場のバルーンの扱い・バルーンだけの書庫の入れ先・記憶の形・段の並び・引数で渡したバルーンの扱い（どれも変更 0）。
 - ゴーストのフォルダの直下や `balloon\<名>\` のさらに下を探すこと。シェルのフォルダの中のバルーン。
 - 以前に根の置き場へ入れた同梱のバルーンを移す・消すこと。ゴーストを削除する操作を作ること。
-- 使用中のファイルへの上書きの扱い（`areka-P0-install-live-target-hazards`）。シェルに紐づくバルーン（`areka-P0-shell-companion-balloon`）。
+- 使用中のファイルへの上書きの扱い（`install-live-target-hazards`）。シェルに紐づくバルーン（`shell-companion-balloon`）。
 
 ## Boundary Commitments
 

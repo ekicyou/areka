@@ -1,6 +1,6 @@
 # 実機の記録: areka-P0-char-position-save-on-exit（タスク 6.2・要件 5.5）
 
-> 拡大率（DPI）は変えずに確かめる。拡大率を変えたあとの詰め直しが 2 回目の起動から効かなくなる後退は、この spec では受け入れて `areka-P0-dpi-realign-remembered-chain` として起票済み（design.md「知っている後退」）。
+> 拡大率（DPI）は変えずに確かめる。拡大率を変えたあとの詰め直しが 2 回目の起動から効かなくなる後退は、この spec では受け入れて `dpi-realign-remembered-chain` として起票済み（design.md「知っている後退」）。
 
 ## 1. 確かめるゴーストを決めた経緯（2026-10-07）
 
@@ -73,4 +73,4 @@ R3 exit=0 end=2026-10-07T23:20:06.7376266+09:00
 
 ### 拡大率
 
-3 回とも拡大率は変えていない。拡大率を変えたあとの詰め直しの後退は `areka-P0-dpi-realign-remembered-chain` の持ち分。
+3 回とも拡大率は変えていない。拡大率を変えたあとの詰め直しの後退は `dpi-realign-remembered-chain` の持ち分。

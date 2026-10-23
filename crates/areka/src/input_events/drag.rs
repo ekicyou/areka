@@ -18,7 +18,7 @@ use wintf::ecs::drag::{DragEndEvent, DragStartEvent};
 use wintf::ecs::pointer::{Phase, PhysicalPoint};
 
 use super::{MouseWiring, char_scope, resolve_hit_owned};
-use crate::placement::follow::on_char_drag_end;
+use crate::placement::follow::{begin_char_drag, on_char_drag_end};
 
 /// キャラクター窓のドラッグの開始を kanade へ 1 回知らせる（要件 1.1〜1.4）。
 ///
@@ -32,6 +32,10 @@ pub(super) fn on_char_drag_start(
     ev: &Phase<DragStartEvent>,
 ) -> bool {
     if let Phase::Bubble(ev) = ev {
+        // 組の連れ動きの控え（wintf が `move_window` を控えたのと同じ回・設計の決め 4・12）。
+        if ev.target == entity {
+            begin_char_drag(world, entity);
+        }
         notify_drag(
             world,
             entity,
@@ -166,6 +170,9 @@ fn notify_drag(
     }
 }
 
+#[cfg(test)]
+#[path = "drag_sticky_tests.rs"]
+mod sticky_tests;
 #[cfg(test)]
 #[path = "drag_test_support.rs"]
 mod test_support;

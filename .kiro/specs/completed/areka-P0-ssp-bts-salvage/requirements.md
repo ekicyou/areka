@@ -32,7 +32,7 @@ areka の側には、正典（ukadoc）の拾い残しを追う一式（`doc/uka
   - SHIORI（里々・YAYA など）とゴースト個別の課題の精査。
 - **Adjacent expectations**:
   - BTS は閲覧だけで使う外部のサーバーで、本 spec は BTS の側に何も求めない。
-  - `areka-P0-coverage-roadmap-refresh`（ukadoc の網羅の台帳と roadmap の突き合わせ）とは扱う相手が違う。本 spec は BTS だけを扱い、ukadoc の網羅の台帳と重なる行には参照を書くだけにする。
+  - `coverage-roadmap-refresh`（ukadoc の網羅の台帳と roadmap の突き合わせ）とは扱う相手が違う。本 spec は BTS だけを扱い、ukadoc の網羅の台帳と重なる行には参照を書くだけにする。
   - 台帳を使うのは、開発者の `/kiro-discovery`（台帳から選んで起票する）と、棚卸で起票の材料を探すときである。本 spec はその材料を置くところまでを受け持つ。
   - 完了の手順の参照パスの修正は、spec の文書とソース（`crates`）だけを探し、steering は探さない。`structure.md` の案内のパスが移動後の台帳を指していることは、本 spec の側（タスクと、完了への申し送り）で確かめる。
   - 同じウェーブで並走する spec とは、steering の `structure.md` への 1〜2 行のほかにファイルが重ならない。

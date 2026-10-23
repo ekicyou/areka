@@ -185,3 +185,109 @@ fn other_execute_and_position_tags_are_not_sent() {
         );
     }
 }
+
+/// 窓の組・吸着・バルーン位置初期化の 5 組は、それぞれの種類で 1 件だけ送る（areka-P0-window-link-directives
+/// 要件 1.4・1.7・3.1・3.5・7.1）。吸着は実行者のスコープを持ち、組の ID は読まずにそのまま運ぶ。
+#[test]
+fn window_link_pairs_send_their_cues() {
+    use crate::placement::resolver::Anchor;
+    use crate::placement::script_alignment::AlignmentWord;
+    let cases: [(&str, &str, &[&str], PositionCue); 6] = [
+        (
+            "1",
+            "set",
+            &["alignmenttodesktop", "top"],
+            PositionCue::SetAlignment {
+                scope: 1,
+                word: AlignmentWord::Anchor(Anchor::Top),
+            },
+        ),
+        (
+            "0",
+            "set",
+            &["alignmentondesktop", "Free", "junk"],
+            PositionCue::SetAlignment {
+                scope: 0,
+                word: AlignmentWord::Anchor(Anchor::Free),
+            },
+        ),
+        (
+            "0",
+            "set",
+            &["alignmenttodesktop"],
+            PositionCue::SetAlignment {
+                scope: 0,
+                word: AlignmentWord::Missing,
+            },
+        ),
+        (
+            "sakura",
+            "set",
+            &["sticky-window", "0", "x", "0"],
+            PositionCue::SetSticky {
+                tokens: vec!["0".into(), "x".into(), "0".into()],
+            },
+        ),
+        (
+            "sakura",
+            "reset",
+            &["sticky-window", "junk"],
+            PositionCue::ResetSticky,
+        ),
+        (
+            "sakura",
+            "execute",
+            &["resetballoonpos", "junk"],
+            PositionCue::ResetBalloonPos,
+        ),
+    ];
+    for (actor, name, tokens, expected) in cases {
+        let (tx, rx) = channel::<PositionCue>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(carrier_cue(actor, name, tokens));
+        assert_eq!(rx.try_recv(), Ok(expected), "{name},{tokens:?}");
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
+    }
+}
+
+/// 吸着の実行者が数でなければ `warn!` で捨てる（`move` と同じ読み・design「MoveCueSink と PositionCue」）。
+#[test]
+fn alignment_with_non_numeric_actor_is_dropped_with_warn() {
+    // 記録の `tag` は実際に届いた第 1 引数の綴り（`alignmentondesktop` も取り違えない）。
+    for selector in ["alignmenttodesktop", "alignmentondesktop"] {
+        let (tx, rx) = channel::<PositionCue>();
+        let mut sink = MoveCueSink::new(tx);
+        let (_, events) = crate::placement::test_support::capture_logs(|| {
+            sink.emit(carrier_cue("sakura", "set", &[selector, "top"]))
+        });
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+        let expected = format!("set,{selector}");
+        assert!(
+            events.iter().any(|e| e.level == tracing::Level::WARN
+                && e.field_str("tag") == Some(expected.as_str())),
+            "tag={expected} の warn! が出ていない: {events:?}"
+        );
+    }
+}
+
+/// 掛け合わせの組（名前と第 1 引数の取り違え）は送らない。
+#[test]
+fn crossed_window_link_pairs_are_not_sent() {
+    let cases: [(&str, &[&str]); 5] = [
+        ("reset", &["alignmenttodesktop", "top"]),
+        ("reset", &["alignmentondesktop"]),
+        ("execute", &["sticky-window", "0", "1"]),
+        ("set", &["resetballoonpos"]),
+        ("execute", &["alignmenttodesktop", "top"]),
+    ];
+    for (name, tokens) in cases {
+        let (tx, rx) = channel::<PositionCue>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(carrier_cue("0", name, tokens));
+        assert_eq!(
+            rx.try_recv(),
+            Err(TryRecvError::Empty),
+            "{name},{tokens:?} は送らない"
+        );
+    }
+}

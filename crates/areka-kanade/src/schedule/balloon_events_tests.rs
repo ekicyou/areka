@@ -15,7 +15,7 @@ use crate::msg::{
     KanadeConfig, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriOutcome,
 };
 use crate::schedule::{Action, State};
-use crate::talk::TalkId;
+use crate::talk::{ScriptOrigin, TalkId};
 use tracing::Level;
 
 /// SHIORI が返す元の台本。
@@ -50,7 +50,7 @@ pub(super) fn reply_value(s: &mut State, script: &str, origin: &'static str) -> 
     feed(
         s,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(script.to_string()),
+            outcome: ShioriOutcome::Value(script.to_string(), areka_talk::SecurityLevel::Local),
             origin,
         },
     )
@@ -79,7 +79,12 @@ pub(super) fn start_translated(s: &mut State, now: u64, final_script: &str) -> T
         matches!(actions.as_slice(), [Action::Translate(_)]),
         "台本の応答は翻訳へ預けられる"
     );
-    let actions = feed(s, Input::TranslateDone(Ok(final_script.to_string())));
+    let actions = feed(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            final_script,
+        ))),
+    );
     started(&actions).0
 }
 
@@ -91,6 +96,7 @@ fn shown_talk_keeps_the_final_script_after_translation() {
     s.shown = Some(ShownTalk {
         talk_id: TalkId(4),
         script: "\\0前のトーク\\e".to_string(),
+        origin: ScriptOrigin::GHOST,
         close_sent: true,
         timeout_sent: true,
         timeout_pending: false,
@@ -110,13 +116,17 @@ fn shown_talk_keeps_the_final_script_after_translation() {
         "翻訳へ預けている間は再生が始まっていないので、控えは前のトークのまま"
     );
 
-    let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        &mut s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     let (talk_id, _) = started(&actions);
     assert_eq!(
         s.shown,
         Some(ShownTalk {
             talk_id,
             script: FINAL.to_string(),
+            origin: ScriptOrigin::GHOST,
             close_sent: false,
             timeout_sent: false,
             timeout_pending: false,
@@ -151,7 +161,10 @@ fn shown_talk_keeps_the_change_farewell_script() {
     assert!(matches!(s.phase, Phase::ChangeClosePending));
     let actions = reply_value(&mut s, ORIGINAL, "OnClose");
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        &mut s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     let (talk_id, _) = started(&actions);
     assert!(
         matches!(s.phase, Phase::ChangeCloseTalkWait { talk_id: t, .. } if t == talk_id),
@@ -207,7 +220,10 @@ fn replacing_the_talk_drops_the_break_note_with_one_talk_gone_line() {
         "捨てた控えの相手の番号を載せる。\n捕捉={ev:#?}"
     );
 
-    let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        &mut s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     let (second, _) = started(&actions);
     assert_ne!(second, first);
     assert_eq!(

@@ -324,7 +324,7 @@ Research Needed（設計フェーズで消化）:
 
 #### Decision: 禁則遅延の引受先（DD-15・R6.9）
 - **Context**: 要件の候補は `text-decoration-canon` brief（`layout.rs` の行の置き場所を扱う）。
-- **Selected**: `areka-P0-balloon-canon-residue` の brief へ登記（bvc 残件 11〜12 と同じく emo-text 帰属の正典残件の台帳として実在・番号は末尾採番）。decoration brief には相互参照のみ。
+- **Selected**: `balloon-canon-residue` の brief へ登記（bvc 残件 11〜12 と同じく emo-text 帰属の正典残件の台帳として実在・番号は末尾採番）。decoration brief には相互参照のみ。
 - **Rationale**: 禁則は折返し規則であって `\f` 装飾ではない。residue は「語彙とシームはあるが追跡 spec が無い」項目の受け皿として定義されている。
 
 ### 11.4 Synthesis（設計統合の 3 つの観点）

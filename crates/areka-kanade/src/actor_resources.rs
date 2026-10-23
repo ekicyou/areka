@@ -41,7 +41,7 @@ pub(crate) fn queryable(phase: &Phase) -> bool {
 /// 受け手が残す（要件 3.4）。送出失敗・拒否そのものの記録は往復側が既に残している。
 pub(crate) fn outcome_of(id: &'static str, outcome: ShioriOutcome) -> ResourceOutcome {
     match outcome {
-        ShioriOutcome::Value(body) => ResourceOutcome::Value(body),
+        ShioriOutcome::Value(body, _) => ResourceOutcome::Value(body),
         ShioriOutcome::NoContent => ResourceOutcome::NoContent,
         ShioriOutcome::Failed(failure) => ResourceOutcome::Failed(failure.to_string()),
         other => {

@@ -277,7 +277,7 @@
 ### Upstream / Downstream
 
 - **Upstream**: 完了 `areka-P0-text-decoration-canon`（下線の描画）・`areka-P0-anchor-tag-canon`（アンカーの既定の見た目を下線にした。互換の記録は `doc/anchor-compat.md`）。
-- **Downstream**: `areka-P0-anchor-style-canon`（アンカーの下線の解決を差し替え、縦書きの下線の位置を決め直す。本 spec が下線の位置を自分で決める形を選ぶなら、その上に乗る）。
+- **Downstream**: `anchor-style-canon`（アンカーの下線の解決を差し替え、縦書きの下線の位置を決め直す。本 spec が下線の位置を自分で決める形を選ぶなら、その上に乗る）。
 
 ### Existing Spec Touchpoints
 

@@ -40,7 +40,7 @@
   - 依存の追加（開発用の依存を含む）と、それに伴う `Cargo.toml`・`Cargo.lock` の変更。
 - **Adjacent expectations**:
   - `areka-P0-impl-watch-skills` は、端末へ出す文と `--help` を読む。この spec は今ある文を変えないので、あちらとの触るファイルの重なりは無い。`clear --repo` は、あちらの Requirement 12（`kiro-next` の始まりに 1 回呼ぶ・終了コード 2 なら飛ばす）と Requirement 9.5（手順書に書く）が呼ぶ側・書く側を受け持ち、この spec はアプリの側だけを受け持つ。着地の順はどちらが先でもよい。
-  - `areka-P0-actor-thread-log-capture`（記録の捕捉の道具）は、(i) で使えるかを見るだけで触らない。ワークスペースの「共有の捕捉の仕組みの迂回」の見張りの例外表も増やさない。
+  - `actor-thread-log-capture`（記録の捕捉の道具）は、(i) で使えるかを見るだけで触らない。ワークスペースの「共有の捕捉の仕組みの迂回」の見張りの例外表も増やさない。
   - 手順書 `doc/impl-watch.md` の今の記述のうち、壊れたファイルの退避が「ログにも残る」はこの spec の後も正しいままである。裁定 4 の窓を戻しの理由の 1 つに挙げる一文だけは、Requirement 6 で窓を閉じると古くなる（害は無い）。その削除は `areka-P0-impl-watch-skills` へ申し送る。
 
 ## Requirements

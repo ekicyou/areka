@@ -27,7 +27,7 @@
 //! ## 予約（記録のみ・実装しない・R8.3/R10.3）
 //!
 //! `\f` 系のうち**寄せ 2 項目（`align`／`valign`）は今も未実装**（語彙の記録のみ）で、
-//! 追跡先は `areka-P0-text-align-shadow-canon`。正典 2 ページで `valign` の写像が逆である
+//! 追跡先は `text-align-shadow-canon`。正典 2 ページで `valign` の写像が逆である
 //! 事実（疑義 SC1）と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が
 //! 正本。**下線は `areka-P0-text-decoration-canon` が実装済み**——線を引く位置は描画基盤の
 //! 既定に委ね、書字方向ごとに描き分けない（実測値と、`areka-P0-balloon-vertical-canon`
@@ -40,7 +40,7 @@
 //!
 //! - [`RESERVED_EFFECT_MULTICOLOR`]／[`RESERVED_EFFECT_ROTATION`]——予約のまま
 //!   （所有仕様なし・実挙動を持たない）。
-//! - [`RESERVED_EFFECT_SHADOW`]——影 3 項目の実体化は `areka-P0-text-align-shadow-canon`
+//! - [`RESERVED_EFFECT_SHADOW`]——影 3 項目の実体化は `text-align-shadow-canon`
 //!   が所有する。
 //! - [`RESERVED_EFFECT_OUTLINE`]——白抜き。上下付き（`\f[sub]`／`\f[sup]`）とあわせて
 //!   `areka-P0-text-decoration-canon` が**語彙のみ**で受理する裁定を下した（6 値の解釈・
@@ -57,7 +57,7 @@ pub const RESERVED_EFFECT_OUTLINE: &str = "outline";
 /// 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・所有仕様なし・R8.3/R10.3）。
 pub const RESERVED_EFFECT_MULTICOLOR: &str = "multicolor";
 /// 予約名: シャドウ装飾 `shadow`（記録のみ・実体化の所有は
-/// `areka-P0-text-align-shadow-canon`・R8.3/R10.3）。
+/// `text-align-shadow-canon`・R8.3/R10.3）。
 pub const RESERVED_EFFECT_SHADOW: &str = "shadow";
 /// 予約名: 回転 `rotation`（記録のみ・実装しない・R8.2/R8.3）。
 pub const RESERVED_EFFECT_ROTATION: &str = "rotation";
@@ -147,7 +147,7 @@ impl RegionTransform {
 
 /// **行単位**の文字装飾の予約型シーム（R8.3/R10.3——実挙動なし・フィールド未使用）。
 ///
-/// 予約対象: 白抜き（語彙のみ・上記の裁定）・多色・シャドウ（`areka-P0-text-align-shadow-canon`
+/// 予約対象: 白抜き（語彙のみ・上記の裁定）・多色・シャドウ（`text-align-shadow-canon`
 /// が所有）・回転（予約名定数はモジュール doc 参照）。文字ごとの `\f` 装飾は
 /// [`TextLook`](crate::look::TextLook) が担うため本型には載らない。
 /// `#[non_exhaustive]` により α 後のフィールド追加は破壊的変更にならない。

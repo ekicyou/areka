@@ -50,6 +50,7 @@ use crate::charset::CharsetNegotiator;
 use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
+use crate::request_headers::{RequestHeaders, ValueReply, request_of};
 use crate::shiori3::{Method, ParsedResponse, ShioriRequest, build_request, parse_response};
 
 /// 送出ヘッダ `Sender` の既定値（design.md §送出ヘッダ最小集合）。
@@ -145,19 +146,30 @@ impl<'a> Shiori3Client<'a> {
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
+        let headers = RequestHeaders::internal(self.sender);
+        Ok(self
+            .get_with_headers(id, references, status, &headers)?
+            .map(|reply| reply.value))
+    }
+
+    /// [`Shiori3Client::get`] の追加のヘッダつき版。値と、応答の `SecurityLevel` の生の値を返す
+    /// （areka-P0-script-security-level 要件 2.1・3.5）。結果の判定と誤りは `get` と同じ。
+    ///
+    /// # Errors
+    /// [`Shiori3Client::get`] と同じ。
+    pub fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
         let timeout = self.effective_timeout();
         // 現在の文字コードを先に取り出す（交渉状態の可変借用と読みを同時に持たない）。
         let charset = self.negotiator.current();
         let bytes = encode_and_note(
             self.negotiator,
-            &ShioriRequest {
-                method: Method::Get,
-                id,
-                references,
-                sender: self.sender,
-                status,
-                charset,
-            },
+            &request_of(Method::Get, id, references, status, *headers, charset),
         );
         // GET/NOTIFY は wire tag = MsgTag::Request で合流（要件 4.7）。符号化したバイト列は
         // helper・IPC へ**そのまま**渡す（解釈を挟まない・要件 3.6）。
@@ -169,7 +181,7 @@ impl<'a> Shiori3Client<'a> {
         // 採用と記録は `map_get_result` より前（応答が 204／400／500 でも `Charset` ヘッダは
         // 採用対象・design.md §交渉の一周）。
         let parsed = parse_and_note(self.negotiator, &resp)?;
-        map_get_result(parsed)
+        map_get_reply(parsed)
     }
 
     /// 片道イベントを送る（同期 `request()` 往復・応答破棄・要件 4.2/4.8・design.md §GET 往復）。
@@ -191,19 +203,28 @@ impl<'a> Shiori3Client<'a> {
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError> {
+        let headers = RequestHeaders::internal(self.sender);
+        self.notify_with_headers(id, references, status, &headers)
+    }
+
+    /// [`Shiori3Client::notify`] の追加のヘッダつき版（areka-P0-script-security-level 要件 2.1）。
+    /// 応答は `notify` と同じく破棄する。
+    ///
+    /// # Errors
+    /// [`Shiori3Client::notify`] と同じ。
+    pub fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
         let timeout = self.effective_timeout();
         // 現在の文字コードを先に取り出す（交渉状態の可変借用と読みを同時に持たない）。
         let charset = self.negotiator.current();
         let bytes = encode_and_note(
             self.negotiator,
-            &ShioriRequest {
-                method: Method::Notify,
-                id,
-                references,
-                sender: self.sender,
-                status,
-                charset,
-            },
+            &request_of(Method::Notify, id, references, status, *headers, charset),
         );
         // 同期往復（要件 4.8）: wire tag は GET と同じ MsgTag::Request（要件 4.7）。
         let _discarded = self
@@ -314,6 +335,15 @@ fn map_get_result(parsed: ParsedResponse) -> Result<Option<String>, RequestError
     Ok(parsed.value)
 }
 
+/// [`map_get_result`] の値に、応答の `SecurityLevel` の生の値を添える（判定の順は変えない・要件 3.5）。
+fn map_get_reply(parsed: ParsedResponse) -> Result<Option<ValueReply>, RequestError> {
+    let security_level = parsed.security_level.clone();
+    Ok(map_get_result(parsed)?.map(|value| ValueReply {
+        value,
+        security_level,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -394,6 +424,51 @@ mod tests {
         );
     }
 
+    // --- map_get_reply（areka-P0-script-security-level 要件 3.5）---------------
+
+    /// 200 ＋ Value は値と応答の `SecurityLevel` の生の値をそのまま運ぶ。
+    #[test]
+    fn map_get_reply_carries_the_raw_security_level() {
+        let parsed = ParsedResponse {
+            status: 200,
+            value: Some("hi".to_string()),
+            error_level: None,
+            error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
+            security_level: Some("external".to_string()),
+        };
+        assert_eq!(
+            map_get_reply(parsed).expect("200+value は Ok"),
+            Some(ValueReply {
+                value: "hi".to_string(),
+                security_level: Some("external".to_string()),
+            })
+        );
+    }
+
+    /// 判定の順は今のまま: `SecurityLevel` があっても 400 は誤り・204 は無し（要件 3.5）。
+    #[test]
+    fn map_get_reply_keeps_the_judgment_order() {
+        let with = |status: u16| ParsedResponse {
+            status,
+            value: Some("hi".to_string()),
+            error_level: None,
+            error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
+            security_level: Some("local".to_string()),
+        };
+        assert!(matches!(
+            map_get_reply(with(400)),
+            Err(RequestError::Shiori(ShioriError::Status {
+                status: 400,
+                ..
+            }))
+        ));
+        assert_eq!(map_get_reply(with(204)).expect("204 は Ok"), None);
+    }
+
     // --- map_get_result（要件 4.1/2.1/2.2/2.7/5.2）---------------------------
 
     /// 200 ＋ Value → `Ok(Some(v))`（要件 2.1）。
@@ -406,6 +481,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         // RequestError は PartialEq を持たない（error.rs は本タスクで不変）ため、Ok 側を取り出して比較する。
         let ok = map_get_result(parsed).expect("200+value は Ok");
@@ -422,6 +498,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let ok = map_get_result(parsed).expect("200 (Value 欠落) は Ok");
         assert_eq!(ok, None);
@@ -437,6 +514,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let ok = map_get_result(parsed).expect("204 は Ok");
         assert_eq!(ok, None);
@@ -452,6 +530,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let err = map_get_result(parsed).expect_err("400 は SHIORI エラー");
         assert!(
@@ -473,6 +552,7 @@ mod tests {
             error_description: Some("boom".to_string()),
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let err = map_get_result(parsed).expect_err("500 は SHIORI エラー");
         assert!(
@@ -498,6 +578,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let err = map_get_result(parsed).expect_err("ErrorLevel 付きはエラー");
         assert!(
@@ -523,6 +604,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let ok = map_get_result(parsed).expect("311 は許容 status で Ok");
         assert_eq!(ok, Some("teach".to_string()));
@@ -538,6 +620,7 @@ mod tests {
             error_description: None,
             charset_header: None,
             decode_had_errors: false,
+            security_level: None,
         };
         let ok = map_get_result(parsed).expect("312 は許容 status で Ok");
         assert_eq!(ok, None);
@@ -583,7 +666,7 @@ mod tests {
             method,
             id,
             references: &[],
-            sender: DEFAULT_SENDER,
+            headers: RequestHeaders::internal(DEFAULT_SENDER),
             status: None,
             charset,
         }
@@ -641,7 +724,7 @@ mod tests {
         // 改行の綴り（CRLF／LF）に依存しないよう CR を落としてから切り出す。
         let source = SELF_SOURCE.replace('\r', "");
         let after = source
-            .split_once("    pub fn notify(")
+            .split_once("    pub fn notify_with_headers(")
             .expect("notify の定義行が見つからない")
             .1;
         let body = after

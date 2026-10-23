@@ -110,6 +110,24 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
         ("reload", Some("balloon"), vec!["balloon"]),
         ("reload", Some("descript"), vec!["descript", "ghost shell"]),
         ("reloadsurface", None, vec![]),
+        // move_cue_move_sink_tests.rs の窓の組・吸着・バルーン位置初期化（areka-P0-window-link-directives）
+        (
+            "set",
+            Some("alignmenttodesktop"),
+            vec!["alignmenttodesktop", "top"],
+        ),
+        (
+            "set",
+            Some("alignmentondesktop"),
+            vec!["alignmentondesktop", "free"],
+        ),
+        (
+            "set",
+            Some("sticky-window"),
+            vec!["sticky-window", "0", "1"],
+        ),
+        ("reset", Some("sticky-window"), vec!["sticky-window"]),
+        ("execute", Some("resetballoonpos"), vec!["resetballoonpos"]),
     ]
 }
 

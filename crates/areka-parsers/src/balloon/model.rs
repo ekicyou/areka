@@ -563,7 +563,7 @@ impl FontDecorationRaw {
 ///
 /// 転記層契約: 2 層マージ済みの値を**解釈せず・警告せず**そのまま保持する。`none`／数値／未指定は
 /// `Some("none")`／`Some("64")`／`None` として区別される。`none` の判定・色成分の数値化・
-/// 語彙外値の縮退・警告は下流の責務であり、担当下流は `areka-P0-text-align-shadow-canon`
+/// 語彙外値の縮退・警告は下流の責務であり、担当下流は `text-align-shadow-canon`
 /// （本仕様は影を描画へ配線しない）。
 ///
 /// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、[`BalloonModel::new`] が用いる。
@@ -619,7 +619,7 @@ impl FontShadowRaw {
 /// 書体名・大きさ・色は既存 [`Font`] を値で再利用し（数値化の縮退規則は基底と同じ）、書体 5 本・
 /// 影 4 本は基底と同じ [`FontDecorationRaw`]／[`FontShadowRaw`] で持つ。束であって生文字列では
 /// ないため `Raw` を付けない。値の解釈は下流の責務であり、書体は `look.rs` の受け口へ本仕様が
-/// 配線し、影は `areka-P0-text-align-shadow-canon` が引き受ける。
+/// 配線し、影は `text-align-shadow-canon` が引き受ける。
 ///
 /// `Font` が `Default` を持たないため `Default` は手書き（全キー未指定）。
 #[non_exhaustive]

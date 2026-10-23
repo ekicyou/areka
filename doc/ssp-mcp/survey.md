@@ -116,7 +116,7 @@ SSP 2.9.07（`baseware.version` → `SSP/2.9.07 (20261001-0; Windows NT 10.0.263
 1. **値は素のまま**: `OK:` を付けず、空白も改行も足さない。空の値（idle の `status`）は空の本文で `isError: false`。→ areka の要件と同じ。
 2. **「無い」はすべて 1 つの文言**: 名前の誤り・書式の誤り・範囲外の番号・選んだ名前の不在・一覧そのものの名前・descript に無い項目は、どれも `NG:Cannot find such property name.`。→ areka の `DottedResolution::NotFound` 1 つに写せば足りる。
 3. **名前は手直ししない（空白）**: 前後の空白は削らず「無い名前」になる。→ areka の要件と同じ。
-4. **名前の英字の大小は区別しない（SSP）**: `BASEWARE.NAME` が通る。areka の読み手（`areka-sylphya` の点付きの名前の解釈 `parse_dotted` と鏡像の引き当て）は大小を区別する＝`BASEWARE.NAME` は「無い名前」になる。SHIORI の `GetProperty`・`%property[]` も同じ読み手なので、直すなら読み手の側で全経路をそろえる話になる（get_property だけ畳むと SHIORI 側と食い違う）。
+4. **名前の英字の大小は区別しない（SSP）**: `BASEWARE.NAME` が通る。areka の読み手（`areka-sylphya` の点付きの名前の解釈 `parse_dotted` と鏡像の引き当て）は大小を区別する＝`BASEWARE.NAME` は「無い名前」になる。SHIORI の `GetProperty`・`%property[]` も同じ読み手なので、直すなら読み手の側で全経路をそろえる話になる（get_property だけ畳むと SHIORI 側と食い違う）。**2026-10-22 に `property-name-case-fold` が読み手の側（`parse_dotted`）で畳んだ**（半角の英字の大小だけ・括弧の中の名前も・前後の空白は削らない）＝この項の areka の側の記述は直す前の形。
 5. **数字の括弧（SSP）**: `ghostlist(0).name` は SSP では「名前が 0 のゴースト」と読まれて無い名前になり、番号で引くのは `ghostlist.index(0).name` の形だけ。areka の `parse_dotted` は数字だけの括弧を番号として読む。値の網羅の spec（`property-catalog-lists`）の持ち物。
 6. **`ghost_name` の綴り（SSP）**: 英字の大小を区別せず、空文字は「省略」でなく「外れ」。areka の宛先の解決（`crates/areka/src/mcp/resolve.rs` の `resolve`）は名前を完全一致で比べ、空文字を省略と同じに扱う。全ツール共通の振る舞いなので `mcp-tool-entrances` の持ち物（get_property だけの話ではない）。本体側名・前後の空白も含めた全体は 7.4。**2026-10-06 に `mcp-ghost-name-match` が 7.4 の表どおりに直した**（大小を区別しない・空文字は外れ）＝この項の areka の側の記述は直す前の形。
 

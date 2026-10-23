@@ -52,9 +52,9 @@
 ### 2.4 並走 spec との重なり
 
 `.kiro/specs/` 直下の active spec（`completed/` を除く）で `shiori_proxy.rs` または `shiori-host32-helper` を挙げるのは 4 本の brief だけで、**編集を予定しているものは無い**:
-- `areka-P0-makoto-dll-host/brief.md`: 「切れ端 ⓐ は本 spec へ移管・`shiori_proxy.rs` は編集集合から外れる」（明記）。
-- `areka-P0-property-ipc-transport/brief.md`: 編集集合の見込みに `crates/shiori-host32-helper/src/` が入るが、対象は property の受け渡し（`main.rs` の分類・wire）で、入口解決には触れない見込み。**`main.rs` の `TriggerLoad` の枝に 1 行足す本仕様と同じファイルを触る可能性**は残る（着手時に rebase して確認・要件の「並走」の記述どおり）。
-- `areka-P0-property-query-channels`: `areka-ghost` 側。`shiori_proxy.rs` には触れない。
+- `makoto-dll-host/brief.md`: 「切れ端 ⓐ は本 spec へ移管・`shiori_proxy.rs` は編集集合から外れる」（明記）。
+- `property-ipc-transport/brief.md`: 編集集合の見込みに `crates/shiori-host32-helper/src/` が入るが、対象は property の受け渡し（`main.rs` の分類・wire）で、入口解決には触れない見込み。**`main.rs` の `TriggerLoad` の枝に 1 行足す本仕様と同じファイルを触る可能性**は残る（着手時に rebase して確認・要件の「並走」の記述どおり）。
+- `property-query-channels`: `areka-ghost` 側。`shiori_proxy.rs` には触れない。
 - `areka-P0-alpha-release-signoff/brief.md`: 配布 zip に helper exe を入れる話のみ。
 
 ## 3. 要件 → 資産の対応表
@@ -219,7 +219,7 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 
 ### 10.3 境界の決定と根拠
 
-- **`main.rs` を触らない**（決定 3 の帰結）。並走 `areka-P0-property-ipc-transport` が `main.rs` を触る見込み（§2.4）なので、同じファイルを触らないことで合流の衝突を 0 にする。
+- **`main.rs` を触らない**（決定 3 の帰結）。並走 `property-ipc-transport` が `main.rs` を触る見込み（§2.4）なので、同じファイルを触らないことで合流の衝突を 0 にする。
 - **既存 `mod tests` と `main_loopback_tests.rs` を触らない**（要件 6.8）。新テストは兄弟ファイル `shiori_proxy_loadu_tests.rs`（`shiori_proxy.rs` 末尾の `#[cfg(test)] #[path] mod loadu_tests;`）。env が既存 fixture と重ならないので直列化の鍵も自前（`LOADU_SERIAL`）。
 - **`ProxyError` の variant を増やさない**。増やすと `main.rs` の `{e:?}` の語彙が変わり、失敗種別の grep（要件 4.4）と下流 `makoto-dll-host` の期待が動く。
 - **観測の 2 行の位置**: 警告は符号化の直後（`Load` の枝だけ）、入口名は呼ぶ直前。符号化・確保で失敗したときは入口を呼ばないので入口名の行は出ない（要件 4.1 の主語は「呼んだ」入口）。失敗の種別は `main.rs` の既存の 1 行が出す。

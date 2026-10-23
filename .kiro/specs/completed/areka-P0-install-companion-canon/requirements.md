@@ -1,6 +1,6 @@
 # Requirements Document
 
-> **2026-10-03・実施せず、3 本へ引き継いで閉じた（書きかけ・未承認のまま残す資料）**。要件の段で、同梱の「最初の 1 個」が areka に無い 2 つの機能（ゴーストの標準バルーン・シェルごとのバルーン）に触れると分かったため、開発者指示で分けた。要件 1〜4・6〜8 は `areka-P0-install-companion-reading`、要件 5 は `areka-P0-ghost-standard-balloon`、シェルに紐づくバルーンは `areka-P0-shell-companion-balloon` が引き継ぐ。引き継ぎの経緯は `.kiro/steering/roadmap.md`「同梱バルーンの正典」節。
+> **2026-10-03・実施せず、3 本へ引き継いで閉じた（書きかけ・未承認のまま残す資料）**。要件の段で、同梱の「最初の 1 個」が areka に無い 2 つの機能（ゴーストの標準バルーン・シェルごとのバルーン）に触れると分かったため、開発者指示で分けた。要件 1〜4・6〜8 は `areka-P0-install-companion-reading`、要件 5 は `areka-P0-ghost-standard-balloon`、シェルに紐づくバルーンは `shell-companion-balloon` が引き継ぐ。引き継ぎの経緯は `.kiro/steering/roadmap.md`「同梱バルーンの正典」節。
 
 ## Project Description (Input)
 - **困っている人**: ukadoc「Install設定」どおりに `install.txt` の同梱（`balloon*.directory` など）を書いたゴースト・シェルの作者と、その書庫を落とす利用者。

@@ -1,0 +1,67 @@
+# Implementation Plan
+
+> 着手前に [design.md](design.md) の「設計で決めたこと」7 点と「Testing Strategy」を読む。畳みは半角の英字だけ（`to_ascii_lowercase`／`eq_ignore_ascii_case`）。`to_lowercase` は使わない。前後の空白は削らない。値は畳まない。`persist/` と読む口 2 つ（MCP の `get_property`・SHIORI の `GetProperty`）の本体のコードは変えない。新しいテストは兄弟のファイルに置く。
+
+- [x] 1. プロパティシステムの名前の畳みと書き込みの仕分け
+- [x] 1.1 名前を鍵の綴りへ直す所で半角の英字を小文字へ畳み、解釈の段の檻を足す
+  - 点で区切った各部分の名前と括弧の中の名前を、半角の英字だけ小文字へ畳んでから鍵の部分を作る。括弧の中の数字（番号）は触らない
+  - `index(…)` の見分けを畳んだ後の名前で行う（`INDEX(abc)`・`Index(abc)` は `index(abc)` と同じ書式の誤り）。区切りの規則・誤りの種類・誤りの位置は今のまま
+  - 鍵の型と解釈の関数の説明に「名前の半角の英字は小文字（解釈が畳む）・手で組むときも小文字」を書く。既存の `mod tests` には手を入れない
+  - 新しい兄弟のテストのファイルで、design の「解釈の段の檻」1〜6 を固定する（各部分の大小違い・括弧の中・全角の英字とかなは畳まない・前後の空白が残る・書式の誤りが小文字と同じ `Err`・語彙の表 3 つが小文字だけ）
+  - 完了の状態: `cargo test -p areka-sylphya` で新しい檻と既存の檻（正準の綴りの冪等・保存の名前の往復を含む）がすべて緑
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 3.3, 3.4, 4.2, 5.1_
+
+- [x] 1.2 書き込みの仕分けの 1 段目を大小を区別しない比べにし、仕分けと効果の檻を足す
+  - 書ける名前の表との比べを、半角の英字の大小を区別しない一致へ変える（前後の空白は削らない）。説明の「厳密一致」を直す
+  - 効果（書けない名前・運行の値）とその `warn!` が運ぶ名前は書かれた綴りのまま、自由な名前の書き込みの鍵は畳んだ正準の綴り（今の作りのまま届く）であることを変えない
+  - 新しい兄弟のテストのファイルで、design の「アクターの檻」の純関数の段 1〜3 を固定する（`CURRENTGHOST.NAME`・`Baseware.Name` が書けない名前で効果は 1 つ・`warn!` を捕まえる、`MENU`・`Surface.Num` が運行の値、`My.Flag` と `MY.FLAG` がどちらも `my.flag` への書き込み）
+  - 完了の状態: 新しい檻が緑で、既存の仕分けの檻（`actor_tests.rs` ほか）が期待を変えずに緑。1 段目を畳まずに戻すと `MENU` の檻が赤になる
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 5.2_
+
+- [x] 1.3 アクターを立てて書いて読む檻を足す
+  - 1.2 と同じテストのファイルに、既存のアクターの結合の檻と同じ形（偽の保存の IO・反映を待つ）で design の「アクターの檻」4〜12 を足す
+  - 読みの大小違い・括弧の中・全角とかなは別の名前・前後の空白は「無い名前」・値の綴りはそのまま・ゴーストごとの値が先・書式の誤りはどの綴りでも「無い名前」・自由な名前の後勝ち・書けない名前を大文字で書いても本物の値が残る・保存された値を大小違いで引ける
+  - 完了の状態: `cargo test -p areka-sylphya` で 4〜12 の檻がすべて緑
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 3.3, 3.4, 3.5, 4.1, 4.2, 5.1, 5.2_
+
+- [x] 2. 読む口 2 つの答えを決定論テストで固定する
+- [x] 2.1 (P) MCP の `get_property` を実行系ごと通す檻に大文字の名前を足す
+  - 既存の実行系を立てる檻の聞く名前の並びに `BASEWARE.NAME` を足し、`areka`（`isError: false`）を期待する。既存の ` baseware.name` →「無い名前」はそのまま残す
+  - 冒頭の説明の「英字の大小を混ぜた名前は使わない」を、本 spec で大小違いの 1 つを足したことへ直す
+  - 完了の状態: その檻が緑で、既存の 7 つの名前の期待は変わらない
+  - _Boundary: MCP get_property のテスト_
+  - _Depends: 1.1_
+  - _Requirements: 2.1, 2.3, 5.3_
+
+- [x] 2.2 (P) SHIORI の `GetProperty` に大小違いの名前を渡す檻を足す
+  - SHIORI の受け口のファイルには兄弟のテストの接続宣言だけを足し、本体のコードは変えない
+  - 新しい兄弟のテストのファイルで、テスト用の sylphya を立てて `baseware.name = areka` と自由な名前 `path.to.key = some-value` を載せ、`BASEWARE.NAME`・`Baseware.Name` → `areka`、`PATH.TO.KEY` → `some-value`、` baseware.name` と `NO.SUCH.KEY` →「プロパティが無い」の失敗を固定する
+  - 完了の状態: `cargo test -p areka` でその檻が緑。2 つの口が同じ読み手の関数を名前を手直しせずに呼ぶ形が変わっていないことを差分で確かめる
+  - _Boundary: SHIORI の受け口のテスト_
+  - _Depends: 1.1_
+  - _Requirements: 2.2, 2.3, 2.4, 5.4_
+
+- [x] 3. 既存の期待の確認・実機確認・記録
+- [x] 3.1 既存のテストを期待を変えずに通し、保存の側に差分が無いことを確かめる
+  - `areka-sylphya` の全テストと、`areka` のうち SHIORI の受け口・MCP の `get_property`・重なり指定の延期の檻を回す
+  - 保存（`persist/`）・読み手・読む口 2 つの本体のコードに差分が無いことを `git diff` の pathspec で確かめる（pathspec が実在することを先に確かめる）
+  - 完了の状態: 回したテストがすべて緑で、既存のテストの期待の行に差分が無く、保存の側の差分が 0
+  - _Requirements: 2.4, 4.3, 5.5_
+
+- [x] 3.2 配布形で MCP の `get_property` を当て、記録を残す
+  - design の「実機確認（6.1）」の手順どおり、配布形を作ってワークツリーの `target\` の下へ展開し、有界の自動終了を付けて起こす
+  - `baseware.name`・`BASEWARE.NAME`・` baseware.name` を順に渡し、`areka`・`areka`・`NG:Cannot find such property name.`（`isError: true`）を確かめる
+  - 版・環境変数・URL の行・3 回の要求と答えの全文・ツールに答えた記録の行・`ERROR` の行の数・終わり方を spec の `verification/signoff.md` に書く。自分で起こしたプロセス以外は止めない
+  - 完了の状態: `verification/signoff.md` に 3 回の答えが期待どおりであった記録がある
+  - _Requirements: 6.1_
+
+- [x] 3.3 (P) 沈黙ルール対応表と survey に決まりを書く
+  - `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾に、design の「記録の文書」の行（項目・決めたこと・根拠・出どころの 4 列）を足す
+  - `doc/ssp-mcp/survey.md` §7.3 の 4 の末尾に、着地で違いが無くなった注記を 1 句足す。日付は着地の日（実装の段で書くなら実装の日・完了の段で直してよい）
+  - 完了の状態: 2 つの文書にその行と注記があり、表の列の数が他の行と同じ
+  - _Boundary: 記録の文書_
+  - _Requirements: 6.2, 6.3_
+
+## Implementation Notes
+
+- 範囲外（10-22）: rustc 1.99.1 の clippy で `cargo clippy -p areka --all-targets -- -D warnings` が本 spec の外のクレートで赤（dola の resolve.rs:284 too_many_arguments・conflict_resolver.rs:42 collapsible_if・facade.rs:323 doc_lazy_continuation、areka-kanade もビルド止まり）。clippy は test-all と CI の関門ではないので本 spec では扱わない。完了の棚卸で、既存の起票 `clippy-199-lints` の範囲と確かめ、その brief に再観測の 1 行を足した（新しい起票は 0 件・その場で解決は 0 件）。

@@ -164,7 +164,7 @@ fn script_reply_is_left_to_the_existing_reply_arm() {
         let handled = on_anchor_reply(
             &mut state,
             stage,
-            &ShioriOutcome::Value("\\0やあ\\e".to_string()),
+            &ShioriOutcome::Value("\\0やあ\\e".to_string(), areka_talk::SecurityLevel::Local),
             "OnAnchorSelectEx",
         );
         assert!(handled.is_none());
@@ -330,7 +330,10 @@ fn script_reply_through_step_starts_one_talk_without_select() {
         step(
             state,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("\\0やあ\\e".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "\\0やあ\\e".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "OnAnchorSelectEx",
             },
             &config(),

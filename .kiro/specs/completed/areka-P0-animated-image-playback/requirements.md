@@ -2,7 +2,7 @@
 
 > 本文のコードの引用は「何の定義か（関数名・型名＋ファイル）」で指す。現状の記述は**本ブランチでの実測（2026-10-05・main `ec072853` の上）**であり、設計・実装の着手時に引き直すこと。
 >
-> **2026-10-05 棚卸㉒の裁定（main `82607b5f`）で `import` を `areka-P0-animated-image-import` へ切り出した**。本 spec は自動アニメーション・interval `always`・バルーンの面を持つ（要件 5 は切り出し済みの印だけ）。
+> **2026-10-05 棚卸㉒の裁定（main `82607b5f`）で `import` を `animated-image-import` へ切り出した**。本 spec は自動アニメーション・interval `always`・バルーンの面を持つ（要件 5 は切り出し済みの印だけ）。
 >
 > **議題は全部決着した・未決は 0 件**（2026-10-05 の要件討議。起票時の 4 件と、討議で足した 1 件＝クリックを通す形〔要件 1.8・1.13〕）。議題 1（バルーンの面＝要件 6）・議題 2（繰り返し回数＝要件 2）・議題 3（待ち時間 0＝要件 2.4・2.9）・議題 4（組み合わせ＝要件 4.9・10.5・10.7）。裁定は各要件の本文に日付つきで記した。
 
@@ -16,7 +16,7 @@
 
 - 動く APNG・動く WebP をシェルの絵に置くと、全部のコマは読まれてアトラスに載る（完了 `areka-P0-animated-image-decode`）。しかし**コマを時間で切り替える仕組みが無い**ので、画面に出るのは 1 枚目のコマだけである。コマの一覧を引く口（`areka-emo-atlas` の `AtlasTable::animation`）を呼ぶ本番のコードは **0 か所**（呼び手はテストだけ）。
 - interval `always` は書いても動かない。seriko の表（`crates/areka-seriko/src/table.rs` の `AnimationTable::from_world`）が駆動するのは `random`・`bind+random`・`sometimes`・`rarely` の 4 語だけで、`always` は元の綴りを添えた `debug!` を残して落とされる。網羅台帳（`doc/ukadoc-coverage/ledger/assets.toml`）の `always` の項は「語彙のみ」。
-- pattern定義の描画メソッド `import` は名前を知られていない。`areka-emo-compose` の `method::from_name` が未知の名前として `warn!` を出し、何も描かれない。網羅台帳の `import` の項は「absent」。 **`import` は 2026-10-05 の棚卸㉒で `areka-P0-animated-image-import` へ切り出した（本 spec は触らない）。**
+- pattern定義の描画メソッド `import` は名前を知られていない。`areka-emo-compose` の `method::from_name` が未知の名前として `warn!` を出し、何も描かれない。網羅台帳の `import` の項は「absent」。 **`import` は 2026-10-05 の棚卸㉒で `animated-image-import` へ切り出した（本 spec は触らない）。**
 - element定義で数字だけを書いてサーフェスを部品として置く入口と、親の切り替えで巻き戻らない子の時計は、完了 `areka-P0-surface-element-nesting` で入った。本 spec はその上に載る。
 
 ### 何を変えるか
@@ -25,7 +25,7 @@
 
 1. 動く絵を element定義・`surface*.png` に置けば、SERIKO 定義を書かなくても動く（自動アニメーション）。
 2. interval `always` のアニメーションが、そのサーフェスである間ずっと繰り返す。
-3. （切り出し済み）pattern定義の描画メソッド `import` は、後続 `areka-P0-animated-image-import` が持つ（2026-10-05 棚卸㉒）。本 spec は `import` の扱いを変えない。
+3. （切り出し済み）pattern定義の描画メソッド `import` は、後続 `animated-image-import` が持つ（2026-10-05 棚卸㉒）。本 spec は `import` の扱いを変えない。
 4. バルーンの面に置いた動く絵も動く（開発者裁定 2026-10-05）。
 5. 動く絵も `always` も使わないシェル（`emo2` を含む）は、見た目も軽さも変わらない。
 
@@ -62,20 +62,20 @@
   - **数字だけの element定義でサーフェスを置く入口と、子の時計の決まり**（完了 `areka-P0-surface-element-nesting`）。本 spec は使うだけで、決まりを変えない（変更 0）。
   - **動く GIF**。今までどおり 1 枚の絵（変更 0）。
   - **`always` 以外の interval の語**（`runonce`・`never`・`yen-e`・`talk`・`periodic`・`bind` 単独 ほか）。今までどおり駆動しない（変更 0）。引き受け先は `areka-P0-seriko-trigger-intervals`。
-  - **`overlay` 以外の描画メソッド全般**（`import` を含む）。今の扱いを変えない（変更 0）。`overlay` 以外の描画メソッドの element定義は今までどおり読み飛ばされ、そこに置いた動く絵も動かない。 pattern定義の描画メソッド `import` は `areka-P0-animated-image-import` が持つ（2026-10-05 棚卸㉒で切り出し）。
-  - **element定義のオプション**（`--clipping`・`--alpha`・`--source`・`--scaling`）。`--clipping` を付けた element定義では動く絵として読まない決まり（C2）は `areka-P0-element-clipping-option` が持つ。本 spec はオプションを読まない（要件 10.4）。
+  - **`overlay` 以外の描画メソッド全般**（`import` を含む）。今の扱いを変えない（変更 0）。`overlay` 以外の描画メソッドの element定義は今までどおり読み飛ばされ、そこに置いた動く絵も動かない。 pattern定義の描画メソッド `import` は `animated-image-import` が持つ（2026-10-05 棚卸㉒で切り出し）。
+  - **element定義のオプション**（`--clipping`・`--alpha`・`--source`・`--scaling`）。`--clipping` を付けた element定義では動く絵として読まない決まり（C2）は `element-clipping-option` が持つ。本 spec はオプションを読まない（要件 10.4）。
   - **台本の再生**（さくらスクリプトの再生と、その土台の時刻つきの台本）。触らない。`\i[ID]` の意味も変えない。
-  - **起動の採寸で全コマを読む時間の直し**（`areka-P0-placement-measure-bake-once`）。
-- **同じウェーブ C4 の約束は解いた**（2026-10-05 設計討議・開発者裁定「本質的な案で設計せよ。スコープが膨らむなら関係しそうな他セッションと調整」）。棚卸㉒の brief は「`areka-parsers` の `shell/`・`areka-emo-atlas` の `manifest.rs`・`areka-emo-compose` の `plan.rs`・`fold.rs`・`method.rs`・`areka-emo-present`・`crates/areka/src/emo2_boot/assets.rs` に触らない」と約束していたが、動く絵を子サーフェスへ分解する形を根から作るために、`plan.rs` と `areka-emo-present` には触る。触る場所の一覧と、ほかのセッション（`areka-P0-element-base-method`・`areka-P0-balloon-lifecycle-events`）と決めた取り込みの順は design.md に記す。未着手の `areka-P0-extent-element-offset` へは、外形の計算の置き場が変わることを brief で申し送る。
+  - **起動の採寸で全コマを読む時間の直し**（`placement-measure-bake-once`）。
+- **同じウェーブ C4 の約束は解いた**（2026-10-05 設計討議・開発者裁定「本質的な案で設計せよ。スコープが膨らむなら関係しそうな他セッションと調整」）。棚卸㉒の brief は「`areka-parsers` の `shell/`・`areka-emo-atlas` の `manifest.rs`・`areka-emo-compose` の `plan.rs`・`fold.rs`・`method.rs`・`areka-emo-present`・`crates/areka/src/emo2_boot/assets.rs` に触らない」と約束していたが、動く絵を子サーフェスへ分解する形を根から作るために、`plan.rs` と `areka-emo-present` には触る。触る場所の一覧と、ほかのセッション（`areka-P0-element-base-method`・`areka-P0-balloon-lifecycle-events`）と決めた取り込みの順は design.md に記す。未着手の `extent-element-offset` へは、外形の計算の置き場が変わることを brief で申し送る。
 - **Adjacent expectations**:
-  - **`areka-P0-animated-image-import`（後続・2026-10-05 棚卸㉒で本 spec から切り出し）**: pattern定義の描画メソッド `import` を持つ。動く絵を `import` したときは、本 spec の分解と繰り返しの仕組みに載る（要件 5）。
+  - **`animated-image-import`（後続・2026-10-05 棚卸㉒で本 spec から切り出し）**: pattern定義の描画メソッド `import` を持つ。動く絵を `import` したときは、本 spec の分解と繰り返しの仕組みに載る（要件 5）。
   - **`areka-P0-animated-image-decode`（前提・完了）**: 動く絵ごとに、重ね済みの全部のコマ・コマごとの待ち時間（ミリ秒・0 は 0 のまま）・繰り返し回数（終わりなし／合計 N 回）を渡す。各コマは絵の全体の寸法で揃っている。同 spec の要件の Out of scope は「バルーンの絵のコマを時間で切り替える仕組みは本 spec でも後続でも作らない」と書いているが、**本 spec の裁定（2026-10-05・要件 6）がこれを上書きする**。完了した文書は書き換えず、上書きしたことを対応表に記す（要件 10.2）。
   - **`areka-P0-surface-element-nesting`（前提・完了）**: 子の時計は「スコープ × 子のサーフェス番号」ごとに 1 つで、親の切り替えで巻き戻らず、見えない間も進んだものとして扱われ、シェルの切り替え・ゴーストが降りるときに捨てられる。同 spec は「今動かない間隔の語は、後続の spec が一番上のサーフェスで実装した時点で子でも動く」と定めている。本 spec が入れる `always` は、子のサーフェスでも同じ規則で動く。
-  - **`areka-P0-element-clipping-option`（後続）**: `--clipping` 付きの element定義を動く絵として読まない判定を持つ。
+  - **`element-clipping-option`（後続）**: `--clipping` 付きの element定義を動く絵として読まない判定を持つ。
   - **`areka-P0-seriko-trigger-intervals`（後続）**: 残りの interval の語を引き受ける。本 spec の繰り返しの仕組みの上に載る。
-  - **`areka-P0-balloon-element-order`・`areka-P0-self-alpha-declaration`（隣接）**: 同じ合成の場所を触るので、同時には走らせない（steering `roadmap.md` の列の決まり）。
+  - **`balloon-element-order`・`areka-P0-self-alpha-declaration`（隣接）**: 同じ合成の場所を触るので、同時には走らせない（steering `roadmap.md` の列の決まり）。
   - **`areka-P0-mcp-dump-images`（隣接・完了）**: 今の見た目を読み戻す。動いている絵では、読み戻した時点のコマが返る。本 spec は読み戻しの道具を変えない。
-  - **`areka-P0-currentghost-property-tree`（下流）**: `seriko.*` のプロパティでアニメーションを読む。本 spec はプロパティを足さない（0 個）。
+  - **`currentghost-property-tree`（下流）**: `seriko.*` のプロパティでアニメーションを読む。本 spec はプロパティを足さない（0 個）。
   - **アニメーションの仕組みの数**: 台本の再生と、サーフェスのアニメーションの 2 つのまま。動く絵のための 3 つ目の時計は作らない（開発者確定・brief）。
 
 ## Requirements
@@ -150,14 +150,14 @@
 
 ### Requirement 5: 描画メソッド `import`（切り出し済み）
 
-> **2026-10-05 の棚卸㉒の裁定で、`import` は `areka-P0-animated-image-import` へ切り出した**（`import` だけが読み手・焼く一覧・合成の命令という別の場所を触るため）。本要件に在った受け入れ基準 10 項（冒頭の待ち・X,Y・`overlay` 合成・interval だけで開始と繰り返しを決める・ファイルの繰り返し回数は使わない・無いファイルと静止画の扱い・`import` だけが名指しする絵・上限・混在）は、同 spec の brief へ申し送った。番号は後ろの要件の参照を保つために残す。
+> **2026-10-05 の棚卸㉒の裁定で、`import` は `animated-image-import` へ切り出した**（`import` だけが読み手・焼く一覧・合成の命令という別の場所を触るため）。本要件に在った受け入れ基準 10 項（冒頭の待ち・X,Y・`overlay` 合成・interval だけで開始と繰り返しを決める・ファイルの繰り返し回数は使わない・無いファイルと静止画の扱い・`import` だけが名指しする絵・上限・混在）は、同 spec の brief へ申し送った。番号は後ろの要件の参照を保つために残す。
 
-**Objective:** 後続 `areka-P0-animated-image-import` の担当者として、本 spec が `import` に手を付けていないことと、動く絵を `import` したときに載る仕組みを知りたい。
+**Objective:** 後続 `animated-image-import` の担当者として、本 spec が `import` に手を付けていないことと、動く絵を `import` したときに載る仕組みを知りたい。
 
 #### Acceptance Criteria
 
 1. The areka shall pattern定義の描画メソッド `import` の扱いを、本 spec の前から変えない（変更 0）。
-2. The areka shall 本 spec の繰り返しの仕組みと、動く絵をコマの列へ分解する仕組みの形を、後続 `areka-P0-animated-image-import` の brief の申し送りの節に記し、完了の時点で実物との食い違いを **0 件**にする。
+2. The areka shall 本 spec の繰り返しの仕組みと、動く絵をコマの列へ分解する仕組みの形を、後続 `animated-image-import` の brief の申し送りの節に記し、完了の時点で実物との食い違いを **0 件**にする。
 
 ### Requirement 6: バルーンの面の動く絵
 
@@ -218,10 +218,10 @@
 
 #### Acceptance Criteria
 
-1. The areka shall 網羅台帳の `element*`・`always` の項を、本 spec の着地後の実際の振る舞いに合わせて更新する。動く GIF が非対応であることの注記は残す。 `import` の項は後続 `areka-P0-animated-image-import` が更新する（本 spec は変更 0）。
+1. The areka shall 網羅台帳の `element*`・`always` の項を、本 spec の着地後の実際の振る舞いに合わせて更新する。動く GIF が非対応であることの注記は残す。 `import` の項は後続 `animated-image-import` が更新する（本 spec は変更 0）。
 2. The areka shall 正典が黙っている箇所について本 spec が定めたこと（自動アニメーションでの繰り返し回数と始め直し＝要件 2.2・2.3・2.7・2.8／待ち時間 0＝要件 2.4・2.5／サーフェスを切り替えても途切れないこと＝要件 3／`always` の途中の終わりのコマと合計 0＝要件 4.5・4.6／バルーンの面＝要件 6〔完了 `areka-P0-animated-image-decode` の「後続でも作らない」を上書きしたことを含む〕）を、対応表（`doc/COMPAT_ARCHITECTURE.md` の §8）に 1 か所へまとめて記す。
 3. The areka shall 動く絵をサーフェスの切り替えで巻き戻さないこと（要件 3）を、SSP と見え方が違いうる areka の決まりとして、同じ対応表に記す。
-4. The areka shall `--clipping` を付けた element定義の動く絵について、`areka-P0-element-clipping-option` が着地するまで areka がオプションを見分けないこと（C2 を満たさない間の振る舞い）を、網羅台帳の `element*` の項の注記に記す。
+4. The areka shall `--clipping` を付けた element定義の動く絵について、`element-clipping-option` が着地するまで areka がオプションを見分けないこと（C2 を満たさない間の振る舞い）を、網羅台帳の `element*` の項の注記に記す。
 5. The areka shall 後続 `areka-P0-seriko-trigger-intervals` の brief の申し送りの節（2026-10-05 に要件討議で作成済み）を、本 spec が生きている間ずっと正しく保つ（開発者裁定 2026-10-05・議題 4）。載せるのは、本 spec が入れた繰り返しの仕組みの形・残した interval の語・`always` を含む組み合わせ（`bind+always` ほか）を引き受けてもらうこと、の 3 つである。設計が確定したとき・実装で形が変わったとき・完了のときに、その節を実物と照らして書き直し、完了の時点で食い違いを **0 件**にする。
 7. The areka shall steering `roadmap.md` の `seriko-trigger-intervals` の行を「優先（高）」のまま保ち、引き受ける範囲に `always` を含む組み合わせが載っていることを、完了の時点で確かめる（2026-10-05 に要件討議で書き込み済み）。
 6. The areka shall 実装の途中で見つけた範囲外の問題を、すべて `/kiro-discovery` で起票して steering `roadmap.md` に載せる。

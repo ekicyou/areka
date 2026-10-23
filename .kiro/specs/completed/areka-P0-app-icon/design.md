@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Purpose**: `areka.exe` に、areka の顔になるアプリのアイコンと通知領域用のアイコンを入れる。エクスプローラー・タスクマネージャー・ショートカットに areka の絵が出て、後続の `areka-P0-tasktray-icon` は絵のファイルを別に配らずに exe から通知領域用の絵を引ける。
+**Purpose**: `areka.exe` に、areka の顔になるアプリのアイコンと通知領域用のアイコンを入れる。エクスプローラー・タスクマネージャー・ショートカットに areka の絵が出て、後続の `tasktray-icon` は絵のファイルを別に配らずに exe から通知領域用の絵を引ける。
 
 **Users**: areka を受け取って使う人（exe の絵で areka と分かる）、後続の spec（決まった番号で通知領域用の絵を引く）、絵を直したい開発者（同じ手順で作り直す）。
 
@@ -16,7 +16,7 @@
 
 ### Non-Goals
 
-- 通知領域にアイコンを出すコード（`areka-P0-tasktray-icon`）・ゴーストが決めるアイコン（`areka-P0-tasktray-ghost-icon`）。アイコンを読む・出すコードは `crates/` のどこにも足さない（テストを除く）。
+- 通知領域にアイコンを出すコード（`tasktray-icon`）・ゴーストが決めるアイコン（`tasktray-ghost-icon`）。アイコンを読む・出すコードは `crates/` のどこにも足さない（テストを除く）。
 - 窓のタイトルバー・タスクバーのボタンのアイコン、インストーラー版、winget のマニフェストのアイコンの欄、README やサイトのロゴ、`.nar` の関連付けの絵。
 - マニフェストの中身と埋め方の変更。`tools/package.ps1`・`.github/workflows/release.yml`・`tools/test-all.ps1` の変更。
 - `areka-mcp-bridge.exe`・`shiori-host32-helper.exe` へのアイコン。
@@ -35,7 +35,7 @@
 
 ### Out of Boundary
 
-- 番号の定数を Rust のコードに置くこと（読む側の `areka-P0-tasktray-icon` が自分のモジュールに置く）。`crates/areka/src/` にモジュールを足さない（`main.rs` の行を増やさない）。
+- 番号の定数を Rust のコードに置くこと（読む側の `tasktray-icon` が自分のモジュールに置く）。`crates/areka/src/` にモジュールを足さない（`main.rs` の行を増やさない）。
 - `HICON` を作る・通知領域へ出す・拡大率に合わせて選ぶ処理（`LoadIconMetric` などは下流）。
 - 今のマニフェスト（`crates/areka/areka.manifest`）と `/MANIFEST:EMBED` の指示。本設計は触らず、そのまま残ることをテストで見るだけ。
 - 配布の zip の手順と中身の一覧、winget の手続き、署名（`release-code-signing`）。
@@ -51,7 +51,7 @@
 
 ### Revalidation Triggers
 
-- 組の番号（アプリ 1・通知領域 2）か資源の言語（0）を変える → `areka-P0-tasktray-icon` が引き直す。
+- 組の番号（アプリ 1・通知領域 2）か資源の言語（0）を変える → `tasktray-icon` が引き直す。
 - 寸法の並び（8 寸法）か絵の形式（PNG）を変える → 下流の `LoadIconMetric` での見え方と、要件 6.3 の実機の確かめをやり直す。
 - アイコンのフォルダの場所か資源のファイルの名前を変える → `build.rs`・テスト・説明の文書を同時に直す。
 - マニフェストの埋め方を変える（別の spec）→ 本設計のテストのマニフェストの検査を見直す。
@@ -389,7 +389,7 @@ fn defects_of(exe: &std::path::Path) -> Vec<String>;
   - エクスプローラー: アイコンの覚えに邪魔されないよう、組んだ `areka.exe` をワークツリーの `target\` の下に初めての名前で写して見る（覚えを消す道もあるが、写す方が他の表示を乱さない）。
   - タスクマネージャー: areka を動かして、プロセスの行の絵を見る。ショートカット: exe へのショートカットを作って絵を見る。
   - それぞれを、Windows の明るい表示設定と暗い表示設定、画面の拡大率 100% と 200% 以上で見る。
-  - 16 ピクセルの輪郭（要件 2.4）: エクスプローラーの「小さいアイコン」か「詳細」の表示（16 ピクセルで出る）で、写した `areka.exe`（アプリの絵）と `tray.ico`（`.ico` のファイルは自分の絵で出る＝通知領域用の絵）を、明るい表示設定と暗い表示設定の両方で見る。通知領域に実際に出して見るのは下流 `areka-P0-tasktray-icon` の仕事。見分けにくければ `<名>-<寸法>.png` を手で整えて置き、道具を回し直す（設計は変わらない）。
+  - 16 ピクセルの輪郭（要件 2.4）: エクスプローラーの「小さいアイコン」か「詳細」の表示（16 ピクセルで出る）で、写した `areka.exe`（アプリの絵）と `tray.ico`（`.ico` のファイルは自分の絵で出る＝通知領域用の絵）を、明るい表示設定と暗い表示設定の両方で見る。通知領域に実際に出して見るのは下流 `tasktray-icon` の仕事。見分けにくければ `<名>-<寸法>.png` を手で整えて置き、道具を回し直す（設計は変わらない）。
   - arm64: `tools/package.ps1 -Arch arm64`（または `cargo build --release -p areka --target aarch64-pc-windows-msvc`）で組み、PowerShell で `$env:AREKA_ICON_CHECK_EXE = '<arm64 の areka.exe の絶対パス>'` を立てて `cargo test -p areka --test embedded_icon_test` を回す（arm64 の exe は動かさない）。コマンドは絶対パスで書く。
 - **`dist/README.txt` への追記**（要件 5.9）: モデルの条件が表示を求めるときだけ「■ 同梱物とライセンス」に 1 行。要件の段の確かめでは求めていない。
 
@@ -400,7 +400,7 @@ fn defects_of(exe: &std::path::Path) -> Vec<String>;
 | 資源の種別 | 番号 | 中身 | 言語 |
 |------------|------|------|------|
 | `RT_GROUP_ICON`（14） | **1** | アプリのアイコン（exe の絵＝エクスプローラー・タスクマネージャー・ショートカット） | 0 |
-| `RT_GROUP_ICON`（14） | **2** | 通知領域用のアイコン（`areka-P0-tasktray-icon` が引く） | 0 |
+| `RT_GROUP_ICON`（14） | **2** | 通知領域用のアイコン（`tasktray-icon` が引く） | 0 |
 | `RT_ICON`（3） | 1〜8 | アプリの絵（16・20・24・32・40・48・64・256 の順） | 0 |
 | `RT_ICON`（3） | 9〜16 | 通知領域用の絵（同じ順） | 0 |
 | `RT_MANIFEST`（24） | 1 | 今のマニフェスト（`link.exe` の `/MANIFEST:EMBED` が入れる・本設計は作らない） | リンカの既定 |

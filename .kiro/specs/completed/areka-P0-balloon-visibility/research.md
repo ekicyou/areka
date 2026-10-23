@@ -368,7 +368,7 @@ Requirement 4.4 が「タイムアウト非表示では内容を消さない」�
 - **R5**（バリア中の horizon）: D4 で裁定（5.4 抑止＋horizon 更新での計測自動破棄）。
 - **R6**（SERIKO ループ）: バルーン表は現 fixture で構造的に常に空（`synthetic_surfaces_txt` が animation 行を出さない・`looper.rs:41-42` に明記）だが、データ不変量に依存せず所有権方式が経路を型で塞ぐ（6.9＝6.2 と同一機構）。
 - **R7**（時間短縮手段）: D6 で裁定（`AREKA_BALLOON_TIMEOUT_MS`・`AREKA_` 冠規約準拠）。
-- **R8**（対応表書式・追跡 spec 実在）: `doc/COMPAT_ARCHITECTURE.md` §8 の `\![move]` 行を書式先例として採用。追跡 spec の実在を確認——`areka-P0-balloon-canon-residue`／`areka-P0-status-execution-states` は `.kiro/specs/` 直下に実在（本仕様の**新規**先送りの受け皿はこの 2 本）。`areka-P0-choice-select-events` は `completed/` に実在＝**完了済み**であり、選択肢タイムアウト規約の所有は同 spec で決着済み（本仕様は既存照会 `choice_active` を消費するだけで、同 spec へ新たな先送りを積まない——completed は新規先送りを消化できないという規律とも整合）。
+- **R8**（対応表書式・追跡 spec 実在）: `doc/COMPAT_ARCHITECTURE.md` §8 の `\![move]` 行を書式先例として採用。追跡 spec の実在を確認——`balloon-canon-residue`／`areka-P0-status-execution-states` は `.kiro/specs/` 直下に実在（本仕様の**新規**先送りの受け皿はこの 2 本）。`areka-P0-choice-select-events` は `completed/` に実在＝**完了済み**であり、選択肢タイムアウト規約の所有は同 spec で決着済み（本仕様は既存照会 `choice_active` を消費するだけで、同 spec へ新たな先送りを積まない——completed は新規先送りを消化できないという規律とも整合）。
 
 ### 8.4 リスク更新
 

@@ -90,7 +90,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `areka-P0-baseware-root-layout` と `areka-P0-alpha-release-signoff` の末尾「裁定候補 ⑴」を本 spec へ移した（2026-09-18・両 brief に追記済み）。
-- **Adjacent**: `areka-P0-nar-install`（保管形式・共有ヘルパの検体名に `StayseeBalloon` を足す）／`areka-P0-balloon-canon-residue`（α 後・descript の未読キー）。
+- **Adjacent**: `areka-P0-nar-install`（保管形式・共有ヘルパの検体名に `StayseeBalloon` を足す）／`balloon-canon-residue`（α 後・descript の未読キー）。
 
 ## Constraints
 

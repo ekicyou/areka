@@ -123,8 +123,8 @@
 
 ### C. 項目 7（`balloontimeout` の表示の側）の扱い
 
-- 台本のコンパイルの側の持ち主 `areka-P0-sakura-time-directives` の brief は、今「`balloontimeout`（受ける側は `balloon-lifecycle-events` の項目 7）」と書いている（`.kiro/specs/areka-P0-sakura-time-directives/brief.md:58`）。切り離すなら、この行の書き換えが相互登記の作業になる（要件 6.5）。
-- 台帳 `sakura-script.toml:3019-3034` の `balloontimeout` の行の `owner` は分割元 `areka-P0-balloon-canon-residue` のまま。COMPAT §8 の 2 行（`:129` のコンパイルの側・`:165` の寿命の側）の追跡先も分割元のまま。
+- 台本のコンパイルの側の持ち主 `sakura-time-directives` の brief は、今「`balloontimeout`（受ける側は `balloon-lifecycle-events` の項目 7）」と書いている（`.kiro/specs/sakura-time-directives/brief.md:58`）。切り離すなら、この行の書き換えが相互登記の作業になる（要件 6.5）。
+- 台帳 `sakura-script.toml:3019-3034` の `balloontimeout` の行の `owner` は分割元 `balloon-canon-residue` のまま。COMPAT §8 の 2 行（`:129` のコンパイルの側・`:165` の寿命の側）の追跡先も分割元のまま。
 - 表示の側の作り（ここに書くのは参考）: 判断中核は待ち時間を引数で受けるだけ（`decide(state, obs, now, timeout_secs)`）なので、トークごとの指定を受ける形にするのは軽い。重いのは指定の値を台本から UI まで運ぶ道（汎用の `\!` の運び手の受け口を 1 本足す型＝`consumer_ledger.rs` の流儀）と、コンパイルの側の「位置に依らず効く」の扱い。項目 7 を切り離しても本 spec の他の作業は 1 つも変わらない。
 
 ### D. `OnBalloonTimeout` の Reference1（残り時間）
@@ -212,7 +212,7 @@
 3. **時間切れと次のトークの行き違い**: UI が時間切れを決めた後、kanade では次のトークが「始まって終わっていた」場合、Reference0 が新しいトークの台本になる。UI はトークの番号を知らない（受け口は番号を受け取らない）。起きる幅と、許すか（記録だけ残す）を設計で決める。
 4. **切れ目の見張りとの絡み**: 中断で定常へ戻った同じ巡で `talk_gap::observe` は「切れ目に達した」と決める（`talk_gap.rs:193-227`）。その後に `OnBalloonBreak` の応答で新しいトークが始まると、切れ目を待っていた側（インストール・更新・シェルの切替の送り出しの後の知らせ）の汎用の入口の応答がそのトークを置き換える。今の pump（`OnSecondChange`）と同じ性質で問題が無いかを確かめる。
 5. **起点の時刻の軸**: `TalkClock` の epoch は全トークで 1 つ。受け口が落ちる時点では次のトークの cue はまだ観測されていない（次のトークは前のトークの合流の後に起きる＝`user_break_cue.rs:108-117` の説明）ので、落ちた時点の `talk_time` は止めたトークの軸のはず。設計で決定論のテストに落とす。
-6. **Reference2 を作る後続 spec の名前と範囲**（要件 6.2）: **2026-10-05 の要件の討議で `areka-P0-balloon-break-position` として起票済み**（上の A の未知 3 つを brief に写した）。
+6. **Reference2 を作る後続 spec の名前と範囲**（要件 6.2）: **2026-10-05 の要件の討議で `balloon-break-position` として起票済み**（上の A の未知 3 つを brief に写した）。
 
 ---
 

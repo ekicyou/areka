@@ -31,7 +31,7 @@ use super::{
     PersistWiring, balloon_offset_entries, char_pos_entries, persist_entries,
     persist_unremembered_char_positions,
 };
-use crate::placement::follow::{OffsetBase, on_char_drag_end};
+use crate::placement::follow::{Anchored, OffsetBase, on_char_drag_end};
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
@@ -436,5 +436,20 @@ fn scope_moved_only_vertically_before_finalize_is_not_written() {
     assert_eq!(lines[0].level, tracing::Level::INFO);
     assert_eq!(lines[0].expect_field("current_y"), "300");
     assert_eq!(lines[0].expect_field("default_y"), "356");
+    rig.finish();
+}
+
+/// 要件 4.8: 台本で今の向きを `free` にした窓も、書く形は descript の向き（下）で決まり、
+/// 下端の中央の x で書かれる（今の向きの形＝左上のままでは書かない）。
+#[test]
+fn writes_in_descript_form_even_when_current_anchor_is_free() {
+    let mut rig = Rig::new(true);
+    let free = rig.char_window(1);
+    rig.world.entity_mut(free).insert(Anchored(Anchor::Free));
+
+    persist_unremembered_char_positions(&rig.world);
+    let after = rig.load();
+
+    assert_eq!(window_pos(&after, 1), Some(expected_saved(1)));
     rig.finish();
 }

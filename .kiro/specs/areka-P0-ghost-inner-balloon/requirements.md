@@ -69,8 +69,8 @@ ukadoc はバルーンをゴーストの持ち物として書いていない。�
   - 引数で渡したバルーンの扱い。
 - **Adjacent expectations**:
   - 完了 `areka-P0-ghost-standard-balloon` の「`default.balloon.path` の突き合わせ先は根の置き場だけ・ゴーストの中は探さない」を、本 spec が「根の置き場と今のゴーストの中の `balloon\`」に広げる。値の書き方（フォルダ名 1 段）は受け継ぐ。
-  - `areka-P0-shell-companion-balloon`（後に着地する）は、シェルに紐づくバルーンがゴーストの中のバルーンを指せるかを決める。本 spec はその段を作らない。
-  - `areka-P0-install-live-target-hazards` は、使用中のファイルへの上書きの扱いを決める。本 spec は、使用中のゴーストの中のバルーンを、ゴーストの他の使用中のファイルと別に扱わない。
+  - `shell-companion-balloon`（後に着地する）は、シェルに紐づくバルーンがゴーストの中のバルーンを指せるかを決める。本 spec はその段を作らない。
+  - `install-live-target-hazards` は、使用中のファイルへの上書きの扱いを決める。本 spec は、使用中のゴーストの中のバルーンを、ゴーストの他の使用中のファイルと別に扱わない。
 
 ## Requirements
 

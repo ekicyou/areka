@@ -159,10 +159,10 @@ SHIORI3 の仕様へ 1 本。両端が中にある関連は 0 本なので、塊
   近そうな id へ憶測で結び付けることはしない。
 
 担当欄（台帳の `owner`）の分布は 188 件の内訳と一致している——
-`areka-P0-property-catalog-lists` 120・`areka-P0-currentghost-property-tree` 64・
+`property-catalog-lists` 120・`currentghost-property-tree` 64・
 `areka-P0-sylphya`（完了済み）2・空文字 2。
 
-### `areka-P0-property-catalog-lists`（担当 120 件）
+### `property-catalog-lists`（担当 120 件）
 
 | # | brief の場所 | brief の書き方 | 実測の id 群（接頭辞＋件数） | 突合 |
 |---|---|---|---|---|
@@ -179,7 +179,7 @@ L8 の 4 件は L2・L3 の中に既に入っている。ここで数え直す�
 
 **この spec の担当件数の検算**: 25 ＋ 10 ＋ 11 ＋ 12 ＋ 24 ＋ 17 ＋ 21 ＝ **120**。台帳の担当欄の件数と一致する。
 
-### `areka-P0-currentghost-property-tree`（担当 64 件）
+### `currentghost-property-tree`（担当 64 件）
 
 | # | brief の場所 | brief の書き方 | 実測の id 群（接頭辞＋件数） | 突合 |
 |---|---|---|---|---|
@@ -199,7 +199,7 @@ brief の冒頭（brief:4）と brief:22 は「≈65 項目」と書くが、bri
 19 ＋ 17 ＋ 6 ＋ 14 ＋ 4 ＋ 2 ＝ 62 で、括弧書きの 4 件（T2）が抜けている。
 65 という数と 69 との差の全体は ⑹ 節で扱う。
 
-### `areka-P0-property-query-channels`（担当 0 件）
+### `property-query-channels`（担当 0 件）
 
 この spec は照会の経路そのものを持ち、値の木は持たない。したがって台帳の担当欄には 1 件も現れない。
 それでも突合表に載せるのは、**この spec の主張が他 3 本の担当範囲と重なっているから**である
@@ -213,7 +213,7 @@ brief の冒頭（brief:4）と brief:22 は「≈65 項目」と書くが、bri
 | C4 | brief:29 | サウンド語彙 ≈18 葉は族ごと不在 | サウンドの要素葉 **18** | 一致（18）。`currentghost.sound.*` の頭 3 件は含まない（brief が指しているのは葉） |
 | C5 | brief:29 | 21 が先取りしていない 5 件（`seriko.zorder`・`seriko.sticky-window`・サウンドの 3 葉） | 5 id（下の突合表の区分 ⑵ と同じ） | 一致（5・id 単位で一致） |
 
-### `areka-P0-zorder-property`（担当 0 件）
+### `zorder-property`（担当 0 件）
 
 | # | brief の場所 | brief の書き方 | 実測の id 群 | 突合 |
 |---|---|---|---|---|
@@ -232,13 +232,13 @@ brief の冒頭（brief:4）と brief:22 は「≈65 項目」と書くが、bri
 
 | 担当 | 件数 | 出どころ |
 |---|---:|---|
-| `areka-P0-property-catalog-lists` | 120 | L1〜L7 の合計 |
-| `areka-P0-currentghost-property-tree` | 64 | T1〜T7 の 66 から裁定待ち 2 を引いた数 |
+| `property-catalog-lists` | 120 | L1〜L7 の合計 |
+| `currentghost-property-tree` | 64 | T1〜T7 の 66 から裁定待ち 2 を引いた数 |
 | `areka-P0-sylphya`（完了済み） | 2 | S1 |
 | 空文字（裁定待ち） | 2 | `currentghost.seriko.zorder`・`currentghost.seriko.sticky-window` |
 | **合計** | **188** | 台帳の項目数と一致 |
 
-`areka-P0-property-query-channels` と `areka-P0-zorder-property` の行はどれも
+`property-query-channels` と `zorder-property` の行はどれも
 上のどれかに既に数えられている id を別の切り口で見たものなので、合計には足さない。
 前者の主張はすべて語彙表の側（値を導出しない）で、後者の唯一の主張は裁定待ちに先取りされている。
 
@@ -363,9 +363,9 @@ tree の brief はこの 4 件を括弧書きで名前だけ挙げ、**どの件
 
 | brief の場所 | 記述 | なぜ対応が付かないか |
 |---|---|---|
-| `areka-P0-property-query-channels` brief:22 | 経路 6（スクリプトを通さない同期読み・里々の関数など） | このページに相当する見出しが無い。brief 自身も「輸送路がスナップショットに未記載」と書いており、実測でも 0 件 |
-| `areka-P0-property-query-channels` brief:42-43 | 経路 1〜4 の実装と、イベント発生の届け先の型の新設 | 相手はさくらスクリプトのページの項目と areka のコードで、このページの項目ではない |
-| `areka-P0-currentghost-property-tree` brief:28 | `vertical` などを汎用プロパティ名の一覧に登録するかの裁定 | 正典に単独の見出し `vertical` は無い。`vertical` を含む見出しはこのページに `currentghost.balloon.scope(ID).vertical` の 1 件だけで、これは T1 に既に入っている。汎用名への登録は areka 側の語彙表の話であって正典の項目ではない |
+| `property-query-channels` brief:22 | 経路 6（スクリプトを通さない同期読み・里々の関数など） | このページに相当する見出しが無い。brief 自身も「輸送路がスナップショットに未記載」と書いており、実測でも 0 件 |
+| `property-query-channels` brief:42-43 | 経路 1〜4 の実装と、イベント発生の届け先の型の新設 | 相手はさくらスクリプトのページの項目と areka のコードで、このページの項目ではない |
+| `currentghost-property-tree` brief:28 | `vertical` などを汎用プロパティ名の一覧に登録するかの裁定 | 正典に単独の見出し `vertical` は無い。`vertical` を含む見出しはこのページに `currentghost.balloon.scope(ID).vertical` の 1 件だけで、これは T1 に既に入っている。汎用名への登録は areka 側の語彙表の話であって正典の項目ではない |
 
 ### 書き込みが有効な項目の突き合わせ
 
@@ -427,7 +427,7 @@ tree の brief はこの 4 件を括弧書きで名前だけ挙げ、**どの件
 | `playing` | `playing:1` | 2.8.72 |
 | `pause` | `pause:1` | 2.8.72 |
 
-この 5 件は `areka-P0-property-query-channels` brief:29・brief:44 が「21 → 26」として挙げている中身と
+この 5 件は `property-query-channels` brief:29・brief:44 が「21 → 26」として挙げている中身と
 **id 単位でぴったり一致する。**
 
 #### ⑶ areka の 21 名にあるが、正典は書き込みを認めていないもの — **2 名・4 id**
@@ -521,7 +521,7 @@ areka 側の受け皿も書き込み有効一覧ではなく `property.get`／`p
 
 ### brief の `balloon.汎用`・`balloon.count` は頭を省いた書き方で、別の一族ではない
 
-`areka-P0-currentghost-property-tree` の brief:23 は、自分の持ち分を
+`currentghost-property-tree` の brief:23 は、自分の持ち分を
 「`currentghost.balloon.scope(ID).*` ×17 ＋ `balloon.汎用` ＋ `balloon.count` ＝ 19 項目」と書いている。
 このうち後ろの 2 つ、`balloon.汎用` と `balloon.count` という名前は**カタログに存在しない**。
 実在するのは次の 2 件で、どちらも頭に `currentghost.` が付く。
@@ -551,7 +551,7 @@ areka 側の受け皿も書き込み有効一覧ではなく `property.get`／`p
 
 ## ⑶ 持ち主のいない項目・裁定待ちの項目の一覧
 
-> **📌 2026-09-17 追記**——この節と ⑷ は調査時点（`areka-P0-ukadoc-survey-property`・PR#138・2026-09-05）の写真である。2 件の裁定待ちはその後に解消した: 開発者裁定 2026-09-13 で `currentghost.seriko.zorder` は語彙台帳の行も値の導出も `areka-P0-zorder-property`（sylphya の語彙表へは載せない）、`currentghost.seriko.sticky-window` の語彙台帳の行は `areka-P0-sylphya-set-ledger`（PR#151 で `SET_EFFECTIVE` へ登記・値の導出は `areka-P0-currentghost-property-tree`）。台帳の担当欄は 2 件とも記入済みで、空文字は **0 件**。⑴ の見出し「`areka-P0-zorder-property`（担当 0 件）」も現在は 1 件。記録の正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行。
+> **📌 2026-09-17 追記**——この節と ⑷ は調査時点（`areka-P0-ukadoc-survey-property`・PR#138・2026-09-05）の写真である。2 件の裁定待ちはその後に解消した: 開発者裁定 2026-09-13 で `currentghost.seriko.zorder` は語彙台帳の行も値の導出も `zorder-property`（sylphya の語彙表へは載せない）、`currentghost.seriko.sticky-window` の語彙台帳の行は `areka-P0-sylphya-set-ledger`（PR#151 で `SET_EFFECTIVE` へ登記・値の導出は `currentghost-property-tree`）。台帳の担当欄は 2 件とも記入済みで、空文字は **0 件**。⑴ の見出し「`zorder-property`（担当 0 件）」も現在は 1 件。記録の正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行。
 
 ### 一覧は 2 行、台帳で担当欄が空の項目も 2 件
 
@@ -567,7 +567,7 @@ areka 側の受け皿も書き込み有効一覧ではなく `property.get`／`p
 担当欄が空になる理由は 2 通りある——「誰も名乗っていない」か「2 本以上が争っていて決まらない」かである。
 **このドメインで起きているのは後者だけで、前者は 1 件も無い。** 188 件のうち 186 件には担当欄に
 spec 名が入っている——4 本の brief のいずれかが自分の範囲だと書いているものが 184 件
-（`areka-P0-property-catalog-lists` 120・`areka-P0-currentghost-property-tree` 64）、
+（`property-catalog-lists` 120・`currentghost-property-tree` 64）、
 既に実装が済んでいて完了済み spec の名前が入っているものが 2 件（`areka-P0-sylphya`）。
 残る 2 件が上の裁定待ちである。
 
@@ -579,13 +579,13 @@ spec 名が入っている——4 本の brief のいずれかが自分の範囲
 
 台帳はこの 2 件の備考に、争っている spec の名前と争点を 1 行ずつ持っている。写すと次のとおり。
 
-- **`currentghost.seriko.zorder`** — `areka-P0-zorder-property` が値の導出を単独で持つと主張し、
-  `areka-P0-currentghost-property-tree` は `seriko.*` 14 項の一括所有に含め、
-  `areka-P0-property-query-channels` は areka 側の書き込み有効一覧の追随（21 → 26）に含める。
+- **`currentghost.seriko.zorder`** — `zorder-property` が値の導出を単独で持つと主張し、
+  `currentghost-property-tree` は `seriko.*` 14 項の一括所有に含め、
+  `property-query-channels` は areka 側の書き込み有効一覧の追随（21 → 26）に含める。
   争点は値の導出の担い手と、書き込み有効一覧の 1 行の持ち主。主張しているのは **3 本**。
-- **`currentghost.seriko.sticky-window`** — `areka-P0-currentghost-property-tree` が `seriko.*` 14 項の
-  一括所有に含め、`areka-P0-property-query-channels` は同じ書き込み有効一覧の追随に含める。
-  争点は同じ 2 つ。主張しているのは **2 本**（`areka-P0-zorder-property` はこちらを主張していない）。
+- **`currentghost.seriko.sticky-window`** — `currentghost-property-tree` が `seriko.*` 14 項の
+  一括所有に含め、`property-query-channels` は同じ書き込み有効一覧の追随に含める。
+  争点は同じ 2 つ。主張しているのは **2 本**（`zorder-property` はこちらを主張していない）。
 
 ### 優先度がどちらも `C10` である理由
 
@@ -634,27 +634,27 @@ areka 側は書き込みを受け取って警告を出し、値は変えない�
 
 | spec | brief の場所 | 主張していること |
 |---|---|---|
-| `areka-P0-zorder-property` | brief:9・brief:13-17 | `currentghost.seriko.zorder` の読み書きの実導出を単独で持つ。読み書きの完全な書式（群の中はカンマ区切り・群と群の間はセミコロン区切り・名前で書く形と番号で書く形は混ぜられない・書き込みは今の設定の丸ごとの入れ替え・空文字で全解除・要素が 2 個未満の群は無視）は、この brief が正本である |
+| `zorder-property` | brief:9・brief:13-17 | `currentghost.seriko.zorder` の読み書きの実導出を単独で持つ。読み書きの完全な書式（群の中はカンマ区切り・群と群の間はセミコロン区切り・名前で書く形と番号で書く形は混ぜられない・書き込みは今の設定の丸ごとの入れ替え・空文字で全解除・要素が 2 個未満の群は無視）は、この brief が正本である |
 | 〃 | brief:22 | areka 側の書き込み有効一覧（`crates/areka-sylphya/src/vocab/dotted.rs` の 21 名）に `seriko.zorder` を**入れない**。動かない名前を先に登録することはしない |
-| `areka-P0-currentghost-property-tree` | brief:26 | `currentghost.seriko.*` の 14 項目をまとめて持つ。その列挙の中に `zorder` と `sticky-window` が名指しで入っている |
-| 〃 | brief:53 | `areka-P0-zorder-property` の範囲は自分の範囲の一部だと認めたうえで、「吸収する」か「切り出す」かを合流の会で決めるよう自分から求めている |
-| `areka-P0-property-query-channels` | brief:29・brief:44 | areka 側の書き込み有効一覧を 21 から 26 へ追随させる仕事を、書き込み経路の持ち主として持つ。増える 5 件の中に `seriko.zorder` と `seriko.sticky-window` が入っている |
+| `currentghost-property-tree` | brief:26 | `currentghost.seriko.*` の 14 項目をまとめて持つ。その列挙の中に `zorder` と `sticky-window` が名指しで入っている |
+| 〃 | brief:53 | `zorder-property` の範囲は自分の範囲の一部だと認めたうえで、「吸収する」か「切り出す」かを合流の会で決めるよう自分から求めている |
+| `property-query-channels` | brief:29・brief:44 | areka 側の書き込み有効一覧を 21 から 26 へ追随させる仕事を、書き込み経路の持ち主として持つ。増える 5 件の中に `seriko.zorder` と `seriko.sticky-window` が入っている |
 
 食い違いは 2 つある。
 
-- **1 つ目・値を導き出す仕事を誰がやるか** — `areka-P0-zorder-property` と `areka-P0-currentghost-property-tree` が
+- **1 つ目・値を導き出す仕事を誰がやるか** — `zorder-property` と `currentghost-property-tree` が
   どちらも自分だと書いている。
-- **2 つ目・areka 側の書き込み有効一覧の 1 行を誰が触るか** — `areka-P0-zorder-property` は
+- **2 つ目・areka 側の書き込み有効一覧の 1 行を誰が触るか** — `zorder-property` は
   「入れない・この brief が正本」と書き、
-  `areka-P0-property-query-channels` は「21 から 26 へ増やす中に入っている」と書いている。
+  `property-query-channels` は「21 から 26 へ増やす中に入っている」と書いている。
   同じ 1 行について正反対のことが書いてある。
 
 #### 推す案は 1 つ（案 甲）
 
-- 値を導き出す仕事は `areka-P0-zorder-property` が単独で持つ。
-- `areka-P0-currentghost-property-tree` は `seriko.*` の一括所有から `zorder` を外す（14 項目 → 13 項目）。
-- areka 側の書き込み有効一覧の 1 行は `areka-P0-property-query-channels` が持つ。
-  `areka-P0-zorder-property` は書き込み有効一覧に触れない。
+- 値を導き出す仕事は `zorder-property` が単独で持つ。
+- `currentghost-property-tree` は `seriko.*` の一括所有から `zorder` を外す（14 項目 → 13 項目）。
+- areka 側の書き込み有効一覧の 1 行は `property-query-channels` が持つ。
+  `zorder-property` は書き込み有効一覧に触れない。
 
 **この案を選んだ理由**: この 3 つの組み合わせは、既に `.kiro/steering/roadmap.md` の三重所有の裁定（棚卸⑫の干渉台帳・2026-09-11 棚卸⑬で「棚卸⑬の仮裁定」節として採択）に推奨として
 書き留められているものと同じである。そこには「推奨＝切り出し: 値の導出は `zorder-property` 単独・
@@ -666,28 +666,28 @@ tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ �
 
 | 誰の | 採ったとき | 採らなかったとき |
 |---|---|---|
-| `areka-P0-zorder-property` | 範囲は今のまま（値の導出だけ）。ただし brief:22 の「書き込み有効一覧に入れない・この brief が語彙の正本」は書き直しが要る——書き込み有効一覧の 1 行は `areka-P0-property-query-channels` が入れることになるため。⑸ 節の是正候補に載せる | 主張が宙に浮いたままになる。完了済み spec `areka-P0-scope-zorder-pinning` は、先送りにした語彙の追跡先をこの spec 単独と記録している（`.kiro/specs/completed/areka-P0-scope-zorder-pinning/requirements.md:230-231`）ので、その追跡先を誰も受け取らない状態が続く |
-| `areka-P0-currentghost-property-tree` | `seriko.*` の一括所有が 14 項目から 13 項目へ減り、brief:26 の列挙から `zorder` を外すことになる。`sticky-window` は範囲に残る | brief:53 が自分から求めている合流の裁定が未了のまま実装に入る。`zorder` の値の導出を 2 本が並行して書く危険が残る |
-| `areka-P0-property-query-channels` | 範囲は今のまま。21 → 26 の追随に `seriko.zorder`・`seriko.sticky-window` を含めてよいことが確定する | 「21 → 26」で増える 5 件のうち 2 件が誰の持ち物か決まらないまま、書き込み有効一覧を触ることになる |
-| この台帳 | 担当欄が空文字の 2 件が埋まる——`zorder` は `areka-P0-zorder-property`、`sticky-window` は `areka-P0-currentghost-property-tree`。備考の「裁定待ち」の行は要らなくなる | 空文字の 2 件がそのまま残り、4 ドメインをまとめる会で同じ議論をもう一度開くことになる |
+| `zorder-property` | 範囲は今のまま（値の導出だけ）。ただし brief:22 の「書き込み有効一覧に入れない・この brief が語彙の正本」は書き直しが要る——書き込み有効一覧の 1 行は `property-query-channels` が入れることになるため。⑸ 節の是正候補に載せる | 主張が宙に浮いたままになる。完了済み spec `areka-P0-scope-zorder-pinning` は、先送りにした語彙の追跡先をこの spec 単独と記録している（`.kiro/specs/completed/areka-P0-scope-zorder-pinning/requirements.md:230-231`）ので、その追跡先を誰も受け取らない状態が続く |
+| `currentghost-property-tree` | `seriko.*` の一括所有が 14 項目から 13 項目へ減り、brief:26 の列挙から `zorder` を外すことになる。`sticky-window` は範囲に残る | brief:53 が自分から求めている合流の裁定が未了のまま実装に入る。`zorder` の値の導出を 2 本が並行して書く危険が残る |
+| `property-query-channels` | 範囲は今のまま。21 → 26 の追随に `seriko.zorder`・`seriko.sticky-window` を含めてよいことが確定する | 「21 → 26」で増える 5 件のうち 2 件が誰の持ち物か決まらないまま、書き込み有効一覧を触ることになる |
+| この台帳 | 担当欄が空文字の 2 件が埋まる——`zorder` は `zorder-property`、`sticky-window` は `currentghost-property-tree`。備考の「裁定待ち」の行は要らなくなる | 空文字の 2 件がそのまま残り、4 ドメインをまとめる会で同じ議論をもう一度開くことになる |
 
 #### 退けた代案
 
-- **案 乙（`tree` が `seriko.*` を一括で持ち、`zorder-property` を畳む）** — `areka-P0-zorder-property` の brief にだけ書かれている完全な書式（brief:13-17）を丸ごと移し替える手間が要り、`.kiro/steering/roadmap.md:111` の推奨とも逆向きになる。完了済み spec が記録した追跡先も書き換えることになる。
+- **案 乙（`tree` が `seriko.*` を一括で持ち、`zorder-property` を畳む）** — `zorder-property` の brief にだけ書かれている完全な書式（brief:13-17）を丸ごと移し替える手間が要り、`.kiro/steering/roadmap.md:111` の推奨とも逆向きになる。完了済み spec が記録した追跡先も書き換えることになる。
 - **案 丙（決めずに保留する）** — これは案ではなく、何も決めなかったときの今の状態そのものである（担当欄は空文字のまま）。比較の材料として並べるだけで、選ぶ対象にはならない。
 
 #### `currentghost.seriko.sticky-window` も同じ案の対象
 
 `currentghost.seriko.sticky-window` にも同じ形の食い違いがあるので、別扱いにせず同じ案で片付ける。
-ただし**争っているのは 2 本だけ**である——`areka-P0-zorder-property` はこの項目を主張していない
+ただし**争っているのは 2 本だけ**である——`zorder-property` はこの項目を主張していない
 （同 brief が扱うのは `zorder` の 1 項目だけ）。残る 2 本の争いは上の 2 つ目（書き込み有効一覧の 1 行）だけで、
 1 つ目（値を導き出す仕事）のほうは初めから争いになっていない。
 
 案 甲を採ると、この項目はこう片付く。
 
-- 値を導き出す仕事は `areka-P0-currentghost-property-tree` が持つ（`seriko.*` の一括所有に残る。外れるのは `zorder` だけ）。
-- areka 側の書き込み有効一覧の 1 行は `areka-P0-property-query-channels` が持つ（`zorder` と同じ扱い）。
-- 台帳の担当欄には `areka-P0-currentghost-property-tree` が入る。
+- 値を導き出す仕事は `currentghost-property-tree` が持つ（`seriko.*` の一括所有に残る。外れるのは `zorder` だけ）。
+- areka 側の書き込み有効一覧の 1 行は `property-query-channels` が持つ（`zorder` と同じ扱い）。
+- 台帳の担当欄には `currentghost-property-tree` が入る。
 
 つまり案 甲は、`zorder` については「切り出す」、`sticky-window` については「切り出さない」と言っている。
 2 件で答えが分かれるのは、主張している spec の数が違うからである。
@@ -732,24 +732,24 @@ tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ �
 
 | # | どの brief のどこ | 今の記述 | どう直すか | 差し替える先の id の表 |
 |---|---|---|---|---|
-| 是正 1 | `areka-P0-property-catalog-lists` brief:17 | 「`ghostlist` ×5・`activeghostlist` ×5＋`.ext` ＝ 12」 | 合計は **10**。`.ext` の 2 件は `activeghostlist` の 5 件の中に既に入っているので、別に足すと二重になる | ⑴ 節「L2」の 10 行 |
+| 是正 1 | `property-catalog-lists` brief:17 | 「`ghostlist` ×5・`activeghostlist` ×5＋`.ext` ＝ 12」 | 合計は **10**。`.ext` の 2 件は `activeghostlist` の 5 件の中に既に入っているので、別に足すと二重になる | ⑴ 節「L2」の 10 行 |
 | 是正 2 | 同 brief:18 | 「`balloonlist` ×3・`headlinelist` ×2・`pluginlist` ×4＋`.ext` ＝ 11」 | 合計 11 は動かないが内訳が違う。`headlinelist` は **3**、`pluginlist` は **5**（どちらも `.count` の葉を数え落としている）。`.ext` の 2 件は `pluginlist` の 5 件の中にある | ⑴ 節「L3」の 11 行 |
 | 是正 3 | 同 brief:19 | 「`history.*` 8」 | **12**。4 つの枝それぞれに `.count` の葉がもう 1 つある | ⑴ 節「L4」の 12 行 |
-| 是正 4 | `areka-P0-currentghost-property-tree` brief:4・brief:22 | 「`currentghost.*` 枝（≈65 項目）」 | この spec が実際に主張している範囲は **66 件**（枝ごとに書いてある数の合計 62 ＋ brief:23 が括弧書きで挙げている `mousecursor` 系 4 件）。`currentghost` で始まる項目はカタログでは 69 件で、残る 3 件は `currentghost.sound.*` ＝ `areka-P0-property-catalog-lists` へ切り出し済み | ⑴ 節「T1〜T7」と「T2」の表。突き合わせの全体は ⑹ 節の① |
+| 是正 4 | `currentghost-property-tree` brief:4・brief:22 | 「`currentghost.*` 枝（≈65 項目）」 | この spec が実際に主張している範囲は **66 件**（枝ごとに書いてある数の合計 62 ＋ brief:23 が括弧書きで挙げている `mousecursor` 系 4 件）。`currentghost` で始まる項目はカタログでは 69 件で、残る 3 件は `currentghost.sound.*` ＝ `property-catalog-lists` へ切り出し済み | ⑴ 節「T1〜T7」と「T2」の表。突き合わせの全体は ⑹ 節の① |
 
 ### 名前の書き方を直す候補（2 件）
 
 | # | どの brief のどこ | 今の記述 | どう直すか | 理由 |
 |---|---|---|---|---|
-| 是正 5 | `areka-P0-currentghost-property-tree` brief:23 | 「`balloon.汎用` ＋ `balloon.count`」 | `currentghost.balloon.汎用プロパティ名` と `currentghost.balloon.count` の完全な名前に書き直す（⑵ 節の 2 行の表がその 2 件） | 短く書いただけで、指しているものは正しい（⑵ 節で確かめた）。ただし頭の `currentghost.` を落とすと「`balloon.*` という別の一族がある」と読めてしまう。実際にそう読み違えた記録がある——本調査の要件 3.8 は、この箇条書きを「古い名前の例示」と読んで「カタログに存在しない」と書いていた |
-| 是正 6 | `areka-P0-property-catalog-lists` brief:21 | 「汎用プロパティ名（共有葉）17 ／ `GENERIC_PROP_NAMES`（sylphya 登記済み・17 で一致）が各カタログ根の下で乗算される」 | 17 を **13 ＋ 4** に分け、「各カタログ根の下で乗算される」という説明は 13 件の側にだけ掛ける | 下の「是正 6 の中身」 |
+| 是正 5 | `currentghost-property-tree` brief:23 | 「`balloon.汎用` ＋ `balloon.count`」 | `currentghost.balloon.汎用プロパティ名` と `currentghost.balloon.count` の完全な名前に書き直す（⑵ 節の 2 行の表がその 2 件） | 短く書いただけで、指しているものは正しい（⑵ 節で確かめた）。ただし頭の `currentghost.` を落とすと「`balloon.*` という別の一族がある」と読めてしまう。実際にそう読み違えた記録がある——本調査の要件 3.8 は、この箇条書きを「古い名前の例示」と読んで「カタログに存在しない」と書いていた |
+| 是正 6 | `property-catalog-lists` brief:21 | 「汎用プロパティ名（共有葉）17 ／ `GENERIC_PROP_NAMES`（sylphya 登記済み・17 で一致）が各カタログ根の下で乗算される」 | 17 を **13 ＋ 4** に分け、「各カタログ根の下で乗算される」という説明は 13 件の側にだけ掛ける | 下の「是正 6 の中身」 |
 
 #### 是正 6 の中身
 
 `menu`・`sakura.bind.menu`・`kero.bind.menu`・`char*.bind.menu` の 4 件は、確かに areka 側の
 汎用プロパティ名 17 名（`crates/areka-sylphya/src/vocab/dotted.rs:37`）に文字どおり載っている。
 だから brief がこの 4 件を自分の範囲に数えたのは憶測ではなく、台帳の担当欄も
-`areka-P0-property-catalog-lists` のままでよい（この 4 件を主張しているのはこの brief だけである）。
+`property-catalog-lists` のままでよい（この 4 件を主張しているのはこの brief だけである）。
 
 成り立たないのは**理由付けのほう**である。正典はこの 4 件の使える場所を 1 つに絞っていて、
 本文の頭に括弧書きでそう断っている——`menu` は `currentghost.shelllist` の下だけ、
@@ -765,7 +765,7 @@ tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ �
 
 | # | どの brief のどこ | 今の記述 | どう直すか |
 |---|---|---|---|
-| 是正 7 | `areka-P0-zorder-property` brief:22 | 「sylphya の SET 有効プロパティ一覧（`crates/areka-sylphya/src/vocab/dotted.rs`・21 項）に `seriko.zorder` は**入れない**（… 本 brief が語彙の正本）」 | ⑷ 節の案 甲を採る場合にかぎり、「一覧への登録は `areka-P0-property-query-channels` が行う。本 brief が正本として持つのは読み書きの書式（brief:13-17）であって、一覧の 1 行ではない」の形に直す |
+| 是正 7 | `zorder-property` brief:22 | 「sylphya の SET 有効プロパティ一覧（`crates/areka-sylphya/src/vocab/dotted.rs`・21 項）に `seriko.zorder` は**入れない**（… 本 brief が語彙の正本）」 | ⑷ 節の案 甲を採る場合にかぎり、「一覧への登録は `property-query-channels` が行う。本 brief が正本として持つのは読み書きの書式（brief:13-17）であって、一覧の 1 行ではない」の形に直す |
 
 **この 1 件だけは裁定に従属する。** 案 甲が採られなければ書き直しは要らない。対象の id は
 `currentghost.seriko.zorder:1` の 1 件で、⑷ 節の「案 甲を採ったとき／採らなかったときに動くもの」の表が
@@ -796,17 +796,17 @@ tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ �
 
 どちらも担当欄の中身は変わらないが、あとから「なぜそう決めたのか」を問われる形なので残しておく。
 
-- **`menu` の群 4 件を `areka-P0-property-catalog-lists` に付けた根拠** — この 4 件を自分の範囲だと
+- **`menu` の群 4 件を `property-catalog-lists` に付けた根拠** — この 4 件を自分の範囲だと
   書いている brief はこの 1 本だけである（主張者が 1 本ならそこを担当にする、という規則が当たった）。
   brief が「17 名」を areka 側の名前の一覧と名指しで同じものだと書いており、その一覧に 4 件が
   実在するので、対応付けは憶測ではない。上の是正 6 が直すのは件数の内訳と理由付けだけで、担当は動かない。
 - **`currentghost.sound.*` の頭 3 件に「語彙表だけを触る spec」の行を付けなかった理由** —
-  `areka-P0-property-query-channels` brief:29 が挙げているのは「サウンド語彙 ≈18 葉」で、
+  `property-query-channels` brief:29 が挙げているのは「サウンド語彙 ≈18 葉」で、
   これは要素の葉 18 件を指している。頭の 3 件
   （`currentghost.sound.count:1`／`currentghost.sound.index_28ID_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1`／
   `currentghost.sound_28_8981_7d20_540d_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1`）まで
   広げるのは、書いていないことを補うことになる。担当欄はどちらの読みでも
-  `areka-P0-property-catalog-lists` で変わらない。
+  `property-catalog-lists` で変わらない。
 
 ## ⑹ カタログとの件数の差
 
@@ -875,8 +875,8 @@ lists brief:22 が切り出しを明記していることを踏まえると、**
 （`duration`・`error`・`id`・`loop`・`meta.*` 8・`name`・`path`・`pause`・`playing`・`position`・`preload`）。
 「サウンドの要素葉 18」とだけ書いても brief の持ち主が id の一覧へ書き換えられないので、ここに全部並べる。
 
-この 18 件を指しているのは `areka-P0-property-catalog-lists` brief:22 の「サウンド語彙族 ≈21」の後半と、
-`areka-P0-property-query-channels` brief:29 の「サウンド語彙 ≈18 葉」である。
+この 18 件を指しているのは `property-catalog-lists` brief:22 の「サウンド語彙族 ≈21」の後半と、
+`property-query-channels` brief:29 の「サウンド語彙 ≈18 葉」である。
 どちらも件数は合っていて、直す必要は無い。
 
 | 見出し | id |
@@ -980,7 +980,7 @@ lists brief:22 が切り出しを明記していることを踏まえると、**
 
 | 検査 | 本台帳が与えた主語の件数 |
 |---|---|
-| 7 | 186 回の照合。ただし通った spec 名は **3 種類**だけ（`areka-P0-property-catalog-lists`・`areka-P0-currentghost-property-tree`・`areka-P0-sylphya`） |
+| 7 | 186 回の照合。ただし通った spec 名は **3 種類**だけ（`property-catalog-lists`・`currentghost-property-tree`・`areka-P0-sylphya`） |
 | 10 | 関連 **73 本**・関連を持つ項目 **40 件**・相手の id は **39 種類** |
 | 11 | 版番号を持つ項目 **99 件**（番号の種類は 21 種） |
 | 12 | テーマを持つ項目 **3 件**。凍結された 8 語のうち、本台帳のデータが通したのは **「装い」1 語だけ** |

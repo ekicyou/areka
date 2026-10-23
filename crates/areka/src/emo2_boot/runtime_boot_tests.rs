@@ -181,3 +181,7 @@ fn successful_boot_installs_receivers() {
     );
     drop(sample);
 }
+
+// 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。
+#[path = "script_security_e2e_tests.rs"]
+mod script_security_e2e;

@@ -7,7 +7,7 @@
 - 検体と一時フォルダは、どのテストも `TempPath::under_target`（ワークツリーの `target\` の下）に作る（要件 10.2）。
 - テストは実装の兄弟ファイルに置く。新しい外部の依存は 0。
 - 新しい記録は 3 つ（info `ghost_balloon_hides_root`・info `installed_balloon_hidden_by_ghost`・warn `companion_overrides_archive_folder`）。事象名の形は `.kiro/steering/logging.md` に従う。
-- 並走の注意: `areka-P0-install-live-target-hazards` と `areka-nar` の `plan.rs`・`install.rs` が重なる。同じウェーブに置かない。
+- 並走の注意: `install-live-target-hazards` と `areka-nar` の `plan.rs`・`install.rs` が重なる。同じウェーブに置かない。
 
 ---
 

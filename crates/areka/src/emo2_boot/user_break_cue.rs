@@ -34,8 +34,13 @@
 
 use std::sync::mpsc::Sender;
 
+use areka_ghost::sink::BootCueSink;
+use areka_sakura::TalkId;
+use areka_sakura::contract::ScriptOrigin;
 use dola::cue::TalkCue;
 use tracing::{debug, warn};
+
+use super::script_restriction::{command_row, permits};
 
 /// 区間へ入るコマンド名（`\![enter,…]`）。第 1 引数まで見ないと担当は決まらない。
 const NAME_ENTER: &str = "enter";
@@ -73,12 +78,21 @@ pub(crate) struct NoUserBreakCueSink {
     tx: Sender<NoUserBreakSignal>,
     /// このトークで [`NoUserBreakSignal::TalkStarted`] を送出済みか（複製ごとに `false` から）。
     started: bool,
+    /// この複製が受け持つトークの番号（配送が `begin_talk` で渡す・複製ごとに `None` から）。
+    talk_id: Option<TalkId>,
+    /// このトークの出どころ（配送が `begin_talk` で渡す・登録の原本と複製の初期値はゴースト自身）。
+    origin: ScriptOrigin,
 }
 
 impl NoUserBreakCueSink {
     /// 送信端（受信端は結線の task が UI の持ち物へ渡す）から受け口を組む。
     pub(crate) fn new(tx: Sender<NoUserBreakSignal>) -> Self {
-        Self { tx, started: false }
+        Self {
+            tx,
+            started: false,
+            talk_id: None,
+            origin: ScriptOrigin::GHOST,
+        }
     }
 
     /// 1 つの合図を非ブロックで送る。受信端が閉じていても台本は殺さない
@@ -93,15 +107,22 @@ impl NoUserBreakCueSink {
     }
 }
 
-/// **状態を引き継がない複製**——`#[derive(Clone)]` ではなく手書きにしてある。
+/// **状態を引き継がない複製**——`Clone` を持たず、`BootCueSink` を自分で実装してある
+/// （一括の実装に乗らないので、配送から番号と出どころを受け取る `begin_talk` を上書きできる・
+/// `BalloonLifecycleSink` と同じ形）。
 ///
 /// 配送はトークの起動ごとに登録済みの受け口を 1 回だけ複製し、その複製が当該トーク専用に
 /// なる。複製で `started` を初期状態へ戻すことで「複製＝トークの境界」を型の側で保証する
 /// （`BalloonLifecycleSink` と同じ手口）。前のトークの `started` を持ち越すと、次のトークで
 /// 始まりの合図が出ず、閉じ忘れた区間が解けないまま居残る。
-impl Clone for NoUserBreakCueSink {
-    fn clone(&self) -> Self {
-        Self::new(self.tx.clone())
+impl BootCueSink for NoUserBreakCueSink {
+    fn clone_box(&self) -> Box<dyn BootCueSink> {
+        Box::new(Self::new(self.tx.clone()))
+    }
+
+    fn begin_talk(&mut self, talk_id: TalkId, origin: ScriptOrigin) {
+        self.talk_id = Some(talk_id);
+        self.origin = origin;
     }
 }
 
@@ -167,7 +188,25 @@ impl dola::cue::CueSink for NoUserBreakCueSink {
             }
         };
 
-        // ⑷ 送り出し。旗の状態は持たない（入れ子・区間外の「出る」の判定は UI が下す）。
+        // ⑷ 出どころの止め（areka-P0-script-security-level 要件 4.2・4.4）。判定は表が持つ。
+        //    `leave` は表に無いので止めない（4.5）。台本の残りはそのまま流れる。
+        if signal == NoUserBreakSignal::Enter
+            && let Some(row) = command_row(name, selector)
+            && !permits(row, &self.origin)
+        {
+            warn!(
+                event = "script_tag_refused",
+                tag = row.display,
+                talk_id = ?self.talk_id,
+                sender_type = %self.origin.sender_type.render(),
+                sstp = ?self.origin.sstp,
+                level = self.origin.level.wire(),
+                "NoUserBreakCueSink: 外部扱いの台本なので合図を送らない——台本は続ける"
+            );
+            return;
+        }
+
+        // ⑸ 送り出し。旗の状態は持たない（入れ子・区間外の「出る」の判定は UI が下す）。
         self.send(signal);
     }
 }
@@ -175,3 +214,7 @@ impl dola::cue::CueSink for NoUserBreakCueSink {
 #[cfg(test)]
 #[path = "user_break_cue_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "user_break_cue_origin_tests.rs"]
+mod origin_tests;

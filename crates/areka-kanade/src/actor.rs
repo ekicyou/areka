@@ -506,6 +506,7 @@ fn execute_batch(
                         EventId::Static(s) => *s,
                         EventId::Choice(_) => "OnChoiceEvent",
                         EventId::Sstp(_) => crate::schedule::sstp::NOTIFY_ORIGIN,
+                        EventId::Translate(_) => "OnTranslate",
                     },
                 };
                 last_reply = Some((round_trip_request(shiori, call), origin));
@@ -665,6 +666,8 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
         // 外から頼まれた名前（`EventId::Sstp`）: 入口と同じ検査を満たすかだけで決める。許可の表と
         // スケジューラ起源の恒久禁止は効かせない（呼び手が 1 回ずつ頼むもの＝選択起源と同じ理屈）。
         EventId::Sstp(name) => crate::sstp::validate_notify(name, references).is_ok(),
+        // 翻訳の要求: 今の `Static("OnTranslate")` と同じ（許可表の `OnTranslate`）。
+        EventId::Translate(_) => crate::schedule::events::is_allowed_event_id("OnTranslate"),
     };
     if !allowed {
         tracing::error!(
@@ -679,6 +682,8 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
     }
 
     // 送出前の wire 証跡（Req6.2）。status=None は Status ヘッダ欠落として観測可能（DD-IT-5）。
+    // 出どころの 3 項目は SHIORI の回り役が入れ物を作るのと同じ規則から導く（要件 2.1〜2.6）。
+    let origin_wire = crate::request_origin::RequestOrigin::of_event(event_id).wire();
     tracing::trace!(
         target: "kanade",
         event = "shiori_request",
@@ -686,6 +691,9 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
         id = %id,
         references = ?references,
         status = ?status_wire,
+        sender = origin_wire.sender,
+        sender_type = %origin_wire.sender_type,
+        security_level = origin_wire.security_level,
         "SHIORI 送出"
     );
 
@@ -706,8 +714,8 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
 fn replace_absent_markers(call: &mut ShioriCall) {
     let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) = call;
     for (index, value) in references.iter_mut().enumerate() {
-        if value != ABSENT_REFERENCE || (index == 1 && matches!(id, EventId::Static("OnTranslate")))
-        {
+        let translate = matches!(id, EventId::Translate(_));
+        if value != ABSENT_REFERENCE || (index == 1 && translate) {
             continue;
         }
         tracing::warn!(

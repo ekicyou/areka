@@ -25,7 +25,7 @@
 - kanade の起動系列・終了の握手の配線（`schedule/{boot,mod,close}.rs`）。終了挨拶中に毎秒の往復を止める運行は前提。
 - helper → areka 向きの自発通知そのもの（語彙・配送は将来の spec）。
 - 握手時の heartbeat の再設計（無改変・説明文のみ追随）。
-- `areka-P0-zorder-chain-residue` A 系の決着。
+- `zorder-chain-residue` A 系の決着。
 
 ## Boundary Commitments
 

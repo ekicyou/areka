@@ -51,7 +51,7 @@
 - 新規の外部依存 0（要件 7.7）。乱数は `std::hash::RandomState` から取る。
 
 ### Revalidation Triggers
-- `catalog` の公開型（`Identity` の 7 項目・`GhostEntry`／`ShellEntry`／`BalloonEntry`）や関数署名を変えたとき → `areka-P0-ghost-shell-balloon-switch`・`areka-P0-shell-balloon-switch`・`areka-P0-property-catalog-lists` を再確認。
+- `catalog` の公開型（`Identity` の 7 項目・`GhostEntry`／`ShellEntry`／`BalloonEntry`）や関数署名を変えたとき → `areka-P0-ghost-shell-balloon-switch`・`areka-P0-shell-balloon-switch`・`property-catalog-lists` を再確認。
 - 鍵 3 つの正準名・スコープ（`LastBalloon` は Ghost スコープ）・TOML の表 `[last]` を変えたとき → 上記切替 2 spec と `areka-P0-alpha-release-signoff`（実機手順 ②）を再確認。
 - 解決順（4.2〜4.5・5.2〜5.6）や既定の定数を変えたとき → `areka-P0-alpha-release-signoff`（配布物に `emo2`・`StayseeBalloon` を同梱する前提）を再確認。
 - 告知の抑止の環境変数名 `AREKA_NO_ALERT` や smoke の目印（固定ログ文言）を変えたとき → `tests/smoke_boot_loop_exit.rs` と実機サインオフ手順を再確認。

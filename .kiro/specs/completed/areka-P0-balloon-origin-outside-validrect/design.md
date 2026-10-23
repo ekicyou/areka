@@ -39,7 +39,7 @@
 
 - `areka-parsers` の `balloon` 解析（`Origin` は今までどおり `Option<i32>` で宣言の有無を運ぶ。無改変）。
 - `TextRegion::start()` の消費側（配置層・`cursor_tag.rs` の `\_l` 解決・描画・viewbox）。解決後の開始点を受け取るだけで、無改変のまま追随する。
-- 折返し基準が描画範囲の外に解決される件と、その警告 `warn_coarse_wrap_threshold`（`areka-P0-balloon-canon-residue` 項目 14 の所有。文言・欄・件数とも無改変）。
+- 折返し基準が描画範囲の外に解決される件と、その警告 `warn_coarse_wrap_threshold`（`balloon-canon-residue` 項目 14 の所有。文言・欄・件数とも無改変）。
 - 完了 spec `areka-P0-balloon-vertical-canon`・`areka-P0-emo-text-layer` のアーカイブ本体（無改変。上書きの事実は COMPAT §8 と本仕様に記録する）。
 - 検体 `emo2-kakukaku-offsetdpi` と areka 同梱の全検体のファイル（書き換えない）。
 - ukadoc 網羅台帳（`doc/ukadoc-coverage/ledger/assets.toml` の `origin.x`／`origin.y`）。ukadoc は範囲外の宣言について沈黙しており、台帳の判定（実装済み・正典どおりに読む）は変わらない。台帳を触ると briefing と roadmap-draft の数の検査が連動して赤くなるため、本仕様では触らない。
@@ -57,7 +57,7 @@
 - `TextRegion` の `PartialEq` の意味が変わる変更（欄の増減）——再追従の判定キーと警告の件数規律（`previous == Some(region)`）が同じ比較に乗っているため、両方の件数テストを見直す。
 - `TextRegion::resolve` が毎フレーム呼ばれなくなる、または登録口を通らない本番の解決経路が増える変更——警告の置き場所の前提が変わる。
 - 書字開始角の選択（`start_corner`）や `validrect` の解決規則の変更——本仕様の表の期待値（36／46／356）が動く。
-- `BALLOON_NAME_PLACEHOLDER` の差し替え（`areka-P0-emo-text-canon-residue` 項目 14）——参照が 3 ファイル・警告 2 種類になっている点を引き継ぐ。
+- `BALLOON_NAME_PLACEHOLDER` の差し替え（`emo-text-canon-residue` 項目 14）——参照が 3 ファイル・警告 2 種類になっている点を引き継ぐ。
 - 検体の登記表（`sample-ghost-kit` の `SAMPLES`）の変更——`emo2-kakukaku-offsetdpi` の登記が消えるか種別が変わると、T-検体の根の引き方（`SampleRoot::acquire` → `folder()`）が変わる。`areka-P0-nar-install` 自体は 2026-09-19 に着地済み。
 
 ## Architecture
@@ -119,8 +119,8 @@ graph TB
 | `crates/areka-emo-text/tests/choice_fixture_test.rs` | 検体から `origin` を消した是正の doc にある 1 文「宣言が復活すれば……字義どおり `(0,0)` へ落ちて赤くなる」は修正後に偽になる（範囲外の宣言は書字開始角へ落ちるので緑のまま）。事実に合わせて言い直す。テスト本体は無改変 | 行数不変 |
 | `doc/COMPAT_ARCHITECTURE.md` | §8 の 3 行（撤去の行・`\_l` の縦書き座標系の行・`\_l[x,y]` の上書き行） | 行数不変（3 行の書き換え） |
 | `.kiro/specs/areka-P0-balloon-origin-outside-validrect/research.md` | §3.4 の全数確認の引き直し（要件 4.2／4.3 の記録の正本） | — |
-| `.kiro/specs/areka-P0-currentghost-property-tree/brief.md` | 申し送り 1 行（要件 7.2） | +1 |
-| `.kiro/specs/areka-P0-emo-text-canon-residue/brief.md` | 項目 14 への申し送り 1 行（プレースホルダの参照が 3 ファイル・警告 2 種類になった） | +1 |
+| `.kiro/specs/currentghost-property-tree/brief.md` | 申し送り 1 行（要件 7.2） | +1 |
+| `.kiro/specs/emo-text-canon-residue/brief.md` | 項目 14 への申し送り 1 行（プレースホルダの参照が 3 ファイル・警告 2 種類になった） | +1 |
 
 **`actor.rs` の余白 30 行の扱い（明示）**: 警告の関数は本体 20 行前後＋doc 10 行前後になり、`actor.rs` へ置くと 1,000 行ちょうど付近に達する。ゆえに本体は子モジュール `actor_decoration.rs` に `pub(super)` で置き、`actor.rs` の増分は呼出しと doc の 3〜7 行に抑える。これは同ファイルが `build_actor_render` を引き受けたのと同じ理由・同じ形であり、「警告は登録口 `register_actor` が書く」という決着（research.md §5.1 項目 1）は変わらない——書く**時点**は登録口のまま、関数の**置き場所**だけが子モジュールである。
 
@@ -177,7 +177,7 @@ WARN の件数は先例と同じ比較で決まる——登録口に達し、か
 | 6.5 | アーカイブ本体は無改変 | — | `.kiro/specs/completed/` に差分なし | 差分の確認 |
 | 6.6 | file:line の裏取り・行番号引用の指し直し | CompatDoc | 触る行の `region.rs:292-294`／`:231-234` を「何の定義行か」へ | — |
 | 7.1 | roadmap #46 の完了更新 | —（完了手続き） | `/kiro-complete` で実施。上書きした要件（`areka-P0-balloon-vertical-canon` 3.10）を明記 | — |
-| 7.2 | `basepos` の申し送り | Handoffs | `areka-P0-currentghost-property-tree/brief.md` へ 1 行 | — |
+| 7.2 | `basepos` の申し送り | Handoffs | `currentghost-property-tree/brief.md` へ 1 行 | — |
 | 7.3 | 検体は共有の窓口から引く（申し送りは不要） | FixtureTest | `SampleRoot::acquire("emo2-kakukaku-offsetdpi")` → `folder()` | T-検体（パスを綾る行が 0 であること） |
 
 ## Components and Interfaces

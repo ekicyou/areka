@@ -20,7 +20,7 @@ fn inactive_status() -> ExecutionStatus {
 /// 不変ゆえ、assert 失敗メッセージ用に variant を局所的に説明する）。
 fn describe(outcome: &ShioriOutcome) -> &'static str {
     match outcome {
-        ShioriOutcome::Value(_) => "Value",
+        ShioriOutcome::Value(_, _) => "Value",
         ShioriOutcome::NoContent => "NoContent",
         ShioriOutcome::Notified => "Notified",
         ShioriOutcome::Unloaded => "Unloaded",
@@ -214,7 +214,7 @@ fn get_ok_some_maps_to_value() {
         },
     );
     assert!(
-        matches!(outcome, ShioriOutcome::Value(ref s) if s == r"\0hi\e"),
+        matches!(outcome, ShioriOutcome::Value(ref s, _) if s == r"\0hi\e"),
         "Ok(Some) は Value へ: got {}",
         describe(&outcome)
     );
@@ -713,7 +713,8 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
 /// `ShioriConnection` の構築には実窓と実 helper が要り、純 x64 のテストでは組み立てられない
 /// （要件 9.8 の趣旨で実機依存の檻を作らない）。ゆえに「作り直していない」ことは**本番ファイル
 /// `real.rs` 1 本の本文**で機械的に確かめる: そこに交渉状態の構築子が 1 つも無く、応答待ち・
-/// 片道の 2 つの入口がいずれも接続のフィールドを借用して結線へ渡している。
+/// 片道の 2 つの入口とそのヘッダつき版 2 つ（areka-P0-script-security-level 要件 2.1）の計 4 つが
+/// いずれも接続のフィールドを借用して結線へ渡している。
 ///
 /// 検査の射程はこの 1 ファイルに限る（「クレート全体に構築子が無い」ではない）。交渉状態を
 /// 作ってよい正当な構築点は接続の値を組む 2 か所——`crates/areka-ghost/src/shiori_wiring.rs`
@@ -733,7 +734,7 @@ fn the_connection_owns_one_negotiator_and_never_mints_one_per_call() {
     );
     assert_eq!(
         SOURCE.matches("&mut self.negotiator").count(),
-        2,
-        "応答待ち・片道の 2 つの入口がともに接続のフィールドを借用して結線へ渡すべき（要件 5.1）"
+        4,
+        "応答待ち・片道の入口とそのヘッダつき版の計 4 つがともに接続のフィールドを借用して結線へ渡すべき（要件 5.1）"
     );
 }

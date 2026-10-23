@@ -20,11 +20,11 @@
 
 ### Non-Goals
 
-- `yen-e`・`never`・台本のタグ `\i[ID]`・`animation*.name` → `areka-P0-seriko-script-triggers`。
-- `always` を含む `+` の組み合わせ（`bind+always` ほか）→ `areka-P0-seriko-interval-combinations`。`bind+runonce` など 3 語を含む組み合わせも、今までどおり元の綴りを添えた記録だけ（採らない）。
+- `yen-e`・`never`・台本のタグ `\i[ID]`・`animation*.name` → `seriko-script-triggers`。
+- `always` を含む `+` の組み合わせ（`bind+always` ほか）→ `seriko-interval-combinations`。`bind+runonce` など 3 語を含む組み合わせも、今までどおり元の綴りを添えた記録だけ（採らない）。
 - `\i[ID,wait]`・`start`／`alternativestart`／`stop` などアニメーションから別のアニメーションを呼ぶメソッド・`\![anim,…]` 系。
 - ゴーストの `descript.txt` の `don't need seriko talk`（口パクの無効化）。読まない。
-- `\_q`・`\![quicksection]`・`\![set,balloonwait]`（`areka-P0-sakura-time-directives`）・クリックでの早送り（`areka-P0-talk-fast-forward`）。本設計は「文字が現れる時刻」を文字の層と同じ式で写すので、これらが文字の層の時刻を変えても、口はその時刻の列に自動で従う（式が同じなら同じにずれる）。
+- `\_q`・`\![quicksection]`・`\![set,balloonwait]`（`sakura-time-directives`）・クリックでの早送り（`talk-fast-forward`）。本設計は「文字が現れる時刻」を文字の層と同じ式で写すので、これらが文字の層の時刻を変えても、口はその時刻の列に自動で従う（式が同じなら同じにずれる）。
 - 見えていない部品の抽選の乱数の消費（`areka-P0-seriko-rebuild-hidden-lottery`）。本設計は「見えていない部品で 3 語の再生が始まらない」ことだけを自分で保証し、乱数の並びは今のまま触らない。
 - seriko の時計の種類（`GetTickCount64`）の変更。研究項目 11 の「QPC 由来の ms に揃える」案は採らない（下の Architecture「時計」）。
 
@@ -61,7 +61,7 @@
 ### Revalidation Triggers
 
 - `Interval` に腕が増えたので、`Interval` を網羅 `match` している crate 内のコードは腕を足す必要がある（`#[non_exhaustive]` ゆえ crate の外は `_` 腕で通る）。`LoopTrigger` は `#[non_exhaustive]` でないので、seriko の中と seriko の型を `match` するテスト（`crates/areka/src/emo2_boot/` の E2E など）は腕の漏れがコンパイル時に出る。
-- 文字の層が「i 文字目が現れる時刻」の式（`crates/areka-emo-text/src/state.rs` の `RevealSchedule::extend_chunk`＝`r_i = max(r_{i−1} + interval, chunk_start)`・`interval = duration / glyph_count`・先頭は `r_0 = chunk_start`）や起点の式（`crates/areka/src/emo2_boot/talk_clock.rs` の `TalkClock::observe_cue`＝`epoch = max(epoch, now − at)`・全部の cue で観測）を変えたら、`talk.rs` の写しも同じに変える（`areka-P0-sakura-time-directives`・`areka-P0-talk-fast-forward` が変える見込み）。
+- 文字の層が「i 文字目が現れる時刻」の式（`crates/areka-emo-text/src/state.rs` の `RevealSchedule::extend_chunk`＝`r_i = max(r_{i−1} + interval, chunk_start)`・`interval = duration / glyph_count`・先頭は `r_0 = chunk_start`）や起点の式（`crates/areka/src/emo2_boot/talk_clock.rs` の `TalkClock::observe_cue`＝`epoch = max(epoch, now − at)`・全部の cue で観測）を変えたら、`talk.rs` の写しも同じに変える（`sakura-time-directives`・`talk-fast-forward` が変える見込み）。
 - `cue_target_of`（`crates/dola/src/cue/sink.rs`）の `Text`・`Choice` の分類や、`Choice{text}` を文字の層が現れさせる決まり（`state.rs` の `Choice` の腕）が変わったら、`talk.rs` が読む腕を見直す。
 - `ScopeStates::apply` の「同じ番号は `Unchanged`・それ以外は `Changed`」（`crates/areka-seriko/src/state.rs`）が変わったら、`runonce` の「切り替わった瞬間」の定義が動く。
 - `parts.rs` の `rebuild` の評価の順を `areka-P0-seriko-rebuild-hidden-lottery` が変えるとき、本設計の 2 段の評価（見えると確定した部品だけが引き金を受ける）を保つこと。
@@ -190,7 +190,7 @@ doc/ukadoc-coverage/
 - `crates/areka-seriko/src/actor.rs` — `SerikoMsg::Cue(cue)` を取り出した直後（`cue_target_of` の `match` の前）に `loop_runtime.observe_cue(&cue)` を 1 回。他は不変（`Text` などの `debug!` の腕はそのまま）。
 - `crates/areka-seriko/src/lib.rs` — `mod trigger; mod talk;`。
 - `doc/ukadoc-coverage/ledger/assets.toml` — 要件 10 のとおり。
-- `doc/ukadoc-coverage/roadmap-draft.md` — spec 表の `areka-P0-seriko-trigger-intervals` の `owner_count` を 1→3（`talk,数値`・`runonce`・`periodic,数値`）、`areka-P0-seriko-interval-combinations` の `[[spec]]` 行（`stage = "A"`・`bundle = "サーフェスアニメーション"`・`owner_count = 1`＝`always`）を足し、`[briefs].count` を 48→49。**理由**: 見張り `crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 f は台帳の非空の宛先が spec 表の名前であることを要求し、腕 c は担当の数の一致を要求する。`seriko-interval-combinations` の行は今の表に無い（2026-10-10 の分割で起票したが表は 10-08 の写し）ので、`always` の担当を付け替える（要件 10.3）には行を足すしかない。
+- `doc/ukadoc-coverage/roadmap-draft.md` — spec 表の `areka-P0-seriko-trigger-intervals` の `owner_count` を 1→3（`talk,数値`・`runonce`・`periodic,数値`）、`seriko-interval-combinations` の `[[spec]]` 行（`stage = "A"`・`bundle = "サーフェスアニメーション"`・`owner_count = 1`＝`always`）を足し、`[briefs].count` を 48→49。**理由**: 見張り `crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 f は台帳の非空の宛先が spec 表の名前であることを要求し、腕 c は担当の数の一致を要求する。`seriko-interval-combinations` の行は今の表に無い（2026-10-10 の分割で起票したが表は 10-08 の写し）ので、`always` の担当を付け替える（要件 10.3）には行を足すしかない。
 
 ### 触るファイルと約束
 
@@ -761,11 +761,11 @@ fn fire_part_triggers<'a>(clocks, armed, order, anims: &'a [LoopAnimation], scop
 
 - `talk_2c_6570_5024:1`・`runonce:1`・`periodic_2c_6570_5024:1`: `status = "implemented"`・`owner = "areka-P0-seriko-trigger-intervals"`。note に areka の裁量: `periodic` は切り替わった瞬間には再生しない（起点から数値秒後が最初）／`talk` は書記素クラスタで数え、面が切り替わったとき・窓が開き直したときに 0 から数え直す（選択肢の文字も数える・改行・消去・待ちは数えない）／同じ時刻に区切りが 2 つ以上来たら 1 回にまとめる／再生中の区切り・周は飛ばす／バルーンの窓が閉じている間は非表示（`periodic` は止まり、開き直しが新しい起点。`runonce` は開き直しでは鳴らさない）／`+` の組み合わせ（`bind+runonce` など）は採らない。
 - `sometimes:1`・`rarely:1` の note: 「`runonce`・`periodic,数値` などは非駆動」の文を「`talk,数値`・`runonce`・`periodic,数値` は `areka-P0-seriko-trigger-intervals` で駆動・`yen-e`・`never` は非駆動」に直す。
-- `always:1`: `owner = "areka-P0-seriko-interval-combinations"`（判定 `degraded` と note は不変）。
+- `always:1`: `owner = "seriko-interval-combinations"`（判定 `degraded` と note は不変）。
 - `yen-e:1`・`never:1`: 触らない。
 - `doc/ukadoc-coverage/roadmap-draft.md`: 上の File Structure Plan のとおり（見張りの腕 a・c・f）。
 - 実装で分かった見張りの要求（2026-10-10・タスク 8。上の「腕 a・c・f」だけでは足りなかった）: ⑴ `implemented` の項目は `crates/` の下のソースに正典 URL のコメント（`// ukadoc: <URL>`）が要る＝`crates/areka-seriko/src/table.rs` の `from_world_and_films` の 3 語の腕の上に 3 行（`sometimes`／`rarely` と同じ置き方）⑵ `doc/ukadoc-coverage/briefing.md` の `[[barrier]] descript_shell_surfaces` の数（`implemented` 7→10・`vocabulary_only` 53→50）⑶ 報告の作り直し（`cargo run -p ukadoc-survey -- report` と `-- report-summary`＝`report/assets.md`・`report/summary.md`。道具は LF で書き出すので CRLF へ戻す）。見張りは見ないが偽になる散文も最小で直した: `roadmap-draft.md` の段階 A の表・「サーフェスアニメーション」の節・日付つきの段落、`briefing-assets.md` の 3 行と内訳と注記 ⑴（駆動する間隔の語は 8 語）、`sometimes`／`rarely` の note の「名前として認める語」の数（3→6）。
-- `always:1` の note の末尾の 1 文「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）」は、担当の付け替えで実態と合わなくなったが、要件 10.3 が note を変えないと決めているので触っていない（完了の棚卸で `areka-P0-seriko-interval-combinations` へ申し送る）。
+- `always:1` の note の末尾の 1 文「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）」は、担当の付け替えで実態と合わなくなったが、要件 10.3 が note を変えないと決めているので触っていない（完了の棚卸で `seriko-interval-combinations` へ申し送る）。
 
 ## 実装との対応（2026-10-10・完了前の検証で拾った差）
 

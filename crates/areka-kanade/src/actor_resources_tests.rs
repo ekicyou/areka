@@ -103,12 +103,18 @@ fn only_steady_is_queryable() {
 #[test]
 fn shiori_outcome_maps_onto_resource_outcome() {
     assert_eq!(
-        outcome_of("readmebutton.caption", ShioriOutcome::Value("x".into())),
+        outcome_of(
+            "readmebutton.caption",
+            ShioriOutcome::Value("x".into(), areka_talk::SecurityLevel::Local)
+        ),
         ResourceOutcome::Value("x".into())
     );
     // 空文字の 200 は値のまま返す（既定名へ倒すのは受け手の解釈・要件 3.3）。
     assert_eq!(
-        outcome_of("readmebutton.caption", ShioriOutcome::Value(String::new())),
+        outcome_of(
+            "readmebutton.caption",
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local)
+        ),
         ResourceOutcome::Value(String::new())
     );
     assert_eq!(
@@ -169,7 +175,10 @@ fn steady_round_trips_each_id_and_rejects_only_the_disallowed_one() {
                 panic!("リソース照会は GET");
             };
             seen.push((id.as_str().to_string(), status.render()));
-            let _ = reply.send(ShioriOutcome::Value(format!("<{}>", id.as_str())));
+            let _ = reply.send(ShioriOutcome::Value(
+                format!("<{}>", id.as_str()),
+                areka_talk::SecurityLevel::Local,
+            ));
         }
         seen
     });
@@ -212,6 +221,45 @@ fn steady_round_trips_each_id_and_rejects_only_the_disallowed_one() {
             ),
             ("username".to_string(), Some("talking".to_string())),
         ]
+    );
+}
+
+/// ゴーストが「バルーン位置初期化」の項目名を返したとき、その名前が引ける
+/// （許可表の 14 名目・areka-P0-window-link-directives 要件 7.6）。
+#[test]
+fn reset_balloon_position_caption_is_looked_up_from_the_ghost() {
+    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+    let fake = thread::spawn(move || {
+        let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() else {
+            panic!("照会が SHIORI へ届かない");
+        };
+        let ShioriCall::Get { id, .. } = call else {
+            panic!("リソース照会は GET");
+        };
+        let _ = reply.send(ShioriOutcome::Value(
+            "吹き出しを戻す".into(),
+            areka_talk::SecurityLevel::Local,
+        ));
+        id.as_str().to_string()
+    });
+    let (reply_tx, reply_rx) = reply_channel();
+    answer(
+        &state_in(Phase::Steady { talk: None }),
+        &shiori_tx,
+        vec!["resetballoonpositionbutton.caption"],
+        reply_tx,
+    );
+    drop(shiori_tx);
+    assert_eq!(
+        reply_rx.recv().expect("応答は必ず 1 回返る"),
+        vec![(
+            "resetballoonpositionbutton.caption",
+            ResourceOutcome::Value("吹き出しを戻す".into())
+        )]
+    );
+    assert_eq!(
+        fake.join().expect("偽 SHIORI は panic しない"),
+        "resetballoonpositionbutton.caption"
     );
 }
 

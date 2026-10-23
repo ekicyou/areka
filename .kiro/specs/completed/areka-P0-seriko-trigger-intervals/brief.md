@@ -166,8 +166,8 @@
   - 文字の到着は、seriko に既に届いている文字の cue から数える（cue の受け口＝`crates/areka-seriko/src/actor.rs` の `handle_message` が、今は「担当外」として読み飛ばしている）。`runonce` は面が切り替わった瞬間（`state.rs`）、`periodic` は刻み（`looper.rs` の `on_tick`）で起こす。子の面や pattern定義の先でも動かすなら、部品の門と進め方（`parts.rs` の `gate`・`advance`）にも足す。
   - 決定論のテスト（偽の時計と偽の文字の到着）・網羅台帳の 3 行・口パクの検体（同梱に無いので新しく作る）での実機の確かめ。
 - **出した範囲（Out・どの spec へ）**:
-  - `yen-e`・`never`・台本のタグ `\i[ID番号]`・`animation*.name` の読み → `areka-P0-seriko-script-triggers`（新しく起票）。
-  - `bind+always` ほか、`always` を含む `+` の組み合わせ → `areka-P0-seriko-interval-combinations`（新しく起票）。上の「`animated-image-playback` からの申し送り」の「引き受けるもの」と「`bind+always` を入れるとき」は、そちらが引き継ぐ（申し送りの本文はこの brief に残し、そちらから指す）。
+  - `yen-e`・`never`・台本のタグ `\i[ID番号]`・`animation*.name` の読み → `seriko-script-triggers`（新しく起票）。
+  - `bind+always` ほか、`always` を含む `+` の組み合わせ → `seriko-interval-combinations`（新しく起票）。上の「`animated-image-playback` からの申し送り」の「引き受けるもの」と「`bind+always` を入れるとき」は、そちらが引き継ぐ（申し送りの本文はこの brief に残し、そちらから指す）。
   - `talk`・`runonce`・`periodic` を含む `+` の組み合わせ（`bind+runonce` など）も、この spec では今までどおり元の綴りを添えた記録だけにする。読むかどうかは `seriko-interval-combinations` の議題。
   - `\i[ID,wait]`・`start` などの、アニメーションから別のアニメーションを呼ぶメソッド・`\![anim,…]` 系のタグは、今までどおり別途。
 - **順番**: この spec が先。後の 2 本はどちらもこの spec の着地の後（seriko の `table.rs`・`looper.rs`・`parts.rs` を分け合うため）。後の 2 本どうしも seriko の同じファイルを触るので直列。

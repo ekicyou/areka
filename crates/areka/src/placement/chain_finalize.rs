@@ -20,8 +20,10 @@
 //! - **先頭スコープは動かさない**（連鎖の起点・接地点は不変・7.2）。
 //! - **Y は扱わない**（下端吸着は各窓の再アンカーが既に保っている・7.2）。
 //! - **明示的に再配置されたスコープは対象外**（7.3）。判定は「現在位置が既定位置と一致するか」
-//!   で行う——ゴースト台本の移動指令や利用者のドラッグで動いた窓は一致しなくなるため、移動側へ
-//!   フックを足さずに除外できる。除外したスコープの**実位置**は以後の連鎖の基準
+//!   で行う——利用者のドラッグで動いた窓は一致しなくなるため除外できる。ゴースト台本の
+//!   `\![move]` が置いた窓（連れ動いた組の相手を含む）は、x が既定のまま（縦にだけ動いた・
+//!   ちょうど既定へ置いた）でも一致してしまうので、移動側が印 [`ScriptPlaced`] を付け、起動時の
+//!   確定はその窓の既定を `None` にして除外する。除外したスコープの**実位置**は以後の連鎖の基準
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
 //!   既定位置は起動時に固定されるのではなく、**システム由来の再アンカー**で書込先へ追随する
 //!   （`areka-P0-dpi-transition-atomicity` D9／D16・要件 6.2）——拡大率の遷移で全スコープの
@@ -39,7 +41,7 @@
 
 use std::fmt;
 
-use bevy_ecs::prelude::Resource;
+use bevy_ecs::prelude::{Component, Resource};
 
 use super::resolver::PointPx;
 
@@ -53,6 +55,15 @@ use super::resolver::PointPx;
 /// 作り直した窓でも初回の起動と同じく確定が 1 回走る（areka-P0-ghost-shell-balloon-switch 要件 4.10）。
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChainFinalized;
+
+/// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む・7.3）。
+///
+/// 読むのは起動時の確定（`emo2_boot::frame` の `finalize_chain_once_with`）と並べ終えた時点の保存
+/// （`persist::persist_unremembered_char_positions`）で、印の付いた窓は引き戻さず、記憶にも書かない。
+/// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
+/// 戻した窓からも外す。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ScriptPlaced;
 
 /// 連鎖再解決の入力（スコープ 1 件ぶん・物理 px）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

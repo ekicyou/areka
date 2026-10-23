@@ -22,7 +22,7 @@
   - time>0 は補間せず最終位置へすぐ置き、`TimedMoveImmediate` を記録する。
   - 窓を動かすのは `placement/follow/window_move.rs` の `move_window_to` だけで、`Anchored` と位置の記憶には触れない（`char-position-save-on-exit` の決まり「台本の移動の指示で動いた窓は書かない」）。dx・dy に拡大率 k を掛けるのは意図した SSP との差（`doc/COMPAT_ARCHITECTURE.md` §8 :155）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 :131-135 の `\![move]` の 5 行（裸の `base`・名前付きの形の縮退・`screen` ほか 4 語の縮退・time>0 は即時・basepos は既定の値だけ）は「emo2 は positional 形のみ使用」を根拠にしている＝**前提が崩れた**。
-- 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml`: `move`（:1773）は degraded・持ち主 `areka-P0-sakura-time-directives`（同 brief :116 は「付け替える」と書く）。`set,position`（:3266）・`reset,position`（:2932 前後）・`execute,resetwindowpos`（:1466）は absent・持ち主なし。
+- 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml`: `move`（:1773）は degraded・持ち主 `sakura-time-directives`（同 brief :116 は「付け替える」と書く）。`set,position`（:3266）・`reset,position`（:2932 前後）・`execute,resetwindowpos`（:1466）は absent・持ち主なし。
 - 登録された受け手は `emo2_boot/consumer_ledger.rs`（943 行）:347-356 の `move`・`(set,zorder)`・`(reset,zorder)`（と bind）だけ。`\![set,position]`・`\![reset,position]`・`\![execute,resetwindowpos]` は運ばれるだけで誰も受けない。areka には「シェル位置初期化」のメニューも `OnResetWindowPos` も無い。
 
 ### ukadoc の正典（2026-10-17 に読んだ・節「\![move]、\![moveasync]について」は MCP の索引に無いので https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html から）

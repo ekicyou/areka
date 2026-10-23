@@ -402,13 +402,20 @@ fn shiori_request_envelope_wires_and_outcome_variants_exist() {
                 }
                 ShioriCall::Notify { .. } => unreachable!("constructed Get"),
             }
-            let _ = reply.send(ShioriOutcome::Value(r"\0hi\e".to_string()));
+            let _ = reply.send(ShioriOutcome::Value(
+                r"\0hi\e".to_string(),
+                areka_talk::SecurityLevel::External,
+            ));
         }
         _ => unreachable!("constructed Request"),
     }
     // 受信側で Value を観測できる。
     match receiver.recv() {
-        Ok(ShioriOutcome::Value(script)) => assert_eq!(script, r"\0hi\e"),
+        // 台詞と応答のレベルの組がそのまま届く（要件 3.1）。
+        Ok(ShioriOutcome::Value(script, level)) => {
+            assert_eq!(script, r"\0hi\e");
+            assert_eq!(level, areka_talk::SecurityLevel::External);
+        }
         Ok(_) => unreachable!("expected Value outcome"),
         Err(_) => unreachable!("reply should have been sent"),
     }

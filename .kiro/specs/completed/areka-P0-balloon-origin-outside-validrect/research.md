@@ -91,7 +91,7 @@ Some(v) => {
 | `\_l[x,y]` の上書き行 | `:209` | 「未宣言成分だけが書字開始角へ落ちる（`region.rs:292-294` の `TextRegion::start()`・書字開始角の分岐は同 `:231-234`）」。要件 6.3 の書き換え対象。同じく行番号が陳腐化 |
 | `region.rs` 冒頭 doc | `:24-37` | 要件 6.4 |
 | roadmap 台帳 | `.kiro/steering/roadmap.md` の spec 台帳の #46 の行と、ウェーブ表の A0 の行（番号は 2026-09-19 の main 取り込みで #38 → #46） | 要件 7.1（完了時） |
-| 隣接 spec | `areka-P0-balloon-canon-residue/brief.md:98`（項目 14＝折返し基準の範囲外）・`areka-P0-emo-text-canon-residue/brief.md:11`（項目 14＝`BALLOON_NAME_PLACEHOLDER`）・`areka-P0-currentghost-property-tree/*.md:23`（`balloon.scope(ID).*` 19 項目に `basepos` を含む） | brief の記述どおり実在。要件 7.2 の申し送り先も実在 |
+| 隣接 spec | `balloon-canon-residue/brief.md:98`（項目 14＝折返し基準の範囲外）・`emo-text-canon-residue/brief.md:11`（項目 14＝`BALLOON_NAME_PLACEHOLDER`）・`currentghost-property-tree/*.md:23`（`balloon.scope(ID).*` 19 項目に `basepos` を含む） | brief の記述どおり実在。要件 7.2 の申し送り先も実在 |
 
 ログ文言の依存: 現行の 2 つの `debug!` 文言（「宣言された origin 成分が validrect の外にある……」「未指定の origin 成分を書字開始角へ寄せる」）を grep している文書・手順書・スクリプトは**無い**（`.md`／`.rs`／`.ps1` 全文検索でヒットは `region.rs` 本体と本仕様の brief のみ）。文言は自由に改められる。
 
@@ -266,7 +266,7 @@ Some(v) => {
 
 1. **範囲外の事実を登録口へ届ける器**——案 A（`TextRegion` にフィールド）／案 B（`ResolvedBalloonText` に別計算で載せる）。推奨は A。判断が変わるのは「`TextRegion` に診断情報を混ぜてよいか」の一点。
 2. **解決側の `debug!` を残すか**——残す: 無記録経路の懸念が構造上消える・既存テストの `counts.debug` の期待値（範囲外成分 1 つにつき 1 件）を据え置けて書き直しが小さい。消す: 記録が登録口 1 か所に集まり、毎フレームの DEBUG 行が減る。要件 3.5 はどちらでも満たす。推奨は残す（文言だけ「範囲外ゆえ書字開始角へ寄せる」へ）。
-3. **WARN の欄の確定**——要件 3.3 の 4 項目（`key`・`resolved`・`range_min`／`range_max`・`corner`）に加え、先例と同じ `balloon = BALLOON_NAME_PLACEHOLDER` を載せるか。載せると `areka-P0-emo-text-canon-residue` 項目 14（名前への差し替え）の対象が 2 か所になる（申し送りが要る）。
+3. **WARN の欄の確定**——要件 3.3 の 4 項目（`key`・`resolved`・`range_min`／`range_max`・`corner`）に加え、先例と同じ `balloon = BALLOON_NAME_PLACEHOLDER` を載せるか。載せると `emo-text-canon-residue` 項目 14（名前への差し替え）の対象が 2 か所になる（申し送りが要る）。
 4. **書き直す既存テスト①（`region.rs:677`）の置き場所**——`region.rs` の中で書き直す（要件 5.4 の字義）か、被覆を失わない前提で兄弟ファイルの表へ吸収して `region.rs` の行数を減らすか。余白 49 行と案 A の +10〜15 行の兼ね合い。
 5. **新設兄弟ファイルの名前と補助関数の共有**——`region_origin_range_tests.rs`（案）。`model`／`resolve_counting`／`assert_capture_alive` は `region_vertical_canon_tests.rs` の private なので、複製するか `region.rs` の `tests::model` を `pub(super)` に上げて共有するか。
 6. **検体テストの置き場所**——`tests/shipped_fixture_region_test.rs` に関数を足す（既存 5 本と同じ補助関数を使え、`nar-install` が寄せる共有ヘルパの対象ファイルが増えない）か、新規 `tests/offsetdpi_fixture_region_test.rs` を作る（要件 7.3 の「39 本目」として申し送り）。前者は「無改変のまま緑」（要件 2.3）の証跡ファイルを触ることになる点だけが難点——2.3 の証跡は既存 5 本の関数を触らないことで足りるか、ファイル単位の無改変が要るかを決める。
@@ -284,7 +284,7 @@ Some(v) => {
 |---|---|---|
 | 1 器 | **案 A**——`TextRegion` に「無視した宣言の解決値」を成分ごとに持たせ、登録口 `register_actor` で先例と同じ `previous == Some(region)` の比較で 1 件に絞る | 登録口は `ResolvedBalloonText` しか受け取らず（`actor.rs` の `register_actor`）、解決は毎フレーム走る（`refresh_actor_binding` が判定前に必ず解き直す）。「装着 1 回につき 1 件」の意味を持つ層は登録口だけ、と先例の doc が明言している。案 B（WARN を落とす）は brief の「作者に分かる形で記録する」に反し、案 C は純粋層に可変状態を入れる。欄が `PartialEq` に入ることは正しい向きに働く（宣言値が変われば新しい値で 1 件） |
 | 2 解決側の `debug!` | **残す**（文言だけ改める） | 未宣言の成分も現に毎フレーム `debug!` を書いており、範囲外だけ消す理由が無い。既存の件数検査（成分 1 つにつき 1 件）の形を据え置ける |
-| 3 WARN の欄 | 要件 3.3 の 4 項目＋先例と同じ `balloon = BALLOON_NAME_PLACEHOLDER` | 同じ定数を共有するので、`areka-P0-emo-text-canon-residue` 項目 14 の差し替え先が 2 か所になる（同 spec へ申し送る）。面の区別は `range_min`（sakura 36／kero 24）で付く |
+| 3 WARN の欄 | 要件 3.3 の 4 項目＋先例と同じ `balloon = BALLOON_NAME_PLACEHOLDER` | 同じ定数を共有するので、`emo-text-canon-residue` 項目 14 の差し替え先が 2 か所になる（同 spec へ申し送る）。面の区別は `range_min`（sakura 36／kero 24）で付く |
 | 4 `region.rs` の既存テスト 1 本 | **その場で期待値を書き直す**（`(100.0, 0.0)` → `(100.0, 46.0)`） | 撤去の経緯を語る doc 段落が減るので行数は増えない。移す必要が無い |
 | 5 兄弟ファイル | **新設しない**——`region_vertical_canon_tests.rs` へ足す（要件 5.2 を改訂済み） | 同ファイルは冒頭 doc で「`origin` 解決そのものの判断分岐も固定する」（分岐 5〜9）と宣言済みで、`model`／`resolve_counting`／`assert_capture_alive` を持つ。677 行＝余白 323 行。`#[path]` 宣言・走査対象の登録・補助関数の複製がすべて不要になり、`region.rs` の増分も欄と腕の差し替えだけ（951 → 970 行前後）に収まる |
 | 6 検体テスト | `tests/shipped_fixture_region_test.rs` へ関数を足す（要件 2.3 を改訂済み） | 既存の補助関数を使え、`nar-install` へ渡す 39 本目が生じない（要件 7.3 は条件付きのまま空振りする） |

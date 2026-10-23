@@ -203,7 +203,7 @@
 # - **判断の根拠の場所**: 知らせる側は `crates/areka-kanade/src/schedule/events.rs` の
 #   `ALLOWED_EVENT_IDS`、引く側は `crates/areka-kanade/src/schedule/resources.rs` の
 #   `ALLOWED_RESOURCE_IDS`（`username` 1 件だけ）。`property.get`／`property.set` の担当は
-#   `areka-P0-property-query-channels`。
+#   `property-query-channels`。
 # - **共通 `note`**:
 #
 #   ```
@@ -386,11 +386,15 @@
 #
 # - **対象**: リクエスト側の `Charset`（UTF-8 のみ）と `SecurityLevel`（`local` のみ）。
 # - **件数**: 2
-# - **状態**: `degraded`
+# - **状態**: 2 件とも `implemented`。調査時点は 2 件とも `degraded`（値が 1 つに固定）で、`Charset` は
+#   `areka-P0-charset-canon` が、`SecurityLevel` は 2026-10-23 に `areka-P0-script-security-level` が
+#   出どころから `local`／`external` を選んで送るようにした（下の共通 `note` は調査時点の文面）。
 # - **テーマ**: 空（`[]`）
 # - **優先度**: `D2`（仮置き）
 # - **判断の根拠の場所**: `crates/shiori-host32-host/src/shiori3.rs` の `build_request`。
-#   `Charset` の担当は `areka-P0-charset-canon`。
+#   `Charset` の担当は `areka-P0-charset-canon`。`SecurityLevel` の値は
+#   `crates/areka-kanade/src/request_origin.rs` の `RequestOrigin` が決める（担当は
+#   `areka-P0-script-security-level`）。
 # - **共通 `note`**:
 #
 #   ```
@@ -413,7 +417,10 @@
 #   `SecurityLevel`・`X-SSTP-PassThru-`、`ValueNotify`・`Marker`・`BalloonOffset`・`Reference0`・
 #   `Reference1〜`・`Age`・`MarkerSend`）。
 # - **件数**: 15
-# - **状態**: `absent`
+# - **状態**: `absent`。ただし 2026-10-23 に `areka-P0-script-security-level` がリクエスト側の
+#   `SenderType`・`SecurityOrigin` を送り、レスポンス側の `SecurityLevel` を読むようにした
+#   （`SenderType` とレスポンス側の `SecurityLevel` は `implemented`、`SecurityOrigin` は常に `null` を
+#   送る `degraded`）。この 3 行には下の共通 `note` は当たらず、各行の `note` を書き直した。
 # - **テーマ**: 空（`[]`）
 # - **優先度**: `D2`（仮置き）
 # - **判断の根拠の場所**: `crates/shiori-host32-host/src/shiori3.rs` の `build_request` と
@@ -551,7 +558,7 @@
 #   （絶対パスで読み込み、正典の 4 つの入口 `loadu`・`load`・`unload`・`request` を全て名前で引く。
 #   初期化の入口は `choose_init_entry` が `loadu` を優先して 1 つ選び、入口ごとのパスの渡し方と表せない
 #   字の警告は `init_bytes` が持つ）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
-#   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `areka-P0-makoto-dll-host`。
+#   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `makoto-dll-host`。
 # - **共通 `note`**:
 #
 #   ```
@@ -570,7 +577,7 @@
 #   とする場所が無いのでログは 1 行も出ない。
 #   SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
 #   プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
-#   無いので、SAORI 用の行は作らない。MAKOTO は areka-P0-makoto-dll-host が担う。
+#   無いので、SAORI 用の行は作らない。MAKOTO は makoto-dll-host が担う。
 #   縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
 #   「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
 #   粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
@@ -1321,7 +1328,7 @@ note = """
 （OnTranslate を通した後のもの）・Ref1＝ダブルクリックされたバルーンの scope 番号（箱ならその箱が
 属するキャラクターの番号）は正典どおり。縮退は Ref2（中断位置）で、常に空で送る——台本の中の位置を
 字句から台本のコンパイル・再生・完了の知らせまで通す工事が要るため。追跡先は
-areka-P0-balloon-break-position。止めた台本が終了を予約していた・終了の握手の別れの台詞を止めた・
+balloon-break-position。止めた台本が終了を予約していた・終了の握手の別れの台詞を止めた・
 保留の終了や保留の切替へ進むとき・終了の要求を保留している間は送らない。
 ログ: 送ったときは info のログ balloon_event_sent（cause=break・scope 付き）、送る場面に当たって
 送らなかったときは info のログ balloon_event_not_sent が理由つきで 1 行出る。送出の直前に trace の
@@ -8149,7 +8156,7 @@ SHIORI から値を引く項目ではない。
 [entry."ukadoc:list_shiori_event:property.get:1"]
 status = "absent"
 introduced = "2.7.85"
-owner = "areka-P0-property-query-channels"
+owner = "property-query-channels"
 priority = "D4"
 values = []
 links = [
@@ -8171,17 +8178,17 @@ note = """
 扱いの違い: この行は同じ群の他の 23 件と性格が違う。他の 23 件はベースウェアが場面に応じて一方向に
 知らせるか、ベースウェアが値を引くかのどちらかだが、この 2 件は外部からのプロパティの照会
 （activeghostlist(ゴースト名／パス／ID).ext）を起点として、ベースウェアがゴーストへ取り次ぐ往復の
-経路である。経路そのものの判断は areka-P0-property-query-channels が持つので、この行は owner に
+経路である。経路そのものの判断は property-query-channels が持つので、この行は owner に
 その spec の名前を書くだけとし、判断を上書きしない。
 テーマ: 付けない。要件 7.4 がテーマを付けない既定とする群である。外部からの拡張プロパティの照会を
 ベースウェアがゴーストへ取り次ぐ往復の口であって、無いと利用者がゴーストの何を失うかに areka の側か
-ら答えられないため。経路そのものの判断は areka-P0-property-query-channels が持つ。
+ら答えられないため。経路そのものの判断は property-query-channels が持つ。
 """
 
 [entry."ukadoc:list_shiori_event:property.set:1"]
 status = "absent"
 introduced = "2.7.85"
-owner = "areka-P0-property-query-channels"
+owner = "property-query-channels"
 priority = "D4"
 values = []
 links = [
@@ -8204,11 +8211,11 @@ note = """
 扱いの違い: この行は同じ群の他の 23 件と性格が違う。他の 23 件はベースウェアが場面に応じて一方向に
 知らせるか、ベースウェアが値を引くかのどちらかだが、この 2 件は外部からのプロパティの照会
 （activeghostlist(ゴースト名／パス／ID).ext）を起点として、ベースウェアがゴーストへ取り次ぐ往復の
-経路である。経路そのものの判断は areka-P0-property-query-channels が持つので、この行は owner に
+経路である。経路そのものの判断は property-query-channels が持つので、この行は owner に
 その spec の名前を書くだけとし、判断を上書きしない。
 テーマ: 付けない。要件 7.4 がテーマを付けない既定とする群である。外部からの拡張プロパティの照会を
 ベースウェアがゴーストへ取り次ぐ往復の口であって、無いと利用者がゴーストの何を失うかに areka の側か
-ら答えられないため。経路そのものの判断は areka-P0-property-query-channels が持つ。
+ら答えられないため。経路そのものの判断は property-query-channels が持つ。
 """
 
 [entry."ukadoc:list_shiori_event:rateofusegraph:1"]
@@ -14200,25 +14207,22 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:resetballoonpositionbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「バルーン位置初期化」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「バルーン位置初期化」枠へ項目を登記するのは本仕様（crates/areka/src/menu/reset_balloon_pos_frame.rs の register）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「バルーン位置初期化」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS（正典 URL の注記が
+ある）と crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「バルーン位置初期化の名称」とされ、その項
 目に出る言葉である。
-無いと失うもの: 右クリックのメニューの「バルーン位置初期化」の項目が、そのゴーストらしい言い回しにな
-らず、areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:resettodefaultbutton.caption:1"]
@@ -15512,7 +15516,7 @@ DLL の入口は、生存期間の loadu（SSP 2.6.92 以降・置き場所の�
 とする場所が無いのでログは 1 行も出ない。
 SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
 プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
-無いので、SAORI 用の行は作らない。MAKOTO は areka-P0-makoto-dll-host が担う。
+無いので、SAORI 用の行は作らない。MAKOTO は makoto-dll-host が担う。
 縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
 「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
 粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
@@ -15998,68 +16002,75 @@ Reference1・… として書き出すので、実際に何本出るかは呼び
 """
 
 [entry."ukadoc:spec_shiori3:SecurityLevel:1"]
-status = "degraded"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-script-security-level"
 priority = "A18"
 values = []
 links = []
 note = """
 この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
-壊れ方: 黙って壊れる。ヘッダは送っているが値が 1 つに固定してあり、正典が許す他の値を選べない。
-Charset は UTF-8 だけなので、Shift_JIS で書かれた既存ゴーストとは噛み合わない。SecurityLevel は
-local だけなので、外部由来の呼び出しと区別できない。
-ログ: 固定値であること自体を知らせるログは 1 行も出ない。値は分岐せずそのまま書き出されるので、
-「選べなかった」という判断がコードの中に存在しない。文字の変換に失敗したときだけ、応答を読む側が
-読み取り失敗として扱い、そこで初めて明示的なエラーになる。
-根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request（Charset は 1 値のみを持つ
-型から書き出し、SecurityLevel は local の文字列を直接書き出す）。
-この行は固定値でしか送れない。build_request は SecurityLevel: local を直に書き出すので、
-正典が定めるもう 1 つの値 external を選ぶ枝が無い。正典で見出しの似ているレスポンス側の
-SecurityLevel [SSP拡張] は別の項目であり、別の行として登記してある。
+送り方: GET と NOTIFY のどの要求にも、送るイベントの出どころから導いた値（local か external）を
+SecurityOrigin・Sender・SenderType と並べて ID より前に書く。areka の中で起きたイベント（選択肢の ID と
+アンカーで送るイベントを含む）・MCP の raise_event のイベント・MCP の sakurascript の台本の
+OnTranslate はどれも local（MCP は SSP と同じく Owned SSTP の扱い）。SHIORI の応答の台本の
+OnTranslate は、元のイベントの要求の値（応答の SecurityLevel で下がる前の値）を引き継ぐ。external を
+送る出どころ（SSTP の受信など）はまだ areka に無いので、今実際に送られる値は local だけである。
+壊れ方: 該当なし。値は出どころから選ばれ、毎回送っている。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で security_level を含む送る内容を残す。
+組み立てが途中で失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+根拠の場所: 値を決めるのは crates/areka-kanade/src/request_origin.rs の RequestOrigin::of_event と
+wire、書き出すのは crates/shiori-host32-host/src/shiori3.rs の build_request（32bit の仲介を通る経路と
+同じプロセスで呼ぶ経路の両方が crates/shiori-host32-host/src/request_headers.rs の request_of を通る）。
+正典で見出しの似ているレスポンス側の SecurityLevel [SSP拡張] は別の項目であり、別の行として登記して
+ある。
 """
 
 [entry."ukadoc:spec_shiori3:SecurityLevel_20_5bSSP_62e1_5f35_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-script-security-level"
 priority = "A18"
 values = []
 links = []
 note = """
 この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
-壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
-届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
-ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
-名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
-リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
-根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
-大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
-SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
-crates 以下のソースに 1 件も無い）。
+読み方: GET の応答のヘッダを読む繰り返しが SecurityLevel の名前（大文字小文字を無視）を拾い、生の値を
+kanade へ渡す。kanade は local・external を大文字小文字を無視して読み、ヘッダが無いときは local とする。
+応答の台本の実効のレベルは、元のイベントの出どころのレベルをこの値で下げるだけで上げない（external
+から local へは戻さない）。external の応答で始まる台本は外部扱いになり、出どころで制限されるタグ
+（\\![enter,nouserbreakmode] など）が止まる。NOTIFY の応答は今どおり読まない。
+壊れ方: 該当なし。
+ログ: 読めない値（local でも external でもない）は warn のログ response_security_level_unreadable
+（イベントの ID と値）を 1 行残し、ヘッダが無いものとして扱う。応答で外部扱いへ下げたトークごとに
+info のログ script_security_lowered（by=response）を 1 行残す。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の parse_response（SecurityLevel の分岐）、
+crates/areka-kanade/src/request_origin.rs の read_response_level、
+crates/areka-kanade/src/schedule/talk_origin.rs の stamp。
 正典で見出しの似ているリクエスト側の SecurityLevel は別の項目であり、別の行として登記して
-ある。ゴーストが喋りたいスクリプトの安全水準を返しても、読む側がそれを取る腕を持たない。
+ある。
 """
 
 [entry."ukadoc:spec_shiori3:SecurityOrigin_20_5bSSP_62e1_5f35_5d:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-script-security-level"
 priority = "A18"
 values = []
 links = []
 note = """
 この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
-壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
-届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
-ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
-名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
-リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
-根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
-大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
-SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
-crates 以下のソースに 1 件も無い）。
-build_request の説明が「送らないもの」として名指ししている 3 つのうちの 1 つ。
+送り方: GET と NOTIFY のどの要求にも SecurityLevel の次に書くが、値は今は常に null（送信元の情報が
+無いときの値）。MCP の入口からの要求も null で送る。送信元を URL 風に示す値を持つのは SSTP の受信で、
+その値はその受信を作る spec が持つ（roadmap の登記だけの行「SSTP の受信」・まだ起票していない）。
+壊れ方: 今は無い。送信元の情報を持つ出どころ（SSTP の受信）がまだ areka に無いので、null は今ある
+出どころのすべてにとって正典どおりの値である。SSTP の受信が入るときにここへ値を渡さないと黙って
+壊れる。
+ログ: 送出の直前の trace のログ shiori_request は SecurityLevel・Sender・SenderType を残すが、
+SecurityOrigin は常に null なので載せない。
+根拠の場所: crates/areka-kanade/src/request_origin.rs の RequestOrigin::wire（security_origin は null の
+固定）、crates/shiori-host32-host/src/shiori3.rs の build_request。
+裁量の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「要求の SecurityOrigin の値」。
 """
 
 [entry."ukadoc:spec_shiori3:Sender:1"]
@@ -16102,24 +16113,25 @@ crates 以下のソースに 1 件も無い）。
 """
 
 [entry."ukadoc:spec_shiori3:SenderType_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.05"
-owner = ""
+owner = "areka-P0-script-security-level"
 priority = "A18"
 values = []
 links = []
 note = """
 この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
-壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
-届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
-ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
-名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
-リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
-根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
-大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
-SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
-crates 以下のソースに 1 件も無い）。
-build_request の説明が「送らないもの」として名指ししている 3 つのうちの 1 つ。
+送り方: GET と NOTIFY のどの要求にも、先頭の語（internal か external）に出どころの語をカンマで
+つないだ値（正典の見本 internal,raise の形）を書く。areka の中で起きたイベント（選択肢の ID と
+アンカーで送るイベントを含む）は internal、MCP の raise_event のイベントは external,sstp、MCP の
+sakurascript の台本の OnTranslate は internal（台本の出どころは Reference1 の sstp-send,owned で渡す）。
+SHIORI の応答の台本の OnTranslate は元のイベントの要求の値を引き継ぐ。
+壊れ方: 該当なし。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で sender_type を含む送る内容を残す。
+組み立てが途中で失敗する経路は無い。
+根拠の場所: crates/areka-kanade/src/request_origin.rs の RequestOrigin::of_event と wire、
+crates/areka-talk/src/origin.rs の SenderType（9 つの語と書き出し）、
+crates/shiori-host32-host/src/request_headers.rs の RequestHeaders と shiori3.rs の build_request。
 """
 
 [entry."ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1"]
@@ -16143,7 +16155,7 @@ note = """
 いる。実際に導出するときの唯一の情報源はバルーンの表示状態の読み口とし、見えているかどうかの
 帳簿を第 2 に作らない。online・nouserbreak・balloon は areka-P0-status-execution-states で
 導出済み（balloon はバルーンの表示状態の読み口から導き、第 2 の帳簿を作っていない）。
-残り 5 状態の宛先: timecritical→areka-P0-sakura-time-critical／induction・passive→候補
+残り 5 状態の宛先: timecritical→sakura-time-critical／induction・passive→候補
 areka-P0-passive-mode-states／minimizing→候補 areka-P0-minimize-state／opening→候補
 areka-P0-inputbox-dialog・areka-P0-communicate-events（候補はどれもまだ起票していない）。
 根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。

@@ -40,7 +40,7 @@
 - `scan_bracket_args`・`scan_sysvar`・`lex` のエスケープ処理・短縮形判定の条件式（`SHORTHAND_WORDS.contains(&first) && 次が 1 桁 && その次が [ でない`）。
 - `decode.rs`・`model.rs`・`crates/areka-sakura/src/compile.rs`（`Raw` を「M-boot 外タグを無視」の debug ログで捨てる catch-all）。同ウェーブ W13 の `areka-P0-text-decoration-canon` が `decode.rs`／`compile.rs` を触るため、本仕様はこれらに触れない（共有ファイル 0）。同 spec は 2026-09-17 に PR#148 で main へ着地し本ブランチへ取り込み済み——本番ファイルの共有 0 は保たれるが、同 spec が新設したテストファイル `decode_font_tests.rs` の 2 本は本仕様の編集対象に入る（下記 Modified Files）。
 - 完了済み spec（`areka-P0-sakura-parse`・`areka-P0-sakura-bare-tag-lexer`）の文書、行数上限の例外表、roadmap・steering。
-- `\_a`・`\_q` 等の意味付け（`areka-P0-anchor-tag-canon`・`areka-P0-sakura-time-directives` の領分）。
+- `\_a`・`\_q` 等の意味付け（`areka-P0-anchor-tag-canon`・`sakura-time-directives` の領分）。
 
 ### Allowed Dependencies
 
@@ -53,7 +53,7 @@
 - 語走査の停止文字（`[`／`\`／`%`）・頭打ち長（3）・`bare_tag_len` の決定表・短縮形の 1 桁規律のいずれかを変える変更。
 - `Token::Tag { word }` の `word` が 3 文字を超えて生成され得るようになる変更（本設計後は `word` は常に 1〜3 文字。`decode_tag` の腕はすべて 1〜2 文字の綴りであり、この不変条件に依存しない設計だが、破れば `\foo[a,b]` の登記と要件 4.11 が無効になる）。
 - 正典（ukadoc）に `_` 始まり以外の多文字タグ名が追加された場合（規則の統一の前提が崩れる）。
-- 後続 spec への前提: `areka-P0-anchor-tag-canon`（W17）は `\_a[ID]` が角括弧経路で不変であること（要件 4.2）、`areka-P0-property-query-channels`（W14）は `scan_sysvar` を拡張する際に「タグ名は確定位置で閉じ、`%` は語走査の停止文字である」ことを前提にできる。
+- 後続 spec への前提: `areka-P0-anchor-tag-canon`（W17）は `\_a[ID]` が角括弧経路で不変であること（要件 4.2）、`property-query-channels`（W14）は `scan_sysvar` を拡張する際に「タグ名は確定位置で閉じ、`%` は語走査の停止文字である」ことを前提にできる。
 
 ## Architecture
 

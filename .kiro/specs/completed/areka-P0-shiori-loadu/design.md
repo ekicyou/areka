@@ -18,7 +18,7 @@
 - 既存 fixture・既存テスト・host の e2e 4 本を無改変で緑に保つ（6.2・6.8）。
 
 ### Non-Goals
-- MAKOTO・SAORI・PLUGIN の DLL の読み込み（`areka-P0-makoto-dll-host` ほか）。台帳 `ukadoc:spec_dll` の `status` は `degraded` のまま。
+- MAKOTO・SAORI・PLUGIN の DLL の読み込み（`makoto-dll-host` ほか）。台帳 `ukadoc:spec_dll` の `status` は `degraded` のまま。
 - `request` の文字コード・`unload`／`request` の振る舞い・呼ぶ時機・所有権。変わるのは `unload` の戻り値を受ける型だけ。
 - 親側と凍結した受け渡し。親は「どの入口で確立したか」を知らないまま。
 - x64 の同居経路（COM `IShiori`）・`crates/pilot/` の先進坑・pasta 上流への `loadu` 追加・パスの末尾区切りの作法。
@@ -49,7 +49,7 @@
 - 依存方向: `shiori-host32-testdll-loadu`（leaf・誰にも依存されない cdylib）← テストが `target/i686-pc-windows-msvc/` の成果物としてだけ読む。helper 本体は fixture クレートに依存しない。
 
 ### Revalidation Triggers
-- `LoadFn`／`UnloadFn` の署名を再び変える（下流 `areka-P0-makoto-dll-host` は `ShioriByteProxy` を流用する）。
+- `LoadFn`／`UnloadFn` の署名を再び変える（下流 `makoto-dll-host` は `ShioriByteProxy` を流用する）。
 - 入口名の行・警告の行の固定語句を変える（実機確認の grep と、将来の e2e が語句で判定する）。
 - fixture の記録ファイルの書式・env 名を変える（`shiori_proxy_loadu_tests.rs` が読む）。
 - `ProxyError` に variant を足す（`main.rs` は `{e:?}` で出すだけなので今回は増やさない）。

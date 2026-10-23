@@ -171,14 +171,14 @@
 
 **未着手の隣接 spec 側**（要件 7.2 の担当取り込み）
 
-- `areka-P0-balloon-canon-residue/brief.md` — 番号付き項目は **12 個**（1〜6 が `:11`〜`:16`、7〜10 が `:24`〜`:27`、11・12 が `:33`・`:35`）。Scope 行 `:58` は「6 項目＋追加登記の 7〜10」と書いており **10 のまま追随していない**（項目 11・12 が 2026-08-29 追加であることは `:29` に明記）。要件 7.3 の指示（12 を採る）は実測と一致する。なお `:91` に「項目 13」があるが**消化済み**と明記されているので、12 と数えるのが正しい。
-- `areka-P0-surfaces-basepos/brief.md:38` — `point.basepos.x`／`.y` の 2 キー。
+- `balloon-canon-residue/brief.md` — 番号付き項目は **12 個**（1〜6 が `:11`〜`:16`、7〜10 が `:24`〜`:27`、11・12 が `:33`・`:35`）。Scope 行 `:58` は「6 項目＋追加登記の 7〜10」と書いており **10 のまま追随していない**（項目 11・12 が 2026-08-29 追加であることは `:29` に明記）。要件 7.3 の指示（12 を採る）は実測と一致する。なお `:91` に「項目 13」があるが**消化済み**と明記されているので、12 と数えるのが正しい。
+- `surfaces-basepos/brief.md:38` — `point.basepos.x`／`.y` の 2 キー。
 - `areka-P0-text-decoration-canon/brief.md:33` — バルーン descript の `font.*` 基底「13 キー」と `disable.font.*`。⚠ **13 という数だけがあり、13 個の名前は列挙されていない**（`:19` は解析済み 5＋未解析の族名を書くだけ）。台帳側で名前を確定する必要がある。
 - `areka-P0-anchor-tag-canon/brief.md:30`・`:16` — `anchor.font.*`／`anchor.notselect.font.*`／`anchor.visited.font.*` の 3 族。
-- `areka-P0-choice-marker-styling/brief.md:26`・`:8` — バルーン descript の `cursor.*`。`:12` に「`underline` を `SquareFill` へ落とす（1 度だけ警告）」という既存の縮退判定があり、そのまま取り込める。
+- `choice-marker-styling/brief.md:26`・`:8` — バルーン descript の `cursor.*`。`:12` に「`underline` を `SquareFill` へ落とす（1 度だけ警告）」という既存の縮退判定があり、そのまま取り込める。
 - `areka-P0-charset-canon/brief.md:19-26` — 7 行の層別表（各行に ✅／⚠ decode 迂回／❌ 未解析／対象外の判定と file:line）。`:50` が `shiori.encoding`／`shiori.forceencoding` と surfaces.txt 読取 2 箇所を担当と宣言。⚠ **`:51` の Out 行が `updates2.dau`・`install.txt`・`readme.charset`・`surfacetable.txt` の文字コードを対象外と宣言している**——つまりこれらの `charset` 項目は**担当なし**になる。
-- `areka-P0-zorder-property/brief.md:9` — `currentghost.seriko.zorder` 1 件のみ（プロパティ台帳側）。`:52` に `currentghost-property-tree`・`property-query-channels` との**三重所有の未決**が登記されている。本ドメインの項目ではないので assets 台帳は関連で指すだけでよい。
-- `areka-P0-zorder-chain-residue/brief.md` — 正典キー名を 1 つも持たない（テストと文書の負債表）。本ドメインの取り込み対象にならない。
+- `zorder-property/brief.md:9` — `currentghost.seriko.zorder` 1 件のみ（プロパティ台帳側）。`:52` に `currentghost-property-tree`・`property-query-channels` との**三重所有の未決**が登記されている。本ドメインの項目ではないので assets 台帳は関連で指すだけでよい。
+- `zorder-chain-residue/brief.md` — 正典キー名を 1 つも持たない（テストと文書の負債表）。本ドメインの取り込み対象にならない。
 
 **担当 spec 名の実在**（要件 7.2 が名指しする 11 本）。`package-mount`・`shell-parse`・`balloon-parse`・`balloon-visibility`・`kero-balloon`・`balloon-vertical-canon`・`balloon-offset-dpi`・`bindoption-exclusivity`・`windowposition-limit`・`scope-zorder-pinning` は `.kiro/specs/completed/` に、`surfaces-basepos` は `.kiro/specs/` に実在する。**宙に浮いた名前は 1 つも無い**。
 
@@ -364,7 +364,7 @@
 ### 判断 9: 隣接 spec の誤りの是正候補をどこまで拾うか
 
 - **触れる要件**: 7.3・7.4
-- **事実**: 既に 2 件が確定している。⑴ `areka-P0-balloon-canon-residue/brief.md:58` の Scope 行が「10 項目」のまま（実際は `:11-16`・`:24-27`・`:33`・`:35` の 12 項目）。⑵ `areka-P0-charset-canon/brief.md:51` が `updates2.dau`・`install.txt`・`surfacetable.txt` の文字コードを対象外と宣言しており、それらの `charset` 項目は担当が空のまま残る。さらに ⑶ `areka-P0-zorder-property/brief.md:52` が三重所有の未決を登記しており、⑷ `areka-P0-text-decoration-canon/brief.md:33` の「13 キー」は名前が列挙されていない。
+- **事実**: 既に 2 件が確定している。⑴ `balloon-canon-residue/brief.md:58` の Scope 行が「10 項目」のまま（実際は `:11-16`・`:24-27`・`:33`・`:35` の 12 項目）。⑵ `areka-P0-charset-canon/brief.md:51` が `updates2.dau`・`install.txt`・`surfacetable.txt` の文字コードを対象外と宣言しており、それらの `charset` 項目は担当が空のまま残る。さらに ⑶ `zorder-property/brief.md:52` が三重所有の未決を登記しており、⑷ `areka-P0-text-decoration-canon/brief.md:33` の「13 キー」は名前が列挙されていない。
 - **選択肢**: ⑴ 要件 7.4 のとおりブリーフィングに是正候補として並べるだけにする。⑵ 並べたうえで、台帳の当該項目の備考にも「担当 spec の記述が古い」と書く。⑶ 拾わない。
 - **推奨**: ⑵。要件 7.4 は brief を書き換えるなと言っているだけで、備考に書くことは禁じていない。台帳を読む人が担当 spec を開いたときに食い違いに気づけるようにしておく価値がある。
 
@@ -425,9 +425,9 @@
 
 ### 9.4 要件確定後に main へ現れた隣接 spec 2 本
 
-`areka-P0-makoto-dll-host` と `areka-P0-translate-pipeline` の brief を読んだ。本ドメインの項目への担当宣言は 2 件ある。
+`makoto-dll-host` と `areka-P0-translate-pipeline` の brief を読んだ。本ドメインの項目への担当宣言は 2 件ある。
 
-- `areka-P0-makoto-dll-host` — ゴースト descript の `makoto,ファイル名`（brief `:10`・`:37`・`:57`）。シェル側 `makoto.dll` も範囲だが、対応する正典項目は無い。
+- `makoto-dll-host` — ゴースト descript の `makoto,ファイル名`（brief `:10`・`:37`・`:57`）。シェル側 `makoto.dll` も範囲だが、対応する正典項目は無い。
 - `areka-P0-translate-pipeline` — トランスレータの継ぎ目と順序（brief `:9`・`:47`）。ページ全体項目 `ukadoc:manual_translator` が該当する。
 
 `manual_translator` は 2 本が半分ずつ主張する。`owner` は 1 つしか書けないので `translate-pipeline` を担当とし、備考と `links` で `makoto-dll-host` を指す（design.md §8）。要件 7.2 が挙げる最小集合への**追加**であり、要件は書き換えない。

@@ -98,7 +98,7 @@
 - `doc/COMPAT_ARCHITECTURE.md` の「8. 沈黙ルール対応表」は「項目・裁量・根拠・出典 spec」の 4 列の表で、各 spec が着地時に行を足す（要件 10.3 の登記先として実在）。
 - 検体は `vendors/sample_ghost/*.nar` を `sample-ghost-kit` 越しに引く形と、シェルをメモリ上で組む形（`areka-emo-present/src/shell_target.rs` の `build_shell_target`＝fs に触れない核）の 2 つがある。箱を持つ試験用シェル（要件 10.4）はどちらでも作れる。
 - 1,000 行の番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`（例外表 `OVER_LIMIT_ALLOWED`・件数 10）。
-- `areka-P0-surface-element-nesting`・`areka-P0-balloon-element-order`・`areka-P0-balloon-font-file`・`areka-P0-talk-fast-forward` はいずれも `.kiro/specs/` に未着手で残っている（`completed/` ではない）。同じ `Element` の型を触る `surface-element-nesting` はまだ着地していないので、読み分けを揃える側は後から着地する方になる。
+- `areka-P0-surface-element-nesting`・`balloon-element-order`・`balloon-font-file`・`talk-fast-forward` はいずれも `.kiro/specs/` に未着手で残っている（`completed/` ではない）。同じ `Element` の型を触る `surface-element-nesting` はまだ着地していないので、読み分けを揃える側は後から着地する方になる。
 
 ---
 

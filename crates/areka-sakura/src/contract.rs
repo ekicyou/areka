@@ -50,6 +50,9 @@ pub struct TalkHandle {
 
 pub use areka_talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 
+// 出どころの語彙（正本=areka-talk・受け口の areka が直接の依存なしで使う）。
+pub use areka_talk::{ScriptOrigin, SecurityLevel, SenderHead, SenderType, SenderWord, SstpKind};
+
 // ── 再輸出（二重定義しない） ──
 //
 // relevance 分類器 [`cue_target_of`] は dola（`dola::cue::sink`）が単一権威として所有し、

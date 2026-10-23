@@ -42,9 +42,9 @@
 ### Out of Boundary
 
 - `crates/areka-emo-text/src/layout.rs` の **カーソル経路**（`\_l` の座標解決・単位・縮退表）——`areka-P0-cursor-tag-canon` が全語彙を一括所有する。本仕様は同ファイルの**モジュール doc の 1 行**（クランプ正準への言及）以外を触らない。
-- `crates/areka-sylphya/**` の**全域**——プロパティの実導出・語彙表・件数錠。`areka-P0-currentghost-property-tree`／`areka-P0-property-query-channels`／`areka-P0-property-catalog-lists` が所有する。
+- `crates/areka-sylphya/**` の**全域**——プロパティの実導出・語彙表・件数錠。`currentghost-property-tree`／`property-query-channels`／`property-catalog-lists` が所有する。
 - `\f[align]`／`\f[valign]`／下線の**実装**——`areka-P0-text-decoration-canon` が所有する（SC1 の採択は本仕様が確定させ、同 spec は再審議せず継承する）。
-- `arrow0`／`arrow1` の**画像と座標の実導出**——`areka-P0-balloon-canon-residue` 項目 1 の第 3 軸が所有する。
+- `arrow0`／`arrow1` の**画像と座標の実導出**——`balloon-canon-residue` 項目 1 の第 3 軸が所有する。
 - `crates/areka/src/emo2_boot/**`・`placement/**`・`presenter/**`——本仕様は非接触（W6.95 同居 3 本とのファイル素を保つ）。**`crates/pilot/**` のコードも非接触**（触るのは上記境界拡張のとおり実ゴースト定義**データファイル 2 件**＝`emo2-kakukaku/descript.txt` と `emo2-kakukaku-wplimit/descript.txt` の origin 宣言 各 2 行のみ。**2 件目は 2026-08-28 のタスク 4.1 棚卸しで判明**——下記 C9 の訂正を参照）。
 - **完了 spec のアーカイブ本体**（`.kiro/specs/completed/areka-P0-emo-text-layer/**`）——非改変。上書きの事実は COMPAT §8 と本書に記録する（後述 DD4）。
 
@@ -61,7 +61,7 @@
 
 | 変化 | 再確認が要る先 |
 |---|---|
-| `WritingDirectionDecision` の公開面（採用キー・`vertical` 相当値の導出規則）の変更 | `areka-P0-currentghost-property-tree`（`.vertical` の導出規則を本仕様参照で収載済み） |
+| `WritingDirectionDecision` の公開面（採用キー・`vertical` 相当値の導出規則）の変更 | `currentghost-property-tree`（`.vertical` の導出規則を本仕様参照で収載済み） |
 | `TextRegion::start` の解決規約の再変更 | `areka-P0-cursor-tag-canon`（`\_l[0,0]` と `origin.x` の一致は本仕様のクランプ撤去に従属する・SC15） |
 | SSP が縦書きの座標意味論を再改訂（SC14） | 追随点は `WritingDirectionDecision::resolve` と `TextRegion::resolve` の 2 関数のみ。COMPAT §8 の該当行も同時に改訂する |
 | `doc/COMPAT_ARCHITECTURE.md` §8 への行追加 | **`areka-P0-balloon-offset-dpi`**（2026-08-29 実測で確定した実際の隣接相手——同ブランチが §8 の同一ハンク `@@ -173` へ 3 行を挿入している）。⚠**当初の予測 `areka-P0-scope-zorder-pinning` は外れ**——同ブランチは `doc/COMPAT_ARCHITECTURE.md` に一切触れていない（実測・重複は `roadmap.md` のみ）。衝突は純粋な追記どうしの隣接行マージで意味的衝突ではないが、後着側が rebase を負う |
@@ -627,10 +627,10 @@ fn resolve_origin_component(
 |---|---|---|---|
 | 4.5（非負ゲートの所在・`vertical_rl` の原点符号不一致・`vertical_lr` は既に一致・縦書きテスト被覆 0・完了 spec `emo-text-layer` の縮退表改訂義務） | `.kiro/specs/areka-P0-cursor-tag-canon/brief.md`（91 行） | ✅ | ✅ 5 項目すべて——:18（非負ゲート `layout.rs:656-670`）・:29-32（原点符号不一致）・:33（`vertical_lr` 一致）・:35（被覆 0）・:27／:44／:54（縮退表改訂義務） |
 | 5.5（`\f[align]`／`\f[valign]`／下線の縦書き写像・SC1 の継承） | `.kiro/specs/areka-P0-text-decoration-canon/brief.md`（59 行） | ✅ | ✅ :20（align／valign／underline を核 17 項目として列挙）・:21／:33／:59（SC1 は bvc 裁定を継承し再審議しない） |
-| 5.5（矢印の縦書き再解釈） | `.kiro/specs/areka-P0-balloon-canon-residue/brief.md`（75 行） | ✅ | ✅ :11 の項目 1 に「追加軸（2026-08-27・bvc 討議 5 から登記）」として `arrow0`／`arrow1` の右／左再解釈が第 3 軸で追記済み |
-| 7.5（`.vertical` の導出規則を bvc 参照で収載・balloon.scope 族 19 項目の全列挙） | `.kiro/specs/areka-P0-currentghost-property-tree/brief.md`（59 行） | ✅ | ✅ :24（導出規則を bvc Requirement 2／7／9 参照で収載）・:23（17 リーフ＋`balloon.汎用`＋`balloon.count`＝19 項目を全列挙） |
-| 7.3（照会経路） | `.kiro/specs/areka-P0-property-query-channels/brief.md`（76 行） | ✅ | ✅ :14-22 に正典 6 経路を表で列挙 |
-| 8.4（同族の実導出の着地先） | `areka-P0-currentghost-property-tree`（同上） | ✅ | ✅ 上記 :23 の 19 項目に `validwidth`／`validheight`／`lines` および `.initial` 変種が含まれる |
+| 5.5（矢印の縦書き再解釈） | `.kiro/specs/balloon-canon-residue/brief.md`（75 行） | ✅ | ✅ :11 の項目 1 に「追加軸（2026-08-27・bvc 討議 5 から登記）」として `arrow0`／`arrow1` の右／左再解釈が第 3 軸で追記済み |
+| 7.5（`.vertical` の導出規則を bvc 参照で収載・balloon.scope 族 19 項目の全列挙） | `.kiro/specs/currentghost-property-tree/brief.md`（59 行） | ✅ | ✅ :24（導出規則を bvc Requirement 2／7／9 参照で収載）・:23（17 リーフ＋`balloon.汎用`＋`balloon.count`＝19 項目を全列挙） |
+| 7.3（照会経路） | `.kiro/specs/property-query-channels/brief.md`（76 行） | ✅ | ✅ :14-22 に正典 6 経路を表で列挙 |
+| 8.4（同族の実導出の着地先） | `currentghost-property-tree`（同上） | ✅ | ✅ 上記 :23 の 19 項目に `validwidth`／`validheight`／`lines` および `.initial` 変種が含まれる |
 
 **再検証の記録（2026-08-28〜29・タスク 6.1 ＝着手時／DD8 前半）**
 
@@ -640,10 +640,10 @@ fn resolve_origin_component(
 |---|---|---|---|---|
 | 4.5 | `areka-P0-cursor-tag-canon/brief.md` | ✅ git 追跡下に実在 | 91 → **91（一致）** | :18 ＝ 非負ゲート（`layout.rs:656-670` の `value >= 0.0`）／:29 が `vertical_rl` の原点・符号不一致の見出しで :30-32 がその内訳（`layout.rs:453-454`／`:305-311`／`:611-621`）／:33 ＝ `vertical_lr` は既に整合／:35 ＝ `layout_cursor_tests.rs` は `WritingMode::` 全 22 箇所が `HorizontalTb`＝縦書き被覆 0／:27・:44・:54 ＝ 完了 spec `emo-text-layer` の縮退表（R2.4／6.5・`CursorWarnGuard`）改訂義務。**5 項目すべて一致** |
 | 5.5（装飾） | `areka-P0-text-decoration-canon/brief.md` | ✅ 同上 | 59 → **59（一致）** | :20 ＝ 核 17 項目の列挙に `underline`・`align`（行内・`\n`/`\_l` でリセット）・`valign`（行厚み方向・リセットされない）を含む／:21・:33・:59 ＝ SC1 は bvc 裁定を継承し再審議しない（:21 が縦書き写像を `align`=左上/右下・`valign`=**top 右/bottom 左**・下線=列の右側で明記）。**一致** |
-| 5.5（矢印） | `areka-P0-balloon-canon-residue/brief.md` | ✅ 同上 | 75 → **75（一致）** | :11 の項目 1 に「**追加軸（2026-08-27・bvc 討議 5 から登記）**」として `arrow0`／`arrow1` の右／左再解釈が系列解決軸とは独立の**第 3 軸**として記載され、出典を bvc Requirement 5.4 と名指ししている。**一致** |
-| 7.5 | `areka-P0-currentghost-property-tree/brief.md` | ✅ 同上 | 59 → **59（一致）** | :24 ＝ `.vertical` の導出規則を bvc Requirement 2／7／9 参照で収載／:23 ＝ `scope(ID).*` ×17 ＋ `balloon.汎用` ＋ `balloon.count` ＝ 19 項目を全列挙（17 リーフを実数え＝一致）。**一致** |
-| 7.3 | `areka-P0-property-query-channels/brief.md` | ✅ 同上 | 76 → **76（一致）** | :14 が「正典の照会経路 6 本」の見出し、:15-16 が表頭、:17-22 が経路 1〜6（`\![get,property,…]`／`\![set,property,…]`／`%property[…]`／`\![embed,…]`／`.ext.*`／非スクリプト同期読み）。**一致** |
-| 8.4 | `areka-P0-currentghost-property-tree`（同上 :23） | ✅ 同上 | 同上 | :23 の 19 項目に `validwidth`／`validwidth.initial`／`validheight`／`validheight.initial`／`lines`／`lines.initial` がすべて含まれる（2.8.83 改訂の適用注記つき）。**一致** |
+| 5.5（矢印） | `balloon-canon-residue/brief.md` | ✅ 同上 | 75 → **75（一致）** | :11 の項目 1 に「**追加軸（2026-08-27・bvc 討議 5 から登記）**」として `arrow0`／`arrow1` の右／左再解釈が系列解決軸とは独立の**第 3 軸**として記載され、出典を bvc Requirement 5.4 と名指ししている。**一致** |
+| 7.5 | `currentghost-property-tree/brief.md` | ✅ 同上 | 59 → **59（一致）** | :24 ＝ `.vertical` の導出規則を bvc Requirement 2／7／9 参照で収載／:23 ＝ `scope(ID).*` ×17 ＋ `balloon.汎用` ＋ `balloon.count` ＝ 19 項目を全列挙（17 リーフを実数え＝一致）。**一致** |
+| 7.3 | `property-query-channels/brief.md` | ✅ 同上 | 76 → **76（一致）** | :14 が「正典の照会経路 6 本」の見出し、:15-16 が表頭、:17-22 が経路 1〜6（`\![get,property,…]`／`\![set,property,…]`／`%property[…]`／`\![embed,…]`／`.ext.*`／非スクリプト同期読み）。**一致** |
+| 8.4 | `currentghost-property-tree`（同上 :23） | ✅ 同上 | 同上 | :23 の 19 項目に `validwidth`／`validwidth.initial`／`validheight`／`validheight.initial`／`lines`／`lines.initial` がすべて含まれる（2.8.83 改訂の適用注記つき）。**一致** |
 
 規律の出典 `.kiro/specs/completed/areka-P0-balloon-visibility/tasks.md:196` も実在と内容を確認した——同行は「受け側が項目を列挙していない spec は所有者ではない、という規律による」と逐語で述べている。下の訂正注記が「residue brief にその文は無い」と述べる点も、陽性対照（同 brief の `arrow0` は 1 件ヒット）を添えた 0 件確認で再現した。
 
@@ -659,10 +659,10 @@ fn resolve_origin_component(
 |---|---|---|---|---|
 | 4.5 | `areka-P0-cursor-tag-canon/brief.md` | ✅ git 追跡下に実在・`brief.md` のまま | 91 → **91（一致）** | :18 ＝ 非負ゲート（`layout.rs:656-670` の `value >= 0.0`）／:29 ＝ `vertical_rl` の原点・符号不一致の見出し・:30-32 がその内訳（`layout.rs:453-454`／`:305-311`／`:611-621`）／:33 ＝ `vertical_lr` は既に整合／:35 ＝ `layout_cursor_tests.rs` は `WritingMode::` 全 22 箇所が `HorizontalTb`＝縦書き被覆 0／:27・:44・:54 ＝ 完了 spec `emo-text-layer` の縮退表（R2.4／6.5・`CursorWarnGuard`）改訂義務。**5 項目すべて着手時と逐語一致・追随不要** |
 | 5.5（装飾） | `areka-P0-text-decoration-canon/brief.md` | ✅ 同上 | 59 → **59（一致）** | :20 ＝ 核 17 項目の列挙に `underline`・`align`・`valign` を含む／:21 ＝ 縦書き写像（`align`=左上/右下・`valign`=**top 右/bottom 左**・下線=列の右側）と「bvc がバルーン定義ページ側を採る裁定を確定済み・本 spec は再審議しない」／:33 ＝ In スコープに「align/valign/underline の縦書き写像（bvc SC1 裁定を継承）」／:59 ＝ 「SC1 は bvc 裁定を継承し再審議しない」。**一致・追随不要** |
-| 5.5（矢印） | `areka-P0-balloon-canon-residue/brief.md` | ✅ 同上 | 75 → **75（一致）** | :11 の項目 1 に「**追加軸（2026-08-27・bvc 討議 5 から登記）**」として `arrow0`／`arrow1` の右／左再解釈が系列解決軸とは独立の**第 3 軸**として記載され、出典を bvc Requirement 5.4 と名指ししている。**一致・追随不要** |
-| 7.5 | `areka-P0-currentghost-property-tree/brief.md` | ✅ 同上 | 59 → **59（一致）** | :23 ＝ `scope(ID).*` ×17 ＋ `balloon.汎用` ＋ `balloon.count` ＝ 19 項目の全列挙（`vertical`・`validwidth`／`.initial`・`validheight`／`.initial`・`lines`／`.initial` を含み、2.8.83 改訂の適用注記つき）／:24 ＝ `.vertical` の導出規則を bvc Requirement 2／7／9 参照で収載。**一致・追随不要** |
-| 7.3 | `areka-P0-property-query-channels/brief.md` | ✅ 同上 | 76 → **76（一致）** | :14 が「正典の照会経路 6 本」の見出し、:15-16 が表頭、:17-22 が経路 1〜6（`\![get,property,…]`／`\![set,property,…]`／`%property[…]`／`\![embed,…]`／`.ext.*`／非スクリプト同期読み）。**一致・追随不要** |
-| 8.4 | `areka-P0-currentghost-property-tree`（同上 :23） | ✅ 同上 | 同上 | :23 の 19 項目に `validwidth`／`validwidth.initial`／`validheight`／`validheight.initial`／`lines`／`lines.initial` がすべて含まれる。**一致・追随不要** |
+| 5.5（矢印） | `balloon-canon-residue/brief.md` | ✅ 同上 | 75 → **75（一致）** | :11 の項目 1 に「**追加軸（2026-08-27・bvc 討議 5 から登記）**」として `arrow0`／`arrow1` の右／左再解釈が系列解決軸とは独立の**第 3 軸**として記載され、出典を bvc Requirement 5.4 と名指ししている。**一致・追随不要** |
+| 7.5 | `currentghost-property-tree/brief.md` | ✅ 同上 | 59 → **59（一致）** | :23 ＝ `scope(ID).*` ×17 ＋ `balloon.汎用` ＋ `balloon.count` ＝ 19 項目の全列挙（`vertical`・`validwidth`／`.initial`・`validheight`／`.initial`・`lines`／`.initial` を含み、2.8.83 改訂の適用注記つき）／:24 ＝ `.vertical` の導出規則を bvc Requirement 2／7／9 参照で収載。**一致・追随不要** |
+| 7.3 | `property-query-channels/brief.md` | ✅ 同上 | 76 → **76（一致）** | :14 が「正典の照会経路 6 本」の見出し、:15-16 が表頭、:17-22 が経路 1〜6（`\![get,property,…]`／`\![set,property,…]`／`%property[…]`／`\![embed,…]`／`.ext.*`／非スクリプト同期読み）。**一致・追随不要** |
+| 8.4 | `currentghost-property-tree`（同上 :23） | ✅ 同上 | 同上 | :23 の 19 項目に `validwidth`／`validwidth.initial`／`validheight`／`validheight.initial`／`lines`／`lines.initial` がすべて含まれる。**一致・追随不要** |
 
 これで DD8 が要求する 2 レグ（着手時＝タスク 6.1／完了時＝タスク 7.1）が揃った。上表本体は着手時・完了時のいずれでも実測と食い違わなかったため、**表の記載は一度も書き換えていない**。
 
@@ -738,10 +738,10 @@ fn resolve_origin_component(
 | 4 | 会話中の書字方向切替（SC11） | **実装しない**。スコープの書字方向は起動時に一度確定し、会話中に変わらない。したがって SSP が明記する「切替時のレイアウト破綻」に areka は入らない | SSP は破綻の**内容**（組み直す／消す／放置する）を規定していない＝**未解決のまま**。仮に将来実装しても正典から挙動を導けないこと | 9.3, 9.4, 11.6, 12.3, 12.4 |
 | 5 | 縦書きで列が並ぶ範囲の上限（SC5） | **`validrect.left`**（`vertical_lr` は鏡像で `validrect.right`）。これは新たに採る仮定ではなく**既に実装され決定論テストで固定されている挙動**である | 正典に該当キーも該当文も無い＝**未解決のまま**。既存の固定箇所（`layout_visible_window_tests.rs` の縦書きあふれ檻） | 3.6, 12.3, 12.4 |
 | 6 | `\f[align]`／`\f[valign]`／下線の縦書き写像（SC1） | **未実装（語彙記録）**。`align`＝`left` は上寄せ／`right` は下寄せ／`center` は縦中央。`valign`＝**`top` は右寄せ／`bottom` は左寄せ**（バルーン定義ページ側を採る）。下線は**列の右側** | SC1＝正典 2 ページで写像が逆であること・areka が採る側と理由（`align` の回転と対称性）。`center` はさくらスクリプトページの記述を採ること（SC2）。**未解決のまま**。追跡先＝`areka-P0-text-decoration-canon`（同 spec は再審議せず継承する） | 5.1, 5.2, 5.3, 5.5, 5.7, 12.3, 12.4 |
-| 7 | `arrow0`／`arrow1` の縦書き再解釈（SC10） | **未実装（語彙記録）**。縦書きでは `arrow0`＝右方向・`arrow1`＝左方向のスクロールを意味する | SC10＝クリア・改行・スクロールの縦書き挙動が全て未記述であり、スクロール方向は矢印の説明から間接推測するしかないこと＝**未解決のまま**。追跡先＝`areka-P0-balloon-canon-residue` 項目 1 第 3 軸 | 5.4, 5.5, 12.3, 12.4 |
+| 7 | `arrow0`／`arrow1` の縦書き再解釈（SC10） | **未実装（語彙記録）**。縦書きでは `arrow0`＝右方向・`arrow1`＝左方向のスクロールを意味する | SC10＝クリア・改行・スクロールの縦書き挙動が全て未記述であり、スクロール方向は矢印の説明から間接推測するしかないこと＝**未解決のまま**。追跡先＝`balloon-canon-residue` 項目 1 第 3 軸 | 5.4, 5.5, 12.3, 12.4 |
 | 8 | `\_l` の縦書き座標系正典と、areka の既知非互換（SC8／SC9／SC15） | **未実装（語彙記録＋既知非互換の登記）**。正典＝座標軸はバルーン画像と平行（X 正＝右／Y 正＝下）・数値座標の原点は文字描画範囲の右上・`\_l[0,0]`＝1 列目の先頭・負の X＝次の列・`em`＝字送り方向の文字高さ／`lh`＝列送り方向の列間隔・`@` 相対も同一軸。**areka の現行は `vertical_rl` で原点と符号が食い違い、`\_l[0,0]` が描画範囲の外側左方へ着地する** | 正典文の逐語引用（4.6）。`vertical_lr` は既に一致していること。SC8（副作用の文が横書き前提のまま）・SC9（`centerx`／`centery` が未規定）・SC15（原点の二重系。クランプ撤去により areka 内では二択が発生しないが正典側の未規定は残る）＝**いずれも未解決のまま**。追跡先＝`areka-P0-cursor-tag-canon`（全語彙を一括所有・つまみ食い禁止の裁定込み） | 4.1〜4.3, 4.5, 4.6, 12.3, 12.4 |
-| 9 | `currentghost.balloon.scope(ID).vertical` の導出規則と 2 つの穴 | **未実装（語彙記録）**。導出規則＝当該スコープに**実際に適用されている書字方向**から導き、縦書きなら `1`・横書きなら `0`・`vertical_lr` も `1`・未解決スコープは値なし・起動時に一度確定するため会話中に変わらない。穴＝⑴ `currentghost.*` 枝は実導出 0 件（族ごと不在）⑵ 本番構成（32bit ヘルパ経由）にプロパティ照会を運ぶ経路が無い | 照会されたときの応答は現行どおり値なし（捏造しない）。追跡先＝値の導出は `areka-P0-currentghost-property-tree`・照会経路は `areka-P0-property-query-channels` | 7.1〜7.5 |
-| 10 | 同族 `validwidth`／`validheight`／`lines`（＋各 `.initial`）の意味論 | **未実装（語彙記録）**。**2.8.83 現行**＝`validwidth` は列が並ぶ方向（右から左）に使える幅・`validheight` は 1 列の長さ（スクロールで不変）・`lines` は収まる列数。いずれも**画面上の向き**基準 | **2.8.80 では `validwidth` と `validheight` の役割が逆であった**こと（SC4・SC13）と、それが 2.8.83 の仕様変更＝2.8.80 に合わせたゴーストにとって破壊的変更であること。changelog は「座標指定の仕様変更」としか記さず範囲を過少に述べていること。追跡先＝`areka-P0-currentghost-property-tree` | 8.1〜8.6, 12.3 |
+| 9 | `currentghost.balloon.scope(ID).vertical` の導出規則と 2 つの穴 | **未実装（語彙記録）**。導出規則＝当該スコープに**実際に適用されている書字方向**から導き、縦書きなら `1`・横書きなら `0`・`vertical_lr` も `1`・未解決スコープは値なし・起動時に一度確定するため会話中に変わらない。穴＝⑴ `currentghost.*` 枝は実導出 0 件（族ごと不在）⑵ 本番構成（32bit ヘルパ経由）にプロパティ照会を運ぶ経路が無い | 照会されたときの応答は現行どおり値なし（捏造しない）。追跡先＝値の導出は `currentghost-property-tree`・照会経路は `property-query-channels` | 7.1〜7.5 |
+| 10 | 同族 `validwidth`／`validheight`／`lines`（＋各 `.initial`）の意味論 | **未実装（語彙記録）**。**2.8.83 現行**＝`validwidth` は列が並ぶ方向（右から左）に使える幅・`validheight` は 1 列の長さ（スクロールで不変）・`lines` は収まる列数。いずれも**画面上の向き**基準 | **2.8.80 では `validwidth` と `validheight` の役割が逆であった**こと（SC4・SC13）と、それが 2.8.83 の仕様変更＝2.8.80 に合わせたゴーストにとって破壊的変更であること。changelog は「座標指定の仕様変更」としか記さず範囲を過少に述べていること。追跡先＝`currentghost-property-tree` | 8.1〜8.6, 12.3 |
 | 11 | `origin.y` の既定に縦書きの分岐が無いこと（SC6） | 分岐なしと仮定する（`validrect.top`）。`origin.x` だけが 2 分岐で書かれている非対称に追随しない | 正典が `origin.x` にのみ分岐を書き `origin.y` に書いていないこと＝**未解決のまま**。字送りが上から始まる以上これで整合すること | 3.3, 12.2 |
 | 12 | 正典参照の出所 | **ライブ ukadoc（2.8.83 現行）＋ SSP changelog（2.8.80／2.8.83）**を正典とする | **ukadoc-mcp のスナップショットは 2.8.80 時点であり、陳腐化は「プロパティ節に限局」する**（`validwidth`／`validheight` の役割が現行と逆）。**座標節（`origin.x`／`wordwrappoint.x`／`.y`）はスナップショットでも現行と一致する**——後続が同じ罠を踏まず、かつ不要な全面不信にも陥らないため | 11.7 |
 | 13 | 正典側の不安定さ（SC14） | SSP は縦書きを依然「試験実装」と称し、2.8.80→2.8.83 の 4 日間で 3 層のうち 2 層が変わった。**再改訂されうる前提**で扱い、正典依存箇所を単一の追随点に保つ | 追随点＝`WritingDirectionDecision::resolve`（書字方向）と `TextRegion::resolve`（座標）の 2 関数、および本表の該当行＝**未解決のまま** | 11.7, 12.5, 12.6 |

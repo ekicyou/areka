@@ -212,7 +212,7 @@ fn on_reply_wait(mut state: State, input: Input, config: &KanadeConfig) -> (Stat
     }
     match input {
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(script),
+            outcome: ShioriOutcome::Value(script, _),
             ..
         } => {
             let talk_id = TalkId(state.next_talk_id);
@@ -374,7 +374,7 @@ fn on_yielded_reply(
 ) -> (State, Vec<Action>) {
     match input {
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(script),
+            outcome: ShioriOutcome::Value(script, _),
             ..
         } => {
             let talk_id = TalkId(state.next_talk_id);

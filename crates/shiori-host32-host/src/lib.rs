@@ -30,6 +30,8 @@ mod job;
 pub mod lifecycle;
 pub mod parent_window;
 pub mod process_host;
+/// 要求の追加のヘッダの入れ物（`RequestHeaders`・解釈しない wire 値）。
+pub mod request_headers;
 pub mod shiori3;
 /// `Child` を持たないスレッドから helper を終わらせる取っ手（windows 依存をここへ隔離する）。
 mod terminator;
@@ -44,6 +46,7 @@ pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
 pub use process_host::{
     ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
 };
+pub use request_headers::{RequestHeaders, ValueReply, request_of};
 pub use shiori3::{
     EncodedRequest, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
 };

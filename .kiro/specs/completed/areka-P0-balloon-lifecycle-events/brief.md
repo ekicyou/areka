@@ -1,6 +1,6 @@
 # Brief: areka-P0-balloon-lifecycle-events
 
-> 起票: 2026-09-11（棚卸⑬・`areka-P0-balloon-canon-residue` の 3 軸分割 ⑵＝表示寿命側の項目 7〜10 を独立 spec に切り出し）。項目本文の正本は分割元 brief の「`balloon-visibility` からの追加登記（2026-08-12）」節。ここでは所有と着地条件だけを書き、本文は重複させない。
+> 起票: 2026-09-11（棚卸⑬・`balloon-canon-residue` の 3 軸分割 ⑵＝表示寿命側の項目 7〜10 を独立 spec に切り出し）。項目本文の正本は分割元 brief の「`balloon-visibility` からの追加登記（2026-08-12）」節。ここでは所有と着地条件だけを書き、本文は重複させない。
 
 ## Problem
 
@@ -13,7 +13,7 @@
 
 ## Current State
 
-2026-09-11 実測: `BalloonLifecycleNotice` の `#[allow(dead_code)]` 注記「消費者ゼロ（意図的予約・Requirement 7.8）: 実発火は areka-P0-balloon-canon-residue が所有」が逐語で現存（**所有者名は本 spec へ読み替える**・分割元 brief の追記に登記）。`noclear`・`balloontimeout` は `crates/` で 0 件。emo2 は 3 イベントとも消費者ゼロ・`\x` も `balloontimeout` も辞書に無い（M1 実害なし）。
+2026-09-11 実測: `BalloonLifecycleNotice` の `#[allow(dead_code)]` 注記「消費者ゼロ（意図的予約・Requirement 7.8）: 実発火は balloon-canon-residue が所有」が逐語で現存（**所有者名は本 spec へ読み替える**・分割元 brief の追記に登記）。`noclear`・`balloontimeout` は `crates/` で 0 件。emo2 は 3 イベントとも消費者ゼロ・`\x` も `balloontimeout` も辞書に無い（M1 実害なし）。
 
 ## Desired Outcome
 
@@ -43,7 +43,7 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 
 ## Existing Spec Touchpoints
 
-- **Extends**: `areka-P0-balloon-canon-residue`（分割元・7〜10 を引き継ぐ）。
+- **Extends**: `balloon-canon-residue`（分割元・7〜10 を引き継ぐ）。
 - **Adjacent**: `translate-pipeline`（kanade `schedule/events.rs` を共有＝同居不可）・`sakura-time-directives`。
 
 ## Constraints
@@ -58,7 +58,7 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 
 ---
 
-> **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）による引き取り**——**項目 9（`\x`／`\x[noclear]`＝クリック待ち）は新 spec `areka-P0-talk-fast-forward` が引き取った**。クリックでの早送り（areka 独自・話している最中のバルーンの 1 クリックで次の `\x` か台詞の終わりまで進む）と、`\x` での停止と再開と、クリック待ちの印 `clickwaitmarker.*` を 1 つの spec に揃えた（どれも「クリックで台詞の時計を進める」同じ仕組み）。開発者裁定「クリック待ちは台本に明示した `\x` だけ・自動でクリックを求める仕組みは作らない」もそちらの brief にある。**本 spec に残るのは項目 7・8・10**（`balloontimeout` の実導出・`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の発火・中断で終わった会話のタイムアウト起点）。上の 2026-09-13 の相互登記（`\x` で `\f` 状態の何が戻るか）は `talk-fast-forward` がそのまま使う。
+> **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）による引き取り**——**項目 9（`\x`／`\x[noclear]`＝クリック待ち）は新 spec `talk-fast-forward` が引き取った**。クリックでの早送り（areka 独自・話している最中のバルーンの 1 クリックで次の `\x` か台詞の終わりまで進む）と、`\x` での停止と再開と、クリック待ちの印 `clickwaitmarker.*` を 1 つの spec に揃えた（どれも「クリックで台詞の時計を進める」同じ仕組み）。開発者裁定「クリック待ちは台本に明示した `\x` だけ・自動でクリックを求める仕組みは作らない」もそちらの brief にある。**本 spec に残るのは項目 7・8・10**（`balloontimeout` の実導出・`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の発火・中断で終わった会話のタイムアウト起点）。上の 2026-09-13 の相互登記（`\x` で `\f` 状態の何が戻るか）は `talk-fast-forward` がそのまま使う。
 
 
 ---
@@ -87,7 +87,7 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
   - **Reference2（中断位置）の源はどこにも無い**: 字句（`areka-parsers/src/sakura/lexer.rs` の `Token`）・`Instruction`・コンパイル・dola の cue・完了の知らせ `areka_talk::TalkDone` のどれにも台本の中の位置を持たない。足すなら `TalkDone` に欄を足すことになり、`TalkDone {` の書き方は 27 ファイル・60 か所（kanade 19・sakura 3・ghost 2・talk 2・areka 1）。
   - `OnBalloonTimeout`／`OnBalloonClose` は表示の側（`emo2_boot/balloon_visibility*.rs`）が時間切れを知る。送る道は汎用の `KanadeMsg::RaiseEvent` で足りる（時間切れのときは台詞が終わって定常・トーク無し）＝kanade の運行表は表へ 3 行足すだけで済む見込み。
   - 3 語の返事の台本も `translate-pipeline` の出口を通り、`OnTranslate` に掛かる（作業は増えない・テストの期待に `OnTranslate` が載る）。
-  - 網羅台帳の 3 行（`OnBalloonClose:1`・`OnBalloonTimeout:1`・`OnBalloonBreak:1`）と `\![set,balloontimeout]` の行の `owner` は、まだ分割元の `areka-P0-balloon-canon-residue` のまま。
+  - 網羅台帳の 3 行（`OnBalloonClose:1`・`OnBalloonTimeout:1`・`OnBalloonBreak:1`）と `\![set,balloontimeout]` の行の `owner` は、まだ分割元の `balloon-canon-residue` のまま。
 - 触るファイル（並走の照合用）:
   - `crates/areka-kanade/src/schedule/events.rs`（`ALLOWED_EVENT_IDS` の末尾 3 行・組み立ての関数）・`schedule/events_change_tests.rs`（個数）・`crates/areka-kanade/src/lib.rs`（`pub mod events`）
   - `crates/areka-kanade/src/schedule/user_break.rs`・`schedule/mod.rs`（`on_talk_done` の中断の腕）・`schedule/mod.rs` の `State`（scope を控えるなら欄 1 つ＝`..` なしで `State` を組むテスト 14 か所）
@@ -114,7 +114,7 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
   - **`input_events/user_break.rs` は触らなくてよい**: 中断の scope は既に `KanadeMsg::UserBreak { scope }` → `schedule/user_break.rs` の `on_user_break(state, scope)` まで届いている（記録に載せるだけで、`state.user_break_talk` は `TalkId` しか控えていない）。控えるのは kanade の中だけ＝㉑の「`input_events/user_break.rs`（中断の scope を運ぶなら）」は外す。
   - **表示の側から kanade へ送る口が無い**: 可視性の相（`balloon_visibility_phase.rs`）が読む `frame/wiring.rs` の結線の束は `lifecycle_rx`（talk スレッドからの受け口）を持つが、kanade への送り手を持たない。時間切れを送るには送り手を足す＝`frame/wiring.rs`（束の組み立ての `new`）と、その組み立ての呼び手 `emo2_boot/mod.rs`（`lifecycle_tx, lifecycle_rx` の channel を作る所）を触る。㉑の触るファイルに抜けていた。
   - `balloon_visibility_phase.rs` は C3（`shell-balloon-frame-align`）で、箱を持つ面の判定が「シェルの窓がいま表示している絵の番号」を渡す形に変わった（`balloon_shown_glyphs` の引数）。時間切れの判断の本体（`balloon_visibility_wait.rs` の `decide_timeout`）は変わっていない。
-  - `talk_lifecycle.rs` の `#[allow(dead_code)]`（`BalloonLifecycleNotice` の定義の上・持ち主の名は本 spec）は現存。網羅台帳 `shiori.toml` の `OnBalloon*` の行の `owner` は今も `areka-P0-balloon-canon-residue`。
+  - `talk_lifecycle.rs` の `#[allow(dead_code)]`（`BalloonLifecycleNotice` の定義の上・持ち主の名は本 spec）は現存。網羅台帳 `shiori.toml` の `OnBalloon*` の行の `owner` は今も `balloon-canon-residue`。
   - `State` を `..` なしで組む所: `user_break_talk:` で数えて 16 か所・5 ファイル（既定の 1 か所を含む）。
 - 触るファイル（並走の照合用・Reference2 を空で送る形）:
   - `crates/areka-kanade/src/schedule/{events.rs, events_change_tests.rs, user_break.rs, mod.rs}`・`crates/areka-kanade/src/lib.rs`（`pub mod events`）・新しいファイル（`mod.rs` を太らせないなら）

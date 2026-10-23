@@ -990,8 +990,8 @@ not_applicable = 0
 
 [[barrier]]
 page = "list_shiori_resource"
-implemented = 13
-vocabulary_only = 146
+implemented = 14
+vocabulary_only = 145
 degraded = 0
 absent = 0
 alias = 0
@@ -1013,14 +1013,15 @@ not_applicable = 0
 `seriko.use_self_alpha` を未対応から縮退へ移したもの、`descript_ghost` の 1 は 2026-10-07 に
 `areka-P0-ghost-standard-balloon` が `default.balloon.path` を縮退として登記したもので、どちらもそれまでは 0 だった。
 `descript_ghost` はその後、2026-10-17 に `areka-P0-emily-ghost-verification` が `char*.name` を実装済みから縮退へ移して 2 になった（3 人目以降の窓を作らなくなり、名前が画面に出ないため）。
+2026-10-23 に `areka-P0-window-link-directives` が両ページの `seriko.alignmenttodesktop` 系（各 4 項目）を未対応から縮退へ移し、`descript_ghost` は 6・`descript_shell` は 5 になった（areka はこの欄を読んでいて、`top`・`left`・`right` は起動の直後の既定の位置だけが `bottom` と同じになるため）。同じ spec が `descript_shell` の `seriko.sticky-window` を語彙のみから実装済みへ、`list_shiori_resource` の `resetballoonpositionbutton.caption` を語彙のみから実装済みへ移した。
 
 ```toml
 [[barrier]]
 page = "descript_ghost"
 implemented = 16
 vocabulary_only = 0
-degraded = 2
-absent = 56
+degraded = 6
+absent = 52
 alias = 0
 not_applicable = 0
 
@@ -1035,10 +1036,10 @@ not_applicable = 0
 
 [[barrier]]
 page = "descript_shell"
-implemented = 17
-vocabulary_only = 2
-degraded = 1
-absent = 82
+implemented = 18
+vocabulary_only = 1
+degraded = 5
+absent = 78
 alias = 0
 not_applicable = 0
 
@@ -1962,27 +1963,27 @@ shiori の作業記録の末尾が、上流の道具の spec は封じてあっ�
 （`ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1`）
 
 - **決めたこと**: 調査側の案をそのまま採る。台本を読む側でこのタグの綴りを受け付ける一覧は
-  `areka-P0-sakura-time-directives` が持ち、返ってきた結果でタグを置き換える実行時の経路は
-  `areka-P0-property-query-channels` が持つ。
+  `sakura-time-directives` が持ち、返ってきた結果でタグを置き換える実行時の経路は
+  `property-query-channels` が持つ。
 - **この項目は 2 本の着地を要する。宛先の欄 1 つには収まらない。** 根拠は 2 つある。⑴
   `doc/COMPAT_ARCHITECTURE.md` には、台本を組み立てる側が時間の指令として受け付ける綴りの
   一覧を載せた行がある。その行はこのタグの綴りを逐語で並べたうえで、**M1 では綴りを受け取って
-  覚えるだけで意味は実装しない**と定め、意味を実装する仕事を `areka-P0-sakura-time-directives`
+  覚えるだけで意味は実装しない**と定め、意味を実装する仕事を `sakura-time-directives`
   へ申し送っている。**受け付ける側の作業は残っている。** ⑵
-  `areka-P0-sakura-time-directives` の brief は、自分が扱う綴りの一覧の中でこのタグを「タグ
+  `sakura-time-directives` の brief は、自分が扱う綴りの一覧の中でこのタグを「タグ
   全体が SHIORI の返答で置き換わってそのまま続く＝台本を途中で分けて、進み方を組み直す必要が
   ある」と分類し、自分の担当範囲として「この一覧の綴りを台本を組み立てる側で解釈して実際の
   指令に落とすことと、決まったとおりの結果になるかを確かめる検査」を挙げている。一方
-  `areka-P0-property-query-channels` が自分の担当範囲として挙げているのは照会の 4 経路の実装
+  `property-query-channels` が自分の担当範囲として挙げているのは照会の 4 経路の実装
   までで、台本を途中で分けることも、返事が返るまで待つ場所を台本に作ることも、進み方を組み
   直すことも引き受けていない。
-- **台帳の宛先**: `areka-P0-property-query-channels`。宛先の欄は 1 本しか置けないので、同
+- **台帳の宛先**: `property-query-channels`。宛先の欄は 1 本しか置けないので、同
   spec が担当範囲の 4 経路の 4 つ目として「`\![embed]` の対」を逐語で挙げていること、そして
   備考の「壊れ方」が述べる「別のイベントの返す台詞がその場に埋め込まれない」の、**返す側の
   道を作るのがこの 1 本である**ことを採った。
 - **残りをどうするか**: 台本を組み立てる側でこのタグの意味を実装する仕事（台本を途中で分ける・
   返事が返るまで待つ場所を台本に作る・台本を進める側で進み方を組み直す）は
-  `areka-P0-sakura-time-directives` に残る依存である。宛先の欄には現れないので、この行を依存の
+  `sakura-time-directives` に残る依存である。宛先の欄には現れないので、この行を依存の
   登記とする。
 - **利用者から見える差**: 決める前は、別のイベントが返す本文がその場に現れないという壊れ方を
   誰も引き受けていなかった。決めた後は、引き受ける 2 本の名前が読めるようになった。**1 本
@@ -1991,14 +1992,14 @@ shiori の作業記録の末尾が、上流の道具の spec は封じてあっ�
 **申-22——窓を動かすタグ**（`ukadoc:list_sakura_script:_5c_21_5bmove_5d:1`）
 
 - **決めたこと**: 調査側の案「引数ごとに分ける」のうち、時間の側を
-  `areka-P0-sakura-time-directives` が持つ点は採り、基準の側を `areka-P0-surfaces-basepos` が
+  `sakura-time-directives` が持つ点は採り、基準の側を `surfaces-basepos` が
   持つ点は採らない。
-- **採らない理由**: `areka-P0-surfaces-basepos` の brief は、自分の範囲を宣言された基準点の
+- **採らない理由**: `surfaces-basepos` の brief は、自分の範囲を宣言された基準点の
   意味を実装することに限り、このタグの他の意味を範囲外と明記している。そしてこの項目が「縮退」
   である中身は 3 つ（名前付きの書き方が解けない・基準の語のうち 4 つが解かれない・時間を指定
   しても即座に飛ぶ）で、宣言された基準点の実装はそのどれも消さない。既定の基準点の決め方は既に
   あるので、基準 `base` はそもそもこの 3 つに入っていない。
-- **台帳の宛先**: `areka-P0-sakura-time-directives`。3 つのうち時間の指定を正面から、名前付きの
+- **台帳の宛先**: `sakura-time-directives`。3 つのうち時間の指定を正面から、名前付きの
   書き方をその中の時間の指定を通じて動かす唯一の brief である。
 - **残りをどうするか**: 基準の語 4 つ（`screen`・`primaryscreen`・`me`・`global`）は、どちらの
   brief の範囲にも入っていない。引受先は束「窓の配置と重なり」の候補 spec の側に持つ。候補
@@ -2021,10 +2022,10 @@ shiori の作業記録の末尾が、上流の道具の spec は封じてあっ�
 
 | 古びた場所 | いまの記載 | 数え直した値 | 数え方 |
 | --- | --- | --- | --- |
-| spec 表 `[[spec]]` の `areka-P0-property-query-channels` の `owner_count` | 5 | **6** | 4 台帳でこの名前を宛先に持つ項目を数えた |
-| spec 表 `[[spec]]` の `areka-P0-sakura-time-directives` の `owner_count` | 10 | **11** | 同上 |
-| 束 2「窓の配置と重なり」の「依存する既存 spec」の `areka-P0-sakura-time-directives`（W16・1 件） | 1 件 | **2 件** | この束の構成 id 126 件のうち、この名前を宛先に持つものを数えた。**同じ記載が段階の一覧の表と先頭ウェーブの節の 2 か所にある** |
-| 束 14「イベントの呼び起こし」の「依存する既存 spec」 | **0 本** | **1 本**（`areka-P0-property-query-channels`・1 件） | この束の構成 id 6 件のうち、非空の宛先を持つものを数えた |
+| spec 表 `[[spec]]` の `property-query-channels` の `owner_count` | 5 | **6** | 4 台帳でこの名前を宛先に持つ項目を数えた |
+| spec 表 `[[spec]]` の `sakura-time-directives` の `owner_count` | 10 | **11** | 同上 |
+| 束 2「窓の配置と重なり」の「依存する既存 spec」の `sakura-time-directives`（W16・1 件） | 1 件 | **2 件** | この束の構成 id 126 件のうち、この名前を宛先に持つものを数えた。**同じ記載が段階の一覧の表と先頭ウェーブの節の 2 か所にある** |
+| 束 14「イベントの呼び起こし」の「依存する既存 spec」 | **0 本** | **1 本**（`property-query-channels`・1 件） | この束の構成 id 6 件のうち、非空の宛先を持つものを数えた |
 
 **最後の 1 行は、明示して書いた 0 が偽になった点で、件数のずれより重い。** 0 は「調べたうえで
 無かった」ことを表す書き方なので、放置すると「調べた結果」として読まれ続ける。
@@ -2198,7 +2199,7 @@ spec の持ち物なので直す**——要件 12.4 が許す `README.md` の限
 | 記録 §13.2 行 4 | 起動と挨拶 | いいえ | 起動系列の途中に届いた再生完了の通知が捨てられる。構造的だが本走行では発現していない（該当のログが 0 行）。発現していないものは順位の材料にならない。引受先は起票済み（7-6） |
 | 記録 §13.2 行 10 | SHIORI の要求と応答 | いいえ | 脳と話す窓のスレッドが待機中にメッセージを取り出さない。構造的だが本走行では発現しない。areka の橋渡しの作りの話で、正典の語彙の欠けではない。引受先は起票済み（7-6） |
 | 記録 §13.2 行 13 | バルーンの文字 | いいえ | 話し始めに相方側バルーンの冒頭へ 1.5 行ぶんの空きが出る。出どころは上流のゴーストが空の相手側へ話者交替の改行を出すことで、areka は正典どおりに保っている。引受先は上流のリポジトリで、本リポジトリの束の順位を動かさない |
-| 隔離裁定 `verification/isolation-decision.md` §4.5.1 の留保 | 無し（0 束） | いいえ | 壁時計の期限で待つ決定論テストの族が、高負荷で低確率に期限切れになりうるという留保。テストの作りの話で、正典の項目に写る先が無い（数え方: `linkage.md` の 67 の囲みの `foundation` を読み、テストの作りを扱う基盤が 1 つも無いことを確かめた）。引受先は既存の台帳 spec `areka-P0-zorder-chain-residue`（W14）の A 群である |
+| 隔離裁定 `verification/isolation-decision.md` §4.5.1 の留保 | 無し（0 束） | いいえ | 壁時計の期限で待つ決定論テストの族が、高負荷で低確率に期限切れになりうるという留保。テストの作りの話で、正典の項目に写る先が無い（数え方: `linkage.md` の 67 の囲みの `foundation` を読み、テストの作りを扱う基盤が 1 つも無いことを確かめた）。引受先は既存の台帳 spec `zorder-chain-residue`（W14）の A 群である |
 | R8.3 後半の未履行 | 無し（0 束） | いいえ | 2 つの修正の後に一周走行を採り直していないという手続きの未履行。開発者が 2026-09-11 に受容と裁定して確定しており、判定結果を書き換えない。走行の手続きの話で、正典の項目に写る先が無い（数え方は 1 つ上の行と同じ）。引受先は無い |
 
 ### 7-5. 結論（要件 9.3）
@@ -2242,7 +2243,7 @@ areka の内部の作りと上流のゴーストの事情で、正典の語彙�
 | 症状 E | `areka-P0-present-gpu-transform-scale` | W13 | ○ |
 | 記録 §13.2 行 4 | `areka-P0-kanade-boot-talkdone-drop` | W13 | ○ |
 | 記録 §13.2 行 10 | `areka-P0-host32-window-thread-pump` | W13 | ○ |
-| 記録 §13.1 行 1 | `areka-P0-dpi-transition-two-tick-bounce` | W14 | ○ |
+| 記録 §13.1 行 1 | `dpi-transition-two-tick-bounce` | W14 | ○ |
 
 「次段の spec 表」は `roadmap-draft.md`「既存 brief の位置づけ」の spec 表（段 5 が書く）で
 ある。ウェーブの欄は正本のロードマップの spec 台帳から引いた。
@@ -2254,7 +2255,7 @@ areka の内部の作りと上流のゴーストの事情で、正典の語彙�
 
 引受先を持つ持ち越し行はほかに 2 行ある。⑴ 隔離裁定
 `verification/isolation-decision.md` §4.5.1 の留保 の引受先は既存の台帳 spec
-`areka-P0-zorder-chain-residue`（W14）の A 群で、M1 の走行で新しく起票されたものではない
+`zorder-chain-residue`（W14）の A 群で、M1 の走行で新しく起票されたものではない
 ので要件 9.4 が名指す 4 件には入らない。⑵ 記録 §13.2 行 13 の引受先は上流のリポジトリで、
 本リポジトリの spec ではない。どちらも新たな束にしない点は 4 件と同じである。
 
@@ -2583,7 +2584,7 @@ spec の作業から出た 22 件（下の表）である。
 | ---: | --- | --- |
 | 1 | M2 の最初のウェーブを W17 の後に置く | 「裁定候補」ウェーブの並べ替え |
 | 2 | `areka-P0-anchor-tag-canon` を繰り上げるか、宛先 1 件を先頭ウェーブの候補 spec へ移すか | 同上 |
-| 3 | `areka-P0-surfaces-basepos` の「任意」を外して W13 で確定させるか | 同上 |
+| 3 | `surfaces-basepos` の「任意」を外して W13 で確定させるか | 同上 |
 | 4 | 同順位 **13 組・29 束**の解消（先頭ウェーブより後の着手順を決める） | 「裁定候補」同順位の解消 |
 | 5 | 先頭ウェーブ 6 束を spec として起票し、正本の spec 台帳へ登記するか | 「先頭ウェーブ」 |
 | 6 | 候補 spec 名 **63 個**（うち先頭ウェーブが 6）を案のまま置くか、順に起票するか | 「読み方」「段階 A」〜「段階 E」 |

@@ -175,7 +175,7 @@ flowchart TD
 
 ### DD-5. `lexer.rs` には 1 行も置かない（議題 4 の解消）
 
-URL を置く先は「意味を作っている定義」であって「綴りを並べた表」ではない（要件 9.6 が `%` 語彙表について定める扱いを、綴りの表にも同じく当てる）。短縮形 3 語の意味を作っているのは `decode.rs` の `decode_token` にある `Token::Shorthand { word: 'w' … }` などの腕であり、`lexer.rs` の `SHORTHAND_WORDS` は綴りの集合を宣言しているだけである。さらに `\bID番号`・`\pID番号` は DD-2 により `alias` になるので URL 自体が要らない。結果として `SHORTHAND_WORDS` の既存の説明文（`ukadoc:` の語を含む `///` ブロック）には**触れない**。要件 9.11 の「書き換えない」と、`areka-P0-property-query-channels` が同じファイルの `scan_sysvar` を直す予定であることの両方に対して、衝突が構造的に消える。
+URL を置く先は「意味を作っている定義」であって「綴りを並べた表」ではない（要件 9.6 が `%` 語彙表について定める扱いを、綴りの表にも同じく当てる）。短縮形 3 語の意味を作っているのは `decode.rs` の `decode_token` にある `Token::Shorthand { word: 'w' … }` などの腕であり、`lexer.rs` の `SHORTHAND_WORDS` は綴りの集合を宣言しているだけである。さらに `\bID番号`・`\pID番号` は DD-2 により `alias` になるので URL 自体が要らない。結果として `SHORTHAND_WORDS` の既存の説明文（`ukadoc:` の語を含む `///` ブロック）には**触れない**。要件 9.11 の「書き換えない」と、`property-query-channels` が同じファイルの `scan_sysvar` を直す予定であることの両方に対して、衝突が構造的に消える。
 
 ### DD-6. `%` の未対応 24 件の備考は語彙表の層で 5 群に分ける（要件 2.12・議題 12）
 
@@ -416,7 +416,7 @@ doc/
 
 5 ファイル・5 クレート（`areka-parsers`・`areka-seriko`・`areka`・`areka-sakura`・`areka-ghost`）。`crates/areka` を含むので、`cargo test --workspace` を緑にするには **i686 の host-32 成果物を先にビルドしておく**（新しいワークツリーでは submodule の展開と i686 ビルド 2 本が前提。未ビルドだと helper 系のテストが黙って飛ばずに明示的に失敗する）。
 
-**並走との重なりは 1 か所だけになる**——`crates/areka-ghost/src/sylphya_wiring.rs` を `areka-P0-ukadoc-survey-property` と共有する（同じファイルの別の関数）。後着が rebase する。`crates/areka-parsers/src/sakura/lexer.rs` は DD-5 により触らないので、`areka-P0-property-query-channels` との重なりは消える。
+**並走との重なりは 1 か所だけになる**——`crates/areka-ghost/src/sylphya_wiring.rs` を `areka-P0-ukadoc-survey-property` と共有する（同じファイルの別の関数）。後着が rebase する。`crates/areka-parsers/src/sakura/lexer.rs` は DD-5 により触らないので、`property-query-channels` との重なりは消える。
 
 ### repo に置かないもの（作業用の一時置き場）
 
@@ -542,7 +542,7 @@ doc/
 | 台帳の id には逆斜線が大量に含まれるので `\\` の書き分けが最大の危うさ | **342 件の id に逆斜線・引用符・非 ASCII は 1 件も無い**（見出しの記号は `_5c` などに符号化済み）。`\\` の逃がしが要るのは**備考**だけ | 規則 0 の 5。骨組みを機械生成する利点は「逆斜線」ではなく「符号化された 342 件の逐語と文字順」に移る |
 | `implemented` は 30 件・URL コメントは約 30 行・7 ファイル・5 クレート | **23 件・23 行・5 ファイル・5 クレート**。減った内訳は `\![move]`・`\q[タイトル,script:実行内容]`・`\q[タイトル,ID1,ID2,ID3...]` が `degraded`（−3。`\_l[x,y]` も一度はここに数えたが、2026-09-06 の最終検証で `implemented` へ戻した）、`\bID番号`・`\pID番号`・`\q[タイトル,ID]` が `alias`（−3）、単独 `\![*]` が `absent`（−1） | コメントを置く場所の表。`lexer.rs` と `move_cue.rs` に触らなくなる |
 | 「値が違うだけの兄弟 11 群」からは別名が出ない | DD-2 の対の判定は `\_a[ID]`⊂`\_a[ID,r2,r3...]` に届き、11 群の側からも **1 件**が `alias` になる。`alias` は合計 **20 件**（順 1 の 3＋順 4 の 3＋接頭辞の 11＋順 6 の 3。当初は順 6 を数え落として 17 と書いていた・タスク 2.6 で是正） | DD-2・規則 2 の順 2。突合表は `alias` の id も載せる |
-| `\![move]` の二重所有は合意済みの分担 | `areka-P0-surfaces-basepos` と `areka-P0-sakura-time-directives` の brief は互いを名指ししておらず、§8 の `\![move]` の行にも両者の住み分けは登記されていない | 規則 5 の順 2（裁定待ち）へ。裁定案を添える対象は `\![embed,...]` と `\![move]` の 2 件 |
+| `\![move]` の二重所有は合意済みの分担 | `surfaces-basepos` と `sakura-time-directives` の brief は互いを名指ししておらず、§8 の `\![move]` の行にも両者の住み分けは登記されていない | 規則 5 の順 2（裁定待ち）へ。裁定案を添える対象は `\![embed,...]` と `\![move]` の 2 件 |
 | `\![*]` は `fold_choice_marker` により実装済みの候補 | 畳まれた場合もマーカーは描かれず、単独形の名前 `"*"` を選ぶ受け手も無い＝`absent` | 規則 2 の順 6 |
 | 上流 付録 A.1 の記入例にある id（`ukadoc:list_sakura_script:\\![get,property,ID]:1`） | その綴りの id はスナップショットに存在しない（形を説明するための作り物）。実物は符号化された形 | 規則 0 の 6。見た目で直さない |
 

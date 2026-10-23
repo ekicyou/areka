@@ -372,11 +372,11 @@ doc/
 
 | 担当 spec | 取り込む項目 | 出所 |
 |---|---|---|
-| `areka-P0-balloon-canon-residue` | バルーンの残語彙 **12 項目すべて**（brief の Scope 行が書く「10 項目」は採らない・要件 7.3） | `brief.md:11-16`・`:24-27`・`:33`・`:35` |
-| `areka-P0-surfaces-basepos` | `point.basepos.x`／`.y` | `brief.md:38` |
+| `balloon-canon-residue` | バルーンの残語彙 **12 項目すべて**（brief の Scope 行が書く「10 項目」は採らない・要件 7.3） | `brief.md:11-16`・`:24-27`・`:33`・`:35` |
+| `surfaces-basepos` | `point.basepos.x`／`.y` | `brief.md:38` |
 | `areka-P0-text-decoration-canon` | バルーン descript の `font.*` 系と `disable.font.*` | `brief.md:33` |
 | `areka-P0-anchor-tag-canon` | `anchor.font.*`／`anchor.notselect.font.*`／`anchor.visited.font.*` | `brief.md:30`・`:16` |
-| `areka-P0-choice-marker-styling` | バルーン descript の `cursor.*` | `brief.md:26`・`:8` |
+| `choice-marker-styling` | バルーン descript の `cursor.*` | `brief.md:26`・`:8` |
 | `areka-P0-charset-canon` | `shiori.encoding`／`shiori.forceencoding`／surfaces.txt の `charset` | `brief.md:50` |
 | `areka-P0-scope-zorder-pinning` | シェル descript の `seriko.zorder` | 完了 spec |
 | `areka-P0-windowposition-limit` | `descript_balloon` の `windowposition.x`／`.y`／`.limit`（要件 7.2 は「ゴースト側」と書くが、本ドメインで `windowposition` を見出しに持つ正典項目はバルーンの 3 件だけ・`descript_ghost` には無い——§12 訂正 12） | 完了 spec |
@@ -388,10 +388,10 @@ doc/
 | **`areka-P0-mayuna-compose`（実測で追加）** | 着せ替えの宣言のうちキャラクタ番号で指す形と `addid` の系統 | 完了 spec の **design**（brief ではなく、design が持つ「ukadoc 正典 3 分類表」が根拠） |
 | **`areka-P0-emo-atlas`（実測で追加）** | バルーン側の透過の描き方（`use_self_alpha`・`paint_transparent_region_black`） | 完了 spec の brief |
 | **`areka-P0-ghost-setup`（実測で追加）** | シェル descript の `name`（起動時のシェル名の出どころ） | 完了 spec の brief |
-| **`areka-P0-makoto-dll-host`（追加）** | `ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1`（本ドメインで `makoto` を見出しに持つ唯一の項目——2026-09-03 に全 542 件で確認） | `brief.md:10`・`:37`・`:57` |
+| **`makoto-dll-host`（追加）** | `ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1`（本ドメインで `makoto` を見出しに持つ唯一の項目——2026-09-03 に全 542 件で確認） | `brief.md:10`・`:37`・`:57` |
 | **`areka-P0-translate-pipeline`（追加）** | ページ全体項目 `ukadoc:manual_translator` | `brief.md:9`・`:47` |
 
-`ukadoc:manual_translator` は 2 本が半分ずつ主張する（`translate-pipeline` が継ぎ目と順序、`makoto-dll-host` が DLL のホスティング）。`owner` は 1 つしか書けないので、ページが説明する仕組みの入口を持つ `areka-P0-translate-pipeline` を担当とし、備考に `areka-P0-makoto-dll-host` が後半を持つことを書き、`links` に `{ kind = "same-feature", to = "ukadoc:descript_ghost:makoto_..." }` を置く。
+`ukadoc:manual_translator` は 2 本が半分ずつ主張する（`translate-pipeline` が継ぎ目と順序、`makoto-dll-host` が DLL のホスティング）。`owner` は 1 つしか書けないので、ページが説明する仕組みの入口を持つ `areka-P0-translate-pipeline` を担当とし、備考に `makoto-dll-host` が後半を持つことを書き、`links` に `{ kind = "same-feature", to = "ukadoc:descript_ghost:makoto_..." }` を置く。
 
 **担当が空のまま残るもの**（要件 7.5）: `descript_install`・`descript_shell_surfacetable`・`descript_plugin`・`descript_headline` の `charset`（`areka-P0-charset-canon/brief.md:51` が対象外を宣言）、install／update／nar の全項目、プラグインとヘッドラインの descript、配布者向けページ。
 

@@ -49,7 +49,7 @@
 
 use std::path::Path;
 
-use windows::Win32::Foundation::{FreeLibrary, GlobalFree, HGLOBAL, HMODULE};
+use windows::Win32::Foundation::{FreeLibrary, GetLastError, GlobalFree, HGLOBAL, HMODULE};
 use windows::Win32::Globalization::{
     CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar, WideCharToMultiByte,
 };
@@ -115,7 +115,10 @@ pub enum ProxyError {
     /// `load_dir` の符号化失敗（`loadu` の UTF-8 化・`load` の ANSI(CP_ACP) 化）、または `GlobalAlloc` 確保失敗。
     EncodingFailed,
     /// 初期化の入口（`loadu`／`load`）が 0 を返した（クラッシュはせず失敗を返した・R6.3）。
-    LoadReturnedFalse,
+    /// `last_error` は返った直後に読んだ OS の最後のエラー（`areka-P0-emo2-real-run-stability` 要件 5.5）。
+    /// SHIORI の約束に「失敗したら最後のエラーを置く」は無いので、DLL の中の最後の呼び出しの結果が
+    /// 残っていれば読める、という約束のない手がかり（0 や無関係の値もありうる）。
+    LoadReturnedFalse { last_error: u32 },
     /// `request` が null／無効 HGLOBAL を返した（応答確保失敗等・クラッシュせず失敗を返した）。
     /// silent failure を避けるため他 variant と区別可能な形で返す（R3.2〜3.4 request 失敗面）。
     RequestFailed,
@@ -278,7 +281,9 @@ impl ShioriByteProxy {
         if ret != 0 {
             Ok(())
         } else {
-            Err(ProxyError::LoadReturnedFalse)
+            // 最後のエラーは返った直後、ほかの関数を呼ぶ前に読む（後の呼び出しが上書きするため）。
+            let last_error = unsafe { GetLastError() }.0;
+            Err(ProxyError::LoadReturnedFalse { last_error })
         }
     }
 

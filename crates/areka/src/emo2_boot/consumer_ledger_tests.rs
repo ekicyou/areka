@@ -291,18 +291,19 @@ fn exclusion_applies_only_within_the_same_name() {
 /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register（31 行）が Ok（重複なら expect が panic する）。
+    // canonical() は内部 try_register（36 行）が Ok（重複なら expect が panic する）。
     let ledger = ConsumerLedger::canonical();
     assert_eq!(
         ledger.entry_count(),
-        31,
-        "正準台帳の登記は 31 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+        36,
+        "正準台帳の登記は 36 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
          (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
          (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
          (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
          updatebymyself／update／updateother／(set,choicetimeout)／\
          areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\
-         (reload,balloon)／(reload,descript)／reloadsurface）——増減させたら本檻と doc の 2 か所を編集すること"
+         (reload,balloon)／(reload,descript)／reloadsurface／(set,alignmenttodesktop)／\
+         (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)）——増減させたら本檻と doc の 2 か所を編集すること"
     );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
@@ -326,7 +327,7 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::ZOrderSink)
     );
 
-    // 31 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+    // 36 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
     // 検出される。
     let mut ext = ledger.clone();
     let err = ext
@@ -338,7 +339,7 @@ fn canonical_builds_without_duplicate() {
             name: "bind".to_string(),
             selector: None,
         },
-        "31 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+        "36 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
     );
     // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -468,7 +469,8 @@ fn canonical_registers_change_ghost_shell_balloon_and_no_bare_change() {
 
 /// areka-P0-ghost-install 要件 1.5〜1.7: install の受け口は `(execute, install)` の 1 組だけを
 /// 担当する。`execute` の第 1 引数のうち表に載るのは `install` と、窓の位置の受け口の
-/// `resetwindowpos`（areka-P0-move-canon 要件 8.7）の 2 つだけで、他の第 1 引数・裸の
+/// `resetwindowpos`（areka-P0-move-canon 要件 8.7）・`resetballoonpos`（areka-P0-window-link-directives
+/// 要件 7.1）の 3 つだけで、他の第 1 引数・裸の
 /// `execute` は登記しない。
 #[test]
 fn canonical_install_sink_owns_only_execute_install() {
@@ -477,16 +479,18 @@ fn canonical_install_sink_owns_only_execute_install() {
         [
             ledger.consumer_of("execute", Some("install")),
             ledger.consumer_of("execute", Some("resetwindowpos")),
+            ledger.consumer_of("execute", Some("resetballoonpos")),
             ledger.consumer_of("execute", Some("http-get")),
             ledger.consumer_of("execute", None),
         ],
         [
             Some(CommandConsumer::InstallSink),
             Some(CommandConsumer::MoveSink),
+            Some(CommandConsumer::MoveSink),
             None,
             None
         ],
-        "install の受け口は (execute,install) だけ・(execute,resetwindowpos) は窓の位置の受け口\
+        "install の受け口は (execute,install) だけ・(execute,resetwindowpos|resetballoonpos) は窓の位置の受け口\
          （execute の他の第 1 引数・裸の execute は担当なし）"
     );
 }
@@ -552,4 +556,36 @@ fn canonical_bind_row_uses_the_seriko_constant() {
         ConsumerLedger::canonical().consumer_of(areka_seriko::BIND_COMMAND, None),
         Some(CommandConsumer::Seriko)
     );
+}
+
+/// areka-P0-window-link-directives 要件 1.4・3.1・3.5・7.1: 吸着・窓の組・バルーン位置初期化の 5 組は
+/// 窓の位置の受け口の担当で、名前と第 1 引数の掛け合わせ（`reset,alignmenttodesktop` など）は担当なし。
+#[test]
+fn canonical_registers_the_five_window_link_pairs_for_the_move_sink() {
+    let ledger = ConsumerLedger::canonical();
+    for (name, selector) in [
+        ("set", "alignmenttodesktop"),
+        ("set", "alignmentondesktop"),
+        ("set", "sticky-window"),
+        ("reset", "sticky-window"),
+        ("execute", "resetballoonpos"),
+    ] {
+        assert_eq!(
+            ledger.consumer_of(name, Some(selector)),
+            Some(CommandConsumer::MoveSink),
+            "({name},{selector}) は窓の位置の受け口"
+        );
+    }
+    for (name, selector) in [
+        ("reset", "alignmenttodesktop"),
+        ("reset", "alignmentondesktop"),
+        ("execute", "sticky-window"),
+        ("set", "resetballoonpos"),
+    ] {
+        assert_eq!(
+            ledger.consumer_of(name, Some(selector)),
+            None,
+            "({name},{selector}) は担当なし"
+        );
+    }
 }

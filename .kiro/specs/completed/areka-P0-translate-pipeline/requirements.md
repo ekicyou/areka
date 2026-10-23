@@ -5,10 +5,10 @@
 
 **今どうなっているか**: ukadoc の正典では、SHIORI が返した台詞はバルーンに表示される直前に「翻訳」を通る（順序は `OnTranslate` → ゴースト側 MAKOTO → シェル側 MAKOTO）。`OnTranslate` の Reference0 には、ベースウェアが環境変数（`%username` 等）を展開した後の台詞が入る。areka は今日 `OnTranslate` を一度も送らず、翻訳を挟む継ぎ目も無い。そのため作者が直しているはずの台詞（「ユーザーさんさん」・語尾違い）が、正常な顔のまま間違って表示される。また areka の `%username` の展開は再生の直前に行われており、翻訳を置ける位置より後にある。
 
-**何を変えるか**: SHIORI の返した台詞が再生に渡る前に、正典の順序（環境変数の展開 → `OnTranslate` → MAKOTO の鎖を差し込む口〔本 spec では素通し〕→ 再生）で翻訳を 1 か所に通す。`OnTranslate` を正典の Reference で送り、応答の台詞を最終の台詞にする。204 やエラー応答のときは元の台詞で進み、黙らない。「SHIORI との往復は一度に 1 つまで」の決まりを守る。MAKOTO/2.0 DLL のホスティングは後半の spec `areka-P0-makoto-dll-host` が受け持つ（詳細は brief.md）。
+**何を変えるか**: SHIORI の返した台詞が再生に渡る前に、正典の順序（環境変数の展開 → `OnTranslate` → MAKOTO の鎖を差し込む口〔本 spec では素通し〕→ 再生）で翻訳を 1 か所に通す。`OnTranslate` を正典の Reference で送り、応答の台詞を最終の台詞にする。204 やエラー応答のときは元の台詞で進み、黙らない。「SHIORI との往復は一度に 1 つまで」の決まりを守る。MAKOTO/2.0 DLL のホスティングは後半の spec `makoto-dll-host` が受け持つ（詳細は brief.md）。
 
 ## Introduction
-SHIORI が返した台詞を、バルーンに表示する前に正典（ukadoc「トランスレータ」「OnTranslate」）の順序で翻訳する。翻訳は 1 か所で行い、SHIORI の返した台詞が再生されるすべての経路がそこを通る。本 spec が受け持つのは、環境変数の展開を翻訳の前へ移すこと・SHIORI イベント `OnTranslate` を送って応答を最終の台詞にすること・後半の spec `areka-P0-makoto-dll-host` が MAKOTO の鎖を差し込む口を 1 つ用意すること（本 spec ではその口は台詞をそのまま返す）。
+SHIORI が返した台詞を、バルーンに表示する前に正典（ukadoc「トランスレータ」「OnTranslate」）の順序で翻訳する。翻訳は 1 か所で行い、SHIORI の返した台詞が再生されるすべての経路がそこを通る。本 spec が受け持つのは、環境変数の展開を翻訳の前へ移すこと・SHIORI イベント `OnTranslate` を送って応答を最終の台詞にすること・後半の spec `makoto-dll-host` が MAKOTO の鎖を差し込む口を 1 つ用意すること（本 spec ではその口は台詞をそのまま返す）。
 
 正典の根拠: ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html)（「トランスレートのタイミングはバルーンに表示される直前」・SHIORI→MAKOTO の順）・[OnTranslate](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1)（Reference0＝環境変数の展開などの後の元のスクリプト・Reference1＝出所で「該当がない場合欠番」・Reference2＝このスクリプトが発生したイベント ID・Reference3＝そのイベントの Reference をバイト値 1 で区切ったもの・「OnTranslate 自身では再度発生しない」）。正典は `OnTranslate` を「元の SHIORI Event に対して返却されたスクリプトが…再び SHIORI に送られる」と書くので、送り先は台詞を返した SHIORI である。
 
@@ -29,11 +29,11 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 
 ## Boundary Context
 - **In scope**: 上の経路すべての台詞の翻訳・展開を翻訳の前へ移すこと・`OnTranslate` の送出と応答の扱い・MAKOTO の鎖を差し込む口 1 つ（本 spec では素通し）・翻訳の待ちを「SHIORI との往復は一度に 1 つまで」の決まりの中で表すこと・控える台詞を翻訳後にすること・決定論テスト・`doc/COMPAT_ARCHITECTURE.md` §8（正典が沈黙する箇所の areka の裁量）への登記。
-- **Out of scope**: MAKOTO/2.0 DLL の読み込み・通信・文字コード・`\![load|unload|reload,makoto]`（→ `areka-P0-makoto-dll-host`）。SSTP・コミュニケート・プラグインなど新しい台詞の出所を作ること（よって Reference1 の出所の語彙・SSTP の `notranslate`・descript の `sstp.alwaystranslate` も範囲外）。`%(...)` の展開。`username` 以外の環境変数名を新たに展開できるようにすること。`OnTranslate` 以外の新しいイベント。`\![reload,shiori]`。再生側（台本の解釈・文字の表示）の振る舞いの変更。
+- **Out of scope**: MAKOTO/2.0 DLL の読み込み・通信・文字コード・`\![load|unload|reload,makoto]`（→ `makoto-dll-host`）。SSTP・コミュニケート・プラグインなど新しい台詞の出所を作ること（よって Reference1 の出所の語彙・SSTP の `notranslate`・descript の `sstp.alwaystranslate` も範囲外）。`%(...)` の展開。`username` 以外の環境変数名を新たに展開できるようにすること。`OnTranslate` 以外の新しいイベント。`\![reload,shiori]`。再生側（台本の解釈・文字の表示）の振る舞いの変更。
 - **Adjacent expectations**:
-  - `areka-P0-makoto-dll-host` は、本 spec が用意する口へ「台詞と元のイベントの出所を受け取り、台詞を返す」形で MAKOTO の鎖を差し込む。本 spec はその口の向こうで何が起きるか（DLL・プロセス・文字コード）を一切持たない。
+  - `makoto-dll-host` は、本 spec が用意する口へ「台詞と元のイベントの出所を受け取り、台詞を返す」形で MAKOTO の鎖を差し込む。本 spec はその口の向こうで何が起きるか（DLL・プロセス・文字コード）を一切持たない。
   - SHIORI の失敗の分類（エラー応答 400・500 は 204 と同じ扱いで会話を続ける・輸送路の失敗はそのゴーストの SHIORI の故障）は、完了 spec `areka-P0-shiori-fault-notice` の決まりをそのまま使い、`OnTranslate` のために例外を作らない。
-  - `areka-P0-property-query-channels`・`areka-P0-balloon-lifecycle-events`・`areka-P0-network-update-canon-order` は同じ運行の判断のファイルを触るので、本 spec と同時には進めない（本 spec が先）。`areka-P0-ukadoc-survey-shiori` は完了済みのため、`OnTranslate` の ukadoc の URL の注記と台帳の更新は本 spec が行う（要件 3.7）。
+  - `property-query-channels`・`areka-P0-balloon-lifecycle-events`・`network-update-canon-order` は同じ運行の判断のファイルを触るので、本 spec と同時には進めない（本 spec が先）。`areka-P0-ukadoc-survey-shiori` は完了済みのため、`OnTranslate` の ukadoc の URL の注記と台帳の更新は本 spec が行う（要件 3.7）。
 - **開発上の制約**: 1 ファイル 1,000 行未満を保つ（触るファイルが上限に近い場合は、振る舞いを変えずに先に分ける）。ファイルの長さの検査の例外表には触れない。areka 本体のクレートの `ghost_session.rs`・`main.rs`・`emo2_boot/` の本番のコードには触れない（同じウェーブの spec が触る）。例外として、`emo2_boot/` と `crates/areka/src/` のテスト用の偽の SHIORI（`emo2_boot/spine.rs` の `ScriptedShioriBackend`）に「`OnTranslate` は既定で 204」を足すことと、テストの期待（記録した呼び出しの列）に `OnTranslate` を書き足すことは行ってよい（2026-10-03 開発者裁定）。既定の 204 は呼び出しの記録に残し、記録から隠さない。同じテストのファイルを同じウェーブの spec（`shell-balloon` 等）も触った場合は、後から着地する側がテストの行を rebase で直す。`crates/areka-ghost/tests/ghost/spine_e2e_test.rs` の同名の偽の SHIORI も同じ扱いとする。
 
 ## Requirements
@@ -104,7 +104,7 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 4. The areka shall §8 の既存の行「`OnGhostChanged` の Ref1 に何を載せるか」（今は「`OnGhostChanging` が返した台本をそのまま載せる」）を、⑵ と食い違わない書き方に改める（新しい行を足すだけで既存の行を残さない）。
 
 ### Requirement 7: MAKOTO の鎖を差し込む口
-**Objective:** As a 後半の spec `areka-P0-makoto-dll-host` の実装者, I want MAKOTO の鎖を差し込む口が 1 つだけ決まっていてほしい, so that 翻訳の経路を作り直さずに MAKOTO の DLL を足せる
+**Objective:** As a 後半の spec `makoto-dll-host` の実装者, I want MAKOTO の鎖を差し込む口が 1 つだけ決まっていてほしい, so that 翻訳の経路を作り直さずに MAKOTO の DLL を足せる
 
 #### Acceptance Criteria
 1. The areka shall `OnTranslate` の後・再生の前に、台詞と元のイベントの出所（ID）を受け取って台詞を返す口を 1 つだけ持つ。

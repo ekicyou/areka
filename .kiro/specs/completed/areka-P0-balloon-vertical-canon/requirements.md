@@ -43,7 +43,7 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
   - **`\_l[x,y]` の実装全般**（負値解禁・`%`・`@` 相対・縦書き座標系の是正を含む）——全語彙を `areka-P0-cursor-tag-canon`（M2 解禁ゲート・2026-08-27 即日起票）が一括所有する。本仕様が行うのは語彙登記と既知非互換の登記のみ（Requirement 4）。
   - `sstpmessage.*`（2.8.83 の `.yb` を含む）・`number.*`（同 `.x`／`.yb` を含む）・`arrow*` の**画像と座標の実導出**——バルーン機能ごと非モデル化のままとする（該当機能自体が M1 非実装）。本仕様は縦書きに伴う**意味の変化を語彙として記録するだけ**である。
   - SSTP マーカー送信元表示・ネットワーク更新進捗表示・入力ボックス（communicatebox）——機能自体が M1 非実装。
-  - `currentghost.balloon.scope(ID).validwidth`／`validheight`／`lines`（および `.initial` 系）**を含む同族プロパティの実導出**。当該族は sylphya に**族ごと不在**であり（2026-08-27 実測で `currentghost.balloon.scope(ID).*` は 0 件）、正典側は 19 項目規模である。本仕様はプロパティを**一切実装せず**（`.vertical` 含む——2026-08-27 討議 #4 裁定）、導出規則の確定と縮退シーム＋追跡先（`areka-P0-currentghost-property-tree`）の登記に留める（Requirement 7／8）。
+  - `currentghost.balloon.scope(ID).validwidth`／`validheight`／`lines`（および `.initial` 系）**を含む同族プロパティの実導出**。当該族は sylphya に**族ごと不在**であり（2026-08-27 実測で `currentghost.balloon.scope(ID).*` は 0 件）、正典側は 19 項目規模である。本仕様はプロパティを**一切実装せず**（`.vertical` 含む——2026-08-27 討議 #4 裁定）、導出規則の確定と縮退シーム＋追跡先（`currentghost-property-tree`）の登記に留める（Requirement 7／8）。
   - `vertical_lr`（縦書き左送り）——SSP に対応物が無く、areka 拡張として維持する。
   - budoux 分かち書き改行との相互作用の拡張——現行挙動（書字方向に対して直交・縦書きでは列を割る）を維持するのみ。
   - `\f` 系文字装飾そのものの実装（M2 予約シーム）・下線描画そのものの実装。
@@ -140,7 +140,7 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
 6. The areka バルーン文字表示 shall 1.〜4. の語彙を記録することによって現在の表示結果を変えない（記録は実導出ではない）。
 7. Where `\f` 系文字装飾が M2 の予約シームとして扱われている箇所があるとき、the 当該記述 shall 縦書き写像が確定済みであることと、その参照先を示す。
 
-> **裁定（2026-08-27 討議・議題 5 で確定）**: 5. の追跡先は開発者指示「別 spec が必要」を受けた ukadoc 全域調査（`\f` 族全 43 項目・**どの spec も未所有**・areka は 1 項目も解読していない）の結果、次のとおり**確定**した——⑴ `\f[align]`／`\f[valign]`／下線（1.〜3.）→ **`areka-P0-text-decoration-canon`**（`\f` 核 17 項目＋per-run 属性基盤の所有者・同日起票・M2 ゲート・文字装飾 3 spec〔decoration→anchor-tag-canon＋choice-marker-styling〕の先頭。SC1 の採択（バルーン定義ページ側）は同 spec が**再審議せず継承**する）⑵ 矢印の縦書き再解釈（4.）→ **`areka-P0-balloon-canon-residue` 項目 1 へ第 3 軸として追記済み**（同 brief の「項目を列挙していない spec は所有者ではない」規律を追記で満たした・既存の `arrow*` 系列解決軸とは独立）。roadmap 追記(87) が正本。調査の副産物として**実バグ 1 件**（素の `\_a` の文字漏れ・`lexer.rs:172-177`）を発見し `anchor-tag-canon` が修正を所有する。
+> **裁定（2026-08-27 討議・議題 5 で確定）**: 5. の追跡先は開発者指示「別 spec が必要」を受けた ukadoc 全域調査（`\f` 族全 43 項目・**どの spec も未所有**・areka は 1 項目も解読していない）の結果、次のとおり**確定**した——⑴ `\f[align]`／`\f[valign]`／下線（1.〜3.）→ **`areka-P0-text-decoration-canon`**（`\f` 核 17 項目＋per-run 属性基盤の所有者・同日起票・M2 ゲート・文字装飾 3 spec〔decoration→anchor-tag-canon＋choice-marker-styling〕の先頭。SC1 の採択（バルーン定義ページ側）は同 spec が**再審議せず継承**する）⑵ 矢印の縦書き再解釈（4.）→ **`balloon-canon-residue` 項目 1 へ第 3 軸として追記済み**（同 brief の「項目を列挙していない spec は所有者ではない」規律を追記で満たした・既存の `arrow*` 系列解決軸とは独立）。roadmap 追記(87) が正本。調査の副産物として**実バグ 1 件**（素の `\_a` の文字漏れ・`lexer.rs:172-177`）を発見し `anchor-tag-canon` が修正を所有する。
 
 ### Requirement 6: フォント縦書き異体の挙動等価（areka 裁量）
 
@@ -165,7 +165,7 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
 
 1. The areka ワークスペース shall `.vertical` の導出規則を語彙として確定する——当該スコープに**実際に適用されている書字方向**（Requirement 2 の共存規則で確定した結果）から導き、縦書きなら `1`・横書きなら `0`・`writing_mode,vertical_lr`（areka 拡張・縦書き左送り）も `1`（正典の語彙は縦横 2 値で送り方向を区別しない）・未解決スコープは値なし（捏造しない）・書字方向は起動時に一度確定する（Requirement 9）ため値は会話中に変わらない。
 2. The areka ワークスペース shall 現状の 2 つの欠落を**既知の穴**として登記する——⑴ `currentghost.*` 枝は areka のプロパティ機構に実導出 0 件（族ごと不在）⑵ 本番構成（32bit ヘルパ経由）にはプロパティ照会を運ぶ経路自体が存在しない（host32 の 3 crate に property の語 0 件・2026-08-27 実測）。
-3. The areka ワークスペース shall 実装の追跡先を登記する——値の導出（`.vertical` を含む `currentghost.*` ≈65 項目）は `areka-P0-currentghost-property-tree`・照会経路（`\![get,property]` ほか正典 6 経路）は `areka-P0-property-query-channels`（いずれも 2026-08-27 討議で即日起票・M2 解禁ゲート・`areka-P0-property-catalog-lists` と合わせて 3 spec でプロパティ正典 ≈180 項目を全域所有）。
+3. The areka ワークスペース shall 実装の追跡先を登記する——値の導出（`.vertical` を含む `currentghost.*` ≈65 項目）は `currentghost-property-tree`・照会経路（`\![get,property]` ほか正典 6 経路）は `property-query-channels`（いずれも 2026-08-27 討議で即日起票・M2 解禁ゲート・`property-catalog-lists` と合わせて 3 spec でプロパティ正典 ≈180 項目を全域所有）。
 4. The areka プロパティ解決 shall 本仕様によって挙動を 1 つも変えない——`currentghost.*` の照会は現行どおり値なし（既存の未導出語彙と同一の縮退）のまま（本要件は登記であって実装ではない）。
 5. The areka ワークスペース shall 追跡先 spec の brief が ⑴ `.vertical` の導出規則（1. の内容）を本仕様参照で収載し ⑵ balloon.scope 族 19 項目を全列挙していることを確認する（実在確認＋項目列挙の双方向登記）。
 
@@ -182,7 +182,7 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
 5. The areka プロパティ解決 shall 当該族を照会されたとき、値を捏造せず、値なしとして応答する（既存の未導出語彙と同一の縮退）。
 6. The areka ワークスペース shall 前項の縮退が**新たな挙動の追加ではなく現行どおりである**ことを確認する（本要件は登記であって実装ではない）。
 
-> **裁定 3（2026-08-27 討議・議題 4 で確定）**: 当初案（`.vertical` 単独実導出＋族は縮退登記）は開発者が却下した——「`currentghost` スコープの実装自体が無い。spec を立ち上げてそちらへ任せるべき」。ukadoc の規模実測（プロパティ木 ≈180 項目・照会経路 6 本・本番に経路 0 本）を経て、**プロパティ正典を全域所有する 3 spec を即日起票**（`property-query-channels`〔経路〕→ `currentghost-property-tree`〔`currentghost.*` ≈65 項目・**balloon.scope 族 19 項目の指名受け皿・全列挙済み**〕→ `property-catalog-lists`〔system/カタログ群〕・いずれも M2 解禁ゲート・roadmap 追記(86)）。**本仕様はプロパティを一切実装しない**——4. の追跡先は `areka-P0-currentghost-property-tree` で確定（実在＋項目列挙の双方向登記を Requirement 7.5 が検査する）。族ごと実装しない理由（spec の変質）は分割形でも維持されている——族は専用 spec が所有する。
+> **裁定 3（2026-08-27 討議・議題 4 で確定）**: 当初案（`.vertical` 単独実導出＋族は縮退登記）は開発者が却下した——「`currentghost` スコープの実装自体が無い。spec を立ち上げてそちらへ任せるべき」。ukadoc の規模実測（プロパティ木 ≈180 項目・照会経路 6 本・本番に経路 0 本）を経て、**プロパティ正典を全域所有する 3 spec を即日起票**（`property-query-channels`〔経路〕→ `currentghost-property-tree`〔`currentghost.*` ≈65 項目・**balloon.scope 族 19 項目の指名受け皿・全列挙済み**〕→ `property-catalog-lists`〔system/カタログ群〕・いずれも M2 解禁ゲート・roadmap 追記(86)）。**本仕様はプロパティを一切実装しない**——4. の追跡先は `currentghost-property-tree` で確定（実在＋項目列挙の双方向登記を Requirement 7.5 が検査する）。族ごと実装しない理由（spec の変質）は分割形でも維持されている——族は専用 spec が所有する。
 
 ### Requirement 9: サーフェス毎の縦書き指定の適用範囲
 

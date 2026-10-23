@@ -15,7 +15,11 @@ pub(crate) fn pass_translate(
     match actions.as_slice() {
         [Action::Translate(request)] => {
             let script = request.script.clone();
-            step(state, Input::TranslateDone(Ok(script)), config)
+            step(
+                state,
+                Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(script))),
+                config,
+            )
         }
         _ => (state, actions),
     }

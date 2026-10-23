@@ -54,13 +54,13 @@ release 版の areka は窓だけのアプリで、端末へは何も出さな�
   - 読み方と起動の解決の答えを確かめる決定論のテスト
 - **Out of scope**（申し送り先は roadmap と各 brief に登記済み）:
   - `--offline-dump` とその仲間（`--dump-*`） → `areka-P0-offline-surface-dump`
-  - `--option readonly` → `areka-P0-readonly-mode`
-  - `--install`・`--option callghost`・`--option deletesource`・exe の隣の `initial_install.nar` → `areka-P0-startup-install-option`
+  - `--option readonly` → `readonly-mode`
+  - `--install`・`--option callghost`・`--option deletesource`・exe の隣の `initial_install.nar` → `startup-install-option`
   - `--option kiosk`（通知領域のアイコンの後）・`--fmo-name`・`--ukagaka-link`・`--ssf`（MCP で足りる）・`--windowmode`・`--guifont`・`--offline-tool` とその仲間 → 受けて記録だけ（要件 1.6）。働きは作らない
   - 起動中の areka へ処理を任せる仕組みと、二重起動の確かめ（SSTP の受け口の後）
-  - `--ghost` で並べた 2 体目以降を同時に起こすこと → `areka-P0-multi-ghost-runtime`
+  - `--ghost` で並べた 2 体目以降を同時に起こすこと → `multi-ghost-runtime`
   - `--help ファイル名`（指定のヘルプの頁を開くこと）。値は受けて記録だけ（要件 9.4）
-  - 置き場の並びの決め方と保存そのもの（完了 `areka-P0-baseware-root-list`）・開発用のフォルダの別名の表（`areka-P0-dev-folder-alias`）
+  - 置き場の並びの決め方と保存そのもの（完了 `areka-P0-baseware-root-list`）・開発用のフォルダの別名の表（`dev-folder-alias`）
   - MCP の中継（`areka-mcp-bridge.exe`）の待受の読み方。中継は今までどおり `AREKA_MCP_PORT` を読み、起動オプションは読まない
   - 網羅台帳に起動オプションの台帳を足すこと（起動オプションは ukadoc の仕様の外の SSP ヘルプで、配布物の説明書の節で足りる。2026-10-18 要件の討議）
 - **Adjacent expectations**:

@@ -14,7 +14,7 @@
 - winget は、配布 zip の最上位に在った物（`ghost\`・`balloon\` と 6 つのファイル）を、**上げ直すときにも外すときにも**消す。フォルダは、中に後から置かれた物ごと消える。winget が出す文は、利用者の物を消したことを告げない。
   - ＝利用者が後から入れたゴースト・バルーンと、ゴーストの記憶（同梱のゴーストの分も）が、上げ直しのたびに黙って消える。
 - 機械の全員向け（`winget install --scope machine`）に入れると、入れ先（`C:\Program Files\WinGet\Packages\…`）の直下に普段の権限では何も作れない。areka の記憶は書けず、ゴーストを後から入れることもできない。
-- この状態が直るまで、説明書に winget での入れ方を載せられず、winget-pkgs へ次の版も出せない（`areka-P0-winget-release-automation` が待つ）。
+- この状態が直るまで、説明書に winget での入れ方を載せられず、winget-pkgs へ次の版も出せない（`winget-release-automation` が待つ）。
 
 ## Current State
 
@@ -107,24 +107,24 @@
 ## Out of Boundary
 
 - 根の並びそのもの（値の形・上から探す関数・メニューの「根を追加…」）＝`areka-P0-baseware-root-list`。
-- 開発用のエイリアス＝`areka-P0-dev-folder-alias`。
+- 開発用のエイリアス＝`dev-folder-alias`。
 - ゴーストの中のバルーン＝`areka-P0-ghost-inner-balloon`。
 - `.nar` の展開の中身（`areka-nar` の検査と手続き）。
-- 起動中のゴーストへ入れるときの危険＝`areka-P0-install-live-target-hazards`。
+- 起動中のゴーストへ入れるときの危険＝`install-live-target-hazards`。
 
 ## Upstream / Downstream
 
 - **Upstream**: `areka-P0-baseware-root-list`（brief だけ。根を並びで持つ・新しく入れる物は先頭の根へ・既定は「exe の隣だけ」）。この spec はその上に作るか、少なくともその後に置く（同じ `crates/areka-ghost/src/catalog.rs`・`crates/areka/src/boot_config.rs`・`boot_resolve.rs`・`install/` を触る）。完了 `baseware-root-layout`（根と記憶の置き場の裁定）。
-- **Downstream**: `areka-P0-winget-release-automation`（この spec が着地するまで、説明書に winget の行を載せず、winget-pkgs へ次の版を出さない）。
+- **Downstream**: `winget-release-automation`（この spec が着地するまで、説明書に winget の行を載せず、winget-pkgs へ次の版を出さない）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: なし。完了 `baseware-root-layout` の裁定 1（根と記憶は exe の隣）を、winget で入れた形について改める。
 - **Adjacent**:
   - `areka-P0-baseware-root-list`: 同 brief の「確かめること」（winget の portable で更新したとき、exe の隣のフォルダが入れ替わるか）の答えは「入れ替わる」と出た。同 brief は、その場合に「exe の隣に入れたゴーストを守る手を要件に足す」と書く。**持ち分が重なる**ので、着手のときにどちらが持つかを決める。
-  - `areka-P0-dev-folder-alias`・`areka-P0-ghost-inner-balloon`・`areka-P0-shell-companion-balloon`（同じ `catalog.rs`・`boot_resolve.rs`・`boot_config.rs`）。
+  - `dev-folder-alias`・`areka-P0-ghost-inner-balloon`・`shell-companion-balloon`（同じ `catalog.rs`・`boot_resolve.rs`・`boot_config.rs`）。
   - `areka-P0-winget-manifest-submission`（出どころ。雛形の `InstallationNotes` と、設計の「Revalidation Triggers」に「利用者の物の置き場を変える spec が着地する」が在る）。
-  - `areka-P0-install-live-target-hazards`（`install/`）。
+  - `install-live-target-hazards`（`install/`）。
   - `areka-P0-write-failure-notice`（同じ日に起票。この spec が着地しても、書き込みはほかの理由で失敗しうるので、別の仕事）。
 
 ## Constraints

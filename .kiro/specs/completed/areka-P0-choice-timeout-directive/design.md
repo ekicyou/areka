@@ -19,7 +19,7 @@
 - 決定論テスト（9.1〜9.6）と記録の更新（10.1〜10.6）。
 
 ### Non-Goals
-- `\![set,balloontimeout,時間]`・`quicksection`・`balloonwait`・`embed`・`sound,wait`・`syncobject`・`move` の時間の引数（`areka-P0-sakura-time-directives` に残す）。
+- `\![set,balloontimeout,時間]`・`quicksection`・`balloonwait`・`embed`・`sound,wait`・`syncobject`・`move` の時間の引数（`sakura-time-directives` に残す）。
 - 既定の 30 秒（`KanadeConfig::choice_timeout_default_ms`）の見直し。
 - 時間切れの発火と `OnChoiceTimeout` の送り方（完了 `areka-P0-choice-select-events` のまま）。
 - クリック待ち（`WaitForInput`）・時間待ち（`Timeout`）の区切りの振る舞いの変更。
@@ -51,8 +51,8 @@
 - `BarrierKind::WaitForChoice` の `timeout` の意味（「上位層へ運ぶ指令・再生層は解かない」）を変えるとき → `doc/choice-cascade-compat.md` の行 5d と本設計を改訂する。
 - `choice_deadline` の写像（`None`＝既定・`<= 0`＝無期限・`> 0`＝秒）を変えるとき → `parse_choice_timeout` の出力の意味を再確認する。
 - `scan_bracket_args` の規則（空欄・引用符・空白）を変えるとき → `parse_choice_timeout` の表（下記）を再確認する。
-- 早送り（`areka-P0-talk-fast-forward`）が時計を飛ばす実装を入れるとき → dola の檻（区切りの時刻と値を越えて進めても止まる）が守りになっている。
-- 後続の `areka-P0-sakura-time-directives`・`areka-P0-anchor-tag-canon` が同じ `GenericCommand` の腕を触るとき → 腕の中の「転記＋読み取り」の並びを保つ。
+- 早送り（`talk-fast-forward`）が時計を飛ばす実装を入れるとき → dola の檻（区切りの時刻と値を越えて進めても止まる）が守りになっている。
+- 後続の `sakura-time-directives`・`areka-P0-anchor-tag-canon` が同じ `GenericCommand` の腕を触るとき → 腕の中の「転記＋読み取り」の並びを保つ。
 
 ## Architecture
 
@@ -123,7 +123,7 @@ graph LR
 
 ### Modified Files（文書・台帳）
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — `\![set,choicetimeout,時間]` の項目: `status = "implemented"`・`owner = "areka-P0-choice-timeout-directive"`・`note` を今の振る舞いへ（10.1）。
-- `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]]` に本 spec の行（`stage = "A"`・`bundle = "会話"`・`owner_count = 1`・`wave = "C1-②"`）、`areka-P0-sakura-time-directives` の `owner_count` 11 → 10、`[briefs].count` 39 → 40、段階ごとの表と「会話」の節の「依存する既存 spec」の欄（`sakura-time-directives` の件数を数え直し・本 spec を件数付きで足す）、追加の理由の段落（前例「2026-09-29 の 2 行目の追加」の型）、`snapshot_on`（10.5）。数はすべて数え直した値を書く（引き算で出さない）。
+- `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]]` に本 spec の行（`stage = "A"`・`bundle = "会話"`・`owner_count = 1`・`wave = "C1-②"`）、`sakura-time-directives` の `owner_count` 11 → 10、`[briefs].count` 39 → 40、段階ごとの表と「会話」の節の「依存する既存 spec」の欄（`sakura-time-directives` の件数を数え直し・本 spec を件数付きで足す）、追加の理由の段落（前例「2026-09-29 の 2 行目の追加」の型）、`snapshot_on`（10.5）。数はすべて数え直した値を書く（引き算で出さない）。
 - `doc/ukadoc-coverage/report/sakura-script.md`・`doc/ukadoc-coverage/report/summary.md` — 生成器で作り直す（10.5）。同じ C1 の `status-execution-states` も `ledger/sakura-script.toml` に 3 項目を持つので、`main` へ後から着地する側が作り直す（手で数を直さない）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 — 「compile 側時間指令 allowlist」の行に `set,choicetimeout` は本 spec で実際に読むようになったことを書き足し（10.4）、裁量の 1 行を足す（10.3）。
 - `doc/choice-cascade-compat.md` — 行 5b（既定値だけが流れる → 台本の指定が流れる）・行 5d（着いたときに飛ばす判定も選択の区切りには効かない、と本 spec で構造にした）（10.6）。

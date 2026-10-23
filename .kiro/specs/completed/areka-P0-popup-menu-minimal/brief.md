@@ -89,8 +89,8 @@ M1 の E2E で「メニュー」と呼んでいたものは**ゴースト側が�
 
 - **Extends**: なし（新規）。
 - **Adjacent**:
-  - `areka-P0-choice-marker-styling`／`anchor-tag-canon`（α 後・選択肢バルーン）——ゴースト側の「メニュー」（選択肢）とは別物。共有ファイル 0。
-  - `areka-P0-property-catalog-lists`（α 後）——束「メニュー」の依存先として 4 件を持つ。本仕様はプロパティを出さない。
+  - `choice-marker-styling`／`anchor-tag-canon`（α 後・選択肢バルーン）——ゴースト側の「メニュー」（選択肢）とは別物。共有ファイル 0。
+  - `property-catalog-lists`（α 後）——束「メニュー」の依存先として 4 件を持つ。本仕様はプロパティを出さない。
 
 ## Constraints
 

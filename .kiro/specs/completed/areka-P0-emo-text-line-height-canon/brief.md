@@ -67,7 +67,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `areka-P0-emo-text-layer`（completed・design「補足正準」の行送りの行と research のリスク登記を消化）。
-- **Adjacent**: `areka-P0-cursor-tag-canon`（`lh` 係数の受け手・算出式は本 spec）・`areka-P0-text-decoration-canon`（`draw.rs` 共有・直列）・`areka-P0-balloon-canon-residue`（バルーン記述の粗さの台帳）。
+- **Adjacent**: `areka-P0-cursor-tag-canon`（`lh` 係数の受け手・算出式は本 spec）・`areka-P0-text-decoration-canon`（`draw.rs` 共有・直列）・`balloon-canon-residue`（バルーン記述の粗さの台帳）。
 
 ## Constraints
 

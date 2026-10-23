@@ -212,7 +212,10 @@ fn cascade_value_emits_resolve_then_start_in_this_order() {
     let (next, actions) = step(
         s,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(r"\0次のシーン\e".to_string()),
+            outcome: ShioriOutcome::Value(
+                r"\0次のシーン\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "OnChoiceEvent",
         },
         &config(),
@@ -411,7 +414,10 @@ fn one_choice_yields_at_most_one_cascade_resolve_and_start() {
         step(
             s1,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("script".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "script".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "OnChoiceEvent",
             },
             &config(),
@@ -520,7 +526,10 @@ fn canonical_value_at_first_stage_skips_the_remaining_stage() {
         step(
             s1,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("script".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "script".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "OnChoiceSelectEx",
             },
             &config(),
@@ -559,7 +568,10 @@ fn cascade_reply_does_not_reach_the_dd6_defense_arm() {
         let (_next, a) = step(
             s,
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("script".to_string()),
+                outcome: ShioriOutcome::Value(
+                    "script".to_string(),
+                    areka_talk::SecurityLevel::Local,
+                ),
                 origin: "OnChoiceEvent",
             },
             &cfg,

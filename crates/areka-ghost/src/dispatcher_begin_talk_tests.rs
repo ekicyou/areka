@@ -3,7 +3,7 @@
 
 use super::test_support::{run_bounded, test_system_vars};
 use super::*;
-use areka_sakura::contract::TalkCue;
+use areka_sakura::contract::{ScriptOrigin, TalkCue};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
@@ -42,7 +42,7 @@ impl BootCueSink for TalkIdSink {
         })
     }
 
-    fn begin_talk(&mut self, talk_id: TalkId) {
+    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin) {
         self.talk_id = Some(talk_id);
         self.log
             .lock()
@@ -88,6 +88,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         epilogue: Vec::new(),
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Tick {
@@ -101,6 +102,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         epilogue: Vec::new(),
         talk_id: talk_b,
         script: r"\s[2]B\_w[2500]B_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(B)");
     tx.send(DispatcherMsg::Tick {
@@ -167,4 +169,72 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
 
     // 置き換えられた A の終わりは古いトークの知らせとして捨てられ、kanade へは何も届かない。
     assert!(kanade_rx.try_recv().is_err(), "kanade へは何も届かない");
+}
+
+/// 出どころを記録するだけの受け口（task 6.1・要件 1.4）。複製は記録先を共有する。
+struct OriginSink {
+    seen: Arc<Mutex<Vec<(TalkId, ScriptOrigin)>>>,
+}
+
+impl CueSink for OriginSink {
+    fn emit(&mut self, _cue: TalkCue) {}
+}
+
+impl BootCueSink for OriginSink {
+    fn clone_box(&self) -> Box<dyn BootCueSink> {
+        Box::new(OriginSink {
+            seen: Arc::clone(&self.seen),
+        })
+    }
+
+    fn begin_talk(&mut self, talk_id: TalkId, origin: ScriptOrigin) {
+        self.seen
+            .lock()
+            .expect("seen mutex poisoned")
+            .push((talk_id, origin));
+    }
+}
+
+/// 配送はトークの起動の出どころ（`StartTalk::origin`）を、そのトークの全ての複製へ渡す
+/// （task 6.1・要件 1.4・design.md「begin_talk の出どころ」）。
+#[test]
+fn each_talk_start_hands_its_origin_to_every_clone() {
+    let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = || -> Box<dyn BootCueSink> {
+        Box::new(OriginSink {
+            seen: Arc::clone(&seen),
+        })
+    };
+    let (tx, handle) = spawn_dispatcher(kanade_tx, vec![sink(), sink()], test_system_vars());
+
+    for (id, origin) in [(1, ScriptOrigin::MCP_SEND), (2, ScriptOrigin::GHOST)] {
+        tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
+            talk_id: TalkId(id),
+            script: r"\s[0]X\_w[2500]\e".to_string(),
+            origin,
+        }))
+        .expect("send Start");
+    }
+    tx.send(DispatcherMsg::Close).expect("send Close");
+    run_bounded(
+        "dispatcher join after Close",
+        Duration::from_secs(5),
+        move || {
+            handle.join().expect("dispatcher terminates normally");
+        },
+    );
+
+    let seen = seen.lock().expect("seen mutex poisoned").clone();
+    assert_eq!(
+        seen,
+        [
+            (TalkId(1), ScriptOrigin::MCP_SEND),
+            (TalkId(1), ScriptOrigin::MCP_SEND),
+            (TalkId(2), ScriptOrigin::GHOST),
+            (TalkId(2), ScriptOrigin::GHOST),
+        ],
+        "起動ごとに全ての複製がそのトークの出どころを受ける"
+    );
 }
