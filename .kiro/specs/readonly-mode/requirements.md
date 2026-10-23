@@ -60,7 +60,15 @@ areka の外で起きる書き込み:
 - 設定の値は変えられるが、終わるときに書き戻さないので次の起動に引き継がない。動くのに要る一時ファイル（一時フォルダ）は作り、終わるときに捨てる。
 - `--option kiosk,readonly` と組める（kiosk とは別のもの）。
 
-ゴーストへの知らせ（断ったインストールと更新に何を送るか）は正典に書かれていない＝要件討議の前に readonly の SSP で測る（議題 3）。
+ゴーストへの知らせ（断ったインストールと更新に何を送るか）は正典に書かれていない＝要件討議で readonly の SSP を測った（議題 3・2026-10-23・`C:\wintools\ssp\ssp.exe --option readonly --ghost pasta-in-windows-dresstest`・ゴーストへ送った要求は開発用パレットの SHIORI のログ `ghost\master\ssp_shiori_log.txt` の差分で数えた）:
+
+| 頼み | SSP の記録（`get_log` の status） | ゴーストへ送ったもの | ネットワーク |
+|---|---|---|---|
+| 台本の `\![execute,install,path,<.nar>]`（バルーンの `.nar`） | `Read-only mode: install was skipped` | 何も送らない（`OnInstallBegin`・`OnInstallFailure` とも 0 件） | — |
+| 台本の `\![updatebymyself]`（homeurl を持つゴースト） | `Read-only mode: network update was skipped` | （このゴーストは SHIORI のログを持たず数えられなかった） | 0 件 |
+| 台本の `\![updateother,--balloon=にゃんばるーん]`（homeurl を持つバルーン） | `Read-only mode: network update was skipped` | `OnUpdateResultEx`（Reference0 ＝ `にゃんばるーん\1balloon\1`）→ `OnUpdateResult`（Reference0 ＝ `balloon\1`）だけ。成否（OK／NG）と理由の欄は空。`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateFailure` は 0 件。`readonly` の語は出ない | 0 件 |
+
+ほかに分かったこと: readonly の SSP でも、SHIORI（pasta）が自分で書く保存と記録・プラグイン（共有変数プラグインの `values.dat`）が自分で書くファイル・開発用パレットの SHIORI のログは書かれた。SSP 本体の設定（`data\profile\app.dat`・ゴーストの `profile\ghost.dat`）は書かれなかった。メニューの「インストール」「ネットワーク更新」の見え方は、画面の操作の許しが無く測っていない（議題 4 は測る前の推しで確定）。
 
 ### 何を変えるか
 
@@ -76,7 +84,7 @@ areka の外で起きる書き込み:
 - **Out of scope**: SHIORI が自分で書く保存・一時フォルダ（作ってよい）・`--option kiosk`（readonly と一緒に渡しても今までどおり「まだ扱わない」）・SSP の SSTP の設定・POP・メッセンジャー・カレンダー・セーブデータ共有・プラグイン・vanish・時刻合わせ・自動の更新（どれも areka に無い）・`initial_install.nar` と `--install` の受け取りそのもの（`startup-install-option` の持ち物）・別の exe の中継 `areka-mcp-bridge.exe`・`--offline-dump` の書き出し（利用者が書き出し先を指して頼む物で、`--offline-dump` と一緒の `--option` は効かないと決まっている）・記憶の形と置き場の決め方（完了 `user-data-root`・`baseware-root-list`）・記憶を書けないときの告知そのもの（完了 `write-failure-notice`）。完了 spec は直さず、この spec が新しい決まりを持つ。
 - **Adjacent expectations**:
   - `startup-options-core`（完了）が作った起動オプションの読み手に語を 1 つ足す。ほかの語（`nobootcheck`・`dontloadmodule` など）の扱いは変えない。
-  - 完了 `areka-P0-network-update` の要件 4.3 は、正典の更新の失敗理由の語 `readonly` を「送らない 7 語」に入れている（`crates/areka/src/update/refs_tests.rs` の `UNSENT_WORDS`・`doc/COMPAT_ARCHITECTURE.md` §8）。議題 3 の測りで readonly の SSP が `OnUpdateFailure(readonly)` を送ると分かったら、この spec が新しい決まりを持ち、檻を 6 語に改める（完了 spec の文書は直さない）。
+  - 完了 `areka-P0-network-update` の要件 4.3 は、正典の更新の失敗理由の語 `readonly` を「送らない 7 語」に入れている（`crates/areka/src/update/refs_tests.rs` の `UNSENT_WORDS`・`doc/COMPAT_ARCHITECTURE.md` §8）。議題 3 の測り（2026-10-23）で readonly の SSP も `readonly` を送らないと分かった＝檻はそのまま守る（この spec は 7 語を変えない）。
   - `startup-install-option`（下流・次のウェーブ）は、`initial_install.nar` と `--install` を、この spec が作るインストールの断りの入口を通して readonly で断る。この spec は、その後から足される入口も同じ断りを通る形を用意する。
   - `dev-folder-alias`（下流）は、別名のフォルダへ書かない守りを同じ「読み取りだけ」の状態から作れる。
   - ウェーブ C11 の約束: ③（この spec）は「約束なし」。ただし要件 2.5（ゴーストの記憶のフォルダを作らない）は `crates/areka-ghost/src/runtime.rs` の起動の段に関わり、このファイルは同じウェーブの ④ `mcp-scope-rect-property` が触るファイルに挙がっている＝触り方は設計の段で決め、触るなら ④ のセッションと先に話す（議題 5）。
@@ -127,7 +135,7 @@ areka の外で起きる書き込み:
 
 1. While 読み取りだけで動いている, the areka shall 利用者ごとの置き場（`%LOCALAPPDATA%\areka`、または `AREKA_USER_ROOT` が指す所）を作らず、exe の隣の記憶とゴーストをそこへ写さない。
 2. While 読み取りだけで動いている, when 利用者ごとの置き場が既に在る, the areka shall ふつうの起動と同じくそこにある記憶と置き場を読む。
-3. While 読み取りだけで動いている, when ふつうの起動なら利用者ごとの置き場を作って exe の隣の記憶を写すはずの場面（初めての起動など）である, the areka shall 写す元（exe の隣の記憶と置き場）を、写さずにそのまま読む（議題 2・推し）。
+3. While 読み取りだけで動いている, when ふつうの起動なら利用者ごとの置き場を作って exe の隣の記憶を写すはずの場面（初めての起動・置き場は在るが中の記憶が無く exe の隣に記憶がある場合を含む）である, the areka shall 写す元（exe の隣の記憶と置き場）を、写さずにそのまま読み、ふつうの起動が写した後に読むのと同じ値で起こす（議題 2）。
 4. While 読み取りだけで動いている, when 起こすゴーストが書けない所に在り、ふつうの起動ならそれを利用者ごとの置き場へ写して起こすはずである, the areka shall 写さず、元の所のゴーストをそのまま起こす。
 5. When 読み取りだけで置き場を作らなかった・写さなかった, the areka shall そのことを記録（info）に残す。
 
@@ -162,7 +170,7 @@ areka の外で起きる書き込み:
 2. While 読み取りだけで動いている, when URL からの書庫の取り込みを頼まれる, the areka shall 書庫を落とし始めない（ネットワークへ取りに行かない）。
 3. While 読み取りだけで動いている, when ネットワーク更新を頼まれる（メニュー・台本の `\![updatebymyself]`・`\![update,…]` など、どの入口からでも）, the areka shall ネットワークへ取りに行かず、更新するゴースト／シェル／バルーンのフォルダにファイルを作らず、変えず、消さず、頼みを断る。
 4. When 読み取りだけを理由にインストール・更新・取り込みを断った, the areka shall 断ったこと（何の頼みか・読み取りだけが理由であること）を記録（info か warn）に 1 件残し、メッセージボックスを出さない。
-5. When 読み取りだけを理由にインストール・更新を断った, the areka shall ゴーストへの知らせ（どのイベントを、どの理由の語で送るか、送らないか）を、readonly の SSP で測った振る舞いに合わせる（議題 3）。
+5. When 読み取りだけを理由にインストール・更新を断った, the areka shall ゴーストへの知らせを readonly の SSP で測った振る舞いに合わせる（議題 3）: インストール（どの入口でも）はゴーストへ何も送らない。ネットワーク更新は始まりと失敗のイベント（`OnUpdateBegin`・`OnUpdateFailure` など）を送らず、まとめの `OnUpdateResultEx`（頼まれた対象ごとに「名前\1種別\1」・成否と理由の欄は空）と `OnUpdateResult`（「種別\1」）だけを送る。どちらでも `readonly` の語を送らない（完了 `areka-P0-network-update` の送らない 7 語の檻を守る）。
 6. When 読み取りだけを理由にインストール・更新を断った後, the areka shall インストールと更新の窓口を「忙しい」のまま残さない（その後のゴーストの読み直し・シェルとバルーンの切り替え・次の頼みが、インストールも更新も走っていないときと同じに受けられる）。
 7. When 読み取りだけで動いている間にインストール・更新が何回頼まれた, the areka shall 1 回ごとに断って記録に残し、頼みを溜めない。
 
@@ -178,6 +186,7 @@ areka の外で起きる書き込み:
 4. While 読み取りだけで動いている, the areka shall 動くのに要る一時フォルダの中の物は今までどおり作ってよい。
 5. While 読み取りだけで動いている, when 置き場の並びをメニューで足す・外す, the areka shall その走りの中のメニューと目録へ変更を映し、記憶の置き場の並びへは書かない。
 6. While 読み取りだけで動いている, when 置き場を足すフォルダ選びと説明書を開く, the areka shall OS に「最近使った」フォルダや項目を残させない呼び方をする（どこまで areka が止められるかは議題 6）。
+7. While 読み取りだけで動いている, the areka shall 右クリックメニューの「インストール…」と「ネットワーク更新」の項目を灰色（押せない）で出し、インストールの書庫選びの画面を開かない（議題 6・議案 4）。
 
 ### Requirement 9: 説明書に書く
 
@@ -201,15 +210,17 @@ areka の外で起きる書き込み:
 4. The areka shall インストールと更新の断りの後に、窓口が「忙しい」のまま残らないことを判定するテストを持つ。
 5. The areka shall テストで、開発者の本物の `%LOCALAPPDATA%\areka` と exe の隣の記憶を読みも書きもしない。
 
-### Requirement 11: 議題（暫定・要件討議で確定）
+### Requirement 11: 議題（2026-10-23 の要件討議で確定）
+
+> 開発者は全議題を推奨案で承認した（2026-10-23）。議題 3 はその承認のもとで readonly の SSP を測り、結果で決めた。議題 4 と議題 5 の具体（結果の型・`runtime.rs` の触り方）は設計の段で決める。
 
 **Objective:** As a 開発者, I want 答えで作業が変わる点を要件討議で決めたい, so that 設計が推し量りで進まない
 
 #### Acceptance Criteria
 
-1. The areka shall 議題 1（起動中の印）を次の推しで扱う: 読み取りだけでは印を書かず消さない（SSP どおり）。前のふつうの走りが残した印があれば、ふつうの起動と同じに読んで既定のゴーストへ `halt` を伝え、印は消さずに残す（要件 3）。
-2. The areka shall 議題 2（初めての起動で利用者ごとの置き場が無いとき）を次の推しで扱う: 写す元の exe の隣の記憶と置き場を、写さずにそのまま読む（要件 4.3）。
-3. The areka shall 議題 3（断ったインストールと更新でゴーストへ何を送るか）を、要件討議の前に readonly の SSP で測って決める（readonly の SSP へ `.nar` を投げ込む・`\![updatebymyself]` を流す。SSP をもう 1 つ起こすので開発者に一言断る）。測る前の推し: SSP が送る物と同じ物を送る。SSP が何も送らなければ areka も送らず、記録だけを残す。
+1. The areka shall 議題 1（起動中の印）を次のとおり扱う（確定）: 読み取りだけでは印を書かず消さない（SSP どおり）。前のふつうの走りが残した印があれば、ふつうの起動と同じに読んで既定のゴーストへ `halt` を伝え、印は消さずに残す（要件 3）。
+2. The areka shall 議題 2（利用者ごとの置き場が無い・中の記憶が無いとき）を次のとおり扱う（確定）: 写す元の exe の隣の記憶と置き場を、写さずにそのまま読む（要件 4.3）。
+3. The areka shall 議題 3（断ったインストールと更新でゴーストへ何を送るか）を、readonly の SSP で測った結果（Introduction の「正典（SSP）の位置づけ」の表）に合わせる（確定・要件 7.5）: インストールは何も送らない。更新はまとめの `OnUpdateResultEx`・`OnUpdateResult` だけを、成否と理由の欄を空にして送る。`readonly` の語は送らない。
 4. The areka shall 議題 4（書かなかった保存の記録）を次の推しで扱う: 書かなかった保存は、書けたかの判定の手前で道を分け、「読み取りだけで書かなかった」と読める記録（info 以下）を残す。書けたときの記録（「記憶へ書きました」）も書けなかったときの記録（error）も残さない（要件 2.6・6.2・6.3）。
 5. The areka shall 議題 5（ゴーストのフォルダの中へ areka が書く物の数え直し）の答えとして、要件の段の数え直しで見つけた「ゴーストの記憶のフォルダを、保存が無くても起動のたびに先に作る」（`crates/areka-ghost/src/runtime.rs` の起動の段）を守りに入れる（要件 2.5）。13 種の表の外で見つかったのはこの 1 件。同じウェーブの ④ `mcp-scope-rect-property` がこのファイルを触るので、触り方（このファイルに手を入れずに済む形があるか・入れるなら ④ と先に話す）を設計の段で決める。
-6. The areka shall 議題 6（OS が残す「最近使った」）を次の推しで扱う: 置き場を足すフォルダ選びは、読み取りだけのとき「最近使った所に足さない」の指定で開く。説明書を開く道は OS の既定のアプリが残す物を areka が止められないので、止められる範囲だけを守り、止められない物は説明書に書く（要件 8.6・9.2）。
+6. The areka shall 議題 6（OS が残す「最近使った」）と議案 4（メニューの項目）を次のとおり扱う（確定）: 置き場を足すフォルダ選びは、読み取りだけのとき「最近使った所に足さない」の指定で開く。メニューの「インストール…」「ネットワーク更新」は灰色にし、書庫選びの画面を出さない（SSP のメニューの見え方は測っていない・測る前の推しで確定）。説明書を開く道は OS の既定のアプリが残す物を areka が止められないので、止められる範囲だけを守り、止められない物は説明書に書く（要件 8.6・8.7・9.2）。

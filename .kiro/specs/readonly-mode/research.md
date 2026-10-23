@@ -170,7 +170,7 @@ ukadoc の「ネットワーク更新の失敗理由」には `readonly` とい�
 3. **置き場は在るが中の `profile\areka` が無く、exe の隣に記憶がある場合**（ふつうなら写す）: 読み取りだけでは、置き場の空の記憶を読むか、隣の記憶を読むか（要件 4.2 と 4.3 の境目）。
 4. **書かなかった保存の結果の形**（議題 4 の推しの具体）: `PersistOutcome` に 3 つ目の値を足す（網羅の `match` は `boot_resolve.rs` の 3 か所）か、`Saved` のまま記録だけを分けるか。足すなら `boot_resolve.rs` の成功の info（「起動中の印を書きました」など）を出さない腕ができる。
 5. **メニューの「インストール…」と「ネットワーク更新」**: 読み取りだけでは項目を灰色にするか、押されたら断りの記録だけにするか。書庫選び（`install/pick.rs`）は議題 6 の数え上げに無く、画面を出すと OS が最後の場所を覚えうる＝出す前に断る形が要件 8.6 に合う。
-6. **議題 3 の測りの結果と正典の語 `readonly`**（§3.6）: SSP の readonly が `OnUpdateFailure(readonly)` を送るなら、この spec が「readonly の断りでは送る」決まりを持ち、`update/refs_tests.rs` の送らない 7 語の檻と `doc/COMPAT_ARCHITECTURE.md` §8 の行を改める。インストールの断りで `OnInstallFailure` を送るなら、正典に readonly の語が無いので語を決める（SSP の測りに従う）。
+6. **（2026-10-23 要件討議で解決: readonly の SSP は `readonly` の語を送らない＝檻は改めない・インストールは何も送らず、更新は成否の欄が空の `OnUpdateResultEx`／`OnUpdateResult` だけ。requirements.md の Introduction の表と要件 7.5）** **議題 3 の測りの結果と正典の語 `readonly`**（§3.6）: SSP の readonly が `OnUpdateFailure(readonly)` を送るなら、この spec が「readonly の断りでは送る」決まりを持ち、`update/refs_tests.rs` の送らない 7 語の檻と `doc/COMPAT_ARCHITECTURE.md` §8 の行を改める。インストールの断りで `OnInstallFailure` を送るなら、正典に readonly の語が無いので語を決める（SSP の測りに従う）。
 7. **印の扱いの実装**（議題 1 の推しの具体）: 案 A／C なら印は控えへ行き、ファイルの印は読んだまま残る（`argv_session` の 4 ファイルに触らない）。印の 3 関数の記録の文だけを分ける。別の旗（「印を読むが書かない」）を `BootContext` に足す形は `main.rs`（残り 22 行）と 4 ファイルに響く。
 8. **印を立てる場所と `main.rs` の行数**: `resolve_boot` より前に立てる必要がある（`layout()` が固まる前）。`main.rs` に置く行を数行に収め、記録と立て方は新しいモジュールへ出す。
 
@@ -178,7 +178,7 @@ ukadoc の「ネットワーク更新の失敗理由」には `readonly` とい�
 
 - `IFileOpenDialog` の `FOS_DONTADDTORECENT` が止める範囲と、画面が自分で覚える最後のフォルダ（利用者の設定の中）を止める手があるか（`SetClientGuid`・`ClearClientData`）。
 - `ShellExecuteExW` が「最近使った項目」へ足すか（足すのは開いた側のアプリだけか）。
-- 議題 3: readonly の SSP へ `.nar` を投げ込む・`\![updatebymyself]` を流す・メニューの更新を選ぶ・`\![execute,install,url,…]` を流したとき、SSP が送るイベントと Reference（`OnInstallFailure`・`OnUpdateFailure(readonly)` か・何も送らないか）。SSP をもう 1 つ起こすので開発者に一言断る。
+- （済・2026-10-23）議題 3: readonly の SSP へ `.nar` を投げ込む・`\![updatebymyself]` を流す・メニューの更新を選ぶ・`\![execute,install,url,…]` を流したとき、SSP が送るイベントと Reference（`OnInstallFailure`・`OnUpdateFailure(readonly)` か・何も送らないか）。SSP をもう 1 つ起こすので開発者に一言断る。
 - `FOS_*` と同じく、`GetOpenFileNameW` に「最近使った」を止める指定（`OFN_DONTADDTORECENT`）があるが、§6 の 5 で画面を出さないと決めれば要らない。
 
 ## 7. 次の手
