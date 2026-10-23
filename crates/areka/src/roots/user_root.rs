@@ -13,12 +13,18 @@ use areka_user_data::{CopyDone, Layout, UserRoot};
 
 use super::ROOTS_ENV;
 
-/// プロセスに 1 つの形（初回に `establish` を 1 回だけ呼んで覚える）。
+/// プロセスに 1 つの形（初回に `establish` を 1 回だけ呼んで覚える）。読み取りだけの走りでは
+/// 作らず写さない `establish_readonly`（readonly-mode 要件 4.1・4.5）。
 pub(crate) fn layout() -> &'static Layout {
     static LAYOUT: OnceLock<Layout> = OnceLock::new();
     LAYOUT.get_or_init(|| {
         let profile_env = std::env::var_os(areka_user_data::PROFILE_DIR_ENV);
-        areka_user_data::establish(exe_dir().as_deref(), profile_env.as_deref())
+        let establish = if crate::readonly::is_on() {
+            areka_user_data::establish_readonly
+        } else {
+            areka_user_data::establish
+        };
+        establish(exe_dir().as_deref(), profile_env.as_deref())
     })
 }
 
