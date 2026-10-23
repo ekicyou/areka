@@ -9,11 +9,14 @@ use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, line_bands,
     to_window_physical,
 };
+use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DWriteMetrics, FontCatalog, PROBE_MAX_EXTENT, ResolvedFont, create_text_format};
 use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::look::{GlyphStyles, StyleId, StyleTable, TextLook};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::{ChoiceSpan, SpanKind, TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
+use areka_sakura::contract::ActorKey;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteFactory2,
 };
@@ -756,4 +759,117 @@ fn vertical_band_covers_column_ink_readback() {
         red.len(),
         red.join("\n")
     );
+}
+
+/// 1.2 の記録（設計の行き止まり「大きさの違う列が隣り合う」・議題 1）: `\f[height,40]` の字の列と、
+/// その両隣の em 20 の列の**字のインクそのもの**が重なるかを、2 つの向き × 拡大率 1・2 で測る。
+/// 帯は見ない（帯の式に依らない数）。合否に入れず、測った数を標準出力へ出す（`research.md` 13 節）。
+#[test]
+#[ignore = "実 GPU の記録だけ（1.2）: 大きい字の列と隣の列のインクの重なりを測る・合否なし"]
+fn vertical_big_glyph_column_ink_overlap_record() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let mut rig = Rig::new();
+    let name = R_FONTS[0];
+    let default = TextLook {
+        name: vec![name.to_owned()],
+        height: 20.0,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let big = table.intern(
+        &TextLook {
+            height: 40.0,
+            ..default.clone()
+        },
+        &default,
+    );
+    // 小さい列・大きい列（\f[height,40]）・小さい列。
+    let words: [(&str, StyleId); 3] = [
+        ("雨だよ", StyleId::DEFAULT),
+        ("晴れてる", big),
+        ("曇ってる", StyleId::DEFAULT),
+    ];
+    let mut items = Vec::new();
+    let mut ids = Vec::new();
+    for (word, id) in words {
+        if !items.is_empty() {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        let word_items = glyph_items(word);
+        ids.extend(std::iter::repeat_n(id, word_items.len()));
+        items.extend(word_items);
+    }
+    let model = live_diff_model_font(Some(name), Some(20));
+    let font = ResolvedFont::resolve(&model);
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成");
+        let image = (200u32, 200u32);
+        let region = TextRegion::resolve(&model, image, mode);
+        let styles = GlyphStyles {
+            table: &table,
+            ids: &ids,
+            default: &default,
+            current: &default,
+        };
+        let lines = LayoutEngine::layout_styled(
+            &items,
+            ids.len(),
+            &region,
+            mode,
+            20.0,
+            &metrics,
+            WrapPlan::CharByChar,
+            styles,
+            &ActorKey::from("0"),
+            &mut CursorWarnGuard::default(),
+        );
+        assert_eq!(lines.len(), 3, "3 列に並ぶ");
+        let window = LayoutEngine::visible_window(&lines, &region, mode);
+        let base = ContentCanvas::from_layout(&lines, &region, mode);
+        for k in [1.0f32, 2.0] {
+            let tag = format!("[{name} 大きい字 {mode:?} k={k}]");
+            let contract = ScaleContract::new(k, None);
+            let ink: Vec<(u32, u32)> = (0..lines.len())
+                .map(|i| {
+                    let only = ContentCanvas {
+                        residents: vec![base.residents[i].clone()],
+                        size: base.size,
+                    };
+                    let mut surface = rig.attach(image, k);
+                    let (w, h) = surface.size();
+                    let mut exec =
+                        ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+                    exec.render_styled(
+                        &only,
+                        &window,
+                        &font,
+                        mode,
+                        &contract,
+                        &mut surface,
+                        &table,
+                    )
+                    .expect("大きい字の列の描画に失敗");
+                    let px = surface.read_back().expect("read_back 失敗");
+                    block_axis_ink_span(&px, w, h, mode).expect("列のインクが在る")
+                })
+                .collect();
+            for (i, line) in lines.iter().enumerate() {
+                println!(
+                    "{tag} 列 {}: 行矩形 x{}..{}（物理）・インク x{}..{}",
+                    words[i].0,
+                    line.rect.left * k,
+                    line.rect.right * k,
+                    ink[i].0,
+                    ink[i].1
+                );
+            }
+            for j in [0usize, 2] {
+                let (b, n) = (ink[1], ink[j]);
+                // 正なら重なる画素の数、0 以下なら間の画素の数（負号つき）。
+                let overlap = i64::from(b.1.min(n.1)) - i64::from(b.0.max(n.0)) + 1;
+                println!("{tag} 大きい列と {} のインクの重なり {overlap}", words[j].0);
+            }
+        }
+    }
 }
