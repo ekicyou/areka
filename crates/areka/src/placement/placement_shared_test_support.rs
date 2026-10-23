@@ -11,7 +11,7 @@ use super::resolver::RectPx;
 
 /// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求・
 /// measure.rs テストと同一パターン）。
-pub(super) fn with_com_initialized<F: FnOnce()>(f: F) {
+pub(crate) fn with_com_initialized<F: FnOnce()>(f: F) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
@@ -25,11 +25,11 @@ pub(super) fn with_com_initialized<F: FnOnce()>(f: F) {
 static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
-pub(super) fn emo2_root() -> PathBuf {
+pub(crate) fn emo2_root() -> PathBuf {
     EMO2.folder().to_path_buf()
 }
 
-pub(super) fn balloon_root() -> PathBuf {
+pub(crate) fn balloon_root() -> PathBuf {
     EMO2.balloon("emo2-kakukaku")
         .expect("emo2 の同梱バルーン")
         .to_path_buf()
@@ -49,7 +49,7 @@ pub(super) fn write_self_alpha_one_descript(dir: &Path, key: &str) {
 }
 
 /// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。
-pub(super) const WA: RectPx = RectPx {
+pub(crate) const WA: RectPx = RectPx {
     left: 0,
     top: 0,
     right: 1920,

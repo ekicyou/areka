@@ -327,6 +327,10 @@ pub(crate) fn spawn_test_sylphya_sink() -> TestSylphyaSink {
 }
 
 #[cfg(test)]
+#[path = "shiori_host_case_fold_tests.rs"]
+mod shiori_host_case_fold_tests;
+
+#[cfg(test)]
 mod tests {
     //! areka 側 `IShioriHost` 実装の結合テスト（要件 10.2/10.3/10.4/12.4・design.md §System Flows）。
     //!

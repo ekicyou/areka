@@ -2674,14 +2674,14 @@ areka の placement::source::char_name_scope_of が番号を取り出し、同 b
 """
 
 [entry."ukadoc:descript_ghost:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は下から 2 番目の段（ゴーストのスコープ別）にあたり、シェル側の 2 つの綴りには負けるが、同じゴーストの接頭辞なしの綴りには勝つ。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -3020,14 +3020,14 @@ areka-parsers の package::resolve が `GhostNames::kero_name` へ写し、areka
 """
 
 [entry."ukadoc:descript_ghost:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は下から 2 番目の段（ゴーストのスコープ別）にあたり、シェル側の 2 つの綴りには負けるが、同じゴーストの接頭辞なしの綴りには勝つ。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -3402,14 +3402,14 @@ areka-parsers の package::resolve が `GhostNames::sakura_name` へ写し、are
 """
 
 [entry."ukadoc:descript_ghost:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は下から 2 番目の段（ゴーストのスコープ別）にあたり、シェル側の 2 つの綴りには負けるが、同じゴーストの接頭辞なしの綴りには勝つ。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -3432,14 +3432,14 @@ areka は本体側の初期サーフェス番号の宣言を受け取る経路�
 """
 
 [entry."ukadoc:descript_ghost:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は最も弱い段（ゴースト全体）にあたり、シェル側の 2 つの綴りにも、同じゴーストのスコープを付けた綴りにも負ける。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -4504,14 +4504,14 @@ areka が 2 人目以降の窓の題に使う名前は起点の descript の側�
 """
 
 [entry."ukadoc:descript_shell:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 `charN.` の番号は、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られ、2 以上ならそのキャラクタが立たないので使われない（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
@@ -4969,14 +4969,14 @@ areka が相方の名前として採るのは起点の descript の側だけで�
 """
 
 [entry."ukadoc:descript_shell:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 1 つ補いがある——値の導出は上のとおり縮んでいるが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
@@ -5833,14 +5833,14 @@ areka が本体側の名前として採るのは起点の descript の側だけ�
 """
 
 [entry."ukadoc:descript_shell:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5848,14 +5848,14 @@ note = """
 """
 
 [entry."ukadoc:descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決めるので、id は別でも最後は同じ 1 つの置き方になる。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5913,15 +5913,18 @@ areka は透過色の残る場所を黒で塗るかどうかの宣言を読む�
 """
 
 [entry."ukadoc:descript_shell:seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-window-link-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka の placement::config::build_placement_config が `sticky_window_raw` へ生のまま持ち上げるが、この欄を読む経路が 1 つも無い（定義の doc にも「実挙動なし」と書かれている）。
-担当は決まっていない。重なり順を受け持つ areka-P0-scope-zorder-pinning の brief は、自分の範囲を重なり順の読み口までとしており、貼り付きの欄を挙げていない。窓の置き方を建てた areka-P0-window-placement の brief は、この欄を差し替えできる形だけ残すと書いている。
+実装済み。起動のたびに、この値を `\\![set,sticky-window,…]` と同じ規則（ID は数として読み、異なる ID が 2 つ以上・同じ ID の重ね書きなし・ほかの組に入っていない）で 1 つの組にする（descript の組）。組のどれかの窓をドラッグするか瞬間の `\\![move]` で動かすと、組の相手も同じ量だけ動く（くわしくはさくらスクリプトの台帳の `\\![set,sticky-window,…]` の項）。
+シェルを切り替えると（シェルの読み直しを含む）descript の組だけを新しいシェルの値へ取り替え、台本で作った組は保つ。台本の組と ID が重なる descript の組は作らずに記録する。`\\![reset,sticky-window]` の後に残るのはこの組だけである。
+壊れ方: 無い。捨てる書き方の値は組を作らず、起動を続ける。
+ログ: 組を据えたら info! の sticky_groups（action が descript_seed または descript_replace）、捨てたら warn! の sticky_group_rejected に値と理由を残す。
+根拠の場所: crates/areka/src/placement/config.rs の build_placement_config が値を `sticky_window_raw` へ読み（正典 URL の注記がある）、crates/areka/src/placement/sticky_group_ledger.rs の seed_sticky_descript（起動）と replace_sticky_descript（シェルの切り替え）が組にする。
 束: 窓の置き場所・名前だけ受けて使わない（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 61——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

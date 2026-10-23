@@ -14,10 +14,12 @@ use super::*;
 use std::collections::HashMap;
 
 use crate::app_exit::close_windows_for_restart;
+use crate::emo2_boot::move_cue::{apply_move_directive, parse_move_directive};
 use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::follow::move_window_to;
+use crate::placement::follow::{Anchored, move_window_to};
 use crate::placement::persist::persist_entries;
-use crate::placement::resolver::ScopePlacement;
+use crate::placement::resolver::{Anchor, ScopePlacement};
+use areka_emo_compose::ScaleRatio;
 use areka_parsers::charset::DefaultEncoding;
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::SizeI;
@@ -276,10 +278,10 @@ fn partner_moved_by_shiori_before_finalize_is_not_written() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 11c（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を SHIORI の移動の指示と同じ口で
-/// **縦にだけ**動かすと、並べ直しは x だけを見るので相方を横へ並べ直すが、相方は書かれず本体だけ
-/// 書かれる（台本の y は既定の位置に入らない）。相方の記憶には目印を入れておき、書けば目印が
-/// 消えることで見分ける。
+/// テスト 11c（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・Y だけ
+/// 動かす・時間 0）で**縦にだけ**動かすと、x は既定のままでも台本が置いた窓なので並べ直しは
+/// 相方を動かさず（scg 7.3）、相方は書かれず本体だけ書かれる（台本の y は既定の位置に入らない）。
+/// 相方の記憶には目印を入れておき、書けば目印が消えることで見分ける。
 #[test]
 fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     let store = PersistStore::fake();
@@ -287,22 +289,78 @@ fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     let (mut world, gw, _ghost) = booted(&store, &shown);
     seed_sentinels(&world, &[1]);
     let char1 = gw.char_window(1).unwrap();
+    // 下端の吸い付きは縦の移動を下端へ戻すので、吸い付きなしにして縦にだけ動かす。
+    world.entity_mut(char1).insert(Anchored(Anchor::Free));
     let start = pos_of(&world, char1).expect("相方の位置");
+    let tokens = ["--base=me", "--Y=-33", "--time=0"].map(String::from);
     assert!(
-        move_window_to(&mut world, char1, start.x, start.y - 33),
+        apply_move_directive(
+            &mut world,
+            &parse_move_directive(1, &tokens).directive,
+            ScaleRatio::ONE
+        ),
         "前提: 移動の指示が窓へ届く"
+    );
+    assert_eq!(
+        pos_of(&world, char1).map(|p| (p.x, p.y)),
+        Some((start.x, start.y - 33)),
+        "前提: 縦にだけ動く"
     );
 
     finalize_chain_once_with(&shown, &mut world);
 
     let partner = pos_of(&world, char1).expect("相方の位置");
-    assert_ne!(partner.x, start.x, "前提: 並べ直しは相方を横へ動かす");
-    assert_eq!(partner.y, start.y - 33, "前提: 台本の y は据え置かれる");
+    assert_eq!(
+        (partner.x, partner.y),
+        (start.x, start.y - 33),
+        "並べ直しは台本が置いた相方をそこから動かさない（scg 7.3）"
+    );
     let saved = store.load();
     assert_eq!(
         saved_pos(&saved, 1),
         (Some(SENTINEL), Some(SENTINEL)),
         "相方は書かない: {saved:?}"
+    );
+    let (x, y) = expected_saved(&world, &gw, 0);
+    assert_eq!(
+        saved_pos(&saved, 0),
+        (Some(x.as_str()), Some(y.as_str())),
+        "本体は書かれる: {saved:?}"
+    );
+    let _residue = drain_window_pos_commands();
+}
+
+/// テスト 11d（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・
+/// 動かす量 0・時間 0）で**ちょうど既定の位置へ**置くと、位置は既定と同じでも台本が置いた窓
+/// （印 `ScriptPlaced`）なので書かれず、本体だけ書かれる。相方の記憶には目印を入れておき、
+/// 書けば目印が消えることで見分ける。
+#[test]
+fn partner_placed_exactly_on_default_by_shiori_before_finalize_is_not_written() {
+    let store = PersistStore::fake();
+    let shown = shown_sizes();
+    let (mut world, gw, _ghost) = booted(&store, &shown);
+    seed_sentinels(&world, &[1]);
+    let char1 = gw.char_window(1).unwrap();
+    world.entity_mut(char1).insert(Anchored(Anchor::Free));
+    let start = pos_of(&world, char1).expect("相方の位置");
+    let tokens = ["--base=me", "--X=0", "--Y=0", "--time=0"].map(String::from);
+    assert!(
+        apply_move_directive(
+            &mut world,
+            &parse_move_directive(1, &tokens).directive,
+            ScaleRatio::ONE
+        ),
+        "前提: 移動の指示が窓へ届く"
+    );
+    assert_eq!(pos_of(&world, char1), Some(start), "前提: 既定の位置のまま");
+
+    finalize_chain_once_with(&shown, &mut world);
+
+    let saved = store.load();
+    assert_eq!(
+        saved_pos(&saved, 1),
+        (Some(SENTINEL), Some(SENTINEL)),
+        "台本が既定へ置いた相方は書かない: {saved:?}"
     );
     let (x, y) = expected_saved(&world, &gw, 0);
     assert_eq!(

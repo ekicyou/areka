@@ -13,6 +13,7 @@ mod drag;
 pub(crate) mod file_drop;
 pub(crate) mod shell_box;
 pub(crate) mod shell_box_handler;
+pub(crate) mod shortcut;
 pub(crate) mod throttle;
 pub(crate) mod user_break;
 

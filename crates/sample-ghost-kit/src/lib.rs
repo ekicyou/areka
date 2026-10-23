@@ -187,6 +187,13 @@ pub const SAMPLES: &[Sample] = &[
             url: "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar",
         },
     },
+    // ．さくら（華和梨 32 ビット・Shift_JIS・α の無い絵）。受け取ったバイト列のまま置く（畳まない）。
+    Sample {
+        name: "dot_sakura",
+        kind: SampleKind::Ghost,
+        balloons: &["bottle"],
+        source: SampleSource::Vendored,
+    },
 ];
 
 /// 取得した検体。**この値を束縛している間だけ**パスを借りられる。

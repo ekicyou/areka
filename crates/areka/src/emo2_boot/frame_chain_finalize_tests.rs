@@ -14,10 +14,15 @@ use super::test_support::{
 };
 use super::*;
 
+use crate::emo2_boot::move_cue::{apply_move_directive, parse_move_directive};
 use crate::placement::chain_finalize::{
     CHAIN_FINALIZE_STALL_FRAMES, ChainFinalizeStall, ChainFinalized,
 };
+use crate::placement::follow::Anchored;
+use crate::placement::resolver::Anchor;
+use crate::placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 
+use areka_emo_compose::ScaleRatio;
 use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::{Point, SizeI};
 
@@ -205,6 +210,75 @@ fn finalize_does_not_pull_back_an_explicitly_moved_scope() {
         pos_of(&world, char1).map(|p| p.x),
         Some(800),
         "明示的に動かされたスコープは引き戻さない（7.3）"
+    );
+}
+
+/// `\![move]` を `ScaleRatio::ONE` で当てる。
+fn apply_move(world: &mut World, scope: u32, tokens: &[&str]) {
+    let tokens: Vec<String> = tokens.iter().map(|t| t.to_string()).collect();
+    assert!(
+        apply_move_directive(
+            world,
+            &parse_move_directive(scope, &tokens).directive,
+            ScaleRatio::ONE
+        ),
+        "前提: 移動の指示が窓へ届く"
+    );
+}
+
+/// `\![move]` がちょうど既定の x・y へ置いたスコープも、台本が置いた窓なので引き戻さない
+/// （位置を比べるだけでは見分けられない・7.3）。
+#[test]
+fn finalize_does_not_pull_back_a_scope_moved_onto_its_default_position() {
+    let (mut world, gw) = resnap_world();
+    let char1 = gw.char_window(1).unwrap();
+    let before = pos_of(&world, char1);
+
+    apply_move(&mut world, 1, &["--base=me", "--X=0", "--Y=0"]);
+    assert_eq!(pos_of(&world, char1), before, "前提: 既定の位置のまま");
+
+    finalize_chain_once_with(&settled_sizes(), &mut world);
+
+    assert_eq!(
+        pos_of(&world, char1),
+        before,
+        "台本が置いたスコープは引き戻さない（7.3）"
+    );
+}
+
+/// 組の相手の `\![move]` に x を動かさずに連れ動かされたスコープも、台本が置いた窓なので
+/// 引き戻さない（7.3・window-link-directives 要件 5.1）。
+#[test]
+fn finalize_does_not_pull_back_a_scope_followed_by_a_sticky_move() {
+    let (mut world, gw) = resnap_world();
+    let (char0, char1) = (gw.char_window(0).unwrap(), gw.char_window(1).unwrap());
+    seed_sticky_descript(&mut world, None);
+    assert!(apply_set_sticky(
+        &mut world,
+        &["0".to_string(), "1".to_string()]
+    ));
+    // 下端の吸い付きは縦の量を捨てるので、吸い付きなしにして縦にだけ連れ動かす。
+    for e in [char0, char1] {
+        world.entity_mut(e).insert(Anchored(Anchor::Free));
+    }
+    let before = pos_of(&world, char1).unwrap();
+
+    apply_move(&mut world, 0, &["--base=me", "--X=0", "--Y=-40"]);
+    assert_eq!(
+        pos_of(&world, char1),
+        Some(Point {
+            x: before.x,
+            y: before.y - 40
+        }),
+        "前提: x は既定のまま縦にだけ連れ動く"
+    );
+
+    finalize_chain_once_with(&settled_sizes(), &mut world);
+
+    assert_eq!(
+        pos_of(&world, char1).map(|p| p.x),
+        Some(before.x),
+        "連れ動かされたスコープは引き戻さない（7.3）"
     );
 }
 

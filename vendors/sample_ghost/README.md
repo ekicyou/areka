@@ -6,7 +6,7 @@
 
 | 形 | 登記の `source` | 書庫の在処 | 引く前に要ること |
 |---|---|---|---|
-| 書庫を置く行（今の 8 本） | `SampleSource::Vendored` | このフォルダの `<名前>.nar`（リポジトリが追跡する） | 何も要らない |
+| 書庫を置く行（今の 9 本） | `SampleSource::Vendored` | このフォルダの `<名前>.nar`（リポジトリが追跡する） | 何も要らない |
 | URL の行 | `SampleSource::Fetched { url }` | 取り寄せ先の URL。手元では `target\` の下の置き場（リポジトリは追跡しない） | 取り寄せの段を 1 回回す（下の「取り寄せの段」） |
 
 書庫を置く行の検体:
@@ -21,6 +21,7 @@
 | `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
 | `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 135 | 3,651,357 バイト |
 | `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・同梱バルーン `emily4` は書庫に無く入らない・**受け取ったバイト列そのまま**＝下の節） | 260 | 2,677,923 バイト |
+| `dot_sakura.nar` | ゴースト（華和梨 32bit・「．さくら」・同梱バルーン `bottle`・**受け取ったバイト列そのまま**＝下の節） | 204 | 1,425,534 バイト |
 
 URL の行の検体:
 
@@ -56,6 +57,18 @@ URL の行の検体:
 - 中身は SSP の `ghost/emily4/` から起動記録（`ghost/master/profile/`・`shell/master/profile/`・`ghost/master/yaya_variable.cfg`）を除いたもの。**SSP の走行の残り `ghost/master/yaya_ssp_debug.log`（356 バイト）が 1 本入っている**が、受け取ったバイト列のまま置いた（deflate と無圧縮が混在＝239／21）。
 - ライセンス（書庫の中の `readme.txt` が出どころ）: 「Emily/Phase4.5（ghost/emily4フォルダ以下）」は **CC BY-NC 4.0**（<https://creativecommons.org/licenses/by-nc/4.0/deed.ja>）。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。`konnoyayame` のシェルと同じく、**開発用の検体としてだけ使い、areka の配布物へ同梱しない**。
 - **同梱のバルーンは入らない。** `install.txt` が `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るのに、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` に入っているため、ゴーストのフォルダだけを畳むと抜ける）。`areka-nar` は取り出し元の無い同梱のバルーンを断らずに飛ばし、ゴースト `emily4` だけを入れる（`<根>/balloon/emily4/` は作らない）。飛ばしたことは記録に 1 件（鍵 `balloon.source.directory`・値 `balloon`・置き場 `emily4`）残り、areka の画面からのインストールでは警告のダイアログが 1 つ出る。起動するとバルーンは、ほかに当たるものが無ければ既定のバルーンになる。登記表の行もこの形（ゴースト 1 つ・同梱のバルーン 0）で、判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion`。
+
+### `dot_sakura.nar` の出どころとライセンス
+
+- 出どころ: 開発者のサイトが公開する <https://ekicyou.github.io/old/dot-sakura/download/nar/dot_sakura.nar>（ゴースト「．さくら」・どっとさくら・2026-10-22 取得）。開発者が 2003 年ごろに作ったゴーストで、華和梨 7.4（32 ビット）の古い作りをまとめて持つ。
+  sha256 `0c602c6a431dcbec48c02d934d98e342337d2db9628095e0a6f90d3e83b7a472`（1,425,534 バイト）
+- 手元で畳み直していない（取り寄せたバイト列をそのまま置いた。deflate と無圧縮が混在＝129／75）。
+- 取り扱いの条件（書庫の中の `readme.txt`）: 取扱種別「無償ですが著作権複数のためフリーには出来ません(^^;」、転載・配布「インターネット上は不可、それ以外は各自の責任において可」。シェルの `readme.txt`（`shell/master/readme.txt`）: リビルド「日蔭　翠」、転載・配布「インターネット上でのアーカイブの転載不可。」。
+- それでもこのリポジトリに置く根拠は、開発者の言葉（2026-10-10）「どっとさくらは私の実装なので、検体として利用する分には問題ない。私のサイトで公開してます」。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。`konnoyayame` のシェル・`emily4` と同じく、**開発用の検体としてだけ使い、areka の配布物へ同梱しない**。
+- 見る物: 華和梨 7.4 の 32 ビットの SHIORI・Shift_JIS の辞書・α の無い絵（`tRNS` を持つ絵は 0 枚）・同梱バルーン `bottle` の連番のオンラインの印 `online0`〜`online15` と赤の抜き色。
+- **URL の行にしない理由**: 取り寄せ先の隣にハッシュのファイル `dot_sakura.nar.sha256` が無い（2026-10-22 に確かめて 404）。URL の行には隣の `<URL>.sha256` が要る（「検体を 1 本足す手順」）。サイトにハッシュのファイルが置かれたら、URL の行へ移せる。
+- 入れた結果: ゴースト `dot_sakura` と同梱のバルーン `bottle`（`<根>/balloon/bottle/`）が入り、飛ばした同梱は 0 件・警告も 0 件。書庫の最上位の `delete.txt`・`updates.txt`・`readme.txt` は、`ghost/dot_sakura/` の直下に普通のファイルとして置かれる（areka はインストールのときに `delete.txt` を読まない）。判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings`（入る 2 件・飛ばした同梱 0・警告 0 と、`delete.txt`・`updates.txt` の置き場を確かめる）。
+- 差し替えるとき: サイトの新しい `.nar` をそのまま置き、この節のハッシュ・大きさ・日と上の表の 2 つの数を書き直す。
 
 ### `pasta-in-windows`（URL の行）の出どころ
 

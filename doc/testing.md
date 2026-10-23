@@ -99,3 +99,72 @@ cargo build -p shiori-host32-helper --target i686-pc-windows-msvc
 ### 負荷の走りと同じ時間に回さない
 
 実機の試験は本物の窓を出し、CPU と GPU を使う。負荷の走り（`areka-test-binary-stability` の走行）と同じ時間に回すと、両方の結果が乱れるので重ねない。実機の試験を 1 本ずつ回す机のことは、机の貸し出しの手順書 `doc/impl-watch.md` を見る。
+
+### emo2 の実機の試験とくり返し
+
+emo2 の検体を本物の areka で起こす試験は 2 本ある。どちらも環境変数で明示したときだけ子を起こし、明示しなければ素通りする（常時の `cargo test -p areka` では回らない）。回す前に排他テストの机を借りる（`doc/impl-watch.md`）。1 本ずつ回し、ほかの実機の試験や負荷の走りと重ねない。回す前に、回す回数と所要時間の見込みを示しておく。
+
+#### 回し方
+
+件 1 の試験（`crates/areka/tests/emo2_real_run.rs`）は、新しい写しから emo2 を 1 回起こし、印（wire 成立・装着・`wrap=BudouxWordWrap`）を待ってから利用者と同じ閉じ方で閉じ、終了コード 0 を確かめる。1 回では揺れを見落とすので、3 回続けて回す。
+
+```powershell
+$env:AREKA_EMO2_REAL_RUN="1"; cargo test -p areka --test emo2_real_run -- --nocapture
+```
+
+100% 相当で回すときは、子にだけ `__COMPAT_LAYER` を渡す `AREKA_EMO2_COMPAT_LAYER` に互換モードの値を置く（まず `DPIUNAWARE`、効かなければ `GDIDPISCALING DPIUNAWARE`）。時間の 1 行の `primary_dpi=96` で効いたことを見る（200% なら `192`）。
+
+```powershell
+$env:AREKA_EMO2_REAL_RUN="1"; $env:AREKA_EMO2_COMPAT_LAYER="DPIUNAWARE"; cargo test -p areka --test emo2_real_run -- --nocapture
+```
+
+くり返しの試験（`crates/areka/tests/emo2_first_load_repeat.rs`）は、新しい写しからの最初の起動を `AREKA_EMO2_REPEAT` の回数だけ回し、成功・LOAD の失敗・ほかの失敗を数える。基本の条件は 20 回以上回す。
+
+```powershell
+$env:AREKA_EMO2_REPEAT="20"; cargo test -p areka --test emo2_first_load_repeat -- --nocapture
+```
+
+LOAD の失敗が 1 回でも出たら、`AREKA_EMO2_REPEAT_DROP` で取り合いの相手を 1 つずつ外した 3 つの条件を、基本と同じ回数ずつ回して失敗の数を比べる。
+
+| `AREKA_EMO2_REPEAT_DROP` | 条件 |
+|---|---|
+| 無い・空 | 基本。写した直後に起こし、前の回の直後に次を起こし、待つ間に MCP で面とバルーンを読む |
+| `gap` | 前の回の終わりから次の起動まで 10 秒あける |
+| `copy-wait` | 写しを取った後 10 秒待ってから起こす |
+| `no-mcp` | 待つ間の MCP の呼び出しを止める |
+
+```powershell
+$env:AREKA_EMO2_REPEAT="20"; $env:AREKA_EMO2_REPEAT_DROP="gap"; cargo test -p areka --test emo2_first_load_repeat -- --nocapture
+```
+
+`AREKA_EMO2_REPEAT` が数でない・0 のときと、`AREKA_EMO2_REPEAT_DROP` が上の 3 つ以外のときは、子を起こさずに理由を書いて赤になる。同じ PowerShell で続けて回すときは、前に置いた環境変数が残るので、要らないものは `Remove-Item Env:AREKA_EMO2_REPEAT_DROP` などで消す。
+
+どちらも `-- --nocapture` を付ける。付けないと、次の行が見えない。
+
+```text
+emo2_real_run: wire_ms=764 attach_ms=959 wrap_ms=2294 close_ms=19521 talk_to_wrap_ms=72 attach_to_talk_ms=1277 primary_dpi=192
+emo2_first_load_repeat run=1/20 outcome=ok: wire_ms=812 attach_ms=1540 ...
+emo2_first_load_repeat run=2/20 outcome=load_failed: kept=C:\...\target\test-roots\areka-rr-1234-2
+emo2_first_load_repeat: condition=basic runs=20 ok=19 load_failed=1 other_failed=0
+```
+
+時間はミリ秒の整数で、見つからない値は `none`。各値の意味は `emo2_real_run.rs` の冒頭の説明にある。
+
+所要時間の見込み（200%・debug 版で測った値）:
+
+- 件 1 の試験: 1 回約 25 秒（22〜26 秒だった）。3 回続けて約 1 分半
+- くり返しの基本の条件: 20 回で約 9 分（510 秒だった）。1 回あたり約 25 秒で見積もる
+- `gap`・`copy-wait`: 1 回あたり 10 秒ずつ増える（20 回で約 12 分）。`no-mcp` は基本と同じに見込む
+
+#### 落ちた回の証拠と読む順
+
+落ちた回の置き場は消えずに残る（中身は上の「残した証拠の場所と読み方」）。次の順に読む。
+
+1. 置き場を見つける。くり返しなら落ちた回の行の `kept=` に、件 1 の試験なら標準エラーの「落ちた回の証拠を残しました: <場所>」の行に場所が出る。くり返しの赤の文の終わりにも、落ちた回の一覧が並ぶ
+2. `stderr.log` の `[helper]` の行を読む。`[helper] SHIORI 初期化の入口: ` の行で仲介が SHIORI のどの入口を呼んだかが分かり、`[helper] LOAD 失敗（観測・ack[0]）: ` の行で失敗の訳が分かる。訳が `LoadReturnedFalse { last_error: N }` なら、`N` は SHIORI の LOAD が 0 を返した直後に読んだ OS の最後のエラーの値。DLL がこの値を残す約束は無いので、手がかりとしてだけ読む（5＝アクセス拒否・32＝共有違反なら、ファイルの取り合いを疑う。0 なら手がかり無し）
+3. `stdout.log` の `event="connect_failed"` の行と、その前後を読む（areka が SHIORI とつなげなかった時刻と、その前に起きていたこと）
+4. 写しの中の SHIORI 自身の記録 `sample\ghost\emo2\ghost\master\profile\pasta\logs\` を読む。標準エラーに「落ちた回の検体の写しを複写できませんでした」の行が出ていれば、写しは途中までしか残っておらず、この記録の最後が欠けている
+
+#### 件 2（最初の LOAD の失敗）の結論
+
+件 2 は、200% と 100% 相当で合わせて 32 回起こして LOAD の失敗が 0 回だったので、再現しないとして記録した。根拠と各回の値は `.kiro/specs/areka-P0-emo2-real-run-stability/verification.md` にある。次に同じ赤が出たら、上の順で証拠を読み、比べの 3 条件を回す。

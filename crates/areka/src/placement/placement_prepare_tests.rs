@@ -639,14 +639,24 @@ fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
 /// 採寸結果を空にしてあるのは、搬送の主張が寸法にも配置にも一切依らないからである
 /// （この値は窓を 1 mm も動かさない）。
 fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
+    let source = source::DescriptSource {
+        ghost_kv: areka_parsers::kv::parse_kv(""),
+        shell_kv: areka_parsers::kv::parse_kv(shell_kv_text),
+        shell_dir: std::path::PathBuf::new(),
+        titles: GhostTitles::from_scope_titles(Vec::new()),
+    };
     PreparedStages {
-        cfg: config::build_placement_config(
-            &areka_parsers::kv::parse_kv(""),
-            &areka_parsers::kv::parse_kv(shell_kv_text),
-        ),
+        cfg: config::build_placement_config(&source.ghost_kv, &source.shell_kv),
         sizes: MeasuredSizes { scopes: Vec::new() },
         titles: GhostTitles::from_scope_titles(Vec::new()),
         author_dpi: AuthorDpi::DEFAULT,
+        default_basis: reset_pos::DefaultPlacementBasis {
+            source,
+            balloon: reseed::BalloonPlacementInputs {
+                author_dpi: 96,
+                windowpositions: Default::default(),
+            },
+        },
         // 採寸 DPI は既定の 96（この助手は寸法にも配置にも依らないので値は判定に効かない）。
         measure_dpi: DPI::from_dpi(96, 96),
     }
@@ -668,6 +678,31 @@ fn prepare_carries_the_shell_zorder_value_verbatim() {
         prepared.zorder_raw.as_deref(),
         Some("1,0"),
         "shell の seriko.zorder が準備の結果へ搬送されていない（解釈は下流なので生のまま）"
+    );
+}
+
+/// shell の `seriko.sticky-window` も Z の順と同じ形で、生の値のまま準備の結果に載る
+/// （areka-P0-window-link-directives 要件 3.8・3.9）。宣言が無ければ `None`。
+#[test]
+fn prepare_carries_the_shell_sticky_window_value_verbatim() {
+    let declared = stages_with_shell(
+        "seriko.sticky-window,1,0
+",
+    )
+    .resolve(WA);
+    let undeclared = stages_with_shell(
+        "seriko.zorder,1,0
+",
+    )
+    .resolve(WA);
+
+    assert_eq!(
+        (
+            declared.sticky_window_raw.as_deref(),
+            undeclared.sticky_window_raw
+        ),
+        (Some("1,0"), None),
+        "seriko.sticky-window が生のまま準備の結果へ運ばれていない（宣言あり, 宣言なし）"
     );
 }
 

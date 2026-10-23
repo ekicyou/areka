@@ -98,3 +98,13 @@
   - 本文と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。
   - 本文 Current State の「帯を避ける判断（`zorder_pair.rs` の `measure_window_is_always_on_top`）」: 測る関数は `zorder_pair.rs` に残るが、呼ぶのは組を保つ系の `zorder_pair_maintain.rs`。条件をつけるなら両方を見る。
   - ゴーストの読み直し（`\![reload,ghost]`・MCP の `reload`）で窓が作り直されたとき、「常に手前」を保つか戻すかを決める。正典は「ゴースト終了まで有効」で、読み直しは終了ではない。SSP で測る項目（議題 1）に足す。
+
+## 追記（2026-10-23 `areka-P0-window-link-directives` の完了の棚卸）
+
+- **件 1: 台本の `\![set,zorder]` の組が、シェルの切り替えで捨てられる**（`window-link-directives` 要件 10.6・要件の段の裁定の表の 2 行目）。
+  - 正典（ukadoc・2026-10-23 に MCP で引き直した）: `\![set,zorder,スコープID,スコープID,...]` は「ゴースト終了まで有効」。シェルの切り替えはゴーストの終了ではない。
+  - areka の今: シェルの切り替えで、重なりの順の帳簿の基底を新しいシェルの `seriko.zorder` へ置き直すとき、台本で作った組も一緒に落ちる（`crates/areka/src/emo2_boot/frame/zorder_descript.rs` の `apply_descript_rebase` が `ZOrderGroupLedger::set_descript_base` を呼ぶ・注記に「タグ由来のグループも落ち」）。完了 `shell-balloon-switch` の要件 2.7 の後始末として入った形。
+  - 兄弟の決まり: 完了 `window-link-directives` は、台本で作った窓の組（`\![set,sticky-window]`）と台本で変えた吸着を、シェルの切り替え（とシェルの読み直し）の後も保ち、descript の値に従っていたものだけを新しいシェルの descript へ取り替える（裁定 2）。`\![set,zorder]` の組だけが違う扱いになっている。
+  - やること: 台本で作った重なりの組をシェルの切り替えの後も保ち、descript の `seriko.zorder` から来た組だけを新しいシェルの値へ取り替える。ゴーストの読み直しで窓が作り直されたとき（本文の棚卸㉘の穴の 3 つ目）も同じ「ゴースト終了まで有効」の線で決める。SSP で測る項目（議題 1）に「シェルの切り替えの後に `\![set,zorder]` の組が残るか」を足す。
+  - 起票の理由: 本 spec は「ゴースト終了まで有効」の指令（`\v`・`stayontop`）の寿命をシェルの切り替えと読み直しで決め、同じ重なりの順の鎖の上で働く。`zorder-property` はプロパティの読み書きだけを持ち、Out に「タグ／descript 入口」を挙げているので合わない。
+  - 触るファイル（足す分）: `crates/areka/src/emo2_boot/frame/zorder_descript.rs`（105 行）と兄弟のテスト `zorder_descript_tests.rs`・帳簿 `crates/areka/src/placement/zorder_group_ledger.rs`（基底の置き直しで台本の組を残す口）・`doc/COMPAT_ARCHITECTURE.md` §8 の行。+1〜2 タスク。

@@ -162,6 +162,30 @@ pub struct OnSessionEnd(pub fn(world: &mut World, entity: Entity));
 pub struct OnFilesDropped(pub fn(world: &mut World, entity: Entity, paths: Vec<PathBuf>));
 
 // ============================================================================
+// OnKeyDown
+// ============================================================================
+
+/// 窓が受けたキーの押下（`WM_KEYDOWN`・`WM_SYSKEYDOWN`）。修飾キーは押下を受けた時点の状態。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyDown {
+    /// 仮想キーコード（`wParam`）
+    pub vk: u16,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    /// 押しっぱなしによる繰り返し（`lParam` の 30 ビット目）
+    pub repeat: bool,
+}
+
+/// 窓がキーの押下を受けたときにアプリへ知らせる関数（[`OnFilesDropped`] と同じ形）。
+///
+/// 関数は World 借用中に呼ばれる。真を返すと wintf はその押下を消費し（`Some(LRESULT(0))`）、
+/// `DefWindowProc` へ渡さない。偽なら今どおり `DefWindowProc` へ渡る。
+#[derive(Component, Clone, Copy)]
+#[component(storage = "SparseSet")]
+pub struct OnKeyDown(pub fn(world: &mut World, entity: Entity, key: KeyDown) -> bool);
+
+// ============================================================================
 // WindowStyle
 // ============================================================================
 
