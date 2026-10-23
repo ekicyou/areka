@@ -739,7 +739,6 @@ fn vertical_band_case(
 /// 赤の確かめは組ごとに集めて最後に 1 度だけ落とす（向きごとにどれが赤かを 1 回の走行で残す）。
 /// 測った数は標準出力へ出る（`--nocapture`。赤のときは失敗の出力にも載る）。
 #[test]
-#[ignore = "2.1 で外す: 今の式（縦書きも横書きと同じ厚みと 0 以上の寄せ）では右から左の帯が列のインクからずれて赤（崩れ 23 の再現）・左から右も厚みが em でなく赤の見込み"]
 fn vertical_band_covers_column_ink_readback() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let mut rig = Rig::new();

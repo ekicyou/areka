@@ -332,4 +332,22 @@
 | 字のインクが重なる（大きい字の列） | 当たらない（帯だけが重なり得る＝受け入れ・P3 で量を固定・`layout.rs` は変えない） | 大きい列と隣の列のインクの間は −19〜0（13.3） |
 | ぱすたの書体名が引けない | 当たった（12.4・本 spec の外で起票） | — |
 
-- "Ag" の件は設計のとおり合否に入れず、要件 4.3 と同じく**開発者の決めを待っている**（4.2 の SSP の形＝em と 1.1 の食い違い。進行役が開発者に仰ぐ）。決めが出るまで 13.2 の 2 つの定数（右から左 0.5455・左から右 0.5303）は仮名と漢字の列で決めた値のまま。
+- "Ag" の件は設計のとおり合否に入れず、要件 4.3 と同じく開発者の決めを仰いだ（4.2 の SSP の形＝em と 1.1 の食い違い）。
+- **開発者の決め（2026-10-23・案 A 承認）**: 横倒しの "Ag" が em の帯からはみ出すこと（帯の左へ 3〜10 画素、左から右では「ないしょ」の帯が右隣の "Ag" のインクに 1〜6 画素かかること）は受け入れる。c はそのまま（13.2 の 2 つの定数・右から左 0.5455・左から右 0.5303）。"Ag" は合否に入れない（記録だけ）。
+
+## 14. 式の書き換えと、崩れた形を固めていた検査の書き換え（タスク 2.1・2026-10-23）
+
+- **直したコード**: `crates/areka-emo-text/src/choice.rs` の `line_bands` の縦書きの枝。厚み＝列の em、寄せは左から右 ＝ `round(VERTICAL_LR_EM_BOX_LEFT_SHARE × s)`、右から左 ＝ `−round((1 − VERTICAL_RL_EM_BOX_LEFT_SHARE) × s)`（s ＝ `max(0, 行の箱 − em)`）。2 つの定数は 0.5455・0.5303（13.2 節・根拠の数は定数の説明に書いた）。横書きの枝は同じ式のまま（`match` の腕へ移しただけ）。`LineBand.offset`・`ChoiceLineContent.band_extent／band_offset`・`derive_hit_rows`・`glyph_cells` の説明を「行矩形の左辺〔横書きは上辺〕からの符号つきの量」に揃えた（説明だけ）。
+- **読み戻しの検査**: `vertical_band_covers_column_ink_readback` の無視の印を外した。ふつうの crate のテストとして右から左・左から右とも緑。1.1 の右から左の 6.2 の赤（帯が面の右端を越えて塗りが切れる）は、新しい式では帯の右辺が行矩形の右辺を越えない（寄せ ≦ 0・厚み em）ので出ない（緑で確かめた）。`vertical_big_glyph_column_ink_overlap_record` は記録だけなので無視の印のまま。
+- **書き換えた検査**（消さない・足さない・ゆるめない。どれも `FixedMetrics`＝行の箱 1.33 倍。em 10 で s 3.3・em 20 で 6.6・em 28 で 9.24・em 40 で 13.2）:
+
+| 検査 | 元の期待値 | 新しい期待値 |
+|---|---|---|
+| `choice_tests.rs` `line_bands_read_the_block_axis_in_vertical_modes` | 右から左・列幅 40 の帯の丈 42 | 丈 40（em）・寄せ −6（−round(0.4545 × 13.2)） |
+| `choice_tests.rs` `hit_row_vertical_block_band_uses_band_extent_from_left_edge` | 2 つの向きとも明示の帯（丈 13・寄せ 0）で x 377..390 | 帯を `line_bands`（em 10・s 3.3）から取り、右から左 x 376..386（寄せ −1）・左から右 x 379..389（寄せ 2） |
+| `choice_tests.rs` `derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis` | 2 つの向きとも寄せ 2・丈 13 を右へ（x 379..392） | 丈 10、右から左は寄せ −1（x 376..386・行矩形の左へ出る）、左から右は寄せ 2（x 379..389） |
+| `choice_glyph_cells_tests.rs` `block_axis_is_union_of_line_rect_and_band` | 2 つの向きとも同じ明示の帯（丈 22・寄せ 3）で 1 列目の字の矩形 x 578..628 | 1 列目の帯を `line_bands`（em 20・s 6.6）から取り、右から左（丈 20・寄せ −3）x 572..618（行矩形の左へ広がる）・左から右（丈 20・寄せ 3）x 578..624。2 列目（帯が収まる）と横書きは変えない |
+| `choice_glyph_cells_tests.rs` `every_choice_hit_row_lies_inside_the_glyph_cells` の前置き | 3 方向とも「帯の遠い辺が em を越える（offset + extent ＞ em）」 | 「帯が行矩形の外へ出る（offset ＜ 0 か offset + extent ＞ em）」。em 28 で右から左は寄せ −4（左へ出る）、左から右は寄せ 5（右へ出る）なので 3 方向とも前置きに残す（c ＝ 0 の見込みでは左から右を外す予定だったが、c ＝ 0.5303 では出る） |
+
+- ほかに崩れた形を固めた縦書きの期待値は見つからなかった（新しい式で `cargo test -p areka-emo-text` の全部が緑。ほかの crate のテストは縦書きの選択肢の帯を読まない）。
+- **赤の確かめ（機能の旗）**: 旗を切った（今の式のまま）で書き換えた検査を回すと、`line_bands_read_the_block_axis_in_vertical_modes`・`hit_row_vertical_block_band_uses_band_extent_from_left_edge`・`block_axis_is_union_of_line_rect_and_band`・`vertical_band_covers_column_ink_readback` の 4 本が赤。`derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis` は明示の帯で足し算だけを見るので旗に依らず緑、`every_choice_hit_row_lies_inside_the_glyph_cells` は今の式でも前置きを満たすので緑。旗を入れて全部緑、旗を外して全部緑（1050 件）。

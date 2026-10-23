@@ -187,8 +187,10 @@ fn only_revealed_glyphs_have_cells() {
     }
 }
 
-/// 帯（`offset`＋`extent`）が行矩形の遠い辺を越える行では、字の矩形のブロック軸は帯の遠い辺まで
-/// 伸びる（近い辺は行矩形の近い辺）。帯が行矩形に収まる行は行矩形のまま。横書きと縦書きの両方。
+/// 帯（`offset`＋`extent`）が行矩形の外へ出る行では、字の矩形のブロック軸は行矩形と帯の和まで
+/// 伸びる（帯の寄せが負なら近い辺の外へ、遠い辺を越えるなら遠い辺の外へ）。帯が行矩形に収まる行は
+/// 行矩形のまま。横書きと縦書きの両方。縦書きの 1 列目の帯は `line_bands`（`FixedMetrics`・em 20・
+/// s 6.6）の値: 右から左は厚み 20・寄せ −3（行矩形の左へ出る）、左から右は厚み 20・寄せ 3。
 #[test]
 fn block_axis_is_union_of_line_rect_and_band() {
     let region = region(36, 46, 356, 168);
@@ -226,11 +228,17 @@ fn block_axis_is_union_of_line_rect_and_band() {
         line((300.0, 46.0, 320.0, 168.0), &[(46.0, 10.0)]),
         line((280.0, 46.0, 300.0, 168.0), &[(46.0, 10.0)]),
     ];
-    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+    for (mode, first) in [
+        // x: (300−3−36)×2+50 … (320−36)×2+50（帯 297..317 は行矩形の左へ出る）
+        (WritingMode::VerticalRl, cell(572.0, 0.0, 618.0, 20.0)),
+        // x: (300−36)×2+50 … (300+3+20−36)×2+50（帯 303..323 は行矩形の右へ出る）
+        (WritingMode::VerticalLr, cell(578.0, 0.0, 624.0, 20.0)),
+    ] {
+        let vertical_bands = [line_bands(&vertical[..1], mode, &FixedMetrics)[0], bands[1]];
         assert_eq!(
-            glyph_cells(&vertical, &bands, mode, &region, 50, &contract),
+            glyph_cells(&vertical, &vertical_bands, mode, &region, 50, &contract),
             vec![
-                cell(578.0, 0.0, 628.0, 20.0), // x: (300−36)×2+50 … (300+3+22−36)×2+50
+                first,
                 cell(538.0, 0.0, 578.0, 20.0), // 帯が収まる列は行矩形のまま
             ],
             "{mode:?}"
@@ -279,16 +287,17 @@ fn every_choice_hit_row_lies_inside_the_glyph_cells() {
             WrapPlan::CharByChar,
         );
         let bands = line_bands(&lines, mode, &FixedMetrics);
-        // 前提: 帯の遠い辺が em（行矩形）を越える（越えなければこの檻は何も確かめない）。
+        // 前提: 帯が行矩形の外へ出る（出なければこの檻は何も確かめない）。em 28・s 9.24 で
+        // 右から左は寄せ −4（左へ出る）、左から右は寄せ 5（右へ出る）、横書きは寄せ 4・丈 30。
         assert!(
             lines.iter().zip(&bands).all(|(l, b)| {
                 let em = match mode {
                     WritingMode::HorizontalTb => l.rect.bottom - l.rect.top,
                     _ => l.rect.right - l.rect.left,
                 };
-                b.offset + b.extent > em
+                b.offset < 0.0 || b.offset + b.extent > em
             }),
-            "{mode:?}: 前提の帯が em を越えていない: {bands:?}"
+            "{mode:?}: 前提の帯が行矩形の外へ出ていない: {bands:?}"
         );
         let cells = glyph_cells(&lines, &bands, mode, &region, committed, &contract);
         let rows = derive_hit_rows(

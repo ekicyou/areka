@@ -698,10 +698,11 @@ fn line_bands_scale_with_each_line_own_em() {
     );
 }
 
-/// 縦書きでは行矩形の**行内幅ではなく列幅**（x 軸）が基準になる。
+/// 縦書きでは行矩形の**行内幅ではなく列幅**（x 軸）が基準になる。帯の厚みは列の em、
+/// 右から左の寄せは負（列の箱の余り s のうち em の箱の右に乗る分だけ左へ）。
 ///
 /// 較正: 軸の読み替えを落として横書きと同じ `bottom - top` を採ると、
-/// 列幅 40 の行が丈 200 相当の帯になって赤。
+/// 列幅 40 の行が丈 200 相当の帯になって赤。横書きの式（丈 42・寄せ 6）に戻しても赤。
 #[test]
 fn line_bands_read_the_block_axis_in_vertical_modes() {
     // 縦書き: ブロック軸は x（列幅 40）・行内軸は y（200）。
@@ -710,9 +711,11 @@ fn line_bands_read_the_block_axis_in_vertical_modes() {
     let bands = line_bands(&lines, WritingMode::VerticalRl, &FixedMetrics);
 
     assert_eq!(
-        bands[0].extent, 42.0,
-        "列幅 40 が基準（行内軸 200 ではない）"
+        bands[0].extent, 40.0,
+        "列幅 40（em）が基準（行内軸 200 ではない）"
     );
+    // s ＝ 40 × 1.33 − 40 ＝ 13.2 → −round(0.4545 × 13.2) ＝ −6。
+    assert_eq!(bands[0].offset, -6.0, "右から左の寄せは負");
 }
 
 /// 装飾の無い行は従来と 1 画素も変わらない（非退行）——行矩形のブロック軸寸が既定の大きさに
@@ -830,23 +833,29 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
     );
 }
 
-/// 縦書きも同一規則: 帯は行矩形の block 近端（left）から band_extent 分（右方向）。
+/// 縦書きも同一規則: 帯は行矩形の左辺 ＋ 符号つきの寄せから band_extent 分（右方向）。
+/// 帯は `line_bands`（`FixedMetrics`・em 10・s 3.3）から取る: 厚み em 10、寄せは右から左
+/// −round(0.4545 × 3.3) ＝ −1・左から右 round(0.5303 × 3.3) ＝ 2。
 #[test]
 fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
     let region = region(0, 0, 400, 224);
-    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+    for (mode, left, right) in [
+        (WritingMode::VerticalRl, 376.0, 386.0),
+        (WritingMode::VerticalLr, 379.0, 389.0),
+    ] {
         let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(13.0, NO_OFFSET));
+        let bands = line_bands(&lines, mode, &FixedMetrics);
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands);
         assert_eq!(
             rows[0].rect,
             LineRect {
-                left: 377.0,
+                left,
                 top: 5.0,
-                right: 390.0,
+                right,
                 bottom: 15.0
             },
-            "{mode:?}: block 帯は left から band_extent（13）分"
+            "{mode:?}: block 帯は left ＋寄せから em（10）分"
         );
     }
 }
@@ -911,24 +920,28 @@ fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
     );
 }
 
-/// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から `band_offset` 右へ
-/// ずれて始まる（R13.7）。行内軸（y）は寄せの影響を受けない。
+/// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から符号つきの
+/// `band_offset` だけずれて始まる（R13.7）。右から左は負の寄せ（行矩形の左へ出る）、左から右は
+/// round(c·s) の寄せ（em 10・s 3.3 で −1 と 2）。行内軸（y）は寄せの影響を受けない。
 #[test]
 fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
     let region = region(0, 0, 400, 224);
-    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+    for (mode, offset) in [
+        (WritingMode::VerticalRl, -1.0),
+        (WritingMode::VerticalLr, 2.0),
+    ] {
         let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(13.0, 2.0));
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(10.0, offset));
         assert_eq!(
             rows[0].rect,
             LineRect {
-                left: 379.0,  // 377 + 寄せ 2
-                top: 5.0,     // 行内軸は不動
-                right: 392.0, // 379 + 帯 13
+                left: 377.0 + offset, // 377 ＋ 符号つきの寄せ
+                top: 5.0,             // 行内軸は不動
+                right: 387.0 + offset,
                 bottom: 15.0
             },
-            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せ 0 なら 377..390 で赤）"
+            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せ 0 なら 377..387 で赤）"
         );
     }
 }
