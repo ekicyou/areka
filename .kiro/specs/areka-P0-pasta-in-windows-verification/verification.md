@@ -113,6 +113,65 @@ sync exit=0
 
 手順の穴: 手順書（`doc/pasta-real-run.md`）4 節の補いの走りの準備は、本走行の根を写すときにゴーストの記憶（`ghost\master\profile\`）も一緒に写し、消していない。このため alt1 は前の走行の記憶で起動した。手順書の直しはタスク 8.1 で行う。
 
+## 5. 崩れた所の表
+
+本走行 run1（`<w>\target\pasta-verify\shots\run1\notes.md`・`logs\run1.*`）と、参考の補いの走り alt2（`<w>\target\pasta-verify-alt\shots\alt2\notes.md`・`logs\alt2.*`）で見えた崩れを、SSP の基準（`ssp-measurement.md`）と比べて 1 件ずつ仕分けた（2026-10-23・タスク 5.1・要件 5.2・5.3・5.6・7.3）。引き取る spec は、設計の Out of Boundary の一覧と要件の Adjacent expectations で決め、一覧に無い件は兄弟の spec の `brief.md` の持ち分と照らした。どれにも当たらない件は、設計の「仕分けと申し送り」の線のとおり本 spec が受け持ち、直すか起票するかをタスク 5.3 で決める。
+
+- 記録の行の時刻は世界標準時（`Z`）のまま引いた。日本時間は 9 時間足す。
+- 目視で「同じ／違う」を決める項目（重なりの順・メニューの見た目・縦書きの並び）は、開発者の判定（タスク 4.3）がまだ無い。下の表は、記録と撮った物から言える事実だけで仕分けた。判定待ちの所は表の中に「開発者の判定待ち」と書いた。
+- 「参考」と書いた件は補いの走り（alt2）だけで見えた件で、段の 3 値の数には入れない。
+
+### 崩れた所
+
+| 番号 | 症状 | 根拠 | 原因 | 扱い | 引き取る spec／裁定 |
+|---|---|---|---|---|---|
+| 1 | 縦書きのバルーンが見つからず、既定の横書きのバルーン（`StayseeBalloon`）で出た。SSP はゴーストのフォルダの中の `pasta_tategaki` を使った | run1 の記録 `2026-10-22T23:17:53.448361Z` の `boot_resolve` の WARN `descript_balloon_not_found value="窓際のぱすたさん縦書き"`・get_log の `#3 … balloon_resolved route=Default dir=...\root\balloon\StayseeBalloon`（`shots\run1\1-boot-getlog.txt`）。SSP は `ssp-measurement.md` 2 節の段 1 | `crates/areka/src/boot_resolve.rs:294`〜`297`。descript の `balloon` の名前を、根の `balloon\` の一覧（`listed`）の中だけで探し、ゴーストのフォルダの中を探さない | 引き取る spec | `areka-P0-ghost-inner-balloon` |
+| 2 | 横書きのバルーンで、`\_l[-283,0]` の後の段が前の行に重なって描かれた（起動の段・`縦書き試作` の 2 ページとも）。`\_l[-253,0]` の後の選択肢 4 つも本文の 2 行目に重なった。縦書きのバルーン（alt2）では重ならない | `shots\run1\1-boot-balloon0.png`（「あれフ映ってるボール」）・`2-choice-zorder.png`・`2-choice-balloon0.png`・`2-tategaki-frames-page1.png`・`2-tategaki-balloon0-end.png`。参考: `shots\alt2\1-boot-balloon0.png`・`2-choice-zorder.png`・`2-tategaki-burst-03.png` | 1 の結果。台本の `\_l[x,y]` は「現スコープ側のカーソル位置を XY の座標に移動する」（ukadoc）で、ぱすたは縦書きの左の枠へ移るために y を 0 にしている。横書きのバルーンでは y=0 が 1 行目の高さになるので重なる。原因の場所は 1 と同じ（`boot_resolve.rs:294`〜`297`） | 引き取る spec | `areka-P0-ghost-inner-balloon` |
+| 3 | 選択肢の前の `\![*]` の印が出ない（run1・alt2 とも）。SSP は 4 つの選択肢それぞれの前に印が出た | `shots\run1\2-choice-zorder.png`・参考 `shots\alt2\2-choice-zorder.png`。SSP は `ssp-measurement.md` 2 節の段 2（`stage2-choice-shot.png`） | `crates/areka-parsers/src/sakura/decode.rs:127`。`fold_choice_marker` が印を「無視した」として直後の `\q` に畳み、印は何も描かない | 引き取る spec | `areka-P0-script-small-tags` |
+| 4 | ぱすたの窓が画面の下端を越えた。窓は (0,864)-(1108,2232) で、主画面の高さ 1800 を越え、ボールの下半分がタスクバーに隠れた | run1 の記録 `2026-10-22T23:17:55.378678Z` `merge_scope restore scope=0 … default_char_y=864 … char_w=640 char_h=840`・hit_test の `bounds=(0,864)-(1108,2232)`（`logs\run1.stage3-excerpt.log`）。作業領域の下端は 1704（同じ記録の `work_area=RectPx { … bottom: 1704 }`） | `crates/areka/src/placement/measure.rs:173`。起動の位置を決めるときの窓の大きさを、`\0` は面 0 で測る（決め打ち）。ぱすたの面 0 は `pasta/xyz.png`（320×420）なので 200% で 640×840 になり、下端に揃えた y が 1704−840＝864 になった。実際に出る面 1000・1002 は 554×684（200% で 1108×1368）。ぱすたは descript に `sakura.seriko.defaultsurface,1000` を書いているが、areka は読まない（`\1` は面 10 で測るので 1108×1368・y＝336 で合っている） | 引き取る spec | `areka-P0-descript-window-keys`（`sakura.seriko.defaultsurface` と大きさの測りの決め打ちの置き換えは、同 brief の範囲に在る） |
+| 5 | （参考）縦書きのバルーンの右の枠の 1 列目の上端に、ぱすたの × の板が重なり、字の一部が隠れた | alt2 の記録 `2026-10-22T23:42:32.443025Z` `Clamp 起動時関門 … scope=0 … from=PointPx { x: 80, y: 980 } to=PointPx { x: 80, y: 804 } balloon_size=SizePx { w: 872, h: 900 }`・`shots\alt2\1-boot-primary-full.png`・`2-choice-zorder.png`・`2b-after-choice.png` | 4 の結果。バルーンのぱすたからのずれ（80,116）は SSP（150% で 60,87＝等倍で 40,58）と同じだが、ぱすたの窓が 4 のとおり低すぎたため、バルーンの下端（980＋900＝1880）が作業領域を越え、起動の関門が 176 上へ寄せて × の板にかかった。原因の場所は 4 と同じ（`measure.rs:173`）。前後（ぱすたが手前・バルーンが奥）は SSP の `\![set,zorder,s0,b0,s1]` と同じ向き | 引き取る spec | `areka-P0-descript-window-keys` |
+| 6 | 窓の枠（`\1`・面 10）が `\0` に重ならず、副画面に出た（run1・alt2 とも）。SSP は `scope(0)` と `scope(1)` の rect が同じ（`-782,201,49,1227`） | run1 の記録 `2026-10-22T23:17:58.829725Z` `move_applied scope=1 … to_x=0 to_y=864` の直後 `23:17:58.830231Z` `chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1） scope=1 from_x=0 to_x=-1108`。alt2 も `23:42:34.243709Z`・`23:42:34.244103Z` で同じ。`shots\run1\1-boot-full-a.png`・`1-boot-surface1.png` | `crates/areka/src/placement/chain_finalize.rs:121`。起動の最後の並べ直しは、既定の位置のままかを x だけで比べる（`default_x != Some(current_x)`）。ぱすたの台本の `\![move,--X=0,--Y=0,--base=0,…]` は `\1` を `\0` の左上（0,864）へ動かしたが、x は既定の 0 のままで y だけが変わったので「動かされていない」と読まれ、`\0` の左隣（x＝-1108・副画面）へ並べ直された | 本 spec（タスク 5.3 で線を引く・持ち主なし） | 持ち主なし。`areka-P0-window-link-directives` の brief は、組の窓を拡大率の後の詰め直し（`placement/chain_realign.rs`）から外す件だけを名指しし、この起動の並べ直し（`chain_finalize.rs`）と台本の移動の食い違いは持ち分に無い。直すとすべてのゴーストの起動の位置に効くので、直すなら先に開発者の決めを仰ぐ（要件 6.4） |
+| 7 | 同じ画面の中のドラッグで、ぱすた（`\0`）だけが動き、窓の枠（`\1`）が付いてこない。拡大率の違う画面へのドラッグでも同じ。SSP は 2 つが揃って動いた | run1 の記録 `2026-10-22T23:23:03.468835Z` `char DragEnd 保存 scope=0 char_x=800 char_y=464`（`\1` の保存の行は無い）・`shots\run1\4-before-drag-full.png`・`4-after-drag-full.png`・`5-after-move-full.png`。SSP は `ssp-measurement.md` 2 節の段 4 | `crates/areka/src/placement/config.rs:107`・`135`。シェルの `seriko.sticky-window,0,1` を生のまま写すだけで、ドラッグに組の相手を連れて動かす所が無い | 引き取る spec | `areka-P0-window-link-directives` |
+| 8 | 拡大率 150% の画面へ移ると、ぱすたの窓が 1108 から 831 の幅へ縮んだ。SSP は大きさを変えない（831×1026 のまま・`scaling` 150,150） | run1 の記録 `2026-10-22T23:23:21.153099Z` `char DragEnd 保存 scope=0 char_x=-1725 char_y=194 … char_w=Some(831)`。SSP は `ssp-measurement.md` 2 節の段 5（`stage5-rects.txt`） | 方針の裁定。areka は画面の拡大率に合わせて絵を拡げ縮めする（DPI 追従・倍率＝画面の DPI ÷ 作者の基準の DPI）のが基本の設計で、SSP の「画面が替わっても大きさを変えない」には合わせない | 方針で受けない | 2026-07-18 開発者（DPI 追従が基本の設計・SSP とは別の考え方）。出どころ: `.kiro/steering/roadmap-history.md` の M-dpi の行と追記㉜、完了 `areka-P0-emo-dpi-scaling` |
+| 9 | 拡大率の違う画面へドラッグして落とすと、ぱすたが落とした点より上（左上）に置かれた。落とした点 (-1500,1000) に対し、掴んだボールの中心はおよそ (-1554,802) | run1 の記録 `2026-10-22T23:23:19.129935Z` の掴んだ点 `client_x=225 client_y=806 … bounds=(800,464)-(1908,1832)`・`23:23:21.152609Z` `DragEndEvent … x=-1500 y=1000`・`23:23:21.153099Z` `char_x=-1725 char_y=194`（`logs\run1.stage4-5-excerpt.log`）。`shots\run1\5-after-move-full.png` | `crates/wintf/src/ecs/window_proc/mouse_move.rs:302`〜`303`（`new_x = initial_window_pos.x + (current_pos.x - start_pos.x)`・y も同じ形）。ドラッグの窓の位置を「始めの窓の左上＋カーソルの移動量」で決め（始めの窓の左上は `crates/wintf/src/ecs/drag/dispatch.rs:149`〜`159` で控える）、拡大率が変わって窓が 0.75 倍に縮んでも、掴んだ点の窓の中の位置（225,806）を縮めない（-1500−225＝-1725・1000−806＝194 と合う） | 引き取る spec | `areka-P0-dpi-realign-remembered-chain`（設計の Out of Boundary「拡大率の違う画面をまたぐドラッグ」） |
+| 10 | × に乗っても × が赤くならない（run1 の段 3・段 7）。SSP は `OnMouseEnter`（`Reference4: 閉じる`）が届き、応答の `\![bind,閉じる,赤,1]` で赤くなった | `shots\run1\3-x-hover.png`・`3-x-nohover.png`・`7-x-hover.png`。ぱすたの記録 `logs\run1.pasta.log` に `OnMouseEnter` の行が 0。SSP は `ssp-measurement.md` 2 節の段 3・段 7 | `crates/areka-kanade/src/schedule/events.rs:114`。送ってよいイベントの表 `ALLOWED_EVENT_IDS` に `OnMouseEnter`・`OnMouseLeave` が無く、areka は送らない | 引き取る spec | `areka-P0-mouse-click-wheel-events` |
+| 11 | ボールと × を押しても何も起きない（run1 の段 3・段 7、alt2 の終わり）。窓には当たっている。SSP は `OnMouseClick` が届き、ボールのトークと終わりの台詞が出た | run1 の記録 `2026-10-22T23:22:07.960045Z` `hit_test result … screen_x=225 screen_y=1630 bounds=(0,864)-(1108,2232) button=Left is_down=true`（`logs\run1.stage3-excerpt.log`）。get_log の台本に新しい行なし・`logs\run1.pasta.log` に `OnMouseClick` が 0。`shots\run1\3-ball-1..5.png`・`7-after-x-1..4.png`・参考 `shots\alt2\9-after-x.png` | `crates/areka/src/input_events/mod.rs:483`・`526`〜`531`。キャラの窓の押下の受け口 `on_char_pointer_pressed` は、単発のクリックを送らない（完了 `input-events` の要件 7.3 の線） | 引き取る spec | `areka-P0-mouse-click-wheel-events` |
+| 12 | ぱすたの身体が最後まで映らなかった（面 1002＝ボールと × だけのまま）。そのため顔を撫でた入力は窓を素通りしてデスクトップに届き、`OnMouseMove` は出ず、自然なトーク（ランダムトーク）も 1 つも出なかった | `shots\run1\1-boot-surface0.png`・`3-after-stroke-1.png`（ごみ箱が選ばれた色）・`6-after-menu-surface0.png`（面 1002 のまま）。get_log の台本は `#18` の次が `#83`（`raise_event`）。面 1002 の `window/canvas.png` は × の範囲の外が α 0（中を数えた: α 0 の画素 377,464・α 241〜255 の画素 1,472） | 11 の結果。ぱすたの初回の起動の台本（`dic/boot.pasta` の `＊OnFirstBoot`）は、最後に `\0\s[1002]` を出して「ボールのクリックで映る」のを待ち、待つ間は印 `初回待ち` で毎秒のイベント（`OnSecondChange`）の応答を止める。ボールのクリック（`OnMouseClick`）が届かないので、待ちが終わらない。原因の場所は 11 と同じ（`input_events/mod.rs:483`） | 引き取る spec | `areka-P0-mouse-click-wheel-events` |
+| 13 | × で終われず、メニューの「終了」で終えたとき、終わりの台詞が出なかった。SSP は × の `OnMouseClick` で「…ここからは、画面ごしのお別れだね。…」が出た | run1 の記録 `2026-10-22T23:25:02.132856Z` `OnClose GET を発行し握手を開始` → `23:25:02.136443Z` `OnClose 応答なし（204）——追加イベントなしで無言終了へ`・`shots\run1\7-farewell-1..5.png`。SSP は `ssp-measurement.md` 2 節の段 7 | 11 の結果。ぱすたの辞書に `OnClose` の受け口は無く（`dic\` の中に `OnClose` の語が 0）、SSP の終わりの台詞は × の `OnMouseClick` の応答から出た。`OnClose` に 204 が返ったのはぱすたの答えどおり。原因の場所は 11 と同じ（`input_events/mod.rs:483`） | 引き取る spec | `areka-P0-mouse-click-wheel-events` |
+| 14 | 右クリックメニューに「着せ替え」の項目が無く、着せ替えを選ぶ操作を回せなかった。SSP は着せ替えのメニュー（口・目・眉・うで・まばたき・ボール・閉じる - 赤）が出て、選ぶと面が変わった | run1 の記録 `2026-10-22T23:23:44.627931Z` `[menu] shown event="menu_shown" scope=0 items=13`（`logs\run1.stage6-excerpt.log`）・`shots\run1\6-menu.png`・`6-menu-shell-sub.png`。SSP は `ssp-measurement.md` 2 節の段 6 | `crates/areka/src/menu/mod.rs:49`。メニューの枠 `Frame` に着せ替えの枠が無い。シェルの `sakura.menu,auto` を読む所も無い | 引き取る spec | `areka-P0-popup-menu-shell-look` |
+| 15 | 右クリックメニューが、シェルの `menu.*` の絵と色を使わない普通の Windows のメニューで出た。SSP もシェルの絵と色で「普通の Windows のメニューに見える」ので、見た目が違うかは開発者の判定待ち | `shots\run1\6-menu.png`。SSP は `stage6-menu-shot.png` | `crates/areka/src/menu/mod.rs:49` の枠のまま普通のメニューを組み、シェルの `menu.*` の 21 の鍵を読む所が無い（網羅台帳で absent） | 引き取る spec | `areka-P0-popup-menu-shell-look` |
+| 16 | 当たり判定ごとのマウスの形（身体は `system:hand`）を areka は出さない見込み。走行ではマウスの形を読み取っていない（`shots\run1\notes.md` の段 3） | SSP の `stage3-cursor.txt`（身体は `custom`・× とボールは `HAND`）。areka の側は記録なし | シェルの `surfaces.txt` の `sakura.cursor` ブレス（`mouseup*`）を読む所が無い（網羅台帳で absent・`areka-P0-shell-mouse-cursor` の brief の Current State） | 引き取る spec | `areka-P0-shell-mouse-cursor` |
+| 17 | 台本の `\_u[0x3000]`（全角の空白を作ってバルーンを出し、重なりの順を指定してから `\c` で消す段取り）を、areka は文字にしない。見た目への効きは走行の記録からは言えない（バルーンとぱすたの前後は alt2 で SSP と同じ向き） | 起動の台本の原文（run1 の記録 `2026-10-22T23:17:58.394554Z` の `areka::log::script`） | 読み手 `crates/areka-parsers/src/sakura/decode.rs` の `decode_tag` に `\_u` の腕が無く、知らないタグとして `Raw` になり、台本の組み立て（`crates/areka-sakura/src/compile.rs:291`）で捨てる | 引き取る spec | `areka-P0-script-small-tags` |
+| 18 | 台本の `\![bind-noevent,…]` に受け手が無い。見た目への効きは走行の記録からは言えない | 網羅台帳の行（10 節）・ぱすたの辞書と Lua の台本 | 着せ替えの受け手は名前が `bind` ちょうどのものだけを受ける（`crates/areka-seriko/src/actor.rs:492`） | 引き取る spec | `areka-P0-script-small-tags` |
+| 19 | 台本の `\![set,windowstate,!stayontop]` に受け手が無い。見た目への効きは走行の記録からは言えない | 起動の台本の原文（run1 の記録 `2026-10-22T23:17:58.394554Z`） | 受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs:27` の決まり（名簿に無い第 1 引数 `windowstate` は担当なし） | 引き取る spec | `areka-P0-stay-on-top-directives` |
+| 20 | 外の機能から位置を読む `get_property` の `currentghost.scope(0).rect`・`scope(1).rect`・`balloon.scope(0).rect` が `NG:Cannot find such property name.` で答えた。ぱすたの動きではなく、走行の測り方（窓の位置を撮影と記録の `bounds=` で読み替えた）に効いた | `shots\run1\notes.md` の「走行」 | `crates/areka/src/mcp/get_property.rs:48`。値を出す所が無い名前は `NotFound` で断る（その値を出す所がまだ無い） | 引き取る spec | `areka-P0-currentghost-property-tree`（`currentghost.scope(ID).rect` と `currentghost.balloon.scope(ID).*` は同 brief の項目） |
+| 21 | 記録の 9 割が `apply(ShowSurface): 表示・マスクを更新` の INFO 行だった（6,073 行のうち面 1002 が 5,989 行・毎秒十数行・どれも `cache_hit=false`）。判定に要る行が埋もれる | `logs\run1.stdout.log`（6,546 行）を数えた。alt2 でも 3,650 行 | 再描画の回数そのものは、面 1002 のボールの 3 枚（`window/ball/eback.webp`・`base_rings.webp`・`efront.webp`）が動く WebP（どれも `ANIM` の塊を持つ）で、コマが替わるたびに合成し直す決まりどおり（完了 `areka-P0-animated-image-playback`）。記録の量は、適用 1 回ごとに INFO を 1 行出すこと（`crates/areka-emo-present/src/presenter/show.rs:402`） | 本 spec（タスク 5.3 で線を引く・持ち主なし） | 持ち主なし。`areka-P0-real-run-log-noise` の範囲は文字の層の毎フレームの `debug!` 2 種類と同梱の emo2 の WARN だけ、`areka-P0-present-emit-tail-latency` は適用の時間の尾を扱い「動く絵の適用の回数を減らすこと」を範囲の外にしている。どちらの持ち分にも、この INFO 行の量は無い |
+| 22 | α の小さい画素の当たり（SSP では当たり、areka では通り抜ける薄い所）。本走行と補いの走りで見つかった件は 0。面 1002 で撫でる入力が素通りした所（12）は α が 0 の所で、SSP も当たらない見込みの所なので、この件に入れない | 7 節・`window/canvas.png` の α を数えた値（12 の根拠） | 方針の裁定。当たりは α が 0.5 以上の画素だけ（7 節） | 方針で受けない | 2026-10-22 開発者。出どころ: 本 spec の設計の話し合いの議題 1（コミット `3f539637`）と要件 7.1・7.2（7 節の「裁定」） |
+
+### 数え
+
+- 表の件数は 22。扱いの内訳: 引き取る spec 18・方針で受けない 2（8・22）・本 spec がタスク 5.3 で線を引く 2（6・21）・直した 0。
+- **引き取る spec の名前も方針の裁定も無い件は 0 件**。持ち主の居ない 2 件（6・21）は、設計の「仕分けと申し送り」の線のとおり本 spec が受け持つ。直すか（1 タスクで閉じるか）・起票するか・20 本の線は、タスク 5.3 で決める。6 はすべてのゴーストの起動の位置に効くので、直すなら先に開発者の決めを仰ぐ。
+- 引き取る spec ごとの件数: `areka-P0-mouse-click-wheel-events` 4（10〜13）・`areka-P0-ghost-inner-balloon` 2（1・2）・`areka-P0-descript-window-keys` 2（4・5）・`areka-P0-script-small-tags` 3（3・17・18）・`areka-P0-popup-menu-shell-look` 2（14・15）・`areka-P0-window-link-directives` 1（7）・`areka-P0-dpi-realign-remembered-chain` 1（9）・`areka-P0-shell-mouse-cursor` 1（16）・`areka-P0-stay-on-top-directives` 1（19）・`areka-P0-currentghost-property-tree` 1（20）。
+- 開発者の判定待ちの目視の項目: 15（メニューの見た目）・重なりの順（窓 → バルーン → ぱすた。6 のため窓の枠が別の画面に在り、3 つの並びは主画面で見えていない。ぱすたとバルーンの前後は alt2 で SSP と同じ向き）・縦書きの列と枠の並び（alt2・参考）。判定で崩れが見つかれば、この表に件を足す。
+
+### 崩れではないと分かったこと
+
+記録だけでは崩れに見えるが、調べて崩れではないと分かった物。表の数に入れない。
+
+- **起動の台本が `\0\s[1002]`（身体の無い面）で終わる**: ぱすたの初回の起動の台本どおり（`dic/boot.pasta` の `＊初回の呼びかけ` の `shokai_hikaru` が `\0\s[1002]` を出す）。SSP の基準の起動は記憶のある起動で `OnBoot` が届き、別の台本（`\s[1000]` で始まり身体が映る）だった（`ssp-measurement.md` 1 節・`target\pasta-verify\ssp\stage1-pasta-log.txt` の応答の Value）。areka は記憶の置き場が空なので `OnFirstBoot` を送った（正典どおり）。映らないまま進まなかったのは 12 の件。
+- **`OnSecondChange` がぱすたの記録に 1 行も無い**（10 節の残りの問い）: areka は毎秒送っている（`crates/areka-kanade/src/schedule/events.rs:429` の `on_second_change`）。ぱすたの記録 `pasta.log` は、応答の本文を返した要求だけを残す。SSP の測りでも、毎秒届くはずの `OnSecondChange` は段ごとに 0〜3 行しか残っていない（`stage1`〜`stage7-pasta-log.txt`）。run1 で areka が確かに送り 204 が返った `OnClose` も、`logs\run1.pasta.log` に 1 行も無い。run1 の間は、ぱすたの `初回待ち` の印（12）が `OnSecondChange` の応答を止めていたので、記録に残る応答が無かった。areka の崩れではない。網羅台帳の `OnSecondChange` の行（implemented）は記録と食い違わない。
+- **`OnClose` に 204 が返った**: ぱすたの辞書に `OnClose` の受け口が無いため（13）。
+- **seriko の WARN 96 行**（`mustselect カテゴリの脱衣指示を無視`）: ぱすたの台本の `\![bind,<部位>,<名>,0]` を、正典どおり無視したもの（網羅台帳の `sakura.bindoption*.group` の行）。
+- **`areka_emo_present::balloon` の縮退の WARN 6 行**（run1・`StayseeBalloon` の `\1` の面 2・3）: 1 の結果で出た既定のバルーンの定義の作りで、縦書きのバルーンの alt2 では 0 行。
+- **`areka_emo_atlas` の WARN**（`pasta/null.png`・縦書きのバルーンの `balloonk0.png` が全透明）: ぱすたの中身の絵が全透明なため。
+
+### 手順の側の件（areka の崩れではない）
+
+- 本走行で、起動の直後に areka.exe の空のコンソールの窓が主画面の手前に開き、ぱすたの窓を覆った（`shots\run1\notes.md`・`1-boot-full-a.png`）。手順書の `Start-Process` が窓を隠さないため。補いの走りでは `-WindowStyle Hidden` を足して出なくなった。手順書の直しはタスク 8.1。
+- 補いの走りの準備でゴーストの記憶を写してしまう件（4 節の「手順の穴」）。手順書の直しはタスク 8.1。
+- `get_property` の rect が読めないため、窓の位置を撮影と記録で読み替えた（20 の件）。手順書には読み替え方を書く（タスク 8.1）。
+
 ## 7. α の決まり
 
 ukadoc が書いていない所（絵の薄い画素の当たり）についての areka の決め。コードは変えていない。
@@ -147,7 +206,7 @@ ukadoc が書いていない所（絵の薄い画素の当たり）について�
 
 ## 10. 網羅台帳との突き合わせ
 
-ぱすたが使う項目を、取り寄せた書庫を展開した木（`target\pasta-verify\root\ghost\pasta-in-windows`。1 節の `.sha256` の書庫と同じ中身）から拾い、網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の行と突き合わせた（2026-10-23・タスク 7.1・要件 9.1・9.2・9.4）。突き合わせた相手は、測りの記録 `ssp-measurement.md`・最初の走行の控え `target\pasta-verify\shots\run1\notes.md` と記録 `target\pasta-verify\logs\run1.*`・この記録の 1〜3 節と 7 節である。崩れた所の表（5 節）はまだ無いので、原因が記録に書かれていない崩れは 5.1 の仕分けへ渡し、台帳は変えていない。
+ぱすたが使う項目を、取り寄せた書庫を展開した木（`target\pasta-verify\root\ghost\pasta-in-windows`。1 節の `.sha256` の書庫と同じ中身）から拾い、網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の行と突き合わせた（2026-10-23・タスク 7.1・要件 9.1・9.2・9.4）。突き合わせた相手は、測りの記録 `ssp-measurement.md`・最初の走行の控え `target\pasta-verify\shots\run1\notes.md` と記録 `target\pasta-verify\logs\run1.*`・この記録の 1〜3 節と 7 節である。7.1 の時点では崩れた所の表（5 節）がまだ無かったので、原因が記録に書かれていない崩れの分は台帳を変えなかった。5.1 の後、下の表の行のうち 5.1 へ渡していたもの（`seriko.alignmenttodesktop`・`OnSecondChange`）は、5 節の仕分けを指すように直した（台帳の値は変えていない）。
 
 ### 拾いの命令（使い捨て・道具にはしない）
 
@@ -215,7 +274,7 @@ rg -o --no-filename '^ID: [^ \r]+' $T/ssp/stage*-pasta-log.txt $T/logs/run1.past
 | シェル `craftman`・`craftmanw` | `descript_shell:craftman_2c_4f5c_8005_540d:1`<br>`descript_shell:craftmanw_2c_4f5c_8005_540d:1` | implemented・areka-P0-baseware-root-layout | 走行と測りに崩れの記録なし | なし | — |
 | シェル `craftmanurl` | `descript_shell:craftmanurl_2cURL:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
 | シェル `seriko.use_self_alpha` | `descript_shell:seriko.use_self_alpha_2c_5024:1` | degraded・areka-P0-self-alpha-declaration | α の決まりは 7 節。行の `note` は 7.2 で当たりの決まりを書いた | なし | — |
-| シェル `seriko.alignmenttodesktop` | `descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1` | absent・（空） | areka のぱすたの窓は画面の下端を越えた（段 1）。読む経路が無いことと合う。崩れの仕分けは 5.1 | なし | — |
+| シェル `seriko.alignmenttodesktop` | `descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1` | absent・（空） | areka のぱすたの窓は画面の下端を越えた（段 1）。読む経路が無いことと合う。下端を越えたのは面 0 で大きさを測ったため（5 節の 4） | なし | — |
 | シェル `sakura.defaultx` | `descript_shell:sakura.defaultx_2cX_5ea7_6a19:1` | absent・（空） | 走行と測りに崩れの記録なし（読む経路が無いことと合う） | なし | — |
 | シェル `sakura.balloon.alignment` | `descript_shell:sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1` | implemented・（空） | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
 | シェル `sakura.balloon.offsetx`・`offsety` | `descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1`<br>`descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1` | absent・（空） | 縦書きのバルーンが見つからず既定のバルーンで出たので、走行では見えない（`ghost-inner-balloon` の着地の後の回し直しで見る） | なし | — |
@@ -285,7 +344,7 @@ rg -o --no-filename '^ID: [^ \r]+' $T/ssp/stage*-pasta-log.txt $T/logs/run1.past
 | `OnBoot` | `list_shiori_event:OnBoot:1` | implemented・（空） | SSP は記憶のある起動で `OnBoot`。areka は空の記憶で `OnFirstBoot` を先に送り、`OnBoot` は飛ばした（正典どおり） | なし | — |
 | `OnFirstBoot` | `list_shiori_event:OnFirstBoot:1` | implemented・（空） | 届いて台本が返った（段 1） | なし | — |
 | `OnChoiceSelectEx` | `list_shiori_event:OnChoiceSelectEx:1` | implemented・（空） | 届いて続きの台本が返った（段 2） | なし | — |
-| `OnSecondChange` | `list_shiori_event:OnSecondChange:1` | implemented・（空） | SSP は毎秒届いた。areka の走行ではぱすたの記録に要求の行が 0 で、自然なトークも出なかった。areka の記録の水準では送出の行（trace）が見えず、届かなかったのか送ったのかは記録から決められない。崩れの仕分けは 5.1 で行い、原因が分かったら台帳を直す | なし | — |
+| `OnSecondChange` | `list_shiori_event:OnSecondChange:1` | implemented・（空） | SSP は毎秒届いた。areka も毎秒送っている。ぱすたの記録に行が無いのは、ぱすたが本文を返した応答だけを記録し、run1 の間は「初回待ち」で応答を止めていたため。崩れではない（5 節の「崩れではないと分かったこと」） | なし | — |
 | `OnMouseMove` | `list_shiori_event:OnMouseMove:1` | implemented・（空） | 面 1002 に身体が無く、撫でる入力は窓を素通りした（段 3）。送出の崩れとは記録から言えない | なし | — |
 | `OnMouseEnter`・`OnMouseLeave` | `list_shiori_event:OnMouseEnter:1`<br>`list_shiori_event:OnMouseLeave:1` | absent・（空） | SSP は × で届いて赤くなった。areka は送らない（段 3・7。引き取り先 `mouse-click-wheel-events`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-mouse-click-wheel-events"`・`note` に引き取りの 1 行 |
 | `OnMouseClick` | `list_shiori_event:OnMouseClick:1` | absent・（空） | SSP はボールと × で届いた。areka は窓に当たったが送らない（段 3・7。引き取り先 `mouse-click-wheel-events`） | あり（宛先が空。崩れは兄弟の持ち分） | `owner = "areka-P0-mouse-click-wheel-events"`・`note` に引き取りの 1 行 |
@@ -300,7 +359,7 @@ rg -o --no-filename '^ID: [^ \r]+' $T/ssp/stage*-pasta-log.txt $T/logs/run1.past
   - `areka-P0-descript-window-keys` 2・`areka-P0-window-link-directives` 1・`areka-P0-popup-menu-shell-look` 22・`areka-P0-shell-mouse-cursor` 2・`areka-P0-script-small-tags` 3・`areka-P0-stay-on-top-directives` 1・`areka-P0-mouse-click-wheel-events` 3。
 - 台帳の宛先は、`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に名前が在ることを検査が求める（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 c と腕 f）。7 本はどれも表に無かったので、`none = true`（束はまだ割り当てない）と理由と件数の行を 7 行足し、`[briefs].count` を 52 から 59 へ、`snapshot_on` を 2026-10-23 へ直した（同じ文書の「2026-10-23 の追加」の段落）。あわせて、34 項目が `linkage.md` の束の `members` で属する 8 つの束（「メニュー」22・「窓の配置と重なり」3・「撫で」3・「マウスの矢印」2・「descript の転記」「選択肢の目印」「切替」「バルーンの文字」1 件ずつ）の段階の表の行と、節を持つ 2 つの束の節の「依存する既存 spec」に、7 本を件数付きで足した。候補 spec 名の案はどの束でも ⑴（全数）にも ⑵（過半）にも当たらないので変えていない。
 - 引き取る spec が台帳に既に書かれていた行（ゴーストの `balloon` の `note` の `areka-P0-ghost-inner-balloon`）と、本 spec の範囲の外の行（`balloon.syncscale`・`OnShellScaling`・`OnBalloonScaling`・スクロールの矢印・`communicatebox`）は変えていない。ぱすたが使わない行は 1 行も変えていない（要件 9.4。差分は上の 34 行だけ）。
-- `OnSecondChange` は、走行でぱすたの記録に要求の行が 0 だったが、areka の記録の水準では送ったかどうかが分からないので、台帳の「実装済み」と食い違うとは記録から言えない。5.1 の崩れた所の表で仕分け、原因が分かって台帳と食い違えば、そのときに直す。
+- `OnSecondChange` は崩れではない（5 節の「崩れではないと分かったこと」）。台帳の「実装済み」は記録と食い違わないので、直していない。
 - **食い違いの残りは 0 件**（ぱすたが使う項目の行 154 のうち、記録と食い違う行は 0）。
 
 ### 確かめ（2026-10-23）
