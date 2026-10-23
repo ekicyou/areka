@@ -307,7 +307,7 @@ impl MouseWiring {
         not(test),
         expect(
             dead_code,
-            reason = "解放の受け手（task 3.4）と窓の見張り（task 3.5）が呼ぶまで本番の呼び手が居ない"
+            reason = "解放の受け手を入れる包み（task 4.1）と窓の見張り（task 3.5）が結線するまで本番の呼び手が居ない"
         )
     )]
     fn send_mouse(&self, input: MouseInput, kind_name: &'static str) -> bool {
