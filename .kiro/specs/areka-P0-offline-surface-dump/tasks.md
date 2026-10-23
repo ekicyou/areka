@@ -167,7 +167,7 @@
   - 部品で組んだ検体を、今のシェルの読み込みで窓なしに読める試験が緑
   - _Requirements: 12.6_
 
-- [ ] 7.2 (P) 面の指定の読みと展開
+- [x] 7.2 (P) 面の指定の読みと展開
   - 7.1 の骨の後に、7.3・7.4 と並べて行える（それぞれ自分のファイルだけを触る）
   - カンマ区切りの各要素の前後の空白を除き、頭の `surface`（大文字小文字を区別しない）を 1 つ外して、単独・範囲・除外・除外の範囲として読む。読めない要素（空・数でない・`a > b`）は warn を出してその要素だけ飛ばす
   - シェルに在る面の番号へ、包含を集めて除外を引き、昇順・重ねなしで展開する。単独の番号で指した無い面は warn、範囲の中の欠番は記録しない
@@ -273,3 +273,4 @@
 - 6.2: 写しの層（`CaptureLayer`）そのものは単体試験で通していない（受け口を差し替えられないため）＝10.1 の exe の試験で CSV の中身として確かめる。`capture_begin`／`capture_finish` の `#[allow(dead_code)]` は呼び手の 7.7 で外す。log クレート経由の記録は本文に `log.*` の欄も入る（履歴と同じ）
 - 6.4: `--dump-scope -1` は `-1` を名前として読む（Unknown・dump-scope は MissingValue＝design どおり）。6.5 で直す試験: `dump_pending_and_other_dump_names` と `empty_dump_value_is_missing` の末尾の `--dump-scope` の場合（今は記録なしを期待）。`--offline-dump` なしの `--dump-scope 1` が要約の `effective` に載る件も 6.5 で見る。`StartupOptions.offline` の `#[allow(dead_code)]` は 7.7／8 で外す
 - 7.1: 欠けた element の絵（シェルを焼く段の脱落）は `areka-emo-present/src/shell_target.rs` で warn だったのを design（読み込みの段で Error）に合わせて error に上げた（画面の記録も error になる）。5.2 の共有の検体は `TempPath::under_target` に直した（前は OS の一時フォルダ）。検体の部品は `offline_dump_test_support::{build_ghost, variety_shell, ShellSpec, Solid}`
+- 7.2: 面の指定は頭の `surface` を外してから `!` を読むので `surface!4` は読め `!surface4` は読めない（design の順・SSP の扱いは測っていない）。`read_surface_list`・`resolve` の `#[allow(dead_code)]` は 7.7／7.8 で外す
