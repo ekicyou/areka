@@ -50,7 +50,7 @@ const LOW_SIZE_1: (u32, u32) = (336, 298);
 const MID_SIZE_1: (u32, u32) = (504, 447);
 
 /// 詰め直しを入れないときに 100% で残る隙間（実機 359px の決定論版）。
-const GAP_WITHOUT_REALIGN: i32 = 359;
+pub(super) const GAP_WITHOUT_REALIGN: i32 = 359;
 
 fn sizes(s0: (u32, u32), s1: (u32, u32)) -> PerTargetSizes {
     PerTargetSizes::new([(0, Some(s0)), (1, Some(s1))])
@@ -60,7 +60,7 @@ fn high_sizes() -> PerTargetSizes {
     sizes(HIGH_SIZE_0, HIGH_SIZE_1)
 }
 
-fn low_sizes() -> PerTargetSizes {
+pub(super) fn low_sizes() -> PerTargetSizes {
     sizes(LOW_SIZE_0, LOW_SIZE_1)
 }
 
@@ -102,7 +102,7 @@ fn boot_remembered_at(
 }
 
 /// 200% で起動して隣り合わせ、全スコープの既定の位置を外す（記憶から戻した形）。
-fn boot_remembered_at_high(harness: &mut FrameHarness, source: &mut FakeReports) {
+pub(super) fn boot_remembered_at_high(harness: &mut FrameHarness, source: &mut FakeReports) {
     boot_remembered_at(harness, source, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1);
 }
 
@@ -123,7 +123,7 @@ fn change_scale(
 }
 
 /// 200% → 100% を 1 フレームで流し込む。
-fn lower_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
+pub(super) fn lower_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
     change_scale(harness, source, LOW_DPI, LOW_SIZE_0, LOW_SIZE_1);
 }
 
@@ -133,7 +133,7 @@ fn raise_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
 }
 
 /// キャラ窓の左上の x だけをその値に置く（ドラッグや台本の結果の位置。既定の位置も印も触らない）。
-fn place_char_window_x(harness: &mut FrameHarness, scope: usize, x: i32) {
+pub(super) fn place_char_window_x(harness: &mut FrameHarness, scope: usize, x: i32) {
     let window = harness.char_window(scope);
     let mut wp = harness
         .world
@@ -145,7 +145,7 @@ fn place_char_window_x(harness: &mut FrameHarness, scope: usize, x: i32) {
 }
 
 /// キャラ窓の今の左上。
-fn char_pos(harness: &FrameHarness, scope: usize) -> (i32, i32) {
+pub(super) fn char_pos(harness: &FrameHarness, scope: usize) -> (i32, i32) {
     let p = pos_of(&harness.world, harness.char_window(scope)).expect("position がある");
     (p.x, p.y)
 }
@@ -158,7 +158,7 @@ fn char_width(harness: &FrameHarness, scope: usize) -> i32 {
 }
 
 /// scope0 の左端 − scope1 の右端（scope1 が scope0 の左に隣り合う並び）。
-fn gap(harness: &FrameHarness) -> i32 {
+pub(super) fn gap(harness: &FrameHarness) -> i32 {
     char_pos(harness, 0).0 - (char_pos(harness, 1).0 + char_width(harness, 1))
 }
 
@@ -379,7 +379,7 @@ fn chain3_placement(scope: usize, (x, w, h): (i32, i32, i32)) -> ScopePlacement 
 }
 
 /// 3 スコープの窓の一式（偽 WindowHandle 付き・起動の並べ直し済み）。
-fn chain3_world() -> (World, GhostWindows) {
+pub(super) fn chain3_world() -> (World, GhostWindows) {
     let placements: Vec<ScopePlacement> = CHAIN3_HIGH
         .iter()
         .enumerate()
@@ -409,7 +409,7 @@ fn chain3_world() -> (World, GhostWindows) {
 }
 
 /// 幅と高さを半分にし、下端中央を保って置き直す（拡大率の相の再射影の結果の形）。
-fn halve_keeping_bottom_center(world: &mut World, gw: &GhostWindows) {
+pub(super) fn halve_keeping_bottom_center(world: &mut World, gw: &GhostWindows) {
     for scope in 0..3 {
         let mut wp = world
             .get_mut::<WindowPos>(gw.char_window(scope).expect("キャラ窓"))
@@ -427,7 +427,7 @@ fn halve_keeping_bottom_center(world: &mut World, gw: &GhostWindows) {
 }
 
 /// 今の窓の位置と幅から解きの入力を作る（本番の走査と同じ形・既定の位置は無い）。
-fn chain3_scan(
+pub(super) fn chain3_scan(
     world: &World,
 ) -> (
     Vec<ScopeChainState>,
@@ -451,7 +451,7 @@ fn chain3_scan(
     (states, targets)
 }
 
-fn chain3_pos(world: &World, gw: &GhostWindows, scope: usize) -> (i32, i32) {
+pub(super) fn chain3_pos(world: &World, gw: &GhostWindows, scope: usize) -> (i32, i32) {
     let p = pos_of(world, gw.char_window(scope).expect("キャラ窓")).expect("position がある");
     (p.x, p.y)
 }
