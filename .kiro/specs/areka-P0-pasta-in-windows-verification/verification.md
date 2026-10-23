@@ -209,7 +209,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 
 置き場: 記録は `<w>\target\pasta-verify-alt\logs\alt1.*`・`alt2.*`、撮った物と控えは `<w>\target\pasta-verify-alt\shots\alt1\`・`shots\alt2\`（それぞれ `notes.md`）。
 
-手順の穴: 手順書（`doc/pasta-real-run.md`）4 節の補いの走りの準備は、本走行の根を写すときにゴーストの記憶（`ghost\master\profile\`）も一緒に写し、消していない。このため alt1 は前の走行の記憶で起動した。手順書の直しはタスク 8.1 で行う。
+手順の穴: 手順書（`doc/pasta-real-run.md`）4 節の補いの走りの準備は、本走行の根を写すときにゴーストの記憶（`ghost\master\profile\`）も一緒に写し、消していない。このため alt1 は前の走行の記憶で起動した。手順書はタスク 8.1 で直した（9 節）。
 
 ## 5. 崩れた所の表
 
@@ -268,9 +268,9 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 
 ### 手順の側の件（areka の崩れではない）
 
-- 本走行で、起動の直後に areka.exe の空のコンソールの窓が主画面の手前に開き、ぱすたの窓を覆った（`shots\run1\notes.md`・`1-boot-full-a.png`）。手順書の `Start-Process` が窓を隠さないため。補いの走りでは `-WindowStyle Hidden` を足して出なくなった。手順書の直しはタスク 8.1。
-- 補いの走りの準備でゴーストの記憶を写してしまう件（4 節の「手順の穴」）。手順書の直しはタスク 8.1。
-- `get_property` の rect が読めないため、窓の位置を撮影と記録で読み替えた（20 の件）。手順書には読み替え方を書く（タスク 8.1）。
+- 本走行で、起動の直後に areka.exe の空のコンソールの窓が主画面の手前に開き、ぱすたの窓を覆った（`shots\run1\notes.md`・`1-boot-full-a.png`）。手順書の `Start-Process` が窓を隠さないため。補いの走りでは `-WindowStyle Hidden` を足して出なくなった。手順書はタスク 8.1 で直した（9 節）。
+- 補いの走りの準備でゴーストの記憶を写してしまう件（4 節の「手順の穴」）。手順書はタスク 8.1 で直した（9 節）。
+- `get_property` の rect が読めないため、窓の位置を撮影と記録で読み替えた（20 の件）。読み替え方はタスク 8.1 で手順書に書いた（9 節）。
 
 ## 6. 直しの見積もりと 20 本の線
 
