@@ -201,7 +201,7 @@
   - _Depends: 2.5, 3.1_
   - _Requirements: 1.5, 4.1, 4.3, 4.4, 4.5, 4.6, 4.7, 4.9, 12.2_
 
-- [ ] 7.6 面の PNG をファイルに書く
+- [x] 7.6 面の PNG をファイルに書く
   - 名前は `<頭の文字列><番号>.png`（既定 `surface`・`--dump-output-prefix` で置き換え・スコープは入れない）。書く直前に出力先を作る。頭の文字列の `\`・`/` は出力先からの相対の道として扱い、その下のフォルダは作らない。同じ名前は置き換える。書けなければ error を 1 行出して失敗を返す
   - 試験: 既定の名前・頭の文字列の置き換え・出力先を作る・置き換え・その下の道（在る／無い）・名前に使えない文字・スコープが名前に入らない
   - 上の試験が `render_tests.rs` で緑で、`render.rs` と試験のファイルが 1,000 行の内（超えるならテーマで分ける）
@@ -275,3 +275,4 @@
 - 7.1: 欠けた element の絵（シェルを焼く段の脱落）は `areka-emo-present/src/shell_target.rs` で warn だったのを design（読み込みの段で Error）に合わせて error に上げた（画面の記録も error になる）。5.2 の共有の検体は `TempPath::under_target` に直した（前は OS の一時フォルダ）。検体の部品は `offline_dump_test_support::{build_ghost, variety_shell, ShellSpec, Solid}`
 - 7.2: 面の指定は頭の `surface` を外してから `!` を読むので `surface!4` は読め `!surface4` は読めない（design の順・SSP の扱いは測っていない）。`read_surface_list`・`resolve` の `#[allow(dead_code)]` は 7.7／7.8 で外す
 - 7.5: 合成は負の座標の部分を切り捨てるので、負の座標の element を持つ面では下地の左上の余白が透明のまま（design の Risks・`areka-P0-extent-element-offset` が追う）。`render_surface`・`render_png`・`Canvas::from_bounds` の `#[allow(dead_code)]` は 7.6／7.8 で外す
+- 7.6: `png_path` は頭の文字列が空だと `0.png` を返す＝走り（7.8）は `--dump-output-prefix` の値なしで `DEFAULT_PREFIX` に替える。頭の文字列の絶対パスや `..` は止めない（要件の外）

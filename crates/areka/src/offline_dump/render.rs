@@ -1,5 +1,7 @@
 //! 面 1 つを時点 T まで進めて組み、シェル全体の下地に置いて PNG のファイルにする（要件 4.1・4.3〜4.9・6.1〜6.8）。
 
+use std::path::{Path, PathBuf};
+
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, Composer, EmoWorld, ShellBounds};
 use areka_seriko::{AnimationTable, settle_surface};
@@ -32,13 +34,19 @@ impl Canvas {
     }
 }
 
+/// 頭の文字列の既定（`--dump-output-prefix` が無いとき・要件 6.1）。
+#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.8）
+pub(crate) const DEFAULT_PREFIX: &str = "surface";
+
 /// 面 1 つを描けなかったわけ。
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub(crate) enum RenderError {
     /// 合成が `Err` を返した（記録は合成が出している）。
     Compose,
     /// 組んだ絵が下地からはみ出した（作りの誤り）。
     CanvasOverflow,
+    /// PNG のファイルを書けなかった（記録は [`write_surface`] が出している）。
+    Write(#[allow(dead_code)] /* 読み手は走り（タスク 7.8） */ std::io::Error),
 }
 
 /// 面 1 つを時点 T まで画面と同じ道で進め、画面と同じ入力の形で合成し、下地の `(-left, -top)` に
@@ -98,7 +106,7 @@ pub(crate) fn render_surface(
 
 /// [`render_surface`] の絵を MCP と同じ `png_image::encode_png` で PNG のバイト列にする（要件 4.6）。
 #[allow(clippy::too_many_arguments)] // render_surface と同じ口
-#[allow(dead_code)] // 呼び手は面の PNG のファイルの書き出し（タスク 7.6）
+#[allow(dead_code)] // 呼び手は write_surface 経由でオフラインの書き出しの走り（タスク 7.8）
 pub(crate) fn render_png(
     composer: &mut Composer,
     world: &EmoWorld,
@@ -113,6 +121,47 @@ pub(crate) fn render_png(
         composer, world, atlas, table, binds, scope, surface_id, canvas,
     )?;
     Ok(png_image::encode_png(&bgra, canvas.width, canvas.height))
+}
+
+/// 面の PNG のファイルの道 `<出力先>\<頭の文字列><番号>.png`（スコープは入れない・要件 6.1・6.2・6.7）。
+/// 頭の文字列の `\`・`/` は出力先からの相対の道になる（6.8）。
+#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.8）
+pub(crate) fn png_path(output_dir: &Path, prefix: &str, surface_id: u32) -> PathBuf {
+    output_dir.join(format!("{prefix}{surface_id}.png"))
+}
+
+/// 面 1 つを描いて [`png_path`] へ書く。書く直前に出力先だけを作り、頭の文字列の下のフォルダは
+/// 作らない。同じ名前は置き換える。書けなければ error 1 行（要件 6.3〜6.6・6.8）。
+#[allow(clippy::too_many_arguments)] // render_surface の口に出力先と頭の文字列を足した形
+#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.8）
+pub(crate) fn write_surface(
+    composer: &mut Composer,
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    table: &AnimationTable,
+    binds: &BindSet,
+    scope: u32,
+    surface_id: u32,
+    canvas: &Canvas,
+    output_dir: &Path,
+    prefix: &str,
+) -> Result<PathBuf, RenderError> {
+    let png = render_png(
+        composer, world, atlas, table, binds, scope, surface_id, canvas,
+    )?;
+    let path = png_path(output_dir, prefix, surface_id);
+    let written = std::fs::create_dir_all(output_dir).and_then(|()| std::fs::write(&path, png));
+    if let Err(err) = written {
+        tracing::error!(
+            event = "offline_dump_png_write_failed",
+            surface = surface_id,
+            path = %path.display(),
+            error = %err,
+            "[offline_dump] 面の PNG を書けなかったので、この面を飛ばします"
+        );
+        return Err(RenderError::Write(err));
+    }
+    Ok(path)
 }
 
 #[cfg(test)]

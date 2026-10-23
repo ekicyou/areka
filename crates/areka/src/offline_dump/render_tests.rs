@@ -1,4 +1,4 @@
-//! `render.rs` の試験（下地の画素・大きさと位置・2 度で同じ・ファイル名）。
+//! `render.rs` の試験（下地の画素・大きさと位置・2 度で同じ・ファイルの名前と書き出し）。
 //!
 //! 検体は `offline_dump_test_support::variety_shell`（土台 16×8・負の座標の絵が -2,-2）。期待の絵は
 //! 画面と同じ入力（同じ面・同じ着せ替え・`settle_surface` の同じ状態）で `Composer::compose` した絵を
@@ -13,7 +13,11 @@ use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::super::offline_dump_test_support as fixture;
-use super::{Canvas, RenderError, render_png, render_surface};
+use std::path::{Path, PathBuf};
+
+use super::{
+    Canvas, DEFAULT_PREFIX, RenderError, png_path, render_png, render_surface, write_surface,
+};
 
 /// 読み込んだ検体のシェル（根は Drop まで残す）。
 struct Loaded {
@@ -75,6 +79,22 @@ impl Loaded {
             &self.canvas,
         )
         .unwrap_or_else(|e| panic!("面 {id} を PNG にできる: {e:?}"))
+    }
+
+    /// 面 `id` をスコープ `scope` で `dir` へ頭の文字列 `prefix` で書く。
+    fn write(&self, scope: u32, id: u32, dir: &Path, prefix: &str) -> Result<PathBuf, RenderError> {
+        write_surface(
+            &mut Composer::new(),
+            &self.world,
+            self.target.atlas(),
+            &self.table,
+            &default_binds(),
+            scope,
+            id,
+            &self.canvas,
+            dir,
+            prefix,
+        )
     }
 
     /// 画面と同じ入力で組んだ絵を、下地の `(-left, -top)` に 1 画素ずつ置いた期待の絵。
@@ -253,7 +273,7 @@ fn rendering_twice_gives_the_same_bytes() {
 fn compose_failure_adds_only_info() {
     let shell = load("offline-render-compose-failure");
     let (got, events) = capture(|| shell.render(&default_binds(), fixture::EMPTY));
-    assert_eq!(got, Err(RenderError::Compose));
+    assert!(matches!(got, Err(RenderError::Compose)), "{got:?}");
     let errors = events
         .iter()
         .filter(|e| e.level == tracing::Level::ERROR)
@@ -277,7 +297,7 @@ fn overflow_is_an_error() {
         height: 4,
     };
     let (got, events) = capture(|| shell.render(&default_binds(), fixture::RUNONCE));
-    assert_eq!(got, Err(RenderError::CanvasOverflow));
+    assert!(matches!(got, Err(RenderError::CanvasOverflow)), "{got:?}");
     let errors: Vec<_> = events
         .iter()
         .filter(|e| e.level == tracing::Level::ERROR)
@@ -287,4 +307,129 @@ fn overflow_is_an_error() {
         errors[0].field_str("event"),
         Some("offline_dump_canvas_overflow")
     );
+}
+
+/// 書き出しの試験で書く面（赤の部品）。
+const WRITTEN: u32 = fixture::PARTS[0];
+
+/// 既定の名前は `surface<番号>.png` で、中身は `render_png` の PNG（6.1・6.3）。
+#[test]
+fn default_name_is_surface_and_number() {
+    let shell = load("offline-write-default");
+    let out = TempPath::under_target("offline-write-default-out");
+    assert_eq!(DEFAULT_PREFIX, "surface");
+    let got = shell
+        .write(0, WRITTEN, out.path(), DEFAULT_PREFIX)
+        .expect("書ける");
+    assert_eq!(got, out.child(&format!("surface{WRITTEN}.png")));
+    assert_eq!(got, png_path(out.path(), DEFAULT_PREFIX, WRITTEN));
+    assert_eq!(
+        std::fs::read(&got).unwrap(),
+        shell.png(&default_binds(), WRITTEN)
+    );
+}
+
+/// 頭の文字列は既定を置き換える（付け足さない・6.2）。
+#[test]
+fn prefix_replaces_the_default() {
+    let shell = load("offline-write-prefix");
+    let out = TempPath::under_target("offline-write-prefix-out");
+    let got = shell.write(0, WRITTEN, out.path(), "x_").expect("書ける");
+    assert_eq!(got, out.child(&format!("x_{WRITTEN}.png")));
+    assert!(!out.child(&format!("surface{WRITTEN}.png")).exists());
+    assert!(!out.child(&format!("x_surface{WRITTEN}.png")).exists());
+}
+
+/// 無い出力先は書く前に作る（深い道も・6.4）。
+#[test]
+fn missing_output_dir_is_created() {
+    let shell = load("offline-write-mkdir");
+    let out = TempPath::under_target("offline-write-mkdir-out");
+    let dir = out.path().join("a").join("b");
+    let got = shell
+        .write(0, WRITTEN, &dir, DEFAULT_PREFIX)
+        .expect("書ける");
+    assert_eq!(got, dir.join(format!("surface{WRITTEN}.png")));
+    assert!(got.is_file());
+}
+
+/// 同じ名前のファイルは書いた絵で置き換える（6.5）。
+#[test]
+fn same_name_is_replaced() {
+    let shell = load("offline-write-replace");
+    let out = TempPath::under_target("offline-write-replace-out");
+    let path = out.child(&format!("surface{WRITTEN}.png"));
+    std::fs::write(&path, b"old and longer than nothing").unwrap();
+    shell
+        .write(0, WRITTEN, out.path(), DEFAULT_PREFIX)
+        .expect("書ける");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        shell.png(&default_binds(), WRITTEN)
+    );
+}
+
+/// 頭の文字列の `\`・`/` は出力先からの相対の道で、在るフォルダへは書ける（6.8）。
+#[test]
+fn prefix_with_separators_writes_into_existing_subfolder() {
+    let shell = load("offline-write-subdir");
+    let out = TempPath::under_target("offline-write-subdir-out");
+    std::fs::create_dir(out.child("sub")).unwrap();
+    for prefix in [r"sub\p", "sub/q"] {
+        let got = shell.write(0, WRITTEN, out.path(), prefix).expect("書ける");
+        assert!(got.is_file(), "{prefix}: {}", got.display());
+    }
+    assert!(out.child("sub").join(format!("p{WRITTEN}.png")).is_file());
+    assert!(out.child("sub").join(format!("q{WRITTEN}.png")).is_file());
+}
+
+/// 書けなかったら error 1 行（道筋と OS の誤り）で `RenderError::Write` を返す。
+fn assert_write_failed(shell: &Loaded, dir: &Path, prefix: &str) {
+    let (got, events) = capture(|| shell.write(0, WRITTEN, dir, prefix));
+    assert!(
+        matches!(got, Err(RenderError::Write(_))),
+        "{prefix}: {got:?}"
+    );
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "{prefix}: {events:?}");
+    assert_eq!(
+        errors[0].field_str("event"),
+        Some("offline_dump_png_write_failed")
+    );
+    let names = errors[0].field_names_sorted();
+    assert!(
+        names.contains(&"path") && names.contains(&"error"),
+        "{names:?}"
+    );
+}
+
+/// 頭の文字列の下の無いフォルダは作らず、書けなかった error（6.8・6.6）。
+#[test]
+fn prefix_with_missing_subfolder_fails_without_creating_it() {
+    let shell = load("offline-write-nosub");
+    let out = TempPath::under_target("offline-write-nosub-out");
+    assert_write_failed(&shell, out.path(), r"none\p");
+    assert!(!out.child("none").exists(), "その下のフォルダは作らない");
+}
+
+/// 名前にファイル名として使えない文字が入ると書けなかった error（6.6）。
+#[test]
+fn invalid_file_name_fails() {
+    let shell = load("offline-write-invalid");
+    let out = TempPath::under_target("offline-write-invalid-out");
+    assert_write_failed(&shell, out.path(), "a?");
+}
+
+/// スコープの番号は名前に入らない（6.7）。
+#[test]
+fn scope_is_not_in_the_name() {
+    let shell = load("offline-write-scope");
+    let out = TempPath::under_target("offline-write-scope-out");
+    let got = shell
+        .write(1, WRITTEN, out.path(), DEFAULT_PREFIX)
+        .expect("書ける");
+    assert_eq!(got, out.child(&format!("surface{WRITTEN}.png")));
 }
