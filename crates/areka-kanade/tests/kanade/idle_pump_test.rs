@@ -194,6 +194,7 @@ fn the_real_connection_offers_an_unblock_handle_that_ends_the_helper() {
         window,
         helper: HelperLifecycle::new(handle),
         negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
+        version: shiori_host32_host::ShioriVersion::Shiori3,
     };
     assert_eq!(
         connection.status(),

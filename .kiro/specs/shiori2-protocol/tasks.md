@@ -51,7 +51,7 @@
   - _Requirements: 2.1, 2.5, 6.1_
 
 - [ ] 4. 接続と結線へつなぐ
-- [ ] 4.1 kanade の接続に版を持たせ、要求ごとに版と資源の印を client へ渡す
+- [x] 4.1 kanade の接続に版を持たせ、要求ごとに版と資源の印を client へ渡す
   - 接続の欄に版を足し、4 つの往復の手で版を client へ渡す。GET の 2 つの手だけ、kanade の資源の正本の一覧（送出の関門と同じ判定）に載る名前なら資源の印を付ける。NOTIFY には付けない
   - kanade の `msg.rs`・`schedule/`・`actor.rs` は直さない（一覧は読むだけ）
   - 接続を書き下している kanade のテスト 3 ファイルに「版＝3.0」の 1 行だけを足す
@@ -106,3 +106,5 @@
 
 - shiori-host32-host の結合テスト（`error_paths`・`lifecycle_cyclic_e2e`）は i686 の helper と testdll の成果物を要する（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`・`cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc`）。
 - `cargo clippy -p shiori-host32-host --all-targets` は触っていない `tests/lifecycle_kill_e2e.rs:332`・`tests/lifecycle_cyclic_e2e.rs:275,408` の `drop(client)` で赤（本 spec の前からの既存の問題・範囲外）。タスクの検査は `--lib --bins` で回す。
+- 4.1 で `ShioriConnection` の書き下しに `version: ShioriVersion::Shiori3` の 1 行を足したテスト: `crates/areka-kanade/tests/kanade/common/common_window_actor.rs`・`idle_pump_test.rs`・`real_helper_test.rs`（5.2 で verification.md に載せる）。`shiori_wiring.rs` にも同じ仮の 1 行を足した（4.2 で確かめた版に置き換える）。
+- `cargo clippy -p areka-kanade --lib --tests` は触っていない既存の行（`real.rs:331` の collapsible_if・`actor_raise_reply_tests.rs:98` の never_loop・type_complexity 4 件・結合テストの警告）で赤（本 spec の前から・範囲外）。差分の行に当たる指摘が無いことで見る。

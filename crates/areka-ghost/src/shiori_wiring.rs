@@ -201,6 +201,8 @@ pub fn real_connect(
             // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
             // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
             negotiator,
+            // 版の確かめはタスク 4.2 で入る。それまでは今と同じ 3.0。
+            version: shiori_host32_host::ShioriVersion::Shiori3,
         }) as Box<dyn ShioriBackend>)
     }
 }
