@@ -4,8 +4,6 @@
 //! `permits` が偽ならそのタグの合図を送らない。未実装の行（`enforced: false`）は今の扱いを
 //! 変えない（4.6）。`\![leave,nouserbreakmode]` は ukadoc が制限しないので載せない（4.5）。
 //! 網羅台帳に `\![execute,…]` の 3 行がまだ無いため、出典は台帳でなく ukadoc の URL で書く。
-// 表を引くのは 6.3 の受け口（`user_break_cue.rs`）から。それまでの呼び手はテストだけ。
-#![allow(dead_code)]
 
 use areka_sakura::contract::ScriptOrigin;
 

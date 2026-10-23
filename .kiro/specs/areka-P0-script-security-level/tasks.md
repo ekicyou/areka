@@ -113,7 +113,7 @@
   - 兄弟のテストで、表がちょうど 5 行で綴りが要件 4.1 の 5 つと一致すること（違えば「ukadoc を引き直して表を直す」の文で赤）と、許すかの真理表が緑になる。
   - _Requirements: 4.1, 4.5, 4.6, 4.8_
 
-- [ ] 6.3 ユーザーブレイク禁止の受け口が外部扱いのトークで enter を止める
+- [x] 6.3 ユーザーブレイク禁止の受け口が外部扱いのトークで enter を止める
   - 一括の複製の実装をやめて受け口の約束を自分で実装し（複製は今と同じく状態を引き継がない）、複製の直後の手でトークの番号と出どころを控える。登録の原本はゴースト自身。
   - 自己選別で `\![enter,nouserbreakmode]` に当たったら判定の表を引き、許されなければ合図を送らずに warn（`script_tag_refused`・表の綴り・`talk_id`・`sender_type`・`sstp`・`level`）を 1 件残して戻る。台本の残りはそのまま流れる。トークの始まり・`leave`・トークの終わりは今どおり送る。
   - 既存の受け口のテストの複製の追随（5 か所）を済ませ、新しい兄弟のテスト（記録の捕捉は `log-capture-kit`）で、外部扱いを渡した複製は `enter` を送らず warn が 1 件・ほかの合図は今どおり、ゴースト自身・MCP の SEND・MCP の NOTIFY では今どおり `enter` が出る、が緑になる。受け口の名簿のファイルには触らない。
@@ -160,4 +160,3 @@
 - （範囲外・4.1 のレビューで発見）`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は main で既に 1,135 行（行数の番人の許可表に載っている）。同じ `BoxedBackend` の写しが 3 つのテストのファイルにある。
 - 選択肢の `script:` を試すテストは `steady_with_ledger` だけだと控え `shown` が無く、構造上は起きない `choice_script_origin_missing` の道を通る。元のトークの控えを置き、その error が出ないことを確かめる（5.4 のレビュー）。
 - `areka` には lib の対象が無い。単体テストは `cargo test -p areka --bin areka`（結合テストの `smoke_boot_loop_exit` などはアプリを起こすので机が要り、32bit の `shiori-host32-testdll-loadu` のビルドも前提）。
-- `crates/areka/src/emo2_boot/script_restriction.rs` の頭の `#![allow(dead_code)]` は、6.3／6.4 で表を引く呼び手ができたら外す。
