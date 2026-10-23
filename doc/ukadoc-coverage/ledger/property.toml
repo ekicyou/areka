@@ -399,17 +399,18 @@ note = """
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.rect:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = "2.8.39"
 owner = "mcp-scope-rect-property"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+壊れ方: 見た目の差 — 読み取りはバルーンの窓の今の位置と大きさを「左,上,右,下」（物理の画素・仮想画面の座標）で返すので壊れない。バルーンが無いときは SSP と同じく値なし。大きさは拡大率への追従の方針で SSP と違うことがある。
+ログ: 読み取りは値を返すので何も出ない（窓の名前の書式が読めないときだけ crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
-担当 spec は mcp-scope-rect-property。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、走行の測りが窓の位置を読めなかった崩れ（同 spec の検証の記録の崩れた所の表の 20）を引き取る spec として書いた（前の宛先は currentghost-property-tree）。
+実装: 読み手は crates/areka/src/ghost_session_scope_rect.rs（窓の印の表 ScopeWindowTable・読み手 ScopeRectSource・結線・OS の読み取り os_window_rect）。読まれた時に OS へ 1 回だけ窓の矩形を聞く（プル）登録の口は crates/areka-sylphya/src/pull.rs と reader.rs（PullRegistry・register_pull・写しの区画に無いときだけ引く）。証拠は os_window_rect の定義行の `// ukadoc:` の URL。
+テスト: crates/areka-sylphya/src/pull_tests.rs・crates/areka/src/ghost_session_scope_rect_tests.rs・crates/areka/src/ghost_session_scope_rect_boot_tests.rs・crates/areka/src/mcp/get_property_tests.rs（mod scope_rect）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.scaling:1"]
@@ -737,17 +738,18 @@ note = """
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.rect:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
 owner = "mcp-scope-rect-property"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+壊れ方: 見た目の差 — 読み取りは窓の今の位置と大きさを「左,上,右,下」（物理の画素・仮想画面の座標）で返すので壊れない。無いスコープは SSP と同じ 0,0,0,0。大きさは拡大率への追従の方針で SSP と違うことがある。
+ログ: 読み取りは値を返すので何も出ない（窓の名前の書式が読めないときだけ crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
-担当 spec は mcp-scope-rect-property。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、走行の測りが窓の位置を読めなかった崩れ（同 spec の検証の記録の崩れた所の表の 20）を引き取る spec として書いた（前の宛先は currentghost-property-tree）。
+実装: 読み手は crates/areka/src/ghost_session_scope_rect.rs（窓の印の表 ScopeWindowTable・読み手 ScopeRectSource・結線・OS の読み取り os_window_rect）。読まれた時に OS へ 1 回だけ窓の矩形を聞く（プル）登録の口は crates/areka-sylphya/src/pull.rs と reader.rs（PullRegistry・register_pull・写しの区画に無いときだけ引く）。証拠は os_window_rect の定義行の `// ukadoc:` の URL。
+テスト: crates/areka-sylphya/src/pull_tests.rs・crates/areka/src/ghost_session_scope_rect_tests.rs・crates/areka/src/ghost_session_scope_rect_boot_tests.rs・crates/areka/src/mcp/get_property_tests.rs（mod scope_rect）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.scaling:1"]

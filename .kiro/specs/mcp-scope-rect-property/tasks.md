@@ -91,7 +91,7 @@
   - _Requirements: 3.4, 6.3, 6.6, 7.4, 8.3_
 
 - [ ] 4. 台帳・手順書・実機の確かめ
-- [ ] 4.1 (P) 網羅台帳の 2 行を改め、報告を生成し直す
+- [x] 4.1 (P) 網羅台帳の 2 行を改め、報告を生成し直す
   - `currentghost.scope_28ID_29.rect`・`currentghost.balloon.scope_28ID_29.rect` を実装済みの状態へ改め、note に実装の場所とテストを書く（証拠は 2.2 の `// ukadoc:` の行）
   - 領域の報告は `cargo run -p ukadoc-survey -- report` で作り直す（手で書き換えない・全体の summary は触らない）
   - 完了の状態: `cargo test -p ukadoc-survey` が緑（台帳と報告の食い違いの検査が通る）
@@ -112,3 +112,6 @@
   - 完了の状態: 3 つの段の値と記録の一致・SSP との書き分けが spec の検証の記録に残り、机が返されている
   - _Depends: 2.5, 3.1, 3.3_
   - _Requirements: 9.1, 9.2, 9.3_
+
+## Implementation Notes
+- 4.1: タスク文の「全体の summary は触らない」は、今の `doc/ukadoc-coverage/README.md` の決まり（台帳を直したら `report` と `report-summary` の両方を走らせる・summary は全文一致の新しさの検査つき）より古い。summary.md は道具で作り直した（手では書かない）。統合で競合したら作り直す。
