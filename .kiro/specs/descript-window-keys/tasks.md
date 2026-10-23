@@ -132,3 +132,5 @@
 - 4.2: `cargo clippy -p areka-emo-text --all-targets` は前からある `absurd_extreme_comparisons` 3 件（tests/line_pitch_readback_test.rs:705・choice_fixture_test.rs:565・emo2_fixture_e2e_test.rs:638、e3291fc14）で止まる。範囲外として完了の棚卸へ。空の面の集合は seriko と同じく文字の層も「材料なし・替えない」。
 - 5.1: バルーンの窓は帳簿を据えた後に生まれると次の書き直しまで move_window=true のまま。今は窓を作る閉包の中で据える前に作るので問題ないが、6.1 の結線で順を崩さないこと。`mod balloon_lock` の `#[allow(dead_code)]` は 5.3・6.1 で外す。
 - 5.4: `.kiro/steering/roadmap.md` の 282・522 行目に「36 件の登記」の棚卸の写しが残る（台帳は 38 件）。kiro-complete／kiro-next で直す。
+- 8.2（10-24・run1・HEAD a19c608a）: 9.1 合格（ぱすたの窓 1108×1368・dpi 192・下端 1704＝作業領域の下端）。縦書きのバルーンは route=Descript で出た。default_surface_missing 0・panic 0・ERROR 0。9.2: スコープ 0 の Clamp 0 件。スコープ 1 に横向きの Clamp 2 件（boot-gate・runtime-gate・x -872→0・y 336 のまま・上へは寄せていない）。9.4 は未実施（スクリーンセーバーと画面のロックで撮影・SendInput ができなかった）。開発者が席にいるときに回し直す（約 6 分・道具は target\pasta-verify\）。ぱすたの新しい書庫（sha256 4c354864…）は sample-ghost-kit の台帳（lib.rs:184）と入る先の数が合わず nar-sample-path が exit=2。直しは main 側（mcp-scope-rect-property）で着地。
+- 8.3: /kiro-discovery の始めの main の取り込みが doc/ukadoc-coverage/report/summary.md（生成物）で競合したので取り込みを中止した。起票は main を取り込んでから行う（kiro-complete の棚卸でも可・要件 9.3 は完了の手順での起票）。
