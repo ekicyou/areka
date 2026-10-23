@@ -149,6 +149,10 @@ fn unreadable_dir_is_exit_2() {
         lines[0].starts_with("error: cannot read folder: "),
         "{lines:?}"
     );
+    assert!(
+        lines[0].contains("no-such-dir"),
+        "どちらのフォルダか: {lines:?}"
+    );
     assert!(lines[0].is_ascii(), "{lines:?}");
 }
 

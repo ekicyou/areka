@@ -68,7 +68,10 @@ pub fn compare_dirs(ssp_dir: &Path, areka_dir: &Path) -> std::io::Result<Vec<Fil
 /// 直下の `*.png` を、小文字にした名前 → （元の綴り・パス）で並べる。
 fn list_pngs(dir: &Path) -> std::io::Result<BTreeMap<String, (String, PathBuf)>> {
     let mut map = BTreeMap::new();
-    for entry in std::fs::read_dir(dir)? {
+    // 誤りの文にフォルダの道を入れる（OS の文だけではどちらのフォルダか分からない）。
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| std::io::Error::new(e.kind(), format!("{}: {e}", dir.display())))?;
+    for entry in entries {
         let path = entry?.path();
         let is_png = path
             .extension()
