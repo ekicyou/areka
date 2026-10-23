@@ -84,3 +84,7 @@
 - **ファイルの重なり**: `system-property-values`・`property-catalog-lists`・`zorder-property`（`dotted.rs`・`emo2_boot/mod.rs`）と、`emo2_boot` の結線の列の全員。`system-property-values` とは働きの依存が無く、ファイルを分け合うだけ。
 - **優先度の区分**: C（ukadoc の `currentghost.*` の拾い残し）。**要件定義のモデル**: Opus（口の形と scope の数え方は前の spec が決める）。
 - **見つけた穴・古くなった記述**: 上の「値の源が無い 10 行」。`get_property_tests.rs` の `currentghost.name` の期待は今もそのまま（着地のときに直す・今は直さない）。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- `currentghost.scope(ID).rect` を v0.1.0 の新しい spec `areka-P0-mcp-scope-rect-property` へ、`currentghost.scope(ID).scaling`・`currentghost.scope(ID).currentmonitor.dpi` を v0.1.0 の新しい spec `areka-P0-shell-scale-linkage` へ移した（`verification.md` 5 節の 20・ぱすたの `dic/tategaki.pasta:53`）。動く値の口の持ち主は `mcp-scope-rect-property` になった。

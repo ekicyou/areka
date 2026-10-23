@@ -119,3 +119,7 @@
 - 見つけた穴・古くなった記述:
   - 棚卸㉖の「emo-atlas の `lib.rs` の 164〜166 行目と 167〜169 行目に同じ説明が 2 回」は、もう直っている（今は 164〜166 行目に 1 回だけ）。
   - v0.1.0 の後に取る見直しの spec（`audit-emo-text-layout-draw` が `region*`、`audit-emo-text-state-actor` が `actor*`、`audit-emo-atlas` が emo-atlas の全部を持つ）と同じファイル＝この spec を v0.1.0 の間に取れば先に済む。後に回すなら同じウェーブに置かない。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- ぱすたの走行で見つかった `apply(ShowSurface): 表示・マスクを更新` の INFO 行の量（`crates/areka-emo-present/src/presenter/show.rs:402`・記録の 9 割）は、開発者の決めで本 spec へまとめず、v0.1.0 の新しい spec `areka-P0-animated-surface-log-flood` が持つ（`verification.md` 5 節の 21）。本 spec の範囲は変わらない。

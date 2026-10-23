@@ -1393,7 +1393,7 @@ Reference 割当（正典）: Ref0＝閉じる際に表示されていたスク�
 [entry."ukadoc:list_shiori_event:OnBalloonScaling:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-scale-linkage"
 priority = "B2"
 values = ["装い"]
 links = []
@@ -1410,6 +1410,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 吹き出しの大きさを変えても、ゴーストがその見え方の変化に応じられない。
+担当 spec は areka-P0-shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonTimeout:1"]
@@ -5887,7 +5888,7 @@ crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch_with 
 [entry."ukadoc:list_shiori_event:OnShellScaling:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-scale-linkage"
 priority = "B2"
 values = ["装い"]
 links = []
@@ -5904,6 +5905,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 絵の大きさを変えても、ゴーストがその変化に応じられない。
+担当 spec は areka-P0-shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnSoundError:1"]

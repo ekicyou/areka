@@ -717,7 +717,7 @@ areka はスクロール用の矢印の画像を読み込む経路も描く経�
 [entry."ukadoc:descript_balloon:arrow0.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -725,14 +725,15 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:arrow0.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -740,14 +741,15 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:arrow1.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -755,14 +757,15 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:arrow1.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -770,8 +773,9 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -955,7 +959,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 [entry."ukadoc:descript_balloon:communicatebox.height_2c_30b5_30a4_30ba:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -964,14 +968,15 @@ note = """
 areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
 バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.width_2c_30b5_30a4_30ba:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -980,14 +985,15 @@ note = """
 areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
 バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.x_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -996,14 +1002,15 @@ note = """
 areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
 バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.y_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -1012,8 +1019,9 @@ note = """
 areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
 バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:craftman_2c_4f5c_8005_540d:1"]
@@ -2559,7 +2567,7 @@ areka のバルーンは常に本体の窓に付いて動く（areka の placeme
 [entry."ukadoc:descript_ghost:balloon.syncscale_2ctrue:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-scale-linkage"
 priority = "A2"
 values = ["装い"]
 links = []
@@ -2570,8 +2578,8 @@ areka はバルーンの拡大率を本体に合わせる宣言を受け取る�
 areka のバルーンの拡大率は、画面の DPI とバルーンの定義が申告する推奨 DPI から決まる（areka の placement::source が読む）。ゴースト側から連動を強制する道は無い。
 正典本文は登場を 2.7 RC1 と書いているが、カタログの版番号の欄は空である。登場した版はカタログから選ぶ規則に従って空のままにした。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1"]

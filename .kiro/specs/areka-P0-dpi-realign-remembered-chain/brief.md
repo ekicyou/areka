@@ -112,3 +112,7 @@
   - `placement/chain_realign.rs` 28〜30 行目の説明「誰も触っていないスコープは対象に残る」は 2 回目の起動から成り立たない（変わらず・この spec が判定と一緒に直す）。
   - `OnShellScaling` を SSP で測る項目は `pasta-in-windows-verification` の議題 1 にもある＝こちらで測ってあちらへ渡す形にそろえる。
   - ゴーストの読み直し（✅ `mcp-reload`）は窓を作り直して位置を記憶から戻す＝詰め直しの判定は起動と同じ扱いでよいかを、確かめる項目に足す。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- `OnShellScaling` の持ち主は v0.1.0 の新しい spec `areka-P0-shell-scale-linkage` に決まった（SSP は 150% から 200% の画面へ移しても倍率が変わらず送らなかった＝`ssp-measurement.md` 2 節の段 5。areka で画面を移ったときに送るかは同 spec の議題）。本 spec はぱすたの付け直し（`OnMouseDragEnd`・`OnShellScaling`）と詰め直しの順を確かめるだけ。

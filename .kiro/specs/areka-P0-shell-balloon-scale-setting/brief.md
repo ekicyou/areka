@@ -76,3 +76,7 @@
 - 先に要るもの: 本文のとおり（v0.2.0 の 3 本）。
 - 版: v0.4.0 のまま（v0.2.0 の改造の後・入口の設定画面は windows-reactor 待ち）。
 - 優先度の区分: A のまま。要件定義のモデル: Opus（本文に無かった。先例＝`ScalePolicy.app_scale` の口と DPI の変化の鎖）。分割の案: なし。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- 棚卸㉗で足した `balloon.syncscale`（ゴーストとシェルの descript の読み取りと値）と、`OnShellScaling`・`OnBalloonScaling` の送り方を v0.1.0 の新しい spec `areka-P0-shell-scale-linkage` へ移した（ぱすたが使う・`verification.md` 10 節）。本 spec は、表示倍率を変えたときに同じイベントの口で送ることと、`syncscale` の強制を「バルーンも連携する」の切り替えに効かせることだけを持つ。

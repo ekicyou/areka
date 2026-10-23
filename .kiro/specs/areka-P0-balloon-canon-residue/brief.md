@@ -200,3 +200,7 @@
 - 優先度の区分: C のまま。
 - 要件定義のモデル: Opus のまま。
 - 見つけた穴・古くなった記述: `sakura.balloon.defaultsurface` はゴーストの descript の鍵で、今はどこも読んでいない（バルーンの descript の読み手 `crates/areka-parsers/src/balloon/parse.rs` の仕事ではない）。`config-parse-diagnostics` の brief はこの spec を `balloon/parse.rs` の相手に挙げるが、こちらの触るファイルに無い＝重ならない見込み（要件で確かめる）。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- 網羅台帳 `assets.toml` で本 spec が持ち主の `arrow0.*`・`arrow1.*` の行は、v0.1.0 の新しい spec `areka-P0-balloon-scroll-arrows` が引き取る（ぱすたの縦書きのバルーンが使う・`verification.md` 10 節の「バルーン `arrow0.*`・`arrow1.*`」の欄）。台帳の持ち主は同 spec が自分の行を直すときに書き換える。

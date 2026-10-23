@@ -170,3 +170,7 @@ sink 新設（get/set）＋ kanade への「参照付きイベント発生」型
 - **下流が 1 本増えた**: `shiori4-api`（10-10 起票）は「プロパティへの入口の許可の表は本 spec が最初に決める」と書き、本 spec の後ろに並ぶ。
 - **優先度の区分**: C（ukadoc の照会の道の拾い残し・台帳の段は「その他」）。**要件定義のモデル**: Fable（イベントの往復の時機・6 つのクレートをまたぐ）。
 - **見つけた穴・古くなった記述**: 網羅台帳の持ち主のずれ 3 行は今もそのまま（この棚卸では台帳を直していない）＝`shiori.toml` の `property.get:1`・`property.set:1` は `property-ipc-transport` へ、`sakura-script.toml` の `\![embed,…]` の行は `sakura-embed-directive` へ。本 spec が自分の行を直すときに、数の欄と一緒に動かす。本文 Current State は古いまま（着手の前に書き直す・棚卸⑳の注記どおり）。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- 道 1 `\![get,property,イベント名,プロパティ名,…]`（受け手と `SenderType: property`）を v0.1.0 の新しい spec `areka-P0-shell-scale-linkage` へ移した（ぱすたの `dic/tategaki.pasta:53`・`:101`・`verification.md` 10 節の `\![get,property,…]` の欄）。受け手は名前に縛らない形で作る＝本 spec に残るのは道 2〜6（`\![set,property]`・`%property[…]`・`\![embed]` との対・`.ext.*`・非スクリプトの読み）と台帳の追随。
