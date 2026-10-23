@@ -49,7 +49,7 @@
 
 ### Allowed Dependencies
 
-- `offline_dump` が使ってよいもの: `cli`（`OfflineDumpRequest` の型だけ）・`log_history`（写しの窓）・`png_image`・`emo2_boot::shell_balloon_resolve`（純粋な名前の突き合わせだけ）・`areka-parsers`・`areka-emo-present`（`load_shell_target`・`ShellTarget`）・`areka-emo-atlas`（`WicDecoderArm`）・`areka-emo-compose`（`Composer`・`shell_bounds`・`BindSet`）・`areka-seriko`（`settle_surface`・`settle_time`・`AnimationTable`・`DefaultBinds`・`BindResolver`・`ScopeStates`・`apply_named_bind`）・`windows`（COM の初期化と現地時刻）・`std`。
+- `offline_dump` が使ってよいもの: `cli`（`OfflineDumpRequest` の型だけ）・`log_history`（写しの窓）・`png_image`・`emo2_boot::shell_balloon_resolve`（純粋な名前の突き合わせだけ）・`areka-parsers`・`areka-emo-present`（`load_shell_target`・`ShellTarget`）・`areka-emo-atlas`（`WicDecoderArm`）・`areka-emo-compose`（`Composer`・`shell_bounds`・`BindSet`）・`areka-seriko`（`settle_surface`・`settle_time`・`AnimationTable`・`DefaultBinds`・`BindResolver`・`ScopeStates`・`apply_named_bind`）・`areka-sakura`（`ActorKey` の型だけ。`ScopeStates::current_binds`・`apply_named_bind` が要る）・`windows`（COM の初期化と現地時刻）・`std`。`emo2_boot::shell_balloon_resolve::shell_candidates` は中で `areka-ghost` の catalog を読むだけで使う（`offline_dump` が `areka-ghost` を直に使うのではない）。
 - `offline_dump` が使ってはならないもの: `emo2_boot` のほかの部品（結線・`assets.rs`・`spine`）・`boot_resolve`・`boot_config`・`ghost_session`・`session_end`・`write_failure`・`mcp`・`install`・`update`・`areka-user-data`・`wintf`・`areka-kanade`・`areka-ghost`。これが要件 9（書かない）の構造の上の担保である。
 - 外の依存は足さない。`surface-compare` の `image`（0.25.10・`png` の機能だけ）と、`areka` のテスト用の `image` は、ワークスペースに既に在る同じ版である。
 - 層の向き: `areka-parsers` → `areka-emo-compose` → `areka-emo-present`／`areka-seriko` → `areka`（`png_image`・`log_history` → `offline_dump` → `main`）。逆向きの参照は作らない。
@@ -103,7 +103,7 @@ graph TB
 - 採る形: 新しいモジュール（案 B）を骨にし、既定の着せ替えと名前の表の決め方だけを画面と共有する（案 C）。runonce の時点は areka-seriko の中に同じスレッドの公開関数を足して `handle_message` を回す（R2）。
 - 境: 書き出しの走りは `offline_dump` が持つ。シェルの部品は読むだけで、足すのは読むだけの口（`take_world`・`shell_bounds`・`settle_surface`）と共有の決め方（要件 14）。
 - 守る今の形: 起動オプションの読み方（`startup-options-core` 要件 1）・兄弟の `*_tests.rs`・1 ファイル 1,000 行・失敗は `error!`＋`Err`・試験の根は `target\` の下。
-- steering: 依存を足さない・窓を作らない走りはメッセージボックスを出さない・ログはスコープの前置き（`[offline-dump]`）と構造の欄。
+- steering: 依存を足さない・窓を作らない走りはメッセージボックスを出さない・ログはスコープの前置き（`[offline_dump]`）と構造の欄。
 
 ### Technology Stack
 
@@ -191,7 +191,13 @@ crates/surface-compare/        # 新クレート（publish = false）
 - `crates/areka-emo-present/src/shell_target.rs` — 読み込みで組んだ面の表を `ShellTarget` に `Option<EmoWorld>` で持たせ、`take_world` で 1 度だけ渡す。`EmoWorld` は `Debug` を持たないので、`#[derive(Debug)]` をやめて `Debug` を手で書く（面の表は有無だけを出す）。
 - `crates/areka-emo-compose/src/lib.rs` — `plan_bounds` と形の誤りを集める関数の `pub use`。
 - `crates/areka-emo-compose/src/plan.rs`・`plan_extent.rs`・`blit.rs` — 面を組むたびの形の誤りの warn 6 か所を `debug!` に下げる（ShapeIssuesOnce）。形の誤りを集める純粋な関数は新しい兄弟のファイル（例 `plan_issues.rs`＋`plan_issues_tests.rs`）に置く。
-- `crates/areka-emo-present/src/shell_target.rs`（上と同じファイル）— 集めた形の誤りを、読み込みの知らせと並べて 1 件ずつ warn で出す。
+- `crates/areka-emo-present/src/shell_target.rs`（上と同じファイル）— 集めた形の誤りを、読み込みの知らせと並べて 1 件ずつ warn で出す。シェルを焼く段で落ちた element の絵の行を warn から error に上げる。
+- `crates/areka-parsers/src/shell/decode.rs`・`model.rs` — 知らない `animation-sort`／`collision-sort` を `SortOrder::Other(Box<str>)` として残す。
+- `crates/areka-emo-compose/src/world.rs` — `SortOrder` が `Copy` でなくなったので複製して持つ。
+- `crates/areka-emo-compose/src/nesting.rs`・`method.rs` — `move` を入れ子の辺にしない（`pattern_edge`・`is_move_name`）。
+- `crates/areka-emo-compose/src/atlas_bind.rs` — 「atlas 未束縛 element」を warn から debug に下げる。
+- `crates/areka/src/scope_bind_fixture_test_support.rs`（新・`#[cfg(test)]`）— スコープごとの既定と名前の検体を、画面の試験と書き出しの試験で共有する部品。
+- `crates/areka/tests/offline_dump_exe_test.rs`（新）— `#[path]` の宣言だけ。試験の本体は `tests/offline_dump_exe_test/` の下のテーマごとのファイル（`*_test.rs`）、共有の部品は `tests/offline_dump_exe_test/common/mod.rs`。
 - `crates/areka/Cargo.toml` — `[dev-dependencies]` に `image`（0.25.10・`png` のみ・ワークスペースに既在の版）。
 - `dist/README.txt` — 「■ 起動オプション」の節（効く起動オプションに `--offline-dump`、`--dump-*` の働き・名前・CSV・終了コード・例・まだ扱わない 2 つ）。
 - `.kiro/steering/structure.md` — 新クレート `surface-compare` の項と、`offline_dump` の許す依存。
@@ -232,7 +238,7 @@ sequenceDiagram
 
 - 写しを始めるのは、ゴーストの descript.txt が読めた後（要件 2.6 の失敗は CSV を作らず 0）で、起動オプションの名前の記録（`cli::read`）はそれより前に出終わっている（要件 7.3 の「入れない記録」は順番で外れる）。
 - シェルが見つからない（要件 2.5）・読めない（要件 2.7）ときは、Error を 1 件残して面の段を飛ばし、写しを閉じる段へ進む。
-- 面の指定が無い（要件 3.6）ときは、シェルの読み込みまでで写しを閉じる（`--dump-bind` も読まない）。
+- 面の指定が無い（要件 3.6）ときも SERIKO の表と下地は 1 度作り（表の warn を CSV に残す）、そこで写しを閉じる（`--dump-bind` も読まない）。
 - 面ごとの失敗（合成・ファイル）は、その面を飛ばして次へ進む（要件 4.8・6.6）。
 
 ## Requirements Traceability
@@ -242,7 +248,7 @@ sequenceDiagram
 | 1.1 | 起こさず書き出して終わる | MainEntry, OfflineDumpRun | `offline_dump::run` | 全体 |
 | 1.2, 1.3, 1.4 | 窓・SHIORI・MCP なし | MainEntry | `--help` の直後で `exit` | 全体 |
 | 1.5 | GPU なし | OfflineDumpRun, SurfaceRenderer | WIC＋`Composer` | 面の段 |
-| 1.6, 1.7 | 始めと終わりの info | OfflineDumpRun | `[offline-dump]` の 2 行 | 始め・終わり |
+| 1.6, 1.7 | 始めと終わりの info | OfflineDumpRun | `[offline_dump]` の 2 行 | 始め・終わり |
 | 1.8 | `--offline-dump` に値なし | CliOfflineFields, OfflineDumpRun | `ghost_dir: None` | ゴーストの失敗 |
 | 1.9 | 起動中の areka・SSP に任せない | MainEntry | 二重起動の確かめより前で戻る | 全体 |
 | 2.1, 2.2 | ゴーストのフォルダ・相対パス | OfflineDumpRun | `std::path::absolute` | 始め |
@@ -387,13 +393,13 @@ if let Some(req) = &opts.offline {
 | Requirements | 1.1, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.6, 3.8, 3.9, 3.10, 4.2, 8.4, 9.4 |
 
 **Responsibilities & Constraints**
-- 順番（System Flows の図）: 始めの info → ゴーストの名前を読む（失敗は error・0）→ `capture_begin` → スコープの読み → `--dump-shell` の解決 → `resolve_with_shell` → COM の初期化（MTA）→ `load_shell_target` → `take_world` → `AnimationTable::from_world` と `shell_bounds` を 1 度だけ → 面の指定があれば着せ替えを組んで面ごとに `render` → `capture_finish` → 終了コード → CSV → 終わりの info。
+- 順番（System Flows の図）: 始めの info → ゴーストの名前を読む（失敗は error・0）→ `capture_begin` → スコープの読み → `--dump-shell` の解決 → `resolve_with_shell` → COM の初期化（MTA）→ `load_shell_target` → `take_world` → `AnimationTable::from_world` と `shell_bounds`（下地）を 1 度だけ（面の指定が無くても作る）→ 面の指定が無ければここで閉じる → 既定の組と `--dump-bind` → 面の指定の展開 → 面ごとに `render` → `capture_finish` → 終了コード → CSV → 終わりの info。
 - パスは `std::path::absolute` で起動したときの今のフォルダから絶対にする（2.2）。末尾の `\` は `Path` がそのまま扱う（2.1）。
 - `--dump-shell`: 値があれば `shell_candidates(ghost_root)` に `find_by_name_or_folder` を当て、見つかったフォルダ名を `resolve_with_shell` へ渡す。見つからなければ Error を 1 件（`event = "offline_dump_shell_missing"`）残して面の段を飛ばす（2.4・2.5）。値が無ければ `None`（既定のシェル・記憶は読まない＝2.3）。
 - `resolve_with_shell` の `ShellDirMissing`・`load_shell_target` の `Err`・COM の初期化の失敗は Error（`load_shell_target` の `Err` は関数自身が `error!` を出しているので、run は重ねて出さない＝1 つの誤りは 1 行）。`ShellDirMissing` と COM の失敗は run が `error!` を出す（2.7）。
 - スコープ: `None` は 0。`u32` として読めなければ 0 と Warning（`offline_dump_scope_unreadable`・3.10）。
 - 着せ替え: `DefaultBinds::from_groups(&model.bindgroups)` と `BindResolver::from_groups(&model.bindgroups)` を作り（画面と同じ決め方＝14.3）、`ScopeStates::new(defaults)` に `apply_bind_specs` を当てて、`current_binds(scope)` をその走りの着せ替えにする（4.2・3.9・5.8）。
-- 面の指定が無ければ、シェルの読み込みの後で面の段を飛ばす（3.6）。
+- 面の指定が無ければ、SERIKO の表と下地を作った後で面の段を飛ばす（3.6）。
 - ゴーストの名前: `GhostNames.name`、無ければ空（7.2）。
 
 **Contracts**: Service [x] / Batch [x]
@@ -720,7 +726,10 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds;
   - 描かない method の pattern: `plan.rs` 465 行目・534 行目。
   - 描かない method の element: `blit.rs` 90 行目。
 - 読み込みの知らせ（`shell_target.rs` の `log_nest_issue`・描かない element の行など）が既に同じ誤りを出しているものは、そのまま使う。出していないもの（少なくとも知らない sort と、描かない method の pattern）は、areka-emo-compose に足す純粋な関数で面の表から集め、`shell_target.rs` が読み込みの知らせと並べて 1 件ずつ warn で出す（`surface_id`・`animation_id` などの欄を付ける）。
+- 知らない `animation-sort` は、転記層（areka-parsers の `shell/decode.rs`・`model.rs`）が `SortOrder::Other(Box<str>)` として残す（前は記録なしで捨てていた）。形の誤りを集める関数はこれを `UnknownAnimationSort { value }` としてシェル全体で 1 件だけ返す（面と animation の欄は付かない）。
+- `move` は入れ子の辺にしない（`nesting.rs` の `pattern_edge`・入れ子の報告と共有。判定は `method.rs` の `is_move_name`）。
 - 面を組むときの上の 6 か所は `debug!` に下げる（打ち切り・skip の振る舞いは変えない）。
+- 欠けた element の絵（シェルを焼く段で落ちたもの）は、`shell_target.rs` が読み込みのときに error で 1 行出す（warn から上げた・画面の記録も error になる）。面を組むたびの `atlas_bind.rs` の「atlas 未束縛 element」は debug に下げる（1 つの誤りは 1 行＝要件 7.5）。
 - 形の誤りでない知らせは warn のまま残す（`blit.rs` 106 行目の「転写元アトラス頁が存在しない」は内部の食い違いで、定義からは決まらない）。
 - 画面にも効く。今は面を組むたびに同じ warn が積み重なっているが、直した後はシェルを読むときの 1 度だけになる。
 
@@ -807,10 +816,11 @@ impl BindResolver {
 }
 
 pub enum NamedBindResult {
-    Applied(BindApplyOutcome),
+    /// `id` は解決した着せ替え ID（書き出しの記録の欄 `id` に使う）。
+    Applied { id: u32, outcome: BindApplyOutcome },
     NoNamespace,
     NotFound,
-    MustSelectKept,
+    MustSelectKept { id: u32 },
 }
 
 /// 画面の \![bind] と --dump-bind が使う当て方（記録は出さない）。
@@ -909,7 +919,7 @@ pub fn compare_dirs(ssp_dir: &Path, areka_dir: &Path) -> std::io::Result<Vec<Fil
 
 | 場面 | 記録 | 写しに入るか | 続き |
 |------|------|--------------|------|
-| `--offline-dump` に値なし（1.8） | error `offline_dump_no_ghost` | 入らない（窓の前） | 0 で終わる |
+| `--offline-dump` に値なし（1.8） | error `offline_dump_ghost_missing_value` | 入らない（窓の前） | 0 で終わる |
 | ゴーストの descript.txt が無い・読めない（2.6） | error `offline_dump_ghost_unreadable` | 入らない | 0 で終わる |
 | `--dump-scope` が読めない（3.10） | warn | 入る | スコープ 0 |
 | `--dump-shell` が見つからない（2.5） | error | 入る | 面の段を飛ばす |
@@ -926,7 +936,7 @@ pub fn compare_dirs(ssp_dir: &Path, areka_dir: &Path) -> std::io::Result<Vec<Fil
 
 ### Monitoring
 
-- 記録の前置きは `[offline-dump]`、欄 `event` に上の名前。始めと終わりの info（1.6・1.7）で 1 回の走りが分かる。
+- 記録の前置きは `[offline_dump]`、欄 `event` に上の名前。始めと終わりの info（1.6・1.7）で 1 回の走りが分かる。
 - 起動オプションの段の記録は今までどおり `[cli]`。
 
 ## Testing Strategy
