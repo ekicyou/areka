@@ -465,7 +465,7 @@ Opus
 
 **潜在の性質（実害は観測されていない）**
 
-- **SHIORI へ渡す置き場所のパスの形**（XS）。`load`／`loadu` へ渡すパスが `…\ghost/master` の形（区切りの混在・末尾の区切りなし）。出どころは `crates/areka-parsers/src/package/resolve_shell.rs` の定数 `GHOST_MASTER`（`"ghost/master"`）を `join` する所（helper も末尾に区切りを足さない＝`shiori_proxy.rs` の `init_bytes`）。正典は沈黙。直すなら SHIORI へ渡す 2 つの口（`crates/areka-ghost/src/{shiori_inproc,shiori_wiring}.rs`）だけで揃えるのが影響が狭い。**棚卸㉓**: SHIORI へ送るバイトが変わるので開発者の決めごと。`shiori4-api`（議題の候補）の brief へ申し送った（✅ `emily-ghost-verification` は 2026-10-18 完了＝えみりの YAYA は今のパスの形で起動から終了まで動いた・疑い先には当たらなかった）。
+- **SHIORI へ渡す置き場所のパスの形**（XS）。`load`／`loadu` へ渡すパスが `…\ghost/master` の形（区切りの混在・末尾の区切りなし）。出どころは `crates/areka-parsers/src/package/resolve_shell.rs` の定数 `GHOST_MASTER`（`"ghost/master"`）を `join` する所（helper も末尾に区切りを足さない＝`shiori_proxy.rs` の `init_bytes`）。正典は沈黙。直すなら SHIORI へ渡す 2 つの口（`crates/areka-ghost/src/{shiori_inproc,shiori_wiring}.rs`）だけで揃えるのが影響が狭い。**棚卸㉓**: SHIORI へ送るバイトが変わるので開発者の決めごと。`shiori4-api`（議題の候補）の brief へ申し送った。**2026-10-23 開発者の決定**＝helper の道にも「絶対パス・OS の区切り・末尾に区切りあり」を当てる（shiori4 の abi-conventions の論点 6 と同じ形）・変えた直後に検体のゴーストで起動を確かめる条件つき・`shiori4-api` の決定 6 で行う（✅ `emily-ghost-verification` は 2026-10-18 完了＝えみりの YAYA は今のパスの形で起動から終了まで動いた・疑い先には当たらなかった）。
 
 **道具と試験**
 
