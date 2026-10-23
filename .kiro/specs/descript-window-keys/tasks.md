@@ -71,7 +71,7 @@
   - _Requirements: 1.7, 3.2, 3.5_
 
 - [ ] 5. バルーンの動かせない指定
-- [ ] 5.1 動かせない指定の帳簿とバルーンの窓のドラッグ設定の書き手
+- [x] 5.1 動かせない指定の帳簿とバルーンの窓のドラッグ設定の書き手
   - スコープごとに descript の段と台本の lock を分けて持つ帳簿と、据える・descript の段だけ取り替える・台本の lock を書いた所のスコープにだけ当てる、の 3 つの入口を置く
   - 窓を作った後にバルーンの窓の「窓を動かすか」を書くのは書き手 1 か所だけにし、有効の印と閾値は触らない
   - lock・unlock・descript の段のために解けなかったこと・帳簿が無い所への lock の記録を残す
@@ -130,3 +130,4 @@
 - 3.1: `cargo test -p areka` で `script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` が i686 ヘルパーの初回 LOAD 失敗（LoadReturnedFalse）で 2 回赤・単独では緑。本番の値は変わらない差分なので範囲外の揺れとして完了の棚卸へ。
 - 4.1: コミット前の確かめで `areka-seriko` の `bind::tests::bind_resolver_from_groups_reads_three_kinds_of_scope`（ログも共有状態も使わない純関数のテスト・bind.rs はこの spec で触っていない）が全体の lib 実行で 1 回だけ赤。単独 300 回・lib 全体 7 回は緑で再現せず。範囲外の揺れとして完了の棚卸へ。
 - 4.2: `cargo clippy -p areka-emo-text --all-targets` は前からある `absurd_extreme_comparisons` 3 件（tests/line_pitch_readback_test.rs:705・choice_fixture_test.rs:565・emo2_fixture_e2e_test.rs:638、e3291fc14）で止まる。範囲外として完了の棚卸へ。空の面の集合は seriko と同じく文字の層も「材料なし・替えない」。
+- 5.1: バルーンの窓は帳簿を据えた後に生まれると次の書き直しまで move_window=true のまま。今は窓を作る閉包の中で据える前に作るので問題ないが、6.1 の結線で順を崩さないこと。`mod balloon_lock` の `#[allow(dead_code)]` は 5.3・6.1 で外す。
