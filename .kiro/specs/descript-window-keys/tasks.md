@@ -89,7 +89,7 @@
   - 決定論のテストで、`\0`・`\1` の実行者のスコープで合図が 1 件（窓の位置の合図の受け手に新しいテストの兄弟を宣言して置く）・`\![lock,repaint]` は送らない・余分な引数を受ける、が通る
   - _Depends: 5.1_
   - _Requirements: 5.1, 5.2_
-- [ ] 5.4 (P) `check_script` の担当の表に lock・unlock の 2 行を足す
+- [x] 5.4 (P) `check_script` の担当の表に lock・unlock の 2 行を足す
   - 窓の位置の受け口の担当として `lock,balloonmove`・`unlock,balloonmove` を登記し、注記の一覧を合わせる。担当の引き方と未登録の扱いは変えない
   - 表のテストの手書きの数が 38 になり、一致のテストの見本 2 件が窓の位置の受け口に届いて通る
   - _Boundary: ConsumerLedger_
@@ -131,3 +131,4 @@
 - 4.1: コミット前の確かめで `areka-seriko` の `bind::tests::bind_resolver_from_groups_reads_three_kinds_of_scope`（ログも共有状態も使わない純関数のテスト・bind.rs はこの spec で触っていない）が全体の lib 実行で 1 回だけ赤。単独 300 回・lib 全体 7 回は緑で再現せず。範囲外の揺れとして完了の棚卸へ。
 - 4.2: `cargo clippy -p areka-emo-text --all-targets` は前からある `absurd_extreme_comparisons` 3 件（tests/line_pitch_readback_test.rs:705・choice_fixture_test.rs:565・emo2_fixture_e2e_test.rs:638、e3291fc14）で止まる。範囲外として完了の棚卸へ。空の面の集合は seriko と同じく文字の層も「材料なし・替えない」。
 - 5.1: バルーンの窓は帳簿を据えた後に生まれると次の書き直しまで move_window=true のまま。今は窓を作る閉包の中で据える前に作るので問題ないが、6.1 の結線で順を崩さないこと。`mod balloon_lock` の `#[allow(dead_code)]` は 5.3・6.1 で外す。
+- 5.4: `.kiro/steering/roadmap.md` の 282・522 行目に「36 件の登記」の棚卸の写しが残る（台帳は 38 件）。kiro-complete／kiro-next で直す。
