@@ -57,7 +57,7 @@
   - 決定論のテストで、今の面が在る・descript の面・組み込みの面・どれも無い・非表示のスコープの 5 通りと、無い面を出していたスコープの置き直しの結果が最初から戻り先の面を載せること、が通る
   - _Boundary: areka-seriko, SwitchSplit_
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 7.2_
-- [ ] 4.2 (P) 文字の層が今の面を同じ戻り先へ引き直す
+- [x] 4.2 (P) 文字の層が今の面を同じ戻り先へ引き直す
   - 文字の層の状態に、今の面が新しいシェルに無いスコープだけを候補の最初に在る面（無ければ非表示）へ替え、行き先を今の面の引き直しに任せる働きを足す（新しいソースファイルは足さない）
   - 文字の層の実行時に、替えたスコープがあったときだけ区間の全文を求め直す呼び口を足す。箱の配置を渡す今の関数の引数は変えない
   - 決定論のテストで、替えない・descript の面へ・組み込みの面へ・非表示（行き先は普通のバルーン）・替えた面に箱があれば行き先がその面の既定の箱、の 5 本が通る
@@ -128,3 +128,5 @@
 
 - 2.1: `crates/areka/src/placement/measure_tests.rs` はちょうど 1,000 行。これ以上足すなら新しい兄弟のテストファイルへ。`mod descript_window_keys` の `#[allow(dead_code)]` は本番の呼び手がつながったら外す。
 - 3.1: `cargo test -p areka` で `script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` が i686 ヘルパーの初回 LOAD 失敗（LoadReturnedFalse）で 2 回赤・単独では緑。本番の値は変わらない差分なので範囲外の揺れとして完了の棚卸へ。
+- 4.1: コミット前の確かめで `areka-seriko` の `bind::tests::bind_resolver_from_groups_reads_three_kinds_of_scope`（ログも共有状態も使わない純関数のテスト・bind.rs はこの spec で触っていない）が全体の lib 実行で 1 回だけ赤。単独 300 回・lib 全体 7 回は緑で再現せず。範囲外の揺れとして完了の棚卸へ。
+- 4.2: `cargo clippy -p areka-emo-text --all-targets` は前からある `absurd_extreme_comparisons` 3 件（tests/line_pitch_readback_test.rs:705・choice_fixture_test.rs:565・emo2_fixture_e2e_test.rs:638、e3291fc14）で止まる。範囲外として完了の棚卸へ。空の面の集合は seriko と同じく文字の層も「材料なし・替えない」。
