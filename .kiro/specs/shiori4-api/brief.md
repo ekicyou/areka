@@ -86,22 +86,27 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
    - **製品は別プロセスだけ**（開発者・同日。「別プロセスの版と同じプロセスの版を 2 つ作るか…でも設計者が混乱しそう」への推奨を承認）。同じプロセスで SHIORI を動かす道は、設定の項目も選ぶ道も作らない。理由: 2 つあると「同じ環境で動く」という決定の狙いが崩れ（カレントディレクトリ・プロセス全体の状態が版で違う）、試験と不具合の切り分けも倍になる。速さの得（問い合わせの IPC の往復が要らない）は小さい見込み（未計測）。
    - **同じプロセスで回すのはテストの道具に限る**。helper の中身（中継の `Host` と `GhostRuntime` を回すところ）をライブラリに切り出し、テストのときだけテストのプロセスのスレッドで回す（プロセスを起こさない決定論の試験のため）。速さが要ると測って分かったら、その切り出しの上に同じプロセスの道を後から足せる（今は作らない）。
 4. **helper の exe は 1 つにまとめる**（開発者・同日「helper の exe を 1 つにまとめる案、承認」）。1 種類の helper の exe が SHIORI/3.0 と SHIORI4 の両方を受け持つ。DLL を読んだあと `shiori_get_api` があれば v4、`load`／`request`／`unload` だけなら SHIORI/3.0（両方を持つ DLL は v4）。exe を共有するだけで、プロセスは SHIORI 1 つにつき 1 つのまま。起こし方・ジョブ・終わらせ方・IPC の札の読み手を 1 つで持てる。今は i686 だけを建てているので、v4 の DLL のために x64・arm64 の版も建てる。
+5. **DLL は arch の接尾辞つきの名前から先に探す**（開発者・同日「shiori宣言で『pasta.dll』と書いてるときに、『pasta.x64.dll』→『pasta.dll』の順に解決を試みる、とかですねえ。多分ゴースト作者は今後、x64とarm64を同梱することになるため、その対応が必要です」）。SSP は `pasta.dll` しか読まないので、作者は SSP 向けの 32bit 版を `pasta.dll` に残したまま、`pasta.x64.dll`・`pasta.arm64.dll` を同梱できる。areka の推奨の細部（要件の段で確かめる）:
+   - x64 の Windows: `pasta.x64.dll` → `pasta.dll`。arm64 の Windows: `pasta.arm64.dll` → `pasta.x64.dll`（Windows 11 は arm64 の上で x64 を動かせる）→ `pasta.dll`。
+   - arch の名前は `x64`・`arm64` の 2 つ。`x86` の接尾辞は作らない（接尾辞なしが今の 32bit の役を担う）。
+   - どの helper を起こすかは、選んだファイルの PE ヘッダの機械の種類で決める（接尾辞なしの名前は x86 とも x64 ともありうる）。接尾辞つきの候補の中身が名前と食い違えば、ログを出して次の候補へ進む。
+   - SHIORI/3.0 と v4 の両方に効かせる（helper は両方を受け持つ＝決定 4。x64 の SHIORI/3.0 の DLL も読める）。
+   - 名前の決まりは他のベースウェアと SHIORI の配り方にも関わるので、shiori4 の正本に置くよう提案した（10-23）。正本に入ったら、それを参照する。
 
 ## 開発者の判断（着手の前または要件の段で）
 推奨つき。
 
-1. **v4 の DLL の arch の決め方**。推奨は DLL の PE ヘッダの機械の種類を読んで helper を選ぶ（違う arch の helper で読み込みに失敗させてから試し直すより確実）。
-2. abi-conventions の load の dir の形を helper の道（32bit の SHIORI/3.0）にも当てるか。当てると、すべてのゴーストへ渡す `load` のバイト列が変わる（10-10 からの議題の候補）。推奨は当てる（SSP と同じ形になる。えみりの YAYA は今の形でも動いたので、変えても壊す見込みは低い）。
+1. abi-conventions の load の dir の形を helper の道（32bit の SHIORI/3.0）にも当てるか。当てると、すべてのゴーストへ渡す `load` のバイト列が変わる（10-10 からの議題の候補）。推奨は当てる（SSP と同じ形になる。えみりの YAYA は今の形でも動いたので、変えても壊す見込みは低い）。
 
 ## Scope
 - **In**:
   - helper の v4 の読み方（`shiori4_host` への依存・helper の中の中継の `Host`・`GhostRuntime` の置き場）と、x64・arm64・i686 の helper の建て方。
   - IPC の札の追加（同期の問い合わせとその答え・post・log）と、親の側で Request の応答を待つ間に問い合わせに答える仕組み。
   - 本体の受け側（getproperty／setproperty → sylphya・post の SEND／NOTIFY → kanade・log → tracing）。
-  - `ShioriBackend` の v4 版の実装と、descript.txt の `shiori` からの選び分け（`shiori_get_api` の有無・DLL の arch）。
+  - `ShioriBackend` の v4 版の実装と、descript.txt の `shiori` からの選び分け（arch の接尾辞つきの名前から探す＝決定 5・PE ヘッダで helper の arch を決める・`shiori_get_api` の有無）。
   - 要求の組み立て器を v3（helper）と v4 で共有する整理。
   - post の SEND を待たせるための待ちの列（3 者会談の合意＝`Option: nobreak` のときと OnHostComplete の応答のとき。areka は今トークの枠が 1 つで列を持たない）と、再生の終わりで出す完了（`completed`／`interrupted`）。
-  - `load` に渡すパスの形（abi-conventions・判断 2）。
+  - `load` に渡すパスの形（abi-conventions・判断 1）。
   - COM の面とテスト用の COM の DLL と `IShioriHost` の実装と `ShioriWiring::InProc` の道の撤去、テスト用の v4 DLL（決定 1・3）。
   - 封筒の書き換え（決定 2）・`doc/COMPAT_ARCHITECTURE.md` §5・roadmap の技術の要約の書き直し。
   - 古くなった注釈の掃除（`crates/areka/src/main.rs`・`shiori_inproc.rs`・`crates/shiori-host32-host/src/client.rs` の「`IShiori` への写像点」）。
