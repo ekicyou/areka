@@ -766,6 +766,13 @@ fn on_reply(
     {
         return (state, actions);
     }
+    // クリックの段の列の応答も同じ形で先に見る（台本だけが下の腕へ流れる）。
+    if let Some(chain) = state.mouse_click.take()
+        && let Some(actions) =
+            super::mouse_events::on_click_reply(&mut state, chain, &outcome, origin)
+    {
+        return (state, actions);
+    }
     // === choice 先行アーム（C4 規則 3・origin 非依存）===
     // カスケード段の応答は既存の origin 政策 match より**先に**捌く。これを落とすと選択応答が
     // 下の DD-6 防御アーム（`steady_value_during_talk`）で warn 破棄され、選択が沈黙する

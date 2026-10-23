@@ -531,8 +531,10 @@ fn on_shiori_reply(
     //
     // アンカーのイベントの応答待ち（段の記憶がある間）も同じ免除に入れる。失敗は steady の先頭の
     // 腕（`anchor::on_anchor_reply`）が `anchor_shiori_failed_as_204` を残して 204 と同じに扱う。
+    // クリックの段の列（段の記憶がある間）も同じ（`mouse_events::on_click_reply`・要件 1.6・1.8）。
     if matches!(state.phase, Phase::Steady { .. })
         && (state.anchor.is_some()
+            || state.mouse_click.is_some()
             || state
                 .choice
                 .as_ref()

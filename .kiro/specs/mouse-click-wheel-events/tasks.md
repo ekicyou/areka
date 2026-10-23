@@ -37,7 +37,7 @@
   - 定常の入口の分岐の 2.1 の仮の腕を、閉じの握手の保留を確かめた後に 3 つをここへ渡す委譲に置き換える（話の最中かでは分けない）。送ったら `mouse_event_sent` をクリックの系は info・ホイールと出入りは debug で残す
   - 段の列の表の 10 通り・Reference の 7 並び・ホイールと出入りの組み立て・閉じの握手の保留と定常以外では送らないこと、の単体テストが新しい兄弟のテストファイルで通る
   - _Requirements: 1.1, 1.7, 2.1, 2.4, 2.6, 3.2, 6.1, 6.2, 7.5, 8.2, 8.3, 9.1_
-- [ ] 2.4 段の列の応答を扱い、送信の失敗を 204 と同じにする
+- [x] 2.4 段の列の応答を扱い、送信の失敗を 204 と同じにする
   - 応答の入口（アンカーの腕の直後）で段の記憶を取り出し、台本なら止めて今の応答の腕で再生（話の最中は置き換え）、204・送信の失敗（error）・GET では起きない応答（warn）なら次の段を積む。最後の段の後は何もしない
   - 止めたときは `mouse_click_chain_stopped`（送らなかった段の名前の列つき）、2 回目の解放で 1 段目だけで終えたときは `mouse_click_not_sent`（理由＝2 回目）を info で残す
   - 定常の送信の失敗を終了の系列へ倒す条件の免除に「段の記憶がある間」を足す
@@ -121,3 +121,4 @@
 - 2.3・2.4: クリックの段の列の中身は `schedule/mouse_events.rs`（テストは `mouse_events_tests.rs`）へ置き、`steady.rs`（2.1 の後で 964 行）には委譲の腕と応答の入口だけを足す。
 - 2.2: 表の手書きの数（`events_change_tests.rs` 55→64）のほか、表の全体を固定する `events_tests.rs::allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour` の期待の配列に 9 語を足した（語を足せば必ず赤になる檻・design の変更ファイルの一覧に漏れ）。4.2 の差分の説明に例外として書く。範囲外の clippy の止まりは `balloon_events_cleanup_tests.rs:189` ほか複数の触っていないテストのファイルにもある。
 - 2.3: `ClickChain` に `cfg_attr(not(test), expect(dead_code))` の足場がある。2.4 で `on_click_reply` が欄を読み始めたら外す（外さないと unfulfilled_lint_expectations）。記録の欄のイベント名は `event` と重なるので `id` にしてある（`balloon_event_sent` と同じ形）。
+- 2.4: kanade 側の `mouse_click_not_sent`（second_of_double）の `button` は 1 段目の Ref5 の値（"0"／"1"／"middle"／"xbutton1"／"xbutton2"）。3.4 で入力の層の `mouse_click_not_sent` の `button` を書くときは同じ書き方にそろえる。応答の出所の照合はアンカーの腕にそろえて持たない。

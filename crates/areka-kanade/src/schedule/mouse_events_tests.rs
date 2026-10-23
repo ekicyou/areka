@@ -5,7 +5,9 @@
 //! 定常以外の棄却は最上位の `step` から通す。
 
 use super::*;
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall};
+use crate::msg::{
+    CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
+};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::{ActiveTalk, Input, Phase, step};
 use crate::talk::TalkId;
@@ -270,4 +272,203 @@ fn step_sends_nothing_outside_steady() {
         assert!(actions.is_empty(), "{kind:?}");
         assert!(state.mouse_click.is_none());
     }
+}
+
+// --- 段の列の応答（`step` を通す） ---
+
+fn script() -> ShioriOutcome {
+    ShioriOutcome::Value("\\0やあ\\e".to_string(), areka_talk::SecurityLevel::Local)
+}
+
+fn failed() -> ShioriOutcome {
+    ShioriOutcome::Failed(ShioriFailure::Ipc("pipe closed".to_string()))
+}
+
+/// 解放を `step` へ入れ、1 段目の GET を確かめた状態を返す。
+fn released(state: State, button: ClickButton, second: bool) -> State {
+    let (state, actions) = step(state, Input::Mouse(input(up(button, second))), &config());
+    assert_eq!(only_get(&actions).0, plan_click(button, second)[0].id);
+    state
+}
+
+/// 応答を `step` へ入れる（台本なら翻訳の往復も通す）。
+fn reply(state: State, outcome: ShioriOutcome, origin: &'static str) -> (State, Vec<Action>) {
+    crate::schedule::translate_test_support::pass_translate(
+        step(state, Input::ShioriReply { outcome, origin }, &config()),
+        &config(),
+    )
+}
+
+const ALL: [(ClickButton, bool); 10] = {
+    use ClickButton::*;
+    [
+        (Left, false),
+        (Left, true),
+        (Right, false),
+        (Right, true),
+        (Middle, false),
+        (Middle, true),
+        (XButton1, false),
+        (XButton1, true),
+        (XButton2, false),
+        (XButton2, true),
+    ]
+};
+
+/// 要件 1.2・2.2・2.4・3.2・3.6・9.3: 204 なら次の 1 本だけ（同じ Reference）、最後の段の後は何もしない。
+/// 2 回目の解放は 1 段目の系だけで終え、`mouse_click_not_sent`（理由＝2 回目）を残す。
+#[test]
+fn no_content_sends_exactly_the_next_step_until_the_last() {
+    for (button, second) in ALL {
+        let steps = plan_click(button, second);
+        let mut state = released(steady_none(), button, second);
+        for k in 0..steps.len() {
+            let mut out = None;
+            let events =
+                capture(|| out = Some(reply(state, ShioriOutcome::NoContent, steps[k].id)));
+            let (s, actions) = out.unwrap();
+            state = s;
+            if let Some(next) = steps.get(k + 1) {
+                let (id, references) = only_get(&actions);
+                assert_eq!(id, next.id, "{button:?} {second} 段 {k}");
+                assert_eq!(references, refs("0", next.ref5));
+                assert!(state.mouse_click.is_some());
+                assert_not_logged(&events, "mouse_click_not_sent");
+            } else {
+                assert!(actions.is_empty(), "{button:?} {second} 最後の段の後");
+                assert!(state.mouse_click.is_none());
+                if second {
+                    let ev = logged_once(&events, Level::INFO, "mouse_click_not_sent");
+                    assert_eq!(
+                        ev.fields.get("reason").map(String::as_str),
+                        Some("second_of_double")
+                    );
+                } else {
+                    assert_not_logged(&events, "mouse_click_not_sent");
+                }
+            }
+            assert_not_logged(&events, "mouse_click_chain_stopped");
+            assert!(matches!(state.phase, Phase::Steady { talk: None }));
+        }
+    }
+}
+
+/// 要件 1.3・2.3・2.5・9.2: どの段でも台本なら止めて再生し、以降の段は送らない。
+/// 送らなかった段があれば `mouse_click_chain_stopped` にその名前の列を残す。
+#[test]
+fn script_at_any_step_plays_and_stops_the_chain() {
+    for (button, second) in ALL {
+        let steps = plan_click(button, second);
+        for k in 0..steps.len() {
+            let mut state = released(steady_none(), button, second);
+            for s in &steps[..k] {
+                state = reply(state, ShioriOutcome::NoContent, s.id).0;
+            }
+            let mut out = None;
+            let events = capture(|| out = Some(reply(state, script(), steps[k].id)));
+            let (state, actions) = out.unwrap();
+            assert!(
+                matches!(actions.as_slice(), [Action::StartTalk(start)] if start.talk_id == TalkId(7)),
+                "{button:?} {second} 段 {k}: 台詞の起動だけ（GET 無し）"
+            );
+            assert!(state.mouse_click.is_none());
+            let skipped: Vec<&str> = steps[k + 1..].iter().map(|s| s.id).collect();
+            if skipped.is_empty() {
+                assert_not_logged(&events, "mouse_click_chain_stopped");
+            } else {
+                let ev = logged_once(&events, Level::INFO, "mouse_click_chain_stopped");
+                assert_eq!(
+                    ev.fields.get("skipped").map(String::as_str),
+                    Some(format!("{skipped:?}").as_str())
+                );
+            }
+            // 要件 3.6・9.3: 2 回目の解放の列は、台本で止めても `mouse_click_not_sent` を 1 回だけ残す。
+            if second {
+                let ev = logged_once(&events, Level::INFO, "mouse_click_not_sent");
+                assert_eq!(
+                    ev.fields.get("reason").map(String::as_str),
+                    Some("second_of_double")
+                );
+            } else {
+                assert_not_logged(&events, "mouse_click_not_sent");
+            }
+        }
+    }
+}
+
+/// 要件 2.5: 中ボタンで `Ex` の 2 段のどちらかに台本なら、互換の `OnMouseUp`／`OnMouseClick` は送らない。
+#[test]
+fn middle_script_on_ex_never_sends_compat_steps() {
+    // `OnMouseUpEx` に台本。
+    let state = released(steady_none(), ClickButton::Middle, false);
+    let (state, actions) = reply(state, script(), "OnMouseUpEx");
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
+    assert!(state.mouse_click.is_none());
+    // `OnMouseClickEx` に台本。
+    let state = released(steady_none(), ClickButton::Middle, false);
+    let (state, actions) = reply(state, ShioriOutcome::NoContent, "OnMouseUpEx");
+    assert_eq!(only_get(&actions).0, "OnMouseClickEx");
+    let (state, actions) = reply(state, script(), "OnMouseClickEx");
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
+    assert!(state.mouse_click.is_none());
+}
+
+/// 要件 1.6・1.8・9.3: 送信の失敗は `error!` を残して 204 と同じに次へ。終了の系列へ倒れない。
+#[test]
+fn send_failure_at_each_step_moves_on_without_closing() {
+    for (button, second) in ALL {
+        let steps = plan_click(button, second);
+        let mut state = released(steady_none(), button, second);
+        for (k, s) in steps.iter().enumerate() {
+            let mut out = None;
+            let events = capture(|| out = Some(reply(state, failed(), s.id)));
+            let (next_state, actions) = out.unwrap();
+            state = next_state;
+            assert!(
+                matches!(state.phase, Phase::Steady { talk: None }),
+                "{button:?} {second} 段 {k}: 終了へ倒れない"
+            );
+            logged_once(&events, Level::ERROR, "mouse_click_shiori_failed_as_204");
+            match steps.get(k + 1) {
+                Some(next) => assert_eq!(only_get(&actions).0, next.id),
+                None => assert!(actions.is_empty()),
+            }
+        }
+        assert!(state.mouse_click.is_none());
+    }
+}
+
+/// GET では起きない応答（`Notified`・`Unloaded`）は `warn!` を残して 204 と同じに次へ。
+#[test]
+fn unexpected_reply_moves_on_like_no_content() {
+    for outcome in [ShioriOutcome::Notified, ShioriOutcome::Unloaded] {
+        let state = released(steady_none(), ClickButton::Left, false);
+        let mut out = None;
+        let events = capture(|| out = Some(reply(state, outcome, "OnMouseUp")));
+        let (state, actions) = out.unwrap();
+        assert_eq!(only_get(&actions).0, "OnMouseClick");
+        assert!(state.mouse_click.is_some());
+        logged_once(&events, Level::WARN, "mouse_click_unexpected_reply");
+    }
+}
+
+/// 要件 5.4・8.1: 話の最中の台本は話を置き換える（出所は返事のあったイベントの名前）。
+#[test]
+fn script_while_talking_replaces_the_talk() {
+    let state = released(steady_talking(), ClickButton::Right, false);
+    let (state, actions) = reply(state, ShioriOutcome::NoContent, "OnMouseUp");
+    assert_eq!(only_get(&actions).0, "OnMouseClick");
+    let (state, actions) = reply(state, script(), "OnMouseClick");
+    assert!(
+        matches!(actions.as_slice(), [Action::StartTalk(start)] if start.talk_id == TalkId(7)),
+        "新しい台詞の起動だけ"
+    );
+    match &state.phase {
+        Phase::Steady { talk: Some(talk) } => {
+            assert_eq!(talk.talk_id, TalkId(7));
+            assert_eq!(talk.origin, "OnMouseClick");
+        }
+        _ => panic!("置き換えた話が続くはず"),
+    }
+    assert!(state.mouse_click.is_none());
 }

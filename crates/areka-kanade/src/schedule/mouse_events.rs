@@ -8,7 +8,7 @@
 //! 運行表の入口が持つ。話の最中かどうかでは分けない（要件 8.2）。
 
 use super::{Action, State, events};
-use crate::msg::{ClickButton, HoverEdge, MouseEventKind, MouseInput};
+use crate::msg::{ClickButton, HoverEdge, MouseEventKind, MouseInput, ShioriOutcome};
 
 /// 段 1 つ（送るイベントの名前と Ref5）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,8 +56,6 @@ pub(crate) fn plan_click(button: ClickButton, second_of_double: bool) -> &'stati
 }
 
 /// 送っている途中の段の列（Reference の材料と、次に送る段の位置）。
-// 応答の側（段を進める）は 2.4 の on_click_reply が読む。それまで本体のビルドでは読み手が居ない。
-#[cfg_attr(not(test), expect(dead_code, reason = "2.4 の on_click_reply が読む"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ClickChain {
     pub(super) scope: u32,
@@ -139,6 +137,101 @@ pub(super) fn on_mouse_extended(mut state: State, input: MouseInput) -> (State, 
         }
     };
     (state, vec![Action::ShioriRequest(call)])
+}
+
+/// 段の列の応答。`chain` は呼び手（`steady::on_reply`）が [`State::mouse_click`](super::State) から
+/// 取り出したもの。
+///
+/// - 台本（`Value`）→ `None`。呼び手が今の応答の腕へ流す（話していなければ起動・話していれば置き換え）。
+///   送らなかった段があれば `mouse_click_chain_stopped` を残す（要件 1.3・2.3・2.5・9.2）。
+/// - 204・送信の失敗（`error!`）・GET では起きない応答（`warn!`）→ `Some`。次の段の GET を積んで記憶を
+///   戻すか、最後の段なら空（要件 1.2・1.6・1.8・2.2・2.4）。
+///
+/// 2 回目の解放の列は、どちらの終わり方でも終えた時点で `mouse_click_not_sent`（理由＝2 回目）を
+/// 1 回だけ残す（要件 3.6・9.3）。
+pub(super) fn on_click_reply(
+    state: &mut State,
+    mut chain: ClickChain,
+    outcome: &ShioriOutcome,
+    origin: &'static str,
+) -> Option<Vec<Action>> {
+    let sent = chain.steps[chain.next - 1].id;
+    let stage = chain.next - 1;
+    match outcome {
+        ShioriOutcome::Value(_, _) => {
+            let skipped: Vec<&str> = chain.steps[chain.next..].iter().map(|s| s.id).collect();
+            if !skipped.is_empty() {
+                tracing::info!(
+                    target: "kanade",
+                    event = "mouse_click_chain_stopped",
+                    id = sent,
+                    scope = chain.scope,
+                    skipped = ?skipped,
+                    "クリックの段に台本——以降の段は送らない"
+                );
+            }
+            log_second_not_sent(&chain);
+            return None;
+        }
+        ShioriOutcome::NoContent => {}
+        ShioriOutcome::Failed(failure) => tracing::error!(
+            target: "kanade",
+            event = "mouse_click_shiori_failed_as_204",
+            id = sent,
+            stage,
+            origin,
+            error = %failure,
+            "クリックの段の送信に失敗——何も返らなかった（204）ときと同じ扱いで続ける"
+        ),
+        ShioriOutcome::Notified | ShioriOutcome::Unloaded => tracing::warn!(
+            target: "kanade",
+            event = "mouse_click_unexpected_reply",
+            id = sent,
+            stage,
+            origin,
+            "クリックの段に GET では起きない応答——204 と同じ扱いで続ける"
+        ),
+    }
+    let Some(&step) = chain.steps.get(chain.next) else {
+        log_second_not_sent(&chain);
+        return Some(Vec::new());
+    };
+    tracing::info!(
+        target: "kanade",
+        event = "mouse_event_sent",
+        id = step.id,
+        scope = chain.scope,
+        region = chain.region.as_deref(),
+        ref5 = step.ref5,
+        "クリックの段の列の次の段を送る"
+    );
+    let call = events::mouse_get(
+        step.id,
+        chain.x,
+        chain.y,
+        "0",
+        chain.scope,
+        chain.region.as_deref(),
+        step.ref5,
+        &state.snapshot(),
+    );
+    chain.next += 1;
+    state.mouse_click = Some(chain);
+    Some(vec![Action::ShioriRequest(call)])
+}
+
+/// 2 回目の解放の列を終えたときの `mouse_click_not_sent`（理由＝2 回目）。
+fn log_second_not_sent(chain: &ClickChain) {
+    if chain.second_of_double {
+        tracing::info!(
+            target: "kanade",
+            event = "mouse_click_not_sent",
+            reason = "second_of_double",
+            scope = chain.scope,
+            button = chain.steps[0].ref5,
+            "ダブルクリックの 2 回目の解放——クリックの段は送らない"
+        );
+    }
 }
 
 /// ホイールと出入りの `mouse_event_sent`（カーソルの動きにつれて出るので debug）。
