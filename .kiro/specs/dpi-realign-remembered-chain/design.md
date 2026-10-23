@@ -147,6 +147,8 @@ crates/areka/src/
 │   ├── frame_chain_realign_exclusion_tests.rs  # 新: 外す理由（組・ドラッグ・台本・控えに無い）の FrameHarness テスト
 │   ├── frame_chain_finalize_remembered_tests.rs # 新: 起動・作り直しでの隣り合わせの FrameHarness テスト
 │   └── frame_dpi_drag_grab_tests.rs       # 新: 掴んだ点の置き直しのテスト
+├── alert.rs                               # 書けなかった記憶の知らせの語: WindowAdjacent を「窓の位置」へ
+├── alert_memory_write_tests.rs            # 印の鍵が「窓の位置」の語になる行を足す
 ├── main.rs                                # restore_merged_placements が覚えた印も返す
 ├── main_restore_seam_tests.rs             # 戻り値の形の変更に合わせる
 └── ghost_session.rs                       # 覚えた印を窓の一式へ据える
@@ -174,6 +176,7 @@ doc/COMPAT_ARCHITECTURE.md                 # §8 の表の末尾に 2 行
 - `crates/areka/src/emo2_boot/frame_chain_realign_tests.rs` — `a_dragged_scope_stays_out_of_the_realign` を新しい決め方の意図に書き直す（下の Testing Strategy）。
 - `crates/areka/src/emo2_boot/frame_chain_realign_arm_tests.rs`・`frame_chain_finalize_persist_*_tests.rs`・`placement/persist_entries_tests.rs`・`placement/persist_finalize_save_tests.rs` — 武装の関数の引数・送る鍵に印が加わることに合わせて直す（陳腐化した主張の更新）。
 - `crates/areka/src/main.rs` — `restore_merged_placements` の 2 つ目の戻り値を `BTreeMap<usize, Option<AdjacencyMark>>`（鍵＝記憶に位置があるスコープ・値＝覚えた印）にする。集める処理は `persist.rs` の関数へ移し、`main.rs` の行数を増やさない。
+- `crates/areka/src/alert.rs` — 書けなかった記憶の知らせの語を選ぶ `remembered_text` の `match` は `PersistKey` の全種を名指しし、残りの腕を持たない。`PersistKey::WindowAdjacent { .. }` を `WindowPos`・`BalloonOffset` と同じ「窓の位置」の腕へ足す（足さないとビルドが通らない）。兄弟のテスト `alert_memory_write_tests.rs` に、印の鍵だけが書けなかったときも「窓の位置」の語になる行を足す。`write_failure_sites_tests.rs` の 13 種の表は変わらない（印は位置と同じ束で送るので、書く口は増えない）。
 - `crates/areka/src/ghost_session.rs` — 窓を作る閉包で、記憶から戻したスコープの既定の位置を外す今の処理に、覚えた印を窓の一式へ据える 1 行を足す。
 - `crates/areka-sylphya/src/persist/mod.rs` — `PersistKey::WindowAdjacent { scope }`・正準の鍵・`apply_entry`・`doc_to_entries`・読み込みの順の説明。書かない形への差し替えの口には触れない。
 - `crates/areka-sylphya/src/persist/format.rs` — `FormatDoc.window_adjacent`・表の読み書き・`is_all_absent`。`FORMAT_VERSION` は 1 のまま。
@@ -702,19 +705,20 @@ y = "300"
 
 - `frame_chain_realign_adjacency_tests.rs`（8.1・8.4）: 全スコープの既定の位置を外した（記憶から戻した）形で、200%（幅 764・672）→ 100%（382・336）で隙間が許す幅以内に閉じる・100% → 200% で重なりが閉じる・200% → 100% → 200% の往復・解決の前に 2 度目の変化が来ても最初の控えで解く（1.7）・右に隣り合っていた組が右のまま詰まる・3 体の鎖。
 - `frame_chain_realign_exclusion_tests.rs`（8.2）: 離れていた組（2.1）・重なっていた組（2.2）・組の窓（`StickyGroupLedger` に組を据える・2.3）・ドラッグ中の窓とその隣（`DraggingState` を付ける・2.4）・武装の後に `\![move]` で置いた窓（3.1）・解決の後の `\![move]` が上書きされず 2 度目が走らない（3.2）・武装の前に台本で置かれ隣り合っていた窓は詰まる（3.3）・控えに無い窓は動かさず `warn!` が出てほかの組は詰まる（7.2）。それぞれ陽性の対（外す理由が無ければ詰まる）を同じテストに置く。
-- `chain_realign_script_moved_tests.rs`: 武装中だけ `ScriptPlaced` の差し込み（付け直しを含む）が記録され、武装の前・解決の後は記録されないこと。
+- `chain_realign_script_moved_tests.rs`: 武装中だけ `ScriptPlaced` の差し込み（付け直しを含む）が記録され、武装の前・解決の後・武装していないあいだの差し込みは記録されないこと。
+- `snapshot_char_rects`（`frame_chain_realign_exclusion_tests.rs`）: `WindowPos` の位置か大きさが無いキャラ窓は控えに入らず、バルーン窓は控えに入らないこと。
 - 今あるテストは保つ（8.3）: `one_transition_realigns_exactly_once`・`a_surface_swap_during_a_conversation_never_arms_the_realign`・待ちの札・停滞の警告。
 - 書き直す: `a_dragged_scope_stays_out_of_the_realign` は新しい決め方では「ドラッグしたから」でなく「離れていたから」（`DRAG_DX = 120`）で通るので、名前と主張を「変わる前にドラッグで離して置いた窓は動かない」に改め、陽性の対に「ドラッグで隣に付け直した窓は詰まる」を足す。ドラッグの最中の除外は `frame_chain_realign_exclusion_tests.rs` が持つ。
 
 ### 掴んだ点（8.5）
 
-- `frame_dpi_drag_grab_tests.rs`: `rescale_drag_grab` に実測の形（1108×1368 → 831×1026・g = (225, 806)）を入れ、置き直した値と落とした点 (−1500, 1000) から出る左上 (−1669, 395)、落とした点と掴んだ点の差が縦横 1 px 以内（4.1・4.2）。`DraggingState` の付いたキャラ窓へ `reconcile_window_size` で大きさを書くと置き直り、`DraggingState` の無い窓・同じ大きさの書き込みでは変わらない（4.3）。
+- `frame_dpi_drag_grab_tests.rs`: `rescale_drag_grab` に実測の形（1108×1368 → 831×1026・g = (225, 806)）を入れ、置き直した値と落とした点 (−1500, 1000) から出る左上 (−1669, 395)、落とした点と掴んだ点の差が縦横 1 px 以内（4.1・4.2）。`DraggingState` の付いたキャラ窓へ `reconcile_window_size` で大きさを書くと置き直り、`DraggingState` の無い窓・同じ大きさの書き込みでは変わらない（4.3）。前の大きさの縦か横が 0 以下なら置き直さない。バルーン窓の大きさの書き込みでは置き直さない。
 - `mouse_move_drag_origin_tests.rs`: `live` があればその値、無ければ控えを使う。値が同じなら結果も同じ（4.3）。
 
 ### 記憶（8.6）
 
 - `persist_window_adjacent_tests.rs`（sylphya）: 正準の鍵の往復・TOML の往復・マージで他の鍵が残る・文字列でない値は無し・表の無い古いファイルでも読める・書き出しの `format-version` は 1。
-- `persist_adjacency_tests.rs`: `persist_entries` に位置の鍵を渡すと触れる組の印が足される（左・右・離れ・重なり・組）・位置の値は変わらない・バルーンのオフセットだけの束には足さない。`persist_unremembered_char_positions` が古い記憶（印なし）に印だけを書き足し、位置を書かず、`info!` を残す（6.5・⑸）。`restored_scope_marks` が位置のあるスコープだけを鍵にし、知らない語を無しにする。
+- `persist_adjacency_tests.rs`: `persist_entries` に位置の鍵を渡すと触れる組の印が足される（左・右・離れ・重なり・組）・位置の値は変わらない・バルーンのオフセットだけの束には足さない・矩形の読めない窓の組は印を書かず `warn!` を出し、位置は書く・同じ束に同じ印の鍵が 2 度出ても 1 つにまとめて送る。`persist_unremembered_char_positions` が古い記憶（印なし）に印だけを書き足し、位置を書かず、`info!` を残す（6.5・⑸）。`restored_scope_marks` が位置のあるスコープだけを鍵にし、知らない語を無しにする。
 - `frame_chain_finalize_remembered_tests.rs`: ⑴ 実行中に 200% → 100% で詰めた後、送られた束に位置が無い（6.1）⑵ 200% で隣り合って覚えた（印 `left`）組を 100% の幅で起動すると隣り合って立ち、窓の一式を閉じて作り直しても同じ（読み直し・切り替えの道＝同じ閉包・5.1）⑶ 印 `none` の組は詰めない ⑷ 覚えたときと今の幅が同じなら誰も動かない ⑸ 印の無い古い記憶は位置のまま立つ。
 - 直す今のテスト: 並べ終えた時点の保存で「送る鍵は x・y だけ」（`char-position-save-on-exit` 1.5）を主張するテストは、6.2 で中身が変わったので「x・y と隣り合いの印」に改める。`restore_merged_placements` の戻り値の形を使うテスト（`main_restore_seam_tests.rs`・`frame_chain_finalize_persist_*`）は鍵の集まりで読む形に直す。
 
@@ -731,6 +735,6 @@ y = "300"
 
 ### 並走ウェーブ（C11）との約束
 
-- 触るファイルは File Structure Plan のとおり。要件で足した `areka-sylphya/src/persist/{mod,format}.rs`・`main.rs`・`ghost_session.rs` の内、`persist/mod.rs` は `readonly-mode` も触る（向こうは書かない形への差し替えの口・こちらは鍵の一覧と TOML の写し）。文字の当たりは後に着地する側が取り込む。
+- 触るファイルは File Structure Plan のとおり。要件で足した `areka-sylphya/src/persist/{mod,format}.rs`・`main.rs`・`ghost_session.rs` の内、`persist/mod.rs` は `readonly-mode` も触る（向こうは書かない形への差し替えの口・こちらは鍵の一覧と TOML の写し）。文字の当たりは後に着地する側が取り込む。`readonly-mode` のセッションには 2026-10-23 の要件の話し合いの後にこの当たりを知らせた。正準の鍵 `areka.window.scope(ID).adjacent` は sylphya の汎用の構文 `key.rs` の `parse_dotted` で読めるので、`mcp-scope-rect-property` の `vocab/dotted.rs` には触れない。`alert.rs` は C11 のどの spec も名指ししていない。
 - `descript-window-keys` との約束（`run_move_drain_phase`・`PositionCue`／`MoveCueSink` に触れない・frame.rs の呼び順を変えない）は守る。`drain_resnap.rs` で触るのは `finalize_chain_once_with` だけ。
 - 約束をまたぐ所はほかに無い。`wintf/src/ecs/drag/dispatch.rs` は要件の触る所に挙がっていたが、この設計では触らない。`placement/sticky_follow.rs`・`emo2_boot/move_cue_place.rs`（`ScriptPlaced` を差し込む所）も触らない（差し込みの口は印の定義の側に付ける）。
