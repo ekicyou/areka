@@ -82,6 +82,8 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 ### 過去互換経路（フォールバック）
 - **32bit Rustホスト**（`areka-shiori-host`, i686ターゲットの随伴バイナリ）。
 - 本物の `shiori.dll` を `LoadLibraryW`＋`GetProcAddress` で**実行時ロード**（`extern "C"` cdecl）。`load`/`unload`/`request`。
+- `load` へ渡すゴーストのフォルダは **絶対パス・`\` の区切り・末尾に `\` が 1 つ**（華和梨はこれにファイル名をそのままつなげて辞書を開く）。`shiori4-api` の決定 6 の helper の道を `shiori2-protocol` が前倒しした（要件 6.4・`crates/areka-ghost/src/shiori_wiring.rs` の `helper_load_dir`）。
+- 相手の SHIORI の版（3.0／2.x）は読み込みの直後の `GET Version` で決め、2.x の相手へは要求を 2.x の書き方へ組み替える（§8「SHIORI/2.x のゴーストとの話し方」）。
 - **64bit areka側で早期に HSTRING(UTF-16) → Charsetヘッダ解析 → charset符号化バイト列**へ変換し、**自前IPC**（名前付きパイプ/共有メモリ）でバイト列を運ぶ。※HGLOBALはプロセスローカルなので跨げない。
 - 32bitホストが受信バイト列を `GlobalAlloc` で HGLOBAL 化して旧SHIORIへ渡す。SHIORI規約の所有権（要求HGLOBALはDLLが解放／応答HGLOBALはホストが解放）はホスト内に閉じる。
 - **SAORIサブDLLは同32bitプロセスに同居**（実物を飼うことで互換をタダで得る。里々/YAYAをソースビルドしないこと——bitness連鎖で詰む）。
@@ -463,6 +465,48 @@ ukadoc は、element定義と `surface*.png` に動く絵を置くと SERIKO 定
 判定は `crates/areka-seriko/src/timeline_repeat_tests.rs`（`film_switches_exactly_at_frame_delays`・`one_ms_waits_are_not_rounded`・`finite_laps_stop_on_last_frame`・`zero_delay_frame_is_skipped_alpha_webp`・`film_jump_of_one_second_advances_one_second`・`negative_frame_hides_then_returns`・`written_zero_first_wait_last_frame_shows_zero_ms`・`elapsed_zero_matches_compose_rest_index`）、`crates/areka-seriko/src/table_always_tests.rs`（`exact_always_is_adopted_with_period_and_no_laps`・`combinations_and_other_words_keep_the_debug_arm`・`zero_total_always_is_not_adopted_and_warns_once`）、`crates/areka-seriko/src/parts_film_tests.rs`（`endless_film_continues_across_surfaces_and_while_hidden`・`finite_film_is_dropped_when_hidden_and_restarts_from_head`・`finite_film_continuously_visible_keeps_going_and_stays_stopped`・`clocks_are_separate_per_scope_and_face_kind`）、`crates/areka-seriko/src/looper_always_tests.rs`（`top_always_starts_without_lottery_and_restarts_from_head_on_switch`・`adding_always_keeps_random_fire_times`・`top_always_blanks_on_negative_frame_and_keeps_looping`）、`crates/areka-seriko/src/parts_always_tests.rs` の `always_in_child_does_not_rewind_when_parent_switches`、`crates/areka-emo-compose/src/plan_extent_film_tests.rs` の `hand_written_always_extent_is_union_of_all_patterns`・`cells_do_not_change_extent`、`crates/areka-emo-present/src/presenter_film_tests.rs` の `hidden_frame_changes_are_held_and_the_last_one_is_shown`・`a_stopped_finite_film_restarts_from_rest_when_shown_again`・`show_target_on_a_visible_target_keeps_the_finite_frame`、`crates/areka/src/emo2_boot/film_playback_e2e_tests.rs` の `shell_films_play_from_the_real_reader_to_the_composer`・`close_then_show_race_keeps_order_through_the_bridge`。
 
 - 出典 spec: `areka-P0-animated-image-playback`（開発者裁定 2026-10-05・要件 1・2・3・4・6・8.4・10.2・10.3）。
+
+### SHIORI/2.x のゴーストとの話し方（ukadoc に無い）
+
+ukadoc は SHIORI/3.0 の要求と応答だけを書き、SHIORI/2.x の要求の形・版の確かめ方・3.0 の要求との対応を書いていない（2.x の項目は ukadoc に無い）。areka は SSP 2.9.23 が華和梨 7.4 のゴースト「．さくら」へ送った記録（2026-10-23・ゴーストの `ghost\master\ssp_shiori_log.txt`）を出どころとして、次のとおり決めた。下の各行の出どころは、`shiori2-protocol` の研究記録 `research.md` の 10 節に置いた記録の抜き書きである（記録そのものは機械の情報を含むのでリポジトリに写していない）。網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` には 2.x の要求の行を作らず、ここにだけ置く。
+
+**版の確かめ方**（出どころ: 研究記録 10.1 節・測 1・測 2）
+
+- 読み込み（`load`）の直後に 1 本だけ `GET Version SHIORI/2.6`・`Charset: <今の文字コード>`・`Sender: areka`・空行（CRLF）を送る。SSP は同じ要求を `Charset: UTF-8`・`Sender: SSP` で送る（Sender の値は上の表の「要求の `Sender` の値」の行のとおり `areka`）。3.0 のゴーストにもこの 1 本を送る（SSP も送る）。3.0 のゴーストは `SHIORI/3.0` で始まる行で答える。状態の番号はゴーストで違い、ぱすた（emo2）と YAYA は 204、里々は 200 だった（`shiori2-protocol` の検証の記録 `verification.md` の 5.2 節。SSP で測ったのはぱすただけ・研究記録 10.6 節）。
+- 答えの先頭の行の最初の字句が `SHIORI/2.` で始まれば 2.x、`SHIORI/3.` で始まれば 3.0 と決める。状態の番号は見ない（SSP の記録では 3.0 の 204 も 2.x の 200 も、先頭の行の版の字の側へ移っていた）。
+- 答えが空・先頭の行の最初の字句が `SHIORI/2.` でも `SHIORI/3.` でもない・往復が失敗したなど決められないときは、3.0 とみなして話し、`warn!`（`shiori_version_undecided`）を 1 行出す。決めたときは `info!`（`shiori_version_decided`・版と答えの先頭の行）を 1 行出す。
+- 読み込み直したときは確かめ直す。確かめの答えの `Charset` は文字コードの採用に使わない。
+
+**組み替えの表**（3.0 の要求の材料から組む 2.x の要求・出どころ: 研究記録 10.2 節・測 3・測 5・測 6）
+
+行の区切りは CRLF・最後に空行。`[ ]` は値があるときだけ出す行。
+
+| 3.0 での種類 | 2.x の要求の行 | 見出し（この並び） | SSP との違い |
+|---|---|---|---|
+| 版の確かめ（areka が足す） | `GET Version SHIORI/2.6` | `Charset`・`Sender` | `Charset` は今の文字コード（SSP は `UTF-8` 固定）・`Sender: areka` |
+| 台本を求めるイベント（GET・資源の一覧に無い名前） | `GET Sentence SHIORI/2.2` | `Charset`・`SecurityLevel`・`Sender`・`Event`・`[Status]`・`Reference0…` | `BaseEvent` は書かない（areka は 3.0 でも `BaseID` を送っていない） |
+| 通知だけのイベント（3.0 では NOTIFY） | `GET Sentence SHIORI/2.2`（GET で送る） | 上と同じ | 答えは 3.0 の NOTIFY と同じく捨てる |
+| 資源の問い合わせ（GET・kanade の資源の一覧に載る名前） | `GET String SHIORI/2.5` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`ID`・`[Status]` | 今の areka は資源の問い合わせに References を付けない。付く資源ができたら 3.0 と同じ値を同じ番号で `Status` の後に書く（SSP では測っていない） |
+| 台本の翻訳（GET・`OnTranslate`） | `TRANSLATE Sentence SHIORI/2.6` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`[Status]`・`Sentence` | `Sentence` の値は 3.0 の `Reference0`。References は書かない（SSP も書かない） |
+
+- 見出しの値は 3.0 と同じ（`SecurityOrigin` は `null`・`Event`／`ID` の値は 3.0 の `ID` の値）。`SenderType` は 2.x のどの要求にも書かない（SSP も書かない・測 6）。References の欠番の位置は 3.0 と同じく行を出さず番号だけ進める。
+- **送らない行**: `basewareversion`（3.0 では NOTIFY）は 2.x の相手へ送らず、`debug!`（`shiori2_event_not_sent`）を 1 行出す（SSP も送らなかった・測 5）。SSP が 2.x の相手へ送る `NOTIFY OwnerGhostName SHIORI/2.3`（`Ghost` 見出し）・`NOTIFY OtherGhostName SHIORI/2.3`・3.0 の相手へ送る `capability` は、areka が今どのゴーストへも送っていないので組まない。
+
+**見出しの対応**（2.x の応答の読み・出どころ: 研究記録 10.3 節・測 4）
+
+| 3.0 で areka が読む見出し | 2.x の見出し | 扱い |
+|---|---|---|
+| `Value`（台本・翻訳の結果） | `Sentence` | 同じに扱う |
+| `Value`（資源の値） | `String` | 同じに扱う |
+| `ErrorLevel`・`ErrorDescription`・`SecurityLevel` | 2.x に無い | 読まない（3.0 で見出しの無い答えと同じ扱い） |
+| `Charset` | `Charset` | 3.0 と同じ採用の規則（GET の答えだけ） |
+| 状態の行の番号 | 同じ（`200`・`204`・`400` など） | 3.0 と同じ振り分け |
+
+**3.0 のゴーストへの違い**は、読み込みの直後の `GET Version` の 1 本と、`load` へ渡すパスの形（§5「過去互換経路」）の 2 つだけで、ほかの要求のバイトと応答の読み方は変えない。
+
+- 実機: 「．さくら」は areka で起動の挨拶・時間のトーク・`OnClose` の終了のトークを話し、面を出して終了コード 0 で終わった（2026-10-24）。`OnClose` の形は SSP では測っておらず（研究記録 10.5 節）、areka の実機の 1 回で、ほかのイベントと同じ `GET Sentence` の形で台本が返ることを確かめた。
+- 根拠の場所: `crates/shiori-host32-host/src/shiori2.rs`（`version_probe_request`・`decide_version`・組み替えの表の 1 か所 `route`・`build_request`・`parse_response`）。判定は兄弟の `shiori2_tests.rs`。
+- 出典 spec: `shiori2-protocol`（要件 1.4・2.1・3.7・4.7・6.4・8.1）。
 
 ### areka 裁量の性能目標（正典は負荷に沈黙）
 
