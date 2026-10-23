@@ -166,6 +166,105 @@ pub fn moved_default_pos(current: PointPx, new_x: i32) -> PointPx {
 }
 
 // ---------------------------------------------------------------------------
+// 隣り合いの判定と記憶の印の語（dpi-realign-remembered-chain 要件 1.2・2.1・2.2）
+// ---------------------------------------------------------------------------
+
+/// キャラ窓の矩形（物理 px・左上と大きさ）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChainRect {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+/// 隣り合いと見なす隙間・重なりの幅の上限（物理 px）。
+///
+/// 各窓の下端中央を保つ置き直しで、幅の半分の整数割りが窓ごとに最大 1 px ずれるため、
+/// 2 つの窓の分を足した値（要件 1.2・実機の確かめ 8.7 で測り直す）。
+pub const ADJACENT_TOLERANCE_PX: i32 = 2;
+
+/// 組 (n−1, n) の並びの判定。`gap` は向かい合う端の隙間（負は重なり）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Adjacency {
+    /// n が n−1 の左に隣り合う（|gap| ≤ 許す幅）。
+    Left { gap: i32 },
+    /// n が n−1 の右に隣り合う（|gap| ≤ 許す幅）。
+    Right { gap: i32 },
+    /// 隙間が許す幅より広い、または縦の範囲が重ならない（2.1）。
+    Apart { gap: i32 },
+    /// 重なりが許す幅を超える（gap < −許す幅・2.2）。
+    Overlapped { gap: i32 },
+}
+
+/// 前の窓 `prev`（n−1）に対する `cur`（n）の並びを決める。
+///
+/// 左右は中心の x の大小で決める（cur の中心 < prev の中心 → 左・同じなら右）。
+/// 左なら gap = prev.x − (cur.x + cur.w)、右なら gap = cur.x − (prev.x + prev.w)。
+/// 縦の範囲（[y, y+h)）が重ならなければ Apart。飽和演算ゆえ極端な座標でも panic しない。
+pub fn judge_adjacency(prev: ChainRect, cur: ChainRect) -> Adjacency {
+    // 中心の比較は 2 倍して整数のまま行う（半 px の丸めで左右が揺れない）。
+    let center2 = |r: ChainRect| r.x.saturating_mul(2).saturating_add(r.w);
+    let gap = if center2(cur) < center2(prev) {
+        prev.x.saturating_sub(cur.x.saturating_add(cur.w))
+    } else {
+        cur.x.saturating_sub(prev.x.saturating_add(prev.w))
+    };
+    let vertical_overlap =
+        cur.y < prev.y.saturating_add(prev.h) && prev.y < cur.y.saturating_add(cur.h);
+    if !vertical_overlap || gap > ADJACENT_TOLERANCE_PX {
+        Adjacency::Apart { gap }
+    } else if gap < -ADJACENT_TOLERANCE_PX {
+        Adjacency::Overlapped { gap }
+    } else if center2(cur) < center2(prev) {
+        Adjacency::Left { gap }
+    } else {
+        Adjacency::Right { gap }
+    }
+}
+
+/// 記憶に書く隣り合いの印（スコープ n に付き、組 (n−1, n) を表す）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdjacencyMark {
+    /// n が n−1 の左に隣り合っていた（語 `left`）。
+    Left,
+    /// n が n−1 の右に隣り合っていた（語 `right`）。
+    Right,
+    /// 離れていた・重なっていた・組の窓だった（語 `none`）。
+    Separate,
+}
+
+impl AdjacencyMark {
+    /// 記憶の値の語: "left" / "right" / "none"。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Separate => "none",
+        }
+    }
+
+    /// 語から戻す。知らない語は None（読み手が warn! を出す）。
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "left" => Some(Self::Left),
+            "right" => Some(Self::Right),
+            "none" => Some(Self::Separate),
+            _ => None,
+        }
+    }
+
+    /// Left/Right はそのまま、Apart/Overlapped は Separate。
+    pub fn from_adjacency(adjacency: Adjacency) -> Self {
+        match adjacency {
+            Adjacency::Left { .. } => Self::Left,
+            Adjacency::Right { .. } => Self::Right,
+            Adjacency::Apart { .. } | Adjacency::Overlapped { .. } => Self::Separate,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 確定が見送られ続けたときの一発診断（scg 6.5・design C6「確定が見送られ続けた場合の一発診断」）
 // ---------------------------------------------------------------------------
 
@@ -329,3 +428,7 @@ pub fn note_chain_deferral(stall: &mut ChainFinalizeStall) -> bool {
 #[cfg(test)]
 #[path = "chain_finalize_tests.rs"]
 mod chain_finalize_tests;
+
+#[cfg(test)]
+#[path = "chain_finalize_adjacency_tests.rs"]
+mod chain_finalize_adjacency_tests;
