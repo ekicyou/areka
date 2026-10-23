@@ -16,7 +16,7 @@ SHIORI/2.x の口だけを持つゴースト（検体は開発者のゴースト
 - ステータスコード（<https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#response>）: 「400 Bad Requestリクエスト文字列が解釈不能だった。」・「311 Not EnoughID: OnTeach (SHIORI/2系のTEACHメソッド)において、さらなる追加情報を必要とすることを示す。」
 - Age（同ページ）: 「SSP拡張だが、実質はSHIORI/2.x互換処理。」
 
-SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostName`・`TRANSLATE Sentence`・`GET Version` など）、応答の見出し（`Sentence:` など）、版の確かめ方は ukadoc で読めない。参考に、里々の文書（<https://ukatech.github.io/satori-docs/shiori/protocol/>）は SHIORI 側の受け方として「SHIORI/2.x | Event を ID に読み替え、応答は SHIORI/3.0 形式（Sentence に読み替え）」「GET Version には 200 OK を返します」と書くが、これは SHIORI の側の作りで、ベースウェアが何を送るかの正典ではない。
+SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostName`・`TRANSLATE Sentence`・`GET Version` など）、応答の見出し（`Sentence:` など）、版の確かめ方は ukadoc で読めない。参考に、里々の文書（<https://ukatech.shillest.net/satori-docs/shiori/protocol/>・旧 URL <https://ukatech.github.io/satori-docs/shiori/protocol/> から移っている）は SHIORI 側の受け方として「SHIORI/2.x | Event を ID に読み替え、応答は SHIORI/3.0 形式（Sentence に読み替え）」「GET Version には 200 OK を返します」と書くが、これは SHIORI の側の作りで、ベースウェアが何を送るかの正典ではない。
 
 そこで、ukadoc で読めない点は **SSP が同じゴーストへ送る要求の記録（ゴーストの `ghost\master\ssp_shiori_log.txt`）で測ったものを正本とする**（開発者方針「ukadoc で読めない点は議題の前に SSP の MCP で測る」）。測る前の手がかり: 完了 spec `areka-P0-mcp-reload` の調べ（`.kiro/specs/completed/areka-P0-mcp-reload/research.md` 10 節）は、SSP が SHIORI/3.0 のゴーストを読み直したとき、load の直後に `GET Version` を送り、続けて `version` を問うことを記録している（要求の行のバイトまでは控えていない）。
 
@@ -110,7 +110,7 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 3. When 「．さくら」に終了のイベント（`OnClose`）を送ったとき, the areka shall 返ってきた終了のトークを再生し、終了まで通す（`OnClose` のトークは必ず終了で終わるという既存の決めのとおり）。
 4. When 起動の挨拶の台本が再生されたとき, the areka shall 1 人目・2 人目のキャラクターの窓に面を出し、MCP の `dump_surface` が両方とも面の絵を返す（`NG:No surface has been shown in this scope yet` を返さない）。
 5. If 件 1 が直った後も 1 人目か 2 人目の窓に面が 1 度も出ないなら, the 本 spec の調べ shall 面を出さない今の決めを独断で変えず、SHIORI が台本を返さないときに既定の面を出すかを ukadoc で引き、ukadoc で読めなければ SSP で測り（測 7）、結果と扱いの案を開発者へ報告して決めを仰ぐ。
-6. The 実機の 1 回の記録 shall 版の確かめの INFO の行・台本を返したイベントの数・`shiori_error_response` の行の数とその内訳・MCP の答え（`get_status`・`dump_surface`・`raise_event OnClose`）を、検証の記録に抜き書きで残す。
+6. The 実機の 1 回の記録 shall 版の確かめの INFO の行・台本を返したイベントの数・`shiori_error_response` の行の数とその内訳・MCP の答え（`get_status`・`dump_surface`・`raise_event OnClose`）を、検証の記録に抜き書きで残す。辞書に受け口の無いイベント（「．さくら」では翻訳の `OnTranslate`・`OnInitialize` など）への 400 は SSP でも同じく返るので、内訳では別に数え、崩れに数えない。
 7. The 実機の 1 回 shall 根・検体・一時フォルダをこのワークツリーの `target\` の下だけに置き、自分が起こした areka のプロセスだけを扱う。
 
 ### Requirement 6: SHIORI/3.0 のゴーストの振る舞いを変えない
@@ -139,4 +139,4 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 1. The 本 spec shall 組み替えの表（要件 3.7）と版の確かめ方（要件 2.1）を、出どころ（ukadoc の引用、または SSP の記録の抜き書き）付きで `doc/COMPAT_ARCHITECTURE.md` §8 に記録する。
 2. The 本 spec shall 網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` のうち、本 spec が受け持つ ukadoc の項目の行（2.x に触れる項目を含む）の状態と持ち主を、実装の結果に合わせて直す。ukadoc に項目の無い 2.x の要求は台帳に作らず、§8 の記録だけに置く。
 3. When 実機の 1 回で「．さくら」が話すと確かめられたとき, the 本 spec shall `README.md` の検体の表の「．さくら」の行（今は「話さず、面も出ません」）を実際の結果に合わせて直す。
-4. The 本 spec shall 本 spec で直さなかった「．さくら」の崩れ（実機の 1 回で新しく見えたもの）を、持ち主の spec の brief へ足すか `/kiro-discovery` で起票し、記録だけで済ませない。
+4. The 本 spec shall 本 spec で直さなかった「．さくら」の崩れ（実機の 1 回で新しく見えたもの、およびギャップ分析で既に見えた古い資源の名前〔`updatebuttoncaption`・`vanishbuttoncaption` など・台帳では持ち主の無い `vocabulary-only`〕を areka が問わない件）を、持ち主の spec の brief へ足すか `/kiro-discovery` で起票し、記録だけで済ませない。
