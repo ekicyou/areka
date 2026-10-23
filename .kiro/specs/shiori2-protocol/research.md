@@ -207,3 +207,163 @@ Sentence: \0\s[0]…\e
 - 2.x の SHIORI の `GET Version` の答えの形（状態の番号・`ID`・`Craftman`・`Version`）。
 - SSP で SHIORI の要求の記録を出す設定の場所（ゴーストごとか・全体か）。
 - 3.0 の検体（emo2・ぱすたさん・里々・YAYA）が `GET Version SHIORI/2.6` に何を返すか（areka の実機で確かめるか、SSP の記録で読めるか）。
+
+## 10. SSP での測り（2026-10-23・要件 1.1）
+
+> 測った SSP: `SSP/2.9.23 (20261021-5)`（`C:\wintools\ssp`）。検体: `vendors/sample_ghost/dot_sakura.nar`。開発者が SSP に入れた（`ghost\dot_sakura`）。記録の設定はゴーストの `ghost\master\profile\ghost.dat` の `shiori.log,1` の行で、測りの前に足した。要件 1.3 で許された 5 つの操作のうち ⑴〜⑶ と ⑸ を行った。⑷ `OnClose` は送っていない（下の「測れなかったこと」）。窓の位置は前後とも `1710,376,2818,1744`。
+> 記録: `C:\wintools\ssp\ghost\dot_sakura\ghost\master\ssp_shiori_log.txt`（166,364 バイト・20:43:24〜20:45:17）。手順は ①「窓際のぱすたさん」から `\![change,ghost,．さくら]` で切り替える ② 約 2 分待つ ③ `\![change,ghost,窓際のぱすたさん]` で戻す。記録は OS・フォント・入っているゴーストの一覧など機械の情報を含むので、リポジトリには写していない。以下は抜き書き（行の区切りは CRLF）と、要求の形ごとのまとめ。台本と利用者の名前の値は省いた。
+
+### 10.1 版の確かめ（測 1・測 2）
+
+```
+-----send------------------------
+GET Version SHIORI/2.6
+Charset: UTF-8
+Sender: SSP
+
+-----response--------------------
+SHIORI/2.6 200 OK
+Charset: Shift_JIS
+Craftman: KawariDevelopmentTeam
+ID: KAWARI.kdt
+Version: 7.4.0
+```
+
+- 読み込みの直後、`load` の答え `1` の次に 1 本だけ送る（4.1 節の 3.0 のゴーストと同じ並び）。
+- 華和梨 7.4 は先頭の行を `SHIORI/2.6` で答える。続く要求は全部 2.x の書き方になる。3.0 の要求は 1 本も送られていない。**測 1: 華和梨 7.4 は 2.x の相手**（要件 1.2 の枝には入らない）。
+- 3.0 のゴーストは `SHIORI/3.0 204 No Content` で答え、SSP は 3.0 で続けていた（4.1 節）。2.x のゴーストは `SHIORI/2.6 200 OK` で答え、SSP は 2.x へ移った。**測 2: 版は「`GET Version` の答えの先頭の行の版の字」で決まる**（状態の番号は 204 と 200 で違うが、どちらでも先頭の行の版の字の側へ移っている）。「3.0 の要求に 400 が返ったら 2.x へ移る」枝は記録に無い（3.0 の要求を 1 本も送っていない）。
+- `GET Version` の要求の `Charset` は `UTF-8`。華和梨の答えの `Charset` は `Shift_JIS` で、その後の要求は全部 `Charset: Shift_JIS`（`descript.txt` の `charset,Shift_JIS` のとおり）。
+
+### 10.2 要求の形（測 3・測 5・測 6）
+
+記録の要求を、最初の行とイベント名で数えた（`Ref*`＝`Reference0` 以降）。
+
+| 3.0 での種類 | SSP が 2.x の相手へ送った形 | 見出し（並びのまま） | 例（回数） |
+|---|---|---|---|
+| 台本を求めるイベント | `GET Sentence SHIORI/2.2` | `Charset`・`SecurityLevel`・`Sender`・`Event`・（`BaseEvent`）・（`Status`）・`Ref*` | `OnFirstBoot`（1）・`OnSecondChange`（113）・`OnMinuteChange`（2）・`OnSurfaceChange`（32）・`OnDestroy`（1） |
+| 通知だけのイベント（3.0 では NOTIFY） | **`GET Sentence SHIORI/2.2`**（GET で送る） | 上と同じ | `OnInitialize`・`OnLanguageChange`・`OnNotifyOSInfo` ほか `OnNotify*`・`installedghostname` ほか `installed*`・`hwnd`・`uniqueid`・`ghostpathlist` ほか・`rateofusegraph`（各 1〜3） |
+| `ownerghostname` | `NOTIFY OwnerGhostName SHIORI/2.3` | `Charset`・`Sender`・`Ghost`（値はゴーストの名前） | 1 |
+| `otherghostname` | `NOTIFY OtherGhostName SHIORI/2.3` | `Charset`・`Sender`（`Ghost` の見出しが無い） | 22 |
+| 資源の問い合わせ | `GET String SHIORI/2.5` | `Charset`・`SecurityLevel`・`SecurityOrigin`（値 `null`）・`Sender`・`ID`・（`Status`） | `username`・`version`・`name`・`craftman`・`sakura.recommendsites`・`sakura.defaultx` ほか |
+| 台本の翻訳（`OnTranslate`） | `TRANSLATE Sentence SHIORI/2.6` | `Charset`・`SecurityLevel`・`SecurityOrigin`（`null`）・`Sender`・`Status`・`Sentence`（**References は無い**） | 2 |
+
+- `Event:` の値は 3.0 の `ID:` の値と同じイベント名。資源は `ID:` に資源の名前を載せる。
+- `OnFirstBoot` には `BaseEvent: OnBoot` が付く（3.0 の `BaseID` に当たる見込み。4.2 節の古い記録には無かった）。
+- `Status:` は、台詞の最中や選択肢の最中など状態があるときだけ付く（例 `Status: talking,timecritical,balloon(0=0)`）。
+- **測 5: 3.0 のゴーストへ送っていて 2.x の相手へ送らなかったもの**: `basewareversion`・`capability`（4.1 節では 3.0 のゴーストへ送っている）。`ownerghostname`・`otherghostname` は名前を変えた NOTIFY として送る。
+- **測 6: 見出しの組み**: `Charset`・`Sender`・`SecurityLevel` は 2.x の要求にも付く。`SecurityOrigin` は `GET String`・`TRANSLATE` にだけ付き（値 `null`）、`GET Sentence` には付かない。`SenderType` はどの要求にも無い。
+
+抜き書き（それぞれの形の 1 本目）:
+
+```
+GET Sentence SHIORI/2.2
+Charset: Shift_JIS
+SecurityLevel: local
+Sender: SSP
+Event: OnInitialize
+Reference0: 
+
+-----response--------------------
+SHIORI/2.6 204 No Content
+Charset: Shift_JIS
+```
+
+```
+NOTIFY OwnerGhostName SHIORI/2.3
+Charset: Shift_JIS
+Sender: SSP
+Ghost: さくら
+
+-----response--------------------
+SHIORI/2.6 200 OK
+Charset: Shift_JIS
+```
+
+```
+GET String SHIORI/2.5
+Charset: Shift_JIS
+SecurityLevel: local
+SecurityOrigin: null
+Sender: SSP
+ID: username
+
+-----response--------------------
+SHIORI/2.6 200 OK
+Charset: Shift_JIS
+String: （値は省いた）
+```
+
+```
+GET Sentence SHIORI/2.2
+Charset: Shift_JIS
+SecurityLevel: local
+Sender: SSP
+Event: OnFirstBoot
+BaseEvent: OnBoot
+Reference0: 0
+Reference1: 
+（Reference2〜6 は空）
+Reference7: master
+
+-----response--------------------
+SHIORI/2.6 200 OK
+Charset: Shift_JIS
+Sentence: \t\t\h\s[6]…（台本は省いた）
+```
+
+```
+TRANSLATE Sentence SHIORI/2.6
+Charset: Shift_JIS
+SecurityLevel: local
+SecurityOrigin: null
+Sender: SSP
+Status: talking
+Sentence: \t\t\h\s[6]…（直前の OnFirstBoot の台本）
+
+-----response--------------------
+SHIORI/2.6 400 Bad Request
+Charset: Shift_JIS
+```
+
+```
+GET Sentence SHIORI/2.2
+Charset: Shift_JIS
+SecurityLevel: local
+Sender: SSP
+Event: OnSecondChange
+Status: talking,timecritical,balloon(0=0)
+Reference0: 193
+Reference1: 0
+Reference2: 0
+Reference3: 0
+Reference4: 64
+
+-----response--------------------
+SHIORI/2.6 204 No Content
+Charset: Shift_JIS
+```
+
+### 10.3 応答の形（測 4）
+
+- 台本は `Sentence:`、資源の値は `String:` に入る。どちらも状態は `200 OK`。
+- 「返す物が無い」は `SHIORI/2.6 204 No Content`（`Charset` だけ）。見出しの無い 200 は、台本や値を求める要求への答えには出ていない。NOTIFY（`OwnerGhostName`・`OtherGhostName`）への答えは `200 OK`＋`Charset` だけ。
+- 受け口の無い要求は `400 Bad Request`（翻訳の 2 本）。
+- 答えに出た見出しは `Charset`・`Sentence`・`String`、`GET Version` への `Craftman`・`ID`・`Version` だけ。`Value`・`Marker`・`ErrorLevel`・`ErrorDescription`・`SecurityLevel` に当たる見出しは出ていない（要件 4.7 の「2.x に無い」の行になる）。
+- 記録の中で、応答の前に `***CallTime:15msec.` の行が付くものが 2 本ある。SSP が呼び出しにかかった時間を書いた行で、SHIORI の答えの一部ではない。
+
+### 10.4 面（測 7）
+
+- `OnFirstBoot` の台本に `\s[6]` などがあり、`OnSurfaceChange` が 32 回送られている（例 `Reference0: 6`・`Reference1: -1`）。SSP では 2.x の書き方で話せば面が出た。要件 5.5 の枝（台本が来ても面が出ない）は、SSP の側では起きていない。測 7 は測らない。
+
+### 10.5 測れなかったこと
+
+- **`OnClose`**: 送らなかった。MCP の `raise_event` は返ってきた台本を再生する。「．さくら」の終了のトークは `\-` で終わる見込みで、再生すれば SSP ごと閉じる。同じ SSP をこの後 ② `mouse-click-wheel-events` が使う予定だった。記録の 70 種を超えるイベントは、ownerghostname・otherghostname を除いて全部 `GET Sentence SHIORI/2.2`＋`Event:` の同じ形だったので、`OnClose` も同じ形と見ている。**これは測った値ではなく、同じ形の並びからの見込み**。areka の実機の 1 回（要件 5.3）で、areka が送る形と「．さくら」の答えを記録して確かめる。
+- **ゴーストを切り替えて出すときのイベント**: `\![change,ghost,…]` で戻したときに「．さくら」へ届いたのは `TRANSLATE`（切り替えの台本そのもの）→ `rateofusegraph` → `OnDestroy` → `unload` だった。`OnGhostChanging` は来ていない。台本を外から（SSTP で）送って切り替えたからの見込みで、利用者がメニューから切り替えたときの並びは測っていない。
+- **時間のトーク**: 約 2 分のあいだ、`OnSecondChange` 113 本・`OnMinuteChange` 2 本はどれも 204 だった。この間に時間のトークは出ていない（要件 5.2 の「来なかったときは待った時間を書く」の先例）。
+
+### 10.6 9 節の持ち越しへの答え
+
+- 2.x の相手へ送る通知・資源の問い合わせの形 → 10.2 節。資源の値の見出し → `String:`（10.3 節）。
+- 2.x の SHIORI の `GET Version` の答え → 10.1 節（`200 OK`・`Craftman`・`ID`・`Version`）。
+- SSP の記録を出す設定 → ゴーストごと。`ghost\master\profile\ghost.dat` の `shiori.log,1`。
+- 3.0 の検体が `GET Version SHIORI/2.6` に何を返すか → ぱすたさんは `SHIORI/3.0 204 No Content`（4.1 節）。ほかの 3.0 の検体（emo2・里々・YAYA）は測っていない。設計の段で、areka の決定論のテストか実機で確かめる。

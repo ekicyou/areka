@@ -20,7 +20,7 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 
 そこで、ukadoc で読めない点は **SSP が同じゴーストへ送る要求の記録（ゴーストの `ghost\master\ssp_shiori_log.txt`）で測ったものを正本とする**（開発者方針「ukadoc で読めない点は議題の前に SSP の MCP で測る」）。測る前の手がかり: 完了 spec `areka-P0-mcp-reload` の調べ（`.kiro/specs/completed/areka-P0-mcp-reload/research.md` 10 節）は、SSP が SHIORI/3.0 のゴーストを読み直したとき、load の直後に `GET Version` を送り、続けて `version` を問うことを記録している（要求の行のバイトまでは控えていない）。
 
-要件 1 の測りで決める点（本書を書いた時点で未測定・推測で埋めない）:
+要件 1 の測りで決める点（本書を書いた時点で未測定・推測で埋めない。**2026-10-23 に SSP 2.9.23 で測った結果は `research.md` 10 節**。測 1＝華和梨 7.4 は 2.x・測 7＝SSP では面が出たので測らない・`OnClose` の形だけは測っていない）:
 
 | 番号 | 測って決めること |
 |---|---|
