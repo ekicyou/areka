@@ -22,7 +22,7 @@
 - 窓どうしの連携（sticky-window）・`\![set,alignmenttodesktop]`・`--option=ignore-sticky-window` の効き目（`areka-P0-window-link-directives`）。
 - `\![execute,resetballoonpos]`・「バルーン位置初期化」・位置初期化のキーボードの近道（同上）。
 - 窓の固定（`\![set,position]`／`\![reset,position]`）の働き（SSP 2.9.18 も持たない・受けない）。
-- 面ごとの `point.basepos`（`areka-P0-surfaces-basepos`）・`check_script` の引数の診断（`areka-P0-check-script-arg-checks`）・他のゴーストの名前の基準の解決（`areka-P0-multi-ghost-runtime`）・3 人目以降の窓（`areka-P0-extra-character-windows`）。
+- 面ごとの `point.basepos`（`surfaces-basepos`）・`check_script` の引数の診断（`check-script-arg-checks`）・他のゴーストの名前の基準の解決（`multi-ghost-runtime`）・3 人目以降の窓（`extra-character-windows`）。
 
 ## Boundary Commitments
 
@@ -55,7 +55,7 @@
 
 ### Revalidation Triggers
 
-- `MoveDirective` の欄・`parse_move_directive` の戻りの形が変わる → `areka-P0-check-script-arg-checks`（読み手を共有）・`areka-P0-window-link-directives`（`ignore_sticky_window` を読む）が確かめ直す。
+- `MoveDirective` の欄・`parse_move_directive` の戻りの形が変わる → `check-script-arg-checks`（読み手を共有）・`areka-P0-window-link-directives`（`ignore_sticky_window` を読む）が確かめ直す。
 - `PositionCue` に種類が増える・`MoveCueSink` の担当が変わる → 消費者台帳と一致の檻・`check_script` の答え。
 - `DefaultPlacementBasis` を組む所（起動の準備・シェルの切替）が増える・減る → 並べ直しの材料が古くなる。
 - `project_anchor` の契約・`Anchored` の持ち主（`window-link-directives` の吸い付きの指令）が変わる → `\![move]` の当て直し。

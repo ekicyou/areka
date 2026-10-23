@@ -39,13 +39,13 @@
 ## Out of Boundary
 
 - 機械負荷（別プロセス）の管理。
-- 拡大率遷移の 2 ティックの跳ね（`areka-P0-dpi-transition-two-tick-bounce`・別 spec）。
+- 拡大率遷移の 2 ティックの跳ね（`dpi-transition-two-tick-bounce`・別 spec）。
 - 文字層の行送り・折返し（完了 spec）。
 
 ## Upstream / Downstream
 
 - **Upstream**: 完了 spec `areka-P0-emo-dpi-scaling`（D3／D5／D6 を覆す）・`areka-P0-collision-dpi-hittest`（÷k・不変）・`areka-P0-recompose-budget`（計時の型）・`areka-P0-draw-load-parity`。
-- **Downstream**: `areka-P0-emo2-conformance-e2e`（症状 E の登記の消化・完成判定は待たない）・`areka-P0-dpi-transition-two-tick-bounce`（外れの代金が消えると遅れの量が変わる＝本 spec の後に採り直す）・`tick-gate-adoption`。
+- **Downstream**: `areka-P0-emo2-conformance-e2e`（症状 E の登記の消化・完成判定は待たない）・`dpi-transition-two-tick-bounce`（外れの代金が消えると遅れの量が変わる＝本 spec の後に採り直す）・`tick-gate-adoption`。
 
 ## Existing Spec Touchpoints
 

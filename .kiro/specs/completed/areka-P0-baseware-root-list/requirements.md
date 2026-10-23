@@ -45,21 +45,21 @@
   - 利用者向けの説明（`dist/README.txt`）と構成の文書（`doc/COMPAT_ARCHITECTURE.md`）の直し。
   - 決定論テストと実機確認。
 - **Out of scope**:
-  - ゴースト・シェル・バルーン 1 つずつを別の場所に結び付けること（後続 `areka-P0-dev-folder-alias`）。
+  - ゴースト・シェル・バルーン 1 つずつを別の場所に結び付けること（後続 `dev-folder-alias`）。
   - SSP の個別の設定（一時的な除外のチェック・フォルダごとのランダム切替・自動切替・自動更新・ヘッドラインの除外・インストールのたびに行き先を選ぶ・起動時に使うフォルダを選ぶ）。
   - 並べ替えの画面・設定画面・本体の設定ファイル。
   - 同じゴーストを SSP と areka で同時に起動したときの SHIORI の保存ファイルの書き合いを防ぐこと（説明書の注意書きだけにする）。
   - winget の上げ直しで exe の隣の物が消えることへの守り、書ける根の置き場、既定の並びに exe の外の根を足すこと（`areka-P0-user-data-root`）。
   - 記憶やインストールの書き込みに失敗したことを利用者へ知らせること（`areka-P0-write-failure-notice`）。この spec は記録に残すまで。
-  - プロパティの `ghostlist`・`balloonlist`（`areka-P0-property-catalog-lists`）。この spec の一覧が、その日の供給源になる。
+  - プロパティの `ghostlist`・`balloonlist`（`property-catalog-lists`）。この spec の一覧が、その日の供給源になる。
   - インストールの中身（`.nar` の展開・`install.txt` の意味論）。宛先の根を受ける口と作業フォルダの置き方だけは In（要件 5.5・5.9）。
   - ゴーストの記憶・シェルの記憶の置き場（今どおりゴーストのフォルダの中）。
   - 多重ゴースト（同時に起動するのは今どおり 1 体）。
 - **Adjacent expectations**:
-  - `areka-P0-dev-folder-alias`（後続）: この spec の「フォルダ名から場所を引く規則」の手前に、エイリアスを引く段を 1 枚足すだけで済む形にしておく。一覧の各項目は自分がどの根にあるかを持つ（後続は「エイリアスから来た」を足す）。
+  - `dev-folder-alias`（後続）: この spec の「フォルダ名から場所を引く規則」の手前に、エイリアスを引く段を 1 枚足すだけで済む形にしておく。一覧の各項目は自分がどの根にあるかを持つ（後続は「エイリアスから来た」を足す）。
   - `areka-P0-user-data-root`（後続・カタログの鎖の 2 本目）: この spec の「並び」と「新しいものは先頭の根へ」の上に、既定の並びと書ける根を足す。この spec は既定を「実行ファイルの隣だけ」のままにし、利用者がメニューで変えるまで並びを記憶に書かない（要件 1.11）＝後続が既定を変えたとき、古い既定が記憶に残らない。
-  - `areka-P0-property-catalog-lists`（後続）: 要件 3 の和を供給源にする。
-  - `areka-P0-ghost-inner-balloon`・`areka-P0-shell-companion-balloon`（鎖の後ろ）: 一覧の項目の「どの置き場のものか」の欄は、この spec が作る。
+  - `property-catalog-lists`（後続）: 要件 3 の和を供給源にする。
+  - `areka-P0-ghost-inner-balloon`・`shell-companion-balloon`（鎖の後ろ）: 一覧の項目の「どの置き場のものか」の欄は、この spec が作る。
   - 完了 spec `areka-P0-baseware-root-layout`・`areka-P0-ghost-shell-balloon-switch`・`areka-P0-shell-balloon-switch`・`areka-P0-popup-menu-minimal`・`areka-P0-ghost-install`・`areka-P0-nar-install`・`areka-P0-network-update`・`areka-P0-open-external-tags`: それぞれの振る舞いは、並びが 1 つのときは今と同じに残る（要件 11）。
 
 ## Requirements

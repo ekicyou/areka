@@ -12,7 +12,7 @@ pages = ["descript_balloon", "descript_ghost", "descript_headline", "descript_in
 [entry."ukadoc:descript_balloon:anchor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -21,14 +21,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの重ね方の指定を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -37,14 +37,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -53,14 +53,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -69,14 +69,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -85,14 +85,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -101,14 +101,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -117,7 +117,7 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 この綴りは、正典キー font.color.r へ値が漏れないことを確かめる引っ掛けとして crates/areka-parsers/src/balloon/parse_tests.rs で使われている。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -125,7 +125,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -134,14 +134,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -150,14 +150,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -166,14 +166,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -182,14 +182,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -198,14 +198,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -214,14 +214,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -230,14 +230,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -246,14 +246,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -262,14 +262,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -278,14 +278,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -294,14 +294,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -310,14 +310,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -326,14 +326,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -342,14 +342,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -358,14 +358,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -374,14 +374,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -390,14 +390,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -406,14 +406,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -422,14 +422,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -438,14 +438,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -454,14 +454,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -470,14 +470,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -486,14 +486,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -502,14 +502,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -518,14 +518,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -534,14 +534,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -550,14 +550,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -566,14 +566,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -582,14 +582,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -598,14 +598,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -614,14 +614,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -630,14 +630,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -646,14 +646,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -662,14 +662,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -678,14 +678,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-style-canon"
+owner = "anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -694,14 +694,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
+担当 spec は anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:arrow.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = "2.5.51"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -710,14 +710,14 @@ note = """
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
 正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:arrow0.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-scroll-arrows"
+owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -725,15 +725,15 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:arrow0.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-scroll-arrows"
+owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -741,15 +741,15 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:arrow1.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-scroll-arrows"
+owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -757,15 +757,15 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:arrow1.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-scroll-arrows"
+owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -773,9 +773,9 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は areka-P0-balloon-canon-residue）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
 """
 
 [entry."ukadoc:descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -795,7 +795,7 @@ note = """
 [entry."ukadoc:descript_balloon:clickwaitmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = "2.5.54"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -804,14 +804,14 @@ note = """
 areka はクリック待ちの表示の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
 正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: クリック待ちの目印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 33——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:clickwaitmarker.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = "2.5.54"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -820,14 +820,14 @@ note = """
 areka はクリック待ちの表示の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
 正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: クリック待ちの目印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 33——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:clickwaitmarker.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = "2.5.54"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -836,7 +836,7 @@ note = """
 areka はクリック待ちの表示の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
 正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: クリック待ちの目印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 33——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -959,7 +959,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 [entry."ukadoc:descript_balloon:communicatebox.height_2c_30b5_30a4_30ba:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-communicatebox"
+owner = "balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -970,13 +970,13 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.width_2c_30b5_30a4_30ba:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-communicatebox"
+owner = "balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -987,13 +987,13 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.x_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-communicatebox"
+owner = "balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -1004,13 +1004,13 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.y_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-communicatebox"
+owner = "balloon-communicatebox"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -1021,7 +1021,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。
 束: 話しかけ箱・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 3——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は balloon-communicatebox。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_balloon:craftman_2c_4f5c_8005_540d:1"]
@@ -1076,97 +1076,97 @@ note = """
 [entry."ukadoc:descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!。areka-parsers の balloon::map_merged が生の文字列のまま転記するが、合成のしかたを決める枝が無い。areka-emo-text の choice::ResolvedChoiceStyle::resolve は`none` 以外に記録を残すだけで、描画は常に色の塗りで行う。担当 spec は areka-P0-choice-marker-styling。
+壊れ方: 黙って壊れる。記録: warn!。areka-parsers の balloon::map_merged が生の文字列のまま転記するが、合成のしかたを決める枝が無い。areka-emo-text の choice::ResolvedChoiceStyle::resolve は`none` 以外に記録を残すだけで、描画は常に色の塗りで行う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・名前を受けて警告を残す（先に要る仕組み: 選択肢の目印の描画）。束の順位: 14——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.brush.color.b_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が選択肢の矩形の塗り色に使う。担当 spec は areka-P0-choice-marker-styling。
+areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が選択肢の矩形の塗り色に使う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・正典どおりに動く（先に要る仕組み: 選択肢の目印の描画）。束の順位: 65——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.brush.color.g_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が選択肢の矩形の塗り色に使う。担当 spec は areka-P0-choice-marker-styling。
+areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が選択肢の矩形の塗り色に使う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・正典どおりに動く（先に要る仕組み: 選択肢の目印の描画）。束の順位: 65——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.brush.color.r_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が選択肢の矩形の塗り色に使う。担当 spec は areka-P0-choice-marker-styling。
+areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が選択肢の矩形の塗り色に使う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・正典どおりに動く（先に要る仕組み: 選択肢の目印の描画）。束の順位: 65——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.color.b_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が指した選択肢の文字色に使う。担当 spec は areka-P0-choice-marker-styling。
+areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が指した選択肢の文字色に使う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・正典どおりに動く（先に要る仕組み: 選択肢の目印の描画）。束の順位: 65——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.color.g_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が指した選択肢の文字色に使う。担当 spec は areka-P0-choice-marker-styling。
+areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が指した選択肢の文字色に使う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・正典どおりに動く（先に要る仕組み: 選択肢の目印の描画）。束の順位: 65——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.color.r_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が指した選択肢の文字色に使う。担当 spec は areka-P0-choice-marker-styling。
+areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の choice::square_fill_from が指した選択肢の文字色に使う。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・正典どおりに動く（先に要る仕組み: 選択肢の目印の描画）。束の順位: 65——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1175,14 +1175,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれている選択肢の文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1191,14 +1191,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれている選択肢の文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1207,14 +1207,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれている選択肢の文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1223,14 +1223,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれている選択肢の文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1239,14 +1239,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1255,14 +1255,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1271,14 +1271,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1287,14 +1287,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1303,14 +1303,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1319,14 +1319,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1335,14 +1335,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1351,14 +1351,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1367,14 +1367,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1383,14 +1383,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1399,14 +1399,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1415,14 +1415,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1431,14 +1431,14 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.notselect.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1447,50 +1447,50 @@ note = """
 areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 選ばれていない選択肢の目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+担当 spec は choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
 束: 選択肢の目印の見た目・読む経路が無い（先に要る仕組み: 選択肢の目印の描画）。束の順位: 23——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.pen.color.b_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引き、`CursorColor` へ転記するが、値を使う経路が無い。読むのは areka-emo-text の choice::cursor_all_unspecified の「cursor 系が 1 つも書かれていないか」の判定だけで、枠線の色を作る枝は存在しない。担当 spec は areka-P0-choice-marker-styling。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引き、`CursorColor` へ転記するが、値を使う経路が無い。読むのは areka-emo-text の choice::cursor_all_unspecified の「cursor 系が 1 つも書かれていないか」の判定だけで、枠線の色を作る枝は存在しない。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・名前だけ受けて使わない（先に要る仕組み: 選択肢の目印の描画）。束の順位: 12——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.pen.color.g_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引き、`CursorColor` へ転記するが、値を使う経路が無い。読むのは areka-emo-text の choice::cursor_all_unspecified の「cursor 系が 1 つも書かれていないか」の判定だけで、枠線の色を作る枝は存在しない。担当 spec は areka-P0-choice-marker-styling。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引き、`CursorColor` へ転記するが、値を使う経路が無い。読むのは areka-emo-text の choice::cursor_all_unspecified の「cursor 系が 1 つも書かれていないか」の判定だけで、枠線の色を作る枝は存在しない。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・名前だけ受けて使わない（先に要る仕組み: 選択肢の目印の描画）。束の順位: 12——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.pen.color.r_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引き、`CursorColor` へ転記するが、値を使う経路が無い。読むのは areka-emo-text の choice::cursor_all_unspecified の「cursor 系が 1 つも書かれていないか」の判定だけで、枠線の色を作る枝は存在しない。担当 spec は areka-P0-choice-marker-styling。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引き、`CursorColor` へ転記するが、値を使う経路が無い。読むのは areka-emo-text の choice::cursor_all_unspecified の「cursor 系が 1 つも書かれていないか」の判定だけで、枠線の色を作る枝は存在しない。担当 spec は choice-marker-styling。
 束: 選択肢の目印の見た目・名前だけ受けて使わない（先に要る仕組み: 選択肢の目印の描画）。束の順位: 12——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:cursor.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-choice-marker-styling"
+owner = "choice-marker-styling"
 priority = "A14"
 values = ["装い"]
 links = []
@@ -1525,7 +1525,7 @@ priority = "A5"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides（draw::ResolvedFont::resolve_with_background から呼ぶ）が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。画像色との混色は指定が無いときだけ——正典の「disable.font.color のみバルーンの画像色とミックスした色」を本仕様は「指定が無いときの既定」と解釈した。要件 9.10）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（areka-P0-text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。
+壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides（draw::ResolvedFont::resolve_with_background から呼ぶ）が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。画像色との混色は指定が無いときだけ——正典の「disable.font.color のみバルーンの画像色とミックスした色」を本仕様は「指定が無いときの既定」と解釈した。要件 9.10）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。
 束: 台詞の書体・読めるが正典どおりに描かれない（先に要る仕組み: バルーンの文字描画）。束の順位: 37——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -1653,48 +1653,48 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 [entry."ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-text-align-shadow-canon"
+owner = "text-align-shadow-canon"
 priority = "A5"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
 束: 台詞の書体・名前だけ受けて使わない（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-text-align-shadow-canon"
+owner = "text-align-shadow-canon"
 priority = "A5"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
 束: 台詞の書体・名前だけ受けて使わない（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-text-align-shadow-canon"
+owner = "text-align-shadow-canon"
 priority = "A5"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
 束: 台詞の書体・名前だけ受けて使わない（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "vocabulary-only"
 introduced = "2.5.27"
-owner = "areka-P0-text-align-shadow-canon"
+owner = "text-align-shadow-canon"
 priority = "A5"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。
 束: 台詞の書体・名前だけ受けて使わない（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -1760,7 +1760,7 @@ note = """
 [entry."ukadoc:descript_balloon:marker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = "2.5.51"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A13"
 values = ["装い"]
 links = []
@@ -1769,7 +1769,7 @@ note = """
 areka はさくらスクリプトの目印表示で出す画像の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
 正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: さくらスクリプトが出す目印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 39——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -1963,7 +1963,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 [entry."ukadoc:descript_balloon:onlinemarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = "2.5.51"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い"]
 links = []
@@ -1971,14 +1971,14 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 通信中の目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 7——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:onlinemarker.interval_2c_5f85_6a5f_6642_9593:1"]
 status = "absent"
 introduced = "2.5.77"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い"]
 links = []
@@ -1986,14 +1986,14 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 通信中の目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 7——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:onlinemarker.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い"]
 links = []
@@ -2001,14 +2001,14 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 通信中の目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 7——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:onlinemarker.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い"]
 links = []
@@ -2016,7 +2016,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 通信中の目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 7——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -2154,7 +2154,7 @@ areka には勧められた組み合わせと違う使い方を警告する仕�
 [entry."ukadoc:descript_balloon:sstpmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = "2.5.51"
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -2162,14 +2162,14 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は SSTP マーカーの画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 外から伝言が届いたときの目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 2——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:sstpmarker.x_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -2177,14 +2177,14 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は SSTP マーカーの画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 外から伝言が届いたときの目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 2——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:sstpmarker.y_2c_5ea7_6a19_20_2a1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "D2"
 values = ["装い", "交わり"]
 links = []
@@ -2192,7 +2192,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は SSTP マーカーの画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
 通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
 束: 外から伝言が届いたときの目印・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 2——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -2534,7 +2534,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_ghost:balloon.defaultsurface_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -2543,14 +2543,14 @@ note = """
 areka はバルーンの初期表示面の宣言を受け取る経路を持たず、どのバルーンも面 ID 0 の絵から出す（面 ID 0 が必ずあることを areka-emo-present の balloon::resolve_balloon_faces が施行し、その先頭の面がそのまま最初の見た目になる）。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
-担当 spec は areka-P0-balloon-canon-residue（brief が番号を付けている項目のうち、バルーンの初期面を指定する語彙の非追従を扱う項目）。
+担当 spec は balloon-canon-residue（brief が番号を付けている項目のうち、バルーンの初期面を指定する語彙の非追従を扱う項目）。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_ghost:balloon.dontmove_2ctrue:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-descript-window-keys"
+owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
@@ -2560,14 +2560,14 @@ areka はバルーンの位置合わせを切る宣言を受け取る経路を�
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka のバルーンは常に本体の窓に付いて動く（areka の placement::follow が本体の移動をバルーンへ伝える）。切ると書いても付いて動くので、作者が意図した見え方にはならない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当 spec は areka-P0-descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_ghost:balloon.syncscale_2ctrue:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-scale-linkage"
+owner = "shell-scale-linkage"
 priority = "A2"
 values = ["装い"]
 links = []
@@ -2579,7 +2579,7 @@ areka のバルーンの拡大率は、画面の DPI とバルーンの定義が
 正典本文は登場を 2.7 RC1 と書いているが、カタログの版番号の欄は空である。登場した版はカタログから選ぶ規則に従って空のままにした。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
@@ -2601,7 +2601,7 @@ note = """
 [entry."ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -2610,8 +2610,8 @@ note = """
 areka はキャラクタ番号で指すスコープのバルーンの初期表示面の宣言を受け取る経路を持たない。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
-担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げているのは接頭辞の無い綴りと相方側の綴りだけで、キャラクタ番号で指す綴りを挙げていない（沈黙ルール対応表の行は挙げている）。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+担当 spec は balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げているのは接頭辞の無い綴りと相方側の綴りだけで、キャラクタ番号で指す綴りを挙げていない（沈黙ルール対応表の行は挙げている）。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -2676,7 +2676,7 @@ values = ["掛け合い"]
 links = []
 note = """
 壊れ方: 見た目の差（3 人目以降の名前が画面に出ない）。記録: なし。名前は読むが、その名前を題に付ける 3 人目以降の窓を作らない。
-areka の placement::source::char_name_scope_of が番号を取り出し、同 build_titles が 2 番以降のスコープの窓の題として持つ。ただし 2026-10-17 から 3 人目以降の窓を作らない（areka の placement::config::detect_scopes が `charN.` の綴りでキャラクタを立てない。areka-P0-emily-ghost-verification のタスク 3.1・要件 4.7）ので、題は窓を作る placement::spawn まで届かず、画面にも出ない。それまでは実装済みとしていたが、この絞りで縮退へ移した。えみり（`emily4`）の `char2.name` もこの扱いで、3 人目は出なかった（同 spec の検証の記録 verification.md「崩れた所の表」の 2）。担当 spec は areka-P0-extra-character-windows（3 人目以降の窓を作る）。宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の完了済み spec の列挙（[[owner_completed]]）の名前でなければならず（areka-P0-ukadoc-coverage-roadmap 要件 11.1 ⑸ の検査）、areka-P0-extra-character-windows はどちらにも載っていない。表へ足すのは棚卸の仕事である。0 番と 1 番の題は `sakura.name`／`kero.name` が正本で、こちらは写さない。
+areka の placement::source::char_name_scope_of が番号を取り出し、同 build_titles が 2 番以降のスコープの窓の題として持つ。ただし 2026-10-17 から 3 人目以降の窓を作らない（areka の placement::config::detect_scopes が `charN.` の綴りでキャラクタを立てない。areka-P0-emily-ghost-verification のタスク 3.1・要件 4.7）ので、題は窓を作る placement::spawn まで届かず、画面にも出ない。それまでは実装済みとしていたが、この絞りで縮退へ移した。えみり（`emily4`）の `char2.name` もこの扱いで、3 人目は出なかった（同 spec の検証の記録 verification.md「崩れた所の表」の 2）。担当 spec は extra-character-windows（3 人目以降の窓を作る）。宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の完了済み spec の列挙（[[owner_completed]]）の名前でなければならず（areka-P0-ukadoc-coverage-roadmap 要件 11.1 ⑸ の検査）、extra-character-windows はどちらにも載っていない。表へ足すのは棚卸の仕事である。0 番と 1 番の題は `sakura.name`／`kero.name` が正本で、こちらは写さない。
 シェルの descript にも同じ綴りの項目があるが、areka が窓の題に使う名前はゴーストの descript の側からしか採らない——上に書いた題の組み立ては起点の descript の表だけを走査する。だから同じ綴りでもページごとに状態が割れる。名前で引かず、ページを決めてから引くこと。
 束: 本体と相方の名前・引き受けたうえで縮めている（記録なし）（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 68——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。縮退へ移したので、下位区分を実物に揃えた。順位 68 は実装済みだったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
@@ -2708,7 +2708,7 @@ areka はキャラクタ番号で指すスコープの初期サーフェス番�
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -2788,7 +2788,7 @@ areka はマウスの矢印の絵をゴーストごとに差し替える仕組�
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この見出しは新旧の綴りを 1 つにまとめているので、別名の行は作らない。登場した版はカタログが持つ唯一の値を写したが、正典本文がその版として書いているのは `mousecursor` と書けるようになった時期であって、欄そのものが現れた時期ではない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
-選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2947,7 +2947,7 @@ note = """
 [entry."ukadoc:descript_ghost:kero.balloon.defaultsurface_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -2956,7 +2956,7 @@ note = """
 areka は相方側のバルーンの初期表示面の宣言を受け取る経路を持たない。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
-担当 spec は areka-P0-balloon-canon-residue（brief が名前を挙げている綴りのうち相方側にあたる）。
+担当 spec は balloon-canon-residue（brief が名前を挙げている綴りのうち相方側にあたる）。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3060,7 +3060,7 @@ areka は相方側の初期サーフェス番号の宣言を受け取る経路�
 [entry."ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-makoto-dll-host"
+owner = "makoto-dll-host"
 priority = "E4"
 values = []
 links = []
@@ -3069,7 +3069,7 @@ note = """
 areka は台詞を書き換える翻訳の DLL を呼ぶ仕組みを持たず、そのファイル名を書くこの欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当 spec は areka-P0-makoto-dll-host（brief がゴースト側とシェル側の両方の `makoto,` を自分の範囲に挙げている）。
+担当 spec は makoto-dll-host（brief がゴースト側とシェル側の両方の `makoto,` を自分の範囲に挙げている）。
 束: トランスレータ（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: 翻訳 DLL のホスティング）。束の順位: 60——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3121,7 +3121,7 @@ note = """
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
-選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3140,7 +3140,7 @@ note = """
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
-選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3159,7 +3159,7 @@ note = """
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
-選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3178,7 +3178,7 @@ note = """
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
-選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3197,7 +3197,7 @@ note = """
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
-選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3313,7 +3313,7 @@ areka が使うバルーンは、起動時もゴーストの切替でも areka �
 [entry."ukadoc:descript_ghost:sakura.balloon.defaultsurface_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "balloon-canon-residue"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -3322,8 +3322,8 @@ note = """
 areka は本体側のバルーンの初期表示面の宣言を受け取る経路を持たない。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
-沈黙ルール対応表のこの行も areka-P0-balloon-canon-residue の brief も、本体側の綴りを名前としては挙げていない。ただし行の裁量の欄は各スコープの初期表示面を一括で扱うと書いており、brief の項目もバルーンの初期面を指定する語彙そのものを扱うと書いているので、この綴りも同じ行・同じ担当が引き受けていると読んだ。
-担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げている綴りは正典の綴りをすべて覆っていない。
+沈黙ルール対応表のこの行も balloon-canon-residue の brief も、本体側の綴りを名前としては挙げていない。ただし行の裁量の欄は各スコープの初期表示面を一括で扱うと書いており、brief の項目もバルーンの初期面を指定する語彙そのものを扱うと書いているので、この綴りも同じ行・同じ担当が引き受けていると読んだ。
+担当 spec は balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げている綴りは正典の綴りをすべて覆っていない。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3425,7 +3425,7 @@ note = """
 [entry."ukadoc:descript_ghost:sakura.seriko.defaultsurface_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-descript-window-keys"
+owner = "descript-window-keys"
 priority = "A10"
 values = ["装い"]
 links = []
@@ -3435,7 +3435,7 @@ areka は本体側の初期サーフェス番号の宣言を受け取る経路�
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当 spec は areka-P0-descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3673,7 +3673,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には外から台詞を送り込む口が無く、それを常に翻訳へ回すかを決めるこの欄を読む経路も無い。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-翻訳の後半を持つ areka-P0-makoto-dll-host の brief は、この欄を対象外と宣言している（外から台詞を送り込む口が未実装であることを理由に挙げている）。要件の定めどおり担当の欄は空にした。
+翻訳の後半を持つ makoto-dll-host の brief は、この欄を対象外と宣言している（外から台詞を送り込む口が未実装であることを理由に挙げている）。要件の定めどおり担当の欄は空にした。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 束: トランスレータ（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: 翻訳 DLL のホスティング）。束の順位: 60——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -4214,7 +4214,7 @@ note = """
 areka はバルーンを利用者が動かせなくする宣言を読む経路を持たない。
 areka のバルーンはドラッグで動かせる（単独のドラッグを扱うのは areka の placement::follow::on_balloon_drag）ので、この宣言を書いても利用者は動かせてしまう。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4231,7 +4231,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はバルーンの拡大率をゴーストと連動させることを強いる宣言を読む経路を持たない。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4247,7 +4247,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は連れ立って着せる相手の指定を、どの綴りでも受け取らない。`addid` という綴りは areka のソースに 1 つも無く、キャラクタ番号で指すこの綴りは、そのうえ転記側の接頭辞の照合（areka-parsers の package::read_bindgroup_defaults が見るのは `sakura.` と `kero.` だけ）にも掛からない。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分けているが、その語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4264,7 +4264,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの着せ替えの初期状態を受け取る経路を持たない。起動時に着せる番号を集める areka の emo2_boot::assets::default_bind_ids が見るのは `sakura.` で始まる綴りだけで、転記側の areka-parsers の package::read_bindgroup_defaults も `sakura.` と `kero.` の 2 つしか照合しない。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの宣言の扱いを 3 つに仕分けた表を持ち、キャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4281,7 +4281,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの着せ替えの名前宣言を受け取る経路を持たない。名前を転記する areka-parsers の package::read_bindgroup_defaults が照合する接頭辞は `sakura.` と `kero.` の 2 つだけで、`charN.` で始まる綴りはどの分岐にも入らない。名前で着せ替えを着脱する指示は、この番号の登場人物については解けない。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの名前宣言の取り込みを自分のものとし、その設計でキャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4298,7 +4298,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの排他の指定を受け取る経路を持たない。シェルの descript から着せ替えの宣言を読む areka-parsers の package::read_bindgroup_defaults が照合する接頭辞は `sakura.` と `kero.` の 2 つだけで、`charN.` で始まる綴りはどの分岐にも入らない。作者が複数選べると書いても、同時に選べる数の判断そのものが起きない。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-bindoption-exclusivity。同 spec の brief は自分が直す正典として、本体側・相方側・キャラクタ番号で指す側の 3 つの綴りを並べて引いている。ただし着地した実装が照合するのは前の 2 つだけである。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4318,7 +4318,7 @@ areka は `defaultleft` を `defaultx` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaultleft` を画面上の X 座標と定めている。areka が画面上の座標として解くのは揃えが `free` のときだけで、既定（下端）のときは連鎖の基準からのずらし量として使ってしまう。同じ descript に `defaultx` も書いてあれば、そちらが先に採られてこの欄は黙って落ちる。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4338,7 +4338,7 @@ areka は `defaulttop` を `defaulty` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaulttop` を画面上の Y 座標と定め、揃えが `free` のときだけ有効とも書いている。`free` のときの解き方はその定めに沿うが、同じ descript に `defaulty` も書いてあればそちらが先に採られてこの欄は黙って落ち、画像基準のつもりで書かれた値が画面上の座標として使われる。原点も画面そのものではなく作業領域の左上である。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4358,7 +4358,7 @@ areka は `defaultx` を `defaultleft` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaultx` を画像を基準にした X 座標（既定は画像の中央）と定め、`defaultleft` を画面上の X 座標と別々に定めている。areka はどちらの基準にも解かないので、書いた作者の意図した位置には立たない。
 横の値の使い道そのものには裁定がある——沈黙ルール対応表の「複数スコープの既定 X 連鎖規則」が `defaultx` を名指しし、連鎖の基準からの左方向のずらし量（0＝基準に密着）として扱うことを意味論不変と決めている（担当は areka-P0-scope-chain-gap）。ただしその行が確かめたのはスコープどうしの相対位置であって、この欄 1 つの基準点ではない。本台帳が未対応として記録する食い違いは基準点の方であり、それを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4378,7 +4378,7 @@ areka は `defaulty` を `defaulttop` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaulty` を画像を基準にした Y 座標（既定は画像の下端）と定めており、揃えを問わない。areka はこれを画像基準として解く枝を持たず、既定の揃えでは捨て、`free` では画面上の座標として使う。どちらも正典の言う基準ではない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4397,7 +4397,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4415,7 +4415,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4433,7 +4433,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4451,7 +4451,7 @@ note = """
 areka には着せ替えのメニューが無く、その出しかたを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4469,7 +4469,7 @@ note = """
 areka には着せ替えのメニューが無く、その並びの決まった位置に項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4487,7 +4487,7 @@ note = """
 areka には着せ替えのメニューが無く、その並びに階層を作って項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4505,7 +4505,7 @@ note = """
 areka が 2 人目以降の窓の題に使う名前は起点の descript の側からしか採らず、シェルの descript に書かれた同じ綴りは引かれない。
 題を組み立てる areka の placement::source::build_titles が走査するのは起点の表だけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 本体と相方の名前・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 30——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4521,7 +4521,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。ただし起動で窓を最初に置く既定の位置だけは `bottom` と同じに解き、記録を残す（areka の placement::config の `Alignment::Seam` と placement::resolver::resolve_placement の警告）。このため起動の直後は下端に立ち、最初のドラッグや窓の大きさの変化で指定の辺へ移る。書いた作者の意図とは起動の直後の位置だけが違う。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の emo2_boot::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
-`charN.` の番号は、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られ、2 以上ならそのキャラクタが立たないので使われない（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
+`charN.` の番号は、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られ、2 以上ならそのキャラクタが立たないので使われない（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
@@ -4995,7 +4995,7 @@ note = """
 [entry."ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5005,14 +5005,14 @@ areka には作り付けのメニューが無く、その背景に敷く画像�
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5023,14 +5023,14 @@ areka には作り付けのメニューが無く、その背景に敷く画像�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5041,14 +5041,14 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5059,14 +5059,14 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5077,14 +5077,14 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.disable.font.color.b:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5095,14 +5095,14 @@ areka には作り付けのメニューが無く、その選べない項目の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.disable.font.color.g:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5113,14 +5113,14 @@ areka には作り付けのメニューが無く、その選べない項目の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.disable.font.color.r:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5131,7 +5131,7 @@ areka には作り付けのメニューが無く、その選べない項目の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5174,7 +5174,7 @@ areka には作り付けのメニューが無く、その書体を決めるこ�
 [entry."ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5184,14 +5184,14 @@ areka には作り付けのメニューが無く、その手前に重ねる画�
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5202,14 +5202,14 @@ areka には作り付けのメニューが無く、その手前に重ねる画�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5220,14 +5220,14 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5238,14 +5238,14 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5256,14 +5256,14 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.frame.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.5.41"
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5274,14 +5274,14 @@ areka には作り付けのメニューが無く、その枠の色の青の成�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.frame.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.5.41"
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5292,14 +5292,14 @@ areka には作り付けのメニューが無く、その枠の色の緑の成�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.frame.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.5.41"
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5310,14 +5310,14 @@ areka には作り付けのメニューが無く、その枠の色の赤の成�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5328,14 +5328,14 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5346,14 +5346,14 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5364,14 +5364,14 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5381,14 +5381,14 @@ areka には作り付けのメニューが無く、その脇に置く画像を�
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5399,7 +5399,7 @@ areka には作り付けのメニューが無く、その脇に置く画像の�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5753,7 +5753,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 [entry."ukadoc:descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-popup-menu-shell-look"
+owner = "popup-menu-shell-look"
 priority = "A11"
 values = []
 links = []
@@ -5764,7 +5764,7 @@ areka には着せ替えのメニューが無く、その出しかたを決め�
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -6060,7 +6060,7 @@ note = """
 [entry."ukadoc:descript_shell_surfaces:always:1"]
 status = "degraded"
 introduced = ""
-owner = "areka-P0-seriko-interval-combinations"
+owner = "seriko-interval-combinations"
 priority = "A6"
 values = ["気配"]
 links = []
@@ -6268,13 +6268,13 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:base:1"]
 status = "degraded"
 introduced = ""
-owner = "areka-P0-draw-methods-canon"
+owner = "draw-methods-canon"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!。element定義では描ける・pattern定義では未対応のまま。element の行の側は areka-parsers の shell::decode_elements が `base` を `overlay` と同じ値にし、areka-emo-compose が `overlay` と同じに重ねる（X,Y は位置として使う。裁量は doc/COMPAT_ARCHITECTURE.md の §8）。コマ（`animation*.pattern*`）の側は、areka-emo-compose の method::from_name がこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。沈黙ルール対応表と見直し表のすべての行を当たった。
-担当 spec は areka-P0-draw-methods-canon（2026-10-05）。areka-P0-element-base-method が element定義の `base` を描けるようにし、描けない描画メソッドの element定義に警告を出すようにした。pattern定義の `base` と残りの描画メソッドは areka-P0-draw-methods-canon が持つ。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+担当 spec は draw-methods-canon（2026-10-05）。areka-P0-element-base-method が element定義の `base` を描けるようにし、描けない描画メソッドの element定義に警告を出すようにした。pattern定義の `base` と残りの描画メソッドは draw-methods-canon が持つ。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
 束: 絵の重ね方の語・名前は解けるが描けず警告を残す（先に要る仕組み: emo の合成器）。束の順位: 71——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7024,7 +7024,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1"]
 status = "degraded"
 introduced = "2.3.53"
-owner = "areka-P0-draw-methods-canon"
+owner = "draw-methods-canon"
 priority = "A15"
 values = ["装い"]
 links = []
@@ -7033,10 +7033,10 @@ note = """
 2026-10-05 の注記（areka-P0-element-base-method）: `base` は描ける・ほかは描かずに `warn!` を残す・`overlay` と `base` 以外の `element0` を持つサーフェスで画像が土台に残るずれは残る。`base` の X,Y の扱いは doc/COMPAT_ARCHITECTURE.md の §8 に登記してある。
 2026-09-20 の実測: 面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。`areka-P0-shell-implicit-surface` の要件 2.7 の既知のずれ）。`element0` の無い面にファイル名だけの画像を層 0 として敷くのは areka-emo-compose の base_image::apply_base_images で、`element0` が在る面には手を出さない。状態と担当はこの実測では変えていない（縮退の根は `overlay` 以外の読み飛ばしのままだからである）。
 2026-10-04 の注記: 動く GIF の自動アニメーションは非対応（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読む。APNG・動く WebP は areka-P0-animated-image-decode で全コマを読んでアトラスに載せるようになったが、自動アニメーションの再生はまだ無い（再生は areka-P0-animated-image-playback の担当）。状態と担当はこの注記では変えていない（縮退の根は上と同じだからである）。読み方の裁量は doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 節で登記してある。
-担当 spec は areka-P0-draw-methods-canon（2026-10-05）。areka-P0-element-base-method が `base` の element定義を描けるようにし、描けない描画メソッドの行に警告を出すようにした。残りの描画メソッドは areka-P0-draw-methods-canon が持つ。最初の担当は areka-P0-shell-parse で、同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
+担当 spec は draw-methods-canon（2026-10-05）。areka-P0-element-base-method が `base` の element定義を描けるようにし、描けない描画メソッドの行に警告を出すようにした。残りの描画メソッドは draw-methods-canon が持つ。最初の担当は areka-P0-shell-parse で、同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
 2026-10-06 の注記（areka-P0-animated-image-playback）: 自動アニメーションが動くようになった。描画メソッド `overlay`・`base` の element定義が指す APNG・動く WebP と、`element0` を持たないサーフェスの `surface<数字>.png` の動く絵は、SERIKO 定義が無くてもコマをファイルの順に切り替えて表示する。areka-emo-compose の film::decompose が動く絵 1 つを `always` を 1 本だけ持つ部品（子）へ分解し、areka-seriko の部品の時計が回す。待ち時間は丸めず、ファイルの繰り返し回数を守る。`element0` を持つサーフェスの `surface<数字>.png` は今までどおり描かず、動かさない。待ち時間の合計が 0 の絵・コマの並びが崩れた絵は分解せずに 1 枚目の静止画のまま出し、相対パスと理由を添えた warn! を表を作るときに 1 回出す。
 動く GIF は非対応のまま（開発者裁定 2026-10-04）で、今までどおり 1 枚の絵として読む。
-element定義のオプション（座標より後ろの欄）は読まないので、`--clipping` を付けた element定義の動く絵も動く絵として読み、動かす（正典は `--clipping` を使うとアニメーションの読み込みが無効になると書く）。このずれは areka-P0-element-clipping-option が着地するまで残る。
+element定義のオプション（座標より後ろの欄）は読まないので、`--clipping` を付けた element定義の動く絵も動く絵として読み、動かす（正典は `--clipping` を使うとアニメーションの読み込みが無効になると書く）。このずれは element-clipping-option が着地するまで残る。
 上の 2026-10-04 の注記の「自動アニメーションの再生はまだ無い」は、この注記で古くなった。状態と担当はこの注記では変えていない（縮退の根は `overlay` と `base` 以外の描画メソッドの読み飛ばしのままだからである）。再生の決めごとは doc/COMPAT_ARCHITECTURE.md の §8「動く絵と `always` の再生」に 1 節で登記してある。
 2026-10-17 の注記（areka-P0-emily-ghost-verification）: 同じサーフェスの番号が 2 つ以上の `surface*`ブレスに出たとき、areka は前の定義に後のブレスの element定義を足す（同じ element番号の行は後の行が勝つ。当たり判定とアニメーションも同じ規則）。それまでは後のブレスが前の定義を丸ごと置き換えていたので、面ごとのブレスに element定義を書き、後の共有のブレスに当たり判定と着せ替えを書くえみり（`emily4`）では絵が消えた（同 spec の検証の記録 verification.md「崩れた所の表」の 1）。足すときの記録は debug! の 1 行で、warn! は出さない。足し方は areka-emo-compose の fold::fold_plain_surface と fold::merge_brace、決めごとは doc/COMPAT_ARCHITECTURE.md の §8「同じ面の番号が 2 つ以上の `surface*`ブレスに出たとき」に登記してある。状態と担当はこの注記では変えていない（縮退の根は `overlay` と `base` 以外の描画メソッドの読み飛ばしのままだからである）。
 束: 絵の重ね合わせの行・引き受けたうえで縮めている（記録なし）（先に要る仕組み: emo の合成器）。束の順位: 17——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7209,7 +7209,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-mouse-cursor"
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
@@ -7221,7 +7221,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 見出しの `*` は 1 個以上の数字。
 束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -7393,7 +7393,7 @@ element定義の子のサーフェス・pattern定義の先のサーフェス（
 [entry."ukadoc:descript_shell_surfaces:point.basepos.x_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-surfaces-basepos"
+owner = "surfaces-basepos"
 priority = "A2"
 values = []
 links = []
@@ -7403,14 +7403,14 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 areka が使うのは正典の既定だけである——`\\![move]` の着地点を出す areka の move_cue::CanonDefaultBasepos が、横はサーフェス幅の半分・縦は下端を返す。宣言を差し込むための受け口（同じファイルの move_cue::BaseposResolver）は型として用意されているが、宣言を読む実装はまだ無い。したがって横位置の宣言を書いても、二体の並べ方は既定のままになる。
 この食い違いを引き受ける行が沈黙ルール対応表にある——「宣言 `point.basepos` の実導出（サーフェス個別 basepos）」。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
 同じ食い違いを引き受ける行が同じ表にもう 1 つある——「`\\![move]` の基準位置 `base`（basepos）解決」。宣言を読まないという中身は同じで、こちらは着地点を出す側から書いたものである。
-担当 spec は areka-P0-surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
+担当 spec は surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell_surfaces:point.basepos.y_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-surfaces-basepos"
+owner = "surfaces-basepos"
 priority = "A2"
 values = []
 links = []
@@ -7420,7 +7420,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 areka が使うのは正典の既定だけである——`\\![move]` の着地点を出す areka の move_cue::CanonDefaultBasepos が、横はサーフェス幅の半分・縦は下端を返す。宣言を差し込むための受け口（同じファイルの move_cue::BaseposResolver）は型として用意されているが、宣言を読む実装はまだ無い。したがって縦位置の宣言を書いても、二体の並べ方は既定のままになる。
 この食い違いを引き受ける行が沈黙ルール対応表にある——「宣言 `point.basepos` の実導出（サーフェス個別 basepos）」。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
 同じ食い違いを引き受ける行が同じ表にもう 1 つある——「`\\![move]` の基準位置 `base`（basepos）解決」。宣言を読まないという中身は同じで、こちらは着地点を出す側から書いたものである。
-担当 spec は areka-P0-surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
+担当 spec は surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7723,7 +7723,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:system_3ahand:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-mouse-cursor"
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
@@ -7734,7 +7734,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
 この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は areka-P0-shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3ahelp:1"]
@@ -8194,7 +8194,7 @@ links = [
 note = """
 壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはトランスレータ（MAKOTO）の置き場と働きを定める。areka には makoto.dll を読み込む経路が 1 か所も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
 担当は areka-P0-translate-pipeline。この spec の brief が範囲の In に挙げているのは翻訳の継ぎ目と OnTranslate の送出で、このページが説明する仕組みの入口にあたる。
-ページの後ろ半分——ゴースト側とシェル側の makoto.dll を実際に読み込んで動かすところと、その付け外しと文字コードの取り決め——は areka-P0-makoto-dll-host が brief の範囲の In に挙げている。担当の欄には 1 本しか書けないので、もう 1 本がそこを持つことをここに書く。
+ページの後ろ半分——ゴースト側とシェル側の makoto.dll を実際に読み込んで動かすところと、その付け外しと文字コードの取り決め——は makoto-dll-host が brief の範囲の In に挙げている。担当の欄には 1 本しか書けないので、もう 1 本がそこを持つことをここに書く。
 関連の向き: 正典の本文が相手のページを名指しで指しているとき、指している側にだけ関連を置き、指されている側には戻りの関連を置かない。担当の 2 本が共通して指す定義の欄が、ゴーストの descript の makoto である。これを関連に置いた。ページ同士の関連は無い。このページの本文は makoto.dll の置き場をゴースト側とシェル側の図で示すだけで、他のページ全体を名指しで指していない。「ゴースト」「シェル」「全体の構成」のページはここを名指しで指しているが、戻りの関連は置かないので、その関連はあちらにある。
 束: トランスレータ（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: 翻訳 DLL のホスティング）。束の順位: 60——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """

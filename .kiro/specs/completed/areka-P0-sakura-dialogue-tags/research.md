@@ -483,7 +483,7 @@ crate コードは origin/main と同一（本ブランチの差分は `.kiro/` 
 | 旧項 | 裁定 |
 |---|---|
 | §5.1 choice 配送 seam | **案C 確定**（配送列＝配置/表示の単一真実源・バッグ＝解決照合専用の並存）。R8.6 が檻更新を明文化 |
-| §5.2 basepos | **A-1 確定**（正典既定 basepos のみ実導出・宣言 point.basepos は型シーム＋追跡 spec `areka-P0-surfaces-basepos`・裸 `base`≡`base.base`） |
+| §5.2 basepos | **A-1 確定**（正典既定 basepos のみ実導出・宣言 point.basepos は型シーム＋追跡 spec `surfaces-basepos`・裸 `base`≡`base.base`） |
 | §5.3 sink スロット | 未決→ **本 design で S-3 を採択**（D10） |
 | §5.4 Move variant 案 | **廃**——`\!` は汎用キャリア（typed `Move` variant は新設しない・R4 全面改稿）。Cursor はコンテンツタグゆえ typed variant 存続。`Choice.references` は案(i) を本 design で採択（D4） |
 | §5.5 値源 U-1 | 骨子存続だが**供給形が変わる**: `GhostBootOptions` の素の map でなく「provider（ghost 所有・sylphya 差替シーム）→ per-talk 凍結スナップショット→ talk 起動時手渡し」（D8/D9） |
@@ -536,7 +536,7 @@ crate コードは origin/main と同一（本ブランチの差分は `.kiro/` 
 ### D11: move 末端＝`MoveCueSink`（talk スレッド・純粋解釈）＋ mpsc ＋ frame 相での適用（UI スレッド）
 - **2 段分割**: ①純粋解釈 `parse_move_directive(scope, tokens) -> Result<MoveDirective, MoveDegradation>`（talk スレッド・決定論檻で全網羅）: 正典 positional 表（X/Y 省略=fix・time 省略=0・基準省略=screen・基準位置省略=left.top）・裸 `base`≡`base.base`・`--key=value` 名前付き形は検出して記録付き縮退（M1 は positional のみ実導出・語彙は `MoveDirective` 型が完全形で保持）・time>0 は即時へ縮退記録（R5.4）。②ライブ解決＋適用 `apply_move_directive(world, &GhostWindows, directive)`（UI スレッド・`emo2_frame_system` が mpsc を drain）: scope→窓 Entity（`GhostWindows`）・基準窓の `WindowPos.position`＋basepos・移動窓の basepos で最終物理 px を算出し `move_window_to` を呼ぶ（dead_code 解消・バルーン随伴は既存内包）。
 - **座標系の確定（R-6）**: 計算は**全経路とも物理 px**に統一する。basepos の分母となる窓サイズは `WindowPos.size`（物理 px・placement の契約）から取る——**論理 px 系（BoxStyle 等）を経由しない**ことで [[areka-window-placement-dpi-coordinate-defect]] の混在事故を構造的に遮断。dpi=96 では自己整合して差が出ないため、最終確認は R9.6 の実 DPI 実機サインオフが正（檻は幾何計算の決定論部のみを固定する）。
-- **basepos 型シーム**: `BaseposResolver` trait＋`CanonDefaultBasepos`（x=幅÷2・y=下端＝高さ）実装のみ M1 実導出（A-1）。宣言 `point.basepos` の実導出は追跡 spec `areka-P0-surfaces-basepos` が本 trait の別実装として差す。
+- **basepos 型シーム**: `BaseposResolver` trait＋`CanonDefaultBasepos`（x=幅÷2・y=下端＝高さ）実装のみ M1 実導出（A-1）。宣言 `point.basepos` の実導出は追跡 spec `surfaces-basepos` が本 trait の別実装として差す。
 - **fixture 逐語検算**: `\1\![move,-353,,,0,base,base]` → `x = pos0.x + w0/2 − 353 − w1/2`・`y = 現状維持`（scope0 窓位置＋scope0 basepos.x を基準に、エモ自身の basepos.x が着地する点＝−353px）。
 - **縮退**: 基準 `screen`/`primaryscreen`/`me`/`global` は語彙保持＋warn 縮退（M1 非実導出・emo2 未使用）。対象窓/基準窓の不在は warn＋継続（R5.5・`move_window_to` の既存縮退と整合）。
 

@@ -42,8 +42,8 @@ yanked = "warn"
 ignore = [
     # unsafe-libyaml は保守されていない（直した版は出ない）。引くのは dola の任意の機能 yaml（serde_yaml）だけで、
     # 既定では無効・ワークスペースで有効にするクレートは 0 本＝areka の配布物には入らない。
-    # serde_yaml を替えるか機能ごと外すかは areka-P0-dola-yaml-backend が決める。片づいたらこの行を消す。
-    { id = "RUSTSEC-2024-0449", reason = "dola の任意の機能 yaml だけが引く・配布物に入らない・持ち主は areka-P0-dola-yaml-backend" },
+    # serde_yaml を替えるか機能ごと外すかは dola-yaml-backend が決める。片づいたらこの行を消す。
+    { id = "RUSTSEC-2024-0449", reason = "dola の任意の機能 yaml だけが引く・配布物に入らない・持ち主は dola-yaml-backend" },
 ]
 
 [bans]

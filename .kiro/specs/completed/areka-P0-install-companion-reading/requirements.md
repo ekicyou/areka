@@ -46,7 +46,7 @@ ukadoc が書いていないこと（本 spec が決める）は次の 3 点で�
   - 決定論の自動テスト。
 - **Out of scope**（どれも今の動きを変えない＝変更 0）:
   - 起動時にどのバルーンを使うか（`areka-P0-ghost-standard-balloon`）。本 spec は起動時の読み方を 1 行も変えない。
-  - シェルに紐づくバルーン（`areka-P0-shell-companion-balloon`）。
+  - シェルに紐づくバルーン（`shell-companion-balloon`）。
   - 同梱の `*.directory` の扱い。区切りを含む値は今どおり断り、`_` への置き換えは採らない。
   - 本体の `directory` の扱い。ukadoc の `directory` の項目は区切りについて書いていないので、今の「区切りや `..` を含む値は断る」を変えない。
   - SSP 2.9.00 より前の形（`*.source.directory` の区切りを `_` に置き換える）は採らない。
@@ -56,12 +56,12 @@ ukadoc が書いていないこと（本 spec が決める）は次の 3 点で�
   - `*.directory` の値が空のときの扱い。
   - 検体をインストール済みの形へ畳む開発用の道具（`crates/sample-ghost-kit/examples/fold-samples.rs`）。階層付きの取り出し元を持つ検体は 0 体なので広げない。そういう検体を畳めば、道具自身の突き合わせが不一致を報せる（2026-10-04 の設計の討議）。
   - `type,package` と `developer_options.txt`。
-  - 使用中のフォルダへの上書き（`areka-P0-install-live-target-hazards`）。
+  - 使用中のフォルダへの上書き（`install-live-target-hazards`）。
   - 書庫の中の名前の安全の規則（シンボリックリンク・絶対パス・`..`・長さの上限 200）と、確定の手順（完了 `areka-P0-nar-install`・`areka-P0-nar-install-hardening`）。
 - **Adjacent expectations**:
   - インストールの手続き（完了 `areka-P0-ghost-install`）は、「何をインストールしたか」の列の順をそのまま `OnInstallComplete`・`OnInstallCompleteEx` の Reference に写す。本 spec は列の順を変え、手続きの側の写し方は変えない（変更 0）。
   - `areka-P0-ghost-standard-balloon` は、本 spec の探索の順で最初に見つかった同梱を「最初の 1 個」とする。`*.directory` の値は読み替えないので、起動の側と共有する規則は無い（0 個）。
-  - `areka-P0-install-live-target-hazards` と同じインストールの手続きの周りを触る。本 spec が手続きの側で触るのは利用条件を探す所だけである。
+  - `install-live-target-hazards` と同じインストールの手続きの周りを触る。本 spec が手続きの側で触るのは利用条件を探す所だけである。
   - pasta の側の `pasta-check-bundled-balloon`（本リポジトリの外）は ukadoc に従って書くので、本 spec の着地の後は areka でも ukadoc どおりの結果になる前提で進められる。
 
 ## Requirements

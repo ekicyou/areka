@@ -6,9 +6,9 @@
 
 **今の状態**: `v0.0.2` の GitHub Release が 2026-10-06 に公開され、`areka-0.0.2-x64.zip`・`areka-0.0.2-arm64.zip` とそれぞれの `.sha256` が置いてある（マニフェストの `InstallerUrl`・`InstallerSha256` が書ける）。リポジトリにマニフェストは無い（`dist/winget/` は無い）。名乗りは開発者が 2026-10-02 に `Areka.Areka.Portable` と決めた（`Areka.Areka` は後で作るインストーラー版のために空けておく）。入れ物は zip のまま（zip の中のポータブルな exe）・x64 と arm64 を最初から並べる・無料・未署名。areka は利用者のゴーストと記憶を exe の隣に置くので、winget で入れると、それらは winget の入れ先のフォルダの中に住む。外すとき・上げ直すときにそれらが残るかは測っていない。
 
-**何を変えるか**: ① マニフェスト 4 ファイル（version・installer・既定のロケール＝英語・追加のロケール＝日本語）の雛形を `dist/winget/` に置く。② 手元で `winget install --manifest` から入れて `areka` の 1 語で起動することを x64 の実機で確かめ、外すとき・上げ直すときに利用者のゴーストと記憶が残るかも測る。③ 開発者が winget-pkgs へ初回の提出（PR）を出し、自動の検査が通るところまで進める。更新の PR を自動で出す workflow（`winget.yml`）と説明書の winget の行は、初回の提出が取り込まれた後に `areka-P0-winget-release-automation` が受け持つ（2026-10-10 に分けた）。
+**何を変えるか**: ① マニフェスト 4 ファイル（version・installer・既定のロケール＝英語・追加のロケール＝日本語）の雛形を `dist/winget/` に置く。② 手元で `winget install --manifest` から入れて `areka` の 1 語で起動することを x64 の実機で確かめ、外すとき・上げ直すときに利用者のゴーストと記憶が残るかも測る。③ 開発者が winget-pkgs へ初回の提出（PR）を出し、自動の検査が通るところまで進める。更新の PR を自動で出す workflow（`winget.yml`）と説明書の winget の行は、初回の提出が取り込まれた後に `winget-release-automation` が受け持つ（2026-10-10 に分けた）。
 
-> 起票: 2026-10-02 `/kiro-discovery`（配布と公開＝winget・crates.io）。2026-10-10 に `areka-P0-winget-release-automation` を切り出した。要件生成: 2026-10-10（main `414d43eb`）。詳細は brief.md。
+> 起票: 2026-10-02 `/kiro-discovery`（配布と公開＝winget・crates.io）。2026-10-10 に `winget-release-automation` を切り出した。要件生成: 2026-10-10（main `414d43eb`）。詳細は brief.md。
 
 ## Introduction
 
@@ -34,8 +34,8 @@
 
 - **In scope**: ① マニフェストの雛形 4 ファイル（`dist/winget/` の下）／② 手元の `winget install --manifest` で入れて `areka` の 1 語で起動する確かめ（x64 の実機）／③ 外すとき・上げ直すときに利用者のゴーストと記憶が残るかの実測と、機械の全員向け（`--scope machine`）に入れた形で areka が動くかの 1 回の実測／④ winget-pkgs への初回の提出の手順と、その実行（開発者の手）／⑤ 確かめと提出の記録／⑥ 後ろの spec への申し送り。
 - **Out of scope**:
-  - `.github/workflows/winget.yml`（更新の PR を自動で出す workflow）・`README.md` と `dist/README.txt` の winget の行と既知の制限の文・`max-versions-to-keep` の数・workflow が使うトークンの登録 → `areka-P0-winget-release-automation`。
-  - zip を作ること（完了 `areka-P0-release-package-versioned`）・Release を作ること（完了 `areka-P0-release-ci-workflow`）・リリースの手順（`areka-P0-release-cycle`）・署名（`areka-P0-release-code-signing`）。
+  - `.github/workflows/winget.yml`（更新の PR を自動で出す workflow）・`README.md` と `dist/README.txt` の winget の行と既知の制限の文・`max-versions-to-keep` の数・workflow が使うトークンの登録 → `winget-release-automation`。
+  - zip を作ること（完了 `areka-P0-release-package-versioned`）・Release を作ること（完了 `areka-P0-release-ci-workflow`）・リリースの手順（`areka-P0-release-cycle`）・署名（`release-code-signing`）。
   - インストーラー版（名乗り `Areka.Areka`）・スタートメニューのショートカット・winget 以外の置き場（Scoop・Chocolatey）。
   - 利用者のゴーストと記憶の置き場を変えること（要件 4 で消えると分かったら、別の spec として起票する）。
   - winget-pkgs の人の審査による取り込みを待つこと。
@@ -43,9 +43,9 @@
 - **変更 0 と明記するもの**: `README.md`・`dist/README.txt`・`.github/workflows/**`・`crates/**`・`tools/**`・各 `Cargo.toml`・配布 zip の中身。破る必要が出たら、作業を止めて開発者へ報告する（同じウェーブのほかの spec と触るファイルを重ねない約束）。
 - **Adjacent expectations**:
   - 上流: `v0.0.2` の Release と、その zip・`.sha256`（公開済み）。zip の名前の規則 `areka-{版}-{arch}.zip` と、`areka.exe` が zip の根に在ることは、完了 `areka-P0-release-package-versioned` の決まりのまま使う。
-  - 下流: `areka-P0-winget-release-automation` は、本仕様の提出が winget-pkgs に取り込まれてから着手する。本仕様は、その brief へ実測の結果と PR の場所を書き足す（要件 6.2）。
+  - 下流: `winget-release-automation` は、本仕様の提出が winget-pkgs に取り込まれてから着手する。本仕様は、その brief へ実測の結果と PR の場所を書き足す（要件 6.2）。
   - `areka-P0-release-cycle` の手順は、タグのコミットに `winget.yml` が在るときだけ winget-pkgs への PR を見守る。本仕様は `winget.yml` を作らないので、本仕様の前後のどこでもリリースを回せる。
-  - `areka-P0-release-cycle` の要件・設計は `winget.yml` の持ち主を本仕様の名前で書いている。持ち主は `areka-P0-winget-release-automation` に替わったが、この名前の直しは本仕様が完了のときに行う（下の議題 6・要件 6.4）。手順そのものは変えない。
+  - `areka-P0-release-cycle` の要件・設計は `winget.yml` の持ち主を本仕様の名前で書いている。持ち主は `winget-release-automation` に替わったが、この名前の直しは本仕様が完了のときに行う（下の議題 6・要件 6.4）。手順そのものは変えない。
 
 ## 要件生成で決めた点と、要件討議で決めた点
 
@@ -62,7 +62,7 @@ brief とギャップ分析が要件討議へ回した議題は、2026-10-10 の
 生成時に決めた点（勝者が明白なので議題にしない・討議で覆してよい）:
 
 - **手元で入れる確かめは、提出するマニフェストそのもので行う**。`v0.0.2` の Release が公開済みなので、`InstallerUrl` は本物の https の URL のまま入れられる（2026-10-03 の実測で使った手元の http の配り方は、Release が無かったための代わりで、今は要らない）。上げ直しの実測のために要る「より新しい版を名乗るマニフェスト」だけが確かめ専用で、それはリポジトリで追跡しない。
-- **リポジトリの雛形は、提出した内容の写し**とする（brief の Approach「提出する内容を PR で見られるようにするため」）。自動の検査を受けてマニフェストを直したら、雛形へ写し戻す。取り込みの後の版ごとの書き換えは持たない（`areka-P0-winget-release-automation` の brief が「更新の PR は winget-pkgs の側の今のマニフェストを元に作られる見込み」としている）。
+- **リポジトリの雛形は、提出した内容の写し**とする（brief の Approach「提出する内容を PR で見られるようにするため」）。自動の検査を受けてマニフェストを直したら、雛形へ写し戻す。取り込みの後の版ごとの書き換えは持たない（`winget-release-automation` の brief が「更新の PR は winget-pkgs の側の今のマニフェストを元に作られる見込み」としている）。
 - **提出の操作と、winget・OS の設定の変更は開発者の手で行う**（完了 `areka-P0-release-package-versioned` の要件 7.4 の裁定と同じ。AI は設定を変えず、開発者のトークンを扱わない）。**それ以外の実機の操作は AI が行い、結果を報告する**（2026-10-10 設計討議の決定。開発者「なるべくあなたが確認する方向で。わたしへの手数は極論少なくして」）。開発者の手に残るのは、設定のオンと戻し・管理者の権限が要る `--scope machine` の出し入れ・提出の 3 つ。AI が権限で止められた操作は、名指しして開発者へ頼み、行えなかった項目は「未確認」と書いて報告する。影響する条項: 要件 3.1・3.6・3.8・4.1・4.7・4.8。提出の操作については、実行のときに開発者の指示で変えた（要件 5 の下の注・2026-10-10）。
 - **steering の `structure.md` の `dist/` の説明を追随させる**（今は「配布物へそのまま入れる文書」とだけ書いてあり、zip に入らない `dist/winget/` と食い違うため）。
 
@@ -143,17 +143,17 @@ brief とギャップ分析が要件討議へ回した議題は、2026-10-10 の
 5. If 自動の検査が赤で、マニフェストの直しで消える, then the 開発者 shall 同じ PR の中で直し、直した内容を雛形へ写し戻して、要件 2.2 をやり直す。
 6. If 自動の検査の赤がマニフェストの直しでは消えない（`areka.exe` がウイルス対策の走査に掛かる・無人のインストールかアンインストールが通らない、など）, then the 本仕様 shall 原因を記録に残して開発者へ報告し、原因を直す仕事を別の spec として `/kiro-discovery` で起票する（本仕様では `crates/**`・`tools/**` を直さない）。
 7. The 本仕様 shall 「PR の自動の検査が通り、人の承認待ちになった」ことを完了の線とし、winget-pkgs への取り込みを待たない。自動の検査が通るまでは完了としない。
-8. The 本仕様 shall 更新の PR を自動で出す workflow と、説明書の winget の行を作らない（`areka-P0-winget-release-automation` が、取り込みの後に作る）。
+8. The 本仕様 shall 更新の PR を自動で出す workflow と、説明書の winget の行を作らない（`winget-release-automation` が、取り込みの後に作る）。
 
 > **実行のときの変更（2026-10-10・開発者の指示）**: 条項 2 の「開発者が自分の手で／AI は提出の操作をしない」は、実行のときに開発者の指示（「だしてよいが、そちらでできない？」）で変わり、提出のコマンド（`wingetcreate submit`）は AI が打って、開発者が行ったのはブラウザでの GitHub へのログインと道具への許可だけだった。PR の確かめ項目の印と、個人としての同意（CLA）のコメントも、開発者の指示（「任せる」「個人として」）で AI が `gh` で書いた。AI はトークンを見ても扱ってもいない（`--token` は付けていない・道具が覚えたログインは PR が出た直後に消した）。条項 2 の文は決めたときのまま残してあり、実際の記録は `verification/submission.md` の「提出した版と日時」の「手順と違ったこと」と、「範囲の確かめ」の 10 に在る。
 
 ### Requirement 6: 記録と、後ろの spec への申し送り
 
-**Objective:** As a 後ろの spec（`areka-P0-winget-release-automation`）を始める開発者, I want 本仕様で確かめたことと提出の状態が、決まった場所に書かれていること, so that 説明書の文と自動化を、測った事実の上に作れる
+**Objective:** As a 後ろの spec（`winget-release-automation`）を始める開発者, I want 本仕様で確かめたことと提出の状態が、決まった場所に書かれていること, so that 説明書の文と自動化を、測った事実の上に作れる
 
 #### Acceptance Criteria
 
 1. The 本仕様 shall 確かめと提出の記録を本仕様のフォルダの中（`verification/`）に置き、機械と winget の版・コミット・変えた設定と戻した時刻・手順と結果・PR の URL を書く。
-2. When 本仕様が完了する, the 本仕様 shall `areka-P0-winget-release-automation` の brief へ次を書き足す: 要件 4 の実測の結果（項目ごとの「残った」「消えた」「置き換わった」）／要件 4.7 の実測の結果（機械の全員向けに入れた形で、立ったか・記憶が書けたか・ゴーストを入れられたか）／`ArchiveBinariesDependOnPath` をどうしたかと、`areka` の解決のされ方／winget-pkgs への PR の URL と、その時点の状態（承認待ち）／直しを求める印が付いたら期限（要件生成時の文書では 10 日）までに応えないと PR が閉じられること／要件 4 で消える物が在ったときは、要件 4.6 で起票した spec の名前と、その spec が着地するまで説明書に winget の行を載せず、winget-pkgs へ次の版を出さないこと（上げ直しのたびに利用者の物が消えるため。初回の 1 版は名乗りを押さえるために載せたままにする）。
+2. When 本仕様が完了する, the 本仕様 shall `winget-release-automation` の brief へ次を書き足す: 要件 4 の実測の結果（項目ごとの「残った」「消えた」「置き換わった」）／要件 4.7 の実測の結果（機械の全員向けに入れた形で、立ったか・記憶が書けたか・ゴーストを入れられたか）／`ArchiveBinariesDependOnPath` をどうしたかと、`areka` の解決のされ方／winget-pkgs への PR の URL と、その時点の状態（承認待ち）／直しを求める印が付いたら期限（要件生成時の文書では 10 日）までに応えないと PR が閉じられること／要件 4 で消える物が在ったときは、要件 4.6 で起票した spec の名前と、その spec が着地するまで説明書に winget の行を載せず、winget-pkgs へ次の版を出さないこと（上げ直しのたびに利用者の物が消えるため。初回の 1 版は名乗りを押さえるために載せたままにする）。
 3. If 実機の確かめか実測で、areka の側の未対応か不具合のためにうまくいかなかった件が見つかる, then the 本仕様 shall 本仕様の範囲の外でも、その件をすべて `/kiro-discovery` で起票する。
-4. When 本仕様が完了する, the 本仕様 shall `areka-P0-release-cycle` の要件と設計のうち、`winget.yml` の持ち主として本仕様の名前を挙げている行を `areka-P0-winget-release-automation` に直し、直した行の数を記録に残す。手順（タグのコミットに `winget.yml` が在るときだけ winget-pkgs への PR を見守る）は変えない。
+4. When 本仕様が完了する, the 本仕様 shall `areka-P0-release-cycle` の要件と設計のうち、`winget.yml` の持ち主として本仕様の名前を挙げている行を `winget-release-automation` に直し、直した行の数を記録に残す。手順（タグのコミットに `winget.yml` が在るときだけ winget-pkgs への PR を見守る）は変えない。

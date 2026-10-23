@@ -63,6 +63,6 @@
 | 証拠抽出器は `///`・`//!`・`//` を同一規則・`ukadoc:`＋空白＋URL 1 語・ページ URL 単独行はスライス突合を起動・走査は兄弟テストも含む | `evidence/extract.rs:35-40`・`evidence/resolve.rs:20-30, 224`・`io/sources.rs:42-46` | 一致（T6 の探し語を行頭に置かない注意は正しい） |
 | property の証拠は 2 → 21 | 現行の property 証拠は `baseware.name`／`baseware.version` の 2 件のみで 19 項目と重ならない | 一致 |
 | `sound(bgm.mp3)` は解釈不能で StoreWrite | `key.rs:104-121`（`.` で分割してから `(` を読む） | 一致 |
-| 追跡 spec の実在 | `.kiro/specs/areka-P0-property-query-channels/brief.md`（追記(88) が本 spec への分割を登記）・`.kiro/specs/areka-P0-zorder-property/brief.md` | 実在 |
+| 追跡 spec の実在 | `.kiro/specs/property-query-channels/brief.md`（追記(88) が本 spec への分割を登記）・`.kiro/specs/zorder-property/brief.md` | 実在 |
 | roadmap 仮裁定 1 の改訂（21→25・26 ではない） | `.kiro/steering/roadmap.md:105` | 一致 |
 | 受入基準 52 項の対応 | 対応表 52 行（1.1〜1.6・2.1〜2.5・3.1〜3.7・4.1〜4.10・5.1〜5.4・6.1〜6.5・7.1〜7.5・8.1〜8.4・9.1〜9.3・10.1〜10.3） | 全件あり |

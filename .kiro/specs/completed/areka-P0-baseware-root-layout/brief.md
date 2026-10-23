@@ -107,7 +107,7 @@
 - **Extends**: なし（新規）。
 - **Adjacent**:
   - `areka-P0-nar-install`（単独枠・**先に着地**）——展開先の形を本仕様の根の形と一致させる。nar-install の brief に「展開先はベースウェア根の形」を追記済み（2026-09-18）。
-  - `areka-P0-property-catalog-lists`（α 後）——`ghostlist`／`balloonlist` の値の供給源が本仕様の列挙になる。所有は動かさない。
+  - `property-catalog-lists`（α 後）——`ghostlist`／`balloonlist` の値の供給源が本仕様の列挙になる。所有は動かさない。
   - `areka-P0-status-execution-states`（α 後・`emo2_boot/mod.rs`）——起動解決を触る本仕様と同じファイルに触る可能性。α 後なので順序で解決。
 
 ## Constraints

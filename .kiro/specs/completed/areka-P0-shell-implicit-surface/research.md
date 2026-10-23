@@ -299,7 +299,7 @@
 - `emo2` の直下の `surface*.png` は `surface0.png`・`surface10.png` の 2 枚。面 0 の `element0` は `surface0.png`・面 10 の `element0` は `CityPop\surface0010.png`。直下の `surface10.png` を名指しする `element` 行は無い（全部焼く案では索引表が 2 枚増える根拠）。
 - `emo2_shell_golden.txt` の行は「セット番号・パス・頁と矩形とずれ・原寸」で、連番を持たない。`null.png` は配置を持たない項目（`EMPTY`）になり詰め込みに入らないので、他の 54 行は変わらない見込み。
 - `AtlasTable::resolve` は `(SetId, 文字列)` の完全一致で引く。面の表の層 0 のパスと、焼く一覧のパスは同じ綴りでなければならない。
-- 要件 9.2 が名指しする `areka-P0-ukadoc-coverage-roadmap` は `.kiro/specs/completed/` に在る（完了済み）。実在する受け皿は `.kiro/specs/areka-P0-coverage-roadmap-refresh/`（`roadmap.md` #45）。
+- 要件 9.2 が名指しする `areka-P0-ukadoc-coverage-roadmap` は `.kiro/specs/completed/` に在る（完了済み）。実在する受け皿は `.kiro/specs/coverage-roadmap-refresh/`（`roadmap.md` #45）。
 - 正典の確かめ直し: ukadoc MCP で `sometimes` を引き、C15 の逐語（「そのサーフェスである間毎秒2分の1の確率で再生。」）と URL が要件の表と一致することを確かめた。
 
 ## 11. 設計の決定（6 節の持ち越し 9 件と 8 節の「設計で決める」3 件の決着）
@@ -342,7 +342,7 @@
 | A3 | 検証 所見 | `dangling_pattern_targets` がメソッドを見ず、`start,ID` などで偽の `warn!` が出うる | ukadoc が「サーフェスID…は無視される」と書く 6 語と `insert` の計 7 語を母集合から除く（3 検体で除かれるコマは 0 件）。`ComposeMethod::from_name` は未知の語で `warn!` を出すので照会からは呼ばない |
 | A4 | 検証 所見 | 「`build_world` は記録を出さない」は新しい記録についてだけ正しい | 言い回しを直し、既存の `warn!` が 1 回の起動で 3 回 → 5 回になることを明記 |
 | A5 | 検証 所見 | `ShellLoadError` の雛形に `#[error]` が無い | 雛形に足した |
-| A6 | 設計の申し送り | 要件 9.2 の宛先が完了済みの仕様 | 要件 9.2 と Boundary Context の宛先を、実在する受け皿 `areka-P0-coverage-roadmap-refresh`（`roadmap.md` #45）へ直した |
+| A6 | 設計の申し送り | 要件 9.2 の宛先が完了済みの仕様 | 要件 9.2 と Boundary Context の宛先を、実在する受け皿 `coverage-roadmap-refresh`（`roadmap.md` #45）へ直した |
 | A7 | 設計の申し送り | 要件 2.6 と 4.9 が字面で衝突しうる | 要件 2.6 の文面を「土台の絵の決まり方は変わらない・焼く段の既存の扱いは要件 4.9 のとおり変更 0」へ直した |
 
 **結果だけ報告する決定（設計が決め、検証が正典と実測で裏づけたもの）**: 抜き色は変換後のバッファの (0,0) の 4 バイトと完全一致で比べる／パレットの `tRNS` の透明度は生かす／`UseSelfAlpha::Off` の下の抜き色は実装しない（渡す経路 0 本）／間隔の語の読み替えは `AnimationTable::from_world`／権威は `areka-emo-present` の `shell_target`。`R_POST_and_KOMAINU` の抜き色は白なので、キャラクターの中の純白も抜ける（C10 どおり）。実機確認 8.2 ⑴ で見え方を見る。

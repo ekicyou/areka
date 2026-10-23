@@ -1,6 +1,6 @@
 # Brief: areka-P0-choice-timeout-directive
 
-> 2026-10-02 棚卸⑳で `areka-P0-sakura-time-directives`（L・全部入れると 20 タスクを超える）の B 群から切り出した。file:line は起票時値（main `03e8d7d6`）。行番号は目安で、正本は「何の定義行か」の方。
+> 2026-10-02 棚卸⑳で `sakura-time-directives`（L・全部入れると 20 タスクを超える）の B 群から切り出した。file:line は起票時値（main `03e8d7d6`）。行番号は目安で、正本は「何の定義行か」の方。
 
 ## Problem
 
@@ -55,12 +55,12 @@
 ## Upstream / Downstream
 
 - **Upstream**: 完了 `areka-P0-sakura-dialogue-tags`（R4.3）・完了 `areka-P0-choice-select-events`（時間切れの受け側）・完了 `cue-playback-duration`（barrier）。
-- **Downstream**: `areka-P0-sakura-time-directives`（残りの A・C・D 群と `balloontimeout`。同じ `compile.rs` を触る＝本 spec の後）・`areka-P0-anchor-tag-canon`（同じ `compile.rs`）。
+- **Downstream**: `sakura-time-directives`（残りの A・C・D 群と `balloontimeout`。同じ `compile.rs` を触る＝本 spec の後）・`areka-P0-anchor-tag-canon`（同じ `compile.rs`）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（`sakura-time-directives` の brief から B 群の `choicetimeout` を引き取る＝同 brief に注記済み）。
-- **Adjacent**: `areka-P0-talk-fast-forward`（早送りは「表示が全部終わってから数え始める」の起点を早めるだけで、値には触らない）。
+- **Adjacent**: `talk-fast-forward`（早送りは「表示が全部終わってから数え始める」の起点を早めるだけで、値には触らない）。
 
 ## Constraints
 

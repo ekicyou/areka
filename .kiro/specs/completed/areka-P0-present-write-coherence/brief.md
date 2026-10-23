@@ -10,7 +10,7 @@
 > - **流用できる観測資産が増えた**: dlp の 4 段の帰属（過程/スレッド/関数/相）・tick の相別観測・`tools/perf/perf-loop.ps1`・スレッド名簿。atom 由来の `wintf::transition`（既定 OFF・10 種）と併せ、可視化→書込の隙間の実測に新設不要。
 > - **アンカー実測再確認（2026-08-27・ドリフトなし）**: `apply_show` :46・可視化の段＝`set_visible` :375／`set_bounds` :381／`Visualize` 発行 :392。
 > - **檻は一本化済みハーネスで書く**: ログ捕捉は `log-capture-kit`（cage が全 8 crate 移行済み）・一時パスは `temp-path-kit`。
-> - **tick の門の本採用は `areka-P0-tick-gate-adoption`（M2 解禁ゲート・棚卸⑪起票）が所有**——本 spec は tick 駆動そのものへ踏み込まない（規模見積りで tick 大改造に及ぶなら atom 要件 9.3 に従い分割再裁定＝従来どおり）。
+> - **tick の門の本採用は `tick-gate-adoption`（M2 解禁ゲート・棚卸⑪起票）が所有**——本 spec は tick 駆動そのものへ踏み込まない（規模見積りで tick 大改造に及ぶなら atom 要件 9.3 に従い分割再裁定＝従来どおり）。
 
 ## Problem
 

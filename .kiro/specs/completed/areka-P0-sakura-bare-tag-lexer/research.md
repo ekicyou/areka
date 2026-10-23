@@ -325,7 +325,7 @@ requirements.md L53 は「角括弧を伴わない `\_` タグは上表のとお
   2. **案 C** — `Token::Bare(char)` を据え置き、`\_` 始まりの角括弧なし形だけ lexer が `Token::Raw("\\_X")` を返す。`decode.rs` は無変更。
 - **選んだ案**: **案 A**。
 - **理由**:
-  1. **一般化した境界面（design-synthesis「一般化」）**: 「角括弧を伴わないタグの綴り」は本来 1 文字とは限らない。`Bare(String)` はその一般形で、既知 1 文字タグはその特殊事例になる。意味付けを後から担う所有仕様（`\_a` ＝ `areka-P0-anchor-tag-canon`・`\_q` ＝ `areka-P0-sakura-time-directives`・その他は `areka-P0-ukadoc-coverage-roadmap` の無所有一覧で裁定）は、**`decode_bare` に腕を 1 本足すだけ**で構造化されたトークンを受け取れる。案 C だと所有仕様は `Token::Raw` の文字列を再解釈するか lexer を再び触る必要があり、本仕様が「rebase 源を消す」ために先行着地する意義（brief「Downstream」）が薄れる。
+  1. **一般化した境界面（design-synthesis「一般化」）**: 「角括弧を伴わないタグの綴り」は本来 1 文字とは限らない。`Bare(String)` はその一般形で、既知 1 文字タグはその特殊事例になる。意味付けを後から担う所有仕様（`\_a` ＝ `areka-P0-anchor-tag-canon`・`\_q` ＝ `sakura-time-directives`・その他は `areka-P0-ukadoc-coverage-roadmap` の無所有一覧で裁定）は、**`decode_bare` に腕を 1 本足すだけ**で構造化されたトークンを受け取れる。案 C だと所有仕様は `Token::Raw` の文字列を再解釈するか lexer を再び触る必要があり、本仕様が「rebase 源を消す」ために先行着地する意義（brief「Downstream」）が薄れる。
   2. **`Token::Raw` の意味を汚さない**: `Token::Raw` は「lexer が区切れなかった入力（未閉じ `[`／`"`）を逐語で吸収する受け皿」（`lexer.rs:47-48`）。正しく区切れた正典タグをそこへ入れると、型の意味が「不正」と「未知」の二重になる。案 A は `Instruction::Raw`（意味層の「意味を持たない生の断片」）へ落とすので、要件 3.4「現在すでに素通しに使われている形式と同じ」を**意味層で**満たす。
   3. **挙動は両案で同一**: どちらも `Instruction::Raw` にタグ全体の文字列が載り、`compile.rs:202-203` で無視される。利用者から見える差は無い。よって差は保守性と拡張点の置き場だけで、⑴⑵が決め手になる。
   4. brief の推奨（案 ⒜）および開発規律「終了経路は正規実装・小細工禁止」と整合する。

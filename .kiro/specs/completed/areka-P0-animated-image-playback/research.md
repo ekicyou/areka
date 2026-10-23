@@ -4,7 +4,7 @@
 > コードは「何の定義か＋ファイル」で指す。設計・実装の着手時に引き直すこと。
 > この文書は材料と選択肢を並べるもので、決定はしない。決めるのは要件討議と設計である。
 >
-> **2026-10-05 設計の段の追記**: この文書の 1〜8 章はギャップ分析（main `ec072853` の上）のままで、一部が古くなった。⑴ `import` は棚卸㉒で `areka-P0-animated-image-import` へ切り出した。`import` についての記述（1 章の 3 項目め・2.5 節の pattern定義の行・3 章の表の 5.x の行・3.2 節・4 章の各案の `import` の文・6 章の 6・8 章の最後の項）は**引き渡し済みの材料**であり、本 spec は使わない（消さずに残す）。⑵ 議題 1〜5 は要件討議で全部決着した（requirements.md）。⑶ 設計が選んだ形と、その根拠は末尾の「設計の段の調査」に在る。
+> **2026-10-05 設計の段の追記**: この文書の 1〜8 章はギャップ分析（main `ec072853` の上）のままで、一部が古くなった。⑴ `import` は棚卸㉒で `animated-image-import` へ切り出した。`import` についての記述（1 章の 3 項目め・2.5 節の pattern定義の行・3 章の表の 5.x の行・3.2 節・4 章の各案の `import` の文・6 章の 6・8 章の最後の項）は**引き渡し済みの材料**であり、本 spec は使わない（消さずに残す）。⑵ 議題 1〜5 は要件討議で全部決着した（requirements.md）。⑶ 設計が選んだ形と、その根拠は末尾の「設計の段の調査」に在る。
 
 ## 1. まとめ
 
@@ -129,7 +129,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 ### 3.2 `import` の今の読まれ方（直さないと残る副作用）
 
-> 【引き渡し済み】この節は `areka-P0-animated-image-import` の材料である（2026-10-05 棚卸㉒）。本 spec は `import` に触らない。
+> 【引き渡し済み】この節は `animated-image-import` の材料である（2026-10-05 棚卸㉒）。本 spec は `import` に触らない。
 
 `animation0.pattern0,import,glow.png,100,10,20` は、今は `method = "import"`・`surface_id = 0`（ファイル名が数でないため）・`wait = 100` と読まれる。その結果:
 
@@ -274,7 +274,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 ### 試して捨てた抜け道
 
-- **使われない着せ替えの animation を子サーフェスに足して外形に数えさせる**: 外形は取れるが、作者の `bindgroup` の番号と当たると 1 枚目が重なって見える。外形の計算の癖に寄りかかるので、後続 `areka-P0-extent-element-offset` が外形を直すと壊れうる。コマが届くまで絵が無い問題は解けない。
+- **使われない着せ替えの animation を子サーフェスに足して外形に数えさせる**: 外形は取れるが、作者の `bindgroup` の番号と当たると 1 枚目が重なって見える。外形の計算の癖に寄りかかるので、後続 `extent-element-offset` が外形を直すと壊れうる。コマが届くまで絵が無い問題は解けない。
 - **置き換えの前の外形を覚えておき、`Composer` でその外形を使う**: 外形は解けるが、コマが届くまで絵が無い問題は解けない。
 - **アトラスに「原寸だけ持つ空の絵」を足す**: 外形は解けるが、読み込みとアトラスは本 spec の範囲外（要件の Boundary Context）。コマが届くまで絵が無い問題は解けない。
 - **seriko にシェルの最初の面も知らせる**: シェルは seriko が出すまで表示されないので要らなかった。
@@ -410,7 +410,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
   - 残る遅れは 2 つ: seriko → UI のスレッドの境（全部の指令に同じだけ掛かる）と、コマの替わり目を見つける刻み（16 ミリ秒）。後ろは刻みの出し手を「次の切り替えの時刻で起こす」形に作り替えれば消せるが、今のアニメーション全部に関わる。
 - **Implications**: 時計の開始は出来事の時刻にする。隠れている対象の合成は先送りする。刻みの作り替えは開発者に問う（design.md の Open Questions 1）。
 
-### 外形と `areka-P0-extent-element-offset`
+### 外形と `extent-element-offset`
 
 - **Findings**: `flatten_extent` の画像の element の行は、累積のオフセットに原寸を足すだけで、その element 自身の X,Y を足していない（同 spec が直すバグ）。動く絵の子を別の行で数えると、直しが片方にしか入らない。
 - **Implications**: 画像と動く絵の子を同じ 1 行で数える。順は本 spec が先。roadmap の「`flatten_extent` は `extent-element-offset` の持ち物」の約束を直す。
@@ -499,7 +499,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 - `areka-P0-element-base-method` は `plan.rs` に触らない。先に main へ入る。このウェーブで `plan.rs` の重なりは 0。
 - `areka-P0-balloon-lifecycle-events` は `emo2_boot/mod.rs` の 1〜3 行だけ（今ある `clock: TalkClock` の写しを渡す）。その `clock` の名前・型・持ち主を変えない。2026-10-05 の実装の頭で順を入れ替え、本 spec の後に main へ入る（同 spec はまだ要件の段だった）。
-- `areka-P0-extent-element-offset` は未着手。本 spec が先。`flatten_extent` を `plan_extent.rs` へ移したことを申し送る。
+- `extent-element-offset` は未着手。本 spec が先。`flatten_extent` を `plan_extent.rs` へ移したことを申し送る。
 
 ### 軽い直し（設計書へ入れたもの）
 
@@ -532,7 +532,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 ### Decision: 手書きの `always` の外形は全部の pattern の和集合（決定）
 
-- **Rationale**: 自動で作った子と手書きの `always` は同じに振る舞う。表示されている間ずっと見える絵が外形で切れてはいけない。画像の element の X,Y の直しは `areka-P0-extent-element-offset` へ申し送る。
+- **Rationale**: 自動で作った子と手書きの `always` は同じに振る舞う。表示されている間ずっと見える絵が外形で切れてはいけない。画像の element の X,Y の直しは `extent-element-offset` へ申し送る。
 
 ### 残る遅れ
 
@@ -562,7 +562,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 1. **element定義の `base` の行も動く絵の分解の入力になる**: `element-base-method` で読み手の `decode_elements` が `is_image_element_method`（`overlay`・`base` の 2 語）の行を同じ `Element` にし、`fold.rs` の `normalize_element` はどちらも `ComposeMethod::Overlay` で置く。したがって `elementN,base,<動く絵>,X,Y` も `overlay` の行と同じに分解され、子を置く element の描画メソッドは `Overlay` を運ぶ。設計（「置いた element の描画メソッドをそのまま運ぶ」・分解は描画メソッドを見ない）のままで正しく、直しは要らない。検体（タスク 1.2）に `base` の行は無い。
 2. **刻みの時計は `areka-ghost` の私的な関数**: `LoopTickerConfig::default()` の時計は `crates/areka-ghost/src/ticker.rs` の `fn real_clock()`（`GetTickCount64`・`pub` でない）。「刻みと同じ時計を 1 つ作って両方へ渡す」は、`mod.rs` で `GetTickCount64` を読む `seriko_clock` を作り、`LoopTickerConfig { interval: 16 ms, clock: Box::new(move || MonotonicMs(seriko_clock())) }` と書けば `areka-ghost` に触らずに済む（`areka` は `windows` の `Win32::System::SystemInformation` を `log_history.rs` で既に使っている）。触るファイルの表は変わらない。
-3. **新しく起票された `areka-P0-draw-methods-canon`**（`element-base-method` の完了時の棚卸・優先）は、残りの描画メソッドを `method.rs`・`plan.rs` ほかで描く spec。同じウェーブで並走していないので本 spec の重なりは 0。本 spec の Non-Goal「`overlay` 以外の描画メソッド」とも矛盾しない。
+3. **新しく起票された `draw-methods-canon`**（`element-base-method` の完了時の棚卸・優先）は、残りの描画メソッドを `method.rs`・`plan.rs` ほかで描く spec。同じウェーブで並走していないので本 spec の重なりは 0。本 spec の Non-Goal「`overlay` 以外の描画メソッド」とも矛盾しない。
 
 ### 前の数字（`emo2` の 1 コマの時間・要件 7.3）
 

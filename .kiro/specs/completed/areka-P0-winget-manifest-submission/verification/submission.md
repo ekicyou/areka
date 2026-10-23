@@ -675,7 +675,7 @@ index ef8b3ca5..9a66ebe2 100644
 本仕様の外に残ること:
 
 - モデレーター（有志）の承認と、その後の取り込み。19:06:01 の案内は、承認が要ることと、時間を見てほしいことを告げている。19:04:06 に、条件がそろったら自動で取り込む設定がオンになった、と出来事の記録から読める（上の「出来事の記録から読んだ印の移り変わり」）。いつ承認されるかは分からない。
-- 取り込みの後の仕事（版を出すたびの更新の PR・説明書の winget の行）は、`areka-P0-winget-release-automation` の持ち物。その前に `areka-P0-user-data-root` の着地が要る（後ろの spec への申し送りの 6）。
+- 取り込みの後の仕事（版を出すたびの更新の PR・説明書の winget の行）は、`winget-release-automation` の持ち物。その前に `areka-P0-user-data-root` の着地が要る（後ろの spec への申し送りの 6）。
 - 本仕様が完了した後は、AI はこの PR を読みに行かない。PR の出し手 `ekicyou` は、この PR の知らせを受ける側に入っている（出来事の記録に `subscribed` が 6 件）。
 
 この後に開発者が行うこと（起きたときだけ）:
@@ -694,7 +694,7 @@ index ef8b3ca5..9a66ebe2 100644
 | `requirements.md` | 4 行 | 0 行 |
 | `design.md` | 1 行 | 0 行 |
 
-相手の文書は本仕様を、頭の `areka-P0-` が無い短い名前で書いている。長い名前で数えると 0 件になる。直す前の 2 ファイルに `areka-P0-winget-release-automation` は 0 回。
+相手の文書は本仕様を、頭の `areka-P0-` が無い短い名前で書いている。長い名前で数えると 0 件になる。直す前の 2 ファイルに `winget-release-automation` は 0 回。
 
 直した行（3 行。`winget.yml` の持ち主として本仕様の名前を挙げていた行）:
 
@@ -709,17 +709,17 @@ index ef8b3ca5..9a66ebe2 100644
 
 直した後の数:
 
-| ファイル | 短い名前（残り） | 長い名前 | `areka-P0-winget-release-automation` |
+| ファイル | 短い名前（残り） | 長い名前 | `winget-release-automation` |
 |---|---|---|---|
 | `requirements.md` | 2 行 | 0 行 | 2 行 |
 | `design.md` | 0 行 | 0 行 | 1 行 |
 
 確かめたこと:
 
-- 差分は名前の置き換えだけ。`git diff --numstat` は `requirements.md` が 2 行足して 2 行消し、`design.md` が 1 行足して 1 行消し。語の単位の差分で、消えた語は `winget-manifest-submission` が 3 回・足した語は `areka-P0-winget-release-automation` が 3 回で、ほかは 0。直した後の 2 ファイルで新しい名前を古い名前へ戻すと、直す前（HEAD）と 1 バイトも違わない。
+- 差分は名前の置き換えだけ。`git diff --numstat` は `requirements.md` が 2 行足して 2 行消し、`design.md` が 1 行足して 1 行消し。語の単位の差分で、消えた語は `winget-manifest-submission` が 3 回・足した語は `winget-release-automation` が 3 回で、ほかは 0。直した後の 2 ファイルで新しい名前を古い名前へ戻すと、直す前（HEAD）と 1 バイトも違わない。
 - 手順の文は 1 字も変えていない（要件の「タグのコミットに `winget.yml` が在る」ときだけ winget-pkgs への PR を確かめる条件、「`winget.yml` が main に無い」間の条件、設計の見守りの表の winget の行と、その下の「`winget.yml` がタグのコミットに無い回」の文。どれも差分に出ない）。
 - `brief.md` は相手にしていない（差分 0）。`brief.md` には短い名前が 7 行あり、そのまま残る。`areka-P0-release-cycle` のほかのファイル（`design-validation.md`・`research.md`・`spec.json`・`tasks.md`・`verification/first-run.md`）は、短い名前も長い名前も 0 行で、触っていない。
-- 置き換えた名前は、頭の `areka-P0-` が付いた長い形。相手の文書は、隣の名前（`release-ci-workflow`・`crates-io-publish` など）を短い形で書いているので、ここだけ形がそろわない。要件 6.4 が直し先を `areka-P0-winget-release-automation` と名指ししているので、そのとおりにした。
+- 置き換えた名前は、頭の `areka-P0-` が付いた長い形。相手の文書は、隣の名前（`release-ci-workflow`・`crates-io-publish` など）を短い形で書いているので、ここだけ形がそろわない。要件 6.4 が直し先を `winget-release-automation` と名指ししているので、そのとおりにした。
 
 ## 範囲の確かめ
 
@@ -760,7 +760,7 @@ index ef8b3ca5..9a66ebe2 100644
 | 11 | `.kiro/specs/areka-P0-winget-manifest-submission/verification/winget-local-check.md` | 足した | 1330 | 0 | ② |
 | 12 | `.kiro/specs/areka-P0-winget-manifest-submission/verification/submission.md` | 足した | 726 | 0 | ② |
 | 13 | `.kiro/steering/structure.md` | 変えた | 1 | 1 | ③ |
-| 14 | `.kiro/specs/areka-P0-winget-release-automation/brief.md` | 変えた | 91 | 0 | ④ |
+| 14 | `.kiro/specs/winget-release-automation/brief.md` | 変えた | 91 | 0 | ④ |
 | 15 | `.kiro/specs/areka-P0-release-cycle/requirements.md` | 変えた | 2 | 2 | ⑤ |
 | 16 | `.kiro/specs/areka-P0-release-cycle/design.md` | 変えた | 1 | 1 | ⑤ |
 | 17 | `.kiro/specs/areka-P0-user-data-root/brief.md` | 足した | 149 | 0 | ⑥ |
@@ -781,8 +781,8 @@ index ef8b3ca5..9a66ebe2 100644
 | ファイル | 設計が許す形 | 実際 | 判定 |
 |---|---|---|---|
 | `.kiro/steering/structure.md` | `dist/` の説明の 1 か所 | 1 行（「その他の最上位」の行）。行の末尾の `dist/` の説明に「と、`winget/`＝winget へ提出するマニフェストの雛形（初回に出した版の写し・配布 zip には入らない）」を足しただけ。その前の字は変わっていない | 合う |
-| `.kiro/specs/areka-P0-winget-release-automation/brief.md` | 末尾への書き足しだけ（既にある文は変えない） | 消した行は 0。分かれた点の中身（9132 バイト）は、今の中身の頭の 9132 バイトと 1 バイトも違わない（`cmp` で同じ）。足したのは、日付の付いた節 1 つ（「`areka-P0-winget-manifest-submission` からの申し送り（2026-10-10）」）で、中の小見出しは 8 つ＝設計の 6 項目と、「この spec を始めるときに効く事実」「上の本文のうち、実測と合わなくなった所」 | 合う |
-| `.kiro/specs/areka-P0-release-cycle/requirements.md` | 名前の 2 行だけ | 2 行。語の単位の差分で、消えた語は `winget-manifest-submission` が 2 回・足した語は `areka-P0-winget-release-automation` が 2 回。ほかは 0 | 合う |
+| `.kiro/specs/winget-release-automation/brief.md` | 末尾への書き足しだけ（既にある文は変えない） | 消した行は 0。分かれた点の中身（9132 バイト）は、今の中身の頭の 9132 バイトと 1 バイトも違わない（`cmp` で同じ）。足したのは、日付の付いた節 1 つ（「`areka-P0-winget-manifest-submission` からの申し送り（2026-10-10）」）で、中の小見出しは 8 つ＝設計の 6 項目と、「この spec を始めるときに効く事実」「上の本文のうち、実測と合わなくなった所」 | 合う |
+| `.kiro/specs/areka-P0-release-cycle/requirements.md` | 名前の 2 行だけ | 2 行。語の単位の差分で、消えた語は `winget-manifest-submission` が 2 回・足した語は `winget-release-automation` が 2 回。ほかは 0 | 合う |
 | `.kiro/specs/areka-P0-release-cycle/design.md` | 名前の 1 行だけ | 1 行。同じ置き換えが 1 回。ほかは 0（数は上の「名前の直しの数」と同じ＝直した行 3） | 合う |
 | `.kiro/steering/roadmap.md` | 起票の書き足し | 足した行 29・消した行 3。消した 3 行は、どれも数を書いた行の書き直し（spec 台帳の見出し＝brief を持つ spec の数 96 → 98／区分ごとの数の行／段ごとの数の行）で、古い数は「その前の数」として同じ行に残してある。足した 29 行は、その 3 行の新しい形・台帳の表の 2 行（`user-data-root`・`write-failure-notice`）・「テーマ別の決めごと」の末尾の節 1 つ（24 行。空行を含む）。台帳の表の行は、数え直して 98（分かれた点では 96） | 合う |
 
@@ -803,7 +803,7 @@ index ef8b3ca5..9a66ebe2 100644
 
 - `.github/workflows/` に在るのは `crates-io.yml` と `release.yml` の 2 つで、分かれた点と同じ。**`winget.yml` は無い**（作っていない）。
 - `README.md` と `dist/README.txt` は、差分が 0。今の 2 つのファイルに `winget` の字は 0 行（大文字と小文字の違いは問わない）。＝**説明書に winget の行は足していない**。
-- 更新の PR を自動で出す仕組みと、説明書の winget の行は、`areka-P0-winget-release-automation` の持ち物のまま。
+- 更新の PR を自動で出す仕組みと、説明書の winget の行は、`winget-release-automation` の持ち物のまま。
 
 ### 6. トークンの形の文字列（要件 2.5）
 
@@ -936,7 +936,7 @@ index ef8b3ca5..9a66ebe2 100644
 ### 9. 起票した数
 
 - **起票した数は 2**: `areka-P0-user-data-root`（利用者の物を、入れ先の外の書ける根へ出す。区分 A）と `areka-P0-write-failure-notice`（書けなかったときの伝え方を直す。区分 B）。どちらも brief だけ（上の一覧の 17・18 番）。
-- **今ある spec への割り付けは 2**: 0.0.2 の MCP の `sakurascript` が仮の受け口である件 → `areka-P0-mcp-kanade-tools`（brief は直していない）／winget で外した後に PATH の項目が残る件 → `areka-P0-winget-release-automation`（申し送りの節に書いた。上の一覧の 14 番）。
+- **今ある spec への割り付けは 2**: 0.0.2 の MCP の `sakurascript` が仮の受け口である件 → `areka-P0-mcp-kanade-tools`（brief は直していない）／winget で外した後に PATH の項目が残る件 → `winget-release-automation`（申し送りの節に書いた。上の一覧の 14 番）。
 - 照らした元は `winget-local-check.md` の「見つかった件と起票」（6 行。どの行にも spec の名前が入っている）。4 つの brief は、4 つとも在る。
 - 提出の後の自動の検査からの起票は 0（上の「赤と、その扱い」）。
 - `areka-P0-user-data-root` の向きは起票のときの推しで、開発者の裁定はまだ受けていない（その spec の要件の討議で受ける）。

@@ -220,7 +220,7 @@ $p = Start-Process -FilePath "$w\target\debug\areka.exe" -WorkingDirectory $v -R
 | 5 | 終了コードを取り損ねた | 起動の命令の形 | 手順の不備（起動と待ちを別の呼び出しにした） | 直した（2 回目の走行で終了コード 0 を取った） | — |
 | 6 | メニューで「終了」を道具のクリックで選ぶと、何も選ばれずにメニューが閉じた。その後の右クリック 3 回は「メニューを出した」（`menu_shown`）の記録が出るのに画面に見えず、選んだ記録も閉じた記録も無い。SendInput だけで出し直すと見えて、「終了」を選べた | 2 回目の 14:56:48・14:57:20・14:57:31・14:57:58 の `menu_shown`（対になる `menu_selected` が無い）、23:56:56・23:57:23・23:57:33 の撮った物 | 未確定。メニューが前面を取れない（メモ帳を閉じた直後や、道具が別の窓を前に出した後）と、Win32 のメニューが見えずに閉じる見込み。選ばれずに閉じたときの記録は DEBUG（`crates/areka/src/menu/trigger.rs` の `menu_dismissed`）で、今回の記録の水準（`info`・メニューは開けていなかった）では出ないので、見えずに閉じたのか、見えないまま開いているのかを記録から区別できなかった | 起票の候補（範囲の外・要件 4.4 は満たした）。`/kiro-complete` の棚卸で起票する。再現を測るときは `RUST_LOG` に `areka::menu=debug` を足す | — |
 
-崩れた所のうち、areka が対応していないためにうまくいかなかった件（2・3）は、どちらも既に起票されていた spec の持ち場なので、新しい起票は 0 本。`.kiro/specs/areka-P0-extra-character-windows/`・`.kiro/specs/areka-P0-mcp-kanade-tools/` が在ることを確かめた。
+崩れた所のうち、areka が対応していないためにうまくいかなかった件（2・3）は、どちらも既に起票されていた spec の持ち場なので、新しい起票は 0 本。`.kiro/specs/extra-character-windows/`・`.kiro/specs/areka-P0-mcp-kanade-tools/` が在ることを確かめた。
 
 ### 直しの見積もりと 20 本の線（タスク 5.3・要件 6.4）
 
@@ -258,8 +258,8 @@ $p = Start-Process -FilePath "$w\target\debug\areka.exe" -WorkingDirectory $v -R
 
 | ファイル | 行（id の見出し） | 直したこと |
 |---|---|---|
-| `ledger/assets.toml` | `descript_ghost` の `char*.name` | 状態を実装済み → 縮退。名前は読むが 3 人目以降の窓を作らないので画面に出ない、と書き直した（崩れた所 2）。束の行の下位区分も縮退に揃えた。宛先の欄は空のまま（`areka-P0-extra-character-windows` は網羅の道筋の spec の表に載っておらず、宛先に書くと検査が赤になる）で、担当の spec の名前は備考に書いた |
-| `ledger/assets.toml` | `descript_ghost` の `char*.balloon.defaultsurface`・`char*.seriko.defaultsurface`、`descript_shell` の `char*.` で始まる 18 行（`balloon.dontmove`・`balloon.syncscale`・`bindgroup*.addid`・`bindgroup*.default`・`bindgroup*.name`・`bindoption*.group`・`defaultleft`・`defaulttop`・`defaultx`・`defaulty`・`icon.frame.color.r/g/b`・`menu`・`menuitem*`・`menuitemex*`・`name`・`seriko.alignmenttodesktop`） | 「`charN.` の番号が 2 以上ならそのキャラクタを立てる（`char_scope_of`）」を、「番号が 2 以上でもキャラクタを立てない（2026-10-17・タスク 3.1。絞りを外すのは `areka-P0-extra-character-windows`）」へ。窓の置き方の 4 行と `seriko.alignmenttodesktop` は「番号が 2 以上の値は使われない」を足した。えみりの `char2.balloon.offsetx` は台帳に行が無い（見出しが無い）ので、直す行も無い。`char3`・`char4.seriko.alignmenttodesktop` はこの直しに入る。状態はどれも未対応のまま |
+| `ledger/assets.toml` | `descript_ghost` の `char*.name` | 状態を実装済み → 縮退。名前は読むが 3 人目以降の窓を作らないので画面に出ない、と書き直した（崩れた所 2）。束の行の下位区分も縮退に揃えた。宛先の欄は空のまま（`extra-character-windows` は網羅の道筋の spec の表に載っておらず、宛先に書くと検査が赤になる）で、担当の spec の名前は備考に書いた |
+| `ledger/assets.toml` | `descript_ghost` の `char*.balloon.defaultsurface`・`char*.seriko.defaultsurface`、`descript_shell` の `char*.` で始まる 18 行（`balloon.dontmove`・`balloon.syncscale`・`bindgroup*.addid`・`bindgroup*.default`・`bindgroup*.name`・`bindoption*.group`・`defaultleft`・`defaulttop`・`defaultx`・`defaulty`・`icon.frame.color.r/g/b`・`menu`・`menuitem*`・`menuitemex*`・`name`・`seriko.alignmenttodesktop`） | 「`charN.` の番号が 2 以上ならそのキャラクタを立てる（`char_scope_of`）」を、「番号が 2 以上でもキャラクタを立てない（2026-10-17・タスク 3.1。絞りを外すのは `extra-character-windows`）」へ。窓の置き方の 4 行と `seriko.alignmenttodesktop` は「番号が 2 以上の値は使われない」を足した。えみりの `char2.balloon.offsetx` は台帳に行が無い（見出しが無い）ので、直す行も無い。`char3`・`char4.seriko.alignmenttodesktop` はこの直しに入る。状態はどれも未対応のまま |
 | `ledger/assets.toml` | `descript_shell` の `sakura.` で始まる 16 行（`balloon.dontmove`・`balloon.offsetx/y`・`balloon.syncscale`・`defaultleft`・`defaulttop`・`defaultx`・`defaulty`・`icon.frame.color.r/g/b`・`menu`・`menuitem*`・`menuitemex*`・`name`・`name2`） | 「人数を決める材料は `kero.` と `charN.` の綴り」を「`kero.` の綴りだけ」へ |
 | `ledger/assets.toml` | `descript_shell_surfaces` の `element*` | 2026-10-17 の注記を足した。同じ番号の 2 つ目の `surface*`ブレスは前の定義へ足す（同じ名前の行は後勝ち・記録は debug!）、全置換だったころはえみりの絵が消えた（崩れた所 1）。状態と担当は変えていない |
 | `ledger/assets.toml` | `descript_shell_surfaces` の `animation*.interval` | 2026-10-17 の注記を足した。後のブレスが pattern定義だけを書くと間隔が `bind` になる既知の限界（上の「既知の限界」・登記した検体では 0 件）。2026-10-18 の完了のときに限界を直し、注記を解決後の振る舞い（前の間隔が残る）へ書き直した |

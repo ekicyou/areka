@@ -35,7 +35,7 @@ spec の表と M2 予約群の対応表は、それぞれ「既存 brief の位�
   **0 本**である行を数える形で、同じ数え方を分岐点の版に当てると 36 が返る＝較正済み。
   **この 33 は検査の外にある手書きの数である**: 分岐点から合流までの間、本流の側は
   束を 2 つ減らしておきながら散文を 1 しか減らしておらず、自分の表（34）とも食い違って
-  いた。数え直す仕組みは `areka-P0-coverage-roadmap-refresh`（台帳 #45）が引き受ける）。
+  いた。数え直す仕組みは `coverage-roadmap-refresh`（台帳 #45）が引き受ける）。
 - **波の案**: 下の規則で決めた M2 の波。正本の W13〜W17 とは別の番号で、続き番号を振るのは
   棚卸セッションである。
 
@@ -77,7 +77,7 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 置き場の直下で説明書を持つディレクトリ名から本 spec 自身を除いた 27 個を、両向きに突き合わせた。
 表は 2026-09-19 に 29 行になったので、いま数え直すと同じ結果にはならない）。
 
-- 表にあるが封じる場所へ移ったもの **3 本**: `areka-P0-charset-canon`・`areka-P0-present-gpu-transform-scale`・`areka-P0-text-decoration-canon`（2026-09-13 完了。宛先に残る 17 件は実装済み 13＋語彙のみ 4 で、語彙のみの 4 件〔`sub`／`sup`／`outline` 系〕は本 spec が意図して見送った項目ゆえ `[[owner_completed]]` の条件〔全件が実装済みか縮退〕を満たさない。分割 ⑵⑶ が受け持つ 15 件は同日 `areka-P0-text-align-shadow-canon`〔5〕と`areka-P0-balloon-font-descript-keys`〔10〕へ付け替え済み）
+- 表にあるが封じる場所へ移ったもの **3 本**: `areka-P0-charset-canon`・`areka-P0-present-gpu-transform-scale`・`areka-P0-text-decoration-canon`（2026-09-13 完了。宛先に残る 17 件は実装済み 13＋語彙のみ 4 で、語彙のみの 4 件〔`sub`／`sup`／`outline` 系〕は本 spec が意図して見送った項目ゆえ `[[owner_completed]]` の条件〔全件が実装済みか縮退〕を満たさない。分割 ⑵⑶ が受け持つ 15 件は同日 `text-align-shadow-canon`〔5〕と`areka-P0-balloon-font-descript-keys`〔10〕へ付け替え済み）
 - いま置き場にあるが表に無いもの **0 本**（2026-09-13 の時点では `areka-P0-nar-install` と
   `areka-P0-shell-implicit-surface` の 2 本がこちら側に居た。2026-09-19 に前者の行が、
   2026-09-20 に後者の行が表へ増えたので、いまは 0 本である。下の「2026-09-19 の追加」と
@@ -223,17 +223,17 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 行の集合に最後に手を入れた日として **2026-10-01** にした。
 段階 B「切替」の行の候補 spec 名の案 `areka-P0-shell-balloon-switch` は、この spec と同じ綴りである。下の「候補 spec 名の案が
 既存の説明書と同じ綴りになっている行」の数え直しは、検査の外にある手書きの数の棚卸として
-`areka-P0-coverage-roadmap-refresh` に任せ、ここでは触っていない。
+`coverage-roadmap-refresh` に任せ、ここでは触っていない。
 
 **2026-10-03 の追加**: `areka-P0-choice-timeout-directive` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、この spec が
 台帳 `ledger/sakura-script.toml` の `\![set,choicetimeout,時間]` の 1 項目を実装済みへ移し、自分の宛先として登記した
-からである。この項目の宛先は `areka-P0-sakura-time-directives` から移した（この spec は時間の指令の中から選択肢の
+からである。この項目の宛先は `sakura-time-directives` から移した（この spec は時間の指令の中から選択肢の
 時間切れだけを切り出したもので、正本のロードマップの台帳が「`sakura-time-directives` から切り出し」と書いている）。
-このため `areka-P0-sakura-time-directives` の行の `owner_count` は 11 から 10 へ変わった（台帳 4 本の宛先の欄を
+このため `sakura-time-directives` の行の `owner_count` は 11 から 10 へ変わった（台帳 4 本の宛先の欄を
 この名前で引いて数え直した値）。項目は `linkage.md` の束「会話」に属するので、束の欄には「会話」を書いた。段階 A の
-表の「会話」の行は、台帳を数え直して `areka-P0-sakura-time-directives` の件数を 5 件から 4 件へ直し、この spec を
+表の「会話」の行は、台帳を数え直して `sakura-time-directives` の件数を 5 件から 4 件へ直し、この spec を
 件数付きで足した。「会話」の束の構成は **46 件**（`linkage.md` の `members` を数えた）で、この spec の 1 件は
-⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。`areka-P0-sakura-time-directives` が
+⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。`sakura-time-directives` が
 持つ残りの 10 件の束の散り方（「会話」4・「窓の配置と重なり」2・「切替」2・「同期オブジェクト」1・「サウンド」1）のうち、
 変わったのは「会話」だけである。足した行の中身は `stage = "A"`・`bundle = "会話"`・`owner_count = 1`・
 `wave = "C1-②"` で、段階は「会話」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。
@@ -241,11 +241,11 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 （3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 40 に合わせ、`snapshot_on` は
 行の集合に最後に手を入れた日として **2026-10-03** にした。
 
-**2026-10-03 の追加（2 行目）**: `areka-P0-sakura-time-critical` の行を 1 行足した。`areka-P0-status-execution-states` の
+**2026-10-03 の追加（2 行目）**: `sakura-time-critical` の行を 1 行足した。`areka-P0-status-execution-states` の
 完了の手続き（同 spec 要件 6.3）で、台帳 `ledger/sakura-script.toml` の `\t`（`ukadoc:list_sakura_script:_5ct:1`）の
-宛先をこの spec へ移したからである。この項目は 6.3 の記録で一度 `areka-P0-sakura-time-directives` へ送ったが、
+宛先をこの spec へ移したからである。この項目は 6.3 の記録で一度 `sakura-time-directives` へ送ったが、
 同じ日に `\t` と `Status` の timecritical を受け持つ専用の spec が起票されたので付け替えた。このため
-`areka-P0-sakura-time-directives` の `owner_count` は 10 のまま、`areka-P0-status-execution-states` は 4 から 3 へ
+`sakura-time-directives` の `owner_count` は 10 のまま、`areka-P0-status-execution-states` は 4 から 3 へ
 変わった。項目は束「会話」に属するので、束の欄には「会話」を書き、段階 A の表と節の「会話」の行にこの spec を
 件数付きで足した（1 件は ⑴ にも ⑵ にも当たらないので、候補 spec 名の案の欄は変えていない）。足した行の中身は
 `stage = "A"`・`bundle = "会話"`・`owner_count = 1`・`wave = "C4 の候補"` で、ウェーブは正本のロードマップの
@@ -276,10 +276,10 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 **29 行**・`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。
 `[briefs].count` はこの 43 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-05** のままにした。
 
-**2026-10-05 の付け替え**: `areka-P0-element-base-method` の行を `areka-P0-draw-methods-canon` の行に替えた。
+**2026-10-05 の付け替え**: `areka-P0-element-base-method` の行を `draw-methods-canon` の行に替えた。
 `areka-P0-element-base-method` は element定義の `base` を描けるようにし、描けない描画メソッドの行に警告を
 出すようにして完了した。残りの描画メソッドと pattern定義の `base` を持つ spec として
-`areka-P0-draw-methods-canon` を起票し、台帳 `ledger/assets.toml` の同じ 2 項目（element定義の行と
+`draw-methods-canon` を起票し、台帳 `ledger/assets.toml` の同じ 2 項目（element定義の行と
 `ukadoc:descript_shell_surfaces:base:1`）の宛先をこの spec へ移したからである。2 項目の状態は変えていない。
 束は同じ「絵の重ね方」で、2 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。
 段階 A の表の「絵の重ね方」の行では、`areka-P0-element-base-method` の 2 件をこの spec の 2 件に替えた。
@@ -354,31 +354,31 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 **2026-10-08 の付け替え**: `areka-P0-balloon-lifecycle-events` の行を `none = true` から束を持つ行に替えた。
 この spec が `OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak` を送るようにし、`\![set,balloontimeout,時間]` を
 読むようにして、台帳 `ledger/shiori.toml` の 3 項目と `ledger/sakura-script.toml` の 1 項目を実装済み 3 件・縮退 1 件
-（`OnBalloonBreak`）へ移し、宛先を分割元の `areka-P0-balloon-canon-residue` からこの spec へ移したからである
+（`OnBalloonBreak`）へ移し、宛先を分割元の `balloon-canon-residue` からこの spec へ移したからである
 （是正候補の節の「表示寿命 5 件」のうち 4 件。残る `\x[noclear]` は分割元の宛先のまま）。このため
-`areka-P0-balloon-canon-residue` の `owner_count` は 26 から 22 へ、この spec は 0 から 4 へ変わった（台帳 4 本の
+`balloon-canon-residue` の `owner_count` は 26 から 22 へ、この spec は 0 から 4 へ変わった（台帳 4 本の
 宛先の欄をこの名前で引いて数え直した値）。4 項目は `linkage.md` の束「会話」に属するので、束の欄には「会話」を書き、
-段階 A の表と節の「会話」の行で `areka-P0-balloon-canon-residue` の件数を 5 件から 1 件へ直してこの spec を件数付きで
+段階 A の表と節の「会話」の行で `balloon-canon-residue` の件数を 5 件から 1 件へ直してこの spec を件数付きで
 足した。「会話」の束の構成は **46 件**で、この spec の 4 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec
 名の案の欄は変えていない。替えた行の中身は `stage = "A"`・`bundle = "会話"`・`owner_count = 4`・`wave = "C4-⑩"` で、
 段階は「会話」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。行数は **48 行**のまま
 （`[[spec]]` の塊を数えた）、束を持つ行が **34 行**・`none = true` の行が **14 行**になった（3 つとも数え直した値で、
 引き算では出していない）。`[briefs].count` は 48 のまま、`snapshot_on` は **2026-10-08** にした。
 
-**2026-10-10 の付け替え**: `areka-P0-anchor-tag-canon` の行の数と束を直し、`areka-P0-anchor-style-canon` の行を 1 行足した。
+**2026-10-10 の付け替え**: `areka-P0-anchor-tag-canon` の行の数と束を直し、`anchor-style-canon` の行を 1 行足した。
 `areka-P0-anchor-tag-canon` が `\_a` のアンカーの働き（範囲・押下・イベント）を実装して、台帳 `ledger/sakura-script.toml` の
 根 2 項目（`\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`）と `ledger/shiori.toml` の `OnAnchorSelect`・`OnAnchorSelectEx` の
 2 項目を実装済みへ移し、イベントの 2 項目を自分の宛先として登記したからである（この 2 項目はそれまで宛先が空だった）。
-同時に、2026-10-04 に見た目を切り出した `areka-P0-anchor-style-canon` が受け持つ行——`ledger/sakura-script.toml` の
+同時に、2026-10-04 に見た目を切り出した `anchor-style-canon` が受け持つ行——`ledger/sakura-script.toml` の
 `\f[anchor*]` 16 項目と `ledger/assets.toml` の descript の `anchor.*` 43 項目——の宛先を、分割元からこの spec へ移した。
-このため `areka-P0-anchor-tag-canon` の `owner_count` は 61 から 4 へ変わり、`areka-P0-anchor-style-canon` は 59 になった
+このため `areka-P0-anchor-tag-canon` の `owner_count` は 61 から 4 へ変わり、`anchor-style-canon` は 59 になった
 （台帳 4 本の宛先の欄をそれぞれの名前で引いて数え直した値）。`areka-P0-anchor-tag-canon` の 4 項目は `linkage.md` の束
 「会話」に 3 件・「バルーンのリンク」に 1 件なので、束の欄を「バルーンのリンク」から、いちばん多くを含む「会話」へ替えた
-（段階はどちらも A）。`areka-P0-anchor-style-canon` の 59 項目はすべて「バルーンのリンク」に属する。段階 A の表と節の
+（段階はどちらも A）。`anchor-style-canon` の 59 項目はすべて「バルーンのリンク」に属する。段階 A の表と節の
 「会話」の行で `areka-P0-anchor-tag-canon` の件数を 1 件から 3 件へ直し、「バルーンのリンク」の行の依存する既存 spec を
-`areka-P0-anchor-style-canon`（59 件）と `areka-P0-anchor-tag-canon`（1 件）に替えた。「バルーンのリンク」の束の構成は
+`anchor-style-canon`（59 件）と `areka-P0-anchor-tag-canon`（1 件）に替えた。「バルーンのリンク」の束の構成は
 **60 件**（`linkage.md` の `members` を数えた）で、全数を持つ spec は無くなったが、持たれていない 1 件は実装済みなので、
-未対応の 59 件の全数を持つ `areka-P0-anchor-style-canon` を ⑴ と同じ読みで引受先にした（⑵ の「残余」の名前を立てても、
+未対応の 59 件の全数を持つ `anchor-style-canon` を ⑴ と同じ読みで引受先にした（⑵ の「残余」の名前を立てても、
 それが指す残りが無い）。⑴ の行は **1 行**のままで、新しい名前の数も変わらない。**この読みは台帳の付け替えに合わせて
 置いたもので、裁定ではない**——次の棚卸で確かめること。足した行の中身は `stage = "A"`・`bundle = "バルーンのリンク"`・
 `owner_count = 59`・`wave = "文字とバルーンの列（choice-marker-styling の隣）"`、替えた行の中身は `stage = "A"`・
@@ -388,32 +388,32 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 `snapshot_on` は行の集合に最後に手を入れた日として **2026-10-10** にした。
 
 **2026-10-10 の付け替えと追加（`areka-P0-seriko-trigger-intervals`・上の同日の付け替えの後）**: `areka-P0-seriko-trigger-intervals` の `owner_count` を 1 から 3 へ直し、
-`areka-P0-seriko-interval-combinations` の行を 1 行足した。`areka-P0-seriko-trigger-intervals` が `talk,数値`・
+`seriko-interval-combinations` の行を 1 行足した。`areka-P0-seriko-trigger-intervals` が `talk,数値`・
 `runonce`・`periodic,数値` を駆動するようにして、台帳 `ledger/assets.toml` の 3 項目を語彙のみから実装済みへ移し、
 宛先を空からこの spec にしたからである。あわせて `always` の項目（`ukadoc:descript_shell_surfaces:always:1`）の
-宛先を、`+` の組み合わせを引き受ける `areka-P0-seriko-interval-combinations`（同日この spec から切り出して起票した）へ
+宛先を、`+` の組み合わせを引き受ける `seriko-interval-combinations`（同日この spec から切り出して起票した）へ
 移した。`always` の状態（縮退）は変えていない。4 項目はどれも `linkage.md` の束「サーフェスアニメーション」に
 属するので、段階 A の表と節の「サーフェスアニメーション」の行で `areka-P0-seriko-trigger-intervals` の件数を 1 件から
-3 件へ直し、`areka-P0-seriko-interval-combinations` を件数付きで足した。束の構成は **47 件**で、3 件も 1 件も
+3 件へ直し、`seriko-interval-combinations` を件数付きで足した。束の構成は **47 件**で、3 件も 1 件も
 ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は `stage = "A"`・
 `bundle = "サーフェスアニメーション"`・`owner_count = 1`・
 `wave = "シェルの element の列（seriko-trigger-intervals・extent-element-offset の後）"` で、段階は
 「サーフェスアニメーション」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。
-上の同日の付け替え（`areka-P0-anchor-style-canon` の行）と合わせて、行数は **50 行**（`[[spec]]` の塊を数えた）で、
+上の同日の付け替え（`anchor-style-canon` の行）と合わせて、行数は **50 行**（`[[spec]]` の塊を数えた）で、
 うち束を持つ行が **36 行**・`none = true` の行が **14 行**である（3 つとも 2 つの枝を合わせた後に
 数え直した値で、引き算では出していない。2 つの枝はどちらも自分の 1 行だけを足して「49 行」と書いていた）。
 `[briefs].count` はこの 50 に合わせ、`snapshot_on` は **2026-10-10** のままにした。
 
 **2026-10-18 の付け替えと追加（`areka-P0-move-canon`）**: `areka-P0-move-canon` の行を 1 行足し、
-`areka-P0-sakura-time-directives` の `owner_count` を 10 から 9 へ直した。`areka-P0-move-canon` が `\![move]` の
+`sakura-time-directives` の `owner_count` を 10 から 9 へ直した。`areka-P0-move-canon` が `\![move]` の
 2 つの書き方・参照点・基準を正典どおりに動かし、`\![execute,resetwindowpos]` と「シェル位置初期化」の項目
 （`OnResetWindowPos`・`switchmovetodefaultpositionbutton.caption`）を実装したので、台帳の 6 項目の宛先をこの spec に
-した。そのうち `\![move]` の項目（`ukadoc:list_sakura_script:_5c_21_5bmove_5d:1`）は `areka-P0-sakura-time-directives`
+した。そのうち `\![move]` の項目（`ukadoc:list_sakura_script:_5c_21_5bmove_5d:1`）は `sakura-time-directives`
 から移した（状態は縮退のまま。時間の部分が残る）。`\![set,position]` と `\![reset,position]` の 2 項目
 （`ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1`・
 `ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1`）は、SSP 2.9.18 も実装していないので受けないと決めて
 対象外へ移し、`linkage.md` の束「窓の配置と重なり」の構成から除いた。このため段階 A の表と節の「窓の配置と重なり」は、
-構成を 126 件から 124 件へ、`areka-P0-sakura-time-directives` の件数を 2 件から 1 件へ直し、`areka-P0-move-canon`
+構成を 126 件から 124 件へ、`sakura-time-directives` の件数を 2 件から 1 件へ直し、`areka-P0-move-canon`
 （3 件）を足した。「メニュー」の行にも `areka-P0-move-canon`（1 件・`switchmovetodefaultpositionbutton.caption`）を
 足した。足した行の中身は `stage = "A"`・`bundle = "窓の配置と重なり"`・`owner_count = 6`・`wave = "v0.0.3"` で、
 束は 6 項目のうち 3 項目が属する束、ウェーブは正本のロードマップの版の写しである。3 件・1 件はどちらの束でも
@@ -422,13 +422,13 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 `[briefs].count` はこの 51 に合わせ、`snapshot_on` は **2026-10-18** にした。
 
 **2026-10-19 の付け替えと追加（`areka-P0-mcp-reload`）**: `areka-P0-mcp-reload` の行を 1 行足し、
-`areka-P0-balloon-canon-residue` の `owner_count` を 22 から 21 へ直した。`areka-P0-mcp-reload` が MCP の `reload` と同じ
+`balloon-canon-residue` の `owner_count` を 22 から 21 へ直した。`areka-P0-mcp-reload` が MCP の `reload` と同じ
 入口で `\![reload,ghost]`・`\![reload,shell]`・`\![reload,balloon]`・`\![reload,shiori]`・`\![reload,descript,パラメータ]`
 の 5 つを読み直すようにしたので、台帳 `ledger/sakura-script.toml` の 5 項目を実装済みへ移し、宛先をこの spec にした。
 そのうち `\![reload,balloon]`（`ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1`）は
-`areka-P0-balloon-canon-residue` から移した（残りの 4 項目はそれまで宛先が空だった）。5 項目は `linkage.md` の 2 つの束に
+`balloon-canon-residue` から移した（残りの 4 項目はそれまで宛先が空だった）。5 項目は `linkage.md` の 2 つの束に
 またがる（「切替」3・「開発者機能」2）ので、束の欄にはいちばん多い「切替」を書いた。段階 B の表の「切替」の行は、
-`areka-P0-balloon-canon-residue`（1 件）を外してこの spec（3 件）を足し、段階 E の表の「開発者機能」の行は
+`balloon-canon-residue`（1 件）を外してこの spec（3 件）を足し、段階 E の表の「開発者機能」の行は
 **0 本**からこの spec の件数付き（2 件）へ替えた。「切替」の束の構成は **32 件**、「開発者機能」は **20 件**
 （`linkage.md` の `members` を数えた）で、3 件・2 件はどちらも ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec
 名の案の欄は変えていない。足した行の中身は `stage = "B"`・`bundle = "切替"`・`owner_count = 5`・`wave = "C9-④"` で、
@@ -467,25 +467,25 @@ SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`
 8 つの束の行の「依存する既存 spec」に、この 7 本を件数付きで足した。
 `areka-P0-pasta-in-windows-verification` がぱすた（「窓際のぱすたさん」）を areka で動かし、SSP と比べて崩れた所のうち
 兄弟の spec が引き取る項目の行に、引き取る spec の名前を宛先として書いたからである（同 spec の要件 9.2）。
-足したのは `areka-P0-descript-window-keys`（2 件）・`areka-P0-window-link-directives`（1 件）・
-`areka-P0-popup-menu-shell-look`（22 件）・`areka-P0-shell-mouse-cursor`（2 件）・`areka-P0-script-small-tags`（3 件）・
-`areka-P0-stay-on-top-directives`（1 件）・`areka-P0-mouse-click-wheel-events`（3 件）で、34 項目はどれもそれまで
+足したのは `descript-window-keys`（2 件）・`areka-P0-window-link-directives`（1 件）・
+`popup-menu-shell-look`（22 件）・`shell-mouse-cursor`（2 件）・`script-small-tags`（3 件）・
+`stay-on-top-directives`（1 件）・`mouse-click-wheel-events`（3 件）で、34 項目はどれもそれまで
 宛先が空だった（状態は変えていない）。7 本とも実装はまだなので行には束を割り当てず、`none = true` と理由を書いた
 （`areka-P0-sylphya-set-ledger` の行と同じ書き方）。ただし、散った先の全部は各段階の節の「依存する既存 spec」の欄が
 持つ決まり（下の「段階と束の決め方」）なので、束を持たない行の宛先も表には足した——`areka-P0-sylphya-set-ledger`・
-`areka-P0-text-align-shadow-canon` が表に件数付きで載っているのと同じ扱いである。34 項目を `linkage.md` の束の
-`members` で引くと、「メニュー」22（`areka-P0-popup-menu-shell-look`）・「窓の配置と重なり」3
-（`areka-P0-descript-window-keys`・`areka-P0-window-link-directives`・`areka-P0-stay-on-top-directives` が 1 件ずつ）・
-「descript の転記」1（`areka-P0-descript-window-keys`）・「マウスの矢印」2（`areka-P0-shell-mouse-cursor`）・
-「選択肢の目印」「切替」「バルーンの文字」1 件ずつ（どれも `areka-P0-script-small-tags`）・「撫で」3
-（`areka-P0-mouse-click-wheel-events`）で、どの束にも属さない項目は無い。段階 A の表の 7 行（「窓の配置と重なり」・
+`text-align-shadow-canon` が表に件数付きで載っているのと同じ扱いである。34 項目を `linkage.md` の束の
+`members` で引くと、「メニュー」22（`popup-menu-shell-look`）・「窓の配置と重なり」3
+（`descript-window-keys`・`areka-P0-window-link-directives`・`stay-on-top-directives` が 1 件ずつ）・
+「descript の転記」1（`descript-window-keys`）・「マウスの矢印」2（`shell-mouse-cursor`）・
+「選択肢の目印」「切替」「バルーンの文字」1 件ずつ（どれも `script-small-tags`）・「撫で」3
+（`mouse-click-wheel-events`）で、どの束にも属さない項目は無い。段階 A の表の 7 行（「窓の配置と重なり」・
 「バルーンの文字」・「descript の転記」・「マウスの矢印」・「メニュー」・「撫で」・「選択肢の目印」）と段階 B の表の
 「切替」の行にこれを足し、節を持つ「窓の配置と重なり」と「バルーンの文字」は節の「**依存する既存 spec**」の行にも
 同じものを足した。束の構成は「メニュー」**145 件**・「窓の配置と重なり」**124 件**・「descript の転記」**15 件**・
 「マウスの矢印」**40 件**・「選択肢の目印」**40 件**・「切替」**32 件**・「バルーンの文字」**63 件**・「撫で」**33 件**
 （`linkage.md` の `members` を数えた）で、足した件数はどれも ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec
-名の案の欄は変えていない。「選択肢の目印」は `areka-P0-choice-marker-styling` が 39 件の過半を持つ ⑵ の行のままだが、
-それまで宛先が空だった残りの 1 件（`\![*]`）が `areka-P0-script-small-tags` の宛先になったので、40 件の全部に
+名の案の欄は変えていない。「選択肢の目印」は `choice-marker-styling` が 39 件の過半を持つ ⑵ の行のままだが、
+それまで宛先が空だった残りの 1 件（`\![*]`）が `script-small-tags` の宛先になったので、40 件の全部に
 宛先がある。「残余」の名前が指すのはこの 1 件で、**この読みは裁定ではない**——次の棚卸で確かめること。依存する
 既存 spec が **0 本**の束の数は変わらない（8 つの束はどれも前から宛先を持っていた）。ウェーブは正本のロードマップの
 写しで、着手中の `areka-P0-window-link-directives` は `C10-②`、残りの 6 本は版の `v0.1.0` を書いた。各 spec は
@@ -500,37 +500,37 @@ SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`
 3 行の `owner_count` を直した。同 spec がぱすたの検証の申し送りを v0.1.0 の中で片づけるために `/kiro-discovery` で
 5 本を起票し（開発者の決め・2026-10-23「0.1.0までに解決しない場合、独立して起票せよ」）、ぱすたが使う項目と走行の
 測りが読めなかった項目の行の宛先を、そのうちの 4 本へ移したからである（同 spec の要件 9.2）。足したのは
-`areka-P0-shell-scale-linkage`（7 件）・`areka-P0-mcp-scope-rect-property`（2 件）・`areka-P0-balloon-scroll-arrows`
-（4 件）・`areka-P0-balloon-communicatebox`（4 件）で、17 項目のうち 10 項目は前の宛先から移した——
-`areka-P0-currentghost-property-tree` から 5 件（`currentghost.scope(ID).scaling`・`currentghost.balloon.scope(ID).scaling`・
-`currentghost.scope(ID).currentmonitor.dpi` は `areka-P0-shell-scale-linkage` へ、`currentghost.scope(ID).rect`・
-`currentghost.balloon.scope(ID).rect` は `areka-P0-mcp-scope-rect-property` へ）・`areka-P0-balloon-canon-residue` から
-4 件（`arrow0.x/y`・`arrow1.x/y`）・`areka-P0-property-query-channels` から 1 件（`\![get,property,…]`）。残る 7 項目
+`shell-scale-linkage`（7 件）・`mcp-scope-rect-property`（2 件）・`balloon-scroll-arrows`
+（4 件）・`balloon-communicatebox`（4 件）で、17 項目のうち 10 項目は前の宛先から移した——
+`currentghost-property-tree` から 5 件（`currentghost.scope(ID).scaling`・`currentghost.balloon.scope(ID).scaling`・
+`currentghost.scope(ID).currentmonitor.dpi` は `shell-scale-linkage` へ、`currentghost.scope(ID).rect`・
+`currentghost.balloon.scope(ID).rect` は `mcp-scope-rect-property` へ）・`balloon-canon-residue` から
+4 件（`arrow0.x/y`・`arrow1.x/y`）・`property-query-channels` から 1 件（`\![get,property,…]`）。残る 7 項目
 （`communicatebox.x/y/width/height`・`OnShellScaling`・`OnBalloonScaling`・ゴーストの descript の `balloon.syncscale`）は
 それまで宛先が空だった（状態はどれも変えていない）。これに合わせて `owner_count` を
-`areka-P0-currentghost-property-tree` は 64 から **59**、`areka-P0-balloon-canon-residue` は 21 から **17**、
-`areka-P0-property-query-channels` は 6 から **5** へ直した。起票した 5 本のうち `areka-P0-animated-surface-log-flood`
+`currentghost-property-tree` は 64 から **59**、`balloon-canon-residue` は 21 から **17**、
+`property-query-channels` は 6 から **5** へ直した。起票した 5 本のうち `animated-surface-log-flood`
 は台帳に宛先を持たない（記録の行の量の話で、正典の項目ではない）ので行を足していない。4 本とも実装はまだなので、
 行には束を割り当てず `none = true` と理由を書いた（上の 7 本と同じ書き方）。17 項目を `linkage.md` の束の `members`
-で引くと、「窓の配置と重なり」6（`areka-P0-shell-scale-linkage` 4・`areka-P0-mcp-scope-rect-property` 2）・「切替」2
-（`areka-P0-shell-scale-linkage`）・「環境の照会」1（`areka-P0-shell-scale-linkage`）・「バルーンの付属画像」4
-（`areka-P0-balloon-scroll-arrows`）・「コミュニケート」4（`areka-P0-balloon-communicatebox`）で、どの束にも属さない項目は
-無い。段階 A の表の「窓の配置と重なり」（`areka-P0-currentghost-property-tree` を 16 件から 11 件へ）と「バルーンの
-付属画像」（`areka-P0-balloon-canon-residue` を 9 件から 5 件へ）・段階 B の表の「切替」・段階 C の表の「環境の照会」
-（`areka-P0-property-query-channels` を 3 件から 2 件へ）・段階 D の表の「コミュニケート」の 5 行にこれを足し、節を持つ
+で引くと、「窓の配置と重なり」6（`shell-scale-linkage` 4・`mcp-scope-rect-property` 2）・「切替」2
+（`shell-scale-linkage`）・「環境の照会」1（`shell-scale-linkage`）・「バルーンの付属画像」4
+（`balloon-scroll-arrows`）・「コミュニケート」4（`balloon-communicatebox`）で、どの束にも属さない項目は
+無い。段階 A の表の「窓の配置と重なり」（`currentghost-property-tree` を 16 件から 11 件へ）と「バルーンの
+付属画像」（`balloon-canon-residue` を 9 件から 5 件へ）・段階 B の表の「切替」・段階 C の表の「環境の照会」
+（`property-query-channels` を 3 件から 2 件へ）・段階 D の表の「コミュニケート」の 5 行にこれを足し、節を持つ
 「窓の配置と重なり」は節の「**依存する既存 spec**」の行も同じに直した。束の構成は「窓の配置と重なり」**124 件**・
 「切替」**32 件**・「環境の照会」**28 件**・「バルーンの付属画像」**22 件**・「コミュニケート」**17 件**（`linkage.md` の
 `members` を数えた）で、足した件数も減らした後の件数も ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の
 欄は変えていない。「コミュニケート」は依存する既存 spec が **0 本**から 1 本へ変わったので、5 つの段階の表で
 「依存する既存 spec」が **0 本**の行は **30** から **29** になった（表の行を数え直した値）。
 宛先が移ったので、上の「段階と束の決め方」の規則で 3 行の束を引き直した（数え方: 3 本それぞれの名前で台帳 4 本の
-宛先を引き、束ごとの件数を数えた）。`areka-P0-currentghost-property-tree` は「マウスの矢印」15・「バルーンの文字」13・
+宛先を引き、束ごとの件数を数えた）。`currentghost-property-tree` は「マウスの矢印」15・「バルーンの文字」13・
 「窓の配置と重なり」11 の順になったので、束を「窓の配置と重なり」から「**マウスの矢印**」へ替えた（段階は A のまま）。
-`areka-P0-balloon-canon-residue` は「SSTP」7・「バルーンの付属画像」5 の順になったので、束を「**SSTP**」へ、段階を A から
-**D** へ替えた。`areka-P0-property-query-channels` は「環境の照会」2 と「多重ゴースト」2 で並んだ。並んだときは順位表で
+`balloon-canon-residue` は「SSTP」7・「バルーンの付属画像」5 の順になったので、束を「**SSTP**」へ、段階を A から
+**D** へ替えた。`property-query-channels` は「環境の照会」2 と「多重ゴースト」2 で並んだ。並んだときは順位表で
 前に置かれている束を採る決まりで、「環境の照会」は段階 C、「多重ゴースト」は段階 D なので、束は「環境の照会」のまま
 である。上の節が 2026-09 の写真として書いている「差が 1 件しかない行が 3 行」の 3 行のうち 2 行は差が 2 件に開き、
-同数で並んだ行は `areka-P0-charset-canon` と `areka-P0-property-query-channels` の **2 行**になった。
+同数で並んだ行は `areka-P0-charset-canon` と `property-query-channels` の **2 行**になった。
 **この 3 行の束と段階の読み替えは裁定ではない**——各 spec が着手したときに自分の行を決め直してよいのは上と同じで、
 そのときは上の表の欄の件数もあわせて直すこと。行数は **63 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
 **38 行**・`none = true` の行が **25 行**である（3 つとも数え直した値）。`[briefs].count` はこの 63 に合わせた。
@@ -543,7 +543,7 @@ SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`
 `seriko.sticky-window` は、既定ブランチで同 spec が実装済みにした 8 項目に入っているからである（台帳 `assets.toml` の
 その項目は既定ブランチの状態と備考を採った）。同じ理由で、段階 A の表と節の「窓の配置と重なり」の
 `areka-P0-window-link-directives` は既定ブランチの **7 件**（こちらの枝の 1 件を含む）、「メニュー」の行は既定ブランチの 1 件と
-こちらの枝の `areka-P0-popup-menu-shell-look`（22 件）を両方載せた。`areka-P0-currentghost-property-tree` の「窓の配置と重なり」は
+こちらの枝の `popup-menu-shell-look`（22 件）を両方載せた。`currentghost-property-tree` の「窓の配置と重なり」は
 こちらの枝の **11 件**（既定ブランチは 16 件のまま触っていない）。`areka-P0-window-link-directives` と
 `areka-P0-script-security-level` は既定ブランチで完了したが、完了した spec の行を表に残して `wave` も写したままにする
 のはこの表の決まり（`areka-P0-charset-canon`・`areka-P0-mcp-reload` と同じ）なので、行は消していない。
@@ -559,7 +559,7 @@ SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`
 2026-09-18 に起票された時点で既に一致していたのに、この節が数え直されなかったために
 2 行のまま残っていた。表示するだけの数は必ず古びるので、宛先を触るときは必ず数え直すこと。
 
-- **意図した重なり 1 行**: 段階 A「バルーンのリンク」の `areka-P0-anchor-style-canon`
+- **意図した重なり 1 行**: 段階 A「バルーンのリンク」の `anchor-style-canon`
   （2026-10-10 に `areka-P0-anchor-tag-canon` から替えた。理由は上の「2026-10-10 の付け替え」）。
   この行は ⑴ の規則の読みで、束の構成 id のうち未対応の全数を持つ既存 spec をそのまま引受先に
   すると欄に明記してある。「読み方」が数える新しい名前には、この行を数えていない。
@@ -592,8 +592,8 @@ snapshot_on = "2026-10-23"
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
 束**を 1 つ書き、段階はその束が順位表で置かれている段階を写した。宛先が 2 つ以上の束に散る spec
 は 14 本のうち **9 本**あり、散った先の全部は各段階の節の「依存する既存 spec」の欄が持っている。
-いちばん多い束と 2 番目の差が **1 件**しかない行が **3 行**ある——`areka-P0-currentghost-property-tree`
-（16 対 15）・`areka-P0-property-query-channels`（3 対 2）・`areka-P0-status-execution-states`
+いちばん多い束と 2 番目の差が **1 件**しかない行が **3 行**ある——`currentghost-property-tree`
+（16 対 15）・`property-query-channels`（3 対 2）・`areka-P0-status-execution-states`
 （2 対 1）。この 3 行は宛先が 1 件動くだけで束が入れ替わる。
 
 同数で並んで決められなかった行は **1 行**ある（数え方: 14 本それぞれで束ごとの件数を降順に
@@ -618,8 +618,8 @@ snapshot_on = "2026-10-23"
 **この 14 本の内訳は、2026-09-18 に数え直すと 2 通りに割れる**（数え方: 14 本それぞれの名前で
 台帳 4 本の宛先の欄を引き、件数を数えた）。**10 本**は宛先が **0 件**——引くものが無いので束も
 決まらない。残る **4 本**は宛先を持つのに束をまだ割り当てていないもので、
-`areka-P0-text-align-shadow-canon`（9 件）・`areka-P0-balloon-font-descript-keys`（7 件）・
-`areka-P0-sylphya-set-ledger`（1 件）・`areka-P0-zorder-property`（1 件）である。この 4 本は
+`text-align-shadow-canon`（9 件）・`areka-P0-balloon-font-descript-keys`（7 件）・
+`areka-P0-sylphya-set-ledger`（1 件）・`zorder-property`（1 件）である。この 4 本は
 どれも 2026-09-17 以降に他の spec の完了で宛先を受け取った行で、`reason` に「束はまだ割り当てて
 いない」と書いてある。節を書いた 2026-09-13 の時点では 14 本とも 0 件だったので、当時の数え方
 （「0 件だったものを数えた」）はいま 10 本しか返さない。**束の欄を持たないことと宛先が 0 件で
@@ -630,21 +630,21 @@ snapshot_on = "2026-10-23"
 
 ```toml
 [[spec]]
-name = "areka-P0-property-catalog-lists"
+name = "property-catalog-lists"
 stage = "C"
 bundle = "一覧と汎用プロパティの照会"
 owner_count = 120
 wave = "W16"
 
 [[spec]]
-name = "areka-P0-currentghost-property-tree"
+name = "currentghost-property-tree"
 stage = "A"
 bundle = "マウスの矢印"
 owner_count = 59
 wave = "W15"
 
 [[spec]]
-name = "areka-P0-anchor-style-canon"
+name = "anchor-style-canon"
 stage = "A"
 bundle = "バルーンのリンク"
 owner_count = 59
@@ -658,7 +658,7 @@ owner_count = 4
 wave = "C5-①"
 
 [[spec]]
-name = "areka-P0-choice-marker-styling"
+name = "choice-marker-styling"
 stage = "A"
 bundle = "選択肢の目印"
 owner_count = 39
@@ -672,7 +672,7 @@ owner_count = 16
 wave = "W13"
 
 [[spec]]
-name = "areka-P0-balloon-canon-residue"
+name = "balloon-canon-residue"
 stage = "D"
 bundle = "SSTP"
 owner_count = 17
@@ -686,7 +686,7 @@ owner_count = 10
 wave = "A0"
 
 [[spec]]
-name = "areka-P0-sakura-time-directives"
+name = "sakura-time-directives"
 stage = "A"
 bundle = "会話"
 owner_count = 9
@@ -707,7 +707,7 @@ owner_count = 30
 wave = "A4"
 
 [[spec]]
-name = "areka-P0-property-query-channels"
+name = "property-query-channels"
 stage = "C"
 bundle = "環境の照会"
 owner_count = 5
@@ -721,7 +721,7 @@ owner_count = 5
 wave = "W13"
 
 [[spec]]
-name = "areka-P0-makoto-dll-host"
+name = "makoto-dll-host"
 stage = "E"
 bundle = "トランスレータ"
 owner_count = 4
@@ -749,7 +749,7 @@ owner_count = 2
 wave = "A1"
 
 [[spec]]
-name = "areka-P0-surfaces-basepos"
+name = "surfaces-basepos"
 stage = "A"
 bundle = "窓の配置と重なり"
 owner_count = 2
@@ -765,12 +765,12 @@ wave = "W15"
 [[spec]]
 name = "areka-P0-balloon-font-descript-keys"
 none = true
-reason = "束はまだ割り当てていない。分割 ⑶ で受け持つ書体の欄は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替えた（当時 10 件）。2026-09-17 の完了で影 4 件の宛先を areka-P0-text-align-shadow-canon へ移し、disable.font.* を分割元から引き取った（7 件）"
+reason = "束はまだ割り当てていない。分割 ⑶ で受け持つ書体の欄は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替えた（当時 10 件）。2026-09-17 の完了で影 4 件の宛先を text-align-shadow-canon へ移し、disable.font.* を分割元から引き取った（7 件）"
 owner_count = 7
 wave = "W13"
 
 [[spec]]
-name = "areka-P0-text-align-shadow-canon"
+name = "text-align-shadow-canon"
 none = true
 reason = "束はまだ割り当てていない。分割 ⑵ で受け持つ寄せ 2 と影 3 は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替えた（当時 5 件）。2026-09-17 に areka-P0-balloon-font-descript-keys の完了でバルーン定義の影 4 件の宛先がこの名前へ移った（9 件）"
 owner_count = 9
@@ -786,33 +786,33 @@ wave = "C4-⑩"
 [[spec]]
 name = "areka-P0-sylphya-set-ledger"
 none = true
-reason = "束はまだ割り当てていない。2026-09-17 に currentghost.seriko.sticky-window の宛先をこの名前で記入した（1 件・SET 有効群の語彙表の行）。説明書が登記すると書くサウンドの語彙は、いまも areka-P0-property-catalog-lists の宛先である。是正候補の節にこの spec の行がある"
+reason = "束はまだ割り当てていない。2026-09-17 に currentghost.seriko.sticky-window の宛先をこの名前で記入した（1 件・SET 有効群の語彙表の行）。説明書が登記すると書くサウンドの語彙は、いまも property-catalog-lists の宛先である。是正候補の節にこの spec の行がある"
 owner_count = 1
 wave = "W13"
 
 [[spec]]
-name = "areka-P0-property-ipc-transport"
+name = "property-ipc-transport"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書の範囲は輸送路の実測と 32bit 側の実装で、正典の項目に当たる行を持たない"
 owner_count = 0
 wave = "W14"
 
 [[spec]]
-name = "areka-P0-emo-text-canon-residue"
+name = "emo-text-canon-residue"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書の範囲は文字の折返しと描画の内側で、正典の項目に当たる行を持たない"
 owner_count = 0
 wave = "W14"
 
 [[spec]]
-name = "areka-P0-zorder-property"
+name = "zorder-property"
 none = true
 reason = "束はまだ割り当てていない。説明書が正本と書く重なり順のプロパティ 1 件の宛先を、開発者裁定（2026-09-13・先送り維持）に従い 2026-09-17 にこの名前で記入した（1 件）。是正候補の節にこの spec の行がある"
 owner_count = 1
 wave = "W15"
 
 [[spec]]
-name = "areka-P0-zorder-chain-residue"
+name = "zorder-chain-residue"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
@@ -847,14 +847,14 @@ owner_count = 0
 wave = "W13"
 
 [[spec]]
-name = "areka-P0-dpi-transition-two-tick-bounce"
+name = "dpi-transition-two-tick-bounce"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
 wave = "W14"
 
 [[spec]]
-name = "areka-P0-tick-gate-adoption"
+name = "tick-gate-adoption"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。門の採否は性能の話で、正典の項目に当たる行を持たない"
 owner_count = 0
@@ -917,7 +917,7 @@ owner_count = 1
 wave = "C1-②"
 
 [[spec]]
-name = "areka-P0-sakura-time-critical"
+name = "sakura-time-critical"
 stage = "A"
 bundle = "会話"
 owner_count = 1
@@ -931,7 +931,7 @@ owner_count = 2
 wave = "C3-④"
 
 [[spec]]
-name = "areka-P0-draw-methods-canon"
+name = "draw-methods-canon"
 stage = "A"
 bundle = "絵の重ね方"
 owner_count = 2
@@ -973,7 +973,7 @@ owner_count = 3
 wave = "C5 の候補"
 
 [[spec]]
-name = "areka-P0-seriko-interval-combinations"
+name = "seriko-interval-combinations"
 stage = "A"
 bundle = "サーフェスアニメーション"
 owner_count = 1
@@ -1008,70 +1008,70 @@ owner_count = 4
 wave = "C10-①"
 
 [[spec]]
-name = "areka-P0-descript-window-keys"
+name = "descript-window-keys"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、ゴーストの descript の sakura.seriko.defaultsurface と balloon.dontmove の宛先をこの名前で記入した（2 件）"
 owner_count = 2
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-popup-menu-shell-look"
+name = "popup-menu-shell-look"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、シェルの descript のうちぱすたが書く menu.* の 21 項目と sakura.menu の宛先をこの名前で記入した（22 件）"
 owner_count = 22
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-shell-mouse-cursor"
+name = "shell-mouse-cursor"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、surfaces.txt の mouseup* と system:hand の宛先をこの名前で記入した（2 件）"
 owner_count = 2
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-script-small-tags"
+name = "script-small-tags"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、さくらスクリプトの \\![*]・\\![bind-noevent]・\\_u[0x0000] の宛先をこの名前で記入した（3 件）"
 owner_count = 3
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-stay-on-top-directives"
+name = "stay-on-top-directives"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、さくらスクリプトの \\![set,windowstate,!stayontop] の宛先をこの名前で記入した（1 件）"
 owner_count = 1
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-mouse-click-wheel-events"
+name = "mouse-click-wheel-events"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、OnMouseClick・OnMouseEnter・OnMouseLeave の宛先をこの名前で記入した（3 件）"
 owner_count = 3
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-shell-scale-linkage"
+name = "shell-scale-linkage"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたが使う倍率の連動の項目（\\![get,property]・currentghost.scope(ID).scaling・currentghost.balloon.scope(ID).scaling・currentghost.scope(ID).currentmonitor.dpi・OnShellScaling・OnBalloonScaling・ゴーストの descript の balloon.syncscale）の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（7 件）"
 owner_count = 7
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-mcp-scope-rect-property"
+name = "mcp-scope-rect-property"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、走行の測りが窓の位置を読めなかった崩れの引き取り先として、currentghost.scope(ID).rect と currentghost.balloon.scope(ID).rect の宛先をこの名前で記入した（2 件）"
 owner_count = 2
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-balloon-scroll-arrows"
+name = "balloon-scroll-arrows"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたの縦書きのバルーンが使う arrow0.x/y・arrow1.x/y の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（4 件）"
 owner_count = 4
 wave = "v0.1.0"
 
 [[spec]]
-name = "areka-P0-balloon-communicatebox"
+name = "balloon-communicatebox"
 none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたの縦書きのバルーンが使う communicatebox.x/y/width/height の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（4 件）"
 owner_count = 4
@@ -1088,31 +1088,31 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（C5-①・3 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件）／`areka-P0-choice-script-prefix`（C4-⑭・1 件） | 第 1 波（先頭ウェーブ） |
-| 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・11 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・1 件）／`areka-P0-move-canon`（v0.0.3・3 件）／`areka-P0-window-link-directives`（C10-②・7 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件）／`areka-P0-descript-window-keys`（v0.1.0・1 件）／`areka-P0-stay-on-top-directives`（v0.1.0・1 件）／`areka-P0-shell-scale-linkage`（v0.1.0・4 件）／`areka-P0-mcp-scope-rect-property`（v0.1.0・2 件） | 第 1 波（先頭ウェーブ） |
-| 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
+| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`sakura-time-directives`（W16・4 件）／`balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（C5-①・3 件）／`sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件）／`areka-P0-choice-script-prefix`（C4-⑭・1 件） | 第 1 波（先頭ウェーブ） |
+| 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `currentghost-property-tree`（W15・11 件）／`surfaces-basepos`（W13 任意／W14・2 件）／`sakura-time-directives`（W16・1 件）／`areka-P0-move-canon`（v0.0.3・3 件）／`areka-P0-window-link-directives`（C10-②・7 件）／`zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件）／`descript-window-keys`（v0.1.0・1 件）／`stay-on-top-directives`（v0.1.0・1 件）／`shell-scale-linkage`（v0.1.0・4 件）／`mcp-scope-rect-property`（v0.1.0・2 件） | 第 1 波（先頭ウェーブ） |
+| 3 | 名前の記憶 | `areka-P0-user-name-memory` | `currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
-| 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-script-small-tags`（v0.1.0・1 件） | 第 1 波（先頭ウェーブ） |
-| 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`areka-P0-seriko-interval-combinations`（シェルの element の列・1 件） | 第 1 波（先頭ウェーブ） |
+| 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `currentghost-property-tree`（W15・13 件）／`text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`script-small-tags`（v0.1.0・1 件） | 第 1 波（先頭ウェーブ） |
+| 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`seriko-interval-combinations`（シェルの element の列・1 件） | 第 1 波（先頭ウェーブ） |
 | 7 | 入力窓とダイアログ | `areka-P0-inputbox-dialog` | **0 本** | 第 2 波 |
 | 7 | 自発発話 | `areka-P0-idle-talk-canon` | **0 本** | 第 2 波 |
 | 8 | 終了 | `areka-P0-shutdown-canon` | **0 本** | 第 2 波 |
 | 9 | キーとゲームパッド | `areka-P0-key-gamepad-events` | **0 本** | 第 2 波 |
-| 10 | descript の転記 | `areka-P0-descript-transcribe` | `areka-P0-balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-ghost-standard-balloon`（C4-⑪・2 件）／`areka-P0-descript-window-keys`（v0.1.0・1 件） | 第 2 波 |
-| 10 | バルーンのリンク | `areka-P0-anchor-style-canon`（既存 spec がそのまま引受先・構成 60 件のうち未対応の 59 件の全数を `owner` に持つ。残る 1 件は `areka-P0-anchor-tag-canon` が実装済みにした） | `areka-P0-anchor-style-canon`（文字とバルーンの列・59 件）／`areka-P0-anchor-tag-canon`（C5-①・1 件） | 第 2 波 |
-| 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `areka-P0-currentghost-property-tree`（W15・15 件）／`areka-P0-shell-mouse-cursor`（v0.1.0・2 件） | 第 2 波 |
-| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件）／`areka-P0-window-link-directives`（C10-②・1 件）／`areka-P0-popup-menu-shell-look`（v0.1.0・22 件） | 第 2 波 |
-| 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件）／`areka-P0-mouse-click-wheel-events`（v0.1.0・3 件） | 第 2 波 |
-| 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-balloon-scroll-arrows`（v0.1.0・4 件） | 第 2 波 |
-| 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
-| 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `areka-P0-choice-marker-styling`（W16・39 件）／`areka-P0-script-small-tags`（v0.1.0・1 件） | 第 2 波 |
-| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-draw-methods-canon`（シェルの element の列・2 件）／`areka-P0-self-alpha-declaration`（C4-⑬・2 件） | 第 2 波 |
+| 10 | descript の転記 | `areka-P0-descript-transcribe` | `balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-ghost-standard-balloon`（C4-⑪・2 件）／`descript-window-keys`（v0.1.0・1 件） | 第 2 波 |
+| 10 | バルーンのリンク | `anchor-style-canon`（既存 spec がそのまま引受先・構成 60 件のうち未対応の 59 件の全数を `owner` に持つ。残る 1 件は `areka-P0-anchor-tag-canon` が実装済みにした） | `anchor-style-canon`（文字とバルーンの列・59 件）／`areka-P0-anchor-tag-canon`（C5-①・1 件） | 第 2 波 |
+| 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `currentghost-property-tree`（W15・15 件）／`shell-mouse-cursor`（v0.1.0・2 件） | 第 2 波 |
+| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件）／`areka-P0-window-link-directives`（C10-②・1 件）／`popup-menu-shell-look`（v0.1.0・22 件） | 第 2 波 |
+| 12 | 撫で | `areka-P0-touch-events-canon` | `currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件）／`mouse-click-wheel-events`（v0.1.0・3 件） | 第 2 波 |
+| 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `balloon-canon-residue`（W14・5 件）／`balloon-scroll-arrows`（v0.1.0・4 件） | 第 2 波 |
+| 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `property-query-channels`（W14・1 件） | 第 2 波 |
+| 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `choice-marker-styling`（W16・39 件）／`script-small-tags`（v0.1.0・1 件） | 第 2 波 |
+| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `draw-methods-canon`（シェルの element の列・2 件）／`areka-P0-self-alpha-declaration`（C4-⑬・2 件） | 第 2 波 |
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件）／`areka-P0-balloon-break`（α 後・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
 | 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-script-security-level`（C10-①・4 件） | 第 2 波 |
 | 18 | シェル定義の転記 | `areka-P0-shell-definition-transcribe` | `areka-P0-charset-canon`（完了・1 件） | 第 2 波 |
-| 18 | 同期オブジェクト | `areka-P0-sync-object-tags` | `areka-P0-sakura-time-directives`（W16・1 件） | 第 2 波 |
+| 18 | 同期オブジェクト | `areka-P0-sync-object-tags` | `sakura-time-directives`（W16・1 件） | 第 2 波 |
 
 ## 段階 B
 
@@ -1123,11 +1123,11 @@ spec 台帳で、この表はそれを写した写真である。
 | ---: | --- | --- | --- | --- |
 | 1 | インストール | `areka-P0-nar-install`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-nar-install`（A0・11 件）／`areka-P0-ghost-install`（B5-②・12 件） | 第 3 波 |
 | 1 | 更新 | `areka-P0-network-update`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-network-update`（A4・1 件） | 第 3 波 |
-| 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件）／`areka-P0-shell-balloon-switch`（B8・5 件）／`areka-P0-mcp-reload`（C9-④・3 件）／`areka-P0-script-small-tags`（v0.1.0・1 件）／`areka-P0-shell-scale-linkage`（v0.1.0・2 件） | 第 3 波 |
+| 2 | 切替 | `areka-P0-shell-balloon-switch` | `currentghost-property-tree`（W15・4 件）／`sakura-time-directives`（W16・2 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件）／`areka-P0-shell-balloon-switch`（B8・5 件）／`areka-P0-mcp-reload`（C9-④・3 件）／`script-small-tags`（v0.1.0・1 件）／`shell-scale-linkage`（v0.1.0・2 件） | 第 3 波 |
 | 3 | 消滅 | `areka-P0-vanish-canon` | **0 本** | 第 3 波 |
 | 4 | 投げ込み | `areka-P0-file-drop`（既存 spec が引受先・構成 10 件のうち 2 件） | `areka-P0-file-drop`（B6・2 件） | 第 3 波 |
 | 5 | 休止と復帰 | `areka-P0-shiori-cache-suspend` | **0 本** | 第 3 波 |
-| 5 | 好感度の絵柄 | `areka-P0-favorite-rate-record`（残余） | `areka-P0-property-catalog-lists`（W16・24 件） | 第 3 波 |
+| 5 | 好感度の絵柄 | `areka-P0-favorite-rate-record`（残余） | `property-catalog-lists`（W16・24 件） | 第 3 波 |
 | 5 | 着せ替え | `areka-P0-dressup-bind-canon` | `areka-P0-mayuna-compose`（完了・3 件）／`areka-P0-bindoption-exclusivity`（完了・2 件） | 第 3 波 |
 | 6 | `ukadoc:manual_balloon` | `areka-P0-balloon-package-layout` | **0 本** | 第 3 波 |
 | 7 | 配布物の素性 | `areka-P0-package-identity` | `areka-P0-popup-menu-minimal`（A0・1 件）／`areka-P0-ghost-setup`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・10 件） | 第 3 波 |
@@ -1151,10 +1151,10 @@ spec 台帳で、この表はそれを写した写真である。
 | 5 | スリープ復帰 | `areka-P0-sleep-resume-events` | **0 本** | 第 4 波 |
 | 6 | フルスクリーン退避 | `areka-P0-fullscreen-retreat` | **0 本** | 第 4 波 |
 | 7 | ごみ箱 | `areka-P0-recyclebin-query` | **0 本** | 第 4 波 |
-| 8 | 一覧と汎用プロパティの照会 | `areka-P0-generic-property-query`（残余） | `areka-P0-property-catalog-lists`（W16・27 件）／`areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sylphya`（完了・2 件） | 第 4 波 |
-| 9 | サウンド | `areka-P0-sound-playback`（残余） | `areka-P0-property-catalog-lists`（W16・21 件）／`areka-P0-sakura-time-directives`（W16・1 件） | 第 4 波 |
+| 8 | 一覧と汎用プロパティの照会 | `areka-P0-generic-property-query`（残余） | `property-catalog-lists`（W16・27 件）／`currentghost-property-tree`（W15・4 件）／`areka-P0-sylphya`（完了・2 件） | 第 4 波 |
+| 9 | サウンド | `areka-P0-sound-playback`（残余） | `property-catalog-lists`（W16・21 件）／`sakura-time-directives`（W16・1 件） | 第 4 波 |
 | 9 | 予定表 | `areka-P0-schedule-query` | **0 本** | 第 4 波 |
-| 10 | 環境の照会 | `areka-P0-system-property-query`（残余） | `areka-P0-property-catalog-lists`（W16・25 件）／`areka-P0-property-query-channels`（W14・2 件）／`areka-P0-shell-scale-linkage`（v0.1.0・1 件） | 第 4 波 |
+| 10 | 環境の照会 | `areka-P0-system-property-query`（残余） | `property-catalog-lists`（W16・25 件）／`property-query-channels`（W14・2 件）／`shell-scale-linkage`（v0.1.0・1 件） | 第 4 波 |
 
 ## 段階 D
 
@@ -1163,12 +1163,12 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 呼び出し | `areka-P0-ghost-call` | **0 本** | 第 5 波 |
-| 2 | SSTP | `areka-P0-sstp-server` | `areka-P0-balloon-canon-residue`（W14・7 件） | 第 5 波 |
-| 2 | コミュニケート | `areka-P0-communicate-events` | `areka-P0-balloon-communicatebox`（v0.1.0・4 件） | 第 5 波 |
+| 1 | 呼び出し | `ghost-call` | **0 本** | 第 5 波 |
+| 2 | SSTP | `areka-P0-sstp-server` | `balloon-canon-residue`（W14・7 件） | 第 5 波 |
+| 2 | コミュニケート | `areka-P0-communicate-events` | `balloon-communicatebox`（v0.1.0・4 件） | 第 5 波 |
 | 3 | FMO | `areka-P0-fmo-share` | **0 本** | 第 5 波 |
-| 4 | 多重ゴースト | `areka-P0-multi-ghost` | `areka-P0-property-catalog-lists`（W16・5 件）／`areka-P0-property-query-channels`（W14・2 件） | 第 5 波 |
-| 5 | PLUGIN | `areka-P0-plugin-host` | `areka-P0-property-catalog-lists`（W16・8 件） | 第 5 波 |
+| 4 | 多重ゴースト | `areka-P0-multi-ghost` | `property-catalog-lists`（W16・5 件）／`property-query-channels`（W14・2 件） | 第 5 波 |
+| 5 | PLUGIN | `areka-P0-plugin-host` | `property-catalog-lists`（W16・8 件） | 第 5 波 |
 | 6 | リンク | `areka-P0-ukagaka-link` | **0 本** | 第 5 波 |
 
 ## 段階 E
@@ -1180,8 +1180,8 @@ spec 台帳で、この表はそれを写した写真である。
 | ---: | --- | --- | --- | --- |
 | 1 | 外部アプリ | `areka-P0-external-app-bridge` | `areka-P0-open-external-tags`（C4-⑮・6 件） | 第 6 波 |
 | 2 | 開発者機能 | `areka-P0-developer-tools` | `areka-P0-mcp-reload`（C9-④・2 件） | 第 6 波 |
-| 3 | ヘッドライン | `areka-P0-headline-host` | `areka-P0-property-catalog-lists`（W16・6 件） | 第 6 波 |
-| 4 | トランスレータ | `areka-P0-translator-canon`（残余） | `areka-P0-makoto-dll-host`（W16・4 件）／`areka-P0-translate-pipeline`（W15・2 件） | 第 6 波 |
+| 3 | ヘッドライン | `areka-P0-headline-host` | `property-catalog-lists`（W16・6 件） | 第 6 波 |
+| 4 | トランスレータ | `areka-P0-translator-canon`（残余） | `makoto-dll-host`（W16・4 件）／`areka-P0-translate-pipeline`（W15・2 件） | 第 6 波 |
 | 5 | 薦める場所 | `areka-P0-recommend-sites` | **0 本** | 第 6 波 |
 | 6 | 作り付けの窓 | `areka-P0-baseware-windows` | `areka-P0-popup-menu-minimal`（A0・1 件） | 第 6 波 |
 | 6 | 読み上げと聞き取り | `areka-P0-voice-io` | **0 本** | 第 6 波 |
@@ -1219,7 +1219,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 46 件の状態は実装済み 24・未対応 15・語彙のみ 5・縮退 2（2026-10-10 に台帳から数え直した）で、`briefing.md` 7-7 が数えた「一般化で壊れる」75 件のうち 14 件がこの束にある。
 - 何が変わるか: 里々製・ヤヤ製の雛形が書く会話の綴りが素通りせずに再生され、バルーンの寿命と選択の待ちが台本の指定で決まるようになる。
 
-**依存する既存 spec**: `areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（C5-①・3 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（完了・1 件）
+**依存する既存 spec**: `sakura-time-directives`（W16・4 件）／`areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（C5-①・3 件）／`sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（完了・1 件）
 
 **構成 id（全 46 件）**
 
@@ -1280,7 +1280,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 124 件の状態は実装済み 16・未対応 66・語彙のみ 29・縮退 13 で、壊れる 75 件のうち 7 件がここにある。M1 の実機一周はこの束を 8 項目（項目 1・9・10・12・16・17・18・19）で見て全部合格しているが、それは emo2 の 1 体で使う範囲である。
 - 何が変わるか: 作者が書いた原点と余白と重なりの指定どおりに二体とバルーンが並び、拡大率を変えても隣接が崩れなくなる。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・11 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・1 件）／`areka-P0-move-canon`（v0.0.3・3 件）／`areka-P0-window-link-directives`（C10-②・7 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件）／`areka-P0-descript-window-keys`（v0.1.0・1 件）／`areka-P0-stay-on-top-directives`（v0.1.0・1 件）／`areka-P0-shell-scale-linkage`（v0.1.0・4 件）／`areka-P0-mcp-scope-rect-property`（v0.1.0・2 件）
+**依存する既存 spec**: `currentghost-property-tree`（W15・11 件）／`surfaces-basepos`（W13 任意／W14・2 件）／`sakura-time-directives`（W16・1 件）／`areka-P0-move-canon`（v0.0.3・3 件）／`areka-P0-window-link-directives`（C10-②・7 件）／`zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件）／`descript-window-keys`（v0.1.0・1 件）／`stay-on-top-directives`（v0.1.0・1 件）／`shell-scale-linkage`（v0.1.0・4 件）／`mcp-scope-rect-property`（v0.1.0・2 件）
 
 **構成 id（全 124 件）**
 
@@ -1419,7 +1419,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 22 件の状態は実装済み 9・未対応 11・語彙のみ 2 で、壊れる 75 件のうち 2 件がここにある（`ukadoc:list_shiori_event:OnNotifyUserInfo:1` と `ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1`）。
 - 何が変わるか: 名前を尋ねる会話が最後まで成立し、覚えた名前が起動をまたいで残り、台詞の中の呼びかけに使えるようになる。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）
+**依存する既存 spec**: `currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）
 
 **構成 id（全 22 件）**
 
@@ -1491,7 +1491,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 63 件の状態は実装済み 13・未対応 32・語彙のみ 10・縮退 8 で、壊れる 75 件のうち 4 件がここにある。63 件のうち 45 件は進行中の 2 spec が `owner` に持つので、この束に残る仕事はその残余である。（この行の数は 2026-09-13 の写真である。すぐ下の「依存する既存 spec」の欄は 2026-09-18 に台帳から数え直したので、進行中の 2 spec の件数はこの 45 と合わない。節全体の撮り直しは統合担当へ申し送り済み）
 - 何が変わるか: 作者の書体と色の指定が画面に出て、縮退している 8 件が正典どおりの振る舞いへ戻る。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-script-small-tags`（v0.1.0・1 件）
+**依存する既存 spec**: `currentghost-property-tree`（W15・13 件）／`text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`script-small-tags`（v0.1.0・1 件）
 
 **構成 id（全 63 件）**
 
@@ -1569,7 +1569,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状（棚卸の時点の数。2026-10-10 の `seriko-trigger-intervals` の後の台帳では実装済み 7・語彙のみ 10・縮退 3）: 構成 47 件の状態は実装済み 2・未対応 27・語彙のみ 16・縮退 2 で、壊れる 75 件のうち 4 件がここにある。M1 の実機一周はこの束を 3 項目（項目 3・4・10）で見て合格しているが、それは emo2 が使う範囲の再生である。
 - 何が変わるか: シェルの定義に書かれた再生の指定が一通り効き、面の切り替えと重ね絵が作者の意図どおりに動く。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`areka-P0-seriko-interval-combinations`（シェルの element の列・1 件）
+**依存する既存 spec**: `currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`seriko-interval-combinations`（シェルの element の列・1 件）
 
 **構成 id（全 47 件）**
 
@@ -1742,21 +1742,21 @@ SHIORI の調査から届いた是正候補のうち、写真に写っている 
 
 | spec 名 | 食い違う id | 直し方の案 |
 | --- | --- | --- |
-| `areka-P0-property-catalog-lists` | `ukadoc:list_propertysystem:activeghostlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1` と `ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30:1` の 2 件 | 拡張の 2 件は一覧の 5 件の中に既に入っている。合計を 12 から **10** へ直す |
-| `areka-P0-property-catalog-lists` | `ukadoc:list_propertysystem:headlinelist.count:1`・`ukadoc:list_propertysystem:pluginlist.count:1` の 2 件 | 合計 11 は動かさず、内訳をヘッドライン **3**・プラグイン **5** へ直す（件数の葉を 2 つ数え落としている） |
-| `areka-P0-property-catalog-lists` | 履歴の件数の葉 4 件（下に全列挙） | 「8」を **12** へ直す。4 つの枝それぞれに件数の葉がもう 1 つある |
-| `areka-P0-property-catalog-lists` | 使える前置きが 1 つに限られる 4 件（下に全列挙） | 「17」を **13 ＋ 4** に割り、「どのカタログ根の下でも乗算される」という説明を 13 件の側だけに掛ける |
-| `areka-P0-currentghost-property-tree` | バルーンのマウスの矢印 4 件（下に全列挙） | 括弧書きで名前だけ挙げてどの件数にも足していない 4 件を数に入れ、「≈65」を **66** へ直す |
-| `areka-P0-currentghost-property-tree` | `ukadoc:list_propertysystem:currentghost.balloon._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1`・`ukadoc:list_propertysystem:currentghost.balloon.count:1` | 頭を落とした短い綴りを完全な名前へ書き直す。落とすと別の一族があるように読める |
-| `areka-P0-zorder-property` | `ukadoc:list_propertysystem:currentghost.seriko.zorder:1` | **三重所有の仮裁定（案 甲）を採る場合にかぎり**、「一覧への登録は別の spec が行う。本説明書が正本として持つのは読み書きの書式であって一覧の 1 行ではない」の形へ直す。いまは同じ 1 行について正反対の指示が 2 本の説明書に残っている |
-| `areka-P0-balloon-canon-residue` | `ukadoc:descript_ghost:sakura.balloon.defaultsurface_2c_6570_5024:1`・`ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1` | 初期表示面の綴りを 2 つではなく **4 つ**挙げる（本体側とキャラクタ番号で指す形が抜けている）。あわせて範囲の行「6 項目＋追加登記の 7〜10」を、番号の付いた項目が 12 まである実態へ追随させる |
+| `property-catalog-lists` | `ukadoc:list_propertysystem:activeghostlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1` と `ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30:1` の 2 件 | 拡張の 2 件は一覧の 5 件の中に既に入っている。合計を 12 から **10** へ直す |
+| `property-catalog-lists` | `ukadoc:list_propertysystem:headlinelist.count:1`・`ukadoc:list_propertysystem:pluginlist.count:1` の 2 件 | 合計 11 は動かさず、内訳をヘッドライン **3**・プラグイン **5** へ直す（件数の葉を 2 つ数え落としている） |
+| `property-catalog-lists` | 履歴の件数の葉 4 件（下に全列挙） | 「8」を **12** へ直す。4 つの枝それぞれに件数の葉がもう 1 つある |
+| `property-catalog-lists` | 使える前置きが 1 つに限られる 4 件（下に全列挙） | 「17」を **13 ＋ 4** に割り、「どのカタログ根の下でも乗算される」という説明を 13 件の側だけに掛ける |
+| `currentghost-property-tree` | バルーンのマウスの矢印 4 件（下に全列挙） | 括弧書きで名前だけ挙げてどの件数にも足していない 4 件を数に入れ、「≈65」を **66** へ直す |
+| `currentghost-property-tree` | `ukadoc:list_propertysystem:currentghost.balloon._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1`・`ukadoc:list_propertysystem:currentghost.balloon.count:1` | 頭を落とした短い綴りを完全な名前へ書き直す。落とすと別の一族があるように読める |
+| `zorder-property` | `ukadoc:list_propertysystem:currentghost.seriko.zorder:1` | **三重所有の仮裁定（案 甲）を採る場合にかぎり**、「一覧への登録は別の spec が行う。本説明書が正本として持つのは読み書きの書式であって一覧の 1 行ではない」の形へ直す。いまは同じ 1 行について正反対の指示が 2 本の説明書に残っている |
+| `balloon-canon-residue` | `ukadoc:descript_ghost:sakura.balloon.defaultsurface_2c_6570_5024:1`・`ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1` | 初期表示面の綴りを 2 つではなく **4 つ**挙げる（本体側とキャラクタ番号で指す形が抜けている）。あわせて範囲の行「6 項目＋追加登記の 7〜10」を、番号の付いた項目が 12 まである実態へ追随させる |
 | `areka-P0-text-decoration-canon` | `ukadoc:descript_balloon:font.outline_2c0_2f1:1` | 書体の欄を「基底 13 キー」ではなく **14** と書く。この 1 件が数に入っていない。分割先の説明書も同じ 13 を写しているので、両方を直す |
 | `areka-P0-balloon-font-descript-keys` | 書体の欄 14 件（下に全列挙） | 2026-09-11 の分割 ⑶ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移すか、分割元の説明書が範囲から外れたことを書く |
-| `areka-P0-text-align-shadow-canon` | 寄せ 2 件と影 3 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移す |
-| `areka-P0-balloon-lifecycle-events` | 表示寿命 5 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-balloon-canon-residue` のままである。宛先をこの spec へ移す。台帳の備考と受け渡し口の注記が名指ししている所有者名も同じ読み替えが要る（**2026-10-06 解消**: 3 つのイベントと `\![set,balloontimeout,時間]` の 4 件は、この spec が送る・読むようにして宛先をこの spec へ移し、台帳の備考を書き直した。受け渡し口の型 `BalloonLifecycleNotice` は消した。残る `\x[noclear]` は `areka-P0-talk-fast-forward` が持つ仕事で、宛先は分割元のまま） |
+| `text-align-shadow-canon` | 寄せ 2 件と影 3 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移す |
+| `areka-P0-balloon-lifecycle-events` | 表示寿命 5 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `balloon-canon-residue` のままである。宛先をこの spec へ移す。台帳の備考と受け渡し口の注記が名指ししている所有者名も同じ読み替えが要る（**2026-10-06 解消**: 3 つのイベントと `\![set,balloontimeout,時間]` の 4 件は、この spec が送る・読むようにして宛先をこの spec へ移し、台帳の備考を書き直した。受け渡し口の型 `BalloonLifecycleNotice` は消した。残る `\x[noclear]` は `talk-fast-forward` が持つ仕事で、宛先は分割元のまま） |
 | `areka-P0-status-execution-states` | `ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1` | 説明書が書いている綴りが正典のどの項目にも当たらない。正典の綴りへ直す。**この 1 件は重い**——その項目の担当を主張している説明書自身が違う綴りを書いている |
 | `areka-P0-charset-canon` | 宛先の欄が空の 6 件（下に全列挙） | 説明書は範囲にも範囲外にもこの 6 件を挙げていない。範囲に入れるか対象外と書くかを決める。**これは誤りではなく沈黙なので、台帳の備考には何も書かれていない** |
-| `areka-P0-sylphya-set-ledger` | サウンドの語彙 18 件（下に全列挙） | 説明書はサウンドの語彙族の登記と台帳の宛先の記入を自分の範囲だと書いているが、台帳の宛先は 18 件とも `areka-P0-property-catalog-lists` である。どちらが持つかを決める（**2026-09-17 解消**: 記録用の語彙表 `SOUND_PROP_NAMES` は `areka-P0-sylphya-set-ledger`〔PR#151〕、値の導出と台帳の宛先は `areka-P0-property-catalog-lists` のまま。正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行） |
+| `areka-P0-sylphya-set-ledger` | サウンドの語彙 18 件（下に全列挙） | 説明書はサウンドの語彙族の登記と台帳の宛先の記入を自分の範囲だと書いているが、台帳の宛先は 18 件とも `property-catalog-lists` である。どちらが持つかを決める（**2026-09-17 解消**: 記録用の語彙表 `SOUND_PROP_NAMES` は `areka-P0-sylphya-set-ledger`〔PR#151〕、値の導出と台帳の宛先は `property-catalog-lists` のまま。正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行） |
 
 ### 全列挙
 
@@ -1920,7 +1920,7 @@ M3「伺かの冠」の受入基準の候補として、**「テーマ 8 つす�
   ある）のうち、W17 に掛かるのはこの **1 件**だけで、残りの最も遅いウェーブは W16 である。
   この 1 件のために第 1 波の始まりが 1 ウェーブ遅れる。
 
-**W-3 `areka-P0-surfaces-basepos` の任意を外すか**
+**W-3 `surfaces-basepos` の任意を外すか**
 
 - 現在のウェーブ: W13 任意／W14（正本の spec 台帳とウェーブ編成が「任意」と書く）。
 - 提案: W13 で確定させる。

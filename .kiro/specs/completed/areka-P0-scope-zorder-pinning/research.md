@@ -300,7 +300,7 @@
 7. **要件 7.3／7.4 の発火経路と相の順序**（G3／G7）: 「再表示」は合成層の `shown` エッジであり、発火点は `emo2_frame_system` の内側になる。**`FrameFinalize` 内で `emo2_frame_system` と `(establish, maintain).chain()` の相対順は現在未拘束**。⒜ 順序を明示して維持系を後ろへ置く／⒝ 生産者側で起床旗を立てる（`maintain.rs` の doc が名指しする作法）／⒞ 両方。**1 巡遅延を許容するかどうか**が要件 7.3 の「表示された直後」の解釈に効く。
 8. ~~**要件 9.3 の「不可視」の定義**（G7）~~ **→ 裁定済み（2026-08-27 要件ディスカッション議題 1）**: Win32 基準で確定。絵を消しただけのバルーン窓は実測上「可視」として数える。要件 9.3／7.3 に注記反映済み。
 9. ~~**要件 12.3 の訂正の置き場**~~ **→ 裁定済み（2026-08-27 要件ディスカッション議題 2）**: COMPAT §8 への訂正行で上書き・完了アーカイブは書き換えない（scg 先例踏襲）。要件 12.3 に反映済み。
-10. ~~**要件 13 の sylphya への露出**~~ **→ 裁定済み（2026-08-27 要件ディスカッション議題 3）**: 語彙表には触れない（名前だけの先行登録はしない）。追跡先の実在検証で拾い手ゼロと判明したため、追跡 spec `areka-P0-zorder-property` を即日起票（brief＋roadmap M2 ゲート棚 6 本目）。要件 13.3〜13.5 に反映済み。bvc との語彙表行隣接ウォッチは消滅。
+10. ~~**要件 13 の sylphya への露出**~~ **→ 裁定済み（2026-08-27 要件ディスカッション議題 3）**: 語彙表には触れない（名前だけの先行登録はしない）。追跡先の実在検証で拾い手ゼロと判明したため、追跡 spec `zorder-property` を即日起票（brief＋roadmap M2 ゲート棚 6 本目）。要件 13.3〜13.5 に反映済み。bvc との語彙表行隣接ウォッチは消滅。
 11. **グループの上限と性能**（要件 3.7 / Out of scope の「性能最適化の計測はしない」）: 上限を設けないと、1 グループ N 窓 × M グループで 1 巡に出す指令数が増える。**「常識的に減らす」の下限（例: 既に順序どおりなら 1 本も出さない同値ガード）をどこまで設計で書くか**。既存 `decide_pair_fix` の同値ガード（`zorder_pair.rs:346`）が手本。
 12. **要件 1.7（実行スコープに依らない）と `cue.actor`**: `move` は `cue.actor` を scope として使う（`move_cue.rs:522`）が、本 spec は actor を**見ない**。同じキャリアで挙動が違うことを、消費者の doc とテストで明示的に固定するかどうか。
 
@@ -1070,8 +1070,8 @@ task 4.4 の走行が拾った赤のうち、**本 spec の担当外**であり�
 |---|---|
 | `completed/areka-P0-ghost-window-zorder`（ペア機構の正本） | **消化不能**——`completed/` に在る |
 | `completed/areka-P0-test-cage-determinism`（檻の非決定の正本） | **消化不能**——`completed/` に在る |
-| `areka-P0-zorder-property`（稼働中・唯一の隣接） | **引き受けない**——brief Scope に **「Out: 窓の是正機構そのもの」**と明記 |
-| `areka-P0-tick-gate-adoption`（稼働中） | **引き受けない**——In は門の裁定（`tick_gate.rs`／`tick_gate_config.rs` 内で閉じる）。`tick_bridge` の檻は範囲外 |
+| `zorder-property`（稼働中・唯一の隣接） | **引き受けない**——brief Scope に **「Out: 窓の是正機構そのもの」**と明記 |
+| `tick-gate-adoption`（稼働中） | **引き受けない**——In は門の裁定（`tick_gate.rs`／`tick_gate_config.rs` 内で閉じる）。`tick_bridge` の檻は範囲外 |
 | `areka-P0-present-write-coherence`（稼働中） | **引き受けない**——Out に「フレーム駆動の CPU 負荷（`draw-load-parity` の担当）」と明記。その `draw-load-parity` は `completed/` |
 | `areka-P0-emo2-conformance-e2e`（稼働中） | **引き受けない**——brief が「**e2e は検出の場であって修正の担当ではない**」と明記 |
 
@@ -1133,7 +1133,7 @@ task 4.4 の走行が拾った赤のうち、**本 spec の担当外**であり�
 | 4 | **要件 12.1〜12.4・13.3・13.4 は COMPAT §8 の行だけに乗っており檻が無い**（13.1／13.2／13.5 には在る）。今日は正しいが静かに腐る | `doc/COMPAT_ARCHITECTURE.md:192-207`（**2026-09-02 の `main` 合流で 176-191 から 16 行ずれた**——`balloon-vertical-canon`／`balloon-offset-dpi` の 16 行が同じ表の手前へ入ったため。**この行番号の腐り方そのものが下の #7 と同じ形である**） | 文書表の性質上、機械の門を置く先が決まっていない |
 | 5 | **要件 11.5 のタスクバーへの出方・クリック透過と、8.2 の「入力の受け付けを損なわない」に実行テストが無い**。いずれも構造で論証されている（`WS_POPUP｜WS_EX_TOOLWINDOW`／後押しが位置・寸法・活性化を持たない） | — | 実機の目視でしか測れない性質。§8 に裁量として登記済み |
 | 6 | **ペア機構の doc が 2 系統の処理列を述べたまま**（本番は 3 系統）。要件 9.5 が凍結する側なので触っていない | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | 「将来ペア機構を触る spec」を宛先にしているが、その spec は実在しない |
-| 7 | **`roadmap.md:132` を引く COMPAT §8 の 5 行が空行を指している**（roadmap が伸びて行番号がずれた） | `doc/COMPAT_ARCHITECTURE.md:160,161,162,164,165` | **本 spec の所有ではない**——完了済み `areka-P0-balloon-visibility` の行で、追跡先 `areka-P0-balloon-canon-residue` は現役。その spec が引き取るべきもの |
+| 7 | **`roadmap.md:132` を引く COMPAT §8 の 5 行が空行を指している**（roadmap が伸びて行番号がずれた） | `doc/COMPAT_ARCHITECTURE.md:160,161,162,164,165` | **本 spec の所有ではない**——完了済み `areka-P0-balloon-visibility` の行で、追跡先 `balloon-canon-residue` は現役。その spec が引き取るべきもの |
 
 ⚠ 1・2・3 はいずれも「**檻が浸食に対して片側しか守っていない**」形であり、
 本 spec が繰り返し掘り当てた欠陥類型（檻が自分の前提の破壊を生き延びる）と同じ根を持つ。

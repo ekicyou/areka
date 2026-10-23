@@ -46,7 +46,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: `areka-P0-release-package-versioned`（C1）。同じウェーブ C2 に `crates-io-publish`（ファイルの共有 0）。
-- **Downstream**: `areka-P0-release-cycle`（タグを打つ）・`areka-P0-crates-io-publish`・`areka-P0-winget-manifest-submission`・`areka-P0-release-code-signing`。
+- **Downstream**: `areka-P0-release-cycle`（タグを打つ）・`areka-P0-crates-io-publish`・`areka-P0-winget-manifest-submission`・`release-code-signing`。
 
 ## Existing Spec Touchpoints
 

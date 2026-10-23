@@ -72,7 +72,7 @@ SSP の課題管理（MantisBT・https://bts.shillest.net/ ）には、利用者
 
 ## Existing Spec Touchpoints
 - **Extends**: なし。
-- **Adjacent**: `areka-P0-coverage-roadmap-refresh`（ukadoc の台帳と roadmap の突き合わせ。こちらは BTS だけを扱い、ukadoc の台帳は書き替えない）。
+- **Adjacent**: `coverage-roadmap-refresh`（ukadoc の台帳と roadmap の突き合わせ。こちらは BTS だけを扱い、ukadoc の台帳は書き替えない）。
 
 ## Constraints
 - **優先度**: 開発者の起票（区分 A）・台帳の段は「優先」。開発者「早めに実施したい」（2026-10-10）。

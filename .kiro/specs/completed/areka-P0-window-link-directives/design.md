@@ -19,9 +19,9 @@
 ### Non-Goals
 
 - 時間つきの移動（`--time` の補間）と `\![moveasync]` での組の連れ動き（dola の改造の後の時間の spec）。
-- ほかのアプリの窓への吸着（`areka-P0-window-snap`）。3 人目以降のキャラクターの窓（`areka-P0-extra-character-windows`）。
-- プロパティ `currentghost.seriko.sticky-window` の読み書き（`areka-P0-currentghost-property-tree`）。
-- 拡大率が変わった後の詰め直しから組の窓を外すこと（`areka-P0-dpi-realign-remembered-chain`・裁定 7）。
+- ほかのアプリの窓への吸着（`window-snap`）。3 人目以降のキャラクターの窓（`extra-character-windows`）。
+- プロパティ `currentghost.seriko.sticky-window` の読み書き（`currentghost-property-tree`）。
+- 拡大率が変わった後の詰め直しから組の窓を外すこと（`dpi-realign-remembered-chain`・裁定 7）。
 - 吸着の向きが上・左・右のときに、作業領域の変化で辺へ当て直すこと（今どおり下だけ）。
 - `\![set,zorder]` の台本の組がシェルの切り替えで捨てられる食い違いを直すこと（本 spec の完了の作業で起票するだけ・要件 10.6）。
 
@@ -58,8 +58,8 @@
 
 ### Revalidation Triggers
 
-- `StickyGroupLedger` の読む口（`group_of`・`partners_of`・`StickyGroup` の形）が変わったとき → `areka-P0-dpi-realign-remembered-chain`・`areka-P0-extra-character-windows`・`areka-P0-currentghost-property-tree` が読み直す。
-- `AnchorSource` の意味（descript の向き・台本の印）や、記憶へ書く形の規則が変わったとき → `areka-P0-window-snap`・`areka-P0-descript-window-keys`。
+- `StickyGroupLedger` の読む口（`group_of`・`partners_of`・`StickyGroup` の形）が変わったとき → `dpi-realign-remembered-chain`・`extra-character-windows`・`currentghost-property-tree` が読み直す。
+- `AnchorSource` の意味（descript の向き・台本の印）や、記憶へ書く形の規則が変わったとき → `window-snap`・`descript-window-keys`。
 - `DefaultPlacementBasis` の中身が変わったとき → 完了 `move-canon` の並べ直しのテスト・`resident-ghost-rotation`（`reset_pos_frame.rs`）。
 - `PositionCue` の種類が増えたとき・受け手の表の行が変わったとき → `move_cue*.rs` を触る後の spec（`shell-balloon-scale-setting`・`surfaces-basepos`）と、受け手の表に行を足す v0.1.0 の各 spec。
 - wintf の `OnKeyDown` の形が変わったとき → キーを使う後の spec。
@@ -724,7 +724,7 @@ pub(crate) fn attach_shortcut_receivers(world: &mut World);
 
 ### 実機（9.7・9.8）
 
-- 検体 `pasta-in-windows` を `sample fetch` で作業ツリーの `target\` の下へ取り寄せ、根も `target\` の下に置く（9.8）。排他テストの机で `real-run-kit` を使う。確かめの間は拡大率を変えない（拡大率が変わった後の詰め直しが重ねた窓を並べ直す問題は `areka-P0-dpi-realign-remembered-chain` の持ち分・裁定 7）。
+- 検体 `pasta-in-windows` を `sample fetch` で作業ツリーの `target\` の下へ取り寄せ、根も `target\` の下に置く（9.8）。排他テストの机で `real-run-kit` を使う。確かめの間は拡大率を変えない（拡大率が変わった後の詰め直しが重ねた窓を並べ直す問題は `dpi-realign-remembered-chain` の持ち分・裁定 7）。
 - 確かめること: ①起動して `sticky_groups`（descript_seed・`{0,1}`）が出る。②本体側の窓をドラッグ（入力の送り込みは画面のロックが無いときだけ）すると、相方側の窓とバルーンが同じ量動き、ドラッグの途中でも 2 つの窓の位置の関係が変わらず（途中で 2 つの矩形を読んで比べる）、`sticky_follow`（drag）が出る。③辞書の「窓あわせ」（MCP の `raise_event` か `sakurascript`）で `\![move,…,--option=ignore-sticky-window]` が出て、相方側だけが動き `sticky_follow_ignored` が出る。④終了して起動し直すと、2 つの窓が重なったまま出る（窓の矩形の比べ）。
 - 起動の連鎖の確定が記憶の無い 2 つの窓を並べた後に辞書の `\![move]` で重ねる流れと、記憶から 2 つを戻すときの作業領域への寄せ直しは、この実機の確かめで見る（研究 1.7 の調べ 5・6）。食い違いが出たら原因をこの spec の中で直すか、持ち主の spec を確かめて起票する。
 - 近道の届き方（F10 が `WM_KEYDOWN` か `WM_SYSKEYDOWN` か・入力先）は、ぱすたの窓をクリックしてから 2 つの近道を押し、`balloon_pos_reset`（trigger=shortcut）と `reset_pos_menu_outcome` が出ることで確かめる。

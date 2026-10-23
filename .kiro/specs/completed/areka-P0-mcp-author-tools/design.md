@@ -689,7 +689,7 @@ pub(in crate::mcp) fn diagnose(
 
 - `doc/ssp-mcp/areka-tools.md`（新規・正本）: ⑴ 独自のツールとは（SSP に無い・接頭辞なし・一覧では 10 本の後）、⑵ `check_script` の引数と結果の形、⑶ 診断の種類の表と文面・予約した種類、⑷ 診ていないもの（受け口が読む引数: `\![move]`・`\![set,zorder]`・`\![bind]`・`\![change,…]`・`\![open,readme]`・`\![execute,install]`・更新の 3 つ・`\_l`、`\f` の値の誤り、`%` の変数の未対応名、字面で決まらないもの）、⑸ SSP との違い、⑹ 後続がツールを足す手順（File Structure Plan の表）。
 - `.kiro/steering/roadmap.md`: 干渉の記述と「MCP の 3 段目の約束」を File Structure Plan の中身で書き直す。「`check_script` が診ない引数の誤り」の覚え書きに、上の文書の ⑷ への参照を足す。書くのは実装のタスク（他のブランチと同じ行を直しやすいので、着地の直前に書く）。
-- 本 spec の完了のときに、`.kiro/specs/areka-P0-mcp-strict-errors/brief.md` へ申し送りを書く: 種類の名前と文面は `areka-tools.md` に揃える／再生中の判定は `parse_noted` の印と `ConsumerLedger::consumer_of` を引けば検査と同じ答えになる。
+- 本 spec の完了のときに、`.kiro/specs/mcp-strict-errors/brief.md` へ申し送りを書く: 種類の名前と文面は `areka-tools.md` に揃える／再生中の判定は `parse_noted` の印と `ConsumerLedger::consumer_of` を引けば検査と同じ答えになる。
 
 ## Error Handling
 

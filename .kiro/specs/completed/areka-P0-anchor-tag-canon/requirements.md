@@ -2,7 +2,7 @@
 
 ## Project Description (Input)
 
-さくらスクリプトのアンカー `\_a[ID]…\_a`（バルーンの本文の中の、押せるリンク）を areka で働かせる。今はタグが読み捨てられ、文字は出るが押しても何も起きず、`OnAnchorSelect`／`OnAnchorSelectEx` も送られない。本 spec はアンカーの**働き**（4 つの形の読み取り・範囲の保持・ホバーとクリック・イベントの送出・既定の見た目 1 種類）だけを持つ。見た目の作者指定（`\f[anchor*]` 16 項目×3 状態・descript の `anchor.*.font.*` 族・訪問済み・縦書きの下線の位置）は `areka-P0-anchor-style-canon` が持つ（出所: `brief.md`・2026-10-04 棚卸㉑の分割）。
+さくらスクリプトのアンカー `\_a[ID]…\_a`（バルーンの本文の中の、押せるリンク）を areka で働かせる。今はタグが読み捨てられ、文字は出るが押しても何も起きず、`OnAnchorSelect`／`OnAnchorSelectEx` も送られない。本 spec はアンカーの**働き**（4 つの形の読み取り・範囲の保持・ホバーとクリック・イベントの送出・既定の見た目 1 種類）だけを持つ。見た目の作者指定（`\f[anchor*]` 16 項目×3 状態・descript の `anchor.*.font.*` 族・訪問済み・縦書きの下線の位置）は `anchor-style-canon` が持つ（出所: `brief.md`・2026-10-04 棚卸㉑の分割）。
 
 ## Introduction
 
@@ -23,10 +23,10 @@
 
 - **In scope**: `\_a` の 4 つの形（`\_a[ID]`・`\_a[ID,r2,…]`・`\_a[OnID,r0,…]`・閉じの `\_a`）の読み取り／アンカーの範囲の保持／ホバーの強調とクリック／`OnAnchorSelectEx`→`OnAnchorSelect` の送出と `On` 始まりの直接送出／既定の見た目 1 種類／普通のバルーンとシェルの中の箱の両方／台本を再生せずに確かめる道具（`check_script`）での扱い／網羅台帳と互換記録の更新／決定論テスト。
 - **Out of scope**:
-  - 見た目の作者指定: `\f[anchorstyle]` ほか 16 項目×選択中／非選択／訪問済みの 3 状態・`\f[anchor.font.color]`・descript の `anchor(.notselect|.visited).font.*` 族・訪問済みの記録・縦書きの下線の位置の決め直し → `areka-P0-anchor-style-canon`。本 spec では、これらの指定は今までどおり受け取って保持するだけで、表示を変えない。
-  - 範囲を選択肢にする `\__q` → `areka-P0-range-choice-tag`（本 spec の範囲の仕組みの上に乗る）。
-  - アンカーの上で止まったときの `OnAnchorHover`・行き先の説明の表示 → `areka-P0-balloon-link-hover`。
-  - 右クリックでの行き先のコピー → `areka-P0-link-context-copy`。
+  - 見た目の作者指定: `\f[anchorstyle]` ほか 16 項目×選択中／非選択／訪問済みの 3 状態・`\f[anchor.font.color]`・descript の `anchor(.notselect|.visited).font.*` 族・訪問済みの記録・縦書きの下線の位置の決め直し → `anchor-style-canon`。本 spec では、これらの指定は今までどおり受け取って保持するだけで、表示を変えない。
+  - 範囲を選択肢にする `\__q` → `range-choice-tag`（本 spec の範囲の仕組みの上に乗る）。
+  - アンカーの上で止まったときの `OnAnchorHover`・行き先の説明の表示 → `balloon-link-hover`。
+  - 右クリックでの行き先のコピー → `link-context-copy`。
   - アンカーの既定の動作で OS を呼ぶこと（URL を開くなど）: ゴーストが `OnAnchorSelect(Ex)` の答えに `\j[…]` などを返す正典の作法で足りる（`\j`・`\![open,…]` は `areka-P0-open-external-tags` で着地済み）。本 spec はアンカーから OS を呼ばない。
   - 選択肢 `\q` の働き・見た目・時間切れ（着地済み・不変）。
 - **Adjacent expectations**:
@@ -137,7 +137,7 @@
 1. The areka 互換記録 shall `OnAnchorSelectEx`／`OnAnchorSelect`／`On` 始まりの直接送出の Reference の割付と順序を、ukadoc の該当記述と対応付けて記録する。
 2. The areka 互換記録 shall 正典が黙っている分岐について areka が採った決めを、正典に根拠がある決めと見分けられる形で記録する。対象は少なくとも次を含む — 話している最中のアンカーのクリックの扱い（Requirement 3.4）・閉じの無い開き／開きの重なり／開き無しの閉じの扱い（Requirement 1.8〜1.10）・ID が空のときの扱い（Requirement 1.11）・ID の綴りに意味を持たせないこと（Requirement 4.1）・`OnAnchorSelect` を 204 のときだけ続ける読み（Introduction の読みの注記）・選択肢とアンカーが重なったときの判定の順（Requirement 3.5）・マウスが乗っていないときの既定の見た目を descript `anchor.style` の既定値から借りたこと（Requirement 5.1）。
 3. When 本 spec が着地する, the areka 網羅台帳 shall `\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`（根 2 件）と `OnAnchorSelect`・`OnAnchorSelectEx` の行を「ある」（台帳の語彙では `implemented`）に改め、持ち主を本 spec にする。別名の行 `\_a[ID]` は台帳の慣例どおり `alias` のまま持ち主を持たない。
-4. When 本 spec が着地する, the areka 網羅台帳 shall 本 spec の持ち物として残っているアンカーの見た目の行（`\f[anchor*]` 16 項目・`\f[anchor.font.color]`・descript の `anchor.*` 族）の持ち主を `areka-P0-anchor-style-canon` に付け替える。
+4. When 本 spec が着地する, the areka 網羅台帳 shall 本 spec の持ち物として残っているアンカーの見た目の行（`\f[anchor*]` 16 項目・`\f[anchor.font.color]`・descript の `anchor.*` 族）の持ち主を `anchor-style-canon` に付け替える。
 5. The areka 互換記録 shall 設計の正本（`COMPAT_ARCHITECTURE.md` §8 の横断表）に本 spec の行を 1 行足し、詳細は互換記録へのポインタで引く。
 
 ### Requirement 8: 決定論テスト

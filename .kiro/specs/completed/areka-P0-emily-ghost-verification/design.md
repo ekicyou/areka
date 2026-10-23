@@ -18,7 +18,7 @@
 ### Non-Goals
 
 - SSP との見た目の一致、`.pna`、オーナードローのメニュー、`replace` などの描画メソッド、着せ替えの残件。
-- 3 人目以降のキャラクターの窓を正しく作ること（`areka-P0-extra-character-windows`）。
+- 3 人目以降のキャラクターの窓を正しく作ること（`extra-character-windows`）。
 - えみりの辞書と書庫のバイト列の変更、SSP のバルーン `emily4` を検体へ足すこと、えみりを配布物へ入れること。
 
 ## Boundary Commitments
@@ -38,7 +38,7 @@
 
 - 取り出し元が在るときの置き方と、ほかの拒否の理由（1.8・1.9＝変更 0）。
 - バルーンの決め方（完了 `areka-P0-ghost-standard-balloon` の `boot_resolve.rs`＝変更 0）。
-- 起動の絵の側の scope（`emo2_boot` の `derive_scopes`＝変更 0）、2 か所の `debug_assert!(scope <= 1)`（`input_events/mod.rs`・`menu/captions.rs`＝変更 0）、3 人目以降の窓の作り方・位置の記憶・最初の面（すべて `areka-P0-extra-character-windows`）。
+- 起動の絵の側の scope（`emo2_boot` の `derive_scopes`＝変更 0）、2 か所の `debug_assert!(scope <= 1)`（`input_events/mod.rs`・`menu/captions.rs`＝変更 0）、3 人目以降の窓の作り方・位置の記憶・最初の面（すべて `extra-character-windows`）。
 - 起動を止める告知（`alert::raise`）と、利用条件の画面（`alert::ask_yes_no`）の挙動（変更 0）。
 - SHIORI へ渡すバイト列の形（`load` のパスなど）。変える必要が出たら直す前に開発者の決めを仰ぐ（6.3）。
 - `crates/areka/src/main.rs`（1,000 行ちょうど）。本 spec は触らない。
@@ -56,8 +56,8 @@
 
 - `InstallOutcome` の形（`skipped` の欄）が変わる: `areka/install/procedure.rs` と `sample-ghost-kit` の `devroot.rs` が読み直す。
 - 拒否の語彙の数（13）が変わる: `judge.rs` の写し・`lib_vocabulary_tests.rs`・`doc/COMPAT_ARCHITECTURE.md` の写しの行。
-- `detect_scopes` の絞りを外す（`areka-P0-extra-character-windows`）: 本 spec が期待を変えたテスト 3 本と、本 spec が足した「scope は 0・1 だけ」のテストを、その spec が作り直す。
-- 検体の登記の数（8）が変わる: 後に続く `areka-P0-dot-sakura-specimen` → `areka-P0-default-balloon-selfmade` → `sample-url-fetch` が数を引き継ぐ。
+- `detect_scopes` の絞りを外す（`extra-character-windows`）: 本 spec が期待を変えたテスト 3 本と、本 spec が足した「scope は 0・1 だけ」のテストを、その spec が作り直す。
+- 検体の登記の数（8）が変わる: 後に続く `areka-P0-dot-sakura-specimen` → `default-balloon-selfmade` → `sample-url-fetch` が数を引き継ぐ。
 - 警告のダイアログの出す時点（締めの知らせの後）が変わる: 手続きのテストの呼び出しの列。
 
 ## Architecture
@@ -448,13 +448,13 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool);
 - `detect_scopes` は 0 を必ず入れ、`kero.name`（ゴースト）か `kero.` で始まる鍵（シェル）があれば 1 を入れる。`char{n}.` の鍵（n ≥ 2）からは scope を足さない。呼び手の無くなる `char_scope_of` は消す。
 - これで、`build_placement_config` を通る 3 つの呼び手（起動とゴーストの切替の準備・シェルの切替の配り直し・切替の重なり順）の全部で、scope 2 以上の窓が作られない。起動の絵の側（`derive_scopes` の `[0, 1]`）と答えがそろう。
 - `char{n}.*` の鍵そのもの（`resolve_scope`・`scope_prefixes`・題名の `build_titles`）は変えない。scope が作られないので読まれないだけ。
-- 2 か所の `debug_assert!(scope <= 1)` は残す（外すのは `areka-P0-extra-character-windows`）。scope 2 の窓が作られなくなるので、当たる道が無くなる。
+- 2 か所の `debug_assert!(scope <= 1)` は残す（外すのは `extra-character-windows`）。scope 2 の窓が作られなくなるので、当たる道が無くなる。
 - 「panic の道はこの 2 か所」は、scope 2 の窓が在る形で調べた結論。絞った後は「台本が `\p[2]` で scope 2 を指すが、窓もバルーンも無い」形になる（えみりの起動・終了の辞書に 50 回・メニューの辞書に 36 回）。この形で会話が止まらないことは、実機の前に決定論のテストで確かめる（設計の討議の議題 1・下の「会話が止まらないテスト」）。
 - `examples/window-placement.rs` の `scope >= 2` の枝は消さない（来なくなるだけ・ビルドは通る）。
 
 **契約**: Service [x]
 - 事後条件: `build_placement_config(ghost_kv, shell_kv).scopes` の鍵は `{0}` か `{0, 1}`。
-- 戻すとき: `areka-P0-extra-character-windows` が scope の導き方を 1 か所にまとめ直すときに、この絞りを外す。
+- 戻すとき: `extra-character-windows` が scope の導き方を 1 か所にまとめ直すときに、この絞りを外す。
 
 ### sample-ghost-kit
 

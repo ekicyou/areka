@@ -34,7 +34,7 @@ host-32 の補助 exe（`shiori-host32-helper`）には、32 ビットでしか�
   - x64 側（`shiori-host32-host`）の host-32 の通しのテスト。
   - 2 本目の偽の DLL（`shiori-host32-testdll-loadu`）と、それを読むテスト（群 D）とその直列化。
   - 全体テストの手順（`tools/test-all.ps1`）の変更。採り直しの仕組みを足して揺れを隠すことはしない。
-  - 同じクレートのテストにある clippy の指摘（`areka-P0-clippy-199-lints` の範囲）。
+  - 同じクレートのテストにある clippy の指摘（`clippy-199-lints` の範囲）。
 - **Adjacent expectations**:
   - x64 側の host-32 の通しのテストは、補助 exe を別プロセスで起こして同じ偽の DLL を読ませる。本 spec が偽の DLL に触れる場合でも、それらのテストの判定と結果は変わらない前提で進める。
   - ワークスペース全体の見張り（1 ファイル 1,000 行の見張り、テスト用一時パスの窓口の迂回の見張り）は、本 spec の後も緑のまま保つ。一時パスの見張りの例外表には、補助 exe の `shiori_proxy.rs` と `main_loopback_tests.rs` が「プロセス識別子で一意化済み」として載っている。

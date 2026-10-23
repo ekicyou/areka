@@ -268,16 +268,16 @@ updated_at: 2026-03-07
 ### feature_name パターン
 
 ```text
-{layer}-{priority}-{feature-name}
+{module}-{feature-name}
 ```
 
-| layer | 説明 |
-| ------- | ------ |
-| `wintf` | UIフレームワーク層 |
-| `areka` | アプリケーション層 |
-| `kiro` | 開発プロセス支援 |
+- `{module}` は spec が主に触る持ち場の名前。エンジンの固有名（`wintf`・`dola`・`emo`・`sylphya`・`kanade`・`sakura`・`seriko`・`shiori` など）か、アプリの中の持ち場（`mcp`・`balloon`・`shell`・`tasktray`・`menu` など）。どれにも当たらなければ `areka`。
+- 優先度は名前に入れない（着手の並びの正本は `roadmap.md` の区分 A〜D と版の段）。先進坑の spec は `pilot-` 接頭辞（`two-tunnel.md` の命名規約）。
+- すべて小文字の英数字とハイフン。
 
-例: `wintf-P0-animation-system`, `areka-P1-devtools`
+例: `dola-interrupt-ticks`, `sylphya-sqlite-kvs`, `mcp-strict-errors`
+
+> **旧い形 `{layer}-{priority}-{feature-name}`**（`areka-P0-…`・`wintf-P0-…`）は 2026-10-23 に廃止した（開発者「今となっては『サブモジュール名-機能』の方が良い」）。廃止の時点で完了していた spec と着手していた spec（`ghost-inner-balloon`・`offline-surface-dump`・`pasta-in-windows-verification`）は旧い名前のまま残す。未着手の brief は同じ日に `areka-P0-` を外した。
 
 ---
 

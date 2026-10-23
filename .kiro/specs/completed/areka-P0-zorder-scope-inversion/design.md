@@ -23,8 +23,8 @@
 ### Non-Goals
 
 - 数字だけの記法の意味・指定が無いときの重なり・拒否の決まり（変えない）
-- プロパティ `currentghost.seriko.zorder`（`areka-P0-zorder-property`）
-- 常に手前の指定（`areka-P0-stay-on-top-directives`）
+- プロパティ `currentghost.seriko.zorder`（`zorder-property`）
+- 常に手前の指定（`stay-on-top-directives`）
 - SSP の癖（バルーンが一度出るまで指定が効かない・読み直しの後に並べ直しが要る・指定の直後に直前の手前の窓が手前に残る）を写すこと
 - 窓の位置と大きさ・バルーンの見える／見えないの寿命
 - wintf の公開の宣言 `KeepDirectlyAbove` の形（欄）を変えること

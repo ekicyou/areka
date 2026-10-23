@@ -203,7 +203,7 @@
 # - **判断の根拠の場所**: 知らせる側は `crates/areka-kanade/src/schedule/events.rs` の
 #   `ALLOWED_EVENT_IDS`、引く側は `crates/areka-kanade/src/schedule/resources.rs` の
 #   `ALLOWED_RESOURCE_IDS`（`username` 1 件だけ）。`property.get`／`property.set` の担当は
-#   `areka-P0-property-query-channels`。
+#   `property-query-channels`。
 # - **共通 `note`**:
 #
 #   ```
@@ -558,7 +558,7 @@
 #   （絶対パスで読み込み、正典の 4 つの入口 `loadu`・`load`・`unload`・`request` を全て名前で引く。
 #   初期化の入口は `choose_init_entry` が `loadu` を優先して 1 つ選び、入口ごとのパスの渡し方と表せない
 #   字の警告は `init_bytes` が持つ）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
-#   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `areka-P0-makoto-dll-host`。
+#   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `makoto-dll-host`。
 # - **共通 `note`**:
 #
 #   ```
@@ -577,7 +577,7 @@
 #   とする場所が無いのでログは 1 行も出ない。
 #   SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
 #   プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
-#   無いので、SAORI 用の行は作らない。MAKOTO は areka-P0-makoto-dll-host が担う。
+#   無いので、SAORI 用の行は作らない。MAKOTO は makoto-dll-host が担う。
 #   縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
 #   「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
 #   粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
@@ -1328,7 +1328,7 @@ note = """
 （OnTranslate を通した後のもの）・Ref1＝ダブルクリックされたバルーンの scope 番号（箱ならその箱が
 属するキャラクターの番号）は正典どおり。縮退は Ref2（中断位置）で、常に空で送る——台本の中の位置を
 字句から台本のコンパイル・再生・完了の知らせまで通す工事が要るため。追跡先は
-areka-P0-balloon-break-position。止めた台本が終了を予約していた・終了の握手の別れの台詞を止めた・
+balloon-break-position。止めた台本が終了を予約していた・終了の握手の別れの台詞を止めた・
 保留の終了や保留の切替へ進むとき・終了の要求を保留している間は送らない。
 ログ: 送ったときは info のログ balloon_event_sent（cause=break・scope 付き）、送る場面に当たって
 送らなかったときは info のログ balloon_event_not_sent が理由つきで 1 行出る。送出の直前に trace の
@@ -1400,7 +1400,7 @@ Reference 割当（正典）: Ref0＝閉じる際に表示されていたスク�
 [entry."ukadoc:list_shiori_event:OnBalloonScaling:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-scale-linkage"
+owner = "shell-scale-linkage"
 priority = "B2"
 values = ["装い"]
 links = []
@@ -1417,7 +1417,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 吹き出しの大きさを変えても、ゴーストがその見え方の変化に応じられない。
-担当 spec は areka-P0-shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonTimeout:1"]
@@ -3661,7 +3661,7 @@ absent のまま変わらない。
 [entry."ukadoc:list_shiori_event:OnMouseClick:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mouse-click-wheel-events"
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = [
@@ -3680,7 +3680,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 触られたことが届かず、撫でてもつついても何も返らない。
-担当 spec は areka-P0-mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseClickEx:1"]
@@ -3843,7 +3843,7 @@ crates/areka-kanade/src/schedule/steady.rs の on_mouse）。右ボタンのド�
 [entry."ukadoc:list_shiori_event:OnMouseEnter:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mouse-click-wheel-events"
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
@@ -3860,7 +3860,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 頭や胸といった当たり判定に触れ始めたことが届かず、どこを触られたかに応えられない。
-担当 spec は areka-P0-mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseEnterAll:1"]
@@ -3938,7 +3938,7 @@ absent のまま変わらない。
 [entry."ukadoc:list_shiori_event:OnMouseLeave:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mouse-click-wheel-events"
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
@@ -3955,7 +3955,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 当たり判定から手が離れたことが届かず、触り終わりに応えられない。
-担当 spec は areka-P0-mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseLeaveAll:1"]
@@ -5895,7 +5895,7 @@ crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch_with 
 [entry."ukadoc:list_shiori_event:OnShellScaling:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-scale-linkage"
+owner = "shell-scale-linkage"
 priority = "B2"
 values = ["装い"]
 links = []
@@ -5912,7 +5912,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 絵の大きさを変えても、ゴーストがその変化に応じられない。
-担当 spec は areka-P0-shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnSoundError:1"]
@@ -8161,7 +8161,7 @@ SHIORI から値を引く項目ではない。
 [entry."ukadoc:list_shiori_event:property.get:1"]
 status = "absent"
 introduced = "2.7.85"
-owner = "areka-P0-property-query-channels"
+owner = "property-query-channels"
 priority = "D4"
 values = []
 links = [
@@ -8183,17 +8183,17 @@ note = """
 扱いの違い: この行は同じ群の他の 23 件と性格が違う。他の 23 件はベースウェアが場面に応じて一方向に
 知らせるか、ベースウェアが値を引くかのどちらかだが、この 2 件は外部からのプロパティの照会
 （activeghostlist(ゴースト名／パス／ID).ext）を起点として、ベースウェアがゴーストへ取り次ぐ往復の
-経路である。経路そのものの判断は areka-P0-property-query-channels が持つので、この行は owner に
+経路である。経路そのものの判断は property-query-channels が持つので、この行は owner に
 その spec の名前を書くだけとし、判断を上書きしない。
 テーマ: 付けない。要件 7.4 がテーマを付けない既定とする群である。外部からの拡張プロパティの照会を
 ベースウェアがゴーストへ取り次ぐ往復の口であって、無いと利用者がゴーストの何を失うかに areka の側か
-ら答えられないため。経路そのものの判断は areka-P0-property-query-channels が持つ。
+ら答えられないため。経路そのものの判断は property-query-channels が持つ。
 """
 
 [entry."ukadoc:list_shiori_event:property.set:1"]
 status = "absent"
 introduced = "2.7.85"
-owner = "areka-P0-property-query-channels"
+owner = "property-query-channels"
 priority = "D4"
 values = []
 links = [
@@ -8216,11 +8216,11 @@ note = """
 扱いの違い: この行は同じ群の他の 23 件と性格が違う。他の 23 件はベースウェアが場面に応じて一方向に
 知らせるか、ベースウェアが値を引くかのどちらかだが、この 2 件は外部からのプロパティの照会
 （activeghostlist(ゴースト名／パス／ID).ext）を起点として、ベースウェアがゴーストへ取り次ぐ往復の
-経路である。経路そのものの判断は areka-P0-property-query-channels が持つので、この行は owner に
+経路である。経路そのものの判断は property-query-channels が持つので、この行は owner に
 その spec の名前を書くだけとし、判断を上書きしない。
 テーマ: 付けない。要件 7.4 がテーマを付けない既定とする群である。外部からの拡張プロパティの照会を
 ベースウェアがゴーストへ取り次ぐ往復の口であって、無いと利用者がゴーストの何を失うかに areka の側か
-ら答えられないため。経路そのものの判断は areka-P0-property-query-channels が持つ。
+ら答えられないため。経路そのものの判断は property-query-channels が持つ。
 """
 
 [entry."ukadoc:list_shiori_event:rateofusegraph:1"]
@@ -15521,7 +15521,7 @@ DLL の入口は、生存期間の loadu（SSP 2.6.92 以降・置き場所の�
 とする場所が無いのでログは 1 行も出ない。
 SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
 プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
-無いので、SAORI 用の行は作らない。MAKOTO は areka-P0-makoto-dll-host が担う。
+無いので、SAORI 用の行は作らない。MAKOTO は makoto-dll-host が担う。
 縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
 「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
 粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
@@ -16160,7 +16160,7 @@ note = """
 いる。実際に導出するときの唯一の情報源はバルーンの表示状態の読み口とし、見えているかどうかの
 帳簿を第 2 に作らない。online・nouserbreak・balloon は areka-P0-status-execution-states で
 導出済み（balloon はバルーンの表示状態の読み口から導き、第 2 の帳簿を作っていない）。
-残り 5 状態の宛先: timecritical→areka-P0-sakura-time-critical／induction・passive→候補
+残り 5 状態の宛先: timecritical→sakura-time-critical／induction・passive→候補
 areka-P0-passive-mode-states／minimizing→候補 areka-P0-minimize-state／opening→候補
 areka-P0-inputbox-dialog・areka-P0-communicate-events（候補はどれもまだ起票していない）。
 根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。

@@ -46,7 +46,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 - **`\!` の受け取り手の台帳。** `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical` に `reload`・`reloadsurface` の行は無い。登記の無い `\!` は「誰も拾わない」として何も起きず、areka 独自の MCP ツール `check_script` は「知らない命令」と答える。
 - **エラーログ。** `crates/areka/src/log_history.rs` の `classify` は、`warn` 以上の記録をすべて error 種別に振り分ける＝`warn!`・`error!` で残した記録は MCP の `get_log`（`log_type=error`）で読める。ただし記録の名前は既定で `[SYSTEM]` になり、`get_log` の `ghost_name` の絞り込みに掛からない（ゴーストの名前を載せる取り決めは同ファイルの `TARGET_ERROR`＋`ghost` の欄・使い方の例は `crates/areka/src/readme/opener.rs`）。今の切替の失敗の記録はどれもこの取り決めを使っていない。
 - **SHIORI だけを読み直す道は無い。** SHIORI の接続は 1 回きり（`crates/areka-kanade/src/shiori/real.rs` の `spawn_shiori_actor`）で、SHIORI のスレッドへの指示は `Request`／`Unload`／`Close` だけ（kanade の `msg.rs`）。作るなら ⒜ kanade に接続し直しの指示を足す（`msg.rs`・`actor.rs`＝`mcp-kanade-tools` の持ち物と重なる）か、⒝ 窓を残したまま実行系（`GhostRuntime`）を組み直す（UI の側は降ろす・窓を閉じる・窓を開き直すが既に分かれている）。
-- **網羅台帳の行**（`doc/ukadoc-coverage/ledger/sakura-script.toml`）: `reload,ghost`・`reload,shell`・`reload,shiori`・`reload,descript,パラメータ` は `owner` が空、`reload,descript`・`reloadsurface` は別名の行、`reload,balloon` は `owner` が `areka-P0-balloon-canon-residue` のまま（棚卸㉑の裁定 5 で本 spec へ移したのに古い）、`reload,makoto` は `owner` が `areka-P0-makoto-dll-host`（命令は切り出し先の `makoto-reload-directives` が持つ）。
+- **網羅台帳の行**（`doc/ukadoc-coverage/ledger/sakura-script.toml`）: `reload,ghost`・`reload,shell`・`reload,shiori`・`reload,descript,パラメータ` は `owner` が空、`reload,descript`・`reloadsurface` は別名の行、`reload,balloon` は `owner` が `balloon-canon-residue` のまま（棚卸㉑の裁定 5 で本 spec へ移したのに古い）、`reload,makoto` は `owner` が `makoto-dll-host`（命令は切り出し先の `makoto-reload-directives` が持つ）。
 - **上限の近いファイル**: `consumer_ledger.rs` 960 行（うちファイルの中のテストが約 517 行）・`ghost_switch.rs` 948 行・`emo2_boot/mod.rs` 916 行（1 ファイル 1,000 行の目安）。
 
 ### 要件の段での暫定の裁定（要件ディスカッションで覆せる）
@@ -199,7 +199,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 1. When MCP の `reload` の `target` が `makoto` である, the areka shall 本文 `NG:Reloading makoto is not supported yet`（`isError: true`）で答え、何も読み直さない。
 2. When 要件 10.1 の答えを返した, the areka shall 「makoto の読み直しはまだ無い」と分かる `warn!` を 1 件残す。
 3. The areka shall 台本の `\![reload,makoto]` を本 spec では拾わない（暫定の裁定 10）。
-4. When 本 spec を完了するとき（`/kiro-complete`）, the areka shall `.kiro/specs/areka-P0-makoto-reload-directives/brief.md` の末尾に「`mcp-reload` からの申し送り（日付）」の節を足し、⑴ 縮退の口の場所（ファイルと関数）、⑵ 口をつなぐときに書き換えるテスト、⑶ 読み直しの操作の入口（makoto も同じ入口・同じ重なりの判定に載せられること）を書く。この追記は spec 文書の変更で、要件 13.1 のソースファイルに数えない。
+4. When 本 spec を完了するとき（`/kiro-complete`）, the areka shall `.kiro/specs/makoto-reload-directives/brief.md` の末尾に「`mcp-reload` からの申し送り（日付）」の節を足し、⑴ 縮退の口の場所（ファイルと関数）、⑵ 口をつなぐときに書き換えるテスト、⑶ 読み直しの操作の入口（makoto も同じ入口・同じ重なりの判定に載せられること）を書く。この追記は spec 文書の変更で、要件 13.1 のソースファイルに数えない。
 
 ### Requirement 11: 台帳
 

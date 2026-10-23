@@ -61,7 +61,7 @@
 - `EmoWorld::build_with_images`／`ShellTarget` の形が変わる → 呼び手 5 か所を見直す。
 - `decode_elements` が `overlay` 以外の `element` 行を値にするようになる → 要件 2.7 の既知のずれが自動的に消える。`apply_base_images` の「層 0 が在るか」の判定が正典どおりになることを確かめ直す。
 - 透過の宣言を読むようになる（`UseSelfAlpha::Off`／`Full` を渡す経路ができる）→ 抜き色の腕の条件（`On` のときだけ）を見直す。
-- `areka-P0-surfaces-basepos` が `crates/areka-parsers/src/shell/` と `fold.rs` に触る → 後着が rebase する（本仕様は `areka-parsers` に触らないので、重なりうるのは `fold.rs` だけである）。
+- `surfaces-basepos` が `crates/areka-parsers/src/shell/` と `fold.rs` に触る → 後着が rebase する（本仕様は `areka-parsers` に触らないので、重なりうるのは `fold.rs` だけである）。
 
 ## Architecture
 
@@ -174,7 +174,7 @@ crates/
 - `crates/areka/src/emo2_boot/mod.rs` — `impl From<ShellLoadError> for BootWiringError`（既存の枝 `ShellRead`／`ShellEmpty` への写し替え。枝の追加 0）。
 - `crates/areka/examples/emo-present/setup.rs`・`crates/areka/examples/collision-probe/setup.rs`・`crates/areka/examples/window-placement.rs` — 同上。
 - 検体の受け口: `crates/areka-seriko/src/sample_test_support.rs`・`crates/areka/src/placement/placement_shared_test_support.rs` に `konnoyayame`／`R_POST_and_KOMAINU` の受け口を足す（`emo2` と同じ `LazyLock<SampleRoot>` の形）。
-- 着地時の文書: `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8・`.kiro/steering/roadmap.md`・`.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md`。
+- 着地時の文書: `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8・`.kiro/steering/roadmap.md`・`.kiro/specs/coverage-roadmap-refresh/brief.md`。
 
 ### 実装の順序（隠れた前提を作らないための並び）
 
@@ -641,7 +641,7 @@ impl Normalizer {
 ## 文書と台帳（要件 9・着地時の作業）
 
 - **9.1**: `doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:descript_shell_surfaces:sometimes:1`・`…:rarely:1` の 2 件に、担当 `areka-P0-shell-implicit-surface` と実測の状態を登記する。ファイル名の慣習と抜き色についての新しい行は **0 件**。
-- **9.2**: 「`dev_shell`・`manual_shell` の当該の文を項目へ割り、担当を本仕様にする」依頼を申し送る。宛先は要件 9.2 のとおり **`.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md`**（`roadmap.md` の #45「各 spec の『統合担当への申し送り』の受け皿」）。もとの統合担当 `areka-P0-ukadoc-coverage-roadmap` は完了済み（`.kiro/specs/completed/` に在る）で申し送りを消化できないため、設計ディスカッションで要件の宛先をこちらへ直した。
+- **9.2**: 「`dev_shell`・`manual_shell` の当該の文を項目へ割り、担当を本仕様にする」依頼を申し送る。宛先は要件 9.2 のとおり **`.kiro/specs/coverage-roadmap-refresh/brief.md`**（`roadmap.md` の #45「各 spec の『統合担当への申し送り』の受け皿」）。もとの統合担当 `areka-P0-ukadoc-coverage-roadmap` は完了済み（`.kiro/specs/completed/` に在る）で申し送りを消化できないため、設計ディスカッションで要件の宛先をこちらへ直した。
 - **9.3**: 台帳の備考 2 項目（`element*`・`seriko.use_self_alpha,値`）を要件の文面どおりに直す。状態と担当は変えない。報告を作り直し、`cargo test -p ukadoc-survey` の緑を確かめる。
 - **9.4**: `doc/COMPAT_ARCHITECTURE.md` §8 に追記する。要件が挙げる 4 行（大小無視・重複は辞書順で最小・許容幅 0・`tRNS` は生かす）に、本設計が定めた沈黙の 2 行（色の比較は 32bit へ変換した後の値で行う／画像だけの面への追記の後に来た波括弧は既存どおり全置換する）を足す。
 - **9.5**: `.kiro/steering/roadmap.md` に「引き受け手の居ない残り」7 件を登記する。⑶（透過の宣言を読むこと）に「`UseSelfAlpha::Off` の下の抜き色は未実装のまま」を含める。実在しない spec の名前は書かない。

@@ -23,7 +23,7 @@
 - `\![raise]`・`\![embed]` が起こすイベントへの引き継ぎの決め事。
 - Owned SSTP の「`\t` の中でも割り込む」扱い。
 - MCP の `check_script` の出どころの診断。
-- 網羅台帳への `\![execute,…]` 3 行の追加（`areka-P0-ukadoc-catalog-refresh` の持ち物）。
+- 網羅台帳への `\![execute,…]` 3 行の追加（`ukadoc-catalog-refresh` の持ち物）。
 
 ## Boundary Commitments
 
@@ -615,7 +615,7 @@ pub(crate) fn permits(row: &RestrictionRow, origin: &ScriptOrigin) -> bool;
 | `\![enter,nouserbreakmode]` | 同上 | 通常の SSTP では使用不可（Owned SSTP は可） | true |
 | `\m[umsg,wparam,lparam]` | SSTP 専用 | SSTP 専用 | false |
 
-- 出典は `https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html` の各項目（`source` に項目の位置まで書く）。網羅台帳に `\![execute,…]` の 3 行が無いのは `areka-P0-ukadoc-catalog-refresh` の持ち物で、表の出典は台帳ではなく URL で書く。
+- 出典は `https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html` の各項目（`source` に項目の位置まで書く）。網羅台帳に `\![execute,…]` の 3 行が無いのは `ukadoc-catalog-refresh` の持ち物で、表の出典は台帳ではなく URL で書く。
 - `permits`: `RefusedWhenExternal` は `!origin.is_external_treated()`、`SstpOnly` は `origin.is_sstp()`。
 - `\![leave,nouserbreakmode]` は表に載せない（4.5）。
 

@@ -18,7 +18,7 @@
   - Boundary audit: **ほぼ整合・記録済みの補正あり**。13.3 の禁止のファイル（kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`crates/areka-mcp/**`・`mcp/mod.rs`・`mcp/resolve.rs`・`doc/ssp-mcp/areka-tools.md`・`Cargo.toml` 全部・`Cargo.lock`）の差分は 0 行。`crates/areka/src/main.rs` も差分 0 行（965 行）。13.1 の外に出たのは、設計の「13.1 の一覧の補正」の表（8.3 の 6 行を含む）・Notes 3.3 の裁定・8.1 の記録にある `areka-kanade/src/lib.rs`（`ReloadScope` の再輸出 1 語）と `input_events/balloon.rs`・`choice_drain.rs`（doc コメントだけ）で、どれも記録済み。**直しで `crates/log-capture-kit/tests/file_length_guard_test.rs` が新たに 13.1 の外に加わる**（下の REMEDIATION）。
 - COVERAGE:
   - Requirements mapped: **13/13 節**（受け入れ基準 66 のうち 65 をタスクの `_Requirements:` が持ち、新しい 3.8 は 8.3 が持つ）。
-  - Coverage gaps: 10.4（makoto の brief への申し送り）だけがタスクに無いが、tasks.md 188 行と design.md 386 行が `/kiro-complete` の手順で行うと決めている（今の `.kiro/specs/areka-P0-makoto-reload-directives/brief.md` には節はまだ無い＝完了のときに足す）。
+  - Coverage gaps: 10.4（makoto の brief への申し送り）だけがタスクに無いが、tasks.md 188 行と design.md 386 行が `/kiro-complete` の手順で行うと決めている（今の `.kiro/specs/makoto-reload-directives/brief.md` には節はまだ無い＝完了のときに足す）。
 - DESIGN:
   - Architecture drift: 無し。設計の Flow 1〜4 と ShellCarry の節のとおり。文書側の食い違い（`ScriptReload::parse`→`parse_script`・`ReloadRaw`→`ScriptReload`・`RuntimeBootInputs`→`Emo2BootInputs`・`rebuild_runtime_in_place -> bool`→`RuntimeRebuild`・543／478–480／512／518／680 行・ReloadDesk の「NoContext」）は Notes が `/kiro-complete` で直すと記録済み。
   - Dependency direction: 違反なし（kanade は areka を見ない・seriko は `BIND_COMMAND` を `lib.rs` の `pub use` で出すだけ・`areka-emo-present` は読み取りの口 1 つ）。

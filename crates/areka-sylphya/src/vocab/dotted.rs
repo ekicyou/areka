@@ -90,7 +90,7 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
 /// 26 行に数えないもの: `activeghostlist(...).ext.拡張プロパティ名`・`pluginlist(...).ext.拡張プロパティ名`
 /// 系の 4 行。正典本文は `property.set` を起こして設定すると述べるが `[SET有効]` の印は無く、
 /// ext 亜枝の中継形なので 26 行に含めない（台帳の当該行の note のとおり）。この 4 行の語彙と
-/// 運搬の担い手は `areka-P0-property-ipc-transport` であり、本機能の範囲外。
+/// 運搬の担い手は `property-ipc-transport` であり、本機能の範囲外。
 ///
 /// 既知の食い違い: 先取り 2 項（`seriko.cursor.name`・`seriko.tooltip.name`）は、正典が SET 有効と
 /// 定めていない名前を登記している状態である（完了 spec `areka-P0-ukadoc-survey-property` の
@@ -164,7 +164,7 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
 /// 自由な名前としての「保存して読み戻せる」から「受理して捨てる」へ変わり得る（葉の名前が
 /// 汎用名の表に載っているだけで扱いが切り替わる）。
 ///
-/// 引受先: `areka-P0-property-query-channels`（`.kiro/specs/areka-P0-property-query-channels/brief.md`
+/// 引受先: `property-query-channels`（`.kiro/specs/property-query-channels/brief.md`
 /// の実在を確認済み）。`\![set,property,...]` の経路を開通させ、フルキーが初めて仕分けへ流れ込む
 /// spec であり、上記 2 点の是正はそこで扱う。
 pub const SOUND_PROP_NAMES: &[&str] = &[

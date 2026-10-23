@@ -107,7 +107,7 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
   - DAP/DDP/DFP/DGP/GIF/JPEG/BMP の後方互換読み——正典が「非推奨」と明記。png 以外は読まない。
   - `defaultsurface`（シェル面の既定サーフェス番号）——消費経路が codebase に 1 本も無い（`grep defaultsurface` → 0 件）。本 spec は「既定 0」を前提に置くだけで、宣言の実導出は持たない。
   - `alias.txt`／`surfaces*.txt` 断片の列挙——読む道が今日も無い（台帳 `assets.toml:5980` の note が「読む道が無い」と記載）。
-  - 着せ替え（`surface.append` の意味論そのもの）・当たり判定・`point.basepos`（`areka-P0-surfaces-basepos` が持つ）。
+  - 着せ替え（`surface.append` の意味論そのもの）・当たり判定・`point.basepos`（`surfaces-basepos` が持つ）。
 
 ## Boundary Candidates
 
@@ -128,7 +128,7 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 ## Existing Spec Touchpoints
 
 - **`areka-P0-nar-install`（未着手・単独枠）— 順序の裁定が要る**。nar-install の brief は `R_POST_and_KOMAINU` を `.nar` へ畳んで展開ツリーを追跡外にすると書いており（同 brief 87・95 行）、**本 spec が参照する `vendors/sample_ghost/R_POST_and_KOMAINU/shell/master/` のパスは nar-install の後に消える**。さらに nar-install は 38 ファイル・9 クレートに触るため並走不可（同 128 行）。⇒ **直列化必須**。**順序は 2026-09-18 に反転し、`nar-install` が先に着地した（2026-09-19 完了）。** 「推奨は本 spec が先」という当初の案はもう選べない。検体は最初から共有ヘルパ経由で受けること（下の「2026-09-18 追記（順序の反転）」）。
-- **`areka-P0-surfaces-basepos`（未着手）**— 同じ `areka-parsers/src/shell/{decode,model}.rs` に触る可能性がある。同じ W14 に居るが**同時には走らせない**（直列・後着が rebase）。
+- **`surfaces-basepos`（未着手）**— 同じ `areka-parsers/src/shell/{decode,model}.rs` に触る可能性がある。同じ W14 に居るが**同時には走らせない**（直列・後着が rebase）。
 - **`areka-P0-present-gpu-transform-scale`（W13）**— `areka-emo-compose`／`areka-emo-present` に同居しうる。着地後に入る。
 - **`areka-P0-charset-canon`（W13・完了直前）**— シェル本文の復号を持つが面の構築には触れない。共有ファイル 0。
 

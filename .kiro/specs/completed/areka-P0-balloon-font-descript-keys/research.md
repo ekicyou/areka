@@ -11,7 +11,7 @@
 - **キー集合 14 は正典側で裏が取れた**。`doc/ukadoc-coverage/catalog.toml` の接頭辞なし `font.*` は 14 行ちょうど（`font.bold`／`font.color.b`／`.g`／`.r`／`font.height`／`font.italic`／`font.name`／`font.outline`／`font.shadowcolor.b`／`.g`／`.r`／`font.shadowstyle`／`font.strike`／`font.underline`）。台帳 `ledger/assets.toml` も同じ 14 項目で、状態は `implemented` 4・`absent` 10。要件 1.1／1.2 の前提は実測と一致する。
 - **2 層マージ・接頭辞漏れ防止・未指定の区別は、すでに機構として在る**。`parse.rs` の 2 層マージはキー非依存（`descript.clone()` に画像別層を後勝ち `insert`）で、写像はその後に 1 回だけ走る。完全一致の `get` で引くので接頭辞付きキーは構造的に混ざらない。よって**要件 4.1〜4.5 を満たすための新規コードは 0 行**で、必要なのはテストによる固定だけである（先例: `vertical` の 2 層テストが「マージ改変 0 行」を証跡として明記している）。
 - **最大の制約は `Font::new` の呼び出し 50 か所**。`Font::new` 50・`FontColor::new` 52・`BalloonModel::new` 43（実測）が `areka-emo-text`／`areka` にまたがって散在する。コンストラクタの引数を伸ばす案を採ると編集集合が 8 crate 以上へ広がり、brief が保証した「W13 の他 spec と共有ファイル 0」も要件 5 の「既存の解析結果を変えない」も守りにくくなる。本リポジトリには**この問題を解いた先例が 3 つある**（`with_cursor`／`with_windowposition_raw`／`with_vertical_raw` の additive ビルダ）。
-- **要件に書かれた数のうち 2 つが実測と食い違う**。⑴ 要件 6.1 の「既に置かれている 9 本」は実測 **4 本**（`parse.rs` の `font.color.r`／`.g`／`.b`／`font.height` のみ。`font.name` には正典 URL コメントが無い）＝新たに置くのは **10 本**。⑵ 要件 1.3 の「3 か所」は実測 **4 文書**（`areka-P0-text-align-shadow-canon/brief.md:27` が漏れている）。どちらも要件本文の改訂を要する可能性があるため、下の「設計判断項目」へ上げる。
+- **要件に書かれた数のうち 2 つが実測と食い違う**。⑴ 要件 6.1 の「既に置かれている 9 本」は実測 **4 本**（`parse.rs` の `font.color.r`／`.g`／`.b`／`font.height` のみ。`font.name` には正典 URL コメントが無い）＝新たに置くのは **10 本**。⑵ 要件 1.3 の「3 か所」は実測 **4 文書**（`text-align-shadow-canon/brief.md:27` が漏れている）。どちらも要件本文の改訂を要する可能性があるため、下の「設計判断項目」へ上げる。
 - **網羅調査の道具は本仕様の作業を止めない**。`vocabulary-only` は状態語彙に実在し（`model.rs`）、証拠（正典 URL）の要否を見るのは `Status::Implemented` の行だけなので、`vocabulary-only` の行に URL コメントを置いても検査は赤にならない。逆に `SourceUrlNotInCatalog`（要件 6.5）と `DomainReportStale`（要件 7.9）は実在の判定であり、URL の綴り写しと `report` の作り直しは必須である。
 
 ---
@@ -204,7 +204,7 @@
 | # | 要件の記述 | 実測 | 影響 |
 | --- | --- | --- | --- |
 | ⒜ | 要件 6.1「既に置かれている 9 本を含めて 14 本」 | 既設は **4 本**（`parse.rs` の `font.color.r`／`.g`／`.b`／`font.height`）。`font.name` にも無い | 新規に置くのは **10 本**。要件本文の数の訂正が要るか、「9 本」を別の意味（新規に置く 9 本＝影 4＋0/1 系 5）と読むかの確認が要る。後者と読んでも `font.name` の 1 本が誰にも数えられない |
-| ⒝ | 要件 1.3「3 か所（本仕様 brief・分割元 brief・roadmap）」 | 「基底 13 キー」を書く**生きた文書は 4 本**。漏れているのは `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md:27` | 是正漏れが 1 件出る。なお `roadmap.md` は「13 キー」とは書かず `:124` に「残り 8 キー」とだけ書く。`roadmap-history.md:749` にも「descript 13 キー」が在るが、steering が history を**非改変**と定めているので対象外と考えられる |
+| ⒝ | 要件 1.3「3 か所（本仕様 brief・分割元 brief・roadmap）」 | 「基底 13 キー」を書く**生きた文書は 4 本**。漏れているのは `.kiro/specs/text-align-shadow-canon/brief.md:27` | 是正漏れが 1 件出る。なお `roadmap.md` は「13 キー」とは書かず `:124` に「残り 8 キー」とだけ書く。`roadmap-history.md:749` にも「descript 13 キー」が在るが、steering が history を**非改変**と定めているので対象外と考えられる |
 | ⒞ | 要件 7.5「束の名前だけを実態に合わせ」 | A11 の束名は「台詞の書体・読む経路が無い」。9 項目が `vocabulary-only` になると偽になる。一方 `font.name` は**現に読まれている**のに同じ A11＋同じ束名のまま据え置き（要件 7.6） | 束名を変えると `font.name` だけが古い束名に残るか、読まれているのに「読む経路が無い」束に残るかの二択になる。台帳の規則「同じ束の項目には同じ優先度」は保てるが、束名と実態の対応は 1 件ほつれる |
 
 ---
@@ -451,7 +451,7 @@
 | `git fetch origin main` | 成功 |
 | `git ls-tree -d --name-only origin/main .kiro/specs/completed/ \| wc -l` | 181（照合の母数が 0 でないことの確認） |
 | `git ls-tree -d --name-only origin/main .kiro/specs/completed/ \| grep -c shadow` | 0（対照: 同じコマンドで `text-decoration-canon` は 1） |
-| `git ls-tree --name-only origin/main .kiro/specs/areka-P0-text-align-shadow-canon/` | `brief.md` の 1 本だけ（作業ツリーも同じ） |
+| `git ls-tree --name-only origin/main .kiro/specs/text-align-shadow-canon/` | `brief.md` の 1 本だけ（作業ツリーも同じ） |
 | `git show origin/main:crates/areka-emo-text/src/look.rs \| grep -n "const UNOWNED_KEYS"` | `const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"];`（HEAD の `look.rs` も同じ定義） |
 
 - **判定**: `text-align-shadow-canon` は未着地・受け口は影を所有外のまま。設計の判定表（影まわりは先着＝申し送り）をそのまま残す。本仕様は影を配線しない（要件の Out of scope）。
@@ -510,10 +510,10 @@
 | `font.strike` | `implemented` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
 | `font.underline` | `implemented` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
 | `font.outline` | `vocabulary-only` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
-| `font.shadowcolor.r` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
-| `font.shadowcolor.g` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
-| `font.shadowcolor.b` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
-| `font.shadowstyle` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowcolor.r` | `vocabulary-only` | `text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowcolor.g` | `vocabulary-only` | `text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowcolor.b` | `vocabulary-only` | `text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowstyle` | `vocabulary-only` | `text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
 | `font.name` | `degraded` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・読めるが正典どおりに描かれない | 一致 |
 | `disable.font.*` | `degraded` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・読めるが正典どおりに描かれない | 一致 |
 
@@ -535,7 +535,7 @@
 | ファイル | 「13 キー」 | 「残り 8 キー」 | 対照「14 キー」 |
 |---|---|---|---|
 | `.kiro/specs/areka-P0-balloon-font-descript-keys/brief.md` | 0 | 0 | 4 |
-| `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | 0 | 0 | 1 |
+| `.kiro/specs/text-align-shadow-canon/brief.md` | 0 | 0 | 1 |
 | `.kiro/steering/roadmap.md` | 0 | 0 | 0 |
 | `doc/ukadoc-coverage/ledger/assets.toml` | 0 | 0 | 1 |
 | **4 ファイル計** | **0** | **0** | — |

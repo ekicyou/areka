@@ -22,11 +22,11 @@
 
 ### Non-Goals
 
-- `align`／`valign`・影 3 項目（`areka-P0-text-align-shadow-canon`）、`cursor*` 10 項目（`areka-P0-choice-marker-styling`）、`anchor*` 16 項目（`areka-P0-anchor-tag-canon`）、`\x`／`\x[noclear]`（`areka-P0-balloon-lifecycle-events` 項目 9）。本設計は値を保持して表示を変えない「語彙のみ」の状態に置く。
+- `align`／`valign`・影 3 項目（`text-align-shadow-canon`）、`cursor*` 10 項目（`choice-marker-styling`）、`anchor*` 16 項目（`areka-P0-anchor-tag-canon`）、`\x`／`\x[noclear]`（`areka-P0-balloon-lifecycle-events` 項目 9）。本設計は値を保持して表示を変えない「語彙のみ」の状態に置く。
 - バルーン定義 `font.*` の残り 8 キーの読み取り（`areka-P0-balloon-font-descript-keys`）。`crates/areka-parsers/src/balloon/parse.rs`・`model.rs` に触れない。
 - `sub`／`sup`／`outline` の表示、フォントファイル（`.ttf`／`.otf`／`.ttc`）の読み込み、自前の描画器（`IDWriteTextRenderer`／`IDWriteInlineObject`）。
 - `TextEffects` の予約名 `multicolor`／`rotation`（M2 予約のまま）。
-- 行末禁則のぶら下がり・`writing_mode` の警告文言（`areka-P0-emo-text-canon-residue`）。
+- 行末禁則のぶら下がり・`writing_mode` の警告文言（`emo-text-canon-residue`）。
 
 ## Boundary Commitments
 
@@ -1022,24 +1022,24 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 7. **縦書きの下線・打ち消し線の位置**＝DirectWrite の既定に委ねる。実測（2026-09-13・タスク 8.2）: `vertical_rl`／`vertical_lr` とも下線は列の**左**側・打ち消し線は列の**中央**。bvc の裁定「列の右側」との照合: **不一致**。**数値の正本は `doc/COMPAT_ARCHITECTURE.md` §8 の同じ行**（帯と列の定数は`tests/decoration_readback/vertical.rs` と `tests/decoration_readback_test.rs` が持つ）——ここで数値を重ねると二重管理になる／根拠: 開発者裁定 2026-09-11・自前で線を描き分けない／要件 5.7・12.2。
 8. **無効表示の色の混ぜ方**＝成分ごとに `(バルーン背景の (0,0) の色 + 文字色 × 2) / 3`（整数除算・1 か所 `color::mix_disabled`）。背景は面 0 の原画像の (0,0)（α が 255 でない・トリムで外・面が無いときは白）／根拠: ukadoc shell `menu.disable.font.color.r` の式を輸入・balloon 側は「画像色とミックス」としか定めない／要件 4.6。
 9. **行の高さの決め方**＝閉じる行の文字の em の最大値・文字の無い行はそのとき効いている大きさ・行送りは `line_pitch(その高さ)`／根拠: 正典は沈黙／要件 7.9。
-10. **戻す操作の対象と時期**＝対象は装飾状態の全項目（`TextLook` 丸ごと＋所有外語彙）・戻すのは `\f[default]`（既定の層へ）・`\f[disable]`（無効表示の層へ・所有外語彙も空に。要件 10.2 の「全項目」と 10.4 の「後続仕様が登記する項目」に照らし `default` と対称にする裁定・実装 2026-09-12）・台詞の開始（`ClearAll`）・`\x`／戻さないのは `\c`・`\n`・`\_l`・`\x[noclear]`／根拠: ukadoc `\x`「`\f` 系の効果も解除」・`\x[noclear]`「効果は残る」／要件 10.6・3.8。追跡先: `areka-P0-balloon-lifecycle-events` 項目 9・`areka-P0-choice-marker-styling`。
+10. **戻す操作の対象と時期**＝対象は装飾状態の全項目（`TextLook` 丸ごと＋所有外語彙）・戻すのは `\f[default]`（既定の層へ）・`\f[disable]`（無効表示の層へ・所有外語彙も空に。要件 10.2 の「全項目」と 10.4 の「後続仕様が登記する項目」に照らし `default` と対称にする裁定・実装 2026-09-12）・台詞の開始（`ClearAll`）・`\x`／戻さないのは `\c`・`\n`・`\_l`・`\x[noclear]`／根拠: ukadoc `\x`「`\f` 系の効果も解除」・`\x[noclear]`「効果は残る」／要件 10.6・3.8。追跡先: `areka-P0-balloon-lifecycle-events` 項目 9・`choice-marker-styling`。
 11. **`default.anchor*`**＝`default` として扱う（warn 1 度）／根拠: アンカーの色定義が未実装／要件 8.8・追跡先 `areka-P0-anchor-tag-canon`。
 12. **6 値の語の大小文字**＝小文字の完全一致のみ／根拠: 正典は小文字で記す・既存の先例（`windowposition.x`・`centerx`）に揃える／要件 5.1〜5.5。
 13. **色名表の範囲**＝SVG 1.1／CSS Color 3 の拡張色名キーワード 147 語（小文字の完全一致のみ・CSS Color 4 で足された `rebeccapurple` は採らない）。あわせて 3 成分は 10 進か百分率のどちらかに揃った形だけを受け、混在と先頭の符号は解析失敗とする（`+N` は要件 7.2 で相対指定という別の意味を持つため）／根拠: ukadoc は色名を列挙せず「基本は HTML・CSS の色の表現と似ています」としか定めない（`[color,色指定]` の※注）・要件 8.1・8.2 が「各 0〜255 の 10 進数」「各 0〜100%」と書式を分けて定める／要件 8.1・8.2・8.4・8.9。
 14. **一括の戻しに余った値**（`[default,1]`・`[disable,x]`）＝意味はキーだけで決まるものとし、余分な値は無視して戻しを実行する／根拠: 正典は `[default]`／`[disable]` の形しか定めず、余った値の扱いを述べない・要件 10.1 は「`[default]` のとき」を定めるだけで余剰値を失敗とは定めない／要件 10.1・10.2。
 15. **`[name]` に値が 2 つ以上あるとき**＝`default`／`disable` を層への戻しと解さず、記述順の候補列の 1 要素として保つ（`[name,default,Arial]` → `["default","Arial"]`）。途中の空トークンも落とさない／根拠: 正典は `[name,default]` の単値形しか定めず混在形の扱いを述べない・要件 9.2 の候補列と衝突させない（実在しない候補は描画層が読み飛ばす）／要件 9.2・9.5・9.6。
-16. 既存行の改訂: 「`\f[align]`／`\f[valign]`／下線の縦書き写像」（:181）の注記を「下線は実装済み（DirectWrite の既定・行 7）・align／valign の追跡先は `areka-P0-text-align-shadow-canon`」へ、追跡先欄の「`\f` 核 17 項目の所有者」を「基盤＋フォント系 10＋一括の戻し 2＝本仕様・寄せ 2＋影 3＋SC8＝align-shadow」へ。「`\_l` の縦書き座標系の正典写像」（:183）の SC8 の追跡先も同様に。
+16. 既存行の改訂: 「`\f[align]`／`\f[valign]`／下線の縦書き写像」（:181）の注記を「下線は実装済み（DirectWrite の既定・行 7）・align／valign の追跡先は `text-align-shadow-canon`」へ、追跡先欄の「`\f` 核 17 項目の所有者」を「基盤＋フォント系 10＋一括の戻し 2＝本仕様・寄せ 2＋影 3＋SC8＝align-shadow」へ。「`\_l` の縦書き座標系の正典写像」（:183）の SC8 の追跡先も同様に。
 
 ### §B 台帳の更新
 
-- `doc/ukadoc-coverage/ledger/sakura-script.toml`（`owner = "areka-P0-text-decoration-canon"` の 12 項目）: `bold`・`italic`・`underline`・`strike`・`color`・`default`・`disable`＝`implemented`／`name`＝`implemented`（note: フォントファイル候補は読み飛ばし）／`height`＝`implemented`（note: スタイルシートの語は語彙のみ）／`sub`・`sup`・`outline`＝`vocabulary-only`（note: DirectWrite の標準機能で表せる手段が見つかるまで）。`align`・`valign`・`shadowcolor`・`shadowcolor,none`・`shadowstyle` の 5 項目は `owner` を `areka-P0-text-align-shadow-canon` へ（本仕様は保持のみ）。
+- `doc/ukadoc-coverage/ledger/sakura-script.toml`（`owner = "areka-P0-text-decoration-canon"` の 12 項目）: `bold`・`italic`・`underline`・`strike`・`color`・`default`・`disable`＝`implemented`／`name`＝`implemented`（note: フォントファイル候補は読み飛ばし）／`height`＝`implemented`（note: スタイルシートの語は語彙のみ）／`sub`・`sup`・`outline`＝`vocabulary-only`（note: DirectWrite の標準機能で表せる手段が見つかるまで）。`align`・`valign`・`shadowcolor`・`shadowcolor,none`・`shadowstyle` の 5 項目は `owner` を `text-align-shadow-canon` へ（本仕様は保持のみ）。
 - `doc/ukadoc-coverage/ledger/assets.toml` の `disable.font.(フォント定義),(指定)`: note を「無効表示の層 `LookLayers.disable` が実体化（色は混色・他は既定と同じ）。`disable.font.*` キーの読み取りは `areka-P0-balloon-font-descript-keys`」へ（`status` は同仕様の着地で `implemented` へ）。
 
 ### §C 隣接 brief への相互登記（1 行ずつ）
 
-- `areka-P0-text-align-shadow-canon`: 「親 spec は `align`／`valign`／`shadowcolor`／`shadowstyle` を `ActorTextState::unowned_vocab()` に保持している（表示不変）。実装は `TextLook` にフィールドを足して `apply_font_tag` の `Unowned` から腕へ移すだけで、戻す操作には自動で含まれる」。
+- `text-align-shadow-canon`: 「親 spec は `align`／`valign`／`shadowcolor`／`shadowstyle` を `ActorTextState::unowned_vocab()` に保持している（表示不変）。実装は `TextLook` にフィールドを足して `apply_font_tag` の `Unowned` から腕へ移すだけで、戻す操作には自動で含まれる」。
 - `areka-P0-balloon-font-descript-keys`: 「口は `LookLayers::from_balloon` の `font_overrides`／`disable_overrides` の 2 引数で、1 件は `` と**同じ形のトークン列**（`font.bold,1` → `["bold","1"]`）。残りのキーは `ResolvedFont::resolve_with_background` の中で `model.font()` から読み、キーごとにトークンの組を作って渡すだけ——**キーが何個増えても `from_balloon` の形は変わらない**」。
-- `areka-P0-choice-marker-styling`: 「`cursor*` は `unowned_vocab()` に保持。`default.cursor*` の色源は `LookLayers.cursor_text`。戻す操作は `TextLayerState::reset_decoration`」。
+- `choice-marker-styling`: 「`cursor*` は `unowned_vocab()` に保持。`default.cursor*` の色源は `LookLayers.cursor_text`。戻す操作は `TextLayerState::reset_decoration`」。
 - `areka-P0-anchor-tag-canon`: 「`anchor*`・`anchor.font.color` は `unowned_vocab()` に保持。`color,default.anchor*` は `default` 扱い（`Note::AnchorColorAsDefault`）の腕を差し替える」。
 - `areka-P0-balloon-lifecycle-events`: 「`\x` は `TextLayerState::reset_decoration(None)`（クリック後にスコープが `\0` へ戻るのと同時）を呼ぶ。`\x[noclear]` は呼ばない」。
 

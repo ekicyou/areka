@@ -55,7 +55,7 @@
 | `crates/areka-sylphya/src/actor.rs:150-166`（`is_canonical_vocab`）・`crates/areka-sylphya/src/vocab/dotted.rs` | 状態判定の規則と語彙表の中身 | 読むだけ。1 行も変えない |
 | `crates/areka-ghost/src/sylphya_wiring.rs`（`baseware.name`／`baseware.version` の定義行。コメント追加後は `:127`／`:129`） | 実装済み 2 件の値の定義行 | コメント 2 行の追加のみ |
 | `doc/COMPAT_ARCHITECTURE.md:136`／`:184`／`:185`／`:207` | 縮退・書込応答の転記元 | 読むだけ |
-| 4 本の brief（`areka-P0-property-query-channels`／`areka-P0-currentghost-property-tree`／`areka-P0-property-catalog-lists`／`areka-P0-zorder-property`） | 所有宣言の突合元 | 読むだけ（4.10） |
+| 4 本の brief（`property-query-channels`／`currentghost-property-tree`／`property-catalog-lists`／`zorder-property`） | 所有宣言の突合元 | 読むだけ（4.10） |
 | `.kiro/steering/roadmap.md:111`（棚卸⑫の三重所有の推奨） | 裁定案の下敷き | 読むだけ（10.5） |
 | `crates/ukadoc-survey`（上流の道具・8 副手続き）*(2026-09-05 追記)* | `check` で整合を確かめ、`report` で `doc/ukadoc-coverage/report/property.md` を作り直す | 走らせるだけ。本番コード `crates/ukadoc-survey/src/` は 1 行も変えない。例外は 1 本だけで、空振り検査の国勢調査 `crates/ukadoc-survey/tests/consistency/checks.rs` の行の主張を `Subjects::Zero` から `NonEmpty` へ移す *(2026-09-05 訂正: 当初は「道具のコードを 1 行も変えない」と書いていたが、台帳に中身を入れると上流のこのテストは必ず赤になる。認められる範囲は Out of Boundary の同日の訂正注記が定める)* |
 
@@ -323,7 +323,7 @@ doc/
 | 区分 | 件数 | 中身 |
 |---|---|---|
 | ⑴ 21 名のうちカタログ id に対応が付かなかった名前 | **0** | 21 名すべてが 1 つ以上の id に当たる（合計 25 id） |
-| ⑵ 正典では SET が有効なのに 21 名に無い葉 | **5** | `currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`（2.8.78）・`position`・`playing`・`pause`（2.8.72）。**`areka-P0-property-query-channels` brief の「21→26」の中身とちょうど一致する** |
+| ⑵ 正典では SET が有効なのに 21 名に無い葉 | **5** | `currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`（2.8.78）・`position`・`playing`・`pause`（2.8.72）。**`property-query-channels` brief の「21→26」の中身とちょうど一致する** |
 | ⑶（追加で分かったこと）21 名のうち、正典が SET 有効としない id を指す名前 | **2 名 / 4 id** | `seriko.cursor.name`・`seriko.tooltip.name`。当たる id は `...mouse????list(当たり判定名).name`／`...mouse????list.index(ID2).name`／`...textlist(当たり判定名).name`／`...textlist.index(ID2).name` の 4 件で、いずれも印が無く、族の頭の継承も無い＝**areka の先取り**。*(2026-09-05 訂正: 当初は 4 件すべてが「index 指定との互換用の記述であり、特に意味はない」と述べていると書いたが、スナップショットで読み直すとこの文が付くのは `(当たり判定名)` の 2 件だけで、`.index(ID2)` の 2 件は「マウスカーソル定義リスト内の指定した位置の当たり判定名。」「ツールチップ定義リスト内の指定した位置の当たり判定名。」と述べる。印が無いこと・継承が無いことは 4 件とも同じなので、区分 ⑶ の件数は動かない)* |
 | ⑷（追加）1 名が 2 id に対応する名前 | **4 名** | `seriko.cursor.path`・`seriko.cursor.name`・`seriko.tooltip.text`・`seriko.tooltip.name`（当たり判定名で指す形と番号で指す形の 2 つ） |
 
@@ -351,7 +351,7 @@ doc/
 
 **出し方の決定**（研究議題 9）: 案を **1 つに絞って推奨として提示**する（5.2）。採った場合と採らなかった場合の影響を 3 本の spec ごとに併記する（5.3）。検討して退けた代案は 1 行ずつ理由付きで残し、比較の材料は失わない。**これは案であって決定ではないことを節の冒頭に明記する**（5.2・5.6）。まず 3 本が何を主張しているかを brief の該当箇所を示して並べる（5.1）。
 
-**推す案（案 甲）**: 値の導出は `areka-P0-zorder-property` が単独で持ち、`areka-P0-currentghost-property-tree` は `seriko.*` から `zorder` を外す。sylphya の SET 有効群の 1 行は `areka-P0-property-query-channels` が持つ。
+**推す案（案 甲）**: 値の導出は `zorder-property` が単独で持ち、`currentghost-property-tree` は `seriko.*` から `zorder` を外す。sylphya の SET 有効群の 1 行は `property-query-channels` が持つ。
 
 - **選んだ理由**: `.kiro/steering/roadmap.md:111`（棚卸⑫）の推奨と一致する *(2026-09-05 訂正: 当初は `:106` と書いていたが、実際に読むと `:106` は「e2e ⇄ toolkit」の行で推奨は書かれていない。三重所有の推奨が載っているのは `:111`。引用の中身は当初のとおりで、案 甲の理由付けは成立する)* — 「**推奨＝切り出し**: 値の導出は `zorder-property` 単独・tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ が持つ」。本 spec が独自の案を立てて統合担当の会に別の軸を持ち込むより、既にある推奨に対して「採る／採らない」の影響を測る方が裁定を 1 度で終えられる。
 - **採ったときの影響**: 3 本の食い違いが消える。tree の範囲が `seriko.*` 14 から 13 へ減る。`zorder-property` brief の本文（「`dotted.rs` の 21 項に入れない・本 brief が語彙の正本」）は ⑸ 節の是正候補の対象になる（語彙表の行は channels が持つため）。

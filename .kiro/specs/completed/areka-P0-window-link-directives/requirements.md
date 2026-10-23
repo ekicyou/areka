@@ -44,7 +44,7 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
 | 4 | 組を作る指令の、正典の「エラー」と、正典が黙る書き方（ID が 2 つ未満・同じ ID の重ね書き・数でない ID）の扱い | どれも組を作らずに捨て、ほかの組はそのまま、何を捨てたかを記録する（トークは止めない・利用者への知らせは出さない） | 正典「すでにペアにしたスコープIDを含むタグを実行するとエラー」。プロパティ `currentghost.seriko.sticky-window` の説明「要素が2つ未満のグループ、および既に他のグループで使われているスコープIDを含むグループは無視される」。兄弟の `\![set,zorder]` も同じ捨て方 | 3.4・3.5 |
 | 5 | ドラッグで連れ動いた組の相手の位置を、位置の記憶に書くか | **書く**（ドラッグした窓と同じ時機に） | 利用者のドラッグの結果だから。書かないと、次の起動でドラッグした窓だけが動いた位置に出て、組が離れる（ぱすたが窓の枠から外れる） | 4.5 |
 | 6 | 吸着の当て直し・表情の切り替えによる大きさの変化・作業領域の変化・位置の初期化で窓が動いたとき、組の相手も動かすか | **動かさない**（連れ動くのはドラッグと `\![move]` だけ） | 正典は「ドラッグ中やmoveタグを実行中にセットで動く」とだけ書く | 4.7・5.6 |
-| 7 | 拡大率が変わった後の詰め直しが、重ねた組の窓を横に並べ直すこと | 本 spec は、どの窓がどの組にいるかを他の機能が確かめられるようにする。詰め直しから組の窓を外すのは `areka-P0-dpi-realign-remembered-chain` が持つ | 同 spec の brief は、組の持ち主（本 spec）の目印を見て外すだけにすると書く。詰め直しのファイルを本 spec が触らずに済む | Boundary Context・9.2 |
+| 7 | 拡大率が変わった後の詰め直しが、重ねた組の窓を横に並べ直すこと | 本 spec は、どの窓がどの組にいるかを他の機能が確かめられるようにする。詰め直しから組の窓を外すのは `dpi-realign-remembered-chain` が持つ | 同 spec の brief は、組の持ち主（本 spec）の目印を見て外すだけにすると書く。詰め直しのファイルを本 spec が触らずに済む | Boundary Context・9.2 |
 | 8 | バルーン位置初期化の後の位置の記憶 | 初期化したバルーンの位置を記憶に書く（次の起動も標準の位置に出る） | 「シェル位置初期化」（完了 `move-canon` 要件 8.8）と同じ扱い | 7.3 |
 | 9 | キーボードの近道が効く場面 | ゴーストのいずれかの窓（キャラクターの窓・バルーンの窓）がキーボードの入力先のときだけ | SSP の「ショートカット一覧」は、この 2 つに「フォーカス無し可」を付けていない | 8.1・8.2 |
 
@@ -60,15 +60,15 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
   - 互換の対応表（`doc/COMPAT_ARCHITECTURE.md` §8）と網羅台帳の該当行の改め
 - **Out of scope**:
   - 時間つきの移動（`--time` の補間）と `\![moveasync]` での組の連れ動き → dola の改造の後の時間の spec（時間つきの移動が入るとき、組の相手も同じ時間で動くことはその spec が引き取る）
-  - 吸着の相手を作業領域の辺から、ほかのアプリの窓へ広げること → `areka-P0-window-snap`
-  - 3 人目以降のキャラクターの窓（その窓を含む組の連れ動きの確かめを含む） → `areka-P0-extra-character-windows`
-  - プロパティ `currentghost.seriko.sticky-window` の読み書き → `areka-P0-currentghost-property-tree`
-  - 拡大率が変わった後の詰め直しから組の窓を外すこと → `areka-P0-dpi-realign-remembered-chain`（裁定 7）
+  - 吸着の相手を作業領域の辺から、ほかのアプリの窓へ広げること → `window-snap`
+  - 3 人目以降のキャラクターの窓（その窓を含む組の連れ動きの確かめを含む） → `extra-character-windows`
+  - プロパティ `currentghost.seriko.sticky-window` の読み書き → `currentghost-property-tree`
+  - 拡大率が変わった後の詰め直しから組の窓を外すこと → `dpi-realign-remembered-chain`（裁定 7）
   - 吸着の向きが上・左・右のときに、作業領域の変化で窓を辺へ当て直すこと（今の areka は下の吸着でだけ当て直す。descript で書いた向きと同じ扱いを保ち、本 spec では広げない）
 - **Adjacent expectations**:
   - 台本の指令で動いた窓は位置の記憶に書かない、という今の決まり（完了 `areka-P0-char-position-save-on-exit`・COMPAT §8）を保ち、`\![move]` で連れ動いた組の相手にも当てる。ドラッグの結果は今どおり記憶に書く。
   - 吸着している窓への `\![move]` は吸着した軸に台本の値を使わない、という完了 `areka-P0-move-canon` の決まりを保つ。台本で向きを変えれば、`\![move]` もその向きに従う。
-  - `areka-P0-dpi-realign-remembered-chain` は、本 spec が持つ「どの窓がどの組にいるか」を見て、詰め直しから組の窓を外す。`areka-P0-window-snap` は、本 spec の吸着（作業領域の辺）を土台にして、吸着の相手を広げる。
+  - `dpi-realign-remembered-chain` は、本 spec が持つ「どの窓がどの組にいるか」を見て、詰め直しから組の窓を外す。`window-snap` は、本 spec の吸着（作業領域の辺）を土台にして、吸着の相手を広げる。
   - descript の `seriko.alignmenttodesktop` の 4 段の優先の読み方（完了 `areka-P0-window-placement`）は変えない。
 
 ## Requirements
@@ -207,5 +207,5 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
 2. When 本機能が完成したとき, the 網羅台帳 shall `\![set,alignmenttodesktop,方向]`・`\![set,alignmenttodesktop,free]`・`\![set,alignmentondesktop,bottomまたはtop]`・`\![set,sticky-window,…]`・`\![reset,sticky-window]`・`\![execute,resetballoonpos]` の行を、実装した状態と持ち主に合わせて改める。
 3. When 本機能が完成したとき, the 網羅台帳 shall シェルの descript の `seriko.sticky-window` の行と、SHIORI リソース `resetballoonpositionbutton.caption` の行を、実装した状態と持ち主に合わせて改める。
 4. When 本機能が完成したとき, the 網羅台帳 shall ゴーストとシェルの descript の `seriko.alignmenttodesktop` 系の行（今は未実装と書かれているが、完了 `areka-P0-window-placement` が既に読む）を、今の実装の状態に合わせて改める。
-5. The 網羅台帳 shall プロパティ `currentghost.seriko.sticky-window` の行を本 spec で実装済みにしない（持ち主は `areka-P0-currentghost-property-tree` のまま）。
+5. The 網羅台帳 shall プロパティ `currentghost.seriko.sticky-window` の行を本 spec で実装済みにしない（持ち主は `currentghost-property-tree` のまま）。
 6. When 本機能が完成したとき, the 本 spec の完了の作業 shall `\![set,zorder]` の台本の組がシェルの切り替えで捨てられる食い違い（正典は「ゴースト終了まで有効」・本 spec の窓の組はシェルの切り替えで保つ）を `/kiro-discovery` で起票する。

@@ -2,7 +2,7 @@
 
 > 起票: 2026-09-20（`/kiro-discovery`・Path C・開発者指示「`load` と `loadu` の両方がある場合、`loadu` を優先して呼び出すこと」）。
 > **種別**: 正典（ukadoc [DLL 共通仕様](https://ssp.shillest.net/ukadoc/manual/spec_dll.html) の 4 つ目の入口 `loadu`）。**規模 XS〜S**。
-> **出自**: `areka-P0-makoto-dll-host` の brief が切れ端 ⓐ「helper の `loadu` 優先（XS・独立 PR 可・SHIORI DLL にも効く）」として抱えていたものを、**SHIORI を主語にした独立 spec** として切り出す。`loadu` は MAKOTO の話ではなく DLL 共通仕様＝SHIORI の入口そのものであり、makoto を待つ理由が無い。makoto 側は本 spec の成果（`ShioriByteProxy`）をそのまま流用するので、移管で失うものは無い。
+> **出自**: `makoto-dll-host` の brief が切れ端 ⓐ「helper の `loadu` 優先（XS・独立 PR 可・SHIORI DLL にも効く）」として抱えていたものを、**SHIORI を主語にした独立 spec** として切り出す。`loadu` は MAKOTO の話ではなく DLL 共通仕様＝SHIORI の入口そのものであり、makoto を待つ理由が無い。makoto 側は本 spec の成果（`ShioriByteProxy`）をそのまま流用するので、移管で失うものは無い。
 
 ## Problem
 

@@ -54,7 +54,7 @@
    - 案 A（推し）: 先に回す段のスクリプト（PowerShell の標準の取り寄せ＝新しい依存なし）。`tools/test-all.ps1` と配布の道具が最初に呼ぶ。テストは通信しない。
    - 案 B: 窓口（Rust）が初回に取り寄せる。素の `cargo test` でそのまま動くが、テスト専用のクレートに通信の依存が要り、テストが通信の調子に左右される。
 4. **取り寄せた書庫の置き場**。ワークツリーの `target\` の下（今の決まりどおり・`cargo clean` のたびに取り寄せ直す）か、ワークツリーをまたいで使い回す置き場（ワークツリーを何本も並べる開発の形で、毎回 15 MB を落とさずに済む）か。後者は「検体・一時のフォルダはワークツリーの `target\` の下だけ」の決まりの例外になるので、開発者が決める。
-5. **どの検体を対象にするか**。第三者の検体と `dot_sakura` は対象。areka が自分で作った変種（`emo2-kakukaku-*`）と、製品の資産（既定バルーン）をどうするか。**製品の資産は対象にしない**案を推す（配布物に必ず入る物は、リポジトリが持つ。`areka-P0-default-balloon-selfmade` が作る自前の既定バルーンがこれに当たる）。
+5. **どの検体を対象にするか**。第三者の検体と `dot_sakura` は対象。areka が自分で作った変種（`emo2-kakukaku-*`）と、製品の資産（既定バルーン）をどうするか。**製品の資産は対象にしない**案を推す（配布物に必ず入る物は、リポジトリが持つ。`default-balloon-selfmade` が作る自前の既定バルーンがこれに当たる）。
 6. **条件の付いた検体を取り寄せ先へ置く権利**。`konnoyayame`（改変禁止・非営利）と `emily4`（非営利）は、そのままのバイト列を非営利で置く分には条件に合う見込みだが、1 本ずつ条件の文を読んで確かめる。合わないものは、リポジトリにも取り寄せ先にも置かず、手で置く口（議題 2）だけにする。
 7. **畳み直した検体の扱い**。リポジトリの書庫が上流のバイト列と違うもの（`StayseeBalloon` など）は、畳み直した後の書庫を取り寄せ先に置くのか、上流のバイト列を取り寄せて手元で畳むのか。
 8. **履歴に残る書庫**。リポジトリから書庫を外しても、過去の履歴には残る。履歴は書き換えない案を推す（リポジトリの太りは、これ以上増えない所で止める）。
@@ -80,13 +80,13 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-dot-sakura-specimen`（取り寄せ先がすでに在る最初の検体・同じ登記表を触る）。同じ登記表を触る `areka-P0-emily-ghost-verification`・`areka-P0-default-balloon-selfmade` が走っていないときに着手する。
+- **Upstream**: `areka-P0-dot-sakura-specimen`（取り寄せ先がすでに在る最初の検体・同じ登記表を触る）。同じ登記表を触る `areka-P0-emily-ghost-verification`・`default-balloon-selfmade` が走っていないときに着手する。
 - **Downstream**: これから足す検体はどれも、書庫をリポジトリに入れずに足せる。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: 完了 `areka-P0-nar-install`（登記表と窓口を作り、「検体は配布形のまま保管する」と決めた）の決めごとを改める。
-- **Adjacent**: `areka-P0-default-balloon-selfmade`（既定バルーンは製品の資産＝この spec の対象にしない。同 spec が既定を差し替えた後は、配布の道が検体の取り寄せに触れない形にできる）。`areka-P0-test-roots-under-target`（検体・一時のフォルダの置き場の決まり＝議題 4）。配布と公開の列（`tools/package.ps1`・`release.yml`）。スキル `/release`（リリースの手順が検体の取り寄せで変わらないこと）。
+- **Adjacent**: `default-balloon-selfmade`（既定バルーンは製品の資産＝この spec の対象にしない。同 spec が既定を差し替えた後は、配布の道が検体の取り寄せに触れない形にできる）。`test-roots-under-target`（検体・一時のフォルダの置き場の決まり＝議題 4）。配布と公開の列（`tools/package.ps1`・`release.yml`）。スキル `/release`（リリースの手順が検体の取り寄せで変わらないこと）。
 
 ## Constraints
 

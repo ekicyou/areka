@@ -219,7 +219,7 @@ fn classifier_source_does_not_reference_the_record_only_table() {
         assert_eq!(
             text.matches(record_only).count(),
             0,
-            "{file} が記録用の表 {record_only} を参照している。仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と引受先 spec（areka-P0-property-query-channels）の裁定が要る"
+            "{file} が記録用の表 {record_only} を参照している。仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と引受先 spec（property-query-channels）の裁定が要る"
         );
     }
     // 較正: 探し方が生きていることを、仕分けが実際に読む表の名前で示す。

@@ -34,7 +34,7 @@
   - 閾値を越えた後に取り消されたドラッグの扱い（今は取り消しでもその時点の位置を保存する。これは変えない）。
   - バルーンの窓の速いドラッグで、バルーンを行き先へ置くこと（今どおり押す前の位置に残る）。
   - 右クリックメニューの出し方、ドラッグの状態が離した後に休む決まり（完了 spec `areka-P0-wintf-drag-state-rest-contract` の決め）。
-  - 拡大率の切替での位置の扱い（`areka-P0-dpi-transition-two-tick-bounce` の範囲）。
+  - 拡大率の切替での位置の扱い（`dpi-transition-two-tick-bounce` の範囲）。
   - 同じウェーブの他の spec との約束により、`crates/areka/src/emo2_boot/`・`crates/areka/src/input_events/`・`crates/areka/src/install/` には触らない。
 - **Adjacent expectations**:
   - 右クリックメニューの引き金（`areka-P0-popup-menu-minimal`・`areka-P0-wintf-drag-state-rest-contract`）は、知らせでなくドラッグの状態を読む。本 spec はドラッグの状態の移り変わり（押して準備 → 離して休む）を変えないので、右クリックメニューの出方は変わらない前提で進める。

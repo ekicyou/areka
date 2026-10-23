@@ -20,10 +20,10 @@
 
 ### Non-Goals
 
-- pattern定義の描画メソッド `import`（後続 `areka-P0-animated-image-import`）。本 spec の変更は 0。
+- pattern定義の描画メソッド `import`（後続 `animated-image-import`）。本 spec の変更は 0。
 - `always` を含む組み合わせ（`bind+always` ほか）と、`always` 以外の interval の語（後続 `areka-P0-seriko-trigger-intervals`）。
 - 動く GIF・読み込みの上限・element定義のオプション・`overlay` 以外の描画メソッド・合成の結果を覚える席の数（どれも変更 0）。
-- 外形が画像の element定義の X,Y を数えないバグの直し（後続 `areka-P0-extent-element-offset`）。本 spec は「静止画のときと同じ外形」を守るだけで、そのバグは直さない。
+- 外形が画像の element定義の X,Y を数えないバグの直し（後続 `extent-element-offset`）。本 spec は「静止画のときと同じ外形」を守るだけで、そのバグは直さない。
 
 ## Boundary Commitments
 
@@ -53,7 +53,7 @@
 ### Revalidation Triggers
 
 - `PartKey`・`PatternState` の欄・`LoopTrigger` の腕・`SerikoMsg::Stage` の形・`always` の経過 0 の決まりが変わるとき → 後続 2 本の brief の申し送りを書き直す（要件 5.2・10.5）。
-- `plan.rs` の画像の element の描き方・外形の数え方が変わるとき（`areka-P0-element-base-method`・`areka-P0-extent-element-offset`・`areka-P0-element-clipping-option`）→ 「画像と動く絵の子は同じ 1 行で外形に数える」が保たれているかを見直す。
+- `plan.rs` の画像の element の描き方・外形の数え方が変わるとき（`areka-P0-element-base-method`・`extent-element-offset`・`element-clipping-option`）→ 「画像と動く絵の子は同じ 1 行で外形に数える」が保たれているかを見直す。
 - 読み込みの側が「各コマは絵の全体の寸法で揃う」「`frames[0]` は親」を変えるとき → 分解の検査を見直す。
 - seriko から表示層までの指令の道が 1 本の FIFO でなくなるとき（出口が増える・橋渡しが並びを変える）→ 出番の世代（合図の後の指令は合図の後に着く、に立っている）を見直す。
 
@@ -87,7 +87,7 @@
 採用の理由:
 
 - コマは「絵」であって「定義」ではない。コマごとのサーフェスの中身は「この絵を 1 枚置く」だけで、定義として何も足さない。上限いっぱい（1,024 コマ）の絵 1 つで 1,025 個の定義が増え、面の表はスコープの数だけ組まれ、面の一覧をなめる処理の全部に現れる。
-- 作者が手で書くときも、要るのは「子サーフェス 1 つと `always` 1 本」である。pattern が絵のファイルを直接指す書き方は、正典の `import`（`animation*.pattern*,import,ファイル名,…`）が既に持つ考え方で、後続 `areka-P0-animated-image-import` が同じ口に載れる。
+- 作者が手で書くときも、要るのは「子サーフェス 1 つと `always` 1 本」である。pattern が絵のファイルを直接指す書き方は、正典の `import`（`animation*.pattern*,import,ファイル名,…`）が既に持つ考え方で、後続 `animated-image-import` が同じ口に載れる。
 - 番号の問題が形から消える（下）。
 
 ### 番号の空間（要件 1.12）
@@ -197,7 +197,7 @@ graph TB
 - `flatten_extent`（今は `plan.rs`。本 spec で `plan_extent.rs` へ移す）に 2 つ足す。
   1. element の輪: `ElementKind::Film` の element は、子の定義の原寸を、**画像の element と同じ 1 行**で数える（「束縛した絵の原寸」か「子の原寸」かを先に決め、数える式は 1 つ）。全部のコマは原寸が同じなので、静止画だったときと同じ値になる（要件 1.7）。
   2. animation の輪: `always` の animation は、**全部の pattern** の先（番号が 0 以上で、欄 2 が animation の番号になる 7 語でも、サーフェスの番号を無視する `move`（ukadoc）でもないもの。`move` は 2026-10-06 の実装のレビューで足した）を、着せ替えの pattern0 と同じやり方で数える。`always` は表示されている間ずっと全部のコマを通るので、和集合が正しい外形である。外形はコマに依らない静的な量のまま。
-- 後続 `areka-P0-extent-element-offset`（未着手・同じ関数を直す）との関係: 同 spec が直すのは「画像の element の X,Y を外形に数えていない」1 点。本 spec は画像と動く絵の子を同じ 1 行で数えるので、その 1 行を直せば両方が直る。**順は本 spec が先**（同 spec は本 spec の後に置かれている）。roadmap の「`flatten_extent` は `extent-element-offset` の持ち物」の約束は、本 spec が 2 つを足すことを書き足して直す。関数を `plan_extent.rs` へ移すことも申し送る。
+- 後続 `extent-element-offset`（未着手・同じ関数を直す）との関係: 同 spec が直すのは「画像の element の X,Y を外形に数えていない」1 点。本 spec は画像と動く絵の子を同じ 1 行で数えるので、その 1 行を直せば両方が直る。**順は本 spec が先**（同 spec は本 spec の後に置かれている）。roadmap の「`flatten_extent` は `extent-element-offset` の持ち物」の約束は、本 spec が 2 つを足すことを書き足して直す。関数を `plan_extent.rs` へ移すことも申し送る。
 
 ### c. 透ける → 子は element を持たない
 
@@ -282,7 +282,7 @@ doc/・.kiro/                        # 台帳・対応表・後続 2 本の brie
 
 | ファイル | 触る所 | 印 |
 | --- | --- | --- |
-| `crates/areka-emo-compose/src/plan.rs` | `push_static_element_ops`（`ElementKind` の振り分けに `Film` の腕）・`flatten_surface`（重ねる番号に `always` を足す・コマが無ければ経過 0・コマが絵を指す腕・「消えている」の腕）・`compute_extent`／`flatten_extent` を `plan_extent.rs` へ移す | **約**。同じウェーブでの重なりは **0**（`areka-P0-element-base-method` は `plan.rs` に触らないと確かめた・下の「調整で確かめた事実」）。`flatten_extent` は未着手の `areka-P0-extent-element-offset` の持ち物とされているので、移したことを申し送る |
+| `crates/areka-emo-compose/src/plan.rs` | `push_static_element_ops`（`ElementKind` の振り分けに `Film` の腕）・`flatten_surface`（重ねる番号に `always` を足す・コマが無ければ経過 0・コマが絵を指す腕・「消えている」の腕）・`compute_extent`／`flatten_extent` を `plan_extent.rs` へ移す | **約**。同じウェーブでの重なりは **0**（`areka-P0-element-base-method` は `plan.rs` に触らないと確かめた・下の「調整で確かめた事実」）。`flatten_extent` は未着手の `extent-element-offset` の持ち物とされているので、移したことを申し送る |
 | `crates/areka-emo-compose/src/plan_extent.rs`・`plan_always.rs` | 新規（`plan_extent.rs` は `plan` の子のモジュール・`plan_always.rs` は `push_film_op`・`always_rest_target`） | — |
 | `crates/areka-emo-compose/src/nesting.rs` | `ElementKind` に `Film`・`FilmId`・`PartKey`・`rest_index`・`rest_pattern`・`SurfaceParts` に 2 欄・`NestTable::walk`・`NestReport::from_world` の `ElementKind` の振り分け | — |
 | `crates/areka-emo-compose/src/pattern.rs`・`world.rs`・`lib.rs`・`film.rs` | 欄・`bind_atlas` の直後の 1 行と読み口・公開の接続・新規 | — |
@@ -306,7 +306,7 @@ doc/・.kiro/                        # 台帳・対応表・後続 2 本の brie
 
 - **`areka-P0-element-base-method`**: `crates/areka-emo-compose/src/plan.rs` には**触らない**（同 spec の tasks.md が `plan.rs`・`blit.rs`・`base_image.rs`・`method.rs` の `is_implemented`／`known_method` を「触らない」に挙げている）。触るのは、読み手の `shell/`（`decode.rs` の `is_image_element_method`・新しい `undrawn.rs`）・合成の `fold.rs` の `normalize_element` と `method.rs` の `ComposeMethod::Base` の注記だけ・表示層の `shell_target.rs` の `load_shell_target`（`warn!` 1 つとテストの接続）・対応表 §8 の 1 行・台帳 `assets.toml` の 2 行。**同 spec が先に main へ入り、本 spec は後**。このウェーブで `plan.rs` の重なりは 0。
 - **`areka-P0-balloon-lifecycle-events`**: `crates/areka/src/emo2_boot/mod.rs` の 1〜3 行だけ（今ある `let clock = TalkClock::new(clock_fn);` の写しを `BalloonLifecycleSink::new(lifecycle_tx)` へ渡す）。`spawn_seriko(` の所・刻みの起動・テストの接続宣言・`frame/status_report.rs` には触らない。**本 spec への縛り: その `clock: TalkClock` の名前・型・持ち主を変えない**。seriko の時計は別の名前（`seriko_clock`）の別の値として足す。**順は入れ替えた（2026-10-05 実装の頭の開発者裁定）: 同 spec はまだ要件の段なので待たず、本 spec が先に main へ入る**。後から入る同 spec が `mod.rs` の小さな競合を解く。同 spec のセッションへ知らせ済み。
-- **`areka-P0-extent-element-offset`**: 未着手（セッションなし）。本 spec が先。同 spec の brief へ「`compute_extent`・`flatten_extent` は `plan_extent.rs` へ移した」「足したのは `always` の全部の pattern と動く絵の子の 2 か所」「画像の element と動く絵の子は同じ 1 行で数えているので、X,Y の直しはその 1 行に入れる」を申し送る（文面は「申し送りの文面」）。
+- **`extent-element-offset`**: 未着手（セッションなし）。本 spec が先。同 spec の brief へ「`compute_extent`・`flatten_extent` は `plan_extent.rs` へ移した」「足したのは `always` の全部の pattern と動く絵の子の 2 か所」「画像の element と動く絵の子は同じ 1 行で数えているので、X,Y の直しはその 1 行に入れる」を申し送る（文面は「申し送りの文面」）。
 
 残る調整は文書だけ: roadmap の同じウェーブの行（本 spec の触るファイル・約束・規模）と `flatten_extent` の持ち主の書き直し。タスクの頭に「main を取り込んで、先に入った `areka-P0-element-base-method` の後の形を引き直す」を置く（`areka-P0-balloon-lifecycle-events` は上のとおり本 spec の後）。
 
@@ -870,7 +870,7 @@ impl ScopeStates {
 
 ## 文書の更新（要件 10）
 
-- **網羅台帳**（`doc/ukadoc-coverage/ledger/assets.toml`）: `always` の項を「単独の `always` は駆動する。組み合わせは駆動しない」へ。`element*` の項に、自動アニメーションが動くこと・動く GIF は非対応のまま・`--clipping` を付けても動く絵として読むこと（`areka-P0-element-clipping-option` が着地するまで）を書く。`import` の項は触らない。
+- **網羅台帳**（`doc/ukadoc-coverage/ledger/assets.toml`）: `always` の項を「単独の `always` は駆動する。組み合わせは駆動しない」へ。`element*` の項に、自動アニメーションが動くこと・動く GIF は非対応のまま・`--clipping` を付けても動く絵として読むこと（`element-clipping-option` が着地するまで）を書く。`import` の項は触らない。
 - **対応表**（`doc/COMPAT_ARCHITECTURE.md` §8）に 1 節: 繰り返し回数を守る・回数つきは表示のたびに始め直す／待ち時間は丸めない・合計 0 は動かさない／終わりなしの絵はサーフェスを切り替えても巻き戻さない（SSP と見え方が違いうる）／`always` の途中の終わりのコマと合計 0／`always` はコマが無くても経過 0 の絵が出て、外形に全部の pattern が入る／バルーンの面も動く（完了 `areka-P0-animated-image-decode` の「後続でも作らない」を上書きした）／コマの切り替えは 16 ミリ秒の刻みで見つける／**手書きの `always` で pattern0 の待ちが 0 のとき、最後のコマは 0 ミリ秒しか出ない**（待ちは「出す前の待ち」なので、周の境目で次の周の pattern0 が同じ時刻に勝つ）／**バルーンの動く絵の記録はスコープごとに 1 回出る**（バルーンの表はスコープごとに作る。要件 8.4 の「読み込み 1 回につき 1 回」は、スコープごとの読み込みを 1 回と数える）／隠れていたバルーンを出すとき、回数つきの絵は必ず 1 枚目から。
 - **roadmap**: 同じウェーブの行の本 spec の触るファイルと約束を、上の「触るファイルと並走の重なり」に合わせて直す。`seriko-trigger-intervals` の行が「優先（高）」で、`always` を含む組み合わせが載っていることを完了のときに確かめる（要件 10.7）。
 
@@ -892,14 +892,14 @@ impl ScopeStates {
 - `bind+always` を入れるときは、`is_always_interval`（経過 0 を描くか・外形に数えるか）と「着せ替えの種類か」（`plan.rs` の `is_bind_interval`・`nesting.rs` の `bind_ids`・`parts.rs` の `gate`）の両方に載せ、着せ替えが無効の間は経過 0 の絵も描かない形にする。
 - バルーンの面でも部品の経路が回る。時計の鍵に面の種類が入った。
 
-**`areka-P0-extent-element-offset` に足すこと（要件 10.6 の範囲・同 spec は未着手で、本 spec の後）**
+**`extent-element-offset` に足すこと（要件 10.6 の範囲・同 spec は未着手で、本 spec の後）**
 
 - `compute_extent`・`flatten_extent` は `crates/areka-emo-compose/src/plan.rs` から `plan_extent.rs` へ移した（中身は変えていない）。roadmap の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読み替える。
 - 本 spec が足したのは 2 か所: `always` の animation の全部の pattern を数える輪と、動く絵の子（`ElementKind::Film`）の原寸。
 - 画像の element と動く絵の子は**同じ 1 行**で数えている。画像の element の X,Y を外形に足す直しは、その 1 行に入れれば子にも効く。
 - 着せ替えの pattern0 を「index が最小」で取る既存の食い違いは、直していない。
 
-**`areka-P0-animated-image-import` に足すこと（分解の仕組みの形）**
+**`animated-image-import` に足すこと（分解の仕組みの形）**
 
 - 動く絵は「子」になる: 子の定義 `FilmSheet`（`EmoWorld::film_sheet`・`crates/areka-emo-compose/src/film.rs`）、鍵 `PartKey::Film(FilmId)`、子を置く element `ElementKind::Film`。子は `always` を 1 本持ち、部品の時計で回る。
 - `import` は「**pattern定義が動く絵の子を指す**」形に載れる。今、pattern定義が指せるのは作者のサーフェスの番号だけなので、足すのは ①読み手が `import` のファイル名を落とさずに運ぶこと ②そのファイルを焼く一覧に載せること ③コマの指す先に「動く絵の子」を足すこと（`PatternFrame`・`LoopFrame`・`flatten_surface` のコマの腕・`NestTable` のコマの辺）。子が見える部品になれば、時計・欄・経過 0・外形は本 spec のものがそのまま効く。
@@ -916,7 +916,7 @@ impl ScopeStates {
 
 ### 決めたこと（2026-10-05）
 
-1. **手書きの `always` の外形は、全部の pattern の和集合にする**（開発者に示して異議なし・2026-10-05）。理由: 自動で作った子と手書きの `always` は同じに振る舞う／表示されている間ずっと見える絵が、外形で切れてはいけない。今 `always` を書いているシェルは、これまで動かなかった絵のぶん外形が広がりうる（対応表に書く）。画像の element の X,Y を外形に数える直しは、後続 `areka-P0-extent-element-offset` へ申し送る（「申し送りの文面」）。
+1. **手書きの `always` の外形は、全部の pattern の和集合にする**（開発者に示して異議なし・2026-10-05）。理由: 自動で作った子と手書きの `always` は同じに振る舞う／表示されている間ずっと見える絵が、外形で切れてはいけない。今 `always` を書いているシェルは、これまで動かなかった絵のぶん外形が広がりうる（対応表に書く）。画像の element の X,Y を外形に数える直しは、後続 `extent-element-offset` へ申し送る（「申し送りの文面」）。
 2. **コマの切り替えは 16 ミリ秒の刻みで見つける（今の刻みのまま）**。開発者の決まり「時刻は正確に扱う・更新が遅れたら過ぎた時間の分だけ進める」に基づく。時計の開始は出来事の時刻で、今のコマは「今の時刻 − 開始の時刻」から正確に決まる。刻みが遅れても過ぎた時間の分だけ進み（要件 2.9）、待ち時間は丸めず、刻みより短いコマは飛ぶ（要件 2.4）。遅れは積み上がらない。まばたきなど今のアニメーションも同じ刻みで動いている。
 3. **隠れているバルーンへもコマの指令は流れ続ける（合成・転送・描画は 0 回）**。同じ決まりに基づく。見えなかった間も進んでいたものとして、出た瞬間に正しいコマを見せるための形である（要件 3.3）。要件 6.4・3.7 の「描き直さない」は、合成・描画が 0 回であることと読む。
 4. **出し直しの前に出た指令は、出番の世代で見分けて本 spec の中で解く**（開発者裁定 2026-10-05「何でもかんでも先送りはよくない」）。前の版が「残る遅れ」に挙げていた「飛んでいる途中の古い指令で古いコマが 1〜2 フレーム見える」は、これで 0 フレームになった。

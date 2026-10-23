@@ -47,7 +47,7 @@
 - `resolve_transition` の枝分け（R5.1〜R5.3）と `crates/wintf/src/runtime/mod.rs` の `wire_click_through` の doc（「`JustEnded` 再収束／R5.2」の文言は本仕様の説明と既に矛盾しないので **変更 0**）。
 - `decide`（`trigger.rs`）の引数と判断。`crates/areka/src/menu/trigger_tests.rs` の `decide_*` 2 本は変えない。
 - `is_available`（`readme.rs`）と `missing_logged` の初回だけの `debug!`（要件 5.4）。`open` 関数の `error!`（要件 5.3）。
-- 右クリックメニューの表示・抑止・項目の動作。`areka-P0-popup-menu-residue` の残件 3〜10。
+- 右クリックメニューの表示・抑止・項目の動作。`popup-menu-residue` の残件 3〜10。
 - `keyboard.rs` の `WM_ACTIVATE` が `JustStarted` で `cancel_dragging` を呼ばない既存の非対称（報告のみ・§Open Questions / Risks）。
 
 ### Allowed Dependencies
@@ -515,5 +515,5 @@ impl DragStateSnapshot {
 ## Open Questions / Risks
 
 - **設計の未決は 0。** `research.md` §6 の 4 件は本設計で決着（冒頭の注記）。
-- 報告のみ（範囲外）: `keyboard.rs` の `WM_ACTIVATE` は `Dragging`・`Preparing` で `cancel_dragging` を呼ぶが `JustStarted` では呼ばない（`WM_KEYDOWN`／`WM_CANCELMODE`／`WM_CAPTURECHANGED` は 3 つとも扱う）。`JustStarted` の間に非アクティブ化が起きると捕捉が残る潜在欠陥。本仕様は `keyboard.rs` を触らない（要件 2.6）ので、`areka-P0-popup-menu-residue` 型の台帳へ渡す候補として残す。
+- 報告のみ（範囲外）: `keyboard.rs` の `WM_ACTIVATE` は `Dragging`・`Preparing` で `cancel_dragging` を呼ぶが `JustStarted` では呼ばない（`WM_KEYDOWN`／`WM_CANCELMODE`／`WM_CAPTURECHANGED` は 3 つとも扱う）。`JustStarted` の間に非アクティブ化が起きると捕捉が残る潜在欠陥。本仕様は `keyboard.rs` を触らない（要件 2.6）ので、`popup-menu-residue` 型の台帳へ渡す候補として残す。
 - リスク: `trigger_flow_tests.rs` の余裕が最も小さい（863 行）。新テスト＋ヘルパで 60 行以内に収める。超える見込みになったら同じ接頭辞の兄弟ファイル（`trigger_flow_scope_tests.rs`・`#[path]` で接続）へ置く。

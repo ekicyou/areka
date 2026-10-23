@@ -47,14 +47,14 @@ ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に
   - 窓の固定と解除の働き → 申し送り先なし（SSP 2.9.18 も実装していない＝受けないことを本 spec の要件 7 で決め、台帳に書く）
   - `\![set,alignmenttodesktop]`・`\![set,sticky-window]`／`\![reset,sticky-window]`、`--option=ignore-sticky-window` の効き目 → `areka-P0-window-link-directives`（v0.1.0）
   - `\![execute,resetballoonpos]`・メニューの「バルーン位置初期化」（`resetballoonpositionbutton.caption`）・位置初期化の 2 つのキーボードの近道（SSP ヘルプの「よくある質問」と「ショートカット一覧」） → `areka-P0-window-link-directives`（v0.1.0）
-  - surfaces.txt に宣言された `point.basepos` を面ごとに使うこと → `areka-P0-surfaces-basepos`
-  - `check_script` による `\![move]` の引数の診断 → `areka-P0-check-script-arg-checks`
-  - 他のゴーストの名前の基準の解決（今はスコープ 0 へ置き換える・要件 3.8） → `areka-P0-multi-ghost-runtime`
-  - 3 人目以降の窓の `\![move]` と並べ直し → `areka-P0-extra-character-windows`
+  - surfaces.txt に宣言された `point.basepos` を面ごとに使うこと → `surfaces-basepos`
+  - `check_script` による `\![move]` の引数の診断 → `check-script-arg-checks`
+  - 他のゴーストの名前の基準の解決（今はスコープ 0 へ置き換える・要件 3.8） → `multi-ghost-runtime`
+  - 3 人目以降の窓の `\![move]` と並べ直し → `extra-character-windows`
 - **Adjacent expectations**:
   - 台本の指令で動いた窓は位置の記憶に書かない、という今の決まり（完了 spec `areka-P0-char-position-save-on-exit`・COMPAT §8 の位置の記憶の行）を保つ。本 spec はそれに「シェル位置初期化」の後の扱いだけを足す（要件 8.8）。
   - 台本の X・Y に拡大率を掛ける今の決まり（COMPAT §8・SSP との意図した差）を保つ。
-  - `areka-P0-check-script-arg-checks` は `\![move]` の読み方を共有するので、本 spec の後は名前付きの形も読めるものとして扱う。`areka-P0-window-link-directives` は本 spec が受け取る `--option` の語彙に意味を持たせる。
+  - `check-script-arg-checks` は `\![move]` の読み方を共有するので、本 spec の後は名前付きの形も読めるものとして扱う。`areka-P0-window-link-directives` は本 spec が受け取る `--option` の語彙に意味を持たせる。
 
 ## Requirements
 

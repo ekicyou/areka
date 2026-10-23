@@ -583,19 +583,19 @@ sed -n '67p;82p;89p'               .kiro/steering/roadmap.md
 実在確認の採取コマンド:
 
 ```
-for d in areka-P0-balloon-offset-dpi areka-P0-tick-gate-adoption areka-P0-draw-load-parity; do
+for d in areka-P0-balloon-offset-dpi tick-gate-adoption areka-P0-draw-load-parity; do
   for base in .kiro/specs .kiro/specs/completed; do
     [ -d "$base/$d" ] && echo "EXISTS  $base/$d"
   done
 done
 → EXISTS  .kiro/specs/areka-P0-balloon-offset-dpi
-  EXISTS  .kiro/specs/areka-P0-tick-gate-adoption
+  EXISTS  .kiro/specs/tick-gate-adoption
   EXISTS  .kiro/specs/completed/areka-P0-draw-load-parity
 ```
 
 | # | 担当しない範囲 | 担当仕様 | **実在するディレクトリ**（実測） | 中身 | roadmap 側の登記 | design 側の登記 |
 |---|---|---|---|---|---|---|
-| N1 | tick の相順／tick の門の本採用 | `tick-gate-adoption` | `.kiro/specs/areka-P0-tick-gate-adoption` | `brief.md` 1 本（`ls … \| wc -l` → **1**） | `:58`（採取＝`sed -n '58p' … \| grep -c 'tick-gate-adoption. が引受け済み'` → **1**）・`:97`・`:121`・`:133` | Non-Goals（「tick の門の本採用（`tick-gate-adoption` の担当）」）＋ Out of Boundary（`tick_bridge.rs` の flush 駆動） |
+| N1 | tick の相順／tick の門の本採用 | `tick-gate-adoption` | `.kiro/specs/tick-gate-adoption` | `brief.md` 1 本（`ls … \| wc -l` → **1**） | `:58`（採取＝`sed -n '58p' … \| grep -c 'tick-gate-adoption. が引受け済み'` → **1**）・`:97`・`:121`・`:133` | Non-Goals（「tick の門の本採用（`tick-gate-adoption` の担当）」）＋ Out of Boundary（`tick_bridge.rs` の flush 駆動） |
 | N2 | フレーム駆動の CPU 負荷 | `draw-load-parity`（完了） | `.kiro/specs/completed/areka-P0-draw-load-parity` | 9 エントリ（`ls … \| wc -l` → **9**） | `:58`（`grep -n 'draw-load-parity' …` → 58 行目に完了サマリ「**W6.9 draw-load-parity ✅**（08-23）」） | Non-Goals（「フレーム駆動の CPU 負荷（`draw-load-parity` が閉じた）」） |
 | N3 | バルーン追従オフセットの k 倍 | `balloon-offset-dpi` | `.kiro/specs/areka-P0-balloon-offset-dpi` | `brief.md` 1 本（`ls … \| wc -l` → **1**） | `:68`（ゴール表の bod 行＝`DPI 遷移時の BalloonFollow.offset スケール意味論確定`）・`:83`（W6.95 の bod 編成行） | Non-Goals（「バルーン追従オフセットの k 倍（`balloon-offset-dpi` の担当）」）＋ Out of Boundary（並走 3 仕様のファイル素＝`placement/follow` 系） |
 

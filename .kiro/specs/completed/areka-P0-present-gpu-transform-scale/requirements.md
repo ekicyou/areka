@@ -45,12 +45,12 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
   - 当たり判定の領域解決（完了 spec `collision-dpi-hittest`・点 ÷k）とバルーン窓のヒット経路（矩形 ×k・点は無変換）: **変更 0**。
   - 窓の寸法・配置・DPI 変化時の窓寸 reconcile（`take_pending_resize`／`target_physical_size` を消費する `crates/areka/src/emo2_boot/frame/drain_resnap.rs`）: **利用者から見える結果は変更 0**（物理寸の照会値は従来どおり `scaled_extent(native)`）。
   - 機械負荷（別プロセス）の管理: 本仕様の対象外。
-  - 拡大率遷移の 2 ティックの跳ね: `areka-P0-dpi-transition-two-tick-bounce`（W14・本仕様の後に再計測）。
+  - 拡大率遷移の 2 ティックの跳ね: `dpi-transition-two-tick-bounce`（W14・本仕様の後に再計測）。
   - 合成メモの容量（3）と置換方式（LRU）: **変更 0**（外れの代金が消えるため容量増は採らない・brief ⓒ 却下）。
   - CPU リサンプルの高速化（brief ⓐ）・別スレッド化（brief ⓓ）: **採らない**。
 - **Adjacent expectations**:
   - **Upstream**: 完了 spec `areka-P0-emo-dpi-scaling`（D3／D5／D6 を本仕様が覆す・D1／D2／D4／D7／D8 は不変）・`areka-P0-collision-dpi-hittest`（÷k・不変）・`areka-P0-recompose-budget`（計時の型と予算席・`FrameBudget` の席のうちリサンプル席は撤去対象）・`areka-P0-draw-load-parity`。
-  - **Downstream**: `areka-P0-emo2-conformance-e2e`（症状 E の登記の消化・完成判定は待たない）・`areka-P0-dpi-transition-two-tick-bounce`（外れの代金が消えると遅れの量が変わる＝本仕様の後に採り直す）・`areka-P0-balloon-canon-residue`（W14・`areka-emo-present` を本仕様の後に触る）・`tick-gate-adoption`。
+  - **Downstream**: `areka-P0-emo2-conformance-e2e`（症状 E の登記の消化・完成判定は待たない）・`dpi-transition-two-tick-bounce`（外れの代金が消えると遅れの量が変わる＝本仕様の後に採り直す）・`balloon-canon-residue`（W14・`areka-emo-present` を本仕様の後に触る）・`tick-gate-adoption`。
   - **正典参照**: 本仕様は areka 内部の描画アーキテクチャの仕様であり、ukadoc に対応する条文は無い（ukadoc 参照 0 件・捏造しない）。
   - **開発者方針**: SSP の画素実測は根拠にしない（目視証跡＝スクリーンショットは根拠に使える）。
 
@@ -166,7 +166,7 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 4. The 本仕様 shall `crates/areka-emo-present/src/cache.rs`・`presenter.rs`・`presenter/show.rs`・`presenter/budget.rs`・`crates/areka-emo-compose/src/scale.rs` のモジュール doc に残る「k 適用済み」「リサンプル」の記述を新しい形へ書き換え、旧設計の説明を残さない（doc の主張は file:line で裏取り）。あわせて `crates/wintf/src/ecs/layout/hit_test/mod.rs` の `AlphaMaskResource` doc（「マスク原寸＝bounds 寸」）と `alpha_mask_hit` doc（「bounds==マスク原寸で恒等写像」）を「マスク＝原寸・bounds＝物理寸・比例写像が ÷k を与える」へ書き換える（判定コードは不変・Requirement 9.5）。
 5. The 本仕様 shall 完了 spec `areka-P0-collision-dpi-hittest` の点 ÷k 契約が不変であること、および同 spec の設計文書が言及する「k 倍マスク」の記述があれば原寸マスクへ改訂することを確認する（無ければ「該当 0」と記録）。2026-09-11 grep: 同 spec の `design.md`／`requirements.md` に「マスク」「mask」は 0 件＝**該当 0**（`acceptance-record.md`／`brief.md` の `info!` 文言の引用のみ・改訂不要）。
 6. The 本仕様 shall 完了 spec `areka-P0-emo2-conformance-e2e` の `acceptance-record.md` §13.2 行 9 の「引受先」欄を本仕様の完了で埋め、`.kiro/steering/roadmap.md` の状態列を `/kiro-complete` で更新する。
-7. The 本仕様 shall 完了時に、下流 `areka-P0-dpi-transition-two-tick-bounce` へ「外れの代金が消え、表示・窓書込・文字が同一 tick に揃ったので走行 D 形式で再計測してから設計」を申し送る（roadmap W14 ① の条件のまま）。
+7. The 本仕様 shall 完了時に、下流 `dpi-transition-two-tick-bounce` へ「外れの代金が消え、表示・窓書込・文字が同一 tick に揃ったので走行 D 形式で再計測してから設計」を申し送る（roadmap W14 ① の条件のまま）。
 
 ### Requirement 9: 非退行と境界（ゼロの明示）
 

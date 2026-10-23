@@ -59,7 +59,7 @@ areka が SHIORI へ送るイベントは emo2 が使う分だけで組まれて
 
 ## Upstream / Downstream
 
-- **Upstream**: `ukadoc-survey-toolkit`（台帳形式・evidence スキャン）。既存: `areka-P0-status-execution-states`（`Status` ヘッダ台帳）・`areka-P0-property-query-channels`（`property.get`/`property.set`・`\![raise]`／`\![embed]` の経路）。
+- **Upstream**: `ukadoc-survey-toolkit`（台帳形式・evidence スキャン）。既存: `areka-P0-status-execution-states`（`Status` ヘッダ台帳）・`property-query-channels`（`property.get`/`property.set`・`\![raise]`／`\![embed]` の経路）。
 - **Downstream**: `ukadoc-coverage-roadmap`。将来の M2 候補（オーナードローメニュー・時刻イベント・窓状態イベント・ネットワーク更新イベント・SSTP/PLUGIN ホスティング）。
 
 ## Existing Spec Touchpoints

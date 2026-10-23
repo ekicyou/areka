@@ -120,7 +120,7 @@
 | 4.6 消えると分かったとき | `/kiro-discovery` での起票 | − | 3.1 の見込みどおりなら起票が要る。議題 5 に新しい材料（3.1 の最後） |
 | 5.1 提出の手順書 | 道具・コマンド・フォーク・同意の手続き | 道具は未導入・フォークは無い | **未決**: 道具（5.1）。**未知**: 初回の提出者に求められる同意の手続き |
 | 5.2〜5.7 提出と検査 | PR・印の読み取り | `gh` で PR の印は読める | **制約**: 提出は開発者の手。**外の不確かさ**: 未署名の exe が走査に掛かるか |
-| 6.1〜6.3 記録と申し送り | `verification/`・後ろの spec の brief | `areka-P0-winget-release-automation` の brief が在り、議題 3 に「消えると分かったとき」の受け口が在る | 書き足すだけ |
+| 6.1〜6.3 記録と申し送り | `verification/`・後ろの spec の brief | `winget-release-automation` の brief が在り、議題 3 に「消えると分かったとき」の受け口が在る | 書き足すだけ |
 
 ## 5. 進め方の案
 
@@ -196,7 +196,7 @@
 
 ## 9. 出典
 
-- リポジトリ: `tools/package.ps1`（`Test-ZipContent` の許可表・段「assemble」の写し）・`crates/areka/src/boot_config.rs`（`follow_exe_links`・`exe_location`・`resolve_boot_from` の `root_resolved`）・`crates/areka/src/ghost_session.rs`・`crates/areka/src/boot_resolve.rs`（`last_ghost_not_found`）・`dist/README.txt`（「■ 記憶の置き場」）・`.kiro/steering/structure.md`（「その他の最上位」）・`.kiro/specs/completed/areka-P0-release-package-versioned/verification/winget-local-check.md`・同 `design.md` の「Out of Boundary」・`.kiro/specs/areka-P0-winget-release-automation/brief.md`。
+- リポジトリ: `tools/package.ps1`（`Test-ZipContent` の許可表・段「assemble」の写し）・`crates/areka/src/boot_config.rs`（`follow_exe_links`・`exe_location`・`resolve_boot_from` の `root_resolved`）・`crates/areka/src/ghost_session.rs`・`crates/areka/src/boot_resolve.rs`（`last_ghost_not_found`）・`dist/README.txt`（「■ 記憶の置き場」）・`.kiro/steering/structure.md`（「その他の最上位」）・`.kiro/specs/completed/areka-P0-release-package-versioned/verification/winget-local-check.md`・同 `design.md` の「Out of Boundary」・`.kiro/specs/winget-release-automation/brief.md`。
 - GitHub（`gh`・読むだけ）: `ekicyou/areka` の Release `v0.0.2`／`microsoft/winget-pkgs` の `manifests/a/`・`doc/manifest/schema/`・直近の PR 2 件のファイル／`microsoft/winget-cli`・`microsoft/winget-create`・`russellbanks/Komac` の最新の Release。
 - winget-cli のソース（タグ `v1.29.380`）: `src/AppInstallerCLICore/Workflows/PortableFlow.cpp`（`GetPortableProductCode`・展開したフォルダを 1 段だけ回す所・`VerifyExpectedState` の後の `--force` の分かれ・`Purge` の決め）／`src/AppInstallerCLICore/PortableInstaller.cpp`（`VerifyPortableFile`・`InstallFile`・`RemoveFile`・`ApplyDesiredState`・`RemoveInstallDirectory`）／`src/AppInstallerCommonCore/Manifest/ManifestCommon.cpp`（`DoesInstallerTypeIgnoreScopeFromManifest`）。
 - 外の文書: https://github.com/microsoft/winget-pkgs/blob/master/doc/manifest/schema/1.12.0/installer.md ・ https://github.com/microsoft/winget-pkgs/blob/master/doc/Authoring.md ・ https://github.com/microsoft/winget-create/blob/main/doc/submit.md ・ https://github.com/russellbanks/Komac/blob/main/README.md

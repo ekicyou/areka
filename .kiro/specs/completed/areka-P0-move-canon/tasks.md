@@ -110,7 +110,7 @@
 - 3.1: Bottom の吸い付きで `MonitorSnapshot` が無いとき、`project_anchor` は台本の Y をそのまま返し debug だけを出す（ドラッグと同じ縮退・本番は起動で必ず置く）。軸が `Fix` でも作業領域・原点の置き換えの記録は `move_frame_substituted` に出る（要件 4.1/4.2 の「base と書かれた場合」に沿う）。
 - 4.1: `crates/areka/src/menu/captions_tests.rs` の注記「引く 9 名」は 4.3 で枠を足すときに 10 名へ合わせる。
 - 4.3: `ghost_session.rs` の注記「`Input` の 10 系」は本 spec より前から実際の系の数（12 以上）と合っていない。数を固定する檻は無い。
-- 5: `set,position`／`reset,position` は `not-applicable`（持ち主は本 spec）にしたので、linkage の target は 1,550、`MIN_LINKAGE_CITED_IDS` も 1,550。`.kiro/specs/areka-P0-sakura-time-directives/brief.md:72` の持ち主の数「10（…move…）」は古いまま（同 brief の :116 が着手時の付け替えを予告）。
+- 5: `set,position`／`reset,position` は `not-applicable`（持ち主は本 spec）にしたので、linkage の target は 1,550、`MIN_LINKAGE_CITED_IDS` も 1,550。`.kiro/specs/sakura-time-directives/brief.md:72` の持ち主の数「10（…move…）」は古いまま（同 brief の :116 が着手時の付け替えを予告）。
 - 6.2: 実機の道具で、選択肢の押下・離し・ポインタの退避が 1 フレームに重なると選択肢の押下が拾われなかった（道具側で 80ms／400ms の間を空けて回避）。製品の不具合として起票するかは完了の棚卸で判断する。
-- 完了時にその場で解決: `.kiro/specs/areka-P0-sakura-time-directives/brief.md` の持ち主の数（10→9・`move` の付け替え）を直した（本 spec の外・`12e4b8c2`）。
-- 完了時に起票（既存の brief へ追記）: 6.2 の「押下・離し・ポインタの退避が同じフレームに重なると選択肢の押下が拾われない」を `areka-P0-real-run-input-guard-observations` の件 3 に足した（起票の条件 4: 確かめるのに実機の走行をくり返す要がある・件 1 と触る所が同じ）。
+- 完了時にその場で解決: `.kiro/specs/sakura-time-directives/brief.md` の持ち主の数（10→9・`move` の付け替え）を直した（本 spec の外・`12e4b8c2`）。
+- 完了時に起票（既存の brief へ追記）: 6.2 の「押下・離し・ポインタの退避が同じフレームに重なると選択肢の押下が拾われない」を `real-run-input-guard-observations` の件 3 に足した（起票の条件 4: 確かめるのに実機の走行をくり返す要がある・件 1 と触る所が同じ）。

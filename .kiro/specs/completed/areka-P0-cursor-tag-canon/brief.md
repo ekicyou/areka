@@ -84,7 +84,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `areka-P0-choice-render`（縮退表改訂＝完了 spec の正典改訂・追随義務あり）。
-- **Adjacent**: `areka-P0-balloon-vertical-canon`（bvc・R4 が本 spec を追跡先として語彙登記・二重実装禁止）。`areka-P0-balloon-canon-residue`（M2 ゲート・収載範囲は系列解決と表示寿命＝本 spec と非交差）。
+- **Adjacent**: `areka-P0-balloon-vertical-canon`（bvc・R4 が本 spec を追跡先として語彙登記・二重実装禁止）。`balloon-canon-residue`（M2 ゲート・収載範囲は系列解決と表示寿命＝本 spec と非交差）。
 
 ## Constraints
 
