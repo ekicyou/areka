@@ -174,7 +174,7 @@ Remove-Item -LiteralPath "$v\root\ghost\pasta-in-windows\ghost\master\profile" -
 
 段はこの順で回す。1 つの段が兄弟の spec の持ち分の崩れで回せないときは「回せなかった」と書いて次の段へ進む（1 つの崩れで走行全体を止めない）。
 
-SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.23）。根拠（台本の原文・面の写し・撮った物）は測りの記録 `.kiro/specs/areka-P0-pasta-in-windows-verification/ssp-measurement.md` の「全体の通しの基準」の段の番号の項目にある。
+SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.23）。根拠（台本の原文・面の写し・撮った物）は測りの記録 `.kiro/specs/completed/areka-P0-pasta-in-windows-verification/ssp-measurement.md` の「全体の通しの基準」の段の番号の項目にある。
 
 | 段 | 操作 | 撮る物 | SSP の基準 | 今の引き取る spec | その着地で変わるはずの所 |
 |---|---|---|---|---|---|
@@ -194,7 +194,7 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 
 ### 最後の確かめで決める項目（案 B）
 
-最初の走行で開発者の判定が付かなかった 7 項目（`.kiro/specs/areka-P0-pasta-in-windows-verification/verification.md` の 6 節「申し送りの漏れが無いことの確かめ」の判定待ちの 6 欄と、5 節の崩れの 15）と、ぱすたの側が直した崩れの 1・2 の確かめの、合わせて 8 項目。v0.1.0 の版の門の最後の確かめで、書いた spec の着地の後に回し、開発者が「同じ／違う」を決める。「違う」になったら、その時に v0.1.0 の持ち主か新しい起票へ渡す。
+最初の走行で開発者の判定が付かなかった 7 項目（`.kiro/specs/completed/areka-P0-pasta-in-windows-verification/verification.md` の 6 節「申し送りの漏れが無いことの確かめ」の判定待ちの 6 欄と、5 節の崩れの 15）と、ぱすたの側が直した崩れの 1・2 の確かめの、合わせて 8 項目。v0.1.0 の版の門の最後の確かめで、書いた spec の着地の後に回し、開発者が「同じ／違う」を決める。「違う」になったら、その時に v0.1.0 の持ち主か新しい起票へ渡す。
 
 | 項目 | 見比べる物 | 決める時 |
 |---|---|---|
