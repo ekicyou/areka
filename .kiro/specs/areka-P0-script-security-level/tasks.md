@@ -127,7 +127,7 @@
   - _Requirements: 4.6, 4.7_
 
 - [ ] 7. 通しの確かめと記録
-- [ ] 7.1 偽の SHIORI で起動の道を通す通しのテストと、全体の回帰
+- [x] 7.1 偽の SHIORI で起動の道を通す通しのテストと、全体の回帰
   - 起動の通しのテストと同じ組み方（偽の受け手と、ユーザーブレイク禁止の受け口）で起こし、テストのファイルの中で台本つきの偽の受け手を包んでヘッダつきの GET だけを上書きし（共有の偽物のファイルは触らない）、`OnBoot` の台本 `\![enter,nouserbreakmode]…` を返す。
   - ⑴ 応答の `SecurityLevel: external` つきでは線に `enter` が出ない ⑵ `local` または無しでは今どおり `enter` が出る、が緑になる（kanade → 台本の起動 → 配送 → 受け口の運ぶ道が既定の値に落ちていない）。
   - ワークスペースの全体テスト（記録の種別の表示・`Status`・翻訳・MCP の 2 つの道・1 ファイル 1,000 行の番人を含む）が緑のままになる。
@@ -160,3 +160,5 @@
 - （範囲外・4.1 のレビューで発見）`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は main で既に 1,135 行（行数の番人の許可表に載っている）。同じ `BoxedBackend` の写しが 3 つのテストのファイルにある。
 - 選択肢の `script:` を試すテストは `steady_with_ledger` だけだと控え `shown` が無く、構造上は起きない `choice_script_origin_missing` の道を通る。元のトークの控えを置き、その error が出ないことを確かめる（5.4 のレビュー）。
 - `areka` には lib の対象が無い。単体テストは `cargo test -p areka --bin areka`（結合テストの `smoke_boot_loop_exit` などはアプリを起こすので机が要り、32bit の `shiori-host32-testdll-loadu` のビルドも前提）。
+- 7.1 の「ワークスペースの全体テストが緑」は、最後の検証（`/kiro-validate-impl` の全体テスト・排他テストの机）で確かめる。
+- （範囲外・7.1 で発見）`areka` の `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が負荷の下で 1 度赤になり、回し直しで緑（揺れ）。

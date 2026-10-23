@@ -71,6 +71,12 @@ impl UserBreakWiring {
         self.talking
     }
 
+    /// 旗の線の受信端（テスト専用の読み口・起動の通しのテストが届いた合図を 1 件ずつ読む）。
+    #[cfg(test)]
+    pub(crate) fn flag_rx(&self) -> &Receiver<NoUserBreakSignal> {
+        &self.flag_rx
+    }
+
     /// 旗の線の受信端が今の送出端につながっているか（テスト専用の読み口）。
     ///
     /// 未読の値が残っていても 1 度の `try_recv` では生死が分からないので、`Err` が出るまで
