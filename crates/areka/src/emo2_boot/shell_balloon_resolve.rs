@@ -3,9 +3,10 @@
 //!
 //! 入口（`shell_balloon_switch.rs`）が長くなるので、解決の純関数と控えをこちらへ分けた
 //! （design「File Structure Plan」の `shell_balloon_resolve.rs`）。
-//! - 候補: シェルは今のゴーストの `shell/` の下の全部（`menu,hidden` を含む）、バルーンは根の目録。
+//! - 候補: シェルは今のゴーストの `shell/` の下の全部（`menu,hidden` を含む）、バルーンは今のゴーストの中と
+//!   根の目録（ゴーストの中が先・areka-P0-ghost-inner-balloon 要件 2.1・9.2）。
 //!   今のものも候補に入る（自分自身への切替は作り直す＝要件 1.8・裁定 5）。
-//! - 照合の順: `random`・`lastinstalled` を先に解き、次に `name` → フォルダ名（大文字小文字を区別）。
+//! - 照合の順: `random`・`lastinstalled` を先に解き、次に `name` → フォルダ名（`same_folder_name`＝区別しない・`name` は区別する）。
 //!   メニューのフォルダの名指しはフォルダ名とだけ突き合わせる（特別な名前は解かない）。
 //! - 控え: このプロセスで最後に入れたシェル・バルーン（プロセスの中だけ・ファイルへは書かない）。
 
@@ -106,9 +107,11 @@ pub(crate) fn shell_candidates(ghost_dir: &Path) -> Vec<SkinCandidate> {
         .collect()
 }
 
-/// 根の `balloon/` の目録のバルーン。
-pub(crate) fn balloon_candidates(roots: &BasewareRoots) -> Vec<SkinCandidate> {
-    areka_ghost::catalog_roots::list_balloons(roots)
+/// 今のゴースト（`ghost_dir`）の中の `balloon/` と根の `balloon/` の目録のバルーン（ゴーストの中が先・
+/// 同じフォルダ名の根は隠れる）。
+pub(crate) fn balloon_candidates(roots: &BasewareRoots, ghost_dir: &Path) -> Vec<SkinCandidate> {
+    areka_ghost::catalog_roots::balloons_for(roots, ghost_dir)
+        .listed
         .into_iter()
         .map(|e| SkinCandidate {
             dir: e.dir,

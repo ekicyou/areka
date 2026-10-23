@@ -93,7 +93,7 @@
 ### 5. 外形
 
 - `always` の外形を全部の pattern の和集合にするのは、外形を「コマに依らない静的な量」（`Extent` の定義・`plan.rs`）のまま保つ唯一の形で、妥当。
-- 動く絵の子を「画像の element と同じ 1 行」で数えるのは良い判断。未着手の `areka-P0-extent-element-offset` が直す 1 行（画像の element の X,Y を足していない）を直せば、子も一緒に直る。
+- 動く絵の子を「画像の element と同じ 1 行」で数えるのは良い判断。未着手の `extent-element-offset` が直す 1 行（画像の element の X,Y を足していない）を直せば、子も一緒に直る。
 - `flatten_extent` を `plan_extent.rs` へ移すのは、`plan.rs` を 1,000 行以下に保つために要る。roadmap は「`flatten_extent` は `extent-element-offset` の持ち物（`plan.rs`）」と書いているので、約束の書き直しが要る（重大な指摘 2）。
 - 今の `flatten_extent` は着せ替えの pattern0 を「index が最小の pattern」で取り、命令の経路は「index が 0 の pattern」で取る（既存の食い違い）。本 spec の範囲ではないが、`always` の和集合を足すとき同じ関数を触るので、移すだけで直さないことを設計に 1 行書いておくと、レビューが迷わない。
 

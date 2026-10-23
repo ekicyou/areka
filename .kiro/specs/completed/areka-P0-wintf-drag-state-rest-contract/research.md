@@ -41,7 +41,7 @@
 
 **brief の「wintf 内 3 か所（`resolve_transition`・`start_preparing`・`keyboard.rs`）」との差**: 上表のとおり `resolve_transition` は別の問い、`keyboard.rs` は値取り出しか可変アクセス。代わりに brief が見落としていた `nchittest_cache.rs` が「押している間か」だけを聞く。**見落とした読み手は 0**（`crates/areka/src/placement/spawn.rs`・`follow/drag_follow.rs` は `drag::` を参照するが、読むのは `DragConfig`／`DraggingState` 等の ECS 部品で、`DragState` は読まない）。
 
-**既存の非対称（範囲外・報告のみ）**: `WM_ACTIVATE` は `Dragging` と `Preparing` で `cancel_dragging` を呼ぶが `JustStarted` は `_ => {}` で呼ばない（`WM_KEYDOWN`／`WM_CANCELMODE`／`WM_CAPTURECHANGED` は 3 つとも扱う）。本仕様は `keyboard.rs` を書き換えない（要件 2.6）ので触らないが、`JustStarted` 中の Alt+Tab で捕捉が残る潜在欠陥として `areka-P0-popup-menu-residue` 型の台帳へ渡す候補になる。
+**既存の非対称（範囲外・報告のみ）**: `WM_ACTIVATE` は `Dragging` と `Preparing` で `cancel_dragging` を呼ぶが `JustStarted` は `_ => {}` で呼ばない（`WM_KEYDOWN`／`WM_CANCELMODE`／`WM_CAPTURECHANGED` は 3 つとも扱う）。本仕様は `keyboard.rs` を書き換えない（要件 2.6）ので触らないが、`JustStarted` 中の Alt+Tab で捕捉が残る潜在欠陥として `popup-menu-residue` 型の台帳へ渡す候補になる。
 
 ### 2.3 相乗り 1（別の窓の預かり）
 

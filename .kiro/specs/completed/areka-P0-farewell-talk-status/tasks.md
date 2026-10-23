@@ -56,4 +56,4 @@
 - 完了時の棚卸し: その場で解決 2 件・新しい起票 0 件。
   - 完了時にその場で解決: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記を実際に合わせた（番号が引ける相は 5 つ・並べるのは 3 つ）。
   - 完了時にその場で解決: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の `OnClose` の行の注記を実際に合わせた（会話なしの作り方で送る・出所は名前で指す）。
-  - 起票しない: `cargo clippy -p areka-kanade --all-targets` の `never_loop`（`actor_raise_reply_tests.rs`）は、既に `areka-P0-clippy-199-lints` の brief と roadmap の行が受け持っている。
+  - 起票しない: `cargo clippy -p areka-kanade --all-targets` の `never_loop`（`actor_raise_reply_tests.rs`）は、既に `clippy-199-lints` の brief と roadmap の行が受け持っている。

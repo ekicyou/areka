@@ -46,4 +46,4 @@
 - `talk` の開始の `debug!` は `every = 3`・50 ms/字で約 150 ms に 1 行。`logging.md` の「高頻度は `trace!`」との境目に近いが、実機の手順 5 がこの行を grep するので `debug!` のままでよい。長い台詞で記録が重いと分かったら `trace!` へ下げ、手順の `RUST_LOG` を `areka_seriko=trace` にする。
 - 1,000 行: `table.rs` 779→約 840・`looper.rs` 682→約 800・`parts.rs` 625→約 735 の見積もりは実物の行数と合う。`parts.rs` は 2 段の `rebuild` と `arm` の閉包で見積もりを超えやすいので、900 行を越えそうなら `rebuild` を兄弟モジュールへ出す。
 - 検体の面 9103 の `animation2.interval,Talk,3`（大文字混じり）は読み手で `Other("Talk")`、表では先頭の語が `talk` でないので `warn!` でなく既存の `debug!`。手順 5 の「`WARN … 数値が無効` が 9103 で 2 行」はこの読みと整合している（`talk,abc`・`periodic,0` の 2 行）。
-- `roadmap-draft.md` の `[briefs].count = 48`・本 spec の `owner_count = 1`・`seriko-interval-combinations` の行が無いことは実物で確認した。`areka-P0-seriko-interval-combinations`・`areka-P0-seriko-script-triggers` の spec ディレクトリは存在する（見張りの腕 b を満たす）。
+- `roadmap-draft.md` の `[briefs].count = 48`・本 spec の `owner_count = 1`・`seriko-interval-combinations` の行が無いことは実物で確認した。`seriko-interval-combinations`・`seriko-script-triggers` の spec ディレクトリは存在する（見張りの腕 b を満たす）。

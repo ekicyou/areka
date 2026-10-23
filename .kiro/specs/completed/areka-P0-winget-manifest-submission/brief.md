@@ -44,7 +44,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: `areka-P0-release-package-versioned`・`areka-P0-release-ci-workflow`・`areka-P0-release-cycle` の初回（`v0.0.2` の Release が実在すること＝初回の提出に要る）。
-- **Downstream**: `areka-P0-release-code-signing`（署名が入っても形は変わらない）・将来のインストーラー spec（名乗り `Areka.Areka`・データは `%APPDATA%` へ＝ポータブル版と住み分ける）。
+- **Downstream**: `release-code-signing`（署名が入っても形は変わらない）・将来のインストーラー spec（名乗り `Areka.Areka`・データは `%APPDATA%` へ＝ポータブル版と住み分ける）。
 
 ## Existing Spec Touchpoints
 
@@ -145,7 +145,7 @@
   - 手元の `winget install --manifest` での確かめ（同 2）。**上げ直し（`winget upgrade`）で利用者のゴースト・記憶が残るかも、ここで測る**（棚卸㉑の議題 2 の ⒜ を採った形）。
   - 初回の手提出（同 3）。
   - **完了の線**: winget-pkgs への PR を出し、その自動の検査が緑になった所まで。取り込み（人の承認）は待たない。
-- **出した範囲（Out・どの spec へ）**: → `areka-P0-winget-release-automation`（新しく起票）
+- **出した範囲（Out・どの spec へ）**: → `winget-release-automation`（新しく起票）
   - `.github/workflows/winget.yml`（本文の Desired Outcome の 4）。
   - `README.md` と `dist/README.txt` の winget の行（同 5。「入手のしかた」の 1 行と「既知の制限」の 2 行）。取り込みの前に `winget install` の行を説明書に載せないため。
   - `max-versions-to-keep` の数（議題の一部）と、トークン（PAT）の登録も、そちらへ移る。

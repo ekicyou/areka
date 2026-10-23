@@ -59,7 +59,9 @@ fn translate_result_becomes_the_reinput_of_the_batch() {
     assert!(result.last_reply.is_none(), "SHIORI の応答は入れ直さない");
     assert_eq!(
         result.translated.map(|r| r.ok()),
-        Some(Some("\\0元\\e".to_string())),
+        Some(Some(crate::schedule::translate::Translated::local(
+            "\\0元\\e"
+        ))),
         "204 は元の台詞（素通しの口）で翻訳の結果になる"
     );
     assert!(!result.stop);

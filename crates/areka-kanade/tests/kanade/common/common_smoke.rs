@@ -9,6 +9,7 @@ use areka_kanade::{
     ExecutionSnapshot, KanadeConfig, KanadeMsg, MouseButton, ShioriMsg, ShioriOutcome, StartTalk,
     TalkEndReason, TalkId, events,
 };
+use areka_talk::ScriptOrigin;
 
 use super::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, MouseResponse, QuitPolicy,
@@ -38,7 +39,7 @@ fn mock_shiori_replies_and_records_onboot() {
         .recv_timeout(DEFAULT_TIMEOUT)
         .expect("mock shiori should reply immediately");
     match outcome {
-        ShioriOutcome::Value(script) => assert_eq!(script, FIXED_BOOT_SCRIPT),
+        ShioriOutcome::Value(script, _) => assert_eq!(script, FIXED_BOOT_SCRIPT),
         // ShioriOutcome は Debug 非実装ゆえ、非 Value は総称メッセージで報告する。
         _ => panic!("expected Value(boot script) from mock shiori OnBoot"),
     }
@@ -76,6 +77,7 @@ fn mock_sakura_records_and_returns_talkdone() {
             epilogue: Vec::new(),
             talk_id: TalkId(1),
             script: FIXED_BOOT_SCRIPT.to_string(),
+            origin: ScriptOrigin::GHOST,
         }))
         .expect("send TalkCommand::Start to mock sakura");
 
@@ -226,7 +228,7 @@ fn mock_shiori_injects_mouse_response() {
         .recv_timeout(DEFAULT_TIMEOUT)
         .expect("mock shiori should reply immediately");
     match outcome {
-        ShioriOutcome::Value(script) => assert_eq!(script, MOUSE_SCRIPT),
+        ShioriOutcome::Value(script, _) => assert_eq!(script, MOUSE_SCRIPT),
         _ => panic!("expected injected Value(script) for OnMouseMove"),
     }
 

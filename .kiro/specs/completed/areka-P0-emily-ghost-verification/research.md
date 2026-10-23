@@ -116,7 +116,7 @@
 ## 4. 規模と危うさ
 
 - **規模: M（3〜7 日）。** 決まっている部分は、インストールの扱い（3〜4 タスク）・登記（1〜2）・文書と台帳（1〜2）・実機の検証と記録（2）＝8〜10 タスク。直しは起こしてから数える。
-- **危うさ: 中〜高。** インストールの扱いと登記は、決まった型を広げるだけで低い。高いのは、SSP 前提のゴーストを初めて起こす部分で、次の 5 節の見立てのどれが当たるか分からないこと。特に 3 人目以降の窓の件は、当たれば直す場所が `areka-P0-extra-character-windows` の持ち場と重なる。
+- **危うさ: 中〜高。** インストールの扱いと登記は、決まった型を広げるだけで低い。高いのは、SSP 前提のゴーストを初めて起こす部分で、次の 5 節の見立てのどれが当たるか分からないこと。特に 3 人目以降の窓の件は、当たれば直す場所が `extra-character-windows` の持ち場と重なる。
 
 ---
 
@@ -193,7 +193,7 @@
 - **調べ物 1（3 人目以降の窓）**: 作られる。`placement/config.rs` の `detect_scopes`（144〜164 行）が `char{n}.` の鍵（n が 2 以上）から scope を足し、`placement/mod.rs` の `prepare_stages_for_shell`（406・407 行）→ `resolver.rs` の `resolve_placement` → `spawn.rs` の `spawn_ghost_windows`（415〜472 行）が scope ごとにキャラクターの窓とバルーンの窓を作る。`ghost_session.rs` 282〜294 行がその全部にポインタ・メニュー・投げ込みの受け手を付ける。起動の絵の側（`emo2_boot/mod.rs` 289〜291 行 `derive_scopes` は `[0, 1]` 固定）は scope 2 の窓に絵を付けず、`attach.rs` 196〜200 行の `warn!` で済む。
 - **panic の道**: debug 版の `debug_assert!(scope <= 1)` の 2 か所だけ。`input_events/mod.rs` 398 行（`char_scope`・マウスの移動・ダブルクリック・ドラッグ・右クリックの離しから来る）と `menu/captions.rs` 110 行（`visible_resource_for`）。ほかの道（`GhostWindows` の引き当て・測り・窓の位置・バルーンの面の引き当てなど）は scope 2 以上でも落ちない。
 - **絞る場所**: `build_placement_config` は呼び手 3 か所（`placement/mod.rs` 406 行・`reseed.rs` 62 行・`emo2_boot/frame/switch.rs` 448 行）がすべて通る。その中の `detect_scopes` が根の 1 か所。
-- **`areka-P0-extra-character-windows` の持ち分**: scope の導き方を 1 か所にまとめる・2 か所の `debug_assert!` を外す・3 人目以降の窓を正しく作る。本 spec の絞りは、その spec が後で外す前提の最小の直し。
+- **`extra-character-windows` の持ち分**: scope の導き方を 1 か所にまとめる・2 か所の `debug_assert!` を外す・3 人目以降の窓を正しく作る。本 spec の絞りは、その spec が後で外す前提の最小の直し。
 
 ### 10.2 設計の議題の決め（6 節の 2・3・4・8・9・10）
 

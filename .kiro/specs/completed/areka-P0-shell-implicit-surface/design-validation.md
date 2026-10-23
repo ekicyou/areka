@@ -21,7 +21,7 @@
 | (0,0) は正典に根拠があるか | ukadoc を引き直した | 根拠あり。C9「画像左上の1ドット(座標0,0)と同色の領域は透過色」のほか、`seriko.paint_transparent_region_black`・`\_b[ファイルパス,x,y]` の項も「画像左上の色」「左上ピクセルの色が透過色」と書く。SSP の実測には 0 件も頼っていない |
 | `fold_append` の条件の追加は C6 どおり | `crates/areka-emo-compose/src/fold.rs` の `fold_append`・`upsert_surface` を読んだ | 成立。「番号が面の表にも画像の対応にも無ければ既存の `warn!` のまま」は要件 3.8 と一致。画像だけの面へ追記した後に同じ番号の波括弧が来たときの全置換は、既存の `upsert_surface` の規則そのままで、設計は沈黙ルール対応表への追記を予定している |
 | 間隔の語の読み替えで解析側のテストは緑のまま | `Interval::Other` を使う箇所を全クレートで数えた | 解析側（`areka-parsers`）は変更 0 なので緑のまま。**ただし `areka-seriko` の本体内テスト 1 本が赤になる（重大な指摘 1）** |
-| 要件 9.2 の申し送り先が実在する | パスを確かめた | `.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md` は実在し、`roadmap.md` の #45 の行が「各 spec の『統合担当への申し送り』の受け皿」と書いている。要件が名指しする `areka-P0-ukadoc-coverage-roadmap` は `.kiro/specs/completed/` に在り、申し送りを消化できないという設計の判断は正しい。完了済みの spec を引受先にした先送りは 0 件 |
+| 要件 9.2 の申し送り先が実在する | パスを確かめた | `.kiro/specs/coverage-roadmap-refresh/brief.md` は実在し、`roadmap.md` の #45 の行が「各 spec の『統合担当への申し送り』の受け皿」と書いている。要件が名指しする `areka-P0-ukadoc-coverage-roadmap` は `.kiro/specs/completed/` に在り、申し送りを消化できないという設計の判断は正しい。完了済みの spec を引受先にした先送りは 0 件 |
 | 1 ファイル 1,000 行・テストは兄弟ファイル | 触るファイルの行数を数えた | `balloon.rs` 644・`table.rs` 529・`normalize.rs` 309・`areka-emo-atlas/src/lib.rs` 596・`fold.rs` 272・`world.rs` 256・`assets.rs` 436（減る）・`measure.rs` 485（減る）・`emo2_boot/mod.rs` 673。どれも上限まで 300 行以上の余裕がある。新しいテストファイルの名前は、同じフォルダの別の本番ファイルの名前と衝突しない（衝突 0 件） |
 
 ### 検体の絵の実測（WIC で 32bit 乗算済み BGRA へ変換した後）

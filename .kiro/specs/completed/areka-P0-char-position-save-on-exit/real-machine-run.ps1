@@ -20,7 +20,7 @@
     R1: 起動して落ち着いたら、本体（\0）だけをドラッグして離す → メニューの「終了」。
     R2: 起動したら、相方が R1 で閉じたときの位置に立っているかを目で見る → 「終了」。
     R3: R2 と同じ（並びが変わらないかを見る）→ 「終了」。
-  拡大率（DPI）は変えない（拡大率の詰め直しの後退は areka-P0-dpi-realign-remembered-chain の持ち分）。
+  拡大率（DPI）は変えない（拡大率の詰め直しの後退は dpi-realign-remembered-chain の持ち分）。
 
 .EXAMPLE
   pwsh -NoProfile -File .kiro/specs/completed/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Prepare

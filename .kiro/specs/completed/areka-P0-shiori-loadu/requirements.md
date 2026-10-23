@@ -68,7 +68,7 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
   - 実機確認（検体 3 体＋既定コードページに無い字を含むフォルダ）。
   - `doc/COMPAT_ARCHITECTURE.md` §8 への裁定 3 件の登記、台帳 `ukadoc:spec_dll` の記述の追随（手書きの正本 `briefing-shiori.md` → 台帳の写し → 生成器が書く `report/*.md` の撮り直し）、`shiori_proxy.rs` 冒頭の「確立シーケンス」の説明の更新、steering `structure.md` の fixture 節の追随。
 - **Out of scope**（**変更 0**。以下は本仕様で 1 行も変えない）:
-  - MAKOTO・SAORI・PLUGIN の DLL の読み込み（`areka-P0-makoto-dll-host` ほか）。台帳 `ukadoc:spec_dll` の `status` は `degraded` の**まま**（SAORI・MAKOTO・PLUGIN が残るため）。
+  - MAKOTO・SAORI・PLUGIN の DLL の読み込み（`makoto-dll-host` ほか）。台帳 `ukadoc:spec_dll` の `status` は `degraded` の**まま**（SAORI・MAKOTO・PLUGIN が残るため）。
   - `request` の文字コード（完了 `areka-P0-charset-canon`）。
   - `unload`・`request` の振る舞い（呼ぶ時機・引数・所有権・Drop での courtesy `unload`・結果の無視）。変わるのは `unload` の戻り値を受ける型だけ。
   - 親側（`crates/shiori-host32-host`・`crates/areka-kanade`）と凍結した受け渡し（`MsgTag`・load-ack の 1 バイト・`LOAD` にペイロードを持たせないこと）。親は「どの入口で確立したか」を**知らない**まま。
@@ -81,7 +81,7 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
   - 完了 spec（`areka-P0-host32-shiori-load` ほか）の文書の改変。要件の上書きは本仕様の requirements と COMPAT §8 に書く。
 - **Adjacent expectations**:
   - **前提（いずれも完了済み・先行必須の未完 spec は無い）**: `areka-P0-host32-shiori-load`（`ShioriByteProxy`）・`areka-P0-host32-request`・`areka-P0-host32-window-thread-pump`・`areka-P0-nar-install`（検体は `.nar`）・`areka-P0-shell-implicit-surface`（里々／YAYA の検体が実機で動く）。
-  - **下流**: `areka-P0-makoto-dll-host` は `ShioriByteProxy` を流用して `loadu` 優先を無償で得る（brief の切れ端 ⓐ は本仕様へ移管済み）。`areka-P0-ukadoc-coverage` 系の台帳は本仕様が 1 項目の記述だけを直す。
+  - **下流**: `makoto-dll-host` は `ShioriByteProxy` を流用して `loadu` 優先を無償で得る（brief の切れ端 ⓐ は本仕様へ移管済み）。`areka-P0-ukadoc-coverage` 系の台帳は本仕様が 1 項目の記述だけを直す。
   - **並走**: `property-ipc-transport`・`property-query-channels` は `shiori-host32-*` を触るが `shiori_proxy.rs` の入口解決には触らない見込み（着手時に rebase して確認）。
   - **本仕様が上書きする完了要件**: 完了 `areka-P0-host32-shiori-load` の「`load`／`unload`／`request` の 3 エクスポートすべてを解決し、いずれか欠落→`EntryNotFound`」（`shiori_proxy.rs` 冒頭の確立シーケンス手順 2）を、「`unload`・`request` は必須、初期化の入口は `loadu`／`load` のどちらか 1 つが在ればよい」に改める。同 spec の「戻り `bool` は Rust bool 1 byte」（`LoadFn`／`UnloadFn` の定義行）を「1 バイト整数・0 か否か」に改める。
 

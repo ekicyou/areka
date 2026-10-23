@@ -66,7 +66,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-P0-impl-watch`（完了済み。文書は動かさず、この spec が引き継ぐ）。
-- **Adjacent**: `areka-P0-impl-watch-skills`（出力の文と `--help` を読む側）。`areka-P0-actor-thread-log-capture`（記録の捕捉の道具。(i) で使えるかを見るだけで、触らない）。
+- **Adjacent**: `areka-P0-impl-watch-skills`（出力の文と `--help` を読む側）。`actor-thread-log-capture`（記録の捕捉の道具。(i) で使えるかを見るだけで、触らない）。
 
 ## Constraints
 

@@ -38,13 +38,13 @@
 - `crates/areka/src/placement/zorder_property_deferral_tests.rs` の**走査対象名簿**（`SCANNED_VOCAB_TABLES`・`vocabulary_tables()`・t_zpd11 の名簿本数と較正行）への新表 1 件の登記。
 
 ### Out of Boundary
-- `currentghost.seriko.zorder` の登記（語彙台帳の行も値の導出も `areka-P0-zorder-property`）。
-- `classify_set`／`is_canonical_vocab` の規則（`actor.rs`）。葉だけで正準とみなす判定と、末尾形が実書込キーと突き合わされない件は `areka-P0-property-query-channels` へ起票する（要件 10）。
+- `currentghost.seriko.zorder` の登記（語彙台帳の行も値の導出も `zorder-property`）。
+- `classify_set`／`is_canonical_vocab` の規則（`actor.rs`）。葉だけで正準とみなす判定と、末尾形が実書込キーと突き合わされない件は `property-query-channels` へ起票する（要件 10）。
 - `GENERIC_PROP_NAMES`（17 項）の内容。本機能は 1 項も足さない。
 - 先送りを守る判定そのもの（t_zpd10／t_zpd30／t_zpd40 の本文）。
 - `doc/ukadoc-coverage/report/summary.md`・`report/property.md`（証拠件数が 2 → 21 に動くが再生成は `areka-P0-ukadoc-coverage-roadmap` へ申し送る）。
 - `.kiro/steering/structure.md` の「`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論」の行（新表の記述が不足するが要件 9.1 の範囲外＝完了報告で申し送る）。
-- 他 spec の brief（`areka-P0-property-catalog-lists` の「17」2 箇所は当該 spec が着手時に引き直す）。
+- 他 spec の brief（`property-catalog-lists` の「17」2 箇所は当該 spec が着手時に引き直す）。
 
 ### Allowed Dependencies
 - 照合元: `doc/ukadoc-coverage/ledger/property.toml`（188 件・完了 spec `areka-P0-ukadoc-survey-property` の成果物）。
@@ -54,8 +54,8 @@
 - 既存の検査の道具: `crates/ukadoc-survey`（`check`・`evidence` 副手続き・`cargo test -p ukadoc-survey`）は**読むだけ**で、そのソースには触れない。
 
 ### Revalidation Triggers
-- `SOUND_PROP_NAMES` を `classify_set` が読むようになったとき（`areka-P0-property-query-channels` が仕分け規則を決める時点）——本機能の構造検査（`actor.rs` が新表を参照しない）は同 spec が意図して改訂する。
-- `SET_EFFECTIVE` の件数が 25 から動くとき（`areka-P0-zorder-property` の解禁で 26 になる見込み）。
+- `SOUND_PROP_NAMES` を `classify_set` が読むようになったとき（`property-query-channels` が仕分け規則を決める時点）——本機能の構造検査（`actor.rs` が新表を参照しない）は同 spec が意図して改訂する。
+- `SET_EFFECTIVE` の件数が 25 から動くとき（`zorder-property` の解禁で 26 になる見込み）。
 - `dotted.rs` に新しい公開 const が生えるとき（t_zpd12 が名簿への登記を要求する）。
 - 正典 `list_propertysystem.html` のサウンドプロパティ名の表に 19 葉目、または ⒜印（SET 有効）の 4 つ目が現れたとき（件数 18／25 の導出が崩れる。ただし正典の増減を自動で見張る仕組みは買わない＝開発者方針 2026-09-11）。
 
@@ -135,7 +135,7 @@ doc/
 - `crates/areka-sylphya/src/vocab/dotted_set_ledger_tests.rs` — **新設**。Components 節「兄弟テスト」の 7 本。
 - `crates/areka-sylphya/src/ledger_key_determinism_tests.rs` — 基準群 C: `criterion_ledger_counts_exact` に `SOUND_PROP_NAMES.len() == 18` を追加、`criterion_set_effective_full_group_coverage` の説明文と `[&str; 21]` を 25 へ（4 項追加）。汎用名 17 の記述は**変えない**。
 - `crates/areka/src/placement/zorder_property_deferral_tests.rs` — 走査対象名簿への登記のみ（Components 節「走査対象名簿」）。t_zpd10／t_zpd30／t_zpd40 の本文は不変。
-- `doc/ukadoc-coverage/ledger/property.toml` — `currentghost.seriko.sticky-window:1` と `currentghost.seriko.zorder:1` の `owner` 記入と note 末尾の「裁定待ち: …」行の差し替え。他の行は不変（サウンド 18 行の「語彙表だけを触る spec: areka-P0-property-query-channels」も**触らない**）。
+- `doc/ukadoc-coverage/ledger/property.toml` — `currentghost.seriko.sticky-window:1` と `currentghost.seriko.zorder:1` の `owner` 記入と note 末尾の「裁定待ち: …」行の差し替え。他の行は不変（サウンド 18 行の「語彙表だけを触る spec: property-query-channels」も**触らない**）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の `currentghost.seriko.zorder` の行（「プロパティ `currentghost.seriko.zorder`（SSP 2.8.78・SET 有効）の読み書き」で始まる行）の**直後**に 1 行追加。既存行は不変。
 
 > `crates/areka-sylphya/src/actor.rs`・`actor_tests.rs`・`reader.rs`・`key.rs`・`vocab/mod.rs`・`vocab/flat.rs`・`vocab/shiori_resource.rs` は**触らない**。
@@ -176,7 +176,7 @@ doc/
 | 5.2 | URL はカタログ同一 id の URL | URL 注記 | 「URL 注記の一覧」節 | — |
 | 5.3 | 既存と同じ書き表し方 | URL 注記 | 抽出器の 3 記号のうち配列要素位置で使える `//` | — |
 | 5.4 | 既存 21 項には要求しない | URL 注記 | 19 行ちょうど（T6 が判定） | — |
-| 6.1 | `zorder` 行の owner | property.toml 2 行 | `owner = "areka-P0-zorder-property"` | — |
+| 6.1 | `zorder` 行の owner | property.toml 2 行 | `owner = "zorder-property"` | — |
 | 6.2 | `sticky-window` 行の owner | property.toml 2 行 | `owner = "areka-P0-sylphya-set-ledger"` | — |
 | 6.3 | 「裁定待ち」を所有の記述へ | property.toml 2 行 | note 末尾行の差し替え | — |
 | 6.4 | 他の行は不変 | property.toml 2 行 | 差分は 2 エントリに閉じる | — |
@@ -194,7 +194,7 @@ doc/
 | 9.2 | 名簿への登記に限る | 走査対象名簿 | 判定本文は不変 | — |
 | 9.3 | 範囲外は報告 | 「範囲外の申し送り」節 | 4 件 | — |
 | 10.1 | 仕分けの欠陥 2 点の記録 | `dotted.rs` 説明文（要件 10 の記録） | — | — |
-| 10.2 | 引受先の実在確認 | `dotted.rs` 説明文 | `.kiro/specs/areka-P0-property-query-channels/brief.md` 実在確認済み | — |
+| 10.2 | 引受先の実在確認 | `dotted.rs` 説明文 | `.kiro/specs/property-query-channels/brief.md` 実在確認済み | — |
 | 10.3 | 利用者から見える言葉を 1 つ | `dotted.rs` 説明文 | 「保存して読み戻せる」→「受理して捨てる」 | — |
 
 ## Components and Interfaces
@@ -228,13 +228,13 @@ doc/
 - 2〜4 には URL 注記を置かない（正典の項目としては 1 つなので、注記は `SOUND_PROP_NAMES` の側に 1 つ・要件 5.1）。代わりにグループ見出しコメントで「URL は `SOUND_PROP_NAMES` の同名要素に置く」と示す。
 - 意味論は 4 項とも `RuntimeCommand`（既存 `set_effective_all_runtime_command` がそのまま判定する）。
 - **綴りの導出（要件 1.5）**: 既存 21 項と同じく「正典の見出しから先頭の親枝とセレクタを除いた末尾の形」。`currentghost.seriko.sticky-window` → `seriko.sticky-window`（`seriko.defaultsurface` と同じ縮め方）。`pause`／`playing`／`position` は正典の見出しがそのまま末尾形。
-- **本文に `zorder` の綴りを書かない**（t_zpd40 は sylphya の全ソース本文から小文字の部分一致で探す。**追跡 spec の名前 `areka-P0-zorder-property` もこの綴りを含むので書けない**）。件数の導出を説明文に書くときは「先送り中の 1 行（窓の重なり順のプロパティ。所有は互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 の該当行を参照）」と言い換える。同じ制約は新設の兄弟テストにも掛かる（`dotted_set_ledger_tests.rs` の本文・失敗メッセージ・コメントに `zorder` を含む語を書かない）。
+- **本文に `zorder` の綴りを書かない**（t_zpd40 は sylphya の全ソース本文から小文字の部分一致で探す。**追跡 spec の名前 `zorder-property` もこの綴りを含むので書けない**）。件数の導出を説明文に書くときは「先送り中の 1 行（窓の重なり順のプロパティ。所有は互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 の該当行を参照）」と言い換える。同じ制約は新設の兄弟テストにも掛かる（`dotted_set_ledger_tests.rs` の本文・失敗メッセージ・コメントに `zorder` を含む語を書かない）。
 
 **説明文（doc コメント）に書く内容**——本 spec が要件 4.2〜4.5 の「文書に明記する」を `dotted.rs` の側で満たす箇所:
 - 群構成: 基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4＋**正典追随 4**（sticky-window 1・サウンド SET 3）＝ 25。
 - 照合元の側の数え方: 調査台帳 `property.toml` で「書き込み: 正典 SET有効」と記録する行は 26 行。先送り中の 1 行を除いて 25 行。`seriko.cursor.path` と `seriko.tooltip.text` はセレクタの書き方違い（当たり判定名で指す形と番号で指す形）で台帳が 2 行ずつに分かれるが語彙表では 1 項目ずつなので 23 項目。これに正典に設定の定めが無いまま areka が先取りで登記している `seriko.cursor.name`・`seriko.tooltip.name` の 2 項目を足して 25。
 - 注記（要件 4.3）: 2 通りが同じ 25 に着くのは偶然の一致であり（「2 行→1 項目」で −2、「先取り」で ＋2 が相殺している）、「26 から 1 を引く」だけでは語彙表の件数の根拠にならない。
-- `.ext.拡張プロパティ名` 系 4 行が 26 に入らない理由（要件 4.4）: 印は無く ext 亜枝の中継形のため（台帳の当該行の note）。担い手は `areka-P0-property-ipc-transport`。
+- `.ext.拡張プロパティ名` 系 4 行が 26 に入らない理由（要件 4.4）: 印は無く ext 亜枝の中継形のため（台帳の当該行の note）。担い手は `property-ipc-transport`。
 - 先取り 2 項（要件 4.5）: 完了 spec `areka-P0-ukadoc-survey-property` の design 規則 8 突合表・区分 ⑶ が「印が無く族の頭の継承も無い＝areka の先取り」と確定している既知の食い違い。本 spec は解消しない（引受先は同 spec の完了報告のとおり未定のまま。本 spec は記録のみ）。
 
 **Contracts**: State [x]
@@ -268,7 +268,7 @@ doc/
   1. 葉の名前が `GENERIC_PROP_NAMES` に載っていれば根が正準でなくても正準語彙とみなす判定（`actor.rs` の正準語彙判定の第 2 項）。正典はどの葉も属する根の下でのみ定義しており、葉の名前が単独で意味を持つ定めは無い。
   2. `SET_EFFECTIVE` が末尾形で持たれているため、実際の書込キー（例 `currentghost.sound(要素名).pause`）とは一度も突き合わされない（既存 21 項すべてが同じ状態）。
   - 利用者から見える結果: 1 により、正典に無い名前（例 `myplugin.name`）への書き込みが「保存して読み戻せる」から「受理して捨てる」へ変わる。
-  - 引受先: `areka-P0-property-query-channels`（`.kiro/specs/areka-P0-property-query-channels/brief.md`・実在確認 2026-09-13・`\![set,property,...]` の経路を開通させフルキーが初めて流れ込む spec）。本 spec は是正しない。
+  - 引受先: `property-query-channels`（`.kiro/specs/property-query-channels/brief.md`・実在確認 2026-09-13・`\![set,property,...]` の経路を開通させフルキーが初めて流れ込む spec）。本 spec は是正しない。
 
 **Contracts**: State [x]
 
@@ -347,7 +347,7 @@ doc/
 | T2 | `sound_set_leaves_appear_in_both_tables` | `pause`／`playing`／`position` の 3 つが `SOUND_PROP_NAMES` と `SET_EFFECTIVE` の双方に載る。残り 15 は `SET_EFFECTIVE` に**載らない**（載る個数 == 3 を判定） |
 | T3 | `newly_registered_set_keys_are_runtime_command_reserved` | 4 項（`seriko.sticky-window`・`pause`・`playing`・`position`）それぞれで `classify_set == RuntimeCommand` かつ `SylphyaCore::new().apply(Set{..})` の効果列が `vec![Effect::RuntimeCommandReserved{..}]` に等しい |
 | T4 | `record_only_leaves_keep_their_previous_classification` | literal 期待値表: `duration`・`error`・`id`・`loop`・`preload` と `meta.*` 8 葉 → `StoreWrite`（13 件）／`name`・`path` → `NotSettable`（2 件）。実キー形 `currentghost.sound(bgm).pause`・`currentghost.sound.index(0).playing`・`currentghost.sound(bgm).meta.album` → `NotSettable`（根 `currentghost` による・3 件。**括弧の中に `.` を含む要素名は使わない**——`parse_dotted` は `.` で分割してから括弧を読むため `sound(bgm.mp3)` は解釈不能＝StoreWrite に落ちて対照にならない）。18 葉すべてと実キー形 2 つを `SylphyaReader::resolve_dotted_str` で引くと `NotFound`（対照として `currentghost.name` を 1 つ載せた鏡像で値が返ることを同居させる） |
-| T5 | `classifier_source_does_not_reference_the_record_only_table` | `include_str!` で `../actor.rs` と、その兄弟テスト 3 本（`../actor_tests.rs`・`../actor_actor_integration_tests.rs`・`../actor_actor_criteria_cage.rs`。`structure.md`「構造テストは兄弟テストファイルも走査対象に列挙する」の規律）を読み、4 本すべてで `SOUND_PROP_NAMES` が **0 回**、`actor.rs` で `GENERIC_PROP_NAMES` が 1 回以上（較正）。失敗メッセージに「仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と `areka-P0-property-query-channels` の裁定が要る」と書く |
+| T5 | `classifier_source_does_not_reference_the_record_only_table` | `include_str!` で `../actor.rs` と、その兄弟テスト 3 本（`../actor_tests.rs`・`../actor_actor_integration_tests.rs`・`../actor_actor_criteria_cage.rs`。`structure.md`「構造テストは兄弟テストファイルも走査対象に列挙する」の規律）を読み、4 本すべてで `SOUND_PROP_NAMES` が **0 回**、`actor.rs` で `GENERIC_PROP_NAMES` が 1 回以上（較正）。失敗メッセージに「仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と `property-query-channels` の裁定が要る」と書く |
 | T6 | `exactly_19_anchored_ukadoc_notes_and_no_page_url_line` | `include_str!("dotted.rs")` の行のうち、`trim_start` して `// ukadoc: ` で始まる行がちょうど **19**、うち `list_propertysystem.html#` を含む行が 19、アンカー無しのページ URL（`.html` で終わる）の行が **0** |
 | T7 | `set_effective_entries_before_this_spec_are_unchanged_in_order` | 変更前の全キーを literal のスライス `before: &[&str]` に書き、`SET_EFFECTIVE[..before.len()]` のキー列が**順序込みで**一致（要件 1.6 の「順序」を既存の集合検査では見ていないため）。固定長 `[&str; 21]` も関数名の数も使わない＝件数の写しを増やさない |
 
@@ -388,17 +388,17 @@ doc/
 **変更内容**（CRLF 保持・`status`／`introduced`／`priority`／`values`／`links`・note の他の行は不変）
 - `[entry."ukadoc:list_propertysystem:currentghost.seriko.sticky-window:1"]`
   - `owner = ""` → `owner = "areka-P0-sylphya-set-ledger"`
-  - note 末尾の「裁定待ち: areka-P0-currentghost-property-tree が …争点は値の導出の担い手と、語彙表の 1 行の持ち主。」→「所有: 語彙表の 1 行は areka-P0-sylphya-set-ledger（SET 有効群へ登記済み）。値の導出は areka-P0-currentghost-property-tree（seriko.* の一括所有・zorder を除く）。」
+  - note 末尾の「裁定待ち: currentghost-property-tree が …争点は値の導出の担い手と、語彙表の 1 行の持ち主。」→「所有: 語彙表の 1 行は areka-P0-sylphya-set-ledger（SET 有効群へ登記済み）。値の導出は currentghost-property-tree（seriko.* の一括所有・zorder を除く）。」
 - `[entry."ukadoc:list_propertysystem:currentghost.seriko.zorder:1"]`
-  - `owner = ""` → `owner = "areka-P0-zorder-property"`
-  - note 末尾の「裁定待ち: areka-P0-zorder-property が …語彙表の 1 行の持ち主。」→「所有: 語彙表の行も値の導出もともに areka-P0-zorder-property（開発者裁定 2026-09-13・先送り維持＝sylphya の語彙表へ名前だけの先行登記もしない）。」
+  - `owner = ""` → `owner = "zorder-property"`
+  - note 末尾の「裁定待ち: zorder-property が …語彙表の 1 行の持ち主。」→「所有: 語彙表の行も値の導出もともに zorder-property（開発者裁定 2026-09-13・先送り維持＝sylphya の語彙表へ名前だけの先行登記もしない）。」
   - 「転記元: doc/COMPAT_ARCHITECTURE.md:207」の行は不変。
 - `status = "vocabulary-only"`（sticky-window）は変えない。本 spec 後もこの行は「語彙表に載るが値は導出されない」であり、記述として正しい。
-- サウンド 18 行の「語彙表だけを触る spec: areka-P0-property-query-channels」は**要件 6.4 のとおり触らない**。指し先の古さは COMPAT §8 の追加行で記録の上から上書きする（下記）。
+- サウンド 18 行の「語彙表だけを触る spec: property-query-channels」は**要件 6.4 のとおり触らない**。指し先の古さは COMPAT §8 の追加行で記録の上から上書きする（下記）。
 
 **要件 6.5 の数え方**（完了報告に書く・新しい検査は作らない＝開発者裁定 2026-09-11）: `grep -c '^owner = ""\r\?$' doc/ukadoc-coverage/ledger/property.toml`（Git Bash。台帳は CRLF なので `\r` を許容する形で書く——`$` が `\r` の前で当たらない道具では母数 0 の恒真になる）が変更前 2・変更後 0。対照として `grep -c '^owner = "areka-P0-' …` が 180 行以上を拾うこと（母数 0 の恒真を避ける）。恒久的な見張りの置き場所は `crates/ukadoc-survey/src/check/`＝`areka-P0-ukadoc-coverage-roadmap` へ申し送る。
 
-**Validation**: 台帳を触ったら `cargo test -p ukadoc-survey` を走らせる（`doc/ukadoc-coverage/README.md` の規律）。TOML の構造崩れに加え、`owner` の中身は `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]].owner_count` と数え合わせる検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs`・本設計の承認後に PR#147 で合流）に掛かる。**実装時の追随（2026-09-17）**: 同ファイルの `[[spec]]` 2 行（`areka-P0-sylphya-set-ledger`・`areka-P0-zorder-property`）の `owner_count` を 0 → 1、`reason` を実態へ書き換える（`none = true` と `wave` は不変・束の割り当ては棚卸の仕事）。
+**Validation**: 台帳を触ったら `cargo test -p ukadoc-survey` を走らせる（`doc/ukadoc-coverage/README.md` の規律）。TOML の構造崩れに加え、`owner` の中身は `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]].owner_count` と数え合わせる検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs`・本設計の承認後に PR#147 で合流）に掛かる。**実装時の追随（2026-09-17）**: 同ファイルの `[[spec]]` 2 行（`areka-P0-sylphya-set-ledger`・`zorder-property`）の `owner_count` を 0 → 1、`reason` を実態へ書き換える（`none = true` と `wave` は不変・束の割り当ては棚卸の仕事）。
 
 ### 互換記録
 
@@ -413,7 +413,7 @@ doc/
 - 置き場所: 「| プロパティ `currentghost.seriko.zorder`（SSP 2.8.78・SET 有効）の読み書き |」で始まる行の**直後**に 1 行。
 - 列の内容:
   - 項目: **【所有の相互参照】`currentghost.seriko.zorder` の語彙台帳の行と値の導出／`currentghost.seriko.sticky-window` の語彙台帳の行／サウンドプロパティ名 18 葉の語彙表**
-  - 裁量: `currentghost.seriko.zorder` は**語彙台帳の行も値の導出もともに追跡 spec `areka-P0-zorder-property` が持つ**（直上の行の先送りを維持・sylphya の語彙表へは載せない）。`currentghost.seriko.sticky-window` の語彙台帳の行（`SET_EFFECTIVE` の `seriko.sticky-window`）とサウンドプロパティ名 18 葉の記録用の語彙表（`SOUND_PROP_NAMES`・書き込みの仕分けは読まない）は `areka-P0-sylphya-set-ledger` が持つ。調査台帳 `doc/ukadoc-coverage/ledger/property.toml` のサウンド 18 行の note が「語彙表だけを触る spec: areka-P0-property-query-channels」と記すのは分割前の指し先であり、**本行が上書きする**。語彙そのものは書き写さない（`zorder` の語彙は直上の行の参照先に従い本行では繰り返さない。サウンド 18 葉の綴りと URL は `crates/areka-sylphya/src/vocab/dotted.rs` の `SOUND_PROP_NAMES`）。
+  - 裁量: `currentghost.seriko.zorder` は**語彙台帳の行も値の導出もともに追跡 spec `zorder-property` が持つ**（直上の行の先送りを維持・sylphya の語彙表へは載せない）。`currentghost.seriko.sticky-window` の語彙台帳の行（`SET_EFFECTIVE` の `seriko.sticky-window`）とサウンドプロパティ名 18 葉の記録用の語彙表（`SOUND_PROP_NAMES`・書き込みの仕分けは読まない）は `areka-P0-sylphya-set-ledger` が持つ。調査台帳 `doc/ukadoc-coverage/ledger/property.toml` のサウンド 18 行の note が「語彙表だけを触る spec: property-query-channels」と記すのは分割前の指し先であり、**本行が上書きする**。語彙そのものは書き写さない（`zorder` の語彙は直上の行の参照先に従い本行では繰り返さない。サウンド 18 葉の綴りと URL は `crates/areka-sylphya/src/vocab/dotted.rs` の `SOUND_PROP_NAMES`）。
   - 根拠: 三重所有（`zorder-property`／`currentghost-property-tree`／`property-query-channels` → 分割後は `sylphya-set-ledger`）の解消。開発者裁定 2026-09-13（`.kiro/steering/roadmap.md`「棚卸⑬の仮裁定」1 の改訂＝SET 有効群は 21→25、26 ではない）。
   - 出典 spec: areka-P0-sylphya-set-ledger（要件 2.5／6.1／8.1〜8.4）
 - 先例: §8 は既にアーカイブ済み文書の誤記を「【訂正】」「【上書き】」の行で上書きしている（同節の `seriko.zorder` descript キーの訂正行・`\_l` の上書き行）。
@@ -428,7 +428,7 @@ doc/
 | 照合元の側 | 台帳で「書き込み: 正典 SET有効」の行 26（実測 2026-09-13・`grep -c` 一致）− 先送り 1（`currentghost.seriko.zorder`）＝ 25 行 → `seriko.cursor.path`／`seriko.tooltip.text` は台帳 2 行→語彙表 1 項目ずつで −2 ＝ 23 項目 ＋ 先取り 2（`seriko.cursor.name`・`seriko.tooltip.name`）＝ 25 | **25** |
 
 - 注記（要件 4.3）: −2 と ＋2 が相殺しているだけで、2 通りが一致するのは偶然。「26 − 1」は根拠にならない。
-- `.ext.*` 4 行（要件 4.4）: 台帳の note「印は無い・ext 亜枝の中継形のため 26 件には数えない」。担い手 `areka-P0-property-ipc-transport`。
+- `.ext.*` 4 行（要件 4.4）: 台帳の note「印は無い・ext 亜枝の中継形のため 26 件には数えない」。担い手 `property-ipc-transport`。
 - 先取り 2 項（要件 4.5）: 出典＝完了 spec `areka-P0-ukadoc-survey-property` の `design.md` 規則 8 突合表・区分 ⑶（「印が無く、族の頭の継承も無い＝areka の先取り」・2026-09-05 訂正込み）。本 spec は解消しない。
 - 正典本文の再確認（`research.md` §9.1）: サウンドプロパティ名 18 葉のうち `[SET有効]` の記述を持つのは `pause`・`playing`・`position` の **3 葉ちょうど**（残り 15 葉には記述なし・`sticky-window` にはあり）。4 葉目は無い＝25 は崩れない。
 
@@ -472,14 +472,14 @@ t_zpd40 が赤になる唯一の経路は、本機能が `crates/areka-sylphya/s
 
 1. `doc/ukadoc-coverage/report/summary.md`・`report/property.md` — property の「証拠あり」2 → 21。再生成（`cargo run -p ukadoc-survey -- report` / `report-summary`）は `areka-P0-ukadoc-coverage-roadmap` へ。
 2. `.kiro/steering/structure.md` の「`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論」— 記録用のサウンド 18 の記述が不足（数そのものは古びない）。steering の追随は `/kiro-steering` の巡回で。
-3. `doc/ukadoc-coverage/ledger/property.toml` のサウンド 18 行の「語彙表だけを触る spec: areka-P0-property-query-channels」— 要件 6.4 により触らず、COMPAT §8 の追加行が記録の上で上書き。
+3. `doc/ukadoc-coverage/ledger/property.toml` のサウンド 18 行の「語彙表だけを触る spec: property-query-channels」— 要件 6.4 により触らず、COMPAT §8 の追加行が記録の上で上書き。
 4. 担当欄の空き 0 を**判定する**検査の恒久的な置き場所は `crates/ukadoc-survey/src/check/`（`areka-P0-ukadoc-coverage-roadmap`）。本 spec は 1 回の実数えで示す。
 
 ## Error Handling
 
 本機能は実行時の経路を 1 本も足さない（配列への追加と文書のみ）。誤りはすべてコンパイル時定数の検査（`cargo test`）で赤として現れる。
 - 件数の不一致・重複・順序の崩れ → `assert_eq!` の失敗メッセージに「どの表の何が」を含める（既存の書き方どおり）。
-- `actor.rs` が新表を読み始めた → T5 が失敗し、引受先（`areka-P0-property-query-channels`）と再検討すべき要件（3.3／7.2）を指す。
+- `actor.rs` が新表を読み始めた → T5 が失敗し、引受先（`property-query-channels`）と再検討すべき要件（3.3／7.2）を指す。
 - URL の綴り違い → `cargo run -p ukadoc-survey -- check` の `SourceUrlNotInCatalog` が赤にする（カタログとの完全一致のみ受理）。
 
 ## Testing Strategy
@@ -507,7 +507,7 @@ t_zpd40 が赤になる唯一の経路は、本機能が `crates/areka-sylphya/s
 
 ## Performance & Scalability
 
-- `dotted.rs` の行数見込み: 現在 289 行 → 本機能後およそ **360 行**（SET 4＋URL 1＋新表 18＋URL 18＋説明文およそ 25＋接続 3）。兄弟テストは別ファイル（およそ 150 行）。後続 `areka-P0-currentghost-property-tree`（W15・縮退宣言文の改訂＝数行）と `areka-P0-property-catalog-lists`（W16・リスト系の名前の追加＝多く見ても 100 行）を合わせても 500 行台に収まり、1,000 行の見張りには当たらない。分割は不要。
+- `dotted.rs` の行数見込み: 現在 289 行 → 本機能後およそ **360 行**（SET 4＋URL 1＋新表 18＋URL 18＋説明文およそ 25＋接続 3）。兄弟テストは別ファイル（およそ 150 行）。後続 `currentghost-property-tree`（W15・縮退宣言文の改訂＝数行）と `property-catalog-lists`（W16・リスト系の名前の追加＝多く見ても 100 行）を合わせても 500 行台に収まり、1,000 行の見張りには当たらない。分割は不要。
 
 ## Supporting References
 

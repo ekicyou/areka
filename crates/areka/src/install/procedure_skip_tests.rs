@@ -162,7 +162,11 @@ fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
         .file("kaku/descript.txt", b"charset,UTF-8\r\nname,Kaku\r\n")
         .done(),
     );
-    assert!(ports.under_root("balloon/kaku/descript.txt").is_file());
+    assert!(
+        ports
+            .under_root("ghost/newbie/balloon/kaku/descript.txt")
+            .is_file()
+    );
     assert_one_warning(
         &ports,
         "インストールの警告 - あたらしい",

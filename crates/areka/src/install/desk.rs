@@ -22,7 +22,7 @@ use std::sync::mpsc::{self, Receiver, SendError, Sender};
 use std::thread::{self, JoinHandle};
 
 use areka_actor::ReplySender;
-use areka_ghost::catalog_roots::{find_balloon, find_ghost};
+use areka_ghost::catalog_roots::{balloons_for, find_balloon, find_ghost, same_folder_name};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_nar::InstallKind;
 use areka_sylphya::{PersistKey, PersistScope};
@@ -377,6 +377,7 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
                 .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
             record_installed_balloon(world, folder.clone());
             remember_balloon(world, folder);
+            note_hidden_by_ghost(world, &record.folder);
         }
         InstallKind::Shell => record_installed_shell(world, record.ghost_folder, record.folder),
         InstallKind::Supplement => {}
@@ -389,6 +390,25 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
             event = "install_record_unsettled",
             error = %err,
             "[install] 今のゴーストの記憶の書き手が止まっているので、入れた後の記録の反映を確かめられません"
+        );
+    }
+}
+
+/// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info
+/// `installed_balloon_hidden_by_ghost` を 1 件残す（areka-P0-ghost-inner-balloon 要件 3.5）。
+/// 起動の文脈が無いときは何もしない。
+fn note_hidden_by_ghost(world: &World, folder: &str) {
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        return;
+    };
+    let hidden = balloons_for(&ctx.roots, &ctx.current.ghost.dir).hidden;
+    if let Some(h) = hidden.iter().find(|h| same_folder_name(&h.folder, folder)) {
+        tracing::info!(
+            event = "installed_balloon_hidden_by_ghost",
+            folder = h.folder.as_str(),
+            installed = %h.hidden.display(),
+            by = %h.by.display(),
+            "[install] 入れたバルーンは今のゴーストの中の同じフォルダ名に隠れます"
         );
     }
 }

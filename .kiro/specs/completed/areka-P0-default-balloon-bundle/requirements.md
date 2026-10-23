@@ -45,7 +45,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
   - 配布 zip の生成・第三者向け README・`THIRD-PARTY-NOTICES.md`（`areka-P0-alpha-release-signoff`。本仕様は「入れるもの」と「書くべき出典」を決めて申し送るだけ。`THIRD-PARTY-NOTICES.md` は手で編集しない＝本仕様の変更 0）。
   - バルーンの `homeurl` によるネットワーク更新（`areka-P0-network-update`）。
   - 複数の既定バルーン（SSP は 2 つ・α は 1 つ）・`recommended.balloon` による案内（α 後）。
-  - `sstpmessage.*`・`number.*`・`onlinemarker`・`communicatebox.*`・`arrow*`・`online*`・`marker.png`・`sstp.png`（StayseeBalloon に在るが areka が読まない・使わない資産。表示に使わないことは検証で確かめるが、実装は `areka-P0-balloon-canon-residue` 等・α 後）。
+  - `sstpmessage.*`・`number.*`・`onlinemarker`・`communicatebox.*`・`arrow*`・`online*`・`marker.png`・`sstp.png`（StayseeBalloon に在るが areka が読まない・使わない資産。表示に使わないことは検証で確かめるが、実装は `balloon-canon-residue` 等・α 後）。
   - 縦書き（StayseeBalloon の descript に `vertical` が無いので横書きのみ。縦書きでの検証は 0 件）。
   - 既存の検体（`emo2-kakukaku` とその派生 2 つ）の内容変更・既存テストの期待値変更。
 - **Adjacent expectations**:

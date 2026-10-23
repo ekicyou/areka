@@ -18,13 +18,13 @@
 
 ### Non-Goals
 
-- `OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の SHIORI 発火（型の口の予約と対応表記録まで。実発火は `areka-P0-balloon-canon-residue`）。
+- `OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の SHIORI 発火（型の口の予約と対応表記録まで。実発火は `balloon-canon-residue`）。
 - `\![set,balloontimeout]` タグの受理、`\x`／`\x[noclear]`（クリック待ち）の実装（語彙・縮退理由の記録のみ）。
 - 選択肢のタイムアウト規約（`areka-P0-choice-select-events` 所有。本仕様は既存照会 `choice_active` の消費のみ）。
 - ukadoc `Status` の `balloon` 導出・報告（情報源となる事実の登記のみ）。
 - バルーンの重なり順（`areka-P0-ghost-window-zorder` 所有）・窓位置・追従・クランプ・スケール追従の規約変更。
 - `\b` 指令経路そのもの・scope 別バルーン資産解決・バルーン内テキストレイアウトの変更。
-- 多面バルーン fixture を要する 2 件（`\b[N]`@scope≥1 の end-to-end 検証・バルーン側アニメーション定義表の scope 写像の実行時検証）は引き受けない（受け皿 `areka-P0-balloon-canon-residue`）。
+- 多面バルーン fixture を要する 2 件（`\b[N]`@scope≥1 の end-to-end 検証・バルーン側アニメーション定義表の scope 写像の実行時検証）は引き受けない（受け皿 `balloon-canon-residue`）。
 
 ## Boundary Commitments
 
@@ -407,7 +407,7 @@ impl dola::cue::CueSink for BalloonLifecycleSink { fn emit(&mut self, cue: TalkC
 
 /// Requirement 7.2 の予約型（消費者ゼロ・7.8 注記つき）。将来 `balloon-canon-residue` が
 /// UI→kanade の口（MouseWiring/ChoiceForwarder 同型）で実発火する際の Reference 写像。
-#[allow(dead_code)] // 消費者ゼロ（意図的予約）: 実発火は areka-P0-balloon-canon-residue が所有
+#[allow(dead_code)] // 消費者ゼロ（意図的予約）: 実発火は balloon-canon-residue が所有
 pub(crate) enum BalloonLifecycleNotice {
     Closed   { script: String },                                  // OnBalloonClose  Ref0
     TimedOut { script: String, remaining_ms: u64 },               // OnBalloonTimeout Ref0/Ref1

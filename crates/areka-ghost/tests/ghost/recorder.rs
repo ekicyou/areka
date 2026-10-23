@@ -18,7 +18,9 @@
 use std::sync::{Arc, Mutex};
 
 use areka_kanade::ShioriBackend;
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use shiori_host32_host::{
+    ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
+};
 
 /// 交信の種別（`status()` は記録対象外ゆえ variant を持たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,6 +141,54 @@ impl<B: ShioriBackend> ShioriBackend for Recorder<B> {
         status: Option<&str>,
     ) -> Result<(), RequestError> {
         let result = self.inner.notify(id, references, status);
+        let outcome = match &result {
+            Ok(()) => ExchangeOutcome::NotifyOk,
+            Err(e) => ExchangeOutcome::Failed(e.to_string()),
+        };
+        self.append(ExchangeRecord {
+            kind: ExchangeKind::Notify,
+            id: Some(id.to_string()),
+            references: references.to_vec(),
+            status: status.map(|s| s.to_string()),
+            outcome,
+        });
+        result
+    }
+
+    // 新しい 2 メソッドも中身へそのまま渡し、同じ記録を残す（kanade は新しいメソッドだけを呼ぶ）。
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        let result = self.inner.get_with_headers(id, references, status, headers);
+        let outcome = match &result {
+            Ok(Some(reply)) => ExchangeOutcome::Value(reply.value.clone()),
+            Ok(None) => ExchangeOutcome::NoContent,
+            Err(e) => ExchangeOutcome::Failed(e.to_string()),
+        };
+        self.append(ExchangeRecord {
+            kind: ExchangeKind::Get,
+            id: Some(id.to_string()),
+            references: references.to_vec(),
+            status: status.map(|s| s.to_string()),
+            outcome,
+        });
+        result
+    }
+
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        let result = self
+            .inner
+            .notify_with_headers(id, references, status, headers);
         let outcome = match &result {
             Ok(()) => ExchangeOutcome::NotifyOk,
             Err(e) => ExchangeOutcome::Failed(e.to_string()),

@@ -93,10 +93,10 @@
 
 | brief | 宣言している範囲 | 本 spec から見た論点 |
 |---|---|---|
-| `areka-P0-property-query-channels` | 照会経路 6 本の実装。加えて **sylphya の SET 表 21→26 の追随**（`seriko.zorder`・`seriko.sticky-window`・サウンド SET 3 葉）を In に掲げる | 経路そのものは本台帳の項目ではない。SET 表の 1 行だけを触る立場＝要件 4.7 の「語彙表だけを触る側は備考へ」に当たる |
-| `areka-P0-currentghost-property-tree` | `currentghost.*` ≈65。`seriko.*` 14 を一括で含む。`sound.*` 3 とサウンド語彙族は明示的に Out（カタログ spec へ） | 実測は 69。差 4 の正体は後述 |
-| `areka-P0-property-catalog-lists` | `system.*` 25・カタログ 5 根・`history`・`rateofuselist`・汎用 17 葉・`currentghost.sound.*` ＋サウンド語彙族・`.ext.*` | `history` を 8・`headlinelist` を 2・`pluginlist` を 4 と書く。実測はそれぞれ 12・3・5 |
-| `areka-P0-zorder-property` | `currentghost.seriko.zorder` 単独。「`dotted.rs` の 21 項に入れない・本 brief が語彙の正本」と明記 | channels の「21→26 に含める」と正面から食い違う |
+| `property-query-channels` | 照会経路 6 本の実装。加えて **sylphya の SET 表 21→26 の追随**（`seriko.zorder`・`seriko.sticky-window`・サウンド SET 3 葉）を In に掲げる | 経路そのものは本台帳の項目ではない。SET 表の 1 行だけを触る立場＝要件 4.7 の「語彙表だけを触る側は備考へ」に当たる |
+| `currentghost-property-tree` | `currentghost.*` ≈65。`seriko.*` 14 を一括で含む。`sound.*` 3 とサウンド語彙族は明示的に Out（カタログ spec へ） | 実測は 69。差 4 の正体は後述 |
+| `property-catalog-lists` | `system.*` 25・カタログ 5 根・`history`・`rateofuselist`・汎用 17 葉・`currentghost.sound.*` ＋サウンド語彙族・`.ext.*` | `history` を 8・`headlinelist` を 2・`pluginlist` を 4 と書く。実測はそれぞれ 12・3・5 |
+| `zorder-property` | `currentghost.seriko.zorder` 単独。「`dotted.rs` の 21 項に入れない・本 brief が語彙の正本」と明記 | channels の「21→26 に含める」と正面から食い違う |
 
 **件数の差の正体（実測で特定できた）**
 
@@ -192,9 +192,9 @@
 
 | brief | 主張 | 根拠の場所 |
 |---|---|---|
-| `areka-P0-zorder-property` | `zorder` の読み書きの実装は自分が単独で持つ。**sylphya の 21 項には入れない**（「動かない名前の先行登録はしない」・本 brief が語彙の正本） | 同 brief の「Current State」節と末尾の 2026-09-02 追記 |
-| `areka-P0-currentghost-property-tree` | `currentghost.seriko.*` 14 項を一括で持つ（`zorder`・`sticky-window` を明示的に列挙） | 同 brief の Scope In |
-| `areka-P0-property-query-channels` | SET 経路の所有者として sylphya の SET 表を 21→26 へ追随させる。その 5 件に `seriko.zorder`・`seriko.sticky-window` を含む | 同 brief の Scope In と Current State |
+| `zorder-property` | `zorder` の読み書きの実装は自分が単独で持つ。**sylphya の 21 項には入れない**（「動かない名前の先行登録はしない」・本 brief が語彙の正本） | 同 brief の「Current State」節と末尾の 2026-09-02 追記 |
+| `currentghost-property-tree` | `currentghost.seriko.*` 14 項を一括で持つ（`zorder`・`sticky-window` を明示的に列挙） | 同 brief の Scope In |
+| `property-query-channels` | SET 経路の所有者として sylphya の SET 表を 21→26 へ追随させる。その 5 件に `seriko.zorder`・`seriko.sticky-window` を含む | 同 brief の Scope In と Current State |
 
 **食い違いの形は 2 層に分かれる。**
 
@@ -358,7 +358,7 @@
 
 **あわせて族の頭（⒞ の読み方）を全件走査で確定**した。「以降」「共通」を含む本文は 5 件あるが、SET の印を族へ及ぼしているのは `currentghost.mousecursor` の 1 件だけ（本文「以降 currentghost.mousecursor / currentghost.balloon.mousecursor で始まるプロパティに共通：…[SET有効]」）で、本体側 6・balloon 側 4 の計 10 件に及ぶ。残る 4 件（`system.os.(キー)`・`system.power.(キー)`・`currentghost.scope(ID).name`・`username`）は SET と無関係の記述。
 
-**この 3 つの読み方を合わせた正典の SET 有効は 26 件**（⒜ 14 ＋ ⒝ 3 ＋ ⒞ の追加 9）。sylphya の 21 名は 25 の id に当たり、そのうち正典が SET 有効とするのは 21 id。差の 5 件（`currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`・`position`・`playing`・`pause`）が `areka-P0-property-query-channels` brief の「21→26」の中身とちょうど一致した。**channels brief の主張は正典の実測で裏付けられる。**
+**この 3 つの読み方を合わせた正典の SET 有効は 26 件**（⒜ 14 ＋ ⒝ 3 ＋ ⒞ の追加 9）。sylphya の 21 名は 25 の id に当たり、そのうち正典が SET 有効とするのは 21 id。差の 5 件（`currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`・`position`・`playing`・`pause`）が `property-query-channels` brief の「21→26」の中身とちょうど一致した。**channels brief の主張は正典の実測で裏付けられる。**
 
 ### §5-4 `values.md` が未着地の間のテーマの扱い — 決着
 

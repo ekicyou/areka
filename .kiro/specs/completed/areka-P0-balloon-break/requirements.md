@@ -69,8 +69,8 @@ areka の利用者。**喋っている途中のゴーストを黙らせる手段
 - **Adjacent expectations**:
   - **前提（いずれも完了済み・先行必須の未完 spec は無い）**: `areka-P0-input-events`（バルーン窓へのポインタ結線）・`choice-interact`（選択肢の確定）・`sakura-engine`（閉じ指示で再生が止まり「中断で終わった」を返すこと）・`balloon-visibility`（隠す理由の語彙とタイムアウト）。
   - **下流**: `areka-P0-balloon-lifecycle-events`（#35・本仕様が届けた通知を `OnBalloonBreak` の起点に使う。項目 10「中断で終わった会話のタイムアウト起点」は、利用者による中断では即時非表示になるため、対象が選択肢タイムアウトなど残りの中断だけになる）・`areka-P0-status-execution-states`（無効化の旗の読み口）。
-  - **並走させない**（同じ `crates/areka-kanade/src/schedule/` を触る）: `areka-P0-balloon-lifecycle-events`・`areka-P0-translate-pipeline`・`areka-P0-sakura-time-directives`。
-  - **隣接**: `areka-P0-popup-menu-residue`（入力ハンドラの隣）。
+  - **並走させない**（同じ `crates/areka-kanade/src/schedule/` を触る）: `areka-P0-balloon-lifecycle-events`・`areka-P0-translate-pipeline`・`sakura-time-directives`。
+  - **隣接**: `popup-menu-residue`（入力ハンドラの隣）。
 
 ## Requirements
 

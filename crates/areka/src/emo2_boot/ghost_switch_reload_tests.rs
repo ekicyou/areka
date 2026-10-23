@@ -305,6 +305,51 @@ fn a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime() {
     assert_eq!(named(&events, "reload_failed"), 0, "{events:?}");
 }
 
+/// shiori の読み直しは窓の組の帳簿と吸着の出どころを残す（areka-P0-window-link-directives 要件 6.3）:
+/// 台本の組の入った帳簿と、台本で向きを変えた印の付いた `AnchorSource` が、読み直しの後も同じ値のまま。
+///
+/// # 非空虚性
+/// 読み直しが `close_windows_for_restart` を通ると帳簿が外れて赤。
+#[test]
+fn a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source() {
+    use crate::placement::follow::AnchorSource;
+    use crate::placement::resolver::Anchor;
+    use crate::placement::sticky_group_ledger::{
+        StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
+    };
+
+    let mut rig = running_a_with(vec![("A", a_shiori_script())]);
+    seed_sticky_descript(&mut rig.world, None);
+    assert!(apply_set_sticky(
+        &mut rig.world,
+        &["0".to_owned(), "1".to_owned()]
+    ));
+    let ledger = rig.world.resource::<StickyGroupLedger>().clone();
+    let source = AnchorSource {
+        descript: Anchor::Bottom,
+        by_script: true,
+    };
+    let window = rig.world.spawn(source).id();
+
+    let (flow, events) = capture(|| {
+        let verdict = reload_shiori(&mut rig);
+        (verdict, rig.pump_talking_until(a_rebooted))
+    });
+    let ledger_after = rig.world.get_resource::<StickyGroupLedger>().cloned();
+    let source_after = rig.world.get::<AnchorSource>(window).copied();
+    assert!(
+        rig.shutdown(),
+        "残った単位を降ろせる（seriko の join が戻る）"
+    );
+
+    assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
+    assert_eq!(
+        (ledger_after, source_after),
+        (Some(ledger), Some(source)),
+        "shiori の読み直しで帳簿か吸着の出どころが変わった: {events:?}"
+    );
+}
+
 /// 組み直しの失敗（要件 4.4）: 新しい SHIORI を起こせなければ既定のゴーストへ戻り、印は
 /// `reload_failed(fell_back_to_default)` を残して下りる。
 ///
@@ -596,4 +641,57 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
         [Some("fell_back_to_default".to_owned())],
         "{events:?}"
     );
+}
+
+/// ゴーストの中のバルーン（`<A>\balloon\inner`）を使っているときのゴーストの読み直し（自分への切替）は、
+/// 記憶の段から同じ `<A>\balloon\inner` を出す（areka-P0-ghost-inner-balloon 要件 5.7）。
+///
+/// # 非空虚性
+/// 自分への切替の候補にゴーストの中が入らないと記憶が当たらず、根の同梱（`emo2-kakukaku`）へ落ちて赤。
+#[test]
+fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
+    let mut rig = SwitchRig::new(vec![("A", a_script())]);
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
+    let inner = rig.add_ghost_balloon_copy("A", "inner", "Aの中のバルーン");
+    rig.plant_last_balloon("A", "inner");
+    rig.boot_with_balloon(
+        "A",
+        crate::boot_resolve::BalloonDecision {
+            route: crate::boot_resolve::BalloonRoute::Memory,
+            dir: inner.clone(),
+            folder: Some("inner".to_owned()),
+        },
+    );
+    assert!(rig.wait_steady(), "A が定常に着く");
+
+    let (flow, events) = capture(|| {
+        let verdict = request_reload(
+            &mut rig.world,
+            ReloadRequest {
+                target: ReloadTarget::Ghost,
+                origin: ReloadOrigin::Script,
+                notes: DescriptNotes::default(),
+            },
+        );
+        (verdict, rig.pump_talking_until(a_rebooted))
+    });
+    let balloon = rig
+        .world
+        .resource::<crate::boot_config::BootContext>()
+        .current
+        .balloon
+        .clone();
+    assert!(rig.shutdown());
+
+    assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
+    assert_eq!(
+        (balloon.route, balloon.folder.as_deref(), balloon.dir),
+        (
+            crate::boot_resolve::BalloonRoute::Memory,
+            Some("inner"),
+            inner
+        ),
+        "{events:?}"
+    );
+    assert_eq!(named(&events, "last_balloon_not_found"), 0, "{events:?}");
 }

@@ -48,7 +48,7 @@
 
 ### Revalidation Triggers
 - rmcp の版を上げるとき: 件 4 のテスト（202 で待ちが残る）と件 5 のテスト（閉じた後の 5 秒・時間の幅と、中継の 6 秒の見切りの枝を通らなかったこと）が rmcp の決まりを固定している（5 秒が短くなっても長くなっても赤）。赤になったら差の記録の 1 節「終わり」と 4 節の行を測り直す。
-- `tools/package.ps1` の `Test-ZipContent` の項目 5 を触る spec（`areka-P0-release-code-signing`・`areka-P0-install-live-target-hazards`・`areka-P0-winget-release-automation`）: 項目 5 の繰り返しの中に窓の作りの判定が入る。項目 5 の形を変えるときはこの判定を残す。
+- `tools/package.ps1` の `Test-ZipContent` の項目 5 を触る spec（`release-code-signing`・`install-live-target-hazards`・`winget-release-automation`）: 項目 5 の繰り返しの中に窓の作りの判定が入る。項目 5 の形を変えるときはこの判定を残す。
 - `areka.exe` か中継の入口から `windows_subsystem` の行を動かすとき: 配布の検査が赤になる（意図どおり）。
 - `port.rs` の記録の文を読む道具（記録の grep など）を足すとき: 文は「既定の候補を使う」になっている。
 

@@ -172,7 +172,7 @@ fn requests_after_idle_are_served_in_order() {
         .map(|receiver| {
             let remaining = deadline.saturating_duration_since(Instant::now());
             match receiver.recv_timeout(remaining) {
-                Ok(ShioriOutcome::Value(v)) => Ok(v),
+                Ok(ShioriOutcome::Value(v, _)) => Ok(v),
                 Ok(_) => Err("Value 以外の応答".to_string()),
                 Err(ReplyError::Timeout) => Err(format!("{BOUND:?} 以内に応答が届かなかった")),
                 Err(ReplyError::Dropped) => Err("応答されずに切断された".to_string()),

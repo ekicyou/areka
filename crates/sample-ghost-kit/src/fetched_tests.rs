@@ -296,7 +296,7 @@ fn row_form_rejects_each_bad_input() {
 fn fetched_shelf_is_outside_work_and_cache() {
     let ns = Path::new(r"C:\x\nar");
     let path = fetched_path_in(ns, "x");
-    for shelf in ["work", "cache", "manual"] {
+    for shelf in ["work", crate::devroot::CACHE, "manual"] {
         assert!(!path.starts_with(ns.join(shelf)), "{}", path.display());
     }
 }

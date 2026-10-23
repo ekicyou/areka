@@ -29,7 +29,7 @@ use areka_kanade::{
     ShioriMethod, ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId,
     TranslateSeams, events, spawn_kanade_translating,
 };
-use shiori_host32_host::{Charset, Method, ShioriRequest, build_request};
+use shiori_host32_host::{Charset, Method, RequestHeaders, ShioriRequest, build_request};
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, RecordedCall, expected_call, expected_translate, expected_unload,
@@ -158,14 +158,16 @@ fn spawn_rig(spec: WireSpec) -> Rig {
                             sent_while_held =
                                 !matches!(shiori_rx.try_recv(), Err(TryRecvError::Empty));
                         }
-                        translated
-                            .clone()
-                            .map_or(ShioriOutcome::NoContent, ShioriOutcome::Value)
+                        translated.clone().map_or(ShioriOutcome::NoContent, |s| {
+                            ShioriOutcome::Value(s, areka_talk::SecurityLevel::Local)
+                        })
                     } else {
                         scripts
                             .get(id.as_str())
                             .cloned()
-                            .map_or(ShioriOutcome::NoContent, ShioriOutcome::Value)
+                            .map_or(ShioriOutcome::NoContent, |s| {
+                                ShioriOutcome::Value(s, areka_talk::SecurityLevel::Local)
+                            })
                     };
                     seen.push(Seen::Call(recorded));
                     let _ = reply.send(outcome);
@@ -506,7 +508,7 @@ fn header_shape(recorded: &RecordedCall) -> Vec<String> {
         method: Method::Get,
         id: &recorded.id,
         references: &recorded.references,
-        sender: "areka",
+        headers: RequestHeaders::internal("areka"),
         status: recorded.status.as_deref(),
         charset: Charset::UTF_8,
     });
@@ -555,10 +557,12 @@ fn on_translate_status_is_the_playback_start_state_and_headers_match_other_gets(
         [
             "GET SHIORI/3.0",
             "Charset",
+            "SecurityLevel",
+            "SecurityOrigin",
             "Sender",
+            "SenderType",
             "Status: talking",
             "ID",
-            "SecurityLevel",
             "",
             "",
         ],

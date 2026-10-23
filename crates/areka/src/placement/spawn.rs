@@ -24,7 +24,7 @@
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
 //!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
 //!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
-//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
+//!   委譲。組に入った窓は直後の `sync_drag_writer` が Free でも false に付け直す・設計の決め 12）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
 //!   さらに `OnDragEnd(on_char_drag_end)` を持つ（最終カーソル位置への同写像適用＋
 //!   確定位置の永続 write-through・非 Free は最終再固定・Free は保存専用アーム・
 //!   DD15 v2 (3)・1.1・task 2.2）。
@@ -97,7 +97,8 @@ use wintf::ecs::{
 use super::config::BalloonXMode;
 use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
-    Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
+    AnchorSource, Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag,
+    on_char_drag_end,
 };
 use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
@@ -179,7 +180,7 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
 /// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
 /// 毎起動 `descript.txt` から解決し直す）。
-/// 例外は並べ直しだけが読む材料 `reset_pos::DefaultPlacementBasis`（設定ごと置くが limit の運び手ではない）。
+/// 例外は並べ直しだけが読む材料 `reset_pos::DefaultPlacementBasis`（descript の値とバルーンの材料を置き、limit は並べ直しのたびに解き直すので運び手ではない）。
 ///
 /// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
 ///
@@ -486,6 +487,12 @@ pub fn spawn_ghost_windows(
                 // Anchored を読むため。二値吸着フラグ（旧 BottomSnap marker）は廃し、
                 // ドラッグ／リサイズはこの単一値を読んで射影 T を分岐する（Req1.6・DD15 v2）。
                 Anchored(p.anchor),
+                // 向きの出どころ（descript の向き・台本の印なし）を Anchored と同じ時に付ける
+                // （areka-P0-window-link-directives 設計の決め 5・要件 6.1／6.2）。
+                AnchorSource {
+                    descript: p.anchor,
+                    by_script: false,
+                },
                 // 非 Free アンカー（Bottom/Top/Left/Right）のキャラ窓は
                 // move_window=false＝wndproc は窓を動かさず on_char_drag が単一ライター
                 // （DD15 v2・4.7・task 8.2R）。Free は従来どおり wndproc 直接移動（4.1）。

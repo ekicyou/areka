@@ -114,7 +114,7 @@
   - _Requirements: 4.1, 4.5, 4.7, 4.8, 5.2_
 
 - [x] 6. (P) 出どころの無い 5 状態の持ち主を記録する
-  - ukadoc 網羅の台帳で `\t` の持ち主を `areka-P0-sakura-time-critical` へ移し（2026-10-03・完了時に付け替え：初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に `\t` と `timecritical` を受け持つ専用の spec が起票されたため）、計画の `owner_count` を本 spec と移し先の両方で合わせる（数は検査に判定させ、手書きの数を信じない）
+  - ukadoc 網羅の台帳で `\t` の持ち主を `sakura-time-critical` へ移し（2026-10-03・完了時に付け替え：初めは `sakura-time-directives` へ送ったが、同じ日に `\t` と `timecritical` を受け持つ専用の spec が起票されたため）、計画の `owner_count` を本 spec と移し先の両方で合わせる（数は検査に判定させ、手書きの数を信じない）
   - `\![enter,inductionmode]`・`\![enter,passivemode]` の注記に次の持ち主の候補を、`Status [SSP拡張]` の注記に導出済みの 3 状態と残り 5 状態の宛先を書く。候補の spec は起票しない
   - 網羅の報告を生成し直し、概要の手書きの行と件数を合わせる。ロードマップの本 spec の行と、移し先 spec の brief に宛先を 1 文ずつ足す
   - ukadoc 網羅の整合検査が、まだフォルダの無い候補名を含めて緑になる
@@ -156,4 +156,4 @@
 - 7.1: `tools/test-all.ps1` 全段緑（検査したコミット 20d659e3・x64 全テスト 275 秒）。C1 の 9 本は実在し `main` との差分 0（較正: 変更した `status.rs` は差分ありと出る）。変更した .rs に 1,000 行超えは無い。
 - 7.3: 実機の観測は起動時の台本（`dic/boot.pasta`）を写しの上で書き換えて流した。URL インストールは `\![execute,install,url,…]`（`\![install,url,…]` は効かない）。区間内でバルーンを左ダブルクリックして中断が断られることは開発者が目視で確かめた（10-03・`real-machine-observation.md`）。
 - 完了時にその場で解決: この Implementation Notes の 7.2 の行（シェルがバックスラッシュを改行・制御文字に化かしていたパス）を書き直した。design の要件対応表の 1.5 の行を、`Status:` 行を書く唯一の口（host32 の `build_request`）に合わせて直した。
-- 完了時にその場で解決: `main` の取り込み（`emo-text-file-split`・`choice-timeout-directive` ほか 7 本）で網羅の文書 3 本が衝突し、持ち主の数を両側の増減で合わせて解いた。`main` が同じ日に `\t` と `timecritical` の専用の spec `areka-P0-sakura-time-critical` を起票していたので、要件 6.3 の宛先をそちらへ付け替えた（`sakura-time-directives` の brief に足した 1 行は消した）。`balloon_visibility_phase.rs` の「併合で衝突しうる」注記は、衝突なく取り込めたので消した。
+- 完了時にその場で解決: `main` の取り込み（`emo-text-file-split`・`choice-timeout-directive` ほか 7 本）で網羅の文書 3 本が衝突し、持ち主の数を両側の増減で合わせて解いた。`main` が同じ日に `\t` と `timecritical` の専用の spec `sakura-time-critical` を起票していたので、要件 6.3 の宛先をそちらへ付け替えた（`sakura-time-directives` の brief に足した 1 行は消した）。`balloon_visibility_phase.rs` の「併合で衝突しうる」注記は、衝突なく取り込めたので消した。

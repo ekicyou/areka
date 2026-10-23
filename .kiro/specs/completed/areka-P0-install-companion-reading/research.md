@@ -214,7 +214,7 @@
 - 新しいテストが使う一時フォルダ（`WorkDir`・`TempPath`）の実際の置き場所が、ワークツリーの `target\` の下であること（要件 8 の 5 項）。
 - 台帳の検査（`crates/ukadoc-survey` の整合のテスト）が、`assets.toml` の 2 行の書き換えと「根拠の場所」の指し先に求める形。
 - 3 節の a の「宛先が無かった場合」の実際の結果（確定の段で失敗して巻き戻るか）。本 spec の対象外だが、7 節の 3 の判断の材料になる。
-- `areka-P0-install-live-target-hazards` の着手の状態と、`procedure_tests.rs`・`procedure_test_support.rs` を向こうが触るか（7 節の 7）。
+- `install-live-target-hazards` の着手の状態と、`procedure_tests.rs`・`procedure_test_support.rs` を向こうが触るか（7 節の 7）。
 
 ## 7. 要件の討議で確かめたい点
 
@@ -224,7 +224,7 @@
 4. **空の `*.directory` の行と探索。** 対象外（今の動きを変えない）とされているが、探索を書き直すので「空の値の行は、見つかった行か」を決める必要が出る。今の動きを保つなら「見つかったものとして扱い、今どおり書庫ごと断る」になる（3 節の b）。「見つからなかった」と読むと、無印なら黙って続き、番号付きなら打ち切りになり、今の「断る」から変わる。
 5. **取り出し元が重なる 2 つの同梱。** 例: `balloon0.source.directory,extra` と `balloon1.source.directory,extra/bal1`。階層付きを許すと、片方がもう片方の配下になる組み合わせが書ける。`in_folder` を前方一致に広げるだけだと、`extra/bal1` の中身は両方の同梱へ入る。同じ取り出し元を 2 つの同梱が指すことは今も書けて、両方へ入る。要件はこの場合を書いていない。
 6. **取り出し元の途中のフォルダが本体の側に空で残るか。** 例: 取り出し元が `extra/bal1` で、`extra/` の中身が `bal1/` だけの書庫。書庫が `extra/` のフォルダのエントリを持っていれば、それは取り出し元の配下ではないので本体の側に空の `extra/` が作られ、持っていなければ作られない。要件 2 の 4 項は「配下でないものは本体の側」とするので前者は要件どおりだが、今の 1 階層の実装は「中身の無い抜け殻を本体に生やさない」ために取り出し元のフォルダのエントリそのものを本体から除いている（`body_placement` の説明）。書庫の作り方で結果が変わってよいかを決める。
-7. **知らせの並びのテスト（要件 8 の 3 項）の置き場所。** 知らせを組むのは `procedure.rs` で、そのテストは `procedure.rs` の末尾の `#[path]` で繋がる 3 本（`procedure_test_support.rs`・`procedure_tests.rs`・`procedure_branch_tests.rs`）である。新しい兄弟のテストのファイルを足すと `procedure.rs` に 1 行足すことになり、「`procedure.rs` は無改変」の約束に触れる。取れる形は、⑴ 既存の `procedure_tests.rs` に 1 本足す（並走の `areka-P0-install-live-target-hazards` と同じファイルを触る恐れ）、⑵ `areka-nar` の側で `InstallOutcome.installed` の並びを確かめ、知らせへの写しは既存の `ghost_with_balloon_lists_body_first_then_the_companion` と `judge_tests.rs` が順を保つことを確かめているのでそれに任せる、の 2 つ。⑵ は要件 8 の 3 項の文（知らせの並びを確かめる）を緩めて読むことになる。
+7. **知らせの並びのテスト（要件 8 の 3 項）の置き場所。** 知らせを組むのは `procedure.rs` で、そのテストは `procedure.rs` の末尾の `#[path]` で繋がる 3 本（`procedure_test_support.rs`・`procedure_tests.rs`・`procedure_branch_tests.rs`）である。新しい兄弟のテストのファイルを足すと `procedure.rs` に 1 行足すことになり、「`procedure.rs` は無改変」の約束に触れる。取れる形は、⑴ 既存の `procedure_tests.rs` に 1 本足す（並走の `install-live-target-hazards` と同じファイルを触る恐れ）、⑵ `areka-nar` の側で `InstallOutcome.installed` の並びを確かめ、知らせへの写しは既存の `ghost_with_balloon_lists_body_first_then_the_companion` と `judge_tests.rs` が順を保つことを確かめているのでそれに任せる、の 2 つ。⑵ は要件 8 の 3 項の文（知らせの並びを確かめる）を緩めて読むことになる。
 8. **開発用の道具の追随（要件 2 の 8 項）の確かめ方。** `fold-samples.rs` は実行の例で関数単位のテストを持たず、階層付きの取り出し元を持つ検体も無い（0 体）。`strip_folder` を複数段へ広げても、今の検体では新しい枝を一度も通らない。確かめる手を足すか（道具の中の写像を、テストから呼べる場所へ出すなど）、読んで確かめるだけにするかを決める。なお、この道具の写像はインストールの結果と突き合わせる**独立した答え合わせ**なので、`areka-nar` の判定の関数をそのまま呼ぶ形にすると答え合わせにならない。
 9. **起動の側との一時的なずれ。** 本 spec の後、`balloon.directory,extra\bal1` のゴーストは `balloon/extra_bal1/` に入るが、起動の側の `companion_balloon` は値を置き換えずに `extra\bal1` という名前でバルーンを探すので見つからず、`warn!`（`companion_balloon_not_found`）を出して次の候補へ進む。今はこの書庫は書庫ごと断られるので、悪くなる書庫は無い。`areka-P0-ghost-standard-balloon` が着地するまでこのずれが残ることを、`doc/COMPAT_ARCHITECTURE.md` §8 に書くかを決める。番号付きの同梱（`balloon0` だけを書いたゴースト）が起動で選ばれないのは今も同じである。
 
@@ -300,7 +300,7 @@
 
 - 実行して確かめていない。本 spec は対象外（9.4 節）で、この場面を増やさないので、設計の判断には使わなかった。
 
-#### `areka-P0-install-live-target-hazards` との重なり
+#### `install-live-target-hazards` との重なり
 
 - 本 spec は `procedure.rs`・`judge.rs` とそのテストのファイルを 1 行も触らない（知らせの並びは `areka-nar` の側で確かめる）。向こうの着手の状態にかかわらず、重なるファイルは 0 本。
 

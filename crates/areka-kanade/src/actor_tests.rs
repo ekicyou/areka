@@ -168,7 +168,9 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
         // OnFirstBoot(GET)→204、OnBoot(GET)→Value でグリーティング talk を起こす。
-        Recorded::Get(id) if id == "OnBoot" => ShioriOutcome::Value(r"\0hi\e".to_string()),
+        Recorded::Get(id) if id == "OnBoot" => {
+            ShioriOutcome::Value(r"\0hi\e".to_string(), areka_talk::SecurityLevel::Local)
+        }
         Recorded::Get(_) => ShioriOutcome::NoContent,
         Recorded::Close => ShioriOutcome::Notified,
     });
@@ -454,6 +456,15 @@ fn allowed_event_id_is_sent_and_wire_trace_logged() {
     );
     // Method・ID・参照値・実行状態の wire 証跡（Req6.2・DD-IT-7）。
     assert_logged(&events, Level::TRACE, "shiori_request");
+    // 出どころの 3 項目（運行表のイベント＝areka・internal・local・要件 2.2）。
+    let request = events
+        .iter()
+        .find(|e| e.event.as_deref() == Some("shiori_request"))
+        .expect("shiori_request");
+    let field = |name: &str| request.fields.get(name).map(String::as_str);
+    assert_eq!(field("sender"), Some("areka"));
+    assert_eq!(field("sender_type"), Some("internal"));
+    assert_eq!(field("security_level"), Some("local"));
 
     drop(shiori_tx);
     drop(shiori_handle);
@@ -604,7 +615,9 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
-        Recorded::Get(id) if id == "username" => ShioriOutcome::Value("bob".to_string()),
+        Recorded::Get(id) if id == "username" => {
+            ShioriOutcome::Value("bob".to_string(), areka_talk::SecurityLevel::Local)
+        }
         Recorded::Get(_) => ShioriOutcome::NoContent,
         Recorded::Close => ShioriOutcome::Notified,
     });

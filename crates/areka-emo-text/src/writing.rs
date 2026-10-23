@@ -270,7 +270,7 @@ impl WritingDirectionDecision {
     /// ——正典の語彙は縦横 2 値であり、列送りの向きを区別しない。
     ///
     /// 本仕様はこの値を publish しない（語彙表登録も照会経路の新設も行わない）。
-    /// プロパティの実導出は追跡 spec `areka-P0-currentghost-property-tree` が所有する（DD7）。
+    /// プロパティの実導出は追跡 spec `currentghost-property-tree` が所有する（DD7）。
     pub fn vertical_property_value(&self) -> u8 {
         match self.mode {
             WritingMode::HorizontalTb => 0,

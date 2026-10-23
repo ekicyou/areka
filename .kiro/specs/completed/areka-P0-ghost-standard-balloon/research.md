@@ -263,4 +263,4 @@
 
 - `switch_balloon_resolved` の文面に「バルーンを決めました」を含めない。
 - 実機の確認 C の 2 回目は、1 回目の起動が書いた記憶を消してから（記憶が勝つため）。
-- `areka-P0-shell-companion-balloon` は同じ 3 ファイルと `BalloonInputs`・`BalloonRoute` を触る（直列）。
+- `shell-companion-balloon` は同じ 3 ファイルと `BalloonInputs`・`BalloonRoute` を触る（直列）。

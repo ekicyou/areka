@@ -6,7 +6,7 @@
 use super::translate::{self, ScriptSource};
 use super::{Action, Phase, State, events};
 use crate::msg::{KanadeConfig, ShioriOutcome};
-use crate::talk::TalkId;
+use crate::talk::{ScriptOrigin, TalkId};
 
 /// SSTP SEND のトークの `ActiveTalk::origin`（記録用）。
 pub(crate) const SEND_ORIGIN: &str = "SstpSend";
@@ -53,7 +53,12 @@ pub(super) fn on_send(
     super::clear_choice_ledger(&mut state, "sstp_send");
     state.choice_prev_talk = None;
     state.sstp_strict = None;
-    let (talk_id, start) = super::start_talk(&mut state, SEND_ORIGIN, script.clone());
+    let (talk_id, start) = super::start_talk(
+        &mut state,
+        SEND_ORIGIN,
+        script.clone(),
+        ScriptOrigin::MCP_SEND,
+    );
     state.sstp_strict = Some(StrictNote { talk_id, strict });
     tracing::info!(target: "kanade", event = "sstp_send_started", talk_id = talk_id.0, strict = ?strict, "外からの台本を新しいトークとして始める");
     if script.is_empty() {
@@ -119,15 +124,16 @@ pub(super) fn on_notify_reply(
         return super::on_shiori_reply(state, outcome, origin, config);
     }
     match outcome {
-        ShioriOutcome::Value(script) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
             super::clear_choice_ledger(&mut state, "sstp_notify");
             state.choice_prev_talk = None;
-            let (talk_id, start) = super::start_talk(&mut state, NOTIFY_ORIGIN, script);
+            let (talk_id, start) =
+                super::start_talk(&mut state, NOTIFY_ORIGIN, script, ScriptOrigin::MCP_NOTIFY);
             state.sstp_strict = Some(StrictNote { talk_id, strict });
             tracing::info!(target: "kanade", event = "sstp_notify_talk", talk_id = talk_id.0, strict = ?strict, "外から頼まれたイベントの台本を新しいトークとして始める");
             (state, vec![start])
         }
-        ShioriOutcome::Value(_) | ShioriOutcome::NoContent => {
+        ShioriOutcome::Value(_, _) | ShioriOutcome::NoContent => {
             tracing::debug!(target: "kanade", event = "sstp_notify_no_script", "外から頼まれたイベントは台本を返さなかった——今のトークを続ける");
             (state, Vec::new())
         }

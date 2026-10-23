@@ -30,8 +30,8 @@
 - **Out of scope**:
   - `validrect` の内に宣言された `origin` の扱い（不変・宣言どおり）
   - 未宣言の `origin` 成分の縮退（不変・書字開始角）
-  - 折返し基準（`wordwrappoint`）が描画範囲の外に解決される件（`areka-P0-balloon-canon-residue` 項目 14 の所有・別の欠陥）
-  - プロパティ `currentghost.balloon.scope(ID).basepos.x`／`.y` の公開（`areka-P0-currentghost-property-tree`・α 後。値は解決後の開始点から導けば足りる、とだけ申し送る）
+  - 折返し基準（`wordwrappoint`）が描画範囲の外に解決される件（`balloon-canon-residue` 項目 14 の所有・別の欠陥）
+  - プロパティ `currentghost.balloon.scope(ID).basepos.x`／`.y` の公開（`currentghost-property-tree`・α 後。値は解決後の開始点から導けば足りる、とだけ申し送る）
   - SSP が範囲外の `origin` を内部でどう処理しているかの実測（SSP 実測主義は取らない。根拠は ukadoc の 2 文と目視 1 件で足りる）
   - 文字の面の寸法・描画・折返し・`\_l` の解決の各実装（いずれも解決後の開始点を受け取るだけで、無改変のまま追随する）
   - バルーン定義の読み取り（`origin` は今までどおり宣言の有無を潰さずに運ぶ）
@@ -40,7 +40,7 @@
   - 完了 spec `areka-P0-balloon-vertical-canon` の要件 3.10（宣言どおりに用いる）を本仕様が**上書き**する。アーカイブ本体は改変せず、上書きの事実を `doc/COMPAT_ARCHITECTURE.md` §8 と本仕様に記録する（先例＝同表の `areka-P0-kero-balloon`・`areka-P0-scope-chain-gap`・`areka-P0-cursor-tag-canon` の上書き行）。同 spec の要件 3.11（未宣言の縮退）と 3.7（負値は反対端基準）は不変のまま引き継ぐ
   - 完了 spec `areka-P0-cursor-tag-canon`（`\_l` の原点＝解決後の `origin`）は無改変。解決規則を変えれば `\_l` は自動で追随する
   - `areka-P0-nar-install` は 2026-09-19 に着地した（PR #158）。検体の保管形は配布形 `.nar` へ移り、参照は共有の窓口 `sample-ghost-kit` の `SampleRoot` へ寄った。本仕様が新設するテストは検体名 `emo2-kakukaku-offsetdpi`（窓口の登記表にバルーン種別で存在）を窓口から引き、パスを自分で継ぎ足さない（同ファイルの既存 2 検体と同じ形）。`doc/COMPAT_ARCHITECTURE.md` §8 は行の追記どうしなので後着が取り込む
-  - `areka-P0-emo-text-canon-residue`（α 後）の項目 14 が `region.rs` の定数 `BALLOON_NAME_PLACEHOLDER` を差し替える＝同じファイル。本仕様が先に着地する
+  - `emo-text-canon-residue`（α 後）の項目 14 が `region.rs` の定数 `BALLOON_NAME_PLACEHOLDER` を差し替える＝同じファイル。本仕様が先に着地する
   - 下流 `areka-P0-default-balloon-bundle`（既定バルーンの `origin` がどう書かれていても欠けない）・`areka-P0-alpha-release-signoff`（第三者のバルーンの持ち込み）は本仕様の着地を前提にできる
 
 ## Requirements
@@ -126,5 +126,5 @@
 #### Acceptance Criteria
 
 1. The areka ワークスペース shall 本仕様の完了時に、`.kiro/steering/roadmap.md` の台帳行（#46）を完了へ更新し、上書きした完了 spec の要件（`areka-P0-balloon-vertical-canon` 3.10）を明記する。
-2. The areka ワークスペース shall プロパティ `currentghost.balloon.scope(ID).basepos.x`／`.y` について「値は解決後の文字描画開始点から導けば足りる」とだけ `areka-P0-currentghost-property-tree` へ申し送り、本仕様では実装しない。
+2. The areka ワークスペース shall プロパティ `currentghost.balloon.scope(ID).basepos.x`／`.y` について「値は解決後の文字描画開始点から導けば足りる」とだけ `currentghost-property-tree` へ申し送り、本仕様では実装しない。
 3. The areka ワークスペース shall 本仕様の新設テストが検体 `emo2-kakukaku-offsetdpi` を参照するとき、共有の窓口 `sample-ghost-kit` の `SampleRoot` から根を引き、パスを自分で綾らない。引受先への申し送りは行わない——申し送る先として見込んでいた `areka-P0-nar-install` は 2026-09-19 に完了しており（PR #158）、完了 spec は先送りを吸收できない。共有ヘルパへの寄せは先方が既に済ませているので、本仕様はその窓口を使うだけで要件を満たす。

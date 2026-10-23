@@ -49,6 +49,7 @@ use crate::placement::reseed::{
 use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::source::DescriptSource;
 use crate::placement::spawn::GhostWindows;
+use crate::placement::sticky_group_ledger::replace_sticky_descript;
 
 /// 差し替えの世代（プロセスで単調に進む＝ゴーストをまたいでも置き場の荷物と合図を取り違えない）。
 static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
@@ -428,7 +429,7 @@ fn poll_replies(
 
 /// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 箱の束を文字の層へ渡す
 /// （areka-P0-shell-balloon）→ 配置の値を入れ直す → 重なりの
-/// 基底と並べ直しの材料を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
+/// 基底と並べ直しの材料と窓の組の descript の分を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
 fn finish_shell(
     wiring: &mut Emo2Wiring,
     world: &mut World,
@@ -459,11 +460,16 @@ fn finish_shell(
             "reseed: 窓の正本が無いので見た目の値を入れ直さない（古い値のまま）"
         ),
     }
-    // 新しいシェルの設定は 1 度だけ組み、重なりの基底と並べ直しの材料の両方へ配る
-    // （材料は areka-P0-move-canon 要件 8.6・読むのは並べ直しだけ）。
+    // 重なりの基底は新しいシェルの設定から置き直す。標準の位置の材料は起動の準備と同じ形
+    // （descript の値＋走っているバルーンの配置の値）で置き直す（areka-P0-window-link-directives 要件 7.4）。
     let placement_cfg = build_placement_config(&source.ghost_kv, &source.shell_kv);
     wiring.reseed_zorder_descript_base(placement_cfg.zorder_raw.as_deref());
-    world.insert_resource(DefaultPlacementBasis(placement_cfg));
+    // 窓の組も descript の分だけを新しいシェルの値へ取り替える（台本の組は保つ・要件 6.5）。
+    replace_sticky_descript(world, placement_cfg.sticky_window_raw.as_deref());
+    world.insert_resource(DefaultPlacementBasis {
+        source: source.clone(),
+        balloon: balloon.clone(),
+    });
     let replaced = world
         .get_non_send_mut::<GhostSlot>()
         .is_some_and(|mut slot| {

@@ -15,7 +15,7 @@ brief の見立て（窓の無い区間の巡が数に入って 600 に届く）
 ## Boundary Context
 - **In scope**: 初期配置の確定を見送ったとき、その巡を数えるかどうかの判定（見送りの理由による仕分け）／それを確かめる決定論テスト（新しい振る舞いに合わなくなった既存テストの更新を含む）／emo2 の入れ直しによる実機の確かめ 1 回。
 - **Out of scope**: 窓の無い区間で毎フレームの処理そのものを止めること（毎フレームの結線の持ち方）／起こし直しの手順（窓と資源の外し方・ゴーストのセッションの扱い）／初期配置の確定の規則と配置の計算／WARN のしきい値（600）と本文／拡大率の遷移の後の解き直しの見送りの数え方／シェルを最初の `\s` まで表示しない作り／インストールの手続き。
-- **Adjacent expectations**: 起こし直しは今日どおり窓と初期配置の資源（見送りの数を含む）を外すことを前提にする（完了 `areka-P0-ghost-shell-balloon-switch` のタスク 11.9）。「`\s` は出たのに表示が着地しない」という表示の側の失敗は、本 spec の後はこの WARN では拾えなくなるので、表示の経路がその場で失敗を記録していることを前提にする（設計で確かめる）。同じウェーブで並走する spec と触るファイルを重ねないため、触るソースは見送りを数える判定の 1 ファイル（`crates/areka/src/emo2_boot/frame/drain_resnap.rs`）と、その確定のテスト（`crates/areka/src/emo2_boot/frame_chain_finalize_restart_tests.rs`・`crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs`）だけに限る。隣の `areka-P0-install-live-target-hazards` は同じ「起動中のゴーストへ入れる」場面を扱うが、触るファイルの共有は 0。
+- **Adjacent expectations**: 起こし直しは今日どおり窓と初期配置の資源（見送りの数を含む）を外すことを前提にする（完了 `areka-P0-ghost-shell-balloon-switch` のタスク 11.9）。「`\s` は出たのに表示が着地しない」という表示の側の失敗は、本 spec の後はこの WARN では拾えなくなるので、表示の経路がその場で失敗を記録していることを前提にする（設計で確かめる）。同じウェーブで並走する spec と触るファイルを重ねないため、触るソースは見送りを数える判定の 1 ファイル（`crates/areka/src/emo2_boot/frame/drain_resnap.rs`）と、その確定のテスト（`crates/areka/src/emo2_boot/frame_chain_finalize_restart_tests.rs`・`crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs`）だけに限る。隣の `install-live-target-hazards` は同じ「起動中のゴーストへ入れる」場面を扱うが、触るファイルの共有は 0。
 
 ## Requirements
 

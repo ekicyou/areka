@@ -182,7 +182,7 @@
 
 ---
 
-**2026-08-01 追補（kero-balloon 検証ゲート＋未登記先送り棚卸より・roadmap 追記(56)）**: 要件フェーズで以下 2 件の**吸収可否を裁定**すること（拒否した場合の受け皿は `areka-P0-balloon-canon-residue`〔同日起票〕と序列確定済み——黙殺は不可）。
+**2026-08-01 追補（kero-balloon 検証ゲート＋未登記先送り棚卸より・roadmap 追記(56)）**: 要件フェーズで以下 2 件の**吸収可否を裁定**すること（拒否した場合の受け皿は `balloon-canon-residue`〔同日起票〕と序列確定済み——黙殺は不可）。
 
 1. **`\b[N]`@scope≥1 の end-to-end 檻**: kero-balloon は解決半分（`build_balloon_target_composes_scope_series_on_emo2_fixture`）＋配送半分（`spine_s3`＝scope0）で被覆したが、scope≥1 の `\b[N]` を実面切替まで通す檻が無い（同 tasks.md 既知シーム）。多面バルーン fixture＋実 GPU spine ハーネスが要る＝本 spec が多面シナリオを組むなら合流が最安。
 2. **バルーン `AnimationTable` の scope 写像の実効化**: `synthetic_surfaces_txt` が `animation*` 行を出さないため balloon 側の表は**構造的に常に空**＝`balloon_tables` の scope キー写像（assets.rs `actor_keyed_balloon_tables`→looper.rs lookup）は現状**静的証跡でしか検証できない**（実行時に取り違えても無観測）。多面＋アニメ付き fixture を作るならこの写像が初めて実行時に効く。

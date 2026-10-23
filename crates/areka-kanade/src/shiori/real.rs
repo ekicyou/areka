@@ -26,11 +26,12 @@ use std::time::Duration;
 use areka_actor::{ActorHandle, spawn_actor};
 use shiori_host32_host::{
     CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow, RequestError,
-    Shiori3Client, ShutdownError,
+    RequestHeaders, Shiori3Client, ShutdownError, ValueReply,
 };
 
 use super::probe::{ShioriBusy, ShioriProbe, ShioriUnblock};
 use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::request_origin::{OriginWire, RequestOrigin, read_response_level};
 
 /// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表が
 /// 直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
@@ -80,6 +81,32 @@ pub trait ShioriBackend {
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError>;
+    /// ヘッダつきの GET（追加のヘッダを渡し、応答の `SecurityLevel` の生の値を受け取る・要件 2.1・3.1）。
+    ///
+    /// 既定はヘッダを使わず [`Self::get`] を呼び、応答のレベルは無し（テストの偽物・中身なしの
+    /// 受け手は既定のまま今と同じに動く）。ヘッダを線へ載せる受け手だけが上書きする。
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        _headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        Ok(self.get(id, references, status)?.map(|value| ValueReply {
+            value,
+            security_level: None,
+        }))
+    }
+    /// ヘッダつきの NOTIFY（要件 2.1）。既定はヘッダを使わず [`Self::notify`] を呼ぶ。
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        _headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        self.notify(id, references, status)
+    }
     /// 正規 clean shutdown（unload → helper 正常終了観測）。
     fn unload(&mut self) -> Result<ExitKind, ShutdownError>;
     /// 非ブロッキング死活問い合わせ（sticky）。
@@ -129,6 +156,29 @@ impl ShioriBackend for ShioriConnection {
     ) -> Result<(), RequestError> {
         // GET と同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
         Shiori3Client::new(&self.window, &mut self.negotiator).notify(id, references, status)
+    }
+
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade・要件 3.5）。
+        Shiori3Client::new(&self.window, &mut self.negotiator)
+            .get_with_headers(id, references, status, headers)
+    }
+
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        Shiori3Client::new(&self.window, &mut self.negotiator)
+            .notify_with_headers(id, references, status, headers)
     }
 
     fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
@@ -182,9 +232,23 @@ fn map_error(err: RequestError) -> ShioriFailure {
     }
 }
 
+/// 4 つのヘッダの文字列を入れ物へ詰める（host32 の型はこのファイルの中だけで使う）。
+fn headers_of(wire: &OriginWire) -> RequestHeaders<'_> {
+    RequestHeaders {
+        security_level: wire.security_level,
+        security_origin: wire.security_origin,
+        sender: wire.sender,
+        sender_type: &wire.sender_type,
+    }
+}
+
 /// 1 件の [`ShioriCall`] を backend へ dispatch し [`ShioriOutcome`] へ写す（本番・テスト共通）。
 ///
-/// GET: `Ok(Some)`→`Value`・`Ok(None)`→`NoContent`・`Err`→`Failed(map_error(..))`。
+/// GET・NOTIFY とも要求の出どころの規則（[`RequestOrigin::of_event`]）から入れ物を作り、
+/// ヘッダつきのメソッドだけを呼ぶ（要件 2.1〜2.6）。
+///
+/// GET: `Ok(Some)`→`Value`（応答の生のレベルを [`read_response_level`] で読んで載せる・要件
+/// 3.1・3.4）・`Ok(None)`→`NoContent`・`Err`→`Failed(map_error(..))`。
 /// NOTIFY: `Ok(())`→`Notified`・`Err`→`Failed(map_error(..))`（NOTIFY は Value を運ばない）。
 ///
 /// `status`（[`crate::status::ExecutionStatus`]）は呼出直前に `render()` して wire 値
@@ -198,9 +262,18 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
             status,
         } => {
             let status_wire = status.render();
+            let wire = RequestOrigin::of_event(&id).wire();
             // wire 形（`as_str()`）のみを backend へ渡す——出所カテゴリは境界を跨がない（DD-1）。
-            match backend.get(id.as_str(), &references, status_wire.as_deref()) {
-                Ok(Some(value)) => ShioriOutcome::Value(value),
+            match backend.get_with_headers(
+                id.as_str(),
+                &references,
+                status_wire.as_deref(),
+                &headers_of(&wire),
+            ) {
+                Ok(Some(reply)) => {
+                    let level = read_response_level(reply.security_level.as_deref(), id.as_str());
+                    ShioriOutcome::Value(reply.value, level)
+                }
                 Ok(None) => ShioriOutcome::NoContent,
                 Err(e) => ShioriOutcome::Failed(map_error(e)),
             }
@@ -211,8 +284,14 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
             status,
         } => {
             let status_wire = status.render();
-            // GET と同じく wire 形のみを渡す（DD-1）。
-            match backend.notify(id.as_str(), &references, status_wire.as_deref()) {
+            let wire = RequestOrigin::of_event(&id).wire();
+            // GET と同じく wire 形のみを渡す（DD-1）。応答は今どおり読まない。
+            match backend.notify_with_headers(
+                id.as_str(),
+                &references,
+                status_wire.as_deref(),
+                &headers_of(&wire),
+            ) {
                 Ok(()) => ShioriOutcome::Notified,
                 Err(e) => ShioriOutcome::Failed(map_error(e)),
             }
@@ -448,3 +527,7 @@ mod idle_tests;
 #[cfg(test)]
 #[path = "real_probe_tests.rs"]
 mod probe_tests;
+
+#[cfg(test)]
+#[path = "real_headers_tests.rs"]
+mod headers_tests;

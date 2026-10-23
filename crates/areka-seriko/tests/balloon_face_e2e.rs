@@ -25,8 +25,8 @@
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{
-    ActorKey, ChoiceWaiting, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
-    TalkEndReason, TalkId, spawn_talk,
+    ActorKey, ChoiceWaiting, CueSink, SakuraMsg, ScriptOrigin, StartTalk, SystemVarSnapshot,
+    TalkCue, TalkDone, TalkEndReason, TalkId, spawn_talk,
 };
 use areka_seriko::{
     BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
@@ -97,6 +97,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
             epilogue: Vec::new(),
             script: script.to_string(),
             talk_id: TalkId(2),
+            origin: ScriptOrigin::GHOST,
         },
         done_tx,
         vec![Box::new(seriko_sink), Box::new(NullTextSink)],

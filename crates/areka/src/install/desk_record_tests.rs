@@ -226,3 +226,71 @@ fn a_shell_install_only_records_names() {
     );
     assert!(rig.shutdown());
 }
+
+/// バルーンだけの書庫を入れた後の記録を頼む（書庫の綴り `fluffy`）。
+fn record_fluffy(rig: &mut SwitchRig) -> Vec<CapturedEvent> {
+    let (answered, events) = record(
+        rig,
+        InstalledRecord {
+            kind: InstallKind::Balloon,
+            object_name: "ふわふわ".to_owned(),
+            folder: "fluffy".to_owned(),
+            ghost_folder: None,
+        },
+    );
+    assert!(answered, "反映が済んでから答える");
+    events
+}
+
+/// バルーンだけの書庫は根へ入り、今のゴーストの中に同じフォルダ名（大文字小文字違い）が在れば
+/// info `installed_balloon_hidden_by_ghost` が 1 件（`installed`＝根の場所・`by`＝ゴーストの中の場所）。
+/// 控えと記憶の書き方は今どおり（areka-P0-ghost-inner-balloon 要件 3.5・7.4）。
+#[test]
+fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
+    let mut rig = rig();
+    plant_balloon(&rig, "Fluffy", "ふわふわ");
+    let by = rig.add_ghost_balloon_copy("A", "FLUFFY", "中のふわふわ");
+    let events = record_fluffy(&mut rig);
+    let hidden: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("installed_balloon_hidden_by_ghost"))
+        .collect();
+    assert_eq!(hidden.len(), 1, "{events:?}");
+    assert_eq!(hidden[0].level, Level::INFO);
+    assert_eq!(hidden[0].field_str("folder"), Some("Fluffy"));
+    let installed = rig.root.balloon_dir("Fluffy");
+    assert_eq!(
+        hidden[0].field("installed"),
+        Some(installed.display().to_string().as_str()),
+        "入れた先は根"
+    );
+    assert_eq!(
+        hidden[0].field("by"),
+        Some(by.display().to_string().as_str())
+    );
+    assert_eq!(
+        rig.world.get_resource::<LastInstalledBalloon>(),
+        Some(&LastInstalledBalloon("Fluffy".to_owned())),
+        "控えは今どおり根の目録の綴り"
+    );
+    assert_eq!(
+        read_last_balloon(&rig.root.ghost_dir("A")).as_deref(),
+        Some("Fluffy"),
+        "記憶の書き方は今どおり"
+    );
+    assert!(rig.shutdown());
+}
+
+/// 今のゴーストの中に同じフォルダ名が無ければ記録 0 件（要件 3.5）。
+#[test]
+fn a_balloon_not_hidden_by_the_running_ghost_is_not_recorded() {
+    let mut rig = rig();
+    plant_balloon(&rig, "Fluffy", "ふわふわ");
+    rig.add_ghost_balloon_copy("A", "other", "別のもの");
+    let events = record_fluffy(&mut rig);
+    assert_eq!(
+        count(&events, "installed_balloon_hidden_by_ghost", Level::INFO),
+        0
+    );
+    assert!(rig.shutdown());
+}

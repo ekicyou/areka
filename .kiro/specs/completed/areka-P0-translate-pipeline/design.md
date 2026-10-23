@@ -4,7 +4,7 @@
 
 **Purpose**: SHIORI が返した台詞を、バルーンに表示する前に正典（ukadoc「トランスレータ」「OnTranslate」）の順序で 1 回だけ翻訳する。里々・YAYA の標準の辞書が `OnTranslate` で行っている直し（敬称の重なりの除去・語尾・自動の間）が、areka でも表示に反映されるようにする。
 
-**Users**: 既存ゴーストの利用者とゴースト作者。後半の spec `areka-P0-makoto-dll-host` の実装者（MAKOTO の鎖を差し込む口を使う）。
+**Users**: 既存ゴーストの利用者とゴースト作者。後半の spec `makoto-dll-host` の実装者（MAKOTO の鎖を差し込む口を使う）。
 
 **Impact**: 運行表（`crates/areka-kanade/src/schedule/` の純粋な状態機械）に「翻訳の待ち」の帳簿を 1 つ足し、SHIORI の台詞から再生を始める直前に `OnTranslate` の往復を 1 つ挟む。環境変数（`%username` 等）の展開を翻訳の前でも行う。再生側（台本の解釈・文字の表示）は変えない。`OnTranslate` に 204 を返すゴースト（emo2 の pasta）では、表示される文字の並びは今日と同じ。
 
@@ -15,7 +15,7 @@
 - 再生を始める時点の運行の状態（相・期限・台詞の切れ目の見張り・Status の導き方）を今日と同じ値に保つ。
 
 ### Non-Goals
-- MAKOTO/2.0 DLL の読み込み・通信・文字コード・`\![load|unload|reload,makoto]`（`areka-P0-makoto-dll-host`）。
+- MAKOTO/2.0 DLL の読み込み・通信・文字コード・`\![load|unload|reload,makoto]`（`makoto-dll-host`）。
 - SSTP・コミュニケート・プラグインなど新しい台詞の出所。Reference1 の出所の語彙。
 - `%(...)` の展開。新しい環境変数名への対応。
 - 再生側（`areka-sakura` の `compile`・`areka-ghost` の `dispatcher`）の振る舞いの変更。`areka-talk` の `StartTalk` の型の変更。
@@ -47,8 +47,8 @@
 - 外部クレートの追加は 0。`Cargo.toml` の変更は 0。
 
 ### Revalidation Triggers
-- `TranslateSeams`・`ScriptExpander`・`MakotoChain` の形が変わる（`areka-P0-makoto-dll-host` が再確認）。
-- `Action::Translate`・`Input::TranslateDone`・`State` の `translate`／`reply_source` の欄が変わる（同じ運行の判断のファイルを触る `areka-P0-property-query-channels`・`areka-P0-balloon-lifecycle-events`・`areka-P0-network-update-canon-order` が再確認）。
+- `TranslateSeams`・`ScriptExpander`・`MakotoChain` の形が変わる（`makoto-dll-host` が再確認）。
+- `Action::Translate`・`Input::TranslateDone`・`State` の `translate`／`reply_source` の欄が変わる（同じ運行の判断のファイルを触る `property-query-channels`・`areka-P0-balloon-lifecycle-events`・`network-update-canon-order` が再確認）。
 - 運行表に、SHIORI の台詞から再生を始める新しい腕が足される（出口の規則が自動で捕まえるが、経路ごとのテストを 1 本足す）。
 - areka が自分で作る台詞に、中身のある文字列を持つものが足される（「翻訳しない」の見分け方の前提が変わる）。
 - 字句解析の規則（`%`・`\\`・`\%`・タグ名の長さ）が変わる（置き換え関数は走査を共有するので追随するが、展開の同値の検査のテストを見直す）。
@@ -475,7 +475,7 @@ pub fn spawn_kanade_translating(
 ) -> (Sender<KanadeMsg>, ActorHandle);
 ```
 - 既存の `spawn_kanade`・`spawn_kanade_with_stop_sink` は `TranslateSeams::passthrough()` を渡す薄い包みにする（既存の呼び手は 1 つも変わらない）。
-- 本 spec が持つ MAKOTO の実装は `passthrough` の中の素通し 1 つだけ。`areka-ghost` の結線もこれを渡す。`areka-P0-makoto-dll-host` は `areka-ghost` の結線で `makoto` を差し替える。
+- 本 spec が持つ MAKOTO の実装は `passthrough` の中の素通し 1 つだけ。`areka-ghost` の結線もこれを渡す。`makoto-dll-host` は `areka-ghost` の結線で `makoto` を差し替える。
 - 口の引数は文字列 2 つだけで、DLL・プロセス・文字コードの型を持たない。
 
 ### 線

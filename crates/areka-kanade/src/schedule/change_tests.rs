@@ -85,7 +85,10 @@ fn talking(script: &str) -> (State, TalkId) {
         Input::ChangeGhost(req(ChangeOrigin::Manual, true)),
         &cfg(),
     );
-    let (s, actions) = reply(s, ShioriOutcome::Value(script.to_string()));
+    let (s, actions) = reply(
+        s,
+        ShioriOutcome::Value(script.to_string(), areka_talk::SecurityLevel::Local),
+    );
     let Phase::ChangeTalkWait { talk_id, deadline } = s.phase else {
         panic!("OnGhostChanging の台本で ChangeTalkWait へ進むはず");
     };
@@ -116,7 +119,10 @@ fn close_talking() -> (State, TalkId) {
         ("OnClose".to_string(), vec!["system".to_string()]),
         "204 なら続けて OnClose（Ref0＝system）を GET"
     );
-    let (s, actions) = reply(s, ShioriOutcome::Value("bye".to_string()));
+    let (s, actions) = reply(
+        s,
+        ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),
+    );
     let Phase::ChangeCloseTalkWait { talk_id, deadline } = s.phase else {
         panic!("OnClose の台本で ChangeCloseTalkWait へ進むはず");
     };
@@ -323,7 +329,10 @@ fn deadline_is_armed_on_first_tick_when_entered_without_time() {
         Input::ChangeGhost(req(ChangeOrigin::Manual, true)),
         &cfg(),
     );
-    let (s, _) = reply(s, ShioriOutcome::Value("hi".to_string()));
+    let (s, _) = reply(
+        s,
+        ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
+    );
     assert!(matches!(
         s.phase,
         Phase::ChangeTalkWait { deadline: None, .. }

@@ -90,12 +90,12 @@ areka 同梱の検体が無傷なのは、開始点の寄せ戻しを撤去し�
 ## Upstream / Downstream
 
 - **Upstream**: 完了 `areka-P0-balloon-vertical-canon`（撤去を行った側。要件 3.10／3.11 を本仕様が上書きする）・完了 `areka-P0-cursor-tag-canon`（`\_l` の原点＝解決後の `origin`）
-- **Downstream**: `areka-P0-default-balloon-bundle`（既定バルーンの `origin` がどう書かれていても欠けない）・`areka-P0-alpha-release-signoff`（第三者のバルーンの持ち込み）・`areka-P0-currentghost-property-tree`（`basepos`）
+- **Downstream**: `areka-P0-default-balloon-bundle`（既定バルーンの `origin` がどう書かれていても欠けない）・`areka-P0-alpha-release-signoff`（第三者のバルーンの持ち込み）・`currentghost-property-tree`（`basepos`）
 
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新規）。ただし完了 `areka-P0-balloon-vertical-canon` の要件 3.10（宣言どおりに用いる）を上書きする。アーカイブ本体は改変せず、上書きの事実を COMPAT §8 と本仕様に記録する（先例＝同表 `:147`・`:153`・`:209`）
-- **Adjacent**: `areka-P0-emo-text-canon-residue`（α 後・項目 14 が `region.rs` の定数 `BALLOON_NAME_PLACEHOLDER` を差し替える＝同じファイル。本仕様が先に着地する）・`areka-P0-balloon-canon-residue`（項目 14＝折返し基準の範囲外。別の欠陥）・α の A0 の 3 本（`nar-install` が書き換える 38 ファイルに `region.rs` は含まれない＝検体パスの参照 0 を実測。`doc/COMPAT_ARCHITECTURE.md` は行の追記どうしなので後着が取り込む）
+- **Adjacent**: `emo-text-canon-residue`（α 後・項目 14 が `region.rs` の定数 `BALLOON_NAME_PLACEHOLDER` を差し替える＝同じファイル。本仕様が先に着地する）・`balloon-canon-residue`（項目 14＝折返し基準の範囲外。別の欠陥）・α の A0 の 3 本（`nar-install` が書き換える 38 ファイルに `region.rs` は含まれない＝検体パスの参照 0 を実測。`doc/COMPAT_ARCHITECTURE.md` は行の追記どうしなので後着が取り込む）
 
 ## Constraints
 

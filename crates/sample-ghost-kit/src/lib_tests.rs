@@ -1,15 +1,17 @@
 //! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
 //! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。`emily4` の 1 本は spec:
-//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3）。
+//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3。`dot_sakura` の 1 本は spec:
+//! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
-//! だから主張は 8 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
-//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 9 つを
+//! だから主張は 9 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
+//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 10 個を
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
 //! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
 //! 取得した根へ書いた起動記録が次に取得した根に現れない／取り出し元の無い同梱を名乗る
-//! `emily4` の `.nar` は同梱を飛ばしてゴーストだけを入れる。
+//! `emily4` の `.nar` は同梱を飛ばしてゴーストだけを入れる／`dot_sakura` の `.nar` は
+//! 警告も飛ばした同梱も無くゴーストと同梱を入れ、最上位の普通のファイルを本体の直下に置く。
 //!
 //! 「借用しか返さないので取得した値を捨てるとコンパイルできない」ことは、コンパイル自体を
 //! 判定に使うので rustdoc の `compile_fail` 例（[`SampleRoot::root`](super::SampleRoot::root)・
@@ -129,7 +131,7 @@ fn fetched_rows() -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-/// 書庫をリポジトリに置く今の 8 行は `Vendored`、ほかは URL の行
+/// 書庫をリポジトリに置く今の 9 行は `Vendored`、ほかは URL の行
 /// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。
 #[test]
 fn current_rows_are_registered_as_vendored() {
@@ -149,8 +151,9 @@ fn current_rows_are_registered_as_vendored() {
             "StayseeBalloon",
             "claudia",
             "emily4",
+            "dot_sakura",
         ],
-        "今の 8 行は Vendored のまま"
+        "今の 9 行は Vendored のまま"
     );
     assert_eq!(
         fetched_rows(),
@@ -195,7 +198,7 @@ fn only_vendored_rows_have_a_nar_in_the_repository() {
     }
 }
 
-/// 登記した 9 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
+/// 登記した 10 個の検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
 /// （要件 1.1・1.2・1.3・7.4。URL の行は spec `areka-P0-sample-url-fetch` 要件 5.4・5.6）。
 ///
 /// 位置は `<根>/<格納先>/<名>` の等式で判定する。検体ごとの第 2 の表や専用関数があれば
@@ -203,7 +206,7 @@ fn only_vendored_rows_have_a_nar_in_the_repository() {
 /// （名前・探した場所・取り寄せの段のコマンド）で落ちる。
 #[test]
 fn every_registered_sample_lands_where_its_registry_row_says() {
-    assert_eq!(SAMPLES.len(), 9, "登記は検体 9 つ");
+    assert_eq!(SAMPLES.len(), 10, "登記は検体 10 個");
     for sample in SAMPLES {
         let acquired = SampleRoot::acquire(sample.name).unwrap_or_else(|err| panic!("{err}"));
 
@@ -238,8 +241,8 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
                 .expect("登記済みの同梱バルーンは引けるはず");
             assert_eq!(
                 path,
-                root.join("balloon").join(balloon),
-                "同梱バルーン {balloon} は `<根>/balloon/<名>`（要件 1.3）"
+                acquired.folder().join("balloon").join(balloon),
+                "同梱バルーン {balloon} は `<根>/ghost/<名>/balloon/<名>`（要件 1.3・spec: `areka-P0-ghost-inner-balloon` 要件 7.1）"
             );
             assert!(
                 path.is_dir(),
@@ -257,39 +260,29 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
     }
 }
 
-/// 未登録の検体名は、既知の名前 9 つを含む理由付きの失敗になる（要件 1.4）。
+/// 未登録の検体名は、既知の名前 10 個を含む理由付きの失敗になる（要件 1.4）。
 #[test]
-fn unknown_sample_fails_with_all_nine_known_names() {
-    let err = SampleRoot::acquire("no-such-ghost").expect_err("未登録名は失敗するはず");
-    let SampleError::UnknownSample { requested, known } = &err else {
-        panic!("未登録名の失敗は UnknownSample であるはず: {err:?}");
-    };
-    assert_eq!(requested, "no-such-ghost");
-    assert_eq!(
-        known,
-        &[
-            "emo2",
-            "R_POST_and_KOMAINU",
-            "emo2-kakukaku-offsetdpi",
-            "emo2-kakukaku-wplimit",
-            "konnoyayame",
-            "StayseeBalloon",
-            "claudia",
-            "emily4",
-            "pasta-in-windows",
-        ]
-    );
-    let shown = err.to_string();
-    for name in [
+fn unknown_sample_fails_with_all_ten_known_names() {
+    let names = [
         "emo2",
         "R_POST_and_KOMAINU",
         "emo2-kakukaku-offsetdpi",
         "emo2-kakukaku-wplimit",
         "konnoyayame",
         "StayseeBalloon",
+        "claudia",
         "emily4",
         "pasta-in-windows",
-    ] {
+        "dot_sakura",
+    ];
+    let err = SampleRoot::acquire("no-such-ghost").expect_err("未登録名は失敗するはず");
+    let SampleError::UnknownSample { requested, known } = &err else {
+        panic!("未登録名の失敗は UnknownSample であるはず: {err:?}");
+    };
+    assert_eq!(requested, "no-such-ghost");
+    assert_eq!(known, &names);
+    let shown = err.to_string();
+    for name in names {
         assert!(shown.contains(name), "失敗の表示に {name} が無い: {shown}");
     }
 }
@@ -373,9 +366,15 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     );
     assert_eq!(
         installed,
-        ["balloon/probe-window-balloon", "ghost/probe-other"]
+        [
+            "ghost/probe-other",
+            "ghost/probe-other/balloon/probe-window-balloon"
+        ]
     );
-    assert_eq!(expected, "balloon/probe-window-balloon, ghost/probe-window");
+    assert_eq!(
+        expected,
+        "ghost/probe-window, ghost/probe-window/balloon/probe-window-balloon"
+    );
     assert!(
         shown.contains("probe-other") && shown.contains("probe-window"),
         "失敗の表示に両側の綴りが無い: {shown}"
@@ -405,7 +404,10 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
         &GHOST_WITH_BALLOON,
     );
     assert_eq!(installed, ["ghost/probe-window"]);
-    assert_eq!(expected, "balloon/probe-window-balloon, ghost/probe-window");
+    assert_eq!(
+        expected,
+        "ghost/probe-window, ghost/probe-window/balloon/probe-window-balloon"
+    );
 
     // ⑷ 登記していない同梱バルーンが置かれた。
     let (_, expected, installed) = refused(
@@ -419,7 +421,10 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     );
     assert_eq!(
         installed,
-        ["balloon/probe-window-balloon", "ghost/probe-window"]
+        [
+            "ghost/probe-window",
+            "ghost/probe-window/balloon/probe-window-balloon"
+        ]
     );
     assert_eq!(expected, "ghost/probe-window");
 }
@@ -474,7 +479,7 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
         sample
             .balloons
             .iter()
-            .map(|balloon| format!("Balloon balloon/{balloon}")),
+            .map(|balloon| format!("Balloon ghost/{}/balloon/{balloon}", sample.name)),
     );
     declared.sort();
     declared
@@ -494,8 +499,8 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
 fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     assert_eq!(
         SAMPLES.len(),
-        9,
-        "登記は検体 9 つ（母数 0 で緑にならない較正）"
+        10,
+        "登記は検体 10 個（母数 0 で緑にならない較正）"
     );
     for sample in SAMPLES {
         let root = WorkDir::new().expect("空の根は取れるはず");
@@ -587,6 +592,58 @@ fn emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion() {
             source: "balloon".to_owned(),
         }],
         "飛ばした同梱は 1 件"
+    );
+}
+
+/// `dot_sakura.nar` は同梱の宛先だけを書き、取り出し元は宛先と同じ名前のフォルダ
+/// で書庫の最上位に在る。空の根へ入れると警告 0・飛ばした同梱 0 で、最上位の `delete.txt`・
+/// `updates.txt` は本体の直下に普通のファイルとして置かれる（spec: areka-P0-dot-sakura-specimen
+/// 要件 2.4・5.7）。
+#[test]
+fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings() {
+    // 同梱の名は登記の行から引く（綴りを直書きしない）。
+    let balloon = SAMPLES
+        .iter()
+        .find(|sample| sample.name == "dot_sakura")
+        .expect("dot_sakura は登記済み")
+        .balloons[0];
+    let root = WorkDir::new().expect("空の根は取れるはず");
+    let nar = devroot::nar_dir().join("dot_sakura.nar");
+    let outcome = areka_nar::NarArchive::open(&nar)
+        .expect("dot_sakura.nar は受理されるはず")
+        .install(&areka_nar::InstallRequest {
+            roots: &areka_nar::SingleRoot(root.path()),
+            target_ghost: None,
+        })
+        .expect("dot_sakura.nar は空の根へ入るはず");
+
+    assert_eq!(outcome.installed.len(), 2, "入るのは本体と同梱 1 つの 2 件");
+    assert_eq!(outcome.skipped.len(), 0, "飛ばした同梱は 0 件");
+    assert_eq!(outcome.warnings.len(), 0, "警告は 0 件");
+    assert_eq!(outcome.leftovers.len(), 0, "残った作業フォルダは 0 件");
+
+    let body = root.path().join("ghost").join("dot_sakura");
+    for top_level_file in ["delete.txt", "updates.txt"] {
+        assert!(
+            body.join(top_level_file).is_file(),
+            "最上位の {top_level_file} は本体の直下に普通のファイルとして在るはず"
+        );
+    }
+    assert!(
+        !body.join(balloon).exists(),
+        "取り出し元のフォルダは本体の直下に残らないはず"
+    );
+    // 同梱はゴーストの中の balloon へ入る（spec: areka-P0-ghost-inner-balloon 要件 7.1）。
+    assert!(
+        body.join("balloon")
+            .join(balloon)
+            .join("descript.txt")
+            .is_file(),
+        "同梱の descript.txt がゴーストの中に在るはず"
+    );
+    assert!(
+        !root.path().join("balloon").exists(),
+        "根の balloon には何も入らないはず"
     );
 }
 

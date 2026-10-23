@@ -246,7 +246,10 @@ fn change_talking(closing: bool) -> (State, TalkId) {
     };
     let actions = reply_value(&mut s, ORIGINAL, origin);
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        &mut s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     let (talk, _) = started(&actions);
     assert!(
         matches!(
@@ -399,7 +402,10 @@ fn replacement_drops_held_notes_then_neither_translation_outcome_sends() {
             assert_dropped(&s, &ev, held, old, "Steady");
 
             if translated {
-                let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+                let actions = feed(
+                    &mut s,
+                    Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+                );
                 let (next, _) = started(&actions);
                 assert_ne!(next, old);
                 assert_quiet_after(

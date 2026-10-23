@@ -475,7 +475,7 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-anchor-tag-canon` | `\_a[ID,引数]` / `\_a[ID]` | `\_a[ID]` | `ukadoc:list_sakura_script:_5c_a_5bID_5d:1` | 所有 | 空 |
 | `areka-P0-anchor-tag-canon` | `\_l[10,20]` | `\_l[x,y]` | `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1` | 例示 | `areka-P0-cursor-tag-canon` |
 | `areka-P0-anchor-tag-canon` | `\_n` | `\_n` | `ukadoc:list_sakura_script:_5c_n:1` | 例示 | 空 |
-| `areka-P0-anchor-tag-canon` | `\_q` | `\_q` | `ukadoc:list_sakura_script:_5c_q:1` | 例示 | `areka-P0-sakura-time-directives` |
+| `areka-P0-anchor-tag-canon` | `\_q` | `\_q` | `ukadoc:list_sakura_script:_5c_q:1` | 例示 | `sakura-time-directives` |
 | `areka-P0-anchor-tag-canon` | `\_v` | `\_v[ファイル名]` | `ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1` | 例示 | 空 |
 | `areka-P0-anchor-tag-canon` | `\_w[450]` | `\_w[時間]` | `ukadoc:list_sakura_script:_5c_w_5b_6642_9593_5d:1` | 例示 | 空 |
 | `areka-P0-anchor-tag-canon` | `\f[anchor.font.color]` | `\f[anchor.font.color,色指定]` | `ukadoc:list_sakura_script:_5cf_5banchor.font.color_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
@@ -494,35 +494,35 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-anchor-tag-canon` | `\f[anchorvisited*]` | `\f[anchorvisitedmethod,描画方法]` | `ukadoc:list_sakura_script:_5cf_5banchorvisitedmethod_2c_63cf_753b_65b9_6cd5_5d:1` | 所有 | この brief |
 | `areka-P0-anchor-tag-canon` | `\f[anchorvisited*]` | `\f[anchorvisitedpencolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5banchorvisitedpencolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
 | `areka-P0-anchor-tag-canon` | `\f[anchorvisited*]` | `\f[anchorvisitedstyle,形状]` | `ukadoc:list_sakura_script:_5cf_5banchorvisitedstyle_2c_5f62_72b6_5d:1` | 所有 | この brief |
-| `areka-P0-balloon-canon-residue` | `\![reload,balloon]` | `\![reload,balloon]` | `ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1` | 所有 | この brief |
-| `areka-P0-balloon-canon-residue` | `\![set,balloontimeout,時間]` | `\![set,balloontimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | 所有 | この brief |
-| `areka-P0-balloon-canon-residue` | `\0` | `\0もしくは\h` | `ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1` | 例示 | `areka-P0-kero-balloon` |
-| `areka-P0-balloon-canon-residue` | `\_l` | `\_l[x,y]` | `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1` | 所有 | `areka-P0-cursor-tag-canon` |
-| `areka-P0-balloon-canon-residue` | `\e` | `\e` | `ukadoc:list_sakura_script:_5ce:1` | 例示 | 空 |
-| `areka-P0-balloon-canon-residue` | `\x` | `\x` | `ukadoc:list_sakura_script:_5cx:1` | 所有 | 空 |
-| `areka-P0-balloon-canon-residue` | `\x[noclear]` | `\x[noclear]` | `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursorcolor,色指定]もしくは\f[cursorbrushcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursorbrushcolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursorfontcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursorfontcolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursormethod,描画方法]` | `ukadoc:list_sakura_script:_5cf_5bcursormethod_2c_63cf_753b_65b9_6cd5_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectcolor,色指定]もしくは\f[cursornotselectbrushcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursornotselectbrushcolor_2c_8272_6307_5b9a_5:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectfontcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectfontcolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectmethod,描画方法]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectpencolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectpencolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectstyle,形状]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectstyle_2c_5f62_72b6_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursorpencolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursorpencolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
-| `areka-P0-choice-marker-styling` | `\f[cursor*]` | `\f[cursorstyle,形状]` | `ukadoc:list_sakura_script:_5cf_5bcursorstyle_2c_5f62_72b6_5d:1` | 所有 | この brief |
+| `balloon-canon-residue` | `\![reload,balloon]` | `\![reload,balloon]` | `ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1` | 所有 | この brief |
+| `balloon-canon-residue` | `\![set,balloontimeout,時間]` | `\![set,balloontimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | 所有 | この brief |
+| `balloon-canon-residue` | `\0` | `\0もしくは\h` | `ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1` | 例示 | `areka-P0-kero-balloon` |
+| `balloon-canon-residue` | `\_l` | `\_l[x,y]` | `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1` | 所有 | `areka-P0-cursor-tag-canon` |
+| `balloon-canon-residue` | `\e` | `\e` | `ukadoc:list_sakura_script:_5ce:1` | 例示 | 空 |
+| `balloon-canon-residue` | `\x` | `\x` | `ukadoc:list_sakura_script:_5cx:1` | 所有 | 空 |
+| `balloon-canon-residue` | `\x[noclear]` | `\x[noclear]` | `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursorcolor,色指定]もしくは\f[cursorbrushcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursorbrushcolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursorfontcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursorfontcolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursormethod,描画方法]` | `ukadoc:list_sakura_script:_5cf_5bcursormethod_2c_63cf_753b_65b9_6cd5_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectcolor,色指定]もしくは\f[cursornotselectbrushcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursornotselectbrushcolor_2c_8272_6307_5b9a_5:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectfontcolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectfontcolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectmethod,描画方法]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectpencolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectpencolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursornotselectstyle,形状]` | `ukadoc:list_sakura_script:_5cf_5bcursornotselectstyle_2c_5f62_72b6_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursorpencolor,色指定]` | `ukadoc:list_sakura_script:_5cf_5bcursorpencolor_2c_8272_6307_5b9a_5d:1` | 所有 | この brief |
+| `choice-marker-styling` | `\f[cursor*]` | `\f[cursorstyle,形状]` | `ukadoc:list_sakura_script:_5cf_5bcursorstyle_2c_5f62_72b6_5d:1` | 所有 | この brief |
 | `areka-P0-cursor-tag-canon` | `\_l` / `\_l[0,0]` / `\_l[x,y]` | `\_l[x,y]` | `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1` | 所有・例示 | この brief |
 | `areka-P0-cursor-tag-canon` | `\c` | `\c` | `ukadoc:list_sakura_script:_5cc:1` | 所有 | この brief |
 | `areka-P0-cursor-tag-canon` | `\f[align]` | `\f[align,寄せる側]` | `ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1` | 例示 | `areka-P0-text-decoration-canon` |
-| `areka-P0-makoto-dll-host` | `\![load,makoto]` | `\![load,makoto]` | `ukadoc:list_sakura_script:_5c_21_5bload_2cmakoto_5d:1` | 所有 | この brief |
-| `areka-P0-makoto-dll-host` | `\![reload,makoto]` | `\![reload,makoto]` | `ukadoc:list_sakura_script:_5c_21_5breload_2cmakoto_5d:1` | 所有 | この brief |
-| `areka-P0-makoto-dll-host` | `\![unload,makoto]` | `\![unload,makoto]` | `ukadoc:list_sakura_script:_5c_21_5bunload_2cmakoto_5d:1` | 所有 | この brief |
-| `areka-P0-makoto-dll-host` | `\0` | `\0もしくは\h` | `ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1` | 例示 | `areka-P0-kero-balloon` |
-| `areka-P0-makoto-dll-host` | `\e` | `\e` | `ukadoc:list_sakura_script:_5ce:1` | 例示 | 空 |
-| `areka-P0-property-query-channels` | `%property[...]` / `%property[x]` / `%property[…]` / `%property[プロパティ名]` | `%property[プロパティ名]` | `ukadoc:list_sakura_script:_25property_5b_30d7_30ed_30d1_30c6_30a3_540d_5d:1` | 所有 | この brief |
-| `areka-P0-property-query-channels` | `\![embed,イベント名,r0,...]` / `\![embed]` | `\![embed,イベント名,r0,r1,r2...]` | `ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1` | 所有 | 空 |
-| `areka-P0-property-query-channels` | `\![get,*]` / `\![get,property,…]` / `\![get,property,イベント名,プロパティ名,...]` / `\![get,property]` | `\![get,property,イベント名,プロパティ名,プロパティ名,...]` | `ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1` | 所有 | この brief |
-| `areka-P0-property-query-channels` | `\![set,property,プロパティ名,値]` / `\![set,property]` | `\![set,property,プロパティ名,値]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1` | 所有 | この brief |
+| `makoto-dll-host` | `\![load,makoto]` | `\![load,makoto]` | `ukadoc:list_sakura_script:_5c_21_5bload_2cmakoto_5d:1` | 所有 | この brief |
+| `makoto-dll-host` | `\![reload,makoto]` | `\![reload,makoto]` | `ukadoc:list_sakura_script:_5c_21_5breload_2cmakoto_5d:1` | 所有 | この brief |
+| `makoto-dll-host` | `\![unload,makoto]` | `\![unload,makoto]` | `ukadoc:list_sakura_script:_5c_21_5bunload_2cmakoto_5d:1` | 所有 | この brief |
+| `makoto-dll-host` | `\0` | `\0もしくは\h` | `ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1` | 例示 | `areka-P0-kero-balloon` |
+| `makoto-dll-host` | `\e` | `\e` | `ukadoc:list_sakura_script:_5ce:1` | 例示 | 空 |
+| `property-query-channels` | `%property[...]` / `%property[x]` / `%property[…]` / `%property[プロパティ名]` | `%property[プロパティ名]` | `ukadoc:list_sakura_script:_25property_5b_30d7_30ed_30d1_30c6_30a3_540d_5d:1` | 所有 | この brief |
+| `property-query-channels` | `\![embed,イベント名,r0,...]` / `\![embed]` | `\![embed,イベント名,r0,r1,r2...]` | `ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1` | 所有 | 空 |
+| `property-query-channels` | `\![get,*]` / `\![get,property,…]` / `\![get,property,イベント名,プロパティ名,...]` / `\![get,property]` | `\![get,property,イベント名,プロパティ名,プロパティ名,...]` | `ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1` | 所有 | この brief |
+| `property-query-channels` | `\![set,property,プロパティ名,値]` / `\![set,property]` | `\![set,property,プロパティ名,値]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1` | 所有 | この brief |
 | `areka-P0-sakura-tag-word-boundary` | `\![move,...]` | `\![move]` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | 例示 | 空 |
 | `areka-P0-sakura-tag-word-boundary` | `\-` | `\-` | `ukadoc:list_sakura_script:_5c-:1` | 字句の境界・例示 | 空 |
 | `areka-P0-sakura-tag-word-boundary` | `\0` / `\h` | `\0もしくは\h` | `ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1` | 字句の境界・例示 | `areka-P0-kero-balloon` |
@@ -534,20 +534,20 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-sakura-tag-word-boundary` | `\e` | `\e` | `ukadoc:list_sakura_script:_5ce:1` | 字句の境界・例示 | 空 |
 | `areka-P0-sakura-tag-word-boundary` | `\n[half]` | `\n[half]` | `ukadoc:list_sakura_script:_5cn_5bhalf_5d:1` | 字句の境界 | 空 |
 | `areka-P0-sakura-tag-word-boundary` | `\w` / `\w[2]` / `\w[3000]` | `\w時間` | `ukadoc:list_sakura_script:_5cw_6642_9593:1` | 字句の境界・例示 | 空 |
-| `areka-P0-sakura-time-directives` | `\![embed,イベント名,r*]` | `\![embed,イベント名,r0,r1,r2...]` | `ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1` | 所有 | 空 |
-| `areka-P0-sakura-time-directives` | `\![move]` | `\![move]` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | 所有 | 空 |
-| `areka-P0-sakura-time-directives` | `\![set,alpha,--time/--wait]` | `\![set,alpha,数値,オプション]` | `ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | 所有 | この brief |
-| `areka-P0-sakura-time-directives` | `\![set,balloontimeout,時間]` / `\![set,balloontimeout]` | `\![set,balloontimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | 所有 | `areka-P0-balloon-canon-residue` |
-| `areka-P0-sakura-time-directives` | `\![set,balloonwait,倍率\|ms指定]` | `\![set,balloonwait,倍率]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1` | 所有 | この brief |
-| `areka-P0-sakura-time-directives` | `\![set,choicetimeout,時間]` | `\![set,choicetimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | 所有 | `areka-P0-choice-timeout-directive`（2026-10-03 にこの brief から切り出した spec が引き受けて実装済みにした。調査時点はこの brief） |
-| `areka-P0-sakura-time-directives` | `\![sound,wait]` | `\![sound,wait]` | `ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1` | 所有 | この brief |
-| `areka-P0-sakura-time-directives` | `\![wait,syncobject,名前,--timeout=]` | `\![wait,syncobject,同期オブジェクト名,オプション]` | `ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | 所有 | この brief |
-| `areka-P0-sakura-time-directives` | `\_V` | `\_V` | `ukadoc:list_sakura_script:_5c_V:1` | 所有 | 空 |
-| `areka-P0-sakura-time-directives` | `\_q` | `\_q` | `ukadoc:list_sakura_script:_5c_q:1` | 例示 | この brief |
+| `sakura-time-directives` | `\![embed,イベント名,r*]` | `\![embed,イベント名,r0,r1,r2...]` | `ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1` | 所有 | 空 |
+| `sakura-time-directives` | `\![move]` | `\![move]` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | 所有 | 空 |
+| `sakura-time-directives` | `\![set,alpha,--time/--wait]` | `\![set,alpha,数値,オプション]` | `ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | 所有 | この brief |
+| `sakura-time-directives` | `\![set,balloontimeout,時間]` / `\![set,balloontimeout]` | `\![set,balloontimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | 所有 | `balloon-canon-residue` |
+| `sakura-time-directives` | `\![set,balloonwait,倍率\|ms指定]` | `\![set,balloonwait,倍率]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1` | 所有 | この brief |
+| `sakura-time-directives` | `\![set,choicetimeout,時間]` | `\![set,choicetimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | 所有 | `areka-P0-choice-timeout-directive`（2026-10-03 にこの brief から切り出した spec が引き受けて実装済みにした。調査時点はこの brief） |
+| `sakura-time-directives` | `\![sound,wait]` | `\![sound,wait]` | `ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1` | 所有 | この brief |
+| `sakura-time-directives` | `\![wait,syncobject,名前,--timeout=]` | `\![wait,syncobject,同期オブジェクト名,オプション]` | `ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | 所有 | この brief |
+| `sakura-time-directives` | `\_V` | `\_V` | `ukadoc:list_sakura_script:_5c_V:1` | 所有 | 空 |
+| `sakura-time-directives` | `\_q` | `\_q` | `ukadoc:list_sakura_script:_5c_q:1` | 例示 | この brief |
 | `areka-P0-status-execution-states` | `\![enter,inductionmode]` | `\![enter,inductionmode]` | `ukadoc:list_sakura_script:_5c_21_5benter_2cinductionmode_5d:1` | 所有 | この brief |
 | `areka-P0-status-execution-states` | `\![enter,passivemode]` | `\![enter,passivemode]` | `ukadoc:list_sakura_script:_5c_21_5benter_2cpassivemode_5d:1` | 所有 | この brief |
-| `areka-P0-status-execution-states` | `\t` | `\t` | `ukadoc:list_sakura_script:_5ct:1` | 所有 | `areka-P0-sakura-time-critical` |
-| `areka-P0-surfaces-basepos` | `\![move,...,base,base]` / `\![move]` | `\![move]` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | 所有 | 空 |
+| `areka-P0-status-execution-states` | `\t` | `\t` | `ukadoc:list_sakura_script:_5ct:1` | 所有 | `sakura-time-critical` |
+| `surfaces-basepos` | `\![move,...,base,base]` / `\![move]` | `\![move]` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | 所有 | 空 |
 | `areka-P0-text-decoration-canon` | `\_l` | `\_l[x,y]` | `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1` | 所有 | `areka-P0-cursor-tag-canon` |
 | `areka-P0-text-decoration-canon` | `\f[align]` | `\f[align,寄せる側]` | `ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1` | 所有 | この brief |
 | `areka-P0-text-decoration-canon` | `\f[bold,1]` / `\f[bold]` | `\f[bold,パラメータ]` | `ukadoc:list_sakura_script:_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1` | 所有 | この brief |
@@ -567,7 +567,7 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-text-decoration-canon` | `\f[underline]` | `\f[underline,パラメータ]` | `ukadoc:list_sakura_script:_5cf_5bunderline_2c_30d1_30e9_30e1_30fc_30bf_5d:1` | 所有 | この brief |
 | `areka-P0-text-decoration-canon` | `\f[valign]` | `\f[valign,寄せる側]` | `ukadoc:list_sakura_script:_5cf_5bvalign_2c_5bc4_305b_308b_5074_5d:1` | 所有 | この brief |
 | `areka-P0-text-decoration-canon` | `\x` | `\x` | `ukadoc:list_sakura_script:_5cx:1` | 所有 | 空 |
-| `areka-P0-text-decoration-canon` | `\x[noclear]` | `\x[noclear]` | `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1` | 所有 | `areka-P0-balloon-canon-residue` |
+| `areka-P0-text-decoration-canon` | `\x[noclear]` | `\x[noclear]` | `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1` | 所有 | `balloon-canon-residue` |
 
 > **注記（2026-09-11 棚卸⑬）**: 上表の `\w[2]`／`\w[3000]` のような**角括弧つきの `\w[n]` は正典に無い綴り**であり、areka はこれを待ちとして読むのをやめた（完了 spec `areka-P0-emo2-conformance-e2e` タスク 6.15・受入記録 §13.4 改変 6）。正典の待ちは `\w1`〜`\w9` と `\_w[ミリ秒]` である。表の綴りは調査時点の例示として残す。
 
@@ -584,11 +584,11 @@ brief が挙げた件数と台帳の担当の件数はその分だけずれる�
 
 | 別名になった項目 | 根の項目 | 主張している brief |
 | --- | --- | --- |
-| `\_V`（alias → 根の id: `ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1`） | `\![sound,wait]` | `areka-P0-sakura-time-directives` |
+| `\_V`（alias → 根の id: `ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1`） | `\![sound,wait]` | `sakura-time-directives` |
 | `\_a[ID]`（alias → 根の id: `ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1`） | `\_a[ID,r2,r3...]` | `areka-P0-anchor-tag-canon` |
 | `\_a[ID]`（alias → 根の id: `ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1`） | `\_a[ID,r2,r3...]` | `areka-P0-sakura-tag-word-boundary` |
 | `\_v[ファイル名]`（alias → 根の id: `ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1`） | `\![sound,play,ファイル名,オプション...]` | `areka-P0-anchor-tag-canon` |
-| `\x`（alias → 根の id: `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1`） | `\x[noclear]` | `areka-P0-balloon-canon-residue` |
+| `\x`（alias → 根の id: `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1`） | `\x[noclear]` | `balloon-canon-residue` |
 | `\x`（alias → 根の id: `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1`） | `\x[noclear]` | `areka-P0-text-decoration-canon` |
 
 ### `\f` の 43 件が 3 本に過不足なく割れること
@@ -600,11 +600,11 @@ brief が挙げた件数と台帳の担当の件数はその分だけずれる�
 | --- | ---: | --- |
 | `areka-P0-text-decoration-canon` | 17 | 文字装飾の核。brief の「本 spec の所有分＝核 17 項目」の行が語を 17 個並べている |
 | `areka-P0-anchor-tag-canon` | 16 | アンカーの装飾。brief の「アンカー装飾 16 項目」の行の 9 語のうち 2 語が各 5 件へ広がる |
-| `areka-P0-choice-marker-styling` | 10 | 選択肢カーソルの装飾。同じ行の `\f[cursor*]` の前方一致で取れる |
+| `choice-marker-styling` | 10 | 選択肢カーソルの装飾。同じ行の `\f[cursor*]` の前方一致で取れる |
 | 合計 | 43 | 正典の `\f` は 43 件。欠け 0・余り 0 |
 
 台帳の担当で数え直しても同じになる——
-`areka-P0-anchor-tag-canon` 16 件、`areka-P0-choice-marker-styling` 10 件、`areka-P0-text-decoration-canon` 17 件、合計 43 件。
+`areka-P0-anchor-tag-canon` 16 件、`choice-marker-styling` 10 件、`areka-P0-text-decoration-canon` 17 件、合計 43 件。
 
 `\f` の綴りを本文に持つ brief は 3 本ではなく 4 本ある。4 本目の `areka-P0-cursor-tag-canon` は
 `\f[align,寄せる側]` を挙げているが、自分の Scope の Out に「実装は別の spec が所有」と
@@ -692,19 +692,19 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 | brief | 主張が届いた項目 | うち所有の型が付いた項目 | 台帳の担当 |
 | --- | ---: | ---: | ---: |
 | `areka-P0-anchor-tag-canon` | 22 | 17 | 18 |
-| `areka-P0-balloon-canon-residue` | 7 | 5 | 3 |
-| `areka-P0-choice-marker-styling` | 10 | 10 | 10 |
+| `balloon-canon-residue` | 7 | 5 | 3 |
+| `choice-marker-styling` | 10 | 10 | 10 |
 | `areka-P0-cursor-tag-canon` | 3 | 2 | 2 |
 | `areka-P0-kero-balloon` | 0 | 0 | 3 |
-| `areka-P0-makoto-dll-host` | 5 | 3 | 3 |
-| `areka-P0-property-query-channels` | 4 | 4 | 3 |
+| `makoto-dll-host` | 5 | 3 | 3 |
+| `property-query-channels` | 4 | 4 | 3 |
 | `areka-P0-sakura-dialogue-tags` | 0 | 0 | 1 |
 | `areka-P0-sakura-tag-word-boundary` | 11 | 0 | 0 |
-| `areka-P0-sakura-time-critical` | 0 | 0 | 1 |
-| `areka-P0-sakura-time-directives` | 10 | 9 | 10 |
+| `sakura-time-critical` | 0 | 0 | 1 |
+| `sakura-time-directives` | 10 | 9 | 10 |
 | `areka-P0-scope-zorder-pinning` | 0 | 0 | 2 |
 | `areka-P0-status-execution-states` | 3 | 3 | 2 |
-| `areka-P0-surfaces-basepos` | 1 | 1 | 0 |
+| `surfaces-basepos` | 1 | 1 | 0 |
 | `areka-P0-sylphya` | 0 | 0 | 2 |
 | `areka-P0-text-decoration-canon` | 20 | 20 | 17 |
 | 合計 | 96 | 74 | 77 |
@@ -716,32 +716,32 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 | `areka-P0-anchor-tag-canon` | `\_a[ID]` | 減る | 別名になった項目なので、担当は根の項目（`\_a[ID,r2,r3...]`）に付く |
 | `areka-P0-anchor-tag-canon` | `\_a[ID,r2,r3...]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
 | `areka-P0-anchor-tag-canon` | `\_a[OnID,r0,r1...]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
-| `areka-P0-balloon-canon-residue` | `\_l[x,y]` | 減る | 2 本以上が主張していて分担が合意済み。実装はもう済んでいるので、担当は実装した `areka-P0-cursor-tag-canon` の記録である |
-| `areka-P0-balloon-canon-residue` | `\x` | 減る | 別名になった項目なので、担当は根の項目（`\x[noclear]`）に付く |
+| `balloon-canon-residue` | `\_l[x,y]` | 減る | 2 本以上が主張していて分担が合意済み。実装はもう済んでいるので、担当は実装した `areka-P0-cursor-tag-canon` の記録である |
+| `balloon-canon-residue` | `\x` | 減る | 別名になった項目なので、担当は根の項目（`\x[noclear]`）に付く |
 | `areka-P0-kero-balloon` | `\0もしくは\h` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-kero-balloon` | `\1もしくは\u` | 増える | §8 の別の行——主題はタグそのものではないが、この項目を実装した spec を名指ししている行——から決まった |
 | `areka-P0-kero-balloon` | `\b[ID番号]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
-| `areka-P0-property-query-channels` | `\![embed,イベント名,r0,r1,r2...]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
+| `property-query-channels` | `\![embed,イベント名,r0,r1,r2...]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
 | `areka-P0-sakura-dialogue-tags` | `%username` | 増える | §8 の行が担当を名指ししている |
-| `areka-P0-sakura-time-critical` | `\t` | 増える | 宛先を移した。`Status` の timecritical と同じく `areka-P0-sakura-time-critical` が担当（2026-10-03 開発者裁定・`areka-P0-status-execution-states` 要件 6.3。初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に専用の spec が起票されたので付け替えた） |
-| `areka-P0-sakura-time-directives` | `\![embed,イベント名,r0,r1,r2...]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
-| `areka-P0-sakura-time-directives` | `\![move]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
-| `areka-P0-sakura-time-directives` | `\![set,balloontimeout,時間]` | 減る | 2 本以上が主張していて分担が合意済み。作業が残っている `areka-P0-balloon-canon-residue` が担当 |
-| `areka-P0-sakura-time-directives` | `\_V` | 減る | 別名になった項目なので、担当は根の項目（`\![sound,wait]`）に付く |
-| `areka-P0-sakura-time-directives` | `\![quicksection,false]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
-| `areka-P0-sakura-time-directives` | `\![quicksection,true]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
-| `areka-P0-sakura-time-directives` | `\![set,scaling,倍率]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
-| `areka-P0-sakura-time-directives` | `\![set,scaling,横倍率,縦倍率,オプション]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
-| `areka-P0-sakura-time-directives` | `\_q` | 増える | §8 の行が担当を名指ししている |
+| `sakura-time-critical` | `\t` | 増える | 宛先を移した。`Status` の timecritical と同じく `sakura-time-critical` が担当（2026-10-03 開発者裁定・`areka-P0-status-execution-states` 要件 6.3。初めは `sakura-time-directives` へ送ったが、同じ日に専用の spec が起票されたので付け替えた） |
+| `sakura-time-directives` | `\![embed,イベント名,r0,r1,r2...]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
+| `sakura-time-directives` | `\![move]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
+| `sakura-time-directives` | `\![set,balloontimeout,時間]` | 減る | 2 本以上が主張していて分担が合意済み。作業が残っている `balloon-canon-residue` が担当 |
+| `sakura-time-directives` | `\_V` | 減る | 別名になった項目なので、担当は根の項目（`\![sound,wait]`）に付く |
+| `sakura-time-directives` | `\![quicksection,false]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
+| `sakura-time-directives` | `\![quicksection,true]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
+| `sakura-time-directives` | `\![set,scaling,倍率]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
+| `sakura-time-directives` | `\![set,scaling,横倍率,縦倍率,オプション]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
+| `sakura-time-directives` | `\_q` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-scope-zorder-pinning` | `\![reset,zorder]` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-scope-zorder-pinning` | `\![set,zorder,スコープID,スコープID,...]` | 増える | §8 の行が担当を名指ししている |
-| `areka-P0-status-execution-states` | `\t` | 減る | 宛先を移した。`Status` の timecritical と同じく `areka-P0-sakura-time-critical` が担当（2026-10-03 開発者裁定・`areka-P0-status-execution-states` 要件 6.3。初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に専用の spec が起票されたので付け替えた） |
-| `areka-P0-surfaces-basepos` | `\![move]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
+| `areka-P0-status-execution-states` | `\t` | 減る | 宛先を移した。`Status` の timecritical と同じく `sakura-time-critical` が担当（2026-10-03 開発者裁定・`areka-P0-status-execution-states` 要件 6.3。初めは `sakura-time-directives` へ送ったが、同じ日に専用の spec が起票されたので付け替えた） |
+| `surfaces-basepos` | `\![move]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
 | `areka-P0-sylphya` | `%keroname` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-sylphya` | `%selfname2` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-text-decoration-canon` | `\_l[x,y]` | 減る | 2 本以上が主張していて分担が合意済み。実装はもう済んでいるので、担当は実装した `areka-P0-cursor-tag-canon` の記録である |
 | `areka-P0-text-decoration-canon` | `\x` | 減る | 別名になった項目なので、担当は根の項目（`\x[noclear]`）に付く |
-| `areka-P0-text-decoration-canon` | `\x[noclear]` | 減る | 2 本以上が主張していて分担が合意済み。作業が残っている `areka-P0-balloon-canon-residue` が担当 |
+| `areka-P0-text-decoration-canon` | `\x[noclear]` | 減る | 2 本以上が主張していて分担が合意済み。作業が残っている `balloon-canon-residue` が担当 |
 
 台帳で担当が入っているのは **77 件**、空は **265 件**である。
 担当が入った 77 件の決まり方は、1 本だけが主張している 66 件・分担が合意済みで作業が残る側 2 件・
@@ -749,18 +749,18 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 実装済みの項目に「誰が実装したか」を記録した 8 件である。
 
 > **2026-09-05 の見直しで 1 件減った。** `\_V` が別名になったので、それまで担当だった
-> `areka-P0-sakura-time-directives` の件数が 11 から 10 へ、全体が 78 から 77 へ変わった。
+> `sakura-time-directives` の件数が 11 から 10 へ、全体が 78 から 77 へ変わった。
 > 担当は根の `\![sound,wait]` の側で読む。
 
 > **2026-10-03 の見直しで宛先が 1 件動いた。** `\t` の担当を `areka-P0-status-execution-states` から
-> `areka-P0-sakura-time-critical` へ移した（`areka-P0-status-execution-states` 要件 6.3）。件数は
+> `sakura-time-critical` へ移した（`areka-P0-status-execution-states` 要件 6.3）。件数は
 > 前者が 3 から 2 へ、後者が 0 から 1 へ変わり、全体の 77 は変わらない。初めは時間の指令をまとめる
-> `areka-P0-sakura-time-directives` へ送ったが、同じ日に `\t` と `Status` の timecritical を受け持つ専用の
-> `areka-P0-sakura-time-critical` が起票されたので、`areka-P0-status-execution-states` の完了の手続きで
-> 付け替えた（`areka-P0-sakura-time-directives` の件数は 10 のまま）。表 ⑶-1 の「主張している brief」の列は
+> `sakura-time-directives` へ送ったが、同じ日に `\t` と `Status` の timecritical を受け持つ専用の
+> `sakura-time-critical` が起票されたので、`areka-P0-status-execution-states` の完了の手続きで
+> 付け替えた（`sakura-time-directives` の件数は 10 のまま）。表 ⑶-1 の「主張している brief」の列は
 > 写した時点の brief のままで、後から起票した brief は数えていない。
 
-> **2026-10-03 の追記**: `\![set,choicetimeout,時間]` の担当は、`areka-P0-sakura-time-directives` から
+> **2026-10-03 の追記**: `\![set,choicetimeout,時間]` の担当は、`sakura-time-directives` から
 > 切り出した `areka-P0-choice-timeout-directive` へ移り、同じ日に実装済みになった（表 ⑶-1 の該当行に
 > 書き添えた）。表 ⑶-2 の「compile 側時間指令 allowlist」の行は §8 の主題を変えていないので指す先は
 > そのままで、§8 にはこの綴りの裁量を記録した行が 1 行増えた（表 ⑶-2 には足していない）。
@@ -790,7 +790,7 @@ brief に書かれている綴りのうち、正典のどの項目にも当た�
 | `\d` | 本ドメインの綴りではないもの（拾い過ぎ） | `areka-P0-dpi-window-vanish`・`areka-P0-kero-balloon`・`areka-P0-ukadoc-survey-toolkit`・`wintf-gpu-test-crash` | 正規表現やパスの断片・環境変数・説明のための代表名として現れたもので、さくらスクリプトの綴りとして書かれたものではない |
 | `\g` | 本ドメインの綴りではないもの（拾い過ぎ） | `areka-P0-draw-load-parity`・`areka-P0-log-capture-determinism`・`wintf-gpu-test-crash` | 正規表現やパスの断片・環境変数・説明のための代表名として現れたもので、さくらスクリプトの綴りとして書かれたものではない |
 | `\o` | 本ドメインの綴りではないもの（拾い過ぎ） | `areka-P0-dpi-transition-atomicity` | 正規表現やパスの断片・環境変数・説明のための代表名として現れたもので、さくらスクリプトの綴りとして書かれたものではない |
-| `\r` | 本ドメインの綴りではないもの（拾い過ぎ） | `areka-P0-makoto-dll-host` | 正規表現やパスの断片・環境変数・説明のための代表名として現れたもので、さくらスクリプトの綴りとして書かれたものではない |
+| `\r` | 本ドメインの綴りではないもの（拾い過ぎ） | `makoto-dll-host` | 正規表現やパスの断片・環境変数・説明のための代表名として現れたもので、さくらスクリプトの綴りとして書かれたものではない |
 | `quicksession` | 本ドメインの綴りのつもりで書かれているが、正典に無い綴り | `areka-P0-ukadoc-survey-sakura-script` | 正典の綴りは `quicksection`（`\![quicksection,true]`・`\![quicksection,false]` の 2 件） |
 | `vanish` | 本ドメインの綴りのつもりで書かれているが、正典に無い綴り | `areka-P0-ukadoc-survey-sakura-script` | 正典の綴りは `vanishbymyself`（`\![vanishbymyself]` の 1 件） |
 
@@ -871,12 +871,12 @@ brief に書かれている綴りのうち、正典のどの項目にも当た�
 
 | 主張している brief | 主張の中身 |
 | --- | --- |
-| `areka-P0-property-query-channels` | このタグは呼んだ結果でタグ自身が置き換わる経路なので、照会の配管として自分が持つ |
-| `areka-P0-sakura-time-directives` | 台本を読む側の受理一覧にこの名前が入っており、その一覧ごと自分が持つ |
+| `property-query-channels` | このタグは呼んだ結果でタグ自身が置き換わる経路なので、照会の配管として自分が持つ |
+| `sakura-time-directives` | 台本を読む側の受理一覧にこの名前が入っており、その一覧ごと自分が持つ |
 
-**分担が決まっていない理由**: **名指しは一方向で、分担が決まっていない。** `areka-P0-property-query-channels` の brief は `areka-P0-sakura-time-directives` を隣り合う spec として名指ししているが、その名指しは「層が違うのでぶつからない」と述べるだけで、**どちらがこの項目を持つかを決めていない**。相手側は名指しを返していない。
+**分担が決まっていない理由**: **名指しは一方向で、分担が決まっていない。** `property-query-channels` の brief は `sakura-time-directives` を隣り合う spec として名指ししているが、その名指しは「層が違うのでぶつからない」と述べるだけで、**どちらがこの項目を持つかを決めていない**。相手側は名指しを返していない。
 
-**裁定案（案であって決定ではない）**: 台本を読む側の受理一覧は `areka-P0-sakura-time-directives` が持ち、返ってきた結果でタグを置き換える実行時の経路は `areka-P0-property-query-channels` が持つ。
+**裁定案（案であって決定ではない）**: 台本を読む側の受理一覧は `sakura-time-directives` が持ち、返ってきた結果でタグを置き換える実行時の経路は `property-query-channels` が持つ。
 
 #### `\![move]`（窓を動かす）
 
@@ -884,12 +884,12 @@ brief に書かれている綴りのうち、正典のどの項目にも当た�
 
 | 主張している brief | 主張の中身 |
 | --- | --- |
-| `areka-P0-surfaces-basepos` | 基準位置の解決（`base` の引数）を自分が持つ |
-| `areka-P0-sakura-time-directives` | 時間の引数の枠を自分が持つ |
+| `surfaces-basepos` | 基準位置の解決（`base` の引数）を自分が持つ |
+| `sakura-time-directives` | 時間の引数の枠を自分が持つ |
 
 **分担が決まっていない理由**: **互いに相手を知らない。** 2 本の brief は互いを 1 度も名指ししておらず（両方向とも 0 件）、対応表 §8 のこのタグの行も、完了済みの spec を担当に書くだけで、2 本の住み分けを登記していない。
 
-**裁定案（案であって決定ではない）**: 引数ごとに分ける。基準位置は `areka-P0-surfaces-basepos`、時間は `areka-P0-sakura-time-directives` が持つ。
+**裁定案（案であって決定ではない）**: 引数ごとに分ける。基準位置は `surfaces-basepos`、時間は `sakura-time-directives` が持つ。
 
 ### 別名だが areka がその綴りを受けない 3 件
 

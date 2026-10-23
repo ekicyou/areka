@@ -16,7 +16,7 @@
 //! ```text
 //! root=C:\...\target\nar-samples\manual\emo2
 //! folder=C:\...\target\nar-samples\manual\emo2\ghost\emo2
-//! balloon.emo2-kakukaku=C:\...\target\nar-samples\manual\emo2\balloon\emo2-kakukaku
+//! balloon.emo2-kakukaku=C:\...\target\nar-samples\manual\emo2\ghost\emo2\balloon\emo2-kakukaku
 //! ```
 //!
 //! # 終了コード

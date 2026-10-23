@@ -23,14 +23,18 @@ pub(crate) fn register(world: &mut World) {
     super::register(world, Frame::ResetPosition, Rc::new(reset_pos_item));
 }
 
-/// 「シェル位置初期化」の葉（要件 8.1・8.2）。選べるのは窓の組が在り、答えを待っていないとき
+/// 「シェル位置初期化」を選べるか。窓の組が在り、答えを待っていないとき
 /// （動作は再入を拒まないので、待っている間はここで灰色にする）。
+pub(crate) fn reset_position_enabled(world: &World) -> bool {
+    world.contains_resource::<GhostWindows>() && !world.contains_non_send::<PendingResetRaise>()
+}
+
+/// 「シェル位置初期化」の葉（要件 8.1・8.2）。
 fn reset_pos_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::ResetPosition).to_string(),
         caption_resource: captions::resource_for(Frame::ResetPosition),
-        enabled: world.contains_resource::<GhostWindows>()
-            && !world.contains_non_send::<PendingResetRaise>(),
+        enabled: reset_position_enabled(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
             raise_reset_window_pos(world)

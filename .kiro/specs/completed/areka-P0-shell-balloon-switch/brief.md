@@ -144,7 +144,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: `areka-P0-baseware-root-layout`（`list_shells`・`last.shell`・`last.balloon`）／`areka-P0-ghost-shell-balloon-switch`（`SwitchRequest`・切替の通知の入口・作り直しの一般形）／`areka-P0-default-balloon-nar-fold`（バルーン 2 つ目の検体は既定バルーンで足りる）。
-- **Downstream**: `areka-P0-ghost-install`（シェル・バルーンの `.nar` を入れた直後の切替）・`areka-P0-network-update`・`areka-P0-alpha-release-signoff`・α 後の `areka-P0-property-catalog-lists`。
+- **Downstream**: `areka-P0-ghost-install`（シェル・バルーンの `.nar` を入れた直後の切替）・`areka-P0-network-update`・`areka-P0-alpha-release-signoff`・α 後の `property-catalog-lists`。
 
 ## Existing Spec Touchpoints
 

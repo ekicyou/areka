@@ -9,17 +9,20 @@ use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::chain_finalize::{
-    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, finalize_chain,
-    moved_default_pos, note_chain_deferral,
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, ScriptPlaced,
+    finalize_chain, moved_default_pos, note_chain_deferral,
 };
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
 use crate::placement::persist::persist_unremembered_char_positions;
+use crate::placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use crate::placement::reset_pos::reset_window_positions;
 use crate::placement::resolver::{PointPx, SizePx};
+use crate::placement::script_alignment::apply_script_alignment;
 use crate::placement::spawn::GhostWindows;
+use crate::placement::sticky_group_ledger::{apply_reset_sticky, apply_set_sticky};
 
 use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 
@@ -67,7 +70,8 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 /// R5.1/5.3/5.5/R6・task 9.2）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`PositionCue`]
 /// を非ブロックで FIFO 全件 drain し、UI スレッド上で種類ごとに適用する——`Move` は
 /// [`apply_move_directive`]、`ResetWindowPos` は [`reset_window_positions`]（`OnResetWindowPos` は
-/// 送らない・areka-P0-move-canon 要件 8.7）。
+/// 送らない・areka-P0-move-canon 要件 8.7）、吸着・組を作る・組を解く・バルーン位置初期化は
+/// `placement` の各関数（areka-P0-window-link-directives）。
 ///
 /// `PresentBridge`（[`run_drain_phase`]）と同型の跨ぎパターンだが、ゲートは `attached`（GPU）でなく
 /// **`GhostWindows` の存在**である——move は GPU 表示層でなくキャラ窓 entity（`GhostWindows` が spawn 時
@@ -95,6 +99,24 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
             // research §13 議題 1）。失敗は関数内で warn! 済みゆえ戻り値を捨てて次へ進む。
             PositionCue::ResetWindowPos => {
                 reset_window_positions(world);
+                continue;
+            }
+            // 吸着・組・バルーン位置初期化（areka-P0-window-link-directives）。記録は各関数の中ゆえ
+            // 戻り値を捨てる。台本の並び（組を作ってから `\![move]`）はこの 1 本の線の順で保たれる。
+            PositionCue::SetAlignment { scope, word } => {
+                apply_script_alignment(world, scope, &word);
+                continue;
+            }
+            PositionCue::SetSticky { tokens } => {
+                apply_set_sticky(world, &tokens);
+                continue;
+            }
+            PositionCue::ResetSticky => {
+                apply_reset_sticky(world);
+                continue;
+            }
+            PositionCue::ResetBalloonPos => {
+                reset_balloon_positions(world, BalloonResetTrigger::Script);
                 continue;
             }
         };
@@ -341,7 +363,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     if world.get_resource::<ChainFinalized>().is_some() {
         return;
     }
-    let (states, targets) = match collect_chain_states(source, world) {
+    let (mut states, targets) = match collect_chain_states(source, world) {
         Ok(scan) => scan,
         Err(reason) => {
             match reason {
@@ -367,6 +389,14 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         }
     };
 
+    // 台本の `\![move]` が置いた窓は、x が既定のまま（縦にだけ動いた・ちょうど既定へ置いた）でも
+    // 引き戻さない（scg 7.3）。既定を `None`＝「既定配置ではない」として判定へ渡す。
+    for (state, &(_, entity, _)) in states.iter_mut().zip(&targets) {
+        if world.get::<ScriptPlaced>(entity).is_some() {
+            state.default_x = None;
+        }
+    }
+
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     let moves = finalize_chain(&states);
     for m in &moves {
@@ -390,11 +420,11 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
     // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     //
-    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。並べ直しは x だけで「既定配置のまま」を
-    // 見るので、SHIORI の移動の指示で縦にだけ動かされた窓も動かす。今の Y を載せると台本の Y が
-    // 既定に入り、既定と今の位置が揃って「動かされていない」に化け、並べ終えた時点の保存が台本の
-    // 位置を書いてしまう（areka-P0-char-position-save-on-exit 要件 1.7・SHIORI の移動はその回かぎり）。
-    // 普段は今の Y と既定の Y が等しいので結果は変わらない。
+    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。台本の `\![move]` が置いた窓は印
+    // （`ScriptPlaced`）で並べ直しから外れるので、ここへ来るのは台本の置いていない窓だけで、普段は
+    // 今の Y と既定の Y が等しく結果は変わらない。今の Y を載せる形にすると、既定と違う Y が既定へ
+    // 入り得て、並べ終えた時点の保存の「動かされていない」の判定を化かす
+    // （areka-P0-char-position-save-on-exit 要件 1.7）。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {

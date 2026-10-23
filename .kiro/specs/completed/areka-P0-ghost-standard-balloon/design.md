@@ -20,7 +20,7 @@
 
 - `recommended.balloon`・`recommended.balloon.path` を読むこと（台帳の注記の文だけ直す）。
 - ゴーストのフォルダの中の `balloon/` を探すこと（`areka-P0-ghost-inner-balloon`）。
-- シェルに紐づくバルーン（`areka-P0-shell-companion-balloon`）。
+- シェルに紐づくバルーン（`shell-companion-balloon`）。
 - 記憶の持ち方・書き方を変えること（変更 0）。
 - インストールの読み方（`crates/areka-nar/`）を変えること（変更 0 行）。
 - 探索の規則を共有の関数へ移すこと（D1 で採らない）。
@@ -53,7 +53,7 @@
 
 ### Revalidation Triggers
 
-次を変えたら、同じファイルを触る `areka-P0-shell-companion-balloon`・`areka-P0-ghost-inner-balloon` は設計を見直す。
+次を変えたら、同じファイルを触る `shell-companion-balloon`・`areka-P0-ghost-inner-balloon` は設計を見直す。
 
 - `BalloonInputs` の欄と `listed` の型、`BalloonRoute` の腕の並びと綴り（とくに `Companion`。`tools/package.ps1` と `crates/areka/tests/smoke_boot_loop_exit.rs` が `route=Companion` を見る）。
 - `catalog::companion_balloon`・`catalog::standard_balloon_keys` の戻り値の意味。

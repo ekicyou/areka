@@ -112,7 +112,7 @@
 2. 台帳の末尾の「起票の候補」は成果物であって、未解決の問題ではない。完了の手順の冒頭の棚卸で起票しない。
 3. roadmap の「棚卸㉓の裁定」の「開発者に決めてほしいこと」⑸（この spec がネットへ出ること）は答えが出ている。roadmap の更新のときに閉じる。
 4. `target\bts-salvage\` はコミットしていない。マージの後は消してよい。
-5. このブランチには、最後の検証の後に開発者が頼んだ `/kiro-discovery` の起票が載っている（brief 5 本＝`areka-P0-tasktray-icon`・`areka-P0-tasktray-ghost-icon`・`areka-P0-tasktray-balloon`・`areka-P0-tasktray-minimize`・`areka-P0-app-icon` と、`.kiro/steering/roadmap.md`）。PR の本文に書く。roadmap の spec 台帳は、この spec を外す前で 101 本。
+5. このブランチには、最後の検証の後に開発者が頼んだ `/kiro-discovery` の起票が載っている（brief 5 本＝`tasktray-icon`・`tasktray-ghost-icon`・`tasktray-balloon`・`tasktray-minimize`・`areka-P0-app-icon` と、`.kiro/steering/roadmap.md`）。PR の本文に書く。roadmap の spec 台帳は、この spec を外す前で 101 本。
 
 ### 実装で分かったこと（タスク 1）
 
@@ -127,10 +127,10 @@
 - 課題の頁の本体には解決状況の欄が無い。頁の下の「課題の履歴」から読む（画面の語は台帳の「画面の語との対応」に足した）。
 - タスク 3.1 で揃え直すこと（2.1 のレビューの提案）: ⑴「spec の要件が逆を決めている」の当て方（BTS 0000178 は「未着手」、0000190 は「方針とぶつかる」で割れて見える。0000209・0000167 も同じ物差しで見る）⑵ BTS 0000073 は結末が「実装済み（版は不明）」なのにひと言が「直しは無い」。`\q` の綴りはカタログの題に揃える ⑶ BTS 0000185 のひと言が長い（areka 側の補いは根拠の欄へ）⑷ 主題「SHIORI・ゴースト個別」の定義文（開いて分かった行も入るようになった）。
 - タスク 3.1 で揃え直すこと（2.2 のレビュー）: 「areka の作りでは起きない・意味を持たない」が根拠の行は、決め方の順 3 の「対象外」（BTS 0000214 は直した。0000232 は「OS の文字コードに依らず読める」が求めで今の areka で動くので「実装済み」のまま）。長めのひと言（15 行ほど）と BTS 0000226 の 3 文を詰める。BTS 0000354（アンインストールの後の働き）は方針の記録が無く「未着手」＝枠の外と見るかは開発者の判断。
-- タスク 3.1 で揃え直すこと（2.3 のレビュー）: ⑴ BTS 0000546・0000458 のひと言が 3 文（2 文へ詰める）⑵ BTS 0000479 は逆を決めているのが MCP の `dump_surface` で、説明された `\![execute,dumpsurface,…]` とは別の口（0000480・0000520 は同じタグを「未着手」）＝「spec の要件が逆を決めている」の揃え直しに加える ⑶ SSP 固有の開発用の画面の物差しが割れている（0000379 は「未着手」、0000429・0000533 は「対象外」。帯 4 の 0000793・0000794・0000803 も同じ物差しで）⑷ BTS 0000561 は結末が「実装済み」なので、報告が変更を求めていたなら種別は「要望」⑸ BTS 0000362 の根拠の持ち主を 0000492 と同じ `areka-P0-currentghost-property-others` に揃える。
-- **範囲の外で見つけたこと（完了の棚卸で扱う）**: ukadoc の網羅の台帳（`doc/ukadoc-coverage/ledger/`）の持ち主が古い所が 2 つある。`currentghost.seriko.tooltip.*`・`currentghost.mousecursor*` は台帳では `areka-P0-currentghost-property-tree` だが、brief は `areka-P0-currentghost-property-others` へ移している。`arrow.filename`・`onlinemarker.*`・`sstpmarker.*` は台帳では `areka-P0-balloon-canon-residue` だが、`areka-P0-balloon-markers` の brief が引き取っている。この spec は網羅の台帳を書き替えない（要件 4.7）ので、直していない。
+- タスク 3.1 で揃え直すこと（2.3 のレビュー）: ⑴ BTS 0000546・0000458 のひと言が 3 文（2 文へ詰める）⑵ BTS 0000479 は逆を決めているのが MCP の `dump_surface` で、説明された `\![execute,dumpsurface,…]` とは別の口（0000480・0000520 は同じタグを「未着手」）＝「spec の要件が逆を決めている」の揃え直しに加える ⑶ SSP 固有の開発用の画面の物差しが割れている（0000379 は「未着手」、0000429・0000533 は「対象外」。帯 4 の 0000793・0000794・0000803 も同じ物差しで）⑷ BTS 0000561 は結末が「実装済み」なので、報告が変更を求めていたなら種別は「要望」⑸ BTS 0000362 の根拠の持ち主を 0000492 と同じ `currentghost-property-others` に揃える。
+- **範囲の外で見つけたこと（完了の棚卸で扱う）**: ukadoc の網羅の台帳（`doc/ukadoc-coverage/ledger/`）の持ち主が古い所が 2 つある。`currentghost.seriko.tooltip.*`・`currentghost.mousecursor*` は台帳では `currentghost-property-tree` だが、brief は `currentghost-property-others` へ移している。`arrow.filename`・`onlinemarker.*`・`sstpmarker.*` は台帳では `balloon-canon-residue` だが、`balloon-markers` の brief が引き取っている。この spec は網羅の台帳を書き替えない（要件 4.7）ので、直していない。
 - タスク 3.1 で揃え直すこと（2.4 のレビュー）: ⑴ BTS 0000613（AI グラフの窓の中の操作）は「対象外」だが、AI グラフは ukadoc の項目（`\![open,aigraph]`・`absent`・持ち主なし）で、0000659 は「未着手」＝SSP 固有の開発用の画面の物差しの揃え直しに加える ⑵ BTS 0000611 のひと言の 2 文目は作者の返事の読みが強い（作者は言い切っておらず、数える形へ変えたときの互換を案じ、エスケープの書き方で避けられると案内して閉じた）。
-- 範囲の外で見つけたこと（続き）: 網羅の台帳の古い持ち主の 3 つ目。`\![embed,イベント名,r0,r1,r2...]` は台帳では `areka-P0-property-query-channels` だが、brief は `areka-P0-sakura-embed-directive` が引き取っている。
+- 範囲の外で見つけたこと（続き）: 網羅の台帳の古い持ち主の 3 つ目。`\![embed,イベント名,r0,r1,r2...]` は台帳では `property-query-channels` だが、brief は `sakura-embed-directive` が引き取っている。
 - タスク 2.5 は読む頁が無かった（2.4 の終わりで「（未読）」の行が 0）。読み手が開いた頁は 237、レビューの抜き取りは 12（帯ごとに 3）。取り直し・拒まれ・読めない頁はどれも 0。
 
 ### 実装で分かったこと（タスク 3）
@@ -139,7 +139,7 @@
 - 頁を読み直さないと決められず、欄どおりに据え置いた行が 2 つある。BTS 0000073 の結末（解決状況の欄は実装済だが、直しは無い）と、BTS 0000561 の種別（報告が変更を求めていたなら「要望」）。どちらも areka との関係には響かない。
 - 起票の候補に添えること: BTS 0000190・0000221・0000178・0000241 は、完了した spec の要件が今は逆の動きを定めている。決めきれずに「未着手」の行は BTS 0000114・0000226・0000458・0000546。
 - 開発者に確かめること: バックログの中だけの話（BTS 0000793・0000794）は「対象外」なので起票の候補に載らない。BTS 0000354（アンインストールの後の働き）は「未着手」のまま。
-- 範囲の外で見つけたこと（続き）: 網羅の台帳の古い持ち主がさらに 3 つ。`system.cursor.pos`（→ `areka-P0-system-property-values`）・`currentghost.scope(ID).*`（→ `areka-P0-currentghost-property-others`）・`animation*.name`（空 → `areka-P0-seriko-script-triggers`）。
+- 範囲の外で見つけたこと（続き）: 網羅の台帳の古い持ち主がさらに 3 つ。`system.cursor.pos`（→ `system-property-values`）・`currentghost.scope(ID).*`（→ `currentghost-property-others`）・`animation*.name`（空 → `seriko-script-triggers`）。
 
 ### 完了の確かめの結果（タスク 5・2026-10-10）
 
@@ -178,7 +178,7 @@ BTS へ取りに行った回数は、一覧まわり 8・課題の頁 237・レ�
 
 その場で解決 0 件・起票 0 件。
 
-- 「範囲の外で見つけたこと」の、網羅の台帳の古い持ち主 6 つは、どれも引き取る側に既に書いてあった。`currentghost.seriko.tooltip.*`・`currentghost.mousecursor*`・`currentghost.scope(ID).*` は `areka-P0-currentghost-property-others` の brief（着地のときに持ち主を直す）、`system.cursor.pos` は `areka-P0-system-property-values` の brief（同じ）、`animation*.name` は `areka-P0-seriko-script-triggers` の brief（担当なしだった 4 行を引き取る）、`arrow.filename`・`onlinemarker.*`・`sstpmarker.*` は `areka-P0-balloon-markers` の brief（`balloon-canon-residue` の項目 1 を引き取り、網羅の台帳を更新する）、`\![embed,…]` は roadmap の「直接修正候補」の「直さずに各 spec へ渡したもの」。網羅の台帳の持ち主は、各 spec の要件の段で動かす決まり（棚卸㉓）なので、ここでは直さない。
+- 「範囲の外で見つけたこと」の、網羅の台帳の古い持ち主 6 つは、どれも引き取る側に既に書いてあった。`currentghost.seriko.tooltip.*`・`currentghost.mousecursor*`・`currentghost.scope(ID).*` は `currentghost-property-others` の brief（着地のときに持ち主を直す）、`system.cursor.pos` は `system-property-values` の brief（同じ）、`animation*.name` は `seriko-script-triggers` の brief（担当なしだった 4 行を引き取る）、`arrow.filename`・`onlinemarker.*`・`sstpmarker.*` は `balloon-markers` の brief（`balloon-canon-residue` の項目 1 を引き取り、網羅の台帳を更新する）、`\![embed,…]` は roadmap の「直接修正候補」の「直さずに各 spec へ渡したもの」。網羅の台帳の持ち主は、各 spec の要件の段で動かす決まり（棚卸㉓）なので、ここでは直さない。
 - 設計の「Open Questions / Risks（段 1 で確かめること）」は、タスク 1 で確かめ終えた（一覧の取り方・拒まれたときの扱い）。
 - 台帳の末尾の「起票の候補」は成果物なので起票しない（申し送り 2）。最後の検証の後に開発者が頼んだ起票 5 本は、申し送り 5 のとおり済んでいる。
 - main `226109e8`（`farewell-talk-status` の完了）を取り込んだ。ぶつかったのは `roadmap.md` の spec 台帳の数の 3 行だけで、main の側（95 本）に起票 5 本を足した 100 本で解いた。

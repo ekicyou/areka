@@ -251,7 +251,10 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     let (next, actions) = step(
         s,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(r"\0時間切れ\e".to_string()),
+            outcome: ShioriOutcome::Value(
+                r"\0時間切れ\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "OnChoiceTimeout",
         },
         &config(),
@@ -541,7 +544,10 @@ fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
     let (next, actions) = step(
         s,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(r"\0つつかれた\e".to_string()),
+            outcome: ShioriOutcome::Value(
+                r"\0つつかれた\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "OnMouseDoubleClick",
         },
         &config(),
@@ -830,7 +836,10 @@ fn choice_happy_path_emits_no_error_level_logs() {
             step(
                 s2,
                 Input::ShioriReply {
-                    outcome: ShioriOutcome::Value(r"\0次のシーン\e".to_string()),
+                    outcome: ShioriOutcome::Value(
+                        r"\0次のシーン\e".to_string(),
+                        areka_talk::SecurityLevel::Local,
+                    ),
                     origin: "OnChoiceEvent",
                 },
                 &cfg,

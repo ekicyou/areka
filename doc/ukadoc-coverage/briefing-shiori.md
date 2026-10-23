@@ -238,7 +238,7 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 - **判断の根拠の場所**: 知らせる側は `crates/areka-kanade/src/schedule/events.rs` の
   `ALLOWED_EVENT_IDS`、引く側は `crates/areka-kanade/src/schedule/resources.rs` の
   `ALLOWED_RESOURCE_IDS`（`username` 1 件だけ）。`property.get`／`property.set` の担当は
-  `areka-P0-property-query-channels`。
+  `property-query-channels`。
 - **共通 `note`**:
 
   ```
@@ -421,11 +421,15 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 
 - **対象**: リクエスト側の `Charset`（UTF-8 のみ）と `SecurityLevel`（`local` のみ）。
 - **件数**: 2
-- **状態**: `degraded`
+- **状態**: 2 件とも `implemented`。調査時点は 2 件とも `degraded`（値が 1 つに固定）で、`Charset` は
+  `areka-P0-charset-canon` が、`SecurityLevel` は 2026-10-23 に `areka-P0-script-security-level` が
+  出どころから `local`／`external` を選んで送るようにした（下の共通 `note` は調査時点の文面）。
 - **テーマ**: 空（`[]`）
 - **優先度**: `D2`（仮置き）
 - **判断の根拠の場所**: `crates/shiori-host32-host/src/shiori3.rs` の `build_request`。
-  `Charset` の担当は `areka-P0-charset-canon`。
+  `Charset` の担当は `areka-P0-charset-canon`。`SecurityLevel` の値は
+  `crates/areka-kanade/src/request_origin.rs` の `RequestOrigin` が決める（担当は
+  `areka-P0-script-security-level`）。
 - **共通 `note`**:
 
   ```
@@ -448,7 +452,10 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   `SecurityLevel`・`X-SSTP-PassThru-`、`ValueNotify`・`Marker`・`BalloonOffset`・`Reference0`・
   `Reference1〜`・`Age`・`MarkerSend`）。
 - **件数**: 15
-- **状態**: `absent`
+- **状態**: `absent`。ただし 2026-10-23 に `areka-P0-script-security-level` がリクエスト側の
+  `SenderType`・`SecurityOrigin` を送り、レスポンス側の `SecurityLevel` を読むようにした
+  （`SenderType` とレスポンス側の `SecurityLevel` は `implemented`、`SecurityOrigin` は常に `null` を
+  送る `degraded`）。この 3 行には下の共通 `note` は当たらず、各行の `note` を書き直した。
 - **テーマ**: 空（`[]`）
 - **優先度**: `D2`（仮置き）
 - **判断の根拠の場所**: `crates/shiori-host32-host/src/shiori3.rs` の `build_request` と
@@ -586,7 +593,7 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   （絶対パスで読み込み、正典の 4 つの入口 `loadu`・`load`・`unload`・`request` を全て名前で引く。
   初期化の入口は `choose_init_entry` が `loadu` を優先して 1 つ選び、入口ごとのパスの渡し方と表せない
   字の警告は `init_bytes` が持つ）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
-  `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `areka-P0-makoto-dll-host`。
+  `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `makoto-dll-host`。
 - **共通 `note`**:
 
   ```
@@ -605,7 +612,7 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   とする場所が無いのでログは 1 行も出ない。
   SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
   プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
-  無いので、SAORI 用の行は作らない。MAKOTO は areka-P0-makoto-dll-host が担う。
+  無いので、SAORI 用の行は作らない。MAKOTO は makoto-dll-host が担う。
   縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
   「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
   粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
@@ -810,7 +817,7 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 
 ### 群 2a — バルーンの開閉を知らせない 3 件
 
-> **2026-10-06 の追記——この 3 件はもう送っている。** 仕様 `areka-P0-balloon-lifecycle-events` が、利用者の中断の後に定常へ戻ったときの `OnBalloonBreak`、時間切れでバルーンが隠れたときの `OnBalloonTimeout`、再生中のトークが無いときに読み終えたバルーンを左ダブルクリックで閉じたときの `OnBalloonClose` を送るようにし、台帳の 3 行を `OnBalloonClose`・`OnBalloonTimeout` は**実装済み**、`OnBalloonBreak` は**縮退**（Reference2 の中断位置を空で送る。追跡先は `areka-P0-balloon-break-position`）へ移して自分を担当として登記した。下の「今ある物」に書いた受け皿の型 `BalloonLifecycleNotice` は使われないまま消し、送る判断は `crates/areka-kanade/src/schedule/balloon_events.rs`、組み立ては `crates/areka-kanade/src/schedule/events.rs` の `on_balloon_break`・`on_balloon_close`・`on_balloon_timeout` に置いた。本文は調査時点の写しのまま残した。
+> **2026-10-06 の追記——この 3 件はもう送っている。** 仕様 `areka-P0-balloon-lifecycle-events` が、利用者の中断の後に定常へ戻ったときの `OnBalloonBreak`、時間切れでバルーンが隠れたときの `OnBalloonTimeout`、再生中のトークが無いときに読み終えたバルーンを左ダブルクリックで閉じたときの `OnBalloonClose` を送るようにし、台帳の 3 行を `OnBalloonClose`・`OnBalloonTimeout` は**実装済み**、`OnBalloonBreak` は**縮退**（Reference2 の中断位置を空で送る。追跡先は `balloon-break-position`）へ移して自分を担当として登記した。下の「今ある物」に書いた受け皿の型 `BalloonLifecycleNotice` は使われないまま消し、送る判断は `crates/areka-kanade/src/schedule/balloon_events.rs`、組み立ては `crates/areka-kanade/src/schedule/events.rs` の `on_balloon_break`・`on_balloon_close`・`on_balloon_timeout` に置いた。本文は調査時点の写しのまま残した。
 
 **利用者に何が起きるか**
 
@@ -826,7 +833,7 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 - **足りない物**: その受け皿を作る側（吹き出しの開閉を見て通知を起こす側）と、受け取って SHIORI へ
   渡す側の両方。どちらも存在しないので、経路そのものが動かない。
 - この 3 件は **M1 では意図的に発火させない**という記録があり（転記元は `doc/COMPAT_ARCHITECTURE.md`
-  の沈黙ルール対応表）、追跡先は `areka-P0-balloon-canon-residue` である。他の群と違い、
+  の沈黙ルール対応表）、追跡先は `balloon-canon-residue` である。他の群と違い、
   「気づいていない欠落」ではなく「先送りと記録されている欠落」である。
 
 **台帳の項目 id**
@@ -853,7 +860,7 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
   （表に載る名前は `username` の 1 つ）。
 - **足りない物**: 知らせる中身そのもの——導入済みのものを登記した一覧、置き場所の一覧、窓の取っ手を
   外へ渡す経路。引く側は、引ける名前を決める表に名前が無いこと。`property.get`／`property.set` の
-  受け口は別の spec（`areka-P0-property-query-channels`）が担当する。
+  受け口は別の spec（`property-query-channels`）が担当する。
 
 **台帳の項目 id**
 
@@ -908,6 +915,8 @@ id は `ukadoc:list_shiori_resource:<名前>:1` の形。名前は次の 27 件�
 
 ### 群 10 — 固定値で送っているヘッダ 2 件
 
+> **2026-10-23 の追記——`SecurityLevel` はもう `local` 固定ではない。** 仕様 `areka-P0-script-security-level` が、送るイベントの出どころから `local`／`external` を選んで送るようにし、台帳の `ukadoc:spec_shiori3:SecurityLevel:1` を**実装済み**へ移して自分を担当として登記した（値を決めるのは `crates/areka-kanade/src/request_origin.rs` の `RequestOrigin`）。`external` を送る出どころ（SSTP の受信など）はまだ無いので、今実際に送られる値は `local` だけである。`Charset` は `areka-P0-charset-canon` が実装済みにした。本文は調査時点の写しのまま残した。
+
 **利用者に何が起きるか**
 
 Shift_JIS で書かれた既存ゴーストと噛み合わない。areka は文字コードの申告を UTF-8 の 1 値でしか
@@ -931,6 +940,8 @@ Shift_JIS で書かれた既存ゴーストと噛み合わない。areka は文�
 ---
 
 ### 群 11 — 送らない／読み飛ばすヘッダ 15 件
+
+> **2026-10-23 の追記——このうち 3 件はもう送る／読む。** 仕様 `areka-P0-script-security-level` が、リクエスト側の `SenderType`（出どころの語）と `SecurityOrigin`（今は常に `null`・値は SSTP の受信を作る spec が持つ）をどの要求にも送り、レスポンス側の `SecurityLevel` を読んで応答の台本の実効のレベルを下げる（上げない・読めない値は warn を残して無いものとする）ようにした。台帳の 3 行は `SenderType` とレスポンス側の `SecurityLevel` が**実装済み**、`SecurityOrigin` が**縮退**で、担当は同 spec。本文は調査時点の写しのまま残した。
 
 **利用者に何が起きるか**
 
@@ -1146,7 +1157,7 @@ PLUGIN の DLL は読み込む呼び出しそのものが無いので同居で�
   失敗したときは黙って先へ進まず、失敗として呼び出し元へ返る。
 - **足りない物**: SAORI・MAKOTO・PLUGIN の DLL を読み込む側（以前ここに⑴として挙げていた
   `loadu` を名前で引く枝は、2026-09-23 に `areka-P0-shiori-loadu` が加えたので今ある物へ
-  移した）。MAKOTO の担当は `areka-P0-makoto-dll-host` である。SAORI については areka が
+  移した）。MAKOTO の担当は `makoto-dll-host` である。SAORI については areka が
   プロトコルを実装するのではなく、32bit の同じプロセスに同居できること・作業ディレクトリ・DLL の
   探索パスの 3 つが条件になる。
 

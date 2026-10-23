@@ -56,8 +56,8 @@
   - SSP との見た目の完全一致。
   - `.pna` の対応（受けない裁定済み・2026-10-05）。
   - オーナードローのメニュー（areka は OS 標準のメニュー）。
-  - 3 人目以降のキャラクターの窓（`areka-P0-extra-character-windows`）。
-  - `replace` ほかの描画メソッド（`areka-P0-draw-methods-canon`）。
+  - 3 人目以降のキャラクターの窓（`extra-character-windows`）。
+  - `replace` ほかの描画メソッド（`draw-methods-canon`）。
   - 着せ替え（bindgroup）の残件。
   - えみりの辞書（YAYA の台本）の書き換え。
   - えみりの書庫のバイト列の変更、および SSP のバルーン `emily4` を検体に足すこと。
@@ -67,8 +67,8 @@
 - **Adjacent expectations**:
   - 完了 `areka-P0-ghost-standard-balloon` の決まりは、そのまま使う（変更 0）。ゴーストの descript.txt の `balloon` が解けないときに既定のバルーンへ落ちる決まりである。
   - 32 ビットの SHIORI の道（`shiori-host32`）は、検体 `claudia` で実機まで通っている。本 spec はこれを前提に使う。
-  - 検体の登記表は、本 spec が先頭で触る。後ろに `areka-P0-dot-sakura-specimen` → `areka-P0-default-balloon-selfmade` → `sample-url-fetch` が続く。登記の数は本 spec で 7 → 8 にする。
-  - `areka-P0-install-live-target-hazards` と `areka-P0-ghost-inner-balloon` も、インストールの計画を触る。本 spec は取り出し元の無い同梱の扱いだけを変え、ほかの拒否の理由と置き方は変えない（変更 0）。
+  - 検体の登記表は、本 spec が先頭で触る。後ろに `areka-P0-dot-sakura-specimen` → `default-balloon-selfmade` → `sample-url-fetch` が続く。登記の数は本 spec で 7 → 8 にする。
+  - `install-live-target-hazards` と `areka-P0-ghost-inner-balloon` も、インストールの計画を触る。本 spec は取り出し元の無い同梱の扱いだけを変え、ほかの拒否の理由と置き方は変えない（変更 0）。
 
 ## Requirements
 
@@ -134,7 +134,7 @@
 4. When 利用者がえみりのキャラクターの上で右クリックしたとき, the areka shall areka の右クリックメニューを出し、選んだ項目の働き（少なくとも 5 項の「終了」と「説明書」）を起こす。えみりの辞書がメニューのイベントに台詞を返すなら、バルーンに出す。
 5. When 利用者がメニューから終了を選んだとき, the areka shall えみりの終了のイベントの台詞を出した後に終わる。終わり方はきれいな終了とし、終了コードは 0 とする。
 6. The areka shall 1 項から 5 項の走行のあいだ、panic と致命の記録を 0 件とする。
-7. The areka shall 3 人目以降のキャラクターの窓が出ないことを、1 項から 5 項の妨げにしない（窓は `areka-P0-extra-character-windows` の持ち分）。
+7. The areka shall 3 人目以降のキャラクターの窓が出ないことを、1 項から 5 項の妨げにしない（窓は `extra-character-windows` の持ち分）。
 8. The 実機の検証 shall 1 項から 5 項の合否のうち、目視で決める項目を開発者が決める。AI は記録を作るだけで、目視の項目を単独で合格にしない。
 9. The 実機の検証 shall 見た目が SSP と違うこと（α の無い絵の抜き色・`.pna` を使わないこと・`replace` で描く部分が欠けること・メニューが OS 標準の見た目であることなど）を、それだけでは不合格にしない。
 
@@ -173,7 +173,7 @@
 6. The 本 spec の直し shall えみりの辞書・書庫を書き換えて通すことをしない（直すのは areka の側だけ）。
 7. The areka shall えみりのように `char2` 以降の鍵（ゴーストの descript.txt の `char2.name`、シェルの `char2.*`・`char3.*`・`char4.*` など）を持つゴーストを起こしても、panic しない（2026-10-17 開発者「最低限パニックは回避して欲しい」）。
    - 3 人目以降の窓が作られ、debug 版の検査（scope は 1 以下）に当たるなら、窓を scope 0・1 に絞る最小の直しで避ける。起動の絵の側が今も scope 0・1 だけを扱うのと、答えを揃える。
-   - 3 人目以降の窓を正しく作るのは `areka-P0-extra-character-windows` が後でやり直す。本 spec は、その spec の要件を先に取り込まない。
+   - 3 人目以降の窓を正しく作るのは `extra-character-windows` が後でやり直す。本 spec は、その spec の要件を先に取り込まない。
    - 実機で当たるのを待たない。`char2` 以降の鍵を持つ固定入力で、起動の配置・ポインタの入力・右クリックメニューの道を通して panic しないことを、決定論の自動テストで確かめる（当たる道があるなら、直す前に赤・直した後に緑）。
 
 ### Requirement 7: 決定論の自動テスト

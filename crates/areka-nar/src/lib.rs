@@ -115,7 +115,18 @@ impl NarArchive {
     /// [`NarError::Io`]（どこまで確定したかと巻き戻せたかを持つ＝要件 6.4）。
     pub fn install(&self, request: &InstallRequest<'_>) -> Result<InstallOutcome, NarError> {
         let mut work = Vec::new();
-        match self.place(request, &mut work) {
+        let mut overridden = Vec::new();
+        let placed = self.place(request, &mut work, &mut overridden);
+        // 書庫の `balloon/<dir>/` を名指しされた同梱が本体から除いた（計画の事実なので成否に関わらず）。
+        for directory in &overridden {
+            tracing::warn!(
+                event = "companion_overrides_archive_folder",
+                archive = %self.archive.display(),
+                directory = directory.as_str(),
+                "[areka_nar] archive folder at a companion balloon home dropped from the ghost body"
+            );
+        }
+        match placed {
             Ok(outcome) => {
                 // 拒否ではないが黙って通さないもの（要件 3.9）。1 件ずつ出す。
                 for warning in &outcome.warnings {
@@ -191,16 +202,20 @@ impl NarArchive {
     /// 積む（呼び手が記録の欄として出す。途中で失敗しても掘った分は載る）。
     /// `rolled_back` が偽のとき、利用者の元の木が残っている場所は失敗の値の
     /// `survivors` が持ち、いずれも `work` のどれかの作業フォルダの配下に在る。
+    /// 書庫の `balloon/<dir>/` を本体から除いた同梱の名前は `overridden` へ積む（同じく記録の材料）。
     fn place(
         &self,
         request: &InstallRequest<'_>,
         work: &mut Vec<PathBuf>,
+        overridden: &mut Vec<String>,
     ) -> Result<InstallOutcome, NarError> {
         let refused = |reason| NarError::Refused {
             archive: self.archive.clone(),
             reason,
         };
-        let (plan, skipped) = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
+        let (plan, skipped, dropped) =
+            build_plan(&self.manifest, &self.names, request).map_err(refused)?;
+        *overridden = dropped;
 
         // 棚の掃除は掘るときに行うので、触るのはこの `.nar` の根の棚だけ。同じ根に 2 度
         // 掘ると 2 度目の掃除が 1 度目の作業フォルダを消すので、綴りが同じ根は 1 つにする。

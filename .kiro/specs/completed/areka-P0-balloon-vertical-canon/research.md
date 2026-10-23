@@ -159,7 +159,7 @@ _ => None,   // 負値絶対・Relative(@)・Invalid・Omitted
 
 ### 3.7 Requirement 5.5／8.4 の「追跡先」——実在確認だけでは規律を満たさない
 
-候補 `.kiro/specs/areka-P0-balloon-canon-residue` は**実在する**（`brief.md` のみ・76 行）。ただし収載範囲は**項目列挙**で定義されており、2 系統だけである。
+候補 `.kiro/specs/balloon-canon-residue` は**実在する**（`brief.md` のみ・76 行）。ただし収載範囲は**項目列挙**で定義されており、2 系統だけである。
 
 - `kero-balloon` 由来＝バルーン**系列解決**の残余（項目 1〜6・`:11-16`）
 - `balloon-visibility` 由来＝バルーン**表示寿命**の残余（項目 7〜10・`:24-27`）
@@ -332,9 +332,9 @@ SC 番号・要件段階の裁定 5 点との対応を併記する。
 |---|---|---|
 | 4.5 の 5 実測 | `areka-P0-cursor-tag-canon/brief.md`（91 行） | ✅ `:18`（非負ゲート）・`:29-32`（`vertical_rl` 原点符号）・`:33`（`vertical_lr` 一致）・`:35`（被覆 0）・`:27`／`:44`／`:54`（縮退表改訂義務） |
 | 5.5 の `\f` 系 | `areka-P0-text-decoration-canon/brief.md`（59 行） | ✅ `:20`（align／valign／underline）・`:21`／`:33`／`:59`（SC1 は bvc 裁定を継承し再審議しない） |
-| 5.5 の矢印 | `areka-P0-balloon-canon-residue/brief.md`（75 行） | ✅ `:11` の項目 1 に第 3 軸として追記済み |
-| 7.5 | `areka-P0-currentghost-property-tree/brief.md`（59 行） | ✅ `:24`（導出規則を bvc 参照で収載）・`:23`（balloon.scope 族 19 項目を全列挙） |
-| 7.3 の照会経路 | `areka-P0-property-query-channels/brief.md`（76 行） | ✅ `:14-22` に正典 6 経路 |
+| 5.5 の矢印 | `balloon-canon-residue/brief.md`（75 行） | ✅ `:11` の項目 1 に第 3 軸として追記済み |
+| 7.5 | `currentghost-property-tree/brief.md`（59 行） | ✅ `:24`（導出規則を bvc 参照で収載）・`:23`（balloon.scope 族 19 項目を全列挙） |
+| 7.3 の照会経路 | `property-query-channels/brief.md`（76 行） | ✅ `:14-22` に正典 6 経路 |
 
 ### §1〜§7 の記述の訂正（本日の実測による）
 

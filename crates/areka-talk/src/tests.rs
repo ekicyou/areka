@@ -43,6 +43,7 @@ fn start_talk_holds_opaque_script_and_id() {
         talk_id: TalkId(42),
         script: r"\0こんにちは\e".to_string(),
         epilogue: Vec::new(),
+        origin: ScriptOrigin::GHOST,
     };
     assert_eq!(msg.talk_id, TalkId(42));
     // script は素の String として保持されるのみ（解釈しない）。
@@ -55,6 +56,7 @@ fn start_talk_is_cloneable() {
         talk_id: TalkId(3),
         script: "hi".to_string(),
         epilogue: Vec::new(),
+        origin: ScriptOrigin::GHOST,
     };
     let cloned = original.clone();
     assert_eq!(cloned.talk_id, original.talk_id);
@@ -70,6 +72,26 @@ fn start_talk_new_has_empty_epilogue() {
     assert_eq!(msg.talk_id, TalkId(1));
     assert_eq!(msg.script, r"\0hi\e");
     assert!(msg.epilogue.is_empty());
+}
+
+/// 従来形コンストラクタ `StartTalk::new` は出どころにゴースト自身を入れる
+/// （製品の呼び手の振る舞いを据え置く・areka-P0-script-security-level 1.4）。
+#[test]
+fn start_talk_new_origin_is_ghost() {
+    let msg = StartTalk::new(TalkId(1), "hi");
+    assert_eq!(msg.origin, ScriptOrigin::GHOST);
+}
+
+/// 字面で組んだ出どころは Clone でそのまま運ばれる（書き換えない）。
+#[test]
+fn start_talk_carries_origin_through_clone() {
+    let msg = StartTalk {
+        talk_id: TalkId(5),
+        script: "hi".to_string(),
+        epilogue: Vec::new(),
+        origin: ScriptOrigin::MCP_SEND,
+    };
+    assert_eq!(msg.clone().origin, ScriptOrigin::MCP_SEND);
 }
 
 /// `new` は `impl Into<String>` を受け、`String` でも `&str` でも構築できる。
@@ -116,6 +138,7 @@ fn start_talk_carries_epilogue_and_clones() {
         talk_id: TalkId(4),
         script: "hi".to_string(),
         epilogue: epilogue.clone(),
+        origin: ScriptOrigin::GHOST,
     };
     let cloned = msg.clone();
     assert_eq!(cloned.epilogue, epilogue);
@@ -244,6 +267,7 @@ fn talk_command_start_wraps_start_talk_without_loss() {
             name: "SET".to_string(),
             tokens: vec!["k".to_string(), "v".to_string()],
         }],
+        origin: ScriptOrigin::GHOST,
     };
     let cmd = TalkCommand::Start(start.clone());
 

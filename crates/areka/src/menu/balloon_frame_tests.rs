@@ -4,6 +4,8 @@
 //! バルーン（起動の文脈の `current.balloon.folder`）だけに印が付くこと・1 つだけでも枠が出ること・
 //! 起動の文脈が無ければ無効の枠だけが出ること。選ぶと入口が要求を受けることは、実行系を起こす
 //! `shell_balloon_switch_session_tests.rs` が確かめる。
+//! ゴーストの中のバルーンが根より先に並び、使っているときにそこへ印が付くことも確かめる
+//! （areka-P0-ghost-inner-balloon 要件 2.1・2.4・2.5）。
 
 use areka_ghost::BasewareRoot;
 use bevy_ecs::world::World;
@@ -44,7 +46,7 @@ fn balloon_shape(world: &World) -> Option<FrameShape> {
 /// バルーン（先頭でない方）だけに印（要件 7.2・7.4）。
 #[test]
 fn balloons_listed_in_catalog_order_with_current_mark() {
-    let tmp = TempPath::new("balloon-frame-list");
+    let tmp = TempPath::under_target("balloon-frame-list");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     put_balloon(&root, "Alpha", "name,アルファ\n");
     put_balloon(&root, "StayseeBalloon", "");
@@ -67,7 +69,7 @@ fn balloons_listed_in_catalog_order_with_current_mark() {
 /// バルーンが 1 つ（今のもの）だけでも枠は出る（要件 7.2）。
 #[test]
 fn a_single_balloon_still_shows_the_frame() {
-    let tmp = TempPath::new("balloon-frame-single");
+    let tmp = TempPath::under_target("balloon-frame-single");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     put_balloon(&root, "StayseeBalloon", "name,ステイシー\n");
     let world = wired_world(&root, true);
@@ -86,7 +88,7 @@ fn a_single_balloon_still_shows_the_frame() {
 /// 起動の文脈が無ければ無効の枠だけが出る。
 #[test]
 fn without_boot_context_only_a_disabled_balloon_frame_is_shown() {
-    let tmp = TempPath::new("balloon-frame-nocontext");
+    let tmp = TempPath::under_target("balloon-frame-nocontext");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     put_balloon(&root, "StayseeBalloon", "name,ステイシー\n");
     let world = wired_world(&root, false);
@@ -126,6 +128,57 @@ fn union_of_two_roots_marks_same_folder_name_balloon() {
         Some(vec![
             ("Alpha".to_owned(), true, Some(false)),
             ("stayseeballoon".to_owned(), true, Some(true)),
+        ])
+    );
+}
+
+/// 今のゴーストの `balloon/<folder>/descript.txt` を書く。
+fn put_ghost_balloon(root: &BasewareRoot, ghost: &str, folder: &str, body: &str) {
+    let dir = root.ghost_dir(ghost).join("balloon").join(folder);
+    std::fs::create_dir_all(&dir).expect("フォルダを組む");
+    std::fs::write(dir.join("descript.txt"), format!("charset,UTF-8\n{body}")).expect("descript");
+}
+
+/// ゴーストの中のバルーンが先・根のバルーンが後に 1 つの一覧で並ぶ（要件 2.1・2.4・2.5）。
+#[test]
+fn ghost_inner_balloons_listed_before_root_balloons() {
+    let tmp = TempPath::under_target("balloon-frame-ghost-inner-first");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    put_balloon(&root, "Alpha", "");
+    put_balloon(&root, "StayseeBalloon", "");
+    put_ghost_balloon(&root, "A", "Zeta", "name,ゼータ\n");
+    let world = wired_world(&root, true);
+
+    assert_eq!(
+        balloon_shape(&world).map(|s| s.3),
+        Some(vec![
+            ("ゼータ".to_owned(), true, Some(false)),
+            ("Alpha".to_owned(), true, Some(false)),
+            ("StayseeBalloon".to_owned(), true, Some(true)),
+        ])
+    );
+}
+
+/// ゴーストの中のバルーンを使っているとき、そこへ今と同じ印が付く（要件 2.4）。
+#[test]
+fn current_ghost_inner_balloon_gets_the_mark() {
+    let tmp = TempPath::under_target("balloon-frame-ghost-inner-mark");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    put_balloon(&root, "Alpha", "");
+    put_ghost_balloon(&root, "A", "Inner", "name,内側\n");
+    let mut ctx = boot_context(&root, "A");
+    ctx.current.balloon.dir = root.ghost_dir("A").join("balloon").join("Inner");
+    ctx.current.balloon.folder = Some("Inner".to_owned());
+    let mut world = World::new();
+    world.insert_resource(ctx);
+    wire_menu(&mut world, std::sync::mpsc::channel().0);
+    register(&mut world);
+
+    assert_eq!(
+        balloon_shape(&world).map(|s| s.3),
+        Some(vec![
+            ("内側".to_owned(), true, Some(true)),
+            ("Alpha".to_owned(), true, Some(false)),
         ])
     );
 }

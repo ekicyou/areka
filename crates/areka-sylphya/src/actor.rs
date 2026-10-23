@@ -126,7 +126,8 @@ pub enum SetClass {
 ///
 /// key が次のいずれかを満たすとき **正準語彙** とみなす:
 ///
-/// 1. [`SET_EFFECTIVE`] に厳密一致（SET 有効群）→ [`SetClass::RuntimeCommand`]（最優先判定）。
+/// 1. [`SET_EFFECTIVE`] に半角の英字の大小を区別せず一致（SET 有効群・前後の空白は削らない）
+///    → [`SetClass::RuntimeCommand`]（最優先判定）。表は小文字だけなので `MENU` も `menu` と同じ。
 /// 2. （1 でなく）[`parse_dotted`] が成功し、**根セグメント名が [`DOTTED_ROOTS`] に属する**、
 ///    または **葉セグメント名が [`GENERIC_PROP_NAMES`] に属する** → 正準語彙かつ SET 無効
 ///    → [`SetClass::NotSettable`]。
@@ -138,8 +139,11 @@ pub enum SetClass {
 /// `menu`/`sakura.bind.menu` 等（[`SET_EFFECTIVE`] と [`GENERIC_PROP_NAMES`] の双方に載る名）は
 /// RuntimeCommand に確定する（二重帰属の曖昧さを排除）。
 pub fn classify_set(key: &str) -> SetClass {
-    // 1. SET 有効群（厳密一致・最優先）→ RuntimeCommand。
-    if SET_EFFECTIVE.iter().any(|(k, _)| *k == key) {
+    // 1. SET 有効群（英字の大小を区別しない一致・空白は削らない・最優先）→ RuntimeCommand。
+    if SET_EFFECTIVE
+        .iter()
+        .any(|(k, _)| k.eq_ignore_ascii_case(key))
+    {
         return SetClass::RuntimeCommand;
     }
     // 2. 正準語彙（根 ∈ DOTTED_ROOTS ∨ 葉 ∈ GENERIC_PROP_NAMES）だが SET 無効 → NotSettable。
@@ -739,6 +743,11 @@ fn run_actor(
 #[cfg(test)]
 #[path = "actor_tests.rs"]
 mod tests;
+
+/// 名前の畳みの書き込みの仕分けの檻（spec areka-P0-property-name-case-fold）。
+#[cfg(test)]
+#[path = "actor_case_fold_tests.rs"]
+mod case_fold_tests;
 
 /// 書き手のアクターの失敗の受け口（spec areka-P0-write-failure-notice タスク 1.2）。
 #[cfg(test)]

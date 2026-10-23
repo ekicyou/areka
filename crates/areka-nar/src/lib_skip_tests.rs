@@ -2,7 +2,7 @@
 //! 通して確かめる兄弟テスト（areka-P0-emily-ghost-verification 要件 1.1〜1.6・1.8・7.1・7.2）。
 //!
 //! 要件 7.1 の 6 場面（無印・番号付き・2 つのうち片方・フォルダのエントリだけ・シェルの
-//! `.nar`・全部在る）ごとに、入った物・`<根>/balloon/<置き場>/` が無いこと・成功・
+//! `.nar`・全部在る）ごとに、入った物・`<ゴースト>/balloon/<置き場>/` が無いこと・成功・
 //! 飛ばした列の中身・警告の記録の件数と欄を判定する。あわせて、`*.source.directory` を
 //! 書かない同梱の鍵と値（要件 1.4）と、飛ばした同梱の置き場に先に在った中身が変わらない
 //! こと（要件 1.6）を見る。
@@ -171,7 +171,7 @@ fn a_plain_companion_without_its_source_is_skipped_and_warned() {
     assert_eq!(installed(run.outcome()), [(ElementKind::Ghost, "Tester")]);
     assert_eq!(run.outcome().skipped, expected);
     assert!(
-        !root.join("balloon/kaku").exists(),
+        !root.join("ghost/tester/balloon/kaku").exists(),
         "飛ばした置き場が作られた"
     );
     assert_eq!(files_under(root), body_files());
@@ -198,7 +198,7 @@ fn a_numbered_companion_without_its_source_is_skipped_and_warned() {
     assert_eq!(installed(run.outcome()), [(ElementKind::Ghost, "Tester")]);
     assert_eq!(run.outcome().skipped, expected);
     assert!(
-        !root.join("balloon/b0").exists(),
+        !root.join("ghost/tester/balloon/b0").exists(),
         "飛ばした置き場が作られた"
     );
     assert_eq!(files_under(root), body_files());
@@ -230,15 +230,15 @@ fn only_the_companion_without_its_source_is_skipped() {
     );
     assert_eq!(run.outcome().skipped, expected);
     assert_eq!(
-        fs::read(root.join("balloon/kaku/balloon.txt")).expect("在るほうは置かれる"),
+        fs::read(root.join("ghost/tester/balloon/kaku/balloon.txt")).expect("在るほうは置かれる"),
         b"kaku\r\n"
     );
     assert!(
-        !root.join("balloon/b0").exists(),
+        !root.join("ghost/tester/balloon/b0").exists(),
         "飛ばした置き場が作られた"
     );
     let mut files = body_files();
-    files.insert(0, "balloon/kaku/balloon.txt".to_owned());
+    files.insert(0, "ghost/tester/balloon/kaku/balloon.txt".to_owned());
     assert_eq!(files_under(root), files);
     run.assert_skip_records(&expected);
 }
@@ -259,7 +259,7 @@ fn a_source_with_only_its_folder_entry_is_skipped_like_an_absent_one() {
     assert_eq!(installed(run.outcome()), [(ElementKind::Ghost, "Tester")]);
     assert_eq!(run.outcome().skipped, expected);
     assert!(
-        !root.join("balloon/kaku").exists(),
+        !root.join("ghost/tester/balloon/kaku").exists(),
         "飛ばした置き場が作られた"
     );
     assert!(
@@ -296,7 +296,7 @@ fn a_shell_with_a_missing_companion_source_installs_the_shell() {
     assert_eq!(installed(run.outcome()), [(ElementKind::Shell, "Shell")]);
     assert_eq!(run.outcome().skipped, expected);
     assert!(
-        !root.join("balloon/kaku").exists(),
+        !root.join("ghost/host/balloon/kaku").exists(),
         "飛ばした置き場が作られた"
     );
     assert_eq!(
@@ -337,8 +337,8 @@ fn companions_with_all_sources_install_as_before_with_no_skip_record() {
     );
     assert_eq!(run.outcome().skipped, []);
     let mut files = vec![
-        "balloon/b0/balloon.txt".to_owned(),
-        "balloon/kaku/balloon.txt".to_owned(),
+        "ghost/tester/balloon/b0/balloon.txt".to_owned(),
+        "ghost/tester/balloon/kaku/balloon.txt".to_owned(),
     ];
     files.extend(body_files());
     assert_eq!(files_under(root), files);
@@ -359,7 +359,7 @@ fn without_a_source_key_the_directory_key_and_name_are_recorded() {
     let expected = [skipped("kaku", "balloon.directory", "kaku")];
     assert_eq!(installed(run.outcome()), [(ElementKind::Ghost, "Tester")]);
     assert_eq!(run.outcome().skipped, expected);
-    assert!(!root.join("balloon/kaku").exists());
+    assert!(!root.join("ghost/tester/balloon/kaku").exists());
     run.assert_skip_records(&expected);
 }
 
@@ -368,7 +368,7 @@ fn without_a_source_key_the_directory_key_and_name_are_recorded() {
 fn an_existing_folder_at_a_skipped_home_is_left_byte_identical() {
     let (shelf, work) = (WorkDir::new().unwrap(), WorkDir::new().unwrap());
     let root = work.path();
-    let home = root.join("balloon/kaku");
+    let home = root.join("ghost/tester/balloon/kaku");
     fs::create_dir_all(home.join("sub")).expect("先の中身を置ける");
     fs::write(home.join("descript.txt"), b"old descript\r\n").expect("先の中身を置ける");
     fs::write(home.join("sub/s0.png"), b"old png").expect("先の中身を置ける");

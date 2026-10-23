@@ -21,7 +21,7 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 - **実害は 1 件出た（2026-09-19）。** `menu/trigger.rs` の解放ハンドラが「`Idle` でなければドラッグ中」と読み、左クリックを 1 度した後は右クリックメニューが二度と出なくなった。決定論テストは「ドラッグ中」の代役に `JustEnded` を置いていた（捕捉の持ち主が要らない唯一の非待機状態だった）ので欠陥を合格条件に固定しており、実機でしか見つからなかった。利用側は是正済みだが、**契約そのものは偽のまま**で、次の読み手が同じ罠を踏む。
 - **透過制御（R5.2「`JustEnded` 再収束」）は `JustEnded` を観測することに依存していない。** `resolve_transition` は `Idle`・`Preparing`・`JustEnded` を同じ枝で扱い、現在の当たりに従う。つまり `JustEnded` を `Idle` に読み替えても判定は 1 ビットも変わらない。`crates/wintf/src/runtime/mod.rs` の `wire_click_through` の doc が触れる「`JustEnded` 再収束」も同じ意味（終了直後の周で、押下中の固定が外れて現在の当たりへ戻る）である。
 
-### 相乗り 2 件（`areka-P0-popup-menu-residue` の残件 1・2）
+### 相乗り 2 件（`popup-menu-residue` の残件 1・2）
 
 同じ `crates/areka/src/menu/trigger.rs` を触り、性質も同じ「右クリックの引き金の潜在バグ」なので本仕様で一緒に直す。
 
@@ -55,7 +55,7 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
   - 右ボタン・中ボタンのドラッグ。
   - `JustEnded` という variant の名前の変更（説明を直せば契約は一致する。改名は設計の裁量で、要件は求めない）。
   - 値を取り出すために variant を並べている読み手（`keyboard.rs`・`mouse_click.rs`・`mouse_move.rs`）の書き換え。
-  - 右クリックメニューの振る舞い（完了 spec `areka-P0-popup-menu-minimal` は開け直さない）・`areka-P0-popup-menu-residue` の残件 3〜10。
+  - 右クリックメニューの振る舞い（完了 spec `areka-P0-popup-menu-minimal` は開け直さない）・`popup-menu-residue` の残件 3〜10。
   - 説明書を開く処理を World の借用の外へ出すこと（残件 10）。
 - **Adjacent expectations**:
   - `areka-P0-popup-menu-minimal` の決定論テスト `crates/areka/src/menu/trigger_flow_tests.rs` の `a_release_after_a_finished_left_click_still_opens_the_menu` は、既に製品と同じ関数で押下→解放を踏んでいる。本仕様の後も緑のまま、意図を変えない。
@@ -146,4 +146,4 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 1. **直し方は案 A（説明を実装に合わせる）＋`reset_to_idle` の撤去で進める（決定済み・2026-09-23 要件ディスカッション）。** 根拠: `reset_to_idle` の製品の呼び手 0 件・`JustEnded` の値を読む製品コード 0 件・透過制御 R5.2 は `JustEnded` の観測に依存しない（`resolve_transition` は `Idle` と同じ枝）・案 B は挙動変更かつ「1 フレーム後に戻す」形。brief は「明記するかテスト専用へ格下げ」も許すが、テスト専用にすると再輸出も `cfg(test)` にする手間が増えるだけで守るものが無いので撤去を推す。
 2. **説明書が無いときの台本の `\![open,readme]` の記録の水準（裁定済み・2026-09-23 開発者が `warn!` を選択）。** **`warn!`**（要求 1 件につき 1 行）。理由: ゴーストの台本が「無いものを開け」と言った＝ゴースト側の作りの問題で、利用者から見ると「何も起きなかった」ので原因を記録に残す価値がある。`logging.md` の基準では「回復可能なエラー・フォールバック」＝`warn!`。対案は `debug!`（メニュー側の `readme_missing` と揃える）と `info!`。`error!` のままにはしない。
 3. **読み手の寄せ替えは brief の「wintf 内 3 か所」と異なる（報告・ギャップ分析で見落とし 0 件を確認済み）。** brief は `resolve_transition`・`start_preparing`・`keyboard.rs` を挙げるが、実測では `resolve_transition` は別の問い（「移動中か」・`Preparing` を含めない）で、`keyboard.rs` の `WM_CAPTURECHANGED` は捕捉の持ち主を可変で触るので写しの述語では足りない。どちらも述語へ寄せると挙動が変わるか書けない。代わりに `nchittest_cache.rs` の当たり判定の読み手が「押している間か」だけを聞いている。寄せる先は `start_preparing`・`nchittest_cache.rs`・`trigger.rs` の 3 か所。
-4. **窓の異なる預かりは「捨てて `trace!`」に決めた（報告）。** `areka-P0-popup-menu-residue` の brief は「捨てるか残すか」を要件で決めるとしていた。残すと、後の無関係な要求の抑止で送られる（`trigger.rs` の `ignore_release` の説明が禁じる形）ので捨てる。
+4. **窓の異なる預かりは「捨てて `trace!`」に決めた（報告）。** `popup-menu-residue` の brief は「捨てるか残すか」を要件で決めるとしていた。残すと、後の無関係な要求の抑止で送られる（`trigger.rs` の `ignore_release` の説明が禁じる形）ので捨てる。

@@ -188,7 +188,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka-mcp-bridge/Cargo.toml`・`src/config.rs`・`src/config_tests.rs` — `from_env` が隣に `areka.exe` が在るとき `areka_user_data::establish` と `app_profile_dir` で置き場を決め、`from_values` は `exe`・`areka_beside` の代わりに決まった記憶の置き場 `beside_profile: Option<PathBuf>` を受ける。
 - `dist/README.txt` — 「■ 右クリックメニュー」（10 項目・「置き場を先頭へ」・並べ替えの行）・「■ 置き場」・「■ 記憶の置き場」。**見出し「■ 記憶の置き場」の綴りは変えない**（`write-failure-notice` の知らせがこの見出しを指す）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の「ベースウェアの格納フォルダ（根）を複数持つ形」の行に、書ける根・既定の並び・写しの規則・記憶の置き場を足す。
-- `.kiro/specs/areka-P0-winget-release-automation/brief.md` — 申し送りの節を足す（要件 9.2）。
+- `.kiro/specs/winget-release-automation/brief.md` — 申し送りの節を足す（要件 9.2）。
 
 ### 約束の外で触るファイル（ウェーブ C8 の約束: `main.rs`・`boot_resolve.rs`・`roots/edit.rs` に触らない）
 
@@ -835,7 +835,7 @@ impl Config {
   - 「■ 記憶の置き場」（見出しは変えない）: zip を展開して使うときと、利用者ごとの置き場を使うときの 2 つの形で、areka の記憶・ゴーストの記憶・シェルの記憶・中継の控えの場所。初回は areka.exe の隣の記憶を写して使う（隣のは消さない）。同梱のゴーストの写しは areka を上げ直しても上書きされず、新しい版はゴーストのネットワーク更新で受け取る。winget で外しても利用者ごとの置き場は残り、すべて消したいときはそのフォルダを手で消す。0.0.2 を winget で入れた人の最初の上げ直しでは後から入れた物が消えうる（areka の側からは守れない）ので、その前に写しておく（9.1 の実測の結果で書き方を決める）。
   - シェルの記憶の行（要件 8.3）: 実装のタスクで `PersistScope::Shell` へ書く本番の呼び手を確かめる（設計の時点の見立ては「読むだけで書く呼び手は 0」＝`areka-sylphya` の `build_initial_image` が読むだけ）。0 なら「今の版には、シェルの記憶を作る操作はありません」と書く。
 - `doc/COMPAT_ARCHITECTURE.md` §8: 「ベースウェアの格納フォルダ（根）を複数持つ形」の行に、書ける根を使う形の 3 つの場合・既定の並び・写しの規則（書ける根が上に在るときだけ・同じフォルダ名が無いときだけ・上書きしない）・記憶の置き場を足す。
-- `.kiro/specs/areka-P0-winget-release-automation/brief.md`: 節「user-data-root からの申し送り」を足す。注意書き（`InstallationNotes`）を外してよい条件＝この spec の版からの上げ直しで消える物が 0（実測 10.8）。外せない場合＝9.1 で 0.0.2 からの最初の上げ直しで消える物が 1 以上なら、その人たち向けの知らせを残す所（Release の説明・説明書の該当の行）を向こうで決める。
+- `.kiro/specs/winget-release-automation/brief.md`: 節「user-data-root からの申し送り」を足す。注意書き（`InstallationNotes`）を外してよい条件＝この spec の版からの上げ直しで消える物が 0（実測 10.8）。外せない場合＝9.1 で 0.0.2 からの最初の上げ直しで消える物が 1 以上なら、その人たち向けの知らせを残す所（Release の説明・説明書の該当の行）を向こうで決める。
 - `verification/winget-user-data-check.md`: 出どころの spec（`areka-P0-winget-manifest-submission` の `verification/winget-local-check.md`）と同じ手順と物差しで、10.8 の 3 つ（利用者向けの上げ直し・外す・機械の全員向け）と 9.1（0.0.2 からの最初の上げ直し）と 10.9（zip の形）を数える。足す数: `%LOCALAPPDATA%\VirtualStore\` の下に areka の物ができていないこと（32bit の SHIORI の helper が逸らされて書いていないこと）。機械の全員向け（`Program Files`）は winget の控えが在るので `reason=winget_install` になる（判断の順は 控え → 書けない。2026-10-17 の実測）。書けるかの確かめが `PermissionDenied`（`reason=unwritable`）になることは、`target\` の下の「物を足す」権限を外したフォルダで `user_data_layout` の行を 1 度確かめる。確かめ専用のマニフェスト・`AREKA_USER_ROOT` で向ける根は `target\` の下。winget と OS の設定を変えるのは開発者の手だけ。止めるのは自分が起こしたと確認できたプロセスだけ（要件 10.10）。
 
 ## Data Models

@@ -333,7 +333,7 @@ mod tests {
     /// ときだけ走る形にした。
     ///
     /// **判定そのものは 1 行も変えていない**——期限も期待値も隔離前のままである。根治の
-    /// 引受先は `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-2（壁時計期限の
+    /// 引受先は `.kiro/specs/zorder-chain-residue/brief.md` の A-2（壁時計期限の
     /// 飢餓）である。
     ///
     /// # 門が閉じたまま呼ばれたら緑にしない

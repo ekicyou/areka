@@ -50,10 +50,10 @@
 
 ### Revalidation Triggers
 - 見どころのファイルの置き場所・名前・見出しの形・出典の URL が変わる → リリースの手順の文書と、pasta の側の同じ決まり。
-- 添付の数または詳しいリリースノートの名前が変わる → リリースの手順の公開の後の確かめ、`areka-P0-winget-release-automation` の zip の拾い方。
+- 添付の数または詳しいリリースノートの名前が変わる → リリースの手順の公開の後の確かめ、`winget-release-automation` の zip の拾い方。
 - `tools/release-notes.ps1` の引数の名前・終了コードの意味が変わる → リリース CI の 2 つの段と、リリースの手順のタスク。
 - PR の題名の形（「種類(スコープ): 題名 (#番号)」）または main への入り方（PR の squash）が変わる → 詳しいリリースノートの区分けと PR の番号の拾い方。
-- リリース CI の段の並び（とくに組み立てと zip の間）が変わる（`areka-P0-release-code-signing`）→ 段「5 つの確かめ」が見る置き場。
+- リリース CI の段の並び（とくに組み立てと zip の間）が変わる（`release-code-signing`）→ 段「5 つの確かめ」が見る置き場。
 
 ## Architecture
 

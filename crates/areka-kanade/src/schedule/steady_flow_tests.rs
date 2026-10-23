@@ -204,7 +204,7 @@ fn steady_none_value_starts_talk_and_ids_are_monotonic() {
     let (s1, actions1) = step(
         steady_none(5),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("hello".to_string()),
+            outcome: ShioriOutcome::Value("hello".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnSecondChange",
         },
         &config(),
@@ -239,7 +239,7 @@ fn steady_none_value_starts_talk_and_ids_are_monotonic() {
     let (s2, actions2) = step(
         steady_none(s1.next_talk_id),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("world".to_string()),
+            outcome: ShioriOutcome::Value("world".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnSecondChange",
         },
         &config(),
@@ -299,7 +299,7 @@ fn steady_some_value_is_discarded_without_start_talk() {
     let (next, actions) = step(
         steady_some(TalkId(3), 6),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("late".to_string()),
+            outcome: ShioriOutcome::Value("late".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnSecondChange",
         },
         &config(),
@@ -331,7 +331,7 @@ fn steady_none_mouse_value_starts_talk_with_mouse_origin() {
     let (next, actions) = step(
         steady_none(5),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("nade".to_string()),
+            outcome: ShioriOutcome::Value("nade".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnMouseMove",
         },
         &config(),
@@ -370,7 +370,7 @@ fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
     let (next, actions) = step(
         steady_some(TalkId(3), 6),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("menu".to_string()),
+            outcome: ShioriOutcome::Value("menu".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnMouseDoubleClick",
         },
         &config(),
@@ -419,7 +419,7 @@ fn steady_some_non_mouse_value_is_discarded_dd6() {
     let (next, actions) = step(
         steady_some(TalkId(3), 6),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("late".to_string()),
+            outcome: ShioriOutcome::Value("late".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnSecondChange",
         },
         &config(),
@@ -450,7 +450,7 @@ fn talk_ids_never_reused_across_mixed_origins() {
     let (s1, _) = step(
         steady_none(5),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("a".to_string()),
+            outcome: ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnSecondChange",
         },
         &config(),
@@ -470,7 +470,7 @@ fn talk_ids_never_reused_across_mixed_origins() {
     let (s3, actions3) = step(
         s2,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("b".to_string()),
+            outcome: ShioriOutcome::Value("b".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnMouseMove",
         },
         &config(),
@@ -851,7 +851,10 @@ fn steady_none_value_records_started_script_in_active_talk() {
     let (next, actions) = step(
         steady_none(5),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(r"\0script-a\e".to_string()),
+            outcome: ShioriOutcome::Value(
+                r"\0script-a\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "OnSecondChange",
         },
         &config(),
@@ -874,7 +877,10 @@ fn steady_some_mouse_replacement_records_new_script_in_active_talk() {
     let (next, actions) = step(
         steady_some(TalkId(3), 6),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(r"\0script-b\e".to_string()),
+            outcome: ShioriOutcome::Value(
+                r"\0script-b\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "OnMouseDoubleClick",
         },
         &config(),

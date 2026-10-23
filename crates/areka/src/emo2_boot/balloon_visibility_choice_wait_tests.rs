@@ -338,7 +338,7 @@ fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     let registered = BalloonLifecycleSink::new(tx, clock);
 
     let mut sink: Box<dyn BootCueSink> = registered.clone_box();
-    sink.begin_talk(TALK_ID);
+    sink.begin_talk(TALK_ID, areka_sakura::contract::ScriptOrigin::GHOST);
     sink.emit(TalkCue {
         at: 0.0,
         actor: ActorKey::from("0"),

@@ -4,7 +4,7 @@
 
 ukadoc のプロパティシステムのページ（`list_propertysystem`・実測 188 項目）について、areka が「どの名前に値を返し、どれを名前だけ持ち、どれを持っていないか」を 1 つの台帳へ書き出す調査を行う。
 
-- **誰が困っているか**: このドメインは既に 4 本の brief（`areka-P0-property-query-channels`／`areka-P0-currentghost-property-tree`／`areka-P0-property-catalog-lists`／`areka-P0-zorder-property`）が所有を宣言している。それぞれ 2026-08-27 の手作業サーベイを元にしており、数え方が brief ごとに違う。統合担当（`areka-P0-ukadoc-coverage-roadmap`）も、これから実装する各 spec の担当者も、正典の項目 1 つ 1 つが誰の持ち物なのかを機械で辿れない。
+- **誰が困っているか**: このドメインは既に 4 本の brief（`property-query-channels`／`currentghost-property-tree`／`property-catalog-lists`／`zorder-property`）が所有を宣言している。それぞれ 2026-08-27 の手作業サーベイを元にしており、数え方が brief ごとに違う。統合担当（`areka-P0-ukadoc-coverage-roadmap`）も、これから実装する各 spec の担当者も、正典の項目 1 つ 1 つが誰の持ち物なのかを機械で辿れない。
 - **現状**: 手作業サーベイの合計は約 180 項目で、正典の実測 188 と食い違う。版番号が付いた項目が 98 件あり（全ページ中で世代の差が最も濃い）、同じ値へ到達する名前が世代ごとに増えている可能性があるが、新旧の仕訳がどこにも無い。さらに `currentghost.seriko.zorder` を 3 本の spec が食い違って主張している（二重所有の裁定が未決）。
 - **何が変わるか**: `areka-P0-ukadoc-survey-toolkit` が凍結した台帳形式で `doc/ukadoc-coverage/ledger/property.toml` を書き、正典 id 単位で状態・世代・担当 spec・優先度・関連を付ける。あわせて 4 本の brief の所有宣言を id 単位で突き合わせた表、別名の仕訳、二重所有の裁定案、既存 brief への是正候補を `doc/ukadoc-coverage/briefing-property.md` に書く。areka の実行時の挙動は 1 ビットも変えない（唯一のコード接触は、実装済み 2 件の値を定義している行に置く id 付きの正典 URL の doc コメント 2 行）。
 
@@ -115,7 +115,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 
 #### Acceptance Criteria
 
-1. When 突合を行う, the プロパティ調査 shall 4 本の brief（`areka-P0-property-query-channels`／`areka-P0-currentghost-property-tree`／`areka-P0-property-catalog-lists`／`areka-P0-zorder-property`）が所有を宣言している項目名を、1 つずつカタログ id へ対応付けた表をブリーフィングに載せる。
+1. When 突合を行う, the プロパティ調査 shall 4 本の brief（`property-query-channels`／`currentghost-property-tree`／`property-catalog-lists`／`zorder-property`）が所有を宣言している項目名を、1 つずつカタログ id へ対応付けた表をブリーフィングに載せる。
 2. If brief に書かれた項目名がどの id にも対応しない, then the プロパティ調査 shall それを表記の揺れとして表に残し、憶測で近い id に結び付けない。
 3. If brief の件数がカタログと食い違う（実測の例: `property-catalog-lists` brief は `history` を 8・`headlinelist` を 2・`pluginlist` を 4 と書くがカタログはそれぞれ 12・3・5。`currentghost-property-tree` brief は `currentghost.*` を約 65 と書くがカタログは 69）, then the プロパティ調査 shall カタログを正とし、差を表に記録する。
 4. When 突合を終える, the property 台帳 shall 各項目の担当 spec 欄に spec 名 1 つ、または「裁定待ち」「所有者なし」を表す空文字を持つ。
@@ -132,7 +132,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 
 #### Acceptance Criteria
 
-1. When `currentghost.seriko.zorder` を仕訳する, the プロパティ調査 shall 3 本の spec（`areka-P0-zorder-property`／`areka-P0-currentghost-property-tree`／`areka-P0-property-query-channels`）がそれぞれ何を主張しているかを、brief の該当箇所を示してブリーフィングに並べる。
+1. When `currentghost.seriko.zorder` を仕訳する, the プロパティ調査 shall 3 本の spec（`zorder-property`／`currentghost-property-tree`／`property-query-channels`）がそれぞれ何を主張しているかを、brief の該当箇所を示してブリーフィングに並べる。
 2. When 主張を並べ終える, the プロパティ調査 shall 裁定案を 1 つ出し、それが**案であって決定ではない**ことをブリーフィングに明記する。
 3. When 裁定案を出す, the プロパティ調査 shall その案を採った場合と採らなかった場合に、3 本それぞれの作業がどう変わるかを併記する。
 4. While 裁定が未了である, the property 台帳 shall 当該 id の担当 spec 欄を空文字のままにし、備考に裁定待ちであることと候補を書く。

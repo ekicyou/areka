@@ -167,7 +167,7 @@
   - _Requirements: 9.4, 9.5_
   - _Depends: 3.3, 6.6_
   - _Signoff (2026-08-13): 実機 2 回実行で開発者が目視合格を判定。DPI 192・絶対パス・有界終了・タイムアウト 5 秒短縮。両実行とも 3 会話サイクルが同型で、⑴装着完了から最初の可視遷移まで可視遷移 0 件（1 回目 1.391 秒／2 回目 0.393 秒。同一時刻に本制御自身の別ログが出ており記録は生きていた）⑵発話 scope のみが文字と同時に可視（6 ミリ秒差）⑶短縮した待ち時間の経過で全 scope が同時に不可視（計測開始から 4.994 秒＝指定どおり）⑷次の会話で再表示。2 回目は 2 サイクル目が scope=1 先行で、どちらの順でも「喋った scope だけ」が守られることも取れた。誤りログ 0 件・本制御の警告 0 件。ログは `runA_human.log` / `runA_human2.log`。**grep は引用符込みで**——`trigger="content"` / `timeout_secs=30.0 source="default"`。_
-  - _Unverified (別担当へ): 「明示的な非表示指令の後に文字が画面へ残らない」だけは実機で踏めていない。emo2 fixture 全体に `[` が 1 件も無く実ゴーストが `[-1]` を発行しないため、fixture を編集するか別ゴーストを与えない限り観測できない。現状の被覆は決定論テストのみ（`presenter_hide_contract_tests.rs` が指令の漏斗を通した非表示で枠と文字の双方が不可視かつポインタ透過になることを主張し、変異で赤くなることも実測済み）。実機での確認は fixture 変更を伴うため `areka-P0-balloon-canon-residue` か実機檻を扱う spec でスコープを切ること。_
+  - _Unverified (別担当へ): 「明示的な非表示指令の後に文字が画面へ残らない」だけは実機で踏めていない。emo2 fixture 全体に `[` が 1 件も無く実ゴーストが `[-1]` を発行しないため、fixture を編集するか別ゴーストを与えない限り観測できない。現状の被覆は決定論テストのみ（`presenter_hide_contract_tests.rs` が指令の漏斗を通した非表示で枠と文字の双方が不可視かつポインタ透過になることを主張し、変異で赤くなることも実測済み）。実機での確認は fixture 変更を伴うため `balloon-canon-residue` か実機檻を扱う spec でスコープを切ること。_
 
 - [x] 8.2 ワークスペース全体の検査を緑にする
   - 32bit 補助実行体を先にビルドしたうえでワークスペース全体の検査を通す
@@ -193,7 +193,7 @@
 - **`decide_content` の `or_insert` が渡す `prev_visible` は死んだ初期値**（`balloon_visibility.rs:532-535`）。4 経路すべてが読む前に再代入するため、反転してもクレート全体が緑のまま。**判断分岐ではないので檻は不要**（6.1 で裁定）。ただし load-bearing に見える罠であり、将来どれか 1 経路の再代入を消すと静かに依存が生まれる。実装を触る spec が定数化するか注記を足すこと。
 - **判断中核の表駆動テストは 5 ファイルに分かれている**——`balloon_visibility_tests.rs`（3.1/3.2 の基本）・`balloon_visibility_content_tests.rs`（6.1 のコンテンツ駆動表）・`balloon_visibility_timeout_config_tests.rs`（3.3 の設定）。1,000 行の線を守るための分割で、共有ヘルパは `balloon_visibility_test_support.rs` に集約されている。6.2 はさらに走査（`balloon_visibility_timeout_suppression_tests.rs`）と表本体（`..._cases.rs`）へ `#[path]` で二分している。**以後もこの形を踏襲すること**。
 - **6.2 の表は満了予定の起点を構造で守っている**——時刻・信号・期待値をすべて占有終端 `ANCHOR`(=12.0) からの相対で書き、計測が成り立つ最初の観測を `LATE`(=7.0) 秒遅らせてある。`now` 起点の実装にすると満了予定が 7 秒ずれて 9 ケースが赤くなる。**`ANCHOR` と `LATE` を 0 にすると表が骨抜きになる**ので、それを禁じる番人テストが置いてある。触らないこと。
-- **【7 で記録】互換対応表 §8 に本 spec の 11 行が入った**（`doc/COMPAT_ARCHITECTURE.md`）。先送り 4 件は受け皿 `areka-P0-balloon-canon-residue` の brief にも項目 7〜10 として登記済みで**双方向**になっている。受け側が項目を列挙していない spec は所有者ではない、という規律による。`Status` の `balloon` は `areka-P0-status-execution-states` の brief `:27` へ読み口ごと登記した。
+- **【7 で記録】互換対応表 §8 に本 spec の 11 行が入った**（`doc/COMPAT_ARCHITECTURE.md`）。先送り 4 件は受け皿 `balloon-canon-residue` の brief にも項目 7〜10 として登記済みで**双方向**になっている。受け側が項目を列挙していない spec は所有者ではない、という規律による。`Status` の `balloon` は `areka-P0-status-execution-states` の brief `:27` へ読み口ごと登記した。
 - **【最終検証で是正】`roadmap.md:132` の受け皿項目数を 10 へ更新した**（kero-balloon 由来 6 件＋本 spec 由来 4 件）。design の Modified Files が roadmap.md を本 spec の対象に挙げており、かつ「次にロードマップを編集する spec」は**実在する担当者ではない**ため、先送りにせずその場で直した。
 - **【最終検証で是正】design の実機判定文字列 3 箇所を実測形へ直した**（`design.md` の Requirements Traceability 9.5 行と E2E 手順 1・2）。design を正本として読む後続 spec が偽の赤を踏むため、tasks.md 側の注記だけでは不足と判断した。
 - **【8.2 で確認】ワークスペース全体が緑**（32bit 補助実行体を先にビルドしたうえで `cargo test --workspace` が exit 0）。本 spec が触った 48 ファイルに**新規の実時間待機はゼロ**——`sleep` / `Instant::now` / spin は全て spine 由来の既存分で、本 spec の差分は 1 行も足していない。`for _ in 0..N` は 4 箇所あるが、いずれも**同一入力を繰り返して不変であることを主張する形**であって待機の有界化ではない（要件 9.3 が禁じているのは後者）。

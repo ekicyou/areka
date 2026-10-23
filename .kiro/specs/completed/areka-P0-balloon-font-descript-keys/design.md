@@ -6,7 +6,7 @@
 
 **Purpose**: バルーン定義（`descript.txt`）の接頭辞なし `font.*` 基底 14 キーのうち、転記層が読み落としている 9 キー（`font.bold`・`font.italic`・`font.outline`・`font.strike`・`font.underline`・`font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`）と、無効表示の書体設定 `disable.font.*` 14 キーを解析結果から取り出せるようにする。転記層は値の意味づけ（既定値・語彙判定・縮退・描画）を一切行わず、宣言された文字列をそのまま保つ。**書体まわりの下流（`areka-P0-text-decoration-canon`）は着地済み**なので、本仕様が最後に配線する——読んだ値を `\f` と同じ形のトークン列にして `look.rs` の受け口へ渡し、受け口が飛ばした綴り誤りは配線側で記録する。影の 4 キーは受け口が無いので配線せず取り出し口を申し送る。あわせて 14＋1 の定義箇所に正典 URL を揃え、網羅台帳・ドメイン別報告・全体報告・生きた 3 文書・調査ブリーフィングを実測に合わせる。
 
-**Users**: バルーン作者（`font.bold,1` と書けば既定の見た目が太字になる。`disable.font.color.r/g/b` を書けば無効表示の色が指定どおりになる。綴りを誤れば警告で理由が分かる）、影まわりの実装者（`areka-P0-text-align-shadow-canon` が影 4 キーを取り出す口を得る）、網羅状況を読む人（台帳が今の実態を映す）。
+**Users**: バルーン作者（`font.bold,1` と書けば既定の見た目が太字になる。`disable.font.color.r/g/b` を書けば無効表示の色が指定どおりになる。綴りを誤れば警告で理由が分かる）、影まわりの実装者（`text-align-shadow-canon` が影 4 キーを取り出す口を得る）、網羅状況を読む人（台帳が今の実態を映す）。
 
 **Impact**: 転記層 `crates/areka-parsers/src/balloon/` に生文字列転記型 2 つ・無効表示層の束 1 つ・完全一致引き 23 本（基底 9＋無効表示 14）が増える。配線層 `crates/areka-emo-text/` に純粋モジュール 1 つ（トークン列の組み立てと事前検証）が増え、`draw.rs` の受け口呼び出し 1 か所が空の列から組み立てた列へ変わる。**9 キーと `disable.font.*` を書いていないバルーンの見た目は変わらない**（宣言が無ければ渡す列は空＝従来と同じ呼び出し）。既存 5 キーの写像と `Font` 型・`look.rs` には触れない。
 
@@ -17,7 +17,7 @@
 - 基底の飾り 5 本と `disable.font.*`（飾り 5・書体名・大きさ・色）を `LookLayers::from_balloon` の受け口へ配線し、受け口が飛ばした値を `warn!` で記録する（8.1・8.2・8.5・8.6・9.10・9.11）。
 - 14＋1 本の定義箇所に正典 URL のコメントを揃える（既設 4＋新設 11・6.1〜6.5）。
 - 網羅台帳 15 項目・ドメイン別報告・全体報告・生きた 3 文書・調査ブリーフィングを実測へ是正する（1.1〜1.5・7.1〜7.10）。
-- 影 4 キーの取り出し口と正典既定値を `areka-P0-text-align-shadow-canon` へ申し送る（3.2〜3.4・8.3・8.4）。
+- 影 4 キーの取り出し口と正典既定値を `text-align-shadow-canon` へ申し送る（3.2〜3.4・8.3・8.4）。
 - 成功基準: `cargo test -p areka-parsers`・`cargo test -p areka-emo-text`・`cargo test -p ukadoc-survey`・`cargo run -p ukadoc-survey -- check` がいずれも緑で、既存テストの期待値を 1 つも緩めておらず、較正 3 通りで赤を実測している（5.3・7.9・9.9・9.12）。
 
 ### Non-Goals
@@ -27,7 +27,7 @@
 - 影 4 キー（基底・無効表示とも）の配線——受け口が `shadowcolor`／`shadowstyle` を所有外として見た目を変えないため、`text-align-shadow-canon` が受け口を開けるときに配線する（8.3）。
 - `font.name` の残る 1 点（バルーンのフォルダのフォントファイル）の是正。引受先を起票しない（開発者方針：正典追従は要望が出た時点で）。
 - 正典（ukadoc）の項目増減に自動で気付く仕組み（9.8・2026-09-11 開発者裁定）。
-- バルーン名 `name,` の写像（`areka-P0-emo-text-canon-residue` 項目 14・同じ写像関数ゆえ同居させない）。
+- バルーン名 `name,` の写像（`emo-text-canon-residue` 項目 14・同じ写像関数ゆえ同居させない）。
 
 ---
 
@@ -67,7 +67,7 @@
 
 | 変化 | 再確認が要る先 |
 |---|---|
-| `FontDecorationRaw`／`FontShadowRaw`／`DisableFont` の公開面（アクセサ名・戻り型）の変更 | `balloon_overrides.rs`（配線）・`areka-P0-text-align-shadow-canon`（影 4 の取り出し口） |
+| `FontDecorationRaw`／`FontShadowRaw`／`DisableFont` の公開面（アクセサ名・戻り型）の変更 | `balloon_overrides.rs`（配線）・`text-align-shadow-canon`（影 4 の取り出し口） |
 | `LookLayers::from_balloon` の引数の形・`apply_font_tag` の受ける語彙の変更 | `balloon_overrides.rs` のトークン列の形と事前検証（DD10） |
 | `BalloonModel::new` の署名を伸ばす形へ回帰 | ワークスペース `BalloonModel::new` 43 呼出（本設計は additive ビルダで 0 波及） |
 | 台帳 15 項目の状態・担当の再変更 | `report/assets.md`・`report/summary.md` の作り直し（`DomainReportStale`） |
@@ -188,11 +188,11 @@ graph TB
 | `doc/ukadoc-coverage/report/summary.md` | `cargo run -p ukadoc-survey -- report-summary` で作り直す（手で書かない） |
 | `doc/ukadoc-coverage/briefing-assets.md` | 是正候補の段 ⑵ を是正済みの記録へ書き換え |
 | `.kiro/specs/areka-P0-balloon-font-descript-keys/brief.md` | 「基底 13 キー」4 か所（起票行・Problem・Desired Outcome・Scope の In）→ 14、09-13 相互登記の「残り 8 キー」1 か所 → 9。数え落としが `font.outline` である旨を 1 か所に添える |
-| `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | Scope の Out の行（「基底 13 キー」）→ 14 |
+| `.kiro/specs/text-align-shadow-canon/brief.md` | Scope の Out の行（「基底 13 キー」）→ 14 |
 | `.kiro/steering/roadmap.md` | W13 干渉台帳の行（「既定層の残り 8 キーは後着が配線」）→ 9 |
 | `doc/ukadoc-coverage/briefing.md`・`doc/ukadoc-coverage/roadmap-draft.md` | **09-17 実装時に追加**: 道具が作り直さない手書きの数（`[[barrier]] descript_balloon` の状態別件数・3 spec の `owner_count`）を道具のテストが示す実数へ（tasks.md 5.2） |
 | `doc/COMPAT_ARCHITECTURE.md` | **09-17 最終検証で追加**: 本仕様の配線で偽／未来形になった `\f[height,disable]` の行を着地後へ、無効表示の混色の行に本仕様の解釈（3 成分が揃えば宣言値）を追記 |
-| `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | **09-17 最終検証で追加**: Scope の Out を「読み取りは着地済み・影 4 キーの配線は本 spec」へ（申し送りと一致させる） |
+| `.kiro/specs/text-align-shadow-canon/brief.md` | **09-17 最終検証で追加**: Scope の Out を「読み取りは着地済み・影 4 キーの配線は本 spec」へ（申し送りと一致させる） |
 
 ### Untouched（零の明示）
 
@@ -385,7 +385,7 @@ impl BalloonModel {
 - State model: 全フィールド非公開・`#[non_exhaustive]`。`Default` は「全キー未指定」の素直な表現で `BalloonModel::new` が用いる。`Eq` は `BalloonModel` の `Eq` 派生を満たすため（`Font` は `Eq` 派生済み）。
 - 命名: 生文字列転記型は `WindowPositionRaw`／`vertical_raw` に倣い `Raw` を付ける。`DisableFont` は正典の見出し `disable.font.*` の写しで、束であって生文字列ではないため `Raw` を付けない。
 - `mod.rs` の `pub use model::{...}` に 3 型を加え、下流が `areka_parsers::balloon::{DisableFont, FontDecorationRaw, FontShadowRaw}` で引けるようにする。
-- doc コメントには「値の解釈（0/1 の判定・`none` の判定・語彙外の縮退・警告）は下流の責務」と、担当下流（書体＝`look.rs` の受け口へ本仕様が配線済み・影＝`areka-P0-text-align-shadow-canon`）を書く。
+- doc コメントには「値の解釈（0/1 の判定・`none` の判定・語彙外の縮退・警告）は下流の責務」と、担当下流（書体＝`look.rs` の受け口へ本仕様が配線済み・影＝`text-align-shadow-canon`）を書く。
 
 **Implementation Notes**
 - Integration: `BalloonModel` の構造体にフィールド 3 つを足し、`new` の本体で `Default` を代入（署名は不変）。モジュール doc の設計規律の箇条書きに 1 段追記。
@@ -494,7 +494,7 @@ mod balloon_overrides_tests;
 | `font.color.r`／`.g`／`.b`・`font.height`（4） | `implemented`（据え置き） | `areka-P0-text-decoration-canon`（据え置き） | `A5`（据え置き） | 「台詞の書体・正典どおりに動く」（据え置き） | 「担当 spec の brief は…13 キー…」の一文だけを除く（7.3）。他は無改変 |
 | `font.bold`・`font.italic`・`font.strike`・`font.underline`（4） | `absent` → **`implemented`** | 本仕様（据え置き） | `A5` | **「台詞の書体・正典どおりに動く」** | 備考テンプレート ⓐ（7.2） |
 | `font.outline`（1） | `absent` → **`vocabulary-only`** | 本仕様（据え置き） | `A5` | **「台詞の書体・名前だけ受けて使わない」** | 備考テンプレート ⓑ |
-| `font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`（4） | `absent` → **`vocabulary-only`** | **`areka-P0-text-align-shadow-canon`**（7.4） | `A5` | 「台詞の書体・名前だけ受けて使わない」 | 備考テンプレート ⓒ |
+| `font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`（4） | `absent` → **`vocabulary-only`** | **`text-align-shadow-canon`**（7.4） | `A5` | 「台詞の書体・名前だけ受けて使わない」 | 備考テンプレート ⓒ |
 | `font.name`（1） | `absent` → **`degraded`** | 本仕様（据え置き） | `A5` | **「台詞の書体・読めるが正典どおりに描かれない」** | ⒜（フォントファイル）は残し「引受先なし・要望が出た時点で起票」を添える。⒝（カンマ区切り）は**解消済み**として書き換える。vertical への転記の記述は残す（7.7） |
 | `disable.font.*`（1） | `vocabulary-only` → **`degraded`** | `areka-P0-text-decoration-canon` → **本仕様**（7.10） | `A5` | 「台詞の書体・読めるが正典どおりに描かれない」 | 備考テンプレート ⓓ |
 
@@ -511,8 +511,8 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 束: 台詞の書体・正典どおりに動く（先に要る仕組み: バルーンの文字描画）。<束の順位の文は元のまま>
 ```
 ⓑ `vocabulary-only`（`font.outline`）: ⓐ の 1 段目を「壊れ方: 黙って壊れる。記録: なし。正典どおりの宣言では記録が出ない。語彙外の値（`font.outline,yes` など）は記録が出る——（ⓐ と同じ事前検証の文）」とし（**09-17 最終検証で是正**: 語彙外の値の記録を落としていた）、2 段目末尾を「…へ渡すが、受け口は白抜きを状態だけ更新して表示は変えない（areka-P0-text-decoration-canon 要件 5.9・語彙のみ）。白抜きの描画の引受先は未起票。」とする。束は「台詞の書体・名前だけ受けて使わない」。
-ⓒ `vocabulary-only`（影 4 本）: 「壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。」束は「台詞の書体・名前だけ受けて使わない」。
-ⓓ `degraded`（`disable.font.*`）: 「壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。画像色との混色は指定が無いときだけ——正典の「disable.font.color のみバルーンの画像色とミックスした色」を本仕様は「指定が無いときの既定」と解釈した。要件 9.10）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（areka-P0-text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。」束は「台詞の書体・読めるが正典どおりに描かれない」。
+ⓒ `vocabulary-only`（影 4 本）: 「壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。」束は「台詞の書体・名前だけ受けて使わない」。
+ⓓ `degraded`（`disable.font.*`）: 「壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。画像色との混色は指定が無いときだけ——正典の「disable.font.color のみバルーンの画像色とミックスした色」を本仕様は「指定が無いときの既定」と解釈した。要件 9.10）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。」束は「台詞の書体・読めるが正典どおりに描かれない」。
 
 - 「読むキーを並べた表を完全一致で引く形で、この項目はその表に無い」「描画側にも受け口が無い」「両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い」の文は 10 項目から除く（着地後は偽になる・7.2）。
 
@@ -529,7 +529,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | ファイル | 箇所（何の行か） | 変更 |
 |---|---|---|
 | `.kiro/specs/areka-P0-balloon-font-descript-keys/brief.md` | 起票行・Problem の 1 文目・Desired Outcome の 1 文目・Scope の In（「基底 13 キー」4 か所）・09-13 相互登記の段（「残り 8 キー」1 か所） | 「基底 13 キー」→「基底 14 キー」、「残り 8 キー」→「残り 9 キー」。Problem の 1 文目に「（従来の 13 は `font.outline` の数え落とし）」を添える |
-| `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | Scope の Out の行 | 「基底 13 キー」→「基底 14 キー」 |
+| `.kiro/specs/text-align-shadow-canon/brief.md` | Scope の Out の行 | 「基底 13 キー」→「基底 14 キー」 |
 | `.kiro/steering/roadmap.md` | W13 干渉台帳の 1 行目（`text-decoration-canon` は分割後 `balloon/parse.rs` に触れない…） | 「残り 8 キー」→「残り 9 キー」 |
 | `doc/ukadoc-coverage/briefing-assets.md` | 是正候補の段 ⑵ | 見出しを「`areka-P0-balloon-font-descript-keys`——書体の欄の数（是正済み）」に改め、「何が合っていないか」を「生きた説明書 3 本が 7 か所で「13 キー」「残り 8 キー」と書いていた（本仕様の brief 5・`text-align-shadow-canon` の brief 1・roadmap 1）が、正典の見出しは 14 種（`font.outline` の数え落とし）。是正後に数え直した結果、生きた説明書で 13 と書く箇所は **0**。完了済み `areka-P0-text-decoration-canon` の brief に残る 8 か所は着地時点の記録として残す」、「誰が引き取るか」を「`areka-P0-balloon-font-descript-keys` が引き取り済み。台帳の備考からも当該の一文を除いた」に書き換える。件数は是正の前後とも `grep -c` で数え直した実測を書き、引き算で導かない（1.5） |
 
@@ -552,7 +552,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | 8 | `font.outline` | `…outline()` | 同上 | `None` | `0` | 同上（受け口は語彙のみ・表示に効かない） |
 | 9 | `font.strike` | `…strike()` | 同上 | `None` | `0` | 同上 |
 | 10 | `font.underline` | `…underline()` | 同上 | `None` | `0` | 同上 |
-| 11〜13 | `font.shadowcolor.r`／`.g`／`.b` | `model.font_shadow_raw().color_r()` 等 | `Option<&str>`（`none`／数値／語彙外をそのまま） | `None` | `none`（影を無効化） | **未配線**——`areka-P0-text-align-shadow-canon` が受け口を開けて配線 |
+| 11〜13 | `font.shadowcolor.r`／`.g`／`.b` | `model.font_shadow_raw().color_r()` 等 | `Option<&str>`（`none`／数値／語彙外をそのまま） | `None` | `none`（影を無効化） | **未配線**——`text-align-shadow-canon` が受け口を開けて配線 |
 | 14 | `font.shadowstyle` | `model.font_shadow_raw().style()` | `Option<&str>`（語彙は `offset`＝右下にずれた表示・`outline`＝縁取り。SSP 2.5.27 で登場） | `None` | `offset` | 同上 |
 | — | `disable.font.<1〜14>` | `model.disable_font().font()`／`.decoration_raw()`／`.shadow_raw()` | 上と同じ形 | `None` | 正典: `color` は画像色との混色・他は `font.` 定義群と同じ（SSP 2.5.51） | 1〜10 は**本仕様が配線**（`overrides(..).disable` → `from_balloon` の `disable_overrides`）。11〜14 は未配線（同上） |
 
@@ -565,7 +565,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | 下流 | 実測（2026-09-17・`main` 取り込み後） | 判定 | 本仕様の作業 |
 |---|---|---|---|
 | `areka-P0-text-decoration-canon`（書体 10） | `.kiro/specs/completed/` に在る・PR#148 で `main` に入っている・受け口 `from_balloon` の 2 引数が本番で空の列 | **後着** | C8 の配線 |
-| `areka-P0-text-align-shadow-canon`（影 4） | `brief.md` のみ・受け口なし（`look.rs` は `shadowcolor`／`shadowstyle` を所有外） | **先着** | 取り出し口の申し送り（8.3） |
+| `text-align-shadow-canon`（影 4） | `brief.md` のみ・受け口なし（`look.rs` は `shadowcolor`／`shadowstyle` を所有外） | **先着** | 取り出し口の申し送り（8.3） |
 
 - 最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認する（`completed/` の有無と `look.rs` の `UNOWNED_KEYS`）。**どちらの結果でも本仕様は影を配線しない**（要件の Out of scope——影の配線は同仕様の範囲）。着地していれば申し送りの宛先を同仕様の design.md の該当節へ更新し、着地していなければ本表のまま。**タスク 6.1 で再確認済み（2026-09-17・未着地＝本表のまま・`research.md` §17）**。
 

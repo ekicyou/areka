@@ -42,7 +42,7 @@
 | 24 | C4 の 15 アンカーはカタログと逐語一致 | `doc/ukadoc-coverage/catalog.toml:111`（`disable.font.…`）・`:113-126`（`font.*` 14 行）と C4 表を 1 行ずつ照合 | 成立 |
 | 25 | 「13 キー」「残り 8 キー」は生きた 3 文書 7 か所（本仕様 brief 4+1・`text-align-shadow-canon` brief 1・`roadmap.md` 1） | `grep -c`: 本仕様 brief「13 キー」4・「残り 8 キー」1／shadow brief「13 キー」1・「残り 8」0／`roadmap.md`「13 キー」0・「残り 8 キー」1（`:127`） | 成立 |
 | 26 | `briefing-assets.md` の段 ⑵ は「6 か所」「引き取るのは `text-decoration-canon`」と書く | `doc/ukadoc-coverage/briefing-assets.md:802-806` | 成立 |
-| 27 | `text-align-shadow-canon` は brief のみ・`text-decoration-canon` は `completed/` | `ls .kiro/specs/areka-P0-text-align-shadow-canon/` → `brief.md` のみ・`ls .kiro/specs/completed/` に `areka-P0-text-decoration-canon` | 成立 |
+| 27 | `text-align-shadow-canon` は brief のみ・`text-decoration-canon` は `completed/` | `ls .kiro/specs/text-align-shadow-canon/` → `brief.md` のみ・`ls .kiro/specs/completed/` に `areka-P0-text-decoration-canon` | 成立 |
 | 28 | 完了済み spec の最終検証が `disable.font.*` の引受先を本仕様と登記 | `.kiro/specs/completed/areka-P0-text-decoration-canon/tasks.md:392`・`:402` | 成立 |
 | 29 | フィクスチャに 9 キー・`disable.font.*` の宣言は 0 件 | `grep -rlE '^(disable\.)?font\.(bold|…)'` と `disable\.font` とも 0 | 成立 |
 | 30 | `areka-emo-text` は `tracing`・`areka-parsers` に依存し `log-capture-kit` は dev-deps 既出 | `crates/areka-emo-text/Cargo.toml:16`・`:27`・`:66` | 成立 |
