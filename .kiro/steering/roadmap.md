@@ -393,6 +393,7 @@ Opus
 | `sstp-receive`（**10-23 起票**・棚卸㉙・覚え書きから格上げ・いつか） | その他・区分 C | SSTP の受信（SEND・NOTIFY・Option・共通のヘッダ・`OnSSTPBreak`）。kanade には SEND と NOTIFY の入口がもうある（`msg.rs`）＝足りないのは網の側。MCP の待受（SSP と 9801 を早い者勝ち）と同じ口で受け、最初の行で振り分ける案が議題。`balloon-markers` の `sstpmarker`／`sstpmessage` が画面に出るのはこの後 | L（24〜30＝要件で ① 受け口と SEND・NOTIFY〔14〜17〕／② `sstp-receive-methods`〔COMMUNICATE・EXECUTE・GIVE・INSTALL・HTTP 越し・10〜13〕に切る） | kanade の列（`schedule/sstp.rs`・`msg.rs`）と MCP の待受（`crates/areka-mcp/src/server.rs`）・`cli/listen.rs` | なし（`X-SSTP-PassThru-*` は `mcp-shiori-query`、`nobreak` は `shiori4-api` の列の後） | − |
 | `balloon-inline-image`（**10-23 起票**・棚卸㉙・覚え書きから格上げ・いつか） | その他・区分 C | バルーンの文中に画像を置く `\_b[…,inline]`（`range-choice-tag` の例 1〔バナーの画像を選択肢にする〕に要る）。新しい cue の種類を足す＝emo-text・`areka-ghost` の受け手・seriko の分岐に波及 | M（10〜14・`\_b[…,x,y]` の形まで入れるなら 13〜17） | 文字とバルーンの列（emo-text の席を使う・`areka-parsers/src/sakura/{decode,model}.rs`・`areka-sakura/src/compile.rs`・dola の `cue/command.rs`） | なし | − |
 | `ghost-alias-file`（**10-23 起票**・棚卸㉙・完了 `dot-sakura-specimen` の research の残り物・v0.2.0） | バグ・区分 B | シェルのフォルダの `alias.txt`（`sakura.surface.alias` ほか）を読まない。今は `kero.surface.alias` だけを読み、全部のキャラに 1 つの表を使い、面の引き当ては別名を見る前に番号を返す（`areka-parsers/src/shell/decode.rs`・seriko の `resolve.rs`）。検体のどっとさくらの `alias.txt` は持っていない面の番号（例: さくらの 9）を持っている面へ振り替える＝`\s[9]` が外れるはず（まだ誰も見ていない）。`ghost/master/alias.txt`（`makoto-dll-host`）とは別のファイル | S〜M（6〜9） | シェルの element の列（`shell/{decode,model}.rs`・emo-present の `shell_target.rs`・emo-compose の `{world,fold}.rs`・seriko の `resolve.rs`・`emo2_boot/assets.rs`） | なし（どっとさくらでの実機の確かめは `shiori2-protocol` の後＝それまで台本が流れない） | − |
+| `seriko-missing-surface-default`（**10-24 起票**・完了 `descript-window-keys` の裁定 11・いつか） | その他・区分 C | 台本の `\s[n]` が今のシェルに無い面を指したときの扱いを決めて入れる。ukadoc は「存在しない番号を\sタグで指定した時などに代わりに表示する」＝既定の面を出すと書くが、今の areka は記録だけで表示を変えず、SSP 2.9 も既定の面を出さない（10-23 の測り＝`surface.num` が -1）。要件の段で ukadoc の字面と SSP の実測のどちらに合わせるかを決める（推奨＝ukadoc・既定の面は `placement::DefaultSurfaces` の候補の最初に在る面） | S（4〜6） | シェルの element の列（seriko の面の切り替え・`seriko-pattern-calls`・`ghost-alias-file` と同じ場所に近い） | `descript-window-keys` | − |
 | `surfaces-basepos` | 据え置き・区分 D | surfaces.txt の `point.basepos`。宣言するシェルが要るまで始めない | S | シェルの element の列の最後 | — | − |
 | `property-ipc-transport` | 据え置き・区分 D | 台本を通さないプロパティの読み取り。**最初の 1 段（調べて裁定）で終わる形へ縮める** | XS〜S（裁定まで 2〜4） | — | — | − |
 | `dpi-transition-two-tick-bounce` | 据え置き・区分 D | 拡大率の切替で位置と大きさが 1 コマずれる（開発者が許容）。着手するなら最初に測り直し、跳ねが無ければ取り下げ | S〜M | — | — | − |
@@ -1505,6 +1506,7 @@ Opus
 - [ ] sstp-receive -- SSTP の受信（受け口と SEND・NOTIFY・Option・`OnSSTPBreak`・要件で残りのメソッドを `sstp-receive-methods` に切る）。いつか・区分 C。Dependencies: none（✅ areka-P0-script-security-level・✅ areka-P0-mcp-kanade-tools）
 - [ ] balloon-inline-image -- バルーンの文中に画像を置く `\_b[…,inline]`。いつか・区分 C。Dependencies: none（下流 range-choice-tag）
 - [ ] ghost-alias-file -- シェルのフォルダの `alias.txt` を読み、キャラごとの別名で面を引き当てる。v0.2.0・区分 B。Dependencies: none（実機の確かめは shiori2-protocol の後）
+- [ ] seriko-missing-surface-default -- 台本の `\s[n]` が無い面を指したときに既定の面を出すか（ukadoc）出さないか（SSP 2.9 の実測）を決めて入れる。いつか・区分 C。Dependencies: descript-window-keys
 
 ## 予約（全て任意・brief なし）
 

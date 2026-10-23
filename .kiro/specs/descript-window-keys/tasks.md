@@ -120,7 +120,7 @@
   - このブランチの組み立てで段 1 を回し、ぱすたの窓が 1108×1368（200%）で下端が作業領域の中・起動の関門でバルーンを上へ寄せない・バルーンだけのドラッグで窓の矩形が変わらないことを記録と矩形で確かめる
   - 既定の面が無いという記録が出ず、止めたドラッグの記録が 1 回のドラッグにつき 1 件出る
   - _Requirements: 9.1, 9.2, 9.4_
-- [ ] 8.3 裁定 11 を起票する
+- [x] 8.3 裁定 11 を起票する
   - 台本の `\s` が無い面を指したときに既定の面を出す働きを、SSP 2.9 の測り（`\s[9998]` で面の番号が -1・既定の面を出さない）と一緒に `/kiro-discovery` で起票し、起票したことを完了の記録に残す
   - _Requirements: 9.3_
 
@@ -135,3 +135,4 @@
 - 8.2（10-24・run1・HEAD a19c608a）: 9.1 合格（ぱすたの窓 1108×1368・dpi 192・下端 1704＝作業領域の下端）。縦書きのバルーンは route=Descript で出た。default_surface_missing 0・panic 0・ERROR 0。9.2: スコープ 0 の Clamp 0 件。スコープ 1 に横向きの Clamp 2 件（boot-gate・runtime-gate・x -872→0・y 336 のまま・上へは寄せていない）。9.4 は未実施（スクリーンセーバーと画面のロックで撮影・SendInput ができなかった）。開発者が席にいるときに回し直す（約 6 分・道具は target\pasta-verify\）。ぱすたの新しい書庫（sha256 4c354864…）は sample-ghost-kit の台帳（lib.rs:184）と入る先の数が合わず nar-sample-path が exit=2。直しは main 側（mcp-scope-rect-property）で着地。
 - 8.3: /kiro-discovery の始めの main の取り込みが doc/ukadoc-coverage/report/summary.md（生成物）で競合したので取り込みを中止した。起票は main を取り込んでから行う（kiro-complete の棚卸でも可・要件 9.3 は完了の手順での起票）。
 - 8.2 回し直し（10-24 6:38・run2・HEAD a19c608a・机あり・画面のロックなし）: 9.4 合格。バルーンの字の上をドラッグして 4 つの窓の矩形が前後で同じ、`balloon_drag_held` が 1 件（scope=0 descript=true script=false）。2 回目は選択肢が時間切れで消えた後に押したので相方側の窓の枠を掴み、キャラクターのドラッグになった（バルーンは付いて動いた・数に入れない）。9.1 合格（run1 と同じ矩形）・default_surface_missing 0・panic 0・ERROR 0。Clamp は相方側（スコープ 1）だけで x を 0 へ寄せるもの 44 件（起動の関門 1 件・残りはキャラクターのドラッグ中）、y は 0 件、本体側は 0 件。目視の気がかり: 縦書きのバルーンの枠の絵が見えず字だけが相方側の白い枠の上に出る（判定は開発者・完了の棚卸へ）。記録と撮った物は target\pasta-verify\（logs\run2.*・shots\run2\）。
+- 8.3（10-24）: main を取り込み（生成物 `report/summary.md` の競合は ukadoc-survey の `report`／`report-summary` で作り直して解消・check は食い違い 0 件）、`/kiro-discovery` で裁定 11 を `seriko-missing-surface-default`（いつか・区分 C・前提 descript-window-keys）として起票した。brief.md と roadmap の spec 台帳の行・Specs の行を足した。roadmap の本数の数え（160→161）と版の段の数の行は kiro-complete の roadmap の更新で直す。
