@@ -270,3 +270,52 @@ C11 の表が本 spec に挙げていない触る先: **wintf の `pointer/buffe
 ほかに見えたこと（本 spec の範囲の外）: SSP は `OnMouseDown`・`OnMouseDownEx` を送る（brief の Out）。止まって約 0.5 秒で `OnMouseHover` と `tooltip` の照会を送る（`OnMouseHover` は Out・ツールチップは後の `shell-tooltip`）。
 
 測りの答えを受けた要件の改め（2026-10-23・開発者が推奨の案で承認）: 差 1 ダブルクリックの 2 回目の解放は `OnMouseUp` だけ・差 2 中ボタンは `Ex` の 2 段に返事が無いときだけ互換の 2 段を続ける・差 3 右のクリックは放した時点でメニューより先に送る・差 4 窓の外へ出たときの Reference は要件のまま（§8 に違いを書く）。これで「決めの項目」の 3（右のクリックの遅れ）は無くなり、`menu/trigger.rs` の `decide`／`poll_once` に右クリックの預かりを足す必要も無くなった。4（解放の受け手は 1 窓に 1 つで、今はメニューが持つ）は残る＝`menu/mod.rs` の装着の替え方は設計で決める。
+
+## 10. 設計の段の調べと決め（2026-10-23・kiro-spec-design）
+
+- 発見の種類: 既存の仕組みへの拡張（light）。新しい外部の依存は無いので Web の調べはしていない。読んだ物: `rules/design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`・設計の雛形・steering（`logging.md`・`structure.md` のテストの置き方と 1,000 行の目安・`roadmap.md` の C11 の表）。使った技能の指針: kiro-spec-design の規則一式と、作業の型（最小の差分で全部に届かせる）。
+
+### 10.1 Research Needed 1〜6 の答え
+
+| 番号 | 問い | 答え（コードで確かめた所） | 設計への写し |
+|---|---|---|---|
+| 1 | ホイールの移し先 | `WM_MOUSEWHEEL` は窓の entity の `WHEEL_BUFFERS` に積まれる（`window_proc/mouse_dblclick_wheel.rs`）。`PointerState` は窓の中のちょうど 1 つの entity に付く（`collect_entities_to_leave` が同じ窓の他の持ち主を外す）。 | `transfer_buffers_to_world` で `find_owner_window` がその窓を返す持ち主を探して `wheel` に入れ、溜めは毎回空にする。持ち主が居なければ捨てる（要件 6.10 もここで満たす） |
+| 2 | 拡張ボタンの押下を配ったときの誤動作 | 押下の受け手は 3 つ（キャラ窓・バルーン・箱）。バルーンは `left_down` だけ、強制退避は `double_click == Left`、箱は `left_down` で選択・中断は `double_click == Left`。箱の「直前の押下が選択だったか」は中ボタンの押下でも今上書きされる。 | 条件に `xbutton1_down || xbutton2_down` を足すだけで、拡張ボタンは今の中ボタンと同じ扱いになる |
+| 3 | 捕捉中に窓の外で左を放したとき | `WM_LBUTTONUP` は捕捉した窓に届き、当たり判定が外れて窓の entity の `PointerState` に窓の外の座標で載る（`mouse_click.rs` の縮退の枝・`mouse_move.rs` の当たり判定の無い枝）。 | 解放の点が `WindowPos.size` の矩形の外なら「窓の外で放した」 |
+| 4 | 同じ tick の閾値越えと解放 | ドラッグの状態（`DRAG_STATE`）は WndProc の中で同期に変わる。閾値越え（`WM_MOUSEMOVE`）も解放（`end_dragging_on_release`）も tick の前に済むので、tick の中の解放の受け手は `JustEnded` を読める。ただし `JustEnded` は開始を配ったかを残さない（`close_drag` の中の `started` が外に出ない）。 | `close_drag` で `started` を thread_local の印に書き、`DragState::ended_after_start()` で読む。`JustEnded` に欄を足すと `clickthrough/controller_tests.rs` と `drag/reentry_tests.rs`（構造体の字面の組み立てと欄の全部を書いた分解）に手が入り「wintf は 3 ファイル」を越えるので、欄は足さない。新しい関数を公開の一覧（`drag/mod.rs`）に足さずに済むよう、公開済みの型 `DragState` の関連関数にする |
+| 5 | 窓を出たことの見分けと、窓の作り直し | `PointerLeave` は窓を出たときと窓の中で持ち主が替わったときの両方で付く。窓を出ると（`WM_MOUSELEAVE`）その窓の持ち主は 0 になる。窓の作り直し（`reopen_ghost_windows`）は窓の entity を替える。 | `PointerLeave` を見ず、毎 tick「その窓に持ち主が居るか」で読む。覚えの鍵を窓の entity にし、消えた entity の覚えは黙って捨てる（要件 7.10）。ゴーストの切り替えは `MouseWiring` の作り直しで捨てられる |
+| 6 | ホイールの吐き出しの置き場所と期限 | `tick_wake` が預かる期限は最も早い 1 つで、到来すると倒れる（`balloon_visibility_phase.rs` の注）。`OnPointerMoved` は持ち主の居る窓にしか配られないので、カーソルが出た後の吐き出しには使えない。 | `dispatch_pointer_events` の前の排他の系 `char_watch` が毎回吐き出しを確かめ、溜めが残る限り毎回預け直す。期限は前の送出＋100 ms ちょうど（注入の時計の ms） |
+
+### 10.2 決めの項目（カテゴリー B）の答え
+
+| 項目 | 決め | 理由 |
+|---|---|---|
+| 4 解放の受け手のまとめ方 | `menu/mod.rs` の `attach_release_handlers` が入れる受け手を、クリックの判定 → `trigger::on_char_pointer_released` の順に呼ぶ包みに替える。`trigger.rs` は直さない | 依存の向き（`menu` → `input_events`）を保つ。`trigger.rs` を直さないので、`trigger` を直に呼ぶ今の檻（`trigger_flow_tests.rs` ほか）がそのまま通る。装着の檻は部品の有無しか見ない（`mod_wiring_tests.rs`・`trigger_wired_tests.rs`） |
+| 6 箱の選択肢の行の上での出入り | 出入りとホイールは `dispatch_pointer_events` の前の系がシェルの当たり判定で決めるので、箱の行の上でも同じに送る。移動の受け手の箱の前段（行の上では `OnMouseMove` を送らない）は変えない。§8 に登記 | 要件は箱の上の出入りを書いていない。特別扱いの判定（箱の行の上かの純粋な問い）は今のコードに無く、作ると箱の受け手の副作用（強調）と分ける仕事が増える |
+| 7 押下の受け手の戻り値 | 変えない。押下の控えは副作用だけにして、単発・中・拡張では `false` を返し続ける | 今の檻（`handler_middle_xbutton_and_single_click_do_not_send` ほか）が変えずに通る（要件 11.4） |
+| 10 記録の水準 | クリックの系（送った・止めた・送らなかった）は info、出入りとホイールの送出と和 0 は debug、受け付けない時期は今の trace、送信の失敗は error | `get_log` は info 以上を集める（`log_history::classify`）。クリックは操作 1 回に数行なので info でも埋まらず、MCP の自動試験で「送っていない」と「返事が無い」を見分けられる。出入りとホイールは動きにつれて出るので要件 9.4 の趣旨で debug |
+| 11 送ってよい表の手書きの数 | 手で 55 → 64 にする。表から数える形には改めない | 手書きの数は「母数も判定する」檻。同じウェーブ（C11）で表に語を足す spec は他に居ないので、両枝が同じ数を書く危険は今は無い（後の `balloon-communicatebox`・`shell-scale-linkage` は本 spec の着地の後） |
+
+### 10.3 案の比べ（設計の段で足した点）
+
+| 案 | 中身 | 良い所 | 困る所 | 決め |
+|---|---|---|---|---|
+| 出入りとホイールを移動の受け手 `on_char_pointer_moved` に入れる | 当たり判定を 1 回で済ませ、出入り → 移動 → ホイールを送る | 系を足さない | 最初の移動で `OnMouseEnterAll` が増え、移動とドラッグの今の檻（`drag_tests.rs` の「最初の移動は届く」の 1 件・`shell_box_handler_tests.rs` の `[Move]` ちょうど 1 件ほか）が崩れる＝要件 11.4 に反する。窓を出た後の吐き出しもできない | 採らない |
+| `dispatch_pointer_events` の前の排他の系にする | 毎 tick、持ち主から窓を引いて出入りとホイールを決める | 移動の受け手に触れない・出入りが同じ tick の移動より先（要件 7.7）・窓を出たことを持ち主の有無で読める・吐き出しも同じ所 | 当たり判定を移動の受け手と 2 回解く（動いたときだけ・窓 1〜2 枚） | 採る |
+| ドラッグの見分けを areka の開始の受け手の印でする | `on_char_drag_start` で控えに印 | wintf を触らない | `dispatch_drag_events` は `dispatch_pointer_events` の後なので、同じ tick の閾値越えと解放でクリックが先に出る | 採らない（要件 3.1 の「同じ瞬間」） |
+
+### 10.4 まとめの 3 つの見方（synthesis）
+
+- 一般化: ボタン 5 つ × 「2 回目の解放か」の 10 通りを、段の列の表 1 つと「台本なら止める・それ以外は次へ」の規則 1 つにまとめた（要件 1.2・1.3・1.6・1.8・2.2〜2.5・3.2 が同じ規則）。出入りの 4 語とホイールも同じ Reference の組み立て `mouse_get`（今の `mouse_drag_get` を広げた物）で作る。
+- 作るか借りるか: 段の記憶はアンカー（`schedule/anchor.rs`）の形、失敗の免除はアンカーと同じ条件の並び、期限で起こすのは `tick_wake::arm_deadline`、窓の持ち主の引き方は `find_owner_window`、純関数＋値型の状態は `throttle.rs` に倣う。新しい仕組みや依存は作らない。
+- 削ったもの: 見張りの状態を読む公開の口（読み手が居ない・後の spec が足す）・`JustEnded` の欄の追加（関連関数で足りる）・`trigger.rs` の手直し（包みで足りる）・移動の受け手の手直し（系で足りる）・`MouseButton` の拡張（別の型 `ClickButton` で、ダブルクリックの組み立てに触れない）。
+
+### 10.5 本 spec の中で決めた細部（§8 へ）
+
+- 中ボタンのダブルクリックの 2 回目の解放は `OnMouseUpEx` → 返事が無ければ `OnMouseUp`(2)。要件 3.2（`Click` の系は送らない）と 2.4（`Ex` に返事が無ければ互換が続く）を両方守る列。SSP では測っていない。
+- 2 つのキャラ窓の間を移ったときは、出る窓の出入り（`OnMouseLeave` → `OnMouseLeaveAll`）を入る窓より先に送る。
+- ホイールと出入りの送信の失敗は、今の `OnMouseMove` と同じに終了の系列へ倒れる（要件が免除を求めるのはクリックの段だけ）。
+
+### 10.6 残る危険
+
+- 1 tick に「押下 1・解放 1・押下 2」が全部入ると、`OnMouseDoubleClick` が解放 1 のクリックより先に届く（wintf がその tick の押下と解放を 1 つの `PointerState` にまとめるため）。UI スレッドが詰まったときだけ起きる。直すには wintf の配りを出来事の列に改める必要があり、本 spec の範囲を越える（design の R1）。
