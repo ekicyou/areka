@@ -113,7 +113,9 @@ pub(crate) fn remembered_text(failure: &PersistFailure) -> String {
             PersistKey::LastBalloon => "最後に使ったバルーン",
             PersistKey::LastShell => "最後に使ったシェル",
             PersistKey::BasewareRoots => "置き場の並び",
-            PersistKey::WindowPos { .. } | PersistKey::BalloonOffset { .. } => "窓の位置",
+            PersistKey::WindowPos { .. }
+            | PersistKey::BalloonOffset { .. }
+            | PersistKey::WindowAdjacent { .. } => "窓の位置",
             PersistKey::BootCount | PersistKey::VanishCount => "ゴーストのプロパティ",
         };
         if !words.contains(&word) {
