@@ -367,3 +367,39 @@ Charset: Shift_JIS
 - 2.x の SHIORI の `GET Version` の答え → 10.1 節（`200 OK`・`Craftman`・`ID`・`Version`）。
 - SSP の記録を出す設定 → ゴーストごと。`ghost\master\profile\ghost.dat` の `shiori.log,1`。
 - 3.0 の検体が `GET Version SHIORI/2.6` に何を返すか → ぱすたさんは `SHIORI/3.0 204 No Content`（4.1 節）。ほかの 3.0 の検体（emo2・里々・YAYA）は測っていない。設計の段で、areka の決定論のテストか実機で確かめる。
+
+## 11. 設計の段の決め（2026-10-23・`/kiro-spec-design -y`）
+
+> 調べの種類: 軽い調べ（既存の仕組みへの足し）。新しい外部の依存は無い。読んだ物: `shiori-host32-host` の `shiori3.rs`・`client.rs`・`request_headers.rs`・`charset.rs`・`lib.rs`、kanade の `shiori/real.rs`・`schedule/events.rs`（許可の表）・`schedule/resources.rs`（資源の 14 名）・`schedule/boot.rs`、`areka-ghost` の `shiori_wiring.rs` と `shiori_wiring_charset_tests.rs`、`runtime.rs` の `real_connect` の呼び出し、steering の `logging.md`・`roadmap.md`（C11 の ⑧ の行）。参考に里々の文書（<https://ukatech.shillest.net/satori-docs/shiori/protocol/>）を引き直した: 「`GET Version` には 200 OK を返します」「SHIORI/2.x では `ID` `Craftman` `Version` を付けます」・2.x の要求への応答は「SHIORI/3.0 形式」。里々は確かめに 3.0 の先頭の行で答える見込みだが逐語では書かれていない（実機の 1 回で 3.0 の検体の版の行を確かめる）。
+> 使ったスキル: `kiro-spec-design`（決めの規則・調べの規則・まとめの規則・見直しの関門）。
+
+### 11.1 8 節の決めの候補への答え
+
+| 候補 | 決め | 理由 |
+|---|---|---|
+| 1 確かめを送る場所 | `areka-ghost` の `shiori_wiring.rs` の `real_connect`、LOAD の ack の直後（案 B-1） | SSP の並び（load の答えの次に 1 本）と同じ。kanade の要求より前に済むので `OnInitialize` が失われない。kanade の偽物を使うテストの要求の数が変わらない。`schedule/`・`runtime.rs` に触らない。 |
+| 3 版を決める根拠 | `GET Version` の答えの先頭の行の最初の字句だけ（`SHIORI/2.`→2.x・`SHIORI/3.`→3.0・ほか→決められない＝3.0＋WARN）。状態の番号は見ない | SSP は 3.0 のゴーストの 204 でも、2.x のゴーストの 200 でも、先頭の行の版の字の側へ移った（4.1・10.1 節）。細かい版（2.0〜2.6）で書き分けない（SSP も種類ごとに決まった行を送っていた）。 |
+| 4 イベントの種類を下へ渡す形 | 下の層が GET／NOTIFY の別とイベント名で決める（案 ⑵）。`GET`＋`OnTranslate`＝翻訳・`GET`＋`On…`＝台本・`GET`＋その他＝資源・`NOTIFY`＋`basewareversion`＝送らない・`NOTIFY`＋その他＝`GET Sentence` | 種類を運ぶ案 ⑴ は `ShioriCall`（kanade の `msg.rs`＝ウェーブの約束で触れない）と `ShioriBackend` の口・偽物の全部へ波及する。ukadoc のイベント名は全部 `On` で始まり、資源の名前は 1 つも `On` で始まらない。SSP の記録も同じ線で分かれていた。 |
+| 5 3.0 のゴーストの確かめへの 400 | `shiori_error_response` の WARN に数えない。INFO の `evidence` に状態の行を残す | 確かめは kanade の往復の関門を通らない。数えると `Version` の受け口の無い 3.0 のゴーストで起動のたびに WARN が増え、要件 5.6 の内訳を濁す。SSP も状態の番号で振る舞いを変えていない。 |
+| ファイルの分け方 | 新 `shiori2.rs`（純粋な 2.x の書き方）＋兄弟の `shiori2_tests.rs`。版で選ぶ分岐は `client.rs` の 2 つの手の中。確かめの記録は `shiori_wiring.rs` | `shiori3.rs` は 852 行。`client.rs` は 858 行で足すのは 50 行ほど。テストは兄弟のファイルへ（`client_shiori2_tests.rs`・`shiori_wiring_version_tests.rs`）。 |
+
+### 11.2 そのほかの決め
+
+- **確かめの答えを文字コードの採用に使わない**。使うと、宣言の無い UTF-8 の 3.0 ゴースト（emo2 の pasta）で、今は `Shift_JIS` を名乗る `OnInitialize`・`username` の要求が `UTF-8` を名乗るように変わり、要件 6.1 に反する。確かめの要求の `Charset` は今の文字コード（SSP は `UTF-8` 固定）。本文は ASCII だけなので、違いはこのラベルだけ。
+- **版は `ShioriConnection` の欄**（文字コードの交渉と同じ「接続の持ち物」）。`Shiori3Client` は `with_version` で写しを受ける。kanade の結合テストの 3 ファイルは構造体の書き下しに欄を 1 行足す（コンパイルのためだけ・要件 6.3 で名前を挙げる）。包む型を新しく作る案は、6 つの手を全部写すので採らない。
+- **答えの読みは `shiori3::parse_response_with(bytes, policy, value_header)`** に本体を移し、3.0 は `"Value"`、2.x は種類に応じて `Sentence`／`String` を渡す。2.x では `ErrorLevel`・`ErrorDescription`・`SecurityLevel` を読まない（測 4 で 2.x に無い・要件 4.7）。
+- **`Sender` は `areka`** のまま（SSP を名乗らない今の決め）。`BaseEvent` は書かない（areka は 3.0 でも `BaseID` を送っていない）。`NOTIFY OwnerGhostName`・`NOTIFY OtherGhostName`・`capability` は areka が今送っていないので組まない。
+- **Reference の付く資源の問い合わせ（`homeurl` など）**は SSP の記録に無かった。3.0 と同じ値を同じ番号で `Status` の後に書く（`GET Sentence` と同じ並べ方）。
+- **INFO の `ghost` はゴーストのフォルダ名**（`ghost\master` の 2 つ上）。`real_connect` は descript の `name` を受け取らず、受け取らせるには `runtime.rs`（C11 ④ の持ち物）の呼び方を変える要がある。
+- **確かめは `real_connect` の閉包の中で 1 回**。閉包は接続ごとに 1 回走るので、読み直し・切り替えで確かめ直す（要件 2.3）。この受け渡しは中継が無いと挙動で確かめられないので、先例（`the_connection_receives_the_already_decided_negotiator`）と同じく本文の構造で検査する。
+
+### 11.3 まとめの規則の当てはめ
+
+- **一般化**: 要件 3.1〜3.4 は「種類で要求の行と見出しを選ぶ」1 つの問題。表を 1 か所（`shiori2` の私の手 `route`）に持ち、組み立てと読みの両方がそれを引く。口は `build_request`・`parse_response` の 2 つだけ。
+- **作るか借りるか**: SHIORI/2.x の符号化を持つ既製のクレートは無い（ukadoc にも項目が無い）。符号化は既存の `Charset`（`encoding_rs`）を借り、状態の行・`Charset` の拾い方・読めない応答の判定は 3.0 の読みを借りる（`parse_response_with`）。
+- **削ったもの**: 種類を kanade から運ぶ口・2.x の細かい版での書き分け・版を設定で固定する手・確かめのための新しい待ちの仕組み・`OwnerGhostName` などの送っていない要求。
+
+### 11.4 残る危うさ
+
+- 3.0 の検体のうち確かめへの答えを測ったのはぱすただけ（`SHIORI/3.0 204`）。emo2・里々・YAYA は実機の 1 回で版の INFO の行を見る。2.x に決まる 3.0 の検体があれば止めて報告する（SSP と同じ規則なので SSP でも同じに振る舞うはずだが、要件 6 と当たる）。
+- `OnClose` の 2.x の形は測っていない（10.5 節）。実機の 1 回で areka が送った形と答えを記録する。
