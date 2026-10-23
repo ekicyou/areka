@@ -155,3 +155,5 @@
 - 4.1: 入れ子の確定のテストは `install_commit_tests.rs` が 1,000 行を超えるため兄弟の `install_nested_tests.rs`（`install_commit_tests.rs` から `#[path] mod nested`）に置いた。`carve_out` の綴りは `\` 区切り（`balloon\<dir>`）でないと当たらない。
 - 4.2/5.1: 4.2 の「`cargo test -p areka` が緑」は 5.1（同梱の表示名）の直しを待つため、5.1 を 4.2 と同じ変更・同じコミットで進めた。同梱の確定の失敗の検体は NTFS の大文字小文字の折りたたみ（古い `balloon\Ω` に同梱 `ω`）で本当に rename を落とす。
 - 最終検証の直し（1 回目）: 検体の窓口 `sample-ghost-kit` の登記・`SampleRoot::balloon`・`nar-sample-path` を同梱の新しい置き場 `<根>/ghost/<名前>/balloon/<dir>` に合わせた。展開済みの写しの棚は .nar のバイトだけを鍵にするため、置き方が変わったら `devroot.rs` の `CACHE` の番号を上げる（今回 `cache` → `cache-2`。古い `cache\` は `cargo clean` まで残る）。`SwitchRig` は emo2 の同梱を根の `balloon\` へ移して、以前の置き方の検体として使う。
+- 完了時にその場で解決: `doc/COMPAT_ARCHITECTURE.md` の `balloon` の行の理由の欄の「フォルダ名との完全一致」を「突き合わせ」へ（フォルダ名は大文字小文字を区別しなくなったため）。
+- 完了時の申し送り: 並走の `install-live-target-hazards` の brief へ、`Placement` の `carve_out`・`within_body` と入れ子の確定の手が入ったことを書き足した（同 spec の担当範囲の `plan.rs`・`install.rs` と重なるため）。
