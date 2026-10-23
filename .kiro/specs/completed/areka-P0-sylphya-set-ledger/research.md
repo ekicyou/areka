@@ -117,7 +117,7 @@
 
 **編集範囲の外**にも 17 の写しがある:
 - `.kiro/steering/roadmap` 系ではなく `.kiro/steering/structure.md:288`「`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論」
-- `.kiro/specs/areka-P0-property-catalog-lists/brief.md:21` と `:73`（他 spec の brief）
+- `.kiro/specs/property-catalog-lists/brief.md:21` と `:73`（他 spec の brief）
 
 → 議題 ⑤。
 
@@ -130,18 +130,18 @@
 
 網羅調査の検査（`crates/ukadoc-survey/src/check/structure.rs:109-146`）は **`owner` の中身を一切見ない**（見るのは id がカタログに実在するか・ページの担当が合うか・id の並び順）。したがって:
 
-- 担当欄に何を書いても検査は赤にならない＝**`areka-P0-zorder-property` という綴りが実在する spec を指しているかは誰も見張っていない**（実在は確認済み: `.kiro/specs/areka-P0-zorder-property/brief.md`）。
+- 担当欄に何を書いても検査は赤にならない＝**`zorder-property` という綴りが実在する spec を指しているかは誰も見張っていない**（実在は確認済み: `.kiro/specs/zorder-property/brief.md`）。
 - 要件 6.5 の「空きが 0 であることを示せる」を**判定する**検査は現状どこにも無い。要件 4.8 が「印字するだけでなく判定させよ」と言っている以上、この 0 も判定形で持つ必要があるが、その置き場所が編集範囲に無い。→ 議題 ④。
 
 ### 2.7 台帳の note に残る古い指し先（要件 6.4 との衝突）
 
-`property.toml` には「語彙表だけを触る spec: areka-P0-property-query-channels」という行が **22 行**ある。内訳は本機能が登記するサウンド 18 葉と、範囲外の `.ext.*` 4 行。
+`property.toml` には「語彙表だけを触る spec: property-query-channels」という行が **22 行**ある。内訳は本機能が登記するサウンド 18 葉と、範囲外の `.ext.*` 4 行。
 
 本 spec は `property-query-channels` から語彙台帳の担当を切り出して独立したもの（`brief.md` 冒頭）なので、**サウンド 18 行の指し先は本 spec が着地した時点で古くなる**。しかし要件 6.4 は「6.1〜6.3 以外の行の内容を変更しない」と定めており、直せない。→ 議題 ⑦。
 
 ### 2.8 互換記録 §8（要件 8）
 
-`doc/COMPAT_ARCHITECTURE.md` の §8 は `:122` から始まる 4 列の表。`currentghost.seriko.zorder` の行は **`:207` の 1 行だけ**（`:206` は `seriko.zorder` の descript キーについての訂正行で、プロパティの行ではない）。`:207` は既に「先送りした語彙の正本は追跡 spec `areka-P0-zorder-property` の brief の『完全語彙』節」と書いており、要件 8.3 が言う「語彙を書き写さない」は**既に守られている**（本機能はこれを持ち越さない＝新しく書き写さない、と読める）。
+`doc/COMPAT_ARCHITECTURE.md` の §8 は `:122` から始まる 4 列の表。`currentghost.seriko.zorder` の行は **`:207` の 1 行だけ**（`:206` は `seriko.zorder` の descript キーについての訂正行で、プロパティの行ではない）。`:207` は既に「先送りした語彙の正本は追跡 spec `zorder-property` の brief の『完全語彙』節」と書いており、要件 8.3 が言う「語彙を書き写さない」は**既に守られている**（本機能はこれを持ち越さない＝新しく書き写さない、と読める）。
 
 要件 8.2「既存の記録行を書き換えずに足せる形」は、`:207` の直後に 1 行足す形で満たせる。表の 4 列（項目／areka の裁量／根拠／出典 spec）の体裁を踏襲すればよい。
 
@@ -203,7 +203,7 @@
 
 **事実**（§2.2）: 名前の解決は完全一致なので、`currentghost.sound(要素名).pause` は `pause` の登記と一度も比較されない。分類は根 `currentghost` によって `NotSettable` のままである。**既存 21 項もすべて同じ**で、`surface.num` が RuntimeCommand になるのは「`surface.num` という文字列そのものを渡したとき」だけである。
 
-**利用者から見える差**: 本リリースではどちらでも**何も変わらない**（RuntimeCommand も NotSettable も、値は反映されず記録が 1 行残るだけ）。差が出るのは `\![set,property,…]` の経路（`areka-P0-property-query-channels`）が着地して、フルキーが実際に流れ込むようになったとき。
+**利用者から見える差**: 本リリースではどちらでも**何も変わらない**（RuntimeCommand も NotSettable も、値は反映されず記録が 1 行残るだけ）。差が出るのは `\![set,property,…]` の経路（`property-query-channels`）が着地して、フルキーが実際に流れ込むようになったとき。
 
 選択肢:
 
@@ -255,7 +255,7 @@
 要件 4.7 は「21 は計 4 箇所」と記すが、再実測では**関数名を含めて 6 箇所**、汎用名の 17 は**編集範囲内に 8 箇所**ある（§2.5）。さらに 17 は編集範囲の外にも 3 箇所ある:
 
 - `.kiro/steering/structure.md:288`「`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論」
-- `.kiro/specs/areka-P0-property-catalog-lists/brief.md:21`（表の「汎用プロパティ名（共有葉）｜17」）と `:73`（「`GENERIC_PROP_NAMES` 17＝`:37-55`」）
+- `.kiro/specs/property-catalog-lists/brief.md:21`（表の「汎用プロパティ名（共有葉）｜17」）と `:73`（「`GENERIC_PROP_NAMES` 17＝`:37-55`」）
 
 決めること:
 
@@ -283,7 +283,7 @@
 
 ### 議題 ⑦ 台帳の note に残る「語彙表だけを触る spec」の指し先【要件 6.4】
 
-サウンド 18 行の note が `areka-P0-property-query-channels` を指しているが、語彙表の担当は本 spec へ移った（§2.7）。要件 6.4 は 6.1〜6.3 以外の行を変えるなと定めているので直せない。
+サウンド 18 行の note が `property-query-channels` を指しているが、語彙表の担当は本 spec へ移った（§2.7）。要件 6.4 は 6.1〜6.3 以外の行を変えるなと定めているので直せない。
 
 選択肢:
 - 案 A: 直さず、`COMPAT_ARCHITECTURE.md` §8 へ足す 1 行に「サウンド 18 葉の語彙表の担当は `areka-P0-sylphya-set-ledger`」と併記して、記録の上で上書きする（先例＝§8 の `:206`／`:210` がアーカイブ済み文書の誤記を表の行で上書きしている）。要件 8.4 は「§8 の該当行の周辺に限る」なので、zorder の行の直後に置く 1 行へ収まるかは design で詰める。
@@ -369,20 +369,20 @@
 - よって**議題 ③ の巻き添え 8 件は発生しない**（要件 3.7 を「変えない」へ改訂・要件 7.2 は例外不要）。**議題 ① の `meta.` 綴りも巻き添えの観点では論点でなくなる**が、正典・台帳 id・カタログ title との逐語一致という理由は残るので 8.1 の決定（`meta.album` 形）は維持する。
 - **議題 ② は議題 ①③ と同じ根っこ**——記録用の表と照合用の表を同一視していること——なので、要件 10 として 1 つにまとめて起票対象にした。
 
-**要件 10 の引受先**: `areka-P0-property-query-channels`（実在確認済み・`.kiro/specs/areka-P0-property-query-channels/brief.md`・W14＝本 spec の後）。`\![set,property,...]` の経路を開通させる spec であり、フルキーが実際に流れ込む最初の地点なので、正規化の要否と仕分けの規則を決めるのはこの spec が最も自然。同 brief の追記(88) は本 spec への分割を既に登記しており、`dotted.rs` には触れないと明記している（＝衝突しない）。**同 spec が引き受けられない場合は単独 spec として起票すること**（引受先の無い先送りにしない）。
+**要件 10 の引受先**: `property-query-channels`（実在確認済み・`.kiro/specs/property-query-channels/brief.md`・W14＝本 spec の後）。`\![set,property,...]` の経路を開通させる spec であり、フルキーが実際に流れ込む最初の地点なので、正規化の要否と仕分けの規則を決めるのはこの spec が最も自然。同 brief の追記(88) は本 spec への分割を既に登記しており、`dotted.rs` には触れないと明記している（＝衝突しない）。**同 spec が引き受けられない場合は単独 spec として起票すること**（引受先の無い先送りにしない）。
 
 ### 8.4 議題 ④〜⑦ の処理（編集範囲を広げない）
 
 | 元議題 | 処理 | 理由 |
 | --- | --- | --- |
 | ④ 担当欄の空き 0 を判定する検査 | **新しい検査は作らない**。要件 6.5 は変更適用後の 1 回の実数えで満たす（数え方を報告に明記）。恒久的な見張りの置き場所は `crates/ukadoc-survey/src/check/` であり、`areka-P0-ukadoc-coverage-roadmap` へ申し送る | 要件 4.8 の「判定させよ」が掛かるのは**件数檻**（`dotted.rs` の `assert_eq!` 群＝既に判定形）であって、台帳の担当欄ではない。議題 ④ は 2 つを混同していた。sylphya から `doc/` を読むテストを新設するのは、置き場所として誤り |
-| ⑤ 件数の写しが範囲外にもある | `.kiro/steering/structure.md` の「汎用名 17」は**本 spec では動かない**（記録用の表を分けたので `GENERIC_PROP_NAMES` は 17 のまま）。新表の存在ぶんだけ記述が不足するので、設計で 1 行の追随可否を判断する。`areka-P0-property-catalog-lists` の brief 2 箇所は他 spec の持ち物なので触らない（着手時に引き直す規律どおり） | 相乗りをやめた結果、範囲外の数字が動く件は大半が消えた |
+| ⑤ 件数の写しが範囲外にもある | `.kiro/steering/structure.md` の「汎用名 17」は**本 spec では動かない**（記録用の表を分けたので `GENERIC_PROP_NAMES` は 17 のまま）。新表の存在ぶんだけ記述が不足するので、設計で 1 行の追随可否を判断する。`property-catalog-lists` の brief 2 箇所は他 spec の持ち物なので触らない（着手時に引き直す規律どおり） | 相乗りをやめた結果、範囲外の数字が動く件は大半が消えた |
 | ⑥ `/// ukadoc:` が報告書の証拠数を動かす | 範囲外として**報告**する。`doc/ukadoc-coverage/report/summary.md` の property「証拠あり」は 2 → 21（19 項目ぶん）。再生成は `areka-P0-ukadoc-coverage-roadmap` へ申し送る。実装では**アンカー付きの項目 URL だけ**を書き、ページ URL の単独行は置かない（証拠抽出器の第 2 段が誤発動しないため） | 報告書は要件 9.1 の範囲外。数え直しの担い手は網羅調査側 |
 | ⑦ 台帳 note の指し先 18 行が古びる | `doc/COMPAT_ARCHITECTURE.md` §8 へ足す 1 行に「サウンドプロパティ名 18 葉の語彙表の担当は `areka-P0-sylphya-set-ledger`」を併記し、記録の上で上書きする（先例＝§8 が既にアーカイブ済み文書の誤記を表の行で上書きしている）。台帳の 18 行は要件 6.4 のとおり触らない | 18 行を書き換えると後続 spec との衝突面が増え、本 spec が先に着地する利点を削る |
 
 ### 8.5 steering への追随（実施済み）
 
-`.kiro/steering/roadmap.md`「棚卸⑬の仮裁定」1 を改訂した（2026-09-13）。`zorder` は台帳行も値の導出もともに `areka-P0-zorder-property` が持ち、`sylphya-set-ledger` の SET 有効群は 21→**25**（仮裁定の文面にあった 26 ではない）。`seriko.sticky-window` と `currentghost-property-tree` に関する部分は据え置き。
+`.kiro/steering/roadmap.md`「棚卸⑬の仮裁定」1 を改訂した（2026-09-13）。`zorder` は台帳行も値の導出もともに `zorder-property` が持ち、`sylphya-set-ledger` の SET 有効群は 21→**25**（仮裁定の文面にあった 26 ではない）。`seriko.sticky-window` と `currentghost-property-tree` に関する部分は据え置き。
 
 ---
 
@@ -407,7 +407,7 @@
 ### 9.3 `dotted.rs` の行数見込み（§8.2 の 3）
 
 - 現在 289 行。本機能後およそ 360 行（SET 4＋URL 1＋新表 18＋URL 18＋説明文 25 前後＋兄弟テスト接続 3）。新設テストは兄弟ファイル `vocab/dotted_set_ledger_tests.rs`（およそ 150 行）へ出す（`structure.md` の兄弟テスト規律）。
-- 後続: `areka-P0-currentghost-property-tree`（W15）は縮退宣言文の改訂＝数行、`areka-P0-property-catalog-lists`（W16）はリスト系の名前の追加＝多く見ても 100 行。合計 500 行台で 1,000 行の見張りには当たらない。分割不要。
+- 後続: `currentghost-property-tree`（W15）は縮退宣言文の改訂＝数行、`property-catalog-lists`（W16）はリスト系の名前の追加＝多く見ても 100 行。合計 500 行台で 1,000 行の見張りには当たらない。分割不要。
 
 ### 9.4 `ukadoc-survey check` の実走時期（§8.2 の 4）
 
@@ -431,7 +431,7 @@
 - `zorder_property_deferral_tests.rs` の再読で確定した事実:
   - t_zpd12 ① は `vocabulary_tables()` が実際に読む表の const 名の列と `SCANNED_VOCAB_TABLES` の**一致**を判定する。名簿だけ足して関数を足さないと赤。→ 登記は const と関数の**対**。
   - t_zpd11 は `tables.len() == 5` と 5 本の較正行を持つ。名簿を 6 本にすると `5` が赤。→ t_zpd11 の `5` は「名簿の本数の写し」であり、要件 7.4 の「台帳が古い前提を固定していた」側（要件 7.5 が更新側に置くなと定めるのは t_zpd10／12／30／40 で、t_zpd11 は含まれない）。
-  - t_zpd40 は `crates/areka-sylphya/src` の**全ソース本文**から探し語 `zorder`（小文字・部分一致）を探す。追跡 spec の名前 `areka-P0-zorder-property` もこの綴りを含む。→ `dotted.rs` の説明文・新設テスト・URL 注記のどこにも書けない。設計に明記した。
+  - t_zpd40 は `crates/areka-sylphya/src` の**全ソース本文**から探し語 `zorder`（小文字・部分一致）を探す。追跡 spec の名前 `zorder-property` もこの綴りを含む。→ `dotted.rs` の説明文・新設テスト・URL 注記のどこにも書けない。設計に明記した。
 - `SOUND_PROP_NAMES` は `pub` が必須（t_zpd12 の抜き出しは `pub const` 行だけを見る。私有にすると t_zpd10 の走査から漏れる）。
 
 ### 9.8 設計判断の記録（synthesis）

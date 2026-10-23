@@ -250,7 +250,7 @@ L2 を採る場合、翻訳を通ったトークのために「預けた一括�
 ### strict の先の使われ方（要件 5）
 
 - **Context**: 「再生する側へ渡す」をどこまでと読むか（ギャップ分析の議題 1・W1）。
-- **Sources Consulted**: `doc/ssp-mcp/survey.md` §2（strict＝存在しないサーフェス・アニメーション・バルーン・未知のタグ・`\![コマンド]`・`\&[実体参照]` をエラーログに記録）、`.kiro/specs/areka-P0-mcp-strict-errors/brief.md`（案 ⑴ 入口で診断／案 ⑵ 印を再生の各所まで運ぶ、が未決）。
+- **Sources Consulted**: `doc/ssp-mcp/survey.md` §2（strict＝存在しないサーフェス・アニメーション・バルーン・未知のタグ・`\![コマンド]`・`\&[実体参照]` をエラーログに記録）、`.kiro/specs/mcp-strict-errors/brief.md`（案 ⑴ 入口で診断／案 ⑵ 印を再生の各所まで運ぶ、が未決）。
 - **Findings**: 後続の spec の 2 案のどちらでも、kanade が「strict の値とトークの番号」を持っていれば足りる（⑴ は MCP の側の値を使い、⑵ はそこから再生の側へ広げる）。`StartTalk` に欄を足すと `schedule/boot.rs` の字面 2 か所に当たり、`script-security-level` の入れ物の決定を先取りする。
 - **Implications**: kanade の運行状態に `StrictNote{talk_id, strict}` を持つ形にする（W1 の ⒜）。要件の Introduction は kanade を「台本の実行と SHIORI の往復を受け持つ部分」と定義しており、kanade が「再生する側」に当たる。
 
@@ -348,7 +348,7 @@ L2 を採る場合、翻訳を通ったトークのために「預けた一括�
 - ukadoc SSTP（`nobreak`・Owned SSTP）・`OnTranslate`（Reference1 の出どころの語）— 要件の Introduction の引用。
 - `doc/ssp-mcp/survey.md` — SSP 2.9.05 の実測（区切り `\r\n`・strict の意味）。
 - `doc/ssp-mcp/log-convention.md` — script 種別のログの取り決め（target・欄・既定）。
-- `.kiro/specs/areka-P0-mcp-strict-errors/brief.md` — strict の後続の案。
+- `.kiro/specs/mcp-strict-errors/brief.md` — strict の後続の案。
 
 ## 設計の討議での実測（2026-10-18）
 

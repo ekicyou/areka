@@ -56,7 +56,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
   - 完了仕様 `areka-P0-shiori-protocol` 要件 8.2 は「レガシー wire の charset 符号化は host-32 の責務」と委譲境界を定めている。本仕様はその責務を実装する側であり、正準 content（UTF-16）側に文字コード概念を持ち込まない。
   - 完了仕様 `areka-P0-ukadoc-survey-shiori`／`-assets` の台帳は `Charset`（要求側）・`shiori.encoding`・`shiori.forceencoding`・surfaces.txt の `charset` の各行の引受先を本仕様と登記済みである。本仕様の着地でそれらを「実装済み」へ更新し、台帳の常設検査を緑に保つ。同仕様が SHIORI/3.0 の組立・解析コードに置いた ukadoc URL コメント（9 行）は、書き換え後も対応する書き出し文の直上に残す（後着が合わせる）。
   - 完了仕様 `areka-P0-emo2-conformance-e2e` が固定した UTF-8 ゴースト（emo2）の実機・決定論の適合結果を、本仕様の前後で変えない。
-  - 同じウェーブで同じクレートの別ファイルを触る `areka-P0-host32-window-thread-pump`（メッセージ窓側）とは共有ファイル 0。`areka-P0-property-query-channels` とは ghost runtime の sink 列を共有するが別ウェーブ。
+  - 同じウェーブで同じクレートの別ファイルを触る `areka-P0-host32-window-thread-pump`（メッセージ窓側）とは共有ファイル 0。`property-query-channels` とは ghost runtime の sink 列を共有するが別ウェーブ。
   - 1,000 行番人（ファイル行数の上限検査）の例外表は増やさない。descript 解決モジュールは既に 959 行であり、キー 2 つの追加で上限を超えないよう配置を選ぶのは設計の責務。
 
 ---

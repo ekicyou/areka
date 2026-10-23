@@ -30,7 +30,7 @@ pages = ["list_propertysystem"]
 [entry."ukadoc:list_propertysystem:system.year:1"]
 status = "implemented"
 introduced = "2.3.53"
-owner = "areka-P0-property-catalog-lists"
+owner = "property-catalog-lists"
 priority = "C1"
 supersedes = ["ukadoc:list_propertysystem:system.year.old:1"]
 values = ["気配", "更新"]
@@ -166,7 +166,7 @@ fn reads_every_column_of_the_appendix_sample() {
         year.supersedes,
         vec![id("ukadoc:list_propertysystem:system.year.old:1")]
     );
-    assert_eq!(year.owner, "areka-P0-property-catalog-lists");
+    assert_eq!(year.owner, "property-catalog-lists");
     assert_eq!(year.priority, "C1");
     assert_eq!(year.values, vec!["気配".to_owned(), "更新".to_owned()]);
     assert_eq!(
@@ -552,7 +552,7 @@ fn a_ledger_without_a_prologue_is_rejected() {
 /// TOML として読めない本文は、置き場を添えて落とす（要件 6.12）。
 #[test]
 fn an_unreadable_body_names_the_file() {
-    let text = tweak(r#"owner = "areka-P0-property-catalog-lists""#, "owner = ");
+    let text = tweak(r#"owner = "property-catalog-lists""#, "owner = ");
 
     let err = err_of(&text);
     assert_mentions(&err, &[FILE]);

@@ -209,7 +209,7 @@ note = "当たり判定名で引く形。正典本文が「index 指定との互
 [entry."ukadoc:list_propertysystem:system.year:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-property-catalog-lists"
+owner = "property-catalog-lists"
 priority = "C1"
 values = []
 links = [

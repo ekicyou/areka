@@ -38,7 +38,7 @@
 | スキルのほかの文書（上の 3 つを除く `.claude/skills/` の全部）・`.claude/agents/` | 0 | 0 | 0 |
 | `CLAUDE.md` | 0 | 0 | 0 |
 | `.kiro/settings/`・`.kiro/MEMO.md`・`docs/` | 0 | 0 | 0 |
-| ほかの完了していない spec（`areka-P0-winget-release-automation` の brief） | 1 | 0 | 1 |
+| ほかの完了していない spec（`winget-release-automation` の brief） | 1 | 0 | 1 |
 | 合わせて | 39 | 7 | 32 |
 
 「直す」の 7 か所は全部直した。直し残しは 0 か所である。`.kiro/specs/completed/` の差分は 0 行である。ほかの完了していない spec の文書のうち、古い形（GitHub に作らせる本文・添付 4 つ・新しい段の無い段の一覧）を今の形として書いている所は 0 か所である。
@@ -90,7 +90,7 @@ roadmap は、日付の付いた記録と起票の台帳である。完了の記
 | M7 | テーマ「リリースノート」の「推す形」（「5 つ目の Assets として添える」） | ア・イ | 直さない | もう新しい形を書いている |
 | M8 | テーマ「リリースノート」の「pasta と違う所」（「添付の数（4 → 5）」） | イ | 直さない | もう新しい数を書いている |
 | M9 | テーマ「リリースノート」の Existing Spec Updates の `areka-P0-release-cycle` の行（「公開の後の確かめを 5 つのファイルにする」） | イ | 直さない | もう新しい数を書いている。印は完了のときに付く |
-| M10 | テーマ「リリースノート」の Existing Spec Updates の `areka-P0-winget-release-automation` の行（「リリースのファイルが 5 つになる」） | イ | 直さない | もう新しい数を書いている |
+| M10 | テーマ「リリースノート」の Existing Spec Updates の `winget-release-automation` の行（「リリースのファイルが 5 つになる」） | イ | 直さない | もう新しい数を書いている |
 | M11 | テーマ「リリースノート」の Specs の `areka-P0-release-notes-highlights` の行 | ア・イ | 直さない | もう新しい形を書いている。印は完了のときに付く |
 
 ## `doc/crates-io-publish.md` — 3 か所
@@ -129,7 +129,7 @@ roadmap は、日付の付いた記録と起票の台帳である。完了の記
 
 | # | 何の行か | 従う物 | 決め | 理由・直し |
 |---|---|---|---|---|
-| X1 | `areka-P0-winget-release-automation` の brief の、ほかの spec からの申し送り（「リリースに添えるファイルが 4 つから 5 つになる」） | イ | 直さない | ほかの spec の文書である。もう新しい数を書いている |
+| X1 | `winget-release-automation` の brief の、ほかの spec からの申し送り（「リリースに添えるファイルが 4 つから 5 つになる」） | イ | 直さない | ほかの spec の文書である。もう新しい数を書いている |
 
 ## 段の一覧の写しと `tools/test-all.ps1` の突き合わせ
 

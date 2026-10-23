@@ -111,12 +111,12 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
   - 間隔の語のうち `sometimes`・`rarely` 以外（`always`・`runonce`・`never`・`yen-e`・`talk,数値`・`periodic,数値` など）。再生の仕組みが別に要り、テンプレートゴースト 2 体に **0 件**。今の「値として読むが再生しない・`debug!` を残す」扱いを変えない（変更 0）。
   - `element` 行の `overlay` 以外の描画メソッド。`decode_elements` は `overlay` の行だけを値にし、他は記録なしで読み飛ばす（網羅台帳 `element*` の項＝縮退・担当 `areka-P0-shell-parse`）。本仕様はこの縮退を直さない。`overlay` 以外で書かれた `element0` は読み飛ばされるので、要件 2.1 の表では「`element0` なし」に数えられる（要件 2.7・3 検体に **0 件**）。
   - 全画素が透明になる面（C14 の「単色で塗り潰した surface10」）を表示の対象にしたときの扱い。3 検体に **0 件**で確かめられない。本仕様は全透明の面の既存の扱いを変えない（要件 4.7・引受先の登記は要件 9.5）。
-  - 着せ替え・当たり判定（`collision*`）の意味論そのもの、`point.basepos`（`areka-P0-surfaces-basepos`）。
-  - 網羅台帳でページ `dev_shell`・`manual_shell` を項目へ割ること（もとは `areka-P0-ukadoc-coverage-roadmap` の仕事だが、同仕様は完了済みで引き受けられない。申し送りの宛先は実在する受け皿 `areka-P0-coverage-roadmap-refresh`・要件 9.2）。
+  - 着せ替え・当たり判定（`collision*`）の意味論そのもの、`point.basepos`（`surfaces-basepos`）。
+  - 網羅台帳でページ `dev_shell`・`manual_shell` を項目へ割ること（もとは `areka-P0-ukadoc-coverage-roadmap` の仕事だが、同仕様は完了済みで引き受けられない。申し送りの宛先は実在する受け皿 `coverage-roadmap-refresh`・要件 9.2）。
 - **Adjacent expectations**:
   - **前提（完了済み）**: `areka-P0-nar-install`（検体は共有ヘルパ `sample_ghost_kit::SampleRoot::acquire` 経由で受ける。`vendors/sample_ghost/<検体名>/` の直パスはもう無い）・`areka-P0-charset-canon`（シェル本文の復号）・`areka-P0-emo-atlas`（透過の正規化の器と、未実装の腕を型で示す継ぎ目）・`areka-P0-emo2-conformance-e2e`（`emo2` の寸法と合成結果を留めている既存テスト）・`areka-P0-popup-menu-minimal`（右クリックメニュー。実機確認 1 件を本仕様へ引き渡し済み）。
   - **`areka-P0-seriko-runtime`（完了済み）**: 間隔の語の再生の器（`AnimationTable`・乱数の駆動）を持つ。本仕様は `sometimes`・`rarely` を既存の乱数の駆動へ読み替えるだけで、再生の仕組みそのものは変えない。
-  - **直列（同時に走らせない）**: `areka-P0-surfaces-basepos`（同じ `crates/areka-parsers/src/shell/` に触りうる・後着が rebase）。
+  - **直列（同時に走らせない）**: `surfaces-basepos`（同じ `crates/areka-parsers/src/shell/` に触りうる・後着が rebase）。
   - **下流**: 里々／YAYA の実ゴースト適合一般・`areka-P0-alpha-release-signoff`（α の検体 3 体＋既定バルーン）。
   - **バルーン**: バルーンの絵も同じ透過の正規化を通る（`crates/areka-emo-present/src/balloon.rs` の `build_balloon_target_from_faces`）ので、抜き色はバルーンの面にも同じく効く（C12）。リポジトリ内のバルーンで面として焼かれる絵に α の無いものは **0 枚**（`StayseeBalloon` の PNG 24 枚は全て α あり・`emo2-kakukaku` の `balloons0.png`／`balloonk0.png` は色の型 6）なので、既存のバルーンの見た目は変わらない。
 
@@ -263,7 +263,7 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 #### Acceptance Criteria
 
 1. The 本仕様 shall 網羅台帳の担当欄（`owner`）へ新しく登記する項目を、間隔の語の **2 件**（`ukadoc:descript_shell_surfaces:sometimes:1`・`ukadoc:descript_shell_surfaces:rarely:1`。どちらも今日は担当が空欄）だけとし、実装の着地時に状態と担当を実測に合わせて改める。ファイル名の慣習と抜き色については **0 件**である。C1〜C3・C7・C10・C14 を持つページ `dev_shell` と、C8・C9・C13 を持つページ `manual_shell` は、台帳に「ページ 1 枚」の粒度でしか無く（`doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:dev_shell`・`ukadoc:manual_shell`）、台帳の id はカタログに実在しなければならないので、項目の行を本仕様が足すことはできない。
-2. The 本仕様 shall `areka-P0-coverage-roadmap-refresh`（steering `roadmap.md` の #45「各 spec の『統合担当への申し送り』の受け皿」・`.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md` が実在する。もとの統合担当 `areka-P0-ukadoc-coverage-roadmap` は完了済みで `.kiro/specs/completed/` に在り、申し送りを消化できない）への依頼「`dev_shell`・`manual_shell` の当該の文（ファイル名の慣習・抜き色）を項目へ割り、担当を本仕様にする」を、完了時の申し送りとして文書に残す。
+2. The 本仕様 shall `coverage-roadmap-refresh`（steering `roadmap.md` の #45「各 spec の『統合担当への申し送り』の受け皿」・`.kiro/specs/coverage-roadmap-refresh/brief.md` が実在する。もとの統合担当 `areka-P0-ukadoc-coverage-roadmap` は完了済みで `.kiro/specs/completed/` に在り、申し送りを消化できない）への依頼「`dev_shell`・`manual_shell` の当該の文（ファイル名の慣習・抜き色）を項目へ割り、担当を本仕様にする」を、完了時の申し送りとして文書に残す。
 3. When 実装が着地した, the 本仕様 shall 台帳の備考のうち本仕様で事実が変わる箇所を実測に合わせて直し、状態と担当は変えない。少なくとも次の 2 項目: ⑴ `descript_shell_surfaces` の `element*`（担当 `areka-P0-shell-parse`・縮退）＝「面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。要件 2.7 の既知のずれ）」 ⑵ `descript_shell` の `seriko.use_self_alpha,値`（未対応）＝「宣言は今も読まず常に `1` 相当。その下で α の無い絵は正典どおり抜き色で描かれるようになった。`.pna` と `full` は未実装のまま」。報告を作り直し、`cargo test -p ukadoc-survey` が緑であることを確かめる。
 4. When 実装が着地した, the 本仕様 shall 正典が沈黙している点の裁量を `doc/COMPAT_ARCHITECTURE.md` §8 の沈黙ルール対応表へ追記する: 大文字小文字を区別しない（要件 1.4）・同じ番号の重複は辞書順で最小を採る（要件 1.5）・抜き色の許容幅は 0（要件 4.2）・パレットの `tRNS` の扱い（要件 4.8 で設計が定めたもの）。
 5. When 実装が着地した, the 本仕様 shall steering `roadmap.md` に、**引き受け手の居ない残り**として次を登記する（2026-09-19 時点で `roadmap.md` にこれらを引き受ける spec は 0 本。実在しない spec の名前を引受先として書かない）: ⑴ `.pna`（開発者確認済みの方針は「非対応」）⑵ `seriko.use_self_alpha,full`／`use_self_alpha,full` の全面不透明 ⑶ 透過の宣言を読むこと（常に `1` 相当の固定）⑷ 全画素が透明になる面（C14 の単色の `surface10`）を表示の対象にしたときの扱いが、検体 0 件で未確認であること ⑸ `surfaces.txt` が無い／波括弧が 0 個で画像だけのシェル（C1 は成り立つ形とするが、起動の失敗のまま）⑹ `overlay` 以外の `element0` を持つ面で画像が使われる既知のずれ（要件 2.7。直る時機は `areka-P0-shell-parse` の縮退の解消と同じ）⑺ `sometimes`・`rarely` 以外の間隔の語。

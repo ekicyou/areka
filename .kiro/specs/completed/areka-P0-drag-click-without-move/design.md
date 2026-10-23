@@ -23,7 +23,7 @@
 - 閾値を越えた後に取り消されたドラッグの扱い（取り消しでもその時点の位置を保存する。変えない）。
 - バルーンの窓の速いドラッグで、バルーンを行き先へ置くこと。バルーンは wndproc が「ドラッグ中」の状態の `WM_MOUSEMOVE` で動かす作りで（`mouse_move.rs` の `Dragging` の腕の `move_window`）、速いドラッグではそのマウス移動が 1 回も来ない。受け手 `on_balloon_drag_end` はバルーンの今の `WindowPos.position` を保存するだけなので、押す前の位置に残り、相対位置 1 件が書かれ、素材が退役する。修正の前と同じ振る舞いで、要件 2.3 もそう定める（2026-10-03 の設計ディスカッションで開発者が決定）。
 - 右クリックメニューの出し方、ドラッグの状態が `JustEnded` で休む決まり（完了 spec `areka-P0-wintf-drag-state-rest-contract`）。
-- 拡大率の切替での位置の扱い（`areka-P0-dpi-transition-two-tick-bounce`）。
+- 拡大率の切替での位置の扱い（`dpi-transition-two-tick-bounce`）。
 - `crates/areka/src/emo2_boot/`・`crates/areka/src/input_events/`・`crates/areka/src/install/`（同じウェーブの他の spec との約束）。
 - 配る所の開始の腕で枠の座標変換に失敗したときの縮退（`(0,0)` のまま使う）と、ESC・`WM_CANCELMODE` が窓の一致を確かめない件（`research.md` §7.5・§6 末尾）。
 

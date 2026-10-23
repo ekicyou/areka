@@ -44,7 +44,7 @@
 | 8.1 記録を増やさない | `apply_cue` の `debug!` は cue 単位。`probe_advance` は失敗時だけ | 今日どおり | なし |
 | 9.1 沈黙ルール対応表 | `doc/COMPAT_ARCHITECTURE.md` §8（4 列の表） | 1 行足す | なし |
 | 9.2 先送りの引き受け | `completed/areka-P0-emo-text-layer/design.md`「書記素クラスタ結合は M2 検討事項として記録」・`research.md` D10・`completed/areka-P0-budoux-newline/research.md` | 本仕様の文書へ | なし |
-| 10.8 影の申し送り | `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` 末尾「`balloon-color-emoji` からの申し送り（2026-09-29）」 | **既に書かれている**（3 行） | なし（要件確定時の作業は済んでいる） |
+| 10.8 影の申し送り | `.kiro/specs/text-align-shadow-canon/brief.md` 末尾「`balloon-color-emoji` からの申し送り（2026-09-29）」 | **既に書かれている**（3 行） | なし（要件確定時の作業は済んでいる） |
 
 ### 単位の変更が触る場所（本番コード）
 

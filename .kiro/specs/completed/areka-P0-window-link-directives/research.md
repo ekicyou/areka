@@ -271,8 +271,8 @@
 
 ### 2.7 境目と後の spec への影響
 
-- 読む口 `StickyGroupLedger::group_of`／`partners_of` は `areka-P0-dpi-realign-remembered-chain` が詰め直しから組の窓を外すときに使う。形を変えたら向こうが読み直す。
-- `AnchorSource` と記憶の形の規則は `areka-P0-window-snap`（吸着の相手を広げる）の土台になる。
+- 読む口 `StickyGroupLedger::group_of`／`partners_of` は `dpi-realign-remembered-chain` が詰め直しから組の窓を外すときに使う。形を変えたら向こうが読み直す。
+- `AnchorSource` と記憶の形の規則は `window-snap`（吸着の相手を広げる）の土台になる。
 - `PositionCue` の種類と受け手の表の 5 行は、`move_cue*.rs`・`consumer_ledger.rs` を触る後の spec と同じウェーブに置けない。
 
 ### 設計ディスカッション（2026-10-22）

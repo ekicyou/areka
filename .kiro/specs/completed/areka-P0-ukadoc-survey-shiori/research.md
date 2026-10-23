@@ -121,7 +121,7 @@
 |---|---|---|
 | `areka-P0-charset-canon` | 進行中（brief のみ） | **同じ `shiori3.rs` の `build_request`／`parse_response` を書き換える**。向こうの brief 71 行目が「`ukadoc-survey-shiori`（同じ `shiori3.rs` に ukadoc URL コメントを置く＝後着が rebase）」と明記済み |
 | `areka-P0-status-execution-states` | 進行中（brief のみ） | `Status` ヘッダの実行状態語彙を所有。編集集合は `kanade/src/status.rs`＋`emo2_boot/` の配線と宣言しており、`events.rs` は現状「参照」だけ。本 spec は `owner` に名前を書くだけ |
-| `areka-P0-property-query-channels` | 進行中（brief のみ） | `property.get`／`property.set` と `\!` 経路を所有。編集集合に `events.rs`（任意名イベントの前例として言及）と `consumer_ledger.rs` が入る見込み。ただし本 spec が触るのは `ALLOWED_EVENT_IDS` の要素行だけで、向こうが触るのは `msg.rs`・`schedule/choice.rs` 側 |
+| `property-query-channels` | 進行中（brief のみ） | `property.get`／`property.set` と `\!` 経路を所有。編集集合に `events.rs`（任意名イベントの前例として言及）と `consumer_ledger.rs` が入る見込み。ただし本 spec が触るのは `ALLOWED_EVENT_IDS` の要素行だけで、向こうが触るのは `msg.rs`・`schedule/choice.rs` 側 |
 | `areka-P0-emo2-conformance-e2e` | 進行中（brief のみ） | 共有ファイル 0 |
 | 並走する調査 3 本（assets／sakura-script／property） | brief のみ | 台帳ファイルが別。共有 0 |
 
@@ -495,7 +495,7 @@
 | 出所 | 反映先 | 内容 |
 |---|---|---|
 | 検証 指摘 1 | DD-4・繋がりの表 | `OnUpdate` の本体更新は 12 でなく **11**（スナップショットで再計数）。鎖 22 本・合計 30 本 |
-| 検証 指摘 2 | 縮退の転記元の表・群の一覧 | `COMPAT_ARCHITECTURE.md` §8 で SHIORI ドメインを名指しする行は **4 行**（`OnBalloonClose`／`Timeout`／`Break` の M1 非発火・`Status` の `balloon` 導出を追加）＋`emo2-conformance-scope.md` §6 の SAORI 行。3 件を新群 2a（`vocabulary-only`・`owner` は `areka-P0-balloon-canon-residue`）へ移し群 2 は 248 |
+| 検証 指摘 2 | 縮退の転記元の表・群の一覧 | `COMPAT_ARCHITECTURE.md` §8 で SHIORI ドメインを名指しする行は **4 行**（`OnBalloonClose`／`Timeout`／`Break` の M1 非発火・`Status` の `balloon` 導出を追加）＋`emo2-conformance-scope.md` §6 の SAORI 行。3 件を新群 2a（`vocabulary-only`・`owner` は `balloon-canon-residue`）へ移し群 2 は 248 |
 | 検証 指摘 3 | テスト方針 | 検査 ⑻＝4 ファイルの URL コメントを id へ解き、台帳の `implemented` 行と集合一致（赤の作り方つき） |
 | 検証 軽微 1・コントローラの見立て | DD-11 | 優先度表を（状態・テーマ）から**群→段階**に改め、brief の開発者裁定（更新＝B 先頭・OnVanish／ファイル D&D＝B・気配り＝C・交わり＝D・`OnUserInput`／`OnTeach` 系／`OnNotifyUserInfo`＝A）に固定。壊れ方の列を追加し「見た目の差」は 1 段下げ（群 7 は C）。`OnCommunicate` は交わりへ。群 14 を 14a（SSTP／FMO＝交わり D）と 14b（E）に分割 |
 | 検証 軽微 2 | DD-10 | 群の索引の正本はブリーフィング冒頭（道具に書き換えられない）。台帳の `#` コメントは写し。上流へ「挿入処理はコメント行を保存すること」を材料として送る |
@@ -509,7 +509,7 @@
 - **論点**: 設計の初版は外部連携 14 件を一律 `absent` としていたが、`spec_dll` が指す `load`／`unload`／`request` の入口は host-32（`shiori-host32-helper/src/shiori_proxy.rs`）が SHIORI DLL に対して実装済みであり「受け口が無い」は事実に反する。一方、同じ入口を使う SAORI・MAKOTO・PLUGIN の DLL は読み込めないので「実装済み」でもない。
 - **選択肢**: ⒜ `degraded`（一部だけできている・コード接触は 22 行のまま）／⒝ `implemented`（helper に URL コメント 1 行・5 ファイル 23 行に増える）／⒞ `absent` のまま。
 - **裁定**: ⒜。未対応の数や段階は ⒞ と同じで、台帳を読む人が「SHIORI の DLL は読める」と正しく知れる点だけが違う。
-- **反映**: 群 14b を 5 件に、新群 14c（`spec_dll`・`degraded`・`E1`・`owner` 空）を追加。`note` には SHIORI 用の入口が実装済みである旨・SAORI の成立条件（要件 5.9）・MAKOTO は `areka-P0-makoto-dll-host` が担う旨を書く。URL コメントは置かない。
+- **反映**: 群 14b を 5 件に、新群 14c（`spec_dll`・`degraded`・`E1`・`owner` 空）を追加。`note` には SHIORI 用の入口が実装済みである旨・SAORI の成立条件（要件 5.9）・MAKOTO は `makoto-dll-host` が担う旨を書く。URL コメントは置かない。
 
 ### 11.3 上流へ送る材料（§10.5 に追加）
 

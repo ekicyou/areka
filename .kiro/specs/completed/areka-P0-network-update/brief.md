@@ -154,7 +154,7 @@
 - **Adjacent**:
   - `areka-P0-ghost-install`（同じ α ウェーブ・**直列**）——`MenuRegistry` への登記と kanade の schedule を両方が触る。install → update の順。
   - `areka-P0-translate-pipeline`／`sakura-time-directives`／`balloon-lifecycle-events`（α 後・kanade の schedule）——後着が rebase。
-  - `areka-P0-property-query-channels`（α 後）——`homeurl` リソースの `GET` は本仕様が薄い読み手を持ち、channels が着地したらそちらへ寄せる。
+  - `property-query-channels`（α 後）——`homeurl` リソースの `GET` は本仕様が薄い読み手を持ち、channels が着地したらそちらへ寄せる。
 
 ## Constraints
 

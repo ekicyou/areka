@@ -8,7 +8,7 @@
 - **既存の形にそのまま乗る。** 検体を足す手順（書庫を 1 つ置く＋登記表 `SAMPLES` に 1 行）・名前で引く窓口 `SampleRoot`・登記の往復のテスト・見張りのテスト・配布物の許可表は全部すでに在る。新しい部品は要らない。仕事は「書庫を置く」「1 行足す」「数を直す」「文書を書く」「実機で 1 回起こして記録する」「起票する」の 6 つ。
 - **入らない見込みは低い。** `install.txt` は `type`・`name`・`directory`・`balloon.directory` だけで、どれも `areka-nar` が知っている鍵。取り出し元 `bottle/` は書庫の最上位に在る（`emily4` のような「名乗るのに無い」形ではない）。要件 2.7（断られたら登記しない）と 2.8（バルーンだけ入らない）の枝は、静的に読む限り通らない。
 - **要件に名前の出ていない数が 1 種類ある。** 「登記の数 9 → 10」とは別に、「書庫を置く行（`Vendored`）の数 8 → 9」が、テスト 2 か所と README の 1 か所に在る（下の 3.2）。
-- **実機の 1 回で崩れそうな所が、もう静的に 3 つ見えている**: ⑴ 別名の専用ファイル `alias.txt`（`sakura.surface.alias` を含む）を areka は読まない・担当の spec が無い ⑵ `surfaces.txt` の `alternativestart` を areka は描かない（`warn!`）・担当の spec が無い ⑶ 同梱バルーンの印（矢印・オンライン・SSTP）は `areka-P0-balloon-markers` の持ち物。起票先の無い ⑴⑵ は、実機で症状を確かめてから起票する。
+- **実機の 1 回で崩れそうな所が、もう静的に 3 つ見えている**: ⑴ 別名の専用ファイル `alias.txt`（`sakura.surface.alias` を含む）を areka は読まない・担当の spec が無い ⑵ `surfaces.txt` の `alternativestart` を areka は描かない（`warn!`）・担当の spec が無い ⑶ 同梱バルーンの印（矢印・オンライン・SSTP）は `balloon-markers` の持ち物。起票先の無い ⑴⑵ は、実機で症状を確かめてから起票する。
 - **SHIORI の版は静的には決まらない。** `shiori.dll` は i386 の PE で UPX で圧縮されており、中の文字列が読めない。辞書には 3.0 寄りの印（`event.On*`・`system.Reference0〜7`）と 2.x 寄りの印（`system.Sentence`・`system.communicate`・「SHIORI/2.2 Notify対応」の注記）が両方在る。版は実機の 1 回の記録で決める（要件 5.7 のとおり）。
 
 ## 2. 今のコードと資産（要件ごとの対応表）
@@ -100,8 +100,8 @@
 |---|---|---|
 | `alias.txt` の別名が全部落ちる（`\s[9]` などが番号で解かれず、面が出ない・黙って壊れる） | 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` 5987 行目「⑵ 本体側の綴り `sakura.surface.alias` は無い」「⑶ `alias.txt` を読む道が無い」 | **担当なし**（担当だった `areka-P0-shell-parse` は完了） |
 | まばたきの `alternativestart,(0,1)` が描かれず `warn!` が出る | 台帳 6024 行目（`status = "absent"`・`owner = ""`・記録 `warn!`） | **担当なし** |
-| 矢印・オンライン（16 コマ）・SSTP の印が出ない | 要件の範囲外の宣言 | `areka-P0-balloon-markers` |
-| 入力の箱 `balloonc0〜3`・`communicatebox.*` | 要件の範囲外の宣言 | `areka-P0-balloon-canon-residue`・`areka-P0-inputbox-user-input` |
+| 矢印・オンライン（16 コマ）・SSTP の印が出ない | 要件の範囲外の宣言 | `balloon-markers` |
+| 入力の箱 `balloonc0〜3`・`communicatebox.*` | 要件の範囲外の宣言 | `balloon-canon-residue`・`inputbox-user-input` |
 | α の無い絵の抜き色 | シェルもバルーンも絵は `areka-emo-atlas` の `normalize`（宣言なし＝透明な画素が無ければ左上の 1 画素の色を抜く）を通る。抜けるはず。バルーンの角の赤が左上の画素と同じ色かは実機で見る | 在る |
 | SHIORI/2.x だけの応答 | 3.0 として読めない応答は `error!`＋`Parse` | 担当なし（要件で対応は範囲外） |
 | `GET Sentence`（2.x のゴースト間の会話） | `system.communicate` を使う辞書。areka は送らない | 方針の確認が要る（範囲外） |
@@ -171,7 +171,7 @@
   - `crates/areka/src/cli/parse.rs`: 起動オプション `--install` は `Unsupported`。インストールを画面の操作なしで起こす口は台本の `\![execute,install,path,…]`（`emo2_boot/install_cue.rs`）だが、起動中のゴーストへ入れると切り替えの一周（`install/overwrite.rs`）になる。
   - `crates/areka/src/alert.rs`: `AREKA_NO_ALERT` で告知のダイアログを抑え、記録には残る。
   - 記録の的: `ghost-boot`（`areka-ghost` の SHIORI の結線・文字コード）・`shiori-host32`（補助プログラムの向き `helper_not_i686`）・`shiori-charset`・`areka::boot_resolve`・`areka_nar`。`areka-emo-atlas` は抜き色の判断を記録に出さない＝透過は MCP の `dump_surface` を文で説明する。
-  - `areka-P0-seriko-script-triggers` の brief は `alternativestart` などのアニメーションから呼ぶメソッドを範囲の外と書く。`alias.txt`・`sakura.surface.alias` を持つ spec は無い（`areka-P0-makoto-dll-host` の `alias.txt` は `makoto,` の上書きの話で別物）。
+  - `seriko-script-triggers` の brief は `alternativestart` などのアニメーションから呼ぶメソッドを範囲の外と書く。`alias.txt`・`sakura.surface.alias` を持つ spec は無い（`makoto-dll-host` の `alias.txt` は `makoto,` の上書きの話で別物）。
 
 ### 9.1 まとめ直し（synthesis）
 

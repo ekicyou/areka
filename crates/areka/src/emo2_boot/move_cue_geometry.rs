@@ -38,7 +38,7 @@ use crate::placement::scale_signed;
 ///
 /// M1 実導出は [`CanonDefaultBasepos`]（正典既定＝x=サーフェス幅÷2・y=下端）のみ。宣言
 /// `point.basepos` の実導出は本 spec の範囲外であり、このトレイトは追跡 spec
-/// `areka-P0-surfaces-basepos` が別実装（宣言値を差す resolver）を差し込むための**差替点**
+/// `surfaces-basepos` が別実装（宣言値を差す resolver）を差し込むための**差替点**
 /// として型のみを予約する（doc/COMPAT_ARCHITECTURE.md §8 対応表に登記）。
 ///
 /// 入力は窓寸法（物理 px・`WindowPos.size` 由来）のみ——論理 px 系（BoxStyle）を経由しない

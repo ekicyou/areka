@@ -225,5 +225,5 @@
   - (e) `consumer_ledger_tests.rs` の assert の文言に混じった `\n` と、`reload_skin_tests.rs` 冒頭の古い説明（「呼び手は 7.4」）を直した（`976fe7c5`）。
   - (f) 8.2 ⑴: `reload_started` に `dir`（読むゴーストのフォルダ）を添えた（`bd9c3e3d`・テスト `accepted_leaves_one_started_record`）。
   - (g) 8.2 ⑵: 要件 8.1・8.3 どおりで欠陥ではないので、直しも起票もしない。
-  - (h) 10.4: `.kiro/specs/areka-P0-makoto-reload-directives/brief.md` の末尾に「`mcp-reload` からの申し送り（areka-P0-mcp-reload 完了時・2026-10-22）」を足した（縮退の口の場所・書き換えるテスト・入口 `request_reload`）。
-- 完了の棚卸の件数（2026-10-22）: その場で解決 8 件（上の (a)〜(h)）。起票 2 件・新しい spec は 0 本（どちらも既存の brief へ「件 1」として足した）: 2.6 の sylphya の消す口 → `areka-P0-sylphya-sqlite-kvs`（他 spec の作り直す KVS の口と重なる）／8.2 ⑶ ぱすたのデバッグ待受 9276 のぶつかり → `areka-P0-pasta-in-windows-verification`（直す場所がこのリポジトリの外）。8.3 の「隠したまま着せ替えたスコープ」は設計の割り切りとして記録どおり残す（起票しない）。
+  - (h) 10.4: `.kiro/specs/makoto-reload-directives/brief.md` の末尾に「`mcp-reload` からの申し送り（areka-P0-mcp-reload 完了時・2026-10-22）」を足した（縮退の口の場所・書き換えるテスト・入口 `request_reload`）。
+- 完了の棚卸の件数（2026-10-22）: その場で解決 8 件（上の (a)〜(h)）。起票 2 件・新しい spec は 0 本（どちらも既存の brief へ「件 1」として足した）: 2.6 の sylphya の消す口 → `sylphya-sqlite-kvs`（他 spec の作り直す KVS の口と重なる）／8.2 ⑶ ぱすたのデバッグ待受 9276 のぶつかり → `areka-P0-pasta-in-windows-verification`（直す場所がこのリポジトリの外）。8.3 の「隠したまま着せ替えたスコープ」は設計の割り切りとして記録どおり残す（起票しない）。

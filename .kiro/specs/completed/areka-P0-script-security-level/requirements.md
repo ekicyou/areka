@@ -56,7 +56,7 @@
   - Owned SSTP の「`\t` の割り込み禁止の中でも割り込む」扱い。
   - MCP の `check_script` に出どころの診断を出すこと。`check_script` が調べるのは MCP で送る台本で、MCP は Owned SSTP 扱い＝外部扱いにならず、止まるタグが無いため。
   - MCP のツールの振る舞い（`mcp-kanade-tools`）。
-  - 網羅台帳への `\![execute,filewatch]`・`\![execute,schedule-add]`・`\![execute,schedule-delete]` の行の追加。正典の写し `catalog.toml`（`ukagaka-doc-mcp` 0.2.7）にこの 3 項目が無く、行を足せないため。写しの取り直しは `areka-P0-ukadoc-catalog-refresh`（2026-10-22 起票）が持つ。判定の表（要件 4.1）の出典は ukadoc の URL で書く。
+  - 網羅台帳への `\![execute,filewatch]`・`\![execute,schedule-add]`・`\![execute,schedule-delete]` の行の追加。正典の写し `catalog.toml`（`ukagaka-doc-mcp` 0.2.7）にこの 3 項目が無く、行を足せないため。写しの取り直しは `ukadoc-catalog-refresh`（2026-10-22 起票）が持つ。判定の表（要件 4.1）の出典は ukadoc の URL で書く。
 - **Adjacent expectations**:
   - `property-query-channels` は、この spec の運ぶ仕組みで `SenderType: internal,property` を送る。
   - `sakura-embed-directive` は、この spec の運ぶ仕組みで `embed` の出どころを付けて送る。

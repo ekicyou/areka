@@ -1,6 +1,6 @@
 # Brief: areka-P0-dot-sakura-specimen
 
-> 2026-10-10 `/kiro-discovery`（開発者「ゴースト検体に『どっとさくら』を追加」）で起票した。同じ依頼の後半（同梱のバルーンを手本に既定バルーンを作る）は `areka-P0-default-balloon-selfmade` と `areka-P0-balloon-webp-names`。roadmap「自前の既定バルーンと検体『どっとさくら』」節。コードは「何の定義か」で指す。着手時に引き直す。
+> 2026-10-10 `/kiro-discovery`（開発者「ゴースト検体に『どっとさくら』を追加」）で起票した。同じ依頼の後半（同梱のバルーンを手本に既定バルーンを作る）は `default-balloon-selfmade` と `balloon-webp-names`。roadmap「自前の既定バルーンと検体『どっとさくら』」節。コードは「何の定義か」で指す。着手時に引き直す。
 
 ## Problem
 
@@ -52,7 +52,7 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 ## Scope
 
 - **In**: `dot_sakura.nar` の保管（リポジトリに入れる）／登記表 `SAMPLES` の 1 行（同梱バルーン `bottle` つき）／`lib_tests.rs` の数と名前の一覧／`vendors/sample_ghost/README.md` の表と節／steering（`product.md` の検体の表・`structure.md` の顔ぶれ）と根の `README.md` の動作確認の表／実機で 1 回起こした記録／崩れの起票。
-- **Out**: 起動・会話・メニューが通るところまでの直し（起票した先）／華和梨や SHIORI 2.x への対応／同梱バルーンの印（矢印・オンライン・SSTP）の表示（`areka-P0-balloon-markers`）／入力の箱 `balloonc*`（`areka-P0-balloon-canon-residue`・`areka-P0-inputbox-user-input`）／シェルの縮小版 2 つの見た目の確かめ／配布物への同梱（入れない）。
+- **Out**: 起動・会話・メニューが通るところまでの直し（起票した先）／華和梨や SHIORI 2.x への対応／同梱バルーンの印（矢印・オンライン・SSTP）の表示（`balloon-markers`）／入力の箱 `balloonc*`（`balloon-canon-residue`・`inputbox-user-input`）／シェルの縮小版 2 つの見た目の確かめ／配布物への同梱（入れない）。
 
 ## Boundary Candidates
 
@@ -63,12 +63,12 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 ## Out of Boundary
 
 - `areka-nar` の展開器・`shiori-host32-*`・表示の経路。直さない（崩れは起票）。
-- `StayseeBalloon` と既定バルーンの解決。触らない（`areka-P0-default-balloon-selfmade` が持つ）。
+- `StayseeBalloon` と既定バルーンの解決。触らない（`default-balloon-selfmade` が持つ）。
 
 ## Upstream / Downstream
 
 - **Upstream**: なし（今すぐ着手できる）。
-- **Downstream**: `areka-P0-default-balloon-selfmade`（同梱バルーン `bottle` を見比べの元にする・登記表と数のテストを続けて触るので、こちらを先に着地させる）。`areka-P0-balloon-markers`（連番のオンラインの印 16 コマ・矢印・SSTP の印を持つ検体として使える）。`areka-P0-balloon-canon-residue`（面 0〜3 と面別の設定を持つ検体として使える）。`areka-P0-sample-url-fetch`（取り寄せ先がすでに在る最初の検体）。
+- **Downstream**: `default-balloon-selfmade`（同梱バルーン `bottle` を見比べの元にする・登記表と数のテストを続けて触るので、こちらを先に着地させる）。`balloon-markers`（連番のオンラインの印 16 コマ・矢印・SSTP の印を持つ検体として使える）。`balloon-canon-residue`（面 0〜3 と面別の設定を持つ検体として使える）。`areka-P0-sample-url-fetch`（取り寄せ先がすでに在る最初の検体）。
 
 ## Existing Spec Touchpoints
 

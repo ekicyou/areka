@@ -45,7 +45,7 @@
   - Claude Desktop の側の振る舞い（中継を 2 つ起こす・エラーの後に起こし直す、など）。
   - 新しい外部のクレートの追加（開発用を含む）。
 - **Adjacent expectations**:
-  - `tools/package.ps1` は `areka-P0-release-code-signing`・`areka-P0-install-live-target-hazards`・`areka-P0-winget-release-automation` も触る。この spec は PE を読む所と zip の中身の判定の 1 項目だけを触り、ほかの段の振る舞い・出力の形・終了コードを変えない。
+  - `tools/package.ps1` は `release-code-signing`・`install-live-target-hazards`・`winget-release-automation` も触る。この spec は PE を読む所と zip の中身の判定の 1 項目だけを触り、ほかの段の振る舞い・出力の形・終了コードを変えない。
   - `areka-P0-mcp-receiver-bugs` は `tests/real_receiver_test.rs` を触る。この spec はこのファイルを触らない。
   - 件 9 の結果は、`/release` の `v0.0.3` の走りの記録が受け持つ。そこが赤だったときの直しは、その時点で別に起票する。
 

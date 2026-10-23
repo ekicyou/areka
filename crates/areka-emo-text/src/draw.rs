@@ -35,7 +35,7 @@
 //!   `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側）。正典 2 ページで
 //!   `valign` の写像が逆である事実（疑義 SC1）と areka が採る側の理由は
 //!   `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、寄せの追跡先は
-//!   `areka-P0-text-align-shadow-canon`。
+//!   `text-align-shadow-canon`。
 //!
 //! ## 計測専用 probe layout（task 6.2・R4.5・probe 規約）
 //!
@@ -239,7 +239,7 @@ impl ResolvedFont {
     /// [`LookLayers::from_balloon`] の 2 引数へ渡す（読み取りの所有は
     /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空で、土台と同じ結果になる。
     /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）は渡さない——所有は
-    /// `areka-P0-text-align-shadow-canon`。
+    /// `text-align-shadow-canon`。
     pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
         let font = model.font();
 

@@ -8,7 +8,7 @@
 >
 > - 対象仕様: `areka-P0-emo2-conformance-e2e`
 > - 裁定の根拠: requirements.md **9.1〜9.8**・**12.1**・**12.3**／design.md **D11 間欠的な赤の隔離裁定**（裁定表・門の形・失う被覆と引受先・妥当性の確認・門を付けない対象・編集集合の外に触れる範囲）
-> - 根治の引受先: `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-1（`:15`）・A-2（`:16`）。同 brief `:34` が「e2e が先に踏んだ場合は e2e が隔離裁定を行い、根治は本 spec」という分担を明記している。**本仕様は根治を行わない**（R9.5）
+> - 根治の引受先: `.kiro/specs/zorder-chain-residue/brief.md` の A-1（`:15`）・A-2（`:16`）。同 brief `:34` が「e2e が先に踏んだ場合は e2e が隔離裁定を行い、根治は本 spec」という分担を明記している。**本仕様は根治を行わない**（R9.5）
 
 ---
 
@@ -79,7 +79,7 @@ grep -E 'zorder_pair_maintain_always_on_top_tests\.rs|runtime/tick_bridge\.rs'
 - **#2 cursor-tag-canon**（6 件）——すべて `.kiro/specs/areka-P0-cursor-tag-canon/` の仕様文書。コードへの接触は 0 件。
 - **#3 ukadoc-survey-toolkit**（68 件）——`crates/ukadoc-survey/`（新規クレート）と `.kiro/specs/areka-P0-ukadoc-survey-toolkit/` のみ。この 2 つの接頭辞を除くと**残り 0 件**（`grep -v` で除いた結果が空であることを確認した）。既存クレートへの接触は 0 件。
 - **#4／#5／#6 ukadoc-survey-{assets,property,shiori}**（各 6 件）——それぞれ自分の仕様文書ディレクトリのみ。
-- **#8 makoto-2-0-spec-launch**（3 件）——`.kiro/specs/areka-P0-makoto-dll-host/brief.md`・`.kiro/specs/areka-P0-translate-pipeline/brief.md`・`.kiro/steering/roadmap.md`。
+- **#8 makoto-2-0-spec-launch**（3 件）——`.kiro/specs/makoto-dll-host/brief.md`・`.kiro/specs/areka-P0-translate-pipeline/brief.md`・`.kiro/steering/roadmap.md`。
 - **#9 sakura-bare-tag-lexer**（12 件）——自分の仕様文書 6 件と `crates/areka-parsers/src/sakura/` の 6 件（`lexer.rs`・`decode.rs`・`parse.rs`＋兄弟テスト 3 件）。`wintf` への接触は 0 件。
 
 ### 1.5 結論（R9.8 の「着手前に確かめて記録する」）
@@ -224,7 +224,7 @@ research.md §10.1 の 3 行をそのまま写し、**門の付与でずれた�
 
 | 止めるテスト | 失う主張 | 同時に止まる対照 | 残る判定で代替できるか | 引受先 |
 |---|---|---|---|---|
-| `zorder_pair_maintain_always_on_top_tests.rs:369`（本体は研究時 `:370-444`・**現在は `#[test]` `:407`／本体 `:409-470`**） | 実の最上位窓 4 枚を作り、3 つの挿入位置指令を実 `SetWindowPos` で流す。**常設走行が「3 つの挿入位置はいずれも帯の所属を変えない」ことを実 OS に対して主張しなくなる** | 対照①＝印の読み取りが常に真を返していないこと（研究時 `:411-414`／**現在 `:452-455`**）・対照②＝帯の内側の窓の直前へ挿すと OS が帯へ引き込むこと（研究時 `:416-424`／**現在 `:457-465`**） | **できない**。対照 2 本が同時に止まるため、残る単体判定は反証不能になる | `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` **A-1**（`:15`） |
+| `zorder_pair_maintain_always_on_top_tests.rs:369`（本体は研究時 `:370-444`・**現在は `#[test]` `:407`／本体 `:409-470`**） | 実の最上位窓 4 枚を作り、3 つの挿入位置指令を実 `SetWindowPos` で流す。**常設走行が「3 つの挿入位置はいずれも帯の所属を変えない」ことを実 OS に対して主張しなくなる** | 対照①＝印の読み取りが常に真を返していないこと（研究時 `:411-414`／**現在 `:452-455`**）・対照②＝帯の内側の窓の直前へ挿すと OS が帯へ引き込むこと（研究時 `:416-424`／**現在 `:457-465`**） | **できない**。対照 2 本が同時に止まるため、残る単体判定は反証不能になる | `.kiro/specs/zorder-chain-residue/brief.md` **A-1**（`:15`） |
 | 同 `:740`（本体は研究時 `:741-794`・**現在は `#[test]` `:781`／本体 `:783-838`**） | 実の所有リンク（`set_window_owner`）を張った実窓 2 枚に `TopOfNormalBand` を適用し、「バルーンがキャラのすぐ手前」を測る（研究時 `:767`／**現在 `:811`**）。**実の所有リンクが実の持ち上げ後も隣接を保つことを測る唯一のテスト**が既定で走らなくなる | 所有リンク無しの対照（`assert_ne!`・研究時 `:775-788`／**現在 `:819-832`**）＝隣接が「所有リンクのおかげ」か「指令の副作用」かを分ける対照 | **できない**（唯一のテストであり、切り分けの対照も同時に止まる） | 同 **A-1**（`:15`） |
 | `tick_bridge.rs:346`（本体は研究時 `:346-362`・**現在は `#[test]` `:383`／本体 `:385-402`**） | 500ms の壁時計期限（研究時 `:353-354`／**現在 `:393-394`**）を置いて通知の到達を主張し（研究時 `:355-358`／**現在 `:395-398`**）、`drop` が停止→join を兼ねる（研究時 `:360-361`／**現在 `:400-401`**）。**実 DWM の垂直同期通知が待機側へ届くことと、`wintf-vsync` スレッドが清く畳まれることの証跡**が既定で止まる | 同一テスト内の対照は無い。隣の `vsync_thread_registers_itself_with_the_vblank_role`（研究時 `#[test]` `:325`／**現在 `:362`**）は登録・命名しか見ないので**代替にならない** | **できない**。実 DWM の通知が届くことも、同期スレッドが清く畳まれることも、既定で主張する相手が居なくなる | 同 **A-2**（`:16`） |
 
@@ -234,7 +234,7 @@ research.md §10.1 の 3 行をそのまま写し、**門の付与でずれた�
 
 | 引受先 | 項目 | 実在確認（2026-09-04・逐語） |
 |---|---|---|
-| `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` | **A-1**（`:15`）＝既存ペア機構の実窓の檻が 3 プロセス同時 regime で稀に赤。実体として `zorder_pair_maintain_always_on_top_tests.rs:767`・同 `:411` を挙げている | 実在。`:15` を逐語で確認した |
+| `.kiro/specs/zorder-chain-residue/brief.md` | **A-1**（`:15`）＝既存ペア機構の実窓の檻が 3 プロセス同時 regime で稀に赤。実体として `zorder_pair_maintain_always_on_top_tests.rs:767`・同 `:411` を挙げている | 実在。`:15` を逐語で確認した |
 | 同上 | **A-2**（`:16`）＝壁時計期限の飢餓。実体として `tick_bridge.rs:355`・`spine_boot_smoke_tests.rs:46`・`spine_talk_close_tests.rs:306` を挙げている | 実在。`:16` を逐語で確認した |
 | 同上 `:34` | 分担の明記＝「A-1／A-2 は、**e2e が先に踏んだ場合は e2e が隔離裁定（除外 or 更新）を行い根治は本 spec**」 | 実在。`:34` を逐語で確認した |
 
@@ -251,14 +251,14 @@ research.md §10.1 の 3 行をそのまま写し、**門の付与でずれた�
 | ⑸ `spine_e2e_test_s1_boot_success.rs` | **入らない**。A-1 は wintf の重なり順専用（名指しは `zorder_pair_maintain_always_on_top_tests.rs:767`／`:411` の 2 件のみ） | **入らない**。A-2 は「壁時計期限の飢餓」＝**待つ形で書かれているのに有界内に届かない**形であり、名指しは `tick_bridge.rs:355`・`spine_boot_smoke_tests.rs:46`・`spine_talk_close_tests.rs:306` の 3 件。⑸ は `areka-ghost` の S1 であり、機序も「待たずに数える」競走であって飢餓ではない | **不要（本仕様がタスク 5.6 で更新した）** |
 | ⑹ `spine_conformance_support_tests.rs` | **入らない**（wintf ではない） | **入らない**。機序は A-2 と同類（飢餓）に見えたが、タスク 5.5 の実測で**飢餓ではなく待ちの形の欠陥**だと確定した（§2.1 ⑹ の「機序」）。いずれにせよ ⑹ のファイルは brief の起票（2026-09-02）より後に本仕様が作ったため名指しに含まれ得ない | **不要（本仕様がタスク 5.5 で直した）**。ただし §2.1 ⑹ の「残る危険 ⑴」（`BootVersion` 滞在中の再生完了通知が捨てられる製品側の欠陥）は引受先が要る＝**開発者の裁定待ち** |
 
-**他 spec の走査（較正つき）**——`.kiro/specs/**/*.md` を `spine_e2e_test_s1`／`spine_conformance_support_tests`／`SPIN_WAIT` で走査した。一致は**完了置き場（`completed/`）の 3 spec のみ**（`file-slimming`・`test-cage-determinism`・`kero-balloon`）で、進行中の spec には 1 件も無い。**完了 spec は申し送りを消化できない**（記憶 `deferral-requires-verified-owner`）。走査が生きていることは、この一致そのものが示している（「0 件」だけを根拠にしていない）。加えて `間欠` で brief を走査すると、進行中の spec で一致するのは本仕様と `areka-P0-zorder-chain-residue` の 2 本だけである。
+**他 spec の走査（較正つき）**——`.kiro/specs/**/*.md` を `spine_e2e_test_s1`／`spine_conformance_support_tests`／`SPIN_WAIT` で走査した。一致は**完了置き場（`completed/`）の 3 spec のみ**（`file-slimming`・`test-cage-determinism`・`kero-balloon`）で、進行中の spec には 1 件も無い。**完了 spec は申し送りを消化できない**（記憶 `deferral-requires-verified-owner`）。走査が生きていることは、この一致そのものが示している（「0 件」だけを根拠にしていない）。加えて `間欠` で brief を走査すると、進行中の spec で一致するのは本仕様と `zorder-chain-residue` の 2 本だけである。
 
 **2026-09-04 の開発者裁定と 2026-09-05 のタスク 5.5・5.6 で、上表の状況は変わった。** ⑸ は裁定が「更新する」へ改まり（design.md D11 ⑸・R9.2／R12.1 の例外を S1 へ広げた）、**その直しをタスク 5.6 が当て終えた**（§2.1 ⑸・S3 と同形の有界待ちを等値照合の前へ置いた）。⑹ は**本仕様が直した**（タスク 5.5・§2.1 ⑹）。ゆえに ⑸ ⑹ そのものに外の引受先は要らない。**残るのは次の 2 件で、どちらも本仕様の編集集合の外である。**
 
-1. **A-2 の族（壁時計期限の飢餓）**——task 3.1 の負荷走行が観測した兄弟群（`crates/areka/src/emo2_boot/spine_talk_close_tests.rs`・同 `spine_text_scale_tests.rs`・同 `spine_seriko_loop_tests.rs`・同 `spine_display_tests.rs`——4 本とも実在を確認した）は依然として「待つ形で書かれているのに有界内に届かない」類型のままである。A-2（`.kiro/specs/areka-P0-zorder-chain-residue/brief.md:16`）は `tick_bridge.rs`・`spine_boot_smoke_tests.rs`・`spine_talk_close_tests.rs` の 3 件しか名指ししていないため、族の残りは名指しの外に居る。**⑹ はこの族には属さない**——タスク 5.5 の実測で、⑹ の赤は飢餓ではなく「消化に要る注入を送っていない」待ちの形の欠陥だったと確定した（§2.1 ⑹）。
+1. **A-2 の族（壁時計期限の飢餓）**——task 3.1 の負荷走行が観測した兄弟群（`crates/areka/src/emo2_boot/spine_talk_close_tests.rs`・同 `spine_text_scale_tests.rs`・同 `spine_seriko_loop_tests.rs`・同 `spine_display_tests.rs`——4 本とも実在を確認した）は依然として「待つ形で書かれているのに有界内に届かない」類型のままである。A-2（`.kiro/specs/zorder-chain-residue/brief.md:16`）は `tick_bridge.rs`・`spine_boot_smoke_tests.rs`・`spine_talk_close_tests.rs` の 3 件しか名指ししていないため、族の残りは名指しの外に居る。**⑹ はこの族には属さない**——タスク 5.5 の実測で、⑹ の赤は飢餓ではなく「消化に要る注入を送っていない」待ちの形の欠陥だったと確定した（§2.1 ⑹）。
 2. **`BootVersion` 滞在中の再生完了通知が捨てられる製品側の欠陥**——§2.1 ⑹ の「残る危険 ⑴」。`schedule/mod.rs:681-694` の `current_talk_id`（`:683-684`）が `BootVersion{Some}` を突合対象に含めながら、委譲先の `boot.rs:32-36` がその通知を捨てるため、捨てられた側のトーク枠が `Steady` へ漏れて以後の握手が始まらなくなる。実機では毎秒 Tick と実時間の再生によりこの窓は事実上開かないが、**檻では踏み得る**。
 
-**引受先の形は 2 通りあり、どちらも本仕様の編集集合の外なので本タスクでは実行していない。** ⑴ 台帳 spec（`.kiro/specs/areka-P0-zorder-chain-residue/brief.md`）へ項目を足す——A-2 の名指しを族へ広げる形になる。ただし同 brief の Current State は zsp research §13.8 の転記であり、転記でない項目を足すなら台帳の性格を一段広げる判断になる。⑵ 新規に起票する——「常設テストの飢餓耐性」を主題に 1 本立て、族と製品側の欠陥をまとめて持たせる。
+**引受先の形は 2 通りあり、どちらも本仕様の編集集合の外なので本タスクでは実行していない。** ⑴ 台帳 spec（`.kiro/specs/zorder-chain-residue/brief.md`）へ項目を足す——A-2 の名指しを族へ広げる形になる。ただし同 brief の Current State は zsp research §13.8 の転記であり、転記でない項目を足すなら台帳の性格を一段広げる判断になる。⑵ 新規に起票する——「常設テストの飢餓耐性」を主題に 1 本立て、族と製品側の欠陥をまとめて持たせる。
 
 新しい引受先が持つべき中身は次の 3 点である——⑴ 上の族の待ち方を飢餓に強い形へ作り直すこと、⑵ その作り直しが既存の被覆を減らさないことを示すこと、⑶ 上の製品側の欠陥（捨てられる再生完了通知）を塞ぐこと。
 
@@ -302,7 +302,7 @@ research.md §10.1 の 3 行をそのまま写し、**門の付与でずれた�
 
 壁時計期限の位置も併せて確認した——B1 の 500ms 期限は `tick_bridge.rs:353-358`（`:353` が説明のコメント・`:354` が `wait_timeout(Duration::from_millis(500))`・`:355-358` が `assert!`）。requirements.md 9.3 の引用 `:353-356` はこの範囲の内側を指しており、矛盾しない。
 
-**根治の引受先（residue brief）が挙げる行番号との関係**——`.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-1（`:15`）は `:411`・`:767` を、A-2（`:16`）は `tick_bridge.rs:355` を挙げる。実測すると次のとおりで、**指している先は同じ 3 本である**（`#[test]` 行ではなく本体の判定行を挙げているだけ）。
+**根治の引受先（residue brief）が挙げる行番号との関係**——`.kiro/specs/zorder-chain-residue/brief.md` の A-1（`:15`）は `:411`・`:767` を、A-2（`:16`）は `tick_bridge.rs:355` を挙げる。実測すると次のとおりで、**指している先は同じ 3 本である**（`#[test]` 行ではなく本体の判定行を挙げているだけ）。
 
 | brief の引用 | 実測した所在 | 逐語 |
 |---|---|---|
@@ -457,7 +457,7 @@ cargo test -p wintf --lib -- --exact <完全名> --ignored --nocapture --test-th
 
 R10.7 は「隔離裁定の後に完成判定を行い、間欠的な赤が残ったまま『全通過』と記録しない」と定める。**⑹ は 2026-09-05 のタスク 5.5 で直した**（§2.1 ⑹）ので、⑹ を名指しした留保はもう要らない。ただし task 3.1 の負荷走行が観測した赤は ⑹ だけではなかった——**留保は 1 本のテストではなく族を覆う文でなければならない**。
 
-- **推奨する形**——task 7.2 は R10.6 の形で宣言する。すなわち ⑴ 全体テストの結果はそのまま記録し（判定結果を書き換えない）、⑵ 留保として次の 1 文を併記する: 「**壁時計期限（`SPIN_WAIT`＝30 秒）で待つ常設の檻の族——task 3.1 の負荷走行が赤を観測した `crates/areka/src/emo2_boot/spine_talk_close_tests.rs`（371 行）・同 `spine_text_scale_tests.rs`（169 行）・同 `spine_seriko_loop_tests.rs`（610 行）・同 `spine_display_tests.rs`（440 行）——は、高負荷で低確率に期限切れになりうる。A-2（`areka-P0-zorder-chain-residue/brief.md:16`）が名指しするのは 3 件だけで族の残りは名指しの外に居る。裁定は §2 の ⑷（触らない）に準じるが、表に行を持つのは `spine_talk_close_tests.rs` だけで残り 3 本は行を持たない。族の引受先は未定（§3.3.1）**」。加えて §2.1 ⑹「残る危険 ⑴」の製品側の欠陥（`BootVersion` 滞在中の再生完了通知が捨てられる）も引受先未定として併記する。緑が出るまで回し直さない（design D10 の手順 2 は同一コミットでの再走を **1 回だけ**に限っている）。
+- **推奨する形**——task 7.2 は R10.6 の形で宣言する。すなわち ⑴ 全体テストの結果はそのまま記録し（判定結果を書き換えない）、⑵ 留保として次の 1 文を併記する: 「**壁時計期限（`SPIN_WAIT`＝30 秒）で待つ常設の檻の族——task 3.1 の負荷走行が赤を観測した `crates/areka/src/emo2_boot/spine_talk_close_tests.rs`（371 行）・同 `spine_text_scale_tests.rs`（169 行）・同 `spine_seriko_loop_tests.rs`（610 行）・同 `spine_display_tests.rs`（440 行）——は、高負荷で低確率に期限切れになりうる。A-2（`zorder-chain-residue/brief.md:16`）が名指しするのは 3 件だけで族の残りは名指しの外に居る。裁定は §2 の ⑷（触らない）に準じるが、表に行を持つのは `spine_talk_close_tests.rs` だけで残り 3 本は行を持たない。族の引受先は未定（§3.3.1）**」。加えて §2.1 ⑹「残る危険 ⑴」の製品側の欠陥（`BootVersion` 滞在中の再生完了通知が捨てられる）も引受先未定として併記する。緑が出るまで回し直さない（design D10 の手順 2 は同一コミットでの再走を **1 回だけ**に限っている）。
 - **推奨しない形 ⑴**——族のどれかに門を付けて既定から外す。R9.3 が門を付ける対象として挙げるのは ⑵ ⑶ の 3 本だけであり、それ以外への門は**裁定の無い隔離**になる。加えて本仕様が作った被覆を本仕様が消すことになり、R9.7 の「隔離は無差別に行わない」の趣旨にも反する。
 - **推奨しない形 ⑵**——留保を書かずに「全通過」と記録する。R10.7 に正面から反する。
 - **推奨しない形 ⑶**——⑹ が直ったことを根拠に留保そのものを落とす。⑹ の直しは**⑹ の待ちの形だけ**を直したのであって、族の飢餓には触れていない（§2.1 ⑹ の「機序」＝⑹ は飢餓ではなかった）。

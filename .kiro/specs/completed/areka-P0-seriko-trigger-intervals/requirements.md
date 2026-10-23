@@ -2,7 +2,7 @@
 
 ## Project Description (Input)
 
-台詞を話している間、キャラクターの口が動かない。多くのゴーストは `surfaces.txt` の `animationN.interval,talk,数値` で口を動かしているが、areka はこの語を読んで記録するだけで再生しない。同じく、面に切り替わった瞬間に 1 回再生する `runonce` と、一定の秒ごとに再生する `periodic,数値` も記録だけで動かない。本 spec は、この 3 つの引き金（`talk,数値`・`runonce`・`periodic,数値`）を seriko の表に採って再生し、口パクを動かす。文字の到着は seriko に既に届いている文字の cue から数え、新しい時計も新しい知らせの口も作らない。`yen-e`・`never`・`\i[ID]` は `areka-P0-seriko-script-triggers`、`bind+always` などの `+` の組み合わせは `areka-P0-seriko-interval-combinations` が別に持つ（2026-10-10 棚卸㉓の分割）。
+台詞を話している間、キャラクターの口が動かない。多くのゴーストは `surfaces.txt` の `animationN.interval,talk,数値` で口を動かしているが、areka はこの語を読んで記録するだけで再生しない。同じく、面に切り替わった瞬間に 1 回再生する `runonce` と、一定の秒ごとに再生する `periodic,数値` も記録だけで動かない。本 spec は、この 3 つの引き金（`talk,数値`・`runonce`・`periodic,数値`）を seriko の表に採って再生し、口パクを動かす。文字の到着は seriko に既に届いている文字の cue から数え、新しい時計も新しい知らせの口も作らない。`yen-e`・`never`・`\i[ID]` は `seriko-script-triggers`、`bind+always` などの `+` の組み合わせは `seriko-interval-combinations` が別に持つ（2026-10-10 棚卸㉓の分割）。
 
 ## Introduction
 
@@ -18,12 +18,12 @@
   - シェルの面とバルーンの面のどちらに書かれていても同じ決まりで扱う（今の `random` と同じ）。
   - 決定論のテスト（偽の時計・偽の文字の到着）、網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 3 行、口パクを持つ検体の新設と実機の確かめ。
 - **Out of scope**（別の spec・今までどおり変えない）:
-  - `yen-e`・`never`・台本のタグ `\i[ID番号]`・`animation*.name` → `areka-P0-seriko-script-triggers`。
-  - `always` を含む `+` の組み合わせ（`bind+always` ほか）→ `areka-P0-seriko-interval-combinations`。`talk`・`runonce`・`periodic` を含む `+` の組み合わせ（`bind+runonce` など）も本 spec では今までどおり元の綴りを添えた記録だけにする。
+  - `yen-e`・`never`・台本のタグ `\i[ID番号]`・`animation*.name` → `seriko-script-triggers`。
+  - `always` を含む `+` の組み合わせ（`bind+always` ほか）→ `seriko-interval-combinations`。`talk`・`runonce`・`periodic` を含む `+` の組み合わせ（`bind+runonce` など）も本 spec では今までどおり元の綴りを添えた記録だけにする。
   - `\i[ID,wait]`・`start`／`alternativestart`／`stop` などアニメーションから別のアニメーションを呼ぶメソッド・`\![anim,…]` 系のタグ。
   - `always` の単独（`animated-image-playback` で実装済み）・`bind`（実装済み）・`sometimes`／`rarely`（実装済み）・`random`／`bind+random`（実装済み）。これらの振る舞いは変えない。
   - ゴーストの `descript.txt` の `don't need seriko talk`（口パクの無効化）。本 spec では読まない。
-  - `\_q`・`\![quicksection]`・`\![set,balloonwait]`（`areka-P0-sakura-time-directives`）と、クリックでの早送り（`areka-P0-talk-fast-forward`）の実装。
+  - `\_q`・`\![quicksection]`・`\![set,balloonwait]`（`sakura-time-directives`）と、クリックでの早送り（`talk-fast-forward`）の実装。
   - 台本の進行そのもの（kanade・dola の cue の形）、台本の読み手とコンパイル、合成と描画。知らせを足さず、既に届いている cue を読むだけにする。
 - **Adjacent expectations**:
   - 文字の到着の知らせは、台詞の再生から seriko へ既に届いている（文字の cue は 1 続きの文字列と、その再生に占める時間を持つ）。本 spec はこの知らせの形を変えない。
@@ -159,8 +159,8 @@
 
 1. When 3 語の実装が着地したとき, the areka shall `doc/ukadoc-coverage/ledger/assets.toml` の `talk,数値`・`runonce`・`periodic,数値` の 3 行を `implemented` にし、担当を本 spec にし、正典が沈黙していて areka の裁量で決めた点（`periodic` が切り替わった瞬間には再生しないこと・`talk` の数える単位と数え直しの時点・同じ時刻の区切りのまとめ）を note に書く。あわせて `sometimes`・`rarely` の行の note にある「`runonce`・`periodic,数値` などは非駆動」の文を、着地後の実態（3 語は駆動・`yen-e`・`never` は非駆動）に直す。
 2. The areka shall 台帳の整合を見張る常時テストを緑のまま保つ。
-3. When 3 行を書き替えるとき, the areka shall `always` の行の担当を `areka-P0-seriko-interval-combinations` へ付け替える（判定 `degraded` と note は変えない。担当が本 spec になっている理由は `+` の組み合わせで、それを同 spec へ出したため・brief の「台帳の担当の付け替え」）。
-4. The areka shall `yen-e`・`never` の行には触れない（担当の付け替えは `areka-P0-seriko-script-triggers` が行う）。
+3. When 3 行を書き替えるとき, the areka shall `always` の行の担当を `seriko-interval-combinations` へ付け替える（判定 `degraded` と note は変えない。担当が本 spec になっている理由は `+` の組み合わせで、それを同 spec へ出したため・brief の「台帳の担当の付け替え」）。
+4. The areka shall `yen-e`・`never` の行には触れない（担当の付け替えは `seriko-script-triggers` が行う）。
 
 ### 要件 11: 口パクの検体と実機の確かめ
 

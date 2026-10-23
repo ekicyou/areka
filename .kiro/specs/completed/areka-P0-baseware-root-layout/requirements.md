@@ -60,7 +60,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
   - `.nar` の展開（完了 spec `areka-P0-nar-install`）・投げ込みや対話でのインストール（`areka-P0-ghost-install`）。
   - 切り替えの実行（`areka-P0-ghost-shell-balloon-switch`・`areka-P0-shell-balloon-switch`）とメニューへの登記（本仕様は `crates/areka/src/menu/` に触らない）。
   - `recommended.balloon`／`recommended.ghost` による並び替えや案内（α 後）。
-  - プロパティシステムの `ghostlist`／`balloonlist`／`currentghost.shelllist.*`（`areka-P0-property-catalog-lists`・`areka-P0-currentghost-property-tree`・α 後）。本仕様の列挙はその日の供給源になる形で置くだけ。
+  - プロパティシステムの `ghostlist`／`balloonlist`／`currentghost.shelllist.*`（`property-catalog-lists`・`currentghost-property-tree`・α 後）。本仕様の列挙はその日の供給源になる形で置くだけ。
   - 複数の根（ポータブル運用と `%APPDATA%` の併用）・多重ゴースト（根は 1 つ・同時起動は 1 体）。
   - 設定画面・設定ファイル（`areka.toml` 等）の新設。記憶はプロパティの永続化で足りる。
   - 既定バルーンを `.nar` へ畳んで検体に登記すること（`areka-P0-default-balloon-nar-fold`）・配布 zip の形（`areka-P0-alpha-release-signoff`）。

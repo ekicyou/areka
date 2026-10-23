@@ -114,7 +114,7 @@
 
 ## 2026-10-04 棚卸㉑で切った後の範囲
 
-- **本 spec は働きだけを持つ**（M・12〜15 タスク）。装飾（`\f[anchor*]` 16 項目×3 状態・`\f[anchor.font.color]`・descript の `anchor(.notselect|.visited).font.*` 族・訪問済み・縦書きの下線）は新しい spec **`areka-P0-anchor-style-canon`** へ移した（開発者「負荷が高すぎる仕様は分割を検討せよ」）。
+- **本 spec は働きだけを持つ**（M・12〜15 タスク）。装飾（`\f[anchor*]` 16 項目×3 状態・`\f[anchor.font.color]`・descript の `anchor(.notselect|.visited).font.*` 族・訪問済み・縦書きの下線）は新しい spec **`anchor-style-canon`** へ移した（開発者「負荷が高すぎる仕様は分割を検討せよ」）。
 - **見た目は既定の 1 種類だけ**: 作者の指定が無いときの姿（非選択の姿とホバーの姿）を 1 つ決めて描く。作者の指定（`\f[anchor*]`・descript）は本 spec では効かなくてよい（受け取りは今までどおり `unowned_vocab()` に保持）。何も描かないと「押せるのに見えない」になるので、既定の姿は要件で決める。
 - **Scope の読み替え**:
   - In から外す: 「装飾 16 項目」「descript `anchor(.notselect|.visited).font.*` 族の解析」「訪問済み状態の管理」「縦書き下線位置（bvc 語彙継承）」→ すべて `anchor-style-canon`。

@@ -230,7 +230,7 @@ crates/areka-emo-text/tests/
 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | **触らない**（8.6・9.5）。上表の見込み行数がすべて 1,000 未満であることが根拠 | — |
 | `doc/COMPAT_ARCHITECTURE.md` §8（`:122`） | 行を 2 本追加（§11.1） | — |
 | `.kiro/specs/completed/areka-P0-emo-text-layer/design.md:725,:736`・`research.md:200` | 1 行注記のみ（2.1／2.2） | — |
-| `.kiro/specs/areka-P0-balloon-canon-residue/brief.md`・`areka-P0-text-decoration-canon/brief.md`・`.kiro/steering/roadmap.md:73,:91`・`areka-P0-emo2-conformance-e2e/verification/acceptance-record.md:683-684` | §11 の登記 | — |
+| `.kiro/specs/balloon-canon-residue/brief.md`・`areka-P0-text-decoration-canon/brief.md`・`.kiro/steering/roadmap.md:73,:91`・`areka-P0-emo2-conformance-e2e/verification/acceptance-record.md:683-684` | §11 の登記 | — |
 
 ## System Flows
 
@@ -459,7 +459,7 @@ impl TextRegion {
 
 **Implementation Notes**
 - Validation: `region_inline_limit_tests.rs`——`inline_limit` の 3 方向テストと警告件数テスト（`log-capture-kit::count_levels`・`emo2-kakukaku` 相当で 1 件・本体側で 0 件）。
-- Risks: ~~`model.name()`（`crates/areka-parsers/src/balloon/model.rs:379`）が `None` のバルーン~~ **⚠訂正 2026-09-06**: design が指した `pub fn name` は `impl Font` のフォント名で、`BalloonModel` にバルーン名の取得口は無い（`descript.txt` の `name,` を `map_merged` が写像していない）。ゆえに全バルーンでプレースホルダ定数 `BALLOON_NAME_PLACEHOLDER` を記録する（ログ無し失敗にしない）。名前の写像の引受先は **`areka-P0-balloon-canon-residue` の項目 14**（台帳 §7 #10。⚠再訂正 2026-09-06: 当初登記先の `areka-P0-ukadoc-survey-assets` は同日 PR #141 で完了・アーカイブされ、先送りを消化できないため差し替えた）。
+- Risks: ~~`model.name()`（`crates/areka-parsers/src/balloon/model.rs:379`）が `None` のバルーン~~ **⚠訂正 2026-09-06**: design が指した `pub fn name` は `impl Font` のフォント名で、`BalloonModel` にバルーン名の取得口は無い（`descript.txt` の `name,` を `map_merged` が写像していない）。ゆえに全バルーンでプレースホルダ定数 `BALLOON_NAME_PLACEHOLDER` を記録する（ログ無し失敗にしない）。名前の写像の引受先は **`balloon-canon-residue` の項目 14**（台帳 §7 #10。⚠再訂正 2026-09-06: 当初登記先の `areka-P0-ukadoc-survey-assets` は同日 PR #141 で完了・アーカイブされ、先送りを消化できないため差し替えた）。
 
 #### 帯の防御式を保つ（`choice.rs:101-132`・`actor.rs:781-789`・`viewbox_draw.rs:728-750`）
 
@@ -630,7 +630,7 @@ rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka
 
 ### 11.3 登記（6.7・6.9・9.4・10.3）
 
-- `.kiro/specs/areka-P0-balloon-canon-residue/brief.md` に本仕様からの追加登記節（番号は着地時に末尾採番を再確認・現在の末尾は項目 13〔`:91`〕）: **項目 N**「`wordwrappoint` が描画範囲の外に解決されるバルーン定義（`emo2-kakukaku` の `balloonk0s.txt` が `wordwrappoint.x` を上書きしない）——areka は hard で折り返し警告 1 回・fixture は改変しない」／**項目 N+1**「行末禁則文字のぶら下がり（折返し基準を超えてよいが描画範囲は超えない・本仕様は未実装）」。
+- `.kiro/specs/balloon-canon-residue/brief.md` に本仕様からの追加登記節（番号は着地時に末尾採番を再確認・現在の末尾は項目 13〔`:91`〕）: **項目 N**「`wordwrappoint` が描画範囲の外に解決されるバルーン定義（`emo2-kakukaku` の `balloonk0s.txt` が `wordwrappoint.x` を上書きしない）——areka は hard で折り返し警告 1 回・fixture は改変しない」／**項目 N+1**「行末禁則文字のぶら下がり（折返し基準を超えてよいが描画範囲は超えない・本仕様は未実装）」。
 - `.kiro/specs/areka-P0-text-decoration-canon/brief.md` に相互参照 2 点: (1) 追加登記 4（`:75`）は本仕様が引き受けなかった（式不変・値の再導出のみ）(2) `\f[height,N]`／`+N`／`N%` は本仕様の `font.height` 意味論（em・DirectWrite の fontSize へ値のまま）を継承し、行送りの式は `TextLayerConfig::line_pitch` にある。`draw.rs` の分割は本仕様では行わない（先取り分割の登記は置かない）。禁則遅延の引受先を residue にした旨も一言。
 - `.kiro/steering/roadmap.md:73`（挙動バグ行）を「✅ 解決」・`:91`（W12 A′）を完了へ。
 

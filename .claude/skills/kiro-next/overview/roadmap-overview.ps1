@@ -410,7 +410,7 @@ function Get-Ledger([string[]]$Lines, [pscustomobject]$Markers) {
 # テーマ別の決めごとの節を読む。節が無ければ $null（欠け themes は呼ぶ側が出す）。
 # ### 見出しごとに、THEME_SPECS の #### の下の「- [{印}] {名前の並び} -- {残り}」の行だけを読む。
 # 返り値 @{ Themes = Specs の行を 1 つ以上持つ見出しの名前（出る順）; Rows = @{ names; done; theme（Themes の添字）;
-#   source（一言の元）; prereqs（前提の文の深さ 0 の SPEC_PREFIX 付きの名前） } }
+#   source（一言の元）; prereqs（前提の文の深さ 0 の spec 名・頭の SPEC_PREFIX は外す） } }
 function Get-Themes([string[]]$Lines, [pscustomobject]$Markers) {
     $start = -1
     for ($i = 0; $i -lt $Lines.Count; $i++) {
@@ -422,7 +422,8 @@ function Get-Themes([string[]]$Lines, [pscustomobject]$Markers) {
     $heading = ''
     $theme = -1
     $inSpecs = $false
-    $prefixed = [regex]::Escape($SPEC_PREFIX) + '([a-z0-9]+(?:-[a-z0-9]+)*)'
+    # 未着手の spec は 2026-10-23 から接頭辞なし（kiro-spec-schema.md の命名規則）なので、頭の SPEC_PREFIX は有っても無くてもよい
+    $prefixed = '(?<![A-Za-z0-9-])(?:' + [regex]::Escape($SPEC_PREFIX) + ')?([a-z0-9]+(?:-[a-z0-9]+)+)(?![A-Za-z0-9-])'
     for ($i = $start + 1; $i -lt $Lines.Count -and -not $Lines[$i].StartsWith($SECTION_PREFIX); $i++) {
         $line = $Lines[$i]
         if ($line.StartsWith('### ')) {

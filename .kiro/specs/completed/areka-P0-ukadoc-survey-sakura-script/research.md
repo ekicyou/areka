@@ -178,10 +178,10 @@
 
 | spec（brief のみ） | 名乗るさくらスクリプトの項目 |
 |---|---|
-| **`areka-P0-property-query-channels`** | **`\![get,property,...]`・`\![set,property,プロパティ名,値]`・`%property[プロパティ名]`・`\![embed,イベント名,r0,r1,r2...]` の 4 件を範囲内と明記**（経路 1〜4）。しかも `%property[...]` のために **`lexer.rs` の `scan_sysvar` を直す**と書いている |
-| `areka-P0-makoto-dll-host` | `\![load,makoto]`・`\![unload,makoto]`・`\![reload,makoto]`（範囲内）。`\![reload,shiori]` は範囲外＋追跡登記 |
+| **`property-query-channels`** | **`\![get,property,...]`・`\![set,property,プロパティ名,値]`・`%property[プロパティ名]`・`\![embed,イベント名,r0,r1,r2...]` の 4 件を範囲内と明記**（経路 1〜4）。しかも `%property[...]` のために **`lexer.rs` の `scan_sysvar` を直す**と書いている |
+| `makoto-dll-host` | `\![load,makoto]`・`\![unload,makoto]`・`\![reload,makoto]`（範囲内）。`\![reload,shiori]` は範囲外＋追跡登記 |
 | `areka-P0-status-execution-states` | `\![enter,inductionmode]`・`\![enter,passivemode]`・`\![enter,nouserbreakmode]` |
-| `areka-P0-zorder-property` | タグは主張しない（完了済み `scope-zorder-pinning` が `\![set,zorder]`／`\![reset,zorder]` を実装済みと明記） |
+| `zorder-property` | タグは主張しない（完了済み `scope-zorder-pinning` が `\![set,zorder]`／`\![reset,zorder]` を実装済みと明記） |
 | `areka-P0-translate-pipeline` | `\![load|unload|reload,makoto]`・`\![reload,shiori]` を**範囲外として**言及 |
 
 **完了済み spec で実装の担い手になれるもの（要件 8.8）**: `sakura-parse`（字句・意味写像の土台）・`sakura-bare-tag-lexer`（角括弧なし `\_` の固定長）・`sakura-dialogue-tags`（`\![move]`・`\!` キャリア・`\q`）・`choice-render`／`choice-select-events`／`choice-interact`（`\q`・`\__q`・`\![*]`）・`kero-balloon`（`\b[ID]`）・`mayuna-compose`／`bindoption-exclusivity`（`\![bind]`）・`seriko-engine`（`\s[ID]`）・`newline-defer`／`budoux-newline`（`\n[...]`）・`cue-playback-duration`（`\_w`）・`emo-text-layer`（`\_l`）・`scope-zorder-pinning`（`\![set,zorder]`／`\![reset,zorder]`）。**`choice-select-events` は既に正典 id の形（`ukadoc:list_sakura_script:_5c_2a:1`）で引用しており、書き方の先例になる。**
@@ -301,7 +301,7 @@ ukadoc MCP のスナップショットを探索した結果:
 
 **⑩ 要件 8.1 の「既存 8 本の brief」は所有の転記元として不完全（要件 8.1・8.4）**
 
-`property-query-channels`（4 件）・`makoto-dll-host`（3 件）・`status-execution-states`（3 件）が 8 本の外からさくらスクリプトの項目を名乗っている。とくに **`\![embed,...]` は `sakura-time-directives` と `property-query-channels` の二重所有で、どちらの brief も相手を知らない**。8 本だけを見て転記すると、この二重所有は見つからないまま `owner = "areka-P0-sakura-time-directives"` が書かれてしまう。
+`property-query-channels`（4 件）・`makoto-dll-host`（3 件）・`status-execution-states`（3 件）が 8 本の外からさくらスクリプトの項目を名乗っている。とくに **`\![embed,...]` は `sakura-time-directives` と `property-query-channels` の二重所有で、どちらの brief も相手を知らない**。8 本だけを見て転記すると、この二重所有は見つからないまま `owner = "sakura-time-directives"` が書かれてしまう。
 
 **⑪ 8 本のうち 4 本は、さくらスクリプト以外の id も一緒に名乗っている（要件 8.2・8.3）**
 
@@ -485,7 +485,7 @@ ukadoc MCP のスナップショットを探索した結果:
 - **別名の判定を群でなく id の対に当てる**（接頭辞の検査＋「引数が 1 つだけ多い相手」の同点処理）。要件 4.5 が `\_b` を 2 通りに数えていた矛盾が、`x,y` 族と `inline` 族の 2 本の鎖に割れることで両方成り立つ形に解けた。機械的に **14 件が `alias`**。
 - `\![...]` の表は **2 段**（表 A 52 行・全数／表 B は選択子が 2 つ以上ある 20 名だけを展開して 151 行）。
 - 1 つの腕に複数の id が当たるときは **1 項目 1 行で積む**。
-- **`lexer.rs` には 1 行も置かない**（意味を作る定義は `decode_token` の短縮形の腕であり、`SHORTHAND_WORDS` は綴りの表。さらに `\bID番号`・`\pID番号` は `alias` なので URL 自体が不要）。議題 4 が消え、`areka-P0-property-query-channels` との衝突も構造的に消えた。
+- **`lexer.rs` には 1 行も置かない**（意味を作る定義は `decode_token` の短縮形の腕であり、`SHORTHAND_WORDS` は綴りの表。さらに `\bID番号`・`\pID番号` は `alias` なので URL 自体が不要）。議題 4 が消え、`property-query-channels` との衝突も構造的に消えた。
 - `%` の未対応 24 件の備考は `flat.rs` の層に沿って **5 群**（暦時計 5／画面と OS 起動時間 5／単語ランダム系 10／インストール文脈 2／構文記録 2）。
 - **§8 の「正典沈黙の裁量」の行は `degraded` の根拠にならない**（`degraded` の根拠は「正典に定めがあるのに別の応答を返す」と明記した行だけ）。
 - **未登記の食い違いで状態を動かさない**。備考に書き、ブリーフィング ⑹ 節へ §8 の新しい行の候補として出す。

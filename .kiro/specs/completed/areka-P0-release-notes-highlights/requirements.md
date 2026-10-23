@@ -54,8 +54,8 @@
   - リリースの手順は、決まりを自分の文書の中に置く例外の spec である。見どころを書く段は同 spec の文書に書き、`workflow.md` や `kiro-complete` は直さない。
   - リリースの実行中（リリースの手順が版上げの PR を出してから見守りを終えるまで）は、本 spec を main へ入れない。
   - 新しい公開の段が本番で初めて動くのは、リリースの手順の次の回（`v0.0.3`）である。本 spec はそれより前に着地する。
-  - `areka-P0-winget-release-automation` は、Release の添付から zip を名前で拾う。詳しいリリースノートの名前は、その拾い方に当たらない（要件 5.3）。
-  - `areka-P0-release-code-signing` は `release.yml` のビルドと zip の間に段を挟む。同じファイルを触るので、本 spec とは直列に進める。
+  - `winget-release-automation` は、Release の添付から zip を名前で拾う。詳しいリリースノートの名前は、その拾い方に当たらない（要件 5.3）。
+  - `release-code-signing` は `release.yml` のビルドと zip の間に段を挟む。同じファイルを触るので、本 spec とは直列に進める。
 
 ## Requirements
 

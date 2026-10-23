@@ -117,9 +117,9 @@
 
 - [x] 6. 互換対応表と網羅の台帳
 - [x] 6.1 記録を実際の振る舞いに合わせ、生成物を作り直す
-  - 互換対応表の沈黙ルール対応表のうち、3 つのイベントの発火・中断で終わったときの時間切れの起点・既定の待ち時間の成立条件の一文・バルーンの中断の操作（完了 spec の約束の改め）・`balloontimeout` の寿命の側の行と、コンパイルの側の時間指令の行の追跡先を、設計の「文書・台帳」の節どおりに書き直す（根拠の区分・Reference2 の縮退と追跡先 `areka-P0-balloon-break-position`・残る行き違いの 2 つを含む）。
+  - 互換対応表の沈黙ルール対応表のうち、3 つのイベントの発火・中断で終わったときの時間切れの起点・既定の待ち時間の成立条件の一文・バルーンの中断の操作（完了 spec の約束の改め）・`balloontimeout` の寿命の側の行と、コンパイルの側の時間指令の行の追跡先を、設計の「文書・台帳」の節どおりに書き直す（根拠の区分・Reference2 の縮退と追跡先 `balloon-break-position`・残る行き違いの 2 つを含む）。
   - 網羅の台帳の 3 行（`OnBalloonClose`・`OnBalloonTimeout` は実装済み、`OnBalloonBreak` は縮退）と冒頭の群の説明、`balloontimeout` の行を、持ち主を本 spec へ直して書き直す。
-  - 生成物は道具で作り直し、手で直さない。`areka-P0-sakura-time-directives` の brief に「`balloontimeout` は本 spec が持つ」の相互登記が残っていることを確かめる。
+  - 生成物は道具で作り直し、手で直さない。`sakura-time-directives` の brief に「`balloontimeout` は本 spec が持つ」の相互登記が残っていることを確かめる。
   - 完了の状態: 網羅の台帳の検査のテストが緑（状態・持ち主・証拠の URL）で、生成物の差分が台帳の変更と一致している。
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.7_
   - _Depends: 5.2_
@@ -150,9 +150,9 @@
 - 4.2: テストの補助 `Frame::ended_at(end)` が占有終端とトークの終わりを一緒に積む（`Frame::talk_started()` は `TalkId(1)` つき）。新しい檻の置き場は `balloon_visibility_talk_end_tests.rs`（4.3 で広げる）。4.3 へ回したもの: 相の側のログの水準と欄の檻（`StoppedAt` の info と `stopped_at` 欄・`StopTimeMissing` の warn・`balloon_timeout_notice_failed`／`no_talk_id` の warn）。
 - 5.1: 相の檻は本物の `decide` と `notify_timeout` を相の順に呼ぶだけで、`run_balloon_visibility_phase` の中の呼び出しの 1 行は通らない（headless の表示層は可視にならず、時間切れまで届かない）。5.2 の通しの檻は、本物の相を可視のバルーンで回し、kanade の受け端に番号つきの知らせが 1 通届くことまで主張する（可視を作れる前例は実 GPU の `frame_visibility_integration_tests.rs` の `seat_ghost`）。
 - 4.4 の取りこぼし（6.1 で発見・直した）: コードの ukadoc の注記の URL は、網羅の台帳のカタログの形（`#_5c_21_5b…:1`）で書く。違う形だと `ukadoc-survey check` が `SourceUrlNotInCatalog` で赤になる。ukadoc の注記を足したら `cargo test -p ukadoc-survey` も回す。design.md・requirements.md・research.md にも同じカタログに無い形の URL が残っている（spec 文書は検査の外）。
-- 6.1（範囲外・完了の棚卸で扱う）: `.kiro/specs/areka-P0-balloon-canon-residue/brief.md` の項目 8 が、消えた `BalloonLifecycleNotice` を今もあるものとして書いている。
+- 6.1（範囲外・完了の棚卸で扱う）: `.kiro/specs/balloon-canon-residue/brief.md` の項目 8 が、消えた `BalloonLifecycleNotice` を今もあるものとして書いている。
 - 7.1: `tools/test-all.ps1` は全段が緑（2026-10-06）。触った Rust のファイルは `emo2_boot/spine.rs` の 1,000 行（取り込みの時点から 1,000 行・本 spec は 1 行を書き替えただけで増やしていない＝設計と調停役の約束どおり）を除いて、すべて 1,000 行未満。運行表の本体 `schedule/mod.rs` の足し分は +23/-6（差し引き +17・上限 60 の内）。
 - 7.2: SHIORI に繋がらないと「SHIORI が動かなくなりました」の窓が出て、`AREKA_APP_SMOKE_EXIT_MS` の自動終了（`origin=Smoke`）が記録されてもプロセスが終わらない（R1・検体の辞書の誤りで LOAD が断られたとき）。窓は終了の処理の最後に出る作り（`main.rs` の `alert::raise`）で、自動の走行のための抑止口 `AREKA_NO_ALERT`（`alert.rs` の `NO_ALERT_ENV`・抑えても `error!(event="alert")` は残る）が既にある。
-- 完了時にその場で解決（2026-10-08）: ⑴ 実機の走行の台本 `real-machine-run.ps1` が `AREKA_NO_ALERT=1` を立てるようにした（上の 7.2 の窓。アプリの不具合ではないので起票しない）。⑵ `areka-P0-balloon-canon-residue/brief.md` の項目 8 が、本 spec で消した `BalloonLifecycleNotice` と `#[allow(dead_code)]` をまだあるものとして書いていたのを、本 spec で着地した記述へ直した。同じく本 spec が引き取った項目 7（`balloontimeout`）と項目 10（中断の起点）にも着地の印を付けた。
-- 完了時の棚卸の起票: 0 件。`cargo clippy -p areka-kanade --all-targets` の既存の誤り（2.5）は起票済みの `areka-P0-clippy-199-lints` の範囲。spec 文書（design.md・requirements.md・research.md）に残るカタログの形でない ukadoc の URL は検査の外で、アーカイブする文書なので直さない。`talk_lifecycle.rs` の「止まった時刻が取れない」の warn に `event=` の欄が無い件は、design の表が欄を決めていないので直さない。
+- 完了時にその場で解決（2026-10-08）: ⑴ 実機の走行の台本 `real-machine-run.ps1` が `AREKA_NO_ALERT=1` を立てるようにした（上の 7.2 の窓。アプリの不具合ではないので起票しない）。⑵ `balloon-canon-residue/brief.md` の項目 8 が、本 spec で消した `BalloonLifecycleNotice` と `#[allow(dead_code)]` をまだあるものとして書いていたのを、本 spec で着地した記述へ直した。同じく本 spec が引き取った項目 7（`balloontimeout`）と項目 10（中断の起点）にも着地の印を付けた。
+- 完了時の棚卸の起票: 0 件。`cargo clippy -p areka-kanade --all-targets` の既存の誤り（2.5）は起票済みの `clippy-199-lints` の範囲。spec 文書（design.md・requirements.md・research.md）に残るカタログの形でない ukadoc の URL は検査の外で、アーカイブする文書なので直さない。`talk_lifecycle.rs` の「止まった時刻が取れない」の warn に `event=` の欄が無い件は、design の表が欄を決めていないので直さない。
 - 7.2: ⑵・⑷ は R2、⑴・⑶（と `OnBalloonClose` の台詞が運ぶ ⑷）は 10-07 の R4 で確認した。SendInput を PowerShell の `Add-Type` から呼ぶときは、x64 の `INPUT` が 40 バイトであることを確かめる（大きさが違うと黙って 0 を返す）。各入力に絶対座標（`MOUSEEVENTF_ABSOLUTE|VIRTUALDESK`）を載せないと、在席中のマウスの動きでダブルクリックが割れる。

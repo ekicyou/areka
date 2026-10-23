@@ -40,7 +40,7 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
   - バルーン資産（`emo2-kakukaku` を含む）の是正。`wordwrappoint` を文字描画範囲の内へ直す等はバルーン側の裁量であり、本仕様は areka の挙動を定めるだけで fixture は改変しない。
 - **Adjacent expectations**:
   - **Upstream**: `areka-P0-cursor-tag-canon`（本ブランチの HEAD `36d1c323` に取り込み済み。`lh` の係数は `CursorBasis.line_pitch` として引数で受ける形＝`cursor_tag.rs:120-125`）。完了 spec `areka-P0-emo-text-layer`（正典表の改訂対象）・`areka-P0-balloon-vertical-canon`（領域解決）。
-  - **Downstream**: `areka-P0-emo2-conformance-e2e`（本仕様の完遂を待って走行 A〜D を採り直し、M1 完成判定へ。同 spec の `acceptance-record.md` §13.2 の「引受先が実在することの確認」欄を本仕様が埋める）・`areka-P0-text-decoration-canon`（`draw.rs` を後から触る）・`areka-P0-choice-marker-styling`・`areka-P0-balloon-canon-residue`（バルーン記述の粗さの台帳）。
+  - **Downstream**: `areka-P0-emo2-conformance-e2e`（本仕様の完遂を待って走行 A〜D を採り直し、M1 完成判定へ。同 spec の `acceptance-record.md` §13.2 の「引受先が実在することの確認」欄を本仕様が埋める）・`areka-P0-text-decoration-canon`（`draw.rs` を後から触る）・`choice-marker-styling`・`balloon-canon-residue`（バルーン記述の粗さの台帳）。
   - **正典参照**: ukadoc `descript_balloon` の `font.height`（単位は px）・ukadoc `\_l[x,y]` の `XXlh`「1lh＝1em＋行間」（`cursor-tag-canon` `requirements.md:193` 付録 A の逐語）。ukadoc に行間の既定値の記述がないため、**裁定で既定値 2px を定め、areka 裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に登記する**（SSP の画素実測は義務にしない＝開発者方針 2026-09-05）。
 
 ## Requirements
@@ -131,7 +131,7 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 4. While 折返し基準が描画範囲の内（本体側 `emo2` では 351 ≤ 356）にある, the emo テキスト層 shall 本仕様の前後で折返しの位置を変えない（行送り以外の差を出さない）。
 5. When 実フォント（Yu Gothic UI・em 28）で「閉じる」の文字送りを測った, the 本仕様 shall `menu.pasta:15` の「閉じる」（`\_l[5em,…]`＝x164 起点・3 文字・送り合計 ≈ 69px の見込み → x164..≈233）が描画範囲の右端 240 の内に収まることを決定論テストで示し、brief の「x164..248（1 文字 28px）」が全角＝em の仮定による机上値であったことを記録する。
 6. If 確定した文字送りでも「閉じる」が描画範囲の右端に収まらない, then the emo テキスト層 shall 欠けさせずに無条件に折り返し（Requirement 6.2）、その結果として先頭行があふれる場合は描画範囲の外へ折返し基準を置いたバルーン定義側の粗さとして記録する（areka 側で描画範囲を広げて救済しない）。
-7. When 折返し基準が描画範囲の外に解決されたバルーンを読み込んだ, the emo テキスト層 shall その事実を警告ログ（バルーン名・解決値・辺の値）で 1 回記録し、バルーン側の粗さとして `areka-P0-balloon-canon-residue` の台帳へ登記する（fixture は改変しない。本 fixture の原因は `balloonk0s.txt` が `wordwrappoint.x` を上書きせず共通 `descript.txt:14` の `-34` を継ぐこと。本体側 `balloons0s.txt` は `-49` を自ら上書きしている）。
+7. When 折返し基準が描画範囲の外に解決されたバルーンを読み込んだ, the emo テキスト層 shall その事実を警告ログ（バルーン名・解決値・辺の値）で 1 回記録し、バルーン側の粗さとして `balloon-canon-residue` の台帳へ登記する（fixture は改変しない。本 fixture の原因は `balloonk0s.txt` が `wordwrappoint.x` を上書きせず共通 `descript.txt:14` の `-34` を継ぐこと。本体側 `balloons0s.txt` は `-49` を自ら上書きしている）。
 8. The 本仕様 shall 選ばなかった案（⑴ 供給面を折返し基準まで広げる＝描画範囲を超えて描くため裁定に反する ⑵ 現状維持＝描画範囲で面を切って 8px 欠ける ⑶ 折返し基準を描画範囲へ丸め込むだけ＝「絶対上限」の意味論を持たず禁則の遅延も表せない）とその帰結を記録する。
 9. The 本仕様 shall 行末禁則文字のぶら下がり（折返しの遅延）を本仕様では実装せず、裁定の意味論（禁則文字は折返し基準を超えてよいが描画範囲は超えない）を記録し、設計フェーズまでに実在する引受先 spec を確認して登記する（候補: `areka-P0-text-decoration-canon` brief の追加登記〔`layout.rs` の行の置き場所を扱う〕）。
 

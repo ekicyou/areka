@@ -1,6 +1,6 @@
 # Brief: areka-P0-translate-pipeline
 
-> 起票: 2026-09-02（`/kiro-discovery`・Path D の 1 本目・**M 規模**）。開発者要望「ukadoc を確認し MAKOTO/2.0 対応を実装する spec を立ち上げよ。ブリーフィング段階で要件議論は大体済ませておきたい」を受け、翻訳（トランスレート）経路を 2 spec に分けた **前半**。後半は [areka-P0-makoto-dll-host](../areka-P0-makoto-dll-host/brief.md)（MAKOTO/2.0 DLL のホスティング）。
+> 起票: 2026-09-02（`/kiro-discovery`・Path D の 1 本目・**M 規模**）。開発者要望「ukadoc を確認し MAKOTO/2.0 対応を実装する spec を立ち上げよ。ブリーフィング段階で要件議論は大体済ませておきたい」を受け、翻訳（トランスレート）経路を 2 spec に分けた **前半**。後半は [makoto-dll-host](../makoto-dll-host/brief.md)（MAKOTO/2.0 DLL のホスティング）。
 > **種別**: 互換機能の新設（SHIORI が返した台詞を表示前に加工する「翻訳」の継ぎ目と、SHIORI イベント `OnTranslate`）。emo2 は使わない＝**M2 ゲート扱い**（e2e をブロックしない）。
 > **ブリーフィング段階の裁定（2026-09-02・開発者）**: ⑴ OnTranslate を範囲に含める ⑵ 2 spec に分割（本 spec → makoto-dll-host） ⑶ 環境変数の展開は正典順（展開してから翻訳）へ寄せる ⑷ 実機は本物の MAKOTO DLL 1 本＋自前テスト DLL（後半 spec） ⑸ 任意 charset は常に欲しい（後半 spec で SHIORI 側 wire にも適用） ⑹ シェル側 MAKOTO も後半 spec に含める ⑺ spec 名は本名で確定。
 

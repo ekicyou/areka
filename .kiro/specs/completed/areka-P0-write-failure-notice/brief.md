@@ -97,7 +97,7 @@
 - **Extends**: なし（完了 `ghost-install` の「I/O の失敗は `extraction`」の写しを見直す）。
 - **Adjacent**:
   - `areka-P0-user-data-root`（同じ日に起票。置き場が直れば、winget で入れた形ではこの失敗が起きなくなる。ただし、書き込みはほかの理由でも失敗するので、この spec は置き場の直しを待たない）。
-  - `areka-P0-install-live-target-hazards`（`install/` を触る）。
+  - `install-live-target-hazards`（`install/` を触る）。
   - `areka-P0-baseware-root-list`（`boot_resolve.rs`・`install/`）。同じ時に走らせるなら、触る関数が重ならないことを照らす。
 
 ## Constraints

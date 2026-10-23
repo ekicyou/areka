@@ -213,7 +213,7 @@
 
 ### 8.3 調べが要る点（§6）への答え
 
-- **網羅台帳に `\![execute,…]` の 3 行が無い件**: 要件の討議で `areka-P0-ukadoc-catalog-refresh` の持ち物と決まった。判定の表の出典は ukadoc の URL で書く。
+- **網羅台帳に `\![execute,…]` の 3 行が無い件**: 要件の討議で `ukadoc-catalog-refresh` の持ち物と決まった。判定の表の出典は ukadoc の URL で書く。
 - **`external` を返す SHIORI**: 実物は要らない。x64 の偽の backend（新しいメソッドを上書きして `security_level: Some("external")` を返す）で運行表から受け口まで通せる。32bit の仲介と同じプロセスの経路は、線の書き読みの純粋な関数（`build_request`・`parse_response`・`map_get_outcome`・共通の組み立て `request_of`）の単体テストで足りる。試験用 DLL（`shiori-host32-testdll`・`shiori4-testdll`）は直さない。手元の検体（pasta）は応答に常に `SecurityLevel: local` を付けるので、実機の振る舞いは変わらない。
 - **MCP の台本の出どころの SSP との突き合わせ**: 値は要件が SSP の実測（10-21）で決めている。テストで値を固定し、加えて送る直前の記録 `shiori_request`（`trace!`）に `sender`・`sender_type`・`security_level` を載せて、実機でも同じヘッダが出たことを記録で確かめられるようにする。
 

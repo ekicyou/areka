@@ -59,7 +59,7 @@
 
 `doc/COMPAT_ARCHITECTURE.md` §8 を全行読んだところ、SHIORI ドメインの正典項目を名指ししている行は、設計が挙げる 2 行のほかに少なくとも次の 2 行がある。
 
-1. **`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の SHIORI 発火** — 「M1 非発火。語彙・Reference 割当・受け渡し口の型のみを残す」と記録され、追跡先の spec 名（`areka-P0-balloon-canon-residue`）と解禁の条件まで書かれている。3 件はいずれも正典に実在する（`ukadoc:list_shiori_event:OnBalloonClose:1` ほか）。現在の設計では群 2 の規則によって、理由の書かれていない `absent` になってしまう。実態は「語彙と受け口の型だけがある」なので、`vocabulary-only` か `degraded` のどちらかと、転記元・`owner` の記入が要る（要件 3.6・12.3）。
+1. **`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の SHIORI 発火** — 「M1 非発火。語彙・Reference 割当・受け渡し口の型のみを残す」と記録され、追跡先の spec 名（`balloon-canon-residue`）と解禁の条件まで書かれている。3 件はいずれも正典に実在する（`ukadoc:list_shiori_event:OnBalloonClose:1` ほか）。現在の設計では群 2 の規則によって、理由の書かれていない `absent` になってしまう。実態は「語彙と受け口の型だけがある」なので、`vocabulary-only` か `degraded` のどちらかと、転記元・`owner` の記入が要る（要件 3.6・12.3）。
 2. **`Status [SSP拡張]` の `balloon`（表示中のバルーン ID 群）の実導出** — 設計が挙げた選択確定カスケードの行とは別の行で、同じ台帳の行（`ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`）に対する 2 つ目の転記元になる。
 
 （`OnBalloonClick` の行は「正典に存在しない」ことの記録なので、台帳の行は要らない。この判断は正しい。）

@@ -70,17 +70,17 @@
 
 ### 2.5 台帳・文書（要件 10）
 
-- **台帳の行**: `doc/ukadoc-coverage/ledger/sakura-script.toml` の `[entry."ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1"]`。今は `status = "vocabulary-only"`・`owner = "areka-P0-sakura-time-directives"`・`priority = "A1"`・`values = ["交わり"]`。注記は「壊れ方: 黙って壊れる」「ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）」「語彙の登記: COMPAT §8 の allowlist の行」。
+- **台帳の行**: `doc/ukadoc-coverage/ledger/sakura-script.toml` の `[entry."ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1"]`。今は `status = "vocabulary-only"`・`owner = "sakura-time-directives"`・`priority = "A1"`・`values = ["交わり"]`。注記は「壊れ方: 黙って壊れる」「ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）」「語彙の登記: COMPAT §8 の allowlist の行」。
 - **実装済みにすると働く検査**（`crates/ukadoc-survey`）:
   - `check::content` の `check_evidence`: `implemented` の項目は、ソースに正典 URL（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1`）が 1 件以上無いと `ImplementedWithoutEvidence` で赤。置き場は定義の箇所（テストの中は証拠に数えない）。前例は `crates/areka-sakura/src/sysvar.rs` の `%username`・`crates/areka/src/emo2_boot/zorder_cue.rs` の `set,zorder`。
   - `check::freshness`: ドメイン別の報告 `doc/ukadoc-coverage/report/sakura-script.md` は台帳から作り直した本文と全文一致が要る → `cargo run -p ukadoc-survey -- report`。
   - `tests/consistency/documents_checks.rs` の判定 ⑹: 全体の報告 `doc/ukadoc-coverage/report/summary.md` も全文一致が要る → `cargo run -p ukadoc-survey -- report-summary`。
-  - **`tests/consistency/spec_checks.rs` の判定 ⑸**: 腕 f「台帳の非空の宛先はすべて `roadmap-draft.md` の `[[spec]]` か `briefing.md` の `[[owner_completed]]` の名前」・腕 c「`[[spec]].owner_count` ＝ 台帳でその名前を宛先に持つ項目の数」・腕 a「`[briefs].count` ＝ `[[spec]]` の行数」。`owner` を本 spec に替えると、`doc/ukadoc-coverage/roadmap-draft.md` に本 spec の `[[spec]]` 行を足し（`bundle = "会話"`＝`linkage.md` の束「会話」に属する・`owner_count = 1`・`stage`・`wave` は前例どおり写す）、`areka-P0-sakura-time-directives` の `owner_count` を 11 → 10 に、`[briefs].count` を 39 → 40 にし、段階ごとの表の「会話」の行の依存する spec の件数も直し、前例（「2026-09-27 の 2 行目の追加」ほか）の型で追加の理由を 1 段落書く必要がある。**要件 10 はこのファイルを挙げていない。**
+  - **`tests/consistency/spec_checks.rs` の判定 ⑸**: 腕 f「台帳の非空の宛先はすべて `roadmap-draft.md` の `[[spec]]` か `briefing.md` の `[[owner_completed]]` の名前」・腕 c「`[[spec]].owner_count` ＝ 台帳でその名前を宛先に持つ項目の数」・腕 a「`[briefs].count` ＝ `[[spec]]` の行数」。`owner` を本 spec に替えると、`doc/ukadoc-coverage/roadmap-draft.md` に本 spec の `[[spec]]` 行を足し（`bundle = "会話"`＝`linkage.md` の束「会話」に属する・`owner_count = 1`・`stage`・`wave` は前例どおり写す）、`sakura-time-directives` の `owner_count` を 11 → 10 に、`[briefs].count` を 39 → 40 にし、段階ごとの表の「会話」の行の依存する spec の件数も直し、前例（「2026-09-27 の 2 行目の追加」ほか）の型で追加の理由を 1 段落書く必要がある。**要件 10 はこのファイルを挙げていない。**
 - **`doc/COMPAT_ARCHITECTURE.md` §8**: 「compile 側時間指令 allowlist」の行（`set,choicetimeout` を逐語で名指し・「M1 は非実導出」）と、選択確定カスケードの行（`doc/choice-cascade-compat.md` へ委譲）がある。要件 10.3・10.4 の 2 点を書き足す場所は特定できた。
 - **着地で古くなる他の記述**（要件 10 の外）:
-  - `doc/choice-cascade-compat.md` 行 5b「M1 で実際に流れるのは既定値のみ（台本タグの解釈は追跡 spec `areka-P0-sakura-time-directives` の領分）」→ 本 spec の着地で嘘になる。
+  - `doc/choice-cascade-compat.md` 行 5b「M1 で実際に流れるのは既定値のみ（台本タグの解釈は追跡 spec `sakura-time-directives` の領分）」→ 本 spec の着地で嘘になる。
   - 同 行 5d「`TimedSchedule` のバリア自動解除機構は選択バリアには使用しない……将来 dola 側 seam を生かす場合は本行を改訂」→ 案 A を取るなら「着いたときに飛ばす判定も選択の区切りには効かない」ことを書き足す。案 B なら「区切りの値は常に `None`」の前提を書く。
-  - `doc/ukadoc-coverage/briefing-sakura-script.md` の ⑶ 担当の突合表（`areka-P0-sakura-time-directives` が `\![set,choicetimeout,時間]` を「所有」）と ⑵ の消費側の表（`set,choicetimeout` が「消費されない」）。機械の検査（判定 ⑴ は `linkage.md`・`briefing.md`・`roadmap-draft.md` の 3 本だけを見る）には掛からないが、記述は古くなる。
+  - `doc/ukadoc-coverage/briefing-sakura-script.md` の ⑶ 担当の突合表（`sakura-time-directives` が `\![set,choicetimeout,時間]` を「所有」）と ⑵ の消費側の表（`set,choicetimeout` が「消費されない」）。機械の検査（判定 ⑴ は `linkage.md`・`briefing.md`・`roadmap-draft.md` の 3 本だけを見る）には掛からないが、記述は古くなる。
   - `crates/areka-sakura/src/compile.rs` の区切りの注記（「台本からの時間指定は追跡 spec の領分ゆえ本層は値を供給しない」）。
 - **完了後の扱い**: `/kiro-complete` で `completed/` に移っても、腕 b は `.kiro/specs/` 直下と `completed/` の和を見るので赤にならない（前例 `areka-P0-ghost-change-name-resolution` は完了後も `[[spec]]` に残っている）。
 
@@ -161,7 +161,7 @@
 
 1. **要件 5 をどこで満たすか**（§4）。案 A（dola の 1 腕・既存テストの書き換え 0・正本 1 か所）か案 B（dola 無改変・drive.rs 改変・正本 2 か所・要件 9.1 の文言と食い違う）。案 A なら brief の「触るソースは compile.rs と兄弟テストだけ」を `crates/dola/src/cue/schedule.rs`（＋注記・dola のテスト）へ広げる了承が要る。
 2. **案 A を取る場合の範囲**: 「着いたら飛ばす」だけを止めるか、「止まっている間に自分で解く」（`barrier_timeout_offset`）も合わせて止めるか。後者は `CuePlayer` からは到達しないが、`TimedSchedule` を直接使う者には効く。1 腕の変更なら両方が同時に止まる。
-3. **台帳の宛先を本 spec へ替えることに伴う文書の拡大**: 要件 10.1（引受先を本 spec に替える）を満たすと、整合テストの判定 ⑸ が `doc/ukadoc-coverage/roadmap-draft.md`（`[[spec]]` 行の追加・`areka-P0-sakura-time-directives` の `owner_count` 11 → 10・`[briefs].count` 39 → 40・段階ごとの表・追加の理由の段落）を要求する。報告 2 本（`report/sakura-script.md`・`report/summary.md`）の作り直しと、ソースへの正典 URL の 1 行（証拠）も要る。これらを要件 10 に書き足すか、設計の「触る文書」にだけ書くか。
+3. **台帳の宛先を本 spec へ替えることに伴う文書の拡大**: 要件 10.1（引受先を本 spec に替える）を満たすと、整合テストの判定 ⑸ が `doc/ukadoc-coverage/roadmap-draft.md`（`[[spec]]` 行の追加・`sakura-time-directives` の `owner_count` 11 → 10・`[briefs].count` 39 → 40・段階ごとの表・追加の理由の段落）を要求する。報告 2 本（`report/sakura-script.md`・`report/summary.md`）の作り直しと、ソースへの正典 URL の 1 行（証拠）も要る。これらを要件 10 に書き足すか、設計の「触る文書」にだけ書くか。
 4. **着地で古くなる記述をどこまで直すか**: `doc/choice-cascade-compat.md` 行 5b・5d、`doc/ukadoc-coverage/briefing-sakura-script.md` の ⑵ ⑶ の行、compile.rs の区切りの注記。要件 10 には無い。
 5. **時間の欄の読み方の細目**（正典は黙っている。§8 の裁量の 1 行に入れるかも含めて）:
    - 前後の空白（`\![set,choicetimeout, 500]`）を切り落とすか、読めない値にするか。

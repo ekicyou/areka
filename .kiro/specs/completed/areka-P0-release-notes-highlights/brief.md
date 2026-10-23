@@ -112,14 +112,14 @@
 ## Upstream / Downstream
 
 - **Upstream**: 完了した `areka-P0-release-ci-workflow`（`release.yml`）、繰り返し spec `areka-P0-release-cycle`（初回 `v0.0.2` は実施済み）。
-- **Downstream**: `release-cycle` の次の回（`v0.0.3`）— この spec が先に着地していること。新しい公開の段が初めて本当に動くのはその回。`areka-P0-winget-release-automation` — リリースの添付が 5 つになる（zip を拾う絞り込み `\.zip$` に、詳しいリリースノートは当たらない見込み）。
+- **Downstream**: `release-cycle` の次の回（`v0.0.3`）— この spec が先に着地していること。新しい公開の段が初めて本当に動くのはその回。`winget-release-automation` — リリースの添付が 5 つになる（zip を拾う絞り込み `\.zip$` に、詳しいリリースノートは当たらない見込み）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: 繰り返し spec `areka-P0-release-cycle`。版上げの PR に載せてよいファイルの数え上げ（要件 3.3・4.2）に、見どころのファイルが加わる。同じ数え上げは、差分の範囲の判定（要件 3.5・タスク 3.2）、公開の後の確かめの「4 つのファイル」（要件 6.1・タスク 6.2）、版上げの PR の説明（設計）にも効いているので、要件定義で全部を洗う。同 spec は決まりを自分の文書の中に置く例外の spec なので、足す段は同 spec の文書に書く。
 - **Adjacent**:
   - 完了した `areka-P0-release-ci-workflow`: 設計の公開の段（`--generate-notes`・添付が 4 つ）を、この spec が上書きする。完了した spec の文書は書き換えない。
-  - `areka-P0-release-code-signing`: `release.yml` のビルドと zip の間に段を挟む。同じファイルなので直列にする。
+  - `release-code-signing`: `release.yml` のビルドと zip の間に段を挟む。同じファイルなので直列にする。
   - `areka-P0-mcp-stdio-bridge-residue`: 次のリリースの走りの結果（arm64）を待っている。
 
 ## Constraints

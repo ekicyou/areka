@@ -21,11 +21,11 @@
 
 ### Non-Goals
 
-- ゴースト・シェル・バルーン 1 つずつを別の場所に結び付けること（後続 `areka-P0-dev-folder-alias`）。
+- ゴースト・シェル・バルーン 1 つずつを別の場所に結び付けること（後続 `dev-folder-alias`）。
 - 並べ替えの画面・設定画面・本体の設定ファイル。SSP の個別の設定（一時的な除外など）。
 - 既定の並びに実行ファイルの外の根を足すこと・書ける根（後続 `areka-P0-user-data-root`）。
 - 書き込みの失敗を利用者へ知らせること（後続 `areka-P0-write-failure-notice`）。この spec は記録に残すまで。
-- プロパティ `ghostlist`・`balloonlist`（後続 `areka-P0-property-catalog-lists`）。
+- プロパティ `ghostlist`・`balloonlist`（後続 `property-catalog-lists`）。
 - `.nar` の展開と `install.txt` の意味論。宛先の根を受ける口と作業フォルダの置き方だけを持つ。
 - 同じゴーストを SSP と areka で同時に起動したときの保存ファイルの書き合いを防ぐこと（説明書の注意書きだけ）。
 
