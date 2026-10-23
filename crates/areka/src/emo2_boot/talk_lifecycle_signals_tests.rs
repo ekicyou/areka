@@ -61,7 +61,7 @@ fn drain(rx: &Receiver<TalkLifecycleSignal>) -> Vec<TalkLifecycleSignal> {
 fn talk_sink(registered: &BalloonLifecycleSink, talk_id: Option<TalkId>) -> Box<dyn BootCueSink> {
     let mut sink = registered.clone_box();
     if let Some(id) = talk_id {
-        sink.begin_talk(id);
+        sink.begin_talk(id, areka_sakura::contract::ScriptOrigin::GHOST);
     }
     sink
 }

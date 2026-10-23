@@ -44,6 +44,7 @@ use std::sync::mpsc::Sender;
 
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
+use areka_sakura::contract::ScriptOrigin;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{info, warn};
 use wintf::ecs::world::tick_wake;
@@ -236,7 +237,8 @@ impl BootCueSink for BalloonLifecycleSink {
         Box::new(Self::new(self.tx.clone(), self.clock.clone()))
     }
 
-    fn begin_talk(&mut self, talk_id: TalkId) {
+    // 出どころは使わない（引数の追随だけ・task 6.1）。
+    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin) {
         self.talk_id = Some(talk_id);
     }
 }
