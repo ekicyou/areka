@@ -123,7 +123,7 @@
   - _Boundary: install destination tests_
   - _Depends: 4.2_
 
-- [ ] 6. 作者と利用者への説明
+- [x] 6. 作者と利用者への説明
 - [x] 6.1 `doc/COMPAT_ARCHITECTURE.md` §8 を書き直す
   - 370 行の `balloon`・`default.balloon.path` の行: 突き合わせ先を「今のゴーストの中の `balloon\` と根の置き場の和（ゴーストの中が先）」に、「ゴーストのフォルダの中は探さない」を新しい行への参照に、「大文字と小文字を区別する完全一致」を「フォルダ名は `same_folder_name`（区別しない）・`name` は区別する」に、無いテスト名 `descript_match_is_case_sensitive` を `descript_folder_match_ignores_case_but_name_match_does_not` に、`default_balloon_path_does_not_see_ghost_inner_balloon` を 2.1 で書き換えた後のテスト名に直す
   - 343 行の飛ばした同梱の置き場の綴り `<根>/balloon/<*.directory>/` を `<ゴースト>/balloon/<*.directory>/` に直す。376 行の根の並びの目録の説明に「バルーンの候補は今のゴーストの中が先に加わる」を一言足す
@@ -132,7 +132,7 @@
   - _Requirements: 9.1, 9.2, 9.3_
   - _Depends: 2.1, 4.2, 5.3_
 
-- [ ] 6.2 (P) `dist/README.txt` に作者向けの説明を足す
+- [x] 6.2 (P) `dist/README.txt` に作者向けの説明を足す
   - メニューの「バルーン」の説明を「今のゴーストのフォルダの balloon フォルダのバルーンを先に、置き場の balloon フォルダのバルーンを後に並べた一覧」へ直す
   - 「■ 置き場」か「■ .nar の入れ方」の後に作者向けの節: ゴーストのフォルダの `balloon\<フォルダ名>\` に置けること・そのゴーストにだけ見えること・同じフォルダ名なら置き場のものより先に使われること（記憶はフォルダ名なので置き場で選んだものも替わる）・ゴーストとシェルの .nar の同梱はゴーストの中へ入ること・バルーンだけの .nar は今どおり置き場へ入ること・ukadoc に無い areka 独自の決まりで SSP では違う動きになること
   - README の該当の 2 か所が上の中身になっている
