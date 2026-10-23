@@ -578,11 +578,22 @@ pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFa
 
 /// きれいに終わらなかったので印を残すときの記録（`session_mark_kept`）。記憶の印を読み直し、
 /// 印が在るときだけ次の起動の Ref6/7 を予告する（要件 4.3）。呼び手は `main::settle_session_mark`。
+/// 置き場が控える範囲の中なら印を読み直さない（控えの印で次の起動を予告しない・readonly-mode 要件 6.3）。
 pub(crate) fn keep_session_mark(
     app_profile_dir: &Path,
     reason: &'static str,
     first: Option<&ExitOrigin>,
 ) {
+    if areka_sylphya::persist::withhold::withholds(app_profile_dir) {
+        tracing::info!(
+            event = "session_mark_kept",
+            readonly = true,
+            reason,
+            first = ?first,
+            "[boot_resolve] 読み取りだけなので起動中の印に触れていません（次の起動は、この走りの前の記憶のとおりに起きます）"
+        );
+        return;
+    }
     match read_session_mark(app_profile_dir) {
         Some(remaining) => tracing::info!(
             event = "session_mark_kept",
@@ -736,3 +747,7 @@ mod boot_resolve_balloon_tests;
 #[cfg(test)]
 #[path = "boot_resolve_mark_text_tests.rs"]
 mod boot_resolve_mark_text_tests;
+
+#[cfg(test)]
+#[path = "boot_resolve_readonly_tests.rs"]
+mod boot_resolve_readonly_tests;
