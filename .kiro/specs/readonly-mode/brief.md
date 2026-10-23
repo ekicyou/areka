@@ -105,3 +105,13 @@
 - 要件定義のモデル: Opus のまま（止める所は今ある保存の口 1 か所・書く所の数え上げは 13 種の表が先例）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: Upstream/Downstream の「`real-run-mcp-kit`（環境変数で逃がす代わりに `--option readonly` で起こせる）」は、向こうが逃がし方を窓口へまとめて着地したので古い。棚卸㉗の節の「`mcp-reload` と同じウェーブに置かない」は向こうの着地で解けた。`boot_resolve.rs`（676→714）・`boot_config.rs`（467→610）は `startup-options-core` で増えた。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 待っていた 2 本が着地した。`offline-surface-dump`（10-23）は `cli/` に `--offline-dump` を足し（`cli/parse.rs` 459→641 行・`cli/mod.rs` の `StartupOptions` に `offline` の欄・新しい `crates/areka/src/offline_dump/`）、`main.rs` は 965→978 行になった。書き出しの道は起動もせず記憶も書かないので、readonly の守りの先例にはならない。`--offline-dump` と一緒の `--option` は効かない（説明書 76 行目）＝readonly と組んだときの扱いは決まっている。`ghost-inner-balloon`（10-23）は `boot_resolve.rs`（714 のまま）・`boot_config.rs`（610→622）・`update/desk.rs`（704→706）・`install/desk.rs`（540→560）を触ったが、書く所は増やしていない（書く所の 13 種の表 `write_failure_sites_tests.rs`・保存の口 `crates/areka-sylphya/src/persist/mod.rs`・`write_failure.rs`・`roots/edit.rs` は 10-22 から変わらず）。`--option readonly` は今も「受けて、まだ扱わないと記録して無視する」語（`cli/parse.rs` 366 行目）。
+- **触るファイル**: 棚卸㉘のとおり。行番号と行数の読み替え＝`cli/parse.rs` 641（語の分岐は 366 行目）・`cli/parse_tests.rs` 674（足す分は新しい兄弟のファイルへ）・`boot_config.rs` 622・`install/desk.rs` 560・`update/desk.rs` 706・`dist/README.txt` の「■ 起動オプション」のまだ扱わない語の文は 61 行目。
+- **規模**: 12〜16 のまま。上限の内。
+- **先に要るもの**: 働きの上では無い＝先頭。同じウェーブに置かない相手: `startup-install-option`（`cli/`・`install/desk.rs`・説明書 61 行目の同じ文）・`default-balloon-selfmade`（`boot_resolve.rs`）・余力の枠の `multi-ghost-runtime`。版に縛らない相手: `dev-folder-alias`（`boot_config.rs`・`boot_resolve.rs`・`update/desk.rs`・`persist/`）・割り込みの候補の `actor-thread-log-capture`・`background-result-tick-wake`（`install/desk.rs`・`install/fetch_url.rs`）・`test-roots-under-target`（`fetch_url.rs`）。`bridge-store-user-root` は `areka-user-data` の `establish.rs` を呼ぶ側を替えるだけで中身を触らない見込み＝重なりは 0。依存は足さない・emo-text に触らない。静かな机・全体テストの比べは要らない。議題 3 は readonly の SSP へ NAR を投げ込んで測る（SSP をもう 1 つ起こすので開発者に一言断る）。
+- **優先度の区分**: A のまま（開発者「SSPなみの起動オプション」「SSP並みの自動試験」）。
+- **要件定義のモデル**: Opus のまま（止める所は今ある保存の口 1 か所・書く所の数え上げは 13 種の表が先例・印の渡し方は SHIORI を読まない指定の先例）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 棚卸㉘の「`cli/parse.rs` 263 行目」は 366 行目、「説明書の 59 行目」は 61 行目に動いた。`boot_config.rs`（610）・`install/desk.rs`（540）・`update/desk.rs`（704）の行数も上のとおり増えた。

@@ -86,3 +86,18 @@
 - 席: 台帳の行の状態や持ち主を変える spec と同じウェーブに置かない（`coverage-roadmap-refresh` と同じ条件）。v0.1.0 の 9 本が台帳の行を動かすので、v0.1.0 の後が安い。
 - 規模の見立て: 差しだいで S〜M（5〜12 タスク）。`diff` で数えるまで決めない。
 - 優先度の区分: C（ukadoc の拾い残し）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化（大きい）**: 新しい写しは手元に在る＝`%APPDATA%\npm\node_modules\ukagaka-doc-mcp\` が 0.10.3（10-22 に入った・`data\index.json` は 2026-10-19 作）。ネットワークは要らない。最上位の鍵（`version`・`generatedAt`・`entries`）と項目の 6 つの鍵は 0.2.7 と同じ。ところが**項目の id と URL の書き方が変わった**。今のカタログの id は `ukadoc:list_shiori_event:OnFileDrop2:1`（ページ・アンカー・連番の 4 欄、日本語は `_2c_6570_5024` のように 16 進で書く）で、0.10.3 は `ukadoc:list_shiori_event:OnFileDrop2`（3 欄・日本語はそのまま・連番は重なるものだけ）。今のカタログ 1,749 件のうち id がそのまま一致するのは 65 件だけ。URL も `#OnFileDrop2:1` から `#OnFileDrop2` に変わり、1,749 件のうち 1,730 件が一致しない。
+- **道具が止まる所**: id の形を確かめる関数（`crates/ukadoc-survey/src/model.rs` の `EntryId::parse`）は 2 欄か 4 欄しか受けない＝0.10.3 の 3 欄の 1,718 件で `catalog` が止まる。差分の道具（`crates/ukadoc-survey/src/diff.rs`）は id で比べるので、ほぼ全件が「消えた」「増えた」に出る。根拠の URL の照らし（`crates/ukadoc-survey/src/evidence/resolve.rs` の `resolve`）は URL の完全一致なので、ソースに置いた正典の URL がほぼ全部「カタログに無い」になる。
+- **ページと見出しの組で照らすと**（python で数えた・道具は回していない）: 今の 1,744 組のうち 1,740 組が 0.10.3 に在る。消えた 4 件（`\![execute,createnar]`・`\![execute,createupdatedata]`・`\![execute,dumpsurface,…]`・`\![execute,install,url,…]` の書き方の変わった行）・増えた 51 件（`\![execute,filewatch]` 系 3 つ・iCal 系・`communicatebox.placeholder.*` ほか）。＝古い id から新しい id への付け替えは、ほぼ機械でできる。
+- **触るファイル**: 道具＝`model.rs`（322）・`catalog/build.rs`（155）・`diff.rs`（134）・`evidence/resolve.rs`（413）と各テスト・付け替えの副手続き（新しく足すなら）。生成物＝`doc/ukadoc-coverage/catalog.toml`・`report/` の 5 本。手で直す扱いの文書の id＝台帳 4 本（1,749 行と行どうしの結び約 2,200 か所）・`linkage.md`（約 2,900 か所）・`briefing*.md`（約 1,400）・`roadmap-draft.md`（約 400）・`values.md`・`README.md`。道具のテストの値（33 ファイル・約 530 か所・新旧の両方を受けるなら直さずに済む）。**ソースの正典の URL**＝12 クレート・39 ファイル・309 行（多いのは kanade の `schedule/events.rs` 58・`areka-parsers` の `sakura/decode.rs` 33・`balloon/parse.rs` 29・`crates/areka/src/emo2_boot/consumer_ledger.rs` 24・`areka-ghost` の `catalog.rs` 22）。
+- **規模**: 起票の 5〜12 は古い。古い URL を道具が新しい id へ読み替える形（ソースに触らない）なら 12〜16、ソースの URL も書き換えるなら 16〜22。
+- **先に要るもの**: 働きの上では無し。人や外の待ち・静かな机は要らない。ただ id を付け替えると台帳のすべての行が動く＝「台帳の別々の行」の許す重なりが効かず、台帳に触る v0.1.0 の 10 本（`stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`mouse-click-wheel-events`・`shell-mouse-cursor`・`popup-menu-shell-look`・`mcp-scope-rect-property`・`shell-scale-linkage`・`balloon-scroll-arrows`・`balloon-communicatebox`）のどれとも同じウェーブに置けない。ソースの URL も書き換えるなら、v0.1.0 のほとんどの spec と重なる（`consumer_ledger.rs` を含む）。＝v0.1.0 の後、台帳に触る spec が 1 本も走らない席で、`coverage-roadmap-refresh` の前。`audit-ukadoc-survey`（見直し）とは道具のファイルで重なる。
+- **優先度の区分**: C（ukadoc の拾い残し）。
+- **要件定義のモデル**: Opus（道具の中の id の形の扱いで、新しい境目や並行の約束ではない）。
+- **分割の案**: ソースの URL を書き換えない形なら切らない。書き換えるなら「道具と写しと台帳・文書の付け替え」（本 spec・12〜16）と「ソースの正典の URL の書き換え」（`ukadoc-source-url-rekey`（仮）・39 ファイル・3〜5・ほかの spec が走らない席で単独）に分ける。
+- **見つけた穴・古くなった記述**:
+  - 本文 Constraints の「0.2.7 → 0.10.3 で形が変わっていないかを確かめる」の答えは「外側は同じ・id と URL の書き方は違う」。本文 Approach の「⑵ `diff` で数えて規模を決める」は、id の形が変わったので今の道具ではできない（付け替えを先に作る）。
+  - 要件の議題に足す: 古い URL を読み替えて残すか、ソースを書き換えるか。完了した spec の文書（`.kiro/specs/completed/`）の古い id は書き換えない、で良いか。
+  - `doc/ukadoc-coverage/README.md` 3 行目の「全 1,749 項目」は、写しの後に 1,796 件（ページ全体の項目を含む）へ変わる。

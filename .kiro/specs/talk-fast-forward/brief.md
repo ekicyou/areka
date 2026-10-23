@@ -165,3 +165,9 @@
 - **先に要るもの**: 働きの前提は満たしている。列の順で `range-choice-tag`（`decode.rs`・`compile.rs`・dola の `cue/runtime.rs`）の後。
 - **優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
 - **見つけた穴・古くなった記述**: コードの穴は無い。kanade に触るので `balloon-link-hover`・`mcp-kanade-tools`・`mcp-shiori-query` と同じウェーブに置けない。
+
+## 2026-10-23 棚卸㉙の追記
+- **印の画像の系列（`clickwait*`）を分け合う相手は `balloon-markers` から `balloon-scroll-arrows`（v0.1.0）に替わった**。同 spec が `balloon-markers` の前半を切り出したとき、装飾の系列の土台（emo-present の `balloon.rs` の `SeriesFamily` の装飾の行・旧名の段・「`clickwait*` も同じ仕組みで解けるようにする」）もあちらへ移った（同 brief の Approach と Downstream）。`balloon-markers` に残った後半（オンラインの印・数字・SSTP の印）は `clickwait*` に触らない。
+- **`clickwaitmarker.*` の鍵と、印を出す振る舞いは今も本 spec の物**（`balloon-scroll-arrows` の Scope の Out に「`clickwaitmarker` の振る舞い（`talk-fast-forward`）」）。
+- 本文の 46・75・84・93・98・123・141 行目の `balloon-markers` は `balloon-scroll-arrows` と読み替える。列の順は「`balloon-scroll-arrows` が先に系列の土台を作り、本 spec はそれを使う」見込みで、「先に着地した方が作る」の取り合いは無くなる。印を文字の面の中で描くか emo-present で重ねるか（議題 3）も、あちらの答えに合わせる。
+- 並走: `balloon-scroll-arrows` とは emo-text の `actor*.rs`・`viewbox*.rs`・`input_events/shell_box.rs`・`user_break.rs`・emo-present の `balloon.rs` が重なる＝同じウェーブに置かない。

@@ -120,3 +120,17 @@
 - **SSP の基準**（`ssp-measurement.md` 2 節の段 1・3 節の終わり）: SSP が送った `OnBoot` の台本も `\![set,windowstate,!stayontop]` を含む。起動の重なりは、窓の枠（奥）→ バルーンの字 → ぱすた（手前）。`\1\v` は通しの台本に出てこなかったので、見えた答えは無い。
 - 網羅台帳の宛先: 2026-10-23 に 1 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 1）: 窓の枠が奥へ回る（常に手前にしない指定が SSP と同じに効く）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 触る所の中身は棚卸㉘から変わらない。✅ `window-link-directives`（10-23）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に 5 行足し、472 行から 496 行になった（登記の数は 36）。窓を作る所 `crates/areka/src/placement/spawn.rs` は 783 行（13 行増えた）。✅ `pasta-in-windows-verification`（10-23）の申し送り（件 19）と、`window-link-directives` の完了の棚卸の追記（件 1・台本の重なりの組がシェルの切り替えで落ちる）が本文の後ろに在る＝どちらもこの spec の中で片づける。網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` は `\![set,windowstate,!stayontop]` の 1 行だけ持ち主がこの spec で、`\v`・`\![set,windowstate,stayontop]` の 2 行は持ち主が空のまま。
+- **触るファイル**: 台本の読み手 `crates/areka-parsers/src/sakura/decode.rs`（502・`decode_bare` は 226 行目）と兄弟のテスト・受け手の表 `consumer_ledger.rs`（496・1 行と見本の表）・新しい受け手のファイル（新・`emo2_boot/` の下）・wintf の組の判断 `crates/wintf/src/ecs/window/zorder_pair.rs`（892・帯を避ける所は 364〜370 行目）・組を保つ系 `zorder_pair_maintain.rs`（557・帯の中かを読む所は 489 行目）・鎖の適用 `zorder_chain_apply.rs`（930・余地 70 行）・窓の指令の口 `window_pos/mod.rs`（454・帯へ上げ下げは 131・137 行目）・`placement/spawn.rs`（783）・件 1 の `emo2_boot/frame/zorder_descript.rs`（105）と帳簿 `placement/zorder_group_ledger.rs`（657）・網羅台帳の 3 行・`doc/COMPAT_ARCHITECTURE.md` §8。**足す分**: 「先送りの言葉」を見張る 2 つのテスト＝wintf の `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`（組と鎖の 8 ファイルに `topmost`・`stayontop`・`windowstate` などの語が入ると赤）と、兄弟の `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs`（`spawn.rs`・`zorder_descript.rs`・`zorder_group_ledger.rs` ほか 7 ファイルを見る）。完了 `ghost-window-zorder` の要件 8.3「`\v` を解釈しない」を守る檻なので、この spec が両方を一緒に書き直す（片方だけ直すと守りが片肺になる、と表の注記に在る）。
+- **規模**: 8〜12 タスク（本文の 6〜9 に、件 1 の 1〜2 と、見張りの 2 つのテストの書き直し 1 を足した。`zorder_chain_apply.rs` を先に外へ出すならさらに 1）。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手＝受け手の表に行を足す `script-small-tags`・`descript-window-keys`・`shell-scale-linkage`・`balloon-communicatebox`・`mcp-strict-errors`（案 2）（1 本ずつ）・`script-small-tags`（`decode.rs` も）・`dpi-realign-remembered-chain`（`spawn.rs`）。依存を足さない。静かな机・前後の全体テストの比べは要らない。実機の確かめは画面のロックを外した排他テストの机で、ほかのアプリを前に出して見る。議題 1 の測り（`\1\v` の効く範囲・シェルの切り替えの後に `\![set,zorder]` の組が残るか）は開発者の機械の SSP。
+- **優先度の区分**: A（開発者の指示＝v0.1.0 のゴール「ぱすたが SSP と同じに動く」）。
+- **要件定義のモデル**: Opus（帯へ上げる処理は `zorder-scope-inversion` が決めた鎖の 1 巡の順に乗る。先例＝`ghost-window-zorder` の要件 8.2「後から足せる構造」。新しい境目も、並行や順の新しい保証も作らない）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - 上の見張りの 2 つのテストが、これまでの見立ての触るファイルに無かった。帯へ上げる処理を組と鎖のファイルに書くと、ここが赤になる。
+  - 棚卸㉘の節の「`consumer_ledger.rs`（472）」は 496、「`spawn.rs`（776）」は 783。
+  - 受け手の表の決まりの注記（`consumer_ledger.rs` 27 行目「名簿に無い第 1 引数（例: `\![set,windowstate]`）は担当なし」）は、この spec の着地で例が変わる＝一緒に直す。
+  - 網羅台帳の `\v` と `stayontop` の 2 行の持ち主が空。着地のときにこの spec を書く。

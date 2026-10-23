@@ -59,3 +59,13 @@ SHIORI/2.x の口だけを持つゴースト（華和梨 7.4 の「．さくら�
 - 正典は ukadoc（SHIORI/2.x の節）。読めない点は SSP の MCP で測る。
 - 決定論のテスト必達・SHIORI/3.0 のゴーストの既存テストは緑のまま。
 - 検体 `dot_sakura` は `vendors/sample_ghost/dot_sakura.nar`（`sample-ghost-kit` の `SAMPLES` に登記済み）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 起票（10-23）の後の初めての測り。本文の主張はコードと合っている。相手の SHIORI の版を確かめる所は areka のどこにも無い（`GET Version` を送る所も、応答の `SHIORI/x.y` の字句を読む所も 0）＝areka は誰にでも 3.0 で話す。要求の文を組むのは `crates/shiori-host32-host/src/shiori3.rs`（852 行）の `build_request` 1 か所で、呼び手は 32 ビットの経路 `shiori-host32-host/src/client.rs`（858 行）と、同じプロセスの経路 `crates/areka-ghost/src/shiori_inproc.rs`（660 行）。同じ接続の中で相手に合わせた決めごとを覚える先例は、文字コードの取り決め（`shiori-host32-host/src/charset.rs` の `CharsetNegotiator`・`client.rs` が持つ）にある＝版の確かめも同じ形で接続ごとに持てる。`script-security-level`（10-23 着地）が同じ 3 ファイルに出どころの見出しを足した（`shiori-host32-host/src/request_headers.rs` 70 行が新しい）。
+- **触るファイル**: 新 2.x の要求の組み立てと応答の読み（`shiori3.rs` も `client.rs` も上限の近くなので新しいファイルへ・例 `shiori-host32-host/src/shiori2.rs`＋兄弟のテスト）・`shiori3.rs`（応答の読みの入口）・`client.rs`（接続ごとの版の覚え）・`shiori_inproc.rs`（同じプロセスの経路も同じ組み立てを通す）・`shiori-host32-host/src/lib.rs` の公開の 1 行・要れば kanade の `actor.rs`（845・往復の分岐）・網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の行・`doc/COMPAT_ARCHITECTURE.md` §8。32 ビットの中継 `crates/shiori-host32-helper/` は触らない。
+- **規模**: 11〜14 タスク（2.x の組み立てと読み 2・版の確かめ 2・3.0 のイベントから 2.x の要求への表 2・2 つの経路への結線 2・偽の 2.x の SHIORI での決定論のテスト 2・SSP での測り 1・どっとさくらの実機 1・面が出ない件の確かめ 1）。上限の内。
+- **先に要るもの**: 働きの上では無い＝先頭。触るファイルが重なる未完了は v0.1.0 に 0（`mcp-strict-errors` は `crates/areka-mcp/`・`crates/areka/src/mcp/`・kanade の `schedule/sstp.rs`、`mouse-click-wheel-events` は kanade の `msg.rs`・`schedule/events.rs`＝どちらとも共有するファイルは無い）。kanade の `actor.rs` に手を入れると、版に縛らない `popup-menu-residue`（同じファイルの往復の失敗の文言）と重なる。後の版の `makoto-dll-host`・`mcp-shiori-query`・`property-ipc-transport`・`property-query-channels`・`shiori4-api`・`audit-shiori-host32` も同じファイル群を挙げる。依存は足さない。人の待ち: SSP の MCP で測る（SSP が SHIORI へ送った要求は `ghost\master\ssp_shiori_log.txt` に残る・SSP の読み直しは毎回開発者に断る）。静かな机は要らない（どっとさくらの実機の 1 回は AI が回せる・32 ビットの補助プログラムは `tools/sync-i686-helper.ps1` で揃える）。
+- **優先度の区分**: A（開発者の条件「次のリリース v0.1.0 までに治ること」・開発者と `/kiro-discovery` で起票）。
+- **要件定義のモデル**: Opus。版の確かめ方の分かれ目（`GET Version` を先に送るか、400 を見て 2.x へ移るか）は SSP で測れば決まり、接続ごとに覚える形は文字コードの取り決めが先例。イベントから 2.x の要求への表は ukadoc の読み。新しい境界・並行の設計・先例で決まらない骨格の分かれ目には当たらない。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文の Problem は「SHIORI/2.x の口だけを持つ」と言い切るが、根拠の検証記録（`.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` 5 節）は「2.x だけの見込み」（3.0 の要求に 400 が返ったことからの推し）＝要件の段の最初に、華和梨 7.4 が 3.0 を受けないことを SSP で確かめる。

@@ -145,3 +145,13 @@
   - 本文の「上限の近いファイル」の行数（`main.rs` 956・`consumer_ledger.rs` 943・`msg.rs` 930 ほか）は古い（上の今の数）。`consumer_ledger.rs` はこの spec の重さに効かなくなった。
   - roadmap の「`main.rs` は 1,000 行ちょうど」の記述（直列の列の 2 か所）も古い。
   - この brief の最後の申し送りの節の 4 行だけ、行末の形がほかの行と違う（その場で直せる）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: C10 の 8 本のうち、この spec の触るファイルを先に触って着地したもの＝`offline-surface-dump`（`main.rs` 965→978 行・余りは 22 行）・`window-link-directives`（`placement/mod.rs` 915→939 行・`emo2_boot/consumer_ledger.rs` 472→496 行）・`script-security-level`（kanade の `msg.rs` 539→544 行・`schedule/` の多くのファイル）・`ghost-inner-balloon`（`boot_config.rs` 622・`install/desk.rs` 560・`update/desk.rs` 706）。上限に近いのは `main.rs` 978・`placement/mod.rs` 939・`emo2_boot/ghost_switch.rs` 921・`ghost_session.rs` 917。ゴーストの箱 `GhostSlot` を読む本番のファイルは 28 のまま、`quit_app` を呼ぶファイルは 10 のまま、止まりの知らせの受け口は今も 1 本（`emo2_boot/frame.rs` 173 行目の `KanadeNoticeRx`）。kanade は今も `OnCloseAll` を送らない（`crates/areka-kanade/src/schedule/close.rs` の注記）。
+- **触るファイル**: 本文と棚卸㉕・㉘のとおり。
+- **規模**: 24〜30 タスクのまま（上限 20 を超える＝下の分割の案）。
+- **先に要るもの**: 働きの上では無し。ファイルの上では `dpi-realign-remembered-chain`（`placement/`）を先に着地させる（決めのまま）。v0.1.0 の未完了のほぼ全部と重なる: `readonly-mode`・`startup-install-option`・`default-balloon-selfmade`（`boot_resolve.rs`・`boot_config.rs`・`main.rs`）・`mcp-strict-errors`（`mcp/sakurascript.rs`・案 ⑵ なら kanade の `msg.rs`）・`mouse-click-wheel-events`（`msg.rs`・`input_events/mod.rs`）・`window-work-area-clamp`（`placement/persist.rs`）・`balloon-communicatebox`・`popup-menu-shell-look`（`menu/mod.rs`）・`placement-measure-bake-once`・`ghost-call`＝v0.1.0 の残りが人や外の待ちで止まったときに、ほぼ単独で走る（変わらず）。1 本だけの席は取らない。人の待ち・静かな机・全体テストの比べは要らない。
+- **優先度の区分**: A のまま（開発者「複数ゴーストの同時起動→アプリ設計として可能だが、まだ出来ていない」）。
+- **要件定義のモデル**: 厳しく当て直して、**後半だけ Fable・前半は Opus**。当たる基準＝順の保証を新しく設計する。全員を止める流れ（`OnCloseAll` → 各ゴーストの `OnClose` → 全員の終わりの握手を待ってアプリを終える・2 体がほぼ同時に「終了」したときにどちらが最後かを決める・OS のシャットダウンの持ち時間の中で N 体を止める）は、今の 1 体の握手（`emo2_boot/frame.rs` の `run_ghost_quit_phase`）では決まらない。一方、知らせにゴーストの区別を付けて 1 本の受け口で振り分けるのは、送り手ごとの順を守る今の受け口の上に乗るだけで、アプリの範囲の記憶の書き手を UI のスレッド 1 つに集めるのも今の作りに乗る＝どちらも先例で足りる。
+- **分割の案**: 棚卸㉕の切り方を保つ（一度切り出した spec だが、20 を少し超えるのでなく 24〜30 なので要件の段で切る）。前＝「席と区別」（集まりと番号・窓と重なりの順・結線 9 種の配り先・知らせの送り主・読み直しの道〔`reload.rs`・`shell_carry.rs`〕・検査用の 2 体目の入口・`get_active_ghost_list`・上限の近いファイルを割る仕事）＝12〜15・Opus。後＝「止まり方と記憶」（1 体の終了・`OnCloseAll`・席での切り替え・起動中の印と記憶の並び）＝10〜14・Fable。`ghost-call` は後を待つ（`OnOtherGhostClosed` が「1 体だけ止まり、ほかは動き続ける」に乗るため）。前だけが着地した間は、どのゴーストの「終了」もアプリを終える今の振る舞いのまま（2 体目は検査用の入口からだけ起きる）。
+- **見つけた穴・古くなった記述**: 棚卸㉘の「申し送りの節の 4 行だけ行末の形が違う」は今は当たらない（全行が同じ形）。棚卸㉘の行数（`main.rs` 965・`placement/mod.rs` 915・`ghost_session.rs` 910）は上のとおり増えた。

@@ -67,3 +67,24 @@
 - 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。段: 優先（バルーン）。
 - 要件定義のモデル: Fable（areka で初めての文字の入力の部品＝先例の無い境界・IME とフォーカス）。
 - 議題（答えで作業が変わるものだけ）: ⑴ 入力欄の作り（Windows の編集の窓か wintf の部品か）。⑵ SSP の MCP で測る: 利用者が開く入口・縦書きのバルーンでの入力欄の向き・既定の大きさ（鍵の既定は ukadoc で「不明」）。⑶ SSP のオプション（`--text=`・`--placeholder=` ほか）をどこまで入れるか。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 起票の後、関係のファイルで動いたのは kanade の `crates/areka-kanade/src/schedule/events.rs`（`script-security-level` で 888 行・上限まで 112）と受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs`（496 行・`window-link-directives` が行を足した）。`script-security-level` で台本の出どころの語に `communicate` が入った（`crates/areka-talk/src/origin.rs` の `SenderWord::Communicate`）が、これはほかのゴーストからの話しかけの語で、利用者の入力（本 spec）とは別。`ghost-inner-balloon` は着地済み。文字を入れる部品は今も 1 つも無い（wintf にある OS の部品は説明の吹き出し `crates/wintf/src/ecs/tooltip/os.rs` だけで、入力もフォーカスも受けない）。
+- **触るファイル**（行数）: バルーンの読み手 `crates/areka-parsers/src/balloon/{mod.rs 26, model.rs 774, parse.rs 252}`＋鍵の新しいファイル・入力欄の部品（新しいファイル。wintf に置くなら wintf の窓の作りにも）・受け手の表 `consumer_ledger.rs`（496）と見本 `consumer_ledger_agreement_tests.rs`（403）＋受け手の新しいファイル・kanade の `schedule/events.rs`（888）・開いている間を状態として出すなら `crates/areka-kanade/src/status.rs`（539）・入口をメニューに足すなら `crates/areka/src/menu/mod.rs`・台帳 `assets.toml` の 11 行（うち 7 行は持ち主が空）・`sakura-script.toml` の 2 行・`shiori.toml` の 2 行と `doc/ukadoc-coverage/roadmap-draft.md` の数の行。日本語の入力を Windows の入力の API で直に扱うなら、ワークスペースの `Cargo.toml` の `windows` の機能の一覧（84 行目の近く・今は入力の機能 `Win32_UI_Input_Ime` が無い）に 1 行。emo-text には触らない見込み（位置はバルーンの読み手から直に引く。列の決まりどおり `actor.rs` の `ResolvedBalloonText` に置くと `balloon-scroll-arrows` と重なる）。
+- **規模**: 14〜19 タスク（起票の 12〜18 から、部品の作りの確かめと SSP での測りの分だけ上へ寄せた）。
+- **先に要るもの**: 働きの上では無い。同じウェーブに置けない相手（v0.1.0）: 受け手の表に行を足す `stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`shell-scale-linkage`・案 2 の `mcp-strict-errors`（1 本ずつの列に本 spec も並ぶ）・kanade の `schedule/events.rs` を触る `mouse-click-wheel-events`・`shell-scale-linkage`・バルーンの読み手の `balloon-scroll-arrows`・メニューに足すなら `popup-menu-shell-look`。**1 本だけの席**: emo-text には足さない。`Cargo.lock` は動かない見込み（機能を 1 つ足しても依存の版は変わらない。足すなら着手のときに確かめる）。人の待ち: SSP の MCP で開く入口・縦書きでの向き・既定の大きさを測る（開発者の許し）・日本語を打つ確かめは人の手の実機の確かめ。静かな机は要らない。
+- **優先度の区分**: A（開発者「0.1.0までに解決しない場合、独立して起票せよ」・v0.1.0 のゴール「ぱすたが SSP と同じに動く」）。
+- **要件定義のモデル**: Fable のまま。当たる決まり＝「先例の無い境目・約束」: 普段フォーカスを取らないゴーストの窓の上で、キーボードのフォーカスと日本語の入力を受ける部品は areka にも wintf にも先例が無く、置き場（Windows の編集の窓か wintf の部品か）で wintf と areka の間に新しい約束ができる。説明の吹き出しは表示だけで先例にならない。
+- **分割の案**: 切らない。要件の段で 20 を超えたら、「入力欄の部品と開く・閉じる・2 つのイベント（位置と大きさの 4 つの鍵）」と「見た目の鍵の残り（字の名前・字の色・地の色・案内の字の色）と SSP の開く命令のオプション」に切る。前が先。
+- **見つけた穴・古くなった記述**:
+  - Scope の「ぱすたの実機の確かめ（`ghost-inner-balloon` の着地の後）」は古い（着地済み）。
+  - 状態の文字列の語 `opening(communicate)` は kanade にあるが、誰も立てていない（`status.rs` の `OpeningKind::Communicate`）＝入力欄を開いている間に状態として出すかを要件の段で決める（MCP の `get_status` の答えが変わる）。
+  - 台帳 `shiori.toml` 16165 行の注記が、起票していない候補の名前 `areka-P0-communicate-events` を挙げる＝本 spec の名前へ直す。
+  - ukadoc の `communicatebox.placeholder.color.r/g/b`（2.9.10）は台帳に行が無い（台帳の 11 行は位置と大きさ 4・字の名前 1・字の色 3・地の色 3）。範囲に入れるなら台帳の写しの更新が先（`ukadoc-catalog-refresh`）か、行の無いまま作るかを決める。
+  - 受け手の表に 1 本ずつ行を足す列が v0.1.0 で 6 本になる（本 spec を入れて）。v0.1.0 の着地までのウェーブ数を押し上げる列。
+
+## 2026-10-23 棚卸㉙の追記
+- **台帳の注記を直すのは本 spec のタスク**: 網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の `Status [SSP拡張]` の項目（16142 行目）の注記（16163〜16165 行目）は、状態 `opening` の宛先に、一度も起票していない候補 `areka-P0-communicate-events` を挙げる。本 spec が `shiori.toml` の行（`OnCommunicate`・`OnCommunicateInputCancel`）を直すタスクで、この注記も一緒に直す（communicate の `opening` の宛先は本 spec の名前へ。並んで挙がる候補 `areka-P0-inputbox-dialog` は、今の `inputbox-user-input` へ）。
+- 状態の語 `opening(communicate)` を本 spec では立てないと決めたときも、注記の宛先は本 spec のままにして、決めた理由を注記に書く。
+- 直すのは注記の文だけで、`Status` の項目の持ち主の欄は変えない。
+- 上の再測定の「見つけた穴」の 3 つ目（16165 行の注記）を、作業の約束にした。台帳はこの棚卸では直していない。

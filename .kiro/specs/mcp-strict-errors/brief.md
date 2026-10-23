@@ -180,3 +180,13 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 ## 2026-10-22 棚卸㉘の申し送り（main 52b014de）
 
 - 件を 1 つ足す（持ち主が居なかった残り物・完了 `mcp-receiver-bugs` の research.md 9 節と要件の「範囲外」）: `params` が入れ物（オブジェクト）でない要求（`7`・`[1]`・`"x"`）に、受け口は 415 の素の文で答え、中継は -32600 を返す＝-32602（引数の誤り）にならない。誤りの答えを正典どおりにそろえるこの spec で一緒に直す。research が勧めた `doc/ssp-mcp/transport-diff-areka.md` への行の追記も一緒に。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: `script-security-level`（10-23 着地）が、台本の始めの知らせ（`crates/areka-talk/src/lib.rs` の `StartTalk`）に出どころの欄 `origin` を足し、再生の側は運ぶだけで、受け口が読んで判断する形（判定の表は `crates/areka/src/emo2_boot/script_restriction.rs`）を作った＝案 ⑵（再生まで印を運ぶ）の先例ができた。strict の印をこの欄の隣に置くか、出どころの型（`crates/areka-talk/src/origin.rs` の `ScriptOrigin`＝SHIORI へ送る見出しにも使う）の中に入れるかは設計で決める（隣を推す）。kanade の控え（`schedule/sstp.rs` 150 行の `StrictNote`）は今も記録とテストだけが読む。
+- **触るファイル**: 案 ⑴＝`crates/areka/src/mcp/{sakurascript,raise_event}.rs`（112・95 行・変わらず）と兄弟のテスト・`crates/areka-mcp/src/handler.rs`（178・案内文は 39 行目）・`doc/ssp-mcp/areka-tools.md`・`check_script_judge.rs`（218）・要れば kanade の `schedule/sstp.rs`。案 ⑵＝さらに `areka-talk` の `lib.rs`（133）・`crates/areka-sakura/src/drive.rs`（576）・seriko の `actor.rs`（768）と `resolve.rs`（314）・`crates/areka-emo-present/src/presenter/show.rs`（426）・`emo2_boot/consumer_ledger.rs`（472→496・`window-link-directives` が行を足した）・kanade の `schedule/translate.rs`（300→348）と、検出点の表と一致の検査（新）。棚卸㉘の申し送りの件（`params` が入れ物でない要求の答え）は `crates/areka-mcp/` の受け口と中継の答え・`doc/ssp-mcp/transport-diff-areka.md`。
+- **規模**: 案 ⑴ 7〜11・案 ⑵ 13〜19（申し送りの件の 1 つ分を足した）。上限の内。
+- **先に要るもの**: 働きの上では無い＝先頭。同じウェーブに置けない相手（v0.1.0）: 案 ⑴ は 0（`schedule/sstp.rs` を挙げるのは後の版の `resident-ghost-rotation`・`shiori4-api` だけ）。案 ⑵ は `consumer_ledger.rs` の `stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`shell-scale-linkage`・`balloon-communicatebox`、`presenter/show.rs` の `animated-surface-log-flood`、余力の枠の `multi-ghost-runtime`（`mcp/sakurascript.rs` がゴーストの箱を読む・kanade の `msg.rs`）。`mouse-click-wheel-events` とは案 ⑴ で 0、案 ⑵ で kanade の `msg.rs` を触るときだけ重なる。`shiori2-protocol` とは 0。1 本だけの席・静かな机・人の待ちは要らない。
+- **優先度の区分**: A のまま（開発者「ssp mcp tool の完全移植のための spec 群を立ち上げて」）。
+- **要件定義のモデル**: Opus のまま（案 ⑴ は `check_script` の判定、案 ⑵ は `StartTalk` の出どころの欄と受け口の判定の表が先例）。
+- **分割の案**: なし（案 ⑵ で 20 を超えたら棚卸㉑の切り方）。
+- **見つけた穴・古くなった記述**: 案内文の最後の 1 文（`crates/areka-mcp/src/handler.rs` 39 行目「まだのツールは `NG:not implemented yet` で始まる答えを返す」）は、当てはまるツールが 0 本のまま残っている＝今すぐ消せる。棚卸㉘の「`translate.rs`（300）」「`consumer_ledger.rs`（472）」は 348・496 に読み替える。10-08 の申し送りの表に `unpaired_tag` の行が無いこと・文面の定数と文書の一致をテストで見ていないことは前のまま。

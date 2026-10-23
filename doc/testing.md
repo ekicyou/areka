@@ -167,4 +167,4 @@ emo2_first_load_repeat: condition=basic runs=20 ok=19 load_failed=1 other_failed
 
 #### 件 2（最初の LOAD の失敗）の結論
 
-件 2 は、200% と 100% 相当で合わせて 32 回起こして LOAD の失敗が 0 回だったので、再現しないとして記録した。根拠と各回の値は `.kiro/specs/areka-P0-emo2-real-run-stability/verification.md` にある。次に同じ赤が出たら、上の順で証拠を読み、比べの 3 条件を回す。
+件 2 は、200% と 100% 相当で合わせて 32 回起こして LOAD の失敗が 0 回だったので、再現しないとして記録した。根拠と各回の値は `.kiro/specs/completed/areka-P0-emo2-real-run-stability/verification.md` にある。次に同じ赤が出たら、上の順で証拠を読み、比べの 3 条件を回す。

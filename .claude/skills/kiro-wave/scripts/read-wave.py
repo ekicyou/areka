@@ -8,6 +8,8 @@ Usage:
 
 Prints "date <YYYY-MM-DD>" for the wave, then one line per spec: "<model> <name>"
 (model is Fable or Opus, name as the block writes it).
+When the block is the release form ("/release <X.Y.Z>" and no /kiro-start), prints
+"release <X.Y.Z>" instead of the spec lines.
 Warnings go to stderr as "WARN ...". Exit 1 when no wave can be found.
 The wave is the first fenced block of the "## ウェーブ編成（…）" section.
 A spec is Fable when the block lists it under Fable OR the spec ledger's
@@ -69,7 +71,7 @@ def read_wave(text):
         raise ValueError("unterminated code block in the wave section")
 
     ledger = read_models(text)
-    specs, warns, group = [], [], None
+    specs, warns, group, release = [], [], None, None
     for l in sec[open_ + 1:close]:
         s = l.strip()
         if s in ("Fable", "Opus"):
@@ -83,9 +85,15 @@ def read_wave(text):
                 warns.append(f"{name}: ledger says Fable, block says {model}; treated as Fable")
                 model = "Fable"
             specs.append((model, name))
-    if not specs:
-        raise ValueError("the code block lists no /kiro-start command")
-    return m.group(0), specs, warns
+        elif s.split()[:1] == ["/release"]:
+            if not re.fullmatch(r"/release \d+\.\d+\.\d+", s):
+                raise ValueError(f"bad release line: {s}")
+            release = s.split()[1]
+    if release and specs:
+        raise ValueError("the code block mixes /release with /kiro-start")
+    if not specs and not release:
+        raise ValueError("the code block lists no /kiro-start or /release command")
+    return m.group(0), specs, warns, release
 
 
 SAMPLE = """# Roadmap
@@ -118,15 +126,27 @@ Opus
 | `d-spec` | その他 | なし | 未定 |
 """
 
+SAMPLE_RELEASE = """## ウェーブ編成（着手順の正本・2026-01-03 棚卸㉚）
+```
+Wave C2 リリース（v0.1.0 の spec は 0 本）
+【本来の次の版 v0.1.0】
+/release 0.1.0
+```
+"""
+
 
 def self_test():
-    date, specs, warns = read_wave(SAMPLE)
+    date, specs, warns, release = read_wave(SAMPLE)
+    assert release is None, release
     assert date == "2026-01-02", date
     assert specs == [("Fable", "b-spec"), ("Opus", "areka-P0-a-spec"), ("Fable", "c-spec")], specs
     assert len(warns) == 1 and warns[0].startswith("c-spec"), warns
+    rel = SAMPLE_RELEASE
+    assert read_wave(rel)[1:] == ([], [], "0.1.0"), read_wave(rel)
     models = read_models(SAMPLE)
     assert models == {"a-spec": "Opus", "b-spec": "Fable", "c-spec": "Fable"}, models
-    for bad in ("# none\n", "## ウェーブ編成（2026-01-02）\nno block\n", "## ウェーブ編成（x）\n```\n/kiro-start a\n```\n"):
+    for bad in ("# none\n", "## ウェーブ編成（2026-01-02）\nno block\n", "## ウェーブ編成（x）\n```\n/kiro-start a\n```\n",
+                rel.replace("/release 0.1.0", "/release 0.1.0\n/kiro-start a"), rel.replace("/release 0.1.0", "/release v0.1.0")):
         try:
             read_wave(bad)
             raise AssertionError("expected ValueError")
@@ -147,13 +167,15 @@ def main():
             print(f"{models.get(key(name), 'unknown')} {name}")
         return 0
     try:
-        date, specs, warns = read_wave(sys.stdin.buffer.read().decode("utf-8"))
+        date, specs, warns, release = read_wave(sys.stdin.buffer.read().decode("utf-8"))
     except ValueError as e:
         print(f"FAIL {e}", file=sys.stderr)
         return 1
     for w in warns:
         print(f"WARN {w}", file=sys.stderr)
     print(f"date {date}")
+    if release:
+        print(f"release {release}")
     for model, name in specs:
         print(f"{model} {name}")
     return 0

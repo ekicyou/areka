@@ -104,3 +104,13 @@
 - 要件定義のモデル: Opus（イベントと Reference の並びは ukadoc が決め、名前の解決は完了 `ghost-change-name-resolution` を使い回し、起動の出どころへの 1 種の追加は `Reloaded` の前例に沿う。送る順の議題 2 は ukadoc の「同じとき」の並べ方の選びで、骨格の分かれ目ではない）。
 - 分割の案: 切らない。
 - 見つけた穴・古くなった記述: 本文の「Current State」の `consumer_ledger.rs`（943 行）と Constraints の「テストを兄弟へ出す」は古い（済んだ）。本文の Adjacent の `mcp-reload` は着地済み。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 10-22 から、この spec の働きの部分は変わっていない。`\![call,ghost]` の行は受け取り手の台帳（`emo2_boot/consumer_ledger.rs`）に今も無く、呼ぶ・呼ばれる・周りの 6 イベントは本番のコードに 0 件（`OnOtherGhostBooted` は `crates/areka/src/reference_brain.rs` の検査の文字列 1 か所だけ）。網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` には `OnGhostCalling` などの行が既に在る（状態を動かすだけ）。台帳は `window-link-directives`（10-23）が行を足して 472→496 行。kanade の起動の出どころ `BootOrigin`（`crates/areka-kanade/src/change.rs` 188 行）は変わらず、前例の `Reloaded`・`Updated` に沿って「呼ばれた」を足せる。`script-security-level` が足した、出どころで止めるタグの表（`emo2_boot/script_restriction.rs`）に `\![call,ghost]` は無い。
+- **触るファイル**: 棚卸㉘のとおり（`consumer_ledger.rs` の行 1 つ・`consumer_ledger_agreement_tests.rs`（403）の見本 1 つ・受け取り手（`emo2_boot/change_cue.rs` 119 行か新しいファイル）・`menu/mod.rs`（373）と `menu/ghost_frame.rs`（75）と新しい枠・kanade の `change.rs` と `schedule/boot.rs`（381）・周りへ送る所・網羅台帳の行・`doc/COMPAT_ARCHITECTURE.md` §8）。
+- **規模**: 10〜14 タスクのまま。
+- **先に要るもの**: `multi-ghost-runtime`（働き・未完了。分けたときは後半の「止まり方と記憶」）。同じウェーブに置けない相手（未完了）: `consumer_ledger.rs` の `stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`shell-scale-linkage`・`balloon-communicatebox`・`mcp-strict-errors`（案 ⑵）／kanade の `change.rs` の `ondestroy-on-exit`・`network-update-canon-order`・`property-query-channels`／`schedule/boot.rs` の `mouse-click-wheel-events`／`menu/mod.rs` の `balloon-communicatebox`・`popup-menu-shell-look`・`popup-menu-residue`・タスクトレイの 2 本／`menu/ghost_frame.rs` の `menu-thumbnail-preview`。1 本だけの席・人の待ち・静かな机・全体テストの比べは要らない。
+- **優先度の区分**: A のまま（開発者「複数ゴーストの同時起動→アプリ設計として可能だが、まだ出来ていない」）。
+- **要件定義のモデル**: Opus のまま（イベントと Reference の並びは ukadoc、名前の解決は完了 `ghost-change-name-resolution` の使い回し、起動の出どころの 1 種は前例どおり。周りへ送る順は ukadoc の「同じとき」の並べ方の選びで、新しい順の保証は `multi-ghost-runtime` の後半が持つ）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**: 棚卸㉘の「同じウェーブに置けない相手」の `script-security-level`・`window-link-directives` は 10-23 に着地した（外す）。`consumer_ledger.rs` の行数（472）は 496 に読み替える。

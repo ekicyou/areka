@@ -128,3 +128,16 @@
   - 棚卸㉗の節の `emo2_boot/mod.rs`「916」は 787、`ghost_session.rs`「885」は 910。棚卸㉗の節の「案 A は `mcp-reload`（`emo2_boot/mod.rs`）と重なる」は着地で済んだ。
   - roadmap の棚卸㉕の行「案 A なら `multi-ghost-runtime`・`user-data-root` と重なる」の `user-data-root` は済んだ話。今の案 A の v0.1.0 の相手は上の 2 本。
   - 案 B は v0.1.0 の `shell-mouse-cursor`（`shell_target.rs`）とも重なる（これまでの節に無かった）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 2 か所が別々に焼く形は変わらない（窓の大きさの測り `crates/areka/src/placement/measure.rs` 450 の `measure_native_scope_sizes`・155 行目／起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs` の `build_boot_assets`・210 行目）。✅ `offline-surface-dump`（10-23）が着せ替えの既定の読みを `areka-seriko` へ移し、`assets.rs` は 547 行から 475 行になった。シェル読み込みの入口 `crates/areka-emo-present/src/shell_target.rs` は 757 行から 855 行になり（形の知らせを足した）、入口 `load_shell_target`（302 行目）の新しい呼び手 `crates/areka/src/offline_dump/mod.rs`（192 行目）ができた。行数: `crates/areka/src/ghost_session.rs` 910→917・`placement/mod.rs` 915→**939**（✅ `window-link-directives`）・`emo2_boot/mod.rs` 787→789。
+  - 測ることが本体か: 本体ではない（本体は焼く回数を減らすコードの直し）。測るのは最後の前後の比べ 1 回だけ。要件で「焼く回数・読んだコマの数」を決定論のテストで固定し、時間は参考の記録に回せば、静かな机は最後の 1 回（release の前後の比べ）だけで済み、ウェーブに並べてよい。
+- **触るファイル**: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs` と兄弟のテスト（`ghost_session.rs` 917・`placement/mod.rs` 939 は上限の近く＝足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`shell_target.rs`（855）・要れば `crates/areka-emo-present/src/balloon.rs`（701）・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`（461）。案 B で `load_shell_target` の形を変えるなら、新しい呼び手 `offline_dump/mod.rs` と手本 3 本（`crates/areka/examples/` の下）も直す＝形を変えず、上限を渡す別の入口を足すほうが当たりが小さい。
+- **規模**: 案 A 10〜14・案 B 5〜8 タスクのまま。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし。どちらの案でも v0.1.0 の `descript-window-keys`（`measure.rs`・案 A は `assets.rs` も＝最初の面の決め打ちをその spec が descript の値へ置き換える）と直列。順は `descript-window-keys` が先のほうが、「採寸の結果が同じ」の固定を新しい最初の面で書ける。案 A＝`startup-install-option`（`ghost_session.rs`）。案 B＝`shell-mouse-cursor`（`shell_target.rs`）・`balloon-scroll-arrows`（10-23 起票・`balloon.rs`）。余力の枠の `multi-ghost-runtime`（案 A）。`dpi-realign-remembered-chain`・`window-work-area-clamp` とは 0。依存を足さない。
+- **優先度の区分**: C（性能の持ち越し。v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う）。
+- **要件定義のモデル**: Opus のまま（案 A も 1 本の道の中の順の入れ替えで、並行の新しい設計ではない）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - 棚卸㉘の節の「`build_boot_assets`・260 行目」は 210 行目、「`assets.rs` 547」は 475、「`shell_target.rs`（757）」は 855。
+  - `window-link-directives` の実機の申し送り ⅳ（MCP の返事が遅れたあいだ、動く絵の玉が毎秒 10〜48 回合成し直された）は、再生の重さで、起動の焼く回数とは別の件。この spec では引き取らない（向こうの `signoff.md`）。

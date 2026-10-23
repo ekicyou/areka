@@ -125,3 +125,17 @@
 - **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 5・3 節の 3 行目）: 150% の画面から 200% の画面へ移しても、`scope(0)` と `scope(1)` はどちらも `818,261,1649,1287` で、大きさ 831×1026 は変わらない。`currentmonitor.dpi` は 192、`scope(0).scaling` は `150,150`。バルーンの rect は `878,348,1532,1023`（ぱすたの左上から 60,87 で、起動したときと同じ）。ぱすたと窓の枠とバルーンの並びは保たれ、`OnShellScaling` は届かなかった（`ssp\stage5-rects.txt`・`stage5-after-shot.png`・`stage5-pasta-log.txt`）。
 - **着地で変わるはずの所**（手順書の段 5）: 移った先の画面で、落とした点に掴んだ点が来るようにぱすたが置かれ、ぱすたと窓の枠とバルーンの並びが保たれる（窓の枠が付いてくることは `window-link-directives` の件 7。解決済み（main #360 で直った・`pasta-in-windows-verification` の回し直し rerun3 で確かめ）＝rerun3 の段 5 で、ぱすたと窓の枠がそろって 150% の画面へ移った）。
 - **main の PR#360（`areka-P0-window-link-directives`・`355a7211`）で変わった所**: 台本の `\![move]` が置いた窓（連れ動いた組の相手を含む）に印 `ScriptPlaced` が付き、起動の最後の並べ直し（`emo2_boot/frame/drain_resnap.rs` の `finalize_chain_once_with`）は、その窓の既定の x を `None` にしてから `finalize_chain` へ渡して外す（`placement/chain_finalize.rs` の冒頭の説明）。上の棚卸㉓の節の「既定の x が今の x と同じスコープだけ動かす」は、この例外を足して読む。ただし印を見るのは起動の確定の呼び手だけで、拡大率の後の詰め直し（`placement/chain_realign.rs` の `realign_chain_once_with`・走査は同じ `collect_chain_states`）は、同じ `finalize_chain` を使うが印を見ない（main `f1a2f4b8` の時点のコードの読み）。重ねた組を詰め直しから外す件（棚卸㉗の節）は、この印を詰め直しの道でも読むかを要件の段で決める。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 待っていた ✅ `window-link-directives`（10-23）が着地した＝働きの上の待ちは無くなった。向こうが残したもの 2 つ: ⑴ 台本の `\![move]` が置いた窓（連れ動いた組の相手を含む）の印 `ScriptPlaced`（`crates/areka/src/placement/chain_finalize.rs` 66 行目）。起動の並べ直し（`emo2_boot/frame/drain_resnap.rs` 448 行目）と、並べ終えた時点の保存（`placement/persist.rs` 604 行目）は読むが、拡大率の後の詰め直し `placement/chain_realign.rs`（245）は読まない（向こうの `signoff.md` に「`chain_realign.rs` は変えていない」）。⑵ 窓の組の帳簿 `placement/sticky_group_ledger.rs`（新・306・組を引く `group_of` は 126 行目・相手を引く `partners_of` は 133 行目）。重ねた組を詰め直しから外す目印は、⑴ の印か ⑵ の帳簿のどちらで読むかを要件の段で決める。行数: `chain_finalize.rs` 320→331・`persist.rs` 642→673・`drain_resnap.rs` 546→**633**（✅ `pasta-in-windows-verification` が描く指令の取り出しを足した・詰め直しの判定は変わらない）・`emo2_boot/frame.rs` 580→591・`spawn.rs` 776→783・`emo2_boot/frame/dpi.rs` 508 のまま。
+- **触るファイル**: 上の 7 本と兄弟のテスト（`placement/persist_restore_tests.rs` 939・`emo2_boot/frame_test_support.rs` 902 は上限の近く＝足すなら新しいファイル）・件 9 の分として wintf のドラッグの位置の決め方 `crates/wintf/src/ecs/window_proc/mouse_move.rs`（602・302〜303 行目）と、始めの窓の左上を控える `crates/wintf/src/ecs/drag/dispatch.rs`（382・147〜152 行目）・`doc/COMPAT_ARCHITECTURE.md` §8。`placement/transition_judge.rs`（996）と `placement/follow/window_move.rs`（1,221・行数の番人の例外）には触らない。
+- **規模**: 8〜12 タスク（棚卸㉘の 6〜10 に、件 9 のドラッグの掴んだ点の縮め 1〜2 を足した）。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手＝`stay-on-top-directives`（`spawn.rs`）・`window-work-area-clamp`（`chain_finalize.rs`・`drain_resnap.rs`・`persist.rs`）・`shell-scale-linkage`（`frame/dpi.rs`＝倍率の変わりのイベントを送る所）・`shell-mouse-cursor`（件 9 の `mouse_move.rs`）。依存を足さない。実機は拡大率の違う 2 つの画面のある机（主の画面は 200%）で、排他テストの机を持って回す。静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: B（直っていた動きの後退・開発者「受け入れず、別の spec として起票」。重ねた組と件 9 の分は開発者の指示＝v0.1.0 のゴール）。
+- **要件定義のモデル**: Opus（2 案の分かれ目は、拡大率への追従の基本設計と位置の記憶の 3 つの決まりで決まる。件 9 はドラッグの位置の式に拡大率の比を掛けるだけ）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - `placement/chain_realign.rs` 25〜30 行目の説明「誰も触っていないスコープは対象に残る」は 2 回目の起動から成り立たない（変わらず・この spec が判定と一緒に直す）。
+  - 棚卸㉘の節の「先に要るもの: `window-link-directives`」は済んだ。行数（`drain_resnap.rs` 546・`persist.rs` 642 ほか）は上のとおり古い。
+  - Scope の In に、件 9 の wintf のドラッグの位置の決め方がまだ書かれていない（申し送りの節が「要件の段で範囲に入れる」と書く）。
+  - `window-work-area-clamp`（10-23 起票）が、起動の並べ直しと記憶から戻す所を作業領域の中へ寄せる。詰め直した位置も作業領域の外へ出うる（隣の画面へ渡る）が、その寄せは向こうの持ち分か、こちらが向こうの寄せの関数を呼ぶかを、先に着地する側の要件で決める。

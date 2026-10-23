@@ -98,3 +98,13 @@
 - **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 3・3 節の 6 行目）: カーソルの形の読み取り（`ssp\stage3-cursor.txt` の 5 点）で、×（-84,258）とボール（-615,805）は `HAND`（Windows の標準の指さしの形・ハンドル `0x1001F`）、身体（-410,450 と -300,640）は `custom`（同じハンドル `0x46160A0D`）、窓の白地（-700,1000）は `ARROW`。シェルの `sakura.cursor` ブレスには `mouseup0,顔,system:hand` から `mouseup19,胸左,system:hand` までの 20 行があり、身体の当たり判定 20 個すべてに `system:hand` を当てている。`閉じる`（×）と `セキュリティボール` の行は無く、`kero.cursor` などのブレスも無い。読み方: 身体の `custom` は、シェルが指定した `system:hand` を SSP が自分の手の形のカーソルとして出したもの。× とボールは指定が無いので ukadoc の既定の `system:finger` になり、標準の指さしの形（`HAND`）として読めた。形そのものの絵は撮っていない。
 - 網羅台帳の宛先: 2026-10-23 に 2 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 3）: 当たり判定ごとにマウスの形が替わる（身体は手の形・× とボールは指さしの形・当たりの外は矢印）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: シェルを運ぶ `crates/areka-emo-present/src/shell_target.rs` が 757 → 855 行になった（`offline-surface-dump` が窓を出さない書き出しの口を足した・カーソルの表を運ぶ所は今も無い）。ほかは動いていない: wintf の `crates/wintf/src/ecs/window_proc/mouse_move.rs` 602 行（`WM_SETCURSOR` は今も診断の十字だけ）・シェルの読み手 `crates/areka-parsers/src/shell/decode.rs` 598 行（`sakura.cursor` のような知らない見出しのブレスは今も記録なしに捨てる＝`dispatch_block`）・`crates/areka/src/emo2_boot/hit_region.rs` 167・`input_events/mod.rs` 576。当たり判定の追跡のファイル `input_events/hover_region.rs` はまだ無い。
+- **触るファイル**: 棚卸㉗の見立てのとおり（新しい転記 `crates/areka-parsers/src/shell/cursor.rs`〔新〕と `shell/mod.rs` 72・`shell_target.rs`・追跡の `input_events/hover_region.rs`〔`mouse-click-wheel-events` が作る〕と `input_events/mod.rs` の数行・`mouse_move.rs` の数行と新しいカーソルの口のファイル〔新〕・ゴーストの descript の読み取り・台帳 `assets.toml`）。`WM_SETCURSOR` は窓の手続きの中でその場で答える。手続きは World を受け取っていて、ふだんは借りられる＝前例の形に乗る。
+- **規模**: 6〜9 のまま。
+- **先に要るもの**: ファイルの上で `mouse-click-wheel-events` の後（追跡を作る側）。同じウェーブに置けない相手（v0.1.0）: `mouse-click-wheel-events`・`placement-measure-bake-once` が `shell_target.rs` の読み込みの口を変える案を選んだとき。`seriko-pattern-calls` とは、向こうが `shell/mod.rs` に新しいファイルを足すときだけ重なる（向こうの本体は `shell/{lexer,decode,model}.rs`）。1 本だけの席は取らない。実機の確かめ（カーソルの形を読む）は画面のロックを外した机。既定の形と止まったときの形は SSP で測る（ぱすたの申し送りで × とボールの形は測ってある）。
+- **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・申し送りの件 16）。
+- **要件定義のモデル**: Opus のまま（先例＝wintf の `WM_SETCURSOR` の診断の口・`shell/boxes.rs` の 2 つ目の転記）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 棚卸㉘の「`shell_target.rs` 757」は 855。後の版の `shell-hover-animation` も追跡のファイルを使う＝`shell-tooltip` と並んで下流に足してよい。

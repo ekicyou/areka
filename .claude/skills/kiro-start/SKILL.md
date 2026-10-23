@@ -68,7 +68,8 @@ Run this before the precondition gate: the discovery `brief.md` may exist only o
    git merge --no-edit {remote}/{default-branch}
    ```
 4. If the fetch fails, the merge refuses (uncommitted changes), or the merge conflicts: run `git merge --abort` when a merge is in progress, then STOP and report the error. Do not resolve conflicts, stash, or reset on the developer's behalf.
-5. Report the result in one line (`Already up to date` or the merged range).
+5. Confirm the merge really took (developer 2026-10-23: `/kiro-wave` squash-merges the inventory just before it starts this session, and the spec must be read only after that merge is in): `git merge-base --is-ancestor {remote}/{default-branch} HEAD` must exit 0. Otherwise STOP and report it; nothing about the spec has been read yet.
+6. Report the result in one line (`Already up to date` or the merged range, with the `{remote}/{default-branch}` short SHA).
 
 ### Step 1: Verify post-discovery precondition (hard gate)
 This skill is deterministic about its precondition: the spec folder created by `/kiro-discovery` MUST already exist.

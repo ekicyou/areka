@@ -125,3 +125,22 @@
 - 見つけた穴・古くなった記述:
   - 本文の Upstream の「`mcp-reload`（未完了）」は古い（着地済み）。
   - v0.1.0 の後の見直し `audit-parsers-sakura` が `crates/areka-parsers/` の全部を持つ＝同じウェーブに置かない。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 読み手のファイルはほぼ動いていない（`crates/areka-parsers/src/kv/parse.rs` 43・`shell/parse.rs` 28・`shell/lexer.rs` 222・`balloon/parse.rs` 252 行）。`shell/decode.rs` だけ `offline-surface-dump`（10-23 着地）が 1 行足して 598 行。記録を出す候補の `crates/areka-ghost/src/runtime.rs` は 815 行のまま。ゴーストの読み手 `crates/areka-parsers/src/package/` は `ghost-inner-balloon` が割った（`resolve_bind.rs` が新しく出た）。`offline-surface-dump` が着地したので、v0.1.0 の重なりの相手から外れた。
+- **触るファイル**: 上の読み手 5 つと各兄弟のテスト・記録を出す所 1 つ（`runtime.rs` か `package/` を設計で選ぶ）。どれも 1,000 行から遠い。
+- **ほかの読み手との境目（調べた）**: ⑴ 配置の設定 `crates/areka/src/placement/config.rs`（689 行・`descript-window-keys` と `shell-scale-linkage` が触る）は `parse_kv` が返した表を受け取ってキーを引く側で、読み手そのものではない。⑵ `crates/areka/src/boot_config.rs`（`readonly-mode` が触る）は環境変数と App の記憶を読む所で、本 spec の 3 つの読み手を通らない＝重ならない。⑶ ただし descript の「読まなかったキー」は `parse_kv` の中では分からない。キーを引くのは下流（`placement/config.rs`・`placement/source.rs`・`crates/areka-ghost/src/config.rs`・`catalog.rs`・`package/resolve_shell.rs` ほか）だからである。議題 2 で「引いたキーを覚える入れ物」を選ぶと、この下流の全部に手が入り、`descript-window-keys`・`shell-scale-linkage`・`readonly-mode`（`catalog.rs`）と重なる。「areka が読むキーの一覧を 1 つ作る」を選べば下流に触らない（一覧と実装がずれる心配は残る）。
+- **規模**: 9〜13 タスク（変わらず）。議題 2 で入れ物を選ぶと下流の分だけ増える。
+- **先に要るもの**: 働きの上では無し。同じウェーブに置けない相手（v0.1.0）: `shell-mouse-cursor`（`shell/decode.rs`）・`seriko-pattern-calls`（`shell/lexer.rs`・新しく足された相手）・`popup-menu-shell-look`（記録を出す所を `package/` にしたとき・裁定待ち）・議題 2 の入れ物を選んだときは上の 3 本。1 本だけの席・静かな机・人の待ちは要らない。
+- **優先度の区分**: C（作者の調べものを助ける改良・利用者から見える不具合ではない）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - 本文 Scope の「読まなかったキー」は `parse_kv` の 1 か所で数えられる書き方だが、上の ⑶ のとおり descript では読み手の外で決まる。要件の段で、descript とバルーンの descript（`balloon/parse.rs` は自分でキーを引く）を分けて扱う。
+  - 本文の Upstream の「`mcp-reload`（未完了）」は古い（10-22 着地・棚卸㉘のとおり）。
+
+## 2026-10-23 棚卸㉙の追記
+- **件を 1 つ足す**（出どころ: `.kiro/specs/completed/areka-P0-offline-surface-dump/tasks.md` の Implementation Notes「完了の棚卸へ」の (4)）: surfaces.txt の `collision-sort` に知らない値を書くと、読み手 `crates/areka-parsers/src/shell/decode.rs` の `decode_sort_key`（518 行目）が 525 行目で原文のまま `SortOrder::Other` に入れて運ぶが、誰も知らせない（2026-10-23 に main aa8da8a7 で確かめた）。
+- 同じ形の `animation-sort` は、合成の側の形の誤りを集める `shape_issues`（`crates/areka-emo-compose/src/plan_issues.rs` 45〜52 行目）が `UnknownAnimationSort` として知らせる。`collision-sort` は当たり判定が値を読まない（`crates/areka-emo-compose/src/hit.rs` 57 行目の説明「`collision-sort`・DPI は参照しない」）ので、知らせる所が無い。
+- 直し方の候補: この spec が作る読み手の記録で知らせるか、`shape_issues` に 1 行足すか。後者は合成のクレート（`crates/areka-emo-compose/`）を触る＝要件の段で決める。規模は 1 タスク増える見込み（9〜13 → 10〜14）。
+- `shell/decode.rs` を触る相手（`seriko-pattern-calls`・`shell-mouse-cursor`・新しく起票した `ghost-alias-file`）とは同じウェーブに置かない。

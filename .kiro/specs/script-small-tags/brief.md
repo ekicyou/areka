@@ -112,3 +112,17 @@
   - SSP の基準: 分けては測っていない。
 - 網羅台帳の宛先: 2026-10-23 に `sakura-script.toml` の 3 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 2）: 全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: ✅ `offline-surface-dump`（10-23）が着せ替えの既定の読みを `areka-seriko` へ移し、着せ替えの受け手 `crates/areka-seriko/src/actor.rs` は 780 行から 768 行になった。名前の選別は今 510 行目と 533 行目（名前の定数 `BIND_COMMAND` は 56 行目のまま）。台本の読み手 `crates/areka-parsers/src/sakura/decode.rs` は 502 行のまま（`fold_choice_marker` は 122 行目・「無視した」印は 127 行目）。台本の組み立ての残りの腕 `crates/areka-sakura/src/compile.rs` は 290 行目あたり。受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` は 496 行。✅ `pasta-in-windows-verification`（10-23）の申し送り（件 3・17・18）が本文の後ろに在る。
+  - 議題 1 に答えが出た: SSP は、ぱすたの選択肢 4 つのそれぞれの前に印を出した（同 spec の `ssp-measurement.md` 3 節）。ぱすたの縦書きのバルーン（ゴーストのフォルダの `pasta_tategaki`）には印の絵 `marker.png` が無いので、SSP は自前の絵か別の絵を使った見込み（どの絵かは確かめていない）。「何も描かないなら記録の行だけ」の道は閉じた＝印を描く仕事をこの spec に入れるか、`marker.filename` の持ち主 `balloon-canon-residue`（いつか）へ渡すかを要件の段で決める。申し送りの決め「すべて v0.1.0 で解決」により、渡すなら v0.1.0 の中に持ち主が要る。
+- **触るファイル**: `decode.rs`（502）と兄弟のテスト・`actor.rs`（768）と兄弟のテスト（新）・`consumer_ledger.rs`（496・`bind-noevent` の 1 行と見本の表 `consumer_ledger_agreement_tests.rs` の 1 行）・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の 4 行。印を描くなら、文字の層の選択肢の飾り（`crates/areka-emo-text/src/` の選択肢の所）とバルーンの descript の読み（`crates/areka-parsers/src/balloon/`）も加わる。
+- **規模**: 4〜6 タスク（印を描くなら 7〜9）。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手＝`stay-on-top-directives`（`decode.rs`・受け手の表）・受け手の表に行を足す `descript-window-keys`・`shell-scale-linkage`・`balloon-communicatebox`・`mcp-strict-errors`（案 2）（1 本ずつ）。印を描くなら `vertical-choice-hover-band`（`crates/areka-emo-text/src/choice.rs`）と `balloon-scroll-arrows`（`crates/areka-parsers/src/balloon/`）とも照らす。`seriko-pattern-calls` は `areka-seriko` の表 `table.rs` を触り、`actor.rs` は挙げていない＝要件の段で重なりを確かめる。依存を足さない。静かな机・前後の全体テストの比べは要らない。議題 2（出せない番号）の測りは開発者の機械の SSP。
+- **優先度の区分**: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
+- **要件定義のモデル**: Opus（先例＝裸の `\+` の写し・`\![*]` の畳み・着せ替えの名前の選別。印を描くとしても、選択肢の飾りの今の描き方に乗る）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - 申し送りの件 18 の「`actor.rs:492`」は今 510・533 行目。棚卸㉘の節の「`actor.rs`（780）」は 768、「`consumer_ledger.rs`（472）」は 496。
+  - 本文の Scope の Out「マーカーの画像の読み込みと描画（`balloon-canon-residue`）」は、議題 1 の答えで見直しが要る（上）。
+  - 網羅台帳の `\_m[0x00]` の行は持ち主が空（`\_u` の行はこの spec）。着地のときに書く。

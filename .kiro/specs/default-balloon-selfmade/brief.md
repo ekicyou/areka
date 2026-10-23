@@ -214,3 +214,13 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - この spec は `bottle` の `validrect` をそのまま引き継ぐ＝同じ読みのままだと、作るバルーンでも文字が描かれない。正典で `validrect.right,0` が右端を指すか（ukadoc の `validrect.right` の既定は「不明」）は確かめていない。要件の段で SSP の MCP で測ってから決める（記憶「ukadoc で読めない点は議題の前に SSP の MCP で測る」）。正典の読みが areka と同じなら、引き継ぐ値の側を直す。
 - 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 3。
 - 開発者（2026-10-23）: 「次のリリースまでに治るように」。この spec はもとから v0.1.0。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 待っていた `dot-sakura-specimen`（10-23）と `ghost-inner-balloon`（10-23）が着地した。登記表（`crates/sample-ghost-kit/src/lib.rs` 704 行）は 10 本で、この spec で 10 → 11。`ghost-inner-balloon` は `resolve_balloon` にゴーストのフォルダの中のバルーンを足したが、既定のバルーンの名前の定数は今も `crates/areka/src/boot_resolve.rs` 34 行目の `DEFAULT_BALLOON_FOLDER`（`StayseeBalloon`）で、使うのは段 6（325〜326 行目）だけ（行番号も変わらず）。同 spec は `sample-ghost-kit` に新しい試験 `tests/pasta_inner_balloon_test.rs` を足した（登記表には触っていない）。
+- **触るファイル**: 定数 1 行と、既定の名前を期待するテスト 4 本（`boot_resolve_tests.rs` 853 行・15 か所／`boot_resolve_balloon_tests.rs` 579→613 行・6 か所／`boot_config_balloon_tests.rs` 238→370 行・3 か所／`main_config_input_tests.rs` 459 行・4 か所）・`tools/package.ps1`（752 行・既定のバルーンを引く 467・496・504・570 行目＝変わらず）・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`（704・783）・`vendors/sample_ghost/` の新しい書庫と README・`dist/README.txt`（380→441 行）・根の `README.md`（138）・絵を描く道具と中身を固定するテスト（新）。
+- **規模**: 8〜12 のまま（`validrect.right,0` の読みを areka の側で直すことになったら +1〜2）。
+- **先に要るもの**: 働きの上では無い＝先頭（議題 3 で `.webp` を選んだときだけ、v0.1.0 の外の `balloon-webp-names` が前提になる）。同じウェーブに置けない相手: `readonly-mode`（`boot_resolve.rs`）・`winget-release-automation`（根の `README.md`＝節は別だが、許す重なりは `dist/README.txt` の別の行だけ）・余力の枠の `multi-ghost-runtime`（`boot_resolve.rs`）。`validrect` の読み（`crates/areka-emo-text/src/region.rs`）を直す側に倒すと、同じファイルを挙げる `mouse-click-wheel-events`・`real-run-log-noise` ほかとも重なる＝要件で決まったら測り直す。登記表は `seriko-pattern-calls`・`shiori2-protocol` が読むだけ（重ならない）。1 本だけの席は取らない。人の待ち: 要件の段で開発者が名前・絵柄・形式を選ぶ往復と、`validrect.right,0` を SSP の MCP で測ること。静かな机・全体テストの比べは要らない。
+- **優先度の区分**: A のまま（開発者「これに含まれるバルーンを参考に、デフォルトバルーンを作ってほしい」）。
+- **要件定義のモデル**: Opus のまま（議題は開発者に聞く選びと SSP で測る読みで、新しい境目・並行の設計・骨格の分かれ目に当たらない）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 棚卸㉘の「`ghost-inner-balloon` が段 6 の前の並びを変える」は着地で確かめられ、段 6 の行は動かなかった（既定の名前を期待するテストの読み直しは、増えた `boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs` の分だけ要る）。どっとさくらで出た「折返し基準が描画範囲の外」の WARN と近い件（`emo2-kakukaku` の折り返し基準）は `balloon-canon-residue` の 14 項が持つ＝`validrect` の読みをどちらで扱うかを要件の段で照らす。

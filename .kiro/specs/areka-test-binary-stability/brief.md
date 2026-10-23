@@ -270,3 +270,18 @@
 - `tools/test-all.ps1 -Format -License` の x64 の段で、`emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` だけが赤（3335 本緑・1 本赤）。打ち切りの文は `待ちの打ち切り［止まった］: 「起動の会話」— 相手が 30.0 秒のあいだ状態を進めなかった（待ち始めから 31.3 秒・それまでの進み 10 回）`（`crates/areka/src/emo2_boot/spine_third_scope_talk_tests.rs:141`）。
 - その 1 本だけを回し直すと 1.22 秒で緑。`dot-sakura-specimen` は `areka` のコードに触れていない＝負荷の下でだけ止まる会話の待ち。steering `tech.md` の「負荷の下で許す赤」に当たるか、止まる原因が足場の側にあるかは確かめていない。
 - 起票でなくここへ足した訳: 確かめるのに負荷つきの全体の走行を何度も回す要があり（完了の棚卸の例外の 4 つ目）、本 spec の件 2（テストの待ち）と同じ足場（`spine_wait.rs` の族）を触る見込み。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 10-23 に着地した `emo2-real-run-stability` は、本物の窓を出す結合テスト（`crates/areka/tests/emo2_real_run.rs`・`emo2_first_load_repeat.rs`・`emo2_real_run/common.rs`）と 32 ビットの仲介（`crates/shiori-host32-helper/src/shiori_proxy.rs`）と手順書 `doc/testing.md` だけを変え、最初の読み込みの失敗を「再現しない」として閉じた。負荷の再現の道具 `tools/load-flake.ps1` が回すのは `cargo test -p areka --bin areka` だけで、あちらの結合テストは別の実行ファイル＝この spec の前提（落ちる組・待ちの 5 種類・足場）は崩れていない。「本物の窓が出る試験と同じ時間に回さない」は、あちらの試験が環境変数 `AREKA_EMO2_REAL_RUN=1` のときだけ走る形になったので、手順で守れば足りる。
+- 同じ実行ファイルで増えたもの: `crates/areka/src/` の下の `#[test]` は約 3,352→約 3,570。`offline-surface-dump` が、各スレッドで COM の部屋（MTA）を開くテストを 36 本足した（`offline_dump/render_tests.rs` 19・`offline_dump/offline_dump_tests.rs` 13・`png_image_tests.rs` 4。絵の読み書きだけで GPU の許可は取らない）＝件 1 の疑いの母集団（各スレッドで MTA を開くテスト）が広がった。二分探索や対照を採るとき、この族を外した組も採る。
+- 待ちの数え直し: 目印の無い `spin_wait_until` の直接の呼び出しは 15 か所のまま（定義の 1 行を除く）。`join_bounded` の写しは 3 つのまま（`emo2_boot/spine_wait.rs` 385 行目・`install/desk_pick_tests.rs` 60 行目・`install/fetch_url_tests.rs` 80 行目）。GPU の装置の許可の待ち（`spine_wait.rs` 420 行目の `take`・424 行目の `wait_while`）は今も上限なし。10-23 の追記の止まった会話の待ち（`emo2_boot/spine_third_scope_talk_tests.rs` 115 行目）は進みの目印つき（SHIORI の呼び出しの数と受けた指示の数）で、打ち切りは 141 行目＝負荷の下で許す赤の字面には当たる。止まった訳が足場か本番かは、件 2 の確かめの中で読む。
+- **触るファイル**: 本文と件 1・件 2 の棚卸㉓の節のとおり（テストと足場だけ・本番は `#[cfg(test)]` の部分だけ）。行数: `emo2_boot/spine_wait.rs` 462・`spine_conformance_support_tests.rs` 959・`spine_conformance_lap_tests.rs` 912・`crates/areka/src/shell_balloon_switch_session_lap_tests.rs` 792・`emo2_boot/ghost_switch_test_support.rs` 676→721（`ghost-inner-balloon`）・`crates/areka-nar/src/install_commit_tests.rs` 832→857（同）・`emo2_boot/assets_tests.rs` 979→**880**（`offline-surface-dump` が中を移した）・`crates/areka/src/main.rs` 1,000→978。`ghost_session_restart_tests.rs` は `window-link-directives` が書き換えた。
+- **規模**: 13〜20 のまま（件 1＝5〜9・件 2＝8〜11）。
+- **先に要るもの**: 働きの前提は無い。測ることが本体＝ウェーブに並べず、静かな机で 1 本だけ（排他テストの机とひとりの机）。負荷つきの全体（1 回 約 50 分）は最後に 1 度。測る間に、同じテストのファイルや一時の根の置き場を動かす spec を着地させない（`test-roots-under-target`・`install-live-target-hazards`・`actor-thread-log-capture`・`background-result-tick-wake` ほか、棚卸㉘の節のとおり）。依存は足さない・文字の層のクレートに触らない。
+- **優先度の区分**: B のまま（テストのプロセスが落ちる）。
+- **要件定義のモデル**: Opus のまま（棚卸㉘の改めのとおり。件 1 の原因が「スレッドに縛られる資源の新しい決まり」を作る形と分かったときだけ、設計の段を Fable にする）。
+- **分割の案**: 上限 20 を超える見込みになったら件 2 を切り出す（本文のまま）。
+- **見つけた穴・古くなった記述**:
+  - 本文の決まりの節の「`assets_tests.rs` 979 行は先に分ける」は古い（今 880 行＝分けなくてよい）。
+  - 足場の説明に「WARP 可」が今も残る（`crates/areka/src/emo2_boot/frame_attach_tests.rs` 225・232 行目・`frame_visibility_integration_tests.rs` 9・42 行目・`emo2_boot/spine.rs` 4・443・647 行目・`mcp/dump_surface_gpu_test_support.rs` 4 行目）。開発の決まりは「GPU のテストは本物の GPU」＝説明の直し候補（その場で直せる）。
+  - `emo2-real-run-stability` の完了の記録が「範囲の外」と書いた件（環境変数なしの `cargo test -p areka` でも `tests/mcp_get_log_real_run.rs` が子の areka を起こす）は、`tools/load-flake.ps1` の回には入らない。全体テスト（`tools/test-all.ps1`）で負荷の確かめをするなら、その回には本物の窓が混ざることを覚えておく。
