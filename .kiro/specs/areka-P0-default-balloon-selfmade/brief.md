@@ -212,5 +212,5 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 
 - どっとさくらの同梱バルーン `bottle` の `descript.txt` は `validrect.left,0`・`validrect.right,0`・`validrect.bottom,-20`。areka は負の値を反対の辺からの距離と読み、0 は左端の 0 と読む（`crates/areka-emo-text/src/region.rs`）。`bottom,-20` は 149 に解けたが、`right,0` は 0 のままで、文字の描画範囲が幅 0 に潰れた（`left=0.0 top=0.0 right=0.0 bottom=149.0 image_size=(326.0, 169.0)`）。続けて「origin が validrect の外」「折返し基準が描画範囲の外」の WARN も 1 人目と 2 人目で 1 回ずつ出た。
 - この spec は `bottle` の `validrect` をそのまま引き継ぐ＝同じ読みのままだと、作るバルーンでも文字が描かれない。正典で `validrect.right,0` が右端を指すか（ukadoc の `validrect.right` の既定は「不明」）は確かめていない。要件の段で SSP の MCP で測ってから決める（記憶「ukadoc で読めない点は議題の前に SSP の MCP で測る」）。正典の読みが areka と同じなら、引き継ぐ値の側を直す。
-- 根拠: `.kiro/specs/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 3。
+- 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 3。
 - 開発者（2026-10-23）: 「次のリリースまでに治るように」。この spec はもとから v0.1.0。

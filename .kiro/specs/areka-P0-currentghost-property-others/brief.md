@@ -89,4 +89,4 @@
 
 - MCP の `get_property` で、ゴースト・シェル・バルーンの名前（`currentghost.*`）がどれも `NG:Cannot find such property name.` だった。答えたのは `baseware.name`=`areka` だけ。ゴーストの名前は `get_active_ghost_list`（`．さくら`）で取れた。
 - 名前の項目は本 spec の `currentghost.汎用` に入る（`currentghost-property-tree` の 19 項目ではない）。開発者（2026-10-23）が持ち主を本 spec と決めた。版の段は今のまま（roadmap は触らない）。
-- 根拠: `.kiro/specs/areka-P0-dot-sakura-specimen/verification.md` の 4 節と 8 節の件 6。
+- 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 4 節と 8 節の件 6。

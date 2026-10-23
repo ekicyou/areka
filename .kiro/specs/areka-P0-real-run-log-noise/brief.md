@@ -124,5 +124,5 @@
 
 - 同梱バルーン `bottle` を使うと、`cursor.blendmethod ROP 系は M1 未対応` の WARN が**毎フレーム**出た。2 分 12 秒で 20,764 行、記録の 98% を占めた。
 - `crates/areka-emo-text/src/choice.rs` の注記は「`cursor.blendmethod` が ROP 系（`none` 以外）→ warn-once（解決時 1 回）」。解決が毎フレーム走り、1 回だけ出すはずの警告が毎回出ている見込み（areka の側）。`mergepennot` を描けないこと自体は決めた縮退で、直すのは警告の回数だけ。
-- 根拠: `.kiro/specs/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 2。
+- 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 2。
 - 開発者（2026-10-23）: 「次のリリースまでに治るように」。この spec の版の段は「版に縛らない」のまま（roadmap はこのセッションでは触っていない）＝次の棚卸で v0.1.0 に入れるかを決める。

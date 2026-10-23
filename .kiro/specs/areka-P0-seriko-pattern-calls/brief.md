@@ -1,6 +1,6 @@
 # Brief: areka-P0-seriko-pattern-calls
 
-> 起票: 2026-10-23（`areka-P0-dot-sakura-specimen` のタスク 5.1・開発者と `/kiro-discovery`）。根拠は `.kiro/specs/areka-P0-dot-sakura-specimen/verification.md` の 7 節・8 節の件 4 と件 5。
+> 起票: 2026-10-23（`areka-P0-dot-sakura-specimen` のタスク 5.1・開発者と `/kiro-discovery`）。根拠は `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節・8 節の件 4 と件 5。
 > **開発者の条件（2026-10-23）: 次のリリース v0.1.0 までに治ること。ただし roadmap.md はこの起票では触らない**（版の段と並びは次の棚卸で決める）。
 
 ## Problem

@@ -155,4 +155,4 @@
 ## 2026-10-23 `move` の持ち主の移し替え（`areka-P0-dot-sakura-specimen` のタスク 5.1）
 
 - 上の議題「`move`（位置の語）を範囲に入れるか」は、開発者と決めて新しい spec `areka-P0-seriko-pattern-calls` へ移した（アニメーションを呼ぶ 7 語と一緒に、pattern の働きとして SERIKO の再生が受ける）。本 spec は重ね方の合成メソッドだけを持つ＝この議題はもう出さない。
-- 根拠: どっとさくらのシェル `master` の `animation0.pattern1,move,0,10,0,6` などが `未知の合成メソッド名` の WARN 22 行になった（`.kiro/specs/areka-P0-dot-sakura-specimen/verification.md` の 8 節の件 4）。
+- 根拠: どっとさくらのシェル `master` の `animation0.pattern1,move,0,10,0,6` などが `未知の合成メソッド名` の WARN 22 行になった（`.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 8 節の件 4）。
