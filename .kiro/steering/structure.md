@@ -308,6 +308,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `key.rs` - 正準 key `PropPath`／セレクタ 5 形パーサ（正準文字列化 `to_canonical_string()` が**唯一の権威**）
 - `vocab/` - 語彙台帳（`flat.rs` 26 トークン／`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論＋記録用のサウンドプロパティ名 18（書き込みの仕分けは読まない）／`shiori_resource.rs` 159 項目）＝**完全語彙を第一級保持**し未導出は縮退シームで管理
 - `mirror.rs` / `reader.rs` / `value.rs` / `asker.rs` - 不変鏡像（per-asker/global 区画・epoch 単調増加）と `SylphyaReader`（`resolve_flat`／`resolve_dotted`／`talk_snapshot`）・問い合わせ元コンテキスト第一級
+- `pull.rs` - 動く値の口（`PullShape`・`PullSource`・`SylphyaReader::register_pull`）。鏡像のどちらの区画にも無い点付きの名前だけを、外から名前の形に登録した読み手に読まれた時に聞く。読み手は待たない・遅れない読み取りに限る（`mcp-scope-rect-property` 2026-10-23。窓の矩形の読み手は `crates/areka/src/ghost_session_scope_rect.rs`）
 - `actor.rs` - `SylphyaMsg` envelope・**純関数中核 `SylphyaCore::apply`**（判断分岐を集約・受信ループは薄い配線）・`spawn_sylphya`／`SylphyaPublisher`（`barrier()` で反映フェンス）
 - `persist/` - 層別スコープ（App/Ghost/Shell/Balloon）×TOML（`format-version`）×原子的書込（temp→rename）×寛容読取 3 段×4 key 族
 **Dependencies**: **std・thiserror・tracing・toml・areka-actor のみ**（上流 areka クレートへの依存は**禁止**＝最下層規律。「消費者は backing を知らない」はこの依存方向から自動帰結）
