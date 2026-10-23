@@ -11,6 +11,7 @@ pub(crate) mod balloon;
 pub(crate) mod choice_drain;
 mod drag;
 pub(crate) mod file_drop;
+mod hover_region;
 pub(crate) mod shell_box;
 pub(crate) mod shell_box_handler;
 pub(crate) mod shortcut;

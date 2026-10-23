@@ -45,7 +45,7 @@
   - _Requirements: 1.2, 1.3, 1.6, 1.8, 2.2, 2.3, 2.5, 3.6, 4.2, 5.4, 8.1, 9.2, 9.3_
 
 - [ ] 3. 入力の層に押下の控え・解放の判定・出入りとホイールの見張りを足す
-- [ ] 3.1 (P) 窓ごとの出入りの状態と、出入りを決める純関数を作る
+- [x] 3.1 (P) 窓ごとの出入りの状態と、出入りを決める純関数を作る
   - 前の状態（窓の上に居るか・位置・当たり判定）と今の見え方（窓の上の当たり判定か、窓の外か）から、次の状態と送る出入りを送る順で返す
   - 窓に入ると `EnterAll` の後に当たり判定があれば `Enter`、A→B は `Leave`(A) → `Enter`(B)、窓の外へ出ると `Leave` の後に `LeaveAll`（座標は窓の中で最後に見た位置）
   - 表の 7 行・`EnterAll` の Ref4・`LeaveAll` の座標のテストが新しい兄弟のテストファイルで通る
@@ -122,3 +122,4 @@
 - 2.2: 表の手書きの数（`events_change_tests.rs` 55→64）のほか、表の全体を固定する `events_tests.rs::allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour` の期待の配列に 9 語を足した（語を足せば必ず赤になる檻・design の変更ファイルの一覧に漏れ）。4.2 の差分の説明に例外として書く。範囲外の clippy の止まりは `balloon_events_cleanup_tests.rs:189` ほか複数の触っていないテストのファイルにもある。
 - 2.3: `ClickChain` に `cfg_attr(not(test), expect(dead_code))` の足場がある。2.4 で `on_click_reply` が欄を読み始めたら外す（外さないと unfulfilled_lint_expectations）。記録の欄のイベント名は `event` と重なるので `id` にしてある（`balloon_event_sent` と同じ形）。
 - 2.4: kanade 側の `mouse_click_not_sent`（second_of_double）の `button` は 1 段目の Ref5 の値（"0"／"1"／"middle"／"xbutton1"／"xbutton2"）。3.4 で入力の層の `mouse_click_not_sent` の `button` を書くときは同じ書き方にそろえる。応答の出所の照合はアンカーの腕にそろえて持たない。
+- 3.1: `input_events/hover_region.rs` はモジュール全体に `cfg_attr(not(test), expect(dead_code))` の足場がある。3.5 で結線したら外す。areka のクレートは lib を持たないので、単体のテストは `cargo test -p areka --bin areka <名前>` で回す。
