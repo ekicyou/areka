@@ -260,3 +260,36 @@
 - `drag_follow.rs`（958 行）は入口に 4 行ほどだけ。足す本体は `balloon_lock.rs` に置く。
 - `areka-seriko` の公開の型が変わる（`SerikoReplace::Shell`）。同じウェーブでこの型を組む spec は無い（C11 の表に持ち主なし）。
 - バルーンの窓に `OnDragStart` を付ける。ゴーストへ知らせない決まり（完了 `areka-P0-mouse-drag-events` 要件 3.3）は保つが、`input_events/drag_tests.rs` 161 行目の檻の組み立てを I4 で確かめる。
+
+## 12. 設計の討議（2026-10-23）
+
+開発者は 2 つの議題をどちらも推奨案で承認した（「承認」）。
+
+### 12.1 議題 1: バルーンのドラッグを止めたかの見分け方
+
+- **決め**: バルーンの窓に `OnDragStart` の受け手を足さず、areka の側に控え（`BalloonDragSession`）も持たない。`on_balloon_drag`・`on_balloon_drag_end` の入口の見張りが、wintf の `WindowDragContextResource` を直接読む。控えの `hwnd` がその窓の `WindowHandle` と同じなら `!move_window`、違う・無いなら、その窓の今の `DragConfig.move_window` で決める。
+- **根拠（wintf の `crates/wintf/src/ecs/drag/dispatch.rs` を読んで確かめた）**:
+  - ドラッグの始まり（`DragTransition::Started`）では、135〜137 行目で `DragConfig.move_window` を読み、147 行目で控えを書いてから、202 行目で `DragStartEvent` を配る。
+  - 途中の `DragEvent` は 373 行目で配る。このとき控えは残っている。
+  - 終わり（`DragTransition::Ended`）では、242 行目で `DragEndEvent` を配ってから、329〜334 行目で控えを消す。
+  - ＝入口の 2 つの受け手の中では、いつもそのドラッグの始まりの値が読める。途中で書き手が `DragConfig` を書き換えても、効くのは次のドラッグから（要件 5.6）。
+- **見つけた落とし穴**: 消した後の控えは `hwnd: None`・`move_window: false`（`context.rs` の `WindowDragContext::clear`）になる。だから `move_window` だけを見ると「止める」と取り違える。見張りは `hwnd` で見分ける。
+- **これで消えたもの**:
+  - ② `mouse-click-wheel-events` の `input_events/mod.rs` と、その檻 `input_events/drag_tests.rs` 161 行目に触る必要（設計の検証の問題 3）。
+  - 調べることの I2・I4。
+  - `app_exit.rs` で外す資源 1 つ。
+- **選ばなかった案**: キャラクターの窓の先例（`CharDragSession`）にそろえて受け手を足す。キャラクターの窓には、ゴーストへ知らせる受け手が前から付いている。バルーンの窓に新しく付けると、② との調整と檻の書き直しが要る。
+
+### 12.2 議題 2: シェルの切り替えでの文字の層の行き先
+
+- **決め**: この spec の中で直す。`ShellBoxAssets` に、スコープごとの戻り先の候補の並び（`fallback_candidates`）を持たせる。`hand_to` は `set_box_layout` の直後に `TextLayerRuntime::fall_back_box_surfaces` を呼ぶ。文字の層の `TextLayerState::fall_back_surfaces` は、今の面の番号が新しいシェルの `surface_ids` に無いスコープだけを、候補の最初に在る面で `route_surface(Show)`（どれも無ければ `route_surface(Hide)`）にする。替えたときだけ、区間の全文を求め直す。
+- **根拠**:
+  - `set_box_index`（`state_route.rs` 58〜68 行目）は、各スコープの今の面の番号を保ったまま行き先を引き直す。戻り先の面を出しても、文字の層は前の番号のまま残り、面の中の文字の箱へ字が入らない（設計の検証の問題 2）。
+  - この spec が足す戻り先の動きで生まれる食い違いなので、作る側で閉じる。
+  - seriko へ渡す `ShellSurfaceFallback` は、`split` が同じ `boxes` の `surface_ids`・`fallback_candidates` から組む。だから材料は 1 つで、決め方も同じ（今の面 → 候補の最初に在る面 → 出さない）。
+- **作りの細部**:
+  - `set_box_layout` の引数は変えない。呼び出しはテストに 24 か所あるので、新しい口 `fall_back_box_surfaces` を足す方が手が小さい。
+  - emo-text に新しいソースファイルは足さない（このウェーブの席を使わない）。
+  - テストは `state_route_tests.rs`（537 行）に足す。⑤ `vertical-choice-hover-band` の持ち物（`choice.rs` ほか）とは重ならない。
+  - 起動・読み直しでも同じ候補を入れ、呼び手で分けない。起動では文字の層にまだ面が無いので何も起きない。読み直しでは `shell_carry::decide` と同じ答えになり、続く `replay` の `\s` も同じ番号を送る。
+- **記録**: 正本は seriko の `shell_switch_surface_fell_back`／`shell_switch_surface_hidden`（同じ材料・同じ答え）。文字の層は `debug!` を 1 行残す（今の `route_surface` の記録と同じ段）。

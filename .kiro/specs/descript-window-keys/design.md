@@ -13,7 +13,7 @@
 ### Goals
 
 - 各スコープの窓の大きさを、最初から descript の既定の面で測る（要件 2）。
-- ゴーストの読み直しとシェルの切り替えで、それまでの面が無いとき descript の既定の面 → 組み込みの既定の面 → 出さない、の順に戻す。表示と seriko の「今の面」を食い違わせない（要件 3）。
+- ゴーストの読み直しとシェルの切り替えで、それまでの面が無いとき descript の既定の面 → 組み込みの既定の面 → 出さない、の順に戻す。表示・seriko の「今の面」・文字の層の今の面（文字の箱の行き先）を食い違わせない（要件 3）。
 - descript の段と台本の lock の間、利用者のドラッグでバルーンを動かさない。追従・`\![move]`・位置初期化・クリックは今どおり（要件 4〜6）。
 - 判断の分かれ目をすべて実機なしの決定論のテストで確かめる（要件 7）。
 
@@ -33,13 +33,15 @@
 - 「戻り先の候補の並び」（descript の既定の面、違えば続けて組み込みの既定の面）と、その並びから在る面を選ぶ決め方。使い手は測り・読み直しの戻り先・シェルの切り替えの戻り先の 3 つ。
 - ゴーストの `balloon.dontmove` とシェルの `sakura.`・`kero.`・`char<n>.balloon.dontmove` の読みと段の優先。
 - スコープごとの「バルーンの動かせない指定」の帳簿（descript の段＋台本の lock）と、その寿命（起動で据える・シェルの切り替えで descript の段だけ取り替える・窓を閉じて起こし直すときに外す）。
-- 窓を作った後のバルーンの窓の `DragConfig.move_window` の書き手（1 か所）と、バルーンのドラッグの控え（このドラッグを止めたか）。
+- 窓を作った後のバルーンの窓の `DragConfig.move_window` の書き手（1 か所）と、バルーンのドラッグの入口の見張り（このドラッグを止めたかを、wintf がドラッグの始まりに控えた値から読む）。
 - `\![lock,balloonmove]`・`\![unlock,balloonmove]` の受け手（`MoveCueSink` の 2 つの名前の選別）と、受け手の表の 2 行。
 - 網羅台帳 `assets.toml`・`sakura-script.toml` の該当行と、`doc/COMPAT_ARCHITECTURE.md` §8 の行。
 
+- シェルの切り替えで、文字の層（areka-emo-text）の各スコープの今の面の番号を、seriko と同じ戻り先の並びで引き直すこと（面の中の文字の箱の行き先を、出ている面にそろえる）。
+
 ### Out of Boundary
 
-- 面の合成・アニメーション・着せ替えの決め方（seriko と emo の既存の働き）。本設計は seriko に「シェルの差し替えのときの戻り先の並び」を渡すだけで、面の解決の規則は変えない。
+- 面の合成・アニメーション・着せ替えの決め方（seriko と emo の既存の働き）。本設計は seriko と文字の層に「シェルの差し替えのときの戻り先の並び」を渡すだけで、面の解決の規則は変えない。
 - 台本の `\![move]`・`balloonoffset`・窓の追従・位置初期化・位置の記憶の書式（どれも `DragConfig` を読まないので変えない）。
 - wintf（`crates/wintf`）。`DragConfig` と `WindowDragContextResource` の公開の口を使うだけで、中は触らない。
 - `placement/spawn.rs`・`placement/{persist,chain_realign,chain_finalize}.rs`・`placement/follow/window_move.rs`・`emo2_boot/frame.rs`・`emo2_boot/frame/dpi.rs`（同じウェーブの ⑥ ほかの持ち物）。バルーンの窓の `DragConfig` の初期値は `spawn.rs` の `DragConfig::default()` のままにし、窓を作った後に書き手が付け直す。
@@ -50,6 +52,7 @@
 
 - 依存の向き: `placement::descript_window_keys`（純関数・`config.rs` の `scoped_value` だけを使う）→ `placement::measure`・`emo2_boot::{assets, shell_carry, frame::switch}` → `ghost_session`。`placement::balloon_lock` は `wintf::ecs::drag` と `placement::spawn::BalloonWindowMarker` に依存し、`emo2_boot::frame::{drain_resnap, switch}`・`placement::follow::drag_follow`・`ghost_session`・`app_exit` から呼ばれる。`placement` は `crate::` を参照しない（手本 `examples/window-placement.rs` が `#[path]` で取り込むため）。
 - `areka-seriko` は `areka` を知らない。戻り先の並びは素の `u32` の列として `SerikoReplace::Shell` に載せる。
+- `areka-emo-text` は `areka-seriko` を知らない（今も依存していない）。戻り先の並びは素の `u32` の列と `ActorKey` の表で渡す。emo-text に新しいソースファイルは足さない（このウェーブの emo-text の席を使わない）。
 - 新しい外部の依存（crate）は足さない。
 
 ### Revalidation Triggers
@@ -58,7 +61,8 @@
 - `build_shell_assets`・`build_boot_assets_with_shell`・`measure_scope_sizes`・`wire_emo2_boot` の引数が 1 つずつ増える。`StartupDescriptValues` に欄が 1 つ増える。`ShellCarry` の `decide` の引数の形が変わる。
 - `PositionCue` に腕が 1 つ増える（`run_move_drain_phase` の照合は網羅なので、腕を足す他の spec は合流で気付く）。
 - 受け手の表の手書きの数が 36 から 38 になる（⑦ と同時に行を足す spec は数を合わせる）。
-- バルーンの窓に `OnDragStart` が付く（今は付いていない）。バルーンの窓のドラッグの受け手を足す spec は、本設計の控え（`BalloonDragSession`）と順を合わせる。
+- バルーンの窓のドラッグの入口（`on_balloon_drag`・`on_balloon_drag_end`）に見張りが 1 行ずつ入る。見張りは wintf の `WindowDragContextResource`（ドラッグの始まりに控えた `hwnd` と `move_window`）を読むので、wintf がこの控えを書く・消す時機（`drag/dispatch.rs`）を変える spec は追随する。バルーンの窓に受け手は足さない（`OnDragStart` は今どおり付かない）。
+- 文字の層に `TextLayerRuntime::fall_back_box_surfaces` と型 `SurfaceFallback` が増える（`ShellBoxAssets::hand_to` の 1 か所から呼ぶ）。`ShellBoxAssets` に欄が 1 つ増える（組む所: `assets.rs` と 3 つのテスト）。
 - `extra-character-windows` は `DefaultSurfaces::surface(scope)` をスコープ 2 以降の最初の面に使う。
 
 ## Architecture
@@ -115,7 +119,7 @@ graph TB
 ```
 
 **Architecture Integration**:
-- 選んだ形: 既存の「準備が 1 度読んで配る」型と「帳簿＋書き手 1 か所＋ドラッグの控え」型をそのまま延ばす。新しい仕組みは作らない。
+- 選んだ形: 既存の「準備が 1 度読んで配る」型と「帳簿＋書き手 1 か所」型をそのまま延ばす。ドラッグを止めたかは、areka で控えを持たず wintf の控え（`WindowDragContextResource`）を読む。新しい仕組みは作らない。
 - 新しい部品の理由: `descript_window_keys.rs` は 3 か所に散った決め打ちを 1 か所にする（`config.rs` を太らせない）。`balloon_lock.rs` は窓の組の帳簿と同じ寿命を持つ別の帳簿で、`drag_follow.rs`（958 行）の外に置く。`areka-seriko` の戻り先は seriko の「今の面」を表示とそろえるため seriko の中で決める。
 - Steering: 1 ファイル 1,000 行以下・テストは兄弟の `*_tests.rs`・黙った失敗を作らない（`warn!`／`info!` に構造化の欄）・1 フレーム遅らせる解を取らない。
 
@@ -123,8 +127,8 @@ graph TB
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| UI 基盤 | wintf（ワークスペース内） | `DragConfig.move_window`・`OnDragStart`・`WindowDragContextResource` の公開の口 | 中は触らない |
-| ECS | bevy_ecs（ワークスペースのピン） | 帳簿とドラッグの控えを `Resource` で持つ | 既存と同じ |
+| UI 基盤 | wintf（ワークスペース内） | `DragConfig.move_window`・`WindowDragContextResource`・`WindowHandle` の公開の口 | 中は触らない |
+| ECS | bevy_ecs（ワークスペースのピン） | 帳簿を `Resource` で持つ（ドラッグの控えは wintf のもの） | 既存と同じ |
 | 面の状態 | areka-seriko（ワークスペース内） | シェルの差し替えの戻り先を seriko の状態で決める | 公開の型 `SerikoReplace::Shell` に欄 1 つ |
 | 記録 | tracing（ワークスペースのピン） | `event =` 付きの `warn!`・`info!` | `.kiro/steering/logging.md` の規約 |
 
@@ -138,7 +142,7 @@ graph TB
 crates/areka/src/placement/
 ├── descript_window_keys.rs          # 新: 既定の面とバルーンの動かせない指定の descript の読み（純関数）・戻り先の候補の並び
 ├── descript_window_keys_tests.rs    # 新: 上の決定論のテスト（要件 7.1・7.3 の descript の段）
-├── balloon_lock.rs                  # 新: 動かせない指定の帳簿・バルーンの DragConfig の書き手・ドラッグの控えと入口の見張り
+├── balloon_lock.rs                  # 新: 動かせない指定の帳簿・バルーンの DragConfig の書き手・入口の見張り（wintf の控えを読む）
 ├── balloon_lock_tests.rs            # 新: 帳簿の段・台本の lock・寿命・書き手（要件 7.3）
 ├── balloon_lock_drag_tests.rs       # 新: 止めたドラッグで位置と記憶が変わらない・キャラクターの窓のドラッグでは付いて動く（要件 7.4）
 └── measure_default_surface_tests.rs # 新: 測りが descript の面・組み込みの面・どちらも無いの 3 通り（要件 7.2）
@@ -165,7 +169,14 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/emo2_boot/shell_carry.rs` — `decide` の 2 つ目の引数を候補の並び `&[u32]` にし、`CarriedShow::FellBack` に `passed_over: Option<u32>`（descript の既定の面が無くて組み込みへ落ちたときの descript の面）を足す。`reload_shell_fell_back`・`reload_shell_skipped` の記録に候補の番号を載せる。
 - `crates/areka/src/emo2_boot/shell_carry_tests.rs` — `decide` の 3 か所を新しい形に合わせ、2 段目へ落ちる場合を足す。
 - `crates/areka/src/emo2_boot/frame/attach.rs` — 285 行目の `decide` の呼び出し 1 行を `fallback_candidates(scope, item.initial_surface_id)` に替える。
-- `crates/areka/src/emo2_boot/frame/switch.rs`（666 行）— `split` で `SerikoReplace::Shell` に `fallback`（`assets.boxes.surface_ids` の写しと各スコープの候補の並び）を載せる。`finish_shell` の `Some(windows)` の腕（`apply_shell_descript` の後）で `replace_balloon_lock_descript(world, &read_balloon_dontmove(&source.ghost_kv, &source.shell_kv, &windows.scopes().collect::<Vec<_>>()))` を 1 行。窓の正本が無い腕は今の `reseed_skipped` の記録のまま帳簿も触らない。
+- `crates/areka/src/emo2_boot/frame/switch.rs`（666 行）— `split` で `SerikoReplace::Shell` に `fallback`（`assets.boxes` の `surface_ids` と `fallback_candidates` の写し＝文字の層へ渡す値と同じ源）を載せる。`finish_shell` の `Some(windows)` の腕（`apply_shell_descript` の後）で `replace_balloon_lock_descript(world, &read_balloon_dontmove(&source.ghost_kv, &source.shell_kv, &windows.scopes().collect::<Vec<_>>()))` を 1 行。窓の正本が無い腕は今の `reseed_skipped` の記録のまま帳簿も触らない。
+- `crates/areka/src/emo2_boot/shell_box_assets.rs`（72 行）— `ShellBoxAssets` に `fallback_candidates: BTreeMap<ActorKey, Vec<u32>>`（スコープごとの戻り先の候補の並び）の欄。`hand_to` は `set_box_layout` の後に `runtime.fall_back_box_surfaces(&SurfaceFallback { surface_ids: surface_ids の写し, candidates })` を呼ぶ（2 行ほど）。
+- `crates/areka/src/emo2_boot/assets.rs` の `build_shell_assets` — `ShellBoxAssets` を組む所（356 行目）で、各スコープの `default_surfaces.candidates(scope)` を `fallback_candidates` に入れる。起動・読み直し・切り替えのどれでも同じ値を入れ、呼び手で分けない（起動では文字の層にまだ面が無いので何も起きない。読み直しでは `shell_carry::decide` と同じ材料なので同じ答えになり、続く `replay` の `\s` も同じ番号を送る）。
+- `ShellBoxAssets` を手で組むテスト 3 か所（`frame/switch_finish_tests.rs` 769 行目・`frame_shell_box_integration_tests.rs` 95 行目・`spine_text_scale_tests.rs` 230 行目）— `fallback_candidates: BTreeMap::new(),` を 1 行ずつ。
+- `crates/areka-emo-text/src/state_route.rs`（190 行）— 型 `SurfaceFallback { surface_ids: BTreeSet<u32>, candidates: BTreeMap<ActorKey, Vec<u32>> }` と `TextLayerState::fall_back_surfaces(&mut self, fallback: &SurfaceFallback) -> bool`（替えたスコープがあれば `true`）。今の面が `Some(id)` で `surface_ids` に無いスコープだけを見て、候補の最初に在る面で `route_surface(actor, SurfaceKeyOutcome::Show(to))`、どれも無ければ `route_surface(actor, SurfaceKeyOutcome::Hide)` を呼ぶ（行き先の引き直しは今の `route_surface` に任せる）。20 行ほど。
+- `crates/areka-emo-text/src/state.rs`（751 行）— 59 行目の再公開に `SurfaceFallback` を足す（1 語）。
+- `crates/areka-emo-text/src/actor_box.rs`（470 行）— `TextLayerRuntime::fall_back_box_surfaces(&mut self, fallback: &SurfaceFallback)`: `state.fall_back_surfaces` が `true` を返したときだけ `rehearse_again()` を呼ぶ（区間の全文を求め直す）。`set_box_layout` の引数は変えない（呼び出し 24 か所のテストを触らない）。10 行ほど。
+- `crates/areka-emo-text/src/state_route_tests.rs`（537 行）— 下の Testing Strategy の 5 本。
 - `crates/areka/src/emo2_boot/move_cue.rs`（354 行）— `PositionCue::BalloonMoveLock { scope: u32, locked: bool }` の腕と、名前の選別に `("lock" | "unlock", Some("balloonmove"))` の 1 組（実行者は `actor_scope`）。テストの兄弟の `#[path]` 宣言 1 つ。
 - `crates/areka/src/emo2_boot/frame/drain_resnap.rs` — `run_move_drain_phase` の照合に `PositionCue::BalloonMoveLock { scope, locked } => { apply_script_balloon_lock(world, scope, locked); continue; }` の 1 腕と `use` 1 行（⑥ と調整済み・下の「並走ウェーブとの調整」）。
 - `crates/areka/src/emo2_boot/consumer_ledger.rs` — 吸着・組・初期化の 5 組の並びに `("lock", "balloonmove")`・`("unlock", "balloonmove")` を足す（`CommandConsumer::MoveSink`）。注記の登記の一覧も合わせる。`consumer_of` と未登録の扱いは変えない。
@@ -173,7 +184,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/emo2_boot/consumer_ledger_agreement_tests.rs` — `samples()` に `("lock", Some("balloonmove"), vec!["balloonmove"])`・`("unlock", Some("balloonmove"), vec!["balloonmove"])` の 2 件。
 - `crates/areka/src/ghost_session.rs`（917 行）— `StartupDescriptValues` に `default_surfaces: placement::DefaultSurfaces` の 1 欄。`prepare_ghost_windows` で `prepared` から 2 つを写す 2 行、窓を作る閉包の `seed_sticky_descript` の直後に `placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove)` の 1 行、`StartupDescriptValues` を組む所に 1 行、`wire_emo2_boot` の呼び出し（838 行目）に `&descript.default_surfaces` の 1 引数。合わせて 6 行ほど。
 - `StartupDescriptValues` を手で組むテスト 9 か所（`emo2_boot/ghost_switch_test_support.rs`・`ghost_session_reload_tests.rs`×2・`ghost_session_restart_tests.rs`×2・`ghost_session_strict_tests.rs`・`main_session_mark_tests.rs`・`main_session_mark_write_tests.rs`・`write_failure_sites_tests.rs`）— `default_surfaces: DefaultSurfaces::builtin(),` を 1 行ずつ。
-- `crates/areka/src/app_exit.rs` — `close_windows_for_restart` で `BalloonLockLedger`・`BalloonDragSession` を外す 2 行と注記。
+- `crates/areka/src/app_exit.rs` — `close_windows_for_restart` で `BalloonLockLedger` を外す 1 行と注記（ドラッグの控えは wintf のものなので外す物は無い）。
 - `crates/areka-seriko/src/actor.rs` — `SerikoReplace::Shell` に `fallback: ShellSurfaceFallback` の欄。差し替えの腕で `states.rebase_shell(static_binds)` の直後に `states.fall_back_shell_surfaces(&fallback)` を呼び、結果を 1 件ずつ記録する。
 - `crates/areka-seriko/src/state.rs`（728 行）— `ScopeStates::fall_back_shell_surfaces(&mut self, fallback: &ShellSurfaceFallback) -> Vec<ShellFallbackOutcome>`（今の面が表示中のスコープだけを見て、`shell_fallback::decide` の答えで `Shown(id)` か `Hidden` に書き換える・20 行ほど）。
 - `crates/areka-seriko/src/lib.rs` — `mod shell_fallback;` と型の再公開。
@@ -227,23 +238,21 @@ stateDiagram-v2
 sequenceDiagram
     participant User as 利用者
     participant Wintf as wintf
-    participant Start as on_balloon_drag_start
     participant Drag as on_balloon_drag
     participant End as on_balloon_drag_end
     User->>Wintf: バルーンを押して閾値を越える
-    Wintf->>Wintf: DragConfig move_window を控える
-    Wintf->>Start: DragStartEvent
-    Start->>Start: 控えの move_window と帳簿の理由で BalloonDragSession
+    Wintf->>Wintf: DragConfig move_window を WindowDragContextResource に控える
     User->>Wintf: 動かす
     Wintf->>Drag: DragEvent
-    Drag->>Drag: 止めたドラッグなら何もしない
+    Drag->>Drag: 控えの move_window が false なら何もしない
     User->>Wintf: 放す
     Wintf->>End: DragEndEvent
-    End->>End: 止めたドラッグなら記録 1 件だけで終わる
+    End->>End: 控えの move_window が false なら記録 1 件だけで終わる
+    Wintf->>Wintf: 配り終えてから控えを消す
 ```
 
 - 書き手（要件 4.1〜4.4・5.1〜5.3）: `sync_balloon_drag_writer` が、バルーンの窓ごとに `move_window = ledger.reason(scope).is_none()` を書く。呼ぶのは `seed_balloon_lock`・`replace_balloon_lock_descript`・`apply_script_balloon_lock` の 3 つだけ。
-- ドラッグの途中の lock（要件 5.6）: wintf はドラッグの始まりに控えた `move_window` でドラッグの最後まで窓を動かす（または動かさない）。areka の入口の見張りも、始まりに控えた `BalloonDragSession.held` だけを見る。途中で書き手が `DragConfig` を書き換えても、効くのは次のドラッグから。
+- ドラッグの途中の lock（要件 5.6）: wintf はドラッグの始まりに控えた `move_window` でドラッグの最後まで窓を動かす（または動かさない）。areka の入口の見張りも同じ控え（`WindowDragContextResource` の `move_window`）だけを読む。途中で書き手が `DragConfig` を書き換えても、効くのは次のドラッグから。
 - 止めたドラッグ（要件 6.1・6.6）: wintf は窓を動かさない。`on_balloon_drag` は追従のずれの引き直しと `reestablish` を行わない。`on_balloon_drag_end` は記憶の書き込み・キーワードの素材の退役・解放の補正を行わず、`info!(event = "balloon_drag_held", scope, descript, script)` を 1 件だけ残す。
 - 寿命（要件 5.4・5.5）: トークの終わりは帳簿に触れない。シェルの切り替えは descript の段だけ取り替え、台本の lock は保つ。`close_windows_for_restart`（ゴーストの切り替え・読み直し・自分自身への切り替え）が帳簿と控えを外す。SHIORI だけの読み直し（`\![reload,shiori]`）はここを通らないので残る。ゴーストの終了は窓と一緒に World が終わる。
 
@@ -265,10 +274,10 @@ sequenceDiagram
 | 2.5 | 置き直しをしない | Measure・PlacementPrep | 測りは窓を作る前の 1 回 | 既定の面 |
 | 2.6 | 書いていなければ今と同じ | DescriptWindowKeys | `DefaultSurfaces::builtin()` | — |
 | 3.1 | 読み直しの戻り先 | ShellCarry・Attach・Assets | `decide(carried, &candidates, exists)` | 既定の面 |
-| 3.2 | シェルの切り替えの戻り先 | SerikoShellFallback・SwitchSplit | `SerikoReplace::Shell.fallback`・`fall_back_shell_surfaces` | 既定の面 |
+| 3.2 | シェルの切り替えの戻り先 | SerikoShellFallback・SwitchSplit・TextBoxFallback | `SerikoReplace::Shell.fallback`・`fall_back_shell_surfaces`・`fall_back_box_surfaces` | 既定の面 |
 | 3.3 | 2 段の戻り先と記録 | ShellCarry・SerikoShellFallback | `CarriedShow::FellBack { passed_over }`・`ShellFallbackOutcome` | 既定の面 |
 | 3.4 | 在る面は持ち越す | ShellCarry・SerikoShellFallback | 今の面を最初に調べる | 既定の面 |
-| 3.5 | 最初から出す | ShellCarry・SerikoShellFallback | 装着の前・`Rebased` の前に決める | 既定の面 |
+| 3.5 | 最初から出す | ShellCarry・SerikoShellFallback・TextBoxFallback | 装着の前・`Rebased` の前・`finish_shell` の `hand_to` の中で決める | 既定の面 |
 | 4.1 | ゴーストの `balloon.dontmove` | DescriptWindowKeys・BalloonLock | `read_balloon_dontmove`・`sync_balloon_drag_writer` | 動かせない指定 |
 | 4.2 | シェルのスコープ個別が優先・別名 | DescriptWindowKeys | `scoped_value(shell_kv, scope, ["balloon.dontmove"])` | — |
 | 4.3 | どちらも無ければ動かせる | DescriptWindowKeys・BalloonLock | 帳簿が空＝`move_window: true` | — |
@@ -279,7 +288,7 @@ sequenceDiagram
 | 5.3 | descript の段は unlock で解けない | BalloonLock | `reason` が descript を持つ間は `move_window: false` | 動かせない指定 |
 | 5.4 | トークの終わり・シェルの切り替えで解けない | BalloonLock・SwitchFinish | `replace_balloon_lock_descript` は台本の分を保つ | 動かせない指定 |
 | 5.5 | 終了・切り替え・読み直しで解く／SHIORI だけでは解かない | AppExit・BalloonLock | `close_windows_for_restart` が帳簿を外す | 動かせない指定 |
-| 5.6 | 途中の lock は次のドラッグから | BalloonLock・DragFollow | `BalloonDragSession.held`（始まりの控え） | ドラッグ |
+| 5.6 | 途中の lock は次のドラッグから | BalloonLock・DragFollow | `balloon_drag_held`（wintf の始まりの控え） | ドラッグ |
 | 5.7 | `check_script` が知らない指令と言わない | ConsumerLedger | 受け手の表の 2 行 | — |
 | 5.8 | lock・unlock・解けなかったことの記録 | BalloonLock | `info!(event = "balloon_move_locked" ／ "balloon_move_unlocked" ／ "balloon_move_unlock_held")` | — |
 | 6.1 | 位置と記憶を変えない | BalloonLock・DragFollow | `move_window: false`・入口の見張り | ドラッグ |
@@ -312,7 +321,8 @@ sequenceDiagram
 | Assets・SwitchAssets | emo2_boot | 資産の `initial_surface_id` を descript の値にする | 1.7・3.1・3.2 | DescriptWindowKeys（P0） | Service |
 | ShellCarry・Attach | emo2_boot | 読み直しの戻り先 | 3.1・3.3〜3.5 | DescriptWindowKeys（P0） | Service |
 | SwitchSplit・SerikoShellFallback | emo2_boot・areka-seriko | シェルの切り替えの戻り先を seriko の状態で決める | 3.2〜3.5 | DescriptWindowKeys（P0）・seriko（P0） | Service・State |
-| BalloonLock | placement（World） | 帳簿・書き手・ドラッグの控えと見張り | 4.1・4.3〜4.4・5.1〜5.6・5.8・6.1・6.2・6.6 | wintf drag（P0）・`BalloonWindowMarker`（P0） | Service・State |
+| TextBoxFallback | emo2_boot・areka-emo-text | シェルの切り替えで文字の層の今の面を同じ戻り先へ替える | 3.2・3.5 | ShellBoxAssets（P0）・`route_surface`（P0） | State |
+| BalloonLock | placement（World） | 帳簿・書き手・入口の見張り | 4.1・4.3〜4.4・5.1〜5.6・5.8・6.1・6.2・6.6 | wintf drag（P0）・`BalloonWindowMarker`（P0） | Service・State |
 | DragFollow | placement::follow | 入口の見張りの呼び出しだけ | 5.6・6.1 | BalloonLock（P0） | — |
 | MoveCueSink・Drain | emo2_boot | 台本の lock を台本の並びで UI へ運ぶ | 5.1・5.2 | `PositionCue` の線（P0） | Event |
 | ConsumerLedger | emo2_boot | `check_script` の担当の表に 2 行 | 5.7 | — | State |
@@ -426,7 +436,7 @@ pub struct PreparedPlacement {
 
 | Field | Detail |
 |-------|--------|
-| Intent | スコープごとの動かせない指定の帳簿・バルーンの窓の `DragConfig.move_window` の書き手・ドラッグの控えと入口の見張り |
+| Intent | スコープごとの動かせない指定の帳簿・バルーンの窓の `DragConfig.move_window` の書き手・入口の見張り |
 | Requirements | 4.1・4.3〜4.4・5.1〜5.6・5.8・6.1・6.2・6.6 |
 
 **Responsibilities & Constraints**
@@ -436,7 +446,7 @@ pub struct PreparedPlacement {
 
 **Dependencies**
 - Inbound: `ghost_session` 窓を作る閉包（据える・P0）、`frame/switch.rs` の `finish_shell`（取り替える・P0）、`frame/drain_resnap.rs` の `run_move_drain_phase`（台本の lock・P0）、`drag_follow.rs`（見張り・P0）、`app_exit.rs`（外す・P0）
-- Outbound: `wintf::ecs::drag::{DragConfig, OnDragStart, DragStartEvent, WindowDragContextResource}`（P0）、`placement::spawn::BalloonWindowMarker`（P0）
+- Outbound: `wintf::ecs::drag::{DragConfig, WindowDragContextResource}`・wintf の `WindowHandle`（P0）、`placement::spawn::BalloonWindowMarker`（P0）
 
 **Contracts**: Service [x] / State [x]
 
@@ -462,8 +472,8 @@ impl BalloonLockLedger {
     pub(crate) fn reason(&self, scope: u32) -> Option<HoldReason>;
 }
 
-/// 起動（窓を作る閉包・`seed_sticky_descript` の直後）: 帳簿を新しく据え、バルーンの窓に
-/// `OnDragStart(on_balloon_drag_start)` を付け、書き手を呼ぶ。
+/// 起動（窓を作る閉包・`seed_sticky_descript` の直後）: 帳簿を新しく据え、書き手を呼ぶ。
+/// 窓に受け手は付けない（バルーンの窓の受け手は今の `OnDrag`・`OnDragEnd` のまま）。
 pub(crate) fn seed_balloon_lock(world: &mut World, descript: &BTreeSet<u32>);
 
 /// シェルの切り替えの後始末: descript の段だけを取り替え、台本の lock は保ち、書き手を呼ぶ。
@@ -476,53 +486,37 @@ pub(crate) fn apply_script_balloon_lock(world: &mut World, scope: u32, locked: b
 /// すべてのバルーンの窓の `DragConfig.move_window` を帳簿から付け直す（書き手は 1 か所）。
 pub(crate) fn sync_balloon_drag_writer(world: &mut World);
 
-/// 今のバルーンのドラッグの控え（wintf も同時に 1 つしかドラッグしない）。
-#[derive(Resource, Debug, Clone)]
-pub(crate) struct BalloonDragSession {
-    dragged: Entity,
-    scope: u32,
-    /// このドラッグで wintf が窓を動かさない（始まりに wintf が控えた `move_window` の否定）。
-    held: bool,
-    /// 始まりのときの帳簿の理由（記録用）。
-    reason: Option<HoldReason>,
-}
-
-/// `OnDragStart` の受け手（Bubble の相・自分の窓宛てだけ）。wintf が控えた
-/// `WindowDragContextResource::get().move_window` を読み（無ければ今の `DragConfig.move_window`）、
-/// 控えを据える。イベントは消費しない（`false`）。
-pub(crate) fn on_balloon_drag_start(
-    world: &mut World,
-    sender: Entity,
-    entity: Entity,
-    ev: &Phase<DragStartEvent>,
-) -> bool;
-
 /// `on_balloon_drag` の入口の見張り: このドラッグを止めているか。
+/// wintf がドラッグの始まりに控えた `WindowDragContextResource::get()` を読み、控えの `hwnd` が
+/// この窓の `WindowHandle` と同じなら `!move_window` を返す。控えが無い（消された後は `hwnd` が
+/// `None`）・別の窓のものなら、この窓の今の `DragConfig.move_window` で決める
+/// （先例 `sticky_follow::drag_wintf_moves` と同じ縮退）。
 pub(crate) fn balloon_drag_held(world: &World, entity: Entity) -> bool;
 
-/// `on_balloon_drag_end` の入口の見張り: 控えを外し、止めたドラッグなら記録を 1 件残して `true`。
-pub(crate) fn end_balloon_drag(world: &mut World, entity: Entity) -> bool;
+/// `on_balloon_drag_end` の入口の見張り: `balloon_drag_held` と同じ見方で止めたドラッグなら、
+/// 終わりのときの帳簿の理由（記録のためだけ）で記録を 1 件残して `true`。
+pub(crate) fn end_balloon_drag(world: &World, entity: Entity) -> bool;
 ```
 
-- 控えが無い・別の窓のものなら、見張りは今の `DragConfig.move_window` で決める（先例 `drag_wintf_moves` と同じ縮退）。
+- wintf の控えの寿命（`crates/wintf/src/ecs/drag/dispatch.rs` で確かめた）: ドラッグの始まり（`DragTransition::Started` の腕）で `DragConfig.move_window` を読み（135〜137 行目）、147 行目で `WindowDragContextResource` に書いてから、202 行目で `DragStartEvent` を配る。途中の `DragEvent` は 373 行目で配る（控えは残ったまま）。終わり（`DragTransition::Ended` の腕）は 242 行目で `DragEndEvent` を配り、そのあと 329〜334 行目で控えを消す。だから `on_balloon_drag`・`on_balloon_drag_end` の中では、いつもそのドラッグの始まりの値が読める。消した後の控えは `hwnd: None`・`move_window: false`（`context.rs` の `clear`）なので、`move_window` だけを見ると「止める」と取り違える。見張りは `hwnd` で見分けて縮退する。
 - 記録（要件 5.8・6.6）:
   - lock を受けた: `info!(event = "balloon_move_locked", scope)`
   - unlock を受けた: `info!(event = "balloon_move_unlocked", scope, was_locked)`
   - unlock を受けたが descript の段で動かせないまま: `info!(event = "balloon_move_unlock_held", scope)`（上の記録に続けて 1 件）
-  - 止めたドラッグ: `info!(event = "balloon_drag_held", scope, descript, script)`（`end_balloon_drag` で 1 回だけ）
+  - 止めたドラッグ: `info!(event = "balloon_drag_held", scope, descript, script)`（`end_balloon_drag` で 1 回だけ。`descript`・`script` は終わりのときの帳簿の理由）
   - 帳簿が無い所へ台本の lock が来た: `warn!(event = "balloon_lock_ledger_missing", scope)` の上で空の帳簿を据える
 
 ##### State Management
 
-- State model: `BalloonLockLedger`（descript の段の集合＋台本の lock の集合）と `BalloonDragSession`（今のドラッグ 1 つ）。どちらも `Resource`。
-- 寿命: 上の「バルーンの動かせない指定」の状態図。`close_windows_for_restart` が 2 つとも外す。
+- State model: `BalloonLockLedger`（descript の段の集合＋台本の lock の集合）の `Resource` 1 つ。ドラッグの控えは wintf の `WindowDragContextResource` をそのまま読み、areka の側には持たない。
+- 寿命: 上の「バルーンの動かせない指定」の状態図。`close_windows_for_restart` が帳簿を外す。
 - Concurrency: UI スレッドの `&mut World` だけで読み書きする。
 
 **Implementation Notes**
 - 入口の見張り（`drag_follow.rs`）:
   - `on_balloon_drag`: `if ev.target != entity { return false; }` の直後に `if balloon_drag_held(world, entity) { return false; }`
-  - `on_balloon_drag_end`: 同じ見張りの直後に `if end_balloon_drag(world, entity) { return false; }`（止めていないドラッグでも控えはここで外れる）
-- `OnDragStart` はバルーンの窓に今は付いていない（`input_events/mod.rs` の注記「バルーン窓には何も付けない（要件 3.3）」は、ゴーストへマウスのドラッグを知らせない決まり）。本設計の受け手はゴーストへ何も知らせないので、その決まりは保つ。`input_events/drag_tests.rs` 161 行目の「バルーンの窓に `OnDragStart` が無い」の檻は、その組み立て（`Rig`）が `seed_balloon_lock` を通らないなら今のまま通る。通るなら、檻の言い分（ゴーストへ知らせない）を `drain()` が空であることで見ていることを確かめ、`OnDragStart` の有無の行は「知らせの受け手が付いていない」の形へ直す（調べること I4）。
+  - `on_balloon_drag_end`: 同じ見張りの直後に `if end_balloon_drag(world, entity) { return false; }`
+- バルーンの窓には受け手を足さない。`input_events/mod.rs`（② `mouse-click-wheel-events` の持ち物）の注記「バルーン窓には何も付けない（要件 3.3）」と、その檻 `input_events/drag_tests.rs` 161 行目の言い分は今のまま正しく、本設計はどちらのファイルにも触らない。
 
 ### emo2_boot
 
@@ -598,8 +592,9 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 
 - `SerikoReplace::Shell` に `fallback: ShellSurfaceFallback` を足す。actor の差し替えの腕は `states.rebase_shell(static_binds)` の直後に `states.fall_back_shell_surfaces(&fallback)` を呼び、結果を `warn!(event = "shell_switch_surface_fell_back", scope, missing, to)`／`warn!(event = "shell_switch_surface_hidden", scope, missing, ?tried)` で 1 件ずつ残す。その後に今の `rebased()` を出す。
 - `ScopeStates::fall_back_shell_surfaces` はシェルの面で `Shown(id)` のスコープだけを見る（非表示・未表示のスコープは替えない）。
-- `split` は `assets.shells` の各 `initial_surface_id` から `fallback_candidates` を、`assets.boxes.surface_ids` の写しから `surface_ids` を組む（`boxes` を `SwapFinish` へ動かす前に写す）。
+- `split` は `assets.boxes` の `surface_ids` と `fallback_candidates` の写しから `ShellSurfaceFallback` を組む（`boxes` を `SwapFinish` へ動かす前に写す）。文字の層は同じ `boxes` を `finish_shell` の `hand_to` で受け取るので、seriko と文字の層は同じ材料・同じ決め方（今の面 → 候補の最初に在る面 → 出さない）で答える。
 - これで `Rebased` → `send_rebased` → `ReplaceTarget { show }` が最初から戻り先の面を載せ、seriko の今の面も同じになる（ギャップ分析の案 2・R3 は起きない）。
+- 文字の層: 今は `set_box_layout`（`set_box_index`）が各スコープの今の面の番号を保ったまま行き先を引き直すので、戻り先の面を出しても文字の層は前の番号のまま残り、面の中の文字の箱へ字が入らない（設計の検証の問題 2）。`hand_to` が `set_box_layout` の直後に `fall_back_box_surfaces` を呼び、seriko と同じ答えで文字の層の今の面を替えてから区間の全文を求め直す。`finish_shell` の中の 1 回の呼び出しで済み、1 フレーム遅らせない。
 
 #### MoveCueSink・Drain（`emo2_boot/move_cue.rs`・`frame/drain_resnap.rs`）
 
@@ -631,7 +626,7 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 - **DefaultSurfaces**: スコープ → descript の既定の面（書かれていなければ組み込み）。値の出所はゴーストの descript だけ。起動では準備が 1 度読み、測り・資産・読み直しの戻り先へ同じ値を配る。
 - **戻り先の候補の並び**: `[descript の既定の面]` か `[descript の既定の面, 組み込みの既定の面]`。「在る」はどの使い手でも「新しいシェルの面の表に番号が在る」。
 - **BalloonLockLedger**: スコープ → { descript の段で禁止, 台本の lock }。動かせないのはどちらかが真のとき。
-- **BalloonDragSession**: 今のバルーンのドラッグ 1 つ → { 窓, スコープ, 止めたか, 理由 }。
+- **ドラッグの控え**: areka は持たない。wintf の `WindowDragContextResource`（始まりの `hwnd` と `move_window`）を読む。
 
 ## Error Handling
 
@@ -645,6 +640,7 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 | 組み込みの既定の面もシェルに無い・測り（2.4） | 今と同じ（本体側は `PlacementError::Measure`・相方側は本体側の大きさ） | 今ある `error!`／`warn!` |
 | 読み直しの戻り先（3.3） | 候補の並びの最初に在る面・無ければ出さない | `reload_shell_fell_back`（`passed_over` 付き）／`reload_shell_skipped`（`candidates` 付き） |
 | シェルの切り替えの戻り先（3.3） | 同上（seriko の状態を書き換える） | `shell_switch_surface_fell_back`／`shell_switch_surface_hidden` |
+| 文字の層の今の面の引き直し（3.2） | seriko と同じ答えで替える | 正本の記録は seriko の上の 2 つ（同じ材料・同じ答え）。文字の層は `debug!(actor, missing, ?to, "シェルの切替で今の面が無い——戻り先へ引き直す")` を 1 行（今の `route_surface` の記録と同じ段） |
 | 台本の lock の帳簿が無い | 空の帳簿を据えて当てる | `warn!(event = "balloon_lock_ledger_missing", scope)` |
 | 実行者が数でない lock・unlock | 捨てる（今の `actor_scope` の扱い） | 今ある `warn!` |
 
@@ -666,9 +662,10 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 
 ### Integration Tests（World と wintf の偽のドラッグ）
 
-- `balloon_lock_drag_tests.rs`（7.4・6.1・6.6・5.6）: `follow_drag_end_gate_tests.rs` と同じ組み立て（`dispatch_drag_events`＋`WindowDragContextResource`）で、止めたバルーンのドラッグの後に `BalloonFollow.offset`・位置の記憶の書き込み・キーワードの素材が変わらず `balloon_drag_held` が 1 件。止めていないスコープは今どおり書かれる。ドラッグの途中で lock を当てても、そのドラッグは今の扱いで終わり（記憶が書かれ）、次のドラッグから止まる。キャラクターの窓のドラッグではバルーンが付いて動く（6.3）。
+- `balloon_lock_drag_tests.rs`（7.4・6.1・6.6・5.6）: `follow_drag_end_gate_tests.rs` と同じ組み立て（`dispatch_drag_events`＋`WindowDragContextResource`）で、止めたバルーンのドラッグの後に `BalloonFollow.offset`・位置の記憶の書き込み・キーワードの素材が変わらず `balloon_drag_held` が 1 件。止めていないスコープは今どおり書かれる。控えが消えた後（`hwnd: None`）・別の窓の控えでは、その窓の今の `DragConfig.move_window` へ縮退する。ドラッグの途中で lock を当てても、そのドラッグは今の扱いで終わり（記憶が書かれ）、次のドラッグから止まる。キャラクターの窓のドラッグではバルーンが付いて動く（6.3）。
 - `measure_default_surface_tests.rs`（7.2・2.1・2.3・2.4・2.6）: 検体のシェルに在る別の面の番号を descript の既定の面にするとその面の大きさになる・無い番号なら組み込みの面の大きさと `warn!` 1 件・書かれていなければ今の期待値と同じ。組み込みの面も無い場合は今の `measure_tests.rs` の檻（本体側の失敗・相方側の代わり）がそのまま確かめる。
 - `actor_replace_tests.rs`（3.2・3.5）: 無い面を出していたスコープの `Rebased` が最初から戻り先の面を載せる。
+- `areka-emo-text/src/state_route_tests.rs`（3.2）: `fall_back_surfaces` が ⑴ 今の面が在れば替えない（`false`） ⑵ descript の面へ替える ⑶ 組み込みの面へ落ちる ⑷ どれも無ければ非表示（行き先は普通のバルーン） ⑸ 替えた面に箱があれば行き先がその面の既定の箱になる、の 5 本。
 - `consumer_ledger_tests.rs`・`consumer_ledger_agreement_tests.rs`（5.7）: 38 件・2 組が窓の位置の受け口にだけ届く。
 
 ### 実機（着地の後・排他テストの机）
@@ -679,8 +676,9 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 ## 並走ウェーブとの調整
 
 - **⑥ `dpi-realign-remembered-chain`（解決済み・2026-10-23）**: 台本の lock を UI へ運ぶ道は道 P（`PositionCue`／`MoveCueSink` に腕を足し、`emo2_boot/frame/drain_resnap.rs` の `run_move_drain_phase` に 1 腕）を採る。`\![move]` と同じ線で台本の並びが保たれ、新しい線や相を作らない。⑥ の答え: 意味の上の衝突は無い。⑥ が触るのは同じファイルの別の関数（`collect_chain_states`・`finalize_chain_once_with`・`realign_chain_once` の呼び出し所）と `frame.rs` のテストの宣言だけで、`frame.rs` の呼び順（`run_move_drain_phase` → `finalize_chain_once` → `realign_chain_once`）は変わらない。⑥ は `move_cue_place.rs` に 1 行足すことがある（向こうの T3 の案）が、`run_move_drain_phase` の腕には触らない。着地の順は問わず、後から着地する方が先の方を取り込む。本設計は `emo2_boot/frame.rs` に触らない。
+- **⑤ `vertical-choice-hover-band`（重なり 0）**: ⑤ の持ち物は emo-text の `choice.rs`・`viewbox_draw_choice_hover_tests.rs`（原因しだいで `viewbox_draw_render.rs`・`draw_metrics.rs`・`layout_styled.rs`）。本設計が触る emo-text のファイル（`state_route.rs`・`state.rs` の再公開の 1 語・`actor_box.rs`・`state_route_tests.rs`）とは重ならない。新しいソースファイルを足さないので、emo-text の席も使わない。
 - **⑦ `mcp-strict-errors`（約束どおり）**: `consumer_ledger.rs` は 2 行を足すだけ、`consumer_ledger_tests.rs` の手書きの数は 36 → 38、見本は 2 件。`consumer_of` と未登録の指令の扱い、`check_script_judge.rs` は触らない。
-- **触らないと約束したファイル**: `placement/{spawn,persist,chain_realign,chain_finalize}.rs`・`placement/follow/window_move.rs`・`emo2_boot/frame.rs`・`emo2_boot/frame/dpi.rs`・wintf。バルーンの `DragConfig` は窓を作った後に `balloon_lock.rs` の書き手 1 つが書く。
+- **触らないと約束したファイル**: `placement/{spawn,persist,chain_realign,chain_finalize}.rs`・`placement/follow/window_move.rs`・`emo2_boot/frame.rs`・`emo2_boot/frame/dpi.rs`・wintf。② `mouse-click-wheel-events` の `input_events/mod.rs` とその檻 `input_events/drag_tests.rs` にも触らない（バルーンの窓に受け手を足さない）。バルーンの `DragConfig` は窓を作った後に `balloon_lock.rs` の書き手 1 つが書く。
 
 ## 網羅台帳と対応表（要件 8）
 
@@ -693,7 +691,5 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 SSP・areka の MCP・画面の操作は設計の段では使わない（他のセッションが持っている）。残る確かめは実装の段で行う。
 
 - **I1（静的）**: バルーンの窓に `WindowDragging` の印が付いたままの止めたドラッグが、`balloon_visibility_phase.rs` 447〜470 行目（ドラッグ中はバルーンを消さない）以外に効かないこと。消さないのは今のドラッグと同じ扱いで、利用者が触っている間なので害は無い見込み。
-- **I2（決定論のテスト）**: `on_balloon_drag_start` が呼ばれるときに `WindowDragContextResource` が始まりの値を持っていること（`dispatch_drag_events` が `Started` で書いてから `DragStartEvent` を配る順）を `balloon_lock_drag_tests.rs` の組み立てで確かめる。持っていなければ今の `DragConfig.move_window` へ縮退する（先例と同じ）。
 - **I3（実機・排他テストの机・着地の後）**: ぱすたの段 1（要件 9.1・9.2・9.4）。SSP は使わない。
-- **I4（静的）**: `input_events/drag_tests.rs` 161 行目の檻の組み立てが `seed_balloon_lock` を通るか（上の BalloonLock の Implementation Notes）。
 - **I5（決定論のテスト）**: 止めたドラッグを放したとき、選択肢・リンクの上でもクリックとして届かないこと（今のドラッグと同じ）。`enabled` を落とさないので変わらない見込み。
