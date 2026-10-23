@@ -94,6 +94,7 @@ use wintf::ecs::{
     establish_owner_links,
 };
 
+use super::chain_finalize::AdjacencyMark;
 use super::config::BalloonXMode;
 use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
@@ -291,6 +292,10 @@ pub struct ScopeWindows {
     /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
     /// スコープだけを書く。
     pub default_char_pos: Option<PointPx>,
+    /// 記憶から読んだ隣り合いの印（組 (n−1, n) を表す）。記憶から戻したスコープ
+    /// （`default_char_pos == None`）についてだけ意味を持ち、`None` は印の無い記憶か記憶が無いこと。
+    /// 据えるのは窓を作る閉包（`ghost_session::prepare_ghost_windows`）だけ。
+    pub remembered_adjacency: Option<AdjacencyMark>,
 }
 
 /// 後続（emo2-boot）への引き渡し正本（6.1/6.2）。
@@ -377,6 +382,24 @@ impl GhostWindows {
         match self.windows.get_mut(&scope) {
             Some(w) => {
                 w.default_char_pos = None;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// スコープの覚えた隣り合いの印（記憶から読んだもの）。未知スコープと印の無いスコープは `None`。
+    pub fn remembered_adjacency(&self, scope: usize) -> Option<AdjacencyMark> {
+        self.windows
+            .get(&scope)
+            .and_then(|w| w.remembered_adjacency)
+    }
+
+    /// スコープの覚えた隣り合いの印を据える。未知スコープは **no-op**（`false`）。
+    pub fn set_remembered_adjacency(&mut self, scope: usize, mark: Option<AdjacencyMark>) -> bool {
+        match self.windows.get_mut(&scope) {
+            Some(w) => {
+                w.remembered_adjacency = mark;
                 true
             }
             None => false,
@@ -580,6 +603,7 @@ pub fn spawn_ghost_windows(
                 // 保存位置が復元された場合は起動シーム（`ghost_session::prepare_ghost_windows`）が直後に
                 // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
                 default_char_pos: Some(p.char_pos),
+                remembered_adjacency: None,
             },
         );
     }

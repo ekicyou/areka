@@ -285,8 +285,9 @@ pub(crate) fn prepare_ghost_windows(
         if !restored_scopes.is_empty()
             && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
         {
-            for scope in &restored_scopes {
-                gw.clear_default_char_pos(*scope);
+            for (&scope, &mark) in &restored_scopes {
+                gw.clear_default_char_pos(scope);
+                gw.set_remembered_adjacency(scope, mark);
             }
         }
         // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→

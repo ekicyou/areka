@@ -63,7 +63,7 @@ fn boot_remembered(
         DefaultEncoding::Ansi,
     );
     assert_eq!(
-        restored.iter().copied().collect::<Vec<_>>(),
+        restored.keys().copied().collect::<Vec<_>>(),
         vec![0, 1],
         "前提: 両方のスコープの位置が記憶にある"
     );
@@ -71,7 +71,7 @@ fn boot_remembered(
     let gw = spawn_shown(world, &placements, &not_shown);
     {
         let mut ghost_windows = world.resource_mut::<GhostWindows>();
-        for scope in &restored {
+        for scope in restored.keys() {
             assert!(ghost_windows.clear_default_char_pos(*scope));
         }
     }

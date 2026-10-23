@@ -94,7 +94,7 @@ fn restore_seam_prefers_saved_position_over_default() {
     // 保存位置が採用された scope は「既定配置ではない」として報告される（scg 7.3）。
     // これを受けて起動シームが台帳の既定位置を落とし、連鎖の再解決から除外する。
     assert_eq!(
-        restored.iter().copied().collect::<Vec<_>>(),
+        restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
         "保存位置を採用した scope が復元済みとして報告される（scg 7.3）"
     );
@@ -182,7 +182,7 @@ fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
         "記憶の値＝既定の値なので位置は同じ（前提の確認）"
     );
     assert_eq!(
-        restored.iter().copied().collect::<Vec<_>>(),
+        restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
         "記憶の値が既定と同じでも記憶から戻したスコープとして報告される（2.6・5.2）"
     );
@@ -230,7 +230,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
 
     assert_eq!(out.len(), 1);
     assert_eq!(
-        restored.iter().copied().collect::<Vec<_>>(),
+        restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
         "保存位置を採用した scope として報告される（合流規則は関門の設置で変わらない）"
     );
@@ -262,4 +262,53 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     );
 
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 5.1・5.2: 2 つ目の戻り値は「記憶に位置があるスコープ → 覚えた印」の一覧。印の鍵はあれば
+/// その語の印、無ければ `None`（印の無い古い記憶）で、窓を作る閉包がこの一覧を窓の一式へ据える。
+#[test]
+fn restore_seam_returns_remembered_adjacency_marks_per_restored_scope() {
+    use placement::chain_finalize::AdjacencyMark;
+    let temp = unique_temp_dir("adjacency-marks");
+    let root = temp.path().to_path_buf();
+    plant_minimal_ghost(&root);
+    let profile = profile_areka_root(&root.join("ghost").join("master"));
+    std::fs::create_dir_all(&profile).expect("create profile/areka");
+    std::fs::write(
+        profile.join("sylphya.toml"),
+        concat!(
+            "format-version = 1\n",
+            "[window.0]\nx = \"800\"\ny = \"300\"\n",
+            "[window.1]\nx = \"400\"\ny = \"300\"\n",
+            "[window-adjacent]\n\"1\" = \"left\"\n",
+        )
+        .as_bytes(),
+    )
+    .expect("plant sylphya.toml");
+
+    let default_char_pos = PointPx { x: 100, y: 100 };
+    let placements = vec![
+        synthetic_placement(default_char_pos),
+        ScopePlacement {
+            scope: 1,
+            ..synthetic_placement(default_char_pos)
+        },
+    ];
+    let snapshot = MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: 0,
+            top: 0,
+            right: 3840,
+            bottom: 2160,
+        }],
+    };
+
+    let (_, restored) =
+        restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+
+    assert_eq!(
+        restored,
+        std::collections::BTreeMap::from([(0usize, None), (1usize, Some(AdjacencyMark::Left))]),
+        "位置のあるスコープごとに覚えた印が運ばれる"
+    );
 }
