@@ -28,7 +28,7 @@
 - kanade の 9 語の受理・Reference の組み立て・クリックの段の列（`plan_click` の表）と、その応答の扱い（台本なら止める・204／失敗／想定外なら次へ）。
 - 入力の層の 3 つの持ち物: 押下の控え（どの窓でどのボタンが押されたか・ダブルクリックの押下か・箱が使ったか）・解放の判定（クリックにするか・理由）・窓ごとの見張りの状態（今どの当たり判定の上か・窓の上に居るか・ホイールの溜めと前の送出の時刻）。
 - 毎 tick の窓の見張りの系（`char_watch`）と、右クリックのメニューとクリックの解放を 1 本にまとめる受け手（`menu/mod.rs` の包み）。
-- 窓の層の最小の 3 つの直し: ホイールの量を `PointerState.wheel` へ移して溜めを空にすること・拡張ボタンの押下で `OnPointerPressed` を配ること・ドラッグの休み（`JustEnded`）の前に閾値を越えたかを読む口。
+- 窓の層の最小の 3 つの直し: ホイールの量を `PointerState.wheel` へ移して溜めを空にすること・拡張ボタンの押下で `OnPointerPressed` を配ること・直前の左の解放がドラッグ（か取り消し）だったかを読む口。
 - 網羅台帳 `shiori.toml` の 9 行・報告の再生成・`doc/COMPAT_ARCHITECTURE.md` §8 の行・実機の確かめの記録。
 
 ### Out of Boundary
@@ -40,7 +40,7 @@
 
 ### Allowed Dependencies
 - 依存の向き: wintf → （公開の型と関数だけ）→ areka の入力の層（`input_events`）→ kanade の境界の型（`areka_kanade::MouseInput` ほか）→ kanade の `schedule`。`menu` → `input_events` の向きは今のまま（`input_events` は `menu` を参照しない）。
-- 入力の層が使ってよい wintf の口: `PointerState`（`client_point`・`*_down`・`released`・`double_click`・`wheel`）・`find_owner_window`・`Window`・`WindowPos.size`・`snapshot_drag_state`・本 spec が足す `DragState::ended_after_start`・`tick_wake::arm_deadline`・`dispatch_pointer_events`（系の順の指定だけ）。
+- 入力の層が使ってよい wintf の口: `PointerState`（`client_point`・`*_down`・`released`・`double_click`・`wheel`）・`find_owner_window`・`Window`・`WindowPos.size`・`snapshot_drag_state`・本 spec が足す `DragState::last_release_was_drag`・`tick_wake::arm_deadline`・`dispatch_pointer_events`（系の順の指定だけ）。
 - kanade の `schedule` が使ってよい物: 今の `events`（表と組み立て）・`State`・`Action::ShioriRequest`・`ShioriOutcome`。新しい外部のクレートは足さない。
 
 ### Revalidation Triggers
@@ -151,7 +151,7 @@ crates/areka/src/input_events/
 - `crates/areka/src/ghost_session.rs` — `register_systems` に `input_events::char_watch::register_char_watch(world);` の 1 行。
 - `crates/wintf/src/ecs/pointer/buffers.rs` — `transfer_buffers_to_world` でホイールの溜めを持ち主へ移し、溜めを毎回空にする。今ある中のテストの塊へテストを足す。
 - `crates/wintf/src/ecs/pointer/dispatch/mod.rs` — `OnPointerPressed` の条件に `xbutton1_down || xbutton2_down` を足す（1 行）。テストは `pointer/dispatch/tests.rs`。
-- `crates/wintf/src/ecs/drag/state/mod.rs` — 休みの前の押下が閾値を越えたかの印（thread_local の 1 つ）と読み口 `DragState::ended_after_start()`。テストは `drag/state/tests.rs`。
+- `crates/wintf/src/ecs/drag/state/mod.rs` — 最後に休みへ移したときの「閾値を越えたか・取り消しか」の印（thread_local の 1 つ・次の `start_preparing` でも消さない）と読み口 `DragState::last_release_was_drag()`。テストは `drag/state/tests.rs`。
 - `doc/ukadoc-coverage/ledger/shiori.toml` の 9 行・`doc/ukadoc-coverage/report/`（`ukadoc-survey` の `report`・`report-summary` で作り直す）・`doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾。
 - `.kiro/specs/mouse-click-wheel-events/verification.md`（新・実機の確かめの記録。撮った絵と記録はワークツリーの `target\` の下）。
 
@@ -233,7 +233,7 @@ stateDiagram-v2
 | 2.4 | 中は `Ex` の 2 段に返事が無ければ互換の 2 段（Ref5＝2） | MouseEvents | `plan_click(Middle, false)` | 段の列 |
 | 2.5 | 中の `Ex` に返事があれば互換を送らない | MouseEvents | 台本で止める規則 | 段の列 |
 | 2.6 | 拡張ボタンは互換を送らない | MouseEvents | `plan_click(XButton*, ..)` | — |
-| 3.1 | ドラッグの後は送らない（同じ瞬間の閾値越えも） | ClickJudge・wintf drag state | `DragState::ended_after_start`・`judge_release` | — |
+| 3.1 | ドラッグの後は送らない（同じ瞬間の閾値越えも・解放と次の押下が同じ tick に入っても） | ClickJudge・wintf drag state | `DragState::last_release_was_drag`・`judge_release` | — |
 | 3.2 | ダブルクリックの 2 回目の解放は 1 段目だけ | PressNote・ClickJudge・MouseEvents | `second_of_double`・`plan_click(.., true)` | 段の列 |
 | 3.3 | 別の窓・窓の外で放したら送らない | ClickJudge・CharWatch | 押下の控えの有無・`WindowPos.size`・控えを捨てる | — |
 | 3.4 | 箱の選択肢の押下は送らない | PressNote | `note_press(.., by_box)` | — |
@@ -256,7 +256,7 @@ stateDiagram-v2
 | 6.7 | 横のホイールは送らない | CharWatch | `vertical` だけ読む | — |
 | 6.8 | 窓ごとに別々 | Wheel | `MouseWiring.wheel` の鍵＝窓の entity | — |
 | 6.9 | Ref0/1/4 は最後の回転の時点 | Wheel | `PendingWheel` の位置と当たり判定を上書き | — |
-| 6.10 | カーソルの下に無い窓へは送らない | wintf buffers | 持ち主が居ない溜めは捨てる | — |
+| 6.10 | カーソルの下に無い窓へは送らない | wintf buffers・CharWatch | 持ち主が居ない溜めは捨てる（wintf）・持ち主が窓の entity そのもの（絵の透けた所＝当たっていない）ならホイールを捨てる（CharWatch） | 見張り |
 | 7.1 | 無し→A で Enter | Hover | `plan_hover` | 見張り |
 | 7.2 | A→無し で Leave | Hover | `plan_hover` | 見張り |
 | 7.3 | A→B は Leave(A)→Enter(B) | Hover | `plan_hover` | 見張り |
@@ -482,7 +482,7 @@ pub(crate) fn on_char_pointer_released(
     ev: &Phase<PointerState>,
 ) -> bool;
 ```
-- 左のドラッグの読み方: `snapshot_drag_state()` が `JustEnded { cancelled: true, .. }` か、`JustEnded` で `DragState::ended_after_start()` が真なら `Dragged`、それ以外は `Clean`。ドラッグの状態は WndProc の中で同期に変わるので、閾値越えと解放が同じ tick に入っても解放の受け手の時点で読める（要件 3.1）。
+- 左のドラッグの読み方: `DragState::last_release_was_drag()`（最後に休みへ移したときに閾値を越えていたか取り消しだったか）が真なら `Dragged`、偽なら `Clean`。今の状態（`snapshot_drag_state()`）が `JustEnded` かどうかは見ない。ドラッグの状態は WndProc の中で同期に変わるので、閾値越えと解放が同じ tick に入っても、ドラッグの解放と次の左の押下が同じ tick に入っても（受け手の時点の状態は次の押下の `Preparing`）、印は直前の閉じのものが残っていて正しく読める（要件 3.1）。
 - 窓の中か: 放した点 `client_point` が、その窓の `WindowPos.size`（物理 px）の矩形 `0 ≤ x < 幅・0 ≤ y < 高さ` の中か。捕捉中に窓の外で放した左は wintf が窓の entity の `PointerState` に窓の外の座標で載せるので、ここで外と分かる。`size` が無い窓は中とみなし trace を残す。右・中・拡張は捕捉を取らないので、窓の外で放した解放はこの窓に届かず、別のキャラ窓で放した解放はその窓に控えが無い（OtherWindow）。窓の外へ出た時点で見張りの系がその窓の右・中・拡張の控えを捨てる（古い控えで後の解放を取り違えない）。
 - 投函: クリックなら放した点で `resolve_hit_owned` を解き、`MouseInput { scope, x, y（surface_point）, region, kind: ButtonUp { button, second_of_double } }` を `MouseWiring::send_mouse` で送る（要件 1.4）。
 - 記録: クリックにしなかったら `info!(event = "mouse_click_not_sent", reason, scope, button)`（要件 3.6・9.3）。結線の前は trace。
@@ -594,6 +594,7 @@ pub(super) fn plan_wheel(acc: &mut WheelAccum, now_ms: u64, rotation: Option<Whe
 
 **Implementation Notes**
 - 横のホイール（`wheel.horizontal`）は読まない（要件 6.7）。
+- 持ち主が窓の entity そのもの（wintf の α のマスクの当たり判定で絵に当たらず、窓へ縮退した＝カーソルが絵の透けた所の上）なら、その tick のホイールの量を捨てて `trace!(event = "mouse_wheel_not_sent", reason = "transparent", scope)` を残す（要件 6.10 の後半。クリック透過の切り替えが後から当たるまでの間もホイールの知らせは窓に届くため）。出入りは同じ持ち主で当たり判定「無し」として扱う（透けた所へ移ると `Leave`、その後 `WM_MOUSELEAVE` で持ち主が外れて `LeaveAll`）。
 - 箱（シェルの中のバルーン）の選択肢の行の上でも、出入りとホイールはシェルの当たり判定で決める（移動の受け手の箱の前段は移動だけを止める・§8 に登記）。
 - 位置が前と同じでホイールも 0 なら当たり判定を解かない（毎 tick の負荷を上げない）。カーソルが止まったまま表情が替わって当たり判定が変わっても、次に動くまで出入りを送らない（要件 7.9）。
 
@@ -648,16 +649,17 @@ fn on_char_release(world: &mut World, sender: Entity, entity: Entity, ev: &Phase
 
 - `pointer/buffers.rs` の `transfer_buffers_to_world`: `WHEEL_BUFFERS` の各窓の entity について、`PointerState` を持ち `find_owner_window` がその窓を返す entity（高々 1 つ）を探し、在ればその `PointerState.wheel` に溜めの `vertical`・`horizontal` を入れる。無ければ捨てる（trace・要件 6.10）。どちらでも溜めは毎回空にする（今は 1 度も空にならず溜まり続けている）。`PointerState.wheel` は今までどおり `FrameFinalize` で 0 に戻る＝1 tick だけ有効。
 - `pointer/dispatch/mod.rs` の `dispatch_pointer_events`: `OnPointerPressed` を配る条件を `left_down || right_down || middle_down || xbutton1_down || xbutton2_down` にする。今の押下の受け手（キャラ窓・バルーン・箱）は `left_down` か `double_click == Left` を見るので、拡張ボタンの押下では今の中ボタンの押下と同じに何もしない（箱の「直前の押下が選択だったか」の記憶だけが上書きされるのも中ボタンと同じ）。
-- `drag/state/mod.rs`: `close_drag` が休みへ移すときに `started`（開始を配ったか）を thread_local の印へ書き、読み口を足す。
+- `drag/state/mod.rs`: `close_drag` が休みへ移すたびに `started || cancelled`（開始を配ったか・取り消しか）を thread_local の印へ書き、読み口を足す。印は次の `start_preparing` でも消さず、次に休みへ移すときにだけ書き換える。
 
 ```rust
 impl DragState {
-    /// 今の状態が `JustEnded` で、その休みの前の押下が閾値を越えていた（開始を配った）とき真。
+    /// 最後に休み（`JustEnded`）へ移したとき、その押下が閾値を越えていた（開始を配った）か取り消しだったとき真。
+    /// 今の状態によらず返す（解放と次の押下が同じ tick に入っても、直前の解放の答えが読める）。
     /// `JustEnded` の欄は変えない（形を変えると wintf の他のテストのファイルに手が入るため）。
-    pub fn ended_after_start() -> bool;
+    pub fn last_release_was_drag() -> bool;
 }
 ```
-- `DragState` は `wintf::ecs::drag` から既に公開されているので、`drag/mod.rs` の公開の一覧に触らずに `wintf::ecs::drag::DragState::ended_after_start()` で読める。
+- `DragState` は `wintf::ecs::drag` から既に公開されているので、`drag/mod.rs` の公開の一覧に触らずに `wintf::ecs::drag::DragState::last_release_was_drag()` で読める。
 
 ### 文書
 
@@ -673,7 +675,7 @@ impl DragState {
 4. クリックの段の各段の送信の失敗は 204 と同じに扱い、ゴーストを終わらせない。
 5. `OnMouseWheel` の Reference2 は OS の回転量（1 目盛り 120・上が正）の和。窓ごとに 100 ミリ秒に高々 1 回に間引き、間の回転は足し合わせ、期限で次の回転を待たずに送る。和が 0 なら送らない。SSP は間引かず知らせごとに送る（測った）。横のホイールは送らない。
 6. 当たり判定 A から B へ直に移ると `OnMouseLeave`(A) → `OnMouseEnter`(B)（測って同じ）。窓と当たり判定に同時に入ると `OnMouseEnterAll` → `OnMouseEnter`、同時に出ると `OnMouseLeave` → `OnMouseLeaveAll`（測って同じ）。窓の外へ直に出たとき、SSP は Reference4 を空・座標を窓の外の位置で送るが、areka は出た当たり判定の名前と窓の中で最後に見た位置を入れる。
-7. カーソルが止まったまま表情が替わって当たり判定が変わっても、次にカーソルが動くまで出入りを送らない。窓が作り直された・ゴーストが替わったときは覚えを捨て、`OnMouseLeave`／`OnMouseLeaveAll` を送らない。2 つのキャラ窓の間を移ったときは出る窓の出入りを先に送る。
+7. カーソルが止まったまま表情が替わって当たり判定が変わっても、次にカーソルが動くまで出入りを送らない。窓が作り直された・ゴーストが替わったときは覚えを捨て、`OnMouseLeave`／`OnMouseLeaveAll` を送らない。2 つのキャラ窓の間を移ったときは出る窓の出入りを先に送る。絵の透けた所の上ではホイールを送らず、当たり判定から透けた所へ移ると `OnMouseLeave`、窓を出たと OS が知らせた（`WM_MOUSELEAVE`）ときに `OnMouseLeaveAll` を送る。
 8. シェルの中のバルーン（箱）の選択肢の行の上でも、出入りとホイールはシェルの当たり判定で決める（行の上では `OnMouseMove` を送らない今の決まりは変えない）。
 
 ## Data Models
@@ -716,7 +718,7 @@ impl DragState {
 - 入力 `wheel_tests.rs`（注入の時計の ms）: 静かな所の最初の回転はすぐ送る・間隔の中は足し合わせて `Wait { until_ms: 前＋100 }`・`until_ms` ちょうどで吐き出す・99 ms では吐き出さない・和 0 は `DropZero` で `last_sent_ms` を変えない・Ref0/1/4 は最後の回転の値。
 
 ### Integration Tests
-- 入力 `char_watch_tests.rs`（`Window` と `CharWindowMarker` を持つ偽の窓・子の entity に `PointerState`・注入の時計）: 入る → `EnterAll` → `Enter` の順・A→B・持ち主を外すと `Leave` → `LeaveAll`・位置が同じなら何も出ない・止まったまま当たり判定が替わっても出ない・窓 2 つで別々・窓を despawn すると何も送らず覚えが消える・窓の外へ出たら右の押下の控えが消える・`wheel.vertical` を入れた tick に `OnMouseWheel`・`horizontal` だけでは何も出ない・溜めを残して時計を進めた次の回しで吐き出す。出入りが同じ tick の `OnMouseMove` より先に届くこと（系を回した後に `on_char_pointer_moved` を呼んで受信端の順を見る）。
+- 入力 `char_watch_tests.rs`（`Window` と `CharWindowMarker` を持つ偽の窓・子の entity に `PointerState`・注入の時計）: 入る → `EnterAll` → `Enter` の順・A→B・持ち主を外すと `Leave` → `LeaveAll`・位置が同じなら何も出ない・止まったまま当たり判定が替わっても出ない・窓 2 つで別々・窓を despawn すると何も送らず覚えが消える・窓の外へ出たら右の押下の控えが消える・`wheel.vertical` を入れた tick に `OnMouseWheel`・`horizontal` だけでは何も出ない・窓の entity そのものに `PointerState` と `wheel.vertical` があっても `OnMouseWheel` を送らない（透けた所）・溜めを残して時計を進めた次の回しで吐き出す。出入りが同じ tick の `OnMouseMove` より先に届くこと（系を回した後に `on_char_pointer_moved` を呼んで受信端の順を見る）。
 - 入力 `char_watch_tests.rs` の続き: 移動の間引きが閉じている（直前に `OnMouseMove` を送った）状態でも、系は当たり判定の変化で出入りを送る（系は移動の間引きの状態を読まない・要件 7.6）。
 - メニュー `mod_wiring_tests.rs`: `MouseWiring` と `MenuWiring` に同じ受信端を渡し、右の押下 → 包みの受け手で右の解放 → 受信端の順が `Mouse(ButtonUp{Right})` → `ResourceQuery`。押下が無い解放ではクリックを送らず、照会は今のとおり 1 件。包みの受け手で作った返事待ちに `popupmenu.visible` の返事を入れ、有効ならメニューを出す・0 なら抑えて預かりの右ダブルクリックを送る、が今の `trigger` の檻と同じ結果になる（要件 5.3・11.1）。
 - kanade `mouse_events_tests.rs`: `step` に解放の知らせを入れ、続けて各段の応答（204）を順に入れると、各応答の後の `Action` が次の段の GET 1 本だけで、最後の応答の後は空（殻が応答を次の知らせより先に入れ直す今の性質と合わせて要件 4.2 を満たす。`actor.rs` には手を入れない）。
@@ -724,7 +726,7 @@ impl DragState {
 ### wintf の決定論テスト（要件 11.5）
 - `buffers.rs` の中のテスト: 窓の entity に溜めたホイールが、その窓の中で `PointerState` を持つ子の `wheel` に移り、溜めが空になる。もう 1 回移しても `wheel` は増えない（その tick の値だけ）。持ち主の居ない窓の溜めは捨てられて空になる。別の窓の `PointerState` には移らない。
 - `pointer/dispatch/tests.rs`: `xbutton1_down`・`xbutton2_down` だけで `OnPointerPressed` が配られる。
-- `drag/state/tests.rs`: `start_preparing` → 解放（`end_dragging_on_release`）で `ended_after_start()` が偽、`start_preparing` → `start_dragging` → 解放で真（閾値越えと解放が同じ tick に入った場合と同じ状態の並び）、取り消し（`cancel_dragging`）の後の値、次の `start_preparing` で `JustEnded` でなくなれば偽。
+- `drag/state/tests.rs`: `start_preparing` → 解放（`end_dragging_on_release`）で `last_release_was_drag()` が偽、`start_preparing` → `start_dragging` → 解放で真（閾値越えと解放が同じ tick に入った場合と同じ状態の並び）、取り消し（`cancel_dragging`）の後は真、`start_dragging` → 解放 → 次の `start_preparing` の後も真のまま（解放と次の押下が同じ tick に入った場合）、その次の解放（閾値を越えない）で偽に戻る。
 
 ### 今のテスト（要件 11.4）
 - 移動の受け手・押下の受け手の戻り値・`menu/trigger.rs` を直さないので、ダブルクリック・ドラッグ・右クリックのメニュー・強制退避の今のテストは変えずに通る。手書きの数 55 → 64 だけは本 spec が直す（語を足した数の檻）。
@@ -738,4 +740,4 @@ impl DragState {
 ## Open Questions / Risks
 - **R1**（受け入れる）: 1 tick に「押下 1・解放 1・押下 2（ダブルクリック）」が全部入ると、wintf がその tick の押下と解放を 1 つの `PointerState` にまとめるため、`OnMouseDoubleClick` が解放 1 のクリックより先に届き、解放 1 のクリックは 2 回目の扱いになる。人のダブルクリックで解放 1 と押下 2 の間が 1 tick に収まるのは UI スレッドが詰まったときだけ。直すには wintf のポインタの配りを出来事の列に改める必要があり、本 spec の範囲（wintf は 3 ファイル）を越える。
 - **R2**: 捕捉中に左を窓の外で放したときの判定は `WindowPos.size` に頼る。`size` の無い窓は中とみなす（trace）。キャラ窓は配置が必ず `size` を入れる。
-- **R3**: 左の休み（`JustEnded`）は次の左押下まで残る。ドラッグを無効にした窓（`start_preparing` を呼ばない）では前の押下の印が残りうるが、キャラ窓は常にドラッグできるので起きない。
+- **R3**: 「直前の左の解放はドラッグだったか」の印は、次に休みへ移すまで残る。ドラッグを無効にした窓（`start_preparing` を呼ばない）では前の押下の印が残りうるが、キャラ窓は常にドラッグできるので起きない。ドラッグの解放と次の左の押下が同じ tick に入る場合は、印が `start_preparing` で消えないので塞がっている（R1 とは別）。
