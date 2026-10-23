@@ -194,7 +194,7 @@
   - _Depends: 6.2_
   - _Requirements: 7.1, 7.2, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 12.3_
 
-- [ ] 7.5 面 1 つを時点 T まで進めて組み、シェル全体の下地に置く
+- [x] 7.5 面 1 つを時点 T まで進めて組み、シェル全体の下地に置く
   - 2.5 の口で時点 T の面の状態を得て、画面と同じ入力の形で合成し、シェル全体の外形（3.1）の大きさの透明な下地へ、組んだ絵の原点を `(-left, -top)` に置いた乗算済み BGRA を返す。合成の失敗は合成自身が error を出すので info だけを足す。下地からのはみ出しは error で失敗にする
   - 試験（7.1 の検体）: 下地の画素が、同じ面・同じ着せ替え・同じ状態で合成した絵を `(-left,-top)` に置いたものと同じ・下地の大きさと位置がどの面も同じ・透明は `(0,0,0,0)`・PNG が MCP と同じ関数から出る・runonce の最後のコマ・always が T のコマ・random が出ない・2 度で同じバイト列
   - 上の試験が `render_tests.rs` で緑
@@ -274,3 +274,4 @@
 - 6.4: `--dump-scope -1` は `-1` を名前として読む（Unknown・dump-scope は MissingValue＝design どおり）。6.5 で直す試験: `dump_pending_and_other_dump_names` と `empty_dump_value_is_missing` の末尾の `--dump-scope` の場合（今は記録なしを期待）。`--offline-dump` なしの `--dump-scope 1` が要約の `effective` に載る件も 6.5 で見る。`StartupOptions.offline` の `#[allow(dead_code)]` は 7.7／8 で外す
 - 7.1: 欠けた element の絵（シェルを焼く段の脱落）は `areka-emo-present/src/shell_target.rs` で warn だったのを design（読み込みの段で Error）に合わせて error に上げた（画面の記録も error になる）。5.2 の共有の検体は `TempPath::under_target` に直した（前は OS の一時フォルダ）。検体の部品は `offline_dump_test_support::{build_ghost, variety_shell, ShellSpec, Solid}`
 - 7.2: 面の指定は頭の `surface` を外してから `!` を読むので `surface!4` は読め `!surface4` は読めない（design の順・SSP の扱いは測っていない）。`read_surface_list`・`resolve` の `#[allow(dead_code)]` は 7.7／7.8 で外す
+- 7.5: 合成は負の座標の部分を切り捨てるので、負の座標の element を持つ面では下地の左上の余白が透明のまま（design の Risks・`areka-P0-extent-element-offset` が追う）。`render_surface`・`render_png`・`Canvas::from_bounds` の `#[allow(dead_code)]` は 7.6／7.8 で外す
