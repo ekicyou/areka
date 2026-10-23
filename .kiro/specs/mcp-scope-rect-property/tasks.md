@@ -99,7 +99,7 @@
   - _Depends: 2.2, 2.4, 3.2, 3.3_
   - _Requirements: 9.4_
 
-- [ ] 4.2 (P) 手順書の位置の読み方を `get_property` で読む形へ戻す
+- [x] 4.2 (P) 手順書の位置の読み方を `get_property` で読む形へ戻す
   - 「位置の読み方」の段落を `get_property` で読む形へ戻し、表の段 1・4・5 の本 spec の欄を「着地済み・確かめる」の形に改める
   - 完了の状態: `doc/pasta-real-run.md` に「撮影と記録の `bounds=` の行で読む」の読み替えが残っていない
   - _Boundary: doc/pasta-real-run.md_
