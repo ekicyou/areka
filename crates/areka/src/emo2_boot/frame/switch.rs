@@ -625,6 +625,8 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
                 static_binds: assets.static_binds,
                 bind_resolver: assets.bind_resolver,
                 shell_table: assets.loop_table,
+                // 戻り先の材料は箱の資産から組む（descript-window-keys タスク 4.3）。それまでは空＝替えない。
+                fallback: areka_seriko::ShellSurfaceFallback::default(),
             },
             SwapFinish::Shell {
                 source,

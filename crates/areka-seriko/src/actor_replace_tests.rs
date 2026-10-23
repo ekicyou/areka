@@ -103,6 +103,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
         static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([1500])),
         bind_resolver: BindResolver::empty(),
         shell_table: new,
+        fallback: crate::ShellSurfaceFallback::default(),
     }));
     sink.send_tick(1150); // 古い表なら 2110 が出る時刻
     sink.send_tick(2000); // 新しい表で発火（3000）
@@ -298,4 +299,97 @@ fn replace_reaching_handle_message_directly_logs_error_and_is_dropped() {
         "error! は 1 件: {logs}"
     );
     assert!(records.lock().unwrap().is_empty(), "発行は 0 件");
+}
+
+/// シェルの差し替え: 新しいシェルに無い面を出していたスコープは、`Rebased` が最初から戻り先の面を
+/// 載せ、seriko の今の面も同じになる。非表示のスコープは替えない（spec: descript-window-keys 要件 3.2・3.5）。
+#[test]
+fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() {
+    let out = MockSurfaceOutput::new();
+    let records = out.records();
+    let (mut sink, handle) = spawn_seriko(
+        resolver_of("通常", 2100),
+        crate::DefaultBinds::uniform(BindSet::default()),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        out,
+    );
+
+    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // scope 0 は面 2100
+    CueSink::emit(&mut sink, emote_cue(0.0, "1", "-1")); // scope 1 は非表示
+    assert!(sink.send_replace(SerikoReplace::Shell {
+        epoch: 4,
+        resolver: resolver_of("通常", 5),
+        static_binds: crate::DefaultBinds::uniform(BindSet::default()),
+        bind_resolver: BindResolver::empty(),
+        shell_table: AnimationTable::empty(),
+        fallback: crate::ShellSurfaceFallback {
+            surface_ids: [0, 5, 10].into_iter().collect(),
+            candidates: BTreeMap::from([
+                (ActorKey::from("0"), vec![5, 0]),
+                (ActorKey::from("1"), vec![10]),
+            ]),
+        },
+    }));
+    // 今の面が 5 になっていれば、同じ面の再指定は冪等で出ない。
+    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常"));
+    sink.close().expect("Close を送れること");
+    handle.join().expect("Close で正常終了する");
+
+    let recorded = records.lock().expect("records mutex poisoned").clone();
+    let at = rebased_positions(&recorded);
+    assert_eq!(at.len(), 1, "Rebased はちょうど 1 件: {recorded:?}");
+    assert_eq!(
+        recorded[at[0]],
+        DisplayCommand::Rebased {
+            epoch: 4,
+            kind: RebaseKind::Shell,
+            shows: vec![
+                RebasedShow {
+                    scope: ActorKey::from("0"),
+                    surface_id: Some(5),
+                    binds: BindSet::default(),
+                },
+                RebasedShow {
+                    scope: ActorKey::from("1"),
+                    surface_id: None,
+                    binds: BindSet::default(),
+                },
+            ],
+        },
+        "無い面 2100 は戻り先の 5 で最初から載る・非表示は替えない"
+    );
+    assert_eq!(
+        recorded.len(),
+        at[0] + 1,
+        "seriko の今の面も 5（再指定は出ない）: {recorded:?}"
+    );
+}
+
+/// 書き換えの記録はスコープごとに 1 件・事象名で見分けられる（要件 3.3）。
+#[test]
+fn shell_fallback_outcomes_log_one_warn_each() {
+    let (logs, ()) = capture_logs_flow(|| {
+        log_shell_fallback(&crate::ShellFallbackOutcome::FellBack {
+            scope: ActorKey::from("0"),
+            missing: 2100,
+            to: 5,
+        });
+        log_shell_fallback(&crate::ShellFallbackOutcome::Hidden {
+            scope: ActorKey::from("1"),
+            missing: 11,
+            tried: vec![10],
+        });
+    });
+    assert_eq!(logs.matches("level=WARN").count(), 2, "{logs}");
+    assert_eq!(
+        logs.matches("shell_switch_surface_fell_back").count(),
+        1,
+        "{logs}"
+    );
+    assert_eq!(
+        logs.matches("shell_switch_surface_hidden").count(),
+        1,
+        "{logs}"
+    );
 }

@@ -592,7 +592,7 @@ pub fn decide(current: u32, candidates: &[u32], surface_ids: &BTreeSet<u32>) -> 
 ```
 
 - `SerikoReplace::Shell` に `fallback: ShellSurfaceFallback` を足す。actor の差し替えの腕は `states.rebase_shell(static_binds)` の直後に `states.fall_back_shell_surfaces(&fallback)` を呼び、結果を `warn!(event = "shell_switch_surface_fell_back", scope, missing, to)`／`warn!(event = "shell_switch_surface_hidden", scope, missing, ?tried)` で 1 件ずつ残す。その後に今の `rebased()` を出す。
-- `ScopeStates::fall_back_shell_surfaces` はシェルの面で `Shown(id)` のスコープだけを見る（非表示・未表示のスコープは替えない）。
+- `ScopeStates::fall_back_shell_surfaces` はシェルの面で `Shown(id)` のスコープだけを見る（非表示・未表示のスコープは替えない）。 `surface_ids` が空の戻り先（`default()`・emo_world の無い資産）は材料なしとして何も替えず、記録もしない。
 - `split` は `assets.boxes` の `surface_ids` と `fallback_candidates` の写しから `ShellSurfaceFallback` を組む（`boxes` を `SwapFinish` へ動かす前に写す）。文字の層は同じ `boxes` を `finish_shell` の `hand_to` で受け取るので、seriko と文字の層は同じ材料・同じ決め方（今の面 → 候補の最初に在る面 → 出さない）で答える。
 - これで `Rebased` → `send_rebased` → `ReplaceTarget { show }` が最初から戻り先の面を載せ、seriko の今の面も同じになる（ギャップ分析の案 2・R3 は起きない）。
 - 文字の層: 今は `set_box_layout`（`set_box_index`）が各スコープの今の面の番号を保ったまま行き先を引き直すので、戻り先の面を出しても文字の層は前の番号のまま残り、面の中の文字の箱へ字が入らない（設計の検証の問題 2）。`hand_to` が `set_box_layout` の直後に `fall_back_box_surfaces` を呼び、seriko と同じ答えで文字の層の今の面を替えてから区間の全文を求め直す。`finish_shell` の中の 1 回の呼び出しで済み、1 フレーム遅らせない。
