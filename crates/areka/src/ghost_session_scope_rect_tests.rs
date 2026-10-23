@@ -355,14 +355,14 @@ mod wiring {
     use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
     use wintf::ecs::{Point, WindowPos, WindowStyle};
 
-    fn fake_handle(raw: usize) -> WindowHandle {
+    pub(super) fn fake_handle(raw: usize) -> WindowHandle {
         WindowHandle {
             hwnd: HWND(raw as *mut _),
             instance: HINSTANCE::default(),
         }
     }
 
-    fn placement() -> ScopePlacement {
+    pub(super) fn placement() -> ScopePlacement {
         ScopePlacement {
             scope: 0,
             char_pos: PointPx { x: 1483, y: 733 },
@@ -639,3 +639,7 @@ mod wiring {
         assert_eq!(updated(&lines), 1, "{lines:?}");
     }
 }
+
+// 本物の起動（切替の試験台）を通す結合テスト（切替・起動し直し）。
+#[path = "ghost_session_scope_rect_boot_tests.rs"]
+mod boot;
