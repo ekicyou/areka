@@ -872,3 +872,126 @@ fn vertical_big_glyph_column_ink_overlap_record() {
         }
     }
 }
+
+/// 5.1 の書体（ぱすたの `pasta_tategaki` の `font.name` は候補列のまま＝本番と同じ `FontCatalog::pick` で引く）。
+const M_FONTS: [&str; 3] = [
+    "Yu Gothic UI",
+    "ＭＳ ゴシック",
+    "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ",
+];
+
+/// 5.1 の記録（設計の T5.1・要件 4.2／4.3／6.3）: 書体 × 大きさ 20・28 × 2 つの向き × 拡大率 1・2 で、
+/// 引けた書体の名前・本番と同じ書式と幅 em の TextLayout の left／width／行の高さ／baseline・列ごとの
+/// インク（行矩形の左辺からの物理画素）を出し、em の箱を基線に中央で重ねた所を 2 つの式
+/// （A＝left＋baseline・B＝left＋width−baseline）で出して、仮名と漢字のインクを覆うかを記録する。
+/// 合否なし（`research.md` 17 節の材料）。
+#[test]
+#[ignore = "実 GPU の記録だけ（5.1）: 書体ごとの縦書きの基線と em の箱とインクを測る・合否なし"]
+fn vertical_em_box_from_column_baseline_record() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let mut rig = Rig::new();
+    let words: Vec<&str> = R_CHOICES.iter().copied().chain([R_LATIN]).collect();
+    for name in M_FONTS {
+        for size in [20u32, 28] {
+            let em = size as f32;
+            let model = live_diff_model_font(Some(name), Some(size));
+            let font = ResolvedFont::resolve(&model);
+            let picked = FontCatalog::new(&factory).expect("FontCatalog").pick(&font);
+            for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+                let tag = format!("[5.1 {} {size} {mode:?}]", picked.name);
+                let metrics =
+                    DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+                        .expect("DWriteMetrics 生成");
+                let format = create_text_format(&factory, &picked, mode).expect("TextFormat");
+                // 式 A・B の em の箱の左（論理・行矩形の左辺から）を、仮名 1 字「あ」と各列の字で出す。
+                let mut boxes = Vec::new();
+                for word in std::iter::once("あ").chain(words.iter().copied()) {
+                    let layout = factory
+                        .create_text_layout(&HSTRING::from(word), &format, em, PROBE_MAX_EXTENT)
+                        .expect("CreateTextLayout");
+                    let mut tm = DWRITE_TEXT_METRICS::default();
+                    unsafe { layout.GetMetrics(&mut tm) }.expect("GetMetrics");
+                    let mut lm = [DWRITE_LINE_METRICS::default(); 4];
+                    let mut count = 0;
+                    unsafe { layout.GetLineMetrics(Some(&mut lm), &mut count) }
+                        .expect("GetLineMetrics");
+                    let (a, b) = (
+                        tm.left + lm[0].baseline - em / 2.0,
+                        tm.left + tm.width - lm[0].baseline - em / 2.0,
+                    );
+                    println!(
+                        "{tag} TextLayout {word}: left {:.2}・width {:.2}・行の高さ {:.2}・baseline {:.2}・箱の左 A {a:.2}（比 {:.4}）・B {b:.2}（比 {:.4}）",
+                        tm.left,
+                        tm.width,
+                        lm[0].height,
+                        lm[0].baseline,
+                        a / em,
+                        b / em
+                    );
+                    boxes.push((a, b));
+                }
+                let (a, b) = boxes[0];
+                let image = (((em + 2.0) * 6.0) as u32, (em * 5.0) as u32);
+                let region = TextRegion::resolve(&model, image, mode);
+                let mut items = Vec::new();
+                for word in &words {
+                    if !items.is_empty() {
+                        items.push(TextItem::LineBreak { ratio: 1.0 });
+                    }
+                    items.extend(glyph_items(word));
+                }
+                let glyphs = items.len() - (words.len() - 1);
+                let lines = LayoutEngine::layout(
+                    &items,
+                    glyphs,
+                    &region,
+                    mode,
+                    em,
+                    &metrics,
+                    WrapPlan::CharByChar,
+                );
+                let bands = line_bands(&lines, mode, &metrics);
+                println!(
+                    "{tag} 行の箱（比から） {:.2}・今の帯（2.1 の c）の寄せ {}",
+                    metrics.line_box_height(em),
+                    bands[0].offset
+                );
+                let window = LayoutEngine::visible_window(&lines, &region, mode);
+                let base = ContentCanvas::from_layout(&lines, &region, mode);
+                for k in [1.0f32, 2.0] {
+                    let contract = ScaleContract::new(k, None);
+                    for (i, line) in lines.iter().enumerate() {
+                        let only = ContentCanvas {
+                            residents: vec![base.residents[i].clone()],
+                            size: base.size,
+                        };
+                        let mut surface = rig.attach(image, k);
+                        let (w, h) = surface.size();
+                        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
+                        exec.render(&only, &window, &font, mode, &contract, &mut surface)
+                            .expect("列の描画");
+                        let px = surface.read_back().expect("read_back");
+                        let Some((lo, hi)) = block_axis_ink_span(&px, w, h, mode) else {
+                            println!("{tag} k={k} 列 {}: インクなし", words[i]);
+                            continue;
+                        };
+                        let o = line.rect.left * k;
+                        let ink = (lo as f32 - o, hi as f32 - o);
+                        // 帯の物理の範囲 [k·round(箱の左), k·round(箱の左)+k·em) と、インクを覆うか。
+                        let band = |left: f32| {
+                            let l = k * left.round();
+                            (l, l + k * em - 1.0, l <= ink.0 && l + k * em >= ink.1 + 1.0)
+                        };
+                        println!(
+                            "{tag} k={k} 列 {}: インク {:?}（行矩形から）・A 帯と覆う {:?}・B 帯と覆う {:?}",
+                            words[i],
+                            ink,
+                            band(a),
+                            band(b)
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
