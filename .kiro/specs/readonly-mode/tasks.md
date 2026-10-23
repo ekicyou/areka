@@ -49,7 +49,7 @@
     - `readonly` を渡しても `bootunlock` を渡しても、起動の求めの値が同じ
     - `nobootcheck`・`dontloadmodule` と組んでも、それぞれの語の効き目が変わらない
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 10.3_
-- [ ] 2.2 走りの状態を 1 度だけ立てて配る口を作る
+- [x] 2.2 走りの状態を 1 度だけ立てて配る口を作る
   - 起動の前に 1 度だけ呼ぶ入れの口を作る。真なら、プロセスの旗を立て、1.1 の全部を控える旗を立て、`readonly_engaged` の info を 1 件残す。偽なら何もしない
   - 旗を読む口・World に印の資源を足す口・World の印を読む口を作る。旗を下ろす口と資源を外す口は作らない
   - この口は入口のモジュールを使わない（入口の側がこの口を見る）
@@ -215,3 +215,8 @@
     - 根の木と `AREKA_USER_ROOT` の場所が、起動の前と同じ（作られていない）
   - _Depends: 5.1, 5.2, 5.3, 6.1_
   - _Requirements: 1.2, 2.1, 4.1, 8.1, 10.5_
+
+## Implementation Notes
+- 2.2: `readonly::of` にも一時の `#[allow(dead_code)]` が付いている（初めて読むのは 4.1）。4.1 で外す。`engage`・`install` の分は 5.1 で外す。
+- 2.2: 構造の試験（`readonly_tests.rs`）は試験のファイルまで走査する。新しい試験から `readonly::engage` や `withhold_everything` を呼ぶと赤になる。試験の控えは `WithholdGuard::under` だけで行う。
+- `crates/areka` の clippy は依存・examples・触っていないファイルの前からの lint で `-D warnings` を通らない。触ったファイルに新しい警告が無いことだけを見る。

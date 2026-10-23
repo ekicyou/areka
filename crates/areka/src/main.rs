@@ -146,6 +146,9 @@ mod roots;
 /// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
 mod smoke_exit;
 
+/// 1 回の走りが読み取りだけかを 1 度だけ立てて配る口（readonly-mode）。
+mod readonly;
+
 /// 起動オプションの読み方（areka-P0-startup-options-core）。
 mod cli;
 
