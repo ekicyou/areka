@@ -32,6 +32,7 @@
 
 pub mod format;
 pub mod io;
+pub mod withhold;
 
 pub use format::{FORMAT_VERSION, FormatDoc};
 pub use io::{FakePersistIo, FsPersistIo, PersistIo};
