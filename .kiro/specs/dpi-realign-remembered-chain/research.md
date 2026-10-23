@@ -179,3 +179,100 @@
 6. **「武装の後に台本が置き直した」の見分け**（T1 位置／T2 印の時刻／T3 新しい印）。T1・T2 は ⑥ の内。
 7. **要件 7.2 と今の走査の「1 つ欠けたら全体を見送る」の違い**: 大きさが揃うのを待つ理由（待つ）と、窓が無いなど取り出せない理由（その窓だけ外して続ける）を分けるか。
 8. **今あるテストの意図の書き直し**: `a_dragged_scope_stays_out_of_the_realign` は新しい決め方では「離れていた」で通る。ドラッグで隣に付け直した組は詰めることになるので、テストの名前と主張を改める（陳腐化したテストの扱い）。
+
+---
+
+# 設計の段の調べと決め（2026-10-23・`/kiro-spec-design -y`）
+
+## Summary
+
+- **Feature**: `dpi-realign-remembered-chain`
+- **Discovery Scope**: Extension（既存の「武装 → 一度きりの解決」の詰め直しと、記憶の形の拡張）。軽い調べ（`design-discovery-light.md`）を当て、外の文書の調べは要らなかった（新しい依存なし）。調べの下請け（サブエージェント）は使わず、主の文脈でコードを読んだ。
+- **使った決まりと手引き**: スキル `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、型 `.kiro/settings/templates/specs/design.md`・`research.md`、steering の `structure.md`（新しいテストは兄弟のファイル・1 ファイル 1,000 行以下）・`logging.md`（ログの水準と構造化の欄）。
+- **Key Findings**:
+  - ゴースト窓は `DpiSuggestedRectPolicy::ExternalAuthority` を持つ（`placement/spawn.rs` 616 行目）ので、`WM_DPICHANGED` の勧めの矩形は窓に書かれない。拡大率の相が書く前の `WindowPos` は変わる直前の位置と大きさで、控え（S1）を相の中で取れる。
+  - 位置の書き手 `enqueue_window_set_pos` は `WindowPos` をその場で書き換える（`follow_window_move_tests.rs` の `enqueue_window_set_pos_none_updates_position_leaves_size`）。`persist_entries` が呼ばれた時点の `WindowPos` は画面の並びなので、隣り合いの印を書く時点の並びから決められる（A2 が成り立つ）。
+  - wndproc のドラッグの式（`mouse_move.rs`）が読むスレッドの控えの `Dragging` には `entity` があり、`world_borrow.world()` も読める。ドラッグ対象の `DraggingState` を読む形にすれば、areka が `DraggingState` を置き直すだけで 2 つの式（wintf と `drag_follow.rs`）が揃う（`dispatch.rs` は直さずに済む）。
+  - bevy_ecs 0.19 の部品の差し込みの口（`#[component(on_insert = …)]`）は付け直しでも呼ばれ、同じ排他 system の中の変化の時刻の比べ（T2）と違ってフレームの中の順に頼らない。リポジトリには `spawn.rs` の `on_remove` ほか同じ書き方の先例がある。
+
+## Research Log
+
+### 変わる直前の矩形の取り方（6 節の 1・3）
+- **Context**: 要件 1.1 は変わる直前の隣り合いで決める。武装は最初のキャラ窓を書いた**後**に起きる。
+- **Findings**: 拡大率の相の第 2 巡で、最初のキャラ窓を処理する直前に全キャラ窓の矩形を控えれば、その巡で書かれる窓も含めて変わる前の矩形が揃う。待ちの札で窓ごとにフレームが割れても、まだ書かれていない窓は書かれるまで変わる前の位置にいる（`ExternalAuthority` で勧めの矩形も書かれない）。2 度目の武装は最初の控えを保てばよい。
+- **Implications**: 控えは `ChainRealignPending.before` に持つ。窓の一式を閉じるときに資源ごと外れるので `app_exit.rs` に手が要らない。
+
+### 「武装の後に台本が置いた」の見分け（6 節の 4）
+- **Context**: 要件 3.1。印 `ScriptPlaced` は時刻を持たない。
+- **Findings**: 武装（拡大率の相）と `\![move]`（台本の移動の相）は同じ排他 system の中の同じ巡で走りうるので、World の変化の時刻（T2）では前後を分けられない。位置で見る形（T1）は、作業領域の変化で下端が動く主な場面（主の画面の拡大率を変えるとタスクバーの物理の高さが変わる）で「動かされた」に倒れ、詰め直しが空振りする。新しい印を移動の側に足す形（T3）は `move_cue_place.rs`・`sticky_follow.rs` に手が要る。
+- **Implications**: `ScriptPlaced` の定義に差し込みの口を付け、武装中なら窓を `ChainRealignPending.script_moved` に積む（T3 の働きを、触る所を増やさずに得る）。
+
+### ドラッグ中に画面をまたいだときの順（6 節の 1・2）
+- **Findings**: 窓の大きさは拡大率の相の `reconcile_window_size`（と報告の回収の経路）で書かれる。その呼び出しの中で `DraggingState.initial_inset` を置き直せば、次の `WM_MOUSEMOVE`（wintf の式）と `on_char_drag`／`on_char_drag_end`（`drag_follow.rs` の式）がどちらも新しい掴んだ点を使う。大きさの書き込みと同じ巡で位置まで書き直すと、拡大率の相のキャラ窓の書き込みを 1 巡 1 回とする約束を破るので取らない。
+- **Implications**: 件 9 は `dpi.rs` と `mouse_move.rs` の 2 か所で直る。`drag_follow.rs`・`dispatch.rs` は触らない。
+
+### 記憶の印の鍵（6 節の 7）
+- **Findings**: 正準の鍵の逆読み（正準の文字列から `PersistKey` へ戻す所）は無く、`areka.window.scope(N).*` の子を数で読む読み手も無い。`AxisPair` は `balloon-offset` と共有なので、印は別の表 `[window-adjacent]` に置くのが他を動かさない。前の areka は知らない表を読み飛ばし、自分が書くときに落とす（`format-version` を上げないので位置は失われない）。
+- **Implications**: 正準 `areka.window.scope(ID).adjacent`・TOML `[window-adjacent]`・値 `left`／`right`／`none`。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| J1 改（採る） | 判定 `judge_adjacency` と解き `resolve_chain` を純関数 1 組にし、3 か所の呼び手（拡大率の後・起動・記憶）が組ごとの決めを作って渡す。`finalize_chain` は約束を変えずに解きの上へ載せ直す | 起動の並べ直しの決まりを変えない。同じ規則を 3 か所で使い回せる（要件 6.3 の「同じ決め方」）。組ごとの決めが値で出るのでログとテストが素直 | `chain_finalize.rs` が 330 → 500 行ほどに増える | J1（新しい関数）と J2（`finalize_chain` を広げる）の間。`ScopeChainState` の欄は足さない（505 行のテストの字面を壊さない） |
+| J2 | `finalize_chain` に欄を足して 1 関数で両方 | 関数が 1 つ | 起動と拡大率の意味が混ざり、`ScopeChainState` の字面の変更が 505 行のテストに及ぶ | 採らない |
+
+## Design Decisions
+
+### Decision: 判定の作り方（7 節の論点 5）
+- **Selected**: J1 改（上の表）。新しいモジュールは作らず `chain_finalize.rs` に置く（`placement/mod.rs` に手を入れない＝C11 の約束の内）。
+
+### Decision: 控えの取り方（3.2 節）
+- **Alternatives**: S1 武装のときに全キャラ窓の矩形を控える／S2 前の大きさだけ控えて今の下端中央から戻す。
+- **Selected**: S1（拡大率の相の第 2 巡の最初のキャラ窓の前に 1 度）。
+- **Rationale**: S2 は下端中央が保たれる前提に頼り、ドラッグで画面を移った窓で成り立たない。
+
+### Decision: 「武装の後に台本が置き直した」の見分け（3.3 節・論点 6）
+- **Alternatives**: T1 位置／T2 印の変化の時刻／T3 新しい印。
+- **Selected**: `ScriptPlaced` の差し込みの口で武装中の差し込みを記録する（T3 の働き・触る所は `chain_finalize.rs`・`chain_realign.rs` だけ）。
+- **Trade-offs**: 印の定義（`chain_finalize`）が受け口（`chain_realign`）を 1 つ指す上向きの参照ができる。判定の純関数はこれに依らない。
+
+### Decision: 件 9 の直し方（3.4 節・論点 3）
+- **Selected**: D1。置き直しは `emo2_boot/frame/dpi.rs` の `reconcile_window_size`（キャラ窓の腕）。wintf は `mouse_move.rs` だけを直し、`DraggingState` を正本として読む。`dispatch.rs` は直さない（要件の Boundary Context の触る所より狭い）。
+- **Rationale**: D2 は `drag_follow.rs`（`descript-window-keys` の持ち物）に手が要る。
+
+### Decision: 要件 6 の記憶の形（3.5 節・論点 1）
+- **Alternatives**: A1 覚えたときの幅／A2 隣り合っていた印。
+- **Selected**: A2。スコープ n の鍵に組 (n−1, n) の印 `left`／`right`／`none` を、位置を書く束へ足す（触れる組 k と k+1）。
+- **Rationale**: A1 は書いた時機が違う 2 つの記録を比べる。200% で隣り合って覚え、100% で詰め直した後（記憶は書かない）に本体を相方の隣へドラッグし直すと、本体の記録は 100% の幅、相方の記録は 200% の位置と幅のままで、覚えたときの矩形どうしは隣り合わず（例: 191 px 離れて読める）、次の起動で隙間が開く。A2 は書く時点の画面の並びで決めるので、利用者が最後に見た並びを表す。
+- **Trade-offs**: スコープ k を書くと k+1 の印も書く（書く時機は同じ・位置の値は書かない＝要件の「書く時機は足さない」の内）。
+
+### Decision: 許す幅（6 節の 5・論点 2）
+- **Selected**: `ADJACENT_TOLERANCE_PX = 2`（物理 px）。隙間と重なりの両側に効く（丸めの 1 px の重なりを隣り合いに含める＝要件 1.2）。
+- **Rationale**: 下端中央を保つ置き直しで幅の半分の整数割りが窓ごとに最大 1 px ずれ、2 つの窓の分で 2 px。控え・印は詰め直しの後の並び（隙間 0）から取ることが多いので、実際の誤差はもっと小さい。実機（8.7）で測り直す。
+
+### Decision: 3 体以上の組（6 節の 6・論点 4）
+- **Selected**: 番号の続く 2 つ（n−1 と n）。本体から昇順に、n の基準は n−1 の解いた後の x。
+- **Rationale**: 要件 1.5 の「前の窓を詰め直した後の位置を次の組の基準にする」と、起動の並べ直しの鎖（`finalize_chain`）と同じ形。星形の並びは詰めない（`extra-character-windows` の既定の並べは鎖で当たらない）。
+
+### Decision: 要件 7.2 と待ちの扱い（論点 7）
+- **Selected**: 「取り出せない」は控え（変わる直前の位置と大きさ）に無い窓で、その窓に触れる組だけを外して `warn!` し、ほかを続ける。今の走査の「揃うまで全体を待つ」（窓寸の未着・待ちの札・まだ表示されていない）は待ちであって取り出せないではないので、起動と共有の `collect_chain_states` の意味を変えない。
+
+### Decision: 外す理由の及ぶ範囲
+- **Selected**: 組・台本は「その窓を動かさない」だけ（n−1 がその窓でも、隣り合っていた n は n−1 の今の位置へ寄せる＝要件 1.1）。ドラッグは要件 2.4 が寄せることも禁じるので両側の組を外す。控えに無い窓は判定できないので両側の組を外す。
+
+### Decision: 今あるテストの書き直し（論点 8）
+- **Selected**: `a_dragged_scope_stays_out_of_the_realign` を「変わる前にドラッグで離して置いた窓は動かない」に改め、陽性の対に「ドラッグで隣に付け直した窓は詰まる」を足す。ドラッグの最中の除外は新しいテストのファイルが持つ。並べ終えた時点の保存の「x・y だけ」の主張は印が加わるので改める。
+
+## Synthesis Outcomes
+
+- **一般化**: 拡大率の後の詰め直し（要件 1〜3）・起動の隣り合わせ（要件 6.3〜6.5）・記憶に書く印（要件 6.2）は、どれも「組 (n−1, n) の並びを決め、本体から順に詰める」の変種。判定と解きを 1 組にし、違いは組ごとの決めを作る呼び手の糊に閉じた。今の `finalize_chain` もその上の 1 つの決め方（既定の位置のまま＝左に詰める）として載せ直した。
+- **作るか使うか**: 新しい依存なし。部品の差し込みの口は bevy_ecs の既存の機能で、リポジトリに先例がある。記憶は sylphya の既存の鍵族の形（閉じた型＋TOML の写し）に沿う。
+- **削ったもの**: 新しいモジュール（`placement/mod.rs` の変更）・`dispatch.rs` の変更・`drag/mod.rs` の欄の追加・新しい移動の印・ドラッグの最中の位置の上書き・控えの別資源（`ChainRealignPending` に持たせた）。
+
+## Risks & Mitigations
+
+- 武装から解決までの数フレームでドラッグを始めて終えた窓は寄せ戻されうる — 現実には起きにくいので手当てせず、実機で見る（design の ChainRealign の注記）。
+- 画面をまたいだ直後、待ちの札で大きさの書き込みが見送られているあいだに落とすと、掴んだ点が落とした点から外れる — 待ちは数フレーム。実機の確かめ（8.7 ⑵）で見る。
+- `readonly-mode` と `persist/mod.rs` の文字の当たり — 意味は当たらない（向こうは書かない形への差し替えの口）。後に着地する側が取り込む。`format-version` は上げない。
+- 前の areka で開くと印の表が落ちる — 次にこの areka で起動したとき古い記憶の道（6.5）で印が書き足される。
