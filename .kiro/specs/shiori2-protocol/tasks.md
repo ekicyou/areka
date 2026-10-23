@@ -67,7 +67,7 @@
   - _Depends: 3.2, 4.1_
   - _Requirements: 2.1, 2.3, 2.4, 2.5, 2.6, 7.3, 7.4, 7.5_
 
-- [ ] 4.3 3.0 の回帰を確かめる
+- [x] 4.3 3.0 の回帰を確かめる
   - 通信の層・kanade・areka-ghost の決定論のテストを回し、全部緑であることを見る
   - 実物の pasta と中継で回る条件つきのテスト（`real_pasta_online`・`snapshot_capture_test`）を 1 回回し、確かめの 1 本が先に届いても記録する要求の並びが変わらないことを見る。変わるなら変更を確かめの分だけに限り、変えたテストの名前を控える
   - 完了の姿: 3 つのクレートのテストと条件つきの 2 本が緑で、その結果（回した命令と件数）を検証の記録の下書きに控えてある
@@ -108,3 +108,5 @@
 - `cargo clippy -p shiori-host32-host --all-targets` は触っていない `tests/lifecycle_kill_e2e.rs:332`・`tests/lifecycle_cyclic_e2e.rs:275,408` の `drop(client)` で赤（本 spec の前からの既存の問題・範囲外）。タスクの検査は `--lib --bins` で回す。
 - 4.1 で `ShioriConnection` の書き下しに `version: ShioriVersion::Shiori3` の 1 行を足したテスト: `crates/areka-kanade/tests/kanade/common/common_window_actor.rs`・`idle_pump_test.rs`・`real_helper_test.rs`（5.2 で verification.md に載せる）。`shiori_wiring.rs` にも同じ仮の 1 行を足した（4.2 で確かめた版に置き換える）。
 - `cargo clippy -p areka-kanade --lib --tests` は触っていない既存の行（`real.rs:331` の collapsible_if・`actor_raise_reply_tests.rs:98` の never_loop・type_complexity 4 件・結合テストの警告）で赤（本 spec の前から・範囲外）。差分の行に当たる指摘が無いことで見る。
+- 実物の pasta の条件つきテストは、`HOST32_PASTA_DLL` を emo2.nar から丸ごと取り出した `ghost\master` の中の `pasta.dll` に向ける（単体で取り出した DLL は不可）。snapshot の回の `TMP` を DLL の親のフォルダの中に置くと、写しの再帰が止まらずスタックが溢れる（命令は verification.md の 4.3 節）。
+- 範囲外（`/kiro-complete` の棚卸で起票）: 4.3 の机の 1 回目で `real_pasta_online` の LOAD が `LoadReturnedFalse { last_error: 203 }` で断られた（2 回目は緑）。確かめの往復より前の段で、本 spec の差分は届かない。完了 spec `areka-P0-emo2-real-run-stability` の件 2 の再発の初めての観測（pasta.log は写しごと消えて残っていない）。
