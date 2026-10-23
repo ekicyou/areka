@@ -1,9 +1,11 @@
-//! `get_property` の決定論テスト（2 本）。
+//! `get_property` の決定論テスト（4 本）。
 //!
 //! - 実行系が無い（空の World）: `NG:Property system is not available`（isError: true）で答え、
 //!   `event = "mcp_get_property_unavailable"` の `warn!` をちょうど 1 件残す（要件 3.1・3.3）。
 //! - 本物の実行系を 1 回だけ起こし、ゴースト自身の問い手・全体・別の問い手・空の値を載せてから
 //!   8 つの名前を聞く（値・空の値・無い名前・問い手の選び方・名前を手直ししない・要件 1.1〜1.4・2.1〜2.3）。
+//! - `mod scope_rect` の 2 本: 窓の矩形を MCP とゴーストの道が同じに答えること・`reload` の後も
+//!   新しい読み口で答えること（`mcp-scope-rect-property` の要件 3.4・6.3・6.6）。
 //!
 //! どちらも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える・
 //! 要件 4.2）。`ghost_name` はすべて省略（要件 4.8）。英字の大小違いの名前は
