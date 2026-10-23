@@ -39,7 +39,7 @@
 
 - 横書きの `highlight_band_extent`・`highlight_band_offset` とその呼び方（1 文字も変えない）。
 - `derive_hit_rows`・`highlight_rect`・`glyph_cells`・`to_window_physical` の足し算（符号つきの寄せを今のまま受けるので変えない）。
-- 列の位置・列送り・行の TextLayout の作り方（`layout.rs`・`draw_line_store.rs`・`draw.rs` の `DirectionRecipe`）。
+- 列の位置・列送り・行の TextLayout の作り方（`layout.rs`・`draw_line_store.rs`・`draw.rs` の `DirectionRecipe`）。ただし、大きさの違う列の字のインクそのものが重なると T1 で測れたときだけ、`layout.rs` の縦書きの列送りを本 spec で直す（設計の討議 議題 1）。
 - 当たりの判定（`crates/areka/src/input_events/balloon.rs` の `hit_choice_row` の半開区間）。
 - 帯が離れたときに消える決まり（完了 `areka-P0-choice-interact` の要件 1.3・本 spec の要件 3.3 は消し残しが無いことだけを持つ）。
 - `GlyphMetrics` の trait（`layout.rs`）。下の「行き止まり」のときだけ触る候補で、そのときは設計を直してから。
@@ -109,7 +109,7 @@ graph LR
 - `.kiro/specs/vertical-choice-hover-band/research.md` — 読み戻しの数と c の決め、6.7 の元の期待値と新しい期待値、6.4 の赤の確かめ、実機の確かめの記録。
 - `.kiro/specs/vertical-choice-hover-band/evidence/` — 実機の撮った物（6.5）。
 
-触らない: `layout.rs`・`draw_metrics.rs`・`layout_styled.rs`・`draw_line_store.rs`・`draw.rs`・`actor_present.rs`・`crates/areka/`。`draw_metrics.rs` と `layout.rs` は下の行き止まりの道でだけ候補になる。
+触らない: `layout.rs`・`draw_metrics.rs`・`layout_styled.rs`・`draw_line_store.rs`・`draw.rs`・`actor_present.rs`・`crates/areka/`。`draw_metrics.rs` と `layout.rs` は下の行き止まりの道でだけ候補になる（`layout.rs` は、大きさの違う列の字のインクが重なるときの列送りの直しも含む）。
 
 ## System Flows
 
@@ -272,7 +272,9 @@ fn expand_overhang_for_band(
 ### 行き止まり（設計を直す・開発者に知らせる所）
 
 - **c が決まらない**: 向きごとに測っても、0〜1 のどの値でも 2 書体・2 大きさ・2 拡大率の全部でインクを覆えない（書体ごとに合う c が違う）。向きで値が違うだけなら行き止まりではない（2 つの定数で済む）。→ 行の箱の比だけでは em の箱の置き場が決まらない。`GlyphMetrics` に既定の実装つきの口（縦書きの em の箱の左の置き場）を 1 つ足し、`DWriteMetrics` が測る形になる。`layout.rs`・`draw_metrics.rs` に届き C11 の約束の外になるので、その場で止めて設計を直し、開発者に知らせる。
-- **大きさの違う列が隣り合って帯が重なる**: P3 で重なりの量が 0 より大きい。→ 字の箱そのものが隣の列へ食い込んでいる（列の並べ方の持ち分）見込みで、1.1・1.6 と 1.4 を同時に満たせない。完了とせず、量を添えて開発者の決めを仰ぐ。
+- **大きさの違う列が隣り合って帯が重なる**（設計の討議 議題 1・2026-10-23 開発者「承認」）: 帯は自分の字を覆う方を先にする（1.6 が 1.4 より先）。T1 の読み戻しで、大きい字（`\f[height,40]`）の列と隣の em 20 の列の**字のインクそのもの**が重なるかを測り、結果で分ける。
+  - **字のインクが重なる** → 列の並べ方の崩れ。並走が無い（C11 のほかの 7 本は emo-text に触らない）ので、本 spec の境界を広げて根本を直す（`layout.rs` の縦書きの列送り）。直す前に、直し方（列送りに何を足すか）と触るファイルを設計に書き足し、開発者に知らせる。直した後、P3 で字のインクが重ならないことを見る。
+  - **字は重ならず帯だけが重なる** → 横書きの今の形（大きい行の帯が次の行へ食い込む）と同じとして受け入れる。要件 1.4 は同じ大きさの列どうしの決まりと読み、P3 は重なりの量を記録して固定する（当たりは `hit_choice_row` が 1 つだけ返すので 2.3 は守られる）。
 - **横倒しの欧文の字がはみ出す**: R の記録で "Ag" の列のインクが em の帯の外に出る。→ 4.2（SSP の形＝em）と 1.1 の食い違い。4.3 と同じく開発者の決めを仰ぐ（合否には入れない）。
 - **ぱすたの書体の名前が引けない**: `pasta_tategaki` の `font.name`（游ゴシック Medium）を areka の本番と同じ解決で引くと代替へ縮退する。→ 本番のぱすたも代替の書体で出ている＝本 spec の外の未対応。`/kiro-discovery` で起票し、R はその書体を除いた残り（Yu Gothic UI）で回す。開発者に知らせる。
 
@@ -297,7 +299,7 @@ fn expand_overhang_for_band(
 
 - **P1（2.1・6.2）** `choice_decorate_tests.rs`: 右から左・左から右で、`decorate_canvas` が焼いた `band_extent`／`band_offset` から組んだ帯と、`derive_hit_rows` の当たりの四角のブロック軸の範囲が数値まで同じ。右から左の寄せが負であることも見る。
 - **P2（1.4・2.3）** `choice_decorate_tests.rs`: 同じ大きさの隣り合う列（`LayoutEngine` で並べた物）の帯は重ならず、間は行間の分。境の点は半開区間でたかだか 1 列に当たる。
-- **P3（1.6）** `choice_decorate_tests.rs`: em 40 の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの量を測り、0 であることを見る（0 でなければ「行き止まり」）。
+- **P3（1.6）** `choice_decorate_tests.rs`: em 40 の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの量を数で固定する（字のインクが重なると T1 で分かり列送りを直した場合は、その後の値。扱いは「行き止まり」の 2 つ目＝設計の討議 議題 1）。
 - **P4（1.7）** `choice_anchor_tests.rs`: 縦書きのアンカー（`\_a`）の当たりの帯が、同じ字の範囲の選択肢の帯と同じ。
 
 ### 横書きを変えないこと（5.1〜5.3）
@@ -320,7 +322,7 @@ fn expand_overhang_for_band(
 
 ### 手順
 
-- **T1（最初のタスク・R1・R2）**: 式を変える前に R を書いて回し、インクの範囲と列の箱の数を `research.md` に残して c を決める。今の式では右から左の R が赤になること（崩れ 23 の再現）も記録する。
+- **T1（最初のタスク・R1・R2・R4）**: 式を変える前に R を書いて回し、インクの範囲と列の箱の数を `research.md` に残して c を決める。今の式では右から左の R が赤になること（崩れ 23 の再現）も記録する。あわせて、`\f[height,40]` の列と em 20 の列が隣り合うときに、字のインクそのものが重なるかを 2 つの向きで測り、記録する（設計の討議 議題 1 の分かれ目）。
 - **T6.4**: 直した後、縦書きの枝を横書きの式へ一時的に戻して R・P1 が赤になるのを 1 度確かめて記録し、戻す。
 - **RealRun（6.5・6.6）**: 開発者の許しを得て、ぱすたの縦書きのバルーン（新しい書庫か `doc/pasta-real-run.md` の入れ方）で `research.md` 9 節と同じ台本を出し、「雨だよ」と「晴れてる」に乗せて撮る。`evidence/` に置き、`ssp-choice-hover-amedayo.jpg`・`ssp-choice-hover-hareteru.jpg` と並べて開発者の目視の判定（同じ／違う）を受け、置き場と判定を `research.md` に残す。違うなら完了とせず、直すか開発者の決めを仰ぐ。
 
