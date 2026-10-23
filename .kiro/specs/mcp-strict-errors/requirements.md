@@ -49,7 +49,7 @@ areka には既に、同じ誤りを再生せずに見つける `check_script` �
 
 1. When `sakurascript` が `strict` 真の台本を受け付けたとき, the areka shall 答えの本文を `OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=<n>)`（SSP の実測と同じ文・`<n>` は 10 進の数）とし、`isError` を偽にする。
 2. The areka shall 1 の `<n>` を、その台本の strict の記録を 1 件も残す前の時点で最後に振られた通し番号（1 件も無ければ 0）とする。
-3. When 1 の答えを受け取った AI が `get_log` を `log_type=error`・`since_id=<n>` で呼んだとき, the areka shall その台本の strict の記録をすべて返す（その間に他の出どころが残した記録が混ざることはある）。
+3. When 1 の答えを受け取った AI が `get_log` を `log_type=error`・`since_id=<n>` で呼んだとき, the areka shall その台本の strict の記録をすべて返す（その間に他の出どころが残した記録が混ざることはある。エラーログの上限〔種別ごとに 1,000 件〕を超えた分は古い方から消える）。
 4. While `strict` が偽か省略のとき, the areka shall `sakurascript` の答えを今のまま（受け付けたら `OK`）にする。
 5. If `sakurascript` の台本が空・ゴーストが今は台本を受け付けない・宛先のゴーストが居ない・答えの前にゴーストが降りた, then the areka shall `strict` の値に関わらず今と同じ `NG:` の答えを返し、strict の記録を残さない。
 
@@ -94,7 +94,7 @@ areka には既に、同じ誤りを再生せずに見つける `check_script` �
 4. Where 宛先のゴーストが窓を持たない（表示の準備に失敗し、記録だけで動いている）とき, the areka shall 無い surface・無いバルーンの記録を出さず、ほかの種類だけを記録する。
 5. The areka shall `\e`・`\-` の後ろの誤りも記録する（再生はそこで止まるので後ろは再生されないが、`check_script` と同じく書いてある誤りを知らせる。アンカーの対応の崩れだけは後ろに出さない）。
 6. The areka shall 台本を受け付けた後に、再生が別の台本・利用者の操作・終了などで途中で打ち切られても、残した strict の記録を取り消さない。
-7. The `doc/ssp-mcp/areka-tools.md` shall 1〜6 の範囲と、SSP の strict（再生中に実際に起きた誤りを記録する）との違いを、strict の記録の約束として書く。
+7. The `doc/ssp-mcp/areka-tools.md` shall 1〜6 の範囲と、SSP の strict（再生中に実際に起きた誤りを記録する）との違いを、strict の記録の約束として書く。あわせて、同じ誤りが再生の側の記録（名は `[SYSTEM]`）としてもエラーログに出ることがあり、strict の記録だけを読むには `get_log` の `ghost_name` で絞ればよいことも書く。
 
 ### Requirement 5: 案内文の最後の 1 文を消す
 
@@ -126,7 +126,7 @@ areka には既に、同じ誤りを再生せずに見つける `check_script` �
 
 #### Acceptance Criteria
 
-1. The areka の決定論テスト shall `doc/ssp-mcp/areka-tools.md` の「⑶」の表の 17 行それぞれについて、その行の「出る台本」を `strict` 真で流すとその行の種類と文面の strict の記録が残り（赤の側）、「出ない台本」では残らない（緑の側）ことを確かめる。確かめは表の行ごとに 1 つずつ持ち、表の行数と確かめの数が食い違えば赤になる。
+1. The areka の決定論テスト shall `doc/ssp-mcp/areka-tools.md` の「⑶」の表の 17 行それぞれについて、その行の「出る台本」を `strict` 真で流すとその行の種類と文面の strict の記録が残り（赤の側）、「出ない台本」では残らない（緑の側）ことを確かめる。確かめは表の行ごとに 1 つずつ持ち、表の行数と確かめの数が食い違えば赤になる。種類の名前と文面は、テストが文書の表そのものを読んで比べる（要件 2.4 の「1 字も違わない」を、文面の定数の写しでなく文書と突き合わせて判定する）。
 2. The areka の決定論テスト shall 要件 2.6 の「`check_script` と同じ集まり」を、複数の誤りを含む台本で確かめる（種類・位置・綴り・文面・順）。
 3. The areka の決定論テスト shall 要件 1.1・1.2・1.4 の答えの文言と `<n>` の値、要件 1.3 の `since_id` での読み出し、要件 3.1・3.2 の「答えの前に記録が済んでいる」ことを確かめる。
 4. The areka の決定論テスト shall 要件 1.5・3.3・3.4 の「記録を残さない」場合それぞれで、エラーログに strict の記録が増えないことを確かめる。
