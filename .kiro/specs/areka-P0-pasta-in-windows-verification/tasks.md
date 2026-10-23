@@ -59,7 +59,7 @@
   - 終わった形: 7 段それぞれの撮った物と記録が `target\pasta-verify\shots\`・`logs\` に揃い、終了コードの控えが在り、机は返されている
   - _Depends: 2.1, 3.1, 3.2_
   - _Requirements: 3.4, 3.6, 3.7, 3.8, 3.9, 3.10, 4.1, 4.3, 4.4, 4.6, 4.9_
-- [ ] 4.2 補いの走りで縦書きの会話の段を回す
+- [x] 4.2 補いの走りで縦書きの会話の段を回す
   - 根の写しの `balloon\` にゴーストのフォルダの縦書きのバルーンを写した別の根で、段 1〜2 だけを回す（設計の話し合いで開発者が残すと決めた足し物）
   - 机・許可・起こし方・止め方は 4.1 と同じ決まりに従う
   - 終わった形: 段 1〜2 の撮った物が本走行と別の置き場に在り、検証の記録に「参考（代わりの置き方）」として、段の 3 値の数と分けて書かれている
@@ -137,3 +137,4 @@
 - 3.1 のレビューの宿題（8.1 の清書で手順へ戻す）: 机の命令の `<識別>`・`<リポジトリ>`（ここでは `areka-p0-pasta-windows-d4ed7a`・`areka`）を `git rev-parse` から求める 1 行に替え、`request` の前に `watch` を立てる旨を添える。段 1 の「SSP は `OnBoot`」は測りの記録 段 1 の値で置き換える。段 5 の SSP の基準の要点は 2.2 の後に埋める
 - 2.1: SSP は 2.9.23（手順・要件は 2.9.18）。このぱすたには `ssp_shiori_log.txt` が無く、起動イベントはぱすた自身の `ghost\master\profile\pasta\logs\pasta.log` で読む。測りのためにゴーストを替えて起こし直したので、SSP の最後のゴーストはぱすたのまま（前はクローディア）。8.1 で手順へ戻す
 - 4.1: 手順 4 節の `Start-Process` に `-WindowStyle Hidden` が無く、空のコンソールの窓がぱすたの手前に出た（4.2 の走りでも足し、8.1 で手順へ戻す）。areka の MCP の `get_property` は `currentghost.scope(n).rect`・`currentghost.balloon.scope(0).rect` に NG で答えるので、位置は撮影と記録の `bounds=` で読む
+- 4.2: 補いの走りの準備（手順 4 節）は使った後の根を写すので、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶 `ghost\master\profile\` まで写り、起動が `OnBoot`・バルーンが記憶の `StayseeBalloon` になった（alt1）。写した記憶を消して回し直した alt2 で `OnFirstBoot`・`route=Descript` になった。8.1 で準備の塊に「写した根の `ghost\pasta-in-windows\ghost\master\profile` を消す」1 行を足す（書庫に profile は無い）

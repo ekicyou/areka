@@ -75,6 +75,44 @@ sync exit=0
 
 - 3 節: 拡大率を「Windows の設定の『ディスプレイ』で読む」から、命令で読む形（`GetDpiForMonitor` の DPI を 96 で割る）に替えた。設定の画面を開かずに、回す者が命令だけで記録に書けるようにするため。拡大率の違う画面が無いときは走らせる前に「段 5 は回していない」と書く旨も足した。
 
+## 4. 走行
+
+### 参考（代わりの置き方）
+
+本走行の後に回した「補いの走り」の結果（タスク 4.2・要件 4.2）。根の写しの `balloon\` に、ゴーストのフォルダの中の縦書きのバルーン `ghost\pasta-in-windows\pasta_tategaki` を写した別の根（`<w>\target\pasta-verify-alt\root`）で、段 1〜2 だけを回した。ぱすたの本来の置き方（ゴーストのフォルダの中のバルーン）ではないので、ここの結果は段の 3 値（同じ／違う／回せなかった）の数に入れない。目視で決める項目（列と枠の並び・重なりの順）は、開発者の判定は 4.3 で書く。ここは事実だけ。
+
+回したのは 2 回（alt1 と alt2）。alt1 は縦書きのバルーンで起動しなかったので、準備を 1 つ替えて alt2 で回し直した。設計の「1 回だけ」に当たる補いの走りは alt2 である。alt1 は、写したゴーストの記憶のために狙った起動（縦書きのバルーンでの `OnFirstBoot`）にならなかったので、補いの走りとして数えない。どちらも `Start-Process` に `-WindowStyle Hidden` を足した（空のコンソールの窓を出さないため。ぱすたの窓とバルーンは普通に出た）。`RUST_LOG` は 3 節の値のまま。
+
+#### alt1（2026-10-23 08:29:26〜08:39:16）
+
+- pid 32956・終了コード 0（`logs\alt1.pid.txt`・`logs\alt1.exitcode.txt`）。起こし直しなし。
+- 縦書きのバルーンで起動しなかった訳: 準備で記憶の置き場 `$v\profile` は空にしたが、ゴーストの記憶は根の中の `root\ghost\pasta-in-windows\ghost\master\profile\areka\sylphya.toml` に在り、本走行（run1）の終わりの値（`[last] balloon = "StayseeBalloon"`・`[window.0] x=-1725 y=194`・`[boot] count=1`）ごと写されていた。取り寄せた書庫には `profile` のフォルダは無い（run1 が作った物）。そのため起動は `OnBoot`（`OnFirstBoot` でない）、バルーンは `balloon_resolved route=Memory` で `StayseeBalloon` に決まり、根の `balloon\pasta_tategaki` は選ばれなかった。ぱすたの記録 `pasta.log` も run1 の分ごと写っていた（`logs\alt1.pasta.log` の alt1 の分は 08:29 以降）。
+- 段 2 の途中で、右クリックメニューの「バルーン → 窓際のぱすたさん縦書き」で替え（`skin_switch_requested kind=Balloon to=pasta_tategaki origin=Menu` → `skin_switch_done`）、段 2 を縦書きのバルーンで回し直した（撮った物 `shots\alt1\2b-*`・`2d-*`）。本文と選択肢・2 ページの縦書き試作の列は重ならずに並んだ。中身は alt2 と同じ形なので、下の alt2 にまとめる。
+- 数（`logs\alt1.stdout.log` 8835 行）: panic 0・致命 0・ERROR 0・WARN 137（seriko 128・`areka_emo_present::balloon` の縮退 6・`areka_emo_atlas` 3）。
+
+#### alt2（2026-10-23 08:42:31〜08:46:48）
+
+- 準備で 1 つ替えた: 写した根のゴーストの記憶 `$v\root\ghost\pasta-in-windows\ghost\master\profile` を、起動の前に消した。`-WindowStyle Hidden` は alt1 と同じ。
+- pid 15924・終了コード 0（`logs\alt2.pid.txt` `areka pid=15924 start=2026-10-23T08:42:31`・`logs\alt2.exitcode.txt` `areka exit=0 end=2026-10-23T08:46:48`）。起こし直しなし。終わりは × が効かず、右クリックメニューの「終了」で終えた（`OnClose` → `unload_clean` → `app_exit closed=4` → `session_mark_cleared`）。
+- 起動の決め方: `ghost_resolved route=Pointed`・`balloon_resolved route=Descript dir=...\root\balloon\pasta_tategaki`。起動のイベントは `OnFirstBoot`。`descript_balloon_not_found` の行は 0。ぱすたの窓は既定の位置 (0,864)。
+- 数（`logs\alt2.stdout.log` 3989 行・`alt2.stderr.log` 1 行）: panic 0・致命 0・ERROR 0・WARN 100（seriko の `mustselect カテゴリの脱衣指示を無視` 96・`areka_emo_atlas` 4〔全透明の `pasta/null.png` 2・縦書きのバルーンの全透明の `balloonk0.png`（set=0・436x450）2〕）。`areka_emo_present::balloon` の縮退（`面がデフォルト定義側…`）の WARN と `boot_resolve` の WARN は 0。標準エラーは `[helper] SHIORI 初期化の入口: loadu` の 1 行。
+
+段 1（起動）:
+
+- 台詞が縦書きのバルーンの縦の列に出た。右の枠に「‥‥、も‥‥しもーし？」「あれ、映ってない？」「ね、そこのボール叩いてくださいな。」、`\_l[-283,0]` の後の左の枠に「えっと、そこで」「フワフワしてるボール。」。列どうし・2 つの枠どうしは重ならない（`1-boot-primary-full.png`・`1-boot-balloon0.png`）。
+- ぱすた（`\0`）の × の印の板が、右の枠の 1 列目の上端に重なり、字の一部が隠れた。見た目の前後は、ぱすた（× の板）が手前・バルーンが奥（`1-boot-primary-full.png`・`2-choice-zorder.png`・`2b-after-choice.png`）。
+- 窓の枠（`\1`・面 10）は、ぱすたの居る主画面でなく副画面の右寄りに別に出た（`1-boot-surface1.png`・`1-boot-second-full.png`。run1 と同じ）。そのため、窓（奥）→ バルーン → ぱすた（手前）の 3 つの並び全体は見えなかった。
+
+段 2（縦書きの会話）:
+
+- `選択肢テスト`: 本文が右の枠に縦の 2 列、`\_l[-253,0]` の後の選択肢 4 つが左の枠に縦の列で右から 晴れてる・雨だよ・曇ってる・ないしょ と並び、重ならない（`2-choice-zorder.png`）。`\![*]` の印は見えない。
+- 選択の待ちは、表示の終わりから 30 秒で `OnChoiceTimeout` になる。1 回目はクリックが 4 秒遅れて時間切れになった。2 回目は「雨だよ」の列が反転し（`2b-choice-hover.png`）、クリックで `choice_selected id=雨だよ` → `OnChoiceSelectEx` →「そういえば薄暗いような？」が右の枠に縦の 1 列で出た（`2b-after-choice.png`）。
+- `縦書き試作`: 1 ページ目・`\c` の後の 2 ページ目とも、右の枠と左の枠（`\_l[-283,0]` の後）の列が重ならずに並んだ（`2-tategaki-burst-01..10.png`・`2-tategaki-balloon0-end.png`）。どのページでも、右の枠の 1 列目の上端に × の板が重なった。
+
+置き場: 記録は `<w>\target\pasta-verify-alt\logs\alt1.*`・`alt2.*`、撮った物と控えは `<w>\target\pasta-verify-alt\shots\alt1\`・`shots\alt2\`（それぞれ `notes.md`）。
+
+手順の穴: 手順書（`doc/pasta-real-run.md`）4 節の補いの走りの準備は、本走行の根を写すときにゴーストの記憶（`ghost\master\profile\`）も一緒に写し、消していない。このため alt1 は前の走行の記憶で起動した。手順書の直しはタスク 8.1 で行う。
+
 ## 7. α の決まり
 
 ukadoc が書いていない所（絵の薄い画素の当たり）についての areka の決め。コードは変えていない。
