@@ -266,6 +266,77 @@ fn os_window_rect_invalid_handle_is_none_and_restores_dpi_context() {
     assert!(unsafe { AreDpiAwarenessContextsEqual(before, after) }.as_bool());
 }
 
+/// 実の窓 1 枚の矩形を、DPI 非対応のスレッドから呼んでも物理の画素で返し、
+/// 呼んだスレッドの扱いを非対応へ戻す（要件 1.3・1.6・8.5）。拡大率 100% より大きい画面が要る。
+#[test]
+#[ignore = "real window: needs a monitor scaled above 100%"]
+fn os_window_rect_real_window_answers_physical_pixels_from_unaware_thread() {
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::HiDpi::{
+        AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        DPI_AWARENESS_CONTEXT_UNAWARE, GetDpiForWindow, GetThreadDpiAwarenessContext,
+        SetThreadDpiAwarenessContext,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos,
+        WINDOW_EX_STYLE, WS_POPUP,
+    };
+    use windows::core::w;
+
+    // 奇数の位置と大きさ（拡大率で割ると端数になり、論理の数なら一致しない）。
+    let placed = rect_of(201, 151, 321, 187);
+    // SAFETY: Win32 境界。テストのスレッドで自分の窓を作り、置き、読み、壊す。
+    unsafe {
+        // マニフェストの無いテストの実行ファイルは非対応で走るので、窓を作る前に v2 にする。
+        let original = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
+        let hwnd = CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("Static"),
+            w!("scope-rect-real-window"),
+            WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
+        )
+        .expect("CreateWindowExW");
+        SetWindowPos(
+            hwnd,
+            None,
+            placed.left,
+            placed.top,
+            placed.right - placed.left,
+            placed.bottom - placed.top,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        )
+        .expect("SetWindowPos");
+        let dpi = GetDpiForWindow(hwnd);
+
+        SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
+        let answer = os_window_rect(WindowKey(hwnd.0 as isize));
+        let after = GetThreadDpiAwarenessContext();
+        let still_unaware = AreDpiAwarenessContextsEqual(after, DPI_AWARENESS_CONTEXT_UNAWARE);
+
+        let _ = DestroyWindow(hwnd);
+        SetThreadDpiAwarenessContext(original);
+
+        assert_ne!(
+            dpi, 96,
+            "拡大率 100% より大きい画面が要る（窓の DPI が 96）"
+        );
+        assert_eq!(answer, Some(placed));
+        assert!(
+            still_unaware.as_bool(),
+            "読み取りがスレッドの扱いを戻さなかった"
+        );
+    }
+}
+
 // ---- 表の出し方（結線と系）----
 
 mod wiring {
