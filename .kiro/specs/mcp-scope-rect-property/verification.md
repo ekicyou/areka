@@ -1,4 +1,4 @@
-# 実機の確かめの記録（タスク 4.3・要件 9.1〜9.3）
+# 実機の確かめの記録（タスク 4.3・要件 9.1〜9.3・8.5）
 
 窓際のぱすたさんを areka で起こし、手順書 `doc/pasta-real-run.md` の段 1（起動）・段 4（同じ画面でのドラッグ）・段 5（拡大率の違う画面への移動）で、MCP の `get_property` に窓の位置を聞いた。答えを、areka の記録の `bounds=` の行と、OS から別に読んだ窓の矩形と比べ、SSP の基準と並べた。
 
@@ -96,7 +96,7 @@ SSP の基準は requirements.md の Introduction の表（`ssp-measurement.md` 
 
 | 対象（モジュール） | 行数 | 中身 |
 |---|---|---|
-| `areka_seriko::actor` | 80 | `mustselect` のカテゴリへの脱衣の指示を正典どおり無視した（目 30・口 25・う… 15・眉 10）。ぱすたのシェルの着せ替えの定義から出る |
+| `areka_seriko::actor` | 80 | `mustselect` のカテゴリへの脱衣の指示を正典どおり無視した（目 30・口 25・うで 15・眉 10）。ぱすたのシェルの着せ替えの定義から出る |
 | `areka_emo_present::balloon` | 6 | バルーンの面が既定の定義の側の系列へ縮退した |
 | `areka_emo_atlas` | 2 | element が全透明で、切り詰めた後の大きさが小さい（ゴーストの作り手の誤りの見込み） |
 | `areka::boot_resolve` | 1 | ゴーストの `descript.txt` が指すバルーンが見つからない（ぱすたの書庫の `install.txt` の件・手順書の段 1 の欄） |
@@ -117,8 +117,25 @@ SSP の基準は requirements.md の Introduction の表（`ssp-measurement.md` 
 - `shots\run1\5-after-move.png`・`5-winrects.txt`（段 5）
 - `logs\run1.stdout.log`・`run1.stderr.log`・`run1.pid.txt`（`areka pid=11820`）・`run1.exitcode.txt`（`areka exit=0`）
 
-## 9. まとめ
+## 9. 実の窓の試験（要件 8.5）
+
+普段は飛ばす（`#[ignore]`）実の窓の試験を、2 回とも進行役が持った排他テストの机の下で回した。コマンドはどちらも同じ:
+
+```
+cargo test -p areka --bin areka -- --ignored ghost_session::ghost_session_scope_rect::tests::os_window_rect_real_window_answers_physical_pixels_from_unaware_thread --exact
+```
+
+| 日時 | 時点 | 結果 |
+|---|---|---|
+| 2026-10-23 | タスク 2.5 | 1 passed・0 failed（0.02 秒） |
+| 2026-10-23 | 機能の確かめ（コミット `c2460ff1`） | 1 passed・0 failed（0.01 秒） |
+
+- 機械は主の画面 DISPLAY1 が 200%（dpi 192）。100% を超える画面でしか意味の無い試験なので、その前提を満たしている。
+- 緑の意味: 物理の画素で (201,151)-(522,338) に置いた `WS_POPUP` の窓を、DPI に追従しないスレッドから `os_window_rect` で読むと、ちょうどその物理の画素が返る。呼んだ後、そのスレッドの DPI の扱いは追従しない形に戻っている。
+
+## 10. まとめ
 
 - 要件 9.1: 机を持って起こし、終わった後すぐ返した。
 - 要件 9.2: 段 1・4・5 のどれでも、`currentghost.scope(0).rect`・`currentghost.scope(1).rect`・`currentghost.balloon.scope(0).rect` が答え、その値は OS の窓の矩形と同じで、記録の `bounds=` と `sticky_follow` の行とも合った。`scope(2)` は `0,0,0,0`、`balloon.scope(2)` は `NG`。
 - 要件 9.3: 数の形・座標の系・無いときの答えは SSP と同じ。大きさの違いは拡大率への追従の方針によるもの。位置の違いは起動の種類とドラッグの量の違いによるもの。
+- 要件 8.5: 実の窓の試験は 2 回とも緑（9 節）。
