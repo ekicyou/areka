@@ -1,14 +1,15 @@
 # ぱすたの実機の手順（何度でも回せる形）
 
-ゴースト「窓際のぱすたさん」（以下ぱすた）を areka で起こし、使い方の流れを 7 段で回して、段ごとに SSP 2.9.18 での動きと比べる手順。この文書だけで、準備から片付けまでを辿れるように書く。
+ゴースト「窓際のぱすたさん」（以下ぱすた）を areka で起こし、使い方の流れを 7 段で回して、段ごとに SSP での動きと比べる手順。SSP の基準は、測りの記録（`ssp-measurement.md` の 1 節）に書いた版で測った値とする（初回の測りは 2026-10-23 の SSP 2.9.23。要件は 2.9.18 と書いていたが、開発者の機械の SSP が上がっていた）。この文書だけで、準備から片付けまでを辿れるように書く。
 
 - 初版: 2026-10-22（spec `areka-P0-pasta-in-windows-verification` の最初の走行のために書いた）。
+- 清書: 2026-10-23（同じ spec のタスク 8.1。最初の走行 run1・補いの走り alt1・alt2・直しの後の回し直し rerun1 で分かった命令の直しを戻した）。
 - 命令はすべて PowerShell 7（`pwsh`）で打つ。Git Bash では打たない（i686 のリンクが落ちる）。
 - 命令の中のパスはすべて絶対パスで、先頭の 1 行 `$w = ...` だけを替えれば、どのフォルダから打っても同じに動く。
 
 ## 1. 何を確かめる手順か
 
-- ぱすたが areka で「SSP 2.9.18 と同じレベル」で動くかを、7 段（下の 5 節の表）で確かめる。段ごとに、SSP での動き（基準）と areka の結果を並べ、「同じ」「違う」「回せなかった」のどれかを書く。
+- ぱすたが areka で「SSP と同じレベル」で動くかを、7 段（下の 5 節の表）で確かめる。段ごとに、SSP での動き（基準）と areka の結果を並べ、「同じ」「違う」「回せなかった」のどれかを書く。
 - 崩れる見込みの所の多くは、まだ着地していない兄弟の spec が引き取っている。表の「今の引き取る spec」の欄の spec が着地するたびに、その段の結果が変わるはずである。
 - 「SSP と同じレベル」の最後の確かめは、兄弟の spec がすべて着地した後に、この手順をもう一度回して行う（v0.1.0 の版の門の最後の確かめ）。そのための別の spec は起こさない。
 - 書庫の版は固定しない。毎回取り寄せから始め、いつも最新のぱすたで回す。回した書庫は `.sha256` の値で記録に書く。
@@ -18,22 +19,24 @@
 | もの | なぜ | 揃わないとき |
 |---|---|---|
 | 拡大率の違う 2 つの画面（例: 200% と 150%） | 段 5（拡大率の違う画面への移動） | 段 5 を「回していない」と書く。合格にしない |
-| SSP のぱすたを閉じてあること | ぱすたはデバッグの待受（127.0.0.1:9276）を開くので、SSP と areka で同時に起こすとぶつかる。起こすのは areka の 1 つのプロセスだけ | 開発者に SSP のぱすたを閉じてもらってから起こす |
+| ぱすたのデバッグの待受がぶつからないこと | 開発者の PC には利用者の環境変数 `PASTA_DEBUG=1`・`PASTA_DEBUG_PORT=9276` が在り、ぱすたで作ったゴーストはどれも 127.0.0.1:9276 で待ち受けようとする（配られた `pasta.toml` だけなら待受は開かない。2026-10-23「ぱすた開発」の答え）。4 節の起動の塊は、その PowerShell の中だけで `PASTA_DEBUG` を消し、areka のぱすたに待ち受けさせない。**未確認：次の走行で 9276 を取り合わないことを確かめる**（4 節の確かめの命令） | 確かめが済むまでは、開発者に SSP のぱすたを閉じてもらってから起こす（起こすのは areka の 1 つのプロセスだけ） |
 | 開発者の SendInput の許可 | areka の窓はクリックが透けるので、撫で・クリック・ドラッグ・右クリックは OS の入力の送り込みで行う。許可はその走行のあいだだけ | 操作の段を回さない |
 | 排他テストの机 | 画面を操作するので、ほかのセッションの実機の窓・負荷の走行と同じ時間に回さない。走行の区切りの中だけ持ち、終わったらすぐ返す | 机が取れるまで待つ |
 | このセッションから areka の MCP が使えること | 段ごとの面・バルーン・記録を撮る（`tools/mcp-bridge-install.ps1` で中継を入れてある） | 画面の撮影（`shot`）だけで残し、その旨を記録に書く |
 
-排他テストの机の取り方と返し方は `doc/impl-watch.md` の 4 節（呼び方の約束）に従う。取るのは次の形（`<識別>` は回すセッションの識別。`--wait` つきはバックグラウンドで打つ）。
+排他テストの机の取り方と返し方は `doc/impl-watch.md` の 4 節（呼び方の約束）に従う。識別（作業木の最上位のフォルダの名前）とリポジトリ（共通の git フォルダ `.git` の親の名前）は、3 節の準備の塊を貼った同じ PowerShell（先頭の `$w` を使う）で、下の 1 行目で求める。準備（取り寄せとビルド）は机が要らないので、机は 4 節の起動の前に取ればよい。`request` の前に、回すセッションの `watch` が立っていること（立っていなければ先に立てる）。`watch` と `--wait` つきはバックグラウンドで打つ。別の呼び出しで打つときは、`$id`・`$repo` を 1 行目が出した値に字のまま替える。
 
 ```powershell
-& "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" request --id <識別> --repo <リポジトリ> --desk test --purpose "ぱすたの実機の手順" --wait
+$id = Split-Path -Leaf (git -C $w rev-parse --show-toplevel); $repo = Split-Path -Leaf (Split-Path -Parent (git -C $w rev-parse --path-format=absolute --git-common-dir)); "desk: id=$id repo=$repo"
+& "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" watch --id $id --repo $repo   # 立っていないときだけ・バックグラウンド
+& "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" request --id $id --repo $repo --desk test --purpose "ぱすたの実機の手順" --wait   # バックグラウンド
 ```
 
 目視の判定（重なりの順・見た目が同じか）は開発者が決める。AI は記録と撮った物を作るだけで、目視の項目を単独で「同じ」にしない。
 
 ## 3. 準備の命令
 
-取り寄せ → 検体を開く → 根を組む → debug 版と i686 の補助 → 記憶を空に、の順。下の塊をそのまま 1 つの PowerShell に貼る。替えるのは先頭の 1 行だけ。走行ごとに回し直す（根と記憶を作り直すので、何度回しても同じ条件になる）。
+取り寄せ → 検体を開く → 根を組む → debug 版と i686 の補助 → 記憶を空に、の順。下の塊をそのまま 1 つの PowerShell に貼る。替えるのは先頭の 1 行だけ。走行ごとに回し直す（根と記憶を作り直すので、何度回しても同じ条件になる）。根はいつも置き場の展開（`target\nar-samples\manual\` の下）から組み直すので、前の走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\pasta-in-windows\ghost\master\profile\`）は残らない（取り寄せた書庫に `profile` のフォルダは無い）。
 
 ```powershell
 $w = 'C:\home\maz\git\areka'   # ここだけ、回すワークツリーの絶対パスに替える
@@ -108,7 +111,7 @@ pwsh -NoProfile -Command {
 
 ## 4. 起動の命令
 
-SSP のぱすたが閉じていること・SendInput の許可・排他テストの机を確かめてから打つ。準備と同じ PowerShell で打つ（`$w`・`$v` を使う）。`$run` は回ごとの名前（`run1`・`run2` …）。
+2 節の前に要るもの（ぱすたの待受・SendInput の許可・排他テストの机）を確かめてから打つ。準備と同じ PowerShell で打つ（`$w`・`$v` を使う）。`$run` は回ごとの名前（`run1`・`run2` …）。
 
 この塊は areka が終わるまで戻らない（終わりを待って終了コードを書き出すため）。AI が回すときはバックグラウンドの呼び出しで打ち、段の操作は別の呼び出しで行う。
 
@@ -116,12 +119,13 @@ SSP のぱすたが閉じていること・SendInput の許可・排他テスト
 $run = 'run1'
 $null = New-Item -ItemType Directory -Force -Path "$v\logs", "$v\shots\$run"
 Remove-Item Env:AREKA_NO_ALERT, Env:AREKA_USER_ROOT -ErrorAction SilentlyContinue
+Remove-Item Env:PASTA_DEBUG -ErrorAction SilentlyContinue   # ぱすたのデバッグの待受を開かせない（2 節）
 $env:AREKA_ROOT = "$v\root"
 $env:AREKA_PROFILE_DIR = "$v\profile"
 $env:RUST_LOG = 'info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug'
 $env:AREKA_APP_SMOKE_EXIT_MS = '3600000'
 $env:NO_COLOR = '1'
-$p = Start-Process -FilePath "$w\target\debug\areka.exe" -ArgumentList @('--ghost', "`"$v\root\ghost\pasta-in-windows`"") -WorkingDirectory $v -RedirectStandardOutput "$v\logs\$run.stdout.log" -RedirectStandardError "$v\logs\$run.stderr.log" -PassThru
+$p = Start-Process -FilePath "$w\target\debug\areka.exe" -ArgumentList @('--ghost', "`"$v\root\ghost\pasta-in-windows`"") -WorkingDirectory $v -WindowStyle Hidden -RedirectStandardOutput "$v\logs\$run.stdout.log" -RedirectStandardError "$v\logs\$run.stderr.log" -PassThru
 "areka pid=$($p.Id)" | Tee-Object -FilePath "$v\logs\$run.pid.txt"
 $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$run.exitcode.txt"
 ```
@@ -136,14 +140,24 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 | `AREKA_APP_SMOKE_EXIT_MS` | `3600000`（60 分） | 安全弁。7 段の所要（30〜45 分の見込み）より長く |
 | `NO_COLOR` | `1` | 記録を色の制御文字の無い平文にする |
 | `AREKA_NO_ALERT`・`AREKA_USER_ROOT` | 消す | 本物の利用者の置き場（`%LOCALAPPDATA%\areka`）に触らない |
+| `PASTA_DEBUG` | 消す（その PowerShell の中だけ） | areka のぱすたにデバッグの待受（127.0.0.1:9276）を開かせず、SSP のぱすたとぶつからないようにする（2 節） |
 
 - ゴーストは `--ghost` に絶対パスで渡して直に起こす。メニューからのインストールは通さない（7 段にインストールは無く、インストールの記録が段の判定に混ざらないように）。
+- `Start-Process` の `-WindowStyle Hidden` は、areka.exe の空のコンソールの窓を出さないため（run1 では、この窓がぱすたの手前に開いて覆った）。
 - `areka pid=` の番号を控える。外から止めるのは、この番号のプロセスだけ（7 節）。
 - areka が途中で止まったら、止まった時刻と記録の最後の行を控え、`$run` を `run1b` のように替えて起動の命令を打ち直し、次の段から続ける（記憶は空にしない。起こし直したことも記録に書く）。
+
+起動の後、最初の台詞が出たら、別の PowerShell で 9276 の待受の持ち主を読む（2 節の「未確認」の確かめ。確かめが済んだらこの塊と 2 節の「未確認」を消す）。行が出ないか、出た行がどれも areka の側のプロセス（`areka.exe`・`shiori-host32-helper.exe`）でなければ、取り合っていない。
+
+```powershell
+Get-NetTCPConnection -LocalPort 9276 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { 'listen 9276 pid={0} path={1}' -f $_.OwningProcess, (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Path }
+```
 
 ### 補いの走り（`ghost-inner-balloon` の着地まで・任意）
 
 `ghost-inner-balloon` が着地するまで、areka はゴーストのフォルダの中の縦書きのバルーンを名前で見つけられず、配布物の既定のバルーンで話す。縦書きのバルーンでしか見えない崩れ（列と枠の並び・縦書きの選択肢）を早く見るため、本走行の後に、縦書きのバルーンを根の `balloon\` に写した別の根で段 1〜2 だけを回してよい。結果は「参考（代わりの置き方）」として、段の 3 値の数と分けて書く。着地の後は要らない。
+
+本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶の `StayseeBalloon` になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
 
 ```powershell
 $v = "$w\target\pasta-verify-alt"   # 置き場を本走行と分ける
@@ -151,6 +165,7 @@ Remove-Item -LiteralPath "$v\root", "$v\profile" -Recurse -Force -ErrorAction Si
 $null = New-Item -ItemType Directory -Force -Path "$v\profile", "$v\logs", "$v\shots"
 Copy-Item -LiteralPath "$w\target\pasta-verify\root" -Destination "$v\root" -Recurse
 Copy-Item -LiteralPath "$v\root\ghost\pasta-in-windows\pasta_tategaki" -Destination "$v\root\balloon\pasta_tategaki" -Recurse
+Remove-Item -LiteralPath "$v\root\ghost\pasta-in-windows\ghost\master\profile" -Recurse -Force -ErrorAction SilentlyContinue   # 本走行が作ったゴーストの記憶を写さない
 ```
 
 この後、同じ PowerShell で起動の命令を `$run = 'alt1'` にして打つ。
@@ -159,22 +174,35 @@ Copy-Item -LiteralPath "$v\root\ghost\pasta-in-windows\pasta_tategaki" -Destinat
 
 段はこの順で回す。1 つの段が兄弟の spec の持ち分の崩れで回せないときは「回せなかった」と書いて次の段へ進む（1 つの崩れで走行全体を止めない）。
 
-SSP の基準の欄は、SSP 2.9.18 での動きの要点。根拠（台本の原文・面の写し・撮った物）は測りの記録 `.kiro/specs/areka-P0-pasta-in-windows-verification/ssp-measurement.md` の「全体の通しの基準」の段の番号の項目にある。
+SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.23）。根拠（台本の原文・面の写し・撮った物）は測りの記録 `.kiro/specs/areka-P0-pasta-in-windows-verification/ssp-measurement.md` の「全体の通しの基準」の段の番号の項目にある。
 
 | 段 | 操作 | 撮る物 | SSP の基準 | 今の引き取る spec | その着地で変わるはずの所 |
 |---|---|---|---|---|---|
-| 1 起動 | 起動の命令で起こし、最初の台詞が出終わるまで待つ | 画面の `shot`（重なりの順）・`dump_surface`（`\0` と `\1`）・`dump_balloon`・`get_log` | ぱすたが着せ替えの面 1000 で立ち、奥に窓の枠（`\1` の面 10）が別の窓で重なり、ゴーストのフォルダの中の縦書きのバルーンで台詞が出る。重なりは窓（奥）→ バルーン → ぱすた（手前）。SSP は記憶のある起動なので `OnBoot`、areka は空の記憶で `OnFirstBoot`（台詞の文の違いは起動イベントの違いとして分けて書く）（測りの記録 段 1） | `ghost-inner-balloon`（縦書きのバルーンを名前で見つける）・`descript-window-keys`（`sakura.seriko.defaultsurface`・`balloon.dontmove`）・`window-link-directives`（`seriko.sticky-window`）・`stay-on-top-directives`（`\1\v`）。重なりの指定は完了 `zorder-scope-inversion`（着地した結果として確かめる） | バルーンが既定のバルーンから縦書きのバルーンに替わる。最初の面が 1000 になる。窓の枠がぱすたに重なって付く。窓の枠が奥へ回る |
-| 2 縦書きの会話 | 台詞の中の選択肢を 1 つ選び、選んだ後の会話が終わるまで待つ | 画面の `shot`（重なりの順・列と枠の並び）・`dump_balloon`・`get_log` | 縦書きのバルーンに、`\_l[x,y]` で並べた列と枠が崩れずに並び、選択肢が出て、選ぶと続きの会話が出る。重なりは段 1 と同じ（測りの記録 段 2） | `ghost-inner-balloon`（縦書きのバルーン）・`script-small-tags`（`\_u[0x3000]`・`\![bind-noevent]`・選択肢の前の `\![*]`） | 会話が縦書きで出る。全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く |
+| 1 起動 | 起動の命令で起こし、最初の台詞が出終わるまで待つ | 画面の `shot`（重なりの順）・`dump_surface`（`\0` と `\1`）・`dump_balloon`・`get_log` | ぱすたが着せ替えの面 1000 で立ち、奥に窓の枠（`\1` の面 10）が別の窓で重なり、ゴーストのフォルダの中の縦書きのバルーンで台詞が出る。重なりは窓（奥）→ バルーン → ぱすた（手前）。SSP の基準は、ゴーストをぱすたへ替えて SSP を起こし直した起動で測ったので `OnBoot`（2026-10-23 07:59:49 に測った。台本の頭は `\0\s[1000]\1\s[10]`）。areka は空の記憶で `OnFirstBoot`（台詞の文の違いは起動イベントの違いとして分けて書く）（測りの記録 段 1） | `ghost-inner-balloon`（縦書きのバルーンを名前で見つける）・`descript-window-keys`（`sakura.seriko.defaultsurface`・`balloon.dontmove`）・`window-link-directives`（`seriko.sticky-window`）・`stay-on-top-directives`（`\1\v`・`\![set,windowstate,!stayontop]`）・`script-small-tags`（`\_u[0x3000]`）・`mouse-click-wheel-events`（初回の台本がボールのクリックを待つので、身体が映らない）・`mcp-scope-rect-property`（位置を `get_property` で読む）・`animated-surface-log-flood`（記録が `apply(ShowSurface)` の行で埋もれる）。重なりの指定は完了 `zorder-scope-inversion`（着地した結果として確かめる）。起動の並べ直しで窓の枠が別の画面へ送られた件は本 spec で直した（コミット `97186487`） | バルーンが既定のバルーンから縦書きのバルーンに替わる。最初の面が 1000 になる。ぱすたの窓が画面の下端を越えない。窓の枠がぱすたに重なって付く。窓の枠が奥へ回る。ボールのクリックで身体が映る。位置を `get_property` で読める |
+| 2 縦書きの会話 | `raise_event` で `選択肢テスト` を起こし、出た選択肢を 1 つ選び、選んだ後の会話が終わるまで待つ（30 秒の時間切れに注意・表の下の注） | 画面の `shot`（重なりの順・列と枠の並び）・`dump_balloon`・`get_log` | 縦書きのバルーンに、`\_l[x,y]` で並べた列と枠が崩れずに並び、選択肢が出て、選ぶと続きの会話が出る。重なりは段 1 と同じ（測りの記録 段 2） | `ghost-inner-balloon`（縦書きのバルーン）・`script-small-tags`（`\_u[0x3000]`・`\![bind-noevent]`・選択肢の前の `\![*]`） | 会話が縦書きで出る。全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く |
 | 3 撫で・× に乗る・ボール | ぱすたを `move` で少しずつ撫でる。× の印の上に乗せる。ボールを `click` | 撫での前後と × に乗ったときの `shot`・`dump_surface`・`get_log`（`OnMouseMove`・`OnMouseEnter`・`OnMouseClick` の届き） | 撫でると反応の台詞が出る。× の印に乗ると × が赤くなる。ボールを押すとボールのトークが出る。当たり判定ごとにマウスの形が替わる（測りの記録 段 3） | `mouse-click-wheel-events`（`OnMouseClick`・`OnMouseEnter`／`OnMouseLeave`）・`shell-mouse-cursor`（`sakura.cursor` ブレス） | × が赤くなる。ボールのトークが出る。マウスの形が替わる |
-| 4 2 つの窓を一緒にドラッグ | ぱすたを `drag` で同じ画面の中で動かして離す | ドラッグの前・後の `shot`・`get_log` | ぱすたと窓の枠が離れずに一緒に動き、落とした後も重なった形に付き直る（測りの記録 段 4） | `window-link-directives`（`seriko.sticky-window`・`--option=ignore-sticky-window`） | 窓の枠がぱすたについて動き、落とした後に付き直る |
-| 5 拡大率の違う画面への移動 | ぱすたを `drag` で拡大率の違うもう 1 つの画面へ動かして離す | 移った後の `shot`・`dump_surface`・`get_log` | 設計・要件には SSP での見え方の要点を書いていない。測りの記録 段 5 を基準にする | `dpi-realign-remembered-chain`（拡大率の違う画面をまたぐドラッグ） | 移った先の画面でぱすたと窓の枠とバルーンの並びが保たれる。倍率の連動（`balloon.syncscale`・`OnShellScaling`）はこの手順の範囲の外なので、それに由来する見た目の違いは「違う」の数と分けて書く |
+| 4 2 つの窓を一緒にドラッグ | ぱすたを `drag` で同じ画面の中で動かして離す | ドラッグの前・後の `shot`・`get_log` | ぱすたと窓の枠が離れずに一緒に動き、落とした後も重なった形に付き直る（測りの記録 段 4） | `window-link-directives`（`seriko.sticky-window`・`--option=ignore-sticky-window`）・`mcp-scope-rect-property`（位置を `get_property` で読む） | 窓の枠がぱすたについて動き、落とした後に付き直る |
+| 5 拡大率の違う画面への移動 | ぱすたを `drag` で拡大率の違うもう 1 つの画面へ動かして離す | 移った後の `shot`・`dump_surface`・`get_log` | 200% の画面へ移っても大きさは変わらない（831x1026 のまま・`scaling` は 150,150）。ぱすたと窓の枠は同じ rect のまま重なって並び、バルーンはぱすたの左上から 60,87 の所のまま。移動に伴うイベント（`OnShellScaling` など）は届かない（測りの記録 段 5） | `dpi-realign-remembered-chain`（拡大率の違う画面をまたぐドラッグ・落とした点のずれ）・`mcp-scope-rect-property`（位置を `get_property` で読む）・`shell-scale-linkage`（倍率の連動。この手順の範囲の外） | 移った先の画面でぱすたと窓の枠とバルーンの並びが保たれ、落とした点に置かれる。大きさが画面の拡大率に合わせて変わるのは areka の方針（DPI 追従・2026-07-18 開発者）で、「方針で受けない」と書く。倍率の連動（`balloon.syncscale`・`OnShellScaling`）はこの手順の範囲の外なので、それに由来する見た目の違いは「違う」の数と分けて書く |
 | 6 右クリックメニュー | ぱすたを `rightclick`。着せ替えのメニューを開き、1 つ選ぶ | メニューの `shot`・着せ替えの後の `shot` と `dump_surface`・`get_log` | 自前の色（`menu.*`。普通の Windows のメニューに見せる色）のメニューが出て、着せ替えのメニューから選ぶと着せ替えが替わる（測りの記録 段 6） | `popup-menu-shell-look`（`menu.*` の色と絵・`sakura.menu,auto`） | メニューの色と絵がシェルの指定どおりになる。着せ替えのメニューが出る |
 | 7 × で終わる | × の印を `click`。効かなければ右クリックメニューの「終了」 | 終わりの台詞の `shot`・`get_log`・`<回>.exitcode.txt` | × を押すと終わりの台詞の後に終わる（測りの記録 段 7） | `mouse-click-wheel-events`（× の `OnMouseClick`） | × で終われる（今は右クリックメニューの「終了」で終える見込み）。どちらで終えたかと終了コードを書く。終了コードは 0 が合格 |
 
 - 段 1 と段 2 では、重なりの順（窓が奥 → バルーン → ぱすたが手前）が見える範囲を `shot` で撮り、開発者が目視で決める。
+- 段 2 の選択肢は、表示が終わってから 30 秒で `OnChoiceTimeout` になって消える。`raise_event` の前に、カーソルを選ぶ選択肢の出る位置へ `move` で置いておき、選択肢が出たら 30 秒のうちに `click` する（alt2 の 1 回目は 4 秒遅れて時間切れになった）。
 - 段 6 でメニューが見えずに閉じたときは `popup-menu-residue` の件 12 に当たる。記録に書くだけで、直さない。
 - 当たりの決まりの違い: areka は α が 0.5 以上（128 以上）の画素だけを当たりにし、SSP には合わせない（2026-10-22 開発者の裁定）。薄い影や縁を撫でても反応しない違いは、崩れでなく「方針で受けない」と書く。
-- この手順の範囲の外（見た目が違っても「違う」の数に入れず、分けて書く）: `balloon.syncscale` と `OnShellScaling`／`OnBalloonScaling`・スクロールの矢印・`communicatebox`・`\![reload,shiori]`・禁則と縦中横・SSP の作りの癖。
+- この手順の範囲の外（見た目が違っても「違う」の数に入れず、分けて書く）: `balloon.syncscale` と `OnShellScaling`／`OnBalloonScaling`（引き取る spec `shell-scale-linkage`。`\![get,property]` で聞く倍率と DPI も同じ）・縦書きのバルーンのスクロールの矢印（`balloon-scroll-arrows`）・`communicatebox`（`balloon-communicatebox`）・`\![reload,shiori]`・禁則と縦中横・SSP の作りの癖。
+
+### 代わりの操作（`mouse-click-wheel-events` の着地まで・任意）
+
+`mouse-click-wheel-events` が着地するまで、areka はボールのクリック（`OnMouseClick`）をぱすたへ送らない。ぱすたの初回の起動の台本（`OnFirstBoot`）は最後に `\0\s[1002]`（ボールと × だけの面）を出してボールのクリックを待つので、身体が最後まで映らない。身体と窓の枠を見るために、段 1 を撮り終えた後に、areka の MCP の `sakurascript` で次の台本を送ってよい（2026-10-23 開発者の承認の案 A）。
+
+```text
+\0\s[1000]\1\s[10]
+```
+
+- `ghost_name` は `get_active_ghost_list` で得た名前。送る前に `check_script` で確かめる。
+- 段 1 の判定は、代わりの操作の前の姿で決める。代わりの操作の後の結果（撮った物の名前は `1s-subst-` から始める）は「代わりの操作」として別に書き、段の 3 値の数には入れない。
+- `mouse-click-wheel-events` の着地の後は要らない（ボールのクリックで身体が映る）。この小節ごと外す。
 
 ## 6. 撮り方と数え方
 
@@ -189,6 +217,13 @@ SSP の基準の欄は、SSP 2.9.18 での動きの要点。根拠（台本の�
 | `dump_balloon` | バルーンの写し（どのバルーンか・列と枠の並び） |
 | `raise_event` | 段の台本を起こして原文を取るとき |
 | `get_log` | その段のあいだの記録 |
+| `sakurascript`・`check_script` | 5 節の代わりの操作 |
+
+位置の読み方: `mcp-scope-rect-property` が着地するまで、`get_property` は `currentghost.scope(n).rect`・`currentghost.balloon.scope(0).rect` に `NG:Cannot find such property name.` で答える。それまでは位置を撮影と、記録の `bounds=` の行（当たりの判定の行）で読む。着地の後は `get_property` で読み、測りの記録の rect と比べる。
+
+```powershell
+Select-String -LiteralPath "$v\logs\$run.stdout.log" -Pattern 'bounds=\(' | Select-Object -Last 5 | ForEach-Object Line
+```
 
 ### 画面の操作と撮影（`tools/mouse-input.ps1`）
 
@@ -222,6 +257,7 @@ Get-Content -LiteralPath "$v\logs\$run.exitcode.txt"
 - panic: `panicked at` の行の数。致命: ERROR の行のうち、致命を名乗る行（areka を止めた行）の数。どちらも 7 段の全部のあいだで数える。
 - ERROR と WARN は、記録の対象（モジュール）ごとに並べて読む。ぱすたの中身（SHIORI の返事・辞書）から出た行は、理由を書いて外し、外す前と外した後の両方の数を書く。
 - 起こし直した回があるときは、その回の記録（`run1b.*` など）も足して数える。
+- `animated-surface-log-flood` が着地するまで、記録の 9 割が `apply(ShowSurface)` の INFO 行になる。記録を目で読むときは `Select-String -LiteralPath $out -Pattern 'apply\(ShowSurface\)' -NotMatch` で外して読む（数えるのは ERROR と WARN だけなので、上の数には効かない）。
 
 ## 7. 結果の書き方と片付け
 
@@ -249,12 +285,12 @@ Get-Content -LiteralPath "$v\logs\$run.exitcode.txt"
 1. areka が終わっていることを確かめる。外から止める必要があるときは、控えた番号のプロセスが自分の起こした `areka.exe` であることを確かめてから止める。ほかの番号は止めない。
 
    ```powershell
-   $id = [int]((Get-Content -LiteralPath "$v\logs\$run.pid.txt") -replace '\D', '')
-   $q = Get-Process -Id $id -ErrorAction SilentlyContinue
-   if ($q -and $q.Path -eq "$w\target\debug\areka.exe") { Stop-Process -Id $id } else { "not running or not ours: $id" }
+   $apid = [int]([regex]::Match((Get-Content -LiteralPath "$v\logs\$run.pid.txt" -Raw), 'pid=(\d+)').Groups[1].Value)
+   $q = Get-Process -Id $apid -ErrorAction SilentlyContinue
+   if ($q -and $q.Path -eq "$w\target\debug\areka.exe") { Stop-Process -Id $apid } else { "not running or not ours: $apid" }
    ```
 
-2. 排他テストの机をすぐ返す: `& "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" return --id <識別> --desk test`。
+2. 排他テストの机をすぐ返す: `& "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" return --id $id --desk test`（`$id` は 2 節の 1 行目の値）。
 3. SendInput の許可はこの走行で終わる。次の走行ではまた許可を得る。
 4. 根・記憶・記録・撮った物（`<w>\target\pasta-verify\`）は消さずに残す。次の走行の準備の命令が根と記憶を作り直す。記録と撮った物は回ごとの名前で分かれる。
 5. 開いた PowerShell を閉じる（4 節で設定した環境変数はその PowerShell の中だけのもの）。
