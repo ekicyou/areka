@@ -1,6 +1,6 @@
 # Brief: areka-P0-window-work-area-clamp
 
-> 2026-10-23 起票（`/kiro-discovery`）。出どころは `window-link-directives` の完了時の棚卸（`.kiro/specs/areka-P0-window-link-directives/signoff.md` の「申し送り」ⅰ〜ⅲ と、`tasks.md` の Implementation Notes の 9.2）。3 件とも「起動のときに窓が作業領域の外へ出る（または出るかもしれない）」で、触る場所が同じ（起動の並べ直し・記憶から戻す所・窓の大きさが変わったときの位置）なので 1 本にまとめた。
+> 2026-10-23 起票（`/kiro-discovery`）。出どころは `window-link-directives` の完了時の棚卸（`.kiro/specs/completed/areka-P0-window-link-directives/signoff.md` の「申し送り」ⅰ〜ⅲ と、`tasks.md` の Implementation Notes の 9.2）。3 件とも「起動のときに窓が作業領域の外へ出る（または出るかもしれない）」で、触る場所が同じ（起動の並べ直し・記憶から戻す所・窓の大きさが変わったときの位置）なので 1 本にまとめた。
 
 ## Problem
 

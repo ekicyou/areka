@@ -61,7 +61,7 @@
 ## 追記（2026-10-23 `areka-P0-window-link-directives` の完了の棚卸）
 
 - **件 1: ぱすたの動く WebP が合成の覚えに当たらないまま合成し直され続け、そのあいだ MCP の `sakurascript` の返事が遅れる**。
-  - 見たこと（`.kiro/specs/areka-P0-window-link-directives/signoff.md` の「申し送り」ⅳ）: ぱすた（`pasta-in-windows`）の実機の 3 回目の走り 1 で、MCP の `sakurascript` の返事が 4.5 秒と 10 秒超かかった。そのあいだ、面 1001・1002 の動く WebP の玉が毎秒 10〜48 回、`cache_hit=false`（合成の覚えに当たらない）で合成し直されていた。`loop ticker catch-up`（刻みが詰まった印）が 01:22:29 に 20 回出ていた。`window-link-directives` の判定の赤の原因ではなかった。
+  - 見たこと（`.kiro/specs/completed/areka-P0-window-link-directives/signoff.md` の「申し送り」ⅳ）: ぱすた（`pasta-in-windows`）の実機の 3 回目の走り 1 で、MCP の `sakurascript` の返事が 4.5 秒と 10 秒超かかった。そのあいだ、面 1001・1002 の動く WebP の玉が毎秒 10〜48 回、`cache_hit=false`（合成の覚えに当たらない）で合成し直されていた。`loop ticker catch-up`（刻みが詰まった印）が 01:22:29 に 20 回出ていた。`window-link-directives` の判定の赤の原因ではなかった。
   - 本 spec との関わり: `cache_hit` は本 spec が測る `presenter/show.rs` の適用の perf の行の欄（覚えに当たらないと `Stage::MaskGen` まで進む）。動く絵の適用が重いと刻みが詰まり、同じ UI のスレッドで受ける MCP の返事も遅れる見込み（確かめていない）。
   - やること: まず測る。ぱすたを起こしたまま、適用の回数・`cache_hit` の割合・1 回の時間・刻みの詰まりと MCP の返事の遅れを並べ、遅れが適用の重さから来るかを切り分ける。動く絵のコマが毎回覚えに当たらないのが正しい（コマごとに絵が違う）のか、覚えの鍵が要らない違いを含んでいるのかも見る。
   - 起票の理由: 測る場所（適用の計時と perf の行）が本 spec と同じ。原因が合成の覚えの鍵や合成そのもの（本文の Out「合成そのものの速さ」）と分かったら、本 spec は計測と記録で閉じ、直しを別に起票する（本文の「分割の案」と同じ）。

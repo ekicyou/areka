@@ -146,7 +146,7 @@
   - 検体 `pasta-in-windows` を `sample fetch` で作業ツリーの `target\` の下へ取り寄せ、根も `target\` の下に絶対パスで置き、`RUST_LOG` を `sticky_groups`・`sticky_follow`・`sticky_follow_ignored`・`balloon_pos_reset`・`reset_pos_menu_outcome` が出る水準まで開けて、排他テストの机で `real-run-kit` を使って起こす。確かめの間は拡大率を変えない
   - 起動で `sticky_groups`（descript_seed・`{0,1}`）が出る・本体側の窓のドラッグ（入力の送り込みは画面のロックが無いときだけ）で相方側の窓とバルーンが同じ量動き、途中で 2 つの矩形を読んで位置の関係が変わらない・辞書の「窓あわせ」（MCP の `raise_event` か `sakurascript`）で相方側だけが動き `sticky_follow_ignored` が出る・終了して起こし直すと 2 つの窓が重なったまま出る、を窓の矩形と記録で判定する
   - ぱすたの窓をクリックしてから 2 つの近道を押し、`balloon_pos_reset`（trigger=shortcut）と `reset_pos_menu_outcome` が出ることで、F10 の届き方と入力先を確かめる。起動の連鎖の確定と記憶の寄せ直しで食い違いが出たら、原因をこの spec の中で直すか、持ち主の spec を確かめて `/kiro-discovery` で起票する
-  - 結果・記録の抜粋・申し送り先を `.kiro/specs/areka-P0-window-link-directives/signoff.md` に残し、各判定の行が載る
+  - 結果・記録の抜粋・申し送り先を `.kiro/specs/completed/areka-P0-window-link-directives/signoff.md` に残し、各判定の行が載る
   - _Requirements: 9.7, 9.8_
 
 ## Implementation Notes
