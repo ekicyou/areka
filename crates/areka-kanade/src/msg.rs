@@ -146,7 +146,7 @@ pub enum MouseEventKind {
 }
 
 /// クリックのボタン（Ref5 の 5 通り）。[`MouseButton`]（左右だけ・ダブルクリック用）とは分ける。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ClickButton {
     Left,
     Right,
