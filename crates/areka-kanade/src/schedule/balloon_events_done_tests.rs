@@ -14,7 +14,7 @@ use crate::change::{
 use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::{Action, State};
-use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use crate::talk::{ScriptOrigin, TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
 /// 完了の知らせを組む。
@@ -137,7 +137,10 @@ fn b3_reply_script_is_translated_and_204_stays_steady() {
             if matches!(&req.source, ScriptSource::Event(e) if e.id.as_str() == "OnBalloonBreak")),
         "台本の応答は元のイベント OnBalloonBreak として翻訳へ預ける"
     );
-    let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        &mut s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     let (next, script) = started(&actions);
     assert_ne!(next, talk, "新しい番号のトークが始まる");
     assert_eq!(script, FINAL);
@@ -312,7 +315,10 @@ fn accept_change(s: &mut State) {
 fn reply_and_start(s: &mut State, origin: &'static str) -> TalkId {
     let actions = reply_value(s, ORIGINAL, origin);
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(s, Input::TranslateDone(Ok(FINAL.to_string())));
+    let actions = feed(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
+    );
     started(&actions).0
 }
 
@@ -469,6 +475,7 @@ fn a4_boot_greeting_break_sends_nothing() {
     s.shown = Some(ShownTalk {
         talk_id: TalkId(3),
         script: FINAL.to_string(),
+        origin: ScriptOrigin::GHOST,
         close_sent: false,
         timeout_sent: false,
         timeout_pending: false,
@@ -489,6 +496,7 @@ fn b2_close_pending_sends_nothing_for_each_cause() {
     s.shown = Some(ShownTalk {
         talk_id: TalkId(3),
         script: FINAL.to_string(),
+        origin: ScriptOrigin::GHOST,
         close_sent: false,
         timeout_sent: false,
         timeout_pending: true,
@@ -537,6 +545,7 @@ fn missing_or_mismatched_shown_sends_empty_script_with_a_warning() {
             Some(ShownTalk {
                 talk_id: TalkId(2),
                 script: "\\0別のトーク\\e".to_string(),
+                origin: ScriptOrigin::GHOST,
                 close_sent: false,
                 timeout_sent: false,
                 timeout_pending: false,

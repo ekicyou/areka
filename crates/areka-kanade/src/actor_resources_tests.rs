@@ -103,12 +103,18 @@ fn only_steady_is_queryable() {
 #[test]
 fn shiori_outcome_maps_onto_resource_outcome() {
     assert_eq!(
-        outcome_of("readmebutton.caption", ShioriOutcome::Value("x".into())),
+        outcome_of(
+            "readmebutton.caption",
+            ShioriOutcome::Value("x".into(), areka_talk::SecurityLevel::Local)
+        ),
         ResourceOutcome::Value("x".into())
     );
     // 空文字の 200 は値のまま返す（既定名へ倒すのは受け手の解釈・要件 3.3）。
     assert_eq!(
-        outcome_of("readmebutton.caption", ShioriOutcome::Value(String::new())),
+        outcome_of(
+            "readmebutton.caption",
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local)
+        ),
         ResourceOutcome::Value(String::new())
     );
     assert_eq!(
@@ -169,7 +175,10 @@ fn steady_round_trips_each_id_and_rejects_only_the_disallowed_one() {
                 panic!("リソース照会は GET");
             };
             seen.push((id.as_str().to_string(), status.render()));
-            let _ = reply.send(ShioriOutcome::Value(format!("<{}>", id.as_str())));
+            let _ = reply.send(ShioriOutcome::Value(
+                format!("<{}>", id.as_str()),
+                areka_talk::SecurityLevel::Local,
+            ));
         }
         seen
     });
@@ -227,7 +236,10 @@ fn reset_balloon_position_caption_is_looked_up_from_the_ghost() {
         let ShioriCall::Get { id, .. } = call else {
             panic!("リソース照会は GET");
         };
-        let _ = reply.send(ShioriOutcome::Value("吹き出しを戻す".into()));
+        let _ = reply.send(ShioriOutcome::Value(
+            "吹き出しを戻す".into(),
+            areka_talk::SecurityLevel::Local,
+        ));
         id.as_str().to_string()
     });
     let (reply_tx, reply_rx) = reply_channel();

@@ -208,7 +208,10 @@ impl FixtureState {
                 // DD-IT-12: 挨拶ありは固定 Value（`Steady{Some}` 完了）、なしは 204（`Steady{None}` 直行）。
                 "OnBoot" => {
                     if self.fixture.boot_greets {
-                        ShioriOutcome::Value(self.fixture.boot_script.clone())
+                        ShioriOutcome::Value(
+                            self.fixture.boot_script.clone(),
+                            areka_talk::SecurityLevel::Local,
+                        )
                     } else {
                         ShioriOutcome::NoContent
                     }
@@ -217,14 +220,20 @@ impl FixtureState {
                     let index = self.second_change_get_seen;
                     self.second_change_get_seen += 1;
                     if self.fixture.steady_value_indices.contains(&index) {
-                        ShioriOutcome::Value(self.fixture.steady_script.clone())
+                        ShioriOutcome::Value(
+                            self.fixture.steady_script.clone(),
+                            areka_talk::SecurityLevel::Local,
+                        )
                     } else {
                         ShioriOutcome::NoContent
                     }
                 }
                 "OnClose" => {
                     if self.fixture.close_quits {
-                        ShioriOutcome::Value(self.fixture.farewell_script.clone())
+                        ShioriOutcome::Value(
+                            self.fixture.farewell_script.clone(),
+                            areka_talk::SecurityLevel::Local,
+                        )
                     } else {
                         ShioriOutcome::NoContent
                     }
@@ -233,7 +242,9 @@ impl FixtureState {
                 // 既存 talk 起動棚（Steady の StartTalk）へそのまま載る（Req 8.1(c)/(d)）。
                 mouse_id @ ("OnMouseMove" | "OnMouseDoubleClick") => {
                     match self.fixture.mouse_responses.get(mouse_id) {
-                        Some(MouseResponse::Script(script)) => ShioriOutcome::Value(script.clone()),
+                        Some(MouseResponse::Script(script)) => {
+                            ShioriOutcome::Value(script.clone(), areka_talk::SecurityLevel::Local)
+                        }
                         Some(MouseResponse::NoContent) | None => ShioriOutcome::NoContent,
                     }
                 }
@@ -242,13 +253,15 @@ impl FixtureState {
                 // リソース名と選択イベント名は語彙が交わらないので、引く順序は結果を変えない。
                 other => match self.fixture.resource_responses.get(other) {
                     // 200 の Value（空文字もそのまま返す＝204 とは別の応答・2.3）。
-                    Some(MouseResponse::Script(value)) => ShioriOutcome::Value(value.clone()),
+                    Some(MouseResponse::Script(value)) => {
+                        ShioriOutcome::Value(value.clone(), areka_talk::SecurityLevel::Local)
+                    }
                     Some(MouseResponse::NoContent) => ShioriOutcome::NoContent,
                     // 選択由来 GET は fixture の注入表を引く（未注入は 204・6.1）。任意名イベントは
                     // ゴースト作者が書いた名前がそのまま id になるため、固定パターンでは受けられない。
                     None => match self.fixture.choice_responses.get(other) {
                         Some(ChoiceResponse::Script(script)) => {
-                            ShioriOutcome::Value(script.clone())
+                            ShioriOutcome::Value(script.clone(), areka_talk::SecurityLevel::Local)
                         }
                         // 未注入の選択由来 GET・未知 GET はいずれも 204（保守的既定）。
                         Some(ChoiceResponse::NoContent) | None => ShioriOutcome::NoContent,

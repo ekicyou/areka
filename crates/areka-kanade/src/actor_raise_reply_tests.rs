@@ -55,7 +55,10 @@ pub(super) fn spawn_rig(answer: Answer) -> Rig {
                     let outcome = match id {
                         RAISED => answer(),
                         // 終了の相で再生を待たせるため、`OnClose` には台本を返す。
-                        "OnClose" => ShioriOutcome::Value(r"\h\s[0]またね\e".into()),
+                        "OnClose" => ShioriOutcome::Value(
+                            r"\h\s[0]またね\e".into(),
+                            areka_talk::SecurityLevel::Local,
+                        ),
                         _ => outcome,
                     };
                     let _ = reply.send(outcome);
@@ -131,7 +134,10 @@ pub(super) fn close(rig: Rig) {
 #[test]
 fn script_reply_is_script_after_the_talk_is_started() {
     let rig = spawn_rig(Box::new(|| {
-        ShioriOutcome::Value("\\h\\s[0]入れてくれてありがとう\\e".into())
+        ShioriOutcome::Value(
+            "\\h\\s[0]入れてくれてありがとう\\e".into(),
+            areka_talk::SecurityLevel::Local,
+        )
     }));
     boot_to_steady(&rig);
 
@@ -155,12 +161,14 @@ fn empty_blank_and_no_content_are_no_reply() {
     let answers: [(&str, Answer, &[&str]); 3] = [
         (
             "空の台本",
-            Box::new(|| ShioriOutcome::Value(String::new())),
+            Box::new(|| ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local)),
             &[],
         ),
         (
             "空白だけの台本",
-            Box::new(|| ShioriOutcome::Value(" \t\r\n\u{3000}".into())),
+            Box::new(|| {
+                ShioriOutcome::Value(" \t\r\n\u{3000}".into(), areka_talk::SecurityLevel::Local)
+            }),
             &["GET OnTranslate"],
         ),
         ("204", Box::new(|| ShioriOutcome::NoContent), &[]),
@@ -277,7 +285,9 @@ fn name_outside_the_table_is_not_allowed_and_nothing_is_sent() {
 /// 返信端が無い依頼は今日どおり送られ、次の依頼も受ける。
 #[test]
 fn without_reply_the_event_is_sent_as_today() {
-    let rig = spawn_rig(Box::new(|| ShioriOutcome::Value("\\h\\s[0]はい\\e".into())));
+    let rig = spawn_rig(Box::new(|| {
+        ShioriOutcome::Value("\\h\\s[0]はい\\e".into(), areka_talk::SecurityLevel::Local)
+    }));
     boot_to_steady(&rig);
 
     rig.kanade

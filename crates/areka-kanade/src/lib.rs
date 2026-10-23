@@ -34,6 +34,7 @@ mod actor_stop;
 mod actor_translate;
 pub mod msg;
 pub mod online;
+pub mod request_origin;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
 // schedule には書くだけで読まない欄（`ClosePending.reason`・`ActiveTalk.origin`）が残り、
 // 外すと dead_code が鳴るため allow を付けたままにしてある。

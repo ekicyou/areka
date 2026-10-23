@@ -59,7 +59,7 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         Input::ShioriReply { outcome, .. } => match outcome {
-            ShioriOutcome::Value(script) => {
+            ShioriOutcome::Value(script, _) => {
                 // 応答スクリプトあり: 一意 talk_id を採番し再生起動要求として配送、
                 // CloseTalkWait へ遷移して再生完了通知まで運行を保留する（Req 4.2・2.1）。
                 let talk_id = TalkId(state.next_talk_id);
@@ -264,7 +264,7 @@ mod tests {
         let (s1, actions1) = step(
             close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("bye".to_string()),
+                outcome: ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
             },
             &config(),
@@ -321,7 +321,7 @@ mod tests {
         let (s1, _a1) = step(
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("stay".to_string()),
+                outcome: ShioriOutcome::Value("stay".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
             },
             &config(),
@@ -381,7 +381,7 @@ mod tests {
         let (s1, _a1) = step(
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("stay".to_string()),
+                outcome: ShioriOutcome::Value("stay".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
             },
             &config(),
@@ -588,7 +588,7 @@ mod tests {
         let (next, actions) = step(
             close_pending(CloseReason::System, None, 5),
             Input::ShioriReply {
-                outcome: ShioriOutcome::Value("hi".to_string()),
+                outcome: ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
             },
             &config(),

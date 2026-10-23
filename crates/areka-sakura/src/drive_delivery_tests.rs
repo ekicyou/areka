@@ -1,6 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::{CueCommand, TalkCue, TalkId};
+use crate::contract::{CueCommand, ScriptOrigin, TalkCue, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc::{self, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -16,6 +16,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(200),
+        origin: ScriptOrigin::GHOST,
     };
     let surface = RecordingSink::new();
     let text = RecordingSink::new();
@@ -73,6 +74,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
             epilogue: Vec::new(),
             script: r"\s[0]hi\_w[500]bye\e".to_string(),
             talk_id: TalkId(1),
+            origin: ScriptOrigin::GHOST,
         };
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let handle = spawn_talk(
@@ -111,21 +113,15 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
 
         // Tick(A+0.5): offset 0.5 → Wait(0.25? いや at=0.1) は due だが bye(0.6) は保留。
         handle.inbox.send(SakuraMsg::Tick(anchor + 0.5)).unwrap();
-        std::thread::yield_now();
         // Wait cue の着弾を barrier に使う（at=0.1 <= 0.5 ゆえこの Tick までに届く）。
-        let mut wait_seen = false;
-        for _ in 0..1000 {
-            match rx.try_recv() {
-                Ok(cue) if cue.command == CueCommand::Wait => {
-                    wait_seen = true;
-                    break;
-                }
+        // 空回しの回数で打ち切ると負荷の下で取りこぼすので、hi と同じく時間切れつきで受ける。
+        loop {
+            match rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(cue) if cue.command == CueCommand::Wait => break,
                 Ok(_) => {}
-                Err(TryRecvError::Empty) => std::thread::yield_now(),
-                Err(TryRecvError::Disconnected) => break,
+                Err(_) => panic!("Wait(at=0.1) は A+0.5 までに届くはず（barrier）"),
             }
         }
-        assert!(wait_seen, "Wait(at=0.1) は A+0.5 までに届くはず（barrier）");
         let bye_after_half = bye_seen(&rx);
 
         // Tick(A+0.6): offset 0.6 → bye が due。着弾を待つ。
@@ -187,6 +183,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
 
     let (tx, rx) = mpsc::channel::<TalkCue>();
@@ -274,6 +271,7 @@ fn same_at_cues_preserve_script_order_fifo() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\nworld\e".to_string(),
         talk_id: TalkId(41),
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -336,6 +334,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -430,6 +429,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id: TalkId(1),
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -476,6 +476,7 @@ fn non_finite_tick_is_ignored_and_playback_survives() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(9),
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -534,6 +535,7 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
             epilogue: Vec::new(),
             script: r"\s[10]hello\_w[100]world\e".to_string(),
             talk_id: TalkId(7),
+            origin: ScriptOrigin::GHOST,
         };
         let sink = RecordingSink::new();
         let records = sink.records();
@@ -743,6 +745,7 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         epilogue: Vec::new(),
         script: r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     // broadcast の第一級性を立証するため**複数**記録 sink を登録（両者が同一配送列を受ける）。
     let sink_a = RecordingSink::new();

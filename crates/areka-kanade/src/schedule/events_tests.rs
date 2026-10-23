@@ -812,7 +812,12 @@ fn on_translate_builds_the_four_canonical_references() {
     for (refs, joined) in cases {
         let (id, references) =
             translate("\\h太郎さん\\e", &source(EventId::Static("OnBoot"), refs));
-        assert_eq!(id, EventId::Static("OnTranslate"));
+        assert_eq!(
+            id,
+            EventId::Translate(crate::request_origin::RequestOrigin::for_translated(
+                &EventId::Static("OnBoot")
+            ))
+        );
         assert_eq!(
             references,
             vec![
@@ -841,7 +846,12 @@ fn on_translate_carries_a_choice_name_verbatim_in_reference2() {
         "\\e",
         &source(EventId::Choice("OnMenu_ほげ.x".to_string()), &["a"]),
     );
-    assert_eq!(id, EventId::Static("OnTranslate"));
+    assert_eq!(
+        id,
+        EventId::Translate(crate::request_origin::RequestOrigin::for_translated(
+            &EventId::Choice("OnMenu_ほげ.x".to_string())
+        ))
+    );
     assert_eq!(references[2], "OnMenu_ほげ.x");
     assert_eq!(references[3], "a");
 }

@@ -32,7 +32,7 @@ fn map_s_ok_200_with_value_is_some() {
         &["Charset: UTF-8", r"Value: \s[0]hi\e"],
     );
     let out = map_get_outcome(S_OK, &bytes).expect("200+Value は Ok");
-    assert_eq!(out, Some(r"\s[0]hi\e".to_string()));
+    assert_eq!(out.map(|r| r.value), Some(r"\s[0]hi\e".to_string()));
 }
 
 /// `S_OK`＋200（`Value` 欠落）→ `Ok(None)`（写像表 1 行目・欠落枝・要件 3.2）。

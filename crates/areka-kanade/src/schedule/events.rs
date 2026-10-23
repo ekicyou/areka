@@ -72,6 +72,7 @@
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
+use crate::request_origin::RequestOrigin;
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
@@ -766,10 +767,11 @@ pub struct SourceEvent {
 ///
 /// Ref0＝展開済みの台詞、Ref1＝欠番（[`ABSENT_REFERENCE`]・areka には出所が無い）、
 /// Ref2＝元のイベントの ID、Ref3＝元のイベントの Reference をバイト値 1 で連ねたもの
-/// （0 個なら空文字列）。Status は呼び手が渡した値をそのまま載せる。
+/// （0 個なら空文字列）。Status は呼び手が渡した値をそのまま載せる。要求の出どころは元のイベントの
+/// 出どころを引き継ぎ、送り手は areka（要件 2.5・2.6）。
 pub fn on_translate(expanded: &str, source: &SourceEvent, status: ExecutionStatus) -> ShioriCall {
     ShioriCall::Get {
-        id: EventId::Static("OnTranslate"),
+        id: EventId::Translate(RequestOrigin::for_translated(&source.id)),
         references: vec![
             expanded.to_string(),
             ABSENT_REFERENCE.to_string(),
@@ -803,10 +805,10 @@ pub fn sstp_notify(
 /// Ref2 以降なし）。
 ///
 /// Ref2・3 の欠番は列を Ref1 で止めて表す（要件 4.4）。イベントへの応答の翻訳は
-/// [`on_translate`] のまま（要件 4.6）。
+/// [`on_translate`] のまま（要件 4.6）。要求の出どころは MCP の SEND（要件 2.4）。
 pub fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> ShioriCall {
     ShioriCall::Get {
-        id: EventId::Static("OnTranslate"),
+        id: EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE),
         references: vec![expanded.to_string(), REF1_SSTP_SEND_OWNED.to_string()],
         status,
     }

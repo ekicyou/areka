@@ -8,7 +8,7 @@
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources};
 use crate::change::{BootOrigin, KanadeNotice, ReloadScope, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
-use crate::talk::{StartTalk, TalkDone, TalkId};
+use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkId};
 use resources::ResourceOutcome;
 
 /// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
@@ -104,7 +104,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
                 let call = events::on_boot(config, &state.snapshot_without_talk());
                 (state, vec![Action::ShioriRequest(call)])
             }
-            ShioriOutcome::Value(script) => {
+            ShioriOutcome::Value(script, _) => {
                 tracing::info!(target: "kanade", event = "boot_type_script", "起動種別にスクリプト——OnBoot をスキップし basewareversion へ");
                 to_baseware_version(state, Some(script), config)
             }
@@ -113,7 +113,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
         // BootMain + OnBoot 応答: Value→StartTalk（Req 1.4・2.1）／204→talk なし（Req 2.3）。
         // いずれも basewareversion NOTIFY を発行し BootVersion へ。
         Phase::BootMain => match outcome {
-            ShioriOutcome::Value(script) => to_baseware_version(state, Some(script), config),
+            ShioriOutcome::Value(script, _) => to_baseware_version(state, Some(script), config),
             ShioriOutcome::NoContent => to_baseware_version(state, None, config),
             other => unexpected_reply(state, "BootMain", other),
         },
@@ -163,7 +163,7 @@ fn on_prefetch_reply(
     config: &KanadeConfig,
 ) -> (State, Vec<Action>) {
     let (resource_outcome, label) = match outcome {
-        ShioriOutcome::Value(body) => (ResourceOutcome::Value(body), "value"),
+        ShioriOutcome::Value(body, _) => (ResourceOutcome::Value(body), "value"),
         ShioriOutcome::NoContent => (ResourceOutcome::NoContent, "no_content"),
         ShioriOutcome::Failed(failure) => {
             tracing::warn!(
@@ -294,6 +294,7 @@ fn to_baseware_version(
             talk_id,
             script: script.clone(),
             epilogue: config.first_boot_epilogue.clone(),
+            origin: ScriptOrigin::GHOST,
         }));
         // script は起動値の保持（DD-10）。boot 起動 talk も steady 起動 talk と同一の追跡 slot
         // （[`ActiveTalk`]）に載るため、`OnChoiceTimeout` Ref0 の供給源は起動経路に依らず同一。
@@ -313,6 +314,7 @@ fn to_baseware_version(
             talk_id,
             script: String::new(),
             epilogue: config.first_boot_epilogue.clone(),
+            origin: ScriptOrigin::GHOST,
         }));
         Some(ActiveTalk {
             talk_id,

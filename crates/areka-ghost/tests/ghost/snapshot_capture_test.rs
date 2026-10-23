@@ -101,7 +101,9 @@ use areka_kanade::{CloseReason, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use shiori_host32_host::{
+    ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
+};
 use temp_path_kit::TempPath;
 
 use crate::recorder::{Recorder, RecorderHandle};
@@ -141,6 +143,27 @@ impl ShioriBackend for BoxedBackend {
         status: Option<&str>,
     ) -> Result<(), RequestError> {
         self.0.notify(id, references, status)
+    }
+
+    // 新しい 2 メソッドも中身へそのまま渡す（既定のままだとヘッダと応答のレベルが黙って落ちる）。
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        self.0.get_with_headers(id, references, status, headers)
+    }
+
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        self.0.notify_with_headers(id, references, status, headers)
     }
 
     fn unload(&mut self) -> Result<ExitKind, ShutdownError> {

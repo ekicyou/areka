@@ -1,6 +1,7 @@
 use super::test_support::{RecordingSink, run_bounded, test_system_vars};
 use super::*;
 use crate::test_log_capture::{CapturedEvent, assert_logged_event, capture};
+use areka_sakura::contract::ScriptOrigin;
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
@@ -92,6 +93,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
         epilogue: Vec::new(),
         talk_id,
         script: script_with_choice_timeout("1234"),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(choicetimeout 1234)");
     // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。

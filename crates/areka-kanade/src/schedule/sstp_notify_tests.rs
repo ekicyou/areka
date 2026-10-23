@@ -146,7 +146,10 @@ fn unlisted_name_goes_out_verbatim_and_its_script_starts_a_talk() {
             "OnNotListed_ほげ",
             &["a", "", "0\u{1}1"],
             Some(true),
-            ShioriOutcome::Value("\\h返った台本\\e".to_string()),
+            ShioriOutcome::Value(
+                "\\h返った台本\\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
         ))
     });
     let (state, actions) = out.unwrap();
@@ -167,7 +170,9 @@ fn unlisted_name_goes_out_verbatim_and_its_script_starts_a_talk() {
     );
     let (_, actions) = step(
         state,
-        Input::TranslateDone(Ok("\\h訳\\e".into())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h訳\\e",
+        ))),
         &config(),
     );
     assert!(matches!(
@@ -188,7 +193,10 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
             "OnAiTalk",
             &[],
             None,
-            ShioriOutcome::Value("\\h割り込み\\e".to_string()),
+            ShioriOutcome::Value(
+                "\\h割り込み\\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
         );
         assert_playing_notify_talk(&state, 10);
         assert_eq!(state.choice_prev_talk, None);
@@ -202,8 +210,14 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
 fn no_value_empty_or_blank_keeps_the_current_talk() {
     let outcomes = [
         ("204", ShioriOutcome::NoContent),
-        ("空", ShioriOutcome::Value(String::new())),
-        ("空白だけ", ShioriOutcome::Value(" \t\r\n　".to_string())),
+        (
+            "空",
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
+        ),
+        (
+            "空白だけ",
+            ShioriOutcome::Value(" \t\r\n　".to_string(), areka_talk::SecurityLevel::Local),
+        ),
     ];
     for (label, outcome) in outcomes {
         let mut state = steady(active(9, "OnMouseDoubleClick"));
@@ -277,12 +291,17 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
         "OnAiTalk",
         &[],
         None,
-        ShioriOutcome::Value("\\h割り込み\\e".to_string()),
+        ShioriOutcome::Value(
+            "\\h割り込み\\e".to_string(),
+            areka_talk::SecurityLevel::Local,
+        ),
     );
     assert!(state.choice.is_none(), "選択肢の帳簿は消えるはず");
     let (state, _) = step(
         state,
-        Input::TranslateDone(Ok("\\h割り込み\\e".into())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h割り込み\\e",
+        ))),
         &cfg,
     );
     let mut out = None;
@@ -437,8 +456,17 @@ fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
     let (s, _) = step(State::initial(), Input::Boot, cfg);
     let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
     let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
-    let s = reply(s, ShioriOutcome::Value("\\h挨拶\\e".to_string())); // → BootVersion{挨拶}
-    let (s, _) = step(s, Input::TranslateDone(Ok("\\h挨拶\\e".into())), cfg);
+    let s = reply(
+        s,
+        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
+    ); // → BootVersion{挨拶}
+    let (s, _) = step(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h挨拶\\e",
+        ))),
+        cfg,
+    );
     let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
     assert!(
         matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == super::BOOT_GREETING_ORIGIN),
@@ -530,7 +558,7 @@ fn translate_references_for_send_and_returned_script() {
     };
     let refs_of = |call: ShioriCall| match call {
         ShioriCall::Get { id, references, .. } => {
-            assert_eq!(id, EventId::Static("OnTranslate"));
+            assert!(matches!(id, EventId::Translate(_)), "{id:?}");
             references
         }
         ShioriCall::Notify { .. } => panic!("OnTranslate は GET"),
@@ -552,7 +580,7 @@ fn translate_references_for_send_and_returned_script() {
         "OnAiTalk",
         &["r0", "r1"],
         None,
-        ShioriOutcome::Value("\\h返\\e".to_string()),
+        ShioriOutcome::Value("\\h返\\e".to_string(), areka_talk::SecurityLevel::Local),
     );
     assert_eq!(
         refs_of(build(translate_request(&actions))),
@@ -575,7 +603,7 @@ fn strict_is_noted_with_the_returned_talk_id() {
             "OnAiTalk",
             &[],
             strict,
-            ShioriOutcome::Value("\\h返\\e".to_string()),
+            ShioriOutcome::Value("\\h返\\e".to_string(), areka_talk::SecurityLevel::Local),
         );
         assert_eq!(
             state.sstp_strict,

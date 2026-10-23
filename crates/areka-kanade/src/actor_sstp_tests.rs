@@ -29,7 +29,9 @@ fn send_in_steady_is_accepted() {
 /// 普段の状態で台本が返る外からのイベントは、SHIORI が返したままの `Script`。
 #[test]
 fn notify_in_steady_with_script_is_script_as_returned() {
-    let rig = spawn_rig(Box::new(|| ShioriOutcome::Value(r"\h\s[0]はい\e".into())));
+    let rig = spawn_rig(Box::new(|| {
+        ShioriOutcome::Value(r"\h\s[0]はい\e".into(), areka_talk::SecurityLevel::Local)
+    }));
     boot_to_steady(&rig);
     let (reply, rx) = areka_actor::reply_channel::<SstpNotifyOutcome>();
     rig.kanade
@@ -152,7 +154,10 @@ fn spawn_with(respond: Respond) -> Rig {
 fn outside_answers(answer: MakeOutcome) -> Respond {
     Box::new(move |id| match id {
         OUTSIDE => Some(answer()),
-        "OnTranslate" => Some(ShioriOutcome::Value(TRANSLATED.into())),
+        "OnTranslate" => Some(ShioriOutcome::Value(
+            TRANSLATED.into(),
+            areka_talk::SecurityLevel::Local,
+        )),
         _ => None,
     })
 }
@@ -244,7 +249,9 @@ fn send_starts_exactly_one_talk_through_on_translate() {
 /// 再生は翻訳の後の台本で始まる（返事と再生の字が違うことで、返事が翻訳の前だと見分ける）。
 #[test]
 fn notify_reaches_shiori_and_answers_the_script_before_translation() {
-    let rig = spawn_with(outside_answers(|| ShioriOutcome::Value(RETURNED.into())));
+    let rig = spawn_with(outside_answers(|| {
+        ShioriOutcome::Value(RETURNED.into(), areka_talk::SecurityLevel::Local)
+    }));
     boot_to_steady(&rig);
     while rig.talks.try_recv().is_ok() {}
 
@@ -269,7 +276,7 @@ fn notify_without_script_is_no_script_and_starts_nothing() {
     let answers: [(&str, MakeOutcome); 3] = [
         ("204", || ShioriOutcome::NoContent),
         ("空白だけ", || {
-            ShioriOutcome::Value(" \t\r\n\u{3000}".into())
+            ShioriOutcome::Value(" \t\r\n\u{3000}".into(), areka_talk::SecurityLevel::Local)
         }),
         ("エラー応答", || {
             ShioriOutcome::Failed(ShioriFailure::Shiori("500 Internal Server Error".into()))
@@ -296,7 +303,9 @@ fn notify_without_script_is_no_script_and_starts_nothing() {
 /// ⑶ 起動の前は、どちらの入口も受け付けず偽の shiori へ何も送らない。
 #[test]
 fn before_boot_neither_entrance_is_accepted() {
-    let rig = spawn_with(outside_answers(|| ShioriOutcome::Value(RETURNED.into())));
+    let rig = spawn_with(outside_answers(|| {
+        ShioriOutcome::Value(RETURNED.into(), areka_talk::SecurityLevel::Local)
+    }));
     assert_eq!(
         send_script(&rig).recv_timeout(LIMIT).expect("返事が届く"),
         SstpSendOutcome::NotAccepted
@@ -316,8 +325,14 @@ fn before_boot_neither_entrance_is_accepted() {
 #[test]
 fn boot_greeting_refuses_until_it_ends() {
     let rig = spawn_with(Box::new(|id| match id {
-        "OnBoot" => Some(ShioriOutcome::Value(GREETING.into())),
-        OUTSIDE => Some(ShioriOutcome::Value(RETURNED.into())),
+        "OnBoot" => Some(ShioriOutcome::Value(
+            GREETING.into(),
+            areka_talk::SecurityLevel::Local,
+        )),
+        OUTSIDE => Some(ShioriOutcome::Value(
+            RETURNED.into(),
+            areka_talk::SecurityLevel::Local,
+        )),
         _ => None,
     }));
     boot_to_steady(&rig);
@@ -371,7 +386,9 @@ fn boot_greeting_refuses_until_it_ends() {
 /// `NotAccepted`。ゴーストは止まらない（後続の台本を受け付ける）。
 #[test]
 fn invalid_notify_sent_directly_is_not_accepted_and_the_ghost_keeps_running() {
-    let rig = spawn_with(outside_answers(|| ShioriOutcome::Value(RETURNED.into())));
+    let rig = spawn_with(outside_answers(|| {
+        ShioriOutcome::Value(RETURNED.into(), areka_talk::SecurityLevel::Local)
+    }));
     boot_to_steady(&rig);
 
     assert_eq!(
@@ -480,7 +497,10 @@ fn notify_round_trip_failure_is_failed_then_stops() {
 /// `OUTSIDE` へ台本を返し、`OnTranslate` は輸送路の失敗にする偽の shiori。
 fn translate_fails() -> Respond {
     Box::new(|id| match id {
-        OUTSIDE => Some(ShioriOutcome::Value(RETURNED.into())),
+        OUTSIDE => Some(ShioriOutcome::Value(
+            RETURNED.into(),
+            areka_talk::SecurityLevel::Local,
+        )),
         "OnTranslate" => Some(ShioriOutcome::Failed(ShioriFailure::Ipc(
             "helper gone".into(),
         ))),
@@ -519,7 +539,9 @@ fn translate_transport_failure_is_failed_then_stops() {
 /// ⑸ 返事の受け手を落としてから送っても、再生は始まり殻は止まらない（要件 3.8）。
 #[test]
 fn dropped_reply_receiver_still_plays_and_keeps_running() {
-    let rig = spawn_with(outside_answers(|| ShioriOutcome::Value(RETURNED.into())));
+    let rig = spawn_with(outside_answers(|| {
+        ShioriOutcome::Value(RETURNED.into(), areka_talk::SecurityLevel::Local)
+    }));
     boot_to_steady(&rig);
     while rig.talks.try_recv().is_ok() {}
 

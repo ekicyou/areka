@@ -4,7 +4,7 @@
 //! ここが持つのは 2 つの控えと、[`super::step`] の出口の処理 [`settle`]、トークの完了の後の判断
 //! [`after_talk_done`]（設計の表 B）、再生中のトークが無いときのダブルクリックの判断
 //! [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
-//! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本。3 つのイベントの
+//! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本・出どころ。3 つのイベントの
 //!   Reference0 の源で、古い時間切れの知らせを退ける照合の相手。
 //! - [`BreakNote`]（`State.user_break_talk`）——利用者の中断を出した相手のトークと、ダブルクリック
 //!   されたバルーンの scope。立てるのは中断の受理（[`super::user_break::on_user_break`]）、取り出すのは
@@ -14,7 +14,7 @@
 //! 高々 1 本（GET）を指示の列に足すだけで、応答の扱いは定常の応答の腕に任せる。
 
 use super::{Action, Phase, State, current_talk_id, events, phase_label};
-use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use crate::talk::{ScriptOrigin, TalkDone, TalkEndReason, TalkId};
 
 /// 再生を始めたトークの控え。3 つのイベントの Reference0 の源で、古い知らせを退ける照合の相手。
 ///
@@ -25,6 +25,8 @@ pub(crate) struct ShownTalk {
     pub talk_id: TalkId,
     /// 再生を始めた最終の台本（`OnTranslate` で書き換えた後）。
     pub script: String,
+    /// 再生を始めた最終の出どころ（翻訳の後）。選択肢の `script:` が引き継ぐ（要件 1.6）。
+    pub origin: ScriptOrigin,
     /// このトークで `OnBalloonClose` を送ったか。
     pub close_sent: bool,
     /// このトークで `OnBalloonTimeout` を送ったか。
@@ -71,6 +73,7 @@ pub(super) fn settle(state: &mut State, actions: &[Action]) {
         state.shown = Some(ShownTalk {
             talk_id: start.talk_id,
             script: start.script.clone(),
+            origin: start.origin,
             close_sent: false,
             timeout_sent: false,
             timeout_pending: false,

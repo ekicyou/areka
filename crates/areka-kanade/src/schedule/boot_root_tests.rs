@@ -195,7 +195,11 @@ fn changed_from_with_script_skips_on_boot() {
         "根 OnGhostChanged の応答待ち"
     );
     // 台本 → OnBoot を飛ばして basewareversion（要件 4.3）。
-    let (s, next) = reply(s, ShioriOutcome::Value("交代".to_string()), &c);
+    let (s, next) = reply(
+        s,
+        ShioriOutcome::Value("交代".to_string(), areka_talk::SecurityLevel::Local),
+        &c,
+    );
     assert!(matches!(s.phase, Phase::BootVersion { talk: Some(_) }));
     assert!(
         get_ids(&next).is_empty(),
@@ -342,7 +346,14 @@ fn updated_with_script_plays_it_and_skips_on_boot() {
     let (s, root) = drive_past_prefetch(&c);
     assert!(matches!(s.phase, Phase::BootType), "根の応答待ち");
     assert_eq!(get_ids(&root), vec!["OnUpdateComplete".to_string()]);
-    let (s, next) = reply(s, ShioriOutcome::Value(r"\0更新したよ\e".to_string()), &c);
+    let (s, next) = reply(
+        s,
+        ShioriOutcome::Value(
+            r"\0更新したよ\e".to_string(),
+            areka_talk::SecurityLevel::Local,
+        ),
+        &c,
+    );
     assert!(matches!(s.phase, Phase::BootVersion { talk: Some(_) }));
     assert!(get_ids(&next).is_empty(), "OnBoot は 0 件のはず");
     assert_eq!(next.len(), 2, "[StartTalk, basewareversion] の 2 件");

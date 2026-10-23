@@ -451,6 +451,18 @@ descript の `seriko.alignmenttodesktop` 系の 8 項目は、未対応から縮
 **39 行**・`none = true` の行が **14 行**である（3 つとも数え直した値）。`[briefs].count` はこの 53 に合わせ、
 `snapshot_on` は **2026-10-23** にした。
 
+**2026-10-23 の追加（`areka-P0-script-security-level`）**: `areka-P0-script-security-level` の行を 1 行足した。この spec が
+SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`）・`SecurityOrigin`（今は常に `null`）・`SenderType`
+を付け、応答の `SecurityLevel` を読むようにしたので、台帳 `ledger/shiori.toml` の 4 項目（要求の `SecurityLevel`・
+`SecurityOrigin`・`SenderType` と応答の `SecurityLevel`）の宛先をこの spec にした（4 項目ともそれまで宛先が空だった。
+`SecurityOrigin` は縮退、残りの 3 項目は実装済み）。4 項目はどれも `linkage.md` の束「SHIORI の要求と応答」に属するので、
+段階 A の表の「SHIORI の要求と応答」の行にこの spec（4 件）を足した。束の構成は **25 件**（`linkage.md` の `members` を
+数えた）で、4 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は
+`stage = "A"`・`bundle = "SHIORI の要求と応答"`・`owner_count = 4`・`wave = "C10-①"` で、段階は「SHIORI の要求と応答」が
+順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。行数は **54 行**（`[[spec]]` の塊を数えた）で、
+うち束を持つ行が **40 行**・`none = true` の行が **14 行**である（3 つとも数え直した値。同じ日の `areka-P0-window-link-directives` の行を含む）。`[briefs].count` はこの 54 に
+合わせ、`snapshot_on` は **2026-10-23** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -485,7 +497,7 @@ descript の `seriko.alignmenttodesktop` 系の 8 項目は、未対応から縮
 
 ```toml
 [briefs]
-count = 53
+count = 54
 snapshot_on = "2026-10-23"
 ```
 
@@ -899,6 +911,13 @@ stage = "A"
 bundle = "窓の配置と重なり"
 owner_count = 8
 wave = "C10-②"
+
+[[spec]]
+name = "areka-P0-script-security-level"
+stage = "A"
+bundle = "SHIORI の要求と応答"
+owner_count = 4
+wave = "C10-①"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -933,7 +952,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件）／`areka-P0-balloon-break`（α 後・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
-| 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件） | 第 2 波 |
+| 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-script-security-level`（C10-①・4 件） | 第 2 波 |
 | 18 | シェル定義の転記 | `areka-P0-shell-definition-transcribe` | `areka-P0-charset-canon`（完了・1 件） | 第 2 波 |
 | 18 | 同期オブジェクト | `areka-P0-sync-object-tags` | `areka-P0-sakura-time-directives`（W16・1 件） | 第 2 波 |
 

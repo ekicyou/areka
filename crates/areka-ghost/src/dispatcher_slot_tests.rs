@@ -1,6 +1,6 @@
 use super::test_support::{RecordingSink, run_bounded, test_system_vars};
 use super::*;
-use areka_sakura::contract::{CueCommand, TalkCue, TalkEndReason};
+use areka_sakura::contract::{CueCommand, ScriptOrigin, TalkCue, TalkEndReason};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -31,6 +31,7 @@ fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
         talk_id: TalkId(101),
         script: r"\s[0]hi\e".to_string(),
         epilogue: Vec::new(),
+        origin: ScriptOrigin::GHOST,
     };
     match DispatcherMsg::from(TalkCommand::Start(start.clone())) {
         DispatcherMsg::Start(got) => {
@@ -119,6 +120,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         epilogue: Vec::new(),
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(A)");
 
@@ -127,6 +129,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         epilogue: Vec::new(),
         talk_id: talk_b,
         script: r"\s[2]B\_w[100]B_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(B)");
 
@@ -196,12 +199,14 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
         epilogue: Vec::new(),
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: talk_b,
         script: r"\s[2]B\_w[100]B_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(B)");
 
@@ -276,6 +281,7 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
         epilogue: Vec::new(),
         talk_id: TalkId(21),
         script: r"\s[1]X\_w[2500]X_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start");
 
@@ -317,6 +323,7 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         epilogue: Vec::new(),
         talk_id: TalkId(31),
         script: r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start");
 
@@ -417,6 +424,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         epilogue: Vec::new(),
         talk_id: talk_c,
         script: r"\s[9]hello\_w[100]world\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(C)");
     tx.send(DispatcherMsg::Tick {
@@ -446,6 +454,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         epilogue: Vec::new(),
         talk_id: talk_d,
         script: r"\s[8]again\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(D)");
     // D（`again`＝5 char・D=0.25）の占有 horizon=0.25 を跨ぐため base(10_000)＋elapsed 0.3 の 2 tick。
@@ -559,6 +568,7 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         epilogue: Vec::new(),
         talk_id: TalkId(61),
         script: r"\s[0]%username\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(1)");
     // 初回 Tick で base_now 刻印＋elapsed=0.0 群（ClearAll/Emote/Text@0.0）を発火。
@@ -583,6 +593,7 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         epilogue: Vec::new(),
         talk_id: TalkId(62),
         script: r"\s[0]%username\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(2)");
     tx.send(DispatcherMsg::Tick {

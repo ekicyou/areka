@@ -1,6 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::{CueCommand, TalkId};
+use crate::contract::{CueCommand, ScriptOrigin, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -16,6 +16,7 @@ fn empty_script_talk_returns_talkdone_immediately_without_tick() {
         epilogue: Vec::new(),
         script: String::new(), // 空 script → 空 Instruction 列 → 空 sheet。
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
 
     let sink = RecordingSink::new();
@@ -53,6 +54,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: id_a,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -69,6 +71,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
         epilogue: Vec::new(),
         script: r"\s[77]DIFFERENT\e".to_string(),
         talk_id: id_b,
+        origin: ScriptOrigin::GHOST,
     };
     handle
         .inbox
@@ -110,6 +113,7 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(4),
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -152,6 +156,7 @@ fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
         epilogue: Vec::new(),
         script: r"\0".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -192,6 +197,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
         epilogue: Vec::new(),
         script: r"\0\-".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -234,6 +240,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -291,6 +298,7 @@ fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
             epilogue: Vec::new(),
             script: script.to_string(),
             talk_id,
+            origin: ScriptOrigin::GHOST,
         };
         let handle = spawn_talk(
             start,
@@ -353,6 +361,7 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let handle = spawn_talk(
         start,
@@ -399,6 +408,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: id_a,
+        origin: ScriptOrigin::GHOST,
     };
     let sink_a = RecordingSink::new();
     let records_a = sink_a.records();
@@ -410,6 +420,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         epilogue: Vec::new(),
         script: r"\s[20]bye\_w[100]done\-".to_string(),
         talk_id: id_b,
+        origin: ScriptOrigin::GHOST,
     };
     let sink_b = RecordingSink::new();
     let records_b = sink_b.records();
@@ -498,6 +509,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[800]\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -566,6 +578,7 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
         epilogue: Vec::new(),
         script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -632,6 +645,7 @@ fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
         epilogue: Vec::new(),
         script: r"\s[10]ab\_w[600]\e".to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let handle = spawn_talk(
         start,
@@ -701,6 +715,7 @@ fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
         epilogue: Vec::new(),
         script: script.to_string(),
         talk_id,
+        origin: ScriptOrigin::GHOST,
     };
     let handle = spawn_talk(
         start,
@@ -771,6 +786,7 @@ fn spawn_with_drop_marker(
             epilogue: Vec::new(),
             script: r"\s[10]hello\_w[100]world\e".to_string(),
             talk_id,
+            origin: ScriptOrigin::GHOST,
         },
         done_tx,
         vec![Box::new(DropMarkerSink { tx: marker_tx })],
