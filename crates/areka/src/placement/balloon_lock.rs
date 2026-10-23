@@ -12,7 +12,8 @@ use std::collections::BTreeSet;
 
 use bevy_ecs::prelude::*;
 use tracing::{info, warn};
-use wintf::ecs::drag::DragConfig;
+use wintf::ecs::WindowHandle;
+use wintf::ecs::drag::{DragConfig, WindowDragContextResource};
 
 use super::spawn::BalloonWindowMarker;
 
@@ -94,6 +95,47 @@ pub(crate) fn sync_balloon_drag_writer(world: &mut World) {
     }
 }
 
+/// `on_balloon_drag` の入口の見張り: このドラッグを止めているか（要件 5.6・6.1）。
+/// wintf がドラッグの始まりに控えた `WindowDragContextResource` の `hwnd` がこの窓のものなら
+/// 控えの `move_window` で決める。控えが消えた後（`hwnd: None`・`move_window: false`）や
+/// 別の窓のものなら、控えを読まずにこの窓の今の `DragConfig.move_window` で決める
+/// （先例 `sticky_follow::drag_wintf_moves` と同じ縮退）。
+pub(crate) fn balloon_drag_held(world: &World, entity: Entity) -> bool {
+    let start = world
+        .get_resource::<WindowDragContextResource>()
+        .and_then(|r| r.get());
+    let hwnd = world.get::<WindowHandle>(entity).map(|h| h.hwnd);
+    match start {
+        Some(ctx) if ctx.hwnd.is_some() && ctx.hwnd == hwnd => !ctx.move_window,
+        _ => world
+            .get::<DragConfig>(entity)
+            .is_some_and(|d| !d.move_window),
+    }
+}
+
+/// `on_balloon_drag_end` の入口の見張り: [`balloon_drag_held`] と同じ見方で止めたドラッグなら、
+/// 終わりのときの帳簿の理由（記録のためだけ）で記録を 1 件残して `true`（要件 6.6）。
+pub(crate) fn end_balloon_drag(world: &World, entity: Entity) -> bool {
+    if !balloon_drag_held(world, entity) {
+        return false;
+    }
+    let scope = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope);
+    let reason = scope
+        .and_then(|s| u32::try_from(s).ok())
+        .and_then(|s| world.get_resource::<BalloonLockLedger>()?.reason(s));
+    info!(
+        event = "balloon_drag_held",
+        scope = scope.map(|s| s as u64),
+        descript = reason.is_some_and(|r| r.descript),
+        script = reason.is_some_and(|r| r.script),
+    );
+    true
+}
+
 #[cfg(test)]
 #[path = "balloon_lock_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "balloon_lock_drag_tests.rs"]
+mod drag_tests;
