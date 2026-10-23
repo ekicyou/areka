@@ -49,7 +49,7 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
 | 8 | 利用者がバルーンをドラッグしている途中に台本の lock を受けたとき | そのドラッグは最後まで続け、次のドラッグから止める。unlock も同じく次のドラッグから | ドラッグの途中で窓を止めると、マウスと窓が離れて利用者が戸惑う。ukadoc は黙る | 5.6 |
 | 9 | 動かせない指定の値が読めないとき（`0`・`1`・`true`・`false` 以外） | その段は書かれていないものとして次の段（ゴーストの値・既定 false）へ進み、記録する | ukadoc は「1(もしくはtrue)で禁止」とだけ書く。読めない値で禁止すると、作者の書き損じで利用者の操作が奪われる | 4.5 |
 | 10 | descript の既定の面の値が読めないとき（0 以上の整数でない） | 組み込みの既定の面を使い、記録する | ukadoc は「数値」とだけ書く。負の番号の面は無い（-1 は消す指定） | 1.5 |
-| 11 | ukadoc の「存在しない番号を\sタグで指定した時などに代わりに表示する」働き（台本の `\s` が無い面を指したときに既定の面を出す） | **本 spec の範囲外**。今の areka は無い面の `\s` を記録して表示を変えない。この働きは本 spec の完了のときに `/kiro-discovery` で起票する | `brief.md` の範囲は窓の最初の面と測りと戻り先。台本の面の切り替えの失敗の扱いは別の場所（面の表示）を触る | 9.3 |
+| 11 | ukadoc の「存在しない番号を\sタグで指定した時などに代わりに表示する」働き（台本の `\s` が無い面を指したときに既定の面を出す） | **本 spec の範囲外**。今の areka は無い面の `\s` を記録して表示を変えない。この働きは本 spec の完了のときに `/kiro-discovery` で起票する | `brief.md` の範囲は窓の最初の面と測りと戻り先。台本の面の切り替えの失敗の扱いは別の場所（面の表示）を触る。2026-10-23 に SSP 2.9（ぱすた・既定の面 1000）で `\0\s[9998]` を送ると、`currentghost.scope(0).surface.num` は `-1` になり、既定の面 1000 は出なかった（ukadoc の字面と違う）。起票の brief にこの測りを書く | 9.3 |
 
 ## Boundary Context
 
@@ -90,7 +90,7 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
 **Objective:** As a ゴーストの利用者, I want 起動したゴーストの窓が実際に出る面の大きさで置かれてほしい, so that 窓が画面の下端を越えたり、バルーンが絵にかぶったりしない
 
 #### Acceptance Criteria
-1. When 起動の位置を決めるためにキャラクターの窓の大きさを測る（起動・ゴーストの切り替えほか、測るすべての時機）, the areka shall 各スコープの descript の既定の面の絵で測る。
+1. When 起動の位置を決めるためにキャラクターの窓の大きさを測る（起動・ゴーストの切り替え・ゴーストの読み直し。シェルの切り替えは測り直さず、出した面の大きさで窓が決まる）, the areka shall 各スコープの descript の既定の面の絵で測る。
 2. The areka shall 窓の大きさの測りと、戻り先の面（要件 3）とで、同じスコープに同じ descript の既定の面を使う。
 3. If descript の既定の面がシェルに無い, the areka shall そのスコープは組み込みの既定の面で測り、スコープ・無かった面の番号・代わりに使った面の番号を記録に残す。
 4. If 組み込みの既定の面もシェルに無い, the areka shall そのスコープの測りを今と同じに扱う（本体側は起動できない失敗として記録し、相方側は本体側の大きさで代える）。
@@ -112,7 +112,7 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
 
 #### Acceptance Criteria
 1. Where ゴーストの descript が `balloon.dontmove` を `true` または `1` にしていて、シェルの descript にそのスコープの `*.balloon.dontmove` が無い, the areka shall そのスコープのバルーンを、利用者のドラッグで動かさない。
-2. Where シェルの descript がスコープの `*.balloon.dontmove`（本体側 `sakura.`・相方側 `kero.`・スコープ 2 以降 `char<スコープ番号>.`）を書いている, the areka shall ゴーストの `balloon.dontmove` よりその値を優先し、`1` または `true` なら動かさず、`0` または `false` なら動かせるようにする。
+2. Where シェルの descript がスコープの `*.balloon.dontmove`（本体側 `sakura.`・相方側 `kero.`・スコープ 2 以降 `char<スコープ番号>.`）を書いている, the areka shall ゴーストの `balloon.dontmove` よりその値を優先し、`1` または `true` なら動かさず、`0` または `false` なら動かせるようにする。スコープの綴りの別名（`char0.`・`char1.`）は要件 1.3 と同じ優先で扱う。
 3. Where ゴーストの descript とシェルの descript のどちらにも指定が無い, the areka shall 今と同じく、利用者のドラッグでバルーンを動かせるようにする。
 4. When シェルを切り替える, the areka shall descript の段の指定を、ゴーストの descript と新しいシェルの descript から決め直す。
 5. If `balloon.dontmove` または `*.balloon.dontmove` の値が `0`・`1`・`true`・`false` のどれでもない, the areka shall その段は書かれていないものとして次の段で決め、スコープ・キー・書かれていた値を記録に残す。
@@ -125,7 +125,7 @@ ukadoc が黙っている点は、本 spec の「要件の段での裁定」に�
 2. When 台本の `\![unlock,balloonmove]` を受ける, the areka shall 台本の lock を解き、descript の段で動かせるスコープのバルーンを、利用者のドラッグで動かせるようにする。
 3. While descript の段がスコープのバルーンを動かさない指定にしている, when 台本の `\![unlock,balloonmove]` を受ける, the areka shall そのスコープのバルーンを動かさないままにする。
 4. While 台本の lock が続いている, the areka shall トークが終わっても、シェルを切り替えても、lock を解かない。
-5. When ゴーストが終わる・切り替わる・読み直される, the areka shall 台本の lock を解く。
+5. When ゴーストが終わる・切り替わる・読み直される, the areka shall 台本の lock を解く。SHIORI だけの読み直し（`\![reload,shiori]`）では解かない（窓の組の先例＝完了 `areka-P0-window-link-directives` 要件 6.3 と同じ）。
 6. If 利用者がバルーンをドラッグしている途中に lock または unlock を受ける, the areka shall そのドラッグは最後まで今の扱いで続け、次のドラッグから新しい指定を使う。
 7. When MCP の `check_script` が `\![lock,balloonmove]` または `\![unlock,balloonmove]` を含む台本を調べる, the areka shall それを知らない指令として報告しない。
 8. The areka shall 台本の lock を受けたことと解いたことを記録に残し、descript の段のために unlock で解けなかったスコープも記録に残す。

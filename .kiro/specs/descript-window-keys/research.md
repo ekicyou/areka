@@ -196,3 +196,16 @@
 8. **`measure.rs` の「scope n≥2 は正典既定なし」の `warn!`**: ukadoc は既定 10 と書くので、この記録の文言を直すか外す（今は出ない行）。
 9. **手本 `examples/window-placement.rs` の定数**: 新しい決め方の関数を呼ぶ形にそろえるか、emo2 の検体だけの手本として決め打ちのまま残すか。
 10. **測りと戻り先の「在る」の基準をそろえるか**（R5）。
+
+## 10. 要件の討議での追記（2026-10-23）
+
+### 10.1 SSP での測り（R1 の一部・SSP 2.9・ぱすた・200% の画面・MCP だけ）
+
+- 起動した SSP はぱすたで上がった。`currentghost.scope(0).seriko.defaultsurface`＝`1000`、`scope(1)`＝`10`、`currentghost.scope(0).surface.num`＝`1000`、`currentghost.scope(0).rect`＝`1710,376,2818,1744`（1108×1368＝面 1000 の 554×684 の 2 倍）、`currentghost.balloon.scope(0).rect`＝`1790,492,2662,1392`。
+- `\0\s[9998]\e`（strict）: 誤りの記録に `surface not found (9998)` が 1 件。`surface.num` は `-1` になり、既定の面 1000 は出なかった。rect は変わらない。ukadoc の「存在しない番号を\sタグで指定した時などに代わりに表示する」の字面と違う（裁定 11・起票の brief へ書く）。測った後に `\0\s[1000]\e` で戻した。
+- `\0\![lock,balloonmove]\![unlock,balloonmove]\![lock,balloonmove,foo]\e`（strict）: 誤りの記録は 0 件＝SSP は 2 つの指令を知っている（3 つ目の余分な引数も黙って受ける）。測った後に `\![unlock,balloonmove]` で解いた。
+- まだ測っていない: 裁定 1（ぱすたのバルーンだけを利用者がドラッグして動くか）・裁定 4（`\0` で lock した後に `\1` のバルーンが動くか）は画面の操作が要る。裁定 2（descript の既定の面がシェルに無いとき）は、そういう descript のゴーストを SSP に置く（環境を変える）か読み直しが要る。
+
+### 10.2 設計の段へ回す事項（要件の討議のカテゴリ B）
+
+9 節の議題 1・2・3・4・7・8・9・10 と 7 節の R2〜R5 は how の判断なので、設計（`/kiro-design`）で決める。とくに議題 4（台本の lock・unlock を UI へ運ぶ道が C11 の ⑥ `dpi-realign-remembered-chain` の持ち物にかかる）は、設計の前に ⑥ のセッションへ相談する。9 節の議題 5（シェルの `*.balloon.dontmove` の別名）と 6（SHIORI だけの読み直しで lock を保つ）は、要件 4.2・5.5 に先例どおり書き足して閉じた。
