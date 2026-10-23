@@ -15,7 +15,8 @@ fn every_proxy_error_maps_to_ack_zero() {
     let errors: [ProxyError; 3] = [
         ProxyError::EntryNotFound("load"),
         ProxyError::EncodingFailed,
-        ProxyError::LoadReturnedFalse,
+        // last_error の値に依らず ack[0]（areka-P0-emo2-real-run-stability 要件 5.5）。
+        ProxyError::LoadReturnedFalse { last_error: 5 },
     ];
     for e in errors {
         let r: Result<(), ProxyError> = Err(e);
