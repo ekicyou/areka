@@ -134,7 +134,7 @@
   - _Requirements: 1.4, 2.9, 3.1, 3.5, 4.2, 4.3, 5.1_
   - _Depends: 5.3, 6.3_
 
-- [ ] 7.2 本物の起動の道での実機の確かめ
+- [x] 7.2 本物の起動の道での実機の確かめ
   - 窓口 `real-run-kit`（手引き `doc/testing.md`・先例 `crates/areka/tests/mcp_get_log_real_run.rs`）で `crates/areka/tests/script_security_real_run.rs` を書き、検体 `emo2` を `RUST_LOG=warn,kanade=trace,areka::input_events::user_break=debug` で起こす。記録は子の標準出力から読む（`get_log` は debug の行を残さないことがあるため）。
   - 記録を読んで ⑴ MCP の `raise_event` の `shiori_request` が `sender=MCP`・`sender_type=external,sstp`・`security_level=local` ⑵ MCP の `sakurascript` の `OnTranslate` が `sender=MCP`・`sender_type=internal` ⑶ 起動の道のゴースト自身のイベントが `sender=areka`・`sender_type=internal` ⑷ MCP の `sakurascript` で流した `\![enter,nouserbreakmode]` が今どおり区間に入る（証拠は `crates/areka/src/input_events/user_break.rs` の debug の記録 `no_user_break_changed`・target `areka::input_events::user_break`）、を確かめて閉じる。
   - 本物の pasta.dll を同じプロセスの経路で通したテストが緑になる。決定論のテストの代わりにはしない。
@@ -162,3 +162,4 @@
 - `areka` には lib の対象が無い。単体テストは `cargo test -p areka --bin areka`（結合テストの `smoke_boot_loop_exit` などはアプリを起こすので机が要り、32bit の `shiori-host32-testdll-loadu` のビルドも前提）。
 - 7.1 の「ワークスペースの全体テストが緑」は、最後の検証（`/kiro-validate-impl` の全体テスト・排他テストの机）で確かめる。
 - （範囲外・7.1 で発見）`areka` の `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が負荷の下で 1 度赤になり、回し直しで緑（揺れ）。
+- 実機のテストで MCP の `raise_event`／`sakurascript` を送るのは、起動のトークが終わってから（再生中は `NG:the ghost cannot accept a script now`）。7.2 は記録の `status=Some("balloon(` を目印に待つ。
