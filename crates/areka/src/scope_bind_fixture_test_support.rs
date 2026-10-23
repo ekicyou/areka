@@ -78,29 +78,12 @@ pub(crate) fn scope_bind_ghost() -> TempPath {
     root
 }
 
-/// 1 色で塗った 8 ビット RGBA の PNG を書く（署名 → IHDR → IDAT → IEND）。
-// shortcut: MCP の PNG の組み立ては共有の置き場へ移るまで呼べない（6.1）、移ったらそちらを呼ぶ。
+/// 1 色で塗った 8 ビット RGBA の PNG を書く（MCP と同じ `png_image::encode_png`）。
 fn write_solid_png(path: &Path, width: u32, height: u32, rgba: [u8; 4]) {
-    // 各行はフィルタ 0 の 1 バイトの後に同じ色を幅の数だけ。
-    let row = [&[0][..], &rgba.repeat(width as usize)].concat();
-    let raw = row.repeat(height as usize);
-    let mut ihdr = Vec::with_capacity(13);
-    ihdr.extend_from_slice(&width.to_be_bytes());
-    ihdr.extend_from_slice(&height.to_be_bytes());
-    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
-    let idat = miniz_oxide::deflate::compress_to_vec_zlib(&raw, 6);
-    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
-    for (kind, data) in [
-        (b"IHDR", &ihdr[..]),
-        (b"IDAT", &idat[..]),
-        (b"IEND", &[][..]),
-    ] {
-        out.extend_from_slice(&(data.len() as u32).to_be_bytes());
-        let start = out.len();
-        out.extend_from_slice(kind);
-        out.extend_from_slice(data);
-        let crc = areka_nar::crc32(&out[start..]);
-        out.extend_from_slice(&crc.to_be_bytes());
-    }
+    let [r, g, b, a] = rgba;
+    // 不透明なら乗算済みも同じ値＝BGRA へ並べ替えるだけで渡した色の画素になる。
+    assert_eq!(a, 255, "検体の色は不透明だけ");
+    let bgra = [b, g, r, a].repeat(width as usize * height as usize);
+    let out = crate::png_image::encode_png(&bgra, width, height);
     std::fs::write(path, out).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
 }

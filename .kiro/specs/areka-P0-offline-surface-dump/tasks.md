@@ -123,7 +123,7 @@
   - _Requirements: 14.1, 14.2, 14.4_
 
 - [ ] 6. areka の共有の部品と起動オプションの欄
-- [ ] 6.1 (P) PNG にする関数を共有の置き場へ移す
+- [x] 6.1 (P) PNG にする関数を共有の置き場へ移す
   - 色の戻しと PNG の組み立てを MCP の書き出しの中から `png_image.rs` へ中身を変えずに移し、MCP の base64 の関数は移した関数の結果を base64 にするだけにする（`mod png_image;` を `main.rs` に足す）
   - 色の戻しと PNG の形の試験を `png_image_tests.rs` へ移し、base64 の試験は残す
   - 移した試験と MCP の `dump_surface`／`dump_balloon` の今の試験が期待を変えずに緑
