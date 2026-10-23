@@ -452,13 +452,11 @@ fn window() -> MutexGuard<'static, Window> {
 }
 
 /// 窓を開ける（開いていれば中身を空にして開け直す）。呼んだスレッドの番号を覚える。
-#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.7）
 pub(crate) fn capture_begin() {
     *window() = Some((std::thread::current().id(), Vec::new()));
 }
 
 /// 窓を閉じて、写した記録を残した順に返す（開いていなければ空）。
-#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.7）
 pub(crate) fn capture_finish() -> Vec<CapturedRecord> {
     window().take().map(|(_, rows)| rows).unwrap_or_default()
 }
@@ -562,4 +560,4 @@ mod convention_tests;
 
 #[cfg(test)]
 #[path = "log_history_capture_tests.rs"]
-mod capture_tests;
+pub(crate) mod capture_tests;

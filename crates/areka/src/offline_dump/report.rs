@@ -7,7 +7,6 @@ use tracing::Level;
 use crate::log_history::CapturedRecord;
 
 /// 写しが空なら 0・warn だけなら 1・error があれば 2（8.1）。CSV の有無に関わらない（8.2）。
-#[allow(dead_code)] // 呼び手は走りの本体（タスク 7.7）
 pub(crate) fn exit_code(records: &[CapturedRecord]) -> i32 {
     match worst(records) {
         None => 0,
@@ -17,7 +16,6 @@ pub(crate) fn exit_code(records: &[CapturedRecord]) -> i32 {
 }
 
 /// 写しの最も重いレベルの語（`Warning`／`Error`）。空なら `None`。
-#[allow(dead_code)] // 呼び手は走りの本体（タスク 7.7）
 pub(crate) fn worst(records: &[CapturedRecord]) -> Option<&'static str> {
     // tracing の Level は重いほど小さい（ERROR < WARN）。
     records.iter().map(|r| r.level).min().map(level_word)
@@ -33,7 +31,6 @@ fn level_word(level: Level) -> &'static str {
 }
 
 /// BOM 付き UTF-8・CRLF・`"時刻","ゴースト名","レベル","内容"` の 4 列（7.1・7.2・7.5）。
-#[allow(dead_code)] // 呼び手は走りの本体（タスク 7.7）
 pub(crate) fn csv_bytes(ghost_name: &str, records: &[CapturedRecord]) -> Vec<u8> {
     let quote = |s: &str| s.replace('"', "\"\"");
     let ghost = quote(ghost_name);
@@ -52,7 +49,6 @@ pub(crate) fn csv_bytes(ghost_name: &str, records: &[CapturedRecord]) -> Vec<u8>
 }
 
 /// records が空なら何もしない（作らず、在るファイルに触れない＝7.6）。書けなければ error! を出して Err（7.7）。
-#[allow(dead_code)] // 呼び手は走りの本体（タスク 7.7）
 pub(crate) fn write_csv(
     path: &Path,
     ghost_name: &str,

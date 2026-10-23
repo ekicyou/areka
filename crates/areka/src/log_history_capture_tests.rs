@@ -7,10 +7,10 @@ use std::sync::Mutex;
 
 use super::*;
 
-/// 窓を触るテストの排他（このファイルの中だけ）。
+/// 窓を触るテストの排他（窓を開け閉めする書き出しの走りの試験 `offline_dump_tests` も握る）。
 static WINDOW: Mutex<()> = Mutex::new(());
 
-fn hold() -> MutexGuard<'static, ()> {
+pub(crate) fn hold() -> MutexGuard<'static, ()> {
     WINDOW.lock().unwrap_or_else(PoisonError::into_inner)
 }
 

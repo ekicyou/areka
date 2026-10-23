@@ -207,7 +207,7 @@
   - 上の試験が `render_tests.rs` で緑で、`render.rs` と試験のファイルが 1,000 行の内（超えるならテーマで分ける）
   - _Requirements: 4.8, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 12.1_
 
-- [ ] 7.7 書き出しの走りの前半: ゴースト・シェル・写しの窓・始めと終わり
+- [x] 7.7 書き出しの走りの前半: ゴースト・シェル・写しの窓・始めと終わり
   - 走りの入口: 始めの info（ゴースト・シェル・スコープ・面の指定・出力先・CSV の生の値）→ ゴーストのフォルダを起動したときの今のフォルダから絶対にしてゴーストの名前を読む（値なし・失敗は error を出して CSV を作らず 0）→ 写しの窓を開ける → スコープを読む（無ければ 0・0 以上の整数で読めなければ 0 と warn＝design の順どおり窓を開けた直後・`--dump-shell` の前に置き、CSV の行の順を design と同じにする）→ `--dump-shell` を 6.3 の段で探す（見つからなければ Error を 1 件・面の段を飛ばす）→ シェルを解決する → COM（MTA）を初期化する → シェルを読み、面の表を 1 度だけ受け取る（フォルダが無い・COM の失敗は走りが error、読み込みの失敗は下の層の error だけ）→ 写しの窓を閉じる → 終了コード → CSV → 終わりの info（書いた数・書けなかった数・最も重いレベル・終了コード）
   - 途中の失敗も必ず窓を閉じる段へ流れる。areka の記憶・置き場・MCP・窓の部品を呼ばない（許す依存の一覧の外を使わない）
   - 試験（`offline_dump_tests.rs`・7.1 の検体）: ゴーストのフォルダが無い・descript.txt が無い・値なしで 0 を返し CSV を作らない、ゴーストのフォルダの末尾の `\` の有無で同じシェルになる、`--dump-shell` が名前とフォルダ名で見つかる・見つからない、シェルのフォルダが無い、スコープの無し・読めない値で 0
@@ -276,3 +276,4 @@
 - 7.2: 面の指定は頭の `surface` を外してから `!` を読むので `surface!4` は読め `!surface4` は読めない（design の順・SSP の扱いは測っていない）。`read_surface_list`・`resolve` の `#[allow(dead_code)]` は 7.7／7.8 で外す
 - 7.5: 合成は負の座標の部分を切り捨てるので、負の座標の element を持つ面では下地の左上の余白が透明のまま（design の Risks・`areka-P0-extent-element-offset` が追う）。`render_surface`・`render_png`・`Canvas::from_bounds` の `#[allow(dead_code)]` は 7.6／7.8 で外す
 - 7.6: `png_path` は頭の文字列が空だと `0.png` を返す＝走り（7.8）は `--dump-output-prefix` の値なしで `DEFAULT_PREFIX` に替える。頭の文字列の絶対パスや `..` は止めない（要件の外）
+- 7.7: 走りは `offline_dump::run(&OfflineDumpRequest) -> i32`。7.8 のつなぎ口は `surface_stage(req, scope, LoadedShell) -> DumpTally`（`LoadedShell { bindgroups, target, world }`）。走りを呼ぶ試験は写しの窓がプロセスに 1 つなので `log_history::capture_tests::hold()` の排他を共有する。単体の試験では写しの層が無く CSV と終了コード 2 は見えない＝10.1。`shell_candidates` は `areka-ghost` の catalog を読むだけで使う＝9 で structure.md の許す依存に一言添える
