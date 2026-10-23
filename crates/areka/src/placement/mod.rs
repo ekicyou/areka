@@ -441,7 +441,15 @@ fn prepare_stages_for_shell(
     // ここ（採寸の源）で吸収され、`spawn.rs` は k 倍済み `SizePx` を consume するのみ
     // ＝窓生成・窓移動の責務は不変（要件 3.4/7.6）。
     let (scaling, measure_dpi) = build_measure_scaling(primary_dpi, author_dpi);
-    let sizes = measure::measure_scope_sizes(&src.shell_dir, balloon_root, &scope_ids, &scaling)?;
+    // shortcut: 組み込みの既定の面で測る、descript-window-keys task 2.2 で読んだ値へ替える。
+    let default_surfaces = descript_window_keys::DefaultSurfaces::builtin();
+    let sizes = measure::measure_scope_sizes(
+        &src.shell_dir,
+        balloon_root,
+        &scope_ids,
+        &default_surfaces,
+        &scaling,
+    )?;
     // 起動観測点（D10・要件 6.3）: 窓生成へ渡る**k₀ 倍後の物理寸**そのものを載せる。
     // 非 96 環境では k_shell/k_balloon が 1.0 以外になり、scopes の寸が原寸の k₀ 倍で
     // あることを RUST_LOG の grep だけで決定論的に判定できる。
