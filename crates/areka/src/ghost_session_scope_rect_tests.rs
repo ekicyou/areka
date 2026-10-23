@@ -79,3 +79,13 @@ fn malformed_selector_has_no_value() {
         );
     }
 }
+
+/// 壊れた窓の印（0）は値なしで、呼んだスレッドの DPI の扱いは呼ぶ前と同じに戻る（要件 4.4・1.3）。
+#[test]
+fn os_window_rect_invalid_handle_is_none_and_restores_dpi_context() {
+    use windows::Win32::UI::HiDpi::{AreDpiAwarenessContextsEqual, GetThreadDpiAwarenessContext};
+    let before = unsafe { GetThreadDpiAwarenessContext() };
+    assert_eq!(os_window_rect(WindowKey(0)), None);
+    let after = unsafe { GetThreadDpiAwarenessContext() };
+    assert!(unsafe { AreDpiAwarenessContextsEqual(before, after) }.as_bool());
+}

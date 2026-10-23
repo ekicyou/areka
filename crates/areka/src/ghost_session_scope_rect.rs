@@ -132,6 +132,41 @@ pub(crate) fn rect_text(rect: ScreenRect) -> String {
     format!("{},{},{},{}", rect.left, rect.top, rect.right, rect.bottom)
 }
 
+/// 窓の印から OS の今の窓の矩形を 1 回で読む（本物・読み手の既定の読み取り）。
+///
+/// `GetWindowRect` は呼んだスレッドの DPI の扱いで値が変わるので、呼ぶ間だけ
+/// モニタごとの v2 にして物理の画素で読む（要件 1.3）。窓のスレッドは待たない（要件 5.1）。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.scope_28ID_29.rect:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.balloon.scope_28ID_29.rect:1
+pub(crate) fn os_window_rect(key: WindowKey) -> Option<ScreenRect> {
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::UI::HiDpi::{
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
+
+    let mut r = RECT::default();
+    let read = unsafe {
+        let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let read = GetWindowRect(HWND(key.0 as *mut _), &mut r);
+        if previous.is_invalid() {
+            tracing::debug!(
+                event = "scope_rect_dpi_context_unchanged",
+                "DPI の扱いを変えられなかった（今の扱いのまま読んだ）"
+            );
+        } else {
+            SetThreadDpiAwarenessContext(previous);
+        }
+        read
+    };
+    read.ok().map(|()| ScreenRect {
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom,
+    })
+}
+
 #[cfg(test)]
 #[path = "ghost_session_scope_rect_tests.rs"]
 mod tests;
