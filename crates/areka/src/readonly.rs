@@ -46,8 +46,6 @@ pub(crate) fn install(world: &mut World) {
 }
 
 /// World の中の守りが読む（試験は自分の World に [`ReadOnlyRun`] を足す）。
-// 一時: 最初の読み手は 4.1（`install`）で足す。
-#[allow(dead_code)]
 pub(crate) fn of(world: &World) -> bool {
     world.contains_resource::<ReadOnlyRun>()
 }
