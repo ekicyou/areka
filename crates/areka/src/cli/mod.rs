@@ -20,8 +20,6 @@ pub(crate) struct StartupOptions {
     /// `--help` が渡された（値は使わない）。
     pub help: bool,
     /// `--offline-dump` が（値の有無に関わらず）渡されたら Some。
-    // 読み手は 7.7 の書き出しの走り（main の入口は 8.1）。
-    #[allow(dead_code)]
     pub offline: Option<OfflineDumpRequest>,
 }
 

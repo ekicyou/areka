@@ -223,7 +223,7 @@
   - _Depends: 2.3, 5.2_（5.2 の検体の部品を使うため）
   - _Requirements: 3.6, 3.8, 3.9, 3.10, 4.2, 4.5, 4.8, 14.3, 14.4_
 
-- [ ] 8. 入口でオフラインへ渡して終える
+- [x] 8. 入口でオフラインへ渡して終える
   - 記録の初期化と起動オプションの読みと `--help` の判定の直後に、オフラインの欄があれば走らせてその終了コードでプロセスを終える分岐を数行で足す（スレッドの役目の登録・性能の報告・起動の解決・書けるかの確かめ・二重起動の確かめ・MCP・窓より前）。判断と記録は `offline_dump` に置く
   - `--help` が真ならオフラインは走らない
   - `main.rs` が 1,000 行の内で、建った `areka.exe --offline-dump <検体>` を `target\` の下の検体で 1 度回すと、窓を出さずに PNG を書いて終わり終了コードを返す（分岐ごとの確かめは 10 の試験）
@@ -279,3 +279,4 @@
 - 7.7: 走りは `offline_dump::run(&OfflineDumpRequest) -> i32`。7.8 のつなぎ口は `surface_stage(req, scope, LoadedShell) -> DumpTally`（`LoadedShell { bindgroups, target, world }`）。走りを呼ぶ試験は写しの窓がプロセスに 1 つなので `log_history::capture_tests::hold()` の排他を共有する。単体の試験では写しの層が無く CSV と終了コード 2 は見えない＝10.1。`shell_candidates` は `areka-ghost` の catalog を読むだけで使う＝9 で structure.md の許す依存に一言添える
 - 7.8: 面の段の順は「SERIKO の表・下地（面の指定が無くても作る＝表の warn を CSV に残す）→ 面の指定が無ければここで閉じる → 既定の組と `--dump-bind` → 面の指定の展開 → 1 面ずつ書く」。出力先のパスを絶対にできないときは error 1 行で指定の面を全部「書けなかった」に数える（実装係の足した最小の道）。`RenderError::Write` の欄の `#[allow(dead_code)]` は Debug でだけ読むため残す
 - 9: `offline_dump` は design の許す依存の一覧に無い `areka-sakura` を `ActorKey` の型だけ使う（`ScopeStates::current_binds`・`apply_named_bind` が要る・areka は前から依存）。structure.md には実際どおり載せた
+- 8: 机を持った 1 回の走り（`--offline-dump ghost8 --dump-surface-list 0-200`）は終了コード 0・5.7 秒・窓なし・PNG 3 枚・誤り無しで CSV なし。範囲外: `cargo test -p areka --bins` で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が待ち時間の切れで 1 度赤（単独では緑・触っていない場所）＝完了の棚卸で扱う

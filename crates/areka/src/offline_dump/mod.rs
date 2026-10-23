@@ -50,7 +50,6 @@ struct LoadedShell {
 }
 
 /// オフラインの書き出しを 1 回走らせ、終了コード（0・1・2）を返す。
-#[allow(dead_code)] // 呼び手は main の入口（タスク 8）
 pub(crate) fn run(req: &OfflineDumpRequest) -> i32 {
     tracing::info!(
         event = "offline_dump_started",

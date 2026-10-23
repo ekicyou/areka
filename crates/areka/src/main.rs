@@ -174,6 +174,10 @@ fn main() -> Result<()> {
     if opts.help {
         return cli::help::run();
     }
+    // `--offline-dump` は書き出しだけ走らせ、その終了コードで終える（役目の登録・起動の解決・MCP・窓より前）。
+    if let Some(req) = &opts.offline {
+        std::process::exit(offline_dump::run(req));
+    }
     if opts.modules == cli::ModulePolicy::Skip {
         tracing::info!(
             event = "shiori_skipped",
