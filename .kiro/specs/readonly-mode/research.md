@@ -174,6 +174,8 @@ ukadoc の「ネットワーク更新の失敗理由」には `readonly` とい�
 7. **印の扱いの実装**（議題 1 の推しの具体）: 案 A／C なら印は控えへ行き、ファイルの印は読んだまま残る（`argv_session` の 4 ファイルに触らない）。印の 3 関数の記録の文だけを分ける。別の旗（「印を読むが書かない」）を `BootContext` に足す形は `main.rs`（残り 22 行）と 4 ファイルに響く。
 8. **印を立てる場所と `main.rs` の行数**: `resolve_boot` より前に立てる必要がある（`layout()` が固まる前）。`main.rs` に置く行を数行に収め、記録と立て方は新しいモジュールへ出す。
 
+9. **⑥ `dpi-realign-remembered-chain` との同じファイル**（2026-10-23 に ⑥ のセッションから知らせ）: ⑥ は窓の位置の記憶に新しい項目を足すため `crates/areka-sylphya/src/persist/mod.rs`（`PersistKey` と TOML への写し）と `persist/format.rs`（`FormatDoc` の表）に触る（format-version は上げない）。意味の上では当たらない（足す項目も同じ書く道を通り、readonly の「書かない」に覆われる）。当たるのは同じファイルの文字だけ＝後に着地する側が取り込む。設計の前に main を取り込み直し、⑥ が先に着地していればその形の上に書く。
+
 ### Research Needed（設計の段で調べる）
 
 - `IFileOpenDialog` の `FOS_DONTADDTORECENT` が止める範囲と、画面が自分で覚える最後のフォルダ（利用者の設定の中）を止める手があるか（`SetClientGuid`・`ClearClientData`）。
