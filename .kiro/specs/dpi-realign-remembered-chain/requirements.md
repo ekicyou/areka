@@ -62,9 +62,10 @@ brief は決め方を要件の段で決めるとし、候補を 3 つ挙げた�
   - `multi-ghost-runtime`（後の版）は、隣り合いの判定をゴーストごとへ運ぶ。
 - **同じウェーブ（C11）で並んで進む仕事との約束**（`roadmap.md`「ウェーブ編成」C11 の ⑥ の行）:
   - この spec が触る所: `crates/areka/src/placement/{chain_realign,chain_finalize,spawn,persist}.rs`・`emo2_boot/frame.rs`・`emo2_boot/frame/{dpi,drain_resnap}.rs`・wintf の `ecs/window_proc/mouse_move.rs`・`ecs/drag/dispatch.rs`（件 9）と、それぞれの兄弟のテスト（上限の近い `placement/persist_restore_tests.rs`・`emo2_boot/frame_test_support.rs` へは足さず、新しいファイルへ）・`doc/COMPAT_ARCHITECTURE.md` §8（表の末尾への追記）。
+  - 件 9 は、組に入った窓（ぱすた）のドラッグにも効かせる。ぱすたのドラッグ中と落とした時の位置は wintf の `mouse_move.rs` でなく `placement/follow/drag_follow.rs` の式で決まる（`research.md` 1.4 節）が、`drag_follow.rs` には触らない約束のまま直す（直し方は設計で決める・`research.md` 3.4 節の D1＝ドラッグの始めの値を置き直す道なら `emo2_boot/frame/dpi.rs` か `drag/dispatch.rs` と `mouse_move.rs` の内に収まる見込み）。
   - 触らない所: `placement/transition_judge.rs`・`placement/follow/window_move.rs`・`placement/{config,measure}.rs`・`placement/follow/drag_follow.rs`（`descript-window-keys` の持ち物）・`emo2_boot` の結線の列のファイル（`mod.rs`・`ghost_switch.rs`・`frame/{attach,switch,wiring}.rs`）・統一プロパティシステムの `crates/areka-sylphya/`（`readonly-mode`・`mcp-scope-rect-property` の持ち物）。
   - 依存を足さない。
-  - **案 A（要件 6 の仮置き）は C11 の約束をまたぐ**: 記憶に覚えたときの幅（または隣り合っていた印）を足すには、記憶の項目の一覧 `crates/areka-sylphya/src/persist/mod.rs`（`readonly-mode` が触る）と、ドラッグの確定で記憶に書く所 `placement/follow/drag_follow.rs`（`descript-window-keys` の持ち物）に手が入る。案 A を確定するなら、両 spec のセッションと順を調整するか、記憶の形を足す部分だけを次のウェーブの別の spec に切るかを、要件の話し合いで決める。案 B・案 C を採れば約束の内に収まる。
+  - **案 A（要件 6 の仮置き）は C11 の約束をまたぐ**: 記憶に覚えたときの幅（または隣り合っていた印）を足すには、記憶の項目の一覧 `crates/areka-sylphya/src/persist/mod.rs`（`readonly-mode` も触る。向こうが触るのは書かない形への差し替えの口で、項目の一覧とは別の所＝同じファイルの文字の当たりだけ）と `persist/format.rs`（記憶のファイルの表）に手が入る。記憶から戻す道の `crates/areka/src/main.rs`（`restore_merged_placements`）と `ghost_session.rs` にも数行要る（C11 のほかの spec は名指ししていない）。`placement/follow/drag_follow.rs`（`descript-window-keys` の持ち物）は要らない（記憶に書く 4 つの所はどれも `placement/persist.rs` の `persist_entries` を通るので、そこで足せる・`research.md` 4 節）。案 A を確定するなら、`readonly-mode` のセッションと着地の順を調整するか、記憶の形を足す部分だけを次のウェーブの別の spec に切るかを、要件の話し合いで決める。案 B・案 C を採れば約束の内に収まる。
 
 ## Requirements
 
@@ -75,7 +76,7 @@ brief は決め方を要件の段で決めるとし、候補を 3 つ挙げた�
 #### Acceptance Criteria
 
 1. When 拡大率が変わり、全部のキャラクター窓が新しい拡大率の大きさで表示し終えたとき, the areka shall 変わる直前に隣り合っていたキャラクターの組を、位置を記憶から戻したかどうか・利用者がドラッグしたかどうかにかかわらず、新しい大きさで隙間なく隣り合わせる。
-2. The areka shall 要件 1.1 の「隣り合っていた」を、2 つのキャラクター窓が横に並び（縦の範囲が重なり）、重ならずに、向かい合う左右の端の隙間が許す幅（数ピクセル。値は設計で決めて、処理の説明に残す）以内であることとする。
+2. The areka shall 要件 1.1 の「隣り合っていた」を、2 つのキャラクター窓が横に並び（縦の範囲が重なり）、向かい合う左右の端の隙間または重なりが許す幅（数ピクセル。値は設計で決めて、処理の説明に残す）以内であることとする（拡大率の置き直しの丸めで出る 1 ピクセルほどの重なりは隣り合いに含める）。
 3. When 隣り合っていた組を詰め直すとき, the areka shall 本体に近い側（スコープの番号が小さい側）の窓を動かさず、もう一方の窓を横にだけ動かし、隣り合っていた左右の側を保つ。
 4. The areka shall 詰め直しでキャラクター窓の縦の位置を変えない（縦は拡大率が変わったときの置き直しが保っている足元の位置のまま）。
 5. Where キャラクターが 3 体以上いるとき, the areka shall 本体から順に、隣り合っていた組ごとに要件 1.1〜1.4 を当て、前の窓を詰め直した後の位置を次の組の基準にする（キャラクターの数を 2 体に決め打ちしない）。
@@ -90,7 +91,7 @@ brief は決め方を要件の段で決めるとし、候補を 3 つ挙げた�
 #### Acceptance Criteria
 
 1. If 拡大率が変わる直前に 2 つのキャラクター窓が離れていたとき（要件 1.2 の許す幅より広い隙間）, the areka shall どちらの窓も詰め直しで動かさない（拡大率が変わったときの足元の中央を保つ置き直しのまま）。
-2. If 拡大率が変わる直前に 2 つのキャラクター窓が重なっていたとき, the areka shall どちらの窓も詰め直しで動かさず、横に並べない。
+2. If 拡大率が変わる直前に 2 つのキャラクター窓が要件 1.2 の許す幅を超えて重なっていたとき, the areka shall どちらの窓も詰め直しで動かさず、横に並べない。
 3. Where キャラクター窓が一緒に動く組（`seriko.sticky-window` などで結んだ窓）に入っているとき, the areka shall その窓を詰め直しで動かさない。
 4. While 利用者がキャラクター窓をドラッグしている間, the areka shall その窓を詰め直しで動かさず、その窓へほかのキャラクター窓を寄せることもしない。
 5. When 表情の差し替えなど、拡大率が変わらずに絵の大きさだけが変わったとき, the areka shall 詰め直しを行わない（キャラクターを横へ動かさない約束＝`areka-P0-scope-chain-gap` 7.4・`areka-P0-dpi-transition-atomicity` 要件 6.6 を保つ）。
