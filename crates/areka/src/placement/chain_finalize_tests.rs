@@ -8,13 +8,18 @@
 
 use super::*;
 
+/// 補助が組むスコープの Y（縦の位置は既定のまま）。
+const Y: i32 = 336;
+
 /// 未接触スコープを組む補助（現在位置＝既定位置）。
 fn untouched(scope: usize, x: i32, w: i32) -> ScopeChainState {
     ScopeChainState {
         scope,
         current_x: x,
+        current_y: Y,
         width: w,
         default_x: Some(x),
+        default_y: Some(Y),
     }
 }
 
@@ -23,8 +28,10 @@ fn repositioned(scope: usize, current_x: i32, w: i32, default_x: i32) -> ScopeCh
     ScopeChainState {
         scope,
         current_x,
+        current_y: Y,
         width: w,
         default_x: Some(default_x),
+        default_y: Some(Y),
     }
 }
 
@@ -33,8 +40,10 @@ fn restored(scope: usize, current_x: i32, w: i32) -> ScopeChainState {
     ScopeChainState {
         scope,
         current_x,
+        current_y: Y,
         width: w,
         default_x: None,
+        default_y: None,
     }
 }
 
@@ -189,6 +198,28 @@ fn repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis() {
         xs[2], 700,
         "以後の連鎖は実位置 900 を基準にする（900 − 200）"
     );
+}
+
+/// **縦にだけ動かされたスコープも明示の位置**で、横へ並べ直さない（崩れの表 6）。
+///
+/// 実機（pasta）: 起動の台本が `\1` を `\![move,--X=0,--Y=0,--base=0,...]` で (0,336) から
+/// (0,864) へ動かした。x は既定のままなので、x だけで比べると「既定配置のまま」と読まれ、
+/// 本体の左隣（別の画面の x=-1108）へ引き戻されていた。
+#[test]
+fn vertically_moved_scope_is_not_pulled_back() {
+    let mut moved = untouched(1, 0, 1108);
+    moved.current_y = 864;
+    let states = [untouched(0, 1000, 400), moved, untouched(2, 0, 200)];
+
+    let moves = finalize_chain(&states);
+
+    assert!(
+        moves.iter().all(|m| m.scope != 1),
+        "縦にだけ動かされたスコープへ指示を出さない（7.3）: {moves:?}"
+    );
+    let xs = apply(&states, &moves);
+    assert_eq!(xs[1], 0, "台本が置いた x のまま");
+    assert_eq!(xs[2], -200, "以後の連鎖は実位置 0 を基準にする（0 − 200）");
 }
 
 /// **保存位置が復元されたスコープは、現在位置に関わらず常に対象外**（scg 7.3）。

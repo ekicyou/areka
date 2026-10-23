@@ -277,8 +277,8 @@ fn partner_moved_by_shiori_before_finalize_is_not_written() {
 }
 
 /// テスト 11c（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を SHIORI の移動の指示と同じ口で
-/// **縦にだけ**動かすと、並べ直しは x だけを見るので相方を横へ並べ直すが、相方は書かれず本体だけ
-/// 書かれる（台本の y は既定の位置に入らない）。相方の記憶には目印を入れておき、書けば目印が
+/// **縦にだけ**動かすと、並べ直しはそれを明示の位置と見て相方を動かさず（崩れの表 6）、相方は
+/// 書かれず本体だけ書かれる（台本の位置は既定の位置に入らない）。相方の記憶には目印を入れておき、書けば目印が
 /// 消えることで見分ける。
 #[test]
 fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
@@ -296,7 +296,10 @@ fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     finalize_chain_once_with(&shown, &mut world);
 
     let partner = pos_of(&world, char1).expect("相方の位置");
-    assert_ne!(partner.x, start.x, "前提: 並べ直しは相方を横へ動かす");
+    assert_eq!(
+        partner.x, start.x,
+        "前提: 並べ直しは縦に動かされた相方を横へ動かさない"
+    );
     assert_eq!(partner.y, start.y - 33, "前提: 台本の y は据え置かれる");
     let saved = store.load();
     assert_eq!(

@@ -89,10 +89,11 @@
   - 5.4 で直す件は、触るファイルをこの計画の 5.4 の詳細に書き足してから直す
   - 終わった形: 記録の直しの節に、件ごとの扱いと見積もりと 20 本の線の判定が在り、起票した件は spec の名前が書かれている
   - _Requirements: 5.4, 6.2, 6.3_
-- [ ] 5.4 持ち主の居ない小さい崩れを根本から直す
+- [x] 5.4 持ち主の居ない小さい崩れを根本から直す
   - 5.3 で本 spec が直すと決めた 1 件目を直す（2 件目からは 5.3 で足したタスクがそれぞれ受け持つ）。直す前に赤・直した後に緑の決定論のテストを兄弟の `*_tests.rs` に置く。`crates/areka/src/main.rs` には足さない
   - すべてのゴーストの見え方・当たり・SHIORI へ渡すものを変える直しは、直す前に開発者の決めを仰ぐ。兄弟の持ち分は直さず、ぱすたの辞書と書庫は書き換えない
   - 完了 spec の要件を上書きする直しは番号を記録に書く。記録の無い失敗の道を作らず、利用者へ伝える失敗はゴーストの台詞で伝える
+  - 直す件（2026-10-23 開発者の承認・崩れの表 6）: 起動の最後の並べ直し（`finalize_chain`）が、組の窓が既定の位置のままかを x だけで比べ、y だけ動かされた `\1` を既定の位置のままと読んで別の画面へ並べ直す。x と y の両方で比べる。触るファイル: `crates/areka/src/placement/chain_finalize.rs`・`chain_finalize_tests.rs`、既定の位置（`default_x`）を控えて渡す所（`crates/areka/src/emo2_boot/frame.rs`・`frame/drain_resnap.rs` と、その兄弟のテストの支え `frame_test_support.rs`・`frame_default_pos_track_tests.rs`）。実装で足した物: `crates/areka/src/emo2_boot/frame_chain_finalize_persist_tests.rs`（テスト 11c の前提を新しい規則へ）・`crates/areka/src/placement/persist.rs`（説明の文だけ）
   - 終わった形: 直した件に赤から緑のテストが在り、触ったクレートのテストが緑。直す件が 0 件なら、その旨を記録に書く
   - _Requirements: 6.1, 6.4, 6.5, 6.6, 6.7, 6.8_
 - [ ] 5.5 直した段を手順で回し直す

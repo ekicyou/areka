@@ -390,16 +390,13 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
     // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     //
-    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。並べ直しは x だけで「既定配置のまま」を
-    // 見るので、SHIORI の移動の指示で縦にだけ動かされた窓も動かす。今の Y を載せると台本の Y が
-    // 既定に入り、既定と今の位置が揃って「動かされていない」に化け、並べ終えた時点の保存が台本の
-    // 位置を書いてしまう（areka-P0-char-position-save-on-exit 要件 1.7・SHIORI の移動はその回かぎり）。
-    // 普段は今の Y と既定の Y が等しいので結果は変わらない。
+    // Y は**元の既定位置の Y** を載せる。並べ直しは x・y の両方が既定のままの窓しか動かさない
+    // （縦にだけ動かされた窓も明示の位置・崩れの表 6）ので、今の Y と既定の Y は等しい。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {
         for m in &moves {
-            // 動かすのは既定の x と今の x が等しいスコープだけなので既定は必ずある。
+            // 動かすのは既定の位置と今の位置が等しいスコープだけなので既定は必ずある。
             let Some(old_default) = ghost_windows.default_char_pos(m.scope) else {
                 debug!(
                     scope = m.scope,
@@ -480,7 +477,7 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         // （atom D9／D16・要件 6.2）。拡大率の遷移では単一の窓書込口が同じ量を書込先へ
         // 運ぶので、誰も触っていないスコープは遷移後も一致したまま＝対象に残る。運ばないと
         // 全スコープが「明示的に動かされた」へ倒れて解き直しが空振りする。
-        let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
+        let default_pos = ghost_windows.default_char_pos(scope);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
         let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
             return Err(ChainDeferReason::NotShownYet { scope });
@@ -508,8 +505,10 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         states.push(ScopeChainState {
             scope,
             current_x: pos.x,
+            current_y: pos.y,
             width: iw,
-            default_x,
+            default_x: default_pos.map(|p| p.x),
+            default_y: default_pos.map(|p| p.y),
         });
         targets.push((scope, char_window, PointPx { x: pos.x, y: pos.y }));
     }
