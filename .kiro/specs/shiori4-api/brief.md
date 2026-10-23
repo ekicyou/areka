@@ -29,38 +29,32 @@ areka には COM の `IShioriFactory`／`IShiori`／`IShioriHost`（`crates/shio
 - `doc/COMPAT_ARCHITECTURE.md` §5 と `.kiro/steering/roadmap.md` の技術の要約は「SHIORI 内部唯一 ABI＝`IShiori`（COM, HSTRING/UTF-16）」のまま。
 - `load` に渡すフォルダのパスは `…\ghost/master`（区切りが混ざり、末尾に区切りが無い）。出どころは `crates/areka-parsers/src/package/resolve_shell.rs` の `GHOST_MASTER` を `join` する所（`shiori_inproc.rs` も helper の `shiori_proxy.rs` の `init_bytes` も整えずに渡す）。
 
-## 2026-10-23 の shiori4 セッションとの調整
-areka のセッション（SHIORI4:areka）が、ベースウェアの実装者として 8 点を出し、shiori4 のセッションがすべてに同意した（3 だけ対案）。**どれも両セッションの推奨で、確定は開発者**。確定した語は **shiori4 リポジトリを正本**にする（pasta 側の「SHIORI4:pasta」セッションにも同じ表が渡っている）。
+## 2026-10-23 の調整（shiori4・pasta との 3 者会談）
+areka のセッション（SHIORI4:areka）が、ベースウェアの実装者として「shiori4」と「SHIORI4:pasta」の両セッションと詰めた。途中から shiori4 の開発者の指示で 3 者会談になった（shiori4 は記録係・割れたら shiori4 の開発者が裁定）。**割れた論点は無い**。
 
-| # | 論点 | 合意した推奨 | shiori4 側の置き場 |
-|---|---|---|---|
-| 1 | プロパティの書き込みが無い | `ID: setproperty` ／ `Reference0: 名前` ／ `Reference1: 値` → 204 成功・400 不正。読みも `ID: getproperty` へ改名して get／set の対にする（0.0.1 の `ID: property` を壊すが、利用者がまだいない 0.0.x のうちに直す） | ② host-protocol |
-| 2 | post の `Command` の語彙が空 | SSTP の語に寄せる。`Command: SEND` ＋ `Script`＝台本を再生する。`Command: NOTIFY` ＋ `Event`／`Reference*`＝ホストがそのイベントを SHIORI へ送る。post は「同じプロセスからの SSTP」として扱う（pasta の「今すぐ台本を出す」要望も SEND で満たす） | ② |
-| 3 | 安全上の拒否を「存在しない（204）」と区別する | 400 ＋ `Reason: forbidden`（SHIORI/3.0 の形を崩さない・`X-` は付けない）。v4 だけに 403 を足す案と二択で、shiori4 側が開発者に出す | ② |
-| 4 | プロパティの名前の決まり | ukadoc のプロパティシステムの名前をそのまま使う・ベースウェア固有の名前は接頭辞（例 `areka.`）で分ける・大文字小文字は区別しない・値の改行は取り除く（改行を含む値が要るプロパティが出たら別の名前で足す） | ② |
-| 5 | `load` の dir の形 | v4 も v3 互換も「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」 | ① abi-conventions |
-| 6 | v4 の Charset | 要求に付けなくてよく、付いていても無視する。応答にも付けない | ① |
-| 7 | v4 のヘッダの語彙 | 「v4 のヘッダの名前と意味は SHIORI/3.0（ukadoc）と同じ」と明記する。ホストが必ず付けるヘッダ（Sender・SecurityLevel・Status・BaseID）と、SHIORI の名前と版をホストが知る手段（`ID: version` の候補）も同じ所で決める（pasta の要望） | ② |
-| 8 | `OnHostComplete` の届け方 | 既定は request（結果を台本で返しうるため）。SHIORI は request と notify の両方を受けられなければならない | ② |
+**正本（語を areka の文書へ写さず、ここを参照する）**: shiori4 リポジトリの作業ブランチ `claude/abi-host-protocol`（10-23 時点で main には未統合）。
+- `.kiro/specs/host-protocol/brief.md` の「合意した論点」1〜9（`5cabbfa`）: `getproperty`／`setproperty`・post の `SEND`／`NOTIFY`（SSTP の語）・宛先は post したインスタンス・プロパティ名の決まり・必須のヘッダ・`ID: version` など・OnHostComplete の並び・拒否は 400＋`Reason: forbidden`・SEND は SSTP どおり既定で割り込み `Option: nobreak` で待つ。
+- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約。
+- 要件の段に入ったら、それぞれの requirements.md を参照する。
 
-shiori4 側はこれを 2 本の spec（① `abi-conventions`＝ヘッダの注釈・スレッドの意味・`SHIORI_E_WRONG_THREAD`・unload の後の約束など／② `host-protocol`＝上の表の 1〜4・7・8）で確定させる。2 本の brief は shiori4 の作業ブランチ `claude/abi-host-protocol` に起票済み（10-23 時点で main には未統合）。この spec は ② を上流として参照する。
+**追加で合意した論点 A〜F**（areka が出し、shiori4・pasta が賛成。記録は `b69856d`＝C・D・E は host-protocol の論点 10〜12、A・B・F は abi-conventions の「追加の論点」8〜10。2 本の brief の論点はすべて合意済みで、この先は shiori4 の開発者が要件の段で承認する）:
+- A: 同じ DLL のファイルを 2 体のゴーストが使うと、同じプロセスで load が 2 回呼ばれる。SHIORI は 2 つ目を断ってよい（load が NULL＋log）が、できれば受けるべき。pasta は受けられる見込み（Lua VM はアクタースレッドごと。プロセスに 1 つの mailbox などはインスタンスへ移し、デバッグの待受は 2 体目以降では開かない。入れる版は pasta の要件で決める）。
+- B: 「ホストが決めた単一のスレッド」はインスタンスごと。`SHIORI_E_WRONG_THREAD` の判定もインスタンスごと。
+- C: post の SEND は SSTP の Option の `nobreak`・`notranslate`・`strict` を ukadoc どおり読む。`nodescript` は読まない。知らない語は無視する。
+- D: post の NOTIFY のイベント名に制限は掛けない。ホストは安全上の理由で 400＋`Reason: forbidden` で断れる。
+- E: `Reason` の語は当面 `forbidden` だけ。未知の語は理由不明の拒否と読む。
+- F: unload は長く止まらないこと。ホストは OS の終了の猶予の中で各インスタンスの unload を呼ぶことがある（時間の数字は書かない）。
 
-### 3 者会談（10-23・shiori4 の開発者の指示で areka・pasta・shiori4）
-shiori4 は記録係。areka と pasta が直接詰め、合意したものと割れたものを shiori4 へ送る。割れたものは shiori4 の開発者が裁定する。
+**この合意で areka が引き受ける仕事**（正本の語のとおりに作る）:
+- `Host` の実装で `getproperty`／`setproperty` に答える（許可は `property-query-channels` の表・拒否は 400＋`Reason: forbidden`）。
+- post の `SEND`／`NOTIFY` を、MCP と同じ kanade の口へ通す。SEND は既定で割り込み、`Option: nobreak` のときだけ待つ。優先度は Owned SSTP と同じ。
+- **待ちの列を作る**（`nobreak` の SEND と、OnHostComplete の応答の台本の 2 つ）。areka は今トークの枠が 1 つで、列を持たない。
+- SEND の完了は再生が終わった時に出す（`completed`／`interrupted`・一度も再生せずに捨てたら 204）。
+- v4 の要求は、今の SHIORI/3.0 の組み立て器（`crates/shiori-host32-host/src/request_headers.rs` の `request_of`）から開始行と Charset を外して作る。post から起きた要求には `SenderType: internal`・`SecurityLevel: local` を付ける。
+- 同じ DLL のファイルを 2 体が使うとき、2 つ目の load が断られうる前提で扱う（論点 A。読めなかったゴーストとして既定のゴーストの台詞で伝える）。
+- `GhostRuntime` はゴーストごとの専用スレッドに置く（論点 B）。
 
-| 議題 | 結果 |
-|---|---|
-| post の宛先 | 「post したインスタンス」に固定し、IfGhost などは読まない（pasta 案） |
-| 拒否の返し方（表の 3） | areka と pasta が合意: 400 ＋ `Reason: forbidden` |
-| 必ず付けるヘッダ（表の 7） | areka と pasta が合意: 必須は `ID`・`Sender`・`SenderType`・`SecurityLevel`・`SecurityOrigin`。`Status`・`BaseID`・`Reference*` は状況による。`SecurityLevel` の語は `local`／`external` だけ。post から起きた要求には `SenderType: internal`・`SecurityLevel: local` を付ける（areka は今もこの順で組んでいる＝`crates/shiori-host32-host/src/shiori3.rs`・`request_headers.rs`） |
-| SHIORI の名前と版 | areka と pasta が合意: SHIORI/3.0 と同じ GET（`version`・`name`・`craftman`・`craftmanw`、200 ＋ `Value`）。ABI の版はヘッダに載せない |
-| OnHostComplete の NOTIFY | areka と pasta が合意: Reference1 は無し。起こせたかどうかを 200／400 で返す |
-| load の dir（表の 5） | pasta は問題なし（末尾の区切りの有無に関係なく読む） |
-| SEND の割り込みと完了 | areka と pasta が合意（pasta が areka 案に賛成・割れた所なしとして pasta が shiori4 へ送った）: **SSTP どおり既定で割り込み、`Option: nobreak` のときだけ待つ**。新しいヘッダ `Interrupt` は作らない。優先度は Owned SSTP と同じ（`	` があっても割り込める）。根拠は ukadoc spec_sstp の Option・ID と、完了 spec `mcp-kanade-tools` の裁定 1〜3「SEND は割り込む」。完了は再生が終わった時に出す: 200＋Reference1 `completed`／`interrupted`・204＝一度も再生せずに捨てた（`nobreak` で待つ間に終了・切り替え、ホストが今受けられない）・400＋`Reason`＝不正または拒否 |
-| 割り込まれた側への知らせ | 合意: OnBalloonBreak は使わない（ukadoc は「SSTP以外でブレイクされた際に発生」と定めている）。Tag 付きの post の SEND で出したトークなら、その OnHostComplete が `interrupted` を運ぶ。通常のイベントの応答として出したトークが SEND に切られたときは何も出さない（SSP と同じ）。利用者の中断は今までどおり OnBalloonBreak |
-| OnHostComplete の応答の台本（areka が足した論点） | 合意: `Option: nobreak` の SEND と同じに扱う（再生中なら待ち、待っている間に終了・切り替えが来たら捨てる）。届け方の既定は request のまま |
-
-**areka の今**（10-23・コードで確かめた）: 再生の列は無く、トークの枠は 1 つ。SSTP の受け口は未実装（起票の行だけ）。SEND は MCP の `sakurascript`／`raise_event` だけで、必ず割り込む（`crates/areka-kanade/src/schedule/sstp.rs`）。OnSecondChange 以外のイベントの応答も再生中のトークを置き換える。`\t` は未実装（`sakura-time-critical`）。
+**areka の今**（10-23・コードで確かめた）: 再生の列は無く、トークの枠は 1 つ。SSTP の受け口は未実装（起票の行だけ）。SEND は MCP の `sakurascript`／`raise_event` だけで、必ず割り込む（`crates/areka-kanade/src/schedule/sstp.rs`・完了 spec `mcp-kanade-tools` の裁定 1〜3）。OnSecondChange 以外のイベントの応答も、再生中のトークを置き換える。`	` は未実装（`sakura-time-critical`）。OnBalloonBreak は利用者の中断のときだけ出す（ukadoc「SSTP以外でブレイクされた際に発生」と一致）。
 
 ## Desired Outcome
 - **SHIORI4 は shiori4 の C ABI**。areka は `shiori4_host` を crates.io から使い、自前の COM の面（`crates/shiori-abi/`）とテスト用の COM の DLL（`crates/shiori4-testdll/`）を持たない。
@@ -68,7 +62,7 @@ shiori4 は記録係。areka と pasta が直接詰め、合意したものと�
 - **SHIORI からの問い合わせが本番で使える**（10-10 から「いま特に欲しいもの」）: `getproperty`／`setproperty` が sylphya に届き、post の `SEND`／`NOTIFY` が、MCP の `sakurascript`／`raise_event` と同じ kanade の SEND／NOTIFY の口（`crates/areka-kanade/src/schedule/sstp.rs`）と安全度の扱いを通る。
 - **プロパティへの入口が整理されている**: 入口が台本の指令・SHIORI4 の `host.request`・MCP のどれでも、名前の解決と許可の表は 1 か所（`property-query-channels` が決める所）を通る。
 - descript.txt の `shiori` が指す DLL が `shiori_get_api` を持ち、areka と同じ arch なら、v4 で同じプロセスに読む。持たなければ今までどおり helper で読む。
-- `load` に渡すパスは、v4 の道も helper の道も「絶対パス・OS の区切り・末尾に区切りあり」（上の表の 5）。
+- `load` に渡すパスは、v4 の道も helper の道も「絶対パス・OS の区切り・末尾に区切りあり」（abi-conventions）。
 - `doc/COMPAT_ARCHITECTURE.md` §5 と roadmap の技術の要約が、C ABI の SHIORI4 と「並べる」経路を書いている。
 
 ## Approach
@@ -79,13 +73,16 @@ shiori4 は記録係。areka と pasta が直接詰め、合意したものと�
 - **COM の面と JSON-RPC の封筒をやめる**（下の「開発者の判断」1・2）。446 項目の目録は ukadoc-survey が読むので残す。
 - 規模: 10-10 の見立て（L 超・要件で切る）は、ABI・封筒・第三者向けの文書と見本が shiori4 側へ移ったので小さくなった。**1 本（20 タスク以内）に収まる見込み**。要件の段で数え直し、超えたときだけ切る。
 
+## 開発者の決定（2026-10-23）
+開発者「areka の立場としては、COM-SHIORI インターフェースの作りかけのものはもう排除しちゃって、shiori4 に完全移行するつもりで考えてほしい。shiori4 の ABI なら、Windows 以外でもそのまま動きますので」。
+
+1. **COM の面を消し、shiori4 へ完全に移る**。`crates/shiori-abi/` と `crates/shiori4-testdll/` を消し、`IShioriHost` の 3 つの実装（`crates/areka/src/shiori_host.rs` の `ShioriHostSink`・`crates/areka-ghost/src/shiori_inproc.rs` の `InProcHost`・env で有効にするデモ）も消す。テスト用の v4 DLL は `shiori4::Ghost` で作り直す。
+2. **JSON-RPC の封筒もやめる**（COM の原案と同時に作った紙の契約なので、同じ決定に含めた）。`doc/shiori/fragments/_shared.toml` の封筒は「v4 のペイロード＝SHIORI/3.0 のヘッダ部分（正本は shiori4）」へ書き換える。目録（events・resources）は `ukadoc-survey` が読むので残す。
+
 ## 開発者の判断（着手の前または要件の段で）
 推奨つき。
 
-1. **自前の COM の面 `crates/shiori-abi/` と `crates/shiori4-testdll/` を消し、テスト用の v4 DLL を `shiori4::Ghost` で作り直す**（推奨）。残すと二重の正本になる。
-2. **`doc/shiori/fragments/_shared.toml` の JSON-RPC の封筒をやめ、「v4 のペイロード＝SHIORI/3.0 のヘッダ部分（正本は shiori4）」と書き換える**（推奨）。目録（events・resources）は残す。
-3. 上の表の 3（拒否の返し方）: 400 ＋ `Reason: forbidden` か、v4 だけの 403 か。shiori4 側の推奨は前者。areka 側も前者でよい（areka は v3 を使わないが、SHIORI/3.0 と同じ形のほうが組み立て器を共有できる）。
-4. 上の表の 5 を helper の道（32bit の SHIORI/3.0）にも当てるか。当てると、すべてのゴーストへ渡す `load` のバイト列が変わる（10-10 からの議題の候補）。推奨は当てる（SSP と同じ形になる。えみりの YAYA は今の形でも動いたので、変えても壊す見込みは低い）。
+1. abi-conventions の load の dir の形を helper の道（32bit の SHIORI/3.0）にも当てるか。当てると、すべてのゴーストへ渡す `load` のバイト列が変わる（10-10 からの議題の候補）。推奨は当てる（SSP と同じ形になる。えみりの YAYA は今の形でも動いたので、変えても壊す見込みは低い）。
 
 ## Scope
 - **In**:
@@ -93,9 +90,9 @@ shiori4 は記録係。areka と pasta が直接詰め、合意したものと�
   - `ShioriBackend` の v4 版の実装と、descript.txt の `shiori` からの選び分け（`shiori_get_api` の有無・arch）。
   - 要求の組み立て器を v3（helper）と v4 で共有する整理。
   - post の SEND を待たせるための待ちの列（3 者会談の合意＝`Option: nobreak` のときと OnHostComplete の応答のとき。areka は今トークの枠が 1 つで列を持たない）と、再生の終わりで出す完了（`completed`／`interrupted`）。
-  - `load` に渡すパスの形（上の表の 5・判断 4）。
-  - COM の面とテスト用の COM の DLL の撤去、テスト用の v4 DLL（判断 1）。
-  - 封筒の書き換え（判断 2）・`doc/COMPAT_ARCHITECTURE.md` §5・roadmap の技術の要約の書き直し。
+  - `load` に渡すパスの形（abi-conventions・判断 1）。
+  - COM の面とテスト用の COM の DLL と `IShioriHost` の実装の撤去、テスト用の v4 DLL（決定 1）。
+  - 封筒の書き換え（決定 2）・`doc/COMPAT_ARCHITECTURE.md` §5・roadmap の技術の要約の書き直し。
   - 古くなった注釈の掃除（`crates/areka/src/main.rs`・`shiori_inproc.rs`・`crates/shiori-host32-host/src/client.rs` の「`IShiori` への写像点」）。
 - **Out**: 下の「Out of Boundary」。
 
@@ -126,7 +123,7 @@ shiori4 は記録係。areka と pasta が直接詰め、合意したものと�
   - 直列の列「host32-host」（`script-security-level` → `mcp-shiori-query` → `makoto-dll-host` → `makoto-reload-directives` → `property-ipc-transport`）。触るのは `crates/shiori-host32-host/src/{shiori3.rs, client.rs}`・`crates/areka-ghost/src/{runtime.rs, shiori_inproc.rs, shiori_wiring.rs}`・kanade の `shiori/real.rs`。この spec はこの列の後ろ。
   - `property-ipc-transport`（据え置き）: 32bit の道のプロパティの輸送。v4 の道の `getproperty`／`setproperty` はこの spec が持つ（10-23 に持ち分を分けた）。
   - `property-query-channels`: 許可の表と、台本の指令の入口。
-  - `audit-shiori-host32`・`clippy-199-lints`: `crates/shiori-abi/` を受け持ちに挙げている。判断 1 で消すなら、その行は消える。
+  - `audit-shiori-host32`・`clippy-199-lints`: `crates/shiori-abi/` を受け持ちに挙げている。決定 1 で消すので、その行は消える。
 
 ## Constraints
 - **優先度**: 区分 C・段「その他」（開発者・10-10）。急がない。
