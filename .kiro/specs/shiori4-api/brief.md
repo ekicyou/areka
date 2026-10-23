@@ -34,7 +34,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 
 **正本（語を areka の文書へ写さず、ここを参照する）**: shiori4 リポジトリの作業ブランチ `claude/abi-host-protocol`（10-23 時点で main には未統合）。
 - `.kiro/specs/host-protocol/brief.md` の「合意した論点」1〜9（`5cabbfa`）: `getproperty`／`setproperty`・post の `SEND`／`NOTIFY`（SSTP の語）・宛先は post したインスタンス・プロパティ名の決まり・必須のヘッダ・`ID: version` など・OnHostComplete の並び・拒否は 400＋`Reason: forbidden`・SEND は SSTP どおり既定で割り込み `Option: nobreak` で待つ。
-- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約。
+- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約・論点 11「ホストは SHIORI を専用のプロセスで読むことがある。SHIORI はホストと同じプロセスにいることを前提にしない」（areka の決定 3 を受けて shiori4 が足した）。
 - 要件の段に入ったら、それぞれの requirements.md を参照する。
 
 **追加で合意した論点 A〜F**（areka が出し、shiori4・pasta が賛成。記録は `b69856d`＝C・D・E は host-protocol の論点 10〜12、A・B・F は abi-conventions の「追加の論点」8〜10。2 本の brief の論点はすべて合意済みで、この先は shiori4 の開発者が要件の段で承認する）:
