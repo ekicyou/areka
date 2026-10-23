@@ -34,7 +34,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 
 **正本（語を areka の文書へ写さず、ここを参照する）**: shiori4 リポジトリの作業ブランチ `claude/abi-host-protocol`（10-23 時点で main には未統合）。
 - `.kiro/specs/host-protocol/brief.md` の「合意した論点」1〜9（`5cabbfa`）: `getproperty`／`setproperty`・post の `SEND`／`NOTIFY`（SSTP の語）・宛先は post したインスタンス・プロパティ名の決まり・必須のヘッダ・`ID: version` など・OnHostComplete の並び・拒否は 400＋`Reason: forbidden`・SEND は SSTP どおり既定で割り込み `Option: nobreak` で待つ。
-- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約・論点 11「ホストは SHIORI を専用のプロセスで読むことがある。SHIORI はホストと同じプロセスにいることを前提にしない」（areka の決定 3 を受けて shiori4 が足した）・論点 13〜15（`b5344f0`・shiori4 の開発者が裁定）＝両方を持つ DLL はホストが `shiori_get_api(4)` → `shiori_get_api(3)` → SHIORI/3.0 の書き出しの順に試す／カレントディレクトリは規約で決めない（SHIORI は頼らず load の dir を使う）／`shiori4_host` に読み終えたライブラリから作る入口を足す（`NotShiori4`・`Unsupported` のときだけライブラリを返す・`LoadFailed` は返さず読み直さない）。
+- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約・論点 11「ホストは SHIORI を専用のプロセスで読むことがある。SHIORI はホストと同じプロセスにいることを前提にしない」（areka の決定 3 を受けて shiori4 が足した）・論点 13〜15（`b5344f0`・shiori4 の開発者が裁定）＝両方を持つ DLL を許す（発見の順は `shiori_get_api` があれば `(4)` → `(3)` だけ・無ければ `loadu` → `load`＝`3f97190` で正本はこの形 1 つ）／カレントディレクトリは規約で決めない（SHIORI は頼らず load の dir を使う）／`shiori4_host` に読み終えたライブラリから作る入口を足す（`NotShiori4`・`Unsupported` のときだけライブラリを返す・`LoadFailed` は返さず読み直さない）。
 - 要件の段に入ったら、それぞれの requirements.md を参照する。
 
 **追加で合意した論点 A〜F**（areka が出し、shiori4・pasta が賛成。記録は `b69856d`＝C・D・E は host-protocol の論点 10〜12、A・B・F は abi-conventions の「追加の論点」8〜10。2 本の brief の論点はすべて合意済みで、この先は shiori4 の開発者が要件の段で承認する）:
