@@ -11,6 +11,8 @@ use tracing::warn;
 
 use super::config::{scope_prefixes, scoped_value};
 
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.seriko.defaultsurface_2c_6570_5024:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#kero.seriko.defaultsurface_2c_6570_5024:1
 /// 既定の面のキーのスコープの後ろの綴り。
 const DEFAULT_SURFACE_SUFFIX: &str = "seriko.defaultsurface";
 
@@ -90,6 +92,10 @@ pub fn read_default_surfaces(ghost_kv: &BTreeMap<String, String>) -> DefaultSurf
     DefaultSurfaces { written }
 }
 
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#balloon.dontmove_2ctrue:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.balloon.dontmove_2c_6570_5024:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.balloon.dontmove_2c_6570_5024:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#char_2a.balloon.dontmove_2c_6570_5024:1
 /// バルーンの動かせない指定のキーのスコープの後ろの綴り（ゴーストの段はこの綴りそのもの）。
 const BALLOON_DONTMOVE: &str = "balloon.dontmove";
 

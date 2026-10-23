@@ -284,6 +284,8 @@ impl dola::cue::CueSink for MoveCueSink {
                 }
                 return;
             }
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5block_2cballoonmove_5d:1
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bunlock_2cballoonmove_5d:1
             // 動かせない指定は実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。
             (cmd @ ("lock" | "unlock"), Some("balloonmove")) => {
                 if let Some(scope) = actor_scope(&cue, &format!("{cmd},balloonmove")) {

@@ -2548,20 +2548,19 @@ areka はバルーンの初期表示面の宣言を受け取る経路を持た�
 """
 
 [entry."ukadoc:descript_ghost:balloon.dontmove_2ctrue:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの位置合わせを切る宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka のバルーンは常に本体の窓に付いて動く（areka の placement::follow が本体の移動をバルーンへ伝える）。切ると書いても付いて動くので、作者が意図した見え方にはならない。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を、利用者のドラッグでの移動の禁止と読んで使う。追従（キャラクターの窓に付いて動くこと）は止めない。0・1・true・false のどれでもない値は書かれていないものとして禁止せず、`descript_value_unreadable` の記録を 1 件残す。
+areka の placement::descript_window_keys::read_balloon_dontmove が、シェルの `*.balloon.dontmove` が書かれていない（または読めない）スコープで、この値をそのスコープの動かせない指定として使う。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない（止めたドラッグ 1 回につき `balloon_drag_held` の記録が 1 件）。
+読みの根拠: ukadoc はシェルの `*.balloon.dontmove`（移動操作の禁止）の既定を「ghostのdescript設定(balloon.dontmove)」と書く。SSP 2.9 で 2026-10-23 に測ると、この値が true のぱすたのバルーンは利用者がドラッグしても動かなかった（.kiro/specs/descript-window-keys/research.md の 10.3 節）。キャラクターの窓には付いて動く（完了 areka-P0-pasta-in-windows-verification の ssp-measurement.md の 3 節）。前の注記の「付いて動くのを止める」読みは誤りだった。
 担当 spec は descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_ghost:balloon.syncscale_2ctrue:1"]
@@ -2695,20 +2694,18 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:char_2a.seriko.defaultsurface_2c_6570_5024:1"]
-status = "absent"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はキャラクタ番号で指すスコープの初期サーフェス番号の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 黙って壊れる。記録: なし。areka の placement::descript_window_keys::read_default_surfaces が番号 2 以上の `char<番号>.seriko.defaultsurface` も読み、スコープごとの既定の面として持つ（書かれていなければ 10）が、3 人目からの窓がまだ無いので値を使う先が無い。0 以上の整数として読めない値には `descript_value_unreadable` の記録を 1 件残す。
+番号が 0 と 1 の綴りは本体と相方の別名という扱いで、`sakura.seriko.defaultsurface`・`kero.seriko.defaultsurface` の行と同じに読まれて効く（areka の placement::config::scope_prefixes）。
+3 人目以降の窓は作らない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。絞りを外すのは extra-character-windows）。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+担当は決まっていない（3 人目からの窓を作る extra-character-windows がこの値を使う見込み）。読む形は descript-window-keys が作った（同 spec の要件 1.4・裁定 3＝先送りする正典は語彙を全部持つ）。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3041,20 +3038,20 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:kero.seriko.defaultsurface_2c_6570_5024:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "descript-window-keys"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka は相方側の初期サーフェス番号の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに読んで使う。0 以上の整数として読めない値を書いたときは組み込みの既定の面（相方側は 10）を使い、`descript_value_unreadable` の記録を 1 件残す。
+areka の placement::descript_window_keys::read_default_surfaces がゴーストの descript から読み（別名の `char1.` より `kero.` を先に引く・窓の置き方のほかの欄と同じ優先）、起動とゴーストの切り替えで窓の大きさを測る面と、ゴーストの読み直しとシェルの切り替えで出していた面が無いときの戻り先に使う。シェルの descript からは読まない。
+指した面がシェルに無いときは組み込みの既定の面へ落とし、測りでは `default_surface_missing`、シェルの切り替えでは `shell_switch_surface_fell_back` の記録を残す（正典が黙る点の扱いは doc/COMPAT_ARCHITECTURE.md の §8）。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は descript-window-keys。相方側の綴りも同じ spec が本体側と同じ読みで読む。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -3423,20 +3420,20 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:sakura.seriko.defaultsurface_2c_6570_5024:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "descript-window-keys"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka は本体側の初期サーフェス番号の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに読んで使う。0 以上の整数として読めない値を書いたときは組み込みの既定の面（本体側は 0）を使い、`descript_value_unreadable` の記録を 1 件残す。
+areka の placement::descript_window_keys::read_default_surfaces がゴーストの descript から読み（別名の `char0.` より `sakura.` を先に引く・窓の置き方のほかの欄と同じ優先）、起動とゴーストの切り替えで窓の大きさを測る面と、ゴーストの読み直しとシェルの切り替えで出していた面が無いときの戻り先に使う。シェルの descript からは読まない。
+指した面がシェルに無いときは組み込みの既定の面へ落とし、測りでは `default_surface_missing`、シェルの切り替えでは `shell_switch_surface_fell_back` の記録を残す（正典が黙る点の扱いは doc/COMPAT_ARCHITECTURE.md の §8）。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当 spec は descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_ghost:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -4203,21 +4200,20 @@ note = """
 """
 
 [entry."ukadoc:descript_shell:char_2a.balloon.dontmove_2c_6570_5024:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.96"
-owner = ""
+owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンを利用者が動かせなくする宣言を読む経路を持たない。
-areka のバルーンはドラッグで動かせる（単独のドラッグを扱うのは areka の placement::follow::on_balloon_drag）ので、この宣言を書いても利用者は動かせてしまう。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
+areka の placement::descript_window_keys::read_balloon_dontmove がシェルの descript から `char<番号>.balloon.dontmove` を読む。番号が 0 と 1 の綴りは `sakura.`・`kero.` の別名として効く（正典の綴りが書かれていればそちらを先に引く）。
+シェルの値はゴーストの `balloon.dontmove` に勝つ（シェルの 0 はゴーストの true を打ち消す）。シェルの切り替えでは新しいシェルの値へ取り替える。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない。追従は止めない。台本の `unlock,balloonmove` ではこの段は解けない。
+番号が 2 以上の綴りも同じ形で読めるが、3 人目からのバルーンの窓がまだ無いので当てる先が無い（窓を作るのは extra-character-windows）。
+担当 spec は descript-window-keys。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_shell:char_2a.balloon.syncscale_2ctrue:1"]
@@ -4637,21 +4633,19 @@ areka の placement::config::resolve_scope が引き、配置の解決（placeme
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.dontmove_2c_6570_5024:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.96"
-owner = ""
+owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンを利用者が動かせなくする宣言を読む経路を持たない。
-areka のバルーンはドラッグで動かせる（単独のドラッグを扱うのは areka の placement::follow::on_balloon_drag）ので、この宣言を書いても利用者は動かせてしまう。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
+areka の placement::descript_window_keys::read_balloon_dontmove がシェルの descript から読む（別名の `char1.` より `kero.` を先に引く）。
+シェルの値はゴーストの `balloon.dontmove` に勝つ（シェルの 0 はゴーストの true を打ち消す）。シェルの切り替えでは新しいシェルの値へ取り替える。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない。追従は止めない。台本の `unlock,balloonmove` ではこの段は解けない。
+担当 spec は descript-window-keys。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1"]
@@ -5484,21 +5478,19 @@ areka の placement::config::resolve_scope が引き、配置の解決（placeme
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.dontmove_2c_6570_5024:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.96"
-owner = ""
+owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンを利用者が動かせなくする宣言を読む経路を持たない。
-areka のバルーンはドラッグで動かせる（単独のドラッグを扱うのは areka の placement::follow::on_balloon_drag）ので、この宣言を書いても利用者は動かせてしまう。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
+areka の placement::descript_window_keys::read_balloon_dontmove がシェルの descript から読む（別名の `char0.` より `sakura.` を先に引く）。
+シェルの値はゴーストの `balloon.dontmove` に勝つ（シェルの 0 はゴーストの true を打ち消す）。シェルの切り替えでは新しいシェルの値へ取り替える。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない。追従は止めない。台本の `unlock,balloonmove` ではこの段は解けない。
+担当 spec は descript-window-keys。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1"]

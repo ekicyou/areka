@@ -1737,18 +1737,21 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5block_2cballoonmove_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.96"
-owner = ""
+owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの追随を止められず、キャラを動かすとバルーンも付いてくる）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 見た目の差。記録: info!。areka はこの指令を、指令を書いた所のスコープのバルーンの、利用者のドラッグでの移動の禁止と読んで使う。キャラクターの窓に付いて動くこと（追従）は止めない。受けるたびに `balloon_move_locked` の記録を残す。
+台本の並びのまま運ばれ、窓の位置の受け口（areka の emo2_boot::move_cue の MoveCueSink）が実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。check_script の担当の表（areka の emo2_boot::consumer_ledger）にも載る。
+descript の段（シェルの `*.balloon.dontmove`・ゴーストの `balloon.dontmove`）の禁止とは別に持ち、この指令の禁止は `unlock,balloonmove` を受けるまで続き（unlock でも descript の段は解けない）、トークの終わり・シェルの切り替えでは解けず、ゴーストの終了・切り替え・読み直しで解ける。利用者がドラッグしている途中に受けたときは、そのドラッグは最後まで続け、次のドラッグから止める（正典が黙る点の扱いは doc/COMPAT_ARCHITECTURE.md の §8）。
+SSP 2.9 で 2026-10-23 に測ると、本体（スコープ 0）で書いた lock は本体のバルーンだけを止め、相方のバルーンは動いた。続けて本体で unlock・相方で lock を書くと、本体が動き相方が止まった（.kiro/specs/descript-window-keys/research.md の 10.3 節）。前の注記の「追随を止める」読みは誤りだった。
+担当 spec は descript-window-keys。
+[運搬: 名前はキャリアに載って最後まで運ばれ、窓の位置の受け口が名前で選んで受ける]
 [群: 描き直しと移動の凍結]
-[テーマ無し: 吹き出しの追随を一時止める内部の段取りで、利用者に見えるのは動かしたときの付き方にとどまる]
+[テーマ無し: 利用者のドラッグを一時止める段取りで、利用者に見えるのはバルーンを動かせないことにとどまる]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![lock。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
@@ -3711,18 +3714,21 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunlock_2cballoonmove_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.96"
-owner = ""
+owner = "descript-window-keys"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、止めたはずの追随を戻す指定も届かない。止める側も効かないので、対になる 2 つが揃って無効になる）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 見た目の差。記録: info!。areka はこの指令を、指令を書いた所のスコープのバルーンについて、台本の `lock,balloonmove` が禁止した利用者のドラッグでの移動を解く指令と読んで使う。受けるたびに `balloon_move_unlocked` の記録を残す。
+台本の並びのまま運ばれ、窓の位置の受け口（areka の emo2_boot::move_cue の MoveCueSink）が実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。check_script の担当の表（areka の emo2_boot::consumer_ledger）にも載る。
+descript の段（シェルの `*.balloon.dontmove`・ゴーストの `balloon.dontmove`）の禁止は解けない。解けずに動かせないままのときは、続けて `balloon_move_unlock_held` の記録を 1 件残す。利用者がドラッグしている途中に受けたときは、次のドラッグから動かせる（正典が黙る点の扱いは doc/COMPAT_ARCHITECTURE.md の §8）。
+SSP 2.9 で 2026-10-23 に測ると、本体（スコープ 0）で書いた lock は本体のバルーンだけを止め、相方のバルーンは動いた。続けて本体で unlock・相方で lock を書くと、本体が動き相方が止まった（.kiro/specs/descript-window-keys/research.md の 10.3 節）。前の注記の「追随を止める」読みは誤りだった。
+担当 spec は descript-window-keys。
+[運搬: 名前はキャリアに載って最後まで運ばれ、窓の位置の受け口が名前で選んで受ける]
 [群: 描き直しと移動の凍結]
-[テーマ無し: 吹き出しの追随を戻す内部の段取りで、止める側が効かない限り利用者の目には何も変わらない]
+[テーマ無し: 利用者のドラッグの禁止を解く段取りで、利用者に見えるのはバルーンをまた動かせることにとどまる]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![unlock。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
