@@ -92,7 +92,7 @@
   - _Requirements: 7.5_
 
 - [ ] 4. 比べる道具の新しいクレート `surface-compare`
-- [ ] 4.1 (P) 2 つのフォルダの同じ名前の PNG を画素で比べるライブラリ
+- [x] 4.1 (P) 2 つのフォルダの同じ名前の PNG を画素で比べるライブラリ
   - クレートを立てる。`Cargo.toml` は `temp-path-kit` と同じ形（`workspace = "../.."`・`version`／`edition`／`authors`／`license`／`repository` は `.workspace = true`・行頭から `publish = false # <理由>`）。ワークスペースは `members = ["crates/*"]` なので登録の作業は要らない
   - 依存はワークスペースに既に在る版の `image`（png だけ）と dev の `temp-path-kit` だけにする
   - 両方のフォルダの直下の `*.png` を名前（大文字小文字を区別しない）で組にし、乗算していない RGBA 8 ビットで読み、組ごとに「同じ」「大きさが違う」「画素が違う（数・色の差の最大・α の差の最大）」「片方にしか無い」「読めない」を名前の昇順で返す。フォルダが読めなければ Err。合否は決めない
