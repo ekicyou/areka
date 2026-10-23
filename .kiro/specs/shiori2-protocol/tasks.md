@@ -119,3 +119,4 @@
 - 実物の pasta の条件つきテストは、`HOST32_PASTA_DLL` を emo2.nar から丸ごと取り出した `ghost\master` の中の `pasta.dll` に向ける（単体で取り出した DLL は不可）。snapshot の回の `TMP` を DLL の親のフォルダの中に置くと、写しの再帰が止まらずスタックが溢れる（命令は verification.md の 4.3 節）。
 - 範囲外（`/kiro-complete` の棚卸で起票）: 4.3 の机の 1 回目で `real_pasta_online` の LOAD が `LoadReturnedFalse { last_error: 203 }` で断られた（2 回目は緑）。確かめの往復より前の段で、本 spec の差分は届かない。完了 spec `areka-P0-emo2-real-run-stability` の件 2 の再発の初めての観測（pasta.log は写しごと消えて残っていない）。
 - 最後の確かめの全体テスト（8922f526）は x64 の段だけ赤。赤は 4 本とも `sample-ghost-kit` の検体 `pasta-in-windows` の登記（新しい書庫が `balloon/pasta_tategaki` を同梱）で、本 spec の差分の外。直しは `mcp-scope-rect-property` の PR が着地させる（2026-10-24 同セッションから連絡・重ねて直さない）。ほかの 12 段は緑。
+- 完了時の棚卸（2026-10-24）: その場で解決 0 件・起票 1 件。起票＝`helper-first-load-refusal`（4.3 の 1 回目の LOAD の `last_error: 203`・条件は「直したことを確かめるのに実機の走行を何度も回す必要がある」）。clippy の前からの赤は `clippy-199-lints` が持つ（起票済み）。「．さくら」の崩れは 5.4 で渡し済み。
