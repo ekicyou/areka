@@ -8,13 +8,16 @@
 //! `--dump-shell` → シェルの解決 → COM → シェルの読み込み → 面の段 → 写しの窓を閉じる →
 //! 終了コード → CSV → 終わりの info。途中の失敗はどれも窓を閉じる段へ流れる。
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::EmoWorld;
+use areka_emo_compose::{Composer, EmoWorld, shell_bounds};
 use areka_emo_present::{ShellTarget, load_shell_target};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{BindGroupDefaults, read_ghost_names, resolve_with_shell};
+use areka_sakura::ActorKey;
+use areka_seriko::{AnimationTable, BindResolver, DefaultBinds, ScopeStates};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use crate::cli::OfflineDumpRequest;
@@ -38,7 +41,6 @@ struct DumpTally {
 }
 
 /// 読み込んだシェル（面の段へ 1 度だけ渡す）。
-#[allow(dead_code)] // 読み手は面の段（タスク 7.8）
 struct LoadedShell {
     /// 選んだシェルの descript.txt の着せ替えの読み（既定の組と名前の表の元）。
     bindgroups: BindGroupDefaults,
@@ -203,10 +205,76 @@ fn load_shell(root: &Path, want: Option<&str>) -> Option<LoadedShell> {
     })
 }
 
-/// 面の段。シェルを読めた走りで、写しの窓を閉じる前に 1 度だけ呼ぶ。スコープの着せ替え・
-/// `--dump-bind`・面を描いて書く段はタスク 7.8 がこの関数の中に置く。
-fn surface_stage(_req: &OfflineDumpRequest, _scope: u32, _shell: LoadedShell) -> DumpTally {
-    DumpTally::default()
+/// 面の段。シェルを読めた走りで、写しの窓を閉じる前に 1 度だけ呼ぶ。面の指定が無ければ表と下地を
+/// 作るだけで閉じる（`--dump-bind` も読まない＝3.6）。着せ替えは画面と同じ決め方のそのスコープの初めの組に
+/// `--dump-bind` を当てたもの（利用者の記憶は読まない＝3.9・4.2・14.3）。失敗した面は飛ばす（4.8）。
+fn surface_stage(req: &OfflineDumpRequest, scope: u32, shell: LoadedShell) -> DumpTally {
+    let LoadedShell {
+        bindgroups,
+        target,
+        world,
+    } = shell;
+    // 表と下地は面の指定の有無に関わらず 1 度だけ作る（表の warn を CSV に残す＝design の順）。
+    let table = AnimationTable::from_world(&world);
+    let canvas = render::Canvas::from_bounds(shell_bounds(&world, target.atlas()));
+    let Some(list) = req.surface_list.as_deref() else {
+        return DumpTally::default();
+    };
+
+    let resolver = BindResolver::from_groups(&bindgroups);
+    let mut states = ScopeStates::new(DefaultBinds::from_groups(&bindgroups));
+    if let Some(raw) = req.bind.as_deref() {
+        let specs = bind_spec::read_bind_specs(raw);
+        bind_spec::apply_bind_specs(&specs, scope, &resolver, &mut states);
+    }
+    let binds = states
+        .current_binds(&ActorKey::from(scope.to_string().as_str()))
+        .clone();
+
+    let existing: BTreeSet<u32> = world.surface_ids().collect();
+    let surfaces = surface_list::read_surface_list(list).resolve(&existing);
+    let output_dir = match std::path::absolute(req.output_dir.as_deref().unwrap_or(".")) {
+        Ok(dir) => dir,
+        Err(e) => {
+            tracing::error!(
+                event = "offline_dump_output_dir_unreadable",
+                output_dir = ?req.output_dir,
+                error = %e,
+                "[offline_dump] --dump-output-dir のパスを読めないので面を書き出しません"
+            );
+            return DumpTally {
+                written: 0,
+                failed: surfaces.len(),
+            };
+        }
+    };
+    // 値なしは既定の頭の文字列（png_path は空の頭の文字列で `0.png` を返すため＝6.1）。
+    let prefix = req
+        .output_prefix
+        .as_deref()
+        .unwrap_or(render::DEFAULT_PREFIX);
+
+    let mut composer = Composer::new();
+    let mut tally = DumpTally::default();
+    for surface_id in surfaces {
+        let written = render::write_surface(
+            &mut composer,
+            &world,
+            target.atlas(),
+            &table,
+            &binds,
+            scope,
+            surface_id,
+            &canvas,
+            &output_dir,
+            prefix,
+        );
+        match written {
+            Ok(_) => tally.written += 1,
+            Err(_) => tally.failed += 1,
+        }
+    }
+    tally
 }
 
 /// 検体のゴーストを `target\` の下に組む部品（試験専用）。

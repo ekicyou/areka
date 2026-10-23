@@ -18,7 +18,6 @@ pub(crate) struct SurfaceSelection {
 }
 
 /// 読めない要素は warn! を出して飛ばす。
-#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.7）
 pub(crate) fn read_surface_list(raw: &str) -> SurfaceSelection {
     let mut picks = Vec::new();
     for element in raw.split(',') {
@@ -72,7 +71,6 @@ fn read_pick(element: &str) -> Option<SurfacePick> {
 
 impl SurfaceSelection {
     /// シェルに在る番号へ展開する（昇順・重ねなし）。単独で指した無い面は warn!。
-    #[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.7）
     pub(crate) fn resolve(&self, existing: &BTreeSet<u32>) -> Vec<u32> {
         let mut included = BTreeSet::new();
         // 範囲のまま持つ（`!0-4294967295` を番号へ広げない）。

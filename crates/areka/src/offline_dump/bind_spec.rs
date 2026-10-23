@@ -19,7 +19,6 @@ pub(crate) struct BindSpec {
 }
 
 /// 読めない指定は warn! を出して飛ばす。
-#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.8）
 pub(crate) fn read_bind_specs(raw: &str) -> Vec<BindSpec> {
     raw.split(';')
         .filter(|spec| !spec.is_empty())
@@ -57,7 +56,6 @@ fn read_spec(spec: &str) -> Option<BindSpec> {
 }
 
 /// 書かれた順に当てる。無い名前は warn!、mustselect の OFF は info!。
-#[allow(dead_code)] // 呼び手はオフラインの書き出しの走り（タスク 7.8）
 pub(crate) fn apply_bind_specs(
     specs: &[BindSpec],
     scope: u32,

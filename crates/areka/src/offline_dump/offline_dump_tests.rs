@@ -357,3 +357,193 @@ fn the_scope_warning_comes_before_the_dump_shell_error() {
         ]
     );
 }
+
+/// 書き出した PNG の 1 画素（乗算していない RGBA）。
+fn png_pixel(path: &std::path::Path, x: u32, y: u32) -> [u8; 4] {
+    image::open(path)
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+        .into_rgba8()
+        .get_pixel(x, y)
+        .0
+}
+
+/// スコープ 0・1・2・3 の書き出しの組は、`--dump-bind` が無ければ画面の状態の初めの組と同じで、
+/// `--dump-bind` があればそのスコープの名前の表で当てた組になる（3.9・4.2・14.3・14.4）。
+#[test]
+fn each_scope_dumps_its_own_default_binds_and_dump_bind() {
+    use crate::scope_bind_fixture_test_support::{
+        BLUE, CHAR2_CATEGORY, GREEN, KERO_CATEGORY, RED, SAKURA_CATEGORY, scope_bind_ghost,
+    };
+    com_init();
+    let ghost = scope_bind_ghost();
+    let decoder = WicDecoderArm::new().expect("WIC の工場が作れる");
+    let Ok(screen) = crate::emo2_boot::assets::build_shell_assets(
+        ghost.path(),
+        None,
+        &[0, 1, 2, 3],
+        96,
+        &decoder,
+    ) else {
+        panic!("画面の資産を組める");
+    };
+    let screen = areka_seriko::ScopeStates::new(screen.static_binds);
+    // 土台 24×8 の左・中・右に赤・緑・青の bind が重なる。着ていなければ土台の灰。
+    let regions = [
+        (RED, 4, [255, 0, 0, 255]),
+        (GREEN, 12, [0, 255, 0, 255]),
+        (BLUE, 20, [0, 0, 255, 255]),
+    ];
+    let cases: [(u32, Option<String>, Vec<u32>); 8] = [
+        (0, None, vec![RED]),
+        (1, None, vec![GREEN]),
+        (2, None, vec![BLUE]),
+        (3, None, vec![]),
+        (0, Some(format!("{SAKURA_CATEGORY},青")), vec![BLUE]),
+        (1, Some(format!("{KERO_CATEGORY},赤")), vec![RED]),
+        (2, Some(format!("{CHAR2_CATEGORY},緑")), vec![GREEN]),
+        (3, Some(format!("{CHAR2_CATEGORY},赤")), vec![]),
+    ];
+    for (scope, bind, want) in cases {
+        let out = ghost.path().join(format!("out-{scope}-{}", bind.is_some()));
+        let req = OfflineDumpRequest {
+            scope: Some(scope.to_string()),
+            surface_list: Some("0".to_string()),
+            output_dir: Some(out.display().to_string()),
+            bind: bind.clone(),
+            ..request(ghost.path(), &ghost.path().join("errors.csv"))
+        };
+        let (_, events) = run_logged(&req);
+        assert_eq!(
+            finished(&events).field("written"),
+            Some("1"),
+            "{scope} {bind:?}: {events:?}"
+        );
+        if bind.is_none() {
+            let key = areka_sakura::ActorKey::from(scope.to_string().as_str());
+            assert_eq!(
+                screen.current_binds(&key).ids(),
+                want,
+                "画面の初めの組 {scope}"
+            );
+        }
+        let png = out.join("surface0.png");
+        for (id, x, color) in regions {
+            let expected = if want.contains(&id) {
+                color
+            } else {
+                [128, 128, 128, 255]
+            };
+            assert_eq!(png_pixel(&png, x, 4), expected, "{scope} {bind:?}: {id}");
+        }
+    }
+}
+
+/// 面の指定が無ければシェルの読み込みまでで閉じ、面を書かず、`--dump-bind` も読まない（3.6）。
+#[test]
+fn without_a_surface_list_nothing_is_written_and_dump_bind_is_not_read() {
+    let root = fixture::build_ghost(
+        "offline-run-no-list",
+        Some(&["name,g"]),
+        &[fixture::variety_shell("master")],
+    );
+    let out = root.path().join("out");
+    let req = OfflineDumpRequest {
+        output_dir: Some(out.display().to_string()),
+        bind: Some("読めない".to_string()),
+        ..request(root.path(), &root.path().join("errors.csv"))
+    };
+    let (_, events) = run_logged(&req);
+    assert!(loaded_shell_dir(&events).is_some(), "シェルは読む");
+    assert!(
+        events_named(&events, "offline_dump_bind_unreadable").is_empty(),
+        "{events:?}"
+    );
+    assert_eq!(finished(&events).field("written"), Some("0"));
+    assert!(!out.exists(), "出力先を作らない");
+}
+
+/// 中身の無い面の合成の失敗は飛ばして、残りの面を昇順に書く（4.8・3.9）。
+#[test]
+fn a_failed_surface_is_skipped_and_the_rest_are_written() {
+    let root = fixture::build_ghost(
+        "offline-run-empty-surface",
+        Some(&["name,g"]),
+        &[fixture::variety_shell("master")],
+    );
+    let out = root.path().join("out");
+    let req = OfflineDumpRequest {
+        surface_list: Some("0-200".to_string()),
+        output_dir: Some(out.display().to_string()),
+        output_prefix: Some("s".to_string()),
+        ..request(root.path(), &root.path().join("errors.csv"))
+    };
+    let (_, events) = run_logged(&req);
+    let done = finished(&events);
+    let rest = fixture::VARIETY_SURFACES.len() - 1;
+    assert_eq!(
+        done.field("written"),
+        Some(rest.to_string().as_str()),
+        "{events:?}"
+    );
+    assert_eq!(done.field("failed"), Some("1"));
+    for id in fixture::VARIETY_SURFACES {
+        assert_eq!(
+            out.join(format!("s{id}.png")).is_file(),
+            id != fixture::EMPTY,
+            "{id}"
+        );
+    }
+}
+
+/// SERIKO の表の warn は面の指定が無くても走りの中で出る（表はシェルを読んだ直後に 1 度だけ作る）。
+#[test]
+fn the_animation_table_warns_even_without_a_surface_list() {
+    let shell = ShellSpec {
+        folder: "master",
+        descript: &[],
+        surfaces: &[
+            "surface0",
+            "{",
+            "element0,overlay,base.png,0,0",
+            "animation9.interval,random,0",
+            "animation9.pattern0,overlay,0,100,0,0",
+            "}",
+        ],
+        ..fixture::variety_shell("master")
+    };
+    let root = fixture::build_ghost("offline-run-table-warn", Some(&["name,g"]), &[shell]);
+    let (_, events) = run_logged(&request(root.path(), &root.path().join("errors.csv")));
+    let warned = events.iter().any(|e| {
+        e.level == tracing::Level::WARN && e.field("message").is_some_and(|m| m.contains("k==0"))
+    });
+    assert!(warned, "表の k==0 の warn: {events:?}");
+}
+
+/// `--dump-bind` の warn は面の指定の warn より先に出る（design の順）。
+#[test]
+fn dump_bind_warnings_come_before_surface_list_warnings() {
+    let root = fixture::build_ghost(
+        "offline-run-bind-order",
+        Some(&["name,g"]),
+        &[fixture::variety_shell("master")],
+    );
+    let req = OfflineDumpRequest {
+        surface_list: Some("x".to_string()),
+        bind: Some("読めない".to_string()),
+        output_dir: Some(root.path().join("out").display().to_string()),
+        ..request(root.path(), &root.path().join("errors.csv"))
+    };
+    let (_, events) = run_logged(&req);
+    let order: Vec<_> = events
+        .iter()
+        .filter_map(|e| e.field_str("event"))
+        .filter(|e| e.ends_with("_unreadable"))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            "offline_dump_bind_unreadable",
+            "offline_dump_surface_list_unreadable"
+        ]
+    );
+}

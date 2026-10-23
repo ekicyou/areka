@@ -158,7 +158,7 @@
   - `parse_offline_tests.rs` に 3 種類の記録の分岐を足して緑
   - _Requirements: 10.1, 10.3, 10.4, 12.1_
 
-- [ ] 7. オフラインの書き出しのモジュール
+- [x] 7. オフラインの書き出しのモジュール
 - [x] 7.1 モジュールの骨と検体の部品
   - `offline_dump/` の骨（入口と 5 つの子モジュールの宣言・兄弟の試験の接続）を置き、`main.rs` に `mod offline_dump;` を足す。`crates/areka/Cargo.toml` の dev の依存にワークスペースに既に在る版の `image`（png だけ）を足す
   - 検体の部品（試験専用）: `temp-path-kit` で `target\` の下に、ゴーストの descript.txt・シェルの descript.txt・surfaces.txt・1 色塗りの α 付き PNG を持つゴーストのフォルダを組む。research.md §10 の検体の形（runonce・always・random・periodic・負の座標・mustselect／multiple・element の絵の欠け・中身の無い面）を組める（スコープ別の着せ替えの検体は 5.2 の共有の部品を使う）
@@ -215,7 +215,7 @@
   - _Depends: 1.3, 3.3, 6.2, 6.3, 6.4, 7.4_
   - _Requirements: 1.1, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.8, 3.10, 8.4, 9.4_
 
-- [ ] 7.8 書き出しの走りの後半: スコープ・着せ替え・面の段
+- [x] 7.8 書き出しの走りの後半: スコープ・着せ替え・面の段
   - 7.7 で読んだスコープを使う。シェルの着せ替えの読みから既定の組と名前の表を画面と同じ口（2.3）で作り、スコープの状態に `--dump-bind` を当て（7.3）、そのスコープの組をその走りの着せ替えにする（利用者の着せ替えの記憶は読まない）
   - 面の表から SERIKO の表とシェル全体の外形を 1 度だけ作り、面の指定があれば昇順に 1 面ずつ描いて書く（7.5・7.6）。失敗した面は飛ばして次へ進み、書いた数と書けなかった数を数える。面の指定が無ければシェルの読み込みまでで閉じる（`--dump-bind` も読まない）
   - 試験（`offline_dump_tests.rs`）: 5.2 で置いた共有の検体の部品（同じクレートの `#[cfg(test)]` の部品なので呼べる）をそのまま使い、スコープ 0・1・2・3 の書き出しの組が `--dump-bind` どおりで、画面の状態の初めの組と同じ・面の指定なしで面を書かない・中身の無い面の合成の失敗で残りの面が書かれる
@@ -277,3 +277,4 @@
 - 7.5: 合成は負の座標の部分を切り捨てるので、負の座標の element を持つ面では下地の左上の余白が透明のまま（design の Risks・`areka-P0-extent-element-offset` が追う）。`render_surface`・`render_png`・`Canvas::from_bounds` の `#[allow(dead_code)]` は 7.6／7.8 で外す
 - 7.6: `png_path` は頭の文字列が空だと `0.png` を返す＝走り（7.8）は `--dump-output-prefix` の値なしで `DEFAULT_PREFIX` に替える。頭の文字列の絶対パスや `..` は止めない（要件の外）
 - 7.7: 走りは `offline_dump::run(&OfflineDumpRequest) -> i32`。7.8 のつなぎ口は `surface_stage(req, scope, LoadedShell) -> DumpTally`（`LoadedShell { bindgroups, target, world }`）。走りを呼ぶ試験は写しの窓がプロセスに 1 つなので `log_history::capture_tests::hold()` の排他を共有する。単体の試験では写しの層が無く CSV と終了コード 2 は見えない＝10.1。`shell_candidates` は `areka-ghost` の catalog を読むだけで使う＝9 で structure.md の許す依存に一言添える
+- 7.8: 面の段の順は「SERIKO の表・下地（面の指定が無くても作る＝表の warn を CSV に残す）→ 面の指定が無ければここで閉じる → 既定の組と `--dump-bind` → 面の指定の展開 → 1 面ずつ書く」。出力先のパスを絶対にできないときは error 1 行で指定の面を全部「書けなかった」に数える（実装係の足した最小の道）。`RenderError::Write` の欄の `#[allow(dead_code)]` は Debug でだけ読むため残す
