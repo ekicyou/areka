@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: なし（働きの上で）。実機でぱすたの縦書きのバルーンを見るには `ghost-inner-balloon`（v0.1.0・C10）の着地が要る。
+- **Upstream**: なし（働きの上で）。実機でぱすたの縦書きのバルーンを見るには: `ghost-inner-balloon` は完了（main #364）。ぱすたの縦書きのバルーンは、ぱすたの書庫の直し（ghost_dev の `c32229e`・未リリース）で入る。それまでは手順書 `doc/pasta-real-run.md` の入れ方で入れる。
 - **Downstream**: `inputbox-user-input`（v0.3.0・同じ入力欄の部品を使う）・`mcp-user-response`（利用者の入力をエージェントへ返す）・複数ゴーストの `OnCommunicate`（`multi-ghost-runtime` の後）。
 
 ## Existing Spec Touchpoints

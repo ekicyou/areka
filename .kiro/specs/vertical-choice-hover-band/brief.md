@@ -25,7 +25,7 @@
 
 ## Scope
 
-- **In**: 縦書きの帯の厚みとずれの求め方（塗りと当たり）・`VerticalRl` と `VerticalLr` の決定論のテスト・SSP の MCP での測り・ぱすたの実機の確かめ（`ghost-inner-balloon` の着地の後）。
+- **In**: 縦書きの帯の厚みとずれの求め方（塗りと当たり）・`VerticalRl` と `VerticalLr` の決定論のテスト・SSP の MCP での測り・ぱすたの実機の確かめ（縦書きのバルーンはぱすたの書庫の直し〔ghost_dev の `c32229e`・未リリース〕で入る。それまでは手順書 `doc/pasta-real-run.md` の入れ方で入れる）。
 - **Out**: 選択肢の前の `\![*]` の印（`script-small-tags`・崩れた所の表の 3）・横書きの帯・`cursor.*` の鍵の色や描き方の範囲を広げること・選択肢のマーカーの見た目（`choice-marker-styling`）。
 
 ## Boundary Candidates
@@ -38,7 +38,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: なし（今すぐ着手できる）。実機でぱすたの縦書きのバルーンを見るには `ghost-inner-balloon`（v0.1.0）の着地が要る（働きの前提ではない）。
+- **Upstream**: なし（今すぐ着手できる）。実機でぱすたの縦書きのバルーンを見るには: `ghost-inner-balloon` は完了（main #364）。ぱすたの縦書きのバルーンは、ぱすたの書庫の直し（ghost_dev の `c32229e`・未リリース）で入る。それまでは手順書 `doc/pasta-real-run.md` の入れ方で入れる（働きの前提ではない）。
 - **Downstream**: `pasta-in-windows-verification` の回し直し。
 
 ## Existing Spec Touchpoints

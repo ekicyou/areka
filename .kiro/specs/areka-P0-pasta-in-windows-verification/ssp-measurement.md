@@ -9,7 +9,7 @@ spec `areka-P0-pasta-in-windows-verification` の、SSP でのぱすたの全体
 | 項目 | 値 |
 |---|---|
 | 日時 | 2026-10-23 07:58〜08:13 |
-| SSP の版 | `SSP/2.9.23 (20261021-5; Windows NT 10.0.26300)`（ssp MCP の `get_property` で `baseware.version` を読んだ値）。**要件（Requirement 1）と手順書（`doc/pasta-real-run.md`）は 2.9.18 と書いているが、測ったのは 2.9.23**。開発者の機械の SSP が上がっていたため。本書の「SSP」はすべて 2.9.23 を指す |
+| SSP の版 | `SSP/2.9.23 (20261021-5; Windows NT 10.0.26300)`（ssp MCP の `get_property` で `baseware.version` を読んだ値）。**要件（Requirement 1）は 2.9.18 と書いているが、測ったのは 2.9.23**。開発者の機械の SSP が上がっていたため。手順書（`doc/pasta-real-run.md`）はタスク 8.1 で 2.9.23 に直した。本書の「SSP」はすべて 2.9.23 を指す |
 | SSP の置き場 | `C:\wintools\ssp\ssp.exe` |
 | 書庫の同定 | `target\nar-samples\fetched\pasta-in-windows.nar.sha256` の中身は `ad473d5dd1f142c168092e71b436419270b1cd16331ce19cc24f92a0c04a43a6  pasta-in-windows.nar`。書庫の中の `ghost/master/pasta.toml` は `version = "1.0.0"`（descript に版の行は無い） |
 | SSP に入っているぱすたが同じ版か | `C:\wintools\ssp\ghost\pasta-in-windows` と、この書庫から組んだ走行の根（実機で走らせるために、ゴーストとバルーンを置いて組んだフォルダ）`target\pasta-verify\root\ghost\pasta-in-windows` の 73 ファイルを sha256 で突き合わせ、足りないファイル 0・中身の違い 0 |
@@ -22,6 +22,7 @@ spec `areka-P0-pasta-in-windows-verification` の、SSP でのぱすたの全体
 | 起動の段の起動イベント | SSP を起こしたときはクローディアが立っていた。`\![change,ghost,窓際のぱすたさん]` でぱすたへ替え、`\-` で SSP を閉じ、07:59:47 に起こし直した。このため起動の段は記憶のある起動で、SSP は `OnBoot` を送った（段 1） |
 | 測りの後に残った変化 | 許された切り替えと起こし直しの結果として、**SSP 自身が「最後のゴースト」をぱすたとして保存した**（測りの前はクローディア）。進行役は SSP の本体・設定・SSP が保存するファイルを手で書き換えていない。クローディアへ戻すかは開発者が決める |
 | 測らなかった物 | α の当たりの線と α の描き方（Requirement 1 の 2 項） |
+| 縦書きのバルーンの出どころ（2026-10-23 直し） | 測りの時は「ゴーストのフォルダの中の `pasta_tategaki` を使った」と書いたが誤り。SSP の根の `balloon\` に同じバルーンの写し `C:\wintools\ssp\balloon\pasta_tategaki` が在り、SSP はそれを使っていた。写しが無ければ SSP も既定のバルーンで出る（`areka-P0-ghost-inner-balloon` の SSP の測り・main #364）。配布の書庫（10-20 版）は `install.txt` にバルーンの鍵が無く、書庫を入れただけの利用者の手元にこの写しは無い。**つまり段 1・段 2 の基準の縦書きのバルーンは、利用者が配布の書庫から得られない置き方の上で測ったもので、run1 と比べた前提（同じ書庫なら SSP は縦書きで出る）は成り立たない**。ぱすたの側が `install.txt` を直した（未リリース・`verification.md` 5 節の 1） |
 
 ukadoc との照らし合わせ:
 
@@ -41,7 +42,7 @@ ukadoc との照らし合わせ:
 - 結果:
   - SSP が送った起動イベントは `OnBoot`（`Reference0: パスタ`）。台本の頭は `\0\s[1000]\1\s[10]` で、`\![set,zorder,s0,b0,s1]`・`\![set,windowstate,!stayontop]` を含む。
   - `\0` は面 1000、`\1` は面 10（窓の枠）。
-  - バルーンは `窓際のぱすたさん縦書き`（ゴーストのフォルダの中の `pasta_tategaki`）。
+  - バルーンは `窓際のぱすたさん縦書き`（SSP の根の `balloon\` に在った写し `C:\wintools\ssp\balloon\pasta_tategaki`。測りの時に「ゴーストのフォルダの中」と書いたのは誤りで、2026-10-23 に直した・1 節）。
   - `scope(0)` と `scope(1)` の rect はどちらも `-782,201,49,1227`（窓の枠とぱすたが同じ左上に重なる）。バルーンの rect は `-722,288,-68,963`。
   - 台詞は「‥‥あ、点いた。おはようございます。ビルの隙間から、朝日がちょっとだけ見えました。」。
   - **撮ったときは台詞が出終わってバルーンが閉じていた**ので、`stage1-balloon0.png` は空のバルーンで、`stage1-shot.png` にも台詞は写っていない。台詞の逐語の根拠は `stage1-pasta-log.txt` の応答の Value。重なりの順（窓が奥 → バルーンの字 → ぱすたが手前）は段 2 の撮影で見える。
@@ -158,7 +159,7 @@ ukadoc との照らし合わせ:
 
 | 問い | 申し送り先 | 日時 | 道具と引数 | 見えた答え | 根拠 | ukadoc の URL・逐語の引用・食い違い |
 |---|---|---|---|---|---|---|
-| ゴーストのフォルダの中の縦書きのバルーンを名前で見つけるか | `ghost-inner-balloon` | 2026-10-23 08:01 | `get_property`（バルーンの名前） | SSP は、ゴーストのフォルダの中の `pasta_tategaki`（`name,窓際のぱすたさん縦書き`）を使った。SSP の `balloon\` に同じバルーンが在るかは確かめていない | 段 1 の結果・`stage1-shot.png` | ukadoc の検索でこの見つけ方を書いた項目は見つからなかった。引用なし。食い違い: 判定できない |
+| ゴーストのフォルダの中の縦書きのバルーンを名前で見つけるか | `ghost-inner-balloon` | 2026-10-23 08:01 | `get_property`（バルーンの名前） | （2026-10-23 直し）SSP は `name,窓際のぱすたさん縦書き` のバルーンを使ったが、それは SSP の根の `balloon\` に在った写し（`C:\wintools\ssp\balloon\pasta_tategaki`）だった。測りの時に「ゴーストのフォルダの中の `pasta_tategaki` を使った」と書いたのは、根の写しを確かめていなかった誤り。写しが無ければ SSP もゴーストのフォルダの中を探さず、既定のバルーンで出る（`areka-P0-ghost-inner-balloon` の SSP の測り・main #364）。直す場所はぱすたの `install.txt`（`verification.md` 5 節の 1） | 段 1 の結果・`stage1-shot.png` | ukadoc の検索でこの見つけ方を書いた項目は見つからなかった。引用なし。食い違い: 判定できない |
 | 選択肢の前の `\![*]` | `script-small-tags` | 2026-10-23 08:02 | `raise_event`（`選択肢テスト`）・`shot` | 選択肢 4 つの前に、それぞれ印が出た | `stage2-script.txt`・`stage2-choice-shot.png` | https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_*_ 「マーカーを表示する。」。食い違い: なし |
 | 拡大率の違う画面へ移したときの大きさと `OnShellScaling` | `dpi-realign-remembered-chain` | 2026-10-23 08:09 | `drag -1000 640 1300 700`・`get_property` | 150% の画面から 200% の画面へ移っても、ぱすたの大きさ（831x1026）と `scope(0).scaling`（150,150）は変わらず、`OnShellScaling` も届かなかった。ぱすたと窓の枠とバルーンの並びは保たれた | `stage5-rects.txt`・`stage5-after-shot.png`・`stage5-pasta-log.txt` | https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellScaling 「シェル倍率が変更された際に発生。」。食い違い: なし（倍率が変わっていない） |
 | `balloon.dontmove`（ぱすたの descript は `balloon.dontmove,true`） | `descript-window-keys` | 2026-10-23 08:08〜08:09 | `drag`（段 4・段 5）・`get_property`（バルーンの rect） | ぱすたを 2 回ドラッグした後も、バルーンはぱすたの左上から 60,87 の所に付いたまま動いた。利用者がバルーンを自分で動かす操作は試していない | `stage5-rects.txt` の 4 行目・`stage5-balloon-shot.png` | https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#balloon.dontmove%2Ctrue 「バルーン位置調整の標準設定をOFFにする。」。食い違い: なし（今回の操作の範囲では） |

@@ -104,7 +104,7 @@
 - [x] 5.6 フレームの汲み出しが止まらずに固まる崩れを根本から直す
   - rerun2（2026-10-23）で、areka が起動から数分で答えなくなり、記憶が増え続けた（崩れの表に足す）。根は `crates/areka/src/emo2_boot/frame/drain_resnap.rs` の `run_drain_phase` で、`try_iter()` が送り手（seriko の ShowSurface・動く WebP で毎秒約 14 件）の送り続けるあいだ止まらず、1 フレームが終わらない
   - 開発者の承認（2026-10-23「推奨」・すべてのゴーストの描き方の流れに効く直し・要件 6.4）。届いている分を一度に集めてから適用し、同じ target へ続く `reply` の無い ShowSurface は最後の 1 件だけ適用する。ほかの指令と `reply` 付きの指令は順番どおり残す
-  - 触るファイル: `crates/areka/src/emo2_boot/frame/drain_resnap.rs` と兄弟のテスト（`*_tests.rs`）。`crates/areka/src/main.rs` には足さない
+  - 触るファイル: `crates/areka/src/emo2_boot/frame/drain_resnap.rs` と兄弟のテスト（`*_tests.rs`）・`crates/areka/src/emo2_boot/frame/wiring.rs`（説明文だけ）。`crates/areka/src/main.rs` には足さない
   - 直す前に赤・直した後に緑の決定論のテストを置く（送り手が送り続けても戻る・同じ target の ShowSurface が 1 回の適用になり、ほかの指令の順番と `reply` が保たれる）
   - 終わった形: 足したテストが赤から緑で、`areka` のテストが緑。崩れの表と直しの節に記録がある
   - _Requirements: 6.1, 6.4, 6.5, 6.6, 6.7, 6.8_
@@ -149,3 +149,8 @@
 - 4.2: 補いの走りの準備（手順 4 節）は使った後の根を写すので、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶 `ghost\master\profile\` まで写り、起動が `OnBoot`・バルーンが記憶の `StayseeBalloon` になった（alt1）。写した記憶を消して回し直した alt2 で `OnFirstBoot`・`route=Descript` になった。8.1 で準備の塊に「写した根の `ghost\pasta-in-windows\ghost\master\profile` を消す」1 行を足す（書庫に profile は無い）
 - 5.4（2026-10-23・main の取り込みの後）: 崩れ 6 は兄弟の `areka-P0-window-link-directives`（main #360・`355a7211`）が印 `ScriptPlaced` で直していた。本 spec の 5.4 の直し（x と y で比べる・`97186487`）は重なったので、開発者の承認（「承認する」）を受けて取り込み（`ca75ba2a`）で main の形に寄せて外した。5.5 の rerun1 は外した直しでの確かめなので、main の形で段 1 を回し直す
 - 5.5（2026-10-23・rerun3 の後）: main の形の上の rerun3（`a13e19b6`）で 6 と 7 が直ったこと（7 は `sticky_follow` の行）と、24 が直ったことを確かめた。何もしないあいだの CPU の測り（崩れ 25）は負荷の測りなので、排他テストの机とひとりの机の両方を持って回すのが本来の形。今回は排他テストの机だけで回し、その条件を検証の記録 6 節に書いた
+- 完了時にその場で解決（2026-10-23）: 崩れ 1・2 の持ち主を、完了した `areka-P0-ghost-inner-balloon`（ぱすたの置き方を範囲の外にした）から「ぱすた開発」へ替え、「ぱすたの側が直した（未リリース・`c32229e`）」として数え直した（引き取る spec 18）
+- 完了時にその場で解決（2026-10-23）: 測りの記録の「SSP はゴーストのフォルダの中の `pasta_tategaki` を使った」を、SSP の根の `balloon\` の写しを使った、に直し、段 1・段 2 の基準の前提が変わることを書いた
+- 完了時にその場で解決（2026-10-23）: 申し送りに書いたぱすたの置き場 `ghost\pasta-in-windows\balloon\pasta_tategaki` を、正しい `ghost\pasta-in-windows\pasta_tategaki` と記録に記した（完了した spec の文書は直さない）
+- 完了時にその場で解決（2026-10-23）: 測りの記録 1 節の「手順書は 2.9.18」を、手順書は 2.9.23 に直した、に替えた
+- 完了時にその場で解決（2026-10-23）: 5.6 の触るファイルに `crates/areka/src/emo2_boot/frame/wiring.rs`（説明文だけ）を足した

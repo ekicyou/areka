@@ -153,9 +153,9 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 Get-NetTCPConnection -LocalPort 9276 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { 'listen 9276 pid={0} path={1}' -f $_.OwningProcess, (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Path }
 ```
 
-### 補いの走り（`ghost-inner-balloon` の着地まで・任意）
+### 補いの走り（ぱすたの新しい書庫まで・任意）
 
-`ghost-inner-balloon` が着地するまで、areka はゴーストのフォルダの中の縦書きのバルーンを名前で見つけられず、配布物の既定のバルーンで話す。縦書きのバルーンでしか見えない崩れ（列と枠の並び・縦書きの選択肢）を早く見るため、本走行の後に、縦書きのバルーンを根の `balloon\` に写した別の根で段 1〜2 だけを回してよい。結果は「参考（代わりの置き方）」として、段の 3 値の数と分けて書く。着地の後は要らない。
+取り寄せる書庫（10-20 版）は `install.txt` にバルーンの鍵が無く、縦書きのバルーンはゴーストのフォルダの直下（`ghost\pasta-in-windows\pasta_tategaki`）に置かれたままになる。areka も SSP もそこをバルーンとして探さないので、配布物の既定のバルーンで話す（ぱすたの側が `install.txt` を直した・次のリリースの書庫から入る）。縦書きのバルーンでしか見えない崩れ（列と枠の並び・縦書きの選択肢）を早く見るため、本走行の後に、縦書きのバルーンを根の `balloon\` に写した別の根で段 1〜2 だけを回してよい。結果は「参考（代わりの置き方）」として、段の 3 値の数と分けて書く。直した書庫で回すときは要らない。
 
 本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶の `StayseeBalloon` になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
 
@@ -178,8 +178,8 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 
 | 段 | 操作 | 撮る物 | SSP の基準 | 今の引き取る spec | その着地で変わるはずの所 |
 |---|---|---|---|---|---|
-| 1 起動 | 起動の命令で起こし、最初の台詞が出終わるまで待つ | 画面の `shot`（重なりの順）・`dump_surface`（`\0` と `\1`）・`dump_balloon`・`get_log` | ぱすたが着せ替えの面 1000 で立ち、奥に窓の枠（`\1` の面 10）が別の窓で重なり、ゴーストのフォルダの中の縦書きのバルーンで台詞が出る。重なりは窓（奥）→ バルーン → ぱすた（手前）。SSP の基準は、ゴーストをぱすたへ替えて SSP を起こし直した起動で測ったので `OnBoot`（2026-10-23 07:59:49 に測った。台本の頭は `\0\s[1000]\1\s[10]`）。areka は空の記憶で `OnFirstBoot`（台詞の文の違いは起動イベントの違いとして分けて書く）（測りの記録 段 1） | `ghost-inner-balloon`（縦書きのバルーンを名前で見つける）・`descript-window-keys`（`sakura.seriko.defaultsurface`・`balloon.dontmove`）・`stay-on-top-directives`（`\1\v`・`\![set,windowstate,!stayontop]`）・`script-small-tags`（`\_u[0x3000]`）・`mouse-click-wheel-events`（初回の台本がボールのクリックを待つので、身体が映らない）・`mcp-scope-rect-property`（位置を `get_property` で読む）・`animated-surface-log-flood`（記録が `apply(ShowSurface)` の行で埋もれる）。重なりの指定は完了 `zorder-scope-inversion`（着地した結果として確かめる）。着地済み: `window-link-directives`（`seriko.sticky-window`・main の PR#360）。起動の並べ直しで窓の枠が別の画面へ送られた件も #360 が直した（台本の `\![move]` が置いた窓の印 `ScriptPlaced`）。どちらも着地した結果として確かめる | バルーンが既定のバルーンから縦書きのバルーンに替わる。最初の面が 1000 になる。ぱすたの窓が画面の下端を越えない。窓の枠がぱすたに重なって付く（#360 で着地済み・確かめる）。窓の枠が奥へ回る。ボールのクリックで身体が映る。位置を `get_property` で読める |
-| 2 縦書きの会話 | `raise_event` で `選択肢テスト` を起こし、出た選択肢を 1 つ選び、選んだ後の会話が終わるまで待つ（30 秒の時間切れに注意・表の下の注） | 画面の `shot`（重なりの順・列と枠の並び）・`dump_balloon`・`get_log` | 縦書きのバルーンに、`\_l[x,y]` で並べた列と枠が崩れずに並び、選択肢が出て、選ぶと続きの会話が出る。重なりは段 1 と同じ（測りの記録 段 2） | `ghost-inner-balloon`（縦書きのバルーン）・`script-small-tags`（`\_u[0x3000]`・`\![bind-noevent]`・選択肢の前の `\![*]`）・`vertical-choice-hover-band`（縦書きの選択肢の反転の帯） | 会話が縦書きで出る。全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く。縦書きの選択肢の反転の帯が列に合う |
+| 1 起動 | 起動の命令で起こし、最初の台詞が出終わるまで待つ | 画面の `shot`（重なりの順）・`dump_surface`（`\0` と `\1`）・`dump_balloon`・`get_log` | ぱすたが着せ替えの面 1000 で立ち、奥に窓の枠（`\1` の面 10）が別の窓で重なり、縦書きのバルーンで台詞が出る（測った SSP の縦書きのバルーンは、SSP の根の `balloon\` に置いた写しから出た。配布の書庫〔10-20 版〕は `install.txt` にバルーンの鍵が無く、入れただけでは縦書きのバルーンが入らない。ぱすたの側が直した・未リリース）。重なりは窓（奥）→ バルーン → ぱすた（手前）。SSP の基準は、ゴーストをぱすたへ替えて SSP を起こし直した起動で測ったので `OnBoot`（2026-10-23 07:59:49 に測った。台本の頭は `\0\s[1000]\1\s[10]`）。areka は空の記憶で `OnFirstBoot`（台詞の文の違いは起動イベントの違いとして分けて書く）（測りの記録 段 1） | ぱすたの側（書庫の `install.txt` に縦書きのバルーンの鍵が無い・直した・未リリース）・`descript-window-keys`（`sakura.seriko.defaultsurface`・`balloon.dontmove`）・`stay-on-top-directives`（`\1\v`・`\![set,windowstate,!stayontop]`）・`script-small-tags`（`\_u[0x3000]`）・`mouse-click-wheel-events`（初回の台本がボールのクリックを待つので、身体が映らない）・`mcp-scope-rect-property`（位置を `get_property` で読む）・`animated-surface-log-flood`（記録が `apply(ShowSurface)` の行で埋もれる）。重なりの指定は完了 `zorder-scope-inversion`（着地した結果として確かめる）。着地済み: `window-link-directives`（`seriko.sticky-window`・main の PR#360）。起動の並べ直しで窓の枠が別の画面へ送られた件も #360 が直した（台本の `\![move]` が置いた窓の印 `ScriptPlaced`）。どちらも着地した結果として確かめる | バルーンが既定のバルーンから縦書きのバルーンに替わる。最初の面が 1000 になる。ぱすたの窓が画面の下端を越えない。窓の枠がぱすたに重なって付く（#360 で着地済み・確かめる）。窓の枠が奥へ回る。ボールのクリックで身体が映る。位置を `get_property` で読める |
+| 2 縦書きの会話 | `raise_event` で `選択肢テスト` を起こし、出た選択肢を 1 つ選び、選んだ後の会話が終わるまで待つ（30 秒の時間切れに注意・表の下の注） | 画面の `shot`（重なりの順・列と枠の並び）・`dump_balloon`・`get_log` | 縦書きのバルーンに、`\_l[x,y]` で並べた列と枠が崩れずに並び、選択肢が出て、選ぶと続きの会話が出る。重なりは段 1 と同じ（測りの記録 段 2） | ぱすたの側（縦書きのバルーン・段 1 と同じ）・`script-small-tags`（`\_u[0x3000]`・`\![bind-noevent]`・選択肢の前の `\![*]`）・`vertical-choice-hover-band`（縦書きの選択肢の反転の帯） | 会話が縦書きで出る。全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く。縦書きの選択肢の反転の帯が列に合う |
 | 3 撫で・× に乗る・ボール | ぱすたを `move` で少しずつ撫でる。× の印の上に乗せる。ボールを `click` | 撫での前後と × に乗ったときの `shot`・`dump_surface`・`get_log`（`OnMouseMove`・`OnMouseEnter`・`OnMouseClick` の届き） | 撫でると反応の台詞が出る。× の印に乗ると × が赤くなる。ボールを押すとボールのトークが出る。当たり判定ごとにマウスの形が替わる（測りの記録 段 3） | `mouse-click-wheel-events`（`OnMouseClick`・`OnMouseEnter`／`OnMouseLeave`）・`shell-mouse-cursor`（`sakura.cursor` ブレス） | × が赤くなる。ボールのトークが出る。マウスの形が替わる |
 | 4 2 つの窓を一緒にドラッグ | ぱすたを `drag` で同じ画面の中で動かして離す | ドラッグの前・後の `shot`・`get_log` | ぱすたと窓の枠が離れずに一緒に動き、落とした後も重なった形に付き直る（測りの記録 段 4） | `mcp-scope-rect-property`（位置を `get_property` で読む）。着地済み: `window-link-directives`（`seriko.sticky-window`・`--option=ignore-sticky-window`・main の PR#360。組の相手をドラッグと `\![move]` で連れて動かす） | 窓の枠がぱすたについて動き、落とした後に付き直る（#360 で着地済み・確かめる。付いてこなければ起票する） |
 | 5 拡大率の違う画面への移動 | ぱすたを `drag` で拡大率の違うもう 1 つの画面へ動かして離す | 移った後の `shot`・`dump_surface`・`get_log` | 200% の画面へ移っても大きさは変わらない（831x1026 のまま・`scaling` は 150,150）。ぱすたと窓の枠は同じ rect のまま重なって並び、バルーンはぱすたの左上から 60,87 の所のまま。移動に伴うイベント（`OnShellScaling` など）は届かない（測りの記録 段 5） | `dpi-realign-remembered-chain`（拡大率の違う画面をまたぐドラッグ・落とした点のずれ）・`mcp-scope-rect-property`（位置を `get_property` で読む）・`shell-scale-linkage`（倍率の連動。この手順の範囲の外）。着地済み: `window-link-directives`（窓の枠が付いてくる・main の PR#360） | 移った先の画面でぱすたと窓の枠とバルーンの並びが保たれ、落とした点に置かれる（窓の枠が付いてくることは #360 で着地済み・確かめる）。大きさが画面の拡大率に合わせて変わるのは areka の方針（DPI 追従・2026-07-18 開発者）で、「方針で受けない」と書く。倍率の連動（`balloon.syncscale`・`OnShellScaling`）はこの手順の範囲の外なので、それに由来する見た目の違いは「違う」の数と分けて書く |
@@ -194,17 +194,20 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 
 ### 最後の確かめで決める項目（案 B）
 
-最初の走行で開発者の判定が付かなかった 7 項目（`.kiro/specs/areka-P0-pasta-in-windows-verification/verification.md` の 6 節「申し送りの漏れが無いことの確かめ」の判定待ちの 6 欄と、5 節の崩れの 15）。v0.1.0 の版の門の最後の確かめで、書いた spec の着地の後に回し、開発者が「同じ／違う」を決める。「違う」になったら、その時に v0.1.0 の持ち主か新しい起票へ渡す。
+最初の走行で開発者の判定が付かなかった 7 項目（`.kiro/specs/areka-P0-pasta-in-windows-verification/verification.md` の 6 節「申し送りの漏れが無いことの確かめ」の判定待ちの 6 欄と、5 節の崩れの 15）と、ぱすたの側が直した崩れの 1・2 の確かめの、合わせて 8 項目。v0.1.0 の版の門の最後の確かめで、書いた spec の着地の後に回し、開発者が「同じ／違う」を決める。「違う」になったら、その時に v0.1.0 の持ち主か新しい起票へ渡す。
 
 | 項目 | 見比べる物 | 決める時 |
 |---|---|---|
 | シェル `seriko.alignmenttodesktop`（`free`）・`sakura.defaultx`（`0`） | 段 1 の起動の位置（手で動かす前の `shot`）。SSP の基準は記憶のある起動（`OnBoot`）の位置なので、起動の種類の違いを分けて書く | `descript-window-keys` の着地の後 |
-| シェル `sakura.balloon.offsetx`（`476`）・`offsety`（`58`） | 段 1・段 2 のバルーンのぱすたからのずれ（SSP は等倍で 40,58） | `ghost-inner-balloon` の着地の後（縦書きのバルーンが手当てなしで出る形で見る） |
+| シェル `sakura.balloon.offsetx`（`476`）・`offsety`（`58`） | 段 1・段 2 のバルーンのぱすたからのずれ（SSP は等倍で 40,58） | ぱすたの新しい書庫の後（縦書きのバルーンが手当てなしで出る形で見る） |
 | リソース `sakura.recommendsites` | 段 6 のメニュー（崩れ 15 と一緒に見る） | `popup-menu-shell-look` の着地の後 |
 | バルーン `anchor.font.color.*` | リンク（`\_a`）の字の色。7 段のどれにもリンクの字が出なければ「見た目・振る舞いに効かない」へ移す | 兄弟の spec の着地の後の回し直しで |
 | `collision*` | 段 3 の、顔を撫でたときの当たり（身体が映る起動で見る） | `mouse-click-wheel-events` の着地の後 |
 | `\![move,…]` | 段 1 の窓の枠（`\1`）の位置（手で動かす前の `shot`。`\0` の左上に重なって出るか） | 着地済みの `window-link-directives`（main の PR#360）の上で、次の回し直しで |
 | 右クリックメニューの見た目（崩れ 15） | 段 6 のメニューの `shot` を SSP の `stage6-menu-shot.png` と比べる | `popup-menu-shell-look` の着地の後 |
+| 縦書きのバルーンが書庫から入って出るか（崩れ 1・2） | 新しい書庫（`install.txt` に `balloon.directory,pasta_tategaki`・ghost_dev の `c32229e`）を入れて段 1・段 2 を回す。縦書きのバルーンで起動し（`balloon_resolved route=Descript`・`descript_balloon_not_found` が 0）、`\_l[x,0]` の後の段と選択肢が前の行に重ならないこと。入れ方は表の下 | ぱすたの新しい書庫のリリースの後（リリースは開発者が決める） |
+
+崩れ 1・2 の確かめの準備: 3 節の根を組む塊は書庫を写すだけで `install.txt` を読まない。新しいぱすたの書庫は、areka 自身のインストールで入れる（3 節の根で起こした areka のゴーストの窓へ `.nar` を投げ込む）。同梱のバルーンは、main #364 の決めのとおりゴーストの中の `ghost\pasta-in-windows\balloon\pasta_tategaki\` に入る。この入れ方は案 B の前に実機で確かめる。
 
 ### 代わりの操作（`mouse-click-wheel-events` の着地まで・任意）
 

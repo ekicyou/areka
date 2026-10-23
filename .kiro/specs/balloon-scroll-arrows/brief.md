@@ -45,13 +45,13 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: 完了 `shell-balloon`（箱の形）。実機でぱすたの縦書きのバルーンを見るには `ghost-inner-balloon`（v0.1.0・C10）の着地が要る（働きの前提ではない）。名前から絵を探す所を `.webp` も受ける形にそろえる `balloon-webp-names`（v0.1.0 から外した 5 本）は待たない（ぱすたの矢印は `.png`）。
+- **Upstream**: 完了 `shell-balloon`（箱の形）。実機でぱすたの縦書きのバルーンを見るには: `ghost-inner-balloon` は完了（main #364）。ぱすたの縦書きのバルーンは、ぱすたの書庫の直し（ghost_dev の `c32229e`・未リリース）で入る。それまでは手順書 `doc/pasta-real-run.md` の入れ方で入れる（働きの前提ではない）。名前から絵を探す所を `.webp` も受ける形にそろえる `balloon-webp-names`（v0.1.0 から外した 5 本）は待たない（ぱすたの矢印は `.png`）。
 - **Downstream**: `balloon-markers`（後半の状態の印が系列の土台と印の配置に乗る）・`balloon-scroll-fade`（v0.3.0・前半だけを待てばよいと決めていた＝本 spec の後）・`talk-fast-forward`（`clickwait*` の系列）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: `balloon-markers`（前半を本 spec へ切り出した＝同 brief に 1 行）・`balloon-canon-residue`（網羅台帳の持ち主＝同 brief に 1 行）。
-- **Adjacent**: `ghost-inner-balloon`（同じ縦書きのバルーン）・`balloon-font-file`・`text-typesetting`・`talk-fast-forward`（emo-text の `actor*.rs`・`viewbox*.rs` を分け合う＝並べない）・`balloon-webp-names`（emo-present の `balloon.rs`）。
+- **Adjacent**: ✅ `ghost-inner-balloon`（main #364 で完了・ゴーストの中の `balloon\<名>\`。ぱすたの縦書きのバルーンはぱすたの書庫の直しで入る）・`balloon-font-file`・`text-typesetting`・`talk-fast-forward`（emo-text の `actor*.rs`・`viewbox*.rs` を分け合う＝並べない）・`balloon-webp-names`（emo-present の `balloon.rs`）。
 
 ## Constraints
 
