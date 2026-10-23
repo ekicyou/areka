@@ -771,6 +771,7 @@ fn box_bundle(text: &str) -> ShellBoxAssets {
         aliases: world.alias_snapshot(),
         surface_ids: world.surface_ids().collect(),
         font_dirs: Vec::new(),
+        fallback_candidates: std::collections::BTreeMap::new(),
     }
 }
 
@@ -849,6 +850,65 @@ fn shell_switch_hands_the_new_box_bundle_to_the_text_layer() {
             None,
         ),
         r"(切替の前, 切替の後, `\s` を書かない次の台詞, 印)"
+    );
+}
+
+/// 前のシェル: 面 10 と面 20（どちらも箱なし）。
+const OLD_SHELL_WITH_20: &str = "surface10
+{
+}
+surface20
+{
+}
+";
+
+/// シェルの切替で今の面（20）が新しいシェルに無いスコープは、文字の層も箱の束の候補の並びの
+/// 最初に在る面（5 は無いので 10）へ替わり、`\s` を書かない次の台詞はその面の箱 `new` へ入る
+/// （spec: descript-window-keys 要件 3.2・3.5）。seriko と同じ材料（面の番号の集合と候補の並び）で決める。
+///
+/// # 非空虚性
+/// `hand_to` が戻り先を呼ばないと、今の面が 20 のままで次の台詞は普通のバルーンへ入って赤。
+#[test]
+fn shell_switch_falls_the_text_layer_back_to_the_bundle_candidates() {
+    let SwapFinish::Shell {
+        source,
+        balloon,
+        restored,
+        ..
+    } = shell_finish()
+    else {
+        unreachable!("shell_finish はシェルの残り")
+    };
+    let actor = ActorKey::from("0");
+    let mut boxes = box_bundle(NEW_SHELL);
+    boxes.fallback_candidates = BTreeMap::from([(actor.clone(), vec![5, 10])]);
+    let finish = SwapFinish::Shell {
+        source,
+        balloon,
+        restored,
+        boxes,
+    };
+    let mut rig = rig_on(World::new(), SkinKind::Shell, false, finish);
+    box_bundle(OLD_SHELL_WITH_20).hand_to(&mut rig.wiring.runtime.borrow_mut(), &mut rig.world);
+    rig.wiring
+        .runtime
+        .borrow_mut()
+        .apply_cue(&cue(&actor, CueCommand::Emote { key: "20".into() }));
+    let before = rig.wiring.runtime.borrow().state().current_surface(&actor);
+
+    answer(&mut rig, 0, Ok(()));
+    answer(&mut rig, 1, Ok(()));
+    frame(&mut rig);
+    let after = rig.wiring.runtime.borrow().state().current_surface(&actor);
+    rig.wiring
+        .runtime
+        .borrow_mut()
+        .apply_cue(&cue(&actor, CueCommand::Text("新しい".into())));
+
+    assert_eq!(
+        (before, after, texts(&rig.wiring, &actor), stage(&rig.world)),
+        (Some(20), Some(10), vec![("new".to_owned(), 3)], None),
+        r"(切替の前の面, 切替の後の面, `\s` を書かない次の台詞, 印)"
     );
 }
 

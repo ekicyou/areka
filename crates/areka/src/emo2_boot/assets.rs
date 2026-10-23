@@ -364,6 +364,14 @@ pub fn build_shell_assets(
         aliases: aliases.clone(),
         surface_ids,
         font_dirs: box_font_search_dirs(&shell_dir, &model.shiori.dir),
+        // 起動・読み直し・切り替えのどの呼び手でも同じ値を入れる（descript-window-keys 要件 3.2）。
+        fallback_candidates: scopes
+            .iter()
+            .map(|&scope| {
+                let candidates = default_surfaces.candidates(scope as usize);
+                (ActorKey::from(scope.to_string()), candidates)
+            })
+            .collect(),
     };
     let resolver = SurfaceResolver::new(aliases);
 
