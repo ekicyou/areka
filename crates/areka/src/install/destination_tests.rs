@@ -356,3 +356,118 @@ fn unmarked_list_answers_the_same_root_as_today() {
     assert_eq!(dest.ghost_root("emo2"), exe, "今と同じ根");
     assert!(!user.join("ghost").exists(), "写さない");
 }
+
+// ---- 根の置き場の同名と以前の同梱に触らない（areka-P0-ghost-inner-balloon tasks.md 5.3・要件 6.4・7.3・8.2） ----
+
+/// 同梱のバルーン `kaku` つきのシェル `dress` の書庫を開く。
+fn shell_nar_with_companion(tmp: &TempPath) -> NarArchive {
+    let path = tmp.child("dress.nar");
+    NarBuilder::new()
+        .file(
+            "install.txt",
+            &install_txt(&[
+                "type,shell",
+                "name,きがえ",
+                "directory,dress",
+                "balloon.directory,kaku",
+                "balloon.source.directory,kaku",
+            ]),
+        )
+        .done()
+        .file("descript.txt", b"charset,UTF-8\r\nname,Dress\r\n")
+        .done()
+        .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
+        .done()
+        .write_to(&path)
+        .expect("書庫を置ける");
+    NarArchive::open(&path).expect("書庫を開ける")
+}
+
+/// 実行ファイルの隣の根に同じフォルダ名のバルーン `kaku` が在っても、ゴーストの書庫・シェルの書庫の
+/// 同梱はそれを写さず（書ける根の `balloon\` を作らない＝`copied_root` を通らない）上書きもしない。
+#[test]
+fn bundled_root_balloon_of_the_same_name_is_neither_copied_nor_overwritten() {
+    let (tmp, user, exe) = bundled("install-destination-companion-bundled-balloon");
+    put_balloon(&exe, "kaku");
+    let before = tree(&exe.join("balloon"));
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let dest = CatalogDestinations::new(roots)
+        .expect("作れる")
+        .with_exe_dir(Some(exe.clone()));
+
+    let ghost = ghost_nar(&tmp, "fresh", true);
+    ghost
+        .install(&InstallRequest {
+            roots: &dest,
+            target_ghost: None,
+        })
+        .expect("ゴーストの書庫が入る");
+    let shell = shell_nar_with_companion(&tmp);
+    shell
+        .install(&InstallRequest {
+            roots: &dest,
+            target_ghost: Some("emo2"),
+        })
+        .expect("シェルの書庫が入る");
+
+    for ghost in ["fresh", "emo2"] {
+        assert_eq!(
+            std::fs::read(
+                user.join("ghost")
+                    .join(ghost)
+                    .join("balloon/kaku/descript.txt")
+            )
+            .expect("同梱はゴーストの中"),
+            b"charset,UTF-8\r\nname,K\r\n",
+            "{ghost}"
+        );
+    }
+    assert!(
+        !user.join("balloon").exists(),
+        "実行ファイルの隣の同じフォルダ名を書ける根へ写さない"
+    );
+    assert_eq!(
+        tree(&exe.join("balloon")),
+        before,
+        "実行ファイルの隣の同じフォルダ名は 1 バイトも変わらない"
+    );
+}
+
+/// 以前の areka が根へ入れた同梱 `kaku` は、そのゴーストを上書きインストールしても根のまま残り、
+/// 根の項目として候補に出る（同梱はゴーストの中へ入り、そのゴーストからは隠れる）。
+#[test]
+fn a_companion_installed_into_the_root_earlier_stays_a_root_entry() {
+    let tmp = TempPath::under_target("install-into-earlier-root-companion");
+    let root = tmp.child("root");
+    put_ghost(&root, "fresh");
+    put_ghost(&root, "other");
+    put_balloon(&root, "kaku");
+    let earlier = tree(&root.join("balloon"));
+    let archive = ghost_nar(&tmp, "fresh", true);
+
+    install_into(&list(std::slice::from_ref(&root)), &archive, None, None).expect("入る");
+
+    let old = root.join("balloon").join("kaku");
+    assert_eq!(
+        tree(&root.join("balloon")),
+        earlier,
+        "根の同梱は移さず消さず変えない"
+    );
+    assert!(root.join("ghost/fresh/balloon/kaku/descript.txt").is_file());
+    let roots = list(std::slice::from_ref(&root));
+    let other = areka_ghost::catalog_roots::balloons_for(&roots, &root.join("ghost/other"));
+    assert!(
+        other.listed.iter().any(|e| e.dir == old && e.root == root),
+        "根の項目として候補に出る: {:?}",
+        other.listed
+    );
+    let fresh = areka_ghost::catalog_roots::balloons_for(&roots, &root.join("ghost/fresh"));
+    assert!(
+        fresh.hidden.iter().any(|h| h.hidden == old),
+        "入れたゴーストからはゴーストの中が先: {:?}",
+        fresh.hidden
+    );
+}

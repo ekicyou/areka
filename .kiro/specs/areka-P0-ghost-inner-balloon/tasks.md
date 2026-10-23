@@ -102,7 +102,7 @@
   - _Requirements: 6.4, 7.1, 7.2, 7.3, 7.5, 7.7, 7.8, 8.2, 10.1, 10.3_
   - _Boundary: CompanionPlan, NestedCommit, install destination tests (integration)_
 
-- [ ] 5. インストールの側（`areka`）
+- [x] 5. インストールの側（`areka`）
 - [x] 5.1 (P) 同梱の表示名を入れたゴーストの中から引く
   - `install/procedure.rs` の `installed_items` で、同梱（先頭より後のバルーン）の名前を、根だけの `find_balloon` でなく、`element.path` の 2 段上を `ghost_dir` として `balloons_for(&facts.roots, ghost_dir).listed` からフォルダ名で引く。見つからない・`name` が無いときは今どおりフォルダ名。`OnInstallCompleteEx` の Reference2・`skipped_notice`・`installed_record` は変えない
   - `procedure_tests.rs` に、同梱の表示名がゴーストの中の `name` で、根の同じフォルダ名の別の `name` を取らない、を足して緑
@@ -117,7 +117,7 @@
   - _Boundary: InstallDeskNotice_
   - _Depends: 1.2_
 
-- [ ] 5.3 (P) 根の置き場の同名と以前の同梱に触らないことを確かめる
+- [x] 5.3 (P) 根の置き場の同名と以前の同梱に触らないことを確かめる
   - `install/destination_tests.rs` に、実行ファイルの隣の根に同じフォルダ名のバルーンが在っても、ゴーストの書庫・シェルの書庫の同梱で写されず・上書きされない（`copied_root` を通らない）、以前に根へ入れた同梱は根のまま残り根の項目として候補に出る、のテストを足して緑
   - _Requirements: 6.4, 7.3, 8.2, 10.1_
   - _Boundary: install destination tests_
