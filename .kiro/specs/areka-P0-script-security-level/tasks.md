@@ -107,7 +107,7 @@
   - _Requirements: 1.4_
   - _Depends: 1.2_
 
-- [ ] 6.2 出どころで制限されるタグの判定の表
+- [x] 6.2 出どころで制限されるタグの判定の表
   - ukadoc が出どころで実行を制限する 5 つのタグ（`\![execute,filewatch,…]`・`\![execute,schedule-add,…]`・`\![execute,schedule-delete,…]`・`\![enter,nouserbreakmode]`・`\m[umsg,wparam,lparam]`）を、区分（外部扱いでは実行しない／SSTP 専用）・ukadoc の注記の要旨・出典の URL・実装済みかの旗とともに 1 つの表に持つ。実装済みは `\![enter,nouserbreakmode]` だけ。`\![leave,nouserbreakmode]` は載せない。
   - `\!` の名前と選別子から行を引く手と、行と出どころから許すかを決める手を置く（外部扱いでは実行しない → 外部扱いでないとき許す／SSTP 専用 → SSTP 系のとき許す）。
   - 兄弟のテストで、表がちょうど 5 行で綴りが要件 4.1 の 5 つと一致すること（違えば「ukadoc を引き直して表を直す」の文で赤）と、許すかの真理表が緑になる。
@@ -160,3 +160,4 @@
 - （範囲外・4.1 のレビューで発見）`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は main で既に 1,135 行（行数の番人の許可表に載っている）。同じ `BoxedBackend` の写しが 3 つのテストのファイルにある。
 - 選択肢の `script:` を試すテストは `steady_with_ledger` だけだと控え `shown` が無く、構造上は起きない `choice_script_origin_missing` の道を通る。元のトークの控えを置き、その error が出ないことを確かめる（5.4 のレビュー）。
 - `areka` には lib の対象が無い。単体テストは `cargo test -p areka --bin areka`（結合テストの `smoke_boot_loop_exit` などはアプリを起こすので机が要り、32bit の `shiori-host32-testdll-loadu` のビルドも前提）。
+- `crates/areka/src/emo2_boot/script_restriction.rs` の頭の `#![allow(dead_code)]` は、6.3／6.4 で表を引く呼び手ができたら外す。

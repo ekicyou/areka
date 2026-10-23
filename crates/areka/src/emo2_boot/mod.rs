@@ -37,6 +37,8 @@ mod reload_cue;
 pub(crate) mod runtime_boot;
 /// 同じフォルダ名のゴーストを今のゴーストとして扱う（areka-P0-baseware-root-list）。
 pub(crate) mod same_folder_pin;
+/// 出どころで実行を制限するタグの判定の表（areka-P0-script-security-level）。
+pub(crate) mod script_restriction;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
 pub(crate) mod shell_balloon_resolve;
 /// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。
