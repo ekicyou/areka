@@ -3,7 +3,7 @@
 > 要件 1（SSP の記録で測る）は設計の前に済んでいる（2026-10-23・SSP 2.9.23・`research.md` 10 節）。1.2（3.0 を受け付けていたら止まる・測 1 で 2.x と決まり枝に入らなかった）・1.3（許された 5 つの操作の内で測った）・1.5（設計の前に済ませる）は満たし済みなので、実装のタスクを持たない。1.1 は測れなかった `OnClose` の形だけを 5.1 で、1.4（表の各行の出どころ）は 5.3 で受け持つ。
 
 - [ ] 1. 土台: 3.0 の応答の読みを、値の見出しの名前を受け取れる形にする
-- [ ] 1.1 応答の読みの本体を「値の見出しの名前」を受け取る私の手へ移し、3.0 の読みはそれに `Value` を渡すだけにする
+- [x] 1.1 応答の読みの本体を「値の見出しの名前」を受け取る私の手へ移し、3.0 の読みはそれに `Value` を渡すだけにする
   - 3.0 の応答の読み方（状態の番号・`Charset` の拾い方・読めない応答の判定）は 1 文字も変えない
   - 呼び手（32 ビットの経路の client と同じプロセスの道）は変えない
   - 完了の姿: 通信の層の既存のテストが変えずに全部緑で、`Sentence` を値の見出しとして渡すと 2.x の答えの値が読めることを小さなテスト 1 本で示している
@@ -101,3 +101,8 @@
   - 5.1 で新しく見えた崩れと、古い資源の名前（`updatebuttoncaption`・`vanishbuttoncaption` など）を areka が問わない件を、持ち主の spec の brief へ足すか `/kiro-discovery` で起票する
   - 完了の姿: 各件の行き先（brief の追記の場所か起票した spec の名前）が `verification.md` に並んでいる
   - _Requirements: 8.4_
+
+## Implementation Notes
+
+- shiori-host32-host の結合テスト（`error_paths`・`lifecycle_cyclic_e2e`）は i686 の helper と testdll の成果物を要する（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`・`cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc`）。
+- `cargo clippy -p shiori-host32-host --all-targets` は触っていない `tests/lifecycle_kill_e2e.rs:332`・`tests/lifecycle_cyclic_e2e.rs:275,408` の `drop(client)` で赤（本 spec の前からの既存の問題・範囲外）。タスクの検査は `--lib --bins` で回す。
