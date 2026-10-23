@@ -15,7 +15,7 @@ use crate::msg::{
     KanadeConfig, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriOutcome,
 };
 use crate::schedule::{Action, State};
-use crate::talk::TalkId;
+use crate::talk::{ScriptOrigin, TalkId};
 use tracing::Level;
 
 /// SHIORI が返す元の台本。
@@ -96,6 +96,7 @@ fn shown_talk_keeps_the_final_script_after_translation() {
     s.shown = Some(ShownTalk {
         talk_id: TalkId(4),
         script: "\\0前のトーク\\e".to_string(),
+        origin: ScriptOrigin::GHOST,
         close_sent: true,
         timeout_sent: true,
         timeout_pending: false,
@@ -125,6 +126,7 @@ fn shown_talk_keeps_the_final_script_after_translation() {
         Some(ShownTalk {
             talk_id,
             script: FINAL.to_string(),
+            origin: ScriptOrigin::GHOST,
             close_sent: false,
             timeout_sent: false,
             timeout_pending: false,

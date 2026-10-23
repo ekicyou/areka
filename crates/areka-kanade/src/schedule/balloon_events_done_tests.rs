@@ -14,7 +14,7 @@ use crate::change::{
 use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::{Action, State};
-use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use crate::talk::{ScriptOrigin, TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
 /// 完了の知らせを組む。
@@ -475,6 +475,7 @@ fn a4_boot_greeting_break_sends_nothing() {
     s.shown = Some(ShownTalk {
         talk_id: TalkId(3),
         script: FINAL.to_string(),
+        origin: ScriptOrigin::GHOST,
         close_sent: false,
         timeout_sent: false,
         timeout_pending: false,
@@ -495,6 +496,7 @@ fn b2_close_pending_sends_nothing_for_each_cause() {
     s.shown = Some(ShownTalk {
         talk_id: TalkId(3),
         script: FINAL.to_string(),
+        origin: ScriptOrigin::GHOST,
         close_sent: false,
         timeout_sent: false,
         timeout_pending: true,
@@ -543,6 +545,7 @@ fn missing_or_mismatched_shown_sends_empty_script_with_a_warning() {
             Some(ShownTalk {
                 talk_id: TalkId(2),
                 script: "\\0別のトーク\\e".to_string(),
+                origin: ScriptOrigin::GHOST,
                 close_sent: false,
                 timeout_sent: false,
                 timeout_pending: false,

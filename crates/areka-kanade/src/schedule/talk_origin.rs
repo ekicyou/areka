@@ -3,8 +3,8 @@
 //! [`step`](super::step) の出口で、振り分けの後・翻訳へ預ける前に [`stamp`] を 1 回呼ぶ。
 //! 腕（起動・切替・終了・常駐）は出どころを決めず、ここで一括に付ける。
 
-use super::Action;
-use crate::talk::ScriptOrigin;
+use super::{Action, State};
+use crate::talk::{ScriptOrigin, TalkId};
 use areka_talk::SecurityLevel;
 
 /// 台詞の応答の一括の中のすべての再生の開始に、`reply_origin`（元のイベントの基本の出どころを
@@ -27,6 +27,21 @@ pub(super) fn stamp(reply_origin: Option<ScriptOrigin>, mut actions: Vec<Action>
         }
     }
     actions
+}
+
+/// 選択肢の `script:` で始める台本の出どころ: 最後に再生を始めたトークの控えが元のトーク
+/// （`prev_talk_id`）なら、その最終の出どころ（翻訳の後・外部扱いを含む）をそのまま写す（要件 1.6）。
+///
+/// 一致しない・控えが無い（構造上は起きない）ときは error `choice_script_origin_missing` を残し、
+/// 外部扱いへ倒す（止める側）。
+pub(super) fn of_shown(state: &State, prev_talk_id: TalkId) -> ScriptOrigin {
+    match &state.shown {
+        Some(shown) if shown.talk_id == prev_talk_id => shown.origin,
+        other => {
+            tracing::error!(target: "kanade", event = "choice_script_origin_missing", prev_talk_id = prev_talk_id.0, shown_talk_id = other.as_ref().map(|shown| shown.talk_id.0), "元のトークの出どころの控えが無い——選択肢の script: を外部扱いへ倒す");
+            ScriptOrigin::GHOST.lowered_by(SecurityLevel::External)
+        }
+    }
 }
 
 #[cfg(test)]

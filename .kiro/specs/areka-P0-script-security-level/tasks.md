@@ -92,7 +92,7 @@
   - 新しい兄弟のテストで、運行表の一歩を通して ⑴ ゴースト自身のイベントの応答はゴースト自身 ⑵ `raise_event` の応答は MCP の NOTIFY ⑶ 外からの台本は MCP の SEND ⑷ 応答の `external` で下がり翻訳の応答の `local` で上がらない ⑸ 翻訳の応答の `external` で下がる、が緑になる。運行表のファイルは 1,000 行以内に収まる。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 3.1, 3.2_
 
-- [ ] 5.4 選択肢の `script:` の引き継ぎと、選択肢の ID・アンカーのイベント
+- [x] 5.4 選択肢の `script:` の引き継ぎと、選択肢の ID・アンカーのイベント
   - 最後に再生を始めたトークの控えに出どころを足し、控えを写す所が台本の起動の最終の値（翻訳の後）を写す。控えの字面（7 か所）を追随させる。
   - 5.3 で仮にゴースト自身を渡していた選択肢の `script:` の呼び手を、引き継ぎの値に替える。選択肢の `script:` で始まる台本は、控えのトークの番号が元のトークと一致すればその出どころを写す。一致しない（構造上は起きない）ときは error（`choice_script_origin_missing`）を残して外部扱いへ倒す。
   - 兄弟のテストで、⑹ 選択肢の `script:` は元のトークの値（`external` を含む）を写す ⑺ 選択肢の ID のイベントの応答は元が外部扱いでもゴースト自身、が緑になる。
@@ -158,3 +158,4 @@
 - `cargo test -p shiori-host32-host` は先に `cargo build -p shiori-host32-testdll -p shiori-host32-helper --target i686-pc-windows-msvc` が要る（無いと統合テスト 1 本が前提不足で赤）。
 - `crates/areka-kanade/src/actor_tests.rs` は 3.4 の後 983 行。これ以上足すなら兄弟のテストのファイルへ。
 - （範囲外・4.1 のレビューで発見）`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は main で既に 1,135 行（行数の番人の許可表に載っている）。同じ `BoxedBackend` の写しが 3 つのテストのファイルにある。
+- 選択肢の `script:` を試すテストは `steady_with_ledger` だけだと控え `shown` が無く、構造上は起きない `choice_script_origin_missing` の道を通る。元のトークの控えを置き、その error が出ないことを確かめる（5.4 のレビュー）。

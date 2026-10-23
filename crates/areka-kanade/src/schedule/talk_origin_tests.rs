@@ -164,3 +164,23 @@ fn external_translate_reply_lowers() {
     let hit = logged_once(&ev, Level::INFO, "script_security_lowered");
     assert_eq!(hit.fields.get("by").map(String::as_str), Some("translate"));
 }
+
+/// 最後に再生を始めたトークの控えは、翻訳の後の最終の出どころを写す（選択肢の `script:` の引き継ぎの源・要件 1.6）。
+#[test]
+fn shown_talk_keeps_the_final_origin_after_translation() {
+    let cfg = cfg();
+    let mut state = steady();
+    for input in [
+        Input::Tick {
+            now: MonotonicMs(2_000),
+        },
+        reply(SecurityLevel::Local, "OnSecondChange"),
+        translated(SecurityLevel::External),
+    ] {
+        state = step(state, input, &cfg).0;
+    }
+    assert_eq!(
+        state.shown.map(|shown| (shown.talk_id.0, shown.origin)),
+        Some((5, ScriptOrigin::GHOST.lowered_by(SecurityLevel::External)))
+    );
+}

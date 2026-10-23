@@ -5,9 +5,10 @@
 //! 出し、帳簿は `on_choice` が取り出し済みである。SHIORI への往復も翻訳の依頼も作らない。
 
 use super::super::choice::script_body;
+use super::super::talk_origin::of_shown;
 use super::super::{Action, State, start_talk};
 use crate::msg::ChoiceInput;
-use crate::talk::{ScriptOrigin, TalkId};
+use crate::talk::TalkId;
 
 /// `script:` の選択肢を受け付けた後の結末を決める。
 ///
@@ -46,13 +47,9 @@ pub(in crate::schedule) fn begin(
         );
         return None;
     }
-    // 仮にゴースト自身（元のトークの出どころの引き継ぎは 5.4 で替える）。
-    let (talk_id, action) = start_talk(
-        state,
-        "choice_script",
-        script.to_string(),
-        ScriptOrigin::GHOST,
-    );
+    // 元のトークの出どころを引き継ぐ（要件 1.6）。
+    let origin = of_shown(state, prev_talk_id);
+    let (talk_id, action) = start_talk(state, "choice_script", script.to_string(), origin);
     state.choice_prev_talk = Some(prev_talk_id);
     tracing::info!(
         target: "kanade",
