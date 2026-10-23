@@ -94,3 +94,57 @@ fn an_event_not_sent_to_2x_logs_exactly_one_debug_line() {
     assert_eq!(lines[0].level, tracing::Level::DEBUG);
     assert_eq!(lines[0].field_str("id"), Some("basewareversion"));
 }
+
+/// 確かめの往復を窓なしで回す: 今の文字コードで要求を組み、送受の結果を判定の半分へ渡す。
+/// 交渉の状態は判定の前後で同じでなければならない（答えを採用の根拠にしない・要件 6.1）。
+fn probe_with(result: Result<Vec<u8>, SendError>) -> VersionVerdict {
+    let negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let before = negotiator.current();
+    let req = shiori2::version_probe_request(negotiator.current(), DEFAULT_SENDER);
+    assert!(req.starts_with(b"GET Version SHIORI/2.6\r\nCharset: UTF-8\r\n"));
+    let verdict = verdict_of_probe(result);
+    assert_eq!(
+        negotiator.current(),
+        before,
+        "確かめの後も文字コードは変わらない"
+    );
+    verdict
+}
+
+/// 2.x の答え（`Charset` 付きでも）は 2.x に決まる（要件 2.1・6.1）。
+#[test]
+fn a_2x_probe_reply_decides_shiori2() {
+    let verdict = probe_with(Ok(
+        b"SHIORI/2.6 200 OK\r\nCharset: Shift_JIS\r\nString: x\r\n\r\n".to_vec(),
+    ));
+    assert_eq!(
+        verdict,
+        VersionVerdict::Decided {
+            version: ShioriVersion::Shiori2,
+            evidence: "SHIORI/2.6 200 OK".to_string(),
+        }
+    );
+}
+
+/// 3.0 の答え（204）は 3.0 に決まる（要件 2.1）。
+#[test]
+fn a_3_0_probe_reply_decides_shiori3() {
+    let verdict = probe_with(Ok(
+        b"SHIORI/3.0 204 No Content\r\nCharset: UTF-8\r\n\r\n".to_vec()
+    ));
+    assert_eq!(
+        verdict,
+        VersionVerdict::Decided {
+            version: ShioriVersion::Shiori3,
+            evidence: "SHIORI/3.0 204 No Content".to_string(),
+        }
+    );
+}
+
+/// 送りの失敗は panic せず「決められない」になり、理由は失敗の表示（要件 2.5）。
+#[test]
+fn a_failed_probe_send_is_undecided_with_the_error_display() {
+    let err = SendError::Ipc(shiori_host32_ipc::IpcError::Timeout);
+    let reason = err.to_string();
+    assert_eq!(probe_with(Err(err)), VersionVerdict::Undecided { reason });
+}

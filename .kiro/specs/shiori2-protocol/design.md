@@ -331,7 +331,7 @@ impl<'a> Shiori3Client<'a> {
 
     /// GET Version SHIORI/2.6 を 1 本送り、答えから版を決める。
     /// 符号化は今の文字コード（negotiator.current()）。答えは文字コードの採用の根拠にしない。
-    /// 往復の失敗は Undecided（理由は RequestError の表示）。panic しない。
+    /// 往復の失敗は Undecided（理由は SendError の表示）。panic しない。
     pub fn probe_version(&mut self) -> VersionVerdict;
 }
 ```

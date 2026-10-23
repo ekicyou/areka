@@ -51,7 +51,7 @@ use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
 use crate::request_headers::{RequestHeaders, ValueReply, request_of};
-use crate::shiori2::{self, ShioriVersion};
+use crate::shiori2::{self, ShioriVersion, VersionVerdict};
 use crate::shiori3::{Method, ParsedResponse, ShioriRequest, build_request, parse_response};
 
 /// 送出ヘッダ `Sender` の既定値（design.md §送出ヘッダ最小集合）。
@@ -139,6 +139,14 @@ impl<'a> Shiori3Client<'a> {
             is_resource: true,
             ..self
         }
+    }
+
+    /// `GET Version SHIORI/2.6` を 1 本送り、答えから版を決める（要件 2.1・2.5）。
+    /// 符号化は今の文字コード。答えは文字コードの採用の根拠にしない（要件 6.1）。
+    pub fn probe_version(&mut self) -> VersionVerdict {
+        let req = shiori2::version_probe_request(self.negotiator.current(), self.sender);
+        let timeout = self.effective_timeout();
+        verdict_of_probe(self.window.send_request(MsgTag::Request, &req, timeout))
     }
 
     /// 応答を要するイベントを送り、Value を取り出す（要件 4.1/4.3/4.7・design.md §GET 往復）。
@@ -356,6 +364,16 @@ fn parse2_and_note(
         shiori2::parse_response(resp, negotiator.policy(), req.method, req.id, is_resource)?;
     negotiator.note_response(parsed.charset_header.as_deref(), parsed.decode_had_errors);
     Ok(parsed)
+}
+
+/// 確かめの往復の**後半**: 送受の結果から版を決める。往復の失敗は決められない（理由は失敗の表示）。
+fn verdict_of_probe(result: Result<Vec<u8>, SendError>) -> VersionVerdict {
+    match result {
+        Ok(reply) => shiori2::decide_version(&reply),
+        Err(err) => VersionVerdict::Undecided {
+            reason: err.to_string(),
+        },
+    }
 }
 
 /// [`SendError`]（transport/handshake）を [`RequestError`]（統合語彙）へ写像する純関数（要件 5.1〜5.4）。
