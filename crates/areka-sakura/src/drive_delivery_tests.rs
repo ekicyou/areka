@@ -113,21 +113,15 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
 
         // Tick(A+0.5): offset 0.5 → Wait(0.25? いや at=0.1) は due だが bye(0.6) は保留。
         handle.inbox.send(SakuraMsg::Tick(anchor + 0.5)).unwrap();
-        std::thread::yield_now();
         // Wait cue の着弾を barrier に使う（at=0.1 <= 0.5 ゆえこの Tick までに届く）。
-        let mut wait_seen = false;
-        for _ in 0..1000 {
-            match rx.try_recv() {
-                Ok(cue) if cue.command == CueCommand::Wait => {
-                    wait_seen = true;
-                    break;
-                }
+        // 空回しの回数で打ち切ると負荷の下で取りこぼすので、hi と同じく時間切れつきで受ける。
+        loop {
+            match rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(cue) if cue.command == CueCommand::Wait => break,
                 Ok(_) => {}
-                Err(TryRecvError::Empty) => std::thread::yield_now(),
-                Err(TryRecvError::Disconnected) => break,
+                Err(_) => panic!("Wait(at=0.1) は A+0.5 までに届くはず（barrier）"),
             }
         }
-        assert!(wait_seen, "Wait(at=0.1) は A+0.5 までに届くはず（barrier）");
         let bye_after_half = bye_seen(&rx);
 
         // Tick(A+0.6): offset 0.6 → bye が due。着弾を待つ。
