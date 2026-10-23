@@ -117,6 +117,8 @@ crates/shiori-host32-host/src/
 ├── shiori2.rs                 # 新: 2.x の書き方（版の型・確かめの要求と判定・組み替えの表・組み立て・読み）。純粋
 ├── shiori2_tests.rs           # 新: shiori2.rs の兄弟のテスト（表の各行の要求のバイト・答えの読み・版の判定）
 └── client_shiori2_tests.rs    # 新: client.rs の兄弟のテスト（2.x の前半・後半の結線・送らないイベントの DEBUG）
+crates/areka-kanade/src/shiori/
+└── real_resource_mark_tests.rs     # 新: real.rs の兄弟のテスト（資源の印が GET の 2 つの手の中・資源の一覧の判定の後ろにだけあることの構造）
 crates/areka-ghost/src/
 └── shiori_wiring_version_tests.rs  # 新: shiori_wiring.rs の兄弟のテスト（版の記録の INFO/WARN・確かめが接続ごとに 1 回であることの構造）
 .kiro/specs/shiori2-protocol/
@@ -334,7 +336,8 @@ impl<'a> Shiori3Client<'a> {
 ```
 - `get_with_headers`: `Shiori3` は今の行をそのまま通す（`encode_and_note` → `send_request` → `parse_and_note` → `map_get_reply`）。`Shiori2` は `encode2_and_note`（`shiori2::build_request`＋`note_request`）→ `send_request` → `parse2_and_note`（`shiori2::parse_response`＋`note_response`）→ 同じ `map_get_reply`。`encode2_and_note` が `None` なら送らず `Ok(None)`（表では GET に `None` は無いが、口は 1 つの形にそろえる）。
 - `notify_with_headers`: `Shiori3` は今の `encode_and_note(` をそのまま呼ぶ。`Shiori2` は `encode2_and_note` を呼び、`None` なら送らず `Ok(())`。答えは今と同じく捨てる。本文とコメントに採用の経路の名前を書かない（既存の構造の検査を緑に保つ）。
-- `encode2_and_note` は `shiori2::build_request(req, self.resource)` を呼ぶ。`None` のとき DEBUG を 1 行出す: `target: "shiori2"`, `event = "shiori2_event_not_sent"`, `id`。
+- `encode2_and_note`・`parse2_and_note` は今の `encode_and_note`・`parse_and_note` と同じく窓を持たない自由な関数（`negotiator`・`req`・`is_resource` を受ける）にし、窓なしで試せるようにする。確かめも「要求を組む半分」と「送受の結果（答えか `SendError`）から `VersionVerdict` を出す半分」の自由な関数に分け、`probe_version` はその間で `send_request` を呼ぶだけにする。
+- `encode2_and_note` は `shiori2::build_request(req, is_resource)` を呼ぶ。`None` のとき DEBUG を 1 行出す: `target: "shiori2"`, `event = "shiori2_event_not_sent"`, `id`。
 - 状態: `version` は client が持つ写し（`Copy`）。続く状態は接続が持つ（下の `ShioriConnection`）。
 
 **Implementation Notes**
