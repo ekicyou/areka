@@ -162,9 +162,39 @@ pub(crate) fn exe_dir() -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// 本番の口: [`copy_for_write`] に実行ファイルのフォルダを渡す。
+/// `readonly` なら写さず `dir` を返す（写すはずだったときだけ info 1 件）。そうでなければ `copy_for_write`。
+/// 写しの計画と写しの本体は変えない（readonly-mode 要件 4.4・4.5）。
+pub(crate) fn copy_unless_readonly(
+    readonly: bool,
+    roots: &BasewareRoots,
+    exe_dir: Option<&Path>,
+    kind: StoreKind,
+    dir: &Path,
+) -> PathBuf {
+    if !readonly {
+        return copy_for_write(roots, exe_dir, kind, dir);
+    }
+    if let CopyPlan::Copy { from, to } = plan_copy(roots, exe_dir, kind, dir) {
+        tracing::info!(
+            event = "user_data_copy_withheld",
+            kind = kind_name(kind),
+            from = %from.display(),
+            to = %to.display(),
+            "read-only run: not copying into the user root; using the original folder"
+        );
+    }
+    dir.to_path_buf()
+}
+
+/// 本番の口: [`copy_unless_readonly`] に走りの旗と実行ファイルのフォルダを渡す。
 pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) -> PathBuf {
-    copy_for_write(roots, exe_dir().as_deref(), kind, dir)
+    copy_unless_readonly(
+        crate::readonly::is_on(),
+        roots,
+        exe_dir().as_deref(),
+        kind,
+        dir,
+    )
 }
 
 /// `resolve_boot_from` へ渡す口（ゴースト用）。

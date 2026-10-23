@@ -213,3 +213,41 @@ fn boot_check_without_readonly_is_the_current_check() {
         "{events:?}"
     );
 }
+
+/// 写すはずの並びでも、読み取りだけなら元を返し、記録が 1 件出て、写し先が作られない（要件 4.4・4.5）。
+#[test]
+fn copy_is_withheld_and_the_original_is_used() {
+    use crate::roots::user_root::{CopyPlan, copy_unless_readonly, plan_copy};
+    use areka_ghost::{BasewareRoot, BasewareRoots, StoreKind};
+
+    let tmp = temp_path_kit::TempPath::under_target("readonly-copy-withheld");
+    let user = tmp.child("user");
+    let exe = tmp.child("exe");
+    std::fs::create_dir_all(&user).unwrap();
+    let bundled = exe.join("ghost").join("emo2");
+    std::fs::create_dir_all(&bundled).unwrap();
+    std::fs::write(bundled.join("a.txt"), "bundled").unwrap();
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    // 較正: この並びは写すはずの並び。
+    assert!(matches!(
+        plan_copy(&roots, Some(&exe), StoreKind::Ghost, &bundled),
+        CopyPlan::Copy { .. }
+    ));
+    let before = tree(tmp.path());
+
+    let (got, events) = log_capture_kit::capture(|| {
+        copy_unless_readonly(true, &roots, Some(&exe), StoreKind::Ghost, &bundled)
+    });
+
+    assert_eq!(got, bundled, "元のフォルダを返す");
+    let withheld = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("user_data_copy_withheld"))
+        .count();
+    assert_eq!(withheld, 1, "{events:?}");
+    assert!(!user.join("ghost").exists(), "写し先が作られた");
+    assert_eq!(tree(tmp.path()), before, "木が変わった");
+}
