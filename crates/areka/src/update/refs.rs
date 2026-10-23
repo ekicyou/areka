@@ -291,8 +291,6 @@ pub(crate) fn summary_refs(kind: SummaryKind, ends: &[(&TargetSpec, &TargetEnd)]
 
 /// 読み取りだけの断りの総括: 対象ごとに `[名前（ResultEx のときだけ）, 種別, ""]` を区切りでつなぐ
 /// （readonly の SSP の測りと同じ字・成否の欄が空）。
-// 初めて呼ぶのは 4.4（`update/readonly_refusal.rs`）。そこで外す。
-#[allow(dead_code)]
 pub(crate) fn readonly_summary_refs(kind: SummaryKind, targets: &[TargetSpec]) -> Vec<String> {
     targets
         .iter()
