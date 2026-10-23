@@ -105,7 +105,7 @@
   - _Depends: 5.1_
   - _Requirements: 1.4, 3.7, 8.1, 8.2, 8.3_
 
-- [ ] 5.4 直さなかった「．さくら」の崩れを持ち主へ渡す
+- [x] 5.4 直さなかった「．さくら」の崩れを持ち主へ渡す
   - 5.1 で新しく見えた崩れと、古い資源の名前（`updatebuttoncaption`・`vanishbuttoncaption` など）を areka が問わない件を、持ち主の spec の brief へ足すか `/kiro-discovery` で起票する
   - 完了の姿: 各件の行き先（brief の追記の場所か起票した spec の名前）が `verification.md` に並んでいる
   - _Requirements: 8.4_

@@ -105,6 +105,8 @@ INFO actor{actor=shiori}: ghost-boot: SHIORI の版を確かめた event="shiori
 
 面は出た（要件 5.4。要件 5.5 の枝には入らない）。
 
+同梱のバルーン `bottle` では文字の描画範囲が幅 0 に潰れ、台詞の文字はまだ描かれない（5.4 の件 4・`default-balloon-selfmade`）。
+
 **時間のトーク**（要件 5.2）: 挨拶の終わり（00:33:44）から待ち、00:34:57 に `OnSecondChange` が台本を返して時間のトークが出た（待った時間 約 73 秒・`\u\s[10]ここだけの話、…`）。その後 00:35:54 まで待って、ほかの時間のトークは出ていない。
 
 **`OnClose`**（要件 5.3・研究記録 10.5 節の測れなかった点）:
@@ -142,3 +144,22 @@ INFO actor{actor=shiori}: ghost-boot: SHIORI の版を確かめた event="shiori
 
 - 4.1（`ShioriConnection` の書き下しに `version: ShioriVersion::Shiori3` の 1 行を足しただけ）: `crates/areka-kanade/tests/kanade/common/common_window_actor.rs`・`crates/areka-kanade/tests/kanade/idle_pump_test.rs`・`crates/areka-kanade/tests/kanade/real_helper_test.rs`
 - 4.3: なし
+
+## 5.4 直さなかった「．さくら」の崩れの行き先（要件 8.4）
+
+2026-10-24・机なし。5.1 の run2 の記録（`target\s2p-5-1\logs\run2.stdout.log`）の WARN と ERROR を全部拾い、中身ごとに数えた（ERROR 0）。前回の実機の 1 回（`.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節・8 節）で持ち主が決まった件はそこへ寄せ、新しく見えた件と、古い資源の名前の件を渡した。新しい spec は起こしていない（どれも持ち主が在った）。
+
+| 件 | 中身（run2 の件数） | 行き先 |
+|---|---|---|
+| 1 | 古い資源の名前（`updatebuttoncaption`・`vanishbuttoncaption`・`vanishbuttonvisible`）を areka が問わない。合わせて、「．さくら」が持つおすすめ・ポータルの資源（`*.recommendbuttoncaption`・`*.recommendsites`・`sakura.portalbuttoncaption`・`sakura.portalsites`）の項目が areka のメニューに無い。研究記録 4.4 節から（右クリックメニューは開いていないので、記録にも画面にも出ていない） | 既存の brief に足した: `.kiro/specs/popup-menu-residue/brief.md` の「2026-10-24 追記: 件 13」（触る場所が件 9 と同じ）。`.kiro/steering/roadmap.md` の同 spec の行にも件 13 を足した |
+| 2 | **新しく見えた**: pattern定義の `base` を描かない（`shell: areka が描けない描画メソッドの pattern を描かない … method="base"`・6 件＝面 12 の pattern0・面 22 の pattern0 と 3 の 3 種が、シェルを 2 回読んだので 2 回ずつ）。面 12・22 の絵は全部が透明で `base` の土台の前提なので、今のままでは面 12・22 を出すと何も描かれない見込み（この 1 回では面 12・22 は出ていない） | 既存の brief に足した: `.kiro/specs/draw-methods-canon/brief.md` の「2026-10-24 「．さくら」の pattern定義の `base`」（pattern定義の `base` はもとからこの spec の範囲） |
+| 3 | 同じ面 12・22 の絵の焼き込みの「全透明」の WARN（4 件）。前回は作者の誤りとして外したが、件 2 の `base` の土台と読み直した | 件 2 と同じ場所に書いた（`draw-methods-canon`）。警告の条件そのものは `real-run-log-noise` の範囲（同梱の emo2 の `null.png` の件）で、足すことは無い |
+| 4 | バルーン `bottle` の文字の描画範囲が幅 0 に潰れる（潰れた 2 件・origin が範囲の外 2 件・折返し基準が範囲の外 2 件）。台詞が来るようになったので「話しているのに文字が出ない」崩れになる（画面は撮っていない） | 既存の brief に足した: `.kiro/specs/default-balloon-selfmade/brief.md` の「2026-10-24 「．さくら」が話すようになった後の `bottle`」（前回の 8 節の件 3 の持ち主） |
+| 5 | `cursor.blendmethod ROP 系は M1 未対応 … mergepennot` が毎フレーム出る（67,200 件・約 4 分） | 前回の 8 節の件 2 と同じ。持ち主 `.kiro/specs/real-run-log-noise/brief.md` の「どっとさくらで見えた事実」に書いてあり、足すことは無い |
+| 6 | pattern定義の `move` が未知の合成メソッド（22 件） | 前回の 8 節の件 4 と同じ。持ち主 `.kiro/specs/seriko-pattern-calls/brief.md` の件 2。足すことは無い |
+| 7 | pattern定義の `alternativestart` が未知の合成メソッド（5 件） | 前回の 8 節の件 5 と同じ。持ち主 `.kiro/specs/seriko-pattern-calls/brief.md` の件 1。足すことは無い |
+
+崩れに数えなかったもの:
+
+- `OnTranslate` の 400（3 件）。華和梨に `OnTranslate` の受け口が無く、SSP でも同じ 400（研究記録 10.2 節）。台本はそのまま再生された。
+- バルーン面が本体側の系列へ落ちる WARN（`balloons2`・`balloons3`・3 件ずつ）。`bottle` が 2 人目用の絵を持たないための決まった道（前回の 7 節で外したのと同じ）。
