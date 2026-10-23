@@ -61,13 +61,11 @@ pub fn withholds(path: &Path) -> bool {
 }
 
 /// 控えた中身（無ければ `None`）。
-#[allow(dead_code)] // 一時: 1.2 で FsPersistIo::read が呼ぶまで
 pub(crate) fn staged(path: &Path) -> Option<String> {
     lock().staged.get(&key(path)).cloned()
 }
 
 /// 中身を控えへ入れる（同じパスは上書き）。
-#[allow(dead_code)] // 一時: 1.2 で FsPersistIo::commit が呼ぶまで
 pub(crate) fn stage(path: &Path, content: &str) {
     lock().staged.insert(key(path), content.to_owned());
 }

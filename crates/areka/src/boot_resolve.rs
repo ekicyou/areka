@@ -472,6 +472,14 @@ pub(crate) fn write_session_mark(
             );
             Ok(())
         }
+        PersistOutcome::Withheld => {
+            tracing::info!(
+                event = "session_mark_withheld",
+                ghost = running,
+                "[boot_resolve] 読み取りだけなので、起動中の印を書きませんでした"
+            );
+            Ok(())
+        }
         PersistOutcome::Degraded(failure) => {
             tracing::warn!(
                 event = "session_mark_write_degraded",
@@ -504,6 +512,15 @@ pub(crate) fn write_switch_drop(
             );
             Ok(())
         }
+        PersistOutcome::Withheld => {
+            tracing::info!(
+                event = "switch_drop_withheld",
+                last_ghost = DEFAULT_GHOST_FOLDER,
+                mark = mark.unwrap_or("-"),
+                "[boot_resolve] 読み取りだけなので、降ろした直後の記憶を書きませんでした"
+            );
+            Ok(())
+        }
         PersistOutcome::Degraded(failure) => {
             tracing::warn!(
                 event = "switch_drop_record_degraded",
@@ -529,6 +546,13 @@ pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFa
             tracing::info!(
                 event = "session_mark_cleared",
                 "[boot_resolve] きれいに終わったので起動中の印を消しました"
+            );
+            Ok(())
+        }
+        PersistOutcome::Withheld => {
+            tracing::info!(
+                event = "session_mark_clear_withheld",
+                "[boot_resolve] 読み取りだけなので、起動中の印に触れていません"
             );
             Ok(())
         }
