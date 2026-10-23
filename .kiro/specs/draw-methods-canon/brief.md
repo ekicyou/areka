@@ -156,3 +156,10 @@
 
 - 上の議題「`move`（位置の語）を範囲に入れるか」は、開発者と決めて新しい spec `seriko-pattern-calls` へ移した（アニメーションを呼ぶ 7 語と一緒に、pattern の働きとして SERIKO の再生が受ける）。本 spec は重ね方の合成メソッドだけを持つ＝この議題はもう出さない。
 - 根拠: どっとさくらのシェル `master` の `animation0.pattern1,move,0,10,0,6` などが `未知の合成メソッド名` の WARN 22 行になった（`.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 8 節の件 4）。
+
+## 2026-10-24 「．さくら」の pattern定義の `base`（`shiori2-protocol` のタスク 5.4）
+
+- `shiori2-protocol` の実機の 1 回（5.1・2026-10-24・記録 `target\s2p-5-1\logs\run2.stdout.log`）で、シェルを読むときに `shell: areka が描けない描画メソッドの pattern を描かない … method="base"` の WARN が 6 件（`surface_id=12 pattern=0`・`surface_id=22 pattern=0`・`surface_id=22 pattern=3` の 3 種が、シェルを 2 回読んだので 2 回ずつ）出た。前回の実機の 1 回（`areka-P0-dot-sakura-specimen`）の記録には無かった行。
+- 元は「．さくら」のシェル `master` の `surfaces.txt`: `surface12` の `animation0.pattern0,base,11` と、`surface22` の `animation0.pattern0,base,0`・`pattern3,base,2`。どちらも `interval,runonce` で、`base` の後に `move` が続く（`move` は `seriko-pattern-calls` の件 2）。
+- `surface12.png`・`surface22.png` は全部が透明な絵で、`base` で別の面を土台に描く前提の作り。前回は焼き込みの「全透明」の WARN を作者の誤りとして数から外したが、`base` の土台と読むのが正しい。今のままでは面 12・22 を出すと何も描かれない見込み（この 1 回では面 12・22 は出ていない）。
+- 直した後の確かめ: 「．さくら」で面 12・22 を出し（`\s[12]`・`\s[22]`）、`base` の面が描かれ WARN が 0 になること。`move` が付くので `seriko-pattern-calls` と並べて見る。

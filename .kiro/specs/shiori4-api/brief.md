@@ -94,7 +94,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
    - SHIORI/3.0 と v4 の両方に効かせる（helper は両方を受け持つ＝決定 4）。ただし従来の書き出しだけを持つ DLL を読むのは i686 の helper だけにする（推奨）。shiori4 の `shiori3-legacy-host` は x86 の Windows だけで有効で、SSP が 32bit なので x64 の従来の DLL は実際にはほとんど無い。x64・arm64 の helper は v4 と v3 互換モードだけを読む。
    - pasta の答え（10-23）: 名前に異論なし。`pasta_check release` は DLL の名前も arch も見ずにフォルダを写すので、今のままで同梱できる。ただし pasta はまだ i686 の `pasta.dll` しか出しておらず、x64・arm64 の版を出すのは pasta の新しい仕事（arm64 は LuaJIT が建つか未確認）。作者が `ffi.load` で読む自前の DLL も pasta の arch に合わせる必要があり、pasta のマニュアルに書く。
 
-6. **load に渡すパスの形は helper の道（32bit の SHIORI/3.0）にも当てる**（開発者・同日「loadのパスの形は helper の道にも当てる。ただし変えた直後に検体のゴーストで起動を確かめる条件つき」）。形は abi-conventions の論点 6（絶対パス・OS の区切り・末尾に区切りあり）。shiori4 の `shiori3-legacy-host` も同じ形に揃えるので、helper がそれに乗り換えても形は変わらない。
+6. **load に渡すパスの形は helper の道（32bit の SHIORI/3.0）にも当てる**（開発者・同日「loadのパスの形は helper の道にも当てる。ただし変えた直後に検体のゴーストで起動を確かめる条件つき」）。形は abi-conventions の論点 6（絶対パス・OS の区切り・末尾に区切りあり）。shiori4 の `shiori3-legacy-host` も同じ形に揃えるので、helper がそれに乗り換えても形は変わらない。**helper の道は `shiori2-protocol` で前倒し済み**（2026-10-23 開発者「1 を承認」・華和梨のゴースト「．さくら」が `…\ghost/master` の形で辞書を読めなかったため。起動の確かめは同 spec の 5.1・5.2）。
    - **条件**: 変えた直後に、検体のゴースト（emo2・えみり・ぱすた・．さくら など、その時点の検体）が今までどおり起動することを確かめる。すべてのゴーストへ渡す `load` のバイト列が変わるため（10-10 から預かっていた議題）。
 
 ## Scope
@@ -105,7 +105,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
   - `ShioriBackend` の v4 版の実装と、descript.txt の `shiori` からの選び分け（arch の接尾辞つきの名前から探す＝決定 5・PE ヘッダで helper の arch を決める・`shiori_get_api` の有無）。
   - 要求の組み立て器を v3（helper）と v4 で共有する整理。
   - post の SEND を待たせるための待ちの列（3 者会談の合意＝`Option: nobreak` のときと OnHostComplete の応答のとき。areka は今トークの枠が 1 つで列を持たない）と、再生の終わりで出す完了（`completed`／`interrupted`）。
-  - `load` に渡すパスの形（abi-conventions の論点 6・決定 6。変えた直後に検体のゴーストで起動を確かめる）。
+  - `load` に渡すパスの形（abi-conventions の論点 6・決定 6。変えた直後に検体のゴーストで起動を確かめる）。helper の道は `shiori2-protocol` で前倒し済み（2026-10-23）。この spec に残るのは v4 の道の形。
   - COM の面とテスト用の COM の DLL と `IShioriHost` の実装と `ShioriWiring::InProc` の道の撤去、テスト用の v4 DLL（決定 1・3）。
   - 封筒の書き換え（決定 2）・`doc/COMPAT_ARCHITECTURE.md` §5・roadmap の技術の要約の書き直し。
   - 古くなった注釈の掃除（`crates/areka/src/main.rs`・`shiori_inproc.rs`・`crates/shiori-host32-host/src/client.rs` の「`IShiori` への写像点」）。

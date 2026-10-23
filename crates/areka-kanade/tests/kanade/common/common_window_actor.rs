@@ -65,6 +65,7 @@ pub fn spawn_window_actor() -> WindowActor {
             helper: HelperLifecycle::new(handle),
             // テスト用の既定値（UTF-8・強制なし。stand-in は通信しないので値は結果に影響しない）。
             negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
+            version: shiori_host32_host::ShioriVersion::Shiori3,
         }))
     };
 
