@@ -9,6 +9,7 @@ use tracing::{debug, error, warn};
 use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{DPI, SizeI, WindowPos};
 
+use crate::placement::chain_finalize::ChainRect;
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, DpiSyncHold};
@@ -314,7 +315,15 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     }
 
     // 第 2 巡（処理）: 通過した窓だけを従来どおり再導出・反映する。
+    //
+    // 変わる直前のキャラ窓の矩形の控え（dpi-realign-remembered-chain 要件 1.1・設計 DpiSnapshot）。
+    // 最初のキャラ窓を書く直前に 1 度だけ取る。待ちの札で窓ごとにフレームが割れても、まだ
+    // 書かれていない窓の `WindowPos` は変わる前のままなので、最初の武装の控えが正しい（1.7）。
+    let mut before_rects: Option<Vec<(usize, ChainRect)>> = None;
     for (window, scope, kind) in proceed {
+        if matches!(kind, GhostWindowKind::Char) && before_rects.is_none() {
+            before_rects = Some(chain_realign::snapshot_char_rects(world));
+        }
         // target 採番（DD-3: shell=2*scope／balloon=2*scope+1）は u32 域。収まらない scope は
         // 如何なる target とも対応しない（plan_attachments の usize→u32 境界と同じ扱い）。
         let Ok(scope) = u32::try_from(scope) else {
@@ -366,7 +375,11 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                 // いなければ位置は動いておらず、バルーン窓は連鎖の構成要素ではない。
                 if wrote && matches!(kind, GhostWindowKind::Char) && size_changed(before, new_size)
                 {
-                    chain_realign::arm_chain_realign(world);
+                    // 控えはキャラ窓の腕で必ず取られている。武装済みなら渡しても使われない。
+                    chain_realign::arm_chain_realign(
+                        world,
+                        before_rects.clone().unwrap_or_default(),
+                    );
                 }
                 wrote
             }

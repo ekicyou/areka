@@ -24,13 +24,13 @@
 use bevy_ecs::entity::Entity;
 use wintf::ecs::SizeI;
 
-use crate::placement::chain_finalize::ChainFinalized;
+use crate::placement::chain_finalize::{ChainFinalized, ChainRect};
 use crate::placement::chain_realign::ChainRealignPending;
 
 use super::dpi::size_changed;
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, WRITER_WITNESS, arrangement_offset_of,
-    assert_no_write, s2_monitors_with_work_area, s2_taskbar_hidden_work_area, size_of,
+    assert_no_write, pos_of, s2_monitors_with_work_area, s2_taskbar_hidden_work_area, size_of,
 };
 use super::{balloon_target, shell_target};
 
@@ -343,5 +343,78 @@ fn size_changed_covers_the_missing_size_the_overflow_and_the_comparison() {
     assert!(
         !size_changed(before, (SIZE_0.0, u32::MAX)),
         "高さが i32 域を超える報告は「変わった」と言わない"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 変わる直前の控え（dpi-realign-remembered-chain 要件 1.1・1.7）
+// ---------------------------------------------------------------------------
+
+/// 武装は**変わる前**の矩形の控えを持ち、解決の前に 2 度目の変化が来ても最初の控えを保つ。
+///
+/// 控えを書き込みの後に取ると幅が新しい寸（`HALVED_*`）になり、変わる直前の隣り合いを
+/// 判定できない。2 度目の変化で控えを取り直すと、最初の変化の前の並びが失われる（1.7）。
+#[test]
+fn arming_keeps_the_rects_from_before_the_first_change() {
+    let mut harness = FrameHarness::new();
+    let mut source = FakeReports::default();
+    boot_and_finalize(&mut harness, &mut source);
+    let before_pos: Vec<_> = [0, 1]
+        .map(|scope| pos_of(&harness.world, harness.char_window(scope)).expect("位置がある"))
+        .into();
+
+    drive_reprojection(&mut harness, &mut source, [HALVED_0, HALVED_1]);
+    let pending = harness
+        .world
+        .get_resource::<ChainRealignPending>()
+        .expect("寸が変わる再射影で武装していない")
+        .clone();
+    assert_eq!(
+        pending.before,
+        vec![
+            (
+                0,
+                ChainRect {
+                    x: before_pos[0].x,
+                    y: before_pos[0].y,
+                    w: SIZE_0.0 as i32,
+                    h: SIZE_0.1 as i32,
+                }
+            ),
+            (
+                1,
+                ChainRect {
+                    x: before_pos[1].x,
+                    y: before_pos[1].y,
+                    w: SIZE_1.0 as i32,
+                    h: SIZE_1.1 as i32,
+                }
+            ),
+        ],
+        "控えが変わる直前の矩形でない（書き込みの後に取ると新しい寸になる）"
+    );
+    assert!(
+        pending.script_moved.is_empty(),
+        "武装の直後に台本の記録がある"
+    );
+
+    // 解決の前に 2 度目の変化（さらに半分）が来ても、控えは最初の武装のまま。
+    drive_reprojection(
+        &mut harness,
+        &mut source,
+        [
+            (HALVED_0.0 / 2, HALVED_0.1 / 2),
+            (HALVED_1.0 / 2, HALVED_1.1 / 2),
+        ],
+    );
+    assert_eq!(
+        expect_size(&harness, harness.char_window(0)),
+        as_window_size((HALVED_0.0 / 2, HALVED_0.1 / 2)),
+        "前提が崩れている: 2 度目の変化が landing していない"
+    );
+    assert_eq!(
+        harness.world.get_resource::<ChainRealignPending>(),
+        Some(&pending),
+        "2 度目の武装で控えか武装のフレームが置き換わった（要件 1.7）"
     );
 }
