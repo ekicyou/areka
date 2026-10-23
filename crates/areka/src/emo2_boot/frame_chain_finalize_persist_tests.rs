@@ -330,6 +330,47 @@ fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     let _residue = drain_window_pos_commands();
 }
 
+/// テスト 11d（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・
+/// 動かす量 0・時間 0）で**ちょうど既定の位置へ**置くと、位置は既定と同じでも台本が置いた窓
+/// （印 `ScriptPlaced`）なので書かれず、本体だけ書かれる。相方の記憶には目印を入れておき、
+/// 書けば目印が消えることで見分ける。
+#[test]
+fn partner_placed_exactly_on_default_by_shiori_before_finalize_is_not_written() {
+    let store = PersistStore::fake();
+    let shown = shown_sizes();
+    let (mut world, gw, _ghost) = booted(&store, &shown);
+    seed_sentinels(&world, &[1]);
+    let char1 = gw.char_window(1).unwrap();
+    world.entity_mut(char1).insert(Anchored(Anchor::Free));
+    let start = pos_of(&world, char1).expect("相方の位置");
+    let tokens = ["--base=me", "--X=0", "--Y=0", "--time=0"].map(String::from);
+    assert!(
+        apply_move_directive(
+            &mut world,
+            &parse_move_directive(1, &tokens).directive,
+            ScaleRatio::ONE
+        ),
+        "前提: 移動の指示が窓へ届く"
+    );
+    assert_eq!(pos_of(&world, char1), Some(start), "前提: 既定の位置のまま");
+
+    finalize_chain_once_with(&shown, &mut world);
+
+    let saved = store.load();
+    assert_eq!(
+        saved_pos(&saved, 1),
+        (Some(SENTINEL), Some(SENTINEL)),
+        "台本が既定へ置いた相方は書かない: {saved:?}"
+    );
+    let (x, y) = expected_saved(&world, &gw, 0);
+    assert_eq!(
+        saved_pos(&saved, 0),
+        (Some(x.as_str()), Some(y.as_str())),
+        "本体は書かれる: {saved:?}"
+    );
+    let _residue = drain_window_pos_commands();
+}
+
 /// テスト 12（要件 1.3）: ゴーストの切り替えの閉じ方（`close_windows_for_restart`）で閉じ、記憶の
 /// 送り口を別の保存先へ差し替えて窓を作り直すと、並べ直しがもう 1 度書き、書かれるのは
 /// 差し替えた後の保存先だけ。前の保存先には目印を入れておき、書けば目印が消えることで見分ける。
