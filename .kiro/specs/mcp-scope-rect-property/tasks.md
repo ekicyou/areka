@@ -70,7 +70,7 @@
   - 完了の状態: 拡大率 100% より大きい画面の在る机で `cargo test -p areka -- --ignored <名前>` が緑（実行は 4.3 の机の中でまとめて回してよい）
   - _Requirements: 1.3, 1.6, 8.5_
 
-- [ ] 3. 実行系への結線と、2 つの読む道を通すテスト
+- [x] 3. 実行系への結線と、2 つの読む道を通すテスト
 - [x] 3.1 系の登録と結線の 1 行ずつを実行系の口に足す
   - `ghost_session` の系の登録の所に表の系の登録を 1 行、実行系を作るたびに通る口（初回の起動・切替・`reload` が共に通る所）に結線を 1 行足す。`main.rs`・`emo2_boot`・⑥ の持ち物・`mcp/get_property.rs`・`shiori_host.rs` には触らない
   - 完了の状態: `cargo build -p areka` が警告なしで通り、本物の起動の道（切替の試験台）で実行系が置き場に付いた時点で、MCP の `get_property` が `currentghost.scope(0).rect` に偽の矩形を答える（3.2 のテストで確かめる）
@@ -83,7 +83,7 @@
   - 完了の状態: `cargo test -p areka ghost_session_scope_rect` で新しいテストが緑
   - _Requirements: 6.1, 6.2, 6.5, 8.1_
 
-- [ ] 3.3 MCP とゴーストの道の一致と `reload` の後の答えのテストを置く
+- [x] 3.3 MCP とゴーストの道の一致と `reload` の後の答えのテストを置く
   - MCP の `get_property` のテストファイルにテストを足すだけ（本番の `mcp/get_property.rs` は変えない）
   - 同じ時点に MCP の `handle` と、同じ実行系の読み口から作ったゴーストの道（`ShioriHostSink` の `GetProperty`）が、`scope(0)`・`scope(1)`・`balloon.scope(0)` に同じ値、`balloon.scope(2)` に同じ値なしを返す
   - `reload`（実行系をその場で作り直す道）の後、MCP の `handle` が新しい sylphya の読み口で同じ窓の矩形を答える
