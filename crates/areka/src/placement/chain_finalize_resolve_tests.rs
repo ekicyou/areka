@@ -142,6 +142,31 @@ fn join_right_with_non_positive_previous_width_is_kept() {
     assert!(resolve_chain(&slots).is_empty());
 }
 
+/// 式が使う幅が非正の組だけ決めの語が "non-positive-width" に改まり、解きは変わらない（7.1）。
+#[test]
+fn mark_non_positive_widths_rewrites_only_unusable_joins() {
+    let mut slots = [
+        slot(0, 1000, 0, BODY),
+        slot(1, 1500, 300, PairDecision::JoinRight),
+        slot(2, 700, 0, PairDecision::JoinLeft),
+        slot(3, 0, 200, PairDecision::JoinLeft),
+        slot(4, 0, 0, PairDecision::Keep(KeepReason::RememberedSeparate)),
+    ];
+    let before = resolve_chain(&slots);
+    mark_non_positive_widths(&mut slots);
+    let words: Vec<&str> = slots.iter().skip(1).map(|s| s.decision.as_str()).collect();
+    assert_eq!(
+        words,
+        vec![
+            "non-positive-width",
+            "non-positive-width",
+            "adjacent-left",
+            "remembered-separate"
+        ]
+    );
+    assert_eq!(resolve_chain(&slots), before);
+}
+
 /// 空・1 体は動かす相手が居ない。極端な値でも panic しない。
 #[test]
 fn empty_single_and_extremes() {

@@ -407,6 +407,25 @@ pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
     moves
 }
 
+/// 式が使う幅が非正の `JoinLeft`／`JoinRight` を `Keep(NonPositiveWidth)` に改める。
+///
+/// [`resolve_chain`] は同じ組を動かさないので解きは変わらない。組の行の語を実際の扱い
+/// （"non-positive-width"）と揃えるため、解く前に呼び手が通す（7.1）。
+pub fn mark_non_positive_widths(slots: &mut [ChainSlot]) {
+    for i in 1..slots.len() {
+        let prev_w = slots[i - 1].width;
+        let s = &mut slots[i];
+        let usable = match s.decision {
+            PairDecision::JoinLeft => s.width > 0,
+            PairDecision::JoinRight => s.width > 0 && prev_w > 0,
+            PairDecision::Keep(_) => true,
+        };
+        if !usable {
+            s.decision = PairDecision::Keep(KeepReason::NonPositiveWidth);
+        }
+    }
+}
+
 /// 起動の並べ直しで記憶から戻したスコープに当てる決め（6.3・6.4）。
 ///
 /// Left→JoinLeft・Right→JoinRight・Separate→Keep(RememberedSeparate)・

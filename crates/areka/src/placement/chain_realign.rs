@@ -69,7 +69,8 @@ use wintf::ecs::drag::DraggingState;
 
 use super::chain_finalize::{
     Adjacency, ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainRect, ChainSlot,
-    KeepReason, PairDecision, ScopeChainState, judge_adjacency, note_chain_deferral, resolve_chain,
+    KeepReason, PairDecision, ScopeChainState, judge_adjacency, mark_non_positive_widths,
+    note_chain_deferral, resolve_chain,
 };
 use super::diag::PlacementRoute;
 use super::dpi_sync::{self, DpiSyncHold};
@@ -313,6 +314,7 @@ where
         before_gaps.push(before_gap);
     }
 
+    mark_non_positive_widths(&mut slots);
     let moves = resolve_chain(&slots);
     let mut applied: Vec<(Entity, i32, i32)> = Vec::new();
     for (i, slot) in slots.iter().enumerate().skip(1) {

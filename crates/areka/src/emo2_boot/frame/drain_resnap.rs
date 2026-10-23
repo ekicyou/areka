@@ -12,7 +12,8 @@ use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
-    boot_pair_decision, moved_default_pos, note_chain_deferral, resolve_chain,
+    boot_pair_decision, mark_non_positive_widths, moved_default_pos, note_chain_deferral,
+    resolve_chain,
 };
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
@@ -451,7 +452,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // 基準は前の窓の解いた後の x（resolve_chain）。
     let ledger = world.get_resource::<StickyGroupLedger>();
     let ghost_windows = world.get_resource::<GhostWindows>();
-    let slots: Vec<ChainSlot> = states
+    let mut slots: Vec<ChainSlot> = states
         .iter()
         .zip(&targets)
         .map(|(s, &(_, entity, _))| ChainSlot {
@@ -468,6 +469,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         .collect();
 
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
+    mark_non_positive_widths(&mut slots);
     let moves = resolve_chain(&slots);
     // 記憶から戻した組は、動かさない組も含めて組ごとに 1 行残す（7.1）。
     for (i, (slot, state)) in slots.iter().zip(&states).enumerate().skip(1) {
