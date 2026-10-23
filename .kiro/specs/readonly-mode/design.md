@@ -42,7 +42,7 @@
 
 ### Allowed Dependencies
 - `crates/areka` → `areka-sylphya`（`persist::withhold`・`PersistOutcome`）・`areka-user-data`（`establish_readonly`・`readonly_app_profile_dir`）・`areka-ghost`・`areka-kanade`（送出端）。
-- `crates/areka-ghost` → `areka-sylphya`（`persist::ensure_root_dir`）。
+- `crates/areka-ghost` → `areka-sylphya`（`persist::FsPersistIo::ensure_root_dir`）。
 - `areka-sylphya`・`areka-user-data` は上の層を知らない（読み取りだけの状態を「控える範囲」「関数の選び分け」の形で受け取るだけ）。
 - 新しい外部の依存は足さない（std の `OnceLock`・`Mutex`・`BTreeMap`、既存の `windows` の `FOS_DONTADDTORECENT`）。
 
@@ -125,7 +125,7 @@ crates/areka/src/
 ├── update/readonly_refusal_tests.rs# 新: 送る物の字・順・窓口が忙しくない（要件 10.4 の片方）
 └── roots/pick_tests.rs             # 新: フォルダ選びの指定の選び分け
 crates/areka-sylphya/src/persist/
-├── withhold.rs                     # 新: 控える範囲（全部／根の下）・重ね書きの控え・ensure_root_dir（兄弟の試験を宣言する）
+├── withhold.rs                     # 新: 控える範囲（全部／根の下）・重ね書きの控え（兄弟の試験を宣言する）
 └── withhold_tests.rs               # 新: 範囲・控え・取っ手の後始末・鍵の綴り・並んだ試験への漏れなし
 crates/areka-user-data/src/
 └── establish_readonly_tests.rs     # 新: 作らない・写さない・写す元を読む
@@ -151,8 +151,8 @@ crates/areka-user-data/src/
 - `crates/areka/src/menu/install_frame.rs`・`menu/update_frame.rs` — `enabled` に `!readonly::of(world)`。
 - `crates/areka/src/menu/install_frame_tests.rs`・`menu/update_frame_tests.rs` — 読み取りだけで灰色の試験。
 - `crates/areka-sylphya/src/persist/io.rs`（301 行）— `PersistIo::withholds`（既定 `false`）、`FsPersistIo` の `read`（控えを先に見る）・`commit`（控える範囲なら控えへ）・`withholds`。
-- `crates/areka-sylphya/src/persist/mod.rs`（451 行）— `pub mod withhold;`・`pub use withhold::ensure_root_dir;`・`PersistOutcome::Withheld`・`save_scope` の確定の前の分かれ目。
-- `crates/areka-ghost/src/runtime.rs`（815 行）— `boot_with_origin` の 629 行目の `std::fs::create_dir_all(ghost_root)` を `areka_sylphya::persist::ensure_root_dir(ghost_root)` に替える（1 行）。
+- `crates/areka-sylphya/src/persist/mod.rs`（451 行）— `pub mod withhold;`・`PersistOutcome::Withheld`・`save_scope` の確定の前の分かれ目。 `persist/io.rs` に `FsPersistIo::ensure_root_dir`（関連関数）。
+- `crates/areka-ghost/src/runtime.rs`（815 行）— `boot_with_origin` の 629 行目の `std::fs::create_dir_all(ghost_root)` を `areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)` に替える（1 行）。
 - `crates/areka-user-data/src/establish.rs`（240 行）— `establish_readonly`・`establish_readonly_from`、`migrate` と分け合う `migrate_source`。兄弟の試験の宣言。
 - `crates/areka-user-data/src/lib.rs` — `readonly_app_profile_dir`・公開の行。
 - `dist/README.txt` — 「■ 起動オプション」の 61 行目の文から `readonly` を外し、readonly の段落を足す。
@@ -252,7 +252,7 @@ sequenceDiagram
 | 2.2 | 今ある記憶をふだんどおり読む | PersistWithhold | `FsPersistIo::read`（控えが無ければファイル） | 起動の前の順 |
 | 2.3 | 変わった値を走る間は読み返せる | PersistWithhold | 重ね書きの控え | 保存の口の分かれ目 |
 | 2.4 | 終わるときに捨て、記憶は起動の前のまま | PersistWithhold | 控えはメモリの中だけ | — |
-| 2.5 | ゴーストの記憶のフォルダを作らない | PersistWithhold・GhostRuntimeDirHook | `persist::ensure_root_dir` | 起動の前の順 |
+| 2.5 | ゴーストの記憶のフォルダを作らない | PersistWithhold・GhostRuntimeDirHook | `FsPersistIo::ensure_root_dir` | 起動の前の順 |
 | 2.6 | 書かなかった保存を見分けられる記録 | PersistWithhold・BootMarkLogs | `persist_withheld`（debug）・`*_withheld`（info） | 保存の口の分かれ目 |
 | 3.1 | 印を書かず書き換えず消さない | PersistWithhold・BootMarkLogs | 印の 3 関数の `Withheld` の腕 | 保存の口の分かれ目 |
 | 3.2 | 前の印を読みふつうと同じ起こし方・印は残す | BootMarkLogs | `read_session_mark`（ファイル） | 起動の前の順 |
@@ -388,11 +388,11 @@ pub(crate) fn of(world: &World) -> bool;
 
 **Responsibilities & Constraints**
 - プロセスに 1 つの `Mutex` の中に、範囲（`Everything` か、登録された根の列）と控え（鍵→中身の `BTreeMap`）を持つ。
-- 鍵は「小文字にし、区切りを `\` にそろえた」パスの文字列。範囲の判定（根の下か）も同じ鍵で行う。
+- 鍵は「小文字にし、区切りを `\` にそろえた」パスの文字列。範囲の判定（根の下か）は**パスの部品の単位**で行う（根の鍵の末尾に `\` を足してから頭の一致を見る＝根そのものか、根の鍵＋`\` で始まるか）。文字の頭の一致だけでは `TempPath` の `areka-{label}-{pid}-1` が `…-10`〜`…-19` を含んでしまい、並んで走る別の試験の書き込みを黙って控える（設計の検証の指摘 1）。
 - `FsPersistIo::commit(path, content)`: 範囲の中なら控えへ入れて `Ok(())`（親のフォルダ・一時ファイル・改名のどれもしない＝要件 2.1）。範囲の外は今の道のまま。
 - `FsPersistIo::read(path)`: 控えに在ればその中身、無ければ今の道（ファイル）。控えが空の起動の前は今と同じ値を読む（要件 2.2）。
 - `save_scope`: 重ねた中身を作った後、`io.withholds(&path)` が真なら `io.commit` で控えへ入れ、`debug!(target: LOG_TARGET, event = "persist_withheld", ?scope, keys = ?key_names, "persist withheld (read-only run); nothing written")` を残して `PersistOutcome::Withheld` を返す。「書けたか」の判定（`Saved`／`Degraded`）には入らない（要件 6.1・6.2・11.4）。控えへの入れは失敗しない（メモリの中）。
-- `ensure_root_dir(dir)`: 範囲の中なら `debug!(event = "persist_root_dir_withheld")` を残して `Ok(())`、外なら `std::fs::create_dir_all(dir)`。
+- `FsPersistIo::ensure_root_dir(dir)`（関連関数）: 範囲の中なら `debug!(event = "persist_root_dir_withheld")` を残して `Ok(())`、外なら `std::fs::create_dir_all(dir)`。FS に触れるのは今どおり `FsPersistIo` だけ（`persist/io.rs` の説明「`FsPersistIo` が areka-sylphya で FS に触れる唯一の型（R8.3）」を守る＝設計の検証の指摘 3）。`withhold.rs` は FS に触れない。
 - 範囲の外の振る舞い・記録は 1 つも変えない（要件 6.4）。控えはメモリの中だけ＝プロセスが終われば消える（要件 2.4）。
 
 **Dependencies**
@@ -419,15 +419,17 @@ pub enum PersistOutcome {
     /// 読み取りだけの走りで書かずに控えた（中身は走る間だけ読み返せる）。
     Withheld,
 }
-pub use withhold::ensure_root_dir;
+// persist/io.rs（FS に触れる唯一の型の関連関数）
+impl FsPersistIo {
+    /// 範囲の中ならフォルダを作らずに Ok、外なら create_dir_all。
+    pub fn ensure_root_dir(dir: &Path) -> std::io::Result<()>;
+}
 
-// persist/withhold.rs
+// persist/withhold.rs（FS に触れない）
 /// 本番の読み取りだけの走り: 以後すべてのパスを控える（戻す口は無い・呼び手は areka の readonly::engage だけ）。
 pub fn withhold_everything();
 /// このパスを書かずに控えるか。
 pub fn withholds(path: &Path) -> bool;
-/// 範囲の中ならフォルダを作らずに Ok、外なら create_dir_all。
-pub fn ensure_root_dir(dir: &Path) -> std::io::Result<()>;
 /// 試験の根だけを控える取っ手（落とすと登録と、その根の下の控えを消す）。
 #[must_use]
 pub struct WithholdGuard { /* 登録の番号 */ }
@@ -438,7 +440,7 @@ pub(crate) fn stage(path: &Path, content: &str);
 ```
 - Preconditions: なし（`withhold_everything` 前は登録された根だけが範囲）。
 - Postconditions: 範囲の中のパスについて、`commit` の後もファイルの木は変わらず、`read` は最後に控えた中身を返す。
-- Invariants: `Everything` は一度立つと下りない。`WithholdGuard` の根は呼び出しごとに別（`TempPath`）なので、並んで走る別の試験のパスは範囲に入らない。
+- Invariants: `Everything` は一度立つと下りない。`WithholdGuard` の根は呼び出しごとに別（`TempPath`）で、範囲の判定は部品の単位なので、並んで走る別の試験のパス（名前の頭が同じ根を含む）は範囲に入らない。
 
 ##### State Management
 - State model: `struct Withhold { everything: bool, roots: Vec<(u64, String)>, staged: BTreeMap<String, String> }` を `static` の `Mutex` で 1 つ。
@@ -447,7 +449,7 @@ pub(crate) fn stage(path: &Path, content: &str);
 
 **Implementation Notes**
 - Integration: `FsPersistIo` の作り手 7 か所には触らない。`#[derive(Clone, Copy, Debug, Default)]` の単位の構造体のまま。
-- Validation: `withhold_tests.rs`（範囲の中の `commit` で親のフォルダも `*.tmp` も作られない・`read` が控えを返す・`save_scope` が `Withheld` と `persist_withheld` を返し `Saved`／`Degraded` の記録を出さない・取っ手を落とすと控えが消える・別の根は書く・鍵の大小を問わない・`ensure_root_dir` の 2 つの道）。`io.rs` の中の今の試験は変えない。
+- Validation: `withhold_tests.rs`（範囲の中の `commit` で親のフォルダも `*.tmp` も作られない・`read` が控えを返す・`save_scope` が `Withheld` と `persist_withheld` を返し `Saved`／`Degraded` の記録を出さない・取っ手を落とすと控えが消える・別の根は書く・`…-1` を登録しても `…-10` の根は書く（部品の単位の判定）・鍵の大小を問わない・`ensure_root_dir` の 2 つの道）。`io.rs` の中の今の試験は変えない。
 - Risks: 範囲を登録し忘れた試験は今までどおり本物の根（`TempPath`）へ書く（今と同じ）。
 
 #### GhostRuntimeDirHook（`crates/areka-ghost/src/runtime.rs`）
@@ -457,7 +459,7 @@ pub(crate) fn stage(path: &Path, content: &str);
 | Intent | 起動のたびにゴーストの記憶のフォルダを作る段を、保存の口の `ensure_root_dir` へ寄せる |
 | Requirements | 2.5, 11.5 |
 
-- `boot_with_origin` の中の `std::fs::create_dir_all(ghost_root)` を `areka_sylphya::persist::ensure_root_dir(ghost_root)` に替える。`if let Err(err) = …` の `warn!` と続ける振る舞いはそのまま。
+- `boot_with_origin` の中の `std::fs::create_dir_all(ghost_root)` を `areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)` に替える。`if let Err(err) = …` の `warn!` と続ける振る舞いはそのまま。
 - ふつうの起動の振る舞いは変わらない（範囲の外は今どおり作る）。読み取りだけでは作らない（空のフォルダも残らない）。
 - ④ `mcp-scope-rect-property` と同じファイル（④ は `publish_ghost_statics` のあたり）。差分はこの 1 行だけで、実装の前に ④ のセッションへ伝える。
 
@@ -510,6 +512,7 @@ pub(crate) fn check_boot(
 - `migrate_source(root, exe_dir) -> Option<(from, to)>`: 「`root\profile\areka` が無く、`exe_dir\profile\areka` がフォルダ」のときだけ `Some`。`migrate` と `readonly_app_profile_dir` が分け合う（写しの条件の持ち主は 1 つ）。
 - `readonly_app_profile_dir(profile_env, layout, exe_dir)`: `AREKA_PROFILE_DIR` が在ればそれ。書ける根が在り `migrate_source` が `Some` なら写す元（`exe_dir\profile\areka`）を返し `info!(event = "app_memory_read_beside", from, to, "read-only run: reading the bundled app memory without copying it")`。ほかは `app_profile_dir` と同じ値（要件 4.3・11.2）。
 - areka の側: `layout()` は `readonly::is_on()` で `establish_readonly` と `establish` を選ぶ。`default_app_profile_dir()` は同じく `readonly_app_profile_dir` と `app_profile_dir` を選ぶ。
+- 読み取りだけの記憶の置き場は、`layout()`・`exe_location()` と同じく**1 回の走りに 1 度だけ決めて覚える**（`boot_config.rs` の `OnceLock`）。`default_app_profile_dir()` は 1 回の走りで少なくとも 3 回呼ばれる（`boot_config.rs` の起動の値・`main.rs` の 2 か所）ので、呼ぶたびに FS を見て決め直すと、別の areka が同時にふつうに起きて写しを終えた場面（今のコードの `CopyDone::Raced`）で走りの途中に置き場が変わりうる。`app_memory_read_beside` の info も、決めたときの 1 件だけにする（設計の検証の指摘 2・要件 1.6・4.3・4.5）。判断（`migrate_source` の結果から置き場を選ぶ）は純粋な関数に分け、FS を見る所（フォルダが在るか）と覚える所を外に置く。
 
 ```rust
 // areka-user-data
@@ -606,7 +609,7 @@ pub(super) fn refuse(world: &World, raw: &RawUpdateRequest, reason: UpdateReason
 ```
 
 ##### Event Contract
-- Published events: `OnUpdateResultEx`（Reference*n* ＝ `名前\u{1}種別\u{1}`）→ `OnUpdateResult`（Reference*n* ＝ `種別\u{1}`）。例: バルーン「にゃんばるーん」なら `にゃんばるーん\u{1}balloon\u{1}` と `balloon\u{1}`（2026-10-23 の readonly の SSP の測りと字まで同じ）。
+- Published events: `OnUpdateResultEx`（Reference*n* ＝ `名前\u{1}種別\u{1}`）→ `OnUpdateResult`（Reference*n* ＝ `種別\u{1}`）。例: バルーン「にゃんばるーん」なら `にゃんばるーん\u{1}balloon\u{1}` と `balloon\u{1}`（2026-10-23 の readonly の SSP の測りと字まで同じ）。自分のゴーストの更新（`\![updatebymyself]`＝`Current`）でも、同じ測りで SSP は `窓際のぱすたさんDRESSTEST\u{1}ghost\u{1}` と `ghost\u{1}` の 2 件を送った（homeurl の無いゴーストで測った）＝`Current` でも Ex と Result の 2 件を送る。ふつうの areka が `Current` で `OnUpdateResult` だけを送るのとは違うが、読み取りだけの断りは SSP の測りに合わせる（要件 7.5）。
 - Ordering / delivery guarantees: 同じ送出端に Ex → Result の順で積む（kanade の受け口は届いた順に送る）。送れなければ `notified = false` の記録だけ（台本は殺さない）。
 - `readonly` の語は Reference に現れない（`update/refs_tests.rs` の送らない 7 語の檻に `readonly_summary_refs` の出力を足して固める）。
 
@@ -677,7 +680,7 @@ fn dialog_options(base: FILEOPENDIALOGOPTIONS, readonly: bool) -> FILEOPENDIALOG
 どれも決定論。試験の根は `temp_path_kit::TempPath`（`target\` の下）だけ。本物の `%LOCALAPPDATA%\areka` と exe の隣は読みも書きもしない（`areka-user-data` は `Signals` を注入し、areka の側は `TempPath` の根と `SwitchRig` の検体だけ・要件 10.5）。プロセスに 1 つの状態は、試験では `engage`／`withhold_everything` を呼ばず、`WithholdGuard::under(自分の根)` と自分の World の `ReadOnlyRun` だけで立てる。ログの「出ていない」の主張は `log-capture-kit` の捕捉窓（対照のイベントつき）で判定する。
 
 ### Unit Tests
-1. `persist/withhold_tests.rs`: 範囲の中の `commit` で親のフォルダも `sylphya.toml.tmp` も宛先も作られない・`read` が控えを返す・`save_scope` が `Withheld` を返し `persist_withheld` を出し `persist commit failed` を出さない・取っ手を落とすと控えが消えてファイルを読む・登録していない隣の根は書く・鍵の大小を問わない・`ensure_root_dir` は範囲の中で作らず外で作る（2.1・2.3・2.5・2.6）。
+1. `persist/withhold_tests.rs`: 範囲の中の `commit` で親のフォルダも `sylphya.toml.tmp` も宛先も作られない・`read` が控えを返す・`save_scope` が `Withheld` を返し `persist_withheld` を出し `persist commit failed` を出さない・取っ手を落とすと控えが消えてファイルを読む・登録していない隣の根は書く・`…-1` を登録しても `…-10` の根は書く・鍵の大小を問わない・`ensure_root_dir` は範囲の中で作らず外で作る（2.1・2.3・2.5・2.6）。
 2. `cli/parse_readonly_tests.rs`: `readonly`・`READONLY`・`nobootcheck,readonly`・`--option` 2 回で `readonly = true` と `effective` に 1 つ・`WordPending` が `readonly` に出ない・`kiosk,readonly` で `kiosk` だけがまだ扱わない・`--offline-dump` と一緒で `OfflineIgnored{option}` と無視の側の `readonly`・`readonly` と `bootunlock` のどちらでも `BootRequest` が同じ（1.1〜1.5・10.3）。`cli/parse_tests.rs` の 3 か所は `kiosk` へ替える。
 3. `areka-user-data/src/establish_readonly_tests.rs`: 根が無い → 作らず `None`・`user_root_withheld`／根が在る → `Some`・作る物 0／根は在るが記憶が無く隣に記憶 → `readonly_app_profile_dir` が隣を返し `app_memory_read_beside`・写さない／両方無い → ふつうと同じ値／`AREKA_PROFILE_DIR` が勝つ／どの腕も木の前後が同じ（4.1〜4.3・4.5・11.2）。
 4. `readonly_tests.rs`: `install` は旗が立たない試験のプロセスで何も足さない・`of` は資源で真偽・構造の試験（`readonly::engage(` の呼び手は `main.rs` だけ・`withhold_everything(` の呼び手は `readonly.rs` だけ）・`check_boot(true, 書けない置き場)` が `Ok` と `readonly_boot_check_skipped`・`check_boot(false, …)` は `check_boot_dirs` と同じ `Err`・`copy_unless_readonly(true, 写す並び)` が元を返し `user_data_copy_withheld`・写し先が作られない（1.6・4.4・5.1・5.2・6.4）。
