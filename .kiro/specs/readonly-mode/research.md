@@ -186,3 +186,130 @@ ukadoc の「ネットワーク更新の失敗理由」には `readonly` とい�
 ## 7. 次の手
 
 要件討議（`kiro-requirements-discussion`）で §6 の 1〜8 を決め、議題 3 の SSP の測りを済ませてから、`/kiro-design readonly-mode` で設計へ進む。
+
+---
+
+# 設計の段の調べと決めたこと（2026-10-23・`/kiro-spec-design readonly-mode -y`）
+
+> 本ブランチ（main `15d8b0f3` の上・`024600d3`）のコードを読み直した結果。ギャップ分析の §6 の 1〜9 と §4 の案 A／B／C を、ここで決めた。決めたことの正本は `design.md`（ここは根拠と比べ）。
+
+## Summary
+
+- **Feature**: `readonly-mode`
+- **Discovery Scope**: Extension（既存の保存の口・起動の段・インストールと更新の窓口・メニューへの継ぎ足し）＝light の調べ。新しい依存は無い。
+- **使った手引き**: スキル `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、テンプレート `.kiro/settings/templates/specs/design.md`・`research.md`、steering の `product.md`・`tech.md`・`structure.md`・`logging.md`・`roadmap.md`（ウェーブ C11 の表）。
+- **Key Findings**:
+  - 記憶の 13 種の書き手は `FsPersistIo` という**単位の構造体**を 7 か所で作るが、どれも同じ型＝その型の `read`／`commit` の中で「控える」と決めれば、作り手に 1 つも触らずに 13 種が止まる（案 A の芯）。試験の漏れは「控える範囲」を根ごとに登録する形で防げる。
+  - 起動の前（World が無い時点）に決まるもの（利用者ごとの置き場の形 `layout()`・書けるかの確かめ・ゴーストの写し）は、プロセスに 1 つの値でしか持てない。World の中の守り（インストール・更新・メニュー）は World の資源で持てば試験の間で漏れない＝持ち方は複数になるが、立てる口は `crates/areka/src/readonly.rs` の 1 つに寄せる（案 C）。
+  - `PersistOutcome` を網羅で読むのは `boot_resolve.rs` の 3 か所だけ（試験の中にも無い）＝3 つ目の値 `Withheld` は 3 か所の腕を足すだけで入る。
+
+## Research Log
+
+### `PersistIo` の作り手と読み手（案 A の成り立ち）
+- **Context**: 13 種を 1 か所で止められるか（ギャップ分析 §2.2・§6 の 1）。
+- **Sources Consulted**: `crates/areka-sylphya/src/persist/{io,mod}.rs`、`grep "FsPersistIo"`（本番 7 か所＝`boot_resolve.rs`・`roots/{mod,edit}.rs`・`placement/persist.rs`・`shiori_host.rs`・`areka-ghost/src/sylphya_wiring.rs`）、`grep "impl PersistIo for"`（本番は `FsPersistIo` と `FakePersistIo` だけ・ほかは試験の中の 10 個）。
+- **Findings**: `FsPersistIo` は `#[derive(Clone, Copy, Debug, Default)]` の単位の構造体。`commit` は `create_dir_all(parent)` → 一時ファイル → `rename`。trait に既定の実装つきの関数を足しても、試験の中の 10 個の実装は直さずに済む。`PersistOutcome::Saved` を網羅で読むのは `boot_resolve.rs` の 3 か所（`write_session_mark`・`write_switch_drop`・`clear_session_mark`）。`actor.rs`・`roots/edit.rs` は `if let Degraded` だけ。
+- **Implications**: 控えの層は `FsPersistIo` の中に置き、作り手 7 か所（④ の `sylphya_wiring.rs`・⑥ の `placement/persist.rs` を含む）には触らない。
+
+### 起動中の印と「次の起動の予告」の記録
+- **Context**: 要件 3・6.3（記録の文を起きたことと合わせる）。
+- **Sources Consulted**: `boot_resolve.rs` の `read_session_mark`・`keep_session_mark`・`clear_session_mark`。
+- **Findings**: `keep_session_mark` は印を**読み直して**「次の起動は Ref7＝…」と予告する。控えの層の上では、読み直しが控えの印（この走りが書いたはずの値）を返すので、読み取りだけでは予告が事実と食い違う（ファイルの印は起動の前のまま）。
+- **Implications**: `keep_session_mark` に「読み取りだけなので印に触れていない（次の起動は、この走りの前の記憶のとおりに起きる）」の 3 つ目の記録を足す。判定は保存の口の述語（`withholds`）で行う（試験は根の登録で同じ道を通る）。
+
+### 利用者ごとの置き場の形（`layout()`）と記憶の置き場（議題 2）
+- **Context**: 要件 4.1〜4.3・ギャップ分析 §6 の 3。
+- **Sources Consulted**: `areka-user-data/src/{establish,lib}.rs`（`establish_from`・`create`・`migrate`・`app_profile_dir`）、`areka/src/roots/user_root.rs`（`layout` の `OnceLock`）、`boot_config.rs` の `default_app_profile_dir`、`grep "Layout {"`（`Layout` を字で組む所が `areka-user-data` の試験・`areka-mcp-bridge` の試験・`areka` の試験に 7 か所）。
+- **Findings**: `migrate` が写すのは「書ける根の `profile\areka` が無く、exe の隣の `profile\areka` がフォルダのとき」。`Layout` に欄を足すと字で組む 7 か所が壊れる。`app_profile_dir` は純粋な関数。
+- **Implications**: `Layout` の形は変えない。読み取りだけの記憶の置き場は、`migrate` と同じ条件の判定（写す元を返す小さな関数を `migrate` と分け合う）で「写す元＝exe の隣」を返す別の純粋な関数 `readonly_app_profile_dir` にする。書ける根が無ければ作らずに `user_root = None`（隣の形）。
+
+### 窓口の形（インストール・更新・URL の取り込み・メニュー）
+- **Context**: 要件 7・8.7。
+- **Sources Consulted**: `install/mod.rs` の `submit`、`update/mod.rs` の `submit`・`judge`、`update/desk.rs` の `refuse_executing`・`resolve_targets`（`pub(crate)`）・`is_busy`、`update/refs.rs` の `summary_refs`・`SEPARATOR`（`\u{1}`）、`update/refs_tests.rs` の `UNSENT_WORDS`・`unsent_seven_words_never_appear`、`emo2_boot/install_cue.rs`、`emo2_boot/runtime_boot.rs` 109 行目、`emo2_boot/zorder_wiring_tests.rs` 303 行目、`menu/{install_frame,update_frame}.rs`。
+- **Findings**:
+  - `zorder_wiring_tests.rs` は `runtime_boot.rs` の受け口の並びを**字で**固めている（`InstallCueSink::new(crate::install::desk::raw_sender(world))` を含む）＝`InstallCueSink::new` の引数を変えると檻が赤になる。中身（取得の口の選び方）だけを変えれば檻に触らない。
+  - 更新の総括の Reference は `[名前（Ex のときだけ）, 種別, 成否, 数か語, (ファイル)]` を `\u{1}` でつなぐ。SSP の readonly の測り（`にゃんばるーん\1balloon\1`・`balloon\1`）は「成否の欄を空にした `[名前, 種別, ""]`／`[種別, ""]`」をつないだ形と字まで一致する。
+  - メニューの 2 項目はどちらも `enabled` をメニューを出すたびに窓口へ尋ねる形＝条件を 1 つ足せば灰色になる。
+- **Implications**: 断りは `install::submit`（積む前）・`update::judge`（段を移す前）・`InstallCueSink` の取得の口（落とし始める前）の 3 か所。`install/desk.rs`・`update/desk.rs` には触らない。
+
+### OS が残す「最近使った」（議題 6・Research Needed の 2 件を閉じた）
+- **Sources Consulted**: Microsoft Learn「_FILEOPENDIALOGOPTIONS」（https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/ne-shobjidl_core-_fileopendialogoptions ）・「IFileDialog::SetClientGuid」（https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ifiledialog-setclientguid ）・「SHELLEXECUTEINFOW」（https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-shellexecuteinfow ）。`roots/pick.rs`・`readme/os_port.rs` の今の指定。
+- **Findings**:
+  - `FOS_DONTADDTORECENT`（0x2000000）は、開いた・保存した項目を最近使った文書の一覧（`SHAddToRecentDocs`）に足さない指定。
+  - 画面の状態（最後に開いたフォルダ・位置と大きさ）は、ふつうは exe の名前ごとに OS が覚える。`SetClientGuid` は覚える先を GUID ごとに分けるだけで、覚えることそのものを止める指定は文書に無い（`ClearClientData` は覚えた物を消す＝それ自体が書き込み）。
+  - `ShellExecuteExW` は `SEE_MASK_FLAG_LOG_USAGE` を渡したときに利用の記録をとる。areka は `SEE_MASK_FLAG_NO_UI` だけを渡している＝areka の呼び方からは足していない。開いたアプリが自分で残す物は areka の外。
+- **Implications**: フォルダ選びは読み取りだけのとき `FOS_DONTADDTORECENT` を足す。画面が自分で覚える最後のフォルダと、説明書を開いたアプリが残す物は止められない＝説明書に書く（要件 11.6 の推しのとおり）。
+
+### ゴーストの記憶のフォルダを先に作る段（議題 5・§6 の 2）
+- **Sources Consulted**: `areka-ghost/src/runtime.rs` の `boot_with_origin`（621〜637 行目）、`persist/io.rs` の `real_commit_creates_missing_parent_dirs`、`git log -S`（このブロックは `areka-P0-position-persist` が `commit` の `create_dir_all` と同じコミット `33aa3844` で入れた「二重の安全網」）。
+- **Findings**: ブロックを消すと、ふつうの起動でも「何も保存しないうちは `profile\areka` が無い」に変わる。ゴーストの SHIORI が `profile\` の在ることを当てにしていないかは測れていない（SSP では `profile\ghost.dat` を SSP が書くので `profile\` は在るのがふつう）。
+- **Implications**: 消さずに、フォルダを作る呼び出しを保存の口の関数 `persist::ensure_root_dir`（控える範囲なら作らない）へ置き換える。ふつうの起動の振る舞いは 1 つも変わらず、`profile\areka` を作る持ち主が保存の口 1 つになる。`runtime.rs` の差分は 1 行。
+
+### 二重起動の任せ先（要件 1.3）
+- **Sources Consulted**: `grep "CreateMutex|FindWindowW|single_instance"`（`crates/areka/src` の本番の道）・`dist/README.txt` 60 行目。
+- **Findings**: areka には、起動中のほかの areka や SSP へ起動を任せる道が無い（`bootunlock`・`standalone` は「受け取るが何も変わらない」語）。
+- **Implications**: 要件 1.3 はコードを足さずに満たされる。説明書の文と、語の読み手の試験（`readonly` を渡しても `bootunlock` を渡したときと同じく任せ先の道が無い＝起動の求めの値が変わらない）だけを置く。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| A | 控えの層と範囲を sylphya に置き、入口の守りもプロセスの値で見る | 触るファイルが一番少ない | 入口の守り（World の中）の試験がプロセスの値を立てると、並んで走る別の試験へ漏れる | 記憶の部分は採る |
+| B | 「読み取りだけの IO」を値で配る | プロセスの値が無い | ④ ⑥ の持ち物（`sylphya_wiring.rs`・`placement/persist.rs`）と `GhostBootOptions` を組む試験全部に当たる。作り手 7 か所に散ったまま＝後から足した作り手が黙って破る（要件 10 の目的に逆らう） | 採らない |
+| C | 記憶は A（保存の口の中・根ごとの範囲）・World の中の守りは World の資源・起動の前の守りはプロセスの値を引数で渡す純粋な関数 | 13 種が 1 か所で止まる・試験はどれも自分の根か自分の World だけを読み取りだけにする | 持ち方が 3 つ（保存の口の範囲・World の資源・プロセスの値）＝立てる口を `readonly.rs` の 1 つに寄せる | **採る** |
+
+## Design Decisions
+
+### Decision: 書かない形の置き場（§6 の 1）＝案 C
+- **Context**: 要件 2・10・ウェーブ C11 の持ち物。
+- **Alternatives Considered**: 案 A・案 B・案 C（上の表）。
+- **Selected Approach**: 保存の口（`areka-sylphya/src/persist/withhold.rs` 新規）が「控える範囲」（本番は「全部」・試験は登録した根の下だけ）と「重ね書きの控え」（パス→中身）をプロセスに 1 つ持ち、`FsPersistIo` の `read`／`commit` がそれを見る。World の中の守りは資源 `ReadOnlyRun` を見る。起動の前の守りは `readonly::is_on()` を引数として純粋な関数へ渡す。
+- **Rationale**: 13 種が作り手に触らずに 1 か所で止まり、後から足した `FsPersistIo` の作り手も自動で覆われる（要件 10 の目的）。試験の漏れは根の登録と World の資源で防げる。
+- **Trade-offs**: 最下層のクレートにプロセスに 1 つの状態が入る（IO の継ぎ目の中に閉じる）。
+- **Follow-up**: 「全部」を立てるのは `readonly::engage` だけ、`engage` を呼ぶのは `main.rs` だけ、を構造の試験で固める。
+
+### Decision: 要件 2.5 の触り方（§6 の 2）＝作る呼び出しを保存の口へ移す
+- **Selected Approach**: `runtime.rs` の `std::fs::create_dir_all(ghost_root)` を `areka_sylphya::persist::ensure_root_dir(ghost_root)` に替える（1 行）。`ensure_root_dir` は控える範囲なら何もせず `Ok(())`、そうでなければ今どおり `create_dir_all`。
+- **Alternatives Considered**: (a) `runtime.rs` に「控える範囲か」の条件を書く（判定の持ち主が 2 つになる）・(b) ブロックごと消す（ふつうの起動の振る舞いが変わり、SHIORI が `profile\` を当てにしていないかが測れていない）。
+- **Rationale**: ふつうの起動を変えず、`profile\areka` を作る持ち主を保存の口 1 つにする。並走の約束を理由にした形ではない（(a)(b) も同じファイルに触る）。
+- **Follow-up**: ④ `mcp-scope-rect-property` のセッションへ「`boot_with_origin` の 629 行目の 1 行だけを替える」と先に伝える（④ は 280 行目・662 行目の `publish_ghost_statics` のあたり）。
+
+### Decision: 置き場は在るが中の記憶が無いとき（§6 の 3）
+- **Selected Approach**: 要件 11.2 のとおり写す元を読む。`migrate` と同じ条件（書ける根の `profile\areka` が無く、exe の隣の `profile\areka` がフォルダ）を判定する関数を `areka-user-data` の中で `migrate` と `readonly_app_profile_dir` が分け合う。書ける根そのものは在るので置き場の並びには載せ、ゴーストはそこからも読む（要件 4.2）。
+- **Rationale**: 「ふつうの起動が写した後に読むのと同じ値」（要件 4.3）を、写しの条件そのものから導く。
+
+### Decision: 書かなかった保存の結果の形（§6 の 4・議題 4）
+- **Selected Approach**: `PersistOutcome::Withheld` を足す。`save_scope` は確定の前に `io.withholds(path)` を見て、控えたら `debug!(event = "persist_withheld")` を残して `Withheld` を返す。`boot_resolve.rs` の 3 か所は `Withheld` の腕で info（「読み取りだけなので…を書きませんでした」）を残し `Ok(())` を返す。
+- **Alternatives Considered**: `Saved` のまま記録だけ分ける（`boot_resolve.rs` の成功の info「書きました」が残る＝要件 6.3 に反する）。
+- **Rationale**: 書けた・書けなかった・控えたの 3 つが型で分かれ、記録の行も 3 つに分かれる（要件 2.6・6.2・6.3）。
+
+### Decision: メニューの 2 項目（§6 の 5）
+- **Selected Approach**: 要件 11.6 のとおり、`install_frame.rs`・`update_frame.rs` の `enabled` に `!readonly::of(world)` を足す。灰色の項目は Win32 のメニューが選ばせないので、書庫選びの画面は開かない（`install/desk.rs` の `pick_and_submit` には触らない）。
+
+### Decision: 断った更新でゴーストへ送る物の形（要件 7.5・11.3）
+- **Selected Approach**: 解いた対象ごとに、`OnUpdateResultEx` の Reference に `名前\1種別\1`、続けて `OnUpdateResult` の Reference に `種別\1` を並べ、この順で返事なしで 1 件ずつ送る。ふつうの更新のように「入口の形（今のもの＝Result・名前で引くもの＝Ex）で片方だけ」にはしない（SSP の readonly は名前で引く頼みに両方を送った）。解けた対象が 0 なら何も送らない（ふつうの「全部飛ばせば総括を送らない」と同じ）。homeurl の有無では対象を外さない（readonly の SSP は取りに行く前に断る＝homeurl を見る前）。
+- **Rationale**: 測った字の形と一致し、`readonly` の語は出ない（送らない 7 語の檻に新しい関数を足して固める）。
+
+### Decision: 印の扱い（§6 の 7）
+- **Selected Approach**: 印の 3 関数はふつうどおり保存の口を呼び、控えの層へ入る（ファイルは変わらない）。`argv_session` の 4 ファイルには触らない。記録は `Withheld` の腕と `keep_session_mark` の 3 つ目の文で合わせる。
+
+### Decision: 印を立てる場所と `main.rs`（§6 の 8）
+- **Selected Approach**: `main` の `--offline-dump` の戻りの後・`resolve_boot` の前に `readonly::engage(opts.readonly)` を 1 行。World の資源は `roots::install` の次に `readonly::install(world)` を 1 行。`check_boot_dirs` の呼び出しは同じ 1 行のまま `write_failure::check_boot(readonly::is_on(), …)` に替える。`mod readonly;` と説明の 1 行。足すのは 5 行前後（978 → 983 前後）。
+
+### Decision: ⑥ との同じファイル（§6 の 9）
+- **Selected Approach**: この spec が `persist/mod.rs` で触るのは `PersistOutcome` の値・`save_scope` の確定の前・`pub mod withhold;` と `ensure_root_dir` の公開の行だけ。`persist/format.rs` には触らない。⑥ が足す `PersistKey` の値と TOML への写しとは別の場所＝文字だけの重なり。実装の前に main を取り込み直し、⑥ が先に着地していればその上に書く。
+
+## Synthesis
+
+- **Generalization**: 「この道は書いてよいか」は保存の口の述語 `withholds(path)` 1 つに寄せた（記憶の 13 種・ゴーストの記憶のフォルダ・印の予告の記録が同じ述語を見る）。インストール・更新・取り込みの断りは「入口の 1 つの口で、積む前・段を移す前・落とす前に断る」という同じ形で 3 か所に置き、後から足される入口（`startup-install-option`）も `install::submit` を通れば同じ断りを受ける。
+- **Build vs. Adopt**: 新しい依存は無い。控えの層は std の `Mutex`＋`BTreeMap`。OS の「最近使った」は OS の指定（`FOS_DONTADDTORECENT`）を使う。
+- **Simplification**: IO を値で配る形（案 B）・`BootContext` に旗を足す形・`Layout` に欄を足す形・`install/desk.rs` と `update/desk.rs` の中の守り・メニューの動作の中の二重の守りは取らない。説明書を開く道は今の呼び方で足りている（`SEE_MASK_FLAG_LOG_USAGE` を渡していない）ので触らない。
+
+## Risks & Mitigations
+
+- **プロセスに 1 つの状態が試験の間で漏れる** — 本番の「全部」は `readonly::engage` だけが立て、`engage` は `main.rs` だけが呼ぶ（構造の試験で固める）。試験は自分の `TempPath` の根を登録する取っ手（落とすと登録と控えを消す）と、自分の World の資源だけを使う。
+- **控えの鍵の綴りの違い**（大小・区切り）で読み返しが外れる — 鍵は小文字化と区切りの統一をした文字列にし、範囲の判定も同じ鍵で行う。
+- **④ と `runtime.rs` の同じファイル** — 差分は 629 行目の 1 行。実装に入る前に ④ のセッションへ伝える。
+- **⑥ と `persist/mod.rs` の同じファイル** — 文字だけの重なり。後に着地する側が取り込む。
+- **OS が自分で覚える物を止められない** — 説明書に書く（要件 9.2・11.6）。
+- **書ける根が無いときの置き場の並びの見え方** — 読み取りだけでは書ける根を作らないので、初めての起動のメニューの「置き場」に書ける根の行が出ない（ふつうの起動は空の書ける根を作って並べる）。値（記憶・起こすゴースト）は同じ＝要件 4.3 の「同じ値」は満たす。説明書に書く。
