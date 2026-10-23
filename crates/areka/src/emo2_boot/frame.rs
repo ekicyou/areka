@@ -560,6 +560,12 @@ mod chain_finalize_persist_nowrite_tests;
 #[path = "frame_chain_finalize_remembered_tests.rs"]
 mod chain_finalize_remembered_tests;
 
+// 拡大率の違う画面をまたぐドラッグで掴んだ点を窓の大きさの比で置き直す檻
+// （dpi-realign-remembered-chain 要件 4・8.5）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_dpi_drag_grab_tests.rs"]
+mod dpi_drag_grab_tests;
+
 #[cfg(test)]
 #[path = "frame_dpi_tests.rs"]
 mod dpi_tests;
