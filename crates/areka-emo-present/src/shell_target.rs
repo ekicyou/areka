@@ -24,7 +24,7 @@
 //! **記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
 //! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
 //! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
-//! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
+//! 焼く段で落ちた絵の `error!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
 //! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
 //! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）、描けない
 //! 描画メソッドの element定義の各行の `warn!`（spec: areka-P0-element-base-method 要件 2.1・4.2）、
@@ -404,7 +404,7 @@ pub fn load_shell_target(
         );
     }
     for error in &target.bake_errors {
-        tracing::warn!(error = %error, "shell: shell bake で脱落した element");
+        tracing::error!(error = %error, "shell: shell bake で脱落した element");
     }
     for issue in &target.nest_report.issues {
         log_nest_issue(issue);
@@ -508,7 +508,7 @@ pub fn build_shell_target_with_boxes(
     let nest_report = probe.nest_report();
 
     // 数字だけの element定義はサーフェスを置くもので画像ではない。焼く一覧に入れると、その名前の
-    // 絵を読みに行き（在れば使い・無ければ脱落の warn!）になるので、複製から外して渡す（要件 1.5・3.5）。
+    // 絵を読みに行き（在れば使い・無ければ脱落の error!）になるので、複製から外して渡す（要件 1.5・3.5）。
     let mut surfaces = shell.surfaces.clone();
     for surface in &mut surfaces {
         surface

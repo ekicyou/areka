@@ -159,7 +159,7 @@
   - _Requirements: 10.1, 10.3, 10.4, 12.1_
 
 - [ ] 7. オフラインの書き出しのモジュール
-- [ ] 7.1 モジュールの骨と検体の部品
+- [x] 7.1 モジュールの骨と検体の部品
   - `offline_dump/` の骨（入口と 5 つの子モジュールの宣言・兄弟の試験の接続）を置き、`main.rs` に `mod offline_dump;` を足す。`crates/areka/Cargo.toml` の dev の依存にワークスペースに既に在る版の `image`（png だけ）を足す
   - 検体の部品（試験専用）: `temp-path-kit` で `target\` の下に、ゴーストの descript.txt・シェルの descript.txt・surfaces.txt・1 色塗りの α 付き PNG を持つゴーストのフォルダを組む。research.md §10 の検体の形（runonce・always・random・periodic・負の座標・mustselect／multiple・element の絵の欠け・中身の無い面）を組める（スコープ別の着せ替えの検体は 5.2 の共有の部品を使う）
   - element の絵の欠けの面は、ほかに描ける層（土台か別の element）を少なくとも 1 つ持たせる（記録が Error 1 行だけになり、合成は失敗しない）
@@ -272,3 +272,4 @@
 - 5.2: 共有の検体 `crates/areka/src/scope_bind_fixture_test_support.rs`（`scope_bind_ghost()`）の `write_solid_png` は MCP の非公開の `fn png` の一時の写し＝6.1 で `png_image.rs` へ移したら移した関数を呼ぶ形に替え、shortcut の注記を消す
 - 6.2: 写しの層（`CaptureLayer`）そのものは単体試験で通していない（受け口を差し替えられないため）＝10.1 の exe の試験で CSV の中身として確かめる。`capture_begin`／`capture_finish` の `#[allow(dead_code)]` は呼び手の 7.7 で外す。log クレート経由の記録は本文に `log.*` の欄も入る（履歴と同じ）
 - 6.4: `--dump-scope -1` は `-1` を名前として読む（Unknown・dump-scope は MissingValue＝design どおり）。6.5 で直す試験: `dump_pending_and_other_dump_names` と `empty_dump_value_is_missing` の末尾の `--dump-scope` の場合（今は記録なしを期待）。`--offline-dump` なしの `--dump-scope 1` が要約の `effective` に載る件も 6.5 で見る。`StartupOptions.offline` の `#[allow(dead_code)]` は 7.7／8 で外す
+- 7.1: 欠けた element の絵（シェルを焼く段の脱落）は `areka-emo-present/src/shell_target.rs` で warn だったのを design（読み込みの段で Error）に合わせて error に上げた（画面の記録も error になる）。5.2 の共有の検体は `TempPath::under_target` に直した（前は OS の一時フォルダ）。検体の部品は `offline_dump_test_support::{build_ghost, variety_shell, ShellSpec, Solid}`

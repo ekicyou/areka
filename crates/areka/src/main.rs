@@ -149,6 +149,9 @@ mod smoke_exit;
 /// 起動オプションの読み方（areka-P0-startup-options-core）。
 mod cli;
 
+/// オフラインの書き出し（`--offline-dump`・areka-P0-offline-surface-dump）。
+mod offline_dump;
+
 /// スコープごとに既定の着せ替えと名前が分かれる検体（試験専用・画面と書き出しの試験が共有）。
 #[cfg(test)]
 mod scope_bind_fixture_test_support;

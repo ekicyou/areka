@@ -120,6 +120,7 @@ dependencies = [
  "bevy_ecs",
  "dola",
  "human-panic",
+ "image",
  "log-capture-kit",
  "miniz_oxide 0.9.1",
  "real-run-kit",

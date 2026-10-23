@@ -30,7 +30,7 @@ pub(crate) const CHAR2_CATEGORY: &str = "髪";
 /// 中身は `ghost/master/descript.txt` と `shell/master/`（descript.txt・surfaces.txt・PNG 4 枚）。
 /// バルーンは置かない。
 pub(crate) fn scope_bind_ghost() -> TempPath {
-    let root = TempPath::new("areka-scope-bind-ghost");
+    let root = TempPath::under_target("areka-scope-bind-ghost");
     let ghost_master = root.path().join("ghost").join("master");
     let shell_master = root.path().join("shell").join("master");
     for dir in [&ghost_master, &shell_master] {
