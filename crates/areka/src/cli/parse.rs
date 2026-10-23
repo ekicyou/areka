@@ -7,7 +7,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use super::listen::{self, ListenNote};
-use super::{ModulePolicy, StartupOptions};
+use super::{ModulePolicy, OfflineDumpRequest, StartupOptions};
 
 /// 値の取り方。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,8 +30,40 @@ enum Kind {
     Option,
     SstpListen,
     Help,
+    /// `--offline-dump`（値はゴーストのフォルダ）。
+    OfflineDump,
+    /// `--dump-*` の値の欄。
+    DumpValue(DumpField),
+    /// `--dump-surface-option`・`--dump-animation`（まだ扱わない＝要件 10.3）。
+    DumpPending,
     /// 正典に載っているが areka が扱わない（1.6）。
     Unsupported,
+}
+
+/// `--dump-*` の値の欄（`OfflineDumpRequest` の欄）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DumpField {
+    Shell,
+    Scope,
+    SurfaceList,
+    OutputDir,
+    OutputPrefix,
+    ErrorLog,
+    Bind,
+}
+
+impl DumpField {
+    fn slot(self, req: &mut OfflineDumpRequest) -> &mut Option<String> {
+        match self {
+            Self::Shell => &mut req.shell,
+            Self::Scope => &mut req.scope,
+            Self::SurfaceList => &mut req.surface_list,
+            Self::OutputDir => &mut req.output_dir,
+            Self::OutputPrefix => &mut req.output_prefix,
+            Self::ErrorLog => &mut req.error_log,
+            Self::Bind => &mut req.bind,
+        }
+    }
 }
 
 /// 表の 1 行: 名前・短い形・値の取り方・種類。
@@ -51,7 +83,7 @@ const fn spec(long: &'static str, short: Option<char>, arity: Arity, kind: Kind)
     }
 }
 
-/// 起動オプションの表（設計の CliParse の表）。`dump-` で始まる名前は `lookup_long` が読む。
+/// 起動オプションの表（設計の CliParse の表）。表に無い `dump-` で始まる名前は `lookup_long` が読む。
 const TABLE: &[Spec] = &[
     spec("ghost", Some('g'), Arity::Many, Kind::Ghost),
     spec("random", Some('r'), Arity::None, Kind::Random),
@@ -62,7 +94,56 @@ const TABLE: &[Spec] = &[
     spec("fmo-name", Some('f'), Arity::One, Kind::Unsupported),
     spec("ukagaka-link", Some('m'), Arity::One, Kind::Unsupported),
     spec("ssf", Some('s'), Arity::One, Kind::Unsupported),
-    spec("offline-dump", None, Arity::One, Kind::Unsupported),
+    spec("offline-dump", None, Arity::One, Kind::OfflineDump),
+    spec(
+        "dump-shell",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::Shell),
+    ),
+    spec(
+        "dump-scope",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::Scope),
+    ),
+    spec(
+        "dump-surface-list",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::SurfaceList),
+    ),
+    spec(
+        "dump-output-dir",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::OutputDir),
+    ),
+    spec(
+        "dump-output-prefix",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::OutputPrefix),
+    ),
+    spec(
+        "dump-error-log",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::ErrorLog),
+    ),
+    spec(
+        "dump-bind",
+        None,
+        Arity::Optional,
+        Kind::DumpValue(DumpField::Bind),
+    ),
+    spec(
+        "dump-surface-option",
+        None,
+        Arity::Optional,
+        Kind::DumpPending,
+    ),
+    spec("dump-animation", None, Arity::Optional, Kind::DumpPending),
     spec("offline-tool", None, Arity::One, Kind::Unsupported),
     spec("target-dir", None, Arity::One, Kind::Unsupported),
     spec("output", None, Arity::One, Kind::Unsupported),
@@ -121,9 +202,7 @@ pub(crate) enum ParseNote {
     Unknown { arg: String },
     /// 扱わない名前（1.6）。warn
     Unsupported { name: String },
-    /// 値を取る名前の値が無く、意味も定まっていない（1.8）。warn
-    // 今の表には値なしの意味が定まっていない名前が無いので作られない（設計は 1.8 の口として残す）。
-    #[allow(dead_code)]
+    /// 値を取る名前の値が無く、意味も定まっていない（1.8）。`--offline-dump` があるときの `--dump-*` の 7 つ。warn
     MissingValue { name: String },
     /// `--option`・`--ghost` 以外の重ね（1.11）。warn
     Repeated { name: String },
@@ -180,6 +259,8 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
     let mut ghosts: Vec<String> = Vec::new();
     let mut listen_value: Option<Option<String>> = None;
     let mut help_value: Option<String> = None;
+    let mut offline_given = false;
+    let mut offline = OfflineDumpRequest::default();
 
     let mut i = 1;
     while i < args.len() {
@@ -277,6 +358,26 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                 // 名前 `option` はまとめに並べない（効かせる語が並ぶ）。
                 continue;
             }
+            Kind::DumpPending => {
+                if !ignored.contains(&name) {
+                    ignored.push(name);
+                }
+                continue;
+            }
+            Kind::OfflineDump | Kind::DumpValue(_) => {
+                if !first {
+                    notes.push(ParseNote::Repeated { name: name.clone() });
+                }
+                // 後勝ち。後が値なしなら値なし。
+                let value = values.pop();
+                match kind {
+                    Kind::DumpValue(field) => *field.slot(&mut offline) = value,
+                    _ => {
+                        offline_given = true;
+                        offline.ghost_dir = value;
+                    }
+                }
+            }
             Kind::Random | Kind::SstpListen | Kind::Help => {
                 if !first {
                     notes.push(ParseNote::Repeated { name: name.clone() });
@@ -321,6 +422,18 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
         } else if !rest.is_empty() {
             notes.push(ParseNote::ExtraGhosts { rest });
         }
+    }
+
+    // `--offline-dump` の有無は読み終えて決まる。値なしの `--dump-*` は値なしの記録（`--offline-dump` の値なしは記録しない＝1.8）。
+    if offline_given {
+        for name in &effective {
+            if let Some((_, _, Kind::DumpValue(field))) = lookup_long(name)
+                && field.slot(&mut offline).is_none()
+            {
+                notes.push(ParseNote::MissingValue { name: name.clone() });
+            }
+        }
+        options.offline = Some(offline);
     }
 
     if let Some(value) = help_value {
@@ -457,3 +570,7 @@ impl ParseNote {
 #[cfg(test)]
 #[path = "parse_tests.rs"]
 mod parse_tests;
+
+#[cfg(test)]
+#[path = "parse_offline_tests.rs"]
+mod parse_offline_tests;

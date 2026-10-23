@@ -145,7 +145,7 @@
   - _Boundary: SkinNameMatch_
   - _Requirements: 2.4_
 
-- [ ] 6.4 (P) オフラインの書き出しの欄を起動オプションの読みに足す
+- [x] 6.4 (P) オフラインの書き出しの欄を起動オプションの読みに足す
   - 起動オプションの結果にオフラインの欄（`--offline-dump` があれば値の有無に関わらず在る・8 つの生の文字列・空の値は値なし）を足し、表の `offline-dump` を効く行に、`dump-*` の 7 つを値の欄に、`dump-surface-option`・`dump-animation` を「まだ扱わない」に替える。ほかの `dump-` の名前は今までどおり扱わない名前
   - `--offline-dump` があるときに値の無い `dump-*` の 7 つは値なしの記録（`[cli]`・warn）を出す。`--offline-dump` の値なしは記録しない
   - 今の `parse_tests.rs` の `offline-dump` を扱わない名前とする期待を直し、新しい `parse_offline_tests.rs` に値の有無・7 つの値と `=` の形・空の値・重なり・`--dump-scope -1`・相対パスを生のまま運ぶこと・`--help` と一緒のとき両方が立つことの分岐を書く
@@ -271,3 +271,4 @@
 - 4.2: surface-compare の行の形は `same|size-differs|pixels-differ|only-in-ssp|only-in-areka|unreadable <名前> ...` とまとめ `total=.. ...`。フォルダが読めないときの行はどちらのフォルダかを言わない（要件の外・直すなら `compare_dirs` の `list_pngs` の `?` を `map_err` で側と道筋つきに）
 - 5.2: 共有の検体 `crates/areka/src/scope_bind_fixture_test_support.rs`（`scope_bind_ghost()`）の `write_solid_png` は MCP の非公開の `fn png` の一時の写し＝6.1 で `png_image.rs` へ移したら移した関数を呼ぶ形に替え、shortcut の注記を消す
 - 6.2: 写しの層（`CaptureLayer`）そのものは単体試験で通していない（受け口を差し替えられないため）＝10.1 の exe の試験で CSV の中身として確かめる。`capture_begin`／`capture_finish` の `#[allow(dead_code)]` は呼び手の 7.7 で外す。log クレート経由の記録は本文に `log.*` の欄も入る（履歴と同じ）
+- 6.4: `--dump-scope -1` は `-1` を名前として読む（Unknown・dump-scope は MissingValue＝design どおり）。6.5 で直す試験: `dump_pending_and_other_dump_names` と `empty_dump_value_is_missing` の末尾の `--dump-scope` の場合（今は記録なしを期待）。`--offline-dump` なしの `--dump-scope 1` が要約の `effective` に載る件も 6.5 で見る。`StartupOptions.offline` の `#[allow(dead_code)]` は 7.7／8 で外す
