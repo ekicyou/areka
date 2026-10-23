@@ -596,11 +596,24 @@ fn with_adjacency_marks(
         .flat_map(|k| [k, k + 1])
         .filter(|&n| n >= 1)
         .collect();
-    if touched.is_empty() {
-        return entries;
+    push_adjacency_marks(world, &mut entries, touched);
+    entries
+}
+
+/// 組 (n−1, n) ごとに書く時点の画面の並びから印を決め、スコープ n の鍵で束の後ろへ足し、
+/// 足した印を返す（[`with_adjacency_marks`] と古い記憶の書き足しが共有する唯一の決め方）。
+/// 決め方と飛ばし方は [`with_adjacency_marks`] の説明のとおり。
+fn push_adjacency_marks(
+    world: &World,
+    entries: &mut Vec<(PersistKey, String)>,
+    pairs: BTreeSet<usize>,
+) -> Vec<(usize, AdjacencyMark)> {
+    let mut added = Vec::new();
+    if pairs.is_empty() {
+        return added;
     }
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
-        return entries;
+        return added;
     };
     let in_set: BTreeSet<usize> = ghost_windows.scopes().collect();
     let rects = snapshot_char_rects(world);
@@ -608,8 +621,8 @@ fn with_adjacency_marks(
         rects.iter().find(|(s, _)| *s == scope).map(|(_, r)| *r)
     };
     let ledger = world.get_resource::<StickyGroupLedger>();
-    for n in touched {
-        if !in_set.contains(&(n - 1)) || !in_set.contains(&n) {
+    for n in pairs {
+        if n == 0 || !in_set.contains(&(n - 1)) || !in_set.contains(&n) {
             continue;
         }
         if entries
@@ -634,8 +647,9 @@ fn with_adjacency_marks(
             AdjacencyMark::from_adjacency(judge_adjacency(prev, cur))
         };
         entries.push(adjacency_entry(n as u32, mark));
+        added.push((n, mark));
     }
-    entries
+    added
 }
 
 /// 並べ終えた時点の保存（areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・
@@ -683,8 +697,13 @@ pub fn persist_unremembered_char_positions(world: &World) {
     };
 
     let mut entries = Vec::new();
+    // 記憶から戻したスコープ 1 以上で覚えた印が無いもの＝印の無い古い記憶（dpi-realign-remembered-chain 6.5）。
+    let mut unmarked = BTreeSet::new();
     for scope in ghost_windows.scopes() {
         let Some(default_pos) = ghost_windows.default_char_pos(scope) else {
+            if scope >= 1 && ghost_windows.remembered_adjacency(scope).is_none() {
+                unmarked.insert(scope);
+            }
             info!(
                 target: "areka::persist::save",
                 scope,
@@ -755,6 +774,15 @@ pub fn persist_unremembered_char_positions(world: &World) {
             "並べ終えた時点の保存: 書いた"
         );
         entries.extend(char_pos_entries(scope as u32, saved));
+    }
+    // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
+    for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked) {
+        info!(
+            target: "areka::persist::save",
+            scope,
+            mark = %mark.as_str(),
+            "並べ終えた時点の保存: 古い記憶に隣り合いの印だけを書き足した"
+        );
     }
     if !entries.is_empty() {
         persist_entries(world, entries);

@@ -21,9 +21,10 @@ use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 
 use crate::app_exit::close_windows_for_restart;
+use crate::placement::chain_finalize::AdjacencyMark;
 use crate::placement::chain_finalize::ChainFinalized;
 use crate::placement::follow::move_window_to;
-use crate::placement::persist::{char_pos_entries, persist_entries};
+use crate::placement::persist::{adjacency_entry, char_pos_entries, persist_entries};
 use crate::placement::resolver::{PointPx, RectPx};
 
 /// 書き手が送られた分を書き終えるのを待ってから、記憶のファイルの中身をそのまま読む。
@@ -71,8 +72,10 @@ fn boot_remembered(
     let gw = spawn_shown(world, &placements, &not_shown);
     {
         let mut ghost_windows = world.resource_mut::<GhostWindows>();
-        for scope in restored.keys() {
-            assert!(ghost_windows.clear_default_char_pos(*scope));
+        // 本番の起動（ghost_session）と同じく既定位置を外し覚えた印を据える。
+        for (&scope, &mark) in &restored {
+            assert!(ghost_windows.clear_default_char_pos(scope));
+            ghost_windows.set_remembered_adjacency(scope, mark);
         }
     }
     resnap_with(&shown_sizes(), world);
@@ -233,6 +236,8 @@ fn offscreen_saved_position_survives_finalize_while_shown_pulled_in() {
         store.wire(&mut seed);
         let mut entries = char_pos_entries(0, offscreen);
         entries.extend(char_pos_entries(1, inside));
+        // 印のある記憶（印の無い古い記憶は印だけ書き足される・dpi-realign-remembered-chain 6.5）。
+        entries.push(adjacency_entry(1, AdjacencyMark::Separate));
         persist_entries(&seed, entries);
     }
     assert_positions_saved(&store);

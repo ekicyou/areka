@@ -31,6 +31,7 @@ use super::{
     PersistWiring, balloon_offset_entries, char_pos_entries, persist_entries,
     persist_unremembered_char_positions,
 };
+use crate::placement::chain_finalize::AdjacencyMark;
 use crate::placement::follow::{Anchored, OffsetBase, on_char_drag_end};
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
@@ -465,5 +466,63 @@ fn writes_in_descript_form_even_when_current_anchor_is_free() {
     let after = rig.load();
 
     assert_eq!(window_pos(&after, 1), Some(expected_saved(1)));
+    rig.finish();
+}
+
+/// テスト（dpi-realign-remembered-chain 6.5・8.6 ⑸）: 印の無い古い記憶のスコープ 1 には、位置を
+/// 書かずに画面の並びから決めた印だけが書き足され、`info!` が残る。覚えた印のあるスコープ 2 と
+/// スコープ 0（前の窓が無い）には書き足さない。種は印を連れてこないよう送り口へ直接入れる。
+#[test]
+fn old_memory_gets_only_the_adjacency_mark_added() {
+    let mut rig = Rig::new(true);
+    let mut seed = seed_entries();
+    for scope in [1, 2] {
+        seed.extend(char_pos_entries(scope, SENTINEL_POS));
+    }
+    rig.parts.publisher.persist_put(PersistScope::Ghost, seed);
+    let before = rig.load();
+    assert!(
+        !before
+            .keys()
+            .any(|k| matches!(k, PersistKey::WindowAdjacent { .. })),
+        "種は印の無い古い記憶: {before:?}"
+    );
+    for scope in [0, 1, 2] {
+        rig.mark_remembered(scope);
+    }
+    assert!(
+        rig.world
+            .resource_mut::<GhostWindows>()
+            .set_remembered_adjacency(2, Some(AdjacencyMark::Separate))
+    );
+    // スコープ 1 の右端をスコープ 0 の左端（1483）へ付ける＝左に隣り合う。
+    let entity = rig.char_window(1);
+    rig.world
+        .get_mut::<WindowPos>(entity)
+        .unwrap()
+        .position
+        .as_mut()
+        .unwrap()
+        .x = 1483 - 381;
+
+    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let mut after = rig.load();
+
+    assert_eq!(
+        after
+            .remove(&PersistKey::WindowAdjacent { scope: 1 })
+            .as_deref(),
+        Some("left"),
+        "印だけが書き足される"
+    );
+    assert_eq!(after, before, "印のほか（位置を含む）は前後で同じ");
+    let infos = find(&events, "古い記憶に隣り合いの印だけを書き足した", 1);
+    assert_eq!(infos.len(), 1, "書き足しの info が 1 行: {events:?}");
+    assert_eq!(infos[0].level, tracing::Level::INFO);
+    assert_eq!(infos[0].field("mark"), Some("left"));
+    assert!(
+        find(&events, "古い記憶に隣り合いの印だけを書き足した", 2).is_empty(),
+        "覚えた印のあるスコープには書き足さない"
+    );
     rig.finish();
 }
