@@ -236,7 +236,10 @@ fn reset_balloon_position_caption_is_looked_up_from_the_ghost() {
         let ShioriCall::Get { id, .. } = call else {
             panic!("リソース照会は GET");
         };
-        let _ = reply.send(ShioriOutcome::Value("吹き出しを戻す".into()));
+        let _ = reply.send(ShioriOutcome::Value(
+            "吹き出しを戻す".into(),
+            areka_talk::SecurityLevel::Local,
+        ));
         id.as_str().to_string()
     });
     let (reply_tx, reply_rx) = reply_channel();
