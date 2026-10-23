@@ -50,6 +50,9 @@ pub enum PositionCue {
     ResetSticky,
     /// `\![execute,resetballoonpos]`——すべてのバルーンを標準の位置へ戻す（要件 7.1）。
     ResetBalloonPos,
+    /// `\![lock,balloonmove]`（`locked: true`）／`\![unlock,balloonmove]`（`false`）——実行者のスコープの
+    /// バルーンを利用者のドラッグで動かさない指定を当てる・解く（`placement::balloon_lock`・要件 5.1・5.2）。
+    BalloonMoveLock { scope: u32, locked: bool },
 }
 
 /// `\![move]` の 1 件の意味（design.md「MoveArgs」）。
@@ -281,6 +284,16 @@ impl dola::cue::CueSink for MoveCueSink {
                 }
                 return;
             }
+            // 動かせない指定は実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。
+            (cmd @ ("lock" | "unlock"), Some("balloonmove")) => {
+                if let Some(scope) = actor_scope(&cue, &format!("{cmd},balloonmove")) {
+                    self.send(PositionCue::BalloonMoveLock {
+                        scope,
+                        locked: cmd == "lock",
+                    });
+                }
+                return;
+            }
             _ => {}
         }
         if name != "move" {
@@ -352,3 +365,7 @@ mod apply_move_sticky_tests;
 #[cfg(test)]
 #[path = "move_cue_move_severity_log_tests.rs"]
 mod move_severity_log_tests;
+
+#[cfg(test)]
+#[path = "move_cue_balloon_lock_tests.rs"]
+mod balloon_lock_tests;
