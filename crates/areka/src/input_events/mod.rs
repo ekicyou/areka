@@ -17,6 +17,7 @@ pub(crate) mod shell_box_handler;
 pub(crate) mod shortcut;
 pub(crate) mod throttle;
 pub(crate) mod user_break;
+mod wheel;
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;

@@ -53,7 +53,7 @@
   - _Boundary: HoverRegion_
   - _Depends: 2.1_
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.8, 7.11, 7.12, 7.13, 11.3_
-- [ ] 3.2 (P) 窓ごとのホイールの溜めと、100 ミリ秒の間引きの純関数を作る
+- [x] 3.2 (P) 窓ごとのホイールの溜めと、100 ミリ秒の間引きの純関数を作る
   - 回転を飽和加算で足し（位置と当たり判定は最後の回転で上書き）、前の送出から 100 ミリ秒以上経っていれば吐き出す。和が 0 なら送らずに溜めを空にし、前の送出の時刻は変えない。期限前なら期限（前の送出＋100 ミリ秒ちょうど）を返す
   - 注入の時計で、静かな所の最初の回転はすぐ送る・間隔の中は足し合わせて期限を返す・期限ちょうどで吐き出し 99 ミリ秒では吐き出さない・和 0・最後の回転の位置、のテストが新しい兄弟のテストファイルで通る
   - 入力の層の `mod.rs` に足すのは自分のモジュールの宣言 1 行だけ（3.1 と同じファイルの別の行に当たる重なりは受け入れる）
@@ -123,3 +123,4 @@
 - 2.3: `ClickChain` に `cfg_attr(not(test), expect(dead_code))` の足場がある。2.4 で `on_click_reply` が欄を読み始めたら外す（外さないと unfulfilled_lint_expectations）。記録の欄のイベント名は `event` と重なるので `id` にしてある（`balloon_event_sent` と同じ形）。
 - 2.4: kanade 側の `mouse_click_not_sent`（second_of_double）の `button` は 1 段目の Ref5 の値（"0"／"1"／"middle"／"xbutton1"／"xbutton2"）。3.4 で入力の層の `mouse_click_not_sent` の `button` を書くときは同じ書き方にそろえる。応答の出所の照合はアンカーの腕にそろえて持たない。
 - 3.1: `input_events/hover_region.rs` はモジュール全体に `cfg_attr(not(test), expect(dead_code))` の足場がある。3.5 で結線したら外す。areka のクレートは lib を持たないので、単体のテストは `cargo test -p areka --bin areka <名前>` で回す。
+- 3.2: `input_events/wheel.rs` にも 3.1 と同じ dead_code の足場がある（3.5 で外す）。ホイールの間引きの幅は移動の間引きの定数を指さず、自分の 100（要件 6.3）。
