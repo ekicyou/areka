@@ -63,8 +63,8 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 1. When 2.x の要求の組み立てに着手する前に, the 本 spec の調べ shall SSP で「．さくら」を動かし、`ghost\master\ssp_shiori_log.txt` の操作前のバイト位置から後ろを読んで、上の表の測 1〜測 6 の答えを要求と応答のバイトのまま調べの記録（`research.md`）に書く。
 2. If 測 1 で、華和梨 7.4 が SSP からの SHIORI/3.0 の要求を受け付けていると分かったなら, the 本 spec の調べ shall 2.x の書き方の作業へ進まず、400 の原因の見立てと記録の抜き書きを開発者へ報告して扱いを仰ぐ。
 3. The 本 spec の調べ shall SSP の読み直し（reload）・ゴーストの切り替え・設定の変更を伴う操作を、1 回ごとに開発者の許しを得てから行い、測る前に窓の位置を控えて、測った後に戻す。ただし次の 1 回の測りの 5 つの操作は、2026-10-23 の要件の話し合いで開発者がまとめて許した（議題 1）: ⑴ `vendors/sample_ghost/dot_sakura.nar` を SSP に入れる ⑵ 「．さくら」の SHIORI の要求の記録を出す設定を入れる ⑶ 記録の大きさを控えて「．さくら」へ切り替え、1〜2 分待つ ⑷ `OnClose` を 1 回送る ⑸ 元のゴーストと窓の位置へ戻す。「．さくら」は測った後も SSP に残す。この 5 つに無い操作は、これまでどおり 1 回ごとに許しを得る。
-5. When 要件の話し合いが終わったとき, the 本 spec の調べ shall 設計に入る前に要件 1.1 の測りを済ませる。
 4. The 本 spec の調べ shall 組み替えの表の各行に、出どころ（ukadoc の URL と逐語の引用、または SSP の記録の抜き書き）を付ける。ukadoc に書かれていない行は「ukadoc に無い・SSP で測った」と明記する。
+5. When 要件の話し合いが終わったとき, the 本 spec の調べ shall 設計に入る前に要件 1.1 の測りを済ませる。
 
 ### Requirement 2: 相手の SHIORI の版を確かめて覚える
 **Objective:** As a ゴーストの利用者, I want areka が相手の SHIORI の版を確かめてから話しかけてほしい, so that 古いゴーストでも最初の挨拶から話してくれる
