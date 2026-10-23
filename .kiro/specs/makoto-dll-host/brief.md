@@ -51,7 +51,7 @@ Charset: <符号名>\r\n
 
 **多重 DLL 案（不採用）**: helper に DLL 選別子を足して 1 プロセスで複数 DLL を飼う。解決: プロセス数 1。未解決: 凍結 wire（`MsgTag`）の改変・helper の単一スロット設計の全面改修・SHIORI と MAKOTO の障害が同居する（片方のクラッシュで会話が止まる）。SAORI の「同 32bit プロセス同居」（COMPAT §5:87）は SHIORI が自分で `LoadLibrary` する話であり、ベースウェアが呼ぶ MAKOTO には当てはまらない。
 
-x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DLL は存在しない・MAKOTO は常に 32bit helper 経由）。arm64 ホストでも helper は i686（SHIORI と同じ）。
+x64 in-proc（SHIORI4。2026-10-23 に COM の `IShiori` から C ABI の `ekicyou/shiori4` へ移った＝`shiori4-api`）の MAKOTO 版は作らない（そのような DLL は存在しない・MAKOTO は常に 32bit helper 経由）。arm64 ホストでも helper は i686（SHIORI と同じ）。
 
 ## Scope
 
