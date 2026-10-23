@@ -264,3 +264,9 @@
 - 要件定義のモデル: **Opus に改める**（2026-10-15 の線）。件 1 は原因の分からない落ちの切り分け（原因を探すことだけでは当たらない）、件 2 は今ある待ちの部品と steering の線にそろえる仕事（今ある仕組みに乗る）で、新しく並行の保証を決める所は今は見えない。件 1 の原因が「スレッドに縛られる資源の新しい決まり」を作る形と分かったときだけ、設計の段を Fable にする。
 - 分割の案: 上の条件つきの 1 つだけ（本文のまま）。
 - 見つけた穴・古くなった記述: 本文と棚卸㉓の節の `shell_balloon_switch_session_lap_tests.rs` と `shell_balloon_switch_session_abort_tests.rs` は `emo2_boot/` でなく `crates/areka/src/` の直下に在る。roadmap の「ウェーブの外」の行はこの spec を **Fable** と書く＝上の改めを採るなら直す。
+
+## 2026-10-23 追記: 負荷の下で止まった会話のテスト（`areka-P0-dot-sakura-specimen` の最終検証・完了時の棚卸）
+
+- `tools/test-all.ps1 -Format -License` の x64 の段で、`emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` だけが赤（3335 本緑・1 本赤）。打ち切りの文は `待ちの打ち切り［止まった］: 「起動の会話」— 相手が 30.0 秒のあいだ状態を進めなかった（待ち始めから 31.3 秒・それまでの進み 10 回）`（`crates/areka/src/emo2_boot/spine_third_scope_talk_tests.rs:141`）。
+- その 1 本だけを回し直すと 1.22 秒で緑。`dot-sakura-specimen` は `areka` のコードに触れていない＝負荷の下でだけ止まる会話の待ち。steering `tech.md` の「負荷の下で許す赤」に当たるか、止まる原因が足場の側にあるかは確かめていない。
+- 起票でなくここへ足した訳: 確かめるのに負荷つきの全体の走行を何度も回す要があり（完了の棚卸の例外の 4 つ目）、本 spec の件 2（テストの待ち）と同じ足場（`spine_wait.rs` の族）を触る見込み。
