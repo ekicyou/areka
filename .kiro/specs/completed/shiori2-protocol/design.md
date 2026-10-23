@@ -31,7 +31,7 @@
 - 決めた版を「接続（load から unload まで）」の持ち物として覚えること（`ShioriConnection` の欄）。
 - 3.0 のイベントから 2.x の要求への組み替えの表（コードの 1 か所と `doc/COMPAT_ARCHITECTURE.md` §8 の記録）。
 - 版の決定の INFO・決められないときの WARN・送らなかったイベントの DEBUG の記録。
-- 「．さくら」の実機の 1 回と、その記録（`.kiro/specs/shiori2-protocol/verification.md`）。
+- 「．さくら」の実機の 1 回と、その記録（`.kiro/specs/completed/shiori2-protocol/verification.md`）。
 - 32 ビットの経路で `load` に渡すフォルダのパスの形（要件 6.4・`shiori4-api` の決定 6 の helper の道の前倒し・2026-10-23 開発者承認）。`shiori_wiring.rs` の `real_connect` で helper を起こす前に整える。helper・`shiori_proxy.rs`・`resolve_shell.rs` の `GHOST_MASTER`（ほかの読み手も使う）は変えない。
 
 ### Out of Boundary
@@ -122,7 +122,7 @@ crates/areka-kanade/src/shiori/
 └── real_resource_mark_tests.rs     # 新: real.rs の兄弟のテスト（資源の印が GET の 2 つの手の中・資源の一覧の判定の後ろにだけあることの構造）
 crates/areka-ghost/src/
 └── shiori_wiring_version_tests.rs  # 新: shiori_wiring.rs の兄弟のテスト（版の記録の INFO/WARN・確かめが接続ごとに 1 回であることの構造）
-.kiro/specs/shiori2-protocol/
+.kiro/specs/completed/shiori2-protocol/
 └── verification.md            # 新: 「．さくら」の実機の 1 回の記録（要件 5.6）
 ```
 

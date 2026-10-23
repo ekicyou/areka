@@ -1,9 +1,9 @@
 {
   "feature_name": "shiori2-protocol",
   "created_at": "2026-10-23T10:32:56Z",
-  "updated_at": "2026-10-23T12:33:06Z",
+  "updated_at": "2026-10-23T21:40:35Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,7 +16,11 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-23T21:40:35Z"
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true
 }

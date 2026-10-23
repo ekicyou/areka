@@ -1,7 +1,7 @@
 # 設計の検証: shiori2-protocol
 
 - 検証日: 2026-10-23
-- 対象: `.kiro/specs/shiori2-protocol/design.md`（要件 `requirements.md`・調べ `research.md` 10 節〔SSP 2.9.23 の測り〕・11 節〔設計の決め〕）
+- 対象: `.kiro/specs/completed/shiori2-protocol/design.md`（要件 `requirements.md`・調べ `research.md` 10 節〔SSP 2.9.23 の測り〕・11 節〔設計の決め〕）
 - 照らした steering: `product.md`・`tech.md`・`structure.md`・`logging.md`・`roadmap.md`（C11 ⑧ の行と約束）
 - 進め方: `kiro-validate-design`（分析 → 大きな問題 → よい点 → 判定）。対話なしで判定まで出す。
 
