@@ -1,6 +1,7 @@
 //! キーボード・システムキャンセル・アクティベーションメッセージハンドラ
 //!
-//! WM_KEYDOWN, WM_CANCELMODE, WM_ACTIVATE の処理を担当する。
+//! WM_KEYDOWN, WM_SYSKEYDOWN, WM_CANCELMODE, WM_ACTIVATE の処理を担当する。
+//! キーの押下は窓に差された [`OnKeyDown`] の関数へ渡す（wintf はアプリの近道を知らない）。
 
 #![allow(non_snake_case)]
 
@@ -8,8 +9,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
+use tracing::{debug, warn};
 use windows::Win32::Foundation::*;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT};
 
+use super::lifecycle::DESPAWNED_SKIP_TAG;
+use crate::ecs::window::{KeyDown, OnKeyDown};
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
@@ -18,11 +23,11 @@ type HandlerResult = Option<LRESULT>;
 /// WM_KEYDOWN: キー押下
 #[inline]
 pub(super) fn WM_KEYDOWN(
-    _world: &Rc<RefCell<EcsWorld>>,
-    _entity: Entity,
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     _hwnd: HWND,
     wparam: WPARAM,
-    _lparam: LPARAM,
+    lparam: LPARAM,
 ) -> HandlerResult {
     use windows::Win32::UI::Input::KeyboardAndMouse::VK_ESCAPE;
 
@@ -35,7 +40,84 @@ pub(super) fn WM_KEYDOWN(
         tracing::debug!("[WM_KEYDOWN] ESC key pressed, drag cancelled");
     }
 
-    None // DefWindowProcWに委譲
+    // 取り消しの後で利用側へ知らせる（真なら消費、それ以外は DefWindowProcW に委譲）
+    deliver_key_down(
+        world,
+        entity,
+        key_down_from(wparam, lparam, read_modifiers()),
+    )
+}
+
+/// WM_SYSKEYDOWN: Alt との組み合わせや F10 の押下。WM_KEYDOWN と同じ受け渡しを通す
+/// （消費しなければ DefWindowProcW に委譲し、Alt+F4 やメニューの起動は今どおり）。
+#[inline]
+pub(super) fn WM_SYSKEYDOWN(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    _hwnd: HWND,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> HandlerResult {
+    deliver_key_down(
+        world,
+        entity,
+        key_down_from(wparam, lparam, read_modifiers()),
+    )
+}
+
+/// 押下を受けた時点の修飾キー（Ctrl, Shift, Alt）。窓の手続きの入口でだけ読む。
+fn read_modifiers() -> (bool, bool, bool) {
+    // 上位ビットが立っていれば押されている（戻り値が負）
+    let down = |vk: u16| unsafe { GetKeyState(vk as i32) } < 0;
+    (down(VK_CONTROL.0), down(VK_SHIFT.0), down(VK_MENU.0))
+}
+
+/// メッセージの引数と修飾キーから [`KeyDown`] を作る（OS を読まない）。
+pub(super) fn key_down_from(
+    wparam: WPARAM,
+    lparam: LPARAM,
+    (ctrl, shift, alt): (bool, bool, bool),
+) -> KeyDown {
+    KeyDown {
+        vk: wparam.0 as u16,
+        ctrl,
+        shift,
+        alt,
+        repeat: (lparam.0 >> 30) & 1 != 0,
+    }
+}
+
+/// キーの押下を、窓に差された [`OnKeyDown`] の関数へ World 借用中に渡す。
+///
+/// 分かれ道は `deliver_dropped_files` と同じ 4 つ: World が借用中 → `key_down_dropped` の
+/// `warn!` で渡さない／entity が破棄済み → [`DESPAWNED_SKIP_TAG`] の `debug!`／部品なし →
+/// 渡さない／在れば呼び、真なら消費して `Some(LRESULT(0))`。消費しないときは `None`
+/// （DefWindowProcW に委譲）。
+pub(super) fn deliver_key_down(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    key: KeyDown,
+) -> HandlerResult {
+    let Ok(mut w) = world.try_borrow_mut() else {
+        warn!(
+            event = "key_down_dropped",
+            entity = ?entity,
+            vk = key.vk,
+            reason = "world_busy",
+            "[WM_KEYDOWN] World が借用中でキーの受け手を呼べない → この押下は渡さない"
+        );
+        return None;
+    };
+    if w.world().get_entity(entity).is_err() {
+        debug!(
+            entity = ?entity,
+            vk = key.vk,
+            "{DESPAWNED_SKIP_TAG} WM_KEYDOWN: 対象 entity は既に破棄済み（despawn）→ 押下を正常系として打ち切り"
+        );
+        return None;
+    }
+    let cb = w.world().get::<OnKeyDown>(entity).copied()?;
+    (cb.0)(w.world_mut(), entity, key).then_some(LRESULT(0))
 }
 
 /// WM_CANCELMODE: システムキャンセル

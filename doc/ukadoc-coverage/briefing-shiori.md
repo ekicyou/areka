@@ -421,11 +421,15 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 
 - **対象**: リクエスト側の `Charset`（UTF-8 のみ）と `SecurityLevel`（`local` のみ）。
 - **件数**: 2
-- **状態**: `degraded`
+- **状態**: 2 件とも `implemented`。調査時点は 2 件とも `degraded`（値が 1 つに固定）で、`Charset` は
+  `areka-P0-charset-canon` が、`SecurityLevel` は 2026-10-23 に `areka-P0-script-security-level` が
+  出どころから `local`／`external` を選んで送るようにした（下の共通 `note` は調査時点の文面）。
 - **テーマ**: 空（`[]`）
 - **優先度**: `D2`（仮置き）
 - **判断の根拠の場所**: `crates/shiori-host32-host/src/shiori3.rs` の `build_request`。
-  `Charset` の担当は `areka-P0-charset-canon`。
+  `Charset` の担当は `areka-P0-charset-canon`。`SecurityLevel` の値は
+  `crates/areka-kanade/src/request_origin.rs` の `RequestOrigin` が決める（担当は
+  `areka-P0-script-security-level`）。
 - **共通 `note`**:
 
   ```
@@ -448,7 +452,10 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   `SecurityLevel`・`X-SSTP-PassThru-`、`ValueNotify`・`Marker`・`BalloonOffset`・`Reference0`・
   `Reference1〜`・`Age`・`MarkerSend`）。
 - **件数**: 15
-- **状態**: `absent`
+- **状態**: `absent`。ただし 2026-10-23 に `areka-P0-script-security-level` がリクエスト側の
+  `SenderType`・`SecurityOrigin` を送り、レスポンス側の `SecurityLevel` を読むようにした
+  （`SenderType` とレスポンス側の `SecurityLevel` は `implemented`、`SecurityOrigin` は常に `null` を
+  送る `degraded`）。この 3 行には下の共通 `note` は当たらず、各行の `note` を書き直した。
 - **テーマ**: 空（`[]`）
 - **優先度**: `D2`（仮置き）
 - **判断の根拠の場所**: `crates/shiori-host32-host/src/shiori3.rs` の `build_request` と
@@ -908,6 +915,8 @@ id は `ukadoc:list_shiori_resource:<名前>:1` の形。名前は次の 27 件�
 
 ### 群 10 — 固定値で送っているヘッダ 2 件
 
+> **2026-10-23 の追記——`SecurityLevel` はもう `local` 固定ではない。** 仕様 `areka-P0-script-security-level` が、送るイベントの出どころから `local`／`external` を選んで送るようにし、台帳の `ukadoc:spec_shiori3:SecurityLevel:1` を**実装済み**へ移して自分を担当として登記した（値を決めるのは `crates/areka-kanade/src/request_origin.rs` の `RequestOrigin`）。`external` を送る出どころ（SSTP の受信など）はまだ無いので、今実際に送られる値は `local` だけである。`Charset` は `areka-P0-charset-canon` が実装済みにした。本文は調査時点の写しのまま残した。
+
 **利用者に何が起きるか**
 
 Shift_JIS で書かれた既存ゴーストと噛み合わない。areka は文字コードの申告を UTF-8 の 1 値でしか
@@ -931,6 +940,8 @@ Shift_JIS で書かれた既存ゴーストと噛み合わない。areka は文�
 ---
 
 ### 群 11 — 送らない／読み飛ばすヘッダ 15 件
+
+> **2026-10-23 の追記——このうち 3 件はもう送る／読む。** 仕様 `areka-P0-script-security-level` が、リクエスト側の `SenderType`（出どころの語）と `SecurityOrigin`（今は常に `null`・値は SSTP の受信を作る spec が持つ）をどの要求にも送り、レスポンス側の `SecurityLevel` を読んで応答の台本の実効のレベルを下げる（上げない・読めない値は warn を残して無いものとする）ようにした。台帳の 3 行は `SenderType` とレスポンス側の `SecurityLevel` が**実装済み**、`SecurityOrigin` が**縮退**で、担当は同 spec。本文は調査時点の写しのまま残した。
 
 **利用者に何が起きるか**
 

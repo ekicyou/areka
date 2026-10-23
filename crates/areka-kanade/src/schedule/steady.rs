@@ -399,7 +399,7 @@ fn on_cascade_reply(
     };
 
     let outcome = match outcome {
-        ShioriOutcome::Value(script) => {
+        ShioriOutcome::Value(script, _) => {
             // Value 短絡（Req2.4）: 以降の段を発行せず、解決と新トーク起動を同一バッチへ。
             let new_talk_id = TalkId(state.next_talk_id);
             state.next_talk_id += 1;
@@ -621,7 +621,7 @@ fn on_timeout_reply(
 ) -> (State, Vec<Action>) {
     let talk_id = ledger.talk_id;
     let outcome = match outcome {
-        ShioriOutcome::Value(script) => {
+        ShioriOutcome::Value(script, _) => {
             // 置換起動（Req7.4）: 既存の起動経路（採番＋slot 上書き＋StartTalk）をそのまま使う。
             let new_talk_id = TalkId(state.next_talk_id);
             state.next_talk_id += 1;
@@ -784,7 +784,7 @@ fn on_reply(
     }
     match state.phase {
         Phase::Steady { talk: None } => match outcome {
-            ShioriOutcome::Value(script) => {
+            ShioriOutcome::Value(script, _) => {
                 let talk_id = TalkId(state.next_talk_id);
                 state.next_talk_id += 1;
                 tracing::info!(target: "kanade", event = "steady_talk", talk_id = talk_id.0, origin = origin, "応答にスクリプト——再生起動");
@@ -816,7 +816,7 @@ fn on_reply(
             }
             // 出所別の Value 政策（DD-IE-2）。置き換えるかの判断は述語
             // `events::value_replaces_active_talk` の 1 か所に置く（`OnSecondChange` 以外は置き換える）。
-            ShioriOutcome::Value(script) => match origin {
+            ShioriOutcome::Value(script, _) => match origin {
                 origin if events::value_replaces_active_talk(origin) => {
                     // 置換（Req 4.3・DD-IE-2）: マウス 2 語・汎用の入口の Value は active talk を差し替える。
                     // kanade 側は新 talk_id 採番＋slot 上書き＋StartTalk のみ。旧 talk の後始末

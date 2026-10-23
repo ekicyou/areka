@@ -85,6 +85,12 @@
 - **優先度の区分**: C（ukadoc の `currentghost.*` の拾い残し）。**要件定義のモデル**: Opus（口の形と scope の数え方は前の spec が決める）。
 - **見つけた穴・古くなった記述**: 上の「値の源が無い 10 行」。`get_property_tests.rs` の `currentghost.name` の期待は今もそのまま（着地のときに直す・今は直さない）。
 
+## どっとさくらで見えた事実（2026-10-23 `areka-P0-dot-sakura-specimen` の実機の 1 回）
+
+- MCP の `get_property` で、ゴースト・シェル・バルーンの名前（`currentghost.*`）がどれも `NG:Cannot find such property name.` だった。答えたのは `baseware.name`=`areka` だけ。ゴーストの名前は `get_active_ghost_list`（`．さくら`）で取れた。
+- 名前の項目は本 spec の `currentghost.汎用` に入る（`currentghost-property-tree` の 19 項目ではない）。開発者（2026-10-23）が持ち主を本 spec と決めた。版の段は今のまま（roadmap は触らない）。
+- 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 4 節と 8 節の件 6。
+
 ## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
 
 - `currentghost.scope(ID).rect` を v0.1.0 の新しい spec `areka-P0-mcp-scope-rect-property` へ、`currentghost.scope(ID).scaling`・`currentghost.scope(ID).currentmonitor.dpi` を v0.1.0 の新しい spec `areka-P0-shell-scale-linkage` へ移した（`verification.md` 5 節の 20・ぱすたの `dic/tategaki.pasta:53`）。動く値の口の持ち主は `mcp-scope-rect-property` になった。

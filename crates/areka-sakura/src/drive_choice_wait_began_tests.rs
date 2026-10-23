@@ -1,6 +1,6 @@
 use super::test_support::NEG_WINDOW;
 use super::*;
-use crate::contract::{CueCommand, TalkCue, TalkId};
+use crate::contract::{CueCommand, ScriptOrigin, TalkCue, TalkId};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
@@ -63,6 +63,7 @@ fn spawn(script: &str, talk_id: u64) -> (TalkHandle, mpsc::Receiver<Event>) {
             epilogue: Vec::new(),
             script: script.to_string(),
             talk_id: TalkId(talk_id),
+            origin: ScriptOrigin::GHOST,
         },
         tx.clone(),
         vec![Box::new(EventSink { tx })],

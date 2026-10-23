@@ -305,6 +305,51 @@ fn a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime() {
     assert_eq!(named(&events, "reload_failed"), 0, "{events:?}");
 }
 
+/// shiori の読み直しは窓の組の帳簿と吸着の出どころを残す（areka-P0-window-link-directives 要件 6.3）:
+/// 台本の組の入った帳簿と、台本で向きを変えた印の付いた `AnchorSource` が、読み直しの後も同じ値のまま。
+///
+/// # 非空虚性
+/// 読み直しが `close_windows_for_restart` を通ると帳簿が外れて赤。
+#[test]
+fn a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source() {
+    use crate::placement::follow::AnchorSource;
+    use crate::placement::resolver::Anchor;
+    use crate::placement::sticky_group_ledger::{
+        StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
+    };
+
+    let mut rig = running_a_with(vec![("A", a_shiori_script())]);
+    seed_sticky_descript(&mut rig.world, None);
+    assert!(apply_set_sticky(
+        &mut rig.world,
+        &["0".to_owned(), "1".to_owned()]
+    ));
+    let ledger = rig.world.resource::<StickyGroupLedger>().clone();
+    let source = AnchorSource {
+        descript: Anchor::Bottom,
+        by_script: true,
+    };
+    let window = rig.world.spawn(source).id();
+
+    let (flow, events) = capture(|| {
+        let verdict = reload_shiori(&mut rig);
+        (verdict, rig.pump_talking_until(a_rebooted))
+    });
+    let ledger_after = rig.world.get_resource::<StickyGroupLedger>().cloned();
+    let source_after = rig.world.get::<AnchorSource>(window).copied();
+    assert!(
+        rig.shutdown(),
+        "残った単位を降ろせる（seriko の join が戻る）"
+    );
+
+    assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
+    assert_eq!(
+        (ledger_after, source_after),
+        (Some(ledger), Some(source)),
+        "shiori の読み直しで帳簿か吸着の出どころが変わった: {events:?}"
+    );
+}
+
 /// 組み直しの失敗（要件 4.4）: 新しい SHIORI を起こせなければ既定のゴーストへ戻り、印は
 /// `reload_failed(fell_back_to_default)` を残して下りる。
 ///

@@ -207,3 +207,10 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
   - 棚卸㉕の `tools/package.ps1` の行番号（466・495・503・564）はずれた（今は 467・496・504・570）。`boot_resolve.rs` の段 6 の行（棚卸㉗の 291〜292 行）も今は 325〜326 行。
   - 棚卸㉗の「`sample-url-fetch` との間はファイルの順」は解けた（あちらは着地済み）。
   - `ghost-inner-balloon` が名前で探す段を `resolve_balloon` に足すと、段 6 の前の並びが変わる＝差し替えのタスクの前に main を取り込み、既定の名前を期待するテストを読み直す（変わらず）。
+
+## どっとさくらで見えた事実（2026-10-23 `areka-P0-dot-sakura-specimen` の実機の 1 回）
+
+- どっとさくらの同梱バルーン `bottle` の `descript.txt` は `validrect.left,0`・`validrect.right,0`・`validrect.bottom,-20`。areka は負の値を反対の辺からの距離と読み、0 は左端の 0 と読む（`crates/areka-emo-text/src/region.rs`）。`bottom,-20` は 149 に解けたが、`right,0` は 0 のままで、文字の描画範囲が幅 0 に潰れた（`left=0.0 top=0.0 right=0.0 bottom=149.0 image_size=(326.0, 169.0)`）。続けて「origin が validrect の外」「折返し基準が描画範囲の外」の WARN も 1 人目と 2 人目で 1 回ずつ出た。
+- この spec は `bottle` の `validrect` をそのまま引き継ぐ＝同じ読みのままだと、作るバルーンでも文字が描かれない。正典で `validrect.right,0` が右端を指すか（ukadoc の `validrect.right` の既定は「不明」）は確かめていない。要件の段で SSP の MCP で測ってから決める（記憶「ukadoc で読めない点は議題の前に SSP の MCP で測る」）。正典の読みが areka と同じなら、引き継ぐ値の側を直す。
+- 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 3。
+- 開発者（2026-10-23）: 「次のリリースまでに治るように」。この spec はもとから v0.1.0。

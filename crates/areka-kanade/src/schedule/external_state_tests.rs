@@ -265,7 +265,10 @@ fn every_boot_stage_request_carries_online_and_balloons_from_the_copy() {
         vec![
             Input::Boot,
             reply(Notified),
-            reply(Value("名無し".to_string())),
+            reply(Value(
+                "名無し".to_string(),
+                areka_talk::SecurityLevel::Local,
+            )),
             reply(NoContent),
             reply(NoContent),
         ],
@@ -291,7 +294,10 @@ fn every_boot_stage_request_carries_online_and_balloons_from_the_copy() {
             Input::Boot,
             reply(Notified),
             reply(NoContent),
-            reply(Value(r"\0やあ\e".to_string())),
+            reply(Value(
+                r"\0やあ\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            )),
         ],
         &plain,
     );
@@ -545,7 +551,7 @@ fn farewell_reply(label: &str, requests: &[&str]) -> (State, Vec<Action>) {
         let outcome = if i + 1 < requests.len() {
             crate::msg::ShioriOutcome::NoContent
         } else {
-            crate::msg::ShioriOutcome::Value(FAREWELL.to_string())
+            crate::msg::ShioriOutcome::Value(FAREWELL.to_string(), areka_talk::SecurityLevel::Local)
         };
         next = step(state, reply(outcome), &config());
     }

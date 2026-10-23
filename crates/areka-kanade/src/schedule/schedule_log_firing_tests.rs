@@ -231,7 +231,10 @@ fn warn_boot_unexpected_reply_logs() {
     let ev = run_step(
         Phase::BootInit,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("unexpected".to_string()),
+            outcome: ShioriOutcome::Value(
+                "unexpected".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "test",
         },
     );
@@ -269,7 +272,7 @@ fn warn_steady_value_during_talk_logs() {
     let ev = run_step(
         steady_with_talk(TalkId(5)),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("late".to_string()),
+            outcome: ShioriOutcome::Value("late".to_string(), areka_talk::SecurityLevel::Local),
             origin: "OnSecondChange",
         },
     );

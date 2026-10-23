@@ -10,6 +10,7 @@
 // 5.4・7.3）。
 
 use super::*;
+use areka_ghost::sink::BootCueSink;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
@@ -169,7 +170,7 @@ fn non_carrier_cue_is_benign_skip() {
 fn talk_started_is_sent_once_per_clone_and_comes_first() {
     let (registered, rx) = sink();
 
-    let mut first = registered.clone();
+    let mut first = registered.clone_box();
     first.emit(carrier_cue("enter", &["nouserbreakmode"]));
     first.emit(carrier_cue("leave", &["nouserbreakmode"]));
     assert_eq!(
@@ -182,7 +183,7 @@ fn talk_started_is_sent_once_per_clone_and_comes_first() {
         "1 つ目の複製: TalkStarted は先頭に 1 回だけ"
     );
 
-    let mut second = registered.clone();
+    let mut second = registered.clone_box();
     second.emit(carrier_cue("enter", &["nouserbreakmode"]));
     assert_eq!(
         drain(&rx),
@@ -192,7 +193,7 @@ fn talk_started_is_sent_once_per_clone_and_comes_first() {
 
     // 既に指示を配った受け口から複製しても境界は戻る（登録した受け口が配られないという
     // 上流の前提に頼らない）。
-    let mut third = first.clone();
+    let mut third = first.clone_box();
     third.emit(carrier_cue("leave", &["nouserbreakmode"]));
     assert_eq!(
         drain(&rx),
@@ -241,7 +242,7 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
 #[test]
 fn dropping_a_clone_that_sent_delivers_talk_ended() {
     let (registered, rx) = sink();
-    let mut talk = registered.clone();
+    let mut talk = registered.clone_box();
     talk.emit(carrier_cue("enter", &["nouserbreakmode"]));
     drop(talk);
     assert_eq!(
@@ -259,7 +260,7 @@ fn dropping_a_clone_that_sent_delivers_talk_ended() {
 #[test]
 fn dropping_a_sink_that_never_sent_delivers_nothing() {
     let (registered, rx) = sink();
-    drop(registered.clone());
+    drop(registered.clone_box());
     drop(registered);
     assert_eq!(
         drain(&rx),

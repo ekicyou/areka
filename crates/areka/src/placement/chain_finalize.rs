@@ -20,8 +20,10 @@
 //! - **先頭スコープは動かさない**（連鎖の起点・接地点は不変・7.2）。
 //! - **Y は扱わない**（下端吸着は各窓の再アンカーが既に保っている・7.2）。
 //! - **明示的に再配置されたスコープは対象外**（7.3）。判定は「現在位置が既定位置と一致するか」
-//!   で行う——ゴースト台本の移動指令や利用者のドラッグで動いた窓は一致しなくなるため、移動側へ
-//!   フックを足さずに除外できる。除外したスコープの**実位置**は以後の連鎖の基準
+//!   で行う——利用者のドラッグで動いた窓は一致しなくなるため除外できる。ゴースト台本の
+//!   `\![move]` が置いた窓（連れ動いた組の相手を含む）は、x が既定のまま（縦にだけ動いた・
+//!   ちょうど既定へ置いた）でも一致してしまうので、移動側が印 [`ScriptPlaced`] を付け、起動時の
+//!   確定はその窓の既定を `None` にして除外する。除外したスコープの**実位置**は以後の連鎖の基準
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
 //!   既定位置は起動時に固定されるのではなく、**システム由来の再アンカー**で書込先へ追随する
 //!   （`areka-P0-dpi-transition-atomicity` D9／D16・要件 6.2）——拡大率の遷移で全スコープの
@@ -39,7 +41,7 @@
 
 use std::fmt;
 
-use bevy_ecs::prelude::Resource;
+use bevy_ecs::prelude::{Component, Resource};
 
 use super::resolver::PointPx;
 
@@ -54,6 +56,15 @@ use super::resolver::PointPx;
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChainFinalized;
 
+/// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む・7.3）。
+///
+/// 読むのは起動時の確定（`emo2_boot::frame` の `finalize_chain_once_with`）と並べ終えた時点の保存
+/// （`persist::persist_unremembered_char_positions`）で、印の付いた窓は引き戻さず、記憶にも書かない。
+/// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
+/// 戻した窓からも外す。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ScriptPlaced;
+
 /// 連鎖再解決の入力（スコープ 1 件ぶん・物理 px）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeChainState {
@@ -61,8 +72,6 @@ pub struct ScopeChainState {
     pub scope: usize,
     /// 現在のキャラ窓左上 X（再アンカー後の実位置）。
     pub current_x: i32,
-    /// 現在のキャラ窓左上 Y（「既定配置のまま」の判定にだけ使う・連鎖は Y を動かさない・7.2）。
-    pub current_y: i32,
     /// 現在のキャラ窓幅（実表示サーフェスの物理寸）。
     pub width: i32,
     /// 既定キャラ位置 X（未接触判定の基準）。
@@ -76,11 +85,6 @@ pub struct ScopeChainState {
     /// **`None` は「そもそも既定配置ではない」**（保存位置が復元されたスコープ）。
     /// この場合は現在位置に関わらず**常に対象外**とする（scg 7.3）。
     pub default_x: Option<i32>,
-    /// 既定キャラ位置 Y（`default_x` と同じ台帳の値・`None` も同時に立つ）。
-    ///
-    /// 縦にだけ動かされた窓（台本の `\![move]` 等）を「既定配置のまま」と読まないために x と
-    /// 並べて比べる（areka-P0-pasta-in-windows-verification 崩れの表 6）。
-    pub default_y: Option<i32>,
 }
 
 /// 連鎖再解決の結果（動かすべきスコープと新しい左上 X）。
@@ -104,10 +108,9 @@ pub struct ChainMove {
 ///
 /// 1. 幅が非正（`width <= 0`）なら**動かさない**。実位置を次の基準にする（表示未確立などの
 ///    縮退入力で暴走した座標を作らない・`resize_window_to` の非正寸ガードと同じ考え方）。
-/// 2. 既定位置と現在位置が x・y の**どちらかで**違う＝**既定配置のままではない**なら動かさない。
-///    実位置を次の基準にする。これは 2 通りを畳んだもの——`Some(d)` かつ `d` が現在位置と違う
-///    （台本の移動指令や利用者のドラッグで動かされた。縦にだけの移動も含む）と、`None`
-///    （そもそも既定配置ではない＝保存位置の復元）。
+/// 2. `default_x != Some(current_x)`＝**既定配置のままではない**なら動かさない。実位置を次の
+///    基準にする。これは 2 通りを畳んだもの——`Some(d)` かつ `d != current_x`（台本の移動指令や
+///    利用者のドラッグで動かされた）と、`None`（そもそも既定配置ではない＝保存位置の復元）。
 /// 3. それ以外は `new_x = 前スコープの結果 X − 自スコープの幅`。`current_x` と異なるときだけ
 ///    [`ChainMove`] を積み、いずれにせよ `new_x` を次の基準にする。
 ///
@@ -126,12 +129,9 @@ pub fn finalize_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
             // 先頭スコープ＝連鎖の起点。実位置をそのまま基準にする（動かさない・7.2）。
             None => s.current_x,
             Some(base_x) => {
-                if s.width <= 0
-                    || s.default_x != Some(s.current_x)
-                    || s.default_y != Some(s.current_y)
-                {
-                    // 動かさない 3 通り——非正寸（縮退入力）／既定配置から x か y のどちらかで
-                    // 動かされている（縦にだけの移動も明示の位置・崩れの表 6）／そもそも既定配置ではない
+                if s.width <= 0 || s.default_x != Some(s.current_x) {
+                    // 動かさない 3 通り——非正寸（縮退入力）／既定配置から動かされている
+                    // （`Some(d)` かつ `d != current_x`）／そもそも既定配置ではない
                     // （`None`＝保存位置の復元）。いずれも 7.3 の「明示された位置へ
                     // 引き戻さない」に属し、その実位置を以後の連鎖基準にする
                     // （実配置基準の原則・2.7 と同型）。
@@ -157,7 +157,7 @@ pub fn finalize_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
 /// 再解決後の既定位置（[`ChainMove`] を反映した [`PointPx`]）を組む補助。
 ///
 /// Y は再解決の対象外ゆえ呼び手が渡した位置の Y をそのまま載せる（7.2）。起動時の確定は
-/// 元の既定位置を渡す（動かすスコープは Y も既定のままなので、今の Y と同じ値になる）。
+/// 元の既定位置を渡す（台本が縦に動かした Y を既定へ入れない・char-position-save-on-exit 要件 1.7）。
 pub fn moved_default_pos(current: PointPx, new_x: i32) -> PointPx {
     PointPx {
         x: new_x,

@@ -10,6 +10,13 @@
 //! - 1.7: 変換アダプタによる二重定義を作らず、物理的に単一の型定義として実現する。
 //! - 5.1 / 5.6: 選択待ちバリアの解決指示を[`TalkCommand`]（再生層の正規入力経路）で運ぶ。
 //! - 7.1: 選択待ち成立の事実と表示完了時刻を[`ChoiceWaiting`]で再生層から返す。
+//!
+//! 台本とイベントの出どころの語彙（[`ScriptOrigin`] ほか）も依存ゼロのここに置く
+//! （areka-P0-script-security-level 1.8, 2.7, 3.2, 3.3）。
+
+mod origin;
+
+pub use origin::{ScriptOrigin, SecurityLevel, SenderHead, SenderType, SenderWord, SstpKind};
 
 /// talk の一意識別子（kanade が単調増番で採番・再利用しない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,20 +36,25 @@ pub struct EpilogueCommand {
 /// `epilogue` は compile 後の CueSheet 末尾（最終 offset・duration 0）へ carrier cue として
 /// 付加される汎用コマンド列。既定は空（従来挙動）。空でない場合のみ末尾へ付く。
 /// スクリプト文字列末尾への追記ではないため、`\e` による End 切詰めでも脱落しない。
+///
+/// `origin` は台本 1 つの出どころと実効のレベル。kanade が送った後は誰も書き換えず、
+/// 再生の層は運ぶだけで解釈しない（areka-P0-script-security-level 1.4）。
 #[derive(Debug, Clone)]
 pub struct StartTalk {
     pub talk_id: TalkId,
     pub script: String,
     pub epilogue: Vec<EpilogueCommand>,
+    pub origin: ScriptOrigin,
 }
 
 impl StartTalk {
-    /// epilogue なしの従来形コンストラクタ（構築点の機械的追随を最小化）。
+    /// epilogue なし・出どころはゴースト自身の従来形コンストラクタ（構築点の機械的追随を最小化）。
     pub fn new(talk_id: TalkId, script: impl Into<String>) -> Self {
         Self {
             talk_id,
             script: script.into(),
             epilogue: Vec::new(),
+            origin: ScriptOrigin::GHOST,
         }
     }
 }

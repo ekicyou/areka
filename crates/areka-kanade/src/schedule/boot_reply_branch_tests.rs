@@ -123,7 +123,7 @@ fn prefetch_maps_outcomes_to_resource_outcome() {
     let (_, actions) = step(
         drive_to_prefetch(&cfg),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value("bob".to_string()),
+            outcome: ShioriOutcome::Value("bob".to_string(), areka_talk::SecurityLevel::Local),
             origin: "test",
         },
         &cfg,
@@ -205,7 +205,10 @@ fn prefetch_value_does_not_produce_a_talk() {
     let (_, actions) = step(
         drive_to_prefetch(&cfg),
         Input::ShioriReply {
-            outcome: ShioriOutcome::Value(r"\0greeting\e".to_string()),
+            outcome: ShioriOutcome::Value(
+                r"\0greeting\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
             origin: "test",
         },
         &cfg,
@@ -223,7 +226,10 @@ fn prefetch_emits_fixed_completion_log_exactly_once() {
     use crate::schedule::log_capture::{assert_resource_prefetch_logged_once, capture};
 
     let cases: [(ShioriOutcome, &str); 3] = [
-        (ShioriOutcome::Value("bob".to_string()), "value"),
+        (
+            ShioriOutcome::Value("bob".to_string(), areka_talk::SecurityLevel::Local),
+            "value",
+        ),
         (ShioriOutcome::NoContent, "no_content"),
         (
             ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
@@ -425,7 +431,14 @@ fn boot_greeting_talk_carries_epilogue() {
         reply_source: None,
         ..State::initial()
     };
-    let (_, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
+    let (_, actions) = step(
+        s,
+        reply(ShioriOutcome::Value(
+            "greeting".to_string(),
+            areka_talk::SecurityLevel::Local,
+        )),
+        &cfg,
+    );
     let st = start_talk_of(&actions);
     assert_eq!(st.script, "greeting");
     assert_eq!(
@@ -553,7 +566,14 @@ fn boot_active_talk_records_started_script() {
         reply_source: None,
         ..State::initial()
     };
-    let (s, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
+    let (s, actions) = step(
+        s,
+        reply(ShioriOutcome::Value(
+            "greeting".to_string(),
+            areka_talk::SecurityLevel::Local,
+        )),
+        &cfg,
+    );
     assert_eq!(start_talk_of(&actions).script, "greeting");
     assert_eq!(
         tracked_script(&s.phase),

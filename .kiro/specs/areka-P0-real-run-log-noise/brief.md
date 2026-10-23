@@ -120,6 +120,13 @@
   - 棚卸㉖の「emo-atlas の `lib.rs` の 164〜166 行目と 167〜169 行目に同じ説明が 2 回」は、もう直っている（今は 164〜166 行目に 1 回だけ）。
   - v0.1.0 の後に取る見直しの spec（`audit-emo-text-layout-draw` が `region*`、`audit-emo-text-state-actor` が `actor*`、`audit-emo-atlas` が emo-atlas の全部を持つ）と同じファイル＝この spec を v0.1.0 の間に取れば先に済む。後に回すなら同じウェーブに置かない。
 
+## どっとさくらで見えた事実（2026-10-23 `areka-P0-dot-sakura-specimen` の実機の 1 回）
+
+- 同梱バルーン `bottle` を使うと、`cursor.blendmethod ROP 系は M1 未対応` の WARN が**毎フレーム**出た。2 分 12 秒で 20,764 行、記録の 98% を占めた。
+- `crates/areka-emo-text/src/choice.rs` の注記は「`cursor.blendmethod` が ROP 系（`none` 以外）→ warn-once（解決時 1 回）」。解決が毎フレーム走り、1 回だけ出すはずの警告が毎回出ている見込み（areka の側）。`mergepennot` を描けないこと自体は決めた縮退で、直すのは警告の回数だけ。
+- 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 2。
+- 開発者（2026-10-23）: 「次のリリースまでに治るように」。この spec の版の段は「版に縛らない」のまま（roadmap はこのセッションでは触っていない）＝次の棚卸で v0.1.0 に入れるかを決める。
+
 ## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
 
 - ぱすたの走行で見つかった `apply(ShowSurface): 表示・マスクを更新` の INFO 行の量（`crates/areka-emo-present/src/presenter/show.rs:402`・記録の 9 割）は、開発者の決めで本 spec へまとめず、v0.1.0 の新しい spec `areka-P0-animated-surface-log-flood` が持つ（`verification.md` 5 節の 21）。本 spec の範囲は変わらない。

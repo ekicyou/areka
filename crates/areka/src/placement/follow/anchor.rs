@@ -179,3 +179,17 @@ pub fn project_anchor(
 /// 分岐する。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Anchored(pub Anchor);
+
+/// キャラ窓の吸着の向きの出どころ（areka-P0-window-link-directives 設計の決め 5・要件 6.1／6.2）。
+///
+/// [`Anchored`] と同じ時（窓を作るとき）に必ず付く。今のシェルの descript の向きと、台本の吸着の
+/// 指令で向きを変えたかの印を持つ。窓と一緒に消えるので、ゴーストの終了・切り替え・読み直しで
+/// 自然に descript から始まる（保存しない）。不変条件: `by_script == false` なら
+/// `Anchored.0 == descript`。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnchorSource {
+    /// 今のシェルの descript の吸着の向き（4 段の優先で決めたもの）。
+    pub descript: Anchor,
+    /// 台本の吸着の指令で向きを変えたなら真（`default` で偽に戻る）。
+    pub by_script: bool,
+}

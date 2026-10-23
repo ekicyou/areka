@@ -225,7 +225,7 @@ enum ParsedElement {
 ///
 /// `str::parse` は `+1` を通してしまうため、先に ASCII 数字だけであることを確かめる
 /// ——正典に無い書式を areka が独自に受理しないようにするためである。
-fn parse_scope_id(digits: &str) -> Option<u32> {
+pub(crate) fn parse_scope_id(digits: &str) -> Option<u32> {
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }

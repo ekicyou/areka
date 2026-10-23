@@ -57,14 +57,19 @@ fn last_get(actions: &[Action]) -> &str {
 
 /// 台本の応答を返し、翻訳の依頼を `translated` で入れ直して再生の開始まで進める。
 fn answer(state: State, script: &str, translated: &str) -> State {
-    let (state, actions) = reply(state, ShioriOutcome::Value(script.to_string()));
+    let (state, actions) = reply(
+        state,
+        ShioriOutcome::Value(script.to_string(), areka_talk::SecurityLevel::Local),
+    );
     assert!(
         matches!(actions.as_slice(), [Action::Translate(_)]),
         "台詞の応答は翻訳へ預けるはず"
     );
     let (state, actions) = step(
         state,
-        Input::TranslateDone(Ok(translated.to_string())),
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            translated,
+        ))),
         &config(),
     );
     assert!(
@@ -213,7 +218,9 @@ fn sstp_send_is_logged_once_after_translate() {
         assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
         let (_, actions) = step(
             s,
-            Input::TranslateDone(Ok("\\h訳した外\\e".into())),
+            Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+                "\\h訳した外\\e",
+            ))),
             &config(),
         );
         assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
@@ -268,7 +275,10 @@ fn translate_transport_failure_logs_nothing() {
             },
             &config(),
         );
-        let (s, actions) = reply(s, ShioriOutcome::Value("\\h自発\\e".to_string()));
+        let (s, actions) = reply(
+            s,
+            ShioriOutcome::Value("\\h自発\\e".to_string(), areka_talk::SecurityLevel::Local),
+        );
         assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
         let (_, actions) = step(
             s,
@@ -291,7 +301,10 @@ fn empty_script_talk_logs_nothing() {
             },
             &config(),
         );
-        let (_, actions) = reply(s, ShioriOutcome::Value(String::new()));
+        let (_, actions) = reply(
+            s,
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
+        );
         assert!(
             actions
                 .iter()

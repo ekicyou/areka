@@ -29,11 +29,15 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
+use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
 
-use super::follow::{Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
+use super::chain_finalize::ScriptPlaced;
+use super::follow::{
+    AnchorSource, Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window,
+};
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::spawn::GhostWindows;
 
@@ -76,6 +80,20 @@ pub fn char_pos_from_origin_x(anchor: Anchor, pos: PointPx, char_size: SizePx) -
             y: pos.y,
         },
         _ => pos,
+    }
+}
+
+/// キャラ窓の位置を記憶へ書くときの形を決める向き（areka-P0-window-link-directives 要件 4.8・
+/// 設計の決め 6）。
+///
+/// 次の起動はこの窓を descript の向きで読み戻すので、今の向き（台本で変えたかもしれない）では
+/// なく [`AnchorSource`]`.descript` で書く。射影（ドラッグの縛り）には今の向きを使い、形にだけ
+/// これを使う。`AnchorSource` が無い窓（テストの組み立てなど）は [`Anchored`] を使い、どちらも
+/// 無ければ `None`。
+pub fn saved_form_anchor(world: &World, window: Entity) -> Option<Anchor> {
+    match world.get::<AnchorSource>(window) {
+        Some(source) => Some(source.descript),
+        None => world.get::<Anchored>(window).map(|a| a.0),
     }
 }
 
@@ -521,9 +539,11 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
 ///   記憶から戻したスコープで、書き換えない（寄せ直して表示している場合を含む・1.2）。
 /// - 今の位置（x・y）が既定の位置と同じ。違うのは並べ終える前にドラッグされた窓（ドラッグの
 ///   確定が書く）か、SHIORI の移動の指示で動いた窓（その回かぎり・1.7）で、どちらも書かない。
-///   並べ直し（`chain_finalize::finalize_chain`）と同じく x・y の両方で比べ、台本が縦にだけ
-///   動かした窓も見逃さない。システムの置き直しは既定の位置を x・y とも一緒に運ぶので
-///   （`follow::window_move` の既定の位置の追随）、ふだんの流れで書き漏れは起きない。
+///   台本が縦にだけ動かした窓も見逃さないよう x・y の両方で比べる。システムの置き直しは既定の
+///   位置を x・y とも一緒に運ぶので（`follow::window_move` の既定の位置の追随）、ふだんの流れで
+///   書き漏れは起きない。
+/// - 台本の印（`chain_finalize::ScriptPlaced`）が無い。台本の `\![move]` がちょうど既定の位置へ
+///   置いた窓は位置では見分けられないので、並べ直しと同じく印で外す（1.7）。
 ///
 /// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
 /// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y だけで（1.5）、全スコープの
@@ -581,6 +601,14 @@ pub fn persist_unremembered_char_positions(world: &World) {
             skip("位置");
             continue;
         };
+        if world.get::<ScriptPlaced>(entity).is_some() {
+            info!(
+                target: "areka::persist::save",
+                scope,
+                "並べ終えた時点の保存: 台本が置いた窓なので書かない"
+            );
+            continue;
+        }
         let current = PointPx { x: pos.x, y: pos.y };
         if current != default_pos {
             info!(
@@ -596,7 +624,8 @@ pub fn persist_unremembered_char_positions(world: &World) {
             skip("大きさ");
             continue;
         };
-        let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
+        // 形は次の起動の読み戻しと同じ descript の向きで決める（要件 4.8）。
+        let Some(anchor) = saved_form_anchor(world, entity) else {
             skip("揃え方");
             continue;
         };
@@ -639,3 +668,6 @@ mod restore_offset_base_tests;
 #[cfg(test)]
 #[path = "persist_restore_tests.rs"]
 mod restore_tests;
+#[cfg(test)]
+#[path = "persist_saved_form_tests.rs"]
+mod saved_form_tests;

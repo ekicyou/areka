@@ -1,0 +1,29 @@
+{
+  "feature_name": "areka-P0-dot-sakura-specimen",
+  "created_at": "2026-10-22T13:15:51Z",
+  "updated_at": "2026-10-23T02:20:07Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-22T13:40:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-22T13:55:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-22T14:05:35Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-23T02:20:07Z"
+    }
+  },
+  "ready_for_implementation": true
+}

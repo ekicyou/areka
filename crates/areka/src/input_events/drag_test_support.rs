@@ -125,6 +125,10 @@ pub(super) struct Rig {
     pub(super) char_w: Entity,
     /// 相方のバルーン窓。
     pub(super) balloon: Entity,
+    /// 本体（scope 0）のキャラ窓（組の相手）。
+    pub(super) partner: Entity,
+    /// 本体のバルーン窓。
+    pub(super) partner_balloon: Entity,
 }
 
 impl Rig {
@@ -200,6 +204,8 @@ impl Rig {
             store,
             char_w: gw.char_window(SCOPE).unwrap(),
             balloon: gw.balloon_window(SCOPE).unwrap(),
+            partner: gw.char_window(0).unwrap(),
+            partner_balloon: gw.balloon_window(0).unwrap(),
         }
     }
 
@@ -213,6 +219,13 @@ impl Rig {
     /// 1 回の画面更新として配る。
     pub(super) fn tick(&mut self) {
         dispatch_drag_events(&mut self.world);
+    }
+
+    /// wndproc の代わりにドラッグ中のカーソルを `cursor` へ動かす（次の配りで `OnDrag` が出る）。
+    pub(super) fn drag_to(&self, cursor: Point) {
+        let acc = self.world.resource::<DragAccumulatorResource>();
+        acc.accumulate_delta(PhysicalPoint::new(1, 1));
+        acc.update_position(PhysicalPoint::new(cursor.x, cursor.y));
     }
 
     /// 窓の今の位置（`WindowPos.position`）。

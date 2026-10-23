@@ -20,7 +20,7 @@
 
 use crate::msg::{CloseReason, KanadeConfig, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStateUpdate;
-use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
+use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkEndReason, TalkId};
 // テストの `use super::*` が引く名前（型の塊を `types.rs` へ出す前と同じ顔ぶれを保つ）。
 #[cfg(test)]
 use crate::msg::{ChoiceInput, MonotonicMs, ShioriCall};
@@ -50,6 +50,8 @@ pub mod script_log;
 pub(crate) mod sstp;
 pub(crate) mod steady;
 pub(crate) mod talk_gap;
+/// SHIORI の応答で始まるトークの出どころ（出口の付与と引き下げの記録）。
+mod talk_origin;
 /// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
 pub(crate) mod translate;
 /// 既存テスト用の「翻訳を台詞そのままで通す」補助（テスト専用）。
@@ -103,21 +105,25 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
 /// 台本 1 つを新しいトークとして始める（採番・枠の差し替え・再生開始の行動を返す）。
 ///
 /// 選択肢の帳簿・`choice_prev_talk`・解決・記録は呼び手の仕事で、ここでは触らない。
+/// `label` は `ActiveTalk::origin`（記録用の綴り）、`origin` は再生の開始に付ける出どころ。
 pub(in crate::schedule) fn start_talk(
     state: &mut State,
-    origin: &'static str,
+    label: &'static str,
     script: String,
+    origin: ScriptOrigin,
 ) -> (TalkId, Action) {
     let talk_id = TalkId(state.next_talk_id);
     state.next_talk_id += 1;
     state.phase = Phase::Steady {
         talk: Some(ActiveTalk {
             talk_id,
-            origin,
+            origin: label,
             script: script.clone(),
         }),
     };
-    (talk_id, Action::StartTalk(StartTalk::new(talk_id, script)))
+    let mut start = StartTalk::new(talk_id, script);
+    start.origin = origin;
+    (talk_id, Action::StartTalk(start))
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -137,7 +143,10 @@ pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (St
     let replied = translate::before(&mut state, &input);
     // この入力で始まるトークの出どころ（script 種別のログの表示の語の素・入力が消費される前に控える）。
     let talk_source = script_log::source_of(&state, &input, &replied);
+    let reply_origin = replied.reply_origin();
     let (mut state, actions) = route(state, input, config);
+    // 翻訳へ預ける前に、応答で始まるトークへ出どころを付ける（腕は触らない）。
+    let actions = talk_origin::stamp(reply_origin, actions);
     let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
     // 出口: 相手を失った控えの掃除と、再生を始めたトークの控え（最終の台本で取る）。

@@ -404,7 +404,7 @@ fn done_of(
 }
 
 fn value() -> ShioriOutcome {
-    ShioriOutcome::Value(SCRIPT.to_string())
+    ShioriOutcome::Value(SCRIPT.to_string(), areka_talk::SecurityLevel::Local)
 }
 
 fn is_playing(s: &State, id: TalkId) -> bool {
@@ -512,7 +512,7 @@ fn marked_talk_replaced_by_another_reply_is_reached_replaced_at_the_end_of_the_r
     // 再生中のダブルクリックの応答が印の台詞を置き換える（旧トークの完了は dispatcher が捨てて届かない）。
     let (s, _) = reply(
         s,
-        ShioriOutcome::Value("OTHER".to_string()),
+        ShioriOutcome::Value("OTHER".to_string(), areka_talk::SecurityLevel::Local),
         "OnMouseDoubleClick",
     );
     let replacing = TalkId(6);
@@ -555,7 +555,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
     get_call(&actions[0]);
     let (s, _) = reply(
         s,
-        ShioriOutcome::Value("CHOSEN".to_string()),
+        ShioriOutcome::Value("CHOSEN".to_string(), areka_talk::SecurityLevel::Local),
         "OnChoiceSelectEx",
     );
     let replacing = TalkId(6);

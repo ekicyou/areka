@@ -58,7 +58,10 @@ fn start_talk(rig: &Rig) -> TalkId {
 
 fn talking_rig() -> (Rig, TalkId) {
     let rig = spawn_rig(Box::new(|| {
-        ShioriOutcome::Value("\\h\\s[0]しゃべっている\\e".into())
+        ShioriOutcome::Value(
+            "\\h\\s[0]しゃべっている\\e".into(),
+            areka_talk::SecurityLevel::Local,
+        )
     }));
     boot_to_steady(&rig);
     let talk = start_talk(&rig);

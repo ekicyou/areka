@@ -2,7 +2,7 @@ use super::test_support::{RecordingSink, run_bounded, test_system_vars};
 use super::*;
 use crate::test_log_capture::{assert_logged, assert_logged_event, capture};
 use areka_kanade::{AnchorInput, ChoiceInput};
-use areka_sakura::contract::TalkEndReason;
+use areka_sakura::contract::{ScriptOrigin, TalkEndReason};
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
@@ -626,6 +626,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
         epilogue: Vec::new(),
         talk_id,
         script: MENU_SCRIPT.to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(menu)");
     // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。
@@ -718,6 +719,7 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
         epilogue: Vec::new(),
         talk_id,
         script: MENU_SCRIPT.to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(menu)");
     tx.send(DispatcherMsg::Tick {
@@ -820,6 +822,7 @@ fn pressed_selection_queued_after_choice_waiting_reaches_kanade_in_inbox_order()
         epilogue: Vec::new(),
         talk_id: TalkId(942),
         script: MENU_SCRIPT.to_string(),
+        origin: ScriptOrigin::GHOST,
     }));
     fx.feed(DispatcherMsg::Choice(dirty_choice_input()));
     fx.feed(DispatcherMsg::Anchor(dirty_anchor_input()));

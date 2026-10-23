@@ -111,6 +111,55 @@ fn shell_build_runs_on_worker_and_returns_named_shell() {
     );
 }
 
+/// バルーン位置初期化の材料は起動とシェルの切り替えで同じ形・同じ値になる
+/// （areka-P0-window-link-directives 要件 7.4・設計の決め 7）: 起動の準備が置く材料と、同じシェルへ
+/// 切り替えたときの資産づくりの結果から後始末が置く材料（descript の値＋走っているバルーンの
+/// `windowposition`・作者の DPI）が等しい。
+#[test]
+fn default_basis_from_boot_equals_the_one_from_shell_switch() {
+    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let rpost =
+        sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
+    let work_area = crate::placement::resolver::RectPx {
+        left: 0,
+        top: 0,
+        right: 1920,
+        bottom: 1040,
+    };
+    let boot = crate::placement::prepare_ghost_windows_with_work_area(
+        rpost.folder(),
+        &emo2_balloon_root(),
+        work_area,
+        Some(96),
+    )
+    .expect("起動の準備は成功する")
+    .default_basis;
+    let built = build_swap(&SwitchBuildRequest::Shell {
+        ghost_root: rpost.folder().to_path_buf(),
+        folder: "master".to_string(),
+        balloon_dir: emo2_balloon_root(),
+    })
+    .expect("同じシェルの資産づくりは成功する");
+    let SwapBuilt::Shell {
+        source, balloon, ..
+    } = built
+    else {
+        panic!("シェルの依頼にはシェルの結果が返る");
+    };
+    assert!(
+        !boot.balloon.windowpositions.is_empty(),
+        "前提: 検体のバルーンは windowposition を持つ"
+    );
+    assert_eq!(
+        boot,
+        crate::placement::reset_pos::DefaultPlacementBasis { source, balloon },
+        "起動で置く材料とシェルの切り替えで置く材料は同じシェルで等しい"
+    );
+}
+
 /// バルーン: 背景のスレッドがバルーンの資産（scope ごとの文字の模型・背景色・アニメ表）を作る。
 /// アニメ表は装着の全 scope ぶん作る（4.2 の合図の `shows` がこれを前提にする）。
 #[test]

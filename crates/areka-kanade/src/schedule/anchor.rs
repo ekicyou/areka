@@ -107,7 +107,7 @@ pub(super) fn on_anchor_reply(
         AnchorStage::Final { id } => ("final", id.as_str()),
     };
     match outcome {
-        ShioriOutcome::Value(_) => return None,
+        ShioriOutcome::Value(_, _) => return None,
         ShioriOutcome::NoContent => {}
         ShioriOutcome::Failed(failure) => tracing::error!(
             target: "kanade",

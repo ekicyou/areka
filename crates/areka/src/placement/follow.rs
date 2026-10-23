@@ -10,11 +10,11 @@
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
 //! - [`DragPositionPolicy`]／[`BottomSnapPolicy`]: bottom 吸着ドラッグ（4.7・
 //!   DD15 v2・task 8.2R）の核——「生ドラッグ座標→実窓位置」の純粋写像トレイトと
-//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。非 Free
-//!   アンカーのキャラ窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
-//!   [`on_char_drag`]／[`on_char_drag_end`] が [`Anchored`] を読んで [`project_anchor`]
-//!   適用済み座標を**単一ライター**として書く（v1 の事後再釘付けは wndproc と
-//!   競合し振動→撤去）
+//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。吸着した窓と組に
+//!   入った窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
+//!   [`on_char_drag`]／[`on_char_drag_end`] がドラッグの始めに控えた向きで
+//!   [`project_anchor`] 適用済み座標を**単一ライター**として書く（組に入った Free は恒等・
+//!   設計の決め 12。v1 の事後再釘付けは wndproc と競合し振動→撤去）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: 全モニタ work area 集合の
 //!   Resource と窓中心→モニタ解決の純粋ヘルパ（task 8.1・ポリシーの入力）
 //!
@@ -36,6 +36,8 @@ mod drag_follow;
 mod keyword_base;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
+// 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
+mod sticky_follow;
 mod visibility;
 mod window_move;
 mod work_area;
@@ -60,7 +62,7 @@ use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, Gh
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
 use super::spawn::BalloonLimit;
 
-pub use self::anchor::{Anchored, project_anchor};
+pub use self::anchor::{AnchorSource, Anchored, project_anchor};
 pub(crate) use self::drag_follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };
@@ -127,7 +129,17 @@ pub use self::window_move::{
 // この 2 項目だけは私有再束縛から crate 内公開へ格上げする。areka は bin crate であり
 // `pub(crate)` はクレート内に留まるので、外部 API 面は増えない。
 pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
+// 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
 use self::keyword_base::rederive_keyword_balloon_offset;
+pub(crate) use self::sticky_follow::{is_char_dragging, sync_drag_writer};
+// ドラッグの始めの控え。呼び手は `input_events::drag` だけで、`#[path]` で src を取り込む
+// examples には input_events が無いので、そちらのビルドでは未使用に見える。
+#[allow(unused_imports)]
+pub(crate) use self::sticky_follow::{CharDragSession, begin_char_drag};
+// `\![move]` の連れ動き。呼び手は `emo2_boot::move_cue_place` だけで、examples には emo2_boot が
+// 無いので、そちらのビルドでは未使用に見える。
+#[allow(unused_imports)]
+pub(crate) use self::sticky_follow::{follow_sticky_move, log_sticky_ignored};
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard, rect_at,
     route_applies_visibility_guard,
@@ -186,6 +198,12 @@ mod offset_space_tests;
 #[cfg(test)]
 #[path = "follow_resize_tests.rs"]
 mod resize_tests;
+#[cfg(test)]
+#[path = "follow_sticky_follow_drag_tests.rs"]
+mod sticky_follow_drag_tests;
+#[cfg(test)]
+#[path = "follow_sticky_follow_tests.rs"]
+mod sticky_follow_tests;
 #[cfg(test)]
 #[path = "follow_test_support.rs"]
 mod test_support;
