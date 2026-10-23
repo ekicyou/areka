@@ -72,7 +72,7 @@
   - _Boundary: BootCheckReadonly_
   - _Depends: 2.2_
   - _Requirements: 5.1, 5.2, 6.4_
-- [ ] 3.2 (P) 利用者ごとの置き場を、作らず写さずに決める関数を足す
+- [x] 3.2 (P) 利用者ごとの置き場を、作らず写さずに決める関数を足す
   - 読み取りだけの置き場の決め方を、判断と記録はふつうの道と分け合う形で足す。根のフォルダが在ればそれを使い、無ければ作らずに exe の隣の形にして `user_root_withheld` の info を残す。写しは呼ばない
   - 「写すはずか」の条件は 1 か所の関数にまとめ、写しの道と、読み取りだけの記憶の置き場を選ぶ関数が分け合う
   - 読み取りだけの記憶の置き場を選ぶ関数を足す。環境変数の指定があればそれを使う。写すはずの場面なら写す元を返し、`app_memory_read_beside` の info を残す。ほかの場面はふつうと同じ値を返す
@@ -220,3 +220,4 @@
 - 2.2: `readonly::of` にも一時の `#[allow(dead_code)]` が付いている（初めて読むのは 4.1）。4.1 で外す。`engage`・`install` の分は 5.1 で外す。
 - 2.2: 構造の試験（`readonly_tests.rs`）は試験のファイルまで走査する。新しい試験から `readonly::engage` や `withhold_everything` を呼ぶと赤になる。試験の控えは `WithholdGuard::under` だけで行う。
 - `crates/areka` の clippy は依存・examples・触っていないファイルの前からの lint で `-D warnings` を通らない。触ったファイルに新しい警告が無いことだけを見る。
+- 3.2: `areka-user-data` の dev-dependencies に `log-capture-kit` を足した。記録の確かめは `log_capture_kit::capture` で行う（ログの確かめは理由を付けて省かない）。

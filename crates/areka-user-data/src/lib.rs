@@ -9,7 +9,10 @@ mod copy;
 mod establish;
 
 pub use copy::{CopyDone, CopyError, CopyStats, copy_tree_atomic};
-pub use establish::{establish, open_dir_for_add, probe};
+pub use establish::{
+    establish, establish_readonly, establish_readonly_from, open_dir_for_add, probe,
+    readonly_app_profile_dir,
+};
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
