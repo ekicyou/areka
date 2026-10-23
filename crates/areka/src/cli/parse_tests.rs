@@ -410,12 +410,12 @@ fn option_words_table() {
         (vec![], false, Load, vec![]),
         // 6.1・6.4〜6.7: 語ごとに 1 件（空の語も 1 つずつ）
         (
-            vec!["--option", "nobootcheck,bootunlock,readonly,xyz,,"],
+            vec!["--option", "nobootcheck,bootunlock,kiosk,xyz,,"],
             true,
             Load,
             vec![
                 noop("bootunlock"),
-                pending("readonly"),
+                pending("kiosk"),
                 word_unknown("xyz"),
                 ParseNote::WordEmpty,
                 ParseNote::WordEmpty,
@@ -507,7 +507,7 @@ fn summary_table() {
                 "a",
                 "--random",
                 "--option",
-                "nobootcheck,bootunlock,readonly,xyz,,",
+                "nobootcheck,bootunlock,kiosk,xyz,,",
                 "--foo",
                 "--install",
                 "x",
@@ -524,7 +524,7 @@ fn summary_table() {
                 "dontloadmodule",
             ],
             vec!["bootunlock"],
-            vec!["readonly", "xyz", "--foo", "install"],
+            vec!["kiosk", "xyz", "--foo", "install"],
         ),
         // 重ねても 1 つ
         (vec!["--help", "/?"], vec!["help"], vec![], vec![]),
@@ -607,7 +607,7 @@ fn notes_log_one_event_each_with_cli_prefix() {
         ),
         (ParseNote::GhostEmpty, Level::WARN, "ghost_option_empty"),
         (noop("bootunlock"), Level::INFO, "option_word_noop"),
-        (pending("readonly"), Level::WARN, "option_word_pending"),
+        (pending("kiosk"), Level::WARN, "option_word_pending"),
         (word_unknown("xyz"), Level::WARN, "option_word_unknown"),
         (ParseNote::WordEmpty, Level::WARN, "option_word_empty"),
         (
