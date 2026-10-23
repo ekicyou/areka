@@ -211,6 +211,16 @@ impl SwitchRig {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
         let sample = acquire_emo2();
+        let root = BasewareRoot::new(sample.root().to_path_buf());
+        // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る・areka-P0-ghost-inner-balloon
+        // 要件 7.1）。A／B の複製へ持ち込まないよう、写す前に根へ移す。
+        std::fs::create_dir_all(root.balloon_store()).expect("根の balloon を組む");
+        std::fs::rename(
+            sample.balloon(BALLOON).expect("emo2 の同梱バルーン"),
+            root.balloon_dir(BALLOON),
+        )
+        .expect("既定のバルーンを根へ移す");
+        std::fs::remove_dir(sample.folder().join("balloon")).expect("空になった balloon を消す");
         for folder in ["A", "B"] {
             copy_ghost(
                 sample.folder(),
@@ -218,7 +228,6 @@ impl SwitchRig {
                 folder,
             );
         }
-        let root = BasewareRoot::new(sample.root().to_path_buf());
 
         let mut world = World::new();
         world.init_resource::<Schedules>();

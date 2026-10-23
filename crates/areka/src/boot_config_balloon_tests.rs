@@ -143,17 +143,18 @@ fn default_balloon_path_hits_ghost_inner_balloon() {
     assert!(warnings(&events).is_empty(), "{events:?}");
 }
 
-/// `balloon/claudia` は `<ゴースト>\balloon\claudia` が在っても当たらない（フォルダ名の突き合わせ）。
+/// `balloon/plain` は `<ゴースト>\balloon\plain` が在っても当たらない（フォルダ名の突き合わせ）。
+/// 名前は検体と無関係にしてある（検体の在処を綴るのは窓口 `sample_ghost_kit::SampleRoot` だけ）。
 /// `descript_balloon_not_found` が今の欄（`balloon_store` は根の置き場だけ）で 1 件（要件 4.3・4.7）。
 #[test]
 fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
     let tmp = TempPath::under_target("cfg-balloon-inner-prefixed");
     let ghost = fixture(
         &tmp,
-        "default.balloon.path,balloon/claudia\n",
+        "default.balloon.path,balloon/plain\n",
         &[("b1", "First")],
     );
-    put_balloon(&ghost.join("balloon").join("claudia"), "Claudia");
+    put_balloon(&ghost.join("balloon").join("plain"), "Plain");
     let (got, events) = resolve_dir(&tmp, &ghost);
     assert_eq!(
         got,
@@ -175,7 +176,7 @@ fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
         (
             Some("descript_balloon_not_found"),
             Some("default.balloon.path"),
-            Some("balloon/claudia"),
+            Some("balloon/plain"),
             Some(store.as_str()),
         )
     );

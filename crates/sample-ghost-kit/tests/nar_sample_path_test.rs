@@ -138,8 +138,11 @@ fn the_command_prints_one_absolute_path_per_line_for_every_registered_sample() {
         for (index, balloon) in sample.balloons.iter().enumerate() {
             assert_eq!(
                 Path::new(&printed[2 + index].1),
-                root.join("balloon").join(balloon),
-                "同梱バルーン {balloon} は `<根>/balloon/<名>`"
+                root.join(store)
+                    .join(sample.name)
+                    .join("balloon")
+                    .join(balloon),
+                "同梱バルーン {balloon} は `<根>/ghost/<名>/balloon/<名>`"
             );
         }
     }

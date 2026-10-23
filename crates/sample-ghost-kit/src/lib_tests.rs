@@ -238,8 +238,8 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
                 .expect("登記済みの同梱バルーンは引けるはず");
             assert_eq!(
                 path,
-                root.join("balloon").join(balloon),
-                "同梱バルーン {balloon} は `<根>/balloon/<名>`（要件 1.3）"
+                acquired.folder().join("balloon").join(balloon),
+                "同梱バルーン {balloon} は `<根>/ghost/<名>/balloon/<名>`（要件 1.3・spec: `areka-P0-ghost-inner-balloon` 要件 7.1）"
             );
             assert!(
                 path.is_dir(),
@@ -373,9 +373,15 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     );
     assert_eq!(
         installed,
-        ["balloon/probe-window-balloon", "ghost/probe-other"]
+        [
+            "ghost/probe-other",
+            "ghost/probe-other/balloon/probe-window-balloon"
+        ]
     );
-    assert_eq!(expected, "balloon/probe-window-balloon, ghost/probe-window");
+    assert_eq!(
+        expected,
+        "ghost/probe-window, ghost/probe-window/balloon/probe-window-balloon"
+    );
     assert!(
         shown.contains("probe-other") && shown.contains("probe-window"),
         "失敗の表示に両側の綴りが無い: {shown}"
@@ -405,7 +411,10 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
         &GHOST_WITH_BALLOON,
     );
     assert_eq!(installed, ["ghost/probe-window"]);
-    assert_eq!(expected, "balloon/probe-window-balloon, ghost/probe-window");
+    assert_eq!(
+        expected,
+        "ghost/probe-window, ghost/probe-window/balloon/probe-window-balloon"
+    );
 
     // ⑷ 登記していない同梱バルーンが置かれた。
     let (_, expected, installed) = refused(
@@ -419,7 +428,10 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     );
     assert_eq!(
         installed,
-        ["balloon/probe-window-balloon", "ghost/probe-window"]
+        [
+            "ghost/probe-window",
+            "ghost/probe-window/balloon/probe-window-balloon"
+        ]
     );
     assert_eq!(expected, "ghost/probe-window");
 }
@@ -474,7 +486,7 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
         sample
             .balloons
             .iter()
-            .map(|balloon| format!("Balloon balloon/{balloon}")),
+            .map(|balloon| format!("Balloon ghost/{}/balloon/{balloon}", sample.name)),
     );
     declared.sort();
     declared

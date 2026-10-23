@@ -76,7 +76,8 @@
 //!
 //! [`SampleRoot::root`] が**ベースウェアの根**、[`SampleRoot::folder`] が
 //! `<根>/ghost/<名>/`（バルーンの検体なら `<根>/balloon/<名>/`）、
-//! [`SampleRoot::balloon`] が `<根>/balloon/<directory>/`。展開結果の要素が登記
+//! [`SampleRoot::balloon`] が同梱バルーンの入る `<根>/ghost/<名>/balloon/<directory>/`
+//! （spec: `areka-P0-ghost-inner-balloon` 要件 7.1）。展開結果の要素が登記
 //! （種別・フォルダ名・同梱バルーン）と食い違えば [`SampleError::RegistryMismatch`]
 //! を返す（黙って存在しないパスを配らない）。
 
@@ -238,7 +239,7 @@ impl SampleRoot {
         let balloons = sample
             .balloons
             .iter()
-            .map(|balloon| (*balloon, root.join("balloon").join(balloon)))
+            .map(|balloon| (*balloon, companion_folder(sample, &root, balloon)))
             .collect();
         Ok(SampleRoot {
             sample,
@@ -299,8 +300,8 @@ impl SampleRoot {
         &self.folder
     }
 
-    /// 同時にインストールされるバルーンのフォルダ `<根>/balloon/<directory>/` の絶対パス
-    /// （要件 1.3）。
+    /// 同時にインストールされるバルーンのフォルダ `<根>/ghost/<名>/balloon/<directory>/` の
+    /// 絶対パス（要件 1.3・spec: `areka-P0-ghost-inner-balloon` 要件 7.1）。
     ///
     /// `folder()` に名前を継ぎ足して自分でパスを作る代わりにこれを呼ぶ。
     ///
@@ -508,7 +509,7 @@ pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
     printed.extend(sample.balloons.iter().map(|balloon| {
         (
             format!("balloon.{balloon}"),
-            root.join("balloon").join(balloon),
+            companion_folder(sample, &root, balloon),
         )
     }));
     Ok(printed)
@@ -523,42 +524,67 @@ fn declared_elements(sample: &Sample) -> Vec<String> {
         sample
             .balloons
             .iter()
-            .map(|balloon| format!("balloon/{balloon}")),
+            .map(|balloon| format!("{}/{}/balloon/{balloon}", sample.kind.store(), sample.name)),
     );
     declared.sort();
     declared
 }
 
+/// 同梱バルーンの置かれる位置。書庫の本体の中の `balloon\<directory>`（spec:
+/// `areka-P0-ghost-inner-balloon` 要件 7.1）なので、根の `balloon/` ではない。
+fn companion_folder(sample: &Sample, root: &Path, balloon: &str) -> PathBuf {
+    root.join(sample.kind.store())
+        .join(sample.name)
+        .join("balloon")
+        .join(balloon)
+}
+
 /// 展開された根の直下に**実際に**在る要素を `<格納先>/<名前>` の形で名前順に並べる。
 ///
 /// 片方の格納先しか作らない検体（同梱バルーンの無いゴースト・単体のバルーン）があるので、
-/// 棚が無いのは「その格納先の要素が 0 件」と読む。
+/// 棚が無いのは「その格納先の要素が 0 件」と読む。同梱バルーンはゴーストの中の
+/// `ghost/<名>/balloon/<名前>` に置かれるので、ゴーストごとにその棚も数える。
 fn installed_elements(root: &Path) -> Result<Vec<String>, SampleError> {
     let mut installed = Vec::new();
     for store in ["ghost", "balloon"] {
-        let shelf = root.join(store);
-        let entries = match std::fs::read_dir(&shelf) {
-            Ok(entries) => entries,
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(source) => {
-                return Err(SampleError::Io {
-                    what: "展開結果の走査",
-                    path: shelf,
-                    source,
-                });
+        for name in shelf_entries(&root.join(store))? {
+            if store == "ghost" {
+                let inner = root.join(store).join(&name).join("balloon");
+                for balloon in shelf_entries(&inner)? {
+                    installed.push(format!("{store}/{name}/balloon/{balloon}"));
+                }
             }
-        };
-        for entry in entries {
-            let entry = entry.map_err(|source| SampleError::Io {
-                what: "展開結果の走査",
-                path: shelf.clone(),
-                source,
-            })?;
-            installed.push(format!("{store}/{}", entry.file_name().to_string_lossy()));
+            installed.push(format!("{store}/{name}"));
         }
     }
     installed.sort();
     Ok(installed)
+}
+
+/// 棚の直下の名前。棚が無ければ 0 件。
+fn shelf_entries(shelf: &Path) -> Result<Vec<String>, SampleError> {
+    let entries = match std::fs::read_dir(shelf) {
+        Ok(entries) => entries,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => {
+            return Err(SampleError::Io {
+                what: "展開結果の走査",
+                path: shelf.to_path_buf(),
+                source,
+            });
+        }
+    };
+    entries
+        .map(|entry| {
+            entry
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .map_err(|source| SampleError::Io {
+                    what: "展開結果の走査",
+                    path: shelf.to_path_buf(),
+                    source,
+                })
+        })
+        .collect()
 }
 
 /// 登記されている検体名の一覧（失敗の理由に載せる・要件 1.4）。
