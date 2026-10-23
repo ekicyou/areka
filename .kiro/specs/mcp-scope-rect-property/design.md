@@ -158,6 +158,7 @@ crates/areka/src/
 - `crates/areka/src/ghost_session_runtime.rs` — `rewire_runtime_consumers` に `super::ghost_session_scope_rect::wire(world, runtime);` の 1 行。理由: 初回の起動・切替・`reload` の 3 つが共に通り、実行系を置き場へ付ける前の唯一の所。
 - `crates/areka/src/mcp/get_property_tests.rs` — テストを足すだけ（MCP の `handle` は `mcp` の中からしか呼べないので、両方の道の一致〔要件 6.6・8.3〕と `reload` の後の答え〔要件 6.3〕はここに置く。本番の `mcp/get_property.rs` は変えない）。
 - `doc/ukadoc-coverage/ledger/property.toml` — 2 行（`currentghost.scope_28ID_29.rect`・`currentghost.balloon.scope_28ID_29.rect`）を `status = "implemented"` に改め、`note` に実装の場所とテストを書く。証拠は新しいファイルの `// ukadoc:` の行（URL はカタログの形 `…list_propertysystem.html#currentghost.scope_28ID_29.rect:1`・`…#currentghost.balloon.scope_28ID_29.rect:1`）。
+- `doc/ukadoc-coverage/report/property.md` — 台帳を直した後、`cargo run -p ukadoc-survey -- report` で作り直す（手で書き換えない・`ukadoc-survey` の一貫性テスト `DomainReportStale` が台帳と食い違いを見る）。束が閉じるかで `linkage.md` など他の報告が動けば、それも生成の結果のまま載せる。全体の `summary.md`（`report-summary`）は統合の担当が作り直す決まりなので触らない。
 - `doc/pasta-real-run.md` — 「位置の読み方」の段落を `get_property` で読む形へ戻し、表の段 1・4・5 の本 spec の欄を「着地済み・確かめる」の形に改める。
 
 ### ウェーブ C11 の約束との当たり
@@ -563,7 +564,7 @@ pub(crate) fn os_window_rect(key: WindowKey) -> Option<ScreenRect>;
 | 表の鍵・登録の表の鍵が壊れていた（poison） | 中身を使って続ける（読みを失敗させない） | なし（`SharedMirror::load` と同じ扱い） |
 | 実行系が無い（LogSink の起動） | 読み手を登録しない。MCP は今の「実行系が無い」の答え | 今の `mcp_get_property_unavailable` |
 | 書式の誤り | 値なし（`parse_dotted` の誤りは今の `warn!`・`ByName` の誤りは記録なし） | 今のまま |
-| `SetThreadDpiAwarenessContext` が元の扱いを返さない（0） | `GetWindowRect` は呼び、戻しは行わない（扱いを変えられていない） | なし（呼ぶたびの記録は出さない） |
+| `SetThreadDpiAwarenessContext` が元の扱いを返さない（0） | `GetWindowRect` は呼び、戻しは行わない（扱いを変えられていない） | `debug!`（`event = "scope_rect_dpi_context_unchanged"`）。失敗の道を黙らせない。警告以上は出さない（要件 5.5） |
 
 ### Monitoring
 
@@ -598,7 +599,10 @@ pub(crate) fn os_window_rect(key: WindowKey) -> Option<ScreenRect>;
 4. 起動し直し（`ghost_session_scope_rect_tests.rs`）: 新しい World と新しい実行系で、前の表を持ち越さない（表を保存しない作りの確かめ・要件 6.5）。
 
 ### 実窓（`#[ignore]`・同じテストのファイル）
-1. 実の窓を 1 枚（枠の無い `WS_POPUP`・`SetWindowPos` で物理の画素の位置と大きさを決める）作り、`os_window_rect` がその矩形を返す。呼んだスレッドの DPI の扱いを v2 以外にしておいても物理の画素で返す（要件 1.3・1.6・8.5）。
+1. 実の窓を 1 枚（枠の無い `WS_POPUP`・`SetWindowPos` で物理の画素の位置と大きさを決める）作り、`os_window_rect` がその矩形を返す。呼んだスレッドの DPI の扱いを v2 以外にしておいても物理の画素で返す（要件 1.3・1.6・8.5）。順序:
+   - テストの実行ファイルにはマニフェストが無く、DPI 非対応のプロセスとして走る。窓を作る前にテストのスレッドを v2 にする（先例 `tests/window_link_real_run.rs`）。
+   - 窓の `GetDpiForWindow` が 96 でないことを先に確かめ、96 なら「拡大率 100% より大きい画面が要る」と言って失敗させる（100% の画面では物理と論理の数が同じになり、空振りのまま緑になるため）。
+   - `os_window_rect` を呼ぶ直前だけスレッドを DPI 非対応へ替え、呼んだ後に戻す。答えが `SetWindowPos` で決めた物理の画素の矩形と一致し、呼んだ後のスレッドの扱いが非対応のまま（`os_window_rect` が元へ戻した）であることを確かめる。
 
 ### 実機（要件 9）
 - 排他テストの机を取ってから areka を起こし、終わったらすぐ返す（要件 9.1）。
