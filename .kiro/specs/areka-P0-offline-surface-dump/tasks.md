@@ -230,7 +230,7 @@
   - _Depends: 7.7, 7.8_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.9, 9.1, 9.2, 9.3, 10.2_
 
-- [ ] 9. 配布物の説明書と steering の構造
+- [x] 9. 配布物の説明書と steering の構造
   - `dist/README.txt` の起動オプションの節: 効く起動オプションに `--offline-dump` を加え、`--dump-*` の 7 つの働き・書き出す名前・CSV の形・終了コード（0・1・2、3 は出ない）・`start "" /wait` と `echo %ERRORLEVEL%` の例・まだ扱わない 2 つ（記録に残して無視）を書き、「まだ扱わない」の文から `--offline-dump` を外す
   - `.kiro/steering/structure.md` に新しいクレート `surface-compare` の項と、`offline_dump` の許す依存を書く
   - 説明書に 11.1〜11.3 の各項が在り、`help_tests.rs` が緑
@@ -278,3 +278,4 @@
 - 7.6: `png_path` は頭の文字列が空だと `0.png` を返す＝走り（7.8）は `--dump-output-prefix` の値なしで `DEFAULT_PREFIX` に替える。頭の文字列の絶対パスや `..` は止めない（要件の外）
 - 7.7: 走りは `offline_dump::run(&OfflineDumpRequest) -> i32`。7.8 のつなぎ口は `surface_stage(req, scope, LoadedShell) -> DumpTally`（`LoadedShell { bindgroups, target, world }`）。走りを呼ぶ試験は写しの窓がプロセスに 1 つなので `log_history::capture_tests::hold()` の排他を共有する。単体の試験では写しの層が無く CSV と終了コード 2 は見えない＝10.1。`shell_candidates` は `areka-ghost` の catalog を読むだけで使う＝9 で structure.md の許す依存に一言添える
 - 7.8: 面の段の順は「SERIKO の表・下地（面の指定が無くても作る＝表の warn を CSV に残す）→ 面の指定が無ければここで閉じる → 既定の組と `--dump-bind` → 面の指定の展開 → 1 面ずつ書く」。出力先のパスを絶対にできないときは error 1 行で指定の面を全部「書けなかった」に数える（実装係の足した最小の道）。`RenderError::Write` の欄の `#[allow(dead_code)]` は Debug でだけ読むため残す
+- 9: `offline_dump` は design の許す依存の一覧に無い `areka-sakura` を `ActorKey` の型だけ使う（`ScopeStates::current_binds`・`apply_named_bind` が要る・areka は前から依存）。structure.md には実際どおり載せた
