@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use areka_emo_text::actor::ResolvedBalloonText;
+use areka_parsers::charset::decode;
 use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
@@ -10,14 +13,6 @@ use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::target_map::scope_of;
 // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
 use crate::placement::source::{load_balloon_author_dpi, load_descript_source};
-
-/// `(key, value)` のスライスから shell descript KV 相当の `BTreeMap` を組む。
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-        .collect()
-}
 
 /// 観測可能な完了条件（tasks.md task 2.6）: emo2 fixture を渡した統合テストが
 /// `BootAssets` の各フィールドに期待どおりのデータを含んで green で通る。
@@ -716,185 +711,46 @@ fn build_boot_assets_carries_emo2_accessor_author_dpi() {
     );
 }
 
-/// 観測可能な完了条件: emo2 fixture 相当 KV から `[1100,1207,1302,1500,1800]` を抽出する。
-///
-/// noise（`.name` エントリ・`kero.*`・`sakura.menu`・`sakura.bindoption*`・`charset`/`type`/
-/// `seriko.*`）を混在させても `.default==1` の 5 件だけが昇順で抽出されることを固定する
-/// （実 fixture `検体 emo2 の shell/master/descript.txt` 実測）。
-#[test]
-fn default_bind_ids_extracts_emo2_defaults() {
-    let map = kv(&[
-        // --- メタ／既定（noise・非 bindgroup） ---
-        ("charset", "UTF-8"),
-        ("type", "shell"),
-        ("seriko.use_self_alpha", "1"), // value=="1" だが bindgroup キーでない → 非抽出
-        ("sakura.defaultx", "0"),
-        ("kero.defaultx", "0"),
-        ("sakura.balloon.alignment", "left"),
-        ("kero.balloon.alignment", "right"),
-        // --- 腕 ---
-        ("sakura.bindgroup1100.name", "腕,伸び"),
-        ("sakura.bindgroup1100.default", "1"),
-        ("sakura.bindgroup1101.name", "腕,組み"),
-        // --- 口 ---
-        ("sakura.bindgroup1206.name", "口,‥‥"),
-        ("sakura.bindgroup1207.name", "口,にこっ"),
-        ("sakura.bindgroup1207.default", "1"),
-        ("sakura.bindgroup1208.name", "口,小口"),
-        // --- 目 ---
-        ("sakura.bindgroup1301.name", "目,ジトー"),
-        ("sakura.bindgroup1302.name", "目,通常"),
-        ("sakura.bindgroup1302.default", "1"),
-        ("sakura.bindgroup1303.name", "目,笑顔"),
-        // --- まばたき（default なし） ---
-        ("sakura.bindgroup1400.name", "まばたき,通常"),
-        ("sakura.bindgroup1403.name", "まばたき,----"),
-        // --- 眉 ---
-        ("sakura.bindgroup1500.name", "眉,通常"),
-        ("sakura.bindgroup1500.default", "1"),
-        ("sakura.bindgroup1501.name", "眉,オコ"),
-        // --- 紅／キラリ（default なし） ---
-        ("sakura.bindgroup1600.name", "紅,差し"),
-        ("sakura.bindgroup1700.name", "キラリ,キラリ1"),
-        // --- 髪飾り ---
-        ("sakura.bindgroup1800.name", "髪飾り,リボン"),
-        ("sakura.bindgroup1800.default", "1"),
-        ("sakura.bindgroup1801.name", "髪飾り,ボンボン"),
-        // --- 着せ替えオプション／メニュー（noise） ---
-        ("sakura.bindoption0.group", "腕,mustselect"),
-        ("sakura.menu", "auto"),
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        vec![1100, 1207, 1302, 1500, 1800],
-        "emo2 fixture 相当 KV からは default==1 の 5 件のみを昇順抽出する"
-    );
-}
-
-/// `default` が `1` 以外（`0`／`2`／空／非数）の値は抽出しない。
-#[test]
-fn default_bind_ids_excludes_non_one_values() {
-    let map = kv(&[
-        ("sakura.bindgroup9990.default", "0"),
-        ("sakura.bindgroup9991.default", "2"),
-        ("sakura.bindgroup9992.default", ""),
-        ("sakura.bindgroup9993.default", "true"),
-        ("sakura.bindgroup9994.default", "10"), // "10" は "1" と等しくない
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        Vec::<u32>::new(),
-        "default==1 以外は全て非抽出"
-    );
-}
-
-/// `kero.*` scope の bindgroup default は本タスク対象外（M-dual 増分）＝非抽出。
-#[test]
-fn default_bind_ids_excludes_kero_scope() {
-    let map = kv(&[
-        ("kero.bindgroup50.default", "1"),
-        ("kero.bindgroup1100.default", "1"),
-        // sakura 側は抽出される対照。
-        ("sakura.bindgroup1100.default", "1"),
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        vec![1100],
-        "kero scope は非抽出（M-dual 増分）・sakura scope のみ抽出"
-    );
-}
-
-/// 無関係キー（`.name`・任意 noise）は `default==1` を持たない限り無視する。
-#[test]
-fn default_bind_ids_ignores_unrelated_keys() {
-    let map = kv(&[
-        ("sakura.bindgroup1100.name", "腕,伸び"), // .name は非抽出
-        ("charset", "UTF-8"),
-        ("some.random.key", "1"),
-        ("sakura.menu", "auto"),
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        Vec::<u32>::new(),
-        "default==1 の bindgroup キーが無ければ何も抽出しない"
-    );
-}
-
-/// 中間の N が u32 として parse できないキーは無視する。
-#[test]
-fn default_bind_ids_ignores_malformed_middle() {
-    let map = kv(&[
-        ("sakura.bindgroupXYZ.default", "1"),  // 非数値
-        ("sakura.bindgroup.default", "1"),     // 空（middle なし）
-        ("sakura.bindgroup-1.default", "1"),   // 負値は u32 parse 不可
-        ("sakura.bindgroup12ab.default", "1"), // 数字混在
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        Vec::<u32>::new(),
-        "middle が u32 でないキーは非抽出"
-    );
-}
-
-/// prefix/suffix は厳密一致。パターンを部分文字列として含むだけのキーは match しない。
-#[test]
-fn default_bind_ids_requires_strict_prefix_and_suffix() {
-    let map = kv(&[
-        ("xsakura.bindgroup1.default", "1"),       // prefix 前に余分
-        ("sakura.bindgroup2.defaultx", "1"),       // suffix 後に余分
-        ("sakura.bindgroup3.default.extra", "1"),  // suffix の後に別セグメント
-        ("prefix.sakura.bindgroup4.default", "1"), // 別 prefix 配下
-        // 対照: 厳密一致は抽出される。
-        ("sakura.bindgroup5.default", "1"),
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        vec![5],
-        "prefix/suffix 厳密一致のキーのみ抽出（部分一致は除外）"
-    );
-}
-
-/// 決定論: 結果は数値昇順（lexicographic ではなく numeric）で返る。
-///
-/// BTreeMap のキー反復は lexicographic 順（"1000" < "100" < "200" < "90"）であり、
-/// numeric 昇順（90 < 100 < 200 < 1000）と一致しない。結果が numeric 昇順であることを
-/// 檻に入れ、キー反復順への依存を排除する。
-#[test]
-fn default_bind_ids_returns_sorted_numeric_ascending() {
-    let map = kv(&[
-        ("sakura.bindgroup90.default", "1"),
-        ("sakura.bindgroup100.default", "1"),
-        ("sakura.bindgroup1000.default", "1"),
-        ("sakura.bindgroup200.default", "1"),
-    ]);
-    let ids = default_bind_ids(&map);
-    assert_eq!(
-        ids,
-        vec![90, 100, 200, 1000],
-        "numeric 昇順で返る（lexicographic キー順に依存しない）"
-    );
-    // 重複なし（決定論の担保）。
-    let mut sorted_unique = ids.clone();
-    sorted_unique.dedup();
-    assert_eq!(ids, sorted_unique, "結果に重複が無い");
-}
-
-/// 値は trim して比較する（前後空白付き `" 1 "` は抽出・`" 0 "` は非抽出）。
-#[test]
-fn default_bind_ids_trims_value_whitespace() {
-    let map = kv(&[
-        ("sakura.bindgroup10.default", " 1 "),
-        ("sakura.bindgroup20.default", "\t1\n"),
-        ("sakura.bindgroup30.default", " 0 "),
-    ]);
-    assert_eq!(
-        default_bind_ids(&map),
-        vec![10, 20],
-        "trim 後に \"1\" と一致する値のみ抽出"
-    );
-}
-
 // ── 起動経路の surfaces.txt 復号（要件 6.1）──
+
+/// `root` の下に ghost／shell／balloon の最小の検体を組み、balloon のフォルダを返す。
+///
+/// 画像は emo2 から `surface0.png`／`surface10.png`／`balloons0.png` の 3 枚だけを複写し、
+/// シェルの descript.txt と surfaces.txt は呼び手が渡す。
+fn synth_ghost(root: &Path, shell_descript: &str, surfaces: &[u8]) -> PathBuf {
+    let ghost_master = root.join("ghost").join("master");
+    let shell_master = root.join("shell").join("master");
+    let balloon_dir = root.join("balloon-synth");
+    for dir in [&ghost_master, &shell_master, &balloon_dir] {
+        std::fs::create_dir_all(dir).expect("検体ディレクトリ作成");
+    }
+
+    std::fs::write(
+        ghost_master.join("descript.txt"),
+        "charset,UTF-8\nname,えも\n",
+    )
+    .expect("ghost descript");
+    std::fs::write(shell_master.join("descript.txt"), shell_descript).expect("shell descript");
+    std::fs::write(shell_master.join("surfaces.txt"), surfaces).expect("surfaces.txt の書出し");
+    for png in ["surface0.png", "surface10.png"] {
+        std::fs::copy(
+            emo2_root().join("shell/master").join(png),
+            shell_master.join(png),
+        )
+        .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
+    }
+    std::fs::write(
+        balloon_dir.join("descript.txt"),
+        "charset,UTF-8\ndpi,96\nuse_self_alpha,1\n",
+    )
+    .expect("balloon descript");
+    std::fs::copy(
+        emo2_balloon_root().join("balloons0.png"),
+        balloon_dir.join("balloons0.png"),
+    )
+    .expect("balloons0.png 複写");
+    balloon_dir
+}
 
 /// `charset,Shift_JIS` を宣言し、alias の値に Shift_JIS の「通常」を持つ surfaces.txt。
 ///
@@ -933,43 +789,12 @@ fn boot_read_honours_the_files_own_charset_declaration() {
     // 一時パスは共通窓口 `temp-path-kit` から受け取る（プロセス間で一意・Drop で中身ごと消える）。
     // 自前に組むと `std::env::temp_dir` の迂回を見張る番人が赤になる。
     let root = TempPath::new("areka-boot-assets-charset");
-    let ghost_master = root.path().join("ghost").join("master");
-    let shell_master = root.path().join("shell").join("master");
-    let balloon_dir = root.path().join("balloon-synth");
-    for dir in [&ghost_master, &shell_master, &balloon_dir] {
-        std::fs::create_dir_all(dir).expect("検体ディレクトリ作成");
-    }
-
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,えも\n",
-    )
-    .expect("ghost descript");
-    std::fs::write(
-        shell_master.join("descript.txt"),
-        "charset,UTF-8\nseriko.dpi,96\nseriko.use_self_alpha,1\n",
-    )
-    .expect("shell descript");
     // シェル定義ファイルだけを Shift_JIS で置く（他ファイルの宣言は持ち込まれない・要件 6.2）。
-    std::fs::write(shell_master.join("surfaces.txt"), SHIFT_JIS_SURFACES_TXT)
-        .expect("surfaces.txt の書出し");
-    for png in ["surface0.png", "surface10.png"] {
-        std::fs::copy(
-            emo2_root().join("shell/master").join(png),
-            shell_master.join(png),
-        )
-        .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
-    }
-    std::fs::write(
-        balloon_dir.join("descript.txt"),
-        "charset,UTF-8\ndpi,96\nuse_self_alpha,1\n",
-    )
-    .expect("balloon descript");
-    std::fs::copy(
-        emo2_balloon_root().join("balloons0.png"),
-        balloon_dir.join("balloons0.png"),
-    )
-    .expect("balloons0.png 複写");
+    let balloon_dir = synth_ghost(
+        root.path(),
+        "charset,UTF-8\nseriko.dpi,96\nseriko.use_self_alpha,1\n",
+        SHIFT_JIS_SURFACES_TXT,
+    );
 
     // `BootAssets` は Debug を持たないので、失敗側だけを取り出して表示する。
     let result = build_boot_assets(root.path(), &balloon_dir, &[0], 96, 96);
@@ -978,4 +803,65 @@ fn boot_read_honours_the_files_own_charset_declaration() {
         "Shift_JIS 宣言の surfaces.txt でも起動時資産の組立が成立すること（要件 6.1）: {:?}",
         result.err()
     );
+}
+
+// ── スコープごとの既定の着せ替えと名前の表（要件 14.1〜14.3）──
+
+/// 要件 14.1・14.3: 起動時資産の既定の組と名前の表が、シェルの着せ替えの読みからスコープごとに
+/// 作られる。スコープ 0 の初めの組は `sakura.*`、スコープ 1 は `kero.*`、スコープ 2 は `char2.*` の
+/// `default,1` で、`\![bind]` の名前もそのスコープの宣言だけで引ける（14.2）。
+#[test]
+fn boot_assets_build_default_binds_and_names_per_scope_from_shell() {
+    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let root = TempPath::new("areka-boot-assets-scope-binds");
+    let descript = [
+        "charset,UTF-8",
+        "sakura.bindgroup1.name,服,赤",
+        "sakura.bindgroup1.default,1",
+        "sakura.bindgroup2.name,服,青",
+        "kero.bindgroup3.name,帽子,黒",
+        "kero.bindgroup3.default,1",
+        "kero.bindgroup4.name,帽子,白",
+        "char2.bindgroup5.name,髪,長い",
+        "char2.bindgroup5.default,1",
+        "",
+    ]
+    .join("\r\n");
+    let balloon_dir = synth_ghost(root.path(), &descript, SHIFT_JIS_SURFACES_TXT);
+
+    let boot = match build_boot_assets(root.path(), &balloon_dir, &[0, 1], 96, 96) {
+        Ok(boot) => boot,
+        Err(e) => panic!("起動時資産の組立は成功する: {e:?}"),
+    };
+
+    let ids = |scope: &str| {
+        boot.static_binds
+            .for_scope(&areka_sakura::ActorKey::from(scope))
+            .ids()
+            .to_vec()
+    };
+    assert_eq!(
+        ids("0"),
+        vec![1],
+        "スコープ 0 の初めの組は sakura.* の default,1"
+    );
+    assert_eq!(
+        ids("1"),
+        vec![3],
+        "スコープ 1 の初めの組は kero.* の default,1"
+    );
+    assert_eq!(
+        ids("2"),
+        vec![5],
+        "スコープ 2 の初めの組は char2.* の default,1"
+    );
+    assert!(ids("3").is_empty(), "書かれていないスコープは何も着ない");
+
+    let r = &boot.bind_resolver;
+    assert_eq!(r.resolve(BindNamespace::Kero, "帽子", "白"), Some(4));
+    assert_eq!(r.resolve(BindNamespace::Sakura, "帽子", "白"), None);
+    assert_eq!(r.resolve(BindNamespace::Char(2), "髪", "長い"), Some(5));
 }

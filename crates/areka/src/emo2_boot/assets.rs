@@ -3,13 +3,10 @@
 //! `build_boot_assets`（shell: `areka_emo_present::shell_target::load_shell_target` を 1 回→scope
 //! ごとに `ShellTarget::build_world`／balloon: scope ごとに `resolve_balloon_faces`→
 //! `build_balloon_target_from_faces`＋`load_scope_balloon_model`＝[`BalloonScopeAssets`]／
-//! `SurfaceResolver`＝`alias_snapshot()`／static bindset＝`default_bind_ids`→`build_static_bindset`）と
-//! `default_bind_ids`（`sakura.bindgroup{N}.default==1` の N 抽出・DD-8・ukadoc 正典）を所有する。
+//! `SurfaceResolver`＝`alias_snapshot()`／既定の着せ替えと名前の表＝シェルの着せ替えの読みから
+//! スコープごとに `DefaultBinds::from_groups`・`BindResolver::from_groups`）を所有する。
 //! 戻り値だけで以後ファイル I/O 不要にする（parse／bake は 1 回・`AtlasTable` は Clone 共有）。
 //! 失敗は `BootWiringError`（`#[from]` 変換群）で観測可能化する。
-//!
-//! `default_bind_ids` は tasks.md task 2.3 で実装済み。`build_boot_assets` の骨格は残り、
-//! 実装は tasks.md task 2.6 が担う。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -23,65 +20,17 @@ use areka_emo_present::balloon::{
 };
 use areka_emo_present::shell_target::load_shell_target;
 use areka_parsers::balloon::BalloonModel;
-use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::kv::parse_kv;
+use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
 use areka_sakura::ActorKey;
-use areka_seriko::{
-    AnimationTable, BindOptionDecls, BindResolver, DefaultBinds, SurfaceResolver,
-    build_static_bindset,
-};
+use areka_seriko::{AnimationTable, BindResolver, DefaultBinds, SurfaceResolver};
 use tracing::error;
 
 use super::BootWiringError;
 use super::balloon_background;
 use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs};
 
-/// shell descript KV から `default==1` の bindgroup id を抽出する純関数（DD-8・ukadoc 正典）。
-///
-/// `sakura.bindgroup{N}.default` 形（`N` は `u32`）のキーで、値を trim した結果が `"1"` の
-/// エントリの `N` を集める。抽出は sakura scope 限定であり、`kero.*` scope の bindgroup default
-/// は本タスクの対象外（M-dual 増分・design.md Non-Goals「kero scope の bindgroup default 分離」）。
-///
-/// 除外条件:
-/// - 値（trim 後）が `"1"` でないもの（`"0"`／`"2"`／空／`"10"` 等）。
-/// - `kero.*` 等 `sakura.bindgroup` 以外の prefix を持つキー。
-/// - `.name`／`.group` 等 `.default` 以外の suffix を持つキーや、その他の無関係キー。
-/// - 中間 `N` が `u32` として parse できないキー（`XYZ`／空／負値／数字混在）。
-///
-/// prefix/suffix は厳密一致で判定する（`strip_prefix`/`strip_suffix`）。パターンを部分文字列
-/// として含むだけのキー（例 `xsakura.bindgroup1.default`／`sakura.bindgroup1.defaultx`）は
-/// match せず、中間を `u32` として厳密 parse することで数値部の false-positive も防ぐ。
-///
-/// 純粋関数（状態・I/O なし）。戻り値は決定論のため数値昇順にソートし重複を除去する
-/// （`BTreeMap` のキー反復は lexicographic 順のため numeric 昇順とは一致しない）。
-pub fn default_bind_ids(shell_kv: &BTreeMap<String, String>) -> Vec<u32> {
-    /// sakura scope の bindgroup キー prefix（厳密一致）。
-    const PREFIX: &str = "sakura.bindgroup";
-    /// bindgroup default キー suffix（厳密一致）。
-    const SUFFIX: &str = ".default";
-
-    let mut ids: Vec<u32> = shell_kv
-        .iter()
-        .filter_map(|(key, value)| {
-            // 値（trim 後）が "1" のエントリだけを対象にする。
-            if value.trim() != "1" {
-                return None;
-            }
-            // `sakura.bindgroup` <N> `.default` を厳密に剥がし、中間を u32 として parse する。
-            key.strip_prefix(PREFIX)
-                .and_then(|rest| rest.strip_suffix(SUFFIX))
-                .and_then(|mid| mid.parse::<u32>().ok())
-        })
-        .collect();
-
-    // 決定論: numeric 昇順ソート＋重複除去（キー反復順に依存しない安定した戻り値）。
-    ids.sort_unstable();
-    ids.dedup();
-    ids
-}
-
-/// descript 定義ファイル名（shell の static bindset 抽出に読む）。
+/// descript 定義ファイル名（読めないシェルを起動の失敗にするために読む）。
 const DESCRIPT_TXT: &str = "descript.txt";
 /// scope>=1 の初期表示 surface id（DD-9・ukadoc 相方既定サーフェス＝10・placement measure と同値）。
 const KERO_INITIAL_SURFACE_ID: u32 = 10;
@@ -192,7 +141,7 @@ pub struct BootAssets {
     pub balloons: Vec<BalloonScopeAssets>,
     /// `Emote{key}` → surface 解決器（`EmoWorld::alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
-    /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`・DD-8）。
+    /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・要件 14.1）。
     pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
     /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
@@ -228,7 +177,7 @@ pub struct BootAssets {
 /// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_model`）を行い
 /// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・Req 2.1）。
 /// `SurfaceResolver` は `EmoWorld::alias_snapshot()` から、static bindset は shell descript KV の
-/// `default_bind_ids`（DD-8・task 2.3）→ `build_static_bindset` で組む。
+/// シェルの着せ替えの読み（`MountModel.bindgroups`）からスコープごとに組む（要件 14.1〜14.3）。
 ///
 /// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling task 4.1）は
 /// **呼び手が読んだ値をそのまま搬送する**（本関数は解釈も再読取もしない）。設計 Flow 3 手順1 が
@@ -319,7 +268,7 @@ pub struct ShellAssets {
     pub shells: Vec<ScopeAssets>,
     /// `Emote{key}` → surface 解決器（先頭 World の `alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
-    /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`）。
+    /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・要件 14.1）。
     pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` 由来）。
     pub bind_resolver: BindResolver,
@@ -363,28 +312,8 @@ pub fn build_shell_assets(
     let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell)
         .map_err(BootWiringError::Mount)?;
 
-    // bind 名前解決情報: `MountModel.bindgroups` の名前宣言（`(カテゴリ, パーツ)`→着せ替え ID）を
-    // 起動時資産へ焼き込む（既存 default_bind_ids/static_binds 経路は無改変・R independence）。
-    // sakura_names/kero_names は昇順転写ゆえ FORWARD 反復で insert すれば、parsers の
-    // last-declaration-wins（後宣言優先）と一致する（BTreeMap::insert が後勝ちで上書き）。
-    let mut sakura_map: BTreeMap<(String, String), u32> = BTreeMap::new();
-    for name in &model.bindgroups.sakura_names {
-        sakura_map.insert((name.category.clone(), name.part.clone()), name.id);
-    }
-    let mut kero_map: BTreeMap<(String, String), u32> = BTreeMap::new();
-    for name in &model.bindgroups.kero_names {
-        kero_map.insert((name.category.clone(), name.part.clone()), name.id);
-    }
-    // `bindoption` 宣言集合を `MountModel.bindgroups` の転記
-    // （`sakura/kero.bindoption*.group,カテゴリ,オプション`・bindopt 1.1/1.2）から起動時資産へ構築する。
-    // 転記モデルは Vec（転記順保持・重複可）ゆえ、集合化（dedup）はここの BTreeSet 変換が担う。
-    let bind_options = BindOptionDecls {
-        sakura_mustselect: model.bindgroups.sakura_mustselect.iter().cloned().collect(),
-        kero_mustselect: model.bindgroups.kero_mustselect.iter().cloned().collect(),
-        sakura_multiple: model.bindgroups.sakura_multiple.iter().cloned().collect(),
-        kero_multiple: model.bindgroups.kero_multiple.iter().cloned().collect(),
-    };
-    let bind_resolver = BindResolver::new(sakura_map, kero_map, bind_options);
+    // 名前の表はシェルの着せ替えの読みから 3 種類のスコープ分を組む（要件 14.2・14.3）。
+    let bind_resolver = BindResolver::from_groups(&model.bindgroups);
 
     let shell_dir = model.shell.dir;
 
@@ -432,19 +361,16 @@ pub fn build_shell_assets(
     };
     let resolver = SurfaceResolver::new(aliases);
 
-    // static bindset: shell descript KV → default_bind_ids（DD-8・task 2.3）→ build_static_bindset。
+    // 着せ替えの読みは descript.txt が無くても空で返るので、読めないシェルの起動の失敗はここで残す。
     let descript_path = shell_dir.join(DESCRIPT_TXT);
-    let shell_kv = match std::fs::read(&descript_path) {
-        Ok(bytes) => parse_kv(&decode(&bytes, DefaultEncoding::Ansi)),
-        Err(source) => {
-            return Err(BootWiringError::ShellRead {
-                path: descript_path,
-                source,
-            });
-        }
-    };
-    // この段では `sakura.*` の組をどのスコープにも同じ組として持つ（今の振る舞い）。
-    let static_binds = DefaultBinds::uniform(build_static_bindset(&default_bind_ids(&shell_kv)));
+    if let Err(source) = std::fs::read(&descript_path) {
+        return Err(BootWiringError::ShellRead {
+            path: descript_path,
+            source,
+        });
+    }
+    // 既定の組はスコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*`（要件 14.1）。
+    let static_binds = DefaultBinds::from_groups(&model.bindgroups);
 
     // シェル面のループ表（面種非依存＝裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
     // 全 scope が同一 `Shell` から build 済みゆえ内容は scope 非依存＝先頭 World から 1 度だけ
