@@ -218,6 +218,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 - 記録の行の時刻は世界標準時（`Z`）のまま引いた。日本時間は 9 時間足す。
 - 目視で「同じ／違う」を決める項目（重なりの順・メニューの見た目・縦書きの並び）は、5.1 の時点では記録と撮った物から言える事実だけで仕分けた。その後の開発者の判定（2026-10-23・4 節の「開発者の目視の判定」・タスク 4.3）で、23 を足し、3 に開発者の目視を添えた。まだ判定の無い所（15）は表の中に「開発者の判定待ち」と書いた。
 - 「参考」と書いた件は補いの走り（alt2）だけで見えた件で、段の 3 値の数には入れない。
+- 24 は、タスク 5.5 の回し直し rerun2（2026-10-23 14:05〜14:11 日本時間・main を取り込んだ後のコード・`<w>\target\pasta-verify-rerun2\`）で見つかった件で、あとから足した。
 
 ### 崩れた所
 
@@ -246,11 +247,12 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 | 21 | 記録の 9 割が `apply(ShowSurface): 表示・マスクを更新` の INFO 行だった（6,073 行のうち面 1002 が 5,989 行・毎秒十数行・どれも `cache_hit=false`）。判定に要る行が埋もれる | `logs\run1.stdout.log`（6,546 行）を数えた。alt2 でも 3,650 行 | 再描画の回数そのものは、面 1002 のボールの 3 枚（`window/ball/eback.webp`・`base_rings.webp`・`efront.webp`）が動く WebP（どれも `ANIM` の塊を持つ）で、コマが替わるたびに合成し直す決まりどおり（完了 `areka-P0-animated-image-playback`）。記録の量は、適用 1 回ごとに INFO を 1 行出すこと（`crates/areka-emo-present/src/presenter/show.rs:402`） | 引き取る spec | `animated-surface-log-flood`（v0.1.0・2026-10-23 起票・6 節）。もとは持ち主なし（`real-run-log-noise` の範囲は文字の層の毎フレームの `debug!` 2 種類と同梱の emo2 の WARN だけ、`present-emit-tail-latency` は適用の時間の尾を扱い「動く絵の適用の回数を減らすこと」を範囲の外にしている）。`real-run-log-noise` へはまとめない（同日の開発者の決め） |
 | 22 | α の小さい画素の当たり（SSP では当たり、areka では通り抜ける薄い所）。本走行と補いの走りで見つかった件は 0。面 1002 で撫でる入力が素通りした所（12）は α が 0 の所で、SSP も当たらない見込みの所なので、この件に入れない | 7 節・`window/canvas.png` の α を数えた値（12 の根拠） | 方針の裁定。当たりは α が 0.5 以上の画素だけ（7 節） | 方針で受けない | 2026-10-22 開発者。出どころ: 本 spec の設計の話し合いの議題 1（コミット `3f539637`）と要件 7.1・7.2（7 節の「裁定」） |
 | 23 | （参考）縦書きのバルーンで選択肢の列にマウスを乗せると、反転の帯（背景の塗り）が崩れる。帯が列の左へずれ、列の幅のおよそ半分しか塗らない。横書きのバルーンでは帯は行に合っている | 開発者の目視（2026-10-23・4 節の Q2）「選択肢をマウスホバーした時の背景の塗りが崩れている。横書きの時と縦書きの時で、枠の補正方法がことなるのでは？」。撮った物 `<w>\target\pasta-verify-alt\shots\alt2\2b-choice-hover.png`（「雨だよ」の列の反転）。SSP の測り（`ssp-measurement.md` 2 節の段 2）は縦書きの選択肢に乗せたときの反転を撮っていない | `crates/areka-emo-text/src/choice.rs:330`〜`335`（見込み・要件の段で確かめる）。帯の厚みとずれを横書きの行の箱の寸法で決める `highlight_band_extent`（138 行目）・`highlight_band_offset`（176 行目）の値を、縦書き（`VerticalRl`／`VerticalLr`）でも x の軸へそのまま当てている（`LineRect { left: line.rect.left + band_offset, … right: line.rect.left + band_offset + band_extent }`）。当たりの範囲も同じ値を使う見込み | 引き取る spec | `vertical-choice-hover-band`（v0.1.0・2026-10-23 起票・開発者の「承認」）。もとは持ち主なし（`choice-marker-styling`〔いつか〕は `\f[cursor*]` の上書きと `cursor.*` の色と描き方、`script-small-tags` は `\![*]` で、縦書きの帯の寸法はどちらの持ち分にも無い） |
+| 24 | rerun2 で、起動からおよそ 3〜4 分で areka が画面の操作に答えなくなった。`Responding` は 14:09:17〜14:11:38（日本時間）のあいだずっと False で、MCP の道具は「did not respond within 10 seconds」で時間切れになり、ボールのドラッグにも身体のクリックにも `hit_test` の行が 1 つも出なかった。記憶（WorkingSet）は 3,920 MB から 5,333 MB へ増え続けた。05:11:38Z にこの pid だけを止め、終了コードは -1 だった | `<w>\target\pasta-verify-rerun2\logs\rerun2.stdout.log`（4,695 行）・`shots\rerun2\notes.md`。`apply(ShowSurface)` の行を 10 秒ごとに数えると、run1・live1・rerun1 は 138〜159 件（多くは 143 件前後）でそろうのに、rerun2 は止まっては詰めて出た（05:06:10 からの 10 秒が 58 件・05:06:20 からが 204 件、05:10:30〜05:11:00 は 51・77・48 件）。バルーンの時間切れ（30 秒）の計り始めが 64 秒遅れた（05:07:19.603313Z の `trigger="timeout"`）。記憶の増え方は、適用の回数におよそ 1.5〜2.3 MB を掛けた量と合う（調べた係の見積もり） | `crates/areka/src/emo2_boot/frame/drain_resnap.rs:62`（直す前）。`run_drain_phase` が `for cmd in wiring.rx.try_iter()` で取り出しながら適用していた。`try_iter` は呼んだ時点で届いていた分で止まらず、送り手が送り続けるあいだ取り出し続ける。送り手の seriko は、動く WebP のボールで毎秒約 14 件の ShowSurface を送り、どれも `cache_hit=false` で合成し直して、窓の大きさの D2D の絵を作る（`crates/areka-emo-present/src/display.rs:174`）。デバッグ版で適用 1 回が送りの間隔（約 1/14 秒）より重くなると drain が尽きず、1 フレームが終わらない（`crates/wintf/src/runtime/tick_bridge.rs:249`・`303` の `tick_one_frame` が戻らない）。そのため窓のメッセージの処理が止まり、Input 段で汲む MCP の受け口（`crates/areka/src/mcp/mod.rs:52`）と当たりの処理も回らず、フレームの終わりに返す GPU の資源が溜まった。この道は完了 `areka-P0-emo2-boot`（2026-07-13）から在る。main の取り込みの差分はこの道に触れていないので、取り込みで生じた崩れではない | 直した（本 spec のタスク 5.6） | 本 spec。2026-10-23 開発者の承認「推奨」（すべてのゴーストの描き方の流れに効く直しなので、直す前に決めを仰いだ・要件 6.4）。6 節の「直した結果（崩れ 24）」 |
 
 ### 数え
 
-- 表の件数は 23。扱いの内訳: 引き取る spec 20・方針で受けない 2（8・22）・兄弟の spec が直した 1（6・`areka-P0-window-link-directives`・main #360）。20＋2＋1＝23。直した 6 を「直した spec が引き取った」と読めば、引き取る先のある件は 21・方針で受けない件は 2。
-- **引き取る spec の名前も方針の裁定も無い件は 0 件**。持ち主の居なかった 3 件のうち、6 は main の #360（`window-link-directives`）が直し（本 spec のタスク 5.4 の直しは重なったので引っ込めた）、21 は新しい spec `animated-surface-log-flood`、23 は新しい spec `vertical-choice-hover-band` が引き取る。20 は引き取る spec を v0.1.0 の新しい spec `mcp-scope-rect-property` へ替えた（6 節・2026-10-23 開発者の決め）。
+- 表の件数は 24。扱いの内訳: 引き取る spec 20・方針で受けない 2（8・22）・兄弟の spec が直した 1（6・`areka-P0-window-link-directives`・main #360）・本 spec が直した 1（24・タスク 5.6）。20＋2＋1＋1＝24。直した 6 と 24 を「直した spec が引き取った」と読めば、引き取る先のある件は 22・方針で受けない件は 2。
+- **引き取る spec の名前も方針の裁定も無い件は 0 件**。持ち主の居なかった 4 件のうち、6 は main の #360（`window-link-directives`）が直し（本 spec のタスク 5.4 の直しは重なったので引っ込めた）、21 は新しい spec `animated-surface-log-flood`、23 は新しい spec `vertical-choice-hover-band` が引き取り、24 は本 spec のタスク 5.6 が直した。20 は引き取る spec を v0.1.0 の新しい spec `mcp-scope-rect-property` へ替えた（6 節・2026-10-23 開発者の決め）。
 - 引き取る spec ごとの件数: `mouse-click-wheel-events` 4（10〜13）・`areka-P0-ghost-inner-balloon` 2（1・2）・`descript-window-keys` 2（4・5）・`script-small-tags` 3（3・17・18）・`popup-menu-shell-look` 2（14・15）・`areka-P0-window-link-directives` 1（7・完了・main #360 で直った見込み・段 4 で確かめる）・`dpi-realign-remembered-chain` 1（9）・`shell-mouse-cursor` 1（16）・`stay-on-top-directives` 1（19）・`mcp-scope-rect-property` 1（20）・`animated-surface-log-flood` 1（21）・`vertical-choice-hover-band` 1（23）。合わせて 20。
 - 開発者の目視の判定（2026-10-23・4 節）: run1 の絵は「違う」（シェルがまともに出ていない・崩れ 1・2・4・6・12 の結果）。代わりの操作の後の rerun1 で、立ち姿と重なりの順（窓 → バルーン → ぱすた）は「同じ」（Q1）、2 つの枠の縦書きの字と並びは「同じ」（Q3）、選択肢は「違う」（Q2・3 と 23）、動く WebP は live1 で「同じ」。
 - まだ判定待ちの目視の項目: 15（メニューの見た目）と、6 節の「判定待ち（案 B）」の 6 欄（バルーンのぱすたからのずれ `sakura.balloon.offsetx`／`offsety`・`\![move,…]` の効き・既定の位置・`sakura.recommendsites`・`anchor.font.color.*`・`collision*`）。案 B（兄弟の spec の着地の後、v0.1.0 の版の門の最後の確かめ・9 節）で決める。
@@ -278,6 +280,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 
 - 持ち主の居なかった 3 件目の 23（縦書きの選択肢の反転の帯）は、5.3 の後、タスク 4.3 の開発者の目視の判定で見つかり、`vertical-choice-hover-band` として起票した（8 節の「起票した spec」）。この節の表と 20 本の線の判定は 5.3 の時点の 2 件（6・21）と 20 の分で、23 は本 spec のタスクを足していない。
 - 6 は、本 spec がタスク 5.4 で直した後、main の PR#360（`areka-P0-window-link-directives`）が同じ所を別の形で直した。main を取り込むときに本 spec の直しを引っ込めた（下の「直した結果」）。
+- 持ち主の居なかった 4 件目の 24（フレームの汲み出しが止まらずに固まる）は、タスク 5.5 の回し直し rerun2 で見つかった。開発者の承認を得て、本 spec のタスク 5.6 を足して直した（下の「直した結果（崩れ 24）」）。
 
 ### 開発者の決め（2026-10-23・チャット）
 
@@ -286,6 +289,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 - 崩れ 6 は本 spec のタスク 5.4 で直す（承認）。直すとすべてのゴーストの起動の位置に効くので、直す前に決めを仰いだ（要件 6.4）。
 - その後、main の #360 の直しと重なったので、本 spec のタスク 5.4 の直しを引っ込め、main の直しを取る（承認「承認する」）。
 - 崩れ 20 は新しい spec `mcp-scope-rect-property`（v0.1.0）、崩れ 21 は新しい spec `animated-surface-log-flood`（v0.1.0）が引き取る。21 は版に縛らない列の `real-run-log-noise` へはまとめない。
+- 崩れ 24 は本 spec のタスク 5.6 で直す（承認「推奨」）。届いている分を一度に集めてから適用し、同じ target へ続く `reply` の無い ShowSurface は最後の 1 件だけ適用する直しで、すべてのゴーストの描き方の流れに効くので、直す前に決めを仰いだ（要件 6.4）。
 
 ### 件ごとの扱い
 
@@ -294,12 +298,14 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 | 6 | 閉じる。判定 1 か所（x だけで比べる所を x と y で比べる）と、既定の位置を控えて渡す所の直しで、触るファイルは計画の 5.4 に挙げた 6 本 | 直した（タスク 5.4・コミット `97186487`）。のちに main #360 の直しと重なり、引っ込めた | 1 タスク。今ある 5.4 が受け持ち、タスクは足さない | 本 spec（引っ込めた後は `areka-P0-window-link-directives`・main #360）。2026-10-23 開発者の承認（上の決め） |
 | 21 | 本 spec では直さない。2 件目の直しを足すと本 spec が 20 タスクを超える。直す所の `crates/areka-emo-present/src/presenter/show.rs` は `present-emit-tail-latency`・`mcp-strict-errors` も触り、同じウェーブに置けない | 引き取る spec（起票） | S（2〜4）（正本のロードマップの spec 台帳の見立て） | `animated-surface-log-flood`（v0.1.0）。2026-10-23 開発者の決め |
 | 20 | 本 spec の範囲の外（sylphya に動く値の口を作る仕事）。前の持ち主 `currentghost-property-tree`（v0.3.0）・`currentghost-property-others`（いつか）は v0.1.0 の外 | 引き取る spec（起票） | M（8〜12）（同上） | `mcp-scope-rect-property`（v0.1.0）。2026-10-23 開発者の決め（「0.1.0までに解決しない場合、独立して起票せよ」） |
+| 24 | 閉じる。直す所は `crates/areka/src/emo2_boot/frame/drain_resnap.rs` の 1 か所と兄弟のテストだけ | 直した（タスク 5.6） | 1 タスク。タスク 5.6 を足した | 本 spec。2026-10-23 開発者の承認「推奨」（上の決め） |
 
 ### 20 本の線の判定
 
 - 今の計画は 19 タスク（小タスク 18 と、小タスクを持たない 6）。直しの 1 件目（6）は今ある 5.4 が受け持つので、タスクは足さず **19 タスクのまま**。20 本の線は越えない。
 - 2 件目を本 spec で直すと 20 を超えるので、21 は本 spec へ足さず、開発者の決めのとおり起票した（要件 6.3。黙って起票へ回したのではない）。
 - 5.3 で足すタスクは 0。
+- その後、崩れ 24 の直しとしてタスク 5.6 を足した。計画は **20 タスク**（小タスク 19 と、小タスクを持たない 6）になり、20 本の線は越えない（要件 6.3 の決めを仰ぐ線は「20 を超える見込み」）。
 
 ### 直した結果（崩れ 6・main #360 の直し。本 spec のタスク 5.4 の直しは引っ込めた）
 
@@ -308,6 +314,20 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 - 完了 spec の要件の上書き（要件 6.6）: 完了 `areka-P0-scope-chain-gap` の要件 7.3（明示的に置き直したスコープは並べ直さない）と、完了 `areka-P0-char-position-save-on-exit` の要件 1.7（台本で動いた窓は記憶に書かない）に触れる変更は、今は本 spec の変更ではなく #360 の変更である。#360 は 7.3 を印 `ScriptPlaced` で満たし、1.7 を保った（`.kiro/specs/completed/areka-P0-window-link-directives/tasks.md` の 9.2 と、完了時に解決した ⅴ）。本 spec はこの 2 つの要件を上書きしていない。
 - 実機の回し直し（タスク 5.5・rerun1・2026-10-23 01:25〜01:30Z・`<w>\target\pasta-verify-rerun\shots\rerun1\notes.md`）は、**引っ込めた本 spec の直しの上で回した記録**として残す。要点: 記録に `scope=1` の `chain_finalize` の行は 0 件で、`\1` は台本どおり `\0` の左上（0,864）へ動いたまま、ぱすたの奥に出た（`1-boot-primary-ghost.png`）。途中で開発者が手でぱすたと窓の枠をドラッグしたので、それより後の位置は手で置いた位置。段ごとの結果は次の「手順で回し直した段の結果」に書く。
 - **main の直し（#360）の上での回し直しはまだ**（進行役が回す）。段 1 で `\1` が `\0` の左上に重なって出ること（6）と、段 4 で窓の枠がドラッグに付いてくること（7）を確かめる。
+
+### 直した結果（崩れ 24・本 spec のタスク 5.6）
+
+- 直した所: `crates/areka/src/emo2_boot/frame/drain_resnap.rs`。`run_drain_phase` の本体を `drain_present_commands` へ移し、次の 2 つに改めた。
+  - 届いている指令を、適用するより先に `try_iter().take(MAX_DRAIN_PER_FRAME)` で集める。上限は `MAX_DRAIN_PER_FRAME = 1024`。集めるのは指令を移すだけなので速く、適用の回数は集めた件数で決まるので、送り手が送り続けても 1 フレームは必ず終わる。上限は送り手が受け手より速い異常なときだけ効く（普段は 1 target あたり毎秒十数件）。上限を超えた分は捨てずにチャネルに残し、次のフレームが到着順に取り出す。上限に当たったら `warn!` を出す（記録の無い道を作らない・要件 6.8）。1 フレーム遅らせる直しではない。
+  - 同じ target へ続く `reply` の無い ShowSurface は、後ろに同じ target の ShowSurface があれば画面に載らないので、最後の 1 件だけ適用する（今のコマを出す）。ShowSurface 以外の指令（Hide・InvalidateCache・ReplaceTarget・StageAck と、今後足される物）はすべて区切りで、それをまたいで畳まない。`reply` 付きの指令は畳まない。別の target の ShowSurface は区切りにしないので、`\0` と `\1` が交互に届いても畳める。畳んだ件数は `trace!` に残す。
+- テスト（兄弟の `crates/areka/src/emo2_boot/frame/drain_resnap_tests.rs`・3 本）。直す前（閉包で適用を受ける形にだけして、中身は元の `try_iter` の回し方のまま）に回して 3 本とも赤（0 passed・3 failed）、直した後に 3 本とも緑。
+  - ① `drain_returns_while_the_sender_keeps_sending`: 送り手のスレッドが 1 ms ごとに送り続け、適用 1 回に 10 ms かかるとき、drain が戻る。直す前は 3 秒待っても戻らず「送り手が送り続けるあいだ drain が戻らない（1 フレームが終わらない）: Timeout」で赤。
+  - ② `consecutive_shows_to_one_target_collapse_to_the_last_and_keep_other_commands_in_order`: 11 件の並びが、期待の 7 件（畳んだ後・Hide と StageAck の順と `reply` 付きの 1 件を保つ）になる。直す前は 11 件をそのまま全部適用して赤。
+  - ③ `drain_takes_at_most_the_cap_and_leaves_the_rest_in_order_with_a_warning`: 1,029 件のうち 1 フレームで 1,024 件を取り出して `warn!` が 1 行出て、残りの 5 件は次のフレームが到着順に取り出す。直す前は 1,029 件を一度に取り出して赤。
+- 既存のテストは書き換えていない。`frame_drain_text_tests` の `run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order` は Hide 3 件（どれも区切り）なので、新しい決まりでも結果が同じで緑のまま。1 フレームに ShowSurface を何件も送って適用の回数を数える `run_drain_phase` のテストは無かった。
+- 確かめ（2026-10-23）: `cargo test -p areka --bin areka` は 3,463 件が緑（失敗 0・無視 2）。`cargo clippy -p areka --all-targets` で触った 2 本のファイルの警告は 0。`cargo fmt --all -- --check` は差分なし。
+- 完了 spec の要件の上書き（要件 6.6）: 汲み出しを作った完了 `areka-P0-emo2-boot` の要件（`requirements.md`）には「届いた指令を全件適用する」形の決まりは無く、上書きした要件は無い。設計（`design.md` の「UI 毎フレーム結線 / frame」のフェーズ②）には「`Receiver::try_iter` で `PresentCommand` を全件取り出し順に `presenter.apply`」と書かれている。この形は今回、上限まで集めて画面に載らない途中の ShowSurface を畳む形に変わった。到着順を保つことと、装着の前はチャネルに保留して取りこぼさないこと（同じ設計の 193 行目）は変わらない。
+- 実機の回し直しはまだ（タスク 5.5 の回し直しとして進行役が回す）。rerun2 と同じ置き方で、起動から数分たっても `Responding` が True のままで、記憶が増え続けず、ドラッグに `hit_test` の行が出ることを確かめる。
 
 ### 手順で回し直した段の結果（タスク 5.5・要件 8.5）
 
