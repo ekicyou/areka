@@ -228,3 +228,53 @@ SSP 2.9.23・窓際のぱすたさん（手すきの状態＝`get_status` が空
 4. `GetWindowRect` が窓を持つスレッドを待たないことの確かめ（Win32 の作りからの判断で、まだ実測していない）と、DPI 対応 v2 のプロセスで物理の画素が返ることの実機テスト（要件 8.5）。
 5. `reader.rs` の冒頭・`mirror.rs` の `SharedMirror::load` のコメントの直し（要件 7.8）。
 6. ウェーブの約束（6 節）の当たりの組み直し: 集め手が要らなくなったので、`emo2_boot/mod.rs` の `mod` の 1 行・`ghost_session.rs` の登録が要るかを改めて調べる。
+
+## 11. 設計の段の調べと決め（2026-10-23・`/kiro-spec-design -y`）
+
+### 11.1 まとめ
+
+- **調べの種類**: 軽い調べ（今ある sylphya と窓の作りへの足し）。新しい依存は足さない。外の資料は Win32 の `GetWindowRect` の説明だけを引き直した。
+- **使った手引き**: `kiro-spec-design` の決まり（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、このセッションの「最小で全部を満たす」方針（ponytail）。ほかのスキルは使っていない（画面・使い勝手の作りが無い）。
+- **要の発見**:
+  1. 読み手を **sylphya の読み口（`SylphyaReader`）に登録する**形にすると、読み口を作る関数 `SylphyaReader::new` の形も、アクター（`actor.rs`）も、MCP の `mcp/get_property.rs` も、ゴーストの道の `shiori_host.rs` も変えずに済む。読み口の複製はどれも同じ登録の表を共有する。
+  2. 「スコープ → 窓」の表の中身は OS の窓の印（HWND）で、sylphya は OS を知らない（要件 7.2）。だから表は **sylphya に登録した読み手が持つ置き場**へ出す。sylphya はその中身を読まない。
+  3. 実行系を作るたびに必ず通る口 `ghost_session_runtime.rs` の `rewire_runtime_consumers`（初回の起動・切替・`reload` の 3 つとも、実行系を置き場 `GhostSlot` へ付ける**前**に呼ばれる）に 1 行足せば、新しい sylphya に読み手を登録し、その時点の表を同期で載せられる。`reload` の出し直しはこれで済む。
+
+### 11.2 10.2 節の 6 点の答え
+
+| # | 問い | 答え | 根拠 |
+|---|---|---|---|
+| 1 | 読み手の登録の形・引く順 | 名前の「形」（選択子を `(*)` に寄せた正準の文字列＝`currentghost.scope(*).rect`）で引く表を `SylphyaReader` の中に持つ（`Arc<RwLock<BTreeMap<形, Arc<dyn PullSource>>>>`）。読み手の型は `fn read(&self, path: &PropPath) -> Option<String>`。区画は大域（sylphya は実行系ごとに 1 つなので問い手で分ける要が無い）。**写しの区画を先に引き、無いときだけ読み手を引く**（読み手を足しても今ある答えが変わらない＝要件 7.5 が作りで満たされる）。`SylphyaReader::new` の形は変えない（呼び手 24 か所に触らない） | `reader.rs` の `resolve_dotted_canonical`・`mirror.rs`・呼び手の数は 10.2 節 |
+| 2 | 表の置き場と出し手 | 表は areka の新しいファイル `ghost_session_scope_rect.rs` の置き場（`RwLock<ScopeWindowTable>`）に置き、sylphya に登録した 2 つの読み手（キャラクター用・バルーン用）が共有する。出し手は ⑴ `rewire_runtime_consumers` からの結線（実行系を作るたび・同期で今の表を載せる）⑵ `FrameFinalize` の系（`GhostWindows` が変わった・窓の印が付いた〔`Added<WindowHandle>`〕・外れた〔`RemovedComponents<WindowHandle>`〕ときだけ表を組み直し、違えば差し替える）。⑥ の持ち物 `placement/spawn.rs` は読むだけ（公開の `GhostWindows::scopes`・`char_window`・`balloon_window`） | `ghost_session_runtime.rs` の `rewire_runtime_consumers`・`rebuild_runtime_in_place`・`ghost_session.rs` の `boot_wired`・`register_systems`・先例 `placement::spawn::register_ghost_windows_click_through`（`Added<WindowHandle>` を `FrameFinalize` で読む） |
+| 3 | HWND を他のスレッドから使う扱い | 表には HWND の生の値（`isize`）だけを置く。読み手は値を写し取ってから表の鍵を外し、OS へ 1 回聞く。壊れた窓の印なら `GetWindowRect` が失敗する＝「窓を持たない」と同じ答え（要件 3.5）。窓の entity が消えたとき、wintf は `WM_CLOSE` を**投函**するだけ（`window_handle.rs` の `on_window_handle_remove`）なので、OS の窓はその直後の数フレームだけ残りうる。表からは同じフレームの `FrameFinalize` で外す | `crates/wintf/src/ecs/window/window_handle.rs` |
+| 4 | `GetWindowRect` は待たないか・物理の画素か | Microsoft の説明は送るメッセージを書いていない（`GetWindowText` のように窓のスレッドへ送る関数は説明に書く）＝窓を持つスレッドの返事を待たない読み取り。**「GetWindowRect is virtualized for DPI」**＝呼んだスレッドの DPI の扱いで値が変わる。プロセスはモニタごとの v2（`wintf/src/runtime/mod.rs` の `SetProcessDpiAwarenessContext`）だが、ゴーストの道の呼び手のスレッドが自分の扱いを変えている場合に備え、本物の読み手は呼ぶ間だけスレッドの扱いを v2 にして戻す（`SetThreadDpiAwarenessContext`・先例 `crates/areka/tests/window_link_real_run.rs`）。右と下は窓の外の最初の画素（「the bottom-right coordinates of the returned rectangle are exclusive」）。枠の見えない縁を含むことがあるのは枠のある窓だけで、ゴーストの窓は枠の無い `WS_POPUP`（`spawn.rs` の `window_style`） | https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowrect （2026-10-23 に引き直した）。実機の確かめは要件 8.5 の `#[ignore]` テスト |
+| 5 | コメントの直し | `reader.rs` の冒頭の「OS 呼出…一切行わない」と `mirror.rs` の `SharedMirror::load` の説明を、要件 2.7・8.3 の言い方（他のスレッドを待たない・遅れうる値源を載せない・外の環境は登録された読み手を通す）へ直す。`load` 自身が鍵と `Arc` の複製しかしないことは事実なので残す | 要件 7.8 |
+| 6 | ウェーブの約束 | 集め手が要らなくなり `emo2_boot` に置く理由が消えた。**`emo2_boot/mod.rs`・`emo2_boot/frame.rs`・`main.rs`・⑥ の持ち物には触らない**。触るのは `ghost_session.rs`（`mod` の宣言 1 つと系の登録 1 行）と `ghost_session_runtime.rs`（結線 1 行）で、どちらも C11 のどの spec の表にも無い | `roadmap.md` の C11 の行 |
+
+### 11.3 引き直して分かった細かい点
+
+- **書式の読み方**（`key.rs` の `parse_dotted`）: `scope(00)` は `ByIndex(0)`（要件 1.9 は今の読み手のまま満たす）。`scope(-1)`・`scope(x)`・`scope()`・`scope(+1)` はどれも `ByName`（中身はそれぞれ `-1`・`x`・空・`+1`）で、書式の誤りにはならない。u32 を超える番号（`scope(99999999999)`）は `BadIndex` で読み手が `warn!` を残して値なしにする（今の振る舞いのまま）。
+  - → 読み手の側で、`ByName` の中身が「`-` と 1 つ以上の数字」なら**負の番号**（要件 3.1・キャラクターは `0,0,0,0`・バルーンは値なし）、それ以外の `ByName` は**書式の誤り**（要件 3.6・値なし）と読む。`scope(+1)` を SSP がどう答えるかは測っていない（値なしにする）。
+- **`GhostWindows` が変わる時**: 作る時（`spawn_ghost_windows`）・1 つの窓を外す時（`remove_entry_of`）・既定の位置を追う時（`window_move.rs` の既定位置の追随・`drain_resnap.rs` の確定・`reset_pos.rs`）。後の 3 つは拡大率の遷移などシステムの置き直しの時だけで、ドラッグの毎フレームではない。表の中身（窓の印）は変わらないので、比べて差し替えない。
+- **切替**: `app_exit::close_windows_for_restart` が窓の entity を消し、`GhostWindows` を外す。窓の印が外れた（`RemovedComponents<WindowHandle>`）ことで表が空になる。新しい実行系の結線は、その時点の `GhostWindows`（新しい窓の一式・印はまだ付いていないことがある）から表を組む。
+- **網羅台帳の証拠**: `ukadoc-survey` の検査は `implemented` の行に証拠を 1 件以上求める（`check/finding.rs` の `ImplementedWithoutEvidence`）。証拠はソースの `// ukadoc: <URL>` の行で、URL はカタログ（`doc/ukadoc-coverage/catalog.toml`）の形 `https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.scope_28ID_29.rect:1`・`…#currentghost.balloon.scope_28ID_29.rect:1`（括弧は `_28`・`_29`）。
+- **テストの道具**: `emo2_boot/ghost_switch_test_support.rs` の `SwitchRig` は本番の `boot_ghost` を通る（＝`rewire_runtime_consumers` を通る）。窓は `spawn_ghost_windows` で窓なしに組め、偽の印（`frame_test_support.rs` の `fake_handle`）を付けられる。偽の OS の読み手は World の資源（`ScopeRectReadSeam`）で差す。
+
+### 11.4 選んだ形と退けた形（表の置き場）
+
+| 案 | 中身 | 良い所 | 困る所 | 決め |
+|---|---|---|---|---|
+| X 表を写しに載せる | アクターへのメッセージで表を出し、写しの新しい区画に置く。読み手は写しから表を読む | 「書き手はアクター 1 本」を守る | 出してから写しに載るまでの間がある（実行系を付けた直後に読み手が居ない・表が空＝`0,0,0,0` が出ず「無い名前」になる隙間が要件 3.3・6.3 に当たる）。HWND を sylphya の型に載せるには型を消す（`Any`）か文字列にするしかない。`actor.rs`・`mirror.rs` の区画・効果の型が広がる | 退けた |
+| Y 読み手の置き場に表を置き、読み口に同期で登録する | 本設計 | 登録も表の差し替えも同期＝実行系を置き場へ付ける前に揃う。sylphya は OS の型を知らない。アクターに触らない | 読み口に 2 つ目の鍵（登録の表）が増える（`SharedMirror` と同じ「読みの鍵 → `Arc` の複製」の形で、待ち合わせにはならない） | **採った** |
+
+### 11.5 設計の合成（synthesis）
+
+- **一般化**: 2 つの名前は「名前の形に読み手を 1 つ登録する」の 2 例。口は形の文字列で引く表 1 つにした。後の spec（`shell-scale-linkage` の `scope(ID).scaling` など）は読み手を足すだけ（要件 7.4）。読み手に問い手（`AskerContext`）は渡さない（今の 2 つの名前で要らない・足すときは再確認の引き金）。
+- **作るか借りるか**: 置き場の差し替えは標準の `RwLock`（`SharedMirror` と同じ）。`arc-swap` などの依存は足さない。OS の矩形は `GetWindowRect`（`windows` クレートの既にある機能 `Win32_UI_WindowsAndMessaging`・`Win32_UI_HiDpi`）。
+- **削ったもの**: 毎フレームの集め手・可視の読み取り（SSP の実測で要らない）・値を消す効果・写しの新しい区画・アクターのメッセージ・`mcp/get_property.rs` の振り分け・`emo2_boot` の新しいファイル。表の比べは「変わった印が立ったときだけ」で、毎フレームは比べない。
+
+### 11.6 危うさと手当て
+
+- **窓の印の使い回し**: 壊れた窓の HWND の値を OS が別の窓に使い回すと、表の古い値が別の窓を指す。印は同じフレームの `FrameFinalize` で外すので、残るのは数フレーム。HWND には使い回しを遅らせる数が入っている。→ 受け入れる（設計の Risks に書く）。
+- **閉じている途中の窓**: `WM_CLOSE` の投函から窓が実際に壊れるまでの間に、表から外す前の読みが来ると、閉じかけの窓の矩形を返しうる。切替の間は実行系が外れている（MCP は「実行系が無い」で答える）ので、ふつうは届かない。→ 受け入れる。
+- **ほかの C11 の spec と `ghost_session.rs` の `register_systems`**: 表では誰も挙げていないが、系の登録を 1 行足す spec が出ると隣り合う行の競合になりうる（行が別なので手で直せる大きさ）。
