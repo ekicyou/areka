@@ -2,13 +2,18 @@ use std::path::PathBuf;
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_parsers::charset::decode;
-use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
+use areka_seriko::{
+    BindChoicePolicy, BindNamespace, NamedBindResult, ScopeStates, SurfaceTarget, apply_named_bind,
+};
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
 use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::scope_bind_fixture_test_support::{
+    BLUE, CHAR2_CATEGORY, GREEN, KERO_CATEGORY, RED, SAKURA_CATEGORY, scope_bind_ghost,
+};
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::emo2_boot::target_map::scope_of;
 // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
@@ -805,63 +810,71 @@ fn boot_read_honours_the_files_own_charset_declaration() {
     );
 }
 
-// ── スコープごとの既定の着せ替えと名前の表（要件 14.1〜14.3）──
+// ── スコープごとの既定の着せ替えと名前の表（要件 14.1・14.2・14.4）──
 
-/// 要件 14.1・14.3: 起動時資産の既定の組と名前の表が、シェルの着せ替えの読みからスコープごとに
-/// 作られる。スコープ 0 の初めの組は `sakura.*`、スコープ 1 は `kero.*`、スコープ 2 は `char2.*` の
-/// `default,1` で、`\![bind]` の名前もそのスコープの宣言だけで引ける（14.2）。
+/// 要件 14.1・14.2・14.4（画面の側）: 共有の検体（research.md §10.3 の `g_scope` の形）を画面の
+/// 道（シェルの資産づくり → `ScopeStates` → `\![bind]` の決め方）に通すと、初めの組はスコープ
+/// 0・1・2・3 で赤（10）・緑（11）・青（12）・空になり、スコープ 1・2 への名前の着せ替えは
+/// そのスコープの名前の表だけで当たる。
 #[test]
-fn boot_assets_build_default_binds_and_names_per_scope_from_shell() {
+fn screen_binds_split_per_scope_on_shared_scope_fixture() {
     // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let root = TempPath::new("areka-boot-assets-scope-binds");
-    let descript = [
-        "charset,UTF-8",
-        "sakura.bindgroup1.name,服,赤",
-        "sakura.bindgroup1.default,1",
-        "sakura.bindgroup2.name,服,青",
-        "kero.bindgroup3.name,帽子,黒",
-        "kero.bindgroup3.default,1",
-        "kero.bindgroup4.name,帽子,白",
-        "char2.bindgroup5.name,髪,長い",
-        "char2.bindgroup5.default,1",
-        "",
-    ]
-    .join("\r\n");
-    let balloon_dir = synth_ghost(root.path(), &descript, SHIFT_JIS_SURFACES_TXT);
-
-    let boot = match build_boot_assets(root.path(), &balloon_dir, &[0, 1], 96, 96) {
-        Ok(boot) => boot,
-        Err(e) => panic!("起動時資産の組立は成功する: {e:?}"),
+    let ghost = scope_bind_ghost();
+    let decoder = WicDecoderArm::new().expect("WIC デコーダ");
+    let shell = match build_shell_assets(ghost.path(), None, &[0, 1, 2, 3], 96, &decoder) {
+        Ok(shell) => shell,
+        Err(e) => panic!("シェルの資産づくりは成功する: {e:?}"),
     };
+    assert!(shell.bake_failures.is_empty(), "{:?}", shell.bake_failures);
 
-    let ids = |scope: &str| {
-        boot.static_binds
-            .for_scope(&areka_sakura::ActorKey::from(scope))
-            .ids()
-            .to_vec()
-    };
+    let mut states = ScopeStates::new(shell.static_binds);
+    let key = |s: &str| areka_sakura::ActorKey::from(s);
+    let ids = |states: &ScopeStates, scope: &str| states.current_binds(&key(scope)).ids().to_vec();
     assert_eq!(
-        ids("0"),
-        vec![1],
-        "スコープ 0 の初めの組は sakura.* の default,1"
+        ids(&states, "0"),
+        vec![RED],
+        "スコープ 0 は sakura.* の既定＝赤"
     );
     assert_eq!(
-        ids("1"),
-        vec![3],
-        "スコープ 1 の初めの組は kero.* の default,1"
+        ids(&states, "1"),
+        vec![GREEN],
+        "スコープ 1 は kero.* の既定＝緑"
     );
     assert_eq!(
-        ids("2"),
-        vec![5],
-        "スコープ 2 の初めの組は char2.* の default,1"
+        ids(&states, "2"),
+        vec![BLUE],
+        "スコープ 2 は char2.* の既定＝青"
     );
-    assert!(ids("3").is_empty(), "書かれていないスコープは何も着ない");
+    assert!(
+        ids(&states, "3").is_empty(),
+        "char3.* の無いスコープ 3 は何も着ない"
+    );
 
-    let r = &boot.bind_resolver;
-    assert_eq!(r.resolve(BindNamespace::Kero, "帽子", "白"), Some(4));
-    assert_eq!(r.resolve(BindNamespace::Sakura, "帽子", "白"), None);
-    assert_eq!(r.resolve(BindNamespace::Char(2), "髪", "長い"), Some(5));
+    let r = &shell.bind_resolver;
+    // スコープ 1 は kero.* の名前で当たり、同じカテゴリの緑は外れる（排他）。
+    let hit = apply_named_bind(&mut states, r, &key("1"), KERO_CATEGORY, "青", true);
+    assert!(
+        matches!(hit, NamedBindResult::Applied { id: BLUE, .. }),
+        "{hit:?}"
+    );
+    assert_eq!(ids(&states, "1"), vec![BLUE]);
+    // スコープ 2 は char2.* の名前で当たる。
+    let hit = apply_named_bind(&mut states, r, &key("2"), CHAR2_CATEGORY, "赤", true);
+    assert!(
+        matches!(hit, NamedBindResult::Applied { id: RED, .. }),
+        "{hit:?}"
+    );
+    assert_eq!(ids(&states, "2"), vec![RED]);
+    // ほかのスコープの名前では当たらない。
+    for (scope, other) in [("1", SAKURA_CATEGORY), ("2", KERO_CATEGORY)] {
+        let miss = apply_named_bind(&mut states, r, &key(scope), other, "緑", true);
+        assert!(
+            matches!(miss, NamedBindResult::NotFound),
+            "{scope}/{other}: {miss:?}"
+        );
+    }
+    assert_eq!(ids(&states, "0"), vec![RED], "スコープ 0 は触られない");
 }

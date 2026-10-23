@@ -108,7 +108,7 @@
   - 上の試験が緑で、建った実行ファイルを `target\` の下の PNG の組で回すと、上の行と終了コードが出る
   - _Requirements: 13.1, 13.2, 13.3, 13.4_
 
-- [ ] 5. areka（画面）: 既定の着せ替えと名前の表をシェルの読みからスコープごとに作る
+- [x] 5. areka（画面）: 既定の着せ替えと名前の表をシェルの読みからスコープごとに作る
 - [x] 5.1 画面の既定の組と名前の表をシェルの読みから作る
   - 画面の資産の組み立てで、既定の組と名前の表をシェルの着せ替えの読みからスコープごとに作る（2.3 の口）。今の `sakura.*` だけを拾う関数とその試験を消す。シェルの descript.txt が読めないときの今の起動の失敗は残す
   - 期待が意図して変わる試験（画面の資産を通ってスコープ 1 の組を見ているもの）を `kero.*` へ直し、資産の試験に「スコープ 1 の初めの組が `kero.*`・名前の表がシェルの読みから作られる」を足す
@@ -116,7 +116,7 @@
   - _Depends: 2.3, 2.4_
   - _Requirements: 14.1, 14.2, 14.3_
 
-- [ ] 5.2 スコープ 0・1・2 で既定と名前が分かれる検体で画面の組を確かめる
+- [x] 5.2 スコープ 0・1・2 で既定と名前が分かれる検体で画面の組を確かめる
   - research.md §10.3 の `g_scope` と同じ形の検体（`sakura.*`・`kero.*`・`char2.*` で既定と名前が分かれる）を `target\` の下に組む部品を、areka のクレートの試験専用の共有の部品（クレートの根に `src/scope_bind_fixture_test_support.rs`。design の依存の決まりで `offline_dump` は `emo2_boot` の他の部品を使わないため、`emo2_boot/` の下には置かない・`#[cfg(test)]`・`pub(crate)`）として 1 つだけ置く。areka は bin だけのクレートで、画面の試験と 7.8 の書き出しの試験は同じクレートの中の `#[cfg(test)]` なので、どちらからもこの 1 つを使う（検体の組み立てを写さない）
   - 画面の状態の初めの組がスコープ 0・1・2・3 でそれぞれ赤・緑・青・空になり、スコープ 1・2 への `\![bind]` がそのスコープの名前の表で当たることを確かめる
   - 上の試験が緑（14.4 の画面の側）で、検体の部品が 7.8 から呼べる可視性で置かれている
@@ -269,3 +269,4 @@
 - 3.1: `shell_bounds` は右下に面ごとの `compute_extent` も重ねる（非 overlay のメソッドの pattern も合成の絵を広げるため）。`tracing::subscriber::with_default` は本番で使えない（`log-capture-kit` の `with_default_guard_test` が見張る）。bind／always の pattern が循環するシェルでは `compute_extent`（`plan_extent.rs:78`）が warn を出す＝3.2 で debug に下げ、循環する bind の検体で `shell_bounds` が黙ることも 3.2 で確かめる
 - 3.2: 転記層は知らない `animation-sort`／`collision-sort` を `SortOrder::Other(Box<str>)` として残す（前は記録なしで捨てていた＝設計の前提と合わず、記録の無い失敗の道を作らない決まりで根本を直した）。`ShapeIssue::UnknownAnimationSort { value }` はシェル全体で 1 件・面と animation の欄なし＝3.3 はその欄なしで出す。`move` は `nesting.rs::pattern_edge` で辺にしない（NestReport と共有）。描かない method で親へ戻る pattern は `Cycle` と `UndrawnPattern` の 2 件になる＝3.3 の突き合わせで 1 誤り 1 行に寄せる
 - 4.2: surface-compare の行の形は `same|size-differs|pixels-differ|only-in-ssp|only-in-areka|unreadable <名前> ...` とまとめ `total=.. ...`。フォルダが読めないときの行はどちらのフォルダかを言わない（要件の外・直すなら `compare_dirs` の `list_pngs` の `?` を `map_err` で側と道筋つきに）
+- 5.2: 共有の検体 `crates/areka/src/scope_bind_fixture_test_support.rs`（`scope_bind_ghost()`）の `write_solid_png` は MCP の非公開の `fn png` の一時の写し＝6.1 で `png_image.rs` へ移したら移した関数を呼ぶ形に替え、shortcut の注記を消す
