@@ -97,9 +97,17 @@ fn hit(
     state: &TextLayerState,
     t: f64,
 ) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
+    hit_in(state, t, WritingMode::HorizontalTb)
+}
+
+/// [`hit`] の書字方向を選べる形。
+fn hit_in(
+    state: &TextLayerState,
+    t: f64,
+    mode: WritingMode,
+) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
     let actor = ActorKey::from(ACTOR);
     let place = state.actor_state(&actor).expect("場所の状態");
-    let mode = WritingMode::HorizontalTb;
     let model = BalloonModel::new(
         WindowPosition::new(None, None),
         Origin::new(None, None),
@@ -270,4 +278,28 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
             (SpanKind::Anchor, 3, rect(0.0, 25.0, 10.0, 37.0)),
         ]
     );
+}
+
+/// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形（要件 1.7）。
+/// 帯は厚み＝列の em 10・寄せは右から左 −round(0.4545·3.3)＝−1・左から右 round(0.5303·3.3)＝2
+/// （列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。期待値を数で書くので、`line_bands` の縦書きの枝を
+/// 戻すと赤になる。
+#[test]
+fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
+    // 「か」＋範囲「あいう」＋「き」を、範囲がアンカーのときと選択肢のときで並べる。
+    let anchor = applied(&[text("か"), open("x"), text("あいう"), close(), text("き")]);
+    let as_choice = applied(&[text("か"), choice("x", "あいう"), text("き")]);
+    for (mode, want) in [
+        (WritingMode::VerticalRl, (29.0, 39.0)),
+        (WritingMode::VerticalLr, (2.0, 12.0)),
+    ] {
+        let (_, a) = hit_in(&anchor, 0.0, mode);
+        let (_, c) = hit_in(&as_choice, 0.0, mode);
+        assert_eq!(a.len(), 1, "{mode:?}: アンカーの当たりの行");
+        assert_eq!(c.len(), 1, "{mode:?}: 選択肢の当たりの行");
+        let ((ak, _, ar), (ck, _, cr)) = (a[0], c[0]);
+        assert_eq!((ak, ck), (SpanKind::Anchor, SpanKind::Choice), "{mode:?}");
+        assert_eq!(ar, cr, "{mode:?}: アンカーと選択肢の帯");
+        assert_eq!((ar.left, ar.right), want, "{mode:?}: ブロック軸の範囲");
+    }
 }
