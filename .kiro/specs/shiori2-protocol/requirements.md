@@ -50,7 +50,7 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
   - areka が今送っていない要求（ゴースト同士の会話〔コミュニケート〕・TEACH・SHIORI/1.x など）を新しく送ること。2.x の書き方を足すのは、areka が今 3.0 で送っている要求に限る。
   - ゴーストの側（華和梨の辞書）の直し。
 - **Adjacent expectations**:
-  - `shiori4-api`（v0.2.0）は「SHIORI/2.x の見分けはこの spec の外＝areka の `shiori2-protocol`」と決めている。本 spec の版の確かめは、後で helper が乗り換わっても、要求を組む側（64 ビットの側）に残る形でよい。
+  - `shiori4-api`（v0.2.0）は「SHIORI/2.x の見分けはこの spec の外＝areka の `shiori2-protocol`」と決めている。本 spec の版の確かめは、後で helper が乗り換わっても、要求を組む側（64 ビットの側）に残る形でよい。`shiori4-api` の決定 3（SHIORI はどの版でも別プロセスで動かし、同じプロセスの道 `ShioriWiring::InProc` と今の SHIORI4 の口を消す・2026-10-23 開発者が本 spec の話し合いでも確認）により、本 spec は同じプロセスの道（`crates/areka-ghost/src/shiori_inproc.rs`）に触らない。
   - `audit-shiori-host32`・`makoto-dll-host`・`mcp-shiori-query`・`property-ipc-transport`・`property-query-channels` は同じファイル群を挙げる後の版の spec。`popup-menu-residue`（版に縛らない）は kanade の往復の失敗の文言で重なる。
   - 同じウェーブ C11 の約束（`.kiro/steering/roadmap.md`「ウェーブ編成」の C11 の ⑧ の行）: kanade の `msg.rs`・`schedule/` と `crates/shiori-host32-helper/` に触らない。版の確かめに起動の運行の変更が要ると分かったときは、回避の形へ逃げず、持ち主のセッション（`mouse-click-wheel-events`）と調整する（開発者方針「設計は本質的な案で」）。
 
@@ -75,7 +75,7 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 3. When SHIORI を降ろして読み込み直したとき, the areka shall 前の読み込みで決めた版を使わず、要件 2.1 の確かめをやり直す。
 4. When 版を決めたとき, the areka shall ゴーストの名前・決めた版・決めた根拠（相手の答えた版の文字列、または 400 などの状態）を INFO の記録に 1 行残す。
 5. If 確かめの答えから版を決められない（答えが無い・読めない）なら, the areka shall 今と同じ SHIORI/3.0 として話し、その旨を WARN の記録に 1 行残す。
-6. The areka shall 32 ビットの SHIORI を中継で動かす場合と、同じプロセスで動かす場合のどちらでも、同じ確かめ方と同じ覚え方をとる。
+6. The areka shall 版の確かめと 2.x の書き方を、SHIORI を別プロセス（中継）で動かす道にだけ持たせ、同じプロセスで DLL を読む道（`ShioriWiring::InProc`・SHIORI4 の DLL 専用）には足さない（2026-10-23 開発者の決め「SHIORI はすべて別プロセスで動かす・今の SHIORI4 の口は破棄する」＝`shiori4-api` の決定 3。その道は `shiori4-api` で消える）。
 
 ### Requirement 3: 2.x の相手へは 2.x の書き方で送る
 **Objective:** As a ゴーストの利用者, I want SHIORI/2.x のゴーストへ、そのゴーストが読める書き方で話しかけてほしい, so that 起動・時間・終了・翻訳のどの場面でもゴーストが答えられる
@@ -88,7 +88,6 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 5. If 要件 1 の測りで、SSP が 2.x の相手へ送らないイベントがあると分かったなら, the areka shall そのイベントを 2.x の相手へ送らず、送らなかったことを DEBUG の記録に残す。
 6. Where SSP が 2.x の要求にも `Charset`・`Sender`・`SecurityLevel` などの見出しを付けると測れた, the areka shall 3.0 の要求と同じ値をその見出しに載せる（文字コードの決め方は今のまま）。
 7. The areka shall 3.0 のイベントから 2.x の要求への組み替えを 1 つの表として持ち、その表を `doc/COMPAT_ARCHITECTURE.md` §8 に出どころ付きで記録する。
-8. The areka shall 要件 2.6 と同じく、32 ビットの中継の場合と同じプロセスの場合のどちらでも、同じ 2.x の要求を送る。
 
 ### Requirement 4: 2.x の応答を 3.0 と同じ扱いへ戻す
 **Objective:** As a ゴーストの利用者, I want 2.x のゴーストの返事を、3.0 のゴーストの返事と同じに扱ってほしい, so that 台詞・メニューの項目名・翻訳の結果がいつもどおりに出る
@@ -130,8 +129,7 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 2. The 決定論のテスト shall 偽の 2.x の SHIORI の応答（台本付き・値付き・返す物が無い・400・500・読めない）ごとに、areka の扱い（要件 4 の各項）を固定する。
 3. The 決定論のテスト shall 版の確かめを、3.0 と答える相手・2.x と答える相手・版を決められない相手の 3 通りで固定する（要件 2.1・2.5）。
 4. The 決定論のテスト shall 読み込み直したときに版を確かめ直すこと（要件 2.3）を固定する。
-5. The 決定論のテスト shall 32 ビットの中継の場合と同じプロセスの場合の両方で、2.x の相手へ同じ要求が送られることを固定する。
-6. The 決定論のテスト shall SSP・実物の華和梨・ネットへの接続を要さず、全体テストの常時のテストとして回る。
+5. The 決定論のテスト shall SSP・実物の華和梨・ネットへの接続を要さず、全体テストの常時のテストとして回る。
 
 ### Requirement 8: 記録と文書
 **Objective:** As a 開発者, I want 2.x への対応の決めと出どころが文書に残ってほしい, so that 後の spec（`shiori4-api`・`audit-shiori-host32` など）が同じ決めの上に乗れる
