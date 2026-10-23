@@ -577,3 +577,37 @@ fn descript_balloon_agrees_with_runtime_switch() {
         assert_eq!(runtime, chained, "実行中と鎖が食い違う: {value}");
     }
 }
+
+/// 同じ `name` のバルーンがゴーストの中と根に在る一覧（`balloons_for` の並び＝ゴーストの中が先）で、
+/// descript の `balloon` はゴーストの中に当たる（areka-P0-ghost-inner-balloon 要件 4.2・10.1）。
+#[test]
+fn balloon_name_hits_ghost_inner_first_in_listing() {
+    let root = root();
+    let ghost = PathBuf::from(r"C:\areka-boot-resolve-balloon-tests\ghost\g1");
+    let inner = BalloonEntry {
+        dir: ghost.join("balloon").join("inner"),
+        root: ghost.clone(),
+        identity: Identity {
+            folder: "inner".to_owned(),
+            name: Some("Same".to_owned()),
+            ..Default::default()
+        },
+    };
+    let listed: Vec<BalloonEntry> = std::iter::once(inner.clone())
+        .chain(entries(&root, &[("a_root", Some("Same"))]))
+        .collect();
+    let given = Given {
+        name: Some("Same"),
+        ..Default::default()
+    };
+    let (got, events) = chain(&root, given, &listed, no_pick);
+    assert_eq!(
+        got,
+        Ok(BalloonDecision {
+            route: BalloonRoute::Descript,
+            dir: inner.dir,
+            folder: Some("inner".to_owned()),
+        })
+    );
+    assert!(events.is_empty(), "{events:?}");
+}

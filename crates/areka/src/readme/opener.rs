@@ -295,7 +295,7 @@ pub(crate) fn resolve(
 
 /// `\![open,explorer,種類,名前]` の名前を目録で引く（要件 4.4〜4.6）。
 ///
-/// 並び（`ctx.baseware`）の和で引く。ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
+/// 並び（`ctx.baseware`）の和で引く（バルーンは今のゴーストの中が先）。ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
 /// フォルダ名の順に引く（`name` は区別・フォルダ名は `same_folder_name`）。`random` などの特別な名前は解かない（名指しだけ）。
 fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, OpenFailure> {
     let root = ctx.baseware.as_ref().ok_or(OpenFailure::NoBasewareRoot)?;
@@ -305,7 +305,7 @@ fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, 
             &GhostSpec::Name(name.to_owned()),
         )
         .map(|t| t.dir),
-        Store::Balloon => skin_by_name(balloon_candidates(root), name),
+        Store::Balloon => skin_by_name(balloon_candidates(root, &ctx.ghost_dir), name),
         Store::Shell => skin_by_name(shell_candidates(&ctx.ghost_dir), name),
     };
     hit.ok_or_else(|| OpenFailure::NoMatch {

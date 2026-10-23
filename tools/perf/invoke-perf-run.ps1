@@ -572,9 +572,9 @@ if (-not (Test-Path -LiteralPath $descriptPath -PathType Leaf)) {
     Stop-Run $EXIT_BAD_ARGS "ghost boot file $descriptPath not found. -GhostRoot must be the root of the ghost set (the folder with ghost\master\descript.txt under it)."
 }
 
-# バルーンのルート: 絶対パス必須。既定は置かない——バルーンはゴーストのルートの下に無く
-# （検体の窓口が `<根>/ghost/<名前>` と `<根>/balloon/<名前>` へ分けて展開する）、
-# 「ゴーストのルートに名前を継ぎ足す」既定は必ず存在しない場所を指すためである。
+# バルーンのルート: 絶対パス必須。既定は置かない——検体の窓口は同梱バルーンを
+# `<根>/ghost/<名前>/balloon/<directory>` へ展開する（areka-P0-ghost-inner-balloon 要件 7.1）。
+# 置き場は検体ごとに窓口が決めるので、ここで名前を継ぎ足して組まず、窓口の印字した値を受け取る。
 if (-not $BalloonRoot) {
     # 逐語で出す文なので単引用符で書く（二重引用符だとバッククォートが逃がし記号として食われる）
     Stop-Run $EXIT_BAD_ARGS '-BalloonRoot is not given. Pass the balloon root as an absolute path (use the value of the balloon.emo2-kakukaku= line from cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2).'

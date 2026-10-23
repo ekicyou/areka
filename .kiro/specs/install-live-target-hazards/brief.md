@@ -142,3 +142,9 @@
 ## 2026-10-11 棚卸㉔の申し送り
 
 - 完了した `winget-manifest-submission` の手元の確かめで、メニューからインストールした後の終了が約 6 秒遅れたことが 1 回あった（同 spec の tasks.md の Implementation Notes と `verification/winget-local-check.md`。書庫を入れていない状態の確かめ直しでは再現せず、起票されなかった）。本 brief が書いている「名前の付け替えが断られると 1 回につき約 2 秒待つ＝3 回で約 6 秒」と数が合う。原因は確かめていない。測るときに、この遅れが出るかも一緒に見る。
+
+## 2026-10-23 `areka-P0-ghost-inner-balloon` の着地の申し送り
+
+- `crates/areka-nar` の `plan.rs`・`install.rs` が変わった。ゴーストの書庫とシェルの書庫の同梱のバルーンは、根の `balloon\<dir>` でなく入れるゴーストの中の `ghost\<ゴースト>\balloon\<dir>` へ入る。
+- `Placement` に `carve_out`（本体の組み上げで下敷きから写さない相対のフォルダ）と `within_body`（本体の宛先の中に置く配置）が加わった。`within_body` の配置は、確定（`commit_one`）で `ExistingState` に関わらず「無い所へ置く」1 手（親を作る → 名前替え → 戻しは消す）になる。戻し（`unwind`）は今までどおり逆順で、入れ子の同梱を消してから本体を戻す。
+- 本 spec の設計で確定・戻しの名前替えを扱うときは、この入れ子の手も数に入れる（同梱の名前替えが本体の確定の後に続く）。

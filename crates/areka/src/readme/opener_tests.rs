@@ -253,7 +253,7 @@ fn open_mailer_adds_mailto_once() {
 ///
 /// シェル `a` の name は `b`、シェル `b` の name は `Other`＝名前が先に当たることを見る。
 fn named_fixture() -> (TempPath, OpenContext) {
-    let tmp = TempPath::new("open-ext-named");
+    let tmp = TempPath::under_target("open-ext-named");
     let root = build_ghost_root(
         &tmp,
         ("g", "G"),
@@ -387,4 +387,22 @@ fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
         resolve(&named("balloon", "zZ"), &ctx, &os),
         Ok(want(Verb::Open, second.balloon_dir("Zz"), None, None))
     );
+}
+
+/// バルーンの名指しは今のゴーストの中も引き、同じ `name`・フォルダ名はゴーストの中が当たる
+/// （areka-P0-ghost-inner-balloon 要件 2.1・3.3・10.1）。
+#[test]
+fn named_balloon_finds_the_ghost_inner_first() {
+    let (_tmp, ctx) = named_fixture();
+    let inner = ctx.ghost_dir.join("balloon").join("BA");
+    std::fs::create_dir_all(&inner).expect("フォルダを組む");
+    std::fs::write(inner.join("descript.txt"), "charset,UTF-8\nname,bb\n").expect("descript");
+    let os = FakeOs::default();
+    for want_name in ["bb", "ba", "BA"] {
+        assert_eq!(
+            resolve(&named("balloon", want_name), &ctx, &os),
+            Ok(want(Verb::Open, &inner, None, None)),
+            "{want_name}"
+        );
+    }
 }

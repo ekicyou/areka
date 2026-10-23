@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::catalog_roots::find_balloon;
+use areka_ghost::catalog_roots::{balloons_for, same_folder_name};
 use areka_nar::{
     ElementKind, InstallKind, InstallOutcome, IoPhase, NarArchive, NarError, SkippedCompanion,
     SurvivingTree,
@@ -417,19 +417,25 @@ fn fail(
     Ok(ArchiveEnd::Failed(failure.word))
 }
 
-/// 入れた物（識別子・名前・場所）。同梱バルーン（先頭より後のバルーン）の名前は、入れた後の
-/// 和の目録の `name`（設計で決めたこと 14）。目録に無い・名前が無ければ `areka-nar` の名前（フォルダ名）。
+/// 入れた物（識別子・名前・場所）。同梱バルーン（先頭より後のバルーン）の名前は、入れた
+/// ゴーストの中が先の目録（`<ゴースト>\balloon\<名>` の 2 段上がゴースト＝要件 7.6）の `name`
+/// （設計で決めたこと 14）。目録に無い・名前が無ければ `areka-nar` の名前（フォルダ名）。
 fn installed_items(outcome: &InstallOutcome, facts: &GhostFacts) -> Vec<InstalledItem> {
     outcome
         .installed
         .iter()
         .enumerate()
         .map(|(index, element)| {
-            let folder = element.path.file_name().map(|name| name.to_string_lossy());
             let catalog_name = (index > 0 && element.kind == ElementKind::Balloon)
-                .then_some(folder)
+                .then(|| {
+                    let folder = element.path.file_name()?.to_string_lossy();
+                    let ghost_dir = element.path.parent()?.parent()?;
+                    balloons_for(&facts.roots, ghost_dir)
+                        .listed
+                        .into_iter()
+                        .find(|entry| same_folder_name(&entry.identity.folder, &folder))
+                })
                 .flatten()
-                .and_then(|folder| find_balloon(&facts.roots, &folder))
                 .and_then(|entry| entry.identity.name);
             InstalledItem {
                 kind: kind_word(&element.kind),

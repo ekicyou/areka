@@ -449,8 +449,10 @@ fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
 /// 初回起動の argv の第 2 引数はここへ届かない。
 ///
 /// 記憶・descript の 2 鍵・同梱・並びの和の一覧は、段が当たるかどうかに関わらず先にまとめて読み、
-/// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は各根の
-/// バルーンの置き場の列挙だけで、ゴーストのフォルダの中の `balloon/` は読まない。
+/// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は
+/// `balloons_for`（ゴーストのフォルダの中の `balloon\` が先・根の和が後・同じフォルダ名の根は外す）。
+/// 外した根の項目は 1 件ごとに info `ghost_balloon_hides_root` を残す（起動と切替でだけ・
+/// areka-P0-ghost-inner-balloon 要件 3.2）。「当たらなかった」の記録の置き場は今どおり根の列だけ。
 pub(crate) fn resolve_balloon_for_ghost(
     roots: &areka_ghost::BasewareRoots,
     ghost_dir: &std::path::Path,
@@ -462,7 +464,17 @@ pub(crate) fn resolve_balloon_for_ghost(
     let memory = boot_resolve::read_last_balloon(ghost_dir);
     let standard = catalog::standard_balloon_keys(ghost_dir);
     let companion = catalog::companion_balloon(ghost_dir);
-    let listed = areka_ghost::catalog_roots::list_balloons(roots);
+    let areka_ghost::catalog_roots::GhostBalloons { listed, hidden } =
+        areka_ghost::catalog_roots::balloons_for(roots, ghost_dir);
+    for h in &hidden {
+        tracing::info!(
+            event = "ghost_balloon_hides_root",
+            folder = h.folder.as_str(),
+            hidden = %h.hidden.display(),
+            by = %h.by.display(),
+            "[boot_config] ゴーストの中のバルーンが根の同じフォルダ名を隠した"
+        );
+    }
     boot_resolve::resolve_balloon(
         &BalloonInputs {
             stores: &roots.balloon_stores(),

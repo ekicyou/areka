@@ -118,7 +118,7 @@ fn session(
 }
 
 fn rig(label: &str) -> Rig {
-    let temp = TempPath::new(label);
+    let temp = TempPath::under_target(label);
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let shell = root.ghost_dir("A").join("shell");
     write_descript(&shell.join("master"), "name,通常");
@@ -426,6 +426,34 @@ fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
         ));
     }
     assert_eq!(got, want, "(判定, 受理の info!, warn!＋error!, 便り, 印)");
+}
+
+/// バルーンの切替の候補は今のゴーストの中も引く。同じ `name` はゴーストの中が当たり、印の切替先は
+/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる
+/// （areka-P0-ghost-inner-balloon 要件 2.1・3.3・5.1）。
+#[test]
+fn balloon_switch_targets_the_ghost_inner_balloon() {
+    let cases = [
+        (name("かくかく"), PLAIN),
+        (folder("INNER"), SkinOrigin::Menu),
+    ];
+    for (target, origin) in cases {
+        let mut rig = rig("areka-skin-entry-inner");
+        let inner = rig.root.ghost_dir("A").join("balloon").join("inner");
+        write_descript(&inner, "name,かくかく");
+        let verdict = request_skin_switch(&mut rig.world, req(SkinKind::Balloon, target, origin));
+        let marker = rig
+            .world
+            .get_non_send::<SkinSwitchInFlight>()
+            .map(|m| (m.kind, m.target.folder.clone(), m.target.dir.clone()));
+        assert_eq!(
+            (verdict, marker),
+            (
+                SkinVerdict::Accepted,
+                Some((SkinKind::Balloon, "inner".to_owned(), inner))
+            )
+        );
+    }
 }
 
 /// kanade へ送れなければ `error!(skin_switch_send_failed)` 1 件で印を置かない。

@@ -108,7 +108,7 @@ pub enum ExistingPolicy {
 pub struct Companion {
     /// `balloon` / `balloon0` … の接頭辞そのもの。
     pub key: String,
-    /// 宛先 `<根>/balloon/<directory>/`。
+    /// 宛先 `<ゴースト>/balloon/<directory>/`。
     pub directory: String,
     /// 書庫の中の取り出し元。`/` で区切った 1 段以上の相対パスで、各段は 1 階層の
     /// 名前。`..`・空の段・`\` を含まない。

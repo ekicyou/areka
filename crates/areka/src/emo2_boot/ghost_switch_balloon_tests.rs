@@ -153,3 +153,143 @@ fn switching_to_a_ghost_with_numbered_companions_uses_the_first_and_records_the_
     );
     assert_one_record(&events, &rig, "Companion");
 }
+
+// ---------------------------------------------------------------------------
+// ゴーストの中のバルーン（areka-P0-ghost-inner-balloon タスク 2.2・要件 2.3・4.6・5.2〜5.6・8.5・10.1）
+// ---------------------------------------------------------------------------
+
+/// A・B それぞれのゴーストの中のバルーン（フォルダ名・`name`）。
+const A_INNER: &str = "a-inner";
+const A_INNER_NAME: &str = "Aの中のバルーン";
+const B_INNER: &str = "b-inner";
+const B_INNER_NAME: &str = "Bの中のバルーン";
+
+/// B の descript.txt に `balloon,<name>` を足す。
+fn name_balloon_in_b(rig: &SwitchRig, name: &str) {
+    let descript = rig
+        .root
+        .ghost_dir("B")
+        .join("ghost")
+        .join("master")
+        .join("descript.txt");
+    let text = std::fs::read_to_string(&descript).expect("B の descript.txt");
+    std::fs::write(&descript, format!("{text}\r\nballoon,{name}\r\n"))
+        .expect("B の descript.txt に balloon を足す");
+}
+
+fn count(events: &[CapturedEvent], name: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(name))
+        .count()
+}
+
+/// 切替先 B の中のバルーンを descript が指すと、それに決まり、記憶にはフォルダ名だけが書かれ、
+/// 次の切替の決め方（`resolve_balloon_for_ghost`）は記憶の段から同じ場所を出す（要件 2.3・4.6・5.2〜5.4）。
+///
+/// # 非空虚性
+/// 切替の候補にゴーストの中が入らないと descript の段が当たらず同梱の段へ落ちて赤。
+#[test]
+fn switching_to_a_ghost_with_its_own_balloon_uses_and_remembers_it_by_folder_name() {
+    let rig = running_a();
+    let inner = rig.add_ghost_balloon_copy("B", B_INNER, B_INNER_NAME);
+    name_balloon_in_b(&rig, B_INNER_NAME);
+
+    let (balloon, events, rig) = switch_to_b(rig);
+
+    assert_eq!(
+        (balloon.route, balloon.folder.as_deref(), &balloon.dir),
+        (BalloonRoute::Descript, Some(B_INNER), &inner),
+        "{events:?}"
+    );
+    // 記憶の形は今と同じ（フォルダ名 1 つ・場所を書かない）。
+    assert_eq!(
+        read_last_balloon(&rig.root.ghost_dir("B")).as_deref(),
+        Some(B_INNER)
+    );
+    let roots = areka_ghost::BasewareRoots::single(rig.root.dir().to_path_buf());
+    let next =
+        crate::boot_config::resolve_balloon_for_ghost(&roots, &rig.root.ghost_dir("B"), |_| 0)
+            .expect("次の切替のバルーン");
+    assert_eq!(
+        (next.route, next.folder.as_deref(), next.dir),
+        (BalloonRoute::Memory, Some(B_INNER), inner)
+    );
+}
+
+/// 候補は切替先のものに入れ替わる: B の descript が A の中のバルーンの `name` を指しても当たらず、
+/// `descript_balloon_not_found` を残して次の段へ進む（要件 2.3・4.6）。
+///
+/// # 非空虚性
+/// 切替の候補が切替前のゴースト（A）の中を数えると descript の段で A の中に当たって赤。
+#[test]
+fn switching_does_not_see_the_balloon_inside_the_previous_ghost() {
+    let rig = running_a();
+    let a_dir = rig.root.ghost_dir("A");
+    rig.add_ghost_balloon_copy("A", A_INNER, A_INNER_NAME);
+    name_balloon_in_b(&rig, A_INNER_NAME);
+
+    let (balloon, events, _rig) = switch_to_b(rig);
+
+    assert_ne!(balloon.route, BalloonRoute::Descript, "{events:?}");
+    assert!(!balloon.dir.starts_with(&a_dir), "{balloon:?}");
+    assert_eq!(
+        count(&events, "descript_balloon_not_found"),
+        1,
+        "{events:?}"
+    );
+}
+
+/// 本 spec の前の形の記憶（`[last] balloon = "<フォルダ名>"`）がそのまま読め、ゴーストの中のバルーンに
+/// 記憶の段で当たる（要件 5.4・5.6）。
+///
+/// # 非空虚性
+/// 記憶の段の候補にゴーストの中が入らないと記憶が当たらず `last_balloon_not_found` で赤。
+#[test]
+fn a_memory_written_before_this_spec_finds_the_ghost_inner_balloon() {
+    let rig = running_a();
+    let inner = rig.add_ghost_balloon_copy("B", B_INNER, B_INNER_NAME);
+    rig.plant_last_balloon("B", B_INNER);
+
+    let (balloon, events, _rig) = switch_to_b(rig);
+
+    assert_eq!(
+        (balloon.route, balloon.folder.as_deref(), &balloon.dir),
+        (BalloonRoute::Memory, Some(B_INNER), &inner),
+        "{events:?}"
+    );
+    assert_eq!(count(&events, "last_balloon_not_found"), 0, "{events:?}");
+}
+
+/// 記憶のバルーンがゴーストの中から消えたら `last_balloon_not_found` を 1 件残して次の段
+/// （descript）へ進む（要件 5.5・8.5）。
+///
+/// # 非空虚性
+/// 消えた記憶で止まると切替が倒れ、記録が無いと件数が 0 で赤。
+#[test]
+fn a_remembered_ghost_inner_balloon_that_is_gone_moves_on_to_the_next_route() {
+    let rig = running_a();
+    let gone = rig.add_ghost_balloon_copy("B", "gone-inner", "消えるバルーン");
+    std::fs::remove_dir_all(&gone).expect("ゴーストの中のバルーンを消す");
+    rig.plant_last_balloon("B", "gone-inner");
+    let inner = rig.add_ghost_balloon_copy("B", B_INNER, B_INNER_NAME);
+    name_balloon_in_b(&rig, B_INNER_NAME);
+
+    let (balloon, events, _rig) = switch_to_b(rig);
+
+    assert_eq!(
+        (balloon.route, balloon.folder.as_deref(), &balloon.dir),
+        (BalloonRoute::Descript, Some(B_INNER), &inner),
+        "{events:?}"
+    );
+    let warned: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("last_balloon_not_found"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{events:?}");
+    assert_eq!(
+        warned[0].field_str("memory"),
+        Some("gone-inner"),
+        "{warned:?}"
+    );
+}

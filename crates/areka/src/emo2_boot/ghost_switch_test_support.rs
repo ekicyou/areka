@@ -211,6 +211,16 @@ impl SwitchRig {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
         let sample = acquire_emo2();
+        let root = BasewareRoot::new(sample.root().to_path_buf());
+        // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る・areka-P0-ghost-inner-balloon
+        // 要件 7.1）。A／B の複製へ持ち込まないよう、写す前に根へ移す。
+        std::fs::create_dir_all(root.balloon_store()).expect("根の balloon を組む");
+        std::fs::rename(
+            sample.balloon(BALLOON).expect("emo2 の同梱バルーン"),
+            root.balloon_dir(BALLOON),
+        )
+        .expect("既定のバルーンを根へ移す");
+        std::fs::remove_dir(sample.folder().join("balloon")).expect("空になった balloon を消す");
         for folder in ["A", "B"] {
             copy_ghost(
                 sample.folder(),
@@ -218,7 +228,6 @@ impl SwitchRig {
                 folder,
             );
         }
-        let root = BasewareRoot::new(sample.root().to_path_buf());
 
         let mut world = World::new();
         world.init_resource::<Schedules>();
@@ -341,8 +350,38 @@ impl SwitchRig {
     /// 根に既定のバルーンの複製 `balloon/<folder>` を足し、その descript.txt の `name` を `name` に
     /// 書き換える（2 つ目のバルーン）。
     pub(crate) fn add_balloon_copy(&self, folder: &str, name: &str) {
-        let to = self.root.balloon_dir(folder);
-        copy_tree(&self.root.balloon_dir(BALLOON), &to);
+        self.copy_balloon_to(&self.root.balloon_dir(folder), name);
+    }
+
+    /// ゴーストの中に既定のバルーンの複製 `ghost/<ghost>/balloon/<folder>` を足し、`name` を書き換える。
+    /// 足した場所を返す。
+    pub(crate) fn add_ghost_balloon_copy(&self, ghost: &str, folder: &str, name: &str) -> PathBuf {
+        let to = self.root.ghost_dir(ghost).join("balloon").join(folder);
+        self.copy_balloon_to(&to, name);
+        to
+    }
+
+    /// `ghost` に起動記録とバルーンの記憶（`[last] balloon`＝フォルダ名）を書く（[`SwitchRig::plant_boot_record`]
+    /// を置き換える）。
+    pub(crate) fn plant_last_balloon(&self, ghost: &str, folder: &str) {
+        self.plant_boot_record(ghost);
+        let file = self
+            .root
+            .ghost_dir(ghost)
+            .join("ghost")
+            .join("master")
+            .join("profile")
+            .join("areka")
+            .join("sylphya.toml");
+        std::fs::write(
+            file,
+            format!("format-version = 1\n[boot]\ncount = \"1\"\n[last]\nballoon = \"{folder}\"\n"),
+        )
+        .expect("バルーンの記憶を書く");
+    }
+
+    fn copy_balloon_to(&self, to: &Path, name: &str) {
+        copy_tree(&self.root.balloon_dir(BALLOON), to);
         rewrite_lines(&to.join("descript.txt"), |line| {
             if line.starts_with("name,") {
                 format!("name,{name}")
@@ -363,16 +402,22 @@ impl SwitchRig {
     /// `folder` を今のゴーストとして起こす（起動の文脈を据え、作り口の入力で `boot_ghost` し、
     /// 置き場へ入れる＝`fn main` の据え付けと同じ形）。
     pub(crate) fn boot(&mut self, folder: &str) {
-        let cfg = self.cfg(folder);
+        let balloon = BalloonDecision {
+            route: BalloonRoute::Companion,
+            dir: self.root.balloon_dir(BALLOON),
+            folder: Some(BALLOON.to_owned()),
+        };
+        self.boot_with_balloon(folder, balloon);
+    }
+
+    /// [`SwitchRig::boot`] の、起動のバルーンを `balloon` に決めた形（構成入力のバルーンもその場所）。
+    pub(crate) fn boot_with_balloon(&mut self, folder: &str, balloon: BalloonDecision) {
+        let mut cfg = self.cfg(folder);
+        cfg.balloon_root = balloon.dir.clone();
         let ghost = GhostDecision {
             route: GhostRoute::Memory,
             dir: cfg.ghost_root.clone(),
             folder: Some(folder.to_owned()),
-        };
-        let balloon = BalloonDecision {
-            route: BalloonRoute::Companion,
-            dir: cfg.balloon_root.clone(),
-            folder: Some(BALLOON.to_owned()),
         };
         let inputs = (self.world.non_send::<GhostBootInputsSource>().0)(&cfg, BootOrigin::Plain);
         self.world.insert_resource(BootContext {
