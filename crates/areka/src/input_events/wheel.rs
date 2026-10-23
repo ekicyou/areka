@@ -2,14 +2,6 @@
 //!
 //! 状態の置き場所は `MouseWiring.wheel`（鍵＝窓の entity）。結線は `char_watch`（task 3.5）。
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "char_watch（task 3.5）が結線するまで本番の呼び手が居ない"
-    )
-)]
-
 /// 間引きの幅（要件 6.3 で決まるホイール自身の値。移動の間引きの 100 ms とたまたま同じ）。
 pub(super) const WHEEL_MIN_INTERVAL_MS: u64 = 100;
 

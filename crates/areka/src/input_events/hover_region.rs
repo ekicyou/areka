@@ -3,14 +3,6 @@
 //! 状態の置き場所は `MouseWiring.hover`（鍵＝窓の entity）。後の `shell-mouse-cursor`・`shell-tooltip`・
 //! `shell-hover-animation` は [`HoverState`] を読む口を足して使う。結線は `char_watch`（task 3.5）。
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "char_watch（task 3.5）が結線するまで本番の呼び手が居ない"
-    )
-)]
-
 use areka_kanade::HoverEdge;
 
 /// 窓 1 つの見張りの状態。表に在る＝カーソルがその窓の上に居る。

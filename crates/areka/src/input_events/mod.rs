@@ -8,6 +8,7 @@
 //! task 2.6／2.7 で本 mod へ増設される。
 
 pub(crate) mod balloon;
+pub(crate) mod char_watch;
 pub(crate) mod choice_drain;
 pub(crate) mod click;
 mod drag;
@@ -66,6 +67,10 @@ pub(crate) struct MouseWiring {
     pending_right_double_click: Option<PendingDoubleClick>,
     /// 押下の控え（鍵＝キャラ窓の entity とボタン・解放で取り出す・[`click::PressNote`]）。
     presses: HashMap<(Entity, ClickButton), click::PressNote>,
+    /// 窓ごとの出入りの見張りの状態（鍵＝キャラ窓の entity・[`hover_region::HoverState`]）。
+    hover: HashMap<Entity, hover_region::HoverState>,
+    /// 窓ごとのホイールの溜め（鍵＝キャラ窓の entity・[`wheel::WheelAccum`]）。
+    wheel: HashMap<Entity, wheel::WheelAccum>,
 }
 
 /// 押下ハンドラが預かる右ダブルクリック 1 件分の材料（areka-P0-popup-menu-minimal 要件 1.10）。
@@ -118,6 +123,8 @@ impl MouseWiring {
             now_ms: Box::new(move || start.elapsed().as_millis() as u64),
             pending_right_double_click: None,
             presses: HashMap::new(),
+            hover: HashMap::new(),
+            wheel: HashMap::new(),
         }
     }
 
@@ -135,6 +142,8 @@ impl MouseWiring {
             now_ms,
             pending_right_double_click: None,
             presses: HashMap::new(),
+            hover: HashMap::new(),
+            wheel: HashMap::new(),
         }
     }
 
@@ -303,13 +312,6 @@ impl MouseWiring {
 
     /// 新しい知らせ（解放・ホイール・出入り）の送出。失敗は warn＋何もしない（今の送出と同じ扱い）。
     /// 返り値は送れたか。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "解放の受け手を入れる包み（task 4.1）と窓の見張り（task 3.5）が結線するまで本番の呼び手が居ない"
-        )
-    )]
     fn send_mouse(&self, input: MouseInput, kind_name: &'static str) -> bool {
         let scope = input.scope;
         if self.sender.send(KanadeMsg::Mouse(input)).is_err() {
