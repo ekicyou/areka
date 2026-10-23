@@ -302,7 +302,19 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 - 直した所: 起動の最後の並べ直し `finalize_chain`（`crates/areka/src/placement/chain_finalize.rs`）が、組の窓が既定の位置のままかを x と y の両方で比べるようにした。既定の位置を集めて渡す所は `crates/areka/src/emo2_boot/frame/drain_resnap.rs` の `collect_chain_states`。
 - 赤から緑のテスト: `chain_finalize_tests::vertically_moved_scope_is_not_pulled_back`。直す前は `[ChainMove{scope:1,new_x:-108},…]` を返して失敗し、直した後は緑。`frame_chain_finalize_persist_tests` のテスト 11c は前提を直した。`cargo test -p areka --bin areka` は 3336 件 ok。
 - 上書きした完了 spec の要件（要件 6.6）: 完了 `areka-P0-scope-chain-gap` の要件 7.3 は書かれたとおりに当てた（x だけで比べていた判定を x と y へ広げた。7.2 は変えていない）。完了 `areka-P0-char-position-save-on-exit` の要件 1.7 の振る舞いは変えておらず、テスト 11c の前提と「x だけ」と書いた注釈だけを直した。拡大率の後の詰め直しの道も同じ判定を使う（振る舞いはほぼ変わらない）。
-- 実機の回し直し（タスク 5.5・rerun1・2026-10-23 01:25〜01:30Z・`<w>\target\pasta-verify-rerun\shots\rerun1\notes.md`）の要点: 記録に `scope=1` の `chain_finalize` の行は 0 件で、`\1` は台本どおり `\0` の左上（0,864）へ動いたまま、ぱすたの奥に出た（`1-boot-primary-ghost.png`）。途中で開発者が手でぱすたと窓の枠をドラッグしたので、それより後の位置は手で置いた位置。段ごとの結果はタスク 5.5 で書く。
+- 実機の回し直し（タスク 5.5・rerun1・2026-10-23 01:25〜01:30Z・`<w>\target\pasta-verify-rerun\shots\rerun1\notes.md`）の要点: 記録に `scope=1` の `chain_finalize` の行は 0 件で、`\1` は台本どおり `\0` の左上（0,864）へ動いたまま、ぱすたの奥に出た（`1-boot-primary-ghost.png`）。途中で開発者が手でぱすたと窓の枠をドラッグしたので、それより後の位置は手で置いた位置。段ごとの結果は次の「手順で回し直した段の結果」に書く。
+
+### 手順で回し直した段の結果（タスク 5.5・要件 8.5）
+
+- 回し直した段: 段 1（起動）と段 2（縦書きの会話）。置き方は alt2 と同じ（縦書きのバルーンを根の `balloon\` へ写し、写したゴーストの記憶を消した）。段 1 の後に、開発者の承認した案 A の代わりの操作 `\0\s[1000]\1\s[10]`（MCP `sakurascript`）を打って身体と窓の枠を出した。代わりの操作の結果は段の 3 値の数に入れない。あわせて、動く WebP（面 1000 のボール）を SSP と並べて実物で見る live1 を回した（`<w>\target\pasta-verify-live\notes.md`）。
+- 確かめた直し（崩れ 6）: rerun1 の記録（`<w>\target\pasta-verify-rerun\logs\rerun1.stdout.log`）で、手のドラッグの前に `\1` の窓を動かした行は `move_applied`（01:25:21.308786Z）の 1 行だけで、`chain_finalize` の行は 0 件（直す前の alt2 には `23:42:34.244103Z chain_finalize: 実表示寸で連鎖を再解決 … scope=1 from_x=0 to_x=-1108` があった）。`\1` は副画面へ送り直されず、主画面の (0,864) でぱすたの奥に出た（`shots\rerun1\1-boot-primary-ghost.png`・01:26:10Z に撮った・手のドラッグの前）。`scope=1` のバルーンの窓の Clamp の行は別に在る（下の 1 行目と 2 行目。窓の枠ではなくバルーンの窓の位置の補正）。ほかに `scope=1` の行として、記憶から戻す行と、手のドラッグの後の保存の行がある。
+  - `01:25:18.117288Z Clamp 起動時関門 … scope=1 context="boot-gate" from=PointPx { x: -872, y: 336 } to=PointPx { x: 0, y: 336 }`（バルーンの窓）
+  - `01:25:21.308045Z Clamp runtime 関門: バルーン窓の書込位置を作業領域内へ補正した … scope=1 context="runtime-gate" … from=PointPx { x: -872, y: 864 } to=PointPx { x: 0, y: 804 }`（バルーンの窓）
+  - `01:25:21.308786Z \![move] で窓を動かした event="move_applied" scope=1 base=Scope(0) … base_left=0 base_top=864 … from_x=0 from_y=336 script_x=0 script_y=864 to_x=0 to_y=864`
+- 走行の事実: pid 23956。起動 10:25:16 JST、終了 10:30:23 JST。終了コード 0（右クリックメニューの「終了」で終えた。× は `\0` の面に当たったが何も起きなかった）。起こし直しなし。`balloon_resolved route=Descript`（pasta_tategaki）・起動イベント `OnFirstBoot`。stdout 5,038 行・stderr 1 行（`[helper] SHIORI 初期化の入口: loadu`）。panic 0・致命 0・ERROR 0。WARN 100 = seriko 96（`mustselect カテゴリの脱衣指示を無視`）・`areka_emo_atlas` 4（全透明の `pasta/null.png` 2・縦書きのバルーンの全透明の `balloonk0.png` 2）。
+- 開発者の手の操作（AI の操作ではない）: 01:26:09〜01:26:45Z に、開発者がぱすたと窓の枠を手でドラッグした（最後の位置は `\0` が (158,106)、`\1` が (166,108)）。01:28:00.94Z に、開発者が選択肢「雨だよ」をクリックした（AI のクリックは 01:28:11Z で、選んだ後だった）。そのため、代わりの操作の後と段 2 の撮った物の位置は手で置いた位置で、選ぶ前の反転の見た目は rerun1 では撮れていない。
+- 開発者の判定: 4 節の「開発者の目視の判定」のとおり。Q1（代わりの操作の後の立ち姿と重なりの順）は「承認」で同じ、Q2（縦書きの会話と選択肢）は違う（5 節の 3 と 23）、Q3（2 つの枠の縦書きの字）は同じ、動く WebP は live1 で同じ。
+- live1 では、手順の「起動の塊で `PASTA_DEBUG` を消す」手当てが実機で効くことも確かめた。SSP を `PASTA_DEBUG=1` のまま起こしても、9276 で待ち受けていたのは SSP だけだった（8 節の「ぱすた開発」への申し送り）。
 
 ### 申し送り（走行の崩れではない・ぱすたが使う機能で、持ち主が v0.1.0 の外に居たもの）
 

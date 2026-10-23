@@ -71,7 +71,7 @@
   - 終わった形: 7 段すべてに 3 値（または「回していない」）が入り、終了コードと panic・致命の件数が記録に在る
   - _Requirements: 4.2, 4.5, 4.7, 4.8, 5.1, 5.7_
 
-- [ ] 5. 崩れた所の仕分けと本 spec の直し
+- [x] 5. 崩れた所の仕分けと本 spec の直し
 - [x] 5.1 崩れた所の表を作る
   - 崩れごとに、番号・症状・根拠・原因（file:line か方針の裁定）・扱い（直した／方針で受けない／引き取る spec）・引き取る spec の名前か裁定の日付と出どころを書く
   - 引き取る spec は設計の Out of Boundary の一覧で決める。α の薄い所の当たりの違いは「方針で受けない」として裁定つきで書く
@@ -96,7 +96,7 @@
   - 直す件（2026-10-23 開発者の承認・崩れの表 6）: 起動の最後の並べ直し（`finalize_chain`）が、組の窓が既定の位置のままかを x だけで比べ、y だけ動かされた `\1` を既定の位置のままと読んで別の画面へ並べ直す。x と y の両方で比べる。触るファイル: `crates/areka/src/placement/chain_finalize.rs`・`chain_finalize_tests.rs`、既定の位置（`default_x`）を控えて渡す所（`crates/areka/src/emo2_boot/frame.rs`・`frame/drain_resnap.rs` と、その兄弟のテストの支え `frame_test_support.rs`・`frame_default_pos_track_tests.rs`）。実装で足した物: `crates/areka/src/emo2_boot/frame_chain_finalize_persist_tests.rs`（テスト 11c の前提を新しい規則へ）・`crates/areka/src/placement/persist.rs`（説明の文だけ）
   - 終わった形: 直した件に赤から緑のテストが在り、触ったクレートのテストが緑。直す件が 0 件なら、その旨を記録に書く
   - _Requirements: 6.1, 6.4, 6.5, 6.6, 6.7, 6.8_
-- [ ] 5.5 直した段を手順で回し直す
+- [x] 5.5 直した段を手順で回し直す
   - 直した件の段を、手順どおりに机と許可を取って回し直す
   - 終わった形: 記録に回し直した段と結果が書かれている（直しが 0 件なら「回し直し 0」と書かれている）
   - _Requirements: 8.5_
