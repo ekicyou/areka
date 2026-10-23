@@ -141,7 +141,7 @@
   - _Requirements: 1.2, 1.3, 2.2, 2.3, 2.4, 2.8, 4.3_
   - _Depends: 4.1, 6.3_
 
-- [ ] 7.3 (P) 網羅台帳と沈黙ルール対応表を実装の状態に合わせる
+- [x] 7.3 (P) 網羅台帳と沈黙ルール対応表を実装の状態に合わせる
   - `doc/ukadoc-coverage/ledger/shiori.toml` の要求の `SecurityLevel`・`SecurityOrigin`・`SenderType` と応答の `SecurityLevel` の 4 行を、実装の状態と持ち主（本 spec）に合わせて書き換える（`SecurityOrigin` は「今は常に `null`・SSTP の受信の spec が値を持つ」と注記）。群 10・11 の説明の行も合わせる。
   - `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![enter,nouserbreakmode]` の行に「外部扱いの台本では合図を送らず warn（本 spec）」、`\m[umsg,wparam,lparam]` の行に「SSTP 専用・判定の表に載せた（未実装のため扱いは変えない）」を書く。
   - `doc/COMPAT_ARCHITECTURE.md` §8 の沈黙ルール対応表に、`Sender: areka`・選択肢の ID とアンカーのイベントをゴースト自身とする・応答の `SecurityLevel` でレベルを上げない・`SecurityOrigin` を常に `null` とする・読めない応答のレベルを無いものとする、の 5 つを登記する。

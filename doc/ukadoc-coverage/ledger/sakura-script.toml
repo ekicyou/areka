@@ -1043,6 +1043,13 @@ note = """
 （正準台帳が ("enter","nouserbreakmode") の 1 組で登記する）・
 crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
 crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
+出どころの制限（areka-P0-script-security-level）: ukadoc はこの指令を外部扱いの台本（SSTP など外から
+送られた台本・応答の SecurityLevel が external の台本。Owned SSTP は可）では実行しないと定める。
+外部扱いの台本では合図を送らず（区間に入らず）、warn のログ script_tag_refused（タグ・トークの番号・
+SenderType・Owned かどうか・実効のレベル）を 1 行残して台本の残りを続ける。ゴースト自身・MCP の
+台本は今までどおり入る。対の \\![leave,nouserbreakmode] は止めない。判定は
+crates/areka/src/emo2_boot/script_restriction.rs の判定の表 RESTRICTIONS、止めるのは
+crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![enter。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -5268,6 +5275,10 @@ links = []
 note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した窓へメッセージが送られない。
 ログ: 出る（compile の catch-all の debug! 記録）。
+出どころの制限（areka-P0-script-security-level）: ukadoc はこのタグを SSTP 専用（SSTP 以外の出どころの
+台本では実行しない）と定める。crates/areka/src/emo2_boot/script_restriction.rs の判定の表 RESTRICTIONS
+に SSTP 専用として載せたが、タグ自体が未実装なので扱いは変えない（表の enforced は偽・上の壊れ方の
+まま）。実装する spec が表の行を有効にする。
 [群: 外部を開く・別窓]
 [頻度: 里々 7 / YAYA 4（wiki の作例の文書数＝弱い代理。数えた綴りは \\m。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
