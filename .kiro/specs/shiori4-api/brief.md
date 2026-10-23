@@ -2,7 +2,7 @@
 
 > 起票: 2026-10-10（`/kiro-discovery`・開発者「SHIORI4（COM の SHIORI）の API 整備の spec はあるか。いまは最低限の決まりだけ作っていて、どこかの段階で着手しないといけない」）。
 > **2026-10-23 書き直し**（`/kiro-discovery`・開発者「『shiori4』セッションと議論を行い、SHIORI4 インターフェースについて意見を出し合ってインターフェース案を調整せよ。以前から COM で作ろうかと原案を出していたインターフェースだが、クロスプラットフォームを見据え、C ABI でアクセスできるように仕様調整したものである」）。SHIORI4 の正本は COM の `IShiori` から、別リポジトリ `ekicyou/shiori4`（`C:\home\maz\git\shiori4`）の **C ABI**（`shiori4_abi`・`shiori4`・`shiori4_host` の 3 クレート、crates.io 0.0.1）へ移った。areka は**ベースウェア（ホスト）側の実装者**としてそれを使う。10-10 版の COM 前提の記述（3 層の食い違い・JSON-RPC の紙の契約・重ねるか並べるか）は、この書き直しで置き換えた。
-> **区分 C・台帳の段は「その他」**（開発者・10-10）。**着手の条件**は「実装がある程度整備されてから」（同）に、10-23 から「shiori4 側の `host-protocol` が入った版が crates.io に出てから」を足す。
+> **区分 C・台帳の段は「その他」**（開発者・10-10）。**版の段は v0.2.0**（2026-10-23 開発者「対応時期は、dolaなどの基幹部分大整備と同じタイミングで。すぐ必要ではないが、基幹部分となるので」＝「いつか」から移した）。**着手の条件**は「実装がある程度整備されてから」（同）に、10-23 から「shiori4 側の `host-protocol` が入った版が crates.io に出てから」を足す。
 
 ## Problem
 areka の SHIORI の口は、32bit の SHIORI/3.0 の DLL を別プロセスの helper で読む道だけが本番で動いている。SHIORI からベースウェアへ問い合わせる口（プロパティの読み書き・台本の再生・イベントの依頼）は本番のどこにもつながっていない。
@@ -54,7 +54,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 - 同じ DLL のファイルを 2 体が使うとき、2 つ目の load が断られうる前提で扱う（論点 A。読めなかったゴーストとして既定のゴーストの台詞で伝える）。
 - `GhostRuntime` はゴーストごとの専用スレッドに置く（論点 B）。
 
-**areka の今**（10-23・コードで確かめた）: 再生の列は無く、トークの枠は 1 つ。SSTP の受け口は未実装（起票の行だけ）。SEND は MCP の `sakurascript`／`raise_event` だけで、必ず割り込む（`crates/areka-kanade/src/schedule/sstp.rs`・完了 spec `mcp-kanade-tools` の裁定 1〜3）。OnSecondChange 以外のイベントの応答も、再生中のトークを置き換える。`	` は未実装（`sakura-time-critical`）。OnBalloonBreak は利用者の中断のときだけ出す（ukadoc「SSTP以外でブレイクされた際に発生」と一致）。
+**areka の今**（10-23・コードで確かめた）: 再生の列は無く、トークの枠は 1 つ。SSTP の受け口は未実装（起票の行だけ）。SEND は MCP の `sakurascript`／`raise_event` だけで、必ず割り込む（`crates/areka-kanade/src/schedule/sstp.rs`・完了 spec `mcp-kanade-tools` の裁定 1〜3）。OnSecondChange 以外のイベントの応答も、再生中のトークを置き換える。`\t` は未実装（`sakura-time-critical`）。OnBalloonBreak は利用者の中断のときだけ出す（ukadoc「SSTP以外でブレイクされた際に発生」と一致）。
 
 ## Desired Outcome
 - **SHIORI4 は shiori4 の C ABI**。areka は `shiori4_host` を crates.io から使い、自前の COM の面（`crates/shiori-abi/`）とテスト用の COM の DLL（`crates/shiori4-testdll/`）を持たない。
@@ -126,7 +126,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
   - `audit-shiori-host32`・`clippy-199-lints`: `crates/shiori-abi/` を受け持ちに挙げている。決定 1 で消すので、その行は消える。
 
 ## Constraints
-- **優先度**: 区分 C・段「その他」（開発者・10-10）。急がない。
+- **優先度**: 区分 C・段「その他」（開発者・10-10）。版は v0.2.0（wintf・dola の基幹の整備と同じ時期・開発者・10-23）。
 - **着手の条件**: 実装がある程度整備されてから（開発者・10-10）、かつ shiori4 の `host-protocol` が入った版が crates.io に出てから。着手のときに「Current State」を調べ直す。
 - **依存の版**: shiori4 の 3 クレートは同じ版で出る（0.0.x）。areka のワークスペースのピンで 1 か所に持つ。
 - **1,000 行の上限に近いファイル**: 着手のときに測り直す（10-10 の時点で kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/steady.rs`、`crates/areka/src/main.rs`、`crates/areka-ghost/src/runtime_tests.rs` が 900 行を超え、`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は 1135 行で超えている）。
