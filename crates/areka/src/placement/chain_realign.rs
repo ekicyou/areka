@@ -24,10 +24,22 @@
 //!    整合待ちの札（[`DpiSyncHold`]）を持つゴースト窓が 1 つも無くなった最初のフレームで
 //!    連鎖を解き直し、武装を解く。遷移 1 回につき武装→解決の 1 往復である（要件 6.2）。
 //!
-//! 明示的に再配置されたスコープの除外は [`finalize_chain`] の判定（現在位置が既定位置と
-//! 一致するか）をそのまま使う。既定位置は**システム由来の再アンカー**で追随するので
-//! （設計 D9／D16・`follow::window_move::track_default_char_pos`）、遷移で全スコープが動いても
-//! 誰も触っていないスコープは対象に残る。
+//! # 組ごとの決め方（`dpi-realign-remembered-chain` 要件 1・2・3・7）
+//!
+//! 武装のとき、変わる直前のキャラ窓の矩形を控える（[`ChainRealignPending::before`]）。解決では
+//! 組 (n−1, n) ごとに、上から最初に当たった決めを取る。
+//!
+//! 1. n−1 か n が控えに無い → 動かさない（`unreadable`・理由つきの `warn!`。ほかの組は続ける）
+//! 2. n が窓の組に入っている → 動かさない（`sticky-group`）
+//! 3. n−1 か n がドラッグの最中 → 動かさない（`dragging`・寄せもしない）
+//! 4. n を武装の後に台本が置いた → 動かさない（`script-moved`）
+//! 5. 控えの矩形どうしが隣り合っていた → 左／右へ付ける（`adjacent-left`／`adjacent-right`）
+//! 6. 離れていた・重なっていた → 動かさない（`apart`／`overlapped`）
+//!
+//! 決めは揃った後の今の x と幅で [`resolve_chain`] が解き、横にだけ動かす（y は据え置き）。
+//! 既定の位置も台本の印も読まないので、記憶から戻した窓（既定の位置が無い）も、変わる直前に
+//! 隣り合っていれば詰まる。組ごとに 1 行、判断の語・動かした窓・量・直前の隙間を `info!` に
+//! 残す。詰め直した位置は記憶に書かない（要件 6.1）。
 //!
 //! # 既定位置は自分で書かない
 //!
@@ -53,16 +65,18 @@ use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::{DeferredWorld, World};
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
+use wintf::ecs::drag::DraggingState;
 
 use super::chain_finalize::{
-    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainRect, ScopeChainState,
-    finalize_chain, note_chain_deferral,
+    Adjacency, ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainRect, ChainSlot,
+    KeepReason, PairDecision, ScopeChainState, judge_adjacency, note_chain_deferral, resolve_chain,
 };
 use super::diag::PlacementRoute;
 use super::dpi_sync::{self, DpiSyncHold};
 use super::follow::move_window_with_route;
 use super::resolver::PointPx;
 use super::spawn::GhostWindows;
+use super::sticky_group_ledger::StickyGroupLedger;
 use super::transition_diag::{
     self, CHAIN_STAGE_ARMED, CHAIN_STAGE_DEFERRED, CHAIN_STAGE_REALIGNED,
 };
@@ -216,25 +230,124 @@ where
         }
     };
 
-    let moves = finalize_chain(&states);
-    for m in &moves {
-        let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) else {
-            continue;
+    // 武装を解く（遷移 1 回につき 1 往復・要件 6.6）。控えと記録はここで受け取り、以後の
+    // 台本の差し込みは記録されない（要件 3.2）。以後のフレームは早期 return で抜ける。
+    let Some(pending) = world.remove_resource::<ChainRealignPending>() else {
+        return;
+    };
+    let ledger = world.get_resource::<StickyGroupLedger>();
+    let entity_of = |scope: usize| {
+        targets
+            .iter()
+            .find(|(s, _, _)| *s == scope)
+            .map(|&(_, entity, _)| entity)
+    };
+    let before_of = |scope: usize| {
+        pending
+            .before
+            .iter()
+            .find(|(s, _)| *s == scope)
+            .map(|&(_, rect)| rect)
+    };
+    let dragging =
+        |scope: usize| entity_of(scope).is_some_and(|e| world.get::<DraggingState>(e).is_some());
+
+    // 組ごとの決めと、控えで判定したときの直前の隙間（1〜4 の理由で外した組は判定しない）。
+    let mut slots: Vec<ChainSlot> = Vec::with_capacity(states.len());
+    let mut before_gaps: Vec<Option<i32>> = Vec::with_capacity(states.len());
+    for (i, s) in states.iter().enumerate() {
+        let (decision, before_gap) = match i.checked_sub(1).map(|p| states[p].scope) {
+            // 先頭（本体）は組を持たない（解きは決めを読まない）。
+            None => (PairDecision::Keep(KeepReason::ExplicitlyPlaced), None),
+            Some(prev) => match (before_of(prev), before_of(s.scope)) {
+                (Some(prev_rect), Some(rect)) => {
+                    if ledger.is_some_and(|l| l.group_of(s.scope as u32).is_some()) {
+                        (
+                            PairDecision::Keep(KeepReason::StickyGroup { scope: s.scope }),
+                            None,
+                        )
+                    } else if let Some(scope) = [prev, s.scope].into_iter().find(|&sc| dragging(sc))
+                    {
+                        (PairDecision::Keep(KeepReason::Dragging { scope }), None)
+                    } else if entity_of(s.scope).is_some_and(|e| pending.script_moved.contains(&e))
+                    {
+                        (
+                            PairDecision::Keep(KeepReason::ScriptMovedAfterArm { scope: s.scope }),
+                            None,
+                        )
+                    } else {
+                        match judge_adjacency(prev_rect, rect) {
+                            Adjacency::Left { gap } => (PairDecision::JoinLeft, Some(gap)),
+                            Adjacency::Right { gap } => (PairDecision::JoinRight, Some(gap)),
+                            Adjacency::Apart { gap } => {
+                                (PairDecision::Keep(KeepReason::Apart { gap }), Some(gap))
+                            }
+                            Adjacency::Overlapped { gap } => (
+                                PairDecision::Keep(KeepReason::Overlapped { gap }),
+                                Some(gap),
+                            ),
+                        }
+                    }
+                }
+                (prev_rect, _) => {
+                    let missing = if prev_rect.is_none() { prev } else { s.scope };
+                    warn!(
+                        prev_scope = prev,
+                        scope = s.scope,
+                        missing_scope = missing,
+                        "chain_realign: 変わる直前の位置か大きさを控えられなかった窓の組は動かさない（ほかの組は続ける・要件 7.2）"
+                    );
+                    (
+                        PairDecision::Keep(KeepReason::Unreadable { scope: missing }),
+                        None,
+                    )
+                }
+            },
         };
-        info!(
-            scope = m.scope,
-            from_x = pos.x,
-            to_x = m.new_x,
-            "chain_realign: 遷移後の実表示寸で連鎖を解き直した（要件 6.1／6.2）"
-        );
-        // 経路は `ChainRealign`＝**システム由来**（D9／D16）。既定位置は単一の窓書込口が
-        // 同じ量を運ぶので、ここで `set_default_char_pos` を重ねて呼ばない。
-        // Y は現在値を据え置く（下端吸着は各窓の再射影が既に保っている）。
-        move_window_with_route(world, entity, m.new_x, pos.y, PlacementRoute::ChainRealign);
+        slots.push(ChainSlot {
+            scope: s.scope,
+            current_x: s.current_x,
+            width: s.width,
+            decision,
+        });
+        before_gaps.push(before_gap);
     }
 
-    // 武装を解く（遷移 1 回につき 1 往復・要件 6.6）。以後のフレームは早期 return で抜ける。
-    world.remove_resource::<ChainRealignPending>();
+    let moves = resolve_chain(&slots);
+    let mut applied: Vec<(Entity, i32, i32)> = Vec::new();
+    for (i, slot) in slots.iter().enumerate().skip(1) {
+        let decision = match slot.decision {
+            PairDecision::JoinLeft => "adjacent-left",
+            PairDecision::JoinRight => "adjacent-right",
+            PairDecision::Keep(reason) => reason.as_str(),
+        };
+        let to_x = moves
+            .iter()
+            .find(|m| m.scope == slot.scope)
+            .map_or(slot.current_x, |m| m.new_x);
+        info!(
+            prev_scope = slots[i - 1].scope,
+            scope = slot.scope,
+            decision,
+            before_gap = before_gaps[i],
+            from_x = slot.current_x,
+            to_x,
+            dx = to_x.saturating_sub(slot.current_x),
+            "chain_realign: 拡大率の後の詰め直しで組の判断を下した（要件 7.1）"
+        );
+        if to_x != slot.current_x
+            && let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == slot.scope)
+        {
+            applied.push((entity, to_x, pos.y));
+        }
+    }
+    // 経路は `ChainRealign`＝**システム由来**（D9／D16）。既定位置は単一の窓書込口が
+    // 同じ量を運ぶので、ここで `set_default_char_pos` を重ねて呼ばない。
+    // Y は今の値を据え置く（要件 1.4・下端吸着は各窓の再射影が既に保っている）。
+    for (entity, x, y) in applied {
+        move_window_with_route(world, entity, x, y, PlacementRoute::ChainRealign);
+    }
+
     debug!(
         scopes = states.len(),
         moved = moves.len(),
