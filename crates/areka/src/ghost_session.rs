@@ -101,6 +101,8 @@ pub(crate) struct StartupDescriptValues {
     pub(crate) author_dpi: placement::AuthorDpi,
     /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
     pub(crate) zorder_raw: Option<String>,
+    /// 準備が採寸に使ったスコープごとの既定の面（descript-window-keys 要件 2.2）。起動の資産も同じ値で組む。
+    pub(crate) default_surfaces: placement::DefaultSurfaces,
 }
 
 /// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
@@ -237,6 +239,8 @@ pub(crate) fn prepare_ghost_windows(
     let zorder_raw = prepared.zorder_raw.clone();
     // 窓の組の descript の値も同じ読取から取り出し、窓を作る閉包で帳簿へ据える（解釈は帳簿の層）。
     let sticky_window_raw = prepared.sticky_window_raw.clone();
+    // 採寸に使った既定の面も同じ読取から写し、起動の結線へ渡す（descript-window-keys 要件 2.2）。
+    let default_surfaces = prepared.default_surfaces.clone();
     // 標準の位置の材料（descript の値＋バルーンの配置の値）も同じ読取から取り出し、窓の組と
     // 一緒に置く（areka-P0-move-canon 要件 8.6・areka-P0-window-link-directives 要件 7.4）。
     let default_basis = prepared.default_basis;
@@ -321,6 +325,7 @@ pub(crate) fn prepare_ghost_windows(
         descript: StartupDescriptValues {
             author_dpi,
             zorder_raw,
+            default_surfaces,
         },
         spawn,
     })
@@ -842,8 +847,7 @@ fn boot_wired(
         descript.zorder_raw.as_deref(),
         kanade_stop.clone(),
         shell,
-        // shortcut: 組み込みの値のまま。descript-window-keys task 3.3 で準備の値（descript.default_surfaces）に替える。
-        &placement::DefaultSurfaces::builtin(),
+        &descript.default_surfaces,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);

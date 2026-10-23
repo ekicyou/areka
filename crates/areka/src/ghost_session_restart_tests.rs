@@ -266,6 +266,7 @@ fn commit_without_task_pool_logs_error() {
         descript: StartupDescriptValues {
             author_dpi: placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
+            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
         },
         spawn: Box::new(|_: &mut World| {}),
     };
@@ -325,6 +326,7 @@ fn boot_round(
     let descript = StartupDescriptValues {
         author_dpi: placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
+        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
     };
     let ghost = GhostDecision {
         route: GhostRoute::Argv,
