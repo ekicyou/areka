@@ -6,7 +6,7 @@ use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
 
 use super::diag::PlacementRoute;
-use super::follow::{AnchorSource, Anchored, resize_window_to, sync_drag_writer};
+use super::follow::{AnchorSource, Anchored, is_char_dragging, resize_window_to, sync_drag_writer};
 use super::resolver::{Anchor, SizePx};
 use super::spawn::GhostWindows;
 
@@ -53,7 +53,8 @@ pub fn parse_alignment_word(args: &[&str]) -> AlignmentWord {
 ///
 /// 窓は今の大きさのまま経路 `MoveCue` で新しい向きへ当て直す（`\![move]` と同じ明示の操作＝
 /// 記憶に書かず、既定の位置も連れて行かない・design 議題 2）。バルーンは `resize_window_to`
-/// の中で付いて動く（要件 1.6）。
+/// の中で付いて動く（要件 1.6）。ドラッグ中の窓は向きだけ変えて当て直さず、ドラッグの終わりに
+/// 今の向きで当て直す（2.4・`finish_char_drag`）。
 pub fn apply_script_alignment(world: &mut World, scope: u32, word: &AlignmentWord) -> bool {
     if *word == AlignmentWord::Missing {
         warn!(
@@ -125,6 +126,15 @@ pub fn apply_script_alignment(world: &mut World, scope: u32, word: &AlignmentWor
         .and_then(|wp| wp.size)
         .filter(|s| s.width > 0 && s.height > 0);
     match size {
+        // 当てるとその回だけ辺へ飛び、次の `OnDrag` が始めの向きで戻す（1 フレームのちらつき）。
+        // 当て直しはドラッグの終わり（`finish_char_drag`）が今の向きで行う（2.4）。
+        _ if is_char_dragging(world, char_window) => info!(
+            event = "alignment_reanchor_skipped",
+            scope,
+            reason = "dragging",
+            ?to,
+            "ドラッグ中の窓なので向きだけ変え、当て直しはドラッグの終わりに回す"
+        ),
         Some(s) => {
             resize_window_to(
                 world,

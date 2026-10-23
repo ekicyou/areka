@@ -183,6 +183,13 @@ pub(crate) fn begin_char_drag(world: &mut World, dragged: Entity) {
     });
 }
 
+/// `window` が今ドラッグされている窓か（控えがその窓のものか）。
+pub(crate) fn is_char_dragging(world: &World, window: Entity) -> bool {
+    world
+        .get_resource::<CharDragSession>()
+        .is_some_and(|session| session.dragged == window)
+}
+
 /// ドラッグ中の窓の縛りの向き（控えがあれば始めの向き・無ければ `Anchored`・2.4）。
 pub(crate) fn drag_anchor(world: &World, window: Entity) -> Option<Anchor> {
     match world.get_resource::<CharDragSession>() {

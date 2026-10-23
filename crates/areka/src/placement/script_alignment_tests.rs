@@ -10,7 +10,7 @@ use windows::Win32::Foundation::{HINSTANCE, HWND};
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
-use super::super::follow::{AnchorSource, Anchored, MonitorSnapshot, OffsetBase};
+use super::super::follow::{AnchorSource, Anchored, MonitorSnapshot, OffsetBase, begin_char_drag};
 use super::super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::super::source::GhostTitles;
 use super::super::spawn::{GhostWindows, spawn_ghost_windows};
@@ -385,4 +385,43 @@ fn unknown_size_changes_anchor_only_and_logs() {
         Some("char_size_unknown")
     );
     one(&events, "alignment_changed");
+}
+
+/// ドラッグ中の窓へ向きの指令が来たら、向き・台本の印・`move_window` は変えるが窓は当て直さず
+/// （辺へ飛んで次の `OnDrag` で戻る 1 フレームのちらつきを出さない）、そのことを記録する。
+/// 当て直しはドラッグの終わり（`finish_char_drag`）が今の向きで行う
+/// （`follow_sticky_follow_drag_tests.rs` の `anchor_change_during_drag_keeps_start_until_finish_then_reanchors`）。
+#[test]
+fn dragging_window_changes_anchor_but_defers_reanchor_and_logs() {
+    let mut world = world();
+    let e = char_window(&world);
+    begin_char_drag(&mut world, e);
+
+    let (ok, events) = apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Free));
+    assert!(ok);
+    assert!(move_window(&world), "吸着なしで組に無い窓は wintf が動かす");
+    let (ok, events2) = apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Top));
+    assert!(ok);
+
+    assert_eq!(anchor(&world), Anchor::Top);
+    assert_eq!(
+        source(&world),
+        AnchorSource {
+            descript: Anchor::Bottom,
+            by_script: true
+        }
+    );
+    assert!(!move_window(&world));
+    assert_eq!(
+        pos(&world, e),
+        Point { x: 731, y: 356 },
+        "ドラッグ中は辺へ飛ばない"
+    );
+    for events in [&events, &events2] {
+        assert_eq!(
+            one(events, "alignment_reanchor_skipped").field_str("reason"),
+            Some("dragging")
+        );
+        one(events, "alignment_changed");
+    }
 }
