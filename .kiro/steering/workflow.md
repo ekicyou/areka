@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-06-16
+updated_at: 2026-10-23
 ---
 
 # Workflow - 開発ワークフロー
@@ -17,6 +17,7 @@ Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了�
 - **1 feature = 1 branch = 1 PR**: 1つの仕様の全フェーズ（requirements → design → tasks → implementation）を**同一のワークツリーブランチ**で進め、完了時に**1回だけ** PR を作成して squash マージする。
 - **入口**: `/kiro-start {feature}` — 要件ディスカバリ後の単一spec開始。ブランチは作らず、現在のワークツリーブランチで spec を初期化（push しない）。デフォルトブランチ上では STOP し、ワークツリーでの再実行を促す。
 - **出口**: `/kiro-complete {feature}` — DoD静的ゲート → アーカイブ → 全体テスト 1 回（待ち時間に文書更新を並行）→ PR作成 → squash マージ。**mainへの統合はここだけ。**
+- **spec 以外の統合も PR**: 棚卸 `/kiro-next`（開発者の承認の後に PR → squash マージ）・ウェーブの立ち上げ `/kiro-wave`（新しいセッションは remote の既定ブランチを読むので、先にこのワークツリーの変更を PR → squash マージで着地させる）・`/release`（版上げの PR）も、`main` へは PR だけで入る。
 - **直push禁止**: 各タスク・各フェーズの途中で `main` へ fast-forward / 直 push しない。途中コミットはワークツリーブランチ上に積み、統合は完了時のPRに集約する。
 
 ---
@@ -201,6 +202,8 @@ requirements → design → tasks → implementation → completed
 ```
 
 各フェーズ移行時に進捗を確認し、完了時は `/kiro-complete` を実行。フェーズはすべて**同一のワークツリーブランチ**上で進行し、`main` への統合は完了時のPRに一本化する。
+
+ウェーブの回し方（2026-10-23〜）: `/kiro-next`（棚卸・次のウェーブを組む）→ `/kiro-wave`（Opus の spec を 1 本 1 セッションで `/kiro-start`。Fable の spec は警告して外し、開発者が Fable のセッションで打つ）→ 各 spec が上のフローを辿る。
 
 ---
 Document patterns, not every workflow variation.

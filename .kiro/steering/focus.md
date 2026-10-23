@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-10-18
+updated_at: 2026-10-23
 ---
 
 # Focus - ロードマップ管理
@@ -27,7 +27,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 
 | 状態 | 配置先 |
 | ------ | ------ |
-| アクティブ（P0） | `.kiro/specs/` 直下 |
+| アクティブ | `.kiro/specs/` 直下 |
 | 待機（α 後など・当面着手しない） | `.kiro/specs/` 直下に brief のまま置き、段は `roadmap.md` の台帳で持つ（`backlog/` は 2026-09 時点で使っていない） |
 | 完了 | `.kiro/specs/completed/` |
 | 却下 | `.kiro/specs/_rejected/` |
@@ -38,7 +38,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 
 | 配置 | 計上区分 |
 | ------ | ------ |
-| `.kiro/specs/` 直下（completed/backlog/_rejected 以外） | アクティブ（P0） |
+| `.kiro/specs/` 直下（completed/backlog/_rejected 以外） | アクティブ |
 | `.kiro/specs/completed/` | 完了 |
 | `.kiro/specs/_rejected/` | 却下（集計対象外・参考） |
 | `spec.json` を持たないディレクトリ（例: `shape-*`） | 構想段階（Phase 0）として別掲 |
@@ -47,7 +47,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 - **過去の棚卸しの基準実数（2026-06-28〜2026-07-29 の 26 行）は `roadmap-history.md` の末尾「旧・focus.md 棚卸しの基準実数ログ」へ退避した**（2026-09-20）。本ファイルには**最新の 1 行だけ**を置き、更新するときは古い行をそちらへ足してから置き換える（常時読み込みのファイルを履歴で太らせない）。
 - **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名を書き、台帳の番号（「#数字」）は使わない。台帳の番号の列は `roadmap.md` から外した。「#数字」は `PR#185` のように接頭辞を付けた PR 番号にだけ使う。
 - **並走できる spec の紹介の形**（2026-09-26 開発者指示）: 挙げるのは**完全並走できるものだけ**＝要件から実装・完了まで同時に進められ、触るソースファイルの重なりが 0 で、条件（要件までで止める・先進坑の go を待つ・接触制限つき）が付かないもの。条件付きは外す。Fable 推奨を先頭に、「① Fable 推奨：`spec 名`（一言の説明）」＋`/kiro-start` のコマンドだけの短い形で並べ、前置きは 1〜2 行・注意書きや削る順は付けない（聞かれたら答える）。
-- 棚卸しの基準実数（2026-10-22 更新㊴・棚卸㉘の実測・`main` `52b014de` 基準・その前は 2026-10-18 更新㊳＝棚卸㉗・`2d86dbff`）: 完了 **285**（`completed/` 直下の実測エントリ数＝フォルダ 284＋`graphics-rendering-stability.md` 1・棚卸㉗の後に C9 の 8 本〔`mcp-receiver-bugs`・`mcp-kanade-tools`・`real-run-mcp-kit`・`startup-options-core`・`impl-watch-test-desk`・`zorder-scope-inversion`・`sample-url-fetch`・`mcp-reload`〕が完了） / **spec.json 有りの active = 0** / **brief-only = 155**（`.kiro/specs/` 直下の実測。`roadmap.md` の spec 台帳の 155 本と同じ。棚卸㉗の後に `/kiro-discovery` で見直しの 33 本・v0.2.0 の 4 本・v0.4.0 の 4 本を、棚卸㉘で `ondestroy-on-exit` を起票した）。open PR 0 本。M1 は 2026-09-11、M2 は 2026-10-02 に完成宣言済み（PR#210）。**初回リリース `v0.0.2` は 2026-10-06 に公開・`v0.0.3` は 2026-10-18 に公開**（PR#333）。**着手の大枠は「版の段」**（今の版は v0.1.0＝SSP 並みの自動試験〔開発を速くする〕＋ゴースト「窓際のぱすたさん」が SSP と同じに動く・2026-10-18 開発者。ponytail の見直しの 33 本は v0.1.0 の後の隙間で取る・2026-10-22 開発者）。**今の版が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者）。**同じ版の中の並びは 4 区分＝A 開発者が起票を頼んだもの ＞ B バグ ＞ C ukadoc の拾い残し・バグでない持ち越し ＞ D 夢・据え置き・保留**（2026-10-07 開発者指示・並べ方の手順の正本は `/kiro-next` のスキル）。棚卸㉘のウェーブ C10＝v0.1.0 の 8 本（割り込み 0・v0.1.0 の着地まで約 4 ウェーブ）。
+- 棚卸しの基準実数（2026-10-23 更新㊵・steering の同期の実測・`main` `8850b8b1` 基準・その前は 2026-10-22 更新㊴＝棚卸㉘・`52b014de`）: 完了 **290**（`completed/` 直下の実測エントリ数＝フォルダ 289＋`graphics-rendering-stability.md` 1・棚卸㉘の後に C10 の 5 本〔`emo2-real-run-stability`・`property-name-case-fold`・`dot-sakura-specimen`・`window-link-directives`・`script-security-level`〕が完了） / **spec.json 有りの active = 0**（`main` の上の数。着手済みの 3 本〔`ghost-inner-balloon`・`offline-surface-dump`・`pasta-in-windows-verification`〕の spec.json は各自の枝にだけ在り、フォルダは旧い `areka-P0-` の名前のまま） / **brief-only = 154**（`.kiro/specs/` 直下の実測＝2026-10-23 に `areka-P0-` を外した 151＋旧い名前のままの 3。`roadmap.md` の spec 台帳の 154 本と同じ。棚卸㉘の後に `window-work-area-clamp`・`ukadoc-catalog-refresh`・`shiori2-protocol`・`seriko-pattern-calls` を起票した）。open PR 0 本。M1 は 2026-09-11、M2 は 2026-10-02 に完成宣言済み（PR#210）。**初回リリース `v0.0.2` は 2026-10-06 に公開・`v0.0.3` は 2026-10-18 に公開**（PR#333）。**着手の大枠は「版の段」**（今の版は v0.1.0＝SSP 並みの自動試験〔開発を速くする〕＋ゴースト「窓際のぱすたさん」が SSP と同じに動く・2026-10-18 開発者。ponytail の見直しの 33 本は v0.1.0 の後の隙間で取る・2026-10-22 開発者）。**今の版が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者）。**同じ版の中の並びは 4 区分＝A 開発者が起票を頼んだもの ＞ B バグ ＞ C ukadoc の拾い残し・バグでない持ち越し ＞ D 夢・据え置き・保留**（2026-10-07 開発者指示・並べ方の手順の正本は `/kiro-next` のスキル）。棚卸㉘のウェーブ C10＝v0.1.0 の 8 本（割り込み 0）のうち 5 本が 10-23 に着地し、残りの 3 本は着手済み。
 
 ## 運用上の注意
 
