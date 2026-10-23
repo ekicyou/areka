@@ -159,6 +159,7 @@ crates/areka/src/emo2_boot/
 
 - `crates/areka/src/placement/config.rs` — `scoped_value` を `pub(super)` にする（1 語）。本体の読みは足さない。
 - `crates/areka/src/placement/mod.rs`（939 行）— `mod descript_window_keys;`・`pub(crate) mod balloon_lock;` の 2 行。`PreparedStages` と `PreparedPlacement` に `default_surfaces: DefaultSurfaces`・`balloon_dontmove: BTreeSet<u32>` の 2 欄。`prepare_stages_for_shell` で 2 つを読み（`build_placement_config` の直後）、`measure_scope_sizes` へ `&default_surfaces` を渡す 1 行。`resolve` で 2 欄を写す 2 行。合わせて 15 行ほど。
+- `crates/areka/src/placement/placement_prepare_tests.rs` — `PreparedStages` を手で組む `stages_with_shell`（648 行目）に 2 欄を足す（タスクの点検で見つけた組む所）。
 - `crates/areka/src/placement/measure.rs` — `measure_scope_sizes`・`measure_native_scope_sizes` に引数 `default_surfaces: &DefaultSurfaces` を足す。`KERO_INITIAL_SURFACE_ID` と「scope n≥2 は正典既定なし」の `warn!`（196〜200 行目）を外し、スコープごとに候補の並びから `shell_world.surface(id).is_some()` で在る面を選んで合成する。モジュールと関数の注記の決め打ちの記述を直す。新しいテスト兄弟の `#[path]` 宣言 1 つ。
 - `crates/areka/src/placement/measure_tests.rs`（993 行）— `measure_scope_sizes` の呼び出しは 14 か所で、どれも 1 引数 1 行。そのまま引数を足すと 1,000 行を越えるので、ファイルの頭にテスト用の小さな関数 `measure_builtin(..)`（`&DefaultSurfaces::builtin()` を渡すだけ）を 1 つ置き、14 か所をそれで呼ぶ（行は増えない・期待値は変わらない）。`measure_template_tests.rs` は呼び出しが無く、35 行目の注記の定数名を直すだけ。`measure_template_tests.rs` 35 行目の注記の定数名を直す。
 - `crates/areka/src/placement/follow/drag_follow.rs`（958 行）— `on_balloon_drag` と `on_balloon_drag_end` の、`ev.target != entity` の見張りの直後に 1 行ずつ（下の「入口の見張り」）と `use` 1 行。足すのは 4 行ほど。
