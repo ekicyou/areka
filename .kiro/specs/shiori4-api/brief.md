@@ -85,13 +85,13 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 3. **SHIORI の実体は別プロセスで動かす**（開発者・同日「arekaにだけ影響する設計上の大きな要件を出します。SHIORIの実体は別プロセスで動かすこと。これは、SHIORI3がブリッジで動いているのと、同じような環境で動いて欲しいためです。プロセスが同じだと、カレントディレクトリなどのシステム環境の影響を受けたり、pythonなどのプロセスでグローバル環境を持つランタイムが使いにくいため。あとプロセス分離は最近のアーキテクチャのトレンドでもあります」）。v4 の DLL も同じプロセスに読まない。shiori4 の ABI は変わらない（ホストがどのプロセスで DLL を読むかは ABI の外）。
    - **製品は別プロセスだけ**（開発者・同日。「別プロセスの版と同じプロセスの版を 2 つ作るか…でも設計者が混乱しそう」への推奨を承認）。同じプロセスで SHIORI を動かす道は、設定の項目も選ぶ道も作らない。理由: 2 つあると「同じ環境で動く」という決定の狙いが崩れ（カレントディレクトリ・プロセス全体の状態が版で違う）、試験と不具合の切り分けも倍になる。速さの得（問い合わせの IPC の往復が要らない）は小さい見込み（未計測）。
    - **同じプロセスで回すのはテストの道具に限る**。helper の中身（中継の `Host` と `GhostRuntime` を回すところ）をライブラリに切り出し、テストのときだけテストのプロセスのスレッドで回す（プロセスを起こさない決定論の試験のため）。速さが要ると測って分かったら、その切り出しの上に同じプロセスの道を後から足せる（今は作らない）。
+4. **helper の exe は 1 つにまとめる**（開発者・同日「helper の exe を 1 つにまとめる案、承認」）。1 種類の helper の exe が SHIORI/3.0 と SHIORI4 の両方を受け持つ。DLL を読んだあと `shiori_get_api` があれば v4、`load`／`request`／`unload` だけなら SHIORI/3.0（両方を持つ DLL は v4）。exe を共有するだけで、プロセスは SHIORI 1 つにつき 1 つのまま。起こし方・ジョブ・終わらせ方・IPC の札の読み手を 1 つで持てる。今は i686 だけを建てているので、v4 の DLL のために x64・arm64 の版も建てる。
 
 ## 開発者の判断（着手の前または要件の段で）
 推奨つき。
 
-1. **helper の exe を 1 つにするか、v4 用を分けるか**。推奨は 1 つ（1 種類の helper の exe が SHIORI/3.0 と SHIORI4 の両方を受け持つ。DLL を読んだあと `shiori_get_api` があれば v4、`load`／`request`／`unload` だけなら SHIORI/3.0・両方を持つ DLL は v4。exe を共有するだけで、プロセスは SHIORI 1 つにつき 1 つのまま）。起こし方・ジョブ・終わらせ方・IPC の札の読み手を 1 つで持てる。今は i686 だけを建てているので、v4 の DLL のために x64・arm64 の版も建てる。
-2. **v4 の DLL の arch の決め方**。推奨は DLL の PE ヘッダの機械の種類を読んで helper を選ぶ（違う arch の helper で読み込みに失敗させてから試し直すより確実）。
-3. abi-conventions の load の dir の形を helper の道（32bit の SHIORI/3.0）にも当てるか。当てると、すべてのゴーストへ渡す `load` のバイト列が変わる（10-10 からの議題の候補）。推奨は当てる（SSP と同じ形になる。えみりの YAYA は今の形でも動いたので、変えても壊す見込みは低い）。
+1. **v4 の DLL の arch の決め方**。推奨は DLL の PE ヘッダの機械の種類を読んで helper を選ぶ（違う arch の helper で読み込みに失敗させてから試し直すより確実）。
+2. abi-conventions の load の dir の形を helper の道（32bit の SHIORI/3.0）にも当てるか。当てると、すべてのゴーストへ渡す `load` のバイト列が変わる（10-10 からの議題の候補）。推奨は当てる（SSP と同じ形になる。えみりの YAYA は今の形でも動いたので、変えても壊す見込みは低い）。
 
 ## Scope
 - **In**:
@@ -101,7 +101,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
   - `ShioriBackend` の v4 版の実装と、descript.txt の `shiori` からの選び分け（`shiori_get_api` の有無・DLL の arch）。
   - 要求の組み立て器を v3（helper）と v4 で共有する整理。
   - post の SEND を待たせるための待ちの列（3 者会談の合意＝`Option: nobreak` のときと OnHostComplete の応答のとき。areka は今トークの枠が 1 つで列を持たない）と、再生の終わりで出す完了（`completed`／`interrupted`）。
-  - `load` に渡すパスの形（abi-conventions・判断 3）。
+  - `load` に渡すパスの形（abi-conventions・判断 2）。
   - COM の面とテスト用の COM の DLL と `IShioriHost` の実装と `ShioriWiring::InProc` の道の撤去、テスト用の v4 DLL（決定 1・3）。
   - 封筒の書き換え（決定 2）・`doc/COMPAT_ARCHITECTURE.md` §5・roadmap の技術の要約の書き直し。
   - 古くなった注釈の掃除（`crates/areka/src/main.rs`・`shiori_inproc.rs`・`crates/shiori-host32-host/src/client.rs` の「`IShiori` への写像点」）。
