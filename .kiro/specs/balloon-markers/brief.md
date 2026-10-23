@@ -151,3 +151,11 @@
 ## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
 
 - 棚卸㉑〜㉓の切り方の前半（矢印と手動スクロール・装飾の系列の土台・`arrow*` の旧名の段）を v0.1.0 の新しい spec `balloon-scroll-arrows` へ切り出した（ぱすたの縦書きのバルーンが `arrow0/1` を使う・`verification.md` 10 節）。本 spec に残るのは後半（`onlinemarker`・`number.*` と `\![set,balloonnum]`・`sstpmarker`／`sstpmessage`）で、系列の土台と印の配置は同 spec の物に乗る（前提に同 spec を足す）。規模は 7〜9 の見込み。
+
+## 2026-10-23 棚卸㉙の追記
+- **前半は `balloon-scroll-arrows`（v0.1.0）へ移った**: `arrow.filename`・`arrow0/1.x/y`・矢印のクリックとホイールの手動スクロール・装飾の系列の土台（emo-present の `balloon.rs` の `SeriesFamily` の装飾の行と旧名の段）は同 spec の物。本文の Problem の `arrow*` の行・Desired Outcome の「矢印と手動スクロール」・Scope の In の「手動スクロール」・Constraints の `viewbox.rs`／`layout.rs` の行は、もう本 spec の範囲ではない。
+- **本 spec に残るもの**: `onlinemarker.*`（1 枚の動く絵で持つ議題を含む）・`number.*` と `\![set,balloonnum,…]`・`sstpmarker.*`／`sstpmessage.*`（表示と縮退の口だけ）。棚卸㉓の後半（仮の名前 `balloon-status-markers`・7〜9）の一覧がそのまま本 spec の範囲。
+- **Upstream に `balloon-scroll-arrows` を足す**（系列の土台と印の配置に乗る）。本文 Upstream の `shell-balloon` は完了済み。`balloon-scroll-fade` は本 spec でなく `balloon-scroll-arrows` を待つ。
+- **Downstream の「SSTP の受信（登記だけの行）」は 2026-10-23 に `sstp-receive` として起票した**。`sstpmarker`／`sstpmessage` が画面に出るのは同 spec の後。縮退の口は同 spec が本物の値でつなぐ。
+- 議題: 棚卸㉑〜㉓の ⑴〜⑷（箱の印の絵の引き先・手動で戻している最中・印を描く層・時間切れ）は `balloon-scroll-arrows` へ移った＝本 spec はあちらの答えに従う。本 spec に残るのは 10-10 の「オンラインの印を 1 枚の動く絵でも持つ」の 1 件。
+- 要件定義のモデル: 棚卸㉓の Fable は前半の分かれ目が理由だった。後半だけになったので Opus。

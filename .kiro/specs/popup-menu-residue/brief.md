@@ -196,3 +196,17 @@
 - 要件定義のモデル: Opus のまま。
 - 分割の案: 新しくは切らない。隙間に入れるときは、棚卸㉖のとおり件 11・12 を後へ回す。
 - 見つけた穴・古くなった記述: 件 7 の `spine.rs` 752 行の注記（「現在は 11 本＝`mod.rs` の `sinks`」→ 12 本・`runtime_boot.rs` の `runtime_sinks`）は spec を待たずに直せる。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 件 7 は済んだ＝`crates/areka/src/emo2_boot/spine.rs` 752 行の注記は「現在は 12 本＝`runtime_boot.rs` の `runtime_sinks`」に直っていて（`script-security-level`・10-23）、本番の受け口の数（`crates/areka/src/emo2_boot/runtime_boot.rs` の `runtime_sinks` の 12 個）と合う。`menu/` には `window-link-directives` が `reset_balloon_pos_frame.rs`（新しい）・`mod.rs`・`plan.rs`・`captions.rs` を、`ghost-inner-balloon` が `balloon_frame.rs` を足した＝本 spec の件の場所は `captions.rs` の行がずれただけ。ぱすたの実機（10-22・`pasta-in-windows-verification`）でメニューは普通に出た＝件 12 は再現していない。
+- **件ごとの今**: 件 4＝`crates/areka/src/menu/trigger.rs` 487 行と `menu/trigger_show_tests.rs` 263・439 行。件 5＝`emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」7 か所。件 6＝`crates/areka-kanade/src/actor.rs` の 750・760・769 行（ずれた）。件 9＝`menu/captions.rs` 87 行（ずれた）。件 3・8・11・12 は手つかず。
+- **触るファイル**: `menu/{trigger,win32,captions}.rs`（573・137・324 行）・`menu/trigger_show_tests.rs`（504）・`emo2_boot/readme_cue.rs`（140）・`crates/areka-kanade/src/actor.rs`（845・文言だけで増えない）・揃えるなら `actor_resources.rs`（107）・新しいテスト 1〜2 本。件 7 が済んだので `spine.rs`（940）には触らない。
+- **規模**: 件 3〜6・8・9 だけなら 4〜6、件 11・12 の再現と直しを入れて 6〜9。
+- **先に要るもの**: 働きの上では無し。同じウェーブに置けない相手（v0.1.0）: `popup-menu-shell-look`（`menu/win32.rs`・`trigger.rs`・裁定待ち）・`shiori2-protocol`（新しく足された相手＝kanade の `actor.rs` の SHIORI の往復 `round_trip_request` に手を入れる。件 6 の 3 つの文はその往復の失敗の所）・`mouse-click-wheel-events`（議題 3 で `menu/trigger.rs` を触るとき）。`spine.rs` に触らなくなったので `areka-test-binary-stability` とは重ならない。1 本だけの席は取らない。
+- **版の席**: 件 3〜9 だけの形（4〜6・人の待ち無し・静かな机も前後の比べも要らない）なら、上の 3 本が居ないウェーブの隙間に入れられる。件 11・12 は実機でメニューを開いて撮る仕事＝人の待ち（入力を送る許し）になりうるので、隙間に入れるなら後へ回す（棚卸㉖のとおり）。
+- **優先度の区分**: C（記録の文言とテストの穴）。件 11・12 だけ B（見た目の不具合・使えなくなることがある不具合）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 新しくは切らない。隙間に入れるときは件 11・12 を後へ回す。
+- **見つけた穴・古くなった記述**:
+  - steering の roadmap の spec 台帳の本 spec の行の「残り 7 件」は古い。今は件 3〜6・8・9 と件 11・12 の 8 件（件 2・7・10 は済み）。
+  - 棚卸㉘の節の件 6・件 9 の行の番号は上のとおり動いた。

@@ -99,3 +99,14 @@
 - 要件定義のモデル: Opus のまま（呼んだスレッドの受け手を子のスレッドで既定にするのは記録の部品の決まった使い方＝新しい並行や順の保証を設計するのではない）。
 - 分割の案: なし（素のスレッドまで広げる分は、要るなら後で別の 1 本）。
 - 見つけた穴・古くなった記述: 棚卸㉖の「素のスレッドは 8 か所」は 11 か所。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 無い。アクターの起こし方 `crates/areka-actor/src/spawn.rs`（360 行）・兄弟の `spawn_hook_tests.rs`（60）・記録の捕捉 `crates/log-capture-kit/src/capture.rs`（107）・全スレッドの捕捉 `global.rs`（95）・役割名の登録 `crates/areka/src/thread_roles.rs` は、10-22 の後 1 行も動いていない。`spawn_actor` を呼ぶ本番のファイルは 11 本のまま。素のスレッドで起こす本番の所も 10-22 と同じ（`areka` の 10 ファイル 11 か所・kanade の `shiori/probe.rs`・sylphya の `mirror.rs`）。対照の `crates/areka/src/install/desk_overwrite_tests.rs` は 688 行のまま。
+- **触るファイル**（アクターだけに絞る形）: `crates/areka-actor/src/spawn.rs` と兄弟のテスト 1 本（`spawn_hook_tests.rs` へ足すか新しい 1 本）・要るときだけ `crates/log-capture-kit/src/capture.rs`。新しいファイルは `areka-actor` の中だけ（文字の層のクレートの席は取らない）。
+- **規模**: アクターだけ 3〜5／素のスレッドまで 8〜12（変わらない）。
+- **先に要るもの**: 無い（先頭）。v0.1.0 との重なり: 0。v0.1.0 の brief が挙げる `spawn.rs` はどれも窓の置き場の `crates/areka/src/placement/spawn.rs` で、別のファイル。`shiori2-protocol` は kanade の `actor.rs`（`spawn_actor` の呼び手）を触るが、この spec は呼び手を変えない。後の版では `talk-thread-count-growth`（v0.2.0）と、見直しの `audit-sylphya-actor` が `areka-actor` を挙げる＝そちらとは同じウェーブに置かない。
+- 机・待ち: 静かな机・前後の全体テストの比べ・長い負荷の走行は要らない。最後の全体テスト 1 回で、「記録が無いこと」を見る既存のテストが赤に変わらないかを洗う。依存は足さない。ただし `areka-test-binary-stability` を測っている間は着地させない（背景のスレッドの記録の出先が変わる）。
+- **優先度の区分**: C のまま（テストの道具の改善・本番の記録は変えない）。
+- **要件定義のモデル**: Opus のまま（呼んだスレッドの受け手を子のスレッドで既定にするのは、記録の部品の決まった使い方）。
+- **分割の案**: なし（素のスレッドまで広げる分は、要るなら後で別の 1 本）。
+- **見つけた穴・古くなった記述**: 無い（棚卸㉘の数はそのまま正しい）。

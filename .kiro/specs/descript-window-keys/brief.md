@@ -106,3 +106,18 @@
 - **測りの答え（`balloon.dontmove`）**（`ssp-measurement.md` 3 節の 4 行目）: ぱすたの descript は `balloon.dontmove,true`。SSP でぱすたを 2 回ドラッグした後も、バルーンはぱすたの左上から 60,87 の所に付いたまま動いた（`ssp\stage5-rects.txt` の 4 行目・`stage5-balloon-shot.png`）。利用者がバルーンを自分で動かす操作は試していない。
 - 網羅台帳の宛先: 2026-10-23 に 2 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 1）: 最初の面が 1000 になり、起動の位置を決める窓の大きさが面 1000 の大きさになる（200% で 1108×1368・下端が作業領域の中に収まる）。バルーンが起動の関門で上へ寄せられず、× の板にかからない。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: ✅ `offline-surface-dump`（10-23）が起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs` から着せ替えの既定の読みを外へ出し、547 行から 475 行になった。最初の面の決め打ちは今 344 行目（定数 `KERO_INITIAL_SURFACE_ID` は 36 行目）。窓の大きさの測り `crates/areka/src/placement/measure.rs` は 450 行のまま（定数は 43 行目・面 0 の測りは 173〜178 行目・scope 1 以降は 190〜205 行目）。同じ定数は手本 `crates/areka/examples/window-placement.rs` の 123 行目にも在る。✅ `window-link-directives`（10-23）が配置の設定 `placement/config.rs`（689）とバルーンのドラッグ `placement/follow/drag_follow.rs`（937→**958**・`on_balloon_drag` は 511 行目・`on_balloon_drag_end` は 652 行目）を触った。受け手の表 `emo2_boot/consumer_ledger.rs` は 496 行。✅ `pasta-in-windows-verification` の申し送り（件 4・5・`balloon.dontmove` の測り）が本文の後ろに在る。
+- **触るファイル**: `placement/config.rs`（689）・`emo2_boot/assets.rs`（475）・`placement/measure.rs`（450）・`emo2_boot/switch_assets.rs`（253）・`placement/follow/drag_follow.rs`（958・入口の数行だけ・足す分は兄弟の新しいファイルへ）・`consumer_ledger.rs`（496・lock と unlock の 2 行と見本の表）・新しい受け手と決まりのファイル（新）・網羅台帳 `assets.toml`・`sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: 6〜9 タスクのまま。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手＝`placement-measure-bake-once`（`measure.rs`。案 A なら `assets.rs` も）・`shell-scale-linkage`（`placement/config.rs`・受け手の表）・受け手の表に行を足す `stay-on-top-directives`・`script-small-tags`・`balloon-communicatebox`・`mcp-strict-errors`（案 2）（1 本ずつ）。`window-work-area-clamp` とはファイルは重ならないが、向こうの件 2 はこの spec の件 4 と同じ崩れ＝この spec を先に着地させてから向こうが残りを測るのがよい。依存を足さない。静かな机・前後の全体テストの比べは要らない。議題 1・2 の測りは開発者の機械の SSP、実機のドラッグは排他テストの机。
+- **優先度の区分**: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
+- **要件定義のモデル**: Opus（先例＝配置の設定の descript の段の優先・バルーンのドラッグの入口）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - 本文の「`assets.rs` の 411 行あたり」は今 344 行目。棚卸㉘の節の「`assets.rs`（547）」は 475、「`drag_follow.rs`（937）」は 958（上限が近い）。本文 Constraints の `placement/mod.rs`（915 行）は 939 行。
+  - 最初の面の決め打ちが 3 か所（`assets.rs`・`measure.rs`・手本 `window-placement.rs`）に同じ定数で在る。descript の値へ置き換えるとき、起動と測りが同じ値を読む 1 か所にまとめないと、また食い違う。
+  - 議題 1（`balloon.dontmove`）は半分だけ答えが出た: SSP でぱすたを 2 回ドラッグしてもバルーンは付いてきた（`ssp-measurement.md` 3 節）。利用者がバルーンだけをドラッグする操作は測っていない＝要件の段で測る。
+  - 網羅台帳で持ち主が空の行: `kero.`・`char*.seriko.defaultsurface`、シェルの `sakura.`・`kero.`・`char*.balloon.dontmove`、`\![lock,balloonmove]`・`\![unlock,balloonmove]`。着地のときにこの spec を書く。
+  - `window-work-area-clamp` の件 2 と、この spec の件 4 が同じ記録（run1 のぱすたの窓 (0,864)-(1108,2232)）を挙げている。持ち分の線＝この spec は測る面を descript の既定の面にする所まで、`window-work-area-clamp` は吸着の無い窓が後で大きい面へ替わったときの扱いだけ。

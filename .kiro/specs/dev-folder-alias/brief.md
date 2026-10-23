@@ -128,3 +128,17 @@
 - 要件定義のモデル: Opus のまま（今ある口の手前に段を 1 枚・書かない守りの先例も在る）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: 本文 Problem の 2 つ目は上のとおり古い。棚卸㉖の節の `decide_boot_shell`（364〜382 行）は 400 行目へ、`running_root`（41〜63 行）は 68 行目へ動いた。見直しの spec（v0.1.0 の後）がこれらのファイルを 1 本ずつ受け持つ＝v0.1.0 の後は、見直しとの順も棚卸で照らす。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: `ghost-inner-balloon`（10-23 着地）が「ゴーストのフォルダの中のバルーンが、同じフォルダ名の置き場のバルーンを隠す」形を入れた（`crates/areka-ghost/src/catalog_roots.rs` の `balloons_for` と、隠した項目の記録 `Hidden`・`GhostBalloons`）。名前が同じものを上の段が隠し、隠したことを値で返す前例が 1 つ増えた＝エイリアスの「根の方は隠れる」はこの形に寄せられる。同じ spec がゴーストの読み手 `crates/areka-parsers/src/package/` を割った（`resolve.rs` から `resolve_bind.rs` を出し、`resolve_shell.rs` も 71 行動いた）。`property-name-case-fold`（10-23 着地）は保存の `persist/` に触らなかった。
+- **触るファイル**: `crates/areka-ghost/src/catalog_roots.rs`（307 行・和を組む `union` は 223 行目）・`catalog.rs`（487・印 `RootMark` は 34 行目・`scan_shells` は 193 行目）・`crates/areka/src/roots/mod.rs`（54）と新しい読み手・`crates/areka-sylphya/src/persist/{mod,format}.rs`（451・566）・`crates/areka/src/install/destination.rs`（215・`running_root` は 68 行目）・`update/desk.rs`（706）・シェルの場所を組む 3 か所（`scan_shells`・`crates/areka/src/boot_resolve.rs` の `decide_boot_shell` 400 行目・`package/resolve_shell.rs` 29 行目の `SHELL_ROOT`）・`Temporary` の守りの 5 か所（印を並べるとき）・`dist/README.txt`（自分の行）。1,000 行に近いものは無い。
+- **規模**: 10〜14 タスクのまま。
+- **先に要るもの**: 働きの上では無し。人の手・静かな机・前後の全体テストの比べ・依存の追加・emo-text の新しいファイルは要らない。
+- **v0.1.0 との重なり（測り直し）**: 着地した 2 本（`ghost-inner-balloon`・`property-name-case-fold`）が外れ、残るのは 3 本＝`readonly-mode`（`catalog*.rs`・`roots/`・`persist/`・`install/destination.rs`・`update/desk.rs`・`boot_resolve.rs`）・`default-balloon-selfmade`（`catalog.rs`・`boot_resolve.rs`）・`popup-menu-shell-look`（`resolve_shell.rs`・裁定待ち）。`startup-install-option` は `boot_config.rs` の場所を引く関数を呼ぶだけで、説明書も別の行＝重ならない。新しく足された v0.1.0 の 9 本（`shiori2-protocol` ほか）とは 0。余力の枠の `multi-ghost-runtime` とは `persist/`・`roots/`・`boot_resolve.rs` で重なる。
+- **版の席**: `readonly-mode` と `default-balloon-selfmade` は次のウェーブの先頭の見込みで、見立ての上限 14 も v0.1.0 のたいていの spec の下限を超える＝**v0.1.0 の間は隙間に入れない**のが既定のまま。
+- **優先度の区分**: A（開発者「特定のディレクトリを、特定 ID のゴースト・シェル・バルーンとしてエイリアス出来たら便利」）。
+- **要件定義のモデル**: Opus（今ある口の手前に段を 1 枚足すだけ・隠す形と書かない守りの前例が在る）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - バルーンを探す順が 3 段になる（エイリアス・ゴーストの中・置き場の並び）。エイリアスとゴーストの中のどちらを上にするかが決まっていない＝要件の議題に足す（`balloons_for` は置き場の和 `list_balloons` を呼ぶので、エイリアスを和の先頭に混ぜると「ゴーストの中が上」に自然になる）。
+  - 棚卸㉘の節の行の番号は動いた（`union` 189→223・`scan_shells` 192→193・`SHELL_ROOT` 28→29）。本文 Problem の 2 つ目（起動の引数のパスは目録の外）が古いのは棚卸㉘のとおり。

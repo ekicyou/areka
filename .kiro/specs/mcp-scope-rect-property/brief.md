@@ -64,3 +64,16 @@
 - 優先度の区分: A（開発者の指示＝v0.1.0 のゴール）。段: その他。
 - 要件定義のモデル: Fable（動く値の口の形で後ろの 6 本の形が決まる・スレッドをまたぐ読み）。
 - 議題（答えで作業が変わるものだけ）: ⑴ 動く値を「変わるたびに出す」か「読む時に問い合わせる」か。⑵ 出ていないバルーンの rect に SSP が何を答えるか（測る）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 起票（10-23）の枝はそのまま main `aa8da8a7` に入った＝起票の後に触る所は動いていない。上流の ✅ `mcp-get-property`・✅ `property-name-case-fold` は着地済み。MCP の `get_property` の答えを作る所 `crates/areka/src/mcp/get_property.rs`（55）は、値が無いと 48 行目で `NotFound` を返す。MCP の道具の入口 `crates/areka-mcp/src/tools/get_property.rs`（43）は運ぶだけ。
+- **触るファイル**: 値の置き場 `crates/areka-sylphya/src/actor.rs`（808・出す口 `publish_static` は 473 行目・`publish_shiori` は 487 行目）・`mirror.rs`（248）・`vocab/dotted.rs`（407）・**読み手 `crates/areka-sylphya/src/reader.rs`（584・`resolve_dotted_str` は 90 行目。起票の見立てに無かった）**・`crates/areka-ghost/src/{sylphya_wiring.rs 423, runtime.rs 815}`・`crates/areka/src/emo2_boot/` の値を集める新しいファイル（新）・`crates/areka/src/placement/`（読むだけ）・要れば `crates/areka/src/mcp/get_property.rs`（55）・網羅台帳 `property.toml` の 2 行・手順書 `doc/pasta-real-run.md`。値の書き手を World に差す所は、今の位置の記憶の差し方（`crates/areka/src/main.rs` 805 行目の `insert_persist_wiring`）の形が先例だが、`main.rs` は 978 行で上限が近い＝差す所は `emo2_boot` の側の新しいファイルに置く。
+- **規模**: M（8〜12 タスク）のまま。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし（上流は着地済み）。下流の `shell-scale-linkage` はこの spec の口を待つ（同じウェーブに置かない・sylphya のファイルも重なる）。v0.1.0 のほかの spec とのファイルの重なりは見つからない。`mcp-strict-errors`（別の組）とは、向こうが MCP の待受 `crates/areka-mcp/src/handler.rs` を触り、こちらは触らない＝共有のファイル無し（こちらが NG の文言を変えるなら `crates/areka-mcp/src/tools/get_property.rs` が近いが、向こうは挙げていない）。依存を足さない。実機の確かめは排他テストの机。出ていないバルーンに SSP が何を答えるか（議題 2）は開発者の機械の SSP の MCP で測る。静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: A（開発者の指示＝v0.1.0 のゴール「SSP 並みの自動試験」・ぱすたの検証の申し送り）。
+- **要件定義のモデル**: **Opus**（起票の見立ての Fable から改める）。値の置き場 sylphya は「掲示板」の作りで、読みは同じ手番で待たずに済み、書き手が新しい写しを差し替える（`crates/areka-sylphya/src/mirror.rs` の冒頭の説明）。議題 1 の「変わるたびに出す」はこの作りに、`publish_static`・`publish_shiori` と同じ形の口を 1 つ足すだけ＝今ある口に足す形で、新しい境目にも新しい並行の約束にも当たらない。「読む時に問い合わせる」を選ぶと、MCP の手番から画面の手番へ待ち合わせる新しい並行の約束になるので、そのときだけ Fable へ戻す（要件の段で「変わるたびに出す」に倒すのが推し）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - 起票の見立ての触るファイルに、読み手 `reader.rs` と MCP の答えを作る `crates/areka/src/mcp/get_property.rs` が無い（上）。
+  - 「読んだ時点の値が返る」（Desired Outcome）は、書き手が出した値が読み手に届くまでの間がある作り。ドラッグの直後に読んだときに古い値が返らない約束をどこまで持つか（例: 窓を動かした同じフレームのうちに出す）を要件で書く。
+  - 網羅台帳 `property.toml` の 2 行の持ち主は、もうこの spec になっている（`currentghost.scope(ID).rect`・`currentghost.balloon.scope(ID).rect`）。

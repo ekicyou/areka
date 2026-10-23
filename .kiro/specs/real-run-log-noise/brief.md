@@ -130,3 +130,23 @@
 ## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
 
 - ぱすたの走行で見つかった `apply(ShowSurface): 表示・マスクを更新` の INFO 行の量（`crates/areka-emo-present/src/presenter/show.rs:402`・記録の 9 割）は、開発者の決めで本 spec へまとめず、v0.1.0 の新しい spec `animated-surface-log-flood` が持つ（`verification.md` 5 節の 21）。本 spec の範囲は変わらない。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 10-22 の後、触るファイルに変更は 0（`crates/areka-emo-text/src/region.rs` 495 行・`actor_attach.rs` 310 行・`actor_decoration.rs` 208 行・`crates/areka-emo-atlas/src/lib.rs` 683 行）。毎フレームの `debug!` 2 種類（`region.rs` 479 行目・`actor_attach.rs` 274 行目）、同じ関数の中の毎フレーム出うる `debug!` 2 つ（`region.rs` 432 行目・471 行目）、焼き込みの全透明の警告（emo-atlas の `lib.rs` 184 行目）はそのまま在る。
+- 新しく足された件（どっとさくらの走行・10-23 の追記）の出どころをコードで確かめた: 選択肢の飾りの見た目を決める関数 `ResolvedChoiceStyle::resolve`（`crates/areka-emo-text/src/choice.rs` 633 行目）の中に `cursor.blendmethod` の警告（646 行目）がある。この関数は、登録のとき（`actor_decoration.rs` 155 行目）のほかに、描くたびの道（`crates/areka-emo-text/src/draw.rs` 283 行目・選択肢の文字の色を取るため）からも呼ばれる＝説明の「解決時 1 回」は守られていない。同じ関数の `cursor.style` の下線の警告（656 行目）も同じ形で毎フレーム出うる。
+- **触るファイル**: 上の 4 つ・`draw.rs`（761 行）か `choice.rs`（748 行）・記録の文言を数える検査 `crates/areka-emo-text/tests/attach_wiring_test.rs`（788 行・749 行目が「文字層の再追従」をちょうど 1 回と数える）・`region_tests.rs`（520）・`actor_region_warn_tests.rs`（894）。新しいファイルは足さない見込み（文字の層のクレートの一覧の席を取らない）。
+- **規模**: 4〜7 タスク（元の 3〜5 に、どっとさくらの件の 1〜2 を足した）。
+- **先に要るもの**: 無い。v0.1.0 との重なり: 描くたびの道の直しを `draw.rs` の呼び手の側だけで済ませれば 0（`draw.rs` を挙げる v0.1.0 の brief は無い）。`choice.rs` を直す形を取ると、v0.1.0 の `vertical-choice-hover-band`（`choice.rs` の帯の寸法）と重なる＝同じウェーブに置けない。`animated-surface-log-flood` とは今の brief どうしでは重ならないが、あちらの件 25（動く絵のコマを先にアトラスへ並べる）が焼き込みの入口（emo-atlas の `lib.rs`）に手を入れる設計を選ぶと重なる＝同じウェーブに入れるなら、あちらの触るファイルが決まってから。
+- 人の待ち・机: 静かな机・前後の全体テストの比べ・長い負荷の走行は要らない。直した後の数え直しは、有界の自動終了つきの短い実走（約 50 秒・同梱の emo2 と、どっとさくらのバルーン `bottle`）を AI が回す。本物の窓と GPU を使うので、その数分だけ排他テストの机を借りる。依存は足さない。
+- **優先度の区分**: 元は C（バグでない持ち越し）。ただし 10-23 に足した件に開発者の言葉「次のリリースまでに治るように」が付いた＝その件は A（開発者の指示）として扱い、v0.1.0 に入れるかを今回の棚卸で決める（入れるなら隙間の埋め草ではなく v0.1.0 の 1 本）。
+- **要件定義のモデル**: Opus（記録の出し方の直しで、今ある「変わり目に 1 回だけ出す」の先例＝`actor_attach.rs` の `note_region_collapse` に乗る）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - `animated-surface-log-flood`（動く絵の適用の INFO 行・`crates/areka-emo-present/src/presenter/show.rs`）とは仕事が重ならない。互いの brief が相手を範囲の外と書いている。
+  - `choice.rs` 623〜628 行目の説明（「warn-once（解決時 1 回）」）は今の呼ばれ方と合わない。直すのはこの spec の仕事（説明だけを先に直すと、事実と合わなくなる）。
+  - 本文の決まりの節の行数（486・251・686）は古い（今 495・310・683）。
+
+## 2026-10-23 棚卸㉙の追記
+- **棚卸㉙で本 spec を v0.1.0 に入れた**。10-23 に足した件（どっとさくらのバルーン `bottle` で毎フレーム出る `cursor.blendmethod` の警告）に、開発者の言葉「次のリリースまでに治るように」が付いたため。`shiori2-protocol`・`seriko-pattern-calls` と同じ決まり（開発者が「次のリリースまでに」と言った件を持つ spec は、その版の 1 本にする）。
+- もう「版に縛らない列」の埋め草ではない。席が空いたときに挟む扱いはやめ、v0.1.0 のウェーブの 1 本として並べる。優先度の区分は A（10-23 の件）。
+- 範囲・規模（4〜7）・触るファイル・同じウェーブに置けない相手（`choice.rs` を直す形なら `vertical-choice-hover-band`）は、すぐ上の再測定のまま。

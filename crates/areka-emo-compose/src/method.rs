@@ -185,7 +185,7 @@ pub(crate) fn is_implemented_name(name: &str) -> bool {
     known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
 }
 
-/// `move`（サーフェスの番号を無視して窓を動かす・描かない）か。綴りの比べ方は [`canonical_method_name`]。
+/// `move`（サーフェスの番号を無視して、土台の層の表示位置をずらす・描かない）か。綴りの比べ方は [`canonical_method_name`]。
 pub(crate) fn is_move_name(name: &str) -> bool {
     canonical_method_name(name) == "move"
 }

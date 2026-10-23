@@ -115,3 +115,14 @@
 - 要件定義のモデル: Opus。
 - 分割の案: 切らない。
 - 見つけた穴・古くなった記述: v0.1.0 の後の見直し `audit-emo-text-state-actor` が `actor*`・`choice*` を持つ＝この spec を v0.1.0 の間に取れば先に済む。後に回すなら同じウェーブに置かない。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 10-22 の後も関係のファイルは動いていない（C10 の emo-text の直しは説明の字だけで、`actor_present.rs`・`choice.rs`・検査の 2 本は 0 行）。本番の並び（`crates/areka-emo-text/src/actor_present.rs` の 280 行目の範囲 → 289 行目の帯 → 300 行目の強調の描画 → 331 行目の当たり）と、検査の側で同じ 3 つを並べ直す 2 か所（`actor_lookahead_shapes_tests.rs` 183〜185 行目・`choice_anchor_tests.rs` 123〜125 行目）はそのまま。新しく v0.1.0 に `vertical-choice-hover-band` が入った＝同じ `choice.rs` の帯の関数 `line_bands` の縦書きの枝を直す spec。
+- **触るファイル**（行数）: `actor_present.rs`（435）・`choice.rs`（748・まとめた関数をここに置くなら）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（273）。`actor.rs`（768）は触らない。新しいファイルは足さない。
+- **規模**: 3〜5 タスク。
+- **先に要るもの**: 無い。同じウェーブに置けない相手（v0.1.0）: `balloon-scroll-arrows`（`actor_present.rs`）・まとめた関数を `choice.rs` に置くなら `vertical-choice-hover-band`。まとめた関数を `actor_present.rs` に置けば `vertical-choice-hover-band` と並べられる（帯の関数を呼ぶだけで中身に触らない）。`balloon-communicatebox` とは重なり 0。**1 本だけの席**: 取らない（emo-text の `lib.rs` の一覧に触らない・依存の追加なし）。人の待ち・机: 要らない（見た目と当たりを変えない直しで、決まった字幅の検査だけで確かめる）。
+- **版の席**: 版に縛らない列。上限 5＝v0.1.0 のウェーブの空き席に入れられる見込み（そのウェーブで一番大きい v0.1.0 の spec の下限が 5 以上のとき）。
+- **優先度の区分**: C（バグではない。検査が本番の並びを見張れない穴＝`budoux-reveal-reflow` の持ち越し）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**: 棚卸㉘の「v0.1.0 の brief に emo-text の `actor_present.rs`・`choice.rs` を触ると書くものは無い」は古い（10-23 に `vertical-choice-hover-band`〔`choice.rs`〕と `balloon-scroll-arrows`〔`actor_present.rs`〕が v0.1.0 に入った）。`vertical-choice-hover-band` を先にすると、まとめた関数の検査に右から左の縦書きの見本を最初から入れられる。

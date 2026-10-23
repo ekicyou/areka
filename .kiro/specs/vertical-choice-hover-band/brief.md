@@ -58,3 +58,17 @@
 - 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。段: 優先（バルーンの見た目＝段の決まりの「バルーン関係」）。
 - 要件定義のモデル: Opus。
 - 議題: SSP の縦書きの反転の帯の形（測る）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 起票の後、`crates/areka-emo-text/src/choice.rs`（748 行）は動いていない。brief の行番号（帯の厚み `highlight_band_extent` 138 行目・寄せ `highlight_band_offset` 176 行目・縦書きの分かれ 216 行目・当たりの帯 330〜335 行目・今あるテスト `viewbox_draw_choice_hover_tests.rs` 397 行目）は合っている。
+- **触るファイル**（行数）: `choice.rs` の行の帯の関数 `line_bands`（206 行目から・748）と検査 `viewbox_draw_choice_hover_tests.rs`（465）。原因が描く側なら `crates/areka-emo-text/src/viewbox_draw_render.rs`（657）の帯の四角の関数 `highlight_rect`（568 行目から）、行の箱の寸法の側なら `draw_metrics.rs`・`layout_styled.rs`。テストは `choice_tests.rs`（967 行・上限の近く）に足さず、今ある `viewbox_draw_choice_hover_tests.rs` か `choice_decorate_tests.rs` に足す＝新しいファイルを作らない。
+- **規模**: 3〜5 タスク。
+- **先に要るもの**: 無い。同じウェーブに置けない相手: `choice-ranges-one-function`（まとめた関数を `choice.rs` に置く形のとき）・`balloon-scroll-arrows`（本 spec の直しが `viewbox_draw_render.rs` へ届いたときだけ）。ほかの v0.1.0 の spec とは重ならない。**1 本だけの席**: 取らない（emo-text にファイルを足さない・依存の追加なし）。人の待ち: SSP の MCP で縦書きの選択肢にマウスを乗せたときの帯を撮る（画面の操作＝開発者の許し）。ぱすたの実機の確かめは縦書きのバルーンを手順書 `doc/pasta-real-run.md` の入れ方で入れて。静かな机・全体の負荷の走りは要らない。
+- **優先度の区分**: A（開発者の目視の判定「選択肢をマウスホバーした時の背景の塗りが崩れている。…」と起票の提案への「承認」・v0.1.0）。
+- **要件定義のモデル**: Opus（今ある帯の作りの縦書きの枝を直すだけ。新しい境目も並行の約束も無い）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - brief の「当たりの行（クリックの判定）も同じ値を使う（394・434・454 行目）」は少しずれる。394 行目は窓の中の物理の位置への写し（`to_window_physical`）、434・454 行目は字の升目（`glyph_cells`）で、帯の値を当たりに使うのは `derive_hit_rows` の 310〜333 行目。
+  - 描く側の帯の四角（`viewbox_draw_render.rs` の `highlight_rect`）は、右から左の縦書きでも左から右の縦書きでも同じ足し算で横の位置を出す。brief は原因の候補にこれを挙げていない＝要件の段で一緒に確かめる。
+  - 今あるテスト（397 行目）は左から右の縦書きだけを見る。ぱすたは右から左＝両方の見本を足す。
+  - `choice-ranges-one-function` と同じ帯の関数に関わる。本 spec を先にすると、あちらのまとめた関数の検査に右から左の縦書きの見本を最初から入れられる。

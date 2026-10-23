@@ -63,3 +63,18 @@
 - 実機の根・一時フォルダはワークツリーの `target\` の下だけ。
 - 規模の見立て: S〜M（6〜9。SSP の測り 1・件 1 が 2・件 2 が 1〜2・件 3 が 1〜2・記録と実機 1）。
 - 要件定義のモデル: Opus（先例＝`scope-chain-gap` の並べ直しと `balloon_limit` の作業領域への寄せ）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 起票（10-23）の後に、✅ `pasta-in-windows-verification`（10-23）が着地し、起動の並べ直しの呼び手 `crates/areka/src/emo2_boot/frame/drain_resnap.rs` は 576 行から 633 行になった（描く指令の取り出しを足しただけ・並べ直しの判定は変わらない）。並べ直しの判定 `placement/chain_finalize.rs` は 331 行（`finalize_chain` は作業領域を見ないまま）。記憶から戻す所 `placement/persist.rs`（673）の `apply_restored_placements` は 344 行目で、340 行目の注記「本関数自身はクランプしない」も今のまま。件 2 の崩れ（ぱすたの窓 (0,864)-(1108,2232)）は、`descript-window-keys` の申し送りの件 4 と同じ記録を指す。
+- **触るファイル**: `placement/chain_finalize.rs`（331）・`emo2_boot/frame/drain_resnap.rs`（633）・`placement/persist.rs`（673）と兄弟のテスト・寄せる純関数のファイル（新・作業領域は `placement/follow/work_area.rs` 323 の写しを受ける）・件 2 の「吸着の無い窓は左上を保つ」決まりの所＝窓の大きさが変わったときの位置の付け替え `placement/follow/window_move.rs`（**1,221**・289〜305 行目。行数の番人 `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外の表に載る＝足す分は兄弟の新しいファイルへ）・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: 6〜9 タスク（起票の見立てのまま）。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし（上流は全部着地済み）。ただし件 2 は `descript-window-keys` が起動の測りを descript の既定の面にした後で、残る崩れを測り直すほうが無駄が無い＝`descript-window-keys` の後に置く。同じウェーブに置けない v0.1.0 の相手＝`dpi-realign-remembered-chain`（`chain_finalize.rs`・`drain_resnap.rs`・`persist.rs`）。依存を足さない。最初の段の測りは開発者の機械の SSP（MCP）。実機の確かめ（窓あわせの無いゴーストでの記憶からの戻し・隣の画面）は排他テストの机。静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: B（バグ＝窓が画面の外や隣の画面へ出る。起票の Constraints）。
+- **要件定義のモデル**: Opus（先例＝`scope-chain-gap` の並べ直しと、バルーンを作業領域へ寄せる `placement/balloon_limit.rs` の `apply_balloon_limit`）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - 本文 Scope の Out の「並べ終えた時点の保存が台本の移動を記憶へ書く件（`window-link-directives` の申し送り ⅴ）」は、同じ `window-link-directives` の中で直っていた（`placement/persist.rs` の 545 行目の注記と 604 行目で印 `ScriptPlaced` を読んで外す）。Out から消してよい。
+  - 本文 Current State の行数「`chain_finalize.rs`（329 行）」は 331、「`drain_resnap.rs`（576 行）」は 633。
+  - 本文 Downstream の `pasta-in-windows-verification` は 10-23 に着地した。着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md` で回す形になる。
+  - 本文の Boundary Candidates「`placement/follow/` の大きさの変化の扱い」は、上の `window_move.rs` の 289〜305 行目（下端に吸着した窓だけ中央を保ち、ほかは左上を保つ）のこと。1,000 行を超えているファイルなので、ここへは足さない。
+  - `dpi-realign-remembered-chain` の詰め直しも、詰めた位置が隣の画面へ渡りうる。寄せる純関数をどちらが持ち、どちらが呼ぶかを、先に着地する側の要件で決める。

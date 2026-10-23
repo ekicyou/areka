@@ -254,3 +254,18 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 
 - 本 spec が範囲外とする「ukadoc のカタログの更新」は、新しく起票した `ukadoc-catalog-refresh` が持つ（`script-security-level` の要件討議の議題 3）。
 - 並び: `ukadoc-catalog-refresh` を先に着地させる。写しを新しくしてから手書きの数と持ち主を数え直す方が安い。席の条件は本 spec と同じ。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 10-22 の後に網羅の文書と台帳を動かしたのは 3 本と道具の手入れ 1 本＝`window-link-directives`・`script-security-level`・`pasta-in-windows-verification` と、未着手の spec の名前から `areka-P0-` を外した PR#362（台帳 4 本と `roadmap-draft.md` の持ち主の名前を機械で書き換えた）。見張りの道具 `crates/ukadoc-survey/` の中身は、名前を外したテストの値だけ。
+- **数え直し**（棚卸㉘と同じ数え方で 52b014de を数え直して 28 本・168 行・1,203 行と一致することを確かめてから数えた）: 持ち主の spec が完了したのに完了の表（`briefing.md` の `[[owner_completed]]`・14 本のまま）に居ない＝28 本・168 行 → **30 本・180 行**。持ち主が空の行は 1,203 → **1,151**。台帳 `shiori.toml` の「名前を書いた場合だけは別」は 209 行のまま。裁定の候補 W-2 は `roadmap-draft.md` の 1913 行目（前は 1670 行目）に残る。`doc/ukadoc-coverage/README.md` 280・310 行目の申し送り先が完了済みの `ukadoc-coverage-roadmap` なのも残る。
+- **`ukadoc-catalog-refresh` との順（強まった）**: 同 spec の 10-23 の測りで、新しい写し（0.10.3）は項目の id と URL の書き方が変わっていると分かった（今の id 1,749 件のうち一致は 65 件）。写しを新しくすると、台帳 4 本の全行・`linkage.md`・`briefing*.md`・`roadmap-draft.md` の id が付け替わる＝本 spec が触るファイルを全部書き換える。先に本 spec を済ませると、数え直しと文書の撮り直しが付け替えでもう一度動く。**本 spec は `ukadoc-catalog-refresh` の着地の後**（起票の時の並びのまま・理由が強まった）。
+- **触るファイル**: 棚卸㉘のまま＝`doc/ukadoc-coverage/` の `briefing*.md`（`briefing.md` 2,594 行ほか）・`roadmap-draft.md`（1,969）・`README.md`（598）・台帳 4 本・作り直す報告、`crates/ukadoc-survey/tests/consistency/` の `spec_checks.rs`（660）・`documents.rs`（392）・`documents_non_vacuity.rs`（770）、報告を行末 CRLF で書くなら `crates/ukadoc-survey/src/report/` の書き出し。`linkage_checks.rs`（944）・`checks.rs`（893）・`documents_checks.rs`（773）には足さない。製品のソースには触らない。
+- **規模**: 16〜20 タスク（変わらず）。
+- **先に要るもの**: `ukadoc-catalog-refresh`（上のとおり・働きの依存ではなく、同じファイルを二度書き換えない順）。ネットワーク・静かな机・前後の全体テストの比べは要らない。開発者に決めてもらう議題（誰も仕上げられない行の扱い）はあるが、着手を止める待ちではない。
+- **v0.1.0 との重なり**: 台帳の行を動かすと書く v0.1.0 の brief は 10 本（`stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`mouse-click-wheel-events`・`shell-mouse-cursor`・`popup-menu-shell-look`・`mcp-scope-rect-property`・`shell-scale-linkage`・`balloon-scroll-arrows`・`balloon-communicatebox`）。行の状態を動かす spec は手書きの数の文書も同じ時に書き換える（許す重なりの外）＝v0.1.0 の後に回すのが素直なまま。
+- **優先度の区分**: C（網羅台帳の番・製品は壊れない）。
+- **要件定義のモデル**: Opus（台帳の行と文書の扱いの決めごとで、新しい境目・並行の約束・前例の無い骨格の分かれ目のどれにも当たらない）。
+- **分割の案**: 棚卸㉖のまま（要件で 20 を超えたら「数を道具の出力にする」と「台帳の行と文書の撮り直し」に分ける）。
+- **見つけた穴・古くなった記述**:
+  - この brief の申し送りの節が引く id（`runonce:1`・`periodic_2c_6570_5024:1` などの書き方）は、`ukadoc-catalog-refresh` の後は古い書き方になる。要件の段で新しい id で引き直す。
+  - `audit-ukadoc-survey`（見直し）とは `crates/ukadoc-survey/` で重なる＝同じウェーブに置かない（棚卸㉘のとおり）。

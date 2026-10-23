@@ -65,3 +65,18 @@
 - 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。段: 優先（バルーン）。
 - 要件定義のモデル: Opus。
 - 議題（`balloon-markers` の棚卸㉑〜㉓の議題のうち前半の分）: ⑴ 箱の印の絵をどのフォルダから引くか。⑵ 手動で戻している最中に新しい文字が来たとき・時間切れのときの扱い。⑶ 印を文字の面の中で描くか emo-present で重ねるか。⑷ 縦書きの矢印の向きと出る条件（SSP の MCP で測る）。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 起票の後に着地した C10 の 8 本は、この spec の触るファイルをほとんど動かしていない（`crates/areka/src/input_events/user_break.rs` に `window-link-directives` が 6 行、`crates/areka-parsers/src/balloon/model.rs` と emo-text の数ファイルは説明の字の直しだけ）。`ghost-inner-balloon` は着地済み＝Scope の「`ghost-inner-balloon` の着地の後」は済んだ話。網羅台帳の `arrow0.x/y`・`arrow1.x/y` の 4 行は、持ち主がもう本 spec（`doc/ukadoc-coverage/ledger/assets.toml` 717〜778 行）。`arrow.filename` の行（同 701 行）だけが `balloon-canon-residue` のまま。ホイールの値は wintf の `PointerState.wheel`（`crates/wintf/src/ecs/pointer/systems.rs` が毎フレーム消す）にあり、areka はまだどこでも読まない。ぱすたの縦書きのバルーンは `arrow0.png`・`arrow1.png` と descript の 69〜72 行目を持つ（このワークツリーの `target\pasta-verify\` で確かめた）。
+- **触るファイル**（行数）: バルーンの読み手 `crates/areka-parsers/src/balloon/{mod.rs 26, model.rs 774, parse.rs 252, validation_tests.rs 207}`＋鍵の新しいファイル・系列の表 `crates/areka-emo-present/src/balloon.rs`（701）・emo-text の `layout.rs`（502）・`viewbox.rs`（460）・`viewbox_diff.rs`（429）・`viewbox_draw_render.rs`（657）・`actor.rs`（768・バルーンごとの値 `ResolvedBalloonText` に矢印の位置を置く）・`actor_present.rs`（435）・`actor_box.rs`（470）・`lib.rs`（545）＋印の配置の新しいファイル・入力の `crates/areka/src/input_events/{balloon.rs 495, balloon_pressed.rs 198, shell_box.rs 203, shell_box_handler.rs 386, user_break.rs 395, mod.rs 576}`＋ホイールの受け口の新しいファイル・台帳 `assets.toml` の 5 行と `doc/ukadoc-coverage/roadmap-draft.md` の本 spec と `balloon-canon-residue` の数の行。読み返す間の時間切れを止めるなら `crates/areka/src/emo2_boot/balloon_visibility*.rs` も。上限に近いのは `model.rs`（774）と `actor.rs`（768）＝鍵は新しいファイルへ。
+- **規模**: 13〜16 タスク（起票の 11〜13 に、普通のバルーンと箱の両方のホイールの受け口と、SSP での縦書きの矢印の測りを足した）。20 は超えない見込み。
+- **先に要るもの**: 働きの上では無い。同じウェーブに置けない相手（v0.1.0）: `balloon-communicatebox`（読み手の `mod.rs`・`model.rs`・`parse.rs`）・`mouse-click-wheel-events` と `shell-mouse-cursor`（`input_events/mod.rs`）・`choice-ranges-one-function`（`actor_present.rs`）・`placement-measure-bake-once`（案 B なら emo-present の `balloon.rs`）・`vertical-choice-hover-band`（あちらの直しが `viewbox_draw_render.rs` へ届いたときだけ）。**1 本だけの席**: emo-text に新しいファイルを足す＝使う。依存の追加は無い見込み。静かな机は要らない。人の待ち: 縦書きの矢印の向きと出る条件を SSP の MCP で測る（SSP を動かし画面を操作する＝開発者の許しを取る）・ぱすたの実機の確かめは排他の机を持って。ぱすたの書庫の直し（未リリース）は待たない（手順書 `doc/pasta-real-run.md` の入れ方で入れる）。
+- **優先度の区分**: A（開発者「0.1.0までに解決しない場合、独立して起票せよ」・v0.1.0 のゴール「ぱすたが SSP と同じに動く」）。
+- **要件定義のモデル**: Opus。ホイールは wintf に今ある 1 フレームだけの値を読むだけ、時間切れは今のバルーンの時間の数え方の上に乗るだけ＝新しい並行や時刻の約束ではない。議題が多いこと・実機の確かめは Fable の理由にならない。
+- **分割の案**: 切らない（`balloon-markers` から一度切り出した spec）。
+- **見つけた穴・古くなった記述**:
+  - Scope の「ぱすたの実機の確かめ（`ghost-inner-balloon` の着地の後）」は古い（着地済み）。
+  - 台帳の `arrow.filename` の行（`assets.toml` 701〜704 行）は持ち主が `balloon-canon-residue` のまま＝本 spec のタスクで移す。移すときは `roadmap-draft.md` の数の行も一緒に直す（直さないと台帳の検査が赤）。
+  - `balloon-markers` の brief は末尾に 1 行足しただけで、本文（Problem・Desired Outcome・Scope・Upstream）は矢印と手動スクロールをまだ持ち、上流に本 spec が無い。roadmap の台帳の `balloon-markers` の行と依存の一覧の行も「`arrow*` と手動スクロール」「L（18〜22）」「上流は `shell-balloon`」のまま。`balloon-scroll-fade` の台帳の行の上流も `balloon-markers` のまま。
+  - `talk-fast-forward` の brief は印の系列（`clickwait*`）を分け合う相手を `balloon-markers` と書く＝本 spec へ読み替える（系列の土台は本 spec が作る）。
+  - 手動で戻した位置は、選択肢の当たりへ今の「面に反映したスクロールの量」（`crates/areka-emo-text/src/choice.rs` の `to_window_physical` が読む値）を通して届けば `choice.rs` に触らずに済む＝そう作ると `vertical-choice-hover-band` と重ならない。

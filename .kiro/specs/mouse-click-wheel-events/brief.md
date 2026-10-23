@@ -140,3 +140,13 @@ kanade のマウスの出来事に「クリック」と「ホイール」を足�
   - × を押すと `OnMouseClick`（`Reference4: 閉じる`）が届き、終わりの台詞「…ここからは、画面ごしのお別れだね。また、いつでも呼んで。」の後、台本の終わり `\_w[300]\-\e` で約 2 秒後に SSP ごと終わった（`ssp\stage7-pasta-log.txt`・`stage7-farewell-shot.png`）。
 - 網羅台帳の宛先: 2026-10-23 に 3 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 3・段 7）: × が赤くなる。ボールのトークが出て、初回の起動ではボールのクリックで身体が映る（その後に撫でと自然なトークが回せる）。× で終わりの台詞の後に終われる。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: `script-security-level`（10-23 着地）が kanade の同じファイルを触った。中身は「台本の出どころ」を運ぶ欄を足しただけで、マウスの道は変わっていない（kanade のマウスの出来事 `MouseEventKind`〔`crates/areka-kanade/src/msg.rs` 125 行目〕は今も移動・ダブルクリック・ドラッグの開始と終了の 4 つ）。マウスのイベントの出どころは「ふつうのイベント」の扱い（`crates/areka-kanade/src/request_origin.rs` の `of_event`）に乗るので、足すイベントも同じ形で済む見込み。行数: `msg.rs` 544・`schedule/events.rs` 888（残り 112）・`schedule/steady.rs` 957（残り 43）・`schedule/mod.rs` 673。送ってよいイベントの表 `ALLOWED_EVENT_IDS` は `schedule/events.rs` の 115 行目（ぱすたの申し送りの「114」は 1 行ずれた）。キャラの窓の押下の受け口 `on_char_pointer_pressed`（`crates/areka/src/input_events/mod.rs` 576 行）は今も単発のクリックを送らない（483 行目と 526〜532 行目）。当たり判定の追跡のファイルはまだ無い。
+- **触るファイル**: 棚卸㉘のとおり＝kanade の `msg.rs`・`schedule/events.rs`・`schedule/steady.rs`（入口の数行だけ・判断は新しいファイル）・`schedule/mod.rs`（`OnMouseUp` を先に送る案なら状態の欄 1 つ）・`crates/areka/src/input_events/mod.rs`・新しい `input_events/hover_region.rs`（新・`shell-mouse-cursor` と分け合う）・ホイールの間引き（`throttle.rs` 276 か新しいファイル）・右クリックの順を変えるときだけ `crates/areka/src/menu/trigger.rs`（573）・兄弟のテスト・網羅台帳 `shiori.toml` の 5〜9 行・`doc/COMPAT_ARCHITECTURE.md` §8。kanade の `schedule/sstp.rs` と `actor.rs` には触らない。
+- **規模**: 10〜16 のまま（`OnMouseUp` を送らない案なら 10〜13・送る案なら 13〜16）。
+- **先に要るもの**: 働きの上で無し（待っていた `script-security-level` は着地した）。同じウェーブに置けない相手（v0.1.0）: `shell-mouse-cursor`（`input_events/` と追跡のファイル）・`balloon-communicatebox` と `shell-scale-linkage`（どちらも `schedule/events.rs` の送ってよいイベントの表に語を足す＝同じファイル）・`mcp-strict-errors` は「入口で診る」案なら重なり 0（向こうは `schedule/sstp.rs`）、「再生まで印を運ぶ」案なら kanade の `msg.rs` で重なる。`shiori2-protocol` は brief の上では 0（向こうは kanade の `actor.rs` の往復・`crates/shiori-host32-host/src/shiori3.rs`・`crates/areka-ghost/src/shiori_inproc.rs`）＝向こうが版の切り替えの状態を `schedule/mod.rs` に置くと決めたら重なるので、設計で照らし合わせる。1 本だけの席は取らない。実機の確かめは画面のロックを外した机で入力を送る＝人の在席が要る。当たり判定どうしを移ったときの順は SSP で測る。
+- **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・ぱすたの × とボールのクリック・申し送りの件 10〜13）。
+- **要件定義のモデル**: Opus のまま（`OnMouseUp` → `OnMouseClick` の 2 段は選択肢とアンカーの前例どおり・今ある kanade の進行に乗るだけ）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文 Constraints の行数（`msg.rs` 926・`schedule/steady.rs` 950）は上の数に読み替える。本文 Out の「`OnMouseEnter`／`Leave`／`Hover`」は `OnMouseHover` だけ（棚卸㉗の改めが本文に入っていない）。申し送りの `schedule/events.rs:114` は今は 115 行目。後の版の `shell-hover-animation` も追跡のファイルを使うと書いている＝作るときは名前と形を brief どうしで合わせる。

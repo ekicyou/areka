@@ -111,3 +111,13 @@
 - 段 6 でメニューが見えずに閉じる件（`popup-menu-residue` の件 12）は、run1 では起きなかった。
 - 網羅台帳の宛先: 2026-10-23 に 22 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 6）: メニューの色と絵がシェルの指定どおりになり、着せ替えのメニューが出て、選ぶと着せ替えが替わる。
+
+## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
+- **前提の変化**: 生きている決まり 6（オーナードローと着せ替えのメニューは予約のまま）を解くかの開発者の裁定は今も出ていない（roadmap の「棚卸㉘の裁定」9 の ⑶）＝ウェーブの外のまま。メニューの枠は `window-link-directives`（10-23）が「バルーン位置初期化」を足して 12 種になった（`crates/areka/src/menu/mod.rs` 49〜74 行目の `Frame`・着せ替えの枠は今も無い）。行数: `menu/mod.rs` 373・`menu/plan.rs` 139・`menu/win32.rs` 137・wintf の `crates/wintf/src/ecs/window_proc/mod.rs` 381（`WM_MEASUREITEM`・`WM_DRAWITEM` の腕は今も無い）・`crates/areka-seriko/src/state.rs` 728。steering の `tech.md` 161 行目は今も「自前の窓もオーナードローも持たない」。
+- **触るファイル**: 棚卸㉗の見立てのとおり。OS のメニューの待ちの中に届く知らせは、wintf の起こし方の表（`crates/wintf/src/ecs/world/tick_wake.rs` の `wake_bits_for_message`・表に無い知らせは全部を回す側へ落とす）にも関わる＝オーナードローの側は、この表に 2 つの知らせを足すかを設計で決める。
+- **規模**: 14〜18 のまま。
+- **先に要るもの**: 開発者の裁定（決まり 6 を解くか・右クリックメニューを後で WinUI3 へ移すか）。同じウェーブに置けない相手: `popup-menu-residue`（`menu/win32.rs`・版に縛らない）・`balloon-communicatebox`（入口をメニューに足すと決めたら `menu/`）・後の版の `menu-thumbnail-preview`。`mouse-click-wheel-events` が触りうるのは `menu/trigger.rs` だけで、本 spec の外＝0。1 本だけの席は取らない。メニューを開いて撮る実機の確かめと、着せ替えのメニューの並びの SSP の測りが要る（ぱすたの申し送りで並びは撮ってある）。
+- **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・申し送りの件 14・15）。
+- **要件定義のモデル**: オーナードローまで作るなら Fable のまま。当たる基準＝前例の無い境目の約束: OS のメニューを出している間、areka の側は World を借りたまま待っており、wintf の窓の手続きに届く描画の知らせ（`WM_MEASUREITEM`・`WM_DRAWITEM`）にはその場で描いて答えなければならない＝借りられない間に同期で描く口を、wintf と areka の間に新しく引く（場所は `window_proc/mod.rs` と `menu/win32.rs`）。借りられない間の知らせを預かって後で読む前例（wintf の `drag/reentry.rs`・`world/vsync.rs`）はあるが、どれも後回しにする形で、その場で答える形の前例にはならない。着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）。
+- **分割の案**: 前のまま（オーナードローの見た目／着せ替えのメニュー・共通は `menu/plan.rs`・`menu/mod.rs` だけ）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残す。
+- **見つけた穴・古くなった記述**: 本文 Current State の「枠 11 種」は 12 種。オーナードローの側の触るファイルに `tick_wake.rs` の起こし方の表が抜けていた（上のとおり）。この brief だけ行末が LF で、末尾に改行が無かった。
