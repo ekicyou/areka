@@ -55,9 +55,10 @@ pub use change::{
     ShioriMethod, TalkGap,
 };
 pub use msg::{
-    ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped,
-    MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
-    ShioriFailure, ShioriFault, ShioriFaultKind, ShioriMsg, ShioriOutcome,
+    ChoiceInput, ClickButton, CloseReason, EventId, HoverEdge, KanadeConfig, KanadeMsg,
+    KanadeStopCause, KanadeStopped, MonotonicMs, MouseButton, MouseEventKind, MouseInput,
+    ShioriCall, ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, ShioriMsg,
+    ShioriOutcome,
 };
 pub use online::{OnlineCounter, OnlineGuard};
 pub use shiori::{

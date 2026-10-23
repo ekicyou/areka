@@ -131,6 +131,37 @@ pub enum MouseEventKind {
     DragStart,
     /// ドラッグの終了（OnMouseDragEnd）。x／y は終わった位置（取り消しは押した位置）。
     DragEnd,
+    /// クリックにすると入力の層が決めたボタンの解放（OnMouseUp／OnMouseUpEx から始まる段の列）。
+    /// `second_of_double`＝ダブルクリックとして届いた押下の解放（1 段目の系だけを送る・
+    /// mouse-click-wheel-events 要件 3.2）。
+    ButtonUp {
+        button: ClickButton,
+        second_of_double: bool,
+    },
+    /// 縦のホイール（OnMouseWheel）。足し合わせた回転量（1 目盛り 120・上が正）。0 は来ない
+    /// （入力の層が捨てる）。
+    Wheel { delta: i32 },
+    /// 当たり判定・窓の出入り（OnMouseEnter／Leave／EnterAll／LeaveAll）。
+    Hover(HoverEdge),
+}
+
+/// クリックのボタン（Ref5 の 5 通り）。[`MouseButton`]（左右だけ・ダブルクリック用）とは分ける。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClickButton {
+    Left,
+    Right,
+    Middle,
+    XButton1,
+    XButton2,
+}
+
+/// 出入りの 4 語（OnMouseEnter／OnMouseLeave／OnMouseEnterAll／OnMouseLeaveAll）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoverEdge {
+    Enter,
+    Leave,
+    EnterAll,
+    LeaveAll,
 }
 
 /// マウスボタン識別（Ref5: 左 "0"／右 "1"）。

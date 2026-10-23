@@ -20,7 +20,7 @@
   - _Requirements: 3.1, 11.5_
 
 - [ ] 2. kanade に 9 語とクリックの段の列を足す
-- [ ] 2.1 知らせの種類に解放・ホイール・出入りを足す
+- [x] 2.1 知らせの種類に解放・ホイール・出入りを足す
   - マウスの知らせの種類に、ボタンの解放（ボタン 5 通りと「ダブルクリックの 2 回目の解放か」）・縦のホイール（回転量）・出入り（4 語）の 3 つを足し、ボタンと出入りの型を公開する
   - 入力の層のドラッグの知らせの種類の名前の振り分けに、新しい 3 つを「その他」として足す（ドラッグの 2 つしか来ない）
   - 定常のマウスの入口の振り分け（網羅の `match`）に、新しい 3 つを受けて何も送らず trace を残す仮の腕を 1 つ足す（2.3 で新しい受理への委譲に置き換える）
@@ -117,3 +117,5 @@
 ## Implementation Notes
 
 - 1.2: `pointer/dispatch/tests.rs` の `test_dispatch_pressed_gating_requires_main_button`（拡張ボタンだけでは押下が届かない）を `test_dispatch_pressed_fires_for_every_button` に置き換えた。design の WintfHoles（dispatch/mod.rs）が変える動きそのものを固定していたテストで、4.2 の「今のテストを直していない」の差分の説明ではこの置き換えを例外として明記する。
+- 範囲外: `cargo clippy -p areka-kanade --all-targets` が `crates/areka-kanade/src/actor_raise_reply_tests.rs:98` の `never_loop` で止まる（本 spec の前からある）。完了の棚卸で扱う。
+- 2.3・2.4: クリックの段の列の中身は `schedule/mouse_events.rs`（テストは `mouse_events_tests.rs`）へ置き、`steady.rs`（2.1 の後で 964 行）には委譲の腕と応答の入口だけを足す。

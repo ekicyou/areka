@@ -102,6 +102,10 @@ fn notify_drag(
         MouseEventKind::DragEnd => "drag_end",
         MouseEventKind::Move => "move",
         MouseEventKind::DoubleClick { .. } => "double_click",
+        // ドラッグの 2 つしか来ない。
+        MouseEventKind::ButtonUp { .. }
+        | MouseEventKind::Wheel { .. }
+        | MouseEventKind::Hover(_) => "other",
     };
 
     if target != entity {
