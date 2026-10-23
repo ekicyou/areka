@@ -485,3 +485,247 @@ fn hover_stale_ordinal_yields_no_highlight() {
         assert_eq!(c.segments[0].ordinal, ordinal);
     }
 }
+
+// ── 縦書きの帯の純粋の検査（spec `vertical-choice-hover-band` タスク 3.1・設計 P1〜P3） ──
+//
+// 配置（`LayoutEngine`・`FixedMetrics`＝行ボックス 1.33em）→ `line_bands` → `decorate_canvas`／
+// `derive_hit_rows` の本番と同じ道で、焼いた帯と当たりの帯をブロック軸（x）で突き合わせる。
+
+/// 書字方向 `mode` で解いた `TextRegion`（validrect 10,20〜390,220）。
+fn vregion(mode: WritingMode) -> TextRegion {
+    let model = BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(Some(20), Some(220), Some(10), Some(390)),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    TextRegion::resolve(&model, (400, 224), mode)
+}
+
+/// 縦書きの配置・行ごとの帯・選択肢の注釈の組。
+type Columns = (
+    TextRegion,
+    Vec<PositionedLine>,
+    Vec<LineBand>,
+    Vec<LineChoiceSegment>,
+);
+
+/// 「はい」「いいえ」を 1 列ずつ並べた選択肢 2 つ（em 28）の配置と、その帯・注釈。
+fn two_choice_columns(mode: WritingMode) -> Columns {
+    use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+    use crate::state::{SpanKind, TextItem};
+    let items = vec![
+        TextItem::glyph("は"),
+        TextItem::glyph("い"),
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::glyph("い"),
+        TextItem::glyph("い"),
+        TextItem::glyph("え"),
+    ];
+    let span = |ordinal, glyph_range| ChoiceSpan {
+        kind: SpanKind::Choice,
+        ordinal,
+        id: String::new(),
+        label: String::new(),
+        references: vec![],
+        glyph_range,
+    };
+    let region = vregion(mode);
+    let lines = LayoutEngine::layout(
+        &items,
+        5,
+        &region,
+        mode,
+        28.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    let bands = line_bands(&lines, mode, &FixedMetrics);
+    let segments = annotate_lines(&lines, &[span(0, 0..2), span(1, 2..5)]);
+    (region, lines, bands, segments)
+}
+
+/// P1（要件 2.1・6.2）: 右から左・左から右で、`decorate_canvas` が Choice 住人へ焼いた
+/// `band_extent`／`band_offset` から描画と同じ式（住人原点 ＋ 寄せ 〜 ＋ 厚み・`highlight_rect`）で
+/// 組んだ帯と、`derive_hit_rows` の当たりの四角のブロック軸の範囲が数値まで同じ。右から左の寄せは負。
+///
+/// 較正: `line_bands` の縦書きの枝を横書きの式（丈 30・寄せ 4）へ戻すと、厚み・寄せの数で赤。
+#[test]
+fn vertical_baked_band_equals_hit_rect_block_range() {
+    // em 28・s ＝ 28 × 0.33 ＝ 9.24: 右から左 −round(0.4545 × 9.24) ＝ −4・左から右 round(0.5303 × 9.24) ＝ 5。
+    for (mode, want_offset) in [
+        (WritingMode::VerticalRl, -4.0),
+        (WritingMode::VerticalLr, 5.0),
+    ] {
+        let (region, lines, bands, segments) = two_choice_columns(mode);
+        assert_eq!(lines.len(), 2, "{mode:?}: 2 列に並ぶ");
+        let base = ContentCanvas::from_layout(&lines, &region, mode);
+        let out = decorate_canvas(
+            base,
+            &segments,
+            Some(0),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            mode,
+            &bands,
+        );
+        let rows = derive_hit_rows(&lines, &segments, mode, &region, &bands);
+        assert_eq!(rows.len(), 2, "{mode:?}: 当たりの行 2 つ");
+        for (seg, row) in segments.iter().zip(&rows) {
+            let resident = &out.residents[seg.line_index];
+            let c = choice(resident);
+            assert_eq!(c.band_extent, 28.0, "{mode:?}: 焼いた厚みは列の em");
+            assert_eq!(c.band_offset, want_offset, "{mode:?}: 焼いた寄せ");
+            let x0 = resident.transform.offset().0 + c.band_offset;
+            assert_eq!(
+                (x0, x0 + c.band_extent),
+                (row.rect.left, row.rect.right),
+                "{mode:?}: 選択肢 {} の焼いた帯と当たりのブロック軸の範囲が違う",
+                row.ordinal
+            );
+        }
+        if mode == WritingMode::VerticalRl {
+            assert!(
+                bands.iter().all(|b| b.offset < 0.0),
+                "右から左の寄せは負（帯は行矩形の左へ出る）: {bands:?}"
+            );
+        }
+    }
+}
+
+/// P2（要件 1.4・2.3）: 同じ大きさの隣り合う列の帯は重ならず、間は行間の分（行送り − em）。
+/// 帯の境の点は、半開区間（`x >= left && x < right`）でたかだか 1 列に当たる。
+#[test]
+fn vertical_adjacent_same_size_column_bands_do_not_overlap() {
+    use crate::layout::{FixedMetrics, GlyphMetrics};
+    let gap = FixedMetrics.line_pitch(28.0) - 28.0;
+    assert!(gap > 0.0, "前提: 行間がある");
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let (region, lines, bands, segments) = two_choice_columns(mode);
+        let rows = derive_hit_rows(&lines, &segments, mode, &region, &bands);
+        // 右から左は 1 列目が右・左から右は 1 列目が左。左右の順に並べ直す。
+        let (l, r) = if rows[0].rect.left < rows[1].rect.left {
+            (rows[0].rect, rows[1].rect)
+        } else {
+            (rows[1].rect, rows[0].rect)
+        };
+        assert_eq!(
+            r.left - l.right,
+            gap,
+            "{mode:?}: 隣の列の帯の間が行間 {gap} でない: 左 {l:?}・右 {r:?}"
+        );
+        // 両方の列が持つ行内の位置で、帯の辺の上と辺の際の点を見る。
+        let y = l.top.max(r.top);
+        for x in [
+            l.left,
+            l.right,
+            r.left,
+            r.right,
+            l.right - 0.5,
+            r.left - 0.5,
+        ] {
+            let hits = rows
+                .iter()
+                .filter(|row| {
+                    let q = row.rect;
+                    x >= q.left && x < q.right && y >= q.top && y < q.bottom
+                })
+                .count();
+            assert!(hits <= 1, "{mode:?}: 点 ({x},{y}) が {hits} 列に当たる");
+        }
+    }
+}
+
+/// P3（要件 1.6）: `\f[height,40]` の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの
+/// 量（正＝重なる幅・負＝間の幅、image px）を数で固定する。字のインクは隣と重ならないので列送りは
+/// 直さない（research.md 13.3 節）——帯だけが重なり得るのを、横書きの大きい行と同じ扱いで受け入れる。
+#[test]
+fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
+    use crate::cursor_tag::CursorWarnGuard;
+    use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+    use crate::look::{GlyphStyles, StyleTable, TextLook};
+    use crate::state::TextItem;
+    use areka_sakura::contract::ActorKey;
+    let default = TextLook {
+        height: 20.0,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let big = table.intern(
+        &TextLook {
+            height: 40.0,
+            ..default.clone()
+        },
+        &default,
+    );
+    let mut items = Vec::new();
+    let mut ids = Vec::new();
+    for (word, id) in [
+        ("雨だよ", StyleId::DEFAULT),
+        ("晴れてる", big),
+        ("曇ってる", StyleId::DEFAULT),
+    ] {
+        if !items.is_empty() {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        for ch in word.chars() {
+            items.push(TextItem::glyph(&ch.to_string()));
+            ids.push(id);
+        }
+    }
+    // (向き, 大きい列と「雨だよ」の帯の重なり, 大きい列と「曇ってる」の帯の重なり)。
+    // 右から左: 行矩形 x370..390・328..368・306..326 → 帯 367..387・322..362・303..323（寄せ −3・−6・−3）。
+    // 左から右: 行矩形 x10..30・32..72・74..94 → 帯 13..33・39..79・77..97（寄せ 3・7・3）。
+    // 大きい列の帯は後ろ隣（字の進む側）の列の帯へ 1〜2 画素食い込み、前の列とは間が空く。
+    for (mode, want_prev, want_next) in [
+        (WritingMode::VerticalRl, -5.0, 1.0),
+        (WritingMode::VerticalLr, -6.0, 2.0),
+    ] {
+        let region = vregion(mode);
+        let lines = LayoutEngine::layout_styled(
+            &items,
+            ids.len(),
+            &region,
+            mode,
+            20.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+            GlyphStyles {
+                table: &table,
+                ids: &ids,
+                default: &default,
+                current: &default,
+            },
+            &ActorKey::from("0"),
+            &mut CursorWarnGuard::default(),
+        );
+        assert_eq!(lines.len(), 3, "{mode:?}: 3 列に並ぶ");
+        let bands = line_bands(&lines, mode, &FixedMetrics);
+        let extents: Vec<f32> = bands.iter().map(|b| b.extent).collect();
+        assert_eq!(
+            extents,
+            [20.0, 40.0, 20.0],
+            "{mode:?}: 帯の厚みは列ごとの em"
+        );
+        let span = |i: usize| {
+            let x0 = lines[i].rect.left + bands[i].offset;
+            (x0, x0 + bands[i].extent)
+        };
+        // 正なら重なる幅、負なら間の幅（image px）。
+        let overlap = |a: (f32, f32), b: (f32, f32)| a.1.min(b.1) - a.0.max(b.0);
+        assert_eq!(
+            overlap(span(1), span(0)),
+            want_prev,
+            "{mode:?}: 雨だよとの帯の重なり"
+        );
+        assert_eq!(
+            overlap(span(1), span(2)),
+            want_next,
+            "{mode:?}: 曇ってるとの帯の重なり"
+        );
+    }
+}
