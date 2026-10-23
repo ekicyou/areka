@@ -351,3 +351,21 @@
 
 - ほかに崩れた形を固めた縦書きの期待値は見つからなかった（新しい式で `cargo test -p areka-emo-text` の全部が緑。ほかの crate のテストは縦書きの選択肢の帯を読まない）。
 - **赤の確かめ（機能の旗）**: 旗を切った（今の式のまま）で書き換えた検査を回すと、`line_bands_read_the_block_axis_in_vertical_modes`・`hit_row_vertical_block_band_uses_band_extent_from_left_edge`・`block_axis_is_union_of_line_rect_and_band`・`vertical_band_covers_column_ink_readback` の 4 本が赤。`derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis` は明示の帯で足し算だけを見るので旗に依らず緑、`every_choice_hit_row_lies_inside_the_glyph_cells` は今の式でも前置きを満たすので緑。旗を入れて全部緑、旗を外して全部緑（1050 件）。
+
+## 15. 横書きを変えないことと、直しを外すと赤になることの確かめ（タスク 4.1・2026-10-23・ブランチの先頭 `ab7f8b5c`）
+
+- **横書きの今ある検査（5.1〜5.3）と当たりの側の檻**: 検査は 1 本も変えずに回した。机は使わない（crate ごと・`--ignored` なし）。
+
+| コマンド | 結果 | 含む物 |
+|---|---|---|
+| `cargo test -p areka-emo-text` | 緑。lib 1055 件通過・無視 3（記録だけの `--ignored` 物）・統合テスト 16 本で 107 件通過（計 1162 件・赤 0） | `choice_tests.rs` の横書きの全部と `to_window_physical_vertical_puts_committed_on_x_block_axis`・`to_window_physical_parameterized_over_k_committed_and_modes`（当たりの側のスクロール 3.1）、`actor_choice_contract_tests.rs` の Yu Gothic UI の読み戻しと既定フォントの読み戻し、1.1 の R・2.2 の S・3.1 の P1〜P3・3.2 の P4 |
+| `cargo test -p areka --bins input_events::balloon` | 緑。77 件通過・赤 0 | `input_events/balloon_pure_core_tests.rs`（`hit_choice_row` の半開区間＝帯の中の点で選ぶ 2.2）ほか balloon の入力の檻 |
+
+- **直しを外すと赤（6.4・手順 T6.4）**: `crates/areka-emo-text/src/choice.rs` の `line_bands` で帯を決める `match mode` を一時的に `match WritingMode::HorizontalTb` に替え（縦書きの列も横書きの式 `highlight_band_extent`・`highlight_band_offset` で帯を出す＝直す前の形）、2 本だけ回した: `cargo test -p areka-emo-text --lib -- vertical_band_covers_column_ink_readback vertical_baked_band_equals_hit_rect_block_range`。
+
+| 検査 | 赤か | 赤の値 |
+|---|---|---|
+| 1.1 の読み戻し `vertical_band_covers_column_ink_readback` | **赤** | 64 件が赤。先頭は Yu Gothic UI 20・右から左・k1 の「晴れてる」: 帯は丈 22・寄せ +2（直す前の形）で、インク x110..128 が塗り x114..131 の外へ出る（左 4）・塗りの幅 18 が em × k ＝ 20 でない（4.2）・当たり x114..136 が塗り x114..132 と同じでない（6.2）。「雨だよ」はインク x88..105 が塗り x92..113 の外（左 4）・塗りの幅 22 |
+| 3.1 の P1 `vertical_baked_band_equals_hit_rect_block_range` | **赤** | 右から左（em 28）で焼いた厚み 30.0 が列の em 28.0 でない（`choice_decorate_tests.rs:581`） |
+
+- 戻し: `git checkout -- crates/areka-emo-text/src/choice.rs` で戻し、`git status` と `git diff` が空（コードの変わりなし）であることを見た。戻した後に同じ 2 本を回して緑（2 件通過）。

@@ -46,7 +46,7 @@
   - _Requirements: 1.7_
 
 - [ ] 4. 横書きを変えないこと・直しを外すと赤になること・実機を確かめる
-- [ ] 4.1 横書きの今ある検査と全部の選択肢の検査を通し、直しを外すと赤になるのを 1 度確かめる
+- [x] 4.1 横書きの今ある検査と全部の選択肢の検査を通し、直しを外すと赤になるのを 1 度確かめる
   - 横書きの帯と当たりの今ある検査（既定フォントのバイトの一致・Yu Gothic UI の読み戻しを含む）と、当たりの側のスクロールと帯の中の点で選ぶ今の檻を、1 本も変えずに通す
   - 縦書きの枝を一時的に横書きの式へ戻し、1.1 の読み戻しと 3.1 の P1 が赤になるのを確かめて戻す
   - 終わった時: 対象の crate のテストが緑で、赤の確かめ（どの検査が何の値で赤になったか）が `research.md` に残っている
@@ -66,3 +66,4 @@
 - 2.1: 開発者の決め（2026-10-23・案 A）＝横倒しの "Ag" のはみ出しは受け入れ、c はそのまま。`vertical_band_covers_column_ink_readback` は無視の印を外し、ふつうの crate のテストとして実 GPU で毎回走る。
 - 2.2: スクロールと消し残しの読み戻し S は `viewbox_draw_choice_hover_tests.rs`（874 行）へ足すと 1,000 行を超えるため、兄弟のテストファイル `viewbox_draw_vertical_band_scroll_tests.rs` へ分けた。設計の「emo-text に新しいソースファイルを足さない」（Allowed Dependencies）と File Structure Plan の置き場との食い違い。設計の追随は完了の前に行う。
 - 2.2（範囲外）: `cargo clippy -p areka-emo-text --all-targets` が `tests/choice_fixture_test.rs:565`・`tests/line_pitch_readback_test.rs:705`・`tests/emo2_fixture_e2e_test.rs:638` の deny で落ちる（本ブランチ以前から・`absurd_extreme_comparisons` ほか）。完了の棚卸で扱う。
+- 4.1: 既定フォントのバイト一致の檻は `actor_choice_contract_tests.rs` の `hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`・`invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_cage`・`choice_rows_render_at_indented_positions_readback_pixel_cage`（無視の印なし・crate の走行で緑）。スクロールの檻は `choice_tests.rs` の `to_window_physical_*`、帯の中の点で選ぶ檻は `areka` の `input_events::balloon::pure_core_tests`。
