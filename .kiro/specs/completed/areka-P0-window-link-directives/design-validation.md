@@ -57,4 +57,4 @@
 
 - 設計の「`placement/mod.rs` に `sticky_window_raw` を足す」は、欄がもう `PlacementConfig` に在るので、`PreparedPlacement` まで運ぶ所だけで足りる。
 - ドラッグ中に台本が向きを変えた場合、離したときの記憶は当て直しの前の位置で書かれる。次の起動は descript の向きで読み戻すので害は無いが、COMPAT §8 の行に一言あると後の spec が迷わない。
-- 拡大率の変化での詰め直しが重ねた 2 つの窓を並べ直すこと（裁定 7）は、`areka-P0-dpi-realign-remembered-chain` が来るまで残る。実機の確かめでは拡大率を変えないこと。
+- 拡大率の変化での詰め直しが重ねた 2 つの窓を並べ直すこと（裁定 7）は、`dpi-realign-remembered-chain` が来るまで残る。実機の確かめでは拡大率を変えないこと。

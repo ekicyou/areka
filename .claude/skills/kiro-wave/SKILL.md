@@ -1,6 +1,6 @@
 ---
 name: kiro-wave
-description: 'Launch the wave that /kiro-next recommended: reads the current wave from .kiro/steering/roadmap.md on the remote default branch (the first fenced block of the "## ウェーブ編成（…）" section, checked against the spec ledger''s Fable column) and starts one separate Claude Code session per Opus spec, each in its own worktree, running /kiro-start areka-P0-<name>. Specs whose requirements model is Fable are NOT started: they are excluded with a warning and given as individual /kiro-start commands for the developer to run in a Fable session. With spec names as arguments (e.g. /kiro-wave offline-surface-dump) it starts only those specs, in or out of the wave, under the same Fable rule. Because the new sessions read the remote default branch, it first lands this worktree''s own changes (uncommitted edits or unmerged commits, e.g. the /kiro-next inventory) with PR → squash merge, after one approval dialog; otherwise it edits nothing. Use when: /kiro-wave, ウェーブを立ち上げる, ウェーブを一括で起動, start the wave. DO NOT USE FOR: planning the wave (use /kiro-next), starting one spec here (use /kiro-start).'
+description: 'Launch the wave that /kiro-next recommended: reads the current wave from .kiro/steering/roadmap.md on the remote default branch (the first fenced block of the "## ウェーブ編成（…）" section, checked against the spec ledger''s Fable column) and starts one separate Claude Code session per Opus spec, each in its own worktree, running /kiro-start <name>. Specs whose requirements model is Fable are NOT started: they are excluded with a warning and given as individual /kiro-start commands for the developer to run in a Fable session. With spec names as arguments (e.g. /kiro-wave dola-interrupt-ticks) it starts only those specs, in or out of the wave, under the same Fable rule. Because the new sessions read the remote default branch, it first lands this worktree''s own changes (uncommitted edits or unmerged commits, e.g. the /kiro-next inventory) with PR → squash merge, after one approval dialog; otherwise it edits nothing. Use when: /kiro-wave, ウェーブを立ち上げる, ウェーブを一括で起動, start the wave. DO NOT USE FOR: planning the wave (use /kiro-next), starting one spec here (use /kiro-start).'
 disable-model-invocation: true
 allowed-tools: Bash, Read, Grep, Glob, ToolSearch, AskUserQuestion
 argument-hint: '[spec names to start instead of the wave]'
@@ -15,11 +15,11 @@ Start the wave `/kiro-next` wrote into the roadmap, one session per spec, so the
 
 Two modes, chosen by `$ARGUMENTS`:
 - **Wave mode** (no arguments): start the current wave's specs.
-- **Named mode** (`/kiro-wave offline-surface-dump [more names…]`, with or without the `areka-P0-` prefix): start only the named specs, whether or not they are in the wave (developer 2026-10-23: 「指定されたスペックだけを、サブセッションとして『/kiro-start …』を立ち上げる」). The wave is not read for candidates; the Fable rule and the Step 2 checks still apply.
+- **Named mode** (`/kiro-wave dola-interrupt-ticks [more names…]`): start only the named specs, whether or not they are in the wave (developer 2026-10-23: 「指定されたスペックだけを、サブセッションとして『/kiro-start …』を立ち上げる」). The wave is not read for candidates; the Fable rule and the Step 2 checks still apply.
 
 Invoking `/kiro-wave` is the developer's explicit request for separate sessions: use `initiation: "user_asked"`.
 
-Below, `<name>` is the full spec name (`areka-P0-<short>`, the folder under `.kiro/specs/` and the `/kiro-start` argument) and `<short>` is it without the prefix (as the roadmap tables write it).
+Below, `<name>` is the spec's folder name under `.kiro/specs/` and the `/kiro-start` argument, and `<short>` is it without the old `areka-P0-` prefix (as the roadmap tables write it). Unstarted specs have had no prefix since 2026-10-23 (`.kiro/steering/kiro-spec-schema.md`); completed and in-flight specs keep the old `areka-P0-` name.
 
 ## Communication Language
 Think in English. Every developer-facing message (progress, warnings, the report) uses the session's console language and persona (fall back to Japanese).
@@ -55,7 +55,7 @@ Think in English. Every developer-facing message (progress, warnings, the report
    ```bash
    MSYS_NO_PATHCONV=1 git show origin/<default>:.kiro/steering/roadmap.md | python -I .claude/skills/kiro-wave/scripts/read-wave.py --models <name>...
    ```
-   Output: one `<Fable|Opus|unknown> <name>` line each, with the full name (looked up in the spec ledger's `Fable` column: ○ → Fable, − → Opus). For `unknown`, read the brief on `origin/<default>` and take the last line that contains `要件定義のモデル` (the latest 棚卸の再測定 section, e.g. `- 要件定義のモデル: **Opus に下げる**`): ignoring `*`, its value starting with `Opus` → Opus; `Fable`, missing, or unclear → treat as Fable (excluded in Step 3, with the reason "モデルを確かめられない"). Check the spec exists before trusting `unknown` (Step 2).
+   Output: one `<Fable|Opus|unknown> <name>` line each (looked up in the spec ledger's `Fable` column: ○ → Fable, − → Opus). For `unknown`, read the brief on `origin/<default>` and take the last line that contains `要件定義のモデル` (the latest 棚卸の再測定 section, e.g. `- 要件定義のモデル: **Opus に下げる**`): ignoring `*`, its value starting with `Opus` → Opus; `Fable`, missing, or unclear → treat as Fable (excluded in Step 3, with the reason "モデルを確かめられない"). Check the spec exists before trusting `unknown` (Step 2).
 3. **Wave mode**: run, from the repository root:
    ```bash
    MSYS_NO_PATHCONV=1 git show origin/<default>:.kiro/steering/roadmap.md | python -I .claude/skills/kiro-wave/scripts/read-wave.py
@@ -65,7 +65,7 @@ Think in English. Every developer-facing message (progress, warnings, the report
 
 ## Step 2 — Check each spec before starting it
 For each candidate, against `origin/<default>` (use `git ls-tree` / `git show` with `MSYS_NO_PATHCONV=1`; the local checkout may be behind):
-- `.kiro/specs/<name>/brief.md` exists → otherwise skip ("brief が無い").
+- `.kiro/specs/<name>/brief.md` exists → otherwise, in named mode, try `areka-P0-<name>` (an old-named spec) and use that name from here on; if neither exists, skip ("brief が無い").
 - `.kiro/specs/completed/<name>/` does not exist → otherwise skip ("完了済み").
 - `.kiro/specs/<name>/spec.json` does not exist → otherwise skip ("もう始まっている"; the developer continues it in its own session).
 - Not already running: `git worktree list` and `git branch -r` show no worktree or branch whose name contains `<short>`, and `mcp__ccd_session_mgmt__list_sessions` (load with `ToolSearch` if deferred) shows no live session titled for this spec → otherwise skip ("作業中のセッションがある").

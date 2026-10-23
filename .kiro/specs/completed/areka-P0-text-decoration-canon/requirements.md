@@ -15,7 +15,7 @@
 
 不足しているのは語彙よりも**土台**である。文字レンダリング層（`crates/areka-emo-text`）は、追記される 1 文字（`TextItem::Glyph { ch }`）・配置済みの 1 文字（`PositionedGlyph`）・行のグリフ列（`GlyphRunContent`）のいずれも文字以外の属性を持たず、フォントは balloon 定義から 1 つだけ解決され（`ResolvedFont`）、DirectWrite の書式も 1 本で、太さ・斜体は標準固定である。文字装飾の予約型 `TextEffects` はフィールドが 0 個の空の型、`disable.font.*` の予約 `FontDisableSeam` も同様で、「格納はされるが読まれない」。
 
-本仕様は、2026-09-11 の棚卸しで 3 分割された `\f` 装飾仕様群の**先頭**（基盤＋フォント系 10 項目＋一括の戻し 2 項目）である。**描画の手段は DirectWrite の標準機能（`IDWriteTextLayout` の範囲指定と `DrawTextLayout`）に限る**（開発者裁定 2026-09-11）。範囲指定で表せない上下付き（基線のずらし）と白抜き（輪郭だけの描画）は本仕様では表示を変えず、語彙として受理するにとどめる。寄せ 2 項目と影 3 項目は `areka-P0-text-align-shadow-canon`、バルーン定義 `font.*` 13 キーの読み取りは `areka-P0-balloon-font-descript-keys` が持つ。本仕様は `crates/areka-parsers/src/balloon/parse.rs` に**触れない**——既定の見た目は、いま読めている 5 キー（`font.name`・`font.height`・`font.color.r/g/b`）だけから組む。
+本仕様は、2026-09-11 の棚卸しで 3 分割された `\f` 装飾仕様群の**先頭**（基盤＋フォント系 10 項目＋一括の戻し 2 項目）である。**描画の手段は DirectWrite の標準機能（`IDWriteTextLayout` の範囲指定と `DrawTextLayout`）に限る**（開発者裁定 2026-09-11）。範囲指定で表せない上下付き（基線のずらし）と白抜き（輪郭だけの描画）は本仕様では表示を変えず、語彙として受理するにとどめる。寄せ 2 項目と影 3 項目は `text-align-shadow-canon`、バルーン定義 `font.*` 13 キーの読み取りは `areka-P0-balloon-font-descript-keys` が持つ。本仕様は `crates/areka-parsers/src/balloon/parse.rs` に**触れない**——既定の見た目は、いま読めている 5 キー（`font.name`・`font.height`・`font.color.r/g/b`）だけから組む。
 
 意味論は ukadoc から輸入する（SSP の実測は行わない・開発者方針 2026-09-05）。縦書きでの写像（下線は列の右側、など）は完了仕様 `areka-P0-balloon-vertical-canon` の裁定を継承し、再審議しない——ただし線を引く位置は DirectWrite の既定に委ねるので、裁定は「期待値」として実測で照合し、食い違えば §8 に登記する（areka 側で線の位置を自前で描き分けることはしない）。`font.height` は em の大きさとして DirectWrite へそのまま渡し、行送りの式は `crates/areka-emo-text/src/state.rs` の `TextLayerConfig::line_pitch` の 1 点にある（完了仕様 `areka-P0-emo-text-line-height-canon` の裁定）——`\f[height]` もこの 1 点を通る。
 
@@ -37,21 +37,21 @@
   - 正典文書（`doc/COMPAT_ARCHITECTURE.md` §8）・網羅調査の台帳・コード内の予約名の注記の追随。
 
 - **Out of scope（本仕様が持たない範囲）**
-  - `\f[align]`／`\f[valign]`（寄せ 2）・`\f[shadowcolor]`／`\f[shadowcolor,none]`／`\f[shadowstyle]`（影 3）・`\_l` からの追加登記 4 件（`\_l` 直後の左寄せ戻し・中央揃えのインデント・疑義 SC8 の裁定・行送り方向へ後戻りした行のあふれ判定の前提）——すべて **`areka-P0-text-align-shadow-canon`** が持つ。本仕様は寄せ・影の値を受理して保持するだけで、行の置き場所や影の描画は変えない。
+  - `\f[align]`／`\f[valign]`（寄せ 2）・`\f[shadowcolor]`／`\f[shadowcolor,none]`／`\f[shadowstyle]`（影 3）・`\_l` からの追加登記 4 件（`\_l` 直後の左寄せ戻し・中央揃えのインデント・疑義 SC8 の裁定・行送り方向へ後戻りした行のあふれ判定の前提）——すべて **`text-align-shadow-canon`** が持つ。本仕様は寄せ・影の値を受理して保持するだけで、行の置き場所や影の描画は変えない。
   - バルーン定義 `font.*` 13 キーの読み取り拡張（`font.bold`／`font.italic`／`font.underline`／`font.strike`／`font.outline`／`font.shadowcolor.*`／`font.shadowstyle`・`disable.font.*`）——**`areka-P0-balloon-font-descript-keys`** が持つ。本仕様は `crates/areka-parsers/src/balloon/parse.rs`・`model.rs` に触れない。
-  - `\f[cursor*]` 10 項目（`areka-P0-choice-marker-styling`）・`\_a` とアンカー装飾 16 項目（`areka-P0-anchor-tag-canon`）。
+  - `\f[cursor*]` 10 項目（`choice-marker-styling`）・`\_a` とアンカー装飾 16 項目（`areka-P0-anchor-tag-canon`）。
   - `\x`／`\x[noclear]` の実装（`areka-P0-balloon-lifecycle-events` 項目 9）。本仕様は「戻す操作」を供給するだけで、クリック待ちそのものは作らない。
   - `TextEffects` の予約名のうち `multicolor`・`rotation`（M2 の予約のまま残す）。`shadow` は影 3 項目の所有仕様が実体化する。
-  - 行末禁則のぶら下がり・`writing_mode` の警告文言・縦書き字形の観測（`areka-P0-emo-text-canon-residue`）。
+  - 行末禁則のぶら下がり・`writing_mode` の警告文言・縦書き字形の観測（`emo-text-canon-residue`）。
   - `\f[name]` のフォントファイル（`.ttf`／`.otf`／`.ttc`）の読み込み（開発者裁定 2026-09-11・実装しない。ファイル名の候補は読み飛ばして次の候補へ進む）。
   - `sub`・`sup`・`outline` の表示（開発者裁定 2026-09-11・DirectWrite の範囲指定で表せず、自前の描画器を要するため実装しない。語彙として受理し `TextEffects` の予約と同列に M2 予約へ置く）。
   - DirectWrite の標準機能から逸脱する描画手段（`IDWriteTextRenderer`／`IDWriteInlineObject` の自前実装・グリフ輪郭の取り出し・run ごとの別レイアウト）。
   - `sstpmessage.font.*`／`number.font.*`／`communicatebox.font.*` 等の接頭辞付き font 族（各機能の仕様が解禁時に本基盤へ乗る）。
 
 - **Adjacent expectations（隣接する仕様・運用への期待）**
-  - `areka-P0-text-align-shadow-canon`（W15）は本仕様の文字ごとの属性と「戻す操作」に自分の項目（align・valign・影 3）を**登記して**乗る。本仕様は寄せ・影の値を捨てずに保持し、同仕様が消費者を足すだけで済む形にする。
+  - `text-align-shadow-canon`（W15）は本仕様の文字ごとの属性と「戻す操作」に自分の項目（align・valign・影 3）を**登記して**乗る。本仕様は寄せ・影の値を捨てずに保持し、同仕様が消費者を足すだけで済む形にする。
   - `areka-P0-balloon-font-descript-keys`（W13・並走）が残り 8 キーをバルーン定義から読めるようにする。**後に着地した方が配線する**（同仕様の brief に相互登記済み）——本仕様が先なら既定層は 5 キーで立ち、残り 8 キーの配線は同仕様の最後の作業になる。本仕様が後なら本仕様が既定層へ 13 キーを繋ぐ。
-  - `areka-P0-balloon-lifecycle-events` 項目 9（`\x`／`\x[noclear]`）と `areka-P0-choice-marker-styling` は、本仕様が定める「戻す操作」（Requirement 10）を**そのまま呼ぶ**。`\x` は戻す操作を呼び、`\x[noclear]` は呼ばない。
+  - `areka-P0-balloon-lifecycle-events` 項目 9（`\x`／`\x[noclear]`）と `choice-marker-styling` は、本仕様が定める「戻す操作」（Requirement 10）を**そのまま呼ぶ**。`\x` は戻す操作を呼び、`\x[noclear]` は呼ばない。
   - `areka-P0-sakura-tag-word-boundary`（W13・並走）は同じ `crates/areka-parsers/src/sakura/` の `lexer.rs` を触る（本仕様は `decode.rs`・`compile.rs`）。共有ファイルは 0 で、後に着地した方が rebase する。
   - 適合対象ゴースト emo2 は `\f` を 1 つも使わない。本仕様は `\f` を含まない台本の表示結果を変えず、M1 の適合検証（`areka-P0-emo2-conformance-e2e`）を妨げない。
   - 1,000 行の見張りの例外表は誰も触らない運用が続く。
@@ -98,7 +98,7 @@
 4. While 文字が 1 文字ずつ現れる途中（リビール中）でも, when `\f` の命令が届いたとき, the system shall それ以降に現れる文字へ即時に適用し、文字の現れる時刻・間隔を変えない。
 5. When 選択肢（`\q`）の表示文字列が追記されるとき, the system shall そのときの装飾状態を選択肢の文字にも与える。ただし選択肢の hover 表示（文字色の差し替えと帯の塗り）は既存の規則が優先し、装飾は hover の判定と当たり判定を変えない。
 6. The system shall 1 行の中で装飾の異なる文字が混在しても、各文字を自分の装飾で描く（行を装飾ごとの連続区間＝run に分けて描き分ける）。
-7. When `\n`・`\n[...]`・`\_l`・`\c` が現れたとき, the system shall フォント系の装飾状態を**保持**する（これらは装飾を戻さない。`\_l` が戻すのは寄せだけ——所有は `areka-P0-text-align-shadow-canon`）。
+7. When `\n`・`\n[...]`・`\_l`・`\c` が現れたとき, the system shall フォント系の装飾状態を**保持**する（これらは装飾を戻さない。`\_l` が戻すのは寄せだけ——所有は `text-align-shadow-canon`）。
 8. When 台詞の再生が始まるとき（新しい台本の先頭）, the system shall 全スコープの装飾状態を既定の見た目へ戻す（装飾は台詞をまたいで残らない。根拠は ukadoc `\x` の項「`\e` で解除されるさくらスクリプトは継続」＝`\f` の効果は台詞の終わりで消える側に属する）。
 9. The system shall 装飾状態の更新と文字への適用を、GPU や COM に依存しない純粋な層（`state.rs`・`layout.rs` の兄弟）で行い、決定論テストが描画なしで観測できる形にする。
 
@@ -197,7 +197,7 @@
 3. The system shall 「戻す操作」（全項目を既定へ戻す）を、`\f[default]`・台詞の開始（Requirement 3.8）・後続の `\x` が**同じ 1 つの操作**として呼べる形で提供する（それぞれが別々の戻し方を持たない）。
 4. The system shall 「戻す操作」の対象を「装飾状態の全項目」と定め、本仕様の 10 項目に加えて、後続仕様が登記する項目（寄せ 2・影 3・選択肢マーカーの実行時上書き）も同じ操作で戻る形にする（項目を足すだけで戻しに含まれる。列挙の更新漏れが起きない構造）。
 5. The system shall 「戻す操作」がスコープ単位であることを定める（`\x` が「スコープが `\0` へ戻る」と同時に呼ぶ場合、全スコープを戻す呼び方も 1 回で行える）。
-6. The system shall 戻す操作の対象と時期（`\f[default]`・台詞の開始・`\x` は戻す／`\c`・`\n`・`\_l`・`\x[noclear]` は戻さない）を `doc/COMPAT_ARCHITECTURE.md` §8 に 1 行で登記し、`areka-P0-balloon-lifecycle-events` 項目 9 と `areka-P0-choice-marker-styling` の brief からたどれる形にする。
+6. The system shall 戻す操作の対象と時期（`\f[default]`・台詞の開始・`\x` は戻す／`\c`・`\n`・`\_l`・`\x[noclear]` は戻さない）を `doc/COMPAT_ARCHITECTURE.md` §8 に 1 行で登記し、`areka-P0-balloon-lifecycle-events` 項目 9 と `choice-marker-styling` の brief からたどれる形にする。
 7. When 戻す操作が呼ばれたとき, the system shall 既に表示済みの文字の見た目を変えない（戻しは以降の文字にだけ効く）。
 
 ### Requirement 11: 送り幅の計測と折返しの整合
@@ -262,9 +262,9 @@
 
 #### Acceptance Criteria
 1. The system shall areka の裁量で決めた各点（相対指定の基準・百分率の基準・スタイルシートのキーワードの見送り・フォントファイルの読み込みの見送り・`height,disable`・`sub`／`sup`／`outline` の見送り（語彙のみ）・縦書きの下線・打ち消し線の位置を DirectWrite の既定に委ねる裁定と実測結果・無効表示の色の混ぜ方・行の高さの決め方・戻す操作の対象と時期・台詞開始の戻し）を `doc/COMPAT_ARCHITECTURE.md` §8 に、項目・裁量・根拠（ukadoc の逐語引用と URL）・出典 spec の 4 欄で登記する。
-2. The system shall `doc/COMPAT_ARCHITECTURE.md` §8 の「`\f[align]`／`\f[valign]`／下線の縦書き写像」の行にある「areka は align／valign を全書字方向でまだ実装していない…本登記は現在の表示結果を変えない」の注記を、下線が実装済みであること・align／valign の追跡先が `areka-P0-text-align-shadow-canon` であることに合わせて改訂する。同じ表で本仕様を「`\f` 核 17 項目の所有者」として追跡先に挙げている箇所（同行の追跡先欄と、「`\_l` の縦書き座標系の正典写像」の行にある疑義 SC8 の追跡先）も、2026-09-11 の 3 分割後の所有（本仕様＝基盤＋フォント系 10＋一括の戻し 2・SC8 と寄せは `areka-P0-text-align-shadow-canon`）に合わせて改訂する。
+2. The system shall `doc/COMPAT_ARCHITECTURE.md` §8 の「`\f[align]`／`\f[valign]`／下線の縦書き写像」の行にある「areka は align／valign を全書字方向でまだ実装していない…本登記は現在の表示結果を変えない」の注記を、下線が実装済みであること・align／valign の追跡先が `text-align-shadow-canon` であることに合わせて改訂する。同じ表で本仕様を「`\f` 核 17 項目の所有者」として追跡先に挙げている箇所（同行の追跡先欄と、「`\_l` の縦書き座標系の正典写像」の行にある疑義 SC8 の追跡先）も、2026-09-11 の 3 分割後の所有（本仕様＝基盤＋フォント系 10＋一括の戻し 2・SC8 と寄せは `text-align-shadow-canon`）に合わせて改訂する。
 3. The system shall `doc/ukadoc-coverage/ledger/sakura-script.toml` の本仕様 12 項目の `status` を実装後の状態（7 項目＋戻し 2 項目は `implemented`〔`name` はフォントファイル読み飛ばし・`height` はスタイルシートのキーワードのみ注記付き〕・`sub`／`sup`／`outline` は `vocabulary-only`）へ更新し、`doc/ukadoc-coverage/ledger/assets.toml` の `disable.font.(フォント定義),(指定)` の行を無効表示の層が実体化したことに合わせて更新する。
-4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`disable` が実体化したこと・`outline`（および `sub`／`sup`）は本仕様が語彙のみで見送り M2 予約に加えたこと・`shadow` は `areka-P0-text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。あわせて、予約型が空であることを固定している既存テスト（`draw_format_metrics_tests.rs` の `decoration_and_disable_seams_are_type_only`＝`size_of` が 0 であることの検査）を、実体化した内容を述べる述語へ改訂する。この改訂は実体化の段階で行い、Requirement 1.5 の「分割の段階では既存テストを変更しない」とは段階が異なる（分割と実体化を別の作業に分ける理由）。
+4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`disable` が実体化したこと・`outline`（および `sub`／`sup`）は本仕様が語彙のみで見送り M2 予約に加えたこと・`shadow` は `text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。あわせて、予約型が空であることを固定している既存テスト（`draw_format_metrics_tests.rs` の `decoration_and_disable_seams_are_type_only`＝`size_of` が 0 であることの検査）を、実体化した内容を述べる述語へ改訂する。この改訂は実体化の段階で行い、Requirement 1.5 の「分割の段階では既存テストを変更しない」とは段階が異なる（分割と実体化を別の作業に分ける理由）。
 5. The system shall 分割後の新ファイルと接続を steering `structure.md` の該当節へ反映する。
 6. The system shall 本仕様が消費者を足さなかった語彙（寄せ 2・影 3・`cursor*`・`anchor*`・`default.anchor*`・スタイルシートのキーワード）の追跡先を、それぞれの所有仕様の brief に 1 行ずつ相互登記する。`sub`・`sup`・`outline` は所有仕様が無いため、steering `roadmap.md` の M2 予約（`TextEffects` 予約名 `rotation`／`multicolor` の並び）に「DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ」と 1 行で登記し、台帳の `status` は `vocabulary-only` にする。
 7. The system shall 文書の主張（file:line・行数・件数）を書く前に実測で裏取りし、行番号でなく「何の定義行か」で指す。

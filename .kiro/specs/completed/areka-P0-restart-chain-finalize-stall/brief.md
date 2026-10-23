@@ -65,7 +65,7 @@ WARN chain_finalize: 初期配置の確定が続けて見送られている defe
 ## Existing Spec Touchpoints
 
 - **Extends**: なし。
-- **Adjacent**: `areka-P0-install-live-target-hazards`（同じ「起動中のゴーストへ入れる」場面を実機で扱う。こちらは `drain_resnap.rs` だけ・あちらは `install/` と終了の受け手＝共有 0）。
+- **Adjacent**: `install-live-target-hazards`（同じ「起動中のゴーストへ入れる」場面を実機で扱う。こちらは `drain_resnap.rs` だけ・あちらは `install/` と終了の受け手＝共有 0）。
 
 ## Constraints
 

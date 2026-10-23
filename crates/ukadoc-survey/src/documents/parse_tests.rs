@@ -433,7 +433,7 @@ fn a_spec_row_carries_a_bundle_or_a_stated_none() {
     let markdown = format!(
         "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-present-gpu-transform-scale\"\n\
          wave = \"W13\"\nstage = \"A\"\nbundle = \"時刻の刻み\"\nowner_count = 3\n\n\
-         [[spec]]\nname = \"areka-P0-tick-gate-adoption\"\nwave = \"保留\"\n\
+         [[spec]]\nname = \"tick-gate-adoption\"\nwave = \"保留\"\n\
          none = true\nreason = \"どの束にも写らない\"\nowner_count = 0\n```\n"
     );
     let draft = read_roadmap_draft(&markdown).expect("spec 表が読めるはず");
@@ -457,13 +457,13 @@ fn a_spec_row_carries_a_bundle_or_a_stated_none() {
 
     // 空欄で「属さない」を表すことは許さない。
     let silent = format!(
-        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-tick-gate-adoption\"\n\
+        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"tick-gate-adoption\"\n\
          wave = \"保留\"\nstage = \"E\"\nowner_count = 0\n```\n"
     );
     let body = err_body(read_roadmap_draft(&silent));
     assert!(body.contains("bundle"), "欄の名前が本文に無い: {body}");
     assert!(
-        body.contains("areka-P0-tick-gate-adoption"),
+        body.contains("tick-gate-adoption"),
         "どの行かが本文に無い: {body}"
     );
 }
@@ -476,14 +476,14 @@ fn a_spec_row_carries_a_bundle_or_a_stated_none() {
 #[test]
 fn the_stage_field_follows_the_bundle() {
     let with_stage = format!(
-        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-tick-gate-adoption\"\n\
+        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"tick-gate-adoption\"\n\
          wave = \"保留\"\nstage = \"A\"\nnone = true\nreason = \"どの束にも写らない\"\n\
          owner_count = 0\n```\n"
     );
     let body = err_body(read_roadmap_draft(&with_stage));
     assert!(body.contains("stage"), "欄の名前が本文に無い: {body}");
     assert!(
-        body.contains("areka-P0-tick-gate-adoption"),
+        body.contains("tick-gate-adoption"),
         "どの行かが本文に無い: {body}"
     );
 

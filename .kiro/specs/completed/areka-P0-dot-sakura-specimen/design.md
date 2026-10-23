@@ -41,7 +41,7 @@
 - `crates/sample-ghost-kit/src/` の窓口のコード（`lib.rs` の `SAMPLES` の 1 行を除く）・`devroot.rs`・`bin/nar-sample-path.rs`・`examples/fold-samples.rs`。
 - 見張り `crates/log-capture-kit/tests/sample_path_guard_test.rs`（要件 2.6 の枝に入ったときだけ、見張りの側の決まりを直す。入る見込みは無い）。
 - `tools/package.ps1`（配布物の中身）・`tools/sample-fetch.ps1`・`vendors/sample_ghost/.gitattributes`。
-- 既定のバルーン `StayseeBalloon` とその解決（`areka-P0-default-balloon-selfmade`）。
+- 既定のバルーン `StayseeBalloon` とその解決（`default-balloon-selfmade`）。
 - 根の `README.md` の表への `pasta-in-windows` の行（`areka-P0-pasta-in-windows-verification`）。
 - 起票した先の spec の要件・設計（本 spec が書くのは brief の事実だけ）。
 
@@ -55,10 +55,10 @@
 
 ### Revalidation Triggers
 
-- 登記表の行の数・順・書庫の出どころが変わるとき: 後に続く `areka-P0-default-balloon-selfmade`（10 → 11）は、数のテストと名前の一覧と README の表を、この spec の着地の後の値から合わせ直す。
+- 登記表の行の数・順・書庫の出どころが変わるとき: 後に続く `default-balloon-selfmade`（10 → 11）は、数のテストと名前の一覧と README の表を、この spec の着地の後の値から合わせ直す。
 - `dot_sakura` を URL の行へ移すとき（取り寄せ先に `dot_sakura.nar.sha256` が置かれた後）: `current_rows_are_registered_as_vendored`・`only_vendored_rows_have_a_nar_in_the_repository`・README の 2 つの表と節を合わせ直す。
 - `areka-nar` の同梱の扱い・最上位の普通のファイルの置き方が変わるとき: 専用のテスト（下の「決定論のテスト」）が赤になり、README の節と記録の 1 項目目を見直す。
-- `bottle` を見比べの元にする `areka-P0-default-balloon-selfmade`・印の検体に使う `areka-P0-balloon-markers` は、書庫のバイト列が変わったら見比べをやり直す（本 spec は変えない）。
+- `bottle` を見比べの元にする `default-balloon-selfmade`・印の検体に使う `balloon-markers` は、書庫のバイト列が変わったら見比べをやり直す（本 spec は変えない）。
 
 ## Architecture
 
@@ -142,7 +142,7 @@ vendors/sample_ghost/
 - `.kiro/steering/structure.md` — 検体の顔ぶれの段落（今の 421 行目）。
 - `.kiro/steering/product.md` — 「適合の検体」の見出し・表の前の 1 文・表の 3 行。
 - `README.md`（根）— 動作を確かめているゴーストの表の末尾（`emily4` の行の後）に 1 行。実機の 1 回の後に書く。
-- 起票: `.kiro/specs/<新しい spec>/brief.md`（`/kiro-discovery` が作る）と、既存の spec の `brief.md` の末尾（`areka-P0-balloon-markers` など・見えた事実だけ）。
+- 起票: `.kiro/specs/<新しい spec>/brief.md`（`/kiro-discovery` が作る）と、既存の spec の `brief.md` の末尾（`balloon-markers` など・見えた事実だけ）。
 - 条件つき（要件 2.6 の枝に入ったときだけ）: `crates/log-capture-kit/tests/sample_path_guard_test.rs` の見張りの側の決まり。
 
 `.kiro/steering/roadmap.md` は本 spec では触らない（完了の手続き `/kiro-complete` が持つ）。
@@ -300,7 +300,7 @@ Sample {
 },
 ```
 
-- 位置は `SAMPLES` の末尾（`pasta-in-windows` の後）。登記表は足した順に並んでおり（`emily4` の後に `pasta-in-windows` を足した）、後に続く `areka-P0-default-balloon-selfmade` も末尾に足す。書庫の出どころで行を並べ替える決まりは無い。
+- 位置は `SAMPLES` の末尾（`pasta-in-windows` の後）。登記表は足した順に並んでおり（`emily4` の後に `pasta-in-windows` を足した）、後に続く `default-balloon-selfmade` も末尾に足す。書庫の出どころで行を並べ替える決まりは無い。
 - 窓口のコードは触らない。`SampleRoot::acquire("dot_sakura")` と `nar-sample-path dot_sakura` は、この行だけで `<根>/ghost/dot_sakura` と `<根>/balloon/bottle` を返す（2.2）。
 - 要件 2.8 の枝に入ったときは `balloons: &[]` とし、行の上の注記に入らなかった理由を書く（`emily4` の行と同じ形）。
 
@@ -465,10 +465,10 @@ fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings();
 | 役 | 実機の 1 回で見えた areka の未対応を、持ち主へ 1 件も漏らさず渡す |
 | 要件 | 6.2, 6.3 |
 
-- 既存の持ち主が在る件（6.3）: その spec の `brief.md` の末尾に「## どっとさくらで見えた事実（<日付>・areka-P0-dot-sakura-specimen）」を足し、症状と根拠（記録の行・MCP の文）を書く。今の見込みは `areka-P0-balloon-markers`（矢印・`online0〜15`・SSTP の印）・`areka-P0-balloon-canon-residue` と `areka-P0-inputbox-user-input`（`balloonc*`・`communicatebox.*`）。実機で症状を見た物だけを書く（見ていない物は「既知」として書かない）。
+- 既存の持ち主が在る件（6.3）: その spec の `brief.md` の末尾に「## どっとさくらで見えた事実（<日付>・areka-P0-dot-sakura-specimen）」を足し、症状と根拠（記録の行・MCP の文）を書く。今の見込みは `balloon-markers`（矢印・`online0〜15`・SSTP の印）・`balloon-canon-residue` と `inputbox-user-input`（`balloonc*`・`communicatebox.*`）。実機で症状を見た物だけを書く（見ていない物は「既知」として書かない）。
 - 持ち主の無い件（6.2）: `/kiro-discovery` で起票する。まとめ方は「触る場所が同じなら 1 本」（開発者の決め 10-11）に従う。今の見込みは 2 本に分かれる:
   - `alias.txt` の別名（`sakura.surface.alias`・`kero.surface.alias`）: シェルの設定の読み（`areka-parsers` の shell）と面の番号の解き方を触る。
-  - `surfaces.txt` の `alternativestart`（と同じ族の `alternativestop`・`parallelstart`・`parallelstop`・`start`・`stop`）: SERIKO の動きの側を触る。`areka-P0-seriko-script-triggers` の brief はこの族を範囲の外と書いているので、その brief へ足すのではなく新しく起票する。
+  - `surfaces.txt` の `alternativestart`（と同じ族の `alternativestop`・`parallelstart`・`parallelstop`・`start`・`stop`）: SERIKO の動きの側を触る。`seriko-script-triggers` の brief はこの族を範囲の外と書いているので、その brief へ足すのではなく新しく起票する。
   - 実機で別の崩れが見えたら、触る場所で上のどれかに「件 N」で足すか、新しく起票する。
 - 華和梨や SHIORI 2.x の話す口の欠けが見えたときも、要件の範囲の外だが起票する（6.2・開発者の決め 10-05「範囲外でもすべて起票」）。
 

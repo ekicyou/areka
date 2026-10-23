@@ -837,7 +837,7 @@ pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCa
 /// `OnBalloonBreak`（GET・Ref0=止めたトークの台本・Ref1=スコープ番号の十進・Ref2=空）。
 ///
 /// Reference は常に 3 個。Ref2（中断位置）は今は作らず空で送り、位置は保つ（要件 1.4・
-/// 縮退の追跡先は `areka-P0-balloon-break-position`）。
+/// 縮退の追跡先は `balloon-break-position`）。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
 pub fn on_balloon_break(script: &str, scope: u32, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {

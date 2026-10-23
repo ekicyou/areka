@@ -35,13 +35,13 @@
   - helper 側の実装（`crates/shiori-host32-helper/`）。応答方向の旗は 6.11 のまま。
   - kanade の起動系列（`areka-P0-kanade-boot-talkdone-drop`・`crates/areka-kanade/src/schedule/{boot,mod}.rs`）・終了の握手の配線（`schedule/close.rs`）。終了挨拶中に毎秒の往復を止める運行は本仕様の前提であり変えない。
   - helper → areka 向きの自発通知そのもの（将来の spec）。本仕様はその経路が当たる構造を除くだけで、通知の語彙・配送は定義しない。
-  - `areka-P0-zorder-chain-residue` の A 系（wintf／host32 の常設の飢餓・間欠赤）の決着。本仕様はそこへ**間欠赤を足さない**責務のみ負う。
+  - `zorder-chain-residue` の A 系（wintf／host32 の常設の飢餓・間欠赤）の決着。本仕様はそこへ**間欠赤を足さない**責務のみ負う。
   - `areka-P0-charset-canon` が持つ `crates/shiori-host32-host/src/{shiori3.rs,client.rs}`（W13 同 crate 別ファイル・触れない）。
 - **Adjacent expectations（隣接仕様への期待）**:
   - **上流 `areka-P0-emo2-conformance-e2e`（完了）**: 症状 D の機序と較正値（プロセス生存 20〜30 秒超・14 秒以上取り出さない）、6.11 の応答方向の旗と檻、Requirement 16.5 の申し送り（記録 §13.2 行 10）を提供済み。本仕様はその申し送りの引受先であり、完了 spec の文書は書き換えない。
   - **上流 `areka-host32-ipc-and-i686-build`（記憶）／完了 spec `shiori-host32-*`**: WM_COPYDATA 一本化・再入 RESPONSE・親窓の握手／送信パス／正規 clean shutdown を提供済み。本仕様はこれらを不透明に利用する。
   - **下流（将来）helper → areka 向きの自発通知を要する spec**: 本仕様の後は、ホスト窓宛に「相手が応答なしなら待たずに打ち切る」送り方で送っても、待機の長さに関わらず届くことを前提にできる。
-  - **隣接 `areka-P0-zorder-chain-residue`（W14）**: 本仕様の檻は壁時計期限の飢餓に依存しない形で置き、A-2 の族（`SPIN_WAIT` 型の壁時計期限）を増やさない。
+  - **隣接 `zorder-chain-residue`（W14）**: 本仕様の檻は壁時計期限の飢餓に依存しない形で置き、A-2 の族（`SPIN_WAIT` 型の壁時計期限）を増やさない。
   - **併走 W13（`kanade-boot-talkdone-drop`・`charset-canon`）**: 共有ファイル 0 を保つ（上の Out of scope のファイルに触れない）。
   - **未確定で design が埋める項目**: 手空きを検出する周期の値（OS の応答なし判定の閾値に対する余裕を根拠に決め、定数の説明文に残す）・手空き通知の名前と置き場・握手時の heartbeat の扱い（常設の保守に統合するか無改変で残すか）・決定論テストの置き場（crate・ファイル）と駆動方法。
 

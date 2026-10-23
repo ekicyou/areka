@@ -6,7 +6,7 @@
 
 **実測（main `fe157df1`）**: 本文の主張はすべてそのまま成り立つ。`reset_to_idle` の製品の呼び手は 0（定義と再輸出のほかはテスト 3 か所）・`is_button_held`／`is_dragging` は `crates/` 全域で 0 件・areka 側の読み手は `crates/areka/src/menu/trigger.rs` の 1 か所。
 
-**相乗り 2 件（`areka-P0-popup-menu-residue` の残件 1・2 を本仕様へ移した）**
+**相乗り 2 件（`popup-menu-residue` の残件 1・2 を本仕様へ移した）**
 
 本仕様と同じ `crates/areka/src/menu/trigger.rs` を触り、性質も同じ「右クリックの引き金の潜在バグ」なので、別々に走らせると必ず直列になる。1 本にまとめる。
 

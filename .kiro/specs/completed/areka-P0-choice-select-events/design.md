@@ -22,7 +22,7 @@
 ### Non-Goals
 
 - 選択肢の表示・行ジオメトリ・hover・クリック解決（`areka-P0-choice-interact` 完了成果の消費のみ）。
-- `\q`／`\![set,choicetimeout]`／`\*` 等さくらスクリプトタグの**解釈**・cue へのコンパイル（`compile.rs` は触らない。タイムアウト値の供給は追跡 spec `areka-P0-sakura-time-directives` の領分）。
+- `\q`／`\![set,choicetimeout]`／`\*` 等さくらスクリプトタグの**解釈**・cue へのコンパイル（`compile.rs` は触らない。タイムアウト値の供給は追跡 spec `sakura-time-directives` の領分）。
 - `script:` 前置 ID のスクリプト直接実行（M1 明示縮退・Req2.7）・アンカー系（`\_a`）・`OnChoiceEnter`/`OnChoiceHover`・ホイール・owner-draw。
 - メニュー一周の適合判定そのもの（下流 `areka-P0-emo2-conformance-e2e`）。
 
@@ -58,7 +58,7 @@
 - kanade→ghost チャンネルの型変更（`Sender<StartTalk>` → `Sender<TalkCommand>`）: ghost 結線・`MockSakura`・spine e2e の再確認。
 - `ShioriCall.id` の `EventId` 化: mock/real 両 SHIORI バックエンド・kanade 檻ヘルパの一括適応。
 - `spawn_talk` の done 境界拡張（`D: From<TalkDone> + From<ChoiceWaiting>`）: sakura テストの `D` 型全点。
-- `BarrierKind::WaitForChoice{timeout}` の意味論確定（`None`＝既定へ委譲）: `areka-P0-sakura-time-directives` が値を流すとき本表の写像規則に従うこと。
+- `BarrierKind::WaitForChoice{timeout}` の意味論確定（`None`＝既定へ委譲）: `sakura-time-directives` が値を流すとき本表の写像規則に従うこと。
 - 対応表 `doc/choice-cascade-compat.md` の裁定変更: 下流 e2e（emo2-conformance-e2e）の期待値。
 
 ## Architecture

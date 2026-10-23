@@ -52,7 +52,7 @@
 - 上流の道具が未着地のまま本 spec が完了する場合の `doc/ukadoc-coverage/report/shiori.md` の**初回生成**（上記の表の下の行）。
 - `doc/shiori/fragments/`（287＋159）と `crates/areka-sylphya/src/vocab/`（159）の中身。正典 id との対応を確かめるだけで書き換えない（要件 12.6）。ただし `shiori_resource.rs` の `SHIORI_RESOURCE_IDS` の**doc コメント 1 行**は本 spec が置く（語彙表の中身は不変）。
 - `.kiro/steering/roadmap.md`・隣接 spec の brief（要件 12.4・12.5）。食い違いを見つけても書き換えず、`note` またはブリーフィングに記録する。
-- `areka-P0-status-execution-states`（`Status` の実行状態語彙）と `areka-P0-property-query-channels`（`property.get`／`property.set`）が所有する項目の**判断**。本 spec は `owner` にその spec 名を書くだけである。
+- `areka-P0-status-execution-states`（`Status` の実行状態語彙）と `property-query-channels`（`property.get`／`property.set`）が所有する項目の**判断**。本 spec は `owner` にその spec 名を書くだけである。
 
 ### Allowed Dependencies
 
@@ -68,7 +68,7 @@
 - 上流が台帳の欄・状態語彙・関連の種別・テーマの語彙を改訂したとき（`status`／`values`／`links` の `kind` の綴りが変わる）。
 - スナップショットが更新され、担当 12 ページの id 集合が 677 件から変わったとき（上流 要件 8.1 の差分が入口）。
 - `areka-P0-charset-canon` が `shiori3.rs` の `build_request`／`parse_response` を書き換えたとき（コメント 9 行の位置と、リクエスト側 `Charset` の行の状態）。
-- `areka-P0-translate-pipeline`／`areka-P0-makoto-dll-host` が `crates/areka-kanade/src/schedule/` を書き換えたとき（`events.rs` のコメント 11 行の位置）。
+- `areka-P0-translate-pipeline`／`makoto-dll-host` が `crates/areka-kanade/src/schedule/` を書き換えたとき（`events.rs` のコメント 11 行の位置）。
 - 送出許可表 `ALLOWED_EVENT_IDS`・照会許可表 `ALLOWED_RESOURCE_IDS` に要素が増減したとき（`implemented` の行が増減する）。
 
 ## Architecture
@@ -262,9 +262,9 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 
 **訂正（2026-09-06・実測へ追随）** 上の表の群 7 のテーマ列は初版で「装い／記憶ほか」としていたが、**実測は 131 行すべて「装い」で、記憶は 0 件**である。ブリーフィングの索引（群の索引の正本）は既に「装い」へ訂正済みで、この表だけが追随していなかった。参考までに `list_shiori_resource` 159 行のテーマの分布は 装い 131・記憶 3・更新 3・掛け合い 1・触れ合い 1・空 20 で、装い以外の 8 件はすべて群 8（語彙だけあるリソース・その他 27）と群 6（`username`）の側にある。
 
-群 2 の 248 件は「290 − 実装済み 11 − `On` 以外 25 − 別名 3 − 意図的非発火 3（群 2a）」である。群 2a の 3 件は `doc/COMPAT_ARCHITECTURE.md` §8 が「M1 非発火・語彙と Reference 割当と受け渡し口の型のみを残す」と記録しているもので、上流の状態語彙では「語彙のみ登記」＝`vocabulary-only` に当たる。`owner` は追跡先の `areka-P0-balloon-canon-residue`（進行中）。仕分けの途中で新たな別名が見つかれば、その行は群 2 から群 3 へ移る（要件 6.1 の順序で決める）。件数が固定なのは 677 の合計とページ別の内訳だけで、状態ごとの件数は判定の結果として決まる。
+群 2 の 248 件は「290 − 実装済み 11 − `On` 以外 25 − 別名 3 − 意図的非発火 3（群 2a）」である。群 2a の 3 件は `doc/COMPAT_ARCHITECTURE.md` §8 が「M1 非発火・語彙と Reference 割当と受け渡し口の型のみを残す」と記録しているもので、上流の状態語彙では「語彙のみ登記」＝`vocabulary-only` に当たる。`owner` は追跡先の `balloon-canon-residue`（進行中）。仕分けの途中で新たな別名が見つかれば、その行は群 2 から群 3 へ移る（要件 6.1 の順序で決める）。件数が固定なのは 677 の合計とページ別の内訳だけで、状態ごとの件数は判定の結果として決まる。
 
-群 14c の `ukadoc:spec_dll` は「DLL 共通仕様」のページ全体で 1 項目であり、SHIORI・SAORI・MAKOTO・PLUGIN が共有する DLL の入口の決まりを指す。**訂正（2026-09-05・実装時に正典と実装で再確認）**: 正典が定める入口は **4 つ**である——初期化が `loadu`（SSP 2.6.92 で加わった側・置き場所のパスを UTF-8 で受け取る・ベースウェアはこちらを優先して使う）と `load`（従来版・同じパスを既定の各国語コードページで受け取る・`loadu` が無いときのフォールバック）に分かれ、これに `unload` と `request` が続く。設計の初版はこれを「`load`／`unload`／`request` の 3 つ」と書いていたが、その 3 つは areka の助け手が名前で引いている数である。あわせて型名も訂正する——実型名は `ShioriByteProxy` であり、`ShioriProxy` という名前の型は `crates/` 以下に 1 件も無い。areka の host-32（`crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriByteProxy::load`／`ShioriByteProxy::request`）は SHIORI DLL に対して `load`・`unload`・`request` の 3 つを名前で解決して呼んでいる（`loadu` は引かない）ので「受け口が無い」ではなく、同じ入口を使う SAORI・MAKOTO・PLUGIN の DLL は読み込めないので「実装済み」でもない。上流の状態語彙では `degraded`（一部だけできている）が当たる（開発者裁定 2026-09-03 議題 1・案 ⒜）。`note` には「SHIORI 用の入口は host-32 が実装済み・SAORI／MAKOTO／PLUGIN の同居は無い」と、SAORI の成立条件（要件 5.9・転記元は `doc/emo2-conformance-scope.md` §6）、MAKOTO は `areka-P0-makoto-dll-host` が担う旨を書く。`owner` は空のまま。実装済みではないので URL コメントは置かず、コード接触は 4 ファイル 22 行のまま変わらない。
+群 14c の `ukadoc:spec_dll` は「DLL 共通仕様」のページ全体で 1 項目であり、SHIORI・SAORI・MAKOTO・PLUGIN が共有する DLL の入口の決まりを指す。**訂正（2026-09-05・実装時に正典と実装で再確認）**: 正典が定める入口は **4 つ**である——初期化が `loadu`（SSP 2.6.92 で加わった側・置き場所のパスを UTF-8 で受け取る・ベースウェアはこちらを優先して使う）と `load`（従来版・同じパスを既定の各国語コードページで受け取る・`loadu` が無いときのフォールバック）に分かれ、これに `unload` と `request` が続く。設計の初版はこれを「`load`／`unload`／`request` の 3 つ」と書いていたが、その 3 つは areka の助け手が名前で引いている数である。あわせて型名も訂正する——実型名は `ShioriByteProxy` であり、`ShioriProxy` という名前の型は `crates/` 以下に 1 件も無い。areka の host-32（`crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriByteProxy::load`／`ShioriByteProxy::request`）は SHIORI DLL に対して `load`・`unload`・`request` の 3 つを名前で解決して呼んでいる（`loadu` は引かない）ので「受け口が無い」ではなく、同じ入口を使う SAORI・MAKOTO・PLUGIN の DLL は読み込めないので「実装済み」でもない。上流の状態語彙では `degraded`（一部だけできている）が当たる（開発者裁定 2026-09-03 議題 1・案 ⒜）。`note` には「SHIORI 用の入口は host-32 が実装済み・SAORI／MAKOTO／PLUGIN の同居は無い」と、SAORI の成立条件（要件 5.9・転記元は `doc/emo2-conformance-scope.md` §6）、MAKOTO は `makoto-dll-host` が担う旨を書く。`owner` は空のまま。実装済みではないので URL コメントは置かず、コード接触は 4 ファイル 22 行のまま変わらない。
 
 `spec_shiori3` 26 件の内訳（群 9〜12）は次のとおり。リクエスト側 11＝送っている 5（要求行・`Sender`・`Status`・`ID`・`Reference*`）／固定値 2（`Charset`・`SecurityLevel`）／送らない 4（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-`）。レスポンス側 15＝解釈している 4（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）／読み飛ばす 11（レスポンス側の `Charset`・`Sender`・`SecurityLevel`・`X-SSTP-PassThru-`、`ValueNotify`・`Marker`・`BalloonOffset`・`Reference0`・`Reference1〜`・`Age`・`MarkerSend`）。`BaseID` は `shiori3.rs` の `build_request` の説明に「送らないもの」として挙がっていないことを `note` に書く（要件 5.3）。
 
@@ -332,7 +332,7 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 | `%username` の SHIORI Resource `username` が 204 や空値を返したときの値 | `ukadoc:list_shiori_resource:username:1` | 照会そのものは行われる（`implemented`）が、値が無いときは既定値へ縮退する。転記元を明記 |
 | 選択確定カスケードの正典沈黙分岐一式（`Status` の複合値を含む） | `ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1` | 語彙の所有は `areka-P0-status-execution-states`。詳細台帳 `doc/choice-cascade-compat.md` を転記元として明記 |
 | `Status [SSP拡張]` の `balloon`（表示中のバルーン ID 群）の実導出 | 同上（`Status` の行の 2 つ目の転記元） | 同じ行の `note` に 2 つ目の転記元として併記 |
-| `OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の SHIORI 発火＝M1 非発火（語彙・Reference 割当・受け渡し口の型のみ残す） | `ukadoc:list_shiori_event:OnBalloonClose:1`・`…:OnBalloonTimeout:1`・`…:OnBalloonBreak:1` | 群 2a。`vocabulary-only`・`owner` は `areka-P0-balloon-canon-residue`・転記元と解禁の条件を `note` に写す。`OnBalloonClick` は正典に無いので行を作らない |
+| `OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の SHIORI 発火＝M1 非発火（語彙・Reference 割当・受け渡し口の型のみ残す） | `ukadoc:list_shiori_event:OnBalloonClose:1`・`…:OnBalloonTimeout:1`・`…:OnBalloonBreak:1` | 群 2a。`vocabulary-only`・`owner` は `balloon-canon-residue`・転記元と解禁の条件を `note` に写す。`OnBalloonClick` は正典に無いので行を作らない |
 | `doc/emo2-conformance-scope.md` §6「SAORI 同居を M1 から削除」 | `ukadoc:spec_dll` | `spec_dll` の `note`（SAORI の成立条件・要件 5.9）の転記元として明記 |
 
 実装時に §8 の全行と §6 を 1 行ずつ読み直し、SHIORI ドメインの項目を名指ししている行が上の 5 行のほかに無いことを確かめる。増えていれば同じ形で対応する行の `note` に書く。
@@ -459,7 +459,7 @@ doc/ukadoc-coverage/
 | 11.1, 11.2, 11.3, 11.4, 11.5, 11.6 | ブリーフィングの置き場所・順序・章の中身・書かないもの | ブリーフィング文書の構成 |
 | 12.1 | 実行時の振る舞いを変えない | コメントを置く場所（追加はコメント行 22 行のみ）・テスト方針 |
 | 12.2 | 他ドメインの行を作らない | Boundary Commitments・テスト方針の検査 ⑵ |
-| 12.3 | 既存 spec が所有する項目は `owner` を書くだけ | 群 10（`Charset` の `owner`）・縮退の転記元（`Status` の `owner`）・群 2a（`areka-P0-balloon-canon-residue`） |
+| 12.3 | 既存 spec が所有する項目は `owner` を書くだけ | 群 10（`Charset` の `owner`）・縮退の転記元（`Status` の `owner`）・群 2a（`balloon-canon-residue`） |
 | 12.4 | brief の食い違いは書き換えず記録する | ブリーフィング文書の構成（是正の候補） |
 | 12.5 | `roadmap.md` を変更しない | Out of Boundary |
 | 12.6 | `doc/shiori/fragments/` と `vocab/` を書き換えない | Out of Boundary（`shiori_resource.rs` はコメント 1 行のみ・語彙は不変） |
@@ -511,9 +511,9 @@ doc/ukadoc-coverage/
 |---|---|---|---|
 | `areka-P0-charset-canon` | `shiori3.rs` の `build_request` と `parse_response` を書き換える | 「後着が rebase」と明記。着地で `Charset` の台帳行が `implemented` へ変わることも下流として明記 | DD-8（本 spec が先着なら向こうが合わせる。先着されていたら本 spec が置き直す） |
 | `areka-P0-translate-pipeline` | `events.rs`（`OnTranslate` の送出と許可表）ほか `areka-kanade/schedule/` | 「`events.rs` の定義箇所へ ukadoc URL コメント＝後着 rebase」「実装済みの証拠は置かない＝`ukadoc-survey-shiori` の仕事」と明記 | 本 spec は許可表の要素行にコメントを置くだけ。向こうが要素を増やせば、その要素の URL コメントは向こうが置く（証拠の置き方は本 spec が定めた形に従う） |
-| `areka-P0-makoto-dll-host` | `shiori-host32-helper`・新規の MAKOTO 用ファイル・`areka-kanade/schedule/` | 「kanade/schedule の doc 1 行＝後着 rebase」と明記。`shiori3.rs` と `client.rs` は非接触と宣言 | 本 spec の `shiori3.rs` への 9 行とは重ならない |
+| `makoto-dll-host` | `shiori-host32-helper`・新規の MAKOTO 用ファイル・`areka-kanade/schedule/` | 「kanade/schedule の doc 1 行＝後着 rebase」と明記。`shiori3.rs` と `client.rs` は非接触と宣言 | 本 spec の `shiori3.rs` への 9 行とは重ならない |
 
-このほか `areka-P0-status-execution-states`（`Status` の実行状態語彙）と `areka-P0-property-query-channels`（`property.get`／`property.set`）は同じ**項目**を所有する。本 spec は台帳の `owner` にその spec 名を書くだけで、判断を上書きしない（要件 12.3）。並走する調査 spec 3 本（assets／sakura-script／property）とは台帳ファイルが別で、共有するファイルは無い。
+このほか `areka-P0-status-execution-states`（`Status` の実行状態語彙）と `property-query-channels`（`property.get`／`property.set`）は同じ**項目**を所有する。本 spec は台帳の `owner` にその spec 名を書くだけで、判断を上書きしない（要件 12.3）。並走する調査 spec 3 本（assets／sakura-script／property）とは台帳ファイルが別で、共有するファイルは無い。
 
 ## 危険と対処
 

@@ -2,7 +2,7 @@
 
 - 実施日: 2026-10-10
 - 方法: 確定した requirements.md と、今ある文書（このブランチ＝main `414d43eb` の上に spec の初期化 `c8d43b95` を積んだもの）を Grep・Glob・Read で読み比べた。この spec はコードを足さないので、「今あるコード」は「台帳が照らし合わせる相手の文書」と「台帳が倣う型の文書」と「完了の手順」に読み替えた。ビルドもテストも回していない。
-- 読んだもの: spec.json・requirements.md・brief.md・steering（product・tech・structure の全文、roadmap・focus・workflow の該当の節）・`doc/ukadoc-coverage/`（README・`report/summary.md`・`values.md` の見出し・`ledger/*.toml` の数え）・`doc/ssp-mcp/survey.md`・`doc/COMPAT_ARCHITECTURE.md` §8 の先頭・完了した `areka-P0-ghost-session-test-load-flake` の `load-repro.md` と `research.md`・`.claude/skills/kiro-complete/SKILL.md`・`.claude/skills/kiro-start/SKILL.md` の該当の行・隣の `areka-P0-coverage-roadmap-refresh` の brief。
+- 読んだもの: spec.json・requirements.md・brief.md・steering（product・tech・structure の全文、roadmap・focus・workflow の該当の節）・`doc/ukadoc-coverage/`（README・`report/summary.md`・`values.md` の見出し・`ledger/*.toml` の数え）・`doc/ssp-mcp/survey.md`・`doc/COMPAT_ARCHITECTURE.md` §8 の先頭・完了した `areka-P0-ghost-session-test-load-flake` の `load-repro.md` と `research.md`・`.claude/skills/kiro-complete/SKILL.md`・`.claude/skills/kiro-start/SKILL.md` の該当の行・隣の `coverage-roadmap-refresh` の brief。
 - BTS へのアクセス: **一覧の頁を 1 回だけ**開いた（`view_all_bug_page.php`・匿名・課題の頁は開いていない・CSV は取っていない）。一覧の形を確かめるためで、結果は 5 章。取得の道具は頁を小さなモデルに要約させて返すもの（WebFetch）なので、5 章の事実は「道具がそう答えた」ものである。
 
 ## 1. 要約
@@ -28,7 +28,7 @@
 | spec の数 | `ls .kiro/specs`・`ls .kiro/specs/completed` | 直下 96 本（roadmap の spec 台帳の 96 本と一致）・`completed/` の直下 254 件 |
 | 先例 `load-repro.md` | Read・`git grep "load-repro"` | `.kiro/specs/completed/areka-P0-ghost-session-test-load-flake/load-repro.md`（1,434 行）が実在。`tech.md` の Testing「許す赤」・`roadmap.md`・`areka-P0-areka-test-threads-av` の brief・コードのコメントから指されている。`tech.md` は「同 spec の `load-repro.md` の 4.2〜4.4」と名前で指し、フルパスは書いていない |
 | roadmap の扱い | `roadmap.md` の該当の行 | ウェーブ C5 の ⑥（「文書だけ・ネットへ出る」・触るのは自分の spec フォルダと `structure.md` の 1〜2 行）。「開発者に決めてほしいこと」の ⑸ に「`ssp-bts-salvage` がネットへ出ること（一覧の CSV を落とすなら許しが要る）」が**答え待ちで残っている** |
-| 隣の spec | `areka-P0-coverage-roadmap-refresh` の brief | 扱うのは `doc/ukadoc-coverage/roadmap-draft.md`・`briefing.md` と `crates/ukadoc-survey`。BTS も `structure.md` も触らない（重なり 0） |
+| 隣の spec | `coverage-roadmap-refresh` の brief | 扱うのは `doc/ukadoc-coverage/roadmap-draft.md`・`briefing.md` と `crates/ukadoc-survey`。BTS も `structure.md` も触らない（重なり 0） |
 
 ## 3. 今あるもの（倣える型・照らし合わせの相手）
 

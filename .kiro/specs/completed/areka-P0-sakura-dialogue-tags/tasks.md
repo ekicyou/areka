@@ -125,10 +125,10 @@
   - _Requirements: 5.2, 5.4_
 
 - [x] 7.2 basepos 型シームと座標算出を実装する
-  - `BaseposResolver` trait と `CanonDefaultBasepos`（x=幅÷2・y=下端）を実装する（宣言 `point.basepos` は追跡 spec `areka-P0-surfaces-basepos` への差替シームとして型のみ予約）
+  - `BaseposResolver` trait と `CanonDefaultBasepos`（x=幅÷2・y=下端）を実装する（宣言 `point.basepos` は追跡 spec `surfaces-basepos` への差替シームとして型のみ予約）
   - 座標算出式を物理 px のみ（`WindowPos.size` のみを源とする）で実装する
   - fixture 検算式（`\1\![move,-353,,,0,base,base]` → `x' = pos0.x + w0/2 - 353 - w1/2`・Y 現状維持）が成立することを確認する
-  - 宣言 `point.basepos` の型シーム予約（追跡 spec `areka-P0-surfaces-basepos` への差替点）を `doc/COMPAT_ARCHITECTURE.md` の対応表へ登記する
+  - 宣言 `point.basepos` の型シーム予約（追跡 spec `surfaces-basepos` への差替点）を `doc/COMPAT_ARCHITECTURE.md` の対応表へ登記する
   - _Requirements: 5.2_
   - _Depends: 7.1_
 

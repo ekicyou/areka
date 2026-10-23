@@ -242,7 +242,7 @@
 
 ### 7.3 議題 3 の裁定（2026-09-02・開発者確認済み）
 
-**⑤ 間欠的な赤 ⑵⑶ の `wintf` 側テストは明示実行の門で隔離する。** 既存の書き方（理由付きの `#[ignore]`＋環境変数・`transition_signoff_tests.rs:59` の形）を使い、判定ロジックは改変しない。対象は `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs`（実窓の重なり順）と `crates/wintf/src/runtime/tick_bridge.rs:353-356`（画面同期の 500ms 期限）。失う被覆と根治の引受先（`areka-P0-zorder-chain-residue` A-1／A-2）は記録に残す（R9.4）。`emo2_boot` 側の同形 2 本（`spine_boot_smoke_tests.rs:46-49`・`spine_talk_close_tests.rs:306-309`）は「条件が揃うまで待つ」形で既に書かれており、期限は打ち切りの上限にすぎないため、触らず残す。妥当性の確認は隔離前・隔離後に各 3 回を上限とする（R9.6・開発者方針「長時間試行禁止」）。編集集合の外に触れる範囲は R9.8／R12.1 に事前登記（`wintf` は W12 併走の cursor-tag・調査系・⓪ lexer のいずれも触れない＝共有 0）。却下した案: 「そのまま残す」は R10.7 と衝突、「判定の走行だけ `--skip`」は「全通過」の意味が手順書依存になる。
+**⑤ 間欠的な赤 ⑵⑶ の `wintf` 側テストは明示実行の門で隔離する。** 既存の書き方（理由付きの `#[ignore]`＋環境変数・`transition_signoff_tests.rs:59` の形）を使い、判定ロジックは改変しない。対象は `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs`（実窓の重なり順）と `crates/wintf/src/runtime/tick_bridge.rs:353-356`（画面同期の 500ms 期限）。失う被覆と根治の引受先（`zorder-chain-residue` A-1／A-2）は記録に残す（R9.4）。`emo2_boot` 側の同形 2 本（`spine_boot_smoke_tests.rs:46-49`・`spine_talk_close_tests.rs:306-309`）は「条件が揃うまで待つ」形で既に書かれており、期限は打ち切りの上限にすぎないため、触らず残す。妥当性の確認は隔離前・隔離後に各 3 回を上限とする（R9.6・開発者方針「長時間試行禁止」）。編集集合の外に触れる範囲は R9.8／R12.1 に事前登記（`wintf` は W12 併走の cursor-tag・調査系・⓪ lexer のいずれも触れない＝共有 0）。却下した案: 「そのまま残す」は R10.7 と衝突、「判定の走行だけ `--skip`」は「全通過」の意味が手順書依存になる。
 
 **① 決定論一周テストをどの家に置くか**（選択肢 A／B／C）
 - A（実 DLL の家）は交信の忠実さを解き、見た目を解かない。凍結表の追加＝`crates/` 改変が発生する。
@@ -364,7 +364,7 @@ ukadoc の MCP 検索で総覧を引き直した。**要件・設計の内容を
 | 同 `:741-794`（`the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`・`#[test]` は `:740`） | 実の所有リンク（`set_window_owner`）を張った実窓 2 枚に `TopOfNormalBand` を適用し、`:767` で「バルーンがキャラのすぐ手前」を測る。`:775-788` は所有リンク無しの対照（`assert_ne!`） | 実の所有リンクが実の持ち上げ後も隣接を保つことを測る**唯一の**テストが既定で走らなくなる。隣接が「所有リンクのおかげ」か「指令の副作用」かを分ける対照も止まる |
 | `crates/wintf/src/runtime/tick_bridge.rs:346-362`（`vblank_notifies_listener_then_joins_on_drop`） | `:353-354` で 500ms の壁時計期限を置き `:355-358` で通知の到達を主張する。`:360-361` の `drop` は停止→join を兼ね、終わらなければハングして落ちる | 実 DWM の垂直同期通知が待機側へ届くことと、`wintf-vsync` スレッドが清く畳まれることの証跡が既定で止まる。隣の `vsync_thread_registers_itself_with_the_vblank_role`（`#[test]` `:325`）は登録・命名しか見ないので代替にならない |
 
-いずれも根治の引受先は `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の **A-1**（`:15`・`zorder_pair_maintain_always_on_top_tests.rs:767`／`:411` を名指し）と **A-2**（`:16`・`tick_bridge.rs:355` を名指し）である。同 brief `:34` は「e2e が先に踏んだ場合は e2e が隔離裁定を行い根治は本 spec」という分担を明記している。
+いずれも根治の引受先は `.kiro/specs/zorder-chain-residue/brief.md` の **A-1**（`:15`・`zorder_pair_maintain_always_on_top_tests.rs:767`／`:411` を名指し）と **A-2**（`:16`・`tick_bridge.rs:355` を名指し）である。同 brief `:34` は「e2e が先に踏んだ場合は e2e が隔離裁定を行い根治は本 spec」という分担を明記している。
 
 ## 11. 設計判断（決定と、採らなかった案）
 

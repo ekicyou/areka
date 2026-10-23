@@ -31,7 +31,7 @@
 
 - **`crates/areka-parsers`**: タスク 4.1 は「`BalloonModel` にバルーン名の取得口が無い」ことを実走で見つけましたが、
   parser を改変して口を足すことは**しませんでした**（台帳 §7 #10）。欄は定数
-  `BALLOON_NAME_PLACEHOLDER = "(名前なし)"` で埋め、引受先を `areka-P0-balloon-canon-residue`（項目 14）の brief へ登記しています（⚠当初の `areka-P0-ukadoc-survey-assets` は 2026-09-06 に完了・アーカイブされたため、完了ワークフローで差し替えました）。
+  `BALLOON_NAME_PLACEHOLDER = "(名前なし)"` で埋め、引受先を `balloon-canon-residue`（項目 14）の brief へ登記しています（⚠当初の `areka-P0-ukadoc-survey-assets` は 2026-09-06 に完了・アーカイブされたため、完了ワークフローで差し替えました）。
   差分 0 件はその判断どおりの結果です。
 - **`crates/areka-sakura`**: タスク 3.4 は観測用 example が `text_playback_duration` を呼ぶように直しましたが、
   変えたのは**呼ぶ側**（`crates/areka-emo-text/examples/emo-text-layer.rs:118` の `use` と

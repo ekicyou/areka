@@ -21,9 +21,9 @@
 - 選択肢の表示・UI・ヒットテスト・`\_l` の単位換算（em/lh/%）＝choice-render（W4）。
 - 選択確定→SHIORI カスケード（ID 解釈・`OnChoiceSelect(Ex)` 判別・タイムアウト）＝choice-select-events（W5）。
 - `\![bind]` 等 move 以外のコマンド**消費**（cue 化＝転写は本 spec のキャリアが行う）。
-- compile 側時間指令 allowlist の実導出（語彙＋縮退のみ・追跡 spec `areka-P0-sakura-time-directives`）。
+- compile 側時間指令 allowlist の実導出（語彙＋縮退のみ・追跡 spec `sakura-time-directives`）。
 - 時間付き移動アニメーション・`\![moveasync]`（即時縮退・語彙保持）。
-- 位置の永続化（sylphya persistent backing／position-persist）・宣言 `point.basepos` の実導出（追跡 spec `areka-P0-surfaces-basepos`）。
+- 位置の永続化（sylphya persistent backing／position-persist）・宣言 `point.basepos` の実導出（追跡 spec `surfaces-basepos`）。
 - プロパティシステム本体（`areka-P0-sylphya`）・`%username` 以外のシステム変数の実導出。
 
 ## Boundary Commitments
@@ -523,7 +523,7 @@ pub struct MoveDirective {
 /// `--key=value` 名前付き形の混入は M1 縮退（Err＝記録付きスキップ・語彙は将来 additive）。
 pub fn parse_move_directive(scope: u32, tokens: &[String]) -> Result<MoveDirective, MoveDegradation>;
 
-/// basepos 型シーム（宣言 point.basepos は追跡 spec areka-P0-surfaces-basepos が別実装を差す）。
+/// basepos 型シーム（宣言 point.basepos は追跡 spec surfaces-basepos が別実装を差す）。
 pub trait BaseposResolver { fn basepos(&self, window_size: SizeI) -> PointPx; }
 pub struct CanonDefaultBasepos;   // x=幅÷2・y=下端（正典既定・A-1）
 
@@ -627,5 +627,5 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> boo
 | move 名前付き `--` 形 | M1 縮退（記録付きスキップ・語彙保持） | emo2 未使用・positional が canon 正 |
 | move 基準 `screen`/`primaryscreen`/`me`/`global` | M1 縮退（記録・語彙保持） | emo2 未使用（数値スコープのみ実導出） |
 | time>0 の移動 | 最終位置へ即時（縮退記録） | R5.4 明文・fixture は time 空=0 |
-| 宣言 `point.basepos` | 型シーム予約・追跡 spec `areka-P0-surfaces-basepos` | A-1 裁定（emo2 は宣言なし＝正典既定が正規経路） |
-| compile 時間指令 allowlist | M1 非実導出・追跡 spec `areka-P0-sakura-time-directives` | R4.3 但書 |
+| 宣言 `point.basepos` | 型シーム予約・追跡 spec `surfaces-basepos` | A-1 裁定（emo2 は宣言なし＝正典既定が正規経路） |
+| compile 時間指令 allowlist | M1 非実導出・追跡 spec `sakura-time-directives` | R4.3 但書 |

@@ -7,13 +7,15 @@ Usage:
   python -I read-wave.py --self-test
 
 Prints "date <YYYY-MM-DD>" for the wave, then one line per spec: "<model> <name>"
-(model is Fable or Opus, name is the full spec name with the areka-P0- prefix).
+(model is Fable or Opus, name as the block writes it).
 Warnings go to stderr as "WARN ...". Exit 1 when no wave can be found.
 The wave is the first fenced block of the "## ウェーブ編成（…）" section.
 A spec is Fable when the block lists it under Fable OR the spec ledger's
 "Fable" column says ○ — the stricter of the two wins.
-With --models, prints "<Fable|Opus|unknown> <name>" per named spec (with or
-without the prefix), looked up in the spec ledger (header "spec…" … "Fable").
+With --models, prints "<Fable|Opus|unknown> <name>" per named spec, looked up in
+the spec ledger (header "spec…" … "Fable").
+Names are compared without the old areka-P0- prefix (unstarted specs dropped it on
+2026-10-23; completed and in-flight ones keep it, and the ledger omits it).
 """
 import re
 import sys
@@ -23,8 +25,8 @@ FENCE = "```"
 PREFIX = "areka-P0-"
 
 
-def full_name(name):
-    return name if name.startswith(PREFIX) else PREFIX + name
+def key(name):
+    return name[len(PREFIX):] if name.startswith(PREFIX) else name
 
 
 def read_models(text):
@@ -44,8 +46,8 @@ def read_models(text):
         m = re.match(r"`([a-z0-9-]+)`", cells[0])
         mark = cells[col]
         kind = "Fable" if mark.startswith("○") else "Opus" if mark.startswith(("−", "-")) else None
-        if m and kind and models.get(full_name(m.group(1))) != "Fable":
-            models[full_name(m.group(1))] = kind
+        if m and kind and models.get(key(m.group(1))) != "Fable":
+            models[key(m.group(1))] = kind
     return models
 
 
@@ -75,9 +77,9 @@ def read_wave(text):
         elif s.startswith("【"):
             group = None
         elif s.startswith("/kiro-start "):
-            name = full_name(s.split()[1])
+            name = s.split()[1]
             model = group or "Opus"
-            if ledger.get(name) == "Fable" and model != "Fable":
+            if ledger.get(key(name)) == "Fable" and model != "Fable":
                 warns.append(f"{name}: ledger says Fable, block says {model}; treated as Fable")
                 model = "Fable"
             specs.append((model, name))
@@ -98,13 +100,13 @@ SAMPLE = """# Roadmap
 Wave C1 3本（v0.1.0 2本＋割り込み 1本）
 【本来の次の版 v0.1.0】
 Fable
-/kiro-start areka-P0-b-spec
+/kiro-start b-spec
 Opus
 /kiro-start areka-P0-a-spec
 
 【割り込み（版に縛らない・v0.1.0 の着地を遅らせない）】
 Opus
-/kiro-start areka-P0-c-spec
+/kiro-start c-spec
 ```
 ### 次
 ## spec 台帳
@@ -120,10 +122,10 @@ Opus
 def self_test():
     date, specs, warns = read_wave(SAMPLE)
     assert date == "2026-01-02", date
-    assert specs == [("Fable", "areka-P0-b-spec"), ("Opus", "areka-P0-a-spec"), ("Fable", "areka-P0-c-spec")], specs
-    assert len(warns) == 1 and warns[0].startswith("areka-P0-c-spec"), warns
+    assert specs == [("Fable", "b-spec"), ("Opus", "areka-P0-a-spec"), ("Fable", "c-spec")], specs
+    assert len(warns) == 1 and warns[0].startswith("c-spec"), warns
     models = read_models(SAMPLE)
-    assert models == {"areka-P0-a-spec": "Opus", "areka-P0-b-spec": "Fable", "areka-P0-c-spec": "Fable"}, models
+    assert models == {"a-spec": "Opus", "b-spec": "Fable", "c-spec": "Fable"}, models
     for bad in ("# none\n", "## ウェーブ編成（2026-01-02）\nno block\n", "## ウェーブ編成（x）\n```\n/kiro-start a\n```\n"):
         try:
             read_wave(bad)
@@ -142,7 +144,7 @@ def main():
     if "--models" in sys.argv:
         models = read_models(sys.stdin.buffer.read().decode("utf-8"))
         for name in sys.argv[sys.argv.index("--models") + 1:]:
-            print(f"{models.get(full_name(name), 'unknown')} {full_name(name)}")
+            print(f"{models.get(key(name), 'unknown')} {name}")
         return 0
     try:
         date, specs, warns = read_wave(sys.stdin.buffer.read().decode("utf-8"))

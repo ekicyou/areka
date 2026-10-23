@@ -1,7 +1,7 @@
 # Brief: areka-P0-sylphya-set-ledger
 
-> 起票: 2026-09-11（棚卸⑬・`areka-P0-property-query-channels` の分割 ⑶ を独立 spec に切り出し）。親 brief の「Scope In: sylphya 台帳の正典追随（`SET_EFFECTIVE` 21→26・サウンド語彙族の登記・件数檻の更新）」を丸ごと本 spec が引き継ぐ。親 spec はスクリプト経路（1〜4）に専念し、台帳には触れない。
-> **三重所有の仮裁定（棚卸⑬）を本 spec が台帳側で履行する**: `currentghost.seriko.zorder`／`seriko.sticky-window` の SET 台帳行は本 spec が持ち、値の導出（parse／serialize）は `areka-P0-zorder-property` 単独、`areka-P0-currentghost-property-tree` は `seriko.*` から `zorder` を除外する。裁定の出典は roadmap の「棚卸⑬の仮裁定」節。
+> 起票: 2026-09-11（棚卸⑬・`property-query-channels` の分割 ⑶ を独立 spec に切り出し）。親 brief の「Scope In: sylphya 台帳の正典追随（`SET_EFFECTIVE` 21→26・サウンド語彙族の登記・件数檻の更新）」を丸ごと本 spec が引き継ぐ。親 spec はスクリプト経路（1〜4）に専念し、台帳には触れない。
+> **三重所有の仮裁定（棚卸⑬）を本 spec が台帳側で履行する**: `currentghost.seriko.zorder`／`seriko.sticky-window` の SET 台帳行は本 spec が持ち、値の導出（parse／serialize）は `zorder-property` 単独、`currentghost-property-tree` は `seriko.*` から `zorder` を除外する。裁定の出典は roadmap の「棚卸⑬の仮裁定」節。
 
 ## Problem
 
@@ -43,7 +43,7 @@ sylphya の SET 有効一覧 `SET_EFFECTIVE`（`crates/areka-sylphya/src/vocab/d
 
 ## Existing Spec Touchpoints
 
-- **Extends**: `areka-P0-property-query-channels`（分割元・⑶ を引き継ぐ）。
+- **Extends**: `property-query-channels`（分割元・⑶ を引き継ぐ）。
 - **Adjacent**: `zorder-property`（値の導出）・`currentghost-property-tree`（`seriko.*` 一括から `zorder` を除外）。
 
 ## Constraints

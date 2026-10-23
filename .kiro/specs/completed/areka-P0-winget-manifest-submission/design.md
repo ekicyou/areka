@@ -4,9 +4,9 @@
 
 **目的**: areka のポータブル版を、winget のコミュニティの置き場（microsoft/winget-pkgs）へ初めて載せる所までを進める。作る物は 3 つ。① 提出するマニフェストの雛形（YAML 4 ファイル）② 手元の実機で入れて起動し、上げ直しと外し方で利用者の物がどうなるかを測った記録 ③ 初回の提出の手順書と、その実行の記録。
 
-**使う人**: winget で areka を入れたい利用者（`winget install Areka.Areka.Portable` の 1 行で入る）と、areka を winget で配りたい開発者（人の承認を待つだけの状態まで迷わず進める）。後ろの spec `areka-P0-winget-release-automation` を始める人は、本仕様の記録と申し送りを材料にする。
+**使う人**: winget で areka を入れたい利用者（`winget install Areka.Areka.Portable` の 1 行で入る）と、areka を winget で配りたい開発者（人の承認を待つだけの状態まで迷わず進める）。後ろの spec `winget-release-automation` を始める人は、本仕様の記録と申し送りを材料にする。
 
-**リポジトリへの影響**: Rust のコードは 0 行。新しいスクリプトも 0 本。足すのは `dist/winget/0.0.2/` の YAML 4 ファイルと、本仕様のフォルダの中の記録 2 ファイル。直すのは steering の `structure.md` の 1 か所・`areka-P0-winget-release-automation` の brief への書き足し・`areka-P0-release-cycle` の要件と設計の名前 3 行。
+**リポジトリへの影響**: Rust のコードは 0 行。新しいスクリプトも 0 本。足すのは `dist/winget/0.0.2/` の YAML 4 ファイルと、本仕様のフォルダの中の記録 2 ファイル。直すのは steering の `structure.md` の 1 か所・`winget-release-automation` の brief への書き足し・`areka-P0-release-cycle` の要件と設計の名前 3 行。
 
 ### Goals
 
@@ -18,7 +18,7 @@
 
 ### Non-Goals
 
-- `.github/workflows/winget.yml`・`README.md` と `dist/README.txt` の winget の行（`areka-P0-winget-release-automation` が、取り込みの後に作る）。
+- `.github/workflows/winget.yml`・`README.md` と `dist/README.txt` の winget の行（`winget-release-automation` が、取り込みの後に作る）。
 - 利用者のゴーストと記憶の置き場を変えること（消えると分かったら、別の spec として起票するだけ）。
 - winget-pkgs の人の審査による取り込みを待つこと。
 - arm64 の実機で入れて起動する確かめ。
@@ -34,7 +34,7 @@
 - 初回の提出の手順書と、提出の記録（`verification/submission.md`）。
 - 完了の線の判定（PR にどの印が付いたら「自動の検査が通った」とするか）。
 - steering の `structure.md` の `dist/` の説明の 1 か所。
-- `areka-P0-winget-release-automation` の brief への申し送りの節（書き足しだけ。既にある文は変えない）。
+- `winget-release-automation` の brief への申し送りの節（書き足しだけ。既にある文は変えない）。
 - `areka-P0-release-cycle` の要件と設計のうち、`winget.yml` の持ち主の名前の 3 行（名前だけ。手順は変えない）。
 
 ### Out of Boundary
@@ -192,8 +192,8 @@ target/winget-check/                                # 追跡しない（確か�
 ### Modified Files
 
 - `.kiro/steering/structure.md` — 「その他の最上位」の行にある `dist/` の説明の 1 か所。`dist/winget/` が winget へ提出するマニフェストの雛形の置き場で、配布 zip には入らないことを足す。
-- `.kiro/specs/areka-P0-winget-release-automation/brief.md` — 末尾に申し送りの節を 1 つ書き足す（既にある文は変えない）。
-- `.kiro/specs/areka-P0-release-cycle/requirements.md` — `winget.yml` の持ち主として本仕様の名前を挙げている 2 行を `areka-P0-winget-release-automation` に直す（「Out of scope」の workflow の中身の行と、「Adjacent expectations」の「`winget.yml` を main へ入れた後の回から」の行）。
+- `.kiro/specs/winget-release-automation/brief.md` — 末尾に申し送りの節を 1 つ書き足す（既にある文は変えない）。
+- `.kiro/specs/areka-P0-release-cycle/requirements.md` — `winget.yml` の持ち主として本仕様の名前を挙げている 2 行を `winget-release-automation` に直す（「Out of scope」の workflow の中身の行と、「Adjacent expectations」の「`winget.yml` を main へ入れた後の回から」の行）。
 - `.kiro/specs/areka-P0-release-cycle/design.md` — 同じく 1 行（「winget の見守りの細部」の行）。
 - 直さない行（本仕様の持ち物のままなので名前は正しい）: 同 `requirements.md` の「winget のマニフェストの形と初回の手提出」の行と、「winget の初回の手提出は … の番」の受け入れ基準の行。＝直す行は合わせて 3、直さない行は 2。着手のときに数え直し、数を記録に書く。
 - 起票したときだけ: `/kiro-discovery` が作る新しい spec のフォルダの `brief.md` と、steering の roadmap まわりへの書き足し（要件 4.6・5.6・6.3 の起票。件が 0 なら 0 ファイル）。
@@ -491,14 +491,14 @@ AI が、入れた areka を有界でなく起動し（MCP の口の番号は `A
 ### 文書の直し（段 1・12）
 
 - **steering の `structure.md`**（要件 2.7・段 1 で雛形と一緒に）: 「その他の最上位」の行の `dist/` の説明を、「配布物へそのまま入れる文書（第三者向け `README.txt`）と、`winget/`＝winget へ提出するマニフェストの雛形（初回に出した版の写し・配布 zip には入らない）」の趣旨に直す。直すのはこの 1 か所。
-- **後ろの spec への申し送り**（要件 6.2・段 12）: `.kiro/specs/areka-P0-winget-release-automation/brief.md` の末尾に、日付の付いた節を 1 つ足し、次の 6 項目を書く。
+- **後ろの spec への申し送り**（要件 6.2・段 12）: `.kiro/specs/winget-release-automation/brief.md` の末尾に、日付の付いた節を 1 つ足し、次の 6 項目を書く。
   1. 上げ直しと外し方の実測の結果（項目ごとの「残った」「消えた」「置き換わった」）。
   2. 機械の全員向けの実測の結果（立ったか・記憶が書けたか・ゴーストを入れられたか）。
   3. `ArchiveBinariesDependOnPath` を付けたことと、`areka` の解決のされ方（入れ先の `areka.exe` そのもの・リンクではない・利用者の PATH に入れ先が足される）。
   4. winget-pkgs への PR の URL と、その時点の状態（承認待ち）。
   5. 直しを求める印が付いたら 10 日のうちに応えないと PR が閉じられること。
   6. 消える物が在ったときだけ: 段 7 で起票した spec の名前と、その spec が着地するまで、説明書に winget の行を載せず、winget-pkgs へ次の版を出さないこと（初回の 1 版は名乗りを押さえるために載せたままにする）。消える物が 0 だったときは、この項目に「消えた物は 0・制限なし」と書く。
-- **`areka-P0-release-cycle` の名前の直し**（要件 6.4・段 12）: 「Modified Files」の 3 行を `areka-P0-winget-release-automation` に直し、直した行の数と、直さなかった行の数を `verification/submission.md` に書く。手順の文（タグのコミットに `winget.yml` が在るときだけ見守る）は 1 字も変えない。
+- **`areka-P0-release-cycle` の名前の直し**（要件 6.4・段 12）: 「Modified Files」の 3 行を `winget-release-automation` に直し、直した行の数と、直さなかった行の数を `verification/submission.md` に書く。手順の文（タグのコミットに `winget.yml` が在るときだけ見守る）は 1 字も変えない。
 - **範囲の確かめ**（要件 2.5・2.6・5.8・段 12）: 本仕様の枝の差分のファイル名を一覧にし、「File Structure Plan」の範囲に収まっていること、`README.md`・`dist/README.txt`・`.github/workflows/**`・`crates/**`・`tools/**` がどれも 0 件であることを記録する。雛形と記録の中に、GitHub のトークンの形の文字列（`ghp_`・`gho_`・`github_pat_` で始まる物）が 0 件であることも記録する。
 
 ### 記録の見出し（要件 6.1）

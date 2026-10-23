@@ -60,7 +60,7 @@ ukadoc が書いていないことは次のとおりで、本 spec が決める�
 - **Out of scope**（どれも今の動きを変えない＝変更 0）:
   - `recommended.balloon`／`recommended.balloon.path`（これ以外へ切り替えると「強い内容の警告」を出す項目。roadmap の覚え書き。網羅台帳の注記の文だけは Requirement 6 で直す）。
   - ゴーストのフォルダの中の `balloon/` に置いたバルーン（`areka-P0-ghost-inner-balloon`）。本 spec は、バルーンをゴーストのフォルダの中に探さない（変更 0）。
-  - シェルに紐づくバルーン（`areka-P0-shell-companion-balloon`）。シェルの切替では、本 spec の段を見ない。
+  - シェルに紐づくバルーン（`shell-companion-balloon`）。シェルの切替では、本 spec の段を見ない。
   - インストールの読み方（完了 `areka-P0-install-companion-reading`）。本 spec は書庫の入れ方を 1 行も変えない。
   - `char*.balloon.*` などバルーンの見た目の鍵。
   - 引数でバルーンを渡したときの扱い、唯一・既定・無作為の段、バルーンが 0 個のときの失敗。
@@ -70,7 +70,7 @@ ukadoc が書いていないことは次のとおりで、本 spec が決める�
 - **Adjacent expectations**:
   - 完了 `areka-P0-install-companion-reading` から受け取るのは探索の順だけである（無印 → 0 → 1…・「見つかった」は `*.directory` の行が在ること・先頭に 0 を付けた綴りは数えない）。`*.directory` の値は読み替えないので、共有する読み替えの規則は 0 個。
   - 完了 `areka-P0-baseware-root-layout` の要件 5.3（同梱は無印の `balloon.directory`）を本 spec が上書きする。同要件 5.2 の「利用者の選択は同梱より優先」は崩さない。
-  - `areka-P0-shell-companion-balloon` は、本 spec の並びへ「シェルに紐づくバルーン」の段を足す。本 spec はその段の置き場所を決めない。
+  - `shell-companion-balloon` は、本 spec の並びへ「シェルに紐づくバルーン」の段を足す。本 spec はその段の置き場所を決めない。
   - `areka-P0-ghost-inner-balloon` は、ゴーストの中の `balloon/` に置いたバルーンを使えるようにする。`default.balloon.path` の起点を広げるかどうかは、その spec が決める。本 spec の後は、根のバルーンの置き場だけが起点である。
 
 ## Requirements

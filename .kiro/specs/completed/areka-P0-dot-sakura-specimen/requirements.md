@@ -33,8 +33,8 @@
 - **Out of scope**（本 spec では行わない）:
   - どっとさくらの起動・会話・メニューを通すための areka の直し（起票した先が持つ）。
   - 華和梨への対応、SHIORI 2.x への対応。
-  - 同梱バルーンの印（矢印・オンライン・SSTP）の表示（`areka-P0-balloon-markers` が持つ）。
-  - 入力の箱 `balloonc*`（`areka-P0-balloon-canon-residue`・`areka-P0-inputbox-user-input` が持つ）。
+  - 同梱バルーンの印（矢印・オンライン・SSTP）の表示（`balloon-markers` が持つ）。
+  - 入力の箱 `balloonc*`（`balloon-canon-residue`・`inputbox-user-input` が持つ）。
   - シェルの縮小版 2 つ（`sakura100`・`sakura50`）の見た目の確かめ。
   - areka の配布物へのどっとさくらの同梱（入れない）。
   - 書庫のバイト列の変更（畳み直し・改行の変換・中のファイルの足し引き）。
@@ -43,8 +43,8 @@
   - 実機の 1 回でのネットワーク更新（要件 5.11）。
 - **Adjacent expectations**:
   - `.nar` のインストール（`areka-nar`）・32 ビットの SHIORI の載せ台（`shiori-host32`）・表示の経路は、今のまま使う（変更 0）。崩れは起票する。
-  - 既定のバルーン（`StayseeBalloon`）と、その解決の決まりには触らない（`areka-P0-default-balloon-selfmade` が持つ）。同梱バルーンを持つゴーストは、起動で同梱の 1 個目が既定より先に採られる（完了 `areka-P0-ghost-standard-balloon` の決まり・変更 0）。
-  - 検体の登記表・数のテスト・検体の README は、後ろに `areka-P0-default-balloon-selfmade`（10 → 11）が続く。本 spec の着地の後に、そちらが数を合わせる。
+  - 既定のバルーン（`StayseeBalloon`）と、その解決の決まりには触らない（`default-balloon-selfmade` が持つ）。同梱バルーンを持つゴーストは、起動で同梱の 1 個目が既定より先に採られる（完了 `areka-P0-ghost-standard-balloon` の決まり・変更 0）。
+  - 検体の登記表・数のテスト・検体の README は、後ろに `default-balloon-selfmade`（10 → 11）が続く。本 spec の着地の後に、そちらが数を合わせる。
   - 同じウェーブの `areka-P0-pasta-in-windows-verification` は、登記表（`crates/sample-ghost-kit/src/lib.rs`・`lib_tests.rs`）に触らない約束である（棚卸㉘）。
 
 ## Requirements
@@ -137,7 +137,7 @@
 
 1. The 実機の記録 shall 崩れた所を 1 件ずつ、症状・根拠・原因の見立て・扱いの 4 つで書く。扱いは「起票した」「既存の spec の brief に足した」「方針で受けない」「ゴーストの側の作り（繕わない）」のどれか 1 つとする。
 2. When areka が対応していないために崩れた件を見つけたとき, the 開発者 shall 本 spec の範囲の外のものも含めて全部、`/kiro-discovery` で起票する。触る場所が同じ件は 1 本にまとめ、既存の brief に「件 N」として足してよい。
-3. When 崩れた件が既存の spec（例: `areka-P0-balloon-markers`・`areka-P0-balloon-canon-residue`・`areka-P0-inputbox-user-input`）の持ち物であるとき, the 開発者 shall その spec の brief に、どっとさくらで見えた事実を足す（「既知」だけで済ませない）。
+3. When 崩れた件が既存の spec（例: `balloon-markers`・`balloon-canon-residue`・`inputbox-user-input`）の持ち物であるとき, the 開発者 shall その spec の brief に、どっとさくらで見えた事実を足す（「既知」だけで済ませない）。
 4. The 実機の記録 shall 「方針で受けない」の件に、その裁定（日付と要旨）を書く。
 5. The 実機の記録 shall 崩れの一覧の末尾に、扱いごとの件数を書く。0 件の扱いも 0 と書く。
 6. The 実機の記録 shall 記録の ERROR と WARN を数えるとき、どっとさくらの中身から出るもの（辞書が持たない面を呼ぶなど）を、理由を書いて数から外す。

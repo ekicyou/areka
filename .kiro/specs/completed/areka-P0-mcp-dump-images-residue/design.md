@@ -20,7 +20,7 @@
 ### Non-Goals
 
 - 前の spec の要件 7.7 ⑵ の撮り直し（`areka-P0-mcp-kanade-tools` の実機確認へ引き継ぎ済み）。
-- 文言の SSP 寄せ（`areka-P0-mcp-strict-errors`）・新しいツール。
+- 文言の SSP 寄せ（`mcp-strict-errors`）・新しいツール。
 - `surface` を指定した `dump_surface` の UI スレッドの時間（前の spec の実機で 2.2 ms・範囲外の観測として要件に記録済み）。
 - 全部の答えを後から答える置き場に通すこと（要件 4.5 の裁定）。
 

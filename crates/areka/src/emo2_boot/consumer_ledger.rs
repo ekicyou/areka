@@ -208,7 +208,7 @@ pub enum CommandConsumer {
     LifecycleSink,
     /// 読み直しのタグの担当消費者（[`ReloadCueSink`](super::reload_cue::ReloadCueSink)）。`reload` は
     /// 名前だけでは決まらず、第 1 引数が `ghost`・`shiori`・`shell`・`balloon`・`descript` の出現だけを
-    /// 担当する（`makoto` は areka-P0-makoto-reload-directives が後から足す余地・`aigraph` は担当なし・
+    /// 担当する（`makoto` は makoto-reload-directives が後から足す余地・`aigraph` は担当なし・
     /// areka-P0-mcp-reload 要件 11.2）。旧い `reloadsurface` は選別子なしで担当する。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cghost_5d:1
@@ -462,7 +462,7 @@ impl ConsumerLedger {
                 CommandConsumer::LifecycleSink,
             )
             .expect("正準台帳: ('set','balloontimeout') は一意（重複・排他違反は編集ミス）");
-        // `(reload, makoto)` は areka-P0-makoto-reload-directives が後から足す（要件 11.2）。
+        // `(reload, makoto)` は makoto-reload-directives が後から足す（要件 11.2）。
         for selector in ["ghost", "shiori", "shell", "balloon", "descript"] {
             ledger
                 .try_register("reload", Some(selector), CommandConsumer::ReloadSink)

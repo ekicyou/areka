@@ -25,7 +25,7 @@ winget で areka を入れた利用者（と、`areka.exe` の在るフォルダ
   - 中継（`areka-mcp-bridge.exe`）の控えは、隣に `areka.exe` が在れば実行ファイルの隣の `profile\areka\mcp-bridge\`（`crates/areka-mcp-bridge/src/config.rs` の `from_values`）。
 - winget は、配布 zip の最上位に在った物（`ghost\`・`balloon\` と 6 つのファイル）を、上げ直すときにも外すときにも、中に後から置かれた物ごと消す。出どころの spec `areka-P0-winget-manifest-submission` の実測（0.0.2・開発機 1 台）では、上げ直しでも外し方でも利用者の物が **6**（後から入れたゴースト 1・バルーン 3・ゴーストの記憶 2）消えた。
 - 機械の全員向けでは、普段の権限で、areka の記憶を書けず（1 回の起動で 3 回「アクセスが拒否されました」）、メニューの「インストール…」が作業フォルダを作れずに止まった。
-- この状態が直るまで、説明書に winget の入れ方を載せず、winget-pkgs へ次の版を出さないと決めてある（後続 `areka-P0-winget-release-automation` が待つ）。
+- この状態が直るまで、説明書に winget の入れ方を載せず、winget-pkgs へ次の版を出さないと決めてある（後続 `winget-release-automation` が待つ）。
 
 ### 何を変えるか
 
@@ -41,7 +41,7 @@ winget で areka を入れた利用者（と、`areka.exe` の在るフォルダ
   - areka の記憶の置き場と、実行ファイルの隣に在る今の記憶の引き継ぎ。
   - 中継の控えの置き場を、areka の記憶の置き場にそろえること。
   - 説明書 `dist/README.txt` の「■ 置き場」「■ 記憶の置き場」の直し。
-  - 後続 `areka-P0-winget-release-automation` への申し送り（雛形の注意書きを外してよい条件）。
+  - 後続 `winget-release-automation` への申し送り（雛形の注意書きを外してよい条件）。
   - 決定論テストと、winget で入れた形での実測（上げ直し・外す・機械の全員向け）。
 - **Out of scope**:
   - 根の並びそのもの（値の形・上から探す規則・メニューの「置き場を追加…」「置き場を外す ▸」）＝完了 `areka-P0-baseware-root-list`。
@@ -55,10 +55,10 @@ winget で areka を入れた利用者（と、`areka.exe` の在るフォルダ
 - **Adjacent expectations**:
   - 完了 `areka-P0-baseware-root-list`: 根の並び・上から探す規則・「新しく入れる物は見つかるいちばん上の根へ」・「すでに在る物はその場で上書き」・作業フォルダは宛先の根ごと、をそのまま使う。この spec はその上に既定の並びと書ける根を足す。
   - `areka-P0-write-failure-notice`（同じウェーブ）: 書ける根を作れない・写せない・記憶を書けないときの利用者への知らせは向こうの持ち物。同じウェーブの約束で、この spec は `crates/areka/src/main.rs`・`crates/areka/src/boot_resolve.rs`・`crates/areka/src/roots/edit.rs` に触らない（`boot_resolve.rs` に手を入れないと済まないと設計で分かったら、そのタスクを最後に置き、向こうの着地を待って main を取り込んでから直す）。
-  - `areka-P0-winget-release-automation`（後続）: この spec の着地で、説明書の winget の行と winget-pkgs への次の版の提出を始められる。雛形の注意書き（`InstallationNotes`）を外すかどうかと、その作業は向こうが持つ（要件 9）。
+  - `winget-release-automation`（後続）: この spec の着地で、説明書の winget の行と winget-pkgs への次の版の提出を始められる。雛形の注意書き（`InstallationNotes`）を外すかどうかと、その作業は向こうが持つ（要件 9）。
   - メニューの「置き場を外す ▸」（`crates/areka/src/menu/roots_frame.rs`）: 書ける根を選べない形にするために触る（要件 3.3）。「置き場を先頭へ ▸」も `crates/areka/src/menu/` に足す（要件 3.7・3.8。`write-failure-notice` は `menu/` に触らないと確かめた）。
   - 並びを変える手続き（`crates/areka/src/roots/edit.rs`）: 「置き場を先頭へ ▸」の判断の関数を足し、今の `apply` を呼ぶ（`apply` の中身は変えない）。このファイルは同じウェーブの約束で触らないものなので、**このタスクを最後に置く**。2026-10-16 の `write-failure-notice` の設計の討議（向こうのコミット `0af52066`）で、`apply` の形（引数・戻り値 `()`）は変わらず、書けなかった結果は `apply` の中で向こうの致命の道へ渡ると決まった＝今の `apply` を呼べば要件 3.9 を満たす。着地の順はこちらが先（向こうの「起動の前の確かめ」のタスクが、こちらの書けるかの確かめの部品 `areka_user_data::open_dir_for_add` を待つ片向きの待ち）なので、向こうの着地は待たない（待つと互いに待ち合う）。
-  - `areka-P0-dev-folder-alias`・`areka-P0-ghost-inner-balloon`・`areka-P0-shell-companion-balloon`: 同じ `roots/` と `boot_config.rs` の別の関数を触る。この spec は根の並びの値の形を変えない。
+  - `dev-folder-alias`・`areka-P0-ghost-inner-balloon`・`shell-companion-balloon`: 同じ `roots/` と `boot_config.rs` の別の関数を触る。この spec は根の並びの値の形を変えない。
 
 ## Requirements
 
@@ -174,7 +174,7 @@ winget で areka を入れた利用者（と、`areka.exe` の在るフォルダ
 #### Acceptance Criteria
 
 1. When winget で入れた形で実測する, the 開発者 shall 0.0.2 から新しい版への最初の上げ直しで消える物の数を数えて記録に残す（0 であってもそう書く）。
-2. The 本仕様 shall 着地の前に、後続 `areka-P0-winget-release-automation` の brief へ、雛形の注意書き（`InstallationNotes`）を外してよい条件（この spec の版からの上げ直しで消える物が 0 であること）と、外せない場合（9.1 で 0.0.2 からの最初の上げ直しで消える物が 1 以上なら、その人たち向けの知らせをどこに残すか）を申し送る。
+2. The 本仕様 shall 着地の前に、後続 `winget-release-automation` の brief へ、雛形の注意書き（`InstallationNotes`）を外してよい条件（この spec の版からの上げ直しで消える物が 0 であること）と、外せない場合（9.1 で 0.0.2 からの最初の上げ直しで消える物が 1 以上なら、その人たち向けの知らせをどこに残すか）を申し送る。
 3. The 本仕様 shall `dist/winget/**` を書き替えない。
 
 ### Requirement 10: 決定論テストと実機確認
@@ -219,6 +219,6 @@ brief の議題 1〜10 を、本文での扱いと並べる。
 6. **areka の記憶の置き場**（議題 6）: 本文の案は書ける根の `profile\areka\`（要件 5.2）。実行ファイルの隣と同じ形にそろえる。
 7. **同梱のゴーストの記憶**（議題 7・いちばん難しい）: 本文の案は「書く必要が出る前に、同梱のゴーストを書ける根へ写し、写しの方を使う」（要件 4.3〜4.9）。areka の記憶の分だけでなく、SHIORI が自分のフォルダへ書く分（同梱の えも？？ の `ghost\master\profile\pasta\` など）も写しの中へ書かれるので、Desired Outcome 1 の「消えた物 0」と、機械の全員向けで書けることの両方が満たせる。入れ直し・ネットワーク更新の作業フォルダ（brief の「残る穴」）も同じ規則で書ける根へ行く。代償は、areka の版が上がって同梱のゴーストが新しくなっても、写しが下の同梱の物を隠し続けること（要件 4.9。新しくするのはゴースト自身のネットワーク更新か、利用者の入れ直し）。代わりの案は「同梱のゴーストは実行ファイルの隣のまま起こし、areka が決める記憶（`profile\areka\`）だけを書ける根の下へ移す」（`sylphya_wiring.rs`・`runtime.rs`・`placement/persist.rs` を触る）。こちらは同梱のゴーストの更新がそのまま届くが、SHIORI の書き残しは上げ直しで消え、機械の全員向けでは書けない（説明書の既知の制限になる）。
 8. **説明書の書き直し**（議題 8）: 本文は 2 つの形（zip・書ける置き場）で書く案（要件 8）。シェルの記憶の行は、作る操作の有無を確かめて書く（要件 8.3）。
-9. **雛形の注意書きを外す時機と持ち主**（議題 9）: 本文の案は、持ち主を `areka-P0-winget-release-automation` とし、この spec は外してよい条件を申し送るまで（要件 9.2・9.3）。
+9. **雛形の注意書きを外す時機と持ち主**（議題 9）: 本文の案は、持ち主を `winget-release-automation` とし、この spec は外してよい条件を申し送るまで（要件 9.2・9.3）。
 10. **自分たち以外が次の版を winget-pkgs へ出しうること**（議題 10）: 本文は範囲に入れていない（areka の側からは止められない）。この spec が着地した後に第三者が出す版は、この spec の版以降なら要件 10.8 の上げ直しの結果どおり消える物 0 の見込み。着地の前に 0.0.2 の次の版が第三者から出た場合の知らせ方（注意書き・Release の説明）は、9 と一緒に `winget-release-automation` で決める案。
 11. **書ける根を「置き場を外す ▸」で外したときの、その回の効き方**（brief 10-16 の「残る穴」）: 同じウェーブの約束で `roots/edit.rs` に触らないため、本文は「遅くとも次の起動から先頭に戻す」とした（要件 3.3）。外したその回のうちに新しく入れた物は、実行ファイルの隣へ入りうる。メニューで書ける根を選べない形にするなら、`write-failure-notice` の着地の後に `roots/edit.rs` を触ることになる。

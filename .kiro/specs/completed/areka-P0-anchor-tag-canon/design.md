@@ -22,9 +22,9 @@
 
 ### Non-Goals
 
-- 見た目の作者指定（`\f[anchor*]` 16 項目×3 状態・descript `anchor.*` 族・訪問済み・縦書きの下線の位置）→ `areka-P0-anchor-style-canon`。本 spec では受け取って保持するだけ（今の `unowned_vocab` のまま）。
-- `\__q`（範囲の選択肢）→ `areka-P0-range-choice-tag`。
-- `OnAnchorHover`・行き先の説明 → `areka-P0-balloon-link-hover`。右クリックのコピー → `areka-P0-link-context-copy`。
+- 見た目の作者指定（`\f[anchor*]` 16 項目×3 状態・descript `anchor.*` 族・訪問済み・縦書きの下線の位置）→ `anchor-style-canon`。本 spec では受け取って保持するだけ（今の `unowned_vocab` のまま）。
+- `\__q`（範囲の選択肢）→ `range-choice-tag`。
+- `OnAnchorHover`・行き先の説明 → `balloon-link-hover`。右クリックのコピー → `link-context-copy`。
 - アンカーから OS を呼ぶこと（ゴーストが `\j[…]` 等を返す正典の作法で足りる）。
 - 選択肢 `\q` の働き・見た目・時間切れの変更。
 
@@ -204,10 +204,10 @@ doc/
 | `crates/areka-mcp/src/tools/check_script.rs` | `Kind::UnpairedTag` → `"unpaired_tag"` |
 | `crates/areka-mcp/src/tools/check_script_tests.rs` | 種類と名前の対応の表（`Kind::UnknownTag` → `"unknown_tag"` の列挙）に `UnpairedTag` → `"unpaired_tag"` を足す |
 | `doc/ssp-mcp/areka-tools.md` | ⑶ の表に `unpaired_tag` の 3 行（15〜17）と文言 |
-| `doc/ukadoc-coverage/ledger/sakura-script.toml` | 根 2 件（`\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`）を `implemented`・`\f[anchor*]` 16 行の `owner` を `areka-P0-anchor-style-canon` へ |
-| `doc/ukadoc-coverage/ledger/assets.toml` | descript `anchor.*` 43 行の `owner` を `areka-P0-anchor-style-canon` へ |
+| `doc/ukadoc-coverage/ledger/sakura-script.toml` | 根 2 件（`\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`）を `implemented`・`\f[anchor*]` 16 行の `owner` を `anchor-style-canon` へ |
+| `doc/ukadoc-coverage/ledger/assets.toml` | descript `anchor.*` 43 行の `owner` を `anchor-style-canon` へ |
 | `doc/ukadoc-coverage/ledger/shiori.toml` | `OnAnchorSelect`・`OnAnchorSelectEx` を `implemented`・`owner = "areka-P0-anchor-tag-canon"` |
-| `doc/ukadoc-coverage/roadmap-draft.md` | `[[spec]] areka-P0-anchor-tag-canon` の `owner_count` を数え直し（61 → 4）・`[[spec]] areka-P0-anchor-style-canon`（`stage = "A"`・`bundle = "バルーンのリンク"`・`owner_count = 59`）を足し `[briefs].count` を 1 増やす（`ukadoc-survey` の整合の檻 a・b・c・f が見る） |
+| `doc/ukadoc-coverage/roadmap-draft.md` | `[[spec]] areka-P0-anchor-tag-canon` の `owner_count` を数え直し（61 → 4）・`[[spec]] anchor-style-canon`（`stage = "A"`・`bundle = "バルーンのリンク"`・`owner_count = 59`）を足し `[briefs].count` を 1 増やす（`ukadoc-survey` の整合の檻 a・b・c・f が見る） |
 | `doc/ukadoc-coverage/briefing.md` | `[[barrier]] page = "list_shiori_event"` の `implemented`（50 → 52）と `absent`（236 → 234）を数え直す（`briefing_arms.rs::distribution_findings` が見る） |
 | `doc/ukadoc-coverage/report/{sakura-script,shiori,assets}.md`・`report/summary.md` | **手で直さず**作り直す: `cargo run -p ukadoc-survey -- report` と `report-summary`（`DomainReportStale`・`summary_findings` の全文一致が見る。先例は `choice-script-prefix` のタスク）。台帳・`briefing.md`・`roadmap-draft.md`・報告の作り直しは **1 タスク**にまとめる |
 | `doc/COMPAT_ARCHITECTURE.md` | §8 に 1 行（詳細は `doc/anchor-compat.md` へのポインタ） |

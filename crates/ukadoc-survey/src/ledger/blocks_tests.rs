@@ -34,7 +34,7 @@ note = "旧名。本文注記により currentghost.* 側が正典。"
 [entry."ukadoc:list_propertysystem:system.year:1"]
 status = "implemented"
 introduced = ""
-owner = "areka-P0-property-catalog-lists"
+owner = "property-catalog-lists"
 priority = "C1"
 values = []
 links = [

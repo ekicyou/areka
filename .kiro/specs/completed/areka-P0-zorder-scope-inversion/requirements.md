@@ -62,16 +62,16 @@
 - **Out of scope**:
   - 数字だけの記法の意味（変えない）
   - 指定が一つも無いときの重なり（変えない）
-  - プロパティ `currentghost.seriko.zorder` の読み書き（`areka-P0-zorder-property` の持ち物）
-  - 常に手前の指定（`\v`・`\![set,windowstate,stayontop]`／`!stayontop`）（`areka-P0-stay-on-top-directives` の持ち物）。ぱすたは指定の後に `\1\v` を出すが、本機能はそれを扱わない
+  - プロパティ `currentghost.seriko.zorder` の読み書き（`zorder-property` の持ち物）
+  - 常に手前の指定（`\v`・`\![set,windowstate,stayontop]`／`!stayontop`）（`stay-on-top-directives` の持ち物）。ぱすたは指定の後に `\1\v` を出すが、本機能はそれを扱わない
   - SSP の癖を写すこと（バルーンが一度出るまで指定が効かない・シェルの読み直しの後に別の指示で並べ直さないと重なりが揃わない）
   - 窓の位置と大きさ（変えない）
   - バルーンの見える・見えないの寿命
   - グループどうしの前後・未指定のスコープの後ろ側への参加・再指定の拒否・記法の混在や重複の拒否などの、完了 spec の他の決まり（変えない）
 - **Adjacent expectations**:
   - `areka-P0-pasta-in-windows-verification` は、本機能の後にぱすたの重なり（手前から ぱすた → 縦書きのバルーン → 窓）を確かめる。本機能は、その重なりがぱすたと同じ指定（`\![reset,zorder]\![set,zorder,s0,b0,s1]`）で成り立つことまでを持つ。
-  - `areka-P0-zorder-property` は、プロパティの読み出しで逆転・非隣接の並びも書かれた形で返す。本機能は、グループの並びを書かれた順のまま持ち続けることだけを渡し、プロパティそのものは持たない。
-  - `areka-P0-stay-on-top-directives` は、同じ並びの鎖を常に手前の帯へ上げる。本機能はその余地を塞がない。
+  - `zorder-property` は、プロパティの読み出しで逆転・非隣接の並びも書かれた形で返す。本機能は、グループの並びを書かれた順のまま持ち続けることだけを渡し、プロパティそのものは持たない。
+  - `stay-on-top-directives` は、同じ並びの鎖を常に手前の帯へ上げる。本機能はその余地を塞がない。
 
 ## Requirements
 

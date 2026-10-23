@@ -84,7 +84,7 @@ const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
 /// ときだけ走る形にした。
 ///
 /// **判定そのものは 1 行も変えていない**——閾値も期待値も隔離前のままである。根治
-/// （判定の作り直し）の引受先は `.kiro/specs/areka-P0-zorder-chain-residue/brief.md`
+/// （判定の作り直し）の引受先は `.kiro/specs/zorder-chain-residue/brief.md`
 /// の A-1 で、そちらが「実窓の重なり順を割り込みに強い形で測る」を持つ。
 ///
 /// # 門が閉じたまま呼ばれたら緑にしない

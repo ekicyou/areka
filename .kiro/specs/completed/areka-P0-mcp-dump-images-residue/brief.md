@@ -44,7 +44,7 @@ MCP の `dump_surface`／`dump_balloon`（`areka-P0-mcp-dump-images`・2026-10-0
 
 ## Existing Spec Touchpoints
 - **Extends**: `areka-P0-mcp-dump-images`（完了・`completed/` にある）
-- **Adjacent**: `areka-P0-mcp-kanade-tools`（`mod.rs` の `later` を使う見込み）・`areka-P0-mcp-strict-errors`
+- **Adjacent**: `areka-P0-mcp-kanade-tools`（`mod.rs` の `later` を使う見込み）・`mcp-strict-errors`
 
 ## Constraints
 - 1 フレーム遅らせる解は取らない（状態の持ち方で 0 フレームで解く）。1 の非同期の読み戻しで「答えが 1 フレーム後になる」のは、描画を遅らせるのでなく答えを後にするだけなので可。

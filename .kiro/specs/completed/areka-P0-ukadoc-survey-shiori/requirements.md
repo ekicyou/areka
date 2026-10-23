@@ -79,7 +79,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
   - 上流 `ukadoc-survey-toolkit` は台帳の形式を要件確定の時点で凍結済みであり、本 spec は道具の実装完了を待たずに台帳を書き始める。機械の検査は後から追いつく。
   - 並走する調査 spec 3 本とは共有ファイルを持たない。本 spec の編集集合は「自分の台帳 1 本＋自分のドメイン別報告 1 本＋自分のブリーフィング文書 1 本＋ソースの URL コメント」に限られる。
   - `ukadoc-coverage-roadmap` は本 spec の台帳を、ドメインを跨ぐ束の材料として読む。本 spec は他ドメインの id を `links` の相手として指してよいが、その行は作らない。
-  - `areka-P0-status-execution-states` は `Status` ヘッダの実行状態語彙を、`areka-P0-property-query-channels` は `property.get`／`property.set` と照会の経路を既に所有している。本 spec は同じ項目に担当 spec としてその名前を書くだけで、判断を上書きしない。
+  - `areka-P0-status-execution-states` は `Status` ヘッダの実行状態語彙を、`property-query-channels` は `property.get`／`property.set` と照会の経路を既に所有している。本 spec は同じ項目に担当 spec としてその名前を書くだけで、判断を上書きしない。
   - 既存の `doc/shiori/fragments/`（287＋159）と `crates/areka-sylphya/src/vocab/`（159）は置き換えない。本 spec は正典 id との対応を確かめるだけで、それらのファイルを書き換えない。
 
 ## Requirements
@@ -234,7 +234,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
    **（2026-09-06 の訂正・実装時の是正を例外として追記）** 括弧書きの「要件 9 のコメント行だけ」には例外が 1 つある。本 spec は上流の常時テスト 2 ファイル `crates/ukadoc-survey/tests/consistency/checks.rs` と `crates/ukadoc-survey/tests/consistency/values_md.rs` を是正した（計 5 件）。この 2 ファイルは「正典 URL はソースのどこにも置かれていない」「台帳は全行が未分類」という**着手前の実データを前提に建っており**、本 spec が要件 9.1／9.2 のとおり URL を置き台帳を埋めた瞬間に**恒久的に赤**になった。上流 spec `areka-P0-ukadoc-survey-toolkit` は `.kiro/specs/completed/` に封書済みで開き直せないため、本 spec が是正する以外に緑へ戻す道が無い。**触れたのはこの 2 ファイルだけで、道具の `src/` と兄弟の `crates/ukadoc-survey/tests/consistency/perturb.rs` は 1 行も変えていない。** どちらもテストであり、判定そのもの（製品側の検査）は 1 行も緩めていないので、**areka の実行時の振る舞いを変えないという本文はそのまま成り立つ**。詳細は `design.md` の `Boundary Commitments`。
 
 2. The SHIORI ドメイン調査 shall 他ドメインの台帳・報告・ブリーフィング文書を編集せず、他ドメインの項目の行を作らない。
-3. Where 既存の spec（`areka-P0-status-execution-states`・`areka-P0-property-query-channels` ほか）が同じ項目を所有している, the SHIORI ドメイン台帳 shall `owner` にその spec 名を書くだけとし、その spec の判断を上書きしない。
+3. Where 既存の spec（`areka-P0-status-execution-states`・`property-query-channels` ほか）が同じ項目を所有している, the SHIORI ドメイン台帳 shall `owner` にその spec 名を書くだけとし、その spec の判断を上書きしない。
 4. If 既存の spec の brief に正典と食い違う記述を見つける, then the SHIORI ドメイン調査 shall その brief を書き換えず、是正の候補として `note` またはブリーフィング文書に記録する。
 5. The SHIORI ドメイン調査 shall `.kiro/steering/roadmap.md` を変更しない。
 6. The SHIORI ドメイン調査 shall `doc/shiori/fragments/` と `crates/areka-sylphya/src/vocab/` を書き換えず、正典 id との対応を確かめるだけにする。

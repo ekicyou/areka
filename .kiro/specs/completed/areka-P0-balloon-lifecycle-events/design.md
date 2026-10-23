@@ -15,8 +15,8 @@
 - 送った・送らなかった・起点を決めた、のすべてが記録に残る（要件 7）。
 
 ### Non-Goals
-- `OnBalloonBreak` の Reference2（中断位置）の源を作ること（空で送る。`areka-P0-balloon-break-position` が持つ）。
-- `\x`／`\x[noclear]`（`areka-P0-talk-fast-forward`）。
+- `OnBalloonBreak` の Reference2（中断位置）の源を作ること（空で送る。`balloon-break-position` が持つ）。
+- `\x`／`\x[noclear]`（`talk-fast-forward`）。
 - 利用者の中断の規則そのもの・抑止の条件・既定の待ち時間・バルーンが現れる契機を変えること。
 - 台本のコンパイルの側の先読み（`crates/areka-sakura/src/compile.rs` には触らない）。
 - 選択肢の時間切れ（`OnChoiceTimeout`）と `\![set,choicetimeout]`。
@@ -173,7 +173,7 @@ doc/
 - `crates/areka-ghost/src/sink.rs`・`dispatcher.rs` — 下の「BootCueSink::begin_talk」。
 - `crates/areka/src/emo2_boot/talk_lifecycle.rs`（212 → 約 330）・`talk_clock.rs`・`balloon_visibility*.rs`・`consumer_ledger.rs`（859 → 約 875。15 行 → 16 行）・`mod.rs`（883・行数は変わらない）。
 - 既存のテストの機械的な直し: `TalkLifecycleSignal::TalkStarted` を書いている所（定義のファイルのほかに、テストと注記あわせて 10 ファイル。spine の檻 `spine_conformance_lap_tests.rs` の照合 2 か所を含む——このファイルは約束の対象ではないが、`areka-P0-ghost-session-test-load-flake` が触っていれば後からマージする側が合わせる）、`BalloonLifecycleSink::new` を呼んでいる所（`talk_lifecycle_tests.rs` 12・`frame_attach_tests.rs` 1・`balloon_visibility_lifecycle_e2e_tests.rs` 1）、時間切れを期待する可視性の檻（占有終端の後にトークの終わりを届ける。補助 `display_end` を使う所は 15）。**行数の決まりはテストのファイルにも掛かる**: `balloon_visibility_tests.rs` は 982 行（余裕 18 行・直す所 7）なので、テストの補助のファイルへ「占有終端とトークの終わりを一緒に積む」関数を 1 つ足し、既存の呼び出しの行数を増やさない。直しの後の `balloon_visibility_tests.rs`・`balloon_visibility_phase_tests.rs`（864）・`talk_lifecycle_tests.rs`（621）の行数が 1,000 未満であることを、この直しのタスクの受け入れの条件にする。`frame/wiring.rs` の文書の注記にある `TalkStarted` へのリンクは形が変わるので文言だけ合わせる（コードは変えない）。
-- 文書: `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表のうち「会話終了後にバルーンを消すまでの既定の待ち時間」（計測の成立条件の一文）・「会話が中断で終わったときのタイムアウト起点」・「バルーンの中断の操作」・「`\![set,balloontimeout,時間]` のバルーン寿命側の実導出」・「`OnBalloonClose` ／ `OnBalloonTimeout` ／ `OnBalloonBreak` の SHIORI 発火」と、「compile 側時間指令 allowlist」の行の `set,balloontimeout` の追跡先。台帳は `shiori.toml` の 3 行と冒頭の群の説明、`sakura-script.toml` の `balloontimeout` の行。生成物は `cargo run -p ukadoc-survey -- report` と `report-summary` で作り直し、`cargo test -p ukadoc-survey` で確かめる（手で直さない）。`areka-P0-sakura-time-directives` の brief の相互登記は要件の討議で済んでいる（残っていることを確かめるだけ）。
+- 文書: `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表のうち「会話終了後にバルーンを消すまでの既定の待ち時間」（計測の成立条件の一文）・「会話が中断で終わったときのタイムアウト起点」・「バルーンの中断の操作」・「`\![set,balloontimeout,時間]` のバルーン寿命側の実導出」・「`OnBalloonClose` ／ `OnBalloonTimeout` ／ `OnBalloonBreak` の SHIORI 発火」と、「compile 側時間指令 allowlist」の行の `set,balloontimeout` の追跡先。台帳は `shiori.toml` の 3 行と冒頭の群の説明、`sakura-script.toml` の `balloontimeout` の行。生成物は `cargo run -p ukadoc-survey -- report` と `report-summary` で作り直し、`cargo test -p ukadoc-survey` で確かめる（手で直さない）。`sakura-time-directives` の brief の相互登記は要件の討議で済んでいる（残っていることを確かめるだけ）。
 
 ### 同じウェーブの約束の外に出るファイル
 
@@ -603,7 +603,7 @@ pub(crate) struct VisibilityDecision {
 
 #### 互換対応表と網羅の台帳（`doc/`）
 - **3 つのイベントの行**（6.1）: 送る場面（表 B・C・D）と Reference の入れ方に書き直す。areka の決定として次を根拠の区分つきで書く——`OnBalloonClose` は「再生中のトークが無い定常で、普通のバルーンを左ダブルクリックして隠したとき」と「中断を出したがトークが自分で最後まで流れて終わったとき」に送る（areka 裁量）／`OnBalloonTimeout` の Reference1 は `0`（areka 裁量）／`OnBalloonBreak` は中断の後に定常へ戻ったときだけ（areka 裁量）／3 つとも GET（正典整合）／終了の要求を保留している間は送らない（areka 裁量）／台本の控えが無いときは Reference0 を空で送る（areka 裁量）／1 つのトークにつき `OnBalloonTimeout`・`OnBalloonClose` はそれぞれ高々 1 回（areka 裁量）／残る行き違いの 2 つ（cue を 1 つも出さないトークを挟んだとき・読み終えたバルーンのダブルクリックと次のトークの開始が重なったとき）とその結果（縮退の記録）。
-- **Reference2 の縮退**（6.2）: 空で送ることと、追跡先 `areka-P0-balloon-break-position` を、互換対応表と台帳の `OnBalloonBreak` の行（状態は `degraded`）に書く。
+- **Reference2 の縮退**（6.2）: 空で送ることと、追跡先 `balloon-break-position` を、互換対応表と台帳の `OnBalloonBreak` の行（状態は `degraded`）に書く。
 - **中断の起点の行**（6.3）: 「トークの終わりが表示の側に届いてから計測する。起点は占有区間の終端と止まった時刻の早い方。止まった時刻が届かなければ終端」に書き直す。既定の待ち時間の行の「計測が成り立つ」の説明も同じ成立条件に合わせる。
 - **台帳の 3 行**（6.4）: `OnBalloonClose`・`OnBalloonTimeout` は `implemented`、`OnBalloonBreak` は `degraded`。持ち主を本 spec の名前へ直し、`note` と冒頭の群の説明を書き直す。証拠の URL は `events.rs` の表の 3 行の注記。
 - **`balloontimeout`**（6.5）: 台帳の行を `implemented`・持ち主を本 spec へ（証拠の URL は宣言表の `LifecycleSink` の注記）。互換対応表の寿命の側の行を実際の読み方（正＝ミリ秒・0 と負＝時間切れなし・省略＝既定・読めない＝既定・そのトークの中だけ）に、コンパイルの側の行の追跡先を「本 spec が丸ごと持つ・先読みは足さない」に書き直す。

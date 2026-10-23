@@ -172,9 +172,9 @@
 - **Extends**: なし（新規）。
 - **Adjacent**:
   - `areka-P0-status-execution-states`（α 後・`emo2_boot/mod.rs`）——切替中の `status` 値（`balloon`／`minimizing` 等）。本仕様は値を出さない。
-  - `areka-P0-property-query-channels`／`property-ipc-transport`（α 後・`areka-ghost` の `prop_sink.rs`／`runtime.rs`）——**`runtime.rs` を本仕様も触る**。α 後なので順序で解決するが、本仕様の変更は `boot`／`shutdown` の寿命に限り、sink の形は変えない。
+  - `property-query-channels`／`property-ipc-transport`（α 後・`areka-ghost` の `prop_sink.rs`／`runtime.rs`）——**`runtime.rs` を本仕様も触る**。α 後なので順序で解決するが、本仕様の変更は `boot`／`shutdown` の寿命に限り、sink の形は変えない。
   - `areka-P0-translate-pipeline`（α 後・`kanade/{actor,msg,schedule}`）——kanade の schedule に本仕様が相を足す。後着が rebase。
-  - `areka-P0-zorder-chain-residue`（W14・`spine_*_tests.rs`）——切替で窓を作り直すと z 順の鎖も作り直る。A 群の間欠赤が本仕様のテストに混ざらないよう、A 群を先に着地させるか、本仕様のテストは鎖を数えない。
+  - `zorder-chain-residue`（W14・`spine_*_tests.rs`）——切替で窓を作り直すと z 順の鎖も作り直る。A 群の間欠赤が本仕様のテストに混ざらないよう、A 群を先に着地させるか、本仕様のテストは鎖を数えない。
 
 ## Constraints
 

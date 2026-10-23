@@ -358,7 +358,7 @@ fn both_declarations_broken_fall_back_to_canon_default_with_two_warns() {
 /// **`vertical_lr`（areka 拡張の縦書き左送り）も `1`** である——正典 SSP の語彙は
 /// 縦横 2 値であり、列送りの向きを区別しないため、縦書き 2 モードは同じ `1` へ写る。
 /// 本仕様はこの値を publish しない（実導出は追跡 spec
-/// `areka-P0-currentghost-property-tree` が所有する）。
+/// `currentghost-property-tree` が所有する）。
 #[test]
 fn vertical_property_value_maps_three_modes_to_two_canon_values() {
     for (writing_mode, expected_mode, expected_value) in [

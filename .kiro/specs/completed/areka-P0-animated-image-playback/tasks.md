@@ -216,14 +216,14 @@
 
 - [x] 7. 記録と申し送り
 - [x] 7.1 (P) 網羅台帳と対応表を、着地した振る舞いに合わせる
-  - `assets.toml` の `always` の項を「単独の `always` は駆動する。組み合わせは駆動しない」へ、`element*` の項に自動アニメーションが動くこと・動く GIF は非対応のまま・`--clipping` を付けても動く絵として読むこと（`areka-P0-element-clipping-option` が着地するまで）を書く。`import` の項は触らない
+  - `assets.toml` の `always` の項を「単独の `always` は駆動する。組み合わせは駆動しない」へ、`element*` の項に自動アニメーションが動くこと・動く GIF は非対応のまま・`--clipping` を付けても動く絵として読むこと（`element-clipping-option` が着地するまで）を書く。`import` の項は触らない
   - `doc/COMPAT_ARCHITECTURE.md` §8 に 1 節: design.md「文書の更新」に挙げた全項（繰り返し回数と始め直し・待ち時間・巻き戻さない・途中の終わりのコマと合計 0・経過 0 と外形・バルーンの面と完了 spec の上書き・16 ミリ秒の刻み・pattern0 の待ち 0・スコープごとの記録・出したときの 1 枚目）
   - 完了の姿: 台帳の検査（`ukadoc-survey` ほか）が緑で、§8 の節に design.md の全項が載っている
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
   - _Boundary: 文書_
 
 - [x] 7.2 後続 3 本の申し送りと roadmap を実物と照らす
-  - `areka-P0-seriko-trigger-intervals`・`areka-P0-animated-image-import`・`areka-P0-extent-element-offset` の brief の申し送りの節を、実装した型・関数・ファイルの名前と照らして書き直す
+  - `areka-P0-seriko-trigger-intervals`・`animated-image-import`・`extent-element-offset` の brief の申し送りの節を、実装した型・関数・ファイルの名前と照らして書き直す
   - roadmap の `seriko-trigger-intervals` の行が「優先（高）」で `always` を含む組み合わせが載っていること、本 spec の行の触るファイルと規模が実物と合うことを確かめる
   - 実装の途中で見つけた範囲外の問題がすべて `/kiro-discovery` で起票され roadmap に載っていることを確かめる
   - 完了の姿: 3 本の brief の申し送りと実物の食い違いが 0 件で、`import` の扱いの差分が 0（読み手・`method.rs` に変更なし）

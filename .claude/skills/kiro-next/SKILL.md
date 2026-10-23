@@ -141,13 +141,13 @@ Do all roadmap edits in one Python script in the scratch directory (run with `py
 Wave <Cn> <k>本（<version> <a>本＋割り込み <b>本）
 【本来の次の版 <version>】
 Fable
-/kiro-start areka-P0-<name>
+/kiro-start <name>
 Opus
-/kiro-start areka-P0-<name>
+/kiro-start <name>
 
 【割り込み（版に縛らない・<version> の着地を遅らせない）】
 Opus
-/kiro-start areka-P0-<name>
+/kiro-start <name>
 ```
    `/kiro-wave` lands the inventory (PR → squash merge, after one approval dialog) and then starts the Opus specs as separate sessions, leaving the Fable ones to the developer; say so in one line.
 5. Decisions needed from the developer (none of them block the wave) and any manual steps.

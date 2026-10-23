@@ -22,13 +22,13 @@
   - 登記の件数を固定する検査を、新しい数と導出根拠つきで更新する。
   - 本 spec が登記した各項目に正典 URL の証跡を残す。
   - 調査台帳 `property.toml` の担当欄が空の 2 行を埋め、「裁定待ち」の記述を取り除く。
-  - 互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 に、`currentghost.seriko.zorder` の語彙台帳の行と値の導出がともに追跡 spec `areka-P0-zorder-property` に属することを示す相互参照を足す。
+  - 互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 に、`currentghost.seriko.zorder` の語彙台帳の行と値の導出がともに追跡 spec `zorder-property` に属することを示す相互参照を足す。
 - **Out of scope**
-  - **`currentghost.seriko.zorder` の登記**（先送り維持。語彙台帳の行も値の導出も `areka-P0-zorder-property` が持つ）。
-  - 値の導出（実際に設定を読み書きして窓・サーフェス・音の状態を動かすこと）。`areka-P0-zorder-property`／`areka-P0-currentghost-property-tree`／`areka-P0-property-catalog-lists` が持つ。
-  - `\![set,property,...]`／`\![get,property,...]` などの照会経路そのもの。`areka-P0-property-query-channels` が持つ。
-  - `.ext.拡張プロパティ名` 系 4 項目の語彙と運搬。`areka-P0-property-ipc-transport` が持つ（本機能が数える 26 件に含めない理由は要件 4.2 に明記する）。
-  - sylphya の M1 縮退宣言文そのものの改訂。`areka-P0-currentghost-property-tree` が持つ。
+  - **`currentghost.seriko.zorder` の登記**（先送り維持。語彙台帳の行も値の導出も `zorder-property` が持つ）。
+  - 値の導出（実際に設定を読み書きして窓・サーフェス・音の状態を動かすこと）。`zorder-property`／`currentghost-property-tree`／`property-catalog-lists` が持つ。
+  - `\![set,property,...]`／`\![get,property,...]` などの照会経路そのもの。`property-query-channels` が持つ。
+  - `.ext.拡張プロパティ名` 系 4 項目の語彙と運搬。`property-ipc-transport` が持つ（本機能が数える 26 件に含めない理由は要件 4.2 に明記する）。
+  - sylphya の M1 縮退宣言文そのものの改訂。`currentghost-property-tree` が持つ。
   - **書き込みの仕分けの規則そのものの是正**——葉の名前だけで正準語彙とみなす判定（`crates/areka-sylphya/src/actor.rs` の正準語彙判定の第 2 項）と、SET 有効語彙が末尾の形で持たれていて実際の書込キーと突き合わされない件。どちらも正典に根拠のない areka 固有の作りであり、本機能では触らず追跡 spec へ起票する（要件 10）。
 - **Adjacent expectations**
   - 本機能は、語彙台帳に載っている名前が**実際に効く**ことを保証しない。効くようになるのは上記 Out of scope の各機能が着地したときである。
@@ -87,7 +87,7 @@
    - **登記の側**: 既存 21 項＋本機能が足す 4 項（`seriko.sticky-window`・`pause`・`playing`・`position`）＝ 25。
    - **照合元の側**: 調査台帳が「正典 SET 有効」と記録する行は 26 行。そこから先送り中の `currentghost.seriko.zorder` 1 行を除いて 25 行。この 25 行は語彙表の 23 項目へ対応する——`seriko.cursor.path` と `seriko.tooltip.text` はセレクタの書き方違いで台帳が 2 行に分かれているが語彙表では 1 項目ずつだから、合わせて 2 項目ぶん縮む。これに、正典に設定の定めが無いまま areka が先取りで登記している 2 項目（`seriko.cursor.name`・`seriko.tooltip.name`）を足して 25。
 3. The 統一プロパティ語彙台帳 shall 要件 4.2 の 2 通りが同じ 25 に着くのは偶然の一致であり、「26 から 1 を引く」だけの数え方は語彙表の件数の根拠にならないことを、検査の側に注記として残す。
-4. The 統一プロパティ語彙台帳 shall 照合元台帳が「正典 SET 有効」と記録する 26 行に `.ext.拡張プロパティ名` 系 4 行を含めない理由（同 4 行は本機能の範囲外であり、担い手は `areka-P0-property-ipc-transport` であること）を文書に明記する。
+4. The 統一プロパティ語彙台帳 shall 照合元台帳が「正典 SET 有効」と記録する 26 行に `.ext.拡張プロパティ名` 系 4 行を含めない理由（同 4 行は本機能の範囲外であり、担い手は `property-ipc-transport` であること）を文書に明記する。
 5. The 統一プロパティ語彙台帳 shall 要件 4.2 の「先取りで登記している 2 項目」が正典と食い違っている既知の状態であり、本機能はその食い違いを解消しないことを文書に明記する。
 6. The 統一プロパティ語彙台帳 shall 記録用の語彙表の件数を **18** に固定する検査を持ち、その数の導出（正典のサウンドプロパティ名の葉が 18 件であること。内訳は括弧を含まない 10 葉と `meta.` を伴う 8 葉）を文書に明記する。正典はサウンドの `name`・`path` を汎用プロパティ名の `name`・`path` とは別の項目として定めているため、綴りが同じでも既存の汎用名の表からは引かない（＝汎用名の表の件数 17 は本機能では動かない）。
 7. The 統一プロパティ語彙台帳 shall 件数を固定する記述が複数箇所に写し取られている場合（再実測 2026-09-11: SET 有効群の 21 という数は `crates/areka-sylphya/src/vocab/dotted.rs` に 4 箇所〔説明文・テスト関数の名前・件数の主張・網羅の主張〕、`crates/areka-sylphya/src/ledger_key_determinism_tests.rs` に 2 箇所〔説明文・網羅の主張〕の計 6 箇所。設定できない正準語彙の 17 という数は同じ 2 ファイルに計 8 箇所。いずれも数そのものだけでなく**テスト関数の名前に埋め込まれた数**を含む）、そのすべてを更新し、どれか 1 箇所だけが古いまま残る状態を作らない。
@@ -112,7 +112,7 @@
 
 #### Acceptance Criteria
 
-1. The ukadoc 調査台帳 shall `currentghost.seriko.zorder` の行の担当欄に `areka-P0-zorder-property` を記入する（語彙台帳の行も値の導出も同 spec が持つ）。
+1. The ukadoc 調査台帳 shall `currentghost.seriko.zorder` の行の担当欄に `zorder-property` を記入する（語彙台帳の行も値の導出も同 spec が持つ）。
 2. The ukadoc 調査台帳 shall `currentghost.seriko.sticky-window` の行の担当欄に `areka-P0-sylphya-set-ledger` を記入する。
 3. When 要件 6.1／6.2 の記入が済んだとき, the ukadoc 調査台帳 shall 当該 2 行の備考から「裁定待ち」を示す記述を取り除き、代わりに決まった所有を記す。
 4. The ukadoc 調査台帳 shall 要件 6.1〜6.3 以外の行の内容を変更しない。
@@ -136,7 +136,7 @@
 
 #### Acceptance Criteria
 
-1. The areka の互換記録 shall `currentghost.seriko.zorder` に関する既存の記録へ、語彙台帳の行も値の導出もともに `areka-P0-zorder-property` が持つことを示す参照を足す。
+1. The areka の互換記録 shall `currentghost.seriko.zorder` に関する既存の記録へ、語彙台帳の行も値の導出もともに `zorder-property` が持つことを示す参照を足す。
 2. The areka の互換記録 shall 要件 8.1 の追記を、既存の記録行を書き換えずに足せる形で行う。
 3. The areka の互換記録 shall 先送りした語彙の正本が追跡 spec の brief であるという既存の記述を、本機能が持ち越さない（語彙を書き写さない）。
 4. The areka の互換記録 shall 本機能が触る箇所を `doc/COMPAT_ARCHITECTURE.md` §8 の該当行の周辺に限り、他機能の節を変更しない。

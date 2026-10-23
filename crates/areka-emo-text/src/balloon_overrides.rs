@@ -8,7 +8,7 @@
 //! - 基底の飾り 5 本（`font.bold`／`italic`／`outline`／`strike`／`underline`）→ `font`。
 //! - `disable.font.*` の飾り 5 本・`name`・`height`・`color` → `disable`。
 //! - 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`・無効表示の同名）は**渡さない**
-//!   ——語彙の形と `none` の扱いは影まわりの仕様（`areka-P0-text-align-shadow-canon`）が決める。
+//!   ——語彙の形と `none` の扱いは影まわりの仕様（`text-align-shadow-canon`）が決める。
 
 use areka_parsers::balloon::{BalloonModel, FontDecorationRaw};
 use tracing::warn;

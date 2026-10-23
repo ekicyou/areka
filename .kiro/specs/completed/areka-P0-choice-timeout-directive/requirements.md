@@ -34,8 +34,8 @@
   - 値に依らず選択待ちが成り立つこと。そのために、再生層（dola）の選択待ちの区切りの扱いに限って触ってよい（`brief.md` の「触るソース」からの拡大。同じウェーブ C1 の他の spec は dola に触らないので並走の衝突は 0。クリック待ち・時間待ちの区切りは触らない）。
   - 決定論テスト、網羅台帳の 1 行とそれに連なる文書（要件 10.5）、`doc/COMPAT_ARCHITECTURE.md` §8 の記録、着地で古くなる記述の書き直し（要件 10.6）。
 - **Out of scope**:
-  - `\![set,balloontimeout,時間]`（受ける側が未実装。`areka-P0-sakura-time-directives` に残す）。
-  - `quicksection`・`balloonwait`・`embed`・`sound,wait`・`syncobject`・`move` ほかの時間の引数（`areka-P0-sakura-time-directives` に残す）。
+  - `\![set,balloontimeout,時間]`（受ける側が未実装。`sakura-time-directives` に残す）。
+  - `quicksection`・`balloonwait`・`embed`・`sound,wait`・`syncobject`・`move` ほかの時間の引数（`sakura-time-directives` に残す）。
   - 既定の 30 秒（`KanadeConfig::choice_timeout_default_ms`）そのものの見直し。
   - 時間切れの発火と `OnChoiceTimeout` の送り方（完了 `areka-P0-choice-select-events` のまま）。
   - 台本を読む側が中身を読んでよいコマンドの一覧の拡張（`\![set,choicetimeout,…]` は完了 `areka-P0-sakura-dialogue-tags` の要件 4.3 の一覧に最初から載っている。これ以外のコマンドは読まない）。
@@ -48,8 +48,8 @@
 - **Adjacent expectations**:
   - kanade の期限の判定（`choice_deadline`）は、秒の値について「未指定＝既定」「0 以下＝無期限」「正＝その秒数」と写す。本 spec はこの約束に乗り、変えない。
   - 再生層の選択待ちの区切りの扱いを変えるかどうかは設計で決める。変える場合も、クリック待ち（`WaitForInput`）と時間待ち（`Timeout`）の今日の振る舞いは変えない。
-  - 早送り（`areka-P0-talk-fast-forward`・未着手）は台詞の時計を先へ飛ばす。本 spec の要件 5 は、時計が飛んでも選択待ちが成り立つことを求めるので、早送りの着地後も時間の値は壊れない。
-  - 同じ台本を読む処理を触る後続（`areka-P0-sakura-time-directives`・`areka-P0-anchor-tag-canon`）は本 spec の後に着手する。
+  - 早送り（`talk-fast-forward`・未着手）は台詞の時計を先へ飛ばす。本 spec の要件 5 は、時計が飛んでも選択待ちが成り立つことを求めるので、早送りの着地後も時間の値は壊れない。
+  - 同じ台本を読む処理を触る後続（`sakura-time-directives`・`areka-P0-anchor-tag-canon`）は本 spec の後に着手する。
 
 ## Requirements
 
@@ -158,6 +158,6 @@
 1. When 本 spec の実装が着地する, the 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` shall `\![set,choicetimeout,時間]` の行を実装済み（`implemented`）にし、引受先を本 spec に替え、注記を今の振る舞い（壊れ方とログ）に書き直す。
 2. The 網羅台帳 shall 台帳を検査する既存のテストを通し続ける。
 3. When 本 spec の実装が着地する, the `doc/COMPAT_ARCHITECTURE.md` §8 shall 正典が黙っている点の areka の裁量を 1 行で記録する（同じ台本に複数回書いたら最後のものが勝つ・`-1` 以外の負の値も時間切れなし・時間の欄が空は省略と同じ・読めない値は既定として扱い警告を残す・終わりのタグより後ろは数えない）。
-4. When 本 spec の実装が着地する, the `doc/COMPAT_ARCHITECTURE.md` §8 shall 「compile 側時間指令 allowlist」の行に、`set,choicetimeout` は本 spec で実際に読むようになったことを書き足す（他の時間の指令は `areka-P0-sakura-time-directives` の担当のまま）。
-5. When 要件 10.1 で台帳の行を書き換える, the areka shall 台帳の整合の検査が求める連鎖をすべて満たす: `doc/ukadoc-coverage/roadmap-draft.md` に本 spec の行を足し、引受先を移した件数（`areka-P0-sakura-time-directives` の受け持ちの数・brief の総数・段階ごとの表）を直し、追加の理由を書く。台帳から作る報告（`doc/ukadoc-coverage/report/sakura-script.md`・`doc/ukadoc-coverage/report/summary.md`）は生成器で作り直し、手で数を直さない。実装済みの証拠として、読み取りの定義の箇所に正典の URL の `// ukadoc:` 行を 1 行置く。
+4. When 本 spec の実装が着地する, the `doc/COMPAT_ARCHITECTURE.md` §8 shall 「compile 側時間指令 allowlist」の行に、`set,choicetimeout` は本 spec で実際に読むようになったことを書き足す（他の時間の指令は `sakura-time-directives` の担当のまま）。
+5. When 要件 10.1 で台帳の行を書き換える, the areka shall 台帳の整合の検査が求める連鎖をすべて満たす: `doc/ukadoc-coverage/roadmap-draft.md` に本 spec の行を足し、引受先を移した件数（`sakura-time-directives` の受け持ちの数・brief の総数・段階ごとの表）を直し、追加の理由を書く。台帳から作る報告（`doc/ukadoc-coverage/report/sakura-script.md`・`doc/ukadoc-coverage/report/summary.md`）は生成器で作り直し、手で数を直さない。実装済みの証拠として、読み取りの定義の箇所に正典の URL の `// ukadoc:` 行を 1 行置く。
 6. When 本 spec の実装が着地する, the areka shall 着地で事実と食い違う既存の記述を書き直す: `doc/choice-cascade-compat.md` の行 5b（「実際に流れるのは既定値のみ」）と行 5d（再生層の区切りの自動解除）、`doc/ukadoc-coverage/briefing-sakura-script.md` の担当の表と消費側の表の `set,choicetimeout` の行、`crates/areka-sakura/src/compile.rs` の選択待ちの区切りの注記（「本層は値を供給しない」）。

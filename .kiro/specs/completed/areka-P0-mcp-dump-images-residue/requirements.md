@@ -48,7 +48,7 @@
   - 決定論テスト（符号化のスレッドの記録を数えること・成功の記録の欄を含む）と実機確認の記録（本 spec の `verification/signoff.md`）。
 - **Out of scope**:
   - 件 6（前の spec の要件 7.7 ⑵ の撮り直し）。`areka-P0-mcp-kanade-tools` の実機確認で行う（裁定 1）。
-  - 新しいツール。文言の SSP 寄せ（`areka-P0-mcp-strict-errors`）。`sakurascript`・`raise_event`・`get_status` の実装（`areka-P0-mcp-kanade-tools` ほか）。
+  - 新しいツール。文言の SSP 寄せ（`mcp-strict-errors`）。`sakurascript`・`raise_event`・`get_status` の実装（`areka-P0-mcp-kanade-tools` ほか）。
   - 全体テストの負荷の下の揺れ（`areka-P0-ghost-session-test-load-flake`）。
   - 前の spec の要件 1〜6 の振る舞いの変更（要件 6 で保つ。例外は要件 2 の新しい文言 1 つ）。
 - **Adjacent expectations**:
