@@ -63,3 +63,62 @@ cargo test --manifest-path "$wt\Cargo.toml" -p areka-ghost --test ghost snapshot
 - `crates/areka-kanade/tests/kanade/real_helper_test.rs`
 
 4.3 で変えたテスト: なし。
+
+## 5.1 「．さくら」を areka で動かす実機の 1 回（要件 1.1・5.1〜5.7）
+
+### 置き場と命令
+
+根・記憶・一時フォルダ・記録は、すべてこのワークツリーの `target\s2p-5-1\` の下（`root\ghost\dot_sakura`・`root\ghost\emo2`・`root\balloon\bottle`・`root\balloon\emo2-kakukaku`・空の `profile\`・`tmp\`・`logs\`）。根の組み方とビルドは `doc/pasta-real-run.md` の 3 節と同じ（`nar-sample-path` で `emo2` と `dot_sakura` を開く・`cargo build -p areka`・`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`・`tools/sync-i686-helper.ps1`）。起動は 4 節の形で、替えたのは次の所だけ。
+
+- `--ghost "<w>\target\s2p-5-1\root\ghost\dot_sakura"`・`AREKA_ROOT`／`AREKA_PROFILE_DIR` を `target\s2p-5-1` の下・`TMP`／`TEMP` を `target\s2p-5-1\tmp`・`AREKA_APP_SMOKE_EXIT_MS=900000`
+- `RUST_LOG=info,ghost-boot=info,shiori2=debug,kanade=trace,areka_kanade::resource=debug,areka_sylphya::actor=debug`（`kanade=trace` は要求ごとの `shiori_request` を数えるため）
+- 観測は areka の MCP（`get_active_ghost_list` が `．さくら` を答えることで、道具が SSP でなくこの areka を指していることを確かめた・待受 9801）。画面の操作（SendInput・computer-use）は使っていない
+
+### 1 回目（run1・2026-10-23 23:29〜23:30）: 要件 5.5 で停止
+
+版は 2.x に決まった（下の run2 と同じ INFO の行）が、`OnFirstBoot`・`OnBoot`・`username` を含む GET が全部「返す物が無い」になり、台本 0 件・面 0（`dump_surface` は scope 0・1 とも `NG:No surface has been shown in this scope yet`）。`shiori_error_response` は 0。原因は `load` に渡すフォルダのパスの形（`…\dot_sakura\ghost/master`・区切りが混ざり末尾に区切りが無い）で、華和梨がそこへファイル名を継いで辞書を 1 つも読めなかった。`shiori4-api` の決定 6 を前倒しした 4.4（絶対パス・`\` の区切り・末尾に `\` が 1 つ）で直し、run2 を回した。外から送った `OnClose` に台本が返らなかったので areka は終わらず、起こした pid だけを止めた（終了コード -1）。記録: `target\s2p-5-1\logs\run1.*`。
+
+### 2 回目（run2・2026-10-24 00:32:02〜00:36:07・4.4 の後）: 通った
+
+記録: `target\s2p-5-1\logs\run2.stdout.log`（69,147 行）・`run2.pid.txt`・`run2.exitcode.txt`（`areka exit=0`）。時刻は日本時間。
+
+**版の INFO の行**（要件 5.6）:
+
+```
+INFO actor{actor=shiori}: ghost-boot: SHIORI の版を確かめた event="shiori_version_decided" ghost="dot_sakura" version="SHIORI/2.x" evidence="SHIORI/2.6 200 OK"
+```
+
+**資源の問い合わせ `GET String` の 1 件**（要件 3.3・4.2）: `username`。kanade の TRACE `shiori_request method=GET id=username` の直後に `areka_kanade::resource: shiori resource prefetch done id="username" outcome="value"`（値あり）。sylphya の「不在の記録」（`shiori resource absent`）は出ていない。値そのものは記録に出さない（run1 では同じ行が `outcome="no_content"` だった）。
+
+**起動の挨拶**（要件 5.1）: 00:32:05 に `OnFirstBoot` の台本の再生を始め（`kanade: 起動グリーティングを再生起動`）、00:33:44 に `steady_talk_done`。台本の頭は `\t\t\h\s[6]初期起動、…`、終わりは `…ヨロシク頼むわ。\e`。挨拶の最中に `talking,balloon(0=0)`、終わった後に `balloon(0=0/1=0)`（`get_status`）。
+
+**MCP の答えの抜き書き**（要件 5.6・`dump_surface` は要件 5.4 も）:
+
+| 道具 | 答え |
+|---|---|
+| `get_active_ghost_list` | `．さくら` |
+| `get_status`（挨拶の最中・後） | `talking,balloon(0=0)` → `balloon(0=0/1=0)` |
+| `dump_surface` scope 0（挨拶の最中・後） | `OK:scope 0, surface 0 as currently shown …`（さくらの絵。後の 1 枚は目を閉じた瞬き） |
+| `dump_surface` scope 1 | `OK:scope 1, surface 10 as currently shown …`（うにゅうの絵） |
+| `get_log`（error） | `(no log entries)` |
+| `raise_event OnClose` | `OK:the ghost returned a script and it is being played.` `Script: \t\t\u\s[10]お。\w8終わりやね。\w8\w8\h\s[7]よーし寝るぞ%keroname！\w8\u\n\n[half]\s[11]落ち着けっ！\w9\w9\-` |
+
+面は出た（要件 5.4。要件 5.5 の枝には入らない）。
+
+**時間のトーク**（要件 5.2）: 挨拶の終わり（00:33:44）から待ち、00:34:57 に `OnSecondChange` が台本を返して時間のトークが出た（待った時間 約 73 秒・`\u\s[10]ここだけの話、…`）。その後 00:35:54 まで待って、ほかの時間のトークは出ていない。
+
+**`OnClose`**（要件 5.3・研究記録 10.5 節の測れなかった点）:
+- areka が送った要求（kanade の TRACE）: `method=GET id=OnClose references=[] status=None sender="MCP" sender_type=external,sstp security_level="local"`。2.x の組み立て（`shiori2::build_request`）では `GET Sentence SHIORI/2.2` / `Charset: Shift_JIS` / `SecurityLevel: local` / `Sender: MCP` / `Event: OnClose`（References の行なし）の形になる。バイト列そのものは記録に出ないので、形は論理の要求の記録と組み立ての規則から言っている。
+- 答え: 台本（上の表）。`\-` で終わる。
+- 終了: 00:36:02 に再生を始め、00:36:06 に `talk_done_quit`（`reason=Quit`）→ `unload_clean`（unload が正常終了を返した）→ `ghost_quit cause=Quit` → `app_exit`。areka の終了コードは 0（00:36:07）。外から止めていない。
+- 台本の `%keroname` は areka が展開して `うにゅう` にした（`OnTranslate` に渡した台本で確かめた）。
+
+**台本を返したイベントの数**: 3（`OnFirstBoot`・`OnSecondChange` 1 回・`OnClose`。`areka::log::script` の行の `label=Ghost:<イベント>` で数えた）。
+
+**要求の数**（kanade の TRACE `shiori_request`）: `GET OnSecondChange` 129・`NOTIFY OnSecondChange` 113・`GET OnTranslate` 3・`GET OnBalloonTimeout` 2・`NOTIFY OnInitialize` 1・`NOTIFY basewareversion` 1・`GET username` 1・`GET homeurl` 1・`GET OnFirstBoot` 1・`GET OnClose` 1。2.x の相手へ送らなかったのは `basewareversion` の 1 件（`shiori2` の DEBUG `shiori2_event_not_sent`）。
+
+**エラー応答の数と内訳**（要件 5.6・Error Handling > Monitoring）:
+- `shiori_error_response` の行: **0**。
+- 受け口の無いイベントの 400（別に数える）: **3**。どれも `OnTranslate`（2.x では `TRANSLATE Sentence SHIORI/2.6`）への `SHIORI error status 400` で、`kanade: OnTranslate がエラー応答——展開済みの元の台詞で進む event="translate_reply" kind="error_response"` の WARN として出た（翻訳の道は `shiori_error_response` を出さない）。華和梨に `OnTranslate` の受け口が無いため（研究記録 4 節・SSP の 10.2 節でも翻訳の 2 本は 400）。台本はそのまま再生された。
+
+**load のパスの形（4.4）**: 整えたパスそのものは記録に出ない（4.4 は記録の行を足していない・helper の標準エラーは `[helper] SHIORI 初期化の入口: load` だけ）。整えた形が効いたことは、同じ根と同じ検体で run1 が辞書を読めず run2 が台本と資源の値を返したことで見ている。

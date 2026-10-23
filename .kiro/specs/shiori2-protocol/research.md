@@ -358,6 +358,7 @@ Charset: Shift_JIS
 ### 10.5 測れなかったこと
 
 - **`OnClose`**: 送らなかった。MCP の `raise_event` は返ってきた台本を再生する。「．さくら」の終了のトークは `\-` で終わる見込みで、再生すれば SSP ごと閉じる。同じ SSP をこの後 ② `mouse-click-wheel-events` が使う予定だった。記録の 70 種を超えるイベントは、ownerghostname・otherghostname を除いて全部 `GET Sentence SHIORI/2.2`＋`Event:` の同じ形だったので、`OnClose` も同じ形と見ている。**これは測った値ではなく、同じ形の並びからの見込み**。areka の実機の 1 回（要件 5.3）で、areka が送る形と「．さくら」の答えを記録して確かめる。
+  - **areka 側の観測（2026-10-24・タスク 5.1 の run2・`verification.md` の 5.1 節）**: areka は `OnClose` を `GET` の `id=OnClose`・References なしで送り（kanade の TRACE `shiori_request`）、2.x の組み立て（`shiori2::build_request`）で `GET Sentence SHIORI/2.2`＋`Charset: Shift_JIS`＋`SecurityLevel: local`＋`Sender`＋`Event: OnClose` の形になる。「．さくら」は台本（`Sentence:`）を返し、台本は `\-` で終わり、再生の後に areka は終了した（終了コード 0）。見込みどおり、ほかのイベントと同じ `GET Sentence` の形で通った。バイト列そのものは記録に出ないので、形は論理の要求の記録と組み立ての規則から言っている。
 - **ゴーストを切り替えて出すときのイベント**: `\![change,ghost,…]` で戻したときに「．さくら」へ届いたのは `TRANSLATE`（切り替えの台本そのもの）→ `rateofusegraph` → `OnDestroy` → `unload` だった。`OnGhostChanging` は来ていない。台本を外から（SSTP で）送って切り替えたからの見込みで、利用者がメニューから切り替えたときの並びは測っていない。
 - **時間のトーク**: 約 2 分のあいだ、`OnSecondChange` 113 本・`OnMinuteChange` 2 本はどれも 204 だった。この間に時間のトークは出ていない（要件 5.2 の「来なかったときは待った時間を書く」の先例）。
 
@@ -402,7 +403,7 @@ Charset: Shift_JIS
 ### 11.4 残る危うさ
 
 - 3.0 の検体のうち確かめへの答えを測ったのはぱすただけ（`SHIORI/3.0 204`）。emo2・里々・YAYA は実機の 1 回で版の INFO の行を見る。2.x に決まる 3.0 の検体があれば止めて報告する（SSP と同じ規則なので SSP でも同じに振る舞うはずだが、要件 6 と当たる）。
-- `OnClose` の 2.x の形は測っていない（10.5 節）。実機の 1 回で areka が送った形と答えを記録する。
+- `OnClose` の 2.x の形は SSP では測っていない（10.5 節）。areka の側で、タスク 5.1 の run2 で確かめた（10.5 節・`verification.md` の 5.1 節）: 送った要求は `GET`・`id=OnClose`・References なしで、「．さくら」は `\-` で終わる台本を返し、areka は終了コード 0 で終わった。`GET Sentence SHIORI/2.2`＋`Event: OnClose` のバイトの形は記録に出ないので、組み立ての規則（`shiori2::build_request`）から言っている。
 
 ### 11.x 設計の話し合いでの直し（2026-10-23）
 
