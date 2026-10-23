@@ -16,8 +16,9 @@ Run one full roadmap inventory ("棚卸") on the current harness worktree branch
 1. main has advanced → inventory the roadmap, deep-dive the specs, brief thoroughly.
 2. Apply roadmap-listed trivial fixes (no brief needed) immediately and close them.
 3. Of the items that exist only in the roadmap (no brief), launch briefs for those that warrant one; adjust granularity; split specs whose load is too high.
-4. Build a strict dependency tree, rank its head specs, and pick at most 8 as the next wave — **from the current version only** (the youngest version in the roadmap's "版の段" that still has unfinished specs), plus version-free fillers that cannot delay that version (Step 6 version gate).
-5. Report the wave in the fixed code-block format, split into Fable and Opus.
+4. Build a strict dependency tree, rank its head specs, and pick at most 8 as the next wave — **from the current version only** (the youngest version in the roadmap's "版の段" that is not released yet), plus version-free fillers that cannot delay that version (Step 6 version gate). When the current version has no spec left and can be released, the wave is `/release <X.Y.Z>` instead (Step 6 release gate).
+5. Keep "版の段" to the live rows only: drop released versions and emptied groups (Step 7).
+6. Report the wave in the fixed code-block format, split into Fable and Opus (or the `/release` block).
 
 `$ARGUMENTS` (optional) carries extra developer instructions for this run; they override the defaults where they conflict.
 
@@ -105,10 +106,13 @@ Last line: "briefs written: N/N".
 **Single-seat resources** (one spec per wave): `Cargo.lock` / `THIRD-PARTY-NOTICES.md` / `tech.md` dependency additions (a pending `/release` version bump holds this seat); the emo-text `lib.rs` pure-file list (only one spec may add an emo-text source file per wave).
 **Excluded from the tree**: 据え置き, 保留, 取り下げ予定 specs (neither candidates nor counted as descendants). **Not parallelised**: specs whose core work is measurement (latency/perf/load) — they pollute and are polluted by other work.
 **Version gate** (developer 2026-10-16: "ゴールが近いので他の版の割り込みは避けて"・"版に縛らない列は含めてもよいが、その場合、0.0.3 の着地（ウェーブ数）が増えることのないように"):
-- The **current version** = the youngest version in roadmap "版の段" with an unfinished spec. While it has unfinished specs, the wave takes **no spec from any later version** (v0.1.0 does not enter while v0.0.3 is open), even when seats are empty.
+- The **current version** = the youngest version row (`vX.Y.Z`) in roadmap "版の段" that is not released yet (no tag `vX.Y.Z` on origin: `git ls-remote --tags origin refs/tags/vX.Y.Z` prints nothing). While it is open, the wave takes **no spec from any later version** (v0.1.0 does not enter while v0.0.3 is open), even when seats are empty.
 - Spare seats may be filled only from the **version-free column** ("版に縛らない") and only with a **filler** that cannot increase the number of waves the current version needs to land: it is a head; it shares no source file with the wave's current-version specs (allowed overlaps aside); it takes no single-seat resource the current version uses or will need next; it is expected to finish within the wave (its upper size estimate ≤ the lower estimate of the wave's largest current-version spec — the wave ends when its slowest spec lands — and no human/external wait inside it); it needs no quiet desk, no quiet before/after full test run and no long load run (measurement-core specs are never fillers). When unsure, leave the seat empty.
 - When the current version has no startable head (all wait on in-flight specs), the wave is fillers only; still no later-version spec.
 - Report the current version, how many more waves it needs (critical path of its remaining specs), and that the fillers keep that count.
+**Release gate** (developer 2026-10-23: 「ウェーブの対象が０本となり、リリースできるなら、/releaseを開始コマンドとせよ」):
+- The current version can be released when it has **no unfinished spec** (every spec of its row landed, none in flight) and every last check the roadmap lists for that version (e.g. a real-run procedure under "版の段") is recorded as done. Then the wave is the release: the start-command block holds only `/release <X.Y.Z>` — no spec of a later version and no filler (the version bump holds the `Cargo.lock` seat; the next inventory after the tag picks the next version). The version row stays in "版の段" until the tag exists.
+- No spec left but a listed last check not done → not releasable yet: the wave is fillers only (as when no head is startable), and the check goes to the report as the developer's manual step.
 **Procedure**:
 1. Heads = specs with no unfinished predecessor (in-flight specs count as unfinished predecessors).
 2. Descendant count = number of unfinished specs transitively depending on the head (approximate is fine; state "約").
@@ -120,7 +124,7 @@ Last line: "briefs written: N/N".
 ## Step 7 — Write the roadmap (one script)
 Do all roadmap edits in one Python script in the scratch directory (run with `python -X utf8`; read with `newline=''`, split on the file's own line ending — the working copy of `roadmap.md` may be LF while `roadmap-history.md`/`focus.md` are CRLF; assert every anchor/replace target exists):
 - Append to `roadmap-history.md` a section "## <date> 棚卸NN退避（`roadmap.md` から逐語で移した・main `<BASE>`）" holding verbatim: the old wave table and its sub-notes, the old serial lanes, memo bullets promoted to briefs, the old "直接修正候補", the previous verdict section.
-- In `roadmap.md`: new "ウェーブ編成（着手順の正本・<date> 棚卸NN）" (rules, remaining in-flight row, the new wave row with files and promises, next-wave candidates, 保留, and right after the table the wave's start commands as the section's only fenced code block — a one-line bold caption `**<Cn> の開始コマンド**（…）:` then the block exactly as in Step 10 item 4; the overview page reads the first fenced block of this section and shows it with a copy button, developer 2026-10-16 「ウェーブのコード表示をコピペボタン付きで」; `/kiro-wave` reads the same block, and the spec ledger's `Fable` column, with `.claude/skills/kiro-wave/scripts/read-wave.py` to start the wave — if you change this shape, change that script and its self-test in the same commit); serial lanes with targeted edits (splits and new specs inserted, inventory note); spec ledger heading with the new real count and its history, split notes on the original rows, new rows before the first 据え置き row; memo minus promoted items; new "直接修正候補" (what was fixed, what was handed to specs); living rule 1 if the priority rules changed; new "棚卸NNの裁定" section (what was re-measured, fixes, splits and why, promotions and what stayed, the wave and why, Fable/Opus split, broken same-wave promises, holes found, decisions needed); a theme section "棚卸NNの分割と起票" (Existing Spec Updates + Specs (dependency order)) before "## 予約"; `updated_at` and the header note.
+- In `roadmap.md`: new "ウェーブ編成（着手順の正本・<date> 棚卸NN）" (rules, remaining in-flight row, the new wave row with files and promises, next-wave candidates, 保留, and right after the table the wave's start commands as the section's only fenced code block — a one-line bold caption `**<Cn> の開始コマンド**（…）:` then the block exactly as in Step 10 item 4; the overview page reads the first fenced block of this section and shows it with a copy button, developer 2026-10-16 「ウェーブのコード表示をコピペボタン付きで」; `/kiro-wave` reads the same block, and the spec ledger's `Fable` column, with `.claude/skills/kiro-wave/scripts/read-wave.py` to start the wave — if you change this shape, change that script and its self-test in the same commit); "版の段" keeps live rows only (developer 2026-10-23: 「０本になったバージョンターゲットは消して整理して欲しい。生きてるバージョンターゲットが見れれば良い」) — remove the row of every released version (its tag exists) and of every non-version group whose specs are all landed (e.g. a side group or a "moved out" group), copy each removed row verbatim (with the table header) into this inventory's history section, and drop its term from the count line (never write a `0＋`); the standing columns 「版に縛らない」 and 「いつか」 stay even when empty; an unreleased version with 0 specs stays (release gate); serial lanes with targeted edits (splits and new specs inserted, inventory note); spec ledger heading with the new real count and its history, split notes on the original rows, new rows before the first 据え置き row; memo minus promoted items; new "直接修正候補" (what was fixed, what was handed to specs); living rule 1 if the priority rules changed; new "棚卸NNの裁定" section (what was re-measured, fixes, splits and why, promotions and what stayed, the wave and why, Fable/Opus split, broken same-wave promises, holes found, decisions needed); a theme section "棚卸NNの分割と起票" (Existing Spec Updates + Specs (dependency order)) before "## 予約"; `updated_at` and the header note.
 - Then `focus.md` (counts line: completed entries, spec.json-active, brief count, priority rule), and stale bits of `product.md` / `structure.md`. Grep for old wording of changed rules and for references to moved sections.
 - Verify: `b'\r\r'` count 0, no lone `\n` in CRLF files, `git diff --numstat` proportional to the edit (a whole-file diff means broken line endings).
 
@@ -149,7 +153,13 @@ Opus
 Opus
 /kiro-start <name>
 ```
-   `/kiro-wave` lands the inventory (PR → squash merge, after one approval dialog) and then starts the Opus specs as separate sessions, leaving the Fable ones to the developer; say so in one line.
+   When the release gate (Step 6) holds, the block is instead exactly:
+```
+Wave <Cn> リリース（<version> の spec は 0 本）
+【本来の次の版 <version>】
+/release <X.Y.Z>
+```
+   `/kiro-wave` lands the inventory (PR → squash merge, after one approval dialog) and then starts the Opus specs as separate sessions, leaving the Fable ones to the developer; say so in one line. For the release block it starts nothing: `/release` runs only when the developer types it — say so instead.
 5. Decisions needed from the developer (none of them block the wave) and any manual steps.
 6. The overview page URL from Step 8 (one line, with the inventory number and base SHA).
 
