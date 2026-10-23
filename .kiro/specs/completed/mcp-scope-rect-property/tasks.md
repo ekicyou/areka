@@ -118,3 +118,4 @@
 - 完了時にその場で解決: `crates/areka/src/mcp/get_property_tests.rs` の冒頭の説明が「2 本」のままだったのを 4 本に直し、`mod scope_rect` の 2 本を書き足した（3.3 のレビューの指摘）。
 - 完了時の棚卸: 実機で見つけた範囲外の 2 件（拡大率の違う画面へ落とすと掴んだ点がずれる・起動の位置で窓の下の端が画面を越える）は、`dpi-realign-remembered-chain` の件 9 と `descript-window-keys` の件 4 に起票済み。新しい起票は 0 件。
 - 完了時にその場で解決（全体テストの赤・本 spec の外）: ぱすたの新しい書庫（ghost_dev 2026-10-23・同梱 `balloon.directory,pasta_tategaki`）に合わせて、`sample-ghost-kit` の登記の行・検体の形の試験・`window_link_real_run.rs` の写し元を `ghost/pasta-in-windows/balloon/pasta_tategaki` へ。RUSTSEC-2026-0386 で tokio を 1.54.1 へ上げ謝辞を作り直した。
+- 完了の全体テストの回し直し（`9dd52193`）で、触っていない `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` だけが負荷の下の待ちの打ち切りで赤（30.0 秒・`spine_third_scope_talk_tests.rs:141`）。そのテストだけを 1 回回し直して緑。同じ字面は `areka-test-binary-stability` の brief に起票済み（申し送りをもって緑）。ほかの段（cargo deny・謝辞を含む）は全部緑。
