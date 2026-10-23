@@ -139,3 +139,77 @@ fn withhold_everything_is_called_only_from_readonly() {
         "readonly.rs の外から withhold_everything を呼ぶ所: {outside:?}"
     );
 }
+
+/// 置き場の木（下の階層まで、相対パスと中身）。
+fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
+        for e in std::fs::read_dir(dir).expect("木が読めない") {
+            let p = e.expect("木の項目").path();
+            let content = if p.is_dir() {
+                walk(root, &p, out);
+                Vec::new()
+            } else {
+                std::fs::read(&p).expect("ファイルが読めない")
+            };
+            out.push((p.strip_prefix(root).unwrap().to_path_buf(), content));
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
+/// アプリもゴーストも書けない置き場（フォルダの在るべき所に普通のファイル）。根は `target\` の下。
+fn unwritable_places(
+    tmp: &temp_path_kit::TempPath,
+) -> (crate::boot_config::ConfigInputs, std::path::PathBuf) {
+    let app = tmp.child("app-profile");
+    std::fs::write(&app, "x").unwrap();
+    let root = tmp.child("ghost-a");
+    std::fs::create_dir_all(root.join("ghost").join("master")).unwrap();
+    std::fs::write(root.join("ghost").join("master").join("profile"), "x").unwrap();
+    let cfg = crate::boot_config::ConfigInputs {
+        ghost_root: root,
+        balloon_root: tmp.child("balloon"),
+    };
+    (cfg, app)
+}
+
+/// 書けない置き場でも、読み取りだけなら通り、記録が 1 件出て、木が変わらない（要件 5.1・5.2）。
+#[test]
+fn boot_check_passes_readonly_without_touching_the_tree() {
+    let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-skip");
+    let (cfg, app) = unwritable_places(&tmp);
+    let before = tree(tmp.path());
+
+    let (result, events) =
+        log_capture_kit::capture(|| crate::write_failure::check_boot(true, &cfg, &app));
+
+    assert!(result.is_ok(), "{result:?}");
+    let skipped = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("readonly_boot_check_skipped"))
+        .count();
+    assert_eq!(skipped, 1, "{events:?}");
+    assert_eq!(tree(tmp.path()), before, "確かめが木を変えた");
+}
+
+/// 読み取りだけでなければ、今の確かめと同じ失敗を返し、飛ばした記録は出ない（要件 6.4）。
+#[test]
+fn boot_check_without_readonly_is_the_current_check() {
+    let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-normal");
+    let (cfg, app) = unwritable_places(&tmp);
+
+    let expected = crate::write_failure::check_boot_dirs(&cfg, &app).expect_err("書けない");
+    let (result, events) =
+        log_capture_kit::capture(|| crate::write_failure::check_boot(false, &cfg, &app));
+
+    assert_eq!(result.expect_err("今の確かめと同じく止まる"), expected);
+    assert!(
+        events
+            .iter()
+            .all(|e| e.field_str("event") != Some("readonly_boot_check_skipped")),
+        "{events:?}"
+    );
+}

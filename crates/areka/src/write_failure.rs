@@ -137,6 +137,25 @@ pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()> {
     areka_user_data::open_dir_for_add(found)
 }
 
+/// 起動の前の確かめの入口（readonly-mode 要件 5.1・5.2・6.4）。`readonly` なら何も開かず
+/// 作らずに通す（info 1 件）。そうでなければ今の [`check_boot_dirs`]。
+// 一時: 呼び手は 5.1 で `main` に足す。
+#[allow(dead_code)]
+pub(crate) fn check_boot(
+    readonly: bool,
+    cfg: &ConfigInputs,
+    app_profile_dir: &Path,
+) -> Result<(), PersistFailure> {
+    if readonly {
+        tracing::info!(
+            event = "readonly_boot_check_skipped",
+            "[write_failure] 読み取りだけなので、記憶の置き場が書けるかを確かめません"
+        );
+        return Ok(());
+    }
+    check_boot_dirs(cfg, app_profile_dir)
+}
+
 /// 起動の前の確かめ: アプリの記憶の置き場 → ゴーストの記憶の置き場
 /// （`<cfg.ghost_root>\ghost\master\profile\areka`）の順で、最初の失敗を返す。
 /// 見るのは渡された `cfg`（`resolve_boot` が返した＝写しの後の置き場）だけ。シェルの記憶は見ない。
