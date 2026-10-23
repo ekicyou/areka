@@ -87,14 +87,12 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
    - **同じプロセスで回すのはテストの道具に限る**。helper の中身（中継の `Host` と `GhostRuntime` を回すところ）をライブラリに切り出し、テストのときだけテストのプロセスのスレッドで回す（プロセスを起こさない決定論の試験のため）。速さが要ると測って分かったら、その切り出しの上に同じプロセスの道を後から足せる（今は作らない）。
 4. **helper の exe は 1 つにまとめる**（開発者・同日「helper の exe を 1 つにまとめる案、承認」）。1 種類の helper の exe が SHIORI/3.0 と SHIORI4 の両方を受け持つ。DLL を読んだあと、abi-conventions の論点 13 の順に試す＝`shiori_get_api(4)` が返れば v4、だめなら `shiori_get_api(3)`（shiori4 の v3 互換モード＝SHIORI/3.0 の全文を ABI で運ぶ・ホストを呼べない）、どちらも NULL なら SHIORI/3.0 の書き出し（`load`／`request`／`unload`）。v3 互換モードと SHIORI/3.0 の書き出しは、helper の中で同じ SHIORI/3.0 のテキストの道に乗せる。exe を共有するだけで、プロセスは SHIORI 1 つにつき 1 つのまま。起こし方・ジョブ・終わらせ方・IPC の札の読み手を 1 つで持てる。今は i686 だけを建てているので、v4 の DLL のために x64・arm64 の版も建てる。
    - DLL を 2 回読まないよう、`shiori4_host` に「読んだライブラリから作り、v4 でなければライブラリを返す」入口を足すよう、開発者の指示で shiori4 へ正式に要望し、shiori4 の開発者が承認した（10-23・abi-conventions の論点 15）。ライブラリが返るのは `NotShiori4` と `Unsupported` のとき。v4 の load が NULL（`LoadFailed`）なら、SHIORI/3.0 として読み直さず、読めなかったゴーストとして既定のゴーストの台詞で伝える（`shiori_get_api` を持つ DLL は v4 だと名乗っているため）。
-5. **DLL は arch の接尾辞つきの名前から先に探す**（開発者・同日「shiori宣言で『pasta.dll』と書いてるときに、『pasta.x64.dll』→『pasta.dll』の順に解決を試みる、とかですねえ。多分ゴースト作者は今後、x64とarm64を同梱することになるため、その対応が必要です」）。SSP は `pasta.dll` しか読まないので、作者は SSP 向けの 32bit 版を `pasta.dll` に残したまま、`pasta.x64.dll`・`pasta.arm64.dll` を同梱できる。areka の推奨の細部（要件の段で確かめる）:
-   - x64 の Windows: `pasta.x64.dll` → `pasta.dll`。arm64 の Windows: `pasta.arm64.dll` → `pasta.x64.dll`（Windows 11 は arm64 の上で x64 を動かせる）→ `pasta.dll`。
-   - arch の名前は `x64`・`arm64` の 2 つ。`x86` の接尾辞は作らない（接尾辞なしが今の 32bit の役を担う）。
-   - どの helper を起こすかは、選んだファイルの PE ヘッダの機械の種類で決める（接尾辞なしの名前は x86 とも x64 ともありうる）。接尾辞つきの候補の中身が名前と食い違えば、ログを出して次の候補へ進む。
+5. **DLL は arch の接尾辞つきの名前から先に探す**（開発者・同日「shiori宣言で『pasta.dll』と書いてるときに、『pasta.x64.dll』→『pasta.dll』の順に解決を試みる、とかですねえ。多分ゴースト作者は今後、x64とarm64を同梱することになるため、その対応が必要です」）。SSP は `pasta.dll` しか読まないので、作者は SSP 向けの 32bit 版を `pasta.dll` に残したまま、`pasta.x64.dll`・`pasta.arm64.dll` を同梱できる。
+   - **名前の決まりの正本は shiori4**（abi-conventions の論点 12・shiori4 の開発者が 10-23 に裁定。areka の案をもとに Linux・macOS の形も決めた）。areka の文書へ語を写さず、それを参照する。
+   - areka での帰結: arm64 の Windows で x64 の候補へ進むのは「x64 のプロセスを起こせるホストだけ」（論点 12）。areka は x64 の helper をエミュレーションで起こせるので、arm64 でも x64 の候補を使う。接尾辞なしの 32bit の DLL も i686 の helper で読む。**arm64 版の areka の配布物にも x64 と i686 の helper を入れる**。
+   - どの helper を起こすかは、選んだファイルのヘッダの機械の種類で決める（接尾辞なしの名前は x86 とも x64 ともありうる）。候補を並べるのと機械の種類を確かめるのには、`shiori4_host` に足される DLL を読まない純粋な関数 2 つを、areka の本体の側（helper を起こす前）で使う。
    - SHIORI/3.0 と v4 の両方に効かせる（helper は両方を受け持つ＝決定 4。x64 の SHIORI/3.0 の DLL も読める）。
-   - arm64 の Windows で `pasta.x64.dll` へ戻ったときは、x64 の helper をエミュレーションで起こす（arm64 のネイティブのプロセスは x64 の DLL を読めない＝pasta の指摘）。接尾辞なしの 32bit の DLL も同じく i686 の helper で読む。**arm64 版の areka の配布物にも x64 と i686 の helper を入れる**。
    - pasta の答え（10-23）: 名前に異論なし。`pasta_check release` は DLL の名前も arch も見ずにフォルダを写すので、今のままで同梱できる。ただし pasta はまだ i686 の `pasta.dll` しか出しておらず、x64・arm64 の版を出すのは pasta の新しい仕事（arm64 は LuaJIT が建つか未確認）。作者が `ffi.load` で読む自前の DLL も pasta の arch に合わせる必要があり、pasta のマニュアルに書く。
-   - 名前の決まりは他のベースウェアと SHIORI の配り方にも関わるので、shiori4 の正本に置くよう提案した（10-23）。shiori4 は abi-conventions の brief の論点 12 に「shiori4 の開発者の裁定待ち」で記録した（shiori4 の推奨＝「ゴーストの配布の決まり」として載せる・ABI は変えない・確定は Windows の分だけ・`shiori4_host` に選び方の関数を足すかは要件の段で）。正本に入ったら、それを参照する。関数が足されるなら、DLL を読まずに候補を並べて PE ヘッダを確かめるだけの形なら areka の本体の側（helper を起こす前）で使える、と伝えた。
 
 ## 開発者の判断（着手の前または要件の段で）
 推奨つき。
