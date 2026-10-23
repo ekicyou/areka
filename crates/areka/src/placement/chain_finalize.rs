@@ -58,8 +58,10 @@ pub struct ChainFinalized;
 
 /// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む・7.3）。
 ///
-/// 読むのは起動時の確定（`emo2_boot::frame` の `finalize_chain_once_with`）だけで、印の付いた窓は
-/// 既定を `None` として渡して引き戻さない。窓と一緒に消える（窓の一式ごと）。
+/// 読むのは起動時の確定（`emo2_boot::frame` の `finalize_chain_once_with`）と並べ終えた時点の保存
+/// （`persist::persist_unremembered_char_positions`）で、印の付いた窓は引き戻さず、記憶にも書かない。
+/// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
+/// 戻した窓からも外す。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ScriptPlaced;
 

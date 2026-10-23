@@ -432,3 +432,31 @@ fn grouped_windows_each_return_to_their_own_default_and_the_group_stays() {
     );
     rig.finish();
 }
+
+/// 並べ直しで既定の位置へ戻した窓からは台本の印 `ScriptPlaced` を外す（起動の確定の前に
+/// 並べ直しても、戻した窓を台本の置いた窓と見ない）。戻した窓は記憶へ届く。
+#[test]
+fn reset_clears_script_placed_mark_and_persists() {
+    use crate::placement::chain_finalize::ScriptPlaced;
+    let mut rig = Rig::new();
+    let char0 = rig.gw().char_window(0).unwrap();
+    rig.world.entity_mut(char0).insert(ScriptPlaced);
+
+    assert!(reset_window_positions(&mut rig.world));
+
+    assert!(
+        rig.world.get::<ScriptPlaced>(char0).is_none(),
+        "戻した窓の印は外れる"
+    );
+    let store = rig.load();
+    let w = SCOPES[0].2.w;
+    assert_eq!(
+        saved(&store, 0),
+        Some((
+            (EXPECTED[0].x + w / 2).to_string(),
+            EXPECTED[0].y.to_string()
+        )),
+        "戻した窓の位置が記憶へ届く: {store:?}"
+    );
+    rig.finish();
+}

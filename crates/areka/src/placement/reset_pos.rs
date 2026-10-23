@@ -7,7 +7,8 @@
 //! （research §13 議題 1）。
 //!
 //! 書込は起動の連鎖の確定と同じ 3 手——[`move_window_to`]（`MoveCue`・バルーンは今のずらしで
-//! 付いて動く）→ 既定の位置を自分で記す → [`persist_unremembered_char_positions`] で記憶へ書く。
+//! 付いて動く）→ 既定の位置を自分で記し、台本の印 `ScriptPlaced` を外す →
+//! [`persist_unremembered_char_positions`] で記憶へ書く。
 //! `Anchored`・バルーンのずらし・吸い付きの設定は変えない（SSP 2.9.18 の実測 M9 と同じ）。
 
 use bevy_ecs::prelude::*;
@@ -15,6 +16,7 @@ use tracing::{info, warn};
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{DPI, WindowPos};
 
+use super::chain_finalize::ScriptPlaced;
 use super::config::build_placement_config;
 use super::follow::move_window_to;
 use super::persist::persist_unremembered_char_positions;
@@ -112,6 +114,8 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         if let Some(mut gw) = world.get_resource_mut::<GhostWindows>() {
             gw.set_default_char_pos(p.scope, p.char_pos);
         }
+        // 既定へ戻した窓は台本の置いた窓ではない（起動の確定と記憶の判定が印を読む）。
+        world.entity_mut(char_window).remove::<ScriptPlaced>();
         info!(
             event = "reset_window_pos",
             scope = p.scope,
