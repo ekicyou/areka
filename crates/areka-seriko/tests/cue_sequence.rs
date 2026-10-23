@@ -84,7 +84,7 @@ fn cue_sequence_emits_expected() {
     // アクター起動→fixture 系列を emit→Close→join で終了同期（唯一の同期点・sleep なし）。
     let (mut sink, handle) = spawn_seriko(
         resolver,
-        binds.clone(),
+        areka_seriko::DefaultBinds::uniform(binds.clone()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         mock,

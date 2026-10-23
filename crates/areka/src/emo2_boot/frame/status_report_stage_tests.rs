@@ -51,7 +51,7 @@ fn notes_of(frames: &[Vec<StageObservation>]) -> (Vec<StageNote>, BalloonStatusL
 fn world_with_seriko() -> World {
     let (sink, _actor) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::default(),
+        areka_seriko::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         MockSurfaceOutput::new(),

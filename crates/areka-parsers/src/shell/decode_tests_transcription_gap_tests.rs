@@ -91,20 +91,30 @@ element0,overlay,CityPop.png,3,4
 }
 
 /// (a) sort キー値の転記（要件 12.5(a)）。トップレベル `animation-sort`／`collision-sort` を
-/// SortOrder として保持し、未知値は寛容に None へ倒す（既定解釈は下流）。
+/// SortOrder として保持し、知らない値は原文のまま `Other` で運ぶ（空・欠落は None・既定解釈は下流）。
 #[test]
-fn top_level_sort_keys_are_transcribed_and_unknown_is_none() {
+fn top_level_sort_keys_are_transcribed_and_unknown_is_other() {
     // 認識可能な 2 値: animation-sort,ascend / collision-sort,descend。
     let input = "animation-sort,ascend\ncollision-sort,descend\n";
     let shell = decode(lex(input));
     assert_eq!(shell.animation_sort, Some(SortOrder::Ascend));
     assert_eq!(shell.collision_sort, Some(SortOrder::Descend));
 
-    // 未知値は寛容に None（materialize しない）。
+    // 知らない値は原文のまま Other（黙って落とさない）。空の値は None。
     let unknown = "animation-sort,sideways\ncollision-sort,\n";
     let shell2 = decode(lex(unknown));
-    assert_eq!(shell2.animation_sort, None);
+    assert_eq!(
+        shell2.animation_sort,
+        Some(SortOrder::Other("sideways".into()))
+    );
     assert_eq!(shell2.collision_sort, None);
+    // 大文字は今の照合（完全一致）のまま知らない値。キーが無ければ None。
+    let shell3 = decode(lex("collision-sort,Ascend\n"));
+    assert_eq!(
+        shell3.collision_sort,
+        Some(SortOrder::Other("Ascend".into()))
+    );
+    assert_eq!(shell3.animation_sort, None);
 }
 
 /// (d) definitions の登場順（種別間 interleaving）保持（要件 12.5(d)）。

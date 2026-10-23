@@ -62,7 +62,7 @@ impl Rig {
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
             bind_resolver: BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default()),
-            states: ScopeStates::new(BindSet::from_ids([])),
+            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([]))),
             rt: LoopRuntime::new(config).with_clock(clock),
             out,
             records,
@@ -254,7 +254,7 @@ fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_ti
         move |out| {
             spawn_seriko_clocked(
                 SurfaceResolver::new(BTreeMap::new()),
-                BindSet::from_ids([]),
+                crate::DefaultBinds::uniform(BindSet::from_ids([])),
                 BindResolver::empty(),
                 cfg(table_of(TOP_ALWAYS), always_fire()),
                 out,
@@ -265,7 +265,7 @@ fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_ti
     let legacy = run_actor(|out| {
         spawn_seriko(
             SurfaceResolver::new(BTreeMap::new()),
-            BindSet::from_ids([]),
+            crate::DefaultBinds::uniform(BindSet::from_ids([])),
             BindResolver::empty(),
             cfg(table_of(TOP_ALWAYS), always_fire()),
             out,

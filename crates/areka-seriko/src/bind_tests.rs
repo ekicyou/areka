@@ -386,9 +386,9 @@ fn empty_resolver_resolves_all_none() {
     );
 }
 
-/// scope 写像（D7）: "0"→Sakura・"1"→Kero・その他→None（写像なし＝判定なし）。
+/// scope 写像（D7・要件 14.2）: "0"→Sakura・"1"→Kero・2 以上の数→Char(n)・非数値→None。
 #[test]
-fn scope_namespace_maps_zero_one_only() {
+fn scope_namespace_maps_two_and_above_to_char() {
     assert_eq!(
         scope_namespace(&ActorKey::from("0")),
         Some(BindNamespace::Sakura),
@@ -401,8 +401,13 @@ fn scope_namespace_maps_zero_one_only() {
     );
     assert_eq!(
         scope_namespace(&ActorKey::from("2")),
-        None,
-        "scope \"2\" 以降は写像なし＝判定なし（char2+ は M1 未取込・D7）"
+        Some(BindNamespace::Char(2)),
+        "scope \"2\" は 3 人目（char2）の名前空間へ写像する（要件 14.2）"
+    );
+    assert_eq!(
+        scope_namespace(&ActorKey::from("12")),
+        Some(BindNamespace::Char(12)),
+        "2 以上の数はその番号の char の名前空間（要件 14.2）"
     );
     assert_eq!(
         scope_namespace(&ActorKey::from("balloon0")),
@@ -413,6 +418,108 @@ fn scope_namespace_maps_zero_one_only() {
         scope_namespace(&ActorKey::from("x")),
         None,
         "その他の scope 識別子は判定なし（None・D7）"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// spec: areka-P0-offline-surface-dump task 2.3: シェルの読みからの既定と名前の表（要件 14.1〜14.3・5.2・5.9）。
+
+/// 3 種類のスコープで既定と名前が分かれるシェルの descript.txt。`服` の A（3 番）は B（20 番）より
+/// 前の行に書く（キーの順では `bindgroup20` が先＝行の順で並べないと赤）。B は 21 番でも書き直す。
+const SCOPED_SHELL: &str = "charset,UTF-8\r\n\
+sakura.bindgroup3.name,服,A\r\n\
+sakura.bindgroup3.default,1\r\n\
+sakura.bindgroup20.name,服,B\r\n\
+sakura.bindgroup5.name,帽子,C\r\n\
+kero.bindgroup30.name,尾,長い\r\n\
+kero.bindgroup30.default,1\r\n\
+char2.bindgroup41.name,服,赤\r\n\
+char2.bindgroup40.name,服,青\r\n\
+char2.bindgroup41.default,1\r\n\
+char2.bindoption0.group,服,multiple\r\n\
+sakura.bindgroup21.name,服,B\r\n";
+
+/// シェルの descript.txt `shell` を持つゴーストを作業フォルダ（`target\\` の下）に組み、着せ替えの読みを返す。
+fn groups_of(shell: &str) -> areka_parsers::package::BindGroupDefaults {
+    let work = sample_ghost_kit::WorkDir::new().expect("作業フォルダを取れる");
+    let master = work.path().join("ghost").join("master");
+    std::fs::create_dir_all(&master).expect("ghost/master を作る");
+    std::fs::write(master.join("descript.txt"), "charset,UTF-8\r\nname,t\r\n")
+        .expect("ゴーストの descript.txt を書く");
+    let shell_dir = work.path().join("shell").join("master");
+    std::fs::create_dir_all(&shell_dir).expect("shell/master を作る");
+    std::fs::write(shell_dir.join("descript.txt"), shell).expect("シェルの descript.txt を書く");
+    areka_parsers::package::resolve_with_shell(
+        work.path(),
+        areka_parsers::charset::DefaultEncoding::Utf8,
+        None,
+    )
+    .expect("検体のシェルは解決できる")
+    .bindgroups
+}
+
+/// 既定の組: スコープ 0 に `sakura.*`・1 に `kero.*`・2 に `char2.*`・書かれていない 3 と数でない
+/// スコープは空（要件 14.1）。
+#[test]
+fn default_binds_from_groups_splits_by_scope() {
+    let defaults = DefaultBinds::from_groups(&groups_of(SCOPED_SHELL));
+    assert_eq!(defaults.for_scope(&ActorKey::from("0")).ids(), &[3]);
+    assert_eq!(defaults.for_scope(&ActorKey::from("1")).ids(), &[30]);
+    assert_eq!(defaults.for_scope(&ActorKey::from("2")).ids(), &[41]);
+    assert!(
+        defaults.for_scope(&ActorKey::from("3")).ids().is_empty(),
+        "char3 の無いスコープ 3 は何も着ない"
+    );
+    assert!(defaults.for_scope(&ActorKey::from("x")).ids().is_empty());
+}
+
+/// 名前の表: 3 種類のスコープがそれぞれ自分の表を引き、ほかのスコープの名前は引かない。
+/// `char2` の `multiple` は `char2` だけに効く（要件 14.2・14.3）。
+#[test]
+fn bind_resolver_from_groups_reads_three_kinds_of_scope() {
+    let r = BindResolver::from_groups(&groups_of(SCOPED_SHELL));
+    assert_eq!(r.resolve(BindNamespace::Sakura, "服", "A"), Some(3));
+    assert_eq!(
+        r.resolve(BindNamespace::Sakura, "服", "B"),
+        Some(21),
+        "同じ名前は後の宣言が勝つ"
+    );
+    assert_eq!(r.resolve(BindNamespace::Kero, "尾", "長い"), Some(30));
+    assert_eq!(r.resolve(BindNamespace::Char(2), "服", "赤"), Some(41));
+    assert_eq!(r.resolve(BindNamespace::Sakura, "服", "赤"), None);
+    assert_eq!(r.resolve(BindNamespace::Char(2), "服", "A"), None);
+    assert_eq!(r.resolve(BindNamespace::Char(3), "服", "赤"), None);
+    assert_eq!(
+        r.policy(BindNamespace::Char(2), "服"),
+        BindChoicePolicy::Multiple
+    );
+    assert_eq!(
+        r.policy(BindNamespace::Sakura, "服"),
+        BindChoicePolicy::Default
+    );
+    assert_eq!(r.category_ids(BindNamespace::Char(2), "服"), vec![40, 41]);
+    assert_eq!(r.name_of(BindNamespace::Char(2), 40), Some(("服", "青")));
+}
+
+/// カテゴリのパーツ名は descript.txt に書かれた行の順（同じ名前は 1 度）。無いカテゴリ・`char3` は空。
+#[test]
+fn category_parts_follow_written_order() {
+    let r = BindResolver::from_groups(&groups_of(SCOPED_SHELL));
+    assert_eq!(
+        r.category_parts_in_order(BindNamespace::Sakura, "服"),
+        vec!["A".to_owned(), "B".to_owned()]
+    );
+    assert_eq!(
+        r.category_parts_in_order(BindNamespace::Char(2), "服"),
+        vec!["赤".to_owned(), "青".to_owned()]
+    );
+    assert!(
+        r.category_parts_in_order(BindNamespace::Sakura, "無い")
+            .is_empty()
+    );
+    assert!(
+        r.category_parts_in_order(BindNamespace::Char(3), "服")
+            .is_empty()
     );
 }
 
@@ -684,4 +791,48 @@ fn accumulate_off_absent_is_noop() {
         after, base,
         "存在しない ID の off は入力集合と同値（no-op）"
     );
+}
+
+/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（今の振る舞い・要件 14.3）。
+#[test]
+fn default_binds_uniform_returns_same_set_for_every_scope() {
+    let set = areka_emo_compose::BindSet::from_ids([1100, 1207]);
+    let binds = DefaultBinds::uniform(set.clone());
+    for scope in ["0", "1", "2", "x"] {
+        assert_eq!(
+            binds.for_scope(&ActorKey::from(scope)),
+            &set,
+            "scope {scope}"
+        );
+    }
+}
+
+/// `DefaultBinds::single` はそのスコープだけに組を持ち、ほかのスコープ・数でないスコープは空（要件 14.3）。
+#[test]
+fn default_binds_single_holds_one_scope_and_others_are_empty() {
+    let set = areka_emo_compose::BindSet::from_ids([3000]);
+    let binds = DefaultBinds::single(1, set.clone());
+    assert_eq!(binds.for_scope(&ActorKey::from("1")), &set);
+    let empty = areka_emo_compose::BindSet::default();
+    for scope in ["0", "2", "x"] {
+        assert_eq!(
+            binds.for_scope(&ActorKey::from(scope)),
+            &empty,
+            "scope {scope}"
+        );
+    }
+}
+
+/// `DefaultBinds::default` はどのスコープにも空の組を返す（要件 14.3）。
+#[test]
+fn default_binds_default_is_empty_for_every_scope() {
+    let binds = DefaultBinds::default();
+    let empty = areka_emo_compose::BindSet::default();
+    for scope in ["0", "1", "x"] {
+        assert_eq!(
+            binds.for_scope(&ActorKey::from(scope)),
+            &empty,
+            "scope {scope}"
+        );
+    }
 }

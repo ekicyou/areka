@@ -128,7 +128,11 @@ fn a_nested_source_is_stripped_of_every_segment() {
     assert_eq!(companion.name, "test-balloon");
     assert_eq!(
         companion.destination,
-        root.path().join("balloon").join("test-balloon"),
+        root.path()
+            .join("ghost")
+            .join("test-ghost")
+            .join("balloon")
+            .join("test-balloon"),
         "宛先に取り出し元の値が継ぎ足されている"
     );
     assert_eq!(companion.target_ghost, None);

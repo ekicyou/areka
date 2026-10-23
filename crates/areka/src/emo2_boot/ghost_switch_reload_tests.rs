@@ -642,3 +642,56 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
         "{events:?}"
     );
 }
+
+/// ゴーストの中のバルーン（`<A>\balloon\inner`）を使っているときのゴーストの読み直し（自分への切替）は、
+/// 記憶の段から同じ `<A>\balloon\inner` を出す（areka-P0-ghost-inner-balloon 要件 5.7）。
+///
+/// # 非空虚性
+/// 自分への切替の候補にゴーストの中が入らないと記憶が当たらず、根の同梱（`emo2-kakukaku`）へ落ちて赤。
+#[test]
+fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
+    let mut rig = SwitchRig::new(vec![("A", a_script())]);
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
+    let inner = rig.add_ghost_balloon_copy("A", "inner", "Aの中のバルーン");
+    rig.plant_last_balloon("A", "inner");
+    rig.boot_with_balloon(
+        "A",
+        crate::boot_resolve::BalloonDecision {
+            route: crate::boot_resolve::BalloonRoute::Memory,
+            dir: inner.clone(),
+            folder: Some("inner".to_owned()),
+        },
+    );
+    assert!(rig.wait_steady(), "A が定常に着く");
+
+    let (flow, events) = capture(|| {
+        let verdict = request_reload(
+            &mut rig.world,
+            ReloadRequest {
+                target: ReloadTarget::Ghost,
+                origin: ReloadOrigin::Script,
+                notes: DescriptNotes::default(),
+            },
+        );
+        (verdict, rig.pump_talking_until(a_rebooted))
+    });
+    let balloon = rig
+        .world
+        .resource::<crate::boot_config::BootContext>()
+        .current
+        .balloon
+        .clone();
+    assert!(rig.shutdown());
+
+    assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
+    assert_eq!(
+        (balloon.route, balloon.folder.as_deref(), balloon.dir),
+        (
+            crate::boot_resolve::BalloonRoute::Memory,
+            Some("inner"),
+            inner
+        ),
+        "{events:?}"
+    );
+    assert_eq!(named(&events, "last_balloon_not_found"), 0, "{events:?}");
+}

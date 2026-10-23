@@ -80,7 +80,7 @@ pub(super) fn synth_assets_with_balloons(
             })
             .collect(),
         resolver: SurfaceResolver::new(BTreeMap::new()),
-        static_binds: BindSet::default(),
+        static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
         // plan_attachments は bind_resolver を読まない（headless 純合成）＝空表で十分。
         bind_resolver: BindResolver::empty(),
         // plan_attachments は loop_tables を読まない（headless 純合成）＝空表で十分。

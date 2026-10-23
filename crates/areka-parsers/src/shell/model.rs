@@ -36,12 +36,14 @@ pub struct Shell {
 
 /// ソート順の値（`animation-sort`／`collision-sort` の記述のまま。既定の適用は下流・要件 12.5(a)）。
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SortOrder {
     /// 昇順（`ascend`）。
     Ascend,
     /// 降順（`descend`）。
     Descend,
+    /// 上の 2 つでない空でない値の原文（転記層は黙って落とさない・扱いと知らせは下流）。
+    Other(Box<str>),
 }
 
 /// 種別間 interleaving を保持する登場順参照ストリームの要素（3 Vec への index・要件 12.5(d)）。

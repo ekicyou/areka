@@ -1,0 +1,17 @@
+[package]
+name = "surface-compare"
+workspace = "../.."
+description = "SSP と areka が書き出した 2 つのフォルダの同じ名前の PNG を画素で比べ、違いの数を返す開発の道具（spec: areka-P0-offline-surface-dump 要件 13）"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # 開発の道具・SSP との見比べの試験だけが使う
+repository.workspace = true
+
+[dependencies]
+# areka-emo-atlas と同じ版。既定の機能は exr/avif 経由で paste（RUSTSEC-2024-0436）を引くので切る。
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+
+[dev-dependencies]
+temp-path-kit = { path = "../temp-path-kit" }

@@ -90,8 +90,8 @@ impl EmoWorld {
         world.insert_resource(SurfaceIndex::default());
         world.insert_resource(AliasMap::default());
         world.insert_resource(ShellSettings {
-            animation_sort: shell.animation_sort,
-            collision_sort: shell.collision_sort,
+            animation_sort: shell.animation_sort.clone(),
+            collision_sort: shell.collision_sort.clone(),
         });
         world.insert_resource(SurfaceImages(images.clone()));
 
@@ -273,12 +273,16 @@ impl EmoWorld {
         self.world
             .resource::<ShellSettings>()
             .animation_sort
+            .clone()
             .unwrap_or(SortOrder::Descend)
     }
 
     /// 実効 collision ソート順（未指定は `None`＝記述順・要件 1.6/5.6）。
     pub fn collision_sort(&self) -> Option<SortOrder> {
-        self.world.resource::<ShellSettings>().collision_sort
+        self.world
+            .resource::<ShellSettings>()
+            .collision_sort
+            .clone()
     }
 
     /// 将来の seriko system 統合用の脱出口（本 spec では未使用・design 決定3）。

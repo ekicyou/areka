@@ -185,6 +185,11 @@ pub(crate) fn is_implemented_name(name: &str) -> bool {
     known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
 }
 
+/// `move`（サーフェスの番号を無視して窓を動かす・描かない）か。綴りの比べ方は [`canonical_method_name`]。
+pub(crate) fn is_move_name(name: &str) -> bool {
+    canonical_method_name(name) == "move"
+}
+
 /// 正規化済み（小文字・区切り除去）メソッド名を [`BlendMode`] へ写像する。
 ///
 /// 新書式 `blend<kind>`／`blend<kind>fast` に加え、旧書式別名

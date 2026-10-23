@@ -513,7 +513,7 @@ fn representative_id(targets: &[AppendTarget]) -> u32 {
 /// トップレベル行が `animation-sort`／`collision-sort` なら値を `shell` へ充填する（要件 12.5(a)/1.6）。
 ///
 /// - field[0] がキー名・field[1] が値（`ascend`→`Ascend`・`descend`→`Descend`）。
-/// - 3 種以外の値・欠落は `None` のまま吸収する（寛容・既定適用は下流・要件 3.3/9.2）。
+/// - それ以外の空でない値は原文のまま `Other` で運ぶ。空の値・欠落は `None`（既定適用は下流・要件 3.3/9.2）。
 /// - キーが両者いずれでもない行（`charset` 等）は何もしない（非保持・要件 3.1）。
 fn decode_sort_key(shell: &mut Shell, fields: &[String]) {
     let key = fields.first().map(String::as_str).unwrap_or("");
@@ -521,7 +521,8 @@ fn decode_sort_key(shell: &mut Shell, fields: &[String]) {
     let order = match value {
         Some("ascend") => Some(SortOrder::Ascend),
         Some("descend") => Some(SortOrder::Descend),
-        // 未知値は None のまま吸収（既定 descend/none の解釈は下流・寛容規約）。
+        // 知らない値は原文を運ぶ（既定 descend/none の解釈と知らせは下流）。
+        Some(other) if !other.is_empty() => Some(SortOrder::Other(other.into())),
         _ => None,
     };
     match key {

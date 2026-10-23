@@ -52,7 +52,7 @@ fn write_descript(dir: &Path, body: &str) {
 
 /// 根と、シェル `master`（通常）・`summer`（通常）・`secret`（`menu,hidden`）を持つゴースト `A`。
 fn plant_ghost() -> (TempPath, BasewareRoot) {
-    let temp = TempPath::new("areka-skin-resolve");
+    let temp = TempPath::under_target("areka-skin-resolve");
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let shell = root.ghost_dir("A").join("shell");
     write_descript(&shell.join("master"), "name,通常");
@@ -146,9 +146,10 @@ fn hidden_shell_by_name_and_the_current_one_are_candidates() {
         "今のものへも切り替える"
     );
 
-    let balloons = balloon_candidates(&areka_ghost::BasewareRoots::single(
-        root.dir().to_path_buf(),
-    ));
+    let balloons = balloon_candidates(
+        &areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        &ghost,
+    );
     let hit = resolve_skin_target(
         &balloons,
         &by_name("かくかく"),
@@ -300,9 +301,10 @@ fn balloon_lastinstalled_resolves_only_when_in_the_catalog() {
     let resolve = |world: &World| {
         let installed = installed_for(world, SkinKind::Balloon, &ghost);
         folder(resolve_skin_target(
-            &balloon_candidates(&areka_ghost::BasewareRoots::single(
-                root.dir().to_path_buf(),
-            )),
+            &balloon_candidates(
+                &areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+                &ghost,
+            ),
             &by_name("lastinstalled"),
             Some("kaku"),
             installed.as_deref().map_err(|r| *r),
@@ -317,4 +319,99 @@ fn balloon_lastinstalled_resolves_only_when_in_the_catalog() {
 
     record_installed_balloon(&mut world, "gone".to_owned());
     assert_eq!(resolve(&world), Err(NotFoundReason::LastInstalledMissing));
+}
+
+/// 特別な名前を解かない「名前 → フォルダ名」の突き合わせ（`--dump-shell` が使う・要件 2.4）。
+#[test]
+fn find_by_name_or_folder_ignores_special_names() {
+    let cands = [
+        cand("alpha", Some("beta"), false),
+        cand("beta", Some("ガンマ"), false),
+        cand("random", None, false),
+        cand("other", Some("lastinstalled"), false),
+    ];
+    let find = |value: &str| find_by_name_or_folder(&cands, value).map(|c| c.folder.as_str());
+    assert_eq!(find("ガンマ"), Some("beta"), "名前で見つかる");
+    assert_eq!(find("alpha"), Some("alpha"), "フォルダ名で見つかる");
+    assert_eq!(
+        find("beta"),
+        Some("alpha"),
+        "名前を先に見る（フォルダ名 beta より名前 beta）"
+    );
+    assert_eq!(
+        find("random"),
+        Some("random"),
+        "random はただのフォルダ名として探す"
+    );
+    assert_eq!(
+        find("lastinstalled"),
+        Some("other"),
+        "lastinstalled はただの名前として探す"
+    );
+    assert_eq!(find("none"), None, "見つからない");
+}
+
+/// バルーンの候補は今のゴーストの中が先・根の和が後。同じフォルダ名の根は隠れ、同じ `name` は
+/// ゴーストの中が当たる。`random`・`lastinstalled` の候補にもゴーストの中が入る
+/// （areka-P0-ghost-inner-balloon 要件 2.1・3.3・10.1）。
+#[test]
+fn balloon_candidates_put_the_ghost_inner_first() {
+    let (_temp, root) = plant_ghost();
+    let ghost = root.ghost_dir("A");
+    let inner = ghost.join("balloon");
+    write_descript(&inner.join("inner"), "name,かくかく");
+    write_descript(&inner.join("Fluffy"), "name,中のふわふわ");
+    let cands = balloon_candidates(
+        &areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        &ghost,
+    );
+    let listed: Vec<(&str, &Path)> = cands
+        .iter()
+        .map(|c| (c.folder.as_str(), c.dir.as_path()))
+        .collect();
+    assert_eq!(
+        listed,
+        vec![
+            ("Fluffy", inner.join("Fluffy").as_path()),
+            ("inner", inner.join("inner").as_path()),
+            ("kaku", root.balloon_dir("kaku").as_path()),
+        ],
+        "ゴーストの中が先・根の fluffy は隠れる"
+    );
+
+    let dir = |spec: &SkinSpec| {
+        resolve_skin_target(&cands, spec, Some("kaku"), NO_MEMO, |_| 0).map(|c| c.dir)
+    };
+    assert_eq!(
+        dir(&by_name("かくかく")),
+        Ok(inner.join("inner")),
+        "同じ name は中"
+    );
+    assert_eq!(
+        dir(&by_name("fluffy")),
+        Ok(inner.join("Fluffy")),
+        "フォルダ名も中"
+    );
+    assert_eq!(
+        dir(&SkinSpec::Folder("FLUFFY".to_owned())),
+        Ok(inner.join("Fluffy")),
+        "メニューのフォルダの名指しも中"
+    );
+    assert_eq!(
+        dir(&by_name("random")),
+        Ok(inner.join("Fluffy")),
+        "random の候補の先頭は中"
+    );
+    assert_eq!(
+        resolve_skin_target(
+            &cands,
+            &by_name("lastinstalled"),
+            Some("kaku"),
+            Ok("inner"),
+            never
+        )
+        .map(|c| c.dir),
+        Ok(inner.join("inner")),
+        "lastinstalled も中を引く"
+    );
 }

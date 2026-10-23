@@ -7,7 +7,7 @@ pub(super) fn binds_1100_1207() -> BindSet {
 }
 
 pub(super) fn empty_states() -> ScopeStates {
-    ScopeStates::new(binds_1100_1207())
+    ScopeStates::new(crate::DefaultBinds::uniform(binds_1100_1207()))
 }
 
 /// テスト専用 tracing 捕捉ハーネス（actor/table の同名ヘルパと同一＝硬化機構の唯一の定義元

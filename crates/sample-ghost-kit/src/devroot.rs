@@ -98,7 +98,11 @@ const NAMESPACE: &str = "nar-samples";
 const WORK: &str = "work";
 
 /// 読み専用の原本を並べる棚。名前は `<検体>-<刻印>`。
-const CACHE: &str = "cache";
+///
+/// 棚の名前に展開器の置き方の世代を持つ。刻印は `.nar` だけから決まるので、置き方が
+/// 変わると同じ刻印の古い原本が残ってしまう（spec: `areka-P0-ghost-inner-balloon` で
+/// 同梱バルーンが根の `balloon/` から本体の中へ移った）。置き方を変えたら数を上げる。
+pub(crate) const CACHE: &str = "cache-2";
 
 /// 手で使う根を並べる棚。名前は検体名そのもの（刻印は入れない——人が読んで打つ）。
 ///

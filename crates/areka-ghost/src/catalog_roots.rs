@@ -4,6 +4,8 @@
 //! 見つからない根も並びに残り、在否（`is_dir`）は呼ぶたびに見直す（要件 9.3）。
 //! フォルダ名の同じ・違う（要件 2.8）と同じ根（要件 1.9）の規則を 1 つずつ持つ。
 //! 並び全体の和・隠れ・引き当て・入れる根は、どれも同じ和（`union`）の上で決める（要件 2.6）。
+//! ゴーストの中の `balloon\` との合わせ方（ゴーストの中が先・同じフォルダ名は根を隠す）もここ
+//! （`balloons_for`・areka-P0-ghost-inner-balloon）。根だけの口はゴーストの中を見ない。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -140,6 +142,38 @@ pub fn find_balloon(roots: &BasewareRoots, folder: &str) -> Option<BalloonEntry>
         .find(|e| same_folder_name(&e.identity.folder, folder))
 }
 
+/// 今のゴーストの候補の一覧と、ゴーストの中が隠した根の項目（areka-P0-ghost-inner-balloon）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GhostBalloons {
+    /// ゴーストの中が先・根の和が後（それぞれフォルダ名のバイト順）。
+    pub listed: Vec<BalloonEntry>,
+    /// ゴーストの中が隠した根の項目だけ（根どうしの隠れは入れない）。
+    pub hidden: Vec<Hidden>,
+}
+
+/// `ghost_dir` はゴーストのフォルダ（`ghost\master\descript.txt` を持つフォルダ）。
+/// 記録は残さず、保存もしない（呼ぶたびに今のファイルの状態から作る）。
+pub fn balloons_for(roots: &BasewareRoots, ghost_dir: &Path) -> GhostBalloons {
+    let mut listed = catalog::scan_ghost_balloons(ghost_dir);
+    let inner: HashMap<String, PathBuf> = listed
+        .iter()
+        .map(|e| (fold_key(&e.identity.folder), e.dir.clone()))
+        .collect();
+    let mut hidden = Vec::new();
+    for entry in list_balloons(roots) {
+        match inner.get(&fold_key(&entry.identity.folder)) {
+            Some(by) => hidden.push(Hidden {
+                kind: StoreKind::Balloon,
+                folder: entry.identity.folder,
+                hidden: entry.dir,
+                by: by.clone(),
+            }),
+            None => listed.push(entry),
+        }
+    }
+    GhostBalloons { listed, hidden }
+}
+
 /// 入れる根。見えているものがあればその根、無ければ見つかるいちばん上の根。
 /// `head_skipped` は先頭の根が見つからず飛ばしたときのその根（要件 5.2 の記録用）。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -262,6 +296,9 @@ fn root_key(p: &Path) -> String {
     fold_key(trimmed)
 }
 
+#[cfg(test)]
+#[path = "catalog_roots_ghost_balloon_tests.rs"]
+mod ghost_balloon_tests;
 #[cfg(test)]
 #[path = "catalog_roots_temporary_tests.rs"]
 mod temporary_tests;

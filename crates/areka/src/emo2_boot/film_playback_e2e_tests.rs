@@ -78,7 +78,7 @@ fn spawn<O: SurfaceOutput + Send + 'static>(
 ) -> (SerikoSink, areka_actor::ActorHandle) {
     spawn_seriko_clocked(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::default(),
+        areka_seriko::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         config,
         out,

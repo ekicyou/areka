@@ -117,6 +117,24 @@ fn items_of_other_roots_and_shell_folders_are_as_is() {
     );
 }
 
+/// ゴーストの中のバルーン（親が `<実行ファイルの隣>\balloon` でない）は、隣の根のゴーストの中でも
+/// 書ける根の写しの中でも写さない（spec: areka-P0-ghost-inner-balloon 要件 8.3）。
+#[test]
+fn ghost_inner_balloon_is_as_is() {
+    let f = fixture("ur-plan-ghost-inner-balloon");
+    let roots = marked(&f.user, &f.exe);
+    for ghost in [
+        f.exe.join("ghost").join("emo2"),
+        f.user.join("ghost").join("emo2"),
+    ] {
+        let inner = ghost.join("balloon").join("inner");
+        assert_eq!(
+            plan_copy(&roots, Some(&f.exe), StoreKind::Balloon, &inner),
+            CopyPlan::AsIs
+        );
+    }
+}
+
 #[test]
 fn user_root_below_exe_root_is_as_is() {
     let f = fixture("ur-plan-below");

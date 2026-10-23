@@ -64,7 +64,7 @@ fn film_cell(states: &ScopeStates, slot: Slot, film: FilmId) -> Option<u32> {
 #[test]
 fn open_window_births_child_clock_on_noted_face() {
     let mut rt = runtime(AnimationTable::empty());
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     rt.on_tick(500, &mut states);
 
     note(&mut states, true, 0);
@@ -97,7 +97,7 @@ fn open_window_births_child_clock_on_noted_face() {
 #[test]
 fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     let mut rt = runtime(AnimationTable::empty());
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     note(&mut states, false, 1);
     assert!(rt.on_tick(1000, &mut states).is_empty());
@@ -166,7 +166,7 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
 #[test]
 fn balloon_hide_cue_drops_finite_clocks() {
     let mut rt = runtime(AnimationTable::empty());
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     rt.on_tick(0, &mut states);
     states.apply_balloon(&scope(), SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope(), Slot::Balloon);
@@ -187,7 +187,7 @@ fn balloon_hide_cue_drops_finite_clocks() {
 #[test]
 fn shell_and_balloon_clocks_do_not_mix() {
     let mut rt = runtime(film_table());
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     states.apply(&scope(), SurfaceTarget::Show(0));
     rt.on_tick(1000, &mut states);
     assert_eq!(clock(&rt, Slot::Shell, ENDLESS), playing(1000));
@@ -244,7 +244,7 @@ fn top_started(rt: &LoopRuntime) -> Option<u64> {
 fn closed_window_births_no_top_always_playback() {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = runtime_of(BALLOON_TOP_ALWAYS, rng);
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     note(&mut states, false, 0);
     rt.on_tick(1000, &mut states);
@@ -262,7 +262,7 @@ fn closed_window_births_no_top_always_playback() {
 
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = runtime_of(BALLOON_TOP_ALWAYS, rng);
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     note(&mut states, true, 0);
     rt.on_tick(1000, &mut states);
     assert_eq!(
@@ -284,7 +284,7 @@ const BALLOON_PART_RANDOM: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 fn closed_window_draws_no_part_lottery() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = runtime_of(BALLOON_PART_RANDOM, rng);
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     let part_clock = |rt: &LoopRuntime| {
         rt.parts
             .clock_at(&scope(), Slot::Balloon, PartKey::Surface(100), 0)

@@ -107,7 +107,7 @@ fn shown_shell(sid: u32) -> (ScopeStates, ActorKey) {
 }
 
 fn shown_shell_with_binds(sid: u32, binds: BindSet) -> (ScopeStates, ActorKey) {
-    let mut states = ScopeStates::new(binds);
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(binds));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(sid));
     (states, scope)
@@ -207,7 +207,7 @@ fn hidden_slot_consumes_no_rng() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     // Show せず（未知 scope）＝表示中 slot が 1 つも無い。
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
 
     rt.on_tick(0, &mut states);
     let cmds = rt.on_tick(1000, &mut states);
@@ -427,7 +427,7 @@ fn lottery_consumes_in_scope_ascending_order() {
     // [1, 0]: 先頭消費（scope "0"）は非発火、2 番目（scope "1"）は発火。
     let (rng, probe) = counting_rng(&[1, 0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply(&s0, SurfaceTarget::Show(10));
@@ -462,7 +462,7 @@ fn lottery_consumes_shell_before_balloon() {
         balloon_tables: BTreeMap::from([(scope.clone(), balloon_t)]),
         rng,
     });
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     states.apply(&scope, SurfaceTarget::Show(10)); // Shell shown surface 10
     states.apply_balloon(&scope, SurfaceTarget::Show(20)); // Balloon shown surface 20
 
@@ -491,7 +491,7 @@ fn balloon_tables_are_looked_up_per_scope() {
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0), (ActorKey::from("1"), t1)]),
         rng: always_fire(),
     });
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply_balloon(&s0, SurfaceTarget::Show(20));
@@ -540,7 +540,7 @@ fn absent_scope_balloon_table_is_inert() {
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0)]),
         rng,
     });
-    let mut states = ScopeStates::new(BindSet::from_ids([]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let s1 = ActorKey::from("1");
     states.apply_balloon(&s1, SurfaceTarget::Show(20));
 

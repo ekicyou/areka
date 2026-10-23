@@ -251,7 +251,7 @@ fn spawned_actor_moves_the_mouth_for_text_arriving_through_the_sink() {
     let records = out.records();
     let (mut sink, handle) = spawn_seriko_clocked(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::from_ids([]),
+        crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         config(),
         out,

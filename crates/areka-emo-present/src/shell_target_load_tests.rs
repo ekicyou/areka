@@ -384,7 +384,7 @@ fn every_record_is_emitted_once_per_load() {
     // 4.9 ほか: 焼く段で落ちた絵は絵ごとに 1 行（実機確認が数える語を含む）。
     let bake = only_from_shell_target(
         &events,
-        tracing::Level::WARN,
+        tracing::Level::ERROR,
         "shell bake で脱落した element",
     );
     assert!(
@@ -397,8 +397,8 @@ fn every_record_is_emitted_once_per_load() {
 
     assert_eq!(
         count_from_shell_target(&events, tracing::Level::WARN),
-        3,
-        "`warn!` は重複・相手の無いコマ・脱落の 3 行だけ"
+        2,
+        "`warn!` は重複・相手の無いコマの 2 行だけ（脱落は `error!`）"
     );
 
     // `build_world` は新しい記録を 0 本出す（design「Monitoring」）。
