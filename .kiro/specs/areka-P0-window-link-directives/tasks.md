@@ -2,7 +2,7 @@
 
 > 設計は `design.md`（設計の決め 1〜12）、調べの記録は `research.md`（SSP の測りは 1.10・設計ディスカッションの結果は末尾）。テストはすべて実際の画面を使わない x64 の決定論テストで、実装の隣の兄弟ファイル（`*_tests.rs`）に置く。実機の根・検体・ログは作業ツリーの `target\` の下だけ。新しい `PlacementRoute` の語は足さず、`placement/follow/window_move.rs`・`placement/diag.rs`・`placement/chain_realign.rs`・`placement/work_area_sync.rs` には、どのタスクも触らない。`DragConfig.move_window` を書くのは 1.3 の書き手だけにする（設計の決め 12）。`drag_follow.rs`（937 行）は呼び出しの数行だけを足し、1,000 行を超えそうなら本番の側をファサードの形で分ける。
 
-- [ ] 1. 吸着の出どころ・窓の組の帳簿・連れ動きの計算・初期化の材料という土台を作る
+- [x] 1. 吸着の出どころ・窓の組の帳簿・連れ動きの計算・初期化の材料という土台を作る
 - [x] 1.1 キャラクターの窓に吸着の向きの出どころを持たせ、記憶へ書く形を descript の向きにそろえる
   - 窓ごとの部品 `AnchorSource { descript, by_script }` を `placement/follow/anchor.rs` に足して `follow.rs` から公開し、窓を作るとき（`spawn.rs`）に `Anchored` と同じ時に descript の向き・印なしで付ける
   - 記憶へ書く形を決める `saved_form_anchor`（`AnchorSource.descript`、無ければ `Anchored`、どちらも無ければ無し）を `persist.rs` に足し、並べ終えた時点の保存（`persist_unremembered_char_positions`）もこれで形を決める
@@ -29,7 +29,7 @@
   - 今の `reseed`・`reset_pos`・`switch_finish` の兄弟のテストが、形を合わせる以外の書き換えなしで緑のまま、起動で置いた材料とシェルの切り替えで置いた材料が同じシェルで等しいことの檻が足されて緑になる
   - _Requirements: 7.4_
 
-- [ ] 2. 吸着の指令・組の指令・バルーン位置初期化・キーの受け口を、それぞれの持ち場で作る
+- [x] 2. 吸着の指令・組の指令・バルーン位置初期化・キーの受け口を、それぞれの持ち場で作る
 - [x] 2.1 (P) 組の指令と descript の組を World に当て、記録を出す
   - 帳簿の World の側の薄い関数（台本の組を作る・台本の組を解く・起動で descript の組を据える・シェルの切り替えで descript の組を取り替える）を `sticky_group_ledger.rs` に作る。descript の値は `,` で区切って同じ規則で読む
   - 作成・解除・据え付け・取り替え・拒否のたびに、その時点のすべての組の中身と出どころを `sticky_groups` の `info!` に、拒否を `sticky_group_rejected` の `warn!`（出どころ・受け取った引数・理由）に、窓の無いスコープを含む組を受け付けたときは `sticky_member_absent` の `warn!` に出し、どの関数も最後に 1.3 の書き手で `DragConfig.move_window` を付け直す。帳簿が無いときは `warn!` で捨てる
@@ -61,7 +61,7 @@
   - _Boundary: wintf window_proc_
   - _Requirements: 8.1, 8.2, 8.4_
 
-- [ ] 3. ドラッグで組の相手を連れ動かす
+- [x] 3. ドラッグで組の相手を連れ動かす
 - [x] 3.1 ドラッグの控えと、相手を同じ量だけ動かす手続きを作る
   - `sticky_follow.rs` に資源 `CharDragSession`（ドラッグした窓・その始めの位置・このドラッグで wintf が窓を動かすか・始めの向き・窓のある相手とその始めの位置）と、始め（`begin_char_drag`）・縛りの向き（`drag_anchor`）・書き手（`drag_wintf_moves`）・途中（`follow_partners_on_drag`）・終わり（`finish_char_drag`）を作る。wintf の `DraggingState` は読まない
   - 途中は「今の位置−始めの位置」の量で相手ごとに `partner_target` を出し、経路なしで書いてバルーンを付いて動かす（1 回ごとは記録しない）。控えが無い・別の窓の控えなら相手を動かさず、組の相手がいるときだけ `sticky_follow_skipped` を記録する。窓の無い相手は始めに `sticky_member_absent` で外す
@@ -86,7 +86,7 @@
   - _Depends: 2.1, 3.1_
   - _Requirements: 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 9.3, 9.4_
 
-- [ ] 5. 台本で変えた吸着と組の寿命を正典と裁定どおりにする
+- [x] 5. 台本で変えた吸着と組の寿命を正典と裁定どおりにする
 - [x] 5.1 起動で descript の組を据え、ゴーストの窓を閉じるときに帳簿と控えを外す
   - シェルの descript の `seriko.sticky-window` の生の値を、Z の順の生の値と同じ形で起動の準備の結果まで運び、`ghost_session.rs` の窓を作る閉包で `GhostWindows` と一緒に帳簿を据える（据えた後に書き手が付け直す）
   - `app_exit.rs` の `close_windows_for_restart` で帳簿とドラッグの控えを外す 2 行を足す。SHIORI だけの読み直しは触らない
@@ -108,7 +108,7 @@
   - _Depends: 2.1, 2.2, 2.3, 4, 5.1_
   - _Requirements: 1.4, 1.7, 1.9, 3.1, 3.5, 3.7, 7.1_
 
-- [ ] 7. 右クリックのメニューの「バルーン位置初期化」と、位置初期化の近道を入れる
+- [x] 7. 右クリックのメニューの「バルーン位置初期化」と、位置初期化の近道を入れる
 - [x] 7.1 (P) kanade の許可表に `resetballoonpositionbutton.caption` を足す
   - `areka-kanade` の SHIORI リソースの許可表に 1 名足し（13 → 14 名）、数と一覧の檻を合わせる
   - `areka-kanade` のテストが緑になり、ゴーストがこの名前を返したときに引けることが檻で確かめられる
@@ -135,7 +135,7 @@
   - `ukadoc-survey` の `report` と `report-summary` で生成物を作り直し、`ukadoc-survey` のテストが緑のまま、台帳と生成物が同じコミットに入る。`\![set,zorder]` の食い違いの起票（要件 10.6）は完了の作業（`/kiro-complete` の棚卸）で `/kiro-discovery` を使って行う旨を COMPAT の行に添える
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
 
-- [ ] 9. 全体と実機で確かめる
+- [x] 9. 全体と実機で確かめる
 - [x] 9.1 触ったクレートのテストを通し、決定論の檻が要件の分岐をすべて覆うことを確かめる
   - `areka`・`areka-kanade`・`wintf` のテストを回し、赤が出たら赤のテストだけに絞って直す
   - 要件 9.6 の分岐（吸着の語の読み・縛り・組を作る規則と捨てる規則・連れ動きの量と吸着の制限・`ignore-sticky-window`・寿命・バルーン位置初期化の位置と記憶）それぞれに緑の檻が 1 つ以上あることを、テストの名前の一覧で示す

@@ -6,17 +6,18 @@
 //! 無いときだけ回す。確かめの間は拡大率を変えない。
 //!
 //! 有効にするのは環境変数 `AREKA_WINDOW_LINK_REAL_RUN`（空でない値）。未設定なら即 return する。
-//! 先に要るもの: `tools/sample-fetch.ps1` で検体の書庫を取り寄せ、
-//! `cargo run -p sample-ghost-kit --bin nar-sample-path -- pasta-in-windows` で展開しておく。
+//! 先に要るもの: `tools/sample-fetch.ps1` で検体の書庫を取り寄せておく（検体は
+//! `sample_ghost_kit::SampleRoot::acquire` が名前で引いて、使い捨ての複製を配る）。
 //! 32bit の仲介 `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` も建てておく。
 //!
-//! 根・記憶の置き場・記録はすべて `target\wl-signoff\` の下（要件 9.8）。根は展開した原本の写しに、
+//! 根・記憶の置き場・記録はすべて `target\wl-signoff\` の下（要件 9.8）。根は配られた複製の写しに、
 //! ゴーストの中のバルーン `pasta_tategaki` を根の `balloon\` へ写して作る（ゴーストの中のバルーンを
 //! 探すかどうかは `areka-P0-pasta-in-windows-verification` の持ち分なので、ここでは利用者が置いた形にする）。
 //!
 //! 判定は 1 行ずつ `target\wl-signoff\judgments.txt` に書き、走りの記録は `run1.log`・`run2.log` へ写す。
 
 use real_run_kit::{Launch, RealRun, Run};
+use sample_ghost_kit::SampleRoot;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -434,23 +435,21 @@ fn window_link_directives_on_pasta_in_windows() {
         "{}",
         target.display()
     );
-    let manual = target.join(r"nar-samples\manual\pasta-in-windows");
-    assert!(
-        manual.join("ghost").is_dir(),
-        "検体が展開されていない: {}",
-        manual.display()
-    );
+    let sample = SampleRoot::acquire("pasta-in-windows")
+        .unwrap_or_else(|e| panic!("検体 pasta-in-windows を取れない: {e}"));
     let base = target.join("wl-signoff");
     if base.exists() {
         std::fs::remove_dir_all(&base).unwrap();
     }
     let root = base.join("root");
     let profile = base.join("profile");
-    copy_dir(&manual.join("ghost"), &root.join("ghost"));
+    copy_dir(&sample.root().join("ghost"), &root.join("ghost"));
     copy_dir(
-        &manual.join(r"ghost\pasta-in-windows\pasta_tategaki"),
+        &sample.folder().join("pasta_tategaki"),
         &root.join(r"balloon\pasta_tategaki"),
     );
+    // 根は写し終えたので、配られた複製はここで返す。
+    drop(sample);
     std::fs::create_dir_all(&profile).unwrap();
     let exe = env!("CARGO_BIN_EXE_areka");
     let mut n = Notes {
