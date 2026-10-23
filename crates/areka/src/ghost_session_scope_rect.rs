@@ -3,8 +3,6 @@
 //! `currentghost.scope(ID).rect`・`currentghost.balloon.scope(ID).rect` は、読まれた時に
 //! スコープ → 窓の印の表で窓を引き、OS に 1 回だけ今の矩形を聞いて「左,上,右,下」で答える。
 //! 値は写しにも保存にも載せない（プル）。画面に出ているかは見ない（要件 1.8・2.4）。
-// 呼び手（結線と系の登録）は 3.1 で付く。それまで `wire`・`register` はどのビルドでも使われない。
-#![allow(dead_code)]
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};

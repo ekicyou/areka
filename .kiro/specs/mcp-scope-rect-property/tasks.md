@@ -71,7 +71,7 @@
   - _Requirements: 1.3, 1.6, 8.5_
 
 - [ ] 3. 実行系への結線と、2 つの読む道を通すテスト
-- [ ] 3.1 系の登録と結線の 1 行ずつを実行系の口に足す
+- [x] 3.1 系の登録と結線の 1 行ずつを実行系の口に足す
   - `ghost_session` の系の登録の所に表の系の登録を 1 行、実行系を作るたびに通る口（初回の起動・切替・`reload` が共に通る所）に結線を 1 行足す。`main.rs`・`emo2_boot`・⑥ の持ち物・`mcp/get_property.rs`・`shiori_host.rs` には触らない
   - 完了の状態: `cargo build -p areka` が警告なしで通り、本物の起動の道（切替の試験台）で実行系が置き場に付いた時点で、MCP の `get_property` が `currentghost.scope(0).rect` に偽の矩形を答える（3.2 のテストで確かめる）
   - _Requirements: 3.3, 6.1, 6.2, 6.3_
