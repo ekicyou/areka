@@ -236,7 +236,7 @@ mod tests;
 
 #[cfg(test)]
 #[path = "write_failure_sites_tests.rs"]
-mod sites_tests;
+pub(crate) mod sites_tests;
 
 #[cfg(test)]
 #[path = "write_failure_probe_tests.rs"]
