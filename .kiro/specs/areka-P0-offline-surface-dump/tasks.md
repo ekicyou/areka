@@ -130,7 +130,7 @@
   - _Boundary: PngEncoder_
   - _Requirements: 4.4, 4.6_
 
-- [ ] 6.2 (P) 記録の写しの窓
+- [x] 6.2 (P) 記録の写しの窓
   - 履歴の本文の組み方（`message` の後に ` 名前=値`）を切らない関数に分け、履歴だけが 4,096 字で切るようにする
   - プロセスの受け口の 3 つ目の層を足す: 出来事で warn 以上だけを関心とし、窓が開いているあいだ、窓を開けたスレッドの記録だけを、現地時刻の時・分・秒・レベル・切らない本文で積む。窓を開ける口（開いていれば空にして開け直す・呼んだスレッドを覚える）と閉じて残した順に返す口を足す。排他の中で記録のマクロを呼ばない。受け口は差し替えない
   - 試験（`log_history_capture_tests.rs`・窓を触る試験はファイルの中の排他 1 つで順に回す）: 本文を切らない・warn 以上だけ写す・違うスレッドから積んでも入らず同じスレッドなら入る・閉じた窓には積まない
@@ -270,3 +270,4 @@
 - 3.2: 転記層は知らない `animation-sort`／`collision-sort` を `SortOrder::Other(Box<str>)` として残す（前は記録なしで捨てていた＝設計の前提と合わず、記録の無い失敗の道を作らない決まりで根本を直した）。`ShapeIssue::UnknownAnimationSort { value }` はシェル全体で 1 件・面と animation の欄なし＝3.3 はその欄なしで出す。`move` は `nesting.rs::pattern_edge` で辺にしない（NestReport と共有）。描かない method で親へ戻る pattern は `Cycle` と `UndrawnPattern` の 2 件になる＝3.3 の突き合わせで 1 誤り 1 行に寄せる
 - 4.2: surface-compare の行の形は `same|size-differs|pixels-differ|only-in-ssp|only-in-areka|unreadable <名前> ...` とまとめ `total=.. ...`。フォルダが読めないときの行はどちらのフォルダかを言わない（要件の外・直すなら `compare_dirs` の `list_pngs` の `?` を `map_err` で側と道筋つきに）
 - 5.2: 共有の検体 `crates/areka/src/scope_bind_fixture_test_support.rs`（`scope_bind_ghost()`）の `write_solid_png` は MCP の非公開の `fn png` の一時の写し＝6.1 で `png_image.rs` へ移したら移した関数を呼ぶ形に替え、shortcut の注記を消す
+- 6.2: 写しの層（`CaptureLayer`）そのものは単体試験で通していない（受け口を差し替えられないため）＝10.1 の exe の試験で CSV の中身として確かめる。`capture_begin`／`capture_finish` の `#[allow(dead_code)]` は呼び手の 7.7 で外す。log クレート経由の記録は本文に `log.*` の欄も入る（履歴と同じ）
