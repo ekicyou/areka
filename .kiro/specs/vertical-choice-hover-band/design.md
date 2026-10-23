@@ -181,8 +181,9 @@ flowchart TD
 **持ち物と決まり**
 
 - 横書きの枝は今の 1 行（`highlight_band_extent`・`highlight_band_offset`）のまま。
+- 以下の c は、向きごとに 2 つの値を持つときは、その向きの値と読む。
 - 縦書きの枝は、em ＝ `rect.right − rect.left`、s ＝ `max(0, line_box_height(em) − em)`、厚み ＝ em。寄せは左から右 ＝ `round(c·s)`、右から左 ＝ `−round((1−c)·s)`。
-- c は定数 `VERTICAL_EM_BOX_LEFT_SHARE`（em の箱の左に置かれる列の箱の余りの割合）。値は最初のタスクの読み戻しで、候補 0・0.5・1 から決める（撮った物の当てでは 0）。根拠の数（書体・大きさ・向きごとのインクの範囲）を説明に書く。
+- c は em の箱の左に置かれる列の箱の余りの割合（0〜1）。値は最初のタスクの読み戻しで**測って**決める（候補を 0・0.5・1 に限らない。撮った物の当てでは 0）。全部の組み合わせでインクを覆う範囲の真ん中を取る。向きで値が違えば、`choice.rs` の中に右から左用と左から右用の 2 つの定数（`VERTICAL_RL_EM_BOX_LEFT_SHARE`・`VERTICAL_LR_EM_BOX_LEFT_SHARE`）を置く。同じなら 1 つにまとめる。根拠の数（書体・大きさ・向きごとのインクの範囲）を説明に書く。
 
 **Dependencies**
 
@@ -270,7 +271,7 @@ fn expand_overhang_for_band(
 
 ### 行き止まり（設計を直す・開発者に知らせる所）
 
-- **c が決まらない**: 読み戻しで、候補 0・0.5・1 のどれでも 2 書体・2 大きさ・2 拡大率の全部でインクを覆えない、または書体ごとに合う c が違う。→ 行の箱の比だけでは em の箱の置き場が決まらない。`GlyphMetrics` に既定の実装つきの口（縦書きの em の箱の左の置き場）を 1 つ足し、`DWriteMetrics` が測る形になる。`layout.rs`・`draw_metrics.rs` に届き C11 の約束の外になるので、その場で止めて設計を直し、開発者に知らせる。
+- **c が決まらない**: 向きごとに測っても、0〜1 のどの値でも 2 書体・2 大きさ・2 拡大率の全部でインクを覆えない（書体ごとに合う c が違う）。向きで値が違うだけなら行き止まりではない（2 つの定数で済む）。→ 行の箱の比だけでは em の箱の置き場が決まらない。`GlyphMetrics` に既定の実装つきの口（縦書きの em の箱の左の置き場）を 1 つ足し、`DWriteMetrics` が測る形になる。`layout.rs`・`draw_metrics.rs` に届き C11 の約束の外になるので、その場で止めて設計を直し、開発者に知らせる。
 - **大きさの違う列が隣り合って帯が重なる**: P3 で重なりの量が 0 より大きい。→ 字の箱そのものが隣の列へ食い込んでいる（列の並べ方の持ち分）見込みで、1.1・1.6 と 1.4 を同時に満たせない。完了とせず、量を添えて開発者の決めを仰ぐ。
 - **横倒しの欧文の字がはみ出す**: R の記録で "Ag" の列のインクが em の帯の外に出る。→ 4.2（SSP の形＝em）と 1.1 の食い違い。4.3 と同じく開発者の決めを仰ぐ（合否には入れない）。
 - **ぱすたの書体の名前が引けない**: `pasta_tategaki` の `font.name`（游ゴシック Medium）を areka の本番と同じ解決で引くと代替へ縮退する。→ 本番のぱすたも代替の書体で出ている＝本 spec の外の未対応。`/kiro-discovery` で起票し、R はその書体を除いた残り（Yu Gothic UI）で回す。開発者に知らせる。
@@ -288,7 +289,7 @@ fn expand_overhang_for_band(
   - 塗りの y 範囲が選択肢の字の範囲（1.3）。
   - 同じ帯の列から `derive_hit_rows` → `to_window_physical` で出した当たりの四角の x・y が、塗りの範囲と画素まで同じ（6.2）。
   - 記録だけ: 行の TextLayout の `GetMetrics`（left・width）と `GetLineMetrics`（height・baseline）、列ごとのインクの範囲、"Ag" の列のインク。
-- **S（3.1・3.3）** `vertical_band_follows_scroll_and_leaves_no_residue_readback`: 右から左・左から右で、列があふれて `block_offset` が 0 でない状態で、乗せる列を移し、さらに解除する。塗りが今乗せている列の帯の中にだけ在り、解除の後は面の全域で塗りの画素が 0。
+- **S（3.1・3.3）** `vertical_band_follows_scroll_and_leaves_no_residue_readback`: 右から左・左から右で、拡大率 1 と 1.5（分数の倍率での描き替えの範囲の丸めを見る）で、列があふれて `block_offset` が 0 でない状態で、乗せる列を移し、さらに解除する。塗りが今乗せている列の帯の中にだけ在り、解除の後は面の全域で塗りの画素が 0。
 - 今の `vertical_band_offset_shifts_paint_on_block_axis`（左から右・寄せの差）はそのまま通る（足し算は変えない）。
 - 当たりの側のスクロール（3.1）と、帯の中の点で選ぶこと（2.2）は、足し算を変えないので今の檻が受け持つ: `choice_tests.rs` の `to_window_physical_vertical_puts_committed_on_x_block_axis`・`to_window_physical_parameterized_over_k_committed_and_modes`、areka の `input_events/balloon_pure_core_tests.rs`（`hit_choice_row` の半開区間）。R の「当たり＝塗り」がその入口の四角を固める。
 
