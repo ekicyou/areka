@@ -401,7 +401,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.rect:1"]
 status = "vocabulary-only"
 introduced = "2.8.39"
-owner = "currentghost-property-tree"
+owner = "mcp-scope-rect-property"
 priority = "A2"
 values = []
 links = []
@@ -409,12 +409,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+担当 spec は mcp-scope-rect-property。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、走行の測りが窓の位置を読めなかった崩れ（同 spec の検証の記録の崩れた所の表の 20）を引き取る spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.scaling:1"]
 status = "vocabulary-only"
 introduced = "2.7.89"
-owner = "currentghost-property-tree"
+owner = "shell-scale-linkage"
 priority = "A2"
 values = []
 links = [
@@ -425,6 +426,7 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。相手の id が正典に無いので関連には書けない。掛け合わされる残りの 2 つのうち、シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形（倍率／横倍率・縦倍率／横倍率・縦倍率・オプション）のどれを指すか決まらないので関連には書かない。
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight.initial:1"]
@@ -659,7 +661,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.dpi:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = "currentghost-property-tree"
+owner = "shell-scale-linkage"
 priority = "A2"
 values = []
 links = []
@@ -668,6 +670,7 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面の目盛の細かさ。相手の id が正典に無いので関連には書けない。
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.primary:1"]
@@ -736,7 +739,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.rect:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "currentghost-property-tree"
+owner = "mcp-scope-rect-property"
 priority = "A2"
 values = []
 links = []
@@ -744,12 +747,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+担当 spec は mcp-scope-rect-property。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、走行の測りが窓の位置を読めなかった崩れ（同 spec の検証の記録の崩れた所の表の 20）を引き取る spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.scaling:1"]
 status = "vocabulary-only"
 introduced = "2.7.89"
-owner = "currentghost-property-tree"
+owner = "shell-scale-linkage"
 priority = "A2"
 values = []
 links = [
@@ -760,6 +764,7 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。相手の id が正典に無いので関連には書けない。掛け合わされる残りの 2 つのうち、シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形（倍率／横倍率・縦倍率／横倍率・縦倍率・オプション）のどれを指すか決まらないので関連には書かない。
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.seriko.defaultsurface:1"]

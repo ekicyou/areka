@@ -560,7 +560,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "script-small-tags"
 priority = "A14"
 values = []
 links = []
@@ -571,6 +571,7 @@ note = """
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 選択肢マーカーの表示]
 [頻度: 里々 7 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\![*。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。* と ? は文字としてそのまま引いたので実際の書かれ方には当たらず過小に出る）]
+担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2coverlay_2cID_5d:1"]
@@ -709,7 +710,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1"]
 status = "absent"
 introduced = "2.8.23"
-owner = ""
+owner = "script-small-tags"
 priority = "B2"
 values = ["装い"]
 links = []
@@ -721,6 +722,7 @@ areka-seriko の handle_message は名前の完全一致で bind だけを選ぶ
 [群: 着せ替え]
 [テーマ: 知らせを出さない形の着せ替えができず、静かに着替える演出が組めない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![bind-noevent。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1"]
@@ -1586,7 +1588,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1"]
 status = "absent"
 introduced = ""
-owner = "property-query-channels"
+owner = "shell-scale-linkage"
 priority = "C10"
 values = []
 links = [
@@ -1601,6 +1603,7 @@ note = """
 [テーマ無し: 値を尋ねるための配管で、利用者に見える手応えは返事を受け取った台本の側に現れる]
 [頻度: 里々 6 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![get。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 [読み書き: 読み（プロパティシステムの値を取り出し、指定したイベントの Reference へ入れる）。相手のプロパティ名は引数で決まるので 188 件のどれにでも向く。links に載せたのは正典本文の記述例が名指しする 2 件だけ]
+担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は property-query-channels）。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2ccollisionmode_5d:1"]
@@ -3372,7 +3375,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "stay-on-top-directives"
 priority = "A2"
 values = []
 links = []
@@ -3383,6 +3386,7 @@ note = """
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1・ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
+担当 spec は stay-on-top-directives。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1"]
@@ -4327,7 +4331,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_u_5b0x0000_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "script-small-tags"
 priority = "A5"
 values = []
 links = []
@@ -4336,6 +4340,7 @@ note = """
 ログ: 出る（compile の catch-all の debug! 記録）。
 [群: 文字コードの埋め込みと実体参照]
 [頻度: 里々 7 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\_u）]
+担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1"]

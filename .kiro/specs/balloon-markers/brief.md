@@ -147,3 +147,7 @@
 - **議題を 1 つ足す＝オンラインの印を 1 枚の動く絵でも持てるようにする**。開発者の指示（2026-10-10「online0.png などのアニメは動画 webp などで実現する」）で、areka 自前の既定バルーン（`default-balloon-selfmade`）はオンラインの印を連番でなく 1 枚の動く WebP で持つ。正典は `onlinemarker.filename` の名前に 0 からの連番を足して読み、`onlinemarker.interval`（既定 500 ミリ秒・50 未満は不可）で切り替える。1 枚の動く絵（動く WebP・APNG）は areka の拡張になるので、決めること: 連番が 1 枚だけでその絵が動く絵のとき、こまの時間は絵の中の時間割りを使うか／`onlinemarker.interval` を書いたときどちらが勝つか／連番と動く絵が混ざったときの扱い。動く絵を読んで時刻どおりに回す仕組みは面の絵で着地済み（完了 `areka-P0-animated-image-playback`）。
 - **名前の探し方は `balloon-webp-names` の 1 か所を通す**。同 spec が「名前から絵のファイルを探す」所をまとめ、`.png` と `.webp` を受ける。印の絵（`arrow*`・`online*`・`sstp`）も同じ所で探せば `.webp` の印を拾える。同じ系列の表（`SeriesFamily`）を触るので、同 spec を先に着地させる。
 - **印の検体が 2 つできる**。連番 16 コマのオンラインの印・矢印・SSTP の印を持つ古い作りの検体＝`dot_sakura` の同梱バルーン `bottle`（`areka-P0-dot-sakura-specimen`）。1 枚の動く絵の印を持つ検体＝新しい既定バルーン（`default-balloon-selfmade`）。Constraints の「印の画像の検体はリポジトリ内に作る」は、この 2 つで足りるかを着手時に見直す。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- 棚卸㉑〜㉓の切り方の前半（矢印と手動スクロール・装飾の系列の土台・`arrow*` の旧名の段）を v0.1.0 の新しい spec `balloon-scroll-arrows` へ切り出した（ぱすたの縦書きのバルーンが `arrow0/1` を使う・`verification.md` 10 節）。本 spec に残るのは後半（`onlinemarker`・`number.*` と `\![set,balloonnum]`・`sstpmarker`／`sstpmessage`）で、系列の土台と印の配置は同 spec の物に乗る（前提に同 spec を足す）。規模は 7〜9 の見込み。

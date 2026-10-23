@@ -87,3 +87,14 @@
 - 要件定義のモデル: Opus のまま（先例＝wintf の `WM_SETCURSOR` の診断の口・`shell/boxes.rs` の 2 つ目の転記）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: なし。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 16（当たり判定ごとのマウスの形）**: 当たり判定ごとのマウスの形（ぱすたの身体は `system:hand`）を、areka は出さない見込み。走行ではマウスの形を読み取っていない（`shots\run1\notes.md` の段 3）。run1 では身体が映らなかった（`mouse-click-wheel-events` の件 12）ので、身体の上の形は、その spec の着地の後でないと確かめられない。
+  - 原因: シェルの `surfaces.txt` の `sakura.cursor` ブレス（`mouseup*`）を読む所が無い（網羅台帳で absent・この brief の Current State）。
+- **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 3・3 節の 6 行目）: カーソルの形の読み取り（`ssp\stage3-cursor.txt` の 5 点）で、×（-84,258）とボール（-615,805）は `HAND`（Windows の標準の指さしの形・ハンドル `0x1001F`）、身体（-410,450 と -300,640）は `custom`（同じハンドル `0x46160A0D`）、窓の白地（-700,1000）は `ARROW`。シェルの `sakura.cursor` ブレスには `mouseup0,顔,system:hand` から `mouseup19,胸左,system:hand` までの 20 行があり、身体の当たり判定 20 個すべてに `system:hand` を当てている。`閉じる`（×）と `セキュリティボール` の行は無く、`kero.cursor` などのブレスも無い。読み方: 身体の `custom` は、シェルが指定した `system:hand` を SSP が自分の手の形のカーソルとして出したもの。× とボールは指定が無いので ukadoc の既定の `system:finger` になり、標準の指さしの形（`HAND`）として読めた。形そのものの絵は撮っていない。
+- 網羅台帳の宛先: 2026-10-23 に 2 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 3）: 当たり判定ごとにマウスの形が替わる（身体は手の形・× とボールは指さしの形・当たりの外は矢印）。

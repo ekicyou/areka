@@ -151,3 +151,18 @@
   - 本文 Constraints の「Fable 推奨」と棚卸㉓〜㉗の節の「Fable」は古い（上）。
   - 棚卸㉗の節の重なりの `startup-options-core` は着地済み。本文 Upstream の `ghost-standard-balloon` は着地済み、`shell-companion-balloon` は後ろ（前に居ると読める書き方は古い）。
   - バルーンの読み直し（`\![reload,balloon]`・MCP の `reload`）でゴーストの中のバルーンが保たれることを、確かめる項目に足す。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 1（縦書きのバルーンが見つからない）**: run1 で、ぱすたの descript の `balloon` の名前 `窓際のぱすたさん縦書き` が見つからず、既定の横書きのバルーン `StayseeBalloon` で出た。
+  - 根拠: `logs\run1.stdout.log` の `2026-10-22T23:17:53.448361Z` の `boot_resolve` の WARN `descript_balloon_not_found value="窓際のぱすたさん縦書き"`。get_log の `#3 … balloon_resolved route=Default dir=...\root\balloon\StayseeBalloon`（`shots\run1\1-boot-getlog.txt`）。
+  - 原因: `crates/areka/src/boot_resolve.rs:294`〜`297`。descript の `balloon` の名前を、根の `balloon\` の一覧（`listed`）の中だけで探し、ゴーストのフォルダの中（ぱすたは `ghost\pasta-in-windows\balloon\pasta_tategaki`）を探さない。
+- **件 2（横書きのバルーンで段が重なる）**: 件 1 の結果。横書きのバルーンでは、`\_l[-283,0]` の後の段が前の行に重なって描かれた（起動の段・`縦書き試作` の 2 ページとも）。`\_l[-253,0]` の後の選択肢 4 つも本文の 2 行目に重なった。ぱすたは縦書きの左の枠へ移るために y を 0 にしているので、横書きでは 1 行目の高さに戻る。
+  - 根拠: `shots\run1\1-boot-balloon0.png`（「あれフ映ってるボール」）・`2-choice-zorder.png`・`2-choice-balloon0.png`・`2-tategaki-frames-page1.png`・`2-tategaki-balloon0-end.png`。
+- **縦書きのバルーンが見つかれば崩れは消えること**: 縦書きのバルーンを根の `balloon\` へ写した alt2 と rerun1 では、`balloon_resolved route=Descript dir=...\root\balloon\pasta_tategaki` になり、`descript_balloon_not_found` は 0、列と枠は重ならなかった（`<w>\target\pasta-verify-alt\shots\alt2\1-boot-balloon0.png`・`2-choice-zorder.png`・`2-tategaki-burst-03.png`、`<w>\target\pasta-verify-rerun\shots\rerun1\2-tategaki-burst-03.png`・`2-tategaki-burst-09.png`）。この spec の着地で変わるのは見つけ方だけで足りる見込み。
+- **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 1・段 2、3 節の 1 行目）: SSP は、ゴーストのフォルダの中の `pasta_tategaki`（`name,窓際のぱすたさん縦書き`）を使った（`get_property` のバルーンの名前・`ssp\stage1-shot.png`）。SSP の `balloon\` に同じバルーンが在るかは確かめていない。この見つけ方を書いた ukadoc の項目は見つからなかった。段 2 では `\_l[-253,0]`・`\_l[-283,0]` で左の枠へ移り、列と枠が崩れずに並んだ（`ssp\stage2-choice-shot.png`・`stage2-tategaki-frames-shot.png`）。
+- **着地で変わるはずの所**（手順書の段 1・段 2）: バルーンが既定のバルーンから縦書きのバルーンに替わり、会話が縦書きで出る。
+- 縦書きのバルーンの descript の `font.name`・`font.shadowcolor.*`・`cursor.*`・`anchor.font.color.*`・`vertical`・`use_self_alpha` が SSP と同じに見えるかは、開発者の判定がまだ無い（`verification.md` 6 節の「申し送りの漏れが無いことの確かめ」）。この spec の着地の後の回し直しで見比べる。`balloon-scroll-arrows`・`balloon-communicatebox` の実機の確かめも、この spec の後になる。

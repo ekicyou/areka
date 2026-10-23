@@ -334,8 +334,9 @@ impl Emo2Wiring {
 
     /// rx にキュー済みの `PresentCommand` を非ブロックで FIFO 全件取り出す（S3/S4 の受信列記録用）。
     ///
-    /// `run_drain_phase` と同じ `Receiver::try_iter` だが、spine は形状記録のため apply 前に**値**として
-    /// 取り出す（`PresentCommand` は `reply: Option<ReplySender>` ゆえ非 Clone・move で受ける）。
+    /// `run_drain_phase`（上限まで先に集め、同じ target へ続く reply の無い ShowSurface を最後の 1 件に
+    /// 畳む）と違い、本補助は上限も畳みも持たず届いた分を全部そのまま返す。spine は形状記録のため apply 前に
+    /// **値**として取り出す（`PresentCommand` は `reply: Option<ReplySender>` ゆえ非 Clone・move で受ける）。
     #[cfg(test)]
     pub(crate) fn drain_received(&mut self) -> Vec<PresentCommand> {
         self.rx.try_iter().collect()

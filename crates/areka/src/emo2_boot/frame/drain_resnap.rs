@@ -1,11 +1,13 @@
 //! drain フェーズ＋resnap（[`run_drain_phase`]・[`resnap_shell_targets`] ほか）。
 
+use std::sync::mpsc::Receiver;
+
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, info, trace, warn};
 
 use areka_emo_compose::ScaleRatio;
-use areka_emo_present::{EmoPresenter, TargetId};
+use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::chain_finalize::{
@@ -32,17 +34,16 @@ use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 // ---------------------------------------------------------------------------
 
 /// フェーズ②（drain・design「フェーズ②（drain）」・DD-1）: attach 完了後のみ受信済み
-/// `PresentCommand` を FIFO で全件 `presenter.apply` へ適用する。
+/// `PresentCommand` を FIFO で `presenter.apply` へ適用する（画面に載らない途中の `ShowSurface` は畳む）。
 ///
 /// attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）ため **`attached` が立つまで
-/// drain しない**。装着後は [`Receiver::try_iter`] で**現時点でキュー済みの指令を非ブロックで
-/// FIFO 全件**取り出し、到着順に `presenter.apply(world, cmd)` する。`apply` は `()` を返し、失敗は
+/// drain しない**。装着後は届いている指令を非ブロックで**先に集めてから**到着順に
+/// `presenter.apply(world, cmd)` する（集め方・畳み方は [`drain_present_commands`]）。`apply` は `()` を返し、失敗は
 /// `cmd.reply`（本経路は常に `None`＝撃ちっぱなし）経由で、未装着等の異常は presenter 内部で
 /// `error!` 済み（log-first）。本フェーズは panic しない（`SurfaceOutput`→UI の非ブロック配送契約）。
 ///
 /// drain は attach 後にのみ走るため `TargetNotAttached` は原理上発生しない（発生＝結線バグとして
-/// presenter が `error!`・design「適用時（UI）」）。`try_iter` はチャネルが空になるか送信端が全て
-/// drop されると尽きる（ブロックしない）。
+/// presenter が `error!`・design「適用時（UI）」）。
 ///
 /// # 窓寸 reconcile は本フェーズの外側にある
 ///
@@ -57,12 +58,64 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     if !wiring.attached {
         return;
     }
-    // try_iter: 現時点でキュー済みの指令を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
     // wiring.rx（受信端＝shared 借用）と wiring.presenter（mut 借用）は互いに素なフィールドゆえ両立する。
-    for cmd in wiring.rx.try_iter() {
-        // apply は () を返し、失敗は cmd.reply（本経路は常に None）経由。未装着等の異常は presenter 内部で
-        // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
-        wiring.presenter.apply(world, cmd);
+    // apply は () を返し、失敗は cmd.reply（本経路は常に None）経由。未装着等の異常は presenter 内部で
+    // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
+    drain_present_commands(&wiring.rx, |cmd| wiring.presenter.apply(world, cmd));
+}
+
+/// 1 フレームの drain が受信端から取り出す指令の上限（送り手が受け手より速いときもフレームを終わらせる）。
+///
+/// 普段は届くのが 1 フレームに数件（動く絵で 1 target あたり毎秒十数件）なので当たらない。
+pub(super) const MAX_DRAIN_PER_FRAME: usize = 1024;
+
+/// [`run_drain_phase`] の本体（適用を閉包で受ける形・GPU 無しの檻へ入れるためのシーム）。
+///
+/// 1. 届いている指令を**適用より先に**上限 [`MAX_DRAIN_PER_FRAME`] まで集める。`try_iter` を回しながら
+///    適用すると、送り手（seriko）が送り続けるあいだ尽きず、適用 1 回が送りの間隔より重いと
+///    フレームが終わらない（rerun2 の固まり・task 5.6）。上限を超えた分は捨てずにチャネルに残り、
+///    次のフレームが到着順に取り出す（当たったら `warn!`）。
+/// 2. 同じ target へ続く `reply` の無い `ShowSurface` は、後ろに同じ target の `ShowSurface` が
+///    あれば画面に載らないので最後の 1 件だけ適用する（今のコマを出す）。`ShowSurface` 以外の指令は
+///    区切りで、それをまたいで畳まない。`reply` 付きの指令は畳まない。
+pub(super) fn drain_present_commands(
+    rx: &Receiver<PresentCommand>,
+    mut apply: impl FnMut(PresentCommand),
+) {
+    let cmds: Vec<PresentCommand> = rx.try_iter().take(MAX_DRAIN_PER_FRAME).collect();
+    if cmds.len() == MAX_DRAIN_PER_FRAME {
+        warn!(
+            cap = MAX_DRAIN_PER_FRAME,
+            "drain: 1 フレームに取り出す上限に達した（残りは捨てずに次のフレームで到着順に適用する）"
+        );
+    }
+    // 後ろから見て、区切りまでのあいだに後の ShowSurface を持つ target を控える。
+    let mut kept = Vec::with_capacity(cmds.len());
+    let mut shown_later: Vec<TargetId> = Vec::new();
+    let mut superseded = 0usize;
+    for cmd in cmds.into_iter().rev() {
+        if let PresentCommand::ShowSurface { target, reply, .. } = &cmd {
+            if shown_later.contains(target) {
+                if reply.is_none() {
+                    superseded += 1;
+                    continue;
+                }
+            } else {
+                shown_later.push(*target);
+            }
+        } else {
+            shown_later.clear();
+        }
+        kept.push(cmd);
+    }
+    if superseded > 0 {
+        trace!(
+            superseded,
+            "drain: 同じ target へ続く ShowSurface を最後の 1 件に畳んだ（途中のコマは画面に載らない）"
+        );
+    }
+    for cmd in kept.into_iter().rev() {
+        apply(cmd);
     }
 }
 
@@ -574,3 +627,7 @@ fn defer_chain_finalize(world: &mut World, reason: ChainDeferReason) {
         "chain_finalize: 初期配置の確定が続けて見送られている（隣接が崩れたままの可能性・scg 7.1/6.5）"
     );
 }
+
+#[cfg(test)]
+#[path = "drain_resnap_tests.rs"]
+mod tests;

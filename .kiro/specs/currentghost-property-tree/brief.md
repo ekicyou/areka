@@ -133,3 +133,7 @@
 - **優先度の区分**: C（ukadoc の `currentghost.*` の拾い残し・完了 `balloon-vertical-canon` が先送りした `.vertical` の受け皿・台帳の段は「その他」）。
 - **要件定義のモデル**: Fable（動く値の口の形で後ろの 4 本の形が決まる・スレッドをまたぐ）。
 - **見つけた穴・古くなった記述**: 棚卸㉒の「待つのは `balloon-font-file`〔C4〕ほか」は古い（`balloon-font-file` は C5 へ回った）。roadmap の台帳の行の「前提」の欄（`property-query-channels`（読む道）か `mcp-get-property`）は満たされた＝今の前提は `property-name-case-fold`。本文の行番号つきの位置（`emo2_boot/mod.rs:430-465` など）はどれも古い（受け口の並びは今 `emo2_boot/mod.rs` の `GhostBootOptions` を組む所）。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- `currentghost.balloon.scope(ID).rect` と動く値の口（持ち主・議題「変わるたびに出すか、読む時に問い合わせるか」）を v0.1.0 の新しい spec `mcp-scope-rect-property` へ移した（`verification.md` 5 節の 20）。`currentghost.balloon.scope(ID).scaling` は v0.1.0 の新しい spec `shell-scale-linkage` へ移した（ぱすたの `dic/tategaki.pasta:101`）。本 spec に残る 17 項目は、`mcp-scope-rect-property` が作る口に載せる（前提に同 spec を足す）。

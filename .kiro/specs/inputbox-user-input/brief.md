@@ -104,3 +104,7 @@
 - 先に要るもの: 働きの上では無い。同じウェーブに置けない相手: `mcp-kanade-tools`・`mouse-click-wheel-events`・`script-security-level`（kanade の `schedule/events.rs`・`schedule/mod.rs`・`msg.rs`）・`mcp-reload`・`sakura-time-critical`・`sakura-time-directives`（`consumer_ledger.rs`）。`mcp-kanade-tools` が `msg.rs` と `schedule/mod.rs` を分けた後に着手するのが安い。重なり 0: `mcp-receiver-bugs`・`mcp-stdio-bridge-residue`・`check-script-arg-checks`（`doc/ssp-mcp/areka-tools.md` の受け取り手の数の 1 行を向こうに預ければ）。
 - 優先度の区分: C のまま。要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: 棚卸㉓の測定は、入力の種類を足すと触ることになる kanade の `msg.rs`・`schedule/mod.rs`・`lib.rs` を挙げていなかった。Adjacent の `anchor-tag-canon` は着地済み。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
+
+- `communicatebox`（`\![open,communicatebox]`・`\![close,communicatebox]`・`OnCommunicate`・`OnCommunicateInputCancel`・バルーンの `communicatebox.*`）は v0.1.0 の新しい spec `balloon-communicatebox` が持つ（ぱすたの縦書きのバルーンが鍵を持つ・`verification.md` 10 節）。areka で初めての文字の入力欄の部品は同 spec が先に作る＝本 spec は同 spec の後に置き、その部品を使う。

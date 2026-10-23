@@ -90,3 +90,19 @@
   - 本文 Problem の「areka は面 0 を出す＝起動の一瞬がずれて見える」は古い（上）。崩れの本体は、窓の大きさと置き場所が面 0 の絵で決まること（ぱすたの面 0 は「ずれた小さい絵」）。
   - 本文 Desired Outcome の「リロードの後に既定の面で出る」は、ゴーストの読み直しでは前の面の持ち越しが先で、既定の面は戻り先だけ、と書き直す。本文 Downstream の `mcp-reload` は着地済み＝この spec は戻り先の値を descript から渡すだけになった。
   - 本文 Constraints の `emo2_boot/mod.rs`（916 行）は 787 行、`consumer_ledger.rs`（960 行）は 472 行。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 4（ぱすたの窓が画面の下端を越える）**: 起動の位置で、ぱすたの窓が (0,864)-(1108,2232) になり、主画面の高さ 1800 を越え、ボールの下半分がタスクバーに隠れた。
+  - 根拠: `logs\run1.stage3-excerpt.log` の `2026-10-22T23:17:55.378678Z` `merge_scope restore scope=0 … default_char_y=864 … char_w=640 char_h=840`・hit_test の `bounds=(0,864)-(1108,2232)`。作業領域の下端は 1704（同じ記録の `work_area=RectPx { … bottom: 1704 }`）。
+  - 原因: `crates/areka/src/placement/measure.rs:173`。起動の位置を決めるときの窓の大きさを、`\0` は面 0 で測る（決め打ち）。ぱすたの面 0 は `pasta/xyz.png`（320×420）なので、200% で 640×840 になり、下端に揃えた y が 1704−840＝864 になった。実際に出る面 1000・1002 は 554×684（200% で 1108×1368）。ぱすたの descript は `sakura.seriko.defaultsurface,1000` だが、areka は読まない（`\1` は面 10 で測るので 1108×1368・y＝336 で合っている）。
+- **件 5（参考・alt2 だけ）**: 縦書きのバルーンの右の枠の 1 列目の上端に、ぱすたの × の板が重なり、字の一部（「そっ」「うい」）が隠れた。件 4 の結果で、ぱすたの窓が低すぎたため、バルーンの下端（980＋900＝1880）が作業領域を越え、起動の関門が 176 上へ寄せて × の板にかかった。
+  - 根拠: alt2 の記録 `2026-10-22T23:42:32.443025Z` `Clamp 起動時関門 … scope=0 … from=PointPx { x: 80, y: 980 } to=PointPx { x: 80, y: 804 } balloon_size=SizePx { w: 872, h: 900 }`・`<w>\target\pasta-verify-alt\shots\alt2\1-boot-primary-full.png`・`2-choice-zorder.png`・`2b-after-choice.png`。
+  - バルーンのぱすたからのずれ（80,116）は SSP（150% で 60,87＝等倍で 40,58）と同じ。前後（ぱすたが手前・バルーンが奥）も SSP の `\![set,zorder,s0,b0,s1]` と同じ向き。rerun1 では開発者の手のドラッグの後の位置で × と列の頭が離れていたが、既定の位置ではないので確かめにならない。
+- **SSP の基準**（`ssp-measurement.md` 2 節の段 1）: `\0` は面 1000。`scope(0)` と `scope(1)` の rect はどちらも `-782,201,49,1227`（150% の画面で 831×1026＝554×684 の 1.5 倍）。台本も `\s[1000]` を出すので、この段だけでは descript の効きと台本の効きを分けられない。
+- **測りの答え（`balloon.dontmove`）**（`ssp-measurement.md` 3 節の 4 行目）: ぱすたの descript は `balloon.dontmove,true`。SSP でぱすたを 2 回ドラッグした後も、バルーンはぱすたの左上から 60,87 の所に付いたまま動いた（`ssp\stage5-rects.txt` の 4 行目・`stage5-balloon-shot.png`）。利用者がバルーンを自分で動かす操作は試していない。
+- 網羅台帳の宛先: 2026-10-23 に 2 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 1）: 最初の面が 1000 になり、起動の位置を決める窓の大きさが面 1000 の大きさになる（200% で 1108×1368・下端が作業領域の中に収まる）。バルーンが起動の関門で上へ寄せられず、× の板にかからない。
