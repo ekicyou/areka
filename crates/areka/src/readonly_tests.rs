@@ -99,6 +99,31 @@ fn engage_is_called_only_from_main() {
     );
 }
 
+/// `main.rs` が入れの口を 1 度だけ、起動の値を解く段（`resolve_boot`）より前で呼ぶ（要件 1.1・1.5）。
+#[test]
+fn main_calls_engage_exactly_once_before_resolve_boot() {
+    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs"))
+        .expect("main.rs が読めない");
+    let code: Vec<&str> = src
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with("//"))
+        .collect();
+    let needle = ["readonly::eng", "age("].concat();
+    let calls: Vec<usize> = code
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.contains(&needle))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(calls.len(), 1, "main.rs の engage の呼び出し: {calls:?}");
+    let resolve = code
+        .iter()
+        .position(|line| line.contains(&["resolve_", "boot(&"].concat()))
+        .expect("main.rs に resolve_boot の呼び出しが無い（走査が空振りした）");
+    assert!(calls[0] < resolve, "engage が resolve_boot より後");
+}
+
 #[test]
 fn withhold_everything_is_called_only_from_readonly() {
     // 定義の在る sylphya も含め、ワークスペースのクレートの源（試験も含む）を全部見る。

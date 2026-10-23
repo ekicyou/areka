@@ -181,6 +181,8 @@ fn main() -> Result<()> {
     if let Some(req) = &opts.offline {
         std::process::exit(offline_dump::run(req));
     }
+    // 読み取りだけかを 1 度だけ立てる（置き場の形と受け口が決まる前・readonly-mode 要件 1.1・1.5）。
+    readonly::engage(opts.readonly);
     if opts.modules == cli::ModulePolicy::Skip {
         tracing::info!(
             event = "shiori_skipped",
@@ -216,7 +218,7 @@ fn main() -> Result<()> {
             }
         };
     // 書けるかの確かめ（argv の起動も同じ道・写しの後の置き場を見る・write-failure-notice 要件 2.1）。
-    write_failure::check_boot_dirs(&cfg, &default_app_profile_dir())
+    write_failure::check_boot(readonly::is_on(), &cfg, &default_app_profile_dir())
         .map_err(write_failure::stop_boot)?;
 
     // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
@@ -251,6 +253,7 @@ fn main() -> Result<()> {
     ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
     mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
     roots::install(app.world().borrow_mut().world_mut());
+    readonly::install(app.world().borrow_mut().world_mut());
 
     // 起動の文脈と起動入力の作り口（本番版）を据える（切替と右クリックメニューの「ゴースト」枠が読む）。
     install_boot_context(

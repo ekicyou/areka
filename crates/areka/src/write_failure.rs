@@ -139,8 +139,6 @@ pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()> {
 
 /// 起動の前の確かめの入口（readonly-mode 要件 5.1・5.2・6.4）。`readonly` なら何も開かず
 /// 作らずに通す（info 1 件）。そうでなければ今の [`check_boot_dirs`]。
-// 一時: 呼び手は 5.1 で `main` に足す。
-#[allow(dead_code)]
 pub(crate) fn check_boot(
     readonly: bool,
     cfg: &ConfigInputs,

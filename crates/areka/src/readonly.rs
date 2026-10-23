@@ -17,8 +17,6 @@ static ON: AtomicBool = AtomicBool::new(false);
 pub(crate) struct ReadOnlyRun;
 
 /// 起動の前に 1 度だけ呼ぶ（呼び手は `main` だけ）。`on` が真なら旗・保存の口の範囲・記録を立てる。
-// 一時: 呼び手は 5.1 で `main` に足す。
-#[allow(dead_code)]
 pub(crate) fn engage(on: bool) {
     if !on {
         return;
@@ -37,8 +35,6 @@ pub(crate) fn is_on() -> bool {
 }
 
 /// 旗が立っていれば World に [`ReadOnlyRun`] を足す（呼び手は `main` だけ）。
-// 一時: 呼び手は 5.1 で `main` に足す。
-#[allow(dead_code)]
 pub(crate) fn install(world: &mut World) {
     if is_on() {
         world.insert_resource(ReadOnlyRun);
