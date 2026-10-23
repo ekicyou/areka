@@ -44,7 +44,6 @@ impl BalloonLockLedger {
 
 /// 起動（窓を作る閉包・`seed_sticky_descript` の直後）: 帳簿を新しく据え、書き手を呼ぶ。
 /// 窓に受け手は付けない（バルーンの窓の受け手は今の `OnDrag`・`OnDragEnd` のまま）。
-#[allow(dead_code)] // 呼び手は task 6.1 の寿命の結線（起動・シェルの切り替え）
 pub(crate) fn seed_balloon_lock(world: &mut World, descript: &BTreeSet<u32>) {
     world.insert_resource(BalloonLockLedger {
         descript: descript.clone(),
@@ -54,7 +53,6 @@ pub(crate) fn seed_balloon_lock(world: &mut World, descript: &BTreeSet<u32>) {
 }
 
 /// シェルの切り替えの後始末: descript の段だけを取り替え、台本の lock は保ち、書き手を呼ぶ（要件 4.4・5.4）。
-#[allow(dead_code)] // 呼び手は task 6.1 の寿命の結線（起動・シェルの切り替え）
 pub(crate) fn replace_balloon_lock_descript(world: &mut World, descript: &BTreeSet<u32>) {
     world
         .get_resource_or_insert_with(BalloonLockLedger::default)

@@ -241,6 +241,8 @@ pub(crate) fn prepare_ghost_windows(
     let sticky_window_raw = prepared.sticky_window_raw.clone();
     // 採寸に使った既定の面も同じ読取から写し、起動の結線へ渡す（descript-window-keys 要件 2.2）。
     let default_surfaces = prepared.default_surfaces.clone();
+    // バルーンの動かせない指定の descript の段も同じ読取から写し、窓を作る閉包で帳簿へ据える（要件 4.1）。
+    let balloon_dontmove = prepared.balloon_dontmove.clone();
     // 標準の位置の材料（descript の値＋バルーンの配置の値）も同じ読取から取り出し、窓の組と
     // 一緒に置く（areka-P0-move-canon 要件 8.6・areka-P0-window-link-directives 要件 7.4）。
     let default_basis = prepared.default_basis;
@@ -282,6 +284,8 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(default_basis);
         // 窓の組の帳簿も窓の束と一緒に据える（窓が在るので据えた後に書き手が付け直す・要件 3.8・6.1）。
         placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());
+        // 動かせない指定の帳簿も窓を作った後に据える（据える前に作った窓へ書き手が届く・要件 4.1）。
+        placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove);
         // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
         // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
         // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として

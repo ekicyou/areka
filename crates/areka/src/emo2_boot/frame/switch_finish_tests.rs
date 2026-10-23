@@ -731,6 +731,46 @@ fn shell_finish_replaces_only_the_descript_sticky_group() {
     );
 }
 
+/// シェルの切り替えは動かせない指定の descript の段だけを新しいシェルの値へ取り替え、台本の lock は
+/// 保つ（descript-window-keys 要件 4.4・5.4）。起動の descript の段 `{0}` は新しいシェルの
+/// `kero.balloon.dontmove,1` の `{1}` へ替わり、スコープ 1 の台本の lock は残る。
+#[test]
+fn shell_finish_replaces_only_the_descript_balloon_lock() {
+    use crate::placement::balloon_lock::{
+        BalloonLockLedger, HoldReason, apply_script_balloon_lock, seed_balloon_lock,
+    };
+
+    let (mut world, _windows) = reseed_tests::booted_world(96);
+    seed_balloon_lock(&mut world, &[0].into());
+    apply_script_balloon_lock(&mut world, 1, true);
+    let finish = SwapFinish::Shell {
+        source: reseed_tests::new_shell(&[("kero.balloon.dontmove", "1")]),
+        balloon: BalloonPlacementInputs {
+            author_dpi: 96,
+            windowpositions: BTreeMap::new(),
+        },
+        restored: Vec::new(),
+        boxes: ShellBoxAssets::default(),
+    };
+    let mut rig = rig_on(world, SkinKind::Shell, false, finish);
+    answer(&mut rig, 0, Ok(()));
+    answer(&mut rig, 1, Ok(()));
+    frame(&mut rig);
+
+    let ledger = rig.world.resource::<BalloonLockLedger>();
+    assert_eq!(
+        (ledger.reason(0), ledger.reason(1)),
+        (
+            None,
+            Some(HoldReason {
+                descript: true,
+                script: true
+            })
+        ),
+        "(スコープ 0, スコープ 1)"
+    );
+}
+
 // ---------------------------------------------------------------- 箱の束（areka-P0-shell-balloon）
 
 /// 前のシェル: 面 10 に箱 `old`。

@@ -42,7 +42,9 @@ use crate::emo2_boot::shell_balloon_switch::{
 use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapPayload};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::placement::balloon_lock::replace_balloon_lock_descript;
 use crate::placement::config::build_placement_config;
+use crate::placement::descript_window_keys::read_balloon_dontmove;
 use crate::placement::reseed::{
     BalloonPlacementInputs, apply_shell_descript, reanchor_char_windows,
 };
@@ -449,6 +451,12 @@ fn finish_shell(
     match world.get_resource::<GhostWindows>().cloned() {
         Some(windows) => {
             apply_shell_descript(world, &windows, source, balloon, restored);
+            // 動かせない指定は descript の段だけを新しいシェルの値へ取り替える（台本の lock は保つ・要件 4.4・5.4）。
+            let scopes: Vec<usize> = windows.scopes().collect();
+            replace_balloon_lock_descript(
+                world,
+                &read_balloon_dontmove(&source.ghost_kv, &source.shell_kv, &scopes),
+            );
             // 揃え方が変わっても窓寸が同じだと後段の再スナップは置き直さないので、ここで新しい
             // 揃え方へ置き直す（要件 2.7）。
             reanchor_char_windows(world, &windows);
