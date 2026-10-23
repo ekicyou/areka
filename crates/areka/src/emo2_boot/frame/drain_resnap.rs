@@ -9,8 +9,8 @@ use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::chain_finalize::{
-    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, finalize_chain,
-    moved_default_pos, note_chain_deferral,
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, ScriptPlaced,
+    finalize_chain, moved_default_pos, note_chain_deferral,
 };
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
@@ -363,7 +363,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     if world.get_resource::<ChainFinalized>().is_some() {
         return;
     }
-    let (states, targets) = match collect_chain_states(source, world) {
+    let (mut states, targets) = match collect_chain_states(source, world) {
         Ok(scan) => scan,
         Err(reason) => {
             match reason {
@@ -389,6 +389,14 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         }
     };
 
+    // 台本の `\![move]` が置いた窓は、x が既定のまま（縦にだけ動いた・ちょうど既定へ置いた）でも
+    // 引き戻さない（scg 7.3）。既定を `None`＝「既定配置ではない」として判定へ渡す。
+    for (state, &(_, entity, _)) in states.iter_mut().zip(&targets) {
+        if world.get::<ScriptPlaced>(entity).is_some() {
+            state.default_x = None;
+        }
+    }
+
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     let moves = finalize_chain(&states);
     for m in &moves {
@@ -412,11 +420,11 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
     // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     //
-    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。並べ直しは x だけで「既定配置のまま」を
-    // 見るので、SHIORI の移動の指示で縦にだけ動かされた窓も動かす。今の Y を載せると台本の Y が
-    // 既定に入り、既定と今の位置が揃って「動かされていない」に化け、並べ終えた時点の保存が台本の
-    // 位置を書いてしまう（areka-P0-char-position-save-on-exit 要件 1.7・SHIORI の移動はその回かぎり）。
-    // 普段は今の Y と既定の Y が等しいので結果は変わらない。
+    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。台本の `\![move]` が置いた窓は印
+    // （`ScriptPlaced`）で並べ直しから外れるので、ここへ来るのは台本の置いていない窓だけで、普段は
+    // 今の Y と既定の Y が等しく結果は変わらない。今の Y を載せる形にすると、既定と違う Y が既定へ
+    // 入り得て、並べ終えた時点の保存の「動かされていない」の判定を化かす
+    // （areka-P0-char-position-save-on-exit 要件 1.7）。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {

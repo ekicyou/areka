@@ -16,6 +16,7 @@ use tracing::{info, warn};
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::{Point, WindowPos};
 
+use super::super::chain_finalize::ScriptPlaced;
 use super::super::persist::saved_form_anchor;
 use super::super::sticky_group_ledger::StickyGroupLedger;
 use super::{
@@ -356,6 +357,8 @@ pub fn follow_sticky_move(world: &mut World, target_scope: u32, delta: PointPx) 
             world.get_resource::<MonitorSnapshot>(),
         );
         if move_window_to(world, window, target.x, target.y) {
+            // 連れ動いた相手も台本が置いた窓（起動時の確定が引き戻さない・scg 7.3）。
+            world.entity_mut(window).insert(ScriptPlaced);
             moved.push(want);
         }
     }

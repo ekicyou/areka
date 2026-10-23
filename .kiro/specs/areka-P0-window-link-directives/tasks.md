@@ -142,7 +142,7 @@
   - 1,000 行の決まりを超えたファイルが無く、`DragConfig.move_window` を書く所が書き手の 1 か所だけであることを grep で示す
   - _Requirements: 9.6_
 
-- [ ] 9.2 ぱすた（「窓際のぱすたさん」）を動かし、組の連れ動き・`ignore-sticky-window`・次の起動での重なり・近道を実機で確かめる
+- [x] 9.2 ぱすた（「窓際のぱすたさん」）を動かし、組の連れ動き・`ignore-sticky-window`・次の起動での重なり・近道を実機で確かめる
   - 検体 `pasta-in-windows` を `sample fetch` で作業ツリーの `target\` の下へ取り寄せ、根も `target\` の下に絶対パスで置き、`RUST_LOG` を `sticky_groups`・`sticky_follow`・`sticky_follow_ignored`・`balloon_pos_reset`・`reset_pos_menu_outcome` が出る水準まで開けて、排他テストの机で `real-run-kit` を使って起こす。確かめの間は拡大率を変えない
   - 起動で `sticky_groups`（descript_seed・`{0,1}`）が出る・本体側の窓のドラッグ（入力の送り込みは画面のロックが無いときだけ）で相方側の窓とバルーンが同じ量動き、途中で 2 つの矩形を読んで位置の関係が変わらない・辞書の「窓あわせ」（MCP の `raise_event` か `sakurascript`）で相方側だけが動き `sticky_follow_ignored` が出る・終了して起こし直すと 2 つの窓が重なったまま出る、を窓の矩形と記録で判定する
   - ぱすたの窓をクリックしてから 2 つの近道を押し、`balloon_pos_reset`（trigger=shortcut）と `reset_pos_menu_outcome` が出ることで、F10 の届き方と入力先を確かめる。起動の連鎖の確定と記憶の寄せ直しで食い違いが出たら、原因をこの spec の中で直すか、持ち主の spec を確かめて `/kiro-discovery` で起票する
@@ -163,3 +163,4 @@
 - 6: `consumer_ledger.rs` の ukadoc の錨は新旧の形が混ざる（新しい行は今の MCP の `#_!_…` 形）。全 variant を揃えるなら別の機会に一括で。`reset_balloon_pos` の一時の `#[allow(dead_code)]` は 7.2・7.3 で外す。
 - 7.1（範囲外）: `cargo clippy -p areka-kanade --all-targets` が `actor_raise_reply_tests.rs:95` の `clippy::never_loop`（既定で deny）で止まる。この spec の前から（66eaa2b5）。完了の棚卸で扱う。
 - 8: 台帳 `assets.toml` の `seriko.alignmenttodesktop` 系は design.md の「実装済みに改める」と違い `degraded`・持ち主なし。起動の初めの位置は top/left/right でも下として解く（`placement/resolver.rs` の `resolve_placement`）ままで、この spec の要件にその起動の位置は無い（10.4 は今の状態に合わせる）。作業領域が変わったときの当て直しも下だけ。完了の棚卸で `/kiro-discovery` の起票を決める。`consumer_ledger.rs` の ukadoc の錨は `check` が求める目録の形に直した（6 の注記は古い）。
+- 9.2: 起動の並べ直し（`finalize_chain_once_with`）が台本の `\![move]` で置いた窓を x の一致だけで「動かされていない」と読み引き戻していた（完了 `scope-chain-gap` 7.3 違反）。印 `ScriptPlaced` で直した。実機の確かめは道具の 3 つの誤り（`\?\` の根・透明な点を押した・起動の挨拶の最中に台本を送った）を直して 4 回目で 13 判定すべて PASS。申し送り ⅰ〜ⅴ は `signoff.md`。完了の棚卸で ⅰ（finalize が作業領域へ寄せない）と ⅴ（`persist_unremembered_char_positions` が既定と同じ位置へ置いた台本の移動を記憶へ書く。`ScriptPlaced` を読めば直る）をその場で直すか `/kiro-discovery` で起票し、ⅱ〜ⅳ も起票を決める。

@@ -18,6 +18,7 @@ use areka_emo_compose::ScaleRatio;
 
 use super::geometry::{BaseFrame, FrameNote, compute_move_target};
 use super::{BaseposResolver, CanonDefaultBasepos, MoveBase, MoveDirective};
+use crate::placement::chain_finalize::ScriptPlaced;
 use crate::placement::follow::{
     Anchored, MonitorSnapshot, follow_sticky_move, log_sticky_ignored, move_window_to,
     project_anchor, work_area_for_window,
@@ -173,6 +174,8 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         // 窓の書込口が受けなかった（窓ハンドルがまだ無い等）。
         return skipped("write_refused");
     }
+    // 起動時の確定が台本の置いた窓を引き戻さないための印（x が既定のままでも・scg 7.3）。
+    world.entity_mut(target).insert(ScriptPlaced);
     let base_rect = match frame {
         BaseFrame::Window { rect, .. } | BaseFrame::Area(rect) => rect,
         BaseFrame::Origin => RectPx {
