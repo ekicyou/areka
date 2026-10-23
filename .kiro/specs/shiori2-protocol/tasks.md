@@ -20,7 +20,7 @@
   - _Boundary: shiori2, lib.rs_
   - _Requirements: 2.1, 2.5, 7.3_
 
-- [ ] 2.2 組み替えの表と 2.x の要求の組み立てを作る
+- [x] 2.2 組み替えの表と 2.x の要求の組み立てを作る
   - 表は 1 か所だけに持つ: 翻訳は `TRANSLATE Sentence SHIORI/2.6`、資源の印つきの GET は `GET String SHIORI/2.5`、ほかの GET と `basewareversion` 以外の NOTIFY は `GET Sentence SHIORI/2.2`、`basewareversion` の NOTIFY は送らない
   - 見出しの並び・`SecurityOrigin` を書く行・`SenderType` を書かないこと・References の欠番の扱い・翻訳の `Sentence` を Reference0 から取ることは設計の「2.x の要求の形」の表のとおり
   - 全文を要求の文字コードの 1 本の経路で符号化する（2 バイト文字の値も含む）

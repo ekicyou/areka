@@ -1,10 +1,12 @@
-//! `shiori2` の決定論テスト（タスク 2.1・要件 2.1/2.5/7.3）。
+//! `shiori2` の決定論テスト（タスク 2.1・2.2・要件 2.1/2.5/3.1〜3.7/7.1/7.3）。
 //!
 //! 窓も I/O も持たない純関数の入出力だけで成立する（x64 のみ・32bit 成果物不要）。
-//! 参照値のバイト列は符号化器から導かず、研究記録 10.1 節から手で写した定数として持つ。
+//! 参照値のバイト列は符号化器から導かず、研究記録 10.1・10.2 節から手で写した定数として持つ。
 
-use super::{ShioriVersion, VersionVerdict, decide_version, version_probe_request};
+use super::{ShioriVersion, VersionVerdict, build_request, decide_version, version_probe_request};
 use crate::charset::Charset;
+use crate::request_headers::RequestHeaders;
+use crate::shiori3::{ABSENT_REFERENCE, Method, ShioriRequest};
 
 /// 研究記録 10.1 節の確かめの要求（SSP が華和梨へ送ったもの）の全文。
 const PROBE_UTF8_SSP: &[u8] = b"GET Version SHIORI/2.6\r\nCharset: UTF-8\r\nSender: SSP\r\n\r\n";
@@ -74,4 +76,182 @@ fn unknown_replies_are_undecided() {
             String::from_utf8_lossy(reply)
         );
     }
+}
+
+// ---- 2.x の要求の組み立て（タスク 2.2・要件 3.1〜3.7・7.1） ----------------
+
+/// 研究記録 10.2 節の通知の `OnInitialize`（3.0 では NOTIFY）を SSP が送った全文。
+const ON_INITIALIZE_SSP: &[u8] = b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnInitialize\r\nReference0: \r\n\r\n";
+
+/// 研究記録 10.2 節の `OnSecondChange`（`Status` あり）の全文。
+const ON_SECOND_CHANGE_SSP: &[u8] = b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnSecondChange\r\nStatus: talking,timecritical,balloon(0=0)\r\nReference0: 193\r\nReference1: 0\r\nReference2: 0\r\nReference3: 0\r\nReference4: 64\r\n\r\n";
+
+/// 研究記録 10.2 節の `OnFirstBoot` の全文から `BaseEvent: OnBoot` の行を除いたもの
+/// （areka は 3.0 でも `BaseID` を送っていないので書かない・設計の「2.x の要求の形」）。
+const ON_FIRST_BOOT_SSP: &[u8] = b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnFirstBoot\r\nReference0: 0\r\nReference1: \r\nReference2: \r\nReference3: \r\nReference4: \r\nReference5: \r\nReference6: \r\nReference7: master\r\n\r\n";
+
+/// 研究記録 10.2 節の資源の問い合わせ `username` の全文。
+const USERNAME_SSP: &[u8] = b"GET String SHIORI/2.5\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSecurityOrigin: null\r\nSender: SSP\r\nID: username\r\n\r\n";
+
+/// 研究記録 10.2 節の翻訳（`Status: talking`）の形。台本は記録で省かれているので短い台本を置く。
+const TRANSLATE_SSP: &[u8] = b"TRANSLATE Sentence SHIORI/2.6\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSecurityOrigin: null\r\nSender: SSP\r\nStatus: talking\r\nSentence: \\t\\h\\s[6]\\e\r\n\r\n";
+
+fn refs(values: &[&str]) -> Vec<String> {
+    values.iter().map(|v| (*v).to_string()).collect()
+}
+
+fn sjis() -> Charset {
+    Charset::for_label("Shift_JIS").expect("Shift_JIS は解決できる")
+}
+
+/// SSP の記録と同じ値の見出し（`SenderType` は 2.x では書かれないはず）。
+fn ssp_headers() -> RequestHeaders<'static> {
+    RequestHeaders::internal("SSP")
+}
+
+fn bytes_of(
+    method: Method,
+    id: &str,
+    references: &[String],
+    status: Option<&str>,
+    is_resource: bool,
+) -> Option<Vec<u8>> {
+    let req = ShioriRequest {
+        method,
+        id,
+        references,
+        headers: ssp_headers(),
+        status,
+        charset: sjis(),
+    };
+    build_request(&req, is_resource).map(|e| e.bytes)
+}
+
+fn assert_bytes(actual: Option<Vec<u8>>, expected: &[u8]) {
+    let actual = actual.expect("送るはず");
+    assert_eq!(
+        actual,
+        expected,
+        "\n実際: {}\n期待: {}",
+        String::from_utf8_lossy(&actual),
+        String::from_utf8_lossy(expected)
+    );
+}
+
+/// NOTIFY の `OnInitialize` は `GET Sentence SHIORI/2.2` で送る（要件 3.2）。
+#[test]
+fn notify_on_initialize_is_get_sentence() {
+    assert_bytes(
+        bytes_of(Method::Notify, "OnInitialize", &refs(&[""]), None, false),
+        ON_INITIALIZE_SSP,
+    );
+}
+
+/// `Status` ありの台本を求めるイベント（要件 3.1・3.6）。
+#[test]
+fn get_with_status_is_get_sentence() {
+    assert_bytes(
+        bytes_of(
+            Method::Get,
+            "OnSecondChange",
+            &refs(&["193", "0", "0", "0", "64"]),
+            Some("talking,timecritical,balloon(0=0)"),
+            false,
+        ),
+        ON_SECOND_CHANGE_SSP,
+    );
+}
+
+/// `Status` なし・空の References を含む `OnFirstBoot`（要件 3.1）。
+#[test]
+fn get_on_first_boot_is_get_sentence() {
+    assert_bytes(
+        bytes_of(
+            Method::Get,
+            "OnFirstBoot",
+            &refs(&["0", "", "", "", "", "", "", "master"]),
+            None,
+            false,
+        ),
+        ON_FIRST_BOOT_SSP,
+    );
+}
+
+/// 欠番の印の位置は行を出さず番号だけ進める（3.0 と同じ）。
+#[test]
+fn absent_reference_skips_line_keeps_numbering() {
+    assert_bytes(
+        bytes_of(
+            Method::Get,
+            "OnFirstBoot",
+            &refs(&["0", ABSENT_REFERENCE, "master"]),
+            None,
+            false,
+        ),
+        b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnFirstBoot\r\nReference0: 0\r\nReference2: master\r\n\r\n",
+    );
+}
+
+/// `On` で始まらない外からのイベント名でも、資源の印が無ければ `GET Sentence`（要件 3.1・3.7）。
+#[test]
+fn non_on_event_without_resource_mark_is_get_sentence() {
+    assert_bytes(
+        bytes_of(Method::Get, "installedghostname", &refs(&["a"]), None, false),
+        b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: installedghostname\r\nReference0: a\r\n\r\n",
+    );
+}
+
+/// 資源の印つきの GET は `GET String SHIORI/2.5`（要件 3.3・3.6）。
+#[test]
+fn resource_get_is_get_string() {
+    assert_bytes(
+        bytes_of(Method::Get, "username", &[], None, true),
+        USERNAME_SSP,
+    );
+}
+
+/// 翻訳は `TRANSLATE Sentence SHIORI/2.6`・`Sentence` は Reference0・References は書かない（要件 3.4）。
+#[test]
+fn on_translate_is_translate_sentence() {
+    assert_bytes(
+        bytes_of(
+            Method::Get,
+            "OnTranslate",
+            &refs(&["\\t\\h\\s[6]\\e", "", "", "x"]),
+            Some("talking"),
+            false,
+        ),
+        TRANSLATE_SSP,
+    );
+}
+
+/// `basewareversion` の NOTIFY は送らない（要件 3.5）。
+#[test]
+fn basewareversion_notify_is_not_sent() {
+    assert_eq!(
+        bytes_of(
+            Method::Notify,
+            "basewareversion",
+            &refs(&["2.6"]),
+            None,
+            false
+        ),
+        None
+    );
+}
+
+/// 2 バイト文字の値も全文 1 本の経路で Shift_JIS に符号化する（要件 3.6）。
+#[test]
+fn shift_jis_value_is_encoded_with_whole_text() {
+    // 「さくら」の Shift_JIS は 82 B3 82 AD 82 E7（手で写した値）。
+    assert_bytes(
+        bytes_of(
+            Method::Get,
+            "OnTranslate",
+            &refs(&["\u{3055}\u{304f}\u{3089}"]),
+            None,
+            false,
+        ),
+        b"TRANSLATE Sentence SHIORI/2.6\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSecurityOrigin: null\r\nSender: SSP\r\nSentence: \x82\xb3\x82\xad\x82\xe7\r\n\r\n",
+    );
 }
