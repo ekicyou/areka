@@ -124,7 +124,7 @@
   - _Depends: 4.2_
 
 - [ ] 6. 作者と利用者への説明
-- [ ] 6.1 `doc/COMPAT_ARCHITECTURE.md` §8 を書き直す
+- [x] 6.1 `doc/COMPAT_ARCHITECTURE.md` §8 を書き直す
   - 370 行の `balloon`・`default.balloon.path` の行: 突き合わせ先を「今のゴーストの中の `balloon\` と根の置き場の和（ゴーストの中が先）」に、「ゴーストのフォルダの中は探さない」を新しい行への参照に、「大文字と小文字を区別する完全一致」を「フォルダ名は `same_folder_name`（区別しない）・`name` は区別する」に、無いテスト名 `descript_match_is_case_sensitive` を `descript_folder_match_ignores_case_but_name_match_does_not` に、`default_balloon_path_does_not_see_ghost_inner_balloon` を 2.1 で書き換えた後のテスト名に直す
   - 343 行の飛ばした同梱の置き場の綴り `<根>/balloon/<*.directory>/` を `<ゴースト>/balloon/<*.directory>/` に直す。376 行の根の並びの目録の説明に「バルーンの候補は今のゴーストの中が先に加わる」を一言足す
   - 新しい行「【areka 独自】ゴーストのフォルダの中のバルーン」: 要件 9.1 の 8 項目・根拠の SSP 2.9 の実測（2026-10-22）と SSP に合わせない理由・定義点（`balloons_for`・`scan_ghost_balloons`・`companion_placement`・`within_body`）・1〜5 で足した判定のテスト名
