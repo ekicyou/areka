@@ -113,7 +113,8 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 ///    ウィンドウ生成・プロセス起動のいずれも試みない（推測しない・design.md）。
 /// 2. `ParentMessageWindow::create()` で親 message-only 窓を生成する（`!Send`・
 ///    呼び出しスレッド＝shiori アクタースレッド上で実行される前提）。
-/// 3. `spawn(helper_exe, load_dir, shiori_name, parent_hwnd)` で i686 helper を起動する。
+/// 3. `spawn(helper_exe, helper_dir, shiori_name, parent_hwnd)` で i686 helper を起動する
+///    （`helper_dir` は [`helper_load_dir`] で決定 6 の形に整えた `load_dir`）。
 /// 4. `pump_until_hello_or(HANDSHAKE_TIMEOUT)` で HELLO 受領（ハンドシェイク完了）を観測する。
 /// 5. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を発行し ack `[1]` を確認する。
 /// 6. 版の確かめを 1 往復し、[`record_version`] で記録して決めた版を接続へ渡す
@@ -149,14 +150,21 @@ pub fn real_connect(
             ));
         };
         let load_dir = shiori.dir;
+        // helper へは決定 6 の形で渡す（記録の名前は元のパスから取る・要件 6.4）。
+        let helper_dir = helper_load_dir(&load_dir).map_err(|e| {
+            format!(
+                "読み込みのパスを絶対パスにできない（dir={}）: {e}",
+                load_dir.display()
+            )
+        })?;
 
         // 2. 親 message-only 窓（!Send・アクタースレッド上で生成される）。
         let window = ParentMessageWindow::create()
             .map_err(|e| format!("親 message-only 窓生成に失敗: {e}"))?;
         let parent_hwnd = window.hwnd_u32();
 
-        // 3. i686 helper を spawn（cwd=load_dir）。
-        let helper = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
+        // 3. i686 helper を spawn（cwd=helper_dir）。
+        let helper = spawn(&helper_exe, &helper_dir, &shiori_name, parent_hwnd)
             .map_err(|e| format!("i686 helper の spawn に失敗: {e}"))?;
 
         // 4. HELLO 受領＝ハンドシェイク完了を観測（上限時間内に来なければ失敗）。
@@ -257,6 +265,19 @@ fn ghost_label(master_dir: &Path) -> String {
             || master_dir.display().to_string(),
             |name| name.to_string_lossy().into_owned(),
         )
+}
+
+/// helper の `load` へ渡すフォルダのパス＝絶対パス・`\` の区切り・末尾に `\` が 1 つ
+/// （要件 6.4・`shiori4-api` の決定 6 の helper の道の前倒し）。
+///
+/// 華和梨などはこれにファイル名をそのままつなげて辞書を開くので、区切りの混在や末尾の
+/// 区切りなし（`…\ghost/master`）では読めない。
+fn helper_load_dir(dir: &Path) -> std::io::Result<PathBuf> {
+    // 部品を集め直すと区切りが `\` にそろい、末尾の区切りも落ちる。
+    let mut shaped: PathBuf = std::path::absolute(dir)?.components().collect();
+    // 空を足すと末尾に区切りが 1 つだけ付く（既にあれば足さない）。
+    shaped.push("");
+    Ok(shaped)
 }
 
 /// 何を聞かれても中身なしで答える SHIORI（`--option dontloadmodule`・要件 7.2〜7.5）。

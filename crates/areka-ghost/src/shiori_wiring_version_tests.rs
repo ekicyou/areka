@@ -10,7 +10,7 @@ use log_capture_kit::CapturedEvent;
 use shiori_host32_host::{ShioriVersion, VersionVerdict};
 use tracing::Level;
 
-use super::{ghost_label, record_version};
+use super::{ghost_label, helper_load_dir, record_version};
 use crate::test_log_capture::capture_events;
 
 /// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り・design §Monitoring）。
@@ -94,6 +94,44 @@ fn ghost_label_takes_the_folder_two_levels_above_master() {
     );
     // 2 つ上が無ければフォルダの表示へ後退する。
     assert_eq!(ghost_label(Path::new("master")), "master");
+}
+
+/// helper の `load` へ渡すパスは絶対パス・`\` の区切り・末尾に `\` が 1 つ（要件 6.4・
+/// `shiori4-api` の決定 6）。華和梨はこれにファイル名をそのままつなげて辞書を開く。
+#[test]
+fn helper_load_dir_is_absolute_backslashed_with_one_trailing_separator() {
+    for input in [
+        r"C:\x\ghost/master",
+        r"C:\x\ghost\master\",
+        r"C:\x\ghost/master/",
+    ] {
+        let got = helper_load_dir(Path::new(input)).expect("絶対パスにできる");
+        assert_eq!(
+            got.as_os_str(),
+            r"C:\x\ghost\master\",
+            "入力 {input:?} は決定 6 の形になる"
+        );
+    }
+}
+
+/// 整えたパスは helper にだけ渡し、記録のゴーストの名前は元のパスから取る（要件 6.4）。
+#[test]
+fn real_connect_spawns_with_the_shaped_dir_and_labels_from_the_original() {
+    const SOURCE: &str = include_str!("shiori_wiring.rs");
+    let body = &SOURCE[SOURCE
+        .find("pub fn real_connect(")
+        .expect("real_connect がある")..];
+    let shaped = body
+        .find("helper_load_dir(&load_dir)")
+        .expect("元のパスを整える");
+    let spawned = body
+        .find("spawn(&helper_exe, &helper_dir,")
+        .expect("整えたパスで helper を起こす");
+    assert!(shaped < spawned, "整えてから起こす");
+    assert!(
+        body.contains("ghost_label(&load_dir)"),
+        "ゴーストの名前は元のパスのまま"
+    );
 }
 
 /// 確かめの往復の結線（要件 2.1・2.3・7.4）。
