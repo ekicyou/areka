@@ -56,9 +56,9 @@ shiori4 は記録係。areka と pasta が直接詰め、合意したものと�
 | SHIORI の名前と版 | areka と pasta が合意: SHIORI/3.0 と同じ GET（`version`・`name`・`craftman`・`craftmanw`、200 ＋ `Value`）。ABI の版はヘッダに載せない |
 | OnHostComplete の NOTIFY | areka と pasta が合意: Reference1 は無し。起こせたかどうかを 200／400 で返す |
 | load の dir（表の 5） | pasta は問題なし（末尾の区切りの有無に関係なく読む） |
-| SEND の割り込みと完了 | **詰めている途中**。完了は「再生が終わった時」に出し、Status は 200＋Reference1 `completed`／`interrupted`・204＝一度も再生せずに捨てた・400＋`Reason`＝拒否、までは areka と pasta が一致。**既定で割れる見込み**: shiori4・pasta は「既定は待つ・割り込みは明示（`Interrupt: true`）」、areka は「SSTP どおり既定で割り込み、`Option: nobreak` で待つ・優先度は Owned SSTP と同じ」（ukadoc spec_sstp の Option・ID と、完了 spec `mcp-kanade-tools` の裁定 1〜3「SEND は割り込む」に揃える）。割れたら shiori4 の開発者の裁定 |
-| 割り込まれた側への知らせ | pasta 案は OnBalloonBreak。areka は反対: ukadoc は OnBalloonBreak を「SSTP以外でブレイクされた際に発生」と定めている。代わりに、Tag 付きの post の SEND で出したトークなら、その OnHostComplete が `interrupted` を運ぶ |
-| OnHostComplete の応答の台本（areka が足した論点） | `interrupted` の知らせは割り込んだトークの再生中に届く。その応答を通常のイベントの応答と同じに扱うと、さらに置き換えてしまう。areka 案は `Option: nobreak` の SEND と同じに扱う（再生中なら待ち、待っている間に終了・切り替えが来たら捨てる） |
+| SEND の割り込みと完了 | areka と pasta が合意（pasta が areka 案に賛成・割れた所なしとして pasta が shiori4 へ送った）: **SSTP どおり既定で割り込み、`Option: nobreak` のときだけ待つ**。新しいヘッダ `Interrupt` は作らない。優先度は Owned SSTP と同じ（`	` があっても割り込める）。根拠は ukadoc spec_sstp の Option・ID と、完了 spec `mcp-kanade-tools` の裁定 1〜3「SEND は割り込む」。完了は再生が終わった時に出す: 200＋Reference1 `completed`／`interrupted`・204＝一度も再生せずに捨てた（`nobreak` で待つ間に終了・切り替え、ホストが今受けられない）・400＋`Reason`＝不正または拒否 |
+| 割り込まれた側への知らせ | 合意: OnBalloonBreak は使わない（ukadoc は「SSTP以外でブレイクされた際に発生」と定めている）。Tag 付きの post の SEND で出したトークなら、その OnHostComplete が `interrupted` を運ぶ。通常のイベントの応答として出したトークが SEND に切られたときは何も出さない（SSP と同じ）。利用者の中断は今までどおり OnBalloonBreak |
+| OnHostComplete の応答の台本（areka が足した論点） | 合意: `Option: nobreak` の SEND と同じに扱う（再生中なら待ち、待っている間に終了・切り替えが来たら捨てる）。届け方の既定は request のまま |
 
 **areka の今**（10-23・コードで確かめた）: 再生の列は無く、トークの枠は 1 つ。SSTP の受け口は未実装（起票の行だけ）。SEND は MCP の `sakurascript`／`raise_event` だけで、必ず割り込む（`crates/areka-kanade/src/schedule/sstp.rs`）。OnSecondChange 以外のイベントの応答も再生中のトークを置き換える。`\t` は未実装（`sakura-time-critical`）。
 
@@ -92,7 +92,7 @@ shiori4 は記録係。areka と pasta が直接詰め、合意したものと�
   - `shiori4_host` への依存と `Host` の実装（getproperty／setproperty・post の SEND／NOTIFY・log・wake）。
   - `ShioriBackend` の v4 版の実装と、descript.txt の `shiori` からの選び分け（`shiori_get_api` の有無・arch）。
   - 要求の組み立て器を v3（helper）と v4 で共有する整理。
-  - post の SEND を「待つ」扱いで受けるための待ちの列（3 者会談の裁定しだい。SSTP どおりなら `Option: nobreak` のときと OnHostComplete の応答のとき）と、再生の終わりで出す完了（`completed`／`interrupted`）。
+  - post の SEND を待たせるための待ちの列（3 者会談の合意＝`Option: nobreak` のときと OnHostComplete の応答のとき。areka は今トークの枠が 1 つで列を持たない）と、再生の終わりで出す完了（`completed`／`interrupted`）。
   - `load` に渡すパスの形（上の表の 5・判断 4）。
   - COM の面とテスト用の COM の DLL の撤去、テスト用の v4 DLL（判断 1）。
   - 封筒の書き換え（判断 2）・`doc/COMPAT_ARCHITECTURE.md` §5・roadmap の技術の要約の書き直し。
