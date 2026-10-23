@@ -92,3 +92,23 @@
 - 見つけた穴・古くなった記述:
   - 本文 Current State と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。「488 行あたり」は今 492 行目。
   - 議題 3（`OnDressupChanged` を誰が持つか）に、読み直しの持ち越しが `bind` で流し直すこと（上）を足す。送る spec を起票するなら、流し直しを「イベントを起こさない」側に寄せることも書く。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 3（選択肢の前の `\![*]` の印が出ない）**: run1・alt2・rerun1 のどれでも、選択肢の前の印が見えない。
+  - 根拠: `shots\run1\2-choice-zorder.png`・`<w>\target\pasta-verify-alt\shots\alt2\2-choice-zorder.png`・`<w>\target\pasta-verify-rerun\shots\rerun1\2-choice-zorder.png`（縦書きのバルーンで、本文 2 列と左の枠の選択肢 4 つは出たが、印は無い）。
+  - 原因: `crates/areka-parsers/src/sakura/decode.rs:127`。`fold_choice_marker` が印を「無視した」として直後の `\q` に畳み、印は何も描かない。
+  - SSP の基準・測りの答え（`ssp-measurement.md` 2 節の段 2・3 節の 2 行目）: 台本は `\_l[-253,0]\n[150]` の後に `\![*]\q[晴れてる,晴れてる,選択肢テスト_1]` など選択肢を 4 つ並べ（`ssp\stage2-script.txt`）、4 つそれぞれの前に印が出た（`ssp\stage2-choice-shot.png`）。ukadoc の `\![*]` は「マーカーを表示する。」。
+- **件 17（`\_u[0x3000]` を文字にしない）**: 起動の台本は、全角の空白を `\_u[0x3000]` で作ってバルーンを出し、重なりの順を指定してから `\c` で消す。areka はこれを文字にしない。見た目への効きは走行の記録からは言えない（バルーンとぱすたの前後は alt2 で SSP と同じ向き）。
+  - 根拠: 起動の台本の原文（`logs\run1.stdout.log` の `2026-10-22T23:17:58.394554Z` の `areka::log::script`）。
+  - 原因: 読み手 `crates/areka-parsers/src/sakura/decode.rs` の `decode_tag` に `\_u` の腕が無く、知らないタグとして `Raw` になり、台本の組み立て（`crates/areka-sakura/src/compile.rs:291`）で捨てる。
+  - SSP の基準: この段取りの効きだけを分けては測っていない。起動の重なりは、窓の枠（奥）→ バルーンの字 → ぱすた（手前）（`ssp-measurement.md` 2 節の段 1・段 2）。
+- **件 18（`\![bind-noevent,…]` に受け手が無い）**: 見た目への効きは走行の記録からは言えない。
+  - 根拠: 網羅台帳の行（`verification.md` 10 節）と、ぱすたの辞書と Lua の台本。
+  - 原因: 着せ替えの受け手は名前が `bind` ちょうどのものだけを受ける（`crates/areka-seriko/src/actor.rs:492`）。
+  - SSP の基準: 分けては測っていない。
+- 網羅台帳の宛先: 2026-10-23 に `sakura-script.toml` の 3 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 2）: 全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く。

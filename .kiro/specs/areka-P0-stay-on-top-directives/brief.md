@@ -98,3 +98,15 @@
   - 本文と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。
   - 本文 Current State の「帯を避ける判断（`zorder_pair.rs` の `measure_window_is_always_on_top`）」: 測る関数は `zorder_pair.rs` に残るが、呼ぶのは組を保つ系の `zorder_pair_maintain.rs`。条件をつけるなら両方を見る。
   - ゴーストの読み直し（`\![reload,ghost]`・MCP の `reload`）で窓が作り直されたとき、「常に手前」を保つか戻すかを決める。正典は「ゴースト終了まで有効」で、読み直しは終了ではない。SSP で測る項目（議題 1）に足す。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 19（`\![set,windowstate,!stayontop]` に受け手が無い）**: ぱすたの起動の台本の `\![set,windowstate,!stayontop]` に受け手が無い。見た目への効きは走行の記録からは言えない。
+  - 根拠: 起動の台本の原文（`logs\run1.stdout.log` の `2026-10-22T23:17:58.394554Z` の `areka::log::script`）。
+  - 原因: 受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs:27` の決まり（名簿に無い第 1 引数 `windowstate` は担当なし）。
+- **SSP の基準**（`ssp-measurement.md` 2 節の段 1・3 節の終わり）: SSP が送った `OnBoot` の台本も `\![set,windowstate,!stayontop]` を含む。起動の重なりは、窓の枠（奥）→ バルーンの字 → ぱすた（手前）。`\1\v` は通しの台本に出てこなかったので、見えた答えは無い。
+- 網羅台帳の宛先: 2026-10-23 に 1 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 1）: 窓の枠が奥へ回る（常に手前にしない指定が SSP と同じに効く）。

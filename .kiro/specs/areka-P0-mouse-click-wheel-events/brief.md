@@ -117,3 +117,26 @@ kanade のマウスの出来事に「クリック」と「ホイール」を足�
 - 要件定義のモデル: Opus のまま（`OnMouseUp` → `OnMouseClick` の 2 段は選択肢とアンカーの前例どおり）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: 本文 Constraints の行数（`msg.rs` 926・`schedule/steady.rs` 950）は上の数に読み替える。本文 Out の「`OnMouseEnter`／`Leave`／`Hover`」は棚卸㉗で `OnMouseHover` だけになったが、本文は直っていない（要件の段で読み替える）。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 10（× に乗っても赤くならない）**: run1 の段 3・段 7 で、× に乗っても × が赤くならない。
+  - 根拠: `shots\run1\3-x-hover.png`・`3-x-nohover.png`・`7-x-hover.png`。ぱすたの記録 `logs\run1.pasta.log` に `OnMouseEnter` の行が 0。
+  - 原因: `crates/areka-kanade/src/schedule/events.rs:114`。送ってよいイベントの表 `ALLOWED_EVENT_IDS` に `OnMouseEnter`・`OnMouseLeave` が無く、areka は送らない。
+- **件 11（ボールと × を押しても何も起きない）**: run1 の段 3・段 7、alt2 と rerun1 の終わり。窓には当たっている。
+  - 根拠: run1 の `2026-10-22T23:22:07.960045Z` `hit_test result … screen_x=225 screen_y=1630 bounds=(0,864)-(1108,2232) button=Left is_down=true`（`logs\run1.stage3-excerpt.log`）。get_log の台本に新しい行なし・`logs\run1.pasta.log` に `OnMouseClick` が 0。`shots\run1\3-ball-1..5.png`・`7-after-x-1..4.png`。参考: `<w>\target\pasta-verify-alt\shots\alt2\9-after-x.png`、rerun1 の `01:29:56Z` の × のクリック（hit_test は `\0` の面 `bounds=(158,106)-(1266,1474)` に当たったが何も起きない・`<w>\target\pasta-verify-rerun\shots\rerun1\9-after-x.png`）。
+  - 原因: `crates/areka/src/input_events/mod.rs:483`・`526`〜`531`。キャラの窓の押下の受け口 `on_char_pointer_pressed` は、単発のクリックを送らない（完了 `input-events` の要件 7.3 の線）。
+- **件 12（ぱすたの身体が最後まで映らない）**: 件 11 の結果。ぱすたの初回の起動の台本（`dic/boot.pasta` の `＊OnFirstBoot`）は、最後に `\0\s[1002]`（ボールと × だけの面）を出して「ボールのクリックで映る」のを待ち、待つ間は印 `初回待ち` で毎秒のイベント（`OnSecondChange`）の応答を止める。ボールのクリックが届かないので待ちが終わらず、顔を撫でた入力は窓を素通りしてデスクトップに届き（面 1002 の `window/canvas.png` は × の範囲の外が α 0）、`OnMouseMove` は出ず、自然なトークも 1 つも出なかった。
+  - 根拠: `shots\run1\1-boot-surface0.png`・`3-after-stroke-1.png`（ごみ箱が選ばれた色）・`6-after-menu-surface0.png`（面 1002 のまま）。get_log の台本は `#18` の次が `#83`（`raise_event`）。
+- **件 13（× で終われず、終わりの台詞が出ない）**: 件 11 の結果。メニューの「終了」で終えたとき、終わりの台詞が出なかった。ぱすたの辞書に `OnClose` の受け口は無く（`dic\` の中に `OnClose` の語が 0）、SSP の終わりの台詞は × の `OnMouseClick` の応答から出る。`OnClose` に 204 が返ったのはぱすたの答えどおり。
+  - 根拠: run1 の `2026-10-22T23:25:02.132856Z` `OnClose GET を発行し握手を開始` → `23:25:02.136443Z` `OnClose 応答なし（204）——追加イベントなしで無言終了へ`・`shots\run1\7-farewell-1..5.png`。
+- **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 3・段 7、3 節の 7 行目）:
+  - 顔を撫でると `OnMouseMove`（`Reference4: 顔`・`Reference6: mouse`）が届き、撫での台詞が出た。
+  - × に乗ると `OnMouseEnter`（`Reference4: 閉じる`）が届き、応答 `\![bind,閉じる,赤,1]\e` で × の地が赤くなった（`ssp\stage3-x-hover-shot.png`）。離れると `OnMouseLeave`（`Reference4: 閉じる`）が届いた。
+  - ボールを押すと `OnMouseClick`（`Reference4: セキュリティボール`・`Reference5: 0`）が届き、ボールのトークが出た（`ssp\stage3-ball-shot.png`・`stage3-pasta-log.txt` の 201 行目の応答）。
+  - × を押すと `OnMouseClick`（`Reference4: 閉じる`）が届き、終わりの台詞「…ここからは、画面ごしのお別れだね。また、いつでも呼んで。」の後、台本の終わり `\_w[300]\-\e` で約 2 秒後に SSP ごと終わった（`ssp\stage7-pasta-log.txt`・`stage7-farewell-shot.png`）。
+- 網羅台帳の宛先: 2026-10-23 に 3 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 3・段 7）: × が赤くなる。ボールのトークが出て、初回の起動ではボールのクリックで身体が映る（その後に撫でと自然なトークが回せる）。× で終わりの台詞の後に終われる。

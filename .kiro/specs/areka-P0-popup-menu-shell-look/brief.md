@@ -91,3 +91,23 @@
 - 要件定義のモデル: Fable のまま（オーナードローの側だけ。基準＝先例の無い境目の約束: wintf の窓の手続きが OS のメニューの待ちの中で同期して描画の知らせを areka へ渡し、その中で World を借りない決まりを新しく引く。場所は `window_proc/mod.rs` と `menu/win32.rs`。今ある `WM_SETCURSOR` の口は wintf の中で閉じた診断で、先例にならない）。着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）。
 - 分割の案: 前のまま（オーナードローの見た目／着せ替えのメニュー）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残し、オーナードローの側は別の 1 本として後へ回す。
 - 見つけた穴・古くなった記述: `popup-menu-residue` の件 11（メニューを開いている間の黒い四角）・件 12（メニューが見えずに閉じる）とどちらが先に直すかは未決のまま。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 14（着せ替えの項目が無い）**: 右クリックメニューに「着せ替え」の項目が無く、着せ替えを選ぶ操作を回せなかった。項目はゴースト・シェル・バルーン・シェル位置初期化・ネットワーク更新・インストール…・置き場の 3 項目・説明書・終了で、シェルの下はパスタだけ。
+  - 根拠: run1 の `2026-10-22T23:23:44.627931Z` `[menu] shown event="menu_shown" scope=0 items=13`（`logs\run1.stage6-excerpt.log`）・`shots\run1\6-menu.png`・`6-menu-shell-sub.png`。
+  - 原因: `crates/areka/src/menu/mod.rs:49`。メニューの枠 `Frame` に着せ替えの枠が無い。シェルの `sakura.menu,auto` を読む所も無い。
+- **件 15（シェルの `menu.*` を使わない普通のメニュー）**: 右クリックメニューが、シェルの `menu.*` の絵と色を使わない普通の Windows のメニューで出た。SSP もシェルの絵と色で「普通の Windows のメニューに見える」ので、見た目が違うかは開発者の判定がまだ無い。
+  - 根拠: `shots\run1\6-menu.png`。SSP は `ssp\stage6-menu-shot.png`。
+  - 原因: `crates/areka/src/menu/mod.rs:49` の枠のまま普通のメニューを組み、シェルの `menu.*` の 21 の鍵を読む所が無い（網羅台帳で absent）。
+- **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 6・3 節の 8 行目）:
+  - メニューはシェルの絵と色で、普通の Windows のメニューに見えた（`ssp\stage6-menu-shot.png`）。
+  - 着せ替えのメニューに、口・目・眉・うで・まばたき・ボール・「閉じる - 赤」が並んだ（`ssp\stage6-dress-menu-shot.png`）。目 → びっくり を選ぶと面が変わり（`stage6-surface0-after-pick1.png` は起動したときの写しと、顔の範囲 66,216〜299,445 で 5742 画素違う）、同じ項目をもう一度選ぶと外れて戻った（`stage6-surface0-after-pick2.png`）。
+  - ぱすたは `OnSecondChange` の応答で着せ替えの `\![bind,…]` を毎分返し直すので、選んだ着せ替えは長くは残らない。areka で比べるときは、選んだ直後に撮る。
+  - 切り出した記録に着せ替えの通知（`OnDressupChanged`）の要求は無い。在るのはメニューを組むための `ID: sakura.recommendsites`（日本時間 08:09:52・08:10:59）。リソース `sakura.recommendsites`（台帳では vocabulary-only・宛先なし）が SSP と同じに見えるかは、件 15 と一緒に判定する（`verification.md` 6 節の「申し送りの漏れが無いことの確かめ」）。
+- 段 6 でメニューが見えずに閉じる件（`popup-menu-residue` の件 12）は、run1 では起きなかった。
+- 網羅台帳の宛先: 2026-10-23 に 22 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 6）: メニューの色と絵がシェルの指定どおりになり、着せ替えのメニューが出て、選ぶと着せ替えが替わる。

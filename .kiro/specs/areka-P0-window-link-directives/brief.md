@@ -94,3 +94,16 @@ ukadoc の窓の位置の台本の指令のうち、窓どうしをつなぐも�
   - 本文 Current State の網羅台帳の行番号（3151・3266・2948）と「`consumer_ledger.rs`（943 行）」は古い（上）。Constraints の「1,000 行に近い」も今は当たらない（受け手の中身を兄弟に置くのは変わらない）。
   - ゴーストの読み直しの後に、台本でつないだ組・台本で変えた吸着を保つか descript の値へ戻すかを議題に足す（正典は「ゴースト終了まで有効」・読み直しは終了ではない）。
   - `dpi-realign-remembered-chain` が要る「組の窓は詰め直しから外す」の目印を、この spec の組の持ち主に持たせるかを要件で決める（持たせれば、向こうは `chain_realign.rs` の判定だけで済み、このファイルの重なりも消える）。
+
+## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
+- 開発者の決め（2026-10-23）「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」。この spec は v0.1.0 なので、下の件はこの spec の中で片づける。
+- 着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md`（5 節の 7 段の表）で回す。
+- **件 6（起動の並べ直しで窓の枠が別の画面へ送られる）は本 spec で直した**（タスク 5.4・コミット `97186487`・2026-10-23 開発者の承認）: 起動の最後の並べ直し `finalize_chain`（`crates/areka/src/placement/chain_finalize.rs`。直す前は 121 行目）が、組の窓が既定の位置のままかを x だけで比べていた（`default_x != Some(current_x)`）。ぱすたの台本の `\![move,--X=0,--Y=0,--base=0,…]` は `\1` を `\0` の左上（0,864）へ動かしたが、x が既定の 0 のままだったので「動かされていない」と読まれ、`\0` の左隣（x＝-1108・副画面）へ並べ直されていた（run1 の `2026-10-22T23:17:58.830231Z` `chain_finalize: 実表示寸で連鎖を再解決 … scope=1 from_x=0 to_x=-1108`）。いまは x と y の両方で比べる。既定の位置を集めて渡す所は `crates/areka/src/emo2_boot/frame/drain_resnap.rs` の `collect_chain_states`。赤から緑のテストは `chain_finalize_tests::vertically_moved_scope_is_not_pulled_back`。拡大率の後の詰め直し（`placement/chain_realign.rs`）も同じ判定を使う。rerun1 では `scope=1` の `chain_finalize` の行が 0 件で、`\1` は台本どおり (0,864) へ動いたまま、ぱすたの奥に出た（`<w>\target\pasta-verify-rerun\shots\rerun1\1-boot-primary-ghost.png`）。この spec が `chain_finalize.rs`・`chain_realign.rs` を触るときは、この直しの後の形の上で考える。
+- **件 7（ドラッグで窓の枠が付いてこない）はこの spec の持ち分**: 同じ画面の中のドラッグで、ぱすた（`\0`）だけが動き、窓の枠（`\1`）が付いてこない。拡大率の違う画面へのドラッグでも同じ（run1 の段 5 でも窓の枠は動かず、ぱすたと離れたまま）。
+  - 根拠: run1 の `2026-10-22T23:23:03.468835Z` `char DragEnd 保存 scope=0 char_x=800 char_y=464`（`\1` の保存の行は無い・`logs\run1.stage4-5-excerpt.log`）・`shots\run1\4-before-drag-full.png`・`4-after-drag-full.png`・`5-after-move-full.png`。rerun1 でも、ぱすたのドラッグで保存されたのは `scope=0` だけで、窓の枠は別に手でドラッグされた（`<w>\target\pasta-verify-rerun\shots\rerun1\notes.md` の「開発者の手の操作が入った」）。
+  - 原因: `crates/areka/src/placement/config.rs:107`・`135`。シェルの `seriko.sticky-window,0,1` を生のまま写すだけで、ドラッグに組の相手を連れて動かす所が無い。
+- **SSP の基準・測りの答え**（`ssp-measurement.md` 2 節の段 4・3 節の 5 行目）: 身体をつかんで同じ 150% の画面の中で左へ 700 動かすと、`scope(0)` と `scope(1)` がどちらも `-782,201,49,1227` から `-1482,201,-651,1227` へ揃って動いた（`ssp\stage4-before-shot.png`・`stage4-after-shot.png`・`stage5-rects.txt` の 1 行目）。ドラッグに伴うイベントは出なかった。200% の画面へ移したときも、2 つは同じ rect（`818,261,1649,1287`）のまま。起動の台本の `\![move,…,--option=ignore-sticky-window]` で `\0` だけを動かしたときに `\1` が付いてくるかは測っていない。
+- 網羅台帳の宛先: 2026-10-23 に 1 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
+- **着地で変わるはずの所**（手順書の段 1・段 4）: 窓の枠がぱすたに重なって付き（起動のときの重なりは件 6 の直しで出るようになった＝着地の後も崩れないことを確かめる）、ドラッグで窓の枠がぱすたについて動き、落とした後に付き直る。

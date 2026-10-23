@@ -287,6 +287,59 @@ ukadoc が書いていない所（絵の薄い画素の当たり）について�
 
 `alpha_mask.rs` と `hit_test/mod.rs` の `main` との差分は 0 行（`git diff main -- <2 つのファイル>` の出力が空）。
 
+## 8. 申し送り
+
+5 節の崩れた所の表の「引き取る spec」の件と、SSP の測りで見えた兄弟の問いの答え（`ssp-measurement.md` 3 節）を、兄弟の spec の `brief.md` の末尾へ申し送った（2026-10-23・タスク 6・要件 1.4・5.5・5.8）。
+
+- 開発者の決め（2026-10-23・チャット）: 「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」
+- 書いた節の名前は「本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）」。各節には、出どころ（本記録と測りの記録・撮った物の置き場・時刻は `Z`）、件ごとの症状・根拠（撮った物の名前と記録の行と時刻）・原因（file:line）、SSP の基準、着地で変わるはずの所（`doc/pasta-real-run.md` 5 節の表の欄）を書いた。`dpi-realign-remembered-chain` は、タスク 5.3 で足した同じ日の節（「2026-10-23 `pasta-in-windows-verification` からの申し送り」）が末尾に在ったので、新しい節を立てずにその節へ足した。
+- 申し送り先の完了済みの spec は 0 本（`.kiro/specs/completed/` に同じ名前は無い）。完了済みの兄弟のために `/kiro-discovery` で起票した物は無い。
+
+### 兄弟の brief へ書いたもの（2026-10-23）
+
+| brief | 件（5 節の番号） | 要点 | 測りの答え（`ssp-measurement.md`） |
+|---|---|---|---|
+| `areka-P0-ghost-inner-balloon` | 1・2 | 縦書きのバルーンをゴーストのフォルダの中から見つけない（`boot_resolve.rs:294`〜`297`）。その結果、横書きのバルーンで `\_l[x,0]` の後が重なる。根の `balloon\` へ写した alt2・rerun1 では重ならない | 3 節の 1 行目（SSP はゴーストのフォルダの中の `pasta_tategaki` を使った）・2 節の段 2 |
+| `areka-P0-script-small-tags` | 3・17・18 | 選択肢の前の `\![*]` が出ない（run1・alt2・rerun1）・`\_u[0x3000]` を捨てる・`\![bind-noevent]` に受け手が無い | 3 節の 2 行目（印が 4 つの選択肢の前に出た） |
+| `areka-P0-descript-window-keys` | 4・5 | 起動の位置を決める窓の大きさを面 0 で測る（`measure.rs:173`）ため、ぱすたの窓が下端を越え、alt2 ではバルーンが × の板にかかった。`sakura.seriko.defaultsurface,1000` を読まない | 3 節の 4 行目（`balloon.dontmove`・バルーンはぱすたに付いたまま動いた）・2 節の段 1 |
+| `areka-P0-window-link-directives` | 7（6 は本 spec で直した） | 6（起動の並べ直しが x だけで比べていた）は本 spec のタスク 5.4・コミット `97186487` で直したことと、直した後の形。残りの持ち分は 7（ドラッグで `\1` が付いてこない・`config.rs:107`・`135`） | 3 節の 5 行目（`sticky-window` で 2 つが揃って動いた）・2 節の段 4 |
+| `areka-P0-dpi-realign-remembered-chain` | 9 | 拡大率の違う画面へドラッグして落とすとき、掴んだ点の窓の中の位置が拡大率に合わせて縮められない（`crates/wintf/src/ecs/window_proc/mouse_move.rs:302`〜`303`）。この brief の Scope にはまだ無いので、要件の段で範囲に入れること。8（大きさが縮む）は方針で受けない | 3 節の 3 行目（SSP は大きさを変えず、`OnShellScaling` も送らない）・2 節の段 5 |
+| `areka-P0-mouse-click-wheel-events` | 10〜13 | `OnMouseEnter`／`OnMouseLeave` を送らない（`events.rs:114`）・単発のクリックを送らない（`input_events/mod.rs:483`）。その結果、身体が映らず、× で終われず、終わりの台詞が出ない | 3 節の 7 行目・2 節の段 3・段 7 |
+| `areka-P0-popup-menu-shell-look` | 14・15 | 着せ替えの枠が無い・`menu.*` を読まない（`menu/mod.rs:49`）。15 の見た目は開発者の判定待ち。`sakura.recommendsites` も 15 と一緒に判定する | 3 節の 8 行目・2 節の段 6 |
+| `areka-P0-shell-mouse-cursor` | 16 | `sakura.cursor` ブレスを読まない。areka の側はマウスの形を読んでいない | 3 節の 6 行目（身体は `system:hand`・× とボールは既定の `system:finger`） |
+| `areka-P0-stay-on-top-directives` | 19 | `\![set,windowstate,!stayontop]` に受け手が無い（`consumer_ledger.rs:27`） | 3 節の終わり（`\1\v` は通しに出ず、見えた答えは無い） |
+
+### 起票した spec（2026-10-23・タスク 5.3 の `/kiro-discovery`）
+
+5 本とも起票のときに brief へ証拠（本記録の節と表の欄）が書かれている。タスク 6 で 5 本の brief を読み直し、症状・根拠・原因・SSP の基準・着地で変わる所が揃っていたので、足した物は無い。
+
+| spec | 引き取る件 | 版 |
+|---|---|---|
+| `areka-P0-mcp-scope-rect-property` | 5 節の 20（`get_property` の rect が読めない）。SSP の基準（2 節の段 1・段 4・段 5 の rect）は brief の Current State に在る | v0.1.0 |
+| `areka-P0-animated-surface-log-flood` | 5 節の 21（`apply(ShowSurface)` の INFO 行が記録の 9 割） | v0.1.0 |
+| `areka-P0-shell-scale-linkage` | 6 節の申し送り（倍率と DPI のプロパティ・`OnShellScaling`／`OnBalloonScaling`・`balloon.syncscale`） | v0.1.0 |
+| `areka-P0-balloon-scroll-arrows` | 6 節の申し送り（縦書きのバルーンの `arrow0.x/y`・`arrow1.x/y`） | v0.1.0 |
+| `areka-P0-balloon-communicatebox` | 6 節の申し送り（縦書きのバルーンの `communicatebox.x/y/width/height`） | v0.1.0 |
+
+前の持ち主の brief（`areka-P0-currentghost-property-tree`・`areka-P0-currentghost-property-others`・`areka-P0-property-query-channels`・`areka-P0-balloon-canon-residue`・`areka-P0-balloon-markers`・`areka-P0-shell-balloon-scale-setting`・`areka-P0-balloon-scroll-fade`・`areka-P0-inputbox-user-input`・`areka-P0-real-run-log-noise`）には、タスク 5.3 で付け替えを書いた。
+
+### 「ぱすた開発」への申し送り（待受のぶつかり・要件 5.8）
+
+- 送った日: 2026-10-23（開発者の了承を得て、セッション `local_c4b2ef26-2601-42fe-a8d9-465fcd644677` へ）。中身: SSP と areka で同時にぱすたを起こすと、ぱすたのデバッグの待受 127.0.0.1:9276 がぶつかる。いまの逃げ方は片方だけを起こすこと。ぱすたの側で避けるか、いつ避けるかを問うた。
+- 答え（2026-10-23 に受け取った）の要点:
+  - ぱすた（ゴースト）は何も変えない。配る物と開発の物の `pasta.toml` には `[debug]` が無く、既定はデバッグが切れているので、配られたぱすたは待受を開かず、利用者の所ではぶつからない。
+  - 待受を開いているのは、開発者の利用者の環境変数 `PASTA_DEBUG=1` と `PASTA_DEBUG_PORT=9276` で、ぱすたの決まりどおり `pasta.toml` より優先される。このため、開発者の PC では、ぱすたで作ったゴースト（emo2 も）はどれも 9276 を取り合う（1 つの SSP の中の 2 体でも）。
+  - 直しなしの逃げ方: areka を `PASTA_DEBUG` を消したシェルから起こす（PowerShell で `$env:PASTA_DEBUG = $null`）か、両方をデバッグしたいときは `PASTA_DEBUG_PORT` を別の番号（例 9277）にする。ぱすたの決まりから判断したもので、実機ではまだ試していない（手順の段で確かめる）。
+  - 空いた番号へ自動でずらすなどのぱすたのエンジンの変更は、pasta のリポジトリの判断で、ゴーストのセッションでは決めない。環境変数を付けたままにするかは開発者が決める。
+- 本 spec の扱い: areka の側では直さない。手順書 `doc/pasta-real-run.md` の「SSP のぱすたを閉じてから」（2 節の表の「SSP のぱすたを閉じてあること」の行）は、タスク 8.1 で、起動の塊の中で `PASTA_DEBUG` を消す形に置き換え、次の走行で効くことを確かめる。
+
+### 漏れの確かめ
+
+- 5 節の表の「引き取る spec」の 19 件は、上の 2 つの表のどれかに入っている: 1・2（`ghost-inner-balloon`）・3・17・18（`script-small-tags`）・4・5（`descript-window-keys`）・7（`window-link-directives`）・9（`dpi-realign-remembered-chain`）・10〜13（`mouse-click-wheel-events`）・14・15（`popup-menu-shell-look`）・16（`shell-mouse-cursor`）・19（`stay-on-top-directives`）・20（`mcp-scope-rect-property`）・21（`animated-surface-log-flood`）。直した 6 は `window-link-directives` へ直したことを伝えた。方針で受けない 8・22 は申し送りの対象ではない（9 の申し送りに 8 を崩れとして扱わないことを添えた）。申し送りの届いていない「引き取る spec」の件は 0 件。
+- `ssp-measurement.md` 3 節の 8 行の問いは、申し送り先の brief へ答えを書いた（8 行とも上の表の右の欄）。`\1\v` は答えが無いことを `stay-on-top-directives` へ書いた。
+- 申し送り先の 14 本（上の 2 つの表）は、正本のロードマップ `.kiro/steering/roadmap.md` の版の段の v0.1.0 の行に名前があり、どれも未完了。**v0.1.0 の外の申し送り先は 0 本**。
+- 6 節の「申し送りの漏れが無いことの確かめ」の判定待ちの 14 欄は、開発者の判定がまだ無いので申し送っていない。判定で崩れが出たら、5 節の表に足して v0.1.0 の持ち主か新しい起票へ渡す。
+
 ## 10. 網羅台帳との突き合わせ
 
 ぱすたが使う項目を、取り寄せた書庫を展開した木（`target\pasta-verify\root\ghost\pasta-in-windows`。1 節の `.sha256` の書庫と同じ中身）から拾い、網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の行と突き合わせた（2026-10-23・タスク 7.1・要件 9.1・9.2・9.4）。突き合わせた相手は、測りの記録 `ssp-measurement.md`・最初の走行の控え `target\pasta-verify\shots\run1\notes.md` と記録 `target\pasta-verify\logs\run1.*`・この記録の 1〜3 節と 7 節である。7.1 の時点では崩れた所の表（5 節）がまだ無かったので、原因が記録に書かれていない崩れの分は台帳を変えなかった。5.1 の後、下の表の行のうち 5.1 へ渡していたもの（`seriko.alignmenttodesktop`・`OnSecondChange`）は、5 節の仕分けを指すように直した（台帳の値は変えていない）。
