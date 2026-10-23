@@ -246,3 +246,25 @@ C11 の表が本 spec に挙げていない触る先: **wintf の `pointer/buffe
 10. **記録の水準**（要件 9.1〜9.3）: 今のマウスの送出の記録は trace（`mouse_get`・`shiori_request`）。「何も喋らない」の見分けに使うなら、送った・送らなかったの行を debug 以上にするか（要件 9.4 は info 以上の 1 回ごとの行を禁じるだけ）。
 11. **送ってよい表の手書きの数**（1.1）: 55 → 62 を手で直すか、表から数える形へ改めるか（後のウェーブの 2 本も同じ数を動かす・棚卸㉙の裁定の 8 と同じ型の問い）。
 12. **SSP の 5 点の測りを要件討議の前に行うか**（要件の Introduction の段取り）。手元の記録では 5 点とも決まらなかった（5 節）。在席の机と開発者の許しが要る。
+
+## 9. SSP の測り（2026-10-23・要件討議の議題の承認を受けて）
+
+- 測った物: SSP 2.9.x（`C:\wintools\ssp\ssp.exe`・pid 41060）・ゴースト「窓際のぱすたさんDRESSTEST」（`pasta.toml` 1.0.0 の検体・どのマウスのイベントにも 204 を返す）。当たり判定は `shell\master\surfaces.txt` の `collision1,239,282,344,420,胴`・`collision3,213,420,344,478,腰`。
+- 測り方: 排他テストの机を取り、Win32 の `SendInput`（絶対座標の移動・ボタン・ホイール）で操作した。SSP が送った要求は、開発用パレットの「SHIORI呼出ログ有効」（10-21 から ON のまま）の `ghost\master\ssp_shiori_log.txt` の差分で数えた（測る前にバイト位置を控えた）。computer-use のカーソル移動は Claude のアプリの覆いの窓に吸われ、SSP に `WM_MOUSEMOVE` が届かなかったので使っていない（クリックは届いた）。
+- 後始末: ドラッグで動いた窓は元の位置（`-775,218`）へ戻した。開いた右クリックのメニューは Esc で閉じた。ゴーストは測る前の「窓際のぱすたさん」へ戻した。SSP の設定は変えていない。
+
+| 点 | 操作 | SSP が送った順（`ID`・Reference4・Reference5。R2 は 0 のとき略） | 要件との突き合わせ |
+| --- | --- | --- | --- |
+| ⑹ 窓と当たり判定に同時に入る | 窓の外 → 胴へ 1 回で移る | `OnMouseEnterAll`(胴) → `OnMouseEnter`(胴) → `OnMouseMove`(胴) | 7.13 と同じ（`EnterAll` が先・Reference4 は入った位置の当たり判定＝7.11 と同じ） |
+| ⑴ 当たり判定から当たり判定へ直に移る | 胴 → 腰へ 1 回で移る | `OnMouseLeave`(胴) → `OnMouseEnter`(腰) → `OnMouseMove`(腰)。`OnMouseLeave` の Reference0／1 は**移った後の位置** | 7.3 と同じ順。出入りが移動より先（7.7）も同じ |
+| ⑹ 当たり判定の上から窓の外へ出る | 腰 → 窓の外へ 1 回で移る | `OnMouseLeave`(**空**) → `OnMouseLeaveAll`(**空**)。Reference0／1 は**窓の外の位置**（ローカル座標で 250,854） | 順は 7.13 と同じ。**Reference4 が空で、要件 7.4・7.12（出た当たり判定の名前）と違う**。座標も 7.5（窓の中で最後に見た位置）と違う |
+| 単発のクリック | 腰で左を押して放す | `OnMouseDown`(腰,0) → `OnMouseUp`(腰,0) → `OnMouseClick`(腰,0) | 1.1・1.2 と同じ |
+| ⑵ ダブルクリック | 腰で左を 2 回（間 120 ms） | `OnMouseDown` → `OnMouseUp` → `OnMouseClick` → `OnMouseDoubleClick`（2 回目の押下・`OnMouseDown` は来ない）→ **`OnMouseUp`**（2 回目の解放・`OnMouseClick` は来ない） | 4.1 の順は同じ。**2 回目の解放で `OnMouseUp` が来る＝要件 3.2（Up も Click も送らない）と違う** |
+| ⑶ ドラッグ | 腰で押して 60 px 動かして放す | `OnMouseDown` → `OnMouseDragStart` →（既定の位置の照会）→ `OnMouseDragEnd`。**`OnMouseUp`・`OnMouseClick` は来ない** | 3.1 と同じ |
+| ⑷ 中ボタン | 腰で中を押して放す | `OnMouseDownEx`(middle) → `OnMouseDown`(2) → `OnMouseUpEx`(middle) → `OnMouseClickEx`(middle) → `OnMouseUp`(2) → `OnMouseClick`(2) | **両方の系列が来る**（`Ex` が先・続けて互換の Reference5＝2）。要件 2.4（互換の側は送らない）と違う |
+| ⑷' 拡張ボタン 1 | 腰で押して放す | `OnMouseDownEx`(xbutton1) → `OnMouseUpEx`(xbutton1) → `OnMouseClickEx`(xbutton1) | 2.1〜2.3 と同じ（互換の側は来ない） |
+| ⑸ ホイール 1 目盛り | 上へ 1 | `OnMouseWheel`(腰, R2=120) | 6.2 の単位と向き（1 目盛り＝120・上が正）と同じ |
+| ⑸ ホイールを速く 3 目盛り | 下へ 3（30 ms おき） | `OnMouseWheel`(R2=-120) を 3 回（30 ms おき） | **SSP は間引かず、知らせごとに送る**。要件 6.3（100 ms に高々 1 回・足し合わせ）と違う（討議で決めた areka の決め） |
+| 右クリック | 腰で右を押して放す（ぱすたはメニューを抑えない） | `OnMouseDown`(1) → `OnMouseUp`(1) → `OnMouseClick`(1) → メニューの照会（`sakura.popupmenu.visible` ほか）→ メニューが出る → `OnMouseLeave`(腰)・`OnMouseLeaveAll`(腰)（メニューが窓を覆ったため） | **メニューが出るときも、右の `OnMouseUp`／`OnMouseClick` をメニューより先に送る**。要件 5.1（メニューが有効な間は送らない・完了 `popup-menu-minimal` 1.5）と違う |
+
+ほかに見えたこと（本 spec の範囲の外）: SSP は `OnMouseDown`・`OnMouseDownEx` を送る（brief の Out）。止まって約 0.5 秒で `OnMouseHover` と `tooltip` の照会を送る（`OnMouseHover` は Out・ツールチップは後の `shell-tooltip`）。
