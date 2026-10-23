@@ -47,6 +47,7 @@
 ### Allowed Dependencies
 
 - 依存の向き: `areka-sylphya`（記憶の形）← `wintf`（`DraggingState`・`WindowPos`）← `areka::placement`（`chain_finalize` の純関数 ← `chain_realign`・`persist`・`spawn`）← `areka::emo2_boot::frame`（`dpi`・`drain_resnap`）← `ghost_session`・`main`。上向きの参照は作らない。
+- `placement::persist` → `placement::chain_realign`（`snapshot_char_rects`）は許す: 印の無い古い記憶へ並べ終えた時点で印を書き足すとき、拡大率の控えと同じ口で窓の矩形を取る（同じ層の中の参照で、`chain_realign` は `persist` を読まない）。
 - 唯一の例外: 印 `ScriptPlaced`（`chain_finalize.rs`）の差し込みの知らせ（bevy の部品の差し込みの口 `on_insert`）が `chain_realign` の受け口 1 つを指す。印の定義が知らせの行き先を名指しするだけで、`chain_finalize` の判定は `chain_realign` に依らない。
 - 窓の組は `placement/sticky_group_ledger.rs` の `StickyGroupLedger::group_of` を読むだけ（書かない）。
 - 新しい外部の依存（crate）は足さない。bevy_ecs 0.19 の部品の差し込みの口は `spawn.rs`（`on_remove`）ほかで使っている形をそのまま使う。
@@ -134,6 +135,7 @@ crates/areka/src/
 ├── placement/
 │   ├── chain_finalize.rs                  # 純関数の核: ChainRect・判定・印の語・PairDecision・resolve_chain（finalize_chain はこの上に載せ直す）
 │   ├── chain_finalize_adjacency_tests.rs  # 新: 判定・解き・印の語の決定論テスト
+│   ├── chain_finalize_resolve_tests.rs    # 新: resolve_chain・remembered_decision・boot_pair_decision・mark_non_positive_widths の決定論テスト
 │   ├── chain_realign.rs                   # 拡大率の後の詰め直し: 控え・台本の記録・組ごとの決め・ログ
 │   ├── persist.rs                         # 印を書く（persist_entries に足す）・古い記憶への書き足し・印を読む
 │   ├── persist_adjacency_tests.rs         # 新: 印の書き足し・読み戻し・古い記憶の決定論テスト
@@ -163,7 +165,7 @@ crates/wintf/src/ecs/window_proc/
 doc/COMPAT_ARCHITECTURE.md                 # §8 の表の末尾に 2 行
 ```
 
-新しいテストのファイルは、それぞれの本番ファイルにパス属性つきの接続宣言を 1 つ足して繋ぐ（`chain_finalize_adjacency_tests.rs` は `chain_finalize.rs`・`chain_realign_script_moved_tests.rs` は `chain_realign.rs`・`persist_adjacency_tests.rs` は `persist.rs`・`frame_*` の 4 本は `emo2_boot/frame.rs`・`persist_window_adjacent_tests.rs` は `persist/mod.rs`・`mouse_move_drag_origin_tests.rs` は `mouse_move.rs`）。
+新しいテストのファイルは、それぞれの本番ファイルにパス属性つきの接続宣言を 1 つ足して繋ぐ（`chain_finalize_adjacency_tests.rs` と `chain_finalize_resolve_tests.rs` は `chain_finalize.rs`・`chain_realign_script_moved_tests.rs` は `chain_realign.rs`・`persist_adjacency_tests.rs` は `persist.rs`・`frame_*` の 4 本は `emo2_boot/frame.rs`・`persist_window_adjacent_tests.rs` は `persist/mod.rs`・`mouse_move_drag_origin_tests.rs` は `mouse_move.rs`）。
 
 ### Modified Files
 

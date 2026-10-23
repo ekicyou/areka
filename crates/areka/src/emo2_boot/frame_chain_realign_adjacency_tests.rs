@@ -27,7 +27,9 @@ use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 
 use super::shell_target;
-use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, pos_of, size_of};
+use super::test_support::{
+    FakeReports, FrameHarness, PerTargetSizes, capture_logs, pos_of, size_of,
+};
 
 /// 変わる前の拡大率（実機の 200%）。
 const HIGH_DPI: u16 = 192;
@@ -173,7 +175,7 @@ fn ys(harness: &FrameHarness) -> (i32, i32) {
 }
 
 /// 記憶から戻した（既定の位置の無い）形で 200% → 100% に変えても、隙間が許す幅以内に閉じ、
-/// 縦の位置は変わらない（要件 1.1・1.4・1.8・8.1）。
+/// 縦の位置は変わらない。組の判断・動かした量・直前の隙間が記録に残る（要件 1.1・1.4・1.8・7.1・8.1）。
 #[test]
 fn remembered_windows_close_the_gap_after_200_to_100() {
     let mut harness = FrameHarness::new();
@@ -188,7 +190,22 @@ fn remembered_windows_close_the_gap_after_200_to_100() {
     );
     let y_before = ys(&harness);
 
-    harness.run_chain_realign(&low_sizes());
+    let logs = capture_logs(|| harness.run_chain_realign(&low_sizes()));
+
+    let pair_lines: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("拡大率の後の詰め直しで組の判断を下した"))
+        .collect();
+    assert_eq!(pair_lines.len(), 1, "組ごとに 1 行（要件 7.1）: {logs:?}");
+    let line = pair_lines[0];
+    for needle in [
+        "decision=\"adjacent-left\"",
+        // 変わる直前（200%）は隣り合っていた＝隙間 0。
+        "before_gap=0 ",
+        &format!("dx={GAP_WITHOUT_REALIGN}"),
+    ] {
+        assert!(line.contains(needle), "{needle} が無い（要件 7.1）: {line}");
+    }
 
     let gap_after = gap(&harness);
     assert!(

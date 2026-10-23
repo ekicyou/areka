@@ -602,13 +602,13 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         let Some(char_window) = ghost_windows.char_window(scope) else {
             return Err(ChainDeferReason::NoCharWindow { scope });
         };
-        // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
-        // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        // `None` は「既定配置ではない」（記憶から戻したスコープ）。ここでは打ち切らずそのまま渡す。
+        // 起動の並べ直しは `None` のスコープを覚えた印で決め（`left`／`right` は今の幅で隣り合わせ、
+        // `none`・印なし・組の窓・台本の印は動かさない）、拡大率の変化の後の詰め直しはこの値を
+        // 使わず変わる直前の隣り合いで決める（dpi-realign-remembered-chain 要件 1・6.3〜6.5）。
         //
         // 読む値は「起動時の既定」ではなく**「最後にシステムが置いた既定位置」**である
-        // （atom D9／D16・要件 6.2）。拡大率の遷移では単一の窓書込口が同じ量を書込先へ
-        // 運ぶので、誰も触っていないスコープは遷移後も一致したまま＝対象に残る。運ばないと
-        // 全スコープが「明示的に動かされた」へ倒れて解き直しが空振りする。
+        // （atom D9／D16）。システム由来の再アンカーでは単一の窓書込口が同じ量を書込先へ運ぶ。
         let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
         let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {

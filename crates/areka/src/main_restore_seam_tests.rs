@@ -92,7 +92,8 @@ fn restore_seam_prefers_saved_position_over_default() {
 
     assert_eq!(out.len(), 1);
     // 保存位置が採用された scope は「既定配置ではない」として報告される（scg 7.3）。
-    // これを受けて起動シームが台帳の既定位置を落とし、連鎖の再解決から除外する。
+    // これを受けて起動シームが台帳の既定位置を落とし、起動の並べ直しは覚えた印で決める
+    // （dpi-realign-remembered-chain 要件 6.3）。
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
