@@ -528,7 +528,7 @@ pub(crate) enum CarriedShow {
     Carried(u32),
     /// `passed_over` は、descript の既定の面も無くて組み込みの面へ落ちたときの descript の面。
     FellBack { missing: u32, to: u32, passed_over: Option<u32> },
-    Skipped { missing: u32 },
+    Skipped { missing: u32, descript: u32 }, // descript は記録で候補の並びを組み直すための descript の既定の面
 }
 
 /// 在れば持ち越し、無ければ候補の並びの最初に在る面、どれも無ければ出さない（純粋）。
