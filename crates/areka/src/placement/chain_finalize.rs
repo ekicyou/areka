@@ -23,12 +23,13 @@
 //!   一致するか」で行う——利用者のドラッグで動いた窓は一致しなくなるため除外できる。ゴースト台本の
 //!   `\![move]` が置いた窓（連れ動いた組の相手を含む）は、x が既定のまま（縦にだけ動いた・
 //!   ちょうど既定へ置いた）でも一致してしまうので、移動側が印 [`ScriptPlaced`] を付け、起動時の
-//!   確定はその窓の既定を `None` にして除外する。除外したスコープの**実位置**は以後の連鎖の基準
+//!   確定はその窓を動かさない。除外したスコープの**実位置**は以後の連鎖の基準
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
 //! - 解きの核は組ごとの決め（[`PairDecision`]）を受け取る [`resolve_chain`] で、起動時の確定
-//!   （[`finalize_chain`]）は既定位置との一致から決めを作ってこれに渡す。拡大率の後の詰め直しは
-//!   変わる直前の隣り合い（[`judge_adjacency`]）から決めを作る（`chain_realign`・
-//!   dpi-realign-remembered-chain 要件 1）。
+//!   （`emo2_boot::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
+//!   一致から、記憶から戻したスコープを覚えた印（[`remembered_decision`]）から決めて渡す
+//!   （dpi-realign-remembered-chain 要件 6.3）。拡大率の後の詰め直しは変わる直前の隣り合い
+//!   （[`judge_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
 //!   （`emo2_boot::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
@@ -85,8 +86,10 @@ pub struct ScopeChainState {
     /// 初期値は spawn 時の resolver 出力で、システム由来の再アンカーで位置が動いたときは
     /// 単一の窓書込口が同じ量を運ぶ（値は「最後にシステムが置いた既定位置」）。
     ///
-    /// **`None` は「そもそも既定配置ではない」**（保存位置が復元されたスコープ）。
-    /// この場合は現在位置に関わらず**常に対象外**とする（scg 7.3）。
+    /// **`None` は「そもそも既定配置ではない」**（記憶から戻したスコープ・既定の位置は外してある）。
+    /// 起動の並べ直しは今の位置ではなく覚えた印で決める（[`boot_pair_decision`]）: `left`／`right` は
+    /// 今の幅で隣り合わせ、`none` と印なし・組の窓・台本の印は動かさない
+    /// （dpi-realign-remembered-chain 要件 6.3〜6.5）。
     pub default_x: Option<i32>,
 }
 
@@ -123,23 +126,49 @@ pub struct ChainMove {
 /// `x(n−1) == x(n) + w(n)`（隙間 0）が実表示寸で成立する。
 ///
 /// 空入力・単一スコープでは常に空列（動かす相手が居ない）。飽和演算ゆえ極端入力でも panic しない。
+// 本番（`finalize_chain_once_with`）は World から台本の印・組・覚えた印を読んで
+// boot_pair_decision を直接呼ぶ。ここは同じ規則を印なしで通す檻の口（chain_finalize_tests.rs）。
+#[cfg(test)]
 pub fn finalize_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
-    // 既定配置のままのスコープだけを左へ付け、それ以外（動かされた・`None`＝保存位置の復元）は
-    // 実位置を次の基準にする。非正寸の扱いと飽和演算は解き（resolve_chain）が持つ。
     let slots: Vec<ChainSlot> = states
         .iter()
         .map(|s| ChainSlot {
             scope: s.scope,
             current_x: s.current_x,
             width: s.width,
-            decision: if s.default_x == Some(s.current_x) {
-                PairDecision::JoinLeft
-            } else {
-                PairDecision::Keep(KeepReason::ExplicitlyPlaced)
-            },
+            decision: boot_pair_decision(s, false, false, None),
         })
         .collect();
     resolve_chain(&slots)
+}
+
+/// 起動の並べ直しで組 (n−1, n) に当てる決め（dpi-realign-remembered-chain design BootRemembered）。
+///
+/// | 条件 | 決め |
+/// |---|---|
+/// | 記憶に位置が無く（`default_x == Some(current_x)`）、台本の印が無い | `JoinLeft` |
+/// | 記憶に位置が無く、既定から動かされたか台本の印がある | `Keep(ExplicitlyPlaced)` |
+/// | 記憶から戻した（`default_x == None`）で、台本の印がある | `Keep(ExplicitlyPlaced)` |
+/// | 記憶から戻したで、n が窓の組に入っている | `Keep(StickyGroup{n})` |
+/// | 記憶から戻した、上のどれでもない | [`remembered_decision`]`(mark)` |
+///
+/// `script_placed` は印 [`ScriptPlaced`]、`in_sticky_group` は窓の組の帳簿に n が載っているか、
+/// `mark` は覚えた隣り合いの印。後の 2 つは記憶から戻したスコープでだけ読む。
+pub fn boot_pair_decision(
+    state: &ScopeChainState,
+    script_placed: bool,
+    in_sticky_group: bool,
+    mark: Option<AdjacencyMark>,
+) -> PairDecision {
+    match state.default_x {
+        Some(d) if d == state.current_x && !script_placed => PairDecision::JoinLeft,
+        Some(_) => PairDecision::Keep(KeepReason::ExplicitlyPlaced),
+        None if script_placed => PairDecision::Keep(KeepReason::ExplicitlyPlaced),
+        None if in_sticky_group => {
+            PairDecision::Keep(KeepReason::StickyGroup { scope: state.scope })
+        }
+        None => remembered_decision(mark),
+    }
 }
 
 /// 再解決後の既定位置（[`ChainMove`] を反映した [`PointPx`]）を組む補助。
@@ -267,6 +296,17 @@ pub enum PairDecision {
     Keep(KeepReason),
 }
 
+impl PairDecision {
+    /// ログに載せる判断の語（JoinLeft "adjacent-left"・JoinRight "adjacent-right"・Keep は理由の語）。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::JoinLeft => "adjacent-left",
+            Self::JoinRight => "adjacent-right",
+            Self::Keep(reason) => reason.as_str(),
+        }
+    }
+}
+
 /// 動かさない理由（ログの語は [`KeepReason::as_str`] の固定語）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeepReason {
@@ -282,7 +322,7 @@ pub enum KeepReason {
     ScriptMovedAfterArm { scope: usize },
     /// 控えに無い・矩形が読めない窓が組にかかわる。
     Unreadable { scope: usize },
-    /// 起動: 既定から動かされた・台本の印・保存位置の復元。
+    /// 起動: 既定から動かされた・台本の印（記憶から戻した窓を含む）。
     ExplicitlyPlaced,
     /// 起動: 記憶の印が `none`。
     RememberedSeparate,

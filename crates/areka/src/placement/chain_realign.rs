@@ -316,11 +316,7 @@ where
     let moves = resolve_chain(&slots);
     let mut applied: Vec<(Entity, i32, i32)> = Vec::new();
     for (i, slot) in slots.iter().enumerate().skip(1) {
-        let decision = match slot.decision {
-            PairDecision::JoinLeft => "adjacent-left",
-            PairDecision::JoinRight => "adjacent-right",
-            PairDecision::Keep(reason) => reason.as_str(),
-        };
+        let decision = slot.decision.as_str();
         let to_x = moves
             .iter()
             .find(|m| m.scope == slot.scope)

@@ -194,3 +194,112 @@ fn keep_reason_fixed_words() {
         assert_eq!(reason.as_str(), word);
     }
 }
+
+/// 判断の語: 付ける向きは固定語、動かさないは理由の語（7.1）。
+#[test]
+fn pair_decision_words() {
+    assert_eq!(PairDecision::JoinLeft.as_str(), "adjacent-left");
+    assert_eq!(PairDecision::JoinRight.as_str(), "adjacent-right");
+    assert_eq!(
+        PairDecision::Keep(KeepReason::StickyGroup { scope: 1 }).as_str(),
+        "sticky-group"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// 起動の並べ直しの組ごとの決め（design BootRemembered の 5 行・要件 6.3〜6.5）
+// -----------------------------------------------------------------------------
+
+fn state(default_x: Option<i32>) -> ScopeChainState {
+    ScopeChainState {
+        scope: 1,
+        current_x: 500,
+        width: 336,
+        default_x,
+    }
+}
+
+const MARKS: [Option<AdjacencyMark>; 4] = [
+    Some(AdjacencyMark::Left),
+    Some(AdjacencyMark::Right),
+    Some(AdjacencyMark::Separate),
+    None,
+];
+
+/// 記憶に位置が無く既定のままなら左へ付ける。組・覚えた印は読まない（1 行目）。
+#[test]
+fn boot_untouched_scope_joins_left() {
+    for mark in MARKS {
+        for sticky in [false, true] {
+            assert_eq!(
+                boot_pair_decision(&state(Some(500)), false, sticky, mark),
+                PairDecision::JoinLeft
+            );
+        }
+    }
+}
+
+/// 記憶に位置が無く、既定から動かされたか台本の印があれば動かさない（2 行目）。
+#[test]
+fn boot_moved_or_script_placed_scope_without_memory_is_kept() {
+    let explicit = PairDecision::Keep(KeepReason::ExplicitlyPlaced);
+    for mark in MARKS {
+        assert_eq!(
+            boot_pair_decision(&state(Some(800)), false, false, mark),
+            explicit
+        );
+        assert_eq!(
+            boot_pair_decision(&state(Some(500)), true, false, mark),
+            explicit
+        );
+        assert_eq!(
+            boot_pair_decision(&state(Some(800)), true, true, mark),
+            explicit
+        );
+    }
+}
+
+/// 記憶から戻した窓に台本の印があれば、組や印より先に動かさない（3 行目）。
+#[test]
+fn boot_restored_scope_with_script_marker_is_explicitly_placed() {
+    for mark in MARKS {
+        for sticky in [false, true] {
+            assert_eq!(
+                boot_pair_decision(&state(None), true, sticky, mark),
+                PairDecision::Keep(KeepReason::ExplicitlyPlaced)
+            );
+        }
+    }
+}
+
+/// 記憶から戻した窓が組に入っていれば、印より先に動かさない（4 行目）。
+#[test]
+fn boot_restored_scope_in_sticky_group_is_kept() {
+    for mark in MARKS {
+        assert_eq!(
+            boot_pair_decision(&state(None), false, true, mark),
+            PairDecision::Keep(KeepReason::StickyGroup { scope: 1 })
+        );
+    }
+}
+
+/// 記憶から戻した、上のどれでもない窓は覚えた印で決める（5 行目）。
+#[test]
+fn boot_restored_scope_follows_the_remembered_mark() {
+    let cases = [
+        (Some(AdjacencyMark::Left), PairDecision::JoinLeft),
+        (Some(AdjacencyMark::Right), PairDecision::JoinRight),
+        (
+            Some(AdjacencyMark::Separate),
+            PairDecision::Keep(KeepReason::RememberedSeparate),
+        ),
+        (None, PairDecision::Keep(KeepReason::NoRememberedMark)),
+    ];
+    for (mark, expected) in cases {
+        assert_eq!(
+            boot_pair_decision(&state(None), false, false, mark),
+            expected
+        );
+        assert_eq!(remembered_decision(mark), expected);
+    }
+}

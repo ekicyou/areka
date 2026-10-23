@@ -278,9 +278,10 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(default_basis);
         // 窓の組の帳簿も窓の束と一緒に据える（窓が在るので据えた後に書き手が付け直す・要件 3.8・6.1）。
         placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());
-        // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
-        // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
-        // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
+        // 記憶から戻したスコープは既定配置ではない（scg 7.3）。台帳の既定位置を外し
+        // 覚えた印を据える——起動の並べ直しは今の位置でなく印で決める（left/right は今の幅で
+        // 隣り合わせ、none・印なし・組の窓・台本の印は動かさない・dpi-realign-remembered-chain 6.3〜6.5）。
+        // 既定位置を残すと利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
         // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
         if !restored_scopes.is_empty()
             && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
