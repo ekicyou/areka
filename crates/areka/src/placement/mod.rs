@@ -24,6 +24,10 @@ pub mod chain_finalize;
 /// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
 pub mod chain_realign;
 pub mod config;
+/// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び（descript-window-keys）。
+#[allow(dead_code)]
+// 消費者（測り・配置の準備・資産）は descript-window-keys の task 2.x で結線し、そこで外す
+mod descript_window_keys;
 pub mod diag;
 /// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。
 pub(crate) mod dpi_sync;
