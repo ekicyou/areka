@@ -138,6 +138,7 @@ crates/areka/src/
 │   ├── persist.rs                         # 印を書く（persist_entries に足す）・古い記憶への書き足し・印を読む
 │   ├── persist_adjacency_tests.rs         # 新: 印の書き足し・読み戻し・古い記憶の決定論テスト
 │   ├── spawn.rs                           # ScopeWindows に覚えた印の欄
+│   ├── reset_pos.rs                       # 窓を戻した直後に note_script_moved を 1 行で呼ぶ
 │   └── chain_realign_script_moved_tests.rs # 新: ScriptPlaced の差し込みの記録の決定論テスト
 ├── emo2_boot/
 │   ├── frame.rs                           # 新しいテストの接続宣言だけ（呼び順は変えない）
@@ -170,6 +171,7 @@ doc/COMPAT_ARCHITECTURE.md                 # §8 の表の末尾に 2 行
 - `crates/areka/src/placement/chain_realign.rs` — `ChainRealignPending` に控えと台本の記録を持たせ、`arm_chain_realign` が控えを受け取る。解決で `finalize_chain` を使うのをやめ、組ごとの決めを作って `resolve_chain` へ渡し、組ごとにログを出す。冒頭の説明を書き直す（7.4）。
 - `crates/areka/src/placement/persist.rs` — `persist_entries` が窓の位置の鍵を見て、触れる組の印を足す。`persist_unremembered_char_positions` が古い記憶の印だけを書き足す。印を読む関数と、記憶から戻したスコープと印の一覧を作る関数を足す。
 - `crates/areka/src/placement/spawn.rs` — `ScopeWindows` に `remembered_adjacency: Option<AdjacencyMark>` を足し、読み書きの関数を足す（構造体の字面は `spawn.rs` と `spawn_cleanup_tests.rs` の 2 か所）。
+- `crates/areka/src/placement/reset_pos.rs` — `\![execute,resetwindowpos]` で窓を置いた直後に `chain_realign::note_script_moved` を呼ぶ 1 行（印を外す今の働きは変えない）。
 - `crates/areka/src/emo2_boot/frame/dpi.rs` — 第 2 巡の最初のキャラ窓を書く前に控えを取り、武装へ渡す。`reconcile_window_size` のキャラ窓の腕で、大きさが変わりドラッグ中なら掴んだ点を置き直す。
 - `crates/areka/src/emo2_boot/frame/drain_resnap.rs` — `finalize_chain_once_with` が記憶から戻したスコープに覚えた印から決めを作り、`resolve_chain` で解き、組ごとにログを出す。記憶から戻したスコープには既定の位置を付けない（今の「届かないはずの分かれ道」の `debug!` を正常の道の説明へ改める）。`run_move_drain_phase`・`collect_chain_states` の待ちの意味は変えない。
 - `crates/areka/src/emo2_boot/frame.rs` — 新しいテストの接続宣言（`#[cfg(all(test, target_pointer_width = "64"))]` の形）だけ。
@@ -239,7 +241,7 @@ graph LR
 | 2.3 | 一緒に動く組の窓を動かさない | ChainRealign | `StickyGroupLedger::group_of` → `KeepReason::StickyGroup` | — |
 | 2.4 | ドラッグの最中の窓を動かさず寄せもしない | ChainRealign | `DraggingState` → 両側の組を `KeepReason::Dragging` | — |
 | 2.5 | 表情の差し替えでは詰めない | DpiSnapshot | 武装は拡大率の相だけ（今のまま） | — |
-| 3.1 | 変わった後・詰める前の台本の移動を上書きしない | ChainRealign・ChainCore | `ScriptPlaced` の `on_insert` → `script_moved` → `KeepReason::ScriptMovedAfterArm` | 拡大率の流れ |
+| 3.1 | 変わった後・詰める前の台本の移動を上書きしない | ChainRealign・ChainCore | `ScriptPlaced` の `on_insert`・`reset_pos.rs` の `note_script_moved` → `script_moved` → `KeepReason::ScriptMovedAfterArm` | 拡大率の流れ |
 | 3.2 | 詰めた後の台本の移動を上書きせず再び詰めない | ChainRealign | 解決で武装を解く（今のまま） | 拡大率の流れ |
 | 3.3 | 変わる前に台本で置かれ隣り合っていた窓は対象 | ChainRealign | 武装の前の印は記録しない・判定は印を読まない | — |
 | 3.4 | ぱすたの並びを保つ | ChainRealign・ChainCore | 組（2.3）と重なり（2.2）で外す | — |
@@ -428,6 +430,10 @@ pub fn arm_chain_realign(world: &mut World, before: Vec<(usize, ChainRect)>);
 /// `ScriptPlaced` の差し込みの口（on_insert）。武装中なら窓を `script_moved` に積む。
 pub(super) fn note_script_placed_after_arm(world: DeferredWorld, hook: HookContext);
 
+/// 台本が印を外して窓を置いたとき（`\![execute,resetwindowpos]`＝`reset_pos.rs`）に呼ぶ受け口。
+/// 武装中なら窓を `script_moved` に積む。武装していなければ何もしない。
+pub fn note_script_moved(world: &mut World, char_window: Entity);
+
 /// 解決（署名は今のまま）。
 pub fn realign_chain_once_with<F>(world: &mut World, collect: F)
 where F: FnOnce(&World) -> Result<ChainRealignScan, ChainDeferReason>;
@@ -456,7 +462,8 @@ where F: FnOnce(&World) -> Result<ChainRealignScan, ChainDeferReason>;
 - ログ（7.1）: 解決のとき組ごとに 1 行 `info!(prev_scope, scope, decision = 語, before_gap, from_x, to_x, dx, "chain_realign: …")`。控えの判定の隙間 `before_gap` は 1・2・3・4 の理由で外した組では判定しないので出さない。動かした窓の行は今の行を組の行へまとめる。
 - 7.2 の解釈: 「取り出せない」は控え（変わる直前の位置と大きさ）に無い窓。今の走査が揃うまで待つ理由（窓寸が未着・待ちの札・まだ表示されていない）は「待つ」であって取り出せないではないので、今のまま全体を待つ（`collect_chain_states` は起動と共有で、意味を変えない）。
 - 7.4: 冒頭の説明の「明示的に再配置されたスコープの除外は `finalize_chain` の判定をそのまま使う…誰も触っていないスコープは対象に残る」を、新しい決め方（控え・組ごとの決め・外す理由の表）に書き直す。
-- 危うさ: 武装から解決までの数フレームのあいだにドラッグを始めて落とし終えた窓は、ドラッグの記録が残らないので、控えで隣り合っていれば寄せ戻される。解決はふつう武装と同じか数フレーム後で、5 px を越えるドラッグをその間に始めて終える手順は現実には起きにくいので、手当てしない（実機の確かめで見る）。
+- `\![execute,resetwindowpos]`（`PositionCue::ResetWindowPos` → `placement/reset_pos.rs`）は窓を既定の位置へ戻すとき印 `ScriptPlaced` を外すので、差し込みの口では拾えない。`reset_pos.rs` が窓を置いた直後に `note_script_moved` を 1 行で呼び、武装中なら `script_moved` に積む（3.1・2026-10-23 の設計の話し合いで確定）。`reset_pos.rs` は C11 のどの spec も名指ししていない。
+- 受け入れた外れ（2026-10-23 の設計の話し合いで確定・実機の確かめ 8.7 で見る）: 武装から解決までの数フレームのあいだにドラッグを始めて落とし終えた窓は、ドラッグの記録が残らないので、控えで隣り合っていれば寄せ戻される。解決はふつう武装と同じか数フレーム後で、5 px を越えるドラッグをその間に始めて終える手順は現実には起きにくい。手当てするにはドラッグの始まりを知らせる口を `drag_follow.rs`（触らない約束）か wintf に足すことになるので、この spec では手当てしない。実機で目に見えて起きたら `/kiro-discovery` で起票する。
 
 #### AdjacencyPersist（`placement/persist.rs`）
 
@@ -560,7 +567,7 @@ pub(super) fn rescale_drag_grab(
 - 置き直した値は、組に入った窓（ぱすた）の位置を決める `drag_follow.rs` の `policy_mapped_position`（ドラッグ中と落とした時）がそのまま読む（4.2・`drag_follow.rs` は直さない）。組の相手は `sticky_follow.rs` の差の式で同じだけ動く（4.5）。落とした位置を記憶に書く時機は変えない（4.6）。
 - 窓の大きさが変わるのと同じ呼び出しの中で置き直すので、次のカーソルの移動・落とした時の計算は新しい大きさに合った掴んだ点を使う（1 フレーム遅れない）。置き直した `initial_inset` は整数の値で持つ（`drag_follow.rs` と `mouse_move.rs` がどちらも `as i32` で読むので、端数を持たせると読み手ごとに 1 px 割れる）。
 - 大きさを書いたその巡のうちは、窓は下端中央を保つ置き直しの位置にいて、カーソルの次の移動（画面をまたぐドラッグの最中は続けて届く）か落とした時に、掴んだ点がカーソルの下に来る位置へ置かれる。大きさの書き込みと同じ巡で位置をもう一度書く形は、拡大率の相のキャラ窓の書き込みを 1 巡 1 回とする今の約束を破り、`follow/window_move.rs`（触らない）の書き手を通さずに位置を決めることになるので取らない。
-- 危うさ: 画面をまたいだ直後、待ちの札で大きさの書き込みが見送られているあいだに落とすと、落とした位置は前の大きさで決まり、後から大きさだけが下端中央を保って変わる（掴んだ点が落とした点から外れる）。待ちは表の整合までの数フレームで、実機の確かめ（8.7 ⑵）で見る。
+- 受け入れた外れ（2026-10-23 の設計の話し合いで確定・実機の確かめ 8.7 で見る）: 上の「次のカーソルの移動か落とした時まで、下端中央を保つ位置にいる」こと。もう 1 つ、画面をまたいだ直後、待ちの札で大きさの書き込みが見送られているあいだに落とすと、落とした位置は前の大きさで決まり、後から大きさだけが下端中央を保って変わる（掴んだ点が落とした点から外れる）。待ちは表の整合までの数フレームで、実機の確かめ（8.7 ⑵）で見る。
 - 実測の形（8.5）: 1108×1368 → 831×1026、g = (225, 806) → g' = (169, 605)。落とした点 (−1500, 1000) で窓の左上 (−1669, 395)。
 
 #### BootRemembered（`emo2_boot/frame/drain_resnap.rs` の `finalize_chain_once_with`）
@@ -704,7 +711,7 @@ y = "300"
 ### 拡大率の後の詰め直し（FrameHarness）
 
 - `frame_chain_realign_adjacency_tests.rs`（8.1・8.4）: 全スコープの既定の位置を外した（記憶から戻した）形で、200%（幅 764・672）→ 100%（382・336）で隙間が許す幅以内に閉じる・100% → 200% で重なりが閉じる・200% → 100% → 200% の往復・解決の前に 2 度目の変化が来ても最初の控えで解く（1.7）・右に隣り合っていた組が右のまま詰まる・3 体の鎖。
-- `frame_chain_realign_exclusion_tests.rs`（8.2）: 離れていた組（2.1）・重なっていた組（2.2）・組の窓（`StickyGroupLedger` に組を据える・2.3）・ドラッグ中の窓とその隣（`DraggingState` を付ける・2.4）・武装の後に `\![move]` で置いた窓（3.1）・解決の後の `\![move]` が上書きされず 2 度目が走らない（3.2）・武装の前に台本で置かれ隣り合っていた窓は詰まる（3.3）・控えに無い窓は動かさず `warn!` が出てほかの組は詰まる（7.2）。それぞれ陽性の対（外す理由が無ければ詰まる）を同じテストに置く。
+- `frame_chain_realign_exclusion_tests.rs`（8.2）: 離れていた組（2.1）・重なっていた組（2.2）・組の窓（`StickyGroupLedger` に組を据える・2.3）・ドラッグ中の窓とその隣（`DraggingState` を付ける・2.4）・武装の後に `\![move]` で置いた窓（3.1）・武装の後に `\![execute,resetwindowpos]` で戻した窓（3.1・`note_script_moved`）・解決の後の `\![move]` が上書きされず 2 度目が走らない（3.2）・武装の前に台本で置かれ隣り合っていた窓は詰まる（3.3）・控えに無い窓は動かさず `warn!` が出てほかの組は詰まる（7.2）。それぞれ陽性の対（外す理由が無ければ詰まる）を同じテストに置く。
 - `chain_realign_script_moved_tests.rs`: 武装中だけ `ScriptPlaced` の差し込み（付け直しを含む）が記録され、武装の前・解決の後・武装していないあいだの差し込みは記録されないこと。
 - `snapshot_char_rects`（`frame_chain_realign_exclusion_tests.rs`）: `WindowPos` の位置か大きさが無いキャラ窓は控えに入らず、バルーン窓は控えに入らないこと。
 - 今あるテストは保つ（8.3）: `one_transition_realigns_exactly_once`・`a_surface_swap_during_a_conversation_never_arms_the_realign`・待ちの札・停滞の警告。
@@ -724,7 +731,7 @@ y = "300"
 
 ### 実機（8.7）
 
-- 開発者の机（主の画面 200%・拡大率の違う 2 画面）で排他テストの机を持って、要件 8.7 の ⑴〜⑷ を emo2 とぱすたで確かめる。判定は画面と、組ごとの判断の行（`RUST_LOG` で `chain_realign`・`chain_finalize`・`areka::persist::save` を info まで開ける）で行う。許す幅 2 px が実機の並びで足りるかもここで見る。
+- 開発者の机（主の画面 200%・拡大率の違う 2 画面）で排他テストの机を持って、要件 8.7 の ⑴〜⑷ を emo2 とぱすたで確かめる。判定は画面と、組ごとの判断の行（`RUST_LOG` で `chain_realign`・`chain_finalize`・`areka::persist::save` を info まで開ける）で行う。許す幅 2 px が実機の並びで足りるかもここで見る。受け入れた外れ 3 つ（武装から解決までのあいだに始めて終えたドラッグ・画面をまたいだ直後の次のカーソルの移動まで・待ちの札のあいだに落とした時）が目に見えて起きないかも見て、起きたら `/kiro-discovery` で起票する。
 
 ## Optional Sections
 
@@ -735,6 +742,6 @@ y = "300"
 
 ### 並走ウェーブ（C11）との約束
 
-- 触るファイルは File Structure Plan のとおり。要件で足した `areka-sylphya/src/persist/{mod,format}.rs`・`main.rs`・`ghost_session.rs` の内、`persist/mod.rs` は `readonly-mode` も触る（向こうは書かない形への差し替えの口・こちらは鍵の一覧と TOML の写し）。文字の当たりは後に着地する側が取り込む。`readonly-mode` のセッションには 2026-10-23 の要件の話し合いの後にこの当たりを知らせた。正準の鍵 `areka.window.scope(ID).adjacent` は sylphya の汎用の構文 `key.rs` の `parse_dotted` で読めるので、`mcp-scope-rect-property` の `vocab/dotted.rs` には触れない。`alert.rs` は C11 のどの spec も名指ししていない。
+- 触るファイルは File Structure Plan のとおり。要件で足した `areka-sylphya/src/persist/{mod,format}.rs`・`main.rs`・`ghost_session.rs` の内、`persist/mod.rs` は `readonly-mode` も触る（向こうは書かない形への差し替えの口・こちらは鍵の一覧と TOML の写し）。文字の当たりは後に着地する側が取り込む。`readonly-mode` のセッションには 2026-10-23 の要件の話し合いの後にこの当たりを知らせた。正準の鍵 `areka.window.scope(ID).adjacent` は sylphya の汎用の構文 `key.rs` の `parse_dotted` で読めるので、`mcp-scope-rect-property` の `vocab/dotted.rs` には触れない。`alert.rs`・`placement/reset_pos.rs` は C11 のどの spec も名指ししていない。
 - `descript-window-keys` との約束（`run_move_drain_phase`・`PositionCue`／`MoveCueSink` に触れない・frame.rs の呼び順を変えない）は守る。`drain_resnap.rs` で触るのは `finalize_chain_once_with` だけ。
-- 約束をまたぐ所はほかに無い。`wintf/src/ecs/drag/dispatch.rs` は要件の触る所に挙がっていたが、この設計では触らない。`placement/sticky_follow.rs`・`emo2_boot/move_cue_place.rs`（`ScriptPlaced` を差し込む所）も触らない（差し込みの口は印の定義の側に付ける）。
+- 約束をまたぐ所はほかに無い（`alert.rs` と `reset_pos.rs` は持ち主の無いファイルで、2026-10-23 の設計の話し合いで足した）。`wintf/src/ecs/drag/dispatch.rs` は要件の触る所に挙がっていたが、この設計では触らない。`placement/sticky_follow.rs`・`emo2_boot/move_cue_place.rs`（`ScriptPlaced` を差し込む所）も触らない（差し込みの口は印の定義の側に付ける）。
