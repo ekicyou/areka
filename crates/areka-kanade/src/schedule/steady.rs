@@ -124,13 +124,10 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
             input.region.as_deref(),
             &snapshot,
         ),
-        // 仮の腕: 受理は 2.3 で mouse_events へ委譲する。それまでは何も送らない。
+        // 解放・ホイール・出入りは段の列を持つ側へ渡す（閉じの握手の保留は上で確かめ済み）。
         MouseEventKind::ButtonUp { .. }
         | MouseEventKind::Wheel { .. }
-        | MouseEventKind::Hover(_) => {
-            tracing::trace!(target: "kanade", event = "mouse_not_sent", ?input, "未対応の種類");
-            return (state, Vec::new());
-        }
+        | MouseEventKind::Hover(_) => return super::mouse_events::on_mouse_extended(state, input),
     };
     tracing::trace!(
         target: "kanade",

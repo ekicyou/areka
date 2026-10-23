@@ -41,6 +41,8 @@ pub mod events;
 /// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
 #[cfg(test)]
 pub(crate) mod log_capture;
+/// マウスの解放・ホイール・出入りの受理と、クリックの段の列。
+pub(crate) mod mouse_events;
 /// SHIORI Resource 照会の許可集合（イベント檻とは別族・Req4.1）。DD-9 の例外として `pub`。
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;

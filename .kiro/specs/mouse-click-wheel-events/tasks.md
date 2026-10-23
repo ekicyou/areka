@@ -31,7 +31,7 @@
   - ドラッグの組み立てを Ref2・Ref5 を受ける共通の組み立てへ広げ、ドラッグの 2 つは今と同じ値で呼ぶ
   - 表の数のテストが 64 で通り、ドラッグの開始・終了の Reference のテストが変えずに通る
   - _Requirements: 1.1, 2.1, 6.1, 7.5, 10.1_
-- [ ] 2.3 3 つの新しい知らせの受理と、クリックの段の列の表を作る
+- [x] 2.3 3 つの新しい知らせの受理と、クリックの段の列の表を作る
   - ボタンと「2 回目の解放か」から段の列を決める表（左・右・中・拡張 2 つ × ふつう／2 回目の 10 通り。中のふつうは `Ex` の 2 段の後に互換の 2 段、中の 2 回目は `OnMouseUpEx` → `OnMouseUp`(2)）を作る
   - 解放の知らせは段の列の 1 段目の GET を積んで段の記憶を状態に置く。ホイールは `OnMouseWheel`（Ref2＝回転量）、出入りは 4 語のどれか（Ref2・Ref5＝0）の GET を 1 本積むだけ
   - 定常の入口の分岐の 2.1 の仮の腕を、閉じの握手の保留を確かめた後に 3 つをここへ渡す委譲に置き換える（話の最中かでは分けない）。送ったら `mouse_event_sent` をクリックの系は info・ホイールと出入りは debug で残す
@@ -120,3 +120,4 @@
 - 範囲外: `cargo clippy -p areka-kanade --all-targets` が `crates/areka-kanade/src/actor_raise_reply_tests.rs:98` の `never_loop` で止まる（本 spec の前からある）。完了の棚卸で扱う。
 - 2.3・2.4: クリックの段の列の中身は `schedule/mouse_events.rs`（テストは `mouse_events_tests.rs`）へ置き、`steady.rs`（2.1 の後で 964 行）には委譲の腕と応答の入口だけを足す。
 - 2.2: 表の手書きの数（`events_change_tests.rs` 55→64）のほか、表の全体を固定する `events_tests.rs::allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour` の期待の配列に 9 語を足した（語を足せば必ず赤になる檻・design の変更ファイルの一覧に漏れ）。4.2 の差分の説明に例外として書く。範囲外の clippy の止まりは `balloon_events_cleanup_tests.rs:189` ほか複数の触っていないテストのファイルにもある。
+- 2.3: `ClickChain` に `cfg_attr(not(test), expect(dead_code))` の足場がある。2.4 で `on_click_reply` が欄を読み始めたら外す（外さないと unfulfilled_lint_expectations）。記録の欄のイベント名は `event` と重なるので `id` にしてある（`balloon_event_sent` と同じ形）。
