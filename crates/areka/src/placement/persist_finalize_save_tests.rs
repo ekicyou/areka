@@ -220,8 +220,13 @@ fn find<'a>(events: &'a [LogEvent], needle: &str, scope: usize) -> Vec<&'a LogEv
 fn writes_only_unremembered_scopes_and_keeps_other_keys() {
     let mut rig = Rig::new(true);
     rig.seed(seed_entries());
-    let before = rig.load();
-    assert_eq!(before.len(), 2 + 6 + 1, "種が記憶に入っている: {before:?}");
+    let mut before = rig.load();
+    // 種のスコープ 0 の位置が組 (0,1) の印を連れてくる（dpi-realign-remembered-chain 6.2）。
+    assert_eq!(
+        before.len(),
+        2 + 6 + 1 + 1,
+        "種が記憶に入っている: {before:?}"
+    );
     rig.mark_remembered(0);
 
     persist_unremembered_char_positions(&rig.world);
@@ -233,14 +238,23 @@ fn writes_only_unremembered_scopes_and_keeps_other_keys() {
     assert_eq!(expected_saved(1), ("1239".to_string(), "400".to_string()));
     assert_eq!(expected_saved(2), ("818".to_string(), "500".to_string()));
 
-    // 書いた鍵はスコープ 1・2 の位置の 4 つだけ。ほかは前と同じ。
+    // 書いた鍵はスコープ 1・2 の位置の 4 つと、触れる組 (0,1)・(1,2) の隣り合いの印の 2 つだけ
+    // （dpi-realign-remembered-chain 6.2）。SCOPES の並びはどの組も離れているので印は `none`。
+    // ほかは前と同じ。
     let mut rest = after.clone();
     for scope in [1, 2] {
         for axis in [Axis::X, Axis::Y] {
             rest.remove(&PersistKey::WindowPos { scope, axis });
         }
+        assert_eq!(
+            rest.remove(&PersistKey::WindowAdjacent { scope })
+                .as_deref(),
+            Some("none"),
+            "スコープ {scope} の隣り合いの印"
+        );
     }
-    assert_eq!(rest, before, "書いた 4 つの鍵のほかは前後で同じ");
+    before.remove(&PersistKey::WindowAdjacent { scope: 1 });
+    assert_eq!(rest, before, "書いた 6 つの鍵のほかは前後で同じ");
     assert_eq!(
         window_pos(&after, 0),
         Some((SENTINEL_POS.x.to_string(), SENTINEL_POS.y.to_string())),
