@@ -60,3 +60,15 @@
 - 優先度の区分: A（開発者の指示）。段: その他。
 - 要件定義のモデル: Opus。
 - 議題: 上の 3 案のどれにするか。
+
+## 2026-10-23 `pasta-in-windows-verification` からの申し送り（件 25・開発者の承認「承認。animated-surface-log-flood に件として足し、記録も進めて」）
+
+- 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表の **25**・6 節の「何もしないあいだの CPU の測り」。件の番号は表の番号）。記録は git の外の `<w>\target\pasta-verify-quiet\debug\logs\`・`<w>\target\pasta-verify-quiet\release\logs\`（`quiet-<版>.health.csv`・`quiet-<版>.stdout.log`・`quiet-<版>.exitcode.txt`）と `<w>\target\pasta-verify-rerun3\logs\rerun3.health.csv` に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。
+- **件 25（動く絵を毎フレームいちから作り直す〔`cache_hit=false`〕ため、何もしていない間も CPU を使い続ける〔release で 1 コアの 20%・debug で 69%・毎秒およそ 14 回〕・記録のあふれ〔件 21〕と同じ場所）**:
+  - 測り: コミット `a13e19b6` の debug 版と release 版で、ぱすたを手順書 `doc/pasta-real-run.md` 4 節の起動の塊（`AREKA_APP_SMOKE_EXIT_MS=360000` で 6 分で自分を終える）で起こし、何も操作せずに置いた。最初の 60 秒を除いた 5 秒ごとの 50 行で、areka の CPU は 1 コアに対して debug 版が中央値 69%（最大 86%）・release 版が中央値 20%（最大 29%）。WorkingSet は debug 版 197 MB・release 版 176 MB で増えず、答えなくなることは 0 回、panic と ERROR は 0、終了コードはどちらも 0。操作のあった rerun3（debug 版）は中央値 84%（最大 108%）。
+  - 根拠: 面 0 の面 1002 の `apply(ShowSurface)` の INFO 行が、debug 版 5,060 行（`07:29:26Z`〜`07:35:20Z`）・release 版 5,063 行（`07:35:39Z`〜`07:41:33Z`）。どちらも約 354 秒に毎秒およそ 14 行で、どの行も `cache_hit=false`。
+  - 原因: 件 21 と同じ面 1002 のボールの 3 枚の動く WebP のコマが替わるたびに、面をいちから合成し直す（窓の大きさの絵を作る `crates/areka-emo-present/src/display.rs:174` の道）。何もしていないあいだも、動く絵がある限りこの合成が毎秒およそ 14 回走る。release 版は 1 回の合成が軽いだけで、回数は debug 版と同じ。記録の行の場所は件 21 と同じ（`presenter/show.rs:402`）。
+  - 測りの条件: 進行役は排他テストの机だけを持ち、ひとりの机は持っていなかった。測りのあいだの機械ぜんたいの CPU は中央値で debug 版 16%・release 版 15%。
+  - SSP との比べ: 同じ測り方で、SSP 2.9.23（32 ビット）に入れてあるぱすたを SSP 自身の保存した状態のまま起こし、何もせずに置くと、SSP の CPU は 1 コアに対して中央値 10%（最大 13%）・WorkingSet 111〜112 MB（`<w>\target\pasta-verify-quiet\ssp\logs\quiet-ssp.health.csv`・最初の 60 秒を除いた 62 行）。areka の release 版はおよそ 2 倍、debug 版はおよそ 7 倍。ただし SSP がそのあいだにどの面を出していたか（動くボールが動いていたか）は確かめておらず、同じ動く絵の比べとまでは言えない。要件の段で、同じ面を出した SSP の基準を測るかを決める。
+  - 範囲: この brief の Scope の Out「動く絵の適用の回数を減らすこと」は、決まりどおりの再描画の回数の話。件 25 は 1 回ごとの合成の重さ（変わらない層までいちから作り直すこと）の話で、要件の段で Scope の In に入れる。完了 `areka-P0-animated-image-playback` の再描画の決まりは変えない。
+  - 版: **v0.1.0** の中で解く（開発者の決め「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）。
