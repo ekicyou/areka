@@ -1,7 +1,7 @@
 ---
 inclusion: fileMatch
 fileMatchPattern: '**/*.rs'
-updated_at: 2026-09-24
+updated_at: 2026-10-23
 ---
 
 # Logging Guidelines (tracing)
@@ -14,7 +14,7 @@ updated_at: 2026-09-24
 # ライブラリクレート全般（wintf, dola, areka-parsers, shiori-abi, shiori-host32-* 等）
 tracing = { workspace = true }
 
-# アプリケーション（areka, examples, shiori-host32-helper 実行体）
+# アプリケーション（areka, areka-mcp-bridge, areka-impl-watch, real-run-kit の実行体, examples）
 tracing-subscriber = { workspace = true }  # env-filter feature有効
 ```
 

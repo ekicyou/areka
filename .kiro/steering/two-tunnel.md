@@ -1,6 +1,6 @@
 ---
 inclusion: manual
-updated_at: 2026-06-28
+updated_at: 2026-10-23
 ---
 
 # 二坑モデル
@@ -90,7 +90,7 @@ _Depends(confirmed): pilot-<spec-name>
 
 **先進坑（pilot）の spec 名は `pilot-` 接頭辞を付ける**（例: `pilot-clickthrough-alpha-toggle`）。`.kiro/specs/` の一覧・`/kiro-start <name>` 等のコマンド表示・依存記法のいずれでも、**名前だけで先進坑と一目で判別できる**ようにするため。
 
-- 本坑（main）は接頭辞を付けない（基盤層なら `wintf-` 等の領域接頭辞は可）。例: 本坑 `wintf-clickthrough-alpha-toggle`。
+- 本坑（main）は `pilot-` を付けず、`kiro-spec-schema.md`「命名規則」の `{module}-{feature-name}`（持ち場の名前が先頭・2026-10-23〜）に従う。例: 本坑 `wintf-clickthrough-alpha-toggle`。
 - 例 example フォルダも spec 名に一致させる: `crates/pilot/examples/pilot-<spec-name>/`（1 仕様 = 1 フォルダ・traceability）。
 - spec 名が `pilot-` で自明ゆえ、`_Depends(confirmed):` は接頭辞付き名をそのまま参照する（旧 `pilot/<name>` のパス修飾は不要）。
 
