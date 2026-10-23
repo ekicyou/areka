@@ -163,3 +163,6 @@
 - 7.1 の「ワークスペースの全体テストが緑」は、最後の検証（`/kiro-validate-impl` の全体テスト・排他テストの机）で確かめる。
 - （範囲外・7.1 で発見）`areka` の `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が負荷の下で 1 度赤になり、回し直しで緑（揺れ）。
 - 実機のテストで MCP の `raise_event`／`sakurascript` を送るのは、起動のトークが終わってから（再生中は `NG:the ghost cannot accept a script now`）。7.2 は記録の `status=Some("balloon(` を目印に待つ。
+- 完了時にその場で解決: `areka-sakura` の `same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times` の Wait の待ちを、空回し 1000 回から時間切れ 5 秒の受け取りへ替えた（揺れの元）。
+- 完了時にその場で解決: `script_security_real_run.rs` の流した後の記録の切り出しを `unwrap_or("")` から `expect` に替え、空の文字列のまま判定が通る道を塞いだ（7.2 のレビューの提案）。
+- 完了時の棚卸で起票済みと確かめたもの: `never_loop` は `areka-P0-clippy-199-lints`、`spine_third_scope…` の揺れは `areka-P0-areka-test-binary-stability`、`inproc_e2e_test.rs` の上限超えは `areka-P0-shiori4-api` の brief にある。

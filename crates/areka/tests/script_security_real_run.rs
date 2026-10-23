@@ -122,7 +122,9 @@ fn real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break() {
     // 利用者と同じ閉じ方で閉じてから標準出力を読む（保険の自動終了を待たない）。
     let ended = run.close();
     let stdout = run.stdout();
-    let after_send = stdout.get(before_send..).unwrap_or("");
+    let after_send = stdout
+        .get(before_send..)
+        .expect("流す前の位置が標準出力の字の境目に無い");
     let ctx = || run.output();
     assert_eq!(
         ended.by,
