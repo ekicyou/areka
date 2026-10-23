@@ -243,6 +243,27 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     // 「シェル位置初期化」を選んだときに送る。`\![execute,resetwindowpos]` からは送らない（要件 8.7）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnResetWindowPos:1
     "OnResetWindowPos",
+    // マウスの解放・クリック・ホイール・出入りの 9 語（mouse-click-wheel-events 要件 1.1・2.1・6.1・
+    // 7.5・10.1・55→64 語）。ボタンを放したとき・クリックのとき・ホイールを回したとき・当たり判定
+    // やキャラクター窓に出入りしたときに送る。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseUp:1
+    "OnMouseUp",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseUpEx:1
+    "OnMouseUpEx",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseClick:1
+    "OnMouseClick",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseClickEx:1
+    "OnMouseClickEx",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseWheel:1
+    "OnMouseWheel",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseEnter:1
+    "OnMouseEnter",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseLeave:1
+    "OnMouseLeave",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseEnterAll:1
+    "OnMouseEnterAll",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseLeaveAll:1
+    "OnMouseLeaveAll",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -587,7 +608,7 @@ pub fn on_mouse_drag_start(
     region: Option<&str>,
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
-    mouse_drag_get("OnMouseDragStart", x, y, scope, region, snapshot)
+    mouse_get("OnMouseDragStart", x, y, "0", scope, region, "0", snapshot)
 }
 
 /// `OnMouseDragEnd`（GET・Ref0..6 正典 layout・areka-P0-mouse-drag-events 要件 4）。
@@ -601,16 +622,20 @@ pub fn on_mouse_drag_end(
     region: Option<&str>,
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
-    mouse_drag_get("OnMouseDragEnd", x, y, scope, region, snapshot)
+    mouse_get("OnMouseDragEnd", x, y, "0", scope, region, "0", snapshot)
 }
 
-/// ドラッグの 2 イベントの共通の組み立て（Ref2・Ref5 は常に "0"・Ref4 の `None` は空文字）。
-fn mouse_drag_get(
+/// マウスの GET の共通の組み立て（Ref0..6 の固定の並び `[x, y, ref2, scope, region, ref5, "mouse"]`・
+/// Ref4 の `None` は空文字）。ドラッグの 2 つは Ref2・Ref5 とも "0" で呼ぶ。
+#[allow(clippy::too_many_arguments)]
+pub(super) fn mouse_get(
     id: &'static str,
     x: i64,
     y: i64,
+    ref2: &str,
     scope: u32,
     region: Option<&str>,
+    ref5: &str,
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
     ShioriCall::Get {
@@ -618,10 +643,10 @@ fn mouse_drag_get(
         references: vec![
             x.to_string(),
             y.to_string(),
-            "0".to_string(),
+            ref2.to_string(),
             scope.to_string(),
             region.unwrap_or("").to_string(),
-            "0".to_string(),
+            ref5.to_string(),
             REF6_DEVICE_MOUSE.to_string(),
         ],
         status: ExecutionStatus::derive(snapshot),

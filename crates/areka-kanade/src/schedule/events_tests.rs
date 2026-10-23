@@ -213,6 +213,8 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 正典固定 ID）。
 /// shiori の読み直しの `OnDestroy` は mcp-reload 2.2 で同じ前例に倣い `OnClose` の直後へ足した
 /// （54→55・正典固定 ID・語を足すたびに名前が競合しないようテスト名から件数を外した）。
+/// マウスの解放・クリック・ホイール・出入りの 9 語は mouse-click-wheel-events 2.2 で同じ前例に倣い
+/// 末尾へ足した（55→64・いずれも正典固定 ID）。
 #[test]
 fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
     assert_eq!(
@@ -273,6 +275,15 @@ fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
             "OnAnchorSelectEx",
             "OnAnchorSelect",
             "OnResetWindowPos",
+            "OnMouseUp",
+            "OnMouseUpEx",
+            "OnMouseClick",
+            "OnMouseClickEx",
+            "OnMouseWheel",
+            "OnMouseEnter",
+            "OnMouseLeave",
+            "OnMouseEnterAll",
+            "OnMouseLeaveAll",
         ]
     );
     assert!(

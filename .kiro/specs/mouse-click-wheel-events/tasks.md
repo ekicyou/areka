@@ -26,7 +26,7 @@
   - 定常のマウスの入口の振り分け（網羅の `match`）に、新しい 3 つを受けて何も送らず trace を残す仮の腕を 1 つ足す（2.3 で新しい受理への委譲に置き換える）
   - ワークスペースが組み上がり、今のマウス・ドラッグのテストが変えずに通る
   - _Requirements: 1.1, 1.7, 2.1, 3.2, 6.1, 7.1, 7.11_
-- [ ] 2.2 送ってよい表に 9 語と、マウスの Reference の共通の組み立てを足す
+- [x] 2.2 送ってよい表に 9 語と、マウスの Reference の共通の組み立てを足す
   - 9 語を ukadoc の URL のコメントつきで表に足し、表の語の数の手書きの数を 55 から 64 にする（コメントに 9 語と本 spec 名）
   - ドラッグの組み立てを Ref2・Ref5 を受ける共通の組み立てへ広げ、ドラッグの 2 つは今と同じ値で呼ぶ
   - 表の数のテストが 64 で通り、ドラッグの開始・終了の Reference のテストが変えずに通る
@@ -119,3 +119,4 @@
 - 1.2: `pointer/dispatch/tests.rs` の `test_dispatch_pressed_gating_requires_main_button`（拡張ボタンだけでは押下が届かない）を `test_dispatch_pressed_fires_for_every_button` に置き換えた。design の WintfHoles（dispatch/mod.rs）が変える動きそのものを固定していたテストで、4.2 の「今のテストを直していない」の差分の説明ではこの置き換えを例外として明記する。
 - 範囲外: `cargo clippy -p areka-kanade --all-targets` が `crates/areka-kanade/src/actor_raise_reply_tests.rs:98` の `never_loop` で止まる（本 spec の前からある）。完了の棚卸で扱う。
 - 2.3・2.4: クリックの段の列の中身は `schedule/mouse_events.rs`（テストは `mouse_events_tests.rs`）へ置き、`steady.rs`（2.1 の後で 964 行）には委譲の腕と応答の入口だけを足す。
+- 2.2: 表の手書きの数（`events_change_tests.rs` 55→64）のほか、表の全体を固定する `events_tests.rs::allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour` の期待の配列に 9 語を足した（語を足せば必ず赤になる檻・design の変更ファイルの一覧に漏れ）。4.2 の差分の説明に例外として書く。範囲外の clippy の止まりは `balloon_events_cleanup_tests.rs:189` ほか複数の触っていないテストのファイルにもある。
