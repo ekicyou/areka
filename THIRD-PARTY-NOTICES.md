@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (266 crate)
+- MIT License (267 crate)
 - Apache License 2.0 (4 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
@@ -2981,6 +2981,7 @@ SOFTWARE.
 - shiori-host32-testdll 0.0.3
 - shiori-host32-testdll-loadu 0.0.3
 - shiori4-testdll 0.0.3
+- surface-compare 0.0.3
 - temp-path-kit 0.0.3
 - ukadoc-survey 0.0.3
 - wintf 0.0.3

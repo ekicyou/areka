@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
-use crate::method::is_implemented_name;
+use crate::method::{is_implemented_name, is_move_name};
 use crate::pattern::{Cell, PatternState};
 use crate::plan::is_bind_interval;
 use crate::world::{EmoWorld, targets_animation_id};
@@ -323,28 +323,10 @@ impl NestReport {
     /// 面の表から作る（[`EmoWorld::nest_report`] の中身）。
     ///
     /// 循環をたどる辺は、element定義の辺と、すべての animation のすべての pattern定義の辺
-    /// （番号が 0 以上で、欄 2 が animation の番号になる 7 語でないもの）。着せ替えの有効・無効や
+    /// （[`pattern_edge`]・7 語と `move` を除く）。着せ替えの有効・無効や
     /// 描画メソッドが動くかには依らない（どの一番上から見ても切られうる辺を全部挙げる）。
     pub(crate) fn from_world(world: &EmoWorld) -> NestReport {
-        let mut edges: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-        for id in world.surface_ids() {
-            let Some(master) = world.surface(id) else {
-                continue;
-            };
-            let to = edges.entry(id).or_default();
-            to.extend(master.elements.iter().filter_map(|e| match e.kind {
-                ElementKind::Surface(c) => Some(c),
-                _ => None,
-            }));
-            to.extend(
-                master
-                    .animations
-                    .iter()
-                    .flat_map(|a| &a.patterns)
-                    .filter(|p| !targets_animation_id(p.method.as_str()))
-                    .filter_map(|p| u32::try_from(p.surface_id).ok()),
-            );
-        }
+        let edges = nest_edges(world);
 
         let mut issues = Vec::new();
         for &id in edges.keys() {
@@ -379,9 +361,43 @@ impl NestReport {
     }
 }
 
+/// 循環をたどる辺（親の番号 → 子の番号）: element定義の辺と、すべての animation のすべての
+/// pattern定義の辺（[`pattern_edge`]）。[`NestReport`] と形の誤り（[`crate::plan_issues`]）が共有する。
+pub(crate) fn nest_edges(world: &EmoWorld) -> BTreeMap<u32, Vec<u32>> {
+    let mut edges: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for id in world.surface_ids() {
+        let Some(master) = world.surface(id) else {
+            continue;
+        };
+        let to = edges.entry(id).or_default();
+        to.extend(master.elements.iter().filter_map(|e| match e.kind {
+            ElementKind::Surface(c) => Some(c),
+            _ => None,
+        }));
+        to.extend(
+            master
+                .animations
+                .iter()
+                .flat_map(|a| &a.patterns)
+                .filter_map(pattern_edge),
+        );
+    }
+    edges
+}
+
+/// pattern定義の辺の先（番号が 0 以上で u32 に収まり、欄 2 が animation の番号になる 7 語でも、
+/// サーフェスの番号を無視する `move`（ukadoc）でもないもの）。
+pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
+    let method = p.method.as_str();
+    if targets_animation_id(method) || is_move_name(method) {
+        return None;
+    }
+    u32::try_from(p.surface_id).ok()
+}
+
 /// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。
 // ponytail: 辺 1 本ごとに全体をなめる（辺 × 面）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
-fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32) -> bool {
+pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32) -> bool {
     let mut seen = BTreeSet::from([from]);
     let mut stack = vec![from];
     while let Some(s) = stack.pop() {

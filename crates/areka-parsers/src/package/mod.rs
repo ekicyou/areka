@@ -24,6 +24,10 @@ mod resolve;
 #[cfg(test)]
 mod resolve_tests;
 
+mod resolve_bind;
+#[cfg(test)]
+mod resolve_bind_tests;
+
 mod resolve_shell;
 #[cfg(test)]
 mod resolve_shell_tests;
@@ -33,4 +37,4 @@ mod validation_tests;
 
 pub use model::{BindGroupDefaults, GhostNames, MountError, MountModel, ShellMount, ShioriMount};
 pub use resolve::resolve;
-pub use resolve_shell::resolve_with_shell;
+pub use resolve_shell::{read_ghost_names, resolve_with_shell};

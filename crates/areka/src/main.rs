@@ -67,6 +67,8 @@ mod app_exit;
 mod log_history;
 mod mcp;
 mod menu;
+/// 乗算済み BGRA → 透過 PNG（MCP とオフラインの書き出しが共有）。
+mod png_image;
 mod readme;
 /// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
 mod session_end;
@@ -147,6 +149,13 @@ mod smoke_exit;
 /// 起動オプションの読み方（areka-P0-startup-options-core）。
 mod cli;
 
+/// オフラインの書き出し（`--offline-dump`・areka-P0-offline-surface-dump）。
+mod offline_dump;
+
+/// スコープごとに既定の着せ替えと名前が分かれる検体（試験専用・画面と書き出しの試験が共有）。
+#[cfg(test)]
+mod scope_bind_fixture_test_support;
+
 // ---------------------------------------------------------------------------
 // Entry Point
 // ---------------------------------------------------------------------------
@@ -164,6 +173,10 @@ fn main() -> Result<()> {
     let opts = cli::read();
     if opts.help {
         return cli::help::run();
+    }
+    // `--offline-dump` は書き出しだけ走らせ、その終了コードで終える（役目の登録・起動の解決・MCP・窓より前）。
+    if let Some(req) = &opts.offline {
+        std::process::exit(offline_dump::run(req));
     }
     if opts.modules == cli::ModulePolicy::Skip {
         tracing::info!(

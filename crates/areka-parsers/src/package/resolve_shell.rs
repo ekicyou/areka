@@ -11,6 +11,7 @@
 //! （`seriko.defaultsurfacedirectoryname`、無ければ `master`）、名前ありは
 //! `shell/<名>/` を選ぶ。既存の `resolve` は名前なしでここへ委ねる。
 
+use std::collections::BTreeMap;
 use std::io::ErrorKind;
 use std::path::Path;
 
@@ -18,7 +19,7 @@ use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv;
 
 use super::model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
-use super::resolve::read_bindgroup_defaults;
+use super::resolve_bind::read_bindgroup_defaults;
 
 /// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。
 const GHOST_MASTER: &str = "ghost/master";
@@ -28,6 +29,57 @@ const DESCRIPT_FILE: &str = "descript.txt";
 const SHELL_ROOT: &str = "shell";
 /// shell 既定ディレクトリ名（ukadoc 正典・Req 3.1）。
 const DEFAULT_SHELL_DIR: &str = "master";
+
+/// ゴーストの `ghost/master/descript.txt` だけを読み、名前情報を返す（シェルは見ない）。
+///
+/// 失敗は `resolve_with_shell` と同じ `StartPointMissing`（不在）・`StartPointUnreadable`
+/// （その他の I/O 失敗）。`name` 等が無ければ該当欄は None（失敗にしない）。
+pub fn read_ghost_names(
+    ghost_root: &Path,
+    default_encoding: DefaultEncoding,
+) -> Result<GhostNames, MountError> {
+    let map = read_ghost_descript(&ghost_root.join(GHOST_MASTER), default_encoding)?;
+    Ok(names_from(&map))
+}
+
+/// `shiori_dir/descript.txt` を読み、decode して KV に分ける。
+fn read_ghost_descript(
+    shiori_dir: &Path,
+    default_encoding: DefaultEncoding,
+) -> Result<BTreeMap<String, String>, MountError> {
+    let descript = shiori_dir.join(DESCRIPT_FILE);
+
+    // 起点 descript.txt を読む。不在は StartPointMissing、その他 I/O 失敗は
+    // StartPointUnreadable（黙って空を返さない・Req 1.6/5.1）。
+    let bytes = match std::fs::read(&descript) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == ErrorKind::NotFound => {
+            return Err(MountError::StartPointMissing { expected: descript });
+        }
+        Err(err) => {
+            return Err(MountError::StartPointUnreadable {
+                path: descript,
+                kind: err.kind(),
+            });
+        }
+    };
+
+    // charset 判定 + デコード + KV 分割は foundation へ委譲（Req 1.5）。
+    Ok(parse_kv(&decode(&bytes, default_encoding)))
+}
+
+/// KV から名前情報を取る（欠落は None・推測しない・Req 1.4）。
+fn names_from(map: &BTreeMap<String, String>) -> GhostNames {
+    GhostNames {
+        name: map.get("name").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name_2c_540d_524d:1
+        sakura_name: map.get("sakura.name").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name2_2c_540d_524d:1
+        sakura_name2: map.get("sakura.name2").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#kero.name_2c_540d_524d:1
+        kero_name: map.get("kero.name").cloned(),
+    }
+}
 
 /// 展開済みゴーストパッケージのルートから、descript.txt 起点で
 /// SHIORI/shell の 2 点マウントを解決する（シェル名つき）。
@@ -48,39 +100,10 @@ pub fn resolve_with_shell(
     default_encoding: DefaultEncoding,
     shell: Option<&str>,
 ) -> Result<MountModel, MountError> {
-    // ghost/master（SHIORI マウント先）と起点 descript.txt のパスを合成。
+    // ghost/master（SHIORI マウント先）と起点 descript.txt を読む（名前だけの読みと同じ部品）。
     let shiori_dir = ghost_root.join(GHOST_MASTER);
-    let descript = shiori_dir.join(DESCRIPT_FILE);
-
-    // 起点 descript.txt を読む。不在は StartPointMissing、その他 I/O 失敗は
-    // StartPointUnreadable（黙って空を返さない・Req 1.6/5.1）。
-    let bytes = match std::fs::read(&descript) {
-        Ok(bytes) => bytes,
-        Err(err) if err.kind() == ErrorKind::NotFound => {
-            return Err(MountError::StartPointMissing { expected: descript });
-        }
-        Err(err) => {
-            return Err(MountError::StartPointUnreadable {
-                path: descript,
-                kind: err.kind(),
-            });
-        }
-    };
-
-    // charset 判定 + デコード + KV 分割は foundation へ委譲（Req 1.5）。
-    let text = decode(&bytes, default_encoding);
-    let map = parse_kv(&text);
-
-    // 名前情報（欠落は None・推測しない・Req 1.4）。
-    let names = GhostNames {
-        name: map.get("name").cloned(),
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name_2c_540d_524d:1
-        sakura_name: map.get("sakura.name").cloned(),
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name2_2c_540d_524d:1
-        sakura_name2: map.get("sakura.name2").cloned(),
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#kero.name_2c_540d_524d:1
-        kero_name: map.get("kero.name").cloned(),
-    };
+    let map = read_ghost_descript(&shiori_dir, default_encoding)?;
+    let names = names_from(&map);
 
     // SHIORI マウント: dir は起点の親（存在確定）、file は未指定なら None（推測禁止・Req 2.3）。
     let shiori = ShioriMount {

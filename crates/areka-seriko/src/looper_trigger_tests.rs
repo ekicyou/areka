@@ -38,7 +38,7 @@ const TRIGGERS: &str = "surface0\n{\n\
 fn runonce_plays_once_from_the_event_time_on_first_show() {
     let (rng, probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table_of(TRIGGERS), rng));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     assert!(rt.on_tick(1000, &mut states).is_empty());
 
     let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1030).expect("Show");
@@ -410,7 +410,7 @@ fn table_replacement_drops_trigger_state_and_rearms_on_the_next_tick() {
     rt.on_tick(300, &mut states);
     assert!(rt.armed.contains_key(&(scope(), Slot::Shell)), "前提");
 
-    states.rebase_shell(BindSet::default());
+    states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
     rt.replace_shell_table(table_of(TRIGGERS));
     assert!(rt.armed.is_empty(), "差し替えで捨てる");
 
@@ -443,7 +443,7 @@ const NO_TRIGGER_WORDS: &str = "surface0\n{\n\
 #[test]
 fn tables_without_trigger_words_keep_no_trigger_state() {
     let mut rt = LoopRuntime::new(cfg(table_of(NO_TRIGGER_WORDS), always_fire()));
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     let logs = capture_logs(|| {
         rt.on_tick(0, &mut states);
@@ -490,7 +490,7 @@ fn trigger_words_beside_random_do_not_interfere() {
     let run = |text: &str| {
         let (rng, probe) = counting_rng(&draws);
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
-        let mut states = ScopeStates::new(BindSet::default());
+        let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
         rt.on_tick(0, &mut states);
         switch(&mut rt, &mut states, SurfaceTarget::Show(0), 0);
         let runonce = started(&rt, Slot::Shell, 0);
@@ -566,7 +566,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
         balloon_tables: BTreeMap::from([(scope(), table_of(TRIGGERS))]),
         rng,
     });
-    let mut states = ScopeStates::new(BindSet::default());
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     let note = |states: &mut ScopeStates, open: bool| {
         states.note_stage(&StageNote::Balloon {
             scope: scope(),

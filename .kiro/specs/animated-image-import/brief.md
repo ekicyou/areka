@@ -140,3 +140,11 @@ SERIKO の pattern定義の描画メソッド `import`（`animation*.pattern*,im
 - 要件定義のモデル: **Opus に改める**（棚卸㉔は Fable）。読み手・焼く一覧・合成・seriko にまたがるが、形は `animated-image-playback` の子の仕組み（`FilmSheet`・`PartKey::Film`・`Cell::Picture`）が前例で、足す 3 か所まで本文の「仕組みの形」に書いてある。
 - 分割の案: 無し（一度切り出した spec）。
 - 見つけた穴・古くなった記述: 上の roadmap の列の順。本文の Out of Boundary「seriko の表と時計」と Constraints の触るファイルの欠けは棚卸㉓の指摘のまま。
+
+## 2026-10-23 足した件: 1 枚目の待ちが 0 の動く絵の経過 0 のコマ（`areka-P0-offline-surface-dump` の完了の棚卸から）
+
+- 出どころ: `areka-P0-offline-surface-dump` の要件の討議 1（「画面の側のずれとして起票する」と開発者が決めた件）。測りは `.kiro/specs/completed/areka-P0-offline-surface-dump/research.md` の 2.9 節・10.1 節・10.2 節。
+- 起きること: 1 枚目の待ちが 0 の APNG（と動く WebP）を element に置いた面で、areka の画面と書き出しは経過 0 のとき 2 枚目を描く。SSP 2.9.23 は待ち 0 の 1 枚目を描く（10.2 節の面 11＝APNG「赤 0ms・緑 100ms・青 100ms」で SSP は赤、areka は緑）。
+- 場所: `crates/areka-emo-compose/src/plan_always.rs` の `push_film_op`。欄が空（`Cell::Rest`）のとき `FilmSheet::rest`（1 枚目の待ちが 0 なら次のコマ）を描く。経過 0 の絵の決め方は `nesting.rs` の `rest_index`・`rest_pattern` と同じ道で、この brief の本文「繰り返しと分解の仕組みの形」の「経過 0」の項が触る所と同じ。
+- 区分: バグ（B）。この brief の `import` とは別に、件として先に直してよい（触るファイルが同じなので、spec を分けず 1 本にまとめた）。
+- 決めること: 待ち 0 の 1 枚目を経過 0 で出すのを動く絵の子だけにするか、手書きの `always`（`always_rest_target`）でも同じにするか。手書きの `always` は 10.1 節の面 2 で SSP も「出ていない」ので、今のままが SSP と同じ。

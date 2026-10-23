@@ -128,11 +128,6 @@ fn boot_request_and_notes_table() {
             vec![unsupported("ssf")],
         ),
         (
-            vec!["--offline-dump", "o"],
-            boot(None, None, None, false),
-            vec![unsupported("offline-dump")],
-        ),
-        (
             vec!["--dump-surface", "d"],
             boot(None, None, None, false),
             vec![unsupported("dump-surface")],

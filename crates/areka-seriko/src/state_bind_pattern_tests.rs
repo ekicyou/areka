@@ -207,7 +207,9 @@ fn apply_bind_accumulates_across_two_binds_when_shown() {
 /// 目カテゴリ旧パーツ(1301,1303) を外し 1304 を付与、非カテゴリ 1207 は保持 → {1207,1304}。
 #[test]
 fn apply_bind_exclusive_replaces_same_category_on_shown() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1301, 1303, 1207,
+    ])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -232,7 +234,9 @@ fn apply_bind_exclusive_replaces_same_category_on_shown() {
 /// 冪等（R3.6・D9）: 同一 target の排他置換を 2 回目は Unchanged（結果集合同値・状態書き込みなし）。
 #[test]
 fn apply_bind_exclusive_idempotent_second_is_unchanged() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1301, 1303, 1207,
+    ])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -258,7 +262,9 @@ fn apply_bind_exclusive_idempotent_second_is_unchanged() {
 #[test]
 fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
     // Hidden scope。
-    let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1301, 1303, 1207,
+    ])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     states.apply(&scope, SurfaceTarget::Hide);
@@ -276,7 +282,9 @@ fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
     );
 
     // 未知 scope。
-    let mut states2 = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+    let mut states2 = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1301, 1303, 1207,
+    ])));
     let unknown = ActorKey::from("1");
     let outcome2 = states2.apply_bind_exclusive(&unknown, &[1301, 1303, 1304], 1304);
     assert_eq!(
@@ -294,7 +302,9 @@ fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
 /// 非退行（R3.8）: 排他置換はシェル面・バルーン面の状態機械を一切変更しない。
 #[test]
 fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1301, 1303, 1207,
+    ])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -315,7 +325,7 @@ fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
 /// target が category_ids に含まれても最終的に有効になる（filter→chain の順序保証・bindopt 2.1/3.1）。
 #[test]
 fn apply_bind_exclusive_target_in_category_ids_stays_present() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1301]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1301])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -569,7 +579,7 @@ fn frame(surface_id: u32) -> PatternFrame {
 /// 1402 の残留コマが乗ったままになり、以後の表示を覆い続ける。
 #[test]
 fn apply_bind_exclusive_drops_residual_frames_of_removed_ids() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -604,7 +614,9 @@ fn apply_bind_exclusive_drops_residual_frames_of_removed_ids() {
 /// 除去（脱衣）で外れた ID の保持コマも消える（bindopt 7.1）。非 bind コマは無影響（bindopt 7.4）。
 #[test]
 fn apply_bind_off_drops_residual_frame_of_that_id_only() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1402, 1600]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
+        1402, 1600,
+    ])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -634,7 +646,7 @@ fn apply_bind_off_drops_residual_frame_of_that_id_only() {
 /// 着衣（加算）だけでは何も外れないので保持コマも一切減らない（bindopt 7.4 の裏側）。
 #[test]
 fn apply_bind_on_keeps_all_residual_frames() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -661,7 +673,7 @@ fn apply_bind_on_keeps_all_residual_frames() {
 /// 非表示 scope（StateOnly）でも状態側の保持コマは取り除かれる（次 Show へ古いコマを持ち越さない）。
 #[test]
 fn commit_bind_state_only_still_drops_residual_frames() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -687,7 +699,7 @@ fn commit_bind_state_only_still_drops_residual_frames() {
 /// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8 の非退行）。
 #[test]
 fn commit_bind_does_not_touch_balloon_pattern() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -707,7 +719,7 @@ fn commit_bind_does_not_touch_balloon_pattern() {
 /// 除去の痕跡は info! で残す（bindopt 7.5・無言の状態変更を作らない）。文言と水準を固定する。
 #[test]
 fn residual_frame_removal_emits_info_marker() {
-    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -746,7 +758,7 @@ fn residual_frame_removal_emits_info_marker() {
 fn no_removal_log_when_dropped_id_has_no_residual_frame() {
     const REMOVAL_MARKER: &str = "seriko: bind から外れた ID の保持コマを除去";
 
-    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
     let with_frame = ActorKey::from("0"); // 外れる 1402 の保持コマを持つ（陽性対照）
     let without_frame = ActorKey::from("1"); // pattern はあるが 1402 の保持コマは無い（本題）
     states.apply(&with_frame, SurfaceTarget::Show(2100));

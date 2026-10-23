@@ -132,12 +132,13 @@ fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
 
 // ── 7.3: 循環検出 warn（ops 経路・flatten_surface）────────────────────────────────────
 
-/// 要件 7.3: 自己参照 surface の合成で循環 WARN が surface_id つきで発火する（＋部分結果は非パニック）。
+/// 要件 7.3: 自己参照 surface の合成で循環の知らせが surface_id つきで発火する（＋部分結果は非パニック）。
+/// 組むたびの知らせなので DEBUG（warn は読み込みが 1 度だけ・offline-surface-dump 要件 7.5）。
 ///
 /// surface 1000 が自身の bind pattern0 で 1000 を参照する（自己参照）。build_plan（→derive_ops→
 /// flatten_surface）は循環枝を打ち切り WARN を出す。要件 7.3 はこのログが本体。
 #[test]
-fn cycle_detection_warn_fires_with_surface_id() {
+fn cycle_detection_debug_fires_with_surface_id() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["self.png"]);
 
@@ -175,7 +176,7 @@ fn cycle_detection_warn_fires_with_surface_id() {
     // contains では extent 経路の WARN に masking されうる。ops 経路の WARN は「外形算出」を
     // **含まない** 循環行として一意に判別する（この行を消せば必ず落ちる・非空虚性）。
     let ops_cycle_line = logs.lines().find(|l| {
-        l.contains("level=WARN")
+        l.contains("level=DEBUG")
             && l.contains("target=areka_emo_compose")
             && l.contains("surface_id=1000")
             && l.contains("循環")
@@ -183,16 +184,21 @@ fn cycle_detection_warn_fires_with_surface_id() {
     });
     assert!(
         ops_cycle_line.is_some(),
-        "ops 経路（flatten_surface）の循環 WARN（外形算出を含まない）が発火する: {logs}",
+        "ops 経路（flatten_surface）の循環 DEBUG（外形算出を含まない）が発火する: {logs}",
+    );
+    // 組むたびの知らせは debug（warn は読み込みが 1 度だけ・offline-surface-dump 要件 7.5）。
+    assert!(
+        !logs.contains("level=WARN"),
+        "合成は循環で WARN を出さない: {logs}"
     );
 }
 
-/// 要件 7.3: 外形算出経路（flatten_extent）の循環 WARN も surface_id つきで発火する。
+/// 要件 7.3: 外形算出経路（flatten_extent）の循環の知らせ（DEBUG）も surface_id つきで発火する。
 ///
 /// build_plan は compute_extent を先に走らせるため、flatten_extent の循環 WARN（メッセージに
 /// 「外形算出」を含む）が別途発火する。extent 経路の循環ログを個別に固定する。
 #[test]
-fn extent_cycle_warn_fires_with_surface_id() {
+fn extent_cycle_debug_fires_with_surface_id() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["self.png"]);
 
@@ -223,7 +229,7 @@ fn extent_cycle_warn_fires_with_surface_id() {
     // extent 経路（flatten_extent）特有の循環 WARN を **行単位で判別**する（「外形算出」を含む
     // 循環行）。ops 経路の循環 WARN とは別の行として一意に突く（この行を消せば必ず落ちる）。
     let extent_cycle_line = logs.lines().find(|l| {
-        l.contains("level=WARN")
+        l.contains("level=DEBUG")
             && l.contains("target=areka_emo_compose")
             && l.contains("surface_id=2000")
             && l.contains("循環")
@@ -231,7 +237,7 @@ fn extent_cycle_warn_fires_with_surface_id() {
     });
     assert!(
         extent_cycle_line.is_some(),
-        "extent 経路（flatten_extent）の循環 WARN（外形算出を含む）が発火する: {logs}",
+        "extent 経路（flatten_extent）の循環 DEBUG（外形算出を含む）が発火する: {logs}",
     );
 }
 
@@ -348,12 +354,12 @@ fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> AtlasTable {
     AtlasTable::new(keys, entries, vec![page])
 }
 
-/// 要件 8.4: 未実装メソッド命令（Replace/Base/Blend）は WARN（method＋element つき）を出して skip する。
+/// 要件 8.4: 未実装メソッド命令（Replace/Base/Blend）は DEBUG（method＋element つき）を出して skip する。
 ///
 /// blit::execute へ未実装メソッド命令を渡すと、method の Debug 値と element id を載せた WARN が
 /// 発火し、その命令は合成へ寄与しない（skip）。3 種の未実装メソッドで method フィールドの判別も突く。
 #[test]
-fn unimplemented_method_warn_fires_with_method_and_element() {
+fn unimplemented_method_debug_fires_with_method_and_element() {
     let page = page_1px(200, 150, 100, 255);
     let atlas = single_entry_table(
         page,
@@ -392,8 +398,8 @@ fn unimplemented_method_warn_fires_with_method_and_element() {
         );
         // ログ: WARN・target・method（Debug 判別子）・element を同時に突く。
         assert!(
-            logs.contains("level=WARN"),
-            "{marker}: 未実装は WARN: {logs}"
+            logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
+            "{marker}: 未実装は DEBUG（組むたびの知らせ）: {logs}"
         );
         assert!(
             logs.contains("target=areka_emo_compose"),
@@ -612,11 +618,12 @@ fn nonexistent_append_target_warn_fires_with_id() {
     assert!(logs.contains("未存在"), "未存在メッセージ: {logs}");
 }
 
-// ── 4.3: 未束縛 element warn（atlas_bind.rs bind_atlas）───────────────────────────────
+// ── 4.3: 未束縛 element debug（atlas_bind.rs bind_atlas）───────────────────────────────
 
-/// 要件 4.3: atlas に無い element path を bind すると WARN（path つき）が発火し、AtlasBinding は None。
+/// 要件 4.3: atlas に無い element path を bind すると DEBUG（path つき）が発火し、AtlasBinding は None。
+/// 脱落の知らせは読み込みの入口の error が 1 度出すので、ここは warn にしない（1 誤り 1 行）。
 #[test]
-fn unbound_element_warn_fires_with_path() {
+fn unbound_element_debug_fires_with_path() {
     let base = Path::new("shell/master");
     // atlas には known.png のみ。bogus.png は未束縛＝None になる。
     let atlas = bake_atlas(base, &["known.png"]);
@@ -650,10 +657,14 @@ fn unbound_element_warn_fires_with_path() {
         .expect("bogus element");
     assert_eq!(binding.0[bogus_idx], None, "未束縛 element は None");
 
-    // ログ: WARN・target・path を同時に突く。
+    // ログ: DEBUG・target・path を同時に突き、WARN 以上は出ない。
     assert!(
-        logs.contains("level=WARN"),
-        "未束縛 element は WARN: {logs}"
+        logs.contains("level=DEBUG"),
+        "未束縛 element は DEBUG: {logs}"
+    );
+    assert!(
+        !logs.contains("level=WARN") && !logs.contains("level=ERROR"),
+        "未束縛 element は WARN 以上を出さない: {logs}"
     );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(

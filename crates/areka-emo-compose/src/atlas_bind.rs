@@ -2,7 +2,7 @@
 //!
 //! 構築時（load-time・ゴーストごと1回）に `ElementPath`→`ElementId` を resolve し、結果を
 //! `AtlasBinding` コンポーネントとして World へ挿入する。以後の毎フレーム参照は O(1) の `entry`
-//! 引きに帰着する。解決不能なパスはパニックせず `warn` 以上で観測可能に扱う。
+//! 引きに帰着する。解決不能なパスはパニックせず `debug` で残す（脱落は bake の段の error が知らせる）。
 
 use areka_emo_atlas::{AtlasTable, ElementId, SetId};
 use bevy_ecs::entity::Entity;
@@ -18,7 +18,7 @@ use crate::world::AtlasBinding;
 /// resolve は本関数（構築時）でのみ呼ぶ（design Postconditions「束縛後の compose 経路に
 /// resolve 呼び出しが存在しない」）。`ElementPath.as_str()` は無改変で `AtlasTable` の
 /// `rel_path` キーと同一規約ゆえ、bake 済みの既知パスは `Some(ElementId)`・未知パスは
-/// `None`＋`warn` になる（design Risks）。パニックしない。画像でない element
+/// `None`＋`debug` になる（design Risks）。パニックしない。画像でない element
 /// （[`ElementKind`] が `Image` 以外）は引かずに `None` を置き、警告も出さない。
 ///
 /// `AtlasBinding.0` は `SurfaceMaster.elements` と同じ添字で並ぶ（index 対応の契約）。
@@ -40,7 +40,8 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
                 match atlas.resolve(set, rel_path) {
                     Some(id) => Some(id),
                     None => {
-                        tracing::warn!(
+                        // 未知のパスは bake で脱落した絵だけで、読み込みの入口が error で 1 度出している（1 誤り 1 行）。
+                        tracing::debug!(
                             target: "areka_emo_compose",
                             set = set.0,
                             surface_id = master.id,
@@ -147,7 +148,7 @@ mod tests {
         result.table
     }
 
-    /// テスト①（受入基準）: 既知パスは `Some(ElementId)`・未知パスは `None`（warn 済み）に束縛される。
+    /// テスト①（受入基準）: 既知パスは `Some(ElementId)`・未知パスは `None`（debug 済み）に束縛される。
     ///
     /// KNOWN パスと BOGUS パスの 2 element を持つ surface を fold し、KNOWN のみ bake した
     /// `AtlasTable` に対し `bind_atlas` を実行。`AtlasBinding` の既知 index が `Some`・未知 index が
@@ -222,7 +223,7 @@ mod tests {
         }
     }
 
-    /// テスト③: 全パス未知でもパニックせず全 `None`（非パニック・warn のみ）。
+    /// テスト③: 全パス未知でもパニックせず全 `None`（非パニック・debug のみ）。
     #[test]
     fn all_unknown_paths_yield_all_none_without_panic() {
         let base = Path::new("shell/master");

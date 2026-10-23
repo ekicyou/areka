@@ -91,3 +91,6 @@ sample-ghost-kit = { path = "../sample-ghost-kit" }
 # 実機の試験の窓口（spec: areka-P0-real-run-mcp-kit）。検体の窓口を本番の表に持つので、
 # [dependencies] へは決して置かない（見張り sample_path_guard_test が赤にする＝D-2）。
 real-run-kit = { path = "../real-run-kit" }
+# オフラインの書き出しの検体の 1 色塗りの α 付き PNG を書き、書き出した PNG を RGBA で読む
+# （spec: areka-P0-offline-surface-dump）。areka-emo-atlas と同じ版で、Cargo.lock に新しいクレートは増えない。
+image = { version = "0.25.10", default-features = false, features = ["png"] }

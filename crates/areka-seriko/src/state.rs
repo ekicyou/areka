@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
 
-use crate::bind::accumulate;
+use crate::bind::{DefaultBinds, accumulate};
 use crate::output::DisplayCommand;
 use crate::resolve::SurfaceTarget;
 
@@ -140,7 +140,7 @@ pub struct ScopeStates {
     /// 動的 bind 未適用の scope に対する既定（初期値）供給源でもある（要件 3.1・
     /// [`ScopeStates::current_binds`] のフォールバック先）。供給元は shell descript の
     /// `default,1`（`build_static_bindset`）。
-    static_binds: BindSet,
+    static_binds: DefaultBinds,
     /// per-scope の動的着せ替え集合（要件 3.1）。エントリを持つ scope はその集合を、持たない
     /// scope は `static_binds`（既定・初期値）を Show の bind 供給源とする（[`current_binds`]）。
     ///
@@ -166,7 +166,7 @@ impl ScopeStates {
     ///
     /// `static_binds` は task 1.2/2.4 で解決される bindgroup default 由来の `BindSet` を想定し、
     /// 本構造体はそれを保持する（替わるのはシェルの差し替え [`ScopeStates::rebase_shell`] だけ）。
-    pub fn new(static_binds: BindSet) -> Self {
+    pub fn new(static_binds: DefaultBinds) -> Self {
         Self {
             scopes: HashMap::new(),
             balloon: HashMap::new(),
@@ -306,7 +306,7 @@ impl ScopeStates {
     /// 静的な着せ替えを新しいシェルの既定へ入れ替え、動的な着せ替えとシェル側のパターンの
     /// 進行を消す（着せ替えの区分はシェルごとの定義ゆえ持ち越さない）。今の面（`scopes`・
     /// `balloon`）とバルーン側のパターンの進行は保つ。発行はしない（合図は呼び手が出す）。
-    pub fn rebase_shell(&mut self, static_binds: BindSet) {
+    pub fn rebase_shell(&mut self, static_binds: DefaultBinds) {
         self.static_binds = static_binds;
         self.dynamic_binds.clear();
         self.pattern_states
@@ -353,7 +353,7 @@ impl ScopeStates {
     /// （シェルの差し替えの後は [`ScopeStates::rebase_shell`] で渡した新しい既定）を返す。
     ///
     /// [`current_binds`]: ScopeStates::current_binds
-    pub fn binds(&self) -> &BindSet {
+    pub fn binds(&self) -> &DefaultBinds {
         &self.static_binds
     }
 
@@ -366,7 +366,7 @@ impl ScopeStates {
     pub fn current_binds(&self, scope: &ActorKey) -> &BindSet {
         match self.dynamic_binds.get(scope) {
             Some(binds) => binds,
-            None => &self.static_binds,
+            None => self.static_binds.for_scope(scope),
         }
     }
 

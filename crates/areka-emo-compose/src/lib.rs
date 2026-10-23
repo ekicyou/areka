@@ -57,7 +57,11 @@ pub use boxes::{
 pub mod fold;
 pub mod plan;
 mod plan_always;
+mod plan_bounds;
+mod plan_issues;
 pub use plan::BlitOp;
+pub use plan_bounds::{ShellBounds, shell_bounds};
+pub use plan_issues::{ShapeIssue, shape_issues};
 pub mod blit;
 pub mod hit;
 pub use hit::{RegionPriority, ScaledHit, hit_region, hit_region_scaled};

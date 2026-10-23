@@ -62,7 +62,7 @@ fn rig(kind: SkinKind) -> Rig {
     let seriko_out = out.records();
     let (sink, seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
-        BindSet::default(),
+        areka_seriko::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         SerikoLoopConfig::disabled(),
         out,
@@ -138,7 +138,7 @@ fn shell_built() -> SwapBuilt {
                 })
                 .into(),
             resolver: SurfaceResolver::new(BTreeMap::new()),
-            static_binds: BindSet::default(),
+            static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
             bind_resolver: BindResolver::empty(),
             loop_table: AnimationTable::empty(),
             author_dpi: 120,
@@ -765,7 +765,7 @@ fn a_shell_replace_moves_the_wiring_static_binds_but_a_balloon_replace_does_not(
         (SkinKind::Balloon, balloon_built()),
     ] {
         let mut rig = rig(kind);
-        rig.wiring.static_binds = BindSet::from_ids([7]);
+        rig.wiring.static_binds = areka_seriko::DefaultBinds::uniform(BindSet::from_ids([7]));
         let built = match built {
             SwapBuilt::Shell {
                 mut assets,
@@ -773,7 +773,7 @@ fn a_shell_replace_moves_the_wiring_static_binds_but_a_balloon_replace_does_not(
                 balloon,
                 restored,
             } => {
-                assets.static_binds = BindSet::from_ids([100]);
+                assets.static_binds = areka_seriko::DefaultBinds::uniform(BindSet::from_ids([100]));
                 SwapBuilt::Shell {
                     assets,
                     source,
@@ -792,7 +792,13 @@ fn a_shell_replace_moves_the_wiring_static_binds_but_a_balloon_replace_does_not(
             },
         );
         frame(&mut rig);
-        got.push(rig.wiring.static_binds.ids().to_vec());
+        got.push(
+            rig.wiring
+                .static_binds
+                .for_scope(&areka_sakura::ActorKey::from("0"))
+                .ids()
+                .to_vec(),
+        );
         replaces(rig);
     }
     assert_eq!(got, vec![vec![100], vec![7]]);

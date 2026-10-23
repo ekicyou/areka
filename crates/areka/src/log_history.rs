@@ -5,11 +5,13 @@
 //! 振り分けは tracing の受け口にも World にも触れない純粋な関数で、テストは値を直に渡す。
 //! 記録は [`History`] が全種別で 1 本の通し番号を振り、種別ごとに [`PER_KIND_CAP`] 件まで持つ。
 //! 入れ物はプロセスに 1 つの置き場に据え、[`record`] で積み [`snapshot`]・[`last_id`] で読む。
-//! 出口は [`init`] が標準出力の層と履歴の層（[`HistoryLayer`]＋[`HistoryFilter`]）を重ねて据える。
+//! 出口は [`init`] が標準出力の層と履歴の層（[`HistoryLayer`]＋[`HistoryFilter`]）と
+//! 写しの層（[`CaptureLayer`]＋[`CaptureFilter`]・[`capture_begin`]／[`capture_finish`] の窓）を重ねて据える。
 
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::thread::ThreadId;
 
 use tracing::field::{Field, Visit};
 use tracing::subscriber::Interest;
@@ -182,6 +184,25 @@ pub(crate) fn draft<'a>(
 ) -> Option<Draft> {
     let kind = classify(level, target)?;
     let convention = target == TARGET_SCRIPT || target == TARGET_ERROR;
+    let (mut body, name, label) = body_text(convention, fields);
+    if let Some((cut, _)) = body.char_indices().nth(BODY_CAP_CHARS) {
+        body.truncate(cut);
+        body.push_str(TRUNCATED_SUFFIX);
+    }
+    Some(Draft {
+        kind,
+        label: label.unwrap_or(kind.default_label()).to_string(),
+        name: name.unwrap_or(kind.default_name()).to_string(),
+        body,
+    })
+}
+
+/// 本文を組む（切らない）。返すのは（本文・`ghost` の値・`label` の値）。
+/// `convention` が真のときだけ `ghost`・`label` を本文から除いて返す（組み方は [`draft`] の注記）。
+pub(crate) fn body_text<'a>(
+    convention: bool,
+    fields: impl IntoIterator<Item = FieldText<'a>>,
+) -> (String, Option<&'a str>, Option<&'a str>) {
     let mut name = None;
     let mut label = None;
     let mut message = None;
@@ -201,21 +222,12 @@ pub(crate) fn draft<'a>(
             }
         }
     }
-    let mut body = match message {
+    let body = match message {
         Some(m) => format!("{m}{rest}"),
         // メッセージが無ければ欄だけ（先頭の空白は付けない）。
         None => rest.strip_prefix(' ').unwrap_or(&rest).to_string(),
     };
-    if let Some((cut, _)) = body.char_indices().nth(BODY_CAP_CHARS) {
-        body.truncate(cut);
-        body.push_str(TRUNCATED_SUFFIX);
-    }
-    Some(Draft {
-        kind,
-        label: label.unwrap_or(kind.default_label()).to_string(),
-        name: name.unwrap_or(kind.default_name()).to_string(),
-        body,
-    })
+    (body, name, label)
 }
 
 /// 記録した時刻（現地時刻・分まで）。
@@ -383,28 +395,150 @@ impl Visit for Fields {
     }
 }
 
+impl Fields {
+    fn of(event: &Event<'_>) -> Self {
+        let mut fields = Fields::default();
+        event.record(&mut fields);
+        fields
+    }
+
+    fn texts(&self) -> impl Iterator<Item = FieldText<'_>> {
+        self.0.iter().map(|(name, debug, raw)| FieldText {
+            name,
+            debug,
+            raw: raw.as_deref(),
+        })
+    }
+}
+
 /// 当たる出来事を下書きにし、出したスレッドの上で同期に置き場へ積む層。
 pub(crate) struct HistoryLayer;
 
 impl<S: Subscriber> Layer<S> for HistoryLayer {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let mut fields = Fields::default();
-        event.record(&mut fields);
+        let fields = Fields::of(event);
         let meta = event.metadata();
         // `log` から橋渡しされた行はここへ target `log` で届く。info 以下は下書きが None で捨てる。
-        let texts = fields.0.iter().map(|(name, debug, raw)| FieldText {
-            name,
-            debug,
-            raw: raw.as_deref(),
-        });
-        if let Some(d) = draft(*meta.level(), meta.target(), texts) {
+        if let Some(d) = draft(*meta.level(), meta.target(), fields.texts()) {
             record(local_now(), d);
         }
     }
 }
 
+/// 写しの窓（areka-P0-offline-surface-dump）の時刻（現地時刻・秒まで）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Hms {
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+}
+
+/// 窓に写した記録 1 件（本文は切らない）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CapturedRecord {
+    pub at: Hms,
+    pub level: Level,
+    pub body: String,
+}
+
+/// プロセスに 1 つの窓（開けたスレッドの番号と写した記録）。閉じていれば None。
+/// 排他の中で tracing のマクロも本文の組み立ても走らせない（置き場と同じ約束）。
+static WINDOW: Mutex<Window> = Mutex::new(None);
+
+type Window = Option<(ThreadId, Vec<CapturedRecord>)>;
+
+fn window() -> MutexGuard<'static, Window> {
+    WINDOW.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// 窓を開ける（開いていれば中身を空にして開け直す）。呼んだスレッドの番号を覚える。
+pub(crate) fn capture_begin() {
+    *window() = Some((std::thread::current().id(), Vec::new()));
+}
+
+/// 窓を閉じて、写した記録を残した順に返す（開いていなければ空）。
+pub(crate) fn capture_finish() -> Vec<CapturedRecord> {
+    window().take().map(|(_, rows)| rows).unwrap_or_default()
+}
+
+/// 窓が開いていて、呼んだスレッドが窓を開けたスレッドか。
+fn capture_open_here() -> bool {
+    matches!(&*window(), Some((id, _)) if *id == std::thread::current().id())
+}
+
+/// 窓へ 1 件積む（写しの層とテストが使う同じ口）。窓が閉じているか、窓を開けたスレッドで
+/// なければ積まない。
+pub(crate) fn capture_push(at: Hms, level: Level, body: String) {
+    let here = std::thread::current().id();
+    if let Some((id, rows)) = &mut *window()
+        && *id == here
+    {
+        rows.push(CapturedRecord { at, level, body });
+    }
+}
+
+/// 写しの層がその呼び出し口を必ず欲しいか（出来事で warn 以上）。
+pub(crate) fn capture_wants(is_event: bool, level: Level) -> bool {
+    is_event && level <= Level::WARN
+}
+
+/// 写しの層のフィルタが通すか。出来事でない問い合わせは必ず通す（[`passes`] と同じ理由）。
+pub(crate) fn capture_passes(is_event: bool, level: Level) -> bool {
+    !is_event || level <= Level::WARN
+}
+
+/// 写しの層の規則のフィルタ。warn 以上は履歴の層が既に `always` なので受け口の関心は変わらない。
+pub(crate) struct CaptureFilter;
+
+impl<S> Filter<S> for CaptureFilter {
+    fn enabled(&self, meta: &Metadata<'_>, _cx: &Context<'_, S>) -> bool {
+        capture_passes(meta.is_event(), *meta.level())
+    }
+
+    fn callsite_enabled(&self, meta: &'static Metadata<'static>) -> Interest {
+        if capture_wants(meta.is_event(), *meta.level()) {
+            Interest::always()
+        } else {
+            Interest::never()
+        }
+    }
+
+    fn max_level_hint(&self) -> Option<LevelFilter> {
+        Some(LevelFilter::WARN)
+    }
+}
+
+/// 窓が開いているあいだ、窓を開けたスレッドの warn 以上を切らない本文で積む層。
+pub(crate) struct CaptureLayer;
+
+impl<S: Subscriber> Layer<S> for CaptureLayer {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        // 窓が閉じているあいだの費用はロック 1 つの確かめだけ。
+        if !capture_open_here() {
+            return;
+        }
+        let meta = event.metadata();
+        let convention = meta.target() == TARGET_SCRIPT || meta.target() == TARGET_ERROR;
+        let fields = Fields::of(event);
+        let (body, _, _) = body_text(convention, fields.texts());
+        capture_push(local_hms(), *meta.level(), body);
+    }
+}
+
+/// 現地時刻（`GetLocalTime`・秒まで）。
+fn local_hms() -> Hms {
+    // SAFETY: GetLocalTime は出力先を自前で用意して埋めるだけで、前提も失敗の道も無い。
+    let t = unsafe { GetLocalTime() };
+    // 時・分・秒は Windows の定義で u8 に収まる範囲（0〜23・0〜59・0〜59）。
+    Hms {
+        hour: t.wHour as u8,
+        minute: t.wMinute as u8,
+        second: t.wSecond as u8,
+    }
+}
+
 /// ログの出口を据える（`fn main()` の先頭で 1 度だけ。2 度目はパニックする）。
-/// 標準出力の層（`RUST_LOG` のフィルタ・未設定や不正なら info）と履歴の層を重ねる。
+/// 標準出力の層（`RUST_LOG` のフィルタ・未設定や不正なら info）と履歴の層と写しの層を重ねる。
 /// `init()` は `log` クレートの受け口も据える。
 pub(crate) fn init() {
     tracing_subscriber::registry()
@@ -412,6 +546,7 @@ pub(crate) fn init() {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         ))
         .with(HistoryLayer.with_filter(HistoryFilter))
+        .with(CaptureLayer.with_filter(CaptureFilter))
         .init();
 }
 
@@ -422,3 +557,7 @@ mod tests;
 #[cfg(test)]
 #[path = "log_history_convention_tests.rs"]
 mod convention_tests;
+
+#[cfg(test)]
+#[path = "log_history_capture_tests.rs"]
+pub(crate) mod capture_tests;

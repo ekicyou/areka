@@ -120,7 +120,11 @@ fn attach_replays_the_carried_surfaces_and_falls_back_for_a_missing_one() {
 fn attach_replays_the_carried_binds_and_drops_an_undefined_one() {
     let mut expected = Vec::new();
     let shown = shows_after_attach(|assets| {
-        let defaults = assets.static_binds.ids().to_vec();
+        let defaults = assets
+            .static_binds
+            .for_scope(&areka_sakura::ActorKey::from("0"))
+            .ids()
+            .to_vec();
         assert!(
             defaults.contains(&1100) && !defaults.contains(&1101),
             "前提: emo2 の既定は 腕＝伸び（1100）: {defaults:?}"
