@@ -633,13 +633,17 @@ fn dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings() {
         !body.join(balloon).exists(),
         "取り出し元のフォルダは本体の直下に残らないはず"
     );
+    // 同梱はゴーストの中の balloon へ入る（spec: areka-P0-ghost-inner-balloon 要件 7.1）。
     assert!(
-        root.path()
-            .join("balloon")
+        body.join("balloon")
             .join(balloon)
             .join("descript.txt")
             .is_file(),
-        "同梱の descript.txt が在るはず"
+        "同梱の descript.txt がゴーストの中に在るはず"
+    );
+    assert!(
+        !root.path().join("balloon").exists(),
+        "根の balloon には何も入らないはず"
     );
 }
 
