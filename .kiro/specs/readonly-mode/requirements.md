@@ -28,7 +28,7 @@ areka が書く所（ふつうの `areka.exe` の起動で走るもの）:
 |---|---|---|---|
 | 記憶の 13 種（アプリ: 起動中の印を書く・降ろした直後・定常の印・印を消す・最後に使ったゴースト・置き場の並び／ゴーストごと: 最後に使ったバルーン・最後に使ったシェル・最後のシェルだけ・最後のバルーンだけ・入れたバルーン・窓の位置・ゴーストのプロパティ） | アプリの記憶の置き場・`<ゴースト>\ghost\master\profile\areka\`（シェルの段は `<シェル>\profile\areka\` も根に持つが、今の本番の道にシェルの段の保存は無い） | 表は `crates/areka/src/write_failure_sites_tests.rs` の `KINDS`。どれも `crates/areka-sylphya/src/persist/mod.rs` の `save_scope` を通り、書き込みは `persist/io.rs` の `FsPersistIo` | 保存の口 1 か所 |
 | ゴーストの記憶のフォルダを先に作る | `<ゴースト>\ghost\master\profile\areka\` | `crates/areka-ghost/src/runtime.rs` の起動の段（`create_dir_all`・保存が無くても毎回の起動で作る） | 直接（**brief の数え上げの外・要件の段で見つけた**） |
-| 起動のときの書けるかの確かめ | アプリの記憶の置き場・ゴーストの記憶の置き場 | `crates/areka/src/write_failure.rs` の `check_boot_dirs` | 直接 |
+| 起動のときの書けるかの確かめ | アプリの記憶の置き場・ゴーストの記憶の置き場 | `crates/areka/src/write_failure.rs` の `check_boot_dirs` | 何も作らない（`areka_user_data::open_dir_for_add` で物を足す権限でフォルダを開いて閉じるだけ・brief の「試しに書いて消す」は古い）。書けないと起動を止める |
 | 利用者ごとの置き場を作る・exe の隣の記憶を写す | `%LOCALAPPDATA%\areka` | `crates/areka-user-data/src/establish.rs`・`copy.rs` | 直接 |
 | 書けない所に在るゴーストを写す | 利用者ごとの置き場 | `crates/areka/src/roots/user_root.rs` の `writable_ghost` | 直接 |
 | メニューの置き場の並びの編集 | アプリの記憶 | `crates/areka/src/roots/edit.rs` | 保存の口（13 種の「置き場の並び」） |
@@ -42,6 +42,7 @@ OS が自分で残しうるもの（areka のコードは書かないが、areka
 
 - 置き場を足すメニューのフォルダ選び（`crates/areka/src/roots/pick.rs`）は、「最近使った所に足さない」指定をしていない。OS が最後に開いたフォルダを利用者の設定に覚えうる。
 - 説明書を開く（`crates/areka/src/readme/os_port.rs`）は OS の既定のアプリで開く。OS が「最近使った項目」に足しうる。
+- メニューの「インストール…」の書庫選び（`crates/areka/src/install/pick.rs`・`GetOpenFileNameW`）も、OS が最後に開いた場所を利用者の設定に覚えうる（ギャップ分析で見つけた）。
 
 areka の外で起きる書き込み:
 
@@ -75,6 +76,7 @@ areka の外で起きる書き込み:
 - **Out of scope**: SHIORI が自分で書く保存・一時フォルダ（作ってよい）・`--option kiosk`（readonly と一緒に渡しても今までどおり「まだ扱わない」）・SSP の SSTP の設定・POP・メッセンジャー・カレンダー・セーブデータ共有・プラグイン・vanish・時刻合わせ・自動の更新（どれも areka に無い）・`initial_install.nar` と `--install` の受け取りそのもの（`startup-install-option` の持ち物）・別の exe の中継 `areka-mcp-bridge.exe`・`--offline-dump` の書き出し（利用者が書き出し先を指して頼む物で、`--offline-dump` と一緒の `--option` は効かないと決まっている）・記憶の形と置き場の決め方（完了 `user-data-root`・`baseware-root-list`）・記憶を書けないときの告知そのもの（完了 `write-failure-notice`）。完了 spec は直さず、この spec が新しい決まりを持つ。
 - **Adjacent expectations**:
   - `startup-options-core`（完了）が作った起動オプションの読み手に語を 1 つ足す。ほかの語（`nobootcheck`・`dontloadmodule` など）の扱いは変えない。
+  - 完了 `areka-P0-network-update` の要件 4.3 は、正典の更新の失敗理由の語 `readonly` を「送らない 7 語」に入れている（`crates/areka/src/update/refs_tests.rs` の `UNSENT_WORDS`・`doc/COMPAT_ARCHITECTURE.md` §8）。議題 3 の測りで readonly の SSP が `OnUpdateFailure(readonly)` を送ると分かったら、この spec が新しい決まりを持ち、檻を 6 語に改める（完了 spec の文書は直さない）。
   - `startup-install-option`（下流・次のウェーブ）は、`initial_install.nar` と `--install` を、この spec が作るインストールの断りの入口を通して readonly で断る。この spec は、その後から足される入口も同じ断りを通る形を用意する。
   - `dev-folder-alias`（下流）は、別名のフォルダへ書かない守りを同じ「読み取りだけ」の状態から作れる。
   - ウェーブ C11 の約束: ③（この spec）は「約束なし」。ただし要件 2.5（ゴーストの記憶のフォルダを作らない）は `crates/areka-ghost/src/runtime.rs` の起動の段に関わり、このファイルは同じウェーブの ④ `mcp-scope-rect-property` が触るファイルに挙がっている＝触り方は設計の段で決め、触るなら ④ のセッションと先に話す（議題 5）。
