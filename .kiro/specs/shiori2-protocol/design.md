@@ -289,6 +289,7 @@ pub fn parse_response(
     policy: CharsetPolicy,
     method: Method,
     id: &str,
+    is_resource: bool,
 ) -> Result<ParsedResponse, ShioriError>;
 ```
 - 事前条件: `decide_version` は先頭の行を LF で切り、行末の CR と前後の空白を落として見る。状態の行は ASCII の範囲なので、復号の前のバイトのまま読める（`scan_charset_header` と同じ根拠）。

@@ -27,7 +27,7 @@
   - 完了の姿: 兄弟のテストで、表の各行（References と欠番あり・`Status` あり／なし・`On` で始まらない外からのイベント名でも資源の印が無ければ `GET Sentence`・`username` の `GET String`・`Status: talking` の翻訳・NOTIFY の `OnInitialize`・Shift_JIS の値）の要求の全文のバイトが研究記録 10.2 節から手で写した定数と一致し、`basewareversion` で「送らない」が返る
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 7.1_
 
-- [ ] 2.3 2.x の答えの読みを作る
+- [x] 2.3 2.x の答えの読みを作る
   - 要求の種類で値の見出しを選ぶ（台本と翻訳は `Sentence`・資源は `String`）。1.1 の私の手を使い、状態の行の規則は 3.0 と同じ
   - 2.x に無い見出し（`ErrorLevel`・`ErrorDescription`・`SecurityLevel`）は読まない
   - 完了の姿: 兄弟のテストで、`Sentence` 付き 200・`String` 付き 200・204・見出しの無い 200・400・500・状態の行の無い答えの扱いが固定され、`Value` だけの 2.x の答えは値なし、`ErrorLevel`・`SecurityLevel` を付けた 2.x の答えでもそれらが無いものとして読まれる

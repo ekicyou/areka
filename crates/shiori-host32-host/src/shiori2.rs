@@ -1,10 +1,13 @@
-//! SHIORI/2.x の書き方（版の型・確かめの要求と判定・組み替えの表と要求の組み立て）。純粋・決定的（記録は呼び手が出す）。
+//! SHIORI/2.x の書き方（版の型・確かめの要求と判定・組み替えの表と要求の組み立て・答えの読み）。純粋・決定的（記録は呼び手が出す）。
 //!
 //! 版の決め方は SSP の測り（研究記録 10.1 節）に合わせ、`GET Version` の答えの
 //! 先頭の行の版の字だけで決める（状態の番号は見ない）。
 
-use crate::charset::Charset;
-use crate::shiori3::{ABSENT_REFERENCE, EncodedRequest, Method, ShioriRequest};
+use crate::charset::{Charset, CharsetPolicy};
+use crate::error::ShioriError;
+use crate::shiori3::{
+    ABSENT_REFERENCE, EncodedRequest, Method, ParsedResponse, ShioriRequest, parse_response_with,
+};
 
 /// 相手の SHIORI の版（接続のあいだ変わらない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,6 +159,32 @@ pub fn build_request(req: &ShioriRequest<'_>, is_resource: bool) -> Option<Encod
     Some(EncodedRequest {
         bytes: bytes.into_owned(),
         replaced,
+    })
+}
+
+/// 2.x の答えを読む。要求の種類で値の見出し（`Sentence`／`String`）を選び、
+/// 2.x に無い見出し（`ErrorLevel`・`ErrorDescription`・`SecurityLevel`）は読まない。
+///
+/// 状態の番号・`Charset` の拾い方・読めない応答の判定は 3.0 と同じ（`parse_response_with`）。
+/// is_resource は [`build_request`] に渡したものと同じ印（資源なら `String` を読む）。
+pub fn parse_response(
+    bytes: &[u8],
+    policy: CharsetPolicy,
+    method: Method,
+    id: &str,
+    is_resource: bool,
+) -> Result<ParsedResponse, ShioriError> {
+    // 送らない要求（route が None）の答えは来ないが、来ても台本と同じに読む。
+    let value_header = match route(method, id, is_resource) {
+        Some(Route::String) => "String",
+        _ => "Sentence",
+    };
+    let parsed = parse_response_with(bytes, policy, value_header)?;
+    Ok(ParsedResponse {
+        error_level: None,
+        error_description: None,
+        security_level: None,
+        ..parsed
     })
 }
 

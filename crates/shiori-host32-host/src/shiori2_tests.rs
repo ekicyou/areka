@@ -1,4 +1,4 @@
-//! `shiori2` の決定論テスト（タスク 2.1・2.2・要件 2.1/2.5/3.1〜3.7/7.1/7.3）。
+//! `shiori2` の決定論テスト（タスク 2.1〜2.3・要件 2.1/2.5/3.1〜3.7/4.1〜4.4/4.6/4.7/7.1〜7.3）。
 //!
 //! 窓も I/O も持たない純関数の入出力だけで成立する（x64 のみ・32bit 成果物不要）。
 //! 参照値のバイト列は符号化器から導かず、研究記録 10.1・10.2 節から手で写した定数として持つ。
@@ -254,4 +254,128 @@ fn shift_jis_value_is_encoded_with_whole_text() {
         ),
         b"TRANSLATE Sentence SHIORI/2.6\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSecurityOrigin: null\r\nSender: SSP\r\nSentence: \x82\xb3\x82\xad\x82\xe7\r\n\r\n",
     );
+}
+
+// ---- 2.x の答えの読み（タスク 2.3・要件 4.1〜4.4/4.6/4.7/7.2） ----
+
+fn parse2(
+    reply: &[u8],
+    method: Method,
+    id: &str,
+    is_resource: bool,
+) -> Result<crate::shiori3::ParsedResponse, crate::error::ShioriError> {
+    super::parse_response(
+        reply,
+        crate::charset::CharsetPolicy::Negotiate(sjis()),
+        method,
+        id,
+        is_resource,
+    )
+}
+
+#[test]
+fn sentence_200_reads_script() {
+    let r = parse2(
+        b"SHIORI/2.2 200 OK\r\nCharset: Shift_JIS\r\nSentence: \\h\\s[0]hi\\e\r\n\r\n",
+        Method::Get,
+        "OnBoot",
+        false,
+    )
+    .expect("読める");
+    assert_eq!(r.status, 200);
+    assert_eq!(r.value.as_deref(), Some(r"\h\s[0]hi\e"));
+    assert_eq!(r.charset_header.as_deref(), Some("Shift_JIS"));
+}
+
+#[test]
+fn translate_reads_sentence() {
+    let r = parse2(
+        b"SHIORI/2.6 200 OK\r\nSentence: \\t\\h\\s[6]\\e\r\n\r\n",
+        Method::Get,
+        "OnTranslate",
+        false,
+    )
+    .expect("読める");
+    assert_eq!(r.value.as_deref(), Some(r"\t\h\s[6]\e"));
+}
+
+#[test]
+fn resource_200_reads_string_not_sentence() {
+    let reply = b"SHIORI/2.5 200 OK\r\nSentence: wrong\r\nString: sakura\r\n\r\n";
+    let r = parse2(reply, Method::Get, "username", true).expect("読める");
+    assert_eq!(r.status, 200);
+    assert_eq!(r.value.as_deref(), Some("sakura"));
+    // 台本の要求では String を値として読まない。
+    let r = parse2(
+        b"SHIORI/2.2 200 OK\r\nString: sakura\r\n\r\n",
+        Method::Get,
+        "OnBoot",
+        false,
+    )
+    .expect("読める");
+    assert_eq!(r.value, None);
+}
+
+#[test]
+fn no_content_and_headerless_200_have_no_value() {
+    let r = parse2(
+        b"SHIORI/2.2 204 No Content\r\n\r\n",
+        Method::Get,
+        "OnBoot",
+        false,
+    )
+    .expect("読める");
+    assert_eq!((r.status, r.value), (204, None));
+    let r = parse2(b"SHIORI/2.2 200 OK\r\n\r\n", Method::Get, "OnBoot", false).expect("読める");
+    assert_eq!((r.status, r.value), (200, None));
+}
+
+#[test]
+fn error_statuses_are_kept_verbatim() {
+    for (reply, code) in [
+        (&b"SHIORI/2.2 400 Bad Request\r\n\r\n"[..], 400),
+        (&b"SHIORI/2.2 500 Internal Server Error\r\n\r\n"[..], 500),
+    ] {
+        let r = parse2(reply, Method::Get, "OnBoot", false).expect("読める");
+        assert_eq!((r.status, r.value), (code, None));
+    }
+}
+
+#[test]
+fn reply_without_status_line_is_parse_error() {
+    for reply in [&b""[..], &b"Sentence: \\e\r\n\r\n"[..]] {
+        assert!(matches!(
+            parse2(reply, Method::Get, "OnBoot", false),
+            Err(crate::error::ShioriError::Parse)
+        ));
+    }
+}
+
+#[test]
+fn value_header_alone_is_no_value_in_2x() {
+    for is_resource in [false, true] {
+        let r = parse2(
+            b"SHIORI/2.2 200 OK\r\nValue: \\e\r\n\r\n",
+            Method::Get,
+            "username",
+            is_resource,
+        )
+        .expect("読める");
+        assert_eq!(r.value, None);
+    }
+}
+
+#[test]
+fn headers_absent_in_2x_are_not_read() {
+    let r = parse2(
+        b"SHIORI/2.2 200 OK\r\nSentence: \\e\r\nErrorLevel: warning\r\nErrorDescription: x\r\nSecurityLevel: external\r\n\r\n",
+        Method::Get,
+        "OnBoot",
+        false,
+    )
+    .expect("読める");
+    assert_eq!(r.value.as_deref(), Some(r"\e"));
+    assert_eq!(r.error_level, None);
+    assert_eq!(r.error_description, None);
+    assert_eq!(r.security_level, None);
 }
