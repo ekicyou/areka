@@ -118,7 +118,7 @@
     - ゴーストへの送り物が 0 件
   - _Boundary: InstallRefusal_
   - _Requirements: 7.1, 7.4, 7.5, 7.6, 7.7, 10.4, 11.3_
-- [ ] 4.2 (P) URL からの書庫の取り込みを、落とし始める前に断る
+- [x] 4.2 (P) URL からの書庫の取り込みを、落とし始める前に断る
   - 取得の口を旗で選ぶ。読み取りだけなら `readonly_refused`（`what = install_url`）の info を残し、要求を送らず、スレッドも起こさない
   - 受け口を作る関数の引数は変えない（受け口の並びを字で固めた試験に触らない）
   - 終わった形: 兄弟の試験で、読み取りだけの取得の口を渡した `url` の腕が要求を送らずに記録を出すことが確かめられ、今の試験が緑のまま
@@ -221,3 +221,4 @@
 - 2.2: 構造の試験（`readonly_tests.rs`）は試験のファイルまで走査する。新しい試験から `readonly::engage` や `withhold_everything` を呼ぶと赤になる。試験の控えは `WithholdGuard::under` だけで行う。
 - `crates/areka` の clippy は依存・examples・触っていないファイルの前からの lint で `-D warnings` を通らない。触ったファイルに新しい警告が無いことだけを見る。
 - 3.2: `areka-user-data` の dev-dependencies に `log-capture-kit` を足した。記録の確かめは `log_capture_kit::capture` で行う（ログの確かめは理由を付けて省かない）。
+- 4.2: `InstallCueSink::new` は作るときに 1 度だけ `readonly::is_on()` を読む。5.1 では `engage` を runtime の起動（受け口を作る所）より前に呼ぶこと。

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use dola::cue::{CueCommand, TalkCue};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::install::judge::{ScriptRefusal, ScriptRequest, script_request};
 use crate::install::{InstallOrigin, RawInstallRequest, fetch_url};
@@ -45,13 +45,30 @@ pub(crate) struct InstallCueSink {
 
 impl InstallCueSink {
     pub(crate) fn new(tx: Sender<RawInstallRequest>) -> Self {
-        Self::with_fetch(tx, Arc::new(fetch_url::spawn_download))
+        Self::with_fetch(tx, fetch_for(crate::readonly::is_on()))
     }
 
     /// 取得の起こし方を差し替える口（テストが偽の取得口を差す）。
     pub(crate) fn with_fetch(tx: Sender<RawInstallRequest>, start_fetch: StartFetch) -> Self {
         Self { tx, start_fetch }
     }
+}
+
+/// 読み取りだけなら断りの記録だけを残す口、そうでなければ本物の取得（`fetch_url::spawn_download`）。
+///
+/// 断りの口は要求を送らず、スレッドも起こさない＝ネットワークへ行かない（readonly-mode 要件 7.2）。
+fn fetch_for(readonly: bool) -> StartFetch {
+    if !readonly {
+        return Arc::new(fetch_url::spawn_download);
+    }
+    Arc::new(|url, _tx| {
+        info!(
+            event = "readonly_refused",
+            what = "install_url",
+            url = url.as_str(),
+            "[InstallCueSink] 読み取りだけなので、書庫を取りに行きません"
+        )
+    })
 }
 
 impl dola::cue::CueSink for InstallCueSink {
