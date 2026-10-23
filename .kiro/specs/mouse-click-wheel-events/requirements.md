@@ -38,30 +38,30 @@
 | 2 クリック・ダブルクリック・ドラッグの見分け | 放した時点で決める（待たない）。ドラッグになった押下の解放と、ダブルクリックを生んだ押下（2 回目）の解放では、`OnMouseUp` も `OnMouseClick` も送らない | ダブルクリックの 2 回目の解放でも送る・ドラッグの後も `OnMouseUp` だけは送る | 3・4 |
 | 3 右クリックとメニューの順 | 右クリックのメニューが有効な間（`popupmenu.visible` が 0 でない）は、右ボタンの `OnMouseUp`・`OnMouseClick` を送らない（完了 `popup-menu-minimal` の要件 1.5 のまま）。ゴーストがメニューを抑えた（`popupmenu.visible`＝0）ときだけ送る（右ダブルクリックの決まり〔同 1.10〕と同じ形） | メニューの前に送り、返事があればメニューを出さない・メニューと並べて送る | 5 |
 | 4 ホイールの送る頻度 | 窓ごとに 100 ミリ秒（移動の間引きと同じ）に高々 1 回。間の回転は捨てずに足し合わせて次に送る。静かな所からの最初の回転は待たずに送り、残りは間隔が明けた時点で次の回転を待たずに送る。Reference2 は OS の回転量（1 目盛り＝120・上が正）の和 | 1 フレーム分の和を毎フレーム送る | 6 |
-| 5 `OnMouseEnterAll`／`OnMouseLeaveAll` | **入れない**（ぱすたは使わない・規模を 16 タスクの内に保つ）。網羅台帳の 2 行は今のまま「無い」 | 入れる（窓の出入りの追跡は同じなので 2〜3 タスク増える） | 7 |
+| 5 `OnMouseEnterAll`／`OnMouseLeaveAll` | **入れる**（個別の議論で決めた）。窓の外へ出たことの見分け（7.4）と窓ごとの覚え（7.8）は入れなくても作るので、足すのは表の 2 語・組み立て 2 つ・台帳 2 行・テストだけ（1〜2 タスク） | 入れない（ぱすたは使わない・台帳に「無い」が 2 行残り、後で起票し直す） | 7・10・11 |
 | 6 窓の層（wintf）を触るか（brief の Out of Boundary を改める） | **最小に触る**。ホイールの量を `PointerState.wheel` へ移す（今は溜めるだけで誰にも渡らず、ホイールが一切届かない）・拡張ボタンの押下を配る・ドラッグの終わりに「閾値を越えたか」を残す、の 3 つ。触るのは `pointer/buffers.rs`・`pointer/dispatch/mod.rs`・`drag/state/mod.rs` だけ（同じウェーブの `dpi-realign-remembered-chain` が触る `window_proc/mouse_move.rs`・`drag/dispatch.rs` には触らない） | ホイールだけ wintf で直し、残りは areka の側で回る（同じ瞬間の閾値越えと解放でクリックが先に届く隙が残る） | 2・3・6・Boundary |
 | 7 送信の失敗 | **2 段とも、選択肢・アンカーの前例と同じに 204 と同じ扱い**。失敗は error で残し、ゴーストを終わらせない | 2 段目の失敗は今のマウスのイベントと同じに終了の系列へ倒す | 1・2 |
 | 8 右のクリックの遅れ（議題 3 の続き） | **受け入れて §8 に書く**。右のクリックはメニューの照会の決着を待って送るので、放した後に届いた移動・出入りのイベントより後に届くことがある | メニューの前に送る（メニューが出るまで毎回待つ） | 5・10 |
 
-**SSP で測る点**（ukadoc で読めない・開発者の承認〔2026-10-23〕を受けて、排他テストの机で computer-use により SSP を操作し、`ssp_shiori_log.txt` の差分で測る〔記憶「意味論は ukadoc から輸入・読めない点は SSP で測る」〕）: ⑴ 当たり判定から当たり判定へ直に移ったときの `OnMouseLeave` と `OnMouseEnter` の順（brief の棚卸㉗）、⑵ ダブルクリックの 2 回目の解放で `OnMouseUp`／`OnMouseClick` が来るか、⑶ ドラッグの終わりの解放で `OnMouseUp` が来るか、⑷ 中ボタンで `OnMouseClick`（Reference5＝2）と `OnMouseClickEx` のどちらが来るか（`OnMouseUp` の中ボタンも）、⑸ `OnMouseWheel` の Reference2 の値（1 目盛りで 120 か 1 か）と、SSP がホイールの知らせを間引くか。測った答えが上の決めと違えば、該当する要件を直す。答えは `research.md` に記す。
+**SSP で測る点**（ukadoc で読めない・開発者の承認〔2026-10-23〕を受けて、排他テストの机で computer-use により SSP を操作し、`ssp_shiori_log.txt` の差分で測る〔記憶「意味論は ukadoc から輸入・読めない点は SSP で測る」〕）: ⑴ 当たり判定から当たり判定へ直に移ったときの `OnMouseLeave` と `OnMouseEnter` の順（brief の棚卸㉗）、⑵ ダブルクリックの 2 回目の解放で `OnMouseUp`／`OnMouseClick` が来るか、⑶ ドラッグの終わりの解放で `OnMouseUp` が来るか、⑷ 中ボタンで `OnMouseClick`（Reference5＝2）と `OnMouseClickEx` のどちらが来るか（`OnMouseUp` の中ボタンも）、⑸ `OnMouseWheel` の Reference2 の値（1 目盛りで 120 か 1 か）と、SSP がホイールの知らせを間引くか、⑹ 窓に入るのと当たり判定に入るのが同時のときの `OnMouseEnterAll` と `OnMouseEnter` の順・出るのが同時のときの `OnMouseLeave` と `OnMouseLeaveAll` の順と、それぞれの Reference4。測った答えが上の決めと違えば、該当する要件を直す。答えは `research.md` に記す。
 
 ## Boundary Context
 
 - **In scope**:
-  - キャラクターの窓の上の操作から、`OnMouseUp`・`OnMouseClick`・`OnMouseUpEx`・`OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave` を正典の Reference で送ること。
+  - キャラクターの窓の上の操作から、`OnMouseUp`・`OnMouseClick`・`OnMouseUpEx`・`OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave`・`OnMouseEnterAll`・`OnMouseLeaveAll` を正典の Reference で送ること。
   - `OnMouseUp` → `OnMouseClick`（`Ex` も同じ）の 2 段の送り方。
   - クリックにしない場合（ドラッグ・ダブルクリック・窓の外で放す・箱の選択肢）の決まりと、ダブルクリック・ドラッグ・右クリックのメニューとの順。
   - ホイールの間引きと足し合わせ。
-  - 窓ごとに「今どの当たり判定の上か」を覚え、変わったときに出入りを送ること。
+  - 窓ごとに「今どの当たり判定の上か」「カーソルが窓の上に居るか」を覚え、変わったときに当たり判定と窓の出入りを送ること。
   - 窓の層（wintf）の最小の直し: ホイールの量を受け手へ渡すこと・拡張ボタンの押下を配ること・ドラッグの終わりに閾値を越えたかを残すこと（議題 6）。
-  - 送った・送らなかったの記録。網羅台帳の 7 行。`doc/COMPAT_ARCHITECTURE.md` §8 への areka の決めの登記。決定論の自動テスト。ぱすたの手順書の段 3・段 7 での実機の確かめ。
+  - 送った・送らなかったの記録。網羅台帳の 9 行。`doc/COMPAT_ARCHITECTURE.md` §8 への areka の決めの登記。決定論の自動テスト。ぱすたの手順書の段 3・段 7 での実機の確かめ。
 - **Out of scope**:
-  - `OnMouseDown`・`OnMouseDownEx`（押した瞬間）・`OnMouseDoubleClickEx`・`OnMouseMultipleClick`・`OnMouseHover`・`OnMouseGesture`（タッチパネルの代わりの `OnMouseWheel` も含む）・`OnMouseEnterAll`・`OnMouseLeaveAll`（議題 5 で入れると決めたときだけ In）。
+  - `OnMouseDown`・`OnMouseDownEx`（押した瞬間）・`OnMouseDoubleClickEx`・`OnMouseMultipleClick`・`OnMouseHover`・`OnMouseGesture`（タッチパネルの代わりの `OnMouseWheel` も含む）。
   - バルーンの窓の上のクリック・ホイール・出入り（バルーンのスクロールは別の spec）。
   - 横のホイール（正典の `OnMouseWheel` に横の Reference は無い）。
   - 入力の機器の見分け（Reference6 は今と同じく `mouse`）。
   - 当たり判定の解決そのもの・ドラッグの判定そのもの（今の結果を使うだけ）。
-  - `\t`（時間に厳しい台本）の間にマウスのイベントを止めること（`sakura-time-critical` の持ち物。止める対象に本 spec の 7 つが加わる）。
+  - `\t`（時間に厳しい台本）の間にマウスのイベントを止めること（`sakura-time-critical` の持ち物。止める対象に本 spec の 9 つが加わる）。
 - **Adjacent expectations**:
   - 当たり判定の解決（完了 `collision-geometry`）が、今の `OnMouseMove` と同じ座標と当たり判定の名前を返すこと。本 spec は新しい解決を作らない。
   - ドラッグの判定（完了 `mouse-drag-events`）が、押下がドラッグになったかを今のまま知らせること。`OnMouseDragStart`／`OnMouseDragEnd` の動きは変えない。
@@ -168,7 +168,10 @@
 8. The areka shall 「今どの当たり判定の上か」を窓（スコープ）ごとに別々に覚える。
 9. The areka shall 出入りをカーソルの動きのときにだけ確かめる。カーソルが止まったまま表情が替わって当たり判定が変わっても、次にカーソルが動くまで出入りを送らない。
 10. When ゴーストの切り替え・終了・窓の作り直しで窓が無くなった, the areka shall その窓について覚えていた当たり判定を捨て、`OnMouseLeave` を送らない。
-11. The areka shall `OnMouseEnterAll`・`OnMouseLeaveAll` を送らない（議題 5 の推奨）。
+11. When カーソルがキャラクターの窓の外からその窓の上に入った, the areka shall `OnMouseEnterAll` を送る（Reference は 5. と同じ並び・4＝入った位置の当たり判定の名前〔無ければ空〕）。
+12. When カーソルがキャラクターの窓の上から窓の外へ出た, the areka shall `OnMouseLeaveAll` を送る（Reference は 5. と同じ並び・0／1＝その窓の中で最後に見た位置・4＝最後に居た当たり判定の名前〔無ければ空〕）。
+13. When 窓の出入りと当たり判定の出入りが 1 回のカーソルの動きで同時に起きた, the areka shall 入るときは `OnMouseEnterAll` を `OnMouseEnter` より先に、出るときは `OnMouseLeave` を `OnMouseLeaveAll` より先に送る（SSP の測り ⑹ の答えが違えばそれに合わせる）。
+14. The areka shall 6.・7.・10. の決まりを `OnMouseEnterAll`・`OnMouseLeaveAll` にも当てる（間引かない・`OnMouseMove` より先・窓が無くなったときは `OnMouseLeaveAll` を送らない）。
 
 ### Requirement 8: 話の最中と、受け付ける時期
 
@@ -176,9 +179,9 @@
 
 #### Acceptance Criteria
 
-1. While ゴーストが話している, when 本 spec の 7 つのイベントのどれかに台本が返った, the areka shall 今のマウスのイベントと同じく、今の話をその台本で置き換える（生きている決まり 10）。
-2. While ゴーストが話している, the areka shall 本 spec の 7 つのイベントを、話していないときと同じ条件で送る（話の最中だからといって送らないことはしない）。
-3. While 起動・終了の握手・ゴーストの切り替えの途中で、マウスのイベントを受け付けない時期である, the areka shall 今のマウスのイベントと同じく本 spec の 7 つのイベントを送らず、送らなかったことを記録に残す。
+1. While ゴーストが話している, when 本 spec の 9 つのイベントのどれかに台本が返った, the areka shall 今のマウスのイベントと同じく、今の話をその台本で置き換える（生きている決まり 10）。
+2. While ゴーストが話している, the areka shall 本 spec の 9 つのイベントを、話していないときと同じ条件で送る（話の最中だからといって送らないことはしない）。
+3. While 起動・終了の握手・ゴーストの切り替えの途中で、マウスのイベントを受け付けない時期である, the areka shall 今のマウスのイベントと同じく本 spec の 9 つのイベントを送らず、送らなかったことを記録に残す。
 4. While 右クリックのメニューが表示されている, the areka shall メニューへの操作を本 spec のイベントとして送らない（今の決まりのまま）。
 
 ### Requirement 9: 記録
@@ -187,7 +190,7 @@
 
 #### Acceptance Criteria
 
-1. When 本 spec の 7 つのイベントのどれかを SHIORI へ送った, the areka shall イベントの名前・スコープ・当たり判定の名前・ボタン（ホイールは回転量）を記録に残す。
+1. When 本 spec の 9 つのイベントのどれかを SHIORI へ送った, the areka shall イベントの名前・スコープ・当たり判定の名前・ボタン（ホイールは回転量）を記録に残す。
 2. When `OnMouseUp`（`OnMouseUpEx`）に台本が返って `OnMouseClick`（`OnMouseClickEx`）へ進まなかった, the areka shall 2 段目へ進まなかったことを記録に残す。
 3. When クリック・ホイールを送らなかった, the areka shall 理由（ドラッグ・ダブルクリックの解放・窓の外で放した・箱の選択肢・メニューを出した・受け付けない時期・回転量が 0）を記録に残す。
 4. The areka shall ホイールの 1 回ごとの回転と、カーソルの 1 回ごとの動きを、既定の記録の水準（info 以上）で 1 行ずつ残さない（ホイールは足し合わせた結果を送るか捨てるときにだけ残す）。
@@ -198,10 +201,10 @@
 
 #### Acceptance Criteria
 
-1. The 本 spec shall 網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の `OnMouseUp`・`OnMouseUpEx`・`OnMouseClick`・`OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave` の 7 行を、実装済み・持ち主＝本 spec・実物の在りかで書き直す。
-2. The 本 spec shall `OnMouseDown`・`OnMouseDownEx`・`OnMouseDoubleClickEx`・`OnMouseMultipleClick`・`OnMouseHover`・`OnMouseGesture`・`OnMouseEnterAll`・`OnMouseLeaveAll` の行を変えない（議題 5 で入れると決めたときは `OnMouseEnterAll`・`OnMouseLeaveAll` も 1. に加える）。
+1. The 本 spec shall 網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の `OnMouseUp`・`OnMouseUpEx`・`OnMouseClick`・`OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave`・`OnMouseEnterAll`・`OnMouseLeaveAll` の 9 行を、実装済み・持ち主＝本 spec・実物の在りかで書き直す。
+2. The 本 spec shall `OnMouseDown`・`OnMouseDownEx`・`OnMouseDoubleClickEx`・`OnMouseMultipleClick`・`OnMouseHover`・`OnMouseGesture` の行を変えない。
 3. The 本 spec shall 網羅台帳の報告（生成物）を手で直さず、生成の道具で作り直す。
-4. The 本 spec shall `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾に、正典が黙る所で areka が決めた点を登記する: ドラッグの後とダブルクリックの 2 回目の解放でクリックを送らないこと・右ボタンのクリックとメニュー（右のクリックが放した後の移動・出入りより後に届くことを含む）・中ボタンを `OnMouseClick`（Reference5＝2）で送らないこと・2 段の送信の失敗を 204 と同じに扱うこと・ホイールの単位と間引きと横のホイール・出入りの順と窓の外へ出たときと表情が替わったとき。SSP で測った点は測った版と答えを添える。
+4. The 本 spec shall `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾に、正典が黙る所で areka が決めた点を登記する: ドラッグの後とダブルクリックの 2 回目の解放でクリックを送らないこと・右ボタンのクリックとメニュー（右のクリックが放した後の移動・出入りより後に届くことを含む）・中ボタンを `OnMouseClick`（Reference5＝2）で送らないこと・2 段の送信の失敗を 204 と同じに扱うこと・ホイールの単位と間引きと横のホイール・出入りの順と窓の外へ出たときと表情が替わったとき・窓の出入り（`OnMouseEnterAll`／`OnMouseLeaveAll`）と当たり判定の出入りの順。SSP で測った点は測った版と答えを添える。
 
 ### Requirement 11: 決定論の自動テスト
 
@@ -211,7 +214,7 @@
 
 1. The 本 spec shall 次の各場合を、本物のマウスの操作も実際の待ち時間も使わない決定論の自動テストで確かめる: 左・右・中・拡張 2 つのボタンごとの送るイベントと Reference／`OnMouseUp` に台本が返ったとき・返らなかったとき・送信に失敗したときの 2 段目／ドラッグの後は送らない／ダブルクリックの 2 回目の解放は送らない・1 回目のクリックがダブルクリックより先に届く／窓の外で放したとき／箱の選択肢の押下／右クリックでメニューが有効なとき・抑えたとき／話の最中に台本が返ったとき／受け付けない時期。
 2. The 本 spec shall ホイールについて、静かな所からの最初の回転をすぐ送ること・間隔の中の回転を足し合わせること・回転が止まった後の残りを間隔が明けた時点で送ること・和が 0 のとき送らないこと・横のホイール・窓ごとに別々であることを、時刻を注入する決定論のテストで確かめる。
-3. The 本 spec shall 出入りについて、無し→A・A→無し・A→B の順・窓の外へ出たとき・`OnMouseMove` が間引かれたときも出入りは送ること・出入りが `OnMouseMove` より先であること・窓ごとに別々であること・窓が無くなったときを確かめる。
+3. The 本 spec shall 出入りについて、無し→A・A→無し・A→B の順・窓の外へ出たとき・`OnMouseMove` が間引かれたときも出入りは送ること・出入りが `OnMouseMove` より先であること・窓ごとに別々であること・窓が無くなったときを確かめる。窓の出入り（`OnMouseEnterAll`／`OnMouseLeaveAll`）について、窓に入った・出たとき・当たり判定の出入りと同時のときの順・窓が無くなったときに `OnMouseLeaveAll` を送らないことも確かめる。
 4. The 本 spec shall 今のダブルクリック・ドラッグ・右クリックのメニュー・強制退避のテストが、変えずに通ることを確かめる。
 5. The 本 spec shall 窓の層に足した 3 つ（ホイールの量を受け手へ渡す・拡張ボタンの押下を配る・ドラッグの終わりに閾値を越えたかを残す）を、窓の層の決定論のテストで確かめる。ホイールの量が 1 回の処理で渡された後に空になること、閾値を越えたのと放したのが同じ瞬間の処理に入った場合も含める。
 
