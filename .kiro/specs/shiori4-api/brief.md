@@ -34,7 +34,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 
 **正本（語を areka の文書へ写さず、ここを参照する）**: shiori4 リポジトリの作業ブランチ `claude/abi-host-protocol`（10-23 時点で main には未統合）。
 - `.kiro/specs/host-protocol/brief.md` の「合意した論点」1〜9（`5cabbfa`）: `getproperty`／`setproperty`・post の `SEND`／`NOTIFY`（SSTP の語）・宛先は post したインスタンス・プロパティ名の決まり・必須のヘッダ・`ID: version` など・OnHostComplete の並び・拒否は 400＋`Reason: forbidden`・SEND は SSTP どおり既定で割り込み `Option: nobreak` で待つ。
-- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約・論点 11「ホストは SHIORI を専用のプロセスで読むことがある。SHIORI はホストと同じプロセスにいることを前提にしない」（areka の決定 3 を受けて shiori4 が足した）。
+- `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約・論点 11「ホストは SHIORI を専用のプロセスで読むことがある。SHIORI はホストと同じプロセスにいることを前提にしない」（areka の決定 3 を受けて shiori4 が足した）・論点 13〜15（`b5344f0`・shiori4 の開発者が裁定）＝両方を持つ DLL はホストが `shiori_get_api(4)` → `shiori_get_api(3)` → SHIORI/3.0 の書き出しの順に試す／カレントディレクトリは規約で決めない（SHIORI は頼らず load の dir を使う）／`shiori4_host` に読み終えたライブラリから作る入口を足す（`NotShiori4`・`Unsupported` のときだけライブラリを返す・`LoadFailed` は返さず読み直さない）。
 - 要件の段に入ったら、それぞれの requirements.md を参照する。
 
 **追加で合意した論点 A〜F**（areka が出し、shiori4・pasta が賛成。記録は `b69856d`＝C・D・E は host-protocol の論点 10〜12、A・B・F は abi-conventions の「追加の論点」8〜10。2 本の brief の論点はすべて合意済みで、この先は shiori4 の開発者が要件の段で承認する）:
@@ -85,8 +85,8 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 3. **SHIORI の実体は別プロセスで動かす**（開発者・同日「arekaにだけ影響する設計上の大きな要件を出します。SHIORIの実体は別プロセスで動かすこと。これは、SHIORI3がブリッジで動いているのと、同じような環境で動いて欲しいためです。プロセスが同じだと、カレントディレクトリなどのシステム環境の影響を受けたり、pythonなどのプロセスでグローバル環境を持つランタイムが使いにくいため。あとプロセス分離は最近のアーキテクチャのトレンドでもあります」）。v4 の DLL も同じプロセスに読まない。shiori4 の ABI は変わらない（ホストがどのプロセスで DLL を読むかは ABI の外）。
    - **製品は別プロセスだけ**（開発者・同日。「別プロセスの版と同じプロセスの版を 2 つ作るか…でも設計者が混乱しそう」への推奨を承認）。同じプロセスで SHIORI を動かす道は、設定の項目も選ぶ道も作らない。理由: 2 つあると「同じ環境で動く」という決定の狙いが崩れ（カレントディレクトリ・プロセス全体の状態が版で違う）、試験と不具合の切り分けも倍になる。速さの得（問い合わせの IPC の往復が要らない）は小さい見込み（未計測）。
    - **同じプロセスで回すのはテストの道具に限る**。helper の中身（中継の `Host` と `GhostRuntime` を回すところ）をライブラリに切り出し、テストのときだけテストのプロセスのスレッドで回す（プロセスを起こさない決定論の試験のため）。速さが要ると測って分かったら、その切り出しの上に同じプロセスの道を後から足せる（今は作らない）。
-4. **helper の exe は 1 つにまとめる**（開発者・同日「helper の exe を 1 つにまとめる案、承認」）。1 種類の helper の exe が SHIORI/3.0 と SHIORI4 の両方を受け持つ。DLL を読んだあと `shiori_get_api` があれば v4、`load`／`request`／`unload` だけなら SHIORI/3.0（両方を持つ DLL は v4）。exe を共有するだけで、プロセスは SHIORI 1 つにつき 1 つのまま。起こし方・ジョブ・終わらせ方・IPC の札の読み手を 1 つで持てる。今は i686 だけを建てているので、v4 の DLL のために x64・arm64 の版も建てる。
-   - DLL を 2 回読まないよう、`shiori4_host` に「読んだライブラリから作り、v4 でなければライブラリを返す」入口（`GhostRuntime::from_library` など）を足すよう、開発者の指示で shiori4 へ正式に要望した（10-23）。今の `GhostRuntime::load` は `NotShiori4` のときにライブラリを手放す。入らなければ helper の側で `shiori_get_api` の有無を先に確かめてから読み分ける。
+4. **helper の exe は 1 つにまとめる**（開発者・同日「helper の exe を 1 つにまとめる案、承認」）。1 種類の helper の exe が SHIORI/3.0 と SHIORI4 の両方を受け持つ。DLL を読んだあと、abi-conventions の論点 13 の順に試す＝`shiori_get_api(4)` が返れば v4、だめなら `shiori_get_api(3)`（shiori4 の v3 互換モード＝SHIORI/3.0 の全文を ABI で運ぶ・ホストを呼べない）、どちらも NULL なら SHIORI/3.0 の書き出し（`load`／`request`／`unload`）。v3 互換モードと SHIORI/3.0 の書き出しは、helper の中で同じ SHIORI/3.0 のテキストの道に乗せる。exe を共有するだけで、プロセスは SHIORI 1 つにつき 1 つのまま。起こし方・ジョブ・終わらせ方・IPC の札の読み手を 1 つで持てる。今は i686 だけを建てているので、v4 の DLL のために x64・arm64 の版も建てる。
+   - DLL を 2 回読まないよう、`shiori4_host` に「読んだライブラリから作り、v4 でなければライブラリを返す」入口を足すよう、開発者の指示で shiori4 へ正式に要望し、shiori4 の開発者が承認した（10-23・abi-conventions の論点 15）。ライブラリが返るのは `NotShiori4` と `Unsupported` のとき。v4 の load が NULL（`LoadFailed`）なら、SHIORI/3.0 として読み直さず、読めなかったゴーストとして既定のゴーストの台詞で伝える（`shiori_get_api` を持つ DLL は v4 だと名乗っているため）。
 5. **DLL は arch の接尾辞つきの名前から先に探す**（開発者・同日「shiori宣言で『pasta.dll』と書いてるときに、『pasta.x64.dll』→『pasta.dll』の順に解決を試みる、とかですねえ。多分ゴースト作者は今後、x64とarm64を同梱することになるため、その対応が必要です」）。SSP は `pasta.dll` しか読まないので、作者は SSP 向けの 32bit 版を `pasta.dll` に残したまま、`pasta.x64.dll`・`pasta.arm64.dll` を同梱できる。areka の推奨の細部（要件の段で確かめる）:
    - x64 の Windows: `pasta.x64.dll` → `pasta.dll`。arm64 の Windows: `pasta.arm64.dll` → `pasta.x64.dll`（Windows 11 は arm64 の上で x64 を動かせる）→ `pasta.dll`。
    - arch の名前は `x64`・`arm64` の 2 つ。`x86` の接尾辞は作らない（接尾辞なしが今の 32bit の役を担う）。
@@ -124,7 +124,6 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 
 ## Out of Boundary
 - **SHIORI4 の ABI と host-protocol の中身を決めること**。正本は shiori4 リポジトリ（① `abi-conventions`・② `host-protocol`）。areka は意見を出すが、自分の文書に二重に書かない。
-- shiori4 の v3 互換モード（他 OS の互換ベースウェア向け）。areka は v4 だけを使う。従来の DLL は helper の道のまま。
 - SHIORI/3.0 の道の helper の動き（v4 のために札と読み分けを足すだけで、SHIORI/3.0 の要求と応答の運び方は変えない）。32bit の SHIORI/3.0 の DLL からの台本を通さないプロパティの読み取りは `property-ipc-transport`（この spec が足す問い合わせの札を使えるなら使う）。
 - helper のプロセスと本体の間の通信を、Windows 以外でも動く形にすること（areka は Windows のアプリ。WM_COPYDATA のまま）。
 - 台本の指令によるプロパティの読み書き（`\![get,property]` など）は `property-query-channels`。
