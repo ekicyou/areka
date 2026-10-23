@@ -42,10 +42,16 @@ pub fn build_ghost(
     images: &[Solid],
 ) -> TempPath {
     let root = TempPath::under_target(label);
-    let ghost_master = root.path().join("ghost").join("master");
+    write_ghost(root.path(), ghost_descript, surfaces, images);
+    root
+}
+
+/// [`build_ghost`] と同じ形のゴーストを `at` のフォルダに組む。
+pub fn write_ghost(at: &Path, ghost_descript: &[&str], surfaces: &[&str], images: &[Solid]) {
+    let ghost_master = at.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("ゴーストのフォルダ作成");
     write_lines(&ghost_master.join("descript.txt"), &[], ghost_descript);
-    let shell = root.path().join("shell").join("master");
+    let shell = at.join("shell").join("master");
     std::fs::create_dir_all(&shell).expect("シェルのフォルダ作成");
     write_lines(
         &shell.join("descript.txt"),
@@ -58,7 +64,43 @@ pub fn build_ghost(
             .save(shell.join(image.name))
             .unwrap_or_else(|e| panic!("{}: {e}", image.name));
     }
-    root
+}
+
+/// CSV の 1 行（囲みを外した 4 列）。
+pub struct Row {
+    pub time: String,
+    pub ghost: String,
+    pub level: String,
+    pub body: String,
+}
+
+/// `"時刻","ゴースト名","レベル","内容"` の 1 行を読む。列の中の `""` は `"` に戻す。
+pub fn parse_row(line: &str) -> Row {
+    let inner = line
+        .strip_prefix('"')
+        .and_then(|l| l.strip_suffix('"'))
+        .unwrap_or_else(|| panic!("各列を \" で囲む: {line}"));
+    let cols: Vec<String> = inner
+        .splitn(4, "\",\"")
+        .map(|c| c.replace("\"\"", "\""))
+        .collect();
+    assert_eq!(cols.len(), 4, "4 列: {line}");
+    Row {
+        time: cols[0].clone(),
+        ghost: cols[1].clone(),
+        level: cols[2].clone(),
+        body: cols[3].clone(),
+    }
+}
+
+/// BOM 付きの CSV を読んで行に分ける（無ければ panic）。
+pub fn csv_rows(path: &Path) -> Vec<Row> {
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    text.strip_prefix('\u{FEFF}')
+        .expect("BOM 付き")
+        .split_terminator("\r\n")
+        .map(parse_row)
+        .collect()
 }
 
 /// `charset,UTF-8`・`head`・`lines` の順に CRLF で書く。

@@ -9,3 +9,5 @@ mod common;
 mod dump_success_test;
 #[path = "offline_dump_exe_test/error_log_test.rs"]
 mod error_log_test;
+#[path = "offline_dump_exe_test/failure_branches_test.rs"]
+mod failure_branches_test;

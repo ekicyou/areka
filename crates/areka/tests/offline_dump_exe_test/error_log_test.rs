@@ -3,7 +3,7 @@
 //! 入らない（要件 7.1〜7.5・8.1）。写しの層（`CaptureLayer`）は exe の中にだけ在るので、ここが
 //! CSV の中身の確かめの場所になる（tasks.md 6.2 の申し送り）。
 
-use crate::common::{BASE, RED, build_ghost, run_areka};
+use crate::common::{BASE, RED, Row, build_ghost, parse_row, run_areka};
 
 /// 形の誤り 3 つ（知らない `animation-sort`・描かない method の pattern（面 0）・入れ子の循環
 /// （面 10））と、絵の欠け（面 5・土台は描けるので合成は失敗しない）を持つ。
@@ -31,33 +31,6 @@ const SURFACES: &[&str] = &[
     "element0,overlay,red.png,0,0",
     "}",
 ];
-
-/// CSV の 1 行（囲みを外した 4 列）。
-struct Row {
-    time: String,
-    ghost: String,
-    level: String,
-    body: String,
-}
-
-/// `"時刻","ゴースト名","レベル","内容"` の 1 行を読む。列の中の `""` は `"` に戻す。
-fn parse_row(line: &str) -> Row {
-    let inner = line
-        .strip_prefix('"')
-        .and_then(|l| l.strip_suffix('"'))
-        .unwrap_or_else(|| panic!("各列を \" で囲む: {line}"));
-    let cols: Vec<String> = inner
-        .splitn(4, "\",\"")
-        .map(|c| c.replace("\"\"", "\""))
-        .collect();
-    assert_eq!(cols.len(), 4, "4 列: {line}");
-    Row {
-        time: cols[0].clone(),
-        ghost: cols[1].clone(),
-        level: cols[2].clone(),
-        body: cols[3].clone(),
-    }
-}
 
 #[test]
 fn warning_and_error_dump_writes_one_csv_line_per_record_and_exits_two() {
