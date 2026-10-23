@@ -117,9 +117,10 @@ SHIORI/2.x の要求の行（`GET Sentence`・`GET String`・`NOTIFY OwnerGhostN
 **Objective:** As a 3.0 のゴーストの利用者, I want 2.x への対応のために今のゴーストの動きが変わらないでほしい, so that emo2・ぱすたさん・里々・YAYA の検体がいつもどおり動く
 
 #### Acceptance Criteria
-1. While 相手が SHIORI/3.0 と決まっている, the areka shall 各イベントの要求のバイトを今と同じに送る。要件 2.1 の確かめのために SSP と同じく足す要求があるなら、それだけを違いとして表に書く。
+1. While 相手が SHIORI/3.0 と決まっている, the areka shall 各イベントの要求のバイトを今と同じに送る。要件 2.1 の確かめのために SSP と同じく足す要求と、要件 6.4 の `load` に渡すパスの形だけを違いとして表に書く。
 2. While 相手が SHIORI/3.0 と決まっている, the areka shall 応答の読み方を今と同じに保つ。
 3. The areka shall SHIORI/3.0 のゴーストを相手にした今の決定論のテストを、変えずに緑のまま通す。要件 2.1 の確かめで要求の数や並びを固定したテストが変わるなら、その変更を確かめの要求の分だけに限り、変えたテストの名前を記録に挙げる。
+4. The areka shall 32 ビットの経路で SHIORI の `load` に渡すゴーストのフォルダのパスを、絶対パス・OS の区切り（`\`）・末尾に区切りあり の形にする（`shiori4-api` の決定 6 の helper の道の前倒し・2026-10-23 開発者承認。2.x・3.0 を問わず全部のゴーストに当たる）。変えた直後に、検体のゴースト（2.x の「．さくら」と 3.0 の emo2 ほか）で起動を確かめる。
 
 ### Requirement 7: 決定論のテスト
 **Objective:** As a 開発者, I want 2.x の書き方と読み方を、実物の SHIORI や SSP なしで毎回固定して確かめたい, so that 後の変更で 2.x のゴーストがまた黙ることを防げる

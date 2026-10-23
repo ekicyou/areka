@@ -32,6 +32,7 @@
 - 3.0 のイベントから 2.x の要求への組み替えの表（コードの 1 か所と `doc/COMPAT_ARCHITECTURE.md` §8 の記録）。
 - 版の決定の INFO・決められないときの WARN・送らなかったイベントの DEBUG の記録。
 - 「．さくら」の実機の 1 回と、その記録（`.kiro/specs/shiori2-protocol/verification.md`）。
+- 32 ビットの経路で `load` に渡すフォルダのパスの形（要件 6.4・`shiori4-api` の決定 6 の helper の道の前倒し・2026-10-23 開発者承認）。`shiori_wiring.rs` の `real_connect` で helper を起こす前に整える。helper・`shiori_proxy.rs`・`resolve_shell.rs` の `GHOST_MASTER`（ほかの読み手も使う）は変えない。
 
 ### Out of Boundary
 - 同じプロセスの道（`ShioriWiring::InProc`）と SHIORI4 の口。
@@ -130,7 +131,7 @@ crates/areka-ghost/src/
 - `crates/shiori-host32-host/src/client.rs` — `Shiori3Client` に `version: ShioriVersion` の欄（`new`・`with_sender` は `Shiori3`）、`with_version`・`probe_version` の 2 つの手、`get_with_headers`・`notify_with_headers` の版の分岐、私の手 `encode2_and_note`・`parse2_and_note`、兄弟のテストの `#[path]` の 3 行。
 - `crates/shiori-host32-host/src/lib.rs` — `pub mod shiori2;`・`pub use shiori2::{ShioriVersion, VersionVerdict};`・モジュールの説明の 1 行。
 - `crates/areka-kanade/src/shiori/real.rs` — `ShioriConnection` に `pub version: ShioriVersion`。4 つの手で `Shiori3Client::new(..).with_version(self.version)` とする。
-- `crates/areka-ghost/src/shiori_wiring.rs` — LOAD の ack の後に `probe_version` を 1 回呼び、`record_version` で INFO／WARN を出し、決めた版を `ShioriConnection` へ渡す。ゴーストのフォルダ名を取る小さな手 `ghost_label`。兄弟のテストの `#[path]` の 3 行。
+- `crates/areka-ghost/src/shiori_wiring.rs` — LOAD の ack の後に `probe_version` を 1 回呼び、`record_version` で INFO／WARN を出し、決めた版を `ShioriConnection` へ渡す。ゴーストのフォルダ名を取る小さな手 `ghost_label`。helper へ渡す読み込みのパスを決定 6 の形（絶対パス・`\` の区切り・末尾に `\` が 1 つ）に整える小さな私の手 1 つ（要件 6.4・`ghost_label` は元のパスのまま）。兄弟のテストの `#[path]` の 3 行。
 - `crates/areka-kanade/tests/kanade/common/common_window_actor.rs`・`crates/areka-kanade/tests/kanade/idle_pump_test.rs`・`crates/areka-kanade/tests/kanade/real_helper_test.rs` — `ShioriConnection` の書き下しに `version: ShioriVersion::Shiori3` の 1 行を足す（コンパイルのためだけ・確かめを送らないので要求のバイトも数も変わらない・要件 6.3 で名前を挙げる）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 — 版の確かめ方と組み替えの表を出どころ付きで足す（要件 3.7・8.1）。
 - `doc/ukadoc-coverage/ledger/shiori.toml` — ステータスコードの行（`ukadoc:spec_shiori3:_30b9_30c6_30fc_30bf_30b9_30b3_30fc_30c9:1`）の `owner` を `shiori2-protocol` に、`note` に「2.x の答えも同じ番号の規則で読む・`GET Version` の答えの先頭の行の版の字で版を決める」を足す（`status` は `implemented` のまま・要件 8.2）。`Age` の行（`ukadoc:spec_shiori3:Age_20_5bSSP_62e1_5f35_5d:1`）は本 spec が受け持たない（areka は `Age` を送らず、コミュニケートは範囲の外）ので触らない。ukadoc に項目の無い 2.x の要求の行は台帳に作らない。
@@ -212,6 +213,7 @@ flowchart TB
 | 6.1 | 3.0 の要求のバイトは確かめの 1 本だけが違い | `Shiori3` の枝は今の `encode_and_note` をそのまま通る・違いの表（本書） | — | 組み替え |
 | 6.2 | 3.0 の応答の読み方 | `Shiori3` の枝は今の `parse_and_note` をそのまま通る。`parse_response` の働きは不変 | — | — |
 | 6.3 | 3.0 のテストは緑のまま | 変えるテストはコンパイルのための 3 ファイルの 1 行だけ（名前を挙げる） | — | — |
+| 6.4 | `load` に渡すパスの形 | `real_connect` が helper を起こす前にパスを整える私の手（決定 6 の前倒し） | — | 読み込み |
 | 7.1 | 表の各行の要求のバイト | `shiori2_tests.rs` | — | — |
 | 7.2 | 答えの種類ごとの扱い | `shiori2_tests.rs`・`client_shiori2_tests.rs` | — | — |
 | 7.3 | 版の確かめの 3 通り | `shiori2_tests.rs`（判定）・`shiori_wiring_version_tests.rs`（記録） | — | — |
@@ -410,6 +412,7 @@ areka が今送っていないので組まない行（表には「送らない�
 | 読み込みの直後 | 何も送らない | `GET Version SHIORI/2.6`（`Charset: <今の文字コード>`・`Sender: areka`）を 1 本 |
 | それ以外の要求のバイト | — | 変わらない（`Shiori3` の枝は今の `encode_and_note` をそのまま通る・確かめの答えは文字コードの採用に使わない） |
 | 応答の読み方 | — | 変わらない |
+| `load` に渡すパス | `…\ghost/master`（区切りの混在・末尾の区切りなし。華和梨はこれにファイル名をそのままつなげて辞書を開くので読めなかった＝5.1 の 1 回目） | 絶対パス・`\` の区切り・末尾に `\`（要件 6.4・全部のゴースト） |
 
 ## Error Handling
 
@@ -441,6 +444,7 @@ areka が今送っていないので組まない行（表には「送らない�
 - `record_version`: `Decided` で INFO 1 行（`ghost`・`version`・`evidence`）、`Undecided` で WARN 1 行（`assumed = "SHIORI/3.0"`）と `Shiori3` の戻り（要件 2.4・2.5・7.3）。
 - 構造の検査（先例 `the_connection_receives_the_already_decided_negotiator` と同じ理由＝接続の値は中継が無いと組めない）: `shiori_wiring.rs` の中で `probe_version(` は 1 回だけ、`real_connect` の閉包の中の `MsgTag::Load` の後かつ `ShioriConnection {` の前にあり、版を閉包の外に置かない（閉包が接続ごとに 1 回走る＝読み直しで確かめ直す・要件 2.3・7.4）。
 - `ghost_label` が `…\dot_sakura\ghost\master` から `dot_sakura` を返す。
+- 読み込みのパスを整える私の手: `C:\x\ghost/master` が `C:\x\ghost\master\` になり、末尾に区切りが既にあっても区切りは 1 つのまま（要件 6.4）。
 - 要件 2.4 の「ゴーストの名前」はフォルダ名で残す（`verification.md` にもそう書く）。
 
 ### 3.0 のテスト（要件 6.3）
