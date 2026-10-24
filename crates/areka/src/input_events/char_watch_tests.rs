@@ -313,6 +313,48 @@ fn pending_wheel_is_flushed_on_a_later_run_after_the_clock_advances() {
     assert_eq!(r.run(), vec![]);
 }
 
+/// ホイールは窓ごとに別々に間引く: A の間隔の中でも B の初回はすぐ送り、A の溜めは A の期限で吐く（要件 6.8・11.2）。
+#[test]
+fn wheel_is_throttled_per_window() {
+    let mut r = rig();
+    let (_wa, a) = r.window(0);
+    let (_wb, b) = r.window(1);
+    let wheels = |v: Vec<MouseInput>| -> Vec<MouseInput> {
+        v.into_iter()
+            .filter(|i| matches!(i.kind, MouseEventKind::Wheel { .. }))
+            .collect()
+    };
+    r.point_wheel(a, 10, 5, 120, 0);
+    assert_eq!(wheels(r.run()), vec![wheel(0, 120, (20, 10), Some("Head"))]);
+    r.clock.set(30);
+    r.point_wheel(a, 10, 5, 120, 0);
+    assert_eq!(wheels(r.run()), vec![], "A は間隔の中なので溜める");
+    r.clock.set(40);
+    r.away(a);
+    r.point_wheel(b, 60, 5, -120, 0);
+    assert_eq!(
+        wheels(r.run()),
+        vec![wheel(1, -120, (120, 10), Some("Face"))],
+        "B の間引きは静かなのですぐ送る"
+    );
+    r.clock.set(50);
+    r.point_wheel(b, 60, 5, -240, 0);
+    assert_eq!(wheels(r.run()), vec![], "B は B の間隔の中なので溜める");
+    r.clock.set(99);
+    assert_eq!(r.run(), vec![]);
+    r.clock.set(100);
+    assert_eq!(
+        r.run(),
+        vec![wheel(0, 120, (20, 10), Some("Head"))],
+        "A だけが A の期限で吐く"
+    );
+    r.clock.set(139);
+    assert_eq!(r.run(), vec![]);
+    r.clock.set(140);
+    assert_eq!(r.run(), vec![wheel(1, -240, (120, 10), Some("Face"))]);
+    assert_eq!(r.run(), vec![]);
+}
+
 /// 出入りは同じ tick の `OnMouseMove` より先に届く（要件 7.7）。
 #[test]
 fn hover_arrives_before_move_of_the_same_tick() {
