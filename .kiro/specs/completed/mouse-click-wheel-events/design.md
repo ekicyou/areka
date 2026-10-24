@@ -153,7 +153,7 @@ crates/areka/src/input_events/
 - `crates/wintf/src/ecs/pointer/dispatch/mod.rs` — `OnPointerPressed` の条件に `xbutton1_down || xbutton2_down` を足す（1 行）。テストは `pointer/dispatch/tests.rs`。
 - `crates/wintf/src/ecs/drag/state/mod.rs` — 最後に休みへ移したときの「閾値を越えたか・取り消しか」の印（thread_local の 1 つ・次の `start_preparing` でも消さない）と読み口 `DragState::last_release_was_drag()`。テストは `drag/state/tests.rs`。
 - `doc/ukadoc-coverage/ledger/shiori.toml` の 9 行・`doc/ukadoc-coverage/report/`（`ukadoc-survey` の `report`・`report-summary` で作り直す）・`doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾。
-- `.kiro/specs/mouse-click-wheel-events/verification.md`（新・実機の確かめの記録。撮った絵と記録はワークツリーの `target\` の下）。
+- `.kiro/specs/completed/mouse-click-wheel-events/verification.md`（新・実機の確かめの記録。撮った絵と記録はワークツリーの `target\` の下）。
 
 wintf の兄弟のテストファイル（`pointer/dispatch/tests.rs`・`drag/state/tests.rs`）は、要件の「wintf で触るのは 3 ファイルだけ」の 3 ファイルのテストの置き場所として扱う（構造の決まり「テストは兄弟ファイル」・同じウェーブの `dpi-realign-remembered-chain` は触らない）。`drag/mod.rs` の公開の一覧・`clickthrough/controller_tests.rs`・`drag/reentry_tests.rs` に触らないために、`JustEnded` の形（欄）は変えない。
 
