@@ -2557,7 +2557,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!。areka はこの項目を、利用者のドラッグでの移動の禁止と読んで使う。追従（キャラクターの窓に付いて動くこと）は止めない。0・1・true・false のどれでもない値は書かれていないものとして禁止せず、`descript_value_unreadable` の記録を 1 件残す。
 areka の placement::descript_window_keys::read_balloon_dontmove が、シェルの `*.balloon.dontmove` が書かれていない（または読めない）スコープで、この値をそのスコープの動かせない指定として使う。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない（止めたドラッグ 1 回につき `balloon_drag_held` の記録が 1 件）。
-読みの根拠: ukadoc はシェルの `*.balloon.dontmove`（移動操作の禁止）の既定を「ghostのdescript設定(balloon.dontmove)」と書く。SSP 2.9 で 2026-10-23 に測ると、この値が true のぱすたのバルーンは利用者がドラッグしても動かなかった（.kiro/specs/descript-window-keys/research.md の 10.3 節）。キャラクターの窓には付いて動く（完了 areka-P0-pasta-in-windows-verification の ssp-measurement.md の 3 節）。前の注記の「付いて動くのを止める」読みは誤りだった。
+読みの根拠: ukadoc はシェルの `*.balloon.dontmove`（移動操作の禁止）の既定を「ghostのdescript設定(balloon.dontmove)」と書く。SSP 2.9 で 2026-10-23 に測ると、この値が true のぱすたのバルーンは利用者がドラッグしても動かなかった（.kiro/specs/completed/descript-window-keys/research.md の 10.3 節）。キャラクターの窓には付いて動く（完了 areka-P0-pasta-in-windows-verification の ssp-measurement.md の 3 節）。前の注記の「付いて動くのを止める」読みは誤りだった。
 担当 spec は descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
