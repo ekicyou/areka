@@ -702,7 +702,7 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
         // 下端のはみ出しは 0（裁定 2026-09-06 第 2 回・`areka-P0-emo2-conformance-e2e` R13.3）。
         let overhang = text_bottom.saturating_sub(band_bottom);
         assert!(
-            overhang <= BAND_OVERHANG_MAX,
+            overhang == BAND_OVERHANG_MAX,
             "塗り帯の下端 y{band_bottom} から文字のインクの下端 y{text_bottom} が {overhang} 画素はみ出した（選択肢「{label}」・font.height {FONT_HEIGHT}・帯の丈 {PITCH_28}・帯の寄せ {BAND_OFFSET_28}）。裁定 2026-09-06（第 2 回・R13.3）が許すのは {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接する行の帯と重なり、どの選択肢を指しているかの一意性が壊れる）。**許容幅を裁定なしで緩めてもならない**（R12.2）。この数値を添えて開発者の裁定を仰ぐこと（本関数の doc に寄せの前後の実測表がある）"
         );
     }
