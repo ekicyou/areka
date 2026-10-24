@@ -2,7 +2,8 @@
 
 > 起票: 2026-10-10（`/kiro-discovery`・開発者「SHIORI4（COM の SHIORI）の API 整備の spec はあるか。いまは最低限の決まりだけ作っていて、どこかの段階で着手しないといけない」）。
 > **2026-10-23 書き直し**（`/kiro-discovery`・開発者「『shiori4』セッションと議論を行い、SHIORI4 インターフェースについて意見を出し合ってインターフェース案を調整せよ。以前から COM で作ろうかと原案を出していたインターフェースだが、クロスプラットフォームを見据え、C ABI でアクセスできるように仕様調整したものである」）。SHIORI4 の正本は COM の `IShiori` から、別リポジトリ `ekicyou/shiori4`（`C:\home\maz\git\shiori4`）の **C ABI**（`shiori4_abi`・`shiori4`・`shiori4_host` の 3 クレート、crates.io 0.0.1）へ移った。areka は**ベースウェア（ホスト）側の実装者**としてそれを使う。10-10 版の COM 前提の記述（3 層の食い違い・JSON-RPC の紙の契約・重ねるか並べるか）は、この書き直しで置き換えた。
-> **区分 C・台帳の段は「その他」**（開発者・10-10）。**版の段は v0.2.0**（2026-10-23 開発者「対応時期は、dolaなどの基幹部分大整備と同じタイミングで。すぐ必要ではないが、基幹部分となるので」＝「いつか」から移した）。**着手の条件**は「実装がある程度整備されてから」（同）に、10-23 から「shiori4 側の `host-protocol` が入った版が crates.io に出てから」を足す。
+> **区分 C・台帳の段は「その他」**（開発者・10-10）。**版の段は v0.2.0**（2026-10-23 開発者「対応時期は、dolaなどの基幹部分大整備と同じタイミングで。すぐ必要ではないが、基幹部分となるので」＝「いつか」から移した）。**着手の条件**は「実装がある程度整備されてから」（同）に、10-23 から「shiori4 側の `host-protocol` が入った版が crates.io に出てから」を足す（**後者は 2026-10-24 に満たされた**＝shiori4 v0.1.0 の公開）。
+> **2026-10-24 shiori4 v0.1.0 に合わせて更新**（`/kiro-discovery`・shiori4 のセッションから「shiori4 v0.1.0 がリリースされたので、spec を v0.1.0 に合わせて更新」）。**既存の spec の更新で済ませ、新しい spec は起こさない**。理由: 変わったのは上流の ABI の 1 点（応答のメモリをホストが作る・下の「v0.1.0 の二進互換でない変更」）で、areka が `shiori4_host` の上に作る計画では芯がそれを引き受けるため、境界も仕事の分け方も変わらない。spec はまだ brief の段（spec.json なし）なので、要件の段に入る前に brief を直せば足りる。
 
 ## Problem
 areka の SHIORI の口は、32bit の SHIORI/3.0 の DLL を別プロセスの helper で読む道だけが本番で動いている。SHIORI からベースウェアへ問い合わせる口（プロパティの読み書き・台本の再生・イベントの依頼）は本番のどこにもつながっていない。
@@ -12,14 +13,18 @@ areka には COM の `IShioriFactory`／`IShiori`／`IShioriHost`（`crates/shio
 ## Current State
 2026-10-23 の調べ（main `ef96cb39`・コードは読んだだけ）。着手のときに調べ直すこと。
 
-**shiori4（上流・別リポジトリ）の形**（main `72cff0b`・0.0.1）
-- 公開シンボルは `shiori_get_api(版)` の 1 つ。`#[repr(C)]` の関数テーブル（`ShioriApi`＝load／unload／request／notify、`ShioriHostApi`＝request／post／log）。構造体は末尾にだけ足し、`struct_size` で有無を判定する。
-- 版は v4（既定・ホストを呼べる）と v3（SHIORI/3.0 全文を運ぶ互換。他 OS の互換ベースウェア向け・host は NULL）。
+**shiori4（上流・別リポジトリ）の形**（2026-10-24 に読み直した＝タグ `v0.1.0`・`9425b73`・crates.io の `shiori4_abi`・`shiori4`・`shiori4_host` 0.1.0。リリース https://github.com/ekicyou/shiori4/releases/tag/v0.1.0 ）
+- 公開シンボルは `shiori_get_api(版)` の 1 つ。`#[repr(C)]` の関数テーブル（`ShioriApi`＝load／unload／request／notify、`ShioriHostApi`＝request／post／log／**copy_from_slice**〔v0.1.0 で末尾に足された〕）。構造体は末尾にだけ足し、`struct_size` で有無を判定する。Rust の `ShioriHostApi` の request／post／log／copy_from_slice の欄は `Option`（v3 のテーブルでは copy_from_slice 以外が `None`）。
+- 版は v4（既定・ホストを呼べる）と v3 互換モード（SHIORI/3.0 全文を運ぶ互換。他 OS の互換ベースウェア向け・load の host は `copy_from_slice` だけを持つテーブル）。
 - **v4 のペイロードは SHIORI/3.0 のヘッダ部分そのもの**（開始行なし・状態は戻り値・UTF-8 固定）。
+- **応答（`request` の `out` の `ShioriBytes`）は常にホストが作る**。SHIORI は `host.copy_from_slice` で写し、解放はホストの `release`（unload の後でも、どのスレッドからでも呼べる＝スレッド規約 6）。
 - SHIORI → ホスト: 同期の `host.request`（SHIORI のスレッドで、load／request／notify の処理中だけ）と、任意のスレッドからの非同期の `host.post`（`Tag` で完了を `OnHostComplete` として返す）。
 - 規約: ホストが決めた単一のスレッドからだけ呼ぶ・`host.request` の中から SHIORI を呼び返さない（`SHIORI_E_REENTRANT`）・unload で未配送を捨てる。
-- ホスト側の高水準層 `shiori4_host`: `Host` trait（`property`・`request`・`accept_post`・`on_post`・`log`・`wake`）と `GhostRuntime`（`!Send`・作ったスレッドで request／notify／pump）。
-- `host_protocol` はまだ「暫定」（読みの `ID: property` だけ。書き込みと post の語彙は無い）。
+- ホスト側の高水準層 `shiori4_host`: `Host` trait（`name`・`request`・`accept_post`・`on_post`・`log`・`wake`。`property` は無くなった＝芯は中身を解釈しない）と `GhostRuntime`（`!Send`・作ったスレッドで request／notify／pump・`load`／`from_library`／`from_static`）。v3 互換モードは `V3Runtime`（`load`／`from_library`／`from_static`・`request(&str)`）。発見の口は `load_ghost`／`load_ghost_with`（`EntryKind` で許す口の集合を渡す・`LoadedGhost::{V4, V3, Legacy}`＝従来の口は呼ばずにライブラリを返す）。`from_library` の失敗 `FromLibraryError` は `InvalidPath`・`NotShiori4`・`Unsupported` のときだけライブラリを返す（`LoadFailed` では返さない）。DLL を読まない純粋な関数 `shiori_file_candidates`（arch の接尾辞つきの候補）と `machine_matches(path, TargetArch)`（ヘッダの機械の種類）もある。
+- `host_protocol` は確定（完了 spec `host-protocol`・`doc/host-protocol.md`）。語の解析と組み立ては `shiori4::protocol`（`Headers`・`HeaderWriter`・`ID_GETPROPERTY` などの定数）を使う。
+- 従来の SHIORI/3.0 の DLL（HGLOBAL の書き出し）を読む口は **v0.1.0 にはまだ無い**（shiori4 の spec `shiori3-legacy-host` は brief だけ）。`load_ghost` は従来の口を見つけても呼ばない。
+- 試験用のホスト `shiori4-testhost`（`shiori4_host` の example）: ベースウェア無しで SHIORI を読み、要求を 1 回投げて表示し unload する。名前・引数・終了の状態は他のリポジトリの CI が頼れる契約（教科書 `doc/textbook/testhost.md`）。
+- 教科書は `doc/textbook/`（規約の一覧＝`rules.md`・移行の手引き＝`migration.md`）。**shiori4 の PR と教科書には「0.0.3」と書いた箇所があるが、実際に出た版は 0.1.0**（shiori4 のセッション・10-24）。areka の文書では 0.1.0 と書く。
 
 **areka の今**
 - 本番は `ShioriWiring::Helper` に固定（`crates/areka/src/boot_config.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）。進行役（kanade）の共通の口 `ShioriBackend`（`crates/areka-kanade/src/shiori/real.rs`）がイベント名と番号付きの Reference の並びを受け、`crates/shiori-host32-host/src/shiori3.rs` が SHIORI/3.0 のテキストを組む。
@@ -32,7 +37,7 @@ areka には COM の `IShioriFactory`／`IShiori`／`IShioriHost`（`crates/shio
 ## 2026-10-23 の調整（shiori4・pasta との 3 者会談）
 areka のセッション（SHIORI4:areka）が、ベースウェアの実装者として「shiori4」と「SHIORI4:pasta」の両セッションと詰めた。途中から shiori4 の開発者の指示で 3 者会談になった（shiori4 は記録係・割れたら shiori4 の開発者が裁定）。**割れた論点は無い**。
 
-**正本（語を areka の文書へ写さず、ここを参照する）**: shiori4 リポジトリの作業ブランチ `claude/abi-host-protocol`（10-23 時点で main には未統合）。
+**正本（語を areka の文書へ写さず、ここを参照する）**: shiori4 リポジトリの作業ブランチ `claude/abi-host-protocol`（10-23 時点で main には未統合）。**2026-10-24 からは v0.1.0 のタグが正本**＝規約の正本は C ヘッダ `shiori4_abi/include/shiori4_abi.h` の冒頭と `shiori4_abi` の `//!`、その言い直しが `doc/textbook/rules.md`、語は `doc/host-protocol.md`。下の 2 本の brief は `.kiro/specs/completed/` へ移った（requirements.md もそこにある）。
 - `.kiro/specs/host-protocol/brief.md` の「合意した論点」1〜9（`5cabbfa`）: `getproperty`／`setproperty`・post の `SEND`／`NOTIFY`（SSTP の語）・宛先は post したインスタンス・プロパティ名の決まり・必須のヘッダ・`ID: version` など・OnHostComplete の並び・拒否は 400＋`Reason: forbidden`・SEND は SSTP どおり既定で割り込み `Option: nobreak` で待つ。
 - `.kiro/specs/abi-conventions/brief.md`: load の dir は「絶対パス・OS の区切り・末尾に区切りあり・UTF-8」・v4 は Charset を付けない・スレッドと unload の規約・論点 11「ホストは SHIORI を専用のプロセスで読むことがある。SHIORI はホストと同じプロセスにいることを前提にしない」（areka の決定 3 を受けて shiori4 が足した）・論点 13〜15（`b5344f0`・shiori4 の開発者が裁定）＝両方を持つ DLL を許す（発見の順は `shiori_get_api` があれば `(4)` → `(3)` だけ・無ければ `loadu` → `load`＝`3f97190` で正本はこの形 1 つ）／カレントディレクトリは規約で決めない（SHIORI は頼らず load の dir を使う）／`shiori4_host` に読み終えたライブラリから作る入口を足す（`NotShiori4`・`Unsupported` のときだけライブラリを返す・`LoadFailed` は返さず読み直さない）。
 - 要件の段に入ったら、それぞれの requirements.md を参照する。
@@ -54,6 +59,21 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 - 論点 A・B は、areka では「1 つの SHIORI に 1 つのプロセス」（下の決定 3）なので、同じプロセスで load が 2 回呼ばれることは無い。`GhostRuntime` は helper のプロセスの中で、そのプロセスの専用スレッドに置く。
 
 **areka の今**（10-23・コードで確かめた）: 再生の列は無く、トークの枠は 1 つ。SSTP の受け口は未実装（起票の行だけ）。SEND は MCP の `sakurascript`／`raise_event` だけで、必ず割り込む（`crates/areka-kanade/src/schedule/sstp.rs`・完了 spec `mcp-kanade-tools` の裁定 1〜3）。OnSecondChange 以外のイベントの応答も、再生中のトークを置き換える。`\t` は未実装（`sakura-time-critical`）。OnBalloonBreak は利用者の中断のときだけ出す（ukadoc「SSTP以外でブレイクされた際に発生」と一致）。
+
+## 2026-10-24 v0.1.0 の二進互換でない変更と areka への帰結
+**上流の変更**（shiori4 #11・正本は v0.1.0 の `.kiro/specs/completed/abi-textbook/research.md` の「二進互換の申し送り」と `doc/textbook/migration.md` の「0.0.2 以前の shiori4 から」）:
+- 応答の `ShioriBytes` は常にホストが作る。SHIORI は `ShioriHostApi` の末尾に足した `copy_from_slice` で `out` に写す。関数の形は 0.0.2 と同じだが二進互換でない。
+- `copy_from_slice` の無いテーブルでは、新しい SHIORI の load が失敗する（v4 は `SHIORI_E_UNSUPPORTED` を log に出して NULL・v3 互換モードは黙って NULL。`shiori4_host` からは `LoadError::LoadFailed`）。v3 互換モードの load にも、`copy_from_slice` だけを持つテーブルを渡す。
+- 応答の `release` は常にホストの関数なので、unload の後でも、どのスレッドからでも呼べる。ただし 0.0.2 以前で作った SHIORI の応答はこの規約の外で、ライブラリを外した後に捨ててはいけない。
+- Rust の `ShioriHostApi` の request・post・log の欄は `Option` になった。
+
+**areka での帰結**（計画は変えない。仕事が増える所は無く、縛りが減る所がある）:
+- **helper は `shiori4_host` 0.1.0 を使い、自前の `ShioriHostApi` を組まない**（Approach のとおり）。`copy_from_slice` と、v3 互換モードの load に渡す `copy_from_slice` だけのテーブルは、`GhostRuntime`／`V3Runtime` の芯が用意する。自前で組む道（テーブルを手で作る・`shiori4_abi` の欄を直に触る）を設計で選ぶ場合に限り、`copy_from_slice` を必ず足し、写せなかったときは自分で決めた印を `out` に残す（SHIORI には知らせない＝ABI 規約 5）。Rust の欄が `Option` になったことは、その道を選んだときだけ効く。
+- **応答の解放の順の縛りが減る**: 0.1.0 で作った SHIORI の応答はホストのメモリなので、helper が `GhostRuntime` を落とした後に応答を捨てても落ちない（shiori4 のテスト `response_dropped_after_runtime_is_safe`）。helper の終わらせ方（応答を親へ送り終える前に unload が走る経路）を、この縛り抜きで設計できる。
+- **0.0.2 以前の shiori4 で作った v4 の DLL は扱わない**: 新しいホストでも読めはするが、応答を unload の後に捨てると落ちる。v4 の DLL はまだ配られていない（shiori4 の申し送り）ので、areka は互換の手当てを作らず、検体・テスト用の DLL は 0.1.0 以降で作ったものだけを使う。pasta の v4 版も 0.1.0 で作り直したものを待つ。
+- **テスト用の v4 DLL**（決定 1）は `shiori4` 0.1.0 の `shiori4::Ghost`（`export_ghost!`・`Adapter`）で作る。高水準層を使えばソースの直しは要らない（shiori4 の申し送り）。DLL 単体の確かめに `shiori4-testhost` を使えるが、areka の CI に取り込むか（取り込むなら testhost.md の契約に頼る）は要件の段の議題にする。
+- **従来の SHIORI/3.0 の DLL の道は当面 areka の helper の `shiori_proxy.rs` のまま**（決定 4 のとおり）。v0.1.0 の `shiori4_host` にはその口がまだ無い（`shiori3-legacy-host` は brief の段）。v4 と v3 互換モードだけを `shiori4_host` に乗せ、従来の道の乗り換えは `shiori3-legacy-host` が出た版で改めて決める。
+- **依存の版**: ワークスペースのピンで `0.1`（3 クレートとも同じ版）。0.0.x とは二進互換でないので、0.0.x を混ぜない。
 
 ## Desired Outcome
 - **SHIORI4 は shiori4 の C ABI**。areka は `shiori4_host` を crates.io から使い（helper のプロセスの中で）、自前の COM の面（`crates/shiori-abi/`）とテスト用の COM の DLL（`crates/shiori4-testdll/`）を持たない。
@@ -129,7 +149,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 - SSP を動かして挙動を確かめること。
 
 ## Upstream / Downstream
-- **Upstream**: `ekicyou/shiori4` の `host-protocol`（未起票）が入った版の公開・`property-query-channels`（許可の表）・`script-security-level`（SecurityLevel の運び）・kanade の SEND／NOTIFY の口・sylphya。
+- **Upstream**: `ekicyou/shiori4` の `host-protocol` が入った版の公開（**2026-10-24 に v0.1.0 で満たされた**）・従来の DLL の道を乗り換えるなら shiori4 の `shiori3-legacy-host`（v0.1.0 では未着手）・`property-query-channels`（許可の表）・`script-security-level`（SecurityLevel の運び）・kanade の SEND／NOTIFY の口・sylphya。
 - **Downstream**: v4 の pasta を本番で読むこと（roadmap の予約「pasta の native x64」。決定 3 で同じプロセスでなく helper で読む）・第三者が v4 で SHIORI を書くこと（Python などプロセス全体の状態を持つランタイムを抱えた SHIORI も含む）。
 
 ## Existing Spec Touchpoints
@@ -143,8 +163,8 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 
 ## Constraints
 - **優先度**: 区分 C・段「その他」（開発者・10-10）。版は v0.2.0（wintf・dola の基幹の整備と同じ時期・開発者・10-23）。
-- **着手の条件**: 実装がある程度整備されてから（開発者・10-10）、かつ shiori4 の `host-protocol` が入った版が crates.io に出てから。着手のときに「Current State」を調べ直す。
-- **依存の版**: shiori4 の 3 クレートは同じ版で出る（0.0.x）。areka のワークスペースのピンで 1 か所に持つ。
+- **着手の条件**: 実装がある程度整備されてから（開発者・10-10）、かつ shiori4 の `host-protocol` が入った版が crates.io に出てから（**後者は 2026-10-24 に v0.1.0 で満たされた**）。着手のときに「Current State」を調べ直す。
+- **依存の版**: shiori4 の 3 クレートは同じ版で出る（**0.1.0**・2026-10-24）。areka のワークスペースのピン（`0.1`）で 1 か所に持つ。0.0.2 以前とは二進互換でない（上の「v0.1.0 の二進互換でない変更」）。
 - **1,000 行の上限に近いファイル**: 着手のときに測り直す（10-10 の時点で kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/steady.rs`、`crates/areka/src/main.rs`、`crates/areka-ghost/src/runtime_tests.rs` が 900 行を超え、`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は 1135 行で超えている）。
 - **host-32 は後付け**。進行役（kanade）の変更は、切り離す向きでだけ行う。
 - 挙動の意味は ukadoc から決める。
