@@ -3038,7 +3038,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 対象 crate:
 - tokio-stream 0.1.19
 - tokio-util 0.7.19
-- tokio 1.53.1
+- tokio 1.54.1
 
 ```
 MIT License

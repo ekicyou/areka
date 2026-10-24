@@ -527,6 +527,31 @@ fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
     );
 }
 
+/// 起こし直しで動かせない指定の帳簿が無くなる（descript-window-keys 要件 5.5）: 窓を閉じて起こし直す所が
+/// descript の段も台本の lock も外す（次に起きた窓の組は起動で据え直す）。
+#[test]
+fn close_windows_for_restart_removes_the_balloon_lock_ledger() {
+    use crate::placement::balloon_lock::{
+        BalloonLockLedger, apply_script_balloon_lock, seed_balloon_lock,
+    };
+
+    let mut world = World::new();
+    world.insert_non_send(AppExit::new());
+    seed_balloon_lock(&mut world, &[0].into());
+    apply_script_balloon_lock(&mut world, 1, true);
+    assert!(
+        world.contains_resource::<BalloonLockLedger>(),
+        "前提: 閉じる前は帳簿が在る"
+    );
+
+    let _closed = close_windows_for_restart(&mut world);
+
+    assert!(
+        !world.contains_resource::<BalloonLockLedger>(),
+        "起こし直しの後も帳簿が残っている"
+    );
+}
+
 /// **areka-P0-ghost-shell-balloon-switch 要件 12.9**: HWND が付いたゴースト窓へ、OS の閉鎖要求の
 /// 受け手と並べて OS のセッションの終了の受け手も差す（系は増やさない）。印の無い窓には差さない。
 #[test]

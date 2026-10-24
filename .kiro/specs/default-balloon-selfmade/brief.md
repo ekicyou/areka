@@ -224,3 +224,7 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - **要件定義のモデル**: Opus のまま（議題は開発者に聞く選びと SSP で測る読みで、新しい境目・並行の設計・骨格の分かれ目に当たらない）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: 棚卸㉘の「`ghost-inner-balloon` が段 6 の前の並びを変える」は着地で確かめられ、段 6 の行は動かなかった（既定の名前を期待するテストの読み直しは、増えた `boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs` の分だけ要る）。どっとさくらで出た「折返し基準が描画範囲の外」の WARN と近い件（`emo2-kakukaku` の折り返し基準）は `balloon-canon-residue` の 14 項が持つ＝`validrect` の読みをどちらで扱うかを要件の段で照らす。
+
+## 2026-10-24 「．さくら」が話すようになった後の `bottle`（`shiori2-protocol` のタスク 5.4）
+
+- `shiori2-protocol` で「．さくら」が話すようになった（実機の 1 回 5.1・2026-10-24・記録 `target\s2p-5-1\logs\run2.stdout.log`）。台詞は `bottle` に来たが、文字の描画範囲は前回と同じく幅 0 に潰れた（`文字の描画範囲が潰れている … right=0.0 bottom=149.0 image_size=(326.0, 169.0)` と `bottom=82.0 image_size=(326.0, 96.0)` が 1 件ずつ・origin と折返し基準の WARN も 2 件ずつ）。areka はこのとき文字を描かない作りなので、上の「どっとさくらで見えた事実」の件は、台詞が来る今は「話しているのに文字が出ない」という見える崩れになる。画面は撮っていない。

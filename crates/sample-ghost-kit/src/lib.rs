@@ -180,10 +180,11 @@ pub const SAMPLES: &[Sample] = &[
         source: SampleSource::Vendored,
     },
     // 窓際のぱすたさん。書庫は取り寄せの段が置き場へ取る（`tools/sample-fetch.ps1`）。
+    // 縦書きのバルーン `pasta_tategaki` を同梱する（ghost_dev の 2026-10-23 の書庫から）。
     Sample {
         name: "pasta-in-windows",
         kind: SampleKind::Ghost,
-        balloons: &[],
+        balloons: &["pasta_tategaki"],
         source: SampleSource::Fetched {
             url: "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar",
         },

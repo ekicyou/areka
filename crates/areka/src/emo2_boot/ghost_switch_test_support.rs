@@ -435,6 +435,7 @@ impl SwitchRig {
         let descript = StartupDescriptValues {
             author_dpi: AuthorDpi::DEFAULT,
             zorder_raw: None,
+            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
         };
         let session = boot_ghost(&mut self.world, inputs, &descript, &ghost, &balloon);
         self.world.insert_non_send(GhostSlot(Some(session)));

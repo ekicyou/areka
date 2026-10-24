@@ -64,6 +64,8 @@ pub(crate) fn rewire_runtime_consumers(
     // `ChoiceWaiting` と同じ inbox に並べて追い越させないため（areka-P0-balloon-text-bugs 件 1・案 (b)）。
     // 位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——Sender クローンを持つ NonSend 資源挿入。
     input_events::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
+    // 窓の矩形の読み手を新しい実行系へ登録する（mcp-scope-rect-property 要件 6.1〜6.3）。
+    super::ghost_session_scope_rect::wire(world, runtime);
 }
 
 /// shiori だけの読み直しの答え（呼び手 `switch_to` が段・既定への戻し・致命を選ぶ）。

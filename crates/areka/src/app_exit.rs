@@ -18,6 +18,7 @@ use wintf::ecs::window::{OnCloseRequest, OnSessionEnd, ZOrderChainPlan};
 
 use crate::emo2_boot::frame::ZOrderAbsentReports;
 use crate::input_events::MouseWiring;
+use crate::placement::balloon_lock::BalloonLockLedger;
 use crate::placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
 use crate::placement::chain_realign::ChainRealignPending;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
@@ -180,6 +181,8 @@ impl WindowsClosed {
 /// - `StickyGroupLedger`（窓の組の帳簿）・`CharDragSession`（ドラッグの控え）: 台本の組と消した窓の
 ///   `Entity` を次の一式へ持ち越さない（areka-P0-window-link-directives 要件 6.2）。SHIORI だけの
 ///   読み直しはここを通らないので残る（要件 6.3）。
+/// - `BalloonLockLedger`（バルーンの動かせない指定の帳簿）: descript の段も台本の lock も次の一式へ
+///   持ち越さない（descript-window-keys 要件 5.5）。SHIORI だけの読み直しはここを通らないので残る。
 ///
 /// 外さないもの（プロセスに属する・または起こすたびに差し替わる）:
 /// - [`WindowsEpoch`]: 閉じた回数。投函済みの古い窓を作らない照合に使うので、進めて残す。
@@ -200,6 +203,8 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     world.remove_resource::<ZOrderAbsentReports>();
     world.remove_resource::<StickyGroupLedger>();
     world.remove_resource::<CharDragSession>();
+    // 動かせない指定の帳簿も外す（ドラッグの控えは wintf のものなので areka が外す物は無い・要件 5.5）。
+    world.remove_resource::<BalloonLockLedger>();
     tracing::info!(
         event = "windows_closed_for_restart",
         closed,

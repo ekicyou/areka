@@ -10,6 +10,7 @@ use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
+use crate::placement::balloon_lock::apply_script_balloon_lock;
 use crate::placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
     boot_pair_decision, mark_non_positive_widths, moved_default_pos, note_chain_deferral,
@@ -173,6 +174,11 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
             }
             PositionCue::ResetBalloonPos => {
                 reset_balloon_positions(world, BalloonResetTrigger::Script);
+                continue;
+            }
+            // 台本の lock・unlock（descript-window-keys・要件 5.1・5.2）。記録は関数の中。
+            PositionCue::BalloonMoveLock { scope, locked } => {
+                apply_script_balloon_lock(world, scope, locked);
                 continue;
             }
         };

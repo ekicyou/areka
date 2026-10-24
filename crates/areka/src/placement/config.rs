@@ -162,7 +162,7 @@ fn detect_scopes(
 
 /// スコープ別キーのプレフィックス（正典, 別名）。scope0=`sakura.`（別名 `char0.`）・
 /// scope1=`kero.`（別名 `char1.`）・scope n≥2=`char{n}.`（別名なし）。
-fn scope_prefixes(scope: usize) -> (String, Option<&'static str>) {
+pub(super) fn scope_prefixes(scope: usize) -> (String, Option<&'static str>) {
     match scope {
         0 => ("sakura.".to_owned(), Some("char0.")),
         1 => ("kero.".to_owned(), Some("char1.")),
@@ -172,7 +172,7 @@ fn scope_prefixes(scope: usize) -> (String, Option<&'static str>) {
 
 /// 1 つの KV（＝1 層）からスコープ別キーを探す。優先順位はプレフィックス外側
 /// （正典 ＞ 別名）×サフィックス内側（`suffixes` の並び順＝正典表記 ＞ 別表記）。
-fn scoped_value<'a>(
+pub(super) fn scoped_value<'a>(
     kv: &'a BTreeMap<String, String>,
     scope: usize,
     suffixes: &[&str],

@@ -445,7 +445,7 @@ fn window_link_directives_on_pasta_in_windows() {
     let profile = base.join("profile");
     copy_dir(&sample.root().join("ghost"), &root.join("ghost"));
     copy_dir(
-        &sample.folder().join("pasta_tategaki"),
+        &sample.folder().join(r"balloon\pasta_tategaki"),
         &root.join(r"balloon\pasta_tategaki"),
     );
     // 根は写し終えたので、配られた複製はここで返す。

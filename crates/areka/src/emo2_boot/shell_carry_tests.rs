@@ -57,30 +57,68 @@ fn wear(category: &str, part: &str, on: bool) -> BindReplay {
     }
 }
 
-/// ⑴ 控えた面が読み直したシェルに在ればその面、無ければ既定の面、どちらも無ければ出さない。
+/// ⑴ 控えた面が読み直したシェルに在ればその面、無ければ候補の並び（descript の既定の面 → 組み込みの
+/// 既定の面）の最初に在る面、どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4・7.2）。
 #[test]
 fn decide_keeps_the_carried_surface_or_falls_back_to_the_default() {
+    // 持ち越し: 控えた面が在れば、descript の既定の面が在っても替えない（要件 3.4）。
     assert_eq!(
-        decide(1000, 0, shell_with(&[0, 1000])),
+        decide(1000, &[5, 0], shell_with(&[0, 5, 1000])),
         CarriedShow::Carried(1000)
     );
+    // descript の面へ戻る（要件 3.1）。
     assert_eq!(
-        decide(1000, 0, shell_with(&[0, 5])),
+        decide(1000, &[5, 0], shell_with(&[0, 5])),
         CarriedShow::FellBack {
             missing: 1000,
-            to: 0
+            to: 5,
+            passed_over: None,
         }
     );
+    // descript の既定の面が組み込みと同じなら候補は 1 つ（飛ばした面は無い）。
     assert_eq!(
-        decide(1000, 10, shell_with(&[0])),
-        CarriedShow::Skipped { missing: 1000 }
+        decide(1000, &[0], shell_with(&[0])),
+        CarriedShow::FellBack {
+            missing: 1000,
+            to: 0,
+            passed_over: None,
+        }
+    );
+    // 組み込みの面へ落ちる: 飛ばした descript の面が載る（要件 3.3）。
+    assert_eq!(
+        decide(2011, &[11, 10], shell_with(&[0, 10])),
+        CarriedShow::FellBack {
+            missing: 2011,
+            to: 10,
+            passed_over: Some(11),
+        }
+    );
+    // どれも無い: 出さず、候補の先頭（descript の既定の面）を載せる（要件 3.3）。
+    assert_eq!(
+        decide(1000, &[11, 10], shell_with(&[0])),
+        CarriedShow::Skipped {
+            missing: 1000,
+            descript: 11,
+        }
     );
     assert_eq!(CarriedShow::Carried(7).surface(), Some(7));
     assert_eq!(
-        CarriedShow::FellBack { missing: 7, to: 10 }.surface(),
+        CarriedShow::FellBack {
+            missing: 7,
+            to: 10,
+            passed_over: Some(11),
+        }
+        .surface(),
         Some(10)
     );
-    assert_eq!(CarriedShow::Skipped { missing: 7 }.surface(), None);
+    assert_eq!(
+        CarriedShow::Skipped {
+            missing: 7,
+            descript: 10,
+        }
+        .surface(),
+        None
+    );
 }
 
 /// ⑵ 面は表示中のスコープだけ（scope 1 は非表示＝`None`）、着せ替えは表示したことのあるスコープだけ載る。
@@ -289,9 +327,16 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
                 CarriedShow::FellBack {
                     missing: 2011,
                     to: 10,
+                    passed_over: None,
                 },
             ),
-            (2, CarriedShow::Skipped { missing: 3000 }),
+            (
+                2,
+                CarriedShow::Skipped {
+                    missing: 3000,
+                    descript: 10,
+                },
+            ),
         ],
         &[(
             0,
