@@ -669,7 +669,7 @@ fn vertical_em_box_from_column_baseline_record() {
                 );
                 let bands = line_bands(&lines, mode, &metrics);
                 println!(
-                    "{tag} 行の箱（比から） {:.2}・今の帯（2.1 の c）の寄せ {}",
+                    "{tag} 行の箱（比から） {:.2}・今の帯（5.2 の測った em の箱）の寄せ {}",
                     metrics.line_box_height(em),
                     bands[0].offset
                 );

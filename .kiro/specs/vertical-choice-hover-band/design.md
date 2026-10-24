@@ -53,7 +53,7 @@
 - 純粋層: `GlyphMetrics::line_box_height`・`line_pitch`（今ある口）と、足す `GlyphMetrics::vertical_em_box_left`（既定の実装は `line_box_height` から出す）、`PositionedLine.rect`、`WritingMode`。
 - COM 層（本番）: `DWriteMetrics::new_shared` の中で、束縛した書式（`create_text_format` の出力・本番と同じ書体と方向のレシピ）から試しの `IDWriteTextLayout` を 1 つ作り、`GetMetrics`（left・width）と `GetLineMetrics`（baseline）を読む。どれも `windows` crate の今ある API（ワークスペースのピン）。
 - COM 層（テストだけ）: `DWriteMetrics::new`・`ResolvedFont::resolve`・`FontCatalog::pick`・`ViewboxExecutor`・`Rig`・`live_diff_model_font`・`block_axis_ink_span`（どれも今ある物）。
-- 依存（crate）は足さない。emo-text に新しいソースファイルを足さない（2.2 で足した兄弟のテストファイル `viewbox_draw_vertical_band_scroll_tests.rs` は例外として記録・下の File Structure Plan）。どのファイルも 1,000 行を超えない。
+- 依存（crate）は足さない。emo-text に新しいソースファイルを足さない（2.2 で足した兄弟のテストファイル `viewbox_draw_vertical_band_scroll_tests.rs` と、5.3 で足した兄弟のテストファイル `viewbox_draw_vertical_band_readback_tests.rs` は例外として記録・下の File Structure Plan）。どのファイルも 1,000 行を超えない。
 - 依存の向き: `choice.rs`（純粋）→ `canvas.rs`（純粋データ）→ `viewbox_draw_render.rs`（COM）。純粋層は COM を読まない。
 
 ### Revalidation Triggers
@@ -92,7 +92,7 @@ graph LR
 - **選んだ形**: 単一の源で符号つきの寄せを出す（`research.md` 10 節の案 B）。鏡の判断は `line_bands` の 1 か所だけ。
 - **直すコード**: `LineBands` の縦書きの枝と `Dirty` の縦書きの `left` の 2 か所（済み）。2026-10-23 の改めで、`EmBox`（`GlyphMetrics` に足す 1 メソッドと既定の実装）と `DWrite`（`DWriteMetrics` の測りと上書き）の 2 か所を足し、`LineBands` の縦書きの枝は `EmBox` を読む形に替える。`Metrics`（`line_box_height`）は横書きの枝と `EmBox` の既定の実装だけが読む。
 - **保つ形**: 横書きの式・単一の源・半開区間の当たり・×k の一点適用・純粋層と COM 層の分け方（純粋層は測った値を `GlyphMetrics` の口で受け取るだけで、COM を読まない＝`line_box_height` と同じ形）。
-- **新しい部品**: `GlyphMetrics::vertical_em_box_left`（既定の実装つきのメソッド 1 つ）と、`DWriteMetrics` の欄 1 つ（測った比）と測る関数 1 つ。型・ファイルは足さない。2.1 で足した 2 つの定数 c は消す。
+- **新しい部品**: `GlyphMetrics::vertical_em_box_left`（既定の実装つきのメソッド 1 つ）と、その既定の実装の式を置く公開関数 `layout::column_centred_em_box_left`（`DWriteMetrics` が測れなかったときの縮退でも同じ式を使う）と、`DWriteMetrics` の欄 1 つ（測った比）と測る関数 1 つ。型・ファイルは足さない。2.1 で足した 2 つの定数 c は消す。
 
 ### Technology Stack
 
@@ -111,7 +111,8 @@ graph LR
 - `crates/areka-emo-text/src/choice.rs`（今 792 行）— `line_bands` の縦書きの枝を「厚み＝em・寄せ＝符号つき」に替えた。`LineBand.offset` の説明を「行矩形の左辺（横書きは上辺）からの符号つきの量」に替え、`derive_hit_rows`・`glyph_cells` の説明の「近端＝left」を同じ意味に揃えた（コードは変えない）。2.1 で置いた定数 c（`VERTICAL_RL_EM_BOX_LEFT_SHARE`・`VERTICAL_LR_EM_BOX_LEFT_SHARE`）は 5.2 で消す（下）。
 - `crates/areka-emo-text/src/viewbox_draw_render.rs` — `expand_overhang_for_band` の縦書きの枝に `left = max(実測の left, −offset)` を足した。横書きの枝は変えない。
 - `crates/areka-emo-text/src/canvas.rs` — `ChoiceLineContent.band_extent`／`band_offset` の説明だけを書き換えた。C11 のほかの 7 本は emo-text に触らない（`roadmap.md` の C11 の行。⑤ の持ち物に「原因しだいで `draw_metrics.rs`」と書いてある）ので重ならない。
-- `crates/areka-emo-text/src/viewbox_draw_choice_hover_tests.rs`（今 874 行）— 実フォントの読み戻し R。
+- `crates/areka-emo-text/src/viewbox_draw_choice_hover_tests.rs`（今 714 行）— 帯の寄せの檻と、1.2・5.1 の記録だけのテスト。実フォントの読み戻し R は 5.3 で下の兄弟のファイルへ移した。
+- `crates/areka-emo-text/src/viewbox_draw_vertical_band_readback_tests.rs`（今 347 行・5.3 で足した兄弟のテストファイル）— 実フォントの読み戻し R。5.3 で R に書体を足すと `viewbox_draw_choice_hover_tests.rs` が 1,000 行に届いたため分けた（「emo-text に新しいソースファイルを足さない」の例外。`lib.rs` の `SOURCES_OUTSIDE_THE_PURE_SCAN` に載せた）。
 - `crates/areka-emo-text/src/viewbox_draw_vertical_band_scroll_tests.rs`（今 238 行・2.2 で足した兄弟のテストファイル）— スクロールと消し残しの読み戻し S。`viewbox_draw_choice_hover_tests.rs` へ足すと 1,000 行を超えるため分けた（「emo-text に新しいソースファイルを足さない」の例外。テストのファイルで `lib.rs` の純粋な一覧の数は動かさない）。
 - `crates/areka-emo-text/src/choice_decorate_tests.rs`（今 731 行）— P1〜P3。
 - `crates/areka-emo-text/src/choice_anchor_tests.rs`（今 305 行）— P4。
@@ -124,7 +125,7 @@ graph LR
 - `crates/areka-emo-text/src/choice.rs` — `line_bands` の縦書きの枝を `offset = round(metrics.vertical_em_box_left(em, mode))` に替え、2 つの定数 c とその説明を消す。`LineBand.offset` の説明を新しい決め方に揃える。横書きの枝は 1 文字も変えない。
 - `crates/areka-emo-text/src/canvas.rs`・`viewbox_draw_render.rs` — 説明の中の「c」の言い回しが在れば揃える（コードは変えない）。
 - `crates/areka-emo-text/src/draw_metrics_styled_tests.rs`（今 321 行）— `DWriteMetrics` の測りの検査 M を足す（COM が書けるファイル）。
-- `crates/areka-emo-text/src/viewbox_draw_choice_hover_tests.rs` — R の書体にぱすたの候補列を足し、引けた書体の名前を固定する（数行）。
+- `crates/areka-emo-text/src/viewbox_draw_vertical_band_readback_tests.rs`（5.3 で `viewbox_draw_choice_hover_tests.rs` から R を移した先）— R の書体にぱすたの候補列を足し、引けた書体の名前を固定する（数行）。
 - `crates/areka-emo-text/src/choice_decorate_tests.rs` — 純粋の検査 P5・P6 を足し、P1・P3 の数を書き換える（下の 5.2 の書き換えの表）。
 - `crates/areka-emo-text/src/choice_anchor_tests.rs`・`choice_tests.rs`・`viewbox_draw_vertical_band_scroll_tests.rs` — 5.2 の書き換えの表のとおり（`choice_tests.rs` には足さない・1,000 行以下）。
 - `.kiro/specs/vertical-choice-hover-band/research.md` — 5.1 の測りの数、5.2 の書き換えの元と新しい期待値、5.3 の赤の確かめ、4.2 の撮り直しの記録。
@@ -267,12 +268,22 @@ pub trait GlyphMetrics {
     /// 右から左 ＝ −s/2・左から右 ＝ +s/2（列の箱は右から左で行矩形の右辺に、左から右で
     /// 左辺に揃う）。実測の metrics（DWriteMetrics）は DirectWrite の列の基線で上書きする。
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
-        let s = (self.line_box_height(font_height) - font_height).max(0.0);
-        match mode {
-            WritingMode::VerticalRl => -s / 2.0,
-            WritingMode::VerticalLr => s / 2.0,
-            WritingMode::HorizontalTb => 0.0,
-        }
+        column_centred_em_box_left(self.line_box_height(font_height), font_height, mode)
+    }
+}
+
+/// 既定の実装の式（列の箱の真ん中に em の箱を置く）。`DWriteMetrics` が測れなかったときの
+/// 縮退（`vertical_em_box_left_ratio` が None・束縛と違う向き）でも同じ式を使うため 1 つに置く。
+pub fn column_centred_em_box_left(
+    line_box_height: f32,
+    font_height: f32,
+    mode: WritingMode,
+) -> f32 {
+    let s = (line_box_height - font_height).max(0.0);
+    match mode {
+        WritingMode::VerticalRl => -s / 2.0,
+        WritingMode::VerticalLr => s / 2.0,
+        WritingMode::HorizontalTb => 0.0,
     }
 }
 ```
@@ -307,13 +318,13 @@ impl GlyphMetrics for DWriteMetrics {
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32;
 }
 
-/// 束縛した書式で縦書きの em の箱の左の比を測る（縦書きでなければ None）。
+/// 束縛した書式（縦書き）で em の箱の左の比を測る。横書きに束縛したときは呼ばない（`new_shared` が
+/// 向きで分ける）。Err は失敗した段の名前で、呼ぶ側が書体の名前と向きを添えて `warn!` し None へ縮退する。
 fn measure_vertical_em_box_left_ratio(
     factory: &IDWriteFactory2,
     format: &IDWriteTextFormat,
     font_height: f32,
-    mode: WritingMode,
-) -> Option<f32>;
+) -> Result<f32, &'static str>;
 ```
 
 **Implementation Notes**
@@ -382,7 +393,7 @@ fn expand_overhang_for_band(
 
 検査の名前は案。置き場は File Structure Plan のとおり（`choice_tests.rs` には足さない）。
 
-### 実フォントの読み戻し（`viewbox_draw_choice_hover_tests.rs`）
+### 実フォントの読み戻し（`viewbox_draw_vertical_band_readback_tests.rs`・5.3 で `viewbox_draw_choice_hover_tests.rs` から移した）
 
 - **R（6.1・6.2・6.3・1.1・1.2・1.3・1.4・3.2・4.2）** `vertical_band_covers_column_ink_readback`: 書体 2 つ（Yu Gothic UI・`pasta_tategaki` の `font.name` の**候補列のまま**を本番と同じ解決〔`FontCatalog::pick`〕で引いた物）× 大きさ 20・28 × `VerticalRl`・`VerticalLr` × 拡大率 1・2。ぱすたの候補列は、引けた書体の名前を 5.1 で記録した名前に固定する（違えば赤）。1.1〜4.1 では Yu Gothic UI だけで回していた（12.4 節）。5.3 で 2 書体とも緑にする。台本はぱすたの測りと同じ並び（「晴れてる」「雨だよ」「曇ってる」「ないしょ」を列ごと）。本番と同じ道（`DWriteMetrics` で配置 → `line_bands` → `decorate_canvas` → `ViewboxExecutor` で描く）。確かめる事:
   - 乗せていない面で測った、乗せた列の字のインクの x 範囲が、乗せた面の塗りの x 範囲に入る（1.1・1.2）。

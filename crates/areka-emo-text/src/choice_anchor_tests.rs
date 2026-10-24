@@ -303,3 +303,38 @@ fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
         assert_eq!((ar.left, ar.right), want, "{mode:?}: ブロック軸の範囲");
     }
 }
+
+/// 縦書きで列をまたぐ選択肢は、またいだ列ごとに当たりの行を 1 つずつ持ち、どの行の帯もその列の
+/// 行矩形の左辺＋寄せから厚み em（要件 1.5）。列は 20 字（描画範囲の丈 200 ÷ 字の丈 10）なので、
+/// 前置き 19 字の後の選択肢「はいいえ」は 1 列目に「は」・2 列目に「いいえ」。列の左辺は
+/// 右から左で 1 列目 30・2 列目 18（列送り 12）、左から右で 0・12。寄せは右から左 −2・左から右 ＋2
+/// （上の `vertical_anchor_band_has_the_same_shape_as_a_choice` と同じ）。期待値を数で書くので、
+/// 列ごとの行矩形を読まない、または縦書きの枝を横書きの式へ戻すと赤になる（`research.md` 21 節）。
+#[test]
+fn vertical_choice_across_columns_has_a_band_on_each_column() {
+    let state = applied(&[
+        text("あいうえおかきくけこさしすせそたちつて"),
+        choice("x", "はいいえ"),
+    ]);
+    for (mode, first, second) in [
+        // 右から左: 30 − 2 ＝ 28・18 − 2 ＝ 16。
+        (WritingMode::VerticalRl, (28.0, 38.0), (16.0, 26.0)),
+        // 左から右: 0 ＋ 2 ＝ 2・12 ＋ 2 ＝ 14。
+        (WritingMode::VerticalLr, (2.0, 12.0), (14.0, 24.0)),
+    ] {
+        let (segments, rows) = hit_in(&state, 0.0, mode);
+        assert_eq!(
+            segments.iter().map(|s| s.line_index).collect::<Vec<_>>(),
+            vec![0, 1],
+            "{mode:?}: 選択肢が 2 列にまたがる"
+        );
+        assert_eq!(
+            rows,
+            vec![
+                (SpanKind::Choice, 0, rect(first.0, 190.0, first.1, 200.0)),
+                (SpanKind::Choice, 0, rect(second.0, 0.0, second.1, 30.0)),
+            ],
+            "{mode:?}: 列ごとの当たりの帯"
+        );
+    }
+}
