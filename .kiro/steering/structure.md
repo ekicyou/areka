@@ -388,7 +388,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Purpose**: x64/arm64 の areka から 32bit SHIORI DLL（emo2 の `pasta.dll` 等）を駆動する過去互換ブリッジ（M1 ①shiori トラック・`areka-P0-host32-ipc` 2026-07-02 完了）。
 **Pattern**（ターゲットを **crate 境界で分離**＝`cfg` 分岐回避）:
 - `shiori-host32-ipc` - プロトコル定義（bytes-over-wire・両側共有）
-- `shiori-host32-host` - x64＋arm64 側ホスト
+- `shiori-host32-host` - x64＋arm64 側ホスト。`shiori2.rs` が SHIORI/2.x の書き方（読み込みの直後の版の確かめ・2.x の要求への組み替え・`Sentence`／`String` の答えの読み）を持ち、`Shiori3Client` が接続の版で書き方を選ぶ（`shiori2-protocol` 2026-10-24 完了・表は `doc/COMPAT_ARCHITECTURE.md` §8）
 - `shiori-host32-helper` - **i686 専用** helper 実行体（`wintf-winmsg-executor` の message pump 上）
 - トランスポートは **WM_COPYDATA 一本化＋再入 RESPONSE**（named pipe 不要）。x64⟷x86 を跨ぐのは生バイト列のみ
 - 下流ユニット（shiori-load／request／lifecycle）はこの seam の上に増分
