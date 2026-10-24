@@ -201,8 +201,8 @@
   - 終わった形: 説明書の 61 行目のあたりの文から `readonly` が消え、段落と例が在り、互換の文書の表に行が 1 つ増えている
   - _Requirements: 1.3, 3.3, 8.6, 9.1, 9.2, 9.3, 11.6_
 
-- [ ] 7. 仕上げの確かめ
-- [ ] 7.1 触ったクレートのテスト・整形・静的検査を通し、実機で 1 回確かめる
+- [x] 7. 仕上げの確かめ
+- [x] 7.1 触ったクレートのテスト・整形・静的検査を通し、実機で 1 回確かめる
   - 触ったクレート（`areka-sylphya`・`areka-user-data`・`areka-ghost`・`areka`）のテストと、整形・clippy を通す
   - 実機の確かめは、ワークツリーの `target\` の下の根で行う
     - `AREKA_USER_ROOT` を `target\` の下へ向ける
@@ -223,3 +223,4 @@
 - 3.2: `areka-user-data` の dev-dependencies に `log-capture-kit` を足した。記録の確かめは `log_capture_kit::capture` で行う（ログの確かめは理由を付けて省かない）。
 - 4.2: `InstallCueSink::new` は作るときに 1 度だけ `readonly::is_on()` を読む。5.1 では `engage` を runtime の起動（受け口を作る所）より前に呼ぶこと。
 - 4.3: `update::refs::readonly_summary_refs` に一時の `#[allow(dead_code)]` が付いている。4.4 で外す。
+- 7.1: 実機の確かめ（2026-10-24）は `--option readonly --sstp-listen 9871 --ghost <target\readonly-verify\root\ghost\emo2>`、`AREKA_ROOT` と `AREKA_USER_ROOT` を `target\` の下へ向けて 15 秒の自動終了で行った。`readonly_engaged` 1 件・ERROR/panic 0・根の木の差は pasta 自身の保存（`ghost\master\profile\pasta\`）だけ・利用者の根は作られなかった。
