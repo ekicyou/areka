@@ -93,25 +93,13 @@
   3. `initial_install.nar` の確認なしの上書き: 今のインストールの手続きに利用者へ確かめる段（`crates/areka/src/install/terms.rs`・`overwrite.rs` の起動中のゴーストへ入れる一周）がどこにあるかを要件の段で確かめ、あればその段を飛ばす印を足すか。
   4. 起動の引数のインストールが終わるまで、ゴーストのトークを待たせるか（SSP は「インストール処理を行った後起動を続行する」）。
 
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化（`startup-options-core`・10-19 着地）: `--install`（短い形 `/i`）は「値を空白区切りで何本も取る・まだ扱わない」行として読まれ（`crates/areka/src/cli/parse.rs` 61 行目）、`callghost`・`deletesource` も「まだ扱わない語」として記録して無視される（263 行目）。本 spec はその行と語を効かせる側へ替える。`readonly-mode` はまだ着手されていない＝readonly の印はまだ無い。
-- 前提の変化（定常に着いた所）: インストールの窓口に「定常に着いた」知らせの受け口 `install::desk::on_steady`（`crates/areka/src/install/desk.rs` 127 行目・ゴーストの切り替えの `emo2_boot/ghost_switch.rs` 513 行目から呼ばれる）が既に在る。起動の引数の依頼はここから出せる見込み＝`ghost_session.rs`（910 行＝上限の近く・10-18 の 885 から増えた）に触らずに済む。最初の起動の定常でもここが呼ばれるかは設計で確かめる。
-- 前提の変化（`mcp-reload`・10-22 着地）: `install/desk.rs` に窓口が忙しいかを答える `is_busy`（150 行目）が足され、読み直しの入口がこれを見て断る＝起動の引数で並べた書庫を扱う間は読み直しが断られる（試験の手順に書く）。`install/desk.rs` は 524→540 行。依頼の出どころの語 `InstallOrigin`（`install/mod.rs` 40 行目・`Menu`・`Script`・`WindowDrop`）は変わっていない。
-- 前提の変化（`real-run-mcp-kit`・10-19 着地）: 実機の試験の窓口（`crates/real-run-kit/`）は起動の引数を渡せる（`launch.rs` の `arg`）＝「入れる → 起こす → MCP で確かめる」の実機の確かめはこの窓口の上で書ける。
-- 触るファイル: `cli/mod.rs`・`cli/parse.rs`・新しい兄弟のテスト（`cli/install_args.rs` を分けるかは設計）・`install/mod.rs`（出どころの語 1 つ）・`install/desk.rs`（依頼と結果を受ける所・`on_steady`）・`install/judge.rs` か `procedure.rs`（成功を受けて NAR を消す）・`initial_install.nar` を探す所（`boot_config.rs` 145 行目の `exe_location` を呼ぶだけ）・`dist/README.txt`（「■ 起動オプション」の 59 行目の文）。
-- 規模: 6〜9（議題 2 を入れると 9〜12）のまま。
-- 先に要るもの: `readonly-mode`（readonly の印と `install/desk.rs` の守り）。同じウェーブに置かない相手: `readonly-mode`・`offline-surface-dump`（`cli/` と説明書の同じ文）・`install-live-target-hazards`（測ることが本体・インストールの道）。依存は足さない・emo-text に触らない。静かな机・全体テストの比べは要らない。議題 1 は開発者の裁定（2026-09-28）に触れる＝要件の段で開発者の答えを待つ。`callghost` の振る舞いは SSP で測る。
-- 優先度の区分: A のまま。
-- 要件定義のモデル: Opus のまま（今ある窓口へ並びを渡すだけ・`callghost` の扱いは開発者が答える議題）。
-- 分割の案: なし。
-- 見つけた穴・古くなった記述: 棚卸㉗の節の「定常に着いた所の結線（`ghost_session.rs` 885 行＝上限の近く）」は、今は 910 行で、`install::desk::on_steady` を使えば触らない見込み。`install/desk.rs` の行数は 540。Downstream の `real-run-mcp-kit` は 10-19 に着地済み（足場として使う側になった）。
-
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: `offline-surface-dump`（10-23）が `cli/` を広げた（`cli/parse.rs` 459→641 行・`StartupOptions` に `offline` の欄）。`--install`（短い形 `/i`）は今も「値を何本も取る・まだ扱わない」行（`cli/parse.rs` 93 行目）、`callghost`・`deletesource` は「まだ扱わない語」（366 行目）。`ghost-inner-balloon`（10-23）が `install/desk.rs` を 540→560 行にしたが、定常に着いた知らせの受け口 `on_steady`（127 行目）・送り口 `raw_sender`（141）・忙しいかを答える `is_busy`（150）の位置と、依頼の出どころの語 `InstallOrigin`（`install/mod.rs` 40 行目・3 つ）は変わらない。`readonly-mode` はまだ着手されていない。
-- **触るファイル**: 棚卸㉘のとおり（`cli/mod.rs`・`cli/parse.rs`・新しい兄弟のテスト・`install/mod.rs`・`install/desk.rs`・`install/judge.rs`（260）か `procedure.rs`（521）・`boot_config.rs` の `exe_location`（145 行目）を呼ぶ所・`dist/README.txt` の 61 行目の文）。`ghost_session.rs` は 917 行で、`on_steady` を使えば触らない見込み（変わらず）。
-- **規模**: 6〜9（議題 2 を入れると 9〜12）のまま。
-- **先に要るもの**: `readonly-mode`（働き＝readonly の印と `install/desk.rs` の守り・ファイル＝`cli/`・`install/desk.rs`・説明書 61 行目の同じ文）。同じウェーブに置かない相手: `readonly-mode`・余力の枠の `multi-ghost-runtime`（`boot_config.rs`・`ghost_session.rs` を触る形になったとき）・版に縛らない `install-live-target-hazards`（測ることが本体）・割り込みの候補の `actor-thread-log-capture`・`background-result-tick-wake`（`install/desk.rs`）。依存は足さない・emo-text に触らない。静かな机・全体テストの比べは要らない。議題 1（`callghost` と 2026-09-28 の裁定の折り合い）は要件の段で開発者の答えを待つ。`callghost` の振る舞いは SSP で測る。
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: 待っていた `readonly-mode`（10-24）が着地した。readonly の断りは、依頼の唯一の口 `install::submit`（`crates/areka/src/install/mod.rs` 71 行目）の先頭に入った＝`readonly::of(world)` が真なら積まずに `SubmitVerdict::ReadOnly` を返し、`info!(readonly_refused)`（`what=install`・`origin`）を 1 件残す。起動の引数の並びも `initial_install.nar` も `submit` を通すなら、readonly で断る働きと記録は既にある＝この spec に残るのは、出どころの語が記録に出ることのテストと説明書の行だけ。窓のアプリの外から readonly を見る口 `readonly::is_on()`（`readonly.rs` 33 行目・プロセス全体の印）もある＝議題 2（窓口の外で入れる）でも使える。`readonly` の語は `cli/parse.rs` で効く側へ移り、まだ扱わない語は `kiosk`・`callghost`・`deletesource`（366 行目）、`--install` は 93 行目の「まだ扱わない」行のまま。`readonly-mode` は `install/desk.rs` に触らなかった（560 行・`on_steady` 127・`raw_sender` 141・`is_busy` 150 行目は変わらず）。`InstallOrigin`（`install/mod.rs` 40 行目）は 3 つのまま。
+- **触るファイル**: `cli/mod.rs`（80）・`cli/parse.rs`（645）・新しい兄弟のテスト・`install/mod.rs`（134・出どころの語 1 つ）・`install/desk.rs`（`on_steady`）・`install/judge.rs`（260）か `procedure.rs`（521）・`boot_config.rs` の `exe_location`（145 行目）を呼ぶ所・`dist/README.txt`（まだ扱わない起動オプションの文は 62 行目、readonly の「断る物」の文は 79 行目＝`--install` と `initial_install.nar` を足す）。`ghost_session.rs` は 935 行（上限の近く・917 から増えた）で、`on_steady` を使えば触らない見込み（変わらず）。
+- **規模**: 5〜8（readonly の断りは `submit` が済ませた）。議題 2 を入れると 8〜11。
+- **先に要るもの**: 働きの上では無い＝先頭。同じウェーブに置かない相手: 余力の枠の `multi-ghost-runtime`（`boot_config.rs`・`ghost_session.rs` を触る形のとき）・版に縛らない `install-live-target-hazards`（インストールの道を測る）・割り込みの候補の `actor-thread-log-capture`・`background-result-tick-wake`（`install/desk.rs`）。`default-balloon-selfmade`・`mcp-strict-errors`・`bridge-store-user-root` とは 0（説明書は別の行＝許す重なり）。依存は足さない・emo-text に触らない。
+- **中の待ち**: 議題 1（`callghost` の読み＝切り替えか 2 体目か。2026-09-28 の裁定「インストールと切り替えは別・areka は主導しない」との折り合い）は開発者の裁定。`callghost` の振る舞いは SSP で測る（打つ前に許し）。静かな机・全体テストの比べは要らない。
 - **優先度の区分**: A のまま（開発者「SSPなみの起動オプション」）。
-- **要件定義のモデル**: Opus のまま（今ある窓口へ書庫の並びを渡すだけ・`callghost` の扱いは開発者が答える議題）。
+- **要件定義のモデル**: Opus のまま（今ある窓口へ書庫の並びを渡すだけ・`callghost` は開発者が答える議題）。
 - **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 棚卸㉘の行番号は動いた（`cli/parse.rs` の 61 行目→93 行目・263 行目→366 行目・説明書の 59 行目→61 行目・`install/desk.rs` 540→560 行・`ghost_session.rs` 910→917 行）。ukadoc の `callghost` は「ゴーストを呼び出す」で、SSP では呼ぶ＝2 体目を並べる意味になりうる。areka は今 1 体しか動かせない（`multi-ghost-runtime`・`ghost-call` は余力の枠）＝議題 1 で「呼ぶ」を切り替えに読むかを一緒に決める。
+- **見つけた穴・古くなった記述**: Desired Outcome の「readonly のときは…断ったことを記録に残す」は `submit` の中で既に起きる＝要件では新しく作らず確かめるだけ。棚卸㉘・㉙の「`readonly-mode` と `install/desk.rs` を分け合う」は当たらなかった（向こうは `install/mod.rs` を触った）。ukadoc の `callghost` は「ゴーストを呼び出す」で、areka は今 1 体しか動かせない（`multi-ghost-runtime`・`ghost-call` は余力の枠）＝議題 1 で「呼ぶ」を切り替えに読むかを一緒に決める。

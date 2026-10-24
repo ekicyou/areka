@@ -64,21 +64,6 @@
 - 規模の見立て: S〜M（6〜9。SSP の測り 1・件 1 が 2・件 2 が 1〜2・件 3 が 1〜2・記録と実機 1）。
 - 要件定義のモデル: Opus（先例＝`scope-chain-gap` の並べ直しと `balloon_limit` の作業領域への寄せ）。
 
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 起票（10-23）の後に、✅ `pasta-in-windows-verification`（10-23）が着地し、起動の並べ直しの呼び手 `crates/areka/src/emo2_boot/frame/drain_resnap.rs` は 576 行から 633 行になった（描く指令の取り出しを足しただけ・並べ直しの判定は変わらない）。並べ直しの判定 `placement/chain_finalize.rs` は 331 行（`finalize_chain` は作業領域を見ないまま）。記憶から戻す所 `placement/persist.rs`（673）の `apply_restored_placements` は 344 行目で、340 行目の注記「本関数自身はクランプしない」も今のまま。件 2 の崩れ（ぱすたの窓 (0,864)-(1108,2232)）は、`descript-window-keys` の申し送りの件 4 と同じ記録を指す。
-- **触るファイル**: `placement/chain_finalize.rs`（331）・`emo2_boot/frame/drain_resnap.rs`（633）・`placement/persist.rs`（673）と兄弟のテスト・寄せる純関数のファイル（新・作業領域は `placement/follow/work_area.rs` 323 の写しを受ける）・件 2 の「吸着の無い窓は左上を保つ」決まりの所＝窓の大きさが変わったときの位置の付け替え `placement/follow/window_move.rs`（**1,221**・289〜305 行目。行数の番人 `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外の表に載る＝足す分は兄弟の新しいファイルへ）・`doc/COMPAT_ARCHITECTURE.md` §8。
-- **規模**: 6〜9 タスク（起票の見立てのまま）。上限 20 の内。
-- **先に要るもの**: 働きの上ではなし（上流は全部着地済み）。ただし件 2 は `descript-window-keys` が起動の測りを descript の既定の面にした後で、残る崩れを測り直すほうが無駄が無い＝`descript-window-keys` の後に置く。同じウェーブに置けない v0.1.0 の相手＝`dpi-realign-remembered-chain`（`chain_finalize.rs`・`drain_resnap.rs`・`persist.rs`）。依存を足さない。最初の段の測りは開発者の機械の SSP（MCP）。実機の確かめ（窓あわせの無いゴーストでの記憶からの戻し・隣の画面）は排他テストの机。静かな机・前後の全体テストの比べは要らない。
-- **優先度の区分**: B（バグ＝窓が画面の外や隣の画面へ出る。起票の Constraints）。
-- **要件定義のモデル**: Opus（先例＝`scope-chain-gap` の並べ直しと、バルーンを作業領域へ寄せる `placement/balloon_limit.rs` の `apply_balloon_limit`）。
-- **分割の案**: なし。
-- **見つけた穴・古くなった記述**:
-  - 本文 Scope の Out の「並べ終えた時点の保存が台本の移動を記憶へ書く件（`window-link-directives` の申し送り ⅴ）」は、同じ `window-link-directives` の中で直っていた（`placement/persist.rs` の 545 行目の注記と 604 行目で印 `ScriptPlaced` を読んで外す）。Out から消してよい。
-  - 本文 Current State の行数「`chain_finalize.rs`（329 行）」は 331、「`drain_resnap.rs`（576 行）」は 633。
-  - 本文 Downstream の `pasta-in-windows-verification` は 10-23 に着地した。着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md` で回す形になる。
-  - 本文の Boundary Candidates「`placement/follow/` の大きさの変化の扱い」は、上の `window_move.rs` の 289〜305 行目（下端に吸着した窓だけ中央を保ち、ほかは左上を保つ）のこと。1,000 行を超えているファイルなので、ここへは足さない。
-  - `dpi-realign-remembered-chain` の詰め直しも、詰めた位置が隣の画面へ渡りうる。寄せる純関数をどちらが持ち、どちらが呼ぶかを、先に着地する側の要件で決める。
-
 ## 2026-10-24 `vertical-choice-hover-band` の完了の棚卸で足した件
 
 - **件 4: バルーンだけが作業領域へ寄せられ、ぱすたの「×」と横線が縦書きの 1 列目にかぶる**。`vertical-choice-hover-band` の実機の撮り直し（2026-10-24・拡大率 200%・`.kiro/specs/completed/vertical-choice-hover-band/evidence/areka-choice-*.png`）で、1 列目の「今日の天気は？」の「今日の」の下に横線と × が重なり、続く字が隠れた。SSP の同じ台本の撮った物（同じフォルダの `ssp-choice-*.jpg`）では 1 列目は × の下から始まり、何も重ならない。
@@ -98,3 +83,17 @@
 - **件 5（新）: 初回起動のトークの最中にぱすたの窓あわせ（見た目の調整）が効かず、トークの後にずれる**。SSP では起きない。同じ記録では、初回起動で kanade が `OnBoot` を飛ばして `OnFirstBoot` の台本を流し（`boot_type_script`）、台本の頭が `\0\s[1000]\1\s[10]\![move,…]\![reset,zorder]\![set,zorder,0,1]\0\![bind,…]…`。窓あわせがどのイベント・どの指令で流れるか、SSP が初回起動で送る要求の並びと時機（`ghost\master\ssp_shiori_log.txt` の差分）と比べて原因を決めるのが最初の段。触る場所は起動の配置（件 2 と同じ所）か、起動のイベントの順（kanade）かのどちらかで、測ってから決める。件 2 と同じく起動の直後のぱすたの見た目の崩れなので、この spec に束ねた（小さいバグは触る場所が同じものを 1 本に・測った結果で kanade の持ち物と分かったら、要件の段で切り出すか決める）。
 - **規模の見立ての更新**: S〜M（7〜11。件 5 の SSP との比べと直しで 1〜2 増える）。
 - **件 3 への足し（`dpi-realign-remembered-chain` の完了の棚卸）**: 記憶の位置が作業領域の外で、起動の寄せ直しで引き寄せて表示しているとき、`dpi-realign-remembered-chain` が印の無い古い記憶へ書き足す隣り合いの印（`[window-adjacent]`）は、表示している矩形から決まる（同 spec の設計どおり）。外した画面を付け直して本体が元の位置へ戻る場合だけ、記憶の並びと食い違いうる。寄せ方を決めるとき、印をどの矩形から決めるか（表示・記憶の位置・決めない）も一緒に決める（直し方が複数ある＝裁定が要るため起票側へ回した）。
+
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: ✅ `dpi-realign-remembered-chain`（10-24）で件 1 の場所が変わった。起動の並べ直しの本番の道は `crates/areka/src/emo2_boot/frame/drain_resnap.rs`（685）の `finalize_chain_once_with`（420 行目）が台本の印・組・覚えた隣り合いの印を読み、`placement/chain_finalize.rs`（613）の `boot_pair_decision`（157 行目）を呼ぶ形になった。本文の `finalize_chain` は試験の口だけ（`#[cfg(test)]`）。どちらも作業領域を見ないまま。拡大率の後の詰め直しは `placement/chain_realign.rs`（423）の `realign_chain_once_with`。記憶から戻す所 `placement/persist.rs`（815）の `apply_restored_placements` は 347 行目、注記「本関数自身はクランプしない」は 343 行目。✅ `descript-window-keys`（10-24）が起動の測りを descript の既定の面にした＝件 2 の前半（面 0 で解いて後で 1000 へ育つ）が変わる。件 2・件 4 は取り込んだ後の版で測り直してから扱いを決める。同じ spec がバルーンの動かせない指定を `placement/balloon_lock.rs` に足した（件 4 の寄せの所とは別）。
+- **申し送りの漏れ（範囲が広がる）**: `dpi-realign-remembered-chain` の要件（「作業領域への寄せ」の節・2026-10-23 確定）は、「詰め直した位置は寄せない。寄せる働きは `window-work-area-clamp` が作り、詰め直しの位置にも同じ寄せを当てるのは向こうの範囲」と決め、着地のときにこの brief へ申し送ると書いたが、この brief に無かった。同じ spec の設計（`design.md` 22・60 行目）は、起動で隣り合わせた位置にも寄せを当てるのをこの spec の持ち分とする。＝本文 Scope の Out「拡大率が変わったあとの詰め直し（`dpi-realign-remembered-chain`）」のうち寄せだけは In へ移り、触るファイルに `chain_realign.rs` が加わる。
+- **触るファイル**: `drain_resnap.rs`（685）・`chain_finalize.rs`（613）・`chain_realign.rs`（423）・`persist.rs`（815）と兄弟のテスト・寄せる純関数（新。`placement/` の直下に置くと `placement/mod.rs`〔969・上限まで 31〕に `mod` の 1 行が入る＝作業領域の写し `placement/follow/work_area.rs`（323）の隣に置けば避けられる）・件 2 の `placement/follow/window_move.rs`（1,221・行数の番人の例外の表に載る＝足す分は兄弟の新しいファイルへ）・件 4 の `placement/balloon_limit.rs`（231）・件 5 は測ってから（起動の配置か、kanade の起動のイベントの順）・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: 8〜12 タスク（7〜11 に、詰め直しへの寄せの 1 を足した）。上限 20 の内。件 5 が kanade の持ち物と分かったら、要件の段で切り出すかを決める。
+- **先に要るもの**: 働きの上ではなし（上流は全部着地済み）。v0.1.0 の相手: `placement-measure-bake-once`（案 A は `placement/mod.rs`＝寄せる関数を `placement/` の直下に置くときだけ重なる）。`balloon_limit.rs` を挙げる `real-run-input-guard-observations`。`stay-on-top-directives` とは重ならない（あちらは `spawn.rs`）。依存を足さない・emo-text の席を使わない。件 2 は開発者の裁定（2026-10-24）で SSP の測りは任意。件 5 は SSP の `ssp_shiori_log.txt` の差分と比べるのが最初の段（開発者の機械）。実機は排他テストの机（倍率 200%・ぱすた・窓あわせの無いゴーストでの記憶からの戻し）。静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: B（バグ＝窓が画面の外や隣の画面へ出る。件 2 は開発者の指示「画面内に収まっていればよい」も出どころ）。
+- **要件定義のモデル**: Opus（先例＝起動の並べ直しと、バルーンを作業領域へ寄せる `placement/balloon_limit.rs` の `apply_balloon_limit`・記憶の位置を寄せる `persist.rs` の射影）。
+- **分割の案**: なし（件 5 だけ上の条件つき）。
+- **見つけた穴・古くなった記述**:
+  - 本文 Current State の「`finalize_chain`」は試験の口だけ＝本番は `boot_pair_decision`。行数「`chain_finalize.rs`（329 行）」「`drain_resnap.rs`（576 行）」は 613・685。
+  - 本文 Scope の Out「並べ終えた時点の保存が台本の移動を記憶へ書く件（`window-link-directives` の申し送り ⅴ）」は、同じ `window-link-directives` の中で直っていた（`persist.rs` が印 `ScriptPlaced` を読んで外す）＝Out から消してよい。
+  - 本文 Downstream の `pasta-in-windows-verification` は 10-23 に着地した。着地した後の確かめは、ぱすたの手順書 `doc/pasta-real-run.md` で回す。

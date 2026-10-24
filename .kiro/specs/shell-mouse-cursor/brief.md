@@ -78,16 +78,6 @@
   2. **`mousehover*` と `mousewheel*`**: 「しばらく動かさない」の時間と、ホイールの後いつ戻すか。SSP で測る。ホイールの送出は `mouse-click-wheel-events`。
   3. **ドラッグ中の形**: `bust` の押下の `system:grip` を、ドラッグのあいだ保つか。
 
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 10-18 から触るファイルは動いていない（wintf の `crates/wintf/src/ecs/window_proc/mouse_move.rs` 602 行〔`WM_SETCURSOR` は今も診断の十字だけ〕・シェルを運ぶ `crates/areka-emo-present/src/shell_target.rs` 757・シェルの読み手 `crates/areka-parsers/src/shell/decode.rs` 597〔知らない見出しのブレスは今も記録なしに捨てる〕・当たり判定を引く `crates/areka/src/emo2_boot/hit_region.rs` 167・`crates/areka/src/input_events/mod.rs` 575）。当たり判定の追跡のファイル `input_events/hover_region.rs` はまだ無い。
-- 触るファイル: 棚卸㉗の見立てのとおり（新しい転記 `crates/areka-parsers/src/shell/cursor.rs`〔新〕と `shell/mod.rs` 72・`shell_target.rs`・追跡の `input_events/hover_region.rs`〔新・`mouse-click-wheel-events` と共有〕と `input_events/mod.rs` の数行・`mouse_move.rs` の数行と新しいカーソルの口のファイル〔新〕・ゴーストの descript の読み取り・台帳 `assets.toml`）。
-- 規模: 6〜9 のまま。
-- 先に要るもの: 働きの上で無し。ファイルの上で `mouse-click-wheel-events` の後（追跡を先に作る側・ぱすたの × に効く）。同じウェーブに置けない相手（v0.1.0）: `mouse-click-wheel-events`（`input_events/`）・`placement-measure-bake-once` が案 B（`shell_target.rs` の読み込みの口を変える）を選んだとき。`offline-surface-dump` は `shell_target.rs` の `load_shell_target` を呼ぶだけ＝0。1 本だけの席は取らない。実機の確かめ（カーソルの形を見る）は画面のロックを外した机で、議題 1・2 は SSP で測る。
-- 優先度の区分: A のまま（開発者の指示＝v0.1.0 のゴール・ぱすたの体の当たり判定で手の形）。
-- 要件定義のモデル: Opus のまま（先例＝wintf の `WM_SETCURSOR` の診断の口・`shell/boxes.rs` の 2 つ目の転記）。
-- 分割の案: なし。
-- 見つけた穴・古くなった記述: なし。
-
 ## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
 
 - 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
@@ -99,12 +89,13 @@
 - 網羅台帳の宛先: 2026-10-23 に 2 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 3）: 当たり判定ごとにマウスの形が替わる（身体は手の形・× とボールは指さしの形・当たりの外は矢印）。
 
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: シェルを運ぶ `crates/areka-emo-present/src/shell_target.rs` が 757 → 855 行になった（`offline-surface-dump` が窓を出さない書き出しの口を足した・カーソルの表を運ぶ所は今も無い）。ほかは動いていない: wintf の `crates/wintf/src/ecs/window_proc/mouse_move.rs` 602 行（`WM_SETCURSOR` は今も診断の十字だけ）・シェルの読み手 `crates/areka-parsers/src/shell/decode.rs` 598 行（`sakura.cursor` のような知らない見出しのブレスは今も記録なしに捨てる＝`dispatch_block`）・`crates/areka/src/emo2_boot/hit_region.rs` 167・`input_events/mod.rs` 576。当たり判定の追跡のファイル `input_events/hover_region.rs` はまだ無い。
-- **触るファイル**: 棚卸㉗の見立てのとおり（新しい転記 `crates/areka-parsers/src/shell/cursor.rs`〔新〕と `shell/mod.rs` 72・`shell_target.rs`・追跡の `input_events/hover_region.rs`〔`mouse-click-wheel-events` が作る〕と `input_events/mod.rs` の数行・`mouse_move.rs` の数行と新しいカーソルの口のファイル〔新〕・ゴーストの descript の読み取り・台帳 `assets.toml`）。`WM_SETCURSOR` は窓の手続きの中でその場で答える。手続きは World を受け取っていて、ふだんは借りられる＝前例の形に乗る。
-- **規模**: 6〜9 のまま。
-- **先に要るもの**: ファイルの上で `mouse-click-wheel-events` の後（追跡を作る側）。同じウェーブに置けない相手（v0.1.0）: `mouse-click-wheel-events`・`placement-measure-bake-once` が `shell_target.rs` の読み込みの口を変える案を選んだとき。`seriko-pattern-calls` とは、向こうが `shell/mod.rs` に新しいファイルを足すときだけ重なる（向こうの本体は `shell/{lexer,decode,model}.rs`）。1 本だけの席は取らない。実機の確かめ（カーソルの形を読む）は画面のロックを外した机。既定の形と止まったときの形は SSP で測る（ぱすたの申し送りで × とボールの形は測ってある）。
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: `mouse-click-wheel-events`（#380）が着地し、窓ごとの当たり判定の追跡を作った＝`crates/areka/src/input_events/hover_region.rs`（102 行・状態 `HoverState`〔スコープ・位置・当たり判定の名前〕と、出入りを決める純関数 `plan_hover`）。状態の置き場所は `MouseWiring.hover`（`input_events/mod.rs`・鍵は窓の entity）。読む口はまだ無い（あちらの design「読み手が居ないので作らない」）＝本 spec が足す。押下の控え（`click.rs`・ボタンの区別つき）とホイール（`wheel.rs`）も同じ見張りの系に在り、`mousedown*`・`mouserightdown*`・`mousewheel*` の材料に使える。
+- **追跡は毎 tick の系**（`char_watch.rs` 234 行・`Input` の段で `dispatch_pointer_events` の前）で、マウスの移動のたびではない。`WM_SETCURSOR` は移動の直後にその場で来るので、`HoverState` の名前だけで形を選ぶと、当たり判定をまたいだ直後に前の名前の形が 1 tick 残る＝Constraints の「1 フレーム遅らせない」とぶつかる。`WM_SETCURSOR` の中で当たり判定をその場で引くか、名前が変わった tick で `SetCursor` を直に呼ぶかを要件・設計の段で決める。
+- **触るファイル**: 新しい転記 `crates/areka-parsers/src/shell/cursor.rs`〔新〕と `shell/mod.rs`（72）・`crates/areka-emo-present/src/shell_target.rs`（855）・読む口 `input_events/hover_region.rs`（102）か `char_watch.rs`（234）・wintf の `crates/wintf/src/ecs/window_proc/mouse_move.rs`（632・`WM_SETCURSOR` は 30 行目で今も診断の十字だけ）と新しいカーソルの口のファイル〔新〕・ゴーストの descript の読み取り・台帳 `assets.toml`（持ち主が本 spec の行は 7204 行）。`input_events/mod.rs`（611）は新しい mod の 1 行を足すときだけ。
+- **規模**: 6〜9 のまま（追跡が出来た分は減るが、`WM_SETCURSOR` との時の合わせ方が足される）。
+- **先に要るもの**: 働きの上で無し（待っていた `mouse-click-wheel-events` は着地）。同じウェーブに置けない相手（v0.1.0）: `balloon-scroll-arrows`（どちらも `input_events/mod.rs` に mod の行を足す）＝本 spec が新しいコードを `char_watch.rs`／`hover_region.rs` の子（`#[path]`）に置いて `mod.rs` に触らないと約束すれば 0。`seriko-pattern-calls` とは、向こうが `areka-parsers/src/shell/` に新しいファイルを足すときだけ（`shell/mod.rs`）。`placement-measure-bake-once` が `shell_target.rs` の読み込みの口を変える案を選んだとき。1 本だけの席・依存の追加は無い。実機の確かめ（カーソルの形を読む）は画面のロックを外した机。既定の形と止まったときの形は SSP で測る。
 - **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・申し送りの件 16）。
-- **要件定義のモデル**: Opus のまま（先例＝wintf の `WM_SETCURSOR` の診断の口・`shell/boxes.rs` の 2 つ目の転記）。
+- **要件定義のモデル**: Opus のまま（先例＝wintf の `WM_SETCURSOR` の診断の口・`shell/boxes.rs` の 2 つ目の転記・`HoverState` の読み口）。tick と `WM_SETCURSOR` の合わせ方は、今の窓の手続きと tick の上での選び方で、新しい並行の約束ではない。
 - **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 棚卸㉘の「`shell_target.rs` 757」は 855。後の版の `shell-hover-animation` も追跡のファイルを使う＝`shell-tooltip` と並んで下流に足してよい。
+- **見つけた穴・古くなった記述**: ⑴ Current State の「どの当たり判定の上に居るかを窓ごとに覚えて、変わった時を知る所は無い」と Approach の「覚える所を 1 つ作る」は古い（`hover_region.rs` が在る・本 spec は読むだけ）。⑵ Constraints の行数（575・602）は古い（611・632）。⑶ 版の決まっていない `mouse-hover-event`（10-24 起票・`OnMouseHover`）も「しばらく動かさない」を測る＝本 spec の `mousehover*` と同じ時間を使う見込み。後に来る側が先の側の判定を使う。⑷ 後の版の `shell-hover-animation` も追跡を使う（あちらの design にも書かれた）。

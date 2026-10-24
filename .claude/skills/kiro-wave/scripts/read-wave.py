@@ -89,6 +89,9 @@ def read_wave(text):
             if not re.fullmatch(r"/release \d+\.\d+\.\d+", s):
                 raise ValueError(f"bad release line: {s}")
             release = s.split()[1]
+        elif s.startswith("/"):
+            # e.g. "/kiro-design <name>" for a spec whose requirements already landed
+            warns.append(f"{s}: not a /kiro-start line; /kiro-wave does not start it, run it by hand")
     if release and specs:
         raise ValueError("the code block mixes /release with /kiro-start")
     if not specs and not release:
@@ -111,6 +114,7 @@ Fable
 /kiro-start b-spec
 Opus
 /kiro-start areka-P0-a-spec
+/kiro-design e-spec
 
 【割り込み（版に縛らない・v0.1.0 の着地を遅らせない）】
 Opus
@@ -147,7 +151,7 @@ def self_test():
     assert release is None, release
     assert date == "2026-01-02", date
     assert specs == [("Fable", "b-spec"), ("Opus", "areka-P0-a-spec"), ("Fable", "c-spec")], specs
-    assert len(warns) == 1 and warns[0].startswith("c-spec"), warns
+    assert len(warns) == 2 and warns[0].startswith("/kiro-design e-spec") and warns[1].startswith("c-spec"), warns
     rel = SAMPLE_RELEASE
     assert read_wave(rel)[1:] == ([], [], "0.1.0"), read_wave(rel)
     models = read_models(SAMPLE)

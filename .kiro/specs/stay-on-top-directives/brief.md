@@ -86,19 +86,6 @@
 - 鎖の適用系の 1 巡の順は「去る窓の切離し → 鎖の撤去 → 組の外し → 組の結び直し → 鎖の付与 → 後押し → 直後の実測」。外し損ねがあった巡だけ、付与と結び直しの直前に持ち主の輪を確かめる（`link-refused`）。帯へ上げる処理をこの 1 巡に足すなら、この順と `PairReleased` の組（結び目の無い組）を前提にすること。持ち主の鎖の根だけを帯へ上げる案では、結び目を外している組の窓が鎖の外れ方によって付いてこない場合がある。
 - 触るファイルの行数（完了時）: `zorder_chain_apply.rs` 930・`zorder_pair.rs` 892・`zorder_chain.rs` 631（上限 1,000）。`zorder_chain_apply.rs` は余地が 70 行しか無いので、足すなら先に外へ出す。
 
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 待っていた ✅ `zorder-scope-inversion`（10-19）が着地した（申し送りは上の節）＝こちら側の待ちは無い。✅ `mcp-reload`（10-22）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` の中のテストを兄弟のファイルへ出し、960 行から 472 行になった（受け手の中身を新しいファイルに置くのは変わらない）。ゴーストの読み直しは窓を閉じて作り直す（`emo2_boot/reload.rs`）。
-- 触るファイル: `crates/areka-parsers/src/sakura/decode.rs`（502・`decode_bare` に 1 腕）と兄弟のテスト・`consumer_ledger.rs`（472・1 行）・新しい受け手のファイル（新・`emo2_boot/` の下）・wintf の `crates/wintf/src/ecs/window/zorder_pair.rs`（892・帯を避ける判断は 368 行目）・`zorder_pair_maintain.rs`（557・帯の中かを見る所は 488 行目）・`zorder_chain_apply.rs`（930・余地 70 行＝足すなら先に外へ出す）・`window_pos/mod.rs`（454・帯へ上げ下げする指令の口）・後から出る窓の作り `crates/areka/src/placement/spawn.rs`（776）・網羅台帳 `sakura-script.toml` の 3 行（3352・3385 行目ほか）・`doc/COMPAT_ARCHITECTURE.md` §8。
-- 規模: 6〜9 タスクのまま（`zorder_chain_apply.rs` を外へ出すなら 1 つ増える）。
-- 先に要るもの: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手: `script-small-tags`（`decode.rs`）・受け手の表に行を足す `window-link-directives`・`script-small-tags`・`descript-window-keys`・`mcp-strict-errors`（案 2）・`script-security-level`（1 本ずつ）・`dpi-realign-remembered-chain`（`placement/spawn.rs`）。後の版: `zorder-chain-residue`・`zorder-property`・`multi-ghost-runtime`・`tasktray-minimize`・`elevated-drop-filter`（`spawn.rs`）。依存を足さない。実機の確かめは画面のロックを外した排他テストの机で、ほかのアプリを前に出して見る。静かな机・前後の全体テストの比べは要らない。議題 1 の測りは開発者の機械の SSP。
-- 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
-- 要件定義のモデル: Opus（`zorder-scope-inversion` が鎖の 1 巡の順を決めた後で、帯へ上げる処理はその順に乗る＝時刻や順番の新しい保証を作らない。先例＝`ghost-window-zorder` の要件 8.2）。
-- 分割の案: なし。
-- 見つけた穴・古くなった記述:
-  - 本文と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。
-  - 本文 Current State の「帯を避ける判断（`zorder_pair.rs` の `measure_window_is_always_on_top`）」: 測る関数は `zorder_pair.rs` に残るが、呼ぶのは組を保つ系の `zorder_pair_maintain.rs`。条件をつけるなら両方を見る。
-  - ゴーストの読み直し（`\![reload,ghost]`・MCP の `reload`）で窓が作り直されたとき、「常に手前」を保つか戻すかを決める。正典は「ゴースト終了まで有効」で、読み直しは終了ではない。SSP で測る項目（議題 1）に足す。
-
 ## 追記（2026-10-23 `areka-P0-window-link-directives` の完了の棚卸）
 
 - **件 1: 台本の `\![set,zorder]` の組が、シェルの切り替えで捨てられる**（`window-link-directives` 要件 10.6・要件の段の裁定の表の 2 行目）。
@@ -121,16 +108,15 @@
 - 網羅台帳の宛先: 2026-10-23 に 1 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 1）: 窓の枠が奥へ回る（常に手前にしない指定が SSP と同じに効く）。
 
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 触る所の中身は棚卸㉘から変わらない。✅ `window-link-directives`（10-23）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に 5 行足し、472 行から 496 行になった（登記の数は 36）。窓を作る所 `crates/areka/src/placement/spawn.rs` は 783 行（13 行増えた）。✅ `pasta-in-windows-verification`（10-23）の申し送り（件 19）と、`window-link-directives` の完了の棚卸の追記（件 1・台本の重なりの組がシェルの切り替えで落ちる）が本文の後ろに在る＝どちらもこの spec の中で片づける。網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` は `\![set,windowstate,!stayontop]` の 1 行だけ持ち主がこの spec で、`\v`・`\![set,windowstate,stayontop]` の 2 行は持ち主が空のまま。
-- **触るファイル**: 台本の読み手 `crates/areka-parsers/src/sakura/decode.rs`（502・`decode_bare` は 226 行目）と兄弟のテスト・受け手の表 `consumer_ledger.rs`（496・1 行と見本の表）・新しい受け手のファイル（新・`emo2_boot/` の下）・wintf の組の判断 `crates/wintf/src/ecs/window/zorder_pair.rs`（892・帯を避ける所は 364〜370 行目）・組を保つ系 `zorder_pair_maintain.rs`（557・帯の中かを読む所は 489 行目）・鎖の適用 `zorder_chain_apply.rs`（930・余地 70 行）・窓の指令の口 `window_pos/mod.rs`（454・帯へ上げ下げは 131・137 行目）・`placement/spawn.rs`（783）・件 1 の `emo2_boot/frame/zorder_descript.rs`（105）と帳簿 `placement/zorder_group_ledger.rs`（657）・網羅台帳の 3 行・`doc/COMPAT_ARCHITECTURE.md` §8。**足す分**: 「先送りの言葉」を見張る 2 つのテスト＝wintf の `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`（組と鎖の 8 ファイルに `topmost`・`stayontop`・`windowstate` などの語が入ると赤）と、兄弟の `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs`（`spawn.rs`・`zorder_descript.rs`・`zorder_group_ledger.rs` ほか 7 ファイルを見る）。完了 `ghost-window-zorder` の要件 8.3「`\v` を解釈しない」を守る檻なので、この spec が両方を一緒に書き直す（片方だけ直すと守りが片肺になる、と表の注記に在る）。
-- **規模**: 8〜12 タスク（本文の 6〜9 に、件 1 の 1〜2 と、見張りの 2 つのテストの書き直し 1 を足した。`zorder_chain_apply.rs` を先に外へ出すならさらに 1）。上限 20 の内。
-- **先に要るもの**: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手＝受け手の表に行を足す `script-small-tags`・`descript-window-keys`・`shell-scale-linkage`・`balloon-communicatebox`・`mcp-strict-errors`（案 2）（1 本ずつ）・`script-small-tags`（`decode.rs` も）・`dpi-realign-remembered-chain`（`spawn.rs`）。依存を足さない。静かな机・前後の全体テストの比べは要らない。実機の確かめは画面のロックを外した排他テストの机で、ほかのアプリを前に出して見る。議題 1 の測り（`\1\v` の効く範囲・シェルの切り替えの後に `\![set,zorder]` の組が残るか）は開発者の機械の SSP。
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: 触る所の中身は棚卸㉙から変わらない（wintf の組と鎖のファイル・`zorder_descript.rs`・帳簿・台本の読み手 `decode.rs` は動いていない）。✅ `dpi-realign-remembered-chain`（10-24）が窓を作る所 `crates/areka/src/placement/spawn.rs` に覚えた隣り合いの印の欄と読み書きの 2 つの関数を足し、783 行から 810 行になった（帯や重なりの所には触れていない＝前提は崩れず、`spawn.rs` の列の相手は着地した）。✅ `descript-window-keys`（10-24）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に `(lock|unlock,balloonmove)` の 2 行を足し、504 行・登記 38 件になった（手書きの数 `consumer_ledger_tests.rs` 298 行目も 38）。
+- **触るファイル**: 台本の読み手 `crates/areka-parsers/src/sakura/decode.rs`（502・`decode_bare` は 226 行目）と兄弟のテスト・`consumer_ledger.rs`（504・`(set,windowstate)` の 1 行・手書きの数 38→39・説明の一覧）と見本 `consumer_ledger_agreement_tests.rs`（406）・新しい受け手のファイル（新・`emo2_boot/` の下＝`emo2_boot/mod.rs` に `mod` の 1 行、受け手をつなぐ `emo2_boot/runtime_boot.rs` に 1 行）・wintf の `zorder_pair.rs`（892・帯を避ける所は 368 行目）・`zorder_pair_maintain.rs`（557・帯の中かを読むのは 488〜489 行目）・`zorder_chain_apply.rs`（930・余地 70 行＝足すなら先に外へ出す）・`window_pos/mod.rs`（454・帯へ上げ下げする指令の口）・`placement/spawn.rs`（810）・件 1 の `emo2_boot/frame/zorder_descript.rs`（105）と帳簿 `placement/zorder_group_ledger.rs`（657）・先送りの言葉を見張る 2 つのテスト（wintf の `zorder_pair_deferred_vocabulary_tests.rs` と `placement/spawn_zorder_pair_deferred_tests.rs`＝片方だけ直すと守りが片肺になるので両方を一緒に書き直す）・網羅台帳 `sakura-script.toml` の 3 行（今は 3378・3412 行目ほか）・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: 8〜12 タスク（`zorder_chain_apply.rs` を先に外へ出すなら +1）。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし（列の相手 `zorder-scope-inversion`・`dpi-realign-remembered-chain` は着地済み）。受け手の表に行を足す v0.1.0 の残り 4 本（この spec・`script-small-tags`・`shell-scale-linkage`・`balloon-communicatebox`）と `mcp-strict-errors` の案 2 は 1 本ずつ（行は避けられない＝`(set,windowstate)` は表に無い組で、無いと `check_script` が「知らない命令」と答える）。`decode.rs` で `script-small-tags` と直列。`spawn.rs` は `actor-thread-log-capture` も挙げる。`window-work-area-clamp`・`placement-measure-bake-once` とは `placement/` のファイルで重ならない（`emo2_boot/mod.rs` の `mod` の 1 行だけ、案 A の `placement-measure-bake-once` と同じファイル）。依存を足さない・emo-text の席を使わない。静かな机は要らない。実機は画面のロックを外した排他テストの机で、ほかのアプリを前に出して見る。議題 1 の SSP の測り（`\1\v` の効く範囲・シェルの切り替えと読み直しの後に `\![set,zorder]` の組と「常に手前」が残るか）は開発者の機械。
 - **優先度の区分**: A（開発者の指示＝v0.1.0 のゴール「ぱすたが SSP と同じに動く」）。
-- **要件定義のモデル**: Opus（帯へ上げる処理は `zorder-scope-inversion` が決めた鎖の 1 巡の順に乗る。先例＝`ghost-window-zorder` の要件 8.2「後から足せる構造」。新しい境目も、並行や順の新しい保証も作らない）。
+- **要件定義のモデル**: Opus（帯へ上げる処理は `zorder-scope-inversion` が決めた鎖の 1 巡の順に乗る・先例＝`ghost-window-zorder` の要件 8.2「後から足せる構造」。新しい境目も、並行や順の新しい保証も作らない）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**:
-  - 上の見張りの 2 つのテストが、これまでの見立ての触るファイルに無かった。帯へ上げる処理を組と鎖のファイルに書くと、ここが赤になる。
-  - 棚卸㉘の節の「`consumer_ledger.rs`（472）」は 496、「`spawn.rs`（776）」は 783。
-  - 受け手の表の決まりの注記（`consumer_ledger.rs` 27 行目「名簿に無い第 1 引数（例: `\![set,windowstate]`）は担当なし」）は、この spec の着地で例が変わる＝一緒に直す。
-  - 網羅台帳の `\v` と `stayontop` の 2 行の持ち主が空。着地のときにこの spec を書く。
+  - 本文 Current State と Constraints の「`consumer_ledger.rs`（960 行）」は古い（504 行）。帯を測る関数は `zorder_pair.rs` に在るが、呼ぶのは `zorder_pair_maintain.rs`＝条件をつけるなら両方を見る。
+  - 受け手の表の決まりの注記（`consumer_ledger.rs` 27 行目「名簿に無い第 1 引数（例: `\![set,windowstate]`）は担当なし」）は、この spec の着地で例が変わる＝一緒に直す。網羅台帳の `\v` と `stayontop` の 2 行は持ち主が空＝着地のときにこの spec を書く。
+  - ゴーストの読み直しで窓が作り直されたとき、「常に手前」を保つか戻すかを決める（正典は「ゴースト終了まで有効」・読み直しは終了ではない）。

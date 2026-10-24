@@ -81,18 +81,6 @@
   2. **`\_u` の出せない番号**: 0・制御の文字・サロゲートの片割れ・範囲の外。SSP で測るか、「捨てて記録」に倒すか。
   3. **`OnDressupChanged` を誰が持つか**: 今は送っていないので `bind-noevent` との違いが見えない。この spec で起票だけするか。
 
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 触る所の中身は棚卸㉗から変わらない。✅ `mcp-reload`（10-22）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` を 472 行に減らし（テストを兄弟へ）、着せ替えの読み取りのテストを `crates/areka-seriko/src/bind_tests.rs` へ出した。着せ替えの受け手 `crates/areka-seriko/src/actor.rs`（780）の名前の選別は 492 行目あたり（名前の定数 `BIND_COMMAND` は 56 行目）。同じ spec の持ち越し（`crates/areka/src/emo2_boot/shell_carry.rs`）は、ゴーストの読み直しの後に着せ替えを `\![bind,…]` と同じ合図で流し直す＝後で `OnDressupChanged` を送るようになると、読み直しのたびにイベントが飛ぶ。この spec の「イベントを起こさない」目印は、その流し直しにも使える。
-- 触るファイル: `crates/areka-parsers/src/sakura/decode.rs`（502）と兄弟のテスト・`actor.rs`（780）と兄弟のテスト（新）・`consumer_ledger.rs`（472・1 行）・網羅台帳 `sakura-script.toml` の 4 行（`\![bind-noevent]` は 709 行目）。字句の読み手 `lexer.rs`（426）は今も読めるので触らない見込み。
-- 規模: 4〜6 タスクのまま。
-- 先に要るもの: なし。同じウェーブに置けない v0.1.0 の相手: `stay-on-top-directives`（`decode.rs`・受け手の表）・受け手の表に行を足す `window-link-directives`・`descript-window-keys`・`mcp-strict-errors`（案 2）・`script-security-level`（1 本ずつ）。後の版: `decode.rs` を触る 10 本（`range-choice-tag` ほか）・`actor.rs` を触る `animated-image-import`・`seriko-script-triggers`・`balloon-canon-residue`・`shell-hover-animation`・`talk-anchor-interrupt-ticks`。依存を足さない。机・静かな机・前後の全体テストの比べは要らない。議題 1（`\![*]`）の測りは開発者の機械の SSP。
-- 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
-- 要件定義のモデル: Opus（先例＝裸の `\+` の写し・`\![*]` の畳み・着せ替えの名前の選別）。
-- 分割の案: なし。
-- 見つけた穴・古くなった記述:
-  - 本文 Current State と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。「488 行あたり」は今 492 行目。
-  - 議題 3（`OnDressupChanged` を誰が持つか）に、読み直しの持ち越しが `bind` で流し直すこと（上）を足す。送る spec を起票するなら、流し直しを「イベントを起こさない」側に寄せることも書く。
-
 ## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
 
 - 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
@@ -113,16 +101,16 @@
 - 網羅台帳の宛先: 2026-10-23 に `sakura-script.toml` の 3 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 2）: 全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く。
 
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: ✅ `offline-surface-dump`（10-23）が着せ替えの既定の読みを `areka-seriko` へ移し、着せ替えの受け手 `crates/areka-seriko/src/actor.rs` は 780 行から 768 行になった。名前の選別は今 510 行目と 533 行目（名前の定数 `BIND_COMMAND` は 56 行目のまま）。台本の読み手 `crates/areka-parsers/src/sakura/decode.rs` は 502 行のまま（`fold_choice_marker` は 122 行目・「無視した」印は 127 行目）。台本の組み立ての残りの腕 `crates/areka-sakura/src/compile.rs` は 290 行目あたり。受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` は 496 行。✅ `pasta-in-windows-verification`（10-23）の申し送り（件 3・17・18）が本文の後ろに在る。
-  - 議題 1 に答えが出た: SSP は、ぱすたの選択肢 4 つのそれぞれの前に印を出した（同 spec の `ssp-measurement.md` 3 節）。ぱすたの縦書きのバルーン（ゴーストのフォルダの `pasta_tategaki`）には印の絵 `marker.png` が無いので、SSP は自前の絵か別の絵を使った見込み（どの絵かは確かめていない）。「何も描かないなら記録の行だけ」の道は閉じた＝印を描く仕事をこの spec に入れるか、`marker.filename` の持ち主 `balloon-canon-residue`（いつか）へ渡すかを要件の段で決める。申し送りの決め「すべて v0.1.0 で解決」により、渡すなら v0.1.0 の中に持ち主が要る。
-- **触るファイル**: `decode.rs`（502）と兄弟のテスト・`actor.rs`（768）と兄弟のテスト（新）・`consumer_ledger.rs`（496・`bind-noevent` の 1 行と見本の表 `consumer_ledger_agreement_tests.rs` の 1 行）・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の 4 行。印を描くなら、文字の層の選択肢の飾り（`crates/areka-emo-text/src/` の選択肢の所）とバルーンの descript の読み（`crates/areka-parsers/src/balloon/`）も加わる。
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: ✅ `descript-window-keys`（10-24）が着せ替えの受け手 `crates/areka-seriko/src/actor.rs` に既定の面の扱いを足し、768 行から 799 行になった。名前の選別は今 541 行目と 564 行目（名前の定数 `BIND_COMMAND` は 56 行目のまま）。同じ spec が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に 2 行足し、504 行・登記 38 件（手書きの数 `consumer_ledger_tests.rs` 298 行目も 38）。✅ `vertical-choice-hover-band`（10-24）が着地し、印を描くときに照らす相手（`crates/areka-emo-text/src/choice.rs`）の待ちは解けた。台本の読み手 `crates/areka-parsers/src/sakura/decode.rs`（502・`fold_choice_marker` は 122 行目）と台本の組み立て `crates/areka-sakura/src/compile.rs`（481）は動いていない。
+- **議題 1 の答え（棚卸㉙で出た・今も残る）**: SSP はぱすたの選択肢 4 つのそれぞれの前に印を出した。ぱすたの縦書きのバルーンは `marker.png` を持たない（SSP がどの絵を使ったかは確かめていない）。印を描く仕事をこの spec に入れるか、`marker.filename` の持ち主 `balloon-canon-residue`（いつか）へ渡すかを要件の段で決める。渡すなら v0.1.0 の中に持ち主が要る（申し送りの決め「すべて v0.1.0 で解決」）。
+- **触るファイル**: `decode.rs` と兄弟のテスト・`actor.rs`（799）と兄弟のテスト（新）・`consumer_ledger.rs`（504・`bind-noevent` の 1 行＝担当は今の `Seriko` で新しい種類は要らない・手書きの数 38→39・説明の一覧）と見本 `consumer_ledger_agreement_tests.rs`（406）の 1 行・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の 4 行。印を描くなら emo-text の選択肢の飾り（`choice.rs` ほか＝emo-text の席）とバルーンの descript の読み（`crates/areka-parsers/src/balloon/`）も加わる。
 - **規模**: 4〜6 タスク（印を描くなら 7〜9）。上限 20 の内。
-- **先に要るもの**: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手＝`stay-on-top-directives`（`decode.rs`・受け手の表）・受け手の表に行を足す `descript-window-keys`・`shell-scale-linkage`・`balloon-communicatebox`・`mcp-strict-errors`（案 2）（1 本ずつ）。印を描くなら `vertical-choice-hover-band`（`crates/areka-emo-text/src/choice.rs`）と `balloon-scroll-arrows`（`crates/areka-parsers/src/balloon/`）とも照らす。`seriko-pattern-calls` は `areka-seriko` の表 `table.rs` を触り、`actor.rs` は挙げていない＝要件の段で重なりを確かめる。依存を足さない。静かな机・前後の全体テストの比べは要らない。議題 2（出せない番号）の測りは開発者の機械の SSP。
+- **先に要るもの**: 働きの上ではなし。受け手の表に行を足す `stay-on-top-directives`・`shell-scale-linkage`・`balloon-communicatebox`・`mcp-strict-errors`（案 2）と 1 本ずつ（行は避けられない＝読み手は転記に徹するので、`bind-noevent` を読み手で `bind` へ写す道は取れない）。`decode.rs` で `stay-on-top-directives` と直列。`actor.rs` は `balloon-font-file`・`balloon-link-hover`・`popup-menu-residue` も挙げる（同じウェーブなら照らす）。印を描くなら `balloon-scroll-arrows`・`balloon-communicatebox`（`balloon/`）とも照らす。依存を足さない。静かな机・前後の全体テストの比べは要らない。議題 2（出せない番号）の測りは開発者の機械の SSP。
 - **優先度の区分**: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
 - **要件定義のモデル**: Opus（先例＝裸の `\+` の写し・`\![*]` の畳み・着せ替えの名前の選別。印を描くとしても、選択肢の飾りの今の描き方に乗る）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**:
-  - 申し送りの件 18 の「`actor.rs:492`」は今 510・533 行目。棚卸㉘の節の「`actor.rs`（780）」は 768、「`consumer_ledger.rs`（472）」は 496。
-  - 本文の Scope の Out「マーカーの画像の読み込みと描画（`balloon-canon-residue`）」は、議題 1 の答えで見直しが要る（上）。
-  - 網羅台帳の `\_m[0x00]` の行は持ち主が空（`\_u` の行はこの spec）。着地のときに書く。
+  - 申し送りの件 18 の「`actor.rs:492`」は今 541・564 行目。本文 Current State と Constraints の「`consumer_ledger.rs`（960 行）」は 504 行。
+  - 本文 Scope の Out「マーカーの画像の読み込みと描画（`balloon-canon-residue`）」は、議題 1 の答えで見直しが要る。網羅台帳の `\_m[0x00]` の行は持ち主が空＝着地のときに書く。
+  - 議題 3（`OnDressupChanged` を誰が持つか）に、ゴーストの読み直しの持ち越し（`emo2_boot/shell_carry.rs`）が着せ替えを `\![bind,…]` と同じ合図で流し直す件を足す。送る spec を起票するなら、流し直しを「イベントを起こさない」側に寄せることも書く。

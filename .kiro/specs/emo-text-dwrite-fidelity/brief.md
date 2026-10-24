@@ -69,3 +69,13 @@ areka の本番の描き方（`present_frame` → 読み戻し・游ゴシック
 - 横書きの見た目を変えない（既存の読み戻しの試験が緑のまま）。
 - GPU のテストは実 GPU（WARP 案は出さない）。
 - SSP との見比べは SSP の MCP（`dump_balloon`・`raise_event`）で、測る前に他のセッションへ知らせる。
+
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: 起票（#378）の後に emo-text は動いていない。書き出しの「main `81d3ebdb`」からは、`vertical-choice-hover-band`（#375）が `draw_metrics.rs` を 413 → 480 行にした（`vertical_em_box_left_ratio`・本文の件 3 はこれを前提に書いてある）。本文が名前で挙げる所は 9318cdb0 でそのまま在る（`draw.rs` 178 行目の `LOCALE_JA_JP`・334 行目の `DirectionRecipe`・396 行目の `create_text_format`・428 行目の `try_create_format`・`draw_catalog.rs` 120 行目の `family_for`・178 行目の `has_family`・`draw_metrics.rs` 226 行目の `probe_format_for`〔242 行目で太さを NORMAL に決め打ち〕・380 行目の `vertical_em_box_left`）。
+- **触るファイル**（行数）: `crates/areka-emo-text/src/draw.rs`（761）・`draw_catalog.rs`（208）・`draw_metrics.rs`（480）・`draw_line_store.rs`（233）と兄弟のテスト（`draw_catalog_tests.rs` 318・`draw_metrics_styled_tests.rs` 379・`draw_line_store_tests.rs` 399・`draw_format_metrics_tests.rs` は 922＝足すなら別の兄弟へ）・読み戻しの試験 `crates/areka-emo-text/tests/decoration_readback/vertical.rs`（274・`src` の外＝`lib.rs` の一覧に載らない）・台帳 `assets.toml` の `font.name` の行。件 3 を行の矩形の側で直すなら `layout.rs`（531・`column_centred_em_box_left`）か `viewbox_draw_render.rs`（661）にも及ぶ。
+- **規模**: 9〜13 タスク（件 1 の原因の測り分けと直しと檻 4〜5・件 2 の GDI の名前の引き直しと太さ・斜体の受け渡し 3〜5・件 3 の確かめ 1・SSP との見比べと実機 1〜2）。
+- **先に要るもの**: 働きの上で無し。同じウェーブに置けない相手（v0.1.0）: `real-run-log-noise`（向こうが描くたびの警告を `draw.rs` 283 行目の呼び手で止めるとき＝向こうが `choice.rs` と `actor_decoration.rs` で止めれば 0）・`balloon-scroll-arrows`（条件つき＝本 spec が件 3 で `layout.rs`／`viewbox_draw_render.rs` に触るか、emo-text に新しいソースファイルを足すときだけ）。版の外: `balloon-font-file`（`draw_catalog.rs`・`draw.rs`）・`emo-text-line-gap`（`draw_metrics.rs`）。**1 本だけの席**: 取らない見込み（GDI の名前の引き直しは `draw_catalog.rs` に足し、テストは今ある兄弟へ＝emo-text に新しいソースファイルを足さない）。依存の追加は無い（`IDWriteGdiInterop`・`LOGFONTW` はワークスペースの `windows` の機能 `Win32_Graphics_Gdi` に在る）。人の待ち: SSP との見比べ（SSP の MCP・測る前に他のセッションへ知らせる）・ぱすたの実機の確かめは排他の机・GPU の読み戻しは実 GPU。静かな机は要らない。
+- **優先度の区分**: A（2026-10-24 開発者「ロードマップ優先度は高いです。次のバージョンに入れたい」）。
+- **要件定義のモデル**: Opus（今ある DirectWrite の書式と `FontCatalog` の中の直しで、新しい境目・並行・骨組みの分かれ目は無い。原因が未特定なのは根本の調べで、Fable の理由にならない）。
+- **分割の案**: なし（20 に届かない）。
+- **見つけた穴・古くなった記述**: ⑴ 起票の見立て（規模・同じウェーブに置けない相手・モデル）が書かれていなかった＝この節で足した。⑵ 書き出しの「本文の file:line は 81d3ebdb の実測」は、本文に行の番号が無く名前だけ＝9318cdb0 でもそのまま読める。
