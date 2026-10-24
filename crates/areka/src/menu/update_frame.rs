@@ -23,7 +23,8 @@ fn update_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Update).to_string(),
         caption_resource: captions::resource_for(Frame::Update),
-        enabled: desk::can_update(world),
+        // 読み取りだけの走りでは更新を始めない（readonly-mode 要件 8.7）。
+        enabled: desk::can_update(world) && !crate::readonly::of(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
             desk::update_current(world)

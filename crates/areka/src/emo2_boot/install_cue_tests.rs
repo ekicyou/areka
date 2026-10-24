@@ -377,6 +377,29 @@ fn url_refusals_warn_once_and_start_nothing() {
     }
 }
 
+/// 読み取りだけの取得の口を差した `url` の腕は、要求を送らず、`readonly_refused`（`what =
+/// install_url`）の info を 1 件残す（要件 7.1・7.2・7.4）。記録が捕捉の窓（このスレッド）に入る＝
+/// スレッドを起こしていない。送出端を持ち続けないので、受け口を落とすと受信端は閉じる＝送り物 0。
+#[test]
+fn readonly_fetch_refuses_the_url_without_sending_or_warning() {
+    let (tx, rx) = channel();
+    let mut sink = InstallCueSink::with_fetch(tx, fetch_for(true));
+    let ((), events) =
+        capture(|| sink.emit(carrier_cue("execute", &["install", "url", URL, "nar"])));
+    drop(sink);
+
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
+    let refused: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("readonly_refused"))
+        .collect();
+    assert_eq!(refused.len(), 1, "断りの記録は 1 件");
+    assert_eq!(refused[0].level, tracing::Level::INFO);
+    assert_eq!(refused[0].field_str("what"), Some("install_url"));
+    assert_eq!(refused[0].field_str("url"), Some(URL));
+    assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
+}
+
 // ---------------------------------------------------------------- 担当外
 
 /// `execute` の他の第 1 引数・裸の `execute`・他の名前は 0 件で警告も出さない。

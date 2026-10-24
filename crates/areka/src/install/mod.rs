@@ -54,6 +54,8 @@ pub(crate) enum SubmitVerdict {
     NoDesk,
     /// 終了が始まっている。
     Closing,
+    /// 読み取りだけの走り（積まない・ゴーストへ何も送らない）。
+    ReadOnly,
 }
 
 /// 別のスレッド（台本の受け口・選ぶ画面）から窓口へ届く、依頼になる前の要求。
@@ -65,9 +67,20 @@ pub(crate) struct RawInstallRequest {
 
 /// 依頼を手続きへ渡す唯一の口（UI スレッド・要件 1.1・1.9）。受けたら窓口の待ち行列の末尾に
 /// 積んで `info!(install_order_queued)`、断ったら `warn!(install_order_refused)` を 1 件残す。
+/// 読み取りだけの走りなら積む前に断り、`info!(readonly_refused)` だけを 1 件残す（readonly-mode 要件 7.1・7.4〜7.7）。
 pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
     let count = order.archives.len();
     let origin = order.origin;
+    if crate::readonly::of(world) {
+        tracing::info!(
+            event = "readonly_refused",
+            what = "install",
+            origin = ?origin,
+            count,
+            "[install] 読み取りだけなので、インストールの依頼を断ります"
+        );
+        return SubmitVerdict::ReadOnly;
+    }
     let verdict = match world.get_non_send_mut::<desk::InstallDesk>() {
         _ if count == 0 => SubmitVerdict::Empty,
         None => SubmitVerdict::NoDesk,
@@ -115,3 +128,7 @@ pub(crate) fn register(world: &mut World) {
         .add_systems(Input, desk::drain.after(dispatch_pointer_events));
     exit_wait::register_gate(world, "install", gate, desk::discard_for_exit);
 }
+
+#[cfg(test)]
+#[path = "submit_readonly_tests.rs"]
+mod submit_readonly_tests;

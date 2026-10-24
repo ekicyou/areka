@@ -32,6 +32,7 @@
 
 pub mod format;
 pub mod io;
+pub mod withhold;
 
 pub use format::{FORMAT_VERSION, FormatDoc};
 pub use io::{FakePersistIo, FsPersistIo, PersistIo};
@@ -219,6 +220,8 @@ pub enum PersistOutcome {
     /// 保存失敗（root 不在・commit 失敗）→ ログ済み・縮退（鏡像反映はアクターの領分・R6.7）。
     /// 書けなかった 1 回の中身を運ぶ。
     Degraded(PersistFailure),
+    /// 読み取りだけの走りで書かずに控えた（中身は走る間だけ読み返せる）。
+    Withheld,
 }
 
 /// 当該スコープの永続状態を一括ロードする（起動時・R6.1/R6.3/R6.5）。
@@ -279,6 +282,8 @@ pub fn load_scope(
 /// - 既存読取が `Err` → warn! ＋ 既存を空とみなして続行（tolerant・design「read 失敗→不在」）。
 /// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
 ///   ゆえ無傷・R6.2。鏡像更新はアクターの領分——ここは結果のみ報告）。
+/// - 控える範囲の中（[`PersistIo::withholds`]）→ 控えへ入れて debug `persist_withheld` ＋
+///   [`PersistOutcome::Withheld`]（読み取りだけの走り・「書けたか」の判定に入らない）。
 /// - 成功 → [`PersistOutcome::Saved`]。
 pub fn save_scope(
     scope: PersistScope,
@@ -308,7 +313,20 @@ pub fn save_scope(
     }
 
     let content = format::to_toml_string(&doc);
+    // 控える道は「書けたか」の判定に入らない（読み取りだけの走り・控えへの入れはメモリの中）。
+    let withheld = io.withholds(&path);
     match io.commit(&path, &content) {
+        Ok(()) if withheld => {
+            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
+            tracing::debug!(
+                target: LOG_TARGET,
+                event = "persist_withheld",
+                ?scope,
+                keys = ?key_names,
+                "persist withheld (read-only run); nothing written"
+            );
+            PersistOutcome::Withheld
+        }
         Ok(()) => PersistOutcome::Saved,
         Err(e) => {
             let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();

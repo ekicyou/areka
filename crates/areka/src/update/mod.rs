@@ -20,6 +20,7 @@ use crate::ghost_session::GhostSlot;
 
 pub(crate) mod desk;
 mod procedure;
+mod readonly_refusal;
 mod refs;
 mod worker;
 
@@ -110,6 +111,8 @@ pub(crate) enum SubmitVerdict {
     Held,
     NoDesk,
     Closing,
+    /// 読み取りだけの走り（段を移さず、成否の欄が空の総括だけを送った）。
+    ReadOnly,
     /// 走っている（答え待ちで預かりが埋まっているときも）＝`OnUpdateFailure(executing)` を送った。
     Executing,
     /// 切替の予約が在る。
@@ -121,7 +124,8 @@ pub(crate) enum SubmitVerdict {
     WorkerGone,
 }
 
-/// 依頼を手続きへ渡す唯一の口（UI スレッド）。窓口が無い → 終了が始まった → 走っている（答え待ちで
+/// 依頼を手続きへ渡す唯一の口（UI スレッド）。窓口が無い → 終了が始まった →（読み取りだけなら段を移さずに
+/// 断って総括だけを送り、`info!(readonly_refused)` を残す）→ 走っている（答え待ちで
 /// 預かりが埋まっているときも）→ 切替の予約が在る → 送出端・起動の文脈が無い → 解いた対象が 0 の順に
 /// 断り、判定ごとに `warn!(update_refused)` を 1 件残す。答え待ちで預かりが空なら対象を解かずに預かる。
 /// 受けたら対象を解き、kanade の送出端の写しと一緒に背景スレッドへ渡す。
@@ -136,6 +140,7 @@ pub(crate) fn submit(
         SubmitVerdict::Started
         | SubmitVerdict::Held
         | SubmitVerdict::Executing
+        | SubmitVerdict::ReadOnly
         | SubmitVerdict::WorkerGone => {}
         _ => tracing::warn!(
             event = "update_refused",
@@ -153,6 +158,10 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
     };
     if desk.gate.is_closing() {
         return SubmitVerdict::Closing;
+    }
+    if crate::readonly::of(world) {
+        readonly_refusal::refuse(world, &raw, reason);
+        return SubmitVerdict::ReadOnly;
     }
     match (desk.stage, desk.held.is_some()) {
         (desk::Stage::Running, _) | (desk::Stage::AwaitingExec, true) => {

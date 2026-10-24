@@ -424,6 +424,7 @@ fn unsent_seven_words_never_appear() {
         .map(|(reason, _)| failure_word(reason))
         .chain(fetch_samples().iter().map(|(e, _)| fetch_word(e)))
         .chain(executing_refs(TargetKind::Ghost, UpdateReason::Script).into_iter())
+        .chain(readonly_summary_words())
         .collect();
     for word in &words {
         assert!(!UNSENT_WORDS.contains(&word.as_str()), "{word}");
@@ -484,4 +485,54 @@ fn summary_refs_in_both_forms_for_mixed_three_targets() {
         ]
     );
     assert_eq!(SEPARATOR, SEP);
+}
+
+/// 読み取りだけの断りの総括の 2 形を欄に割った語（送らない 7 語の檻へ足す・要件 7.5・11.3）。
+fn readonly_summary_words() -> Vec<String> {
+    let targets = [
+        spec(TargetKind::Ghost, "emo2"),
+        spec(TargetKind::Balloon, "にゃんばるーん"),
+    ];
+    [SummaryKind::ResultEx, SummaryKind::Result]
+        .into_iter()
+        .flat_map(|kind| readonly_summary_refs(kind, &targets))
+        .flat_map(|r| r.split(SEP).map(str::to_owned).collect::<Vec<_>>())
+        .collect()
+}
+
+/// 読み取りだけの断りの総括（SSP の測りと字まで同じ・要件 7.5・11.3）。
+#[test]
+fn readonly_summary_refs_match_ssp_measurement() {
+    let balloon = [spec(TargetKind::Balloon, "にゃんばるーん")];
+    assert_eq!(
+        readonly_summary_refs(SummaryKind::ResultEx, &balloon),
+        ["にゃんばるーん\u{1}balloon\u{1}"]
+    );
+    assert_eq!(
+        readonly_summary_refs(SummaryKind::Result, &balloon),
+        ["balloon\u{1}"]
+    );
+
+    let three = [
+        spec(TargetKind::Ghost, "emo2"),
+        spec(TargetKind::Shell, "master"),
+        spec(TargetKind::Balloon, "emo-gs"),
+    ];
+    assert_eq!(
+        readonly_summary_refs(SummaryKind::ResultEx, &three),
+        [
+            format!("emo2{SEP}ghost{SEP}"),
+            format!("master{SEP}shell{SEP}"),
+            format!("emo-gs{SEP}balloon{SEP}"),
+        ]
+    );
+    assert_eq!(
+        readonly_summary_refs(SummaryKind::Result, &three),
+        [
+            format!("ghost{SEP}"),
+            format!("shell{SEP}"),
+            format!("balloon{SEP}"),
+        ]
+    );
+    assert!(readonly_summary_refs(SummaryKind::Result, &[]).is_empty());
 }

@@ -391,7 +391,12 @@ pub(crate) fn accept_switch(
         "切替の要求を kanade へ送った"
     );
     let exe_dir = crate::roots::user_root::exe_dir();
-    let copy = super::switch_copy::start(&ctx.roots, exe_dir.as_deref(), &target.dir);
+    let copy = super::switch_copy::start(
+        crate::readonly::of(world),
+        &ctx.roots,
+        exe_dir.as_deref(),
+        &target.dir,
+    );
     world.insert_non_send(SwitchInFlight {
         target,
         prev,

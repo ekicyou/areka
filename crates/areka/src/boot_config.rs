@@ -516,16 +516,51 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
 ///
 /// App スコープはマウント解決に現れない（ghost/shell スコープは `<shiori.dir>`／`<shell.dir>` から
 /// ghost が導く）ため、bin が本関数で供給して `GhostBootOptions.app_profile_dir` へ渡す。
+///
+/// 読み取りだけの走り（readonly-mode 要件 4.3・4.5）では 1 回の走りに 1 度だけ決めて覚える
+/// （呼び手は 1 回の走りで 3 か所以上・別の areka が途中で写しを終えても置き場が変わらないため）。
 pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
-    // 共有の決め方（user-data-root 要件 5.1〜5.3）: env → 書ける根 → 実行ファイルの隣。
-    let exe_dir = exe_location().and_then(std::path::Path::parent);
-    areka_user_data::app_profile_dir(
-        std::env::var_os(areka_user_data::PROFILE_DIR_ENV).as_deref(),
-        crate::roots::user_root::layout(),
-        exe_dir,
-    )
+    static READONLY_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    let readonly = crate::readonly::is_on();
+    let decide = || {
+        app_profile_dir_for(
+            readonly,
+            std::env::var_os(areka_user_data::PROFILE_DIR_ENV).as_deref(),
+            crate::roots::user_root::layout(),
+            exe_location().and_then(std::path::Path::parent),
+        )
+    };
+    if readonly {
+        remembered(&READONLY_DIR, decide)
+    } else {
+        decide()
+    }
+}
+
+/// [`default_app_profile_dir`] の選び分け（旗を引数で受ける）。共有の決め方（user-data-root
+/// 要件 5.1〜5.3）: env → 書ける根 → 実行ファイルの隣。読み取りだけなら写す元をそのまま読む
+/// `readonly_app_profile_dir`（readonly-mode 要件 4.3）。
+pub(crate) fn app_profile_dir_for(
+    readonly: bool,
+    profile_env: Option<&std::ffi::OsStr>,
+    layout: &areka_user_data::Layout,
+    exe_dir: Option<&std::path::Path>,
+) -> std::path::PathBuf {
+    let dir = if readonly {
+        areka_user_data::readonly_app_profile_dir(profile_env, layout, exe_dir)
+    } else {
+        areka_user_data::app_profile_dir(profile_env, layout, exe_dir)
+    };
     // 決まらない（実行ファイルの場所が取れない）ときは今どおり `"."` の下。
-    .unwrap_or_else(|| std::path::Path::new(".").join("profile").join("areka"))
+    dir.unwrap_or_else(|| std::path::Path::new(".").join("profile").join("areka"))
+}
+
+/// 覚える所: 初めの 1 回だけ `decide` を呼び、後は覚えた値を返す（試験は自分の `OnceLock` を渡す）。
+pub(crate) fn remembered(
+    cell: &std::sync::OnceLock<std::path::PathBuf>,
+    decide: impl FnOnce() -> std::path::PathBuf,
+) -> std::path::PathBuf {
+    cell.get_or_init(decide).clone()
 }
 
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
@@ -620,3 +655,7 @@ mod copy_tests;
 #[cfg(test)]
 #[path = "boot_config_option_tests.rs"]
 mod option_tests;
+
+#[cfg(test)]
+#[path = "boot_config_readonly_tests.rs"]
+mod readonly_tests;

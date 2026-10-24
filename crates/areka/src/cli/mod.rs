@@ -21,6 +21,8 @@ pub(crate) struct StartupOptions {
     pub help: bool,
     /// `--offline-dump` が（値の有無に関わらず）渡されたら Some。
     pub offline: Option<OfflineDumpRequest>,
+    /// `--option readonly` が渡された（readonly-mode 要件 1.1）。既定は偽。
+    pub readonly: bool,
 }
 
 /// オフラインの書き出しの生の値（空の値は None）。解釈は offline_dump が写しの中で行う。

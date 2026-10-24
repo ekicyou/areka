@@ -1,4 +1,5 @@
 //! 置き場にするフォルダを選ぶ画面（design「RootsPick」・要件 6.2・6.9・11.5）。
+//! 読み取りだけの走りでは「最近使った所に足さない」を足して開く（design「FolderPickerReadonly」・要件 8.6・11.6）。
 //!
 //! OS 標準のフォルダ選択（`IFileOpenDialog`＋`FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM |
 //! FOS_PATHMUSTEXIST`）を持ち主の窓なしで出し、選ばれたフォルダのパスを返す。呼んだスレッドを
@@ -14,8 +15,8 @@ use windows::Win32::System::Com::{
     CoTaskMemFree, CoUninitialize,
 };
 use windows::Win32::UI::Shell::{
-    FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS, FileOpenDialog, IFileOpenDialog,
-    SIGDN_FILESYSPATH,
+    FILEOPENDIALOGOPTIONS, FOS_DONTADDTORECENT, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST,
+    FOS_PICKFOLDERS, FileOpenDialog, IFileOpenDialog, SIGDN_FILESYSPATH,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -49,7 +50,10 @@ fn show_dialog() -> Result<Option<PathBuf>, PickError> {
     unsafe {
         let options = dialog.GetOptions().map_err(|e| PickError::Com(e.code()))?;
         dialog
-            .SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)
+            .SetOptions(dialog_options(
+                options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST,
+                crate::readonly::is_on(),
+            ))
             .map_err(|e| PickError::Com(e.code()))?;
         dialog
             .SetTitle(PCWSTR(title.as_ptr()))
@@ -73,3 +77,16 @@ fn show_dialog() -> Result<Option<PathBuf>, PickError> {
         Ok(Some(PathBuf::from(path)))
     }
 }
+
+/// 今の指定に、読み取りだけなら `FOS_DONTADDTORECENT` を足す。
+fn dialog_options(base: FILEOPENDIALOGOPTIONS, readonly: bool) -> FILEOPENDIALOGOPTIONS {
+    if readonly {
+        base | FOS_DONTADDTORECENT
+    } else {
+        base
+    }
+}
+
+#[cfg(test)]
+#[path = "pick_tests.rs"]
+mod tests;
