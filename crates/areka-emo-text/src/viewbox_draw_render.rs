@@ -104,7 +104,7 @@ impl ViewboxExecutor {
                     // 実測インクはみ出しのままだと、帯の外側部分がクリップで塗り残り／消し残りに
                     // なる（hover 解除フレームに塗りが残る）。ゆえにブロック軸の遠端はみ出しを
                     // **帯の超過分**まで広げる（横書き＝下・縦書き＝右——`highlight_rect` が帯を
-                    // 伸ばす向きと同一）。
+                    // 伸ばす向きと同一。縦書きの右から左は寄せが負で帯が左へも出るので左も広げる）。
                     expand_overhang_for_band(
                         measured,
                         choice.band_extent,
@@ -269,9 +269,10 @@ impl ViewboxExecutor {
                                 // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
                                 // 住人 transform ＋block_offset ＋band_offset 反映＝ヒット矩形／
                                 // 指紋と同座標系・R3.3/R13.2）。帯は em ボックス丈（font.height）
-                                // ではなく choice.band_extent（descent 込みの実行ボックス丈）を
-                                // choice.band_offset だけ行ボックスの中央へ寄せた位置に置く
-                                // ——`derive_hit_rows` へ渡る 2 値と同一。
+                                // ではなく choice.band_extent（横書きは descent 込みの丈・縦書きは
+                                // em）を、行矩形の左辺（横書きは上辺）から符号つきの寄せ
+                                // choice.band_offset だけずらした位置に置く（縦書きの右から左は負＝
+                                // 帯は行矩形の左へ出る）——`derive_hit_rows` へ渡る 2 値と同一。
                                 rects.push(highlight_rect(
                                     seg.inline_range,
                                     (dx, dy),
@@ -601,8 +602,9 @@ fn highlight_rect(
 /// （寄せを数えないと、寄せた分だけ帯の下（縦書きは右）がダーティ矩形の外へ落ち、hover 解除の
 /// フレームで塗りが消し残る・R13.5）。この超過分をブロック軸**遠端**（横書き＝`bottom`・
 /// 縦書き＝`right`——[`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの
-/// 方が大きい場合は実測値を保つ（`max`）。これにより hover フレームの塗りが欠けず、hover 解除
-/// フレームで塗りが消し残らない（同一帯が両フレームでダーティになる）。
+/// 方が大きい場合は実測値を保つ（`max`）。縦書きの寄せは符号つきで、右から左は負（帯が行矩形の
+/// 左へ出る）——その分 `−band_offset` を**近端**（`left`）の下限として与える。これにより hover
+/// フレームの塗りが欠けず、hover 解除フレームで塗りが消し残らない（同一帯が両フレームでダーティになる）。
 fn expand_overhang_for_band(
     measured: LineOverhang,
     band_extent: f32,
@@ -618,6 +620,8 @@ fn expand_overhang_for_band(
         },
         WritingMode::VerticalRl | WritingMode::VerticalLr => LineOverhang {
             right: measured.right.max(excess),
+            // 右から左の寄せは負＝帯は行矩形の左へ −band_offset 出る（広げるだけ・狭めない）。
+            left: measured.left.max(-band_offset),
             ..measured
         },
     }

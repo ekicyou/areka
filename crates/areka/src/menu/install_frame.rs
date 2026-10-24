@@ -22,7 +22,8 @@ fn install_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Install).to_string(),
         caption_resource: captions::resource_for(Frame::Install),
-        enabled: desk::can_pick(world),
+        // 読み取りだけの走りでは書庫選びを開かない（readonly-mode 要件 8.7）。
+        enabled: desk::can_pick(world) && !crate::readonly::of(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
             desk::pick_and_submit(world)

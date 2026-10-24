@@ -385,6 +385,7 @@ dependencies = [
 name = "areka-user-data"
 version = "0.0.3"
 dependencies = [
+ "log-capture-kit",
  "temp-path-kit",
  "tracing",
 ]

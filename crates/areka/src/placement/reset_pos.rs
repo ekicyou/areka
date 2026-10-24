@@ -17,6 +17,7 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{DPI, WindowPos};
 
 use super::chain_finalize::ScriptPlaced;
+use super::chain_realign::note_script_moved;
 use super::config::build_placement_config;
 use super::follow::move_window_to;
 use super::persist::persist_unremembered_char_positions;
@@ -116,6 +117,8 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         }
         // 既定へ戻した窓は台本の置いた窓ではない（起動の確定と記憶の判定が印を読む）。
         world.entity_mut(char_window).remove::<ScriptPlaced>();
+        // ただし台本の指示で置いた窓なので、拡大率の後の詰め直しはこの窓を寄せない（要件 3.1）。
+        note_script_moved(world, char_window);
         info!(
             event = "reset_window_pos",
             scope = p.scope,

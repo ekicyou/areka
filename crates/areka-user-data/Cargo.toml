@@ -16,3 +16,5 @@ tracing = { workspace = true }
 [dev-dependencies]
 # 写しと引き継ぎのテストの根をワークツリーの target\ の下に作る唯一の窓口。
 temp-path-kit = { path = "../temp-path-kit" }
+# ログ捕捉テストの唯一の定義元（テスト専用・[dependencies] へは置かない）。
+log-capture-kit = { path = "../log-capture-kit" }

@@ -21,7 +21,7 @@ areka の本番の描き方（`present_frame` → 読み戻し・游ゴシック
   - `IDWriteTypography` で `vchw`・`halt` を当てると「「」の墨は下端へ動く（上から 12〜17px）が、送り幅は 20px のまま。空きが「…→「」の側へ移るだけ。`vhal`（括弧だけ）は括弧を動かさず範囲の外の「っ」を 2px 動かし、`vpal` は何も変えない（どちらも説明がつかない）。
 - **件 2 フォント名**: DirectWrite のシステムのフォント集には「游ゴシック Medium」「Yu Gothic Medium」というファミリが無い（`FindFamilyName` が false）。DirectWrite では中太はファミリ「Yu Gothic」の中の太さ 500。そのため `draw_catalog.rs` の `FontCatalog::family_for`／`has_family` が先頭の 2 つを飛ばし、3 番目の `游ゴシック` を Regular で選ぶ。`draw.rs` の `try_create_format` と `draw_metrics.rs` の `probe_format_for` は太さを NORMAL に決め打ちしている。SSP は GDI の名前で引くので中太になるはず（SSP では未確認）。
   - 正典（ukadoc `descript_balloon` の `font.name`）: 「カンマ区切りでフォント名を複数指定可で、書いた順＝優先度順で自動的にインストールされている中から選択する（SSPのみ）」。areka もカンマ区切りの先頭から入っているものを選ぶ形は実装済み。足りないのは「GDI の名前（ファミリ名＋太さ）を、入っているものとして見つける」ことだけ。
-- **件 3 列の左右のずれ（測りのついでに見つけた）**: 列の字の墨は x 405〜424（中心 約 414.5）に描かれるのに、areka が覚えている行の矩形は x 411〜431（中心 421）。列全体が、areka の思う位置より約 6px 左に描かれている。括弧の空きの原因ではない。`vertical-choice-hover-band`（選択肢の反転の帯のずれ）と関わるかもしれない。同 spec の要件の段のセッションは起票時に閉じていて知らせられず、要件はブランチ `claude/kiro-start-vertical-choice-hover-band-9ac66b` の上にある（既定ブランチの brief を書き換えると競合するので触っていない）。持ち主は、本 spec と同 spec のどちらか先に要件の段へ入った方が、もう一方の要件を見て決める（決めるまでは本 spec の件 3）。
+- **件 3 列の左右のずれ（測りのついでに見つけた）**: 列の字の墨は x 405〜424（中心 約 414.5）に描かれるのに、areka が覚えている行の矩形は x 411〜431（中心 421）。列全体が、areka の思う位置より約 6px 左に描かれている。括弧の空きの原因ではない。`vertical-choice-hover-band`（#375・2026-10-24 着地）は、帯を行の矩形でなく書体の em の箱の位置（`GlyphMetrics::vertical_em_box_left`・`draw_metrics.rs` が DirectWrite から測る）に合わせて置くことで、帯の側を手当てした。残るのは、列そのものを行の矩形の真ん中に置くべきか（矩形の側を直すか）だけ＝要件の段で確かめ、直さないなら理由を残して閉じる。
 
 ## Desired Outcome
 
@@ -51,7 +51,7 @@ areka の本番の描き方（`present_frame` → 読み戻し・游ゴシック
 
 - 約物の詰め・ぶら下げ・禁則・縦中横・字の向き（`text-typesetting`）。
 - フォントファイルの読み込み（`balloon-font-file`）。
-- 選択肢の反転の帯（`vertical-choice-hover-band`）。件 3 の列の左右のずれは、同 spec が引き取るならそちら。
+- 選択肢の反転の帯（完了 `vertical-choice-hover-band`・#375）。本 spec の件 3 を直すときは、帯が em の箱の位置に合わせて置かれていることを壊さない。
 
 ## Upstream / Downstream
 
@@ -61,7 +61,7 @@ areka の本番の描き方（`present_frame` → 読み戻し・游ゴシック
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新しい spec）。
-- **Adjacent**: `balloon-font-file`（`draw_catalog.rs`・`draw.rs` が重なる＝同じウェーブに置かない）・`vertical-choice-hover-band`（emo-text の縦書き・件 3）・`text-typesetting`（約物の詰めを引き取る）・`text-align-shadow-canon`（縦書きの寄せ）。
+- **Adjacent**: `balloon-font-file`（`draw_catalog.rs`・`draw.rs` が重なる＝同じウェーブに置かない）・完了 `vertical-choice-hover-band`（帯を em の箱に合わせた・件 3）・`text-typesetting`（約物の詰めを引き取る）・`text-align-shadow-canon`（縦書きの寄せ）。
 
 ## Constraints
 

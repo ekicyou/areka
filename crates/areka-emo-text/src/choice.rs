@@ -178,11 +178,17 @@ pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
 }
 
 /// 1 行分のハイライト帯／ヒット帯（丈と寄せ量・**描画とヒットの単一の源**）。
+///
+/// 帯のブロック軸の範囲は、どの向きでも `[辺 + offset, 辺 + offset + extent]`
+/// （辺＝横書きは行矩形の上辺・縦書きは左辺）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineBand {
-    /// 帯のブロック軸の丈（[`highlight_band_extent`] の出力）。
+    /// 帯のブロック軸の丈。横書き＝[`highlight_band_extent`] の出力・縦書き＝列の em。
     pub extent: f32,
-    /// 行矩形のブロック軸近端から内側へ寄せる量（[`highlight_band_offset`] の出力）。
+    /// 行矩形の左辺（横書きは上辺）から帯の起点までの**符号つき**の量。横書き＝
+    /// [`highlight_band_offset`] の出力（0 以上）・縦書き＝
+    /// `round(metrics.vertical_em_box_left(em, mode))`（em の箱を書体の縦書きの基線に中央で
+    /// 重ねた所・右から左は負になり得る＝帯は行矩形の左へ出る）。
     pub offset: f32,
 }
 
@@ -218,10 +224,19 @@ pub fn line_bands<M: GlyphMetrics + ?Sized>(
                 }
             };
             let line_box_height = metrics.line_box_height(em);
-            let extent = highlight_band_extent(em, line_box_height, metrics.line_pitch(em));
-            LineBand {
-                extent,
-                offset: highlight_band_offset(line_box_height, extent),
+            match mode {
+                // 縦書き: 厚み＝列の em、寄せ＝書体の縦書きの基線に中央で重ねた em の箱の左（符号つき）。
+                WritingMode::VerticalLr | WritingMode::VerticalRl => LineBand {
+                    extent: em,
+                    offset: metrics.vertical_em_box_left(em, mode).round(),
+                },
+                WritingMode::HorizontalTb => {
+                    let extent = highlight_band_extent(em, line_box_height, metrics.line_pitch(em));
+                    LineBand {
+                        extent,
+                        offset: highlight_band_offset(line_box_height, extent),
+                    }
+                }
             }
         })
         .collect()
@@ -263,9 +278,10 @@ pub struct HitRectPx {
 ///
 /// 各 [`LineChoiceSegment`] について、**行内軸範囲＝セグメントの `inline_range`（＝選択肢グリフ
 /// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝行矩形の
-/// block 近端から `band_offset` だけ内側へ寄せた点から `band_extent` 分**
-/// （[`highlight_band_extent`] が決める descent 込みの帯を [`highlight_band_offset`] が行ボックスの
-/// 中央へ寄せた位置——行矩形の em ボックス丈ではない。ハイライト描画（`highlight_rect`）と同一の
+/// 左辺（横書きは上辺）＋符号つきの `band_offset` から `band_extent` 分**
+/// （[`LineBand`] の 2 値。横書きは [`highlight_band_extent`] の descent 込みの帯を
+/// [`highlight_band_offset`] が行ボックスの中央へ寄せた位置、縦書きは列の em の帯を em の箱へ
+/// 重ねた位置で、右から左の寄せは負。ハイライト描画（`highlight_rect`）と同一の
 /// 2 値を受け取ることで帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px の
 /// ヒット矩形を組む。これを
 /// [`ContentCanvas::from_layout`] と**同一の原点差引き**（`- region.left()` / `- region.top()`）で
@@ -314,7 +330,7 @@ pub fn derive_hit_rows(
             continue;
         };
         // 行内軸＝セグメントの inline_range（文字幅）・ブロック軸帯＝行矩形の block 近端から
-        // band_offset だけ内側へ寄せた点から band_extent 分を軸読み替え正準表で x/y へ割り当て
+        // 符号つきの band_offset だけずらした点から band_extent 分を軸読み替え正準表で x/y へ割り当て
         // 絶対 image px のヒット矩形を組む（横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。
         // block 近端（横書き＝rect.top・縦書き＝rect.left）は描画（住人 transform の offset＝
         // 行矩形の近端）と同一の起点ゆえ、band_extent と band_offset が同値なら帯は描画と数値一致
@@ -407,8 +423,10 @@ pub fn to_window_physical(
 /// [`to_window_physical`] から面の装着位置（`(場所の左上 + 領域の原点) × k`）を引いたもの:
 /// 行内軸＝`(字の位置 − 領域の原点) × k`、ブロック軸＝`(行の範囲 − 領域の原点) × k + committed`。
 ///
-/// 行の範囲（ブロック軸）は**行矩形と選択肢の帯の和**: 近い辺は行矩形の近い辺（横書き＝上・縦書き＝
-/// 左。[`derive_hit_rows`] と同じ起点）、遠い辺は `max(行矩形の遠い辺, 近い辺 + 帯の offset + extent)`。
+/// 行の範囲（ブロック軸）は**行矩形と選択肢の帯の和**: 帯の起点は行矩形の近い辺（横書き＝上・縦書き＝
+/// 左。[`derive_hit_rows`] と同じ起点）＋符号つきの帯の offset。近い辺は
+/// `min(行矩形の近い辺, 近い辺 + offset)`（縦書きの右から左は offset が負で左へ広がる）、遠い辺は
+/// `max(行矩形の遠い辺, 近い辺 + 帯の offset + extent)`。
 /// `bands` は [`decorate_canvas`]・[`derive_hit_rows`] へ渡すのと同じ [`line_bands`] の列で、帯が
 /// em を越えるフォントでも選択肢の当たり行・強調の帯の全部が字の矩形に入る（要件 8.3・R3.3 の
 /// 単一導出）。帯の無い行は行矩形だけ。送りの幅が 0 の字は矩形を持たない。同一入力→同一出力（純粋）。

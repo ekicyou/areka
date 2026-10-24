@@ -77,14 +77,14 @@ const GAP_WITHOUT_REALIGN: i32 = 359;
 /// 解き直しが入ったときに scope1 が収まる左上 X（`SCOPE0_X_LOW − 336`＝隣接）。
 const SCOPE1_X_AFTER_REALIGN: i32 = SCOPE0_X_LOW - LOW_SIZE_1.0 as i32;
 
-/// ドラッグで scope1 を右へずらす量。
+/// ドラッグで scope1 を本体から左へ離す量（許す幅 2 px を超える＝変わる直前に「離れ」）。
 const DRAG_DX: i32 = 120;
 
-/// ドラッグ後（`x=646+120=766`・幅 672）に低水準へ遷移した場合の再射影後 X。
+/// 左へ離した後（`x=646−120=526`・幅 672）に低水準へ遷移した場合の再射影後 X。
 ///
-/// 中央 `766 + 336 = 1102`、幅 336 で `1102 − 168 = 934`。解き直しから外れる限りここに留まる
-/// （解き直しの対象に入っていれば隣接位置 1173 へ動く）。
-const SCOPE1_X_AFTER_DRAG_LOW: i32 = 934;
+/// 中央 `526 + 336 = 862`、幅 336 で `862 − 168 = 694`。詰め直しが動かさない限りここに留まる
+/// （詰め直しの対象に入っていれば隣接位置 1173 へ動く）。
+const SCOPE1_X_AFTER_DRAG_APART_LOW: i32 = 694;
 
 /// 会話中の表情差替でシェルが取る別寸（高水準・幅だけが変わる）。
 const SWAPPED_SIZE_0: (u32, u32) = (800, 1094);
@@ -181,12 +181,12 @@ fn gap(harness: &FrameHarness) -> i32 {
     char_x(harness, 0) - right_of_scope1
 }
 
-/// 当該スコープのキャラ窓を右へずらす（利用者のドラッグが landing した後の状態）。
+/// 当該スコープのキャラ窓を横へ `dx` だけずらす（利用者のドラッグが landing した後の状態）。
 ///
 /// ドラッグ経路そのもの（`on_char_drag`）は `placement/follow_drag_tests.rs` が所有するので、
 /// ここでは**結果の位置**だけを置く。既定位置は動かさない——ドラッグは route を持たない書込で
 /// あり、既定位置の追跡（D9）の対象から構造的に外れているからである。
-fn drag_char_window_right(harness: &mut FrameHarness, scope: usize, dx: i32) {
+fn drag_char_window_by(harness: &mut FrameHarness, scope: usize, dx: i32) {
     let window = harness.char_window(scope);
     let mut wp = harness
         .world
@@ -435,22 +435,23 @@ fn a_surface_swap_during_a_conversation_never_arms_the_realign() {
 }
 
 // ---------------------------------------------------------------------------
-// 明示的に再配置されたスコープの除外（要件 6.2）
+// ドラッグで置いた窓（dpi-realign-remembered-chain 要件 2.1・2.4）
 // ---------------------------------------------------------------------------
 
-/// ドラッグで動かしたスコープは、遷移後の解き直しでも対象から外れたままである（要件 6.2）。
+/// 変わる前にドラッグで離して置いた窓は、詰め直しで動かない（変わる直前に離れていたから・
+/// 要件 2.1）。ドラッグの最中の窓の除外は `frame_chain_realign_exclusion_tests.rs` が持つ。
 #[test]
-fn a_dragged_scope_stays_out_of_the_realign() {
+fn a_window_dragged_apart_before_the_change_is_not_moved() {
     {
         let mut harness = FrameHarness::new();
         let mut source = FakeReports::default();
         boot_at_high(&mut harness, &mut source);
 
-        drag_char_window_right(&mut harness, 1, DRAG_DX);
-        assert_ne!(
-            default_x(&harness, 1),
-            Some(char_x(&harness, 1)),
-            "前提が崩れている: ドラッグ後も既定位置と現在位置が一致している"
+        drag_char_window_by(&mut harness, 1, -DRAG_DX);
+        assert_eq!(
+            gap(&harness),
+            DRAG_DX,
+            "前提が崩れている: ドラッグで本体から離れていない"
         );
 
         lower_the_scale(&mut harness, &mut source);
@@ -458,21 +459,24 @@ fn a_dragged_scope_stays_out_of_the_realign() {
 
         assert_eq!(
             char_x(&harness, 1),
-            SCOPE1_X_AFTER_DRAG_LOW,
-            "ドラッグ済みスコープが解き直しで動かされた（`scope-chain-gap` 7.3 の破壊）"
+            SCOPE1_X_AFTER_DRAG_APART_LOW,
+            "変わる前にドラッグで離して置いた窓を詰め直しが動かした（要件 2.1）"
         );
     }
 
-    // 陽性の対: ドラッグしなければ同じ駆動で解き直しが効く。
+    // 陽性の対: ドラッグで隣に付け直した窓は詰まる（ドラッグした事実では外さない）。
     let mut fresh = FrameHarness::new();
     let mut fresh_source = FakeReports::default();
     boot_at_high(&mut fresh, &mut fresh_source);
+    drag_char_window_by(&mut fresh, 1, -DRAG_DX);
+    drag_char_window_by(&mut fresh, 1, DRAG_DX);
+    assert_eq!(gap(&fresh), 0, "前提が崩れている: 隣に付け直せていない");
     lower_the_scale(&mut fresh, &mut fresh_source);
     fresh.run_chain_realign(&low_sizes());
     assert_eq!(
         char_x(&fresh, 1),
         SCOPE1_X_AFTER_REALIGN,
-        "陽性の対が成立していない（解き直しが死んでいれば上の主張は空虚である）"
+        "ドラッグで隣に付け直した窓が詰まっていない（解き直しが死んでいれば上の主張は空虚である）"
     );
 }
 

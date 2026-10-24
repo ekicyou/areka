@@ -213,3 +213,19 @@ fn rewiring_gives_a_fresh_registration_with_the_update_frame() {
         "{events:?}"
     );
 }
+
+/// 読み取りだけの走り（World に [`crate::readonly::ReadOnlyRun`]）では、更新先が在っても灰色。
+/// 対照: 印が無ければ今どおり選べる（readonly-mode 要件 8.7）。
+#[test]
+fn item_is_greyed_in_a_readonly_run() {
+    let (plain, _tmp_plain) = wired_world("areka-update-frame-plain", Some(GHOST_URL));
+    let (mut readonly, _tmp_ro) = wired_world("areka-update-frame-readonly", Some(GHOST_URL));
+    readonly.insert_resource(crate::readonly::ReadOnlyRun);
+    assert_eq!(
+        (
+            update_item(&plain).map(|i| i.enabled),
+            update_item(&readonly).map(|i| i.enabled),
+        ),
+        (Some(true), Some(false))
+    );
+}

@@ -32,6 +32,7 @@
 
 pub mod format;
 pub mod io;
+pub mod withhold;
 
 pub use format::{FORMAT_VERSION, FormatDoc};
 pub use io::{FakePersistIo, FsPersistIo, PersistIo};
@@ -155,6 +156,12 @@ pub enum PersistKey {
     /// （中身の意味は呼び手が持ち、ここは運ぶだけ）。空文字は空文字のまま（「無し」に潰さない）。
     /// 書けば並び全体を 1 回で置き換える。載せるスコープは呼び手の契約（本番は App）。
     BasewareRoots,
+    /// 隣り合いの印（キャラクタースコープ別）→ 正準 key `areka.window.scope(ID).adjacent`・
+    /// TOML `[window-adjacent]` の `"ID" = "left" | "right" | "none"`。値の意味は呼び手（areka）が持つ。
+    WindowAdjacent {
+        /// キャラクタースコープ ID。
+        scope: u32,
+    },
 }
 
 impl PersistKey {
@@ -178,6 +185,7 @@ impl PersistKey {
             PersistKey::LastShell => "areka.last.shell".to_string(),
             PersistKey::LastRunning => "areka.last.running".to_string(),
             PersistKey::BasewareRoots => "areka.baseware.roots".to_string(),
+            PersistKey::WindowAdjacent { scope } => format!("areka.window.scope({scope}).adjacent"),
         }
     }
 }
@@ -212,6 +220,8 @@ pub enum PersistOutcome {
     /// 保存失敗（root 不在・commit 失敗）→ ログ済み・縮退（鏡像反映はアクターの領分・R6.7）。
     /// 書けなかった 1 回の中身を運ぶ。
     Degraded(PersistFailure),
+    /// 読み取りだけの走りで書かずに控えた（中身は走る間だけ読み返せる）。
+    Withheld,
 }
 
 /// 当該スコープの永続状態を一括ロードする（起動時・R6.1/R6.3/R6.5）。
@@ -223,7 +233,7 @@ pub enum PersistOutcome {
 ///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
 ///
 /// 返り値は決定論的順序（[`FormatDoc`] は [`std::collections::BTreeMap`] ゆえ scope ID 昇順、
-/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）→ baseware、
+/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）→ baseware → window-adjacent、
 /// 各 pair は x → y）。
 pub fn load_scope(
     scope: PersistScope,
@@ -272,6 +282,8 @@ pub fn load_scope(
 /// - 既存読取が `Err` → warn! ＋ 既存を空とみなして続行（tolerant・design「read 失敗→不在」）。
 /// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
 ///   ゆえ無傷・R6.2。鏡像更新はアクターの領分——ここは結果のみ報告）。
+/// - 控える範囲の中（[`PersistIo::withholds`]）→ 控えへ入れて debug `persist_withheld` ＋
+///   [`PersistOutcome::Withheld`]（読み取りだけの走り・「書けたか」の判定に入らない）。
 /// - 成功 → [`PersistOutcome::Saved`]。
 pub fn save_scope(
     scope: PersistScope,
@@ -301,7 +313,20 @@ pub fn save_scope(
     }
 
     let content = format::to_toml_string(&doc);
+    // 控える道は「書けたか」の判定に入らない（読み取りだけの走り・控えへの入れはメモリの中）。
+    let withheld = io.withholds(&path);
     match io.commit(&path, &content) {
+        Ok(()) if withheld => {
+            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
+            tracing::debug!(
+                target: LOG_TARGET,
+                event = "persist_withheld",
+                ?scope,
+                keys = ?key_names,
+                "persist withheld (read-only run); nothing written"
+            );
+            PersistOutcome::Withheld
+        }
         Ok(()) => PersistOutcome::Saved,
         Err(e) => {
             let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
@@ -365,6 +390,9 @@ fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
         PersistKey::LastShell => doc.last_shell = Some(value),
         PersistKey::LastRunning => doc.last_running = Some(value),
         PersistKey::BasewareRoots => doc.baseware_roots = Some(value),
+        PersistKey::WindowAdjacent { scope } => {
+            doc.window_adjacent.insert(scope.to_string(), value);
+        }
     }
 }
 
@@ -410,6 +438,19 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
             out.push((key, v.clone()));
         }
     }
+    for (id, v) in &doc.window_adjacent {
+        // 数でない ID は window と同じく debug ＋ skip（寛容）。
+        let Ok(scope_id) = id.parse::<u32>() else {
+            tracing::debug!(
+                target: LOG_TARGET,
+                ?scope,
+                raw_id = %id,
+                "persist scope id is not a u32; skipping entry (tolerant)"
+            );
+            continue;
+        };
+        out.push((PersistKey::WindowAdjacent { scope: scope_id }, v.clone()));
+    }
 
     out
 }
@@ -449,3 +490,7 @@ mod tests;
 #[cfg(test)]
 #[path = "persist_failure_tests.rs"]
 mod failure_tests;
+
+#[cfg(test)]
+#[path = "persist_window_adjacent_tests.rs"]
+mod window_adjacent_tests;

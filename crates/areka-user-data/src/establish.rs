@@ -8,7 +8,7 @@ use crate::{
 };
 use std::ffi::OsStr;
 use std::os::windows::fs::OpenOptionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// `FILE_ADD_FILE`（フォルダに物を足す権限）。
 const FILE_ADD_FILE: u32 = 0x2;
@@ -95,6 +95,72 @@ pub(crate) fn establish_from(
     exe_dir: Option<&Path>,
     profile_env: Option<&OsStr>,
 ) -> Layout {
+    let (root, reason) = decide_logged(signals, exe_dir);
+    let user_root = root.and_then(|root| create(root, &reason));
+    if let (Some(root), None, Some(exe_dir)) = (&user_root, profile_env, exe_dir) {
+        migrate(&root.dir, exe_dir);
+    }
+    let layout = Layout { user_root, reason };
+    log_layout(&layout);
+    layout
+}
+
+/// 読み取りだけの走りの準備（spec: readonly-mode 要件 4.1・4.2・4.5）: probe → decide → 記録。
+/// 書ける根は作らず（無ければ隣の形）、記憶も写さない。
+pub fn establish_readonly(exe_dir: Option<&Path>, profile_env: Option<&OsStr>) -> Layout {
+    establish_readonly_from(&probe(exe_dir), exe_dir, profile_env)
+}
+
+/// [`establish_readonly`] の内側（本物の環境を読まない）。判断と記録は [`establish_from`] と分け合う。
+/// `profile_env` は形を変えない（記憶の置き場は [`readonly_app_profile_dir`] が決める）。
+pub fn establish_readonly_from(
+    signals: &Signals,
+    exe_dir: Option<&Path>,
+    _profile_env: Option<&OsStr>,
+) -> Layout {
+    let (root, reason) = decide_logged(signals, exe_dir);
+    let user_root = root.filter(|root| {
+        let present = root.dir.is_dir();
+        if !present {
+            tracing::info!(
+                event = "user_root_withheld",
+                dir = %root.dir.display(),
+                "read-only run: the user root is not created; staying beside the exe"
+            );
+        }
+        present
+    });
+    let layout = Layout { user_root, reason };
+    log_layout(&layout);
+    layout
+}
+
+/// 読み取りだけの走りの記憶の置き場（spec: readonly-mode 要件 4.3・11.2）。
+/// `profile_env` が在ればそれ。写すはずの場面（[`migrate_source`]）なら写す元をそのまま返す。
+/// ほかは [`app_profile_dir`](crate::app_profile_dir) と同じ値。
+pub fn readonly_app_profile_dir(
+    profile_env: Option<&OsStr>,
+    layout: &Layout,
+    exe_dir: Option<&Path>,
+) -> Option<PathBuf> {
+    if profile_env.is_none()
+        && let (Some(root), Some(exe_dir)) = (&layout.user_root, exe_dir)
+        && let Some((from, to)) = migrate_source(&root.dir, exe_dir)
+    {
+        tracing::info!(
+            event = "app_memory_read_beside",
+            from = %from.display(),
+            to = %to.display(),
+            "read-only run: reading the bundled app memory without copying it"
+        );
+        return Some(from);
+    }
+    crate::app_profile_dir(profile_env, layout, exe_dir)
+}
+
+/// 判断と、隣に居る・決められないときの記録（ふつうの道と読み取りだけの道が分け合う）。
+/// 書ける根に当たれば、まだ作っていない根を返す。
+fn decide_logged(signals: &Signals, exe_dir: Option<&Path>) -> (Option<UserRoot>, Reason) {
     if let (Writability::Unknown(error), None) = (&signals.writability, &signals.user_root_env) {
         tracing::warn!(
             event = "user_data_writability_unknown",
@@ -103,7 +169,7 @@ pub(crate) fn establish_from(
             "exe folder writability could not be checked; staying beside the exe"
         );
     }
-    let (user_root, reason) = match decide(signals) {
+    match decide(signals) {
         Decision::Beside { reason } => (None, reason),
         Decision::Fallback { reason, error } => {
             let (kind, tried) = unlocatable(&error);
@@ -116,14 +182,8 @@ pub(crate) fn establish_from(
             );
             (None, reason)
         }
-        Decision::UserRoot { root, reason } => (create(root, &reason), reason),
-    };
-    if let (Some(root), None, Some(exe_dir)) = (&user_root, profile_env, exe_dir) {
-        migrate(&root.dir, exe_dir);
+        Decision::UserRoot { root, reason } => (Some(root), reason),
     }
-    let layout = Layout { user_root, reason };
-    log_layout(&layout);
-    layout
 }
 
 /// 書ける根を作る（無いときだけ）。作れなければ `None`（今の形）。
@@ -157,11 +217,9 @@ fn create(root: UserRoot, reason: &Reason) -> Option<UserRoot> {
 /// 実行ファイルの隣の記憶を書ける根へ一度だけ写す。隣は読むだけ。
 /// 写せなくても置き場は書ける根の `profile\areka` のまま（要件 5.5）。
 fn migrate(root: &Path, exe_dir: &Path) {
-    let to = root.join("profile").join("areka");
-    let from = exe_dir.join("profile").join("areka");
-    if to.exists() || !from.is_dir() {
+    let Some((from, to)) = migrate_source(root, exe_dir) else {
         return;
-    }
+    };
     match copy_tree_atomic(&from, &to, root) {
         Ok(CopyDone::Copied(stats)) => tracing::info!(
             event = "app_memory_migrated",
@@ -185,6 +243,14 @@ fn migrate(root: &Path, exe_dir: &Path) {
             "app memory could not be migrated; using the user root profile"
         ),
     }
+}
+
+/// 写すはずか（写しの条件の持ち主は 1 つ）: `root\profile\areka` が無く `exe_dir\profile\areka` が
+/// フォルダのときだけ `Some((写す元, 写し先))`。[`migrate`] と [`readonly_app_profile_dir`] が分け合う。
+pub(crate) fn migrate_source(root: &Path, exe_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+    let to = root.join("profile").join("areka");
+    let from = exe_dir.join("profile").join("areka");
+    (!to.exists() && from.is_dir()).then_some((from, to))
 }
 
 fn log_layout(layout: &Layout) {
@@ -238,3 +304,7 @@ fn unlocatable(error: &Unlocatable) -> (&'static str, String) {
 #[cfg(test)]
 #[path = "establish_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "establish_readonly_tests.rs"]
+mod readonly_tests;

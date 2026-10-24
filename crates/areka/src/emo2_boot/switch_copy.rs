@@ -14,7 +14,7 @@ use areka_kanade::ChangeHandoff;
 use bevy_ecs::world::World;
 
 use super::ghost_switch::{SwitchInFlight, SwitchStage, switch_to};
-use crate::roots::user_root::{CopyPlan, copy_for_write, plan_copy};
+use crate::roots::user_root::{CopyPlan, copy_for_write, copy_unless_readonly, plan_copy};
 
 /// 写しの見込み（予約 [`SwitchInFlight`] に持たせる）。
 #[derive(Debug)]
@@ -31,7 +31,23 @@ pub(crate) enum SwitchCopy {
 struct CopyWaitHandoff(ChangeHandoff);
 
 /// 受理の直後に呼ぶ。`plan_copy` が `Copy` なら `std::thread` で `copy_for_write` を走らせる。
-pub(crate) fn start(roots: &BasewareRoots, exe_dir: Option<&Path>, dir: &Path) -> SwitchCopy {
+/// 読み取りだけの走りでは写さず、スレッドも起こさず `Done(dir)`（写すはずだったときだけ
+/// `user_data_copy_withheld` を 1 件・readonly-mode 要件 4.1・4.4・10.2）。
+pub(crate) fn start(
+    readonly: bool,
+    roots: &BasewareRoots,
+    exe_dir: Option<&Path>,
+    dir: &Path,
+) -> SwitchCopy {
+    if readonly {
+        return SwitchCopy::Done(copy_unless_readonly(
+            true,
+            roots,
+            exe_dir,
+            StoreKind::Ghost,
+            dir,
+        ));
+    }
     if plan_copy(roots, exe_dir, StoreKind::Ghost, dir) == CopyPlan::AsIs {
         return SwitchCopy::None;
     }

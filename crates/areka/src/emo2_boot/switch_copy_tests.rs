@@ -19,9 +19,11 @@ use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::emo2_boot::ghost_switch::{
-    GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, request_ghost_switch,
+    GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
+    request_ghost_switch,
 };
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::readonly::ReadOnlyRun;
 
 /// 書ける根 `user` と実行ファイルの隣の根 `exe`（同梱のゴースト `A`・`B`）。
 struct Fixture {
@@ -150,9 +152,9 @@ fn start_without_copy_need_is_none() {
     let f = Fixture::new("switch-copy-none");
     let plain = BasewareRoots::new(vec![BasewareRoot::new(f.exe.clone())]);
     let cases = [
-        start(&plain, Some(&f.exe), &f.bundled("B")),
-        start(&f.roots(), Some(&f.exe), &f.copied("B")),
-        start(&f.roots(), None, &f.bundled("B")),
+        start(false, &plain, Some(&f.exe), &f.bundled("B")),
+        start(false, &f.roots(), Some(&f.exe), &f.copied("B")),
+        start(false, &f.roots(), None, &f.bundled("B")),
     ];
     assert!(
         cases.iter().all(|c| matches!(c, SwitchCopy::None)),
@@ -165,7 +167,7 @@ fn start_without_copy_need_is_none() {
 #[test]
 fn start_copies_on_a_background_thread() {
     let f = Fixture::new("switch-copy-start");
-    let SwitchCopy::Running(rx) = start(&f.roots(), Some(&f.exe), &f.bundled("B")) else {
+    let SwitchCopy::Running(rx) = start(false, &f.roots(), Some(&f.exe), &f.bundled("B")) else {
         panic!("写し中の見込みになる");
     };
     assert_eq!(rx.recv().unwrap(), f.copied("B"));
@@ -277,7 +279,7 @@ fn copy_failure_boots_from_the_original() {
     let f = Fixture::new("switch-copy-fail");
     // 書ける根の `ghost` をファイルにして、写しの置き場を作れなくする。
     fs::write(f.user.join("ghost"), "not a folder").unwrap();
-    let SwitchCopy::Running(rx) = start(&f.roots(), Some(&f.exe), &f.bundled("B")) else {
+    let SwitchCopy::Running(rx) = start(false, &f.roots(), Some(&f.exe), &f.bundled("B")) else {
         panic!("写し中の見込みになる");
     };
     let answer = rx.recv().unwrap();
@@ -306,5 +308,89 @@ fn copy_failure_boots_from_the_original() {
         ),
         (1, shown(&f.bundled("B"))),
         "{lost:?}"
+    );
+}
+
+/// 読み取りだけの走り（readonly-mode 要件 4.1・4.4・10.2）: 写す要があっても写さず、スレッドを起こさず
+/// `Done(元のフォルダ)`。書ける根は何も変わらず（写しも `.copy-work` も無い）、`user_data_copy_withheld`
+/// が 1 件・`user_data_copied` は 0 件。切替はそのまま同梱のフォルダから起こす。
+#[test]
+fn readonly_start_withholds_the_copy_and_boots_from_the_original() {
+    let f = Fixture::new("switch-copy-readonly");
+    let (copy, events) = capture(|| start(true, &f.roots(), Some(&f.exe), &f.bundled("B")));
+    let done = matches!(&copy, SwitchCopy::Done(d) if *d == f.bundled("B"));
+    let user_tree: Vec<_> = fs::read_dir(&f.user).unwrap().collect();
+
+    let mut world = f.world(copy);
+    let ((), switched) = capture(|| switch_to(&mut world, handoff()));
+
+    assert!(done, "写さずに元のフォルダで写し終えたになる");
+    assert!(user_tree.is_empty(), "書ける根は空のまま: {user_tree:?}");
+    assert_eq!(
+        (
+            count(&events, "user_data_copy_withheld"),
+            count(&events, "user_data_copied")
+        ),
+        (1, 0),
+        "(控えた・写した): {events:?}"
+    );
+    assert_eq!(
+        (
+            count(&switched, "ghost_switch_copy_wait"),
+            first_boot_dir(&switched)
+        ),
+        (0, shown(&f.bundled("B"))),
+        "(写し待ち・起こしたフォルダ): {switched:?}"
+    );
+}
+
+/// 受理（`accept_switch`）は World の [`ReadOnlyRun`] を写しへ渡す: 在れば `Done(切替先)`、無ければ
+/// `None`（このプロセスの実行ファイルのフォルダは並びに無いので、どちらも写す要は無い）。
+#[test]
+fn accept_switch_passes_the_readonly_mark_to_the_copy() {
+    let f = Fixture::new("switch-copy-accept-readonly");
+    let copy_of = |readonly: bool| {
+        let mut world = f.world(SwitchCopy::None);
+        world.remove_non_send::<SwitchInFlight>();
+        let (tx, _rx) = mpsc::channel();
+        world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
+            Some(tx),
+            f.bundled("A"),
+        ))));
+        if readonly {
+            world.insert_resource(ReadOnlyRun);
+        }
+        let target = SwitchTarget {
+            dir: f.bundled("B"),
+            folder: "B".to_owned(),
+            name: "B".to_owned(),
+            sakura_name: None,
+        };
+        let req = SwitchRequest {
+            ghost: GhostSpec::Folder("B".to_owned()),
+            raise_event: false,
+            origin: ChangeOrigin::Automatic,
+            boot_event: None,
+        };
+        let verdict = accept_switch(&mut world, target, req);
+        let copy = world
+            .get_non_send::<SwitchInFlight>()
+            .map(|flight| format!("{:?}", flight.copy));
+        (verdict, copy)
+    };
+
+    assert_eq!(
+        copy_of(true),
+        (
+            SwitchVerdict::Accepted,
+            Some(format!("{:?}", SwitchCopy::Done(f.bundled("B"))))
+        )
+    );
+    assert_eq!(
+        copy_of(false),
+        (
+            SwitchVerdict::Accepted,
+            Some(format!("{:?}", SwitchCopy::None))
+        )
     );
 }

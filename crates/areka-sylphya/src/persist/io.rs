@@ -38,6 +38,10 @@ pub trait PersistIo: Send {
     fn read(&self, path: &Path) -> std::io::Result<Option<String>>;
     /// `content` を `path` へ原子的に確定する（temp 書込→rename）。失敗時、既存ファイルは無傷。
     fn commit(&self, path: &Path, content: &str) -> std::io::Result<()>;
+    /// 書かずに控える道か（既定は控えない＝試験の中の偽の IO はそのまま）。
+    fn withholds(&self, _path: &Path) -> bool {
+        false
+    }
 }
 
 /// 本番 IO 実装（`std::fs` による temp 書込→`rename` の原子的確定）。
@@ -61,10 +65,29 @@ impl FsPersistIo {
         temp_name.push(".tmp");
         path.with_file_name(temp_name)
     }
+
+    /// ゴーストの記憶のフォルダを先に作る。控える範囲の中なら作らずに `Ok`、外なら
+    /// `create_dir_all`（FS に触れるのはこの型だけ・R8.3）。
+    pub fn ensure_root_dir(dir: &Path) -> std::io::Result<()> {
+        if super::withhold::withholds(dir) {
+            tracing::debug!(
+                target: super::LOG_TARGET,
+                event = "persist_root_dir_withheld",
+                dir = %dir.display(),
+                "persist root dir not created (read-only run)"
+            );
+            return Ok(());
+        }
+        std::fs::create_dir_all(dir)
+    }
 }
 
 impl PersistIo for FsPersistIo {
     fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+        // 控えを先に見る＝同じ走りの中では書けたときと同じ値を読む。
+        if let Some(content) = super::withhold::staged(path) {
+            return Ok(Some(content));
+        }
         match std::fs::read_to_string(path) {
             Ok(content) => Ok(Some(content)),
             // 不在はエラーではなく `None`（design「read: 不在 → Ok(None)」）。
@@ -75,6 +98,11 @@ impl PersistIo for FsPersistIo {
     }
 
     fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        // 控える範囲の中は親のフォルダも一時ファイルも作らずメモリへ入れるだけ（失敗しない）。
+        if self.withholds(path) {
+            super::withhold::stage(path, content);
+            return Ok(());
+        }
         // 宛先の親ディレクトリを保証する（新規ゴーストで `<profile>/areka/` が未作成でも書ける）。
         // 実機初回起動の恒久修正: これが無いと `File::create` が親不在で NotFound(os error 3) を返し、
         // 全永続書込が Degraded に倒れて位置・起動記録が保存されない。create_dir_all は既存 dir に対し
@@ -105,6 +133,10 @@ impl PersistIo for FsPersistIo {
             return Err(e);
         }
         Ok(())
+    }
+
+    fn withholds(&self, path: &Path) -> bool {
+        super::withhold::withholds(path)
     }
 }
 

@@ -37,7 +37,8 @@ use crate::placement::resolver::PointPx;
 use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
 
 /// 要件 1 の表の 13 種（1.1 のアプリの記憶 6 種＋1.2 のゴーストごとの記憶 7 種）。
-const KINDS: [&str; 13] = [
+/// 読み取りだけの行列（`readonly_sites_tests.rs`）も同じ表を読む。
+pub(crate) const KINDS: [&str; 13] = [
     "起動中の印を書く",
     "降ろした直後",
     "定常の印",
@@ -52,6 +53,11 @@ const KINDS: [&str; 13] = [
     "窓の位置",
     "ゴーストのプロパティ",
 ];
+
+/// 致命の机の汲み出しを 1 回回す（読み取りだけの行列が「机に届かない」を見る口）。
+pub(crate) fn drain_desk(world: &mut World) {
+    drain_system(world);
+}
 
 /// 置き場を普通のファイルに替える（書けない）。
 fn unwritable(dir: &Path) {
