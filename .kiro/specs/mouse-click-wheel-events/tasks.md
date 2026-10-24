@@ -131,3 +131,7 @@
 - 5.1: 台帳の境界の外で、道具の一致のテストが照らす手書きの数 2 か所（`doc/ukadoc-coverage/briefing.md` の list_shiori_event の barrier 53→62・233→224、`roadmap-draft.md` の本 spec の owner_count 3→9）を直した（前例 PR #332）。design の変更ファイルの一覧には無い。
 - 範囲外（6 の準備で）: 新しいぱすたの書庫（sha256 `4c354864…`）はゴーストのフォルダの中に縦書きのバルーン（`balloon\pasta_tategaki`）を持つが、`crates/sample-ghost-kit/src/lib.rs:184` の登記（`balloons: &[]`）が知らず、`nar-sample-path pasta-in-windows` が exit=2 で落ちる（手順書 3 節の `Open-Sample` が通らない）。完了の棚卸で扱う。
 - 最終検証の直し（2026-10-24）: 要件 6.8・11.2 の「窓ごとに別々に間引く」を窓 2 つで確かめる `char_watch_tests.rs::wheel_is_throttled_per_window` を足した（溜めを 1 つに潰すと赤になるのを確かめた）。全体テストの赤は触っていない `sample-ghost-kit` の検体の登記（新しいぱすたの書庫）で、main の PR #372 が直していたので main を取り込んだ。
+- 完了時にその場で解決: `actor_raise_reply_tests.rs:98` の never_loop を直し、`cargo clippy -p areka-kanade --all-targets` が通るようにした（`balloon_events_cleanup_tests.rs` ほかは main の取り込みで既に通っていた）。
+- 完了時にその場で解決: wintf の `PointerState` の `*_down` の説明を「この tick に押された」に直した。
+- 完了時にその場で解決（main の取り込みで解消）: `sample-ghost-kit` の検体の登記と新しいぱすたの書庫の食い違い（PR #372 が直した）。
+- 完了時の棚卸で直さないと決めたもの: `char_watch` の毎 tick の QueryState の作り直し（窓の数程度で実害が無く、欠陥ではない）。R1 は §8 に受け入れとして登記済み。
