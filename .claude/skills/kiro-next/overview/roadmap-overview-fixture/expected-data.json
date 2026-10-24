@@ -268,7 +268,7 @@
       ]
     }
   ],
-  "waveCommands": "Wave C9 2本\nOpus\n/kiro-start areka-P0-beta-next",
+  "waveCommands": "Wave C9 2本\nOpus\n/kiro-start areka-P0-beta-next\n\nWave C10（見込み）1本（v9.9.9 1本）\n【本来の次の版 v9.9.9】\nOpus\n/kiro-start omega-last\n\nWave C11（見込み）リリース（v9.9.9 の spec は 0 本）\n【本来の次の版 v9.9.9】\n/release 9.9.9",
   "completed": {
     "rows": [
       {

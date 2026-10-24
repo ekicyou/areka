@@ -4,6 +4,7 @@
     "secLedger": "spec 台帳",
     "secThemes": "テーマ別の決めごと",
     "secWaves": "ウェーブ編成",
+    "secNextWaves": "### その先のウェーブ（",
     "secSummary": "完了サマリ",
     "groupSep": "／",
     "headSep": "＝",
@@ -46,7 +47,7 @@
     "completedExtra": "完了サマリに無い完了",
     "what": "何をするか",
     "note": "版の段の注",
-    "waveCommands": "次のウェーブの開始コマンド",
+    "waveCommands": "ウェーブの開始コマンド（2 つ目からは見込み）",
     "copy": "コピー",
     "copied": "コピーしました"
   }

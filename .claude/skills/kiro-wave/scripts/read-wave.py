@@ -116,6 +116,13 @@ Opus
 Opus
 /kiro-start c-spec
 ```
+### その先のウェーブ（2026-01-02 の見込み）
+```
+Wave C2（見込み）1本（v0.1.0 1本）
+【本来の次の版 v0.1.0】
+Opus
+/kiro-start z-spec
+```
 ### 次
 ## spec 台帳
 | spec（`areka-P0-` 省略） | 段 | 前提 | Fable |
