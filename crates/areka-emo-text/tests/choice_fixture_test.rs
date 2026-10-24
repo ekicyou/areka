@@ -562,7 +562,7 @@ fn real_font_menu_hover_render_dumps_png() {
     );
     let overhang = ink_span.1.saturating_sub(fill_span.1);
     assert!(
-        overhang <= BAND_OVERHANG_MAX,
+        overhang == BAND_OVERHANG_MAX,
         "hover 行の文字のインク下端 y{} がハイライト矩形の下端 y{} から {overhang} 画素はみ出した\
          （インク y{}..{}・矩形 y{}..{}）。裁定 2026-09-06（第 2 回・R13.3）が許すのは \
          {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接行の帯と重なり、\
