@@ -41,7 +41,11 @@ fn close_windows_for_restart_forgets_window_set_resources() {
         deferrals: 599,
         reported: false,
     });
-    world.insert_resource(ChainRealignPending { armed_frame: 7 });
+    world.insert_resource(ChainRealignPending {
+        armed_frame: 7,
+        before: Vec::new(),
+        script_moved: Vec::new(),
+    });
     world.insert_resource(ZOrderChainPlan::default());
     world.insert_resource(ZOrderAbsentReports::default());
     let present = |world: &World| {

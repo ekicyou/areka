@@ -8,7 +8,7 @@
 //! 不変条件: 行き先が `Box(n)` のとき、`n` は必ずそのスコープの今のサーフェスの箱の列にある。
 //! 箱の表が空なら、行き先は 1 度も普通のバルーンから動かない（要件 5.4）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use areka_emo_compose::BoxName;
 use areka_sakura::contract::ActorKey;
@@ -25,6 +25,15 @@ pub enum SurfaceKeyOutcome {
     Hide,
     /// 解決できない（今のシェルにそのサーフェスが無い場合を含む）。何も変えない。
     Unresolved,
+}
+
+/// シェルの切替の戻り先（descript-window-keys 要件 3.2・3.5）。seriko の戻り先と同じ材料。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SurfaceFallback {
+    /// 新しいシェルの面の番号の集合（「在る」の判定）。
+    pub surface_ids: BTreeSet<u32>,
+    /// スコープごとの戻り先の候補の並び（descript の既定の面 → 組み込みの既定の面）。
+    pub candidates: BTreeMap<ActorKey, Vec<u32>>,
 }
 
 /// スコープ 1 つの行き先の状態。記録の無いスコープは「非表示・普通のバルーン」と同じ。
@@ -90,6 +99,34 @@ impl TextLayerState {
             self.set_dest(actor, dest);
         }
         tracing::debug!(actor = %actor, ?surface, dest = ?self.destination(actor), "\\s による行き先の決定");
+    }
+
+    /// シェルの切替: 今の面が新しいシェルに無いスコープだけを、候補の最初に在る面（無ければ非表示）へ
+    /// 替える（descript-window-keys 要件 3.2・3.5）。行き先の引き直しは [`Self::route_surface`] に
+    /// 任せる。替えたスコープがあれば `true`。非表示のスコープは替えない。
+    pub fn fall_back_surfaces(&mut self, fallback: &SurfaceFallback) -> bool {
+        // 面の番号の集合が空＝材料なし（seriko の fall_back_shell_surfaces と同じ）。
+        if fallback.surface_ids.is_empty() {
+            return false;
+        }
+        let missing: Vec<(ActorKey, u32)> = self
+            .routes
+            .iter()
+            .filter_map(|(actor, route)| route.surface.map(|id| (actor.clone(), id)))
+            .filter(|(_, id)| !fallback.surface_ids.contains(id))
+            .collect();
+        for (actor, missing) in &missing {
+            let to = fallback.candidates.get(actor).and_then(|candidates| {
+                candidates
+                    .iter()
+                    .copied()
+                    .find(|id| fallback.surface_ids.contains(id))
+            });
+            tracing::debug!(actor = %actor, missing, ?to, "シェルの切替で今の面が無い——戻り先へ引き直す");
+            let outcome = to.map_or(SurfaceKeyOutcome::Hide, SurfaceKeyOutcome::Show);
+            self.route_surface(actor, outcome);
+        }
+        !missing.is_empty()
     }
 
     /// 名前の形の `\b[名前]` で行き先を切り替える（要件 4.3・4.9）。

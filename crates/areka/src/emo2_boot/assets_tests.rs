@@ -824,7 +824,14 @@ fn screen_binds_split_per_scope_on_shared_scope_fixture() {
     }
     let ghost = scope_bind_ghost();
     let decoder = WicDecoderArm::new().expect("WIC デコーダ");
-    let shell = match build_shell_assets(ghost.path(), None, &[0, 1, 2, 3], 96, &decoder) {
+    let shell = match build_shell_assets(
+        ghost.path(),
+        None,
+        &[0, 1, 2, 3],
+        96,
+        &crate::placement::DefaultSurfaces::builtin(),
+        &decoder,
+    ) {
         Ok(shell) => shell,
         Err(e) => panic!("シェルの資産づくりは成功する: {e:?}"),
     };

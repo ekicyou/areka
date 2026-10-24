@@ -7,8 +7,11 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
 use areka_emo_present::{EmoPresenter, TargetId};
+use wintf::ecs::drag::DraggingState;
+use wintf::ecs::pointer::PhysicalPoint;
 use wintf::ecs::{DPI, SizeI, WindowPos};
 
+use crate::placement::chain_finalize::ChainRect;
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, DpiSyncHold};
@@ -156,11 +159,75 @@ pub(super) fn reconcile_window_size(
         // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。
         // 経路タグは呼出元が渡した route を透過させる（本関数は共通末端であって経路ではない
         // ＝DPI 相と drain 後段の報告回収を 1 語で名乗らせない・Req 1.2／D13）。
-        GhostWindowKind::Char => resize_window_to(world, window, new_size, route),
+        //
+        // ドラッグ中なら、書く前の大きさと比べて掴んだ点を置き直す（dpi-realign-remembered-chain
+        // 要件 4.1〜4.3・設計 DragGrab）。書く前に読まないと新しい大きさしか見えない。
+        GhostWindowKind::Char => {
+            let before = world.get::<WindowPos>(window).and_then(|wp| wp.size);
+            let wrote = resize_window_to(world, window, new_size, route);
+            if wrote {
+                realign_drag_grab(world, window, before, SizeI::new(w, h));
+            }
+            wrote
+        }
         // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える
         // （経路語彙は関数名そのもの＝KeepPositionResize ゆえ route を消費しない）。
         GhostWindowKind::Balloon => resize_window_keep_position(world, window, new_size),
     }
+}
+
+/// 掴んだ点の窓の中の位置 g = drag_start − initial_inset を、g' = round(g × after ÷ before)
+/// （縦横別・四捨五入）にし、置き直した initial_inset = drag_start − g' を返す
+/// （dpi-realign-remembered-chain 要件 4.1・4.2・設計 DragGrab）。
+///
+/// 返す値は整数の値に揃える——読み手（`drag_follow` と wndproc の式）がどちらも `as i32` で
+/// 読むので、端数を持たせると読み手ごとに 1 px 割れる。before の縦か横が 0 以下なら比が
+/// 決まらないので initial_inset をそのまま返す。
+pub(super) fn rescale_drag_grab(
+    drag_start: PhysicalPoint,
+    initial_inset: (f32, f32),
+    before: SizeI,
+    after: SizeI,
+) -> (f32, f32) {
+    if before.width <= 0 || before.height <= 0 {
+        return initial_inset;
+    }
+    let axis = |start: i32, inset: f32, b: i32, a: i32| -> f32 {
+        let grab = f64::from(start) - f64::from(inset);
+        let scaled = (grab * f64::from(a) / f64::from(b)).round();
+        (f64::from(start) - scaled) as f32
+    };
+    (
+        axis(drag_start.x, initial_inset.0, before.width, after.width),
+        axis(drag_start.y, initial_inset.1, before.height, after.height),
+    )
+}
+
+/// キャラ窓の大きさを書いた直後、大きさが変わり窓がドラッグ中なら掴んだ点を置き直す
+/// （設計 DragGrab）。ドラッグ中でない窓・大きさの変わらない書き込みでは何もしない（要件 4.3）。
+/// 書く前の大きさが無い（窓生成前）なら比べる相手が無いので置き直さない。
+fn realign_drag_grab(world: &mut World, window: Entity, before: Option<SizeI>, after: SizeI) {
+    let Some(before) = before else {
+        return;
+    };
+    if before == after {
+        return;
+    }
+    let Some(mut drag) = world.get_mut::<DraggingState>(window) else {
+        return;
+    };
+    let start = drag.drag_start_pos;
+    let old = drag.initial_inset;
+    let new = rescale_drag_grab(start, old, before, after);
+    debug!(
+        entity = ?window,
+        ?before,
+        ?after,
+        grab_before = ?(start.x as f32 - old.0, start.y as f32 - old.1),
+        grab_after = ?(start.x as f32 - new.0, start.y as f32 - new.1),
+        "dpi reconcile: ドラッグ中のキャラ窓の大きさが変わった → 掴んだ点を窓の大きさの比で置き直す"
+    );
+    drag.initial_inset = new;
 }
 
 /// 報告された物理寸が**書込前の窓寸と違う**か（遷移後の連鎖再解決の武装条件・設計 C4）。
@@ -314,7 +381,15 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     }
 
     // 第 2 巡（処理）: 通過した窓だけを従来どおり再導出・反映する。
+    //
+    // 変わる直前のキャラ窓の矩形の控え（dpi-realign-remembered-chain 要件 1.1・設計 DpiSnapshot）。
+    // 最初のキャラ窓を書く直前に 1 度だけ取る。待ちの札で窓ごとにフレームが割れても、まだ
+    // 書かれていない窓の `WindowPos` は変わる前のままなので、最初の武装の控えが正しい（1.7）。
+    let mut before_rects: Option<Vec<(usize, ChainRect)>> = None;
     for (window, scope, kind) in proceed {
+        if matches!(kind, GhostWindowKind::Char) && before_rects.is_none() {
+            before_rects = Some(chain_realign::snapshot_char_rects(world));
+        }
         // target 採番（DD-3: shell=2*scope／balloon=2*scope+1）は u32 域。収まらない scope は
         // 如何なる target とも対応しない（plan_attachments の usize→u32 境界と同じ扱い）。
         let Ok(scope) = u32::try_from(scope) else {
@@ -366,7 +441,11 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                 // いなければ位置は動いておらず、バルーン窓は連鎖の構成要素ではない。
                 if wrote && matches!(kind, GhostWindowKind::Char) && size_changed(before, new_size)
                 {
-                    chain_realign::arm_chain_realign(world);
+                    // 控えはキャラ窓の腕で必ず取られている。武装済みなら渡しても使われない。
+                    chain_realign::arm_chain_realign(
+                        world,
+                        before_rects.clone().unwrap_or_default(),
+                    );
                 }
                 wrote
             }

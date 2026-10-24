@@ -33,6 +33,9 @@ use crate::placement;
 use crate::readme;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
+#[path = "ghost_session_scope_rect.rs"]
+pub(crate) mod ghost_session_scope_rect;
+
 #[path = "ghost_session_runtime.rs"]
 mod ghost_session_runtime;
 pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
@@ -88,6 +91,8 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
         .resource_mut::<Schedules>()
         .add_systems(FrameFinalize, app_exit::attach_os_close_request);
     placement::spawn::wire_zorder_pair(world);
+    // スコープ → 窓の印の表を出す系（mcp-scope-rect-property 要件 3.3）。
+    ghost_session_scope_rect::register(world);
 }
 
 /// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ
@@ -102,6 +107,8 @@ pub(crate) struct StartupDescriptValues {
     pub(crate) author_dpi: placement::AuthorDpi,
     /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
     pub(crate) zorder_raw: Option<String>,
+    /// 準備が採寸に使ったスコープごとの既定の面（descript-window-keys 要件 2.2）。起動の資産も同じ値で組む。
+    pub(crate) default_surfaces: placement::DefaultSurfaces,
 }
 
 /// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
@@ -238,6 +245,10 @@ pub(crate) fn prepare_ghost_windows(
     let zorder_raw = prepared.zorder_raw.clone();
     // 窓の組の descript の値も同じ読取から取り出し、窓を作る閉包で帳簿へ据える（解釈は帳簿の層）。
     let sticky_window_raw = prepared.sticky_window_raw.clone();
+    // 採寸に使った既定の面も同じ読取から写し、起動の結線へ渡す（descript-window-keys 要件 2.2）。
+    let default_surfaces = prepared.default_surfaces.clone();
+    // バルーンの動かせない指定の descript の段も同じ読取から写し、窓を作る閉包で帳簿へ据える（要件 4.1）。
+    let balloon_dontmove = prepared.balloon_dontmove.clone();
     // 標準の位置の材料（descript の値＋バルーンの配置の値）も同じ読取から取り出し、窓の組と
     // 一緒に置く（areka-P0-move-canon 要件 8.6・areka-P0-window-link-directives 要件 7.4）。
     let default_basis = prepared.default_basis;
@@ -279,15 +290,19 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(default_basis);
         // 窓の組の帳簿も窓の束と一緒に据える（窓が在るので据えた後に書き手が付け直す・要件 3.8・6.1）。
         placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());
-        // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
-        // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
-        // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
+        // 動かせない指定の帳簿も窓を作った後に据える（据える前に作った窓へ書き手が届く・要件 4.1）。
+        placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove);
+        // 記憶から戻したスコープは既定配置ではない（scg 7.3）。台帳の既定位置を外し
+        // 覚えた印を据える——起動の並べ直しは今の位置でなく印で決める（left/right は今の幅で
+        // 隣り合わせ、none・印なし・組の窓・台本の印は動かさない・dpi-realign-remembered-chain 6.3〜6.5）。
+        // 既定位置を残すと利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
         // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
         if !restored_scopes.is_empty()
             && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
         {
-            for scope in &restored_scopes {
-                gw.clear_default_char_pos(*scope);
+            for (&scope, &mark) in &restored_scopes {
+                gw.clear_default_char_pos(scope);
+                gw.set_remembered_adjacency(scope, mark);
             }
         }
         // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
@@ -322,6 +337,7 @@ pub(crate) fn prepare_ghost_windows(
         descript: StartupDescriptValues {
             author_dpi,
             zorder_raw,
+            default_surfaces,
         },
         spawn,
     })
@@ -843,6 +859,7 @@ fn boot_wired(
         descript.zorder_raw.as_deref(),
         kanade_stop.clone(),
         shell,
+        &descript.default_surfaces,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);

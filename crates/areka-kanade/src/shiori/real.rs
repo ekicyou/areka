@@ -26,12 +26,13 @@ use std::time::Duration;
 use areka_actor::{ActorHandle, spawn_actor};
 use shiori_host32_host::{
     CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow, RequestError,
-    RequestHeaders, Shiori3Client, ShutdownError, ValueReply,
+    RequestHeaders, Shiori3Client, ShioriVersion, ShutdownError, ValueReply,
 };
 
 use super::probe::{ShioriBusy, ShioriProbe, ShioriUnblock};
 use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg, ShioriOutcome};
 use crate::request_origin::{OriginWire, RequestOrigin, read_response_level};
+use crate::schedule::resources::is_allowed_resource_id;
 
 /// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表が
 /// 直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
@@ -54,6 +55,9 @@ pub struct ShioriConnection {
     pub helper: HelperLifecycle,
     /// 文字コードの交渉状態（接続と同寿命・GET/NOTIFY 共通・要件 5.1）。
     pub negotiator: CharsetNegotiator,
+    /// 読み込みの直後に結線が確かめて決めた SHIORI の版（接続と同寿命・要求のたびに確かめ
+    /// 直さない・shiori2-protocol 要件 2.2）。読み直しは新しい接続を作るので前の版は残らない。
+    pub version: ShioriVersion,
 }
 
 /// `ShioriMsg` dispatch の背後にある呼出面（本番＝[`ShioriConnection`]・テスト＝scripted fake）。
@@ -145,7 +149,13 @@ impl ShioriBackend for ShioriConnection {
     ) -> Result<Option<String>, RequestError> {
         // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
         // 文字コードの規則は結線側が持ち、本層には書かない。
-        Shiori3Client::new(&self.window, &mut self.negotiator).get(id, references, status)
+        let mut client =
+            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
+        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない・要件 3.7）。
+        if is_allowed_resource_id(id) {
+            client = client.for_resource();
+        }
+        client.get(id, references, status)
     }
 
     fn notify(
@@ -155,7 +165,10 @@ impl ShioriBackend for ShioriConnection {
         status: Option<&str>,
     ) -> Result<(), RequestError> {
         // GET と同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
-        Shiori3Client::new(&self.window, &mut self.negotiator).notify(id, references, status)
+        // NOTIFY は資源の問い合わせではないので印を付けない。
+        Shiori3Client::new(&self.window, &mut self.negotiator)
+            .with_version(self.version)
+            .notify(id, references, status)
     }
 
     fn get_with_headers(
@@ -166,8 +179,12 @@ impl ShioriBackend for ShioriConnection {
         headers: &RequestHeaders<'_>,
     ) -> Result<Option<ValueReply>, RequestError> {
         // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade・要件 3.5）。
-        Shiori3Client::new(&self.window, &mut self.negotiator)
-            .get_with_headers(id, references, status, headers)
+        let mut client =
+            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
+        if is_allowed_resource_id(id) {
+            client = client.for_resource();
+        }
+        client.get_with_headers(id, references, status, headers)
     }
 
     fn notify_with_headers(
@@ -178,6 +195,7 @@ impl ShioriBackend for ShioriConnection {
         headers: &RequestHeaders<'_>,
     ) -> Result<(), RequestError> {
         Shiori3Client::new(&self.window, &mut self.negotiator)
+            .with_version(self.version)
             .notify_with_headers(id, references, status, headers)
     }
 
@@ -531,3 +549,7 @@ mod probe_tests;
 #[cfg(test)]
 #[path = "real_headers_tests.rs"]
 mod headers_tests;
+
+#[cfg(test)]
+#[path = "real_resource_mark_tests.rs"]
+mod resource_mark_tests;

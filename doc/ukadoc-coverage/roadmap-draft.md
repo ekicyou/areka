@@ -551,6 +551,17 @@ SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`
 （3 つとも数え直した値）。`[briefs].count` はこの 64 に合わせた。`snapshot_on` は **2026-10-23** のままである。
 
 
+**2026-10-24 の追加（`shiori2-protocol`）**: `shiori2-protocol` の行を 1 行足した。この spec が SHIORI/2.x の相手の
+版を読み込みの直後の `GET Version` で決め、2.x の応答も 3.0 と同じ振り分けで読むようにしたので、台帳 `ledger/shiori.toml`
+の 1 項目（応答のステータスコード）の宛先をこの spec にした（それまで宛先が空だった・状態は実装済みのまま）。2.x の要求の形は
+ukadoc に項目が無いので台帳に行を作らず、`doc/COMPAT_ARCHITECTURE.md` §8 にだけ置いた。この項目は `linkage.md` の束
+「SHIORI の要求と応答」に属するので、段階 A の表の「SHIORI の要求と応答」の行にこの spec（1 件）を足した。1 件は ⑴（全数）にも
+⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は `stage = "A"`・
+`bundle = "SHIORI の要求と応答"`・`owner_count = 1`・`wave = "C11-⑧"` で、段階は「SHIORI の要求と応答」が順位表で置かれている
+段階の写し、ウェーブは正本のロードマップの写しである。行数は **65 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
+**41 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 65 に合わせ、`snapshot_on` は **2026-10-24** にした。
+
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -585,8 +596,8 @@ SHIORI への要求に `SecurityLevel`（出どころから `local`／`external`
 
 ```toml
 [briefs]
-count = 64
-snapshot_on = "2026-10-23"
+count = 65
+snapshot_on = "2026-10-24"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -1010,8 +1021,8 @@ wave = "C10-①"
 [[spec]]
 name = "descript-window-keys"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、ゴーストの descript の sakura.seriko.defaultsurface と balloon.dontmove の宛先をこの名前で記入した（2 件）"
-owner_count = 2
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、ゴーストの descript の sakura.seriko.defaultsurface と balloon.dontmove の宛先をこの名前で記入した（2 件）。2026-10-24 にこの spec の実装の着地で、相方側の kero.seriko.defaultsurface・シェルの sakura.／kero.／char*.balloon.dontmove・さくらスクリプトの lock,balloonmove と unlock,balloonmove の 6 件を足した（8 件）"
+owner_count = 8
 wave = "v0.1.0"
 
 [[spec]]
@@ -1076,6 +1087,13 @@ none = true
 reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたの縦書きのバルーンが使う communicatebox.x/y/width/height の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（4 件）"
 owner_count = 4
 wave = "v0.1.0"
+
+[[spec]]
+name = "shiori2-protocol"
+stage = "A"
+bundle = "SHIORI の要求と応答"
+owner_count = 1
+wave = "C11-⑧"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -1110,7 +1128,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件）／`areka-P0-balloon-break`（α 後・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
-| 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-script-security-level`（C10-①・4 件） | 第 2 波 |
+| 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-script-security-level`（C10-①・4 件）／`shiori2-protocol`（C11-⑧・1 件） | 第 2 波 |
 | 18 | シェル定義の転記 | `areka-P0-shell-definition-transcribe` | `areka-P0-charset-canon`（完了・1 件） | 第 2 波 |
 | 18 | 同期オブジェクト | `areka-P0-sync-object-tags` | `sakura-time-directives`（W16・1 件） | 第 2 波 |
 

@@ -73,6 +73,7 @@ fn split_keeps_window_side_and_attach_copies_new_kanade() {
     let descript = StartupDescriptValues {
         author_dpi: placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
+        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
     };
     let ghost = GhostDecision {
         route: GhostRoute::Argv,
@@ -198,6 +199,7 @@ fn set_names_delegates_to_runtime_or_returns_false() {
         &StartupDescriptValues {
             author_dpi: placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
+            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
         },
         &ghost,
         &balloon,

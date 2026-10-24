@@ -8,7 +8,8 @@
 //! 1. 降ろす前に、表示層が最後に確立した各スコープのシェルの面と着せ替えの集合を控える
 //!    （[`capture_for_reload`]）。
 //! 2. 起こし直しが成功したら、控えを新しい結線（`Emo2Wiring`）へ渡す（[`hand_over`]）。
-//! 3. 装着の相が、読み直したシェルにその面が在るかを確かめ（[`decide`]）、無ければ既定の面へ戻す。
+//! 3. 装着の相が、読み直したシェルにその面が在るかを確かめ（[`decide`]）、無ければ descript の既定の面
+//!    （それも無ければ組み込みの既定の面）へ戻す（descript-window-keys 要件 3.1・3.3）。
 //!    着せ替えは、読み直しの前のシェルの既定との差（台本で着た・脱いだ分）だけを、読み直したシェルの
 //!    既定の上に、読み直したシェルの名前で `\![bind,カテゴリ,パーツ,1|0]` にし（[`decide_binds`]）、
 //!    名前の無くなった着せ替えは落とす（シェルの descript の既定の書き換えは読み直しで効く）。
@@ -31,6 +32,7 @@ use tracing::{info, warn};
 use super::frame::Emo2Wiring;
 use super::target_map::shell_target;
 use crate::ghost_session::GhostSlot;
+use crate::placement::descript_window_keys::{fallback_candidates, first_existing};
 use crate::placement::spawn::GhostWindows;
 
 /// 控えたシェルの状態（スコープ → 表示中の面・最後に表示したときの着せ替えの集合）。
@@ -65,10 +67,16 @@ impl ShellCarry {
 pub(crate) enum CarriedShow {
     /// 控えた面が読み直したシェルにも在る。
     Carried(u32),
-    /// 控えた面が無くなっていたので既定の面へ戻した。
-    FellBack { missing: u32, to: u32 },
-    /// 控えた面も既定の面も無い（出さない）。
-    Skipped { missing: u32 },
+    /// 控えた面が無くなっていたので候補の並びの最初に在る面へ戻した。`passed_over` は、descript の
+    /// 既定の面も無くて組み込みの既定の面へ落ちたときの descript の面（descript-window-keys 要件 3.3）。
+    FellBack {
+        missing: u32,
+        to: u32,
+        passed_over: Option<u32>,
+    },
+    /// 控えた面も候補の並びのどの面も無い（出さない）。`descript` は候補の先頭（descript の既定の面）で、
+    /// 記録に候補の並びを載せるために持つ（要件 3.3）。
+    Skipped { missing: u32, descript: u32 },
 }
 
 impl CarriedShow {
@@ -98,18 +106,28 @@ pub(crate) struct CarriedBinds {
     pub(crate) dropped: Vec<u32>,
 }
 
-/// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ既定の面
-/// `initial`（scope 0 は 0・ほかは 10）、それも無ければ出さない。
-pub(crate) fn decide(carried: u32, initial: u32, exists: impl Fn(u32) -> bool) -> CarriedShow {
+/// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ戻り先の
+/// 候補の並び `candidates`（`placement::descript_window_keys::fallback_candidates`）の最初に在る面、
+/// どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4）。
+pub(crate) fn decide(
+    carried: u32,
+    candidates: &[u32],
+    exists: impl Fn(u32) -> bool,
+) -> CarriedShow {
     if exists(carried) {
-        CarriedShow::Carried(carried)
-    } else if exists(initial) {
-        CarriedShow::FellBack {
+        return CarriedShow::Carried(carried);
+    }
+    let descript = candidates.first().copied();
+    match first_existing(candidates, exists) {
+        Some(to) => CarriedShow::FellBack {
             missing: carried,
-            to: initial,
-        }
-    } else {
-        CarriedShow::Skipped { missing: carried }
+            to,
+            passed_over: descript.filter(|&d| d != to),
+        },
+        None => CarriedShow::Skipped {
+            missing: carried,
+            descript: descript.unwrap_or(carried),
+        },
     }
 }
 
@@ -282,13 +300,24 @@ pub(crate) fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32,
                 surface = id,
                 "読み直しの前の面を出し直す"
             ),
-            CarriedShow::FellBack { missing, to } => warn!(
+            CarriedShow::FellBack {
+                missing,
+                to,
+                passed_over,
+            } => warn!(
                 event = "reload_shell_fell_back",
-                scope, missing, to, "読み直しの前の面が読み直したシェルに無い——既定の面を出す"
+                scope,
+                missing,
+                to,
+                ?passed_over,
+                "読み直しの前の面が読み直したシェルに無い——既定の面を出す"
             ),
-            CarriedShow::Skipped { missing } => warn!(
+            CarriedShow::Skipped { missing, descript } => warn!(
                 event = "reload_shell_skipped",
-                scope, missing, "読み直しの前の面も既定の面も読み直したシェルに無い——面を出さない"
+                scope,
+                missing,
+                candidates = ?fallback_candidates(scope as usize, descript),
+                "読み直しの前の面も既定の面も読み直したシェルに無い——面を出さない"
             ),
         }
     }

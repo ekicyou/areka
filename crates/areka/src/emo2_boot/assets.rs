@@ -29,11 +29,10 @@ use tracing::error;
 use super::BootWiringError;
 use super::balloon_background;
 use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs};
+use crate::placement::DefaultSurfaces;
 
 /// descript 定義ファイル名（読めないシェルを起動の失敗にするために読む）。
 const DESCRIPT_TXT: &str = "descript.txt";
-/// scope>=1 の初期表示 surface id（DD-9・ukadoc 相方既定サーフェス＝10・placement measure と同値）。
-const KERO_INITIAL_SURFACE_ID: u32 = 10;
 
 /// 1 scope 分のシェル表示資産（`attach_target` へ手渡す 1 組）。
 ///
@@ -46,7 +45,8 @@ pub struct ScopeAssets {
     pub emo_world: EmoWorld,
     /// 共有アトラス（読み込み 1 回・Clone 共有）。
     pub atlas: AtlasTable,
-    /// 初期表示 surface id（scope0=0／scope>=1=10・DD-9）。
+    /// 初期表示 surface id＝descript の既定の面（`*.seriko.defaultsurface`・書いていなければ
+    /// 本体側 0／それ以外 10・descript-window-keys 要件 1.7）。
     pub initial_surface_id: u32,
 }
 
@@ -221,6 +221,7 @@ pub fn build_boot_assets(
         shell_author_dpi,
         balloon_author_dpi,
         None,
+        &DefaultSurfaces::builtin(),
     )
 }
 
@@ -238,10 +239,18 @@ pub fn build_boot_assets_with_shell(
     shell_author_dpi: u16,
     balloon_author_dpi: u16,
     shell: Option<&str>,
+    default_surfaces: &DefaultSurfaces,
 ) -> Result<BootAssets, BootWiringError> {
     // 実 WIC デコーダ（COM 初期化済みスレッド前提・donor build_and_spawn／placement measure と同型）。
     let decoder = WicDecoderArm::new().map_err(BootWiringError::Decoder)?;
-    let shell_assets = build_shell_assets(ghost_root, shell, scopes, shell_author_dpi, &decoder)?;
+    let shell_assets = build_shell_assets(
+        ghost_root,
+        shell,
+        scopes,
+        shell_author_dpi,
+        default_surfaces,
+        &decoder,
+    )?;
     let balloon_assets = build_balloon_assets(balloon_root, scopes, balloon_author_dpi, &decoder)?;
     Ok(BootAssets {
         shells: shell_assets.shells,
@@ -306,6 +315,7 @@ pub fn build_shell_assets(
     shell: Option<&str>,
     scopes: &[u32],
     author_dpi: u16,
+    default_surfaces: &DefaultSurfaces,
     decoder: &WicDecoderArm,
 ) -> Result<ShellAssets, BootWiringError> {
     // マウント解決で shell dir を得る（起点 ghost/master/descript.txt・placement source と同経路）。
@@ -338,11 +348,7 @@ pub fn build_shell_assets(
             resolver_snapshot = Some(emo_world.alias_snapshot());
             surface_ids = emo_world.surface_ids().collect();
         }
-        let initial_surface_id = if scope == 0 {
-            0
-        } else {
-            KERO_INITIAL_SURFACE_ID
-        };
+        let initial_surface_id = default_surfaces.surface(scope as usize);
         shells.push(ScopeAssets {
             scope,
             emo_world,
@@ -358,6 +364,14 @@ pub fn build_shell_assets(
         aliases: aliases.clone(),
         surface_ids,
         font_dirs: box_font_search_dirs(&shell_dir, &model.shiori.dir),
+        // 起動・読み直し・切り替えのどの呼び手でも同じ値を入れる（descript-window-keys 要件 3.2）。
+        fallback_candidates: scopes
+            .iter()
+            .map(|&scope| {
+                let candidates = default_surfaces.candidates(scope as usize);
+                (ActorKey::from(scope.to_string()), candidates)
+            })
+            .collect(),
     };
     let resolver = SurfaceResolver::new(aliases);
 

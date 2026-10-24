@@ -22,6 +22,7 @@
 //! であり、変換は不要（[`balloon_offset_entries`] 参照）。キャラ窓位置の原点符号化
 //! （[`char_pos_to_origin_x`]＝下端中央）は別の関心事ゆえ従来どおり維持する。
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use areka_ghost::sylphya_wiring::profile_areka_root;
@@ -34,12 +35,14 @@ use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
 
-use super::chain_finalize::ScriptPlaced;
+use super::chain_finalize::{AdjacencyMark, ChainRect, ScriptPlaced, judge_adjacency};
+use super::chain_realign::snapshot_char_rects;
 use super::follow::{
     AnchorSource, Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window,
 };
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::spawn::GhostWindows;
+use super::sticky_group_ledger::StickyGroupLedger;
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -377,6 +380,48 @@ pub fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> boo
     saved_char_pos(entries, scope as u32).is_some()
 }
 
+/// 隣り合いの印 1 つ分の記憶の項目（dpi-realign-remembered-chain 要件 6.2・design AdjacencyPersist）。
+pub fn adjacency_entry(scope: u32, mark: AdjacencyMark) -> (PersistKey, String) {
+    (
+        PersistKey::WindowAdjacent { scope },
+        mark.as_str().to_string(),
+    )
+}
+
+/// 記憶の項目からスコープの隣り合いの印を読む。鍵が無ければ `None`。知らない語は `warn!` を
+/// 出して `None`（印の無い古い記憶と同じ扱い＝位置のまま立つ）。
+pub fn saved_adjacency(entries: &[(PersistKey, String)], scope: usize) -> Option<AdjacencyMark> {
+    let value = entry_value(
+        entries,
+        PersistKey::WindowAdjacent {
+            scope: scope as u32,
+        },
+    )?;
+    let mark = AdjacencyMark::parse(value);
+    if mark.is_none() {
+        warn!(
+            target: "areka::persist::restore",
+            scope,
+            value,
+            "隣り合いの印の語が分からないので印は無いものとして扱う"
+        );
+    }
+    mark
+}
+
+/// 記憶に位置（x・y の両方）があるスコープと、その覚えた印の一覧（`restore_merged_placements` が返す）。
+/// 位置の無いスコープは鍵に入れない（印だけあっても入れない）。
+pub fn restored_scope_marks(
+    entries: &[(PersistKey, String)],
+    merged: &[ScopePlacement],
+) -> BTreeMap<usize, Option<AdjacencyMark>> {
+    merged
+        .iter()
+        .filter(|p| has_saved_char_pos(entries, p.scope))
+        .map(|p| (p.scope, saved_adjacency(entries, p.scope)))
+        .collect()
+}
+
 /// 1 scope 分の復元 merge（[`apply_restored_placements`] の要素写像・純関数）。
 fn merge_scope(
     placement: ScopePlacement,
@@ -524,8 +569,87 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
         );
         return;
     };
+    // 位置を書く束には触れる組の隣り合いの印を足す（書く時機は足さない・dpi-realign-remembered-chain 6.2）。
+    let entries = with_adjacency_marks(world, entries);
     // Ghost スコープ固定（7.1）。fire-and-forget＝UI スレッド非ブロッキング（同期 IO を持ち込まない）。
     wiring.publisher.persist_put(PersistScope::Ghost, entries);
+}
+
+/// 送る束に窓の位置の鍵（[`PersistKey::WindowPos`]）があれば、触れる組 (k−1, k)・(k, k+1) の
+/// 隣り合いの印をスコープ n（組の後ろ側）の鍵で束の後ろへ足す（dpi-realign-remembered-chain
+/// 要件 6.2・6.4・design AdjacencyPersist）。束の中身（位置の値を含む）は変えない。
+///
+/// 印は書く時点の画面の並び（各キャラ窓の [`WindowPos`]）で決める: n が組（[`StickyGroupLedger`]）に
+/// 入っていれば `none`、そうでなければ [`judge_adjacency`] の結果。組の相手のスコープが窓の一式に
+/// 無ければログなしで飛ばし、矩形の読めない窓に触れる組は印を書かず `warn!` を出す。
+/// 束にもう有る印の鍵は足さない（同じ画面の並びから決めるので値は同じ・1 つにまとめる）。
+fn with_adjacency_marks(
+    world: &World,
+    mut entries: Vec<(PersistKey, String)>,
+) -> Vec<(PersistKey, String)> {
+    let touched: BTreeSet<usize> = entries
+        .iter()
+        .filter_map(|(key, _)| match key {
+            PersistKey::WindowPos { scope, .. } => Some(*scope as usize),
+            _ => None,
+        })
+        .flat_map(|k| [k, k + 1])
+        .filter(|&n| n >= 1)
+        .collect();
+    push_adjacency_marks(world, &mut entries, touched);
+    entries
+}
+
+/// 組 (n−1, n) ごとに書く時点の画面の並びから印を決め、スコープ n の鍵で束の後ろへ足し、
+/// 足した印を返す（[`with_adjacency_marks`] と古い記憶の書き足しが共有する唯一の決め方）。
+/// 決め方と飛ばし方は [`with_adjacency_marks`] の説明のとおり。
+fn push_adjacency_marks(
+    world: &World,
+    entries: &mut Vec<(PersistKey, String)>,
+    pairs: BTreeSet<usize>,
+) -> Vec<(usize, AdjacencyMark)> {
+    let mut added = Vec::new();
+    if pairs.is_empty() {
+        return added;
+    }
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        return added;
+    };
+    let in_set: BTreeSet<usize> = ghost_windows.scopes().collect();
+    let rects = snapshot_char_rects(world);
+    let rect = |scope: usize| -> Option<ChainRect> {
+        rects.iter().find(|(s, _)| *s == scope).map(|(_, r)| *r)
+    };
+    let ledger = world.get_resource::<StickyGroupLedger>();
+    for n in pairs {
+        if n == 0 || !in_set.contains(&(n - 1)) || !in_set.contains(&n) {
+            continue;
+        }
+        if entries
+            .iter()
+            .any(|(key, _)| *key == PersistKey::WindowAdjacent { scope: n as u32 })
+        {
+            continue;
+        }
+        let mark = if ledger.is_some_and(|l| l.group_of(n as u32).is_some()) {
+            AdjacencyMark::Separate
+        } else {
+            let (Some(prev), Some(cur)) = (rect(n - 1), rect(n)) else {
+                let unreadable = if rect(n).is_none() { n } else { n - 1 };
+                warn!(
+                    target: "areka::persist::save",
+                    scope = unreadable,
+                    pair_scope = n,
+                    "隣り合いの印: キャラ窓の位置か大きさが読めないので、この組の印は書かない"
+                );
+                continue;
+            };
+            AdjacencyMark::from_adjacency(judge_adjacency(prev, cur))
+        };
+        entries.push(adjacency_entry(n as u32, mark));
+        added.push((n, mark));
+    }
+    added
 }
 
 /// 並べ終えた時点の保存（areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・
@@ -546,7 +670,8 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
 ///   置いた窓は位置では見分けられないので、並べ直しと同じく印で外す（1.7）。
 ///
 /// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
-/// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y だけで（1.5）、全スコープの
+/// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y（1.5）と、[`persist_entries`] が
+/// 足す触れる組の隣り合いの印（dpi-realign-remembered-chain 6.2）で、全スコープの
 /// 分を 1 つの束にして [`persist_entries`] を 1 回呼ぶ（待たない。書き込みの失敗は送った先が
 /// 記録し、UI の側へは戻らない＝起動は続く・4.1）。読めない窓は `warn!` を出して飛ばし、
 /// 残りを書く（4.2）。書いた・書かなかったは target `areka::persist::save` に残す（4.3）。
@@ -572,8 +697,13 @@ pub fn persist_unremembered_char_positions(world: &World) {
     };
 
     let mut entries = Vec::new();
+    // 記憶から戻したスコープ 1 以上で覚えた印が無いもの＝印の無い古い記憶（dpi-realign-remembered-chain 6.5）。
+    let mut unmarked = BTreeSet::new();
     for scope in ghost_windows.scopes() {
         let Some(default_pos) = ghost_windows.default_char_pos(scope) else {
+            if scope >= 1 && ghost_windows.remembered_adjacency(scope).is_none() {
+                unmarked.insert(scope);
+            }
             info!(
                 target: "areka::persist::save",
                 scope,
@@ -645,11 +775,23 @@ pub fn persist_unremembered_char_positions(world: &World) {
         );
         entries.extend(char_pos_entries(scope as u32, saved));
     }
+    // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
+    for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked) {
+        info!(
+            target: "areka::persist::save",
+            scope,
+            mark = %mark.as_str(),
+            "並べ終えた時点の保存: 古い記憶に隣り合いの印だけを書き足した"
+        );
+    }
     if !entries.is_empty() {
         persist_entries(world, entries);
     }
 }
 
+#[cfg(test)]
+#[path = "persist_adjacency_tests.rs"]
+mod adjacency_tests;
 #[cfg(test)]
 #[path = "balloon_offset_persist_roundtrip_tests.rs"]
 mod balloon_offset_persist_roundtrip_tests;

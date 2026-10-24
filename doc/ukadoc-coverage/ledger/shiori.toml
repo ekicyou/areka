@@ -16321,7 +16321,7 @@ build_request の説明が「送らないもの」として名指ししている
 [entry."ukadoc:spec_shiori3:_30b9_30c6_30fc_30bf_30b9_30b3_30fc_30c9:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "shiori2-protocol"
 priority = "A18"
 values = []
 links = []
@@ -16337,6 +16337,14 @@ note = """
 parse_response がステータス行を parse_status_code に渡して数値を取り出し、client.rs の
 map_get_result が 400 と 500 をエラーの枝へ、204 をスクリプト無しの成功へ、それ以外を
 Value を返す枝へ振り分ける。
+SHIORI/2.x の相手: 読み込みの直後に GET Version SHIORI/2.6 を 1 本送り、答えの先頭の行の版の字
+（SHIORI/2. か SHIORI/3. か・状態の番号は見ない）で相手の版を決める。2.x と決まった相手の
+応答も、状態の番号は 3.0 と同じ map_get_result で振り分け、値は Value の代わりに Sentence
+（台本・翻訳の結果）と String（資源の値）から読む。ErrorLevel・ErrorDescription は 2.x に無いので
+読まない。2.x の要求の形は ukadoc に項目が無いのでこの台帳には行を作らず、組み替えの表と出どころ
+（SSP 2.9.23 の記録の抜き書き）は doc/COMPAT_ARCHITECTURE.md §8 に置く。根拠の場所:
+crates/shiori-host32-host/src/shiori2.rs（版の決め方と 2.x の組み立て）と shiori3.rs の
+parse_response_with（値の見出しの名前を受け取る読み）。担当 spec は shiori2-protocol。
 """
 
 [entry."ukadoc:spec_shiori3:_30e1_30bd_30c3_30c9:1"]

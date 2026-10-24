@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::placement::PlacementError;
+use crate::placement::descript_window_keys::DefaultSurfaces;
 use crate::placement::shared_test_support::{
     balloon_root, emo2_root, write_self_alpha_one_descript,
 };
@@ -22,6 +23,12 @@ fn with_com_initialized<F: FnOnce()>(f: F) {
     unsafe {
         CoUninitialize();
     }
+}
+
+/// 組み込みの既定の面で測る（今の期待値はどれも組み込みの面 0／10 の大きさ）。
+type Measured = Result<MeasuredSizes, PlacementError>;
+fn measure_builtin(s: &Path, b: &Path, ids: &[usize], k: &MeasureScaling) -> Measured {
+    measure_scope_sizes(s, b, ids, &DefaultSurfaces::builtin(), k)
 }
 
 /// emo2 検体のゴーストフォルダ配下を `rel` で引く。
@@ -83,7 +90,7 @@ const BALLOON1_H: i32 = 203;
 #[test]
 fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
     with_com_initialized(|| {
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[0, 1],
@@ -130,7 +137,7 @@ fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
 #[test]
 fn measure_emo2_fixture_yields_per_scope_balloon_sizes() {
     with_com_initialized(|| {
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[0, 1],
@@ -160,7 +167,7 @@ fn measure_emo2_fixture_yields_per_scope_balloon_sizes() {
 #[test]
 fn measure_emo2_fixture_scales_per_scope_balloon_independently() {
     with_com_initialized(|| {
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[0, 1],
@@ -192,13 +199,13 @@ fn measure_emo2_fixture_scales_per_scope_balloon_independently() {
     });
 }
 
-/// scope n≥2 は正典既定が無く id10 暫定（warn 付き）＝scope1 と同じキャラ寸になる。
+/// scope n≥2 は組み込みの既定の面 10 で測る＝scope1 と同じキャラ寸になる。
 /// バルーンは scope n≥2 の連鎖にも `balloonk` が載る（正典が三人目以降の流用先として
 /// 名指しする系列）ため、emo2-kakukaku では scope1 と同じ `balloonk0.png` へ解決する。
 #[test]
 fn scope_n_ge_2_measures_interim_id10() {
     with_com_initialized(|| {
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[0, 1, 2],
@@ -210,7 +217,7 @@ fn scope_n_ge_2_measures_interim_id10() {
         assert_eq!(out.scopes[2].scope, 2);
         assert_eq!(
             out.scopes[2].char_size, out.scopes[1].char_size,
-            "scope n≥2 は id10 暫定＝scope1 と同寸"
+            "scope n≥2 は組み込みの面 10＝scope1 と同寸"
         );
         assert_eq!(
             (out.scopes[2].balloon_size.w, out.scopes[2].balloon_size.h),
@@ -239,7 +246,7 @@ fn failed_scope_substitutes_scope0_size() {
         .expect("surfaces.txt の書出し");
         write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
 
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             shell.path(),
             &balloon_root(),
             &[0, 1],
@@ -266,7 +273,7 @@ fn shell_without_any_surface_is_measure_error() {
     with_com_initialized(|| {
         let empty_shell = TempDir::new();
 
-        match measure_scope_sizes(
+        match measure_builtin(
             empty_shell.path(),
             &balloon_root(),
             &[0],
@@ -302,7 +309,7 @@ fn balloonk_absent_yields_identical_size_for_all_scopes() {
         .expect("balloons0.png の複写");
         write_self_alpha_one_descript(balloon.path(), "use_self_alpha");
 
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             &emo2("shell/master"),
             balloon.path(),
             &[0, 1, 2],
@@ -343,7 +350,7 @@ fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
         )
         .expect("balloons0.png の複写");
         write_self_alpha_one_descript(control_dir.path(), "use_self_alpha");
-        let control = measure_scope_sizes(
+        let control = measure_builtin(
             &emo2("shell/master"),
             control_dir.path(),
             &[0],
@@ -352,7 +359,7 @@ fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
         .expect("対照ディレクトリの採寸は成功する");
 
         // 実 fixture（相方側 `balloonk0.png` を併せ持つ）。
-        let actual = measure_scope_sizes(
+        let actual = measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[0, 1],
@@ -380,7 +387,7 @@ fn missing_balloon_frame_is_measure_error() {
     with_com_initialized(|| {
         let empty_balloon = TempDir::new();
 
-        match measure_scope_sizes(
+        match measure_builtin(
             &emo2("shell/master"),
             empty_balloon.path(),
             &[0],
@@ -851,7 +858,7 @@ fn native_stage_balloon_failure_reports_real_scope() {
     with_com_initialized(|| {
         let empty_balloon = TempDir::new();
 
-        match measure_scope_sizes(
+        match measure_builtin(
             &emo2("shell/master"),
             empty_balloon.path(),
             &[1, 2],
@@ -879,7 +886,7 @@ fn native_stage_balloon_failure_reports_real_scope() {
 fn scope_beyond_u32_is_measure_error() {
     with_com_initialized(|| {
         let huge = usize::MAX;
-        match measure_scope_sizes(
+        match measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[huge],
@@ -901,7 +908,7 @@ fn scope_beyond_u32_is_measure_error() {
 #[test]
 fn measure_emo2_fixture_applies_k_end_to_end() {
     with_com_initialized(|| {
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             &emo2("shell/master"),
             &balloon_root(),
             &[0, 1],
@@ -954,7 +961,7 @@ fn placement_read_honours_the_files_own_charset_declaration() {
             .expect("surfaces.txt の書出し");
         write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
 
-        let out = measure_scope_sizes(
+        let out = measure_builtin(
             shell.path(),
             &balloon_root(),
             &[0],

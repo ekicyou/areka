@@ -659,6 +659,8 @@ fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
         },
         // 採寸 DPI は既定の 96（この助手は寸法にも配置にも依らないので値は判定に効かない）。
         measure_dpi: DPI::from_dpi(96, 96),
+        default_surfaces: DefaultSurfaces::builtin(),
+        balloon_dontmove: Default::default(),
     }
 }
 

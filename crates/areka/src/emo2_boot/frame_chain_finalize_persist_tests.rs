@@ -83,7 +83,7 @@ fn support_wired_world_delivers_positions_to_store() {
                 DefaultEncoding::Ansi,
             );
             assert_eq!(
-                restored.into_iter().collect::<Vec<_>>(),
+                restored.into_keys().collect::<Vec<_>>(),
                 vec![0, 1],
                 "書いた記憶を起動の準備の関数が読み直せる"
             );

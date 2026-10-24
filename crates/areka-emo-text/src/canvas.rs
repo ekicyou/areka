@@ -186,7 +186,9 @@ pub struct ChoiceLineContent {
     pub hovered: Option<usize>,
     /// 解決済みハイライト塗り（`None`＝描かない＝GlyphRun と同一の素描画）。
     pub highlight: Option<HighlightPaint>,
-    /// ハイライト帯（＝ヒット帯）のブロック軸寸（image px・行矩形の block 近端起点）。
+    /// ハイライト帯（＝ヒット帯）のブロック軸寸（image px・起点は行矩形の左辺〔横書きは上辺〕
+    /// ＋ [`band_offset`](Self::band_offset)）。縦書きは列の em
+    /// （[`LineBand`](crate::choice::LineBand) の写し）。横書きは以下のとおり。
     ///
     /// [`highlight_band_extent`](crate::choice::highlight_band_extent) が実 font metrics
     /// （`ascent + descent`）から決めた **descent 込みの帯丈**——`run.size` の em ボックス丈
@@ -195,7 +197,9 @@ pub struct ChoiceLineContent {
     /// ハイライト矩形とダーティ帯の両方を組み、純粋層の
     /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
     pub band_extent: f32,
-    /// ハイライト帯（＝ヒット帯）を行矩形の block 近端から内側へ寄せる量（image px）。
+    /// 行矩形の左辺（横書きは上辺）からハイライト帯（＝ヒット帯）の起点までの**符号つき**の量
+    /// （image px・[`LineBand`](crate::choice::LineBand) の写し）。縦書きの右から左は負になり得る
+    /// （帯が行矩形の左へ出る）。縦書きの左から右は 0 以上。横書きは以下のとおり 0 以上。
     ///
     /// [`highlight_band_offset`](crate::choice::highlight_band_offset) が
     /// `round(max(0, 行ボックス丈 − band_extent) / 2)` で決めた値——帯を行ボックスの**中央**へ

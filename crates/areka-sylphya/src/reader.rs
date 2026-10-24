@@ -8,20 +8,22 @@
 //!
 //! ## 無待機の読み不変（R2.7 / R8.3・観測条件）
 //!
-//! [`SylphyaReader::resolve_flat`] / [`SylphyaReader::resolve_dotted`] /
-//! [`SylphyaReader::resolve_dotted_str`] / [`SylphyaReader::talk_snapshot`] が行うのは
-//! **鏡像の read lock 取得 → `Arc` clone → 不変像への map 参照** のみである。
-//! チャネルの送受信（send/recv）・ファイル IO・OS 呼出・他アクター/他スレッドへの
-//! ブロッキング照会は一切行わない（`SharedMirror::load` 自体がその不変を持つ）。
+//! 読みが行うのは、写しの読みの鍵と `Arc` の複製、登録の表の読みの鍵と複製、
+//! 登録された読み手（[`PullSource`]）の呼び出しだけである。他エンジン・他スレッドへの
+//! ブロッキング照会を行わず、遅延しうる値源を同期読み経路に載せない（完了 spec
+//! `areka-P0-sylphya` の要件 2.7）。外部環境へのアクセスは外から登録された読み手
+//! （注入可能な値源シーム）を通す（同 8.3）。読み手はその約束を守るものだけを登録する。
 //! ゆえに読み経路はシステム全体の直列化点にならない。
 
 use crate::asker::AskerContext;
 use crate::key::{PropPath, parse_dotted};
 use crate::mirror::SharedMirror;
+use crate::pull::{PullRegistry, PullShape, PullSource};
 use crate::value::{DottedResolution, FlatResolution};
 use crate::vocab::DegradePolicy;
 use crate::vocab::flat::FLAT_VOCAB;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// 共有読みハンドル: 鏡像（[`SharedMirror`]）を包み、同期・無待機の読み口 2 形を提供する。
 ///
@@ -31,12 +33,23 @@ use std::collections::BTreeMap;
 #[derive(Clone)]
 pub struct SylphyaReader {
     shared: SharedMirror,
+    pull: PullRegistry,
 }
 
 impl SylphyaReader {
-    /// 共有鏡像ハンドルから読み口を構築する。
+    /// 共有鏡像ハンドルから読み口を構築する（登録の表は空）。
     pub fn new(shared: SharedMirror) -> Self {
-        SylphyaReader { shared }
+        SylphyaReader {
+            shared,
+            pull: PullRegistry::default(),
+        }
+    }
+
+    /// 名前の形に読み手を登録する（同じ形は置き換え）。複製どうしで共有される。
+    ///
+    /// 写しの区画に無い点付きの名前だけがこの読み手に届く。答えは写しにも保存にも書かない。
+    pub fn register_pull(&self, shape: PullShape, source: Arc<dyn PullSource>) {
+        self.pull.register(shape, source);
     }
 
     /// フラット窓の逐次解決（`%` 抜きの名を与える・R3.1）。
@@ -73,13 +86,13 @@ impl SylphyaReader {
     /// 点付き窓の逐次解決（パース済み [`PropPath`]・R3.2 / R5.2）。
     ///
     /// `PropPath` を正準文字列形（[`PropPath::to_canonical_string`]）へ正規化し、
-    /// per-asker → global の順で点付き区画を引く。値が実在すれば
-    /// [`DottedResolution::Value`]、不在なら [`DottedResolution::NotFound`]（決定論）。
+    /// per-asker → global の順で点付き区画を引き、どちらにも無い時だけ登録の表の読み手に聞く。
+    /// 値が得られれば [`DottedResolution::Value`]、無ければ [`DottedResolution::NotFound`]。
     ///
     /// 無待機（R2.7）・由来非露出（R2.4）。
     pub fn resolve_dotted(&self, asker: &AskerContext, path: &PropPath) -> DottedResolution {
         let key = path.to_canonical_string();
-        self.resolve_dotted_canonical(asker, &key)
+        self.resolve_dotted_canonical(asker, path, &key)
     }
 
     /// 文字列 key の便宜口（sink 用・R3.2）。
@@ -123,16 +136,25 @@ impl SylphyaReader {
         out
     }
 
-    /// 正準文字列 key で点付き区画を引く（per-asker → global）。内部共通経路。
-    fn resolve_dotted_canonical(&self, asker: &AskerContext, key: &str) -> DottedResolution {
+    /// 正準文字列 key で点付き区画を引く（per-asker → global → 登録の表）。内部共通経路。
+    fn resolve_dotted_canonical(
+        &self,
+        asker: &AskerContext,
+        path: &PropPath,
+        key: &str,
+    ) -> DottedResolution {
         let img = self.shared.load();
         let hit = img
             .dotted_per_asker
             .get(&asker.asker)
             .and_then(|m| m.get(key))
             .or_else(|| img.dotted_global.get(key));
-        match hit {
-            Some(v) => DottedResolution::Value(v.clone()),
+        if let Some(v) = hit {
+            return DottedResolution::Value(v.clone());
+        }
+        // 写しに無い時だけ読み手に聞く（`find` は鍵を外してから返すので、呼ぶのは鍵の外）。
+        match self.pull.find(path).and_then(|s| s.read(path)) {
+            Some(v) => DottedResolution::Value(v),
             None => {
                 tracing::debug!(
                     target: "areka_sylphya::reader",

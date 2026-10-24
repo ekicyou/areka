@@ -1,12 +1,25 @@
 use super::ViewboxExecutor;
-use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
+use super::test_support::{
+    Rig, block_axis_ink_span, build, geo_model, glyph_items, live_diff_model_font, opaque_count,
+};
+use super::vertical_band_readback_tests::{R_CHOICES, R_FONTS, R_LATIN};
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, Resident, ResidentContent,
 };
-use crate::draw::ResolvedFont;
+use crate::choice::line_bands;
+use crate::cursor_tag::CursorWarnGuard;
+use crate::draw::{DWriteMetrics, FontCatalog, PROBE_MAX_EXTENT, ResolvedFont, create_text_format};
+use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::look::{GlyphStyles, StyleId, StyleTable, TextLook};
 use crate::region::{ScaleContract, TextRegion};
-use crate::state::TextItem;
+use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
+use areka_sakura::contract::ActorKey;
+use windows::Win32::Graphics::DirectWrite::{
+    DWRITE_FACTORY_TYPE_SHARED, DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS,
+};
+use windows::core::HSTRING;
+use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
 
 /// canvas の GlyphRun 住人を、内包 run が等価な非 hover の Choice 住人へ写す
 /// （`segments` 空・`hovered=None`・`highlight=None`）。transform/effects は不変。
@@ -369,7 +382,7 @@ fn hover_band_offset_shifts_paint_and_leaves_no_residue_on_hover_off() {
 }
 
 /// premultiplied BGRA 密配列の全域から、指定 BGRA を持つ画素の x 範囲（左端, 右端）を返す。
-fn bgra_x_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Option<(u32, u32)> {
+pub(super) fn bgra_x_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Option<(u32, u32)> {
     let mut span: Option<(u32, u32)> = None;
     for x in 0..w {
         let hit = (0..h).any(|y| {
@@ -462,4 +475,240 @@ fn vertical_band_offset_shifts_paint_on_block_axis() {
         flat_span.1 - flat_span.0,
         "寄せても帯の厚みは変わらない（帯を広げない）"
     );
+}
+
+/// 1.2 の記録（設計の行き止まり「大きさの違う列が隣り合う」・議題 1）: `\f[height,40]` の字の列と、
+/// その両隣の em 20 の列の**字のインクそのもの**が重なるかを、2 つの向き × 拡大率 1・2 で測る。
+/// 帯は見ない（帯の式に依らない数）。合否に入れず、測った数を標準出力へ出す（`research.md` 13 節）。
+#[test]
+#[ignore = "実 GPU の記録だけ（1.2）: 大きい字の列と隣の列のインクの重なりを測る・合否なし"]
+fn vertical_big_glyph_column_ink_overlap_record() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let mut rig = Rig::new();
+    let name = R_FONTS[0].0;
+    let default = TextLook {
+        name: vec![name.to_owned()],
+        height: 20.0,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let big = table.intern(
+        &TextLook {
+            height: 40.0,
+            ..default.clone()
+        },
+        &default,
+    );
+    // 小さい列・大きい列（\f[height,40]）・小さい列。
+    let words: [(&str, StyleId); 3] = [
+        ("雨だよ", StyleId::DEFAULT),
+        ("晴れてる", big),
+        ("曇ってる", StyleId::DEFAULT),
+    ];
+    let mut items = Vec::new();
+    let mut ids = Vec::new();
+    for (word, id) in words {
+        if !items.is_empty() {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        let word_items = glyph_items(word);
+        ids.extend(std::iter::repeat_n(id, word_items.len()));
+        items.extend(word_items);
+    }
+    let model = live_diff_model_font(Some(name), Some(20));
+    let font = ResolvedFont::resolve(&model);
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成");
+        let image = (200u32, 200u32);
+        let region = TextRegion::resolve(&model, image, mode);
+        let styles = GlyphStyles {
+            table: &table,
+            ids: &ids,
+            default: &default,
+            current: &default,
+        };
+        let lines = LayoutEngine::layout_styled(
+            &items,
+            ids.len(),
+            &region,
+            mode,
+            20.0,
+            &metrics,
+            WrapPlan::CharByChar,
+            styles,
+            &ActorKey::from("0"),
+            &mut CursorWarnGuard::default(),
+        );
+        assert_eq!(lines.len(), 3, "3 列に並ぶ");
+        let window = LayoutEngine::visible_window(&lines, &region, mode);
+        let base = ContentCanvas::from_layout(&lines, &region, mode);
+        for k in [1.0f32, 2.0] {
+            let tag = format!("[{name} 大きい字 {mode:?} k={k}]");
+            let contract = ScaleContract::new(k, None);
+            let ink: Vec<(u32, u32)> = (0..lines.len())
+                .map(|i| {
+                    let only = ContentCanvas {
+                        residents: vec![base.residents[i].clone()],
+                        size: base.size,
+                    };
+                    let mut surface = rig.attach(image, k);
+                    let (w, h) = surface.size();
+                    let mut exec =
+                        ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+                    exec.render_styled(
+                        &only,
+                        &window,
+                        &font,
+                        mode,
+                        &contract,
+                        &mut surface,
+                        &table,
+                    )
+                    .expect("大きい字の列の描画に失敗");
+                    let px = surface.read_back().expect("read_back 失敗");
+                    block_axis_ink_span(&px, w, h, mode).expect("列のインクが在る")
+                })
+                .collect();
+            for (i, line) in lines.iter().enumerate() {
+                println!(
+                    "{tag} 列 {}: 行矩形 x{}..{}（物理）・インク x{}..{}",
+                    words[i].0,
+                    line.rect.left * k,
+                    line.rect.right * k,
+                    ink[i].0,
+                    ink[i].1
+                );
+            }
+            for j in [0usize, 2] {
+                let (b, n) = (ink[1], ink[j]);
+                // 正なら重なる画素の数、0 以下なら間の画素の数（負号つき）。
+                let overlap = i64::from(b.1.min(n.1)) - i64::from(b.0.max(n.0)) + 1;
+                println!("{tag} 大きい列と {} のインクの重なり {overlap}", words[j].0);
+            }
+        }
+    }
+}
+
+/// 5.1 の書体（ぱすたの `pasta_tategaki` の `font.name` は候補列のまま＝本番と同じ `FontCatalog::pick` で引く）。
+const M_FONTS: [&str; 3] = [
+    "Yu Gothic UI",
+    "ＭＳ ゴシック",
+    "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ",
+];
+
+/// 5.1 の記録（設計の T5.1・要件 4.2／4.3／6.3）: 書体 × 大きさ 20・28 × 2 つの向き × 拡大率 1・2 で、
+/// 引けた書体の名前・本番と同じ書式と幅 em の TextLayout の left／width／行の高さ／baseline・列ごとの
+/// インク（行矩形の左辺からの物理画素）を出し、em の箱を基線に中央で重ねた所を 2 つの式
+/// （A＝left＋baseline・B＝left＋width−baseline）で出して、仮名と漢字のインクを覆うかを記録する。
+/// 合否なし（`research.md` 17 節の材料）。
+#[test]
+#[ignore = "実 GPU の記録だけ（5.1）: 書体ごとの縦書きの基線と em の箱とインクを測る・合否なし"]
+fn vertical_em_box_from_column_baseline_record() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let mut rig = Rig::new();
+    let words: Vec<&str> = R_CHOICES.iter().copied().chain([R_LATIN]).collect();
+    for name in M_FONTS {
+        for size in [20u32, 28] {
+            let em = size as f32;
+            let model = live_diff_model_font(Some(name), Some(size));
+            let font = ResolvedFont::resolve(&model);
+            let picked = FontCatalog::new(&factory).expect("FontCatalog").pick(&font);
+            for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+                let tag = format!("[5.1 {} {size} {mode:?}]", picked.name);
+                let metrics =
+                    DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+                        .expect("DWriteMetrics 生成");
+                let format = create_text_format(&factory, &picked, mode).expect("TextFormat");
+                // 式 A・B の em の箱の左（論理・行矩形の左辺から）を、仮名 1 字「あ」と各列の字で出す。
+                let mut boxes = Vec::new();
+                for word in std::iter::once("あ").chain(words.iter().copied()) {
+                    let layout = factory
+                        .create_text_layout(&HSTRING::from(word), &format, em, PROBE_MAX_EXTENT)
+                        .expect("CreateTextLayout");
+                    let mut tm = DWRITE_TEXT_METRICS::default();
+                    unsafe { layout.GetMetrics(&mut tm) }.expect("GetMetrics");
+                    let mut lm = [DWRITE_LINE_METRICS::default(); 4];
+                    let mut count = 0;
+                    unsafe { layout.GetLineMetrics(Some(&mut lm), &mut count) }
+                        .expect("GetLineMetrics");
+                    let (a, b) = (
+                        tm.left + lm[0].baseline - em / 2.0,
+                        tm.left + tm.width - lm[0].baseline - em / 2.0,
+                    );
+                    println!(
+                        "{tag} TextLayout {word}: left {:.2}・width {:.2}・行の高さ {:.2}・baseline {:.2}・箱の左 A {a:.2}（比 {:.4}）・B {b:.2}（比 {:.4}）",
+                        tm.left,
+                        tm.width,
+                        lm[0].height,
+                        lm[0].baseline,
+                        a / em,
+                        b / em
+                    );
+                    boxes.push((a, b));
+                }
+                let (a, b) = boxes[0];
+                let image = (((em + 2.0) * 6.0) as u32, (em * 5.0) as u32);
+                let region = TextRegion::resolve(&model, image, mode);
+                let mut items = Vec::new();
+                for word in &words {
+                    if !items.is_empty() {
+                        items.push(TextItem::LineBreak { ratio: 1.0 });
+                    }
+                    items.extend(glyph_items(word));
+                }
+                let glyphs = items.len() - (words.len() - 1);
+                let lines = LayoutEngine::layout(
+                    &items,
+                    glyphs,
+                    &region,
+                    mode,
+                    em,
+                    &metrics,
+                    WrapPlan::CharByChar,
+                );
+                let bands = line_bands(&lines, mode, &metrics);
+                println!(
+                    "{tag} 行の箱（比から） {:.2}・今の帯（5.2 の測った em の箱）の寄せ {}",
+                    metrics.line_box_height(em),
+                    bands[0].offset
+                );
+                let window = LayoutEngine::visible_window(&lines, &region, mode);
+                let base = ContentCanvas::from_layout(&lines, &region, mode);
+                for k in [1.0f32, 2.0] {
+                    let contract = ScaleContract::new(k, None);
+                    for (i, line) in lines.iter().enumerate() {
+                        let only = ContentCanvas {
+                            residents: vec![base.residents[i].clone()],
+                            size: base.size,
+                        };
+                        let mut surface = rig.attach(image, k);
+                        let (w, h) = surface.size();
+                        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
+                        exec.render(&only, &window, &font, mode, &contract, &mut surface)
+                            .expect("列の描画");
+                        let px = surface.read_back().expect("read_back");
+                        let Some((lo, hi)) = block_axis_ink_span(&px, w, h, mode) else {
+                            println!("{tag} k={k} 列 {}: インクなし", words[i]);
+                            continue;
+                        };
+                        let o = line.rect.left * k;
+                        let ink = (lo as f32 - o, hi as f32 - o);
+                        // 帯の物理の範囲 [k·round(箱の左), k·round(箱の左)+k·em) と、インクを覆うか。
+                        let band = |left: f32| {
+                            let l = k * left.round();
+                            (l, l + k * em - 1.0, l <= ink.0 && l + k * em >= ink.1 + 1.0)
+                        };
+                        println!(
+                            "{tag} k={k} 列 {}: インク {:?}（行矩形から）・A 帯と覆う {:?}・B 帯と覆う {:?}",
+                            words[i],
+                            ink,
+                            band(a),
+                            band(b)
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

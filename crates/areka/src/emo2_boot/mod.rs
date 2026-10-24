@@ -125,7 +125,7 @@ use bevy_ecs::world::World;
 use tracing::{error, info, warn};
 use wintf::ecs::{Update, update_typewriters};
 
-use crate::placement::AuthorDpi;
+use crate::placement::{AuthorDpi, DefaultSurfaces};
 
 use self::adapter::PresentBridge;
 use self::assets::{
@@ -314,6 +314,7 @@ fn build_boot_assets_for(
     scopes: &[u32],
     author_dpi: AuthorDpi,
     shell: Option<&str>,
+    default_surfaces: &DefaultSurfaces,
 ) -> Result<BootAssets, BootWiringError> {
     build_boot_assets_with_shell(
         ghost_root,
@@ -322,6 +323,7 @@ fn build_boot_assets_for(
         author_dpi.shell,
         author_dpi.balloon,
         shell,
+        default_surfaces,
     )
 }
 
@@ -416,6 +418,7 @@ pub fn wire_emo2_boot(
     zorder_descript: Option<&str>,
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
+    default_surfaces: &DefaultSurfaces,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
     /// boot へ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
@@ -444,6 +447,7 @@ pub fn wire_emo2_boot(
         &scopes,
         author_dpi,
         shell,
+        default_surfaces,
     ) {
         Ok(assets) => assets,
         Err(err) => {
@@ -730,6 +734,7 @@ mod wire_tests {
                 balloon: 144,
             },
             None,
+            &DefaultSurfaces::builtin(),
         )
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -771,6 +776,7 @@ mod wire_tests {
             None,
             std::sync::mpsc::channel().0,
             None,
+            &DefaultSurfaces::builtin(),
         );
 
         assert!(

@@ -308,6 +308,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `key.rs` - 正準 key `PropPath`／セレクタ 5 形パーサ（正準文字列化 `to_canonical_string()` が**唯一の権威**）
 - `vocab/` - 語彙台帳（`flat.rs` 26 トークン／`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論＋記録用のサウンドプロパティ名 18（書き込みの仕分けは読まない）／`shiori_resource.rs` 159 項目）＝**完全語彙を第一級保持**し未導出は縮退シームで管理
 - `mirror.rs` / `reader.rs` / `value.rs` / `asker.rs` - 不変鏡像（per-asker/global 区画・epoch 単調増加）と `SylphyaReader`（`resolve_flat`／`resolve_dotted`／`talk_snapshot`）・問い合わせ元コンテキスト第一級
+- `pull.rs` - 動く値の口（`PullShape`・`PullSource`・`SylphyaReader::register_pull`）。鏡像のどちらの区画にも無い点付きの名前だけを、外から名前の形に登録した読み手に読まれた時に聞く。読み手は待たない・遅れない読み取りに限る（`mcp-scope-rect-property` 2026-10-23。窓の矩形の読み手は `crates/areka/src/ghost_session_scope_rect.rs`）
 - `actor.rs` - `SylphyaMsg` envelope・**純関数中核 `SylphyaCore::apply`**（判断分岐を集約・受信ループは薄い配線）・`spawn_sylphya`／`SylphyaPublisher`（`barrier()` で反映フェンス）
 - `persist/` - 層別スコープ（App/Ghost/Shell/Balloon）×TOML（`format-version`）×原子的書込（temp→rename）×寛容読取 3 段×4 key 族
 **Dependencies**: **std・thiserror・tracing・toml・areka-actor のみ**（上流 areka クレートへの依存は**禁止**＝最下層規律。「消費者は backing を知らない」はこの依存方向から自動帰結）
@@ -387,7 +388,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Purpose**: x64/arm64 の areka から 32bit SHIORI DLL（emo2 の `pasta.dll` 等）を駆動する過去互換ブリッジ（M1 ①shiori トラック・`areka-P0-host32-ipc` 2026-07-02 完了）。
 **Pattern**（ターゲットを **crate 境界で分離**＝`cfg` 分岐回避）:
 - `shiori-host32-ipc` - プロトコル定義（bytes-over-wire・両側共有）
-- `shiori-host32-host` - x64＋arm64 側ホスト
+- `shiori-host32-host` - x64＋arm64 側ホスト。`shiori2.rs` が SHIORI/2.x の書き方（読み込みの直後の版の確かめ・2.x の要求への組み替え・`Sentence`／`String` の答えの読み）を持ち、`Shiori3Client` が接続の版で書き方を選ぶ（`shiori2-protocol` 2026-10-24 完了・表は `doc/COMPAT_ARCHITECTURE.md` §8）
 - `shiori-host32-helper` - **i686 専用** helper 実行体（`wintf-winmsg-executor` の message pump 上）
 - トランスポートは **WM_COPYDATA 一本化＋再入 RESPONSE**（named pipe 不要）。x64⟷x86 を跨ぐのは生バイト列のみ
 - 下流ユニット（shiori-load／request／lifecycle）はこの seam の上に増分

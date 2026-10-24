@@ -256,6 +256,7 @@ pub(super) fn WM_MOUSEMOVE(
                     }
                 }
                 crate::ecs::drag::DragStateSnapshot::Dragging {
+                    entity: drag_entity,
                     prev_pos,
                     start_pos,
                     hwnd: drag_hwnd,
@@ -299,6 +300,12 @@ pub(super) fn WM_MOUSEMOVE(
                     // NOTE: SetWindowPosはWM_WINDOWPOSCHANGEDを同期発火し、そこで
                     // World borrowが必要になるため、借用スコープ外に遅延実行する
                     if move_window {
+                        // 始めの値は ECS の DraggingState が正本（拡大率の変化で掴んだ点を置き直せる）
+                        let live = world_borrow
+                            .world()
+                            .get::<crate::ecs::drag::DraggingState>(drag_entity);
+                        let (initial_window_pos, start_pos) =
+                            dragging_window_origin(initial_window_pos, start_pos, live);
                         let mut new_x = initial_window_pos.x + (current_pos.x - start_pos.x);
                         let mut new_y = initial_window_pos.y + (current_pos.y - start_pos.y);
 
@@ -452,6 +459,25 @@ pub(super) fn WM_MOUSEMOVE(
     Some(LRESULT(0))
 }
 
+/// ドラッグの式の始めの値を選ぶ。live（ドラッグ対象の DraggingState）があれば
+/// (initial_inset を整数にしたもの, drag_start_pos)、無ければ控えの (initial_window_pos, start_pos)。
+pub(crate) fn dragging_window_origin(
+    snapshot_origin: crate::ecs::Point,
+    snapshot_start: crate::ecs::pointer::PhysicalPoint,
+    live: Option<&crate::ecs::drag::DraggingState>,
+) -> (crate::ecs::Point, crate::ecs::pointer::PhysicalPoint) {
+    match live {
+        Some(s) => (
+            crate::ecs::Point {
+                x: s.initial_inset.0.round() as i32,
+                y: s.initial_inset.1.round() as i32,
+            },
+            s.drag_start_pos,
+        ),
+        None => (snapshot_origin, snapshot_start),
+    }
+}
+
 /// WM_MOUSELEAVE: マウス離脱メッセージ
 ///
 /// 当該ウィンドウに属するエンティティのPointerStateのみを削除し、
@@ -600,3 +626,7 @@ mod tests {
         assert!(result.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "mouse_move_drag_origin_tests.rs"]
+mod mouse_move_drag_origin_tests;

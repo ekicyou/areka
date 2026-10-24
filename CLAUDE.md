@@ -65,6 +65,7 @@ Skills are located in `.claude/skills/*/SKILL.md` (mostly `kiro-*`)
 - `kiro-debug` — root-cause-first debug protocol used by debugger subagents
 - `kiro-verify-completion` — fresh-evidence gate before success or completion claims
 - `release` — one release (`/release [X.Y.Z]`); the procedure lives in the skill (`SKILL.md` + `procedure.md`) and runs in the main context without approval stops; it stops only on a failed check, a red run, a state the procedure does not cover, or a refused command
+- `update` — dependency update (`/update [--check]`, only when the developer types it): surveys the Rust dependencies, proposes compatible updates / raised minimums / major updates in one batch with recommendations, then commits the approved ones per category (majors per dependency), runs one full test on the exclusive-test desk and lands them by PR → squash merge; never during `/release`
 - `kiro-watch-clear` — clears every record of the impl-watch desks (`areka-impl-watch.exe clear`, then `status`); run only when the developer asks for a full clear (runbook: `doc/impl-watch.md`)
 - `kiro-next` — roadmap inventory ("棚卸") and next-wave planning (rewrites `roadmap.md` / `roadmap-history.md` / `focus.md` on the worktree branch; PR + squash merge only behind an explicit approval)
 - `kiro-wave` — launches the wave `/kiro-next` recommended as separate sessions (Opus specs only; Fable specs excluded with a warning); lands this worktree's changes by PR → squash merge first
