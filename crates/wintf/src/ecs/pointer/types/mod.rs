@@ -122,16 +122,16 @@ pub struct PointerState {
     /// エンティティローカル座標（物理ピクセル）
     pub local_point: PhysicalPoint,
 
-    // === ボタン押下状態（wParam のビットマスクを透過転送）===
-    /// 左ボタン押下中 (MK_LBUTTON)
+    // === ボタン押下（この tick に押下が届いたボタン。配りの後に `dispatch_pointer_events` が下ろす）===
+    /// この tick に左ボタンが押された
     pub left_down: bool,
-    /// 右ボタン押下中 (MK_RBUTTON)
+    /// この tick に右ボタンが押された
     pub right_down: bool,
-    /// 中ボタン押下中 (MK_MBUTTON)
+    /// この tick に中ボタンが押された
     pub middle_down: bool,
-    /// XButton1 押下中 (MK_XBUTTON1) - 4thボタン
+    /// この tick に XButton1（4thボタン）が押された
     pub xbutton1_down: bool,
-    /// XButton2 押下中 (MK_XBUTTON2) - 5thボタン
+    /// この tick に XButton2（5thボタン）が押された
     pub xbutton2_down: bool,
 
     // === 修飾キー状態（wParam から透過転送）===
