@@ -21,7 +21,6 @@
 
 pub(crate) mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
-// 呼び手（起動・シェルの切り替え・台本の lock の結線）は task 5.3・6.1 でつながる。
 pub(crate) mod balloon_lock;
 pub mod chain_finalize;
 /// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
