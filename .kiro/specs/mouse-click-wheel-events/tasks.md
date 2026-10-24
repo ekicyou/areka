@@ -87,7 +87,7 @@
   - メニューの結線のテストに、同じ受信端で右の押下 → 解放の後の順が「右の解放の知らせ → メニューの照会」・押下の無い解放ではクリックを送らず照会は 1 件・`popupmenu.visible` の返事で出す・抑える（預かりの右ダブルクリック）が今の引き金の檻と同じ結果、が足されて通る
   - _Depends: 3.4_
   - _Requirements: 4.3, 5.1, 5.2, 5.3, 8.4, 11.1_
-- [ ] 4.2 触った 3 つのクレートのテストを全部回し、今のテストが変えずに通ることを確かめる
+- [x] 4.2 触った 3 つのクレートのテストを全部回し、今のテストが変えずに通ることを確かめる
   - kanade・areka・wintf のテストを回し、手書きの数 64 のほかに今のテストを直していないことを差分で示す
   - ダブルクリック・ドラッグ・右クリックのメニュー・強制退避のテストが緑で、新しい・直したファイルがどれも 1,000 行以下
   - _Depends: 1.2, 2.4, 3.5, 4.1_
@@ -127,3 +127,4 @@
 - 3.3: wintf の `PointerState` の `*_down` は「この tick に押された」の意味（配りの後に毎回下ろす）。型の doc の「押下中 (MK_LBUTTON)」は今の動きと食い違う（範囲外・完了の棚卸で扱う）。`click.rs` のモジュールと `MouseWiring::send_mouse` に dead_code の足場（3.4・3.5 で外す）。`ClickButton` に `Hash` を足した。
 - 3.4: 解放の受け手 `click::on_char_pointer_released` はまだどこにも登録していない（4.1 の包みで登録）。`click.rs` のモジュールと `send_mouse` の dead_code の足場は 4.1 で外す。wintf の `released` も「この tick に放した」の旗。
 - 3.5: design の「`until_ms <= now_ms` なら `tick_wake::mark(REARM)`」の枝は `plan_wheel` が `now_ms < until_ms` でしか `Wait` を返さないので届かず、置いていない。`char_watch` は毎 tick `world.query` で QueryState を作り直す（窓の数程度で実害は小さい・持ち続ける形は `emo2_boot/frame/wiring.rs` が先例）。
+- 4.2（2026-10-24）: kanade 702+85・areka bin 3598（ignored 2）＋統合・wintf 1193（ignored 18）＋統合 489・doctest 14 がすべて緑。merge-base `15d8b0f3` からの既存のテストの直しは、手書きの数 64（`events_change_tests.rs`）・表の全体の檻への 9 語（`events_tests.rs`）・押下のゲートの檻の置き換え（`pointer/dispatch/tests.rs`）の 3 つと、`menu/mod_wiring_tests.rs` の import の 1 行の広げ（新しいテストのため）だけ。ほかの既存テストのファイルは足しただけ。足した・直したファイル 29 本はどれも 1,000 行以下（最長 `steady.rs` 968 行）。
