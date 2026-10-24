@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use areka_emo_compose::BoxLayout;
 use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::SurfaceKeyOutcome;
+use areka_emo_text::state::{SurfaceFallback, SurfaceKeyOutcome};
+use areka_sakura::ActorKey;
 use areka_seriko::{SurfaceResolver, SurfaceTarget};
 use bevy_ecs::world::World;
 
@@ -23,10 +24,12 @@ pub(crate) struct ShellBoxAssets {
     pub surface_ids: BTreeSet<u32>,
     /// 箱の `font.name` のフォントを探す場所の順（[`box_font_search_dirs`]）。
     pub font_dirs: Vec<PathBuf>,
+    /// スコープごとの戻り先の候補の並び（`DefaultSurfaces::candidates`・descript-window-keys 要件 3.2）。
+    pub fallback_candidates: BTreeMap<ActorKey, Vec<u32>>,
 }
 
 impl ShellBoxAssets {
-    /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。`\s` の解決の閉包は、別名の写しから
+    /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。箱の配置の直後に戻り先の引き直しを呼ぶ。`\s` の解決の閉包は、別名の写しから
     /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（[`resolve_for_text`]）。
     pub(crate) fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
         let ShellBoxAssets {
@@ -34,14 +37,21 @@ impl ShellBoxAssets {
             aliases,
             surface_ids,
             font_dirs,
+            fallback_candidates,
         } = self;
         let resolver = SurfaceResolver::new(aliases);
+        let fallback = SurfaceFallback {
+            surface_ids: surface_ids.clone(),
+            candidates: fallback_candidates,
+        };
         runtime.set_box_layout(
             world,
             layout,
             Box::new(move |key| resolve_for_text(&resolver, &surface_ids, key)),
             font_dirs,
         );
+        // シェルの切替で今の面が無いスコープを seriko と同じ戻り先へ替える（descript-window-keys 要件 3.2・3.5）。
+        runtime.fall_back_box_surfaces(&fallback);
     }
 }
 

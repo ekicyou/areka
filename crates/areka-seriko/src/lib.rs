@@ -32,6 +32,8 @@ mod parts;
 mod resolve;
 // 面 1 つを時点 T まで進める口（spec: areka-P0-offline-surface-dump）。
 mod settle;
+// シェルの差し替えの戻り先（spec: descript-window-keys）。
+mod shell_fallback;
 mod state;
 mod table;
 // 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上の面の配線。
@@ -57,6 +59,7 @@ pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
 pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 pub use settle::{SETTLE_TICK_MS, settle_surface, settle_time};
+pub use shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceKeep};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
 };

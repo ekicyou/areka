@@ -13,6 +13,7 @@ use areka_sakura::ActorKey;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::emo2_boot::shell_carry;
+use crate::placement::descript_window_keys::fallback_candidates;
 use crate::placement::spawn::GhostWindows;
 
 use super::{
@@ -62,7 +63,8 @@ pub struct PlannedAttach {
     ///
     /// **注記（defect #5・2026-07-13 実機#5）**: attach フェーズはこの値でシェル初回表示を駆動しなく
     /// なった（シェルは最初の `\s` cue まで非表示）。ghost の読み直しで控えた面が読み直したシェルに
-    /// 無いときの戻り先として使う（areka-P0-mcp-reload 要件 3.8・[`shell_carry::decide`]）。
+    /// 無いときの戻り先（descript の既定の面・違えば続けて組み込みの既定の面の候補の並び）として使う
+    /// （areka-P0-mcp-reload 要件 3.8・descript-window-keys 要件 3.1・[`shell_carry::decide`]）。
     pub initial_surface_id: u32,
     /// `assets.shells` 内の対応添字（attach フェーズの add 消費用）。
     pub shell_index: usize,
@@ -282,9 +284,11 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         } = shell_assets;
         // 控えた面が読み直したシェルに在るかは、装着で move する前の World で引く。
         let carried = carry.as_ref().and_then(|c| c.surface(scope)).map(|id| {
-            shell_carry::decide(id, item.initial_surface_id, |s| {
-                shell_world.surface(s).is_some()
-            })
+            shell_carry::decide(
+                id,
+                &fallback_candidates(scope as usize, item.initial_surface_id),
+                |s| shell_world.surface(s).is_some(),
+            )
         });
 
         if let Err(e) = wiring.presenter.attach_target(

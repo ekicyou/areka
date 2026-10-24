@@ -285,3 +285,8 @@
   - 本文の決まりの節の「`assets_tests.rs` 979 行は先に分ける」は古い（今 880 行＝分けなくてよい）。
   - 足場の説明に「WARP 可」が今も残る（`crates/areka/src/emo2_boot/frame_attach_tests.rs` 225・232 行目・`frame_visibility_integration_tests.rs` 9・42 行目・`emo2_boot/spine.rs` 4・443・647 行目・`mcp/dump_surface_gpu_test_support.rs` 4 行目）。開発の決まりは「GPU のテストは本物の GPU」＝説明の直し候補（その場で直せる）。
   - `emo2-real-run-stability` の完了の記録が「範囲の外」と書いた件（環境変数なしの `cargo test -p areka` でも `tests/mcp_get_log_real_run.rs` が子の areka を起こす）は、`tools/load-flake.ps1` の回には入らない。全体テスト（`tools/test-all.ps1`）で負荷の確かめをするなら、その回には本物の窓が混ざることを覚えておく。
+
+## 2026-10-24 `descript-window-keys` の完了の棚卸で足した観測
+
+- `cargo test -p areka-seriko` の lib の全体の走行で、`bind::tests::bind_resolver_from_groups_reads_three_kinds_of_scope`（ログも共有状態も使わない純関数のテスト・`bind.rs` は `descript-window-keys` で触っていない）が 1 回だけ赤になった。単独で 300 回・lib の全体で 7 回回して再現しなかった（赤の出力の本文は残っていない）。areka の実行ファイルの外（areka-seriko）だが、「並べて回したときだけ落ちる試験」の材料として残す。
+- 起票でなくここへ足した訳: 再現の手がかりが無く、確かめるのに全体の走行を何度も回す必要がある（kiro-complete 冒頭ステップの手順 3 の 4 つ目）。同じ「試験の揺れ」の持ち場に寄せた。

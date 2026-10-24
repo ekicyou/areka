@@ -97,6 +97,7 @@ impl Cage {
             aliases: text_world.alias_snapshot(),
             surface_ids: BTreeSet::from([0, 10]),
             font_dirs: Vec::new(),
+            fallback_candidates: BTreeMap::new(),
         }
         .hand_to(&mut wiring.runtime.borrow_mut(), &mut world);
 

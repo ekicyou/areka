@@ -24,8 +24,8 @@ use areka_sylphya::{
 use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::{
-    DragAccumulatorResource, DragEndEvent, DragEvent, DragStartEvent, DragTransition, OnDragEnd,
-    WindowDragContextResource, dispatch_drag_events,
+    DragAccumulatorResource, DragConfig, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
+    OnDragEnd, WindowDragContextResource, dispatch_drag_events,
 };
 use wintf::ecs::{PhysicalPoint, Point, Window, WindowPos};
 
@@ -115,6 +115,8 @@ impl Rig {
                 fake_handle(0x2000),
                 window_pos_at(BALLOON_START.x, BALLOON_START.y),
                 BalloonWindowMarker { scope: SCOPE },
+                // 製品（`spawn.rs`）と同じく動かせるバルーン（wintf の控えの `move_window` が真）。
+                DragConfig::default(),
                 OnDragEnd(on_balloon_drag_end),
             ))
             .id();

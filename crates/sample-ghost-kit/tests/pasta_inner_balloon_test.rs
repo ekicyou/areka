@@ -1,7 +1,7 @@
 //! 取り寄せたぱすたの書庫の中身の形を見張る（spec: `areka-P0-pasta-in-windows-verification`
 //! 要件 2.1〜2.7）。
 //!
-//! 見るのは 2 点だけ: 縦書きのバルーンがゴーストのフォルダの直下に在り名前を名乗ること、
+//! 見るのは 2 点だけ: 縦書きのバルーンがゴーストのフォルダの中の `balloon/` に在り名前を名乗ること、
 //! 根の `balloon/` に何も入っていないこと。書庫の大きさ・数・ハッシュは書かない（2.3）。
 //! 窓口は置き場の書庫しか読まないので通信しない（2.5）。取り寄せの段が回っていない机では
 //! 窓口の失敗の文（取り寄せのコマンドを含む）で落ちる（2.4）。
@@ -14,10 +14,13 @@ use sample_ghost_kit::{NarBuilder, SampleRoot, WorkDir, install_txt};
 const INNER_BALLOON_DIR: &str = "pasta_tategaki";
 const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 
-/// ゴーストのフォルダの直下の縦書きのバルーンと、根の balloon/ が空であることを確かめる。
+/// ゴーストのフォルダの中の `balloon/` の縦書きのバルーンと、根の balloon/ が空であることを確かめる。
 /// Err の文は、何が無かったか（どのパス・どの行）を書く。
 fn check_pasta_layout(root: &Path, ghost_folder: &Path) -> Result<(), String> {
-    let descript = ghost_folder.join(INNER_BALLOON_DIR).join("descript.txt");
+    let descript = ghost_folder
+        .join("balloon")
+        .join(INNER_BALLOON_DIR)
+        .join("descript.txt");
     let text = std::fs::read_to_string(&descript)
         .map_err(|err| format!("{} を読めない: {err}", descript.display()))?;
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);

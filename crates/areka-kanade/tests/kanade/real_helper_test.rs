@@ -142,6 +142,7 @@ fn connect_real_helper(
         // 置く（UTF-8 始まり・強制なし）。以後の文字コードは相手の応答の `Charset` ヘッダ次第で、
         // ヘッダが無いか `UTF-8` を名乗る限り UTF-8 のまま変わらない。
         negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
+        version: shiori_host32_host::ShioriVersion::Shiori3,
     }))
 }
 

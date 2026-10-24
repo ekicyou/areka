@@ -1,0 +1,26 @@
+{
+  "feature_name": "mcp-scope-rect-property",
+  "created_at": "2026-10-23T10:29:18Z",
+  "updated_at": "2026-10-23T14:36:29Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-23T14:36:29Z"
+    }
+  },
+  "ready_for_implementation": true
+}
