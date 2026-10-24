@@ -1021,8 +1021,8 @@ wave = "C10-①"
 [[spec]]
 name = "descript-window-keys"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、ゴーストの descript の sakura.seriko.defaultsurface と balloon.dontmove の宛先をこの名前で記入した（2 件）"
-owner_count = 2
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、ゴーストの descript の sakura.seriko.defaultsurface と balloon.dontmove の宛先をこの名前で記入した（2 件）。2026-10-24 にこの spec の実装の着地で、相方側の kero.seriko.defaultsurface・シェルの sakura.／kero.／char*.balloon.dontmove・さくらスクリプトの lock,balloonmove と unlock,balloonmove の 6 件を足した（8 件）"
+owner_count = 8
 wave = "v0.1.0"
 
 [[spec]]

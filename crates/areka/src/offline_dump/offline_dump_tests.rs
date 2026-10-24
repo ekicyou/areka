@@ -382,6 +382,7 @@ fn each_scope_dumps_its_own_default_binds_and_dump_bind() {
         None,
         &[0, 1, 2, 3],
         96,
+        &crate::placement::DefaultSurfaces::builtin(),
         &decoder,
     ) else {
         panic!("画面の資産を組める");

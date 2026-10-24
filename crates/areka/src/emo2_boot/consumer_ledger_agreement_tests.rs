@@ -128,6 +128,9 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
         ),
         ("reset", Some("sticky-window"), vec!["sticky-window"]),
         ("execute", Some("resetballoonpos"), vec!["resetballoonpos"]),
+        // move_cue_balloon_lock_tests.rs（descript-window-keys 要件 5.1・5.7）
+        ("lock", Some("balloonmove"), vec!["balloonmove"]),
+        ("unlock", Some("balloonmove"), vec!["balloonmove"]),
     ]
 }
 

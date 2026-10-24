@@ -535,3 +535,67 @@ fn rehearsal_copy_marks_only_the_copy() {
         "印のほかは元の状態と同じ"
     );
 }
+
+// ---- シェルの切替の戻り先（descript-window-keys 要件 3.2・3.5）
+
+/// 新しいシェルの面の番号の集合と、スコープ "0" の候補の並び。
+fn fallback(surface_ids: &[u32], candidates: &[u32]) -> SurfaceFallback {
+    SurfaceFallback {
+        surface_ids: surface_ids.iter().copied().collect(),
+        candidates: BTreeMap::from([(key("0"), candidates.to_vec())]),
+    }
+}
+
+#[test]
+fn fall_back_keeps_surface_present_in_new_shell() {
+    let mut state = state_with_boxes();
+    show(&mut state, "0", 2);
+    let before = state.clone();
+    assert!(!state.fall_back_surfaces(&fallback(&[0, 2], &[0])));
+    assert_eq!(state, before, "今の面が在れば何も替えない");
+}
+
+#[test]
+fn fall_back_moves_to_descript_surface() {
+    let mut state = state_with_boxes();
+    show(&mut state, "0", 9);
+    assert!(state.fall_back_surfaces(&fallback(&[0, 3], &[3, 0])));
+    assert_eq!(state.current_surface(&key("0")), Some(3), "descript の面");
+}
+
+#[test]
+fn fall_back_drops_to_builtin_surface() {
+    let mut state = state_with_boxes();
+    show(&mut state, "0", 9);
+    assert!(state.fall_back_surfaces(&fallback(&[2, 3], &[7, 3])));
+    assert_eq!(state.current_surface(&key("0")), Some(3), "組み込みの面");
+}
+
+#[test]
+fn fall_back_hides_when_no_candidate_exists() {
+    let mut state = state_with_boxes();
+    show(&mut state, "0", 9);
+    assert!(state.fall_back_surfaces(&fallback(&[2], &[7, 8])));
+    assert_eq!(state.current_surface(&key("0")), None);
+    assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
+}
+
+#[test]
+fn fall_back_to_surface_with_boxes_routes_to_its_default_box() {
+    let mut state = state_with_boxes();
+    show(&mut state, "0", 9);
+    assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
+    assert!(state.fall_back_surfaces(&fallback(&[0, 1], &[1, 0])));
+    assert_eq!(state.current_surface(&key("0")), Some(1));
+    assert_eq!(state.destination(&key("0")), boxed("b"), "面 1 の既定の箱");
+}
+
+#[test]
+fn fall_back_with_empty_surface_ids_changes_nothing() {
+    // 面の番号の集合が空＝材料なし（seriko の fall_back_shell_surfaces と同じ）。
+    let mut state = state_with_boxes();
+    show(&mut state, "0", 9);
+    let before = state.clone();
+    assert!(!state.fall_back_surfaces(&SurfaceFallback::default()));
+    assert_eq!(state, before);
+}

@@ -6,8 +6,8 @@
 //! **そのスコープが解決した**バルーン面 0 を **bind なし合成**し、原寸
 //! （物理 px [`SizePx`]）を得る。
 //!
-//! - 初期 surface id: scope0 → `0`・scope1 → `10`（ukadoc 正典: 相方既定
-//!   サーフェス）・scope n≥2 → `10`（正典既定なし・`warn!` 付き暫定）
+//! - 初期 surface id: スコープごとに descript の既定の面の候補の並び
+//!   （[`DefaultSurfaces::candidates`]）からシェルに在る最初の面（descript-window-keys 要件 2.1）
 //! - バルーン面 0 のファイル選択は系列解決権威
 //!   [`areka_emo_present::balloon::resolve_balloon_faces`] の消費のみで行う。採寸側は
 //!   接頭辞連鎖もディレクトリ走査も持たない（列挙が 2 実装に分かれると採寸窓寸と実際に
@@ -36,11 +36,8 @@ use areka_emo_present::shell_target::load_shell_target;
 use tracing::{error, warn};
 
 use super::PlacementError;
+use super::descript_window_keys::{DefaultSurfaces, builtin_default_surface, first_existing};
 use super::resolver::{ScopeInput, SizePx};
-
-/// scope1 以降の初期 surface id（ukadoc 正典: 相方既定サーフェス＝10）。
-/// scope n≥2 には正典既定が無く、同値を `warn!` 付き暫定として用いる（design）。
-const KERO_INITIAL_SURFACE_ID: u32 = 10;
 
 /// 採寸結果（design「placement::measure」Service Interface）。
 ///
@@ -106,7 +103,7 @@ impl SizeKind {
     }
 }
 
-/// 各スコープの初期 surface（scope0=id0・scope1=id10・scope n≥2=id10 暫定＋warn）と
+/// 各スコープの初期 surface（`default_surfaces` の候補の並びからシェルに在る最初の面）と
 /// **そのスコープが解決した**バルーン面 0 を bind なし合成して原寸（物理 px）を得る
 /// （2.9 の幅供給源・3.2 の物理 px 単一通貨・DD5）。
 ///
@@ -138,10 +135,11 @@ pub fn measure_scope_sizes(
     shell_dir: &Path,
     balloon_root: &Path,
     scope_ids: &[usize],
+    default_surfaces: &DefaultSurfaces,
     scaling: &MeasureScaling,
 ) -> Result<MeasuredSizes, PlacementError> {
     // (1) native 採寸（原寸・k 非適用）。
-    let natives = measure_native_scope_sizes(shell_dir, balloon_root, scope_ids)?;
+    let natives = measure_native_scope_sizes(shell_dir, balloon_root, scope_ids, default_surfaces)?;
     // (2) k 適用（per-scope 写像）。
     let scopes = apply_scaling(natives, scaling)?;
     Ok(MeasuredSizes { scopes })
@@ -156,6 +154,7 @@ fn measure_native_scope_sizes(
     shell_dir: &Path,
     balloon_root: &Path,
     scope_ids: &[usize],
+    default_surfaces: &DefaultSurfaces,
 ) -> Result<Vec<ScopeInput>, PlacementError> {
     // 実 WIC デコーダ（COM 初期化済みスレッド前提・donor build_and_spawn と同型）。
     let decoder = WicDecoderArm::new().map_err(|e| {
@@ -170,10 +169,32 @@ fn measure_native_scope_sizes(
     let (shell_world, shell_atlas) = build_shell_assets(shell_dir, &decoder)?;
     let mut composer = Composer::new();
 
-    // 基準採寸: scope0 初期 surface（id 0）。失敗は代替根拠が無い＝ hard Err。
+    // スコープの測る面: 候補の並びのうちシェルに在る最初の面。どれも無ければ組み込みの面で
+    // 合成し、今の失敗の扱い（本体側は Err・相方側は本体側の大きさ）へ委ねる（要件 2.4）。
+    let initial_surface = |scope: usize| {
+        let candidates = default_surfaces.candidates(scope);
+        match first_existing(&candidates, |id| shell_world.surface(id).is_some()) {
+            Some(id) => {
+                if id != candidates[0] {
+                    warn!(
+                        event = "default_surface_missing",
+                        scope,
+                        missing = candidates[0],
+                        to = id,
+                        "default_surface_missing: descript の既定の面がシェルに無い——組み込みの面で測る"
+                    );
+                }
+                id
+            }
+            None => builtin_default_surface(scope),
+        }
+    };
+
+    // 基準採寸: scope0 初期 surface。失敗は代替根拠が無い＝ hard Err。
+    let scope0_id = initial_surface(0);
     let scope0_size =
-        compose_size(&mut composer, &shell_world, &shell_atlas, 0).map_err(|reason| {
-            error!(reason = %reason, "measure: scope0（surface id 0）の採寸合成に失敗");
+        compose_size(&mut composer, &shell_world, &shell_atlas, scope0_id).map_err(|reason| {
+            error!(surface_id = scope0_id, reason = %reason, "measure: scope0 の採寸合成に失敗");
             PlacementError::Measure { scope: 0, reason }
         })?;
 
@@ -184,25 +205,14 @@ fn measure_native_scope_sizes(
         let char_size = if scope == 0 {
             scope0_size
         } else {
-            if scope >= 2 {
-                warn!(
-                    scope,
-                    surface_id = KERO_INITIAL_SURFACE_ID,
-                    "measure: scope n≥2 の初期 surface は正典既定なし（id10 暫定で採寸）"
-                );
-            }
-            match compose_size(
-                &mut composer,
-                &shell_world,
-                &shell_atlas,
-                KERO_INITIAL_SURFACE_ID,
-            ) {
+            let surface_id = initial_surface(scope);
+            match compose_size(&mut composer, &shell_world, &shell_atlas, surface_id) {
                 Ok(size) => size,
                 Err(reason) => {
                     // 採寸失敗スコープは scope0 寸法で代替（窓自体は生やす・design Error Handling）。
                     warn!(
                         scope,
-                        surface_id = KERO_INITIAL_SURFACE_ID,
+                        surface_id,
                         reason = %reason,
                         "measure: スコープの採寸合成に失敗（scope0 の寸法で代替）"
                     );
@@ -448,3 +458,8 @@ mod tests;
 #[cfg(test)]
 #[path = "measure_template_tests.rs"]
 mod template_tests;
+
+// 測りが descript の既定の面で合成することの 3 通り（descript-window-keys 要件 7.2）。
+#[cfg(test)]
+#[path = "measure_default_surface_tests.rs"]
+mod default_surface_tests;

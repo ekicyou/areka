@@ -234,6 +234,40 @@ fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
     );
 }
 
+/// 起動で descript の段が動かせない指定の帳簿に入る（descript-window-keys 要件 4.1）: 窓を作る閉包が
+/// 窓を作った後に帳簿を据えるので、シェルの `kero.balloon.dontmove` のスコープ 1 のバルーンの窓だけが
+/// 動かせない（据える前に作った窓へ書き手が届く）。
+#[test]
+fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
+    use crate::placement::balloon_lock::{BalloonLockLedger, HoldReason};
+    use crate::placement::spawn::BalloonWindowMarker;
+    use wintf::ecs::drag::DragConfig;
+
+    let (mut world, events) = boot_windows_with_sticky_line("kero.balloon.dontmove,1");
+
+    let reasons = world
+        .get_resource::<BalloonLockLedger>()
+        .map(|ledger| (ledger.reason(0), ledger.reason(1)));
+    assert_eq!(
+        reasons,
+        Some((
+            None,
+            Some(HoldReason {
+                descript: true,
+                script: false
+            })
+        )),
+        "起動で帳簿に descript の段が入っていない: {events:?}"
+    );
+    let mut movable: Vec<(usize, bool)> = world
+        .query::<(&BalloonWindowMarker, &DragConfig)>()
+        .iter(&world)
+        .map(|(m, d)| (m.scope, d.move_window))
+        .collect();
+    movable.sort();
+    assert_eq!(movable, vec![(0, true), (1, false)], "(スコープ, 動かせる)");
+}
+
 /// 捨てる書き方（ID が 1 つ）なら組を作らずに記録し、起動は続く（要件 3.9・窓は 4 枚・帳簿は空で据わる）。
 #[test]
 fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
@@ -266,6 +300,7 @@ fn commit_without_task_pool_logs_error() {
         descript: StartupDescriptValues {
             author_dpi: placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
+            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
         },
         spawn: Box::new(|_: &mut World| {}),
     };
@@ -325,6 +360,7 @@ fn boot_round(
     let descript = StartupDescriptValues {
         author_dpi: placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
+        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
     };
     let ghost = GhostDecision {
         route: GhostRoute::Argv,

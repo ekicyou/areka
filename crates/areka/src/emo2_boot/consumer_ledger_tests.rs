@@ -291,19 +291,19 @@ fn exclusion_applies_only_within_the_same_name() {
 /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register（36 行）が Ok（重複なら expect が panic する）。
+    // canonical() は内部 try_register（38 行）が Ok（重複なら expect が panic する）。
     let ledger = ConsumerLedger::canonical();
     assert_eq!(
         ledger.entry_count(),
-        36,
-        "正準台帳の登記は 36 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+        38,
+        "正準台帳の登記は 38 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
          (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
          (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
          (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
          updatebymyself／update／updateother／(set,choicetimeout)／\
          areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\
          (reload,balloon)／(reload,descript)／reloadsurface／(set,alignmenttodesktop)／\
-         (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)）——増減させたら本檻と doc の 2 か所を編集すること"
+         (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)／(lock,balloonmove)／(unlock,balloonmove)）——増減させたら本檻と doc の 2 か所を編集すること"
     );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
@@ -327,7 +327,7 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::ZOrderSink)
     );
 
-    // 36 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+    // 38 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
     // 検出される。
     let mut ext = ledger.clone();
     let err = ext
@@ -339,7 +339,7 @@ fn canonical_builds_without_duplicate() {
             name: "bind".to_string(),
             selector: None,
         },
-        "36 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+        "38 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
     );
     // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));

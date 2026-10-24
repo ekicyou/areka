@@ -32,8 +32,8 @@ use crate::placement::shared_test_support::{
 // (1) 採寸経路と表示経路の外形の一致
 // ---------------------------------------------------------------------------
 
-/// 相方側の初期面（ukadoc 正典の既定サーフェス＝10・`measure.rs` の `KERO_INITIAL_SURFACE_ID`
-/// と同値）。
+/// 相方側の初期面（ukadoc 正典の既定サーフェス＝10・`descript_window_keys.rs` の
+/// `builtin_default_surface(1)` と同値）。
 const KERO_SURFACE_ID: u32 = 10;
 
 /// 検体 1 体ぶんの入力と期待値。

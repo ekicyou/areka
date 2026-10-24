@@ -118,10 +118,6 @@ use placement::spawn::{
 // Constants / fixture paths
 // ---------------------------------------------------------------------------
 
-/// scope1 以降の初期 surface id（ukadoc 正典: 相方既定サーフェス＝10。
-/// `placement::measure` の採寸規約と同値——採寸した surface と装着する surface を一致させる）。
-const KERO_INITIAL_SURFACE_ID: u32 = 10;
-
 /// smoke 自動 close の env ゲート名（main.rs と同名・`AREKA_` 冠規約）。
 const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
@@ -293,20 +289,13 @@ fn build_and_spawn(world: &mut World) {
 
     let mut pending = Vec::new();
     for scope in windows.scopes().collect::<Vec<_>>() {
-        // 初期 surface id: scope0→0・scope1→10（`placement::measure` の採寸規約と同値＝
-        // 窓寸法と表示 surface の原寸が一致する）。scope n≥2 は正典既定なし・id10 暫定＋warn。
-        let surface_id = if scope == 0 {
-            0
-        } else {
-            if scope >= 2 {
-                tracing::warn!(
-                    scope,
-                    surface_id = KERO_INITIAL_SURFACE_ID,
-                    "window-placement: scope n≥2 の初期 surface は正典既定なし（id10 暫定）"
-                );
-            }
-            KERO_INITIAL_SURFACE_ID
-        };
+        // 初期 surface id: 測りと同じく、候補の並びのうちシェルに在る最初の面（窓寸法と表示 surface の原寸が一致する）。
+        let probe = shell_target.build_world();
+        let surface_id = placement::descript_window_keys::first_existing(
+            &prepared.default_surfaces.candidates(scope),
+            |id| probe.surface(id).is_some(),
+        )
+        .unwrap_or_else(|| prepared.default_surfaces.surface(scope));
 
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
