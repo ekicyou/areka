@@ -2701,7 +2701,7 @@ priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka の placement::descript_window_keys::read_default_surfaces が番号 2 以上の `char<番号>.seriko.defaultsurface` も読み、スコープごとの既定の面として持つ（書かれていなければ 10）が、3 人目からの窓がまだ無いので値を使う先が無い。0 以上の整数として読めない値には `descript_value_unreadable` の記録を 1 件残す。
+壊れ方: 黙って壊れる。記録: 窓が無いことについてはなし。areka の placement::descript_window_keys::read_default_surfaces が番号 2 以上の `char<番号>.seriko.defaultsurface` も読み、スコープごとの既定の面として持つ（書かれていなければ 10）が、3 人目からの窓がまだ無いので値を使う先が無い。0 以上の整数として読めない値には `descript_value_unreadable` の記録を 1 件残す。
 番号が 0 と 1 の綴りは本体と相方の別名という扱いで、`sakura.seriko.defaultsurface`・`kero.seriko.defaultsurface` の行と同じに読まれて効く（areka の placement::config::scope_prefixes）。
 3 人目以降の窓は作らない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。絞りを外すのは extra-character-windows）。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
