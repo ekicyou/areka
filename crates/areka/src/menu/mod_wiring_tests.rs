@@ -17,7 +17,7 @@
 
 use std::sync::mpsc::{Receiver, channel};
 
-use areka_kanade::CloseReason;
+use areka_kanade::{ClickButton, CloseReason, MouseButton, MouseEventKind, MouseInput};
 use bevy_ecs::schedule::Schedules;
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
@@ -453,4 +453,167 @@ fn registered_frames_after_wiring_are_the_two_builtin_items() {
             vec![Frame::Shell, Frame::Readme, Frame::Close]
         )
     );
+}
+
+// ---- クリック → メニューの順の包み（mouse-click-wheel-events 要件 5.1・5.2・5.3・8.4・11.1） ----
+
+/// 入力とメニューの結線に同じ受信端を渡し、窓を作って解放ハンドラ（包み）を付けた World。
+/// 順序は本番と同じ: 結線と登録 → 窓 → 装着。
+fn shared_fixture() -> (World, Entity, Receiver<KanadeMsg>) {
+    let (tx, rx) = channel::<KanadeMsg>();
+    let mut world = empty_world();
+    world.insert_non_send(MouseWiring::new(tx.clone(), RegionSource::Mock(no_region)));
+    wire_menu_with(
+        &mut world,
+        MenuWiring::with_to_screen(tx, shifted_to_screen),
+    );
+    register_menu_poll(&mut world);
+    let window = spawn_char_window(&mut world);
+    attach_release_handlers(&mut world);
+    (world, window, rx)
+}
+
+/// 窓へ付いた解放ハンドラで右の解放を 1 回配る。
+fn release_right(world: &mut World, window: Entity) -> bool {
+    let handler = world.get::<OnPointerReleased>(window).expect("装着済み").0;
+    handler(world, window, window, &right_release())
+}
+
+/// キャラ窓の押下の受け手へ右の押下を 1 回配る（控えが書かれる）。
+fn press_right(world: &mut World, window: Entity) {
+    let state = PointerState {
+        client_point: Point { x: 30, y: 40 },
+        right_down: true,
+        ..Default::default()
+    };
+    crate::input_events::on_char_pointer_pressed(world, window, window, &Phase::Bubble(state));
+}
+
+/// 届いた照会を取り出して返信端を返す。
+fn take_query(rx: &Receiver<KanadeMsg>) -> areka_actor::ReplySender<captions::QueryReply> {
+    match rx.try_recv().expect("照会が届く") {
+        KanadeMsg::ResourceQuery { reply, .. } => reply,
+        _ => panic!("ResourceQuery を期待"),
+    }
+}
+
+/// 右の押下 → 解放で、右の解放の知らせ（放した点・2 回目でない）がメニューの照会より先に届く（要件 5.1・5.2）。
+#[test]
+fn a_right_click_sends_the_button_up_before_the_menu_query() {
+    let (mut world, window, rx) = shared_fixture();
+    press_right(&mut world, window);
+    assert!(rx.try_recv().is_err(), "押下だけでは何も送らない");
+
+    assert!(
+        release_right(&mut world, window),
+        "返り値はメニューの側のもの"
+    );
+
+    match rx.try_recv().expect("1 件目が届く") {
+        KanadeMsg::Mouse(m) => assert_eq!(
+            m,
+            MouseInput {
+                scope: 0,
+                x: 30,
+                y: 40,
+                region: None,
+                kind: MouseEventKind::ButtonUp {
+                    button: ClickButton::Right,
+                    second_of_double: false,
+                },
+            }
+        ),
+        _ => panic!("1 件目は Mouse(ButtonUp) を期待"),
+    }
+    drop(take_query(&rx));
+    assert!(rx.try_recv().is_err(), "ちょうど 2 件");
+}
+
+/// 押下の無い解放ではクリックを送らず、照会は今のとおり 1 件（要件 4.3・8.4）。
+#[test]
+fn a_release_without_a_press_sends_no_click_and_one_query() {
+    let (mut world, window, rx) = shared_fixture();
+
+    assert!(release_right(&mut world, window));
+
+    drop(take_query(&rx));
+    assert!(rx.try_recv().is_err(), "クリックは送らない・照会は 1 件");
+}
+
+/// 包みの受け手で作った返事待ちに、右ダブルクリックを 1 件預けてから `popupmenu.visible` を返し、
+/// 入力の段を 1 回回す。返り値は回したときの記録。
+fn answer_visible(visible: &str) -> (World, Receiver<KanadeMsg>, Vec<String>) {
+    let (mut world, window, rx) = shared_fixture();
+    press_right(&mut world, window);
+    assert!(release_right(&mut world, window));
+    assert!(
+        matches!(rx.try_recv(), Ok(KanadeMsg::Mouse(_))),
+        "先にクリック"
+    );
+    let reply = take_query(&rx);
+    world
+        .get_non_send_mut::<MouseWiring>()
+        .expect("結線済み")
+        .defer_right_double_click(crate::input_events::PendingDoubleClick {
+            scope: 0,
+            surface_pos: (7, 4),
+            region: Some("Bust".to_string()),
+        });
+    reply
+        .send(vec![(
+            "sakura.popupmenu.visible",
+            areka_kanade::resources::ResourceOutcome::Value(visible.to_string()),
+        )])
+        .expect("受け口は生きている");
+
+    let ((), lines) = capture_lines(LineFormat::LevelFields, || world.run_schedule(Input));
+    (world, rx, lines)
+}
+
+/// `1` ならメニューを出す側へ進み（この World には外側の参照が無いので表示の手前で 1 行残る）、
+/// 預かりの右ダブルクリックは送らない＝今の引き金の檻と同じ（要件 5.3・11.1）。
+#[test]
+fn a_showing_reply_through_the_wrapper_opens_the_menu_like_the_trigger() {
+    let (world, rx, lines) = answer_visible("1");
+
+    assert_eq!(
+        lines_of(&lines, "menu_outer_world_ref_missing").len(),
+        1,
+        "{lines:?}"
+    );
+    assert!(rx.try_recv().is_err(), "右ダブルクリックは送らない");
+    assert!(
+        world
+            .get_non_send::<MenuWiring>()
+            .unwrap()
+            .pending
+            .is_none()
+    );
+}
+
+/// `0` なら抑えて預かりの右ダブルクリックをちょうど 1 件送る＝今の引き金の檻と同じ（要件 5.3・11.1）。
+#[test]
+fn a_suppressing_reply_through_the_wrapper_sends_the_deferred_double_click() {
+    let (world, rx, lines) = answer_visible("0");
+
+    assert!(lines_of(&lines, "menu_outer_world_ref_missing").is_empty());
+    match rx.try_recv().expect("右ダブルクリックが届く") {
+        KanadeMsg::Mouse(m) => assert_eq!(
+            m,
+            MouseInput {
+                scope: 0,
+                x: 7,
+                y: 4,
+                region: Some("Bust".to_string()),
+                kind: MouseEventKind::DoubleClick {
+                    button: MouseButton::Right
+                },
+            }
+        ),
+        _ => panic!("Mouse(DoubleClick) を期待"),
+    }
+    assert!(rx.try_recv().is_err(), "ちょうど 1 件");
+    let wiring = world.get_non_send::<MenuWiring>().unwrap();
+    assert!(wiring.pending.is_none());
+    assert!(!wiring.in_flight.get());
 }

@@ -2,14 +2,6 @@
 //!
 //! 控えの置き場所は `MouseWiring.presses`（鍵＝キャラ窓の entity とボタン）。
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "解放の受け手はメニューの包み（task 4.1）が入れるまで本番の呼び手が居ない"
-    )
-)]
-
 use areka_kanade::{ClickButton, MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
 use wintf::ecs::WindowPos;
