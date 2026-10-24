@@ -102,7 +102,7 @@ pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: V
         );
     }
     if !sorted.installs.is_empty() {
-        // 戻り値の記録は `submit` 自身が出す（`install_order_queued`／`install_order_refused`）。
+        // 戻り値の記録は `submit` 自身が出す（`install_order_queued`／`install_order_refused`／`readonly_refused`）。
         install::submit(
             world,
             InstallOrder {

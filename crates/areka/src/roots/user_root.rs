@@ -13,12 +13,18 @@ use areka_user_data::{CopyDone, Layout, UserRoot};
 
 use super::ROOTS_ENV;
 
-/// プロセスに 1 つの形（初回に `establish` を 1 回だけ呼んで覚える）。
+/// プロセスに 1 つの形（初回に `establish` を 1 回だけ呼んで覚える）。読み取りだけの走りでは
+/// 作らず写さない `establish_readonly`（readonly-mode 要件 4.1・4.5）。
 pub(crate) fn layout() -> &'static Layout {
     static LAYOUT: OnceLock<Layout> = OnceLock::new();
     LAYOUT.get_or_init(|| {
         let profile_env = std::env::var_os(areka_user_data::PROFILE_DIR_ENV);
-        areka_user_data::establish(exe_dir().as_deref(), profile_env.as_deref())
+        let establish = if crate::readonly::is_on() {
+            areka_user_data::establish_readonly
+        } else {
+            areka_user_data::establish
+        };
+        establish(exe_dir().as_deref(), profile_env.as_deref())
     })
 }
 
@@ -156,9 +162,39 @@ pub(crate) fn exe_dir() -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// 本番の口: [`copy_for_write`] に実行ファイルのフォルダを渡す。
+/// `readonly` なら写さず `dir` を返す（写すはずだったときだけ info 1 件）。そうでなければ `copy_for_write`。
+/// 写しの計画と写しの本体は変えない（readonly-mode 要件 4.4・4.5）。
+pub(crate) fn copy_unless_readonly(
+    readonly: bool,
+    roots: &BasewareRoots,
+    exe_dir: Option<&Path>,
+    kind: StoreKind,
+    dir: &Path,
+) -> PathBuf {
+    if !readonly {
+        return copy_for_write(roots, exe_dir, kind, dir);
+    }
+    if let CopyPlan::Copy { from, to } = plan_copy(roots, exe_dir, kind, dir) {
+        tracing::info!(
+            event = "user_data_copy_withheld",
+            kind = kind_name(kind),
+            from = %from.display(),
+            to = %to.display(),
+            "read-only run: not copying into the user root; using the original folder"
+        );
+    }
+    dir.to_path_buf()
+}
+
+/// 本番の口: [`copy_unless_readonly`] に走りの旗と実行ファイルのフォルダを渡す。
 pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) -> PathBuf {
-    copy_for_write(roots, exe_dir().as_deref(), kind, dir)
+    copy_unless_readonly(
+        crate::readonly::is_on(),
+        roots,
+        exe_dir().as_deref(),
+        kind,
+        dir,
+    )
 }
 
 /// `resolve_boot_from` へ渡す口（ゴースト用）。

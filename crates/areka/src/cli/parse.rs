@@ -347,11 +347,11 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                     let lower = word.to_ascii_lowercase();
                     match lower.as_str() {
                         "" => notes.push(ParseNote::WordEmpty),
-                        "nobootcheck" | "dontloadmodule" => {
-                            if lower == "nobootcheck" {
-                                options.boot.no_boot_check = true;
-                            } else {
-                                options.modules = ModulePolicy::Skip;
+                        "nobootcheck" | "dontloadmodule" | "readonly" => {
+                            match lower.as_str() {
+                                "nobootcheck" => options.boot.no_boot_check = true,
+                                "dontloadmodule" => options.modules = ModulePolicy::Skip,
+                                _ => options.readonly = true,
                             }
                             if !effective.contains(&lower) {
                                 effective.push(lower);
@@ -363,7 +363,7 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                             });
                             noop.push(lower);
                         }
-                        "readonly" | "kiosk" | "callghost" | "deletesource" => {
+                        "kiosk" | "callghost" | "deletesource" => {
                             notes.push(ParseNote::WordPending {
                                 word: lower.clone(),
                             });
@@ -639,3 +639,7 @@ mod parse_tests;
 #[cfg(test)]
 #[path = "parse_offline_tests.rs"]
 mod parse_offline_tests;
+
+#[cfg(test)]
+#[path = "parse_readonly_tests.rs"]
+mod parse_readonly_tests;
