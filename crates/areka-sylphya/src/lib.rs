@@ -41,6 +41,7 @@ pub mod asker;
 pub mod key;
 pub mod mirror;
 pub mod persist;
+pub mod pull;
 pub mod reader;
 pub mod value;
 pub mod vocab;
@@ -67,6 +68,7 @@ pub use persist::{
     Axis, PersistFailure, PersistFailureCause, PersistKey, PersistOutcome, PersistScope,
     ScopeRoots, load_scope, save_scope,
 };
+pub use pull::{PullShape, PullSource};
 pub use reader::SylphyaReader;
 pub use value::{DottedResolution, FlatResolution};
 pub use vocab::{BackingLayer, DegradePolicy, M1Status, SetSemantics};

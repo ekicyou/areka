@@ -451,6 +451,18 @@ mod chain_realign_tests;
 #[path = "frame_chain_realign_arm_tests.rs"]
 mod chain_realign_arm_tests;
 
+// 拡大率の後の詰め直しで動かさない組（外す理由）と変わる直前の控えの檻
+// （dpi-realign-remembered-chain 要件 2・3・7.2）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_exclusion_tests.rs"]
+mod chain_realign_exclusion_tests;
+
+// 拡大率の後の詰め直しが変わる直前の隣り合いで組を詰める檻
+// （dpi-realign-remembered-chain 要件 1・8.1）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_adjacency_tests.rs"]
+mod chain_realign_adjacency_tests;
+
 // 遷移の原子性と随伴（task 6.1）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
 // 接続する（常時テストに x86 を用いない・要件 7.5）。
 #[cfg(all(test, target_pointer_width = "64"))]
@@ -541,6 +553,18 @@ mod chain_finalize_persist_restart_tests;
 #[cfg(test)]
 #[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
 mod chain_finalize_persist_nowrite_tests;
+
+// 起動・作り直しの並べ直しが記憶から戻した組を覚えた印で隣り合わせる檻
+// （dpi-realign-remembered-chain 要件 6・8.6）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_finalize_remembered_tests.rs"]
+mod chain_finalize_remembered_tests;
+
+// 拡大率の違う画面をまたぐドラッグで掴んだ点を窓の大きさの比で置き直す檻
+// （dpi-realign-remembered-chain 要件 4・8.5）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_dpi_drag_grab_tests.rs"]
+mod dpi_drag_grab_tests;
 
 #[cfg(test)]
 #[path = "frame_dpi_tests.rs"]

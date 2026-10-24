@@ -91,6 +91,8 @@ pub enum SerikoReplace {
         static_binds: crate::bind::DefaultBinds,
         bind_resolver: BindResolver,
         shell_table: AnimationTable,
+        /// 今の面が新しいシェルに無いときの戻り先（spec: descript-window-keys 要件 3.2）。
+        fallback: crate::ShellSurfaceFallback,
     },
     /// バルーンの定義（スコープごとのバルーンのアニメ表）。
     Balloon {
@@ -317,10 +319,15 @@ where
                         static_binds,
                         bind_resolver: new_bind_resolver,
                         shell_table,
+                        fallback,
                     } => {
                         resolver = new_resolver;
                         bind_resolver = new_bind_resolver;
                         states.rebase_shell(static_binds);
+                        // 合図の前に今の面を戻り先へ替える＝最初から戻り先の面を出す（要件 3.5）。
+                        for outcome in states.fall_back_shell_surfaces(&fallback) {
+                            log_shell_fallback(&outcome);
+                        }
                         loop_runtime.replace_shell_table(shell_table);
                         (epoch, RebaseKind::Shell, Vec::new())
                     }
@@ -354,6 +361,30 @@ where
         ..SerikoSink::new(tx)
     };
     (sink, actor)
+}
+
+/// シェルの差し替えで今の面を替えたスコープ 1 つぶんの記録（spec: descript-window-keys 要件 3.3）。
+fn log_shell_fallback(outcome: &crate::ShellFallbackOutcome) {
+    match outcome {
+        crate::ShellFallbackOutcome::FellBack { scope, missing, to } => tracing::warn!(
+            event = "shell_switch_surface_fell_back",
+            scope = %scope,
+            missing,
+            to,
+            "シェルの切替で今の面が新しいシェルに無い——戻り先の面へ替えた"
+        ),
+        crate::ShellFallbackOutcome::Hidden {
+            scope,
+            missing,
+            tried,
+        } => tracing::warn!(
+            event = "shell_switch_surface_hidden",
+            scope = %scope,
+            missing,
+            ?tried,
+            "シェルの切替で今の面も戻り先の面も新しいシェルに無い——面を出さない"
+        ),
+    }
 }
 
 /// 差し替えの後の最初の表示を載せた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。

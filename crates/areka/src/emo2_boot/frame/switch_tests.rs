@@ -803,3 +803,45 @@ fn a_shell_replace_moves_the_wiring_static_binds_but_a_balloon_replace_does_not(
     }
     assert_eq!(got, vec![vec![100], vec![7]]);
 }
+
+/// 差し替えの命令を組む所は、seriko の戻り先を後始末へ動かす箱の束と同じ値（面の番号の集合と
+/// 候補の並び）で組む（spec: descript-window-keys 要件 1.7・3.2）。文字の層は同じ束を `hand_to` で
+/// 受け取るので、seriko と文字の層は同じ材料で戻り先を決める。
+///
+/// # 非空虚性
+/// 戻り先を空で組むと seriko の側が空の集合・空の表になって赤。
+#[test]
+fn shell_split_builds_the_seriko_fallback_from_the_same_values_as_the_box_bundle() {
+    let SwapBuilt::Shell {
+        mut assets,
+        source,
+        balloon,
+        restored,
+    } = shell_built()
+    else {
+        unreachable!("shell_built はシェルの資産")
+    };
+    assets.boxes.surface_ids = [0, 10].into();
+    assets.boxes.fallback_candidates = BTreeMap::from([
+        (areka_sakura::ActorKey::from("0"), vec![5, 0]),
+        (areka_sakura::ActorKey::from("1"), vec![10]),
+    ]);
+    let built = SwapBuilt::Shell {
+        assets,
+        source,
+        balloon,
+        restored,
+    };
+    let (_, replace, finish) = super::split(built, 1);
+    let areka_seriko::SerikoReplace::Shell { fallback, .. } = replace else {
+        unreachable!("シェルの差し替えの命令")
+    };
+    let crate::emo2_boot::shell_balloon_switch::SwapFinish::Shell { boxes, .. } = finish else {
+        unreachable!("シェルの後始末")
+    };
+    assert_eq!(
+        (fallback.surface_ids, fallback.candidates),
+        (boxes.surface_ids, boxes.fallback_candidates),
+        "(seriko の戻り先, 文字の層へ渡す箱の束)"
+    );
+}

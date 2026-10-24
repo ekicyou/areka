@@ -107,6 +107,7 @@ fn remembered_text_covers_every_key() {
             },
             "窓の位置",
         ),
+        (PersistKey::WindowAdjacent { scope: 1 }, "窓の位置"),
         (PersistKey::BootCount, "ゴーストのプロパティ"),
         (PersistKey::VanishCount, "ゴーストのプロパティ"),
     ];

@@ -32,6 +32,9 @@
 //!
 //! [baseware]           # areka.baseware.roots（並び全体を 1 本の文字列・空文字は空文字のまま）
 //! roots = "<exe>|D:\\ssp"
+//!
+//! [window-adjacent]    # areka.window.scope(ID).adjacent（隣り合いの印・値の意味は呼び手が持つ）
+//! "1" = "left"
 //! ```
 //!
 //! - `format-version` は最上位の **整数 key**（本バージョン = [`FORMAT_VERSION`] = 1）。
@@ -94,6 +97,9 @@ pub struct FormatDoc {
     /// 根の並び（1 本の文字列・意味は呼び手が持つ）。正準 key `areka.baseware.roots`・表
     /// `[baseware]` roots。空文字は空文字のまま（`last_running` と違い「無し」に潰さない）。
     pub baseware_roots: Option<String>,
+    /// 隣り合いの印: スコープ ID → 値の文字列。正準 key `areka.window.scope(ID).adjacent`・
+    /// 表 `[window-adjacent]`。値の意味（`left`／`right`／`none`）は呼び手（areka）が持つ。
+    pub window_adjacent: BTreeMap<String, String>,
 }
 
 impl FormatDoc {
@@ -110,6 +116,7 @@ impl FormatDoc {
             && self.last_shell.is_none()
             && self.last_running.is_none()
             && self.baseware_roots.is_none()
+            && self.window_adjacent.is_empty()
     }
 }
 
@@ -170,6 +177,14 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
         let mut t = toml::Table::new();
         t.insert("roots".into(), toml::Value::String(v.clone()));
         root.insert("baseware".into(), toml::Value::Table(t));
+    }
+    if !doc.window_adjacent.is_empty() {
+        let t: toml::Table = doc
+            .window_adjacent
+            .iter()
+            .map(|(id, v)| (id.clone(), toml::Value::String(v.clone())))
+            .collect();
+        root.insert("window-adjacent".into(), toml::Value::Table(t));
     }
 
     // toml の直列化は本 Table 構造では失敗しない（全値が String/Integer/Table）。万一の
@@ -263,6 +278,7 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
         balloon_offset: read_axis_map(&table, "balloon-offset"),
         boot_count: read_count(&table, "boot"),
         vanish_count: read_count(&table, "vanish"),
+        window_adjacent: read_string_map(&table, "window-adjacent"),
     }
 }
 
@@ -285,6 +301,18 @@ fn read_axis_map(root: &toml::Table, key: &str) -> BTreeMap<String, AxisPair> {
         }
     }
     out
+}
+
+/// `[<key>]` の `"ID" = "<文字列>"` 群をマップへ（表の不在・非テーブルは空・文字列でない値は無し）。
+fn read_string_map(root: &toml::Table, key: &str) -> BTreeMap<String, String> {
+    root.get(key)
+        .and_then(toml::Value::as_table)
+        .map(|t| {
+            t.iter()
+                .filter_map(|(id, v)| Some((id.clone(), v.as_str()?.to_string())))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// `[<key>]` テーブルの `count`（文字列）を取り出す（不在・型外れは `None`）。
@@ -334,6 +362,7 @@ mod tests {
             last_shell: Some("master".into()),
             last_running: Some("broken".into()),
             baseware_roots: Some(r"<exe>|D:\ssp".into()),
+            window_adjacent: BTreeMap::from([("1".into(), "left".into())]),
         };
 
         let toml = to_toml_string(&doc);

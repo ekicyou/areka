@@ -13,6 +13,7 @@
 //!   セッションの交渉状態 `CharsetNegotiator`／復号方針 `CharsetPolicy`。ラベル解決・
 //!   符号化・復号を `encoding_rs` へ委ねる。純粋・決定的（副作用はログのみ）。
 //! - [`shiori3`] — SHIORI/3.0 ワイヤコーデック（`build_request` / `parse_response`）。純粋・決定的。
+//! - [`shiori2`] — SHIORI/2.x の書き方（版の型 `ShioriVersion`・確かめの要求と判定 `VersionVerdict`）。純粋・決定的。
 //! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
 //!   parse → `RequestError` 統合を結線する。
 //! - [`error`] — 構造化エラー型（`thiserror`）。
@@ -32,6 +33,7 @@ pub mod parent_window;
 pub mod process_host;
 /// 要求の追加のヘッダの入れ物（`RequestHeaders`・解釈しない wire 値）。
 pub mod request_headers;
+pub mod shiori2;
 pub mod shiori3;
 /// `Child` を持たないスレッドから helper を終わらせる取っ手（windows 依存をここへ隔離する）。
 mod terminator;
@@ -47,6 +49,7 @@ pub use process_host::{
     ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
 };
 pub use request_headers::{RequestHeaders, ValueReply, request_of};
+pub use shiori2::{ShioriVersion, VersionVerdict};
 pub use shiori3::{
     EncodedRequest, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
 };

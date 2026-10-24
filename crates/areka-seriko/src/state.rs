@@ -20,6 +20,7 @@ use areka_sakura::ActorKey;
 use crate::bind::{DefaultBinds, accumulate};
 use crate::output::DisplayCommand;
 use crate::resolve::SurfaceTarget;
+use crate::shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceKeep, decide};
 
 /// あるスコープの現 surface 状態（要件 3.1/3.3/3.4）。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -311,6 +312,54 @@ impl ScopeStates {
         self.dynamic_binds.clear();
         self.pattern_states
             .retain(|(_, slot), _| *slot != Slot::Shell);
+    }
+
+    /// シェルの差し替えの戻り先（spec: descript-window-keys 要件 3.2〜3.5）。
+    ///
+    /// シェルの面で表示中（`Shown(id)`）のスコープだけを見て、今の面が新しいシェルに無ければ
+    /// [`crate::shell_fallback::decide`] の答えで `Shown(to)` か `Hidden` に書き換える。非表示・未表示の
+    /// スコープは替えない。結果は書き換えたスコープだけをスコープの昇順で返す（記録は呼び手）。
+    pub fn fall_back_shell_surfaces(
+        &mut self,
+        fallback: &ShellSurfaceFallback,
+    ) -> Vec<ShellFallbackOutcome> {
+        // 面の番号の集合が空＝材料なし（既定値）。どの面も「無い」と読んで全部隠さないよう替えない。
+        if fallback.surface_ids.is_empty() {
+            return Vec::new();
+        }
+        let mut shown: Vec<(ActorKey, u32)> = self
+            .scopes
+            .iter()
+            .filter_map(|(scope, st)| match st {
+                ScopeState::Shown(id) => Some((scope.clone(), *id)),
+                ScopeState::Hidden => None,
+            })
+            .collect();
+        shown.sort();
+        let mut outcomes = Vec::new();
+        for (scope, missing) in shown {
+            let candidates = fallback
+                .candidates
+                .get(&scope)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            match decide(missing, candidates, &fallback.surface_ids) {
+                SurfaceKeep::Keep => {}
+                SurfaceKeep::FallBack(to) => {
+                    self.scopes.insert(scope.clone(), ScopeState::Shown(to));
+                    outcomes.push(ShellFallbackOutcome::FellBack { scope, missing, to });
+                }
+                SurfaceKeep::Hide => {
+                    self.scopes.insert(scope.clone(), ScopeState::Hidden);
+                    outcomes.push(ShellFallbackOutcome::Hidden {
+                        scope,
+                        missing,
+                        tried: candidates.to_vec(),
+                    });
+                }
+            }
+        }
+        outcomes
     }
 
     /// バルーンの定義の差し替え（spec: areka-P0-shell-balloon-switch 要件 3.5）。

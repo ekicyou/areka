@@ -140,6 +140,7 @@ fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
         // spawn が記録した既定キャラ位置（未接触判定の基準・scg 7.3）。台帳の等価比較へ
         // 含めるため、レジストリの値をそのまま引く。
         default_char_pos: gw.default_char_pos(0),
+        remembered_adjacency: gw.remembered_adjacency(0),
     };
     assert_eq!(
         reg.remove_entry_of(expected0.balloon_window),

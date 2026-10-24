@@ -635,7 +635,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     );
     let overhang = ink_span.1.saturating_sub(fill_span.1);
     assert!(
-        overhang <= BAND_OVERHANG_MAX,
+        overhang == BAND_OVERHANG_MAX,
         "hover 行の文字のインク下端 y={} がハイライト矩形の下端 y={} から {overhang} 画素はみ出した\
          ＝**文字の下が切れる**（R3.3/4.2）。裁定 2026-09-06（第 2 回・R13.3）が許すのは \
          {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接行の帯と重なり、\

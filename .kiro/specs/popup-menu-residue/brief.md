@@ -210,3 +210,17 @@
 - **見つけた穴・古くなった記述**:
   - steering の roadmap の spec 台帳の本 spec の行の「残り 7 件」は古い。今は件 3〜6・8・9 と件 11・12 の 8 件（件 2・7・10 は済み）。
   - 棚卸㉘の節の件 6・件 9 の行の番号は上のとおり動いた。
+
+## 2026-10-24 追記: 件 13（`shiori2-protocol` のタスク 5.4・「．さくら」の右クリックメニューの資源）
+
+**件 13: 「．さくら」が用意したメニューの資源のうち、areka が問わない名前がある。そのゴーストらしい項目名にならず、項目そのものが無いものもある。**
+
+- 見たもの（静的・`shiori2-protocol` の研究記録 4.4 節）: 「．さくら」（華和梨・SHIORI/2.x）の辞書は資源を `resource.updatebuttoncaption`・`resource.vanishbuttoncaption`・`resource.vanishbuttonvisible`・`resource.sakura.recommendbuttoncaption`・`resource.sakura.recommendsites`・`resource.kero.recommendbuttoncaption`・`resource.kero.recommendsites`・`resource.sakura.portalbuttoncaption`・`resource.sakura.portalsites` の名前で持つ。areka が問う名前（`crates/areka-kanade/src/schedule/resources.rs` の `ALLOWED_RESOURCE_IDS`）にはどれも無い。
+- 崩れ方:
+  - ⑴ 古い名前: 「ネットワーク更新」の項目は areka が `updatebutton.caption` だけを問うので、「．さくら」の `updatebuttoncaption` が使われず、areka の素の言葉のままになる。ukadoc は `updatebuttoncaption` を別の項目として載せている（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#updatebuttoncaption>）。
+  - ⑵ 項目が無い: 消滅通告（`vanishbuttoncaption`・`vanishbuttonvisible`）・おすすめ（`*.recommendbuttoncaption`・`*.recommendsites`）・ポータル（`sakura.portalbuttoncaption`・`sakura.portalsites`）の項目を areka のメニューは持たない。
+- 台帳: 件 13 の 9 つの名前は、どれも `doc/ukadoc-coverage/ledger/shiori.toml` で `vocabulary-only`・持ち主なし。
+- 重なりに注意: `popup-menu-shell-look` の件 15（brief の 110 行目あたり）が、SSP がメニューを組むときに `sakura.recommendsites` を問うことを見ている。⑵ のおすすめの項目を足すときは、あちらと分け方を決める。
+- 実機の 1 回（`shiori2-protocol` 5.1・2026-10-24）では右クリックメニューを開いていないので、画面では見ていない（メニューを開いたときに問う作りなので、記録にも出ない）。
+- まとめた理由: 触る場所が件 9 と同じ（`menu/captions.rs` と問う名前の表）。⑵ は項目を足す仕事なので、要件の段で大きすぎると分かったら別の spec に切り出す。
+- 優先度の区分: C（ukadoc の拾い残し）。直したら「．さくら」で右クリックメニューを開き、項目名を SSP と見比べる。

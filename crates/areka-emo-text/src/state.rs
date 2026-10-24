@@ -56,7 +56,7 @@ use crate::place::{PlaceKey, TextPlace};
 
 use decoration::font_tag_tokens;
 pub use decoration::{BoxTraits, Decoration};
-pub use route::SurfaceKeyOutcome;
+pub use route::{SurfaceFallback, SurfaceKeyOutcome};
 
 /// テキスト層の調整値（design.md「TextLayerRuntime」の config 正本）。
 ///

@@ -460,3 +460,33 @@ fn reset_clears_script_placed_mark_and_persists() {
     );
     rig.finish();
 }
+
+/// 拡大率の後の詰め直しの武装中に並べ直すと、戻した窓は「武装の後に台本が置いた窓」として
+/// 記録に積まれる（`dpi-realign-remembered-chain` 要件 3.1・印は今までどおり外れる）。
+#[test]
+fn reset_while_armed_records_each_returned_window_as_script_moved() {
+    use crate::placement::chain_finalize::ScriptPlaced;
+    use crate::placement::chain_realign::ChainRealignPending;
+    let mut rig = Rig::new();
+    rig.world.insert_resource(ChainRealignPending {
+        armed_frame: 0,
+        before: Vec::new(),
+        script_moved: Vec::new(),
+    });
+    let chars: Vec<Entity> = rig
+        .gw()
+        .scopes()
+        .filter_map(|s| rig.gw().char_window(s))
+        .collect();
+
+    assert!(reset_window_positions(&mut rig.world));
+
+    let pending = rig.world.resource::<ChainRealignPending>();
+    assert_eq!(pending.script_moved, chars);
+    assert!(
+        chars
+            .iter()
+            .all(|&c| rig.world.get::<ScriptPlaced>(c).is_none())
+    );
+    rig.finish();
+}

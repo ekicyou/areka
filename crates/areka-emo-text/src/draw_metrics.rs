@@ -23,8 +23,9 @@ use std::sync::Arc;
 use tracing::warn;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_ITALIC,
-    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_NORMAL, IDWriteFactory,
-    IDWriteFactory2, IDWriteFontCollection, IDWriteTextFormat,
+    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_NORMAL,
+    DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteFactory, IDWriteFactory2,
+    IDWriteFontCollection, IDWriteTextFormat,
 };
 use windows::core::{BOOL, HSTRING, Interface};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
@@ -34,7 +35,7 @@ use super::{
     create_text_format, device_err,
 };
 use crate::TextLayerError;
-use crate::layout::GlyphMetrics;
+use crate::layout::{GlyphMetrics, column_centred_em_box_left};
 use crate::look::{FontKey, TextLook};
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -73,6 +74,9 @@ pub struct DWriteMetrics {
     /// 実 font face metrics 由来の行ボックス比 `(ascent + descent) ÷ designUnitsPerEm`
     /// （生成時に一度だけ実測・文字列非依存＝フォント固有の設計値）。
     line_box_ratio: f32,
+    /// 縦書きの em の箱の左の比（`(left + baseline − h/2) ÷ h`・生成時に一度だけ実測）。
+    /// 横書きに束縛した物と、測れなかった物は `None`（既定の実装＝列の箱の真ん中）。
+    vertical_em_box_left_ratio: Option<f32>,
     /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（probe 成功値のみ・
     /// 失敗は縮退値を返しキャッシュしない）。既定の見た目は [`default_key`](Self::default_key)
     /// の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く（引くときに割り当てない）。
@@ -156,12 +160,29 @@ impl DWriteMetrics {
             );
             fallback_ratio
         });
+        // 縦書きの em の箱の置き場も、行ボックス比と同じく生成時に 1 度だけ測る（書体の寸法は不変）。
+        let vertical_em_box_left_ratio = match mode {
+            WritingMode::HorizontalTb => None,
+            WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                measure_vertical_em_box_left_ratio(factory, &format, font.height)
+                    .inspect_err(|step| {
+                        warn!(
+                            font = %picked.name,
+                            ?mode,
+                            step,
+                            "縦書きの列の基線を測れない——em の箱を列の箱の真ん中へ縮退する"
+                        );
+                    })
+                    .ok()
+            }
+        };
         Ok(DWriteMetrics {
             factory: factory.clone(),
             format,
             font_height: font.height,
             config: *config,
             line_box_ratio,
+            vertical_em_box_left_ratio,
             cache: RefCell::new(HashMap::new()),
             fonts,
             default_key: font.looks.default.font_key(),
@@ -350,6 +371,18 @@ impl GlyphMetrics for DWriteMetrics {
     fn line_box_height(&self, font_height: f32) -> f32 {
         font_height * self.line_box_ratio
     }
+
+    /// 縦書きの em の箱の左＝生成時に実測した比 × `font_height`（問われた向きが束縛した縦書きと
+    /// 同じときだけ）。それ以外と測れなかった物は既定の実装（列の箱の真ん中）。
+    ///
+    /// 実測例（spec `vertical-choice-hover-band` research.md 17 節）: Yu Gothic UI ∓0.1650・
+    /// ＭＳ ゴシック 0・游ゴシック −0.3013／＋0.3008（右から左／左から右・大きさに比例）。
+    fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
+        match self.vertical_em_box_left_ratio {
+            Some(ratio) if mode == self.mode => ratio * font_height,
+            _ => column_centred_em_box_left(self.line_box_height(font_height), font_height, mode),
+        }
+    }
 }
 
 /// 実測できないときの決定論の縮退送り幅（`FixedMetrics` と同式: ASCII だけのクラスタ＝
@@ -406,6 +439,40 @@ fn measure_line_box_ratio(factory: &IDWriteFactory2, format: &IDWriteTextFormat)
         return None;
     }
     Some((metrics.ascent as f32 + metrics.descent as f32) / upem)
+}
+
+/// 束縛した書式で、縦書きの em の箱の左の比 `(x − h/2) ÷ h` を測る。
+///
+/// x は列の基線の行矩形の左辺からの位置で、本番の行と同じ書式・同じ幅 h の仮名 1 字（「あ」）の
+/// TextLayout の `GetMetrics().left + GetLineMetrics()[0].baseline`（式 A）。右から左でも列の箱の
+/// 左辺から測る（仮名と漢字では基線が列の箱のちょうど半分で、右辺から測る式 B と 0.01 以内で同じ・
+/// research.md 17.4 節。仮名と漢字で半分でない書体が見つかったら確かめ直す）。
+/// 失敗は失敗した所の名前を `Err` で返す（呼び手が `warn!` に載せて縮退）。
+fn measure_vertical_em_box_left_ratio(
+    factory: &IDWriteFactory2,
+    format: &IDWriteTextFormat,
+    font_height: f32,
+) -> Result<f32, &'static str> {
+    if font_height <= 0.0 {
+        return Err("font_height <= 0");
+    }
+    let layout = factory
+        .create_text_layout(&HSTRING::from("あ"), format, font_height, PROBE_MAX_EXTENT)
+        .map_err(|_| "CreateTextLayout")?;
+    let mut text = DWRITE_TEXT_METRICS::default();
+    unsafe { layout.GetMetrics(&mut text) }.map_err(|_| "GetMetrics")?;
+    let mut lines = [DWRITE_LINE_METRICS::default(); 4];
+    let mut count = 0;
+    unsafe { layout.GetLineMetrics(Some(&mut lines), &mut count) }.map_err(|_| "GetLineMetrics")?;
+    if count == 0 {
+        return Err("GetLineMetrics: 行が 0 本");
+    }
+    let ratio = (text.left + lines[0].baseline - font_height / 2.0) / font_height;
+    if ratio.is_finite() {
+        Ok(ratio)
+    } else {
+        Err("値が有限でない")
+    }
 }
 
 #[cfg(test)]

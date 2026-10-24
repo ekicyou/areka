@@ -179,6 +179,7 @@ fn first_boot(rig: &mut SwitchRig, ghost: GhostDecision, origin: BootOrigin, arg
         &StartupDescriptValues {
             author_dpi: AuthorDpi::DEFAULT,
             zorder_raw: None,
+            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
         },
         &ghost,
         &balloon,

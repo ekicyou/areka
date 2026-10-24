@@ -82,6 +82,8 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 ### 過去互換経路（フォールバック）
 - **32bit Rustホスト**（`areka-shiori-host`, i686ターゲットの随伴バイナリ）。
 - 本物の `shiori.dll` を `LoadLibraryW`＋`GetProcAddress` で**実行時ロード**（`extern "C"` cdecl）。`load`/`unload`/`request`。
+- `load` へ渡すゴーストのフォルダは **絶対パス・`\` の区切り・末尾に `\` が 1 つ**（華和梨はこれにファイル名をそのままつなげて辞書を開く）。`shiori4-api` の決定 6 の helper の道を `shiori2-protocol` が前倒しした（要件 6.4・`crates/areka-ghost/src/shiori_wiring.rs` の `helper_load_dir`）。
+- 相手の SHIORI の版（3.0／2.x）は読み込みの直後の `GET Version` で決め、2.x の相手へは要求を 2.x の書き方へ組み替える（§8「SHIORI/2.x のゴーストとの話し方」）。
 - **64bit areka側で早期に HSTRING(UTF-16) → Charsetヘッダ解析 → charset符号化バイト列**へ変換し、**自前IPC**（名前付きパイプ/共有メモリ）でバイト列を運ぶ。※HGLOBALはプロセスローカルなので跨げない。
 - 32bitホストが受信バイト列を `GlobalAlloc` で HGLOBAL 化して旧SHIORIへ渡す。SHIORI規約の所有権（要求HGLOBALはDLLが解放／応答HGLOBALはホストが解放）はホスト内に閉じる。
 - **SAORIサブDLLは同32bitプロセスに同居**（実物を飼うことで互換をタダで得る。里々/YAYAをソースビルドしないこと——bitness連鎖で詰む）。
@@ -392,6 +394,14 @@ ukadoc が沈黙/曖昧な箇所を areka 裁量で決定した記録（§2 沈�
 | 応答の `SecurityLevel` で台本のレベルを上げるか（ukadoc は `external` で下げることだけを書き、`local` の応答で上がるかに沈黙） | **下げるだけで上げない**。応答の台本の実効のレベルは、元のイベントの出どころのレベルを応答の値で下げたもの（どちらかが `external` なら `external`）。`local` の応答や `SecurityLevel` の無い応答では元のレベルのまま。下げたトークごとに info の `script_security_lowered`（`by=response`）を残す | ゴーストの応答で外部扱いの台本の制限を外せると、外から流された台本が自分の権限を戻せてしまう | areka-P0-script-security-level（要件 3.1・3.2） |
 | 要求の `SecurityOrigin` の値（ukadoc は送信元を URL 風に示し、情報が無いときは `null` とするが、SSTP 以外の要求で何を書くかに沈黙） | **どの要求にも常に `null`**（MCP の入口からの要求も含む）。送信元を示す値は SSTP の受信を作る spec が持つ（roadmap の登記だけの行「SSTP の受信」・まだ起票していない）。網羅台帳の行は `degraded` | 今の areka には送信元の情報を持つ出どころが無い。SSP の実測（2026-10-21）でも `SecurityOrigin: null` はどの要求にも付くので、行そのものは省かずに送る | areka-P0-script-security-level（要件 2.1〜2.5） |
 | 応答の `SecurityLevel` が `local`・`external` のどちらでもない（ukadoc は他の値に沈黙） | **ヘッダが無いものとして扱い**（元のレベルのまま）、イベントの ID と読めなかった値を warn の `response_security_level_unreadable` に残す。値は大文字小文字を区別せずに読む。読めないことで台本を捨てたりレベルを下げたりはしない | 正典の 2 値以外を推測で解さない。下げる側に倒すと、綴りを誤ったゴーストの台本の正当な指令まで止まる | areka-P0-script-security-level（要件 3.3・3.4） |
+| 拡大率が変わった後の詰め直しの対象（正典は拡大率の変化に沈黙） | 完了 spec `areka-P0-dpi-transition-atomicity` 要件 6.2 の「保存位置を戻したスコープと、台本やドラッグで動かしたスコープを外す」を、**変わる直前に隣り合っていた組（許す幅 2 px・番号の続く組）を詰め、離れていた・重なっていた・一緒に動く組の窓・ドラッグの最中・詰め直しの備えの後に台本が置いた窓は動かさない**へ改めた | `char-position-save-on-exit` の後は 2 回目の起動から全員が記憶から戻るので、既定の位置かどうかで決める判定では誰も詰め直されない（後退） | dpi-realign-remembered-chain（要件 1〜3・7.3） |
+| キャラ窓の位置の記憶に隣り合いの印を持たせるか（正典は保存の形に沈黙） | 2026-08-14 の裁定（拡大率の変更をまたぐ保存位置の追従はしない）のうち「保存の形に拡大率の情報を持たせない」の部分を、キャラ窓の位置について改めた。**`[window-adjacent]` に隣り合いの印（`left`・`right`・`none`）を書く**。印は拡大率そのものでなく並びの情報で、位置の値は換算しない。`format-version` は上げない | 詰めた位置を書く案（案 B）は拡大率を戻した起動で組が重なったまま固まり、書かない案（案 C）は起動し直すと組が離れたまま固まる | dpi-realign-remembered-chain（要件 6・7.3） |
+| ゴーストの descript の `balloon.dontmove,true` が止めるもの（ukadoc はシェルの `*.balloon.dontmove`〔移動操作の禁止〕の既定をこの値と書くだけで、この値そのものが何を止めるかに黙る） | **利用者のドラッグでの移動を禁止する。追従（キャラクターの窓に付いて動くこと）は止めない**。段の優先はシェルの `<スコープ>.balloon.dontmove`（`sakura.`＞`char0.`・`kero.`＞`char1.`）＞ゴーストの `balloon.dontmove`＞禁止しない。止めたドラッグでは窓を動かさず位置の記憶も書かず、1 回につき `balloon_drag_held` の記録を 1 件残す。定義点＝`crates/areka/src/placement/descript_window_keys.rs` の `read_balloon_dontmove` | ukadoc はシェルの `*.balloon.dontmove` の既定を「ghostのdescript設定(balloon.dontmove)」と書く。SSP 2.9 の 2026-10-23 の測り（`.kiro/specs/completed/descript-window-keys/research.md` 10.3 節）で、この値が true のぱすたのバルーンは利用者がドラッグしても動かず、dontmove の無い Emily/Phase4.5 のバルーンは同じやり方で動いた。キャラクターの窓には付いて動く（完了 `areka-P0-pasta-in-windows-verification` の `ssp-measurement.md` 3 節） | descript-window-keys（要件 4.1〜4.3・裁定 1） |
+| descript の既定の面（`sakura.`・`kero.`・`char*.seriko.defaultsurface`）が指す面がシェルに無いとき（ukadoc は 0 番と 10 番を存在しない面の代わりに出す特別な面と書き、descript の値が無い面を指したときに黙る） | **組み込みの既定の面（本体側 0・それ以外 10）へ落とす**。起動・ゴーストの切り替えでの窓の大きさの測りと、ゴーストの読み直し・シェルの切り替えで出していた面が無いときの戻り先は、同じ並び（descript の既定の面 → 組み込みの既定の面）を使う。落としたときは `default_surface_missing`（測り）・`shell_switch_surface_fell_back`（シェルの切り替え）を `warn!` で残す。どちらも無いとき、測りは今までの扱いのまま、シェルの切り替えは面を出さずに `shell_switch_surface_hidden` を残す。定義点＝`crates/areka/src/placement/descript_window_keys.rs` の `fallback_candidates` | descript の値はその特別な面を置き換えるもので、無い番号を指したときは元の 0・10 が残るのが自然。空の窓（大きさ 0）で測ると起動の位置が決められない。シェルの切り替えの戻り先はゴーストの読み直しの規則（完了 `mcp-reload` 要件 3.8）にそろえた。SSP では測っていない（測るのに SSP の環境を変える必要があるため） | descript-window-keys（要件 2.3・3.2・3.3・裁定 2・6） |
+| `\![lock,balloonmove]`・`\![unlock,balloonmove]` の効くスコープと寿命（ukadoc は「バルーン」とだけ書いてスコープに黙り、寿命を「\![unlock,balloonmove]が呼ばれるまで」と書くがシェルやゴーストの切り替えに黙る） | **指令を書いた所のスコープのバルーンにだけ効く**（unlock も同じ）。lock は unlock を受けるまで続き、トークの終わり・シェルの切り替え（と読み直し）・SHIORI だけの読み直しでは解けず、ゴーストの終了・切り替え・読み直しで解ける。unlock が解くのは台本の lock だけで、descript の段の禁止は解けない（解けずに動かせないままのときは `balloon_move_unlock_held` を残す）。追従は止めない。余分な引数は読まない。定義点＝`crates/areka/src/emo2_boot/move_cue.rs` の lock・unlock の腕と `crates/areka/src/placement/balloon_lock.rs` の帳簿 | SSP 2.9 の 2026-10-23 の測り（`research.md` 10.3 節）で、本体で書いた lock は本体のバルーンだけを止めて相方は動き、本体で unlock・相方で lock を書くと本体が動き相方が止まった。lock・unlock を含まない別の台本の後も止まったままだった。余分な引数も誤りにしない（同 10.1 節）。シェルの切り替えで保ちゴーストの読み直しで捨てるのは、台本で決めた窓の決まりの先例（完了 `areka-P0-window-link-directives` の裁定 1・2）にそろえた | descript-window-keys（要件 5.1〜5.5・裁定 4・5） |
+| 動かせない指定が効いている間の、前にドラッグして記憶したバルーンの位置（ukadoc は利用者の移動操作の禁止だけを書き、記憶した位置に黙る） | **そのまま使う**（記憶を消さず、無視もしない） | 利用者は「バルーン位置初期化」（完了 `areka-P0-window-link-directives`）で標準の位置へ戻せる | descript-window-keys（要件 6.5・裁定 7） |
+| 利用者がバルーンをドラッグしている途中に受けた lock・unlock（ukadoc は黙る） | **そのドラッグは最後まで今のまま続け、次のドラッグから効かせる**。ドラッグの始まりに控えた値（wintf の `WindowDragContextResource` の `move_window`）だけを読む | ドラッグの途中で窓を止めると、マウスと窓が離れて利用者が戸惑う | descript-window-keys（要件 5.6・裁定 8） |
+| 動かせない指定と既定の面の読めない値（ukadoc は動かせない指定を「1(もしくはtrue)で禁止」、既定の面を「数値」とだけ書く） | 動かせない指定は `0`・`1`・`true`・`false` だけを読み、それ以外は**その段が書かれていないものとして次の段**（シェルの値 → ゴーストの値 → 禁止しない）へ進む。既定の面は 0 以上の整数だけを読み、それ以外は**組み込みの既定の面**を使う。どちらも `descript_value_unreadable` を `warn!` で 1 件残す。定義点＝`crates/areka/src/placement/descript_window_keys.rs` の `read_flag`・`insert_readable` | 読めない値で禁止すると、作者の書き損じで利用者の操作が奪われる。負の番号の面は無い（-1 は消す指定） | descript-window-keys（要件 1.5・4.5・裁定 9・10） |
 | **`--option readonly` で断ったインストールと更新でゴーストへ送る物**（正典 `ssphelp:option` は readonly で「手動のネットワーク更新・NAR のインストールもしない」と書くだけで、断ったときにゴーストへ何を送るかに沈黙。更新の失敗理由の語 `readonly` が在ることも、それを readonly の起動で送るかも書かない） | インストールは**何も送らない**（メニュー・窓へ落とす・台本・URL のどの入口でも、積む前に断る。`OnInstallBegin`・`OnInstallFailure` とも 0 件。URL はダウンロードを始めない）。更新は段を移す前に断り、**総括の `OnUpdateResultEx` → `OnUpdateResult` だけ**を、対象ごとに成否と理由の欄を空にして送る（`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateFailure` ほかは 0 件・ネットワークへ行かない・更新先の無い対象は今の規則どおり飛ばし、対象が全部飛べば何も送らない）。失敗理由の語 `readonly` は送らない（上の「正典に語の無い輸送の失敗の語」の行の「送らない語」のまま）。断りは `info!(readonly_refused)` を 1 件残し、メッセージボックスも告知も出さない。メニューの「インストール…」「ネットワーク更新」は灰色。定義点＝`crates/areka/src/install/mod.rs` の `submit`（`SubmitVerdict::ReadOnly`）・`crates/areka/src/emo2_boot/install_cue.rs` の `fetch_for`・`crates/areka/src/update/readonly_refusal.rs` の `refuse`・`crates/areka/src/update/refs.rs` の `readonly_summary_refs` | **SSP の測りに合わせる**（2026-10-23・readonly の SSP で、ゴーストへ送った要求を SHIORI のログの差分で数えた）。SSP は `.nar` のインストールの断りで何も送らず、バルーンの更新の断りで成否の欄が空の `OnUpdateResultEx`・`OnUpdateResult` だけを送り、`readonly` の語は出さなかった。判定は `crates/areka/src/install/submit_readonly_tests.rs` の `readonly_refuses_every_origin_before_queueing`・`crates/areka/src/update/readonly_refusal_tests.rs` の `readonly_refuses_updateother_balloon_with_ex_then_result`・`readonly_refuses_own_ghost_with_ex_then_result`・`readonly_with_no_targets_sends_nothing`・`crates/areka/src/emo2_boot/install_cue_tests.rs` の `readonly_fetch_refuses_the_url_without_sending_or_warning` | readonly-mode（要件 7.1〜7.7・11.3） |
 
 ### 動く絵（APNG・動く WebP）の読み込み（正典は読み方の細部に沈黙）
@@ -464,6 +474,48 @@ ukadoc は、element定義と `surface*.png` に動く絵を置くと SERIKO 定
 判定は `crates/areka-seriko/src/timeline_repeat_tests.rs`（`film_switches_exactly_at_frame_delays`・`one_ms_waits_are_not_rounded`・`finite_laps_stop_on_last_frame`・`zero_delay_frame_is_skipped_alpha_webp`・`film_jump_of_one_second_advances_one_second`・`negative_frame_hides_then_returns`・`written_zero_first_wait_last_frame_shows_zero_ms`・`elapsed_zero_matches_compose_rest_index`）、`crates/areka-seriko/src/table_always_tests.rs`（`exact_always_is_adopted_with_period_and_no_laps`・`combinations_and_other_words_keep_the_debug_arm`・`zero_total_always_is_not_adopted_and_warns_once`）、`crates/areka-seriko/src/parts_film_tests.rs`（`endless_film_continues_across_surfaces_and_while_hidden`・`finite_film_is_dropped_when_hidden_and_restarts_from_head`・`finite_film_continuously_visible_keeps_going_and_stays_stopped`・`clocks_are_separate_per_scope_and_face_kind`）、`crates/areka-seriko/src/looper_always_tests.rs`（`top_always_starts_without_lottery_and_restarts_from_head_on_switch`・`adding_always_keeps_random_fire_times`・`top_always_blanks_on_negative_frame_and_keeps_looping`）、`crates/areka-seriko/src/parts_always_tests.rs` の `always_in_child_does_not_rewind_when_parent_switches`、`crates/areka-emo-compose/src/plan_extent_film_tests.rs` の `hand_written_always_extent_is_union_of_all_patterns`・`cells_do_not_change_extent`、`crates/areka-emo-present/src/presenter_film_tests.rs` の `hidden_frame_changes_are_held_and_the_last_one_is_shown`・`a_stopped_finite_film_restarts_from_rest_when_shown_again`・`show_target_on_a_visible_target_keeps_the_finite_frame`、`crates/areka/src/emo2_boot/film_playback_e2e_tests.rs` の `shell_films_play_from_the_real_reader_to_the_composer`・`close_then_show_race_keeps_order_through_the_bridge`。
 
 - 出典 spec: `areka-P0-animated-image-playback`（開発者裁定 2026-10-05・要件 1・2・3・4・6・8.4・10.2・10.3）。
+
+### SHIORI/2.x のゴーストとの話し方（ukadoc に無い）
+
+ukadoc は SHIORI/3.0 の要求と応答だけを書き、SHIORI/2.x の要求の形・版の確かめ方・3.0 の要求との対応を書いていない（2.x の項目は ukadoc に無い）。areka は SSP 2.9.23 が華和梨 7.4 のゴースト「．さくら」へ送った記録（2026-10-23・ゴーストの `ghost\master\ssp_shiori_log.txt`）を出どころとして、次のとおり決めた。下の各行の出どころは、`shiori2-protocol` の研究記録 `research.md` の 10 節に置いた記録の抜き書きである（記録そのものは機械の情報を含むのでリポジトリに写していない）。網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` には 2.x の要求の行を作らず、ここにだけ置く。
+
+**版の確かめ方**（出どころ: 研究記録 10.1 節・測 1・測 2）
+
+- 読み込み（`load`）の直後に 1 本だけ `GET Version SHIORI/2.6`・`Charset: <今の文字コード>`・`Sender: areka`・空行（CRLF）を送る。SSP は同じ要求を `Charset: UTF-8`・`Sender: SSP` で送る（Sender の値は上の表の「要求の `Sender` の値」の行のとおり `areka`）。3.0 のゴーストにもこの 1 本を送る（SSP も送る）。3.0 のゴーストは `SHIORI/3.0` で始まる行で答える。状態の番号はゴーストで違い、ぱすた（emo2）と YAYA は 204、里々は 200 だった（`shiori2-protocol` の検証の記録 `verification.md` の 5.2 節。SSP で測ったのはぱすただけ・研究記録 10.6 節）。
+- 答えの先頭の行の最初の字句が `SHIORI/2.` で始まれば 2.x、`SHIORI/3.` で始まれば 3.0 と決める。状態の番号は見ない（SSP の記録では 3.0 の 204 も 2.x の 200 も、先頭の行の版の字の側へ移っていた）。
+- 答えが空・先頭の行の最初の字句が `SHIORI/2.` でも `SHIORI/3.` でもない・往復が失敗したなど決められないときは、3.0 とみなして話し、`warn!`（`shiori_version_undecided`）を 1 行出す。決めたときは `info!`（`shiori_version_decided`・版と答えの先頭の行）を 1 行出す。
+- 読み込み直したときは確かめ直す。確かめの答えの `Charset` は文字コードの採用に使わない。
+
+**組み替えの表**（3.0 の要求の材料から組む 2.x の要求・出どころ: 研究記録 10.2 節・測 3・測 5・測 6）
+
+行の区切りは CRLF・最後に空行。`[ ]` は値があるときだけ出す行。
+
+| 3.0 での種類 | 2.x の要求の行 | 見出し（この並び） | SSP との違い |
+|---|---|---|---|
+| 版の確かめ（areka が足す） | `GET Version SHIORI/2.6` | `Charset`・`Sender` | `Charset` は今の文字コード（SSP は `UTF-8` 固定）・`Sender: areka` |
+| 台本を求めるイベント（GET・資源の一覧に無い名前） | `GET Sentence SHIORI/2.2` | `Charset`・`SecurityLevel`・`Sender`・`Event`・`[Status]`・`Reference0…` | `BaseEvent` は書かない（areka は 3.0 でも `BaseID` を送っていない） |
+| 通知だけのイベント（3.0 では NOTIFY） | `GET Sentence SHIORI/2.2`（GET で送る） | 上と同じ | 答えは 3.0 の NOTIFY と同じく捨てる |
+| 資源の問い合わせ（GET・kanade の資源の一覧に載る名前） | `GET String SHIORI/2.5` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`ID`・`[Status]` | 今の areka は資源の問い合わせに References を付けない。付く資源ができたら 3.0 と同じ値を同じ番号で `Status` の後に書く（SSP では測っていない） |
+| 台本の翻訳（GET・`OnTranslate`） | `TRANSLATE Sentence SHIORI/2.6` | `Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`[Status]`・`Sentence` | `Sentence` の値は 3.0 の `Reference0`。References は書かない（SSP も書かない） |
+
+- 見出しの値は 3.0 と同じ（`SecurityOrigin` は `null`・`Event`／`ID` の値は 3.0 の `ID` の値）。`SenderType` は 2.x のどの要求にも書かない（SSP も書かない・測 6）。References の欠番の位置は 3.0 と同じく行を出さず番号だけ進める。
+- **送らない行**: `basewareversion`（3.0 では NOTIFY）は 2.x の相手へ送らず、`debug!`（`shiori2_event_not_sent`）を 1 行出す（SSP も送らなかった・測 5）。SSP が 2.x の相手へ送る `NOTIFY OwnerGhostName SHIORI/2.3`（`Ghost` 見出し）・`NOTIFY OtherGhostName SHIORI/2.3`・3.0 の相手へ送る `capability` は、areka が今どのゴーストへも送っていないので組まない。
+
+**見出しの対応**（2.x の応答の読み・出どころ: 研究記録 10.3 節・測 4）
+
+| 3.0 で areka が読む見出し | 2.x の見出し | 扱い |
+|---|---|---|
+| `Value`（台本・翻訳の結果） | `Sentence` | 同じに扱う |
+| `Value`（資源の値） | `String` | 同じに扱う |
+| `ErrorLevel`・`ErrorDescription`・`SecurityLevel` | 2.x に無い | 読まない（3.0 で見出しの無い答えと同じ扱い） |
+| `Charset` | `Charset` | 3.0 と同じ採用の規則（GET の答えだけ） |
+| 状態の行の番号 | 同じ（`200`・`204`・`400` など） | 3.0 と同じ振り分け |
+
+**3.0 のゴーストへの違い**は、読み込みの直後の `GET Version` の 1 本と、`load` へ渡すパスの形（§5「過去互換経路」）の 2 つだけで、ほかの要求のバイトと応答の読み方は変えない。
+
+- 実機: 「．さくら」は areka で起動の挨拶・時間のトーク・`OnClose` の終了のトークを話し、面を出して終了コード 0 で終わった（2026-10-24）。`OnClose` の形は SSP では測っておらず（研究記録 10.5 節）、areka の実機の 1 回で、ほかのイベントと同じ `GET Sentence` の形で台本が返ることを確かめた。
+- 根拠の場所: `crates/shiori-host32-host/src/shiori2.rs`（`version_probe_request`・`decide_version`・組み替えの表の 1 か所 `route`・`build_request`・`parse_response`）。判定は兄弟の `shiori2_tests.rs`。
+- 出典 spec: `shiori2-protocol`（要件 1.4・2.1・3.7・4.7・6.4・8.1）。
 
 ### areka 裁量の性能目標（正典は負荷に沈黙）
 

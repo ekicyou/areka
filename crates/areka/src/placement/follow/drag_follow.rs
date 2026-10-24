@@ -17,6 +17,7 @@ use super::{
     work_area_for_window,
 };
 // 組の連れ動き（areka-P0-window-link-directives・設計の決め 4・6・12）。
+use super::super::balloon_lock::{balloon_drag_held, end_balloon_drag};
 use super::super::persist::saved_form_anchor;
 use super::sticky_follow::{
     drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
@@ -521,6 +522,10 @@ pub(crate) fn on_balloon_drag(
             if ev.target != entity {
                 return false;
             }
+            // 止めたドラッグは追従のずれを引き直さない（descript-window-keys 要件 6.1）
+            if balloon_drag_held(world, entity) {
+                return false;
+            }
             // バルーン窓の現在位置（wndproc が実窓位置から更新済み・物理 px）
             let Some(wp) = world.get::<WindowPos>(entity) else {
                 return false;
@@ -660,6 +665,10 @@ pub(crate) fn on_balloon_drag_end(
         Phase::Bubble(ev) => {
             // 他 entity 宛イベントには何もしない（ハードニング・on_balloon_drag と同じ規約）
             if ev.target != entity {
+                return false;
+            }
+            // 止めたドラッグは記憶・素材・補正を動かさず記録 1 件だけ（descript-window-keys 要件 6.1・6.6）
+            if end_balloon_drag(world, entity) {
                 return false;
             }
 

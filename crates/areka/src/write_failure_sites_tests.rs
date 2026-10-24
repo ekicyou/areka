@@ -361,6 +361,7 @@ fn every_write_kind_reaches_the_desk() {
     let descript = StartupDescriptValues {
         author_dpi: AuthorDpi::DEFAULT,
         zorder_raw: None,
+        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
     };
     let boot = boot_first_ghost(
         world,

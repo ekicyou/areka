@@ -20,10 +20,15 @@
 //! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
 
 pub(crate) mod balloon_limit;
+/// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
+pub(crate) mod balloon_lock;
 pub mod chain_finalize;
 /// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
 pub mod chain_realign;
 pub mod config;
+/// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び（descript-window-keys）。
+pub(crate) mod descript_window_keys;
+pub use self::descript_window_keys::DefaultSurfaces;
 pub mod diag;
 /// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。
 pub(crate) mod dpi_sync;
@@ -84,7 +89,7 @@ pub(crate) use windowposition::scale_signed;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use areka_emo_compose::ScaleRatio;
@@ -286,6 +291,10 @@ pub struct PreparedPlacement {
     /// 窓の組を作った後にそのまま置く。読み込んだ descript の値とバルーンの `windowposition`・
     /// 作者の DPI を運ぶ（ファイルを読み直さない）。シェルの切り替えの後始末と同じ形で、spawn は読まない。
     pub default_basis: reset_pos::DefaultPlacementBasis,
+    /// 測りに使った descript の既定の面（資産の最初の面と読み直しの戻り先へ同じ値を配る）。
+    pub default_surfaces: DefaultSurfaces,
+    /// descript の段がドラッグを禁止するスコープ（窓を作る閉包が帳簿へ据える）。
+    pub balloon_dontmove: BTreeSet<u32>,
 }
 
 /// 準備パイプラインの中間結果（load→config→measure まで・work area 非依存部）。
@@ -306,6 +315,10 @@ struct PreparedStages {
     /// （areka-P0-balloon-offset-dpi design D15・意図された挙動）。非主モニタで生まれた
     /// 窓は最初の `Changed<DPI>` で主モニタ空間から実モニタ空間へ引き直される。
     measure_dpi: DPI,
+    /// 測りに使った descript の既定の面（[`PreparedPlacement::default_surfaces`]）。
+    default_surfaces: DefaultSurfaces,
+    /// descript の段の動かせない指定（[`PreparedPlacement::balloon_dontmove`]）。
+    balloon_dontmove: BTreeSet<u32>,
 }
 
 impl PreparedStages {
@@ -321,6 +334,8 @@ impl PreparedStages {
             zorder_raw: self.cfg.zorder_raw,
             sticky_window_raw: self.cfg.sticky_window_raw,
             default_basis: self.default_basis,
+            default_surfaces: self.default_surfaces,
+            balloon_dontmove: self.balloon_dontmove,
         }
     }
 }
@@ -425,6 +440,10 @@ fn prepare_stages_for_shell(
     let src = source::load_descript_source_for_shell(ghost_root, shell)?;
     let mut cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
     let scope_ids: Vec<usize> = cfg.scopes.keys().copied().collect();
+    // descript の既定の面と動かせない指定もここで 1 度だけ読む（測りと下流へ同じ値を配る・要件 2.2）。
+    let default_surfaces = descript_window_keys::read_default_surfaces(&src.ghost_kv);
+    let balloon_dontmove =
+        descript_window_keys::read_balloon_dontmove(&src.ghost_kv, &src.shell_kv, &scope_ids);
     // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
     // 読み込み済みの生 KV（`load_descript_source` の戻り）から、balloon は別パッケージ
     // ゆえ `load_balloon_author_dpi` の 1 回の寛容読取から得る（パーサ改造なし・再 I/O なし）。
@@ -437,7 +456,13 @@ fn prepare_stages_for_shell(
     // ここ（採寸の源）で吸収され、`spawn.rs` は k 倍済み `SizePx` を consume するのみ
     // ＝窓生成・窓移動の責務は不変（要件 3.4/7.6）。
     let (scaling, measure_dpi) = build_measure_scaling(primary_dpi, author_dpi);
-    let sizes = measure::measure_scope_sizes(&src.shell_dir, balloon_root, &scope_ids, &scaling)?;
+    let sizes = measure::measure_scope_sizes(
+        &src.shell_dir,
+        balloon_root,
+        &scope_ids,
+        &default_surfaces,
+        &scaling,
+    )?;
     // 起動観測点（D10・要件 6.3）: 窓生成へ渡る**k₀ 倍後の物理寸**そのものを載せる。
     // 非 96 環境では k_shell/k_balloon が 1.0 以外になり、scopes の寸が原寸の k₀ 倍で
     // あることを RUST_LOG の grep だけで決定論的に判定できる。
@@ -475,6 +500,8 @@ fn prepare_stages_for_shell(
         // 採寸 DPI（追従オフセットの基準 DPI・要件 3.1）。両軸に同じ表示 DPI を置く
         // ——k₀ の分子は軸によらず 1 つだからである（軸差は分母＝作者基準 DPI にある）。
         measure_dpi: DPI::from_dpi(measure_dpi as u16, measure_dpi as u16),
+        default_surfaces,
+        balloon_dontmove,
     })
 }
 
@@ -925,6 +952,9 @@ mod char_clamp_tests;
 #[cfg(test)]
 #[path = "placement_monitor_tests.rs"]
 mod monitor_tests;
+#[cfg(test)]
+#[path = "placement_prepare_descript_keys_tests.rs"]
+mod prepare_descript_keys_tests;
 #[cfg(test)]
 #[path = "placement_prepare_tests.rs"]
 mod prepare_tests;

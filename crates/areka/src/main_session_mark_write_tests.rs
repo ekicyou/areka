@@ -170,6 +170,7 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
         let descript = crate::ghost_session::StartupDescriptValues {
             author_dpi: crate::placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
+            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
         };
         let label = format!("{origin:?}");
         let boot = super::boot_first_ghost(&mut world, &cfg, origin, &descript, &ghost, &balloon);

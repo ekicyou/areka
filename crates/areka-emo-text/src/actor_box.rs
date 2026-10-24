@@ -28,7 +28,7 @@ use crate::choice::HitRectPx;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
-use crate::state::BoxTraits;
+use crate::state::{BoxTraits, SurfaceFallback};
 
 impl TextLayerRuntime {
     /// 箱の束を受け取る（UI スレッドから・装着の相とシェルの切替が呼ぶ）。
@@ -118,6 +118,14 @@ impl TextLayerRuntime {
         self.rehearse_again();
         self.box_font_dirs = font_dirs;
         self.box_layout = layout;
+    }
+
+    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える（要件 3.2・3.5）。
+    /// [`Self::set_box_layout`] の直後に呼ぶ。替えたスコープがあったときだけ区間の全文を求め直す。
+    pub fn fall_back_box_surfaces(&mut self, fallback: &SurfaceFallback) {
+        if self.state.fall_back_surfaces(fallback) {
+            self.rehearse_again();
+        }
     }
 
     /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。

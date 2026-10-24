@@ -266,6 +266,17 @@ fn scan_charset_header(bytes: &[u8]) -> Option<String> {
 ///
 /// NUL 終端に依存せず、与えられたバイト長で解析する（len 厳守）。
 pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedResponse, ShioriError> {
+    parse_response_with(bytes, policy, "Value")
+}
+
+/// [`parse_response`] の本体。値の見出しの名前だけを `value_header` で受け取る
+/// （3.0 は `Value`・2.x は `Sentence` など・shiori2-protocol 要件 4.1〜4.3）。
+/// 状態の番号・`Charset` の拾い方・読めない応答の判定は 3.0 と同じ。
+pub(crate) fn parse_response_with(
+    bytes: &[u8],
+    policy: CharsetPolicy,
+    value_header: &str,
+) -> Result<ParsedResponse, ShioriError> {
     // ⑴ 復号前にヘッダの生の値を走査する（位置不問・要件 4.1）。
     let charset_header = scan_charset_header(bytes);
 
@@ -302,7 +313,7 @@ pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedRespo
         let name = name.trim();
         let val = val.trim();
         // ヘッダ名一致は大文字小文字無視（堅牢性）。既知ヘッダ以外は無視（要件 2.8）。
-        if name.eq_ignore_ascii_case("Value") {
+        if name.eq_ignore_ascii_case(value_header) {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Value:1
             value = Some(val.to_string());
         } else if name.eq_ignore_ascii_case("ErrorLevel") {
@@ -371,6 +382,22 @@ mod tests {
                 security_level: None,
             }
         );
+    }
+
+    /// 値の見出しに `Sentence` を渡すと 2.x の答えの台本が `value` に入る
+    /// （shiori2-protocol 要件 4.1）。同じバイト列を 3.0 の読み（`Value`）に通すと
+    /// `value` は `None` のまま——3.0 の読み方は見出しを替えた分しか動かない（要件 6.2）。
+    #[test]
+    fn parse_with_sentence_header_reads_2x_value() {
+        let body = r"\h\s[0]こんにちは\e";
+        let resp = format!("SHIORI/2.5 200 OK\r\nCharset: UTF-8\r\nSentence: {body}\r\n\r\n");
+        let policy = CharsetPolicy::Negotiate(Charset::UTF_8);
+        let parsed = parse_response_with(resp.as_bytes(), policy, "Sentence").expect("well-formed");
+        assert_eq!(parsed.status, 200);
+        assert_eq!(parsed.value, Some(body.to_string()));
+        assert_eq!(parsed.charset_header, Some("UTF-8".to_string()));
+        let as_3 = parse_response(resp.as_bytes(), policy).expect("well-formed");
+        assert_eq!(as_3.value, None);
     }
 
     /// 200 だが Value ヘッダが無い場合は `value: None`（要件 2.1・Value は 200 でも欠落し得る）。

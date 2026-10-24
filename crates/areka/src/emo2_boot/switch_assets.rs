@@ -31,6 +31,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninit
 use super::BootWiringError;
 use super::assets::{BalloonAssets, ShellAssets, build_balloon_assets, build_shell_assets};
 use crate::placement::PlacementError;
+use crate::placement::descript_window_keys::read_default_surfaces;
 use crate::placement::load_scope_windowpositions;
 use crate::placement::persist::load_restored_state;
 use crate::placement::reseed::BalloonPlacementInputs;
@@ -213,11 +214,14 @@ fn build_shell(
 ) -> Result<SwapBuilt, SwitchBuildError> {
     let source = load_descript_source_for_shell(ghost_root, Some(folder))?;
     let decoder = WicDecoderArm::new().map_err(BootWiringError::Decoder)?;
+    // 既定の面はゴーストの descript から起動と同じ関数で読み直す（同じファイルなので値も同じ・要件 1.7）。
+    let default_surfaces = read_default_surfaces(&source.ghost_kv);
     let assets = build_shell_assets(
         ghost_root,
         Some(folder),
         scopes,
         source.shell_author_dpi(),
+        &default_surfaces,
         &decoder,
     )?;
     // 起動は落ちた絵を読み飛ばして続けるが、切替では空の窓へ差し替えず元の表示のまま失敗にする。

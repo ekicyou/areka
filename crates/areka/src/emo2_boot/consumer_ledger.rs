@@ -38,14 +38,14 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 36 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 38 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
 //! `(execute,install)`・`(execute,resetwindowpos)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
 //! `areka.prop.set`・`(set,balloontimeout)`・`(reload,ghost|shiori|shell|balloon|descript)`・
 //! `reloadsurface`・`(set,alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset,sticky-window)`・
-//! `(execute,resetballoonpos)`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `(execute,resetballoonpos)`・`(lock,balloonmove)`・`(unlock,balloonmove)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -78,6 +78,8 @@ type LedgerKey = (String, Option<String>);
 ///   登記する（areka-P0-move-canon 要件 8.7）。吸着・窓の組・バルーン位置初期化の 5 行
 ///   （`(set, alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset, sticky-window)`・
 ///   `(execute, resetballoonpos)`）も同じ受け口に登記する（areka-P0-window-link-directives）。
+///   バルーンの動かせない指定の 2 行（`(lock, balloonmove)`・`(unlock, balloonmove)`）も同じ
+///   受け口に登記する（descript-window-keys 要件 5.7）。
 /// - [`Seriko`](CommandConsumer::Seriko): `\![bind]`（着せ替え）を消費する表示系 seriko。
 ///   正準台帳（[`ConsumerLedger::canonical`]）が `bind` → `Seriko` を登記する（task 7.2）。
 /// - [`ZOrderSink`](CommandConsumer::ZOrderSink): 重なり指定・重なり解除を消費する
@@ -122,7 +124,7 @@ type LedgerKey = (String, Option<String>);
 pub enum CommandConsumer {
     /// 窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`・`\![set,alignmenttodesktop,方向]`
     /// （`alignmentondesktop` も同じ）・`\![set,sticky-window,…]`・`\![reset,sticky-window]`・
-    /// `\![execute,resetballoonpos]`）の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
+    /// `\![execute,resetballoonpos]`・`\![lock,balloonmove]`・`\![unlock,balloonmove]`）の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetwindowpos_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1
@@ -365,8 +367,8 @@ impl ConsumerLedger {
     /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
     /// [`CommandConsumer::LifecycleSink`]・`(reload, ghost|shiori|shell|balloon|descript)` と
     /// `reloadsurface` → [`CommandConsumer::ReloadSink`]・`(set, alignmenttodesktop|alignmentondesktop|
-    /// sticky-window)`・`(reset, sticky-window)`・`(execute, resetballoonpos)` →
-    /// [`CommandConsumer::MoveSink`]）。
+    /// sticky-window)`・`(reset, sticky-window)`・`(execute, resetballoonpos)`・
+    /// `(lock, balloonmove)`・`(unlock, balloonmove)` → [`CommandConsumer::MoveSink`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -482,6 +484,12 @@ impl ConsumerLedger {
             ledger
                 .try_register(name, Some(selector), CommandConsumer::MoveSink)
                 .expect("正準台帳: 吸着・組・バルーン位置初期化の 5 組は一意（重複・排他違反は編集ミス）");
+        }
+        // バルーンの動かせない指定（descript-window-keys 要件 5.7）。
+        for name in ["lock", "unlock"] {
+            ledger
+                .try_register(name, Some("balloonmove"), CommandConsumer::MoveSink)
+                .expect("正準台帳: (lock|unlock, balloonmove) は一意（重複・排他違反は編集ミス）");
         }
         ledger
     }

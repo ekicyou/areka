@@ -191,15 +191,18 @@ fn repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis() {
     );
 }
 
-/// **保存位置が復元されたスコープは、現在位置に関わらず常に対象外**（scg 7.3）。
+/// **印の無い記憶から戻したスコープは、現在位置に関わらず動かさない**（scg 7.3）。
+///
+/// 覚えた印のある組の隣り合わせは `boot_pair_decision`（`chain_finalize_resolve_tests.rs`）が持つ
+/// （dpi-realign-remembered-chain 要件 6.3）。ここは印なし（`NoRememberedMark`）の形。
 ///
 /// 前回セッションで利用者がドラッグした位置は「既定配置」ではない。既定位置と比較する形の
 /// 判定では、復元位置が既定位置として台帳に載ってしまうと `current_x == default_x` が成立し
 /// 未接触と誤判定される——**セッションを跨ぐと利用者のドラッグが隣接位置へ引き戻される**。
-/// 起動シーム（`main.rs`）が復元済みスコープの既定位置を落とし、ここが `None` を対象外として
-/// 扱うことで防ぐ。
+/// 起動シーム（`main.rs`）が復元済みスコープの既定位置を落とし、ここが印の無い `None` を
+/// 動かさないことで防ぐ。
 #[test]
-fn restored_scope_is_never_pulled_back_even_when_it_sits_still() {
+fn restored_scope_without_a_mark_is_never_pulled_back_even_when_it_sits_still() {
     let states = [
         untouched(0, 1000, 400),
         // 復元位置 900。既定位置は台帳から落とされている（None）。
@@ -226,9 +229,10 @@ fn restored_scope_is_never_pulled_back_even_when_it_sits_still() {
     );
 }
 
-/// 復元スコープが**たまたま隣接位置に居ても**指示は出ない（`None` は位置に依らず対象外）。
+/// 印の無い記憶から戻したスコープが**たまたま隣接位置に居ても**指示は出ない
+/// （位置に依らず印で決まる）。
 #[test]
-fn restored_scope_is_excluded_regardless_of_where_it_sits() {
+fn restored_scope_without_a_mark_is_excluded_regardless_of_where_it_sits() {
     let states = [untouched(0, 1000, 400), restored(1, 680, 320)];
 
     assert!(

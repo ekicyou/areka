@@ -190,3 +190,18 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - **要件定義のモデル**: Opus のまま（案 ⑴ は `check_script` の判定、案 ⑵ は `StartTalk` の出どころの欄と受け口の判定の表が先例）。
 - **分割の案**: なし（案 ⑵ で 20 を超えたら棚卸㉑の切り方）。
 - **見つけた穴・古くなった記述**: 案内文の最後の 1 文（`crates/areka-mcp/src/handler.rs` 39 行目「まだのツールは `NG:not implemented yet` で始まる答えを返す」）は、当てはまるツールが 0 本のまま残っている＝今すぐ消せる。棚卸㉘の「`translate.rs`（300）」「`consumer_ledger.rs`（472）」は 348・496 に読み替える。10-08 の申し送りの表に `unpaired_tag` の行が無いこと・文面の定数と文書の一致をテストで見ていないことは前のまま。
+
+## 2026-10-23 要件の討議の裁定と、並走の相手との順（main 15d8b0f3）
+
+- **裁定**（開発者）:
+  - 議題 1: 「手抜きはダメよ？並走相手と相談して実行順を決めてブロッカーとすること。実装は行うこと。」＝案 2（再生の途中まで印を運び、実際に起きた誤りを記録する）。入口で診る案 1 は取らない。
+  - 議題 3: 「議題３も。スコープ増やす必要があるなら、一度このスペックはPRして次のウェーブに回すべき。」＝`params` がオブジェクトでない要求への答えは rmcp の中で直す（rmcp の手前で本文を読んで自分で答える形は取らない）。新しい版で直っていれば上げ、直っていなければ上流へ直しを出し、取り込みまでは `[patch.crates-io]` で持つ＝依存の席を使う。
+  - ほかの議題: 「あとは承認。完成度が最優先です。」
+- **ウェーブ**: C11（⑦）から外した。要件まで（requirements.md・research.md）を PR で main に入れ、設計は待ちが解けてから `/kiro-design mcp-strict-errors` で始める。
+- **待ち（ブロッカー）と順**（10-23 に並走の相手と合意）:
+  - ① `descript-window-keys` が先に着地する。① が `consumer_ledger.rs` で変えるのは、表の末尾の 2 行（`lock`／`unlock` の `balloonmove`）・手書きの数 36→38・`samples()` と見本の 2 件だけ。`consumer_of` と「未登記」を扱う所の形は変えない（設計で変わったら知らせると約束）。
+  - ② `mouse-click-wheel-events` が先に着地する。② が kanade で変えるのは `msg.rs` のマウスの知らせ（`MouseEventKind` とボタンの型）と `schedule/{events,steady,types,mod}.rs`・新しい `mouse_click.rs`。`StartTalk`・SSTP 系の知らせ・`sstp.rs`・`translate.rs`・`actor.rs`・areka-talk・sakura・seriko・emo-present・`consumer_ledger.rs` には触らない＝本 spec は ② の後に `msg.rs` の別の型へ足す。
+  - 依存の席（`Cargo.lock`）は 1 ウェーブに 1 本＝本 spec を入れるウェーブでは、ほかに依存を足す spec と版上げを置かない。
+  - そのほか、次のウェーブを組む棚卸で重なりを測り直す相手: `presenter/show.rs` の `animated-surface-log-flood`・`present-emit-tail-latency`、seriko の `actor.rs` と `consumer_ledger.rs` の `script-small-tags`、`consumer_ledger.rs` の鎖（`stay-on-top-directives`・`shell-scale-linkage`・`balloon-communicatebox`）、kanade の `msg.rs`・`schedule/sstp.rs` の `sstp-receive`・`multi-ghost-runtime`。
+- **規模**: M〜L（13〜19＋rmcp の直し 1〜3）。20 を超えたら棚卸㉑の切り方（⒜ 印の通り道と記録の口＋`\s`・`\b`・`\i` ⒝ 未知のタグ・未知の `\!`・`\&`＋読む段の 3 種類）に、rmcp の直しを ⒜ の前へ置く。
+- **要件定義のモデル**: Opus のまま。設計は Opus で十分（印の運び方は `StartTalk.origin` が先例・rmcp の直しは前例 `image-webp` の `[patch.crates-io]`）。
