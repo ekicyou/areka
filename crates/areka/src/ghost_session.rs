@@ -291,15 +291,17 @@ pub(crate) fn prepare_ghost_windows(
         placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());
         // 動かせない指定の帳簿も窓を作った後に据える（据える前に作った窓へ書き手が届く・要件 4.1）。
         placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove);
-        // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
-        // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
-        // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
+        // 記憶から戻したスコープは既定配置ではない（scg 7.3）。台帳の既定位置を外し
+        // 覚えた印を据える——起動の並べ直しは今の位置でなく印で決める（left/right は今の幅で
+        // 隣り合わせ、none・印なし・組の窓・台本の印は動かさない・dpi-realign-remembered-chain 6.3〜6.5）。
+        // 既定位置を残すと利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
         // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
         if !restored_scopes.is_empty()
             && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
         {
-            for scope in &restored_scopes {
-                gw.clear_default_char_pos(*scope);
+            for (&scope, &mark) in &restored_scopes {
+                gw.clear_default_char_pos(scope);
+                gw.set_remembered_adjacency(scope, mark);
             }
         }
         // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→

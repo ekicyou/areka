@@ -765,7 +765,7 @@ fn restore_merged_placements(
     default_encoding: areka_parsers::charset::DefaultEncoding,
 ) -> (
     Vec<placement::resolver::ScopePlacement>,
-    std::collections::BTreeSet<usize>,
+    std::collections::BTreeMap<usize, Option<placement::chain_finalize::AdjacencyMark>>,
 ) {
     // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
     let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
@@ -777,15 +777,12 @@ fn restore_merged_placements(
     // 一切変えないためであり、補正は `balloon_pos`（表示位置）だけに作用する
     // ——`balloon_offset`（論理相対位置）は生値のまま（DD6・補正を焼き付けない）。
     let merged = placement::balloon_limit::apply_balloon_limit(merged, snapshot);
-    // 記憶に位置（x・y の両方）があるスコープ集合。これらは**利用者の意思による配置**で
-    // あって既定配置ではないため、連鎖の再解決から常に除外される（scg 7.3）。値の違いでなく
+    // 記憶に位置（x・y の両方）があるスコープ集合。既定配置ではなく、起動の並べ直しは覚えた印で、
+    // 拡大率の変化の後は変わる直前の隣り合いで決める（dpi-realign-remembered-chain 6.3・1）。値の違いでなく
     // 記憶の有無で決める＝記憶の値がたまたま既定と同じでも記憶として扱う
     // （char-position-save-on-exit 2.6・判定は merge と同じ読み取り `has_saved_char_pos`）。
-    let restored: std::collections::BTreeSet<usize> = merged
-        .iter()
-        .map(|m| m.scope)
-        .filter(|&scope| placement::persist::has_saved_char_pos(&entries, scope))
-        .collect();
+    // 値は覚えた隣り合いの印（無ければ None）で、窓を作る閉包が窓の一式へ据える。
+    let restored = placement::persist::restored_scope_marks(&entries, &merged);
     (merged, restored)
 }
 

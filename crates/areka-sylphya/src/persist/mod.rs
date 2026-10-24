@@ -155,6 +155,12 @@ pub enum PersistKey {
     /// （中身の意味は呼び手が持ち、ここは運ぶだけ）。空文字は空文字のまま（「無し」に潰さない）。
     /// 書けば並び全体を 1 回で置き換える。載せるスコープは呼び手の契約（本番は App）。
     BasewareRoots,
+    /// 隣り合いの印（キャラクタースコープ別）→ 正準 key `areka.window.scope(ID).adjacent`・
+    /// TOML `[window-adjacent]` の `"ID" = "left" | "right" | "none"`。値の意味は呼び手（areka）が持つ。
+    WindowAdjacent {
+        /// キャラクタースコープ ID。
+        scope: u32,
+    },
 }
 
 impl PersistKey {
@@ -178,6 +184,7 @@ impl PersistKey {
             PersistKey::LastShell => "areka.last.shell".to_string(),
             PersistKey::LastRunning => "areka.last.running".to_string(),
             PersistKey::BasewareRoots => "areka.baseware.roots".to_string(),
+            PersistKey::WindowAdjacent { scope } => format!("areka.window.scope({scope}).adjacent"),
         }
     }
 }
@@ -223,7 +230,7 @@ pub enum PersistOutcome {
 ///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
 ///
 /// 返り値は決定論的順序（[`FormatDoc`] は [`std::collections::BTreeMap`] ゆえ scope ID 昇順、
-/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）→ baseware、
+/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）→ baseware → window-adjacent、
 /// 各 pair は x → y）。
 pub fn load_scope(
     scope: PersistScope,
@@ -365,6 +372,9 @@ fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
         PersistKey::LastShell => doc.last_shell = Some(value),
         PersistKey::LastRunning => doc.last_running = Some(value),
         PersistKey::BasewareRoots => doc.baseware_roots = Some(value),
+        PersistKey::WindowAdjacent { scope } => {
+            doc.window_adjacent.insert(scope.to_string(), value);
+        }
     }
 }
 
@@ -410,6 +420,19 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
             out.push((key, v.clone()));
         }
     }
+    for (id, v) in &doc.window_adjacent {
+        // 数でない ID は window と同じく debug ＋ skip（寛容）。
+        let Ok(scope_id) = id.parse::<u32>() else {
+            tracing::debug!(
+                target: LOG_TARGET,
+                ?scope,
+                raw_id = %id,
+                "persist scope id is not a u32; skipping entry (tolerant)"
+            );
+            continue;
+        };
+        out.push((PersistKey::WindowAdjacent { scope: scope_id }, v.clone()));
+    }
 
     out
 }
@@ -449,3 +472,7 @@ mod tests;
 #[cfg(test)]
 #[path = "persist_failure_tests.rs"]
 mod failure_tests;
+
+#[cfg(test)]
+#[path = "persist_window_adjacent_tests.rs"]
+mod window_adjacent_tests;

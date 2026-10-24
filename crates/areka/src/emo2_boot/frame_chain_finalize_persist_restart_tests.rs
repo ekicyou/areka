@@ -114,7 +114,7 @@ fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
         DefaultEncoding::Ansi,
     );
     assert_eq!(
-        restored.iter().copied().collect::<Vec<_>>(),
+        restored.keys().copied().collect::<Vec<_>>(),
         vec![0, 1],
         "1 回目に並べ終えた時点で両方の位置が記憶にある"
     );
@@ -126,7 +126,7 @@ fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
     let gw = spawn_shown(&mut world, &placements, &not_shown);
     {
         let mut ghost_windows = world.resource_mut::<GhostWindows>();
-        for scope in &restored {
+        for scope in restored.keys() {
             assert!(ghost_windows.clear_default_char_pos(*scope));
         }
     }

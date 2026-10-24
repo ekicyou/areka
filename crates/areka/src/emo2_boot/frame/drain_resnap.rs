@@ -12,8 +12,9 @@ use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::balloon_lock::apply_script_balloon_lock;
 use crate::placement::chain_finalize::{
-    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, ScriptPlaced,
-    finalize_chain, moved_default_pos, note_chain_deferral,
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
+    boot_pair_decision, mark_non_positive_widths, moved_default_pos, note_chain_deferral,
+    resolve_chain,
 };
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
@@ -25,7 +26,9 @@ use crate::placement::reset_pos::reset_window_positions;
 use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::script_alignment::apply_script_alignment;
 use crate::placement::spawn::GhostWindows;
-use crate::placement::sticky_group_ledger::{apply_reset_sticky, apply_set_sticky};
+use crate::placement::sticky_group_ledger::{
+    StickyGroupLedger, apply_reset_sticky, apply_set_sticky,
+};
 
 use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 
@@ -422,7 +425,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     if world.get_resource::<ChainFinalized>().is_some() {
         return;
     }
-    let (mut states, targets) = match collect_chain_states(source, world) {
+    let (states, targets) = match collect_chain_states(source, world) {
         Ok(scan) => scan,
         Err(reason) => {
             match reason {
@@ -448,26 +451,68 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         }
     };
 
-    // 台本の `\![move]` が置いた窓は、x が既定のまま（縦にだけ動いた・ちょうど既定へ置いた）でも
-    // 引き戻さない（scg 7.3）。既定を `None`＝「既定配置ではない」として判定へ渡す。
-    for (state, &(_, entity, _)) in states.iter_mut().zip(&targets) {
-        if world.get::<ScriptPlaced>(entity).is_some() {
-            state.default_x = None;
-        }
-    }
+    // 組ごとの決め（dpi-realign-remembered-chain design BootRemembered）。記憶に位置の無い
+    // スコープ（既定の位置がある）は今の並べ直しのまま: 既定のままなら左へ付け、既定から動かされたか
+    // 台本の `\![move]` が置いた窓（x が既定のままでも・scg 7.3）は動かさない。記憶から戻した
+    // スコープ（既定の位置が無い）は「台本の印 → 組の窓 → 覚えた印」の順で決める（6.3〜6.5）。
+    // 基準は前の窓の解いた後の x（resolve_chain）。
+    let ledger = world.get_resource::<StickyGroupLedger>();
+    let ghost_windows = world.get_resource::<GhostWindows>();
+    let mut slots: Vec<ChainSlot> = states
+        .iter()
+        .zip(&targets)
+        .map(|(s, &(_, entity, _))| ChainSlot {
+            scope: s.scope,
+            current_x: s.current_x,
+            width: s.width,
+            decision: boot_pair_decision(
+                s,
+                world.get::<ScriptPlaced>(entity).is_some(),
+                ledger.is_some_and(|l| l.group_of(s.scope as u32).is_some()),
+                ghost_windows.and_then(|gw| gw.remembered_adjacency(s.scope)),
+            ),
+        })
+        .collect();
 
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
-    let moves = finalize_chain(&states);
+    mark_non_positive_widths(&mut slots);
+    let moves = resolve_chain(&slots);
+    // 記憶から戻した組は、動かさない組も含めて組ごとに 1 行残す（7.1）。
+    for (i, (slot, state)) in slots.iter().zip(&states).enumerate().skip(1) {
+        if state.default_x.is_some() {
+            continue;
+        }
+        let decision = slot.decision.as_str();
+        let to_x = moves
+            .iter()
+            .find(|m| m.scope == slot.scope)
+            .map_or(slot.current_x, |m| m.new_x);
+        info!(
+            prev_scope = slots[i - 1].scope,
+            scope = slot.scope,
+            decision,
+            from_x = slot.current_x,
+            to_x,
+            dx = to_x.saturating_sub(slot.current_x),
+            "chain_finalize: 記憶から戻した組の判断を下した（覚えた印で今の幅に隣り合わせる・要件 6.3・7.1）"
+        );
+    }
     for m in &moves {
         let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) else {
             continue;
         };
-        info!(
-            scope = m.scope,
-            from_x = pos.x,
-            to_x = m.new_x,
-            "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1）"
-        );
+        // 記憶に位置の無い組は今の行のまま（記憶から戻した組は上の組の行が出ている）。
+        if states
+            .iter()
+            .any(|s| s.scope == m.scope && s.default_x.is_some())
+        {
+            info!(
+                scope = m.scope,
+                from_x = pos.x,
+                to_x = m.new_x,
+                "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1）"
+            );
+        }
         // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包）。
         // Y は現在値を据え置く（下端吸着は各窓の再アンカーが既に保っている・7.2）。
         move_window_to(world, entity, m.new_x, pos.y);
@@ -488,11 +533,12 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {
         for m in &moves {
-            // 動かすのは既定の x と今の x が等しいスコープだけなので既定は必ずある。
+            // 既定の位置が無いのは記憶から戻した窓を覚えた印で隣り合わせた組。既定の位置を
+            // 付けないので、並べ終えた時点の保存はこの窓の位置を書かない（6.6）。
             let Some(old_default) = ghost_windows.default_char_pos(m.scope) else {
                 debug!(
                     scope = m.scope,
-                    "chain_finalize: 既定位置が無いので既定の更新を見送る（届かないはずの分かれ道）"
+                    "chain_finalize: 記憶から戻した窓を隣り合わせたので既定の位置を付けない（記憶に書かない・6.6）"
                 );
                 continue;
             };
@@ -562,13 +608,13 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         let Some(char_window) = ghost_windows.char_window(scope) else {
             return Err(ChainDeferReason::NoCharWindow { scope });
         };
-        // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
-        // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        // `None` は「既定配置ではない」（記憶から戻したスコープ）。ここでは打ち切らずそのまま渡す。
+        // 起動の並べ直しは `None` のスコープを覚えた印で決め（`left`／`right` は今の幅で隣り合わせ、
+        // `none`・印なし・組の窓・台本の印は動かさない）、拡大率の変化の後の詰め直しはこの値を
+        // 使わず変わる直前の隣り合いで決める（dpi-realign-remembered-chain 要件 1・6.3〜6.5）。
         //
         // 読む値は「起動時の既定」ではなく**「最後にシステムが置いた既定位置」**である
-        // （atom D9／D16・要件 6.2）。拡大率の遷移では単一の窓書込口が同じ量を書込先へ
-        // 運ぶので、誰も触っていないスコープは遷移後も一致したまま＝対象に残る。運ばないと
-        // 全スコープが「明示的に動かされた」へ倒れて解き直しが空振りする。
+        // （atom D9／D16）。システム由来の再アンカーでは単一の窓書込口が同じ量を書込先へ運ぶ。
         let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
         let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
