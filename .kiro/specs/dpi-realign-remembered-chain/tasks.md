@@ -128,3 +128,7 @@
   - ⑷ 100% にして閉じ、100% のまま起動し直す（run3）: `chain_finalize: … decision="adjacent-left" from_x=1560 to_x=1919 dx=359` で隣り合って立つ。隙間は開かない。
   - 許す幅 2 px: どの組も `before_gap=0` で足りた。受け入れた外れ 3 つは目に見えて起きなかった。
   - 同じ確かめで見つけた範囲外の件: ぱすたの初期表示のはみ出しと初回起動の窓あわせのずれ → `window-work-area-clamp` の brief へ追記（`757952b3`）。ぱすたの検体は登記の食い違い（別 PR で直る）で `nar-sample-path` が落ちたため、照合済みの展開先を直に写して使った。
+- 完了時の棚卸（2026-10-24）: その場で解決 0 件・起票 1 件（既存の brief への追記）・対象外 4 件。
+  - 起票（追記）: 「画面の外の記憶を寄せて表示しているとき、書き足す印が表示の矩形から決まる」→ `window-work-area-clamp` の件 3 へ追記。当たった条件＝直し方が複数あり開発者の裁定が要る（印を表示・記憶の位置のどちらから決めるか、決めないか）。
+  - 対象外: `mcp_get_log_real_run` の赤（作業木に i686 の helper が無い環境の話・helper を作れば緑）／`spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` の揺れ（`areka-test-binary-stability` が起票済み）／`frame_default_pos_track_tests.rs` の「右へ +120」（起動の並べ直しの檻で、ドラッグで既定の位置を外れた時点で動かさない決めになり、離れか重なりかに関わらない＝直す必要なし）／ドラッグ中の面の差し替えで掴んだ点が比で置き直る件（設計どおりの自然な振る舞い）。
+  - 6.3 の確かめの中で起票済み: ぱすたの初期表示のはみ出し・初回起動の窓あわせのずれ（`window-work-area-clamp` の件 2・件 5）、`OnMouseHover`（新 spec `mouse-hover-event`）。
