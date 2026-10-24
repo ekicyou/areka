@@ -138,3 +138,10 @@
 - **先に要るもの**: 働きの前提は満たしている。列の順は `range-choice-tag` → `link-context-copy` → `balloon-link-hover` → `balloon-font-file` の後のまま（列の頭だった `anchor-tag-canon` は着地した）。
 - **優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
 - **見つけた穴・古くなった記述**: コードの穴は無い。前半は `region.rs` に触るので `real-run-log-noise` と、`actor_present.rs` に触るので `balloon-text-bugs`・`choice-ranges-one-function` と、同じウェーブに置けない。
+
+## 2026-10-24 追記（`/kiro-discovery`・`emo-text-dwrite-fidelity` の起票で）
+
+- **件: 括弧の詰め（約物の詰め）**: ぱすたさんの縦書き（游ゴシック 20px）で「」→っ」の間が 15px 空く（「」」の枠の下半分の空き＋小書きの「っ」の上の空き）。行の途中の全角の括弧を詰めずに組んだ見え方で、正典にない組版の機能。行頭・括弧の連続・行の途中で括弧を半分に詰めるか（CSS `text-spacing-trim` の `normal`／`trim-start`／`space-all` が参考）を本 spec で決める。
+- 起票時の実測: DirectWrite の TextLayout は自分では詰めない（送り幅は全部 20.0）。`IDWriteTypography` で `vchw`・`vhal`・`vpal`・`halt` を当てても括弧の送り幅は 20.0 のまま。詰めるなら areka が送り幅を決め、1 字の計測（`draw_metrics.rs`）と行の TextLayout（`draw_line_store.rs`）の両方に同じに効かせる要がある。
+- 開き括弧「「」の墨が枠の上端に描かれる件（本来は下端）は詰めとは別のバグで、`emo-text-dwrite-fidelity` が直す。本 spec の詰めは、その直しの後の位置を前提にする。
+- 小書きかな（っ・ょ）の下の空きはフォントの縦書き用の字形どおり（Chromium でも同じ）で、直さない。
