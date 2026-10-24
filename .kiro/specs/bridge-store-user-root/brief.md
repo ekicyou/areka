@@ -54,7 +54,7 @@
 
 - **Extends**: 完了 `user-data-root`（要件 6.1＝中継の控えの置き場）・完了 `mcp-stdio-bridge`（中継の控え）。
 - **Adjacent**:
-  - `write-failure-notice`（進行中）: 書けない場所の伝え方。`areka-user-data` の `open_dir_for_add` を使う側。中継の `config.rs` には触らない見込み＝着手時に照らす。
+  - ✅ `write-failure-notice`（2026-10-17 着地）: 書けない場所の伝え方。`areka-user-data` の `open_dir_for_add` を使う側。中継の `config.rs` には触らない見込み＝着手時に照らす。
   - `winget-release-automation`: 説明書（`dist/README.txt`）の別の行を触る。説明書の別々の行は同じウェーブで許す重なり。
 
 ## Constraints
@@ -70,34 +70,13 @@
 
 B（バグ。Store 版の利用者で、中継の控えが本当の置き場に届かず、箱の中に置き場の写しができうる）。
 
-## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
-- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。開発者の機械の Claude アプリは Microsoft Store 版で、AI のエージェントが areka の MCP へつなぐ道はこの中継を通る。中継の控えが箱の中に回ると、開発者の Claude から areka を試すときに、areka 本体の記憶の置き場とは別の写しが箱の中にでき、どちらを見ているかが分からなくなる＝「MCP サポートの安定化」の 1 つ。
-- 前提の変化: 起票（10-17）から触るファイルは動いていない。中継は今も `crates/areka-mcp-bridge/src/config.rs`（130 行）の 67〜68 行目で `areka_user_data::establish(Some(dir), …)` を呼び（置き場を作る・写す）、`app_profile_dir` で控えの置き場を決める。`crates/areka-user-data/src/establish.rs` は 240 行。`dist/README.txt` 175 行目の段落（Store 版の書き込みは `LocalCache\Local\` の下へ回る）も同じ。
-- 触るファイル: `crates/areka-mcp-bridge/src/config.rs` と `config_tests.rs`・`dist/README.txt` の 175 行目の段落・要れば中継の起動の記録の行。`areka-user-data` の決め方は変えない。
-- 規模: S（4〜7）のまま。
-- 先に要るもの: なし。最初のタスクの実機の測りは、Claude Desktop を落とす・起動し直すことになったら開発者に頼む。
-- 同じウェーブに置けない相手: `config.rs` を挙げる brief はほかに無い。`dist/README.txt` の別の行は `startup-options-core`・`readonly-mode`・`startup-install-option`・`offline-surface-dump`（起動オプションの節を足す）と重なるが、説明書の別々の行は許す重なり。
-- 優先度の区分: B のまま。要件定義のモデル: Opus のまま。分割の案: なし。
-- 見つけた穴・古くなった記述: なし。Adjacent の `write-failure-notice` は 10-17 に着地した（`config.rs` には触れていない）。
-
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 中継のコードは 10-17 から変わっていない（`crates/areka-mcp-bridge/src/config.rs` 130 行・67〜68 行目で、隣に `areka.exe` が在るときだけ `areka_user_data::establish` を呼んで置き場を作る・写す）。PR#354（10-22）は中継のコードでなく、開発者の机へ中継を置く道具 `tools/mcp-bridge-install.ps1` を足した: ワークツリーからビルドし、環境変数 `AREKA_MCP_HOME` の指すフォルダへ `areka-mcp-bridge.exe` だけを置く。中継のコードは `AREKA_MCP_HOME` を読まない。
-- 開発者の机への効き: 2026-10-22 に見ると `AREKA_MCP_HOME` のフォルダには `areka-mcp-bridge.exe` が 1 つだけで、隣に `areka.exe` が無い＝開発者の Claude（Store 版）が起こす中継は `establish` を呼ばない道を通り、控えは `%LOCALAPPDATA%\areka\mcp-bridge\`（Store 版では箱の中の `LocalCache\Local\areka\mcp-bridge\`）に置かれる。箱の中に置き場を作る・exe の隣の記憶を写す、は開発者の机では起きない。棚卸㉗の節の「開発者の Claude から試すときに箱の中に写しができる」は今は当たらない。
-- それでも残る: winget で入れた利用者が Claude Desktop の設定で中継を `areka.exe` の隣のもの（winget の置き場）に向けたとき、`establish` が箱の中で根を作り、記憶を写しうる＝バグの本体は利用者の形で残る。
-- 触るファイル: `crates/areka-mcp-bridge/src/config.rs` と `config_tests.rs`・`dist/README.txt` の中継の控えの段落（今は 228 行目）・要れば中継の起動の記録の行。`tools/mcp-bridge-install.ps1` は触らない。`areka-user-data` の決め方は変えない。
-- 規模: S（4〜7）のまま。
-- 先に要るもの: 無い＝先頭。`config.rs` を挙げるほかの brief は無い＝重なり 0（`dist/README.txt` は段落が別＝許す重なり）。依存は足さない・emo-text に触らない。最初のタスクの実機の測りは、`AREKA_MCP_HOME` の中継でなく、`areka.exe` の隣に置いた中継（winget の形）を Store 版の Claude Desktop から起こして測る＝Claude Desktop の設定の書き換えと起動し直しは開発者に頼む（人の待ち）。
-- 優先度の区分: B のまま。
-- 要件定義のモデル: Opus のまま。
-- 分割の案: なし。
-- 見つけた穴・古くなった記述: 棚卸㉗の節の「`dist/README.txt` 175 行目」は 228 行目。v0.1.0 に置いた理由（開発者の Claude から試すときに写しが 2 つできて紛らわしい）は PR#354 の置き方では起きないので、v0.1.0 に残す理由は「利用者の形のバグ」（ゴールの「MCP サポートの安定化」）だけになった＝版に残すかを次の棚卸で開発者に問うてよい。
-
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 10-22 から中継のコードも置き場の決め方も変わっていない（`crates/areka-mcp-bridge/src/config.rs` 130 行・67 行目で、隣に `areka.exe` が在るときだけ `areka_user_data::establish` を呼んで置き場を作る・写す／`crates/areka-user-data/src/establish.rs` 240 行／`tools/mcp-bridge-install.ps1` も変わらず）。開発者の机の中継は `AREKA_MCP_HOME` の形のまま＝箱の中に置き場を作る件は開発者の机では起きず、残るのは winget で入れた利用者が `areka.exe` の隣の中継を指した形だけ（棚卸㉘のとおり）。v0.1.0 に残すかの問いは開発者の答え待ち。
-- **触るファイル**: `crates/areka-mcp-bridge/src/config.rs` と `config_tests.rs`（166）・`dist/README.txt` の中継の控えの段落（228 行目→289 行目・説明書が 380→441 行に増えた）・要れば中継の起動の記録の行。
-- **規模**: S（4〜7）のまま。
-- **先に要るもの**: 無い＝先頭。`config.rs` を挙げるほかの brief は無い＝重なり 0（`readonly-mode` も `establish.rs` を挙げるが、この spec は `establish` を呼ばない形へ替えるだけで中身を触らない。説明書は段落が別＝許す重なり）。依存は足さない・emo-text に触らない。人の待ち: 最初のタスクの実機の測りで、Store 版の Claude Desktop の設定を `areka.exe` の隣の中継へ向け直して起動し直すのは開発者に頼む。静かな机・全体テストの比べは要らない。
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: `readonly-mode`（10-24）が `areka-user-data` に「決めるだけで作らない・写さない」口を足した＝`establish_readonly`（書ける根がまだ無ければ作らずに隣の形で返す）と `readonly_app_profile_dir`（写すはずの場面なら写す元を返す）。`crates/areka-user-data/src/establish.rs` は 240→310 行で、判断と記録は `decide_logged` を両方の道が分け合う。この spec の Approach 2（中継は `establish` を呼ばず道筋だけ決める）は、中継の `config.rs`（130 行・67 行目の `establish` の呼び出し）からこの口を呼ぶ形で書ける見込み＝`areka-user-data` に新しい関数を足さずに済む。ただしこの口は、根がまだ無いとき exe の隣の記憶（winget の置き場）を返す＝そこへ控えを書いてよいか（書けなければ控えなしで動く）は要件で決める。中継のコードと `tools/mcp-bridge-install.ps1` は変わっていない。
+- **触るファイル**: `crates/areka-mcp-bridge/src/config.rs` と `config_tests.rs`（166）・`dist/README.txt` の中継の控えの段落（289 行目のまま・説明書は 441→460 行）・要れば中継の起動の記録の行。`establish.rs` は読むだけ。
+- **規模**: S（4〜7）のまま（使える口ができた分、下限寄り）。
+- **先に要るもの**: 無い＝先頭。重なり 0（`config.rs` を挙げるほかの brief は無い。`mcp-strict-errors` は同じクレートの `stdio.rs`・`errors.rs`、rmcp を上げるなら `Cargo.toml`＝ファイルは別。説明書は段落が別＝許す重なり）。依存は足さない・emo-text に触らない。
+- **中の待ち**: 最初のタスクの実機の測りで、Store 版の Claude Desktop の設定を `areka.exe` の隣の中継へ向け直して起動し直すのは開発者に頼む（人の待ち）。開発者の机の中継は `AREKA_MCP_HOME` の形（隣に `areka.exe` が無い）なので、箱の中に置き場を作る件は開発者の机では起きない。静かな机・全体テストの比べは要らない。
 - **優先度の区分**: B のまま（Store 版の利用者で、中継の控えが本当の置き場に届かず、箱の中に置き場の写しができうるバグ）。
 - **要件定義のモデル**: Opus のまま。
 - **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 棚卸㉘の「説明書の 228 行目」は 289 行目。v0.1.0 に残すかの問い（棚卸㉘で開発者に問うた 1 つ目）は、まだ答えが無い＝次のウェーブに入れる前に答えをもらう。
+- **見つけた穴・古くなった記述**: v0.1.0 に残すかの問い（棚卸㉘で開発者に問うた 1 つ目）は、まだ答えが無い＝次のウェーブに入れる前に答えをもらう。Adjacent の `write-failure-notice` を「進行中」と書くが、10-17 に着地している。

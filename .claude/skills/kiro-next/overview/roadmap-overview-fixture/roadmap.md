@@ -60,6 +60,32 @@ Opus
 /kiro-start areka-P0-beta-next
 ```
 
+### その先のウェーブ（見本の見込み）
+
+| ウェーブ | spec | 入る条件 | 要件定義 |
+|---|---|---|---|
+| C10 | `omega-last` | `beta-next` の後 | Opus |
+| C11 | v9.9.9 のリリース | v9.9.9 の spec が 0 本になった後 | — |
+
+```
+Wave C10（見込み）1本（v9.9.9 1本）
+【本来の次の版 v9.9.9】
+Opus
+/kiro-start omega-last
+```
+
+```
+Wave C11（見込み）リリース（v9.9.9 の spec は 0 本）
+【本来の次の版 v9.9.9】
+/release 9.9.9
+```
+
+### 直列の列（見本・この塊は読まない）
+
+```
+/kiro-start not-read
+```
+
 ## spec 台帳（brief を持つ 8 本・見本）
 
 > 前置きの文。

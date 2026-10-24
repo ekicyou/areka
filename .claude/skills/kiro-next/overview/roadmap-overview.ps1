@@ -93,7 +93,7 @@ $ErrorActionPreference = 'Stop'
 # 較正値（説明の一覧と対応。変更はここだけ）
 # =============================================================================
 $STRINGS_FILE = 'roadmap-overview.strings.json'
-$MARKER_KEYS  = 'secVersions', 'secLedger', 'secThemes', 'secWaves', 'secSummary', 'groupSep', 'headSep', 'chainSep',
+$MARKER_KEYS  = 'secVersions', 'secLedger', 'secThemes', 'secWaves', 'secNextWaves', 'secSummary', 'groupSep', 'headSep', 'chainSep',
                 'listSep', 'brackets', 'countRegex', 'classRegex', 'themeCut', 'sentenceEnd', 'ellipsis'
 $LABEL_KEYS   = 'title', 'sourceUpdated', 'sourceBlob', 'sourceBlobUnknown', 'bandCount', 'bandCountMismatch',
                 'warningCount', 'wave', 'done', 'notInLedger', 'notInBand', 'otherBands', 'prereqs', 'notInRoadmap',
@@ -469,18 +469,22 @@ function Get-Wave([string[]]$Lines, [pscustomobject]$Markers) {
     [pscustomobject]@{ Name = $name; Names = $names; Warnings = [object[]]$warnings }
 }
 
-# ウェーブ編成の節の最初のコードの塊（``` で囲んだ行・/kiro-next が書く開始コマンドの一覧）を、囲みを外して返す。
+# ウェーブ編成の節の最初のコードの塊（``` で囲んだ行・/kiro-next が書く今のウェーブの開始コマンド）と、
+# 小節「その先のウェーブ」（markers.secNextWaves）の塊を全部、囲みを外して空行で繋いだ 1 つの塊で返す（1 回のコピーで全部取れる）。
 # 節か塊が無ければ $null（任意の欄＝欠けにも警告にもしない）
 function Get-WaveCommands([string[]]$Lines, [pscustomobject]$Markers) {
     $i = 0
     while ($i -lt $Lines.Count -and -not $Lines[$i].StartsWith($SECTION_PREFIX + $Markers.secWaves)) { $i++ }
+    $blocks = [System.Collections.Generic.List[string]]::new()
+    $inNext = $false
     for ($i++; $i -lt $Lines.Count -and -not $Lines[$i].StartsWith($SECTION_PREFIX); $i++) {
+        if ($Lines[$i].StartsWith('### ')) { $inNext = $Lines[$i].StartsWith($Markers.secNextWaves); continue }
         if (-not $Lines[$i].StartsWith('```')) { continue }
         $body = [System.Collections.Generic.List[string]]::new()
         for ($i++; $i -lt $Lines.Count -and -not $Lines[$i].StartsWith('```'); $i++) { $body.Add($Lines[$i]) }
-        return ($body -join "`n")
+        if ($inNext -or $blocks.Count -eq 0) { $blocks.Add($body -join "`n") }
     }
-    $null
+    $blocks.Count -gt 0 ? ($blocks -join "`n`n") : $null
 }
 
 # 完了サマリの節の最初の表を読む（節の後の別の表は読まない）。節か表が無ければ $null（欠け summary-table は呼ぶ側が出す）。

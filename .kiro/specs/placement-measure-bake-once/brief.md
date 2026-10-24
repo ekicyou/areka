@@ -62,82 +62,15 @@
 1. 案 A と案 B のどちらを取るか（焼く回数を減らすか、採寸だけ全コマを読まないか）。
 2. シェルの着替え（`switch_assets.rs`）とバルーンの着替えも同じ直しに含めるか。
 
-
-## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
-
-- 規模: 案 A なら 10〜14、案 B なら 5〜8 タスク。8〜12 の幅で見積もりのまま。切らない。
-- 前提の状態: `animated-image-decode` は着地済み＝今すぐ着手できる。ただし外形（採寸の元）を変える `extent-element-offset` が先に着地すると、本 spec の「採寸の結果が今と同じ」の固定がその後の値で書ける（後になるなら、固定は「1 回焼きと 2 回焼きの答えが一致する」の形で書く）。
-- 崩れた前提／古くなった位置:
-  - Current State は今も正しい。採寸の `measure_native_scope_sizes`（`placement/measure.rs`）が自前の `build_shell_assets` から `load_shell_target` を 1 回、`measure_balloon_surface0` が scope ごとに `build_balloon_target_from_faces`。資産組み立ては `emo2_boot/assets.rs` の `build_shell_assets`・`build_balloon_assets`。C3 で `placement/` に入ったのは `#[allow(dead_code)]` の注記の外しだけ。
-  - 2 回の焼きは呼ばれる場所が離れている。採寸は `placement/mod.rs` の `prepare_stages_for_shell`（`ghost_session.rs` の窓を作る準備から）、資産は `emo2_boot/mod.rs` の `build_boot_assets_for`（`boot_ghost` の手順 1）。placement の結果は窓を作る閉包へ移されて同期では読めない（`derive_scopes` の doc）＝案 A は `ghost_session.rs` の段取りに触れる。
-  - 議題 2 の答えが出た: シェルの着替え（`switch_assets.rs`）は `build_shell_assets` だけを呼び、採寸をしない＝「同じ形」ではないので範囲外でよい。ゴーストの切替は起動と同じ道（`ghost_session.rs` の準備 → 資産組み立て）を通るので、案 A は起動と切替を一緒に直す。
-- 触るファイル（並走の照合用）:
-  - 案 A: `crates/areka/src/placement/{mod.rs, measure.rs}`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/emo2_boot/{mod.rs, assets.rs}` と兄弟のテスト
-  - 案 B: `crates/areka/src/placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`（`load_shell_target` に上限を渡す口）・必要なら `balloon.rs`。署名を変えると試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs` も
-  - 共有しうる相手: 案 A は `extra-character-windows`（`placement/mod.rs`・`measure.rs`・`emo2_boot/mod.rs`）と `balloon-font-file`（`assets.rs`）。案 B は `self-alpha-declaration`・`surfaces-basepos`（`shell_target.rs`）。
-- 議題（答えで作業が変わるものだけ）: 1（案 A か案 B か）だけが残る。2 は上のとおり答えが出た。
-- すぐ直せる軽微な修正: この brief の「要件の段で決める議題」の直後に、起票のときの書き損じの 2 行（`</content>`・`</invoke>`）が紛れ込んでいる。消すだけ。
-
-
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- 前提の変化: `animated-image-playback`（10-07）が着地し、採寸の 1 回目も束縛の直後に動く絵を子へ分解するようになった（読んで捨てる仕事が増えた）。起動で 2 行ずつ出る警告の種類も増えた＝`element-base-method` の「描けない描画メソッドの行」・`self-alpha-declaration` の「descript.txt が読めない」「添えてあった `.pna` の数」と透過の扱いの知らせ。`self-alpha-declaration` は採寸と資産組み立ての両方に透過の宣言を渡す引数を足した（`placement/measure.rs`・`emo2_boot/assets.rs`・`balloon.rs` の `build_balloon_target_from_faces`）。採寸と資産組み立てが別々に焼く形は変わっていない。
-- 触るファイル: 案 A＝`crates/areka/src/placement/{mod.rs, measure.rs}`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/emo2_boot/{mod.rs, assets.rs}` と兄弟のテスト。案 B＝`placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`・必要なら `balloon.rs`。
-- 規模: 案 A なら 10〜14、案 B なら 5〜8 タスクのまま。切らない。
-- 先に要るもの: 無し（今すぐ着手できる）。`extent-element-offset`・`collisionex-regions`・`seriko-trigger-intervals`・`animated-image-import`・`present-emit-tail-latency` とは重なり 0。列の外では、案 A が `emo2_boot` の結線の列（`mcp-reload`・`balloon-font-file`・`extra-character-windows`）と、案 B が `balloon-canon-residue`（`balloon.rs`）と重なる。`extent-element-offset` が先だと「採寸の結果が同じ」の固定が書きやすい。
-- 優先度の区分: C（性能の持ち越し・同梱の検体では踏まない）。
-- 要件定義のモデル: Opus。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述:
-  - roadmap の台帳の行の「`animated-image-playback` の前が望ましい」は過ぎた。
-  - 棚卸㉒の節の「書き損じの 2 行」は棚卸㉒の即時修正で消えた（もう無い）。
-  - 案 A が足す先の `placement/mod.rs`（902 行）・`emo2_boot/mod.rs`（912 行）・`ghost_session.rs`（873 行）は上限の近く。足す分は新しいファイルへ出す。
-
-## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
-- 前提の変化: 版の段で v0.1.0（「手前が持ち込んだ重さ」）。棚卸㉓から触る所の変更は 0。採寸 `crates/areka/src/placement/measure.rs`（450 行）の `measure_native_scope_sizes` と、起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs`（547 行）の `build_boot_assets` が別々に焼く形はそのまま。
-- 触るファイル: 案 A＝`placement/mod.rs`（902）・`placement/measure.rs`・`crates/areka/src/ghost_session.rs`（873）・`emo2_boot/mod.rs`（911）・`emo2_boot/assets.rs` と兄弟のテスト（上限の近い 3 本には足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`（757）・要れば `crates/areka-emo-present/src/balloon.rs`（701）・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`。
-- 規模: 案 A なら 10〜14、案 B なら 5〜8 タスク（変わらず）。
-- 先に要るもの: 無し。`extent-element-offset` が先だと「採寸の結果が同じ」の固定が書きやすい（ファイルの重なりは 0）。
-- 同じウェーブに置けない相手: 案 A＝`multi-ghost-runtime`（`placement/mod.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）・`user-data-root`（`ghost_session.rs` の記憶の置き場の呼び手を直す場合）。案 B＝`balloon-webp-names`（`balloon.rs`）。`extent-element-offset`・`animated-image-import`（合成と読み手）とは 0。`dpi-realign-remembered-chain` とも 0（あちらは `placement/` の `chain_realign.rs`・`chain_finalize.rs`・`spawn.rs`・`persist.rs` と `emo2_boot/frame/`＝`mod.rs`・`measure.rs` に触らない）。
-- 優先度の区分: C（性能の持ち越し・同梱の検体では踏まない）。
-- 要件定義のモデル: Opus（変わらず）。案 A は起動の段取りの順に触れるが、1 本の道の中の順で、並行の新しい設計ではない。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述: 案 A は `multi-ghost-runtime` がゴーストごとに分け直す起動の道と同じ場所を作り直す＝v0.1.0 の中では `multi-ghost-runtime` の後に置くか、当たりの小さい案 B を選ぶ。棚卸㉓の節の `emo2_boot/mod.rs`「912 行」は今 911 行（差し支え無し）。
-
-## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
-- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。理由が 2 つになった: ⑴ **試験の速さ**: 動く絵の多いシェルは起動の焼き込みが release で 0.19 秒から 3.2 秒（上限いっぱいの動く絵 1 つ・4 つで 13.2 秒・debug では 64.5 秒）になり、うち約半分は採寸で読んで捨てる分。実機の試験は起動を何度もくり返すので、この分がそのまま試験の時間に乗る。MCP の `reload`（`mcp-reload`）の返事の上限 10 秒にも近づく。⑵ **ぱすたが SSP と同じに動く**: ぱすた（窓際のぱすたさん）のシェルは surface1000 に動く WebP の element を 3 つ持つ（`shell/master/window/ball/` の `eback.webp` 40 コマ・`base_rings.webp` 48 コマ・`efront.webp` 40 コマ・ghost_dev の `surfaces.txt` 120〜122 行目＝2026-10-18 に読み取りだけで確かめた）。起票のときの「今は踏まない（検体に動く絵は 0 枚）」は、ぱすたを検体にした今は外れた。
-- 前提の変化: 触る所の中身は棚卸㉕から変わらない（採寸 `placement/measure.rs` 450 行・資産組み立て `emo2_boot/assets.rs` 547 行が別々に焼く）。行数: `placement/mod.rs` 902→**915**・`crates/areka/src/ghost_session.rs` 873→**885**・`emo2_boot/mod.rs` 911→**916**（`move-canon`・`write-failure-notice` ほか）。`crates/areka-emo-present/src/shell_target.rs` 757・`balloon.rs` 701 は変わらず。
-- 触るファイル: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs`（上限の近い 3 本には足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`shell_target.rs`・要れば `balloon.rs`・`crates/areka/src/mcp/dump_surface_gpu_test_support.rs`。
-- 規模: 案 A 10〜14・案 B 5〜8 のまま。
-- 先に要るもの: なし。測り直しにぱすたの絵を使うなら `sample-url-fetch`（ぱすたを検体として取り寄せる）の後が楽。測りは上限いっぱいの合成の検体でもできる。
-- 同じウェーブに置けない相手（v0.1.0）: 案 A＝`mcp-reload`（`emo2_boot/mod.rs`）・`offline-surface-dump` は `load_shell_target` を読むだけ＝0。案 B＝`offline-surface-dump`（同じ `load_shell_target` の口を変えるなら照合）。後回しの段: `multi-ghost-runtime`（案 A）・`balloon-webp-names`（案 B の `balloon.rs`）。
-- 優先度の区分: C のまま（性能の持ち越し）。ただし v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う。
-- 要件定義のモデル: Opus のまま。分割の案: なし。
-- 見つけた穴・古くなった記述: Problem の「今は踏まない」はぱすたで外れた（上）。行数（902・873・911）は古い。
-
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 2 か所が別々に焼く形は変わらない（採寸 `crates/areka/src/placement/measure.rs` 450 の `measure_native_scope_sizes`・155 行目／起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs` 547 の `build_boot_assets`・260 行目）。行数: `crates/areka/src/ghost_session.rs` 885→**910**（上限が近い）・`emo2_boot/mod.rs` 916→**787**（✅ `mcp-reload` が中身を外へ出した）・`placement/mod.rs` 915。✅ `mcp-reload` のゴーストの読み直しも、切り替えと同じ起動の道（`ghost_session.rs` の `boot_ghost`）を通る＝案 A は起動・切り替え・読み直しを一緒に直し、読み直しの返事の上限 10 秒にも効く。✅ `sample-url-fetch` でぱすた（面 1000 に動く WebP 3 つ）を取り寄せられる＝測り直しに使える。✅ `user-data-root` は着地した。
-- 触るファイル: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs` と兄弟のテスト（`ghost_session.rs`・`placement/mod.rs` には足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`（757）・要れば `crates/areka-emo-present/src/balloon.rs`（701）・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`（461）。
-- 規模: 案 A 10〜14・案 B 5〜8 タスクのまま。
-- 先に要るもの: 働きの上ではなし。**案ごとの重なり（今）**: 案 A＝v0.1.0 の `descript-window-keys`（`measure.rs`・`assets.rs`）・`startup-install-option`（`ghost_session.rs`）。余力の枠の `multi-ghost-runtime`（`placement/mod.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）。`emo2_boot/mod.rs` は後の版の多くも触るが、v0.1.0 の中では `descript-window-keys` だけ。案 B＝v0.1.0 の `descript-window-keys`（`measure.rs`）・`shell-mouse-cursor`（`shell_target.rs`）・`offline-surface-dump`（`load_shell_target` の口を変えるときだけ）。ウェーブの外の `areka-test-binary-stability`（試験の支え）。後の版の `balloon-webp-names`・`balloon-canon-residue`（`balloon.rs`）。どちらの案でも `descript-window-keys` とは直列、`dpi-realign-remembered-chain` とは 0。依存を足さない。
-- 待ち: 焼く時間の測り直し（前後の比べ・release）は静かな机で 1 本ずつ。窓の配置の確かめは本物のゴーストと 96 以外の拡大率。
-- 優先度の区分: C（性能の持ち越し）。v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う。
-- 要件定義のモデル: Opus のまま（案 A も 1 本の道の中の順の入れ替えで、並行の新しい設計ではない）。
-- 分割の案: なし。
-- 見つけた穴・古くなった記述:
-  - 棚卸㉗の節の `emo2_boot/mod.rs`「916」は 787、`ghost_session.rs`「885」は 910。棚卸㉗の節の「案 A は `mcp-reload`（`emo2_boot/mod.rs`）と重なる」は着地で済んだ。
-  - roadmap の棚卸㉕の行「案 A なら `multi-ghost-runtime`・`user-data-root` と重なる」の `user-data-root` は済んだ話。今の案 A の v0.1.0 の相手は上の 2 本。
-  - 案 B は v0.1.0 の `shell-mouse-cursor`（`shell_target.rs`）とも重なる（これまでの節に無かった）。
-
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 2 か所が別々に焼く形は変わらない（窓の大きさの測り `crates/areka/src/placement/measure.rs` 450 の `measure_native_scope_sizes`・155 行目／起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs` の `build_boot_assets`・210 行目）。✅ `offline-surface-dump`（10-23）が着せ替えの既定の読みを `areka-seriko` へ移し、`assets.rs` は 547 行から 475 行になった。シェル読み込みの入口 `crates/areka-emo-present/src/shell_target.rs` は 757 行から 855 行になり（形の知らせを足した）、入口 `load_shell_target`（302 行目）の新しい呼び手 `crates/areka/src/offline_dump/mod.rs`（192 行目）ができた。行数: `crates/areka/src/ghost_session.rs` 910→917・`placement/mod.rs` 915→**939**（✅ `window-link-directives`）・`emo2_boot/mod.rs` 787→789。
-  - 測ることが本体か: 本体ではない（本体は焼く回数を減らすコードの直し）。測るのは最後の前後の比べ 1 回だけ。要件で「焼く回数・読んだコマの数」を決定論のテストで固定し、時間は参考の記録に回せば、静かな机は最後の 1 回（release の前後の比べ）だけで済み、ウェーブに並べてよい。
-- **触るファイル**: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs` と兄弟のテスト（`ghost_session.rs` 917・`placement/mod.rs` 939 は上限の近く＝足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`shell_target.rs`（855）・要れば `crates/areka-emo-present/src/balloon.rs`（701）・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`（461）。案 B で `load_shell_target` の形を変えるなら、新しい呼び手 `offline_dump/mod.rs` と手本 3 本（`crates/areka/examples/` の下）も直す＝形を変えず、上限を渡す別の入口を足すほうが当たりが小さい。
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: ✅ `descript-window-keys`（10-24）が窓の大きさの測り `crates/areka/src/placement/measure.rs`（465・`measure_native_scope_sizes` は 153 行目）と起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs`（489・`build_boot_assets` は 210 行目・`build_boot_assets_with_shell` は 235 行目）の両方に descript の既定の面（`DefaultSurfaces`）を通した＝最初の面の決め打ちは済み、「採寸の結果が同じ」の固定は新しい最初の面で書ける。2 か所が別々に `load_shell_target` を呼んで焼く形は変わらない。行数: `placement/mod.rs` 939→**969**（上限まで 31）・`crates/areka/src/ghost_session.rs` 917→**935**（✅ `mcp-scope-rect-property`・✅ `dpi-realign-remembered-chain`）・`emo2_boot/mod.rs` 789→795。`crates/areka-emo-present/src/shell_target.rs` 855・`balloon.rs` 701 は変わらない。
+- **触るファイル**: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs` と兄弟のテスト（`placement/mod.rs`・`ghost_session.rs` は上限の近く＝足さず新しいファイルへ。placement の結果は窓を作る閉包へ移されて同期では読めない＝`ghost_session.rs` の段取りに触れる。ゴーストの切り替えと読み直しも同じ道なので一緒に直る）。案 B＝`measure.rs`・`shell_target.rs`・要れば `balloon.rs`・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`（461）。案 B は `load_shell_target` の形を変えず、上限を渡す別の入口を足すほうが当たりが小さい（呼び手 `offline_dump/mod.rs` と手本 `crates/areka/examples/` を直さずに済む）。シェルの着替え（`switch_assets.rs`）は採寸をしない＝範囲外（棚卸㉒の答え）。
 - **規模**: 案 A 10〜14・案 B 5〜8 タスクのまま。上限 20 の内。
-- **先に要るもの**: 働きの上ではなし。どちらの案でも v0.1.0 の `descript-window-keys`（`measure.rs`・案 A は `assets.rs` も＝最初の面の決め打ちをその spec が descript の値へ置き換える）と直列。順は `descript-window-keys` が先のほうが、「採寸の結果が同じ」の固定を新しい最初の面で書ける。案 A＝`startup-install-option`（`ghost_session.rs`）。案 B＝`shell-mouse-cursor`（`shell_target.rs`）・`balloon-scroll-arrows`（10-23 起票・`balloon.rs`）。余力の枠の `multi-ghost-runtime`（案 A）。`dpi-realign-remembered-chain`・`window-work-area-clamp` とは 0。依存を足さない。
-- **優先度の区分**: C（性能の持ち越し。v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う）。
+- **先に要るもの**: 働きの上ではなし（`descript-window-keys` は着地した）。v0.1.0 の相手: 案 A＝`startup-install-option`（`ghost_session.rs`）・`shell-scale-linkage`（descript の読みの呼び出しを `placement/mod.rs` に足すとき）・`window-work-area-clamp`（寄せる関数を `placement/` の直下に置いて `placement/mod.rs` に `mod` を足すときだけ）・受け手の新しいファイルを `emo2_boot/` に足す `stay-on-top-directives`・`shell-scale-linkage`・`balloon-communicatebox`（`emo2_boot/mod.rs` の `mod` の 1 行）。案 B＝`shell-mouse-cursor`（`shell_target.rs`）・`balloon-scroll-arrows`（`balloon.rs`）。余力の枠の `multi-ghost-runtime`（案 A）。`stay-on-top-directives`・`window-work-area-clamp` とは、上の `mod` の行を除けば `placement/` で重ならない（あちらは `spawn.rs`・`chain_finalize.rs`・`chain_realign.rs`・`persist.rs`・`balloon_limit.rs`）。依存を足さない・emo-text の席を使わない。
+- **待ち**: 最後に静かな机で、release の焼く時間の前後の比べを 1 回（この spec の中の静かな机はこれだけ）。焼く回数・読んだコマの数は決定論のテストで固定し、時間は参考の記録に回す＝ウェーブに並べてよい。窓の配置の確かめは本物のゴースト（ぱすたの面 1000 の動く WebP 3 つ）と 96 以外の拡大率。
+- **優先度の区分**: C（性能の持ち越し）。v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う（棚卸㉗）。
 - **要件定義のモデル**: Opus のまま（案 A も 1 本の道の中の順の入れ替えで、並行の新しい設計ではない）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**:
-  - 棚卸㉘の節の「`build_boot_assets`・260 行目」は 210 行目、「`assets.rs` 547」は 475、「`shell_target.rs`（757）」は 855。
-  - `window-link-directives` の実機の申し送り ⅳ（MCP の返事が遅れたあいだ、動く絵の玉が毎秒 10〜48 回合成し直された）は、再生の重さで、起動の焼く回数とは別の件。この spec では引き取らない（向こうの `signoff.md`）。
+  - 本文 Problem の「今は踏まない（検体に動く絵は 0 枚）」は、ぱすたを検体にした今は外れた。本文の議題 2 は答えが出た（上の `switch_assets.rs`）。
+  - `window-link-directives` の実機の申し送り ⅳ（MCP の返事が遅れたあいだ、動く絵の玉が合成し直された）は再生の重さで、起動の焼く回数とは別の件。この spec では引き取らない。

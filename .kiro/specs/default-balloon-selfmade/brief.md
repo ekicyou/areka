@@ -146,68 +146,6 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - 規模の見立ては M（8〜12 タスク）。
 
 
-## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
-- 前提の変化: `tools/package.ps1` に `mcp-stdio-bridge` の変更が入った（中継の exe を配布物に足した）。既定バルーンを引く 4 か所はそのまま在る。既定の名前の定数（`crates/areka/src/boot_resolve.rs` の `DEFAULT_BALLOON_FOLDER`）と検体の登記表（7 行）は変わっていない。
-- 触るファイル（測った）:
-  - カタログの鎖と重なるのは、既定の名前の定数 1 行と、その名前を既定として期待するテスト 4 本（本文のとおり）だけ。
-  - `StayseeBalloon` を綴るテストはほかに 10 本ほど在るが、検体の名前として使っているだけ＝検体を残すなら直さなくてよい見込み（着手時に 1 本ずつ見る）。
-  - ほかは `tools/package.ps1`・`crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/`・文書・絵を描く道具と中身を固定するテスト（新しいファイル）。
-- 規模: 8〜12 タスク（変わらず）。
-- 先に要るもの: `dot-sakura-specimen`。絵を `.webp` で持つなら `balloon-webp-names` も。
-- 席の案:
-  - 検体の登記表の列: `dot-sakura-specimen` → `emily-ghost-verification` → `default-balloon-selfmade` → `sample-url-fetch`（1 度に 1 本）。この spec の番では、登記の数は 9 を 10 に直す見込み。
-  - カタログの鎖: 鎖の席は使わない。実装の最後に「既定の差し替え」のタスクを置き、その直前に main を取り込む。そのとき鎖の spec が実装中なら、相手が既定の名前の定数とそのテスト 4 本に触らないことを照らす。
-  - `tools/package.ps1`: `sample-url-fetch` と同時に走らせない。
-- 優先度の区分: A。要件定義のモデル: Fable を勧める（名前・絵柄・形式・権利など 9 つの議題を開発者に聞く。絵の案は主のセッションが出す）。
-- 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。
-
-## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
-- 前提の変化: 版の段で v0.1.0（見た目の 2 本目）。ソースの変更は 0。既定の名前の定数は今も `crates/areka/src/boot_resolve.rs` の 31 行目 `DEFAULT_BALLOON_FOLDER`（10 行目の説明も名前を書く）。配布の道具 `tools/package.ps1`（746 行）の 4 か所（466・495・503・564 行）もそのまま。
-- カタログの鎖との当たり（測り直した）: 鎖のファイルで触るのは `boot_resolve.rs`（609 行）の定数 1 行と、既定として期待するテスト 4 本（`boot_resolve_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs`・`main_config_input_tests.rs`）だけ。カタログの本体 `crates/areka-ghost/src/catalog.rs` に名前は無く、触らない（`catalog_tests.rs`・`catalog_test_support.rs` は検体の名前として並び順を見るだけ＝直さない見込み）。
-- 触るファイル: 上の 5 本・`tools/package.ps1`・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/`・`dist/README.txt`・根の `README.md`・steering・絵を描く道具と中身を固定するテスト（新しいファイル）。
-- 規模: 8〜12 タスク（変わらず）。
-- 先に要るもの: `dot-sakura-specimen` → `emily-ghost-verification`（登記表の席・数は 9 を 10 に）。`balloon-webp-names`（絵を `.webp` で持つ場合の働きの依存・ファイルの重なりは 0）。
-- 同じウェーブに置けない相手: `dot-sakura-specimen`・`emily-ghost-verification`（登記表）・`multi-ghost-runtime`（`boot_resolve.rs` を挙げる）・`winget-release-automation`（根の `README.md`）。`boot_resolve.rs` を触る `baseware-root-list`・`user-data-root`・`write-failure-notice` は v0.0.3＝先に着地する見込み。差し替えのタスクの前に main を取り込んで照らす（変わらず）。
-- 優先度の区分: A。
-- 要件定義のモデル: **Opus に改める**（棚卸㉔は Fable を勧めた）。議題 9 つは開発者に聞く選びで、10-15 の基準のどれにも当たらない。絵の案は主のセッションが出す（変わらず）。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述: 鎖の当たりに `catalog.rs` を数える読みは当たらない（名前を持つのは `boot_resolve.rs` だけ）。
-
-## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
-- 前提の変化: v0.1.0 のゴールの組み直しの後も、開発者の決め（10-18）で v0.1.0 に残る。`emily-ghost-verification`（登記表の 8 行目 `emily4`）・`user-data-root`・`write-failure-notice`・`move-canon` が着地した。`crates/areka/src/boot_resolve.rs` は 609 行から 676 行に伸びた（起動中の印と記録の関数）が、既定の名前の定数は 34 行目 `DEFAULT_BALLOON_FOLDER`（説明は 10 行目）、使うのは `resolve_balloon` の段 6（291〜292 行）だけのまま。
-- 棚卸㉗で足した範囲: 無し。
-- 触るファイル: 本文と棚卸㉕のとおり。既定の名前の綴りの数は `boot_resolve_tests.rs` 15・`boot_resolve_balloon_tests.rs` 6・`boot_config_balloon_tests.rs` 3・`main_config_input_tests.rs` 4。登記の数のテストは **9 を 10 に**（`dot-sakura-specimen` の後）。
-- `boot_resolve.rs` の当たり（新しい v0.1.0 の 2 本）:
-  - `startup-options-core`: 触るのは解決の入口（引数の配列でなく起動オプションの値を受ける・`--random`）と `nobootcheck`。定数の行とは別の行だが、`resolve_balloon` の同じ関数に入る見込み。さらに `boot_config.rs` の `resolve_boot_from` が値を受ける形に替わるので、その檻 `main_config_input_tests.rs`（既定の名前を 4 か所書く）と `boot_resolve_tests.rs` を両方が書き換える＝**テストのファイルで重なる**。
-  - `readonly-mode`: 触るのは書く側の関数（`save_app`・`write_session_mark`・`clear_session_mark`・`record_last_*` など 394〜639 行）。定数とも段 6 とも別の関数＝行の当たりは無い見込み。
-  - 進め方は棚卸㉕と同じ: 差し替えのタスクを実装の最後に置き、直前に main を取り込む。`startup-options-core` が先に着地していれば、檻の新しい形の上で名前を替えるだけ。
-- 登記表の順: `dot-sakura-specimen`（8→9）→ この spec（9→10）→ `sample-url-fetch`（全部の行を書き換える）→ `pasta-in-windows-verification`（URL の行・10→11）。`dot-sakura-specimen` へは働きの依存（どっとさくらに被せる実機の確かめ）。`sample-url-fetch` との間はファイルの順（登記表・`tools/package.ps1`）で、この spec が先なら配布の道具が検体の取り寄せに触れずに済む。
-- 規模: 8〜12 タスク（変わらず）。
-- 先に要るもの: `dot-sakura-specimen`。議題 3 で `.webp` を選ぶなら `balloon-webp-names`（10-18 に v0.1.0 から外れた）。
-- 同じウェーブに置けない相手: `dot-sakura-specimen`・`sample-url-fetch`・`pasta-in-windows-verification`（登記表）・`startup-options-core`（`boot_resolve.rs`・`main_config_input_tests.rs`・`boot_resolve_tests.rs`）・`ghost-inner-balloon`（v0.1.0 に入った・`resolve_balloon` を作り直す）。`readonly-mode` は別の関数＝着手の前に照らす。`winget-release-automation` は根の `README.md`・`dist/README.txt` の別の節。
-- 優先度の区分: A。
-- 要件定義のモデル: Opus（棚卸㉕のまま）。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述:
-  - 議題 3 の答えが版に効くようになった: `.webp` を選ぶと `balloon-webp-names` が働きの前提として v0.1.0 へ戻る。α 付きの PNG なら v0.1.0 の中で閉じる。要件の段の最初に決める。
-  - `ghost-inner-balloon` が `resolve_balloon` に名前で探す段を足す見込み＝段 6（既定）の前後の並びが変われば、既定の名前を期待するテストを読み直す。
-
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: `startup-options-core`（10-19）と `sample-url-fetch`（10-19）が着地した。既定のバルーンの名前の定数は今も `crates/areka/src/boot_resolve.rs`（714 行）の 34 行目 `DEFAULT_BALLOON_FOLDER` で、使うのは `resolve_balloon` の段 6（325〜326 行）だけ。起動オプションの読み取りは新しい `crates/areka/src/cli/` に移ったが、`cli/` に既定のバルーンの名前は無い。
-- 登記表の順: `sample-url-fetch` が先に着地したので、今の数は 9 → `dot-sakura-specimen` で 10 → この spec で **10 → 11**（棚卸㉗の「9→10」は古い）。既定のバルーンは製品の資産なので、書庫を置く行のまま足す（本文の「リポジトリが持つ」のとおり・URL の行にはしない）。配布の道具 `tools/package.ps1`（752 行）が既定のバルーンを引く 4 か所は 467・496・504・570 行。
-- 触るファイル: 定数 1 行と、既定の名前を期待するテスト 4 本（`boot_resolve_tests.rs` 853 行・15 か所／`boot_resolve_balloon_tests.rs` 579 行・6 か所／`boot_config_balloon_tests.rs` 238 行・3 か所／`main_config_input_tests.rs` 459 行・4 か所）・`tools/package.ps1`・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/`（新しい書庫）と README・`dist/README.txt`（380 行）・根の `README.md`・steering・絵を描く道具と中身を固定するテスト（新しいファイル）。
-- 規模: 8〜12 タスク（変わらず）。
-- 先に要るもの: `dot-sakura-specimen`（働き＝どっとさくらに被せる確かめ・ファイル＝登記表）。議題 3 で `.webp` を選べば `balloon-webp-names`（今は「v0.1.0 から外した 5 本」）が働きの前提になり、v0.1.0 へ戻る。
-- 同じウェーブに置けない相手（v0.1.0）: `dot-sakura-specimen`・`pasta-in-windows-verification`（`sample-ghost-kit` の `lib.rs` に `mod` を足すなら）・`ghost-inner-balloon`（`resolve_balloon` を作り直す・`boot_resolve.rs` と `boot_config.rs`）・`readonly-mode`（`boot_resolve.rs` の書く側の関数＝別の関数だが同じファイル）・`winget-release-automation`（根の `README.md`・`dist/README.txt` の別の節）。`startup-options-core` とのテストのファイルの重なりは着地で消えた。1 本だけの席は取らない（新しい依存なし）。
-- 人の待ち・机: 要件の段で開発者が名前・絵柄・形式を選ぶ往復（人の待ち）。実機で emo2 とどっとさくらに被せた見え方を確かめる（AI が回せる）。静かな机・前後の全体テストの比べは要らない。
-- 優先度の区分: A（開発者「これに含まれるバルーンを参考に、デフォルトバルーンを作ってほしい」）。
-- 要件定義のモデル: Opus（議題 9 つは開発者に聞く選びで、新しい境目・並行や順の新しい保証・骨格の分かれ目のどれにも当たらない）。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述:
-  - 棚卸㉕の `tools/package.ps1` の行番号（466・495・503・564）はずれた（今は 467・496・504・570）。`boot_resolve.rs` の段 6 の行（棚卸㉗の 291〜292 行）も今は 325〜326 行。
-  - 棚卸㉗の「`sample-url-fetch` との間はファイルの順」は解けた（あちらは着地済み）。
-  - `ghost-inner-balloon` が名前で探す段を `resolve_balloon` に足すと、段 6 の前の並びが変わる＝差し替えのタスクの前に main を取り込み、既定の名前を期待するテストを読み直す（変わらず）。
-
 ## どっとさくらで見えた事実（2026-10-23 `areka-P0-dot-sakura-specimen` の実機の 1 回）
 
 - どっとさくらの同梱バルーン `bottle` の `descript.txt` は `validrect.left,0`・`validrect.right,0`・`validrect.bottom,-20`。areka は負の値を反対の辺からの距離と読み、0 は左端の 0 と読む（`crates/areka-emo-text/src/region.rs`）。`bottom,-20` は 149 に解けたが、`right,0` は 0 のままで、文字の描画範囲が幅 0 に潰れた（`left=0.0 top=0.0 right=0.0 bottom=149.0 image_size=(326.0, 169.0)`）。続けて「origin が validrect の外」「折返し基準が描画範囲の外」の WARN も 1 人目と 2 人目で 1 回ずつ出た。
@@ -215,16 +153,17 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - 根拠: `.kiro/specs/completed/areka-P0-dot-sakura-specimen/verification.md` の 7 節と 8 節の件 3。
 - 開発者（2026-10-23）: 「次のリリースまでに治るように」。この spec はもとから v0.1.0。
 
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 待っていた `dot-sakura-specimen`（10-23）と `ghost-inner-balloon`（10-23）が着地した。登記表（`crates/sample-ghost-kit/src/lib.rs` 704 行）は 10 本で、この spec で 10 → 11。`ghost-inner-balloon` は `resolve_balloon` にゴーストのフォルダの中のバルーンを足したが、既定のバルーンの名前の定数は今も `crates/areka/src/boot_resolve.rs` 34 行目の `DEFAULT_BALLOON_FOLDER`（`StayseeBalloon`）で、使うのは段 6（325〜326 行目）だけ（行番号も変わらず）。同 spec は `sample-ghost-kit` に新しい試験 `tests/pasta_inner_balloon_test.rs` を足した（登記表には触っていない）。
-- **触るファイル**: 定数 1 行と、既定の名前を期待するテスト 4 本（`boot_resolve_tests.rs` 853 行・15 か所／`boot_resolve_balloon_tests.rs` 579→613 行・6 か所／`boot_config_balloon_tests.rs` 238→370 行・3 か所／`main_config_input_tests.rs` 459 行・4 か所）・`tools/package.ps1`（752 行・既定のバルーンを引く 467・496・504・570 行目＝変わらず）・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`（704・783）・`vendors/sample_ghost/` の新しい書庫と README・`dist/README.txt`（380→441 行）・根の `README.md`（138）・絵を描く道具と中身を固定するテスト（新）。
-- **規模**: 8〜12 のまま（`validrect.right,0` の読みを areka の側で直すことになったら +1〜2）。
-- **先に要るもの**: 働きの上では無い＝先頭（議題 3 で `.webp` を選んだときだけ、v0.1.0 の外の `balloon-webp-names` が前提になる）。同じウェーブに置けない相手: `readonly-mode`（`boot_resolve.rs`）・`winget-release-automation`（根の `README.md`＝節は別だが、許す重なりは `dist/README.txt` の別の行だけ）・余力の枠の `multi-ghost-runtime`（`boot_resolve.rs`）。`validrect` の読み（`crates/areka-emo-text/src/region.rs`）を直す側に倒すと、同じファイルを挙げる `mouse-click-wheel-events`・`real-run-log-noise` ほかとも重なる＝要件で決まったら測り直す。登記表は `seriko-pattern-calls`・`shiori2-protocol` が読むだけ（重ならない）。1 本だけの席は取らない。人の待ち: 要件の段で開発者が名前・絵柄・形式を選ぶ往復と、`validrect.right,0` を SSP の MCP で測ること。静かな机・全体テストの比べは要らない。
-- **優先度の区分**: A のまま（開発者「これに含まれるバルーンを参考に、デフォルトバルーンを作ってほしい」）。
-- **要件定義のモデル**: Opus のまま（議題は開発者に聞く選びと SSP で測る読みで、新しい境目・並行の設計・骨格の分かれ目に当たらない）。
-- **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 棚卸㉘の「`ghost-inner-balloon` が段 6 の前の並びを変える」は着地で確かめられ、段 6 の行は動かなかった（既定の名前を期待するテストの読み直しは、増えた `boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs` の分だけ要る）。どっとさくらで出た「折返し基準が描画範囲の外」の WARN と近い件（`emo2-kakukaku` の折り返し基準）は `balloon-canon-residue` の 14 項が持つ＝`validrect` の読みをどちらで扱うかを要件の段で照らす。
-
 ## 2026-10-24 「．さくら」が話すようになった後の `bottle`（`shiori2-protocol` のタスク 5.4）
 
 - `shiori2-protocol` で「．さくら」が話すようになった（実機の 1 回 5.1・2026-10-24・記録 `target\s2p-5-1\logs\run2.stdout.log`）。台詞は `bottle` に来たが、文字の描画範囲は前回と同じく幅 0 に潰れた（`文字の描画範囲が潰れている … right=0.0 bottom=149.0 image_size=(326.0, 169.0)` と `bottom=82.0 image_size=(326.0, 96.0)` が 1 件ずつ・origin と折返し基準の WARN も 2 件ずつ）。areka はこのとき文字を描かない作りなので、上の「どっとさくらで見えた事実」の件は、台詞が来る今は「話しているのに文字が出ない」という見える崩れになる。画面は撮っていない。
+
+## 2026-10-24 棚卸㉚の再測定（main 9318cdb0）
+- **前提の変化**: 同じファイルを挙げていた `readonly-mode`（10-24）が着地した。向こうが `crates/areka/src/boot_resolve.rs`（714→753 行）で触ったのは書く側の関数（`write_session_mark`・`write_switch_drop`・`clear_session_mark`・最後に使ったものの記録）に readonly の断りを足しただけで、既定のバルーンの名前の定数（34 行目 `DEFAULT_BALLOON_FOLDER`＝`StayseeBalloon`）と、それを使う段 6（325〜326 行目）は変わらない。新しい readonly のテスト（`boot_resolve_readonly_tests.rs` ほか）は既定の名前を綴らない＝直すテストは増えない（既定の名前を期待するテスト 4 本の綴りの数は 15・6・3・4 のまま）。`startup-install-option` とは同じファイルが無い（向こうは `cli/`・`install/`・`boot_config.rs` の `exe_location` を呼ぶ所・説明書の別の行）＝同じウェーブに置ける。
+- **触るファイル**: 定数 1 行・既定の名前を期待するテスト 4 本（`boot_resolve_tests.rs` 853・`boot_resolve_balloon_tests.rs` 613・`boot_config_balloon_tests.rs` 370・`main_config_input_tests.rs` 459）・`tools/package.ps1`（752・既定のバルーンを引く 467・496・504・570 行目＝変わらず）・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`（705・783）・`vendors/sample_ghost/` の新しい書庫と README・`dist/README.txt`（460）・根の `README.md`（138）・steering・絵を描く道具と中身を固定するテスト（新）。1,000 行に近いファイルは無い。
+- **規模**: 8〜12 のまま（`validrect.right,0` の読みを areka の側で直すことになったら +1〜2）。
+- **先に要るもの**: 働きの上では無い＝先頭（議題 3 で `.webp` を選んだときだけ、v0.1.0 の外の `balloon-webp-names` が前提になり v0.1.0 へ戻る）。同じウェーブに置けない相手: `winget-release-automation`（根の `README.md`）・余力の枠の `multi-ghost-runtime`（`boot_resolve.rs`）。`validrect` の読み（`crates/areka-emo-text/src/region.rs` 495 行・変わらず）を直す側に倒すと、同じファイルを挙げる spec と重なる＝要件で決まったら測り直す。登記表は 10 本で、この spec で 10 → 11（書庫を置く行のまま足す）。1 本だけの席は取らない。進め方は前のとおり＝既定を差し替えるタスクを実装の最後に置き、その直前に main を取り込む。
+- **中の待ち**: 要件の段で開発者が選ぶ往復＝議題 1（名前と ID）・2（絵柄）・3（形式＝`.webp` か α 付きの PNG）。`validrect.right,0` の正典の読みを SSP の MCP で測る（打つ前に許し）。静かな机・全体テストの比べは要らない。
+- **優先度の区分**: A のまま（開発者「これに含まれるバルーンを参考に、デフォルトバルーンを作ってほしい」）。
+- **要件定義のモデル**: Opus のまま（議題は開発者に聞く選びと SSP で測る読み）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: `bottle` の `validrect.right,0` で文字の描画範囲が幅 0 に潰れる件（上の 2 節）は、`shiori2-protocol` で「．さくら」が話すようになって見える崩れになった＝要件の段の最初に測って決める（`balloon-canon-residue` の 14 項の折り返し基準の件と照らす）。
