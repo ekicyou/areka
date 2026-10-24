@@ -810,3 +810,39 @@ fn test_capture_lost_marks_guard_released_before_cancelling() {
     assert_eq!(released_via_drop(&events), 1, "{events:?}");
     force_idle();
 }
+
+// --- 直前の左の解放はドラッグか（mouse-click-wheel-events 要件 3.1・11.5） ------
+
+/// 印は休みへ移すときにだけ書き換わり、次の `start_preparing` では消えない。
+#[test]
+fn test_last_release_was_drag_follows_each_close() {
+    force_idle();
+    // 閾値を越えない解放 → 偽
+    start_preparing(entity(41), PhysicalPoint::new(1, 1), null_hwnd());
+    end_dragging_on_release(null_hwnd(), None);
+    assert!(!DragState::last_release_was_drag());
+
+    // 閾値を越えて放す（同じ tick に越えて放した並び） → 真
+    start_preparing(entity(42), PhysicalPoint::new(1, 1), null_hwnd());
+    start_dragging(PhysicalPoint::new(9, 1));
+    end_dragging_on_release(null_hwnd(), None);
+    assert!(DragState::last_release_was_drag());
+
+    // 越えない取り消しでも真（その前に偽へ戻しておく）
+    start_preparing(entity(43), PhysicalPoint::new(1, 1), null_hwnd());
+    end_dragging_on_release(null_hwnd(), None);
+    assert!(!DragState::last_release_was_drag());
+    start_preparing(entity(44), PhysicalPoint::new(1, 1), null_hwnd());
+    cancel_dragging();
+    assert!(DragState::last_release_was_drag());
+
+    // ドラッグの解放の後、次の準備の始まりでも真のまま → その次の越えない解放で偽
+    start_preparing(entity(45), PhysicalPoint::new(1, 1), null_hwnd());
+    start_dragging(PhysicalPoint::new(9, 1));
+    end_dragging_on_release(null_hwnd(), None);
+    start_preparing(entity(46), PhysicalPoint::new(2, 2), null_hwnd());
+    assert!(DragState::last_release_was_drag());
+    end_dragging_on_release(null_hwnd(), None);
+    assert!(!DragState::last_release_was_drag());
+    force_idle();
+}

@@ -95,11 +95,9 @@ pub(super) fn spawn_rig(answer: Answer) -> Rig {
 /// 起動して定常の通知を受けるまで待ち、起動系列の呼び出しの記録を読み捨てる。
 pub(super) fn boot_to_steady(rig: &Rig) {
     rig.kanade.send(KanadeMsg::Boot).expect("kanade に届く");
-    loop {
-        match rig.notices.recv_timeout(LIMIT).expect("定常の通知が届く") {
-            KanadeNotice::Steady => break,
-            other => panic!("定常の前に想定外の通知: {other:?}"),
-        }
+    match rig.notices.recv_timeout(LIMIT).expect("定常の通知が届く") {
+        KanadeNotice::Steady => {}
+        other => panic!("定常の前に想定外の通知: {other:?}"),
     }
     // 定常の通知は起動系列の往復がすべて済んだ後に出るので、ここで残りを読み捨てられる。
     while rig.calls.try_recv().is_ok() {}

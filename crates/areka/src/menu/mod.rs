@@ -261,7 +261,20 @@ pub(crate) fn register_menu_poll(world: &mut World) {
         .add_systems(Input, reset_pos_frame::poll_reset_raise);
 }
 
-/// 全 [`CharWindowMarker`] 窓へ解放ハンドラ（[`trigger::on_char_pointer_released`]）を付ける。
+/// キャラ窓の `OnPointerReleased`（部品は 1 窓に 1 つ）。クリックの判定 → メニューの解放の順に呼ぶ。
+/// 送出の端はどちらも同じ kanade の受け箱なので、クリックの段はメニューの照会より先に届く
+/// （mouse-click-wheel-events 要件 5.1・5.2）。返り値はメニューの側のもの。
+fn on_char_release(
+    world: &mut World,
+    sender: Entity,
+    entity: Entity,
+    ev: &wintf::ecs::pointer::Phase<wintf::ecs::pointer::PointerState>,
+) -> bool {
+    crate::input_events::click::on_char_pointer_released(world, sender, entity, ev);
+    trigger::on_char_pointer_released(world, sender, entity, ev)
+}
+
+/// 全 [`CharWindowMarker`] 窓へ解放ハンドラ（[`on_char_release`]＝クリックの判定 → メニューの引き金）を付ける。
 ///
 /// # タイミング契約
 ///
@@ -287,7 +300,7 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
     for window in char_windows {
         world
             .entity_mut(window)
-            .insert(OnPointerReleased(trigger::on_char_pointer_released));
+            .insert(OnPointerReleased(on_char_release));
     }
     if count == 0 {
         tracing::warn!(

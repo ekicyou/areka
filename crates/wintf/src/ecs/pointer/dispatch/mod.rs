@@ -228,7 +228,13 @@ pub fn dispatch_pointer_events(world: &mut World) {
         );
 
         // OnPointerPressed: ボタンが押されている場合に発火（1フレームのみ）
-        if state.left_down || state.right_down || state.middle_down {
+        // 拡張ボタン 1・2 も含む。今の受け手は左しか見ないので、中ボタンと同じに何もしない。
+        if state.left_down
+            || state.right_down
+            || state.middle_down
+            || state.xbutton1_down
+            || state.xbutton2_down
+        {
             dispatch_event_for_handler::<PointerState, OnPointerPressed>(
                 world,
                 *sender,

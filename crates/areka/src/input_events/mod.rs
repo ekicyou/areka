@@ -8,20 +8,24 @@
 //! task 2.6／2.7 で本 mod へ増設される。
 
 pub(crate) mod balloon;
+pub(crate) mod char_watch;
 pub(crate) mod choice_drain;
+pub(crate) mod click;
 mod drag;
 pub(crate) mod file_drop;
+mod hover_region;
 pub(crate) mod shell_box;
 pub(crate) mod shell_box_handler;
 pub(crate) mod shortcut;
 pub(crate) mod throttle;
 pub(crate) mod user_break;
+mod wheel;
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 
 use areka_emo_present::EmoPresenter;
-use areka_kanade::{CloseReason, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
+use areka_kanade::{ClickButton, CloseReason, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::{OnDragEnd, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
@@ -61,6 +65,12 @@ pub(crate) struct MouseWiring {
     now_ms: Box<dyn FnMut() -> u64>,
     /// 預かっている右ダブルクリック（高々 1 件・[`PendingDoubleClick`]）。
     pending_right_double_click: Option<PendingDoubleClick>,
+    /// 押下の控え（鍵＝キャラ窓の entity とボタン・解放で取り出す・[`click::PressNote`]）。
+    presses: HashMap<(Entity, ClickButton), click::PressNote>,
+    /// 窓ごとの出入りの見張りの状態（鍵＝キャラ窓の entity・[`hover_region::HoverState`]）。
+    hover: HashMap<Entity, hover_region::HoverState>,
+    /// 窓ごとのホイールの溜め（鍵＝キャラ窓の entity・[`wheel::WheelAccum`]）。
+    wheel: HashMap<Entity, wheel::WheelAccum>,
 }
 
 /// 押下ハンドラが預かる右ダブルクリック 1 件分の材料（areka-P0-popup-menu-minimal 要件 1.10）。
@@ -112,6 +122,9 @@ impl MouseWiring {
             region_source,
             now_ms: Box::new(move || start.elapsed().as_millis() as u64),
             pending_right_double_click: None,
+            presses: HashMap::new(),
+            hover: HashMap::new(),
+            wheel: HashMap::new(),
         }
     }
 
@@ -128,6 +141,9 @@ impl MouseWiring {
             region_source,
             now_ms,
             pending_right_double_click: None,
+            presses: HashMap::new(),
+            hover: HashMap::new(),
+            wheel: HashMap::new(),
         }
     }
 
@@ -292,6 +308,22 @@ impl MouseWiring {
                 "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
             );
         }
+    }
+
+    /// 新しい知らせ（解放・ホイール・出入り）の送出。失敗は warn＋何もしない（今の送出と同じ扱い）。
+    /// 返り値は送れたか。
+    fn send_mouse(&self, input: MouseInput, kind_name: &'static str) -> bool {
+        let scope = input.scope;
+        if self.sender.send(KanadeMsg::Mouse(input)).is_err() {
+            tracing::warn!(
+                event = "mouse_send_failed",
+                scope,
+                kind = kind_name,
+                "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
+            );
+            return false;
+        }
+        true
     }
 
     /// 右ダブルクリックを預かる。前の預かりがあれば捨てて上書きする（残すのは最新の 1 件だけ）。
@@ -520,7 +552,10 @@ pub(crate) fn on_char_pointer_pressed(
     }
 
     // 箱の前段（areka-P0-shell-balloon）: 箱の選択肢の確定・箱での中断はシェルへ送らない。
-    if shell_box_handler::on_box_pointer_pressed(world, entity, state) {
+    // 箱の判定は 1 回だけ。結果を控えてから今までどおりに返す（控えは結線の前は書かれない）。
+    let by_box = shell_box_handler::on_box_pointer_pressed(world, entity, state);
+    click::note_press(world, entity, state, by_box);
+    if by_box {
         return true;
     }
 

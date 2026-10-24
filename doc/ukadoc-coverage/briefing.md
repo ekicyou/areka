@@ -981,10 +981,10 @@ items = 166
 ```toml
 [[barrier]]
 page = "list_shiori_event"
-implemented = 53
+implemented = 62
 vocabulary_only = 0
 degraded = 1
-absent = 233
+absent = 224
 alias = 3
 not_applicable = 0
 

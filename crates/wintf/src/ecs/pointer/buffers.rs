@@ -246,6 +246,38 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         }
     });
 
+    // WHEEL_BUFFERS（窓ごと）から、その窓の中でポインタの状態を持つ entity（高々 1 つ）へ移す。
+    // 持ち主が居なければ捨てる（要件 6.10）。どちらでも溜めは毎回空にする（1 tick 分だけ渡す）。
+    let wheels: Vec<(Entity, WheelBuffer)> =
+        WHEEL_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
+    if !wheels.is_empty() {
+        let holders: Vec<Entity> = world
+            .query_filtered::<Entity, With<PointerState>>()
+            .iter(world)
+            .collect();
+        for (window, wheel) in wheels {
+            if wheel.vertical == 0 && wheel.horizontal == 0 {
+                continue;
+            }
+            let owner = holders
+                .iter()
+                .copied()
+                .find(|e| crate::ecs::find_owner_window(world, *e) == Some(window));
+            match owner.and_then(|e| world.get_mut::<PointerState>(e)) {
+                Some(mut pointer_state) => {
+                    pointer_state.wheel.vertical = wheel.vertical;
+                    pointer_state.wheel.horizontal = wheel.horizontal;
+                }
+                None => tracing::trace!(
+                    window = ?window,
+                    vertical = wheel.vertical,
+                    horizontal = wheel.horizontal,
+                    "[transfer_buffers_to_world] wheel dropped: no pointer holder in window"
+                ),
+            }
+        }
+    }
+
     // MODIFIER_STATEからPointerStateへ修飾キー状態を転送
     MODIFIER_STATE.with(|state| {
         let state = state.borrow();
@@ -553,6 +585,98 @@ mod tests {
         assert!(
             world.get::<PointerState>(e).is_none(),
             "PointerState は生成されない（転送先がなければ無視）"
+        );
+    }
+
+    /// ホイールの移しのテスト用に、窓とその子（ポインタの状態を持つ）を作る。
+    fn spawn_window_with_pointer_child(world: &mut World) -> (Entity, Entity) {
+        let window = world.spawn(crate::ecs::window::Window::default()).id();
+        let child = world.spawn((PointerState::default(), ChildOf(window))).id();
+        (window, child)
+    }
+
+    #[test]
+    fn test_transfer_wheel_moves_to_pointer_child_and_empties_buffer() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let (window, child) = spawn_window_with_pointer_child(&mut world);
+
+        add_wheel_vertical(window, 120);
+        add_wheel_vertical(window, 120);
+        add_wheel_horizontal(window, -60);
+        transfer_buffers_to_world(&mut world);
+
+        let w = world.get::<PointerState>(child).unwrap().wheel;
+        assert_eq!(w.vertical, 240, "縦の量が子へ移る");
+        assert_eq!(w.horizontal, -60, "横の量も子へ移る");
+        WHEEL_BUFFERS.with(|b| {
+            let b = b.borrow();
+            assert!(
+                b.get(&window)
+                    .is_none_or(|w| w.vertical == 0 && w.horizontal == 0),
+                "移した後は溜めが空"
+            );
+        });
+    }
+
+    #[test]
+    fn test_transfer_wheel_second_transfer_does_not_add_again() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let (window, child) = spawn_window_with_pointer_child(&mut world);
+
+        add_wheel_vertical(window, 120);
+        transfer_buffers_to_world(&mut world);
+        assert_eq!(
+            world.get::<PointerState>(child).unwrap().wheel.vertical,
+            120
+        );
+        // FrameFinalize の代わりに 0 へ戻す
+        world.get_mut::<PointerState>(child).unwrap().wheel = Default::default();
+        transfer_buffers_to_world(&mut world);
+
+        let w = world.get::<PointerState>(child).unwrap().wheel;
+        assert_eq!(w.vertical, 0, "2 回目の移しで量が増えない");
+    }
+
+    #[test]
+    fn test_transfer_wheel_without_owner_is_dropped() {
+        reset_all_buffers();
+        let mut world = World::new();
+        // ポインタの状態を持つ entity が居ない窓
+        let window = world.spawn(crate::ecs::window::Window::default()).id();
+
+        add_wheel_vertical(window, 120);
+        transfer_buffers_to_world(&mut world);
+
+        WHEEL_BUFFERS.with(|b| {
+            let b = b.borrow();
+            assert!(
+                b.get(&window)
+                    .is_none_or(|w| w.vertical == 0 && w.horizontal == 0),
+                "持ち主の居ない窓の溜めは捨てられる"
+            );
+        });
+    }
+
+    #[test]
+    fn test_transfer_wheel_does_not_move_to_other_window_receiver() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let (window_a, child_a) = spawn_window_with_pointer_child(&mut world);
+        let (_window_b, child_b) = spawn_window_with_pointer_child(&mut world);
+
+        add_wheel_vertical(window_a, -120);
+        transfer_buffers_to_world(&mut world);
+
+        assert_eq!(
+            world.get::<PointerState>(child_a).unwrap().wheel.vertical,
+            -120
+        );
+        assert_eq!(
+            world.get::<PointerState>(child_b).unwrap().wheel,
+            Default::default(),
+            "別の窓の受け手へは移らない"
         );
     }
 }

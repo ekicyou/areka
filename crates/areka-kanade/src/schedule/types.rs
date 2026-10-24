@@ -4,7 +4,8 @@
 //! テストは `super::State` などのまま参照できる。兄弟のモジュールの型は `super::` から引く。
 
 use super::{
-    anchor, balloon_events, change, events, resources, sstp, talk_active_of, talk_gap, translate,
+    anchor, balloon_events, change, events, mouse_events, resources, sstp, talk_active_of,
+    talk_gap, translate,
 };
 use crate::msg::{
     ChoiceInput, CloseReason, MonotonicMs, MouseInput, ShioriCall, ShioriFault, ShioriOutcome,
@@ -220,6 +221,8 @@ pub(crate) struct State {
     pub choice_prev_talk: Option<TalkId>,
     /// アンカーのイベントの応答待ちの段（送る直前に置き、応答で必ず取り出す・[`anchor`]）。
     pub anchor: Option<anchor::AnchorStage>,
+    /// クリックの段の列の応答待ち（送る直前に置き、応答で必ず取り出す・[`mouse_events`]）。
+    pub mouse_click: Option<mouse_events::ClickChain>,
     /// 利用者の中断の控え（止めた相手と scope。完了通知を待っている間だけ `Some`）。
     pub user_break_talk: Option<balloon_events::BreakNote>,
     /// 最後に再生を始めたトークの控え（3 つのバルーンのイベントの Reference0 の源）。
@@ -260,6 +263,7 @@ impl State {
             choice: None,
             choice_prev_talk: None,
             anchor: None,
+            mouse_click: None,
             user_break_talk: None,
             shown: None,
             change: None,

@@ -124,6 +124,10 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
             input.region.as_deref(),
             &snapshot,
         ),
+        // 解放・ホイール・出入りは段の列を持つ側へ渡す（閉じの握手の保留は上で確かめ済み）。
+        MouseEventKind::ButtonUp { .. }
+        | MouseEventKind::Wheel { .. }
+        | MouseEventKind::Hover(_) => return super::mouse_events::on_mouse_extended(state, input),
     };
     tracing::trace!(
         target: "kanade",
@@ -759,6 +763,13 @@ fn on_reply(
     // 下の今までの腕へ流す（話していなければ起動・話していれば置き換え）。
     if let Some(stage) = state.anchor.take()
         && let Some(actions) = super::anchor::on_anchor_reply(&mut state, stage, &outcome, origin)
+    {
+        return (state, actions);
+    }
+    // クリックの段の列の応答も同じ形で先に見る（台本だけが下の腕へ流れる）。
+    if let Some(chain) = state.mouse_click.take()
+        && let Some(actions) =
+            super::mouse_events::on_click_reply(&mut state, chain, &outcome, origin)
     {
         return (state, actions);
     }

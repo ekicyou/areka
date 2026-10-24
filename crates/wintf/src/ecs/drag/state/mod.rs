@@ -232,6 +232,17 @@ impl DragState {
 thread_local! {
     /// グローバルドラッグ状態（単一ドラッグのみ）
     static DRAG_STATE: RefCell<DragState> = const { RefCell::new(DragState::Idle) };
+    /// 最後に休みへ移したとき開始を配ったか取り消しだったか（次に休みへ移すときだけ書き換える）
+    static LAST_RELEASE_WAS_DRAG: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+impl DragState {
+    /// 最後に休み（`JustEnded`）へ移したとき、その押下が閾値を越えていた（開始を配った）か取り消しだったとき真。
+    /// 今の状態によらず返す（解放と次の押下が同じ tick に入っても、直前の解放の答えが読める）。
+    /// `JustEnded` の欄は変えない（形を変えると wintf の他のテストのファイルに手が入るため）。
+    pub fn last_release_was_drag() -> bool {
+        LAST_RELEASE_WAS_DRAG.with(|v| v.get())
+    }
 }
 
 /// ドラッグ状態を更新する（wndprocハンドラから呼ばれる）
@@ -518,6 +529,7 @@ fn close_drag(
             position,
             cancelled,
         };
+        LAST_RELEASE_WAS_DRAG.with(|v| v.set(started || cancelled));
         // 開始を配ったドラッグだけが終了の種を積む（閾値前は積まない）
         let notified =
             started && crate::ecs::drag::accumulator::push_ended_seed(entity, position, cancelled);

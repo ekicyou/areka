@@ -300,6 +300,50 @@ fn mouse_input_types_construct_and_compare() {
 }
 
 #[test]
+fn mouse_click_wheel_hover_kinds_construct_and_compare() {
+    // 解放・ホイール・出入りの 3 種（mouse-click-wheel-events 要件 1.1・3.2・6.1・7.1）が
+    // クレートの外から組み立てられ、値の同一性で区別できる。
+    use crate::{ClickButton, HoverEdge};
+    assert_send_static::<ClickButton>();
+    assert_send_static::<HoverEdge>();
+    let up = MouseEventKind::ButtonUp {
+        button: ClickButton::Middle,
+        second_of_double: false,
+    };
+    assert_ne!(
+        up,
+        MouseEventKind::ButtonUp {
+            button: ClickButton::Middle,
+            second_of_double: true,
+        }
+    );
+    for (a, b) in [
+        (ClickButton::Left, ClickButton::Right),
+        (ClickButton::XButton1, ClickButton::XButton2),
+    ] {
+        assert_ne!(a, b);
+    }
+    assert_eq!(
+        MouseEventKind::Wheel { delta: -120 },
+        MouseEventKind::Wheel { delta: -120 }
+    );
+    let edges = [
+        HoverEdge::Enter,
+        HoverEdge::Leave,
+        HoverEdge::EnterAll,
+        HoverEdge::LeaveAll,
+    ];
+    for (i, a) in edges.iter().enumerate() {
+        for (j, b) in edges.iter().enumerate() {
+            assert_eq!(
+                i == j,
+                MouseEventKind::Hover(*a) == MouseEventKind::Hover(*b)
+            );
+        }
+    }
+}
+
+#[test]
 fn shiori_failure_display_matches_vocabulary() {
     // 区別語彙（接続確立失敗／タイムアウト／helper 死活／SHIORI エラー）の Display。
     assert_eq!(
