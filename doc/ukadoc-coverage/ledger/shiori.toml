@@ -3659,7 +3659,7 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseClick:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "mouse-click-wheel-events"
 priority = "A12"
@@ -3668,40 +3668,53 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnMouseClickEx:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はキャラクター窓の上で押して同じ窓で離したクリック（ドラッグでない）の
+とき、OnMouseUp に返事が無かった（204）とき、このイベントを実際に SHIORI へ送っている（左と右は
+2 段目・中は 4 段目）。ドラッグの後とダブルクリックの 2 回目の解放では送らない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに info のログ（mouse_event_sent）が段の名前と Ref5 付きで
+1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+台本が返って残りの段を送らないときは mouse_click_chain_stopped、クリックにしないと決めたとき
+は mouse_click_not_sent が理由（other_window・box_choice・drag・outside・second_of_double）付きで
+info に 1 行出る。段の送信そのものが失敗したときは error のログ（shiori_send_failed と
+mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段へ進む（終了の系列へは倒さない）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_click_reply）。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
+on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 触られたことが届かず、撫でてもつついても何も返らない。
-担当 spec は mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseClickEx:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka は中ボタン・拡張ボタン 1・2 のクリック（ドラッグでない）で OnMouseUpEx に
+返事が無かった（204）とき、このイベントを 2 段目として実際に SHIORI へ送っている（Ref5＝
+middle／xbutton1／xbutton2）。ダブルクリックの 2 回目の解放では送らない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに info のログ（mouse_event_sent）が段の名前と Ref5 付きで
+1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+台本が返って残りの段を送らないときは mouse_click_chain_stopped、クリックにしないと決めたとき
+は mouse_click_not_sent が理由（other_window・box_choice・drag・outside・second_of_double）付きで
+info に 1 行出る。段の送信そのものが失敗したときは error のログ（shiori_send_failed と
+mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段へ進む（終了の系列へは倒さない）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_click_reply）。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
+on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 左右以外のボタンで触られたことが届かず、その触り方には何も返らない。
 """
 
@@ -3841,47 +3854,52 @@ crates/areka-kanade/src/schedule/steady.rs の on_mouse）。右ボタンのド�
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseEnter:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はカーソルがキャラクター窓の当たり判定に入ったとき、このイベントを実際に
+SHIORI へ送っている。当たり判定から別の当たり判定へ移ったときは、出た側の OnMouseLeave の後に送る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに debug のログ（mouse_event_sent）が 1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、
+黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+register_char_watch でポインタの配りの前に登録）。出入りの決め方は
+crates/areka/src/input_events/hover_region.rs の plan_hover。移動の間引きは通さない。
 無いと失うもの: 頭や胸といった当たり判定に触れ始めたことが届かず、どこを触られたかに応えられない。
-担当 spec は mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseEnterAll:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はカーソルがキャラクター窓に入ったとき、このイベントを実際に SHIORI へ
+送っている。入った点が当たり判定の上なら、その OnMouseEnter より先に送る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに debug のログ（mouse_event_sent）が 1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、
+黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+register_char_watch でポインタの配りの前に登録）。移動の間引きは
+通さない。
 無いと失うもの: カーソルがゴーストの窓に入ってきたことに気づけず、近寄られたことに反応できない。
 """
 
@@ -3936,47 +3954,54 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseLeave:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はカーソルがキャラクター窓の当たり判定から出たとき（窓の外へ出たときも
+含む）、このイベントを実際に SHIORI へ送っている。窓の外へ出たときは、出た当たり判定と窓の中で
+最後に見た位置を入れ、OnMouseLeaveAll より先に送る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに debug のログ（mouse_event_sent）が 1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、
+黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+register_char_watch でポインタの配りの前に登録）。出入りの決め方は
+crates/areka/src/input_events/hover_region.rs の plan_hover。移動の間引きは通さない。
 無いと失うもの: 当たり判定から手が離れたことが届かず、触り終わりに応えられない。
-担当 spec は mouse-click-wheel-events。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseLeaveAll:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はカーソルがキャラクター窓から出たとき、このイベントを実際に SHIORI へ
+送っている。当たり判定の上から出たときは、その OnMouseLeave の後に送る。座標は窓の中で最後に
+見た位置。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに debug のログ（mouse_event_sent）が 1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、
+黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+register_char_watch でポインタの配りの前に登録）。出る窓は入る窓より
+先に捌く。移動の間引きは通さない。
 無いと失うもの: カーソルがゴーストの窓から離れたことに気づけず、離れられたことに反応できない。
 """
 
@@ -4044,68 +4069,89 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseUp:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はキャラクター窓の上で左・右・中のボタンを離したとき、このイベントを
+実際に SHIORI へ送っている。左と右は段の列の 1 段目（Ref5＝0／1）、中は OnMouseUpEx と
+OnMouseClickEx に返事が無かったときの 3 段目（Ref5＝2）。ダブルクリックの 2 回目の解放でもこれ
+は送る（中は OnMouseUpEx の次）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに info のログ（mouse_event_sent）が段の名前と Ref5 付きで
+1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+台本が返って残りの段を送らないときは mouse_click_chain_stopped、クリックにしないと決めたとき
+は mouse_click_not_sent が理由（other_window・box_choice・drag・outside・second_of_double）付きで
+info に 1 行出る。段の送信そのものが失敗したときは error のログ（shiori_send_failed と
+mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段へ進む（終了の系列へは倒さない）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_mouse_extended・on_click_reply）。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
+on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 触っていた手を離した瞬間が届かず、触り終わりに合わせた反応ができない。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseUpEx:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はキャラクター窓の上で中ボタン・拡張ボタン 1・2 を離したとき、段の列の
+1 段目としてこのイベントを実際に SHIORI へ送っている（Ref5＝middle／xbutton1／xbutton2）。
+ダブルクリックの 2 回目の解放でもこれは送る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに info のログ（mouse_event_sent）が段の名前と Ref5 付きで
+1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+台本が返って残りの段を送らないときは mouse_click_chain_stopped、クリックにしないと決めたとき
+は mouse_click_not_sent が理由（other_window・box_choice・drag・outside・second_of_double）付きで
+info に 1 行出る。段の送信そのものが失敗したときは error のログ（shiori_send_failed と
+mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段へ進む（終了の系列へは倒さない）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_mouse_extended・on_click_reply）。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
+on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 左右以外のボタンを離した瞬間が届かない。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseWheel:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.3.53"
-owner = ""
+owner = "mouse-click-wheel-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はキャラクター窓の上で縦のホイールを回したとき、このイベントを実際に
+SHIORI へ送っている（Ref2＝回転量の和・1 目盛り 120・上が正）。窓ごとに 100 ミリ秒に 1 回へ間引き、間の回転は
+足し合わせて送る。横のホイールは読まない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送るたびに debug のログ（mouse_event_sent）が 1 行出る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。
+送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、
+黙って消えることはない。
+足し合わせが 0 になったときは debug、透過の点で回したときは trace のログ（mouse_wheel_not_sent）が
+理由付きで出て送らない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
+入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+register_char_watch でポインタの配りの前に登録）。間引きは
+crates/areka/src/input_events/wheel.rs の plan_wheel。
 無いと失うもの: ホイールを回されたことが届かず、その操作には何も返らない。
 
 版番号: 本文に出てくる版番号は 2.3.53 の 1 つだけで、これは挙動の変わり目である。タッチパネルの環

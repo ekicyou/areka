@@ -94,7 +94,7 @@
   - _Requirements: 3.5, 11.1, 11.4_
 
 - [ ] 5. 網羅台帳と §8 を実物に合わせる
-- [ ] 5.1 (P) 網羅台帳の 9 行を書き直し、報告を生成の道具で作り直す
+- [x] 5.1 (P) 網羅台帳の 9 行を書き直し、報告を生成の道具で作り直す
   - 9 行を実装済み・持ち主＝本 spec・移動の行と同じ形の注記（壊れ方・記録・根拠の場所・組み立て・入力の在りか）で書き直す。押下・ダブルクリックの Ex・多重クリック・ホバー・ジェスチャの行は変えない
   - 報告を生成の道具の report と report-summary で作り直し、手で直した報告のファイルが無い
   - _Boundary: 台帳_
@@ -128,3 +128,4 @@
 - 3.4: 解放の受け手 `click::on_char_pointer_released` はまだどこにも登録していない（4.1 の包みで登録）。`click.rs` のモジュールと `send_mouse` の dead_code の足場は 4.1 で外す。wintf の `released` も「この tick に放した」の旗。
 - 3.5: design の「`until_ms <= now_ms` なら `tick_wake::mark(REARM)`」の枝は `plan_wheel` が `now_ms < until_ms` でしか `Wait` を返さないので届かず、置いていない。`char_watch` は毎 tick `world.query` で QueryState を作り直す（窓の数程度で実害は小さい・持ち続ける形は `emo2_boot/frame/wiring.rs` が先例）。
 - 4.2（2026-10-24）: kanade 702+85・areka bin 3598（ignored 2）＋統合・wintf 1193（ignored 18）＋統合 489・doctest 14 がすべて緑。merge-base `15d8b0f3` からの既存のテストの直しは、手書きの数 64（`events_change_tests.rs`）・表の全体の檻への 9 語（`events_tests.rs`）・押下のゲートの檻の置き換え（`pointer/dispatch/tests.rs`）の 3 つと、`menu/mod_wiring_tests.rs` の import の 1 行の広げ（新しいテストのため）だけ。ほかの既存テストのファイルは足しただけ。足した・直したファイル 29 本はどれも 1,000 行以下（最長 `steady.rs` 968 行）。
+- 5.1: 台帳の境界の外で、道具の一致のテストが照らす手書きの数 2 か所（`doc/ukadoc-coverage/briefing.md` の list_shiori_event の barrier 53→62・233→224、`roadmap-draft.md` の本 spec の owner_count 3→9）を直した（前例 PR #332）。design の変更ファイルの一覧には無い。

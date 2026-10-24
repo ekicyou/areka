@@ -1045,8 +1045,8 @@ wave = "v0.1.0"
 [[spec]]
 name = "mouse-click-wheel-events"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、OnMouseClick・OnMouseEnter・OnMouseLeave の宛先をこの名前で記入した（3 件）"
-owner_count = 3
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、OnMouseClick・OnMouseEnter・OnMouseLeave の宛先をこの名前で記入した（3 件）。2026-10-24 に本 spec の実装で OnMouseUp・OnMouseUpEx・OnMouseClick・OnMouseClickEx・OnMouseWheel・OnMouseEnter・OnMouseLeave・OnMouseEnterAll・OnMouseLeaveAll を実装済み・持ち主＝本 spec に書き直した（9 件）"
+owner_count = 9
 wave = "v0.1.0"
 
 [[spec]]
