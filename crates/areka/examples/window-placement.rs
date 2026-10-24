@@ -289,8 +289,13 @@ fn build_and_spawn(world: &mut World) {
 
     let mut pending = Vec::new();
     for scope in windows.scopes().collect::<Vec<_>>() {
-        // 初期 surface id: 準備が測りに使った descript の既定の面（窓寸法と表示 surface の原寸が一致する）。
-        let surface_id = prepared.default_surfaces.surface(scope);
+        // 初期 surface id: 測りと同じく、候補の並びのうちシェルに在る最初の面（窓寸法と表示 surface の原寸が一致する）。
+        let probe = shell_target.build_world();
+        let surface_id = placement::descript_window_keys::first_existing(
+            &prepared.default_surfaces.candidates(scope),
+            |id| probe.surface(id).is_some(),
+        )
+        .unwrap_or_else(|| prepared.default_surfaces.surface(scope));
 
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
