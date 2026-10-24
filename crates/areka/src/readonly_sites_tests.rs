@@ -464,6 +464,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
     let descript = StartupDescriptValues {
         author_dpi: AuthorDpi::DEFAULT,
         zorder_raw: None,
+        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
     };
     let mut boot = Ok(());
     let desk = reached_desk(world, None, |w| {
