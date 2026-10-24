@@ -51,6 +51,7 @@
 - `install::SubmitVerdict::ReadOnly`・`update::SubmitVerdict::ReadOnly` が増えた: インストールの入口を足す spec（`startup-install-option`）は `install::submit` を通す。通さない入口は readonly を破る。
 - `FsPersistIo` を通らずに `profile\areka` へ書く道を足す spec は、`persist::withholds` を見るか、保存の口を通す。
 - 起動の前の順（`readonly::engage` が `resolve_boot`＝`layout()` の最初の呼び出しより前）を動かす変更。
+- `copy_for_write` を直に呼ぶ所を足す spec は、readonly を見る（`copy_unless_readonly` を通すか、`switch_copy::start` のように `readonly` を受け取って先に断る）。今の直の呼び手は `copy_unless_readonly`・`switch_copy::start` の背景のスレッド・入口の断りの後ろに在る `install/destination.rs` と `update/worker.rs`。
 - `dev-folder-alias` が「別名のフォルダへ書かない守り」を作るときは、`readonly::is_on`／`readonly::of`／`persist::withholds` のどれかから作る（新しい旗を作らない）。
 
 ## Architecture
@@ -541,7 +542,8 @@ pub(crate) fn copy_unless_readonly(
 ) -> PathBuf;
 ```
 - 写すはずだったか（`plan_copy` が `Copy`）を見て、そのときだけ `info!(event = "user_data_copy_withheld", kind, from, to, "read-only run: not copying into the user root; using the original folder")`。
-- `writable_copy` がこれを `readonly::is_on()` で呼ぶ＝起動（`writable_ghost`）・切替（`ghost_switch.rs`・`switch_copy.rs`）・インストールの宛先・更新の全部に効く（後の 2 つは断りで届かない）。`plan_copy`・`copy_for_write` は変えない。
+- `writable_copy` がこれを `readonly::is_on()` で呼ぶ＝起動（`writable_ghost`）・既定へ戻す切替（`switch_to_default`）に効く。インストールの宛先（`install/destination.rs`）と更新（`update/worker.rs`）は `copy_for_write` を直に呼ぶが、どちらも入口の断り（`install::submit`・`update::submit`）より先へ進まないので届かない。
+- ふつうの切替は `writable_copy` を通らず、受理（`ghost_switch.rs` の `accept_switch`）が `switch_copy::start(readonly::of(world), …)` を呼ぶ。`start` は `readonly` なら背景のスレッドを起こさず `SwitchCopy::Done(copy_unless_readonly(true, …))`（元のフォルダ・写すはずだったときだけ `user_data_copy_withheld`）を返し、切替はそのフォルダから起こす。`plan_copy`・`copy_for_write` は変えない。
 
 ### 入口の層
 
