@@ -319,3 +319,61 @@ fn the_shared_catalog_constructor_measures_the_same_as_the_owning_one() {
         "共有で渡した台帳がそのまま使われていない（警告の源が 2 つに割れる）"
     );
 }
+
+// ────────────────────────── §6 縦書きの em の箱の置き場の実測（spec vertical-choice-hover-band 要件 4.2・6.3）
+
+/// M: `vertical_em_box_left` が、束縛した書体と向きの列の基線から測った値（式 A ＝ left ＋ baseline
+/// − em/2・research.md 17 節）を返し、大きさに比例する。Yu Gothic UI 20 は ∓3.30、ＭＳ ゴシックは 0、
+/// ぱすたの候補列（本番の解決で「游ゴシック」に引ける）は −0.3013／＋0.3008 × em。横書きに束縛した
+/// 物は測らず既定の実装（列の箱の真ん中）と同じ値。
+///
+/// 較正: 上書きを外す（既定の実装のまま）と、游ゴシックの組が行の箱の比から出る −2.87／＋2.87
+/// （大きさ 20）で赤。
+#[test]
+fn vertical_em_box_left_is_measured_from_the_column_baseline() {
+    use areka_parsers::balloon::{Font, FontColor};
+
+    use crate::layout::column_centred_em_box_left;
+
+    const PASTA: &str =
+        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let bound = |name: &str, size: u32, mode: WritingMode| {
+        let font = ResolvedFont::resolve(&model_with_font(Font::new(
+            Some(name.to_owned()),
+            Some(size),
+            FontColor::new(None, None, None),
+        )));
+        DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成")
+    };
+    // (書体, 右から左の比, 左から右の比)（research.md 17.2 節）。
+    for (name, rl, lr) in [
+        ("Yu Gothic UI", -0.1650f32, 0.1650f32),
+        ("ＭＳ ゴシック", 0.0, 0.0),
+        (PASTA, -0.3013, 0.3008),
+    ] {
+        for (mode, ratio) in [(WritingMode::VerticalRl, rl), (WritingMode::VerticalLr, lr)] {
+            let at = |size: u32| bound(name, size, mode).vertical_em_box_left(size as f32, mode);
+            let (v20, v28) = (at(20), at(28));
+            assert!(
+                (v20 - ratio * 20.0).abs() <= 0.05,
+                "{name} 20 {mode:?}: 測った em の箱の左 {v20} が {} でない",
+                ratio * 20.0
+            );
+            assert!(
+                (v28 / 28.0 - v20 / 20.0).abs() <= 1e-3,
+                "{name} {mode:?}: 大きさに比例しない（20 で {v20}・28 で {v28}）"
+            );
+        }
+    }
+    // 横書きに束縛した物は測らない（既定の実装と同じ値）。
+    let horizontal = bound(PASTA, 20, WritingMode::HorizontalTb);
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        assert_eq!(
+            horizontal.vertical_em_box_left(20.0, mode),
+            column_centred_em_box_left(horizontal.line_box_height(20.0), 20.0, mode),
+            "横書きに束縛した物の {mode:?}"
+        );
+    }
+}

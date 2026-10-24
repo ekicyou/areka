@@ -97,9 +97,17 @@ fn hit(
     state: &TextLayerState,
     t: f64,
 ) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
+    hit_in(state, t, WritingMode::HorizontalTb)
+}
+
+/// [`hit`] の書字方向を選べる形。
+fn hit_in(
+    state: &TextLayerState,
+    t: f64,
+    mode: WritingMode,
+) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
     let actor = ActorKey::from(ACTOR);
     let place = state.actor_state(&actor).expect("場所の状態");
-    let mode = WritingMode::HorizontalTb;
     let model = BalloonModel::new(
         WindowPosition::new(None, None),
         Origin::new(None, None),
@@ -270,4 +278,63 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
             (SpanKind::Anchor, 3, rect(0.0, 25.0, 10.0, 37.0)),
         ]
     );
+}
+
+/// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形（要件 1.7）。
+/// 帯は厚み＝列の em 10・寄せは em の箱を列の箱の真ん中に置いた値の丸め＝右から左 round(−1.65)＝−2・
+/// 左から右 round(1.65)＝2（列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。期待値を数で書くので、`line_bands` の縦書きの枝を
+/// 戻すと赤になる。
+#[test]
+fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
+    // 「か」＋範囲「あいう」＋「き」を、範囲がアンカーのときと選択肢のときで並べる。
+    let anchor = applied(&[text("か"), open("x"), text("あいう"), close(), text("き")]);
+    let as_choice = applied(&[text("か"), choice("x", "あいう"), text("き")]);
+    for (mode, want) in [
+        (WritingMode::VerticalRl, (28.0, 38.0)),
+        (WritingMode::VerticalLr, (2.0, 12.0)),
+    ] {
+        let (_, a) = hit_in(&anchor, 0.0, mode);
+        let (_, c) = hit_in(&as_choice, 0.0, mode);
+        assert_eq!(a.len(), 1, "{mode:?}: アンカーの当たりの行");
+        assert_eq!(c.len(), 1, "{mode:?}: 選択肢の当たりの行");
+        let ((ak, _, ar), (ck, _, cr)) = (a[0], c[0]);
+        assert_eq!((ak, ck), (SpanKind::Anchor, SpanKind::Choice), "{mode:?}");
+        assert_eq!(ar, cr, "{mode:?}: アンカーと選択肢の帯");
+        assert_eq!((ar.left, ar.right), want, "{mode:?}: ブロック軸の範囲");
+    }
+}
+
+/// 縦書きで列をまたぐ選択肢は、またいだ列ごとに当たりの行を 1 つずつ持ち、どの行の帯もその列の
+/// 行矩形の左辺＋寄せから厚み em（要件 1.5）。列は 20 字（描画範囲の丈 200 ÷ 字の丈 10）なので、
+/// 前置き 19 字の後の選択肢「はいいえ」は 1 列目に「は」・2 列目に「いいえ」。列の左辺は
+/// 右から左で 1 列目 30・2 列目 18（列送り 12）、左から右で 0・12。寄せは右から左 −2・左から右 ＋2
+/// （上の `vertical_anchor_band_has_the_same_shape_as_a_choice` と同じ）。期待値を数で書くので、
+/// 列ごとの行矩形を読まない、または縦書きの枝を横書きの式へ戻すと赤になる（`research.md` 21 節）。
+#[test]
+fn vertical_choice_across_columns_has_a_band_on_each_column() {
+    let state = applied(&[
+        text("あいうえおかきくけこさしすせそたちつて"),
+        choice("x", "はいいえ"),
+    ]);
+    for (mode, first, second) in [
+        // 右から左: 30 − 2 ＝ 28・18 − 2 ＝ 16。
+        (WritingMode::VerticalRl, (28.0, 38.0), (16.0, 26.0)),
+        // 左から右: 0 ＋ 2 ＝ 2・12 ＋ 2 ＝ 14。
+        (WritingMode::VerticalLr, (2.0, 12.0), (14.0, 24.0)),
+    ] {
+        let (segments, rows) = hit_in(&state, 0.0, mode);
+        assert_eq!(
+            segments.iter().map(|s| s.line_index).collect::<Vec<_>>(),
+            vec![0, 1],
+            "{mode:?}: 選択肢が 2 列にまたがる"
+        );
+        assert_eq!(
+            rows,
+            vec![
+                (SpanKind::Choice, 0, rect(first.0, 190.0, first.1, 200.0)),
+                (SpanKind::Choice, 0, rect(second.0, 0.0, second.1, 30.0)),
+            ],
+            "{mode:?}: 列ごとの当たりの帯"
+        );
+    }
 }
