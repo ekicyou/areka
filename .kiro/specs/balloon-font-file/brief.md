@@ -41,6 +41,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: α の完成宣言。`shell-balloon` とは並走できる（触るのは `draw_catalog.rs`・`draw.rs` の周り。`shell-balloon` が触る `actor.rs`・`region.rs` と別）。
+- **基準のフォルダ**（2026-10-25 起票の `talk-script-metadata`・v0.2.0）: ファイルを指すタグの相対パスは、台本の付帯情報（実行したゴーストの置き場）と、その spec の解く関数 1 つで読む。この spec が先に着地するなら、受け手が自分で `GhostSlot` を引く形にしない（`talk-script-metadata` へ乗り換えやすい口に留める）。
 - **Downstream**: `text-ruby`（ルビのフォント）・`balloon-markers`（`number.font.name`・`sstpmessage.font.name`）。
 
 ## Existing Spec Touchpoints
