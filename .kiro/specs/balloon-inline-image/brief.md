@@ -52,6 +52,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: 働きの上の前提は無い。
+- **基準のフォルダ**（2026-10-25 起票の `talk-script-metadata`・v0.2.0）: ファイルを指すタグの相対パスは、台本の付帯情報（実行したゴーストの置き場）と、その spec の解く関数 1 つで読む。この spec が先に着地するなら、受け手が自分で `GhostSlot` を引く形にしない（`talk-script-metadata` へ乗り換えやすい口に留める）。
 - **Downstream**: `range-choice-tag`（例 1 のバナーの選択肢）。
 
 ## Existing Spec Touchpoints
