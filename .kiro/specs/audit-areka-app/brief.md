@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝なし（すぐ着手できる）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`session-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 6 本目）。受け持つファイルのうち `ghost_session*`・`boot_*`・`app_exit*`・`session_end*`・`exit_wait*`・`write_failure*`・`readonly*`・`alert*`・`log_history*` と main.rs のシームは `session-module-gather` で `crates/areka/src/session/`、`session-crate-split` で `crates/areka-session/src/` へ移る。両 spec がこの brief の「受け持つファイル」を書き換える。本体に残る SHIORI のデモ（`shiori_host`・`shiori_session`・`shiori_demo`・`reference_brain`）は `AREKA_SHIORI_DEMO` を付けたときだけ動く＝消せるかはこの spec の audit で決める。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints

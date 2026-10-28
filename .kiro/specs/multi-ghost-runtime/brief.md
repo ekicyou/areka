@@ -93,7 +93,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新しい境界）。
-- **Adjacent**: `mcp-kanade-tools`・`mcp-reload`（kanade の `msg.rs`・`ghost_switch.rs`・`shell_balloon_switch.rs`）・`write-failure-notice`（`boot_resolve.rs` の終了の印）・`dpi-realign-remembered-chain`（`placement/`）・`extra-character-windows`（`switch_assets.rs`・スコープの数）。`main.rs` を触る spec（`baseware-root-list`・`user-data-root`・`write-failure-notice`）とは直列。
+- **Adjacent**: `mcp-kanade-tools`・`mcp-reload`（kanade の `msg.rs`・`ghost_switch.rs`・`shell_balloon_switch.rs`）・`write-failure-notice`（`boot_resolve.rs` の終了の印）・`dpi-realign-remembered-chain`（`placement/`）・`extra-character-windows`（`switch_assets.rs`・スコープの数）。`main.rs` を触る spec（`baseware-root-list`・`user-data-root`・`write-failure-notice`）とは直列。本体の crate 分けの 6 本（2026-10-28 `/kiro-discovery`・`placement-crate-split` → … → `session-crate-split`）とは直列で、特に `session-module-gather`・`session-crate-split` とはファイルがほぼ全部重なる（`GhostSlot`・止まる流れ・印）。v0.1.0 の余力の枠で着地しなければ 6 本の後に取り、パスは roadmap の「本体の crate 分け」の新旧の対応表で読み替えて測り直す。
 
 ## Constraints
 

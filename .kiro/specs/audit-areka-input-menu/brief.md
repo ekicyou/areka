@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝なし（すぐ着手できる）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`input-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 4 本目）。受け持つファイルのうち `input_events/` はその着地で `crates/areka-input/src/` へ移り（`shortcut.rs` は `crates/areka/src/menu/` へ・`file_drop.rs` は本体に残る）、menu は本体に残る。同 spec がこの brief の「受け持つファイル」を書き換える。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
