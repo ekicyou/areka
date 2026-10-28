@@ -135,3 +135,5 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - 先に要るもの: 働きの前提は無い。ファイルの順は、列の残り `range-choice-tag` → `talk-fast-forward` の後（どちらも未着手）。列の外では `sakura-time-critical`（`decode.rs`・`model.rs`・`consumer_ledger.rs`）・`mcp-reload`・`inputbox-user-input`（`consumer_ledger.rs`）・`check-script-arg-checks`（検査に値の誤りを答えさせるときだけ `check_script_judge.rs`）と並べられない。kanade と `crates/areka-mcp/` には触らないので、`mcp-kanade-tools`・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue` とは重なり 0。
 - 優先度の区分: C のまま。要件定義のモデル: Opus のまま。
 - 見つけた穴・古くなった記述: 棚卸㉓の節の「`compile.rs`（411 行）」は 481 行。同じ節が書いた台帳の持ち主の付け替えと冒頭の古い記述は、手つかずで残っている。
+
+> **2026-10-28 `/kiro-discovery`（ノベルゲーム基盤）の申し送り**: `\![sound,wait]`（＝`\_V`）を消費する者は、新しい `sound-canon-tags`（ノベルゲーム基盤の段の先頭）が作る。範囲から外した理由「消費する者が現れるまで」は、その着地で解ける。
