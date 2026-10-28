@@ -132,3 +132,5 @@ SSP プロパティ木の過半は `currentghost` の外にある——`system.*
 - **ファイルの重なり**: `currentghost-property-others`・`system-property-values`・`zorder-property`（`dotted.rs`・`actor.rs`・`emo2_boot/mod.rs`）・`property-name-case-fold`（`actor.rs`・`key.rs`）・`emo2_boot` の結線の列の全員・`baseware-root-list`（向こうが `catalog.rs` を書き換える）。
 - **優先度の区分**: C（ukadoc の一覧のプロパティの拾い残し）。**要件定義のモデル**: Opus。
 - **見つけた穴・古くなった記述**: 上の「出し直しの点」と `baseware-root-list` との順。ほかは無し。
+
+> **2026-10-28 `/kiro-discovery`（ノベルゲーム基盤）の申し送り**: 音のプロパティ（`currentghost.sound(…)` の 18 葉・値は「音再生基盤」待ち）の値は、新しい `sound-canon-tags`（ノベルゲーム基盤の段の先頭）が出す。登記と口はこの spec のまま。`rateofuselist.*` は、新しい `areka-usage-stats`（利用統計の段）が「手元の使用率」の軽い代わりとして候補に挙げた（`doc/ideas/usage-stats.md`）。

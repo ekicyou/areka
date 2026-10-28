@@ -29,6 +29,7 @@
 | `release-notes/` | 版ごとのリリースの見どころと、その書き方（リリースの処理が読む） | 今も効く |
 | `shiori/` | SHIORI の紙の契約のカタログ（`fragments/` が正本。`shiori4-api` が正本と呼ぶ） | 今も効く |
 | `images/` | 根の `README.md` が載せる絵 | 今も効く |
+| `ideas/` | まだ spec でない案の原文と決めたこと（`usage-stats.md`＝利用統計、`novel-platform.md`＝ノベルゲーム基盤。roadmap の受け口の節と brief が引く） | 今も効く |
 | `archive/` | 歴史の置き場（旧 ARCHITECTURE・旧 UI の設計・M1 期の議論の写しなど） | 歴史 |
 
 ## 俯瞰の HTML

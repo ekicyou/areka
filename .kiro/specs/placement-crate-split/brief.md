@@ -96,6 +96,7 @@
   - `audit-placement-core`・`audit-placement-follow`: 受け持つファイルのパスをこの spec の完了で書き換える。
   - placement に触ると書いている約 19 本（`window-snap`・`stay-on-top-directives`・`shell-scale-linkage`・`tasktray-minimize`・`placement-measure-bake-once`・`window-work-area-clamp` ほか）: brief は書き換えず、roadmap の新旧のパスの対応表で読み替える。
   - `multi-ghost-runtime`: `placement/{spawn,persist}.rs` を触る。同じウェーブに置かない。
+  - `doc-tree-tidy`: `doc/` のファイルを動かす。この spec も `doc/` のパスを書き換えるので、同じウェーブに置かない。
 
 ## Constraints
 
