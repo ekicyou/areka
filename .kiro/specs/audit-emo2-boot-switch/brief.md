@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`mcp-reload`（v0.1.0・2026-10-19 に着手中）。同 spec が `ghost_switch.rs`・`shell_balloon_switch.rs` に触るので、その着地の後に着手する（着手のときに main を取り込んでから audit をかける）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`mcp-reload`（v0.1.0・2026-10-19 に着手中）。同 spec が `ghost_switch.rs`・`shell_balloon_switch.rs` に触るので、その着地の後に着手する（着手のときに main を取り込んでから audit をかける）。2026-10-28 `/kiro-discovery` で足した待ち＝`runtime-crate-split`（本体の crate 分けの 3 本目）。受け持つファイルのうち `ghost_switch*`・`shell_balloon_switch*` は `runtime-module-untangle` で `crates/areka/src/session/` へ、残り（`switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`）は `crates/areka/src/runtime/` を経て `crates/areka-runtime/src/` へ移る。両 spec がこの brief の「受け持つファイル」を書き換える。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints

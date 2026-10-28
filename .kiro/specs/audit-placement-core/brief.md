@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝なし（すぐ着手できる）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`placement-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 1 本目。受け持つファイルはその着地で `crates/areka-placement/src/` へ移り、同 spec がこの brief の「受け持つファイル」を書き換える）。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints

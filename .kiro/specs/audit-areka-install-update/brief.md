@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`mcp-reload`（v0.1.0・2026-10-19 に着手中）。同 spec が `mcp/reload.rs`・`update/desk.rs` に触るので、その着地の後に着手する（着手のときに main を取り込んでから audit をかける）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`mcp-reload`（v0.1.0・2026-10-19 に着手中）。同 spec が `mcp/reload.rs`・`update/desk.rs` に触るので、その着地の後に着手する（着手のときに main を取り込んでから audit をかける）。2026-10-28 `/kiro-discovery` で足した待ち＝`session-crate-split`（本体の crate 分けの 6 本目）。`runtime-module-untangle` で `install_cue`・`update_cue`・`readme_cue` が `install/`・`update/`・`readme/` へ入り、`session-module-gather` で roots の芯（`mod`・`resolve`・`report`・`user_root`）と readme が `crates/areka/src/session/` へ、`session-crate-split` で `crates/areka-session/src/` へ移る（install・update・mcp と roots の `edit`・`desk`・`pick` は本体に残る）。各 spec がこの brief の「受け持つファイル」を書き換える。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints

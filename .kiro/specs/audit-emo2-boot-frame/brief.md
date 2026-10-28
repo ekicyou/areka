@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝なし（すぐ着手できる）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`runtime-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 3 本目。受け持つファイルは `runtime-module-untangle` で `crates/areka/src/runtime/`、`runtime-crate-split` で `crates/areka-runtime/src/` へ移り、型の名前も `Emo2Wiring` → `RuntimeWiring` ほかに改まる。両 spec がこの brief の「受け持つファイル」を書き換える）。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
