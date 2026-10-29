@@ -174,6 +174,7 @@ fn run_core(
             script: script.to_string(),
             talk_id: TalkId(8),
             origin: ScriptOrigin::GHOST,
+            strict: false,
         },
         done_tx,
         vec![Box::new(seriko_sink), text_sink],

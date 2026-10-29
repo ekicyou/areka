@@ -627,6 +627,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
         talk_id,
         script: MENU_SCRIPT.to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(menu)");
     // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。
@@ -720,6 +721,7 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
         talk_id,
         script: MENU_SCRIPT.to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(menu)");
     tx.send(DispatcherMsg::Tick {
@@ -823,6 +825,7 @@ fn pressed_selection_queued_after_choice_waiting_reaches_kanade_in_inbox_order()
         talk_id: TalkId(942),
         script: MENU_SCRIPT.to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }));
     fx.feed(DispatcherMsg::Choice(dirty_choice_input()));
     fx.feed(DispatcherMsg::Anchor(dirty_anchor_input()));

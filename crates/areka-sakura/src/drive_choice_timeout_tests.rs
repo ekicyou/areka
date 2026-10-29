@@ -26,6 +26,7 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
             script,
             talk_id,
             origin: ScriptOrigin::GHOST,
+            strict: false,
         },
         done_tx,
         two_sinks(NoopSink, NoopSink),

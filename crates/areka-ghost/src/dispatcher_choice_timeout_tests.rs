@@ -94,6 +94,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
         talk_id,
         script: script_with_choice_timeout("1234"),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(choicetimeout 1234)");
     // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。

@@ -17,6 +17,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(200),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let surface = RecordingSink::new();
     let text = RecordingSink::new();
@@ -75,6 +76,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
             script: r"\s[0]hi\_w[500]bye\e".to_string(),
             talk_id: TalkId(1),
             origin: ScriptOrigin::GHOST,
+            strict: false,
         };
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let handle = spawn_talk(
@@ -184,6 +186,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
         script: r"\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
 
     let (tx, rx) = mpsc::channel::<TalkCue>();
@@ -272,6 +275,7 @@ fn same_at_cues_preserve_script_order_fifo() {
         script: r"\s[10]hello\nworld\e".to_string(),
         talk_id: TalkId(41),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -335,6 +339,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -430,6 +435,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
         script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id: TalkId(1),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -477,6 +483,7 @@ fn non_finite_tick_is_ignored_and_playback_survives() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(9),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -536,6 +543,7 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
             script: r"\s[10]hello\_w[100]world\e".to_string(),
             talk_id: TalkId(7),
             origin: ScriptOrigin::GHOST,
+            strict: false,
         };
         let sink = RecordingSink::new();
         let records = sink.records();
@@ -746,6 +754,7 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         script: r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     // broadcast の第一級性を立証するため**複数**記録 sink を登録（両者が同一配送列を受ける）。
     let sink_a = RecordingSink::new();

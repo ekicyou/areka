@@ -422,6 +422,7 @@ mod tests {
                     tokens: vec![PersistKey::BootCount.to_canonical_key(), "1".to_string()],
                 }],
                 origin: ScriptOrigin::GHOST,
+                strict: false,
             }
         }
 

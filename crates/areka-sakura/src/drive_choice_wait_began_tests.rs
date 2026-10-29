@@ -64,6 +64,7 @@ fn spawn(script: &str, talk_id: u64) -> (TalkHandle, mpsc::Receiver<Event>) {
             script: script.to_string(),
             talk_id: TalkId(talk_id),
             origin: ScriptOrigin::GHOST,
+            strict: false,
         },
         tx.clone(),
         vec![Box::new(EventSink { tx })],

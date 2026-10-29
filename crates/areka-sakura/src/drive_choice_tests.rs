@@ -45,6 +45,7 @@ fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
         script: MENU_SCRIPT.to_string(),
         talk_id: TalkId(801),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -89,6 +90,7 @@ fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
         script: MENU_SCRIPT.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -133,6 +135,7 @@ fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
         script: MENU_SCRIPT.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -210,6 +213,7 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
         script: script.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -279,6 +283,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -348,6 +353,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         script: MENU_SCRIPT.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -440,6 +446,7 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
         script: script.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -512,6 +519,7 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
         script: MENU_SCRIPT.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -580,6 +588,7 @@ fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
         script: MENU_SCRIPT.to_string(),
         talk_id: TalkId(823),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
@@ -628,6 +637,7 @@ fn script_without_choices_never_notifies_choice_waiting() {
         script: r"\s[10]hello\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,

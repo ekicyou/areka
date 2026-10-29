@@ -196,6 +196,8 @@ where
             epilogue,
             // 出どころは運ぶだけで再生の層は解釈しない（areka-P0-script-security-level 1.4）。
             origin: _,
+            // strict の印は再生の振る舞いを変えない（mcp-strict-errors 3.1）。
+            strict: _,
         } = start;
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。

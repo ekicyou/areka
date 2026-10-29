@@ -44,6 +44,7 @@ fn start_talk_holds_opaque_script_and_id() {
         script: r"\0こんにちは\e".to_string(),
         epilogue: Vec::new(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     assert_eq!(msg.talk_id, TalkId(42));
     // script は素の String として保持されるのみ（解釈しない）。
@@ -57,6 +58,7 @@ fn start_talk_is_cloneable() {
         script: "hi".to_string(),
         epilogue: Vec::new(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let cloned = original.clone();
     assert_eq!(cloned.talk_id, original.talk_id);
@@ -82,6 +84,14 @@ fn start_talk_new_origin_is_ghost() {
     assert_eq!(msg.origin, ScriptOrigin::GHOST);
 }
 
+/// 従来形コンストラクタ `StartTalk::new` は strict の印を立てない
+/// （kanade が自分で始める台本へ strict は及ばない・mcp-strict-errors 3.8）。
+#[test]
+fn start_talk_new_is_not_strict() {
+    let msg = StartTalk::new(TalkId(1), "hi");
+    assert!(!msg.strict);
+}
+
 /// 字面で組んだ出どころは Clone でそのまま運ばれる（書き換えない）。
 #[test]
 fn start_talk_carries_origin_through_clone() {
@@ -90,6 +100,7 @@ fn start_talk_carries_origin_through_clone() {
         script: "hi".to_string(),
         epilogue: Vec::new(),
         origin: ScriptOrigin::MCP_SEND,
+        strict: false,
     };
     assert_eq!(msg.clone().origin, ScriptOrigin::MCP_SEND);
 }
@@ -139,6 +150,7 @@ fn start_talk_carries_epilogue_and_clones() {
         script: "hi".to_string(),
         epilogue: epilogue.clone(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let cloned = msg.clone();
     assert_eq!(cloned.epilogue, epilogue);
@@ -268,6 +280,7 @@ fn talk_command_start_wraps_start_talk_without_loss() {
             tokens: vec!["k".to_string(), "v".to_string()],
         }],
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let cmd = TalkCommand::Start(start.clone());
 

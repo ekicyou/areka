@@ -78,6 +78,7 @@ fn mock_sakura_records_and_returns_talkdone() {
             talk_id: TalkId(1),
             script: FIXED_BOOT_SCRIPT.to_string(),
             origin: ScriptOrigin::GHOST,
+            strict: false,
         }))
         .expect("send TalkCommand::Start to mock sakura");
 
