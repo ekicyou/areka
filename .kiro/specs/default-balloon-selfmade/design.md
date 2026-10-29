@@ -228,7 +228,7 @@ graph TB
 | 8.1 | 道具と絵柄の値 | `draw.rs`・`webp.rs` | — |
 | 8.2 | 同じ入力から同じバイト列 | 道具の作り（下の決め）・`--check` | `default_balloon_drift_test.rs`（毎回の全体テスト）・作り直しの手順で `--check` |
 | 8.3 | 新しい依存 0・`Cargo.lock` 不変 | example の置き場 | 全体テスト・`git diff Cargo.lock` |
-| 8.4 | 寸法の合わない絵を書かない | `main.rs` の照合 | 道具の失敗の経路 |
+| 8.4 | 寸法の合わない絵を書かない | `build.rs` の照合 | 道具の失敗の経路 |
 | 8.5 | 失敗で今の絵を上書きしない | 一時名→名前替え・書き出し先の確認 | 道具の失敗の経路 |
 | 8.6 | 端末の文は ASCII だけ | `main.rs` の出力の決め | 道具の出力の読み合わせ |
 | 8.7 | 手順の説明 | `vendors/sample_ghost/README.md` の節 | — |
