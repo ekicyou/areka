@@ -112,7 +112,7 @@
   - 完了の状態: `areka` の crate のテストが緑で、定数の値を誤ると名前を文字で比べる 1 本が赤になり、本番コードの差分が定数の 1 行と登記の 1 行だけ
   - _Depends: 5.1_
   - _Requirements: 11.1, 11.2, 11.3, 11.6, 11.9, 13.1, 13.2, 13.3_
-- [ ] 6.2 (P) 配布の道具に新しい既定を足す
+- [x] 6.2 (P) 配布の道具に新しい既定を足す
   - 検体を引く行・必須の項目・`balloon/` 直下の許可の表・写す行に `areka-balloon` を足し、`StayseeBalloon` の行は残す
   - 配布の道具を 1 回回し（所要時間を先に伝える）、配布物に `balloon/areka-balloon/` と `balloon/StayseeBalloon/` の両方が入り中身の検査が通ることを確かめる
   - 完了の状態: 配布の道具が緑で終わり、配布物の `balloon/areka-balloon/descript.txt` が在る
