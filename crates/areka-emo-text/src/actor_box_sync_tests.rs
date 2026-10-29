@@ -653,3 +653,77 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
         "箱の束を受け取り直すと（読み込み 1 回につき）もう一度出す"
     );
 }
+
+// ══ spec real-run-log-noise 要件 2.1〜2.4・5.1: 箱の選択肢の飾りの警告は箱の名前ごとに 1 度 ══
+
+/// 選択肢の飾りに ROP 系の `cursor.blendmethod` を書いた箱 r。
+const ROP_BOX_SHELL: &str = "\
+balloon.r
+{
+size,100,50
+cursor.blendmethod,mergepennot
+}
+surface0
+{
+element1,balloon,r,0,0
+}
+";
+
+/// ROP 系の飾りの警告の文言（発行点と 1 文字も違わないこと）。
+const ROP_FALLBACK_MESSAGE: &str =
+    "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";
+
+/// T5（要件 2.1〜2.4・5.1）: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
+/// 外して付け直しても 0 件、箱の束を差し替えた後の登録で 1 件。
+#[test]
+fn box_cursor_fallback_warns_once_per_box_name() {
+    let world = EmoWorld::build(&parse(ROP_BOX_SHELL));
+    let (layout, report) = fold_boxes(&parse_boxes(ROP_BOX_SHELL), &BTreeMap::new(), &world);
+    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    let mut f = fixture();
+    f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
+    f.layout = layout.clone();
+    f.show("0");
+    f.rt.apply_cue(&text("0", "あ"));
+
+    let ((), events) = capture(|| f.sync(Some(1.0)));
+    let warns: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN && e.message() == ROP_FALLBACK_MESSAGE)
+        .collect();
+    assert_eq!(warns.len(), 1, "最初の登録で 1 件");
+    assert_eq!(
+        warns[0].field_str("balloon"),
+        Some("r"),
+        "名前の欄は箱の名前"
+    );
+    assert_eq!(warns[0].field_str("blendmethod"), Some("mergepennot"));
+
+    let ((), events) = capture(|| {
+        f.show("-1");
+        f.sync(Some(1.0));
+        f.show("0");
+        f.sync(Some(1.0));
+        f.sync(Some(2.0));
+    });
+    assert_eq!(
+        messages(&events, REGISTER_MESSAGE),
+        2,
+        "外して付け直す・作り直すの登録し直しは起きている"
+    );
+    assert_eq!(
+        messages(&events, ROP_FALLBACK_MESSAGE),
+        0,
+        "外して付け直しても 0 件"
+    );
+
+    f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
+    f.show("0");
+    f.rt.apply_cue(&text("0", "あ"));
+    let ((), events) = capture(|| f.sync(Some(1.0)));
+    assert_eq!(
+        messages(&events, ROP_FALLBACK_MESSAGE),
+        1,
+        "箱の束を差し替えた後の登録で 1 件"
+    );
+}
