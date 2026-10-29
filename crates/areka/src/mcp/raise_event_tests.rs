@@ -376,3 +376,58 @@ fn strict_sentence_only_when_strict_true_and_a_script_returned() {
         assert_eq!(answer(&pending).content, text(want), "{strict:?}");
     }
 }
+
+/// 捕まえた出来事のうち、エラーログに積まれる strict の記録（宛先が `RECORD_TARGET` で `point` の欄を持つ）の数。
+fn strict_records(events: &[CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|ev| ev.target == areka_sakura::strict::RECORD_TARGET)
+        .filter(|ev| ev.fields.iter().any(|(name, _)| name == "point"))
+        .count()
+}
+
+/// 記録しない 4 つ（台本が返らない・空白だけ＝どちらも `NoScript`・受け付けない・送れない）を strict 真で、
+/// 台本が返ったのを strict 偽・省略で → エラーログに strict の記録が増えない（要件 3.4・3.5・7.5）。
+/// 記録は呼んだ・回したスレッドで拾う。
+#[test]
+fn no_strict_records_when_nothing_is_played_strictly() {
+    let (mut world, rx) = rig();
+    drop(rx);
+    let (pending, called) = call(&mut world, args(EVENT, &[], None, Some(true)));
+    let _ = answer(&pending);
+    assert_eq!(strict_records(&called), 0, "送れない");
+
+    let script = || Some(SstpNotifyOutcome::Script(SCRIPT.to_string()));
+    let cases = [
+        (Some(true), Some(SstpNotifyOutcome::NoScript), "返らない"),
+        (
+            Some(true),
+            Some(SstpNotifyOutcome::NotAccepted),
+            "受け付けない",
+        ),
+        (
+            Some(true),
+            Some(SstpNotifyOutcome::Failed),
+            "送れない（失敗）",
+        ),
+        (Some(true), None, "送れない（返信端の落ち）"),
+        (Some(false), script(), "strict 偽"),
+        (None, script(), "strict 省略"),
+    ];
+    for (strict, result, label) in cases {
+        let (mut world, rx) = rig();
+        let (pending, called) = call(&mut world, args(EVENT, &[], None, strict));
+        let (_, _, _, reply) = take_notify(&rx);
+        match result {
+            Some(r) => reply.send(r).expect("返信端は生きている"),
+            None => drop(reply),
+        }
+        let ((), polled) = capture(|| drain(&mut world));
+        let _ = answer(&pending);
+        assert_eq!(
+            strict_records(&called) + strict_records(&polled),
+            0,
+            "{label}"
+        );
+    }
+}

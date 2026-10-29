@@ -162,7 +162,7 @@
   - _Depends: 6.2, 9.1_
   - _Requirements: 2.2, 2.4, 2.7, 4.5, 7.1, 7.2, 7.6_
 
-- [ ] 9.3 MCP のツールの試験で、`since_id` での読み出しと記録を残さない場合を確かめる
+- [x] 9.3 MCP のツールの試験で、`since_id` での読み出しと記録を残さない場合を確かめる
   - `sakurascript`・`raise_event` の既存のツールの試験の組み立て（偽の kanade の返事とエラーログの写し）に足す
   - `sakurascript` の答えの番号で `get_log(log_type=error, since_id=<n>)` を読むと、その番号より後に積んだ記録が全部読める
   - NG の 4 つの場合・`raise_event` の記録しない 4 つの場合・strict 偽で、エラーログに strict の記録が増えない

@@ -355,3 +355,107 @@ fn strict_true_ng_answers_are_unchanged() {
         assert!(outcome.is_error);
     }
 }
+
+/// 捕まえた出来事のうち、エラーログに積まれる strict の記録（宛先が `RECORD_TARGET` で `point` の欄を持つ）の数。
+fn strict_records(events: &[CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|ev| ev.target == areka_sakura::strict::RECORD_TARGET)
+        .filter(|ev| ev.fields.iter().any(|(name, _)| name == "point"))
+        .count()
+}
+
+/// `get_log(log_type=error, since_id)` の答えの行の番号（`#<id> ` で始まる行だけ）。
+fn error_log_ids_since(since_id: u64) -> Vec<u64> {
+    let args = areka_mcp::tools::get_log::Args {
+        log_type: Some("error".to_string()),
+        ghost_name: None,
+        since_id: Some(since_id as i64),
+        max_count: None,
+    };
+    let (req, pending) = ToolRequest::new(ToolCall::GetLog(args.clone()));
+    crate::mcp::get_log::handle(&mut World::new(), args, req.reply);
+    let outcome = answer(&pending);
+    assert!(!outcome.is_error);
+    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
+        panic!("本文 1 つ: {:?}", outcome.content);
+    };
+    body.split("\r\n")
+        .filter_map(|line| line.strip_prefix('#')?.split(' ').next()?.parse().ok())
+        .collect()
+}
+
+/// 答えの `<n>` で `get_log(log_type=error, since_id=<n>)` を読むと、送った後に積んだ記録が全部読め、
+/// 呼ぶ前に積んだ記録は読めない（要件 1.3・7.4）。
+///
+/// 置き場はプロセスに 1 つで他のテストも積むので、読めた番号の集まりに含まれるか・含まれないかで測る。
+#[test]
+fn since_id_of_the_answer_reads_every_record_after_sending() {
+    let (mut world, rx) = rig();
+    let earlier = record_one();
+    let (pending, _) = call(&mut world, SCRIPT, None, Some(true));
+    let (_, _, reply) = take_send(&rx);
+    let recorded = [record_one(), record_one()];
+    reply
+        .send(SstpSendOutcome::Accepted)
+        .expect("返信端は生きている");
+    drain(&mut world);
+    let outcome = answer(&pending);
+    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
+        panic!("本文 1 つ: {:?}", outcome.content);
+    };
+    let n: u64 = body
+        .strip_prefix(STRICT_HEAD)
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("strict の文のはず: {body}"));
+    let ids = error_log_ids_since(n);
+    for id in recorded {
+        assert!(ids.contains(&id), "送った後の {id} が読める: {ids:?}");
+    }
+    assert!(!ids.contains(&earlier), "呼ぶ前の {earlier} は読めない");
+}
+
+/// NG の 4 つ（空・受け付けない・居ない・降りた）を strict 真で、受け付けたのを strict 偽・省略で
+/// → エラーログに strict の記録が増えない（要件 1.5・3.5・7.5）。記録は呼んだ・回したスレッドで拾う。
+#[test]
+fn no_strict_records_for_ng_answers_or_strict_false() {
+    let (mut world, _rx) = rig();
+    let (pending, called) = call(&mut world, "", None, Some(true));
+    let _ = answer(&pending);
+    assert_eq!(strict_records(&called), 0, "空");
+
+    let (mut world, rx) = rig();
+    drop(rx);
+    let (pending, called) = call(&mut world, SCRIPT, None, Some(true));
+    let _ = answer(&pending);
+    assert_eq!(strict_records(&called), 0, "送れない");
+
+    let cases = [
+        (
+            Some(true),
+            Some(SstpSendOutcome::NotAccepted),
+            "受け付けない",
+        ),
+        (Some(true), Some(SstpSendOutcome::Failed), "居ない"),
+        (Some(true), None, "降りた"),
+        (Some(false), Some(SstpSendOutcome::Accepted), "strict 偽"),
+        (None, Some(SstpSendOutcome::Accepted), "strict 省略"),
+    ];
+    for (strict, result, label) in cases {
+        let (mut world, rx) = rig();
+        let (pending, called) = call(&mut world, SCRIPT, None, strict);
+        let (_, _, reply) = take_send(&rx);
+        match result {
+            Some(r) => reply.send(r).expect("返信端は生きている"),
+            None => drop(reply),
+        }
+        let ((), polled) = capture(|| drain(&mut world));
+        let _ = answer(&pending);
+        assert_eq!(
+            strict_records(&called) + strict_records(&polled),
+            0,
+            "{label}"
+        );
+    }
+}
