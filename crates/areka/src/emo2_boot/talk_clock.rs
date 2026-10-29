@@ -114,6 +114,13 @@ impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
         dola::cue::CueSink::emit(&mut self.inner, cue);
     }
 
+    fn emit_with(&mut self, cue: TalkCue, probe: &dola::cue::CueProbe) {
+        // 知らせ付きの合図も同じく時刻を観測してから、口ごと内側へ通す（既定の emit に落とすと
+        // 文字の層が名前の形の `\b` を知らせられない・spec mcp-strict-errors）。
+        self.clock.observe_cue(cue.at);
+        dola::cue::CueSink::emit_with(&mut self.inner, cue, probe);
+    }
+
     fn preview(&mut self, upcoming: &[TalkCue]) {
         // 先渡しは「その時刻に届いた」出来事ではないので時刻は観測しない（トークの頭の時刻の
         // 見積もりに混ぜない）。内側へそのまま通すだけ（通さないと文字の層へ届かない）。
@@ -157,6 +164,8 @@ mod tests {
         previews: Arc<Mutex<Vec<Vec<TalkCue>>>>,
         /// 選択待ちの始まりを受けた回数。
         began: Arc<Mutex<usize>>,
+        /// 知らせ付きで受けた合図（`emit_with`・`cues` にも積む）。
+        probed: Arc<Mutex<Vec<TalkCue>>>,
     }
 
     impl RecordingTextSink {
@@ -165,7 +174,15 @@ mod tests {
                 cues: Arc::new(Mutex::new(Vec::new())),
                 previews: Arc::new(Mutex::new(Vec::new())),
                 began: Arc::new(Mutex::new(0)),
+                probed: Arc::new(Mutex::new(Vec::new())),
             }
+        }
+
+        fn probed(&self) -> Vec<TalkCue> {
+            self.probed
+                .lock()
+                .expect("recording sink mutex poisoned")
+                .clone()
         }
 
         fn began_count(&self) -> usize {
@@ -204,6 +221,14 @@ mod tests {
 
         fn choice_wait_began(&mut self) {
             *self.began.lock().expect("recording sink mutex poisoned") += 1;
+        }
+
+        fn emit_with(&mut self, cue: TalkCue, _probe: &dola::cue::CueProbe) {
+            self.probed
+                .lock()
+                .expect("recording sink mutex poisoned")
+                .push(cue.clone());
+            self.emit(cue);
         }
     }
 
@@ -436,6 +461,37 @@ mod tests {
         assert_eq!(inner.began_count(), 2, "forwarded once per call");
         assert_eq!(tc.talk_time(300.0), None, "must not observe time");
         assert!(inner.recorded().is_empty() && inner.previewed().is_empty());
+    }
+
+    /// `ClockedTextSink::emit_with` は時刻を観測してから、知らせの口ごと内側の `emit_with` へ
+    /// 1 回だけ通す（通さないと名前の形の `\b` の知らせが文字の層へ届かない・spec mcp-strict-errors）。
+    #[test]
+    fn clocked_sink_forwards_emit_with_after_observing_time() {
+        let (now, clock) = controllable_clock();
+        let tc = TalkClock::new(clock);
+        let inner = RecordingTextSink::new();
+        let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
+        let probe = dola::cue::CueProbe::new(|_| {});
+        let cue = TalkCue {
+            at: 1.5,
+            actor: ActorKey::from("0"),
+            command: CueCommand::Text("x".to_string()),
+            duration: 0.0,
+        };
+
+        set_now(&now, 100.0);
+        sink.emit_with(cue.clone(), &probe);
+        assert_eq!(
+            inner.probed(),
+            vec![cue.clone()],
+            "inner must receive emit_with"
+        );
+        assert_eq!(inner.recorded(), vec![cue], "delivered exactly once");
+        assert_eq!(
+            tc.talk_time(100.0),
+            Some(1.5),
+            "time observed (epoch = 100 - 1.5)"
+        );
     }
 
     /// `ClockedTextSink<T>` が boot 型境界（`Send + Clone + 'static`）を満たすことをコンパイル時表明。

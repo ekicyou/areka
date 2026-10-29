@@ -50,6 +50,8 @@ pub(crate) mod shell_carry;
 /// 表示の層から今のシェルとバルーンの事実を写す（mcp-strict-errors）。
 pub(crate) mod skin_facts_copy;
 mod special_name;
+/// strict の記録の areka の判定（`\!` の台帳と `\f` の分類・mcp-strict-errors）。
+pub(crate) mod strict_judges;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
 /// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す（areka-P0-user-data-root）。
