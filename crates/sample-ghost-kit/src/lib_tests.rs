@@ -715,12 +715,13 @@ fn a_boot_record_written_into_an_acquired_root_never_appears_in_the_next_one() {
 /// 2 つ目のシェルを写すと、写した先の `name` だけが変わり、元のシェルはバイト単位で
 /// そのまま残る（spec: `areka-P0-shell-balloon-switch` 要件 9.1・9.3）。
 ///
-/// 検体は `R_POST_and_KOMAINU`（`charset,Shift_JIS`・改行 CRLF・`name,master` を持つ）。
+/// 検体は `dot_sakura`（`charset,Shift_JIS`・改行 CRLF・`name,master` を持つ）。
 /// 名前以外の行がバイト単位で残ることも見るので、文字コードを読み直す実装は赤になる。
+/// （`R_POST_and_KOMAINU` は 2026-10-04 の版から UTF-8 になり、この較正に使えなくなった）
 #[test]
 fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
-    let rpost = SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
-    let shell = rpost.folder().join("shell");
+    let sakura = SampleRoot::acquire("dot_sakura").expect("登記済みの検体");
+    let shell = sakura.folder().join("shell");
     let original = std::fs::read(shell.join("master").join("descript.txt"))
         .expect("元のシェルの descript.txt を読めるはず");
     assert!(
@@ -728,7 +729,7 @@ fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
         "較正: 元のシェルが Shift_JIS を宣言していること"
     );
 
-    rpost
+    sakura
         .add_shell_copy("master", "second", "second shell")
         .expect("2 つ目のシェルを写せるはず");
 
@@ -756,11 +757,11 @@ fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
         }
     }
     assert!(
-        shell.join("second").join("surface0000.png").is_file(),
+        shell.join("second").join("surface0.png").is_file(),
         "シェルの中身が再帰で写ること"
     );
     assert!(
-        rpost.add_shell_copy("master", "second", "x").is_err(),
+        sakura.add_shell_copy("master", "second", "x").is_err(),
         "既に在る先へは写さない（黙って上書きしない）"
     );
 }

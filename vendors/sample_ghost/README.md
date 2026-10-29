@@ -13,13 +13,13 @@
 
 | ファイル | 種別 | 中のファイル数 | 大きさ |
 |---|---|---|---|
-| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 114 | 4,663,324 バイト |
-| `R_POST_and_KOMAINU.nar` | ゴースト | 43 | 1,625,603 バイト |
+| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 113 | 4,568,887 バイト |
+| `R_POST_and_KOMAINU.nar` | ゴースト（里々・「Ｒポストと狛犬 with 里々Unicode版」・UTF-8・**配布物そのまま**＝下の節） | 42 | 823,413 バイト |
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
-| `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 125 | 820,368 バイト |
+| `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 65 | 1,310,683 バイト |
 | `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
-| `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 135 | 3,651,357 バイト |
+| `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 164 | 5,390,305 バイト |
 | `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・同梱バルーン `emily4` は書庫に無く入らない・**受け取ったバイト列そのまま**＝下の節） | 260 | 2,677,923 バイト |
 | `dot_sakura.nar` | ゴースト（華和梨 32bit・「．さくら」・同梱バルーン `bottle`・**受け取ったバイト列そのまま**＝下の節） | 204 | 1,425,534 バイト |
 
@@ -31,20 +31,34 @@ URL の行の検体:
 
 - `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。areka の既定バルーンで、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
 
+### `emo2.nar` の出どころ
+
+- 出どころ: 開発者のゴースト開発リポジトリ ghost_dev の `release/emo2/emo2.nar`（コミット `26415a2`・2026-10-25・pasta.dll v0.4.3）。隣の `emo2.nar.sha256` と同じハッシュ。
+  sha256 `24456269ea525c8a64784c8108728a7cb942fe7c94cd704712d8f8872a3c45f7`
+- 差し替えるとき: ghost_dev の新しい `release/emo2/emo2.nar` をそのまま置き、この節のコミット・ハッシュと上の表の 2 つの数を書き直す。
+
+### `R_POST_and_KOMAINU.nar` の出どころとライセンス
+
+- 出どころ: 里々 wiki の「改造版ポストと狛犬」の配布場所 <https://soliton.sub.jp/post/topics.cgi> の 2026-10-09 版（里々 Mc203-6・添付 `files/11-1.zip`・2026-10-30 取得）。`.zip` のバイト列をそのまま `.nar` の名で置いた（最上位に `install.txt` が在る配布形）。
+  sha256 `7bdfc490977c3d42a12f02a7b75d1954f20e625a9e9345de06fb458f29825cb1`
+- 2026-10-04 の版から全テキストが UTF-8 になった（それまでは Shift_JIS）。Shift_JIS の宣言とバイト列を見る判定は `dot_sakura` を使う。
+- ライセンス（書庫の中の `readme.txt`）: 「ポストと狛犬」のサンプルスクリプトは著作権放棄、`satori.dll` は「一定の条件に従って自由に再配布できる」。その条件の文書 `satori_license.txt` は 2026-10-09 の版の書庫には無い（前の版には在った）ので、条件は里々の配布元 <https://github.com/ukatech/satoriya-shiori> で見る。開発用の検体としてだけ使い、areka の配布物へ同梱しない。
+- 差し替えるとき: 配布場所の新しい版をそのまま置き、この節の日・版・ハッシュと上の表の 2 つの数を書き直す。
+
 ### `konnoyayame.nar` の出どころとライセンス
 
-- 出どころ: <https://github.com/YAYA-shiori/konnoyayame/releases> のタグ `35438213310`（2026-09-19 10:44 UTC 公開・自動リリース）の添付 `konnoyayame.nar`。あちらは辞書のチェックが通るたびに最新版を出し直すので、**タグと次のハッシュで 1 本に固定している**。
-  sha256 `e15637f1e286a016608432216dc3489e1b4a6b4691b277a29b8732c7245d7cd2`
+- 出どころ: <https://github.com/YAYA-shiori/konnoyayame/releases> のタグ `40829307071`（2026-10-29 06:27 UTC 公開・自動リリース・2026-10-30 取得）の添付 `konnoyayame.nar`。あちらは辞書のチェックが通るたびに最新版を出し直すので、**タグと次のハッシュで 1 本に固定している**。
+  sha256 `a884a766bff92c55b04ef71bc49236a820f29d623339e870ec9d5538dbbf0e27`
 - ライセンス（書庫の中の `README.md`「ライセンス」節と `shell/master/descript.txt` が出どころ）: 全体は Public Domain (Unlicense)。**ただしシェル `shell/master/` は SATO M 氏（サトウ Ｍ・<http://sgmh.sakura.ne.jp/tcg/>）の作品で CC BY-NC-ND 2.1 JP**（<http://creativecommons.org/licenses/by-nc-nd/2.1/jp/>）。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。
 - だから守ること 2 つ——**畳み直さない**（改変禁止なので `fold-samples` を通さず、ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮なのはそのため）。**営利の配布物に入れない**（開発用の検体としてだけ使い、areka の配布物へ同梱しない）。
 - 差し替えるとき: 新しいタグの `.nar` をそのまま置き、この節のタグ・ハッシュと上の表の 2 つの数を書き直す。
-- 書庫にはゴースト作者向けの開発キット（`.claude/`・`.mcp.json`・`CLAUDE.md`・`AGENTS.md`・`tools/*.ps1`）が入っており、展開先 `ghost/konnoyayame/` にもそのまま置かれる。areka はこれらを読まない。**展開先のフォルダを作業場所にして Claude Code などを起動しないこと**（よその設定とフックが効いてしまう）。
+- 2026-09-19 の版には書庫にゴースト作者向けの開発キット（`.claude/`・`.mcp.json`・`CLAUDE.md`・`AGENTS.md`・`tools/*.ps1`）が入っていたが、2026-10-29 の版には無い。上流が戻すこともあるので、**展開先のフォルダを作業場所にして Claude Code などを起動しないこと**（よその設定とフックが効いてしまう）。
 
 ### `claudia.nar` の出どころとライセンス
 
-- 出どころ: <https://github.com/ponapalt/claudia/releases> のタグ `35799705884` の添付 `claudia.nar`（2026-09-22 23:55 UTC 公開・`github-actions[bot]` の自動リリース・2026-09-24 取得）。`konnoyayame` から作られたゴーストで、同じく出し直されるので、**タグと次のハッシュで 1 本に固定している**。
+- 出どころ: <https://github.com/ponapalt/claudia/releases> のタグ `37863574936` の添付 `claudia.nar`（2026-10-09 00:12 UTC 公開・`github-actions[bot]` の自動リリース・2026-10-30 取得）。`konnoyayame` から作られたゴーストで、同じく出し直されるので、**タグと次のハッシュで 1 本に固定している**。
   **上流は最新の 1 本しかリリースを残さない。** 2026-09-24 に確かめたところ、両リポジトリともリリースは 1 本だけで、上の `konnoyayame` の固定タグ `35438213310` は既に 404 だった。だから**このように上流のリリースが消えていく検体は、URL の行にせず書庫をこのフォルダに置く**（URL だけを登記すると数日で取れなくなる）。URL の行を使ってよいのは、開発者が管理していて、書庫の隣にハッシュのファイル `<URL>.sha256` を公開する取り寄せ先から取るときだけである（今は `pasta-in-windows` の 1 本＝下の節。取り寄せ先に求める条件は「検体を 1 本足す手順」）。
-  sha256 `93a34c502231581c550c236052a64e1a915d8e3dac277153caed6774d23a790a`
+  sha256 `6513e177d0746ef51116aa69600f24d8681aa9853aeafd9e85e85adc5c226601`
 - ライセンス（書庫の中の `README.md`「ライセンス」節が出どころ）: 辞書・シェル画像・同梱バルーン 2 つを含め全体が Unlicense（パブリックドメイン）。改変・再配布・二次利用は自由。
 - 手元で畳み直していない（ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮）。Unlicense なので畳み直してもよいが、揃える利得が無い。
 - 同梱バルーンが 2 つ（`balloon0.directory,claudia`・`balloon1.directory,claudia_vertical`）で、**同梱が複数の検体はこれが唯一**。
@@ -216,7 +230,7 @@ git check-ignore --no-index crates/areka/dic09_Test.txt                         
 - **`install.txt` が書庫の最上位に在ること。** 包みフォルダ 1 段は黙って剥がさず拒否する（`<名>/install.txt` は最上位ではない）。手順 1 が「フォルダの直下に `install.txt`」と言っているのはこのためである。
 - 名前とその中身が `install.txt` の解釈どおりであること。展開先の写像（同梱バルーンをどこへ置くか）は `install.txt` の `directory`・`*.directory`・`*.source.directory` だけから決まり、登記表の綴りは使わない。
 
-ここで畳んだ 4 本（`R_POST_and_KOMAINU.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（`konnoyayame.nar`・`claudia.nar` と、2026-10-17 に最新版へ差し替えた `emo2.nar` は全エントリが deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
+ここで畳んだ 3 本（`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（配布物そのままの `konnoyayame.nar`・`claudia.nar`・`emo2.nar`・`R_POST_and_KOMAINU.nar` は deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
 
 同じ入力からは同じバイト列が出る。走査順を名前順に固定し、書庫に書く日時を 1980-01-01 00:00 に固定してあるので、畳み直しても `.nar` のハッシュは変わらない。
 
