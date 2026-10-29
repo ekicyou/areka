@@ -28,15 +28,20 @@
 //! へ差し替え → `done.send(D::from(TalkDone))` → 直後に `Break`」で実装する（終端後は phase が
 //! Idle かつスレッドが `Break` で消えるため二度目の TalkDone は構造的に不能）。
 
-use std::ops::ControlFlow;
+use std::cell::RefCell;
+use std::ops::{ControlFlow, Range};
+use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
-use crate::compile::compile;
+use crate::compile::{compile, compile_strict};
 use crate::contract::{
     ChoiceWaiting, CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason,
     TalkHandle, TalkId,
 };
 use crate::error::SakuraError;
+use crate::strict::StrictHooks;
+use crate::strict_tap::{StrictLedger, StrictTap};
 use areka_actor::{run_inbox, spawn_actor};
 use dola::cue::{BarrierKind, CuePlayer, CuePlayerState, CueSink};
 
@@ -63,6 +68,10 @@ use dola::cue::{BarrierKind, CuePlayer, CuePlayerState, CueSink};
 /// [`ChoiceWaiting`]（選択待ち成立・DD-6）が**同一ポート**を流れる——同一 talk についての
 /// 「選択待ち成立」と「再生完了」の因果順が単一 FIFO で保存される（別チャンネルへ分離しない）。
 ///
+/// `strict` はゴースト名と判定の束（mcp-strict-errors）。`start.strict` が真でこれが在るときだけ、
+/// 印付きの読み → 控え付きの走査をし、実の sink を全部 [`StrictTap`] で覆って合図の順に記録する。
+/// それ以外は今の道を 1 つも変えない（要件 3.5）。
+///
 /// # Preconditions
 ///
 /// `done` の受信端が生存している（kanade or テスト）。
@@ -77,6 +86,7 @@ pub fn spawn_talk<D>(
     done: Sender<D>,
     sinks: Vec<Box<dyn CueSink + Send>>,
     system_vars: SystemVarSnapshot,
+    strict: Option<StrictHooks>,
 ) -> TalkHandle
 where
     D: From<TalkDone> + From<ChoiceWaiting> + Send + 'static,
@@ -87,7 +97,7 @@ where
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>(&name, move |rx| {
         // 演者 sink（Send 境界付き＝thread へ move 可）を register 順のまま保持する。
         // 初回 Tick で刻印済み台本の CuePlayer へ broadcast 登録する（4.3 register_sink）。
-        let mut driver = TalkDriver::new(sinks, system_vars, done);
+        let mut driver = TalkDriver::new(sinks, system_vars, done, strict);
         run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| Ok(driver.handle(msg)));
     });
 
@@ -151,6 +161,12 @@ struct TalkDriver<D> {
     /// compile は talk あたり高々 1 個の選択待ちバリアしか発行しないため実際には再成立しないが、
     /// 1 トークに複数バリアを持つ将来拡張のシームとしてリセットを残す。
     choice_notified: bool,
+    /// ゴースト名と判定の束（strict の台本でなければ使わない・mcp-strict-errors）。
+    strict_hooks: Option<StrictHooks>,
+    /// strict の talk の `Start` 受領から初回 `Tick` まで: 合図ごとの位置・台本・ゴースト名（覆いを作る材料）。
+    strict_arm: Option<(Vec<Option<Range<usize>>>, String, Arc<str>)>,
+    /// strict の talk の残りの控え（覆いと分け持つ）。自然な終わりで記録し、打ち切りでは捨てる。
+    strict_ledger: Option<Rc<RefCell<StrictLedger>>>,
 }
 
 impl<D> TalkDriver<D>
@@ -161,6 +177,7 @@ where
         sinks: Vec<Box<dyn CueSink + Send>>,
         system_vars: SystemVarSnapshot,
         done: Sender<D>,
+        strict_hooks: Option<StrictHooks>,
     ) -> Self {
         Self {
             phase: TalkPhase::Idle,
@@ -168,6 +185,9 @@ where
             system_vars,
             done,
             choice_notified: false,
+            strict_hooks,
+            strict_arm: None,
+            strict_ledger: None,
         }
     }
 
@@ -196,15 +216,26 @@ where
             epilogue,
             // 出どころは運ぶだけで再生の層は解釈しない（areka-P0-script-security-level 1.4）。
             origin: _,
-            // strict の印は再生の振る舞いを変えない（mcp-strict-errors 3.1）。
-            strict: _,
+            // strict の印は再生の振る舞いを変えない（mcp-strict-errors 3.1）。記録するかだけを決める。
+            strict,
         } = start;
 
-        // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
-        let instructions = areka_parsers::sakura::parse(&script);
         // talk 起動時に手渡された凍結スナップショット（R7.3・D8）を参照してコンパイルする。
         // sakura は値源を所有せず、この凍結像だけを見る（provider 差替で本層は無改変＝差替シーム）。
-        let compiled = compile(&instructions, &self.system_vars);
+        let compiled = match self.strict_hooks.as_ref().filter(|_| strict) {
+            // strict: 印付きの読み → 控え付きの走査（合図の列は `compile` と同じ・mcp-strict-errors 3.9）。
+            Some(hooks) => {
+                let reads = areka_parsers::sakura::parse_noted(&script);
+                let (compiled, trace) =
+                    compile_strict(&reads, &self.system_vars, hooks.judges.as_ref());
+                let ledger = StrictLedger::new(hooks.ghost.clone(), &script, trace.pending);
+                self.strict_ledger = Some(Rc::new(RefCell::new(ledger)));
+                self.strict_arm = Some((trace.cue_spans, script, hooks.ghost.clone()));
+                compiled
+            }
+            // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
+            None => compile(&areka_parsers::sakura::parse(&script), &self.system_vars),
+        };
 
         // epilogue を compile 後・空判定**前**に末尾 carrier cue として付加する（design C12・R3.4）。
         // `epilogue.is_empty()` なら恒等（既存経路完全不変）。epilogue-only talk（空 script＋epilogue）は
@@ -214,6 +245,8 @@ where
         // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
         // （裸の `\-` は空 sheet＋Quit）。epilogue 付加後も空なら epilogue も空（恒等）ゆえ従来挙動。
         if sheet.is_empty() {
+            // 合図の無い strict の台本: 控えは全部「最後の合図より後ろ」なので終わりの前に記録する。
+            self.finish_strict();
             self.send_done(talk_id, compiled.end);
             return ControlFlow::Break(());
         }
@@ -272,9 +305,23 @@ where
                 // 書き換えず、その上にアンカーが載る。刻印済み台本から CuePlayer を構築する。
                 let sheet = sheet.with_absolute_start_time(t);
                 let mut player = CuePlayer::from_sheet(&sheet);
-                // 演者 sink を broadcast 登録（register 順: surface, text・4.3）。
-                for sink in self.sinks.drain(..) {
-                    player.register_sink(sink);
+                // 演者 sink を broadcast 登録（register 順: surface, text・4.3）。strict の talk は
+                // 実の sink を全部覆いへ入れ、覆い 1 つを登録する（覆いが登録順のまま配る）。
+                match (self.strict_arm.take(), &self.strict_ledger) {
+                    (Some((cue_spans, script, ghost)), Some(ledger)) => {
+                        player.register_sink(Box::new(StrictTap::new(
+                            self.sinks.drain(..).collect(),
+                            cue_spans,
+                            &script,
+                            ghost,
+                            Rc::clone(ledger),
+                        )));
+                    }
+                    _ => {
+                        for sink in self.sinks.drain(..) {
+                            player.register_sink(sink);
+                        }
+                    }
                 }
                 player.tick(t);
                 self.settle_after_tick(talk_id, player, end, t)
@@ -325,6 +372,8 @@ where
             // 受け口は終わりを知らせる**前**に落とす——受け口が落ちる時に送る最後の合図（中断の旗の
             // TalkEnded）を TalkDone より前に並べるため。配送は自然終端で合流を待たずに次のトークを
             // 起こすので、後に回すと次のトークの合図に追い越される（areka-P0-status-execution-states 要件 3.4）。
+            // strict の残りの控え（最後の合図より後ろの命令の誤り）も終わりの前に記録する（mcp-strict-errors 3.7）。
+            self.finish_strict();
             drop(player);
             self.send_done(talk_id, end);
             ControlFlow::Break(())
@@ -527,6 +576,14 @@ where
         }
     }
 
+    /// strict の talk の残りの控えを全部記録する（自然な終わりだけ。打ち切りは呼ばずに捨てる・
+    /// mcp-strict-errors 3.6・3.7）。strict でなければ何もしない。
+    fn finish_strict(&mut self) {
+        if let Some(ledger) = self.strict_ledger.take() {
+            ledger.borrow_mut().finish();
+        }
+    }
+
     /// 自然終端の `TalkDone{reason}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
     fn send_done(&self, talk_id: TalkId, reason: TalkEndReason) {
         let done = TalkDone {
@@ -573,6 +630,9 @@ mod delivery_tests;
 #[cfg(test)]
 #[path = "drive_lifecycle_tests.rs"]
 mod lifecycle_tests;
+#[cfg(test)]
+#[path = "drive_strict_tests.rs"]
+mod strict_tests;
 #[cfg(test)]
 #[path = "drive_test_support.rs"]
 mod test_support;

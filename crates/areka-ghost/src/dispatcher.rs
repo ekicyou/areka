@@ -350,7 +350,7 @@ impl DispatcherState {
         // provider を sylphya 読み口へ差し替えても本層は無改変）。
         let system_vars = (self.system_vars)();
 
-        let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars);
+        let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars, None);
         self.active = Some(ActiveTalk {
             talk_id,
             handle,

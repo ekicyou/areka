@@ -103,6 +103,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
         done_tx,
         vec![Box::new(seriko_sink), Box::new(NullTextSink)],
         SystemVarSnapshot::default(),
+        None,
     );
 
     // ── 注入 Tick のみで駆動（sleep/polling ゼロ・要件 5.3）──

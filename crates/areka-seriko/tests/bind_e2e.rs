@@ -179,6 +179,7 @@ fn run_core(
         done_tx,
         vec![Box::new(seriko_sink), text_sink],
         SystemVarSnapshot::default(),
+        None,
     );
 
     // ── 注入 Tick のみで駆動（sleep/polling ゼロ・要件 5.3）──

@@ -69,6 +69,7 @@ fn spawn(script: &str, talk_id: u64) -> (TalkHandle, mpsc::Receiver<Event>) {
         tx.clone(),
         vec![Box::new(EventSink { tx })],
         SystemVarSnapshot::default(),
+        None,
     );
     (handle, rx)
 }

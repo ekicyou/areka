@@ -29,6 +29,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
         done_tx,
         two_sinks(surface, text),
         SystemVarSnapshot::default(),
+        None,
     );
     // 初回 Tick(0.0) でアンカー刻印（0.0）、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -84,6 +85,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
             done_tx,
             two_sinks(ChannelSink { tx }, NoopSink),
             SystemVarSnapshot::default(),
+            None,
         );
 
         // barrier 技法: 記録 sink を挟まず、bye の着弾のみをチャンネルで観測する。
@@ -195,6 +197,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     let d_hello = text_playback_duration("hello"); // 0.25
@@ -285,6 +288,7 @@ fn same_at_cues_preserve_script_order_fifo() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
     // 初回 Tick(0.0) 刻印＋単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -349,6 +353,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     let at_world = text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64();
@@ -445,6 +450,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 初回 Tick(0.0) 刻印。同値・逆行 Tick を織り交ぜて at=0.0 群を発火させる。
@@ -493,6 +499,7 @@ fn non_finite_tick_is_ignored_and_playback_survives() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 刻印前に非有限 Tick を送る: 無視され（error ログ＋SakuraError 記録）刻印もされない。
@@ -553,6 +560,7 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
             done_tx,
             two_sinks(sink, NoopSink),
             SystemVarSnapshot::default(),
+            None,
         );
         handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
         handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
@@ -767,6 +775,7 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         done_tx,
         two_sinks(sink_a, sink_b),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 初回 Tick(0.0) でアンカー刻印。全内容は at=0 群（raise/hello）と at=0.25 群（vanish/world）。

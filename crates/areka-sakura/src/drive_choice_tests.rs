@@ -52,6 +52,7 @@ fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     drive_menu_to_barrier(&handle, &rx);
@@ -97,6 +98,7 @@ fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     drive_menu_to_barrier(&handle, &rx);
@@ -142,6 +144,7 @@ fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     drive_menu_to_barrier(&handle, &rx);
@@ -220,6 +223,7 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // Tick(0.0)/Tick(0.5) で offset 0 群（ClearAll/3 Choice/NewLine/Cursor）を配送し barrier@0 到達を待つ。
@@ -292,6 +296,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 初回 Tick 前（Armed）に ResolveChoice 誤投函: warn して継続（CuePlayer 未構築ゆえ no-op）。
@@ -360,6 +365,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // Tick(0.0) 刻印（アンカー 0.0）→ Tick(0.5) で barrier@0.35 到達＝WaitingForChoice。
@@ -453,6 +459,7 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // アンカー 7.0 で刻印し、7.5 で barrier@0（相対）到達まで進める。
@@ -526,6 +533,7 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     drive_menu_to_barrier(&handle, &rx);
@@ -595,6 +603,7 @@ fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
         done_tx,
         two_sinks(ChannelSink { tx }, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 通知送出**前**に受信端を drop（以降の送出は全て Err＝`error!` 記録のみ）。
@@ -644,6 +653,7 @@ fn script_without_choices_never_notifies_choice_waiting() {
         done_tx,
         two_sinks(NoopSink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // Tick(0.0) でアンカー刻印、Tick(1.0) で占有 horizon（hello の D＝0.25）を跨いで自然終端。
