@@ -214,6 +214,16 @@ D2 の見落としの場面は、要件 3.5（箱の中なら 1 件）・要件 
 9. **測りの形（要件 1.4）**: `AREKA_USER_ROOT` を `target\` の下へ向けると振り替えが起きず、箱の働き（要件 1.1 の a〜c）は測れない。箱の働きは既定の `%LOCALAPPDATA%\areka` で測り、その前後で本物の置き場と箱の中の残りを控え・戻す（要件 1.5）ことにしてよいか。`AREKA_USER_ROOT` の形は「作らない・写さない」の確かめにだけ使う。
 10. **要件 1.1 の「Store 版の Claude Desktop から起こす」の代わり**: 3.2 のとおり、このセッションの Bash の道具の子も振り替えを受ける。設定の向け直しと起動し直し（人の待ち）の前に、Bash から検体の中継を起こして下見をしてよいか。本番の測りは要件どおり Claude Desktop から起こす。
 
+## 8b. 設計フェーズへ回す事項（要件の討議で分けたもの）
+
+1. `areka-user-data` に足す「決めるだけ」の口の形（名前・答えの型で「置き場がまだ無い」「写しがまだ」「使える」「隣の形」「決められない」を分ける・`decide_logged` と `migrate_source` をクレートの中で分け合う）。
+2. 要件 2.4・2.5 の場面で `cache_dir = None` にする所（`cache.rs` の `replace` の `create_dir_all` が置き場を作らないように）。
+3. 箱の見分けの手（3.4 の D1〜D3）。`windows` クレートを中継に足さずに書ける形（`GetCurrentPackageFamilyName` の `extern "system"` の宣言・`std::fs::canonicalize`）を先に考える。調べの 1・2 の測りの結果で決める。
+4. 記録の行の並べ方（今の `None` のときの `warn!` と、要件 3.1・3.2 の info の行の分け・`areka-user-data` が出す `user_data_layout` などの行を中継の記録に残すか）。
+5. テストの組み方（`Signals` と exe のフォルダと `AREKA_PROFILE_DIR` を受ける内側の口・`establish_readonly_tests.rs` の `tree` の比べ・`log-capture-kit` を開発用の依存へ）。
+6. 7 の調べの 1〜4 と 6（中継の exe の名乗り・`canonicalize` の答え・重ね見せ・箱の残りが判断を変える場面・winget の置き場も振り替えの対象）。
+7. 測りの検体（`areka.exe`＋中継＋winget の控えの `Areka.Areka.Portable_*.db`）を `target\` の下に組む手順。
+
 ## 9. 次の段
 
 - 要件の討議（`/kiro-requirements-discussion bridge-store-user-root`）で 8 の決め事を決める。
