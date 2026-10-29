@@ -105,12 +105,12 @@ pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 // 見える。表の外から要素を組めないと `entries` が事実上読めない型になるので再輸出は残す。
 #[allow(unused_imports)]
 pub use self::work_area::MonitorDpiEntry;
-// 作業領域へ寄せる鎖の核と記録の語（window-work-area-clamp・task 1.1）。呼び手は起動の並べ直しと
+// 作業領域へ寄せる鎖の核・World の口と記録の語（window-work-area-clamp・task 1.1・1.2）。呼び手は起動の並べ直しと
 // 詰め直しで、`#[path]` で src を取り込む examples には無いので、そちらのビルドでは未使用に見える。
 #[allow(unused_imports)]
 pub(crate) use self::work_area_clamp::{
     ChainClampOutcome, ChainPlacement, ClampScene, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
-    WORK_AREA_UNRESOLVED_TAG, resolve_chain_in_work_area,
+    WORK_AREA_UNRESOLVED_TAG, place_chain_in_work_area, resolve_chain_in_work_area,
 };
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接

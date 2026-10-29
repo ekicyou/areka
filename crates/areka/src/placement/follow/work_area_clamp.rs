@@ -5,6 +5,8 @@
 //!   1 か所に置く（要件 9.1・9.2・7.4）
 //! - [`resolve_chain_in_work_area`] は組ごとの決めで解いた鎖を、前の窓の置いた後の矩形が属する
 //!   モニタの作業領域の中に置く純関数の核（要件 1・2・7）
+//! - [`place_chain_in_work_area`] はその World の口。窓の高さと作業領域を World から読んで核を呼び、
+//!   寄せた・寄せなかった・取れなかったを記録する（要件 7.4・9.1・9.2）
 //!
 //! 寄せの式は `balloon_limit::clamp_rect_to_work_area`（左辺・上辺を優先）だけを使い、
 //! 隣の位置は `chain_finalize::resolve_chain` に 2 スロットを渡して得る（式を写さない）。
@@ -13,6 +15,10 @@
 //! examples（`collision-probe`・`window-placement`）は `#[path]` で配置の層を取り込むが
 //! 呼び手（起動の並べ直し・詰め直し）を持たないので、そちらのビルドでは本ファイルの項目が
 //! 未使用に見える。ゆえに項目ごとに `#[allow(dead_code)]` を付ける。
+
+use bevy_ecs::prelude::{Entity, World};
+use tracing::{debug, info, warn};
+use wintf::ecs::WindowPos;
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
 use super::super::chain_finalize::{ChainRect, ChainSlot, KeepReason, PairDecision, resolve_chain};
@@ -103,6 +109,17 @@ pub(crate) fn resolve_chain_in_work_area(
     rects: &[ChainRect],
     snapshot: &MonitorSnapshot,
 ) -> Vec<ChainPlacement> {
+    resolve_chain_with(slots, rects, snapshot, |_| true)
+}
+
+/// 核の本体。`height_known(i)` が偽のスロットは作業領域を引かず `Unresolved` で並べた位置に置く
+/// （窓の高さが読めない・World の口だけが使う）。
+fn resolve_chain_with(
+    slots: &[ChainSlot],
+    rects: &[ChainRect],
+    snapshot: &MonitorSnapshot,
+    height_known: impl Fn(usize) -> bool,
+) -> Vec<ChainPlacement> {
     let n = slots.len().min(rects.len());
     let mut out = Vec::with_capacity(n.saturating_sub(1));
     // 前の窓の置いた後の矩形（先頭は今の矩形のまま・要件 1.3）。
@@ -121,15 +138,9 @@ pub(crate) fn resolve_chain_in_work_area(
                     x: neighbor_x(slots[i - 1], base, s, decision),
                     y: r.y,
                 };
-                let area = work_area_for_window(
-                    snapshot,
-                    RectPx {
-                        left: base.x,
-                        top: base.y,
-                        right: base.x.saturating_add(base.w),
-                        bottom: base.y.saturating_add(base.h),
-                    },
-                );
+                let area = height_known(i)
+                    .then(|| work_area_for_window(snapshot, rect_of(base)))
+                    .flatten();
                 match area {
                     None => (joined, joined, ChainClampOutcome::Unresolved),
                     Some(area) => {
@@ -169,6 +180,106 @@ pub(crate) fn resolve_chain_in_work_area(
         };
     }
     out
+}
+
+/// World の口。`targets` は走査（`collect_chain_states`）の `(scope, char 窓, 今の位置)` で、
+/// `slots` と同じ順。窓の高さを `WindowPos` から、作業領域を `MonitorSnapshot` 資源から読んで
+/// 核を呼び、スロットごとに記録を 1 行出す: 置いた位置が並べた位置と違えば `Clamp`（info!）、
+/// 収まっていた・動かさない窓は `Keep`（debug!）、モニタの写しが無い・窓の高さが読めない・
+/// 作業領域が引けないときは `Unresolved`（warn!・ほかのスロットは続ける・要件 7.4）。
+#[allow(dead_code)] // 呼び手は起動の並べ直しと詰め直し（task 2.x）・examples には無い
+pub(crate) fn place_chain_in_work_area(
+    world: &World,
+    slots: &[ChainSlot],
+    targets: &[(usize, Entity, PointPx)],
+    scene_of: impl Fn(usize) -> ClampScene,
+) -> Vec<ChainPlacement> {
+    let heights: Vec<Option<i32>> = targets
+        .iter()
+        .map(|&(_, e, _)| {
+            world
+                .get::<WindowPos>(e)
+                .and_then(|wp| wp.size)
+                .map(|s| s.height)
+        })
+        .collect();
+    let rects: Vec<ChainRect> = slots
+        .iter()
+        .zip(targets)
+        .zip(&heights)
+        .map(|((s, &(_, _, pos)), h)| ChainRect {
+            x: s.current_x,
+            y: pos.y,
+            w: s.width,
+            h: h.unwrap_or(0),
+        })
+        .collect();
+    let empty = MonitorSnapshot { work_areas: vec![] };
+    let snapshot = world.get_resource::<MonitorSnapshot>();
+    let out = resolve_chain_with(slots, &rects, snapshot.unwrap_or(&empty), |i| {
+        heights[i].is_some()
+    });
+
+    let mut base = match rects.first() {
+        Some(r) => *r,
+        None => return out,
+    };
+    for (i, (p, r)) in out.iter().zip(&rects[1..]).enumerate() {
+        let scene = scene_of(p.scope).as_str();
+        let (scope, from, to) = (p.scope, p.from, p.to);
+        let how = match p.outcome {
+            ChainClampOutcome::Fits => "fits",
+            ChainClampOutcome::Flipped => "flipped",
+            ChainClampOutcome::Edge => "edge",
+            ChainClampOutcome::Kept(reason) => {
+                debug!(scene, scope, reason = reason.as_str(), at = ?from, "{WORK_AREA_KEEP_TAG} 組の決めで動かさない窓");
+                base = ChainRect {
+                    x: to.x,
+                    y: to.y,
+                    ..*r
+                };
+                continue;
+            }
+            ChainClampOutcome::Unresolved => {
+                let reason = if snapshot.is_none() {
+                    "no-monitor-snapshot"
+                } else if heights[i + 1].is_none() {
+                    "no-window-height"
+                } else {
+                    "no-work-area"
+                };
+                warn!(scene, scope, reason, at = ?to, "{WORK_AREA_UNRESOLVED_TAG} 作業領域が取れず寄せずに並べた位置へ置く");
+                base = ChainRect {
+                    x: to.x,
+                    y: to.y,
+                    ..*r
+                };
+                continue;
+            }
+        };
+        if to != p.joined {
+            let work_area = work_area_for_window(snapshot.unwrap_or(&empty), rect_of(base));
+            info!(scene, scope, how, joined = ?p.joined, from = ?from, to = ?to, work_area = ?work_area, "{WORK_AREA_CLAMP_TAG} キャラ窓を作業領域の中へ寄せた");
+        } else {
+            debug!(scene, scope, reason = "fits", at = ?to, "{WORK_AREA_KEEP_TAG} 並べた位置が作業領域に収まっている");
+        }
+        base = ChainRect {
+            x: to.x,
+            y: to.y,
+            ..*r
+        };
+    }
+    out
+}
+
+/// 鎖の矩形を帰属判定の矩形へ（飽和演算）。
+fn rect_of(r: ChainRect) -> RectPx {
+    RectPx {
+        left: r.x,
+        top: r.y,
+        right: r.x.saturating_add(r.w),
+        bottom: r.y.saturating_add(r.h),
+    }
 }
 
 /// 隣の x を今の隣り合いの解き（`resolve_chain`）に 2 スロットを渡して得る（式を写さない）。

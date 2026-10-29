@@ -1,14 +1,20 @@
-//! 鎖を作業領域の中に置く純関数の核の檻（window-work-area-clamp・task 1.1・要件 10.1 ⑴⑵⑸⑹⑺）。
+//! 鎖を作業領域の中に置く純関数の核と World の口の檻（window-work-area-clamp・task 1.1・1.2・
+//! 要件 10.1 ⑴⑵⑸⑹⑺・7.4・9.1・9.2）。
 //!
 //! 数値は開発者の机の形の合成: 主の画面（200%）の作業領域 `0..2880 × 0..1704`、その左に
 //! 150% の画面。本体は主の画面の左端に立つ。
 
-use super::test_support::{point, rect};
+use bevy_ecs::prelude::*;
+
+use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
+use super::test_support::{point, rect, window_pos_sized};
 use super::{
     ChainClampOutcome, ChainPlacement, ClampScene, MonitorSnapshot, WORK_AREA_CLAMP_TAG,
-    WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG, resolve_chain_in_work_area,
+    WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG, place_chain_in_work_area,
+    resolve_chain_in_work_area,
 };
 use crate::placement::chain_finalize::{ChainRect, ChainSlot, KeepReason, PairDecision};
+use crate::placement::resolver::PointPx;
 
 fn slot(scope: usize, r: ChainRect, decision: PairDecision) -> ChainSlot {
     ChainSlot {
@@ -252,4 +258,164 @@ fn vocabulary_words() {
             "restore-group"
         ]
     );
+}
+
+// -------------------------------------------------------------------------
+// World の口（task 1.2）: 窓の高さを WindowPos から・作業領域を MonitorSnapshot 資源から読む
+// -------------------------------------------------------------------------
+
+/// 窓を `rects` の矩形で生やした World と、走査の形の `(scope, 窓, 今の位置)` と組のスロット。
+fn world_chain(
+    rects: &[ChainRect],
+    decisions: &[PairDecision],
+    snap: Option<MonitorSnapshot>,
+) -> (World, Vec<ChainSlot>, Vec<(usize, Entity, PointPx)>) {
+    let mut world = World::new();
+    if let Some(snap) = snap {
+        world.insert_resource(snap);
+    }
+    let targets = rects
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let e = world.spawn(window_pos_sized(r.x, r.y, r.w, r.h)).id();
+            (i, e, point(r.x, r.y))
+        })
+        .collect();
+    let slots = rects
+        .iter()
+        .zip(decisions)
+        .enumerate()
+        .map(|(i, (r, d))| slot(i, *r, *d))
+        .collect();
+    (world, slots, targets)
+}
+
+fn tagged<'a>(events: &'a [LogEvent], tag: &str) -> Vec<&'a LogEvent> {
+    events
+        .iter()
+        .filter(|e| e.message().contains(tag))
+        .collect()
+}
+
+/// World を組んでも核と同じ置き方になり（⑴⑵・3 体の鎖）、寄せた窓は `Clamp`（info・場面・
+/// スコープ・how・from・to・作業領域）、収まっていた窓は `Keep`（debug・reason=fits）を残す。
+#[test]
+fn world_entry_places_like_core_and_logs_clamp_and_keep() {
+    let rects = [HEAD, cr(1000, 900, 1108, 800), cr(2000, 900, 300, 700)];
+    let decisions = [
+        PairDecision::JoinLeft,
+        PairDecision::JoinLeft,
+        PairDecision::JoinRight,
+    ];
+    let (world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
+
+    let (out, events) = capture_logs(|| {
+        place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack)
+    });
+
+    assert_eq!(out, run(&rects, &decisions, &desk()));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Flipped);
+
+    let clamp = expect_one(&events, WORK_AREA_CLAMP_TAG);
+    assert_eq!(clamp.level, tracing::Level::INFO);
+    assert_eq!(clamp.expect_field("scene"), "\"boot-repack\"");
+    assert_eq!(clamp.expect_field("scope"), "1");
+    assert_eq!(clamp.expect_field("how"), "\"flipped\"");
+    assert_eq!(
+        clamp.expect_field("from"),
+        format!("{:?}", point(1000, 900))
+    );
+    assert_eq!(clamp.expect_field("to"), format!("{:?}", point(640, 900)));
+    assert_eq!(
+        clamp.expect_field("work_area"),
+        format!("{:?}", Some(rect(0, 0, 2880, 1704)))
+    );
+
+    let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
+    assert_eq!(keep.level, tracing::Level::DEBUG);
+    assert_eq!(keep.expect_field("scope"), "2");
+    assert_eq!(keep.expect_field("reason"), "\"fits\"");
+    assert!(tagged(&events, WORK_AREA_UNRESOLVED_TAG).is_empty());
+}
+
+/// 組の決めが Keep の窓は今の位置のまま `Keep`（reason は組の理由の語）。場面は `scene_of` が決める。
+#[test]
+fn world_entry_logs_kept_reason() {
+    let rects = [HEAD, cr(-1500, 900, 1108, 800)];
+    let decisions = [
+        PairDecision::JoinLeft,
+        PairDecision::Keep(KeepReason::ExplicitlyPlaced),
+    ];
+    let (world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
+
+    let (out, events) = capture_logs(|| {
+        place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::RememberedJoin)
+    });
+
+    assert_eq!(out[0].to, point(-1500, 900));
+    let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
+    assert_eq!(keep.expect_field("scene"), "\"remembered-join\"");
+    assert_eq!(keep.expect_field("reason"), "\"explicitly-placed\"");
+    assert!(tagged(&events, WORK_AREA_CLAMP_TAG).is_empty());
+}
+
+/// ⑹ モニタの写しの無い World → 並べた位置のまま `Unresolved` の warn が出る（要件 7.4）。
+/// 対照: 同じ捕捉窓で写しの有る World を通すと warn は出ず `Clamp` が入る（捕捉が生きている）。
+#[test]
+fn world_without_snapshot_warns_unresolved_with_contrast() {
+    let rects = [HEAD, cr(1000, 900, 1108, 800)];
+    let decisions = [PairDecision::JoinLeft, PairDecision::JoinLeft];
+    let (bare, slots, targets) = world_chain(&rects, &decisions, None);
+    let (with_snap, slots2, targets2) = world_chain(&rects, &decisions, Some(desk()));
+
+    let ((out, contrast), events) = capture_logs(|| {
+        (
+            place_chain_in_work_area(&bare, &slots, &targets, |_| ClampScene::DpiRealign),
+            place_chain_in_work_area(&with_snap, &slots2, &targets2, |_| ClampScene::DpiRealign),
+        )
+    });
+
+    assert_eq!(out[0].to, point(-1108, 900));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved);
+    assert_eq!(contrast[0].outcome, ChainClampOutcome::Flipped);
+
+    let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(warn.expect_field("scene"), "\"dpi-realign\"");
+    assert_eq!(warn.expect_field("scope"), "1");
+    assert_eq!(warn.expect_field("reason"), "\"no-monitor-snapshot\"");
+    expect_one(&events, WORK_AREA_CLAMP_TAG);
+}
+
+/// 窓の高さが読めないスロットは `Unresolved`（no-window-height）で並べた位置に置き、
+/// ほかのスロットは続ける。
+#[test]
+fn unreadable_height_is_unresolved_and_others_continue() {
+    let rects = [HEAD, cr(1000, 900, 1108, 800), cr(2000, 900, 300, 700)];
+    let decisions = [
+        PairDecision::JoinLeft,
+        PairDecision::JoinLeft,
+        PairDecision::JoinRight,
+    ];
+    let (mut world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
+    world
+        .get_mut::<wintf::ecs::WindowPos>(targets[1].1)
+        .unwrap()
+        .size = None;
+
+    let (out, events) = capture_logs(|| {
+        place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack)
+    });
+
+    assert_eq!(out[0].to, point(-1108, 900));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved);
+    // 3 番目は並べた位置の 2 番目（x=−1108・左の画面）を基準に解かれ続ける: 右の隣（x=0）は
+    // 左の画面に入らず左の隣へ並べ替え、y は左の画面の下端（1032）へ収まる。
+    assert_eq!(out[1].joined, point(0, 900));
+    assert_eq!(out[1].to, point(-1108 - 300, 1032 - 700));
+    assert_eq!(out[1].outcome, ChainClampOutcome::Flipped);
+    let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
+    assert_eq!(warn.expect_field("reason"), "\"no-window-height\"");
+    assert_eq!(warn.expect_field("scope"), "1");
 }
