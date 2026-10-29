@@ -302,3 +302,8 @@ brief の議題 1〜4 と要件の段の議題 5 は要件 10 のとおり。こ
 
 ## 参照
 - SSP ヘルプ「起動オプション一覧」 https://ukatech.shillest.net/ukadoc-ssp/functions/option/ （要件の段で読み直し済み・この段では読み直していない）
+
+## 設計の討議の決め（2026-10-29・開発者「承認」）
+- 議題 1: 切り替えの見分けはフォルダ名の比べから、`accept_switch` での受付の数え（プッシュ）へ替えた。根拠: 切り替えを受け付ける時点は `ghost_switch.rs` の `accept_switch`（`SwitchInFlight` を立てる 1 か所・400 行目）で分かる。同じウェーブ C12 で `ghost_switch.rs` に触る兄弟は無い（roadmap の C12 の表の約束は `ghost_session.rs` だけ）。足すのは 2〜3 行（926 → 929 行ほど）。同じフォルダへの起こし直しは数えない。
+- 議題 2: 終了の間に終わった依頼は消さず頼まず、warn `startup_followup_dropped`。要件 3.1 に終了の除きを足した。
+- 議題 3: `callghost` は終わりの知らせの時点で頼む。後から来たゴースト自身の切り替えは `Busy` で退く（テストと説明書の 1 行）。

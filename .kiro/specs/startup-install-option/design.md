@@ -34,20 +34,21 @@
 - 新しい持ち物 `install::startup::StartupInstall`（起動の解決の前に作り、World の資源へ移す）と、その口: 作る・World へ据える・最初の定常到達で 1 回だけ依頼を出す・依頼の終わりを受けて消す／頼む・出さずに終わるなら記録する。
 - 「入った書庫だけ消す」の判断（純粋な関数 `sources_to_delete`）と消す所。
 - `callghost` の判断（純粋な関数 `decide_call_ghost`）と切り替えの頼み方（`callghost_request`）。
+- 切り替えの受付の数え（資源 `SwitchAcceptCount`）。`emo2_boot/ghost_switch.rs` の `accept_switch` の中、予約 `SwitchInFlight` を立てる所で、よそのフォルダへの切り替えを受け付けたときだけ 1 増やす（2〜3 行・設計の討議 議題 1）。
 - 背景のスレッドから窓口への終わりの知らせ `DeskAsk::OrderDone` に、依頼と終わり方の並びを載せること。
 - `dist/README.txt` の「■ 起動オプション」の 62 行目・79 行目と、新しい小見出し 1 つ。
 
 ### Out of Boundary
 - `install::submit` の中身（readonly の断り・`Empty`・`NoDesk`・`Closing`）と、手続き `install::procedure::run_order` の中身と記録。この spec は呼ぶだけで、記録の語も変えない。
-- 切り替えの入口 `emo2_boot::ghost_switch::request_ghost_switch` の中身（予約・目録の突き合わせ・`Busy` の記録）。
-- `crates/areka/src/ghost_session.rs`・`crates/areka/src/emo2_boot/ghost_switch.rs`（同じウェーブの約束で触らない）。
+- 切り替えの入口 `emo2_boot::ghost_switch::request_ghost_switch` の中身（予約・目録の突き合わせ・`Busy` の記録）。数えの 2〜3 行のほかは変えない。
+- `crates/areka/src/ghost_session.rs`（同じウェーブの約束で触らない）。`emo2_boot/ghost_switch.rs` は数えの 2〜3 行だけ（同じウェーブで触る兄弟は無い・926 → 929 行ほど）。
 - 使っている最中のフォルダへの上書きの守り（`install-live-target-hazards`）。
 - 起動の解決 `boot_resolve`・`boot_config::resolve_boot` の振る舞い（ゴーストが居ないときの告知の道は変えない）。
 - `dist/README.txt` のほかの行（`default-balloon-selfmade`・`bridge-store-user-root` が触る）。
 
 ### Allowed Dependencies
 - `cli` → なし（純粋なまま。パスの絶対化もしない）。
-- `install::startup` → `install::submit`・`install::desk`（窓口の門）・`install::procedure::ArchiveEnd`・`emo2_boot::ghost_switch::{request_ghost_switch, SwitchRequest, GhostSpec, SwitchInFlight}`・`boot_config::BootContext`・`roots::user_root::exe_dir`・`areka_ghost::same_folder_name`・`areka_kanade::ChangeOrigin`・`std::path::absolute`・`std::fs::remove_file`。
+- `install::startup` → `install::submit`・`install::desk`（窓口の門）・`install::procedure::ArchiveEnd`・`emo2_boot::ghost_switch::{request_ghost_switch, SwitchRequest, GhostSpec, SwitchInFlight, SwitchAcceptCount}`・`boot_config::BootContext`・`roots::user_root::exe_dir`・`areka_ghost::same_folder_name`・`areka_kanade::ChangeOrigin`・`std::path::absolute`・`std::fs::remove_file`。
 - `install::desk` → `install::startup`（呼ぶ行 3 つ）。
 - `main` → `install::startup`（呼ぶ行 2 つ：作る・据える）。
 - 新しいクレートの依存は足さない。
@@ -57,6 +58,7 @@
 - `ArchiveEnd` に終わり方を足す・意味を変えるとき（特に `Installed` の意味）: `sources_to_delete` と `decide_call_ghost` を見直す（取り消せない消去に効く）。
 - `InstalledItem` の `place`（入れた先のフォルダの絶対パス）・`kind` の語を変えるとき: `decide_call_ghost` の切り替え先を見直す。
 - 定常到達の知らせの道（`ghost_switch::on_notice` → `install::desk::on_steady`）が変わるとき: 1 回だけ出す口を見直す。
+- 予約 `SwitchInFlight` を立てる所が `accept_switch` の外にも増えるとき・同じフォルダへの起こし直しの形が変わるとき: `SwitchAcceptCount` を増やす所を見直す。
 - 切り替えの入口の型 `SwitchRequest` が変わるとき・メニューの「ゴースト」の頼み方（`menu/ghost_frame.rs`）が変わるとき: `callghost_request` を揃える。
 - `callghost` を 2 体目として呼ぶ形へ移すとき（`ghost-call` の着地）。
 
@@ -69,6 +71,7 @@
 - 終了の後始末 `exit_wait::begin_close`（利用者の終了と OS のセッションの終了の 2 か所）が `install::desk::discard_for_exit` を呼ぶ。`app.run()` が戻った後は `drain` が回らない。
 - 切り替えの入口は `request_ghost_switch` 1 本。メニューの「ゴースト」は `GhostSpec::Folder`・`raise_event: true`・`ChangeOrigin::Manual`・`boot_event: None` で頼む（`menu/ghost_frame.rs`）。
 - 上限の近いファイル: `main.rs` 981 行・`ghost_switch.rs` 926 行・`ghost_session.rs` 935 行。
+- 予約 `SwitchInFlight` を立てるのは `accept_switch` の 1 か所だけ（`ghost_switch.rs` 400 行目）。メニュー・台本・インストールの上書きの起こし直し（同じフォルダ）も、ここを通る。
 
 ### Architecture Pattern & Boundary Map
 
@@ -86,6 +89,8 @@ graph TB
     DeskAnswer --> Startup
     Startup --> FsRemove[remove_file]
     Startup --> SwitchEntry[request_ghost_switch]
+    SwitchEntry --> Accept[accept_switch 受付を数える]
+    Startup -.-> Accept
     ExitWait[exit_wait begin_close] --> DeskDiscard[desk discard_for_exit]
     DeskDiscard --> Startup
 ```
@@ -95,7 +100,8 @@ graph TB
 - 終わり方の受け渡し: `DeskAsk::OrderDone { order, ends }`（R1）。
 - 1 回だけ出す所: `desk::on_steady` から `startup::on_steady` を呼び、持ち物を `take` する（T1）。
 - 起動の値を World へ: `main` から 2 行（H1）。持ち物は起動の解決の前に作り、窓のアプリの World へ移す。出さずに落ちたら `Drop` が記録する（起動が止まったどの道でも黙って捨てない）。
-- 依存の向き: `cli`（純粋）← `main` → `install::startup` → `install::{submit, desk, procedure}`・`emo2_boot::ghost_switch`（入口だけ）。`install::desk` は `install::startup` の口を呼ぶだけで、`startup` は窓口の中身（門）だけを読む。逆向き（`ghost_switch` → `startup`）は作らない。
+- 切り替えの見分け: 切り替えを受け付けた時点は `accept_switch` で分かるので、そこで数える（プッシュ）。`startup` は依頼の前後の数を比べる（設計の討議 議題 1）。
+- 依存の向き: `cli`（純粋）← `main` → `install::startup` → `install::{submit, desk, procedure}`・`emo2_boot::ghost_switch`（入口と数えの資源だけ）。`install::desk` は `install::startup` の口を呼ぶだけで、`startup` は窓口の中身（門）だけを読む。逆向き（`ghost_switch` → `startup`）は作らない。
 - steering に合わせたこと: 失敗は記録（`error!`／`warn!`）に残し、メッセージボックスを出さない。時刻の待ちを置かない（状態の形で解く）。テストは兄弟の `*_tests.rs`。
 
 ### Technology Stack
@@ -126,6 +132,8 @@ crates/areka/src/
 │   ├── desk_startup_tests.rs      # 新: 窓口との結線（1 回だけ・2 件の順・readonly・終わりを受けて消す・終了の記録）
 │   ├── worker.rs                  # DeskAsk::OrderDone に order と ends を載せる
 │   └── worker_tests.rs            # OrderDone の形の書き換え 2 か所
+├── emo2_boot/
+│   └── ghost_switch.rs            # accept_switch で SwitchAcceptCount を 1 増やす（よそのフォルダのときだけ・2〜3 行）
 └── main.rs                        # 2 行（起動の解決の前に作る・readonly::install の次に据える）
 crates/areka/tests/
 └── startup_install_real_run.rs    # 新: 実機（--install → 置き場に入る・callghost で起動中・deletesource で写しが消える）
@@ -141,6 +149,7 @@ dist/
 - `crates/areka/src/install/worker.rs` — `DeskAsk::OrderDone { order: InstallOrder, ends: Vec<ArchiveEnd> }`。`spawn_worker` は `run_order` の後に依頼と結果を載せて送る。
 - `crates/areka/src/install/desk.rs` — ⑴ `on_steady` の末尾で `super::startup::on_steady(world)` ⑵ `answer` の `OrderDone` の腕で `busy` を下ろした後に `super::startup::on_order_done(world, &order, &ends, closing)` ⑶ `discard_for_exit` の先頭で `super::startup::discard_for_exit(world)`。判断は入れない（約 8 行の増え）。
 - `crates/areka/src/install/desk_tests.rs`・`worker_tests.rs` — `OrderDone` の形の書き換え（4 か所）と、子のテスト `desk_startup_tests.rs` の宣言。
+- `crates/areka/src/emo2_boot/ghost_switch.rs` — 資源 `SwitchAcceptCount(u64)` の型と、`accept_switch` が `SwitchInFlight` を立てる所で、切り替え先のフォルダが今のゴーストと `same_folder_name` で違うときだけ 1 増やす行（926 → 929 行ほど）。数えのテストは `install/desk_startup_tests.rs` から入口を通して確かめる。
 - `crates/areka/src/main.rs` — `--offline-dump` の早い戻りの後に `let startup_install = install::startup::StartupInstall::new(opts.install);`、`readonly::install(..)` の次に `install::startup::install(app.world().borrow_mut().world_mut(), startup_install);`（981 → 983 行）。
 - `dist/README.txt` — 62 行目から `callghost`・`deletesource`・`--install` を外す。79 行目の「断る物」に `--install` と `initial_install.nar` を足す。63 行目の後（「--sstp-listen と MCP の待受:」の前）に小見出し「--install と initial_install.nar:」を足す。
 
@@ -163,7 +172,7 @@ sequenceDiagram
     Desk->>Startup: on_steady
     Startup->>Startup: pending を take する 2 回目からは空
     Startup->>Desk: submit initial_install.nar 在れば先に
-    Startup->>Desk: submit --install の並び ghost_at_submit を控える
+    Startup->>Desk: submit --install の並び 受付の数 switches_at_submit を控える
     Desk->>Worker: 依頼を 1 件ずつ渡す
     Worker->>Desk: OrderDone with order and ends
     Desk->>Startup: on_order_done
@@ -188,7 +197,7 @@ flowchart TB
     Ghost -->|いいえ| SkipNoGhost[頼まない no_ghost_installed]
     Ghost -->|はい| InFlight{切替の予約が在る}
     InFlight -->|はい| SkipSwitching[頼まない switching]
-    InFlight -->|いいえ| Changed{依頼を出したときから今のゴーストが変わった}
+    InFlight -->|いいえ| Changed{依頼を出したときから切り替えの受付の数が増えた}
     Changed -->|はい| SkipChanged[頼まない switched_meanwhile]
     Changed -->|いいえ| Running{切り替え先が今のゴースト}
     Running -->|はい| SkipRunning[頼まない already_running]
@@ -196,7 +205,8 @@ flowchart TB
 ```
 
 - 頼まないときは、どの枝も info `startup_callghost_skipped` を理由つきで 1 件残す（要件 5.2・5.3・5.4）。
-- 待ちの時間は置かない。比べるのは「依頼を出した時点」と「終わりの知らせを受けた時点」の 2 点だけ（時刻の大原則・`research.md` 議題 8 の決め）。
+- 待ちの時間は置かない。比べるのは「依頼を出した時点」と「終わりの知らせを受けた時点」の切り替えの受付の数だけ（時刻の大原則・設計の討議 議題 1）。A → B → A と戻った切り替えも数が増えるので見分けられる。
+- 終わりの知らせの後に来たゴースト自身の切り替え（`OnInstallCompleteEx` の答えの `\![change,ghost,lastinstalled]` など）は「手続きの間」の外とする。`callghost` が先に予約を立てるので、それは今の入口のとおり `Busy`（warn `ghost_switch_busy`）で退く。行き先はたいてい同じ（最後に入ったゴースト）で、利用者が起動の行で書いた `callghost` を優先する（設計の討議 議題 3）。
 
 ## Requirements Traceability
 
@@ -386,8 +396,8 @@ struct Pending {
 struct ArgsFollowup {
     call_ghost: bool,
     delete_source: bool,
-    /// 依頼を積んだときの今のゴーストのフォルダ名（要件 5.3 の比べの片方）。
-    ghost_at_submit: Option<String>,
+    /// 依頼を積んだときの切り替えの受付の数（要件 5.3 の比べの片方）。
+    switches_at_submit: u64,
 }
 
 impl StartupInstall {
@@ -433,7 +443,10 @@ pub(crate) struct CallGhostFacts<'a> {
     pub closing: bool,
     /// 切替の予約 `SwitchInFlight` が在る。
     pub switching: bool,
-    pub ghost_at_submit: Option<&'a str>,
+    /// 依頼を積んだとき・終わりを受けたときの切り替えの受付の数（`SwitchAcceptCount`）。
+    pub switches_at_submit: u64,
+    pub switches_now: u64,
+    /// 今のゴーストのフォルダ名（`AlreadyRunning` の比べ）。
     pub ghost_now: Option<&'a str>,
 }
 
@@ -461,7 +474,7 @@ pub(crate) fn callghost_request(folder: String) -> SwitchRequest;
 **口ごとの振る舞い**
 - `new` / `new_with`: `archives` を 1 本ずつ `std::path::absolute` で絶対に直す（直せなければ書いた綴りのまま・warn `install_path_not_absolute` を 1 件）。`pending` を置く。`args` が空で `exe_dir` が在っても置く（`initial_install.nar` を見るため）。areka はどこでも今のフォルダを変えないので、ここで直すのは「起動したときの今のフォルダ」から読むのと同じ（要件 1.2）。
 - `install`: 持ち物を World の資源として足す。資源を World へ足すのはここだけ。
-- `on_steady`: `pending` を `take`。空なら無操作。最初の定常到達は、起動の解決で既定のゴーストへ移ったときや、最初の起動に失敗して既定のゴーストへ戻したときは、そのゴーストのもの（要件 2.1）。⑴ `exe_dir` が在り `exe_dir.join(INITIAL_INSTALL_FILE).is_file()` なら `submit(InstallOrder { archives: vec![path], origin: InitialInstall })`。無ければ debug `initial_install_absent` だけ（要件 4.6）。Windows の名前は大小を区別しないので、`Initial_Install.NAR` も当たる（要件 4.1）。⑵ `archives` が空でなければ、今のゴーストのフォルダ名（`BootContext.current.ghost.folder`）を控えてから `submit(InstallOrder { archives, origin: StartupArgs })`。`Queued` のときだけ `args_followup` を置く。
+- `on_steady`: `pending` を `take`。空なら無操作。最初の定常到達は、起動の解決で既定のゴーストへ移ったときや、最初の起動に失敗して既定のゴーストへ戻したときは、そのゴーストのもの（要件 2.1）。⑴ `exe_dir` が在り `exe_dir.join(INITIAL_INSTALL_FILE).is_file()` なら `submit(InstallOrder { archives: vec![path], origin: InitialInstall })`。無ければ debug `initial_install_absent` だけ（要件 4.6）。Windows の名前は大小を区別しないので、`Initial_Install.NAR` も当たる（要件 4.1）。⑵ `archives` が空でなければ、切り替えの受付の数（`SwitchAcceptCount`・無ければ 0）を控えてから `submit(InstallOrder { archives, origin: StartupArgs })`。`Queued` のときだけ `args_followup` を置く。
 - `on_order_done`: 出どころが `StartupArgs`・`InitialInstall` でなければ無操作。⑴ info `startup_install_done` を 1 件（`origin`・書庫ごとの `(パス, 終わり方の語)`。終わり方の語は `installed`・`refused`・`declined`・`failed`・`abandoned`、並びの残りは `not_started`）。⑵ `InitialInstall` なら `sources_to_delete` の書庫を消す。`StartupArgs` なら `args_followup` を `take` し、`delete_source` が真なら消し、`call_ghost` が真なら `decide_call_ghost` で決めて頼む／頼まない。控えが無ければ（readonly などで積まれなかった・既に受けた）何もしない。
 - 消す所（`delete_sources`・内部）: 1 本ごとに `remove_file`。消せたら info `startup_source_deleted`（`origin`・`archive`）、消せなければ warn `startup_source_delete_failed`（`origin`・`archive`・`error`）。1 本の失敗でほかをやめない（要件 3.3・3.4・4.3・4.5）。
 - 頼む所（内部）: `Request { folder }` なら `request_ghost_switch(world, callghost_request(folder))`、info `startup_callghost_requested`（`folder`・`verdict`）を 1 件。受け付けられなかったときの記録と振る舞いは入口のまま（要件 5.5・5.6）。`Skip(reason)` なら info `startup_callghost_skipped`（`reason`）を 1 件。
@@ -479,10 +492,10 @@ pub(crate) fn callghost_request(folder: String) -> SwitchRequest;
 2. `closing` → `Skip(Closing)`。
 3. `ends` を後ろから見て、`Installed(items)` で `items[0].kind == "ghost"` の最初のもの。無ければ `Skip(NoGhostInstalled)`（要件 5.4）。切り替え先は `Path::new(&items[0].place).file_name()`（入れた先のフォルダ名）。
 4. `switching` → `Skip(Switching)`（要件 5.3）。
-5. `ghost_at_submit` と `ghost_now` が違う（両方 Some なら `same_folder_name` で比べ、片方だけ None なら違う）→ `Skip(SwitchedMeanwhile)`（要件 5.3）。
+5. `switches_now != switches_at_submit`（依頼の間に、よそのフォルダへの切り替えを受け付けた）→ `Skip(SwitchedMeanwhile)`（要件 5.3）。
 6. `ghost_now` が Some で切り替え先と `same_folder_name` で同じ → `Skip(AlreadyRunning)`（要件 5.2）。
 7. それ以外 → `Request { folder }`（要件 5.1）。
-- 限り: 依頼の間に A → B → A と切り替わって戻ったときは 5 で見分けられず、7 へ進む。切り替えの始まりを押す口を作るには `ghost_switch.rs` に手を入れる必要があり、並走の約束と上限に触れるので取らない（コードに `shortcut:` の注を残す・`research.md` 議題 8）。
+- 同じフォルダへの起こし直し（起動中のゴーストへの上書き）は数えないので、上書きを含む並びでも 5 に落ちない。
 
 **状態の扱い**
 - 状態の形: `pending`（据えた → 取り出した）と `args_followup`（無い → 積んだ → 受けた）の 2 つ。どちらも `Option` の `take` で 1 回だけ進む。
@@ -492,7 +505,7 @@ pub(crate) fn callghost_request(folder: String) -> SwitchRequest;
 **Implementation Notes**
 - 結線: 今のファイルに足すのは呼ぶ行だけ（DeskHooks・MainWiring）。
 - 確かめ: 純粋な 3 関数（`sources_to_delete`・`decide_call_ghost`・`callghost_request`）は World にもファイルにも触らずに枝を 1 つずつ固定する。結線は窓口の rig で確かめる。
-- 危うさ: 終了の間に終わった依頼は、`app.run()` が戻った後で `drain` が回らないので消さない（安全側）。`hand_next_order` が背景のスレッドを失う（今の `install_worker_gone` の error）と終わりの知らせが来ず、消さず頼まない（記録は今の error 1 件）。
+- 終了の間に終わった依頼は、`app.run()` が戻った後で `drain` が回らないので消さず頼まない（安全側・warn `startup_followup_dropped`・要件 3.1 の終了の除き・設計の討議 議題 2）。`hand_next_order` が背景のスレッドを失う（今の `install_worker_gone` の error）と終わりの知らせが来ず、消さず頼まない（記録は今の error 1 件）。
 
 #### DeskHooks
 
@@ -527,7 +540,7 @@ pub(crate) enum DeskAsk {
 #### Readme（`dist/README.txt`・summary だけ）
 - 62 行目: まだ扱わない語を `kiosk` だけに、まだ扱わない起動オプションから `--install` を外す（要件 8.1）。
 - 79 行目: 「断る物」に「起動オプション `--install` と、areka.exe の隣の `initial_install.nar`（入れず、消しません）」を足す（要件 8.4）。
-- 新しい小見出し「--install と initial_install.nar:」を 63 行目の後に置き、次を書く（要件 8.2・8.3・8.5）: 書き方（空白で区切って複数・書いた順・相対パスは起動したときのフォルダから・`-`／`/` で始まる綴りは使えない）・入れ始める時（最初のゴーストが起動した後・トークは止めない）・手続きは窓へ落としたのと同じ（利用条件の画面と警告もそのまま）・`deletesource`（入った NAR だけ消える・入らなかった NAR は残る・NAR のほかは消さない）・`callghost`（並びの最後に入ったゴーストへ、メニューの「ゴースト」と同じに切り替える・起動中のゴーストへ上書きしたとき・ゴーストやメニューで先に切り替わったときは切り替えない・2 体目としては呼ばない）・2 つの語は `--install` と組んだときだけ効く・ゴーストが居ないときは入れない・起動中の areka や SSP には任せない・`initial_install.nar`（areka.exe の本当の場所の隣・最初のゴーストが起動した後に確かめずに上書きで入る・`--install` より先・入ったら消える・消せないと次の起動でまた入る・利用条件の画面は出る）・1 行の例 `areka.exe --install C:\work\my.nar --option callghost,deletesource`。
+- 新しい小見出し「--install と initial_install.nar:」を 63 行目の後に置き、次を書く（要件 8.2・8.3・8.5）: 書き方（空白で区切って複数・書いた順・相対パスは起動したときのフォルダから・`-`／`/` で始まる綴りは使えない）・入れ始める時（最初のゴーストが起動した後・トークは止めない）・手続きは窓へ落としたのと同じ（利用条件の画面と警告もそのまま）・`deletesource`（入った NAR だけ消える・入らなかった NAR は残る・NAR のほかは消さない）・`callghost`（並びの最後に入ったゴーストへ、メニューの「ゴースト」と同じに切り替える・起動中のゴーストへ上書きしたとき・ゴーストやメニューで先に切り替わったときは切り替えない・2 体目としては呼ばない・ゴーストがインストール完了のトークで自分から切り替えを頼んでも `callghost` が先に立つ）・2 つの語は `--install` と組んだときだけ効く・ゴーストが居ないときは入れない・起動中の areka や SSP には任せない・`initial_install.nar`（areka.exe の本当の場所の隣・最初のゴーストが起動した後に確かめずに上書きで入る・`--install` より先・入ったら消える・消せないと次の起動でまた入る・利用条件の画面は出る）・1 行の例 `areka.exe --install C:\work\my.nar --option callghost,deletesource`。
 
 ## Data Models
 
@@ -565,6 +578,7 @@ pub(crate) enum DeskAsk {
 ### 単体（`crates/areka/src/install/startup_tests.rs`）
 - `sources_to_delete`: 終わり方 5 つ（`Installed`・`Refused`・`Declined`・`Failed`・`Abandoned`）を 1 つずつ並べて、`Installed` だけが返ること。`Abandoned` で短い並びの残りが返らないこと。同じパス（綴りの大小違い）が 2 回で片方だけ `Installed` のとき 1 回だけ返ること（要件 3.1・3.2・4.3・4.4・9.3）。
 - `decide_call_ghost`: 7 つの枝（`Abandoned`・`Closing`・`NoGhostInstalled`〔シェルだけ・バルーンだけ・追加ファイルだけ・全部失敗〕・`Switching`・`SwitchedMeanwhile`・`AlreadyRunning`・`Request`）を 1 つずつ。切り替え先が「最後に入ったゴースト」になること（ゴースト A・失敗・ゴースト B → B）（要件 5.1〜5.4・9.5）。
+- `decide_call_ghost` の 5: 受付の数が増えた（A → B → A を含む）だけで `SwitchedMeanwhile` になり、同じなら次へ進むこと（要件 5.3）。
 - `callghost_request`: メニューの頼み方と同じ（`GhostSpec::Folder`・`raise_event: true`・`ChangeOrigin::Manual`・`boot_event: None`）であること（要件 5.1・10.1）。
 - 消す所: `TempPath::under_target` の下の書庫の写しで、消せたら info 1 件・既に無いファイルは warn 1 件で次へ進むこと・フォルダは消えないこと（要件 3.3・3.4・3.6・9.7）。
 
@@ -574,6 +588,8 @@ pub(crate) enum DeskAsk {
 - `OrderDone { order, ends }` を送ると、`deletesource` ありで `Installed` の写しだけが消え、なしでは消えないこと。`InitialInstall` は語なしで消えること（要件 3.1・3.5・4.3・9.3・9.4）。
 - `ReadOnlyRun` を足した World で、2 件とも `readonly_refused` に `origin` が載り、待ち行列が空で、終わりの控えが無く、写しが消えないこと（要件 6.1〜6.5・9.6）。
 - 起動の依頼でない依頼（`Menu`・`Script`・`WindowDrop`）が `Installed` で終わっても、`deletesource` の控えが残っている最中でも、その書庫は消えず控えも残ること。`InitialInstall` の依頼は語の旗に関わらず、その依頼の書庫（exe の隣のファイル）だけを消すこと（要件 3.5・3.6・9.3・9.4・取り消せない消去の檻）。
+- 切り替えの受付の数: 入口でよそのフォルダへの切り替えを受け付けると 1 増え、同じフォルダへの起こし直し・`Busy`・`NotFound` では増えないこと（要件 5.3）。
+- `callghost` で切り替えを頼んだ後に来たゴースト自身の切り替えが `Busy` で退くこと（設計の討議 議題 3）。
 - 定常到達の前に終了の後始末を呼ぶと warn `startup_install_not_submitted`（`reason=exit_before_steady`）が 1 件出て、依頼が積まれず、その後に World を落としても 2 件目が出ないこと（要件 2.7）。
 - 起動の引数の依頼を積んだ後、終わりを受ける前に終了の後始末を呼ぶと、`deletesource`・`callghost` が立っていれば warn `startup_followup_dropped` が 1 件出て、写しが消えず切り替えも頼まないこと（要件 2.8・7.2）。
 - 定常到達の前に持ち物を落とすと warn `startup_install_not_submitted`（`reason=boot_stopped`）が 1 件出ること。入れる物が無ければ出ないこと。取り出した後に落としても出ないこと（要件 7.1・7.2）。
@@ -594,14 +610,11 @@ pub(crate) enum DeskAsk {
 - `.kiro/specs/ghost-call/brief.md` へ「`callghost` を、2 体目として呼ぶ働きが着地したらその形へ移す（今は `install::startup::callghost_request` がメニューと同じ切り替えを頼む）」の申し送りを書く（要件 10.1）。
 - ゴーストが 1 体も無いときに、起動の解決の前に入れてから起動を続ける形を、`/kiro-discovery` で別の spec として起票する（要件 10.2）。
 
-## Open Questions / Risks（設計の討議の候補・どれも推す形で書いてある）
-1. **`callghost` の「間に切り替えがあった」の見分け**: 依頼を出した時点と終わった時点の今のゴーストを比べる（推す）。依頼の間に A → B → A と戻ったときは見分けられない。見分けるには `ghost_switch.rs` に切り替えの始まりを押す口が要る（並走の約束と上限に触れる）。
-2. **終了の間に終わった依頼の書庫**: `app.run()` が戻った後は `drain` が回らないので消さない（推す・安全側）。要件 3.1 の「途中でやめた」は、終了以外の理由（ゴーストが居ない）で途中でやめたときに当てはまり、そのときは入った書庫を消す。
-3. **記録の出どころ**: 終わりのまとめ `startup_install_done` 1 件に書庫ごとの結果と出どころを並べる（推す）。手続きの 1 件ごとの記録（`install_done` ほか）には足さない（`procedure.rs` に触らない）。
-4. **出さずに終わる記録を `Drop` で出す**: 起動の解決の失敗を含め、起動が止まったどの道でも 1 件出る（推す）。終了の後始末の道だけは明示の呼び出しで出す（OS のセッションの終了で `Drop` が走らないことがあるため）。
-5. **同じ書庫の比べ方**: 絶対に直した後に小文字で比べる（推す）。短い名前（8.3）・リンクは同じと見ない。見損ねても「既に無い」の warn が 1 件増えるだけ。
-6. **`initial_install.nar` の実機の確かめ**: しない（推す）。`target\debug\` に置くと同じ時に走るほかの実機の試験を汚す。決定論のテストで `target\` の下のフォルダを渡して固定する。
-7. **消すのは UI スレッド**: 起動の行に書いた数本の `remove_file` なので UI スレッドで行う（推す）。背景のスレッドへ寄せると `InstallOrder` を組む所すべてに欄が増える。
+## 設計の討議で決めたこと（2026-10-29・開発者「承認」）
+1. **`callghost` の「間に切り替えがあった」の見分け**: `accept_switch` でよそのフォルダへの切り替えの受付を数え（プッシュ）、依頼の前後の数を比べる。A → B → A も見分ける。同じウェーブで `ghost_switch.rs` に触る兄弟は無いので、約束を理由に近道は取らない。
+2. **終了の間に終わった依頼の書庫**: 消さずに残し、warn `startup_followup_dropped` で理由を残す。要件 3.1 に終了の除きを書き足した。
+3. **ゴースト自身の切り替えとのぶつかり**: 待ちを置かず、終わりの知らせの時点で `callghost` を頼む。後から来たゴースト自身の切り替えは「手続きの間」の外で、今の入口のとおり `Busy` で退く（テスト 1 本・説明書に 1 行）。
+4. 推す形のまま確かめた物: 記録の出どころは終わりのまとめ `startup_install_done` 1 件・出さずに終わる記録は `Drop`（終了の後始末だけは明示の呼び出し）・同じ書庫は絶対に直した後に小文字で比べる・`initial_install.nar` の実機の確かめはしない（決定論のテストで固定）・消すのは UI スレッド。
 
 ## Supporting References
 - 調べの記録・形の比べ・決めの引き換え: `research.md` の「設計の段の調べと決め」。
