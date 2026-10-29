@@ -2,6 +2,7 @@
 
 > 2026-10-29 `/kiro-spec-design`（`/kiro-design` の中の段）。測った main は `932d2c30`。行の番号はこの時点のもの。
 > 調べものの詳しい中身は `research.md` の 11 節。ここでは決めたことと約束だけを書く。
+> 2026-10-29 の設計の討議で 4 議題を推奨案で確定し、SSP の実測（要件 6.8）をした（`research.md` 12 節・`doc/ssp-mcp/survey.md` 8 節）。
 
 ## Overview
 
@@ -160,7 +161,8 @@ crates/
 │   ├── boot_config.rs               # 窓の無いゴーストにも strict_judges を入れる
 │   ├── mcp/check_script.rs          # SkinFacts と共用の写しを使う（答えは不変）
 │   ├── mcp/check_script_judge.rs    # 判定の関数と定数を移した先を使う（答えは不変）
-│   └── mcp/sakurascript.rs          # strict 真の答え（since_id）
+│   ├── mcp/sakurascript.rs          # strict 真の答え（since_id）
+│   └── mcp/raise_event.rs           # strict 真で台本が返ったときの答え（since_id）
 ├── areka-mcp/src/
 │   ├── handler.rs                   # INSTRUCTIONS から 1 文を消す
 │   └── server_params_shape_tests.rs # 新: 5 つの版の params の形の答え（server.rs に #[path] 1 行）
@@ -263,7 +265,7 @@ sequenceDiagram
 | 3.7 | 記録済みは消さない | StrictRecord | 書いたら終わり | — |
 | 3.8 | 別の台本へ及ぶか | KanadeStrictFlag | 既定は及ばない（`StartTalk::new` は偽） | — |
 | 3.9 | 再生・`script`・警告を変えない | StrictDrive・CompileStrict | 同じ合図の列を作る・既定の `emit_with` | — |
-| 3.10 | `raise_event` の答えの文 | （変更なし）・SspMeasurement | 実測が違うときだけ変える | — |
+| 3.10 | `raise_event` の答えの文 | RaiseEventStrictAnswer・SspMeasurement | 実測どおり strict 真で台本が返ったときだけ 1 行目に strict の文を足す | — |
 | 3.11 | 表示と他のツールを止めない | StrictTap・SkinFacts | talk スレッドで判定・UI は事実の組み立てだけ | — |
 | 4.1 | 切替の後ろの `\s`・`\b` | SkinFacts・SerikoStrictSink | 差し替えと同じ鍵 | 事実を替える時機 |
 | 4.2 | 名前の形の `\b`・後から解決する指定 | TextProbe・SerikoStrictSink | `TextMsg::ProbedCue`・`route_select` | — |
@@ -308,7 +310,7 @@ sequenceDiagram
 | SkinFacts・SerikoStrictSink | areka-seriko | 今のシェルとバルーンの事実で `\s`・`\b` を判定する | 2.7, 4.1, 4.2 | areka-sakura (P0) | Service, State |
 | TextProbe | areka-emo-text | 名前の形の `\b` を決めた場で知らせる | 4.2 | dola (P0) | Event |
 | ArekaStrictJudges・SkinFactsCopy | areka | 台帳・`\f` の分類の差し込み、事実の組み立て | 2.7, 4.1 | ConsumerLedger (P0) | Service |
-| SakuraScriptStrictAnswer | areka mcp | strict 真の答え | 1.1〜1.5 | log_history (P0) | API |
+| SakuraScriptStrictAnswer・RaiseEventStrictAnswer | areka mcp | strict 真の答え | 1.1〜1.5, 3.10 | log_history (P0) | API |
 | Instructions | areka-mcp | 案内文 | 5.1〜5.3 | — | API |
 | RmcpShapePatch・BridgeShapeAnswer | rmcp フォーク・中継 | `params` の形の誤りへの答え | 6.1〜6.7 | rmcp (P0) | API |
 | ArekaToolsDoc・DiffDocs・SspMeasurement | 文書 | 約束・差の一覧・実測 | 4.4, 4.6, 4.7, 6.8〜6.10 | SSP の MCP (P1) | — |
@@ -629,7 +631,23 @@ impl SerikoSink {
 
 - `<n>` は `handle` の中で、`KanadeMsg::SstpSend` を送る**前**に `log_history::last_id()` を読んだ値（10 進。何も無ければ 0）。`strict` 真のときだけ読む。
 - NG の場合は kanade が talk を始めていない（受け付けない・返事の口が落ちたのは kanade が台本を処理する前）ので、記録も無い（要件 1.5）。
-- `raise_event` の答えは変えない（要件 3.10）。SSP の実測が別の文を示したときだけ、実測の文に揃える。
+- SSP の `<n>` はエラーログの最後の番号だった（`survey.md` 8.1）。areka は要件 1.2 どおり全種類の通しの最後の番号を返す。どちらも `since_id` で読めばその台本の記録が全部入る（文書の「SSP との違い」に書く）。
+
+#### RaiseEventStrictAnswer
+
+| Field | Detail |
+|-------|--------|
+| Intent | `strict` 真で送ったイベントに台本が返ったときの答えを、SSP の実測（`survey.md` 8.2）に揃える |
+| Requirements | 3.10 |
+
+| 条件 | 本文 |
+|------|------|
+| `strict` 真・台本が返った | `OK:the ghost returned a script and it is being played. strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=<n>)`＋今の区切り（`\r\n`）＋`Script: <台本>` |
+| `strict` 偽・省略・台本が返った | 今のまま（`OK:the ghost returned a script and it is being played.`＋区切り＋`Script: <台本>`） |
+| 台本が返らない・受け付けない・送れない | 今のまま |
+
+- `<n>` は `crates/areka/src/mcp/raise_event.rs` の `handle` の中で、`KanadeMsg::SstpNotify` を送る**前**に `log_history::last_id()` を読んだ値（`strict` 真のときだけ読む）。返事の後に読むと、その台本の記録より後の番号になりうる（`sakurascript` と同じ理由）。
+- strict の文は `sakurascript` の答えと同じ定数から作る（`OK:` を除いた本文を共用し、文字列を 2 つに写さない）。
 
 #### 案内文（Instructions）
 
@@ -652,7 +670,8 @@ impl SerikoSink {
 - 直す所: `transport/streamable_http_server/tower.rs` の `handle_post` で `expect_json` が読めなかったとき（`serde_json` の分類が `Data` のとき）だけ、本文を `serde_json::Value` として読み直し、下の関数が `Some` を返せばその答えを返す。`None` なら今の 415 のまま。
 - HTTP の状態: 要求のヘッダ `MCP-Protocol-Version` が無状態の版（`2026-07-28`）なら `jsonrpc_http_status(code)`（`-32600` は 200・`-32602` は 400）、それ以外の版は 200。本文は `application/json` の JSON-RPC のエラー 1 件（要件 6.4）。
 - 1 件の答えで閉じ、次の要求はいつもどおり（要件 6.6）。
-- 上流へ直しを出す（フォークを作る・PR を出す）のは外へ出す操作なので、開発者の許しを取ってから行う。
+- フォークは開発者のアカウントの `ekicyou/rust-sdk`（2026-10-29 の設計の討議で確定）。上流へは `main`（3.8 系）向けに PR を出し、取り込まれて公開されたらその版へ上げて `[patch]` を外す。
+- 上流へ直しを出す（フォークを作る・PR を出す）のは外へ出す操作なので、実装でその段に来たときに改めて開発者の許しを取ってから行う。
 
 **Contracts**: API [x]
 
@@ -686,7 +705,11 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 - 「⑺ strict の記録」を足す:
   - 記録すること（要件 1〜3 の範囲）と、本文の形・名・target・`point` の欄・本文の上限で切られること。
   - 記録しない場合（要件 3）。
-  - SSP の strict との違い（要件 6.8 の実測の分。測れなかった所は「測っていない」）。
+  - SSP の strict との違い（`survey.md` 8 節の実測の分。測れなかった所は「測っていない」）:
+    - 本文の形が違う（SSP は `[GHOST/Script] surface not found (99999) at position 2 : <その位置から後ろの台本>`、areka は `check_script` の種類と文面）。表示の語（`Error`）・名（ゴースト名）・位置の数え方（文字の数）は同じ。
+    - SSP は知らないタグ（`\y`）を記録しなかった。areka は `unknown_tag` として記録する。
+    - SSP の `since_id` はエラーログの最後の番号、areka は全種類の通しの最後の番号（どちらでも読み落としは無い）。
+    - 呼んだ先の台本に記録が及ぶかは測っていない（areka は及ばない）。
   - 同じ誤りが再生の側の記録（名は `[SYSTEM]`）としても出ることがあり、strict の記録だけを読むには `get_log` の `ghost_name` で絞ればよいこと。
   - `ignored` は「areka がまだ対応していないもので、台本の誤りではない」。除いて読みたいときは種類の名前で外せる。
   - areka の切替は台詞の切れ目で効くので、同じ台本の中の切替の後ろの `\s`・`\b` は切替の前のシェル・バルーンで判定されること。
@@ -697,7 +720,8 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 #### DiffDocs・SspMeasurement
 - `transport-diff-areka.md`: `params` がオブジェクトでない要求の行（areka の番号と HTTP の状態・固定するテストの名前・SSP の欄）。
 - `bridge-diff-areka.md`: 91 行目「オブジェクトでない行と、要求の形でないオブジェクト」から `params` の形だけの誤りを分け、areka の欄を「`id` 付きの `-32600`／`-32602`（受け口と同じ）」に書き直す。
-- `survey.md`: 要件 6.8 の 4 つを SSP の MCP で測る。**打つ前に毎回、開発者の許しを取る**（設計の段のこの生成では許しを取れないので未実施。実装の最初のタスクとして置く）。測れなかったものは「測っていない」と書く。既定（測れないとき）: 3.8 は及ばない、3.10 は今の文、表示の語は既定の `Error`、本文は本書の形。
+- `survey.md`: 要件 6.8 の 4 つは、2026-10-29 の設計の討議で開発者の許しを取って測り、8 節に書いた（設計の段で済み・実装のタスクには置かない）。結果: `raise_event` は strict 真で台本が返ったときだけ 1 行目に strict の文が付く（RaiseEventStrictAnswer）。表示の語は `Error`。呼んだ先の台本に及ぶかは「測っていない」＝3.8 は既定の「及ばない」。`params` がオブジェクトでない要求には、SSP は旧式の版で形を見ずに普通に答え、無状態の版では `_meta` の検査の 400・`-32602` が先に出る（`params` の形への答えは見えない）。
+- `transport-diff-areka.md` の行の SSP の欄は、この 8.4 を写す（areka は要件 6.1・6.2 どおり `-32600`／`-32602` で、SSP と違う）。
 
 ## 検出点の表
 
@@ -735,12 +759,12 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 | 表示の層の装着前の宛先（`show.rs` 63 行） | 台本の誤りでない |
 | `\f` の値の誤り（`BadValue`） | `check_script` と同じく診ない |
 
-## 要件の読み（設計の段で決めたこと・討議で確かめる）
+## 要件の読み（2026-10-29 の設計の討議で確定）
 
-1. **要件 2.7 と 4.2**: `check_script` は名前の形の `\b[名前]` を診ない（⑷）。一方、再生は箱が無ければ記録する（要件 4.2）。brief の 2026-10-08 の申し送りは「`check_script` は字面で決まらないもの（名前の形の `\b[名前]` など）を診ないが、再生中は実際の答えが分かるので記録できる」としている。よって 2.7 の「同じ集まり」は、名前の形の `\b[名前]` の箱が見つからない台本を除いて成り立つものとして作る。要件の文に条件を 1 つ足すかは討議で決める。
-2. **要件 4.1**: areka の切替は台詞の切れ目まで待つので、同じ台本の中の切替の後ろの `\s`・`\b` は、再生でも切替の前のシェル・バルーンで扱われる。判定は seriko の本体が実際に使う定義と同じ事実で行う（差し替えと同じ鍵）。差し替えが効いた後の合図は新しい事実で判定する。
-3. **要件 2.5 の順**: talk スレッドで決まる 15 の点は合図の順で書く。名前の形の `\b`（`BalloonBoxMissing`）だけは UI で決まるので、当たった時点で書き、ほかの記録との前後は台本の順と違うことがある。
-4. **記録の本文**: `<kind> <start>-<end> <message>: <text>` に取り決めの欄 `point` が続く。表示の語は既定の `Error`。SSP の実測で違いが分かれば文書の「SSP との違い」に書く（本文の形は変えない）。
+1. **要件 2.7 と 4.2**（議題 2）: `check_script` は名前の形の `\b[名前]` を診ない（⑷）が、再生は箱が無ければ記録する（要件 4.2）。要件 2.7 の条件に「名前の形の `\b[名前]` で箱が見つからない箇所を持たない」を足した。要件 7.1 の「出ない台本」がこの形の行は、今のサーフェスに在る箱の名前で確かめる。
+2. **要件 4.1**（議題 3）: areka の切替は台詞の切れ目まで待つので、同じ台本の中の切替の後ろの `\s`・`\b` は、再生でも切替の前のシェル・バルーンで扱われる。判定は seriko の本体が実際に使う定義と同じ事実で行う（差し替えと同じ鍵）。差し替えが効いた後の合図は新しい事実で判定する。要件 4.1 の文をこの形に直した。文書の「SSP との違い」に書く。
+3. **要件 2.5 の順**（議題 2）: talk スレッドで決まる 15 の点は合図の順で書く。名前の形の `\b`（`BalloonBoxMissing`）だけは UI で決まるので、当たった時点で書き、ほかの記録との前後は台本の順と違うことがある。要件 2.5 にこの例外を足した。
+4. **記録の本文**: `<kind> <start>-<end> <message>: <text>` に取り決めの欄 `point` が続く。表示の語は既定の `Error`（SSP の実測と同じ）。本文の形は SSP と違う（`check_script` の種類と文面に揃えるのが要件 2.4）ので、文書の「SSP との違い」に書く。
 
 ## Error Handling
 
@@ -771,6 +795,7 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
   - `RECORD_TARGET == log_history::TARGET_ERROR`・記録の名が `listed_ghost_name` と同じ（2.2）。
 - `areka-sakura/src/drive_strict_tests.rs`: 窓の無い sink の組（`LogSink`・`DiscardSink`）で、台本の解釈の誤りだけが記録される（4.3）。翻訳で書き換えた台本の位置は書き換えた後の台本に対するもの（3.3）。
 - `areka/src/mcp/sakurascript_tests.rs`: strict 真の答えの文と `<n>`（送る前の `last_id`）、`since_id` で記録が全部読める、strict 偽・省略は `OK`、NG の 4 つの場合は今の答えで記録が増えない（1.1〜1.5・7.4・7.5）。
+- `areka/src/mcp/raise_event_tests.rs`（追記）: strict 真で台本が返ったときの 1 行目の文と `<n>`（送る前の `last_id`）・`Script: ` の行は今のまま、strict 偽・省略と台本が返らないときは今の答え（3.10・7.4）。
 - `areka-mcp/src/server_params_shape_tests.rs`: 5 つの版で、数・文字列・真偽値・配列の `params` に `id` 付きの `-32600`／`-32602` と表の HTTP の状態、知らない名前のメソッドでも同じ、その後の要求がいつもどおり、通知・`null`・JSON でない本文は今のまま。案内文から 1 文が消え、ほかが同じ（5.1・6.1〜6.7・7.7）。
 - `areka-mcp-bridge/tests/real_receiver_test.rs`: 同じ要求を中継へ送ると受け口へ直接と同じ答え（5 つの版）。areka が居ないときの組み込みの `initialize` の案内文（5.2・6.5・7.7）。
 
