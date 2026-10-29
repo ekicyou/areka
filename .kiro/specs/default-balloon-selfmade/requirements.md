@@ -19,7 +19,7 @@
 要件生成時に引き直した事実（main `932d2c30`・設計とギャップ分析はこれを再検証する）:
 
 - 既定の名前の定数は `crates/areka/src/boot_resolve.rs` の 34 行目 `DEFAULT_BALLOON_FOLDER: &str = "StayseeBalloon"` だけで、使うのは段 6（325〜326 行目・「`DEFAULT_BALLOON_FOLDER` を参照するのはこの段だけ」）。段の順は 引数 → 記憶 → ゴーストの descript → 同梱 → 唯一 → **既定** → 無作為。
-- 既定の名前を期待するテストは brief の再測定（10-24）で 4 本（`boot_resolve_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs`・`main_config_input_tests.rs`。綴りの数は 15・6・3・4 のまま）。`crates/` の下には、ほかにも `StayseeBalloon` を綴るテストと example が 18 ファイル在る（`boot_config_copy_tests.rs`・`ghost_switch_fallback_tests.rs`・`menu/balloon_frame_tests.rs`・`areka-ghost` の `catalog_tests.rs`・`areka-sylphya` の `persist/format.rs` ほか）。これらが「既定」を期待しているのか「ある 1 つのバルーンの名前」として使っているだけなのかは、ギャップ分析で 1 本ずつ見分ける。
+- 既定の名前に頼るテストは **6 本**（brief の挙げた 4 本＝`boot_resolve_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs`・`main_config_input_tests.rs` に、`boot_config_roots_tests.rs` と `boot_config_option_tests.rs` を足す。後者は組み立てで置くだけだが、既定が外れると無作為の段の `no_pick` が panic する）。`crates/` の下で `StayseeBalloon` を綴る `.rs` は 27 ファイルで、ギャップ分析（research.md 3.1）が A＝直さないと赤（上の 6 本）・B＝緑のままだが意味は「既定」・C＝ある 1 つのバルーンの名前として使うだけ、に仕分けた。
 - `tools/package.ps1` で既定を引く所は 4 か所（467 行目＝検体の窓口から取り出す・496 行目＝必須の項目・504 行目＝`balloon/` 直下の許可の表・570 行目＝写す行）。配布物の `balloon/` には `emo2-kakukaku` と `StayseeBalloon` の 2 つが入る。
 - 検体の登記表 `crates/sample-ghost-kit/src/lib.rs` の `SAMPLES` は 10 本（`StayseeBalloon` は `kind: SampleKind::Balloon`・`source: SampleSource::Vendored`）。この spec で 10 → 11。
 - `StayseeBalloon` の中身を固定するテストは `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs` と `staysee_balloon_fixture/` のテーマ別 8 ファイル（`assets`・`bake`・`definition`・`faces`・`region`・`scale`・`script`・`wrapping`）。保管したファイルの名前と原寸、焼き込みで半透明の画素が残ること、定義の読み取り、描画範囲と折り返し、拡大率を固定している。
@@ -61,7 +61,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 - **議題 1 名前と ID**（フォルダ名・`name`・`id`・`craftman`）→ 開発者が決める。推しなし。この文書では `<名前>` と書く。
 - **議題 2 絵柄** → 主のセッションが道具の下書きで案を 2〜3 個並べ、開発者が選ぶ（箱の色・縁・角の丸み・しっぽの形・瓶の透かしを無くすか areka の印を小さく入れるか・オンラインの印の絵柄・コマ数・コマの時間）。
 - **議題 3 絵の形式** → 推し＝面も印も `.webp`（オンラインの印は動く WebP 1 枚）。SSP では出ないバルーンになることを承知のうえで選ぶ。`.webp` を選ぶと `balloon-webp-names` の着地が既定の差し替えの前提になる。α 付きの PNG を選べば今すぐ作れる。
-- **議題 4 引き継ぐ値の線引き** → 推し＝寸法・`origin`・`validrect`・`wordwrappoint`・印と数字と入力の箱の位置はそのまま引き継ぐ。`font.name,ＭＳ ゴシック`／`font.height,12`・カーソルの色・SSTP と数字の字の色は聞いてから決める（決まるまでの仮置きは手本の値＝開発者の起票の言葉「設定系パラメーターは引き継ぐ」）。面別の設定の `windowpos.x/y`（値は 0）は、ukadoc の鍵の名前（`windowposition`）を引き直してから扱いを決める。
+- **議題 4 引き継ぐ値の線引き** → 推し＝寸法・`origin`・`validrect`・`wordwrappoint`・印と数字と入力の箱の位置はそのまま引き継ぐ。`font.name,ＭＳ ゴシック`／`font.height,12`・カーソルの色・SSTP と数字の字の色は聞いてから決める（決まるまでの仮置きは手本の値＝開発者の起票の言葉「設定系パラメーターは引き継ぐ」）。面別の設定の `windowpos.x/y` は正典の鍵でないので写さない（要件 5.7・ギャップ分析で確定）。
 - **議題 5 オンラインの印を 1 枚の動く絵で持つときの書き方**（ファイル名・`onlinemarker.*` の書き方）→ 推しなし。正典は `onlinemarker.filename` の名前に 0 からの連番を足して読み、`onlinemarker.interval`（既定 500 ミリ秒・50 未満は不可）で切り替える。1 枚の動く絵で持つのは areka の拡張で、読み方は `balloon-markers` の議題（本仕様は絵を用意する側）。
 - **議題 6 面をいくつ持つか** → 推し＝手本どおり本体側 4・相方側 2・入力の箱 4。
 - **議題 7 `StayseeBalloon` の扱い** → 検体には残す。配布物から外すか、選べるバルーンとして残すかは推しなし。記憶に `StayseeBalloon` が残っている利用者の次の起動がどうなるかを確かめて決める。
@@ -133,8 +133,9 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 4. The 既定バルーン shall `descript.txt` に手本の全体の値のうち、`origin`・`validrect`・`wordwrappoint`・印（矢印・オンライン・SSTP）・SSTP のメッセージ・数字・入力の箱の位置を、手本と同じ数値で持つ（`validrect` は議題 10 の答えで書き方が変わる・要件 6）。
 5. The 既定バルーン shall 面ごとに、手本と同じ数値の面別の設定を持つ: `balloons0s.txt`（origin 14,11・wordwrappoint.x -30・onlinemarker.x 3・sstpmarker.x 10・sstpmessage.x 20）、`balloons1s.txt`（origin 23,11・wordwrappoint.x -20・onlinemarker.x 12・sstpmarker.x 19・sstpmessage.x 29）、`balloons2s.txt`（origin 14,14・wordwrappoint.x -30）、`balloons3s.txt`（origin 23,14・wordwrappoint.x -20）、`balloonk0s.txt`（origin 14,14・wordwrappoint.x -30・validrect.bottom -14）、`balloonk1s.txt`（origin 24,14・wordwrappoint.x -20・validrect.bottom -14）。
 6. The 既定バルーン shall 字の書体と大きさ（`font.name`・`font.height`）・カーソルの色・SSTP のメッセージと数字の字の書体と色を、議題 4 の答えで持つ（仮置き＝手本の値: `font.name,ＭＳ ゴシック`・`font.height,12`・字の色 0/0/0・カーソルは `mergepennot`・`square`・塗り 22/143/231・線 8/8/194・字 201/255/255・SSTP のメッセージは `ＭＳ Ｐゴシック` 12・56/163/163・数字は `Times New Roman` 14・32/76/120）。
-7. The 既定バルーン shall 手本の面別の設定の `windowpos.x,0`・`windowpos.y,0` を、議題 4 で ukadoc の鍵の名前（`windowposition`）を引き直した答えに従って扱う（正典の鍵の名前で書くか、持たないか）。
+7. The 既定バルーン shall 手本の面別の設定の `windowpos.x,0`・`windowpos.y,0` を写さない（正典の鍵の名前は `windowposition.x/y`・既定 0。`windowpos.*` は正典の鍵でなく、areka も黙って捨てる。値 0 は既定と同じなので、書かないのと同じ意味になる。research.md 3.3）。
 8. When areka が既定バルーンの `descript.txt` と面 0 の面別の設定を読む, the areka shall 文字化けせずに、areka が読む鍵の値を宣言どおりに読み取り、読み込みで警告を出さない（areka がまだ読まない鍵＝印・数字・入力の箱の位置などは、今の作りどおり黙って読み飛ばす）。
+9. The 既定バルーン shall `descript.txt` に `use_self_alpha,1` を書く（正典の既定は 0＝α を捨てて抜き色を使う。SSP で α どおりに見せるため。research.md 3.4）。
 
 ### Requirement 6: 文字の描画範囲が潰れない
 
@@ -206,11 +207,11 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 1. When バルーンの解決が段 6（既定）に至り、配布物に `<名前>` のフォルダが在る, the areka shall 新しい既定バルーンを選ぶ。
 2. The 本仕様 shall バルーンの解決の段の順と、各段の当たり方を変えない（替えるのは既定の名前の値だけ）。
-3. The 本仕様 shall 既定の名前を期待するテストを新しい名前へ改め、`StayseeBalloon` を「ある 1 つのバルーンの名前」として使っているだけのテストは変えない（どちらに当たるかはギャップ分析で 1 本ずつ見分ける）。
+3. The 本仕様 shall 既定の名前に頼るテスト（research.md 3.1 の A の 6 本）と、緑のままでも「既定」の意味で綴っているテスト（同 B）を新しい既定へ改め、`StayseeBalloon` を「ある 1 つのバルーンの名前」として使っているだけのテスト（同 C）は変えない。
 4. When 配布の道具が配布物を作る, the 配布の道具 shall 新しい既定バルーンを検体の窓口から引いて配布物の `balloon/<名前>/` に入れ、必須の項目と `balloon/` 直下の許可の表に `<名前>` を載せる。
 5. The 配布の道具 shall `StayseeBalloon` を配布物に入れるかを議題 7 の答えに合わせ、入れないと決めたら、必須の項目・許可の表・取り出し・写す行のすべてから外す。
 6. When 前回の記憶に `StayseeBalloon` が残っている利用者が新しい版の areka を起動する, the areka shall バルーンを決められずに止まることなく、何かのバルーンで喋る（議題 7 で配布物から外したときは、記憶の段が外れて既定の段で新しいバルーンに当たる）。本仕様は、この起動の結果を確かめて記録する。
-7. The 本仕様 shall 根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering（`product.md` の既定バルーンの行・`structure.md` の検体の顔ぶれ・数を書く所）を、新しい既定バルーンを指す書きに改める。
+7. The 本仕様 shall 根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering（`product.md` の既定バルーンの行・`structure.md` の検体の顔ぶれ・数を書く所・`tech.md` 166 行目の既定バルーンの例）・`doc/COMPAT_ARCHITECTURE.md` 381 行目（段の並びの「既定（`StayseeBalloon`）」）を、新しい既定バルーンを指す書きに改める。`dist/README.txt` 402 行目（`use_self_alpha` の説明で同梱の Staysee を例に出す）と `doc/pasta-real-run.md` 56〜84・160 行目（配布物と同じ形の根を組む手順）は、議題 7 の答え（`StayseeBalloon` を配布物に残すか）に合わせて改める（research.md 6.2）。
 8. The 本仕様 shall 完了の spec（`areka-P0-default-balloon-bundle`・`areka-P0-default-balloon-nar-fold`）の文書を直さず、既定の役が新しいバルーンへ移ったことを本仕様と steering に書く。
 9. The 本仕様 shall 既定を差し替える作業を実装の最後に置き、その直前に main を取り込む（カタログの鎖の spec が `boot_resolve.rs` を作り直すのと重ならないようにする）。
 
