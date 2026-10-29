@@ -22,17 +22,15 @@ use std::sync::Arc;
 
 use tracing::warn;
 use windows::Win32::Graphics::DirectWrite::{
-    DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_ITALIC,
-    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_NORMAL,
-    DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteFactory, IDWriteFactory2,
+    DWRITE_FONT_METRICS, DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteFactory, IDWriteFactory2,
     IDWriteFontCollection, IDWriteTextFormat,
 };
 use windows::core::{BOOL, HSTRING, Interface};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
 
 use super::{
-    DEFAULT_FONT_NAME, DirectionRecipe, FontCatalog, LOCALE_JA_JP, PROBE_MAX_EXTENT, ResolvedFont,
-    create_text_format, device_err,
+    DirectionRecipe, FontCatalog, FontFace, PROBE_MAX_EXTENT, ResolvedFont, create_text_format,
+    device_err, try_create_format,
 };
 use crate::TextLayerError;
 use crate::layout::{GlyphMetrics, column_centred_em_box_left};
@@ -49,8 +47,7 @@ use crate::writing::WritingMode;
 ///   writing_mode 方向レシピ込み）で**生成時に一度だけ**焼く。
 /// - 既定でない見た目は、その計測鍵（[`FontKey`]）ごとの試験用書式を
 ///   [`probe_format_for`](Self::probe_format_for) が**鍵ごとに 1 度だけ**焼く
-///   （家族名は [`FontCatalog::family_for`] が解決した名前か [`DEFAULT_FONT_NAME`]
-///   のみ・R11.3）。
+///   （顔は鍵の候補列の顔か、全滅なら束縛の顔のみ・R11.3）。
 /// - `advance` は対象文字（書記素クラスタ 1 つ）全体の**未折返し probe layout**
 ///   （[`PROBE_MAX_EXTENT`] 寸）を生成し cluster metrics の width 合計を返す（折返し決定より
 ///   前の計測＝鶏卵なし。DirectWrite が 2 つに整形するクラスタ＝国旗などは合計が行の中で
@@ -83,6 +80,8 @@ pub struct DWriteMetrics {
     cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, f32>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,
+    /// 束縛書式の顔（`fonts.pick(font)` の解決）——全滅の計測鍵はこの顔で測る（要件 4.10）。
+    bound_face: FontFace,
     /// 束縛書式に焼いた見た目の計測鍵——この鍵の計測は束縛書式の経路をそのまま通る
     /// （装飾を使わない台本の計測値が従来と 1 ビットも変わらない構造的保証）。
     default_key: FontKey,
@@ -185,6 +184,7 @@ impl DWriteMetrics {
             vertical_em_box_left_ratio,
             cache: RefCell::new(HashMap::new()),
             fonts,
+            bound_face: picked.face,
             default_key: font.looks.default.font_key(),
             mode,
             probe_formats: RefCell::new(HashMap::new()),
@@ -209,48 +209,25 @@ impl DWriteMetrics {
 
     /// 計測鍵ごとの試験用書式（**鍵ごとに 1 度だけ**生成して持ち回す）。
     ///
-    /// 家族名の**第 2 の入口**——DirectWrite へ渡る名前は
-    /// [`FontCatalog::family_for`] が解決した名前か [`DEFAULT_FONT_NAME`] のどちらかだけで、
-    /// 別名への差し替え（縦書き異体名など）は存在しない。設定は束縛書式の生成経路
-    /// （`create_text_format`／`try_create_format`）と同じ並び——コレクション既定・
-    /// stretch NORMAL・locale ja-JP——に、鍵の太字／斜体／大きさを載せた形で、
-    /// 最後に同じ [`DirectionRecipe`] を焼く（R11.3「計測と描画は同じ書式経路」）。
-    /// **`draw.rs::try_create_format` の設定列を字面で複製している**（タスク 9.4 の記録）。
-    ///
-    /// 太さと斜体を鍵ごとに変える必要があるため既存関数を再利用できず、それ以外の設定
-    /// （コレクション既定・`DWRITE_FONT_STRETCH_NORMAL`・`LOCALE_JA_JP`）は同じ値を
-    /// 書き写している（design が逐語で指定した形）。**`try_create_format` 側の設定を
-    /// 変えても、ここは自動では追随しない**——家族名が DirectWrite へ渡る入口が 2 つある
-    /// ことは `draw_format_metrics_tests.rs` の家族名検査が見張っているが、その他の設定の
-    /// 一致を見張る述語は無い。
+    /// 顔は「鍵の候補列の顔、全滅なら束縛の顔」（[`FontCatalog::face_or`]）——描画の範囲指定
+    /// （`apply_font_ranges`）と同じ規則なので、全滅の区間も描画と同じ顔で測る（要件 4.10・
+    /// 完了 spec の「全滅は ＭＳ ゴシックで測る」を上書き）。書式は束縛書式と共用の
+    /// `draw.rs::try_create_format` に顔と鍵の太字／斜体／大きさを渡して作り、最後に同じ
+    /// [`DirectionRecipe`] を焼く（要件 4.1「計測と描画は同じ書式経路」・設定の写しを持たない）。
+    /// 計測鍵が顔を一意に決めるので、記憶の鍵は計測鍵のまま。
     fn probe_format_for(&self, key: &FontKey) -> Result<IDWriteTextFormat, TextLayerError> {
         if let Some(format) = self.probe_formats.borrow().get(key) {
             return Ok(format.clone());
         }
-        let family = self
-            .fonts
-            .family_for(&key.name)
-            .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());
-        let format = self
-            .factory
-            .create_text_format(
-                &HSTRING::from(family.as_str()),
-                None::<&IDWriteFontCollection>,
-                if key.bold {
-                    DWRITE_FONT_WEIGHT_BOLD
-                } else {
-                    DWRITE_FONT_WEIGHT_NORMAL
-                },
-                if key.italic {
-                    DWRITE_FONT_STYLE_ITALIC
-                } else {
-                    DWRITE_FONT_STYLE_NORMAL
-                },
-                DWRITE_FONT_STRETCH_NORMAL,
-                f32::from_bits(key.height_bits),
-                &HSTRING::from(LOCALE_JA_JP),
-            )
-            .map_err(device_err("CreateTextFormat(probe)"))?;
+        let face = self.fonts.face_or(&key.name, &self.bound_face);
+        let format = try_create_format(
+            &self.factory,
+            &face,
+            key.bold,
+            key.italic,
+            f32::from_bits(key.height_bits),
+        )
+        .map_err(device_err("CreateTextFormat(probe)"))?;
         self.probe_format_creations
             .set(self.probe_format_creations.get() + 1);
         DirectionRecipe::for_mode(self.mode).apply(&format)?;

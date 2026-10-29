@@ -40,7 +40,7 @@
   - _Boundary: FontRanges_
   - _Depends: 1.3, 2.1_
   - _Requirements: 3.2, 4.1, 4.3, 4.6, 4.10_
-- [ ] 2.3 計測鍵ごとの試験用書式を台帳の顔と共用の関数で作る
+- [x] 2.3 計測鍵ごとの試験用書式を台帳の顔と共用の関数で作る
   - 計測器の生成時に束縛の顔を覚え、計測鍵の書式は「鍵の候補列の顔、全滅なら束縛の顔」と鍵の太字・斜体で共用の関数から作る（設定の字面の写しを消す）。鍵と書式の記憶の形は変えない
   - 完了 spec が決めていた「全滅は ＭＳ ゴシックで測る」を「束縛の顔で測る」へ上書きする
   - 檻 F2（「Yu Gothic Medium」の鍵が 500・太字の鍵が 700・斜体の鍵が ITALIC）、F3（GDI の名前の鍵で測った英字の送り幅が同じ書式の行の cluster の幅と一致）、F4（束縛が中太で全滅の鍵が束縛の家族名・500、太字の鍵は 700、その区間を含む行の cluster の幅と 1 字の計測が一致）が緑
@@ -110,3 +110,4 @@
 - 1.1 の `FontFace` に付けた `#[allow(dead_code, reason = …)]` 2 か所は、1.2 で使い始めたら外す。
 - 1.2 の後、ぱすたの候補列の `pick` の家族名は「Yu Gothic」（GDI の名前で当たった顔の GetFamilyNames の 0 番目）。`viewbox_draw_vertical_band_readback_tests.rs` の `R_FONTS` の期待値をそれに合わせた。
 - 2.2 の後、`FontCatalog::family_for` の本番の呼び手は 0（テストだけ）。`with_faces`（`#[cfg(test)]`）は `pub(crate)`。
+- 2.3 の檻 F3 と F4 の後半は、本番の `apply_font_ranges` を通すため `viewbox_draw_decoration_tests.rs` に置いた（design の置き場 `draw_metrics_styled_tests.rs` から移した・F4 の doc に注記）。
