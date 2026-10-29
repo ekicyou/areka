@@ -20,7 +20,7 @@
   - _Requirements: 5.3_
 
 - [ ] 2. 起動オプションの読み手
-- [ ] 2.1 (P) `--install` の値の並びと語 `callghost`・`deletesource` を読み、組みの誤りを記録の材料にする
+- [x] 2.1 (P) `--install` の値の並びと語 `callghost`・`deletesource` を読み、組みの誤りを記録の材料にする
   - `--install`・`-i`・`/i`・`--install=` の値を書いた順に受け、重ねたら続けて足す
   - `callghost`・`deletesource` を効く語へ移し、`kiosk` は今のまま「まだ扱わない」
   - 値が 0 本の `--install` と、`--install` の値なしの語を、それぞれ 1 件の注にして効かない側へ移す

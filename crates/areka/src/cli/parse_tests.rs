@@ -108,14 +108,14 @@ fn boot_request_and_notes_table() {
         ),
         // 1.6: 扱わない名前は値の取り方どおりに値も飲む
         (
-            vec!["--install", "x", "y", "--random"],
+            vec!["--ukagaka-link", "x", "--random"],
             boot(None, None, None, true),
-            vec![unsupported("install")],
+            vec![unsupported("ukagaka-link")],
         ),
         (
-            vec!["/i", "x", "--random"],
+            vec!["/f", "x", "--random"],
             boot(None, None, None, true),
-            vec![unsupported("install")],
+            vec![unsupported("fmo-name")],
         ),
         (
             vec!["--fmo-name", "f", "g"],
@@ -282,9 +282,9 @@ fn boot_request_and_notes_table() {
         ),
         // 1.13: 書式の誤りが並んでも読み続ける
         (
-            vec!["/g=x", "--foo", "--install", "--random", "a"],
+            vec!["/g=x", "--foo", "--fmo-name", "--random", "a"],
             boot(Some("a"), None, None, true),
-            vec![unknown("/g=x"), unknown("--foo"), unsupported("install")],
+            vec![unknown("/g=x"), unknown("--foo"), unsupported("fmo-name")],
         ),
     ];
     for (args, want_boot, want_notes) in rows {
@@ -438,10 +438,15 @@ fn option_words_table() {
             vec!["/o", "kiosk,callghost,deletesource"],
             false,
             Load,
+            // `callghost`・`deletesource` は扱う語（`--install` が無いので効かない＝startup-install-option 1.4・1.5）
             vec![
                 pending("kiosk"),
-                pending("callghost"),
-                pending("deletesource"),
+                ParseNote::InstallWordWithoutInstall {
+                    word: s("callghost"),
+                },
+                ParseNote::InstallWordWithoutInstall {
+                    word: s("deletesource"),
+                },
             ],
         ),
         // 1.9: 重ねは語を合わせ、後勝ちの warn は出ない
@@ -520,11 +525,12 @@ fn summary_table() {
                 "ghost",
                 "random",
                 "nobootcheck",
+                "install",
                 "sstp-listen",
                 "dontloadmodule",
             ],
             vec!["bootunlock"],
-            vec!["kiosk", "xyz", "--foo", "install"],
+            vec!["kiosk", "xyz", "--foo"],
         ),
         // 重ねても 1 つ
         (vec!["--help", "/?"], vec!["help"], vec![], vec![]),
@@ -575,7 +581,7 @@ fn notes_log_one_event_each_with_cli_prefix() {
     let rows: Vec<(ParseNote, Level, &str)> = vec![
         (unknown("--foo"), Level::WARN, "startup_option_unknown"),
         (
-            unsupported("install"),
+            unsupported("ssf"),
             Level::WARN,
             "startup_option_unsupported",
         ),
