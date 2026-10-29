@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 土台: 手の形の絵・wintf のカーソルの口・cursorブレスの転記
-- [ ] 1.1 (P) 手を開いた形・握った形の `.cur` を一度だけ作る道具と、同梱の絵を置く
+- [x] 1.1 (P) 手を開いた形・握った形の `.cur` を一度だけ作る道具と、同梱の絵を置く
   - spec の `cursor-art/` の `hand.svg`・`grip.svg` を同梱の絵の置き場（`crates/areka/cursor/`）へ写し、焼き直しの入力にする
   - 道具（`tools/cursor-art.ps1`・PowerShell 7 と GDI+）は、SVG の絶対座標の経路（`M`・`L`・`C`・`Q`・`Z`）だけを写し、ほかの命令が出たら `FAIL input` の 1 行で止まる。寸法ごとに焼き、縁から暗い画素を透明にし、1 px の黒い縁を付け、当たりの点を不透明な画素の外接矩形の中心にして、32〜128 の 10 寸法を 32 ビットの項目として `.cur` に詰める（一時ファイルへ書けてから置き換える）
   - 端末へ出すのは ASCII の 1 行ずつ（`OK wrote <file> (10 images)`／`FAIL ...`）。`-SelfTest` は `target\cursor-art-selftest\` の下で 2 回作って同じバイトになるかを見る
