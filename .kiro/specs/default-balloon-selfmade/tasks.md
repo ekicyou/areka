@@ -20,7 +20,7 @@
   - 完了の状態: 77×36・3 コマの画素の並びから動く WebP のバイト列を返す部品になっている。1.4 で道具に繋いだとき、出来たバイト列の先頭が `RIFF`・`WEBP`・`VP8X` で、`ANMF` が 3 つある（areka の読み手での読み戻しは 3.4）
   - _Boundary: 道具の WebP 部品_
   - _Requirements: 3.2, 3.3, 3.4, 8.9_
-- [ ] 1.3 (P) 文のファイルの行を作る
+- [x] 1.3 (P) 文のファイルの行を作る
   - `descript.txt` を手本の値の引き写しにし、先頭の `charset,UTF-8`・`name,areka バルーン`・`id,areka-balloon`・`craftman,ekicyou`・`use_self_alpha,1`・`validrect.right,326` の 4 点だけを替える（`onlinemarker.filename`／`interval` と `windowpos.*` を書かない）
   - 面別の設定 6 つを要件 5.5 の値で、`install.txt` を `type,balloon`・`directory,areka-balloon` で書く
   - `readme.txt` に既定バルーンであること・作り手・権利（絵と設定は CC0・道具のコードは MIT）・手本から数値だけを引き継いだこと・areka でまだ出ないもの（印と数字・入力の箱・面 1 以降の面別の設定）を書く（spec の名前は書かない）
