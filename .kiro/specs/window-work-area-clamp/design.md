@@ -482,7 +482,7 @@ pub(crate) fn keep_restored_groups(
 #### Restore の組の結線
 
 - `apply_restored_placements` は今の窓ごとの写像（`merge_scope`）の後に、記憶から位置を戻したスコープの `RestoredWindow` を組み、`keep_restored_groups` の戻りを当てる。当てるときは `char_pos` と `balloon_pos` を同じ量だけ動かし、`balloon_offset` は変えない（要件 7.7）。純関数のまま（要件 4.5）。
-- `RestoredWindow` を組む私有の関数 1 つ（`restored_windows`）を、組の寄せと下の判定で共有する。`remembered` は今の読み取り（`saved_char_pos`＋`char_pos_from_origin_x`）、`projected` は `project_anchor(anchor, remembered の左上, 大きさ, Some(snapshot))`、印は警告を出さない読み（`entry_value`＋`AdjacencyMark::parse`）。知らない語の警告は今の `restored_scope_marks` の 1 回に任せる。
+- `RestoredWindow` を組む私有の関数 1 つ（`restored_windows`）を、組の寄せと下の判定で共有する。`remembered` と `projected` は**新しく計算し直さず**、`project_restore`（`merge_scope` 経由）が窓ごとの判定のために計算した値を一緒に返させて使う（記憶の位置の計算を 1 か所に保つ。2 か所で計算すると、ずれたときに見えていた組を動かしたり、`RestoredPositionsClamped` を誤って真にしたりする）。印は警告を出さない読み（`entry_value`＋`AdjacencyMark::parse`）。知らない語の警告は今の `restored_scope_marks` の 1 回に任せる。
 - 注記「本関数自身はクランプしない」は「窓ごとの寄せは `project_restore`、組の寄せは `keep_restored_groups`」へ直す。
 
 #### ClampedFlag
