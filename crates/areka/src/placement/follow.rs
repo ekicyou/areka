@@ -41,6 +41,8 @@ mod sticky_follow;
 mod visibility;
 mod window_move;
 mod work_area;
+// キャラ窓を作業領域へ寄せる判定と記録（window-work-area-clamp）。
+mod work_area_clamp;
 
 // limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
 // （`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
@@ -103,6 +105,13 @@ pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 // 見える。表の外から要素を組めないと `entries` が事実上読めない型になるので再輸出は残す。
 #[allow(unused_imports)]
 pub use self::work_area::MonitorDpiEntry;
+// 作業領域へ寄せる鎖の核と記録の語（window-work-area-clamp・task 1.1）。呼び手は起動の並べ直しと
+// 詰め直しで、`#[path]` で src を取り込む examples には無いので、そちらのビルドでは未使用に見える。
+#[allow(unused_imports)]
+pub(crate) use self::work_area_clamp::{
+    ChainClampOutcome, ChainPlacement, ClampScene, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
+    WORK_AREA_UNRESOLVED_TAG, resolve_chain_in_work_area,
+};
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接
 // 呼ばれるため、`follow::` 経由で参照するのは `#[cfg(test)]` のテストモジュールと
@@ -236,3 +245,7 @@ mod default_pos_track_tests;
 #[cfg(test)]
 #[path = "follow_window_move_hold_watch_tests.rs"]
 mod window_move_hold_watch_tests;
+// 作業領域へ寄せる鎖の核（window-work-area-clamp・task 1.1・要件 10.1）。
+#[cfg(test)]
+#[path = "follow_work_area_clamp_chain_tests.rs"]
+mod work_area_clamp_chain_tests;
