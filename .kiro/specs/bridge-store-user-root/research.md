@@ -228,3 +228,50 @@ D2 の見落としの場面は、要件 3.5（箱の中なら 1 件）・要件 
 
 - 要件の討議（`/kiro-requirements-discussion bridge-store-user-root`）で 8 の決め事を決める。
 - 設計（`/kiro-design bridge-store-user-root`）では、案 A／B／C のうち討議 5 で選んだ形と、箱の見分けの手（討議 3）を、7 の調べの 1・2 の測りの結果で確かめてから固める。
+
+## 10. 設計の段の調べと決めたこと（2026-10-29・`/kiro-spec-design -y`）
+
+> 入力は要件（討議で決めた 7 点を含む）・この文書の 1〜8b・steering（`product.md`・`tech.md`・`structure.md`・`logging.md`）・ワークツリーの先頭 `29f6ff2c` のコード。使った手引きは `kiro-spec-design` の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`、steering の `logging.md`（`[bridge]` の頭・構造化の欄・テストの捕捉は `log-capture-kit`）と `structure.md`（テストは兄弟のファイル・1 ファイル 1,000 行・共有のヘルパは `<stem>_test_support.rs`）。
+
+### 10.1 調べの種類
+
+- **軽い調べ（拡張）**。直す所は既存の 2 つのクレート（`areka-mcp-bridge`・`areka-user-data`）と説明書の 2 か所。新しい外部依存は無い。外の文書は 3 章で読み終えている（足して読んだものは無い）。
+
+### 10.2 コードで確かめたこと
+
+- `areka-user-data` の口を呼ぶのは、areka 本体では `crates/areka/src/roots/user_root.rs`（`establish`／`establish_readonly` の選び分け）と `crates/areka/src/boot_config.rs`（`app_profile_dir`／`readonly_app_profile_dir`）だけ。中継は `crates/areka-mcp-bridge/src/config.rs` の `from_env` だけ。新しい口を足しても、この 3 か所は 1 行も変わらない（要件 6.1）。
+- `decide_logged`（`establish.rs`・非公開）は、`Decision::Beside` と `Decision::Fallback` のどちらでも `(None, reason)` を返す。`decide` は `Beside` の理由をいつも `Reason::Neither` にし、`Fallback` の理由は決して `Neither` にしない（`lib.rs` の `decide` の本文と `Decision::Beside` の注記）。新しい口はこの決まりで 2 つを見分けられ、`decide_logged` を変えずに済む。
+- `Config::from_values` の段は `profile_dir.or(beside_profile).or(local)`。隣に `areka.exe` が在って控えを持たない場面で `beside_profile` を `None` にすると、段が `LOCALAPPDATA\areka\mcp-bridge` へ落ち、最初の控えの書き（`cache.rs` の `replace` の `create_dir_all`）が `%LOCALAPPDATA%\areka` そのものを作る。要件 2.2・2.4 を守るには、「隣に areka が居ない」と「隣に areka が居て控えを持たない」を `from_values` の入力の形で分ける必要がある（2 章 2.2 の穴の続き）。
+- `from_values` を呼ぶのは `config.rs` の `from_env` とテスト（`config_tests.rs`）だけ。形を変えても外へは響かない。
+- `tests/exe_test.rs` は `AREKA_PROFILE_DIR` を `target` の下へ向けて建った exe を起こす。直した後もその形のまま動く（控えは `AREKA_PROFILE_DIR` の下）。52〜53 行の注記（「そこを作るので外す」）は古くなるので書き直す。
+- 中継の `Cargo.toml` の開発用の依存は `temp-path-kit` と `tokio` だけ。記録の行のテスト（要件 6.6）には `log-capture-kit`（ワークスペースの中のクレート）を足す。外部依存は 0 のまま（要件 6.3）。
+- areka 本体は `mcp-bridge` のフォルダを作らない（`crates/areka/src` に `mcp-bridge` を作る道は無い）。控えのフォルダを作るのは中継だけなので、控えのフォルダの最終の場所を尋ねれば「中継の書きがどこへ行ったか」が分かる。
+
+### 10.3 決めたこと
+
+| # | 決めたこと | 理由 | 捨てた案 |
+|---|---|---|---|
+| D-1 | `areka-user-data` に口を 1 つだけ足す: `locate_app_profile(signals, exe_dir, profile_env) -> AppProfile`（`establish.rs`）と答えの型 `AppProfile`（`lib.rs`）。答えは `Ready(記憶の置き場)`・`RootMissing { root }`・`MigrationPending { root }`・`Unlocatable` の 4 つ | 討議 5。写しの条件（`migrate_source`）と判断の記録（`decide_logged`・`log_layout`）を `establish.rs` の中に置いたまま使える。`_from` の対を作らず、呼び手が公開の `probe` で入力を作って渡す（口は 1 つ） | 案 A（中継で条件を書き写す）・案 C（`establish_readonly_from` の重ね・"read-only run" の記録が出る） |
+| D-2 | `Ready` の値は `app_profile_dir` で出す（`AREKA_PROFILE_DIR` が在ればそれ・在る書ける根の `profile\areka`・隣の形なら exe の隣の `profile\areka`） | 「`profile\areka`」の綴りの持ち主を `app_profile_dir` 1 つに保つ。答えが今と同じ（要件 2.1） | 中継で `join` する |
+| D-3 | `AREKA_PROFILE_DIR` が在れば、根が無くても写しがまだでも `Ready(その値)` | 要件 2.9（4〜8 に関わらず）。`establish` も `AREKA_PROFILE_DIR` が在れば写さない | — |
+| D-4 | `Config::from_values` の 3 つ目の引数を `Option<PathBuf>` から `Option<AppProfile>` に替える。`None`＝隣に `areka.exe` が無い（今どおり `LOCALAPPDATA` の段へ）・`Some(Ready)`＝その下・`Some(ほか)`＝控え無し（`LOCALAPPDATA` の段へ落ちない） | 10.2 の 3 つ目の穴。型で分けるので、落ちる道が書けない | `bool` を 1 つ足す・中継に別の列挙を作る |
+| D-5 | `Config::from_env` の内側に `from_inputs`（値だけを受け、`locate_app_profile`→`from_values`→控えを持たない理由の記録）を置く。`from_env` は本物の環境・exe の場所・`probe` を読むだけ | 要件 6.7（注入）。`establish_readonly_from` と同じ分け方 | — |
+| D-6 | 箱の見分けは、控えのフォルダの最終の場所を `std::fs::canonicalize` で尋ねるだけ（3.4 の D2）。パッケージの名乗り（D1・`extern "system"` の宣言）は使わない | 3.2 の 3（名乗りの無い子でも箱へ回される）で D1 は「箱の外」の証にならず、「箱の中」の証も初めての起動の 1 回分しか増やさない。`unsafe` の宣言を足さずに済む。D2 は標準ライブラリだけ | D1・D3（D1＋D2）・D4・D5 |
+| D-7 | 見立ては 3 つ: 控えのフォルダが `LOCALAPPDATA` の外の場所に解けた＝箱の中（解けた場所から `LOCALAPPDATA` の下の相対の部分を除いた所を箱のフォルダとして出す）・本当の場所に解けた＝箱の外（行 0 件）・控えが無い／まだ無い／`LOCALAPPDATA` の下でない／解けない＝見分けられない（info 1 件） | 要件 3.5〜3.7・3.9。箱のフォルダの形（`Packages\…\LocalCache\Local`）を決め打ちしない（文書の約束の外） | `Packages\<ファミリー名>\LocalCache\Local` を組む |
+| D-8 | 控えを持たない理由の行は info 1 件（`reason` の欄に `user_root_missing`／`app_memory_not_migrated`・`user_root` の欄に場所）。場所を決められないときは warn 1 件（文を新しく）。どれにも当たらない今の「置き場が無い」は今の warn のまま | 討議 2・3。今の `warn!` 1 件を、場面ごとに重さと文を分ける | 2.4・2.5 も warn |
+| D-9 | `areka-user-data` が出す記録（`user_data_layout`・書けるか分からない warn・決められない error）は、中継の記録にも今どおり残す | 今の中継の記録（`establish` 経由）と同じ行が残る。測りで決めた形が読める | 中継の記録から外す |
+| D-10 | 箱の見立ては `from_env` の最後に 1 回（新しい兄弟のファイル `redirect.rs` の `observe`→`report`） | 要件 2.11（起動のときに 1 回）。`config.rs` を太らせない。OS に触る所は `canonicalize` の 2 回だけ | `main.rs` で呼ぶ |
+| D-11 | 実機の測りの記録は、この文書の新しい節（11 章）に書く | 要件 1.1〜1.3「spec の記録」。ファイルを増やさない | 別のファイル |
+
+### 10.4 合成（generalization・build vs adopt・simplification）
+
+- **まとめられること**: 要件 2.4・2.5・2.7（`Unlocatable`）は、どれも「隣に areka が居るが控えを持たない」の言い換え。`AppProfile` の `Ready` 以外の 3 つとして 1 つの型にまとめ、`from_values` はそれを「控え無し」の 1 つの腕で受ける。記録の文だけが 3 つに分かれる。
+- **作るか借りるか**: 箱の最終の場所は OS の `GetFinalPathNameByHandle` を `std::fs::canonicalize` で借りる（Windows では `CreateFile`＋`GetFinalPathNameByHandle`）。`windows` クレートも `extern` の宣言も足さない。記録の捕捉は既存の `log-capture-kit`、一時の根は既存の `temp-path-kit`。
+- **削ったもの**: `locate_app_profile_from`（`_from` の対）・パッケージの名乗りの読み・箱のフォルダの組み立て・中継の新しい列挙（`BesideAreka` など）・測りの道具のスクリプトの登記（測りの手順は `target\` の下で使い捨て）。
+
+### 10.5 残る危うさ
+
+- **箱の外の取り違え（一度だけ）**: 箱の外で動いた中継（PowerShell から起こしたなど）が本当の場所に控えのフォルダを作った後、箱の中の中継が初めて起こされると、本当の場所が見える（重ねて見せられる）ので「箱の外」と見立てる。その起動の書きで箱の中に写しができるので、次の起動からは「箱の中」になる。取り違えは 1 回の起動に限られる。コードに `shortcut:` の注記で残す。
+- **ジャンクションの取り違え**: 利用者が `%LOCALAPPDATA%\areka` をジャンクションで別の場所へ向けていると、「箱の中」と見立てる。行には尋ねた場所と解けた場所の両方を出すので、読めば分かる。
+- **中継の exe で `canonicalize` が箱の場所を返すか**: 3.2 は PowerShell から OS を直に呼んで確かめただけ。直した後の測り（要件 1.3）で、箱の行に箱のフォルダが出ることを確かめる。出なければ D-6 を見直す（設計に戻る）。
+- **箱の中から本当の `R` が見えるか（要件 1.1 の d）**: 文書では見える。見えなければ、Store 版の利用者は毎回 `RootMissing`（控え無し）になる。要件のとおりの振る舞いだが、説明書の文を測りに合わせて直す（要件 5.1）。
