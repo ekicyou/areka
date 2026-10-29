@@ -33,6 +33,7 @@
 //! | `definition` | `areka_balloon_fixture/definition.rs` | 文のファイルの中身・読み込みの記録・描画範囲の解け方 |
 //! | `bake` | `areka_balloon_fixture/bake.rs` | 面 0 の焼き込みと半透明の保持 |
 //! | `online` | `areka_balloon_fixture/online.rs` | オンラインの印のコマ・待ち時間・繰り返し・灯る点の α |
+//! | `wrapping` | `areka_balloon_fixture/wrapping.rs` | 折り返しの行数と字数・範囲への内包・拡大率 1.0 と 1.25 |
 
 #[cfg(test)]
 #[path = "areka_balloon_fixture/test_support.rs"]
@@ -53,3 +54,7 @@ mod bake;
 #[cfg(test)]
 #[path = "areka_balloon_fixture/online.rs"]
 mod online;
+
+#[cfg(test)]
+#[path = "areka_balloon_fixture/wrapping.rs"]
+mod wrapping;
