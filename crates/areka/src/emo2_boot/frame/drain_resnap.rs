@@ -194,7 +194,15 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
         let k = wiring
             .presenter
             .applied_ratio(shell_target(directive.scope))
-            .unwrap_or(ScaleRatio::ONE);
+            .unwrap_or_else(|| {
+                // 件 5 の測り（MoveMeasure・要件 6.1）: 表示の前に指令が当たったかを記録で読む。
+                info!(
+                    event = "move_ratio_unset",
+                    scope = directive.scope,
+                    "表示の前なので \\![move] を拡大率 1 で当てる"
+                );
+                ScaleRatio::ONE
+            });
         // 適用の全縮退（窓・作業領域・主モニタの不在）は apply_move_directive 内で warn!＋false 済み
         // （log-first・R5.5）。戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
         apply_move_directive(world, &directive, k);

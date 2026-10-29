@@ -347,3 +347,48 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     );
     assert!(wiring.drain_move_directives().is_empty(), "全件消費");
 }
+
+/// 件 5 の測り（window-work-area-clamp 3.1・要件 6.1）: 表示の前（`applied_ratio` が無い）の指令は
+/// `move_ratio_unset` をスコープつきで残し、当てた記録には拡大率と動かす窓の大きさが載る。
+///
+/// target scope1 は (1049,1087,278,357)。表示していない presenter ゆえ k は 1。
+#[test]
+fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
+    let (mut world, _gw) = resnap_world();
+    let (tx, rx) = mpsc::channel::<PositionCue>();
+    let wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        rx,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        synth_assets(&[(0, 0)]),
+    );
+    tx.send(PositionCue::Move(fixture_move_directive()))
+        .expect("送出は成功する");
+
+    let logs = capture_logs(|| run_move_drain_phase(&wiring, &mut world));
+
+    let unset: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("move_ratio_unset"))
+        .collect();
+    assert_eq!(unset.len(), 1, "表示の前の指令は 1 行残す: {logs:?}");
+    assert!(
+        unset[0].contains("level=INFO") && unset[0].contains("scope=1"),
+        "info でスコープつき: {unset:?}"
+    );
+    let applied: Vec<&String> = logs.iter().filter(|l| l.contains("move_applied")).collect();
+    assert_eq!(applied.len(), 1, "{logs:?}");
+    for field in [
+        "k=ScaleRatio { num: 1, den: 1 }",
+        "target_w=278",
+        "target_h=357",
+    ] {
+        assert!(applied[0].contains(field), "{field} が無い: {}", applied[0]);
+    }
+}
