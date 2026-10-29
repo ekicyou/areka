@@ -14,12 +14,13 @@ use crate::placement::balloon_lock::apply_script_balloon_lock;
 use crate::placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
     boot_pair_decision, mark_non_positive_widths, moved_default_pos, note_chain_deferral,
-    resolve_chain,
 };
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
-use crate::placement::follow::{move_window_to, resize_window_to};
+use crate::placement::follow::{
+    ClampScene, move_window_to, place_chain_in_work_area, resize_window_to,
+};
 use crate::placement::persist::persist_unremembered_char_positions;
 use crate::placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use crate::placement::reset_pos::reset_window_positions;
@@ -476,7 +477,23 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
 
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     mark_non_positive_widths(&mut slots);
-    let moves = resolve_chain(&slots);
+    // 解いた鎖を基準の窓のモニタの作業領域の中に置く（window-work-area-clamp 要件 1・2.2）。
+    // 場面は記録の語だけ: 既定の位置が有れば起動の並べ直し、無ければ記憶からの隣り合わせ。
+    let has_default = |scope: usize| {
+        states
+            .iter()
+            .any(|s| s.scope == scope && s.default_x.is_some())
+    };
+    let moves: Vec<_> = place_chain_in_work_area(world, &slots, &targets, |scope| {
+        if has_default(scope) {
+            ClampScene::BootRepack
+        } else {
+            ClampScene::RememberedJoin
+        }
+    })
+    .into_iter()
+    .filter(|p| p.to != p.from)
+    .collect();
     // 記憶から戻した組は、動かさない組も含めて組ごとに 1 行残す（7.1）。
     for (i, (slot, state)) in slots.iter().zip(&states).enumerate().skip(1) {
         if state.default_x.is_some() {
@@ -486,7 +503,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         let to_x = moves
             .iter()
             .find(|m| m.scope == slot.scope)
-            .map_or(slot.current_x, |m| m.new_x);
+            .map_or(slot.current_x, |m| m.to.x);
         info!(
             prev_scope = slots[i - 1].scope,
             scope = slot.scope,
@@ -502,20 +519,17 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
             continue;
         };
         // 記憶に位置の無い組は今の行のまま（記憶から戻した組は上の組の行が出ている）。
-        if states
-            .iter()
-            .any(|s| s.scope == m.scope && s.default_x.is_some())
-        {
+        if has_default(m.scope) {
             info!(
                 scope = m.scope,
                 from_x = pos.x,
-                to_x = m.new_x,
+                to_x = m.to.x,
                 "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1）"
             );
         }
         // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包）。
-        // Y は現在値を据え置く（下端吸着は各窓の再アンカーが既に保っている・7.2）。
-        move_window_to(world, entity, m.new_x, pos.y);
+        // Y は寄せが縦に収めたときだけ変わる（それ以外は今の Y＝下端吸着は再アンカーが保つ・7.2）。
+        move_window_to(world, entity, m.to.x, m.to.y);
     }
 
     // 台帳の既定位置を確定値へ揃える（以後の「既定配置のまま」判定が確定後を基準に働く）。
@@ -524,7 +538,8 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
     // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     //
-    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。台本の `\![move]` が置いた窓は印
+    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる（寄せが縦に収めたときだけ寄せた後の Y・
+    // window-work-area-clamp 要件 7.5）。台本の `\![move]` が置いた窓は印
     // （`ScriptPlaced`）で並べ直しから外れるので、ここへ来るのは台本の置いていない窓だけで、普段は
     // 今の Y と既定の Y が等しく結果は変わらない。今の Y を載せる形にすると、既定と違う Y が既定へ
     // 入り得て、並べ終えた時点の保存の「動かされていない」の判定を化かす
@@ -542,7 +557,11 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
                 );
                 continue;
             };
-            ghost_windows.set_default_char_pos(m.scope, moved_default_pos(old_default, m.new_x));
+            let mut pos = moved_default_pos(old_default, m.to.x);
+            if m.to.y != m.from.y {
+                pos.y = m.to.y;
+            }
+            ghost_windows.set_default_char_pos(m.scope, pos);
         }
     }
 
