@@ -329,7 +329,6 @@ fn opposite(decision: PairDecision) -> PairDecision {
 /// 記録: 吸着が `Free` でない・経路が違う・キャラ窓でない窓は記録しない。`Free` のキャラ窓で
 /// 動かさなかったものは `Keep`（debug!）、作業領域が取れなければ `Unresolved`（warn!・要件 7.4）、
 /// 収めたら `Clamp`（info!・how=grown）。
-#[allow(dead_code)] // 呼び手は `resize_window_to`（task 2.3）・examples には無い
 pub(crate) fn clamp_grown_free_default(
     world: &World,
     char_window: Entity,

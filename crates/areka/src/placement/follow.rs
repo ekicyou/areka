@@ -112,9 +112,7 @@ pub(crate) use self::work_area_clamp::{
     ChainClampOutcome, ChainPlacement, ClampScene, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
     WORK_AREA_UNRESOLVED_TAG, place_chain_in_work_area, resolve_chain_in_work_area,
 };
-// 面の拡大の寄せ（task 1.3）。`window_move` が `super::` で辿る私有の再束縛。呼ぶ文は task 2.3 で
-// 足すので、それまでと examples のビルドではテストの外で未使用に見える。
-#[allow(unused_imports)]
+// 面の拡大の寄せ（task 1.3）。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
 // 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（task 2.4）で、それまでと examples の
 // ビルドではテストの外で未使用に見える。

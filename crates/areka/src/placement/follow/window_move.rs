@@ -326,6 +326,9 @@ pub fn resize_window_to(
         new_pos,
         new_size,
     );
+    // 3d. 既定の位置にいる free のキャラ窓が大きくなってはみ出したら収める（window-work-area-clamp 要件 3.1）。
+    let new_pos =
+        super::clamp_grown_free_default(world, char_window, anchor, route, new_pos, new_size);
 
     // 4. べき等 skip（Req3.1）: 導出 (position, size) が現 WindowPos と同一なら書かない
     //    （冗長な再配置を避ける・こちらは正常系ゆえ debug!）。

@@ -7,16 +7,17 @@
 use bevy_ecs::prelude::*;
 
 use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
-use super::test_support::{dragging_state, point, rect};
+use super::test_support::{dragging_state, fake_handle, point, point_of, rect};
 use super::{
     MonitorSnapshot, PlacementRoute, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
-    WORK_AREA_UNRESOLVED_TAG, clamp_grown_free_default,
+    WORK_AREA_UNRESOLVED_TAG, clamp_grown_free_default, resize_window_to,
 };
 use crate::placement::chain_finalize::ScriptPlaced;
 use crate::placement::follow::OffsetBase;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+use wintf::ecs::window::drain_window_pos_commands;
 
 const SCOPE: usize = 0;
 /// 既定の位置（下端 864+840=1704＝作業領域の下端）。
@@ -234,4 +235,51 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
     assert_eq!(warns[0].expect_field("reason"), "\"no-monitor-snapshot\"");
     assert_eq!(warns[1].expect_field("reason"), "\"no-work-area\"");
     expect_one(&events, WORK_AREA_CLAMP_TAG);
+}
+
+/// ⑶ 大きさを変える書き込み（`resize_window_to`）を通すと、寄せた位置と新しい大きさがキャラ窓へ
+/// 1 回で書かれ（要件 7.3）、既定の位置が寄せた先へ運ばれ（要件 7.5）、バルーンが同じだけ付いて
+/// 動く（ずらしは変えない）。
+#[test]
+fn resize_write_clamps_once_carries_default_and_moves_balloon() {
+    let _residue = drain_window_pos_commands();
+    let (mut world, char_window) = world_free(Some(desk()));
+    let balloon = world
+        .resource::<GhostWindows>()
+        .balloon_window(SCOPE)
+        .expect("balloon 窓がある");
+    world.entity_mut(char_window).insert(fake_handle(0x100));
+    world.entity_mut(balloon).insert(fake_handle(0x200));
+    let balloon_before = point_of(&world, balloon);
+
+    assert!(resize_window_to(
+        &mut world,
+        char_window,
+        GROWN,
+        PlacementRoute::Resnap
+    ));
+
+    let clamped = point(1000, 1704 - 1368);
+    let char_writes: Vec<_> = drain_window_pos_commands()
+        .into_iter()
+        .filter(|c| c.hwnd == fake_handle(0x100).hwnd)
+        .collect();
+    assert_eq!(char_writes.len(), 1, "キャラ窓への書き込みは 1 回");
+    let w = &char_writes[0];
+    assert_eq!(
+        (w.x, w.y, w.width, w.height),
+        (clamped.x, clamped.y, GROWN.w, GROWN.h)
+    );
+    assert_eq!(point_of(&world, char_window), clamped);
+    assert_eq!(
+        world.resource::<GhostWindows>().default_char_pos(SCOPE),
+        Some(clamped),
+        "既定の位置が寄せた先へ運ばれる"
+    );
+    let dy = clamped.y - DEFAULT_POS.y;
+    assert_eq!(
+        point_of(&world, balloon),
+        point(balloon_before.x, balloon_before.y + dy),
+        "バルーンはキャラ窓と同じだけ動く"
+    );
 }

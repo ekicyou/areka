@@ -335,3 +335,95 @@ fn resnap_from_sizes_same_size_repeats_never_change_window_state() {
         );
     }
 }
+
+// ── window-work-area-clamp task 2.3: 面の拡大の寄せと同じフレームの位置の指令（要件 3.1・3.3・3.4） ──
+
+/// 既定の位置にいる `free` の scope0 が面の再スナップで作業領域の下へはみ出すほど大きくなると、
+/// 寄せた位置へ 1 回で書かれ、同じフレームの `\1\![move,--base=0,…]`（scope1 の左下を scope0 の
+/// 左上へ）は寄せた後の矩形を基準に scope1 を置く（要件 3.3）。並べ直しはやり直さない＝どちらの窓も書き込みは 1 回ずつ（要件 3.4）。
+#[test]
+fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
+    use super::test_support::{
+        FrameHarness, PerTargetSizes, SPAWN_SIZE_1, synth_assets, zero_clock,
+    };
+    use crate::emo2_boot::move_cue::{PositionCue, parse_move_directive};
+    use crate::placement::chain_finalize::ChainFinalized;
+    use crate::placement::follow::Anchored;
+    use crate::placement::resolver::Anchor;
+    use std::{cell::RefCell, rc::Rc, sync::mpsc};
+    use wintf::ecs::WindowHandle;
+
+    let mut harness = FrameHarness::new();
+    harness.world.insert_resource(ChainFinalized);
+    harness.advance_frame();
+    let (char0, char1) = (harness.char_window(0), harness.char_window(1));
+    // 両方 free（scope1 も吸着で縦を戻されないように）。
+    for e in [char0, char1] {
+        harness.world.entity_mut(e).insert(Anchored(Anchor::Free));
+    }
+
+    let (tx, rx) = mpsc::channel::<PositionCue>();
+    let wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        rx,
+        mpsc::channel::<crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(areka_emo_text::actor::TextLayerRuntime::new(
+            areka_emo_text::state::TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        synth_assets(&[(0, 0)]),
+    );
+    let tokens: Vec<String> = [
+        "--X=0",
+        "--Y=0",
+        "--base=0",
+        "--base-offset=left.top",
+        "--move-offset=left.bottom",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    tx.send(PositionCue::Move(
+        parse_move_directive(1, &tokens).directive,
+    ))
+    .expect("送出は成功する");
+
+    // scope0 は y=757 の 434×687（下端 1444＝作業領域の下端）から 434×900 へ。
+    let sizes = PerTargetSizes::new([(0, Some((434, 900))), (1, Some(SPAWN_SIZE_1))]);
+    harness.run_resnap(&sizes);
+    run_move_drain_phase(&wiring, &mut harness.world);
+    harness.run_chain_finalize(&sizes);
+
+    let clamped = Point {
+        x: 1483,
+        y: 1444 - 900,
+    };
+    assert_eq!(
+        pos_of(&harness.world, char0),
+        Some(clamped),
+        "下へはみ出した分だけ上げる"
+    );
+    assert_eq!(
+        pos_of(&harness.world, char1),
+        Some(Point {
+            x: 1483,
+            y: clamped.y - SPAWN_SIZE_1.1 as i32,
+        }),
+        "寄せた後の scope0 の左上を基準に置かれる（寄せる前の上辺 757 ではない）"
+    );
+    let hwnd = |e| harness.world.get::<WindowHandle>(e).expect("偽 HWND").hwnd;
+    let (h0, h1) = (hwnd(char0), hwnd(char1));
+    let writes = harness.drain_writes();
+    assert_eq!(
+        writes.iter().filter(|c| c.hwnd == h0).count(),
+        1,
+        "scope0 は 1 回で書く"
+    );
+    assert_eq!(
+        writes.iter().filter(|c| c.hwnd == h1).count(),
+        1,
+        "scope1 は位置の指令の 1 回だけ（並べ直しをやり直さない）"
+    );
+}
