@@ -7,6 +7,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::ActorKey;
 use tracing::{debug, info, trace, warn};
 
+use crate::choice::CursorFallback;
 use crate::place::PlaceKey;
 use crate::region::{TextRegion, inline_axis_name};
 #[cfg(doc)]
@@ -34,6 +35,11 @@ impl ResolveInputs {
     /// 覚えた入力が、いま解き直すなら渡す入力と同じか（毎フレームの比べ・写しを作らない）。
     fn is(&self, model: &BalloonModel, image_size: (u32, u32), background: (u8, u8, u8)) -> bool {
         self.image_size == image_size && self.background == background && self.model == *model
+    }
+
+    /// 覚えた入力の選択肢の飾りの縮退の値（飾りの警告の「前の値」・要件 2.3）。
+    fn cursor_fallback(&self) -> CursorFallback {
+        CursorFallback::of(self.model.cursor())
     }
 }
 
@@ -216,19 +222,45 @@ impl TextLayerRuntime {
         let resolved =
             ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
         let place = PlaceKey::balloon(&actor);
-        self.register_actor(actor, binding, resolved);
-        self.remember_inputs(place, model, binding.image_size, background);
+        // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
+        let previous = self.cursor_fallback_at(&place);
+        self.register_actor(actor.clone(), binding, resolved);
+        self.remember_inputs(
+            &actor,
+            place,
+            model,
+            binding.image_size,
+            background,
+            previous,
+        );
+    }
+
+    /// 場所の記憶の入力から取り出した飾りの縮退の値（記憶が無ければ `None`）。
+    fn cursor_fallback_at(&self, place: &PlaceKey) -> Option<CursorFallback> {
+        self.resolve_inputs
+            .get(place)
+            .map(ResolveInputs::cursor_fallback)
     }
 
     /// 解き直しの入力を場所の記憶へ入れ直す（装着・再追従の作り直しは `register_actor` の後、
     /// 再追従の中の段は解いた値が `layout_input` に等しいと確かめた後に呼ぶ＝不変条件を保つ）。
+    ///
+    /// 入れ直すときに、選択肢の飾りの縮退の値を `previous`（入れ直す前の記憶の値・呼び手が
+    /// `register_actor` の前に取り出す）と比べて警告する（`warn_cursor_fallback`・要件 2.1〜2.4）。
     fn remember_inputs(
         &mut self,
+        actor: &ActorKey,
         place: PlaceKey,
         model: &BalloonModel,
         image_size: (u32, u32),
         background: (u8, u8, u8),
+        previous: Option<CursorFallback>,
     ) {
+        decoration::warn_cursor_fallback(
+            &self.balloon_label_of(actor),
+            &CursorFallback::of(model.cursor()),
+            previous.as_ref(),
+        );
         let inputs = ResolveInputs {
             model: model.clone(),
             image_size,
@@ -335,7 +367,15 @@ impl TextLayerRuntime {
             ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
         if current == binding && self.layout_input.get(&place) == Some(&resolved) {
             // 中の段: 解いた値が今と同じ——記憶だけを新しい入力へ替える（不変条件は保たれる）。
-            self.remember_inputs(place, model, binding.image_size, background);
+            let previous = self.cursor_fallback_at(&place);
+            self.remember_inputs(
+                actor,
+                place,
+                model,
+                binding.image_size,
+                background,
+                previous,
+            );
             trace!(
                 actor = %actor,
                 k = k_new,
@@ -348,8 +388,17 @@ impl TextLayerRuntime {
         // layout 入力を再構築する（単一構築経路・R4.3）。純粋状態（TextLayerState）には
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
         let collapsed = resolved.region.is_collapsed();
+        // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
+        let previous = self.cursor_fallback_at(&place);
         self.register_actor(actor.clone(), binding, resolved);
-        self.remember_inputs(place.clone(), model, binding.image_size, background);
+        self.remember_inputs(
+            actor,
+            place.clone(),
+            model,
+            binding.image_size,
+            background,
+            previous,
+        );
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
         // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で
