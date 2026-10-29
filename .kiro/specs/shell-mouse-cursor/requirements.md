@@ -135,7 +135,7 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 #### Acceptance Criteria
 
 1. When `system:arrow`・`cross`・`finger`・`help`・`move`・`no`・`text`・`wait` のどれかを出す, the areka shall OS の標準の形のうち対応する形（矢印・十字・指差し・ヘルプ・四方向の移動・禁止・文字の I・待ち）を、利用者が OS で設定した絵と大きさで出す。
-2. When `system:hand`・`system:grip` を出す, the areka shall areka が同梱する「手を開いた形」「手を握った形」の絵を出し、指差し（`system:finger`）と見分けられる形にする。絵は要件の段で開発者が選んだもの（fal で作った案から選ぶ・許諾の分かるもの）とする。
+2. When `system:hand`・`system:grip` を出す, the areka shall areka が同梱する「手を開いた形」「手を握った形」の絵を出し、指差し（`system:finger`）と見分けられる形にする。絵は要件の段で開発者が選んだもの（2026-10-29・fal の Ideogram Vector で作った 4 案から、開いた手は `cursor-art/hand.svg`・握った手は `cursor-art/grip.svg` を選んだ。白地の手の形を、まわりに 1 px の黒い縁を付けて出す）とする。
 3. When `.cur` のファイルを指定どおりに出す, the areka shall そのファイルの絵を出す。`.ani` のファイルなら、ファイルどおりに動かして出す。
 4. The areka shall cursorブレスのファイル名とゴーストの descript のファイル名を、どちらもシェルのフォルダ → ゴーストのフォルダ（`ghost\master`＝ゴーストの descript の置き場）の順で探す（ukadoc のプロパティ `currentghost.mousecursor` の「相対パス指定はシェル→ゴーストフォルダ内の順で探索する」に合わせる）。
 5. If 指定のファイルが無い・読めない・カーソルのファイルとして壊れている, the areka shall その場面の既定の形（要件 2〜5 の順で決まる形）を出し、ファイル名・探した場所・理由を記録に残す。
@@ -167,7 +167,7 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 | 3 `mousehover*`・`mousewheel*` の既定の矢印 | 推奨は「正典どおり矢印。ただし SSP が矢印にしなければ乗る形のまま」。**SSP の測り（2026-10-29・`research.md` 8 節）で、行の無い × と身体の上で 3 秒止めても、ホイールを回しても形は替わらなかった＝「行の無い場面は乗る形のまま」に改めた**。ukadoc の既定 `system:arrow` は、`mousehover*`・`mousewheel*` の行に `system:arrow` を書いたときの形とは別に、areka では使わない（§8 に書く） | ukadoc の字面どおり、行が無ければ矢印 | 4.1・4.3・5.4 |
 | 4 ホイールの形から戻る時（brief の議題 2） | **カーソルが動いたとき**（止まったときの形と同じ）。SSP の測りでは、ぱすたに `mousewheel*` の行が無く形が替わらなかったので、戻る時は測れなかった＝推奨のまま | 一定の時間の後に戻す | 4.4 |
 | 5 押している間の形（brief の議題 3） | **ボタンを放すまで押したときの形を保つ**（ドラッグ中も・当たり判定の外へ出ても） | 当たり判定を出たら乗る形・矢印へ戻す | 3.3 |
-| 6 `system:hand`・`system:grip` の絵 | Windows の標準の形に「手を開いた形」「手を握った形」は無い（SSP は自前の絵を出した）。**areka が自前の絵を同梱する**。絵の出どころ（作る・既存の自由に使える絵）と許諾は討議で決める | 指差しで代える（見分けられない） | 6.2 |
+| 6 `system:hand`・`system:grip` の絵 | Windows の標準の形に「手を開いた形」「手を握った形」は無い（SSP は自前の絵を出した）。**areka が自前の絵を同梱する**。2026-10-29 に開発者が絵柄を「Windows 風」と決め、fal の Ideogram Vector（SVG で出る）で開いた手・握った手を 2 案ずつ作り、`hand-a`・`grip-a` を選んだ（`cursor-art/`）。許諾: Ideogram の利用規約（ https://ideogram.ai/legal/tos 2.1）は出来た絵の持ち主を名乗らず、使い道も縛らない。fal の利用規約（ https://fal.ai/terms 4(c)）も出来た絵の権利を求めない。Ideogram の API の規約の「Powered by Ideogram」の表示が fal 経由に及ぶかは確かめられなかったので、同梱の絵の出どころを配布物の説明に書く案を設計の段に回す | 指差しで代える（見分けられない） | 6.2 |
 | 7 `mousecursor.text`・`mousecursor.wait` | **読むが出さない**（キャラクターの窓に入力ボックスも「処理中で応答できない」状態も無い）。入力ボックスが来たら、その spec が使う | 処理中の状態を新しく決めて `wait` を出す | 5.7・7.4 |
 | 8 `bust` の綴り | 正典は `bust` と `Bust` の両方で書く。**大文字と小文字を区別せずに `bust` と見る**（ほかの当たり判定名は綴りどおり） | 小文字の `bust` だけ | 2.2・3.1・5.2・5.3 |
 | 9 ゴーストのフォルダ | 正典の「ゴーストフォルダ」を **`ghost\master`** と読む（descript の置き場所）。測るには SSP に入っているぱすたへファイルを置いて書き換え、読み直させる必要があるので、測らなかった（入っているゴーストを書き換えない）＝推奨のまま | ゴーストの根 | 6.4 |
