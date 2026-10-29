@@ -164,7 +164,29 @@
 - `placement-measure-bake-once`: `shell_target.rs` の読み込みの口を変える案を選んだときに重なる。本 spec の `shell_target.rs` への足しは数行にとどめ、本体は新しいファイルへ。
 - `mouse-hover-event`（版は未定）・`shell-tooltip`・`shell-hover-animation`: 「止まった」の判定と当たり判定の読み口を後から使う。置き場を共有できる形にしておく。
 
-## 8. 次の段
+## 8. SSP の測り（2026-10-29・要件討議の承認の後）
+
+- 開発者の許し: 要件討議の「承認」。排他テストの机を取り、測り終えてすぐ返した。
+- 相手: SSP（pid 41648）の「窓際のぱすたさん」。面 1000、`scope(0)`・`scope(1)` の rect はどちらも `-2555,844,-1724,1870`。OS の「マウスを止めたと見なす時間」（`SPI_GETMOUSEHOVERTIME`）は 400 ミリ秒。
+- 道具: Python の ctypes で `SendInput`（`MOVE|ABSOLUTE|VIRTUALDESK`・per-monitor DPI）を送り、`GetCursorInfo` の `hCursor` を `LoadCursorW(NULL, IDC_*)` と比べて読んだ。押す前に `WindowFromPoint` で SSP の窓かを確かめた。点は 10-23 の測りの点を、今の rect の左上からの差で写した。クリックはしていない。
+- 結果（止めて 3 秒のあいだ 5 ミリ秒ごとに読んだ）:
+
+| 点 | 窓のクラス | 止めている間の形 | ホイール 1 回（+120）の後・その後 2px 動かした後 |
+| --- | --- | --- | --- |
+| ×（-1857,901・行なし） | `Tmainform` | `HAND`（指差し）のまま替わらない | `HAND` のまま・`HAND` のまま |
+| ボール（-2388,1448・行なし） | `Tmainform` | `HAND` のまま | — |
+| 身体（-2183,1093・`system:hand`） | `Tmainform` | `custom`（SSP の手の形）のまま | `custom` のまま・`custom` のまま |
+| 身体（-2073,1283・`system:hand`） | `Tmainform` | `custom` のまま | — |
+| 10-23 に矢印だった白地（-2473,1643） | `Tkeroform` | `HAND` のまま | — |
+
+- 読み方:
+  - 議題 3: `mousehover*`・`mousewheel*` の行の無い当たり判定の上で、止めても（400 ミリ秒の 7 倍以上）ホイールを回しても、SSP は ukadoc の既定の `system:arrow` を出さず、乗ったときの形のままだった。要件 4.1・4.3・5.4 を「行が無ければ乗ったときの形のまま」に改めた。
+  - 議題 2・4: 形が替わらなかったので、止まったと見なす時間とホイールの形から戻る時は測れなかった（ぱすたに `mousehover*`・`mousewheel*` の行が無い）。測るには行のあるシェルが要る。推奨のまま。
+  - 議題 9: 測るには SSP に入っているぱすたへ `.cur` を置き、`surfaces.txt` を書き換えて読み直させる必要がある。入っているゴーストを書き換えないので測らなかった。推奨のまま。
+  - 白地の点は、今回は窓の枠（`\1`・`Tkeroform`）の上で指差しになった。10-23 は矢印だった。窓の枠の面の当たり判定の上に当たったと見られるが、どの当たり判定かは引いていない（本 spec の決めには効かない）。
+- 根拠: スクリプトはセッションの一時フォルダの `cursor_measure.py`（リポジトリの外・残さない）。出力は上の表がすべて。
+
+## 9. 次の段
 
 - 要件討議（`kiro-requirements-discussion`）で 5 節の項目を議題 1〜9 と合わせて決める。
 - その後 `/kiro-design shell-mouse-cursor` で設計へ。
