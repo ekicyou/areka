@@ -97,8 +97,8 @@ where
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>(&name, move |rx| {
         // 演者 sink（Send 境界付き＝thread へ move 可）を register 順のまま保持する。
         // 初回 Tick で刻印済み台本の CuePlayer へ broadcast 登録する（4.3 register_sink）。
-        let mut driver = TalkDriver::new(sinks, system_vars, done, strict);
-        run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| Ok(driver.handle(msg)));
+        let mut handle = talk_handler(sinks, system_vars, done, strict);
+        run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| Ok(handle(msg)));
     });
 
     // 投函経路の一貫: spawn 直後に Start を自己投函する（外部からは送らない）。
@@ -108,6 +108,23 @@ where
     }
 
     TalkHandle { inbox, actor }
+}
+
+/// [`spawn_talk`] の talk スレッドが inbox の 1 通ずつを捌く口（同じ駆動）を、呼んだスレッドの上に作る。
+///
+/// 戻りが `Break` なら talk は終わった。strict の記録は捌いたスレッドで書かれるので、記録を
+/// そのスレッドで捕える試験が talk スレッドを起こさずに同じ駆動を回すために使う（mcp-strict-errors 9.2）。
+pub fn talk_handler<D>(
+    sinks: Vec<Box<dyn CueSink + Send>>,
+    system_vars: SystemVarSnapshot,
+    done: Sender<D>,
+    strict: Option<StrictHooks>,
+) -> impl FnMut(SakuraMsg) -> ControlFlow<()>
+where
+    D: From<TalkDone> + From<ChoiceWaiting> + Send + 'static,
+{
+    let mut driver = TalkDriver::new(sinks, system_vars, done, strict);
+    move |msg| driver.handle(msg)
 }
 
 /// 1 talk の駆動状態機械（body ローカル・他 talk と共有しない・R10.3）。
