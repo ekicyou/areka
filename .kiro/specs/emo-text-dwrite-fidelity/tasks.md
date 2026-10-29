@@ -11,7 +11,7 @@
   - 太字の指定は「名前の太さと BOLD の大きい方」、指定が無ければ名前の太さ。斜体の指定は ITALIC、無ければ名前の斜体
   - 檻 U7: Regular・Medium・Light・Black × 太字の有無、Regular・斜体の顔 × 斜体の有無の表がすべて期待どおりで緑（中太＋太字は 700・Black＋太字は 900）
   - _Requirements: 4.2, 4.3, 4.4, 4.5_
-- [ ] 1.2 フォント台帳に GDI の名前での引き直しを足す
+- [x] 1.2 フォント台帳に GDI の名前での引き直しを足す
   - 候補ごとに「ファイル名なら読み飛ばし → 家族名で在れば Regular の顔 → 無ければ GDI の名前として引き、在ればその家族・太さ・幅・斜体」の順で、最初に当たった候補を採る
   - 台帳の生成時に GDI 互換の口を 1 度だけ取る（失敗は `error!`＋`Err`）。見つからない名前は次の候補へ（記録しない）、想定外の失敗は `error!` を残して次の候補へ、31 単位を超える候補は GDI では引かない（`debug!`）
   - 記憶を「候補列 → 顔（または無し）」にし、顔を返す口・家族名だけ返す口・全滅なら既定（ＭＳ ゴシック Regular）・全滅なら渡した顔、の 4 つの口を揃える。全滅の `warn!` は今のまま 1 度
@@ -108,3 +108,4 @@
 - テストの絞り込み語は `draw_catalog` では 0 件（モジュールの道は `draw::catalog::tests`）。`cargo test -p areka-emo-text --lib catalog` を使う。
 - `cargo clippy -p areka-emo-text --all-targets -- -D warnings` は触っていない `dola` と crate 内の既存の指摘（rustc 1.99.1 の新しい lint・約 45 件）で落ちる。判定は `--no-deps` で「触ったファイルに新しい指摘が無いこと」。既存の指摘は本 spec の外（完了の棚卸で扱う）。
 - 1.1 の `FontFace` に付けた `#[allow(dead_code, reason = …)]` 2 か所は、1.2 で使い始めたら外す。
+- 1.2 の後、ぱすたの候補列の `pick` の家族名は「Yu Gothic」（GDI の名前で当たった顔の GetFamilyNames の 0 番目）。`viewbox_draw_vertical_band_readback_tests.rs` の `R_FONTS` の期待値をそれに合わせた。
