@@ -21,7 +21,7 @@ use crate::segment::{SegmentPlan, segment_plan};
 use crate::state::{ActorTextState, SurfaceKeyOutcome, TextLayerState};
 
 /// 合図 1 つで状態を進める。`\s` は `resolve` で番号に解いて行き先へ渡し（閉包が無ければ読まない）、
-/// そのあと `state.apply_cue(cue)` を呼ぶ。
+/// そのあと `state.apply_cue(cue)` を呼び、その答え（名前の形の `\b` の箱が無かったか）を返す。
 ///
 /// 同じ状態・同じ閉包・同じ合図なら同じ結果になる。描画の全消し要求や選択肢の写しの後始末は
 /// 状態の外の話なので、ここでは扱わない（呼ぶ側の結線が持つ）。
@@ -29,7 +29,7 @@ pub(crate) fn advance_state(
     state: &mut TextLayerState,
     resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
     cue: &TalkCue,
-) {
+) -> bool {
     // `\s` は解決の閉包で番号に解いて行き先へ渡す（要件 4.1）。閉包が無いあいだは
     // 読まない＝行き先は普通のバルーンのまま（要件 5.4）。
     if let CueCommand::Emote { key } = &cue.command {
@@ -40,7 +40,7 @@ pub(crate) fn advance_state(
             }
         }
     }
-    state.apply_cue(cue);
+    state.apply_cue(cue)
 }
 
 /// 先渡しを受け取ってからの消去の数え（区間の番号の元）。空回しと本番で同じ数え方をする。

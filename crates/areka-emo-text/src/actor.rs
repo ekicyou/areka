@@ -18,6 +18,7 @@ use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::strict::DetectionPoint;
 use bevy_ecs::entity::Entity;
 use tracing::debug;
 
@@ -323,7 +324,9 @@ impl TextLayerRuntime {
     /// - `ClearAll`＝**全スコープ**（装着済み全 actor の描画実行部をクリア・#6 の冒頭全消し・
     ///   R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
     ///   行う（`state.rs::apply_cue` の全 `actor_states` 消去と対）。
-    pub fn apply_cue(&mut self, cue: &TalkCue) {
+    ///
+    /// 戻り値は名前の形の `\b[名前]` の箱が無かったか（[`TextLayerState::apply_cue`] の答え）。
+    pub fn apply_cue(&mut self, cue: &TalkCue) -> bool {
         // 状態を進める前の行き先（`\c` が消すのは今の行き先の場所だけ＝純粋状態の `apply_cue` と
         // 同じ宛先）。先渡しの区間の番号は空回しと同じく、この行き先で消去を数える（要件 4.1）。
         let place = PlaceKey {
@@ -377,10 +380,11 @@ impl TextLayerRuntime {
             | CueCommand::AnchorEnd
             | CueCommand::Wait => {}
         }
-        advance_state(&mut self.state, self.surface_resolver.as_deref(), cue);
+        let box_missing = advance_state(&mut self.state, self.surface_resolver.as_deref(), cue);
         // `\c`・台詞の頭で文字が無くなった箱を、提示を待たずに写しから外す。`\s` の受け取りは
         // 行き先だけを替え、箱の置き場所は絵の番号に従う（次の箱の同期が決める）ので外さない。
         self.prune_shown_boxes();
+        box_missing
     }
 
     /// 先渡し（再生の前に渡された、これから届く合図の全部）を受け取る: 今の状態の写しで空回しし、
@@ -614,9 +618,14 @@ pub fn spawn_emo_text(
     let (tx, handle) = areka_actor::spawn_ui("emo-text", move |msg: TextMsg| {
         handle_text_msg_with(
             msg,
-            |cue| match runtime.try_borrow_mut() {
+            |cue, probe| match runtime.try_borrow_mut() {
                 Ok(mut rt) => {
-                    rt.apply_cue(&cue);
+                    let box_missing = rt.apply_cue(&cue);
+                    drop(rt);
+                    // 名前の形の `\b` の箱が無い＝strict の台本へ 1 回知らせる（mcp-strict-errors 要件 4.2）。
+                    if let (true, Some(probe)) = (box_missing, probe) {
+                        probe.report(DetectionPoint::BalloonBoxMissing.finding());
+                    }
                     Ok(())
                 }
                 // 借用競合（UI スレッド上の別処理が runtime を保持中）——panic せず Err 戻しで
@@ -766,3 +775,7 @@ mod decoration_tests;
 #[cfg(test)]
 #[path = "actor_decoration_frame_tests.rs"]
 mod decoration_frame_tests;
+
+#[cfg(test)]
+#[path = "sink_probe_tests.rs"]
+mod sink_probe_tests;
