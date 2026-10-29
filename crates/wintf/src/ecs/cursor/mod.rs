@@ -2,8 +2,9 @@
 //!
 //! 窓の手続きが形を問い合わせる材料と答えの型、自分で作ったカーソルの持ち主、OS の標準の形を
 //! 読む口、`.cur` の目録の読みを置く。どの形を出すかは使う側（[`CursorQuery`] の関数）が決め、
-//! wintf は使う側の型を知らない。`unsafe` と Win32 の呼び出しは `image.rs` だけに置く。
+//! wintf は使う側の型を知らない。`unsafe` と Win32 の呼び出しは `image.rs` と `answer.rs` だけに置く。
 
+pub mod answer;
 pub mod cur_file;
 mod image;
 
