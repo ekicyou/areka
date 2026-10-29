@@ -172,7 +172,7 @@ tools/
 - `crates/wintf/src/ecs/mod.rs` — `pub mod cursor;`。
 - `crates/wintf/src/ecs/window_proc/mod.rs` — `WM_MOUSEHOVER => crate::ecs::cursor::answer::on_mouse_hover(...)` の 1 行。
 - `crates/wintf/src/ecs/window_proc/mouse_move.rs` — `WM_SETCURSOR` の十字の診断の後ろで `crate::ecs::cursor::answer::on_set_cursor(world, entity, hwnd, lparam)` を返す（数行・引数名の `_` を外す）。
-- `crates/wintf/src/ecs/window_proc/mouse_click.rs` — `handle_button_message` の解放（`is_down == false`）の終わりで `push_cursor_rc(world, window_entity, CursorTrigger::Release)`（数行）。
+- `crates/wintf/src/ecs/window_proc/mouse_click.rs` — `WM_[LRMX]BUTTONUP` の各ハンドラで、`handle_button_message` から戻った**後**（世界の借用を返した後）に `push_cursor_rc(world, window_entity, CursorTrigger::Release)`（数行）。`handle_button_message` の中（`try_borrow_mut()` の内側）に置くと借用が必ず取れずに何もしないので置かない（設計の検証の指摘 1）。
 - `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel.rs` — `WM_MOUSEWHEEL` で `push_cursor_rc(world, entity, CursorTrigger::Wheel)`（数行・`_world` を使う）。
 - `crates/wintf/src/ecs/clickthrough/controller.rs` — `evaluate_targets` で透過を外した（`Opaque` の適用に成功した）窓に `push_cursor(world, window, CursorTrigger::Move)`（数行）。
 - `crates/wintf/src/ecs/world/tick_wake.rs` — `WM_MOUSEHOVER` を `POINTER` の旗の表に足す（全走を避ける・1 語）。
@@ -426,7 +426,11 @@ pub enum CursorError {
 - `push_cursor(&World, window, trigger)`: 窓の `WindowHandle` から HWND を取り、`WindowFromPoint(GetCursorPos())` がその窓のときだけ問い合わせて、`Show(h)` なら `SetCursor` する（`Keep`・`None` は何もしない）。`push_cursor_rc` は借用を試してから同じことをする。
 - `trigger_of(msg)`: `WM_MOUSEMOVE`・0（メニュー）・知らない値 → `Move`、`WM_[LMX]BUTTONDOWN`・`WM_[LMX]BUTTONDBLCLK` → `Press { right: false }`、`WM_RBUTTONDOWN`・`WM_RBUTTONDBLCLK` → `Press { right: true }`、`WM_*BUTTONUP` → `Release`。
 - 十字の診断（`WINTF_CROSSHAIR`）は今のまま先に判定する（診断の意味を保つ）。
-- クリック・ドラッグ・メニューの流れには触らない。解放の出し直しは `handle_button_message` の処理が終わった後に足す（要件 3.6）。
+- クリック・ドラッグ・メニューの流れには触らない。解放の出し直しは `WM_[LRMX]BUTTONUP` のハンドラで `handle_button_message` から戻った後に足す（要件 3.6）。`push_cursor_rc` が借用を取れなかったときは `debug!`（解放の形が次の移動まで残る恐れがあるので、`trace!` より上で残す）。
+- 判断の分岐は Win32 から切り離した純関数に置き、`answer_tests.rs` で固定する（設計の検証の指摘 2）:
+  - `plan_set_cursor(hit_test: u32, reply: Option<CursorReply>, trigger: CursorTrigger) -> SetCursorPlan { set: Option<HCURSOR>, result: Option<LRESULT>, rearm_hover: bool }`: `HTCLIENT` でなければ問い合わせず `None`、`Show(h)` は `set = Some(h)`・`result = Some(LRESULT(1))`、`Keep` は `set = None`・`result = Some(LRESULT(1))`（既定の処理を止める＝要件 2.5 の芯）、`None` は `result = None`、`rearm_hover` は `Show` かつ `Move` のときだけ。
+  - `push_allowed(under_cursor: HWND, window: HWND) -> bool`: カーソルの下の窓がその窓のときだけ真。`push_cursor` は `Show` のときだけ `SetCursor`（`Keep`・`None` は何もしない）。
+  - `on_set_cursor`・`push_cursor` は Win32 の値を読んでこれらを呼び、結果どおりに `SetCursor`・`TrackMouseEvent` を呼ぶだけの薄い層にする。
 
 **Contracts**: Service [x] / Event [x]
 
@@ -708,6 +712,9 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
 | 標準の形が読めない | その形は `None`（窓のクラスの矢印） | `error!`（登録で 1 度） |
 | 同梱の絵が作れない | `IDC_HAND` | `error!`（寸法ごとに 1 度） |
 | 世界を借りられない（`WM_SETCURSOR`） | `None`（今の振る舞い） | `trace!` |
+| 世界を借りられない（解放の出し直し `push_cursor_rc`） | 何もしない（次の移動で正しい形） | `debug!` |
+| `GetCursorPos`・`ScreenToClient`・`WindowFromPoint` の失敗（答え・出し直し） | `None`（今の振る舞い）／出し直さない | `trace!` |
+| `GetDpiForWindow` が 0 | 96 として寸法を選ぶ（`dpi_or_default`） | `debug!` |
 | `TrackMouseEvent` の失敗 | 次の移動で掛け直す | `debug!` |
 | `DestroyCursor` の失敗 | 何もしない（解放されないだけ） | `warn!` |
 
@@ -723,7 +730,7 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
 2. `read_cursor_braces`・`parse_shape`（`shell_cursor_table_tests.rs`）: スコープ 0・1・`char2` が 2、5 つの場面、読めない理由の 1 つずつ（欄不足・知らない場面・番号が数でない・当たり判定名が空・知らない system 名・拡張子違い）、知らない見出し、重なりの後勝ちと前の行の報告、面に無い当たり判定名も残る、system 名と拡張子の大小、第 3 欄以降の継ぎ直し。
 3. `read_ghost_cursor_keys`・`candidate_paths`: `mousecursor` と `cursor` の両方・片方ずつ、hand・grip・arrow、text・wait が `unused` に並ぶ、読めない値、絶対パス・ドライブ付き・`\` 始まり・`..` の拒否、シェル → `ghost\master` の順。
 4. `plan_cursor`・`pick_shape`（`cursor_pick_tests.rs`）: 状態の表の全行。乗る → 別の当たり判定へ直に移る（その場で替わる）→ 当たり判定の無い所（矢印）→ 透けた所（Pass）。左・中・右の押下と `bust`／ほか、押したまま外へ・透けた所へ・放す、当たり判定の無い所で押す、解放を落としたときの戻り、止まった（行あり・行なし＝乗る形のまま）、ホイール（同）、押している間の止まった・ホイールの無視、ホイールの形を止まったで上書きしない、位置の変わらない移動で状態が変わらない（2.6）、Refresh。出どころの順（ブレス ＞ descript ＞ 既定）・`Bust`・`BUST`、スコープの分離（2.7）。
-5. `read_cur_directory`・`pick_cur_entry`・`trigger_of`（wintf の兄弟テスト）: 目録の頭と項目の読み・壊れた目録（短い・型が 2 でない・範囲の外）・寸法の選び（ちょうど・間・最大より大きい）・引き金の対応表。
+5. `read_cur_directory`・`pick_cur_entry`・`trigger_of`・`plan_set_cursor`・`push_allowed`・`dpi_or_default`（wintf の兄弟テスト）: 目録の頭と項目の読み・壊れた目録（短い・型が 2 でない・範囲の外）・寸法の選び（ちょうど・間・最大より大きい）・引き金の対応表・`HTCLIENT` の門（`HTCLIENT` 以外は問い合わせない）・`Show`／`Keep`／`None` ごとの `SetCursor` と戻り値（`Keep` は `SetCursor` せずに `LRESULT(1)`）・止まった時計の掛け直しは `Show` かつ `Move` のときだけ・カーソルの下が別の窓なら出し直さない・DPI 0 は 96。
 
 ### Integration Tests
 
