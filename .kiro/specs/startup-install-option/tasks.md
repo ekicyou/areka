@@ -68,7 +68,7 @@
   - 完了の姿: `cargo test -p areka` が緑で、`main.rs` は 983 行ほど・窓口の増えは 8 行ほど
   - _Depends: 2.1, 3.2, 3.3_
   - _Requirements: 1.6, 2.1, 2.7, 4.9, 7.1_
-- [ ] 4.2 窓口の rig で、依頼の出し方の結線を固定する
+- [x] 4.2 窓口の rig で、依頼の出し方の結線を固定する
   - 窓口のテストのファイルに子のテスト `desk_startup_tests.rs` を宣言し、今の rig を借りる
   - 定常到達を 2 回送っても依頼は 1 件・書庫の並びが書いた順・出どころが起動の引数
   - `target\` の下の exe の代わりのフォルダに `initial_install.nar`（と `Initial_Install.NAR`）を置くと先に積まれる・無ければ依頼が無く warn 以上の記録が無い
