@@ -322,13 +322,15 @@ fn the_shared_catalog_constructor_measures_the_same_as_the_owning_one() {
 
 // ────────────────────────── §6 縦書きの em の箱の置き場の実測（spec vertical-choice-hover-band 要件 4.2・6.3）
 
-/// M: `vertical_em_box_left` が、束縛した書体と向きの列の基線から測った値（式 A ＝ left ＋ baseline
-/// − em/2・research.md 17 節）を返し、大きさに比例する。Yu Gothic UI 20 は ∓3.30、ＭＳ ゴシックは 0、
-/// ぱすたの候補列（本番の解決で「游ゴシック」に引ける）は −0.3013／＋0.3008 × em。横書きに束縛した
-/// 物は測らず既定の実装（列の箱の真ん中）と同じ値。
+/// M（spec emo-text-dwrite-fidelity 要件 5.4）: `vertical_em_box_left` は、束縛した書体と向きの列の
+/// 基線から測った値（式 A ＝ left ＋ baseline − em/2）を返す。列のレシピ（行間 UNIFORM・基線は
+/// 箱の幅の半分）の下では Yu Gothic UI・ＭＳ ゴシック・ぱすたの候補列（本番の解決で「游ゴシック」に
+/// 引ける）の 2 方向とも 0（±0.001×em・大きさ 20 と 28・測りが成功した 0 で、縮退の 0 ではない）。列のレシピの前の値（Yu Gothic UI ∓0.1650・
+/// 游ゴシック −0.3013／＋0.3008）は research.md §10.3。束縛と違う縦書きの向きを問われても 0。
+/// 横書きに束縛した物は測らず既定の実装（列の箱の真ん中）と同じ値。
 ///
-/// 較正: 上書きを外す（既定の実装のまま）と、游ゴシックの組が行の箱の比から出る −2.87／＋2.87
-/// （大きさ 20）で赤。
+/// 較正: em の箱の測りを列のレシピ無しの TextLayout へ戻すと、Yu Gothic UI と游ゴシックの組が
+/// 前の値（20 で ∓3.30・−6.03）で赤。
 #[test]
 fn vertical_em_box_left_is_measured_from_the_column_baseline() {
     use areka_parsers::balloon::{Font, FontColor};
@@ -347,25 +349,37 @@ fn vertical_em_box_left_is_measured_from_the_column_baseline() {
         DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics 生成")
     };
-    // (書体, 右から左の比, 左から右の比)（research.md 17.2 節）。
-    for (name, rl, lr) in [
-        ("Yu Gothic UI", -0.1650f32, 0.1650f32),
-        ("ＭＳ ゴシック", 0.0, 0.0),
-        (PASTA, -0.3013, 0.3008),
-    ] {
-        for (mode, ratio) in [(WritingMode::VerticalRl, rl), (WritingMode::VerticalLr, lr)] {
-            let at = |size: u32| bound(name, size, mode).vertical_em_box_left(size as f32, mode);
-            let (v20, v28) = (at(20), at(28));
-            assert!(
-                (v20 - ratio * 20.0).abs() <= 0.05,
-                "{name} 20 {mode:?}: 測った em の箱の左 {v20} が {} でない",
-                ratio * 20.0
-            );
-            assert!(
-                (v28 / 28.0 - v20 / 20.0).abs() <= 1e-3,
-                "{name} {mode:?}: 大きさに比例しない（20 で {v20}・28 で {v28}）"
-            );
+    require_yu_gothic(&bound(PASTA, 20, WritingMode::VerticalRl));
+    for name in ["Yu Gothic UI", "ＭＳ ゴシック", PASTA] {
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for size in [20u32, 28] {
+                let em = size as f32;
+                let m = bound(name, size, mode);
+                // 縮退の 0 でなく測った 0 であること（測りそのものが成功している）。
+                let measured =
+                    super::measure_vertical_em_box_left_ratio(&factory, &m.format, em, mode);
+                assert!(
+                    measured.is_ok(),
+                    "{name} {size} {mode:?}: em の箱を測れない（{measured:?}）"
+                );
+                let left = m.vertical_em_box_left(em, mode);
+                assert!(
+                    left.abs() <= 0.001 * em,
+                    "{name} {size} {mode:?}: 測った em の箱の左 {left} が 0 でない（列のレシピの外で測っている）"
+                );
+            }
         }
+    }
+    // 束縛と違う縦書きの向きを問われても 0（古い ±s/2 の既定の実装へ落とさない）。
+    for (bound_mode, asked) in [
+        (WritingMode::VerticalRl, WritingMode::VerticalLr),
+        (WritingMode::VerticalLr, WritingMode::VerticalRl),
+    ] {
+        assert_eq!(
+            bound(PASTA, 20, bound_mode).vertical_em_box_left(20.0, asked),
+            0.0,
+            "{bound_mode:?} に束縛した物へ {asked:?} を問うた"
+        );
     }
     // 横書きに束縛した物は測らない（既定の実装と同じ値）。
     let horizontal = bound(PASTA, 20, WritingMode::HorizontalTb);

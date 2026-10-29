@@ -53,7 +53,7 @@
   - _Depends: 2.1_
   - _Requirements: 4.8, 4.9, 5.3_
 
-- [ ] 3. 縦書きの列のレシピ
+- [x] 3. 縦書きの列のレシピ
 - [x] 3.1 TextLayout を作る唯一の関数を足し、行の TextLayout をそこで作る
   - 箱の寸法の場合分け（横書き・縦書き）を行の保持庫から関数へ移す
   - 縦書きだけ、行間を「UNIFORM・行の箱の幅・その半分」にし、`vpal`・`vert`・`vkrn` を含まない 10 個の機能（ccmp locl mark mkmk rlig calt clig liga kern rclt）を値 1 で全文字範囲に当てる。横書きには何もしない。失敗は `error!`＋`Err`
@@ -61,7 +61,7 @@
   - 檻 L1（縦書き 2 方向・装飾のある行で行間と 10 個の機能を持ち、横書きは typography 無し・行間既定）と L4（縦書きで絵文字の ZWJ 列と国旗の字形番号と送り幅が typography 無しと一致）が緑
   - 縦書きの読み戻しの固定値（`tests/decoration_readback/vertical.rs` と縦書きを描く兄弟の読み戻しの試験・選択肢の帯の試験）が赤になるのは見込みどおりで、4.3 が改める。このタスクの完了は自分の檻が緑で、その縦書きの読み戻しの組の外に新しい赤が無いこと
   - _Requirements: 1.1, 1.2, 1.3, 1.7, 2.2, 2.5, 5.1, 5.5_
-- [ ] 3.2 計測の TextLayout も同じ関数で作り、em の箱の位置を列の真ん中に揃える
+- [x] 3.2 計測の TextLayout も同じ関数で作り、em の箱の位置を列の真ん中に揃える
   - 1 字の計測と縦書きの em の箱の測りを新しい関数で作る（em の箱の測りは書字方向を受け取り、本番の列と同じレシピで測る）
   - 測れないときと、束縛と違う縦書きの向きを問われたときは 0（行の矩形の真ん中）を返す。横書きの扱いは今のまま
   - doc の実測例（∓0.1650・−0.3013）を「列のレシピの下では 0」に直す。純粋層の trait の doc も「本番は列のレシピで 0・既定の実装は偽の計測器の模型」へ直す（コードは変えない・触る前にほかのセッションへ知らせる）
@@ -114,3 +114,4 @@
 - 2.4: 束縛書式の鍵の型の別名 `FormatKey` は親の `viewbox_draw.rs` にある（そこも 3 か所替えた）。触る前の知らせ（要件 5.3）は 10-29 に C12 の 7 本へ送った。`viewbox_draw.rs` の訂正は 3 本に届き、4 本（default-balloon-selfmade・startup-install-option・window-work-area-clamp・mcp-strict-errors）はセッション間の送信の上限で未達。どの作業木も `viewbox_draw.rs` に触っていないことは確かめた。
 - 3.1 の後の見込みどおりの赤（4.3 の持ち物）: `tests/decoration_readback/vertical.rs` の underline／strike の 2 本（列が約 5px 動いた）、`actor_underline_present_tests` の `vertical_edge_column_…`／`vertical_box_edge_column_…`（vertical_lr k=1）、`viewbox_draw_vertical_band_readback_tests::vertical_band_covers_column_ink_readback`（95 件・帯は em の箱の比から来るので 3.2 の後に変わる見込み）。
 - L4 はこの機械では弁別力が無い（ZWJ の家族・国旗とも既定で合成されず、機能を値 0 にしても緑）。入力は design どおり。
+- 3.2 の後の見込みどおりの赤は 4 件（`actor_underline_present_tests` の vertical_lr k=1 の 2 本・`decoration_readback/vertical.rs` の underline／strike の 2 本）。選択肢の帯の読み戻しは緑に戻った。

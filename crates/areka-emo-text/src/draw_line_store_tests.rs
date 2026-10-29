@@ -737,3 +737,116 @@ fn the_column_recipe_keeps_composed_emoji_glyphs() {
         );
     }
 }
+
+// ────────────────────────── §6 計測と行は同じ生成口（L2・L3・要件 2.4）
+
+/// L2: crate の `src` の本番のファイル全部（`_tests.rs` を除く）で、TextLayout の生成
+/// （`create_text_layout(`／`CreateTextLayout(`）を呼ぶのは `draw.rs` の [`create_line_layout`] の
+/// 本体の中だけ。
+///
+/// 較正: 1 字の計測か em の箱の測りを `create_text_layout` の直呼びへ戻すと `draw_metrics.rs` の行で赤。
+#[test]
+fn only_create_line_layout_creates_text_layouts() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut stray = Vec::new();
+    let mut inside = 0;
+    for entry in std::fs::read_dir(&src).expect("src が読める") {
+        let path = entry.expect("src の項目が読める").path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+            continue;
+        }
+        let body = std::fs::read_to_string(&path).expect("ソースが読める");
+        let (outside, count) = text_layout_calls(&name, &body);
+        stray.extend(outside);
+        inside += count;
+        if name == "draw.rs" {
+            // 較正: 作業木の改行が CRLF（core.autocrlf）でも同じ判定になる。
+            let crlf = body.replace("\r\n", "\n").replace('\n', "\r\n");
+            assert_eq!(
+                text_layout_calls(&name, &crlf),
+                (Vec::new(), count),
+                "draw.rs を CRLF にすると判定が変わる"
+            );
+        }
+    }
+    assert!(
+        stray.is_empty(),
+        "生成口の外で TextLayout を作っている: {stray:?}"
+    );
+    assert!(
+        inside > 0,
+        "生成口の本体に生成の呼び出しが見つからない（走査の較正）"
+    );
+}
+
+/// ファイル 1 つの TextLayout の生成の呼び出しを、生成口の本体の外（`ファイル名:行`）と中（数）に分ける。
+fn text_layout_calls(name: &str, body: &str) -> (Vec<String>, usize) {
+    // 作業木の改行は CRLF のこともある（core.autocrlf）——本体の終わりの目印を LF で探すため揃える。
+    let body = body.replace("\r\n", "\n");
+    // create_line_layout の本体（宣言の行から最初の行頭の `}` まで）。
+    let span = (name == "draw.rs")
+        .then(|| {
+            let start = body.find("pub(crate) fn create_line_layout(")?;
+            let end = start + body[start..].find("\n}\n")?;
+            Some(start..end)
+        })
+        .flatten();
+    let (mut outside, mut inside) = (Vec::new(), 0);
+    for needle in ["create_text_layout(", "CreateTextLayout("] {
+        for (at, _) in body.match_indices(needle) {
+            if span.as_ref().is_some_and(|s| s.contains(&at)) {
+                inside += 1;
+            } else {
+                outside.push(format!("{name}:{}", body[..at].lines().count()));
+            }
+        }
+    }
+    (outside, inside)
+}
+
+/// L3: 游ゴシック 20px の縦書き（2 方向）で、「…「繋がってる」」の 1 字ずつの計測
+/// （`DWriteMetrics::advance`）と、同じ書式で生成口が組んだ行の cluster の幅が全部一致する。
+///
+/// 較正の記録: 列のレシピの有無はこの文字列の送り幅を変えない（1 字の計測を生成口へ寄せる前も緑）。
+/// 本試験は「計測と行が食い違わない」の見張りで、生成口が 1 つであることは L2 が固定する。
+#[test]
+fn per_character_measurements_match_the_vertical_line_clusters() {
+    use areka_parsers::balloon::{Font, FontColor};
+
+    use super::super::DWriteMetrics;
+    use crate::layout::GlyphMetrics;
+    use crate::state::TextLayerConfig;
+
+    const TEXT: &str = "…「繋がってる」";
+    const EM: f32 = 20.0;
+    let factory =
+        dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory が作れる");
+    let resolved = ResolvedFont::resolve(&model_with_font(Font::new(
+        Some("游ゴシック".to_owned()),
+        Some(EM as u32),
+        FontColor::new(None, None, None),
+    )));
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let metrics = DWriteMetrics::new(&factory, &resolved, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics が作れる");
+        assert!(
+            metrics
+                .fonts()
+                .family_for(&["游ゴシック".to_owned()])
+                .is_some(),
+            "実フォント 游ゴシック がこの機械に無い（代替フォントで緑にしない）"
+        );
+        let format = create_text_format(&factory, &resolved, mode).expect("TextFormat が作れる");
+        let line = create_line_layout(&factory, TEXT, &format, EM, mode).expect("行が組める");
+        let measured: Vec<f32> = TEXT
+            .chars()
+            .map(|c| metrics.advance(c.encode_utf8(&mut [0; 4]), EM))
+            .collect();
+        assert_eq!(
+            advances(&line),
+            measured,
+            "{mode:?}: 1 字ずつの計測と行の cluster の幅が食い違う"
+        );
+    }
+}
