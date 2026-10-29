@@ -251,3 +251,189 @@ fn request_matches_the_menu_ghost_frame() {
         }
     );
 }
+
+// ---- 持ち物を作る・据える・出す・出さずに終わる（タスク 3.2） ----
+
+fn args(archives: &[&str]) -> InstallArgs {
+    InstallArgs {
+        archives: paths(archives),
+        call_ghost: true,
+        delete_source: true,
+    }
+}
+
+fn not_submitted(events: &[log_capture_kit::CapturedEvent]) -> Vec<String> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("startup_install_not_submitted"))
+        .map(|e| {
+            assert_eq!(e.level, tracing::Level::WARN);
+            e.field_str("reason").unwrap_or_default().to_owned()
+        })
+        .collect()
+}
+
+fn desk_world() -> bevy_ecs::world::World {
+    let mut world = bevy_ecs::world::World::new();
+    world.init_resource::<bevy_ecs::schedule::Schedules>();
+    crate::install::register(&mut world);
+    world
+}
+
+#[test]
+fn new_makes_relative_paths_absolute_from_the_current_folder() {
+    let absolute = std::env::current_dir()
+        .expect("今のフォルダ")
+        .join("abs.nar");
+    let (startup, events) = log_capture_kit::capture(|| {
+        StartupInstall::new_with(
+            InstallArgs {
+                archives: vec![PathBuf::from("rel.nar"), absolute.clone(), PathBuf::new()],
+                ..Default::default()
+            },
+            None,
+        )
+    });
+    let pending = startup.pending.as_ref().expect("据えた");
+    let cwd = std::env::current_dir().expect("今のフォルダ");
+    assert_eq!(
+        pending.archives,
+        vec![cwd.join("rel.nar"), absolute, PathBuf::new()],
+        "相対は今のフォルダから・絶対はそのまま・直せない空は綴りのまま"
+    );
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("install_path_not_absolute"))
+        .collect();
+    assert_eq!(warns.len(), 1, "直せない 1 本だけ warn");
+    assert_eq!(warns[0].level, tracing::Level::WARN);
+    std::mem::forget(startup); // 落としたときの記録はこのテストの外
+}
+
+#[test]
+fn dropping_unsubmitted_startup_warns_boot_stopped_once() {
+    let ((), events) =
+        log_capture_kit::capture(|| drop(StartupInstall::new_with(args(&[r"C:\a.nar"]), None)));
+    assert_eq!(not_submitted(&events), ["boot_stopped"]);
+}
+
+#[test]
+fn dropping_with_only_initial_install_warns_and_nothing_to_install_is_silent() {
+    let tmp = temp_path_kit::TempPath::under_target("startup-install-drop-initial");
+    let dir = tmp.child("exe");
+    std::fs::create_dir_all(&dir).expect("exe の代わり");
+    let ((), silent) = log_capture_kit::capture(|| {
+        drop(StartupInstall::new_with(
+            InstallArgs::default(),
+            Some(dir.clone()),
+        ))
+    });
+    assert!(
+        not_submitted(&silent).is_empty(),
+        "入れる物が無ければ出さない"
+    );
+    std::fs::write(dir.join("Initial_Install.NAR"), b"nar").expect("書庫の代わり");
+    let ((), events) = log_capture_kit::capture(|| {
+        drop(StartupInstall::new_with(
+            InstallArgs::default(),
+            Some(dir.clone()),
+        ))
+    });
+    assert_eq!(
+        not_submitted(&events),
+        ["boot_stopped"],
+        "大小を問わず exe の隣を見る"
+    );
+}
+
+#[test]
+fn discard_before_steady_warns_exit_before_steady_and_not_again_on_drop() {
+    let mut world = desk_world();
+    let ((), events) = log_capture_kit::capture(|| {
+        install(
+            &mut world,
+            StartupInstall::new_with(args(&[r"C:\a.nar"]), None),
+        );
+        discard_for_exit(&mut world);
+        on_steady(&mut world);
+        drop(world);
+    });
+    assert_eq!(
+        not_submitted(&events),
+        ["exit_before_steady"],
+        "二重に出さない"
+    );
+}
+
+#[test]
+fn first_steady_submits_initial_install_then_args_once() {
+    let tmp = temp_path_kit::TempPath::under_target("startup-install-steady");
+    let dir = tmp.child("exe");
+    std::fs::create_dir_all(&dir).expect("exe の代わり");
+    let initial = dir.join(INITIAL_INSTALL_FILE);
+    std::fs::write(&initial, b"nar").expect("書庫の代わり");
+    let mut world = desk_world();
+    world.insert_resource(crate::emo2_boot::ghost_switch::SwitchAcceptCount(7));
+    let ((), events) = log_capture_kit::capture(|| {
+        install(
+            &mut world,
+            StartupInstall::new_with(args(&[r"C:\a.nar", r"C:\b.nar"]), Some(dir.clone())),
+        );
+        on_steady(&mut world);
+        on_steady(&mut world);
+    });
+    let orders = crate::install::queued_orders(&world);
+    assert_eq!(
+        orders,
+        vec![
+            InstallOrder {
+                archives: vec![initial],
+                origin: InstallOrigin::InitialInstall
+            },
+            InstallOrder {
+                archives: paths(&[r"C:\a.nar", r"C:\b.nar"]),
+                origin: InstallOrigin::StartupArgs
+            },
+        ],
+        "初期インストールが先・2 回目の定常到達では出さない"
+    );
+    let startup = world.resource::<StartupInstall>();
+    let followup = startup
+        .args_followup
+        .as_ref()
+        .expect("受け付けられたので控える");
+    assert!(followup.call_ghost && followup.delete_source);
+    assert_eq!(followup.switches_at_submit, 7);
+    assert!(not_submitted(&events).is_empty());
+}
+
+#[test]
+fn absent_initial_install_is_debug_only_and_refused_args_keep_no_followup() {
+    let tmp = temp_path_kit::TempPath::under_target("startup-install-readonly");
+    let dir = tmp.child("exe");
+    std::fs::create_dir_all(&dir).expect("exe の代わり");
+    let mut world = desk_world();
+    world.insert_resource(crate::readonly::ReadOnlyRun);
+    let ((), events) = log_capture_kit::capture(|| {
+        install(
+            &mut world,
+            StartupInstall::new_with(args(&[r"C:\a.nar"]), Some(dir.clone())),
+        );
+        on_steady(&mut world);
+    });
+    assert!(crate::install::queued_orders(&world).is_empty());
+    assert!(
+        world.resource::<StartupInstall>().args_followup.is_none(),
+        "断られたら控えない"
+    );
+    let absent: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("initial_install_absent"))
+        .collect();
+    assert_eq!(absent.len(), 1);
+    assert_eq!(absent[0].level, tracing::Level::DEBUG);
+    assert!(
+        !events.iter().any(|e| e.level <= tracing::Level::WARN),
+        "warn 以上は無い"
+    );
+}

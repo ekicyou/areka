@@ -44,12 +44,8 @@ pub(crate) enum InstallOrigin {
     /// 窓への投げ込み（areka-P0-file-drop）。
     WindowDrop,
     /// 起動の引数 `--install`（startup-install-option）。
-    #[allow(dead_code)]
-    // 作るのは起動の依頼の持ち物 install::startup（同じ spec の後のタスク）
     StartupArgs,
     /// exe の隣の `initial_install.nar`（startup-install-option）。
-    #[allow(dead_code)]
-    // 作るのは起動の依頼の持ち物 install::startup（同じ spec の後のタスク）
     InitialInstall,
 }
 
