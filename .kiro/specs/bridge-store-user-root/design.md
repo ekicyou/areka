@@ -49,7 +49,6 @@
 
 ### Revalidation Triggers
 - `AppProfile` に値が増えた・意味が変わった: 中継の `Config::from_values` と記録（`log_without_cache`）を見直す。
-- `decide` が `Decision::Beside` に `Reason::Neither` 以外の理由を返す、または `Decision::Fallback` に `Reason::Neither` を返すようになった: `locate_app_profile` の見分け（`Ready`／`Unlocatable`）が崩れる。`lib_tests.rs` か新しいテストが赤にする。
 - 写しの条件（`migrate_source`）が変わった: `MigrationPending` の場面が一緒に変わる（持ち主は 1 つなので直すのは 1 か所）。
 - areka 本体が `mcp-bridge` のフォルダを作るようになった: 箱の見立て（控えのフォルダを作るのは中継だけ、という前提）を見直す。
 - 実機の測りで、中継の exe の `canonicalize` が箱の場所を返さない・箱の中から本当の置き場が見えないと分かった: 箱の見立て（D-6）と説明書の文を見直す（設計に戻る）。
@@ -199,8 +198,8 @@ flowchart TD
     S[decide_logged と log_layout] --> PE{profile_env}
     PE -- 在る --> R1[Ready profile_env]
     PE -- 無い --> Root{決めた書ける根}
-    Root -- 無い かつ 理由が Neither --> R2[Ready exe の隣 profile areka]
-    Root -- 無い かつ 理由が Neither 以外 --> U[Unlocatable]
+    Root -- 無い かつ decide が Beside --> R2[Ready exe の隣 profile areka]
+    Root -- 無い かつ decide が Fallback --> U[Unlocatable]
     Root -- 在る --> IsDir{根のフォルダが在る}
     IsDir -- 無い --> RM[RootMissing]
     IsDir -- 在る --> MS{migrate_source が Some}
@@ -319,13 +318,13 @@ pub fn locate_app_profile(
 - Preconditions: `exe_dir` は `areka.exe` の在るフォルダ（中継が確かめてから渡す）。
 - Postconditions:
   - `profile_env` が `Some` なら、いつも `Ready(PathBuf::from(profile_env))`（要件 2.9・根の有無と写しを見ない）。
-  - `profile_env` が `None` で、決めた根が無く理由が `Reason::Neither` なら `Ready(exe_dir\profile\areka)`（要件 2.8）。理由が `Neither` 以外なら `Unlocatable`（要件 2.7）。
+  - `profile_env` が `None` で、`decide(signals)` が `Decision::Fallback` なら `Unlocatable`（要件 2.7）。`Decision::Beside` なら `Ready(exe_dir\profile\areka)`（要件 2.8）。
   - 決めた根 `R` が在り、`R.is_dir()` が偽なら `RootMissing { root: R }`（要件 2.4）。
   - `R.is_dir()` が真で `migrate_source(R, exe_dir)` が `Some` なら `MigrationPending { root: R }`（要件 2.5）。
   - ほかは `Ready(R\profile\areka)`（要件 2.6。`R\profile\areka` が在っても無くても）。
   - `Ready` の値は、同じ入力で `app_profile_dir(profile_env, &Layout { user_root: 決めた根, reason }, Some(exe_dir))` と等しい（要件 2.1）。
   - 呼ぶ前と後で、ファイルの木は同じ（要件 2.2・2.3）。
-- Invariants: `Beside` と `Fallback` の見分けは「`decide` は `Beside` の理由をいつも `Neither` にし、`Fallback` の理由を `Neither` にしない」に頼る。コードに 1 行の注記で残し、テストで `Fallback` の 4 つの理由（`EnvEmpty`・`EnvRelative`・`LocalAppDataMissing`・`LocalAppDataRelative`）が `Unlocatable` になることを固める。
+- Invariants: `Beside` と `Fallback` の見分けは、純粋な `decide(signals)` をもう一度呼んで `matches!(…, Decision::Fallback { .. })` で見る（`decide_logged` の返す `Reason` から読み戻さない＝理由の決まりに頼らない）。テストで `Fallback` の 4 つの理由（`EnvEmpty`・`EnvRelative`・`LocalAppDataMissing`・`LocalAppDataRelative`）が `Unlocatable` になることを固める。
 
 **Implementation Notes**
 - Integration: 記録の順は `decide_logged`（warn／error）→ `log_layout`（`user_data_layout`・決めた根をそのまま `Layout.user_root` に入れる）。`RootMissing` のときも「決めた」形として `mode = user_root` が出る（作っていないことは中継の行 W1 が言う）。
@@ -474,7 +473,7 @@ pub(crate) fn report(sight: &BoxSight);
 **Implementation Notes**
 - Integration: `from_env` の最後で 1 回。`observe` に渡す `local_app_data` は `from_env` が読んだ `LOCALAPPDATA` と同じ値。
 - Validation: `redirect_tests.rs`。`classify` は値だけで全部の腕を固める（箱の中の場所は注入の値）。`observe` は `target\` の下に組んだ「偽の LOCALAPPDATA」と控えのフォルダで `Outside`・`not_there_yet`・`not_under_local_app_data`・`no_cache_dir` を確かめる（本物の箱はテストで作れない）。
-- Risks: 箱の外の取り違え（一度だけ）と、ジャンクションの取り違え（`research.md` 10.5）。`Outside` の腕に `// shortcut: 箱の外で作られた控えのフォルダを箱の中の中継が初めて見た 1 回は「外」と見立てる。その起動の書きで箱に写しができ次の起動から「中」になる。1 回でも困る場面が出たら名乗りの読み（D1）を重ねる` の注記を置く。
+- Risks: 箱の外の取り違え（一度だけ）と、ジャンクションの取り違え（`research.md` 10.5）。`Outside` の腕に `// shortcut: 箱の外で作られた控えのフォルダを、箱の中の中継は控えを箱の中へ初めて書けた起動までは「外」と見立てる（areka が居なくて書けない間は何回でも続く）。困る場面が出たら名乗りの読み（D1）を重ねる` の注記を置く。
 
 ### 説明書の文（`dist/README.txt`）
 
@@ -500,11 +499,11 @@ pub(crate) fn report(sight: &BoxSight);
   2. 本物に触れうる物を控える（要件 1.5）: 箱の中の `LocalCache\Local\areka\`（今は開発者の机の中継の `mcp-bridge` が在る）を `target\bridge-store-measure\backup\` へ移す。本当の `%LOCALAPPDATA%\areka` は今は無い（在れば同じく控える）。
   3. 場面を作る（S2・S3 なら本当の置き場のフォルダを作る）。
   4. 下見（要件 1.7・任意）: Bash の道具から検体の中継を起こし、`initialize` と `tools/list` の 2 行を流して閉じる。結果は「下見」と書いて分け、本番の代わりにしない。下見で箱にできた物は 2 の形へ戻してから本番へ進む。
-  5. 開発者に頼む（要件 1.6）: Claude Desktop の設定の areka の `command` を検体の中継へ向け直し、Claude Desktop を起動し直す。頼む文は「急がなくてよい・切れ目で」を先頭にする。中継が areka（開発者の机で動いていれば）へつないで控えを書くまで待つ。
+  5. 開発者に頼む（要件 1.6）: Claude Desktop の設定の areka の `command` を検体の中継へ向け直し、Claude Desktop を起動し直す。頼む文は「急がなくてよい・切れ目で」を先頭にする。中継が areka（開発者の机で動いていれば）へつないで控えを書くまで待つ。箱の見立ては控えを書く前の起動の初めに行うので、控えのフォルダがまだ無い起動では B2（`not_there_yet`）になる。M-2 の S2 は areka を動かしたまま 2 回起こしてもらい、1 回目で B2 と箱の中に控えのフォルダができること、2 回目で B1 と `box_dir` を記録する（設計の一番危うい見込み＝`canonicalize` が箱の場所を返すことを確かめる 1 回）。
   6. 4 点を測る（PowerShell の道具から）: (a) 箱の中に `areka\`・`areka\profile\` ができたか（数）、(b) 箱の中に `areka\profile\areka\sylphya.toml` の写しができたか（数）と、検体の exe の隣の記憶の SHA256 が 1 と同じか、(c) `server-info.json`・`tools.json` がどこにできたか（箱・本当の置き場・検体の隣を探す。控えは areka が動いていてつながったときだけ書かれるので、つながらなかったときは「書かれない」とその理由を記録する）、(d) 中継の起動の記録（Claude Desktop がとる中継の標準エラーの記録）の `user_data_layout`・W1〜W3・B1／B2 の行と、S2 で本当の置き場が「在る」と見えたか（M-1 は `user_root_created` の行の有無、M-2 は `AppProfile` の答え）。中継のプロセスがパッケージの名乗りを持つかも、起動中の中継の pid に PowerShell から `GetPackageFamilyName` を尋ねて記録に残す（設計の判断には使わない・`research.md` 7 の 1 の答えとして）。
   7. 比べ（要件 1.2）: 同じ検体の中継を PowerShell の道具から、`AREKA_USER_ROOT` を `target\bridge-store-measure\<before|after>\user-root\` に向けて起こし、`initialize` と `tools/list` を流して同じ 4 点を測る（本当の `%LOCALAPPDATA%\areka` を作らない）。
   8. 戻す（要件 1.5）: 測りで新しくできた物（箱の中の `areka\`・S2／S3 で作った本当の置き場・`user-root\`）を消し、2 で控えた物を元の場所へ戻す。開発者に Claude Desktop の設定を元へ戻してもらう。1 の写しと木を比べ、元の形に戻ったことを記録する。止めるプロセスは、自分で起こしたと確かめたものだけ。
-- 記録: `research.md` の 11 章に、場面ごとの表（Store 版／PowerShell × a〜d）と、記録の行の写し（ASCII のまま）を残す。M-2 では、要件 2 と要件 3 のとおりに動いたこと（作る数 0・写す数 0・exe の隣の記憶の SHA256 不変・S1 と S3 で W1・S2 で控えが箱の中の `areka\profile\areka\mcp-bridge\`・B1 に箱のフォルダ）を表で示す。要件 4.1 の調べの結論（`research.md` 3.3）に、測りで分かったことを足す。
+- 記録: `research.md` の 11 章に、場面ごとの表（Store 版／PowerShell × a〜d）と、記録の行の写し（ASCII のまま）を残す。M-2 では、要件 2 と要件 3 のとおりに動いたこと（作る数 0・写す数 0・exe の隣の記憶の SHA256 不変・S1 と S3 で W1・S2 の 1 回目で B2 と控えが箱の中の `areka\profile\areka\mcp-bridge\`・S2 の 2 回目で B1 に箱のフォルダ）を、起動ごとの欄に分けた表で示す。要件 4.1 の調べの結論（`research.md` 3.3）に、測りで分かったことを足す。
 - Idempotency & recovery: どの段で止まっても 8 を行えば元に戻る。2 の控えは `target\` の下に残るので、戻す前に消えない。
 
 ## Data Models
@@ -551,11 +550,11 @@ pub(crate) fn report(sight: &BoxSight);
 `target\` の下に「偽の LOCALAPPDATA」・exe のフォルダ（`areka.exe` は空のファイル・`profile\areka\sylphya.toml`）を組み、`Config::from_inputs` を `capture` の中で呼ぶ。木の比べのヘルパ `tree` はこのファイルの中に 1 つ（ほかのテーマのファイルは使わない）。
 - 要件 2.4: 根が無い → 控え無し・W1（`reason = user_root_missing`・`user_root` の欄が根）1 件・W2／W3 は 0 件。続けて `Cache::new(config.cache_dir).save_tools(…)` と `save_server_info(…)` を呼んでも、呼ぶ前と後で木が同じ（根も `LOCALAPPDATA\areka` も作られない・要件 2.2・6.5）。
 - 要件 2.5: 根は在り `profile\areka` が無い → 控え無し・W1（`reason = app_memory_not_migrated`）1 件・同じく保存を呼んでも木が同じ（`root\profile\areka` が無い・exe の隣の中身が同じ・要件 2.3・6.5）。
-- 要件 2.6: 根の `profile\areka` が在る → `root\profile\areka\mcp-bridge`・W1〜W3 は 0 件。
-- 要件 2.7・3.3: winget の控え在り・`Signals.local_app_data = None` → 控え無し（exe の隣の `profile\areka\mcp-bridge` でない）・W2 が warn で 1 件。`AREKA_USER_ROOT` が相対の値でも同じ。
+- 要件 2.6: 根の `profile\areka` が在る → `root\profile\areka\mcp-bridge`・W1〜W3 は 0 件。根は在るが `profile\areka` も exe の隣の記憶も無い → 同じ置き場で、保存を呼んだ後に増えた物が `root\profile\areka\mcp-bridge\` の下だけ（ほかの物を作らない）。
+- 要件 2.7・3.3: winget の控え在り・`Signals.local_app_data = None` → 控え無し（exe の隣の `profile\areka\mcp-bridge` でない）・`areka-user-data` の `user_root_unavailable`（error）の後に W2 が warn で 1 件（この順を固める）。`AREKA_USER_ROOT` が相対の値でも同じ。
 - 要件 2.8: 控え無し・書ける → `exe\profile\areka\mcp-bridge`。要件 2.9: `profile_env` 在り・根が無い → `profile_env\mcp-bridge`・根は作られない・W1 は 0 件。要件 2.10: `areka = None` → `LOCALAPPDATA\areka\mcp-bridge`。
 - 要件 2.11: 2.4 の形で 1 回呼んで控え無し → 根の `profile\areka` を作る（areka が置き場を作った形）→ もう 1 回呼ぶと `root\profile\areka\mcp-bridge`。
-- 要件 3.8: このファイルと下の `redirect_tests.rs` が捕まえた W1・W2・B1・B2 の文と欄の値が ASCII（`is_ascii`）。
+- 要件 3.8: このファイルと下の `redirect_tests.rs` が捕まえた W1・W2・B1・B2 の文と、決まった語の欄（`reason`・`why`）が ASCII（`is_ascii`）。パスの欄（`user_root`・`asked`・`resolved`・`box_dir`）は利用者の名前しだいで ASCII でないので確かめない。
 
 ### Unit Tests（`crates/areka-mcp-bridge/src/redirect_tests.rs`）
 - `classify`: 本当の場所に解けた → `Outside`、`report` が 0 件（要件 3.7）。別の場所に解けた（`…\Packages\Claude_x\LocalCache\Local\areka\mcp-bridge` を注入）→ `Inside { box_dir: …\LocalCache\Local }`、`report` が B1 を info で 1 件・`box_dir` の欄あり（要件 3.5・3.6）。末尾が合わない → `box_dir: None`・B1 に `box_dir` の欄なし。大小だけ違う → `Outside`。`NotFound` → `Unknown("not_there_yet")`・ほかの失敗 → `Unknown("cannot_resolve")`、`report` が B2 を info で 1 件・B1 は 0 件（要件 3.9）。
