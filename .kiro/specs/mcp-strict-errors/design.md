@@ -455,11 +455,12 @@ pub fn record(ghost: &str, finding: CueFinding, place: &Place);
 
 **Responsibilities & Constraints**
 - `compile` と `compile_strict` は 1 つの走査の関数を共有する（strict かどうかは控えを取るかどうかだけ）。同じ命令の列から同じ `CompiledTalk` を作る（要件 3.9。テストで固定）。
-- 命令 `i` の走査の頭で「次に作られる合図の順番」（`cues.len()`）を控え、命令 `i` の誤りは全部この順番に結びつける。順は `check_script` の `diagnose` と同じ（読みの印 → 命令の腕の判定 → アンカー）。
+- 命令 `i` の走査の頭で「次に作られる、sink へ配られる合図の順番」を控え、命令 `i` の誤りは全部この順番に結びつける。順は `check_script` の `diagnose` と同じ（読みの印 → 命令の腕の判定 → アンカー）。
+- 順番は sink へ配られる合図（`Entry::Command`）だけを数える。末尾の選択待ちの区切り（`emit_barrier`・`Entry::Barrier`）は配られないので数えない。走査の後で先頭へ差し込む全消しの合図（`compile.rs` 337 行の `cues.insert(0, …ClearAll)`）は位置 `None` の合図として順番 0 に入り、命令の合図の順番はみな 1 つ後ろへずれる。`cue_spans`・`pending` の順番は、この差し込みと区切りを済ませた後の最終の列で決める（走査中の `cues.len()` をそのまま使わない）。
 - 控えるもの: 読みの印 4 つ（`UnknownTag`・`Unclosed`・`ArgumentDefaulted`・`MarkerIgnored`）、`GenericCommand`・`Move` の腕の `judges.command_handled` が偽（単独の `\![*]` は除く）、`choicetimeout` の読めない時間、`Font` の腕の `judges.font`、アンカーの 3 つ（今の `pair_anchors` の答え）。
 - 今の `warn!`（アンカー・`choicetimeout`）と `debug!` は今のまま出す。
 - `\e`・`\-` で走査を止めるので、その後ろの命令の誤りは控えない。
-- 合図ごとの位置: 命令から作った合図にはその命令の読みの範囲（バイト）を、走査の後で補うアンカーの閉じには `None` を持たせる。末尾に足すエピローグの合図は数に入れない（位置なし）。
+- 合図ごとの位置: 命令から作った合図にはその命令の読みの範囲（バイト）を、走査の後で補うアンカーの閉じと先頭の全消しには `None` を持たせる。末尾に足すエピローグの合図は数に入れない（位置なし）。
 
 ##### Service Interface
 ```rust
@@ -476,7 +477,7 @@ pub struct StrictTrace {
     pub(crate) pending: Vec<(usize, DetectionPoint, std::ops::Range<usize>)>,
 }
 ```
-- 不変条件: `compile` が作る合図は時刻が減らない順に並ぶので、`TimedSchedule` の安定な並べ替えの後も配られる順＝作った順になる。テストで「`CuePlayer` が配った順」と「`cue_spans` の順」が一致することを固定する。
+- 不変条件: `compile` が作る合図は時刻が減らない順に並ぶので、`TimedSchedule` の安定な並べ替えの後も配られる順＝作った順になる。テストで「`CuePlayer` が配った順」と「`cue_spans` の順」が一致することを、先頭の全消しを持つ台本と選択肢で終わる台本の両方で固定する。
 
 #### StrictTap・StrictDrive
 
@@ -492,8 +493,9 @@ pub struct StrictTrace {
   1. `pending` のうち順番が `k` 以下のものを順に記録する。
   2. `cue_spans[k]` が在れば、その位置に結びついた `CueProbe` を作り、各 sink へ登録順に `emit_with` する。無ければ各 sink へ `emit` する。
   3. `k` を 1 進める。
-- `preview`・`choice_wait_began` は各 sink へそのまま通す。
-- 自然に終わったとき（`is_completed`）は `finish` で残りの控え（最後の合図より後ろの命令の誤り）を記録してから `TalkDone` を送る。打ち切り（`on_close`）は記録せずに捨てる（要件 3.6・3.7）。
+- `preview` は各 sink へそのまま通す。
+- `choice_wait_began`: 選択待ちの区切りは列の末尾にしか置かれない（`compile.rs` の `emit_barrier` は末尾の 1 か所）ので、再生はここで台本の全部の命令に届いている。残りの控えを全部記録してから各 sink へ通す。選択の後に台本が閉じられても（`on_close`）控えは落ちない。
+- 自然に終わったとき（`is_completed`）は `finish` で残りの控え（最後の合図より後ろの命令の誤り）を記録してから `TalkDone` を送る。打ち切り（`on_close`）は残りを記録せずに捨てる（要件 3.6・3.7）。
 - `CueProbe` の知らせは、talk スレッドの上で来たものは `CharCursor` で位置を出してすぐ記録する。別のスレッドから後で来たもの（名前の形の `\b`）は、その合図の範囲から位置を数え直して記録する（まれなので前から数えてよい）。
 - 窓の無いゴーストは sink が `LogSink`・`DiscardSink` だけなので、`emit_with` で知らせる層が無く、台本の解釈の誤りだけが記録される（要件 4.3）。
 - 仕事は talk スレッドだけで、UI スレッドには何も足さない（要件 3.11）。
@@ -756,7 +758,7 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 
 ### Unit Tests
 - `areka-sakura`: `compile_strict` と `compile` が同じ `CompiledTalk` を作る（台本の見本の集まり・要件 3.9）。命令ごとの控えの順番と順が `diagnose` と同じ順になる。`\e`・`\-` の後ろは控えない（3.6）。`CharCursor` が `check_script` の位置と同じ数を返す。
-- `areka-sakura`: `StrictTap` が合図の順で控えを書き、`cue_spans` の順と `CuePlayer` が配った順が一致する。打ち切りで後ろを書かない・自然な終わりで最後の控えを書く（3.6・3.7）。strict 偽で今の登録になる（3.5）。
+- `areka-sakura`: `StrictTap` が合図の順で控えを書き、`cue_spans` の順と `CuePlayer` が配った順が一致する（先頭の全消しで番号がずれない・選択待ちの区切りを数えない）。打ち切りで後ろを書かない・自然な終わりで最後の控えを書く・選択肢で終わる台本は選択待ちの始まりで残りを書き、その後に閉じても落ちない（3.6・3.7）。strict 偽で今の登録になる（3.5）。
 - `areka-seriko`: `surface_missing`・`balloon_missing` の答えが今の `check_script` の真偽と同じ。`send_replace` の後の合図は新しい事実で、前の合図は古い事実で判定される（4.1）。事実が無いと判定しない。
 - `areka-emo-text`: `ProbedCue` で箱が無いと 1 回知らせ、空回しの写しでは知らせない（4.2）。`classify_font_tag` が今の `judge_font` と同じ答え。
 - `areka-kanade`: `on_send`・`on_notify_reply` が `strict` を立て、翻訳の後も残る（3.1〜3.3）。不受理・空・送れないときは talk が始まらない（3.4）。`StartTalk::new` は偽（3.8）。
