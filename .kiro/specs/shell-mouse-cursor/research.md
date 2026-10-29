@@ -190,3 +190,69 @@
 
 - 要件討議（`kiro-requirements-discussion`）で 5 節の項目を議題 1〜9 と合わせて決める。
 - その後 `/kiro-design shell-mouse-cursor` で設計へ。
+
+## 10. 設計の段の調べと決め（2026-10-29・`/kiro-spec-design -y`）
+
+### 10.1 要約
+
+- **調べの種類**: 既存の仕組みの拡張（軽い調べ）。新しい依存は無く、Win32 の振る舞いを Microsoft の文書で引き直した。
+- **使った手引き**: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、steering の `tech.md`・`structure.md`・`logging.md`。
+- **一番大きい決め**: 5 節の項目 1 は案 C（その場で引く＋カーソルの来ない場面だけ出し直す）。`WM_SETCURSOR` の中で `resolve_hit_owned` をその場で呼ぶので、境目をまたいだ瞬間に前の形が残らない。
+
+### 10.2 調べたこと
+
+#### Win32 の文書（2026-10-29 に引き直した）
+
+- `WM_SETCURSOR`（ https://learn.microsoft.com/en-us/windows/win32/menurc/wm-setcursor ）: 「the mouse causes the cursor to move within a window and mouse input is not captured」のときに届く。`lParam` の上位語は引き金のマウスのメッセージで、メニューの中では 0。`DefWindowProc` は client の中では窓のクラスのカーソルを出す。→ 押下・解放は引き金で分かる。捕まえている間は届かないので、解放は出し直しが要る（5 節 3）。`TRUE` を返して `SetCursor` しなければ今の形のまま（要件 2.5 の `Keep`）。
+- `TRACKMOUSEEVENT`（ https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-trackmouseevent ）: `TME_HOVER` は `WM_MOUSEHOVER` で知らせ、「hover tracking is already active」のときに掛け直すと時計が始めからになる。`HOVER_DEFAULT` は OS の既定（初めは 400 ミリ秒・`SPI_GETMOUSEHOVERTIME`）。止まったと見なす幅も OS の設定。→ 5 節 4 は `TME_HOVER`。移動のたびに掛け直せば「最後に動いてから OS の時間」になり、tick の区切りに丸まらない。
+- `CreateIconFromResourceEx`（ https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createiconfromresourceex ）: カーソルの資源の頭に当たりの点（LOCALHEADER）が来る。`dwVer` は普通 0x00030000。`cxDesired` を渡せばその寸法で作る。作った物は `DestroyCursor` で捨てる。→ 同梱の `.cur` を目録から寸法ごとに選んで、窓の DPI の寸法で作れる（5 節 12）。
+- `DestroyCursor`（ https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-destroycursor ）: 「The cursor must not be in use.」。`LoadCursor`・`LoadCursorFromFile` の物は共有なので捨ててはならない。→ ファイルからは `LoadImageW`（`LR_SHARED` なし）で作り、入れ替えは「入れる → 出し直す → 捨てる」の順。捨てる前に今出ている形なら矢印へ替える守りを `Drop` に置く。`LoadCursorFromFile` は共有になるので使わない。
+- スレッドの縛りは、どの文書にも書かれていない（6 節の調べは未決のまま実機で見る）。
+
+#### コード（2026-10-29・`d8b7a750`）
+
+- wintf のボタンの押下と解放は全部 `mouse_click.rs` の `handle_button_message(.., is_down)` を通る＝解放の出し直しは 1 か所に足せばよい。
+- 捕まえる（`SetCapture`）のはドラッグの状態（`drag/state/mod.rs`）。
+- `WM_MOUSEWHEEL` の手続きは世界を借りずに溜めるだけ＝その後に出し直しを足せる。
+- クリック透過の評価（`clickthrough/controller.rs` の `evaluate_targets`）は tick の外で世界を共有で借りる。透過を外した直後に出し直しを足せる（5 節 16）。
+- 窓の HWND は `WindowHandle` の部品から引ける＝出し直しの口は窓の entity だけで呼べる。`emo2_boot` から `input_events` の新しいファイルを直に呼ばずに済む。
+- シェルの資産の運び（`ShellAssets` → `BootAssets`／`SwapFinish::Shell` → `frame/attach.rs`・`frame/switch.rs`）は箱の束（`ShellBoxAssets::hand_to`）が前例。構造体の字面を書く所は本体 6・テストと支え 7 ファイル。
+- ゴーストの descript の読み口は `placement::source::read_kv_lenient`（非公開）。`MountModel` は鍵を持たない。
+- 探す順は箱のフォントと同じ（`box_font_search_dirs`＝シェル、`ghost\master`）。
+- 同梱の絵: `hand.svg` は黒の背景の矩形・白い手・指の間の黒い経路（色 `#040404`・`#070707`）、`grip.svg` は黒の背景と白い手。経路の命令は `M`・`L`・`C`・`Q`・`Z` の絶対座標だけ。アプリのアイコン（`crates/areka/icon/`・`tools/app-icon.ps1`・GDI+）が「焼き方の SVG ＋道具の出力をコミット」の前例。
+- `tools/mouse-input.ps1` は 197 行・動詞 5 つ。`GetCursorInfo` を使う所はリポジトリに無い。
+
+### 10.3 まとめ方（design-synthesis）
+
+- **一般化**: 5 つの出し直しの場面（止まった・ホイール・解放・透過が外れた直後・入れ替え）は「引き金だけが違う同じ問い合わせ」にまとめた（`CursorTrigger`）。`WM_SETCURSOR` の答えと同じ関数を通るので、形の選び方は 1 か所。
+- **作るか使うか**: 止まった判定は OS の `TME_HOVER` を使い、自前の期限（`tick_wake::arm_deadline`）は作らない。`system:*` は `IDC_*`。`.cur`・`.ani` の解釈は `LoadImageW`。作るのは、ukadoc の意味（場面・既定・出どころの順）と、同梱の `.cur` の目録の小さな読み（`CreateIconFromResourceEx` に寸法ごとの項目を渡すため）だけ。SVG を焼く道具は組み立てに入れず、一度だけ回して出力をコミットする（依存を増やさない）。
+- **削ったもの**: 窓ごとの「最後の答え」の控え（世界を借りられないときの答え）は持たない。tick の中に入力の `WM_SETCURSOR` は来ず、控えると捨てたカーソルを指す危うさが増える。カーソルの表の検証を areka-emo-present に置く案も取らず、転記だけを `ShellTarget` に載せ、検証と記録は areka の 1 か所にした（`shell_target.rs` の足しが 10 行以内で済む）。ファイルのカーソルを DPI ごとに作り直すのはやめた（読み込みで 1 回だけ読む要件 6.9 を優先）。
+
+### 10.4 5 節の項目への答え
+
+| 項目 | 答え |
+| --- | --- |
+| 1 形を選ぶ時点 | 案 C。`WM_SETCURSOR` の中でその場で当たり判定を引く |
+| 2 wintf の口の形 | スレッドに 1 つの `CursorQuery`（Resource・関数）。areka はキャラクターの窓にだけ答え、ほかは `None`＝今の振る舞い。答えは `Show`・`Keep`。借りられないときの控えは持たない |
+| 3 押下の扱い | 押した瞬間は引き金で分かる。窓ごとの状態は areka の `CharCursors`（`RefCell`・UI スレッド）。解放は `handle_button_message` の後で出し直す。解放が届かなかったら次の移動でボタンの状態（`GetAsyncKeyState`）を見て戻す |
+| 4 止まったと見なす判定 | `TrackMouseEvent`（`TME_HOVER`＋`TME_LEAVE`・`HOVER_DEFAULT`）を `Show` の移動のたびに掛け直し、`WM_MOUSEHOVER` で出し直す |
+| 5 ホイールの形と戻り | `WM_MOUSEWHEEL` の中で出し直す。「動いた」は窓の中の位置の違いで見る（`char_watch` と同じ物差し・合成の移動で勝手に戻らない） |
+| 6 止まったまま面が替わったとき | 足す物なし。位置の変わらない `WM_SETCURSOR` は前の当たり判定のまま、次に動いたときに引き直す |
+| 7 表の置き場と運び方 | `ShellAssets` → `BootAssets`／`SwapFinish::Shell` → `hand_to`（入れる → 出し直す → 捨てる） |
+| 8 カーソルを作るスレッド | 資産を作るスレッド（起動は UI・切り替えは背景）で `LoadImageW`。`OwnedCursor` は `Send`。捨てるのは UI スレッド |
+| 9 検証と記録の層 | parsers は転記だけ。検証は areka の純関数（`shell_cursor_table.rs`）、記録は `build_shell_cursors` |
+| 10 ゴーストの descript の読み口 | `build_shell_assets` で `read_kv_lenient(ghost\master\descript.txt)` |
+| 11 descript のファイルの探し場所 | cursorブレスと同じくシェル → `ghost\master`（要件 6.4 のとおり） |
+| 12 hand・grip の絵の持ち方 | `crates/areka/cursor/` に SVG と道具の出力 `.cur`（10 寸法・32 ビット BMP）をコミットし `include_bytes!`。当たりの点は不透明な画素の外接矩形の中心。窓の DPI の寸法（`SM_CXCURSOR`）で作って控える。出どころは README と `dist/README.txt` に 1 行 |
+| 13 `system:*` の対応表 | arrow・cross・finger＝`IDC_HAND`・help・move＝`IDC_SIZEALL`・no・text＝`IDC_IBEAM`・wait。§8 に載せる |
+| 14 ファイルの置き方の約束 | `input_events/mod.rs` は 0 行。新しいコードは `hover_region.rs`（純関数）と `char_watch.rs`（答えと登録）の `#[path]` の子 |
+| 15 十字の診断との順 | 十字を先に（今のまま） |
+| 16 クリック透過を外した直後 | `evaluate_targets` で透過を外した窓に出し直す |
+| 17 実機の道具 | `mouse-input.ps1` に動詞 `cursor` |
+
+### 10.5 危うさと手当て
+
+- `WM_SETCURSOR` と `char_watch` の 2 か所で当たり判定を引く → 同じ点で同じ名前になることを結合テストで固定する。
+- 別のスレッドで作ったカーソルを UI スレッドで使う・捨てる → 文書に縛りが無い。シェルの切り替えの後の実機の確かめで見る。
+- 窓の外で放したときの形 → OS と下の窓の領分。実機で見る。
+- ファイルのカーソルは既定の DPI の寸法 → モニターごとの DPI に追わないことを design の Risks に書いた。

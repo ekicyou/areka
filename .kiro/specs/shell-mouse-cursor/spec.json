@@ -1,16 +1,16 @@
 {
   "feature_name": "shell-mouse-cursor",
   "created_at": "2026-10-29T11:34:24Z",
-  "updated_at": "2026-10-29T11:34:24Z",
+  "updated_at": "2026-10-29T12:46:01Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
