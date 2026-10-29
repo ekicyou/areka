@@ -53,7 +53,7 @@
 
 ### Revalidation Triggers
 
-- `image`・`image-webp` の版が変わる（根の `Cargo.toml` の固定コミットを含む）→ 道具の `--check` が差分を出しうる。出たら道具を回し直して `.nar` を作り直し、中身のテストを回す。
+- `image`・`image-webp` の版が変わる（根の `Cargo.toml` の固定コミットを含む）→ ずれの見張りのテスト（と道具の `--check`）が赤になりうる。赤なら道具を回し直して `.nar` を作り直し、中身のテストを回す。
 - `areka-balloon` のファイルの集合・オンラインの印の名前や書き方が変わる → `balloon-markers` の前提が変わる（申し送りを直す）。
 - 既定の名前の定数の名前か値が変わる → 既定に頼るテスト・`tools/package.ps1`・文書。
 - `real-run-log-noise` などで areka の `validrect` の 0 の読みが変わる → このバルーンは 0 を書かないので影響しないが、中身のテストを回して確かめる。
@@ -105,10 +105,14 @@ graph TB
 
 ```
 crates/areka-emo-atlas/examples/gen_default_balloon/
-├── main.rs      # 入口: 引数（--check）・組み立ての順・寸法の照合・書庫の書き出し（一時名→名前替え）・ASCII の出力
+├── main.rs      # 入口: 引数（--check）・書庫の書き出し（一時名→名前替え）・ASCII の出力
+├── build.rs     # 組み立て: 23 ファイルの（名前, バイト列）を名前順で返す・寸法の照合（ずれの見張りのテストも #[path] で読む）
 ├── draw.rs      # 絵柄の値（色・縁・角の丸み・しっぽ・印の動き）と、距離関数による 4×4 標本の描画（面・入力の箱・矢印・SSTP・オンラインのコマ）
 ├── webp.rs      # 動く WebP の組み立て（VP8L のコマを VP8X・ANIM・ANMF で包む・大きさは引数）
 └── texts.rs     # descript.txt・面別の設定 6 つ・install.txt・readme.txt の行（CRLF で連結して UTF-8 のバイト列にする）
+
+crates/areka-emo-atlas/tests/
+└── default_balloon_drift_test.rs   # ずれの見張り: build.rs（と子）を #[path] で読み、組んだ 23 ファイルと登記した書庫の中身をバイトで比べる
 
 vendors/sample_ghost/
 └── areka-balloon.nar   # 道具の出力（23 ファイル・リポジトリが追跡する）
@@ -222,7 +226,7 @@ graph TB
 | 7.1 | `install.txt`・`readme.txt` | `texts.rs` | `assets.rs`・窓口の照合 |
 | 7.2・7.3 | 説明書の中身 | `texts.rs` の `readme.txt` | 文面の読み合わせ |
 | 8.1 | 道具と絵柄の値 | `draw.rs`・`webp.rs` | — |
-| 8.2 | 同じ入力から同じバイト列 | 道具の作り（下の決め）・`--check` | 作り直しの手順で `--check` |
+| 8.2 | 同じ入力から同じバイト列 | 道具の作り（下の決め）・`--check` | `default_balloon_drift_test.rs`（毎回の全体テスト）・作り直しの手順で `--check` |
 | 8.3 | 新しい依存 0・`Cargo.lock` 不変 | example の置き場 | 全体テスト・`git diff Cargo.lock` |
 | 8.4 | 寸法の合わない絵を書かない | `main.rs` の照合 | 道具の失敗の経路 |
 | 8.5 | 失敗で今の絵を上書きしない | 一時名→名前替え・書き出し先の確認 | 道具の失敗の経路 |
@@ -317,7 +321,7 @@ graph TB
 **実装の注記**
 
 - 動く WebP の包みは前例 `gen_animated_samples.rs` の `riff_chunk`・`u24`・`encode_vp8l`・`animated_webp` を、大きさを引数にして `webp.rs` へ写す（example 同士で共有できないため。前例は書き換えない＝検体の `testdata` のバイト列を動かさない）。写した所に `shortcut:` の注記は要らない（前例の書き換えをしない理由を 1 行書く）。
-- `main.rs` は寸法の表（下の「データの形」）と描いた絵の寸法を比べ、1 つでも違えば書かずに終了コード 1 にする。
+- `build.rs` は寸法の表（下の「データの形」）と描いた絵の寸法を比べ、1 つでも違えば `Err` を返す。`main.rs` はそれを受けて書かずに終了コード 1 にする。
 
 ### データの層
 
@@ -409,6 +413,12 @@ graph TB
 - **`online.rs`**（8.9・3.2・3.3）: 取り出した `online0.webp` を `WicDecoderArm` の `probe_animation` と `decode_frames` で読む。見出しが 77×36・3 コマ、コマが 3 枚・各 `delay_ms` 300・`loop_count` が `LoopCount::Infinite`・`has_alpha` が真。コマ k で点 k の中心の α が 255、ほかの点の中心の α が 64（0.25 × 255 を最も近い整数へ丸める＝道具の `round()`。切り捨てなら 63 になるので、道具と期待値の丸めをそろえる）、点の外（例 (2,2)）の α が 0。`WicDecoderArm::new()` の前に COM を MTA で張る（`assets.rs` も同じ・`bake.rs` と同じ手順）。
 - **`wrapping.rs`**（12.5）: 本体側の面 0 の範囲と書体（`ＭＳ ゴシック` 12）で、本番の折り返しの入口（`staysee_balloon_fixture/wrapping.rs` と同じ `LayoutEngine::layout`）へ半角だけ・全角だけ・混ぜた本文を流す。行数と各行の字数を、範囲（0〜326）・origin 14・折り返し基準 296 と送り幅（半角 6・全角 12）から手で導いた値に固定し（導き方を説明に書く）、すべてのグリフの矩形が範囲の内側に収まることを確かめる。拡大率は `staysee_balloon_fixture/scale.rs` と同じ形で 1.0 と 1.25 を与え、画像の座標での行の並びが同じで、物理の寸法への変換が k 倍になることを見る。相方側は高さだけが違うので、行数が下の辺で止まらない長さの本文 1 本だけ通す。
 
+### ずれの見張り（`crates/areka-emo-atlas/tests/default_balloon_drift_test.rs`・設計の討議の議題 1）
+
+- 道具の `build.rs`（と子の `draw.rs`・`webp.rs`・`texts.rs`）を `#[path]` で読み、組んだ 23 ファイルの（名前, バイト列）と、`SampleRoot::acquire("areka-balloon")` で取り出した木の全ファイルを比べる。名前の集合と各バイト列がすべて一致すること（1 バイトでも違えば、違うファイルの名前を出して赤）。
+- 捕まえるもの: 道具を直して `.nar` を作り直し忘れた・`image`／`image-webp` の版が上がって出力が変わった（要件 8.2）。中身のテスト（手書きの期待値）とは役が違う＝こちらは「保管物が道具の今の出力か」、中身のテストは「保管物が要件どおりか」。
+- `build.rs` は端末へ出さず、ファイルも書かない（書くのは `main.rs` だけ）。`#[path]` で読むので、子のファイルは `crate::` でなく `super::` で互いを参照する形にそろえる。`Cargo.toml` は変えない（`areka-emo-atlas` は dev-dependency の `sample-ghost-kit` を既に持つ）。見張り ⑵ の綴りは書庫の名前を `Path::join` で組むので当たらない。
+
 ### 既定に頼るテスト（`crates/areka/src/`）
 
 - 研究 3.1 の A の 6 本・B の 4 本: 既定の意味で綴る所を `DEFAULT_BALLOON_FOLDER` の参照に替える（決め 3）。答えが `BalloonRoute::Default` のテストが緑のまま。
@@ -436,6 +446,10 @@ graph TB
 4. **動く WebP の読み戻しのテストの置き場** → `crates/areka-emo-text/tests/areka_balloon_fixture/online.rs`。公開の `WicDecoderArm`（`ElementDecoder::probe_animation`・`decode_frames`）が `image` の読み手を通るので、`pub(crate)` の `read_frames` に頼らずに外から読める。根拠: 道具が書いたばかりの絵でなく、**登記した書庫の中の絵**を areka の読み手で読むので、保管物そのものを確かめられる。`areka-emo-atlas` の中に置く案は、書庫を窓口から引く綴りがその crate に増えるだけで得が無い。
 5. **配布物の確かめに既定の段の当たりを足すか** → 足さない。根拠: 配布物の初回起動の確かめは `emo2` を起動し、`emo2` は同梱の `emo2-kakukaku` に当たるので、既定の段を通すにはバルーンを持たないゴーストを配布物に足す必要がある（配布物の形が変わる）。既定の段の当たりは単体テスト（名前を文字で比べる 1 本）が持ち、配布物に `balloon/areka-balloon/descript.txt` が在ることは必須の項目の確かめが持つ。
 6. **`staysee_balloon_fixture_test.rs` の説明の「既定バルーン」** → 入口のファイルの説明に注記を 1 段だけ足す（例「本ファイル群で『既定バルーン』とあるのは 2026-10 までの役名で、今は配布物に同梱する選べるバルーンである（既定は `areka-balloon`・spec `default-balloon-selfmade`）」）。実行行とテーマ別ファイルは変えない。根拠: 要件 10.5 が守るのは中身を固定するテストの働きで、説明の注記はそれを変えない。いっぽう要件 11 の目的（既定を書いていた所がすべて新しいバルーンを指す）から見て、入口の説明が嘘のまま残るのは避けたい。テーマ別ファイルの説明まで直すと差分が広がるので、入口の 1 段で済ませる。
+
+設計の討議（2026-10-29・開発者「承認」）で決めたこと:
+
+10. **道具と保管した `.nar` のずれの見張り** → 毎回の全体テストで突き合わせる（design-validation.md の大事な指摘 1 の案 A）。組み立てを `build.rs` へ出し、`crates/areka-emo-atlas/tests/default_balloon_drift_test.rs` が `#[path]` で読んで登記した書庫とバイトで比べる。根拠: 作り直し忘れと `image` の版の上がりに、人が `--check` を回し忘れても全体テストで気付ける。`Cargo.toml`・依存・見張りの綴りは変わらない。手で `--check` を回すだけの案 B は、回し忘れを捕まえられないので採らない。
 
 ほかに設計で決めたこと:
 
