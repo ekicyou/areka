@@ -11,3 +11,10 @@
 | 6.1 撮った絵 | SSP の「ボトル（でふぉ改）」の面 0 | このフォルダの `ssp-bottle-validrect-right0.png` |
 | 6.4 areka の 0 の読みの直しの引き受け | `real-run-log-noise` が引き受けた（2026-10-29・起票は不要） | `requirements.md` の「Requirement 6」の 6.4 の「結果」・`.kiro/specs/real-run-log-noise/` |
 | 3.7 印の spec への申し送り | オンラインの印・矢印・SSTP の印の検体ができたこと | `.kiro/specs/balloon-markers/brief.md` の「2026-10-29 `default-balloon-selfmade` からの申し送り」 |
+
+## 実装の段の記録
+
+| 要件 | 記録 | 在処 |
+|---|---|---|
+| 12.6〜12.9・6.5・6.6・13.8・13.9 実機の確かめ（タスク 5.1） | emo2 とどっとさくらを 100% と 200% で見た（125% の画面が無く 200% で代えた）。見えたこと・記録の grep の数・崩れの振り分け | このフォルダの `real-machine.md` |
+| 同上の撮った画像 | バルーンの辺りを切り出して半分に縮めたもの 6 枚 | このフォルダの `real-emo2-100-small.png`・`real-emo2-200-small.png`・`real-emo2-200-big.png`・`real-dot_sakura-100-small.png`・`real-dot_sakura-200-small.png`・`real-dot_sakura-200-big.png` |

@@ -93,8 +93,8 @@
   - _Boundary: balloon-markers の brief・本仕様の verification_
   - _Requirements: 3.7, 1.1, 1.2, 1.3, 1.4, 6.1, 6.4_
 
-- [ ] 5. 実機の確かめ
-- [ ] 5.1 emo2 とどっとさくらに新しいバルーンを被せて見る
+- [x] 5. 実機の確かめ
+- [x] 5.1 emo2 とどっとさくらに新しいバルーンを被せて見る
   - 根はワークツリーの `target\` の下に組み、`areka-balloon` を引数かメニューで被せた emo2 とどっとさくらを拡大率 100% と 125% で喋らせ、文字がバルーンの中に描かれ欠けもはみ出しもないことを見る（画面の操作は排他テストの机で順を取る）
   - 台本の `\b[2]` で本体側の大の面へ切り替えた見え方を見て、面 1 以降の面別の設定が効かない崩れが在れば記録する
   - 起動の記録を grep し、描画範囲の潰れ・折り返し基準が範囲の外・origin が範囲の外の行が 0 件
@@ -141,3 +141,6 @@
 - 1.3: readme.txt に SSP での振る舞いを書かない（research.md 9.2 の 2 番＝SSP が .webp の印を読むかは未測）。
 - 2.1: ワークツリーの target\nar-samples\fetched\ にぱすたの書庫が無いと、全検体を回す sample-ghost-kit のテストがぱすたの行で止まる（手で置いてよい・sha256 を確かめる）。
 - 3.2: 相方側は面 0・1 しか持たない（要件 2.2）ので、resolve_balloon_faces は相方側の面 2・3 が本体側の系列へ縮退した WARN を 2 件出す（今の作りどおり）。definition.rs はこの 2 件を欄まで固定する。5.1 の実機の起動の記録の grep でもこの 2 件は出るので数え方に注意。
+- 5.1: 実機では面の縮退の WARN は 1 回の起動で 6 件（2 件 × 装着 3 回）だった。今の作りどおり。`cursor.blendmethod` の WARN が毎フレーム出る件は `real-run-log-noise` に起票済み（数は `verification/real-machine.md`）。
+- 5.1: `/kiro-complete` の棚卸で `/kiro-discovery` に起票する候補（areka の文字の層・生きている spec に持ち主が無い）: 半角の行を折り返すと、次の行の先頭に空白が残る（`verification/real-machine.md` の振り分け 3）。
+- 5.1: `/kiro-complete` の棚卸で `/kiro-discovery` に起票する候補（areka の文字の層）: 数字の並び（`0123456789`）が行をまたいで割れる。行の頭に `:` が来る件は `text-typesetting`（禁則）が持つが、数字の並びを割らないことはその brief に明記が無い（`verification/real-machine.md` の振り分け 4）。
