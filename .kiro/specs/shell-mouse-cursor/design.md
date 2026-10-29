@@ -313,7 +313,7 @@ stateDiagram-v2
 | 5.8 | descript の値も同じ受け付け・読めなければ記録して使わない | CursorTable | `parse_shape`・`CursorIssue::GhostValueUnreadable` | 読み込み |
 | 6.1 | system の 8 種は OS の標準の形 | CursorAnswer・CursorApi | `stock_cursor(IDC_*)`（下の対応表） | — |
 | 6.2 | hand・grip は同梱の絵 | CursorAnswer・CursorApi・道具 | `OwnedCursor::from_cur_bytes`・`hand.cur`・`grip.cur` | — |
-| 6.3 | `.cur` は絵・`.ani` は動かして | CursorAssets・CursorApi | `OwnedCursor::load_file`（`LoadImageW`） | — |
+| 6.3 | `.cur` は絵・`.ani` は動かして | CursorAssets・CursorAnswer・CursorApi | `.cur`＝`CursorFile::Cur` → `from_cur_bytes`（窓の DPI ごと）・`.ani`＝`OwnedCursor::load_file`（`LoadImageW`） | — |
 | 6.4 | シェル → `ghost\master` の順で探す | CursorTable・CursorAssets | `candidate_paths` | 読み込み |
 | 6.5 | 無い・読めない・壊れているは既定へ・記録 | CursorAssets | 失敗した行・値を表から外す（＝行が無いのと同じ既定） | 読み込み |
 | 6.6 | フォルダの外を指す名前は読まない | CursorTable | `candidate_paths` の `PathReason` | 読み込み |
@@ -421,7 +421,7 @@ pub enum CursorError {
 | Requirements | 2.1, 2.3, 2.5, 3.4, 3.6, 4.1, 4.2, 4.3 |
 
 **Responsibilities & Constraints**
-- `on_set_cursor`: 当たりの結果が `HTCLIENT` のときだけ、世界を `try_borrow` し、`CursorQuery` があれば `CursorAsk` を組んで呼ぶ。`Show(h)` なら `SetCursor(h)` して `Some(LRESULT(1))`、`Keep` なら `SetCursor` せずに `Some(LRESULT(1))`（既定の処理を止めて今の形のまま＝要件 2.5）、`None` なら `None`。`Show` で引き金が `Move` なら `TrackMouseEvent(TME_HOVER | TME_LEAVE, HOVER_DEFAULT)` を掛け直す（掛け直すと止まった時計が始めからになる＝最後に動いてから OS の時間）。借りられなければ `trace!` して `None`（tick の中に入力の `WM_SETCURSOR` は来ない。来るのは OS の合成の移動だけで、次の移動で正しい形になる）。
+- `on_set_cursor`: 当たりの結果が `HTCLIENT` のときだけ、世界を `try_borrow` し、`CursorQuery` があれば `CursorAsk` を組んで呼ぶ。`Show(h)` なら `SetCursor(h)` して `Some(LRESULT(1))`、`Keep` なら `SetCursor` せずに `Some(LRESULT(1))`（既定の処理を止めて今の形のまま＝要件 2.5）、`None` なら `None`。`Show` で引き金が `Move` なら `TrackMouseEvent(TME_HOVER | TME_LEAVE, HOVER_DEFAULT)` を掛け直す（掛け直すと止まった時計が始めからになる＝最後に動いてから OS の時間）。借りられなければ（tick の中で窓が動いたときの OS の合成の問い合わせ）、窓ごとの「最後に出した形」の控え `LAST_SHOWN`（`thread_local! { RefCell<HashMap<HWND, HCURSOR>> }`・`nchittest_cache` と同じ型）に在ればその形を `SetCursor` して `Some(LRESULT(1))`、無ければ `None`。記録は `trace!`。控えは `Show` で `SetCursor` したたびに書き、シェル・ゴーストの入れ替えでは前のカーソルを捨てる前に全部消す（捨てたカーソルを出さない）。キャラクターの窓は高々数枚なので、消えた窓の行は入れ替えまで残してよい（設計の議題 1・2026-10-29 承認＝矢印が次の移動まで出っぱなしになるのを防ぐ）。
 - `on_mouse_hover`: `push_cursor_rc(.., Hover)` を呼び、`Some(LRESULT(0))`。
 - `push_cursor(&World, window, trigger)`: 窓の `WindowHandle` から HWND を取り、`WindowFromPoint(GetCursorPos())` がその窓のときだけ問い合わせて、`Show(h)` なら `SetCursor` する（`Keep`・`None` は何もしない）。`push_cursor_rc` は借用を試してから同じことをする。
 - `trigger_of(msg)`: `WM_MOUSEMOVE`・0（メニュー）・知らない値 → `Move`、`WM_[LMX]BUTTONDOWN`・`WM_[LMX]BUTTONDBLCLK` → `Press { right: false }`、`WM_RBUTTONDOWN`・`WM_RBUTTONDBLCLK` → `Press { right: true }`、`WM_*BUTTONUP` → `Release`。
@@ -532,10 +532,10 @@ pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Result<Vec<PathBuf>
 | Requirements | 1.3, 1.4, 5.6, 5.7, 5.8, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 |
 
 **Responsibilities & Constraints**
-- `build_shell_cursors` は失敗しない（シェルの読み込みを止めない）。CursorTable の報告を全部記録し、ファイル名ごとに 1 度だけ探して `OwnedCursor::load_file` で作る。作れなかった名前を使う行と descript の差し替えは表から外す（行が無いのと同じ既定になる＝6.5）。
+- `build_shell_cursors` は失敗しない（シェルの読み込みを止めない）。CursorTable の報告を全部記録し、ファイル名ごとに 1 度だけ探して読む。`.cur` はバイト列を読んで `read_cur_directory` で目録を確かめて持ち（形は窓の DPI ごとに CursorAnswer が `from_cur_bytes` で作る）、`.ani` は `OwnedCursor::load_file` で作る（設計の議題 2）。作れなかった名前を使う行と descript の差し替えは表から外す（行が無いのと同じ既定になる＝6.5）。
 - 記録は読み込み（`build_shell_assets` の 1 回＝起動・ゴーストの切り替え・シェルの切り替え・読み直し）につき 1 度だけ出す。描くたびには出さない（6.7）。ゴーストの descript もこの読み込みで読むので、5.7 の 1 行もこの単位で 1 度。
 - 起動では UI スレッド、シェルの切り替えでは背景のスレッドで作る。`OwnedCursor` はプロセスのどのスレッドからでも使え、捨てるのは UI スレッド（入れ替えの後）。
-- `hand_to(self, world)`: NonSend の `ShellCursorAssets` を入れ替え、全部のキャラクターの窓へ `push_cursor(world, e, Refresh)` を呼んでから、前の資源を捨てる（System Flows の順）。
+- `hand_to(self, world)`: NonSend の `ShellCursorAssets` を入れ替え、全部のキャラクターの窓へ `push_cursor(world, e, Refresh)` を呼び、wintf の `LAST_SHOWN` を消して（`clear_last_shown()`）から、前の資源を捨てる（System Flows の順）。
 
 **Contracts**: Service [x] / State [x]
 
@@ -546,8 +546,16 @@ pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Result<Vec<PathBuf>
 pub(crate) struct ShellCursorAssets {
     pub rows: CursorRows<usize>,
     pub ghost: GhostCursorKeys<usize>,
-    /// 作ったファイルのカーソル（番号＝Shape::File の値）。
-    pub files: Vec<OwnedCursor>,
+    /// 読んだファイル（番号＝Shape::File の値）。
+    pub files: Vec<CursorFile>,
+    /// .cur を窓の DPI の寸法ごとに作った控え（(番号, 寸法) → カーソル）。資源と一緒に捨てる。
+    pub sized: RefCell<HashMap<(usize, u32), Option<OwnedCursor>>>,
+}
+pub(crate) enum CursorFile {
+    /// 目録を確かめた .cur のバイト列（窓の DPI ごとに from_cur_bytes で作る）。
+    Cur(Vec<u8>),
+    /// LoadImageW で作った .ani（主のモニターの寸法・既知の限り）。
+    Ani(OwnedCursor),
 }
 pub(crate) fn build_shell_cursors(
     braces: &[CursorBrace],
@@ -711,7 +719,7 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
 | ファイルが無い・壊れている・フォルダの外 | 表から外して既定 | `warn!`（ファイル名ごとに 1 度） |
 | 標準の形が読めない | その形は `None`（窓のクラスの矢印） | `error!`（登録で 1 度） |
 | 同梱の絵が作れない | `IDC_HAND` | `error!`（寸法ごとに 1 度） |
-| 世界を借りられない（`WM_SETCURSOR`） | `None`（今の振る舞い） | `trace!` |
+| 世界を借りられない（`WM_SETCURSOR`） | `LAST_SHOWN` の形を出す・無ければ `None`（今の振る舞い） | `trace!` |
 | 世界を借りられない（解放の出し直し `push_cursor_rc`） | 何もしない（次の移動で正しい形） | `debug!` |
 | `GetCursorPos`・`ScreenToClient`・`WindowFromPoint` の失敗（答え・出し直し） | `None`（今の振る舞い）／出し直さない | `trace!` |
 | `GetDpiForWindow` が 0 | 96 として寸法を選ぶ（`dpi_or_default`） | `debug!` |
@@ -730,13 +738,13 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
 2. `read_cursor_braces`・`parse_shape`（`shell_cursor_table_tests.rs`）: スコープ 0・1・`char2` が 2、5 つの場面、読めない理由の 1 つずつ（欄不足・知らない場面・番号が数でない・当たり判定名が空・知らない system 名・拡張子違い）、知らない見出し、重なりの後勝ちと前の行の報告、面に無い当たり判定名も残る、system 名と拡張子の大小、第 3 欄以降の継ぎ直し。
 3. `read_ghost_cursor_keys`・`candidate_paths`: `mousecursor` と `cursor` の両方・片方ずつ、hand・grip・arrow、text・wait が `unused` に並ぶ、読めない値、絶対パス・ドライブ付き・`\` 始まり・`..` の拒否、シェル → `ghost\master` の順。
 4. `plan_cursor`・`pick_shape`（`cursor_pick_tests.rs`）: 状態の表の全行。乗る → 別の当たり判定へ直に移る（その場で替わる）→ 当たり判定の無い所（矢印）→ 透けた所（Pass）。左・中・右の押下と `bust`／ほか、押したまま外へ・透けた所へ・放す、当たり判定の無い所で押す、解放を落としたときの戻り、止まった（行あり・行なし＝乗る形のまま）、ホイール（同）、押している間の止まった・ホイールの無視、ホイールの形を止まったで上書きしない、位置の変わらない移動で状態が変わらない（2.6）、Refresh。出どころの順（ブレス ＞ descript ＞ 既定）・`Bust`・`BUST`、スコープの分離（2.7）。
-5. `read_cur_directory`・`pick_cur_entry`・`trigger_of`・`plan_set_cursor`・`push_allowed`・`dpi_or_default`（wintf の兄弟テスト）: 目録の頭と項目の読み・壊れた目録（短い・型が 2 でない・範囲の外）・寸法の選び（ちょうど・間・最大より大きい）・引き金の対応表・`HTCLIENT` の門（`HTCLIENT` 以外は問い合わせない）・`Show`／`Keep`／`None` ごとの `SetCursor` と戻り値（`Keep` は `SetCursor` せずに `LRESULT(1)`）・止まった時計の掛け直しは `Show` かつ `Move` のときだけ・カーソルの下が別の窓なら出し直さない・DPI 0 は 96。
+5. `read_cur_directory`・`pick_cur_entry`・`trigger_of`・`plan_set_cursor`・`push_allowed`・`dpi_or_default`（wintf の兄弟テスト）: 目録の頭と項目の読み・壊れた目録（短い・型が 2 でない・範囲の外）・寸法の選び（ちょうど・間・最大より大きい）・引き金の対応表・`HTCLIENT` の門（`HTCLIENT` 以外は問い合わせない）・`Show`／`Keep`／`None` ごとの `SetCursor` と戻り値（`Keep` は `SetCursor` せずに `LRESULT(1)`）・止まった時計の掛け直しは `Show` かつ `Move` のときだけ・カーソルの下が別の窓なら出し直さない・DPI 0 は 96・世界を借りられないときは `LAST_SHOWN` に在ればその形で `LRESULT(1)`、無ければ `None`・`clear_last_shown` の後は控えが無い（設計の議題 1）。
 
 ### Integration Tests
 
 1. `answer_char_cursor`（`cursor_answer_tests.rs`・`RegionSource::Mock` と手で組んだ `ShellCursorAssets`）: キャラクターの窓で期待の標準の形の `Show` が返る・透けた所で `Keep`（2.5）・バルーンの印の窓では `None`（2.8）・`MouseWiring` が無ければ `None`・形が変わったときだけ `debug!` が 1 行（`log-capture-kit`・対照イベント付き）。
 2. 同じ点で `char_watch` が覚える当たり判定名と、答えが引く当たり判定名が等しい（2 か所で引く危うさの檻）。
-3. `build_shell_cursors`（`shell_cursor_assets_tests.rs`・`temp-path-kit` で `target\` の下に組んだシェルとゴースト）: シェルの `.cur` が使われる・シェルに無く `ghost\master` に在れば使われる・無いファイル・壊れたファイル（中身がでたらめ）・フォルダの外で `warn!` が名前ごとに 1 度だけ出て表から外れる・同じ名前を 2 行が使っても読むのは 1 度。
+3. `build_shell_cursors`（`shell_cursor_assets_tests.rs`・`temp-path-kit` で `target\` の下に組んだシェルとゴースト）: シェルの `.cur` が使われ、DPI 96 と 192 で別の寸法のカーソルが作られて控えられる（設計の議題 2）・シェルに無く `ghost\master` に在れば使われる・無いファイル・壊れたファイル（中身がでたらめ）・フォルダの外で `warn!` が名前ごとに 1 度だけ出て表から外れる・同じ名前を 2 行が使っても読むのは 1 度。
 4. 同梱の `hand.cur`・`grip.cur` が目録として読め、10 寸法がそろい、当たりの点が絵の中に在り、32 と 64 で `from_cur_bytes` が作れる。
 5. `hand_to`: 入れ替えの後の答えが新しい表から選ばれ、前の表の形が返らない（6.8）。
 
@@ -762,6 +770,7 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
   - `mousecursor` と `cursor` の両方があれば `mousecursor`・記録。
   - `system:hand`・`system:grip` は areka 同梱の絵（`crates/areka/cursor/`）。`system:*` の残り 8 種と `IDC_*` の対応表。
   - `bust` は ASCII の大小を区別しない。`system:` の名前と拡張子も大小を区別しない。
+  - シェル・ゴーストの `.cur` は窓のモニターの拡大率の寸法で出す。`.ani` は主のモニターの拡大率の寸法で出す（既知の限り・メモリから作る素直な口が無い）。
   - descript の値のファイルも cursorブレスと同じくシェル → `ghost\master` の順で探す。
 
 ## Security Considerations
@@ -772,6 +781,7 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
 ## Open Questions / Risks
 
 - **作ったスレッドと別のスレッドでカーソルを使う・捨てる**: 文書に縛りの記載が無く、カーソルはプロセスの持ち物として扱う前提（`unsafe impl Send`）。実機の確かめ 3（シェルの切り替えの後）で見る。
-- **ファイルのカーソルの寸法**: `LR_DEFAULTSIZE` はプロセスの既定の DPI の寸法で、モニターごとの DPI には追わない（読み込みで 1 回だけ読む 6.9 を優先）。同梱の絵だけ窓の DPI に追う。
+- **ファイルのカーソルの寸法**: `.cur` は読み込みでバイト列を 1 回だけ読み（6.9）、同梱の絵と同じ `from_cur_bytes` で窓の DPI の寸法ごとに作って控える（設計の議題 2）。`.cur` の項目が 1 寸法しか無いときは `CreateIconFromResourceEx` が拡大・縮小する。
 - **窓の外で放したとき**: 窓の外の形は OS と下の窓が決める。`ReleaseCapture` の後に OS が形を出し直すかは文書に無いので、実機の確かめで見る（本 spec の要件の範囲は窓の上）。
-- **`WM_SETCURSOR` が tick の中に届く**: 入力からは来ないが、来たときは今の振る舞い（窓のクラスの矢印）になり、次の移動で正しくなる。
+- **`WM_SETCURSOR` が tick の中に届く**: 入力からは来ないが、tick の中で窓が動くと OS の合成の問い合わせが来る見込み。そのときは `LAST_SHOWN` の形を出し直す（設計の議題 1）。窓が動いて当たり判定が替わった場合の正しい形は、次の移動で引き直す（要件 2.6 と同じ物差し）。実機の確かめで、面替わりの再配置の直後に矢印が出ないことを見る。
+- **シェルの `.ani` の寸法**: `.ani` はメモリから作る素直な口が無いので、`LR_DEFAULTSIZE`（主のモニターの拡大率）で 1 回だけ作り、モニターごとの拡大率には追わない（設計の議題 2・§8 に既知の限りとして書く）。`.cur` は窓の拡大率に追う。
