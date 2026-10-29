@@ -6,7 +6,7 @@
 
 **Users**: ぱすたさん（v0.1.0 の検体「窓際のぱすたさん」）を見る人と、ゴースト・バルーンの作者。ぱすたの縦書きバルーン（`font.name,游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ`）は、書き替えずに中太で、括弧が正しい位置に、列が行の矩形の真ん中に描かれる。
 
-**Impact**: `areka-emo-text` の COM 層（`draw` ファサードとその子・装飾の範囲指定）だけを変える。純粋層（`layout.rs` ほか）と本番の描画の段（`viewbox_draw_render.rs`）は変えない。新しいソースファイル・新しい依存は 0。縦書きの列のレシピは横書きに何もしない。横書きの見た目が変わるのは、GDI の名前で当たる候補（中太など）を書いたバルーンと、`font.bold`／`font.italic` を宣言したバルーンだけ（要件 3・4 の意図どおり）。
+**Impact**: `areka-emo-text` の COM 層（`draw` ファサードとその子・装飾の範囲指定）だけを変える。純粋層（`layout.rs` ほか）のコードは変えない（doc だけ直す）。本番の描画の段（`viewbox_draw_render.rs`）は束縛書式の記憶の鍵の 1 行だけを変える。新しいソースファイル・新しい依存は 0。縦書きの列のレシピは横書きに何もしない。横書きの見た目が変わるのは、GDI の名前で当たる候補（中太など）を書いたバルーンと、`font.bold`／`font.italic` を宣言したバルーンだけ（要件 3・4 の意図どおり）。
 
 原因は設計の段で測って特定した（research.md §10）。件 1 は「DirectWrite の TextLayout が、typography を付けないときの既定の機能の組で、游ゴシックの縦書きに `vpal` と同じ位置の調整（送り幅は変えない）を当てる」こと。件 3 は「DirectWrite の既定の行間（書体の ascent＋descent＋lineGap）で組んだ列の箱が、em の幅の行の矩形の書き始めの辺に揃う」こと。どちらも縦書きの TextLayout の設定で直る（要件 2.2）。字を個別にずらす最後の手段（要件 2.3）は使わない。
 
@@ -40,7 +40,7 @@
 ### Out of Boundary
 
 - 行の矩形の決め方・行送り・折り返し（純粋層 `layout.rs` 系）。本書は変えない。`GlyphMetrics::vertical_em_box_left` の既定の実装（純粋層の偽の計測器の模型）もそのまま残す。
-- 本番の描画の段（`viewbox_draw_render.rs` の原点・`DrawTextLayout`・`FormatKey`）。本書は変えない。
+- 本番の描画の段（`viewbox_draw_render.rs` の原点・`DrawTextLayout`）。本書は変えない（`FormatKey` の鍵の中身だけは書式を決める値に合わせて替える）。
 - 選択肢の反転の帯の置き方（完了 `vertical-choice-hover-band`）。帯は今のまま「測った em の箱の位置」に置かれ、本書の直しで測った比が 0 になることで帯も行の矩形に重なる。帯の式は変えない（5.4 は壊さないことだけを持つ）。
 - 書体の集まりへファイルの書体を足すこと（`balloon-font-file`）。GDI の引き当てに書体の集まりを渡す口（`IDWriteGdiInterop1`）も下流の持ち物。
 - 約物の詰め・字の向きの選び（`text-typesetting`）。下流が詰めの機能を足すときは、本書の機能の組（`VERTICAL_FEATURES`）へ足す。
@@ -124,6 +124,8 @@ graph TB
 - `crates/areka-emo-text/src/draw_metrics.rs`（480 行 → 約 470 行）— `probe_format_for` は `fonts.face_or_default(&key.name)` と `try_create_format` を呼ぶ形にし、設定の写しを消す。`probe_advance` と `measure_vertical_em_box_left_ratio` は `create_line_layout` で TextLayout を作る。em の箱の比が測れないときの縮退を 0（行の矩形の真ん中）にする。doc の実測例（∓0.1650・−0.3013）を「列のレシピの下では 0」に直す。
 - `crates/areka-emo-text/src/draw_line_store.rs`（233 行 → 約 225 行）— 行の TextLayout を `create_line_layout` で作る（箱の寸法の場合分けを関数へ移す）。
 - `crates/areka-emo-text/src/viewbox_draw_decoration.rs`（333 行 → 約 360 行）— `apply_font_ranges` を顔で考える形にする（区間の名前が既定と違えば `face_for` で顔を引き、家族名・幅を焼く。太さ・斜体は「区間の顔＋区間の太字・斜体」と「束縛の顔＋既定の太字・斜体」を同じ規則で比べ、違えば焼く）。署名は変えない。
+- `crates/areka-emo-text/src/viewbox_draw_render.rs`（661 行・1 行と型 1 つ）— 束縛書式の記憶の鍵（`ensure_format` の `FormatKey`）を `(font.name, height, mode)` から `(font.looks.default.font_key(), mode)` へ替える。本書の後は候補列全体から解いた顔と既定の見た目の太字・斜体でも書式が変わるので、鍵がそれを見ないと同じ実行部でフォントを替えたときに古い書式を黙って使い続ける（設計の確かめの指摘 1）。今の本番は `actor_attach.rs` が resolved の変化で描画資源ごと作り直すので起きないが、鍵が書式を決める値をすべて含むのが本来の形。ウェーブの約束で触らないと決めたファイルなので、触る前に同じウェーブのほかのセッションへ知らせる（要件 5.3・C12 のほかの 7 本は触らない＝重なり 0）。
+- `crates/areka-emo-text/src/layout.rs`（doc だけ・コードは変えない）— `GlyphMetrics::vertical_em_box_left` の trait の doc（130〜135 行・158〜161 行あたり）が語る「本番の em の箱は列の箱の真ん中から ±s/2 ずれる」を、「本番（DirectWrite）は列のレシピで真ん中（0）・既定の実装は純粋層の偽の計測器の模型」へ直す（設計の確かめの指摘 3）。触る前に知らせる（同上）。
 - `doc/ukadoc-coverage/ledger/assets.toml` — `font.name` の行（`entry."ukadoc:descript_balloon:font.name_…:1"`）の注記に GDI の名前の引き直しを書く（7.1）。
 
 ### Modified Files（テスト）
@@ -139,12 +141,13 @@ graph TB
 
 ### 触らないファイル・ウェーブの約束との照合
 
-- **触らない**: `layout.rs`・`viewbox_draw_render.rs`（約束どおり。列のレシピは TextLayout を作る所に置き、束縛書式は `pick` の戻り値に顔を載せて通すので、どちらも不要）。新しいソースファイルは 0（`lib.rs` の一覧は変わらない）。`actor_decoration.rs`・`region.rs`・`actor_attach.rs`・`choice.rs`（④ `real-run-log-noise` の持ち物）にも触らない（`FontCatalog::new` の署名は変えない）。
+- **約束の所に及ぶもの（2026-10-29 設計の討議で足した）**: `viewbox_draw_render.rs`（束縛書式の記憶の鍵の 1 行と型）・`layout.rs`（doc だけ）。列のレシピと顔の受け渡しそのものはどちらにも置かない（TextLayout を作る所と `pick` の戻り値で通す）。実装の担当は触る前に同じウェーブのほかのセッションへ知らせる（要件 5.3）。新しいソースファイルは 0（`lib.rs` の一覧は変わらない）。`actor_decoration.rs`・`region.rs`・`actor_attach.rs`・`choice.rs`（④ `real-run-log-noise` の持ち物）にも触らない（`FontCatalog::new` の署名は変えない）。
 - **roadmap の ③ の一覧の外で触るファイル**（進行役がほかのセッションへ知らせる用）:
   1. `crates/areka-emo-text/src/viewbox_draw_decoration.rs`（要件の段で足すと決めた所・C12 のほかの 7 本は触らない）
   2. `crates/areka-emo-text/src/viewbox_draw_decoration_tests.rs`（上の兄弟のテスト）
   3. `crates/areka-emo-text/tests/decoration_readback/mod.rs`（読み戻しの試験の土台・`src` の外）
   4. 赤になった場合だけ: 上に挙げた縦書きの読み戻しの兄弟のテスト 7 本（どれも C12 のほかの 7 本の持ち物ではない）
+  5. `crates/areka-emo-text/src/viewbox_draw_render.rs`（記憶の鍵）と、その兄弟のテスト（鍵の試験 K1 を足す）・`crates/areka-emo-text/src/layout.rs`（doc だけ）
   - `draw_format_metrics_tests.rs` は字面を直すだけで行を足さない（約束「足さない」の内）。
 
 ## System Flows
@@ -207,7 +210,7 @@ flowchart TB
 | 4.9 | `font.italic` を既定の字の描画と計測へ | FormatFactory | 同上 | 檻 F1・G5 |
 | 5.1 | 列の em の箱の中心を行の矩形の中心へ | ColumnRecipe | `create_line_layout`（行間） | 檻 G4・M |
 | 5.2 | 直す前後のずれを記録 | 記録（research.md §10.3＋実装の画素の測り直し） | — | 記録 |
-| 5.3 | 約束の所に及ぶなら知らせる | 不要（`layout.rs`・`viewbox_draw_render.rs` に触れない） | — | — |
+| 5.3 | 約束の所に及ぶなら知らせる | 実装の進め方（`viewbox_draw_render.rs` の記憶の鍵・`layout.rs` の doc に触る前に知らせる） | — | — |
 | 5.4 | 選択肢の帯を em の箱に重ねたまま | DWriteMetrics（測った比 0・縮退も 0） | `vertical_em_box_left` | 帯の既存の檻 |
 | 5.5 | 横書きの行の位置を変えない | ColumnRecipe（横書きは何もしない） | `create_line_layout` | 横書きの既存の読み戻し |
 | 6.1 | 括弧の上下を実 GPU で固定 | 檻 G1 | — | — |
@@ -424,7 +427,7 @@ pub(crate) fn create_line_layout(
 - `probe_format_for(key)`: 顔＝`self.fonts.face_or_default(&key.name)`（全滅は ＭＳ ゴシック＝今のまま）、書式＝`try_create_format(&self.factory, &face, key.bold, key.italic, size)`＋方向レシピ。計測鍵（候補列・大きさ・太字・斜体）が顔を一意に決めるので、鍵と書式の記憶の形は変えない。
 - `probe_advance(text, format, block_extent)`: `create_line_layout(..., block_extent = 鍵の大きさ, self.mode)`。行内の軸は今のまま `PROBE_MAX_EXTENT`（未折返し）。
 - `measure_vertical_em_box_left_ratio`: 引数に `mode` を足し（呼び手は `new_shared` の縦書きの枝の中）、「あ」の TextLayout を `create_line_layout(..., font_height, mode)` で作る＝本番の列と同じレシピで測る。列のレシピの下の実測は全書体 0（research.md §10.3）。
-- 測れないときの縮退は 0（行の矩形の真ん中＝列のレシピが保証する置き場）。`warn!` は今のまま。束縛と違う向きを問われたとき（`mode != self.mode`）は今のまま既定の実装（`column_centred_em_box_left`）。
+- 測れないときの縮退は 0（行の矩形の真ん中＝列のレシピが保証する置き場）。`warn!` は今のまま。束縛と違う縦書きの向きを問われたとき（`mode != self.mode`）も 0 を返す（列のレシピはどちらの向きでも em の箱を真ん中に置く＝古い ±s/2 の既定の実装へ落とさない・設計の確かめの指摘 3）。横書きを問われたときは今のまま。
 - `new_shared` の `let picked = fonts.pick(font);` の行は変えない（字面の檻がある）。
 
 **Implementation Notes**
@@ -518,7 +521,8 @@ pub(crate) fn create_line_layout(
 ### 列のレシピ（実 DirectWrite・GPU 不要）— `draw_line_store_tests.rs`
 
 - L1（1.7・2.2・5.1・5.5）: 縦書き 2 方向の行の TextLayout が `GetLineSpacing`＝（UNIFORM・箱の幅・箱の幅の半分）と、`GetTypography(0)` に `VERTICAL_FEATURES` の 10 個（`vpal`・`vert` を含まない）を持つ。横書きの行は typography 無し・行間は既定。装飾のある行（箱の幅＝行内最大 em）でも同じ形。
-- L2（2.4）: `draw.rs`・`draw_metrics.rs`・`draw_line_store.rs`（今 TextLayout を作るのはこの 3 ファイルだけ）の本文で `create_text_layout(` を呼ぶのは `create_line_layout` の 1 か所だけ（字面の檻・今の `include_str!` の型）。
+- L2（2.4）: crate の `src` の本番のファイル全部（`_tests.rs` を除く・試験の中で `src` を走査する）で、`create_text_layout(`／`CreateTextLayout(` を呼ぶのは `create_line_layout` の 1 か所だけ（字面の檻。3 ファイルに限ると「crate で唯一の生成口」という不変条件と範囲がずれる＝設計の確かめの補足）。
+- L4（1.7・2.2）: 縦書きで、絵文字の ZWJ 列（例「👨‍👩‍👧」）と国旗（例「🇯🇵」）の字形番号と送り幅が、typography 無しの既定と列のレシピで一致する（明示した 10 個の機能で合成の絵文字が崩れないこと）。
 - L3（2.4）: 游ゴシック 20px の縦書きで、「…「繋がってる」」の 1 字ずつの計測（`DWriteMetrics::advance`）と行の cluster の幅が全部一致する。
 - 既存の `line_layout_produces_the_same_line_as_a_bare_factory_call` は突き合わせ先を `create_line_layout` に直す（縦書きの箱の寸法の檻 `line_layout_keeps_the_vertical_box_extents` は今のまま）。
 
@@ -538,6 +542,10 @@ pub(crate) fn create_line_layout(
 - G4（5.1）: かなと漢字だけの列（「あ亜繋国」）の墨の左右の中心が、最初の列の行の矩形の左右の中心と ±1px。行の矩形は面の `validrect` と字の大きさから求まる値を試験の中で書く（右から左は右端から 20px・左から右は左端から 20px）。求め方の較正として、直す前から真ん中にある ＭＳ ゴシック の列でも同じ式が ±1px で合うことを同じ試験で確かめる（式が外れていれば ＭＳ ゴシック の側が赤になる）。
 - G5（4.8・4.9）: `font.bold,1` を足したバルーンの既定の字は、無いものより墨の画素が多い。`font.italic,1` を足したものは画素が違う（斜体の傾き）。
 - 既存の固定値（`COLUMN_RL`・`COLUMN_LR`・`UNDERLINE_BAND_*`・`STRIKE_BAND_*`・Yu Gothic UI 28px）は、列のレシピで列が行の矩形の真ん中へ寄った分（Yu Gothic UI は 28px で約 4.6px）動く。動いた向きが列の真ん中の側であることを確かめ、理由を添えて改める（6.5）。線の側（`UNDERLINE_SIDE`・`STRIKE_SIDE`）は変わらない見込み。
+
+### 束縛書式の記憶の鍵 — `viewbox_draw_render.rs` の兄弟のテスト
+
+- K1: 同じ実行部で、候補列の先頭が同じで既定の見た目の太字（または斜体・後ろの候補）だけが違う `ResolvedFont` を続けて描くと、`ensure_format` が組み直しを返し、2 度目の束縛書式の太さ・斜体が新しい値になる。
 
 ### 緑のまま保つ既存の檻
 
