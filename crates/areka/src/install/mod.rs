@@ -25,6 +25,7 @@ pub(crate) mod judge;
 pub(crate) mod names;
 pub(crate) mod pick;
 mod procedure;
+pub(crate) mod startup;
 mod terms;
 mod worker;
 
