@@ -87,7 +87,7 @@
   - _Depends: 4.2_
   - _Requirements: 2.8, 3.1, 3.5, 3.6, 4.3, 5.1, 5.3, 9.3, 9.4, 9.5, 9.7_
 
-- [ ] 5. (P) 説明書の「■ 起動オプション」を直す
+- [x] 5. (P) 説明書の「■ 起動オプション」を直す
   - 62 行目のまだ扱わない語を `kiosk` だけに、まだ扱わない起動オプションから `--install` を外す
   - 79 行目の readonly の「断る物」に `--install` と `initial_install.nar` を足す
   - 63 行目の後に小見出し「--install と initial_install.nar:」を足し、設計の summary の中身（書き方・入れ始める時・手続き・2 つの語・限り・`initial_install.nar`・1 行の例・ゴースト自身の切り替えより `callghost` が先）を平易な語で書く
@@ -119,3 +119,4 @@
 - 1.2: `SwitchAcceptCount` は今のゴーストのフォルダ名が `None`（パスを直に指して起こしたゴースト）だと、起こし直しでも数えが増える（`pin_to_current` と同じ扱い）。4.3 のテストで気に留める。`ghost_switch.rs` の増えは rustfmt の折り返しで 11 行。
 - 3.3: 終了の後に終わった起動の引数の依頼の warn `startup_followup_dropped` は、語（`deletesource`・`callghost`）が立っているときだけ（レビューの差し戻しで design.md 478 行もそろえた）。
 - 4.1: このワークツリーでは i686 の補助 exe が建っていないため、`crates/areka/tests` の実機寄りの結合テスト 7 本が `real-run-kit/src/i686.rs:77` で止まる（環境・差分と無関係）。全体テストの前に `cargo build -p <pkg> --target i686-pc-windows-msvc` が要る。
+- 5: 説明書は約束の 3 か所のほか、食い違いを無くすため「効く起動オプション」の一覧（11 個）・短い形 `/i` `-i`・31 行目の重ねたときの扱いも直した（兄弟の spec とマージで競合しうる）。
