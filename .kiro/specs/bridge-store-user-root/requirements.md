@@ -18,7 +18,7 @@
 - **控え**: 中継が areka から受け取った答えを残しておくファイル（areka が居ないときにツールの一覧を並べるために使う）。
 - **利用者ごとの置き場**: `%LOCALAPPDATA%\areka\`（`AREKA_USER_ROOT` で変えたときはそのフォルダ）。winget で入れたときなどに areka が使う。
 - **exe の隣の記憶**: `areka.exe` の隣の `profile\areka\`。areka は利用者ごとの置き場を初めて使うときに、これを利用者ごとの置き場の `profile\areka\` へ写す。
-- **箱**: Microsoft Store 版のアプリから起こされたプログラムが `%LOCALAPPDATA%` の下へ書く物を、OS が回すアプリごとのフォルダ（`%LOCALAPPDATA%\Packages\` の中の `Claude_` で始まるフォルダの `LocalCache\Local\`）。
+- **箱**: Microsoft Store 版のアプリから起こされたプログラムが `%LOCALAPPDATA%` の下へ書く物を、OS が回すアプリごとのフォルダ（実測では `%LOCALAPPDATA%\Packages\` の中の `Claude_` で始まるフォルダの `LocalCache\Local\`。このフォルダの形は OS の文書では約束されておらず、文書は「アプリごとの専用の場所」とだけ言う）。
 
 ## Boundary Context
 
@@ -111,7 +111,7 @@
 2. The 説明書 shall 利用者ごとの置き場を使う形で、Store 版の Claude Desktop から起こした中継の控えが置かれる場所（箱の中か外か、例のパスを含む）を伝える。
 3. The 説明書 shall 中継が控えを持たずに動く場面（areka をまだ一度も起動していない・exe の隣の記憶がまだ写されていない）と、控えができるようになる時（areka を起動した後、次に Claude Desktop が中継を起こしてつないだとき）を伝える。
 4. The 説明書 shall 中継が利用者ごとの置き場を作らず、exe の隣の記憶を写さないことを伝える。
-5. The 本仕様 shall `dist/README.txt` の中継の控えの段落の外の行を変えない。
+5. The 本仕様 shall `dist/README.txt` のうち、利用者ごとの置き場の形の一覧の「中継の控え」の行と、その下の中継の控えの段落（Store 版の箱へ回る話の段落）の 2 か所だけを変え、その外の行（zip の形の一覧の「中継の控え」の行を含む）を変えない。
 
 ### Requirement 6: 今の形を守り、決めた形をテストに固定する
 
