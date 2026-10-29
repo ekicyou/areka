@@ -5,7 +5,7 @@
 > 測りの検体・控え・一時フォルダは、どれもワークツリーの `target\bridge-store-measure\` の下だけに置く。Claude Desktop の設定の向け直しと起動し直しは開発者に頼み、自分では行わない。止めるプロセスは自分で起こしたと確かめたものだけ。
 
 - [ ] 1. 直す前の実機の測り（M-1）
-- [ ] 1.1 直す前の検体を組み、測る前の形を写して控える
+- [x] 1.1 直す前の検体を組み、測る前の形を写して控える
   - 直す前のコード（ワークツリーの今の先頭）で `areka.exe` と中継を建て、`target\bridge-store-measure\before\` に、2 つの exe・空の winget の控えのファイル・中身の決まった exe の隣の記憶（`profile\areka\sylphya.toml`）を並べる
   - PowerShell の道具（箱の外の見え方）から、箱の中の `LocalCache\Local\areka\` と本当の `%LOCALAPPDATA%\areka\` の木と、検体の exe の隣の記憶の SHA256 を写し取る
   - 箱の中の `LocalCache\Local\areka\`（本当の `%LOCALAPPDATA%\areka` が在ればそれも）を `target\bridge-store-measure\backup\` へ移す

@@ -276,6 +276,48 @@ D2 の見落としの場面は、要件 3.5（箱の中なら 1 件）・要件 
 - **中継の exe で `canonicalize` が箱の場所を返すか**: 3.2 は PowerShell から OS を直に呼んで確かめただけ。直した後の測り（要件 1.3）で、箱の行に箱のフォルダが出ることを確かめる。出なければ D-6 を見直す（設計に戻る）。
 - **箱の中から本当の `R` が見えるか（要件 1.1 の d）**: 文書では見える。見えなければ、Store 版の利用者は毎回 `RootMissing`（控え無し）になる。要件のとおりの振る舞いだが、説明書の文を測りに合わせて直す（要件 5.1）。
 
+## 11. 実機の測り（2026-10-29〜）
+
+### 11.1 M-1 の準備（直す前の検体・測る前の形・控え）
+
+**検体**（要件 1.4）: ワークツリーの先頭 `58734aa37`（直しのコードの前）で `cargo build -p areka -p areka-mcp-bridge`（dev の建て方）を通し、`target\bridge-store-measure\before\` に並べた。
+
+```
+\areka.exe                         35232768  SHA256 0EF34B62D4470C7BAEFBE583FD43C859C8294A6D605E8CEDDDAF3130337F6A8F
+\areka-mcp-bridge.exe               8949248  SHA256 C6675CE2C93C97F6E9FC1B409D53E27980C239723FA538139AC5EB80B55EB16B
+\Areka.Areka.Portable_measure.db          0  (winget の控え・空)
+\profile\areka\sylphya.toml              76  (exe の隣の記憶・中身は下)
+```
+
+exe の隣の記憶の中身（改行は LF）と SHA256:
+
+```
+# bridge-store-user-root measure specimen (M-1)
+[measure]
+marker = "before"
+```
+
+`SHA256 EB18050A6C0F99D8C2F68EAF9C04ED3C1B8F5DDF7C458F8D32FAED0F8DACC900`
+
+**測る前の形**（PowerShell の道具＝箱の外の見え方で写した）:
+
+- 箱のフォルダの名前は `Claude_pzs8sxrjxfjjc`（`%LOCALAPPDATA%\Packages\` の下に `Claude_` で始まるのはこれ 1 つ）。
+- 箱の中 `C:\Users\<利用者>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\areka\` の木（相対の名前・大きさ・最後に書いた時刻）:
+
+```
+\mcp-bridge                    <DIR>  2026-10-23 23:37:49
+\mcp-bridge\server-info.json     625  2026-10-23 23:37:49
+\mcp-bridge\tools.json          6807  2026-10-23 23:37:49
+```
+
+  中身の SHA256: `server-info.json` = `4F3F1CEC484AF2C800FD7CBD091BDA8B1D97015FFD830977D99EFD26CA24EEBA`、`tools.json` = `CFF68DF958D4CA3FAF00DEE1064A8A4F28AC07E630D0E6B54349FC43674E7989`。`profile\` は無い（前の版の中継が作る写しは、今の箱には無かった）。
+- 本当の `C:\Users\<利用者>\AppData\Local\areka\` は無い（`Test-Path` が False）。
+- 写した時点で動いていた中継は、開発者の机の本物（`C:\home\maz\store\.areka-mcp\areka-mcp-bridge.exe`、pid 12928 と 18580・Claude Desktop が起こしたもの）。止めていない。
+
+**控え**（要件 1.5）: 箱の中の `LocalCache\Local\areka\` を PowerShell の道具から `target\bridge-store-measure\backup\box-LocalCache-Local-areka\` へ移した（木と SHA256 は上と同じことを移した後に確かめた）。本当の `%LOCALAPPDATA%\areka` は無いので控える物は無い。移した後、箱の中に `areka\` は無い。箱の `LocalCache\Local\` には `areka-diag` など areka の測りと関わらない物が在るが、触っていない。
+
+**裏の書きの注意**: 箱の中の `areka\` を空けた後も、開発者の机の本物の中継（Claude Desktop が起こしたもの）は動き続けている。この中継が areka へつなぎ直すなどして控えを書くと、箱の中に `areka\mcp-bridge\` がまた現れうる。この後の測りでは、起こす直前と直後に箱の木を取り、検体の中継が作った物と分けて、本物の中継が書いた物は「裏の書き」として別に数える。戻す（手順 8）ときは、`backup\` の控えを元の場所へ戻す前に、裏の書きでできた物が在れば記録してから片付ける。
+
 ## 12. 設計の討議で決めたこと（2026-10-29）
 
 - 議題 1（承認）: 実機の測りで Claude Desktop の起動し直しを頼むのは 4 回（M-1 の S1・S2、M-2 の S2 を 2 回）。M-2 の S1・S3 は Bash の道具（その子も同じ箱へ回される）から検体の中継を起こして測る。本物の Claude Desktop でしか確かめられない「箱の行と箱のフォルダの場所」は M-2 の S2 の 2 回目に入る。
