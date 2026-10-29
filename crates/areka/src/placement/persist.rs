@@ -199,7 +199,7 @@ pub fn project_restore(
     project_restore_parts(anchor, pos, size, snapshot).1
 }
 
-/// [`project_restore`] の本体。吸着の当て直しだけをした左上（`project_anchor` の結果・作業領域が
+/// `project_restore` の本体。吸着の当て直しだけをした左上（`project_anchor` の結果・作業領域が
 /// 取れなければ `pos`）と、窓ごとの判定の結果の 2 つを返す（組の寄せが計算し直さずに使う）。
 fn project_restore_parts(
     anchor: Anchor,
@@ -339,7 +339,7 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 ///
 /// 各 scope について:
 /// - `WindowPos` x/y が**両軸とも** [`parse_px`] できたときのみ char_pos を保存値へ差し替え、
-///   [`project_restore`]（アンカー再解決＋域内 clamp・毎起動 live 再射影）を適用する。片軸でも
+///   [`project_restore_parts`]（アンカー再解決＋域内 clamp・毎起動 live 再射影）を適用する。片軸でも
 ///   欠損/非数値なら resolver 既定 char_pos を保持する（Req1.5/6.1）。
 /// - `BalloonOffset` x/y が両軸とも parse できれば、その値を**そのまま**左上基準オフセット
 ///   として採用する（保存表現＝ランタイム表現＝char 左上基準・アンカー辺基準変換なし）。
@@ -358,7 +358,7 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// 焼き付けない）。ゆえに関門通過後の `balloon_pos` は表示位置、`balloon_offset` は論理
 /// 相対位置であり、両者の差が恒等式を満たすとは限らない。
 ///
-/// 寄せは 2 段: 窓ごとの寄せは [`project_restore`]（`merge_scope` の中）、組の寄せは
+/// 寄せは 2 段: 窓ごとの寄せは [`project_restore_parts`]（`merge_scope` の中）、組の寄せは
 /// [`super::follow::keep_restored_groups`]（その後・window-work-area-clamp 要件 4.1〜4.4）。
 /// 組の寄せは窓とバルーンの位置を同じ量だけ動かし、`balloon_offset` は変えない（要件 7.7）。
 /// 寄せた位置は記憶へ書き戻さない（要件 4.5・本関数は純関数のまま）。
@@ -370,6 +370,22 @@ pub fn apply_restored_placements(
     entries: &[(PersistKey, String)],
     snapshot: &MonitorSnapshot,
 ) -> Vec<ScopePlacement> {
+    restore_and_judge(placements, entries, snapshot).0
+}
+
+/// 窓の一式ごとに据える「この起動で記憶の位置を寄せて表示した」（window-work-area-clamp 要件 4.6）。
+/// 真なら並べ終えた時点の保存は古い記憶へ隣り合いの印を書き足さない。保存はしない。
+#[derive(bevy_ecs::prelude::Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RestoredPositionsClamped(pub bool);
+
+/// [`apply_restored_placements`] と同じ配置に、記憶から戻したスコープのどれかを吸着の当て直し
+/// だけの位置と違う位置に表示したか（[`RestoredPositionsClamped`] の値）を添えて返す。
+/// 判定は組の寄せの後の配置で、写像が計算した値を使う（記憶の位置を計算し直さない）。
+pub fn restore_and_judge(
+    placements: Vec<ScopePlacement>,
+    entries: &[(PersistKey, String)],
+    snapshot: &MonitorSnapshot,
+) -> (Vec<ScopePlacement>, bool) {
     let (mut merged, windows) = restored_windows(placements, entries, snapshot);
     for shift in keep_restored_groups(&windows, snapshot) {
         let Some(p) = merged.iter_mut().find(|p| p.scope == shift.scope) else {
@@ -385,7 +401,12 @@ pub fn apply_restored_placements(
         };
         p.char_pos = shift.to;
     }
-    merged
+    let clamped = windows.iter().any(|w| {
+        merged
+            .iter()
+            .any(|p| p.scope == w.scope && p.char_pos != w.projected)
+    });
+    (merged, clamped)
 }
 
 /// 窓ごとの写像（[`merge_scope`]）の結果と、記憶から位置を戻したスコープの組の寄せの入力
@@ -850,6 +871,19 @@ pub fn persist_unremembered_char_positions(world: &World) {
             "並べ終えた時点の保存: 書いた"
         );
         entries.extend(char_pos_entries(scope as u32, saved));
+    }
+    // 記憶の位置を寄せて表示した起動の並びは記憶の並びと違うので、印を決めない（window-work-area-clamp 4.6）。
+    if !unmarked.is_empty()
+        && world
+            .get_resource::<RestoredPositionsClamped>()
+            .is_some_and(|c| c.0)
+    {
+        info!(
+            target: "areka::persist::save",
+            scopes = ?unmarked,
+            "並べ終えた時点の保存: 記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない"
+        );
+        unmarked.clear();
     }
     // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
     for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked) {

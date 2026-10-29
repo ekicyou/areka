@@ -37,7 +37,7 @@ fn support_wired_world_delivers_positions_to_store() {
         } else {
             PersistStore::fake()
         };
-        let (placements, restored) = crate::restore_merged_placements(
+        let (placements, restored, _) = crate::restore_merged_placements(
             ghost.root(),
             prep_placements(),
             &work_area_snapshot(),
@@ -76,7 +76,7 @@ fn support_wired_world_delivers_positions_to_store() {
         store.finish();
         if real {
             // 実物のファイルは、起動の準備の関数が読む置き場と同じ（再起動のテストの前提）。
-            let (_, restored) = crate::restore_merged_placements(
+            let (_, restored, _) = crate::restore_merged_placements(
                 ghost.root(),
                 prep_placements(),
                 &work_area_snapshot(),
@@ -110,7 +110,7 @@ fn booted(store: &PersistStore, shown: &PerTargetSizes) -> (World, GhostWindows,
 
 /// 起動の準備の関数（`crate::restore_merged_placements`）が返した配置。記憶が無いことを確かめる。
 fn unremembered_placements(ghost: &MinimalGhost) -> Vec<ScopePlacement> {
-    let (placements, restored) = crate::restore_merged_placements(
+    let (placements, restored, _) = crate::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),

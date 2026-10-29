@@ -149,7 +149,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/emo2_boot/frame/drain_resnap.rs`（685 行）— `finalize_chain_once_with` が `resolve_chain` の代わりに `place_chain_in_work_area` を呼び、x と y を書き、既定の位置へ寄せた後の位置を運ぶ。`run_move_drain_phase` に拡大率が決まる前に当てたことの記録を足す（測りの道具）。H1 と決まったときだけ、同じ関数に窓ごとの表示の待ちを足す（判定は兄弟の新しいファイル）。
 - `crates/areka/src/placement/chain_realign.rs`（423 行）— `realign_chain_once_with` が `place_chain_in_work_area` を呼び、x と y を書く。
 - `crates/areka/src/placement/follow/window_move.rs`（1,221 行）— `resize_window_to` の手順 3c（可視性の関門）の直後に `clamp_grown_free_default` を呼ぶ 1 文と注記 1 行だけ。本体は兄弟の新しいファイル。
-- `crates/areka/src/placement/persist.rs`（815 行）— `apply_restored_placements` の後段に組の寄せを足す・`restored_display_clamped` と資源 `RestoredPositionsClamped` を足す・`persist_unremembered_char_positions` が資源を読み、寄せた起動では古い記憶へ印を書き足さず記録する。
+- `crates/areka/src/placement/persist.rs`（815 行）— `apply_restored_placements` の後段に組の寄せを足す・`restore_and_judge` と資源 `RestoredPositionsClamped` を足す・`persist_unremembered_char_positions` が資源を読み、寄せた起動では古い記憶へ印を書き足さず記録する。
 - `crates/areka/src/main.rs`（981 行）— `restore_merged_placements` の戻り値に「記憶の位置を寄せて表示したか」の真偽を足す（3 つ組・約 3 行増え 1,000 行を超えない）。
 - `crates/areka/src/ghost_session.rs`（935 行）— 3 つ組を受け、窓を作る閉包で `RestoredPositionsClamped` を毎回据える（約 3 行）。
 - `crates/areka/src/emo2_boot/move_cue_place.rs`（222 行）— `move_applied` の記録に拡大率 `k` と動かす窓の大きさを足す（測りの道具）。
@@ -502,12 +502,15 @@ pub(crate) fn keep_restored_groups(
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RestoredPositionsClamped(pub bool);
 
-/// merge と組の寄せの後の配置で、記憶から戻したスコープのどれかが projected と違う位置か。
-pub fn restored_display_clamped(
+/// 記憶から戻した配置（窓ごとの寄せ＋組の寄せ）と、その後の配置で記憶から戻したスコープの
+/// どれかが projected と違う位置かを、窓ごとの計算の結果を使い回して一緒に返す
+/// （merged から判定し直すと remembered／projected の計算と記録が 2 回になるため・2.5 で確定）。
+/// `apply_restored_placements` は `restore_and_judge(..).0`。
+pub fn restore_and_judge(
+    placements: Vec<ScopePlacement>,
     entries: &[(PersistKey, String)],
-    merged: &[ScopePlacement],
     snapshot: &MonitorSnapshot,
-) -> bool;
+) -> (Vec<ScopePlacement>, bool);
 ```
 
 - 状態の持ち方: `main.rs` の `restore_merged_placements` が `(placements, restored, clamped)` の 3 つ組を返し、`ghost_session.rs` の窓を作る閉包が `spawn_ghost_windows` の直後に `RestoredPositionsClamped(clamped)` を**毎回**据える（窓の一式ごとに上書き＝読み直し・切り替えで古い値が残らない）。`placement/spawn.rs` の `GhostWindows` には持たせない（C12 の約束）。
@@ -582,7 +585,7 @@ pub fn restored_display_clamped(
 | ⑴ 本体が主のモニタの左端・相方を左へ並べると左隣の 150% のモニタへ渡る（x=−1108 の形） | `follow_work_area_clamp_chain_tests.rs`・`frame_chain_finalize_clamp_tests.rs` | 相方が本体の右の隣へ並べ替えられる（`Flipped`）。右にも入らない並び（作業領域が本体＋相方より狭い）では作業領域の端へ寄せられる（`Edge`・本体と重なる）。どちらも本体の位置は変わらない。フレームの檻では `ChainFinalized` の巡で書かれた位置と記録の行を見る |
 | ⑵ 詰め直しと記憶からの隣り合わせで外へ出る | `follow_work_area_clamp_chain_tests.rs`（純関数）・今の `frame_chain_realign_*`／`frame_chain_finalize_remembered_tests.rs` の並びに 1 つずつ足す | 場面 `DpiRealign`・`RememberedJoin` でも ⑴ と同じ置き方になる。3 体の鎖で 2 番目を並べ替えたとき 3 番目は並べ替えた後の 2 番目を基準に付く |
 | ⑶ 200% で既定の位置の `free` の窓が y=864 に 640×840・1108×1368 へ（作業領域の下端 1704） | `follow_work_area_clamp_grow_tests.rs` | 下端が 1704 以下・x は変わらない。既定の位置と違う窓（ドラッグの後）・`ScriptPlaced` の窓・`DraggingState` の窓・既定の位置の無い窓（記憶から戻した窓）は動かない。経路が `DpiReproject` のときは動かない。`resize_window_to` を通したとき書き込みは 1 回で、既定の位置が寄せた先へ運ばれる |
-| ⑷ 記憶の位置がどのモニタとも交わらない組 | `follow_work_area_clamp_restore_tests.rs`（純関数）・`persist_restore_group_tests.rs`（結線） | 全員が外の、隣り合っていた組・重なっていた組（印 `none`）は寄せた後も互いの差が同じ。見えている窓と外の窓が混ざる組では見えている窓が動かない（隣り合っていた組は並べ直しの檻で付け直しを見る）。離れていた組は窓ごとに寄せられる。どれも見えている組は動かない。`balloon_pos` が同じ量だけ動き `balloon_offset` は変わらない。`restored_display_clamped` が真になる |
+| ⑷ 記憶の位置がどのモニタとも交わらない組 | `follow_work_area_clamp_restore_tests.rs`（純関数）・`persist_restore_group_tests.rs`（結線） | 全員が外の、隣り合っていた組・重なっていた組（印 `none`）は寄せた後も互いの差が同じ。見えている窓と外の窓が混ざる組では見えている窓が動かない（隣り合っていた組は並べ直しの檻で付け直しを見る）。離れていた組は窓ごとに寄せられる。どれも見えている組は動かない。`balloon_pos` が同じ量だけ動き `balloon_offset` は変わらない。`restore_and_judge` の判定が真になる |
 | ⑸ 窓が作業領域より大きい | 3 つの純関数の檻 | 左辺・上辺が作業領域の左辺・上辺に合う |
 | ⑹ 作業領域を取り出せない | 3 つの純関数の檻 | 空の `MonitorSnapshot` で動かない（`Unresolved`）。`warn!` の行が出る（`log-capture-kit` の捕捉窓で、対照のイベントつき） |
 | ⑺ 収まっている並び | 3 つの純関数の檻 | どの窓も `to == from`（鎖は `Fits` で並べた位置のまま） |

@@ -142,3 +142,100 @@ fn group_shift_is_pure_and_repeatable() {
     assert_eq!(entries, before);
     assert_eq!(a, restore(&entries));
 }
+
+/// 判定は組の寄せの後の配置で読む: 全員が外の組は寄せたので真・どれも見えている組は偽（要件 4.6）。
+#[test]
+fn judgement_reads_the_layout_after_the_group_shift() {
+    let off = PointPx { x: -200, y: 0 };
+    let judge = |entries: &[(PersistKey, String)]| {
+        restore_and_judge(vec![placement(0), placement(1)], entries, &desk())
+    };
+    let mut outside = remembered(0, 5000, off, None);
+    outside.extend(remembered(1, 5640, off, Some("right")));
+    let (out, clamped) = judge(&outside);
+    assert_eq!(xs(&out), vec![1600, 2240], "組の寄せの後の配置を返す");
+    assert!(clamped, "寄せて表示したのに偽");
+    let mut visible = remembered(0, 1000, off, None);
+    visible.extend(remembered(1, 1640, off, Some("right")));
+    assert!(!judge(&visible).1, "記憶の位置のまま表示したのに真");
+    // 記憶の無い起動は寄せていない。
+    assert!(!judge(&[]).1);
+}
+
+mod clamped_flag_at_finalize {
+    use super::super::finalize_save_tests::{Rig, SENTINEL_POS, find, seed_entries};
+    use super::super::{
+        RestoredPositionsClamped, char_pos_entries, persist_unremembered_char_positions,
+    };
+    use crate::placement::chain_finalize::AdjacencyMark;
+    use crate::placement::spawn::GhostWindows;
+    use crate::placement::test_support::capture_logs;
+    use areka_sylphya::{PersistKey, PersistScope};
+    use wintf::ecs::WindowPos;
+
+    const SKIP: &str = "記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない";
+    const ADDED: &str = "古い記憶に隣り合いの印だけを書き足した";
+
+    /// 印の無い古い記憶のスコープ 1（スコープ 0 の左に隣り合う）を持つ rig。`flag` を据えて保存を呼ぶ。
+    fn run(flag: Option<bool>) -> (bool, Vec<crate::placement::test_support::LogEvent>) {
+        let mut rig = Rig::new(true);
+        let mut seed = seed_entries();
+        seed.extend(char_pos_entries(1, SENTINEL_POS));
+        rig.parts.publisher.persist_put(PersistScope::Ghost, seed);
+        let before = rig.load();
+        for scope in [0, 1, 2] {
+            rig.mark_remembered(scope);
+        }
+        // スコープ 2 は覚えた印あり＝古い記憶はスコープ 1 だけ。
+        assert!(
+            rig.world
+                .resource_mut::<GhostWindows>()
+                .set_remembered_adjacency(2, Some(AdjacencyMark::Separate))
+        );
+        let entity = rig.char_window(1);
+        rig.world
+            .get_mut::<WindowPos>(entity)
+            .unwrap()
+            .position
+            .as_mut()
+            .unwrap()
+            .x = 1483 - 381;
+        if let Some(f) = flag {
+            rig.world.insert_resource(RestoredPositionsClamped(f));
+        }
+        let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+        let mut after = rig.load();
+        let added = after
+            .remove(&PersistKey::WindowAdjacent { scope: 1 })
+            .is_some();
+        assert_eq!(after, before, "印のほかは前後で同じ");
+        rig.finish();
+        (added, events)
+    }
+
+    /// 寄せた起動（資源が真）は古い記憶へ印を書き足さず、そのことを info で 1 行残す（要件 4.6）。
+    #[test]
+    fn true_skips_the_mark_and_logs_info() {
+        let (added, events) = run(Some(true));
+        assert!(!added, "寄せた起動で印が書き足された");
+        let skips: Vec<_> = events
+            .iter()
+            .filter(|e| e.message().contains(SKIP))
+            .collect();
+        assert_eq!(skips.len(), 1, "見送りの info が 1 行: {events:?}");
+        assert_eq!(skips[0].level, tracing::Level::INFO);
+        assert_eq!(skips[0].target, "areka::persist::save");
+        assert_eq!(skips[0].field("scopes"), Some("{1}"));
+        assert!(find(&events, ADDED, 1).is_empty());
+    }
+
+    /// 資源が偽・無い起動は今どおり書き足す。
+    #[test]
+    fn false_or_absent_adds_the_mark() {
+        for flag in [Some(false), None] {
+            let (added, events) = run(flag);
+            assert!(added, "{flag:?} で印が書き足されない");
+            assert!(!events.iter().any(|e| e.message().contains(SKIP)));
+        }
+    }
+}

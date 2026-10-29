@@ -87,7 +87,7 @@ fn restore_seam_prefers_saved_position_over_default() {
         }],
     };
 
-    let (out, restored) =
+    let (out, restored, _) =
         restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(out.len(), 1);
@@ -132,7 +132,7 @@ fn restore_seam_without_persist_is_identity_default() {
         }],
     };
 
-    let (out, restored) =
+    let (out, restored, _) =
         restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(
@@ -175,7 +175,7 @@ fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
         }],
     };
 
-    let (out, restored) =
+    let (out, restored, _) =
         restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(
@@ -225,7 +225,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
         }],
     };
 
-    let ((out, restored), events) = capture_logs(|| {
+    let ((out, restored, _), events) = capture_logs(|| {
         restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi)
     });
 
@@ -304,7 +304,7 @@ fn restore_seam_returns_remembered_adjacency_marks_per_restored_scope() {
         }],
     };
 
-    let (_, restored) =
+    let (_, restored, _) =
         restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(
