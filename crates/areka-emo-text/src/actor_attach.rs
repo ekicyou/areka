@@ -5,7 +5,7 @@
 use areka_emo_present::TextSlotView;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::ActorKey;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::place::PlaceKey;
 use crate::region::{TextRegion, inline_axis_name};
@@ -17,6 +17,26 @@ use super::decoration;
 use super::present_frame;
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 
+/// 解き直しの入力（[`ResolvedBalloonText::resolve_with_background`] の引数と同じ 3 つ）。
+/// 普通のバルーンの場所ごとに `TextLayerRuntime` が覚え、再追従は入力も結線も前と同じなら
+/// 解き直さない（解き直しは純粋な関数なので、同じ入力からは `layout_input` と同じ値が出る）。
+///
+/// **解き直しの引数を足したら、この欄も足す**——3 つのほかを読むようになると、省いたときの
+/// 答えが解き直したときの答えと食い違う。
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct ResolveInputs {
+    model: BalloonModel,
+    image_size: (u32, u32),
+    background: (u8, u8, u8),
+}
+
+impl ResolveInputs {
+    /// 覚えた入力が、いま解き直すなら渡す入力と同じか（毎フレームの比べ・写しを作らない）。
+    fn is(&self, model: &BalloonModel, image_size: (u32, u32), background: (u8, u8, u8)) -> bool {
+        self.image_size == image_size && self.background == background && self.model == *model
+    }
+}
+
 /// 粗いバルーン定義（折返し基準が描画範囲の遠辺の外）を「装着ごとに 1 件」だけ知らせる
 /// （spec `areka-P0-emo2-conformance-e2e` 要件 14.1〜14.3・design D14・2026-09-06）。
 ///
@@ -26,6 +46,8 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 /// ——再追従シーム（[`TextLayerRuntime::refresh_actor_binding`]）が churn ガードの判定キーを
 /// 得るために解き直すためで、実機の一周走行では生ログ 30,837 行のうち **27,908 行**がこの
 /// 1 種類の警告になった（走行 A の実測）。件数が意味を失い、生ログが読めなくなる。
+/// （以上は当時の経緯。今の再追従は入力が前と同じなら解き直さないので、解決が走るのは装着と
+/// 入力の変わり目だけである・spec `real-run-log-noise` 要件 1.1。）
 ///
 /// 「読み込み（装着）1 回につき 1 件」という意味を持つのは actor の登録口である。ゆえに
 /// 解決からは粗さの記録を外し、記録は本関数が担う。文言と 4 つの欄（`balloon`・`axis`・
@@ -134,6 +156,9 @@ impl TextLayerRuntime {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
         // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
         let place = PlaceKey::balloon(&actor);
+        // 呼び手が入力を知らない直の道なので、記憶を消して不変条件を保つ（入力を知っている
+        // 装着と再追従は、この後に記憶を入れ直す）。
+        self.resolve_inputs.remove(&place);
         let previous = self.layout_input.get(&place).map(|it| it.region);
         let label = self.balloon_label_of(&actor);
         warn_coarse_wrap_threshold(&label, &resolved, previous);
@@ -187,12 +212,29 @@ impl TextLayerRuntime {
         binding: TextSlotBinding,
         model: &BalloonModel,
     ) {
-        let resolved = ResolvedBalloonText::resolve_with_background(
-            model,
-            binding.image_size,
-            self.background_of(&actor),
-        );
+        let background = self.background_of(&actor);
+        let resolved =
+            ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
+        let place = PlaceKey::balloon(&actor);
         self.register_actor(actor, binding, resolved);
+        self.remember_inputs(place, model, binding.image_size, background);
+    }
+
+    /// 解き直しの入力を場所の記憶へ入れ直す（装着・再追従の作り直しは `register_actor` の後、
+    /// 再追従の中の段は解いた値が `layout_input` に等しいと確かめた後に呼ぶ＝不変条件を保つ）。
+    fn remember_inputs(
+        &mut self,
+        place: PlaceKey,
+        model: &BalloonModel,
+        image_size: (u32, u32),
+        background: (u8, u8, u8),
+    ) {
+        let inputs = ResolveInputs {
+            model: model.clone(),
+            image_size,
+            background,
+        };
+        self.resolve_inputs.insert(place, inputs);
     }
 
     /// balloon target の**再追従シーム**（適用 k・面実寸・文字描画領域の変化に追従する・
@@ -223,6 +265,18 @@ impl TextLayerRuntime {
     /// 面実寸や文字描画領域が違えば再構築する（R4.4——k の同値のみを根拠に省略しない）。
     /// 未登録 actor（まだ装着されていない）も `false`——装着は `register_actor_view` の
     /// 領分であり、本口が第 2 の装着経路にならない（R4.6）。
+    ///
+    /// 判定は 3 段（spec `real-run-log-noise` 要件 1.1〜1.7）:
+    ///
+    /// - **上の段**: binding も解き直しの入力（[`ResolveInputs`]）も記憶と同じ → 解き直さずに
+    ///   `false`。解き直しの中の記録（領域の `debug!`・作者向けの警告）は出ない。
+    /// - **中の段**: 入力は変わったが、解き直した値が binding ともども今と同じ → 記憶だけを
+    ///   新しい入力へ替えて `false`（次のフレームから上の段で止まる）。
+    /// - **下の段**: 値が違う → 今の作り直し（`register_actor` の後に記憶を入れ直す）。
+    ///
+    /// 上の段の答えが解き直した場合と同じなのは、不変条件「場所の記憶が在れば、その入力から
+    /// 解いた値が `layout_input` に等しい」による（直の登録口 `register_actor` が記憶を消し、
+    /// 装着と再追従が入れ直す）。記憶の無い場所は今と同じく解き直して比べる。
     pub fn refresh_actor_scale(
         &mut self,
         actor: &ActorKey,
@@ -253,6 +307,21 @@ impl TextLayerRuntime {
             return false;
         };
         let (k_old, k_new) = (current.scale, binding.scale);
+        let background = self.background_of(actor);
+        // 上の段: 入力も結線も前と同じ——解き直さない（不変条件により答えは解き直した場合と同じ）。
+        if current == binding
+            && self
+                .resolve_inputs
+                .get(&place)
+                .is_some_and(|it| it.is(model, binding.image_size, background))
+        {
+            trace!(
+                actor = %actor,
+                k = k_new,
+                "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
+            );
+            return false;
+        }
         // 判定キー＝binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸で
         // model から解き直した文字描画領域の**連言**（D3・R4.4）。k の同値のみを根拠に再追従を
         // 省略すると、同 k のまま面実寸や scope 別 `validrect` が変わったときに旧寸の文字層が
@@ -262,13 +331,12 @@ impl TextLayerRuntime {
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。
-        let resolved = ResolvedBalloonText::resolve_with_background(
-            model,
-            binding.image_size,
-            self.background_of(actor),
-        );
+        let resolved =
+            ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
         if current == binding && self.layout_input.get(&place) == Some(&resolved) {
-            debug!(
+            // 中の段: 解いた値が今と同じ——記憶だけを新しい入力へ替える（不変条件は保たれる）。
+            self.remember_inputs(place, model, binding.image_size, background);
+            trace!(
                 actor = %actor,
                 k = k_new,
                 "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
@@ -281,6 +349,7 @@ impl TextLayerRuntime {
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
         let collapsed = resolved.region.is_collapsed();
         self.register_actor(actor.clone(), binding, resolved);
+        self.remember_inputs(place.clone(), model, binding.image_size, background);
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
         // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で
