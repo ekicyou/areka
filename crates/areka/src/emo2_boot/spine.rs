@@ -765,6 +765,7 @@ impl SpineHarness {
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
         // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（production mod.rs と同順・S-3 形）。
         let options = GhostBootOptions {
+            strict_judges: None,
             ghost_root: sample.folder().to_path_buf(),
             default_encoding: DefaultEncoding::Ansi,
             shiori: ShioriWiring::Custom(Box::new(move || {

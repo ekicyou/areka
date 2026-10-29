@@ -77,8 +77,12 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         })
     };
 
-    let (tx, handle) =
-        spawn_dispatcher(kanade_tx, vec![sink("s0"), sink("s1")], test_system_vars());
+    let (tx, handle) = spawn_dispatcher(
+        kanade_tx,
+        vec![sink("s0"), sink("s1")],
+        test_system_vars(),
+        None,
+    );
 
     let talk_a = TalkId(7);
     let talk_b = TalkId(8);
@@ -208,7 +212,7 @@ fn each_talk_start_hands_its_origin_to_every_clone() {
             seen: Arc::clone(&seen),
         })
     };
-    let (tx, handle) = spawn_dispatcher(kanade_tx, vec![sink(), sink()], test_system_vars());
+    let (tx, handle) = spawn_dispatcher(kanade_tx, vec![sink(), sink()], test_system_vars(), None);
 
     for (id, origin) in [(1, ScriptOrigin::MCP_SEND), (2, ScriptOrigin::GHOST)] {
         tx.send(DispatcherMsg::Start(StartTalk {

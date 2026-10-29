@@ -144,6 +144,7 @@ pub(crate) fn boot_runtime(
     } = inputs;
     let (sinks, lines) = runtime_sinks(world, sources);
     let boot_options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: ghost_root.clone(),
         default_encoding: DefaultEncoding::Ansi,
         shiori,

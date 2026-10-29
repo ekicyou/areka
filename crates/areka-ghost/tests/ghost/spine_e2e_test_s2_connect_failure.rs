@@ -91,6 +91,7 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     write_ghost_fixture(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| Err("simulated connect failure".to_string()))),

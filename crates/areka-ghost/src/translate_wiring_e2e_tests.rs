@@ -118,6 +118,7 @@ fn boot_and_play(
     let (seen_tx, seen_rx) = channel();
     let text = Arc::new(Mutex::new(String::new()));
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

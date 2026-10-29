@@ -86,6 +86,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
             Box::new(RecordingSink::new()),
         ],
         test_system_vars(),
+        None,
     );
 
     let talk_id = TalkId(951);

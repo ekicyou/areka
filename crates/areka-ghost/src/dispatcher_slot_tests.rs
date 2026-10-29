@@ -111,6 +111,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     let talk_a = TalkId(1);
@@ -193,6 +194,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     let talk_a = TalkId(11);
@@ -279,6 +281,7 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     // 長い待ちを持つ script（Close 時点では自然完了していない）。
@@ -320,6 +323,7 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     // \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
@@ -424,6 +428,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     let talk_c = TalkId(41);
@@ -557,8 +562,12 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         snapshot
     });
 
-    let (tx, handle) =
-        spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)], provider);
+    let (tx, handle) = spawn_dispatcher(
+        kanade_tx,
+        vec![Box::new(surface), Box::new(text)],
+        provider,
+        None,
+    );
 
     // broadcast: text sink には ClearAll/Emote 等の担当外 cue も届く。次の Text 発火まで読み飛ばす。
     let recv_text = |want: &str| -> TalkCue {

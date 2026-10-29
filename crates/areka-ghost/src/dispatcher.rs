@@ -26,6 +26,7 @@ use areka_sakura::contract::{
     ChoiceWaiting, CueSink, SakuraMsg, StartTalk, TalkCommand, TalkDone, TalkHandle, TalkId,
 };
 use areka_sakura::drive::spawn_talk;
+use areka_sakura::strict::StrictHooks;
 
 use crate::runtime::SystemVarSource;
 use crate::sink::BootCueSink;
@@ -121,6 +122,8 @@ struct DispatcherState {
     /// システム変数の供給シーム（S-3・R7.3/7.4）。talk 起動ごとに一度呼び出して凍結
     /// スナップショットを得、per-talk の `spawn_talk` へ手渡す（凍結像の刻印点）。
     system_vars: SystemVarSource,
+    /// strict の記録の束ね（ゴースト名と判定・spec mcp-strict-errors）。`None` は判定の差し込みが無い構築。
+    strict: Option<StrictHooks>,
     /// per-talk transient へ渡す自身の inbox クローン（self-sender ハンドオフ）。
     self_sender: Sender<DispatcherMsg>,
 }
@@ -350,7 +353,8 @@ impl DispatcherState {
         // provider を sylphya 読み口へ差し替えても本層は無改変）。
         let system_vars = (self.system_vars)();
 
-        let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars, None);
+        let strict = strict_hooks_for(&start, self.strict.as_ref());
+        let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars, strict);
         self.active = Some(ActiveTalk {
             talk_id,
             handle,
@@ -431,10 +435,26 @@ impl DispatcherState {
     }
 }
 
+/// 印が真の台本のときだけ束ねを渡す（spec mcp-strict-errors 要件 3.5）。判定の差し込みが無い構築では
+/// strict の台本も記録せずに再生する（要件 2.2 の名と判定が揃わないので記録を書けない）。
+fn strict_hooks_for(start: &StartTalk, hooks: Option<&StrictHooks>) -> Option<StrictHooks> {
+    if !start.strict {
+        return None;
+    }
+    if hooks.is_none() {
+        tracing::debug!(
+            talk_id = start.talk_id.0,
+            "strict talk without strict judges; playing without strict records"
+        );
+    }
+    hooks.cloned()
+}
+
 /// dispatcher を起動する。`sinks` は構築時注入の可変長 sink 列（S-3・要件 4.6/8.5・setter なし）で、
 /// 各 per-talk transient へは各 sink を `clone_box` した専用インスタンス列を渡す（登録順＝broadcast 順）。
 /// `system_vars` は per-talk のシステム変数供給シーム（R7.3/7.4）で、talk 起動ごとに一度呼び出して
-/// 得た凍結スナップショットを `spawn_talk` へ手渡す（凍結像の刻印点）。
+/// 得た凍結スナップショットを `spawn_talk` へ手渡す（凍結像の刻印点）。`strict` は strict の記録の束ねで、
+/// 印が真の台本のときだけ `spawn_talk` へ渡す（`None` なら strict の台本も記録せずに再生する）。
 ///
 /// self-sender ハンドオフ（モジュール doc 参照）により、dispatcher の inbox は全 `Sender`
 /// drop による切断へ到達し得ない——唯一の停止経路は [`DispatcherMsg::Close`] である。
@@ -442,6 +462,7 @@ pub fn spawn_dispatcher(
     kanade: Sender<KanadeMsg>,
     sinks: Vec<Box<dyn BootCueSink>>,
     system_vars: SystemVarSource,
+    strict: Option<StrictHooks>,
 ) -> (Sender<DispatcherMsg>, ActorHandle) {
     let (self_tx_reply, self_tx_recv) = reply_channel::<Sender<DispatcherMsg>>();
 
@@ -455,6 +476,7 @@ pub fn spawn_dispatcher(
             kanade,
             sinks,
             system_vars,
+            strict,
             self_sender,
         };
 
@@ -480,6 +502,9 @@ mod choice_timeout_tests;
 #[cfg(test)]
 #[path = "dispatcher_slot_tests.rs"]
 mod slot_tests;
+#[cfg(test)]
+#[path = "dispatcher_strict_tests.rs"]
+mod strict_tests;
 #[cfg(test)]
 #[path = "dispatcher_test_support.rs"]
 mod test_support;

@@ -588,6 +588,7 @@ pub(crate) fn ghost_boot_options(
     modules: crate::cli::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
+        strict_judges: None,
         ghost_root,
         default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
         shiori: shiori_wiring_for(modules, helper_exe),

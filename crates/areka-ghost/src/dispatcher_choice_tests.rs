@@ -69,6 +69,7 @@ fn state_fixture() -> StateFixture {
             kanade: kanade_tx,
             sinks: Vec::new(),
             system_vars: test_system_vars(),
+            strict: None,
             self_sender: self_tx,
         },
         kanade_rx,
@@ -619,6 +620,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
             Box::new(RecordingSink::new()),
         ],
         test_system_vars(),
+        None,
     );
 
     let talk_id = TalkId(931);
@@ -713,6 +715,7 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
             Box::new(RecordingSink::new()),
         ],
         test_system_vars(),
+        None,
     );
 
     let talk_id = TalkId(932);
