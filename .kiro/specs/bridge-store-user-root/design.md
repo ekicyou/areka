@@ -494,12 +494,13 @@ pub(crate) fn report(sight: &BoxSight);
   - S1: 本当の `%LOCALAPPDATA%\areka` が無い（今の机の形）。M-1・M-2 の両方。
   - S2: 本当の `%LOCALAPPDATA%\areka\profile\areka\` が在る（PowerShell の道具＝箱の外から測りの間だけ作る）。M-1・M-2 の両方。要件 1.1 の d と要件 2.6 を見る。
   - S3: 本当の `%LOCALAPPDATA%\areka\` は在るが `profile\areka\` が無い（同じく測りの間だけ作る）。M-2 だけ（要件 2.5）。
+  - 起こし手（設計の討議 1 で決めた・Claude Desktop の起動し直しは合わせて 4 回）: M-1 の S1・S2 は Claude Desktop から（2 回）。M-2 の S2 は Claude Desktop から 2 回（1 回目で控えのフォルダが箱にでき、2 回目で B1）。M-2 の S1・S3 は、同じ箱へ回されることを実測で確かめた Bash の道具から検体の中継を起こして測る（「控え無しで動き何も作らない」の確かめで、決定論テストでも固めている。記録では起こし手を欄に書いて分ける）。
 - 手順:
   1. 測る前の写しを取る（PowerShell の道具＝箱の外の見え方）: 箱 `%LOCALAPPDATA%\Packages\Claude_<…>\LocalCache\Local\areka\` と本当の `%LOCALAPPDATA%\areka\` の木と、検体の exe の隣の記憶の SHA256。
   2. 本物に触れうる物を控える（要件 1.5）: 箱の中の `LocalCache\Local\areka\`（今は開発者の机の中継の `mcp-bridge` が在る）を `target\bridge-store-measure\backup\` へ移す。本当の `%LOCALAPPDATA%\areka` は今は無い（在れば同じく控える）。
   3. 場面を作る（S2・S3 なら本当の置き場のフォルダを作る）。
   4. 下見（要件 1.7・任意）: Bash の道具から検体の中継を起こし、`initialize` と `tools/list` の 2 行を流して閉じる。結果は「下見」と書いて分け、本番の代わりにしない。下見で箱にできた物は 2 の形へ戻してから本番へ進む。
-  5. 開発者に頼む（要件 1.6）: Claude Desktop の設定の areka の `command` を検体の中継へ向け直し、Claude Desktop を起動し直す。頼む文は「急がなくてよい・切れ目で」を先頭にする。中継が areka（開発者の机で動いていれば）へつないで控えを書くまで待つ。箱の見立ては控えを書く前の起動の初めに行うので、控えのフォルダがまだ無い起動では B2（`not_there_yet`）になる。M-2 の S2 は areka を動かしたまま 2 回起こしてもらい、1 回目で B2 と箱の中に控えのフォルダができること、2 回目で B1 と `box_dir` を記録する（設計の一番危うい見込み＝`canonicalize` が箱の場所を返すことを確かめる 1 回）。
+  5. 開発者に頼む（要件 1.6・Claude Desktop から起こす場面だけ）: Claude Desktop の設定の areka の `command` を検体の中継へ向け直し、Claude Desktop を起動し直す。頼む文は「急がなくてよい・切れ目で」を先頭にする。中継が areka（開発者の机で動いていれば）へつないで控えを書くまで待つ。箱の見立ては控えを書く前の起動の初めに行うので、控えのフォルダがまだ無い起動では B2（`not_there_yet`）になる。M-2 の S2 は areka を動かしたまま 2 回起こしてもらい、1 回目で B2 と箱の中に控えのフォルダができること、2 回目で B1 と `box_dir` を記録する（設計の一番危うい見込み＝`canonicalize` が箱の場所を返すことを確かめる 1 回）。
   6. 4 点を測る（PowerShell の道具から）: (a) 箱の中に `areka\`・`areka\profile\` ができたか（数）、(b) 箱の中に `areka\profile\areka\sylphya.toml` の写しができたか（数）と、検体の exe の隣の記憶の SHA256 が 1 と同じか、(c) `server-info.json`・`tools.json` がどこにできたか（箱・本当の置き場・検体の隣を探す。控えは areka が動いていてつながったときだけ書かれるので、つながらなかったときは「書かれない」とその理由を記録する）、(d) 中継の起動の記録（Claude Desktop がとる中継の標準エラーの記録）の `user_data_layout`・W1〜W3・B1／B2 の行と、S2 で本当の置き場が「在る」と見えたか（M-1 は `user_root_created` の行の有無、M-2 は `AppProfile` の答え）。中継のプロセスがパッケージの名乗りを持つかも、起動中の中継の pid に PowerShell から `GetPackageFamilyName` を尋ねて記録に残す（設計の判断には使わない・`research.md` 7 の 1 の答えとして）。
   7. 比べ（要件 1.2）: 同じ検体の中継を PowerShell の道具から、`AREKA_USER_ROOT` を `target\bridge-store-measure\<before|after>\user-root\` に向けて起こし、`initialize` と `tools/list` を流して同じ 4 点を測る（本当の `%LOCALAPPDATA%\areka` を作らない）。
   8. 戻す（要件 1.5）: 測りで新しくできた物（箱の中の `areka\`・S2／S3 で作った本当の置き場・`user-root\`）を消し、2 で控えた物を元の場所へ戻す。開発者に Claude Desktop の設定を元へ戻してもらう。1 の写しと木を比べ、元の形に戻ったことを記録する。止めるプロセスは、自分で起こしたと確かめたものだけ。
