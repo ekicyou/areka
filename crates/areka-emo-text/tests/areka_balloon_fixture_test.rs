@@ -31,6 +31,7 @@
 //! | `test_support` | `areka_balloon_fixture/test_support.rs` | 検体の取得と期待値の表 |
 //! | `assets` | `areka_balloon_fixture/assets.rs` | ファイル名の集合・絵の寸法・名前の重なり |
 //! | `definition` | `areka_balloon_fixture/definition.rs` | 文のファイルの中身・読み込みの記録・描画範囲の解け方 |
+//! | `bake` | `areka_balloon_fixture/bake.rs` | 面 0 の焼き込みと半透明の保持 |
 
 #[cfg(test)]
 #[path = "areka_balloon_fixture/test_support.rs"]
@@ -43,3 +44,7 @@ mod assets;
 #[cfg(test)]
 #[path = "areka_balloon_fixture/definition.rs"]
 mod definition;
+
+#[cfg(test)]
+#[path = "areka_balloon_fixture/bake.rs"]
+mod bake;
