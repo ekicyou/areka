@@ -5,7 +5,10 @@
 //! 公開 API 越しに固定する（R2.4・R11.3・D4/D7）。
 
 use dola::DynamicValue;
-use dola::cue::{ActorKey, CueCommand, CueSink, CueTarget, TalkCue, cue_target_of};
+use dola::cue::{
+    ActorKey, CueCommand, CueFinding, CueProbe, CueSink, CueTarget, TalkCue, cue_target_of,
+};
+use std::sync::{Arc, Mutex};
 
 /// テスト用ダミー演者。**単一の `CueSink` 契約のみ**を実装し、broadcast で受け取った
 /// 全 cue のうち **relevance 判定（単一権威 `cue_target_of`）が自分宛て**の cue だけを
@@ -307,4 +310,46 @@ fn custom_type_level_none_defers_to_consumer_name_self_selection() {
         None,
         "非正準 params のキャリアは name 抽出前に None へ縮退する（消費側の自己選別に到達しない）"
     );
+}
+
+/// 知らせの口の檻（mcp-strict-errors 1.1・要件 2.1／3.9／4.2）。
+const FINDING: CueFinding = CueFinding {
+    point: "seriko.surface",
+    kind: "missing_surface",
+    message: "サーフェスが無い",
+};
+
+/// `emit_with` を上書きしない受け手は、知らせの口を添えて渡されても `emit` をちょうど
+/// 1 回だけ同じ合図で呼ぶ（今の送り出しと同じ・知らせは来ない・要件 3.9）。
+#[test]
+fn default_emit_with_emits_once_and_reports_nothing() {
+    let reported = Arc::new(Mutex::new(Vec::<CueFinding>::new()));
+    let sink_reported = reported.clone();
+    let probe = CueProbe::new(move |f| sink_reported.lock().unwrap().push(f));
+
+    let mut shell = RelevancePresenter::new(CueTarget::Shell);
+    let cue = broadcast_stream().remove(0);
+    shell.emit_with(cue.clone(), &probe);
+
+    assert_eq!(shell.acted, vec![cue.command], "emit と同じ 1 回の送り出し");
+    assert_eq!(shell.honored_durations, vec![cue.duration]);
+    assert!(reported.lock().unwrap().is_empty(), "既定は知らせない");
+}
+
+/// 口は知らせを登録した関数へそのまま渡し、複製しても同じ口として等しい。別に作った口は
+/// 同じ関数でも等しくない。複製はスレッドをまたいで知らせられる（要件 2.1／4.2）。
+#[test]
+fn probe_reports_and_equality_is_identity() {
+    let reported = Arc::new(Mutex::new(Vec::<CueFinding>::new()));
+    let r = reported.clone();
+    let probe = CueProbe::new(move |f| r.lock().unwrap().push(f));
+    let copy = probe.clone();
+    assert_eq!(probe, copy, "複製は同じ口");
+    assert_ne!(probe, CueProbe::new(|_| {}), "別に作った口は等しくない");
+
+    std::thread::spawn(move || copy.report(FINDING))
+        .join()
+        .unwrap();
+    probe.report(FINDING);
+    assert_eq!(*reported.lock().unwrap(), vec![FINDING, FINDING]);
 }
