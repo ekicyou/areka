@@ -134,7 +134,9 @@ impl ManifestDeriver {
 /// 絵が入るのは、その絵を持つ面（持ち主）がどれも、同じセットのどこかのパターンから参照され、
 /// しかも参照するパターンがどれも `bind` か `bind+random` のアニメーションに属するときだけ。
 /// 参照されない持ち主・`bind` でないアニメーションから参照される持ち主が 1 つでもあれば入れない
-/// （迷ったら警告の側）。負の番号・無い番号の参照は数えない。抜き色の道か・α を持つかは見ない。
+/// （迷ったら警告の側）。負の番号・無い番号の参照と、番号がアニメーションの番号のメソッド
+/// （`start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・
+/// `insert`）のパターンは数えない。抜き色の道か・α を持つかは見ない。
 /// 下流の emo-compose の `is_bind_interval` は使わず、同じ判定をここで持つ。純粋・決定的。
 pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)> {
     let mut out = BTreeSet::new();
@@ -150,7 +152,26 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
                     | areka_parsers::shell::Interval::BindRandom { .. }
             );
             for pattern in &animation.patterns {
-                if pattern.surface_id >= 0 && ids.contains(&pattern.surface_id) {
+                // 番号がアニメーションの番号のメソッドは面を指さない（emo-compose の
+                // `targets_animation_id` と同じ 7 語・同じ綴りの比べ方）。
+                let method = pattern
+                    .method
+                    .as_str()
+                    .trim()
+                    .to_ascii_lowercase()
+                    .replace(['-', '_'], "");
+                let names_animation = matches!(
+                    method.as_str(),
+                    "start"
+                        | "stop"
+                        | "alternativestart"
+                        | "alternativestop"
+                        | "parallelstart"
+                        | "parallelstop"
+                        | "insert"
+                );
+                if !names_animation && pattern.surface_id >= 0 && ids.contains(&pattern.surface_id)
+                {
                     *referenced.entry(pattern.surface_id).or_insert(true) &= is_bind;
                 }
             }
@@ -514,5 +535,20 @@ mod tests {
             vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
         );
         assert!(got.is_empty(), "{got:?}");
+    }
+
+    /// T8 ⑻: 番号がアニメーションの番号のメソッド（`insert`・`start`・`alternativestart` など）の
+    /// パターンは面の参照と数えない（`bind` のアニメーションからでも持ち主を作らない・迷ったら警告の側）。
+    #[test]
+    fn bind_only_paths_ignores_patterns_whose_number_is_an_animation_id() {
+        for method in ["insert", "start", "Alternative-Start", "parallelstop"] {
+            let mut anim = bind_anim(0, 3000);
+            anim.patterns[0].method = DrawMethod::new(method.to_string());
+            let got = bind_only_of(
+                vec![anim],
+                vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+            );
+            assert!(got.is_empty(), "{method}: {got:?}");
+        }
     }
 }

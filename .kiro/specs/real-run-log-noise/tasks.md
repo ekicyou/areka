@@ -51,7 +51,7 @@
   - _Boundary: emo-atlas manifest.rs_
   - _Requirements: 3.7_
 
-- [ ] 3.2 焼き込みの全透明の分岐で、見分けた絵だけを `debug` の 1 行にする
+- [x] 3.2 焼き込みの全透明の分岐で、見分けた絵だけを `debug` の 1 行にする
   - 焼き込みの入口の頭で 3.1 の集合を 1 回だけ求め、全透明の分岐（動く絵は全コマが透明のときだけ・今のまま）で、集合に在る絵は設計の文言の `debug` を 1 件（欄は今の `warn` と同じ: `set`・`rel_path`・`original_w`・`original_h`）、無い絵は今の `warn`。0 寸の元画像の `warn` は見分けの前のまま
   - 焼き込みの結果（索引表・配置・トリムの矩形・失敗の集計）には触らない
   - 檻 T9: ⑴ `bind` だけから参照される面の全透明の絵 → `warn` 0 件・`debug` 1 件・索引表は見分けの無い場合と同じ ⑵ `runonce` から参照される面の全透明の絵 → 今の `warn` 1 件 ⑶ `bind` だけから参照される面の 0 寸の絵 → 0 寸の `warn` 1 件
@@ -97,3 +97,5 @@
 - 1.1: 記憶の読み口は `self.resolve_inputs.get(&place)`（`actor_attach.rs` の `ResolveInputs`）。`register_actor`（直の登録口）は記憶を消すので、2.2 の前の値はその呼び出しの前に取り出す。
 - 1.1: `cargo clippy -p areka-emo-text --all-targets` は新しい toolchain（1.99.1）由来の既存の指摘で赤（依存の `dola` と areka-emo-text の触っていないファイル）。この spec では触ったファイルに新しい指摘を足さないことだけを見る。
 - 3.1: `bind_only_paths` は `pattern.surface_id` を方式によらず面の参照と数える（`insert`・`start`・`alternativestart` の番号はアニメーションの番号）。3.2 で方式を見て面を指さない参照を除くか、少なくとも説明に書く（迷ったら警告の側）。
+- 3.2: 3.1 の申し送りは片付けた。`bind_only_paths` は番号がアニメーションの番号の 7 方式（start・stop・alternativestart・alternativestop・parallelstart・parallelstop・insert）を数えない（emo-compose の `targets_animation_id` と同じ並びと正規化の写し。片方を変えたら他方も）。
+- 3.2（spec の外・完了の棚卸へ）: 実装係の観察では、`format!("{:?}", table)` で焼き込みの結果を比べると、ページのバイトが走るたびに違うことがある。原因は調べていない。審査係は、`lib.rs` の `HashMap<ElementId, Placement>` を回す順が走るたびに変わることが原因かもしれないと見ている（コードを読んでの見立てで、HEAD で 2 回焼いて確かめてはいない）。
