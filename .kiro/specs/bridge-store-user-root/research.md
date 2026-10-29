@@ -101,7 +101,7 @@ Claude アプリ（Store 版・4.29.0）の中のこのセッションで、2 �
 読み取れること:
 
 1. 本当の `%LOCALAPPDATA%\areka` は無い。箱の中には、前に中継（`AREKA_MCP_HOME` の形）が作った `areka\mcp-bridge` がある（完了 `mcp-stdio-bridge` の実測の残り）。
-2. 振り替えを受けるプロセスからは、箱の中の物が本当の場所に在るように**見える**（読みも重ねて見せられる）。文書の「重ねて見せる」のとおり。要件 1.1 (d)「箱の中から本当の置き場が在ると見えるか」は、文書の上では「見える（読みは本当の場所へ戻る）」。実測でまだ確かめていないのは「本当の場所だけに在る物」が見えるか。この机では本当の `%LOCALAPPDATA%\areka` が無いので測れなかった。
+2. 振り替えを受けるプロセスからは、箱の中の物が本当の場所に在るように**見える**（読みも重ねて見せられる）。文書の「重ねて見せる」のとおり。要件 1.1 (d)「箱の中から本当の置き場が在ると見えるか」は、文書の上では「見える（読みは本当の場所へ戻る）」。実測でまだ確かめていないのは「本当の場所だけに在る物」が見えるか。この机では本当の `%LOCALAPPDATA%\areka` が無いので測れなかった。→ 11.3 の S2 で測った: 見える。
 3. **振り替えを受けるのに、パッケージの名乗りを持たないプロセスがある**。Bash の道具の子は名乗りが無いのに振り替えられていた。中継も Claude アプリが起こす子なので、同じく名乗りを持たない見込みがある。この場合、名乗りで「箱の中か」を見分ける手は見落とす（要件 3.5 の行が 0 件になる）。中継そのものでの確かめは要件 1 の測りで行う。
 4. 振り替えられたフォルダを開いて最終の場所を尋ねると、箱の中の本当の場所が返る。名乗りが無くても返った。Rust の `std::fs::canonicalize` は Windows では `CreateFile`＋`GetFinalPathNameByHandle` を使うので（標準ライブラリの説明に書かれている）、依存を足さずに同じことができる見込み。中継の exe での確かめは要件 1 の測りで行う。
 5. PowerShell の道具は振り替えを受けない。Claude アプリがこの道具を実行環境の外で起こしていると読める。完了 `user-data-root` の実測（PowerShell からは逸らされない）と合う。
@@ -118,6 +118,8 @@ Claude アプリ（Store 版・4.29.0）の中のこのセッションで、2 �
 | R6. 中継が助けのプロセスを `PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY`（`…_ENABLE_PROCESS_TREE`）付きで起こし、その子（実行環境の外）に控えを書かせる | ○（`windows` の `Win32_System_Threading` はワークスペースで既に有効） | ○ | △ | API は文書にある。ただし、受け継いだ「中で起こす」方針の下に居るプロセスが、孫を外へ出せるかは文書から読み切れない。プロセスが 2 段増え、標準入出力の受け渡しか書くたびの起こし直しが要る。規模が S から外れる |
 
 まとめ: 要件 4.2 の 3 条件を**はっきり満たす手は無い**。R6 だけが条件の文面に触れずに済むが、確かさが「文書から読み切れない」で、作りが重い。要件の既定（箱の中に置くことを受け入れる・要件 4.3）に倒すのが今の材料では自然。R6 を測りの対象に入れるかは討議 1。
+
+測りで足したこと（11.3・M-1 の S2）: 本当の `%LOCALAPPDATA%\areka\profile\areka\` が先に在ると、Store 版の Claude Desktop から起こした中継は、`mcp-bridge\` のフォルダも、一時の名前から `rename` で置く `server-info.json`・`tools.json` も、**新しく作る物まで本当の場所へ**書いた（箱の中には何もできない）。R2 の「新しいファイルは箱へ行く」は、親のフォルダが本当の場所に在る場面では当たらない。つまり、areka 本体が箱の外で先に根を作っていれば、中継は今の作りのまま箱の外へ届く。届かないのは根がまだ無い場面（S1）だけで、そこで中継が根を作ると、その根は箱の中にできる。これは「中継は作らず決めるだけ」（要件 2）の向きを裏づける。R1〜R6 の結論は変えない。
 
 ### 3.4 箱の中で動いていると中継が知る手（要件 3.5・3.6）
 
@@ -196,7 +198,7 @@ D2 の見落としの場面は、要件 3.5（箱の中なら 1 件）・要件 
 
 1. Claude アプリ（Store 版）が起こした中継の exe が、パッケージの名乗りを持つか（`GetCurrentPackageFamilyName` の答え）。3.2 の Bash の子は持たなかった。要件 1 の最初の測りで、中継の起動の記録に一時的に出して確かめる。
 2. 中継の exe で `std::fs::canonicalize` が箱の中の場所を返すか（3.2 は PowerShell から `GetFinalPathNameByHandleW` を直に呼んで確かめた）。
-3. 箱の中から、本当の場所にだけ在る `R`（areka が箱の外で作った物）が見えるか（要件 1.1 の d）。この机には本当の `R` が無いので、測りで作る必要がある（要件 1.5 の控えと戻し）。
+3. 箱の中から、本当の場所にだけ在る `R`（areka が箱の外で作った物）が見えるか（要件 1.1 の d）。この机には本当の `R` が無いので、測りで作る必要がある（要件 1.5 の控えと戻し）。→ 11.3 の S2 で測った: 見える。
 4. 箱の中の残り（v0.0.3 の中継や前の測りが作った `LocalCache\Local\areka\…`）が、直した中継の判断を変える場面の洗い出し。重ねて見せられるので、本当の `R` が無くても箱の中の `areka` があれば「`R` が在る」と見える。
 5. R6（実行環境の外で子を起こす）を確かめるか。確かめるなら、受け継いだ方針の下の子孫が `…_ENABLE_PROCESS_TREE` で外へ出られるかを、`target\` の下の検体で測る。
 6. winget の本物の置き場（`%LOCALAPPDATA%\Microsoft\WinGet\Packages\…`）は `AppData\Local\Microsoft` の下で、振り替えの対象に入る。箱の中の中継から exe の隣への書き込みも箱へ行く。要件 2.7 で exe の隣には書かないので直接は効かないが、説明書の例と測りの検体の置き場（`target\` は `AppData` の外）の違いとして記録に残す。
@@ -274,7 +276,7 @@ D2 の見落としの場面は、要件 3.5（箱の中なら 1 件）・要件 
 - **箱の外の取り違え（一度だけ）**: 箱の外で動いた中継（PowerShell から起こしたなど）が本当の場所に控えのフォルダを作った後、箱の中の中継が初めて起こされると、本当の場所が見える（重ねて見せられる）ので「箱の外」と見立てる。その起動の書きで箱の中に写しができるので、次の起動からは「箱の中」になる。取り違えは 1 回の起動に限られる。コードに `shortcut:` の注記で残す。
 - **ジャンクションの取り違え**: 利用者が `%LOCALAPPDATA%\areka` をジャンクションで別の場所へ向けていると、「箱の中」と見立てる。行には尋ねた場所と解けた場所の両方を出すので、読めば分かる。
 - **中継の exe で `canonicalize` が箱の場所を返すか**: 3.2 は PowerShell から OS を直に呼んで確かめただけ。直した後の測り（要件 1.3）で、箱の行に箱のフォルダが出ることを確かめる。出なければ D-6 を見直す（設計に戻る）。
-- **箱の中から本当の `R` が見えるか（要件 1.1 の d）**: 文書では見える。見えなければ、Store 版の利用者は毎回 `RootMissing`（控え無し）になる。要件のとおりの振る舞いだが、説明書の文を測りに合わせて直す（要件 5.1）。
+- **箱の中から本当の `R` が見えるか（要件 1.1 の d）**: 文書では見える。11.3 の S2 で、測っても見えた。見えなければ、Store 版の利用者は毎回 `RootMissing`（控え無し）になる。要件のとおりの振る舞いだが、説明書の文を測りに合わせて直す（要件 5.1）。
 
 ## 11. 実機の測り（2026-10-29〜）
 
@@ -410,6 +412,64 @@ INFO areka_mcp_bridge: [bridge] finished quit=Closed
 **本当の置き場**: 下見の後も比べの後も、本当の `C:\Users\<利用者>\AppData\Local\areka` は無い（`Test-Path` が False）。どちらの測りも作っていない。箱の中の `areka\` も、比べの後は無い（11.1 の控えの後の形のまま）。
 
 比べで分かったこと: 直す前の中継は、箱の外から `AREKA_USER_ROOT` を渡して起こしても、根が無ければ作り（`user_root_created`）、検体の隣の記憶を 1 つ写す（`app_memory_migrated files=1`）。作る・写すは起こし手（箱の中か外か）に関わらず起き、違うのは行き先だけ（箱の中か、渡した根か）。PowerShell から起こした中継の子のプロセスは、パッケージの名乗りを持たない。Claude Desktop から起こしたときの名乗りの有無と、Store 版から起こしたときの 4 点は、手順 5 の本番（開発者に起動し直しを頼む測り）で取る。
+
+### 11.3 M-1 の本番（Store 版の Claude Desktop から起こした・2026-10-30 07:45〜07:58）
+
+**共通の形**:
+
+- 検体は 11.1 の `before\areka-mcp-bridge.exe`。開発者が `claude_desktop_config.json`（本当の `C:\Users\<利用者>\AppData\Roaming\Claude\` の 1 つだけ・箱の `LocalCache\Roaming` に写しは無い）の `areka` の `command` を検体へ向け直し、Claude Desktop を起動し直した（S1・S2 で 1 回ずつ・合わせて 2 回）。
+- 控えが書かれる（c）には areka につながる必要がある。そこで、排他テストの机を取り、ワークツリーの `target\debug\areka.exe` を `target\bridge-store-measure\areka-host\` の根と記憶で起こした（`AREKA_ROOT`・`AREKA_PROFILE_DIR` はそこ、`AREKA_USER_ROOT` は渡していない）。areka は `http://127.0.0.1:9801/api/mcp/v1` で待ち受けた（SSP が 9801 に居ても 127.0.0.1 の口は取れた）。この areka は測りの後に測る側が止め、机も返した。
+- 中継は起こされた時点では areka を探さない。最初の MCP の要求のときに探して、つながれば `server-info.json` を書く（`service.rs` の `ensure_link`）。どちらの場面でも、測る側（この Claude Code のセッション）から `get_status` を 1 回呼んでつながせた。
+- 中継の標準エラーは Claude Desktop の記録 `C:\Users\<利用者>\AppData\Local\Claude\Logs\mcp-server-areka.log` にあった（本当の `%LOCALAPPDATA%` の下・箱の中ではない）。測った時間帯の行の写しは `m1-13\desktop-mcp-server-areka-excerpt.log`。
+- 箱の中には、開発者の本物の中継が書いた `areka\mcp-bridge\`（2026-10-29 23:04・23:09）が在った。これは裏の書きとして 2026-10-29 23:22 に `m1-13\ura-before-s1-box-areka\` へ移し、箱の中を空にした（`s1-pre.txt`）。S1 の起動し直し（07:45）の直前には箱を見直していない。ただし起動し直しの後に最初に見た箱の中の物は、07:45:17 にできたフォルダと、元の時刻を持ったままの写し `sylphya.toml` だけで、`mcp-bridge\` は無かった。その間の裏の書きは無かったと見る。
+
+**S1**（本当の `%LOCALAPPDATA%\areka` が無い・直前の形は `m1-13\s1-pre.txt`）: Claude Desktop の起動し直しで中継が 2 つ起きた（07:45:17・07:45:19、親はどちらも Claude Desktop の `claude` のプロセス）。07:47:46 に areka へつないだ。
+
+**S2**（本当の `%LOCALAPPDATA%\areka\profile\areka\` を、測りの間だけ PowerShell の道具から空で作った・07:48:24・直前の形は `m1-13\s2-pre.txt`）: S1 の後に箱の中の `areka\` を消してから作った。起動し直しで中継が 2 つ起き（07:57:25・07:57:27）、07:57:27 に areka へつないだ。
+
+| 点 | S1（本当の置き場が無い） | S2（本当の `profile\areka\` が在る） | 比べ（11.2・PowerShell から・`AREKA_USER_ROOT` あり） |
+|---|---|---|---|
+| (a) できたフォルダ | 箱の中: `areka\`・`areka\.copy-work\`（空）・`areka\profile\`・`areka\profile\areka\`・`areka\profile\areka\mcp-bridge\`。本当の置き場: 0 | 箱の中: 0（`areka\` そのものができない）。本当の置き場: `profile\areka\mcp-bridge\` が 1 つ（`profile\` と `profile\areka\` は測る側が作った物）。`.copy-work\` はできない | 箱の中 0・本当の置き場 0・`user-root\` の下に 4 つ |
+| (b) 記憶の写し | `sylphya.toml` の写しが 1（箱の中の `areka\profile\areka\`・SHA256 `EB18050A…C900`＝検体の隣と同じ） | 0（根が在るので作らず写さない） | 1（`user-root\` の下） |
+| (c) `server-info.json`・`tools.json` | `server-info.json`（625 バイト）が箱の中の `areka\profile\areka\mcp-bridge\` に書かれた。`tools.json` は書かれなかった（ツールの一覧を取り直す要求が来なかった） | 両方とも**本当の** `%LOCALAPPDATA%\areka\profile\areka\mcp-bridge\` に書かれた（`server-info.json` 625 バイト・`tools.json` 6807 バイト）。箱の中には無い | 書かれない（areka が居なかった） |
+| (d) 中継の標準エラーの行 | 1 つ目の中継に `user_root_created`・`app_memory_migrated files=1`・`user_data_layout reason="winget_install"`、2 つ目は `user_data_layout` だけ（もう根が在る）。どれも場所は本当の `C:\Users\<利用者>\AppData\Local\areka` と書く。`connected to areka port=9801` | 2 つとも `user_data_layout reason="winget_install"` だけ（`user_root_created`・`app_memory_migrated` は無い）。`connected to areka port=9801` | `user_root_created`・`app_memory_migrated files=1`・`user_data_layout reason="env_var"` |
+| パッケージの名乗り | 2 つとも無し（`GetPackageFamilyName` が 15700）。それでも書いた物は箱の中へ回された | 2 つとも無し（15700） | 無し（15700） |
+| 裏の書き | 測る前に在った物を移した（上の共通の形）。測りの間は無し | 無し | 無し |
+
+S1 の 1 つ目の中継の行（ASCII のまま・時刻を省き、利用者名だけ置き換えた）:
+
+```
+INFO areka_user_data::establish: user root created event="user_root_created" dir=C:\Users\<利用者>\AppData\Local\areka
+INFO areka_user_data::establish: app memory migrated to the user root event="app_memory_migrated" from=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\profile\areka to=C:\Users\<利用者>\AppData\Local\areka\profile\areka files=1
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="winget_install" user_root=C:\Users\<利用者>\AppData\Local\areka origin="default" marker="Areka.Areka.Portable_measure.db"
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+INFO areka_mcp_bridge::service: [bridge] connected to areka port=9801
+```
+
+S2 の中継の行（2 つとも同じ形）:
+
+```
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="winget_install" user_root=C:\Users\<利用者>\AppData\Local\areka origin="default" marker="Areka.Areka.Portable_measure.db"
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+INFO areka_mcp_bridge::service: [bridge] connected to areka port=9801
+```
+
+測った物の写し（`target\bridge-store-measure\m1-13\` の下）: `s1-after-box-areka\`（S1 の後の箱の中の `areka\`）・`s2-after-real-areka\`（S2 の後の本当の `areka\`）・`s1-identity.txt`・`s2-identity.txt`（名乗りの答え）。
+
+**M-1 で分かったこと**:
+
+1. Store 版の Claude Desktop が起こした中継は、パッケージの名乗りを持たない。それでも `%LOCALAPPDATA%` への書きは箱の中へ回される。名乗りで「箱の中か」を知る手（3.4 の D1）は、この起こされ方を見落とす。
+2. 本当の置き場が無いと（S1）、直す前の中継は根を作り記憶を 1 つ写す。その根は箱の中にでき、記録の上の場所（本当の `%LOCALAPPDATA%\areka`）と食い違う。直したい欠陥がそのまま出た。
+3. 要件 1.1 (d): 箱の中から、本当の置き場は在ると見えた。S2 で中継は `user_root_created` を出さず（根が在ると見た）、控えを本当の場所へ書いた。本当の `profile\areka\` が先に在ると（S2）、中継は根を作らず写さず、控えは新しいファイルも含めて本当の場所へ書かれる。箱の中には何もできない。areka 本体が箱の外で根を作っていれば、中継が作らず決めるだけでも、控えは本当の置き場へ届く（3.3 の終わりに足した）。
+4. Claude Desktop の中継の記録は、本当の `%LOCALAPPDATA%\Claude\Logs\` に在る。
+
+**戻し**（07:58〜08:47・PowerShell の道具から）:
+
+1. S2 で作った本当の `%LOCALAPPDATA%\areka` を、写しを `s2-after-real-areka\` に取った上で消した。消した後は `Test-Path` が False。
+2. 箱の中の `areka\`（S1 の物は写しを取った上で 07:48 に消した）が無いことを確かめ、`backup\box-LocalCache-Local-areka\` を元の場所へ写して戻した。
+3. 測る側が起こした areka（pid 17372）を止め、排他テストの机を返した。
+4. 開発者が設定の `command` を元の `C:\\home\\maz\\store\\.areka-mcp\\areka-mcp-bridge.exe` へ戻し、Claude Desktop を起動し直した（08:46・本物の中継が 2 つ動いている）。
+5. 08:47 に見比べた。箱の中の木は 11.1 の測る前の写しと同じ: `\mcp-bridge\server-info.json`（625・2026-10-23 23:37:49・SHA256 `4F3F1CEC…EEBA`）、`\mcp-bridge\tools.json`（6807・同じ時刻・SHA256 `CFF68DF9…7989`）。`profile\` は無い。違うのは `\mcp-bridge` のフォルダの時刻（戻した 07:58）だけ。本当の `%LOCALAPPDATA%\areka` は無い。
 
 ## 12. 設計の討議で決めたこと（2026-10-29）
 
