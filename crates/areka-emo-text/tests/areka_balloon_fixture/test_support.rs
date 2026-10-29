@@ -83,7 +83,6 @@ pub(crate) const EXPECTED_ONLINE_SIZE: (&str, u32, u32) = ("online0.webp", 77, 3
 
 /// `descript.txt`（手本の全体の値・替えるのは `charset`・`name`・`id`・`craftman`・
 /// `use_self_alpha`・`validrect.right` だけ）。
-#[expect(dead_code, reason = "定義のテーマ（タスク 3.2）が引く")]
 pub(crate) const EXPECTED_DESCRIPT: &[(&str, &str)] = &[
     ("charset", "UTF-8"),
     ("type", "balloon"),
@@ -144,7 +143,6 @@ pub(crate) const EXPECTED_DESCRIPT: &[(&str, &str)] = &[
 ];
 
 /// 面別の設定 6 つ（要件 5.5・`windowpos.*` を写さない＝要件 5.7・`wordwrappoint.y,0` は手本どおり）。
-#[expect(dead_code, reason = "定義のテーマ（タスク 3.2）が引く")]
 pub(crate) const EXPECTED_FACE_SETTINGS: [(&str, &[(&str, &str)]); 6] = [
     (
         "balloons0s.txt",
@@ -217,7 +215,6 @@ pub(crate) const EXPECTED_FACE_SETTINGS: [(&str, &[(&str, &str)]); 6] = [
 ];
 
 /// `install.txt`（要件 7.1・設計「ファイルの表」）。
-#[expect(dead_code, reason = "定義のテーマ（タスク 3.2）が引く")]
 pub(crate) const EXPECTED_INSTALL: &[(&str, &str)] = &[
     ("charset", "UTF-8"),
     ("type", "balloon"),

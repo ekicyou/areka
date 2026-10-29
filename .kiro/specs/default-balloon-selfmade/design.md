@@ -407,7 +407,7 @@ graph TB
 - **`definition.rs`**（12.4・5.1・5.3〜5.9・6.2・6.3・6.5）:
   - 各文ファイルが UTF-8 として読め、印が無く、1 行目が `charset,UTF-8`。
   - `areka_parsers::kv` で読んだ鍵と値の並びが期待値の表と**鍵の集合ごと**一致（`windowpos.*`・`onlinemarker.filename`・`validrect.right,0` が無いことを含む）。
-  - 本番の `resolve_balloon_faces` と `load_scope_balloon_model`（面 0 の面別の設定を重ねる経路）を `log-capture-kit` の捕捉の中で両 scope 呼び、`WARN` 以上の記録が 0 件。モデルの値（origin・validrect・wordwrappoint・書体）が表のとおり。`load_balloon_use_self_alpha` が 1。
+  - 本番の `resolve_balloon_faces` と `load_scope_balloon_model`（面 0 の面別の設定を重ねる経路）を `log-capture-kit` の捕捉の中で両 scope 呼び、出てよい記録は相方側の面 2・3 が本体側の系列へ縮退した `WARN` 2 件だけ（相方側は面 0・1 しか持たない＝要件 2.2・欄まで固定する）で、ほかの `WARN` 以上は 0 件。モデルの値（origin・validrect・wordwrappoint・書体）が表のとおり。`load_balloon_use_self_alpha` が 1。
   - `ResolvedBalloonText::resolve` で解いた範囲が上の「描画範囲の解け方」の表と同じ。警告の条件と同じ判定が偽: `TextRegion::is_collapsed()` が偽、`wrap_threshold() <= inline_limit()`、解いた origin が宣言どおり（範囲の外で捨てられていない）。
 - **`bake.rs`**（12.3・2.4・5.9）: `staysee_balloon_fixture/bake.rs` と同じ手順（COM を MTA で張り、`build_balloon_target_from_faces` で面 0 を焼く）で両 scope を焼き、走査した画素の総数が面積と一致し、不透明・透明・半透明の 3 種がどれも 1 つ以上ある。
 - **`online.rs`**（8.9・3.2・3.3）: 取り出した `online0.webp` を `WicDecoderArm` の `probe_animation` と `decode_frames` で読む。見出しが 77×36・3 コマ、コマが 3 枚・各 `delay_ms` 300・`loop_count` が `LoopCount::Infinite`・`has_alpha` が真。コマ k で点 k の中心の α が 255、ほかの点の中心の α が 64（0.25 × 255 を最も近い整数へ丸める＝道具の `round()`。切り捨てなら 63 になるので、道具と期待値の丸めをそろえる）、点の外（例 (2,2)）の α が 0。`WicDecoderArm::new()` の前に COM を MTA で張る（`assets.rs` も同じ・`bake.rs` と同じ手順）。
