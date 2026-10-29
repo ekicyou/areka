@@ -279,7 +279,7 @@ mod tests {
         let i = ((80 * s0.width + 150) * 4) as usize;
         assert_eq!(&s0.rgba[i..i + 4], &[255, 255, 255, 255], "fill white");
         // 上の辺の縁の帯（y 0.5〜2.0）の中の画素は灰で不透明
-        let i = ((1 * s0.width + 150) * 4) as usize;
+        let i = ((s0.width + 150) * 4) as usize;
         assert_eq!(&s0.rgba[i..i + 4], &[150, 154, 164, 255], "border gray");
         let ar = find(&all, "arrow0");
         let i = ((7 * ar.width + 5) * 4) as usize;
