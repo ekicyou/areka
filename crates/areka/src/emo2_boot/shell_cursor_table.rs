@@ -102,23 +102,38 @@ pub(crate) enum PathReason {
 
 /// 場面の名前（番号の前の綴り）。`mousedown` は `mouserightdown` の頭ではないので順は問わない。
 const SCENES: [(&str, CursorScene); 5] = [
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
     ("mouseup", CursorScene::Up),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mousedown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
     ("mousedown", CursorScene::Down),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mouserightdown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
     ("mouserightdown", CursorScene::RightDown),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mousehover_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
     ("mousehover", CursorScene::Hover),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
     ("mousewheel", CursorScene::Wheel),
 ];
 
 const SYSTEM_NAMES: [(&str, SystemCursor); 10] = [
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3aarrow:1
     ("arrow", SystemCursor::Arrow),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3across:1
     ("cross", SystemCursor::Cross),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3afinger:1
     ("finger", SystemCursor::Finger),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3agrip:1
     ("grip", SystemCursor::Grip),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3ahand:1
     ("hand", SystemCursor::Hand),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3ahelp:1
     ("help", SystemCursor::Help),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3amove:1
     ("move", SystemCursor::Move),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3ano:1
     ("no", SystemCursor::No),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3atext:1
     ("text", SystemCursor::Text),
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#system_3await:1
     ("wait", SystemCursor::Wait),
 ];
 
@@ -214,17 +229,21 @@ pub(crate) fn read_ghost_cursor_keys(
             None
         }
     };
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1
     keys.finger = match (kv.get("mousecursor"), kv.get("cursor")) {
         (Some(value), _) => read("mousecursor", value),
         (None, Some(value)) => read("cursor", value),
         (None, None) => None,
     };
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#mousecursor.hand_2c_30d5_30a1_30a4_30eb_540d:1
     keys.hand = kv
         .get("mousecursor.hand")
         .and_then(|v| read("mousecursor.hand", v));
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#mousecursor.grip_2c_30d5_30a1_30a4_30eb_540d:1
     keys.grip = kv
         .get("mousecursor.grip")
         .and_then(|v| read("mousecursor.grip", v));
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1
     keys.arrow = kv
         .get("mousecursor.arrow")
         .and_then(|v| read("mousecursor.arrow", v));
