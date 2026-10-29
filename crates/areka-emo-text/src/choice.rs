@@ -25,7 +25,6 @@
 //! 出す（`\q` は emo2 正典上は自動折返ししないが、構造的に正しく扱う）。
 
 use areka_parsers::balloon::{BalloonCursor, CursorColor};
-use tracing::warn;
 
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, ResidentContent,
@@ -638,16 +637,20 @@ impl ResolvedChoiceStyle {
     /// - `cursor` 不在、または cursor.\* 全キー未指定 → [`Invert`](ResolvedChoiceStyle::Invert)
     ///   （未指定バルーン判定・M1 実導出・縮退ではない＝warn なし・要件 4.3/6.1）。
     /// - `cursor.style,none` → [`NoMarker`](ResolvedChoiceStyle::NoMarker)（正典・マーカー無し）。
-    /// - `cursor.style` underline 系（`underline`／`square+underline`）→ warn-once（解決時 1 回）＋
+    /// - `cursor.style` underline 系（`underline`／`square+underline`）→
     ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill) へ縮退（在る色を採る・要件 6.5）。
     /// - `cursor.style` square または style 未指定（既定 square）で他キー在り →
     ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill)（`fill=brush.color`・`text=font.color`・要件 4.2）。
-    /// - `cursor.blendmethod` が ROP 系（`none` 以外）→ warn-once（解決時 1 回）＋`none` 扱い
+    /// - `cursor.blendmethod` が ROP 系（`none` 以外）→ `none` 扱い
     ///   （色ベース描画・variant は style 判定どおりで不変・要件 6.5）。
+    ///
+    /// 本メソッドは記録を出さない。縮退した元の値は [`CursorFallback::of`] が同じ判定で返し、
+    /// 警告は登録の側が置き場ごとに値が決まったときに 1 件出す（spec real-run-log-noise 要件 2.6:
+    /// 解き直し 1 回で本メソッドは 2 回呼ばれ、置き場の名前も知らないため）。
     ///
     /// `default_font_color` は [`Invert`](ResolvedChoiceStyle::Invert) の paint 材料であり本メソッドの
     /// 分岐には用いないが、将来の非正典 variant がバルーン既定色を焼き込む拡張余地として受ける
-    /// （安定シーム）。同一入力→同一出力の純関数（失敗経路なし・縮退は値＋呼び手警告で表現）。
+    /// （安定シーム）。同一入力→同一出力の純関数（失敗経路なし・縮退は値で表現）。
     pub fn resolve(cursor: Option<&BalloonCursor>, default_font_color: (u8, u8, u8)) -> Self {
         let _ = default_font_color;
         // cursor 不在 → 未指定バルーン＝Invert（4.3/6.1）。
@@ -658,25 +661,12 @@ impl ResolvedChoiceStyle {
         if cursor_all_unspecified(cursor) {
             return ResolvedChoiceStyle::Invert;
         }
-        // blendmethod ROP 系（none 以外）→ warn-once＋none 扱い（色ベース描画・variant 不変・6.5）。
-        if let Some(bm) = cursor.blendmethod() {
-            if !bm.eq_ignore_ascii_case("none") {
-                warn!(
-                    blendmethod = bm,
-                    "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退"
-                );
-            }
-        }
-        // style 解決（none→NoMarker・underline 系→warn＋SquareFill 縮退・それ以外＝既定 square→SquareFill）。
+        // blendmethod ROP 系（none 以外）は none 扱い（色ベース描画・variant 不変・6.5）＝分岐に効かない。
+        // style 解決（none→NoMarker・それ以外＝underline 系の縮退も既定 square も SquareFill）。
         match cursor.style() {
             Some(s) if s.eq_ignore_ascii_case("none") => ResolvedChoiceStyle::NoMarker,
-            Some(s) if style_has_underline(s) => {
-                warn!(
-                    style = s,
-                    "cursor.style underline 系は M1 未対応: SquareFill へ縮退"
-                );
-                square_fill_from(cursor)
-            }
+            // underline 系は SquareFill へ縮退（元の値は CursorFallback::of が同じ判定で返す）。
+            Some(s) if style_has_underline(s) => square_fill_from(cursor),
             // square 明示・style 未指定（既定 square）ともに SquareFill（正典確定 cursor.* マップ）。
             _ => square_fill_from(cursor),
         }
@@ -715,6 +705,40 @@ fn cursor_all_unspecified(cursor: &BalloonCursor) -> bool {
 /// `CursorColor` の r/g/b 全成分が `None`（未指定）かを判定する。
 fn color_unspecified(c: CursorColor) -> bool {
     c.r().is_none() && c.g().is_none() && c.b().is_none()
+}
+
+/// 選択肢の飾りの縮退した元の値（純粋・spec real-run-log-noise 要件 2.1・2.2・2.6）。
+///
+/// [`ResolvedChoiceStyle::resolve`] は縮退しても記録を出さない。登録の側が本値を置き場ごとに
+/// 覚え、値が決まったとき（新しく在り、前と違うとき）に警告を 1 件出す。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CursorFallback {
+    /// none 以外の cursor.blendmethod の値（ROP 系・none 扱いで描く）。
+    pub(crate) blendmethod: Option<String>,
+    /// 下線系の cursor.style の値（SquareFill で描く）。
+    pub(crate) underline_style: Option<String>,
+}
+
+impl CursorFallback {
+    /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`ResolvedChoiceStyle::resolve`]
+    /// と同じ [`style_has_underline`] で、ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する
+    /// （`resolve` では ROP 系は分岐に効かないため判定を持たない）。
+    pub(crate) fn of(cursor: &BalloonCursor) -> CursorFallback {
+        CursorFallback {
+            blendmethod: rop_blendmethod(cursor).map(str::to_string),
+            underline_style: cursor
+                .style()
+                .filter(|s| style_has_underline(s))
+                .map(str::to_string),
+        }
+    }
+}
+
+/// `cursor.blendmethod` が ROP 系（在って `none` でない・大小無視）ならその値を返す。
+fn rop_blendmethod(cursor: &BalloonCursor) -> Option<&str> {
+    cursor
+        .blendmethod()
+        .filter(|bm| !bm.eq_ignore_ascii_case("none"))
 }
 
 /// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視）。
