@@ -207,3 +207,15 @@
 - **解き直しが新しい入力を読むようになる**（例: `balloon-font-file` がフォントファイルの場所を読む）と、記憶に足さない限り答えが変わる。→ 設計の Revalidation Triggers の 1 つめに書き、`ResolveInputs` の説明に「`resolve_with_background` の引数と同じ 3 つ」と書く。
 - **直の道 `register_actor`**（テストと見本だけ）の後の最初の再追従は、記憶が無いので今どおり解き直し、飾りの警告が「前は無い」としてもう 1 件出る。本番の結線は直の道を使わない。
 - **実機の上限 `R` ≤ 50** は、台詞ごとのバルーンの面の切り替えが多い走行で超える見込みは低い（50 秒の走行）。超えたら不合格とし（要件 4.4）、行の時刻を見て出来事ごとか毎フレームかを確かめて原因を直す。
+
+### 8.6 要件 6（`validrect` の右辺・下辺の 0）を足した設計（2026-10-29）
+
+> 開発者が要件 6 を足したのを受けて、設計に `region.rs` の読みの直しを 1 つ足した（areka は起こしていない）。
+
+- **決め**: `TextRegion::resolve` の右辺・下辺だけを新しい小さな関数 `resolve_far_edge` で解く。0 以下は `extent + v`（0＝画像の右端・下端）、正の値と未指定は今の `resolve_or` へ渡す。`left`・`top`・`wordwrappoint`・`origin` の読みは今のまま。
+- **根拠**: ukadoc の脚注 *1（マイナス座標は右下からの相対・0 の意味と `validrect.right`／`bottom` の既定値は書かれていない＝沈黙）・同じ頁の記述例の `validrect.right,0`・SSP の測り（2026-10-29 `default-balloon-selfmade`・`bottle` 326×169 で文字が x 14〜300）。下辺は測っていないので脚注の対称で読む（設計の Revalidation Triggers に置いた）。沈黙への読みなので `doc/COMPAT_ARCHITECTURE.md` §8 に 1 行残す（ステアリング `product.md`）。
+- **解く場所は 1 か所**: `crates/` を `validrect` で引き直した。座標へ解くのは `region.rs` 274・275 行目だけで、普通のバルーン・箱（`actor_box.rs` 395 行目）・選択肢の当たり・配置・供給面・areka 本体の入力は解いた `TextRegion` を読む。emo-present `balloon.rs` 530 行目は素の値を `info` に出すだけ。→ 1 か所の直しで同じバルーンの読みがそろう。
+- **同梱物への効き**: どっとさくらの `bottle` は面の上書きが `validrect` の右辺を書かないので、今はどの面も幅 0 に潰れている → 直した後は本体側 (0, 0, 326, 149)・相方側 (0, 0, 326, 82)。同梱の emo2 は面の上書き（`balloons0s.txt`・`balloonk0s.txt` の 2 面だけ）が 4 辺を書くので値は変わらない。
+- **期待値の変わるテスト**（引き直した結果）: `region_tests.rs` の全 0 の基層の 1 本（潰れ → 画像全体）と `region_vertical_canon_tests.rs` の「全 0（退化矩形）」の 1 行だけ。ほかの 4 辺 0 の基層を使うテスト（`actor_region_warn_tests.rs`・`region_inline_limit_tests.rs`・出荷の見本のテスト）は面の上書きで 4 辺を書いてから解くので動かない。`areka-parsers` の `model_tests.rs` は素の値の転記だけ。
+- **ウェーブの約束**: `region.rs` は ④（本 spec）の持ち物で、⑥ `default-balloon-selfmade` は触らないと約束している。`draw.rs` には触らない。新しいソースファイルは足さない。`COMPAT_ARCHITECTURE.md` §8 は ⑦ `window-work-area-clamp` も行を足すが、別々の行（`dist/README.txt` と同じ許す重なり）。
+- **実機**: 走行 B（どっとさくら・`bottle`）で潰れの `warn` が 0 件・「テキスト供給面を予約スロットへ装着した」が 1 件以上を、数え直しの表に足した（要件 6.4）。
