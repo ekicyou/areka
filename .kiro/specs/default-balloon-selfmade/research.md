@@ -229,3 +229,49 @@
 4. 動く WebP の読み戻しのテスト（要件 8.9）の置き場（3.5・推しは `areka-emo-atlas` の中）。
 5. 配布物の確かめ（`tools/package.ps1` 638〜643 行）に既定の段の当たりを足すか（6.1）。
 6. `staysee_balloon_fixture_test.rs` 9 行目の説明「既定バルーン」の扱い（要件 10.5 で中身は変えない。注記で済ませるか）。
+## 10. 設計の段（2026-10-29 `/kiro-spec-design -y`）
+
+### 10.1 調べの範囲と使った物
+
+- 種類: **既存の作りへの足し（Extension）**＝軽い調べ。新しい依存が無いので外の調べ（Web）はしていない。
+- 読んだ物: `kiro-spec-design` の決まり（設計の原則・軽い調べ・まとめの 3 つの目・設計の門）、steering の決まり（ファイルの 1,000 行・テストの置き方・窓口）、下書きの道具 `target\balloon-draft\src\main.rs`、前例 `crates/areka-emo-atlas/examples/gen_animated_samples.rs`、`crates/sample-ghost-kit/examples/fold-samples.rs`・`src/nar_writer.rs`（`fold_tree`・`NarBuilder`・`install_txt`）・`src/lib.rs`（`SAMPLES`）、見張り `crates/log-capture-kit/tests/sample_path_guard_test.rs`、`staysee_balloon_fixture` 一式、`crates/areka-emo-atlas/src/decode.rs`・`decode/wic_arm.rs`・`decode/image_arm.rs`、`crates/areka-emo-text/src/actor_attach.rs`（警告の条件）、`tools/package.ps1`、`doc/pasta-real-run.md`、SSP に入っている手本 `C:\wintools\ssp\balloon\bottle\`（読むだけ）。
+- 使ったスキル: `kiro-spec-design`（その決まりのファイル 5 つ）だけ。絵柄は要件の討議で決まっているので、絵作りのスキルは使っていない。
+
+### 10.2 手本 `bottle` の値（SSP の `balloon\bottle\`・Shift_JIS で読んだ）
+
+- `descript.txt`（`charset` の行なし）: `type,balloon`・`name,ボトル（でふぉ改）`・`id,bottle`・`craftman,MAz`・`origin.x,14`・`origin.y,11`・`validrect.left,0`・`top,0`・`right,0`・`bottom,-20`・`wordwrappoint.x,-20`・`wordwrappoint.y,0`・`font.name,ＭＳ ゴシック`・`font.height,12`・`font.color` 0/0/0・`cursor.blendmethod,mergepennot`・`cursor.style,square`・`cursor.brush.color` 22/143/231・`cursor.pen.color` 8/8/194・`cursor.font.color` 201/255/255・`arrow0.x,303`・`arrow0.y,10`・`arrow1.x,303`・`arrow1.y,-20`・`onlinemarker.x,4`・`onlinemarker.y,-39`・`sstpmarker.x,10`・`sstpmarker.y,-15`・`sstpmessage.x,20`・`sstpmessage.y,-17`・`sstpmessage.font.name,ＭＳ Ｐゴシック`・`sstpmessage.font.height,12`・`sstpmessage.font.color` 56/163/163・`number.font.name,Times New Roman`・`number.font.height,14`・`number.font.color` 32/76/120・`number.xr,-25`・`number.y,-18`・`communicatebox.x,8`・`communicatebox.y,21`・`communicatebox.width,385`・`communicatebox.height,20`。
+- 面別の設定: `balloons0s.txt`（origin 14,11・`windowpos` 0,0・wordwrappoint -30,0・`onlinemarker.x,3`・`sstpmarker.x,10`・`sstpmessage.x,20`）、`balloons1s.txt`（origin 23,11・`windowpos` 0,0・wordwrappoint -20,0・`onlinemarker.x,12`・`sstpmarker.x,19`・`sstpmessage.x,29`）、`balloonk0s.txt`（origin 14,14・`validrect.bottom,-14`・`windowpos` 0,0・wordwrappoint -30,0）。`balloons2s.txt`・`balloons3s.txt`・`balloonk1s.txt` も在る（要件 5.5 の値）。`balloonc*s.txt` は無い。
+- 絵のファイル: `balloons0`〜`3`・`balloonk0`〜`1`・`balloonc0`〜`3`・`arrow0`〜`1`・`sstp`・`online.png` と `online0`〜`online15`。
+- この値は要件 5.4〜5.6 の値と合っている。設計の `texts.rs` はこれを写し、`charset`・`name`・`id`・`craftman`・`use_self_alpha`・`validrect.right` だけを替え、`windowpos.*` を落とす。
+
+### 10.3 新しく分かったこと
+
+- **動く WebP は公開の読み口で外から読める**: `areka_emo_atlas::WicDecoderArm` は `ElementDecoder::probe_animation`（先頭の署名で APNG と WebP を見分ける `sniff`）と `decode_frames`（`image` の腕）を実装していて、`AnimatedImage`・`AnimationFrame`・`LoopCount` も公開されている。ギャップ分析 3.5 の「`read_frames` は `pub(crate)`」は、この公開の道で回避できる。COM の初期化（MTA）が要る（`staysee_balloon_fixture/bake.rs` と同じ）。
+- **6.5 の 3 つの警告は装着の口で出る**: 潰れ（`actor_attach.rs` の `note_region_collapse`・条件は `TextRegion::is_collapsed`）、折り返し基準（`warn_coarse_wrap_threshold`・条件は `wrap_threshold() > inline_limit()`）、origin（`region.rs` 452 行目あたりの解決の中・宣言を捨てる）。純粋なテストでは、同じ条件が偽であることで確かめられる。実機は起動の記録を grep する。
+- **端末の文を ASCII に保つ所**: Windows の `std::io::Error` の `Display` は OS の日本語の文を含む。道具は `ErrorKind` と OS のエラー番号だけを出す。
+- **`hypot` は環境に依る**: 下書きは `f32::hypot` を使っているが、これは環境の数学ライブラリの答えで、機械によって最後の桁が違いうる。`sqrt` は正しく丸められるので、道具は `sqrt(x*x + y*y)` で書く（要件 8.2）。
+- **一時のファイルの置き場**: 要件 13.8 は一時のファイルを `target\` の下だけに置くことを求める。書き出し先の隣に一時名を置く形は使えないので、`target\gen-default-balloon\` に書いてから名前を替える（同じドライブ）。
+- 要件 7.3 の「要件 3.6 と 4.3」の 4.3 は在らない番号。文脈から入力の箱（要件 2.7）を指すと読んだ（設計の Requirements Traceability の注）。
+
+### 10.4 まとめの 3 つの目（設計の synthesis）
+
+- **まとめられるもの**: 面 10 枚と印 3 種と動く印のコマは、どれも「距離関数を 4×4 の標本で塗る」1 つの描き方の場合分け（下書きと同じ）。描き方の関数は 1 つにし、面と印は表で回す。文のファイル 9 つも「行の並び → CRLF の UTF-8」の 1 つの形。
+- **作るか借りるか**: 書庫は `NarBuilder`、CRLF の行は `install_txt`、PNG と VP8L は `image`、動く絵の読み戻しは `WicDecoderArm` を借りる。作るのは描き方（下書きの写し）と動く WebP の包み（前例の写し・大きさを引数に）だけ。`fold-samples` は使わない（展開形を追跡しないため・9.3 の決め 2）。
+- **削ったもの**: 道具の展開した木の書き出し（窓口で取り出せる）、配布物の確かめへの既定の段の追加（9.3 の決め 5）、`areka-emo-atlas` の中の読み戻しのテスト（中身のテストへまとめた）、`gen_animated_samples.rs` の作り直し（写すだけにし、前例の検体のバイト列を動かさない）、`staysee_balloon_fixture` のテーマ別ファイルの説明の直し（入口の注記 1 段だけ）。
+
+### 10.5 9.3 の 6 件の決め（詳しくは design.md「設計で決めたこと」）
+
+| 件 | 決め | 選ばなかった案 |
+|---|---|---|
+| 1 道具の置き場 | `areka-emo-atlas/examples/gen_default_balloon/`（main と子 3 つ） | `sample-ghost-kit` の example・新しい crate（`Cargo.lock` が変わる） |
+| 2 書庫までの道 | 道具が `NarBuilder` で直に書く・文は道具の中の行の並び・`--check` で同じかを見る | 元の木を別に追跡して `fold-samples`（絵が 2 重・改行の手当て）・README の手順で一時に追跡（作り直しが重い） |
+| 3 既定に頼るテスト | 定数を参照し、名前を文字で比べるテストを 1 本残す・C は変えない | 新しい名前を文字で 6 本に書く（次の差し替えでまた 6 本直す） |
+| 4 読み戻しの置き場 | 中身のテストの `online.rs`（公開の `WicDecoderArm` で書庫の中の絵を読む） | `areka-emo-atlas` の中（`read_frames` を直に呼ぶ・保管物でなく作りたての絵になる） |
+| 5 配布物の確かめ | 既定の段の当たりは足さない | バルーンを持たないゴーストを配布物に足す（配布物の形が変わる） |
+| 6 Staysee のテストの説明 | 入口の説明に注記 1 段 | 直さない（嘘が残る）・テーマ別ファイルまで直す（要件 10.5 から遠い） |
+
+### 10.6 危うさ
+
+- `image`・`image-webp` の版が上がると書庫のバイト列が変わりうる → 道具の `--check` で気付き、作り直す（設計の Revalidation Triggers）。
+- 並走の spec と同じファイル（`boot_resolve.rs` のテスト・`dist/README.txt`・根の `README.md`）→ 差し替えを最後の 1 タスクにまとめ、直前に main を取り込む。
+- 折り返しの期待値を手で導く所（`wrapping.rs`）で、折り返しの決まりの読み違えが起こりうる → 導き方を説明に書き、実測に合わせて緩めない（`staysee_balloon_fixture/wrapping.rs` と同じ規律）。

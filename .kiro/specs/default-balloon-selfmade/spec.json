@@ -1,16 +1,16 @@
 {
   "feature_name": "default-balloon-selfmade",
   "created_at": "2026-10-29T11:33:05Z",
-  "updated_at": "2026-10-29T11:36:30Z",
+  "updated_at": "2026-10-29T12:07:54Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
