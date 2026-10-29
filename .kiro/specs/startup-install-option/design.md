@@ -465,7 +465,7 @@ pub(crate) fn callghost_request(folder: String) -> SwitchRequest;
 - `on_order_done`: 出どころが `StartupArgs`・`InitialInstall` でなければ無操作。⑴ info `startup_install_done` を 1 件（`origin`・書庫ごとの `(パス, 終わり方の語)`。終わり方の語は `installed`・`refused`・`declined`・`failed`・`abandoned`、並びの残りは `not_started`）。⑵ `InitialInstall` なら `sources_to_delete` の書庫を消す。`StartupArgs` なら `args_followup` を `take` し、`delete_source` が真なら消し、`call_ghost` が真なら `decide_call_ghost` で決めて頼む／頼まない。控えが無ければ（readonly などで積まれなかった・既に受けた）何もしない。
 - 消す所（`delete_sources`・内部）: 1 本ごとに `remove_file`。消せたら info `startup_source_deleted`（`origin`・`archive`）、消せなければ warn `startup_source_delete_failed`（`origin`・`archive`・`error`）。1 本の失敗でほかをやめない（要件 3.3・3.4・4.3・4.5）。
 - 頼む所（内部）: `Request { folder }` なら `request_ghost_switch(world, callghost_request(folder))`、info `startup_callghost_requested`（`folder`・`verdict`）を 1 件。受け付けられなかったときの記録と振る舞いは入口のまま（要件 5.5・5.6）。`Skip(reason)` なら info `startup_callghost_skipped`（`reason`）を 1 件。
-- `discard_for_exit`: `pending` が残っていて、`archives` が空でないか `initial_install.nar` が在れば、warn `startup_install_not_submitted`（`reason=exit_before_steady`・`archives`・`initial_install`）を 1 件（要件 2.7）。`pending` を落とす。
+- `discard_for_exit`: `pending` が残っていて、`archives` が空でないか `initial_install.nar` が在れば、warn `startup_install_not_submitted`（`reason=exit_before_steady`・`archives`・`initial_install`）を 1 件（要件 2.7）。`pending` を落とす。`args_followup` が残っていて `delete_source` か `call_ghost` が立っていれば（積んだ依頼の終わりを終了の前に受けられなかった）、warn `startup_followup_dropped`（`delete_source`・`call_ghost`）を 1 件残して落とす（消さず頼まない理由を記録に残す＝要件 7.2）。
 - `Drop`: `pending` が残っていて、`archives` が空でないか `initial_install.nar` が在れば、warn `startup_install_not_submitted`（`reason=boot_stopped`・`archives`・`initial_install`）を 1 件（要件 7.1・7.2）。
 
 **`sources_to_delete` の決まり**（取り消せない消去の判断・全部をテストで固定する）
@@ -555,6 +555,7 @@ pub(crate) enum DeskAsk {
 | `startup_callghost_requested` | info | 切り替えを頼んだ | `folder`・`verdict` | 5.6 |
 | `startup_callghost_skipped` | info | 切り替えを頼まなかった | `reason` | 5.2, 5.3, 5.4 |
 | `startup_install_not_submitted` | warn | 依頼を出さずに終わる | `reason`（`boot_stopped`・`exit_before_steady`）・`archives`・`initial_install` | 2.7, 7.1, 7.2 |
+| `startup_followup_dropped` | warn | 積んだ起動の引数の依頼の終わりを受ける前に終了の後始末に入った（`deletesource`・`callghost` を行わない） | `delete_source`・`call_ghost` | 2.8, 7.2 |
 
 - 前置きは今の窓口と同じ `[install]`、起動オプションは `[cli]`（`logging.md`）。
 - 今の記録はそのまま使う: `install_order_queued`・`install_order_refused`・`readonly_refused`・`install_begin`（`origin` つき）、`install_done`・`install_failed`・`install_abandoned` ほか（手続き）、`ghost_switch_busy`・`ghost_switch_unknown`（切り替えの入口）。
@@ -572,7 +573,9 @@ pub(crate) enum DeskAsk {
 - `target\` の下の exe の代わりのフォルダに `initial_install.nar`（と `Initial_Install.NAR`）を置くと、`InitialInstall` の依頼が `StartupArgs` の依頼より先に積まれること。無ければ依頼が無く warn 以上の記録が無いこと（要件 4.1・4.6・4.7・9.4）。
 - `OrderDone { order, ends }` を送ると、`deletesource` ありで `Installed` の写しだけが消え、なしでは消えないこと。`InitialInstall` は語なしで消えること（要件 3.1・3.5・4.3・9.3・9.4）。
 - `ReadOnlyRun` を足した World で、2 件とも `readonly_refused` に `origin` が載り、待ち行列が空で、終わりの控えが無く、写しが消えないこと（要件 6.1〜6.5・9.6）。
+- 起動の依頼でない依頼（`Menu`・`Script`・`WindowDrop`）が `Installed` で終わっても、`deletesource` の控えが残っている最中でも、その書庫は消えず控えも残ること。`InitialInstall` の依頼は語の旗に関わらず、その依頼の書庫（exe の隣のファイル）だけを消すこと（要件 3.5・3.6・9.3・9.4・取り消せない消去の檻）。
 - 定常到達の前に終了の後始末を呼ぶと warn `startup_install_not_submitted`（`reason=exit_before_steady`）が 1 件出て、依頼が積まれず、その後に World を落としても 2 件目が出ないこと（要件 2.7）。
+- 起動の引数の依頼を積んだ後、終わりを受ける前に終了の後始末を呼ぶと、`deletesource`・`callghost` が立っていれば warn `startup_followup_dropped` が 1 件出て、写しが消えず切り替えも頼まないこと（要件 2.8・7.2）。
 - 定常到達の前に持ち物を落とすと warn `startup_install_not_submitted`（`reason=boot_stopped`）が 1 件出ること。入れる物が無ければ出ないこと。取り出した後に落としても出ないこと（要件 7.1・7.2）。
 
 ### 起動オプション（`crates/areka/src/cli/parse_install_tests.rs`）
