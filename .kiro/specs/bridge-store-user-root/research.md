@@ -318,6 +318,99 @@ marker = "before"
 
 **裏の書きの注意**: 箱の中の `areka\` を空けた後も、開発者の机の本物の中継（Claude Desktop が起こしたもの）は動き続けている。この中継が areka へつなぎ直すなどして控えを書くと、箱の中に `areka\mcp-bridge\` がまた現れうる。この後の測りでは、起こす直前と直後に箱の木を取り、検体の中継が作った物と分けて、本物の中継が書いた物は「裏の書き」として別に数える。戻す（手順 8）ときは、`backup\` の控えを元の場所へ戻す前に、裏の書きでできた物が在れば記録してから片付ける。
 
+### 11.2 M-1 の下見と PowerShell から起こした比べ（2026-10-29 22:51）
+
+**共通の形**: 検体は 11.1 の `before\` のもの（直す前）。流したのは次の 2 行で、流した後に標準入力を閉じた（`target\bridge-store-measure\m1-12\input.jsonl`）。
+
+```
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"measure","version":"0"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+```
+
+- 起こす直前と直後に、PowerShell の道具（箱の外の見え方）から 4 か所の木を写して比べた: 箱の中の `areka\`、本当の `%LOCALAPPDATA%\areka\`、`before\user-root\`、検体のフォルダ `before\`（写しは `m1-12\preview-pre.txt`・`preview-post.txt`・`compare-pre.txt`・`compare-post.txt`、中身の SHA256 つき）。数えたのは直後に増えた物だけ。
+- `RUST_LOG`・`AREKA_USER_ROOT`・`AREKA_PROFILE_DIR`・`AREKA_MCP_PORT` は、Bash の道具でも PowerShell の道具でも空だった（記録の重さは中継の既定のまま）。
+- 測った間、areka は動いていなかった（`areka.exe` のプロセスは無い）。9801 と 9821 では SSP の MCP（`ssp-mcp-server`）が待ち受けていた。
+- 中継は 2 回とも、標準入力を閉じた後に自分で終わった（終了コード 0・`[bridge] finished quit=Closed`）。標準出力には `id` 1 と 2 の答えが 1 行ずつ出た（組み込みの答え）。止めたプロセスは無い。
+- 開発者の机の本物の中継（`C:\home\maz\store\.areka-mcp\areka-mcp-bridge.exe`・pid 12928 と 18580）は、どちらの測りの間も動き続けていた。止めていない。
+
+#### 下見（Bash の道具から起こした・本番の代わりにはしない・要件 1.7）
+
+起こし手は Bash の道具（箱の中へ回される・3.2）。22:51:11 に起こし、22:51:13 に終わった。
+
+増えた物（箱の中 `C:\Users\<利用者>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\areka\` の下）:
+
+```
+\                                (areka\ そのもの)
+\.copy-work                <DIR> (空)
+\profile                   <DIR>
+\profile\areka             <DIR>
+\profile\areka\sylphya.toml   76  SHA256 EB18050A6C0F99D8C2F68EAF9C04ED3C1B8F5DDF7C458F8D32FAED0F8DACC900
+```
+
+中継の記録には `user root created ... dir=C:\Users\<利用者>\AppData\Local\areka` と「作った」と出たが、本当の `%LOCALAPPDATA%\areka` は箱の外から見ると無いまま（`Test-Path` が False）。作った物はすべて箱の中へ回された。検体の隣の記憶は変わっていない（SHA256 も時刻も同じ）。`mcp-bridge\` はできていない（areka につながらなかったため・下の比べの (c) と同じ理由）。裏の書きは無かった（起こす直前の箱の中に `areka\` は無く、直後に増えた物に `mcp-bridge\` は無い）。
+
+標準エラー（ASCII のまま・行の先頭の時刻 `2026-10-29T13:51:12.875051Z` などは省き、利用者名だけ置き換えた・元は `m1-12\preview-stderr.txt`）:
+
+```
+INFO areka_user_data::establish: user root created event="user_root_created" dir=C:\Users\<利用者>\AppData\Local\areka
+INFO areka_user_data::establish: app memory migrated to the user root event="app_memory_migrated" from=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\profile\areka to=C:\Users\<利用者>\AppData\Local\areka\profile\areka files=1
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="winget_install" user_root=C:\Users\<利用者>\AppData\Local\areka origin="default" marker="Areka.Areka.Portable_measure.db"
+INFO areka_mcp_bridge: [bridge] candidates on 127.0.0.1 ports=[9801, 9821, 9802, 9822, 9803, 9823, 9804, 9824, 9805, 9825, 9806, 9826, 9807, 9827, 9808, 9828, 9809, 9829, 9810, 9830]
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+INFO areka_mcp_bridge: [bridge] timeouts connect=300ms verify=3s reply=30s
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9801 name="ssp-mcp-server"
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9821 name="ssp-mcp-server"
+INFO areka_mcp_bridge::service: [bridge] answered the first inquiry method="initialize" requested=2025-06-18 answered=2025-06-18
+INFO areka_mcp_bridge::service: [bridge] areka not found; answered from the built-in definitions method="initialize"
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9801 name="ssp-mcp-server"
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9821 name="ssp-mcp-server"
+INFO areka_mcp_bridge::service: [bridge] areka not found; answered from the built-in definitions method="tools/list"
+INFO areka_mcp_bridge: [bridge] finished quit=Closed
+```
+
+**下見の後の戻し**: 箱の中にできた `areka\` を、PowerShell の道具から `target\bridge-store-measure\m1-12\preview-box-areka\` へ移した（証拠として残す・消していない）。移した後、箱の中に `areka\` は無く、11.1 の控えの後の形に戻った。本物の中継が書いた物は無かったので、分けて残す物も無い。
+
+下見で分かったこと: 直す前の中継は、Bash の道具（箱の中）から起こすと、winget の印（`Areka.Areka.Portable_measure.db`）を見て利用者ごとの置き場の形と決め（`reason="winget_install"`）、箱の中に `areka\`・`profile\areka\` を作り、検体の隣の記憶を 1 つ写す。記録の上の場所は本当の `%LOCALAPPDATA%\areka` だが、実物は箱の中にある。0.0.3 の中継が箱の中に作った写しと同じ形が、検体でも起きた。
+
+#### 比べ（PowerShell の道具から起こした・要件 1.2）
+
+起こし手は PowerShell の道具（箱の外）。`AREKA_USER_ROOT` は、起こす子のプロセスにだけ `C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\user-root\` を渡した（PowerShell 自身の環境には書いていない）。pid 37244、22:51:48 に起こし、22:51:52 に終わった。この pid に `GetPackageFamilyName` を尋ねると、答えは 15700（`APPMODEL_ERROR_NO_PACKAGE`＝パッケージの名乗りを持たない）だった。
+
+4 点の表（下見の欄は比べのための参考）:
+
+| 点 | 下見（起こし手: Bash の道具・箱の中） | 比べ（起こし手: PowerShell の道具・箱の外・`AREKA_USER_ROOT` あり） |
+|---|---|---|
+| (a) できたフォルダ | 箱の中: `areka\`・`areka\profile\`・`areka\profile\areka\`・`areka\.copy-work\` ができた。本当の `%LOCALAPPDATA%\areka`: 0。`user-root\`: 0 | 箱の中: 0。本当の `%LOCALAPPDATA%\areka`: 0。`before\user-root\` に `user-root\` そのもの・`profile\`・`profile\areka\`・`.copy-work\`（空）ができた |
+| (b) 記憶の写し | `sylphya.toml` の写しは 1（箱の中の `areka\profile\areka\`・SHA256 は元と同じ）。検体の隣の記憶の SHA256 は `EB18050A…C900` のまま | `sylphya.toml` の写しは 1（`before\user-root\profile\areka\`・SHA256 は元と同じ）。箱の中と本当の置き場は 0。検体の隣の記憶の SHA256 は `EB18050A…C900` のまま |
+| (c) `server-info.json`・`tools.json` | 書かれない（箱・本当の置き場・`user-root\`・検体の隣のどこにも無い）。理由: areka が動いておらず、9801・9821 は SSP が答え、ほかの番号は答えが無く、中継は組み込みの答えで答えた。控えは areka につながったときだけ書く。決めた控えの置き場は `C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge`（実物は箱の中へ回る先） | 書かれない（同じ 4 か所のどこにも無い）。理由は下見と同じ（areka が居ない）。決めた控えの置き場は `before\user-root\profile\areka\mcp-bridge` |
+| (d) 中継の標準エラーの行 | `user_root_created`（dir=`C:\Users\<利用者>\AppData\Local\areka`）・`app_memory_migrated`（files=1）・`user_data_layout`（`mode="user_root" reason="winget_install" origin="default"`） | `user_root_created`（dir=`...\before\user-root\`）・`app_memory_migrated`（files=1）・`user_data_layout`（`mode="user_root" reason="env_var" origin="env_var" marker=""`） |
+| 裏の書き | 無し | 無し（箱の中は起こす直前も直後も `areka\` が無い） |
+
+比べの標準エラー（ASCII のまま・時刻を省いた・元は `m1-12\compare-stderr.txt`）:
+
+```
+INFO areka_user_data::establish: user root created event="user_root_created" dir=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\user-root\
+INFO areka_user_data::establish: app memory migrated to the user root event="app_memory_migrated" from=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\profile\areka to=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\user-root\profile\areka files=1
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="env_var" user_root=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\user-root\ origin="env_var" marker=""
+INFO areka_mcp_bridge: [bridge] candidates on 127.0.0.1 ports=[9801, 9821, 9802, 9822, 9803, 9823, 9804, 9824, 9805, 9825, 9806, 9826, 9807, 9827, 9808, 9828, 9809, 9829, 9810, 9830]
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\home\maz\git\areka\.claude\worktrees\kiro-start-bridge-store-user-root-d1760a\target\bridge-store-measure\before\user-root\profile\areka\mcp-bridge
+INFO areka_mcp_bridge: [bridge] timeouts connect=300ms verify=3s reply=30s
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9801 name="ssp-mcp-server"
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9821 name="ssp-mcp-server"
+INFO areka_mcp_bridge::service: [bridge] answered the first inquiry method="initialize" requested=2025-06-18 answered=2025-06-18
+INFO areka_mcp_bridge::service: [bridge] areka not found; answered from the built-in definitions method="initialize"
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9801 name="ssp-mcp-server"
+INFO areka_mcp_bridge::scan: [bridge] skipped a candidate: it answered as another server port=9821 name="ssp-mcp-server"
+INFO areka_mcp_bridge::service: [bridge] areka not found; answered from the built-in definitions method="tools/list"
+INFO areka_mcp_bridge: [bridge] finished quit=Closed
+```
+
+**`before\user-root\` の中身**（測ったまま残す・`target\` の下）: `.copy-work\`（空）・`profile\areka\sylphya.toml`（76 バイト・SHA256 `EB18050A6C0F99D8C2F68EAF9C04ED3C1B8F5DDF7C458F8D32FAED0F8DACC900`＝検体の隣の記憶と同じ中身）。`mcp-bridge\` は無い。
+
+**本当の置き場**: 下見の後も比べの後も、本当の `C:\Users\<利用者>\AppData\Local\areka` は無い（`Test-Path` が False）。どちらの測りも作っていない。箱の中の `areka\` も、比べの後は無い（11.1 の控えの後の形のまま）。
+
+比べで分かったこと: 直す前の中継は、箱の外から `AREKA_USER_ROOT` を渡して起こしても、根が無ければ作り（`user_root_created`）、検体の隣の記憶を 1 つ写す（`app_memory_migrated files=1`）。作る・写すは起こし手（箱の中か外か）に関わらず起き、違うのは行き先だけ（箱の中か、渡した根か）。PowerShell から起こした中継の子のプロセスは、パッケージの名乗りを持たない。Claude Desktop から起こしたときの名乗りの有無と、Store 版から起こしたときの 4 点は、手順 5 の本番（開発者に起動し直しを頼む測り）で取る。
+
 ## 12. 設計の討議で決めたこと（2026-10-29）
 
 - 議題 1（承認）: 実機の測りで Claude Desktop の起動し直しを頼むのは 4 回（M-1 の S1・S2、M-2 の S2 を 2 回）。M-2 の S1・S3 は Bash の道具（その子も同じ箱へ回される）から検体の中継を起こして測る。本物の Claude Desktop でしか確かめられない「箱の行と箱のフォルダの場所」は M-2 の S2 の 2 回目に入る。
