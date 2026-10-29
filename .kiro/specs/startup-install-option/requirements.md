@@ -1,7 +1,7 @@
 # Requirements Document
 
 > 本文の実測は **2026-10-29・本ブランチ**（main `932d2c30`）のもの。コードは「何の定義か」（関数名・型名＋ファイルパス）で指す。
-> 要件 10 は brief の議題 4 件と、要件の段で足した 1 件（議題 5）。要件 1〜9 のうち、議題の答えで形が変わる所には「（仮・議題 N）」と書いた。そこは brief の推しの向きで仮に書いてあり、要件討議で確定する。
+> 要件 10 は要件討議（2026-10-29）で確定した 5 つの決めと、完了の段での申し送り。要件 1〜9 の「（議題 N）」はその決めを指す。
 
 ## Project Description (Input)
 
@@ -53,27 +53,27 @@ areka の読み方:
 
 - 「起動中の SSP に任せる」は areka に無い（areka はもともと起動中の areka や SSP に起動を任せない＝`dist/README.txt` の readonly の節）。この spec でも任せない（範囲外）。
 - 「確認ダイアログなし」「上書き」は、areka の手続きに「入れますか」の確かめが無く、既に在るフォルダへは確かめずに上書きするので、新しく飛ばす段は無い。残る画面は利用条件と警告の 2 つ（議題 3）。
-- `callghost` の「呼び出される」は、areka が今 1 体のゴーストしか動かせないので、切り替えに読む（仮・議題 1）。
+- `callghost` の「呼び出される」は、SSP の言葉では 2 体目として呼ぶ意味に読めるが、areka は今 1 体のゴーストしか動かせないので、この spec では切り替えとして扱う（議題 1）。2 体目として呼ぶ形は `ghost-call` が着地したときにそちらへ移す（要件 10.1）。
 
 ### 先にある裁定（2026-09-28 `ghost-install` の要件ディスカッション 議題 2・開発者）
 
 > 「インストールと切り替えは異なるイベントです。『ゴーストが自分から切り替えに行く』挙動はありですが、arekaは主導しません。ゴーストが何も言わない場合、ユーザーが明示的にメニューから新しいゴーストを呼び出さない限り切り替わりません。」
 
-`--option callghost` は、起動の行を書いた利用者が「入れた後に呼べ」と明示する指示である。この spec は、`callghost` を渡されたときだけ、メニューから選んだのと同じ切り替えの道を通す形で仮に書く（要件 5・議題 1）。`callghost` が無いときは、この裁定のとおり切り替えない。
+`--option callghost` は、起動の行を書いた利用者が「入れた後に呼べ」と明示する指示である。要件討議（2026-10-29・議題 1）で開発者はこれを裁定の「利用者が明示的に呼び出す」に当たると認めた。この spec は、`callghost` を渡されたときだけ、メニューから選んだのと同じ切り替えの道を通す（要件 5）。`callghost` が無いときは、この裁定のとおり切り替えない。
 
 ### 何を変えるか
 
-`areka.exe --install <NAR> [<NAR> …]` を、最初のゴーストが起動して定常に着いた後に、並べた順の 1 件の依頼として、窓への投げ込みと同じ手続きへ渡す。`deletesource` は入った NAR だけを消す。`callghost` は入れたゴーストへメニューと同じ道で切り替える（仮）。exe の隣の `initial_install.nar` も同じ手続きへ渡し、入ったら消す。読み取りだけの起動では、今ある断り（`submit` の先頭）でどれも断られる。記録には、依頼が起動の引数か `initial_install.nar` から来たことが読める語が出る。
+`areka.exe --install <NAR> [<NAR> …]` を、最初のゴーストが起動して定常に着いた後に、並べた順の 1 件の依頼として、窓への投げ込みと同じ手続きへ渡す。`deletesource` は入った NAR だけを消す。`callghost` は入れたゴーストへメニューと同じ道で切り替える。exe の隣の `initial_install.nar` も同じ手続きへ渡し、入ったら消す。読み取りだけの起動では、今ある断り（`submit` の先頭）でどれも断られる。記録には、依頼が起動の引数か `initial_install.nar` から来たことが読める語が出る。
 
 ## Boundary Context
 
-- **In scope**: `--install`（短い形 `-i`・旧 `/i`）の値の受け取り（複数・順）・`--option callghost`・`--option deletesource` を扱う語にすること・起動の後に並びを 1 件の依頼として今の手続きへ渡すこと・`deletesource` で入った NAR だけを消すこと・`callghost` で入れたゴーストへ切り替えること（仮・議題 1）・exe の隣の `initial_install.nar` を入れて、入ったら消すこと・依頼の出どころの語（起動の引数・`initial_install.nar`）が記録に出ること・読み取りだけのとき断られることの確かめ・ゴーストが居ないときに行わなかったことの記録（仮・議題 2）・説明書 `dist/README.txt` の文・決定論のテスト・実機の確かめ。
-- **Out of scope**: 起動中の areka へインストールを任せる仕組み（SSTP の受け口・二重起動の確かめの後）・`--ukagaka-link`・`--ssf`・インストールの手続きそのもの（判定・置き場・上書き・利用条件・警告・ゴーストへの知らせの中身と順）の変更・切り替えの手続きそのものの変更・NAR を作る道具（SSP の `--offline-tool`・ぱすたの `pasta_check`）・`callghost` を「2 体目として呼ぶ」形（`multi-ghost-runtime` の後）・ゴーストが 1 体も無いときに起動の解決の前に入れる道（仮・議題 2 で入れると決まれば範囲に入る）・`--option kiosk`（今までどおり「まだ扱わない」）。完了 spec は直さず、この spec が新しい決まりを持つ。
+- **In scope**: `--install`（短い形 `-i`・旧 `/i`）の値の受け取り（複数・順）・`--option callghost`・`--option deletesource` を扱う語にすること・起動の後に並びを 1 件の依頼として今の手続きへ渡すこと・`deletesource` で入った NAR だけを消すこと・`callghost` で入れたゴーストへ切り替えること（議題 1）・exe の隣の `initial_install.nar` を入れて、入ったら消すこと・依頼の出どころの語（起動の引数・`initial_install.nar`）が記録に出ること・読み取りだけのとき断られることの確かめ・ゴーストが居ないときに行わなかったことの記録（議題 2）・説明書 `dist/README.txt` の文・決定論のテスト・実機の確かめ。
+- **Out of scope**: 起動中の areka へインストールを任せる仕組み（SSTP の受け口・二重起動の確かめの後）・`--ukagaka-link`・`--ssf`・インストールの手続きそのもの（判定・置き場・上書き・利用条件・警告・ゴーストへの知らせの中身と順）の変更・切り替えの手続きそのものの変更・NAR を作る道具（SSP の `--offline-tool`・ぱすたの `pasta_check`）・`callghost` を「2 体目として呼ぶ」形（`multi-ghost-runtime` の後）・ゴーストが 1 体も無いときに起動の解決の前に入れる道（議題 2・完了の段で別の spec として起票する＝要件 10.2）・`--option kiosk`（今までどおり「まだ扱わない」）。完了 spec は直さず、この spec が新しい決まりを持つ。
 - **Adjacent expectations**:
   - 完了 `startup-options-core` の起動オプションの読み手に、`--install` の値と 2 つの語を足す。ほかの名前と語の扱いは変えない。`--offline-dump` と一緒の起動オプションは効かないという今の決まりも変えない。
   - 完了 `readonly-mode` が、インストールの依頼の唯一の口の先頭で読み取りだけの断りと記録を済ませている。この spec は新しい断りを作らず、起動の引数と `initial_install.nar` の依頼がその口を通ることと、記録に出どころが出ることを確かめる。
   - 完了 `ghost-install`・`nar-install`・`nar-install-hardening`・`file-drop` の手続き・イベント・警告をそのまま使う。
-  - 完了 `ghost-shell-balloon-switch` の切り替えの道（メニューの「ゴースト」から選んだときの道）を、`callghost` のときに使う（仮・議題 1）。
+  - 完了 `ghost-shell-balloon-switch` の切り替えの道（メニューの「ゴースト」から選んだときの道）を、`callghost` のときに使う（議題 1）。
   - `install-live-target-hazards`（版に縛らない）: 使っている最中のフォルダへの上書きは `initial_install.nar` でも起こりうるが、その守りはこの spec の持ち物ではない。
   - `multi-ghost-runtime`（余力の枠）: `callghost` を「2 体目として呼ぶ」形に変えるなら、その後に回す。
   - 同じウェーブ C12 の約束（`crates/areka/src/ghost_session.rs` に触らない・`dist/README.txt` は `default-balloon-selfmade`・`bridge-store-user-root` と別の行）は設計の段で守る。
@@ -90,7 +90,7 @@ areka の読み方:
 2. When `--install` の値に相対パスがある, the areka shall そのパスを、areka.exe を起動したときの今のフォルダからの道として読む（`--offline-dump` の相対パスと同じ読み方）。
 3. When `--install` が値なしで渡された, the areka shall 入れる物が無いことを記録（warn）に 1 件残し、インストールの依頼を出さずに起動を続ける。
 4. When `--option` の語に `callghost` または `deletesource` がある（大小を問わない・ほかの語とカンマで並べてもよい・`--option` を何回に分けて渡してもよい）, the areka shall その語を扱う語として受け取り、今の「まだ扱わない語」の記録をその語について残さない。
-5. If `callghost` または `deletesource` が `--install` の値なしで渡された, the areka shall その語が効かないことを記録（warn）に 1 件残し、ほかは何も変えない（`initial_install.nar` にも効かない・仮・議題 5）。
+5. If `callghost` または `deletesource` が `--install` の値なしで渡された, the areka shall その語が効かないことを記録（warn）に 1 件残し、ほかは何も変えない（`initial_install.nar` にも効かない・議題 5）。
 6. When `--install`・`callghost`・`deletesource` が `--offline-dump` と一緒に渡された, the areka shall 今の決まり（`--offline-dump` と一緒の起動オプションは効かず、効かなかったことを記録に残す）のとおりに扱い、何も入れず何も消さない。
 7. The areka shall `--install` の値の書庫が在るか・読めるかで起動を止めず、在らない・読めない書庫をインストールの手続きの失敗として扱う（要件 2.4）。
 
@@ -105,7 +105,7 @@ areka の読み方:
 3. When 起動の引数の依頼の書庫の手続きが進んだ, the areka shall 今の手続きと同じイベント（`OnInstallBegin`・`OnInstallCompleteEx`／`OnInstallComplete`・`OnInstallFailure`・`OnInstallRefuse`・利用条件の受諾と拒否・2 本以上が全部入ったときの `OnInstallCompleteAll`）を同じ順でゴーストへ送る。
 4. If 並びの中に在らない・NAR として読めない・入れられない書庫がある, the areka shall その書庫を今の手続きの失敗として扱い（記録とゴーストへの `OnInstallFailure`）、並びの残りの書庫を続けて扱う。
 5. The areka shall 起動の引数の依頼について、依頼を受けたこと・書庫ごとの結果（入った・失敗した・断った・利用条件を拒んだ・途中でやめた）が起動の引数の依頼のものだと、記録から読めるようにする（出どころの語はメニュー・台本・投げ込みの語と別。どの記録に語を載せるかは設計で決める）。
-6. While 起動の引数の依頼を扱っている, the areka shall ゴーストのトークと利用者の操作を待たせず、投げ込みで入れているときと同じに動かす（仮・議題 4）。
+6. While 起動の引数の依頼を扱っている, the areka shall ゴーストのトークと利用者の操作を待たせず、投げ込みで入れているときと同じに動かす（議題 4）。
 7. If 最初のゴーストが定常に着く前に終了が始まった, the areka shall 起動の引数の依頼を出さず、入れなかったことと並びを記録（warn）に 1 件残す。
 8. When 手続きの途中で終了が始まった, the areka shall 今の手続きと同じに、まだ始めていない書庫を扱わずにやめる（記録は今の手続きのとおり）。
 
@@ -134,18 +134,18 @@ areka の読み方:
 4. If `initial_install.nar` が入らなかった（失敗・宛先違いで断った・利用条件を拒んだ・途中でやめた）, the areka shall ファイルを残し、今の手続きの記録とゴーストへの知らせのとおりに残す。
 5. If 入った `initial_install.nar` を消せない, the areka shall 消せなかったことと理由を記録（warn）に残して起動を続ける（次の起動でまた入る＝上書きになることを説明書に書く・要件 8.3）。
 6. When `initial_install.nar` が無い, the areka shall 何もせず、warn 以上の記録を残さない。
-7. When `initial_install.nar` と `--install` の両方がある, the areka shall `initial_install.nar` の依頼を先に、`--install` の依頼をその後に、別々の依頼として出す（仮・議題 5）。
+7. When `initial_install.nar` と `--install` の両方がある, the areka shall `initial_install.nar` の依頼を先に、`--install` の依頼をその後に、別々の依頼として出す（議題 5）。
 8. The areka shall `initial_install.nar` の依頼の記録に、依頼の出どころが `initial_install.nar` であると読める語を、起動の引数・メニュー・台本・投げ込みの語と別に出す。
 9. When `--offline-dump` で起動した, the areka shall `initial_install.nar` を見ず、入れず、消さない。
-10. The areka shall `initial_install.nar` の手続きでも、利用条件の画面と同梱を飛ばしたときの警告の画面を今の手続きと同じに出す（仮・議題 3）。
+10. The areka shall `initial_install.nar` の手続きでも、利用条件の画面と同梱を飛ばしたときの警告の画面を今の手続きと同じに出す（議題 3）。
 
-### Requirement 5: `--option callghost` で入れたゴーストへ切り替える（仮・議題 1）
+### Requirement 5: `--option callghost` で入れたゴーストへ切り替える（議題 1）
 
 **Objective:** As a 開発者・AI のエージェント, I want 起動の行で「入れたら呼べ」と書いたときだけ、入れたゴーストが起きてほしい, so that 「入れる → 起こす → MCP で確かめる」を 1 本の試験で回せる
 
 #### Acceptance Criteria
 
-1. Where `--option callghost` が `--install` と一緒に渡された, when 起動の引数の依頼が全部の書庫を扱い終えて（途中でやめたときは頼まない）、その中でゴーストの書庫が 1 本以上「入った」, the areka shall 並びの中で最後に入ったゴーストへ、利用者が右クリックメニューの「ゴースト」から選んだときと同じ切り替えの道（送り出す側への知らせ・降ろし方・起こし方・記憶）で切り替えを頼む。
+1. Where `--option callghost` が `--install` と一緒に渡された, when 起動の引数の依頼が全部の書庫を扱い終えて（途中でやめたときは頼まない）、その中でゴーストの書庫が 1 本以上「入った」, the areka shall 並びの中で最後に入ったゴーストへ、利用者が右クリックメニューの「ゴースト」から選んだときと同じ切り替えの道（送り出す側への知らせ・降ろし方・起こし方・記憶）で切り替えを頼む。送り出す側への `OnGhostChanging` の Reference1 は、メニューの選択と同じ `manual` にする。
 2. If 最後に入ったゴーストが既に起動中のゴーストである（起動中のゴーストへ上書きした）, the areka shall 切り替えを頼まず、切り替えなかったことと理由を記録（info）に 1 件残す。
 3. If 依頼の手続きの間に、ゴースト自身の台本や利用者のメニューの選択で切り替えが始まった・終わった, the areka shall `callghost` の切り替えを頼まず、頼まなかったことと理由を記録（info）に 1 件残す（ゴーストと利用者の選択を上書きしない）。
 4. If ゴーストの書庫が 1 本も入らなかった（シェル・バルーン・追加ファイルだけ・全部が入らなかった）, the areka shall 切り替えを頼まず、頼まなかったことを記録（info）に 1 件残す。
@@ -166,13 +166,13 @@ areka の読み方:
 4. While 読み取りだけで動いている, the areka shall `callghost` があっても切り替えを頼まない。
 5. The areka shall 起動の引数と `initial_install.nar` の依頼を断るときの記録と振る舞いを、メニュー・台本・投げ込みの依頼を読み取りだけで断るときと同じにする（違うのは記録の出どころの語だけ）。
 
-### Requirement 7: ゴーストが居ないとき（仮・議題 2）と失敗の伝え方
+### Requirement 7: ゴーストが居ないとき（議題 2）と失敗の伝え方
 
 **Objective:** As a 開発者・利用者, I want 入れられなかったときに理由が記録に残り、画面が無粋な箱で止まらないでほしい, so that 試験の失敗を記録から追える
 
 #### Acceptance Criteria
 
-1. If 起動の解決がゴーストを見つけられず、ゴーストが 1 体も定常に着かない, the areka shall 今の振る舞い（既定のゴーストの台詞の道で伝えて止まる）を変えず、`--install` と `initial_install.nar` を入れなかったことと並びを記録（warn）に 1 件残す（仮・議題 2）。
+1. If 起動の解決がゴーストを見つけられず、ゴーストが 1 体も定常に着かない, the areka shall 今の振る舞い（既定のゴーストの台詞の道で伝えて止まる）を変えず、`--install` と `initial_install.nar` を入れなかったことと並びを記録（warn）に 1 件残す（議題 2）。
 2. The areka shall この spec で足す道の失敗（依頼を出せない・書庫を消せない・切り替えを頼めない）を、どれも理由の分かる記録に残す（error か warn・黙って捨てない）。
 3. The areka shall この spec で足す道の失敗を、メッセージボックスで告げない（インストールの手続きが今出す利用条件と警告の画面はそのまま）。
 4. If インストールの依頼が受け付けられなかった（インストールの受け付けがまだ無い・終了が始まっている・読み取りだけ）, the areka shall 今の受け付けの記録のとおりに残し、`deletesource` の消去と `callghost` の切り替えを行わない。
@@ -184,8 +184,8 @@ areka の読み方:
 #### Acceptance Criteria
 
 1. The areka shall 説明書の「■ 起動オプション」で、`--install`・`callghost`・`deletesource` を「まだ扱わない」の文から外し、扱う物として書く。
-2. The areka shall 説明書に、`--install` の書き方（複数・順・相対パスの読み方）・入れ始める時（最初のゴーストが起動した後）・手続きが窓への投げ込みと同じこと・`deletesource` で消える物と残る物・`callghost` で切り替わる先とその限り（仮・議題 1 の答えの形）・ゴーストが居ないときは入れないこと（仮・議題 2 の答えの形）・起動中の areka や SSP には任せないことを書く。
-3. The areka shall 説明書に、`initial_install.nar` の置き場所・確かめずに上書きで入ること・入ったら消えること・消せないときは次の起動でまた入ること・利用条件の画面の扱い（仮・議題 3 の答えの形）を書く。
+2. The areka shall 説明書に、`--install` の書き方（複数・順・相対パスの読み方）・入れ始める時（最初のゴーストが起動した後）・手続きが窓への投げ込みと同じこと・`deletesource` で消える物と残る物・`callghost` で切り替わる先（並びの最後に入ったゴースト）とその限り（2 体目としては呼ばない）・ゴーストが居ないときは入れないこと・起動中の areka や SSP には任せないことを書く。
+3. The areka shall 説明書に、`initial_install.nar` の置き場所・確かめずに上書きで入ること・入ったら消えること・消せないときは次の起動でまた入ること・利用条件の画面が今の手続きのとおり出ることを書く。
 4. The areka shall 説明書の readonly の「断る物」の文に、`--install` と `initial_install.nar` を足す（入れず、消さない）。
 5. The areka shall 説明書に、NAR を入れて呼ぶ 1 行の例を 1 つ載せる（例: `areka.exe --install C:\work\my.nar --option callghost,deletesource`）。
 
@@ -199,21 +199,21 @@ areka の読み方:
 2. The areka shall 起動の引数の並びが 1 件の依頼として、書いた順のまま、起動の引数の出どころの語で口へ渡ることを判定する決定論のテストを持つ。
 3. The areka shall `deletesource` について、書庫の終わり方の 5 つ（入った・断った・利用条件を拒んだ・失敗・途中でやめた）の 1 つずつで消す／残すが決まること・同じパスが 2 回あるとき・消せないときを判定する決定論のテストを持つ。
 4. The areka shall `initial_install.nar` について、在る／無い・入った／入らない・大小の違う名前・`--install` との順・`--offline-dump` のときを判定する決定論のテストを持つ。
-5. The areka shall `callghost` について、切り替えを頼む／頼まない（ゴーストが入った・入らない・起動中のゴーストだった・途中で切り替えが始まった・`callghost` なし）の判断と切り替え先（最後に入ったゴースト）を判定する決定論のテストを持つ（仮・議題 1）。
+5. The areka shall `callghost` について、切り替えを頼む／頼まない（ゴーストが入った・入らない・起動中のゴーストだった・途中で切り替えが始まった・`callghost` なし）の判断と切り替え先（最後に入ったゴースト）を判定する決定論のテストを持つ。
 6. The areka shall 読み取りだけのとき、起動の引数と `initial_install.nar` の依頼が断られ、記録に出どころが出て、書庫が消えないことを判定する決定論のテストを持つ。
 7. The areka shall テストの根と書庫の写しをワークツリーの `target\` の下だけに置き、`deletesource` と `initial_install.nar` の試験で本物の書庫を消さない（写しを使う）。
 8. The areka shall 実機で、`target\` の下の根と書庫の写しを使い、起動の 1 行で入れたゴーストが置き場に入ったことと、`callghost` のときにそのゴーストが起動中になったこと（MCP の `get_active_ghost_list`）を、実機の試験の窓口（`real-run-mcp-kit`）の足場で確かめる。
 
-### Requirement 10: 議題（要件討議で確定・今は仮の向き）
+### Requirement 10: 要件討議の決めと完了の段の申し送り
 
-> brief の議題 1〜4 と、要件の段で足した議題 5。どれも「答えで作業が変わる」もの。要件 1〜9 の「仮」の所は、ここに書いた推しの向きで書いてある。
+> 2026-10-29 の要件討議で、開発者が 5 つの議題をすべて推奨案で承認した（「承認」）。
 
-**Objective:** As a 開発者, I want 答えで作業が変わる点を要件討議で決めたい, so that 設計が推し量りで進まない
+**Objective:** As a 開発者, I want 要件討議で決めたことと、この spec の外へ渡すことを残したい, so that 設計が推し量りで進まず、先送りした働きが黙って落ちない
 
 #### Acceptance Criteria
 
-1. The areka shall 議題 1（`callghost` と 2026-09-28 の裁定）を、要件討議の答えに合わせる。推し（仮）: `callghost` は起動の行を書いた利用者の明示の指示なので、裁定の「利用者が明示的に呼び出す」に当たるとして認め、メニューの「ゴースト」から選んだのと同じ切り替えの道を通す。「呼び出し」は切り替えに読む（2 体目は `multi-ghost-runtime` の後）。切り替え先は並びの最後に入ったゴースト。別案: 裁定どおり切り替えず、記録にだけ残す（要件 5 の切り替えの部分が外れる）。SSP で `callghost` のときに切り替えの知らせ（`OnGhostChanging` など）が出るか・切り替えか 2 体目かを測るのは、打つ前に開発者の許しを取る。
-2. The areka shall 議題 2（ゴーストが 1 体も無いときの `--install`）を、要件討議の答えに合わせる。仮の形: 「ゴーストが起動して定常に着いたときだけ入れる」に絞り、ゴーストが居ないときは入れなかったことを記録に残す（要件 7.1）。別案: SSP のように、起動の解決の前に入れてから起動を続ける（窓のアプリの外から手続きを呼ぶ道が要る・3〜4 タスク増）。
-3. The areka shall 議題 3（`initial_install.nar` の「確認なし」）を、要件討議の答えに合わせる。要件の段の読み直しで、今の手続きに「入れますか」の確かめは無く、既に在るフォルダへは確かめずに上書きすると分かった（Introduction の表）。残る画面は利用条件の はい／いいえ と、同梱を飛ばしたときの警告。仮の形: どちらも今の手続きのとおり出す（利用条件への同意は利用者の判断なので飛ばさない）。別案: `initial_install.nar` のときは利用条件を出さずに受諾として扱う。
-4. The areka shall 議題 4（起動の引数のインストールが終わるまでトークを待たせるか）を、要件討議の答えに合わせる。仮の形: 待たせない。最初のゴーストの起動のトーク（`OnBoot` など）が先に走り、定常に着いた後に、投げ込みと同じにインストールが進む（要件 2.1・2.6）。別案: SSP の「インストール処理を行った後起動を続行する」に寄せ、入れ終わるまでゴーストを起こさない（議題 2 の別案と同じ道が要る）。
-5. The areka shall 議題 5（要件の段で足した小さい点）を、要件討議の答えに合わせる。仮の形: ⑴ `initial_install.nar` と `--install` が両方あるときは `initial_install.nar` を先に、別々の依頼で入れる（要件 4.7）。⑵ `callghost`・`deletesource` は `--install` と組んだときだけ効き、`initial_install.nar` には効かない（正典の「--install と同時に使うと」のとおり・要件 1.5）。
+1. The areka shall 議題 1 の決めのとおり、`callghost` を起動の行を書いた利用者の明示の指示（2026-09-28 の裁定の「利用者が明示的に呼び出す」）として扱い、メニューの「ゴースト」と同じ切り替えの道・Reference1 `manual`・切り替え先は並びの最後に入ったゴースト、で切り替える（要件 5）。SSP での測りは行わない（測った答えがどちらでも、今の作業は同じ）。正典の「呼び出される」を 2 体目として呼ぶ形は `ghost-call` が持つ。この spec は完了の段で、`.kiro/specs/ghost-call/brief.md` へ「`callghost` を、2 体目として呼ぶ働きが着地したらその形へ移す」申し送りを書く。
+2. The areka shall 議題 2 の決めのとおり、ゴーストが落ち着いた後だけ入れ、ゴーストが 1 体も無いときは入れなかったことを記録に残す（要件 7.1）。SSP のように起動の解決の前に入れてから起動を続ける形は、この spec の完了の段で `/kiro-discovery` で別の spec として起票する。
+3. The areka shall 議題 3 の決めのとおり、`initial_install.nar` でも利用条件の画面と警告の画面を今の手続きと同じに出す（利用条件への同意は利用者の判断なので飛ばさない・要件 4.10）。
+4. The areka shall 議題 4 の決めのとおり、起動の引数のインストールが終わるまでゴーストのトークを待たせない（要件 2.1・2.6）。
+5. The areka shall 議題 5 の決めのとおり、`initial_install.nar` を先に・`--install` を後に別々の依頼として出し（要件 4.7）、`callghost`・`deletesource` は `--install` と組んだときだけ効かせて `initial_install.nar` には効かせない（要件 1.5）。
