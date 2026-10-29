@@ -377,3 +377,55 @@ fn vertical_em_box_left_is_measured_from_the_column_baseline() {
         );
     }
 }
+
+// ────────────────────────── §7 束縛書式の太さ・斜体（spec emo-text-dwrite-fidelity 檻 F1・要件 3.10／4.8／4.9）
+
+/// F1: ぱすたの候補列に束縛した計測器の束縛書式は中太（500）。バルーン定義に `font.bold,1` を
+/// 足すと 700、`font.italic,1` を足すと斜体。
+///
+/// 較正: 書式の太さ・斜体を NORMAL 決め打ちに戻すと 500／700／ITALIC のすべてで赤。
+#[test]
+fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
+    use areka_parsers::balloon::parse_str;
+    use windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE_NORMAL;
+
+    const PASTA: &str = "font.name,游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ\r\n";
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let bound = |extra: &str| {
+        let font = ResolvedFont::resolve(&parse_str(&format!("{PASTA}{extra}"), None));
+        DWriteMetrics::new(
+            &factory,
+            &font,
+            WritingMode::HorizontalTb,
+            &TextLayerConfig::default(),
+        )
+        .expect("DWriteMetrics 生成")
+    };
+    let plain = bound("");
+    assert!(
+        plain
+            .fonts()
+            .family_for(&["Yu Gothic".to_owned()])
+            .is_some(),
+        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
+         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
+    );
+    let weight_style =
+        |m: &DWriteMetrics| unsafe { (m.format.GetFontWeight().0, m.format.GetFontStyle()) };
+
+    assert_eq!(
+        weight_style(&plain),
+        (500, DWRITE_FONT_STYLE_NORMAL),
+        "ぱすたの候補列は中太"
+    );
+    assert_eq!(
+        weight_style(&bound("font.bold,1\r\n")),
+        (700, DWRITE_FONT_STYLE_NORMAL),
+        "font.bold,1 で太字"
+    );
+    assert_eq!(
+        weight_style(&bound("font.italic,1\r\n")),
+        (500, DWRITE_FONT_STYLE_ITALIC),
+        "font.italic,1 で斜体（太さは名前の中太のまま）"
+    );
+}

@@ -731,7 +731,7 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
 /// **家族名の入口は 2 つある**（タスク 6.4）:
 ///
 /// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
-///    `font.name` をそのまま渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
+///    束縛の顔（`FontCatalog::pick` の解決）を渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
 /// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
 ///    `FontCatalog::family_for` で解決した名前か、全滅時の `DEFAULT_FONT_NAME` か。
 ///
@@ -758,11 +758,11 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
         "呼出 2 箇所はいずれも create_text_format の内側にある"
     );
     assert!(
-        body.contains("try_create_format(factory, &font.name, font.height)"),
-        "1 回目はバルーン定義の font.name をそのまま渡す（別名へ差し替えない）"
+        body.contains("try_create_format(factory, &font.face, bold, italic, font.height)"),
+        "1 回目は台帳が解決した束縛の顔をそのまま渡す（別名へ差し替えない）"
     );
     assert!(
-        body.contains("try_create_format(factory, DEFAULT_FONT_NAME, font.height)"),
+        body.contains("(DEFAULT_FONT_NAME);\n            try_create_format(factory, &retry,"),
         "2 回目は生成失敗時の既定フォント再試行のみ（書字方向とは無関係な経路）"
     );
     // 既定フォント名リテラルは宣言 1 箇所だけ——縦書き専用の差し替え先が別に

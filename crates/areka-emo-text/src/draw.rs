@@ -94,7 +94,6 @@ use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
     DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
-    DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_NORMAL,
     DWRITE_PARAGRAPH_ALIGNMENT, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION,
     DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
     DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
@@ -393,7 +392,10 @@ impl DirectionRecipe {
 
 /// 解決済みフォント＋方向レシピから描画/計測共用の `IDWriteTextFormat` を生成する。
 ///
-/// フォント生成失敗（Error Categories・R4.2）: `warn!`→[`DEFAULT_FONT_NAME`] で再試行→
+/// 顔は `font.face`（[`FontCatalog::pick`] が解決した顔）、太字・斜体は既定の見た目
+/// （バルーン定義の `font.bold`／`font.italic`）を [`FontFace`] の規則で重ねる（要件 4.8／4.9）。
+///
+/// フォント生成失敗（Error Categories・R4.2）: `warn!`→[`DEFAULT_FONT_NAME`] で同じ太字・斜体のまま再試行→
 /// なお失敗は `error!`＋[`TextLayerError::Device`]（panic しない）。
 /// task 6.2 の計測専用 probe layout も**同一のこの format 生成経路**を用いる前提
 /// （probe 規約: 描画と同一 TextFormat）。
@@ -402,7 +404,8 @@ pub fn create_text_format(
     font: &ResolvedFont,
     mode: WritingMode,
 ) -> Result<IDWriteTextFormat, TextLayerError> {
-    let format = match try_create_format(factory, &font.name, font.height) {
+    let (bold, italic) = (font.looks.default.bold, font.looks.default.italic);
+    let format = match try_create_format(factory, &font.face, bold, italic, font.height) {
         Ok(format) => format,
         Err(e) => {
             warn!(
@@ -410,7 +413,8 @@ pub fn create_text_format(
                 hresult = e.code().0,
                 "TextFormat 生成に失敗——既定フォント ＭＳ ゴシック で再試行する"
             );
-            try_create_format(factory, DEFAULT_FONT_NAME, font.height).map_err(|e| {
+            let retry = FontFace::regular(DEFAULT_FONT_NAME);
+            try_create_format(factory, &retry, bold, italic, font.height).map_err(|e| {
                 let hresult = e.code().0;
                 tracing::error!(
                     hresult,
@@ -428,18 +432,21 @@ pub fn create_text_format(
     Ok(format)
 }
 
-/// `CreateTextFormat` の 1 回試行（weight/style/stretch は NORMAL・locale ja-JP＝wintf lift）。
-fn try_create_format(
+/// 顔と太字・斜体の指定から `CreateTextFormat` を 1 回試す（太さ・斜体は [`FontFace`] の規則・
+/// 幅は顔のまま・コレクション既定・locale ja-JP＝wintf lift）。書式の設定の唯一の持ち主。
+pub(super) fn try_create_format(
     factory: &IDWriteFactory2,
-    family_name: &str,
+    face: &FontFace,
+    bold: bool,
+    italic: bool,
     font_size: f32,
 ) -> windows::core::Result<IDWriteTextFormat> {
     factory.create_text_format(
-        &HSTRING::from(family_name),
+        &HSTRING::from(face.family.as_str()),
         None::<&IDWriteFontCollection>,
-        DWRITE_FONT_WEIGHT_NORMAL,
-        DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL,
+        face.weight_with(bold),
+        face.style_with(italic),
+        face.stretch,
         font_size,
         &HSTRING::from(LOCALE_JA_JP),
     )
