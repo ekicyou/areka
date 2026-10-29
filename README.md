@@ -45,7 +45,7 @@
 | えみり（`emily4`） | YAYA | SSP に同梱のゴーストから作った検体。CC BY-NC 4.0 のため開発用の検体としてだけ使い、配布物には入れません |
 | ．さくら（`dot_sakura`） | 華和梨（SHIORI/2.x） | 開発者のゴースト。起動の挨拶・時間のトーク・終了のトークを話し、さくらとうにゅうの面も出て、終了のトークの後にきれいに終わります。ただし同梱のバルーン（ボトル）では台詞の文字がまだ描かれません。開発用の検体としてだけ使い、配布物には入れません |
 
-既定のバルーンは CC0 の [StayseeBalloon](https://github.com/ponapalt/StayseeBalloon) です。
+既定のバルーンは、areka のために作った CC0 の「areka バルーン」（`areka-balloon`）です。以前の既定だった CC0 の [StayseeBalloon](https://github.com/ponapalt/StayseeBalloon) も、選べるバルーンとして配布物に入っています。
 
 表現力は「えも？？ が普通に動く」水準までで、ゴーストによっては表情や演出の一部が欠けます。複数体の同時表示・SSTP などはまだありません。制限の一覧は [dist/README.txt](dist/README.txt) の「既知の制限」にあります。
 

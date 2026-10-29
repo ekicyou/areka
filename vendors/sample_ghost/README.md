@@ -18,11 +18,11 @@
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
 | `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 125 | 820,368 バイト |
-| `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
+| `StayseeBalloon.nar` | バルーン（配布物に同梱する選べるバルーン・CC0） | 29 | 73,021 バイト |
 | `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 135 | 3,651,357 バイト |
 | `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・同梱バルーン `emily4` は書庫に無く入らない・**受け取ったバイト列そのまま**＝下の節） | 260 | 2,677,923 バイト |
 | `dot_sakura.nar` | ゴースト（華和梨 32bit・「．さくら」・同梱バルーン `bottle`・**受け取ったバイト列そのまま**＝下の節） | 204 | 1,425,534 バイト |
-| `areka-balloon.nar` | バルーン（「areka バルーン」・開発者が作った・CC0・**道具が書く**＝下の節） | 23 | 28,014 バイト |
+| `areka-balloon.nar` | バルーン（areka の既定バルーン「areka バルーン」・開発者が作った・CC0・**道具が書く**＝下の節） | 23 | 28,014 バイト |
 
 URL の行の検体:
 
@@ -30,11 +30,11 @@ URL の行の検体:
 |---|---|---|---|---|
 | `pasta-in-windows` | ゴースト（「窓際のぱすたさん」・同梱バルーン無し） | URL（取り寄せの段が取る＝下の節） | 版で変わる | 版で変わる |
 
-- `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。areka の既定バルーンで、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
+- `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。2026-10 まで areka の既定バルーンだった。今は配布物に同梱する選べるバルーン（既定は下の `areka-balloon.nar`）で、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
 
 ### `areka-balloon.nar` の出どころと権利と作り直し
 
-- 出どころ: 開発者（ekicyou）が areka のために作ったバルーン「areka バルーン」。絵（面と印）も設定ファイルも、リポジトリの中の道具 `crates/areka-emo-atlas/examples/gen_default_balloon/` が書く。**展開形はどこにも置かず、追跡するのはこの `.nar` だけ**で、中を手で直さない。直したいときは道具の中の値（絵柄は `draw.rs`、文は `texts.rs`）を直して作り直す。
+- 出どころ: 開発者（ekicyou）が areka のために作ったバルーン「areka バルーン」。areka の既定バルーンで、バルーンを指定しないときはこれを使う（2026-10 に `StayseeBalloon` から替えた）。絵（面と印）も設定ファイルも、リポジトリの中の道具 `crates/areka-emo-atlas/examples/gen_default_balloon/` が書く。**展開形はどこにも置かず、追跡するのはこの `.nar` だけ**で、中を手で直さない。直したいときは道具の中の値（絵柄は `draw.rs`、文は `texts.rs`）を直して作り直す。
 - 権利（書庫の中の `readme.txt` にも同じことを書いてある）: **絵と設定ファイルは CC0**（自由に使い、直し、配ってよい）。**絵を描く道具のコードはこのリポジトリと同じ MIT**。
 - 手本: 寸法と設定の数値は、開発者が自作したバルーン「ボトル（でふぉ改）」（上の `dot_sakura.nar` の同梱バルーン `bottle`）から引き継いだ。**引き継いだのは数値だけで、絵は写しておらず、新しく描いたもの**である。
 - 畳み方は「書庫を置く行で足す」の `fold-samples` を通らない。道具が書庫まで直に書く（ファイルは名前順・時刻を持たない形）ので、同じ道具からは同じバイト列が出る。

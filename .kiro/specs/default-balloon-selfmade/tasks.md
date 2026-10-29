@@ -103,7 +103,7 @@
   - _Depends: 3.5, 4.1_
   - _Requirements: 12.6, 12.7, 12.8, 12.9, 2.3, 2.5, 6.5, 6.6, 13.8, 13.9_
 
-- [ ] 6. 既定の差し替え（実装の最後）
+- [x] 6. 既定の差し替え（実装の最後）
 - [x] 6.1 main を取り込み、既定の名前とそれに頼るテストを替える
   - 差し替えの直前に main を取り込み、カタログの鎖の spec が解決の段を作り直していればその形の上で直す
   - 既定の名前の定数の値を `areka-balloon` にし、ほかの行と段の順は触らない
@@ -119,7 +119,7 @@
   - _Boundary: 配布の道具_
   - _Depends: 6.1_
   - _Requirements: 11.4, 11.5_
-- [ ] 6.3 (P) 既定と書く文書と steering を書き換える
+- [x] 6.3 (P) 既定と書く文書と steering を書き換える
   - 根の `README.md`・`dist/README.txt`（同梱のバルーンの節・同梱物とライセンス・402 行目の例は残す）・`vendors/sample_ghost/README.md` の `StayseeBalloon.nar` の行と出どころの節の「既定バルーン」の書き・steering（`product.md`・`structure.md` の顔ぶれ 10 → 11・`tech.md`）・`doc/COMPAT_ARCHITECTURE.md` の段の並び・`doc/pasta-real-run.md` の根を組む手順（`areka-balloon` を足し `StayseeBalloon` は残す）を新しい既定へ改める
   - `staysee_balloon_fixture_test.rs` の入口の説明に「既定バルーン」が 2026-10 までの役名である注記を 1 段足し、実行行とテーマ別ファイルは変えない
   - 完了の spec の文書と `THIRD-PARTY-NOTICES.md` を触らない

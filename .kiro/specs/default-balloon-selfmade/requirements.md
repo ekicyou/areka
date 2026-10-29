@@ -217,7 +217,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 4. When 配布の道具が配布物を作る, the 配布の道具 shall 新しい既定バルーンを検体の窓口から引いて配布物の `balloon/<名前>/` に入れ、必須の項目と `balloon/` 直下の許可の表に `<名前>` を載せる。
 5. The 配布の道具 shall `StayseeBalloon` を今までどおり配布物に入れ続ける（議題 7: 選べるバルーンとして残す）。
 6. When 前回の記憶に `StayseeBalloon` が残っている利用者が新しい版の areka を起動する, the areka shall バルーンを決められずに止まることなく、何かのバルーンで喋る（議題 7 で配布物に残すので、記憶の段が今までどおり `StayseeBalloon` に当たる）。本仕様は、この起動の結果を確かめて記録する。
-7. The 本仕様 shall 根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering（`product.md` の既定バルーンの行・`structure.md` の検体の顔ぶれ・数を書く所・`tech.md` 166 行目の既定バルーンの例）・`doc/COMPAT_ARCHITECTURE.md` 381 行目（段の並びの「既定（`StayseeBalloon`）」）を、新しい既定バルーンを指す書きに改める。`dist/README.txt` 402 行目（`use_self_alpha` の説明で同梱の Staysee を例に出す）と `doc/pasta-real-run.md` 56〜84・160 行目（配布物と同じ形の根を組む手順）は、議題 7 で `StayseeBalloon` を配布物に残すので改めない（新しい既定バルーンを足す必要があれば足す。research.md 6.2）。
+7. The 本仕様 shall 根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering（`product.md` の既定バルーンの行・`structure.md` の検体の顔ぶれ・数を書く所・`tech.md` 166 行目の既定バルーンの例）・`doc/COMPAT_ARCHITECTURE.md` 381 行目（段の並びの「既定（`StayseeBalloon`）」）を、新しい既定バルーンを指す書きに改める。`dist/README.txt` 402 行目（`use_self_alpha` の説明で同梱の Staysee を例に出す）と `doc/pasta-real-run.md` 56〜84・160 行目（配布物と同じ形の根を組む手順）は、議題 7 で `StayseeBalloon` を配布物に残すので改めない（新しい既定バルーンを足す必要があれば足す。research.md 6.2）。**2026-10-30 改**: 根に `areka-balloon` を足した結果、`doc/pasta-real-run.md` 160 行目の「記憶の `StayseeBalloon`」は事実と食い違うため、経緯を残して `areka-balloon` に改めた（設計の決め 8）。
 8. The 本仕様 shall 完了の spec（`areka-P0-default-balloon-bundle`・`areka-P0-default-balloon-nar-fold`）の文書を直さず、既定の役が新しいバルーンへ移ったことを本仕様と steering に書く。
 9. The 本仕様 shall 既定を差し替える作業を実装の最後に置き、その直前に main を取り込む（カタログの鎖の spec が `boot_resolve.rs` を作り直すのと重ならないようにする）。
 
