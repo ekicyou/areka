@@ -160,3 +160,50 @@
 7. **実機の数え直しの形** — 推奨: **使い捨ての命令（どっとさくらの確かめと同じ形・`target\` の下）で 2 回回し、文言ごとの行数と上限を確かめの記録に表で残す**。記録の量が戻るのを見張るのは要件 5.1 の決定論の檻が担う。繰り返し回せる形を残したいなら、既存の `crates/areka/tests/emo2_real_run.rs` へ環境変数で開ける数え直しの 1 本を足す案もある（どっとさくらは 32 ビットの補助が要る）。上限は「スコープ数 × 成分数 × 変わり目の回数」で決め、装着とバルーンの切り替えの回数を数え直しの前提として書く。
 
 ---
+
+## 8. 設計の段（2026-10-29・`/kiro-spec-design -y`）
+
+> 討議の 8 つの決め（requirements.md の末尾）を前提に、コードを読み直して設計を書いた（areka は起こしていない）。
+
+### 8.1 調べ方と使った手引き
+
+- **調べ方**: 軽い調べ（既存の仕組みの延長）。外の依存は足さないので外部の調べはしていない。コードの読み直しは本文の主の文脈で行い、調べ係は出していない。
+- **使った手引き**: `kiro-spec-design` の `design-principles.md`（境界を先に・依存の向き）・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、ステアリングの `logging.md`（水準の表・テストの捕捉は `log-capture-kit`）・`structure.md`（1 ファイル 1,000 行・テストは兄弟のファイル）・`roadmap.md` の C12 の表の ④ の行（`draw.rs` に触らない・新しいソースファイルを足さない）。
+
+### 8.2 読み直して分かったこと
+
+- **普通のバルーンの `layout_input` を書く口は `register_actor` だけ**（`actor_attach.rs` 150 行目）。箱は `actor_box.rs` の `register_box`・`unregister_box`・`set_box_layout` が書くが、箱は毎フレーム解き直さない（表示が変わったときの登録でだけ解く）。普通のバルーンの場所の登録を外す口は無い。→ 「解き直しの入力」の記憶は普通のバルーンの場所だけに置き、`register_actor` で消して、入力を知る 2 つの道（装着・再追従）で入れ直せば、「記憶が在れば `layout_input` はその入力から解いた値」の不変条件が保てる。
+- **解き直しの入力は 3 つだけ**: `WritingMode::resolve(model)`・`ResolvedFont::resolve_with_background(model, background)`（`draw.rs` 243 行目〜。中の `ResolvedChoiceStyle::resolve`・`balloon_overrides::overrides`・`LookLayers::from_balloon` も model と背景色だけを読む）・`ResolvedChoiceStyle::resolve(model.cursor(), …)`・`TextRegion::resolve(model, image_size, mode)`・`WrapMode::resolve(model)`。外の状態（時刻・フォントの台帳・環境変数）は読まない。
+- **バルーンの付け替え**（研究 6 節の持ち越し 1）: `switch.rs` の `finish_balloon` は名前・背景色・`balloon_models` を差し替えるだけで、文字の層の結び直しは同じフレームの再追従（`refresh_actor_scale` に新しい定義が渡る）が行う。記憶の入力に定義と背景色が入っているので、付け替えのフレームは必ず解き直す。結果が前と同じ（文字の設定が同じバルーン）なら今と同じく `false` で、記憶だけを新しい入力へ替える（次のフレームから省ける）。
+- **`draw.rs` 283 行目の `ResolvedChoiceStyle::resolve`** は解き直しの中（`ResolvedFont::resolve_with_background`）と、箱の束の受け取り（`actor_box.rs` 96 行目の `set_box_layout`）でも呼ばれる。`resolve` から `warn!` を外せば両方とも無音になる。
+- **箱の飾りの警告の単位**（持ち越し 2）: 箱の定義のほかの 2 つの警告（折返し基準・無視した `origin`）は `box_definition_warned`（箱の名前ごとに 1 度・箱の束を差し替えると数え直す）。箱の登録には前の配置の入力が毎回無い（隠す・出すで登録を外して付け直す）ので、置き場ごとの比べはできない。→ 箱は名前ごとに 1 度にそろえる。
+- **着せ替えの判定の語**: `Interval::Bind` と `Interval::BindRandom`（`bind+random`）が着せ替えの仲間（emo-compose の `plan.rs` の `is_bind_interval` と同じ）。同梱の emo2 の `animation1402` は `bind+random`、`animation1403`（`null.png` を持つ `surface1414` を参照）は `bind`。`emo2.nar` の `shell/master/surfaces.txt` を読み直して確かめた（89 行目 `animation1403.pattern2,overlay,1414,0,0,0`・232 行目 `element0,overlay,purple/a/null.png,0,0` は `surface1414` の中だけ）。
+- **`bind` でないパターンから参照される全透明の絵**（持ち越し 3）: 作者の誤りとして `warn` を残す（要件 3.3 の読み）。持ち主の面が 1 つでも条件を外れたら見分けない（迷ったら警告に倒す）。
+- **今のテストへの影響**: `attach_wiring_test.rs` 749 行目（作り直しの呼び出しの `info` をちょうど 1 件）・`region_vertical_canon_tests.rs`（解決 1 回の `debug` の件数）・`emo2_golden.rs` と金の値・`animated_tests.rs` の全透明の檻は、どれも動かない。前提が変わるのは `choice_style_resolve_tests.rs` の説明の語（「warn は解決時 1 回」）だけ。
+
+### 8.3 まとめ方（synthesis）
+
+- **一般化**: 件 1・件 2・`region.rs` の 2 つの `debug!`・要件 1.7 の警告は、どれも「入力が同じなのに毎フレーム解き直す」1 つの問題の現れ。根の 1 か所（再追従の判定）を直し、解き直しの中の記録には手を入れない。
+- **作るか使うか**: 新しい仕組みは作らず、先例の形を使う。前の値と比べて変わったときだけ出す（`warn_coarse_wrap_threshold`・`warn_ignored_origin`）・名前ごとに 1 度（`box_definition_warned`）・`TextRegion::ignored_origin` と同じく「純粋な層は値を運び、記録は登録の側」。焼き込みの見分けはマニフェストの導出と同じ面の索引の作り方。
+- **削ったもの**: ⑴ 件 1 を変わり目だけで出すための新しい値や場所の集合（案 B）は、根の直しで要らなくなった ⑵ 飾りの縮退の値を `ResolvedBalloonText` に入れる形は採らない——入れると再追従の比べの材料が増え、飾りの値だけが違うバルーンへの付け替えで作り直しが起き、判定の答えが変わる（要件 1.6）。前の入力の記憶に定義が入っているので、そこから比べれば足りる ⑶ 数え直しの道具は `tools/` に足さない（使い捨て・討議 7）。
+
+### 8.4 設計の決め
+
+| 決め | 中身 | 理由 |
+|---|---|---|
+| 記憶の中身 | 場所ごとの（バルーンの定義・画像の原寸・背景色） | `resolve_with_background` の引数と同じ 3 つ。結線の同値は別に今どおり比べる |
+| 省く条件 | 結線が同じ かつ 記憶の入力が同じ | 同じ入力から同じ値が出るので、答えは解き直して比べた場合と同じ |
+| 結果が同じで入力だけ違う | `false`・記憶を新しい入力へ替える・飾りの警告を照らす | 付け替えの次のフレームから省ける。答えは今と同じ |
+| 件 2 の行 | 上の段と中の段で `trace!`（文言は今のまま） | 毎フレームの処理そのもの（`logging.md` の表） |
+| 飾りの警告（普通のバルーン） | 記憶を入れ直すときに前の入力の値と比べ、新しい値が在って前と違えば 1 件・`balloon` の欄 | 討議 4。前の入力の記憶をそのまま使い、新しい状態を持たない |
+| 飾りの警告（箱） | `register_box` の `box_definition_warned` の分岐で 1 件 | 持ち越し 2。箱の定義のほかの警告と同じ単位 |
+| 焼き込みの見分け | 持ち主の面がどれも 1 回以上参照され、参照がどれも `bind`／`bind+random` のアニメーションから | 討議 2・持ち越し 3。迷ったら警告 |
+| 見分けた絵の記録 | `debug!`・欄は今の `warn!` と同じ・文言は別（「でトリム後 0 寸」を含まない） | 要件 3.4。数え直しで混ざらない |
+| 数え直しの上限 | 記録から数える解き直しの回数 `R` の倍数・`R` ≤ 50 | 要件 4.3。フレーム数に比例しない。毎フレームへの戻りは `R` 自身で捕まえる |
+| 触るファイルの追加 | `actor.rs`（欄 1 つ）・`actor_box.rs`（呼び出し 1 つ）・emo-atlas の `manifest.rs`・`emo2_e2e.rs` | C12 の ④ の行に無いが、同じウェーブで触る spec は無い（③ は `draw*.rs` だけ） |
+
+### 8.5 危うさと手当て
+
+- **解き直しが新しい入力を読むようになる**（例: `balloon-font-file` がフォントファイルの場所を読む）と、記憶に足さない限り答えが変わる。→ 設計の Revalidation Triggers の 1 つめに書き、`ResolveInputs` の説明に「`resolve_with_background` の引数と同じ 3 つ」と書く。
+- **直の道 `register_actor`**（テストと見本だけ）の後の最初の再追従は、記憶が無いので今どおり解き直し、飾りの警告が「前は無い」としてもう 1 件出る。本番の結線は直の道を使わない。
+- **実機の上限 `R` ≤ 50** は、台詞ごとのバルーンの面の切り替えが多い走行で超える見込みは低い（50 秒の走行）。超えたら不合格とし（要件 4.4）、行の時刻を見て出来事ごとか毎フレームかを確かめて原因を直す。

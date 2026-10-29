@@ -1,16 +1,16 @@
 {
   "feature_name": "real-run-log-noise",
   "created_at": "2026-10-29T11:33:16Z",
-  "updated_at": "2026-10-29T11:35:48Z",
+  "updated_at": "2026-10-29T12:04:01Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
