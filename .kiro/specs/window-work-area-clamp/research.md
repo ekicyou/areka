@@ -204,3 +204,75 @@
 10. **件 5 の持ち場**: 静的な見込みは areka の `emo2_boot`（H1 装着の前の k=1・H2 フレームの割れ）。kanade（H3）なら、① `mcp-strict-errors` とファイルは重ならないが同じクレート。`consumer_ledger.rs` に行を足す形は ① の鎖に割り込むので取れない。測り ⑸ の後に切り出しを決める段取りでよいか。
 11. **要件 2.2 と 7.6 の文言**: 覚えた印で隣り合わせた窓は利用者のドラッグの位置から戻した窓で、7.6 の「ドラッグで置いた位置にある窓は動かさない」の除外に要件 2.2 が入っていない。2.2 を除外に足すか、2.2 の寄せを外すか。
 12. **既存の檻の書き換えの範囲**: 要件 10.2 の 3 つの保つテストのほかに、確定・詰め直しの檻のうち作業領域の外へ解く期待のものがあれば書き換える（設計で列挙）。
+
+---
+
+## 9. 設計の段の調べ（2026-10-29・`/kiro-spec-design -y`）
+
+- 種類: 既存の仕組みへの足し（Extension）＝軽い調べ（`design-discovery-light`）。外の依存・新しいライブラリは無いので、外の調べはしていない。使った手引き: `kiro-spec-design` の `design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`。
+- 読んだ所（静的・main `dfcb85ce` の上）: `placement/balloon_limit.rs`（式）・`placement/follow.rs`（ファサード・兄弟のテストの接続は `placement/follow_*_tests.rs` を `follow.rs` の末尾で繋ぐ）・`placement/chain_finalize.rs`（`resolve_chain`・`ChainSlot`・`ChainRect`・`judge_adjacency`）・`emo2_boot/frame/drain_resnap.rs`（`finalize_chain_once_with`・`collect_chain_states`・`run_move_drain_phase`・`run_drain_phase` の装着の門）・`placement/chain_realign.rs`（`ChainRealignScan` は確定の走査と同じ 3 つ組）・`placement/follow/window_move.rs`（`resize_window_to` の手順 3c・`track_default_char_pos`）・`placement/diag.rs`（`is_system_reanchor`）・`placement/persist.rs`（`project_restore`・`merge_scope`・`persist_unremembered_char_positions`・`push_adjacency_marks`）・`main.rs` の `restore_merged_placements`・`ghost_session.rs` の窓を作る閉包・`emo2_boot/move_cue_place.rs`（`move_applied`）・`emo2_boot/adapter.rs`（`PresentBridge`）・`crates/log-capture-kit/tests/file_length_guard_test.rs`（例外表）・kanade `schedule/boot.rs` の記録。
+
+### 9.1 分かったこと
+
+- **鎖の寄せに要る材料は走査に揃っている**: `collect_chain_states` は全スコープで窓寸と表示の大きさの一致を確かめ、`targets` に今の位置（x・y）を持つ。高さは同じ窓の `WindowPos.size`（一致を確かめ済み）から読める。`ChainRealignScan` も同じ形なので、確定と詰め直しは同じ口で寄せられる。
+- **隣の式を写さずに 2 窓ずつ解ける**: `resolve_chain` に「前の窓を置いた後の x と幅で `Keep`」と「今のスロット」の 2 つを渡せば、今の式のまま隣の位置が出る。決めを `JoinLeft`⇔`JoinRight` に替えれば反対の側も出る。これで 3 体以上でも「寄せた後の前の窓を基準に次を解く」が式の写し無しで成り立つ（案 1-C の一般形）。
+- **件 2 は経路 `ReportedSizeReconcile` が本番の道**: 装着の巡の最初の表示の大きさは窓寸の照合（`ReportedSizeReconcile`）で着地する（`frame.rs` の注記）。面の切り替えの再スナップは `Resnap`。どちらもシステム由来なので、書込口が既定の位置を寄せた先へ運ぶ（要件 7.5 は書込口の今の働きで満たせる）。
+- **`window_move.rs` の行数の番人は行数を見ない**: 番人の例外表は「上限を超えている」事実だけを持ち、理由欄に行数を書かない決まり。呼ぶ 1 文を足しても番人は赤にならない。
+- **`resize_window_to_free_keeps_position_and_updates_size_only` は寄せの対象外のまま**: その檻の窓は `CharWindowMarker`・`GhostWindows` を持たないので、「既定の位置にいる」の判定に入らない。
+- **記憶の寄せの事実を運ぶ口が無い**: `GhostWindows`（`placement/spawn.rs`・C12 で触らない）にも `restore_merged_placements` の戻り値にも無い。窓の一式ごとに据える資源を `ghost_session.rs` の閉包で据えるのが、`spawn.rs` に触らずに済む一番小さい形。
+- **件 5 の記録に拡大率が出ていない（R4 の答え）**: `move_applied` は `from`・`script`・`to`・基準の矩形を出すが、拡大率 `k` と動かす窓の大きさは出さない。`run_move_drain_phase` の `unwrap_or(ScaleRatio::ONE)` の縮退も記録されない。測りの前に足す。
+- **表示の線は seriko の作業スレッドから非同期に届く**: `\s` の指令は talk のスレッドから seriko へ渡り、seriko の作業スレッドが `PresentBridge` 越しに表示の指令を送る。位置の指令は talk のスレッドから直接届く。ゆえに H2（別の巡に割れる）は装着の後でも起こりうる。柵を作るには seriko の進みを知る必要があり、C12 の ① の持ち物（seriko の `actor.rs`・emo-present の `presenter/show.rs`）に及ぶ見込みがある。
+- **H1 の直しは 1 条件で済む見込み**: 表示の線は `run_drain_phase` が装着まで取り出さない（チャネルが順を保って預かる）。位置の線も同じ門にすれば、装着の巡に表示の指令 → 窓寸の照合 → 再スナップ → 位置の指令の順で、同じ巡のうちに正しい拡大率と大きさで当たる。今の注記の「取りこぼさないため早く当てる」は、取り出さなければ取りこぼさないので理由にならない。H3（kanade の時機）も、areka の側で位置の指令が表示の後に当たるので消える。
+- kanade は `boot_start`・`boot_type_script`・`boot_talk`・`boot_talk_done`・`boot_complete` を `info!(target: "kanade")` で出す。起動のイベントの並びは今の記録で読める。
+
+## 10. 設計の決め（2026-10-29）
+
+### 決め: 寄せは `placement/follow/work_area_clamp.rs` の 1 ファイルに置き、4 か所は呼ぶだけ
+
+- **背景**: 寄せる場面が 5 つ（起動の並べ直し・記憶からの隣り合わせ・詰め直し・面の拡大・記憶の組）あり、記録の語彙を揃える必要がある（要件 9）。C12 の約束で `placement/mod.rs` に `mod` を足さない。
+- **候補**: A 既存の各所に書く／B 新しい部品に集める／C B を骨に、各所は呼ぶだけ。
+- **選んだ形**: C。判定と記録は新しいファイル、式は `clamp_rect_to_work_area`（`clamp_axis` の 5 つ目を写さない）、帰属は `work_area_for_window`。`mod` の行は `follow.rs` に入る。
+- **得失**: 約束を守り、語彙が 1 か所に集まる。呼び口が 4 つに散るが、どれも 1〜数行。
+
+### 決め: 鎖は前の窓の寄せた後の矩形を基準に、2 窓ずつ `resolve_chain` で解き直す
+
+- **背景**: 案 1-B（解いた後に寄せるだけ）は 3 体以上で鎖が割れる。案 1-A（`resolve_chain` に作業領域を入れる）は既存の檻の署名が広く動く。
+- **選んだ形**: 先頭から昇順に、前の窓の置いた後の矩形とそのモニタの作業領域で判定する。隣の位置と反対の側は `resolve_chain` を 2 スロットで呼んで得る。入らなければ並べた位置に式を当てて端へ寄せる。要件 1.1 の「基準の窓」と 2.1・2.2 の「組の動かさない側の窓」は、どちらも n−1 で同じになる（research 8 の議題 2 はこれで解ける）。
+- **y**: 同じ式で両軸を収める（要件 7.2）。確定は寄せで y が変わったときだけ既定の位置の y を寄せた後の値にする（変わらなければ元の既定の y＝`char-position-save-on-exit` 1.7 を保つ）。これで要件 7.5 の保存が「並べ終える前に動かされた」と読まない（議題 3 の答え）。
+
+### 決め: 件 2 は `resize_window_to` に呼ぶ 1 文（案 2-a）
+
+- **背景**: 案 2-b（後で書き直す）は同じフレームに 2 回書く。案 2-c（経路の語を足す）は結局 `window_move.rs` の網羅の `match` に触り、記録の語彙も動く。
+- **選んだ形**: 手順 3c の直後に `super::clamp_grown_free_default(...)` を呼ぶ 1 文と注記 1 行。本体は兄弟の新しいファイル。開発者の 10-29 の指示（本質の形を取る・約束を理由に回避の形へ逃げない）と、番人が行数を見ないことによる。
+- **当てる経路**: `Resnap` と `ReportedSizeReconcile`（面の表示の大きさが変わった書き込み）。`DpiReproject`・`AnchorChange`・`WorkAreaResnap` は持ち主が別。
+- **既定の位置にいる**: `GhostWindows::default_char_pos(scope) == 今の位置` かつ `ScriptPlaced` 無し・`DraggingState` 無し。既定の位置の無い窓（記憶から戻した窓）は寄せない（要件 3.5・7.6）。
+
+### 決め: 件 3 は組の和の矩形を 1 回寄せ、その差を組の全員に足す
+
+- **背景**: 「寄せた窓の差を他の窓に足す」だけだと、寄せた窓が端に来たとき、その左に隣り合っていた窓が外へ出る（重なっていた組は確定の隣り合わせ直しで救われない）。
+- **選んだ形**: 組は隣り合う番号の対で、印が `left`／`right` か、記憶の矩形（今の大きさ）どうしの `judge_adjacency` が `Left`／`Right`／`Overlapped` なら繋ぐ。組のどれかが今の判定で寄せられていたら、吸着の当て直しだけをした矩形の和を式で収め、差を全員に足す。和の矩形が収まる組は「どれも見えていた」組と同じになる。
+- **得失**: 組の全員が組の中に入る。本体が見えていて相方だけが外にある組では本体も動く（要件 4.1 の字面どおり・記録で見分けられる）。
+
+### 決め: 「この起動で記憶の位置を寄せて表示した」は資源で運ぶ
+
+- **背景**: `GhostWindows`（`spawn.rs`）に持たせられない（C12）。`main.rs` は 981 行。
+- **選んだ形**: `persist.rs` に `RestoredPositionsClamped(bool)` と判定 `restored_display_clamped`。`restore_merged_placements` が 3 つ組で返し（約 3 行）、`ghost_session.rs` の窓を作る閉包が毎回据える（約 3 行・窓の一式ごとに上書き）。保存は資源が真なら古い記憶へ印を書き足さず `info!` を残す（要件 4.6）。
+- **ほかの案を取らなかった訳**: 覚えた印の値（`Option<AdjacencyMark>`）に混ぜると、確定の判断の語（`no-remembered-mark` と `remembered-separate`）が化ける。`ScopePlacement` に欄を足すと、配置の値を組む全部のテストが動く。
+
+### 決め: 件 5 は測りの道具を必ず入れ、直しは見込みごとに形を決めておく
+
+- 測りの道具: `move_applied` に `k`・動かす窓の大きさ、`run_move_drain_phase` に `move_ratio_unset`。
+- H1 → 位置の指令の線にも装着の門。H3 → H1 の直しで消える（kanade に触らない）。H2 → 順の柵。柵の材料が C12 の ① の持ち物（seriko の `actor.rs`・emo-present の `presenter/show.rs`・`consumer_ledger.rs`）に及ぶなら、この spec では直さず切り出して `brief.md`・`roadmap.md` に残し、開発者へ報告する（要件の話し合い 7 の `consumer_ledger.rs` の扱いを、同じウェーブの ① の他のファイルへも同じに当てる読み。設計の話し合いで確かめる）。どれでもない → 止めて報告。
+
+### 合成の 3 つの目（design-synthesis）
+
+- **一般化**: 5 つの場面は「キャラ窓の矩形をある作業領域へ収める」の変種。式と帰属を 1 つにし、場面の違いは「いつ・どの窓に・どの基準で」だけに閉じた。
+- **作るか使うか**: 式・帰属・隣の解き・隣り合いの判定は全部今あるものを使う。新しく作るのは判定の並べ方と記録だけ。
+- **削ったもの**: 経路の語を足す形・`resolve_chain` の署名を変える形・記憶の書式を変える形・GPU の表示を待つ専用の待ち行列（H1 は今のチャネルの預かりで足りる）・寄せの期間を表す状態（件 2 は「既定の位置にいる間」で状態が要らない）。
+
+### 危うさ
+
+- 3 体以上で反対の側へ並べ替えた窓が前の窓と重なりうる（`extra-character-windows` で見直す）。
+- H2 だった場合に ① と重なる（上の扱い）。
+- `main.rs` は C12 の ⑤ `startup-install-option` の触る所に入る見込みは低い（⑤ の持ち分は `cli/`・`install/`・`boot_config.rs`）が、着手の前にもう一度 roadmap の持ち分を確かめる。
+- 見直す檻が多い（鎖・面の拡大・H1 の門）。前提の状態を合わせる書き換えに留め、主張は変えない。
