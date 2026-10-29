@@ -1,12 +1,12 @@
 //! `check_script` の判断（読み取りの列と事実 → 診断の列）と診断の文言（spec: areka-P0-mcp-author-tools）。
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
-//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`apply_font_tag`・
+//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`classify_font_tag`・
 //! `surface_missing`・`balloon_missing`（`areka_seriko`）・`pair_anchors`）の答えを診断の種類へ写すだけにする。
 
 use std::ops::Range;
 
-use areka_emo_text::look::{FontTagFailure, LookLayers, Note, apply_font_tag};
+use areka_emo_text::look::{FontClass, classify_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read, ReadNote};
 use areka_sakura::strict::{self, CharCursor};
@@ -131,23 +131,12 @@ pub(in crate::mcp) fn diagnose(
     out.list
 }
 
-/// `\f` を使い捨ての見た目に適用し、受け取るだけのキーは `ignored`、知らないキー・キーなしは `unknown_tag`。
-/// 値の誤りと、他の `Ok`（`AnchorColorAsDefault` を含む）は診ない。
+/// `\f` の分類（文字の層の `classify_font_tag`）を診断の種類へ写す。受け取るだけは `ignored`、
+/// 知らないキー・キーなしは `unknown_tag`、値の誤りと他の受理は診ない。
 fn judge_font(args: &[String]) -> Option<(Kind, &'static str)> {
-    let layers = LookLayers::default();
-    let mut look = layers.default.clone();
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    match apply_font_tag(&mut look, &layers, &args) {
-        Ok(Some(Note::VocabularyOnly { .. } | Note::Unowned | Note::StylesheetKeyword)) => {
-            Some((Kind::Ignored, MSG_IGNORED))
-        }
-        Ok(_) => None,
-        Err(issue) => match issue.failure() {
-            FontTagFailure::UnknownKey | FontTagFailure::NoKey => {
-                Some((Kind::UnknownTag, MSG_UNKNOWN_TAG))
-            }
-            FontTagFailure::BadValue => None,
-        },
+    match classify_font_tag(args)? {
+        FontClass::Ignored => Some((Kind::Ignored, MSG_IGNORED)),
+        FontClass::UnknownKey => Some((Kind::UnknownTag, MSG_UNKNOWN_TAG)),
     }
 }
 
