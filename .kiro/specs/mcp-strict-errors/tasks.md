@@ -118,7 +118,7 @@
   - _Boundary: SakuraScriptStrictAnswer・RaiseEventStrictAnswer_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 3.10, 7.4_
 
-- [ ] 7.2 (P) 案内文から「まだのツール」の 1 文を消す
+- [x] 7.2 (P) 案内文から「まだのツール」の 1 文を消す
   - 案内文の定数から最後の 1 文を消し、前の 3 文は 1 字も変えない。説明の文の数を直す
   - 受け口の `initialize`・`server/discover` の案内文から 1 文が消え、ほかが同じことをテストで確かめる（中継の組み込みの答えは 8.3 で確かめる）
   - areka の MCP の本番のファイルに `not implemented yet` の文字列が無いことを読むテストを足す

@@ -445,3 +445,25 @@ fn real_unit_resolves_by_sakura_name_and_ascii_case() {
         "（本体側名・本体側名で解決・大小違いで解決・相方の名前で外れ・sakura.name2 で外れ・回しても同じ値・降ろせた）"
     );
 }
+
+/// (要件 5.3) `crates/areka/src/mcp/` の本番のファイル（`_tests.rs` で終わらないもの）は
+/// `not implemented yet` の文字列を持たない（どのツールもその答えを返さない状態を保つ）。
+#[test]
+fn production_files_have_no_not_implemented_yet() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("mcp");
+    let mut read = 0;
+    for entry in std::fs::read_dir(&dir).expect("mcp のフォルダが読める") {
+        let path = entry.expect("項目が読める").path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("本番のファイルが読める");
+        assert!(!text.contains("not implemented yet"), "{name}");
+        read += 1;
+    }
+    // 較正: 本番のファイルを実際に読んだ（0 本で通らない）。
+    assert!(read > 10, "読んだ本番のファイルが {read} 本");
+}
