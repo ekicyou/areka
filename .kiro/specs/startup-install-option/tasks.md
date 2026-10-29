@@ -11,7 +11,7 @@
   - 完了の姿: `cargo test -p areka install::` が緑で、手続きの記録の語は 1 つも変わっていない
   - _Boundary: install worker, InstallOrigin_
   - _Requirements: 2.5, 4.8, 6.2_
-- [ ] 1.2 (P) 切り替えの入口で、よそのフォルダへの切り替えを受け付けた回数を数える
+- [x] 1.2 (P) 切り替えの入口で、よそのフォルダへの切り替えを受け付けた回数を数える
   - 切り替えの予約を立てる 1 か所で、切り替え先が今のゴーストと違うフォルダのときだけ数えを 1 増やす
   - 同じフォルダへの起こし直し・混み合いで退いた頼み・見つからない頼みでは増やさない
   - 数えは World の資源として持ち、無ければ 0 と読める
@@ -116,3 +116,4 @@
 ## Implementation Notes
 
 - 1.1: `InstallOrigin::{StartupArgs, InitialInstall}` と `DeskAsk::OrderDone` の `order`・`ends` に一時の `#[allow(dead_code)]` を付けた。読み手ができる 3.x／4.1 で外すこと。
+- 1.2: `SwitchAcceptCount` は今のゴーストのフォルダ名が `None`（パスを直に指して起こしたゴースト）だと、起こし直しでも数えが増える（`pin_to_current` と同じ扱い）。4.3 のテストで気に留める。`ghost_switch.rs` の増えは rustfmt の折り返しで 11 行。
