@@ -34,6 +34,7 @@ pub(crate) fn register_char_watch(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, char_watch.before(dispatch_pointer_events));
+    cursor_answer::register_char_cursor(world);
 }
 
 /// カーソルが上に居るキャラ窓 1 つの見え方。
@@ -228,6 +229,9 @@ pub(crate) fn char_watch(world: &mut World) {
         tick_wake::arm_deadline(Instant::now() + Duration::from_millis(until_ms - now_ms));
     }
 }
+
+#[path = "cursor_answer.rs"]
+pub(crate) mod cursor_answer;
 
 #[cfg(test)]
 #[path = "char_watch_tests.rs"]

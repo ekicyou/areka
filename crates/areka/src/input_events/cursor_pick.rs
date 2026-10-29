@@ -2,8 +2,6 @@
 //!
 //! 状態の置き場所と結線は CursorAnswer（`cursor_answer.rs`）。当たり判定はここでは引かず、
 //! 引くときだけ渡された `resolve` を呼ぶ。
-// 消費側（CursorAnswer）は tasks.md 4.2 で来る。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use wintf::ecs::cursor::CursorTrigger;
 
