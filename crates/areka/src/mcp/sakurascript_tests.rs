@@ -258,3 +258,100 @@ fn script_target_reads_the_sender_and_the_gone_wording() {
     assert!(target.kanade.is_none());
     assert_eq!(target.gone, NOT_ACTIVE);
 }
+
+/// strict の答えの文の前後（`<n>` を挟む・要件 1.1）。
+const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
+
+/// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
+fn record_one() -> u64 {
+    crate::log_history::record(
+        crate::log_history::Stamp {
+            year: 2026,
+            month: 10,
+            day: 30,
+            hour: 12,
+            minute: 0,
+        },
+        crate::log_history::Draft {
+            kind: crate::log_history::Kind::Error,
+            label: "strict".to_string(),
+            name: String::new(),
+            body: "test".to_string(),
+        },
+    )
+}
+
+/// strict 真で受け付けた → strict の文・`<n>` は送る前に読んだ最後の番号（要件 1.1・1.2・7.4）。
+///
+/// 置き場はプロセスに 1 つで他のテストも積むので、`<n>` は「呼ぶ前の番号以上・送った後に積んだ番号未満」で測る。
+#[test]
+fn strict_true_answer_carries_the_id_read_before_sending() {
+    let (mut world, rx) = rig();
+    let before = crate::log_history::last_id();
+    let (pending, called) = call(&mut world, SCRIPT, None, Some(true));
+    let (_, _, reply) = take_send(&rx);
+    let recorded = record_one();
+    reply
+        .send(SstpSendOutcome::Accepted)
+        .expect("返信端は生きている");
+    let ((), polled) = capture(|| drain(&mut world));
+    let outcome = answer(&pending);
+    assert!(!outcome.is_error);
+    assert_eq!(warn_or_worse(&called) + warn_or_worse(&polled), 0);
+    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
+        panic!("本文 1 つ: {:?}", outcome.content);
+    };
+    let n: u64 = body
+        .strip_prefix(STRICT_HEAD)
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("strict の文のはず: {body}"));
+    assert!(
+        before <= n && n < recorded,
+        "送る前の番号: {before} <= {n} < {recorded}"
+    );
+}
+
+/// strict 偽・省略で受け付けた → `OK` のまま（要件 1.4）。
+#[test]
+fn strict_false_or_omitted_answer_is_plain_ok() {
+    for strict in [Some(false), None] {
+        let (mut world, rx) = rig();
+        let (pending, _) = call(&mut world, SCRIPT, None, strict);
+        take_send(&rx)
+            .2
+            .send(SstpSendOutcome::Accepted)
+            .expect("返信端は生きている");
+        drain(&mut world);
+        assert_eq!(answer(&pending).content, text("OK"), "{strict:?}");
+    }
+}
+
+/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）は今の答えのまま（要件 1.5）。
+#[test]
+fn strict_true_ng_answers_are_unchanged() {
+    let (mut world, _rx) = rig();
+    let (pending, _) = call(&mut world, "", None, Some(true));
+    assert_eq!(answer(&pending).content, text("NG:script is empty"));
+
+    for (result, want) in [
+        (
+            Some(SstpSendOutcome::NotAccepted),
+            "NG:the ghost cannot accept a script now".to_string(),
+        ),
+        (Some(SstpSendOutcome::Failed), format!("NG:{NOT_ACTIVE}")),
+        (None, format!("NG:{NOT_ACTIVE}")),
+    ] {
+        let (mut world, rx) = rig();
+        let (pending, _) = call(&mut world, SCRIPT, None, Some(true));
+        let (_, _, reply) = take_send(&rx);
+        match result {
+            Some(r) => reply.send(r).expect("返信端は生きている"),
+            None => drop(reply),
+        }
+        drain(&mut world);
+        let outcome = answer(&pending);
+        assert_eq!(outcome.content, text(&want));
+        assert!(outcome.is_error);
+    }
+}

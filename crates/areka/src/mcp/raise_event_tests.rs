@@ -286,3 +286,93 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
     assert!(outcome.is_error);
     assert_eq!((levels.warn, levels.error), (1, 0));
 }
+
+/// strict の文（`<n>` の前まで・要件 3.10）。
+const STRICT_HEAD: &str = " strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
+
+/// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
+fn record_one() -> u64 {
+    crate::log_history::record(
+        crate::log_history::Stamp {
+            year: 2026,
+            month: 10,
+            day: 30,
+            hour: 12,
+            minute: 0,
+        },
+        crate::log_history::Draft {
+            kind: crate::log_history::Kind::Error,
+            label: "strict".to_string(),
+            name: String::new(),
+            body: "test".to_string(),
+        },
+    )
+}
+
+/// strict 真で台本が返った → 1 行目の末尾に strict の文・区切りと `Script: ` の行は今のまま・
+/// `<n>` は送る前に読んだ最後の番号（要件 3.10）。
+///
+/// 置き場はプロセスに 1 つで他のテストも積むので、`<n>` は「呼ぶ前の番号以上・送った後に積んだ番号未満」で測る。
+#[test]
+fn strict_true_script_answer_carries_the_id_read_before_sending() {
+    let (mut world, rx) = rig();
+    let before = crate::log_history::last_id();
+    let (pending, _) = call(&mut world, args(EVENT, &[], None, Some(true)));
+    let (_, _, _, reply) = take_notify(&rx);
+    let recorded = record_one();
+    reply
+        .send(SstpNotifyOutcome::Script(SCRIPT.to_string()))
+        .expect("返信端は生きている");
+    drain(&mut world);
+    let outcome = answer(&pending);
+    assert!(!outcome.is_error);
+    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
+        panic!("本文 1 つ: {:?}", outcome.content);
+    };
+    let n: u64 = body
+        .strip_prefix("OK:the ghost returned a script and it is being played.")
+        .and_then(|rest| rest.strip_prefix(STRICT_HEAD))
+        .and_then(|rest| rest.strip_suffix(&format!(")\r\nScript: {SCRIPT}")))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("strict の文の付いた 2 行のはず: {body:?}"));
+    assert!(
+        before <= n && n < recorded,
+        "送る前の番号: {before} <= {n} < {recorded}"
+    );
+}
+
+/// strict 偽・省略で台本が返った・strict 真でも台本が返らない／受け付けない → 今の答えのまま（要件 3.10）。
+#[test]
+fn strict_sentence_only_when_strict_true_and_a_script_returned() {
+    let plain =
+        format!("OK:the ghost returned a script and it is being played.\r\nScript: {SCRIPT}");
+    let cases = [
+        (
+            Some(false),
+            SstpNotifyOutcome::Script(SCRIPT.to_string()),
+            plain.as_str(),
+        ),
+        (
+            None,
+            SstpNotifyOutcome::Script(SCRIPT.to_string()),
+            plain.as_str(),
+        ),
+        (
+            Some(true),
+            SstpNotifyOutcome::NoScript,
+            "OK:the ghost returned no script.",
+        ),
+        (
+            Some(true),
+            SstpNotifyOutcome::NotAccepted,
+            "NG:the ghost cannot accept a script now",
+        ),
+    ];
+    for (strict, result, want) in cases {
+        let (mut world, rx) = rig();
+        let (pending, _) = call(&mut world, args(EVENT, &[], None, strict));
+        take_notify(&rx).3.send(result).expect("返信端は生きている");
+        drain(&mut world);
+        assert_eq!(answer(&pending).content, text(want), "{strict:?}");
+    }
+}

@@ -22,6 +22,19 @@ pub(super) const NOT_NOW: &str = "the ghost cannot accept a script now";
 /// 置き場に kanade の送り口が無いときの本文（areka 独自・本番では起きない内部の食い違い）。
 pub(super) const UNAVAILABLE: &str = "Script is not available";
 
+/// strict 真の答えに足す文の `<n>` の前まで（`sakurascript` と `raise_event` で共用・要件 1.1・3.10）。
+const STRICT_NOTE_HEAD: &str = "strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
+
+/// strict 真の答えに足す文（`OK:` は付けない）。`since_id` は送る前に読んだ最後の通し番号（要件 1.2）。
+pub(super) fn strict_note(since_id: u64) -> String {
+    format!("{STRICT_NOTE_HEAD}{since_id})")
+}
+
+/// strict 真のときだけ、送る前の最後の通し番号を読む（後に読むとその台本の記録より後になりうる）。
+pub(super) fn since_id_if_strict(strict: Option<bool>) -> Option<u64> {
+    (strict == Some(true)).then(crate::log_history::last_id)
+}
+
 /// 宛先の kanade の送り口と、答える前に降りたときの文言。
 pub(super) struct ScriptTarget {
     pub kanade: Option<Sender<KanadeMsg>>,
@@ -62,6 +75,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
         return;
     };
     let (tx, rx) = reply_channel::<SstpSendOutcome>();
+    let since_id = since_id_if_strict(args.strict);
     let msg = KanadeMsg::SstpSend {
         script: args.script,
         strict: args.strict,
@@ -77,7 +91,10 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
     }
     super::later(world, reply, move |_| match rx.try_recv() {
         Ok(None) => None,
-        Ok(Some(SstpSendOutcome::Accepted)) => Some(outcome::ok("")),
+        Ok(Some(SstpSendOutcome::Accepted)) => Some(match since_id {
+            Some(n) => outcome::ok(&strict_note(n)),
+            None => outcome::ok(""),
+        }),
         Ok(Some(SstpSendOutcome::NotAccepted)) => {
             tracing::debug!(
                 event = "mcp_sakurascript_not_accepted",

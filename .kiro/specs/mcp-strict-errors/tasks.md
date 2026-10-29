@@ -110,7 +110,7 @@
   - _Requirements: 2.2, 2.7_
 
 - [ ] 7. MCP の答えと案内文
-- [ ] 7.1 (P) `sakurascript` と `raise_event` の strict 真の答えに `since_id` を付ける
+- [x] 7.1 (P) `sakurascript` と `raise_event` の strict 真の答えに `since_id` を付ける
   - `sakurascript` は strict 真で受け付けたとき、kanade へ送る前に読んだ最後の通し番号を入れた strict の答えを返す。偽・省略は `OK`、NG の 4 つは今のまま
   - `raise_event` は strict 真で台本が返ったときだけ、1 行目の末尾に同じ strict の文を足す（区切りと `Script: ` の行は今のまま）。番号は送る前に読む
   - strict の文は 2 つのツールで同じ定数から作る
