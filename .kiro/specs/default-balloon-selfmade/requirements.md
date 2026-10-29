@@ -152,7 +152,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 1. When 要件の討議が議題 10 を確定した, the 要件の討議 shall 開発者の許しを取ってから SSP の MCP で `validrect.right,0` の正典の読み（0 が左端からの 0 か、右端を指すか）を測り、測った手順・結果・ukadoc の該当の項（URL と原文の引用）をこの文書に書く。
 2. The 既定バルーン shall `validrect` を、SSP と areka のどちらで読んでも同じ範囲に解け、その範囲が空でなく、`origin` と折り返し基準（`wordwrappoint`）を内に含む書き方で持つ。そのために `validrect.right` を 0 でなく面の幅の正の値 326 と書き、0 を書かない（議題 10）。
 3. The 既定バルーン shall 手本の `validrect.right,0` をそのまま写さない（測った正典の読みによらない）。
-4. If 測った正典の読みが areka の読み（0 は左端からの 0）と違う, then the 本仕様 shall areka の読みの直しを本仕様の中で行わず、まず `region.rs` を持つ `real-run-log-noise` のセッションへ同じ所で直せるかを相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する（議題 10）。回した先が `.kiro/specs/` の直下に実在して `completed/` でないことを確かめてから記録する。
+4. If 測った正典の読みが areka の読み（0 は左端からの 0）と違う, then the 本仕様 shall areka の読みの直しを本仕様の中で行わず、まず `region.rs` を持つ `real-run-log-noise` のセッションへ同じ所で直せるかを相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する（議題 10）。回した先が `.kiro/specs/` の直下に実在して `completed/` でないことを確かめてから記録する。**結果（2026-10-29）**: 相談した `real-run-log-noise` が、開発者の承認（2026-10-29「入れる」）を得て、`validrect` の right・bottom の 0 の読みの直しを自分の要件と設計に足し、`region.rs` で直すと決めた（起票は不要）。`.kiro/specs/real-run-log-noise/` は直下に在り `completed/` でない。根拠には本仕様の「SSP での測り」と `verification/ssp-bottle-validrect-right0.png` を引く。
 5. When areka が既定バルーンの面 0（本体側・相方側）を読み込む, the areka shall 「文字の描画範囲が潰れている」「origin が描画範囲の外」「折り返し基準が描画範囲の外」の警告を 1 件も出さない。
 6. When 既定バルーンを被せたどっとさくらが喋る, the areka shall 台詞の文字をバルーンの中に描き、文字の描画範囲・origin・折り返し基準が、手本の数値を正典の読みで解いたものと同じ位置になる。
 
@@ -164,7 +164,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 1. The 既定バルーン shall `install.txt`（種類がバルーンであること・入れる先のフォルダ名 `<名前>`）と `readme.txt` を持つ。
 2. The 既定バルーンの `readme.txt` shall このバルーンが areka の既定バルーンであること・作り手・再配布の条件（議題 8）・寸法と設定値を手本から引き継いだこと（絵は写していないこと）を書く。
-3. The 既定バルーンの `readme.txt` shall areka でまだ出ない物（印と数字・入力の箱・面 1 以降の面別の設定）を、出るようになる見込みの spec の名前を出さずに平易に書き、出るものと出ないものを取り違えない（要件 3.6 と 4.3 を含む）。
+3. The 既定バルーンの `readme.txt` shall areka でまだ出ない物（印と数字・入力の箱・面 1 以降の面別の設定）を、出るようになる見込みの spec の名前を出さずに平易に書き、出るものと出ないものを取り違えない（要件 3.6 と 2.7 を含む）。
 
 ### Requirement 8: 絵の道具と作り直しの手順
 

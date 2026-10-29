@@ -21,7 +21,7 @@
 
 - 印と数字を画面に出すこと・1 枚の動く絵の印を読むこと（`balloon-markers`）。
 - `.webp` の名前の面を拾うこと（`balloon-webp-names`）。入力の箱を出すこと（`inputbox-user-input`・`balloon-canon-residue`）。面 1 以降の面別の設定を効かせること（`balloon-canon-residue`）。
-- areka の `validrect` の 0 の読みを直すこと（要件 6.4。`real-run-log-noise` へ相談、入らなければ `/kiro-discovery` で起票）。
+- areka の `validrect` の 0 の読みを直すこと（要件 6.4。2026-10-29 に `real-run-log-noise` が引き受けた）。
 - 縦書きの面・2 倍の絵・シェルの中のバルーン。
 - バルーンの解決の段の順を変えること。
 
@@ -176,9 +176,7 @@ graph TB
     T1[tool and nar] --> T2[registry row and count tests]
     T2 --> T3[fixture tests]
     T3 --> T4[vendors readme and rights]
-    T3 --> T5[validrect consult with real run log noise]
     T4 --> T6[real machine check]
-    T5 --> T6
     T6 --> T7[merge main then swap default last]
 ```
 
@@ -218,7 +216,7 @@ graph TB
 | 6.1 | SSP で 0 の読みを測る | 要件の討議（2026-10-29 済み） | requirements.md「SSP での測り」 |
 | 6.2 | 範囲が空でなく origin と折り返し基準を含む | `texts.rs`（`validrect` 0・0・326・-20／相方側の下 -14） | `definition.rs` |
 | 6.3 | `validrect.right,0` を写さない | `texts.rs` | `definition.rs` |
-| 6.4 | 0 の読みの直しは外へ（相談→起票） | 相談のタスク | `verification/` の記録 |
+| 6.4 | 0 の読みの直しは外へ | 2026-10-29 に `real-run-log-noise` が引き受けた（決め 9） | requirements.md 6.4 の結果 |
 | 6.5 | 潰れ・origin・折り返し基準の警告 0 | 範囲の値 | `definition.rs`（警告の条件と同じ判定）・実機の記録の grep |
 | 6.6 | どっとさくらで文字がバルーンの中 | 範囲の値 | 実機の確かめ |
 | 7.1 | `install.txt`・`readme.txt` | `texts.rs` | `assets.rs`・窓口の照合 |
@@ -264,7 +262,7 @@ graph TB
 | 13.8 | 根と一時のファイルは `target\` の下 | 道具（作業は全部メモリ・一時名は `target\gen-default-balloon\`）・実機の根 | — |
 | 13.9 | SSP で測る前に許しを取る | 実機のタスク（SSP で見比べるときだけ） | — |
 
-> 要件 7.3 の「要件 3.6 と 4.3」の 4.3 は requirements.md に無い番号で、文脈から入力の箱の要件 2.7 を指すと読む（説明書に「入力の箱は areka ではまだ出ない」と書く）。
+> 要件 7.3 の参照は設計の討議で「要件 3.6 と 2.7」に直した（もとは無い番号 4.3）。説明書に「入力の箱は areka ではまだ出ない」と書く。
 
 ## Components and Interfaces
 
@@ -313,7 +311,7 @@ graph TB
 - 画素は 4×4 の標本の平均で決める。距離の計算は `f32` の四則と `sqrt` だけで書き、`hypot` を使わない（`sqrt` は正しく丸められるが `hypot` は環境の数学ライブラリに依る）。
 - 色は α で重みを付けて平均し、0〜255 に丸める（下書き `target\balloon-draft\src\main.rs` の `raster` と同じ式）。完全に外の画素は `[0,0,0,0]`。
 - PNG は全部 `Rgba8` で `PngEncoder::new` の既定の設定で書く。WebP のコマは `WebPEncoder::new_lossless`・`Rgba8`。
-- 書庫のファイルの並びは名前順に固定し、`NarBuilder` で書く（時刻などの揺れる値を持たない）。
+- 書庫のファイルの並びは名前順に固定し、`NarBuilder` で書く（時刻などの揺れる値を持たない）。`NarBuilder::bytes()` は足した順を保つので、道具が名前で並べてから足す（design-validation.md の注記）。
 - 同じ版の `image`・`image-webp` の範囲で同じバイト列になる（版は Revalidation Triggers）。
 
 **実装の注記**
@@ -408,7 +406,7 @@ graph TB
   - 本番の `resolve_balloon_faces` と `load_scope_balloon_model`（面 0 の面別の設定を重ねる経路）を `log-capture-kit` の捕捉の中で両 scope 呼び、`WARN` 以上の記録が 0 件。モデルの値（origin・validrect・wordwrappoint・書体）が表のとおり。`load_balloon_use_self_alpha` が 1。
   - `ResolvedBalloonText::resolve` で解いた範囲が上の「描画範囲の解け方」の表と同じ。警告の条件と同じ判定が偽: `TextRegion::is_collapsed()` が偽、`wrap_threshold() <= inline_limit()`、解いた origin が宣言どおり（範囲の外で捨てられていない）。
 - **`bake.rs`**（12.3・2.4・5.9）: `staysee_balloon_fixture/bake.rs` と同じ手順（COM を MTA で張り、`build_balloon_target_from_faces` で面 0 を焼く）で両 scope を焼き、走査した画素の総数が面積と一致し、不透明・透明・半透明の 3 種がどれも 1 つ以上ある。
-- **`online.rs`**（8.9・3.2・3.3）: 取り出した `online0.webp` を `WicDecoderArm` の `probe_animation` と `decode_frames` で読む。見出しが 77×36・3 コマ、コマが 3 枚・各 `delay_ms` 300・`loop_count` が `LoopCount::Infinite`・`has_alpha` が真。コマ k で点 k の中心の α が 255、ほかの点の中心の α が 64（0.25 × 255 の丸め）、点の外（例 (2,2)）の α が 0。
+- **`online.rs`**（8.9・3.2・3.3）: 取り出した `online0.webp` を `WicDecoderArm` の `probe_animation` と `decode_frames` で読む。見出しが 77×36・3 コマ、コマが 3 枚・各 `delay_ms` 300・`loop_count` が `LoopCount::Infinite`・`has_alpha` が真。コマ k で点 k の中心の α が 255、ほかの点の中心の α が 64（0.25 × 255 を最も近い整数へ丸める＝道具の `round()`。切り捨てなら 63 になるので、道具と期待値の丸めをそろえる）、点の外（例 (2,2)）の α が 0。`WicDecoderArm::new()` の前に COM を MTA で張る（`assets.rs` も同じ・`bake.rs` と同じ手順）。
 - **`wrapping.rs`**（12.5）: 本体側の面 0 の範囲と書体（`ＭＳ ゴシック` 12）で、本番の折り返しの入口（`staysee_balloon_fixture/wrapping.rs` と同じ `LayoutEngine::layout`）へ半角だけ・全角だけ・混ぜた本文を流す。行数と各行の字数を、範囲（0〜326）・origin 14・折り返し基準 296 と送り幅（半角 6・全角 12）から手で導いた値に固定し（導き方を説明に書く）、すべてのグリフの矩形が範囲の内側に収まることを確かめる。拡大率は `staysee_balloon_fixture/scale.rs` と同じ形で 1.0 と 1.25 を与え、画像の座標での行の並びが同じで、物理の寸法への変換が k 倍になることを見る。相方側は高さだけが違うので、行数が下の辺で止まらない長さの本文 1 本だけ通す。
 
 ### 既定に頼るテスト（`crates/areka/src/`）
@@ -443,7 +441,7 @@ graph TB
 
 7. **入力の箱の 4 枚** → 同じ絵を 4 枚（バイト列も同じ）。要件 2.1 は面の数だけを求め、手本の 4 枚の違いは飾りの差なので、案 A では描き分ける値が無い。
 8. **`doc/pasta-real-run.md`** → `areka-balloon` を引いて根へ写す行と、根の一覧の書きを足す（`StayseeBalloon` の行は残す）。根拠: 同書の手順は「配布物と同じ形の根」を組むと書いており、差し替えの後の配布物には `areka-balloon` が入るため（要件 11.7 の「必要があれば足す」）。
-9. **`validrect.right,0` の読みの直しの扱い（要件 6.4）** → 実装の早いうち（中身のテストの後・実機の前）に `real-run-log-noise` のセッションへ相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する。回した先が `.kiro/specs/` の直下に在り `completed/` でないことを確かめて（2026-10-29 現在 `real-run-log-noise` は在る）、結果を `verification/validrect-zero-handover.md` に書く。
+9. **`validrect.right,0` の読みの直しの扱い（要件 6.4）** → 済み。2026-10-29 の設計の段で `real-run-log-noise` のセッションへ相談し、同 spec が開発者の承認（「入れる」）を得て、right・bottom の 0 の読みの直しを自分の要件と設計に足して `region.rs` で直すと決めた。起票は要らない。記録は requirements.md 6.4 の結果。本仕様のタスクは無い（このバルーンは 0 を書かないので、向こうの着地の前後で中身のテストの答えは変わらない）。
 
 ## Supporting References
 
