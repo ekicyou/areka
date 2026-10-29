@@ -7,6 +7,8 @@
 //!   モニタの作業領域の中に置く純関数の核（要件 1・2・7）
 //! - [`place_chain_in_work_area`] はその World の口。窓の高さと作業領域を World から読んで核を呼び、
 //!   寄せた・寄せなかった・取れなかったを記録する（要件 7.4・9.1・9.2）
+//! - [`clamp_grown_free_default`] は既定の位置にいる `free` のキャラ窓が大きくなってはみ出したら、
+//!   はみ出した向きにだけ収める判定（要件 3・7）
 //!
 //! 寄せの式は `balloon_limit::clamp_rect_to_work_area`（左辺・上辺を優先）だけを使い、
 //! 隣の位置は `chain_finalize::resolve_chain` に 2 スロットを渡して得る（式を写さない）。
@@ -19,10 +21,16 @@
 use bevy_ecs::prelude::{Entity, World};
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
+use wintf::ecs::drag::DraggingState;
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
-use super::super::chain_finalize::{ChainRect, ChainSlot, KeepReason, PairDecision, resolve_chain};
-use super::{MonitorSnapshot, PointPx, RectPx, SizePx, work_area_for_window};
+use super::super::chain_finalize::{
+    ChainRect, ChainSlot, KeepReason, PairDecision, ScriptPlaced, resolve_chain,
+};
+use super::{
+    Anchor, CharWindowMarker, GhostWindows, MonitorSnapshot, PlacementRoute, PointPx, RectPx,
+    SizePx, limit_correction, rect_at, work_area_for_window,
+};
 
 /// 寄せて動かした（info!）。
 #[allow(dead_code)] // 出す口は task 1.2 の World の口・examples には呼び手が無い
@@ -304,5 +312,81 @@ fn opposite(decision: PairDecision) -> PairDecision {
         PairDecision::JoinLeft => PairDecision::JoinRight,
         PairDecision::JoinRight => PairDecision::JoinLeft,
         keep => keep,
+    }
+}
+
+/// 面の拡大の寄せ（設計 GrowClamp）。`resize_window_to` の可視性の関門の後の提案の位置を受け、
+/// 収めた位置か提案のままを返す。World は読むだけ。
+///
+/// 当てるのは全部を満たす窓だけ: 吸着が `Free`・経路が `Resnap` か `ReportedSizeReconcile`・
+/// キャラ窓・既定の位置が有り今の位置と同じ・`ScriptPlaced` が無い・`DraggingState` が無い
+/// （要件 3.1・3.5・7.6）。収め方は今ある「はみ出した分だけの補正」（`limit_correction`）で、
+/// はみ出していない向きの座標は変えない（要件 3.2）。作業領域は提案の位置に置いた窓のモニタ
+/// （要件 7.1）、大きすぎる軸は左辺・上辺に合う（要件 7.2）。
+///
+/// 記録: 吸着が `Free` でない・経路が違う・キャラ窓でない窓は記録しない。`Free` のキャラ窓で
+/// 動かさなかったものは `Keep`（debug!）、作業領域が取れなければ `Unresolved`（warn!・要件 7.4）、
+/// 収めたら `Clamp`（info!・how=grown）。
+#[allow(dead_code)] // 呼び手は `resize_window_to`（task 2.3）・examples には無い
+pub(crate) fn clamp_grown_free_default(
+    world: &World,
+    char_window: Entity,
+    anchor: Anchor,
+    route: PlacementRoute,
+    proposed: PointPx,
+    new_size: SizePx,
+) -> PointPx {
+    // 拡大率・吸着・作業領域の変化の経路はそれぞれの持ち主が置き直す（設計 GrowClamp）。
+    let grows = matches!(
+        route,
+        PlacementRoute::Resnap | PlacementRoute::ReportedSizeReconcile
+    );
+    if anchor != Anchor::Free || !grows {
+        return proposed;
+    }
+    let Some(scope) = world.get::<CharWindowMarker>(char_window).map(|m| m.scope) else {
+        return proposed;
+    };
+    let scene = ClampScene::SurfaceGrow.as_str();
+    let current = world
+        .get::<WindowPos>(char_window)
+        .and_then(|wp| wp.position)
+        .map(|p| PointPx { x: p.x, y: p.y });
+    let default_pos = world
+        .get_resource::<GhostWindows>()
+        .and_then(|gw| gw.default_char_pos(scope));
+    let keep = if current.is_none() || current != default_pos {
+        Some("not-default-pos")
+    } else if world.get::<ScriptPlaced>(char_window).is_some() {
+        Some("script-placed")
+    } else if world.get::<DraggingState>(char_window).is_some() {
+        Some("dragging")
+    } else {
+        None
+    };
+    if let Some(reason) = keep {
+        debug!(scene, scope, reason, at = ?proposed, "{WORK_AREA_KEEP_TAG} 既定の位置にいない・明示の操作中の窓は動かさない");
+        return proposed;
+    }
+    let snapshot = world.get_resource::<MonitorSnapshot>();
+    let work_area = snapshot.and_then(|s| work_area_for_window(s, rect_at(proposed, new_size)));
+    let Some(area) = work_area else {
+        let reason = if snapshot.is_none() {
+            "no-monitor-snapshot"
+        } else {
+            "no-work-area"
+        };
+        warn!(scene, scope, reason, at = ?proposed, "{WORK_AREA_UNRESOLVED_TAG} 作業領域が取れず寄せずに提案の位置へ置く");
+        return proposed;
+    };
+    match limit_correction(proposed, new_size, area) {
+        Some(to) => {
+            info!(scene, scope, how = "grown", from = ?proposed, to = ?to, work_area = ?work_area, "{WORK_AREA_CLAMP_TAG} 大きくなった窓を作業領域の中へ寄せた");
+            to
+        }
+        None => {
+            debug!(scene, scope, reason = "fits", at = ?proposed, "{WORK_AREA_KEEP_TAG} 大きくなった窓が作業領域に収まっている");
+            proposed
+        }
     }
 }

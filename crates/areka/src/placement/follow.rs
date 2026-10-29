@@ -112,6 +112,10 @@ pub(crate) use self::work_area_clamp::{
     ChainClampOutcome, ChainPlacement, ClampScene, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
     WORK_AREA_UNRESOLVED_TAG, place_chain_in_work_area, resolve_chain_in_work_area,
 };
+// 面の拡大の寄せ（task 1.3）。`window_move` が `super::` で辿る私有の再束縛。呼ぶ文は task 2.3 で
+// 足すので、それまでと examples のビルドではテストの外で未使用に見える。
+#[allow(unused_imports)]
+use self::work_area_clamp::clamp_grown_free_default;
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接
 // 呼ばれるため、`follow::` 経由で参照するのは `#[cfg(test)]` のテストモジュールと
@@ -249,3 +253,7 @@ mod window_move_hold_watch_tests;
 #[cfg(test)]
 #[path = "follow_work_area_clamp_chain_tests.rs"]
 mod work_area_clamp_chain_tests;
+// 面の拡大の寄せ（window-work-area-clamp・task 1.3・要件 10.1 ⑶⑸⑹）。
+#[cfg(test)]
+#[path = "follow_work_area_clamp_grow_tests.rs"]
+mod work_area_clamp_grow_tests;
