@@ -857,3 +857,195 @@ fn an_underlined_line_overhang_covers_its_stroke() {
         "線の出ない欄は実測のはみ出しのまま"
     );
 }
+
+// ────────────────────────── 区間の顔（要件 3.2／4.1／4.3／4.6／4.10・檻 D1〜D3）
+//
+// 実 DirectWrite の TextLayout に偽の台帳（`FontCatalog::with_faces`）で焼き、範囲指定の結果を
+// TextLayout から読み戻す。家族名・太さ・幅は TextLayout が持つ値をそのまま返すので、機械の
+// フォントの有無に頼らない。
+
+use windows::Win32::Graphics::DirectWrite::{
+    DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH, DWRITE_FONT_STRETCH_CONDENSED,
+    DWRITE_FONT_WEIGHT, DWRITE_FONT_WEIGHT_MEDIUM, IDWriteTextLayout,
+};
+use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
+
+use super::decoration::apply_font_ranges;
+use crate::draw::{DEFAULT_FONT_NAME, FontCatalog, FontFace};
+
+/// 偽の GDI の表の顔（家族名「Yu Gothic」・500＝「Yu Gothic Medium」が指す顔）。
+fn yu_gothic_medium() -> FontFace {
+    FontFace {
+        weight: DWRITE_FONT_WEIGHT_MEDIUM,
+        ..FontFace::regular("Yu Gothic")
+    }
+}
+
+/// 「あいう」の真ん中の 1 字だけを `look` の区間にした行へ、束縛書式（`pick` と同じ規則の顔＋
+/// 既定の太字・斜体）から作った TextLayout に `apply_font_ranges` を焼く。戻り値は行と範囲指定の回数。
+fn bake_middle_run(
+    fonts: &FontCatalog,
+    default: &TextLook,
+    look: &TextLook,
+) -> (IDWriteTextLayout, usize) {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let bound = fonts.face_or_default(&default.name);
+    let format = crate::draw::try_create_format(
+        &factory,
+        &bound,
+        default.bold,
+        default.italic,
+        default.height,
+    )
+    .expect("束縛書式");
+    let layout = factory
+        .create_text_layout(
+            &windows::core::HSTRING::from("あいう"),
+            &format,
+            200.0,
+            50.0,
+        )
+        .expect("TextLayout");
+    let (styles, id) = table_with(look, default);
+    let runs = style_runs(&[
+        glyph("あ", StyleId::DEFAULT),
+        glyph("い", id),
+        glyph("う", StyleId::DEFAULT),
+    ]);
+    RANGE_CALLS.with(|c| c.set(0));
+    apply_font_ranges(&layout, &runs, &styles, default, fonts).expect("apply_font_ranges");
+    (layout, RANGE_CALLS.with(|c| c.get()))
+}
+
+/// 文字位置 `pos` の家族名・太さ・幅。
+fn face_at(
+    layout: &IDWriteTextLayout,
+    pos: u32,
+) -> (String, DWRITE_FONT_WEIGHT, DWRITE_FONT_STRETCH) {
+    unsafe {
+        let mut len = 0u32;
+        layout
+            .GetFontFamilyNameLength(pos, &mut len, None)
+            .expect("GetFontFamilyNameLength");
+        let mut buf = vec![0u16; len as usize + 1];
+        layout
+            .GetFontFamilyName(pos, &mut buf, None)
+            .expect("GetFontFamilyName");
+        let mut weight = DWRITE_FONT_WEIGHT(0);
+        layout
+            .GetFontWeight(pos, &mut weight, None)
+            .expect("GetFontWeight");
+        let mut stretch = DWRITE_FONT_STRETCH(0);
+        layout
+            .GetFontStretch(pos, &mut stretch, None)
+            .expect("GetFontStretch");
+        (
+            String::from_utf16_lossy(&buf[..len as usize]),
+            weight,
+            stretch,
+        )
+    }
+}
+
+/// 既定の見た目（候補列だけ差し替える）。
+fn default_named(names: &[&str]) -> TextLook {
+    TextLook {
+        name: names.iter().map(|n| n.to_string()).collect(),
+        ..ResolvedFont::resolve(&geo_model(Some(10))).looks.default
+    }
+}
+
+/// D1（3.2・4.6）: GDI の名前の区間は家族「Yu Gothic」・500。区間の外は束縛（ＭＳ ゴシック 400）のまま。
+#[test]
+fn a_gdi_named_run_draws_with_the_family_and_weight_of_its_face() {
+    let fonts = FontCatalog::with_faces(&[], &[("Yu Gothic Medium", yu_gothic_medium())]);
+    let default = default_named(&[DEFAULT_FONT_NAME]);
+    let look = TextLook {
+        name: vec!["Yu Gothic Medium".into()],
+        ..default.clone()
+    };
+    let (layout, _) = bake_middle_run(&fonts, &default, &look);
+    let (family, weight, _) = face_at(&layout, 1);
+    assert_eq!(family, "Yu Gothic", "区間は GDI の名前が指す家族名");
+    assert_eq!(weight.0, 500, "区間は名前の太さ（中太）");
+    for pos in [0, 2] {
+        let (family, weight, _) = face_at(&layout, pos);
+        assert_eq!(
+            (family.as_str(), weight.0),
+            (DEFAULT_FONT_NAME, 400),
+            "区間の外 {pos} は束縛のまま"
+        );
+    }
+}
+
+/// D2（4.3）: 束縛が中太・既定が太字の行で `\f[bold,0]` の区間は 500（Regular の 400 へ戻らない）。
+/// 束縛が中太で区間が Regular の家族名なら 400（中太を受け継がない）。
+#[test]
+fn run_weights_follow_the_same_rule_as_the_bound_face() {
+    let fonts =
+        FontCatalog::with_faces(&["Yu Gothic"], &[("Yu Gothic Medium", yu_gothic_medium())]);
+
+    let bold_default = TextLook {
+        bold: true,
+        ..default_named(&["Yu Gothic Medium"])
+    };
+    let unbold = TextLook {
+        bold: false,
+        ..bold_default.clone()
+    };
+    let (layout, _) = bake_middle_run(&fonts, &bold_default, &unbold);
+    assert_eq!(face_at(&layout, 0).1.0, 700, "前提: 束縛は中太＋太字＝700");
+    assert_eq!(face_at(&layout, 1).1.0, 500, "太字を切った区間は名前の太さ");
+
+    let medium_default = default_named(&["Yu Gothic Medium"]);
+    let regular = TextLook {
+        name: vec!["Yu Gothic".into()],
+        ..medium_default.clone()
+    };
+    let (layout, _) = bake_middle_run(&fonts, &medium_default, &regular);
+    assert_eq!(face_at(&layout, 0).1.0, 500, "前提: 束縛は中太");
+    let (family, weight, _) = face_at(&layout, 1);
+    assert_eq!(family, "Yu Gothic");
+    assert_eq!(
+        weight.0, 400,
+        "家族名の区間は Regular（束縛の中太を受け継がない）"
+    );
+}
+
+/// D3（4.6・4.10）: 幅の違う GDI の顔は幅を焼く。全滅の区間名は束縛の顔のまま範囲指定 0 回。
+#[test]
+fn a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound() {
+    let condensed = FontFace {
+        stretch: DWRITE_FONT_STRETCH_CONDENSED,
+        ..FontFace::regular("Narrow Sans")
+    };
+    let fonts = FontCatalog::with_faces(&[], &[("Narrow Sans Condensed", condensed)]);
+    let default = default_named(&[DEFAULT_FONT_NAME]);
+
+    let narrow = TextLook {
+        name: vec!["Narrow Sans Condensed".into()],
+        ..default.clone()
+    };
+    let (layout, _) = bake_middle_run(&fonts, &default, &narrow);
+    assert_eq!(
+        face_at(&layout, 1).2,
+        DWRITE_FONT_STRETCH_CONDENSED,
+        "区間の顔の幅"
+    );
+    assert_ne!(
+        face_at(&layout, 0).2,
+        DWRITE_FONT_STRETCH_CONDENSED,
+        "区間の外は束縛の幅"
+    );
+
+    let missing = TextLook {
+        name: vec!["NoSuchFontXYZ".into()],
+        ..default.clone()
+    };
+    let (layout, calls) = bake_middle_run(&fonts, &default, &missing);
+    assert_eq!(
+        calls, 0,
+        "全滅の区間名は束縛の顔のまま（範囲指定を発行しない）"
+    );
+    assert_eq!(face_at(&layout, 1).0, DEFAULT_FONT_NAME);
+}

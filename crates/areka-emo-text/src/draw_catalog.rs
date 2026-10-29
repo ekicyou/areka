@@ -176,7 +176,7 @@ impl FontCatalog {
 
     /// テスト用——家族名の集合と「GDI の名前 → 顔」の表で偽の台帳を作る（要件 6.2）。
     #[cfg(test)]
-    pub(super) fn with_faces(families: &[&str], gdi: &[(&str, FontFace)]) -> FontCatalog {
+    pub(crate) fn with_faces(families: &[&str], gdi: &[(&str, FontFace)]) -> FontCatalog {
         FontCatalog::with_source(FamilySource::Fake {
             families: families.iter().map(|n| n.to_lowercase()).collect(),
             gdi: gdi
