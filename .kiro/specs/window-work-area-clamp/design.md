@@ -56,7 +56,7 @@
 - `resolve_chain` の式や `ChainSlot`・`PairDecision` の形が変わる（鎖の寄せが 2 窓の解きに使っている）。
 - `clamp_rect_to_work_area` の意味（左辺・上辺の優先）が変わる。
 - `restore_merged_placements` の戻り値の形（この spec で 3 つ組にする）が変わる・`GhostWindows` に記憶の寄せの印を持たせる形へ移す。
-- 位置の指令の線（`PositionCue`）の取り出しの門（見込み H1 の直しで GPU の装着を待つ形にする）が変わる。
+- 位置の指令の線（`PositionCue`）の取り出しの門（見込み H1 の直しで、対象の窓と基準の窓の最初の面の表示を待つ形にする）が変わる。
 - `extra-character-windows` が 3 体目以降を出したとき（鎖の寄せの「反対の側」が別の窓と重なりうる・Risks）。
 
 ## Architecture
@@ -138,7 +138,7 @@ crates/areka/src/placement/
 └── persist_restore_group_tests.rs              # 新規: apply_restored_placements の組の結線と寄せた起動の印（10.1 ⑷⑻）
 crates/areka/src/emo2_boot/
 ├── frame_chain_finalize_clamp_tests.rs         # 新規: 並べ直しの寄せのフレームの檻（10.1 ⑴⑻⑼）
-└── frame_move_hold_tests.rs                    # 新規（H1 と決まったとき）: 位置の指令が装着まで待つ檻（10.1 ⑽）
+└── frame_move_hold_tests.rs                    # 新規（H1 と決まったとき）: 位置の指令が対象・基準の窓の最初の面の表示まで待つ檻（10.1 ⑽）
 ```
 
 テストの接続宣言の置き場: `follow_work_area_clamp_*_tests.rs` は `placement/follow.rs` の末尾（今の `follow_*_tests.rs` と同じ並び）、`persist_restore_group_tests.rs` は `placement/persist.rs` の末尾、`frame_chain_finalize_clamp_tests.rs`・`frame_move_hold_tests.rs` は今の `frame_chain_finalize_tests.rs`・`frame_move_order_tests.rs` と同じく `emo2_boot/frame.rs`（615 行）の末尾。
@@ -146,7 +146,7 @@ crates/areka/src/emo2_boot/
 ### Modified Files
 
 - `crates/areka/src/placement/follow.rs`（238 行）— `mod work_area_clamp;`・crate 内の再束縛（`place_chain_in_work_area`・`keep_restored_groups` ほか）・`window_move` が `super::` で辿る私有の再束縛 `clamp_grown_free_default`・テストの接続宣言 3 つ。`placement/mod.rs` には触らない。
-- `crates/areka/src/emo2_boot/frame/drain_resnap.rs`（685 行）— `finalize_chain_once_with` が `resolve_chain` の代わりに `place_chain_in_work_area` を呼び、x と y を書き、既定の位置へ寄せた後の位置を運ぶ。`run_move_drain_phase` に拡大率が決まる前に当てたことの記録を足す（測りの道具）。H1 と決まったときだけ、同じ関数に装着の門を足す。
+- `crates/areka/src/emo2_boot/frame/drain_resnap.rs`（685 行）— `finalize_chain_once_with` が `resolve_chain` の代わりに `place_chain_in_work_area` を呼び、x と y を書き、既定の位置へ寄せた後の位置を運ぶ。`run_move_drain_phase` に拡大率が決まる前に当てたことの記録を足す（測りの道具）。H1 と決まったときだけ、同じ関数に窓ごとの表示の待ちを足す（判定は兄弟の新しいファイル）。
 - `crates/areka/src/placement/chain_realign.rs`（423 行）— `realign_chain_once_with` が `place_chain_in_work_area` を呼び、x と y を書く。
 - `crates/areka/src/placement/follow/window_move.rs`（1,221 行）— `resize_window_to` の手順 3c（可視性の関門）の直後に `clamp_grown_free_default` を呼ぶ 1 文と注記 1 行だけ。本体は兄弟の新しいファイル。
 - `crates/areka/src/placement/persist.rs`（815 行）— `apply_restored_placements` の後段に組の寄せを足す・`restored_display_clamped` と資源 `RestoredPositionsClamped` を足す・`persist_unremembered_char_positions` が資源を読み、寄せた起動では古い記憶へ印を書き足さず記録する。
@@ -257,7 +257,7 @@ sequenceDiagram
 | 5.3 | 窓が収まりバルーンだけはみ出す場面が見つかれば SSP ⑷ の後に決める | 実機の測り（タスク） | — | — |
 | 5.4 | 見つからなければ今の決まりを保つ | 既存 `balloon_limit` | 変えない | — |
 | 6.1 | 件 5 の原因を測って残す | MoveMeasure | `move_applied` の欄・`move_ratio_unset` | 件 5 |
-| 6.2 | 起動のトークの指令を正しい拡大率と大きさで当てる | MoveHold（H1） | 装着の門 | 件 5 |
+| 6.2 | 起動のトークの指令を正しい拡大率と大きさで当てる | MoveHold（H1） | 対象・基準の窓の表示の待ち | 件 5 |
 | 6.3 | トークの後にずらさない | MoveHold（H1） | 最初の当てが正しい | 件 5 |
 | 6.4 | 一般の道の直し | MoveHold | ゴースト・初回を見ない門 | 件 5 |
 | 7.1 | モニタの決め方は今のまま | 全入口 | `work_area_for_window` | — |
@@ -425,6 +425,7 @@ pub(crate) fn clamp_grown_free_default(
 
 **実装の注**
 - 結線: `window_move.rs` の `resize_window_to` の手順 3c の直後に `let new_pos = super::clamp_grown_free_default(world, char_window, anchor, route, new_pos, new_size);` の 1 文（rustfmt で折れても 1 つの呼び出し）と注記 1 行。べき等の判定・書き込み・既定の位置の追随・バルーンの随伴は、今のまま寄せた後の位置で走る。
+- 開発者の承認（設計の話し合い 3・2026-10-29）: この 1 文を `window_move.rs` へ足すことを認めた。ロードマップの C12 の約束「`window_move.rs` に足さない」の書き換えは `/kiro-complete` のときに行う。
 - 行数の番人: `window_move.rs` は番人の例外表に載り、番人は行数を見ない（理由欄に行数を書かない決まり）。足すのは呼ぶ文だけで、判定・記録の本体は兄弟の新しいファイルにある。C12 の約束「足す分は兄弟のファイルへ」の本旨（本体を伸ばさない）を保つ形で、別の書き込みを足す形（同じフレームに 2 回書く）や経路の語を足す形（結局 `window_move.rs` の網羅の `match` に触る）より本質に近い（research 案 2-a・開発者の 10-29 の指示）。
 - 危うさ: 起動の確定の前に寄せると、確定は寄せた後の本体の x を基準に相方を付ける。これはやり直しではなく一度きりの確定の入力が変わるだけ（要件 3.4 を保つ）。
 
@@ -438,7 +439,8 @@ pub(crate) fn clamp_grown_free_default(
 **責務と縛り**
 - 入力は記憶から位置を戻したスコープだけ（スコープ昇順）。
 - 組の決め: 隣り合う番号の組 (n−1, n) が、覚えた印が `left`／`right` か、記憶の矩形どうしの `judge_adjacency` が `Left`／`Right`／`Overlapped` のとき繋がる。繋がった並びが 1 つの組。印が `none` でも記憶の矩形が重なっていれば組（重なっていた組・要件 4.1）。離れていれば組にしない（要件 4.4）。
-- 寄せの決め: 組のどれかが今の判定で寄せられている（`shown != projected`）とき、組の**吸着の当て直しだけをした矩形**（`projected`）の和の矩形を `clamp_rect_to_work_area` で和の矩形のモニタの作業領域へ収め、その差を全員の `projected` に足す。全員が同じ量だけ動くので互いの位置が保たれる（要件 4.1）。
+- 寄せの決め（設計の話し合い 1・2026-10-29）: **組の全員が今の判定で寄せられている（どの窓も作業領域と交わらない）**とき、組の**吸着の当て直しだけをした矩形**（`projected`）の和の矩形を `clamp_rect_to_work_area` で和の矩形のモニタの作業領域へ収め、その差を全員の `projected` に足す。全員が同じ量だけ動くので互いの位置が保たれる（要件 4.1）。
+- **見えている窓は動かさない**（要件 4.1 の改め）: 見えている窓と寄せられた窓が混ざる組では、見えている窓は記憶の位置のまま。隣り合っていた組（印 `left`／`right`）の寄せられた窓は、起動の並べ直しが見えている窓の隣へ付け直し、ChainClamp の決まり（反対の側・端）で作業領域へ置く（要件 2.2）。重なっていた組の寄せられた窓は、今の窓ごとの結果のまま（`Keep`・`reason=partner-visible`）。
 - 寄せた窓の無い組は動かさない（要件 4.3）。1 窓の組は今の窓ごとの結果のまま（要件 4.4）。
 
 **依存**
@@ -510,7 +512,7 @@ pub fn restored_display_clamped(
 
 - 状態の持ち方: `main.rs` の `restore_merged_placements` が `(placements, restored, clamped)` の 3 つ組を返し、`ghost_session.rs` の窓を作る閉包が `spawn_ghost_windows` の直後に `RestoredPositionsClamped(clamped)` を**毎回**据える（窓の一式ごとに上書き＝読み直し・切り替えで古い値が残らない）。`placement/spawn.rs` の `GhostWindows` には持たせない（C12 の約束）。
 - 読む所: `persist_unremembered_char_positions` は、印の無い古い記憶のスコープ（今の `unmarked`）が有り、資源が `true` なら `push_adjacency_marks` を呼ばず、`info!(target: "areka::persist::save", scopes = ?unmarked, …)` で「記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない」を残す。資源が無い・`false` なら今のまま書き足す（印は寄せずに起動した回に書く）。
-- 行数: `main.rs` は 981 行から約 3 行（戻り値の型・判定の 1 行・返す組）、`ghost_session.rs` は約 3 行。どちらも 1,000 行を超えない。
+- 行数: `main.rs` は 981 行から約 3 行（戻り値の型・判定の 1 行・返す組）、`ghost_session.rs` は約 3 行。どちらも 1,000 行を超えない。同じウェーブの ⑤ `startup-install-option` も `main.rs` を約 2 行増やす（2026-10-29 に向こうのセッションへ確かめた・`restore_merged_placements` には触らない）＝両方の着地後で約 986 行。合計が 1,000 行を超える見込みに変わったら、`restore_merged_placements` を `persist.rs` へ移す（設計の話し合い 5）。`ghost_session.rs` は ⑤ が触らない約束。
 
 ### フレームの層: 呼び手の結線
 
@@ -535,13 +537,13 @@ pub fn restored_display_clamped(
 
 | 見込み | 測りで見えるもの | 直しの形 | 触る所 |
 |---|---|---|---|
-| H1 装着の前に位置の指令が当たる | `move_ratio_unset` が起動のトークで出る・`move_applied` の `k` が 1・装着の行より前 | **位置の指令の線を、表示の指令の線と同じく GPU の装着まで取り出さない**（`run_move_drain_phase` の門に `wiring.attached` を足す）。装着の巡では表示の指令が先に当たり、窓寸の照合と再スナップが大きさを着地させてから、同じ巡の位置の指令が正しい拡大率と大きさで当たる。チャネルが順を保ったまま預かるので取りこぼさない | `drain_resnap.rs` の 1 条件・兄弟の檻 |
-| H2 面の指令と位置の指令が別の巡に割れる | 装着の後でも、同じ窓の `move_applied` が対の面の大きさの書き込みより前に出る | **位置の指令を、同じ台本でそれより前に流れた面の指令が表示に当たるまで待たせる順の柵**。柵の材料（表示の線の進み）を取る場所が seriko の `actor.rs`・emo-present の `presenter/show.rs`・`emo2_boot/consumer_ledger.rs`（C12 の ① の持ち物）に及ぶなら、この spec では直さず別の spec へ切り出し、`brief.md` と `roadmap.md` に残して開発者へ報告する（要件の話し合い 7 と同じ扱い） | 測りの後に決める |
+| H1 表示の前に位置の指令が当たる | `move_ratio_unset` が起動のトークで出る・`move_applied` の `k` が 1・対象の窓の最初の面の表示より前 | **指令ごとに、対象の窓と基準の窓（`--base`）が最初の面を表示する（`applied_ratio` が取れる）まで待たせる**（設計の話し合い 2・2026-10-29）。GPU の装着だけを待つ形では、最初の `\s` の前の窓（相方など）に装着の後でも拡大率 1 で当たる穴が残るため取らない。待っている指令に関わる窓へ後から来る指令は、待っている指令を追い越さない（同じ窓への順を保つ）。関わりの無い窓の指令は先に当てる（表示されない窓が 1 つあっても列全体は詰まらない）。待つ間は指令を順のまま預かり、取りこぼさない。`run_move_drain_phase` の「装着を待たない」理由の注記を書き換え、§8 の件 5 の行に残す | `drain_resnap.rs`（待ちの判定は兄弟の新しいファイル）・兄弟の檻 |
+| H2 面の指令と位置の指令が別の巡に割れる | 表示の後でも、同じ窓の `move_applied` が対の面の大きさの書き込みより前に出る | **位置の指令を、同じ台本でそれより前に流れた面の指令が表示に当たるまで待たせる順の柵**。柵の材料（表示の線の進み）を取る場所が seriko の `actor.rs`・emo-present の `presenter/show.rs`（C12 の ① `mcp-strict-errors` の持ち物）に及ぶなら、切り出す前に ① のセッションと相談する（設計の話し合い 4）。① が先に着地するならそれを取り込んでからこの spec で直し、着地が間に合わないときだけ別の spec へ切り出して `brief.md` と `roadmap.md` に残す。`emo2_boot/consumer_ledger.rs` に行が要る形は切り出す（要件の話し合い 7） | 測りの後に決める |
 | H3 起動のイベントの時機の差（kanade） | SSP は表示の後に `OnFirstBoot`、areka は表示の前 | kanade には触らない。areka の側の H1 の直しで、トークがいつ始まっても位置の指令は表示の後に当たる | H1 と同じ |
 | どれでもない | 上のどれとも合わない | 直しを決めずに止め、測りの結果を記録して開発者へ報告する | — |
 
-- どの形もゴースト・初回起動・特定のイベントを見ない（要件 6.4・7.8）。2 回目以降のトークは装着の後なので、H1 の門は何も変えない。
-- H1 の門は 1 フレーム遅らせる形ではない: 指令は入力（表示の大きさと拡大率）がそろった巡の、その相で当たる（要件 7.3）。
+- どの形もゴースト・初回起動・特定のイベントを見ない（要件 6.4・7.8）。2 回目以降のトークは窓が表示された後なので、H1 の待ちは何も変えない。
+- H1 の待ちは 1 フレーム遅らせる形ではない: 指令は入力（表示の大きさと拡大率）がそろった巡の、その相で当たる（要件 7.3）。
 
 ## Data Models
 
@@ -580,13 +582,13 @@ pub fn restored_display_clamped(
 | ⑴ 本体が主のモニタの左端・相方を左へ並べると左隣の 150% のモニタへ渡る（x=−1108 の形） | `follow_work_area_clamp_chain_tests.rs`・`frame_chain_finalize_clamp_tests.rs` | 相方が本体の右の隣へ並べ替えられる（`Flipped`）。右にも入らない並び（作業領域が本体＋相方より狭い）では作業領域の端へ寄せられる（`Edge`・本体と重なる）。どちらも本体の位置は変わらない。フレームの檻では `ChainFinalized` の巡で書かれた位置と記録の行を見る |
 | ⑵ 詰め直しと記憶からの隣り合わせで外へ出る | `follow_work_area_clamp_chain_tests.rs`（純関数）・今の `frame_chain_realign_*`／`frame_chain_finalize_remembered_tests.rs` の並びに 1 つずつ足す | 場面 `DpiRealign`・`RememberedJoin` でも ⑴ と同じ置き方になる。3 体の鎖で 2 番目を並べ替えたとき 3 番目は並べ替えた後の 2 番目を基準に付く |
 | ⑶ 200% で既定の位置の `free` の窓が y=864 に 640×840・1108×1368 へ（作業領域の下端 1704） | `follow_work_area_clamp_grow_tests.rs` | 下端が 1704 以下・x は変わらない。既定の位置と違う窓（ドラッグの後）・`ScriptPlaced` の窓・`DraggingState` の窓・既定の位置の無い窓（記憶から戻した窓）は動かない。経路が `DpiReproject` のときは動かない。`resize_window_to` を通したとき書き込みは 1 回で、既定の位置が寄せた先へ運ばれる |
-| ⑷ 記憶の位置がどのモニタとも交わらない組 | `follow_work_area_clamp_restore_tests.rs`（純関数）・`persist_restore_group_tests.rs`（結線） | 隣り合っていた組・重なっていた組（印 `none`）は寄せた後も互いの差が同じ。離れていた組は窓ごとに寄せられる。どれも見えている組は動かない。`balloon_pos` が同じ量だけ動き `balloon_offset` は変わらない。`restored_display_clamped` が真になる |
+| ⑷ 記憶の位置がどのモニタとも交わらない組 | `follow_work_area_clamp_restore_tests.rs`（純関数）・`persist_restore_group_tests.rs`（結線） | 全員が外の、隣り合っていた組・重なっていた組（印 `none`）は寄せた後も互いの差が同じ。見えている窓と外の窓が混ざる組では見えている窓が動かない（隣り合っていた組は並べ直しの檻で付け直しを見る）。離れていた組は窓ごとに寄せられる。どれも見えている組は動かない。`balloon_pos` が同じ量だけ動き `balloon_offset` は変わらない。`restored_display_clamped` が真になる |
 | ⑸ 窓が作業領域より大きい | 3 つの純関数の檻 | 左辺・上辺が作業領域の左辺・上辺に合う |
 | ⑹ 作業領域を取り出せない | 3 つの純関数の檻 | 空の `MonitorSnapshot` で動かない（`Unresolved`）。`warn!` の行が出る（`log-capture-kit` の捕捉窓で、対照のイベントつき） |
 | ⑺ 収まっている並び | 3 つの純関数の檻 | どの窓も `to == from`（鎖は `Fits` で並べた位置のまま） |
 | ⑻ 並べ終えた時点の保存 | `frame_chain_finalize_clamp_tests.rs`・`persist_restore_group_tests.rs` | 寄せた相方の記憶に書かれる位置が寄せた後の位置（下端中央の x に直した値）。記憶から戻して寄せた窓・詰め直した窓の位置は書かれない。`RestoredPositionsClamped(true)` のとき古い記憶へ印が書き足されず、その行が出る。`false` なら今どおり書き足される |
 | ⑼ キャラ窓が収まりバルーンもずらしどおりで収まる | `frame_chain_finalize_clamp_tests.rs` | ⑴ の並べ替えの後、相方のバルーンが `char + offset` に立ち、`[balloon-limit] Clamp` が出ない（要件 5.1・5.2） |
-| ⑽ 起動のトークの位置の指令が表示の前に届く | `frame_move_hold_tests.rs`（H1 と決まったとき） | 装着の前に送った `\![move]` は窓を動かさず線に残る。装着の巡で、同じ巡の表示の指令・再スナップの後に当たる（相の順は今の `frame_move_order_tests.rs` が固定）。H2 と決まったときは柵の檻に替える |
+| ⑽ 起動のトークの位置の指令が表示の前に届く | `frame_move_hold_tests.rs`（H1 と決まったとき） | 装着の前に送った `\![move]` は窓を動かさず預かられる。**装着の後でも最初の面をまだ表示していない窓**（対象・基準のどちらでも）への指令も預かられる。その窓が表示した巡で、同じ巡の表示の指令・再スナップの後に当たる（相の順は今の `frame_move_order_tests.rs` が固定）。同じ窓へ後から来た指令は追い越さず、関わりの無い窓への指令は先に当たる。H2 と決まったときは柵の檻に替える |
 
 ### 今ある檻（要件 10.2）
 
@@ -609,7 +611,7 @@ pub fn restored_display_clamped(
 | 件 2 | 既定の位置にいる `free` の窓が大きい面ではみ出したら、はみ出した向きにだけ収める。**SSP には無い安全網**（SSP は何もしない見込み・測り ⑵ は任意） |
 | 件 3 | 記憶の位置と今の大きさから隣り合い・重なりを推し、組を同じ量だけ寄せる。離れて置かれた一緒に動く組は拾えない。寄せた起動では古い記憶へ印を書き足さない |
 | 件 4 | キャラ窓を収めることでバルーンだけの寄せを起こさない。要件 5.3 の場面が見つかったときだけ、SSP の測り ⑷ の後に完了 spec `areka-P0-windowposition-limit` の決まりを改め、改めた事実を同じ表に残す（要件 8.4） |
-| 件 5 | 測り ⑸ の結果と、決まった直し（H1 なら位置の指令の線は表示の装着を待つ） |
+| 件 5 | 測り ⑸ の結果と、決まった直し（H1 なら位置の指令は対象・基準の窓の最初の面の表示を待つ） |
 
 SSP を測った ⑴〜⑷ があれば、その版・手順・結果を `research.md` に残し、§8 の根拠の欄から指す（測っていないものは書かない）。
 
@@ -617,5 +619,5 @@ SSP を測った ⑴〜⑷ があれば、その版・手順・結果を `resear
 
 - **3 体以上の鎖**: 反対の側へ並べ替えた窓が、さらに前の窓と重なりうる（例: 本体の左に 1、その左の 2 が外へ出て 1 の右＝本体の上へ）。要件 1.2 の字面どおりで、3 体目は今は出ない（`extra-character-windows`）。そちらの spec で見直す（Revalidation Triggers）。
 - **件 5 が H2 だった場合**: 直しが C12 の ① のファイルに及ぶと、この wave では直せない。MoveHold の表の扱い（切り出して報告）に従う。
-- **見直す檻が多い**: 鎖・面の拡大・H1 の門は、どれも前提の状態を合わせるだけの書き換えになる見込み。本質の主張を外す書き換えはしない。
-- **組の寄せで本体も動く**: 本体が見えていて相方だけが外にある組は、組の和で寄せるので本体も同じ量だけ動く（要件 4.1 の「同じ量だけ組のほかの窓も動かす」の字面どおり）。記録 `restore-group` で見分けられる。
+- **見直す檻が多い**: 鎖・面の拡大・H1 の待ちは、どれも前提の状態を合わせるだけの書き換えになる見込み。本質の主張を外す書き換えはしない。
+- **重なっていた組の片方だけが外にある場合**: 見えている窓を動かさない決め（設計の話し合い 1）のため、外の窓は窓ごとに寄せられ、重なりの互いの位置は保たれない。見えている窓が一部でも作業領域にかかり、それと重なる窓が作業領域とまったく交わらない形に限られる（まれ）。記録 `Keep reason=partner-visible` で見分けられる。
