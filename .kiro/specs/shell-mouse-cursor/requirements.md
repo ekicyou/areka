@@ -34,7 +34,7 @@
 
 SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md`・SSP 2.9.23・2026-10-23）: ぱすたの身体（cursorブレスで `system:hand`）は SSP の手の形、ブレスに行の無い × とボールは Windows の標準の指さしの形、当たり判定の無い窓の白地は矢印だった。**定義の無い当たり判定にも既定の `system:finger` が効く**ことはこの測りで確かめてある（brief の議題 1 の答え）。
 
-本 spec の要件は、brief の議題と、正典が黙る所について**推奨の案**で書いた。推奨の案と採らなかった案は末尾の「要件討議に回す点」に並べる。要件討議で別の案に決まったら、当たる要件を書き直す。
+本 spec の要件は、brief の議題と、正典が黙る所について**推奨の案**で書き、2026-10-29 の要件討議で全議題を推奨の案のまま確定した（開発者「承認」）。決めと採らなかった案は末尾の「要件討議で決めた点」に並べる。SSP で測ってから決める議題（2・3・4・9）は、測りの答えが推奨とずれたときだけ当たる要件を書き直す。
 
 ## Boundary Context
 
@@ -80,7 +80,7 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 #### Acceptance Criteria
 
 1. When カーソルがキャラクターの窓の当たり判定の上に入った, the areka shall そのスコープ・当たり判定名の `mouseup*` の行の形を出す。
-2. If その当たり判定名の `mouseup*` の行が無い, the areka shall 既定の形を出す（当たり判定名が `bust` なら `system:hand`、ほかは `system:finger`。ゴーストの descript による差し替えは要件 5）。
+2. If その当たり判定名の `mouseup*` の行が無い, the areka shall 既定の形を出す（当たり判定名が `bust` なら `system:hand`、ほかは `system:finger`。`bust` は大文字と小文字を区別せずに見る＝`Bust` も同じ。ゴーストの descript による差し替えは要件 5）。
 3. When カーソルが当たり判定から別の当たり判定へ直に移った, the areka shall 移ったその場で移り先の形を出し、前の当たり判定の形を描画の 1 回分も残さない。
 4. When カーソルがキャラクターの窓の上で当たり判定の無い所へ出た, the areka shall その場で矢印（`system:arrow`。ゴーストの descript による差し替えは要件 5）を出す。
 5. While カーソルがキャラクターの窓の、マウスを下の窓へ通す所（絵の透けた所）の上に居る, the areka shall 形を決めず、下に見える窓の形のままにする。
@@ -96,7 +96,7 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 
 1. When 当たり判定の上で右以外のマウスボタンを押した, the areka shall そのスコープ・当たり判定名の `mousedown*` の行の形を出す。行が無ければ既定の形（当たり判定名が `bust` なら `system:grip`、ほかは `system:finger`。差し替えは要件 5）を出す。
 2. When 当たり判定の上で右ボタンを押した, the areka shall そのスコープ・当たり判定名の `mouserightdown*` の行の形を出す。行が無ければ既定の `system:finger`（差し替えは要件 5）を出す。
-3. While ボタンを押している（押下がドラッグになった間を含む）, the areka shall 押したときの形を保つ。
+3. While ボタンを押している（押下がドラッグになった間と、押したまま当たり判定の外へ出た間を含む）, the areka shall 押したときの形を保つ。
 4. When 押していたボタンを放した, the areka shall その場で、その位置の形（当たり判定の上なら要件 2.1〜2.2 の形・当たり判定の無い所なら矢印）へ戻す。
 5. When 当たり判定の無い所でボタンを押した, the areka shall 形を変えない。
 6. The areka shall 押したときの形を出すことで、クリック・ダブルクリック・ドラッグ・右クリックのメニューの今の動きと、それらが SHIORI へ送るイベントを変えない。
@@ -135,9 +135,9 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 #### Acceptance Criteria
 
 1. When `system:arrow`・`cross`・`finger`・`help`・`move`・`no`・`text`・`wait` のどれかを出す, the areka shall OS の標準の形のうち対応する形（矢印・十字・指差し・ヘルプ・四方向の移動・禁止・文字の I・待ち）を、利用者が OS で設定した絵と大きさで出す。
-2. When `system:hand`・`system:grip` を出す, the areka shall areka が持つ「手を開いた形」「手を握った形」を出し、指差し（`system:finger`）と見分けられる形にする。
+2. When `system:hand`・`system:grip` を出す, the areka shall areka が同梱する「手を開いた形」「手を握った形」の絵を出し、指差し（`system:finger`）と見分けられる形にする。絵は要件の段で開発者が選んだもの（fal で作った案から選ぶ・許諾の分かるもの）とする。
 3. When `.cur` のファイルを指定どおりに出す, the areka shall そのファイルの絵を出す。`.ani` のファイルなら、ファイルどおりに動かして出す。
-4. The areka shall cursorブレスのファイル名とゴーストの descript のファイル名を、どちらもシェルのフォルダ → ゴーストのフォルダの順で探す（ukadoc のプロパティ `currentghost.mousecursor` の「相対パス指定はシェル→ゴーストフォルダ内の順で探索する」に合わせる）。
+4. The areka shall cursorブレスのファイル名とゴーストの descript のファイル名を、どちらもシェルのフォルダ → ゴーストのフォルダ（`ghost\master`＝ゴーストの descript の置き場）の順で探す（ukadoc のプロパティ `currentghost.mousecursor` の「相対パス指定はシェル→ゴーストフォルダ内の順で探索する」に合わせる）。
 5. If 指定のファイルが無い・読めない・カーソルのファイルとして壊れている, the areka shall その場面の既定の形（要件 2〜5 の順で決まる形）を出し、ファイル名・探した場所・理由を記録に残す。
 6. If 指定のファイル名が、探す場所のフォルダの外を指す（絶対パス・上のフォルダへ出る書き方）, the areka shall そのファイルを読まずに既定の形を出し、記録に残す。
 7. The areka shall 同じファイルの失敗を、形を出すたびには記録せず、シェル（またはゴースト）を 1 回読み込むごとに 1 回だけ記録する。
@@ -156,11 +156,11 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 4. The areka shall 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の、cursorブレスの 5 つの場面の行・システムカーソル 10 種の行・ゴーストの descript の `cursor`／`mousecursor`・`mousecursor.arrow`・`mousecursor.hand`・`mousecursor.grip`・`mousecursor.text`・`mousecursor.wait` の行を、実物に合わせて書き直し、持ち主を本 spec にする（`mousecursor.text`・`mousecursor.wait` は「読むが使う場面が無い」と書く）。バルーンの descript の行とプロパティの行は変えない。
 5. The areka shall 正典が黙る所の areka の決め（止まったと見なす時間・ホイールの形から戻る時・押している間の形・重なった行・`mousecursor` と `cursor` の両方があるとき・`system:hand`／`system:grip` の絵）を `doc/COMPAT_ARCHITECTURE.md` §8 に書く。
 
-## 要件討議に回す点
+## 要件討議で決めた点
 
-本文は下の「推奨の案」で書いた。要件討議で別の案に決まったら、「当たる要件」を書き直す。SSP で測る点は、記憶「意味論は ukadoc から輸入・読めない点は SSP で測る」に従い、討議の前に開発者の承認を得て測る。
+2026-10-29 の要件討議で、議題 2〜9 を下の「推奨の案」のまま確定した（開発者「承認」）。議題 1 は SSP の測り（2026-10-23）で答えが出ていたので、討議に出さずに確定した。議題 2・3・4・9 は、承認をもらってから SSP で測って確かめる。測りの答えが推奨とずれたときだけ、当たる要件を書き直す。
 
-| 議題 | 推奨の案（本文） | 採らなかった案 | 当たる要件 |
+| 議題 | 決めた案（本文） | 採らなかった案 | 当たる要件 |
 | --- | --- | --- | --- |
 | 1 既定の形を全部のゴーストに効かせるか（brief の議題 1） | **正典どおり効かせる**。SSP の測り（2026-10-23）で、定義の無い × とボールが指差しになることを確かめてある＝SSP と同じ。cursorブレスを書いていないゴーストでも、当たり判定の上は指差しになる | 定義のあるシェルだけで形を変える | 2.2・3.1・3.2 |
 | 2 止まったと見なす時間（brief の議題 2） | **利用者の OS の設定の時間**（Windows の既定は 400 ミリ秒）。SSP で、止まってから形が替わるまでの時間を測って確かめる | SSP で測った固定の時間・`OnMouseHover`（`mouse-hover-event`）の決めを待つ | 4.1・4.2 |
