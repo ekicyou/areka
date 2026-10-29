@@ -2,6 +2,8 @@
 
 > 2026-10-29 `kiro-validate-gap`（要件の段のギャップ分析）。読んだのはワークツリーの先頭 `b181b054`（main `932d2c30` の上に spec の初期化 1 コミット）。コードは静的に読んだだけで、GPU の読み戻しや実機での測りはしていない。「見込み」と書いたものは、設計の段で測って確かめる。
 
+> **2026-10-29 設計の段（`kiro-spec-design`）の追記**: 件 1 の原因・件 2 の引き当て方・件 3 の直し方を、使い捨ての測り（DirectWrite だけ・GPU と画面は使わない・測った後に消した）で決めた。結果は §10。§1〜§9 は要件の段の記録のまま残す（§4.3 の H1〜H5 は §10.1 で決着）。
+
 ## 1. 分析の要約
 
 - **件 2（GDI の名前）は、今ある `FontCatalog` を広げれば足りる**。足りないのは 2 点。⑴ 家族名で見つからない候補を、GDI の名前として引き直す口。⑵ 引き当てた**太さ・斜体を書式まで運ぶ道**。今は `family_for` が `Option<String>`（家族名だけ）を返し、書式を作る 3 か所（`draw.rs::try_create_format`・`draw_metrics.rs::probe_format_for`・`viewbox_draw_decoration.rs::apply_font_ranges`）がどれも太さを NORMAL か BOLD の 2 値で決め打ちしている。
@@ -222,9 +224,120 @@
   - 開き括弧類の檻の字の選び（要件 1.1）: 「「」を主に、「『」「（」を添える見込み。
   - 「中太の名前＋太字の指定」の SSP の振る舞い（要件 4.2）: GDI の流儀（太字の指定が勝つ）で書いてある。SSP では中太を太く合成する見込みで、areka は本物の Bold（700）になりうる。ぱすたは太字を使わない見込みなので、要件 6.6 の見比べのついでに見るだけにする。
 
+## 10. 設計の段の調べ（2026-10-29・`kiro-spec-design`）
+
+### 10.0 やり方と使った手引き
+
+- **発見の型**: 軽い発見（今ある仕組みの拡張）。ただし件 1 の原因が未特定だったので、DirectWrite だけを呼ぶ使い捨ての統合試験（`crates/areka-emo-text/tests/` に仮に置いた 1 ファイル・自前の `IDWriteTextRenderer1` で `DrawGlyphRun` を抜き出す・`IDWriteGdiInterop::CreateFontFromLOGFONT` を呼ぶ）を回して測った。GPU・画面・SSP・areka の MCP には触れていない。測りのファイルは消した（`git status` は spec の文書だけ）。
+- **使った手引き**: `kiro-spec-design` の `rules/`（design-principles・design-discovery-light・design-synthesis・design-review-gate）と、テンプレート `.kiro/settings/templates/specs/{design,research}.md`。steering は `product.md`・`tech.md`・`structure.md` と `roadmap.md` の C12 の行（ウェーブの約束）。ほかの技能（skill）は、この仕事の領域に当たる物が無いので使っていない。
+- 測った机: 開発者の机（Windows 11・游ゴシック／Yu Gothic UI／メイリオ／BIZ UDPゴシック／ＭＳ ゴシック／Segoe UI が入っている）。
+
+### 10.1 件 1: 開き括弧が上端に来る原因（要件 2.1）
+
+**原因**: DirectWrite の TextLayout は、`IDWriteTypography` を付けないとき「既定の機能の組」で字形を並べる。游ゴシックの縦書きでは、この既定の組が **`vpal`（縦書きのプロポーショナルの寸法）と全く同じ字形の位置の調整**を当てる。ただし送り幅は変えない（20px のまま）。そのため開き括弧は位置だけが送りの逆向きへ半 em（20px で −10px）動き、続く字との間が空く。
+
+測った値（游ゴシック Regular・20px・縦書き右から左・本文「…「繋がってる」」）:
+
+| 場合 | 「「」の字形 | 「「」の位置のずらし（送りの向き） | かなのずらし（が・っ・て・る） | 送り幅 |
+|---|---|---|---|---|
+| 既定（typography 無し） | 7913（`vert` の縦書き用） | **−10.00px** | −0.34・−2.82・−0.80・−0.12 | 全部 20.00 |
+| `vpal`＝1 だけを付けた typography | 7913 | **−10.00px** | −0.34・−2.82・−0.80・−0.12（既定と 6 値とも一致） | 20.00 |
+| 空の typography（機能 0 個） | 7913 | 0 | 0・0・0・0 | 20.00 |
+| `vkrn`・`kern`・`palt`・`vchw`・`liga`・`calt`・`ccmp`・`locl`・`chws`・`vert` のどれか 1 つ（＝1 でも 0 でも） | 7913 | 0 | 0（`palt`＝1 は列の幅の向きにだけ ±0.2px） | 20.00 |
+| `vhal`＝1 だけ | 7913 | −10.00 | 0 | 20.00 |
+
+- 縦書き用の字形 7913 の墨は、字の枠の上から 13.0〜18.9px（`GetDesignGlyphMetrics(isSideways=TRUE)` の上の余白 219・下の余白 221・upem 2048 から）＝**下端に寄った正しい置き場**。−10px ずらすと 3.0〜8.9px になり、起票の実測「上から 2〜8px」と合う。
+- 横倒し（H1）ではない: 「「」の並び（run）は `isSideways=TRUE`（縦書きで立てて描く側）で、字形は `vert` の縦書き用（7913）。
+- 縦の原点（H2）ではない: 字形の縦の寸法どおりなら下端に来る。ずれは字形の寸法ではなく、並べたときのずらし（`glyphOffsets.advanceOffset`）だけ。
+- 機能の当たり方（H3）が原因の側。ただし `vert`／`vrt2` ではなく、既定の組の中の `vpal` 相当の位置の調整。
+- `SetVerticalGlyphOrientation(STACKED)`（H4）は何も変えない。代わりの書体（H5）でもない（並びの書体は游ゴシック）。
+- 書式の言語（ja-JP・en-US・zh-CN・空）を替えても既定の −10px は変わらない＝言語の設定の抜けではない（要件 2.5 の ja-JP はそのまま）。
+- 太さ 500（中太）でも同じ（−10px）。
+- ほかの書体（Yu Gothic UI・メイリオ・BIZ UDPゴシック・ＭＳ ゴシック）は既定でもずらし 0＝今も正しい。游ゴシックの GPOS の `vpal` のデータに当たる書体だけで起きる。
+- 手本（Chromium＝HarfBuzz で並べる）は縦書きで既定に `vert` だけを当て、`vpal` を当てない（HarfBuzz の `hb-ot-shape.cc` の縦書きの既定の組）。ゆえに手本ではずらし 0＝下端。areka との違いは、この既定の組の差だけ。
+- 起票で見えた「`vchw`＋`halt` で下端へ動く・`vhal` が括弧を動かさない」は、どちらも「typography を付けた時点で既定の組が外れる」ことで説明がつく（`vchw`／`halt` 自体は縦書きの括弧に効いていない）。
+
+**直し（要件 2.2）**: 縦書きの TextLayout に、`vpal` を含まない機能の組を明示した typography を付ける。組は次の 10 個: `ccmp`・`locl`・`mark`・`mkmk`・`rlig`・`calt`・`clig`・`liga`・`kern`・`rclt`。
+
+| 確かめ | 既定 | 明示の 10 個 |
+|---|---|---|
+| 游ゴシックの「「」のずらし | −10.00 | 0 |
+| 游ゴシックの開き括弧類 9 種（「『（〔［【〈《｛） | 全部 −10.00 | 全部 0 |
+| 游ゴシックの閉じ括弧「」」 | 0 | 0（墨は上から 1.1〜7.0px のまま） |
+| 中太（500）の開き括弧類 9 種 | — | 全部 0（墨は上から 11.3〜13.5px より下） |
+| 横倒しの英字「AVAfiWAVE12」（游ゴシック） | AV の詰め・fi の合字 | 同じ（字形番号・送り幅が全部一致） |
+| Segoe UI の横倒しの英字 | — | 既定と一致 |
+| Yu Gothic UI・メイリオ・BIZ UDPゴシック・ＭＳ ゴシック の「…「繋がってる」AVAfi」 | — | 既定と全部一致（字形・送り幅・ずらし） |
+| 送り幅 | 20.00 | 20.00（変わらない） |
+
+- 空の typography（機能 0 個）でもずらしは消えるが、横倒しの英字の詰め（`kern`）と合字（`liga`）も消える（AV の送り 12.18→12.98・fi が 2 字に分かれる）。ゆえに組は明示する。
+- `vert` は組に入れない。`vert`＝1 を明示すると、横倒しの並び（「…」）にも縦書き用の字形が当たり、倒した向きで描かれてしまう（字形 670→7899）。`vert` は DirectWrite が立てる並びにだけ自分で当てる（明示しなくても 7913 になる）。
+- `vkrn` は組に入れない（手本 HarfBuzz の縦書きの既定に無い。入れても今回の書体では結果が同じ）。
+- 直しで動く字（要件 1.6 の記録）: 游ゴシックの縦書きで、開き括弧類（−10→0）・濁点「゛」（−10→0）・長音「ー」（−0.40→0）・かな（−0.1〜−2.8→0）・「あ」（−0.14→0）。どれも手本（ずらし 0）の側へ動く。ほかの書体は動かない。実装の段で画素でも測り直して記録する。
+- **要件 2.3（字を個別にずらす最後の手段）は使わない**。設定（機能の組の明示）で直ることを測りで確かめた。
+
+### 10.2 件 2: GDI の名前の引き当て（G1 に決めた）
+
+`IDWriteGdiInterop::CreateFontFromLOGFONT`（`LOGFONTW` の `lfFaceName`＝候補・`lfWeight`＝400・`lfCharSet`＝`DEFAULT_CHARSET`）で測った:
+
+| 候補 | 家族名で当たるか | GDI の名前として | 太さ・幅・斜体 | 家族名（en-us／ja-jp） |
+|---|---|---|---|---|
+| 游ゴシック Medium | 当たらない | 当たる | 500・5・0 | Yu Gothic／游ゴシック |
+| Yu Gothic Medium・yu gothic medium・YU GOTHIC MEDIUM | 当たらない | 当たる | 500・5・0 | 同上 |
+| 游ゴシック Light・Yu Gothic Light | 当たらない | 当たる | 300 | 同上 |
+| 游ゴシック・Yu Gothic | 当たる | 当たる | 400 | 同上 |
+| Yu Gothic UI Semibold | 当たらない | 当たる | 600 | Yu Gothic UI |
+| Arial Black | 当たらない | 当たる | 900 | Arial |
+| Arial Narrow | 当たらない | 当たる | 400・**幅 3**（condensed） | Arial |
+| Segoe UI Light Italic | 当たらない | 当たる | 300・5・**斜体 2** | Segoe UI |
+| NoSuchFontXYZ・`pasta.ttf`・空 | 当たらない | **`DWRITE_E_NOFONT`（0x88985002）で失敗** | — | — |
+
+- **見つからない名前は失敗する**（既定の書体へ黙って置き換えない）＝§8 の問い ⑴ は「失敗する」。日本語の GDI の名前にも当たる（⑵）。大小を問わない（要件 3.5）。家族名にも当たるので、家族名 → GDI の名前の順を守る（⑶）。戻る家族名はどの言語のものでも `CreateTextFormat`／`SetFontFamilyName` に渡し直せる（⑷・家族名の照合はどの言語の名前にも当たる）。
+- 名前が指すのは太さ・斜体だけでなく**幅**（Arial Narrow）もある。名前どおりの書体で描くため、幅も運ぶ（幅を落とすと Arial Narrow が並幅で描かれる）。
+- `lfFaceName` は 32 単位（終端込み）。31 単位を超える候補は GDI の名前になりえないので引かない。
+- ⑸ ファイルの書体（下流の `balloon-font-file`）: Windows 10 からの `IDWriteGdiInterop1::CreateFontFromLOGFONT(logfont, fontCollection)` が書体の集まりを受け取る（`windows` 0.62 に在る）。下流はここへ自前の集まりを渡せばよい＝G2 に替える必要は無い。本書は呼ばない（下流の持ち物）。
+- 太字の指定と名前の太さの重ね方（要件 4.2）: 「中太の名前＋太字」は 700。名前の太さが 700 より重い（Arial Black の 900）ときは名前の太さのまま（GDI も同じ名前の中の顔を選ぶ）＝`max(700, 名前の太さ)`。
+
+### 10.3 件 3: 列の左右のずれ（要件 5.1）
+
+`SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, h, h/2)`（行の箱の幅＝h・基線＝その真ん中）を縦書きの TextLayout に付けて測った（20px・本文「あ亜Agほ」と「あ」）:
+
+| 書体 | 向き | 既定の em の箱の左の比 | 揃えた後 | 立てる並びの基線の x（行の箱の左から） |
+|---|---|---|---|---|
+| 游ゴシック | 右から左 | −0.3013（「あ」）／−0.3398（本文） | 0 | 3.98 → **10.00** |
+| 游ゴシック | 左から右 | ＋0.3008 | 0 | 16.80 → 10.00 |
+| Yu Gothic UI | 右から左／左から右 | −0.1650／＋0.1992 | 0／0 | 6.02／13.30 → 10.00 |
+| メイリオ | 右から左／左から右 | −0.2500／＋0.2500 | 0／0 | 5.00／15.00 → 10.00 |
+| ＭＳ ゴシック・BIZ UDPゴシック | 両方 | 0 | 0（変わらない） | 10.00 |
+
+- 列の基線（立てる字の em の箱の真ん中）が、どの書体・どちらの向きでも行の箱の真ん中（x＝10）に来る＝em の箱の左右の中心が行の矩形の中心に重なる（要件 5.1）。起票の −6.5px（游ゴシック・20px）が消える見込み（画素の確かめは実装の檻）。
+- 原因: DirectWrite の既定の行間は書体の `ascent＋descent＋lineGap`（20px で游ゴシック 32.8px・Yu Gothic UI 27.3px・メイリオ 30.0px・ＭＳ ゴシック 20.0px）で列の箱を組み、その箱を行の矩形の書き始めの辺に揃える。areka の行の矩形は em の幅（`layout.rs`）。行間を em に揃えると、DirectWrite の列が areka の行の矩形と同じ形になる。
+- 横倒しの英字の基線は 2.40px（ＭＳ ゴシックは 2.81）へ動く＝立てる字と同じ量だけ真ん中の側へ寄る。
+- 装飾で大きさの違う字が混じる行（行の箱の幅＝行内最大 em）は、同じ設定を行の箱の幅で付ける（`SetLineSpacing` は TextLayout にも在る）。
+- `layout.rs`・`viewbox_draw_render.rs` には触れずに済む（設定は TextLayout を作る所に置く）。
+
+### 10.4 バルーン定義の `font.bold`・`font.italic`（要件 4.8・4.9）
+
+静的に読み直して確かめた: 本番で `looks.default.bold`／`italic` を読む所は `draw_metrics.rs::probe_format_for`（既定でない計測鍵だけ）と `viewbox_draw_decoration.rs::apply_font_ranges`（既定でない区間だけ）の 2 か所しかない。束縛書式（`try_create_format`）は太さ・斜体を NORMAL に決め打ち。ゆえに `font.bold,1` だけのバルーンの既定の字は細く描かれ、計測も細い（両方そろって細いので折り返しはずれない）。§2.7 の見立てどおり。直しは「束縛書式に既定の見た目の太字・斜体を焼く」。檻は実 GPU の読み戻しで太く・斜めに描かれることを固定する（要件 4 の注記の「設計の段で確かめる」は、この読みと実装の檻で満たす）。
+
+### 10.5 合成（design-synthesis）の結果
+
+- **一般化**: 「名前 → 顔（家族・太さ・幅・斜体）」の解決を 1 つにし、太字・斜体の重ね方を 1 つの規則（`FontFace::weight_with`／`style_with`）にした。書式（束縛・計測鍵ごと）と範囲指定の 3 か所が同じ規則を通る。縦書きの TextLayout の設定（機能の組・行間）も、TextLayout を作る 3 か所（行・1 字の計測・em の箱の測り）が通る 1 つの関数にまとめた。
+- **作るか使うか**: GDI の名前は OS の `IDWriteGdiInterop`（SSP と同じ GDI の規則）を使う。名前の末尾を自前で読む G3 は採らない。機能の組は DirectWrite の `IDWriteTypography` を使う。新しい依存は 0。
+- **削る**: 計測鍵ごとの試験用書式が `try_create_format` の設定を字面で写していた重複をやめ、同じ関数を呼ぶ形にする（「`try_create_format` を変えても試験用書式は追随しない」という既知の弱点が消える）。新しいソースファイルは 0。`layout.rs` の既定の実装（列の箱の真ん中）は純粋層の偽の計測器の模型として残す（本番は測った比を使い、測れないときの縮退だけを 0 にする）。
+- **見送った物**: ファイルの書体の集まりを GDI の引き当てに渡す口（下流 `balloon-font-file` の持ち物）・`vhal`／`vchw` などの約物の詰め（下流 `text-typesetting`）。
+
+### 10.6 見つけた既存の食い違い（本書の範囲の外・記録だけ）
+
+- `\f[name,…]` の候補が全部見つからないとき、**計測**（`probe_format_for`）は既定の書体（ＭＳ ゴシック）で測り、**描画**（`apply_font_ranges`）は束縛の書体のまま描く。完了 spec の 2 つの決め（計測＝R11.3・描画＝要件 9.8）の間の既存の食い違いで、送り幅がずれうる。本書は GDI の名前で当たる候補の太さ・斜体を両方に同じに渡すだけで、この食い違いは今のまま残す。直すなら `/kiro-discovery` で起票する（進行役へ申し送る）。
+
 ## 出典
 
 - [Vertical Text（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/directwrite/vertical-text)
 - [DWRITE_VERTICAL_GLYPH_ORIENTATION（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/api/Dwrite_1/ne-dwrite_1-dwrite_vertical_glyph_orientation)
 - [IDWriteGdiInterop::CreateFontFromLOGFONT（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwritegdiinterop-createfontfromlogfont)
 - [Chromium `ui/gfx/platform_font_win.cc`（GDI の名前と DirectWrite の照合・見つからないときの振る舞いの注記）](https://chromium.googlesource.com/chromium/src/+/0b71f14/ui/gfx/platform_font_win.cc)
+- [IDWriteGdiInterop1::CreateFontFromLOGFONT（Microsoft Learn・書体の集まりを渡せる版）](https://learn.microsoft.com/en-us/windows/win32/api/dwrite_3/nf-dwrite_3-idwritegdiinterop1-createfontfromlogfont)
+- [IDWriteTypography（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nn-dwrite-idwritetypography)
+- [IDWriteTextFormat::SetLineSpacing（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwritetextformat-setlinespacing)
+- [HarfBuzz `src/hb-ot-shape.cc`（縦書きの既定の機能は `vert` だけ）](https://github.com/harfbuzz/harfbuzz/blob/main/src/hb-ot-shape.cc)
