@@ -516,3 +516,73 @@ fn a_three_body_chain_uses_the_previous_result_as_the_next_base() {
         "詰め直しが縦の位置を変えた（要件 1.4）"
     );
 }
+
+/// 詰め直した窓が作業領域の外になるときは、反対の側へ並べ替えて作業領域の中に置く
+/// （window-work-area-clamp 要件 2.1・2.3・7.7）。
+///
+/// 3 体の鎖を半分にした後（x: 1100／775／550・幅 200／150／100）、作業領域の左端を 1000 に
+/// すると、scope1 を左に詰めた 950 は外へ出る。寄せは scope1 を本体の右の隣 1300 へ並べ替え、
+/// 本体は動かさない。scope2 は並べ替えた scope1 の左の隣 1200 へ詰まり、収まるので寄せない
+/// （本体と重なるのは許す・3 体以上の鎖は extra-character-windows の持ち場）。記録には場面
+/// `dpi-realign` と `flipped` の寄せが scope1 に 1 行残る。
+#[test]
+fn a_realigned_window_outside_the_work_area_flips_to_the_other_side() {
+    let (mut world, gw) = chain3_world();
+    world.insert_resource(crate::placement::follow::MonitorSnapshot {
+        work_areas: vec![crate::placement::resolver::RectPx {
+            left: 1000,
+            top: 0,
+            right: 2000,
+            bottom: CHAIN3_BOTTOM,
+        }],
+    });
+    let before = snapshot_char_rects(&world);
+    halve_keeping_bottom_center(&mut world, &gw);
+    arm_chain_realign(&mut world, before);
+    assert_eq!(
+        chain3_pos(&world, &gw, 1).0,
+        775,
+        "前提が崩れている: 半分にした後の scope1 の x が想定と違う"
+    );
+    let ys_before: Vec<i32> = (0..3).map(|s| chain3_pos(&world, &gw, s).1).collect();
+
+    let logs = capture_logs(|| realign_chain_once_with(&mut world, |world| Ok(chain3_scan(world))));
+
+    assert_eq!(
+        chain3_pos(&world, &gw, 0).0,
+        1100,
+        "本体が動いた（要件 2.3）"
+    );
+    assert_eq!(
+        chain3_pos(&world, &gw, 1).0,
+        1300,
+        "作業領域の外へ詰めた窓が本体の右の隣へ並べ替えられていない（要件 2.1）"
+    );
+    assert_eq!(
+        chain3_pos(&world, &gw, 2).0,
+        1200,
+        "3 体目が並べ替えた scope1 の左の隣へ詰まっていない（design テスト⑵・要件 1.5。本体と重なるのは許す＝design Risks の 3 体以上の鎖は extra-character-windows の持ち場）"
+    );
+    assert_eq!(
+        (0..3)
+            .map(|s| chain3_pos(&world, &gw, s).1)
+            .collect::<Vec<_>>(),
+        ys_before,
+        "縦に収まっている窓の縦の位置が変わった"
+    );
+    let clamp: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains(crate::placement::follow::WORK_AREA_CLAMP_TAG))
+        .collect();
+    assert!(
+        clamp.iter().any(|l| l.contains("scene=\"dpi-realign\"")
+            && l.contains("scope=1")
+            && l.contains("how=\"flipped\"")),
+        "詰め直しの寄せの記録が無い（要件 7.7）: {logs:?}"
+    );
+    assert!(
+        !clamp.iter().any(|l| l.contains("scope=2")
+            && (l.contains("how=\"flipped\"") || l.contains("how=\"edge\""))),
+        "収まっている scope2 が寄せられた: {logs:?}"
+    );
+}

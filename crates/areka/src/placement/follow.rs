@@ -106,7 +106,7 @@ pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 #[allow(unused_imports)]
 pub use self::work_area::MonitorDpiEntry;
 // 作業領域へ寄せる鎖の核・World の口と記録の語（window-work-area-clamp・task 1.1・1.2）。呼び手は起動の並べ直し
-// （task 2.1）と詰め直しで、`#[path]` で src を取り込む examples には無いので、そちらのビルドでは未使用に見える。
+// （task 2.1）と詰め直し（task 2.2）で、`#[path]` で src を取り込む examples には無いので、そちらのビルドでは未使用に見える。
 #[allow(unused_imports)]
 pub(crate) use self::work_area_clamp::{
     ChainClampOutcome, ChainPlacement, ClampScene, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,

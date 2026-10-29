@@ -39,7 +39,7 @@
   - 解いた x が作業領域の外へ出る並びを期待していた起動の並べ直しの檻は、本質（並べ方・一度きり）を変えずに前提の状態だけを合わせ、全部緑になる
   - _Depends: 1.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.4, 5.1, 5.2, 7.3, 7.5, 7.7, 10.1, 10.2_
-- [ ] 2.2 (P) 拡大率の後の詰め直しが寄せを通してから x と y を書く
+- [x] 2.2 (P) 拡大率の後の詰め直しが寄せを通してから x と y を書く
   - 詰め直しで隣り合いの解きの代わりに 1.2 の口を呼び（場面は詰め直し）、置いた位置が今の位置と違う窓を詰め直しの経路で書く。詰め直しは保存を呼ばない
   - 持ち場の檻はこの 5 つだけ: `frame_chain_realign_tests.rs`・`frame_chain_realign_adjacency_tests.rs`・`frame_chain_realign_arm_tests.rs`・`frame_chain_realign_exclusion_tests.rs`（フレーム）・`chain_realign_script_moved_tests.rs`（配置）。`follow_*` の檻と再スナップの檻には触らない（2.3 の持ち場）
   - `frame_chain_realign_adjacency_tests.rs` に、詰め直した窓が作業領域の外になる形が反対の側へ並べ替えられる形を 1 つ足し、緑になる
