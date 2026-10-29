@@ -25,7 +25,6 @@
 - 同梱のフォントファイルの読み込み（`balloon-font-file`）。ファイル名の候補は今のまま読み飛ばす。
 - `menu.font.name`、`number`／`sstpmessage`／`communicatebox` の表示そのもの（4.7 は「同じ解決を通せば効く」形を保つだけ）。
 - 太さを書く areka だけの新しい書き方・切り替えの設定（3.8・3.9）。
-- `\f[name]` の候補が全滅したときの計測（ＭＳ ゴシック）と描画（束縛の書体）の既存の食い違い（research.md §10.6・本書の範囲の外として記録だけ）。
 
 ## Boundary Commitments
 
@@ -119,9 +118,9 @@ graph TB
 
 ### Modified Files（本番）
 
-- `crates/areka-emo-text/src/draw_catalog.rs`（208 行 → 約 330 行）— `FontFace`（顔の値・`regular`・`weight_with`・`style_with`）を足す。`FontCatalog` の記憶を `Option<FontFace>` にし、`face_for`・`face_or_default` を足し、`family_for` を `face_for` の家族名だけを返す薄い口にする。候補ごとに「家族名 → GDI の名前」の順で引く `lookup`・GDI の名前を引く `gdi_face` を足す。`FamilySource::System` に `IDWriteGdiInterop` を持たせ、`#[cfg(test)]` の `Fake` に「GDI の名前（小文字）→ 顔」の表を足す。`pick` は解決した顔を `ResolvedFont::face` に、家族名を `name` に入れる。
+- `crates/areka-emo-text/src/draw_catalog.rs`（208 行 → 約 330 行）— `FontFace`（顔の値・`regular`・`weight_with`・`style_with`）を足す。`FontCatalog` の記憶を `Option<FontFace>` にし、`face_for`・`face_or_default`・`face_or` を足し、`family_for` を `face_for` の家族名だけを返す薄い口にする。候補ごとに「家族名 → GDI の名前」の順で引く `lookup`・GDI の名前を引く `gdi_face` を足す。`FamilySource::System` に `IDWriteGdiInterop` を持たせ、`#[cfg(test)]` の `Fake` に「GDI の名前（小文字）→ 顔」の表を足す。`pick` は解決した顔を `ResolvedFont::face` に、家族名を `name` に入れる。
 - `crates/areka-emo-text/src/draw.rs`（761 行 → 約 830 行）— `ResolvedFont` に `pub face: FontFace` を足す（`resolve_with_background` は `FontFace::regular(&name)`）。`try_create_format` を「顔＋太字・斜体の指定」で書式を作る形にし（`pub(super)`）、`create_text_format` は既定の見た目の太字・斜体を渡す（既定フォントでの再試行も同じ規則）。縦書きの機能の組 `VERTICAL_FEATURES` と、TextLayout を作る唯一の関数 `create_line_layout`（縦書きに行間と機能の組を当てる）を足す。モジュール doc の該当行を直す。
-- `crates/areka-emo-text/src/draw_metrics.rs`（480 行 → 約 470 行）— `probe_format_for` は `fonts.face_or_default(&key.name)` と `try_create_format` を呼ぶ形にし、設定の写しを消す。`probe_advance` と `measure_vertical_em_box_left_ratio` は `create_line_layout` で TextLayout を作る。em の箱の比が測れないときの縮退を 0（行の矩形の真ん中）にする。doc の実測例（∓0.1650・−0.3013）を「列のレシピの下では 0」に直す。
+- `crates/areka-emo-text/src/draw_metrics.rs`（480 行 → 約 470 行）— `new_shared` で束縛の顔（`picked.face`）を覚え、`probe_format_for` は `fonts.face_or(&key.name, &self.bound_face)` と `try_create_format` を呼ぶ形にし、設定の写しを消す。`probe_advance` と `measure_vertical_em_box_left_ratio` は `create_line_layout` で TextLayout を作る。em の箱の比が測れないときの縮退を 0（行の矩形の真ん中）にする。doc の実測例（∓0.1650・−0.3013）を「列のレシピの下では 0」に直す。
 - `crates/areka-emo-text/src/draw_line_store.rs`（233 行 → 約 225 行）— 行の TextLayout を `create_line_layout` で作る（箱の寸法の場合分けを関数へ移す）。
 - `crates/areka-emo-text/src/viewbox_draw_decoration.rs`（333 行 → 約 360 行）— `apply_font_ranges` を顔で考える形にする（区間の名前が既定と違えば `face_for` で顔を引き、家族名・幅を焼く。太さ・斜体は「区間の顔＋区間の太字・斜体」と「束縛の顔＋既定の太字・斜体」を同じ規則で比べ、違えば焼く）。署名は変えない。
 - `crates/areka-emo-text/src/viewbox_draw_render.rs`（661 行・1 行と型 1 つ）— 束縛書式の記憶の鍵（`ensure_format` の `FormatKey`）を `(font.name, height, mode)` から `(font.looks.default.font_key(), mode)` へ替える。本書の後は候補列全体から解いた顔と既定の見た目の太字・斜体でも書式が変わるので、鍵がそれを見ないと同じ実行部でフォントを替えたときに古い書式を黙って使い続ける（設計の確かめの指摘 1）。今の本番は `actor_attach.rs` が resolved の変化で描画資源ごと作り直すので起きないが、鍵が書式を決める値をすべて含むのが本来の形。ウェーブの約束で触らないと決めたファイルなので、触る前に同じウェーブのほかのセッションへ知らせる（要件 5.3・C12 のほかの 7 本は触らない＝重なり 0）。
@@ -208,6 +207,7 @@ flowchart TB
 | 4.7 | number ほかも同じ解決を通せば効く | FontCatalog（共有の唯一の入口） | `face_for` | 今は読む経路が無い（何もしない） |
 | 4.8 | `font.bold` を既定の字の描画と計測へ | FormatFactory | `create_text_format` | 檻 F1・G5 |
 | 4.9 | `font.italic` を既定の字の描画と計測へ | FormatFactory | 同上 | 檻 F1・G5 |
+| 4.10 | `\f[name]` の候補が全滅なら描画も計測も束縛の顔 | FontCatalog・DWriteMetrics・FontRanges | `face_or` | 檻 D3・F4 |
 | 5.1 | 列の em の箱の中心を行の矩形の中心へ | ColumnRecipe | `create_line_layout`（行間） | 檻 G4・M |
 | 5.2 | 直す前後のずれを記録 | 記録（research.md §10.3＋実装の画素の測り直し） | — | 記録 |
 | 5.3 | 約束の所に及ぶなら知らせる | 実装の進め方（`viewbox_draw_render.rs` の記憶の鍵・`layout.rs` の doc に触る前に知らせる） | — | — |
@@ -272,7 +272,7 @@ impl FontFace {
 }
 ```
 - Invariants: `family` は空でない。`weight_with(false) == weight`・`style_with(false) == style`。
-- 太字が名前の太さより軽くならないよう `max` を取る（「Arial Black」900＋太字は 900・GDI も同じ名前の中の顔を選ぶ）。「中太＋太字」は 700（4.2）。
+- 太字が名前の太さより軽くならないよう `max` を取る（「Arial Black」900＋太字は 900・GDI も同じ名前の中の顔を選ぶ）。「中太＋太字」は 700（4.2）。2026-10-29 設計の討議 議題 2「承認」で確定。
 
 #### FontCatalog
 
@@ -305,6 +305,8 @@ impl FontCatalog {
     pub fn family_for(&self, candidates: &[String]) -> Option<String>;
     /// `face_for`、全滅なら `FontFace::regular(DEFAULT_FONT_NAME)`（束縛書式と計測鍵の書式の唯一の規則）。
     pub fn face_or_default(&self, candidates: &[String]) -> FontFace;
+    /// `face_for`、全滅なら `fallback`（`\f[name]` の区間と計測鍵の規則＝束縛の顔・要件 4.10）。
+    pub fn face_or(&self, candidates: &[String], fallback: &FontFace) -> FontFace;
     /// バルーン定義の候補列を解決した顔を `face` に、その家族名を `name` に入れた複製。
     pub fn pick(&self, font: &ResolvedFont) -> ResolvedFont;
     /// テスト用: 家族名の集合と「GDI の名前 → 顔」の表で作る偽の台帳（機械のフォントに頼らない・6.2）。
@@ -424,7 +426,7 @@ pub(crate) fn create_line_layout(
 | Requirements | 2.4・4.1・5.4 |
 
 **Responsibilities & Constraints**
-- `probe_format_for(key)`: 顔＝`self.fonts.face_or_default(&key.name)`（全滅は ＭＳ ゴシック＝今のまま）、書式＝`try_create_format(&self.factory, &face, key.bold, key.italic, size)`＋方向レシピ。計測鍵（候補列・大きさ・太字・斜体）が顔を一意に決めるので、鍵と書式の記憶の形は変えない。
+- `probe_format_for(key)`: 顔＝`self.fonts.face_or(&key.name, &self.bound_face)`（全滅は束縛の顔＝描画の `apply_font_ranges` と同じ・要件 4.10。束縛の顔は `new_shared` の `pick` が解いたもので、束縛の候補列が全滅なら ＭＳ ゴシック）、書式＝`try_create_format(&self.factory, &face, key.bold, key.italic, size)`＋方向レシピ。計測鍵（候補列・大きさ・太字・斜体）が顔を一意に決めるので、鍵と書式の記憶の形は変えない。
 - `probe_advance(text, format, block_extent)`: `create_line_layout(..., block_extent = 鍵の大きさ, self.mode)`。行内の軸は今のまま `PROBE_MAX_EXTENT`（未折返し）。
 - `measure_vertical_em_box_left_ratio`: 引数に `mode` を足し（呼び手は `new_shared` の縦書きの枝の中）、「あ」の TextLayout を `create_line_layout(..., font_height, mode)` で作る＝本番の列と同じレシピで測る。列のレシピの下の実測は全書体 0（research.md §10.3）。
 - 測れないときの縮退は 0（行の矩形の真ん中＝列のレシピが保証する置き場）。`warn!` は今のまま。束縛と違う縦書きの向きを問われたとき（`mode != self.mode`）も 0 を返す（列のレシピはどちらの向きでも em の箱を真ん中に置く＝古い ±s/2 の既定の実装へ落とさない・設計の確かめの指摘 3）。横書きを問われたときは今のまま。
@@ -457,7 +459,7 @@ pub(crate) fn create_line_layout(
 
 **Implementation Notes**
 - Validation: 計測の側（試験用書式）は同じ `FontFace` の規則を通るので、区間の太さ・斜体は描画と計測で一致する（4.1）。
-- Risks: 区間の名前が全滅のとき計測は ＭＳ ゴシック・描画は束縛の書体という既存の食い違いは残る（Non-Goals・research.md §10.6）。
+- 区間の名前が全滅のときは、描画も計測も束縛の顔に区間の太字・斜体を重ねる（`face_or(&look.name, &束縛の顔)`・要件 4.10）。完了 spec が計測の側に決めていた「全滅は ＭＳ ゴシックで測る」（research.md §10.6 の R11.3）を、描画の側に揃えて上書きする（2026-10-29 設計の討議 議題 1）。
 
 #### Ledger（`assets.toml` の `font.name` の行）
 
@@ -531,6 +533,7 @@ pub(crate) fn create_line_layout(
 - D1（3.2・4.6）: `\f[name,X Medium]`（偽の GDI の表で「Yu Gothic」500）の区間は、家族名「Yu Gothic」・`GetFontWeight`＝500。区間の外は束縛のまま。
 - D2（4.3）: 束縛の顔が中太で既定が太字の行で、`\f[bold,0]` の区間は 500（Regular の 400 へ戻らない）。束縛が中太で区間が Regular の家族名なら 400（中太を受け継がない）。
 - D3（4.6・幅）: GDI の顔の幅が束縛と違えば `GetFontStretch` がその幅。全滅の区間名は束縛の顔のまま（範囲指定 0 回）。
+- F4（4.10・`draw_metrics_styled_tests.rs`）: 束縛が中太（偽の GDI の表）の `DWriteMetrics` で、候補が全滅した計測鍵の試験用書式が束縛の家族名・太さ 500（太字の鍵は 700）になる（ＭＳ ゴシック 400 で測らない）。あわせて、その区間を含む行の cluster の幅と 1 字の計測が一致する。
 
 ### 実 GPU の読み戻し — `tests/decoration_readback/vertical.rs`（`mod.rs` の `run_with`）
 
