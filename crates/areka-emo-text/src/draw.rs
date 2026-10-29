@@ -152,7 +152,7 @@ mod line_store;
 #[path = "draw_catalog.rs"]
 mod catalog;
 
-pub use catalog::FontCatalog;
+pub use catalog::{FontCatalog, FontFace};
 pub(crate) use line_store::LineLayoutStore;
 pub use metrics::DWriteMetrics;
 
@@ -212,6 +212,9 @@ pub struct ResolvedFont {
     /// `height`・`color` が同名のフィールドと一致することは、構築が
     /// [`resolve_with_background`](Self::resolve_with_background) の 1 か所だけであることが保証する。
     pub looks: LookLayers,
+    /// 採用した顔（家族名・太さ・幅・斜体・要件 3.2／3.10）。組み立ては [`name`](Self::name) の
+    /// 未解決の Regular の顔で、[`FontCatalog::pick`] が解決した顔へ差し替える。
+    pub face: FontFace,
 }
 
 impl ResolvedFont {
@@ -300,6 +303,7 @@ impl ResolvedFont {
         let overrides = crate::balloon_overrides::overrides(model, &base);
 
         ResolvedFont {
+            face: FontFace::regular(&name),
             name,
             fallback_chain,
             height,

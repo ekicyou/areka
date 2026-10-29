@@ -542,6 +542,25 @@ fn u6_a_gdi_resolved_list_is_not_looked_up_twice() {
     );
 }
 
+/// U8（3.2・3.10）: ぱすたの候補列を束縛のフォントへ解決すると、名前は家族名・顔は中太。
+/// 組み立てたばかりの束縛は未解決の Regular の顔（先頭候補の名前）を持つ。
+#[test]
+fn u8_pick_puts_the_resolved_face_on_the_bound_font() {
+    let font = ResolvedFont::resolve(&model_with_font(Font::new(
+        Some("游ゴシック Medium, Yu Gothic Medium, 游ゴシック, Yu Gothic, メイリオ".to_owned()),
+        None,
+        FontColor::new(None, None, None),
+    )));
+    assert_eq!(font.face, FontFace::regular("游ゴシック Medium"));
+
+    // GDI の表の鍵は大小を問わない（「游ゴシック medium」で引ける）。
+    let cat = FontCatalog::with_faces(&["メイリオ"], &[("游ゴシック medium", medium())]);
+    let picked = cat.pick(&font);
+    assert_eq!(picked.name, "Yu Gothic");
+    assert_eq!(picked.face, medium());
+    assert_eq!(picked.face.weight.0, 500);
+}
+
 // ---- §9 実際の書体の集まりでの中太（檻 R1・要件 3.5／3.10／6.3） ----
 
 /// R1: 本番の台帳で「Yu Gothic Medium」ほかの GDI の名前が中太（500）の顔になり、

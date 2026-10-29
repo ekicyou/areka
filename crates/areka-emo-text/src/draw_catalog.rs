@@ -255,16 +255,15 @@ impl FontCatalog {
             .unwrap_or_else(|| fallback.clone())
     }
 
-    /// バルーン定義の候補列（`[name] ++ fallback_chain`）を解決した名前を `name` に
-    /// 据えた複製を返す（要件 9.8）。全滅は [`DEFAULT_FONT_NAME`]。
+    /// バルーン定義の候補列（`[name] ++ fallback_chain`）を解決した顔を `face` に、その
+    /// 家族名を `name` に据えた複製を返す（要件 9.8・3.2）。全滅は [`DEFAULT_FONT_NAME`] の Regular。
     ///
     /// 既存の書式生成関数（`create_text_format`／`try_create_format`）は**この複製で**
     /// 呼ぶ——解決は書式生成の手前で終わっているので、生成関数の本文は変わらない。
     pub fn pick(&self, font: &ResolvedFont) -> ResolvedFont {
         let mut picked = font.clone();
-        picked.name = self
-            .family_for(&font.looks.default.name)
-            .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());
+        picked.face = self.face_or_default(&font.looks.default.name);
+        picked.name = picked.face.family.clone();
         picked
     }
 
