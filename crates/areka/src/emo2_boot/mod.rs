@@ -47,6 +47,7 @@ pub(crate) mod shell_balloon_switch;
 pub(crate) mod shell_box_assets;
 /// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。
 pub(crate) mod shell_carry;
+pub(crate) mod shell_cursor_table;
 mod special_name;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
