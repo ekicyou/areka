@@ -393,7 +393,6 @@ pub(crate) fn clamp_grown_free_default(
 }
 
 /// 記憶から位置を戻した 1 窓（組の寄せの入力・設計 GroupClamp）。
-#[allow(dead_code)] // 組む呼び手は記憶の戻し（task 2.4）・examples には無い
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RestoredWindow {
     pub scope: usize,
@@ -408,7 +407,6 @@ pub(crate) struct RestoredWindow {
 }
 
 /// 組の寄せで置き直す窓（`shown` と違うものだけ）。
-#[allow(dead_code)] // 同上
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GroupShift {
     pub scope: usize,
@@ -424,7 +422,6 @@ pub(crate) struct GroupShift {
 /// 和の矩形のモニタの作業領域へ収めの式で収め、その差を全員に足す（要件 4.1・7.1・7.2）。
 /// 見えている窓のある組は動かさない（要件 4.1 の改め・4.3）。作業領域が取れない組は返さず
 /// `Unresolved`（warn!・要件 7.4）。
-#[allow(dead_code)] // 呼び手は記憶の戻し（task 2.4）・examples には無い
 pub(crate) fn keep_restored_groups(
     windows: &[RestoredWindow],
     snapshot: &MonitorSnapshot,

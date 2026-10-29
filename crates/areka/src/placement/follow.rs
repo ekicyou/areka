@@ -114,10 +114,11 @@ pub(crate) use self::work_area_clamp::{
 };
 // 面の拡大の寄せ（task 1.3）。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
-// 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（task 2.4）で、それまでと examples の
-// ビルドではテストの外で未使用に見える。
+// 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（`persist::apply_restored_placements`・task 2.4）。
+pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
+// 戻りの型を名前で呼ぶのは檻だけなので、テストの外では未使用に見える。
 #[allow(unused_imports)]
-pub(crate) use self::work_area_clamp::{GroupShift, RestoredWindow, keep_restored_groups};
+pub(crate) use self::work_area_clamp::GroupShift;
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接
 // 呼ばれるため、`follow::` 経由で参照するのは `#[cfg(test)]` のテストモジュールと

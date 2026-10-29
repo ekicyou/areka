@@ -38,7 +38,8 @@ use wintf::ecs::WindowPos;
 use super::chain_finalize::{AdjacencyMark, ChainRect, ScriptPlaced, judge_adjacency};
 use super::chain_realign::snapshot_char_rects;
 use super::follow::{
-    AnchorSource, Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window,
+    AnchorSource, Anchored, MonitorSnapshot, OffsetBase, RestoredWindow, keep_restored_groups,
+    project_anchor, work_area_for_window,
 };
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::spawn::GhostWindows;
@@ -185,12 +186,27 @@ fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
 /// 返す（identity＝架空の既定矩形を発明しない・既存縮退流儀・panic しない・Req5.1）。
 /// この場合、再射影結果を永続へ書き戻さないのは merge 側（`apply_restored_placements`）
 /// が純関数で書込 API を持たない構造遮断が担う（Req5.4）。
+///
+/// 本番の呼び手（[`merge_scope`]）は吸着の当て直しだけの位置も要るので [`project_restore_parts`] を
+/// 直に呼ぶ。本関数はその結果だけを返す檻向けの口。
+#[cfg(test)]
 pub fn project_restore(
     anchor: Anchor,
     pos: PointPx,
     size: SizePx,
     snapshot: &MonitorSnapshot,
 ) -> PointPx {
+    project_restore_parts(anchor, pos, size, snapshot).1
+}
+
+/// [`project_restore`] の本体。吸着の当て直しだけをした左上（`project_anchor` の結果・作業領域が
+/// 取れなければ `pos`）と、窓ごとの判定の結果の 2 つを返す（組の寄せが計算し直さずに使う）。
+fn project_restore_parts(
+    anchor: Anchor,
+    pos: PointPx,
+    size: SizePx,
+    snapshot: &MonitorSnapshot,
+) -> (PointPx, PointPx) {
     // wa＝`pos` に置いた窓矩形の中心が属するモニタの work area（最近傍規則込み）。
     // 空 snapshot は identity（架空矩形を発明しない・既存縮退流儀・Req5.1）。
     let window = RectPx {
@@ -205,7 +221,7 @@ pub fn project_restore(
             ?anchor, input_x = pos.x, input_y = pos.y,
             "project_restore: work area なし→identity"
         );
-        return pos;
+        return (pos, pos);
     };
 
     // アンカー辺の再導出（5.2）＝ project_anchor へ委譲（Bottom は BottomSnapPolicy・
@@ -268,7 +284,7 @@ pub fn project_restore(
         clamped = (result.x != projected.x || result.y != projected.y),
         "project_restore"
     );
-    result
+    (projected, result)
 }
 
 /// 起動時の永続値先読み（本モジュール**唯一の IO 点**・design C1・A1 シーム）。
@@ -340,7 +356,12 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// [`super::balloon_limit::apply_balloon_limit`] を通し、`balloon_limit` が真の scope の
 /// `balloon_pos` だけを作業領域内へ補正する（`balloon_offset` は生値のまま＝補正を
 /// 焼き付けない）。ゆえに関門通過後の `balloon_pos` は表示位置、`balloon_offset` は論理
-/// 相対位置であり、両者の差が恒等式を満たすとは限らない。本関数自身はクランプしない。
+/// 相対位置であり、両者の差が恒等式を満たすとは限らない。
+///
+/// 寄せは 2 段: 窓ごとの寄せは [`project_restore`]（`merge_scope` の中）、組の寄せは
+/// [`super::follow::keep_restored_groups`]（その後・window-work-area-clamp 要件 4.1〜4.4）。
+/// 組の寄せは窓とバルーンの位置を同じ量だけ動かし、`balloon_offset` は変えない（要件 7.7）。
+/// 寄せた位置は記憶へ書き戻さない（要件 4.5・本関数は純関数のまま）。
 ///
 /// `ScopePlacement.scope` は `usize`・[`PersistKey`] の scope は `u32` ゆえ、entries 突合は
 /// `scope as u32` で一貫キャストする。
@@ -349,10 +370,62 @@ pub fn apply_restored_placements(
     entries: &[(PersistKey, String)],
     snapshot: &MonitorSnapshot,
 ) -> Vec<ScopePlacement> {
-    placements
+    let (mut merged, windows) = restored_windows(placements, entries, snapshot);
+    for shift in keep_restored_groups(&windows, snapshot) {
+        let Some(p) = merged.iter_mut().find(|p| p.scope == shift.scope) else {
+            continue; // 組の窓は merged から組んだので必ずある。
+        };
+        p.balloon_pos = PointPx {
+            x: p.balloon_pos
+                .x
+                .saturating_add(shift.to.x.saturating_sub(p.char_pos.x)),
+            y: p.balloon_pos
+                .y
+                .saturating_add(shift.to.y.saturating_sub(p.char_pos.y)),
+        };
+        p.char_pos = shift.to;
+    }
+    merged
+}
+
+/// 窓ごとの写像（[`merge_scope`]）の結果と、記憶から位置を戻したスコープの組の寄せの入力
+/// （スコープ昇順）。記憶の矩形と吸着の当て直しだけの位置は写像が計算した値をそのまま使う
+/// （計算し直さない）。印は警告を出さない読み（知らない語の警告は [`saved_adjacency`] の 1 回に任せる）。
+fn restored_windows(
+    placements: Vec<ScopePlacement>,
+    entries: &[(PersistKey, String)],
+    snapshot: &MonitorSnapshot,
+) -> (Vec<ScopePlacement>, Vec<RestoredWindow>) {
+    let mut windows = Vec::new();
+    let merged = placements
         .into_iter()
-        .map(|p| merge_scope(p, entries, snapshot))
-        .collect()
+        .map(|p| {
+            let (merged, parts) = merge_scope(p, entries, snapshot);
+            if let Some((remembered, projected)) = parts {
+                windows.push(RestoredWindow {
+                    scope: merged.scope,
+                    remembered: ChainRect {
+                        x: remembered.x,
+                        y: remembered.y,
+                        w: merged.char_size.w,
+                        h: merged.char_size.h,
+                    },
+                    projected,
+                    shown: merged.char_pos,
+                    mark: entry_value(
+                        entries,
+                        PersistKey::WindowAdjacent {
+                            scope: merged.scope as u32,
+                        },
+                    )
+                    .and_then(AdjacencyMark::parse),
+                });
+            }
+            merged
+        })
+        .collect();
+    windows.sort_by_key(|w| w.scope);
+    (merged, windows)
 }
 
 /// 保存 WindowPos の x・y が**両方とも** [`parse_px`] できたときだけ、その値（x は原点基準の
@@ -423,27 +496,29 @@ pub fn restored_scope_marks(
 }
 
 /// 1 scope 分の復元 merge（[`apply_restored_placements`] の要素写像・純関数）。
+/// 記憶の位置が採られたときは、記憶の左上（今の大きさで置いた・吸着の当て直しの前）と
+/// 吸着の当て直しだけをした左上も返す（組の寄せの入力・[`restored_windows`]）。
 fn merge_scope(
     placement: ScopePlacement,
     entries: &[(PersistKey, String)],
     snapshot: &MonitorSnapshot,
-) -> ScopePlacement {
+) -> (ScopePlacement, Option<(PointPx, PointPx)>) {
     let scope = placement.scope as u32;
 
     // --- char_pos: 保存 WindowPos が両軸とも parse できたときのみ差替え＋再射影（1.4/1.5/6.1）---
     let saved_window = saved_char_pos(entries, scope);
-    let char_pos = match saved_window {
+    let (char_pos, restored_parts) = match saved_window {
         // 両軸そろったときのみ保存値を採用し、毎起動 live 再射影（アンカー再解決＋域内 clamp）。
         // 保存 x は**原点＝下端中央**基準（Bottom）ゆえ、現寸の左上へ戻してから射影へ渡す
         // （寸法が保存時と異なっても原点が一致する＝キャラもバルーンも横へずれない）。
-        Some(saved) => project_restore(
-            placement.anchor,
-            char_pos_from_origin_x(placement.anchor, saved, placement.char_size),
-            placement.char_size,
-            snapshot,
-        ),
+        Some(saved) => {
+            let remembered = char_pos_from_origin_x(placement.anchor, saved, placement.char_size);
+            let (projected, shown) =
+                project_restore_parts(placement.anchor, remembered, placement.char_size, snapshot);
+            (shown, Some((remembered, projected)))
+        }
         // 片軸でも欠損/非数値 → resolver 既定 char_pos を保持（1.5/6.1）。
-        None => placement.char_pos,
+        None => (placement.char_pos, None),
     };
 
     // --- balloon: 保存 offset があれば基準逆変換で導出、無ければ既定 offset 保持（2.3/2.4）---
@@ -512,7 +587,7 @@ fn merge_scope(
         "merge_scope restore"
     );
 
-    ScopePlacement {
+    let merged = ScopePlacement {
         scope: placement.scope,
         char_pos,
         char_size: placement.char_size,
@@ -527,7 +602,8 @@ fn merge_scope(
         anchor: placement.anchor,
         // 保存値が効いた scope では `None`（要件 4.7）。上の match が決めている。
         balloon_keyword_base,
-    }
+    };
+    (merged, restored_parts)
 }
 
 // ---------------------------------------------------------------------------
@@ -804,6 +880,9 @@ mod finalize_save_tests;
 #[cfg(test)]
 #[path = "persist_io_wiring_tests.rs"]
 mod io_wiring_tests;
+#[cfg(test)]
+#[path = "persist_restore_group_tests.rs"]
+mod restore_group_tests;
 #[cfg(test)]
 #[path = "persist_restore_offset_base_tests.rs"]
 mod restore_offset_base_tests;
