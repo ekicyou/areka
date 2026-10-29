@@ -195,3 +195,110 @@ brief の議題 1〜4 と要件の段の議題 5 は要件 10 のとおり。こ
 - 守る約束: `ghost_session.rs`（935 行）と `ghost_switch.rs`（926 行）に触らない（定常到達は `desk::on_steady` で受ける）。`main.rs` は 981 行。`desk.rs` に判断を入れず呼ぶ行だけ。`dist/README.txt` は 62 行目と 79 行目と新しい段落だけ（同じウェーブの 2 本と別の行）。依存は足さない。
 - 要件討議（2026-10-29）で、§8 の 6（記録の出どころの語をどこに載せるか・要件 2.5 は「記録から読める」に直した）・8（`callghost` とゴースト自身の切り替えの競り合いの見分け方）・9（起動の値を World へ渡す道と、要件 7.1 の記録の置き場）は設計の段で決める事項に回した。§4 の案 A／B／C・R1〜R3・T1／T2・H1／H2 と §7 の調べ 1〜6 も同じ。
 - 消す判断は「終わり方が `Installed` の書庫だけ」を純粋な関数 1 つに閉じ込め、5 つの終わり方を 1 つずつ檻に入れる（取り消せない操作なので、判断の分岐はすべて固定する）。
+
+---
+
+# 設計の段の調べと決め（2026-10-29・kiro-spec-design）
+
+> 設計の段で、§4 の案 A／B／C・R1〜R3・T1／T2・H1／H2、§7 の調べ 1〜6、§8 の議題 6・8・9 を決めた。
+> 行番号は本ブランチ `fbf3d87e` のもの。コードは読むだけ（ビルド・テストは回していない）。
+> 使った手引き: スキル `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、ひな形 `.kiro/settings/templates/specs/design.md`・`research.md`、steering の `structure.md`（テストの兄弟のファイル）・`logging.md`（記録の形と `log-capture-kit`）。外の調べ（Web）は要らない（新しい依存なし・今ある部品だけ）。
+
+## まとめ
+
+- **調べの種類**: 軽い調べ（今ある仕組みの拡張）。手続き・切り替え・readonly の断りは今のまま使い、入口と後始末だけを足す。
+- **要の発見**:
+  - 定常到達の知らせは、SHIORI の結線（本物の sink か `LogSink` か）に関わらず、kanade の起動の段が `basewareversion` の後に 1 件出す（`crates/areka-kanade/src/schedule/boot.rs` 133 行目）。初回の起動の定常到達も `ghost_switch::on_notice` → `install::desk::on_steady` を通る（`ghost_switch.rs` 494〜517 行目）。＝T1 で足りる。
+  - 終了の後始末 `exit_wait::begin_close` は、利用者の終了（`main.rs` 348 行目）と OS のセッションの終了（`session_end.rs` 101 行目）の 2 か所から呼ばれ、どちらも `install::desk::discard_for_exit` を呼ぶ。`app.run()` が戻った後は取り出しの系 `drain` が回らない＝終了の後に届いた `OrderDone` は捌かれない。
+  - 書庫ごとの終わり方 `ArchiveEnd` は背景のスレッドで `run_order` が返すが、窓口へは中身の無い `DeskAsk::OrderDone` しか届かない（`worker.rs` 67〜71 行目・`desk.rs` 292 行目）。
+
+## 調べ（§7 の 1〜6 の答え）
+
+### 調べ 1: `LogSink` へ倒れたときに定常到達が来るか
+- **見た所**: `areka-kanade/src/schedule/boot.rs` 125〜135 行目（`Phase::BootVersion` + `Notified` → `Action::Notice(KanadeNotice::Steady)`）・`emo2_boot/frame.rs` 205〜218 行目（`run_ghost_quit_phase` が `Stopped` 以外を `ghost_switch::on_notice` へ）。
+- **分かったこと**: 定常到達は kanade の起動の段が出す。sink の結線（`wire_emo2_boot` の成否）とは関わらない。kanade が走り SHIORI が `OnBoot` と `basewareversion` に答えれば、`LogSink` の起動でも定常到達は来る。定常到達が来ない走りでは起動の依頼は出ず、終了の後始末で要件 2.7 の記録が出る。
+- **設計への効き**: T1（`on_steady` で 1 回だけ取り出す）を取る。定常到達が来ない走りのための別の道は作らない。
+
+### 調べ 2: ゴーストが `OnInstallCompleteEx` に `\![change,ghost,lastinstalled]` を返すときの順
+- **見た所**: `install/procedure.rs` 269〜285 行目（締めの知らせの後に `Installed` を返す）・`worker.rs` 64〜79 行目（`run_order` の後に `OrderDone`）・`emo2_boot/ghost_switch.rs` 71〜93 行目（台本の切替要求は `ChangeRx` から入力の段で入口へ）・244〜256 行目（予約が在れば `Busy`）。
+- **分かったこと**: 背景のスレッドは kanade の返事（SHIORI の応え）を受けた時点で次へ進む。応えの台本の中の `\![change,...]` は、トークがその所まで進んだときに受け口から送られる。だから多くは `OrderDone` が先に UI スレッドへ届く。ただし応えが短い・2 本目以降の書庫が残っている、などで台本の切替要求が先に届くこともある。どちらが先かは決まらない。
+- **設計への効き**: 待ちの時間を置かない（時刻の大原則）。依頼を出した時点と終わった時点の今のゴーストを比べ、終わった時点に切替の予約が在るか、今のゴーストが変わっていれば `callghost` を頼まない。`callghost` が先に受理されたら、後から来たゴーストの切替要求は今の入口の `Busy`（warn `ghost_switch_busy`）で記録に残る（議題 8 の ⑴）。
+
+### 調べ 3: SSP で `callghost` を測るか
+- 要件 10.1 のとおり測らない（測った答えがどちらでも作業は同じ）。
+
+### 調べ 4: 同じ書庫の綴り違い
+- **見た所**: `offline_dump/mod.rs` 95・129・235 行目（`std::path::absolute`）。Windows の `std::path::absolute` は `GetFullPathNameW` を使い、`.`・`..`・区切りの向きを整える（短い名前 8.3 は長くしない）。
+- **決め**: 受け取った時点で `std::path::absolute` で絶対に直し、比べるときは文字列を小文字にして比べる。短い名前と長い名前の違い・リンクは同じと見ない。見損ねても、2 つ目の綴りは「既に無い」で消せなかった warn が 1 件増えるだけで、ほかの書庫を消すことは無い（安全側）。
+
+### 調べ 5: `initial_install.nar` の実機の確かめ
+- **決め**: 実機の確かめはしない。決定論のテストだけにする。理由: 開発中の exe は `target\debug\` に在り、そこはこのワークツリーのすべての試験が共有する。そこへ `initial_install.nar` を置くと、同じ時に走るほかの実機の試験の areka がそれを入れて消す（試験どうしが汚し合う）。exe を別の所へ写して起こす形は、隣の 32 ビットの仲介などの決まりを崩す。見る所は引数でフォルダを受ける関数にし、テストは `target\` の下のフォルダを渡す（要件 9.4・9.7）。
+
+### 調べ 6: 消せない `initial_install.nar` の記録の量
+- **決め**: 1 回の走りで、見るのは 1 回・消すのも 1 回なので、消せなければ warn が走りごとに 1 件。毎回上書きで入ることは説明書に書く（要件 4.5・8.3）。読み取りだけの走りは入れも消しもしない（断りの info 1 件だけ）。
+
+## 形の比べ（§4 の結論）
+
+| 候補 | 中身 | 取る／取らない | 理由 |
+|---|---|---|---|
+| 案 A | 今のファイルに全部書き足す | 取らない | `desk.rs` に消す・切り替える判断が入り、窓口の役目から外れる |
+| 案 B | 判断を新しいファイルへ・今のファイルには呼ぶ行だけ | **取る（縮めて）** | `ghost_session.rs`・`ghost_switch.rs` に触らない。判断が純粋な関数になる |
+| 案 C | 消す所を背景のスレッドへ | 取らない | `InstallOrder` を組む所すべてに欄が増える。`callghost` のために結局終わり方を UI へ渡す道が要り、道が 2 本になる |
+| R1 | `OrderDone { order, ends }` | **取る** | 道が 1 本。依頼と結果が 1 つの知らせで揃う。書き換えるテストは 4 か所 |
+| R2 | 別の知らせを足す | 取らない | 知らせの順の約束が増える |
+| R3 | 記録の頼みから拾う | 取らない | 書庫のパスと失敗が分からない |
+| T1 | `on_steady` で 1 回だけ取り出す | **取る** | 要件 2.1 のとおり・調べ 1 で定常到達が来ると確かめた |
+| T2 | 起動のときに積んでおく | 取らない | 定常に着かない走りで窓口が忙しいままになる |
+| H1 | `main` から World へ（2 行） | **取る** | 値の流れが目で追える。テストは World に持ち物を足すだけ。`main.rs` は 981 → 983 行 |
+| H2 | プロセスの印 | 取らない | テストで差し替えにくい。`readonly` の印と違い、値（書庫の並び）を持つ |
+
+### 縮めたこと（Simplification）
+- 案 B の新しい `cli/install_args.rs` は作らない。`--install` の腕と 2 つの語は `cli/parse.rs` の今の腕に数行ずつで入り（645 → 約 690 行）、値の型 `InstallArgs` は `cli/mod.rs` に置く。テストだけ兄弟の新しいファイル `cli/parse_install_tests.rs` に置く（`parse_readonly_tests.rs` と同じ形）。
+- 起動の依頼の持ち物・判断・消す所・`callghost` を頼む所は、新しい `install/startup.rs` 1 つにまとめる（約 250 行）。
+- 「入ったら消す」の印を `InstallOrder` に足さない（案 C を取らない）。消す判断は終わり方の並びだけから決める純粋な関数 1 つ。
+
+### 一般化（Generalization）
+- `deletesource` と `initial_install.nar` の「入った書庫だけ消す」は同じ問題。純粋な関数 `sources_to_delete(archives, ends)` 1 つと消す所 1 つを両方が使う（違うのは、`initial_install.nar` は語なしでいつも消す、の 1 点）。
+- 記録の出どころの語は、今の `InstallOrigin` に 2 つ足すだけで、`install_order_queued`・`install_order_refused`・`readonly_refused`・`install_begin` の 4 つの記録に自然に載る。
+
+### 作るか借りるか（Build vs Adopt）
+- 新しい依存は無い。パスの絶対化は `std::path::absolute`（`offline_dump` と同じ）、消すのは `std::fs::remove_file`、exe の場所は `roots::user_root::exe_dir()`、切り替えは `request_ghost_switch`、readonly の断りは `install::submit` の先頭。作るのは、1 回だけ出す持ち物と、消す／頼むの判断だけ。
+
+## 決め（§8 の議題 6・8・9 ほか）
+
+### 決め: 記録の出どころの語の載せ方（議題 6）
+- **候補**: ⑴ 手続きの記録全部に `origin` を足す ⑵ 「書庫を始めた」の記録との突き合わせで足りるとする ⑶ 起動の依頼が終わったときに、書庫ごとの終わり方と出どころを並べた記録を 1 件足す。
+- **取る**: ⑶。info `startup_install_done`（`origin`・書庫ごとの `(パス, 終わり方の語)`）。手続き（`procedure.rs`）に触らず、消す判断と同じ所で出せる。受けた（`install_order_queued`）と始めた（`install_begin`）には今のまま `origin` が載る。
+- **引き換え**: 「入った」「失敗した」の 1 件ごとの記録（`install_done`・`install_failed`）には出どころが載らないまま。終わりのまとめ 1 件で読む。
+
+### 決め: `callghost` とゴースト自身の切り替えの競り合い（議題 8）
+- **候補**: ⑴ 終わった時点で予約が在る・今のゴーストが変わっていれば頼まない ⑵ 終わってから一拍待つ。
+- **取る**: ⑴。依頼を出したときの今のゴーストのフォルダ名を控え（`ghost_at_submit`）、終わったときの今のゴーストと `same_folder_name` で比べる。上書きのための起こし直しは同じフォルダなので混ざらない。
+- **引き換え**: 依頼の間に A → B → A と切り替わって戻ったときは見分けられない（切り替えが無かったと見て頼む）。切り替えの始まりを知らせる口（押す形）を作るには `ghost_switch.rs` に手を入れる必要があり、並走の約束と上限に触れるので取らない。コードに `shortcut:` の注で残す。
+
+### 決め: 起動の値を World へ渡す道と要件 7.1 の記録の置き場（議題 9）
+- **取る**: H1。`main.rs` に 2 行: ⑴ `--offline-dump` の早い戻りの後・起動の解決の前に `let startup_install = install::startup::StartupInstall::new(opts.install);`（相対パスを絶対に直し、exe の隣のフォルダを控える）⑵ `readonly::install(world)` の次に `install::startup::install(world, startup_install)`（World の資源へ移す）。
+- 要件 7.1 の記録は、持ち物の `Drop` が出す: まだ依頼を出していない（`pending` が残る）持ち物が落ちたら、入れる物が在るときだけ warn `startup_install_not_submitted`（`reason=boot_stopped`）を 1 件。起動の解決が `Err` で戻ると `main` のローカルとして落ちる。起動の解決の後で止まる道（書けるかの確かめ・窓を開けない・最初のゴーストを起こせない）でも、`main` が戻るときに落ちて同じ記録が出る＝要件 7.2「黙って捨てない」をどの道でも満たす。`Err(scene)` の腕は変えない。
+- 取らない形: 起動の解決の `Err` の腕にだけ記録の行を足す形（設計の下書きの 1 回目）。解決の後で止まる道で、入れなかったことが黙って捨てられる（設計の検査で見つけて直した）。
+
+### 決め: 要件 2.7 の記録の置き場
+- **取る**: `install::desk::discard_for_exit` の先頭から `startup::discard_for_exit(world)` を 1 行で呼ぶ。終了の後始末は利用者の終了と OS のセッションの終了の両方がここを通る。まだ取り出していない持ち物があれば、`pending` を取り出して warn `startup_install_not_submitted`（`reason=exit_before_steady`）を 1 件。取り出したので、後で World と一緒に落ちても `Drop` の記録は出ない（二重にならない）。
+- `Drop` だけに任せない理由: OS のセッションの終了ではプロセスが落ちて `Drop` が走らないことがある。終了の後始末の道は明示の呼び出しで記録し、`Drop` は起動が止まった道の受け皿にする。
+
+### 決め: 消すのは UI スレッドで
+- `OrderDone` を捌く所（UI スレッド）で `std::fs::remove_file` を書庫の数だけ呼ぶ。書庫の数は起動の行に書いた数（数本）で、1 本の消去は小さい。背景のスレッドへ寄せる案 C は取らない（上）。
+
+### 決め: 終了の間の `OrderDone`
+- `app.run()` が戻った後は `drain` が回らないので、終了の間に終わった依頼の書庫は消さない（入っていても残る＝安全側）。手続き側の記録（`install_done`・`install_abandoned`）は今のまま残る。
+
+### 決め: `--install` の重ね
+- `--install a --install b` は `--install a b` と同じ（`--ghost` と同じく値を続けて足す・重ねの warn は出さない）。
+
+## 危うさと手当て
+- 書庫を消し違える（取り消せない）— 消す判断を純粋な関数 1 つに閉じ込め、終わり方の 5 つと「まだ扱っていない」を 1 つずつテストで固定する。消すのは `remove_file`（フォルダは消せない）で、並びに書いたパスと exe の隣の `initial_install.nar` だけ。
+- `callghost` がゴーストや利用者の選択を上書きする — 終わった時点の予約と今のゴーストの比べで頼まない。A → B → A は見分けない（上の引き換え）。
+- `main.rs`（981 行）の上限 — 2 行だけ（作る・据える）。`ghost_session.rs`・`ghost_switch.rs` は触らない。
+- `parse.rs` の今のテストの書き換え — `--install` を「扱わない名前」の例にしていた 2 件は `--fmo-name` など別の扱わない名前へ、`callghost`・`deletesource` を `pending` と期待していた 1 件は `kiosk` だけへ直す。
+
+## 参照
+- SSP ヘルプ「起動オプション一覧」 https://ukatech.shillest.net/ukadoc-ssp/functions/option/ （要件の段で読み直し済み・この段では読み直していない）
