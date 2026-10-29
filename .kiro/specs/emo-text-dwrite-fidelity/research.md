@@ -59,7 +59,7 @@
 | `draw_format_metrics_tests.rs:741` `font_family_reaches_directwrite_only_as_author_name_or_default_retry` | `try_create_format(factory, &font.name, font.height)`・`try_create_format(factory, DEFAULT_FONT_NAME, font.height)` の**字面**と、`probe_format_for` の `let family = self.fonts.family_for(&key.name).unwrap_or_else(...)` の**字面**を照らしている。太さ・斜体を引数に足せば赤になる。922 行のファイルで、ウェーブの約束は「足さない」。字面を**直す**のは約束の外か（§6 議題 4） |
 | 同 `:814` `writing_mode_selects_only_the_direction_recipe_not_the_font_name` | `create_text_format` の本文で `mode` を含む行が 2 行であることを数えている。件 1 の直しで縦書きだけの設定をここに足すと赤になる。`DirectionRecipe` の側に足せば当たらない |
 | `tests/decoration_readback/vertical.rs` の `COLUMN_RL (274,301)`・`COLUMN_LR (2,30)`・下線と打ち消し線の帯の定数 | Yu Gothic UI・28px・本文「あア亜Agほ」。件 1 の直しが括弧のほかの字（かな・漢字・英字の横倒し）を動かすか、件 3 を直せば動く（要件 6.5） |
-| `viewbox_draw_vertical_band_readback_tests.rs`・`viewbox_draw_vertical_band_scroll_tests.rs` | em の箱の比に合わせて帯を置くことを固定している（要件 5.3）。束縛書式・行の置き方を変えると、帯の比を測る「あ」の試験用の TextLayout と、描く行の TextLayout が同じ設定を受けているかが鍵になる |
+| `viewbox_draw_vertical_band_readback_tests.rs`・`viewbox_draw_vertical_band_scroll_tests.rs` | em の箱の比に合わせて帯を置くことを固定している（要件 5.4）。束縛書式・行の置き方を変えると、帯の比を測る「あ」の試験用の TextLayout と、描く行の TextLayout が同じ設定を受けているかが鍵になる |
 | `draw_oracle_tests.rs` の `probe_advances_match_drawn_line_advances_per_cluster` ほか | 1 字の計測と行の送り幅が等しいことを見張っている（要件 2.4・4.1） |
 | `draw_catalog_tests.rs`（318 行・17 本） | 偽の集合の形が変わればテストの土台（`catalog()`）も直す |
 
@@ -90,8 +90,8 @@
 | 4.2〜4.5 太字・斜体の指定との重なり | 2 値の決め打ち・既定の太字を描く経路が無い見込み（§2.7） | **Missing** |
 | 4.6 `\f[name]` の区間 | `apply_font_ranges`（家族名だけ差し替え・太さは差分のときだけ） | **Missing** |
 | 4.7 number／sstpmessage／communicatebox | 読む経路が無い（§2.4） | 条件が成り立たない（今は何もしない） |
-| 5.1・5.2 件 3 の測り直し | em の箱の比（`vertical_em_box_left`）が既にある | 測り直しだけ（§4.4） |
-| 5.3 帯を壊さない | 帯の読み戻しの檻 2 本 | Constraint |
+| 5.1〜5.3・5.5 件 3 の直し | em の箱の比（`vertical_em_box_left`）が既にある | **Missing**（2026-10-29 議題 1 で本書で直すと決まった・§4.4） |
+| 5.4 帯を壊さない | 帯の読み戻しの檻 2 本 | Constraint |
 | 6.1 縦書き 2 方向の括弧の読み戻し | `tests/decoration_readback/` の型（`run`・`ink_col_range` など）。行で数える道具は横書きの側にある | **Missing**（括弧の行の範囲を測る述語） |
 | 6.2 偽の集合での引き直し | `FamilySource::Fake(BTreeSet)` | **Missing**（名前→家族・太さ・斜体の表に広げる） |
 | 6.3 実際の書体の集まりで 500 | `assert_real_font_present` の型（`tests/decoration_readback/mod.rs:130`） | **Missing** |
@@ -147,7 +147,7 @@
   - (ii) 描く原点（`viewbox_draw_render.rs`）＝約束で触れない。
   - (iii) DirectWrite の行の置き方を変える。例えば縦書きだけ `SetLineSpacing(UNIFORM, h, baseline)` で em の箱を列の真ん中へ寄せる。`DirectionRecipe::apply`（`draw.rs`）か `draw_line_store.rs` に置け、約束の内に収まる。ただし帯の比（「あ」の試験用の TextLayout）・はみ出しの実測・下線と打ち消し線の帯の定数（`vertical.rs`）が一緒に動く。横書きを動かさないことと、帯の檻が緑のまま残ることを測ってから決めることになる。
   - (iv) 直さずに閉じる（理由と値を残す）。
-- 要件 5.2 は (i)(ii) の場合を「本書では直さない」と決めている。(iii) のような描く側の直しを本書でするかは、要件の申し送り 1 のとおり議題。
+- 2026-10-29 要件の討議 議題 1「承認」で、本書で直すと決まった（要件 5）。(iii) から試し、(i)(ii) に及ぶときは約束を理由に避けず、触る前にほかのセッションへ知らせる。
 
 ## 5. 制約（Constraint）
 
@@ -212,7 +212,7 @@
 
 ### 9.1 要件の討議での振り分け（2026-10-29）
 
-- 議題 1（件 3）・議題 2（バルーン定義の `font.bold`）＝開発者に確かめる（要件の討議の議題）。
+- 議題 1（件 3）・議題 2（バルーン定義の `font.bold`）＝開発者が「承認」（2026-10-29）＝どちらも本書で直す（要件 5・要件 4.8／4.9）。
 - 議題 3（要件 4.7）＝自明の直し。Boundary Context に「今は経路が無い」と書き足した。
 - 次は設計の段（`/kiro-design`）で決める:
   - 議題 4（字面の檻）: 照らす字面を**直す**だけなら、922 行のファイルに「足さない」約束の内と読む（約束の狙いは行数の上限）。行が増えるときは、照らす役ごと兄弟のファイルへ移す。
