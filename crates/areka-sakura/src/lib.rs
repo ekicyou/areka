@@ -37,6 +37,7 @@ pub mod contract;
 pub mod drive;
 pub mod duration;
 pub mod error;
+pub mod strict;
 pub mod sysvar;
 
 pub use anchor_pair::{AnchorFinding, AnchorIssue, pair_anchors};

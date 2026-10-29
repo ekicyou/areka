@@ -9,30 +9,23 @@ use std::ops::Range;
 use areka_emo_text::look::{FontTagFailure, LookLayers, Note, apply_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read, ReadNote};
+use areka_sakura::strict::{self, CharCursor};
 use areka_sakura::{AnchorIssue, ChoiceTimeoutDirective, pair_anchors, parse_choice_timeout};
 use areka_seriko::{BalloonResolve, SurfaceTarget, resolve_balloon_key};
 
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
 
-// 文言（正本は `doc/ssp-mcp/areka-tools.md`。形は「何が起きているか; 再生でどうなるか」の英文 1 文）。
-pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = "areka does not know this tag; playback drops it";
-pub(in crate::mcp) const MSG_UNKNOWN_COMMAND: &str =
-    "no part of areka handles this \\! command; playback ignores it";
-pub(in crate::mcp) const MSG_MISSING_SURFACE: &str =
-    "no such surface in the current shell; playback does not change the surface";
-pub(in crate::mcp) const MSG_MISSING_BALLOON: &str =
-    "no such balloon ID in the current balloon; playback does not change the balloon";
-pub(in crate::mcp) const MSG_UNCLOSED: &str =
-    "the bracket or quote is not closed; playback drops everything from here to the end";
-pub(in crate::mcp) const MSG_DEFAULTED: &str =
-    "the argument is missing or unreadable; playback uses the default value";
-pub(in crate::mcp) const MSG_IGNORED: &str = "areka accepts this but it has no effect yet";
-pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str =
-    "the anchor is not closed; playback extends it to the end of the script";
-pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str =
-    "a new anchor opens before the previous one closes; playback closes the previous one here";
-pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str =
-    "no anchor is open; playback ignores this close";
+// 文言の正本は `areka_sakura::strict`（strict の記録と同じ定数。文書の正本は `doc/ssp-mcp/areka-tools.md`）。
+pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = strict::MSG_UNKNOWN_TAG;
+pub(in crate::mcp) const MSG_UNKNOWN_COMMAND: &str = strict::MSG_UNKNOWN_COMMAND;
+pub(in crate::mcp) const MSG_MISSING_SURFACE: &str = strict::MSG_MISSING_SURFACE;
+pub(in crate::mcp) const MSG_MISSING_BALLOON: &str = strict::MSG_MISSING_BALLOON;
+pub(in crate::mcp) const MSG_UNCLOSED: &str = strict::MSG_UNCLOSED;
+pub(in crate::mcp) const MSG_DEFAULTED: &str = strict::MSG_DEFAULTED;
+pub(in crate::mcp) const MSG_IGNORED: &str = strict::MSG_IGNORED;
+pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED;
+pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
+pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str = strict::MSG_ANCHOR_STRAY_CLOSE;
 
 /// 判断に要る事実。本番は UI スレッドで写し取った値が答え、テストは手書きの表で答える。
 pub(in crate::mcp) trait ScriptFacts {
@@ -54,9 +47,7 @@ pub(in crate::mcp) fn diagnose(
     facts: Option<&dyn ScriptFacts>,
 ) -> Vec<Diagnostic> {
     let mut out = Out {
-        script,
-        byte: 0,
-        chars: 0,
+        cursor: CharCursor::new(script),
         list: Vec::new(),
     };
     // スコープは `compile` と同じく `SpeakerScope` だけが替える（`\0`・`\1`・`\h`・`\u`・`\p[n]` はどれもこれになる）。
@@ -188,26 +179,20 @@ fn balloon_missing(facts: &dyn ScriptFacts, scope: u32, key: &str) -> bool {
     }
 }
 
-/// 診断の置き場。位置はバイトの範囲を前から 1 回だけ数えて文字の数へ直す（診断は台本の順に来る）。
+/// 診断の置き場。位置は strict の記録と同じ物差し（`CharCursor`）で文字の数へ直す（診断は台本の順に来る）。
 struct Out<'a> {
-    script: &'a str,
-    /// ここまで数えたバイトの位置と、そこまでの文字の数。
-    byte: usize,
-    chars: usize,
+    cursor: CharCursor<'a>,
     list: Vec<Diagnostic>,
 }
 
 impl Out<'_> {
     fn push(&mut self, kind: Kind, span: &Range<usize>, message: &'static str) {
-        // 同じ命令に 2 件目が来たときは `byte == span.start` のままなので数え直さない。
-        self.chars += self.script[self.byte..span.start].chars().count();
-        self.byte = span.start;
-        let text = &self.script[span.clone()];
+        let place = self.cursor.place(span.clone());
         self.list.push(Diagnostic {
             kind,
-            start: self.chars,
-            end: self.chars + text.chars().count(),
-            text: text.to_string(),
+            start: place.start,
+            end: place.end,
+            text: place.text,
             message,
         });
     }
