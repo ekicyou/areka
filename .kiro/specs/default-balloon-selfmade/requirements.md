@@ -67,7 +67,15 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 - **議題 7 `StayseeBalloon` の扱い** → 検体に残し、**配布物にも選べるバルーンとして残す**（`tools/package.ps1` は新しい既定を足すだけ）。根拠: 外すと上書きで展開した人・winget で上げた人の手元に古いフォルダが残るかの調べが要り、残せば記憶に `StayseeBalloon` が入っている利用者もそのまま動き、`dist/README.txt` 402 行目の説明も嘘にならない。
 - **議題 8 権利** → **絵と設定ファイルは CC0**、絵を描く道具のコードはリポジトリと同じ MIT。書く所はバルーンの `readme.txt`・`vendors/sample_ghost/README.md`・`dist/README.txt`。
 - **議題 9 拡大率の高い画面** → 等倍の絵だけを作る。
-- **議題 10 `validrect.right,0` の読み** → このバルーンは **`validrect.right,326`（面の幅の正の値）と書き、0 を書かない**（どちらの読みでも右端に解ける）。そのうえで SSP の MCP で `bottle` の 0 の読みを 1 回測る（許しは 2026-10-29 の「承認」で得た。測る前にウェーブの兄弟へ知らせる）。areka の読みが正典と違えば、`region.rs` を持つ `real-run-log-noise` のセッションへ「0 の読みの直しを同じ所で入れられるか」をまず相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する（開発者 10-23「次のリリースまでに治るように」）。測った結果は要件 6.1 の節に書く。
+- **議題 10 `validrect.right,0` の読み** → このバルーンは **`validrect.right,326`（面の幅の正の値）と書き、0 を書かない**（どちらの読みでも右端に解ける）。そのうえで SSP の MCP で `bottle` の 0 の読みを 1 回測る（許しは 2026-10-29 の「承認」で得た。測る前にウェーブの兄弟へ知らせる）。areka の読みが正典と違えば、`region.rs` を持つ `real-run-log-noise` のセッションへ「0 の読みの直しを同じ所で入れられるか」をまず相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する（開発者 10-23「次のリリースまでに治るように」）。測った結果は下の「SSP での測り」に書く。
+
+### SSP での測り（2026-10-29・要件 6.1）
+
+- **手順**: SSP（`C:\wintools\ssp`）に入っている「ボトル（でふぉ改）」（`balloon\bottle\`・`descript.txt` は `validrect.left,0`・`top,0`・`right,0`・`bottom,-20`・`origin` 14,11・`wordwrappoint.x,-20`）を、ゴースト「悪役令嬢クローディア」へ `\![change,balloon,ボトル（でふぉ改）]` で一時的に被せ、`\0\b[0]\_q` のあとに全角 48 字＋半角 20 字の 1 行を流し、`dump_balloon`（scope 0）で面 0（326×169）を撮った。撮った後に `\![change,balloon,クローディア]` で元に戻し、`currentghost.balloon.name` が `クローディア` であることを確かめた。strict のエラーの記録は 0 件。撮った絵は `verification/ssp-bottle-validrect-right0.png`。
+- **結果**: 文字は描かれ、3 行に折り返された。字の画素の横の範囲は 1 行目 x 15〜300・2 行目 14〜299・3 行目 14〜107。**SSP は `validrect.right,0` を「左端から 0」と読まない**（読んでいれば幅 0 で何も描かれない）。右の端は面の右端（または未指定と同じ扱い）として効き、折り返しは `wordwrappoint` で起きている。
+- **areka との違い**: areka は `crates/areka-emo-text/src/region.rs` の `resolve_coord` で 0 を「左端から 0」と読み、同じ定義で幅 0 に潰れる（brief「どっとさくらで見えた事実」）。**正典（SSP）の読みと areka の読みは違う**＝要件 6.4 の枝。
+- **ukadoc**: `validrect.right` は「テキスト描画範囲の右位置。」・既定値は「不明」（<https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.right%2C%E5%BA%A7%E6%A8%99>）。0 の読みは書かれていない（research.md 3.2）。
+- **この仕様での扱い**: 既定バルーンは `validrect.right,326` と書く（要件 6.2・6.3。どちらの読みでも右端）。areka の 0 の読みの直しは要件 6.4 のとおり本仕様の外へ回す。
 
 ## Requirements
 
