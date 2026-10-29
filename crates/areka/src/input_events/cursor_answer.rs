@@ -174,7 +174,7 @@ pub(crate) fn answer_char_cursor(
         .iter()
         .find_map(|(rows, ghost)| {
             let picked = pick_shape(scope, &shown, rows, ghost)?;
-            let cursor = cursors.handle(&picked.0, &assets, size)?;
+            let cursor = cursors.handle(&picked.0, assets, size)?;
             Some((Some(picked), Some(cursor)))
         })
         .unwrap_or_else(|| (pick_shape(scope, &shown, &no_rows, &no_ghost), None));

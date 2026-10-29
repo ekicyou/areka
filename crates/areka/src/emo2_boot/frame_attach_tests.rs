@@ -248,6 +248,50 @@ fn gpu_attach_world() -> (crate::emo2_boot::spine::GpuPermit, World, GhostWindow
     (gpu, world, gw)
 }
 
+/// 装着の相は起動の資産のシェルのカーソルを NonSend へ入れる（shell-mouse-cursor 要件 6.8・
+/// tasks.md 4.3）。入れ替えの順そのものは `shell_cursor_assets` の檻が持つ。
+///
+/// # 非空虚性
+/// 装着の相が `hand_to` しないと、世界にカーソルの資源が無く赤。
+#[test]
+fn attach_hands_the_boot_shell_cursors_to_the_world() {
+    use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
+    use crate::emo2_boot::shell_cursor_table::{CursorScene, Shape, SystemCursor};
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let mut assets = synth_assets(&[(0, 0), (1, 10)]);
+    let key = (0, "Head".to_owned(), CursorScene::Up);
+    assets
+        .cursors
+        .rows
+        .rows
+        .insert(key.clone(), Shape::System(SystemCursor::Cross));
+    let mut wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        assets,
+    );
+
+    run_attach_phase(&mut wiring, &mut world);
+
+    assert_eq!(
+        (
+            wiring.attached,
+            world
+                .get_non_send::<ShellCursorAssets>()
+                .map(|a| a.rows.rows.get(&key).cloned()),
+        ),
+        (true, Some(Some(Shape::System(SystemCursor::Cross)))),
+        "(装着した, 世界のカーソルの表の行)"
+    );
+}
+
 /// 観測可能な完了条件（tasks.md task 3.3・R4.1/4.2）: **相方側 scope の文字描画領域が相方側
 /// 定義から解決される**。実 emo2 fixture＋実 GPU で本番 attach を駆動し、per-scope の
 /// [`BalloonModel`] が

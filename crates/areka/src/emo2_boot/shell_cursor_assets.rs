@@ -2,8 +2,6 @@
 //!
 //! CursorTable の表のファイル名を探して作り、表の報告とファイルの失敗を読み込み 1 回につき 1 度だけ
 //! 記録し、UI スレッドの NonSend の資源として渡す。失敗しない（シェルの読み込みを止めない）。
-// 消費側（起動・切り替えの道とキャラクターの窓の答え）は tasks.md 4.2・4.3 で来る。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};

@@ -3,8 +3,6 @@
 //! 転記済みの cursorブレス（`parse_cursor_braces`）とゴーストの descript を厳しく読み、
 //! 鍵（スコープ・当たり判定名・場面）→ 形の表と、ゴーストの差し替えにする純関数。記録はしない
 //! （報告を返し、記録は CursorAssets が読み込み 1 回につき 1 度残す）。ファイルの実在も見ない。
-// 消費側（CursorAssets・CursorPick・CursorAnswer）は tasks.md 3.1・3.2・4.2 で来る。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
