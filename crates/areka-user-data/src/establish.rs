@@ -3,7 +3,7 @@
 //! 要件 1.1・1.2・1.5・1.6・2.2・2.4・5.4・5.5）。利用者には何も尋ねない。記録の文は ASCII。
 
 use crate::{
-    CopyDone, Decision, Layout, Reason, Signals, USER_ROOT_ENV, Unlocatable, UserRoot,
+    AppProfile, CopyDone, Decision, Layout, Reason, Signals, USER_ROOT_ENV, Unlocatable, UserRoot,
     UserRootOrigin, WINGET_MARKER_PREFIX, Writability, copy_tree_atomic, decide,
 };
 use std::ffi::OsStr;
@@ -158,6 +158,44 @@ pub fn readonly_app_profile_dir(
     crate::app_profile_dir(profile_env, layout, exe_dir)
 }
 
+/// 記憶の置き場を決めるだけ（作らない・写さない。spec: bridge-store-user-root 要件 2.1〜2.9）。
+/// 判断と記録は [`establish`] と分け合う。`signals` は呼び手が [`probe`] で詰める（テストは組んで渡す）。
+pub fn locate_app_profile(
+    signals: &Signals,
+    exe_dir: &Path,
+    profile_env: Option<&OsStr>,
+) -> AppProfile {
+    let (root, reason) = decide_logged(signals, Some(exe_dir));
+    // 決めた根をそのまま入れる（作っていないことは呼び手の記録が言う）。
+    let layout = Layout {
+        user_root: root,
+        reason,
+    };
+    log_layout(&layout);
+    if profile_env.is_none() {
+        match &layout.user_root {
+            // 隣の形と決められない形の見分けは純粋な判断をもう一度見る（理由から読み戻さない）。
+            None if matches!(decide(signals), Decision::Fallback { .. }) => {
+                return AppProfile::Unlocatable;
+            }
+            Some(root) if !root.dir.is_dir() => {
+                return AppProfile::RootMissing {
+                    root: root.dir.clone(),
+                };
+            }
+            Some(root) if migrate_source(&root.dir, exe_dir).is_some() => {
+                return AppProfile::MigrationPending {
+                    root: root.dir.clone(),
+                };
+            }
+            _ => {}
+        }
+    }
+    // `exe_dir` を渡すので `None` にはならない。
+    crate::app_profile_dir(profile_env, &layout, Some(exe_dir))
+        .map_or(AppProfile::Unlocatable, AppProfile::Ready)
+}
+
 /// 判断と、隣に居る・決められないときの記録（ふつうの道と読み取りだけの道が分け合う）。
 /// 書ける根に当たれば、まだ作っていない根を返す。
 fn decide_logged(signals: &Signals, exe_dir: Option<&Path>) -> (Option<UserRoot>, Reason) {
@@ -308,3 +346,7 @@ mod tests;
 #[cfg(test)]
 #[path = "establish_readonly_tests.rs"]
 mod readonly_tests;
+
+#[cfg(test)]
+#[path = "establish_locate_tests.rs"]
+mod locate_tests;
