@@ -5,7 +5,7 @@
 //!
 //! | ファイル | 担当 |
 //! |---|---|
-//! | `draw.rs`（本ファイル） | 既定値・[`ResolvedFont`]・[`DirectionRecipe`]・書式生成・D2D ターゲット bitmap・比較専用オラクル |
+//! | `draw.rs`（本ファイル） | 既定値・[`ResolvedFont`]・[`DirectionRecipe`]・書式生成・TextLayout の唯一の生成口（[`create_line_layout`]・縦書きの列のレシピ）・D2D ターゲット bitmap・比較専用オラクル |
 //! | `draw_metrics.rs` | [`DWriteMetrics`]（計測専用 probe layout・行ボックス比の実測） |
 //! | `draw_line_store.rs` | [`LineLayoutStore`]（行 TextLayout の生成・キャッシュ・インクはみ出しの実測） |
 //! | `draw_catalog.rs` | [`FontCatalog`]（フォント候補列→実在する名前の解決・記憶・記録の 1 度化） |
@@ -93,17 +93,13 @@ use windows::Win32::Graphics::Direct2D::{D2D1_DEVICE_CONTEXT_OPTIONS_NONE, ID2D1
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
-    DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
-    DWRITE_PARAGRAPH_ALIGNMENT, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION,
+    DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM, DWRITE_FONT_FEATURE,
+    DWRITE_FONT_FEATURE_TAG, DWRITE_LINE_SPACING_METHOD_UNIFORM, DWRITE_PARAGRAPH_ALIGNMENT,
+    DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION,
     DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
-    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
-    IDWriteTextFormat,
+    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_RANGE, IDWriteFactory2,
+    IDWriteFontCollection, IDWriteTextFormat, IDWriteTextLayout,
 };
-// 行 TextLayout そのものを扱うのは子モジュール line_store と、比較専用オラクル
-// [`DrawExecutor`]（`#[cfg(test)]`）だけ——非テストビルドの dead import を避けるべく
-// cfg(test) へ隔離する。
-#[cfg(test)]
-use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
 use windows::core::{HSTRING, Interface};
@@ -450,6 +446,89 @@ pub(super) fn try_create_format(
         font_size,
         &HSTRING::from(LOCALE_JA_JP),
     )
+}
+
+/// 縦書きの TextLayout に明示する機能の組（DirectWrite の既定の組から `vpal` 相当を外したもの・
+/// 既定と同じ結果になる 10 個を測りで選んだ・research.md §10.1）。`vert` は入れない
+/// （DirectWrite が立てる並びにだけ自分で当てる＝明示すると横倒しの並びまで縦の字形になる）。
+/// `vkrn` も入れない（手本 HarfBuzz の縦書きの既定に無い）。
+const VERTICAL_FEATURES: [DWRITE_FONT_FEATURE_TAG; 10] = [
+    feature_tag(b"ccmp"),
+    feature_tag(b"locl"),
+    feature_tag(b"mark"),
+    feature_tag(b"mkmk"),
+    feature_tag(b"rlig"),
+    feature_tag(b"calt"),
+    feature_tag(b"clig"),
+    feature_tag(b"liga"),
+    feature_tag(b"kern"),
+    feature_tag(b"rclt"),
+];
+
+/// OpenType の 4 文字の機能名を DirectWrite の機能の札へ写す（札は名前の 4 バイトの little-endian）。
+const fn feature_tag(name: &[u8; 4]) -> DWRITE_FONT_FEATURE_TAG {
+    DWRITE_FONT_FEATURE_TAG(u32::from_le_bytes(*name))
+}
+
+/// TextLayout を作る唯一の口（縦書きは列のレシピを当てる）。失敗は `error!`＋[`TextLayerError::Device`]。
+///
+/// 箱の寸法は行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]）・行送り軸＝`block_extent`
+/// （横書き＝（`PROBE_MAX_EXTENT`, `block_extent`）・縦書き＝（`block_extent`, `PROBE_MAX_EXTENT`））。
+/// 縦書きだけ列のレシピを当てる:
+///
+/// 1. 行間を UNIFORM・`block_extent`・その半分にする（列の箱の幅を行の箱の幅に揃え、列の基線を
+///    その真ん中に置く＝em の箱が行の矩形の真ん中に来る・要件 5.1）。
+/// 2. [`VERTICAL_FEATURES`] を値 1 で全文字範囲に当てる（既定の組の `vpal` 相当の位置の調整を外す
+///    ＝開き括弧類が em の下半分に来る・要件 1.1／2.2）。
+///
+/// 横書きには何もしない（要件 1.7／5.5）。書式の言語・方向レシピは変えない（要件 2.5）。
+/// 装飾の範囲指定は生成の後に焼くので、区間の家族名・大きさを変えても機能の組と行間は保たれる。
+pub(crate) fn create_line_layout(
+    factory: &IDWriteFactory2,
+    text: &str,
+    format: &IDWriteTextFormat,
+    block_extent: f32,
+    mode: WritingMode,
+) -> Result<IDWriteTextLayout, TextLayerError> {
+    let (max_width, max_height) = match mode {
+        WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, block_extent),
+        WritingMode::VerticalRl | WritingMode::VerticalLr => (block_extent, PROBE_MAX_EXTENT),
+    };
+    let layout = factory
+        .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
+        .map_err(device_err("CreateTextLayout(line)"))?;
+    if mode == WritingMode::HorizontalTb {
+        return Ok(layout);
+    }
+    unsafe {
+        layout
+            .SetLineSpacing(
+                DWRITE_LINE_SPACING_METHOD_UNIFORM,
+                block_extent,
+                block_extent / 2.0,
+            )
+            .map_err(device_err("SetLineSpacing(column)"))?;
+        let typography = factory
+            .CreateTypography()
+            .map_err(device_err("CreateTypography(column)"))?;
+        for tag in VERTICAL_FEATURES {
+            typography
+                .AddFontFeature(DWRITE_FONT_FEATURE {
+                    nameTag: tag,
+                    parameter: 1,
+                })
+                .map_err(device_err("AddFontFeature(column)"))?;
+        }
+        // 全文字範囲（長さ u32::MAX は DirectWrite が文字列の終わりで切る）。
+        let all = DWRITE_TEXT_RANGE {
+            startPosition: 0,
+            length: u32::MAX,
+        };
+        layout
+            .SetTypography(&typography, all)
+            .map_err(device_err("SetTypography(column)"))?;
+    }
+    Ok(layout)
 }
 
 /// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると

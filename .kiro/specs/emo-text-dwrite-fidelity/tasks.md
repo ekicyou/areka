@@ -54,7 +54,7 @@
   - _Requirements: 4.8, 4.9, 5.3_
 
 - [ ] 3. 縦書きの列のレシピ
-- [ ] 3.1 TextLayout を作る唯一の関数を足し、行の TextLayout をそこで作る
+- [x] 3.1 TextLayout を作る唯一の関数を足し、行の TextLayout をそこで作る
   - 箱の寸法の場合分け（横書き・縦書き）を行の保持庫から関数へ移す
   - 縦書きだけ、行間を「UNIFORM・行の箱の幅・その半分」にし、`vpal`・`vert`・`vkrn` を含まない 10 個の機能（ccmp locl mark mkmk rlig calt clig liga kern rclt）を値 1 で全文字範囲に当てる。横書きには何もしない。失敗は `error!`＋`Err`
   - 行の保持庫の再利用の鍵・生成回数・装飾の順・はみ出しの実測は今のまま。既存の「素の生成と同じ行になる」檻は突き合わせ先を新しい関数へ直す
@@ -112,3 +112,5 @@
 - 2.2 の後、`FontCatalog::family_for` の本番の呼び手は 0（テストだけ）。`with_faces`（`#[cfg(test)]`）は `pub(crate)`。
 - 2.3 の檻 F3 と F4 の後半は、本番の `apply_font_ranges` を通すため `viewbox_draw_decoration_tests.rs` に置いた（design の置き場 `draw_metrics_styled_tests.rs` から移した・F4 の doc に注記）。
 - 2.4: 束縛書式の鍵の型の別名 `FormatKey` は親の `viewbox_draw.rs` にある（そこも 3 か所替えた）。触る前の知らせ（要件 5.3）は 10-29 に C12 の 7 本へ送った。`viewbox_draw.rs` の訂正は 3 本に届き、4 本（default-balloon-selfmade・startup-install-option・window-work-area-clamp・mcp-strict-errors）はセッション間の送信の上限で未達。どの作業木も `viewbox_draw.rs` に触っていないことは確かめた。
+- 3.1 の後の見込みどおりの赤（4.3 の持ち物）: `tests/decoration_readback/vertical.rs` の underline／strike の 2 本（列が約 5px 動いた）、`actor_underline_present_tests` の `vertical_edge_column_…`／`vertical_box_edge_column_…`（vertical_lr k=1）、`viewbox_draw_vertical_band_readback_tests::vertical_band_covers_column_ink_readback`（95 件・帯は em の箱の比から来るので 3.2 の後に変わる見込み）。
+- L4 はこの機械では弁別力が無い（ZWJ の家族・国旗とも既定で合成されず、機能を値 0 にしても緑）。入力は design どおり。
