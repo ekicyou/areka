@@ -16,15 +16,21 @@
 //! | §4 | 同じ候補列は引き直さない・記録も増えない | 9.7 |
 //! | §5 | バルーン定義の候補列にも同じ規則／本番経路の対照 | 9.8 |
 //! | §6 | 較正（先頭候補だけを採る誤り・鍵を連結する誤り） | 9.2, 13.5 |
+//! | §7 | 顔に太字・斜体の指定を重ねる規則（檻 U7） | 4.2〜4.5 |
 
 use areka_parsers::balloon::{Font, FontColor};
 use log_capture_kit::{CapturedEvent, capture};
-use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
+use windows::Win32::Graphics::DirectWrite::{
+    DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE,
+    DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT,
+    DWRITE_FONT_WEIGHT_BLACK, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_LIGHT,
+    DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_NORMAL,
+};
 use wintf::com::dwrite::dwrite_create_factory;
 
 use super::super::test_support::model_with_font;
 use super::super::{DEFAULT_FONT_NAME, ResolvedFont};
-use super::FontCatalog;
+use super::{FontCatalog, FontFace};
 
 /// フォントファイル名を読み飛ばしたときの記録の本文。
 const FONT_FILE: &str = "フォントファイル名の候補は読み込まない";
@@ -315,4 +321,69 @@ fn the_skip_record_and_the_all_missing_record_are_separate_kinds() {
     assert_eq!(resolved, None);
     assert_eq!(warns(&events, FONT_FILE), 1, "読み飛ばしの記録");
     assert_eq!(warns(&events, ALL_MISSING), 1, "全滅の記録");
+}
+
+// ---- §7 顔に太字・斜体の指定を重ねる規則（檻 U7・要件 4.2〜4.5） ----
+
+/// 太さと斜体だけを変えた顔（家族名・幅は規則に関わらない）。
+fn face(weight: DWRITE_FONT_WEIGHT, style: DWRITE_FONT_STYLE) -> FontFace {
+    FontFace {
+        weight,
+        style,
+        ..FontFace::regular("Yu Gothic")
+    }
+}
+
+/// 家族名で当たった候補の顔は Regular（太さ・幅・斜体とも NORMAL・要件 3.3）。
+#[test]
+fn regular_face_keeps_the_family_and_is_normal_everywhere() {
+    let f = FontFace::regular("Yu Gothic");
+    assert_eq!(f.family, "Yu Gothic");
+    assert_eq!(f.weight, DWRITE_FONT_WEIGHT_NORMAL);
+    assert_eq!(f.stretch, DWRITE_FONT_STRETCH_NORMAL);
+    assert_eq!(f.style, DWRITE_FONT_STYLE_NORMAL);
+}
+
+/// 太字の指定は名前の太さと BOLD の大きい方、指定が無ければ名前の太さ（要件 4.2・4.3）。
+#[test]
+fn bold_takes_the_heavier_of_the_named_weight_and_bold() {
+    let table = [
+        (DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_FONT_WEIGHT_NORMAL),
+        (DWRITE_FONT_WEIGHT_NORMAL, true, DWRITE_FONT_WEIGHT_BOLD),
+        (DWRITE_FONT_WEIGHT_MEDIUM, false, DWRITE_FONT_WEIGHT_MEDIUM),
+        (DWRITE_FONT_WEIGHT_MEDIUM, true, DWRITE_FONT_WEIGHT_BOLD),
+        (DWRITE_FONT_WEIGHT_LIGHT, false, DWRITE_FONT_WEIGHT_LIGHT),
+        (DWRITE_FONT_WEIGHT_LIGHT, true, DWRITE_FONT_WEIGHT_BOLD),
+        (DWRITE_FONT_WEIGHT_BLACK, false, DWRITE_FONT_WEIGHT_BLACK),
+        (DWRITE_FONT_WEIGHT_BLACK, true, DWRITE_FONT_WEIGHT_BLACK),
+    ];
+    for (named, bold, expected) in table {
+        assert_eq!(
+            face(named, DWRITE_FONT_STYLE_NORMAL).weight_with(bold),
+            expected,
+            "名前の太さ {} ＋ 太字 {bold}",
+            named.0
+        );
+    }
+    assert_eq!(DWRITE_FONT_WEIGHT_BOLD.0, 700, "中太＋太字は 700");
+    assert_eq!(DWRITE_FONT_WEIGHT_BLACK.0, 900, "Black＋太字は 900");
+}
+
+/// 斜体の指定は ITALIC、指定が無ければ名前の斜体（要件 4.4・4.5）。
+#[test]
+fn italic_overrides_and_absence_keeps_the_named_style() {
+    let table = [
+        (DWRITE_FONT_STYLE_NORMAL, false, DWRITE_FONT_STYLE_NORMAL),
+        (DWRITE_FONT_STYLE_NORMAL, true, DWRITE_FONT_STYLE_ITALIC),
+        (DWRITE_FONT_STYLE_ITALIC, false, DWRITE_FONT_STYLE_ITALIC),
+        (DWRITE_FONT_STYLE_ITALIC, true, DWRITE_FONT_STYLE_ITALIC),
+    ];
+    for (named, italic, expected) in table {
+        assert_eq!(
+            face(DWRITE_FONT_WEIGHT_NORMAL, named).style_with(italic),
+            expected,
+            "名前の斜体 {} ＋ 斜体 {italic}",
+            named.0
+        );
+    }
 }

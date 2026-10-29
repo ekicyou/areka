@@ -6,7 +6,7 @@
 > - 同じウェーブ（C12）の約束で触らないと決めた所（`viewbox_draw_render.rs`・`layout.rs`）に触るタスクは、触る前に同じウェーブのほかのセッションへ知らせる（要件 5.3）。
 
 - [ ] 1. 名前から顔を解く（家族名 → GDI の名前）
-- [ ] 1.1 顔の値と、太字・斜体の重ね方の規則を作る
+- [x] 1.1 顔の値と、太字・斜体の重ね方の規則を作る
   - 家族名・太さ・幅・斜体を DirectWrite の型のまま持つ顔の値と、家族名で当たった候補用の Regular の顔を作る
   - 太字の指定は「名前の太さと BOLD の大きい方」、指定が無ければ名前の太さ。斜体の指定は ITALIC、無ければ名前の斜体
   - 檻 U7: Regular・Medium・Light・Black × 太字の有無、Regular・斜体の顔 × 斜体の有無の表がすべて期待どおりで緑（中太＋太字は 700・Black＋太字は 900）
@@ -102,3 +102,9 @@
   - SSP の MCP で測る前に同じウェーブのほかのセッションへ知らせ、同じ台詞を SSP で描いて開き括弧・閉じ括弧の位置と字の太さを並べる
   - 揃ったこと（または違いとその値）を spec の記録に残す
   - _Requirements: 6.6, 6.7, 6.8_
+
+## Implementation Notes
+
+- テストの絞り込み語は `draw_catalog` では 0 件（モジュールの道は `draw::catalog::tests`）。`cargo test -p areka-emo-text --lib catalog` を使う。
+- `cargo clippy -p areka-emo-text --all-targets -- -D warnings` は触っていない `dola` と crate 内の既存の指摘（rustc 1.99.1 の新しい lint・約 45 件）で落ちる。判定は `--no-deps` で「触ったファイルに新しい指摘が無いこと」。既存の指摘は本 spec の外（完了の棚卸で扱う）。
+- 1.1 の `FontFace` に付けた `#[allow(dead_code, reason = …)]` 2 か所は、1.2 で使い始めたら外す。

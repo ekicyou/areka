@@ -26,7 +26,9 @@ use std::collections::{BTreeSet, HashMap};
 
 use tracing::warn;
 use windows::Win32::Graphics::DirectWrite::{
-    IDWriteFactory, IDWriteFactory2, IDWriteFontCollection,
+    DWRITE_FONT_STRETCH, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE, DWRITE_FONT_STYLE_ITALIC,
+    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT, DWRITE_FONT_WEIGHT_BOLD,
+    DWRITE_FONT_WEIGHT_NORMAL, IDWriteFactory, IDWriteFactory2, IDWriteFontCollection,
 };
 use windows::core::{BOOL, HSTRING, Interface};
 
@@ -35,6 +37,55 @@ use crate::TextLayerError;
 
 /// フォントファイル名と見なす拡張子（大小無視・要件 9.3）。読み込みは実装しない。
 const FONT_FILE_EXTENSIONS: [&str; 3] = [".ttf", ".otf", ".ttc"];
+
+/// 名前が指す顔（家族名・太さ・幅・斜体を DirectWrite の型のまま持つ値）。
+#[allow(
+    dead_code,
+    reason = "FontCatalog の顔の解決（タスク 1.2）が使い始めるまでの間"
+)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FontFace {
+    /// DirectWrite の家族名（`CreateTextFormat`／`SetFontFamilyName` へそのまま渡せる名前）。
+    pub family: String,
+    pub weight: DWRITE_FONT_WEIGHT,
+    pub stretch: DWRITE_FONT_STRETCH,
+    pub style: DWRITE_FONT_STYLE,
+}
+
+#[allow(
+    dead_code,
+    reason = "FontCatalog の顔の解決（タスク 1.2）が使い始めるまでの間"
+)]
+impl FontFace {
+    /// 家族名で当たった候補の顔（太さ・幅・斜体とも NORMAL・要件 3.3）。
+    pub fn regular(family: &str) -> FontFace {
+        FontFace {
+            family: family.to_owned(),
+            weight: DWRITE_FONT_WEIGHT_NORMAL,
+            stretch: DWRITE_FONT_STRETCH_NORMAL,
+            style: DWRITE_FONT_STYLE_NORMAL,
+        }
+    }
+
+    /// 太字の指定を重ねた太さ。真なら名前の太さと BOLD の大きい方、偽なら名前の太さ（要件 4.2・4.3）。
+    pub fn weight_with(&self, bold: bool) -> DWRITE_FONT_WEIGHT {
+        if bold {
+            // 太字が名前の太さより軽くならないよう大きい方（Black＋太字は 900 のまま）。
+            DWRITE_FONT_WEIGHT(self.weight.0.max(DWRITE_FONT_WEIGHT_BOLD.0))
+        } else {
+            self.weight
+        }
+    }
+
+    /// 斜体の指定を重ねた斜体。真なら ITALIC、偽なら名前の斜体（要件 4.4・4.5）。
+    pub fn style_with(&self, italic: bool) -> DWRITE_FONT_STYLE {
+        if italic {
+            DWRITE_FONT_STYLE_ITALIC
+        } else {
+            self.style
+        }
+    }
+}
 
 /// 記録済み判定の鍵——**連結した綴りにしない**（モジュール doc「記録の重複判定の鍵」）。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
