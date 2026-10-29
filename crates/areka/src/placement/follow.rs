@@ -116,6 +116,10 @@ pub(crate) use self::work_area_clamp::{
 // 足すので、それまでと examples のビルドではテストの外で未使用に見える。
 #[allow(unused_imports)]
 use self::work_area_clamp::clamp_grown_free_default;
+// 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（task 2.4）で、それまでと examples の
+// ビルドではテストの外で未使用に見える。
+#[allow(unused_imports)]
+pub(crate) use self::work_area_clamp::{GroupShift, RestoredWindow, keep_restored_groups};
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接
 // 呼ばれるため、`follow::` 経由で参照するのは `#[cfg(test)]` のテストモジュールと
@@ -257,3 +261,7 @@ mod work_area_clamp_chain_tests;
 #[cfg(test)]
 #[path = "follow_work_area_clamp_grow_tests.rs"]
 mod work_area_clamp_grow_tests;
+// 記憶から戻した組の寄せ（window-work-area-clamp・task 1.4・要件 10.1 ⑷⑸⑹）。
+#[cfg(test)]
+#[path = "follow_work_area_clamp_restore_tests.rs"]
+mod work_area_clamp_restore_tests;

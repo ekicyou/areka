@@ -9,6 +9,7 @@
 //!   寄せた・寄せなかった・取れなかったを記録する（要件 7.4・9.1・9.2）
 //! - [`clamp_grown_free_default`] は既定の位置にいる `free` のキャラ窓が大きくなってはみ出したら、
 //!   はみ出した向きにだけ収める判定（要件 3・7）
+//! - [`keep_restored_groups`] は記憶から戻した組の窓を同じ量だけ動かす判定（要件 4・7）
 //!
 //! 寄せの式は `balloon_limit::clamp_rect_to_work_area`（左辺・上辺を優先）だけを使い、
 //! 隣の位置は `chain_finalize::resolve_chain` に 2 スロットを渡して得る（式を写さない）。
@@ -25,7 +26,8 @@ use wintf::ecs::drag::DraggingState;
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
 use super::super::chain_finalize::{
-    ChainRect, ChainSlot, KeepReason, PairDecision, ScriptPlaced, resolve_chain,
+    Adjacency, AdjacencyMark, ChainRect, ChainSlot, KeepReason, PairDecision, ScriptPlaced,
+    judge_adjacency, resolve_chain,
 };
 use super::{
     Anchor, CharWindowMarker, GhostWindows, MonitorSnapshot, PlacementRoute, PointPx, RectPx,
@@ -389,4 +391,123 @@ pub(crate) fn clamp_grown_free_default(
             proposed
         }
     }
+}
+
+/// 記憶から位置を戻した 1 窓（組の寄せの入力・設計 GroupClamp）。
+#[allow(dead_code)] // 組む呼び手は記憶の戻し（task 2.4）・examples には無い
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RestoredWindow {
+    pub scope: usize,
+    /// 記憶の位置を今の大きさで置いた矩形（吸着の当て直しの前）。
+    pub remembered: ChainRect,
+    /// 吸着の当て直しだけをした左上（窓ごとの寄せの前）。
+    pub projected: PointPx,
+    /// 今の窓ごとの判定の結果（merge の `char_pos`）。
+    pub shown: PointPx,
+    /// 組 (scope−1, scope) の覚えた印。
+    pub mark: Option<AdjacencyMark>,
+}
+
+/// 組の寄せで置き直す窓（`shown` と違うものだけ）。
+#[allow(dead_code)] // 同上
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GroupShift {
+    pub scope: usize,
+    /// 置く左上。
+    pub to: PointPx,
+}
+
+/// 組の寄せ（設計 GroupClamp）。`windows` は記憶から位置を戻したスコープだけ（スコープ昇順）。
+///
+/// 組は隣り合う番号の対 (n−1, n) が、印が `left`／`right` か、記憶の矩形どうしの
+/// `judge_adjacency` が左・右・重なりのとき繋がる（要件 4.1・4.2）。離れていれば窓ごと（要件 4.4）。
+/// 組の全員が今の判定で寄せられている（`shown != projected`）ときだけ、`projected` の和の矩形を
+/// 和の矩形のモニタの作業領域へ収めの式で収め、その差を全員に足す（要件 4.1・7.1・7.2）。
+/// 見えている窓のある組は動かさない（要件 4.1 の改め・4.3）。作業領域が取れない組は返さず
+/// `Unresolved`（warn!・要件 7.4）。
+#[allow(dead_code)] // 呼び手は記憶の戻し（task 2.4）・examples には無い
+pub(crate) fn keep_restored_groups(
+    windows: &[RestoredWindow],
+    snapshot: &MonitorSnapshot,
+) -> Vec<GroupShift> {
+    let scene = ClampScene::RestoreGroup.as_str();
+    let mut out = Vec::new();
+    let mut start = 0;
+    while start < windows.len() {
+        let mut end = start + 1;
+        while end < windows.len() && joined_with_prev(windows[end - 1], windows[end]) {
+            end += 1;
+        }
+        let group = &windows[start..end];
+        start = end;
+        if group.len() < 2 {
+            continue; // 1 窓の組は窓ごとの結果のまま（要件 4.4）。
+        }
+        let scopes: Vec<usize> = group.iter().map(|w| w.scope).collect();
+        let clamped = |w: &RestoredWindow| w.shown != w.projected;
+        if !group.iter().any(clamped) {
+            debug!(scene, scopes = ?scopes, reason = "remembered-visible", "{WORK_AREA_KEEP_TAG} 記憶の組がどれも見えているので動かさない");
+            continue;
+        }
+        if !group.iter().all(clamped) {
+            for w in group.iter().filter(|w| clamped(w)) {
+                debug!(scene, scope = w.scope, reason = "partner-visible", at = ?w.shown, "{WORK_AREA_KEEP_TAG} 組に見えている窓があるので窓ごとの結果のまま");
+            }
+            continue;
+        }
+        let union = group
+            .iter()
+            .map(|w| {
+                rect_of(ChainRect {
+                    x: w.projected.x,
+                    y: w.projected.y,
+                    ..w.remembered
+                })
+            })
+            .reduce(|a, b| RectPx {
+                left: a.left.min(b.left),
+                top: a.top.min(b.top),
+                right: a.right.max(b.right),
+                bottom: a.bottom.max(b.bottom),
+            })
+            .expect("組は 2 窓以上");
+        let Some(area) = work_area_for_window(snapshot, union) else {
+            warn!(scene, scopes = ?scopes, reason = "no-work-area", "{WORK_AREA_UNRESOLVED_TAG} 作業領域が取れず組を窓ごとの結果のまま置く");
+            continue;
+        };
+        let origin = PointPx {
+            x: union.left,
+            y: union.top,
+        };
+        let size = SizePx {
+            w: union.right.saturating_sub(union.left),
+            h: union.bottom.saturating_sub(union.top),
+        };
+        let moved = clamp_rect_to_work_area(origin, size, area);
+        let (dx, dy) = (
+            moved.x.saturating_sub(origin.x),
+            moved.y.saturating_sub(origin.y),
+        );
+        for w in group {
+            let to = PointPx {
+                x: w.projected.x.saturating_add(dx),
+                y: w.projected.y.saturating_add(dy),
+            };
+            if to != w.shown {
+                info!(scene, scope = w.scope, how = "shifted", from = ?w.shown, to = ?to, work_area = ?Some(area), "{WORK_AREA_CLAMP_TAG} 記憶の組を同じ量だけ作業領域の中へ寄せた");
+                out.push(GroupShift { scope: w.scope, to });
+            }
+        }
+    }
+    out
+}
+
+/// 組 (prev, cur) が繋がるか: 隣り合う番号で、印が左右か、記憶の矩形が左・右・重なり。
+fn joined_with_prev(prev: RestoredWindow, cur: RestoredWindow) -> bool {
+    prev.scope.checked_add(1) == Some(cur.scope)
+        && (matches!(cur.mark, Some(AdjacencyMark::Left | AdjacencyMark::Right))
+            || !matches!(
+                judge_adjacency(prev.remembered, cur.remembered),
+                Adjacency::Apart { .. }
+            ))
 }
