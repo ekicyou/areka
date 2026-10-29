@@ -154,7 +154,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/ghost_session.rs`（935 行）— 3 つ組を受け、窓を作る閉包で `RestoredPositionsClamped` を毎回据える（約 3 行）。
 - `crates/areka/src/emo2_boot/move_cue_place.rs`（222 行）— `move_applied` の記録に拡大率 `k` と動かす窓の大きさを足す（測りの道具）。
 - `crates/areka/src/emo2_boot/frame.rs`（615 行）— 新しい兄弟の檻 2 つの接続宣言だけ（相の順は変えない）。
-- `restore_merged_placements` を呼ぶテスト 3 ファイル（`emo2_boot/frame_chain_finalize_persist_tests.rs`・`_persist_nowrite_tests.rs`・`_persist_restart_tests.rs`）— 3 つ組の受け方に合わせる。
+- `restore_merged_placements` を呼ぶテスト 4 ファイル（`emo2_boot/frame_chain_finalize_persist_tests.rs`・`_persist_nowrite_tests.rs`・`_persist_restart_tests.rs`・`main_restore_seam_tests.rs`〔呼び出し 5 か所〕）— 3 つ組の受け方に合わせる。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の末尾へ件 1〜件 5 の行を足す（要件 8.3・8.4）。
 
 ## System Flows
