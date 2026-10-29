@@ -12,7 +12,8 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-use crate::emo2_boot::shell_carry;
+use crate::emo2_boot::{shell_carry, skin_facts_copy};
+use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::descript_window_keys::fallback_candidates;
 use crate::placement::spawn::GhostWindows;
 
@@ -449,6 +450,17 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     // ghost の読み直しの前の面と着せ替えを、台本の `\s[面]`・`\![bind,…]` と同じ道で seriko へ出し直す
     // （target は装着済み）。
     shell_carry::replay(world, &carried_shows, &carried_binds);
+
+    // strict の判定に使う今のシェルとバルーンの事実を、装着した表示の層から入れる
+    // （spec: mcp-strict-errors 要件 4.1）。置き場のゴーストが無ければ判定もしない。
+    if let Some(sink) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(GhostSession::seriko_sink)
+    {
+        let scopes = window_scopes.iter().filter_map(|&s| u32::try_from(s).ok());
+        sink.set_facts(skin_facts_copy::copy(wiring.presenter(), scopes));
+    }
 
     // ゲートを通過した attach 試行の完了。以降は no-op（高々 1 回）。
     wiring.attached = true;

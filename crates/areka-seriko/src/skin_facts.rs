@@ -21,6 +21,7 @@ pub trait SkinLookup {
 }
 
 /// 表示の層から写した事実（別のスレッドへ渡せる値）。
+#[derive(Clone)]
 pub struct SkinFacts {
     /// scope 0 のシェルの別名の表から作った解決器（再生の解決器と同じ作り方）。
     resolver: SurfaceResolver,
@@ -41,6 +42,23 @@ impl SkinFacts {
             resolver: SurfaceResolver::new(aliases),
             shells,
             balloons,
+        }
+    }
+
+    /// シェルの差し替えの後の事実（別名の表とシェルを替え、バルーンは今のまま）。
+    pub fn with_shells(
+        &self,
+        aliases: BTreeMap<String, Vec<u32>>,
+        shells: BTreeMap<u32, BTreeSet<u32>>,
+    ) -> Self {
+        Self::new(aliases, shells, self.balloons.clone())
+    }
+
+    /// バルーンの差し替えの後の事実（シェルと別名の表は今のまま）。
+    pub fn with_balloons(&self, balloons: BTreeMap<u32, BTreeSet<u32>>) -> Self {
+        Self {
+            balloons,
+            ..self.clone()
         }
     }
 }
