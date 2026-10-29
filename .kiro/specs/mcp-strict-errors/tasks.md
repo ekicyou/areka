@@ -147,7 +147,7 @@
   - _Requirements: 5.2, 6.5, 6.6, 6.7, 7.7_
 
 - [ ] 9. 文書と通しの確かめ
-- [ ] 9.1 文書に strict の記録の約束と検出点の表を書き、差の一覧を直す
+- [x] 9.1 文書に strict の記録の約束と検出点の表を書き、差の一覧を直す
   - `areka-tools.md` の ⑶ の 2 つの表を読み取りの印で挟み、「⑺ strict の記録」（記録すること・しないこと・本文の形・SSP との違い・`[SYSTEM]` との見分け・`ignored`・切替の時機・名前の形の `\b` の順・検出点の表を印で挟む）を足し、⑸ の書きぶりを直す
   - `transport-diff-areka.md` に `params` の形の行（areka の番号と HTTP の状態・固定するテストの名前・SSP の欄は `survey.md` 8.4 の写し）を足し、`bridge-diff-areka.md` の該当の行の areka の欄を書き直す
   - 文書の表が設計の検出点の表と同じ 16 行で、印の対が揃っている
@@ -185,3 +185,4 @@
 - 4.1→4.2: seriko に `SkinFacts`・`SkinLookup`・`surface_missing`/`balloon_missing` が在る。`with_shells`/`with_balloons` と差し替えの荷物から組む関数は 4.2 で足す。
 - 5.1: `areka-emo-text/src/look.rs` の 803 行あたりのコメントに HEAD から 0x0C の制御バイトが紛れている（範囲外・完了の棚卸で直すか起票）。
 - 6.1: 本番の構築は 3 つ（boot_config.rs の ghost_boot_options・runtime_boot.rs・spine.rs）。dispatcher のテストは strict_hooks_for を直接見るだけなので、on_start→spawn_talk の配線は 6.2／9.2 で通して確かめる。
+- 9.1→8.2/8.3: transport-diff-areka.md の params の形の行の「測ったテスト名」はファイル単位で書いた。8.2 で関数名へ直す。bridge-diff の real_receiver_test.rs の行も 8.3 で合わせる。
