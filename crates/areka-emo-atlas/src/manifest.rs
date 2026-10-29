@@ -8,6 +8,7 @@
 //! 負値センチネル・不在 id・`Range`/alias（画像を持たない）は除外する。
 //! 訪問済み集合による循環検出を含む。列挙結果は正規化パスで重複排除する。
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
@@ -124,6 +125,55 @@ impl ManifestDeriver {
             }
         }
     }
+}
+
+/// 着せ替え（`bind`）のアニメーションのパターンからだけ参照される面の絵の集合を求める
+/// （real-run-log-noise 要件 3.7）。
+///
+/// 鍵は (セットの番号, 相対パス)。マニフェストの鍵と同じ綴り（`element.path.as_str()`）。
+/// 絵が入るのは、その絵を持つ面（持ち主）がどれも、同じセットのどこかのパターンから参照され、
+/// しかも参照するパターンがどれも `bind` か `bind+random` のアニメーションに属するときだけ。
+/// 参照されない持ち主・`bind` でないアニメーションから参照される持ち主が 1 つでもあれば入れない
+/// （迷ったら警告の側）。負の番号・無い番号の参照は数えない。抜き色の道か・α を持つかは見ない。
+/// 下流の emo-compose の `is_bind_interval` は使わず、同じ判定をここで持つ。純粋・決定的。
+pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)> {
+    let mut out = BTreeSet::new();
+    for (set_index, set) in sets.iter().enumerate() {
+        let set_id = set_index as u32;
+        let ids: BTreeSet<i64> = set.surfaces.iter().map(|s| s.id as i64).collect();
+        // 面の番号 → bind だけから参照されているか（false＝bind でない参照が 1 つでもある）。
+        let mut referenced: HashMap<i64, bool> = HashMap::new();
+        for animation in set.surfaces.iter().flat_map(|s| &s.animations) {
+            let is_bind = matches!(
+                animation.interval,
+                areka_parsers::shell::Interval::Bind
+                    | areka_parsers::shell::Interval::BindRandom { .. }
+            );
+            for pattern in &animation.patterns {
+                if pattern.surface_id >= 0 && ids.contains(&pattern.surface_id) {
+                    *referenced.entry(pattern.surface_id).or_insert(true) &= is_bind;
+                }
+            }
+        }
+        // 絵 → 持ち主がどれも bind だけから参照されているか。
+        let mut paths: BTreeMap<&str, bool> = BTreeMap::new();
+        for surface in set.surfaces {
+            let owner_ok = referenced
+                .get(&(surface.id as i64))
+                .copied()
+                .unwrap_or(false);
+            for element in &surface.elements {
+                *paths.entry(element.path.as_str()).or_insert(true) &= owner_ok;
+            }
+        }
+        out.extend(
+            paths
+                .into_iter()
+                .filter(|&(_, ok)| ok)
+                .map(|(path, _)| (set_id, path.to_string())),
+        );
+    }
+    out
 }
 
 #[cfg(test)]
@@ -349,5 +399,120 @@ mod tests {
         // 決定性: 2 回目も同一
         let m2 = ManifestDeriver.derive(&sets);
         assert_eq!(keys_of(&m), keys_of(&m2));
+    }
+
+    // ---- 檻 T8: 着せ替え（bind）のアニメーションからだけ参照される面の絵（要件 3.7）----
+
+    /// 指定の interval を持つ単一 pattern のアニメーション（参照先は `ref_surface_id`）。
+    fn anim_with(anim_id: u32, interval: Interval, ref_surface_id: i64) -> Animation {
+        let mut a = bind_anim(anim_id, ref_surface_id);
+        a.interval = interval;
+        a
+    }
+
+    /// 基底の面 0 に `animations` を持たせ、持ち主の面 `owners` を並べたセットの集合を求める。
+    fn bind_only_of(animations: Vec<Animation>, owners: Vec<Surface>) -> BTreeSet<(u32, String)> {
+        let mut base_surface = surface(0, vec![elem(0, "surface0.png")]);
+        base_surface.animations = animations;
+        let mut surfaces = vec![base_surface];
+        surfaces.extend(owners);
+        let base = Path::new("shell/master");
+        bind_only_paths(&[set(&surfaces, base)])
+    }
+
+    fn null_key() -> (u32, String) {
+        (0, "purple/a/null.png".to_string())
+    }
+
+    /// T8 ⑴: `bind` だけから参照される持ち主の絵は入る。参照されない基底の面の絵は入らない。
+    #[test]
+    fn bind_only_paths_includes_bind_only_owner() {
+        let got = bind_only_of(
+            vec![bind_anim(0, 3000)],
+            vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+        );
+        assert_eq!(got, BTreeSet::from([null_key()]));
+    }
+
+    /// T8 ⑵: `bind+random` からの参照も着せ替えとして入る。
+    #[test]
+    fn bind_only_paths_includes_bind_random_owner() {
+        let got = bind_only_of(
+            vec![anim_with(0, Interval::BindRandom { k: 2 }, 3000)],
+            vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+        );
+        assert_eq!(got, BTreeSet::from([null_key()]));
+    }
+
+    /// T8 ⑶: `runonce`・未知の語（`always`）からの参照は入らない。
+    #[test]
+    fn bind_only_paths_excludes_runonce_and_unknown_interval() {
+        for interval in [Interval::Runonce, Interval::Other("always".into())] {
+            let got = bind_only_of(
+                vec![anim_with(0, interval.clone(), 3000)],
+                vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+            );
+            assert!(
+                got.is_empty(),
+                "{interval:?} must not count as bind: {got:?}"
+            );
+        }
+    }
+
+    /// T8 ⑷: `bind` と `bind` でないの両方から参照される持ち主の絵は入らない。
+    #[test]
+    fn bind_only_paths_excludes_owner_also_referenced_by_non_bind() {
+        let got = bind_only_of(
+            vec![
+                bind_anim(0, 3000),
+                anim_with(1, Interval::Random { k: 3 }, 3000),
+            ],
+            vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+        );
+        assert!(got.is_empty(), "{got:?}");
+    }
+
+    /// T8 ⑸: どこからも参照されない持ち主の絵は入らない。
+    #[test]
+    fn bind_only_paths_excludes_unreferenced_owner() {
+        let got = bind_only_of(
+            Vec::new(),
+            vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+        );
+        assert!(got.is_empty(), "{got:?}");
+    }
+
+    /// T8 ⑹: 同じ絵を `bind` だけの面と参照されない面の両方が持つときは入らない。
+    #[test]
+    fn bind_only_paths_excludes_path_shared_with_unreferenced_owner() {
+        let got = bind_only_of(
+            vec![bind_anim(0, 3000)],
+            vec![
+                surface(3000, vec![elem(0, "purple/a/null.png")]),
+                surface(3001, vec![elem(0, "purple/a/null.png")]),
+            ],
+        );
+        assert!(got.is_empty(), "{got:?}");
+    }
+
+    /// T8 ⑺: 負の番号・無い番号の参照は数えない（`bind` の参照としても、持ち主を作る参照としても）。
+    #[test]
+    fn bind_only_paths_ignores_negative_and_missing_refs() {
+        // 負の番号・無い番号は bind でないアニメーションからでも ⑴ を崩さない。
+        let got = bind_only_of(
+            vec![
+                bind_anim(0, 3000),
+                anim_with(1, Interval::Runonce, -1),
+                anim_with(2, Interval::Runonce, 9999),
+            ],
+            vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+        );
+        assert_eq!(got, BTreeSet::from([null_key()]));
+        // 負の番号・無い番号の bind の参照だけでは、参照されない持ち主は入らない。
+        let got = bind_only_of(
+            vec![bind_anim(0, -1), bind_anim(1, 9999)],
+            vec![surface(3000, vec![elem(0, "purple/a/null.png")])],
+        );
+        assert!(got.is_empty(), "{got:?}");
     }
 }
