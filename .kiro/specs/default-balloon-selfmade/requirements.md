@@ -49,25 +49,25 @@
   - `StayseeBalloon.nar` の中身と、その中身を固定するテスト（残す）。
 - **Adjacent expectations**:
   - 上流 `areka-P0-dot-sakura-specimen`（完了）: 手本 `bottle` を検体として引ける。登記表と数のテストを続けて触る。
-  - 上流（条件つき）`balloon-webp-names`: 議題 3 で面を `.webp` の名前で持つと決めたときだけ、働きの前提になる（その場合、同 spec は v0.1.0 へ戻る）。
+  - `balloon-webp-names`: 議題 3 で面と動かない印を α 付きの PNG で持つと決めたので、働きの前提ではない（オンラインの印 `online0.webp` を拾うのは同 spec と `balloon-markers` の後）。
   - 下流 `balloon-markers`: このバルーンの矢印・オンライン・SSTP の印が、同 spec の「1 枚の動く絵の印を持つ検体」になる。印が画面に出るのは同 spec の着地の後。
   - 下流 スキル `/release`: 次の版の配布物から既定が替わる。
   - 並走（ウェーブ C12）: `real-run-log-noise` が emo-text の `region.rs` を持つ。`startup-install-option`・`bridge-store-user-root` が `dist/README.txt` の別の行を持つ。カタログの鎖（`boot_resolve.rs` を作り直す spec）とは、既定を差し替える作業を最後に置き、直前に main を取り込んで重ならないようにする。
 
-## 議題と仮置き（要件の討議で決める）
+## 議題の確定（2026-10-29 要件の討議・開発者「承認」＝全議題を推奨案で確定）
 
-brief が要件の段へ回した議題 9 つと、測ってから決める `validrect` の読み（議題 10）。下の要件は、答えによらず成り立つ形で書き、答えで変わる所は「（議題 N・仮置き）」と書いて brief の推しを置いた。推しが brief に無いものは「推しなし」と書いた。
+brief が要件の段へ回した議題 9 つと、測ってから決める `validrect` の読み（議題 10）。下の要件は、この確定に合わせて書いた。
 
-- **議題 1 名前と ID**（フォルダ名・`name`・`id`・`craftman`）→ 開発者が決める。推しなし。この文書では `<名前>` と書く。
-- **議題 2 絵柄** → 主のセッションが道具の下書きで案を 2〜3 個並べ、開発者が選ぶ（箱の色・縁・角の丸み・しっぽの形・瓶の透かしを無くすか areka の印を小さく入れるか・オンラインの印の絵柄・コマ数・コマの時間）。
-- **議題 3 絵の形式** → 推し＝面も印も `.webp`（オンラインの印は動く WebP 1 枚）。SSP では出ないバルーンになることを承知のうえで選ぶ。`.webp` を選ぶと `balloon-webp-names` の着地が既定の差し替えの前提になる。α 付きの PNG を選べば今すぐ作れる。
-- **議題 4 引き継ぐ値の線引き** → 推し＝寸法・`origin`・`validrect`・`wordwrappoint`・印と数字と入力の箱の位置はそのまま引き継ぐ。`font.name,ＭＳ ゴシック`／`font.height,12`・カーソルの色・SSTP と数字の字の色は聞いてから決める（決まるまでの仮置きは手本の値＝開発者の起票の言葉「設定系パラメーターは引き継ぐ」）。面別の設定の `windowpos.x/y` は正典の鍵でないので写さない（要件 5.7・ギャップ分析で確定）。
-- **議題 5 オンラインの印を 1 枚の動く絵で持つときの書き方**（ファイル名・`onlinemarker.*` の書き方）→ 推しなし。正典は `onlinemarker.filename` の名前に 0 からの連番を足して読み、`onlinemarker.interval`（既定 500 ミリ秒・50 未満は不可）で切り替える。1 枚の動く絵で持つのは areka の拡張で、読み方は `balloon-markers` の議題（本仕様は絵を用意する側）。
-- **議題 6 面をいくつ持つか** → 推し＝手本どおり本体側 4・相方側 2・入力の箱 4。
-- **議題 7 `StayseeBalloon` の扱い** → 検体には残す。配布物から外すか、選べるバルーンとして残すかは推しなし。記憶に `StayseeBalloon` が残っている利用者の次の起動がどうなるかを確かめて決める。
-- **議題 8 権利の書き方** → 再配布の条件（`StayseeBalloon` と同じ CC0 にするか）と置き場。推しなし。手本から引き継ぐのは数値だけで、絵は写さない。
-- **議題 9 拡大率の高い画面** → 推し＝等倍の絵だけを作る（今のエンジンに 2 倍の絵を選ぶ口は無い）。
-- **議題 10 `validrect.right,0` の正典の読み**（brief「どっとさくらで見えた事実」）→ 要件の討議の最初に SSP の MCP で測る（打つ前に開発者の許しを取る）。正典の読みが areka と同じなら、引き継ぐ値の側を直す。正典の読みが areka と違う（0 が右端を指す）なら、このバルーンは両方で同じ範囲に解ける書き方にし、areka の読みの直しは、`region.rs` を持つ `real-run-log-noise` の着地の後へ回す（本仕様の後ろのタスクにするか、別に起票するかを討議で決める。roadmap 棚卸㉚「`validrect.right,0` を areka の側で直すと決めたら、その足し分は次のウェーブへ回す」）。
+- **議題 1 名前と ID** → フォルダ名と `id` は `areka-balloon`、`name,areka バルーン`、`craftman,ekicyou`。この文書の `<名前>` は `areka-balloon` を指す。
+- **議題 2 絵柄** → 下書きの 3 案（白と灰・クリーム・すりガラス）から**案 A「白と灰」**: 地は白（255,255,255・不透明）、縁は灰（150,154,164）の 1.5 ピクセル、角の丸み 8、しっぽは面の横（偶数の面は右・奇数の面は左）に出る三角で、幅は手本の `origin.x` の差（本体側 9・相方側 10）。飾り（瓶の透かし・areka の印）は入れない。印の色は縁の灰（矢印）と青（22,143,231＝手本のカーソルの塗りの色・SSTP とオンラインの印）。オンラインの印は**点が 3 つ順に灯る**（灯った点は不透明・ほかは 25%）・**3 コマ・1 コマ 300 ミリ秒**。下書きの道具と絵は `target\balloon-draft\`（リポジトリに入れない）。
+- **議題 3 絵の形式** → **面・矢印・SSTP の印は α 付きの PNG、オンラインの印だけ動く WebP 1 枚**。根拠: 動かない WebP は今 WIC で読み、WebP の拡張が無い機械では出ない（research.md 3.5・1 節）。PNG なら `balloon-webp-names` を待たずに v0.1.0 で差し替えられ、SSP でも面が出る。brief の推し（面も印も `.webp`）から改めた。
+- **議題 4 引き継ぐ値** → 寸法・`origin`・`validrect`（書き方は議題 10）・`wordwrappoint`・印と数字と入力の箱の位置に加え、**書体（`ＭＳ ゴシック` 12）・カーソルの色・字の色もすべて手本のまま**。根拠: 開発者の起票の言葉「設定系パラメーターは引き継ぐ」。字の大きさが変わると 1 行の字数が変わり、手本に合わせたゴーストの改行がずれる。`windowpos.x/y` は正典の鍵でないので写さない（要件 5.7）。
+- **議題 5 オンラインの印の書き方** → ファイル名は **`online0.webp` の 1 枚**。`onlinemarker.filename`・`onlinemarker.interval` は書かない（既定の `online` の連番の 0 番目に収まる）。コマの時間は絵の中の時間割り。`balloon-markers` の申し送り「連番が 1 枚だけでその絵が動く絵のとき」の形に合う。
+- **議題 6 面の数** → 手本どおり本体側 4・相方側 2・入力の箱 4。
+- **議題 7 `StayseeBalloon` の扱い** → 検体に残し、**配布物にも選べるバルーンとして残す**（`tools/package.ps1` は新しい既定を足すだけ）。根拠: 外すと上書きで展開した人・winget で上げた人の手元に古いフォルダが残るかの調べが要り、残せば記憶に `StayseeBalloon` が入っている利用者もそのまま動き、`dist/README.txt` 402 行目の説明も嘘にならない。
+- **議題 8 権利** → **絵と設定ファイルは CC0**、絵を描く道具のコードはリポジトリと同じ MIT。書く所はバルーンの `readme.txt`・`vendors/sample_ghost/README.md`・`dist/README.txt`。
+- **議題 9 拡大率の高い画面** → 等倍の絵だけを作る。
+- **議題 10 `validrect.right,0` の読み** → このバルーンは **`validrect.right,326`（面の幅の正の値）と書き、0 を書かない**（どちらの読みでも右端に解ける）。そのうえで SSP の MCP で `bottle` の 0 の読みを 1 回測る（許しは 2026-10-29 の「承認」で得た。測る前にウェーブの兄弟へ知らせる）。areka の読みが正典と違えば、`region.rs` を持つ `real-run-log-noise` のセッションへ「0 の読みの直しを同じ所で入れられるか」をまず相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する（開発者 10-23「次のリリースまでに治るように」）。測った結果は要件 6.1 の節に書く。
 
 ## Requirements
 
@@ -88,12 +88,12 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 #### Acceptance Criteria
 
-1. The 既定バルーン shall 本体側の面 4 つ・相方側の面 2 つ・入力の箱の面 4 つを持つ（議題 6・仮置き＝手本どおり）。
+1. The 既定バルーン shall 本体側の面 4 つ・相方側の面 2 つ・入力の箱の面 4 つを持つ（議題 6）。
 2. The 既定バルーン shall 面の絵を手本と同じピクセルの寸法で持つ: 本体側の小 `balloons0`・`balloons1` は 326×169、本体側の大 `balloons2`・`balloons3` は 326×348、相方側 `balloonk0`・`balloonk1` は 326×96、入力の箱 `balloonc0`〜`balloonc3` は 400×63。
 3. The 既定バルーン shall 手本と同じく、偶数の面をしっぽが右、奇数の面をしっぽが左の対とし、対の 2 枚と大小の面と相方側の面で同じ絵柄（色・縁・角の丸み）にそろえる。
 4. The 既定バルーン shall 面の絵を α 付きで持ち、抜き色を使わず、`.pna` を置かない。縁の柔らかさは半透明の画素で表す。
-5. The 既定バルーン shall 手本の飾り（瓶の透かし・夕日と波の絵）を持たず、手本より簡素な絵柄にする（areka の印を小さく入れるかは議題 2）。
-6. The 既定バルーン shall 等倍の絵だけを持ち、2 倍の絵を持たない（議題 9・仮置き）。拡大率の高い画面では、areka が画面の拡大率に合わせて拡大する。
+5. The 既定バルーン shall 手本の飾り（瓶の透かし・夕日と波の絵）を持たず、手本より簡素な絵柄にする（areka の印も入れない。絵柄は議題 2 の案 A「白と灰」）。
+6. The 既定バルーン shall 等倍の絵だけを持ち、2 倍の絵を持たない（議題 9）。拡大率の高い画面では、areka が画面の拡大率に合わせて拡大する。
 7. The 既定バルーン shall 入力の箱の面を、SSP と今後の areka のための絵として持つ（areka が入力の箱を出すのは本仕様の外＝`inputbox-user-input`・`balloon-canon-residue`。今の areka が出さないことは要件 7.3 で説明書に書く）。
 
 ### Requirement 3: 印の絵
@@ -104,9 +104,9 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 1. The 既定バルーン shall 上と下の矢印の印を 11×10、SSTP の印を 7×9 のピクセルの寸法で、α 付きで持つ。
 2. The 既定バルーン shall オンラインの印を 77×36 のピクセルの寸法の **1 枚の動く WebP** で持ち、連番の絵（`online0`〜`online15`）で持たない。
-3. The オンラインの印 shall 終わりなく繰り返して動き、絵柄と動きを手本（夕日と波・16 コマ）より簡素にする（絵柄・コマ数・コマの時間は議題 2）。
+3. The オンラインの印 shall 終わりなく繰り返して動き、絵柄と動きを手本（夕日と波・16 コマ）より簡素にする（議題 2: 点が 3 つ順に灯る・3 コマ・1 コマ 300 ミリ秒）。
 4. The 既定バルーン shall 動く絵に GIF を使わない（動く絵は WebP だけ）。
-5. The 既定バルーン shall オンラインの印のファイル名と `descript.txt` の `onlinemarker.*` の書き方を、議題 5 の答え（`balloon-markers` の読み方）に合わせる。
+5. The 既定バルーン shall オンラインの印のファイル名と `descript.txt` の `onlinemarker.*` の書き方を議題 5 のとおりにする: ファイル名は `online0.webp` の 1 枚、`onlinemarker.filename`・`onlinemarker.interval` は書かない（読み方は `balloon-markers`）。
 6. While `balloon-markers` が着地していない, the 既定バルーンの説明書 shall 印（矢印・オンライン・SSTP）と数字が areka ではまだ出ないことと、出るのは areka の今後の版であることを書く（どの spec で出るか＝`balloon-markers` は、本仕様の記録に書く）。
 7. When 本仕様が着地した, the 本仕様 shall `balloon-markers` の brief に、このバルーンが 1 枚の動く絵のオンラインの印の検体になったこと（名前・置き場・オンラインの印のファイル名と書き方）を申し送る。
 
@@ -116,10 +116,8 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 #### Acceptance Criteria
 
-1. Where 議題 3 で `.webp` を選んだ, the 既定バルーン shall 面の絵と印の絵をすべて `.webp` の名前で持つ（議題 3・推し）。
-2. Where 議題 3 で `.webp` を選んだ, the 本仕様 shall `balloon-webp-names` が着地して areka が `.webp` の名前の面を出せるようになるまで、既定を新しいバルーンへ差し替えない。
-3. Where 議題 3 で `.webp` を選んだ, the 既定バルーンの説明書 shall このバルーンが SSP では面が出ないことを書く。
-4. Where 議題 3 で α 付きの PNG を選んだ, the 既定バルーン shall 面の絵と、動かない印の絵を α 付きの `.png` の名前で持ち、オンラインの印だけを動く WebP で持つ。
+1. The 既定バルーン shall 面の絵と、動かない印の絵（矢印・SSTP）を α 付きの `.png` の名前で持ち、オンラインの印だけを動く WebP（`online0.webp`）で持つ（議題 3）。
+2. The 本仕様 shall 既定の差し替えを `balloon-webp-names` の着地に縛らない（面が `.png` なので今の areka で出る）。
 
 ### Requirement 5: 名前と設定ファイル
 
@@ -127,12 +125,12 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 #### Acceptance Criteria
 
-1. The 既定バルーン shall フォルダ名と `descript.txt` の `id` を同じ `<名前>` にし、`name` と `craftman` を持つ（議題 1）。
+1. The 既定バルーン shall フォルダ名と `descript.txt` の `id` を同じ `<名前>`（`areka-balloon`）にし、`name,areka バルーン` と `craftman,ekicyou` を持つ（議題 1）。
 2. The 既定バルーン shall `<名前>` を、ほかの検体のバルーン（`StayseeBalloon`・`emo2-kakukaku` とその派生・どっとさくらの `bottle` ほか）と、大小の違いを無視しても重ならない名前にする。
 3. The 既定バルーン shall `descript.txt`・面別の設定（`balloons0s.txt` など）・`install.txt` を UTF-8 で書き、各ファイルの先頭で `charset,UTF-8` を名乗る（`readme.txt` も UTF-8 で書く）。
-4. The 既定バルーン shall `descript.txt` に手本の全体の値のうち、`origin`・`validrect`・`wordwrappoint`・印（矢印・オンライン・SSTP）・SSTP のメッセージ・数字・入力の箱の位置を、手本と同じ数値で持つ（`validrect` は議題 10 の答えで書き方が変わる・要件 6）。
+4. The 既定バルーン shall `descript.txt` に手本の全体の値のうち、`origin`・`validrect`・`wordwrappoint`・印（矢印・オンライン・SSTP）・SSTP のメッセージ・数字・入力の箱の位置を、手本と同じ数値で持つ（`validrect.right` だけは 0 でなく 326 と書く＝議題 10・要件 6.2）。
 5. The 既定バルーン shall 面ごとに、手本と同じ数値の面別の設定を持つ: `balloons0s.txt`（origin 14,11・wordwrappoint.x -30・onlinemarker.x 3・sstpmarker.x 10・sstpmessage.x 20）、`balloons1s.txt`（origin 23,11・wordwrappoint.x -20・onlinemarker.x 12・sstpmarker.x 19・sstpmessage.x 29）、`balloons2s.txt`（origin 14,14・wordwrappoint.x -30）、`balloons3s.txt`（origin 23,14・wordwrappoint.x -20）、`balloonk0s.txt`（origin 14,14・wordwrappoint.x -30・validrect.bottom -14）、`balloonk1s.txt`（origin 24,14・wordwrappoint.x -20・validrect.bottom -14）。
-6. The 既定バルーン shall 字の書体と大きさ（`font.name`・`font.height`）・カーソルの色・SSTP のメッセージと数字の字の書体と色を、議題 4 の答えで持つ（仮置き＝手本の値: `font.name,ＭＳ ゴシック`・`font.height,12`・字の色 0/0/0・カーソルは `mergepennot`・`square`・塗り 22/143/231・線 8/8/194・字 201/255/255・SSTP のメッセージは `ＭＳ Ｐゴシック` 12・56/163/163・数字は `Times New Roman` 14・32/76/120）。
+6. The 既定バルーン shall 字の書体と大きさ（`font.name`・`font.height`）・カーソルの色・SSTP のメッセージと数字の字の書体と色を、手本の値のまま持つ（議題 4: `font.name,ＭＳ ゴシック`・`font.height,12`・字の色 0/0/0・カーソルは `mergepennot`・`square`・塗り 22/143/231・線 8/8/194・字 201/255/255・SSTP のメッセージは `ＭＳ Ｐゴシック` 12・56/163/163・数字は `Times New Roman` 14・32/76/120）。
 7. The 既定バルーン shall 手本の面別の設定の `windowpos.x,0`・`windowpos.y,0` を写さない（正典の鍵の名前は `windowposition.x/y`・既定 0。`windowpos.*` は正典の鍵でなく、areka も黙って捨てる。値 0 は既定と同じなので、書かないのと同じ意味になる。research.md 3.3）。
 8. When areka が既定バルーンの `descript.txt` と面 0 の面別の設定を読む, the areka shall 文字化けせずに、areka が読む鍵の値を宣言どおりに読み取り、読み込みで警告を出さない（areka がまだ読まない鍵＝印・数字・入力の箱の位置などは、今の作りどおり黙って読み飛ばす）。
 9. The 既定バルーン shall `descript.txt` に `use_self_alpha,1` を書く（正典の既定は 0＝α を捨てて抜き色を使う。SSP で α どおりに見せるため。research.md 3.4）。
@@ -143,10 +141,10 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 #### Acceptance Criteria
 
-1. When 要件の討議が始まる, the 要件の討議 shall 開発者の許しを取ってから SSP の MCP で `validrect.right,0` の正典の読み（0 が左端からの 0 か、右端を指すか）を測り、測った手順・結果・ukadoc の該当の項（URL と原文の引用）をこの文書に書く。
-2. The 既定バルーン shall `validrect` を、SSP と areka のどちらで読んでも同じ範囲に解け、その範囲が空でなく、`origin` と折り返し基準（`wordwrappoint`）を内に含む書き方で持つ（議題 10）。
-3. If 測った正典の読みが areka の読み（0 は左端からの 0）と同じ, then the 既定バルーン shall 手本の `validrect.right,0` をそのまま写さず、手本の意図した範囲（文字を描く範囲が空でない）になる値に直して持つ。
-4. If 測った正典の読みが areka の読みと違う, then the 本仕様 shall areka の読みの直しを `real-run-log-noise` の着地の後へ回し（本仕様の後ろのタスクにするか、別に起票するかは議題 10）、回した先が `.kiro/specs/` の直下に実在して `completed/` でないことを確かめてから記録する。
+1. When 要件の討議が議題 10 を確定した, the 要件の討議 shall 開発者の許しを取ってから SSP の MCP で `validrect.right,0` の正典の読み（0 が左端からの 0 か、右端を指すか）を測り、測った手順・結果・ukadoc の該当の項（URL と原文の引用）をこの文書に書く。
+2. The 既定バルーン shall `validrect` を、SSP と areka のどちらで読んでも同じ範囲に解け、その範囲が空でなく、`origin` と折り返し基準（`wordwrappoint`）を内に含む書き方で持つ。そのために `validrect.right` を 0 でなく面の幅の正の値 326 と書き、0 を書かない（議題 10）。
+3. The 既定バルーン shall 手本の `validrect.right,0` をそのまま写さない（測った正典の読みによらない）。
+4. If 測った正典の読みが areka の読み（0 は左端からの 0）と違う, then the 本仕様 shall areka の読みの直しを本仕様の中で行わず、まず `region.rs` を持つ `real-run-log-noise` のセッションへ同じ所で直せるかを相談し、入らなければ `/kiro-discovery` で v0.1.0 の件として起票する（議題 10）。回した先が `.kiro/specs/` の直下に実在して `completed/` でないことを確かめてから記録する。
 5. When areka が既定バルーンの面 0（本体側・相方側）を読み込む, the areka shall 「文字の描画範囲が潰れている」「origin が描画範囲の外」「折り返し基準が描画範囲の外」の警告を 1 件も出さない。
 6. When 既定バルーンを被せたどっとさくらが喋る, the areka shall 台詞の文字をバルーンの中に描き、文字の描画範囲・origin・折り返し基準が、手本の数値を正典の読みで解いたものと同じ位置になる。
 
@@ -182,7 +180,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 既定バルーンの絵と設定の作り手と再配布の条件（議題 8。候補は `StayseeBalloon` と同じ CC0）を、バルーンの `readme.txt` と `vendors/sample_ghost/README.md` に書く。
+1. The 本仕様 shall 既定バルーンの絵と設定の作り手と再配布の条件（議題 8: 絵と設定ファイルは CC0・絵の道具のコードはリポジトリと同じ MIT）を、バルーンの `readme.txt` と `vendors/sample_ghost/README.md` に書く。
 2. The 本仕様 shall 手本「ボトル（でふぉ改）」から引き継いだのが寸法と設定の数値だけで、絵は写していないことを、同じ 2 か所に書く。
 3. The 本仕様 shall 配布の `dist/README.txt` の同梱物とライセンスの節に、新しい既定バルーンの項（名前・フォルダ・作り手・条件）を書く。
 4. The 本仕様 shall `THIRD-PARTY-NOTICES.md`（依存のライセンスから作る生成物）を手で直さない。
@@ -196,7 +194,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 1. The 本仕様 shall 既定バルーンを検体の決まりどおり `.nar` に畳んで `vendors/sample_ghost/<名前>.nar` に置き、検体の登記表に行を足す（登記は 10 → 11・登記の数を固定するテストも合わせる）。
 2. The リポジトリ shall 既定バルーンを、URL から取り寄せる形でなくリポジトリの中に持つ（配布物に必ず入る製品の資産であるため）。
 3. When 検体の窓口から `<名前>` を引く, the 検体の窓口 shall 既定バルーンのフォルダを取り出して返す。
-4. The 本仕様 shall `vendors/sample_ghost/README.md` の検体の一覧に、既定バルーンの行（名前・種類・ファイルの数・大きさ）を足し、`StayseeBalloon.nar` の行の「既定バルーン」の書きを、議題 7 の答えに合わせて改める。
+4. The 本仕様 shall `vendors/sample_ghost/README.md` の検体の一覧に、既定バルーンの行（名前・種類・ファイルの数・大きさ）を足し、`StayseeBalloon.nar` の行の「既定バルーン」の書きを、「配布物に同梱する選べるバルーン」に改める（議題 7）。
 5. The 本仕様 shall `StayseeBalloon.nar` の中身と、その中身を固定するテスト（`staysee_balloon_fixture` 一式）を変えない。
 
 ### Requirement 11: 既定の差し替え
@@ -209,9 +207,9 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 2. The 本仕様 shall バルーンの解決の段の順と、各段の当たり方を変えない（替えるのは既定の名前の値だけ）。
 3. The 本仕様 shall 既定の名前に頼るテスト（research.md 3.1 の A の 6 本）と、緑のままでも「既定」の意味で綴っているテスト（同 B）を新しい既定へ改め、`StayseeBalloon` を「ある 1 つのバルーンの名前」として使っているだけのテスト（同 C）は変えない。
 4. When 配布の道具が配布物を作る, the 配布の道具 shall 新しい既定バルーンを検体の窓口から引いて配布物の `balloon/<名前>/` に入れ、必須の項目と `balloon/` 直下の許可の表に `<名前>` を載せる。
-5. The 配布の道具 shall `StayseeBalloon` を配布物に入れるかを議題 7 の答えに合わせ、入れないと決めたら、必須の項目・許可の表・取り出し・写す行のすべてから外す。
-6. When 前回の記憶に `StayseeBalloon` が残っている利用者が新しい版の areka を起動する, the areka shall バルーンを決められずに止まることなく、何かのバルーンで喋る（議題 7 で配布物から外したときは、記憶の段が外れて既定の段で新しいバルーンに当たる）。本仕様は、この起動の結果を確かめて記録する。
-7. The 本仕様 shall 根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering（`product.md` の既定バルーンの行・`structure.md` の検体の顔ぶれ・数を書く所・`tech.md` 166 行目の既定バルーンの例）・`doc/COMPAT_ARCHITECTURE.md` 381 行目（段の並びの「既定（`StayseeBalloon`）」）を、新しい既定バルーンを指す書きに改める。`dist/README.txt` 402 行目（`use_self_alpha` の説明で同梱の Staysee を例に出す）と `doc/pasta-real-run.md` 56〜84・160 行目（配布物と同じ形の根を組む手順）は、議題 7 の答え（`StayseeBalloon` を配布物に残すか）に合わせて改める（research.md 6.2）。
+5. The 配布の道具 shall `StayseeBalloon` を今までどおり配布物に入れ続ける（議題 7: 選べるバルーンとして残す）。
+6. When 前回の記憶に `StayseeBalloon` が残っている利用者が新しい版の areka を起動する, the areka shall バルーンを決められずに止まることなく、何かのバルーンで喋る（議題 7 で配布物に残すので、記憶の段が今までどおり `StayseeBalloon` に当たる）。本仕様は、この起動の結果を確かめて記録する。
+7. The 本仕様 shall 根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering（`product.md` の既定バルーンの行・`structure.md` の検体の顔ぶれ・数を書く所・`tech.md` 166 行目の既定バルーンの例）・`doc/COMPAT_ARCHITECTURE.md` 381 行目（段の並びの「既定（`StayseeBalloon`）」）を、新しい既定バルーンを指す書きに改める。`dist/README.txt` 402 行目（`use_self_alpha` の説明で同梱の Staysee を例に出す）と `doc/pasta-real-run.md` 56〜84・160 行目（配布物と同じ形の根を組む手順）は、議題 7 で `StayseeBalloon` を配布物に残すので改めない（新しい既定バルーンを足す必要があれば足す。research.md 6.2）。
 8. The 本仕様 shall 完了の spec（`areka-P0-default-balloon-bundle`・`areka-P0-default-balloon-nar-fold`）の文書を直さず、既定の役が新しいバルーンへ移ったことを本仕様と steering に書く。
 9. The 本仕様 shall 既定を差し替える作業を実装の最後に置き、その直前に main を取り込む（カタログの鎖の spec が `boot_resolve.rs` を作り直すのと重ならないようにする）。
 
@@ -237,7 +235,7 @@ brief が要件の段へ回した議題 9 つと、測ってから決める `val
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 本番コード（`crates/*/src/` のテストでないファイル）の変更を、既定の名前の定数の値 1 つと検体の登記表 `crates/sample-ghost-kit/src/lib.rs` の行に限る（議題 10 で areka の読みの直しを本仕様の後ろのタスクにすると決めたときだけ例外とし、その場合は何を・なぜ変えたかを記録する）。
+1. The 本仕様 shall 本番コード（`crates/*/src/` のテストでないファイル）の変更を、既定の名前の定数の値 1 つと検体の登記表 `crates/sample-ghost-kit/src/lib.rs` の行に限る（議題 10 で areka の読みの直しは本仕様の外へ回すと決めた）。
 2. The 本仕様 shall `crates/areka/src/boot_resolve.rs` の書き込みの関数と `crates/areka-ghost/src/catalog.rs` に触らない。
 3. While ウェーブ C12 が並走している, the 本仕様 shall emo-text の `region.rs` に触らない（`real-run-log-noise` の持ち物）。
 4. The 本仕様 shall バルーンの読み手・合成器・文字の層を直さない（足りない所は起票する）。
