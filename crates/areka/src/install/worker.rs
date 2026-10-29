@@ -21,7 +21,7 @@ use areka_nar::{InstallOutcome, NarArchive, NarError};
 use super::InstallOrder;
 use super::destination::install_into;
 use super::judge::GhostFacts;
-use super::procedure::{InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
+use super::procedure::{ArchiveEnd, InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
 use super::terms::TermsNotice;
 use crate::alert::{self, YesNo};
 use crate::exit_wait::WorkGate;
@@ -51,8 +51,14 @@ pub(crate) enum DeskAsk {
         record: InstalledRecord,
         reply: ReplySender<()>,
     },
-    /// 依頼 1 件が終わった（次の依頼を受け取れる）。
-    OrderDone,
+    /// 依頼 1 件が終わった（次の依頼を受け取れる）。終わった依頼と、書庫の順の終わり方
+    /// （途中でやめたら依頼の書庫より短い）を運ぶ。
+    #[allow(dead_code)]
+    // 読むのは起動の依頼の持ち物 install::startup（同じ spec の後のタスク）
+    OrderDone {
+        order: InstallOrder,
+        ends: Vec<ArchiveEnd>,
+    },
 }
 
 /// 背景のスレッド `install` を起こし、依頼の送出端と join の取っ手を返す。
@@ -68,7 +74,7 @@ pub(crate) fn spawn_worker(
             // 断った・拒否・失敗・途中でやめた書庫の名前を門に残さない。
             gate.end();
             tracing::debug!(event = "install_order_done", ends = ?ends, "[install] 依頼を終えました");
-            if desk.send(DeskAsk::OrderDone).is_err() {
+            if desk.send(DeskAsk::OrderDone { order, ends }).is_err() {
                 tracing::debug!(
                     event = "install_desk_gone",
                     "[install] 窓口が居ないので、依頼の終わりを知らせられません"

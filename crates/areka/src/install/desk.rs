@@ -289,7 +289,7 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 fn answer(world: &mut World, ask: DeskAsk) {
     let closing = world.non_send::<InstallDesk>().gate.is_closing();
     match ask {
-        DeskAsk::OrderDone => world.non_send_mut::<InstallDesk>().busy = false,
+        DeskAsk::OrderDone { .. } => world.non_send_mut::<InstallDesk>().busy = false,
         ask if closing => {
             drop(ask);
             tracing::debug!(
