@@ -219,3 +219,6 @@
 - **期待値の変わるテスト**（引き直した結果）: `region_tests.rs` の全 0 の基層の 1 本（潰れ → 画像全体）と `region_vertical_canon_tests.rs` の「全 0（退化矩形）」の 1 行だけ。ほかの 4 辺 0 の基層を使うテスト（`actor_region_warn_tests.rs`・`region_inline_limit_tests.rs`・出荷の見本のテスト）は面の上書きで 4 辺を書いてから解くので動かない。`areka-parsers` の `model_tests.rs` は素の値の転記だけ。
 - **ウェーブの約束**: `region.rs` は ④（本 spec）の持ち物で、⑥ `default-balloon-selfmade` は触らないと約束している。`draw.rs` には触らない。新しいソースファイルは足さない。`COMPAT_ARCHITECTURE.md` §8 は ⑦ `window-work-area-clamp` も行を足すが、別々の行（`dist/README.txt` と同じ許す重なり）。
 - **実機**: 走行 B（どっとさくら・`bottle`）で潰れの `warn` が 0 件・「テキスト供給面を予約スロットへ装着した」が 1 件以上を、数え直しの表に足した（要件 6.4）。
+
+## 9. 設計の討議（2026-10-29）
+- 開発者が設計の 10 議題を推奨案で一括承認した。結論は design.md 末尾の「設計の討議で決めたこと」。設計の検証（design-validation.md・GO）の指摘 2 件と小さな指摘 1 件は、討議の前に自明な直しとして設計へ反映した。
