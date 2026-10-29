@@ -1,6 +1,6 @@
 use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
 use super::{DrawStats, ViewboxExecutor};
-use crate::draw::ResolvedFont;
+use crate::draw::{ResolvedFont, create_text_format};
 use crate::layout::VisibleWindow;
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextItem;
@@ -446,6 +446,54 @@ fn font_change_degrades_to_full_domain_redraw() {
     assert!(
         opaque_count(&bytes) > 0,
         "font B の content が全域ダーティで正しく描かれる（透明のままでない）"
+    );
+}
+
+/// K1（要件 4.8・4.9）: 束縛書式の記憶の鍵は書式を決める値すべてを見る。同じ実行部で、先頭の
+/// 候補・大きさ・書字方向が同じで既定の見た目の太字・斜体だけが違うフォントを続けて描くと、
+/// 書式が組み直され、2 度目の束縛書式の太さ・斜体が新しい値（同じ経路で作った書式の値）になる。
+#[test]
+fn bold_or_italic_only_change_rebuilds_the_bound_format() {
+    let mut rig = Rig::new();
+    let image = (80u32, 40u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    let (canvas, window) = build(&glyph_items("■■"), &region, mode, 10.0);
+
+    let font_a = ResolvedFont::resolve(&geo_model(Some(10)));
+    let mut font_b = font_a.clone();
+    font_b.looks.default.bold = true;
+    font_b.looks.default.italic = true;
+
+    // 束縛書式の太さ・斜体（実行部が今持っている書式）。
+    let bound = |exec: &ViewboxExecutor| {
+        let (_, format) = exec.format.as_ref().expect("描いた後は書式を持つ");
+        unsafe { (format.GetFontWeight(), format.GetFontStyle()) }
+    };
+
+    exec.render(&canvas, &window, &font_a, mode, &contract, &mut surface)
+        .expect("font A render 失敗");
+    let first = bound(&exec);
+    let creations_a = exec.stats().line_layout_creations;
+
+    exec.render(&canvas, &window, &font_b, mode, &contract, &mut surface)
+        .expect("font B render 失敗");
+    let second = bound(&exec);
+
+    let expected =
+        create_text_format(&exec.dwrite, &exec.fonts.pick(&font_b), mode).expect("期待値の書式");
+    let expected = unsafe { (expected.GetFontWeight(), expected.GetFontStyle()) };
+    assert_ne!(first, expected, "弁別の前提: 太字・斜体で書式の値が変わる");
+    assert_eq!(
+        second, expected,
+        "太字・斜体だけの変更でも束縛書式が組み直され新しい値になる"
+    );
+    assert!(
+        exec.stats().line_layout_creations > creations_a,
+        "組み直しで行キャッシュも捨てられ行レイアウトを作り直す"
     );
 }
 
