@@ -181,6 +181,8 @@ fn main() -> Result<()> {
     if let Some(req) = &opts.offline {
         std::process::exit(offline_dump::run(req));
     }
+    // 起動の依頼の持ち物（`--install` と exe の隣の initial_install.nar）は早い戻りの後に作る（要件 4.9）。
+    let startup_install = install::startup::StartupInstall::new(opts.install);
     // 読み取りだけかを 1 度だけ立てる（置き場の形と受け口が決まる前・readonly-mode 要件 1.1・1.5）。
     readonly::engage(opts.readonly);
     if opts.modules == cli::ModulePolicy::Skip {
@@ -254,6 +256,7 @@ fn main() -> Result<()> {
     mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
     roots::install(app.world().borrow_mut().world_mut());
     readonly::install(app.world().borrow_mut().world_mut());
+    install::startup::install(app.world().borrow_mut().world_mut(), startup_install);
 
     // 起動の文脈と起動入力の作り口（本番版）を据える（切替と右クリックメニューの「ゴースト」枠が読む）。
     install_boot_context(

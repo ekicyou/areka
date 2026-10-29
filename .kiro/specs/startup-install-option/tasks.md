@@ -61,7 +61,7 @@
   - _Requirements: 2.5, 2.8, 3.1, 3.3, 3.4, 3.5, 3.6, 4.3, 4.4, 4.5, 5.1, 5.5, 5.6, 5.7, 5.8, 7.2, 9.7_
 
 - [ ] 4. 結線と窓口のテスト
-- [ ] 4.1 窓口の 3 か所と main の 2 行から持ち物の口を呼ぶ
+- [x] 4.1 窓口の 3 か所と main の 2 行から持ち物の口を呼ぶ
   - 窓口の定常到達の末尾・終わりの知らせの腕（手が空いたことを下ろした後）・終了の後始末の先頭から、それぞれ持ち物の口を呼ぶ（判断は入れない）
   - main で `--help`・`--offline-dump` の早い戻りの後、起動の解決の前に持ち物を作り、readonly の据え付けの次に World へ据える
   - `--offline-dump` で `initial_install.nar` を見ない（要件 4.9・9.4 の該当分）は、持ち物を作る行が早い戻りの後にあるという静的な構造で確かめる（exe の隣にファイルを置く試験は `target\debug\` を共有するほかの試験を汚すので置かない）
@@ -118,3 +118,4 @@
 - 1.1: `InstallOrigin::{StartupArgs, InitialInstall}` と `DeskAsk::OrderDone` の `order`・`ends` に一時の `#[allow(dead_code)]` を付けた。読み手ができる 3.x／4.1 で外すこと。
 - 1.2: `SwitchAcceptCount` は今のゴーストのフォルダ名が `None`（パスを直に指して起こしたゴースト）だと、起こし直しでも数えが増える（`pin_to_current` と同じ扱い）。4.3 のテストで気に留める。`ghost_switch.rs` の増えは rustfmt の折り返しで 11 行。
 - 3.3: 終了の後に終わった起動の引数の依頼の warn `startup_followup_dropped` は、語（`deletesource`・`callghost`）が立っているときだけ（レビューの差し戻しで design.md 478 行もそろえた）。
+- 4.1: このワークツリーでは i686 の補助 exe が建っていないため、`crates/areka/tests` の実機寄りの結合テスト 7 本が `real-run-kit/src/i686.rs:77` で止まる（環境・差分と無関係）。全体テストの前に `cargo build -p <pkg> --target i686-pc-windows-msvc` が要る。

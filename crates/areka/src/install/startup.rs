@@ -74,7 +74,6 @@ struct ArgsFollowup {
 
 impl StartupInstall {
     /// `main` から 1 度だけ（`--help`・`--offline-dump` の早い戻りの後・起動の解決の前）。
-    #[allow(dead_code)] // 読み手は同じ spec の main の結線（タスク 4.1）
     pub(crate) fn new(args: InstallArgs) -> StartupInstall {
         StartupInstall::new_with(args, crate::roots::user_root::exe_dir())
     }
@@ -119,7 +118,6 @@ impl Drop for StartupInstall {
 }
 
 /// `main` から 1 度だけ（`readonly::install` の次）。持ち物を World の資源へ移す。
-#[allow(dead_code)] // 読み手は同じ spec の main の結線（タスク 4.1）
 pub(crate) fn install(world: &mut World, startup: StartupInstall) {
     world.insert_resource(startup);
 }
@@ -131,7 +129,6 @@ fn take_pending(world: &mut World) -> Option<Pending> {
 }
 
 /// どの定常到達でも呼ばれる（最初の 1 回だけ依頼を出す＝要件 2.1・4.1）。積むだけで終わりを待たない（要件 2.6）。
-#[allow(dead_code)] // 読み手は同じ spec の install::desk::on_steady（タスク 4.1）
 pub(crate) fn on_steady(world: &mut World) {
     let Some(pending) = take_pending(world) else {
         return;
@@ -184,7 +181,6 @@ pub(crate) fn on_steady(world: &mut World) {
 
 /// 終了の後始末（定常の前に終わるなら出さずに warn 1 件＝要件 2.7・積んだ依頼の終わりを受けられないなら
 /// 語が立っていれば warn 1 件＝要件 2.8・7.2）。
-#[allow(dead_code)] // 読み手は同じ spec の install::desk::discard_for_exit（タスク 4.1）
 pub(crate) fn discard_for_exit(world: &mut World) {
     if let Some(pending) = take_pending(world) {
         pending.record_not_submitted("exit_before_steady");
@@ -223,7 +219,6 @@ fn end_word(end: Option<&ArchiveEnd>) -> &'static str {
 /// 依頼の終わり（起動の引数・初期インストールだけを扱う＝要件 2.5・2.8・3.1・3.3〜3.6・4.3〜4.5・5.1・5.5〜5.8）。
 ///
 /// `closing`（終了が始まった後に終わった）なら消さず頼まない（要件 3.1 の終了の除き）。
-#[allow(dead_code)] // 読み手は同じ spec の install::desk::answer の OrderDone の腕（タスク 4.1）
 pub(crate) fn on_order_done(
     world: &mut World,
     order: &InstallOrder,

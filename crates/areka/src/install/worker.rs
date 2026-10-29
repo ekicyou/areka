@@ -53,8 +53,6 @@ pub(crate) enum DeskAsk {
     },
     /// 依頼 1 件が終わった（次の依頼を受け取れる）。終わった依頼と、書庫の順の終わり方
     /// （途中でやめたら依頼の書庫より短い）を運ぶ。
-    #[allow(dead_code)]
-    // 読むのは起動の依頼の持ち物 install::startup（同じ spec の後のタスク）
     OrderDone {
         order: InstallOrder,
         ends: Vec<ArchiveEnd>,
