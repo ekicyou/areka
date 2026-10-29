@@ -2,7 +2,7 @@
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
 //! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`apply_font_tag`・
-//! `SurfaceResolver::resolve`・`resolve_balloon_key`・`pair_anchors`）の答えを診断の種類へ写すだけにする。
+//! `surface_missing`・`balloon_missing`（`areka_seriko`）・`pair_anchors`）の答えを診断の種類へ写すだけにする。
 
 use std::ops::Range;
 
@@ -11,7 +11,7 @@ use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read, ReadNote};
 use areka_sakura::strict::{self, CharCursor};
 use areka_sakura::{AnchorIssue, ChoiceTimeoutDirective, pair_anchors, parse_choice_timeout};
-use areka_seriko::{BalloonResolve, SurfaceTarget, resolve_balloon_key};
+use areka_seriko::{SkinLookup, balloon_missing, surface_missing};
 
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
 
@@ -27,16 +27,6 @@ pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED
 pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
 pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str = strict::MSG_ANCHOR_STRAY_CLOSE;
 
-/// 判断に要る事実。本番は UI スレッドで写し取った値が答え、テストは手書きの表で答える。
-pub(in crate::mcp) trait ScriptFacts {
-    /// `\s` の引数を、再生と同じ解決器で解いた結果。
-    fn resolve_surface(&self, key: &str) -> SurfaceTarget;
-    /// そのスコープのシェルに生の surface ID が在るか。スコープに絵が無ければ None。
-    fn shell_has(&self, scope: u32, surface_id: u32) -> Option<bool>;
-    /// そのスコープのバルーンに面の ID が在るか。バルーンが無ければ None。
-    fn balloon_has(&self, scope: u32, balloon_id: u32) -> Option<bool>;
-}
-
 /// 命令を台本の順に 1 つずつ見て診断の列を作る。`facts` が None＝窓の無いゴースト（surface とバルーンを診ない）。
 /// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。アンカーの対応の崩れだけは、
 /// 再生と同じ判定（`pair_anchors`）がそこで数えるのをやめるので、後ろの開き／閉じには出ない。
@@ -44,7 +34,7 @@ pub(in crate::mcp) fn diagnose(
     script: &str,
     reads: &[Read],
     ledger: &ConsumerLedger,
-    facts: Option<&dyn ScriptFacts>,
+    facts: Option<&dyn SkinLookup>,
 ) -> Vec<Diagnostic> {
     let mut out = Out {
         cursor: CharCursor::new(script),
@@ -112,14 +102,14 @@ pub(in crate::mcp) fn diagnose(
             }
             Instruction::Surface(arg) if !shell_switched => {
                 if let Some(facts) = facts
-                    && surface_missing(facts, scope, arg.as_str())
+                    && surface_missing(facts, scope, arg.as_str()).is_some()
                 {
                     out.push(Kind::MissingSurface, &span, MSG_MISSING_SURFACE);
                 }
             }
             Instruction::BalloonSurface(arg) if !balloon_switched => {
                 if let Some(facts) = facts
-                    && balloon_missing(facts, scope, arg.as_str())
+                    && balloon_missing(facts, scope, arg.as_str()).is_some()
                 {
                     out.push(Kind::MissingBalloon, &span, MSG_MISSING_BALLOON);
                 }
@@ -158,24 +148,6 @@ fn judge_font(args: &[String]) -> Option<(Kind, &'static str)> {
             }
             FontTagFailure::BadValue => None,
         },
-    }
-}
-
-/// スコープに絵が無ければ診ない（解けない名前・範囲外の数も、絵の在るスコープでだけ知らせる）。
-fn surface_missing(facts: &dyn ScriptFacts, scope: u32, key: &str) -> bool {
-    match facts.resolve_surface(key) {
-        SurfaceTarget::Show(id) => facts.shell_has(scope, id) == Some(false),
-        SurfaceTarget::Unresolved => facts.shell_has(scope, 0).is_some(),
-        SurfaceTarget::Hide => false,
-    }
-}
-
-/// 名前の形の `\b[名前]` は、そのとき表示しているサーフェスの箱に依るので診ない。
-fn balloon_missing(facts: &dyn ScriptFacts, scope: u32, key: &str) -> bool {
-    match resolve_balloon_key(key) {
-        BalloonResolve::Show(id) => facts.balloon_has(scope, id) == Some(false),
-        BalloonResolve::Invalid => facts.balloon_has(scope, 0).is_some(),
-        BalloonResolve::Hide | BalloonResolve::NameForm => false,
     }
 }
 

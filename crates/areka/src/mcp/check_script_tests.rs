@@ -9,17 +9,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_mcp::tools::check_script::Diagnostic;
 use areka_parsers::sakura::parse_noted;
-use areka_seriko::{SurfaceResolver, SurfaceTarget};
+use areka_seriko::{SkinFacts, SkinLookup, SurfaceResolver, SurfaceTarget};
 
 use super::*;
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
-use crate::mcp::check_script_judge::{ScriptFacts, diagnose};
+use crate::mcp::check_script_judge::diagnose;
 
 /// 手で組んだ事実。スコープ 0 の絵は 0・3・10、スコープ 1 は 10・11、別名 `笑顔` は 3。
 /// バルーンはスコープ 0 が 0・2、スコープ 1 が 1。スコープ 2 には何も無い。
 struct ByHand(SurfaceResolver);
 
-impl ScriptFacts for ByHand {
+impl SkinLookup for ByHand {
     fn resolve_surface(&self, key: &str) -> SurfaceTarget {
         self.0.resolve(key)
     }
@@ -44,16 +44,16 @@ fn aliases() -> BTreeMap<String, Vec<u32>> {
 }
 
 /// 上と同じ事実を、写し取りの値の形（集合の表）で組む。
-fn snapshot() -> ScriptFactsSnapshot {
+fn snapshot() -> SkinFacts {
     let ids = |v: &[u32]| v.iter().copied().collect::<BTreeSet<u32>>();
-    ScriptFactsSnapshot::new(
+    SkinFacts::new(
         aliases(),
         BTreeMap::from([(0, ids(&[0, 3, 10])), (1, ids(&[10, 11]))]),
         BTreeMap::from([(0, ids(&[0, 2])), (1, ids(&[1]))]),
     )
 }
 
-fn check(script: &str, facts: &dyn ScriptFacts) -> Vec<Diagnostic> {
+fn check(script: &str, facts: &dyn SkinLookup) -> Vec<Diagnostic> {
     diagnose(
         script,
         &parse_noted(script),
