@@ -84,7 +84,7 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 3. When カーソルが当たり判定から別の当たり判定へ直に移った, the areka shall 移ったその場で移り先の形を出し、前の当たり判定の形を描画の 1 回分も残さない。
 4. When カーソルがキャラクターの窓の上で当たり判定の無い所へ出た, the areka shall その場で矢印（`system:arrow`。ゴーストの descript による差し替えは要件 5）を出す。
 5. While カーソルがキャラクターの窓の、マウスを下の窓へ通す所（絵の透けた所）の上に居る, the areka shall 形を決めず、下に見える窓の形のままにする。
-6. When カーソルを動かしていない間に面が替わって、カーソルの下の当たり判定が変わった, the areka shall 当たり判定の出入りを決めるのと同じ時点で形を選び直す。
+6. When カーソルを動かしていない間に面が替わって、カーソルの下の当たり判定が変わった, the areka shall 当たり判定の出入りを決めるのと同じ時点（完了 `mouse-click-wheel-events` の要件 7.9 の「次にカーソルが動いた時点」）で形を選び直す。
 7. The areka shall 形の選び方を窓ごと・スコープごとに分け、ある窓の形が別の窓の形を変えないようにする。
 8. The areka shall バルーンの窓の上のカーソルの形を今のまま変えない。
 
@@ -137,7 +137,7 @@ SSP の基準（`areka-P0-pasta-in-windows-verification` の `ssp-measurement.md
 1. When `system:arrow`・`cross`・`finger`・`help`・`move`・`no`・`text`・`wait` のどれかを出す, the areka shall OS の標準の形のうち対応する形（矢印・十字・指差し・ヘルプ・四方向の移動・禁止・文字の I・待ち）を、利用者が OS で設定した絵と大きさで出す。
 2. When `system:hand`・`system:grip` を出す, the areka shall areka が持つ「手を開いた形」「手を握った形」を出し、指差し（`system:finger`）と見分けられる形にする。
 3. When `.cur` のファイルを指定どおりに出す, the areka shall そのファイルの絵を出す。`.ani` のファイルなら、ファイルどおりに動かして出す。
-4. The areka shall cursorブレスのファイル名を、シェルのフォルダ → ゴーストのフォルダの順で探す。ゴーストの descript のファイル名は、ゴーストのフォルダで探す。
+4. The areka shall cursorブレスのファイル名とゴーストの descript のファイル名を、どちらもシェルのフォルダ → ゴーストのフォルダの順で探す（ukadoc のプロパティ `currentghost.mousecursor` の「相対パス指定はシェル→ゴーストフォルダ内の順で探索する」に合わせる）。
 5. If 指定のファイルが無い・読めない・カーソルのファイルとして壊れている, the areka shall その場面の既定の形（要件 2〜5 の順で決まる形）を出し、ファイル名・探した場所・理由を記録に残す。
 6. If 指定のファイル名が、探す場所のフォルダの外を指す（絶対パス・上のフォルダへ出る書き方）, the areka shall そのファイルを読まずに既定の形を出し、記録に残す。
 7. The areka shall 同じファイルの失敗を、形を出すたびには記録せず、シェル（またはゴースト）を 1 回読み込むごとに 1 回だけ記録する。
