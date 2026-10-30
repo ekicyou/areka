@@ -102,6 +102,9 @@ pub use self::transition_record::{
 };
 
 #[cfg(test)]
+#[path = "presenter_blink_stop_tests.rs"]
+mod blink_stop_tests;
+#[cfg(test)]
 #[path = "presenter_budget_steady_state_tests.rs"]
 mod budget_steady_state_tests;
 #[cfg(test)]

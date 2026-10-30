@@ -3,6 +3,7 @@
 > 2026-10-30・ブランチ `claude/animated-surface-log-flood-54fed6`（main `484263230` の上）。行番号はこの時点のもの。実装の着手時に引き直すこと。
 > 入力: `requirements.md`（末尾の「要件討議の決め」6 件は開発者の承認済み）・`research.md`（ギャップ分析と、本設計の段の記録）。
 > 2026-10-30 追記: 開発者の決め（同日・推奨の案）で **件 26**（まばたきの閉じた絵が残る・要件 9）を足した。節「件 26: 止まったアニメーションの重ね絵が残る件（原因の決め方）」と、境界・対応表の行を足した。ほかの節の決めは変えていない。
+> 2026-10-31 追記: 件 26 の原因が emo-compose の `plan.rs`（`flatten_surface` の pattern0 を静的に積む道）にあると分かり、開発者の決め（同日・案 1）で境界を `plan.rs` の 1 か所だけ広げた。節「件 26」の決めの記録と、境界・ファイルの一覧・対応表の行を直した。
 
 ## Overview
 
@@ -38,16 +39,17 @@
 - 表示の行の水準に触れている注記・行の位置の参照（テスト・例・性能の道具・手順書・`doc/COMPAT_ARCHITECTURE.md`）の追随。
 - 実機の測り（要件 5〜7）の手順と、その記録 `.kiro/specs/animated-surface-log-flood/verification.md`。
 - （件 26・要件 9）SERIKO のアニメーションが止まって外したコマが、表示の指令に載って emo-present の絵になるまでの道の正しさ。道は、seriko がコマを外して指令を出す所（`crates/areka-seriko/src/looper.rs` の停止の道と載せ直し `refresh`・`actor.rs` の呼び手・`commit_pattern`）と、emo-present がその指令で絵を作る所（`show.rs`・控えの引き当て・`blit_rect.rs`）。直すのは原因の 1 か所だけ。
+- （件 26・2026-10-31 の開発者の決め・案 1）原因の 1 か所である emo-compose の `plan.rs` の `flatten_surface` のうち、コマの無い id の pattern0 を静的に積む道の 1 か所。`bind+random`（`Interval::BindRandom`）はコマが無いとき pattern0 を積まない、の 1 つの条件だけを足す。
 
 ### Out of Boundary
 
-- emo-compose の `plan.rs`・`pattern.rs`・`blit.rs`・`composed.rs`・`method.rs`・`world.rs`・`plan_extent.rs` の中身（読むだけ・呼ぶだけ）。`seriko-pattern-calls` が `plan.rs`（`derive_ops`・505 行目と 535 行目のあたり）・`pattern.rs`・`method.rs`・`world.rs`・`plan_extent.rs` に触る見込みで、本 spec はそこに 1 行も触らない。
+- emo-compose の `plan.rs`・`pattern.rs`・`blit.rs`・`composed.rs`・`method.rs`・`world.rs`・`plan_extent.rs` の中身（読むだけ・呼ぶだけ）。`seriko-pattern-calls` が `plan.rs`（`derive_ops`・505 行目と 535 行目のあたり）・`pattern.rs`・`method.rs`・`world.rs`・`plan_extent.rs` に触る見込みで、本 spec はそこに 1 行も触らない。ただし件 26 の直しの 1 か所（`flatten_surface` の pattern0 を静的に積む道・This Spec Owns の件 26 の 2 つ目の項）だけは例外（2026-10-31 の開発者の決め・案 1）。純 `bind` の扱い・`is_bind_interval`・`is_bind_animation`・`nesting.rs` 130 行目・抽選・コマの時刻・回数は変えない。
 - 当たりのマスク（wintf の `AlphaMask`）・D2D の絵の作り方・wintf の描き直し（`render_surface`）。
 - perf の行（`timing.rs` の `timing.emit`）の水準・文言・項目（`present-emit-tail-latency` の持ち物）。
 - 控え（`cache.rs` の容量 3 の LRU）の形と容量。
 - 記録の仕組み（`tracing` の設定・`RUST_LOG` の読み方）と、MCP の `get_log` の履歴の振り分け（`log_history.rs`。この行はもともと履歴に載っていない）。
 - seriko のコマの進み（適用の回数・時刻）。件 26 の直しでも、抽選・コマの時刻・回数は変えない。直してよいのは、外したコマが指令と絵に正しく届くかどうかだけ。
-- 件 26 の原因が、上の道の外（emo-compose の `plan.rs`・`pattern.rs`・`blit.rs`、wintf、シェルの定義の読み込み〔`areka-parsers`〕など）にある場合の直し。そのときは直さずに止まって報告する（要件 9.5）。
+- 件 26 の原因が、上の道の外（emo-compose の `plan.rs`・`pattern.rs`・`blit.rs`、wintf、シェルの定義の読み込み〔`areka-parsers`〕など）にある場合の直し。そのときは直さずに止まって報告する（要件 9.5）。2026-10-31、原因が `plan.rs` にあると分かって止まって報告し、開発者の決め（案 1）でその 1 か所だけを本 spec で直すことにした（上の項の例外）。ほかの所（`pattern.rs`・`blit.rs`・wintf・`areka-parsers` など）は今も直さない。
 
 ### Allowed Dependencies
 
@@ -142,6 +144,7 @@ crates/areka-emo-present/src/
 - 性能の道具: `tools/perf/judge-perf.py`（506 行目の注記の行の位置と水準・報告の見出しの「表示成立点 info!」を「表示成立点の行」へ。判定は変えない）・`tools/perf/judge-followup.py`（107 行目の行の位置）・`tools/perf/fixtures/generate.py` と `tools/perf/fixtures-loop/compare/measure_failed/case.txt`（注記の「info!」）。
 - 例: `crates/areka/examples/{collision-probe.rs, emo-present.rs, emo-present/state.rs, emo-present/systems.rs, window-placement.rs}` — 水準に触れる注記があれば合わせる（最初の表示は INFO のままなので、多くは直しが要らない。要らないことを確かめて記録する）。
 - （件 26）原因の 1 か所と、その兄弟の失敗するテスト。どのファイルになるかはテストで決める（節「件 26: 止まったアニメーションの重ね絵が残る件（原因の決め方）」）。候補は `crates/areka-seriko/src/looper.rs`・`actor.rs`・`state` の指令の保持と、emo-present の `show.rs`・`cache.rs`・新しい `blit_rect.rs`。
+  - 2026-10-31 に決まった: 原因は emo-compose の `crates/areka-emo-compose/src/plan.rs`（`flatten_surface` の pattern0 を静的に積む道）。直すのはそこの 1 か所（開発者の決め・案 1）。テストは emo-compose の新しい兄弟 `plan_bind_random_tests.rs`（`plan.rs` に接続宣言を 1 つ足す）・seriko の `looper_tests.rs` に 1 本・emo-present の新しい `presenter_blink_stop_tests.rs`（`presenter.rs` に接続宣言を 1 つ足す）。
 - 手順書: `doc/pasta-real-run.md`（127・141 行目の `RUST_LOG` の値はそのまま・すべての適用を見たいときの足し方の注記を足す、183 行目の表の `animated-surface-log-flood` の項、314 行目の「外して読む」の注記の書き直し）・`doc/COMPAT_ARCHITECTURE.md`（178 行目の `presenter/show.rs:194`/`:221` の行の位置）。
 
 ### emo-compose で触る所（`seriko-pattern-calls` と合わせるための一覧）
@@ -155,7 +158,8 @@ crates/areka-emo-present/src/
 | `crates/areka-emo-compose/src/blit_rect.rs` | 新しいファイル | `Recompose`・`execute_reusing`・矩形の求め方・矩形で切って重ねる式 |
 | `crates/areka-emo-compose/src/blit_rect_tests.rs` | 新しいファイル | 兄弟のテスト |
 
-- 触らない: `plan.rs`（`BlitOp`・`Extent`・`build_plan` を読むだけ）・`pattern.rs`・`blit.rs`（`execute` を呼ぶだけ）・`composed.rs`（`resize_and_clear`・`bytes_mut` を呼ぶだけ）・`method.rs`（`ComposeMethod::Overlay` を比べるだけ）・`world.rs`・`plan_extent.rs`・`composer_tests.rs` を含む既存のテストのファイルすべて。
+- 件 26（2026-10-31 の開発者の決め・案 1）で足した所: `plan.rs` の `flatten_surface` の、コマの無い id の pattern0 を静的に積む道（pattern0 を引いた直後）に、`Interval::BindRandom` なら積まずに次へ進む条件を 1 つ足す。あわせて `derive_ops` の説明に 1 文足し、末尾にテストの接続宣言を 1 つ足す。`seriko-pattern-calls` の触る見込みの 505 行目と 535 行目のあたり（pattern0 の語の引き方・`ComposeMethod::from_name`）と同じ関数の近い行なので、合わさるときは行の並びを見て確かめる。
+- 触らない: `plan.rs`（件 26 の上の 1 か所のほかは `BlitOp`・`Extent`・`build_plan` を読むだけ）・`pattern.rs`・`blit.rs`（`execute` を呼ぶだけ）・`composed.rs`（`resize_and_clear`・`bytes_mut` を呼ぶだけ）・`method.rs`（`ComposeMethod::Overlay` を比べるだけ）・`world.rs`・`plan_extent.rs`・`composer_tests.rs` を含む既存のテストのファイルすべて。
 - `seriko-pattern-calls` と重なりうるのは `lib.rs` だけ。向こうが新しいファイルの `mod` の行を足すなら、行の並びの違いだけで自動で合わさる見込み。向こうが `build_plan` の引数を変えるなら、`lib.rs` の 2 か所（148 行目の `compose_into` の中と、新しい口の中）を同じに直す。
 - **向こうのセッションとの合わせ（2026-10-30・済み）**: この表を送り、`lib.rs` で触る行は重ならないと答えをもらった。`build_plan` の引数を変えることになったら、`lib.rs` の 2 か所は向こうが一緒に直して知らせる。`move` は窓の位置で表す案が有力で、そうなれば命令列も外形も変わらない。詳しくは `research.md` §10.6。
 
@@ -235,10 +239,10 @@ flowchart TB
 | 8.5 | 失敗を注入するテスト | テスト | `arm_display_fault`・GraphicsCore を抜く | — |
 | 8.6 | 手順書を書き直す | 注記の追随 | `doc/pasta-real-run.md` | — |
 | 8.7 | 範囲外の問題は起票 | 実装の進め方 | `/kiro-discovery` | — |
-| 9.1 | 外したコマを画面に出さない | 件 26 の原因の 1 か所 | 原因の決め方の節 | 停止→指令→表示の適用 |
+| 9.1 | 外したコマを画面に出さない | 件 26 の原因の 1 か所（emo-compose の `plan.rs`・`flatten_surface` の pattern0 を静的に積む道） | 原因の決め方の節 | 停止→指令→表示の適用→合成の命令列 |
 | 9.2 | アニメーションのコマを時刻のとおりに出す | 同上 | 同上 | 同上 |
 | 9.3 | 直す前に失敗するテストで再現 | テスト | seriko と emo-present の境目の決定論テスト | — |
-| 9.4 | 原因を 1 か所で直し、回数・時刻・画素の同じさを変えない | 件 26 の原因の 1 か所 | 既存の檻が緑のまま | — |
+| 9.4 | 原因を 1 か所で直し、回数・時刻・画素の同じさを変えない | 件 26 の原因の 1 か所（`plan.rs`） | 既存の檻が緑のまま | — |
 | 9.5 | 原因が境界の外なら止まって報告 | 実装の進め方 | Out of Boundary の件 26 の項 | — |
 | 9.6 | 実機 6 分で目が開くことを両版で確かめる | 実機の測り | `dump_surface` を何度か撮る・`verification.md` | — |
 
@@ -252,7 +256,7 @@ flowchart TB
 | 装置の失敗の記録（`device_err`・`record_display`） | emo-present | 同じ原因の続きを DEBUG にする | 1.6・4.3 | `tracing`（P2） | Service |
 | 注記の追随 | 道具・手順書 | 実物と合わせる | 2.4・2.6・8.6 | — | — |
 | 実機の測り | 手順 | 記録の量・CPU・記憶・SSP の基準 | 5.1〜7.4 | 手順書・impl-watch の机・SSP の MCP | Batch |
-| 件 26 の原因の 1 か所 | seriko か emo-present（テストで決める） | 外したコマが画面に残らないようにする | 9.1〜9.6 | seriko の停止の道・表示の適用 | — |
+| 件 26 の原因の 1 か所 | emo-compose の `plan.rs`（テストで決まった・2026-10-31 の開発者の決め・案 1 で境界を広げた） | `bind+random` のアニメーションは、コマが無いとき pattern0 を静的に積まない | 9.1〜9.6 | seriko の停止の道・表示の適用・合成の命令列 | — |
 
 ### emo-compose
 
@@ -471,6 +475,12 @@ pub(crate) fn record_display(
 2. テストがどちらの側で赤になるかで、原因の場所を決める。赤の出た所の 1 か所だけを直す。両方の側を同時に直さない。
 3. 原因が「分かっていること」の道の外（Out of Boundary の件 26 の項）にあると分かったら、直さずに止まり、場所と根拠を開発者に報告する（要件 9.5）。seriko の中を直すことになったら、触る行を、seriko に触る並走の spec のセッションと先に合わせる。
 4. テストで再現できなかったら、推測で直さない。再現できなかった入力と、次に記録で確かめること（`RUST_LOG` で seriko と表示の判定の分岐まで開ける）を書いて止まり、開発者に仰ぐ。
+
+**原因が決まった（2026-10-31・開発者の決め＝案 1）**
+- テストの結果: seriko の側（`looper_tests.rs` の `blink_ending_in_minus_one_leaves_no_frame_in_the_command_after_stop`）は直す前から緑で、`-1` の停止はコマを指令から外していた。表示の側（`presenter_blink_stop_tests.rs` の `stopped_blink_leaves_no_closed_eye_in_the_picture`）は赤で、コマの無い指令の絵に閉じた目が残った。見立ての 3 つ（seriko・控え・矩形）のどれでもなかった。
+- 原因: emo-compose の `plan.rs` の `flatten_surface`。`bind+random` も bind 種として「有効 bind」に入り、コマが無い id は pattern0 を静的に積む。ぱすたの animation1400（と 1401）は `bind+random` で pattern0 が閉じた目（1410）なので、seriko が `-1` で欄を外すと、閉じた目の pattern0 が静的に残る。
+- 決め: 境界を `plan.rs` の 1 か所だけ広げる。`Interval::BindRandom` はコマが無いとき pattern0 を静的に積まない（再生しているあいだのコマだけを描く）。純 `bind`（着せ替え）は今までどおり bind が入っていれば pattern0 を積む。`is_bind_interval`（`nesting.rs` 130 行目・`plan_extent.rs`・`is_bind_animation` が使う）と、合流の id の集め方は変えない。外形は今までどおり pattern0 を含む静的な量で、変わらない。
+- bind と時刻の組み合わせの語は、今の読み込み（`areka-parsers` の `decode.rs` の `normalize_interval`）では `bind+random` だけが `Interval::BindRandom` になり、ほかの組み合わせ（`bind+periodic` など）は `Interval::Other` で bind 種に入らない。だから足した条件は `BindRandom` だけで足りる。
 
 **変えないこと**: 抽選・コマの時刻・適用の回数（要件 1.7）、要件 3.2 の画素の同じさ、表示の行の文言と欄（要件 2.2）、控えの容量 3 の LRU の形（原因が控えの鍵の比べなら、比べの誤りだけを直す）。
 

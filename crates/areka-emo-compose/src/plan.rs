@@ -239,7 +239,9 @@ pub(crate) fn push_static_element_ops(
 /// 2. **有効 bind pattern0 層**（ii）: 合成対象 surface の `SurfaceMaster.animations` のうち、
 ///    interval が bind 種（[`Interval::Bind`]/[`Interval::BindRandom`]）**かつ** animation id が
 ///    `binds` に含まれる animation を「有効 bind」とし、その pattern0（index 0 の [`Pattern`]）を
-///    **2 段ソート順**で静的層の**後（＝上）**へ積む。
+///    **2 段ソート順**で静的層の**後（＝上）**へ積む。ただし pattern0 を静的に積むのは純
+///    [`Interval::Bind`] だけで、[`Interval::BindRandom`] はコマがあるときだけそのコマを描く
+///    （件 26・`animated-surface-log-flood` 要件 9.1）。
 ///    - **段1（animation-sort・要件 5.3/5.6・design 決定5）**: [`EmoWorld::animation_sort`] が
 ///      [`SortOrder::Descend`]（既定）→ animation id **昇順**に描画（大 id が上）。[`SortOrder::Ascend`]
 ///      → id **降順**に描画（小 id が上）。これが画家のアルゴリズムの画素積層写像。
@@ -515,6 +517,12 @@ fn flatten_surface(
                 );
                 continue;
             };
+            // pattern0 を静的に積むのは純 `bind` だけ。`bind+random` は再生しているあいだのコマ
+            // （上の分岐）だけを描き、コマが無ければ何も積まない（`-1` で外した後に閉じた目の
+            // pattern0 が残っていた・件 26・`animated-surface-log-flood` 要件 9.1）。
+            if matches!(anim.interval, Interval::BindRandom { .. }) {
+                continue;
+            }
 
             if pattern0.surface_id < 0 {
                 // 負値＝レイヤクリア/停止センチネル。非描画ゆえ命令を積まない（要件 5.5 前段）。
@@ -704,3 +712,7 @@ mod ops_tests;
 #[cfg(test)]
 #[path = "plan_nesting_tests.rs"]
 mod nesting_tests;
+
+#[cfg(test)]
+#[path = "plan_bind_random_tests.rs"]
+mod bind_random_tests;

@@ -189,3 +189,47 @@
 
 - 直した後の食い違い: **0 件**（行の位置の参照は `show.rs:480` を指す表示の行の位置と合い、水準の主張はどれも最初の表示＝INFO・コマ送りだけ＝DEBUG と合う）。
 - 再確認の grep: `show.rs:` の参照は `COMPAT_ARCHITECTURE.md`（今の行）・`roadmap.md`（`:480`）・`roadmap-history.md`（履歴）の 3 か所だけ。
+
+## 件 26: 止まったまばたきの重ね絵が残る件（タスク 3.7・要件 9）
+
+### 直す前の失敗するテスト（要件 9.3）
+
+見本はぱすたの animation1400 と同じ形（`bind+random`・pattern0 が閉じた目 1410・pattern1 が半目 1411・pattern2 が `-1`）。
+
+- seriko の側: `crates/areka-seriko/src/looper_tests.rs` の `blink_ending_in_minus_one_leaves_no_frame_in_the_command_after_stop`。直す前から**緑**。`-1` の停止は、1400 の欄を指令から外していた（seriko は正しい）。
+- 表示の側: `crates/areka-emo-present/src/presenter_blink_stop_tests.rs` の `stopped_blink_leaves_no_closed_eye_in_the_picture`。直す前は**赤**。欄の無い指令で成立した絵が、まばたきの重ねの無い絵と違い、「0 周目: `-1` で外した後の絵に閉じた目が残る」で落ちた（127 行目の判定）。
+- 合成の側（原因の所の兄弟）: `crates/areka-emo-compose/src/plan_bind_random_tests.rs`。直す前の `cargo test -p areka-emo-compose --lib bind_random_tests` は 1 本が**赤**で、もう 1 本は緑。
+  - `bind_random_without_frame_stacks_no_pattern0`: 欄の無いとき、命令列が `["eyebase.png", "closed.png"]` になった（期待は `["eyebase.png"]`）。閉じた目の pattern0 が静的に積まれていた。
+  - `bind_random_with_frame_draws_the_frame`: 再生中はそのコマ（1410・1411）を描く。直す前から緑（直しで変わらないことの檻）。
+  - どちらのテストも、純 `bind` の 1300（目の土台）が bind に入っていれば pattern0 を積むことを同じ導出で確かめる（空同士の一致でない）。
+
+### 原因の場所
+
+- emo-compose の `crates/areka-emo-compose/src/plan.rs` の `flatten_surface`。`bind+random` も bind 種として「有効 bind」の id に入り（`is_bind_interval`）、その id にコマが無いときは pattern0 を静的に積んでいた。ぱすたの animation1400 と 1401 は pattern0 が閉じた目（1410）なので、seriko が `-1` で欄を外した後も閉じた目が残った。
+- 本 spec の境界の外だったので止まって報告し、開発者の決め（2026-10-31・案 1）で `plan.rs` の 1 か所だけを本 spec で直すことにした。
+
+### 直した 1 か所
+
+- `plan.rs` の `flatten_surface` の、コマの無い id の pattern0 を静的に積む道（pattern0 を引いた直後）に、`Interval::BindRandom` なら積まずに次へ進む条件を 1 つ足した。純 `bind`・`is_bind_interval`・`is_bind_animation`・`nesting.rs` 130 行目・合流の id の集め方・外形の求め方は変えていない。
+- ほかに足したのは、`derive_ops` の説明の 1 文と、テストの接続宣言 1 つ（`plan.rs` の末尾）だけ。
+
+### 直した後のテスト
+
+- `cargo test -p areka-emo-compose`: 401 本すべて緑（新しい 2 本を含む）。golden のテスト（`golden_tests_*`）は 1 本も変わらず緑。emo2 のまばたき（1400 は pattern0 を持たない `bind+random`・1403 は `bind`）は、もともと pattern0 を静的に積まないので、命令列が変わらない。
+- `cargo test -p areka-emo-present`: 357 本すべて緑（`stopped_blink_leaves_no_closed_eye_in_the_picture` と `stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_the_rect_path` を含む）。
+- `cargo test -p areka-seriko`: 本体 455 本ほか、すべて緑（`blink_ending_in_minus_one_leaves_no_frame_in_the_command_after_stop` と `blink_stop_beside_a_moving_picture_drops_only_the_blink_slot` を含む）。
+
+### 動く絵と並ぶまばたき（矩形の重ね直しの道・レビュー 1 回目の指摘）
+
+欄の空の指令はいちからの合成（`compose_into`）を通るので、上の表示の側の 1 本だけでは矩形の重ね直し（`compose_into_reusing`・タスク 3.3）を通らない。同じ面に純 `random` の動く絵（1500）を足し、その欄が残る止まり方を 2 本で確かめた。
+
+- seriko の側: `blink_stop_beside_a_moving_picture_drops_only_the_blink_slot`。1500 が 1500 → 1501 とコマを替えるあいだに、まばたきが 閉じる → 半目 → 外す と進み、止まった後の指令は 1400 の欄だけを欠いて 1500 の欄（1501）が残る。seriko はもともと正しいので、直す前から緑の檻。
+- 表示の側: `stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_the_rect_path`。止まった後の指令は 1500 の欄だけを運び、半目の絵を下敷きに矩形で重ね直される。その絵が「1500 のそのコマだけ・まばたきの重ね無し」の絵（`native_golden_with`）と同じことを、1 周目（控えに外れる）と 2 周目（控えに当たる）で判定する。空の道で緑にしないため、止まった絵の適用で重ね直しの範囲の行が 1 周目は `partial` 1 件、2 周目は 0 件（控えに当たる）であることも数える。見本の前提として、止まった絵に 1500 のコマの画素が載ることも確かめる。
+- 赤の確かめ: `plan.rs` の条件を一時的に `if false && matches!(...)` にして `cargo test -p areka-emo-present --lib blink_stop` を回すと、2 本とも「0 周目: `-1` で外した後の絵に閉じた目が残る」で**赤**（矩形の道の 1 本も落ちる）。元のファイルへ戻し、控えと `cmp` で 1 バイトも違わないことを確かめてから緑に戻ることを見た。
+
+### 持ち越し
+
+- `nesting.rs` の `bind_targets`／`visible_parts` は、`bind+random` の pattern0 の先をまだ見える部品として数える（開発者へ上げる・本タスクでは直さない）。
+- `cargo fmt --all -- --check`: 差なし。`cargo clippy -p areka-emo-compose --lib -- -D warnings`・`cargo clippy -p areka-emo-present --no-deps --lib -- -D warnings`: 指摘なし。
+
+### 実機の確かめ（未）
