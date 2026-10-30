@@ -395,6 +395,10 @@ where
                     }
                 }
                 emit_display(&mut out, command);
+                // 面を出したので戻したずれ（(0, 0)）を合図の後に出す（spec: seriko-pattern-calls 7.6）。
+                for shift in loop_runtime.take_shifts() {
+                    emit_display(&mut out, shift);
+                }
                 return Ok(ControlFlow::Continue(()));
             }
             Ok(handle_message(
@@ -507,8 +511,8 @@ fn on_stage<O: SurfaceOutput>(
     }
 }
 
-/// 面を出す合図を解いた後に、止めた `always` の印を消す（変わった・同じ面の出し直しのどちらでも・
-/// spec: seriko-pattern-calls 3.5・M2）。同じ面の出し直しで印を消したら、合図の時刻で始め直した絵を
+/// 面を出す合図を解いた後に、ずれを 0 へ戻し、止めた `always` の印を消す（変わった・同じ面の出し直しの
+/// どちらでも・spec: seriko-pattern-calls 3.5・7.6・M2・M3）。同じ面の出し直しで印を消したら、合図の時刻で始め直した絵を
 /// 出す（変わったときは続く [`LoopRuntime::refresh`] が始める）。
 fn on_surface_shown<O: SurfaceOutput>(
     states: &mut ScopeStates,
@@ -526,7 +530,24 @@ fn on_surface_shown<O: SurfaceOutput>(
     }
 }
 
-/// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。
+/// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。処理の中で変わったずれの
+/// 命令は、その後にまとめて出す（同じ合図の `Show` の後・spec: seriko-pattern-calls 7.1・7.6）。
+pub(crate) fn handle_message<O: SurfaceOutput>(
+    resolver: &SurfaceResolver,
+    bind_resolver: &BindResolver,
+    states: &mut ScopeStates,
+    loop_runtime: &mut LoopRuntime,
+    out: &mut O,
+    msg: SerikoMsg,
+) -> ControlFlow<()> {
+    let flow = dispatch_message(resolver, bind_resolver, states, loop_runtime, out, msg);
+    for shift in loop_runtime.take_shifts() {
+        emit_display(out, shift);
+    }
+    flow
+}
+
+/// inbox メッセージ 1 件の振り分け（[`handle_message`] の本体）。
 ///
 /// - [`SerikoMsg::Close`] → `Break`（正常終了・1.4）。
 /// - [`SerikoMsg::Cue`] → 演者側 relevance（`cue_target_of`・D4 単一権威）で担当（Shell）を選別し、
@@ -534,7 +555,7 @@ fn on_surface_shown<O: SurfaceOutput>(
 ///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
 ///   `cue_target_of == None` 枝の内側（Wait 判定より前・D1）に `\![bind]` 名前自己選別分岐を持ち、
 ///   `name == "bind"` のキャリアのみ `bind_resolver` で名前解決し [`ScopeStates::apply_bind`] を通す。
-pub(crate) fn handle_message<O: SurfaceOutput>(
+fn dispatch_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     bind_resolver: &BindResolver,
     states: &mut ScopeStates,

@@ -39,6 +39,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
+use crate::calls::CallOutcome;
 use crate::looper::{log_play_end, pattern_frame};
 use crate::state::Slot;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
@@ -547,7 +548,7 @@ impl PartClocks {
         rng: &mut LoopRng,
         pick: &mut LoopRng,
         pattern: &mut PatternState,
-    ) {
+    ) -> CallOutcome {
         let PartClocks {
             clocks,
             warned_negative,
@@ -560,7 +561,7 @@ impl PartClocks {
             clocks.insert(scope.clone(), HashMap::new());
         }
         let Some(clocks) = clocks.get_mut(scope) else {
-            return;
+            return CallOutcome::default();
         };
         let container = clocks.entry(slot).or_default();
         if !open {
@@ -574,6 +575,8 @@ impl PartClocks {
         // この評価の 1 段目が進める前に再生中だった 3 語の時計の（鍵, 開始の時刻）。2 段目が「開始の
         // 時刻に再生中だったか」を測るのに読む（1 段目が片付けた再生も、ここには残る）。
         let mut was_playing: Vec<(ClockKey, u64)> = Vec::new();
+        // 見える部品の働きのコマの結果（時刻が後の move が勝つ・一番上と合わせるのは呼び手）。
+        let mut shift = CallOutcome::default();
 
         // 部品 1 つの評価（animation の番号の昇順・design.md「部品 1 つの評価」）。始まり（抽選・
         // `always`・引き金）→ 働きのコマ → コマを置く、の順（spec: seriko-pattern-calls 3.8）。
@@ -597,9 +600,10 @@ impl PartClocks {
                 if started.is_empty() {
                     return false;
                 }
-                let (_, called) = run_part_calls(
+                let (outcome, called) = run_part_calls(
                     clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
                 );
+                shift = shift.then(outcome);
                 let called = anims.iter().filter(|a| called.contains(&a.id));
                 for anim in started.iter().copied().chain(called) {
                     // 始まった再生を、開始の時刻からこの刻みまでの経過の分だけ進める。1 段目が書いた
@@ -674,9 +678,10 @@ impl PartClocks {
                     );
                 }
             }
-            run_part_calls(
+            let (outcome, _) = run_part_calls(
                 clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
             );
+            shift = shift.then(outcome);
             for &i in order.iter() {
                 let anim = &anims[i];
                 if !matches!(gate(anim, binds), Gate::Off) {
@@ -700,6 +705,7 @@ impl PartClocks {
         );
 
         drop_unseen_transient(container, table, scope, slot, visible, films);
+        shift
     }
 
     /// 面の切り替え・着せ替えの変化の直後（出来事の時刻 `at_ms`）に、抽選せずに `pattern` の部品の欄を
@@ -722,7 +728,7 @@ impl PartClocks {
         open: bool,
         pick: &mut LoopRng,
         pattern: &mut PatternState,
-    ) {
+    ) -> CallOutcome {
         let PartClocks {
             clocks,
             visible,
@@ -747,6 +753,7 @@ impl PartClocks {
         let now_ms = at_ms.unwrap_or(0);
         // 窓が閉じている間は時計を作らない（今ある時計を読むだけ）。
         let create_at = at_ms.filter(|_| open);
+        let mut shift = CallOutcome::default();
         // 時計を書き換えずに今のコマを読んで置く（`always` は周の答え・時計が無ければ載せない）。
         let put = |clocks: &BTreeMap<ClockKey, PartAnim>,
                    pattern: &mut PatternState,
@@ -797,8 +804,9 @@ impl PartClocks {
                 if started.is_empty() {
                     return false;
                 }
-                let (_, called) =
+                let (outcome, called) =
                     run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+                shift = shift.then(outcome);
                 let called = anims.iter().filter(|a| called.contains(&a.id));
                 for anim in started.iter().copied().chain(called) {
                     // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
@@ -825,7 +833,9 @@ impl PartClocks {
             }
             // 働きのコマを合図の時刻で当てる（頭のコマを置く前・spec: seriko-pattern-calls 3.8）。
             if let Some(at) = at_ms {
-                run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+                let (outcome, _) =
+                    run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+                shift = shift.then(outcome);
             }
             for &i in order.iter() {
                 let anim = &anims[i];
@@ -839,6 +849,7 @@ impl PartClocks {
             table, surface_id, binds, pattern, visible, evaluated, films, step,
         );
         drop_unseen_transient(container, table, scope, slot, visible, films);
+        shift
     }
 
     /// 一番上の再生が無い刻みで部品の経路を通すか: `pattern` の絵に見える部品か見える動く絵の子に、

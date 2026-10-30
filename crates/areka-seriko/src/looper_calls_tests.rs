@@ -235,3 +235,155 @@ fn balloon_surface_applies_calls_the_same_way() {
     assert_eq!(cell(&states, Slot::Balloon, 1), Some(111));
     assert_eq!(cell(&states, Slot::Balloon, 2), Some(120));
 }
+
+/// 抽選で動く animation0 が 100 の絵の後に `move` を 4 度当て、最後に `-1` で止まる（spec:
+/// seriko-pattern-calls 7.1・7.2・7.6）。1000 に始まれば: 1100 (3,5)・1200 絵 101 と (7,5)・
+/// 1300 同じ (7,5)・1400 (0,9999)・1500 `-1`。
+const MOVES: &str = "surface0\n{\n\
+    animation0.interval,random,2\n\
+    animation0.pattern0,overlay,100,0,0,0\n\
+    animation0.pattern1,move,0,100,3,5\n\
+    animation0.pattern2,overlay,101,100,0,0\n\
+    animation0.pattern3,move,0,0,7,5\n\
+    animation0.pattern4,move,0,100,7,5\n\
+    animation0.pattern5,move,0,100,0,9999\n\
+    animation0.pattern6,overlay,-1,100,0,0\n}\n";
+
+/// 指令の並びのうち、ずれの命令の値（ずれの命令が `Show` の後に並ぶことも確かめる）。
+fn shifts_of(cmds: &[DisplayCommand]) -> Vec<(i64, i64)> {
+    if let Some(i) = cmds
+        .iter()
+        .position(|c| matches!(c, DisplayCommand::MoveShift { .. }))
+    {
+        assert!(
+            cmds[i..]
+                .iter()
+                .all(|c| matches!(c, DisplayCommand::MoveShift { .. })),
+            "ずれの命令は Show の後: {cmds:?}"
+        );
+    }
+    cmds.iter()
+        .filter_map(|c| match c {
+            DisplayCommand::MoveShift { scope: s, x, y } => {
+                assert_eq!(*s, scope());
+                Some((*x, *y))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// ずれは値が変わった刻みにだけ、同じ刻みの `Show` の後に出る（同じ値は繰り返さない）。終わり・`-1`
+/// では戻さず、面を出したときに (0, 0) を 1 度だけ出す（3.8・7.1・7.2・7.6・M3）。
+#[test]
+fn move_shift_is_emitted_when_it_changes_and_reset_only_when_the_surface_is_shown() {
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shell_shown(MOVES, lottery, seeded_rng(0));
+    rt.on_tick(0, &mut states);
+    let expect: [(u64, usize, &[(i64, i64)]); 6] = [
+        (1000, 1, &[]),
+        (1100, 0, &[(3, 5)]),
+        (1200, 1, &[(7, 5)]),
+        (1300, 0, &[]),
+        (1400, 0, &[(0, 9999)]),
+        (1500, 1, &[]),
+    ];
+    for (t, shows, want) in expect {
+        let cmds = rt.on_tick(t, &mut states);
+        assert_eq!(shifts_of(&cmds), want, "{t}: {cmds:?}");
+        assert_eq!(cmds.len() - want.len(), shows, "{t} の Show: {cmds:?}");
+    }
+    assert!(
+        rt.on_tick(1600, &mut states).is_empty(),
+        "止まっても戻さない"
+    );
+    assert!(rt.take_shifts().is_empty());
+
+    assert!(!rt.on_surface_shown(&scope(), Slot::Shell));
+    assert_eq!(
+        rt.take_shifts(),
+        vec![DisplayCommand::MoveShift {
+            scope: scope(),
+            x: 0,
+            y: 0
+        }],
+        "面を出したら (0, 0)"
+    );
+    rt.on_surface_shown(&scope(), Slot::Shell);
+    assert!(rt.take_shifts().is_empty(), "0 のときは出さない");
+}
+
+/// バルーンの面のずれはバルーン用の命令で出る（3.8）。
+#[test]
+fn balloon_surface_emits_the_balloon_shift() {
+    let (lottery, _probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(SerikoLoopConfig {
+        shell_table: AnimationTable::empty(),
+        balloon_tables: BTreeMap::from([(scope(), table_of(&format!("{MOVES}{SURFACES}")))]),
+        rng: lottery,
+        pick_rng: seeded_rng(0),
+    });
+    let mut states = no_binds();
+    states.apply_balloon(&scope(), SurfaceTarget::Show(0));
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    assert_eq!(
+        rt.on_tick(1100, &mut states),
+        vec![DisplayCommand::MoveShiftBalloon {
+            scope: scope(),
+            x: 3,
+            y: 5
+        }]
+    );
+    rt.on_surface_shown(&scope(), Slot::Balloon);
+    assert_eq!(
+        rt.take_shifts(),
+        vec![DisplayCommand::MoveShiftBalloon {
+            scope: scope(),
+            x: 0,
+            y: 0
+        }]
+    );
+}
+
+/// 合図の時刻の更新で鳴った `runonce` の `move` も、その時刻のずれとして積まれる（3.1・7.1）。
+#[test]
+fn runonce_move_applied_at_the_event_time_is_queued() {
+    const RUNONCE: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,move,0,0,2,4\n\
+        animation0.pattern1,overlay,100,100,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(RUNONCE, lottery, seeded_rng(0)));
+    let mut states = no_binds();
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40);
+    assert_eq!(
+        rt.take_shifts(),
+        vec![DisplayCommand::MoveShift {
+            scope: scope(),
+            x: 2,
+            y: 4
+        }]
+    );
+    rt.on_tick(200, &mut states);
+    assert!(rt.take_shifts().is_empty(), "同じコマを 2 度当てない");
+}
+
+/// オフラインの書き出しの結果にずれは写らない（ずれは `PatternState` の外・9.6・M8）。
+#[test]
+fn settled_surface_carries_no_shift() {
+    let settle = |text: &str| {
+        let table = table_of(&format!(
+            "{}{SURFACES}",
+            text.replace("random,2", "runonce")
+        ));
+        crate::settle_surface(&table, 0, &BindSet::default(), 0)
+    };
+    let zeroed = MOVES
+        .replace(",3,5", ",0,0")
+        .replace(",7,5", ",0,0")
+        .replace(",0,9999", ",0,0");
+    let moved = settle(MOVES);
+    assert_eq!(moved, settle(&zeroed));
+    assert_eq!(moved.get(0), None, "`-1` で止まった後");
+}

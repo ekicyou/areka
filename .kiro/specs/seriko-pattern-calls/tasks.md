@@ -80,7 +80,7 @@
   - _Boundary: MoveShift の伝達（emo-present）_
   - _Requirements: 7.1, 7.6_
 
-- [ ] 5. 再生への組み込み
+- [x] 5. 再生への組み込み
 - [x] 5.1 選びの乱数と当て終えた時刻の欄を足す
   - 再生の設定に選びの乱数を足し、設定を書くすべての所を直す（止めた設定と書き出しは種 0）。seriko の中だけでなく、areka の起動（`emo2_boot` の本体・背骨・フィルムの通しのテスト）にも書く所があるので、この task は areka の起動の層へまたがる機械的な追随を含む
   - 本番は抽選とは別の種で作り、今の起動の記録に 2 つの種を並べて出す。背骨の「生きた駆動」は抽選の乱数と選びの乱数の 2 つを運ぶ形にし、呼び手（起動の本体とテスト）が 2 つを渡す
@@ -105,7 +105,7 @@
   - _Depends: 3.3, 4.1, 5.1_
   - _Requirements: 3.8, 11.2, 9.1_
 
-- [ ] 5.4 ずれの持ち主を作り、表示の命令で外へ出す
+- [x] 5.4 ずれの持ち主を作り、表示の命令で外へ出す
   - 再生の実行時にスコープ × 面の段ごとのずれを持つ。一番上と部品の結果のうち時刻が後のずれをその段のずれにし、値が変わったら絵の確定の後にシェル用／バルーン用のずれの命令を出す（同じ値は繰り返さない）
   - 5.2 で作った「面を出した」口に、ずれが 0 でなければ 0 にして (0, 0) の命令を返す処理を足し、actor がそれを出す。終わり・`stop`・`-1` では戻さない
   - areka の写しの層に 2 つの腕を足し、シェルとバルーンの対象への提示のずれの命令に写す（数でないスコープは今のまま捨てて警告）。この task はこの 1 か所だけ areka の層へまたがる結合である
@@ -176,3 +176,4 @@
 - 5.1: `SerikoLoopConfig.pick_rng`（止めた設定・`settle.rs` の書き出し・テストは種 0）・本番は `entropy_seed()` を 2 回引いて `seed` と `pick_seed` を同じ info に出す。背骨は `LoopDriver::Live(rng, pick_rng)`。`Playback.acts_through`・`PartAnim::Playing.acts_through`（`Option<u64>`・`#[allow(dead_code)]`）と `on_tick` の `pick_rng: _` は 5.2/5.3 で使い始めて外す。actor_bind_loop_tests.rs はもとから 1,346 行（上限超え）。
 - 5.2: 一番上の口は `looper_calls.rs` の `TopPlays`・`run_top_calls`・`put_visible`。「面を出した」口は `looper.rs` の `on_surface_shown(scope, slot) -> bool`（5.4 で設計どおり `Option<DisplayCommand>` にしてずれの戻しを足す）。`CallOutcome.shift` はまだ誰も読まない（5.4）。actor の差し替え（Replace／Rebased）の枝で全スコープへ口を呼ぶ処理にテストが無い — 5.4 で 1 本足す。部品の `acts_through` の allow は 5.3 で外す。looper.rs は 979 行。
 - 5.3: 部品の口は `parts_calls.rs` の `PartPlays`・`run_part_calls`（働きのコマの無い部品は飛ばす）。`always` の周の見え方は `timeline::always_visible` を一番上と共有。見えなくなった部品の `CallOnly` の時計は抽選の時計と同じく残す（`called_never_clock_survives_while_the_part_is_hidden`）。部品の `CallOutcome`（`move`）はまだ捨てている — 5.4 で読む。引き金の相（runonce/periodic/talk の後に呼び出しを当て直す道）は一番上・部品ともテストが無い — 5.4 か最終検証で 1 本。parts.rs 962・looper.rs 981 行。
+- 5.4: `on_surface_shown` は `bool` のまま（5.2 の注の「Option にする」は取り下げ）。ずれの持ち主は `looper_calls.rs` の `Shifts`、(0, 0) は送り箱に積んで `take_shifts` で合図の `Show`／`Rebased` の後に出す（design.md の契約の行を追随済み）。命令は `DisplayCommand::MoveShift`／`MoveShiftBalloon`、areka の `adapter.rs` で `PresentCommand::MoveShift` に写す。`\s[-1]`（Hide）でもずれは 0 へ戻る（SSP で未測定・7 の互換の文書に 1 行）。背骨の写し `project_display` は MoveShift を `Unknown` のまま。引き金の相（periodic/talk の後の当て直し）の刻みのテストはまだ無い — 最終検証に持ち越し。looper.rs 993・parts.rs 973・actor.rs 908 行。

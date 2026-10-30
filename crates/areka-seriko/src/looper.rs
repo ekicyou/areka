@@ -53,7 +53,7 @@ use top_trigger::{
 // 一番上の面の働きのコマの配線と、描くコマの置き方（spec: seriko-pattern-calls）。
 #[path = "looper_calls.rs"]
 mod top_calls;
-use top_calls::{StoppedAlways, put_top_always, put_visible, run_top_calls};
+use top_calls::{Shifts, StoppedAlways, put_top_always, put_visible, run_top_calls};
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
 /// [`LoopRuntime`] へ値渡しする。
@@ -144,6 +144,8 @@ pub(crate) struct LoopRuntime {
     has_talk: bool,
     /// 呼び出しで止めた一番上の `always`（面を出すまで始め直さない・spec: seriko-pattern-calls 3.5）。
     stopped_always: StoppedAlways,
+    /// ずれの持ち主（spec: seriko-pattern-calls 7.1・7.6）。
+    shifts: Shifts,
 }
 
 /// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
@@ -342,6 +344,7 @@ impl LoopRuntime {
             feeds: HashMap::new(),
             has_talk,
             stopped_always: StoppedAlways::new(),
+            shifts: Shifts::default(),
         }
     }
 
@@ -458,6 +461,7 @@ impl LoopRuntime {
             epoch,
             feeds,
             stopped_always,
+            shifts,
             ..
         } = self;
         let SerikoLoopConfig {
@@ -618,8 +622,7 @@ impl LoopRuntime {
 
             // 働きのコマを予定の時刻の順に当てる（抽選・`always`・引き金の始まりの後、コマを置く前＝
             // 呼ばれて始まった相手の今のコマもこの刻みに載る・spec: seriko-pattern-calls 3.1・3.9）。
-            // ずれ（move）の持ち主は 5.4。
-            run_top_calls(
+            let (mut shift, _) = run_top_calls(
                 playback,
                 &mut new_pattern,
                 stopped_always,
@@ -705,7 +708,7 @@ impl LoopRuntime {
             // 部品: 一番上の進行を済ませた絵で部品の欄を作り直す（一番上の抽選は全スコープぶん済み）。
             // 部品の `talk` はこの面の文字の窓 `window` を借りる（部品は文字の数えを持たない）。
             if with_parts {
-                parts.advance(
+                shift = shift.then(parts.advance(
                     scope,
                     *slot,
                     *sid,
@@ -718,7 +721,7 @@ impl LoopRuntime {
                     rng,
                     pick_rng,
                     &mut new_pattern,
-                );
+                ));
             }
 
             // (4) 差分反映: 変化した slot のみ指令を返す（Unchanged は無発行・要件 6.2）。
@@ -727,7 +730,9 @@ impl LoopRuntime {
             {
                 commands.push(cmd);
             }
+            shifts.apply(scope, *slot, shift);
         }
+        commands.extend(shifts.take_all());
 
         // 全部の面が文字の窓を読み終えた: 数えを今現れている数まで進め、数え終えた文字を刈り込む
         // （表に `talk` が無ければ文字の列は空で、何もしない）。
@@ -752,9 +757,11 @@ impl LoopRuntime {
     }
 
     /// 面を出した（変わった・同じ面の出し直し・シェルの差し替え）ときに actor が呼ぶ口
-    /// （spec: seriko-pattern-calls 3.5・M2）。`scope` の `slot` の止めた `always` の印を消し、消したら
+    /// （spec: seriko-pattern-calls 3.5・7.6・M2・M3）。ずれを 0 へ戻し（0 でなければ (0, 0) の命令を
+    /// 積む＝[`LoopRuntime::take_shifts`]）、`scope` の `slot` の止めた `always` の印を消し、消したら
     /// 真を返す（actor は合図の時刻で [`LoopRuntime::refresh`] して始め直す）。
     pub(crate) fn on_surface_shown(&mut self, scope: &ActorKey, slot: Slot) -> bool {
+        self.shifts.reset(scope, slot);
         let before = self.stopped_always.len();
         self.stopped_always
             .retain(|(s, sl, _)| !(s == scope && *sl == slot));
@@ -805,6 +812,7 @@ impl LoopRuntime {
             epoch,
             feeds,
             stopped_always,
+            shifts,
             ..
         } = self;
         let SerikoLoopConfig {
@@ -830,6 +838,7 @@ impl LoopRuntime {
         };
         let at_ms = at_ms.or(*last_seen);
         let mut pattern = states.current_pattern(scope, slot).clone();
+        let mut shift = Default::default();
         if let Some(at) = at_ms {
             if open {
                 start_top_always(playback, stopped_always, table, scope, slot, sid, at);
@@ -862,7 +871,7 @@ impl LoopRuntime {
                 heads.extend(fired.iter().map(|(anim, _)| anim.id));
             }
             // 働きのコマを合図の時刻で当てる（頭のコマを置く前・spec: seriko-pattern-calls 3.1）。
-            let (_, called) = run_top_calls(
+            let (top, called) = run_top_calls(
                 playback,
                 &mut pattern,
                 stopped_always,
@@ -871,6 +880,7 @@ impl LoopRuntime {
                 at,
                 pick_rng,
             );
+            shift = top;
             heads.extend(called);
             for anim in table.animations(sid) {
                 let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) else {
@@ -889,7 +899,7 @@ impl LoopRuntime {
         }
         // 部品は面の種類を問わない（バルーンの面の着せ替えの集合は空）。
         if table.has_animated_parts() {
-            parts.refresh(
+            shift = shift.then(parts.refresh(
                 scope,
                 slot,
                 sid,
@@ -899,9 +909,11 @@ impl LoopRuntime {
                 open,
                 pick_rng,
                 &mut pattern,
-            );
+            ));
         }
-        match states.commit_pattern(scope, slot, pattern) {
+        let shown = states.commit_pattern(scope, slot, pattern);
+        shifts.apply(scope, slot, shift);
+        match shown {
             PatternApplyOutcome::Changed(cmd) => Some(cmd),
             PatternApplyOutcome::Unchanged => None,
         }

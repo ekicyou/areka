@@ -592,7 +592,7 @@ pub(crate) fn run_calls(
   - 値が変わったら、`commit_pattern` の後に `DisplayCommand::MoveShift`（シェル）／`MoveShiftBalloon`（バルーン）を出す。
   - 部品の `move` もキャラクター全体のずれになる（3.8・7.1）。
 - 戻す時（7.6・M3）:
-  - `actor.rs` で、面を出す合図を解いた後、`ApplyOutcome` が `Changed` でも `Unchanged`（同じ面の出し直し）でも、`LoopRuntime::on_surface_shown(scope, slot)` を呼ぶ。ずれが 0 でなければ 0 にして `MoveShift(0, 0)` を返し、actor が出す。
+  - `actor.rs` で、面を出す合図を解いた後、`ApplyOutcome` が `Changed` でも `Unchanged`（同じ面の出し直し）でも、`LoopRuntime::on_surface_shown(scope, slot)` を呼ぶ。ずれが 0 でなければ 0 にして `MoveShift(0, 0)` を送り箱に積み、actor が合図の `Show`／`Rebased` の後に `take_shifts` で出す（戻り値の `bool` は止めた `always` の印を消したかで、真なら合図の時刻で `refresh` する・実装 5.4 で決めた形）。
   - シェルの差し替え（`Replace`）でも同じく 0 へ戻して出す。
   - アニメーションの終わり・`stop`・`-1` では戻さない。
 - 書き出し（9.6・M8）: ずれは `PatternState` に入らない。だから `settle_surface`（オフラインの書き出し）も MCP の `dump_surface`（提示の合成）も、ずれを写さない。
@@ -609,7 +609,7 @@ pub enum DisplayCommand {
 }
 
 impl LoopRuntime {
-    pub(crate) fn on_surface_shown(&mut self, scope: &ActorKey, slot: Slot) -> Option<DisplayCommand>;
+    pub(crate) fn on_surface_shown(&mut self, scope: &ActorKey, slot: Slot) -> bool; // (0, 0) は take_shifts で出す
 }
 ```
 - 届け方: `Show` と同じ `SurfaceOutput` の流れ。同じ刻みでは `Show` の後に出す。値が変わったときだけ出す（同じ値を繰り返さない）。

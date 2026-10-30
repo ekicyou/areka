@@ -32,6 +32,17 @@ pub(crate) struct CallOutcome {
     pub shift: Option<(u64, i64, i64)>,
 }
 
+impl CallOutcome {
+    /// 後に当てた側 `next` と合わせる: ずれは時刻が後のものが勝つ（同じ時刻なら `next`・7.2・7.3）。
+    pub(crate) fn then(self, next: CallOutcome) -> CallOutcome {
+        match (self.shift, next.shift) {
+            (Some((a, ..)), Some((b, ..))) if a > b => self,
+            (_, None) => self,
+            _ => next,
+        }
+    }
+}
+
 /// 待ち行列の 1 件: (予定の時刻, animation, pattern の位置, その再生の開始の時刻)。
 /// 組の比べ方がそのまま当てる順（時刻・animation・pattern の昇順）になる。
 type Due = (u64, u32, usize, u64);

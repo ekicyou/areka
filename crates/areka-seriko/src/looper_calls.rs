@@ -10,8 +10,9 @@ use std::collections::{HashMap, HashSet};
 use areka_emo_compose::PatternState;
 use areka_sakura::ActorKey;
 
-use super::{Playback, SlotPlayback, pattern_frame};
+use super::{LoopRuntime, Playback, SlotPlayback, pattern_frame};
 use crate::calls::{CallOutcome, CallPlays, run_calls};
+use crate::output::DisplayCommand;
 use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
 use crate::timeline::{AlwaysView, LoopRng, always_visible, visible_frame};
@@ -19,6 +20,69 @@ use crate::timeline::{AlwaysView, LoopRng, always_visible, visible_frame};
 /// 止めた `always` の印（スコープ, 面の段, animation）。印がある間は始め直さず、面を出したときに消す
 /// （SSP の測り M2・2026-10-30 設計議題 1）。
 pub(super) type StoppedAlways = HashSet<(ActorKey, Slot, u32)>;
+
+/// ずれの持ち主（spec: seriko-pattern-calls 要件 3.8・7.1・7.2・7.6・9.6）: (スコープ, 面の段) ごとの
+/// 今のずれ（無ければ 0）と、まだ出していないずれの命令。ずれは `PatternState` に入れない（書き出しに
+/// 写らない・M8）。
+#[derive(Default)]
+pub(super) struct Shifts {
+    now: HashMap<(ActorKey, Slot), (i64, i64)>,
+    outbox: Vec<DisplayCommand>,
+}
+
+impl Shifts {
+    /// 一番上と部品を合わせた結果に move があれば、その段のずれにする（部品の move もキャラクター
+    /// 全体のずれ・3.8）。
+    pub(super) fn apply(&mut self, scope: &ActorKey, slot: Slot, outcome: CallOutcome) {
+        if let Some((_, x, y)) = outcome.shift {
+            self.set(scope, slot, (x, y));
+        }
+    }
+
+    /// 面を出した（同じ面の出し直し・シェルの差し替えを含む）: 0 へ戻す。終わり・`stop`・`-1` では
+    /// 呼ばない（7.6・M3）。
+    pub(super) fn reset(&mut self, scope: &ActorKey, slot: Slot) {
+        self.set(scope, slot, (0, 0));
+    }
+
+    /// 積んだ命令を順に取り出す。
+    pub(super) fn take_all(&mut self) -> Vec<DisplayCommand> {
+        std::mem::take(&mut self.outbox)
+    }
+
+    /// 値が変わったときだけ命令を積む（同じ値は繰り返さない）。
+    fn set(&mut self, scope: &ActorKey, slot: Slot, xy: (i64, i64)) {
+        let key = (scope.clone(), slot);
+        if self.now.get(&key).copied().unwrap_or((0, 0)) == xy {
+            return;
+        }
+        if xy == (0, 0) {
+            self.now.remove(&key);
+        } else {
+            self.now.insert(key, xy);
+        }
+        let (scope, (x, y)) = (scope.clone(), xy);
+        tracing::debug!(
+            scope = scope.as_str(),
+            ?slot,
+            x,
+            y,
+            "seriko: ずれが変わった（要件 7.1・7.6）"
+        );
+        self.outbox.push(match slot {
+            Slot::Shell => DisplayCommand::MoveShift { scope, x, y },
+            Slot::Balloon => DisplayCommand::MoveShiftBalloon { scope, x, y },
+        });
+    }
+}
+
+impl LoopRuntime {
+    /// まだ出していないずれの命令を積んだ順に取り出す（刻みは [`LoopRuntime::on_tick`] が `Show` の後に
+    /// 付け、合図は actor が合図 1 件の処理の後に出す）。
+    pub(crate) fn take_shifts(&mut self) -> Vec<DisplayCommand> {
+        self.shifts.take_all()
+    }
+}
 
 /// 一番上の面の段の再生の表と欄を Calls へ貸す口。
 struct TopPlays<'a> {

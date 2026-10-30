@@ -212,3 +212,23 @@ fn called_never_clock_survives_while_the_part_is_hidden() {
     switch(&mut rt, &mut states, 0, 2500); // また見える: 1200 からの経過 1300 で 2 枚目。
     assert_eq!(part_cell(&states, 0), Some(102));
 }
+
+/// 部品の中の `move` もキャラクター全体のずれになる（シェルのずれの命令・3.8・7.1）。
+#[test]
+fn move_inside_a_part_becomes_the_character_shift() {
+    const MOVE: &str = "animation0.interval,random,2\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,move,0,100,0,9\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shown(MOVE, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    assert_eq!(
+        rt.on_tick(1100, &mut states),
+        vec![crate::DisplayCommand::MoveShift {
+            scope: scope(),
+            x: 0,
+            y: 9
+        }]
+    );
+}
