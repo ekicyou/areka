@@ -490,8 +490,6 @@ pub struct ZOrderGroupLedger {
 }
 
 /// [`ZOrderGroupLedger::rebase_descript`] の結果（記録の本文を組む材料）。
-// 本番の呼び手（シェルの切り替えの後始末 `apply_descript_rebase`）は task 4.2 で結ぶ。結んだら外す。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RebaseOutcome {
     /// 残した台本の組の ID（追加の順）
@@ -601,8 +599,6 @@ impl ZOrderGroupLedger {
     /// 新しい基底は先頭に新しい ID で据える。台本の組とスコープが重なる基底は据えず、
     /// 据え損ねた基底として持ち、重なったスコープを返す（`stay-on-top-directives`
     /// 要件 5.1／5.2）。古い基底は取り替えられる側なので重なりに数えない。
-    // 本番の呼び手（シェルの切り替えの後始末 `apply_descript_rebase`）は task 4.2 で結ぶ。結んだら外す。
-    #[allow(dead_code)]
     pub fn rebase_descript(&mut self, members: Vec<GroupElement>) -> RebaseOutcome {
         self.pending_base = None;
 

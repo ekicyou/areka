@@ -583,7 +583,7 @@ impl ZOrderGroupLedger {
 | 余りの引数 | `debug!` | 余りの列 | WindowStateCueSink | 1.6 |
 | 送り出しの失敗（受信端が閉じた） | `warn!` | — | WindowStateCueSink | 6.3 の流儀 |
 | オンのまま降ろした | `info!` | ゴースト・理由（`exit`／`switch`／`reload`） | DiscardLog | 6.4 |
-| シェルの切り替えで組を保った・基底を取り替えた | `info!`（`log_group_applied`） | 保った組の ID・旧と新の基底 | DescriptRebase | 6.5 |
+| シェルの切り替えで組を保った・基底を取り替えた | `debug!`（`log_group_applied`・既存の入口の水準。実機の確かめでは zorder の記録を debug まで開ける） | 保った組の ID・旧と新の基底 | DescriptRebase | 6.5 |
 | 台本の組と重なる基底を据えなかった | `warn!`（`log_group_rejected`） | 理由・値・スコープ | DescriptRebase | 5.2 |
 | 沈降の観測 | `debug!`（今のまま） | `in_band` を足す | SinkObservationField | 6.6 |
 
