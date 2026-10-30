@@ -101,7 +101,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Depends: 4.3, 5.1, 5.2_
   - _Requirements: 1.6, 1.7, 8.3, 8.4, 8.6, 11.1, 11.2_
 
-- [ ] 6. 押下とホイールの受け口（areka input）
+- [x] 6. 押下とホイールの受け口（areka input）
 - [x] 6.1 (P) 普通のバルーンの窓のホイールの系を足す
   - キャラクターの窓のホイールと同じ入力の段で、バルーンの窓の縦の回転を受けた時だけ OS の「1 回にスクロールする行数」を読み、そのスコープのバルーンの場所の手動の送りへ渡す
   - `OnMouseWheel` は送らず、横の回転は読まず、結線が無いときは debug で何もしない
@@ -120,7 +120,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Depends: 4.2, 4.3_
   - _Requirements: 5.1, 5.2, 5.5, 5.6, 11.1_
 
-- [ ] 6.3 箱の押下と箱の上のホイールに矢印の分岐を足す
+- [x] 6.3 箱の押下と箱の上のホイールに矢印の分岐を足す
   - 6.2 の共有の「話し終えたか」の判断を使う（このため 6.2 の後）
   - 箱の押下の判断の前に、話し終えているときだけ押された箱の場所で矢印の当たりを見て、当たれば送りだけをして `OnMouseClick` などのクリックとして扱わない
   - 4.2 の観測で箱の印の面に当たった押下・ポインタの下の箱の判断が箱の受け口に届かないと分かったら、受け口の側で印の面を箱として引く
@@ -185,3 +185,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 5.3: 今の定義の書き手は `emo2_boot/frame/balloon_face.rs` の `select_balloon_face`（`balloon_models` へ書くのはここだけ）。`wiring.balloon_definitions`・`wiring.balloon_faces` を持つ。隠す枝は `HideScopes` のたびに `hide_scope_boxes` へ入り、箱に届くなら `forget_manual_of`、Clear などでは普通のバルーンだけ `forget_manual_at`（要件 8.3）。
 - 6.1: `input_events/balloon_wheel.rs` の系は `ghost_session::register_systems` で `register_char_watch` の隣に登録（design.md は mod.rs と書くがコードの型に合わせた）。`frame::test_support` と `manual_balloon_runtime`・`balloon_is_manual` は `pub(crate)`（cfg(test)）。
 - 6.2: 「話し終えたか」は `balloon_pressed.rs` の `finished_talking(world)`（`UserBreakWiring.talking`・ゴーストに 1 つ。スコープごとの状態はコードに無い）。6.3 は balloon.rs から `pub(crate) use` で使う。話している最中の矢印の押下は、今は既存のクリックの流れ（`balloon_break_detected`）へ回る。片クリックの早送りは `talk-fast-forward` が入れば自動で効く（要件 5.6 は「本 spec の前と同じクリック」）。消費した矢印の押下は `prev_press_selected` を上書きしない（選択肢のクリック→矢印→矢印の外のダブルクリックで中断を取らない端の場合がある）。
+- 6.3: 箱の矢印の押下は `shell_box_handler.rs` の `press_box_arrow`（true を返すと `by_box` になりクリックにならない）。箱の上のホイールは `char_watch.rs` の `char_watch_with`／`wheel_box`（隠れた行がある箱だけ横取り）。手前の箱の四角が奥の箱の矢印に重なると、その矢印は押せない（選択肢の当たりと同じ規則）。

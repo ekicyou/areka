@@ -408,3 +408,8 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
 // 使うため子に置く。
 #[path = "frame_shell_box_align_tests.rs"]
 mod align_tests;
+
+// 箱の矢印の押下と箱の上のホイール（balloon-scroll-arrows task 6.3）。本ファイルの `Cage` をそのまま
+// 使うため子に置く。
+#[path = "frame_shell_box_arrow_tests.rs"]
+mod arrow_tests;

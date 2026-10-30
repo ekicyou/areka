@@ -51,7 +51,7 @@ mod pressed;
 
 pub(crate) use exit::clear_balloon_hover_on_leave;
 pub(crate) use moved::on_balloon_pointer_moved;
-pub(crate) use pressed::on_balloon_pointer_pressed;
+pub(crate) use pressed::{finished_talking, on_balloon_pointer_pressed};
 
 /// 選択確定のワイヤ形（本 spec 契約正本・2.2）。
 ///

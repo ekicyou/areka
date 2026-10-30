@@ -83,7 +83,7 @@ pub(super) fn balloon_wheel_with(world: &mut World, read_lines: impl FnOnce() ->
 }
 
 /// OS の「1 回にスクロールする行数」（`WHEEL_PAGESCROLL` は 1 画面ずつ）。
-fn os_wheel_lines() -> WheelLines {
+pub(super) fn os_wheel_lines() -> WheelLines {
     use windows::Win32::UI::WindowsAndMessaging::{
         SPI_GETWHEELSCROLLLINES, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
     };
