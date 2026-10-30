@@ -2,7 +2,7 @@
 //!
 //! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`Emo2Wiring`）と
 //! 「実行系の側」（`GhostRuntime`）の 2 段に分かれる。窓の側が受け口の送出端の束
-//! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から 12 本の sink を組んで実行系を
+//! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から 13 本の sink を組んで実行系を
 //! 起こす。受信端が窓の側に無い線（readme・中断を禁じる旗・ゴーストの切替・シェル／バルーンの
 //! 切替・読み直し）はここで新しく張り、実行系が成立したときだけ World へ据える——失敗したとき
 //! World は変わらない。
@@ -35,6 +35,7 @@ use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::update_cue::UpdateCueSink;
 use super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
+use super::window_state_cue::{WindowStateCueSink, WindowStateDirective};
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 
 /// 受け口の送出端の束（窓の側が 1 度作り、実行系を起こすたびに複製して sink を組む）。
@@ -52,6 +53,8 @@ pub(crate) struct CueSinkSources {
     pub lifecycle_tx: Sender<TalkLifecycleSignal>,
     /// 重なりの線の送出端（受信端は `Emo2Wiring`）。
     pub zorder_tx: Sender<ZOrderDirective>,
+    /// 常に手前の線の送出端（受信端は `Emo2Wiring`・SHIORI だけの読み直しでも同じ線に届く）。
+    pub window_state_tx: Sender<WindowStateDirective>,
 }
 
 /// 実行系の側の起動の失敗（分類した記録は [`boot_runtime`] が残す）。
@@ -73,12 +76,12 @@ pub(super) struct RuntimeLines {
     pub(super) reload_rx: Receiver<ScriptReload>,
 }
 
-/// 束の複製から 12 本の sink を組む（並びは旗の順序の保証を担うので変えない）。
+/// 束の複製から 13 本の sink を組む（並びは旗の順序の保証を担うので変えない）。
 ///
 /// 1. surface（seriko）2. 時刻付きの文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
 /// 起床旗 PRESENT が文字 cue より先に倒れないため・draw-load-parity 3.5）5. 重なり
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
-/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）。5 本目から後ろはどれも
+/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。5 本目から後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
 /// インストールと更新の送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
 pub(super) fn runtime_sinks(
@@ -92,6 +95,7 @@ pub(super) fn runtime_sinks(
         move_tx,
         lifecycle_tx,
         zorder_tx,
+        window_state_tx,
     } = sources.clone();
     let (readme_tx, readme_rx) = std::sync::mpsc::channel();
     let (no_user_break_tx, no_user_break_rx) = std::sync::mpsc::channel();
@@ -112,6 +116,7 @@ pub(super) fn runtime_sinks(
         Box::new(UpdateCueSink::new(crate::update::desk::raw_sender(world))),
         Box::new(SwitchCueSink::new(switch_tx)),
         Box::new(ReloadCueSink::new(reload_tx)),
+        Box::new(WindowStateCueSink::new(window_state_tx)),
     ];
     let lines = RuntimeLines {
         readme_rx,
@@ -124,7 +129,7 @@ pub(super) fn runtime_sinks(
     (sinks, lines)
 }
 
-/// 実行系の側の起動: 束の複製から 12 本の sink を組んで `boot_with_origin` を呼び、成立したら
+/// 実行系の側の起動: 束の複製から 13 本の sink を組んで `boot_with_origin` を呼び、成立したら
 /// 受信端を World へ据える。`Err` のとき World は変わっていない。
 ///
 /// 停止通知の送出端は引数 `kanade_stop` をそのまま kanade へ渡す（ここでは channel を作らない）。

@@ -66,9 +66,7 @@ pub mod target_map;
 mod update_cue;
 pub(crate) mod user_break_cue;
 /// `\v`／`\![set,windowstate,…]` の受け口（stay-on-top-directives）。
-// 起動への結線（task 5.1）までは本番から呼ばれないので、その間だけ未使用の警告を止める。
-#[cfg_attr(not(test), allow(dead_code))]
-pub mod window_state_cue;
+mod window_state_cue;
 pub mod zorder_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
@@ -403,7 +401,7 @@ const _: fn() = || {
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動 `runtime_boot::boot_runtime`
-///    （束の複製から 12 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
+///    （束の複製から 13 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
 ///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
@@ -494,7 +492,7 @@ pub fn wire_emo2_boot(
     // 荷物の返信の送り手も消える。seriko の送り手は Emo2Wiring に持たせない）。
     let swap_slot = switch_assets::SwapSlot::default();
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
-    // 受信端が窓の側にある 3 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
+    // 受信端が窓の側にある 4 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
     // UI スレッドの Emo2Wiring が受信端を持つ。送出端は束（`CueSinkSources`）に載り、実行系を
     // 起こすたびに複製されて受け口になる（`runtime_boot::runtime_sinks`）。
     // - move（task 9.1）: frame 相 drain＝task 9.2 が消費。
@@ -502,9 +500,13 @@ pub fn wire_emo2_boot(
     //   届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
     // - 重なり（areka-P0-scope-zorder-pinning task 6.2）: 解釈前のトークン列を運び、意味付けは
     //   台帳の状態を要するので取り出しの相（run_zorder_drain_phase）が行う。
+    // - 常に手前（stay-on-top-directives）: 読み分けた指令を運び、取り出しの相
+    //   （run_window_state_phase）がゴーストの状態へ当てる。
     let (move_tx, move_rx) = std::sync::mpsc::channel::<PositionCue>();
     let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
     let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
+    let (window_state_tx, window_state_rx) =
+        std::sync::mpsc::channel::<window_state_cue::WindowStateDirective>();
     let BootAssets {
         shells,
         balloons,
@@ -593,7 +595,7 @@ pub fn wire_emo2_boot(
     // 持ち主は `GhostSession` だけで、降ろす最初の段で落ちる。boot 失敗時は下で tick_sink と一緒に落とす。
     let session_sink = surface_sink.clone();
     // 受け口の送出端の束（areka-P0-mcp-reload 要件 4.2）: 窓の側がここで 1 度組み、実行系を
-    // 起こすたびに複製から 12 本の sink を組む。
+    // 起こすたびに複製から 13 本の sink を組む。
     let sources = CueSinkSources {
         surface: surface_sink,
         text: emo_text_sink,
@@ -601,6 +603,7 @@ pub fn wire_emo2_boot(
         move_tx,
         lifecycle_tx,
         zorder_tx,
+        window_state_tx,
     };
 
     // 手順5: 実行系の側の起動（`runtime_boot::boot_runtime`）。sink の並び・boot の失敗の分類と記録・
@@ -640,6 +643,8 @@ pub fn wire_emo2_boot(
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
+    // 常に手前の指令の受信端も同じ所で渡す（状態は既定のオフから・stay-on-top-directives 要件 3.4）。
+    wiring.attach_window_state_rx(window_state_rx);
     world.insert_non_send(wiring);
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms で、seriko と

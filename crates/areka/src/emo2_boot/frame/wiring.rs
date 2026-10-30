@@ -250,8 +250,6 @@ impl Emo2Wiring {
     }
 
     /// 常に手前の指令の受信端を渡す（起動の結線の口・`Emo2Wiring::new` の引数は変えない）。
-    // 5.1 で外す（起動の結線から呼ぶまで本番でもテストでも使わない）。
-    #[allow(dead_code)]
     pub(in crate::emo2_boot) fn attach_window_state_rx(
         &mut self,
         rx: Receiver<WindowStateDirective>,

@@ -418,6 +418,96 @@ fn discard_log_reports_reason_while_on() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// 台本の再生から状態まで（task 5.1・要件 1.1〜1.4）
+// ---------------------------------------------------------------------------
+
+/// 台本を本番と同じ解析と組み立てで cue にし、受け口を登録した再生器を返す（`end` は台本の終わり）。
+fn player_for(script: &str, tx: Sender<WindowStateDirective>) -> (dola::cue::CuePlayer, f64) {
+    let instructions = areka_parsers::sakura::parse(script);
+    let compiled = areka_sakura::compile(
+        &instructions,
+        &areka_sakura::sysvar::SystemVarSnapshot::default(),
+    );
+    let mut player = dola::cue::CuePlayer::from_sheet(&compiled.sheet);
+    player.register_sink(Box::new(
+        crate::emo2_boot::window_state_cue::WindowStateCueSink::new(tx),
+    ));
+    (player, compiled.sheet.absolute_end_time())
+}
+
+/// 台本を最後まで再生してから取り出しの相を 1 回回す。
+fn play_to_end(
+    script: &str,
+    state: &mut StayOnTopState,
+    tx: &Sender<WindowStateDirective>,
+    world: &mut World,
+) {
+    let (mut player, end) = player_for(script, tx.clone());
+    player.tick(end);
+    run_window_state_phase(state, world);
+}
+
+/// 台本のオン・`\v`・オフが受け口から線を通って状態を動かす（要件 1.1〜1.3）。
+#[test]
+fn script_playback_turns_on_raises_and_turns_off() {
+    let (mut state, tx) = state_with_channel();
+    let (mut world, all) = world_with_windows();
+
+    play_to_end(
+        r"\0\![set,windowstate,stayontop]\e",
+        &mut state,
+        &tx,
+        &mut world,
+    );
+    assert!(state.on, "オンの指令で状態がオン");
+    assert!(all.iter().all(|e| marked(&world, *e)));
+    clear_queue(&mut world);
+
+    play_to_end(r"\0あ\v\e", &mut state, &tx, &mut world);
+    assert!(state.on, "`\\v` は状態を変えない");
+    assert_eq!(
+        queue_in(&world).unwrap(),
+        queue_text(&[(BandOp::Raise, &all)]),
+        "`\\v` が手前へ出すとして届く"
+    );
+    clear_queue(&mut world);
+
+    play_to_end(
+        r"\0\![set,windowstate,!stayontop]\e",
+        &mut state,
+        &tx,
+        &mut world,
+    );
+    assert!(!state.on, "オフの指令で状態がオフ");
+    assert!(all.iter().all(|e| !marked(&world, *e)));
+}
+
+/// 指令の所へ来る前に中断した台本では状態が変わらない（要件 1.4）。止めずに最後まで流した
+/// 同じ台本がオンにすることを対照に置く（待ちが実際に指令を後ろへずらしている）。
+#[test]
+fn script_stopped_before_the_directive_leaves_the_state() {
+    const SCRIPT: &str = r"\0あ\_w[1000]\![set,windowstate,stayontop]\e";
+
+    let (mut state, tx) = state_with_channel();
+    let (mut world, all) = world_with_windows();
+    let (mut player, end) = player_for(SCRIPT, tx.clone());
+    player.tick(0.0);
+    player.stop();
+    player.tick(end);
+    run_window_state_phase(&mut state, &mut world);
+    assert!(!state.on, "中断した台本で状態が動いた");
+    assert!(queue_in(&world).is_none());
+    assert!(all.iter().all(|e| !marked(&world, *e)));
+
+    // 対照: 中断しなければ同じ台本でオンになる。
+    play_to_end(SCRIPT, &mut state, &tx, &mut world);
+    assert!(
+        state.on,
+        "対照の前提が崩れている（最後まで流してもオンにならない）"
+    );
+}
+
 /// オフのとき・結線が無いときは何も書かない。
 #[test]
 fn discard_log_is_silent_while_off_or_unwired() {

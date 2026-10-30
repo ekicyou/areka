@@ -53,6 +53,7 @@ mod switch;
 mod wiring;
 // 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
 mod window_state;
+use self::window_state::run_window_state_phase;
 pub(crate) use self::window_state::{DiscardReason, log_stay_on_top_discard};
 mod work_area_sync;
 mod zorder_descript;
@@ -371,6 +372,9 @@ pub fn emo2_frame_system(world: &mut World) {
     // 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので `.before` は使わない）。
     // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
+    // 常に手前の指令の取り出し（stay-on-top-directives design「WindowStatePhase」）: 重なりの
+    // 取り出しの直後。印と帯の指令の列を同じ巡の確定段（帯の系）が読む。
+    run_window_state_phase(&mut wiring.window_state, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。

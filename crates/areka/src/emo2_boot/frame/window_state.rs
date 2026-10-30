@@ -64,9 +64,7 @@ pub(crate) fn decide_transition(on: bool, directive: WindowStateDirective) -> Tr
 
 /// Update の相：受信端を到着順に取り出して状態へ当てる。
 ///
-/// 呼び手は `frame.rs` の重なりの取り出しの相の直後（5.1 で結ぶ）。
-// 5.1 で外す（フレームの相から呼ぶまで本番では使わない）。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 呼び手は `frame.rs` の重なりの取り出しの相の直後。
 pub(in crate::emo2_boot) fn run_window_state_phase(state: &mut StayOnTopState, world: &mut World) {
     let Some(rx) = state.rx.as_ref() else {
         return;
