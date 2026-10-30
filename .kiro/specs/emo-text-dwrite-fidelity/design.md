@@ -124,6 +124,7 @@ graph TB
 - `crates/areka-emo-text/src/draw_line_store.rs`（233 行 → 約 225 行）— 行の TextLayout を `create_line_layout` で作る（箱の寸法の場合分けを関数へ移す）。
 - `crates/areka-emo-text/src/viewbox_draw_decoration.rs`（333 行 → 約 360 行）— `apply_font_ranges` を顔で考える形にする（区間の名前が既定と違えば `face_for` で顔を引き、家族名・幅を焼く。太さ・斜体は「区間の顔＋区間の太字・斜体」と「束縛の顔＋既定の太字・斜体」を同じ規則で比べ、違えば焼く）。署名は変えない。
 - `crates/areka-emo-text/src/viewbox_draw_render.rs`（661 行・1 行と型 1 つ）— 束縛書式の記憶の鍵（`ensure_format` の `FormatKey`）を `(font.name, height, mode)` から `(font.looks.default.font_key(), mode)` へ替える。本書の後は候補列全体から解いた顔と既定の見た目の太字・斜体でも書式が変わるので、鍵がそれを見ないと同じ実行部でフォントを替えたときに古い書式を黙って使い続ける（設計の確かめの指摘 1）。今の本番は `actor_attach.rs` が resolved の変化で描画資源ごと作り直すので起きないが、鍵が書式を決める値をすべて含むのが本来の形。ウェーブの約束で触らないと決めたファイルなので、触る前に同じウェーブのほかのセッションへ知らせる（要件 5.3・C12 のほかの 7 本は触らない＝重なり 0）。
+- `crates/areka-emo-text/src/viewbox_draw.rs`（型 1 つとテストの宣言 1 つ）— `FormatKey` を `(FontKey, WritingMode)` の別名にする（上の記憶の鍵の型）。区間の顔の試験 `viewbox_draw_decoration_face_tests.rs` を `#[cfg(test)]` の `decoration_face_tests` として宣言する。
 - `crates/areka-emo-text/src/layout.rs`（doc だけ・コードは変えない）— `GlyphMetrics::vertical_em_box_left` の trait の doc（130〜135 行・158〜161 行あたり）が語る「本番の em の箱は列の箱の真ん中から ±s/2 ずれる」を、「本番（DirectWrite）は列のレシピで真ん中（0）・既定の実装は純粋層の偽の計測器の模型」へ直す（設計の確かめの指摘 3）。触る前に知らせる（同上）。
 - `doc/ukadoc-coverage/ledger/assets.toml` — `font.name` の行（`entry."ukadoc:descript_balloon:font.name_…:1"`）の注記に GDI の名前の引き直しを書く（7.1）。
 
@@ -352,8 +353,8 @@ pub struct ResolvedFont {
 }
 
 /// 顔と太字・斜体の指定から書式を 1 回作る（太さ・斜体は FontFace の規則・幅は顔のまま・locale ja-JP）。
-/// 可視性は今のまま非公開（子モジュール `metrics` は親の非公開の項目を辿れる）。
-fn try_create_format(
+/// 可視性は `pub(super)`（子モジュール `metrics` と、`viewbox_draw` の区間の顔の試験が辿る）。
+pub(super) fn try_create_format(
     factory: &IDWriteFactory2,
     face: &FontFace,
     bold: bool,
