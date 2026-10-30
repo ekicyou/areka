@@ -40,6 +40,8 @@ use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish, skin_ref_name, skin_ref_path,
 };
 use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
+use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
+use crate::emo2_boot::skin_facts_copy;
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapPayload};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::balloon_lock::replace_balloon_lock_descript;
@@ -273,6 +275,14 @@ fn commit(
         );
         return false;
     };
+    // 判定の事実は荷物を分ける前に組む（分けると `EmoWorld` は荷物の置き場へ動く）。
+    let scopes: Vec<u32> = world
+        .get_resource::<GhostWindows>()
+        .into_iter()
+        .flat_map(GhostWindows::scopes)
+        .filter_map(|s| u32::try_from(s).ok())
+        .collect();
+    let facts = skin_facts_copy::swapped(wiring.presenter(), &scopes, &built);
     let (targets, replace, finish) = split(built, epoch);
     // seriko は差し替えの依頼で静的な着せ替えを新しいシェルの既定へ置き直す。結線の写しも依頼が届いた
     // 時点で置き直す（ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。
@@ -295,7 +305,7 @@ fn commit(
     });
     let sent = session(world)
         .and_then(GhostSession::seriko_sink)
-        .is_some_and(|sink| sink.send_replace(replace));
+        .is_some_and(|sink| sink.send_replace(replace, facts));
     if !sent {
         error!(
             event = "skin_switch_failed",
@@ -389,7 +399,10 @@ fn step_committed(
             balloon,
             restored,
             boxes,
-        } => finish_shell(wiring, world, &target, &source, &balloon, &restored, boxes),
+            cursors,
+        } => finish_shell(
+            wiring, world, &target, &source, &balloon, &restored, boxes, cursors,
+        ),
         SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, &target, scopes),
     }
     info!(
@@ -432,6 +445,7 @@ fn poll_replies(
 /// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 箱の束を文字の層へ渡す
 /// （areka-P0-shell-balloon）→ 配置の値を入れ直す → 重なりの
 /// 基底と並べ直しの材料と窓の組の descript の分を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
+#[allow(clippy::too_many_arguments)] // 後始末の残りの欄をそのまま受ける（箱の束とカーソルを足した形）
 fn finish_shell(
     wiring: &mut Emo2Wiring,
     world: &mut World,
@@ -440,11 +454,14 @@ fn finish_shell(
     balloon: &BalloonPlacementInputs,
     restored: &[(PersistKey, String)],
     boxes: ShellBoxAssets,
+    cursors: ShellCursorAssets,
 ) {
     // 新しいシェルの箱の束を文字の層へ渡す（areka-P0-shell-balloon 要件 6.8）: 前の箱の面と
     // 箱の文字を捨て、今のサーフェス番号を保ったまま行き先を新しい表で引き直す（`\s` を書かない
     // 次の台詞が新しいシェルの同じ番号のサーフェスの箱へ入る）。
     boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
+    // 新しいシェルのカーソルを入れ、今の状態のまま出し直してから前のを捨てる（shell-mouse-cursor 要件 6.8）。
+    cursors.hand_to(world);
     // 配置の解決は窓寸を入力に取るので、drain が置き換えで積んだ窓寸の報告をここで先に窓へ
     // 反映し、新しいシェルの寸法で解かせる（同じフレームの後段の照合は取り出し済みで何もしない）。
     reconcile_reported_sizes(&mut wiring.presenter, world);
@@ -644,6 +661,7 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
                 balloon,
                 restored,
                 boxes: assets.boxes,
+                cursors: assets.cursors,
             },
         ),
         SwapBuilt::Balloon { assets } => {

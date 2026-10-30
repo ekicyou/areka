@@ -155,17 +155,18 @@ pub trait GlyphMetrics {
     /// これに厚み em で重なる（spec `vertical-choice-hover-band` 要件 4.2「書体に対して中央」）。
     /// 横書きでは意味を持たない（0）。
     ///
-    /// 既定の実装は列の箱の真ん中に置く: s ＝ `max(0, line_box_height(h) − h)` として、
-    /// 右から左 ＝ `−s/2`・左から右 ＝ `+s/2`（DirectWrite は列の箱を右から左で行矩形の右辺に、
-    /// 左から右で左辺に揃え、反対側へ s はみ出させる）。実測の metrics（COM 層 `DWriteMetrics`）は
-    /// DirectWrite の列の基線で上書きする。
+    /// 本番（COM 層 `DWriteMetrics`）は列のレシピ（行間 UNIFORM・基線は箱の幅の半分＝
+    /// `draw.rs::create_line_layout`）の下の列の基線で測って上書きし、値は 0（em の箱が行矩形の
+    /// 真ん中）。既定の実装は純粋層の偽の計測器（[`FixedMetrics`]）の模型で、列の箱の真ん中に置く:
+    /// s ＝ `max(0, line_box_height(h) − h)` として、右から左 ＝ `−s/2`・左から右 ＝ `+s/2`
+    /// （列のレシピの前の DirectWrite の列の箱の置き方の模型）。
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
         column_centred_em_box_left(self.line_box_height(font_height), font_height, mode)
     }
 }
 
-/// [`GlyphMetrics::vertical_em_box_left`] の既定の実装の式（列の箱の真ん中に em の箱を置く）。
-/// 実測の metrics が測れなかったときの縮退でも同じ式を使うため、関数として 1 つに置く。
+/// [`GlyphMetrics::vertical_em_box_left`] の既定の実装の式（列の箱の真ん中に em の箱を置く・
+/// 偽の計測器の模型）。横書きに束縛した実測の metrics も同じ式を使うため、関数として 1 つに置く。
 pub fn column_centred_em_box_left(
     line_box_height: f32,
     font_height: f32,

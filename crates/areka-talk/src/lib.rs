@@ -39,22 +39,27 @@ pub struct EpilogueCommand {
 ///
 /// `origin` は台本 1 つの出どころと実効のレベル。kanade が送った後は誰も書き換えず、
 /// 再生の層は運ぶだけで解釈しない（areka-P0-script-security-level 1.4）。
+///
+/// `strict` は MCP の `strict` 真で受け付けた台本の印。真のとき再生の層は
+/// 落とした所・直した所を 1 件ずつ記録する（mcp-strict-errors 3.1・3.8）。
 #[derive(Debug, Clone)]
 pub struct StartTalk {
     pub talk_id: TalkId,
     pub script: String,
     pub epilogue: Vec<EpilogueCommand>,
     pub origin: ScriptOrigin,
+    pub strict: bool,
 }
 
 impl StartTalk {
-    /// epilogue なし・出どころはゴースト自身の従来形コンストラクタ（構築点の機械的追随を最小化）。
+    /// epilogue なし・出どころはゴースト自身・strict は偽の従来形コンストラクタ（構築点の機械的追随を最小化）。
     pub fn new(talk_id: TalkId, script: impl Into<String>) -> Self {
         Self {
             talk_id,
             script: script.into(),
             epilogue: Vec::new(),
             origin: ScriptOrigin::GHOST,
+            strict: false,
         }
     }
 }

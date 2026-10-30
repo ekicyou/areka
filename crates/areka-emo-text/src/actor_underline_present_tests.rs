@@ -596,8 +596,11 @@ fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame()
 // ──────────────────────────── 縦書きの端の列（要件 3.4・3.5）
 
 /// 縦書きの文字の面: 列送り 30 の 4 列目の列の箱（幅 28）が面の端にちょうど接する幅（4×30−2）。
-/// 線は字の列の左に出るので、効くのは面の左端の列: 右から左では最後の列（字のインクが面の左端
-/// から始まり、線は面の外へ出る＝寄せが効く）、左から右では最初の列（線は面に収まる＝寄せない）。
+/// 線は字の列の左に出るので、効くのは面の左端の列（右から左では最後の列、左から右では最初の列）。
+/// 縦書きの列のレシピ（spec `emo-text-dwrite-fidelity` 要件 5.1）で em の箱が列の箱の真ん中に来た後は、
+/// 2 方向とも字の墨が列の箱の真ん中にあり（k=1 の実測で右から左 5..=22・左から右 4..=23、
+/// 箱 0..=27 の中心 13.5 と一致）、線は列の箱の左端より 1〜2 列外＝面の外へ出るので、2 方向とも
+/// 寄せが効く。直す前の左から右は墨が箱の右へ約 5px 寄っていて線が面に収まり、寄せなかった。
 const VERTICAL: (u32, u32) = (118, 120);
 
 /// 縦書きの普通のバルーンの定義（validrect は全域）。
@@ -661,23 +664,22 @@ fn assert_vertical_columns(plain: &Shot, styled: &Shot, what: &str) -> Vec<(u32,
 }
 
 /// 面の左端の列の線の寄せ（要件 3.4「端の列で面に収まらないときだけ面の内側へ寄せる」）:
-/// 右から左は線が面の外へ出るので、面の左端の画素から太さを保って塗る。左から右は収まるので
-/// 寄せない（面の左端から離れている）。
-fn assert_left_edge_pull(mode: &str, bands: &[(u32, u32)], k: f32, what: &str) {
+/// 2 方向とも線が面の外へ出る（[`VERTICAL`] の注記）ので、面の左端の画素から太さを保って塗る。
+/// 太さは内側の列（寄せの無い列）の線と同じ列数＝面の端で切られずに 1 本まるごと塗られている。
+fn assert_left_edge_pull(bands: &[(u32, u32)], k: f32, what: &str) {
     let (b0, b1) = bands[0];
-    if mode == "vertical_rl" {
-        assert_eq!(b0, 0, "{what}: 寄せた線は面の左端の画素から塗られる");
-        assert!(
-            b1 + 1 >= (underline_thickness() * k).floor() as u32,
-            "{what}: 寄せた線の太さ（{} 列）が保たれていない",
-            b1 + 1
-        );
-    } else {
-        assert!(
-            b0 > 0,
-            "{what}: 収まる線が面の左端へ寄せられた: {b0}..={b1}"
-        );
-    }
+    let (i0, i1) = bands[1];
+    assert_eq!(b0, 0, "{what}: 寄せた線は面の左端の画素から塗られる");
+    assert!(
+        b1 + 1 >= (underline_thickness() * k).floor() as u32,
+        "{what}: 寄せた線の太さ（{} 列）が保たれていない",
+        b1 + 1
+    );
+    assert_eq!(
+        b1 - b0,
+        i1 - i0,
+        "{what}: 寄せた線 {b0}..={b1} が内側の列の線 {i0}..={i1} より細い（面の端で切られた）"
+    );
 }
 
 /// 縦書き 2 方向の普通のバルーンで、端の列を含む全部の列の作者の下線が面の内側に、今の側
@@ -706,7 +708,7 @@ fn vertical_edge_column_underlines_are_inside_the_surface_on_todays_side() {
                 "{what}: 面の寸（前提）"
             );
             let bands = assert_vertical_columns(&plain, &author, &what);
-            assert_left_edge_pull(mode, &bands, k, &what);
+            assert_left_edge_pull(&bands, k, &what);
         }
     }
 }
@@ -726,7 +728,7 @@ fn vertical_box_edge_column_underlines_are_inside_the_surface_on_todays_side() {
                 "{what}: 箱の面の寸（前提）"
             );
             let bands = assert_vertical_columns(&plain, &author, &what);
-            assert_left_edge_pull(mode, &bands, k, &what);
+            assert_left_edge_pull(&bands, k, &what);
         }
     }
 }

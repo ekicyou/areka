@@ -55,7 +55,7 @@ use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::draw::{FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS};
 use crate::layout::VisibleWindow;
-use crate::look::StyleTable;
+use crate::look::{FontKey, StyleTable};
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
 use crate::viewbox::{ScrollPlanner, ScrollState};
@@ -77,10 +77,10 @@ use decoration::BrushCache;
 #[cfg(test)]
 use plan::plan_inconsistency;
 
-/// 行 TextLayout format の前提（フォント名・高さビット・writing_mode）——変わると
-/// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す
-/// （draw.rs `FormatKey` と同一規律のインライン版）。float はビット表現で同値比較する。
-type FormatKey = (String, u32, WritingMode);
+/// 行 TextLayout format の前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
+/// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため
+/// format と行キャッシュを組み直す。float はビット表現で同値比較する（[`FontKey`] の規律）。
+type FormatKey = (FontKey, WritingMode);
 
 /// 決定論観測用の描画統計（常時コンパイル・u64 加算のみ・R3.5/R10.3）。
 ///
@@ -347,6 +347,9 @@ mod choice_hover_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_color_emoji_tests.rs"]
 mod color_emoji_tests;
+#[cfg(test)]
+#[path = "viewbox_draw_decoration_face_tests.rs"]
+mod decoration_face_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_decoration_tests.rs"]
 mod decoration_tests;

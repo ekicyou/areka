@@ -91,6 +91,7 @@ pub(super) fn synth_assets_with_balloons(
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
         boxes: crate::emo2_boot::shell_box_assets::ShellBoxAssets::default(),
+        cursors: crate::emo2_boot::shell_cursor_assets::ShellCursorAssets::default(),
     }
 }
 
@@ -115,6 +116,12 @@ pub(super) fn synth_assets_with_balloons(
 pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
     lines
+}
+
+/// 窓がどれも最初の面を表示した（拡大率 1）とする表示の読み口。位置の指令の預かり
+/// （`frame/move_hold.rs`）を抜けた後の当て方を見る檻が、指令を流す前の前提として渡す。
+pub(crate) fn all_shown(_scope: u32) -> Option<areka_emo_compose::ScaleRatio> {
+    Some(areka_emo_compose::ScaleRatio::ONE)
 }
 
 /// 捕捉行のうち指定 level（例 `"ERROR"`）の件数を数える。

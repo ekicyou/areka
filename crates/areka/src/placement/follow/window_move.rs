@@ -11,11 +11,11 @@ use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos
 
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit, BalloonPlace,
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
-    apply_visibility_guard, diag, follow_balloon, limit_correction, project_anchor, rect_at,
-    rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
+    apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
+    rect_at, rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -326,6 +326,9 @@ pub fn resize_window_to(
         new_pos,
         new_size,
     );
+    // 3d. 既定の位置にいる free のキャラ窓が大きくなってはみ出したら収める（window-work-area-clamp 要件 3.1）。
+    let new_pos =
+        super::clamp_grown_free_default(world, char_window, anchor, route, new_pos, new_size);
 
     // 4. べき等 skip（Req3.1）: 導出 (position, size) が現 WindowPos と同一なら書かない
     //    （冗長な再配置を避ける・こちらは正常系ゆえ debug!）。
@@ -978,10 +981,11 @@ fn log_window_move(
 /// 窓の位置更新を落とさないことの両立である。無ログの縮退経路は作らない（6.3）。
 ///
 /// 補正が発火したときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!` を出す。
-/// [`limit_correction`] の `None` は「クランプしても位置が動かない」の意であって
-/// 「内包されている」ではない（逆転区間で既に左上に居るときははみ出したままでも
-/// `None`）——毎フレーム偽の補正ログを出さないための設計であり、`None` では
-/// ログも位置の書換も起こさない（6.1 は「実際に動かしたとき」の記録を求める）。
+/// [`place_balloon_in_work_area`] の [`BalloonPlace::Fits`] は「並べ替えも押し込みも
+/// 位置を動かさない」の意であって「内包されている」ではない（逆転区間で既に左上に
+/// 居るときははみ出したままでも `Fits`）——毎フレーム偽の補正ログを出さないための
+/// 設計であり、`Fits` ではログも位置の書換も起こさない（6.1 は「実際に動かしたとき」
+/// の記録を求める）。
 fn apply_balloon_limit_gate(
     world: &World,
     window: Entity,
@@ -1076,13 +1080,15 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    let Some(corrected) = limit_correction(proposed, target_size, area) else {
+    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area);
+    let (BalloonPlace::Flipped(corrected) | BalloonPlace::Pushed(corrected)) = place else {
         return proposed;
     };
 
     info!(
         scope,
         context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+        how = place.how(),
         entity = ?window,
         route = ?route,
         from = ?proposed,

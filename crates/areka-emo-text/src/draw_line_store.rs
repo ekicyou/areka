@@ -29,10 +29,9 @@ use std::collections::HashMap;
 use windows::Win32::Graphics::DirectWrite::{
     IDWriteFactory2, IDWriteTextFormat, IDWriteTextLayout,
 };
-use windows::core::HSTRING;
-use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
+use wintf::com::dwrite::DWriteTextLayoutExt;
 
-use super::{PROBE_MAX_EXTENT, device_err};
+use super::{create_line_layout, device_err};
 use crate::TextLayerError;
 use crate::look::StyleId;
 use crate::viewbox::LineOverhang;
@@ -56,7 +55,8 @@ struct CachedLineLayout {
 /// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
 /// 行レイアウトを得るための抽出型・design.md「draw.rs の再編（LineLayoutStore 抽出）」）。
 ///
-/// 生成規則（行内軸＝[`PROBE_MAX_EXTENT`]・行送り軸＝呼び手が渡す行の箱寸・同一 format・
+/// 生成規則（[`create_line_layout`] で作る＝行内軸＝[`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT)・
+/// 行送り軸＝呼び手が渡す行の箱寸・縦書きは列のレシピ・同一 format・
 /// 生成直後に `decorate` を 1 度）・キー（canvas 行 index）・破棄規律
 /// （[`clear`](Self::clear) のみ全破棄）を両描画実行で共有する——TextLayout 生成経路の完全共有に
 /// より **byte 等価**を構造化する（RN5）。装飾を使わない呼び出し
@@ -90,7 +90,7 @@ impl LineLayoutStore {
 
     /// 行 TextLayout の取得（装飾なし・内容不変なら再利用・変化時のみ生成して置換）。
     ///
-    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
+    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT)・折返しは純粋層で決定済み
     /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
     /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
     ///
@@ -156,14 +156,7 @@ impl LineLayoutStore {
         {
             return Ok(cached.layout.clone());
         }
-        let (max_width, max_height) = match mode {
-            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, block_extent),
-            WritingMode::VerticalRl | WritingMode::VerticalLr => (block_extent, PROBE_MAX_EXTENT),
-        };
-        let layout = self
-            .factory
-            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
-            .map_err(device_err("CreateTextLayout(line)"))?;
+        let layout = create_line_layout(&self.factory, text, format, block_extent, mode)?;
         self.creations += 1;
         let strokes = decorate(&layout)?;
         // 実測インクはみ出し（生成時 1 回・確定行は再計測しない）。行ボックスのブロック軸寸は

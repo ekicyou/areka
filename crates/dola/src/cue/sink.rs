@@ -9,6 +9,8 @@
 //! relevance 判定の権威は [`cue_target_of`] **単一**とし、全演者がこの分類器を共有する
 //! （中央 router による事前振り分けに依存しない・R2.4/R11.3）。
 
+use std::sync::Arc;
+
 use super::command::{CueCommand, CueTarget, TalkCue};
 
 /// 演者非依存の**単一**出力契約。全表現者（seriko／emo-text／将来の演者）がこの 1 本を
@@ -29,6 +31,14 @@ pub trait CueSink {
     /// [`cue_target_of`] で行い、担当外でも duration は honor する。
     fn emit(&mut self, cue: TalkCue);
 
+    /// strict の台本の合図: `probe` はこの合図の台本の位置に結びついた知らせの口。
+    /// 既定は [`emit`](Self::emit) を呼ぶだけ（知らせない・上書きしない受け手の動きは変わらない）。
+    /// 上書きする受け手も `emit` と同じ送り出しをちょうど 1 回する（知らせの有無で配送を変えない）。
+    fn emit_with(&mut self, cue: TalkCue, probe: &CueProbe) {
+        let _ = probe;
+        self.emit(cue);
+    }
+
     /// 先渡し: 登録の時点で 1 度だけ呼ばれる。`upcoming` は、この受け手にこれから
     /// [`emit`](Self::emit) で届く合図の全部（配る順・`emit` と同じ値）。区切りと配送の制御は
     /// 含まない。既定は何もしない（上書きしない受け手の動きは変わらない）。
@@ -41,6 +51,50 @@ pub trait CueSink {
     /// 再生器の状態の移り（`tick`）の中では呼ばれない。既定は何もしない（上書きしない受け手の
     /// 動きは変わらない）。
     fn choice_wait_began(&mut self) {}
+}
+
+/// 合図の受け手が返す知らせ 1 件。dola は中身を解釈しない（どれも不透明な文字列）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CueFinding {
+    /// 検出点の名前。
+    pub point: &'static str,
+    /// 種類の名前（例 `"missing_surface"`）。
+    pub kind: &'static str,
+    /// 文面。
+    pub message: &'static str,
+}
+
+/// 合図 1 つに結びついた知らせの口。複製でき、別のスレッドへ渡せる（UI で決まる知らせのため）。
+/// 等しさは同じ口か（`Arc` の指す先）で決める。
+#[derive(Clone)]
+pub struct CueProbe(Arc<dyn Fn(CueFinding) + Send + Sync>);
+
+impl CueProbe {
+    /// 知らせを受け取る関数から口を作る。
+    pub fn new(report: impl Fn(CueFinding) + Send + Sync + 'static) -> Self {
+        Self(Arc::new(report))
+    }
+
+    /// 知らせ 1 件を口の持ち主へ渡す。
+    pub fn report(&self, finding: CueFinding) {
+        (self.0)(finding);
+    }
+}
+
+impl PartialEq for CueProbe {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for CueProbe {}
+
+impl std::fmt::Debug for CueProbe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CueProbe")
+            .field(&Arc::as_ptr(&self.0).cast::<()>())
+            .finish()
+    }
 }
 
 /// `CueCommand` → 配送先スロットの relevance 分類（**単一権威**・R11.3）。

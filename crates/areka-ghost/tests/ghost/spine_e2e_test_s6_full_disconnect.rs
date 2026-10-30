@@ -124,6 +124,7 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
         .build();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

@@ -1629,8 +1629,8 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!。フォントファイル名らしい候補を読み飛ばすときに 1 度出る。
-areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ、areka-emo-text の draw::ResolvedFont::resolve_with_background がカンマで切って記述順のまま書体の候補列（look::TextLook の name）にし、draw_catalog::FontCatalog::family_for が記述順に問い合わせて最初に見つかった書体を採る。
-⒜ バルーンのフォルダに置いたフォントファイルは指定できない。draw_catalog::FontCatalog::family_for はファイル名らしい候補を warn! で 1 度記録して読み飛ばし、次の候補へ進む（フォントファイルを読み込む経路は無い）。正典どおりでないのはこの 1 点だけで、引受先なし・要望が出た時点で起票（SSP 追従は要望が出た時点で判断する・2026-09-11 開発者裁定）。
+areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ、areka-emo-text の draw::ResolvedFont::resolve_with_background がカンマで切って記述順のまま書体の候補列（look::TextLook の name）にし、draw_catalog::FontCatalog::face_for が記述順に、家族名で、無ければ GDI の名前（家族名＋太さ・斜体・幅。例「游ゴシック Medium」）として問い合わせ、最初に当たった顔（家族・太さ・幅・斜体）で描画と計測を行う。
+⒜ バルーンのフォルダに置いたフォントファイルは指定できない。draw_catalog::FontCatalog::face_for はファイル名らしい候補を warn! で 1 度記録して読み飛ばし、次の候補へ進む（フォントファイルを読み込む経路は無い）。正典どおりでないのはこの 1 点だけで、引受先なし・要望が出た時点で起票（SSP 追従は要望が出た時点で判断する・2026-09-11 開発者裁定）。
 ⒝ カンマ区切りの優先列は解消済み。候補を記述順に問い合わせ、インストールされていない書体は飛ばして次の候補を採る。候補が 1 つも見つからないときだけ warn! を 1 度出して既定の書体へ戻す。
 縦書き用の字形が無いフォントを標準ゴシックへ差し替えるという決まりは、正典ではこの項目ではなく vertical の項目の説明の中に書かれている（2026-09-05 にライブの正典で確認）ため、その食い違いは vertical の項目に登記した。
 担当 spec は areka-P0-balloon-font-descript-keys。
@@ -2773,23 +2773,24 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.41"
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はマウスの矢印の絵をゴーストごとに差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka の emo2_boot::shell_cursor_table::read_ghost_cursor_keys が、ゴーストの読み込み・切り替え・読み直しのたびにこの欄を読む（読む所に正典 URL を置いた）。値には cursorブレスと同じく 10 種の `system:` の名前と `.cur`・`.ani` のファイル名を書け、ファイルはシェルのフォルダ → `ghost\\master` の順で探す（正典のプロパティ `currentghost.mousecursor` の探し方に合わせた）。読めない値・無いファイル・壊れたファイル・フォルダの外を指す名前は warn! を 1 回出して、この差し替えを使わない。cursorブレスに行がある場面ではブレスの形を使い、この欄を使わない。キーは綴りどおりに引く（`MouseCursor` のような大文字混じりの綴りは拾わない。SSP の扱いは測っていない）。
+役目: 当たり判定名が `bust` 以外の乗る形・押す形と、右を押す形の既定（`system:finger`）の代わりに出す。`mousecursor` と旧い綴りの `cursor` の両方があれば `mousecursor` を使い、使わなかった `cursor` の値を warn! で残す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 この見出しは新旧の綴りを 1 つにまとめているので、別名の行は作らない。登場した版はカタログが持つ唯一の値を写したが、正典本文がその版として書いているのは `mousecursor` と書けるようになった時期であって、欄そのものが現れた時期ではない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: マウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 21——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_ghost:default.balloon.path_2c_30d1_30b9:1"]
@@ -3107,98 +3108,99 @@ areka には作り付けのメニューが無く、その書体を決めるこ�
 """
 
 [entry."ukadoc:descript_ghost:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.6.11"
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka の emo2_boot::shell_cursor_table::read_ghost_cursor_keys が、ゴーストの読み込み・切り替え・読み直しのたびにこの欄を読む（読む所に正典 URL を置いた）。値には cursorブレスと同じく 10 種の `system:` の名前と `.cur`・`.ani` のファイル名を書け、ファイルはシェルのフォルダ → `ghost\\master` の順で探す（正典のプロパティ `currentghost.mousecursor` の探し方に合わせた）。読めない値・無いファイル・壊れたファイル・フォルダの外を指す名前は warn! を 1 回出して、この差し替えを使わない。cursorブレスに行がある場面ではブレスの形を使い、この欄を使わない。キーは綴りどおりに引く（`MouseCursor` のような大文字混じりの綴りは拾わない。SSP の扱いは測っていない）。
+役目: キャラクターの窓の当たり判定の無い所の矢印（既定 `system:arrow`）の代わりに出す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: マウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 21——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_ghost:mousecursor.grip_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.6.11"
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka の emo2_boot::shell_cursor_table::read_ghost_cursor_keys が、ゴーストの読み込み・切り替え・読み直しのたびにこの欄を読む（読む所に正典 URL を置いた）。値には cursorブレスと同じく 10 種の `system:` の名前と `.cur`・`.ani` のファイル名を書け、ファイルはシェルのフォルダ → `ghost\\master` の順で探す（正典のプロパティ `currentghost.mousecursor` の探し方に合わせた）。読めない値・無いファイル・壊れたファイル・フォルダの外を指す名前は warn! を 1 回出して、この差し替えを使わない。cursorブレスに行がある場面ではブレスの形を使い、この欄を使わない。キーは綴りどおりに引く（`MouseCursor` のような大文字混じりの綴りは拾わない。SSP の扱いは測っていない）。
+役目: 当たり判定名が `bust` のときの押す形の既定（`system:grip`）の代わりに出す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: マウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 21——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_ghost:mousecursor.hand_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.6.11"
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka の emo2_boot::shell_cursor_table::read_ghost_cursor_keys が、ゴーストの読み込み・切り替え・読み直しのたびにこの欄を読む（読む所に正典 URL を置いた）。値には cursorブレスと同じく 10 種の `system:` の名前と `.cur`・`.ani` のファイル名を書け、ファイルはシェルのフォルダ → `ghost\\master` の順で探す（正典のプロパティ `currentghost.mousecursor` の探し方に合わせた）。読めない値・無いファイル・壊れたファイル・フォルダの外を指す名前は warn! を 1 回出して、この差し替えを使わない。cursorブレスに行がある場面ではブレスの形を使い、この欄を使わない。キーは綴りどおりに引く（`MouseCursor` のような大文字混じりの綴りは拾わない。SSP の扱いは測っていない）。
+役目: 当たり判定名が `bust` のときの乗る形の既定（`system:hand`）の代わりに出す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: マウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 21——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_ghost:mousecursor.text_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "degraded"
 introduced = "2.5.41"
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: info!。読むが使う場面が無い。areka の emo2_boot::shell_cursor_table::read_ghost_cursor_keys が値を読み（読めない値は warn!）、キャラクターの窓にはこの形を使う場面（入力ボックス・処理中で応答できないとき）が無いので出さない。読んだことと使わないことを、キーを添えた info! でゴーストの読み込みごとに 1 回残す。SSP がこの形を出す入力ボックスや応答できない間のカーソルを areka はまだ持たないので、指定しても形は出ない。実装済みにしなかったのはこのためである。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: マウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 21——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_ghost:mousecursor.wait_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "degraded"
 introduced = "2.5.43"
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+壊れ方: 見た目の差。記録: info!。読むが使う場面が無い。areka の emo2_boot::shell_cursor_table::read_ghost_cursor_keys が値を読み（読めない値は warn!）、キャラクターの窓にはこの形を使う場面（入力ボックス・処理中で応答できないとき）が無いので出さない。読んだことと使わないことを、キーを添えた info! でゴーストの読み込みごとに 1 回残す。SSP がこの形を出す入力ボックスや応答できない間のカーソルを areka はまだ持たないので、指定しても形は出ない。実装済みにしなかったのはこのためである。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: マウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 21——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_ghost:name.allowoverride_2c_6570_5024:1"]
@@ -7148,89 +7150,99 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:mousedown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
-introduced = ""
-owner = ""
-priority = "A10"
-values = ["触れ合い", "装い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この綴りは crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-見出しの `*` は 1 個以上の数字。
-束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:mousehover_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
-introduced = ""
-owner = ""
-priority = "A10"
-values = ["触れ合い", "装い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この綴りは crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-見出しの `*` は 1 個以上の数字。
-束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:mouserightdown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
-introduced = "2.6.14"
-owner = ""
-priority = "A10"
-values = ["触れ合い", "装い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この綴りは crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-見出しの `*` は 1 個以上の数字。
-束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この綴りは crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の emo2_boot::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+この場面は「押す」。当たり判定の上で右以外のボタン（左・中・拡張のボタン。ダブルクリックの 2 回目も）を押すと、この行の形を出し、放すまで保つ（押したまま当たり判定や窓の外へ出ても変えない）。行が無ければ既定の形（当たり判定名が `bust` なら `system:grip`、ほかは `system:finger`。ゴーストの descript の `mousecursor.grip`・`mousecursor` が在ればそちら）を出す。当たり判定の無い所で押したときは形を変えない。クリック・ドラッグと SHIORI へ送るイベントは変えない。
+読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 見出しの `*` は 1 個以上の数字。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
-[entry."ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+[entry."ukadoc:descript_shell_surfaces:mousehover_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この綴りは crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の emo2_boot::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+この場面は「止まる」。当たり判定の上でボタンを押さずに、OS の設定の「マウスを止めたと見なす時間」（既定 400 ミリ秒）のあいだ動かなかったら、この行の形を出す。カーソルの窓の中の位置が変わったら、その場で乗ったときの形へ戻す。行が無ければ形を替えず、乗ったときの形のままにする（ukadoc の既定の `system:arrow` は使わない。SSP 2.9.23 の 2026-10-29 の測りに合わせた）。
+読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 見出しの `*` は 1 個以上の数字。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:mouserightdown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "implemented"
+introduced = "2.6.14"
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い", "装い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の emo2_boot::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+この場面は「右を押す」。当たり判定の上で右ボタンを押すと、この行の形を出し、放すまで保つ。行が無ければ既定の `system:finger`（ゴーストの descript の `mousecursor` が在ればそちら）を出す。右クリックのメニューと SHIORI へ送るイベントは変えない。
+読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+見出しの `*` は 1 個以上の数字。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
+束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "implemented"
+introduced = ""
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い", "装い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の emo2_boot::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+この場面は「乗る」。カーソルが当たり判定の上に入ると、その場でこの行の形を出す（当たり判定から別の当たり判定へ直に移ったときも、移ったその場で替える）。行が無ければ既定の形（当たり判定名が `bust`〔ASCII の大小を区別しない〕なら `system:hand`、ほかは `system:finger`。ゴーストの descript の `mousecursor.hand`・`mousecursor` が在ればそちら）を出す。
+読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+見出しの `*` は 1 個以上の数字。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
+担当 spec は shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "implemented"
+introduced = ""
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い", "装い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の emo2_boot::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+この場面は「ホイール」。当たり判定の上でボタンを押さずに縦のホイールを回すと、この行の形を出す。カーソルの窓の中の位置が変わったら、その場で乗ったときの形へ戻す。行が無ければ形を替えず、乗ったときの形のままにする（ukadoc の既定の `system:arrow` は使わない。SSP 2.9.23 の 2026-10-29 の測りに合わせた）。横のホイールでは形を出し直さない（既知の限り）。
+読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+見出しの `*` は 1 個以上の数字。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
+束: 触れた場所で差し替わるマウスの矢印の絵・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 4——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:move:1"]
@@ -7649,164 +7661,174 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3aarrow:1"]
-status = "absent"
-introduced = ""
-owner = ""
-priority = "A10"
-values = ["触れ合い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:system_3across:1"]
-status = "absent"
-introduced = ""
-owner = ""
-priority = "A10"
-values = ["触れ合い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:system_3afinger:1"]
-status = "absent"
-introduced = ""
-owner = ""
-priority = "A10"
-values = ["触れ合い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:system_3agrip:1"]
-status = "absent"
-introduced = ""
-owner = ""
-priority = "A10"
-values = ["触れ合い"]
-links = []
-note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-"""
-
-[entry."ukadoc:descript_shell_surfaces:system_3ahand:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の矢印（`IDC_ARROW`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:system_3across:1"]
+status = "implemented"
+introduced = ""
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の十字（`IDC_CROSS`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
+束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:system_3afinger:1"]
+status = "implemented"
+introduced = ""
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の指差し（`IDC_HAND`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
+束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:system_3agrip:1"]
+status = "implemented"
+introduced = ""
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: areka が同梱する手を握った形の絵（crates/areka/cursor/grip.cur・input_events::cursor_answer の `BUNDLED`）。Windows の標準の形には手を開いた形・手を握った形が無いので、areka が自前の絵を同梱した（2026-10-29 に fal の Ideogram Vector で作った案から開発者が選んだ。白地の手のまわりに 1 px の黒い縁。出どころと許諾は crates/areka/cursor/README.md）。指差し（`system:finger`）と見分けられる。窓のモニターの拡大率の寸法で作り、作れなかった寸法では error! を 1 回残して指差しを出す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
+束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+"""
+
+[entry."ukadoc:descript_shell_surfaces:system_3ahand:1"]
+status = "implemented"
+introduced = ""
+owner = "shell-mouse-cursor"
+priority = "A10"
+values = ["触れ合い"]
+links = []
+note = """
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: areka が同梱する手を開いた形の絵（crates/areka/cursor/hand.cur・input_events::cursor_answer の `BUNDLED`）。Windows の標準の形には手を開いた形・手を握った形が無いので、areka が自前の絵を同梱した（2026-10-29 に fal の Ideogram Vector で作った案から開発者が選んだ。白地の手のまわりに 1 px の黒い縁。出どころと許諾は crates/areka/cursor/README.md）。指差し（`system:finger`）と見分けられる。窓のモニターの拡大率の寸法で作り、作れなかった寸法では error! を 1 回残して指差しを出す。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 担当 spec は shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3ahelp:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形のヘルプ（`IDC_HELP`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3amove:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の四方向の移動（`IDC_SIZEALL`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3ano:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の禁止（`IDC_NO`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3atext:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の文字の I（`IDC_IBEAM`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3await:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-mouse-cursor"
 priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
-areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
-この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
-当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の emo2_boot::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
+出す形: OS の標準の形の待ち（`IDC_WAIT`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
+担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:talk_2c_6570_5024:1"]

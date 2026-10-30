@@ -731,9 +731,9 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
 /// **家族名の入口は 2 つある**（タスク 6.4）:
 ///
 /// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
-///    `font.name` をそのまま渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
+///    束縛の顔（`FontCatalog::pick` の解決）を渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
 /// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
-///    `FontCatalog::family_for` で解決した名前か、全滅時の `DEFAULT_FONT_NAME` か。
+///    `FontCatalog::face_or` で解決した顔か、全滅時の束縛の顔を共用の `try_create_format` へ。
 ///
 /// どちらの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
 /// 別名生成が入り込む余地が無い。**入口を増やしたらこの檻も広げること。**
@@ -758,11 +758,11 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
         "呼出 2 箇所はいずれも create_text_format の内側にある"
     );
     assert!(
-        body.contains("try_create_format(factory, &font.name, font.height)"),
-        "1 回目はバルーン定義の font.name をそのまま渡す（別名へ差し替えない）"
+        body.contains("try_create_format(factory, &font.face, bold, italic, font.height)"),
+        "1 回目は台帳が解決した束縛の顔をそのまま渡す（別名へ差し替えない）"
     );
     assert!(
-        body.contains("try_create_format(factory, DEFAULT_FONT_NAME, font.height)"),
+        body.contains("(DEFAULT_FONT_NAME);\n            try_create_format(factory, &retry,"),
         "2 回目は生成失敗時の既定フォント再試行のみ（書字方向とは無関係な経路）"
     );
     // 既定フォント名リテラルは宣言 1 箇所だけ——縦書き専用の差し替え先が別に
@@ -785,21 +785,21 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
         "probe_format_for が見つからない——改名したなら本檻も更新すること"
     );
     assert_eq!(
-        count(&metrics_src, ".create_text_format("),
+        count(&metrics_src, "try_create_format("),
         1,
-        "draw_metrics.rs から DirectWrite へ family 名を渡す呼出が 1 か所から動いた"
+        "draw_metrics.rs から DirectWrite へ顔を渡す共用の try_create_format の呼出が 1 か所から動いた"
     );
     assert!(
-        metrics_src.contains("&HSTRING::from(family.as_str()),"),
-        "試験用書式へ渡す family 名が束縛 `family` 以外から来ている"
+        !metrics_src.contains(".create_text_format("),
+        "draw_metrics.rs が共用の try_create_format を通らずに書式を作っている（設定の写しが戻った）"
     );
-    // その `family` の唯一の出所——候補列の解決結果か、全滅時の既定名。
+    // 渡す顔の唯一の出所——計測鍵の候補列の顔か、全滅時の束縛の顔（どちらも台帳の解決）。
     assert!(
         metrics_src.contains(
-            "        let family = self\n            .fonts\n            .family_for(&key.name)\n\
-             \x20           .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());"
+            "        let face = self.fonts.face_or(&key.name, &self.bound_face);\n\
+             \x20       let format = try_create_format(\n            &self.factory,\n            &face,"
         ),
-        "family の導出が「計測鍵の候補列を FontCatalog で解決した名前か既定名」から動いた"
+        "face の導出が「計測鍵の候補列の顔か、全滅時の束縛の顔」から動いた"
     );
     assert_eq!(
         count(&metrics_src, "\"ＭＳ ゴシック\""),

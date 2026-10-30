@@ -124,6 +124,17 @@ fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
     world_with(base_placement(balloon_limit), single_monitor())
 }
 
+/// [`base_world`] のキャラ窓を下辺から 8px はみ出させた World（縦 600 → 640・下端 1051 > 1043）。
+///
+/// 押し込みを主張する檻の前提合わせ（window-work-area-clamp task 5.2）: キャラ窓が収まって
+/// いてバルーンだけが横にはみ出すと反対の側へ並べ替える（要件 5.3）ため、キャラ窓を
+/// はみ出させて今の押し込みの経路を通す（要件 5.6）。中心は域内に残るので帰属は正常腕のまま。
+fn char_overflowing_world(balloon_limit: bool) -> (World, Entity, Entity) {
+    let mut placement = base_placement(balloon_limit);
+    placement.char_size.h = 640;
+    world_with(placement, single_monitor())
+}
+
 /// 作業領域の右下からはみ出す提案位置（両軸ともはみ出す＝4 辺のうち 2 辺を同時に検査）。
 fn out_of_area() -> PointPx {
     PointPx { x: 1800, y: 1100 }
@@ -175,7 +186,7 @@ fn probe_self_check_out_of_area_is_really_outside_and_corrected_is_inside() {
 /// 記録される（2.1/2.2/6.1）。
 #[test]
 fn enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true() {
-    let (mut world, _char_window, balloon) = base_world(true);
+    let (mut world, _char_window, balloon) = char_overflowing_world(true);
     let proposed = out_of_area();
 
     let (ok, events) = capture_logs(|| {
@@ -331,7 +342,7 @@ fn follow_balloon_clamps_for_every_trigger() {
         BalloonFollowTrigger::Placement(PlacementRoute::Resnap),
         BalloonFollowTrigger::Placement(PlacementRoute::MoveCue),
     ] {
-        let (mut world, char_window, balloon) = base_world(true);
+        let (mut world, char_window, balloon) = char_overflowing_world(true);
         follow_balloon(&mut world, char_window, char_target, trigger);
         assert_eq!(
             point_of(&world, balloon),
@@ -345,7 +356,7 @@ fn follow_balloon_clamps_for_every_trigger() {
 /// 新しい寸が作る矩形ではみ出すなら補正される（判定対象は位置と寸が作る矩形）。
 #[test]
 fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area() {
-    let (mut world, _char_window, balloon) = base_world(true);
+    let (mut world, _char_window, balloon) = char_overflowing_world(true);
     let before = point_of(&world, balloon);
     let new_size = SizePx { w: 400, h: 300 };
     // 探針: 位置は動かさないのに、新寸だと右辺・下辺の両方がはみ出す。
@@ -450,7 +461,7 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
     let proposed = out_of_area();
     let mut results = Vec::new();
     for variant in ["visible", "hidden", "no-style"] {
-        let (mut world, _char_window, balloon) = base_world(true);
+        let (mut world, _char_window, balloon) = char_overflowing_world(true);
         match variant {
             "hidden" => {
                 let mut style = *world
@@ -511,6 +522,8 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
 fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
     let mut placement = base_placement(true);
     placement.char_pos = PointPx { x: -800, y: 300 };
+    // キャラ窓を左モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う（要件 5.6）。
+    placement.char_size.h = 720;
     placement.balloon_pos = PointPx { x: -500, y: 700 };
     placement.balloon_offset = PointPx { x: 300, y: 400 };
     let snapshot = MonitorSnapshot {
@@ -624,7 +637,7 @@ fn unresolvable_reference_warns_and_lets_the_write_through() {
 #[test]
 fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
     let proposed = out_of_area();
-    let (mut world, _char_window, balloon) = base_world(true);
+    let (mut world, _char_window, balloon) = char_overflowing_world(true);
     world.entity_mut(balloon).insert(WindowPos {
         position: Some(Point { x: 1601, y: 811 }),
         size: None,
@@ -670,7 +683,7 @@ fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
 /// あること（補正は同一書込の一部であって別書込ではない）。
 #[test]
 fn the_window_move_record_carries_the_corrected_position_and_the_original_route() {
-    let (mut world, _char_window, balloon) = base_world(true);
+    let (mut world, _char_window, balloon) = char_overflowing_world(true);
     let proposed = out_of_area();
     let corrected = out_of_area_corrected();
 

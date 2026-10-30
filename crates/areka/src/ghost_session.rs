@@ -255,7 +255,7 @@ pub(crate) fn prepare_ghost_windows(
     // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
     // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
     // （`windowposition-limit` の開発者裁定）を踏襲する。
-    let (placements, restored_scopes) = crate::restore_merged_placements(
+    let (placements, restored_scopes, restored_clamped) = crate::restore_merged_placements(
         &cfg.ghost_root,
         prepared.placements,
         &sources.snapshot,
@@ -287,6 +287,10 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(sources.snapshot);
         world.insert_resource(sources.dpi_table);
         let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
+        // 寄せた起動の印は窓の一式ごとに上書きで据える（切り替えで古い値を残さない・window-work-area-clamp 4.6）。
+        world.insert_resource(placement::persist::RestoredPositionsClamped(
+            restored_clamped,
+        ));
         world.insert_resource(default_basis);
         // 窓の組の帳簿も窓の束と一緒に据える（窓が在るので据えた後に書き手が付け直す・要件 3.8・6.1）。
         placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());

@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 use crate::ecs::world::TICK_WAKE_TEST_LOCK as GLOBAL_TEST_LOCK;
 
-use windows::Win32::UI::Controls::WM_MOUSELEAVE;
+use windows::Win32::UI::Controls::{WM_MOUSEHOVER, WM_MOUSELEAVE};
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_MOUSEMOVE, WM_NCMOUSELEAVE, WM_PAINT, WM_TIMER,
     WM_USER, WM_WINDOWPOSCHANGED,
@@ -369,6 +369,12 @@ fn pointer_messages_map_to_pointer() {
             "ポインタ系は POINTER のはず: msg={msg:#x}"
         );
     }
+}
+
+/// 止まった通知（`WM_MOUSEHOVER`）はカーソルの出し直しの合図なので、全走でなくポインタの旗。
+#[test]
+fn mouse_hover_maps_to_pointer() {
+    assert_eq!(wake_bits_for_message(WM_MOUSEHOVER), POINTER);
 }
 
 #[test]

@@ -33,9 +33,10 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::chain_finalize::ChainFinalized;
 
 use super::test_support::{
-    FrameHarness, PerTargetSizes, SPAWN_SIZE_0, capture_logs, pos_of, synth_assets, zero_clock,
+    FrameHarness, PerTargetSizes, SPAWN_SIZE_0, all_shown, capture_logs, pos_of, synth_assets,
+    zero_clock,
 };
-use super::{Emo2Wiring, run_move_drain_phase};
+use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};
 
 /// scope1 の新しい表示の面の物理寸（spawn 時の 278×357 から変わる）。
 const NEW_SIZE_1: (u32, u32) = (300, 400);
@@ -94,7 +95,8 @@ fn run_resnap_move_finalize(
     sizes: &PerTargetSizes,
 ) {
     harness.run_resnap(sizes);
-    run_move_drain_phase(wiring, &mut harness.world);
+    // 前提: 窓はどれも最初の面を表示済み（定常のフレーム・位置の指令を預からない）。
+    run_move_drain_with(wiring, &all_shown, &mut harness.world);
     harness.run_chain_finalize(sizes);
 }
 
@@ -135,7 +137,7 @@ fn a_move_before_the_resnap_misses_the_right_edge() {
         .expect("送出は成功する");
 
     let sizes = sizes_with_scope1_resized();
-    run_move_drain_phase(&wiring, &mut harness.world);
+    run_move_drain_with(&wiring, &all_shown, &mut harness.world);
     harness.run_resnap(&sizes);
 
     let pos = pos_of(&harness.world, target).expect("位置がある");

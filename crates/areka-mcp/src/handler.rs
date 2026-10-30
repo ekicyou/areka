@@ -34,9 +34,9 @@ pub const SERVER_NAME: &str = "areka-mcp-server";
 /// 組み込みの答えにこの値を読む。
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// `initialize` の `instructions`（英文・4 文）。2 文目の後の 1 文が独自のツール `check_script` の案内
+/// `initialize` の `instructions`（英文・3 文）。2 文目の後の 1 文が独自のツール `check_script` の案内
 /// （spec: areka-P0-mcp-author-tools）。中継（areka-mcp-bridge）も組み込みの答えにこの文を読む。
-pub const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript. A tool that is not implemented yet returns a result starting with \"NG:not implemented yet\".";
+pub const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript.";
 
 /// rmcp へ渡す受け手。中身は登録表を写した `ToolRouter` と登録順の定義の列（複製は `Arc` の複製）。
 #[derive(Clone)]

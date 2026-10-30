@@ -633,8 +633,10 @@ fn negative_origin_resolves_from_opposite_edge_then_is_range_checked() {
 /// どれかの矩形で赤になる。**宣言が在る場合のみの主張**であることに注意——未宣言のときは
 /// 書字開始角そのものが `validrect` から決まるため、下の対照テストのとおり当然に動く。
 ///
-/// 全 0 の退化矩形の期待値は規則の自然な帰結として書いてあるだけで、本検査が保証する
-/// 対象ではない（退化した矩形への分岐は実装に無い）。
+/// 1 点の退化矩形（4 辺とも 10）の期待値は規則の自然な帰結として書いてあるだけで、本検査が
+/// 保証する対象ではない（退化した矩形への分岐は実装に無い）。かつてこの行は全 0 だったが、
+/// 右辺・下辺の 0 を画像の端と読むようになり全 0 は画像全体に解けるので、4 辺とも 10 へ
+/// 差し替えた——要件 6（requirements.md の正典の段）。
 #[test]
 fn declared_origin_follows_validrect_only_when_it_leaves_the_range() {
     // 宣言は固定。validrect だけを差し替える。第 3 要素は期待する開始点——
@@ -650,11 +652,12 @@ fn declared_origin_follows_validrect_only_when_it_leaves_the_range() {
             Some(((210.0, 100.0), (390.0, 100.0))),
         ),
         ("全未宣言（画像端へ縮退）", (None, None, None, None), None),
-        // 全 0 の退化矩形では範囲が 1 点に潰れるので、宣言は必ず範囲外になる。
+        // 4 辺とも 10 の退化矩形では範囲が 1 点に潰れるので、宣言は必ず範囲外になる
+        // （全 0 は要件 6 で画像全体に解けるので 10 を使う）。
         (
-            "全 0（退化矩形）",
-            (Some(0), Some(0), Some(0), Some(0)),
-            Some(((0.0, 0.0), (0.0, 0.0))),
+            "4 辺とも 10（退化矩形）",
+            (Some(10), Some(10), Some(10), Some(10)),
+            Some(((10.0, 10.0), (10.0, 10.0))),
         ),
     ];
     let declared = (Some(200), Some(60));
@@ -691,7 +694,7 @@ fn declared_origin_follows_validrect_only_when_it_leaves_the_range() {
             (RECT_LEFT, RECT_TOP, RECT_RIGHT, RECT_BOTTOM),
             (210.0, 100.0, 390.0, 214.0),
             (0.0, 0.0, 400.0, 224.0),
-            (0.0, 0.0, 0.0, 0.0),
+            (10.0, 10.0, 10.0, 10.0),
         ],
         "差し替えた validrect が解決後も同一だと、上の主張は何も見ていない"
     );

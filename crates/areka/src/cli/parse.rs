@@ -36,6 +36,8 @@ enum Kind {
     DumpValue(DumpField),
     /// `--dump-surface-option`・`--dump-animation`（まだ扱わない＝要件 10.3）。
     DumpPending,
+    /// `--install`（値は入れる書庫＝startup-install-option 1.1）。
+    Install,
     /// 正典に載っているが areka が扱わない（1.6）。
     Unsupported,
 }
@@ -90,7 +92,7 @@ const TABLE: &[Spec] = &[
     spec("option", Some('o'), Arity::One, Kind::Option),
     spec("sstp-listen", None, Arity::Optional, Kind::SstpListen),
     spec("help", Some('?'), Arity::Optional, Kind::Help),
-    spec("install", Some('i'), Arity::Many, Kind::Unsupported),
+    spec("install", Some('i'), Arity::Many, Kind::Install),
     spec("fmo-name", Some('f'), Arity::One, Kind::Unsupported),
     spec("ukagaka-link", Some('m'), Arity::One, Kind::Unsupported),
     spec("ssf", Some('s'), Arity::One, Kind::Unsupported),
@@ -236,6 +238,10 @@ pub(crate) enum ParseNote {
     DumpWithoutOffline { name: String },
     /// `--sstp-listen` の待ち受け先の注記（8.5・8.6）。warn
     Listen(ListenNote),
+    /// `--install` に値が無い（startup-install-option 1.3）。warn
+    InstallEmpty,
+    /// `--install` の値なしの `callghost`・`deletesource`（startup-install-option 1.5）。warn
+    InstallWordWithoutInstall { word: String },
     /// 読み終えたまとめ（1.12・最後に 1 件）。info
     Summary {
         effective: Vec<String>,
@@ -324,7 +330,7 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
         }
         let first = !effective.contains(&name);
         match kind {
-            Kind::Ghost | Kind::Random | Kind::Option | Kind::SstpListen => {
+            Kind::Ghost | Kind::Random | Kind::Option | Kind::SstpListen | Kind::Install => {
                 seen(&mut others, &name)
             }
             Kind::DumpValue(_) | Kind::DumpPending => seen(&mut dumps, &name),
@@ -340,6 +346,11 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                 ghost_given = true;
                 ghosts.extend(values);
             }
+            // 重ねは続けて足す（`Repeated` は出さない）。値なしは読み終えて決める。
+            Kind::Install => options
+                .install
+                .archives
+                .extend(values.into_iter().map(PathBuf::from)),
             Kind::Option => {
                 // 値なし（`--option` だけ）は空の語 1 つ（6.7）。重ねは語を合わせる（1.9）。
                 let value = values.pop().unwrap_or_default();
@@ -347,10 +358,13 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                     let lower = word.to_ascii_lowercase();
                     match lower.as_str() {
                         "" => notes.push(ParseNote::WordEmpty),
-                        "nobootcheck" | "dontloadmodule" | "readonly" => {
+                        "nobootcheck" | "dontloadmodule" | "readonly" | "callghost"
+                        | "deletesource" => {
                             match lower.as_str() {
                                 "nobootcheck" => options.boot.no_boot_check = true,
                                 "dontloadmodule" => options.modules = ModulePolicy::Skip,
+                                "callghost" => options.install.call_ghost = true,
+                                "deletesource" => options.install.delete_source = true,
                                 _ => options.readonly = true,
                             }
                             if !effective.contains(&lower) {
@@ -363,7 +377,7 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                             });
                             noop.push(lower);
                         }
-                        "kiosk" | "callghost" | "deletesource" => {
+                        "kiosk" => {
                             notes.push(ParseNote::WordPending {
                                 word: lower.clone(),
                             });
@@ -476,6 +490,22 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
         effective = keep;
         ignored.extend(moved);
     } else {
+        // 値が 0 本の `--install` と、それと組む語は効かない（startup-install-option 1.3・1.5）。
+        if options.install.archives.is_empty() {
+            let (moved, keep): (Vec<String>, Vec<String>) = effective
+                .into_iter()
+                .partition(|n| matches!(n.as_str(), "install" | "callghost" | "deletesource"));
+            effective = keep;
+            for name in moved {
+                notes.push(match name.as_str() {
+                    "install" => ParseNote::InstallEmpty,
+                    _ => ParseNote::InstallWordWithoutInstall { word: name.clone() },
+                });
+                ignored.push(name);
+            }
+            options.install.call_ghost = false;
+            options.install.delete_source = false;
+        }
         // `--offline-dump` なしの `--dump-*` は効かない（まとめでも無視の側）。
         effective.retain(|n| !dumps.contains(n));
         for name in dumps {
@@ -617,6 +647,15 @@ impl ParseNote {
                 "[cli] --dump-* の起動オプションは --offline-dump なしでは効かないので、使わない"
             ),
             Self::Listen(note) => note.log(),
+            Self::InstallEmpty => warn!(
+                event = "install_option_empty",
+                "[cli] --install に値が無いので、入れる物が無い"
+            ),
+            Self::InstallWordWithoutInstall { word } => warn!(
+                event = "install_word_without_install",
+                word = %word,
+                "[cli] --install の値が無いので、この --option の語は効かない"
+            ),
             Self::Summary {
                 effective,
                 noop,
@@ -643,3 +682,7 @@ mod parse_offline_tests;
 #[cfg(test)]
 #[path = "parse_readonly_tests.rs"]
 mod parse_readonly_tests;
+
+#[cfg(test)]
+#[path = "parse_install_tests.rs"]
+mod parse_install_tests;

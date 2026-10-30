@@ -1,0 +1,29 @@
+{
+  "feature_name": "window-work-area-clamp",
+  "created_at": "2026-10-29T11:31:22Z",
+  "updated_at": "2026-10-30T07:36:02Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-29T11:37:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-29T13:00:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-29T15:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-30T07:36:02Z"
+    }
+  },
+  "ready_for_implementation": true
+}

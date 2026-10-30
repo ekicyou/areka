@@ -99,6 +99,7 @@ fn boot_and_collect(tag: &str, origin: BootOrigin) -> Vec<(String, Vec<String>)>
     let requests: Requests = Arc::new(Mutex::new(Vec::new()));
     let backend_requests = Arc::clone(&requests);
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root,
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

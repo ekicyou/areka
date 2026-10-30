@@ -59,12 +59,8 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{
-    GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
-    boot_with_kanade_stop,
-};
+use areka_ghost::{GhostRuntime, ShioriWiring, TickerMode, boot_with_kanade_stop};
 use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock};
-use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink, SurfaceResolver,
@@ -90,7 +86,7 @@ use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    Emo2Wiring, KanadeNoticeRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
+    Emo2Wiring, KanadeNoticeRx, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with,
     run_text_phase, run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, PositionCue};
@@ -692,6 +688,7 @@ impl SpineHarness {
             shell_author_dpi,
             balloon_author_dpi,
             boxes,
+            cursors,
         } = assets;
         // SERIKO ループ構成（task 9.4・design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
         // （`BootAssets.loop_tables`＝task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）＋
@@ -744,6 +741,7 @@ impl SpineHarness {
             shell_author_dpi,
             balloon_author_dpi,
             boxes,
+            cursors,
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
@@ -764,25 +762,22 @@ impl SpineHarness {
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
         // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（production mod.rs と同順・S-3 形）。
-        let options = GhostBootOptions {
-            ghost_root: sample.folder().to_path_buf(),
-            default_encoding: DefaultEncoding::Ansi,
-            shiori: ShioriWiring::Custom(Box::new(move || {
+        // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
+        // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
+        let options = super::runtime_boot::runtime_boot_options(
+            sample.folder().to_path_buf(),
+            ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
-            sinks: vec![
+            vec![
                 Box::new(surface_sink),
                 Box::new(clocked_text_sink),
                 Box::new(move_sink),
                 Box::new(lifecycle_sink),
             ],
-            // scripted spine harness: 本番 provider 経路（FromSylphya）を忠実に再現する。boot が
-            // 内部で sylphya を起動し selfname 系／username を publish・provider を鏡像由来に据える。
-            // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
-            system_vars: SystemVarWiring::FromSylphya,
-            app_profile_dir: None,
-            ticker: TickerMode::Disabled,
-        };
+            None,
+            TickerMode::Disabled,
+        );
         // 停止通知の channel（R15.4・本番 `wire_emo2_boot` と同型）: 送出端は kanade へ、受信端は
         // World の受け口（`KanadeNoticeRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
         let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();

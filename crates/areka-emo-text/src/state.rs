@@ -495,7 +495,9 @@ impl TextLayerState {
     /// duration は dola ingress で有限・非負へ clamp 済みゆえ本層で再 clamp しない。
     /// リビール中の後続 cue も即時適用される（R3.6）——本層は cue の `at`／`duration` を
     /// 読むだけで書き換えず、pacing が cue 時刻へ影響することはない（R10.2）。
-    pub fn apply_cue(&mut self, cue: &TalkCue) {
+    ///
+    /// 戻り値は名前の形の `\b[名前]` の箱が無かった（空回しの写しでない）か（[`Self::route_select`]）。
+    pub fn apply_cue(&mut self, cue: &TalkCue) -> bool {
         // 文字・改行・`\_l`・選択肢・`\f`・`\c` の宛先＝届いた時点の今の行き先の場所（要件 4.1・4.3）。
         let dest = PlaceKey {
             actor: cue.actor.clone(),
@@ -503,6 +505,7 @@ impl TextLayerState {
         };
         // 空回しの写しでは warn を出さない（場所の状態へは真偽 1 つで渡す・要件 2.8）。
         let quiet = self.rehearsal;
+        let mut box_missing = false;
         match &cue.command {
             CueCommand::Text(text) => {
                 let glyph_units: Vec<&str> = clusters(text).collect();
@@ -639,7 +642,7 @@ impl TextLayerState {
             // 名前の形の `\b[名前]`（鍵が整数として読めない）は行き先の切り替え（要件 4.3・4.4）。
             // 整数の `\b[ID番号]` は普通のバルーンへの指定（seriko の担当）で、下の腕で読み飛ばす（要件 4.8）。
             CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
-                self.route_select(&cue.actor, key);
+                box_missing = self.route_select(&cue.actor, key);
             }
             // アンカーの開き・閉じ（`\_a`）は文字の層の担当（cue_target_of が Balloon に分類）。
             // 開きは今の行き先の場所に範囲を開き、閉じは宛先に関わらず開いている範囲を閉じる
@@ -661,6 +664,7 @@ impl TextLayerState {
                 tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
             }
         }
+        box_missing
     }
 
     /// 注入時刻 `t` での actor 別可視グリフ数（決定論・R3.5）。

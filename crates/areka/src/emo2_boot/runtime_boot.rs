@@ -12,7 +12,9 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use areka_emo_text::sink::EmoTextSink;
 use areka_ghost::sink::BootCueSink;
-use areka_ghost::{GhostBootError, GhostBootOptions, GhostRuntime, SystemVarWiring};
+use areka_ghost::{
+    GhostBootError, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
+};
 use areka_kanade::KanadeNotice;
 use areka_parsers::charset::DefaultEncoding;
 use areka_seriko::SerikoSink;
@@ -143,15 +145,8 @@ pub(crate) fn boot_runtime(
         boot_origin,
     } = inputs;
     let (sinks, lines) = runtime_sinks(world, sources);
-    let boot_options = GhostBootOptions {
-        ghost_root: ghost_root.clone(),
-        default_encoding: DefaultEncoding::Ansi,
-        shiori,
-        sinks,
-        system_vars: SystemVarWiring::FromSylphya,
-        app_profile_dir,
-        ticker,
-    };
+    let boot_options =
+        runtime_boot_options(ghost_root.clone(), shiori, sinks, app_profile_dir, ticker);
     let runtime = match areka_ghost::boot_with_origin(
         boot_options,
         Some(kanade_stop),
@@ -178,6 +173,27 @@ pub(crate) fn boot_runtime(
     };
     install_lines(world, &ghost_root, &runtime, lines);
     Ok(runtime)
+}
+
+/// 窓の在るゴーストの起動の選択肢（本番の [`boot_runtime`] と spine が同じ物を使う）。strict の判定は
+/// 必ず入れる（無いと strict の記録が無言で 0 件になる・spec mcp-strict-errors）。
+pub(crate) fn runtime_boot_options(
+    ghost_root: std::path::PathBuf,
+    shiori: ShioriWiring,
+    sinks: Vec<Box<dyn BootCueSink>>,
+    app_profile_dir: Option<std::path::PathBuf>,
+    ticker: TickerMode,
+) -> GhostBootOptions {
+    GhostBootOptions {
+        strict_judges: super::strict_judges::production(),
+        ghost_root,
+        default_encoding: DefaultEncoding::Ansi,
+        shiori,
+        sinks,
+        system_vars: SystemVarWiring::FromSylphya,
+        app_profile_dir,
+        ticker,
+    }
 }
 
 /// 実行系の成立後に受信端を World へ据える（どれもゴーストごとに新品・前の受信端は置き換わって落ちる）。

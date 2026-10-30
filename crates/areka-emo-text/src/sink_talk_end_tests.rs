@@ -72,7 +72,7 @@ fn spawn_recording_drain() -> (EmoTextSink, Arc<Mutex<Vec<TextMsg>>>) {
         move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
             handle_text_msg_with(
                 msg,
-                |c| {
+                |c, _| {
                     on_cue.lock().expect("records").push(TextMsg::Cue(c));
                     Ok(())
                 },
@@ -179,7 +179,7 @@ fn two_receiver_shape_skips_talk_end_and_choice_wait_began() {
 fn fourth_receiver_failure_propagates_as_err() {
     let result = handle_text_msg_with(
         TextMsg::TalkEnded,
-        |_| -> Result<(), String> { panic!("on_cue must not be called") },
+        |_, _| -> Result<(), String> { panic!("on_cue must not be called") },
         |_| panic!("on_upcoming must not be called"),
         |_| Err("busy".to_string()),
     );

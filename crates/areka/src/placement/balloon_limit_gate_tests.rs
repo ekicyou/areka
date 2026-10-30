@@ -78,6 +78,17 @@ fn placement(
     }
 }
 
+/// キャラ窓を下辺から 20px はみ出させる（縦 600 → 800・上端 300 なら下端 1100 > 1080）。
+///
+/// 押し込みを主張する檻の前提合わせ（window-work-area-clamp task 5.2）: キャラ窓が
+/// 作業領域からはみ出しているときは並べ替えず今の押し込み（要件 5.6）なので、バルーンの
+/// 位置・相対の位置・期待値は変えずに押し込みの経路を通せる。中心は域内に残るので
+/// 帰属モニタも変わらない。
+fn char_overflowing(mut p: ScopePlacement) -> ScopePlacement {
+    p.char_size = SizePx { w: CSZ.w, h: 800 };
+    p
+}
+
 /// 本文に `needle` を含むイベントが 1 件も無いことを主張する。
 ///
 /// 呼び手は**同じ `events` から [`expect_one`] で 1 件取り出した後**に呼ぶこと
@@ -123,7 +134,7 @@ fn assert_only_balloon_pos_may_differ(before: &ScopePlacement, after: &ScopePlac
 #[test]
 fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
     // キャラ窓は作業領域の左寄り（中心は域内）。バルーンは左辺を 50px はみ出す。
-    let before = placement(0, point(30, 300), point(-50, 10), true);
+    let before = char_overflowing(placement(0, point(30, 300), point(-50, 10), true));
     assert_eq!(
         before.balloon_pos,
         point(-20, 310),
@@ -182,7 +193,7 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
 #[test]
 fn boot_gate_logs_only_for_scopes_it_actually_moved() {
     let inside = placement(0, point(700, 300), point(-50, 10), true);
-    let outside = placement(1, point(30, 300), point(-50, 10), true);
+    let outside = char_overflowing(placement(1, point(30, 300), point(-50, 10), true));
     assert_eq!(inside.balloon_pos, point(650, 310), "前提: scope 0 は域内");
 
     let (out, events) =
@@ -209,8 +220,8 @@ fn boot_gate_logs_only_for_scopes_it_actually_moved() {
 /// Clamp 1 件で証明する。
 #[test]
 fn boot_gate_skips_scopes_with_limit_disabled() {
-    let disabled = placement(0, point(30, 300), point(-50, 10), false);
-    let enabled = placement(1, point(30, 300), point(-50, 10), true);
+    let disabled = char_overflowing(placement(0, point(30, 300), point(-50, 10), false));
+    let enabled = char_overflowing(placement(1, point(30, 300), point(-50, 10), true));
 
     let (out, events) =
         capture_logs(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[WA])));
@@ -286,9 +297,10 @@ fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
         right: 3840,
         bottom: 1080,
     };
-    // キャラ窓 (1950,300)-(2350,900)・中心 (2150,600) → 右モニタへ帰属。
+    // キャラ窓 (1950,300)-(2350,1100)・中心 (2150,700) → 右モニタへ帰属。
     // バルーン (1700,310)-(1900,610) は左モニタに完全に収まる。
-    let before = placement(0, point(1950, 300), point(-250, 10), true);
+    // キャラ窓は右モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う（要件 5.6）。
+    let before = char_overflowing(placement(0, point(1950, 300), point(-250, 10), true));
     assert_eq!(before.balloon_pos, point(1700, 310));
     assert_eq!(
         clamp_rect_to_work_area(before.balloon_pos, BSZ, left_monitor),
@@ -373,7 +385,7 @@ fn boot_gate_clamps_keyword_derived_initial_position() {
 /// はみ出しの辺・隅の組み合わせによらず、補正は `balloon_pos` だけに作用する（DD6・要件 2.3）。
 #[test]
 fn boot_gate_never_touches_balloon_offset_on_any_edge() {
-    // キャラ窓は常に作業領域の中央付近（中心 (900,600) → 帰属は WA 固定）。
+    // キャラ窓は常に作業領域の中央付近（中心 (900,700) → 帰属は WA 固定）。
     let char_pos = point(700, 300);
     // (相対位置, 期待表示位置, 説明)
     let table = [
@@ -388,7 +400,8 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
     ];
 
     for (offset, expected, what) in table {
-        let before = placement(0, char_pos, offset, true);
+        // キャラ窓は下辺からはみ出させ、横の辺でも並べ替えず押し込む（要件 5.6）。
+        let before = char_overflowing(placement(0, char_pos, offset, true));
         let out = apply_balloon_limit(vec![before], &snapshot(&[WA]));
 
         assert_eq!(

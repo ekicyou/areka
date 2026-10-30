@@ -62,7 +62,7 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 規模 M（13〜18 タスク）。文字まわりの直列の列（`shell-balloon` の後）。
-- **抜け（作業が広がる）**: ⑴ `\x` は今パーサの段で `Instruction::Raw` に落ちる（`sakura/decode.rs` に腕が無い）＝パーサ・`areka-sakura` の `compile.rs` と `drive.rs`・dola の cue（`command.rs`・`runtime.rs`）まで作業が要り、dola に種類を足すと網羅の match（emo-text・`areka-ghost/src/sink.rs`・seriko）が連鎖する。⑵ **dola の `CuePlayer` の文書は「一時停止と再開は持ち込まない」を対象外と明記している**（`runtime.rs` の冒頭）＝`\x` で止めて再開する案は過去の設計判断とぶつかる。使えそうな既存の継ぎ目は選択肢で使っている barrier。⑶ 既定バルーン（Staysee）に `clickwait*.png` は無い＝検体が要る。⑷ `\x` の後の `\f` 系の解除は emo-text の `state_decoration.rs` の仕事。
+- **抜け（作業が広がる）**: ⑴ `\x` は今パーサの段で `Instruction::Raw` に落ちる（`sakura/decode.rs` に腕が無い）＝パーサ・`areka-sakura` の `compile.rs` と `drive.rs`・dola の cue（`command.rs`・`runtime.rs`）まで作業が要り、dola に種類を足すと網羅の match（emo-text・`areka-ghost/src/sink.rs`・seriko）が連鎖する。⑵ **dola の `CuePlayer` の文書は「一時停止と再開は持ち込まない」を対象外と明記している**（`runtime.rs` の冒頭）＝`\x` で止めて再開する案は過去の設計判断とぶつかる。使えそうな既存の継ぎ目は選択肢で使っている barrier。⑶ 既定バルーン（Staysee）に `clickwait*.png` は無い＝検体が要る（2026-10-30 から既定は `areka-balloon`。`StayseeBalloon` は配布物に同梱する選べるバルーン。`areka-balloon` にも `clickwait*` は無い）。⑷ `\x` の後の `\f` 系の解除は emo-text の `state_decoration.rs` の仕事。
 - 「`OnMouseClick` などは送らない」とあるが、areka は今そもそも `OnMouseClick` を送っていない。
 - **議題**: dola の対象外を覆すか barrier で組むか／ダブルクリックの 1 回目が早送りとして食われる順序／印を emo-text と emo-present のどちらで描くか。
 - `compile.rs` を触る＝`choice-timeout-directive`（C1）の後。

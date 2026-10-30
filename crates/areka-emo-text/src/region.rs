@@ -21,6 +21,14 @@
 //! `resolve(v, extent) = if v >= 0 { v } else { extent + v }`
 //! （「マイナス座標はベース画像の右下からの相対」）。
 //!
+//! **`validrect` の右辺・下辺だけは 0 も反対辺基準**（要件 6）: `resolve_far_edge(v, extent)
+//! = if v > 0 { v } else { extent + v }`＝右辺・下辺の 0 は画像の右端・下端。正典は 0 の意味を
+//! 書かず、`validrect.right`・`validrect.bottom` の既定値は「不明」（ukadoc の descript.txt
+//! （バルーン）の脚注 *1）。同じ頁の記述例が `validrect.right,0` を書き、SSP の測り（2026-10-29・
+//! `bottle` の文字は x 14〜300）が右辺 0 を「左端から 0」と読まないことを示したので、これに
+//! 合わせる。下辺の 0 は SSP で測っておらず、右辺の測りと脚注の対称で読む。`left`・`top`・
+//! `wordwrappoint`・`origin` の 0 は今のまま「左上から 0」。
+//!
 //! ## 描画開始点（spec `areka-P0-balloon-origin-outside-validrect` が正典）
 //!
 //! 描画開始点＝`resolve(origin)`。ただし解決後の値が validrect の当該軸の範囲（**両端を
@@ -230,7 +238,8 @@ impl TextRegion {
     /// 受け取った原寸はそのまま保持し、[`image_size`](Self::image_size) で返す
     /// （`\_l` の `centerx`／`centery` の基準）。
     ///
-    /// - validrect: 負値=反対辺基準で絶対値化。成分 `None` は画像全域の辺へ縮退
+    /// - validrect: 負値=反対辺基準で絶対値化（右辺・下辺は `resolve_far_edge` を通り、
+    ///   0 も画像の右端・下端と読む・要件 6）。成分 `None` は画像全域の辺へ縮退
     ///   （`debug!` 記録）。潰れた矩形（幅/高さ ≤ 0）は記録せずそのまま返す——判定は
     ///   [`is_collapsed`](Self::is_collapsed)、記録は actor の登録口の担当（下の節）。
     /// - 描画開始点: validrect の範囲内（両端を含む）へ解決された origin 成分は宣言どおり。
@@ -249,6 +258,8 @@ impl TextRegion {
     /// `TextLayerRuntime::refresh_actor_binding`）が churn ガードの判定キーを得るために
     /// 毎フレーム解き直すためで、実機の一周走行では生ログ 30,837 行のうち **27,908 行**が
     /// この 1 種類の警告になった（走行 A の実測・要件 14）。
+    /// （以上は当時の経緯。今の再追従は入力が前と同じなら解き直さないので、本関数が走るのは
+    /// 装着と入力の変わり目だけである・spec `real-run-log-noise` 要件 1.1。）
     ///
     /// 「読み込み（装着）1 回につき 1 件」という意味を持つ層は、解決する側ではなく **actor の
     /// 登録口**（`actor.rs` の `TextLayerRuntime::register_actor`）である。ゆえに本関数から
@@ -271,10 +282,11 @@ impl TextRegion {
         let vr = model.validrect();
         let left = resolve_or(vr.left(), width, 0.0, "validrect.left");
         let top = resolve_or(vr.top(), height, 0.0, "validrect.top");
-        let right = resolve_or(vr.right(), width, width, "validrect.right");
-        let bottom = resolve_or(vr.bottom(), height, height, "validrect.bottom");
-        // 潰れた validrect（幅か高さが正でない）でも**ここでは記録しない**——毎フレーム
-        // 呼ばれる本関数が書くと記録が洪水になる。潰れの判定は [`TextRegion::is_collapsed`]、
+        // 右辺・下辺だけは 0 も画像の端からの相対で読む（要件 6・`resolve_far_edge`）。
+        let right = resolve_far_edge(vr.right(), width, "validrect.right");
+        let bottom = resolve_far_edge(vr.bottom(), height, "validrect.bottom");
+        // 潰れた validrect（幅か高さが正でない）でも**ここでは記録しない**——装着と入力の
+        // 変わり目に呼ばれる本関数が書くと記録が洪水になる。潰れの判定は [`TextRegion::is_collapsed`]、
         // 記録は actor の登録口が状態の変わり目に 1 回だけ書く（件 2・要件 2.2）。
 
         // ── 描画開始点: 範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角へ（正準表参照） ──
@@ -301,8 +313,8 @@ impl TextRegion {
         // 遠辺は上で解決済みの right／bottom をそのまま採る（モデルから引き直さない——
         // 引き直すと未指定成分の縮退や負値解決が 2 か所に増える）。
         // 軸の割り当ては [`inline_axis_name`] と同じ表であり、両者は一致していなければならない。
-        // 折返し基準が遠辺の外でも**ここでは記録しない**——毎フレーム呼ばれる本関数に粗さの
-        // 記録を持たせず、actor の登録口が装着 1 回につき 1 件書く（要件 14.1）。
+        // 折返し基準が遠辺の外でも**ここでは記録しない**——装着と入力の変わり目に呼ばれる
+        // 本関数に粗さの記録を持たせず、actor の登録口が装着 1 回につき 1 件書く（要件 14.1）。
         let (wrap_threshold, inline_limit) = match mode {
             WritingMode::HorizontalTb => (
                 resolve_or(model.wordwrappoint().x(), width, right, "wordwrappoint.x"),
@@ -418,7 +430,8 @@ impl TextRegion {
 }
 
 /// 負値=反対辺基準の座標解決（ukadoc 脚注 *1 正典）:
-/// `v >= 0` は絶対値素通し・負値は `extent + v`（右下辺からの相対）。
+/// `v >= 0` は絶対値素通し・負値は `extent + v`（右下辺からの相対）。`validrect` の右辺・
+/// 下辺は本関数の前に `resolve_far_edge` を通り、0 も画像の端と読む（要件 6）。
 fn resolve_coord(v: i32, extent: f32) -> f32 {
     if v >= 0 { v as f32 } else { extent + v as f32 }
 }
@@ -432,6 +445,15 @@ fn resolve_or(v: Option<i32>, extent: f32, fallback: f32, key: &'static str) -> 
             tracing::debug!(key, fallback, "未指定座標成分を既定辺へ縮退する");
             fallback
         }
+    }
+}
+
+/// validrect の右辺・下辺の解決（要件 6）: 0 以下は画像の右端・下端からの相対（0＝画像の端）。
+/// 正の値（左上からの絶対）と未指定（画像の端へ寄せて `debug!` 記録）は [`resolve_or`] と同じ。
+fn resolve_far_edge(v: Option<i32>, extent: f32, key: &'static str) -> f32 {
+    match v {
+        Some(v) if v <= 0 => extent + v as f32,
+        _ => resolve_or(v, extent, extent, key),
     }
 }
 
@@ -450,7 +472,7 @@ fn resolve_or(v: Option<i32>, extent: f32, fallback: f32, key: &'static str) -> 
 /// 負値は先に反対辺基準で絶対値化し（`areka-P0-balloon-vertical-canon` の要件 3.7・不変）、
 /// **その解決後の値**で範囲の内外を判定する。判定は x と y で独立であり、片方の成分が
 /// 範囲外でも他方は宣言どおりに残る。作者向けの警告（`warn!`）は本関数では書かない——
-/// 本関数は毎フレーム呼ばれるので、「装着 1 回につき 1 件」を数えられるのは登録口だけである。
+/// 本関数は装着と入力の変わり目に呼ばれるので、「装着 1 回につき 1 件」を数えられるのは登録口だけである。
 fn resolve_origin_component(
     v: Option<i32>,
     extent: f32,

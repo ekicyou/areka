@@ -706,6 +706,7 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     let text_records = text_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root,
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::InProc,
@@ -869,6 +870,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     let text_records = text_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: wiring,

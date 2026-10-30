@@ -508,7 +508,7 @@ impl ViewboxExecutor {
         font: &ResolvedFont,
         mode: WritingMode,
     ) -> Result<(IDWriteTextFormat, bool), TextLayerError> {
-        let key: FormatKey = (font.name.clone(), font.height.to_bits(), mode);
+        let key: FormatKey = (font.looks.default.font_key(), mode);
         if let Some((cached_key, format)) = &self.format {
             if *cached_key == key {
                 return Ok((format.clone(), false));
