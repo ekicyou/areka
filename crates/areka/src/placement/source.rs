@@ -183,7 +183,7 @@ pub fn load_descript_source_for_shell(
 /// 失敗ログの文言は**帰属中立**にする（実帰属は `path` フィールドが運ぶ）。
 /// ghost 固定文言にすると、バルーン descript 不在時の warn が ghost 起因に見え、
 /// R6.3 の `RUST_LOG` grep 判定を誤らせる。
-fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
+pub(crate) fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
     match std::fs::read(path) {
         Ok(bytes) => parse_kv(&decode(&bytes, DefaultEncoding::Ansi)),
         Err(err) => {

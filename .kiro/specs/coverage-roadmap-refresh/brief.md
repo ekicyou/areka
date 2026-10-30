@@ -269,3 +269,6 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - **見つけた穴・古くなった記述**:
   - この brief の申し送りの節が引く id（`runonce:1`・`periodic_2c_6570_5024:1` などの書き方）は、`ukadoc-catalog-refresh` の後は古い書き方になる。要件の段で新しい id で引き直す。
   - `audit-ukadoc-survey`（見直し）とは `crates/ukadoc-survey/` で重なる＝同じウェーブに置かない（棚卸㉘のとおり）。
+
+## 2026-10-29 `real-run-log-noise` の要件討議からの申し送り
+- 範囲 6 で `emo-text-canon-residue` を片付けても、同梱バルーン `emo2-kakukaku` が起動のたびに出す `WARN`「折返し基準が描画範囲の外に解決された」（`wrap_threshold=254.0`・`inline_limit=240.0`）は消えない。これは装着 1 回につき 1 件の、同梱バルーンの粗さを知らせる**正しい警告**として残すと決めた（開発者 2026-10-29 一括承認・`real-run-log-noise` の討議 5）。片付けのときに「持ち主の居ない警告」と読み違えて消さないこと。

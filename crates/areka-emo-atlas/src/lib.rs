@@ -76,6 +76,9 @@ pub fn bake_with_limits(
 ) -> BakeResult {
     // 1. マニフェスト導出（列挙・重複排除・決定的採番）。
     let manifest = ManifestDeriver.derive(sets);
+    // 着せ替え（bind）のアニメーションからだけ参照される面の絵（全透明でも警告しない側・
+    // real-run-log-noise 要件 3.7）。入口で 1 回だけ求める。
+    let bind_only = manifest::bind_only_paths(sets);
 
     let mut errors: Vec<crate::error::BakeError> = Vec::new();
     // この呼び出しで全コマを載せた動く絵の画素の合計（上限 ㋒・呼び出しごとに 0 から）。
@@ -175,14 +178,27 @@ pub fn bake_with_limits(
             );
         } else if trim.placement.is_none() && frames.as_ref().is_none_or(|f| f.all_transparent()) {
             // 動く絵の透明なコマは正当な 1 コマ。全部のコマが透明な動く絵にだけ出す（要件 3.5）。
-            tracing::warn!(
-                target: "areka_emo_atlas",
-                set = key.set.0,
-                rel_path = key.rel_path.as_str(),
-                original_w = trim.original.w,
-                original_h = trim.original.h,
-                "bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性）"
-            );
+            if bind_only.contains(&(key.set.0, key.rel_path.clone())) {
+                // 着せ替えの「無し」の絵（作者の意図した空の絵）は警告せず記録だけ残す
+                // （real-run-log-noise 要件 3.4）。文言は数え直しで警告と混ざらないよう別にする。
+                tracing::debug!(
+                    target: "areka_emo_atlas",
+                    set = key.set.0,
+                    rel_path = key.rel_path.as_str(),
+                    original_w = trim.original.w,
+                    original_h = trim.original.h,
+                    "bake: element が全透明（α=0）で、着せ替え（bind）のアニメーションからだけ参照される面の絵です——着せ替えの「無し」の絵とみなし、警告しない"
+                );
+            } else {
+                tracing::warn!(
+                    target: "areka_emo_atlas",
+                    set = key.set.0,
+                    rel_path = key.rel_path.as_str(),
+                    original_w = trim.original.w,
+                    original_h = trim.original.h,
+                    "bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性）"
+                );
+            }
         }
 
         survivor_keys.push(key.clone());
@@ -303,7 +319,9 @@ mod bake_entry_tests {
     use crate::normalize::{AlphaParams, UseSelfAlpha};
     use crate::pack::PackConfig;
     use crate::table::SetId;
-    use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
+    use areka_parsers::shell::{
+        Animation, AppendTarget, DrawMethod, Element, ElementPath, Interval, Pattern, Surface,
+    };
     use std::path::Path;
 
     // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
@@ -662,6 +680,122 @@ mod bake_entry_tests {
             .expect("非零 → placement 有り（不変）");
         assert_eq!(placement.uv_rect.w, 2, "trim 幅不変");
         assert_eq!(placement.uv_rect.h, 2, "trim 高不変");
+    }
+
+    // ---- 檻 T9: 着せ替えの「無し」の絵の全透明は debug・それ以外は今の warn（real-run-log-noise 要件 3.2〜3.6・5.2）----
+
+    /// 面 0（不透明の絵）の `interval` のアニメーションが面 3000 を参照し、面 3000 が `rel` だけを持つシェル。
+    fn shell_owned_by(interval: Interval, rel: &str) -> Vec<Surface> {
+        let mut base = surface(0, vec![elem(0, "solid.png")]);
+        base.animations = vec![Animation {
+            id: 0,
+            interval,
+            interval_written: true,
+            patterns: vec![Pattern {
+                index: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                surface_id: 3000,
+                wait: 0,
+                x: 0,
+                y: 0,
+            }],
+        }];
+        vec![base, surface(3000, vec![elem(0, rel)])]
+    }
+
+    /// `shell_owned_by` のシェルを、`rel` に `spec` の絵を当てて焼き、捕捉した記録と結果を返す。
+    fn bake_owned(
+        interval: Interval,
+        rel: &str,
+        spec: (u32, u32, u32, Vec<u8>, bool),
+    ) -> (String, BakeResult) {
+        let base = Path::new("shell/master");
+        let shell = shell_owned_by(interval, rel);
+        let mut dec = MemoryDecoder::new();
+        register(&mut dec, base, "solid.png", opaque_2x2());
+        register(&mut dec, base, rel, spec);
+        let sets = [set(&shell, base)];
+        let mut captured: Option<BakeResult> = None;
+        let out = crate::log_capture::capture_logs(|| {
+            captured = Some(bake(&sets, &dec, PackConfig::default()));
+        });
+        (out, captured.unwrap())
+    }
+
+    const BIND_DEBUG: &str = "着せ替え（bind）のアニメーションからだけ参照される面の絵です";
+    const CLEAR_WARN: &str = "全透明（α=0）でトリム後 0 寸です";
+
+    /// T9 ⑴: `bind` だけから参照される面の全透明の絵は `warn` 0 件・`debug` 1 件（欄は今の `warn` と同じ）。
+    /// 索引表は見分けの無い場合（同じ形を `runonce` で参照）と同じ。
+    #[test]
+    fn bind_only_all_transparent_logs_debug_not_warn() {
+        let (out, result) = bake_owned(Interval::Bind, "null.png", transparent_2x2());
+        assert!(
+            !out.contains("level=WARN"),
+            "bind だけの全透明は warn 0 件: {out}"
+        );
+        let debug: Vec<&str> = out.lines().filter(|l| l.contains(BIND_DEBUG)).collect();
+        assert_eq!(debug.len(), 1, "見分けた debug は 1 件: {out}");
+        let line = debug[0];
+        for want in [
+            "level=DEBUG",
+            "target=areka_emo_atlas",
+            "set=0",
+            "rel_path=\"null.png\"",
+            "original_w=2",
+            "original_h=2",
+        ] {
+            assert!(line.contains(want), "{want} を含む: {line}");
+        }
+        assert!(!line.contains("トリム後 0 寸"), "警告の文言と別: {line}");
+
+        let (_, plain) = bake_owned(Interval::Runonce, "null.png", transparent_2x2());
+        assert_eq!(result.errors.len(), plain.errors.len(), "失敗の集計は同じ");
+        assert_eq!(
+            result.table.len(),
+            plain.table.len(),
+            "索引表の大きさは同じ"
+        );
+        for rel in ["null.png", "solid.png"] {
+            let id = result.table.resolve(SetId(0), rel);
+            assert_eq!(id, plain.table.resolve(SetId(0), rel), "{rel} の番号は同じ");
+            let (got, want) = (
+                result.table.entry(id.unwrap()),
+                plain.table.entry(id.unwrap()),
+            );
+            assert_eq!(got.original, want.original, "{rel} の原寸は同じ");
+            assert_eq!(
+                format!("{:?}", got.placement),
+                format!("{:?}", want.placement),
+                "{rel} の配置・トリムの矩形は同じ"
+            );
+        }
+    }
+
+    /// T9 ⑵: `runonce` から参照される面の全透明の絵は今の `warn` 1 件（見分けない・debug 無し）。
+    #[test]
+    fn runonce_owned_all_transparent_keeps_warn() {
+        let (out, _) = bake_owned(Interval::Runonce, "null.png", transparent_2x2());
+        let warns: Vec<&str> = out.lines().filter(|l| l.contains("level=WARN")).collect();
+        assert_eq!(warns.len(), 1, "今の warn 1 件: {out}");
+        assert!(
+            warns[0].contains(CLEAR_WARN) && warns[0].contains("null.png"),
+            "{out}"
+        );
+        assert!(!out.contains(BIND_DEBUG), "見分けの debug は出ない: {out}");
+    }
+
+    /// T9 ⑶: `bind` だけから参照される面の 0 寸の絵は、見分けの前の 0 寸の `warn` 1 件。
+    #[test]
+    fn bind_only_zero_sized_keeps_zero_size_warn() {
+        let (out, _) = bake_owned(Interval::Bind, "zero.png", zero_sized());
+        let warns: Vec<&str> = out.lines().filter(|l| l.contains("level=WARN")).collect();
+        assert_eq!(warns.len(), 1, "0 寸の warn 1 件: {out}");
+        assert!(
+            warns[0].contains("元画像が 0 寸です") && warns[0].contains("zero.png"),
+            "{out}"
+        );
+        assert!(!out.contains(BIND_DEBUG), "0 寸は見分けに入らない: {out}");
     }
 
     /// テスト⑤（構造的）: channel 非依存（R6.5）。BakeResult は素の値であり、通信機構/async を

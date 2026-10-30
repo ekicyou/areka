@@ -212,6 +212,11 @@ pub struct TextLayerRuntime {
     routing: HashMap<PlaceKey, TextSlotBinding>,
     /// 場所 → layout 入力（writing_mode/region/font の解決済み束）。routing と対で登録。
     layout_input: HashMap<PlaceKey, ResolvedBalloonText>,
+    /// 普通のバルーンの場所 → 前に解き直した入力（`actor_attach.rs` の [`attach::ResolveInputs`]）。
+    /// 再追従は入力も結線も同じなら解き直さずに「変化なし」と答える。在れば、その入力から解いた値が
+    /// `layout_input` に等しい（不変条件）。直の登録口 [`register_actor`](Self::register_actor) が消し、
+    /// 装着と再追従が入れ直す。箱の場所には持たせない（箱は毎フレーム解き直さない）。
+    resolve_inputs: HashMap<PlaceKey, attach::ResolveInputs>,
     /// actor 別の描画資源（遅延生成——`ActorRender` 不在の解決フレームで World 資源から構築・装着。
     /// k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）は本 map の当該エントリだけを破棄し、
     /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・R8.2/R8.3）。
@@ -289,6 +294,7 @@ impl TextLayerRuntime {
             state: TextLayerState::default(),
             routing: HashMap::new(),
             layout_input: HashMap::new(),
+            resolve_inputs: HashMap::new(),
             surfaces: HashMap::new(),
             config: config.normalized(),
             unresolved_warned: BTreeSet::new(),

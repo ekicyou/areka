@@ -6,7 +6,7 @@
 
 | 形 | 登記の `source` | 書庫の在処 | 引く前に要ること |
 |---|---|---|---|
-| 書庫を置く行（今の 9 本） | `SampleSource::Vendored` | このフォルダの `<名前>.nar`（リポジトリが追跡する） | 何も要らない |
+| 書庫を置く行（今の 10 本） | `SampleSource::Vendored` | このフォルダの `<名前>.nar`（リポジトリが追跡する） | 何も要らない |
 | URL の行 | `SampleSource::Fetched { url }` | 取り寄せ先の URL。手元では `target\` の下の置き場（リポジトリは追跡しない） | 取り寄せの段を 1 回回す（下の「取り寄せの段」） |
 
 書庫を置く行の検体:
@@ -18,10 +18,11 @@
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
 | `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 65 | 1,310,683 バイト |
-| `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
+| `StayseeBalloon.nar` | バルーン（配布物に同梱する選べるバルーン・CC0） | 29 | 73,021 バイト |
 | `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 164 | 5,390,305 バイト |
 | `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・同梱バルーン `emily4` は書庫に無く入らない・**受け取ったバイト列そのまま**＝下の節） | 260 | 2,677,923 バイト |
 | `dot_sakura.nar` | ゴースト（華和梨 32bit・「．さくら」・同梱バルーン `bottle`・**受け取ったバイト列そのまま**＝下の節） | 204 | 1,425,534 バイト |
+| `areka-balloon.nar` | バルーン（areka の既定バルーン「areka バルーン」・開発者が作った・CC0・**道具が書く**＝下の節） | 23 | 28,014 バイト |
 
 URL の行の検体:
 
@@ -29,7 +30,48 @@ URL の行の検体:
 |---|---|---|---|---|
 | `pasta-in-windows` | ゴースト（「窓際のぱすたさん」・同梱バルーン無し） | URL（取り寄せの段が取る＝下の節） | 版で変わる | 版で変わる |
 
-- `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。areka の既定バルーンで、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
+- `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。2026-10 まで areka の既定バルーンだった。今は配布物に同梱する選べるバルーン（既定は下の `areka-balloon.nar`）で、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
+
+### `areka-balloon.nar` の出どころと権利と作り直し
+
+- 出どころ: 開発者（ekicyou）が areka のために作ったバルーン「areka バルーン」。areka の既定バルーンで、バルーンを指定しないときはこれを使う（2026-10 に `StayseeBalloon` から替えた）。絵（面と印）も設定ファイルも、リポジトリの中の道具 `crates/areka-emo-atlas/examples/gen_default_balloon/` が書く。**展開形はどこにも置かず、追跡するのはこの `.nar` だけ**で、中を手で直さない。直したいときは道具の中の値（絵柄は `draw.rs`、文は `texts.rs`）を直して作り直す。
+- 権利（書庫の中の `readme.txt` にも同じことを書いてある）: **絵と設定ファイルは CC0**（自由に使い、直し、配ってよい）。**絵を描く道具のコードはこのリポジトリと同じ MIT**。
+- 手本: 寸法と設定の数値は、開発者が自作したバルーン「ボトル（でふぉ改）」（上の `dot_sakura.nar` の同梱バルーン `bottle`）から引き継いだ。**引き継いだのは数値だけで、絵は写しておらず、新しく描いたもの**である。
+- 畳み方は「書庫を置く行で足す」の `fold-samples` を通らない。道具が書庫まで直に書く（ファイルは名前順・時刻を持たない形）ので、同じ道具からは同じバイト列が出る。
+
+#### 作り直しの手順
+
+どのディレクトリからでも同じに動く。
+
+1. **道具を回して書く。**
+
+   ```
+   cargo run --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-atlas --example gen_default_balloon
+   ```
+
+   出力は `<ワークツリー>\vendors\sample_ghost\areka-balloon.nar`（このフォルダ）。通れば `wrote areka-balloon.nar: 23 files, <大きさ> bytes` の 1 行を出して終了コード 0。途中の書き込みは `<ワークツリー>\target\gen-default-balloon\` の下の一時のファイルへ行い、全部できてから名前を替えるので、寸法が合わない・書けないなどで失敗しても今の `.nar` はそのまま残る（`error: <理由>` を出して終了コード 1）。
+2. **書かずに比べる。** 同じ呼び方の末尾に `-- --check` を足す。
+
+   ```
+   cargo run --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-atlas --example gen_default_balloon -- --check
+   ```
+
+   置いてある `.nar` が道具の今の出力と同じなら `check: areka-balloon.nar is identical` を出して終了コード 0。違えば `error: check: areka-balloon.nar differs at byte <位置> (stored <大きさ> bytes, built <大きさ> bytes)` を出して終了コード 1（このときは手順 1 で書き直す）。
+3. **見張りのテストを回す。**
+
+   ```
+   cargo test --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-atlas --test default_balloon_drift_test
+   ```
+
+   道具の組み立てをそのまま読み、登記した書庫とバイトで比べる。全体テストでも毎回回るので、道具を直して作り直し忘れたときや、絵を書く依存（`image`）の版が上がって出力が変わったときは、ここが赤になる。
+4. **中身のテストを回す。** 書庫の中身が決めた形（ファイルの集合・絵の寸法・半透明・設定の値・折り返し）どおりかを確かめる。
+
+   ```
+   cargo test --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-text --test areka_balloon_fixture_test
+   ```
+
+5. **絵柄を変えたときは実機で 1 度見る。** emo2 と、このバルーンを被せた `dot_sakura` を、拡大率 100% と 100% でない値（125% など）で喋らせ、文字がバルーンの中に描かれ、欠けたりはみ出したりしないことを見る。根はワークツリーの `target\` の下に組む。
+6. `.nar` の大きさが変わったら、上の表の大きさを書き直す（ファイルの数が変わったら数も）。
 
 ### `emo2.nar` の出どころ
 

@@ -24,7 +24,7 @@ use tracing::{debug, warn};
 use super::{
     ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration,
 };
-use crate::choice::HitRectPx;
+use crate::choice::{CursorFallback, HitRectPx};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
@@ -379,8 +379,9 @@ impl TextLayerRuntime {
 
     /// 箱の場所を登録する。配置の入力は普通のバルーンと同じ式で、箱の大きさを画像の大きさとし、
     /// 背景は白を混色の相手とする（要件 3.1〜3.3）。はみ出す置き場所は採ったうえで、
-    /// （サーフェス番号, 名前）ごとに 1 度だけ警告する。定義の 2 つの警告（折り返しの基準・無視した
-    /// 書き出し位置）は名前の欄を `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
+    /// （サーフェス番号, 名前）ごとに 1 度だけ警告する。定義の 3 つの警告（折り返しの基準・無視した
+    /// 書き出し位置・選択肢の飾りの縮退＝spec real-run-log-noise 要件 2.1〜2.4）は名前の欄を
+    /// `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
     /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える・要件 3.11）。
     /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（件 2・要件 2.7）。
     fn register_box(&mut self, key: PlaceKey, want: DesiredBox) {
@@ -401,6 +402,7 @@ impl TextLayerRuntime {
             let name = want.site.name.as_str();
             attach::warn_coarse_wrap_threshold(name, &resolved, None);
             decoration::warn_ignored_origin(name, &resolved, None);
+            decoration::warn_cursor_fallback(name, &CursorFallback::of(def.model.cursor()), None);
         }
         let (w, h) = (i64::from(def.size.0), i64::from(def.size.1));
         // 潰れの記録（件 2）。`def` の借用が切れた後に呼ぶ。

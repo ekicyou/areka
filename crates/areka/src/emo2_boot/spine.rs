@@ -692,6 +692,7 @@ impl SpineHarness {
             shell_author_dpi,
             balloon_author_dpi,
             boxes,
+            cursors,
         } = assets;
         // SERIKO ループ構成（task 9.4・design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
         // （`BootAssets.loop_tables`＝task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）＋
@@ -744,6 +745,7 @@ impl SpineHarness {
             shell_author_dpi,
             balloon_author_dpi,
             boxes,
+            cursors,
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
