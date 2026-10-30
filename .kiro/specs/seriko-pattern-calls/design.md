@@ -145,6 +145,7 @@ crates/
 │   ├── table_calls_tests.rs             # 新規
 │   ├── table_calls_dot_sakura_tests.rs  # 新規: 「．さくら」で WARN 0 件
 │   ├── calls.rs                         # 新規: 働きのコマを時刻の順に当てる純粋な係
+│   ├── looper_calls.rs / parts_calls.rs # 新規（実装で分けた）: 一番上・部品の口（CallPlays の実装・ずれの持ち主 Shifts）
 │   ├── calls_tests.rs                   # 新規
 │   ├── looper_calls_tests.rs            # 新規: 一番上・バルーンの結合のテスト
 │   ├── parts_calls_tests.rs             # 新規: 部品の結合のテスト
@@ -169,7 +170,7 @@ crates/
     ├── emo2_boot/frame/move_shift_tests.rs      # 新規
     ├── placement/follow.rs              # 修正: mod move_shift と再輸出
     ├── placement/follow/move_shift.rs   # 新規: ずれの記録（部品）と窓への当て方
-    ├── placement/follow/move_shift_tests.rs     # 新規
+    ├── placement/follow_move_shift_tests.rs     # 新規（既存の並びに合わせた置き場）
     ├── placement/diag.rs                # 修正: PlacementRoute::PatternMove（is_system_reanchor の判定もここ＝見える範囲の守りの経路はこれで足りる）
     ├── placement/follow/window_move.rs  # 修正: 見送りが覆う経路に足す（2 行・上限超えの例外表に既にある）
     ├── placement/follow/drag_follow.rs  # 修正（967 行・上限に近い）: follow_balloon とキャラ・バルーンのドラッグの終わりに、move_shift.rs の口を呼ぶ 1〜2 行ずつだけ
@@ -655,7 +656,7 @@ impl LoopRuntime {
   3. 次の順で今の置き方の決まりを通す（7.8）。
      1. `project_anchor`（下揃えでは y を作業領域の下の端に揃える）。下揃えでは揃えが勝ち、下へのずれは見えない（M4 の付記 2）。
      2. `balloon_limit::clamp_rect_to_work_area`（作業領域の中への寄せ・`work_area_clamp.rs` と同じ式）。`apply_visibility_guard` は y を動かさず、`project_anchor` も Free・Left・Right では y をそのまま返すので、この寄せが無いと揃えない置き方で `move,0,10,0,9999` の窓が画面の下へ出たままになる（設計の検証の指摘 1）。
-     3. `apply_visibility_guard`（見える範囲の守り）。
+     3. `apply_visibility_guard`（見える範囲の守り）。守りの入力（`raw`）も寄せた後の位置を渡す。作者の大きなずれを自分で寄せ戻したのを「画面の外から引き寄せた」（`OffscreenPull`）と記録しないため（実機 8.3 で決めた形）。
   4. 新しい経路 `PlacementRoute::PatternMove` で `move_window_with_route` に書く。窓の大きさは書かない（7.5）。バルーンはこの書き込みで今のまま追う。
   5. `applied = 実際に書いた位置 − base` を記録する。揃えや守りで変わった分も正しく引ける。
 - バルーン窓への当て方（`apply_balloon_shift`）: バルーン窓の部品に `applied`（倍率をかけた値）を書き、そのキャラ窓の今の位置で `follow_balloon` を呼び直す。`follow_balloon` は提案の位置を「キャラ窓 ＋ 相対 offset ＋ バルーンのずれ」にする（1 行足す）。バルーンの面を出せば seriko が 0 を送るので、バルーンを置き直す経路とぶつからない。
@@ -780,7 +781,7 @@ pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> Po
   - `settle_surface` の結果にずれが無い。
 - `parts_calls_tests.rs`（3.8）: 部品の中の `start` と `move`。
 - `presenter/read_move_shift_tests.rs` と `adapter` の写しのテスト: ずれが対象ごとに覚えられ、合成の覚えに触らない。
-- `emo2_boot/frame/move_shift_tests.rs`・`placement/follow/move_shift_tests.rs`（7.1・7.5・7.8）:
+- `emo2_boot/frame/move_shift_tests.rs`・`placement/follow_move_shift_tests.rs`（7.1・7.5・7.8）:
   - 倍率をかける。
   - 下揃えで y が揃いに負ける。
   - 揃えない置き方でずれる。
