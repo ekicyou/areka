@@ -260,3 +260,7 @@ fn os_write(hwnd: HWND, insert_after: HWND) -> windows::core::Result<()> {
 #[cfg(test)]
 #[path = "window_band_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "window_band_real_tests.rs"]
+mod real_tests;
