@@ -236,6 +236,7 @@ fn emo2_does_not_start_chatting_while_online() {
     let online = areka_kanade::online::PROCESS.begin("test");
 
     let runtime = boot(GhostBootOptions {
+        strict_judges: None,
         ghost_root,
         default_encoding: DefaultEncoding::Ansi,
         shiori: wiring,

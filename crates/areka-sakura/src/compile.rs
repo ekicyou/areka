@@ -28,9 +28,12 @@ use crate::anchor_pair::{AnchorIssue, pair_anchors};
 use crate::contract::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, FONT_TAG_CARRIER, TalkEndReason,
 };
+use crate::strict::{DetectionPoint, StrictJudges};
+use crate::strict_tap::StrictTrace;
 use crate::sysvar::SystemVarSnapshot;
-use areka_parsers::sakura::Instruction;
+use areka_parsers::sakura::{Instruction, Read, ReadNote};
 use areka_talk::EpilogueCommand;
+use std::ops::Range;
 
 /// 純粋コンパイル: `Instruction` 列 → cue ドメインの発火列＋確定終端理由（決定的・no I/O）。
 ///
@@ -48,6 +51,105 @@ use areka_talk::EpilogueCommand;
 /// 読まない（純粋・決定論を保つ）。SystemVar アーム（task 4.2）が `resolve_system_var` で
 /// これを純粋展開し、展開文字列を Text cue へ写像する。
 pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> CompiledTalk {
+    scan(instructions.iter(), vars, None)
+}
+
+/// strict の台本の [`compile`]（mcp-strict-errors 要件 2.5・2.7・3.6・3.9）。`compile` と同じ走査で
+/// 同じ [`CompiledTalk`] を作り、台本の解釈で分かる誤りを命令ごとに控える。
+///
+/// 控えの順は `check_script` の診断と同じ（命令の順に、読みの印 → 命令の腕 → アンカー）。
+/// 合図の順番は sink へ配られる合図だけを数え、先頭の全消しを順番 0 に含め、末尾の選択待ちの
+/// 区切りは数えない。`\e`・`\-` で走査が止まるので、その後ろは控えない。
+pub fn compile_strict(
+    reads: &[Read],
+    vars: &SystemVarSnapshot,
+    judges: &dyn StrictJudges,
+) -> (CompiledTalk, StrictTrace) {
+    let mut tracer = Tracer {
+        reads,
+        judges,
+        index: 0,
+        at: 0,
+        trace: StrictTrace::default(),
+    };
+    let compiled = scan(
+        reads.iter().map(|read| &read.instruction),
+        vars,
+        Some(&mut tracer),
+    );
+    (compiled, tracer.trace)
+}
+
+/// strict の控えを取る走査の連れ。`compile` では居ない（控えを取らない）。
+struct Tracer<'a> {
+    reads: &'a [Read],
+    judges: &'a dyn StrictJudges,
+    /// 今の命令の添字。
+    index: usize,
+    /// 今の命令の頭で控えた「次に作られる合図」の順番（先頭の全消しを差し込む前の数え方）。
+    at: usize,
+    trace: StrictTrace,
+}
+
+impl Tracer<'_> {
+    fn span(&self) -> Range<usize> {
+        self.reads[self.index].span.clone()
+    }
+
+    fn find(&mut self, point: DetectionPoint) {
+        let span = self.span();
+        self.trace.pending.push((self.at, point, span));
+    }
+
+    /// 命令の頭: 順番を控え、読みの印を控える。
+    fn head(&mut self, index: usize, next_cue: usize) {
+        (self.index, self.at) = (index, next_cue);
+        for note in &self.reads[index].notes {
+            let point = match note {
+                ReadNote::UnknownTag => DetectionPoint::ReadUnknownTag,
+                ReadNote::Unclosed => DetectionPoint::ReadUnclosed,
+                ReadNote::ArgumentDefaulted => DetectionPoint::ReadDefaulted,
+                ReadNote::MarkerIgnored => DetectionPoint::ReadMarkerIgnored,
+                // 読む段が後から足す印は、その意味が決まるまで控えない（check_script と同じ）。
+                _ => continue,
+            };
+            self.find(point);
+        }
+    }
+
+    /// `\!` の腕（`Move` は名前 `move`）: 誰も拾わない組と、読めない `choicetimeout`。
+    fn command(&mut self, name: &str, raw_args: &[String]) {
+        // 単独のマーカー `\![*]` は読みの印 `ignored` だけで、台帳は引かない。
+        if name == "*"
+            && self.reads[self.index]
+                .notes
+                .contains(&ReadNote::MarkerIgnored)
+        {
+            return;
+        }
+        let first = raw_args.first().map(String::as_str);
+        if !self.judges.command_handled(name, first) {
+            self.find(DetectionPoint::CommandUnhandled);
+        } else if name == "set"
+            && first == Some("choicetimeout")
+            && parse_choice_timeout(raw_args) == ChoiceTimeoutDirective::Unreadable
+        {
+            self.find(DetectionPoint::ChoiceTimeoutUnreadable);
+        }
+    }
+
+    /// ここまでに作られた合図の位置を `span` で埋める（命令の合図は命令の範囲・補いは `None`）。
+    fn spans_up_to(&mut self, cues: usize, span: Option<Range<usize>>) {
+        self.trace.cue_spans.resize(cues, span);
+    }
+}
+
+/// `compile` と `compile_strict` が共有する走査。`tracer` が在るときだけ控えを取る（合図の列は同じ）。
+fn scan<'a>(
+    instructions: impl Iterator<Item = &'a Instruction> + Clone,
+    vars: &SystemVarSnapshot,
+    mut tracer: Option<&mut Tracer<'_>>,
+) -> CompiledTalk {
     let mut offset: f64 = 0.0;
     let mut scope: u32 = 0;
     let mut cues: Vec<Cue> = Vec::new();
@@ -59,7 +161,7 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     // アンカーの開き `\_a[…]` と閉じ `\_a` の対応の崩れ（位置の昇順）。走査の前に 1 回だけ判定し、
     // 開きと閉じの腕が自分の位置の分を先頭から順に取り出す（anchor-tag-canon 要件 1.8〜1.10）。
     // 判定も走査も `\e`・`\-` で止まるので、崩れの位置は必ずどちらかの腕を通る。
-    let anchor_findings = pair_anchors(instructions);
+    let anchor_findings = pair_anchors(instructions.clone());
     let mut anchor_findings = anchor_findings.iter().peekable();
     let mut anchor_issue_at = |index: usize, issue: AnchorIssue| {
         anchor_findings
@@ -69,7 +171,10 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     // 閉じの無い開きがある（走査の終わりで閉じを補う）。
     let mut anchor_unclosed = false;
 
-    for (index, instruction) in instructions.iter().enumerate() {
+    for (index, instruction) in instructions.enumerate() {
+        if let Some(t) = tracer.as_deref_mut() {
+            t.head(index, cues.len());
+        }
         match instruction {
             // 明示ウェイトを offset へ吸収せず、action を持たず duration のみを持つ第一級 Wait cue
             // として当該 offset へ発行し、直後 offset を進める（末尾・単独でも台本に残る・R5.1/4.4・D3）。
@@ -183,6 +288,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                     0.0,
                     CueCommand::command_carrier("move", move_args.args.clone()),
                 ));
+                if let Some(t) = tracer.as_deref_mut() {
+                    t.command("move", &move_args.args);
+                }
             }
             // 汎用 `\!` コマンド（move 以外・→汎用キャリア・R4.1/4.2/8.2）。name＋raw_args を
             // 解釈せず同一キャリアへ載せる（`\![*]` 単独形＝raw_args 空も第一級で台本に載る＝
@@ -198,6 +306,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                     0.0,
                     CueCommand::command_carrier(name.clone(), raw_args.clone()),
                 ));
+                if let Some(t) = tracer.as_deref_mut() {
+                    t.command(name, raw_args);
+                }
                 if name == "set" && raw_args.first().is_some_and(|a| a == "choicetimeout") {
                     last_choice_timeout = match parse_choice_timeout(raw_args) {
                         ChoiceTimeoutDirective::Default => None,
@@ -240,6 +351,11 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                     0.0,
                     CueCommand::command_carrier(FONT_TAG_CARRIER, args.clone()),
                 ));
+                if let Some(t) = tracer.as_deref_mut()
+                    && let Some(point) = t.judges.font(args)
+                {
+                    t.find(point);
+                }
             }
             // アンカーの開き `\_a[ID,…]`（→Balloon・anchor-tag-canon 要件 1.7〜1.9）。ID と引数の列を
             // 解釈せずに運ぶ 0 秒の合図（`Choice` と同じ）。ここから閉じまでに流れる文字が押せる範囲に
@@ -254,6 +370,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                         "[compile] アンカーが開いている間に新しい開きがあるので、直前のアンカーをここで閉じる"
                     );
                     cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
+                    if let Some(t) = tracer.as_deref_mut() {
+                        t.find(DetectionPoint::AnchorReopened);
+                    }
                 }
                 // 閉じの無い開き: 範囲は表示の終わりまで（閉じは走査の終わりで補う）。
                 if anchor_issue_at(index, AnchorIssue::Unclosed) {
@@ -264,6 +383,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                         "[compile] アンカーの開きに閉じが無いので、表示の終わりまでを範囲にする"
                     );
                     anchor_unclosed = true;
+                    if let Some(t) = tracer.as_deref_mut() {
+                        t.find(DetectionPoint::AnchorUnclosed);
+                    }
                 }
                 cues.push(emit(
                     scope,
@@ -284,6 +406,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                         index,
                         "[compile] アンカーが開いていないのに閉じがあるので無視する"
                     );
+                    if let Some(t) = tracer.as_deref_mut() {
+                        t.find(DetectionPoint::AnchorStrayClose);
+                    }
                 } else {
                     cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
                 }
@@ -298,6 +423,11 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                 tracing::debug!(instruction = ?other, "M-boot 外タグを無視");
             }
         }
+        // この命令から作った合図（重なりで足す閉じを含む）は、この命令の範囲を持つ。
+        if let Some(t) = tracer.as_deref_mut() {
+            let span = t.span();
+            t.spans_up_to(cues.len(), Some(span));
+        }
     }
 
     // 閉じの無いアンカーは走査の終わり（`\e`・`\-`・末尾）で閉じる（anchor-tag-canon 要件 1.8）。
@@ -305,6 +435,10 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     // （`Choice` だけを数える・要件 2.5）。
     if anchor_unclosed {
         cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
+    }
+    // 走査の後で補った閉じは台本に元が無い。区切りは配られないので数えない（下で積む前に締める）。
+    if let Some(t) = tracer.as_deref_mut() {
+        t.spans_up_to(cues.len(), None);
     }
 
     // 選択待ち barrier 発行（R2.1/2.2/2.5/2.6）: 走査終了（End/Quit 切詰め後の出力）に対し、choice
@@ -335,6 +469,13 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     // `is_empty()` 即時 TalkDone 契約を保つ（消すべき前 talk のテキストも無い・ドライブ配線は task 7.x）。
     if !cues.is_empty() {
         cues.insert(0, emit(0, 0.0, 0.0, CueCommand::ClearAll));
+        // 全消しは位置なしの順番 0。命令の合図と控えの順番はみな 1 つ後ろへずれる。
+        if let Some(t) = tracer {
+            t.trace.cue_spans.insert(0, None);
+            for (at, _, _) in &mut t.trace.pending {
+                *at += 1;
+            }
+        }
     }
 
     CompiledTalk {
@@ -476,6 +617,9 @@ mod font_tests;
 #[cfg(test)]
 #[path = "compile_sheet_tests.rs"]
 mod sheet_tests;
+#[cfg(test)]
+#[path = "compile_strict_tests.rs"]
+mod strict_tests;
 #[cfg(test)]
 #[path = "compile_test_support.rs"]
 mod test_support;

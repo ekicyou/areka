@@ -7,6 +7,7 @@
 //! 「アクター別の停止経路（正本）」）。
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
@@ -17,6 +18,7 @@ use areka_kanade::{
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{GhostNames, MountError, MountModel, resolve_with_shell};
 use areka_sakura::contract::SystemVarSnapshot;
+use areka_sakura::strict::StrictJudges;
 use areka_sylphya::{
     AskerContext, AskerId, DottedResolution, PersistKey, SylphyaPublisher, SylphyaReader,
 };
@@ -139,6 +141,9 @@ pub struct GhostBootOptions {
     pub app_profile_dir: Option<PathBuf>,
     /// ticker 起動方式。
     pub ticker: TickerMode,
+    /// strict の記録の判定の差し込み（spec mcp-strict-errors）。`boot` がゴースト名と束ねて配り口へ渡す。
+    /// `None` は差し込みの無い構築で、strict の台本も記録せずに再生する。
+    pub strict_judges: Option<Arc<dyn StrictJudges>>,
 }
 
 /// ghost 結線層が起動した全コンポーネントの所有者。
@@ -607,6 +612,8 @@ pub fn boot_with_origin(
 
     // 2. 運行設定の値源解決（task 2.3）。
     let config = resolve_kanade_config(&mount, options.default_encoding);
+    //    strict の記録の束ね（名は kanade の `script` の記録と同じ作り・spec mcp-strict-errors 要件 2.2）。
+    let strict = crate::config::strict_hooks(&mount, options.strict_judges.take());
 
     // 2b. sylphya（統一プロパティシステム）起動＋静的構成 publish（task 8.2・design「boot 系列」）。
     //     層別 profile root: ghost＝`<shiori.dir>/profile/areka/`・shell＝`<shell.dir>/profile/areka/`・
@@ -744,7 +751,7 @@ pub fn boot_with_origin(
         .sinks
         .push(Box::new(PropSetCueSink::new(sylphya_publisher.clone())));
     let (dispatcher_tx, dispatcher_handle) =
-        spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source);
+        spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source, strict);
 
     // 8. relay 2 本（循環解消・design.md 参照）。
     let start_relay_handle = spawn_relay::<areka_kanade::TalkCommand, DispatcherMsg>(

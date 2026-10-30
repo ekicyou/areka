@@ -18,6 +18,7 @@ fn set_names_replaces_mount_names_and_republishes_statics() {
 
     let requests: Requests = Default::default();
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

@@ -549,6 +549,33 @@ fn a_failed_font_tag_tells_unknown_key_missing_key_or_bad_value() {
     }
 }
 
+/// `\f` の分類（`check_script` と strict の再生が引く）: 受け取るだけ（語彙だけ・所有外・
+/// スタイルシートの語）は `Ignored`、知らないキー・キーなしは `UnknownKey`、値の誤りと
+/// それ以外の受理（`AnchorColorAsDefault` を含む）は診ない（`mcp-strict-errors` 要件 2.7）。
+#[test]
+fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
+    let rows: [(&[&str], Option<FontClass>); 14] = [
+        (&["sub", "1"], Some(FontClass::Ignored)),
+        (&["outline", "1"], Some(FontClass::Ignored)),
+        (&["align", "center"], Some(FontClass::Ignored)),
+        (&["height", "large"], Some(FontClass::Ignored)),
+        (&["colour", "red"], Some(FontClass::UnknownKey)),
+        (&["Bold", "1"], Some(FontClass::UnknownKey)),
+        (&[], Some(FontClass::UnknownKey)),
+        (&[""], Some(FontClass::UnknownKey)),
+        (&["bold", "1"], None),
+        (&["color", "red"], None),
+        (&["color", "default.anchor"], None),
+        (&["bold", "abc"], None),
+        (&["height", "0"], None),
+        (&["name"], None),
+    ];
+    for (args, want) in rows {
+        let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+        assert_eq!(classify_font_tag(&args), want, "{args:?} の分類");
+    }
+}
+
 // ------------------------------------------------------------------ §11 較正（3.3）
 
 /// 較正: 「当該項目の既定戻しが他項目も戻す」誤り（`\f[bold,default]` の腕で見た目を

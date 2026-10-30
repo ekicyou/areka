@@ -6,7 +6,7 @@
 use super::translate::{self, ScriptSource};
 use super::{Action, Phase, State, events};
 use crate::msg::{KanadeConfig, ShioriOutcome};
-use crate::talk::{ScriptOrigin, TalkId};
+use crate::talk::ScriptOrigin;
 
 /// SSTP SEND のトークの `ActiveTalk::origin`（記録用）。
 pub(crate) const SEND_ORIGIN: &str = "SstpSend";
@@ -15,11 +15,11 @@ pub(crate) const NOTIFY_ORIGIN: &str = "SstpNotify";
 /// 起動の挨拶のトークの `ActiveTalk::origin`（`schedule/boot.rs` の `to_baseware_version` が置く綴り）。
 pub(super) const BOOT_GREETING_ORIGIN: &str = "boot";
 
-/// 最後に始めた外からの台本のトークの strict（[`State::sstp_strict`]）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct StrictNote {
-    pub talk_id: TalkId,
-    pub strict: Option<bool>,
+/// 受け付けた台本の再生の開始に strict の印を立てる（真のときだけ・翻訳は台本と出どころだけを替える）。
+fn mark_strict(start: &mut Action, strict: Option<bool>) {
+    if let Action::StartTalk(start) = start {
+        start.strict = strict == Some(true);
+    }
 }
 
 /// 普段の状態か: 相が `Steady`・流れているトークが起動の挨拶でない・保留の終了も保留の切替も無い。
@@ -38,8 +38,8 @@ pub(crate) fn accepts(state: &State) -> bool {
 
 /// `Input::SstpSend` の腕。受け付けないなら状態を変えず `debug!`（`sstp_not_accepted`）だけで空の一括。
 ///
-/// 受け付けたら選択肢の帳簿と 1 世代の控えを消し、共通の手で採番・枠の差し替えをし、strict を
-/// 番号と結んで控え、翻訳へ預ける（0 文字なら預けずに再生の開始をそのまま返す）。旧トークの
+/// 受け付けたら選択肢の帳簿と 1 世代の控えを消し、共通の手で採番・枠の差し替えをし、再生の開始に
+/// strict の印を立て、翻訳へ預ける（0 文字なら預けずに再生の開始をそのまま返す）。旧トークの
 /// 後始末は今日の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
 pub(super) fn on_send(
     mut state: State,
@@ -52,14 +52,13 @@ pub(super) fn on_send(
     }
     super::clear_choice_ledger(&mut state, "sstp_send");
     state.choice_prev_talk = None;
-    state.sstp_strict = None;
-    let (talk_id, start) = super::start_talk(
+    let (talk_id, mut start) = super::start_talk(
         &mut state,
         SEND_ORIGIN,
         script.clone(),
         ScriptOrigin::MCP_SEND,
     );
-    state.sstp_strict = Some(StrictNote { talk_id, strict });
+    mark_strict(&mut start, strict);
     tracing::info!(target: "kanade", event = "sstp_send_started", talk_id = talk_id.0, strict = ?strict, "外からの台本を新しいトークとして始める");
     if script.is_empty() {
         return (state, vec![start]);
@@ -108,7 +107,7 @@ pub(super) fn on_notify(
 /// 応答待ちの控えが在るときの `Input::ShioriReply` の腕（`route` が `on_shiori_reply` より先に呼ぶ）。
 ///
 /// 控えを必ず取り出す。相が `Steady` で空でない（trim して 1 文字以上の）台本なら [`on_send`] と同じ
-/// 掃除・採番で新しいトークを始め（`origin = NOTIFY_ORIGIN`）、strict を番号と結んで控える。翻訳は
+/// 掃除・採番で新しいトークを始め（`origin = NOTIFY_ORIGIN`）、再生の開始に strict の印を立てる。翻訳は
 /// `step` の出口の規則が元のイベント（`EventId::Sstp`）の出どころで預ける。空・空白だけ・204（エラー
 /// 応答は殻が 204 に写す）は何もせず今のトークを残す。それ以外（失敗など）は今日の道へ渡す。
 pub(super) fn on_notify_reply(
@@ -127,9 +126,9 @@ pub(super) fn on_notify_reply(
         ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
             super::clear_choice_ledger(&mut state, "sstp_notify");
             state.choice_prev_talk = None;
-            let (talk_id, start) =
+            let (talk_id, mut start) =
                 super::start_talk(&mut state, NOTIFY_ORIGIN, script, ScriptOrigin::MCP_NOTIFY);
-            state.sstp_strict = Some(StrictNote { talk_id, strict });
+            mark_strict(&mut start, strict);
             tracing::info!(target: "kanade", event = "sstp_notify_talk", talk_id = talk_id.0, strict = ?strict, "外から頼まれたイベントの台本を新しいトークとして始める");
             (state, vec![start])
         }

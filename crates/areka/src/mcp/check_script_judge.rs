@@ -1,62 +1,43 @@
 //! `check_script` の判断（読み取りの列と事実 → 診断の列）と診断の文言（spec: areka-P0-mcp-author-tools）。
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
-//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`apply_font_tag`・
-//! `SurfaceResolver::resolve`・`resolve_balloon_key`・`pair_anchors`）の答えを診断の種類へ写すだけにする。
+//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`classify_font_tag`・
+//! `surface_missing`・`balloon_missing`（`areka_seriko`）・`pair_anchors`）の答えを診断の種類へ写すだけにする。
 
 use std::ops::Range;
 
-use areka_emo_text::look::{FontTagFailure, LookLayers, Note, apply_font_tag};
+use areka_emo_text::look::{FontClass, classify_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read, ReadNote};
+use areka_sakura::strict::{self, CharCursor};
 use areka_sakura::{AnchorIssue, ChoiceTimeoutDirective, pair_anchors, parse_choice_timeout};
-use areka_seriko::{BalloonResolve, SurfaceTarget, resolve_balloon_key};
+use areka_seriko::{SkinLookup, balloon_missing, surface_missing};
 
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
 
-// 文言（正本は `doc/ssp-mcp/areka-tools.md`。形は「何が起きているか; 再生でどうなるか」の英文 1 文）。
-pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = "areka does not know this tag; playback drops it";
-pub(in crate::mcp) const MSG_UNKNOWN_COMMAND: &str =
-    "no part of areka handles this \\! command; playback ignores it";
-pub(in crate::mcp) const MSG_MISSING_SURFACE: &str =
-    "no such surface in the current shell; playback does not change the surface";
-pub(in crate::mcp) const MSG_MISSING_BALLOON: &str =
-    "no such balloon ID in the current balloon; playback does not change the balloon";
-pub(in crate::mcp) const MSG_UNCLOSED: &str =
-    "the bracket or quote is not closed; playback drops everything from here to the end";
-pub(in crate::mcp) const MSG_DEFAULTED: &str =
-    "the argument is missing or unreadable; playback uses the default value";
-pub(in crate::mcp) const MSG_IGNORED: &str = "areka accepts this but it has no effect yet";
-pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str =
-    "the anchor is not closed; playback extends it to the end of the script";
-pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str =
-    "a new anchor opens before the previous one closes; playback closes the previous one here";
-pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str =
-    "no anchor is open; playback ignores this close";
-
-/// 判断に要る事実。本番は UI スレッドで写し取った値が答え、テストは手書きの表で答える。
-pub(in crate::mcp) trait ScriptFacts {
-    /// `\s` の引数を、再生と同じ解決器で解いた結果。
-    fn resolve_surface(&self, key: &str) -> SurfaceTarget;
-    /// そのスコープのシェルに生の surface ID が在るか。スコープに絵が無ければ None。
-    fn shell_has(&self, scope: u32, surface_id: u32) -> Option<bool>;
-    /// そのスコープのバルーンに面の ID が在るか。バルーンが無ければ None。
-    fn balloon_has(&self, scope: u32, balloon_id: u32) -> Option<bool>;
-}
+// 文言の正本は `areka_sakura::strict`（strict の記録と同じ定数。文書の正本は `doc/ssp-mcp/areka-tools.md`）。
+pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = strict::MSG_UNKNOWN_TAG;
+pub(in crate::mcp) const MSG_UNKNOWN_COMMAND: &str = strict::MSG_UNKNOWN_COMMAND;
+pub(in crate::mcp) const MSG_MISSING_SURFACE: &str = strict::MSG_MISSING_SURFACE;
+pub(in crate::mcp) const MSG_MISSING_BALLOON: &str = strict::MSG_MISSING_BALLOON;
+pub(in crate::mcp) const MSG_UNCLOSED: &str = strict::MSG_UNCLOSED;
+pub(in crate::mcp) const MSG_DEFAULTED: &str = strict::MSG_DEFAULTED;
+pub(in crate::mcp) const MSG_IGNORED: &str = strict::MSG_IGNORED;
+pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED;
+pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
+pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str = strict::MSG_ANCHOR_STRAY_CLOSE;
 
 /// 命令を台本の順に 1 つずつ見て診断の列を作る。`facts` が None＝窓の無いゴースト（surface とバルーンを診ない）。
 /// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。アンカーの対応の崩れだけは、
 /// 再生と同じ判定（`pair_anchors`）がそこで数えるのをやめるので、後ろの開き／閉じには出ない。
-pub(in crate::mcp) fn diagnose(
+pub(crate) fn diagnose(
     script: &str,
     reads: &[Read],
     ledger: &ConsumerLedger,
-    facts: Option<&dyn ScriptFacts>,
+    facts: Option<&dyn SkinLookup>,
 ) -> Vec<Diagnostic> {
     let mut out = Out {
-        script,
-        byte: 0,
-        chars: 0,
+        cursor: CharCursor::new(script),
         list: Vec::new(),
     };
     // スコープは `compile` と同じく `SpeakerScope` だけが替える（`\0`・`\1`・`\h`・`\u`・`\p[n]` はどれもこれになる）。
@@ -121,14 +102,14 @@ pub(in crate::mcp) fn diagnose(
             }
             Instruction::Surface(arg) if !shell_switched => {
                 if let Some(facts) = facts
-                    && surface_missing(facts, scope, arg.as_str())
+                    && surface_missing(facts, scope, arg.as_str()).is_some()
                 {
                     out.push(Kind::MissingSurface, &span, MSG_MISSING_SURFACE);
                 }
             }
             Instruction::BalloonSurface(arg) if !balloon_switched => {
                 if let Some(facts) = facts
-                    && balloon_missing(facts, scope, arg.as_str())
+                    && balloon_missing(facts, scope, arg.as_str()).is_some()
                 {
                     out.push(Kind::MissingBalloon, &span, MSG_MISSING_BALLOON);
                 }
@@ -150,64 +131,29 @@ pub(in crate::mcp) fn diagnose(
     out.list
 }
 
-/// `\f` を使い捨ての見た目に適用し、受け取るだけのキーは `ignored`、知らないキー・キーなしは `unknown_tag`。
-/// 値の誤りと、他の `Ok`（`AnchorColorAsDefault` を含む）は診ない。
+/// `\f` の分類（文字の層の `classify_font_tag`）を診断の種類へ写す。受け取るだけは `ignored`、
+/// 知らないキー・キーなしは `unknown_tag`、値の誤りと他の受理は診ない。
 fn judge_font(args: &[String]) -> Option<(Kind, &'static str)> {
-    let layers = LookLayers::default();
-    let mut look = layers.default.clone();
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    match apply_font_tag(&mut look, &layers, &args) {
-        Ok(Some(Note::VocabularyOnly { .. } | Note::Unowned | Note::StylesheetKeyword)) => {
-            Some((Kind::Ignored, MSG_IGNORED))
-        }
-        Ok(_) => None,
-        Err(issue) => match issue.failure() {
-            FontTagFailure::UnknownKey | FontTagFailure::NoKey => {
-                Some((Kind::UnknownTag, MSG_UNKNOWN_TAG))
-            }
-            FontTagFailure::BadValue => None,
-        },
+    match classify_font_tag(args)? {
+        FontClass::Ignored => Some((Kind::Ignored, MSG_IGNORED)),
+        FontClass::UnknownKey => Some((Kind::UnknownTag, MSG_UNKNOWN_TAG)),
     }
 }
 
-/// スコープに絵が無ければ診ない（解けない名前・範囲外の数も、絵の在るスコープでだけ知らせる）。
-fn surface_missing(facts: &dyn ScriptFacts, scope: u32, key: &str) -> bool {
-    match facts.resolve_surface(key) {
-        SurfaceTarget::Show(id) => facts.shell_has(scope, id) == Some(false),
-        SurfaceTarget::Unresolved => facts.shell_has(scope, 0).is_some(),
-        SurfaceTarget::Hide => false,
-    }
-}
-
-/// 名前の形の `\b[名前]` は、そのとき表示しているサーフェスの箱に依るので診ない。
-fn balloon_missing(facts: &dyn ScriptFacts, scope: u32, key: &str) -> bool {
-    match resolve_balloon_key(key) {
-        BalloonResolve::Show(id) => facts.balloon_has(scope, id) == Some(false),
-        BalloonResolve::Invalid => facts.balloon_has(scope, 0).is_some(),
-        BalloonResolve::Hide | BalloonResolve::NameForm => false,
-    }
-}
-
-/// 診断の置き場。位置はバイトの範囲を前から 1 回だけ数えて文字の数へ直す（診断は台本の順に来る）。
+/// 診断の置き場。位置は strict の記録と同じ物差し（`CharCursor`）で文字の数へ直す（診断は台本の順に来る）。
 struct Out<'a> {
-    script: &'a str,
-    /// ここまで数えたバイトの位置と、そこまでの文字の数。
-    byte: usize,
-    chars: usize,
+    cursor: CharCursor<'a>,
     list: Vec<Diagnostic>,
 }
 
 impl Out<'_> {
     fn push(&mut self, kind: Kind, span: &Range<usize>, message: &'static str) {
-        // 同じ命令に 2 件目が来たときは `byte == span.start` のままなので数え直さない。
-        self.chars += self.script[self.byte..span.start].chars().count();
-        self.byte = span.start;
-        let text = &self.script[span.clone()];
+        let place = self.cursor.place(span.clone());
         self.list.push(Diagnostic {
             kind,
-            start: self.chars,
-            end: self.chars + text.chars().count(),
-            text: text.to_string(),
+            start: place.start,
+            end: place.end,
+            text: place.text,
             message,
         });
     }

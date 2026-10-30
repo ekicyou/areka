@@ -34,6 +34,8 @@ mod resolve;
 mod settle;
 // シェルの差し替えの戻り先（spec: descript-window-keys）。
 mod shell_fallback;
+// 今のシェルとバルーンの事実と `\s`・数の `\b` の判定（spec: mcp-strict-errors）。
+mod skin_facts;
 mod state;
 mod table;
 // 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上の面の配線。
@@ -60,6 +62,7 @@ pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, Sur
 pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 pub use settle::{SETTLE_TICK_MS, settle_surface, settle_time};
 pub use shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceKeep};
+pub use skin_facts::{SkinFacts, SkinLookup, balloon_missing, surface_missing};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
 };

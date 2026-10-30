@@ -144,6 +144,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     let surface_records = surface_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

@@ -422,6 +422,7 @@ mod tests {
                     tokens: vec![PersistKey::BootCount.to_canonical_key(), "1".to_string()],
                 }],
                 origin: ScriptOrigin::GHOST,
+                strict: false,
             }
         }
 
@@ -441,6 +442,7 @@ mod tests {
                 done_tx,
                 sinks,
                 SystemVarSnapshot::default(),
+                None,
             );
 
             // 初回 Tick(0.0) でアンカー刻印（挨拶 cue は due・末尾 SET(0.1) は未 due で保留）。
@@ -502,6 +504,7 @@ mod tests {
                 done_tx,
                 sinks,
                 SystemVarSnapshot::default(),
+                None,
             );
 
             // 初回 Tick(0.0): Driving 入り・挨拶 cue は due で発火するが末尾 SET(0.1) は未 due で保留。

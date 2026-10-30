@@ -423,6 +423,34 @@ impl FontTagIssue {
     }
 }
 
+/// 診るべき `\f` の分類（[`classify_font_tag`]）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FontClass {
+    /// 受け取るだけで見た目を変えない（語彙だけ・所有外・スタイルシートの語）。
+    Ignored,
+    /// 知らないキー・キーなし。
+    UnknownKey,
+}
+
+/// `\f` を使い捨ての見た目に適用し、受け取るだけのキーは `Ignored`、知らないキー・キーなしは
+/// `UnknownKey`。値の誤りと、他の `Ok`（`AnchorColorAsDefault` を含む）は診ない（None）。
+/// `check_script` と strict の再生が同じ物差しで引く（`mcp-strict-errors` 要件 2.7）。
+pub fn classify_font_tag(args: &[String]) -> Option<FontClass> {
+    let layers = LookLayers::default();
+    let mut look = layers.default.clone();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    match apply_font_tag(&mut look, &layers, &args) {
+        Ok(Some(Note::VocabularyOnly { .. } | Note::Unowned | Note::StylesheetKeyword)) => {
+            Some(FontClass::Ignored)
+        }
+        Ok(_) => None,
+        Err(issue) => match issue.failure() {
+            FontTagFailure::UnknownKey | FontTagFailure::NoKey => Some(FontClass::UnknownKey),
+            FontTagFailure::BadValue => None,
+        },
+    }
+}
+
 /// `\f`／`\f[]`／`\f[""]`——キーが無い（要件 2.6）。
 pub(crate) const REASON_NO_KEY: &str = "\\f にキーが無い";
 /// 43 形のいずれでもないキー（要件 2.6）。キーも小文字の完全一致のみ。
@@ -772,7 +800,7 @@ fn apply_name(
     values: &[&str],
 ) -> Result<Option<Note>, FontTagIssue> {
     // 候補が 1 つも無い（値なし・空文字列だけ）——[`TextLook::name`] は空にしない。
-    // 途中の空トークン（`[name,a,,b]`）は落とさず候補列に残す: 解読層が空を潰さずに
+    // 途中の空トークン（`\f[name,a,,b]`）は落とさず候補列に残す: 解読層が空を潰さずに
     // 渡してくる（要件 2.2）ので、この層でも記述順を変えない。実在しない候補として
     // 描画層の [`FontCatalog`] が読み飛ばす（要件 9.1・9.2）。
     if values.iter().all(|candidate| candidate.is_empty()) {

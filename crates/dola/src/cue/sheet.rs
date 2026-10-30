@@ -147,8 +147,8 @@ fn clamp_duration(duration: f64) -> f64 {
 /// - **絶対アンカーの継承**: スケジュールの `start_time` に [`CueSheet::absolute_start_time`]
 ///   を用いる（dispatch 刻印前は 0.0）。各 cue の相対 `start_time` はエントリオフセットとして
 ///   **そのまま**保存する（min 正規化しない＝先頭・単独の待ちが消えない）。
-/// - **同一 at の FIFO**: [`CueSheet::cues`] の記述順に 1 件ずつ [`TimedSchedule::insert`] で
-///   挿入する（`extend` の一括再ソートは同一オフセット群を逆順化するため使わない）。
+/// - **同一 at の FIFO**: [`CueSheet::cues`] の記述順に 1 件ずつ [`TimedSchedule::insert`] したのと
+///   同じ並びを [`TimedSchedule::insert_each`] で作る（`extend` の一括再ソートは同一オフセット群を逆順化するため使わない）。
 /// - **duration の clamp**: 各 cue の duration を [`clamp_duration`] で有限・非負へ丸め、
 ///   その**同一値**を配送エンベロープ [`TalkCue::duration`] と占有 horizon の両方へ用いる。
 /// - **占有 horizon の算出**: 全 cue の `max(start_time + clamp(duration))`（空台本は 0.0）を
@@ -170,26 +170,21 @@ pub fn to_talk_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
 
     let mut schedule = TimedSchedule::with_horizon(sheet.absolute_start_time(), horizon);
 
-    // per-cue insert（extend 禁止）: 同一 at 群を記述順（FIFO）で保つ。
-    for cue in sheet.cues() {
-        match &cue.payload {
-            CuePayload::Command(command) => {
-                let talk_cue = TalkCue {
-                    at: cue.start_time,
-                    actor: cue.actor.clone(),
-                    command: command.clone(),
-                    duration: clamp_duration(cue.duration),
-                };
-                schedule.insert(Entry::Payload(cue.start_time, talk_cue));
-            }
-            CuePayload::Barrier(kind) => {
-                schedule.insert(Entry::Barrier(cue.start_time, kind.clone()));
-            }
-            CuePayload::Routing(routing) => {
-                schedule.insert(Entry::Routing(cue.start_time, routing.clone()));
-            }
-        }
-    }
+    // per-cue insert と同じ並び（extend 禁止）: 同一 at 群を記述順（FIFO）で保つ。まとめて入れて
+    // 台本の長さに比例する手間にする（1 件ずつの insert は長い台本で 2 乗になる）。
+    schedule.insert_each(sheet.cues().iter().map(|cue| match &cue.payload {
+        CuePayload::Command(command) => Entry::Payload(
+            cue.start_time,
+            TalkCue {
+                at: cue.start_time,
+                actor: cue.actor.clone(),
+                command: command.clone(),
+                duration: clamp_duration(cue.duration),
+            },
+        ),
+        CuePayload::Barrier(kind) => Entry::Barrier(cue.start_time, kind.clone()),
+        CuePayload::Routing(routing) => Entry::Routing(cue.start_time, routing.clone()),
+    }));
 
     schedule
 }

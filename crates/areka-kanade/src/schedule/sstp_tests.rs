@@ -3,7 +3,7 @@
 //! `events.rs` の 2 つの組み立て（`sstp_notify`・`on_translate_sstp`）と、受け付けの判定・
 //! 外からの台本の腕（`accepts`・`on_send`）を固定する。
 
-use super::{BOOT_GREETING_ORIGIN, SEND_ORIGIN, StrictNote, accepts};
+use super::{BOOT_GREETING_ORIGIN, SEND_ORIGIN, accepts};
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
 use crate::msg::{
     ChoiceInput, CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome,
@@ -152,7 +152,7 @@ fn change_request() -> ChangeRequest {
 /// 状態の見比べの指紋（`State` は `PartialEq` を持たないので、腕が触り得る欄を綴りにする）。
 fn fingerprint(s: &State) -> String {
     format!(
-        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} strict={:?} reply={}",
+        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} reply={}",
         phase_label(&s.phase),
         current_talk_id(&s.phase).map(|t| t.0),
         s.next_talk_id,
@@ -161,7 +161,6 @@ fn fingerprint(s: &State) -> String {
         s.pending_close.is_some(),
         s.pending_change.is_some(),
         s.translate.is_some(),
-        s.sstp_strict,
         s.reply_source.is_some(),
     )
 }
@@ -206,6 +205,14 @@ fn assert_deferred(state: &State, actions: &[Action], talk_id: u64, script: &str
     ));
 }
 
+/// 翻訳の帳簿に預けた再生の開始（受け付けた外からの台本の StartTalk）。
+fn deferred_start(state: &State) -> &areka_talk::StartTalk {
+    match state.translate.as_ref().map(|w| w.deferred.as_slice()) {
+        Some([Action::StartTalk(start)]) => start,
+        _ => panic!("翻訳の帳簿に再生の開始 1 つのはず"),
+    }
+}
+
 fn assert_playing(state: &State, talk_id: u64) {
     match &state.phase {
         Phase::Steady { talk: Some(talk) } => {
@@ -216,7 +223,7 @@ fn assert_playing(state: &State, talk_id: u64) {
     }
 }
 
-/// ⑴ 普段の状態（トーク無し）で新しいトークになり、strict を番号と結んで控える（要件 1.1・1.2・5.1・6.3）。
+/// ⑴ 普段の状態（トーク無し）で新しいトークになり、strict 真のときだけ再生の開始に印を立てる（要件 1.1・1.2・5.1・6.3）。
 #[test]
 fn send_in_idle_steady_starts_a_new_talk_and_notes_strict() {
     for strict in [Some(true), Some(false), None] {
@@ -226,14 +233,12 @@ fn send_in_idle_steady_starts_a_new_talk_and_notes_strict() {
         assert_playing(&state, 10);
         assert_eq!(state.next_talk_id, 11);
         assert_eq!(
-            state.sstp_strict,
-            Some(StrictNote {
-                talk_id: TalkId(10),
-                strict
-            })
+            deferred_start(&state).strict,
+            strict == Some(true),
+            "strict={strict:?}: 真のときだけ印が立つ"
         );
         assert_deferred(&state, &actions, 10, "\\h外からの台本\\e");
-        // 翻訳の結果で預けた再生の開始が返る（ゴースト自身の台本と同じ道）。
+        // 翻訳の結果で預けた再生の開始が返る（ゴースト自身の台本と同じ道）。印は翻訳の後も残る。
         let (_, actions) = step(
             state,
             Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
@@ -244,33 +249,98 @@ fn send_in_idle_steady_starts_a_new_talk_and_notes_strict() {
         assert!(matches!(
             actions.as_slice(),
             [Action::StartTalk(start)] if start.talk_id == TalkId(10) && start.script == "\\h訳\\e"
+                && start.strict == (strict == Some(true))
         ));
     }
 }
 
-/// 0 文字の台本は翻訳へ預けず、そのまま再生の開始を返す。
+/// 0 文字の台本は翻訳へ預けず、そのまま再生の開始を返す（strict の印はここでも立つ）。
 #[test]
 fn empty_send_is_not_deferred_to_translate() {
-    let (state, actions) = step(steady(None), send("", None), &config());
-    assert_playing(&state, 10);
-    assert!(state.translate.is_none());
-    assert!(matches!(
-        actions.as_slice(),
-        [Action::StartTalk(start)] if start.talk_id == TalkId(10) && start.script.is_empty()
-    ));
+    for strict in [Some(true), None] {
+        let (state, actions) = step(steady(None), send("", strict), &config());
+        assert_playing(&state, 10);
+        assert!(state.translate.is_none());
+        assert!(matches!(
+            actions.as_slice(),
+            [Action::StartTalk(start)] if start.talk_id == TalkId(10) && start.script.is_empty()
+                && start.strict == (strict == Some(true))
+        ));
+    }
 }
 
-/// ⑵ 再生中は次の番号で差し替わり、前の控えは新しい控えで上書きされる（中断の無効化モードでも同じ・要件 3.1・3.4）。
+/// strict の台本の後でも、kanade が自分で始める台本（起動の挨拶）は印を持たない（要件 3.8）。
+#[test]
+fn own_talks_after_a_strict_send_are_not_strict() {
+    let cfg = config();
+    let (s, _) = step(steady(None), send("\\h外\\e", Some(true)), &cfg);
+    assert!(deferred_start(&s).strict);
+    let (s, actions) = step(
+        s,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h外\\e",
+        ))),
+        &cfg,
+    );
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(start)] if start.strict));
+    // 外から頼まれたイベントが strict 省略で台本を返すと、その台本も印を持たない（別の台本へ及ばない）。
+    let (s, _) = step(
+        s,
+        Input::SstpNotify {
+            event: "OnAiTalk".to_string(),
+            references: Vec::new(),
+            strict: None,
+        },
+        &cfg,
+    );
+    let (s, _) = step(
+        s,
+        Input::ShioriReply {
+            outcome: ShioriOutcome::Value("\\h返\\e".to_string(), areka_talk::SecurityLevel::Local),
+            origin: super::NOTIFY_ORIGIN,
+        },
+        &cfg,
+    );
+    assert!(!deferred_start(&s).strict);
+    // 起動の挨拶（kanade が自分で始める台本）は既定の偽。
+    let (s, _) = step(State::initial(), Input::Boot, &cfg);
+    let reply = |s, outcome| {
+        step(
+            s,
+            Input::ShioriReply {
+                outcome,
+                origin: "test",
+            },
+            &cfg,
+        )
+        .0
+    };
+    let s = reply(s, ShioriOutcome::Notified);
+    let s = reply(s, ShioriOutcome::NoContent);
+    let s = reply(
+        s,
+        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
+    );
+    let greeting = s
+        .translate
+        .as_ref()
+        .and_then(|w| {
+            w.deferred.iter().find_map(|a| match a {
+                Action::StartTalk(start) => Some(start),
+                _ => None,
+            })
+        })
+        .expect("翻訳の帳簿に起動の挨拶の再生の開始があるはず");
+    assert!(!greeting.strict, "起動の挨拶は strict でない");
+}
+
+/// ⑵ 再生中は次の番号で差し替わる（中断の無効化モードでも同じ・要件 3.1・3.4）。
 #[test]
 fn send_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
     for no_user_break in [false, true] {
         let mut state = steady(active(9, "OnMouseDoubleClick"));
         state.external.no_user_break = no_user_break;
         state.choice_prev_talk = Some(TalkId(8));
-        state.sstp_strict = Some(StrictNote {
-            talk_id: TalkId(7),
-            strict: Some(true),
-        });
         assert!(accepts(&state));
         let (state, actions) = step(state, send("\\h割り込み\\e", None), &config());
         assert_playing(&state, 10);
@@ -278,12 +348,9 @@ fn send_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
             state.choice_prev_talk, None,
             "1 世代の控えは次の差し替えで消える"
         );
-        assert_eq!(
-            state.sstp_strict,
-            Some(StrictNote {
-                talk_id: TalkId(10),
-                strict: None
-            })
+        assert!(
+            !deferred_start(&state).strict,
+            "strict 省略では印が立たない"
         );
         assert_deferred(&state, &actions, 10, "\\h割り込み\\e");
     }

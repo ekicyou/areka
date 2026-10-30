@@ -26,10 +26,12 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
             script,
             talk_id,
             origin: ScriptOrigin::GHOST,
+            strict: false,
         },
         done_tx,
         two_sinks(NoopSink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // アンカー 0.0 を刻印し、区切り(0.35)＋指定の時間を遥かに越える 50.0 まで一度に進める（R9.3）。
