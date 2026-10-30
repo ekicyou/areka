@@ -1,9 +1,9 @@
 {
   "feature_name": "emo-text-dwrite-fidelity",
   "created_at": "2026-10-29T20:32:17+09:00",
-  "updated_at": "2026-10-29T12:41:16Z",
+  "updated_at": "2026-10-30T07:10:43Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
