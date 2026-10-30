@@ -549,7 +549,7 @@ ukadoc は pattern定義の描画メソッドに、ほかのアニメーショ�
 - 位置の初期化で窓を並べ直したときは、並べた位置を新しい元の位置にする（ずれはその位置からもう一度当てる）。
 - さくらスクリプトの絶対位置への `\![move]`（基準が自分の窓でない軸で、`fix` でない軸）は、行き先を新しい元の位置にし、ずれはその上へすぐ当て直す。後でずれが 0 に戻ると、窓は `\![move]` の行き先へ戻る。`fix` の軸と、自分の窓を基準にした `\![move]` は今の位置からの相対なので、ずれは元の位置からのまま残る（二度数えない）。SSP では測っていない（開発者裁定 2026-10-31）。
 
-判定は `crates/areka-emo-compose/src/pattern_word_tests.rs`・`crates/areka-emo-compose/src/bind_steps_tests.rs`・`crates/areka-seriko/src/table_calls_tests.rs`・`crates/areka-seriko/src/calls_tests.rs`・`crates/areka-seriko/src/looper_calls_tests.rs`・`crates/areka-seriko/src/parts_calls_tests.rs`・`crates/areka/src/placement/follow_move_shift_tests.rs`・`crates/areka/src/emo2_boot/frame/move_shift_tests.rs` が固定する。SSP の測りの手順と検体は `.kiro/specs/seriko-pattern-calls/research.md` の §3・§6.1 にある。
+判定は `crates/areka-emo-compose/src/pattern_word_tests.rs`・`crates/areka-emo-compose/src/bind_steps_tests.rs`・`crates/areka-seriko/src/table_calls_tests.rs`・`crates/areka-seriko/src/calls_tests.rs`・`crates/areka-seriko/src/looper_calls_tests.rs`・`crates/areka-seriko/src/parts_calls_tests.rs`・`crates/areka/src/placement/follow_move_shift_tests.rs`・`crates/areka/src/emo2_boot/frame/move_shift_tests.rs` が固定する。SSP の測りの手順と検体は `.kiro/specs/completed/seriko-pattern-calls/research.md` の §3・§6.1 にある。
 
 - 出典 spec: `seriko-pattern-calls`（開発者裁定 2026-10-30・要件 3〜8・10.2・11）。
 
