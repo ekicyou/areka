@@ -66,7 +66,9 @@ impl Config {
             .and_then(|dir| {
                 let layout = areka_user_data::establish(Some(dir), profile_env.as_deref());
                 areka_user_data::app_profile_dir(profile_env.as_deref(), &layout, Some(dir))
-            });
+            })
+            // 今の答えを「使える形」で包む（置き場を作る準備の呼び出しを外すのは次の段）。
+            .map(areka_user_data::AppProfile::Ready);
         // UTF-8 でない値を「未設定」に丸めない: 読めない字を U+FFFD に替えた文は数として読めないので、
         // 共有の関数が `warn!` を 1 件残して既定の 20 個にする（要件 2.5）。
         let port_value =
@@ -88,22 +90,26 @@ impl Config {
     /// 値 → 設定（I/O なし）。
     ///
     /// 候補の列は areka 本体と同じ関数の結果そのもの（読めない値の `warn!` もその関数が出す）。
-    /// 控えの置き場は 3 段: `profile_dir` の下 → `beside_profile`（隣の areka と同じに決めた記憶の
-    /// 置き場）の下 → `local_app_data` の `areka` の下 → なし。`local_app_data` は絶対パスの
-    /// ときだけ使う（空・相対の値で、起こされた場所しだいの置き場に黙って書かない）。
+    /// 控えの置き場は 3 段: `profile_dir` の下 → `beside`（隣の areka の記憶の置き場の答え）→
+    /// `local_app_data` の `areka` の下 → なし。どれもその下の `mcp-bridge`。
+    /// `beside` は `None`＝隣に areka.exe が無い、`Some(Ready(dir))`＝その下、`Some(ほか)`＝控え無し
+    /// （まだ置けない・決められない根の代わりに `local_app_data` の段へ落ちない）。
+    /// `local_app_data` は絶対パスのときだけ使う（空・相対の値で、起こされた場所しだいの置き場に黙って書かない）。
     pub fn from_values(
         port_value: Option<&str>,
         profile_dir: Option<PathBuf>,
-        beside_profile: Option<PathBuf>,
+        beside: Option<areka_user_data::AppProfile>,
         local_app_data: Option<PathBuf>,
     ) -> Config {
-        let local = local_app_data
-            .filter(|dir| dir.is_absolute())
-            .map(|dir| dir.join("areka"));
-        let cache_dir = profile_dir
-            .or(beside_profile)
-            .or(local)
-            .map(|dir| dir.join(CACHE_DIR_NAME));
+        let base = match (profile_dir, beside) {
+            (Some(dir), _) => Some(dir),
+            (None, Some(areka_user_data::AppProfile::Ready(dir))) => Some(dir),
+            (None, Some(_)) => None,
+            (None, None) => local_app_data
+                .filter(|dir| dir.is_absolute())
+                .map(|dir| dir.join("areka")),
+        };
+        let cache_dir = base.map(|dir| dir.join(CACHE_DIR_NAME));
         Config::from_parts(
             areka_mcp::candidates_from_env_value(port_value),
             cache_dir,
