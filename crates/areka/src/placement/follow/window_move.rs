@@ -11,11 +11,11 @@ use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos
 
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit, BalloonPlace,
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
-    apply_visibility_guard, diag, follow_balloon, limit_correction, project_anchor, rect_at,
-    rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
+    apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
+    rect_at, rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -1079,13 +1079,15 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    let Some(corrected) = limit_correction(proposed, target_size, area) else {
+    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area);
+    let (BalloonPlace::Flipped(corrected) | BalloonPlace::Pushed(corrected)) = place else {
         return proposed;
     };
 
     info!(
         scope,
         context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+        how = place.how(),
         entity = ?window,
         route = ?route,
         from = ?proposed,

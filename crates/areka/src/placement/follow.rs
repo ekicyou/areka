@@ -49,7 +49,7 @@ mod work_area_clamp;
 // （`drag_follow::on_balloon_drag_end`・task 3.4）が消費する。
 use super::balloon_limit::{
     BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonPlace, limit_correction, place_balloon_in_work_area,
 };
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{

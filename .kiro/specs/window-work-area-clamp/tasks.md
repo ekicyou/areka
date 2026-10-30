@@ -140,7 +140,7 @@
   - _Requirements: 5.3, 5.4, 8.1, 8.4, 10.4_
 
 - [ ] 5. バルーンだけが横にはみ出すときの反対の側への並べ替え（2026-10-30 の裁定・`research.md` 13 節）
-- [ ] 5.1 バルーンの関門に、反対の側への並べ替えを足す
+- [x] 5.1 バルーンの関門に、反対の側への並べ替えを足す
   - 置き換えの前に、書き込みの関門のファイル（`placement/follow/window_move.rs`）の呼び出しの置き換えについて開発者の承認を取る（10-29 に認めた 1 文の外のため）
   - バルーンの関門の式のファイル（`placement/balloon_limit.rs`）に並べ替えの純関数と結果の型（動かさない・並べ替えた・押し込んだ）を足す。キャラ窓が収まっていて、バルーンが横にはみ出すときだけ、キャラ窓の縦の中心線で映した位置を試し、横に入れば縦だけ収めて置く。入らない・映しても動かない・縦だけはみ出す・キャラ窓がはみ出しているときは今の押し込みの式の戻りをそのまま返す。収める式は今の 1 本だけを使い、写しを作らない
   - 起動の関門と書き込みの関門で、今の押し込みの式を呼んでいる 1 か所ずつをこの関数に替え、今の `[balloon-limit] Clamp` の行に `how`（`flipped`／`pushed`）を足す。解放の補正・`limit` の有効の判定・縮退の `Unresolved` は変えない。バルーンの相対の位置（配置のずらし・追従のずらし・記憶）には触らず、動かせない指定の帳簿は読まない
@@ -196,3 +196,4 @@
     - ⑶ `52.571 Clamp 記憶の組を同じ量だけ作業領域の中へ寄せた scene="restore-group" scope=1 how="shifted" from={x:2208,y:904} to={x:1392,y:904} work_area=Some(0,0,2880,1704)`／`56.835 Keep 並べた位置が作業領域に収まっている scene="remembered-join" scope=1 reason="fits" at={x:1392,y:904}`
     - ⑷ `25.318 Keep 組の決めで動かさない窓 scene="boot-repack" scope=1 reason="explicitly-placed" at={x:1392,y:904}`（直前の `move_applied scope=1 k=2/1 base_left=2064 base_top=610 base_right=2828 base_bottom=1704 to_x=1392 to_y=904`）
 - 組 5 の決めごと（2026-10-30・開発者が推奨どおり一括承認）: ① 5.1 で `window_move.rs` の書き込み時の関門の呼び出しを 1 つ差し替え、記録の欄を足すことを認める（10-29 の「呼ぶ 1 文と注記 1 行」の約束の外）② 反対の側での横のずらしは ukadoc どおり（シェルへ向かう向き・両側で同じ距離）、測っていない点として記録し、初期配置（`resolver.rs` P5）との食い違いは完了の棚卸で起票 ③ 縦の位置は保つ ④ 利用者がドラッグで動かしたバルーンも、はみ出せば並べ替える。
+- 5.1 の後、押し込みを期待していた檻 13 本が並べ替えで赤（balloon_limit_gate_tests 5・follow_balloon_limit_tests 7・main_restore_seam_tests の restore_seam_clamps_balloon_display_position_but_keeps_offset_raw 1）。5.2 で前提を合わせる。window_move.rs の 984 行目付近の doc の `[limit_correction]` へのリンクが切れているので 5.2 で言い直す。
