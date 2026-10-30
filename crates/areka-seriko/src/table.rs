@@ -244,7 +244,7 @@ impl AnimationTable {
                     // 純 `bind` は呼ばれるだけ（spec: seriko-pattern-calls 要件 11.1）。
                     areka_parsers::shell::Interval::Bind => Some(LoopTrigger::CallOnly),
                     // 純 `bind` と同じく呼ばれるだけ（spec: seriko-pattern-calls 要件 11.1）。
-                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#never
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#never:1
                     areka_parsers::shell::Interval::Other(vocab) if &**vocab == "never" => {
                         Some(LoopTrigger::CallOnly)
                     }

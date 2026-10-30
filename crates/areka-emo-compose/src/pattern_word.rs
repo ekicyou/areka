@@ -27,13 +27,21 @@ pub enum PatternWord {
 /// [`canonical_method_name`]・記録は出さない）。
 pub fn pattern_word(method: &str) -> PatternWord {
     match canonical_method_name(method).as_str() {
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#start_2cID:1
         "start" => PatternWord::Start,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#stop_2cID:1
         "stop" => PatternWord::Stop,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#alternativestart_2c_28ID1_2cID2..._29:1
         "alternativestart" => PatternWord::AlternativeStart,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#alternativestop_2c_28ID1_2cID2..._29:1
         "alternativestop" => PatternWord::AlternativeStop,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#parallelstart_2c_28ID1_2cID2..._29:1
         "parallelstart" => PatternWord::ParallelStart,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#parallelstop_2c_28ID1_2cID2..._29:1
         "parallelstop" => PatternWord::ParallelStop,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#insert_2cID:1
         "insert" => PatternWord::Insert,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#move:1
         "move" => PatternWord::Move,
         _ => PatternWord::Draw,
     }

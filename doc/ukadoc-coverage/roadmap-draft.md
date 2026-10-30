@@ -562,6 +562,18 @@ ukadoc に項目が無いので台帳に行を作らず、`doc/COMPAT_ARCHITECTU
 **41 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 65 に合わせ、`snapshot_on` は **2026-10-24** にした。
 
 
+**2026-10-31 の追加（`seriko-pattern-calls`）**: `seriko-pattern-calls` の行を 1 行足した。この spec が pattern定義の呼び出しの
+7 語（`start,ID`・`stop,ID`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert,ID`）と `move` を働かせ、
+interval の `never` を呼ばれる相手として表に載せたので、台帳 `ledger/assets.toml` の 9 項目を実装済みへ移し（`never` は語彙のみから、
+ほかの 8 項目は未対応から）、宛先をこの spec にした（それまで宛先が空だった）。7 語と `never` の 8 項目は `linkage.md` の束
+「サーフェスアニメーション」に、`move` は束「絵の重ね方」に属するので、段階 A の表と節の「サーフェスアニメーション」の行にこの spec
+（8 件）を、段階 A の表の「絵の重ね方」の行にこの spec（1 件）を足した。8 件も 1 件も ⑴（全数）にも ⑵（過半）にも当たらないので、
+候補 spec 名の案の欄は変えていない。足した行の中身は `stage = "A"`・`bundle = "サーフェスアニメーション"`・`owner_count = 9`・
+`wave = "C13"` で、束は 9 項目のうち 8 項目が属する束、段階はその束が順位表で置かれている段階の写し、ウェーブは正本のロードマップの
+写しである。あわせて `briefing.md` の `descript_shell_surfaces` の状態の数を数え直した値に直した。行数は **66 行**（`[[spec]]` の塊を
+数えた）で、うち束を持つ行が **42 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 66 に合わせ、`snapshot_on` は
+**2026-10-31** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -596,8 +608,8 @@ ukadoc に項目が無いので台帳に行を作らず、`doc/COMPAT_ARCHITECTU
 
 ```toml
 [briefs]
-count = 65
-snapshot_on = "2026-10-24"
+count = 66
+snapshot_on = "2026-10-31"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -1094,6 +1106,13 @@ stage = "A"
 bundle = "SHIORI の要求と応答"
 owner_count = 1
 wave = "C11-⑧"
+
+[[spec]]
+name = "seriko-pattern-calls"
+stage = "A"
+bundle = "サーフェスアニメーション"
+owner_count = 9
+wave = "C13"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -1111,7 +1130,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
 | 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `currentghost-property-tree`（W15・13 件）／`text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`script-small-tags`（v0.1.0・1 件） | 第 1 波（先頭ウェーブ） |
-| 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`seriko-interval-combinations`（シェルの element の列・1 件） | 第 1 波（先頭ウェーブ） |
+| 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`seriko-interval-combinations`（シェルの element の列・1 件）／`seriko-pattern-calls`（C13・8 件） | 第 1 波（先頭ウェーブ） |
 | 7 | 入力窓とダイアログ | `areka-P0-inputbox-dialog` | **0 本** | 第 2 波 |
 | 7 | 自発発話 | `areka-P0-idle-talk-canon` | **0 本** | 第 2 波 |
 | 8 | 終了 | `areka-P0-shutdown-canon` | **0 本** | 第 2 波 |
@@ -1124,7 +1143,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `balloon-canon-residue`（W14・5 件）／`balloon-scroll-arrows`（v0.1.0・4 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `choice-marker-styling`（W16・39 件）／`script-small-tags`（v0.1.0・1 件） | 第 2 波 |
-| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `draw-methods-canon`（シェルの element の列・2 件）／`areka-P0-self-alpha-declaration`（C4-⑬・2 件） | 第 2 波 |
+| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `draw-methods-canon`（シェルの element の列・2 件）／`areka-P0-self-alpha-declaration`（C4-⑬・2 件）／`seriko-pattern-calls`（C13・1 件） | 第 2 波 |
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件）／`areka-P0-balloon-break`（α 後・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
@@ -1587,7 +1606,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状（棚卸の時点の数。2026-10-10 の `seriko-trigger-intervals` の後の台帳では実装済み 7・語彙のみ 10・縮退 3）: 構成 47 件の状態は実装済み 2・未対応 27・語彙のみ 16・縮退 2 で、壊れる 75 件のうち 4 件がここにある。M1 の実機一周はこの束を 3 項目（項目 3・4・10）で見て合格しているが、それは emo2 が使う範囲の再生である。
 - 何が変わるか: シェルの定義に書かれた再生の指定が一通り効き、面の切り替えと重ね絵が作者の意図どおりに動く。
 
-**依存する既存 spec**: `currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`seriko-interval-combinations`（シェルの element の列・1 件）
+**依存する既存 spec**: `currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・3 件）／`seriko-interval-combinations`（シェルの element の列・1 件）／`seriko-pattern-calls`（C13・8 件）
 
 **構成 id（全 47 件）**
 

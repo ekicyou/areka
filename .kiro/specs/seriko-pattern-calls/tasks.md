@@ -135,7 +135,7 @@
   - _Depends: 4.2, 5.4, 6.1_
   - _Requirements: 3.8, 7.1, 7.3, 7.6_
 
-- [ ] 7. 網羅台帳と互換の文書を更新する
+- [x] 7. 網羅台帳と互換の文書を更新する
   - 網羅台帳の `start,ID`・`stop,ID`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert,ID`・`move` の 8 行と interval の `never` の行を、実装した状態と担当の spec にする
   - 互換の文書の §8 に、等しい確からしさ・巡回の止め・`insert` の行の座標を使わない・使えない所は何もせず記録・M1〜M8 の結果・`move` に倍率をかける（SSP はかけない）・着せ替えを純 `bind` と読む・止めた `always` は面の出し直しまで止まる・差し込む側が無効なら B は本来の位置、を書く
   - 台帳の検査（ukadoc-survey の検査）が通る
@@ -180,3 +180,4 @@
 - 6.1: 口は `placement/follow/move_shift.rs` の `apply_char_shift`・`apply_balloon_shift`・`balloon_shift`（記録 `MoveShiftApplied`、`want`・`ratio` は 6.3 まで `#[allow(dead_code)]`）。新しい経路 `PlacementRoute::PatternMove`（system reanchor・見送りが覆う・見える範囲の守りの対象。経路の表の檻を 12→13 語に直した）。バルーンのずれは `follow_balloon` と `move_window_with_route` の随伴の 2 か所で足す（飽和の足し算）。作業領域はずらした後の矩形で選ぶ（複数モニターでは隣へ寄りうる・SSP で未測定）。`origin_position` は 6.2。window_move.rs はもとから 1,227 行（上限超え）→ 1,231 行。
 - 6.2: 口は `move_shift.rs` の `origin_position`・`reset_applied`。既定のキャラ位置は `PatternMove`（system reanchor）でずれに付いて動き、ずれが 0 に戻れば既定も戻る（設計どおり）。保存は `origin_position`（今の位置 − 当てた分）。残る穴: 絶対位置で書く書き手（`reset_pos.rs:116` の位置の初期化・絶対の `\![move]`）は `applied` を残すので、ずれが 0 に戻ると「既定 − 当てた分」へ動く — 6.3 で扱う。
 - 6.3: ずれの相は `emo2_boot/frame/move_shift.rs` の `run_move_shift_phase`（`run_move_drain_phase` の直後・見送りの門は `defers_window_write`・観測点の語 `pattern-move`）。位置の初期化は `rebase_shift` で記録を外す（design.md の「他の書き手との関係」に追記済み）。裁定待ち: 絶対の `\![move]`（base が me 以外）は design どおり `applied` を残すので、後でずれが 0 に戻ると窓が「`\![move]` の行き先 − 当てた分」へ動く（SSP で未測定）— 案 A: 位置の初期化と同じく `rebase_shift` を呼ぶ／案 B: 今のまま互換の文書 §8 に書く。下揃えの窓は揃えの y の差も当てた分に入るが、保存の後の戻しで y は揃えが決め直すので害は無い。
+- 7: 台帳の 9 行を implemented・担当 seriko-pattern-calls に。COMPAT_ARCHITECTURE §8 に「pattern定義の呼び出しと `move`」。check を通すため `pattern_word.rs` の 8 本の腕に `// ukadoc:` の証跡、`table.rs` の never の URL に `:1`、briefing.md の数・roadmap-draft.md に spec の行（C13）を足した。絶対の `\![move]` は今の振る舞いとして §8 に書いた（裁定で変われば書き直す）。
