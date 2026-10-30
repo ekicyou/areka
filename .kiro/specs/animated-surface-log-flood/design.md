@@ -58,7 +58,7 @@
 - `blit.rs` の重ね方の式（`div255`・`source_over_channel`）を変える、または `Overlay` 以外の合成の仕方を実装する: `blit_rect.rs` が同じ式を持つ。式の食い違いは同値のテストが捕まえ、`Overlay` 以外の命令がある面は自動でいちから合成へ倒れるが、新しい仕方を矩形で切って重ねたいなら `blit_rect.rs` も直す。
 - `BlitOp` に位置や範囲に効く欄を足す（切り抜き・拡大など）: 矩形の求め方（置き場の矩形＝配置の位置＋切り詰めのずれ＋アトラスの矩形の幅と高さ）を見直す。`seriko-pattern-calls` の `move` が変えるのは `transform` の位置だけの見込みで、その場合は直さずに済む（命令が違えば矩形に入る）。
 - `build_plan` の引数を変える: `lib.rs` の `compose_into` と `compose_into_reusing` の 2 か所の呼び出しを同じに直す。
-- 合成の外形（`Extent`）がコマで変わるようになる: 外形が前の絵と違えばいちから合成へ倒れるので正しさは保つが、重さの見込みが変わる。
+- 合成の外形（`Extent`）がコマで変わるようになる（`seriko-pattern-calls` の `move` を命令と外形で表す形になった場合など）: 外形が前の絵と違えばいちから合成へ倒れるので正しさは保つが、その面ではコマ替えのたびに `full` になり、本 spec の効き目が消える。そうなったら、外形の替わりを下敷きの写しのずらしで扱う形を検討し直す。
 - 表示の行の文言・項目・水準の決まりを変える: 性能の道具（`tools/perf/`）と手順書。
 - `apply_show` の引数・`record_display`・`device_err` の引数を変える: 呼び手（`hub.rs`・`visibility.rs`・`refresh.rs`・`replace.rs`・テスト）。
 
@@ -153,6 +153,7 @@ crates/areka-emo-present/src/
 
 - 触らない: `plan.rs`（`BlitOp`・`Extent`・`build_plan` を読むだけ）・`pattern.rs`・`blit.rs`（`execute` を呼ぶだけ）・`composed.rs`（`resize_and_clear`・`bytes_mut` を呼ぶだけ）・`method.rs`（`ComposeMethod::Overlay` を比べるだけ）・`world.rs`・`plan_extent.rs`・`composer_tests.rs` を含む既存のテストのファイルすべて。
 - `seriko-pattern-calls` と重なりうるのは `lib.rs` だけ。向こうが新しいファイルの `mod` の行を足すなら、行の並びの違いだけで自動で合わさる見込み。向こうが `build_plan` の引数を変えるなら、`lib.rs` の 2 か所（148 行目の `compose_into` の中と、新しい口の中）を同じに直す。
+- **向こうのセッションとの合わせ（2026-10-30・済み）**: この表を送り、`lib.rs` で触る行は重ならないと答えをもらった。`build_plan` の引数を変えることになったら、`lib.rs` の 2 か所は向こうが一緒に直して知らせる。`move` は窓の位置で表す案が有力で、そうなれば命令列も外形も変わらない。詳しくは `research.md` §10.6。
 
 ## System Flows
 
