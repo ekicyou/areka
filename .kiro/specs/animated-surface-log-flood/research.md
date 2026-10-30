@@ -198,3 +198,56 @@
 9. **SSP の基準をそろえる面（議題 5）**。SSP を面 1002 にするか、areka を面 1000 で測るか。面 1000 にも同じボールがあり、件 25 の SSP の 10% は面 1000 だった見込みが高い（未確認）。
 10. **emo2 のまばたきの道を崩さない順**。控えの当たりを先に見て、外れたときだけ新しい道へ入る。定常の確保 0（`presenter_budget_steady_state_tests.rs`）と容量 3 の LRU（`presenter_cache_capacity_tests.rs`）の檻をそのまま通す。
 11. **同じ原因の失敗を積まない仕組み（要件 4.3）**。emo-present に前例が無いので、target ごとに「最後に出した失敗の原因」を持つ小さな状態を新しく足す。
+
+## 10. 設計の段（2026-10-30）
+
+> `/kiro-spec-design animated-surface-log-flood -y` の段の記録。discovery は light（既存の漏斗への拡張・新しい依存なし）。使ったのは `kiro-spec-design` の決まり（design-principles・design-discovery-light・design-synthesis・design-review-gate）だけで、ほかの skill は使っていない。調べは本ブランチのコードの読み直しと、`claude/seriko-pattern-calls-175601` の `requirements.md`・`research.md` の読み取り。実機・SSP・areka のプロセスには触れていない。
+
+### 10.1 新しく分かったこと
+
+- **同じ入力の 2 回目の適用も「コマ送りだけ」になる**: 要件 1 の定義（今のコマも同じ中身の適用も含む）のとおり、`presenter_perf_log_tests.rs` の `cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`（同じ面・同じ着せ替えを 2 回）の 2 回目は DEBUG になる。この主張（`assert_info_line_contract` が水準を INFO と決める）は直す。§3.1 の表の「変わらない」は 1 回目にだけ当たる。
+- **表示の行の欄の集合はテストで固定されている**（`assert_info_line_contract` の `INFO_LINE_FIELDS`・「1 つ足す」も赤）。要件 3.5 の読み分けは、表示の行に欄を足さず、別の DEBUG の行で出す。
+- **外から所有される窓（バルーン）の「出し直し」は `apply_show` の中だけでは見分けられない**: 隠れたバルーンへ同じコマの指令が届くと、`show_or_hold` は預からず `apply_show` へ通すが、窓は隠れたまま（出し直しではない＝コマ送りだけ）。`show_target` が通す適用は出し直し。どちらも `apply_show` から見ると同じ入力なので、呼び手が引数 `reveal` で知らせる。
+- **装置の失敗の記録は `command.rs` の `device_err` の中で出る**（target `areka_emo_present::command`・`display_fault_tests.rs` がこの target を主張する）。続く失敗を間引くには、記録の場所を動かさず、`device_err` に「前の原因」を渡すのがいちばん小さい。
+- **合成の外形は面ごとの静的な量**（`plan.rs` の `Extent`・`compute_extent` はコマにも着せ替えにもよらない）。同じ面で拡大率が同じなら `size_changed` は偽になる。
+- **`composer_tests.rs` の hot path の静的検査は `plan.rs`・`blit.rs`・`lib.rs` だけを読む**。新しい `blit_rect.rs` を検査に入れるには `composer_tests.rs` に 1 行足すことになるが、emo-compose で触るのは `lib.rs` と新しいファイルだけの決め（議題 5）なので、同じ検査を新しいテストのファイル `blit_rect_tests.rs` の中に置く。
+- **`seriko-pattern-calls` が emo-compose で触る見込みの所**: `plan.rs`（`derive_ops`・505 行目と 535 行目のあたり＝着せ替えの pattern0 の語の引き方）・`pattern.rs`（`move` の位置を運ぶなら）・`method.rs`・`world.rs`・`plan_extent.rs`。`lib.rs` は書かれていない。本 spec はそのどれにも触らない。`move` は命令の `transform` の位置を変える見込みで、本 spec の命令列の比べはそのまま効く。
+
+### 10.2 判断項目（§9）の行き先
+
+| § 9 | 決め | どこに書いたか |
+|---|---|---|
+| 1 水準 | `debug!`（要件討議の決め 1） | design「表示の適用」 |
+| 2 隠した後の出し直し | INFO。シェルは「今見えていない」、バルーンは「今見えておらず `reveal=true`（`show_target`）」で見分ける | design「System Flows」 |
+| 3 読み分けの形 | 表示の行は変えず、DEBUG の新しい行 `apply(ShowSurface): 重ね直しの範囲`（`recompose=full/partial`・矩形）を、控えに外れた回だけ表示の行の直前に出す。`cache_hit` の意味は変えない | design「新しい行」 |
+| 4 要件 3.1 の読み | 案 ⒞（要件討議の決め 4） | design「矩形の重ね直し」 |
+| 5 マスクと GPU の矩形 | 本 spec では全面のまま。マスクを矩形にするには wintf の `AlphaMask` に口が要り（境界の外）、GPU の絵の使い回しは D2D のコマンドリストの振る舞い（調べ物 ⑵）に頼る。要件 3.1 は重ね直し（合成）の話で、全面のままでも絵と当たりは同じ。CPU が SSP の中央値に届かなければ、要件 6.3 の道（差と理由と段別の所要を書いて仰ぐ）で開発者が次を決める | design「Non-Goals」「実機の測り」 |
+| 6 emo-compose の範囲 | `lib.rs`（`mod` 2 行・`Composer` の欄 1 つ・口 1 つ）と `blit_rect.rs`（＋兄弟のテスト `blit_rect_tests.rs`） | design「emo-compose で触る所」 |
+| 7 要件 3.3 の見本 | 要件はもう直っている（面 1002 は隣り合う 3 枚・挟む形は作った見本）。emo-compose のテストで両方の並びを 240 コマ続けて確かめる | design「Testing Strategy」 |
+| 8 CPU の線 | 要件討議の決め 3 のとおり | design「実機の測り」 |
+| 9 SSP の面 | 面 1002（要件討議の決め 6） | design「実機の測り」 |
+| 10 emo2 の道の順 | 控えの引き当てを先に見て、外れたときだけ矩形の道へ。`pattern` が空の面は今の `compose_into` のまま。定常の確保 0 と容量 3 の LRU の檻はそのまま通す | design「表示の適用」 |
+| 11 同じ原因の失敗 | 対象ごとの `failure_note`（`context`・`hresult`）。成立をはさまず同じ原因が続くあいだ 2 回目から DEBUG。合成の失敗は間引かない（emo-compose の中の行が境界の外・コマ送りだけの適用では起きない） | design「装置の失敗の記録」 |
+
+調べ物（§8）の行き先: ⑴ 内訳は実機の測りで取る（要件 6.3 の道で使う）。⑵ GPU の絵の使い回しをしないので不要。⑶ `presenter_film_tests.rs` の `applies` は文言で数え、`log-capture-kit` は TRACE まで拾うので変わらない。⑷ 置き場の矩形を命令ごとにアトラスから引くので、切り詰めのずれはそのまま入る。⑸ 面 1002 は、既定の水準でも面の替わりは INFO に出るので、最後の INFO の表示の行で確かめる。
+
+### 10.3 まとめ方（synthesis）
+
+- **一般化**: 動く絵のコマ・SERIKO のコマ・着せ替えの重ねの出入り・`move` を、「前の命令列と今の命令列の違い」という 1 つの見方で扱う。どの層が動くかの分類を持たない。口は「下敷きがあれば使う」の形で、使える条件（同じ外形・`Overlay` だけ）は口の中で決める。
+- **作るか使うか**: 外の部品は無い（整数の式の CPU 合成は自前の決まり）。矩形の道は `blit.rs` の式を同じに持ち、テストで同値を縛る。`blit.rs` を変えないのは議題 5 の決めのため（`seriko-pattern-calls` と重ならないこと）。
+- **削ったもの**: 下から途中までを焼いた控え（案 ⒝・絵が 1 枚増える・動く層の見分けが要る）・マスクと GPU の矩形（境界の外・測ってから）・失敗の間引きを合成の失敗まで広げること・同じ入力の当たりのあとも下敷きを保つ細工（下敷きを捨てて次の 1 回をいちから合成にするだけ・まれ）・命令列を控えのエントリごとに持つ形（合成器が 1 本持ち、対象の 1 つの真偽で対を保つほうが小さい）。
+
+### 10.4 案の比べ（重ね直し）
+
+| 案 | 中身 | 良い所 | 悪い所 | 決め |
+|---|---|---|---|---|
+| ⒜ emo-present の中だけ | 控えの数・GPU の絵の持ち方 | emo-compose に触らない | 要件 3.1 を満たさない | 取らない（議題 5） |
+| ⒝ 途中までの控え | 動く層の下を焼いた絵を控える | 上の層が無ければ速い | 絵が 1 枚増える・`move` の後に見分けを直す・上の層は毎回重ねる | 取らない |
+| ⒞ 前の絵＋違う所の矩形 | 前の絵を写し、命令列の違う所の矩形だけ全層を重ねる | 絵の追加 0・分類が要らない・画素の一致を示しやすい | 前の絵の写し（1.5 MB）が毎回要る | **取る**（要件討議の決め 4） |
+
+### 10.5 リスクと手当て
+
+- `blit_rect.rs` の式が `blit.rs` とずれる → 下敷きなし・全面の矩形の道が `blit::execute` とバイト単位で同じことをテストで縛る。`Overlay` 以外の命令がある面は矩形の道に入れない。
+- 下敷きと前の命令列の対が崩れる（当たり・失敗・無効化の後） → `partial_base` を外れの合成の前に偽にし、成立点でだけ真にする。控えに前の絵が無ければいちから合成。
+- CPU が SSP の中央値に届かない → マスク・GPU への上げ・wintf の描き直しが残るため起こりうる。要件 6.3 の道で、段別の所要を添えて開発者に仰ぐ。
+- `seriko-pattern-calls` と `lib.rs` で重なる → 触る行を design に挙げた。`build_plan` の引数が替われば 2 か所を同じに直す。
