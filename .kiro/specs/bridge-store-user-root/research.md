@@ -471,6 +471,67 @@ INFO areka_mcp_bridge::service: [bridge] connected to areka port=9801
 4. 開発者が設定の `command` を元の `C:\\home\\maz\\store\\.areka-mcp\\areka-mcp-bridge.exe` へ戻し、Claude Desktop を起動し直した（08:46・本物の中継が 2 つ動いている）。
 5. 08:47 に見比べた。箱の中の木は 11.1 の測る前の写しと同じ: `\mcp-bridge\server-info.json`（625・2026-10-23 23:37:49・SHA256 `4F3F1CEC…EEBA`）、`\mcp-bridge\tools.json`（6807・同じ時刻・SHA256 `CFF68DF9…7989`）。`profile\` は無い。違うのは `\mcp-bridge` のフォルダの時刻（戻した 07:58）だけ。本当の `%LOCALAPPDATA%\areka` は無い。
 
+### 11.4 M-2 の Bash の道具と PowerShell から（直した後・2026-10-30 10:00〜10:02）
+
+**検体**: HEAD `6406dfc06`（直しと説明書の後）で `cargo build -p areka -p areka-mcp-bridge` を通し、`target\bridge-store-measure\after\` に 11.1 と同じ形で並べた。S4 用に `after-alone\` に中継の exe だけを置いた。
+
+```
+\after\areka.exe                     35232768  SHA256 245B0EB229B0A3733AC2A0DB9DD6C44B3B8C1A752989195A04026BECADF075B2
+\after\areka-mcp-bridge.exe           8936960  SHA256 99906F75887D71A21908E08400DF0AD2B199E41FCC31CBA9E767641F262E95B0
+\after\Areka.Areka.Portable_measure.db      0
+\after\profile\areka\sylphya.toml          76  SHA256 EB18050A6C0F99D8C2F68EAF9C04ED3C1B8F5DDF7C458F8D32FAED0F8DACC900
+\after-alone\areka-mcp-bridge.exe     8936960  (上と同じ SHA256)
+```
+
+**測る前の形と控え**（`m2\pre-measure.txt`）: 箱の中の `areka\` は `\mcp-bridge\server-info.json`・`tools.json`（11.1 と同じ SHA256・時刻は 2026-10-30 09:02:51）だけ。開発者の机の本物の中継が、別のセッションの areka（9802）へつないで書き直したもの。これを `after\backup\box-LocalCache-Local-areka\` へ移した。本当の `%LOCALAPPDATA%\areka` は無い。
+
+**共通の形**: 流したのは 11.2 と同じ 2 行（`m1-12\input.jsonl`）。Bash の道具では `AREKA_MCP_HOME` を外し、`AREKA_*` と `RUST_LOG` は空だった。測った間、9801・9821 では SSP が答え、9802 では別のセッション（window-work-area-clamp）の areka が待ち受けていた（S5 と比べでは待ち受けが終わっていた）。どの起動も、標準入力を閉じた後に自分で終わった（終了コード 0）。起こす直前と直後に `m2\snap.ps1` で箱・本当の置き場・検体の木を写し、増えた物を数えた（`m2\<場面>\pre.txt`・`post.txt`）。
+
+| 点 | S1（本当の置き場が無い・Bash） | S3（本当の `areka\` だけ在る・Bash） | S5（箱の中に 0.0.3 の写しの形・Bash） | 比べ（PowerShell・`AREKA_USER_ROOT`＝`after\user-root\`） |
+|---|---|---|---|---|
+| 場面の作り方 | 何も作らない | PowerShell から本当の `%LOCALAPPDATA%\areka\` を空で作った | PowerShell から箱の中に `areka\profile\areka\sylphya.toml`（M-1 の S1 の写しと同じ物）を作った | 何も作らない（`after\user-root\` は無いまま） |
+| (a) できたフォルダ | 0 | 0 | 0 | 0（`user-root\` もできない） |
+| (b) 記憶の写し | 0。exe の隣の記憶の SHA256 は `EB18050A…C900` のまま | 0。同じ | 0。同じ | 0。同じ |
+| (c) 控え | 無し（areka につながったが、置き場が無いので書かない） | 無し（同じ） | 置き場は箱の中の `profile\areka\mcp-bridge` に決まったが、フォルダが無く areka も居なかったので書かれない | 無し |
+| (d) 判断の記録 | `user_data_layout reason="winget_install"` | 同じ | 同じ | `user_data_layout reason="env_var"` |
+| 控えを持たない理由 | W1 `reason="user_root_missing"` | W1 `reason="app_memory_not_migrated"` | 無し（`Ready`） | W1 `reason="user_root_missing"` |
+| 箱の行 | B2 `why="no_cache_dir"` | B2 `why="no_cache_dir"` | B2 `why="not_there_yet"`・`asked` つき | B2 `why="no_cache_dir"` |
+| 裏の書き | 無し | 無し | 無し | 無し |
+
+S1 の行（ASCII のまま・時刻を省き、利用者名だけ置き換えた・候補・待つ時間・SSP を飛ばした行・`answered the first inquiry`・`areka not found`・`finished quit=Closed` の行は省いた。下の S5 も同じ）:
+
+```
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="winget_install" user_root=C:\Users\<利用者>\AppData\Local\areka origin="default" marker="Areka.Areka.Portable_measure.db"
+INFO areka_mcp_bridge::config: [bridge] running without the cache until areka prepares its user root; it is used from the next start reason="user_root_missing" user_root=C:\Users\<利用者>\AppData\Local\areka
+INFO areka_mcp_bridge::redirect: [bridge] cannot tell whether writes under LOCALAPPDATA are redirected why="no_cache_dir"
+INFO areka_mcp_bridge::service: [bridge] connected to areka port=9802
+```
+
+S3 は 2 行目が `reason="app_memory_not_migrated"` で、ほかは S1 と同じ。S5 の行:
+
+```
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="winget_install" user_root=C:\Users\<利用者>\AppData\Local\areka origin="default" marker="Areka.Areka.Portable_measure.db"
+INFO areka_mcp_bridge::redirect: [bridge] cannot tell whether writes under LOCALAPPDATA are redirected why="not_there_yet" asked=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+```
+
+**S5 の続きの下見（S5b・本番の代わりにしない）**: S5 の形に、PowerShell から箱の中の `areka\profile\areka\mcp-bridge\` を空で足して、Bash の道具から同じく起こした（10:02）。中継は 9802 の areka につなぎ、控えの 2 つを箱の中の `profile\areka\mcp-bridge\` に書いた（`server-info.json` 625・`tools.json` 6807）。箱の行は B1 で、`canonicalize` は箱の場所を返した:
+
+```
+INFO areka_mcp_bridge::redirect: [bridge] writes under LOCALAPPDATA are redirected into the app's private folder (Microsoft Store app) asked=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge resolved=\\?\C:\Users\<利用者>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\areka\profile\areka\mcp-bridge box_dir=\\?\C:\Users\<利用者>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local
+```
+
+`resolved` と `box_dir` には `canonicalize` の `\\?\` の頭が付いたまま出る（設計の文は頭の有無を決めていない）。Claude Desktop から起こしたときも同じかは 6.3 の S4 で見る。
+
+**M-2 の Bash と PowerShell で分かったこと**:
+
+1. 直した中継は、どの場面でもフォルダを作らず、記憶を写さない（作る数 0・写す数 0・exe の隣の記憶の SHA256 不変・要件 2.2・2.3）。
+2. 根がまだ無い（S1）・写しがまだ（S3）では、理由の行 W1 を 1 件出して控え無しで動く（要件 2.4・2.5・3.2）。
+3. 0.0.3 の写しが箱の中に残っていると（S5）、箱の中の中継からは根が在ると見え（`Ready`）、控えの置き場は箱の中の `profile\areka\mcp-bridge` になる。控えが書かれた後の起動では B1 で箱の中と分かる（S5b）。説明書のとおり、その写しを消せば S1 と同じ形に戻る。
+4. Bash の道具から起こした中継でも、`canonicalize` は箱の中の場所を返した（設計の一番危うい見込みの下見）。
+
+**戻し**: S3 で作った本当の `%LOCALAPPDATA%\areka`（空）を消した。S5・S5b で作った箱の中の `areka\`（控えの 2 つを含む）を消した。`after\user-root\` はできていない。10:02 の時点で、箱の中に `areka\` は無く、本当の `%LOCALAPPDATA%\areka` も無い。控えは `after\backup\` に置いたまま（戻すのは 6.3 の終わり）。
+
 ## 12. 設計の討議で決めたこと（2026-10-29）
 
 - 議題 1（承認）: 実機の測りで Claude Desktop の起動し直しを頼むのは 4 回（M-1 の S1・S2、M-2 の S2 を 2 回）。M-2 の S1・S3 は Bash の道具（その子も同じ箱へ回される）から検体の中継を起こして測る。本物の Claude Desktop でしか確かめられない「箱の行と箱のフォルダの場所」は M-2 の S2 の 2 回目に入る。

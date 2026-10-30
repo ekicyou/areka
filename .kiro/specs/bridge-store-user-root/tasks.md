@@ -89,7 +89,7 @@
   - _Requirements: 6.1, 6.2, 6.3_
   - 結果（2026-10-30）: 3 つのクレートのテストは緑（`areka` は `--no-fail-fast` で緑・途中の赤は i686 の試しの DLL の建て忘れと負荷の下の揺れ 1 回で、どちらもこの spec の外）。lint は `cargo clippy --no-deps -p areka-user-data -p areka-mcp-bridge --all-targets -- -D warnings` が 0。`areka` 本体と依存の `dola`・`areka-kanade` には前からの指摘があり、この spec はどれも変えていない（`git diff 58734aa37 -- crates/areka` は空）。`Cargo.lock` の外部のクレートは 0 増
 
-- [ ] 6.2 直した後の検体で、Bash の道具と PowerShell から S1・S3・S5 と比べを測る
+- [x] 6.2 直した後の検体で、Bash の道具と PowerShell から S1・S3・S5 と比べを測る
   - 直した後のコードで建てた検体を `target\bridge-store-measure\after\` に 1.1 と同じ形で並べ、測る前の写しを取って箱の中を控える
   - S1（本当の置き場が無い）と S3（本当の `%LOCALAPPDATA%\areka\` は在るが `profile\areka\` が無い・測りの間だけ作る）を、同じ箱へ回される Bash の道具から検体の中継を起こして測る
   - S5（0.0.3 の中継が残した写しの形＝箱の中の `areka\profile\areka\` を測りの間だけ作る・本当の置き場は無い）も同じく Bash の道具から測り、箱の中から根が在ると見えて控えを箱の中に置くかを記録する
