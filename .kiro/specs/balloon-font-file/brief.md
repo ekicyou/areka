@@ -145,3 +145,8 @@
   - 今ぶつかる相手（同じウェーブに置けない）: `range-choice-tag`（`actor.rs` と `lib.rs` の席）・`choice-ranges-one-function`（`actor.rs`）・`balloon-text-bugs`（`lib.rs` の席。件 1 を文字の層で直すなら `actor.rs` も）・`choice-marker-styling`（`viewbox_draw_render.rs`）・`real-run-log-noise`（`actor_attach.rs`）・`text-typesetting`・`balloon-canon-residue`・`shell-companion-balloon`（`emo2_boot/frame/switch.rs`）。
   - 並べられる相手: `font-size-keywords`（重なり 0。あちらは `look.rs`・`state_decoration.rs`・`check_script_judge.rs`。あちらの brief は本 spec を「`look.rs` に触る」と書くが、本 spec は `look.rs` に触らない見込み）。
   - roadmap の列の説明「`actor.rs`・`viewbox_draw_render.rs` が `anchor-tag-canon` と重なる」は、相手が着地して用済み。
+
+## 2026-10-30 `emo-text-dwrite-fidelity` の着地前の申し送り
+
+- **前提の変化**: `emo-text-dwrite-fidelity` が `FontCatalog`（`crates/areka-emo-text/src/draw_catalog.rs`）の公開の口を変えた。名前は顔 `FontFace`（家族・太さ・幅・斜体）へ解き、`face_for`・`face_or_default`・`face_or` が顔を返す。候補ごとに家族名で引き、無ければ GDI の名前（例「游ゴシック Medium」）で引く。`family_for` は `face_for` の家族名だけを返す薄い口になった。書式は `draw.rs::try_create_format`（顔＋太字・斜体）で作る。
+- **この spec への影響**: 「`.ttf` などを読み飛ばす所」と「書式を作る所」の位置と形が変わった。着手時に、同梱フォントを引く計画（読み込んだフォントの名前を候補列で引く所・書式を作る所）をこの口に合わせて引き直すこと。
