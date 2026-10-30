@@ -1,9 +1,14 @@
 //! # draw_catalog — フォント候補列の解決（COM 層・draw ファサードの子）
 //!
 //! [`FontCatalog`] は「記述順に並んだフォント名の候補列」から、この機械に実際に
-//! 入っているフォント名を 1 つ選ぶ（要件 9.1／9.2）。選んだ結果は候補列ごとに
-//! 覚えるので、同じ列を文字ごとに引き直さない（要件 9.7）。
+//! 入っている顔（[`FontFace`]＝家族名・太さ・幅・斜体）を 1 つ選ぶ（要件 9.1／9.2）。
+//! 選んだ結果は候補列ごとに覚えるので、同じ列を文字ごとに引き直さない（要件 9.7／3.11）。
 //!
+//! - 各候補は家族名として引き、無ければ GDI の名前（例「游ゴシック Medium」）として
+//!   引き直す（emo-text-dwrite-fidelity 要件 3.1〜3.5）。家族名で当たれば Regular の顔、
+//!   GDI の名前で当たればその名前が指す家族・太さ・幅・斜体。切り替えの設定も新しい
+//!   名前の書き方も持たない（要件 3.8／3.9）。number ほかの表示もこの台帳を通せば同じ
+//!   引き直しが効く（要件 4.7・共有の唯一の入口）。
 //! - 候補がフォントファイル名（`.ttf`／`.otf`／`.ttc`・大小無視）のときは読み込まず、
 //!   記録を 1 度だけ残して次の候補へ進む（要件 9.3）。
 //! - 候補が全滅したときは、試した候補を添えた記録を 1 度だけ残して既定のフォントへ
@@ -22,12 +27,19 @@
 //! `\f[name,a,b]` と `\f[name,"a,b"]` は別の候補列として到達する。
 
 use std::cell::{Cell, RefCell};
+#[cfg(test)]
+use std::collections::BTreeMap;
 use std::collections::{BTreeSet, HashMap};
 
-use tracing::warn;
+use tracing::{debug, warn};
+use windows::Win32::Foundation::DWRITE_E_NOFONT;
 use windows::Win32::Graphics::DirectWrite::{
-    IDWriteFactory, IDWriteFactory2, IDWriteFontCollection,
+    DWRITE_FONT_STRETCH, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE, DWRITE_FONT_STYLE_ITALIC,
+    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT, DWRITE_FONT_WEIGHT_BOLD,
+    DWRITE_FONT_WEIGHT_NORMAL, IDWriteFactory, IDWriteFactory2, IDWriteFont, IDWriteFontCollection,
+    IDWriteGdiInterop,
 };
+use windows::Win32::Graphics::Gdi::{DEFAULT_CHARSET, LOGFONTW};
 use windows::core::{BOOL, HSTRING, Interface};
 
 use super::{DEFAULT_FONT_NAME, ResolvedFont, device_err};
@@ -35,6 +47,50 @@ use crate::TextLayerError;
 
 /// フォントファイル名と見なす拡張子（大小無視・要件 9.3）。読み込みは実装しない。
 const FONT_FILE_EXTENSIONS: [&str; 3] = [".ttf", ".otf", ".ttc"];
+
+/// GDI の名前になりうる最大の長さ（`LOGFONTW::lfFaceName` の 32 単位から終端を除いた数）。
+const GDI_FACE_NAME_MAX_UNITS: usize = 31;
+
+/// 名前が指す顔（家族名・太さ・幅・斜体を DirectWrite の型のまま持つ値）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct FontFace {
+    /// DirectWrite の家族名（`CreateTextFormat`／`SetFontFamilyName` へそのまま渡せる名前）。
+    pub family: String,
+    pub weight: DWRITE_FONT_WEIGHT,
+    pub stretch: DWRITE_FONT_STRETCH,
+    pub style: DWRITE_FONT_STYLE,
+}
+
+impl FontFace {
+    /// 家族名で当たった候補の顔（太さ・幅・斜体とも NORMAL・要件 3.3）。
+    pub fn regular(family: &str) -> FontFace {
+        FontFace {
+            family: family.to_owned(),
+            weight: DWRITE_FONT_WEIGHT_NORMAL,
+            stretch: DWRITE_FONT_STRETCH_NORMAL,
+            style: DWRITE_FONT_STYLE_NORMAL,
+        }
+    }
+
+    /// 太字の指定を重ねた太さ。真なら名前の太さと BOLD の大きい方、偽なら名前の太さ（要件 4.2・4.3）。
+    pub fn weight_with(&self, bold: bool) -> DWRITE_FONT_WEIGHT {
+        if bold {
+            // 太字が名前の太さより軽くならないよう大きい方（Black＋太字は 900 のまま）。
+            DWRITE_FONT_WEIGHT(self.weight.0.max(DWRITE_FONT_WEIGHT_BOLD.0))
+        } else {
+            self.weight
+        }
+    }
+
+    /// 斜体の指定を重ねた斜体。真なら ITALIC、偽なら名前の斜体（要件 4.4・4.5）。
+    pub fn style_with(&self, italic: bool) -> DWRITE_FONT_STYLE {
+        if italic {
+            DWRITE_FONT_STYLE_ITALIC
+        } else {
+            self.style
+        }
+    }
+}
 
 /// 記録済み判定の鍵——**連結した綴りにしない**（モジュール doc「記録の重複判定の鍵」）。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -45,20 +101,26 @@ enum WarnKey {
     AllMissing(Vec<String>),
 }
 
-/// 実在するフォント名の問い合わせ先。
+/// 実在するフォントの問い合わせ先。
 enum FamilySource {
-    /// システムのフォント集合（本番経路・生成時に 1 度だけ取得する）。
-    System(IDWriteFontCollection),
-    /// テスト用の偽の集合（小文字化した名前・本番には存在しない）。
+    /// システムのフォント集合と GDI 互換の口（本番経路・生成時に 1 度だけ取得する）。
+    System {
+        collection: IDWriteFontCollection,
+        gdi: IDWriteGdiInterop,
+    },
+    /// テスト用の偽の集合（家族名と GDI の名前の鍵はどちらも小文字・本番には存在しない）。
     #[cfg(test)]
-    Fake(BTreeSet<String>),
+    Fake {
+        families: BTreeSet<String>,
+        gdi: BTreeMap<String, FontFace>,
+    },
 }
 
-/// 候補列→実在するフォント名の解決・記憶・記録の 1 度化（要件 9.1〜9.4／9.7／9.8／13.2）。
+/// 候補列→実在する顔の解決・記憶・記録の 1 度化（要件 9.1〜9.4／9.7／9.8／13.2・3.1〜3.11）。
 pub struct FontCatalog {
     families: FamilySource,
-    /// 候補列→解決した名前（`None`＝全滅）。鍵は候補列そのもの。
-    memo: RefCell<HashMap<Vec<String>, Option<String>>>,
+    /// 候補列→解決した顔（`None`＝全滅）。鍵は候補列そのもの。
+    memo: RefCell<HashMap<Vec<String>, Option<FontFace>>>,
     /// 記録済みの鍵（[`WarnKey`]）。
     ///
     /// **記録の周期は「台帳の寿命のあいだ 1 度」**（タスク 9.4 の裁定・6.2 の申し送り）。
@@ -75,7 +137,7 @@ pub struct FontCatalog {
 }
 
 impl FontCatalog {
-    /// システムのフォント集合を 1 度だけ取得して台帳を作る。
+    /// システムのフォント集合と GDI 互換の口を 1 度だけ取得して台帳を作る（失敗は `error!`＋`Err`）。
     pub fn new(factory: &IDWriteFactory2) -> Result<FontCatalog, TextLayerError> {
         let base: IDWriteFactory = factory
             .cast()
@@ -90,7 +152,11 @@ impl FontCatalog {
                 context: "GetSystemFontCollection",
             }
         })?;
-        Ok(FontCatalog::with_source(FamilySource::System(collection)))
+        let gdi = unsafe { base.GetGdiInterop() }.map_err(device_err("GetGdiInterop"))?;
+        Ok(FontCatalog::with_source(FamilySource::System {
+            collection,
+            gdi,
+        }))
     }
 
     fn with_source(families: FamilySource) -> FontCatalog {
@@ -102,12 +168,22 @@ impl FontCatalog {
         }
     }
 
-    /// テスト用——実機のフォント構成に依存しない偽の集合で台帳を作る。
+    /// テスト用——実機のフォント構成に依存しない偽の集合（家族名だけ）で台帳を作る。
     #[cfg(test)]
     pub(super) fn with_families(installed: &[&str]) -> FontCatalog {
-        FontCatalog::with_source(FamilySource::Fake(
-            installed.iter().map(|n| n.to_lowercase()).collect(),
-        ))
+        FontCatalog::with_faces(installed, &[])
+    }
+
+    /// テスト用——家族名の集合と「GDI の名前 → 顔」の表で偽の台帳を作る（要件 6.2）。
+    #[cfg(test)]
+    pub(crate) fn with_faces(families: &[&str], gdi: &[(&str, FontFace)]) -> FontCatalog {
+        FontCatalog::with_source(FamilySource::Fake {
+            families: families.iter().map(|n| n.to_lowercase()).collect(),
+            gdi: gdi
+                .iter()
+                .map(|(name, face)| (name.to_lowercase(), face.clone()))
+                .collect(),
+        })
     }
 
     /// 記憶に無くて実際に問い合わせた回数（要件 9.7 の観測点）。
@@ -116,8 +192,9 @@ impl FontCatalog {
         self.lookups.get()
     }
 
-    /// 記述順に問い合わせて最初に見つかった名前を返す。空列は `None`（記録なし）。
-    pub fn family_for(&self, candidates: &[String]) -> Option<String> {
+    /// 記述順に問い合わせて最初に入っている顔。空列は `None`（記録なし）。
+    /// 全滅は `warn!` 1 度＋`None`（要件 3.4／3.6）。
+    pub fn face_for(&self, candidates: &[String]) -> Option<FontFace> {
         if candidates.is_empty() {
             return None;
         }
@@ -138,8 +215,13 @@ impl FontCatalog {
                 }
                 continue;
             }
-            if self.has_family(candidate) {
-                resolved = Some(candidate.clone());
+            // 家族名 → GDI の名前の順（GDI の名前は家族名にも当たるので順を守る・要件 3.4）。
+            resolved = if self.has_family(candidate) {
+                Some(FontFace::regular(candidate))
+            } else {
+                self.gdi_face(candidate)
+            };
+            if resolved.is_some() {
                 break;
             }
         }
@@ -156,16 +238,32 @@ impl FontCatalog {
         resolved
     }
 
-    /// バルーン定義の候補列（`[name] ++ fallback_chain`）を解決した名前を `name` に
-    /// 据えた複製を返す（要件 9.8）。全滅は [`DEFAULT_FONT_NAME`]。
+    /// [`FontCatalog::face_for`] の家族名だけ（「入っているか」の問いと名前だけの呼び手の口）。
+    pub fn family_for(&self, candidates: &[String]) -> Option<String> {
+        self.face_for(candidates).map(|face| face.family)
+    }
+
+    /// [`FontCatalog::face_for`]、全滅なら [`DEFAULT_FONT_NAME`] の Regular の顔。
+    pub fn face_or_default(&self, candidates: &[String]) -> FontFace {
+        self.face_for(candidates)
+            .unwrap_or_else(|| FontFace::regular(DEFAULT_FONT_NAME))
+    }
+
+    /// [`FontCatalog::face_for`]、全滅なら `fallback`（束縛の顔・要件 4.10）。
+    pub fn face_or(&self, candidates: &[String], fallback: &FontFace) -> FontFace {
+        self.face_for(candidates)
+            .unwrap_or_else(|| fallback.clone())
+    }
+
+    /// バルーン定義の候補列（`[name] ++ fallback_chain`）を解決した顔を `face` に、その
+    /// 家族名を `name` に据えた複製を返す（要件 9.8・3.2）。全滅は [`DEFAULT_FONT_NAME`] の Regular。
     ///
     /// 既存の書式生成関数（`create_text_format`／`try_create_format`）は**この複製で**
     /// 呼ぶ——解決は書式生成の手前で終わっているので、生成関数の本文は変わらない。
     pub fn pick(&self, font: &ResolvedFont) -> ResolvedFont {
         let mut picked = font.clone();
-        picked.name = self
-            .family_for(&font.looks.default.name)
-            .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());
+        picked.face = self.face_or_default(&font.looks.default.name);
+        picked.name = picked.face.family.clone();
         picked
     }
 
@@ -174,10 +272,10 @@ impl FontCatalog {
         self.warned.borrow_mut().insert(key)
     }
 
-    /// この機械にその名前のフォントが入っているか。
+    /// この機械にその名前のフォントが入っているか（家族名として）。
     fn has_family(&self, name: &str) -> bool {
         match &self.families {
-            FamilySource::System(collection) => {
+            FamilySource::System { collection, .. } => {
                 let mut index = 0u32;
                 let mut exists = BOOL(0);
                 match unsafe {
@@ -192,9 +290,63 @@ impl FontCatalog {
                 }
             }
             #[cfg(test)]
-            FamilySource::Fake(installed) => installed.contains(&name.to_lowercase()),
+            FamilySource::Fake { families, .. } => families.contains(&name.to_lowercase()),
         }
     }
+
+    /// GDI の名前としてその名前が指す顔（要件 3.1／3.2／3.5）。見つからない名前は `None`
+    /// （記録しない）・想定外の失敗は `error!` を残して `None`（次の候補へ進む）。
+    fn gdi_face(&self, name: &str) -> Option<FontFace> {
+        let units: Vec<u16> = name.encode_utf16().collect();
+        if units.len() > GDI_FACE_NAME_MAX_UNITS {
+            debug!(candidate = %name, "31 単位を超える候補は GDI の名前になりえない——引かない");
+            return None;
+        }
+        match &self.families {
+            FamilySource::System { gdi, .. } => {
+                let mut logfont = LOGFONTW {
+                    lfWeight: 400,
+                    lfCharSet: DEFAULT_CHARSET,
+                    ..Default::default()
+                };
+                logfont.lfFaceName[..units.len()].copy_from_slice(&units);
+                match unsafe { gdi.CreateFontFromLOGFONT(&logfont) } {
+                    Ok(font) => face_of(&font),
+                    // 見つからない名前は失敗で返る（置き換えは起きない）——失敗ではなく「無い」。
+                    Err(e) if e.code() == DWRITE_E_NOFONT => None,
+                    Err(e) => {
+                        // log-first: 想定外の失敗は記録して次の候補へ進む。
+                        let _ = device_err("CreateFontFromLOGFONT")(e);
+                        None
+                    }
+                }
+            }
+            #[cfg(test)]
+            FamilySource::Fake { gdi, .. } => gdi.get(&name.to_lowercase()).cloned(),
+        }
+    }
+}
+
+/// GDI で引いた書体の顔（家族名は `GetFamilyNames` の先頭）。失敗は `error!` を残して `None`。
+fn face_of(font: &IDWriteFont) -> Option<FontFace> {
+    let family = unsafe {
+        font.GetFontFamily()
+            .and_then(|family| family.GetFamilyNames())
+            .and_then(|names| {
+                let mut buffer = vec![0u16; names.GetStringLength(0)? as usize + 1];
+                names.GetString(0, &mut buffer)?;
+                let len = buffer.iter().position(|&u| u == 0).unwrap_or(buffer.len());
+                Ok(String::from_utf16_lossy(&buffer[..len]))
+            })
+    }
+    .map_err(device_err("GetFamilyNames"))
+    .ok()?;
+    Some(FontFace {
+        family,
+        weight: unsafe { font.GetWeight() },
+        stretch: unsafe { font.GetStretch() },
+        style: unsafe { font.GetStyle() },
+    })
 }
 
 /// 候補がフォントファイル名か（大小無視・要件 9.3）。

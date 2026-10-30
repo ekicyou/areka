@@ -1629,8 +1629,8 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!。フォントファイル名らしい候補を読み飛ばすときに 1 度出る。
-areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ、areka-emo-text の draw::ResolvedFont::resolve_with_background がカンマで切って記述順のまま書体の候補列（look::TextLook の name）にし、draw_catalog::FontCatalog::family_for が記述順に問い合わせて最初に見つかった書体を採る。
-⒜ バルーンのフォルダに置いたフォントファイルは指定できない。draw_catalog::FontCatalog::family_for はファイル名らしい候補を warn! で 1 度記録して読み飛ばし、次の候補へ進む（フォントファイルを読み込む経路は無い）。正典どおりでないのはこの 1 点だけで、引受先なし・要望が出た時点で起票（SSP 追従は要望が出た時点で判断する・2026-09-11 開発者裁定）。
+areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ、areka-emo-text の draw::ResolvedFont::resolve_with_background がカンマで切って記述順のまま書体の候補列（look::TextLook の name）にし、draw_catalog::FontCatalog::face_for が記述順に、家族名で、無ければ GDI の名前（家族名＋太さ・斜体・幅。例「游ゴシック Medium」）として問い合わせ、最初に当たった顔（家族・太さ・幅・斜体）で描画と計測を行う。
+⒜ バルーンのフォルダに置いたフォントファイルは指定できない。draw_catalog::FontCatalog::face_for はファイル名らしい候補を warn! で 1 度記録して読み飛ばし、次の候補へ進む（フォントファイルを読み込む経路は無い）。正典どおりでないのはこの 1 点だけで、引受先なし・要望が出た時点で起票（SSP 追従は要望が出た時点で判断する・2026-09-11 開発者裁定）。
 ⒝ カンマ区切りの優先列は解消済み。候補を記述順に問い合わせ、インストールされていない書体は飛ばして次の候補を採る。候補が 1 つも見つからないときだけ warn! を 1 度出して既定の書体へ戻す。
 縦書き用の字形が無いフォントを標準ゴシックへ差し替えるという決まりは、正典ではこの項目ではなく vertical の項目の説明の中に書かれている（2026-09-05 にライブの正典で確認）ため、その食い違いは vertical の項目に登記した。
 担当 spec は areka-P0-balloon-font-descript-keys。

@@ -22,17 +22,15 @@ use std::sync::Arc;
 
 use tracing::warn;
 use windows::Win32::Graphics::DirectWrite::{
-    DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_ITALIC,
-    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_NORMAL,
-    DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteFactory, IDWriteFactory2,
+    DWRITE_FONT_METRICS, DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteFactory, IDWriteFactory2,
     IDWriteFontCollection, IDWriteTextFormat,
 };
 use windows::core::{BOOL, HSTRING, Interface};
-use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
+use wintf::com::dwrite::DWriteTextLayoutExt;
 
 use super::{
-    DEFAULT_FONT_NAME, DirectionRecipe, FontCatalog, LOCALE_JA_JP, PROBE_MAX_EXTENT, ResolvedFont,
-    create_text_format, device_err,
+    DirectionRecipe, FontCatalog, FontFace, ResolvedFont, create_line_layout, create_text_format,
+    device_err, try_create_format,
 };
 use crate::TextLayerError;
 use crate::layout::{GlyphMetrics, column_centred_em_box_left};
@@ -49,10 +47,10 @@ use crate::writing::WritingMode;
 ///   writing_mode 方向レシピ込み）で**生成時に一度だけ**焼く。
 /// - 既定でない見た目は、その計測鍵（[`FontKey`]）ごとの試験用書式を
 ///   [`probe_format_for`](Self::probe_format_for) が**鍵ごとに 1 度だけ**焼く
-///   （家族名は [`FontCatalog::family_for`] が解決した名前か [`DEFAULT_FONT_NAME`]
-///   のみ・R11.3）。
+///   （顔は鍵の候補列の顔か、全滅なら束縛の顔のみ・R11.3）。
 /// - `advance` は対象文字（書記素クラスタ 1 つ）全体の**未折返し probe layout**
-///   （[`PROBE_MAX_EXTENT`] 寸）を生成し cluster metrics の width 合計を返す（折返し決定より
+///   （行と同じ生成口 [`create_line_layout`]・行内軸 [`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT) 寸）を生成し
+///   cluster metrics の width 合計を返す（折返し決定より
 ///   前の計測＝鶏卵なし。DirectWrite が 2 つに整形するクラスタ＝国旗などは合計が行の中で
 ///   占める幅になる）。
 /// - 計測値は「計測鍵 → 文字（クラスタ文字列）」の 2 段でキャッシュする（書式が鍵で定まる＝
@@ -75,7 +73,7 @@ pub struct DWriteMetrics {
     /// （生成時に一度だけ実測・文字列非依存＝フォント固有の設計値）。
     line_box_ratio: f32,
     /// 縦書きの em の箱の左の比（`(left + baseline − h/2) ÷ h`・生成時に一度だけ実測）。
-    /// 横書きに束縛した物と、測れなかった物は `None`（既定の実装＝列の箱の真ん中）。
+    /// 横書きに束縛した物は `None`（既定の実装）。縦書きで測れなかった物は 0（行の矩形の真ん中）。
     vertical_em_box_left_ratio: Option<f32>,
     /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（probe 成功値のみ・
     /// 失敗は縮退値を返しキャッシュしない）。既定の見た目は [`default_key`](Self::default_key)
@@ -83,6 +81,8 @@ pub struct DWriteMetrics {
     cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, f32>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,
+    /// 束縛書式の顔（`fonts.pick(font)` の解決）——全滅の計測鍵はこの顔で測る（要件 4.10）。
+    bound_face: FontFace,
     /// 束縛書式に焼いた見た目の計測鍵——この鍵の計測は束縛書式の経路をそのまま通る
     /// （装飾を使わない台本の計測値が従来と 1 ビットも変わらない構造的保証）。
     default_key: FontKey,
@@ -161,20 +161,21 @@ impl DWriteMetrics {
             fallback_ratio
         });
         // 縦書きの em の箱の置き場も、行ボックス比と同じく生成時に 1 度だけ測る（書体の寸法は不変）。
+        // 測れないときは 0（行の矩形の真ん中＝列のレシピが em の箱を置く場所）へ縮退する。
         let vertical_em_box_left_ratio = match mode {
             WritingMode::HorizontalTb => None,
-            WritingMode::VerticalRl | WritingMode::VerticalLr => {
-                measure_vertical_em_box_left_ratio(factory, &format, font.height)
-                    .inspect_err(|step| {
+            WritingMode::VerticalRl | WritingMode::VerticalLr => Some(
+                measure_vertical_em_box_left_ratio(factory, &format, font.height, mode)
+                    .unwrap_or_else(|step| {
                         warn!(
                             font = %picked.name,
                             ?mode,
                             step,
-                            "縦書きの列の基線を測れない——em の箱を列の箱の真ん中へ縮退する"
+                            "縦書きの列の基線を測れない——em の箱を行の矩形の真ん中へ縮退する"
                         );
-                    })
-                    .ok()
-            }
+                        0.0
+                    }),
+            ),
         };
         Ok(DWriteMetrics {
             factory: factory.clone(),
@@ -185,6 +186,7 @@ impl DWriteMetrics {
             vertical_em_box_left_ratio,
             cache: RefCell::new(HashMap::new()),
             fonts,
+            bound_face: picked.face,
             default_key: font.looks.default.font_key(),
             mode,
             probe_formats: RefCell::new(HashMap::new()),
@@ -209,48 +211,25 @@ impl DWriteMetrics {
 
     /// 計測鍵ごとの試験用書式（**鍵ごとに 1 度だけ**生成して持ち回す）。
     ///
-    /// 家族名の**第 2 の入口**——DirectWrite へ渡る名前は
-    /// [`FontCatalog::family_for`] が解決した名前か [`DEFAULT_FONT_NAME`] のどちらかだけで、
-    /// 別名への差し替え（縦書き異体名など）は存在しない。設定は束縛書式の生成経路
-    /// （`create_text_format`／`try_create_format`）と同じ並び——コレクション既定・
-    /// stretch NORMAL・locale ja-JP——に、鍵の太字／斜体／大きさを載せた形で、
-    /// 最後に同じ [`DirectionRecipe`] を焼く（R11.3「計測と描画は同じ書式経路」）。
-    /// **`draw.rs::try_create_format` の設定列を字面で複製している**（タスク 9.4 の記録）。
-    ///
-    /// 太さと斜体を鍵ごとに変える必要があるため既存関数を再利用できず、それ以外の設定
-    /// （コレクション既定・`DWRITE_FONT_STRETCH_NORMAL`・`LOCALE_JA_JP`）は同じ値を
-    /// 書き写している（design が逐語で指定した形）。**`try_create_format` 側の設定を
-    /// 変えても、ここは自動では追随しない**——家族名が DirectWrite へ渡る入口が 2 つある
-    /// ことは `draw_format_metrics_tests.rs` の家族名検査が見張っているが、その他の設定の
-    /// 一致を見張る述語は無い。
+    /// 顔は「鍵の候補列の顔、全滅なら束縛の顔」（[`FontCatalog::face_or`]）——描画の範囲指定
+    /// （`apply_font_ranges`）と同じ規則なので、全滅の区間も描画と同じ顔で測る（要件 4.10・
+    /// 完了 spec の「全滅は ＭＳ ゴシックで測る」を上書き）。書式は束縛書式と共用の
+    /// `draw.rs::try_create_format` に顔と鍵の太字／斜体／大きさを渡して作り、最後に同じ
+    /// [`DirectionRecipe`] を焼く（要件 4.1「計測と描画は同じ書式経路」・設定の写しを持たない）。
+    /// 計測鍵が顔を一意に決めるので、記憶の鍵は計測鍵のまま。
     fn probe_format_for(&self, key: &FontKey) -> Result<IDWriteTextFormat, TextLayerError> {
         if let Some(format) = self.probe_formats.borrow().get(key) {
             return Ok(format.clone());
         }
-        let family = self
-            .fonts
-            .family_for(&key.name)
-            .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());
-        let format = self
-            .factory
-            .create_text_format(
-                &HSTRING::from(family.as_str()),
-                None::<&IDWriteFontCollection>,
-                if key.bold {
-                    DWRITE_FONT_WEIGHT_BOLD
-                } else {
-                    DWRITE_FONT_WEIGHT_NORMAL
-                },
-                if key.italic {
-                    DWRITE_FONT_STYLE_ITALIC
-                } else {
-                    DWRITE_FONT_STYLE_NORMAL
-                },
-                DWRITE_FONT_STRETCH_NORMAL,
-                f32::from_bits(key.height_bits),
-                &HSTRING::from(LOCALE_JA_JP),
-            )
-            .map_err(device_err("CreateTextFormat(probe)"))?;
+        let face = self.fonts.face_or(&key.name, &self.bound_face);
+        let format = try_create_format(
+            &self.factory,
+            &face,
+            key.bold,
+            key.italic,
+            f32::from_bits(key.height_bits),
+        )
+        .map_err(device_err("CreateTextFormat(probe)"))?;
         self.probe_format_creations
             .set(self.probe_format_creations.get() + 1);
         DirectionRecipe::for_mode(self.mode).apply(&format)?;
@@ -289,14 +268,12 @@ impl DWriteMetrics {
         Some(advance)
     }
 
-    /// 1 文字（クラスタ 1 つ）全体の未折返し probe layout を指定の書式で生成し、
-    /// cluster metrics の width 合計を返す。
+    /// 1 文字（クラスタ 1 つ）全体の未折返し probe layout を指定の書式で、行と同じ生成口
+    /// （[`create_line_layout`]・縦書きは列のレシピ）で生成し、cluster metrics の width 合計を返す
+    /// （要件 2.4: 計測と行は同じ設定）。行送り軸の箱は書式の大きさ。
     fn probe_advance(&self, text: &str, format: &IDWriteTextFormat) -> Result<f32, TextLayerError> {
-        let text = HSTRING::from(text);
-        let layout = self
-            .factory
-            .create_text_layout(&text, format, PROBE_MAX_EXTENT, PROBE_MAX_EXTENT)
-            .map_err(device_err("CreateTextLayout(probe)"))?;
+        let block_extent = unsafe { format.GetFontSize() };
+        let layout = create_line_layout(&self.factory, text, format, block_extent, self.mode)?;
         let clusters = layout
             .get_cluster_metrics()
             .map_err(device_err("GetClusterMetrics(probe)"))?;
@@ -373,14 +350,19 @@ impl GlyphMetrics for DWriteMetrics {
     }
 
     /// 縦書きの em の箱の左＝生成時に実測した比 × `font_height`（問われた向きが束縛した縦書きと
-    /// 同じときだけ）。それ以外と測れなかった物は既定の実装（列の箱の真ん中）。
+    /// 同じとき）。縦書きに束縛した物へ別の向き（横書きを含む）を問うたときは 0（列のレシピは
+    /// どちらの向きでも em の箱を行の矩形の真ん中に置く）。横書きに束縛した物は既定の実装。
     ///
-    /// 実測例（spec `vertical-choice-hover-band` research.md 17 節）: Yu Gothic UI ∓0.1650・
-    /// ＭＳ ゴシック 0・游ゴシック −0.3013／＋0.3008（右から左／左から右・大きさに比例）。
+    /// 列のレシピ（行間 UNIFORM・基線は箱の幅の半分）の下の実測は Yu Gothic UI・ＭＳ ゴシック・
+    /// 游ゴシックの 2 方向とも 0。列のレシピの前の値（Yu Gothic UI ∓0.1650・游ゴシック −0.3013）は
+    /// spec `emo-text-dwrite-fidelity` research.md §10.3。
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
         match self.vertical_em_box_left_ratio {
             Some(ratio) if mode == self.mode => ratio * font_height,
-            _ => column_centred_em_box_left(self.line_box_height(font_height), font_height, mode),
+            Some(_) => 0.0,
+            None => {
+                column_centred_em_box_left(self.line_box_height(font_height), font_height, mode)
+            }
         }
     }
 }
@@ -443,22 +425,22 @@ fn measure_line_box_ratio(factory: &IDWriteFactory2, format: &IDWriteTextFormat)
 
 /// 束縛した書式で、縦書きの em の箱の左の比 `(x − h/2) ÷ h` を測る。
 ///
-/// x は列の基線の行矩形の左辺からの位置で、本番の行と同じ書式・同じ幅 h の仮名 1 字（「あ」）の
-/// TextLayout の `GetMetrics().left + GetLineMetrics()[0].baseline`（式 A）。右から左でも列の箱の
-/// 左辺から測る（仮名と漢字では基線が列の箱のちょうど半分で、右辺から測る式 B と 0.01 以内で同じ・
-/// research.md 17.4 節。仮名と漢字で半分でない書体が見つかったら確かめ直す）。
-/// 失敗は失敗した所の名前を `Err` で返す（呼び手が `warn!` に載せて縮退）。
+/// x は列の基線の行矩形の左辺からの位置で、本番の行と同じ書式・同じ生成口（[`create_line_layout`]・
+/// 列のレシピ）・同じ幅 h の仮名 1 字（「あ」）の TextLayout の
+/// `GetMetrics().left + GetLineMetrics()[0].baseline`（式 A）。列のレシピは基線を箱の幅の半分に
+/// 置くので、実測は書体によらず 0（research.md §10.3）。
+/// 失敗は失敗した所の名前を `Err` で返す（生成口の失敗は `error!` 済み・呼び手が `warn!` に載せて縮退）。
 fn measure_vertical_em_box_left_ratio(
     factory: &IDWriteFactory2,
     format: &IDWriteTextFormat,
     font_height: f32,
+    mode: WritingMode,
 ) -> Result<f32, &'static str> {
     if font_height <= 0.0 {
         return Err("font_height <= 0");
     }
-    let layout = factory
-        .create_text_layout(&HSTRING::from("あ"), format, font_height, PROBE_MAX_EXTENT)
-        .map_err(|_| "CreateTextLayout")?;
+    let layout = create_line_layout(factory, "あ", format, font_height, mode)
+        .map_err(|_| "create_line_layout")?;
     let mut text = DWRITE_TEXT_METRICS::default();
     unsafe { layout.GetMetrics(&mut text) }.map_err(|_| "GetMetrics")?;
     let mut lines = [DWRITE_LINE_METRICS::default(); 4];

@@ -37,8 +37,9 @@
 //! 文字が素の既定 12 px で描かれる。
 
 use super::{
-    SAMPLE, VISIBLE_KEYS, added_ink_cols, assert_real_font_present, differs, font_cue,
-    ink_col_range, run, shoot_pair, single_band, text_cue, unbaked_cue,
+    ALT_FONT, FONT_HEIGHT, IMAGE, REAL_FONT, SAMPLE, Shot, VISIBLE_KEYS, added_ink_cols,
+    assert_real_font_present, differs, font_cue, font_is_installed, ink_col_range, model_with, run,
+    run_with, shoot_pair, single_band, text_cue, unbaked_cue,
 };
 
 // ══ 縦書きの 2 方向 ════════════════════════════════════════════════════════════════════
@@ -74,7 +75,7 @@ enum Side {
 ///   1 画素食い込む位置で、2 方向とも同じオフセット）。ここは境目から遠い。
 /// - 打ち消し線は `Center`。`Right` へ **+3 画素**・`Left` へ **−8 画素**で裏返る。
 ///   列 28 画素に対して 3 画素しかなく、**境目から遠くはない**。棄却した「中心どうしの
-///   大小」でも同じ 3 画素（帯の中点 290 に対し列の中心 287.5）で、最悪の余裕は
+///   大小」でも同じ 3 画素（今の値で帯の中点 295.5 に対し列の中心 293）で、最悪の余裕は
 ///   1 画素も改善していない。
 ///
 /// この 3 画素が黙って見過ごされることは無い——側が変わるほど線が動けば、同じ検査が
@@ -108,6 +109,12 @@ fn measure(mode: &str, tokens: &[&str], what: &str) -> ((u32, u32), (u32, u32), 
 // 位置も側も DirectWrite の既定に委ねてある（要件 5.7／12.2）。下線は areka が塗るが、D2D の
 // 既定の描き方と同じ写し方なので値は変わらない（spec `areka-P0-balloon-text-bugs` 要件 3.4）。
 // 値が動いたら描画基盤側の変化を疑い、定数を書き換える前に裁定を仰ぐこと。
+//
+// spec `emo-text-dwrite-fidelity`（要件 5.1・6.5）で列と帯の値を改めた: 縦書きの列のレシピで em の
+// 箱が行の矩形（字の大きさ 28px の幅・供給面は validrect の内側 310px なので、最初の列は右から左が
+// 282..310・左から右が 0..28、中心は 296 と 14）の真ん中へ寄った。墨の列は右から左で右へ 5〜6px、
+// 左から右で左へ 2〜5px 動き、どちらも行の矩形の中心の側へ寄った（直す前の em の箱は 2 方向とも
+// 次の列の側へずれていた）。帯は列と同じだけ動き、側（下の 2 つ）は変わらない。
 
 /// 下線が出る側（2 方向とも同じ・要件 12.2／12.3）——列の**左**（実測では字の列の左端に
 /// 1〜2 画素だけ食い込む位置で、列の外へは出ない）。
@@ -121,22 +128,41 @@ const UNDERLINE_SIDE: Side = Side::Left;
 const STRIKE_SIDE: Side = Side::Center;
 
 /// `vertical_rl` の素の字の列（供給面 local の x の左右端）。
-const COLUMN_RL: (u32, u32) = (274, 301);
+///
+/// 直す前は (274, 301)（中心 287.5・行の矩形の中心 296 から −8.5）。列のレシピで右へ 5〜6px 動き、
+/// 中心 293（−3）へ寄った。墨は行の矩形 282..310 の両端からともに 3px 左にある（本文の墨が em の
+/// 箱から左へはみ出す分・[`COLUMN_LR`] の左端の切れと同じ量）。
+const COLUMN_RL: (u32, u32) = (279, 307);
 
 /// `vertical_lr` の素の字の列。
-const COLUMN_LR: (u32, u32) = (2, 30);
+///
+/// 直す前は (2, 30)（中心 16・行の矩形の中心 14 から +2）。列のレシピで右端が 5px 左へ動いた。
+/// 墨は右から左と同じく行の矩形 0..28 から 3px 左（−3..25）に出るが、左端は供給面の左端（x=0＝
+/// validrect の境）で切れて 0 になる。
+const COLUMN_LR: (u32, u32) = (0, 25);
 
 /// `vertical_rl` で `\f[underline,1]` がインクを増やす列の帯。
-const UNDERLINE_BAND_RL: (u32, u32) = (275, 276);
+///
+/// 直す前は (275, 276)。列と同じく右へ 5px 動いた（墨の列の左端から 1px 内側のまま）。
+const UNDERLINE_BAND_RL: (u32, u32) = (280, 281);
 
 /// `vertical_lr` で同上。
-const UNDERLINE_BAND_LR: (u32, u32) = (3, 4);
+///
+/// 直す前は (3, 4)。列と同じだけ左へ動くと −2..−1 で供給面の外へ出るので、areka の下線の塗り
+/// （spec `areka-P0-balloon-text-bugs` 要件 3.4「端の列で面に収まらないときだけ内側へ寄せる」）が
+/// 太さ 2 列のまま面の左端へ寄せる。右から左の帯と同じ太さ＝切られずに 1 本まるごと塗られている。
+const UNDERLINE_BAND_LR: (u32, u32) = (0, 1);
 
 /// `vertical_rl` で `\f[strike,1]` がインクを増やす列の帯。
-const STRIKE_BAND_RL: (u32, u32) = (289, 291);
+///
+/// 直す前は (289, 291)。列と同じく右へ 5〜6px 動いた（墨の列の左端 279 から 16px 内側）。
+const STRIKE_BAND_RL: (u32, u32) = (295, 296);
 
 /// `vertical_lr` で同上。
-const STRIKE_BAND_LR: (u32, u32) = (18, 19);
+///
+/// 直す前は (18, 19)。列と同じく左へ 5px 動いた（墨の列の切れる前の左端 −3 から 16px 内側＝
+/// 右から左と同じ位置）。
+const STRIKE_BAND_LR: (u32, u32) = (13, 14);
 
 // ══ 表 の母数 ══════════════════════════════════════════════════════════════════════════
 
@@ -270,5 +296,271 @@ fn tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels_in_both_ve
                 "{mode}: `{key}` を装飾の運搬名で流しても画素が変わらない（対照の意味が消える）",
             );
         }
+    }
+}
+
+// ══ 3. 括弧の上下・列の真ん中・括弧と次の字の空き（spec `emo-text-dwrite-fidelity`） ═══
+//
+// 出典 spec: `emo-text-dwrite-fidelity`（要件 1.1〜1.5・2.3・6.1・design.md「Testing Strategy >
+// 実 GPU の読み戻し」の G1〜G3）。バルーン定義はぱすた（`ghost_dev`）と同じ形を基にする。
+// 字の枠は行の矩形の中で `PASTA_HEIGHT` ごと——供給面は `validrect` の内側だけを持つので、
+// 列の先頭の字の枠の上端は面の y=0。
+
+/// ぱすたのバルーン定義の書体名（候補列のまま・GDI の名前「游ゴシック Medium」が中太 500 で当たる）。
+const PASTA_FONT: &str =
+    "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+
+/// ぱすたのバルーン定義の文字の大きさ（image px）＝字の枠の高さ。
+const PASTA_HEIGHT: u32 = 20;
+
+/// 「「」の下端と「繋」の上端の空きの期待値（px）——書体の寸法から決まる値。
+///
+/// 出どころ（design.md「Testing Strategy」の G3）: 游ゴシックの縦書き用の「「」（字形 7913）の墨の
+/// 下端は字の枠の上から 18.9px（research.md §10.1）ゆえ下の空きは 20−18.9＝約 1.1px、「繋」の
+/// 上の余白は約 1.0px、合わせて約 2.1px。手本（Chromium の並べ）は
+/// 開き括弧の位置をずらさないので、字の枠どおりに並べればこの空きになる。墨の端は画素の行に
+/// 丸まるので、「「」の最後の墨の行と「繋」の最初の墨の行の番号の差として数え ±1px で比べる。
+const BRACKET_GAP_PX: i64 = 2;
+
+/// 太さの 3 通り（要件 1.5）——名札・書体名・追加の行。
+const WEIGHTS: &[(&str, &str, &str)] = &[
+    ("Regular", "游ゴシック", ""),
+    ("中太", PASTA_FONT, ""),
+    ("太字", PASTA_FONT, "font.bold,1\n"),
+];
+
+/// 開き括弧類（要件 1.1）——墨が字の枠の下半分に来る。
+const OPENING: &[&str] = &["「", "『", "（"];
+
+/// 閉じ括弧（要件 1.2）——墨が字の枠の上半分のまま。
+const CLOSING: &[&str] = &["」"];
+
+/// 游ゴシックが無ければ赤で止める（代替の書体のまま緑にしない）。
+fn assert_yu_gothic_present() {
+    for name in ["游ゴシック", "游ゴシック Medium"] {
+        assert!(
+            font_is_installed(name),
+            "{name} がこの機械に無い。括弧の檻は当該書体の実描画を前提にしている"
+        );
+    }
+}
+
+/// 縦書きの 1 列を、ぱすたの形のバルーン定義で撮る。
+fn shoot_column(mode: &str, font: &str, extra: &str, body: &str) -> Shot {
+    let model = model_with(font, PASTA_HEIGHT, &format!("writing_mode,{mode}\n{extra}"));
+    let shot = run_with(&model, &[text_cue(body)]);
+    assert!(
+        shot.ink_count() > 0,
+        "{mode}: 「{body}」の列にインクが無い（前提）"
+    );
+    shot
+}
+
+/// 墨がある画素か——α が 0 でなければ墨とする。
+///
+/// 20px の括弧は線が 1px 前後と細く、`Shot::is_ink`（α≥128）では横棒が消えて字の上下端を
+/// 取り違える（游ゴシック Regular の「「」は α≥128 の行が 1 本しか残らない）。
+fn has_ink(shot: &Shot, x: u32, y: u32) -> bool {
+    shot.bytes[((y * shot.width + x) * 4 + 3) as usize] != 0
+}
+
+/// 墨のある行（y）を、上から連続した塊に分ける（字ごとの墨の上下端）。
+fn ink_row_runs(shot: &Shot) -> Vec<(u32, u32)> {
+    let mut runs: Vec<(u32, u32)> = Vec::new();
+    for y in (0..shot.height).filter(|&y| (0..shot.width).any(|x| has_ink(shot, x, y))) {
+        match runs.last_mut() {
+            Some(last) if last.1 + 1 == y => last.1 = y,
+            _ => runs.push((y, y)),
+        }
+    }
+    runs
+}
+
+/// 行の範囲 `rows` の中でインクのある列の左右端。
+fn ink_cols_in(shot: &Shot, rows: (u32, u32)) -> (u32, u32) {
+    let cols: Vec<u32> = (0..shot.width)
+        .filter(|&x| (rows.0..=rows.1).any(|y| has_ink(shot, x, y)))
+        .collect();
+    assert!(!cols.is_empty(), "行 {rows:?} にインクのある列が無い");
+    (cols[0], cols[cols.len() - 1])
+}
+
+/// 1 字だけの列の墨の上下端（1 つの塊のはず）。
+fn single_glyph_rows(shot: &Shot, what: &str) -> (u32, u32) {
+    let runs = ink_row_runs(shot);
+    assert!(!runs.is_empty(), "{what}: 墨が無い");
+    (runs[0].0, runs[runs.len() - 1].1)
+}
+
+/// 「「繋」の列を撮り、「「」と「繋」の墨の上下端を返す（上から 1 つ目の塊が「「」）。
+fn bracket_then_kanji(mode: &str) -> (Shot, (u32, u32), (u32, u32)) {
+    let shot = shoot_column(mode, PASTA_FONT, "", "「繋");
+    let runs = ink_row_runs(&shot);
+    assert!(
+        runs.len() >= 2,
+        "{mode}: 「「」と「繋」の墨が空いた行で分かれていない（空き 0）: {runs:?}"
+    );
+    let bracket = runs[0];
+    let kanji = (runs[1].0, runs[runs.len() - 1].1);
+    (shot, bracket, kanji)
+}
+
+/// G1（要件 1.1・1.2・1.5・6.1）: 縦書き 2 方向・3 通りの太さで、開き括弧類の墨は字の枠の
+/// 下半分、閉じ括弧の墨は上半分にある。
+///
+/// 較正: 列のレシピ（`VERTICAL_FEATURES`）を外して既定の機能の組へ戻すと、開き括弧の墨が
+/// 半 em 上へずれて（research.md §10.1・上から 3.0〜8.9px）赤になる。
+#[test]
+fn opening_brackets_sit_in_the_lower_half_and_closing_in_the_upper_half_of_the_glyph_frame() {
+    assert_yu_gothic_present();
+    let half = PASTA_HEIGHT / 2;
+    for mode in VERTICAL_MODES {
+        for (weight, font, extra) in WEIGHTS {
+            for ch in OPENING {
+                let shot = shoot_column(mode, font, extra, ch);
+                let rows = single_glyph_rows(&shot, ch);
+                assert!(
+                    rows.0 >= half,
+                    "{mode}・{weight}: 「{ch}」の墨が字の枠の下半分に無い（墨の行 {rows:?}・\
+                     下半分は y≥{half}）——開き括弧が上へずれている（要件 1.1・1.5）"
+                );
+            }
+            for ch in CLOSING {
+                let shot = shoot_column(mode, font, extra, ch);
+                let rows = single_glyph_rows(&shot, ch);
+                assert!(
+                    rows.1 < half,
+                    "{mode}・{weight}: 「{ch}」の墨が字の枠の上半分に無い（墨の行 {rows:?}・\
+                     上半分は y<{half}）——閉じ括弧が動いた（要件 1.2）"
+                );
+            }
+        }
+    }
+}
+
+/// G2（要件 1.3）: 「「」の墨の左右の中心は「繋」の墨の左右の中心と ±1px（列の真ん中）。
+#[test]
+fn opening_bracket_is_centred_in_the_column_like_the_next_kanji() {
+    assert_yu_gothic_present();
+    for mode in VERTICAL_MODES {
+        let (shot, bracket, kanji) = bracket_then_kanji(mode);
+        let (b, k) = (ink_cols_in(&shot, bracket), ink_cols_in(&shot, kanji));
+        // 半画素を避けるため 2 倍の目盛りで比べる（中心＝両端の和）。
+        let diff = (i64::from(b.0) + i64::from(b.1)) - (i64::from(k.0) + i64::from(k.1));
+        assert!(
+            diff.abs() <= 2,
+            "{mode}: 「「」の墨の列 {b:?} と「繋」の墨の列 {k:?} の中心の差が ±1px を超えた\
+             （差 {}px・要件 1.3）",
+            diff as f64 / 2.0
+        );
+    }
+}
+
+/// G3（要件 1.4）: 「「」の墨の下端と「繋」の墨の上端の空きが [`BRACKET_GAP_PX`] と ±1px。
+#[test]
+fn gap_between_opening_bracket_and_next_kanji_follows_the_font_metrics() {
+    assert_yu_gothic_present();
+    for mode in VERTICAL_MODES {
+        let (_, bracket, kanji) = bracket_then_kanji(mode);
+        let gap = i64::from(kanji.0) - i64::from(bracket.1);
+        assert!(
+            (gap - BRACKET_GAP_PX).abs() <= 1,
+            "{mode}: 「「」の墨 {bracket:?} と「繋」の墨 {kanji:?} の空きが {gap}px——\
+             書体の寸法から決まる約 2.1px と ±1px で合わない（要件 1.4）"
+        );
+    }
+}
+
+// ══ 4. 列の真ん中と既定の太字・斜体（spec `emo-text-dwrite-fidelity` の G4・G5） ═══════
+
+/// かなと漢字だけの列（G4・要件 5.1・design.md の例のまま）。
+const KANA_KANJI: &str = "あ亜繋国";
+
+/// 最初の列の行の矩形の左右の中心（2 倍の目盛り・供給面の x）。
+///
+/// 行の矩形は面の `validrect` と字の大きさから決まる: 供給面は `validrect` の内側
+/// （[`IMAGE`] から左右 5px ずつ除いた幅）で、最初の列は右から左なら右端から、左から右なら
+/// 左端から [`PASTA_HEIGHT`] の幅を占める。
+fn first_line_rect_centre_x2(mode: &str, shot: &Shot) -> i64 {
+    let width = IMAGE.0 - 2 * 5;
+    assert_eq!(shot.width, width, "供給面は validrect の内側（前提）");
+    let (lo, hi) = match mode {
+        "vertical_rl" => (width - PASTA_HEIGHT, width),
+        "vertical_lr" => (0, PASTA_HEIGHT),
+        _ => unreachable!("縦書きの 2 方向だけ"),
+    };
+    i64::from(lo) + i64::from(hi)
+}
+
+/// G4（要件 5.1）: かなと漢字だけの列の墨の左右の中心が、最初の列の行の矩形の左右の中心と ±1px。
+///
+/// 較正: 直す前から列が真ん中にある ＭＳ ゴシック（既定の行間＝em・research.md §10.3）にも同じ式を
+/// 当てる——行の矩形の求め方が外れていれば ＭＳ ゴシック の側が赤になる。直す前の游ゴシックは
+/// 差 −6.5px（research.md §10・起票の実測）で、この ±1px から大きく外れる。
+#[test]
+fn kana_kanji_column_ink_is_centred_on_the_first_line_rect() {
+    assert_yu_gothic_present();
+    assert!(
+        font_is_installed(ALT_FONT),
+        "{ALT_FONT} がこの機械に無い（較正の前提）"
+    );
+    for mode in VERTICAL_MODES {
+        for (label, font) in [("ぱすた", PASTA_FONT), ("較正 ＭＳ ゴシック", ALT_FONT)] {
+            let shot = shoot_column(mode, font, "", KANA_KANJI);
+            let ink = ink_cols_in(&shot, (0, shot.height - 1));
+            let rect = first_line_rect_centre_x2(mode, &shot);
+            // 半画素を避けるため 2 倍の目盛りで比べる（中心＝両端の和・墨は右端の画素も含むので +1）。
+            let diff = (i64::from(ink.0) + i64::from(ink.1) + 1) - rect;
+            eprintln!(
+                "G4 {mode} {label}: ink {ink:?} diff {}px",
+                diff as f64 / 2.0
+            );
+            assert!(
+                diff.abs() <= 2,
+                "{mode}・{label}: 「{KANA_KANJI}」の墨の列 {ink:?} の中心が行の矩形の中心 {}px と ±1px で合わない（差 {}px・要件 5.1）",
+                rect as f64 / 2.0,
+                diff as f64 / 2.0
+            );
+        }
+    }
+}
+
+/// 書字方向の行（横書きは宣言しない）。G5 は 3 方向とも回す。
+fn writing_mode_line(mode: Option<&str>) -> String {
+    mode.map_or(String::new(), |m| format!("writing_mode,{m}\n"))
+}
+
+/// G5（要件 4.8・4.9）: バルーン定義の `font.bold,1` は既定の字の墨を増やし、`font.italic,1` は
+/// 画素を変える（`\f[…]` を使わない既定の見た目だけで）。
+#[test]
+fn balloon_bold_and_italic_reach_the_default_text() {
+    assert_real_font_present();
+    for mode in [None, Some("vertical_rl"), Some("vertical_lr")] {
+        let line = writing_mode_line(mode);
+        let shoot = |extra: &str| {
+            let model = model_with(REAL_FONT, FONT_HEIGHT, &format!("{line}{extra}"));
+            let shot = run_with(&model, &[text_cue(SAMPLE)]);
+            assert!(shot.ink_count() > 0, "{mode:?}: 墨が無い（前提）");
+            shot
+        };
+        let plain = shoot("");
+        let bold = shoot("font.bold,1\n");
+        let italic = shoot("font.italic,1\n");
+        eprintln!(
+            "G5 {mode:?}: ink plain {} bold {} italic {}",
+            plain.ink_count(),
+            bold.ink_count(),
+            italic.ink_count()
+        );
+        assert!(
+            bold.ink_count() > plain.ink_count(),
+            "{mode:?}: `font.bold,1` の既定の字の墨 {} 画素が、無いもの {} 画素より多くない（要件 4.8）",
+            bold.ink_count(),
+            plain.ink_count()
+        );
+        assert!(
+            differs(&plain, &italic),
+            "{mode:?}: `font.italic,1` を足しても既定の字の画素が 1 バイトも変わらない（要件 4.9）"
+        );
     }
 }

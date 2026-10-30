@@ -5084,7 +5084,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1" },
 ]
 note = """
-壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の name の腕が TextLook.name（候補列）を動かす。描画は apply_font_ranges の SetFontFamilyName で、記述順を優先度としてインストール済みの最初の 1 つを採る（FontCatalog::family_for）。default／disable は層への戻しだが、値が 2 つ以上あるときは戻しと解さず候補列の 1 要素として保つ。
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の name の腕が TextLook.name（候補列）を動かす。描画は apply_font_ranges の範囲指定で、FontCatalog::face_for が記述順に、家族名で、無ければ GDI の名前（家族名＋太さ・斜体・幅。例「游ゴシック Medium」）として問い合わせ、最初に当たった顔（家族・太さ・幅・斜体）で描画と計測を行う。候補が全滅したときは描画も計測もバルーンの束縛の顔のまま（FontCatalog::face_or）。default／disable は層への戻しだが、値が 2 つ以上あるときは戻しと解さず候補列の 1 要素として保つ。
 ログ: 出ない（正常経路）。フォントファイル名（.ttf／.otf／.ttc で終わる候補）は読み込まずに読み飛ばし、そのことを FontCatalog が候補の綴りごとに 1 度記録する。候補が全滅したときも候補列ごとに 1 度記録して既定の書体へ落とす。この 2 つの記録だけは warn_once とは別の仕組み（FontCatalog::first_time）で、台詞をまたいでカタログの寿命のあいだ 1 度である。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """

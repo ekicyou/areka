@@ -35,7 +35,7 @@ use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
 
 /// 番号だけを与えたグリフ（位置と送りは区間の切り出しに効かないので 0）。
-fn glyph(text: &str, style: StyleId) -> PositionedGlyph {
+pub(super) fn glyph(text: &str, style: StyleId) -> PositionedGlyph {
     PositionedGlyph {
         text: text.into(),
         inline_pos: 0.0,
@@ -182,7 +182,7 @@ fn default_only_line_keeps_font_height_and_empty_style_ids() {
 }
 
 /// 番号 1 に `look` を積んだ表を返す（`intern` 経由＝本番と同じ畳み込み規則）。
-fn table_with(look: &TextLook, default: &TextLook) -> (StyleTable, StyleId) {
+pub(super) fn table_with(look: &TextLook, default: &TextLook) -> (StyleTable, StyleId) {
     let mut table = StyleTable::default();
     let id = table.intern(look, default);
     assert_ne!(

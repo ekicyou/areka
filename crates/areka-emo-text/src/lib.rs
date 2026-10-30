@@ -448,6 +448,7 @@ mod tests {
         "viewbox_draw_choice_hover_tests.rs",
         "viewbox_draw_color_emoji_tests.rs",
         "viewbox_draw_decoration.rs",
+        "viewbox_draw_decoration_face_tests.rs",
         "viewbox_draw_decoration_tests.rs",
         "viewbox_draw_frame_render_tests.rs",
         "viewbox_draw_live_diff_tests.rs",
