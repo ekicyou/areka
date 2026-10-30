@@ -790,10 +790,11 @@ pub(crate) fn log_sink_observed(
     adjacency_ok: bool,
     foreground: Option<HWND>,
     behind_foreground: Option<bool>,
+    in_band: Option<bool>,
 ) {
     debug!(
         "{}",
-        sink_observed_line(entity, adjacency_ok, foreground, behind_foreground)
+        sink_observed_line(entity, adjacency_ok, foreground, behind_foreground, in_band)
     );
 }
 

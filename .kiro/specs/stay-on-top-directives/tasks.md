@@ -59,7 +59,7 @@
   - _Boundary: PairFixBandCondition_
   - _Requirements: 2.2, 2.4, 3.3, 7.3, 7.5_
 
-- [ ] 2.5 (P) 沈降の観測の記録に帯の欄を足す
+- [x] 2.5 (P) 沈降の観測の記録に帯の欄を足す
   - 沈降の観測の行に、バルーンが帯に居るか（測れなければ `-`）の欄を足す。水準は `debug!` のまま
   - 記録のテストで、欄が載り水準が変わらないことが通る
   - _Boundary: SinkObservationField_
