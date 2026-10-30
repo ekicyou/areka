@@ -1,12 +1,15 @@
 //! 設定: 候補の列・控えの置き場・待つ時間。
 //!
 //! 環境と exe の場所を読むのは [`Config::from_env`] の 1 か所だけで、判断は値だけを受け取る
-//! [`Config::from_values`] が持つ（`areka_mcp::candidates_from_env_value` と同じ分け方）。
+//! [`Config::from_inputs`]（決めるだけの口と記録）と [`Config::from_values`]（I/O なし）が持つ
+//! （`areka_mcp::candidates_from_env_value` と同じ分け方）。
 
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use tracing::warn;
+use areka_user_data::AppProfile;
+use tracing::{info, warn};
 
 /// 候補へ並べて開く TCP の接続を待つ上限。
 pub const CONNECT_WAIT: Duration = Duration::from_millis(300);
@@ -53,37 +56,50 @@ impl Config {
     /// 環境（`AREKA_MCP_PORT`・`AREKA_PROFILE_DIR`・exe の場所と隣の `areka.exe` の有無・
     /// `LOCALAPPDATA`）を読む唯一の口。exe の場所は `current_exe` のまま（リンクは辿らない）。
     ///
-    /// 隣に `areka.exe` が在れば、areka と同じ `establish(exe_dir, AREKA_PROFILE_DIR)` と
-    /// `app_profile_dir` で areka の記憶の置き場を決めて渡す（user-data-root 要件 6.1）。
+    /// 読むだけで、判断と記録は [`Config::from_inputs`] に渡す。隣に `areka.exe` が在るときだけ、
+    /// areka と同じ `probe` で判断の入力を取る（置き場を作る準備は呼ばない＝作らない・写さない）。
     pub fn from_env() -> Config {
-        let exe_dir = std::env::current_exe()
+        let areka_dir = std::env::current_exe()
             .ok()
-            .and_then(|exe| exe.parent().map(PathBuf::from));
-        let profile_env = std::env::var_os(PROFILE_DIR_ENV);
-        let beside_profile = exe_dir
+            .and_then(|exe| exe.parent().map(PathBuf::from))
+            .filter(|dir| dir.join(AREKA_EXE_FILE_NAME).is_file());
+        let signals = areka_dir
             .as_deref()
-            .filter(|dir| dir.join(AREKA_EXE_FILE_NAME).is_file())
-            .and_then(|dir| {
-                let layout = areka_user_data::establish(Some(dir), profile_env.as_deref());
-                areka_user_data::app_profile_dir(profile_env.as_deref(), &layout, Some(dir))
-            })
-            // 今の答えを「使える形」で包む（置き場を作る準備の呼び出しを外すのは次の段）。
-            .map(areka_user_data::AppProfile::Ready);
+            .map(|dir| areka_user_data::probe(Some(dir)));
+        let profile_env = std::env::var_os(PROFILE_DIR_ENV);
         // UTF-8 でない値を「未設定」に丸めない: 読めない字を U+FFFD に替えた文は数として読めないので、
         // 共有の関数が `warn!` を 1 件残して既定の 20 個にする（要件 2.5）。
         let port_value =
             std::env::var_os(areka_mcp::PORT_ENV).map(|v| v.to_string_lossy().into_owned());
-        let config = Config::from_values(
+        Config::from_inputs(
             port_value.as_deref(),
-            profile_env.map(PathBuf::from),
-            beside_profile,
+            profile_env.as_deref(),
+            areka_dir.as_deref().zip(signals.as_ref()),
             std::env::var_os("LOCALAPPDATA").map(PathBuf::from),
+        )
+    }
+
+    /// [`Config::from_env`] の内側（本物の環境を読まない）。`areka` は隣に areka.exe が在るときの
+    /// （実行ファイルのフォルダ, `probe` の答え）。
+    ///
+    /// 「決めるだけ」の口（`locate_app_profile`）→ 値の判断（[`Config::from_values`]）→
+    /// 控えを持たない理由の記録、の順。どれも作らない・写さない。
+    pub(crate) fn from_inputs(
+        port_value: Option<&str>,
+        profile_env: Option<&OsStr>,
+        areka: Option<(&Path, &areka_user_data::Signals)>,
+        local_app_data: Option<PathBuf>,
+    ) -> Config {
+        let beside = areka.map(|(exe_dir, signals)| {
+            areka_user_data::locate_app_profile(signals, exe_dir, profile_env)
+        });
+        let config = Config::from_values(
+            port_value,
+            profile_env.map(PathBuf::from),
+            beside.clone(),
+            local_app_data,
         );
-        if config.cache_dir.is_none() {
-            warn!(
-                "[bridge] no place for the cache (AREKA_PROFILE_DIR, areka profile beside the bridge, LOCALAPPDATA: none available); running without it"
-            );
-        }
+        log_without_cache(beside.as_ref(), &config);
         config
     }
 
@@ -98,12 +114,12 @@ impl Config {
     pub fn from_values(
         port_value: Option<&str>,
         profile_dir: Option<PathBuf>,
-        beside: Option<areka_user_data::AppProfile>,
+        beside: Option<AppProfile>,
         local_app_data: Option<PathBuf>,
     ) -> Config {
         let base = match (profile_dir, beside) {
             (Some(dir), _) => Some(dir),
-            (None, Some(areka_user_data::AppProfile::Ready(dir))) => Some(dir),
+            (None, Some(AppProfile::Ready(dir))) => Some(dir),
             (None, Some(_)) => None,
             (None, None) => local_app_data
                 .filter(|dir| dir.is_absolute())
@@ -128,6 +144,34 @@ impl Config {
             cache_dir,
             timeouts,
         }
+    }
+}
+
+/// 控えを持たないときの 1 件（持つときは 0 件）。文は ASCII・頭は `[bridge]`。
+fn log_without_cache(beside: Option<&AppProfile>, config: &Config) {
+    if config.cache_dir.is_some() {
+        return;
+    }
+    match beside {
+        // 次に起こされたとき、areka が置き場を作っていれば控えを持つ（要件 2.11）。
+        Some(AppProfile::RootMissing { root }) => info!(
+            reason = "user_root_missing",
+            user_root = %root.display(),
+            "[bridge] running without the cache until areka prepares its user root; it is used from the next start"
+        ),
+        Some(AppProfile::MigrationPending { root }) => info!(
+            reason = "app_memory_not_migrated",
+            user_root = %root.display(),
+            "[bridge] running without the cache until areka prepares its user root; it is used from the next start"
+        ),
+        // 決められない理由は `areka-user-data` の error が先に残している（要件 3.3）。
+        Some(AppProfile::Unlocatable) => {
+            warn!("[bridge] the user root of areka could not be located; running without the cache")
+        }
+        // `Ready` は必ず控えを持つので、ここへ来るのは隣に areka が無いときだけ。
+        Some(AppProfile::Ready(_)) | None => warn!(
+            "[bridge] no place for the cache (AREKA_PROFILE_DIR, areka profile beside the bridge, LOCALAPPDATA: none available); running without it"
+        ),
     }
 }
 
