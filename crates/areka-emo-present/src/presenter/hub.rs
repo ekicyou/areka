@@ -278,10 +278,10 @@ impl EmoPresenter {
 
     /// reply 同梱時に結果を高々 1 回送る。受信端が既に drop 済みなら撃ちっぱなし扱い（debug ログ）。
     pub(super) fn reply(reply: Option<ReplySender<PresentOutcome>>, outcome: PresentOutcome) {
-        if let Some(tx) = reply {
-            if tx.send(outcome).is_err() {
-                tracing::debug!("reply: 受信端が既に drop 済み（撃ちっぱなし扱い・無視）");
-            }
+        if let Some(tx) = reply
+            && tx.send(outcome).is_err()
+        {
+            tracing::debug!("reply: 受信端が既に drop 済み（撃ちっぱなし扱い・無視）");
         }
     }
 }
