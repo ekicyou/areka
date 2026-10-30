@@ -1,7 +1,8 @@
 //! `dump_balloon` の処理（spec: areka-P0-mcp-dump-images）——バルーンの背景と文字を重ねて PNG で返す。
 //!
 //! 入口は `dump_surface` と同じ（結線状態が無い → 窓が無い答え・装着の相がまだ → [`super::later`]）。
-//! 背景はバルーンの対象の最後に表示した絵（隠していても残る）、文字は普通のバルーンの文字の面の写し。
+//! 背景はバルーンの対象の最後に表示した絵（隠していても残る）、文字は普通のバルーンの文字の面の写し、
+//! その上に矢印が出ていれば印の面の写し（spec: balloon-scroll-arrows・要件 3.6）。
 //! 背景の写しと文字の面の写しの積み込みは UI スレッドで、写しの読み出しは後のフレームで待たずに覗き
 //! （GPU の終わりを待たない・要件 1.2）、重ね合わせ・PNG・base64 は別のスレッドで行う。
 //! シェルの絵の中の箱の文字の面は読まない（要件 3.6）。読むだけで、表示・隠れている状態・台詞を
@@ -10,6 +11,7 @@
 use std::time::Instant;
 
 use areka_emo_text::surface::PendingReadBack;
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::dump_balloon::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
 use areka_sakura::ActorKey;
@@ -68,7 +70,7 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     let Some((view, surface)) = text else {
         return Some(Step::Encode(
             scope,
-            balloon_job(scope, canvas, (width, height), None),
+            balloon_job(scope, canvas, (width, height), None, None),
         ));
     };
     let Some(arrangement) = world.get::<Arrangement>(view.slot()) else {
@@ -82,62 +84,113 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
         Ok(pending) => pending,
         Err(e) => return failed(&e.to_string()),
     };
+    // 矢印が出ていれば印の面（バルーンの絵全体の物理寸・窓の原点）の写しも同じ時点で積む（要件 3.6）。
+    let marker = match runtime
+        .marker_surface(&ActorKey::from(scope.to_string()))
+        .map(|m| m.begin_read_back().map(|p| (p, m.size())))
+        .transpose()
+    {
+        Ok(marker) => marker,
+        Err(e) => return failed(&e.to_string()),
+    };
     let offset = (arrangement.offset.x, arrangement.offset.y);
     Some(Step::Read(
         scope,
         reader(
             scope,
-            pending,
+            (pending, surface.size()),
+            marker,
             canvas,
             (width, height),
             view.physical_size(),
-            surface.size(),
             offset,
         ),
     ))
 }
 
-/// 覗かれるたびに待たずに読む口（要件 1.2・1.5）。読めたら大きさを確かめ、重ねる仕事を返す。
+/// 覗かれるたびに待たずに読む口（要件 1.2・1.5）。文字の面と（あれば）印の面が読めたら大きさを
+/// 確かめ、重ねる仕事を返す。先に読めた方は持っておき、もう片方を待つ。
 fn reader(
     scope: u32,
-    pending: PendingReadBack,
+    text: (PendingReadBack, (u32, u32)),
+    marker: Option<(PendingReadBack, (u32, u32))>,
     canvas: Vec<u8>,
     size: (u32, u32),
     physical: (u32, u32),
-    text_size: (u32, u32),
     offset: (f32, f32),
 ) -> Reader {
     let mut canvas = Some(canvas);
+    let mut text_bytes = None;
+    let mut marker_bytes = None;
     Box::new(move || {
-        let bytes = match pending.try_finish() {
-            Ok(Some(bytes)) => bytes,
-            Ok(None) => return Ok(None),
-            Err(e) => return Err(fail(TOOL, scope, &e.to_string())),
-        };
-        let (tw, th) = text_size;
-        if bytes.len() != tw as usize * th as usize * 4 {
-            return Err(fail(TOOL, scope, "picture size mismatch"));
+        if !read_into(&mut text_bytes, &text, scope)? {
+            return Ok(None);
+        }
+        if let Some(m) = &marker
+            && !read_into(&mut marker_bytes, m, scope)?
+        {
+            return Ok(None);
         }
         // 読めた後は覗かれない（覗く関数が符号化待ちへ移る）。届いたら黙らせず想定外の失敗。
-        let Some(canvas) = canvas.take() else {
+        let (Some(canvas), Some(bytes)) = (canvas.take(), text_bytes.take()) else {
             return Err(fail(TOOL, scope, "the text read was already taken"));
         };
-        let layer = (physical, bytes, text_size, offset);
-        Ok(Some(balloon_job(scope, canvas, size, Some(layer))))
+        let layer = (physical, bytes, text.1, offset);
+        let marker_layer = marker_bytes.take().zip(marker.as_ref().map(|m| m.1));
+        Ok(Some(balloon_job(
+            scope,
+            canvas,
+            size,
+            Some(layer),
+            marker_layer,
+        )))
     })
+}
+
+/// 面の写しを待たずに 1 度覗き、読めたら大きさを確かめて `slot` に持つ。持っていれば `true`。
+fn read_into(
+    slot: &mut Option<Vec<u8>>,
+    (pending, (w, h)): &(PendingReadBack, (u32, u32)),
+    scope: u32,
+) -> Result<bool, ToolOutcome> {
+    if slot.is_none() {
+        let bytes = match pending.try_finish() {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return Ok(false),
+            Err(e) => return Err(fail(TOOL, scope, &e.to_string())),
+        };
+        if bytes.len() != *w as usize * *h as usize * 4 {
+            return Err(fail(TOOL, scope, "picture size mismatch"));
+        }
+        *slot = Some(bytes);
+    }
+    Ok(true)
 }
 
 /// 文字の面の読み出し（物理の大きさ, 密な BGRA, 面の大きさ, 文字の領域の原点）。
 type TextLayer = ((u32, u32), Vec<u8>, (u32, u32), (f32, f32));
 
+/// 印の面の読み出し（密な BGRA, 面の大きさ）。面はバルーンの絵全体の物理寸で窓の原点に在る。
+type MarkerLayer = (Vec<u8>, (u32, u32));
+
 /// 背景（乗算済み BGRA の写し）に文字を重ね、PNG・base64 にして成功で答える仕事。文字の面が
 /// ある・ないの両方の腕でこれを使う。
-fn balloon_job(scope: u32, mut canvas: Vec<u8>, size: (u32, u32), layer: Option<TextLayer>) -> Job {
+fn balloon_job(
+    scope: u32,
+    mut canvas: Vec<u8>,
+    size: (u32, u32),
+    layer: Option<TextLayer>,
+    marker: Option<MarkerLayer>,
+) -> Job {
     let (width, height) = size;
     Box::new(move |ui| {
         let started = Instant::now();
         if let Some((physical, bytes, text_size, offset)) = layer {
             overlay::overlay_text(&mut canvas, size, physical, &bytes, text_size, offset);
+            // 印の面は文字より手前（画面と同じ重なり）。ずらしは無い（要件 3.6）。
+            if let Some((bytes, marker_size)) = marker {
+                overlay::overlay_text(&mut canvas, size, physical, &bytes, marker_size, (0.0, 0.0));
+            }
         }
         let png = image::png_base64(&canvas, width, height);
         debug!(
