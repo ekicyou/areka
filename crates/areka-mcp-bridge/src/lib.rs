@@ -6,6 +6,8 @@ pub mod cache;
 pub mod config;
 pub mod errors;
 pub mod http;
+// 箱の見立て（spec: bridge-store-user-root）。クレートの中だけ（呼び手は `config::Config::from_env`）。
+mod redirect;
 pub mod scan;
 pub mod service;
 pub mod stdio;
