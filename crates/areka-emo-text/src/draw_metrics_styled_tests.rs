@@ -519,7 +519,7 @@ fn f2_probe_format_carries_the_weight_of_the_gdi_named_face() {
 /// 束縛の家族名・500（太字の鍵は 700）——ＭＳ ゴシック 400 で測らない。
 ///
 /// 後半（その区間を含む行の cluster の幅と 1 字の計測の一致）と F3 は、本番の範囲指定
-/// `apply_font_ranges` を通すため `viewbox_draw_decoration_tests.rs` に置く。
+/// `apply_font_ranges` を通すため `viewbox_draw_decoration_face_tests.rs` に置く。
 #[test]
 fn f4_all_failed_key_is_measured_with_the_bound_face() {
     use std::rc::Rc;

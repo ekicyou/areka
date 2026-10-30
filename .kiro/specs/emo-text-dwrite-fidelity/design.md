@@ -132,7 +132,7 @@ graph TB
 - `crates/areka-emo-text/src/draw_catalog_tests.rs`（318 行 → 約 480 行）— 偽の集合での引き直し（U1〜U8）と、実際の書体の集まりでの中太（R1）。
 - `crates/areka-emo-text/src/draw_metrics_styled_tests.rs`（379 行 → 約 480 行）— 束縛書式・試験用書式の太さ・斜体（F1〜F4）。`vertical_em_box_left_is_measured_from_the_column_baseline` の期待値を 0 へ直す（列のレシピの下の実測）。
 - `crates/areka-emo-text/src/draw_line_store_tests.rs`（399 行 → 約 480 行）— 列のレシピ（L1〜L3）。`line_layout_produces_the_same_line_as_a_bare_factory_call` は突き合わせ先を `create_line_layout` に直す。
-- `crates/areka-emo-text/src/viewbox_draw_decoration_tests.rs`（859 行 → 約 940 行）— 区間の顔（D1〜D3）。
+- `crates/areka-emo-text/src/viewbox_draw_decoration_face_tests.rs`（新規・約 350 行）— 区間の顔（D1〜D3）と区間の行と 1 字の計測の一致（F3・F4 後半）。`viewbox_draw_decoration_tests.rs`（859 行）が 1,000 行を超えるので兄弟へ分けた（最終検証の是正）。
 - `crates/areka-emo-text/src/draw_format_metrics_tests.rs`（922 行・**足さない**）— `font_family_reaches_directwrite_only_as_author_name_or_default_retry` の照らす字面を新しい呼び方へ**直すだけ**（行は増やさない・増えるなら照らす役ごと `draw_line_store_tests.rs` へ移す）。
 - `crates/areka-emo-text/tests/decoration_readback/mod.rs`（335 行 → 約 360 行）— バルーン定義を「書体名・大きさ・追加の行」で組める口（`model_with`）と、それで撮る `run_with` を足す（`run` は委譲）。
 - `crates/areka-emo-text/tests/decoration_readback/vertical.rs`（274 行 → 約 460 行）— 括弧の位置・列の真ん中・太字・斜体の読み戻し（G1〜G5）。今日の固定値（`COLUMN_RL`・`COLUMN_LR`・下線と打ち消し線の帯）を、列のレシピで動いた値へ理由を添えて改める（6.5）。
@@ -528,7 +528,7 @@ pub(crate) fn create_line_layout(
 - L3（2.4）: 游ゴシック 20px の縦書きで、「…「繋がってる」」の 1 字ずつの計測（`DWriteMetrics::advance`）と行の cluster の幅が全部一致する。
 - 既存の `line_layout_produces_the_same_line_as_a_bare_factory_call` は突き合わせ先を `create_line_layout` に直す（縦書きの箱の寸法の檻 `line_layout_keeps_the_vertical_box_extents` は今のまま）。
 
-### 区間の顔（実 DirectWrite の TextLayout・偽の台帳）— `viewbox_draw_decoration_tests.rs`
+### 区間の顔（実 DirectWrite の TextLayout・偽の台帳）— `viewbox_draw_decoration_face_tests.rs`
 
 - D1（3.2・4.6）: `\f[name,X Medium]`（偽の GDI の表で「Yu Gothic」500）の区間は、家族名「Yu Gothic」・`GetFontWeight`＝500。区間の外は束縛のまま。
 - D2（4.3）: 束縛の顔が中太で既定が太字の行で、`\f[bold,0]` の区間は 500（Regular の 400 へ戻らない）。束縛が中太で区間が Regular の家族名なら 400（中太を受け継がない）。

@@ -348,6 +348,9 @@ mod choice_hover_tests;
 #[path = "viewbox_draw_color_emoji_tests.rs"]
 mod color_emoji_tests;
 #[cfg(test)]
+#[path = "viewbox_draw_decoration_face_tests.rs"]
+mod decoration_face_tests;
+#[cfg(test)]
 #[path = "viewbox_draw_decoration_tests.rs"]
 mod decoration_tests;
 #[cfg(test)]
