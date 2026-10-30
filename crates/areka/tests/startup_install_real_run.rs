@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use real_run_kit::{EndedBy, Launch, RealRun};
+use sample_ghost_kit::SampleRoot;
 use temp_path_kit::TempPath;
 
 /// 入れる書庫（`vendors/sample_ghost/` の利用条件の無いゴースト）。
@@ -19,6 +20,8 @@ const NAR: &str = "konnoyayame.nar";
 const FOLDER: &str = "konnoyayame";
 /// 書庫のゴーストの descript の `name`（`get_active_ghost_list` の綴り）。
 const GHOST_NAME: &str = "はろーYAYAわーるど";
+/// 根に置く既定のバルーン（配布物の `balloon\` と同じ名前の検体）。
+const BALLOON: &str = "areka-balloon";
 
 /// `from` の中身を `to` へ再帰で写す（写せなければ場所と理由で落とす）。
 fn copy_dir(from: &Path, to: &Path) {
@@ -45,10 +48,13 @@ fn install_option_installs_calls_ghost_and_deletes_source() {
     std::fs::copy(&source, &archive)
         .unwrap_or_else(|e| panic!("{} を写せません: {e}", source.display()));
 
+    let balloon = SampleRoot::acquire(BALLOON).expect("areka-balloon は登記済みの検体");
+    let balloon_dir = balloon.folder().to_path_buf();
+
     let root: Arc<Mutex<Option<PathBuf>>> = Arc::default();
     let seen = Arc::clone(&root);
     let mut run = RealRun::new(env!("CARGO_BIN_EXE_areka"))
-        // 根に emo2 を置き、同梱バルーンを根の balloon\ へも写す（書庫のゴーストは
+        // 根に emo2 を置き、配布物と同じく既定のバルーンを根の balloon\ へ写す（書庫のゴーストは
         // バルーンを持たず、切り替えは根とそのゴーストの中のバルーンしか見ないため）。
         .launch(Launch::SampleRoot {
             name: "emo2".into(),
@@ -62,10 +68,7 @@ fn install_option_installs_calls_ghost_and_deletes_source() {
         .deadline(Duration::from_secs(90))
         .before_spawn(move |s| {
             let root = s.root();
-            copy_dir(
-                &root.join(r"ghost\emo2\balloon\emo2-kakukaku"),
-                &root.join(r"balloon\emo2-kakukaku"),
-            );
+            copy_dir(&balloon_dir, &root.join("balloon").join(BALLOON));
             *seen.lock().unwrap() = Some(root.to_path_buf());
         })
         .spawn();
@@ -108,4 +111,10 @@ fn install_option_installs_calls_ghost_and_deletes_source() {
     ] {
         assert!(out.contains(event), "記録に {event} が無い。\n{ctx}");
     }
+    // 切り替えの先は emo2 の同梱バルーンでなく既定のバルーンを使う。
+    assert!(
+        out.lines()
+            .any(|l| l.contains("switch_balloon_resolved") && l.contains(BALLOON)),
+        "切替先のバルーンが {BALLOON} になっていない。\n{ctx}"
+    );
 }
