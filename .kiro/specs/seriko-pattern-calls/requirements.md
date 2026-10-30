@@ -102,6 +102,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 6. The areka shall `alternativestart` と `alternativestop` の選びに使う偶然で、interval の抽選（`sometimes`・`rarely`・`random` など）の結果を変えない（同じ乱数の種なら、この spec の前と同じ時刻に同じアニメーションが抽選で始まる）。
 7. The areka shall `alternativestart` と `alternativestop` の選びを、決定論のテストから決め打ちできるようにする。
 8. The areka shall 要件 3〜7 の働きを、一番上のシェルの面のアニメーションと同じ規則で、入れ子の部品のアニメーションとバルーンの面のアニメーションにも当てる。
+9. When `start`・`parallelstart`・`alternativestart` が再生中のアニメーションを指したとき, the areka shall そのアニメーションを捨てずに、pattern0 から頭でやり直させる（M1・SSP の実測）。
 
 ### Requirement 4: 別のアニメーションの停止（stop・parallelstop・alternativestop）
 
@@ -111,7 +112,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 
 1. When 再生中のアニメーションが `stop` のコマの番になったとき, the areka shall そのコマで待たずに、指した番号のアニメーションを止め、そのアニメーションがサーフェス番号 `-1` のコマに来たときと同じ見え方（そのアニメーションが描いたコマを消す）にする。
 2. When 再生中のアニメーションが `parallelstop` のコマの番になったとき, the areka shall 並びのすべてのアニメーションを、1 と同じ見え方で同じ時刻に止める。
-3. When 再生中のアニメーションが `alternativestop` のコマの番になったとき, the areka shall 並びの候補から 1 つを選んで、1 と同じ見え方で止める（選ぶ範囲は要件 8 の M2 で決める）。
+3. When 再生中のアニメーションが `alternativestop` のコマの番になったとき, the areka shall 並びの全部の候補から等しい確からしさで 1 つを選び（再生中かどうかで候補を絞らない）、1 と同じ見え方で止める。選んだ相手が再生中でなければ 4 のとおり何もしない（M2・SSP の実測）。
 4. If 止める相手のアニメーションが再生中でないとき, the areka shall 何もしない。
 5. The areka shall 止めた後のアニメーションのその後の扱い（interval による次の開始）を、サーフェス番号 `-1` で止まったときと同じにする。
 
@@ -126,6 +127,8 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 3. If 着せ替え（interval が `bind`）のアニメーションか element定義に `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`move` が書かれているとき, the areka shall その語に何もさせず（描かず・呼ばず・ずらさず）、読み込みのときに 1 度だけ記録を残す。
 4. The areka shall 本要件と要件 2.5・6.4〜6.6 の記録を、描くたびや刻みのたびに繰り返して出さない（同じシェルの同じ読み込みにつき 1 度）。
 5. The areka shall 着せ替えの pattern0 に書かれた 8 語以外の未知の描画メソッドの語の記録（「未知の合成メソッド名」）も、合成のたびでなく、同じシェルの同じ読み込みにつき 1 度だけ出す。
+6. When `start`・`parallelstart`・`alternativestart` が着せ替え（interval が `bind`）のアニメーションを指したとき, the areka shall その着せ替えが無効でも、ほかのアニメーションと同じに再生させてそのコマを描く（M5・SSP の実測）。
+7. When `stop`・`parallelstop`・`alternativestop` が有効な着せ替えのアニメーションを指したとき, the areka shall その着せ替えを消さずに描き続ける（M5・SSP の実測）。
 
 ### Requirement 6: 着せ替えの差し込み（insert）
 
@@ -140,7 +143,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 5. If `insert` の相手が今の面に無いか、interval が `bind` でないとき, the areka shall その位置に何も描かず、読み込みのときに 1 度だけ記録を残す。
 6. If `insert` が着せ替えでないアニメーションか element定義に書かれているとき（正典は未定義）, the areka shall 何も描かず、読み込みのときに 1 度だけ記録を残す。
 7. The areka shall `insert` の行のウェイト・X座標・Y座標を使わず、差し込んだ B のコマを B 自身のコマに書かれた座標で描く（正典は黙る・areka の読み）。
-8. The areka shall 着せ替えの何コマ目までを描き、どのコマの `insert` を差し込むかを、要件 8 の M6 の実測どおりにする。
+8. The areka shall 有効な着せ替えのアニメーションの全部のコマを pattern の番号の順に重ねて描き、どのコマに書かれた `insert` もその位置に差し込む（M6・SSP の実測。今の「着せ替えは pattern0 だけ描く」を改める）。
 
 ### Requirement 7: ベースレイヤの表示位置をずらす（move）
 
@@ -153,7 +156,9 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 3. The areka shall `move` によるずらしを瞬間的に行い、コマとコマの間を補って動かさない。
 4. The areka shall `move` のコマのサーフェス番号の欄を無視する。
 5. The areka shall `move` でずらしても、キャラクターの窓の位置と大きさを変えず、窓の外へ出た部分を見せない（例: 「．さくら」の `move,0,10,0,9999` で絵が窓の下へ出て見えなくなる）。
-6. The areka shall `move` のずれを元に戻す時（そのアニメーションの停止・終わり・面の切り替え）と、ずれる範囲（ほかのアニメーションの層・当たり判定がついて動くか・`base` で置き換えた土台もずれるか）を、要件 8 の M3・M4・M7 の実測どおりにする。
+6. The areka shall `move` のずれを、そのアニメーションの終わり・`stop`・サーフェス番号 `-1` では戻さず、面を出したとき（同じ面の出し直しを含む）にだけ元へ戻す（M3・SSP の実測）。
+7. The areka shall `base` のコマで差し替えた土台も `move` でずらし、後の `move` のコマで `base` のコマを消さない（M7・SSP の実測）。
+8. The areka shall `move` でずれる範囲・ずれの単位と表示の倍率・デスクトップの下の端に揃える置き方とのかね合いを、要件 8 の M4 の実測（調べの記録 §3）と 2026-10-30 の議論の決めどおりにする。
 
 ### Requirement 8: SSP で測って決める点
 
@@ -169,6 +174,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
    - M5: 着せ替え（interval が `bind`）のアニメーションを `start` 系・`stop` 系の相手に指したとき。
    - M6: interval が `bind` だけの着せ替えの pattern1 以降を重ねて描くか、pattern1 以降に書いた `insert` が差し込まれるか（要件 6 の「A のそのコマの位置」が pattern0 の外にもあるか）。
    - M7: 同じアニメーションの `base` のコマの後の `move` が、`base` で置き換えた土台をずらすか（「．さくら」の `surface22` の形）。
+   - M1〜M7 と書き出しの写し（M8）は 2026-10-30 に測った（手順・検体・結果は調べの記録 `research.md` の §3、検体の作り方は `ssp-measure/make_calltest.py`）。
 2. When 測りを終えたとき, the 開発者 shall 測りの手順・検体・結果を設計の前に spec の調べの記録へ残し、要件 3〜7 の該当する所を測りの結果で確定する。
 3. If SSP が記録を出さず黙って捨てる振る舞いであったとき, the areka shall 見え方は SSP に合わせ、記録は要件 5 の決まりで残す（記録は areka の足しとして §8 に書く）。
 
@@ -181,8 +187,9 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 1. The areka shall 7 語と `move` の働き（要件 2〜7・11）を、時刻と選びを固定した決定論のテストで確かめる。
 2. The areka shall 候補の並びの読み（`( )`・`[ ]`・`,`・`.` の組み合わせと、欠けた欄）と、要件 5 の境目（相手が無い・巡回・使えない所）を決定論のテストで確かめる。
 3. The areka shall 「．さくら」のシェル `master` を読み込んで、7 語と `move` に由来する警告の記録が 0 件であることを決定論のテストで確かめる。
-4. When 「．さくら」を実機で 1 回動かしたとき（根・検体・一時フォルダはワークツリーの `target\` の下だけ）, the 開発者 shall 7 語と `move` に由来する WARN が 0 件であること、`surface0` などの `alternativestart` で animation0 か 1 が動くこと、`surface12`・`surface22` で絵が `move` のとおりに下へずれて窓の外へ出ることを、記録と面の写しで確かめる。
+4. When 「．さくら」を実機で 1 回動かしたとき（根・検体・一時フォルダはワークツリーの `target\` の下だけ）, the 開発者 shall 7 語と `move` に由来する WARN が 0 件であること、`surface0` などの `alternativestart` で animation0 か 1 が動くこと、`surface12`・`surface22` で絵が `move` のとおりにずれることを、記録と画面の写し（書き出しの写しには `move` が写らない＝6）で確かめる。
 5. The areka shall 既存の SERIKO の再生と合成のテストを、この spec の変更の後も通す。
+6. The areka shall 面の書き出し（オフラインの書き出しと MCP の `dump_surface`）に `move` のずれを写さない（M8・SSP の実測）。
 
 ### Requirement 10: 記録と文書
 
