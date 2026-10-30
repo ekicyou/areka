@@ -14,7 +14,7 @@ use super::{Playback, SlotPlayback, pattern_frame};
 use crate::calls::{CallOutcome, CallPlays, run_calls};
 use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
-use crate::timeline::{AlwaysView, LoopRng, always_at, visible_frame};
+use crate::timeline::{AlwaysView, LoopRng, always_visible, visible_frame};
 
 /// 止めた `always` の印（スコープ, 面の段, animation）。印がある間は始め直さず、面を出したときに消す
 /// （SSP の測り M2・2026-10-30 設計議題 1）。
@@ -141,21 +141,7 @@ pub(super) fn put_top_always(pattern: &mut PatternState, anim: &LoopAnimation, e
     };
     let frames = &anim.frames;
     // `None` は「欄を外す」（描くコマがまだ無い）。
-    let view = |elapsed: u64| match always_at(frames, period_ms, laps, elapsed) {
-        AlwaysView::Frame(i) => {
-            let previous_lap = (elapsed >= period_ms.get()).then(|| frames.len() - 1);
-            let d = visible_frame(frames, i)
-                .or_else(|| previous_lap.and_then(|l| visible_frame(frames, l)))?;
-            Some(
-                if frames[d].picture.is_some() || frames[d].surface_id >= 0 {
-                    AlwaysView::Frame(d)
-                } else {
-                    AlwaysView::Nothing
-                },
-            )
-        }
-        AlwaysView::Nothing => Some(AlwaysView::Nothing),
-    };
+    let view = |elapsed: u64| always_visible(frames, period_ms, laps, elapsed);
     match view(elapsed_ms) {
         now if now == view(0) => pattern.remove(anim.id),
         Some(AlwaysView::Frame(i)) => pattern.set(anim.id, pattern_frame(&frames[i])),

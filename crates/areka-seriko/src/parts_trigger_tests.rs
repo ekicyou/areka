@@ -71,6 +71,7 @@ impl Rig {
             true,
             Some(&window),
             &mut self.rng,
+            &mut crate::seeded_rng(0),
             &mut pattern,
         );
         self.seen = self.seen.max(now_seen);
@@ -102,6 +103,7 @@ impl Rig {
             open,
             None,
             &mut self.rng,
+            &mut crate::seeded_rng(0),
             &mut pattern,
         );
         pattern
@@ -118,6 +120,7 @@ impl Rig {
             &self.table,
             at_ms,
             true,
+            &mut crate::seeded_rng(0),
             &mut pattern,
         );
         pattern

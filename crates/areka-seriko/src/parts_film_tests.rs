@@ -93,6 +93,7 @@ fn tick_at(
         true,
         None,
         rng,
+        &mut crate::seeded_rng(0),
         &mut p,
     );
     p

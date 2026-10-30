@@ -194,6 +194,30 @@ pub fn always_at(
     }
 }
 
+/// `always` の経過 `elapsed_ms` で欄に出す答え（[`always_at`] の今のコマが働きのコマなら、その周の
+/// 最後の描くコマ。周の頭から働きのコマなら前の周の最後の描くコマ）。`None` は描くコマがまだ無い
+/// （1 周目の頭から働きのコマ）＝欄を外す。一番上と部品が共有する（spec: seriko-pattern-calls 1.3・7.7）。
+pub(crate) fn always_visible(
+    frames: &[LoopFrame],
+    period_ms: NonZeroU64,
+    laps: Option<NonZeroU32>,
+    elapsed_ms: u64,
+) -> Option<AlwaysView> {
+    let AlwaysView::Frame(i) = always_at(frames, period_ms, laps, elapsed_ms) else {
+        return Some(AlwaysView::Nothing);
+    };
+    let previous_lap = (elapsed_ms >= period_ms.get()).then(|| frames.len() - 1);
+    let d =
+        visible_frame(frames, i).or_else(|| previous_lap.and_then(|l| visible_frame(frames, l)))?;
+    Some(
+        if frames[d].picture.is_some() || frames[d].surface_id >= 0 {
+            AlwaysView::Frame(d)
+        } else {
+            AlwaysView::Nothing
+        },
+    )
+}
+
 #[cfg(test)]
 #[path = "timeline_repeat_tests.rs"]
 mod repeat_tests;

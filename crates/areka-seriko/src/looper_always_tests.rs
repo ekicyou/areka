@@ -292,6 +292,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
         true,
         None,
         &mut rng,
+        &mut crate::seeded_rng(0),
         &mut PatternState::default(),
     );
     let clock =

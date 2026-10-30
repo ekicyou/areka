@@ -83,6 +83,7 @@ fn tick(
         true,
         None,
         rng,
+        &mut crate::seeded_rng(0),
         &mut pattern,
     );
     pattern
@@ -492,6 +493,7 @@ fn peek_at(
         table,
         Some(now_ms),
         true,
+        &mut crate::seeded_rng(0),
         &mut pattern,
     );
     pattern
@@ -634,6 +636,7 @@ fn clear_drops_clocks_of_every_scope() {
         true,
         None,
         &mut rng,
+        &mut crate::seeded_rng(0),
         &mut p,
     );
     let mut p = PatternState::default();
@@ -648,6 +651,7 @@ fn clear_drops_clocks_of_every_scope() {
         true,
         None,
         &mut rng,
+        &mut crate::seeded_rng(0),
         &mut p,
     );
     assert!(clocks.clock(&scope(), 100, 0).is_some());
@@ -710,6 +714,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 true,
                 None,
                 &mut rng,
+                &mut crate::seeded_rng(0),
                 &mut p,
             );
             let mut p = PatternState::default();
@@ -724,6 +729,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 true,
                 None,
                 &mut rng,
+                &mut crate::seeded_rng(0),
                 &mut p,
             );
         }
@@ -903,6 +909,7 @@ fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself()
         &table,
         Some(1110),
         true,
+        &mut crate::seeded_rng(0),
         &mut p,
     );
     assert_eq!(part_frames(&p, 100), vec![(0, 102)]);

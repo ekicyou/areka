@@ -98,7 +98,7 @@
   - _Depends: 3.3, 4.1_
   - _Requirements: 3.1, 3.4, 3.5, 3.6, 3.8, 3.9, 4.1, 4.5, 11.2, 11.3, 9.1_
 
-- [ ] 5.3 入れ子の部品の刻みと合図で呼び出しを当てる
+- [x] 5.3 入れ子の部品の刻みと合図で呼び出しを当てる
   - 部品の時計の進みと更新の中で、その部品の再生の表と欄を借りる口として係を呼ぶ（相手は同じ部品の面の animation）。更新でも頭のコマを置く前に呼ぶ
   - 部品の進みは、今のコマが働きのコマなら最後の描くコマを置く
   - 部品の結合の兄弟テストで、部品の中の `start` と `stop` が一番上と同じ規則で働く、が緑になる
@@ -175,3 +175,4 @@
 - 4.2: `PresentCommand::MoveShift { target, x, y }`・読み口 `EmoPresenter::move_shift(target)`。`ReplaceTarget` ではずれを引き継がず 0 から（design 596 行・5.4 で差し替え時に (0,0) を送る）。areka の背骨の写し `spine_conformance_support.rs` の `project_display` では MoveShift は `Unknown` に写る — 5.4 で要るなら足す。
 - 5.1: `SerikoLoopConfig.pick_rng`（止めた設定・`settle.rs` の書き出し・テストは種 0）・本番は `entropy_seed()` を 2 回引いて `seed` と `pick_seed` を同じ info に出す。背骨は `LoopDriver::Live(rng, pick_rng)`。`Playback.acts_through`・`PartAnim::Playing.acts_through`（`Option<u64>`・`#[allow(dead_code)]`）と `on_tick` の `pick_rng: _` は 5.2/5.3 で使い始めて外す。actor_bind_loop_tests.rs はもとから 1,346 行（上限超え）。
 - 5.2: 一番上の口は `looper_calls.rs` の `TopPlays`・`run_top_calls`・`put_visible`。「面を出した」口は `looper.rs` の `on_surface_shown(scope, slot) -> bool`（5.4 で設計どおり `Option<DisplayCommand>` にしてずれの戻しを足す）。`CallOutcome.shift` はまだ誰も読まない（5.4）。actor の差し替え（Replace／Rebased）の枝で全スコープへ口を呼ぶ処理にテストが無い — 5.4 で 1 本足す。部品の `acts_through` の allow は 5.3 で外す。looper.rs は 979 行。
+- 5.3: 部品の口は `parts_calls.rs` の `PartPlays`・`run_part_calls`（働きのコマの無い部品は飛ばす）。`always` の周の見え方は `timeline::always_visible` を一番上と共有。見えなくなった部品の `CallOnly` の時計は抽選の時計と同じく残す（`called_never_clock_survives_while_the_part_is_hidden`）。部品の `CallOutcome`（`move`）はまだ捨てている — 5.4 で読む。引き金の相（runonce/periodic/talk の後に呼び出しを当て直す道）は一番上・部品ともテストが無い — 5.4 か最終検証で 1 本。parts.rs 962・looper.rs 981 行。

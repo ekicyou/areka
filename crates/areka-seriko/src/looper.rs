@@ -716,6 +716,7 @@ impl LoopRuntime {
                     *open,
                     window.as_ref(),
                     rng,
+                    pick_rng,
                     &mut new_pattern,
                 );
             }
@@ -757,7 +758,7 @@ impl LoopRuntime {
         let before = self.stopped_always.len();
         self.stopped_always
             .retain(|(s, sl, _)| !(s == scope && *sl == slot));
-        self.stopped_always.len() != before
+        self.parts.on_surface_shown(scope, slot) | (self.stopped_always.len() != before)
     }
 
     /// シェルの表の差し替え（spec: areka-P0-shell-balloon-switch 要件 2.8）。
@@ -896,6 +897,7 @@ impl LoopRuntime {
                 table,
                 at_ms,
                 open,
+                pick_rng,
                 &mut pattern,
             );
         }
