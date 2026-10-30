@@ -86,7 +86,7 @@ ukadoc が黙っている点は、下の「要件の段での裁定」に推奨�
 5. If `\![set,windowstate,…]` の第 2 引数が `stayontop`・`!stayontop` のどちらでもない（`minimize` と空を含む）, the areka shall 常に手前の状態を変えず、ゴーストと台本を止めず、書かれていた値を記録に残す。
 6. If オンかオフの指令に第 3 引数以降が付いている, the areka shall 第 2 引数で状態を決め、余りの引数を記録に残す。
 7. The areka shall 第 2 引数を小文字ちょうどの綴りで読み、大文字の混じった綴りは受け付けずに 1.5 の扱いにする。
-8. When MCP の `check_script` が 3 つの指令を含む台本を確かめる, the areka shall 3 つの指令を「知らない命令」と答えない。
+8. When MCP の `check_script` が 3 つの指令を含む台本を確かめる, the areka shall `\v` を「知らないタグ」と、`\![set,windowstate,stayontop|!stayontop]` を「知らない命令」と答えない。
 
 ### Requirement 2: 常に手前のあいだの見え方
 **Objective:** As a ゴーストを常駐させる利用者, I want 台本が常に手前を求めたあいだ、ゴーストが他のアプリの窓に隠れないこと, so that SSP と同じにゴーストがいつも見える
@@ -139,6 +139,7 @@ ukadoc が黙っている点は、下の「要件の段での裁定」に推奨�
 3. If OS が窓を常に手前へ上げられない、または常に手前から外せない, the areka shall その窓と理由を記録に残し、残りの窓を続けて扱い、ゴーストと台本を止めず、常に手前の状態は指令のとおりに持つ。
 4. When ゴーストの終了・読み直しで常に手前の状態をオフへ戻した, the areka shall 戻したことと理由（終了・切り替え・読み直し）を記録に残す。
 5. When シェルの切り替えで台本の組を保った、または descript の組を取り替えた, the areka shall 保った組と取り替えた組を記録に残す。
+6. While 常に手前の状態がオン, when 他のアプリの窓が活性になってもゴーストの窓が奥へ回らなかった, the areka shall それを重なりの失敗として記録しない。
 
 ### Requirement 7: 決定論のテスト
 **Objective:** As a areka の開発者, I want 判断の分岐を実際の画面を使わずに確かめられること, so that 重なりの不具合を「直ったつもり」で再発させない
@@ -148,7 +149,7 @@ ukadoc が黙っている点は、下の「要件の段での裁定」に推奨�
 2. The areka shall 常に手前の状態の遷移（オン・オフ・重ね・ゴーストの終了・切り替え・読み直し・SHIORI だけの読み直し・シェルとバルーンの切り替え）の各分岐を、決定論のテストで確かめられるようにする。
 3. The areka shall 常に手前のあいだの並べ方の判断（全部の窓を上げる・後から現れる窓・組とバルーンの並び・常に手前でないときの今の判断が変わらないこと）を、決定論のテストで確かめられるようにする。
 4. The areka shall 台本の組の寿命（シェルの切り替えで保つ・descript の組の取り替え・重なる descript の組を作らない・ゴーストの読み直しで捨てる・SHIORI だけの読み直しで保つ）の各分岐を、決定論のテストで確かめられるようにする。
-5. When この spec が着地する, the areka shall `\v` を先送りの語として見張っている 2 つの守り（wintf の重なりの組の側と、areka の窓を作る側）を、両方そろえて着地に合わせて改め、片方だけを古いまま残さない。
+5. When この spec が着地する, the areka shall `\v`・常に手前を先送りの語として見張る守り、および常に手前が無いことを固定している守りの全部（wintf と areka の語の走査・窓の既定のスタイル・重なりの判断の返り値・帯に居る窓の隣接・受け手の表のテストの例と件数と見本。research.md 4 節の G1〜G8）を、着地に合わせてそろえて改め、一部だけを古いまま残さない。常に手前でないときの主張は残す。
 
 ### Requirement 8: 実機での確かめ
 **Objective:** As a areka の開発者, I want 実際の画面で常に手前の効きを確かめること, so that 決定論のテストが隠す OS の振る舞いの違いを見落とさない
@@ -164,5 +165,5 @@ ukadoc が黙っている点は、下の「要件の段での裁定」に推奨�
 
 #### Acceptance Criteria
 1. When この spec が着地する, the areka shall 網羅台帳 `sakura-script.toml` の `\v`・`\![set,windowstate,stayontop]`・`\![set,windowstate,!stayontop]` の 3 行を実物の対応に合わせ、持ち主をこの spec にする（`\![set,windowstate,minimize]` の行は変えない）。
-2. When この spec が着地する, the areka shall 網羅台帳 `shiori.toml` の `alwaysstayontopbutton.caption` の行に、対応しないことと理由（メニューの「常に手前に表示」の項目を作らない・裁定 11）を書く。
-3. When この spec が着地する, the areka shall `doc/COMPAT_ARCHITECTURE.md` §8 に、3 つの指令の対応・完了 `areka-P0-ghost-window-zorder` の要件 4.3・8.1 の読み替え（台本が常に手前を求めたときを除く）・常に手前の状態と台本の重なりの組の寿命の裁定を書く。
+2. When この spec が着地する, the areka shall 網羅台帳 `shiori.toml` の `alwaysstayontopbutton.caption` の行を状態「語彙のみ」（`vocabulary-only`）のまま、持ち主をこの spec にし、注記に対応しないことと理由（メニューの「常に手前に表示」の項目を作らない・裁定 11）を書く。
+3. When この spec が着地する, the areka shall `doc/COMPAT_ARCHITECTURE.md` §8 に、3 つの指令の対応・完了 `areka-P0-ghost-window-zorder` の要件 4.3・8.1 の読み替え（台本が常に手前を求めたときを除く）・常に手前の状態と台本の重なりの組の寿命の裁定を書く。台本の組の寿命は、既にある行（完了 `areka-P0-scope-zorder-pinning` の裁量「descript の基底を据えるとき台本の組を残さない」・完了 `areka-P0-window-link-directives` の行の「食い違う」の文・シェルの差し替えの行の定義点）を、起動の段（今のまま）とシェルの切り替え（台本の組を保つ）に分けて書き直し、上書きしたことを名指しで残す。
