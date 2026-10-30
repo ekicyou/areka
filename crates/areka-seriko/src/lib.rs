@@ -25,6 +25,9 @@
 
 mod actor;
 mod bind;
+// 働きのコマを時刻の順に当てる係（spec: seriko-pattern-calls）。5.2（一番上）・5.3（部品）で配線したら allow を外す。
+#[allow(dead_code)]
+mod calls;
 mod looper;
 mod output;
 // 部品の時計（spec: areka-P0-surface-element-nesting）。持ち主は looper。

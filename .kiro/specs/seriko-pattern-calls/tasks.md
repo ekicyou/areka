@@ -66,7 +66,7 @@
   - _Requirements: 1.3, 7.7_
 
 - [ ] 4. 呼び出しの係と提示の覚え
-- [ ] 4.1 働きのコマを予定の時刻の順に当てる純粋な係を作る
+- [x] 4.1 働きのコマを予定の時刻の順に当てる純粋な係を作る
   - 再生中の各 animation の、まだ当てていない働きのコマのうち予定の時刻（開始 ＋ 累積の待ち・`always` は周ごと）が今以下のものを、時刻・animation・pattern の昇順の待ち行列で 1 つずつ当てる。止められた／やり直された再生の出来事は捨てる
   - 開始は相手の再生を予定の時刻で置き換え（頭からやり直す）、相手の頭の働きのコマも同じ待ち行列に入れる。停止は再生と欄を外し、再生していなければ何もしない。選びは選びの乱数だけで並びの全部から等しく 1 つを選ぶ。`move` は後の時刻のずれが勝つ候補を返す
   - 1 つの時刻の中で同じ animation を 2 度始めない（`debug` だけ）。表に無い相手は何もしない。呼んだ側の再生は止めない
@@ -171,3 +171,4 @@
 - 申し送り（10-30・animated-surface-log-flood から）: ぱすたの 1400（`bind+random`・pattern0 が閉じた目）が再生していないあいだも pattern0 が静的に描かれ、目が閉じたまま戻らない。あちらが先に main で「`bind+random` は静的に積まない（コマがあるときだけ描く）」を直す。main を取り込むときは `bind_steps.rs` の `BindSteps::build` の `bind+random` の枝を空の手順にして合わせる。
 - 3.2: 8 語の検査は `table_calls.rs` の `check_calls`（表を作る `from_world_and_films` の中で 1 度）。巡回する `insert` は巡回の上のコマごとに 1 件（A↔B で 2 件）。純 `bind` の中の働きのコマは `Inert`（待ち・x・y 0）に書き換える。8.1 の「．さくら」の確かめはこの 6 種の WARN が 0 件であることを見る。
 - 3.3: `timeline::visible_frame`（`#[allow(dead_code)]`・5.2/5.3 で使い始めたら外す）。`always_at` にも同じ「描くコマの負の番号だけで止まる」を当てた。5.2/5.3 まで、働きのコマが今のコマになると looper の `pattern_frame` がその `surface_id` を欄に置く途中の状態（`move,-1` なら u32::MAX）— 5.2/5.3 で `visible_frame` に置き換える。`always` の 2 周目以降で周の頭が働きのコマだと `visible_frame` は None になるので、前の周の描くコマを残すかは 5.2 で扱う。`looper.rs` の `pattern_frame` の doc「負は Stopped」も 5.2 で直す。
+- 4.1: 係は `calls.rs` の `run_calls`（口は `CallPlays`・`mod calls` に `#[allow(dead_code)]`、5.2/5.3 で外す）。`CallPlays::start` の実装は当て終えた印を None に戻すこと。止めた `always` の印は 5.2 の `CallPlays::stop` の実装側で付ける。5.2 は抽選・`always`・引き金の始まりを係の呼び出しより前に置く（同じ時刻の 2 度目の開始の止めはこの順が前提）。
