@@ -1,0 +1,175 @@
+# 調査の記録: balloon-scroll-arrows
+
+## ギャップ分析（2026-10-30・ブランチ `claude/balloon-scroll-arrows-37e29d`・main `484263230` の上）
+
+### 分析の要約
+
+- **名前の選び方の土台はもうある**: `crates/areka-emo-present/src/balloon.rs` の `SeriesFamily`（表の形の族）・`prefix_chain`・`select_faces`・`face_digits_of` が、族の名前を変えるだけで要件 2.1 の順（本体 `arrowp0def`→`arrows`→`arrow`、相方 `arrowp1def`→`arrowk`→`arrowp0def`→`arrows`→`arrow`、三人目以降 `arrowp{n}def`→`arrowk`→`arrowp0def`→`arrows`→`arrow`）をそのまま作る。`scope0_legacy: ["arrows", "arrow"]` と積めばよいことは、完了 `areka-P0-kero-balloon` が檻 `series_family_table_expresses_deeper_legacy_names` と §8 の行で用意済み。クリック待ち（`clickwait*`）も同じ表の 1 行で済む。
+- **見える範囲は 1 か所で毎コマ計算している**: `LayoutEngine::visible_window`（`crates/areka-emo-text/src/layout.rs` 433 行）が行の列と文字の範囲だけから自動の位置を出し、`present_actor`（`actor_present.rs` 275 行）が毎コマ呼ぶ。送りの描き直し（`ScrollPlanner`・blit・`ScrollState.committed`）と選択肢の当たり（`to_window_physical` が `committed` を読む）は、渡された `VisibleWindow` に従うだけ。手動の位置は「この 1 か所で別の `VisibleWindow` を渡す」形で入り、`choice.rs` に触らずに当たりも合う（要件 8.5）。
+- **無いもの**: 矢印の鍵の読み取り（`BalloonModel` に受け口が無い）・`--数値` の読み方（今のどの座標の鍵も読めない）・矢印の絵の解決と読み込み・矢印を出す面（今の文字の面は文字を描いてよい範囲の大きさしか無い）・普通のバルーンの窓のホイールの受け口・箱の上のホイールの横取り・矢印の当たり・手動の位置の状態とその捨て時・`dump_balloon` への写し。
+- **描く層は 3 案**（下の「やり方の案」）。推す見込みは「文字の層に矢印だけの面を別に足す（案 B）」。今の文字の面へ描く案は、送りの blit で矢印まで動いてしまうのと、areka-balloon の `arrow1` が文字の範囲の外にあるので取りにくい。
+- **調べが要る点**: SSP の測り（要件 10 の 6 点）・`\b[ID]` で面ごとの設定ファイルを読み直していない今の作り（要件 1.3・8.6 に効く）・箱の当たりが字の矩形だけである点・絵の透けた所に矢印があると押せない点。
+
+### 1. 今の姿
+
+#### 1.1 バルーンの読み手（areka-parsers）
+
+- `crates/areka-parsers/src/balloon/parse.rs`（252 行）: 2 層（descript.txt＋面ごとの設定ファイル）を後勝ちで 1 つの表にまとめ、鍵を完全一致で引く。座標は `get_scalar::<i32>` で読み、**`--5` は数として読めず `None` になる**（`--数値` を読む所はリポジトリのどこにも無い）。マイナスを右端・下端からに直すのは下流の `crates/areka-emo-text/src/region.rs` の `resolve_coord`（`v >= 0` は素通し・負は `extent + v`）。
+- `model.rs` は 774 行で上限に近い。新しい鍵は兄弟の新しいファイルに型を置き、`BalloonModel` には `with_…` の口と読み口を数行だけ足すのが今の流儀（`with_font_decoration_raw` などと同じ）。
+- `validation_tests.rs` 190 行のコメントが「arrow… はモデルに accessor が無い」と書く（テストの期待値は distractor の検査だけで、鍵を足しても赤にならない。コメントは直す）。`parse_tests.rs` は 922 行で、テストは兄弟の新しいファイルへ。
+
+#### 1.2 名前の選び方（areka-emo-present `balloon.rs`・701 行）
+
+- `BALLOON_FAMILY` だけが実装された族。`select_faces` は **面の番号ごと**に連鎖を先頭から辿る（`balloonk0` があり `balloonk1` が無ければ面 1 は `balloons1`）。矢印に使うと「`0` は `arrows0`、`1` は `arrow1`」のように番号ごとに別の名前から採ることになる。要件 2.1 は「最初に見つかった名前の `0` と `1` を使う」（名前ごと）と書き、要件 2.5 は片方だけのときを決めている。**番号ごとか名前ごとか**は設計で決める点。
+- 走査は `enumerate_file_names` で 1 回・判定は大小を無視（要件 2.6 と合う）。拡張子は `.png` 固定（`FRAME_SUFFIX`・要件の範囲外の `.webp` は `balloon-webp-names`）。
+- 絵の読み込み（WIC の bake）は `build_balloon_target_from_faces` が emo-atlas を通して行う。矢印の絵も同じ口で読める見込み。
+- 1 スコープの定義は `load_scope_balloon_model(dir, scope, face0)` が **面 0 の設定ファイルだけ**を重ねて作り（`crates/areka/src/emo2_boot/assets.rs` 475 行・`placement/mod.rs` 824 行）、`\b[ID]` で面が替わっても読み直さない（文字の層の `refresh_actor_scale` は同じ model で拡大率と面の大きさだけを追う）。
+
+#### 1.3 見える範囲と送り（areka-emo-text）
+
+- `visible_window` は「最新の行が収まる最小の飛ばし数」を毎コマ決め、`first_visible_line` と `block_offset` を返す。縦書き（`VerticalRl`）は `block_dir = -1`（中身が右へ動く）。純粋な関数で、手動の位置（行の番号）からも同じ式で `block_offset` が出せる。ただし今の式は「あふれが無いときは 0」と分けているので、行 0 を見せる手動の位置の扱い（冒頭の保留改行の空き）は設計で 1 行確かめる。
+- 行は画像の px で配置され、拡大率は `ScaleContract` で掛ける。手動の位置を **行の番号**で持てば、拡大率が変わっても同じ行が古い側に残る（要件 8.7 は形の上で満たせる）。拡大率の再追従は描画資源だけを作り直し、純粋状態は残す（`actor_attach.rs` の `refresh_actor_scale`）。
+- 場所ごとの実行時の表（`choice_hover`・`choice_snapshot` など）は `TextLayerRuntime` が `PlaceKey`（普通のバルーンと箱）ごとに持ち、`apply_cue` の `Clear`／`ClearAll` と箱の束の受け取り（`set_box_layout`）でまとめて捨てる。手動の位置も同じ置き方・同じ捨て時に乗る（要件 8.2・8.8）。
+- `present_actor` は描き直しが要ったコマ（`changed`）だけ提示する。手動の位置が変われば `ScrollPlanner` が blit とダーティ描画を出すので、送りの描き直しの仕組みはそのまま使える。
+- 文字の面は **文字を描いてよい範囲の大きさ**（`region.right - region.left` × `region.bottom - region.top` に拡大率）で、範囲の左上に置かれる（`actor_present.rs` 150〜158 行）。
+- `\![set,autoscroll,disable]` は実装が無い（範囲の外のまま）。
+
+#### 1.4 箱（シェル内バルーン）
+
+- 箱の定義は `crates/areka-emo-compose/src/boxes.rs` の `BoxDef.model` が **普通のバルーンと同じ `balloon::parse`** で読む。読み捨てるのは `windowposition.*`・`use_self_alpha`・`use_input_alpha` だけなので、`BalloonModel` に矢印の鍵を足せば箱にも自動で届く（要件 7.1）。原点は箱の左上、大きさは `size`。
+- 箱に絵は無い（地の色だけ）。箱の束 `ShellBoxAssets`（`crates/areka/src/emo2_boot/shell_box_assets.rs`）が持つ探す場所は書体の `font_dirs`（シェル→ゴースト）だけで、バルーンのフォルダも矢印の絵も持たない。シェルのフォルダを読む権威は `areka-emo-present/src/shell_target.rs`（`surface*.png` の判定は `face_digits_of` を接頭辞違いで共有）。
+- シェル内バルーンは ukadoc に無い（ukadoc MCP で「シェル内バルーン」0 件）。areka の `areka-P0-shell-balloon` が決めた独自の仕組みなので、**箱の絵の置き場（議題 1）と箱の上のホイール（議題 6）は SSP では測れない**。
+- 箱の窓の面は **表示している字の矩形だけ**でポインタを受ける（`present_actor` の `set_hit_cells(glyph_cells(…))`・shell-balloon 要件 9.4）。矢印の上の押下を箱が受けるには、矢印の矩形も当たりに足す必要がある。押下の判断は `input_events/shell_box.rs` の `box_under_point`（`shown_boxes` の四角＝箱の大きさ全体）と `judge_box_press`。
+- 箱の上にポインタがある間の時間切れの止めは既にある（`balloon_visibility_phase.rs` の `box_hovered`）。
+
+#### 1.5 入力（crates/areka/src/input_events）
+
+- キャラ窓のホイールは `char_watch.rs`（238 行）が毎 tick `PointerState.wheel.vertical` を読み、窓ごとの溜め（`wheel.rs` の `WheelAccum`・100 ミリ秒の間引き）を経て `OnMouseWheel` を送る。横は読まない。バルーンの窓のホイールは **どこも読まない**（`balloon_pressed.rs` 23 行のコメント）。brief の再測定どおり、wintf は窓の中のポインタの持ち主へホイールを渡しているので、受け口は `char_watch.rs` を前例に `BalloonWindowMarker` の窓へ絞った新しい系で作れる。
+- 要件 6.3 の「120 ごとに 1 行・端数は持ち越し」は `OnMouseWheel` の間引き（100 ミリ秒・和を送る）とは別の規則。`wheel.rs` の型は流用せず、端数だけを持つ小さな溜めで足りる見込み。
+- 箱の上のホイール（議題 6）は `char_watch` の 5 番の段（回転を `rotations` に積む前）で、カーソルが「隠れた行のある箱」の上かを `box_under_point` で見て横取りする形になる。
+- バルーンの押下は `balloon_pressed.rs`（198 行）の `on_balloon_pointer_pressed` が選択肢の確定 → 利用者の中断（`user_break.rs`）の順に流す。矢印の当たりはその頭に置けば要件 5.5 の「クリックとして扱わない」が 1 か所で済む。座標は窓の物理 px のまま（選択肢の行と同じ・÷k しない）。
+- バルーンの窓の当たりは絵の α ≥ 0.5 の画素だけ（記憶「当たりは α ≥ 0.5」）。矢印が絵の透けた所にあると押下が窓に届かない。今回の 2 つのバルーンは矢印の下が不透明だった（下の 1.7）。
+
+#### 1.6 MCP `dump_balloon`
+
+- `crates/areka/src/mcp/dump_balloon.rs`（163 行）は、presenter の `last_shown` の絵（原寸）に文字の面の写し（物理寸）を `dump_balloon_overlay.rs` の `overlay_text` で重ねる。箱は読まない（要件 3.6 が普通のバルーンに限るのと合う）。
+- 矢印をバルーンの絵に焼くなら写しは自動で入る。別の面に出すなら、その面の写しを読むか、出している矢印の絵（原寸の BGRA）を原寸の座標で CPU で重ねる。後者は GPU の写しを足さずに済み、原寸の座標そのままなので位置がずれない。
+
+#### 1.7 実物のバルーン（ワークツリーの `target\nar-samples\manual\` の展開形で測った）
+
+| バルーン | 画像 | validrect | 矢印の鍵 | 矢印の絵 | 文字の範囲との関係 | 矢印の下の絵の α |
+|---|---|---|---|---|---|---|
+| ぱすた `pasta_tategaki`（`vertical,1`） | `balloons0`・`balloonk0` 436×450 | 0,0〜436,450（**画像全体**） | `arrow0` (-12,4)＝x 424・y 4、`arrow1` (-12,-12)＝x 424・y 438 | `arrow0.png`・`arrow1.png` 8×8 | 両方とも範囲の**中** | 255（不透明） |
+| 既定 `areka-balloon` | `balloons0` 326×169 ほか | 0,0〜326,`-20`（`balloons0` で y 149 まで） | `arrow0` (303,10)、`arrow1` (303,-20)＝`balloons0` で y 149 | `arrow0.png`・`arrow1.png` 11×10 | `arrow0` は中、**`arrow1` は範囲のすぐ下の外** | 255（不透明・`balloons0`・`balloons2`・`balloonk0` とも） |
+
+- 要件の議題 3 の理由「ぱすたの矢印は文字を描いてよい範囲の外にある」は、今の書庫の descript では成り立たない（ぱすたの validrect は画像全体）。結論（文字の範囲の中にしか写らない形は取れない）は、areka-balloon の `arrow1` が範囲の外にあることで同じく成り立つ。
+- どちらのバルーンも `arrow*` だけで `arrows*`・`arrowk*`・`arrowp*def*` は持たない（旧名 `arrow` が要る）。
+
+#### 1.8 台帳と文書
+
+- `doc/ukadoc-coverage/ledger/assets.toml`: `arrow0.x`（717 行）・`arrow0.y`・`arrow1.x`・`arrow1.y` の 4 行は持ち主がもう `balloon-scroll-arrows`。`arrow.filename`（701 行）だけが `balloon-canon-residue` のまま。状態はどれも `absent`。`clickwaitmarker.*` の行は `balloon-canon-residue` のままで、本 spec は持たない（要件 2.7 は土台だけ）。
+- `doc/ukadoc-coverage/roadmap-draft.md`: `balloon-scroll-arrows` の `owner_count = 4`（1078 行）・`balloon-canon-residue` の `owner_count = 17`（689 行）・束 13「バルーンの付属画像」の表の行（1124 行「`balloon-canon-residue`（W14・5 件）／`balloon-scroll-arrows`（v0.1.0・4 件）」）。`arrow.filename` を移せば 5 と 16 と表の件数を合わせる。数の検査は `crates/ukadoc-survey/tests/consistency/spec_checks.rs`。
+- `doc/COMPAT_ARCHITECTURE.md` §8: 「装飾族の接尾辞なしの旧名」（161 行・未実装の語彙記録）と「`arrow0`／`arrow1` の縦書き再解釈」（205 行・未実装・疑義 SC10＝間接に推すだけ）の 2 行を実装の後の姿に直す。今の ukadoc の `vertical` の項は「arrow0（スクロール上）・arrow1（スクロール下）は、意味としてはそれぞれ右・左へのスクロールになる。画像と位置はバルーン側で用意すること」と明文で書く（ukadoc MCP `ukadoc:descript_balloon:vertical,0/1` で確かめた）ので、205 行の「正典側は未規定」は古い。
+
+### 2. 要件ごとの対応（Missing＝無い・Unknown＝調べが要る・Constraint＝制約）
+
+| 要件 | 今あるもの | ギャップ |
+|---|---|---|
+| 1.1・1.4 鍵を読む | 2 層の後勝ちと完全一致引き（`parse.rs`） | Missing: `arrow0.x/y`・`arrow1.x/y`・`arrow.filename` の型と読み口（新しいファイル） |
+| 1.2 座標の読み方 | 負の値を端からに直す `resolve_coord`（emo-text） | Missing: `--数値`。今の座標の鍵はどれも読めない（`get_scalar` が `None`）。Constraint: 要件 1.2 の「文字を描いてよい範囲などの座標と同じ読み方」は `--` の点で今の実装と違う。矢印だけ新しい座標の型で読むか、他の鍵にも広げるか（範囲の外）は決めが要る。また validrect の右・下の 0 は端と読む特例（`resolve_far_edge`）があり、矢印の 0 は左上からと読むのが要件どおり |
+| 1.3 面ごとの上書き | 2 層マージ | Constraint: スコープの定義は面 0 の設定ファイルだけを重ねる。`\b[ID]` で替えた面の設定ファイル（`balloons2s.txt` など）は今は読まれない |
+| 1.5 読めない値の警告 | 読み手は記録を出さない（寛容な写像） | Missing: 警告の出し場所。emo の型（記録は fs を触る入口 1 か所・事実は戻り値に載せる）に合わせるなら、読み手は「読めなかった鍵と値」を戻り値に載せ、emo-present の `load_scope_balloon_model` か文字の層の入口が `warn!` を出す |
+| 1.6 既存の振る舞いを保つ | 既存のテスト群 | 鍵を持たないバルーンで何も変わらないことは、追加の型が `None` のままなら構造で保てる |
+| 2.1〜2.3・2.6 名前の選び方 | `SeriesFamily`・`prefix_chain`・`select_faces` | Missing: 矢印の族の定数（`base: "arrow"`・`scope0_legacy: ["arrows","arrow"]`・`scope1_legacy: ["arrowk"]`）と、`arrow.filename` を先頭にして無ければ既定の連鎖へ戻す口。Unknown: 番号ごとか名前ごとか（1.2 節） |
+| 2.4・2.5 絵が無い・片方だけ | 面 0 が無いと `Err` にする `resolve_balloon_faces` | Missing: 矢印は無くても失敗にしない別の入口（面 0 必在の契約を矢印へ持ち込まない） |
+| 2.7 クリック待ちの名前 | 同上 | Missing: 族の定数 1 つと、要件 2.1〜2.3 と同じ順で解けることの決定論のテスト |
+| 3.1〜3.3・3.8 出る条件 | `visible_window` の `first_visible_line` | Missing: 「古い側に押し出された行があるか」「手動の位置で新しい側に隠れた行があるか」の判断（行の列と見える範囲から純粋に出せる） |
+| 3.4・3.5 置き場と手前 | 文字の面は validrect の大きさ | Missing: 矢印を出す面（案 A〜C）。Constraint: areka-balloon の `arrow1` は範囲の外 |
+| 3.6 `dump_balloon` | 背景＋文字の面の写し | Missing: 矢印の写し（CPU で重ねるのが軽い） |
+| 3.7 座標が無いとき | — | Unknown: SSP の置き場（要件 10 ⑷） |
+| 4.1・4.2 縦書き | `VerticalRl` の送りの符号・座標は左上原点のまま | Unknown: areka 独自の `writing_mode` の `vertical_lr`（古い側は左）で `arrow0` を何と読むか。要件は `vertical,1` だけを書く |
+| 4.3・4.4 ぱすたで SSP と同じ所 | — | Unknown: SSP の測り（要件 10 ⑴⑸） |
+| 5.1〜5.4 クリックで送る | `ScrollPlanner` の blit | Missing: 手動の位置の状態（場所ごと・行の番号）と限り・戻り |
+| 5.5・5.6 クリックとして扱わない | `on_balloon_pointer_pressed` の頭 | Missing: 矢印の当たりの判断（選択肢・中断より先）。Constraint: 矢印が絵の α < 0.5 の所にあると窓に届かない |
+| 5.7 拡大率に合う当たり | 選択肢の行は `× k` 済みの物理 px | 同じ規約で矢印の矩形を出せばよい |
+| 6.1〜6.7 ホイール | `char_watch.rs` の前例・wintf が値を届ける | Missing: バルーンの窓のホイールの系（新しいファイル）と 120 ごとの端数の持ち越し |
+| 7.1 箱の鍵 | `BoxDef.model` が同じ `parse` | 読み手に足せば自動で届く |
+| 7.3 箱の絵のフォルダ | 書体の探す場所だけ（シェル→ゴースト） | Missing: 箱の束が矢印の絵（シェルのフォルダとバルーンのフォルダの両方から解いたもの）を持つ口 |
+| 7.4 箱の矢印の押下 | `judge_box_press` | Missing: 箱の当たりに矢印の矩形を足す（今は字の矩形だけ） |
+| 7.5・7.6 箱の上のホイール | `char_watch` が `OnMouseWheel` を送る | Missing: 隠れた行のある箱の上だけ横取りする分岐 |
+| 8.1 新しい文字で戻る | `apply_cue` の `Text` 等・表示の時刻で字が増える | Unknown: 「新しい文字が出た」を合図の着いた時に見るか、見える字が増えた時に見るか（下の 4 節） |
+| 8.2 消去で捨てる | `Clear`／`ClearAll` が `choice_hover` を捨てる所 | 同じ所に足すだけ |
+| 8.3 消えたら捨てる | 時間切れは窓を隠すだけで字を残す（`forget_scope` は字を残す） | Missing: 可視の相（areka 本体）から文字の層へ「このスコープの手動の位置を捨てよ」と伝える口 |
+| 8.4 時間切れの数え方 | `is_balloon_hovered`・`box_hovered` | 変えない（何も足さない） |
+| 8.5 選択肢の当たり | `to_window_physical` が `committed` を読む | 手動の `VisibleWindow` を渡せば自動で合う（`choice.rs` に触らない） |
+| 8.6 面の替わり | `BalloonSurface` の合図は文字の層では行き先の切替（名前の形）だけ | Missing: 整数の `\b[ID]` で手動の位置を捨てる所。Constraint: 新しい面の鍵は面 0 の設定ファイルのもの（1.3 の制約） |
+| 8.7 拡大率 | 行の番号で持てば保てる | 再追従で描画資源を作り直しても純粋状態は残る |
+| 8.8 場所ごと | `PlaceKey` で表を持つ流儀 | そのまま |
+| 9.1〜9.4 記録 | emo の「入口 1 か所で 1 回」の型・`logging.md` | Missing: 解決の debug 1 回・手動の始まりと終わりの debug・壊れた絵の warn |
+| 9.5・9.6 §8 と台帳 | 4 行は持ち主済み | Missing: `arrow.filename` の持ち主・5 行の状態と注記・`roadmap-draft.md` の数（5 と 16・束 13 の表）・§8 の 2 行の直しと新しい行 |
+| 10 SSP の測り | — | Unknown: 6 点すべて（開発者の許し・排他の机） |
+| 11.3〜11.5 実機 | emo2 の実機テスト・ぱすたの手順書 `doc/pasta-real-run.md` | Unknown: 箱を持つ実機の検体が見当たらない（箱の固定のテストは `crates/areka-emo-text/tests/fixtures/shell-balloon/` にだけある）。実機の確かめは `target\` の下に箱を持つシェルを組む必要があるかもしれない |
+
+### 3. やり方の案
+
+#### 案 A: 今の文字の面に矢印も描く
+
+- 文字の面を「validrect と矢印の矩形を合わせた大きさ」か「バルーンの絵の全体」へ広げ、`ViewboxExecutor` の描画の最後に矢印の絵を描く。
+- ✅ 面を増やさない。`dump_balloon` は今の文字の面の写しで矢印も写る。
+- ❌ 送りは面の中身全体を blit するので、止まっているべき矢印も動く。毎回の送りで矢印の矩形を消して描き直すダーティの規則が要り、`viewbox_diff.rs`・`viewbox_draw_render.rs`（661 行）に手が入る。
+- ❌ 面の原点と大きさが変わると、選択肢の当たり（`to_window_physical` の原点）・箱の字の矩形・`dump_balloon` の重ね位置・既存の多数の檻の前提が一緒に動く。
+
+#### 案 B: 文字の層に「矢印の面」を場所ごとに足す（推す見込み）
+
+- 普通のバルーンと箱の場所ごとに、矢印だけを描く小さな面（矢印 1 枚ごと、またはバルーンの絵の大きさ 1 枚）を文字の面の手前に置く。矢印の出る・出ないは `present_actor` が行の列と見える範囲から決め、変わったコマだけ描き直す。
+- 名前の選び方は emo-present の `balloon.rs` に族を足し、絵の読み込みは今の bake の口を使う。手動の位置と矢印の判断は emo-text の新しい純粋なファイル（`lib.rs` の `PURE_SOURCES` に載せる・brief の「1 本だけの席」）。
+- ✅ 送りの blit と独立（矢印の面は送らない）。文字の面の形も当たりの規約も変えない。
+- ✅ 後に続く `balloon-markers`（状態の印）・`talk-fast-forward`（クリック待ちの印）が同じ面と置き方に乗れる。
+- ❌ 面を窓の子として手前に挿す口が要る。箱は `attach_window_child` の前例（差し込み口の直後に element番号の順）があるが、普通のバルーンは今は予約スロット 1 つへの装着だけで、矢印の面の並び（文字より手前）を決める口を emo-present の装着か文字の層に足す。
+- ❌ `dump_balloon` に写しの口を 1 つ足す（矢印の絵の原寸の BGRA を原寸の座標で重ねるなら GPU の写しは要らない）。
+
+#### 案 C: 矢印をバルーンの絵の側（emo-present）で重ねる
+
+- 矢印の出る・出ないの状態をバルーンの提示に渡し、バルーンの絵に矢印を重ねて提示し直す（4 通りの見た目をキャッシュに持つ形も取れる）。
+- ✅ `dump_balloon` は `last_shown` で自動で写る。当たりの α の型に矢印の画素も入るので、透けた所の矢印も押せる。
+- ❌ 文字の層の状態（押し出された行）を提示の層へ毎回渡す逆向きの流れが要る（今の依存は emo-present → emo-text の順だけで、emo-present は emo-text を知らない）。
+- ❌ 箱はシェルの絵の中なので、箱の矢印のためにシェルの提示まで動かす。文字の更新で再合成しない今の決め（R9.3）とぶつかる。
+
+#### 組み合わせ（案 B を軸に）
+
+- 読み手（areka-parsers の新しいファイル）＋族の定数（emo-present `balloon.rs`）＋判断と手動の位置（emo-text の新しい純粋なファイル）＋矢印の面（emo-text・案 B）＋入力（areka の新しいホイールの系と押下の頭の分岐・`char_watch` の箱の横取り）＋写し（`dump_balloon` の CPU の重ね）＋台帳と §8。
+
+### 4. 要件の議題 6 点について、コードが言うこと
+
+1. **箱の矢印の絵のフォルダ**: 箱の束は書体の探す場所（シェル→ゴースト）しか持たず、バルーンのフォルダも絵も持たない（`shell_box_assets.rs`）。シェルのフォルダの読み込みの権威は `shell_target.rs` で、名前の判定 `face_digits_of` は接頭辞違いで共有できる。シェル内バルーンは ukadoc に無い areka 独自の仕組みなので、SSP では測れず areka の決めになる。バルーンのフォルダは 1 体のゴーストに 1 つ（スコープで違うのは系列だけ）なので、「そのスコープが今使っているバルーンのフォルダ」の側は普通のバルーンと同じ連鎖を同じフォルダで引けばよい。
+2. **手動の最中の新しい文字・時間切れ**: 見える範囲は毎コマ行の列から計算し直す作りで、手動の位置は場所ごとの表に置ける（`choice_hover` と同じ）。消去は `apply_cue` の `Clear`／`ClearAll` が今も場所ごとの表を捨てる所があり、そこに足せる。時間切れは窓を隠すだけで字を残す（`forget_scope` は字を残す）ので、「消えたら捨てる」には可視の相から文字の層への口が要る。時間切れの止め（バルーン・箱の上）は既にあり、変えずに済む。「新しい文字が出た」は、字が台本のタグの切れ目ごとに時刻つきで届き、そのうえ表示の時刻で 1 字ずつ見える数が増える作りなので、合図の着いた時に捨てるか、見える字（または行）が増えた時に捨てるかで振る舞いが違う（バルーンの可視の相は「見える字の数が増えた」を `Content` として既に見ている）。
+3. **描く層**: 文字の面は validrect の大きさで、送りは面の中身を blit する。ぱすたのバルーンは validrect が画像全体（矢印は範囲の中）だが、areka-balloon の `arrow1` は範囲のすぐ下の外。`dump_balloon` は「バルーンの絵＋文字の面の写し」を重ねる作りで、別の面の矢印は原寸の絵を CPU で重ねれば写せる。議題の理由の書き方（ぱすたの矢印は範囲の外）は今の書庫に合わないが、結論は areka-balloon で同じく成り立つ。
+4. **縦書きの向きと出る条件**: ukadoc の `vertical` の項の明文を MCP で確かめた（右・左）。`visible_window` は `VerticalRl` で中身を右へ動かす符号を既に持ち、古い側は右。areka には独自の `writing_mode` の `vertical_lr`（古い側は左）もあり、`vertical,1` だけを書く要件の外になる。§8 の 205 行は「正典は未規定」のままで古い。出る条件・送る量・座標が無いときの置き場はコードからは決まらない（SSP の測り）。
+5. **`arrow.filename`**: 2 層の後勝ちで面ごとの設定ファイルの値が descript を上書きする所は今もある。ただしスコープの定義は面 0 の設定ファイルだけを重ねるので、「`balloonk0s.txt` に書けば相方だけ名前を変えられる」は面 0 については成り立ち、`\b[ID]` で替えた面の設定ファイルは今は読まれない。連鎖は `prefix_chain` の先頭に書かれた名前を 1 つ足し、無ければ今の連鎖へ戻る形で作れる。
+6. **箱の上のホイールと `OnMouseWheel`**: キャラ窓のホイールは `char_watch` が窓ごとに溜めて 100 ミリ秒ごとに `OnMouseWheel` を送る。箱の四角（`shown_boxes`・箱の大きさ全体）と `box_under_point` は既にあるので、回転を溜めに積む前に「隠れた行のある箱の上か」を見て横取りできる。ただし箱の窓の面は字の矩形だけでポインタを受けるので、字の無い所の回転はシェルの絵の当たりとして届く（座標で箱を引く今の判断なら箱の上と分かる）。シェル内バルーンは areka 独自なので、ここも SSP では測れない。
+
+### 5. 規模と危うさ
+
+- **規模: L（1〜2 週）**。読み手・族・判断と手動の位置・矢印の面・普通のバルーンと箱の入力・写し・台帳と §8・SSP の測り・2 つの実機の確かめと、層が 5 つにまたがる。brief の 13〜16 タスクの見立てと合う。
+- **危うさ: 中**。どの部品も前例（族の表・送りの計画・`char_watch`・箱の子の面の装着・`dump_balloon` の重ね）に乗るが、矢印の面を窓の子として手前に挿す口が新しく、SSP の測りで出る条件や送る量が推奨と違えば要件が動く。
+
+### 6. 設計の段への申し送り
+
+- 推す見込み: 案 B（文字の層に矢印の面）を軸にした組み合わせ。
+- 決める点:
+  1. 矢印の連鎖を番号ごと（`select_faces` と同じ）に採るか、名前ごと（要件 2.1 の字面）に採るか。
+  2. `--数値` を矢印の座標だけの新しい型で読むか（他の鍵は範囲の外）。座標の型をクリック待ちなど後の印と共有する置き場。
+  3. 読めない値の警告を出す所（読み手は記録を出さない・入口 1 か所の型）。
+  4. 矢印の面の形（矢印ごとに 1 枚か、バルーンの絵の大きさで 1 枚か）と、普通のバルーンの窓で文字の面より手前に挿す口（emo-present の装着か文字の層か）。
+  5. 「新しい文字が出た」を合図の着いた時に見るか、見える字が増えた時に見るか。
+  6. 時間切れ・トークの終わり・ゴーストの切り替えで手動の位置を捨てる口（areka 本体の可視の相 → 文字の層）。
+  7. 箱の当たり（字の矩形だけ）へ矢印の矩形を足す形と、箱の上のホイールの横取りを `char_watch` のどこに置くか。
+  8. 絵の透けた所（α < 0.5）に矢印があるときに押せるようにするか（今回の 2 つのバルーンは不透明で起きない）。
+  9. `vertical_lr`（areka 独自）での `arrow0` の読み（古い側＝左か、画面の右か）。
+  10. 行 0 を見せる手動の位置の `block_offset`（冒頭の保留改行の空きを見せるか）。
+  11. `\b[ID]` で面ごとの設定ファイルを読み直していない今の作りを、本 spec で直すか（要件 1.3・8.6 の「新しい面の矢印の鍵」に効く）、面 0 の値のままで §8 に残すか。
+- 調べが要る点（Research Needed）:
+  - SSP の測り（要件 10 の ⑴〜⑹・開発者の許しと排他の机）。
+  - 普通のバルーンの窓へ文字の面より手前の子の面を足せるか（wintf の子の並びと emo-present の装着の口）。
+  - 箱を持つ実機の検体の有無（無ければ `target\` の下に組む）。
+  - 矢印の絵を拡大率で描くときの補間（バルーンの絵と同じ見え方になるか）。
