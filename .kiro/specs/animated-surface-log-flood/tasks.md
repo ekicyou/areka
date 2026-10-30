@@ -102,7 +102,7 @@
   - _Depends: 3.2_
   - _Requirements: 2.4, 2.6_
 
-- [ ] 4.2 例と手順書と互換の設計書を合わせ、食い違い 0 件を確かめる
+- [x] 4.2 例と手順書と互換の設計書を合わせ、食い違い 0 件を確かめる
   - 例（`crates/areka/examples/` の下）の水準に触れる注記を読み、直しが要るものだけ直す。要らないものは要らないと確かめた事実を記録に書く
   - 手順書 `doc/pasta-real-run.md` の `RUST_LOG` の値はそのままにし、すべての適用を見たいときは `areka_emo_present=debug` を足す注記と、「`apply(ShowSurface)` を外して読む」の注記の書き直しと、表の本 spec の項を足す。互換の設計書の行の位置の参照を今の行に直す
   - 文言 `apply(ShowSurface)`・「表示成立点 info」・`show.rs:` を、完了した spec と `target` を除いて grep し、食い違いの件数を記録 `verification.md` に書く

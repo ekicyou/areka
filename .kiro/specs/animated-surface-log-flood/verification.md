@@ -161,3 +161,31 @@
   - 機械ぜんたいの負荷: 件 25 は中央値 15〜16%、今回は 4〜6%。
   - 面の出し方: 件 25 では面 1001 の行が 71〜74 行あった。今回は、面 1002 になった後に別の面の行が無い。
   - どちらが効いたかは確かめていない。
+
+## タスク 4.2: 例・手順書・互換の設計書の注記の食い違い（2026-10-30）
+
+要件 2.6・8.6 の確かめ。文言 `apply(ShowSurface)`・「表示成立点 info」・`show.rs:` を、完了した spec（`.kiro/specs/completed`）と `target` を除いて grep した。表示の行は `crates/areka-emo-present/src/presenter/show.rs:480`（`apply(ShowSurface): 表示・マスクを更新`）。最初の表示と状態の替わりは INFO、コマ送りだけは DEBUG。
+
+### 直したもの（直す前の食い違い 4 件）
+
+- `doc/COMPAT_ARCHITECTURE.md` 178 行目の行の位置の参照 `show.rs:194`/`:221`（`target.rs:31`・`visibility.rs:69` も同じ表の項）を、今の行（可視化のゲート `show.rs:341`・可視化 `:402`、`target.rs:32`、`visibility.rs:81`）へ直した。
+- `.kiro/steering/roadmap.md` 522 行目の `presenter/show.rs:402` を `:480` へ直した。
+- `doc/pasta-real-run.md` の「`apply(ShowSurface)` を外して読む」注記（314 行目）を、着地後の姿（コマ送りだけの適用は既定の水準で出ない・外さずに読む・すべて見たいときは `areka_emo_present=debug` を足す）へ書き直した。`RUST_LOG` の値（127・141 行目）は変えていない。
+- `doc/pasta-real-run.md` の表（183 行目）の本 spec の項を、着地後の確かめ（同じ足し方の注記つき）へ直した。
+
+### 直しが要らないと確かめたもの
+
+- 例 `crates/areka/examples/`（`collision-probe.rs`・`emo-present.rs`・`emo-present/state.rs`・`emo-present/systems.rs`・`window-placement.rs`）の `apply(ShowSurface)` の注記は、どれも「最初の表示を駆動する」「ログの欄（`k_ratio` など）を見る」だけを言い、水準を書いていない。例が出す行は最初の表示（INFO のまま）なので、直しは要らない。例の `RUST_LOG` の既定は `info` のままで、読める。
+- `crates/areka-emo-present/src/presenter_perf_log_tests.rs` の「表示成立点 info!」は、最初の表示の行（INFO のまま）を固定するテストの文言で、今も正しい。`presenter_refresh_and_log_tests.rs` の「表示成立点で info レベル」も最初の表示について言っていて正しい。
+- 性能の道具（`tools/perf/` の判定・順位付け・見本）は文言で行を拾い水準を見ない。注記はタスク 4.1 で合わせ済み。`doc/ukadoc-coverage/ledger/sakura-script.toml` の言及は error! の別の行（未装着ターゲット）の話で、表示の行ではない。
+- `.kiro/steering/roadmap-history.md` 2568 行目の `show.rs:462` → `:402` は、棚卸㉙の時点の直しの記録（履歴）。過去の事実の記録なので書き換えない。
+
+### 本 spec 自身の文書の扱い
+
+- 本 spec の `brief.md`・`requirements.md`・`design.md`・`research.md`・`design-validation.md` などは、直す前の姿（`show.rs:402`・「毎適用 INFO」）を問題として書いた履歴の文書なので、食い違いの数に入れず、書き換えていない。
+- `verification.md` の既存の節も書き換えていない。
+
+### 結果
+
+- 直した後の食い違い: **0 件**（行の位置の参照は `show.rs:480` を指す表示の行の位置と合い、水準の主張はどれも最初の表示＝INFO・コマ送りだけ＝DEBUG と合う）。
+- 再確認の grep: `show.rs:` の参照は `COMPAT_ARCHITECTURE.md`（今の行）・`roadmap.md`（`:480`）・`roadmap-history.md`（履歴）の 3 か所だけ。
