@@ -44,16 +44,18 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
   - 候補の並び `(ID1,ID2,...)`（`[ ]` の括弧・`.` の区切りを含む）を 1 つの欄として読むこと。
   - 7 語と `move` に由来する WARN を無くし、正典が使えないとする所や読めない欄は、読み込みのときに 1 度だけ記録すること。
   - 決定論のテストと、「．さくら」の実機の 1 回。網羅台帳の 8 行と互換の文書の更新。
+  - 入れ子の部品（`parts.rs`）とバルーンの面のアニメーションでも、一番上のシェルの面と同じ規則で 7 語と `move` を働かせること（2026-10-30 議題 5）。
+  - 着せ替えの pattern0 の描画メソッドの語を合成のたびに引き直す今の作り（`plan.rs`）を、表を作るときの 1 度へ寄せ、8 語以外の未知の語の記録も読み込みにつき 1 度にすること（2026-10-30 議題 7）。
 - **Out of scope**:
-  - 旧 SERIKO 1.x の書式（`*pattern*,サーフェスID,ウェイト,描画メソッド,X座標,Y座標` の並び・`*interval`・`version,0`）の読み取り。今の areka は旧書式の行をどの語も読んでいない。brief の棚卸㉚の分割の案に従い、別の spec（仮の名 `seriko-legacy-pattern-format`）が全部の語を対象に持つ。「．さくら」に要るのは新しい書式だけである。
+  - 旧 SERIKO 1.x の書式（`*pattern*,サーフェスID,ウェイト,描画メソッド,X座標,Y座標` の並び・`*interval`・`version,0`）の読み取り。今の areka は旧書式の行をどの語も読んでいない。brief の棚卸㉚の分割の案に従い、別の spec `seriko-legacy-pattern-format`（2026-10-30 議題 1 で分割を確定・`/kiro-discovery` で起票）が全部の語を対象に持つ。「．さくら」に要るのは新しい書式だけである。
   - 重ね方の合成メソッド（`overlay`・`overlayfast`・`base`・`replace`・`interpolate`・`asis`・`reduce`・`blend-*` など）の描画そのもの（`draw-methods-canon`・`draw-methods-blend`）。
-  - 台本のタグ `\i[*]`・`\![anim,…]`（`seriko-script-triggers` とその後続）、interval の `never`・`yen-e` の読み取り、`animation*.name` の名前の読み取り（`seriko-script-triggers`）。
+  - 台本のタグ `\i[*]`・`\![anim,…]`（`seriko-script-triggers` とその後続）、interval の `yen-e` の読み取り、`animation*.name` の名前の読み取り（`seriko-script-triggers`）。interval の `never` は、呼ばれる相手として表に載せるところまでをこの spec が持つ（要件 11・2026-10-30 議題 2）。
   - `auto`（element定義の `--source` が要る・`element-clipping-option` の後の別件）。
   - interval の抽選そのもの（`seriko-interval-combinations`・`seriko-trigger-lottery-gaps`）。
   - サーフェス番号 `-2`（ほかの全てのアニメーションの停止）と `animation*.option,exclusive`。どちらも今の areka は動かしておらず、この spec では入れない。
   - ukadoc の注記「ユーザー設定でmove動作を切ることが可能」にあたる利用者の設定。
 - **Adjacent expectations**:
-  - `seriko-script-triggers` が `never` のアニメーションを再生の対象に載せた後は、この spec の呼び出しでそのアニメーションが動く。この spec は interval の種類で呼び出しを断らない。それまでは `never` のアニメーションは「指した番号のアニメーションが無い」と同じ扱いになる。
+  - `never` のアニメーションはこの spec で呼ばれる相手として表に載る（要件 11）。`seriko-script-triggers` は同じ相手へ `\i` の口を足すだけになる。この spec は interval の種類で呼び出しを断らない（`bind` の扱いは M5 で決める）。
   - `animation*.name` の名前を 7 語の ID の欄に書いたシェルは、この spec では「番号として読めない欄」として扱う（要件 2.5）。名前で指せるようにするのは名前を読む spec の側である。
   - `base` の描画は `draw-methods-canon` が持つ。「．さくら」の `surface12`・`surface22` は `base` の後に `move` が続くので、`move` の確かめは `base` の描画の出来に依らない形で行う。
   - 実機の確かめは、ゴーストの台詞（`shiori2-protocol` の着地）に頼らず、areka の MCP で面を出して行ってよい。
@@ -99,6 +101,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 5. The areka shall 呼ばれて始まったアニメーションのコマの進み・重なりの順・サーフェス番号 `-1` による停止・終わったあとのコマの残り方を、interval で自動に始まったときと同じ規則で扱う。
 6. The areka shall `alternativestart` と `alternativestop` の選びに使う偶然で、interval の抽選（`sometimes`・`rarely`・`random` など）の結果を変えない（同じ乱数の種なら、この spec の前と同じ時刻に同じアニメーションが抽選で始まる）。
 7. The areka shall `alternativestart` と `alternativestop` の選びを、決定論のテストから決め打ちできるようにする。
+8. The areka shall 要件 3〜7 の働きを、一番上のシェルの面のアニメーションと同じ規則で、入れ子の部品のアニメーションとバルーンの面のアニメーションにも当てる。
 
 ### Requirement 4: 別のアニメーションの停止（stop・parallelstop・alternativestop）
 
@@ -118,10 +121,11 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 
 #### Acceptance Criteria
 
-1. If 7 語のコマが指した番号のアニメーションが今の面に無いとき, the areka shall そのコマを何もしないコマとして扱い、読み込みのときにその面・アニメーション・相手の番号を示す記録を 1 度だけ残す。
+1. If 7 語のコマが指した番号のアニメーションが今の面に無いとき（定義はあるが interval が未知の語で再生に載らないものを含む・`never` は要件 11 で相手に載るので含まない）, the areka shall そのコマを何もしないコマとして扱い、読み込みのときにその面・アニメーション・相手の番号を示す記録を 1 度だけ残す。
 2. If 呼び出しが自分自身を指すか、複数のアニメーションの呼び出しが巡回するとき, the areka shall 1 つの時刻の中で同じアニメーションを 2 度以上始めず、ほかのアニメーションの進みと台本の進みを止めない。
 3. If 着せ替え（interval が `bind`）のアニメーションか element定義に `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`move` が書かれているとき, the areka shall その語に何もさせず（描かず・呼ばず・ずらさず）、読み込みのときに 1 度だけ記録を残す。
 4. The areka shall 本要件と要件 2.5・6.4〜6.6 の記録を、描くたびや刻みのたびに繰り返して出さない（同じシェルの同じ読み込みにつき 1 度）。
+5. The areka shall 着せ替えの pattern0 に書かれた 8 語以外の未知の描画メソッドの語の記録（「未知の合成メソッド名」）も、合成のたびでなく、同じシェルの同じ読み込みにつき 1 度だけ出す。
 
 ### Requirement 6: 着せ替えの差し込み（insert）
 
@@ -174,7 +178,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 
 #### Acceptance Criteria
 
-1. The areka shall 7 語と `move` の働き（要件 2〜7）を、時刻と選びを固定した決定論のテストで確かめる。
+1. The areka shall 7 語と `move` の働き（要件 2〜7・11）を、時刻と選びを固定した決定論のテストで確かめる。
 2. The areka shall 候補の並びの読み（`( )`・`[ ]`・`,`・`.` の組み合わせと、欠けた欄）と、要件 5 の境目（相手が無い・巡回・使えない所）を決定論のテストで確かめる。
 3. The areka shall 「．さくら」のシェル `master` を読み込んで、7 語と `move` に由来する警告の記録が 0 件であることを決定論のテストで確かめる。
 4. When 「．さくら」を実機で 1 回動かしたとき（根・検体・一時フォルダはワークツリーの `target\` の下だけ）, the 開発者 shall 7 語と `move` に由来する WARN が 0 件であること、`surface0` などの `alternativestart` で animation0 か 1 が動くこと、`surface12`・`surface22` で絵が `move` のとおりに下へずれて窓の外へ出ることを、記録と面の写しで確かめる。
@@ -186,5 +190,18 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 
 #### Acceptance Criteria
 
-1. The 開発者 shall 網羅台帳（`doc/ukadoc-coverage/ledger/assets.toml`）の `start,ID`・`stop,ID`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert,ID`・`move` の 8 行を、実装した状態と担当の spec に更新する。
+1. The 開発者 shall 網羅台帳（`doc/ukadoc-coverage/ledger/assets.toml`）の `start,ID`・`stop,ID`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert,ID`・`move` の 8 行と、interval の `never` の行（要件 11 の呼ばれる相手として）を、実装した状態と担当の spec に更新する。
 2. The 開発者 shall 正典が書いていない点の areka の読み（`alternativestart` の等しい確からしさ・巡回の扱い・`insert` の行の座標を使わないこと・使えない所と未定義の所を何もせず記録すること・要件 8 の測りの結果）を、`doc/COMPAT_ARCHITECTURE.md` の §8 に残す。
+
+### Requirement 11: 呼ばれるだけのアニメーション（interval の never）
+
+**Objective:** シェルを作る人として、interval を `never` にしたアニメーションを pattern定義の呼び出しで動かしたい。そうすれば、正典どおり「自動では動かず、呼ばれたときだけ動く」アニメーションが組める。
+
+正典: 「自動では実行しない」（https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#never ）。2026-10-30 議題 2 で、呼ばれる相手として表に載せるところまでをこの spec が持つと決めた（`\i` の口は `seriko-script-triggers`）。
+
+#### Acceptance Criteria
+
+1. The areka shall interval が `never` のアニメーションを、interval の抽選では始めず、7 語の呼び出しの相手としてだけ再生の表に載せる。
+2. When 7 語のコマが interval が `never` のアニメーションを指したとき, the areka shall ほかの interval のアニメーションと同じ規則（要件 3〜6）で開始・停止・差し込みする。
+3. The areka shall `never` のアニメーションを表に載せたことで、ほかのアニメーションの interval の抽選の結果を変えない（要件 3.6 と同じ）。
+4. The areka shall interval が未知の語のアニメーションは今と同じに表に載せず、今の記録を保つ。

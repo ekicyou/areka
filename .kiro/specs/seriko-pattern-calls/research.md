@@ -171,3 +171,17 @@
 - 推しの方向（決めではない）: 並びは **R-b**（ほかの行を構造で守る）、語の分類と並びの数への読みは emo-compose の新しいファイル 1 つに寄せ、`targets_animation_id`・`is_move_name` をそこから引く。再生は **案 B か C**（`frame_at` を壊さず、刻みの間に通り過ぎた働きのコマを別の純粋な関数で求める）。`move` と `insert` は M3・M6・M7 の測りの後に決める。
 - 同じウェーブに置けない相手（brief の 2026-10-24 の再測定のまま）: `animated-surface-log-flood`（`plan.rs`・`pattern.rs`・`lib.rs`）・`shell-mouse-cursor`（`areka-parsers/src/shell/mod.rs` に新しいファイルを足すとき）・`mcp-strict-errors` の「再生まで印を運ぶ」案（seriko の `actor.rs`）。版の外と分け合うファイル: `extent-element-offset`（`plan_extent.rs`）・`seriko-trigger-lottery-gaps`（seriko の `table.rs`・`looper.rs`・`parts.rs`・`actor.rs`）。
 - 確かめの土台: 「．さくら」は `sample-ghost-kit` の `SAMPLES` に登記済み。WARN の数えは `areka-emo-compose/src/log_capture.rs` の型。選びの決め打ちは乱数の注入の口（決めごと 7）で行う。
+
+## 2. 要件の議論の決め（2026-10-30・開発者「承認」＝全議題を推奨案で確定）
+
+| 議題 | 決め | 要件への反映 |
+| ---- | ---- | ---- |
+| 1 旧 SERIKO 1.x の書式 | 別の spec `seriko-legacy-pattern-format` に分ける・`/kiro-discovery` で起票 | Out of scope に確定を記した |
+| 2 `never` の相手 | この spec で「呼ばれるだけの相手」として表に載せる・`seriko-script-triggers` は `\i` の口だけ（同 brief に申し送り） | 要件 11 を新設・5.1・Adjacent・10.1 |
+| 3 ID の欄の名前 | 番号として読めない欄として何もせず 1 度記録（今の要件 2.5 のまま） | 変更なし |
+| 4 `insert` | 範囲に残し、M6 の測りどおり正典の形で作る | 要件 6.8（A で追加済み）のまま |
+| 5 部品とバルーンの面 | 一番上の面と同じ規則で働かせる | 要件 3.8・In scope |
+| 6 SSP の測り（M1〜M8） | この議論の後、このセッションで続けて測る・reload は毎回許しを得る・結果はこのファイルへ | 要件 8.2 のまま |
+| 7 `plan.rs` の合成ごとの `from_name` | 表を作るときの 1 度へ寄せ、8 語以外の未知の語も 1 度に（`animated-surface-log-flood` の brief に申し送り） | 要件 5.5・In scope |
+
+§1.6 の決めごと 3（呼ばれる相手の範囲）は議題 2 で「`never` は載せる・未知の interval は載せない」に決まった。決めごと 6（部品とバルーン）は議題 5 で「同じ規則」に決まった。決めごと 10 は議題 7 で「全部の語を表を作るときの 1 度へ」に決まった。残る §1.6 の決めごとは設計の段で解く。
