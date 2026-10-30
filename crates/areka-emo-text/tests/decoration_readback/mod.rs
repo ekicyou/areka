@@ -89,33 +89,33 @@ pub(crate) const VISIBLE_KEYS: &[(&str, &[&str])] = &[
 
 // ══ バルーン定義 ═══════════════════════════════════════════════════════════════════════
 
-/// 読み戻し用バルーンの `descript`（実 `parse_str` を通す ＝ in-code モデルを組み立てない）。
+/// 読み戻し用バルーンを「書体名・大きさ・追加の行」で組む（実 `parse_str` を通す ＝
+/// in-code モデルを組み立てない）。
 ///
-/// `writing_mode` は引数で足す（横書きは宣言しない＝既定の `horizontal_tb`）。
-fn descript(writing_mode: Option<&str>) -> String {
-    let mut s = format!(
+/// `extra` は `descript` の行をそのまま足す（`writing_mode,…`・`font.bold,1` など・各行は改行で終える）。
+pub(crate) fn model_with(font_name: &str, font_height: u32, extra: &str) -> BalloonModel {
+    let s = format!(
         "charset,UTF-8\n\
-         font.name,{REAL_FONT}\n\
-         font.height,{FONT_HEIGHT}\n\
+         font.name,{font_name}\n\
+         font.height,{font_height}\n\
          font.color.r,0\n\
          font.color.g,0\n\
          font.color.b,0\n\
          validrect.top,5\n\
          validrect.left,5\n\
          validrect.right,-5\n\
-         validrect.bottom,-5\n"
+         validrect.bottom,-5\n\
+         {extra}"
     );
-    if let Some(mode) = writing_mode {
-        s.push_str("writing_mode,");
-        s.push_str(mode);
-        s.push('\n');
-    }
-    s
+    parse_str(&s, None)
 }
 
-/// 実 parser を通したバルーン定義。
+/// 実 parser を通したバルーン定義（`REAL_FONT`・`FONT_HEIGHT`）。
+///
+/// `writing_mode` は引数で足す（横書きは宣言しない＝既定の `horizontal_tb`）。
 pub(crate) fn model(writing_mode: Option<&str>) -> BalloonModel {
-    parse_str(&descript(writing_mode), None)
+    let extra = writing_mode.map_or(String::new(), |m| format!("writing_mode,{m}\n"));
+    model_with(REAL_FONT, FONT_HEIGHT, &extra)
 }
 
 // ══ 実フォントの門（本番の判断関数で判定する） ═════════════════════════════════════════
@@ -240,6 +240,11 @@ fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs
 /// 素の既定 12 px**で描かれる。本番の起動順（装着 → 発話）はこの向きで、
 /// `line_pitch_readback_test.rs` の組み立ても同じである。
 pub(crate) fn run(writing_mode: Option<&str>, script: &[TalkCue]) -> Shot {
+    run_with(&model(writing_mode), script)
+}
+
+/// [`run`] の、バルーン定義を呼び手が渡す形（[`model_with`] で組んだ定義で撮る）。
+pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
     let mut world = make_world_with_gpu();
     let (window, slot) = spawn_reserved_slot(&mut world);
 
@@ -248,7 +253,7 @@ pub(crate) fn run(writing_mode: Option<&str>, script: &[TalkCue]) -> Shot {
     rt.register_actor(
         actor.clone(),
         TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE),
-        ResolvedBalloonText::resolve(&model(writing_mode), IMAGE),
+        ResolvedBalloonText::resolve(model, IMAGE),
     );
     for c in script {
         rt.apply_cue(c);

@@ -37,8 +37,9 @@
 //! 文字が素の既定 12 px で描かれる。
 
 use super::{
-    SAMPLE, VISIBLE_KEYS, added_ink_cols, assert_real_font_present, differs, font_cue,
-    ink_col_range, run, shoot_pair, single_band, text_cue, unbaked_cue,
+    SAMPLE, Shot, VISIBLE_KEYS, added_ink_cols, assert_real_font_present, differs, font_cue,
+    font_is_installed, ink_col_range, model_with, run, run_with, shoot_pair, single_band, text_cue,
+    unbaked_cue,
 };
 
 // ══ 縦書きの 2 方向 ════════════════════════════════════════════════════════════════════
@@ -270,5 +271,177 @@ fn tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels_in_both_ve
                 "{mode}: `{key}` を装飾の運搬名で流しても画素が変わらない（対照の意味が消える）",
             );
         }
+    }
+}
+
+// ══ 3. 括弧の上下・列の真ん中・括弧と次の字の空き（spec `emo-text-dwrite-fidelity`） ═══
+//
+// 出典 spec: `emo-text-dwrite-fidelity`（要件 1.1〜1.5・2.3・6.1・design.md「Testing Strategy >
+// 実 GPU の読み戻し」の G1〜G3）。バルーン定義はぱすた（`ghost_dev`）と同じ形を基にする。
+// 字の枠は行の矩形の中で `PASTA_HEIGHT` ごと——供給面は `validrect` の内側だけを持つので、
+// 列の先頭の字の枠の上端は面の y=0。
+
+/// ぱすたのバルーン定義の書体名（候補列のまま・GDI の名前「游ゴシック Medium」が中太 500 で当たる）。
+const PASTA_FONT: &str =
+    "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+
+/// ぱすたのバルーン定義の文字の大きさ（image px）＝字の枠の高さ。
+const PASTA_HEIGHT: u32 = 20;
+
+/// 「「」の下端と「繋」の上端の空きの期待値（px）——書体の寸法から決まる値。
+///
+/// 出どころ（design.md「Testing Strategy」の G3）: 游ゴシックの縦書き用の「「」（字形 7913）の墨の
+/// 下端は字の枠の上から 18.9px（research.md §10.1）ゆえ下の空きは 20−18.9＝約 1.1px、「繋」の
+/// 上の余白は約 1.0px、合わせて約 2.1px。手本（Chromium の並べ）は
+/// 開き括弧の位置をずらさないので、字の枠どおりに並べればこの空きになる。墨の端は画素の行に
+/// 丸まるので、「「」の最後の墨の行と「繋」の最初の墨の行の番号の差として数え ±1px で比べる。
+const BRACKET_GAP_PX: i64 = 2;
+
+/// 太さの 3 通り（要件 1.5）——名札・書体名・追加の行。
+const WEIGHTS: &[(&str, &str, &str)] = &[
+    ("Regular", "游ゴシック", ""),
+    ("中太", PASTA_FONT, ""),
+    ("太字", PASTA_FONT, "font.bold,1\n"),
+];
+
+/// 開き括弧類（要件 1.1）——墨が字の枠の下半分に来る。
+const OPENING: &[&str] = &["「", "『", "（"];
+
+/// 閉じ括弧（要件 1.2）——墨が字の枠の上半分のまま。
+const CLOSING: &[&str] = &["」"];
+
+/// 游ゴシックが無ければ赤で止める（代替の書体のまま緑にしない）。
+fn assert_yu_gothic_present() {
+    for name in ["游ゴシック", "游ゴシック Medium"] {
+        assert!(
+            font_is_installed(name),
+            "{name} がこの機械に無い。括弧の檻は当該書体の実描画を前提にしている"
+        );
+    }
+}
+
+/// 縦書きの 1 列を、ぱすたの形のバルーン定義で撮る。
+fn shoot_column(mode: &str, font: &str, extra: &str, body: &str) -> Shot {
+    let model = model_with(font, PASTA_HEIGHT, &format!("writing_mode,{mode}\n{extra}"));
+    let shot = run_with(&model, &[text_cue(body)]);
+    assert!(
+        shot.ink_count() > 0,
+        "{mode}: 「{body}」の列にインクが無い（前提）"
+    );
+    shot
+}
+
+/// 墨がある画素か——α が 0 でなければ墨とする。
+///
+/// 20px の括弧は線が 1px 前後と細く、`Shot::is_ink`（α≥128）では横棒が消えて字の上下端を
+/// 取り違える（游ゴシック Regular の「「」は α≥128 の行が 1 本しか残らない）。
+fn has_ink(shot: &Shot, x: u32, y: u32) -> bool {
+    shot.bytes[((y * shot.width + x) * 4 + 3) as usize] != 0
+}
+
+/// 墨のある行（y）を、上から連続した塊に分ける（字ごとの墨の上下端）。
+fn ink_row_runs(shot: &Shot) -> Vec<(u32, u32)> {
+    let mut runs: Vec<(u32, u32)> = Vec::new();
+    for y in (0..shot.height).filter(|&y| (0..shot.width).any(|x| has_ink(shot, x, y))) {
+        match runs.last_mut() {
+            Some(last) if last.1 + 1 == y => last.1 = y,
+            _ => runs.push((y, y)),
+        }
+    }
+    runs
+}
+
+/// 行の範囲 `rows` の中でインクのある列の左右端。
+fn ink_cols_in(shot: &Shot, rows: (u32, u32)) -> (u32, u32) {
+    let cols: Vec<u32> = (0..shot.width)
+        .filter(|&x| (rows.0..=rows.1).any(|y| has_ink(shot, x, y)))
+        .collect();
+    assert!(!cols.is_empty(), "行 {rows:?} にインクのある列が無い");
+    (cols[0], cols[cols.len() - 1])
+}
+
+/// 1 字だけの列の墨の上下端（1 つの塊のはず）。
+fn single_glyph_rows(shot: &Shot, what: &str) -> (u32, u32) {
+    let runs = ink_row_runs(shot);
+    assert!(!runs.is_empty(), "{what}: 墨が無い");
+    (runs[0].0, runs[runs.len() - 1].1)
+}
+
+/// 「「繋」の列を撮り、「「」と「繋」の墨の上下端を返す（上から 1 つ目の塊が「「」）。
+fn bracket_then_kanji(mode: &str) -> (Shot, (u32, u32), (u32, u32)) {
+    let shot = shoot_column(mode, PASTA_FONT, "", "「繋");
+    let runs = ink_row_runs(&shot);
+    assert!(
+        runs.len() >= 2,
+        "{mode}: 「「」と「繋」の墨が空いた行で分かれていない（空き 0）: {runs:?}"
+    );
+    let bracket = runs[0];
+    let kanji = (runs[1].0, runs[runs.len() - 1].1);
+    (shot, bracket, kanji)
+}
+
+/// G1（要件 1.1・1.2・1.5・6.1）: 縦書き 2 方向・3 通りの太さで、開き括弧類の墨は字の枠の
+/// 下半分、閉じ括弧の墨は上半分にある。
+///
+/// 較正: 列のレシピ（`VERTICAL_FEATURES`）を外して既定の機能の組へ戻すと、開き括弧の墨が
+/// 半 em 上へずれて（research.md §10.1・上から 3.0〜8.9px）赤になる。
+#[test]
+fn opening_brackets_sit_in_the_lower_half_and_closing_in_the_upper_half_of_the_glyph_frame() {
+    assert_yu_gothic_present();
+    let half = PASTA_HEIGHT / 2;
+    for mode in VERTICAL_MODES {
+        for (weight, font, extra) in WEIGHTS {
+            for ch in OPENING {
+                let shot = shoot_column(mode, font, extra, ch);
+                let rows = single_glyph_rows(&shot, ch);
+                assert!(
+                    rows.0 >= half,
+                    "{mode}・{weight}: 「{ch}」の墨が字の枠の下半分に無い（墨の行 {rows:?}・\
+                     下半分は y≥{half}）——開き括弧が上へずれている（要件 1.1・1.5）"
+                );
+            }
+            for ch in CLOSING {
+                let shot = shoot_column(mode, font, extra, ch);
+                let rows = single_glyph_rows(&shot, ch);
+                assert!(
+                    rows.1 < half,
+                    "{mode}・{weight}: 「{ch}」の墨が字の枠の上半分に無い（墨の行 {rows:?}・\
+                     上半分は y<{half}）——閉じ括弧が動いた（要件 1.2）"
+                );
+            }
+        }
+    }
+}
+
+/// G2（要件 1.3）: 「「」の墨の左右の中心は「繋」の墨の左右の中心と ±1px（列の真ん中）。
+#[test]
+fn opening_bracket_is_centred_in_the_column_like_the_next_kanji() {
+    assert_yu_gothic_present();
+    for mode in VERTICAL_MODES {
+        let (shot, bracket, kanji) = bracket_then_kanji(mode);
+        let (b, k) = (ink_cols_in(&shot, bracket), ink_cols_in(&shot, kanji));
+        // 半画素を避けるため 2 倍の目盛りで比べる（中心＝両端の和）。
+        let diff = (i64::from(b.0) + i64::from(b.1)) - (i64::from(k.0) + i64::from(k.1));
+        assert!(
+            diff.abs() <= 2,
+            "{mode}: 「「」の墨の列 {b:?} と「繋」の墨の列 {k:?} の中心の差が ±1px を超えた\
+             （差 {}px・要件 1.3）",
+            diff as f64 / 2.0
+        );
+    }
+}
+
+/// G3（要件 1.4）: 「「」の墨の下端と「繋」の墨の上端の空きが [`BRACKET_GAP_PX`] と ±1px。
+#[test]
+fn gap_between_opening_bracket_and_next_kanji_follows_the_font_metrics() {
+    assert_yu_gothic_present();
+    for mode in VERTICAL_MODES {
+        let (_, bracket, kanji) = bracket_then_kanji(mode);
+        let gap = i64::from(kanji.0) - i64::from(bracket.1);
+        assert!(
+            (gap - BRACKET_GAP_PX).abs() <= 1,
+            "{mode}: 「「」の墨 {bracket:?} と「繋」の墨 {kanji:?} の空きが {gap}px——\
+             書体の寸法から決まる約 2.1px と ±1px で合わない（要件 1.4）"
+        );
     }
 }
