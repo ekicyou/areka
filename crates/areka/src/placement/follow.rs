@@ -149,10 +149,12 @@ pub use self::window_move::{
 pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
 use self::keyword_base::rederive_keyword_balloon_offset;
-// 面の `move` のずれ（task 6.1）。呼び手は毎フレームの相（task 6.3）で、まだ本番では未使用に見える。
-use self::move_shift::balloon_shift;
+// 面の `move` のずれ（task 6.1・6.2）。当てる口の呼び手は毎フレームの相（task 6.3）で、まだ本番では
+// 未使用に見える。ドラッグの終わりと保存の側は当てた分を 0 にする・引く口だけを使う。
+pub(crate) use self::move_shift::origin_position;
 #[allow(unused_imports)]
 pub(crate) use self::move_shift::{MoveShiftApplied, apply_balloon_shift, apply_char_shift};
+use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::sticky_follow::{is_char_dragging, sync_drag_writer};
 // ドラッグの始めの控え。呼び手は `input_events::drag` だけで、`#[path]` で src を取り込む
 // examples には input_events が無いので、そちらのビルドでは未使用に見える。

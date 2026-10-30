@@ -50,6 +50,28 @@ pub(super) fn balloon_shift(world: &World, balloon: Entity) -> PointPx {
         .map_or(ZERO, |r| r.applied)
 }
 
+/// 保存の側が引くための元の位置（`pos` − 当てた分・記録が無ければ `pos` のまま）。
+///
+/// 記憶にずれを焼き付けない（起動のたびに積もらない・要件 7.8）。
+pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> PointPx {
+    let applied = world
+        .get::<MoveShiftApplied>(window)
+        .map_or(ZERO, |r| r.applied);
+    PointPx {
+        x: pos.x.saturating_sub(applied.x),
+        y: pos.y.saturating_sub(applied.y),
+    }
+}
+
+/// 利用者のドラッグの終わりで、その窓の当てた分を 0 にする（置いた所が新しい元の位置）。
+///
+/// `want`・`ratio` は残すので、毎フレームの相は同じずれを当て直さない。
+pub(super) fn reset_applied(world: &mut World, window: Entity) {
+    if let Some(mut r) = world.get_mut::<MoveShiftApplied>(window) {
+        r.applied = ZERO;
+    }
+}
+
 /// キャラ窓へずれを当てる。書いたら `true`。
 ///
 /// 窓・位置・寸・作業領域のどれかが無ければ `warn!` のうえ `false`（記録は変えないので、

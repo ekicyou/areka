@@ -8,11 +8,17 @@ use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::*;
 use wintf::ecs::{Point, SizeI};
 
+use wintf::ecs::WindowPos;
+use wintf::ecs::pointer::Phase;
+use wintf::ecs::window::drain_window_pos_commands;
+
 use super::test_support::{
-    fake_handle, position_of, single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
+    drag_end_event_at, drag_event, fake_handle, position_of, single_monitor_snapshot, size_of,
+    window_pos_at, window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, OffsetBase, apply_balloon_shift, apply_char_shift, move_window_to,
+    on_balloon_drag, on_balloon_drag_end, on_char_drag_end,
 };
 use crate::placement::resolver::{Anchor, PointPx};
 
@@ -283,4 +289,81 @@ fn extreme_balloon_shift_does_not_overflow() {
         ScaleRatio::ONE
     ));
     assert!(move_window_to(&mut world, window, 700, 450));
+}
+
+/// キャラ窓のドラッグの終わりで当てた分は 0 になり、利用者が置いた所が新しい元の位置になる
+/// （task 6.2・要件 7.5）。
+#[test]
+fn char_drag_end_resets_the_applied_shift() {
+    let (mut world, window) = char_world(Anchor::Free, 100, 100);
+    assert!(apply_char_shift(
+        &mut world,
+        window,
+        (10, 20),
+        ScaleRatio::ONE
+    ));
+    // 利用者がずれたままの窓を 300,200 へ置いた（wndproc が書いた最終位置）。
+    world.get_mut::<WindowPos>(window).unwrap().position = Some(Point { x: 300, y: 200 });
+    on_char_drag_end(
+        &mut world,
+        window,
+        window,
+        &Phase::Bubble(drag_end_event_at(window, (0, 0))),
+    );
+
+    // 同じずれを当て直しても、置いた所から引かず・足さない（0 を当てれば置いた所のまま）。
+    assert!(apply_char_shift(
+        &mut world,
+        window,
+        (0, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(position_of(&world, window), Point { x: 300, y: 200 });
+    let _residue = drain_window_pos_commands();
+}
+
+/// バルーン窓のドラッグの終わりで当てた分は 0 になり、追い直してもずれを二重に足さない
+/// （task 6.2・設計の検証の指摘 2）。
+#[test]
+fn balloon_drag_end_resets_the_shift_without_double_counting() {
+    let (mut world, window) = char_world(Anchor::Free, 600, 500);
+    let balloon = world
+        .spawn((fake_handle(0x2000), window_pos_sized(0, 0, 150, 100)))
+        .id();
+    world.entity_mut(window).insert(BalloonFollow::new(
+        balloon,
+        OffsetBase::unpinned(PointPx { x: -170, y: -40 }),
+    ));
+    assert!(apply_balloon_shift(
+        &mut world,
+        balloon,
+        (4, 6),
+        ScaleRatio::ONE
+    ));
+
+    // 利用者がバルーンを 300,300 へ置いた（相対の位置はずれを含んだ窓の位置から作られる）。
+    world.get_mut::<WindowPos>(balloon).unwrap().position = Some(Point { x: 300, y: 300 });
+    on_balloon_drag(
+        &mut world,
+        balloon,
+        balloon,
+        &Phase::Bubble(drag_event(balloon)),
+    );
+    on_balloon_drag_end(
+        &mut world,
+        balloon,
+        balloon,
+        &Phase::Bubble(drag_end_event_at(balloon, (0, 0))),
+    );
+
+    // キャラ窓が動いて追い直しても、置いた相対の位置のまま（ずれ 4,6 をもう 1 度足さない）。
+    assert!(move_window_to(&mut world, window, 700, 450));
+    assert_eq!(
+        position_of(&world, balloon),
+        Point {
+            x: 300 + 100,
+            y: 300 - 50
+        }
+    );
+    let _residue = drain_window_pos_commands();
 }

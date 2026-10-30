@@ -123,7 +123,7 @@
   - _Boundary: MoveShiftPlacement（areka placement）_
   - _Requirements: 7.1, 7.3, 7.5, 7.8, 8.1_
 
-- [ ] 6.2 利用者のドラッグと位置の保存でずれを扱う
+- [x] 6.2 利用者のドラッグと位置の保存でずれを扱う
   - キャラ窓とバルーン窓のドラッグの終わりで、その窓の当てた分を 0 にする（バルーンは 0 にしてから相対の位置を作る）。上限に近いファイルには口を呼ぶ 1〜2 行だけを足す
   - 位置を保存する所（覚えていないキャラ位置の保存・組の相手の保存）は、当てた分を引いた元の位置を保存する
   - 置き方の兄弟テストで、ドラッグの後のずれ 0（キャラ窓とバルーン窓の両方・バルーンで二重に足されない）と、保存の値がずれを引くこと、が緑になり、触ったファイルが 1,000 行を超えない
@@ -178,3 +178,4 @@
 - 5.3: 部品の口は `parts_calls.rs` の `PartPlays`・`run_part_calls`（働きのコマの無い部品は飛ばす）。`always` の周の見え方は `timeline::always_visible` を一番上と共有。見えなくなった部品の `CallOnly` の時計は抽選の時計と同じく残す（`called_never_clock_survives_while_the_part_is_hidden`）。部品の `CallOutcome`（`move`）はまだ捨てている — 5.4 で読む。引き金の相（runonce/periodic/talk の後に呼び出しを当て直す道）は一番上・部品ともテストが無い — 5.4 か最終検証で 1 本。parts.rs 962・looper.rs 981 行。
 - 5.4: `on_surface_shown` は `bool` のまま（5.2 の注の「Option にする」は取り下げ）。ずれの持ち主は `looper_calls.rs` の `Shifts`、(0, 0) は送り箱に積んで `take_shifts` で合図の `Show`／`Rebased` の後に出す（design.md の契約の行を追随済み）。命令は `DisplayCommand::MoveShift`／`MoveShiftBalloon`、areka の `adapter.rs` で `PresentCommand::MoveShift` に写す。`\s[-1]`（Hide）でもずれは 0 へ戻る（SSP で未測定・7 の互換の文書に 1 行）。背骨の写し `project_display` は MoveShift を `Unknown` のまま。引き金の相（periodic/talk の後の当て直し）の刻みのテストはまだ無い — 最終検証に持ち越し。looper.rs 993・parts.rs 973・actor.rs 908 行。
 - 6.1: 口は `placement/follow/move_shift.rs` の `apply_char_shift`・`apply_balloon_shift`・`balloon_shift`（記録 `MoveShiftApplied`、`want`・`ratio` は 6.3 まで `#[allow(dead_code)]`）。新しい経路 `PlacementRoute::PatternMove`（system reanchor・見送りが覆う・見える範囲の守りの対象。経路の表の檻を 12→13 語に直した）。バルーンのずれは `follow_balloon` と `move_window_with_route` の随伴の 2 か所で足す（飽和の足し算）。作業領域はずらした後の矩形で選ぶ（複数モニターでは隣へ寄りうる・SSP で未測定）。`origin_position` は 6.2。window_move.rs はもとから 1,227 行（上限超え）→ 1,231 行。
+- 6.2: 口は `move_shift.rs` の `origin_position`・`reset_applied`。既定のキャラ位置は `PatternMove`（system reanchor）でずれに付いて動き、ずれが 0 に戻れば既定も戻る（設計どおり）。保存は `origin_position`（今の位置 − 当てた分）。残る穴: 絶対位置で書く書き手（`reset_pos.rs:116` の位置の初期化・絶対の `\![move]`）は `applied` を残すので、ずれが 0 に戻ると「既定 − 当てた分」へ動く — 6.3 で扱う。

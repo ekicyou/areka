@@ -264,6 +264,47 @@ fn writes_only_unremembered_scopes_and_keeps_other_keys() {
     rig.finish();
 }
 
+/// 面の `move` のずれが当たったキャラ窓も、ずれを引いた元の位置（既定の位置）として書く
+/// （seriko-pattern-calls task 6.2・要件 7.8・ずれが起動のたびに積もらない）。
+#[test]
+fn pattern_shift_is_subtracted_before_saving() {
+    let mut rig = Rig::new(true);
+    rig.world
+        .insert_resource(crate::placement::follow::MonitorSnapshot {
+            work_areas: vec![crate::placement::resolver::RectPx {
+                left: 0,
+                top: 0,
+                right: 1920,
+                bottom: 1043,
+            }],
+        });
+    let shifted = rig.char_window(1);
+    // 窓へ書く口は実窓の印を要る（偽 HWND）。
+    rig.world.entity_mut(shifted).insert(WindowHandle {
+        hwnd: HWND(0x200 as *mut _),
+        instance: HINSTANCE::default(),
+    });
+    assert!(crate::placement::follow::apply_char_shift(
+        &mut rig.world,
+        shifted,
+        (12, 0),
+        areka_emo_compose::ScaleRatio::ONE
+    ));
+    assert_eq!(
+        rig.world.get::<WindowPos>(shifted).unwrap().position,
+        Some(Point {
+            x: SCOPES[1].1.x + 12,
+            y: SCOPES[1].1.y
+        })
+    );
+
+    persist_unremembered_char_positions(&rig.world);
+    let after = rig.load();
+
+    assert_eq!(window_pos(&after, 1), Some(expected_saved(1)));
+    rig.finish();
+}
+
 /// テスト 2（4.2）: 1 つのスコープの窓の大きさを読めなくすると、そのスコープは `warn!` を
 /// 出して飛ばし、残りのスコープは書く。
 #[test]
