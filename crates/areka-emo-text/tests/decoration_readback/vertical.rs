@@ -37,9 +37,9 @@
 //! 文字が素の既定 12 px で描かれる。
 
 use super::{
-    SAMPLE, Shot, VISIBLE_KEYS, added_ink_cols, assert_real_font_present, differs, font_cue,
-    font_is_installed, ink_col_range, model_with, run, run_with, shoot_pair, single_band, text_cue,
-    unbaked_cue,
+    ALT_FONT, FONT_HEIGHT, IMAGE, REAL_FONT, SAMPLE, Shot, VISIBLE_KEYS, added_ink_cols,
+    assert_real_font_present, differs, font_cue, font_is_installed, ink_col_range, model_with, run,
+    run_with, shoot_pair, single_band, text_cue, unbaked_cue,
 };
 
 // ══ 縦書きの 2 方向 ════════════════════════════════════════════════════════════════════
@@ -442,6 +442,100 @@ fn gap_between_opening_bracket_and_next_kanji_follows_the_font_metrics() {
             (gap - BRACKET_GAP_PX).abs() <= 1,
             "{mode}: 「「」の墨 {bracket:?} と「繋」の墨 {kanji:?} の空きが {gap}px——\
              書体の寸法から決まる約 2.1px と ±1px で合わない（要件 1.4）"
+        );
+    }
+}
+
+// ══ 4. 列の真ん中と既定の太字・斜体（spec `emo-text-dwrite-fidelity` の G4・G5） ═══════
+
+/// かなと漢字だけの列（G4・要件 5.1・design.md の例のまま）。
+const KANA_KANJI: &str = "あ亜繋国";
+
+/// 最初の列の行の矩形の左右の中心（2 倍の目盛り・供給面の x）。
+///
+/// 行の矩形は面の `validrect` と字の大きさから決まる: 供給面は `validrect` の内側
+/// （[`IMAGE`] から左右 5px ずつ除いた幅）で、最初の列は右から左なら右端から、左から右なら
+/// 左端から [`PASTA_HEIGHT`] の幅を占める。
+fn first_line_rect_centre_x2(mode: &str, shot: &Shot) -> i64 {
+    let width = IMAGE.0 - 2 * 5;
+    assert_eq!(shot.width, width, "供給面は validrect の内側（前提）");
+    let (lo, hi) = match mode {
+        "vertical_rl" => (width - PASTA_HEIGHT, width),
+        "vertical_lr" => (0, PASTA_HEIGHT),
+        _ => unreachable!("縦書きの 2 方向だけ"),
+    };
+    i64::from(lo) + i64::from(hi)
+}
+
+/// G4（要件 5.1）: かなと漢字だけの列の墨の左右の中心が、最初の列の行の矩形の左右の中心と ±1px。
+///
+/// 較正: 直す前から列が真ん中にある ＭＳ ゴシック（既定の行間＝em・research.md §10.3）にも同じ式を
+/// 当てる——行の矩形の求め方が外れていれば ＭＳ ゴシック の側が赤になる。直す前の游ゴシックは
+/// 差 −6.5px（research.md §10・起票の実測）で、この ±1px から大きく外れる。
+#[test]
+fn kana_kanji_column_ink_is_centred_on_the_first_line_rect() {
+    assert_yu_gothic_present();
+    assert!(
+        font_is_installed(ALT_FONT),
+        "{ALT_FONT} がこの機械に無い（較正の前提）"
+    );
+    for mode in VERTICAL_MODES {
+        for (label, font) in [("ぱすた", PASTA_FONT), ("較正 ＭＳ ゴシック", ALT_FONT)] {
+            let shot = shoot_column(mode, font, "", KANA_KANJI);
+            let ink = ink_cols_in(&shot, (0, shot.height - 1));
+            let rect = first_line_rect_centre_x2(mode, &shot);
+            // 半画素を避けるため 2 倍の目盛りで比べる（中心＝両端の和・墨は右端の画素も含むので +1）。
+            let diff = (i64::from(ink.0) + i64::from(ink.1) + 1) - rect;
+            eprintln!(
+                "G4 {mode} {label}: ink {ink:?} diff {}px",
+                diff as f64 / 2.0
+            );
+            assert!(
+                diff.abs() <= 2,
+                "{mode}・{label}: 「{KANA_KANJI}」の墨の列 {ink:?} の中心が行の矩形の中心 {}px と ±1px で合わない（差 {}px・要件 5.1）",
+                rect as f64 / 2.0,
+                diff as f64 / 2.0
+            );
+        }
+    }
+}
+
+/// 書字方向の行（横書きは宣言しない）。G5 は 3 方向とも回す。
+fn writing_mode_line(mode: Option<&str>) -> String {
+    mode.map_or(String::new(), |m| format!("writing_mode,{m}\n"))
+}
+
+/// G5（要件 4.8・4.9）: バルーン定義の `font.bold,1` は既定の字の墨を増やし、`font.italic,1` は
+/// 画素を変える（`\f[…]` を使わない既定の見た目だけで）。
+#[test]
+fn balloon_bold_and_italic_reach_the_default_text() {
+    assert_real_font_present();
+    for mode in [None, Some("vertical_rl"), Some("vertical_lr")] {
+        let line = writing_mode_line(mode);
+        let shoot = |extra: &str| {
+            let model = model_with(REAL_FONT, FONT_HEIGHT, &format!("{line}{extra}"));
+            let shot = run_with(&model, &[text_cue(SAMPLE)]);
+            assert!(shot.ink_count() > 0, "{mode:?}: 墨が無い（前提）");
+            shot
+        };
+        let plain = shoot("");
+        let bold = shoot("font.bold,1\n");
+        let italic = shoot("font.italic,1\n");
+        eprintln!(
+            "G5 {mode:?}: ink plain {} bold {} italic {}",
+            plain.ink_count(),
+            bold.ink_count(),
+            italic.ink_count()
+        );
+        assert!(
+            bold.ink_count() > plain.ink_count(),
+            "{mode:?}: `font.bold,1` の既定の字の墨 {} 画素が、無いもの {} 画素より多くない（要件 4.8）",
+            bold.ink_count(),
+            plain.ink_count()
+        );
+        assert!(
+            differs(&plain, &italic),
+            "{mode:?}: `font.italic,1` を足しても既定の字の画素が 1 バイトも変わらない（要件 4.9）"
         );
     }
 }
