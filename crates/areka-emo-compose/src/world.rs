@@ -309,21 +309,11 @@ impl EmoWorld {
 ///
 /// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
 pub(crate) fn targets_animation_id(method: &str) -> bool {
-    // 正規化は `ComposeMethod::from_name` と同じ 1 本（`method::canonical_method_name`）を引く。
-    // `from_name` 自体は未知の語で `warn!` を出すのでこの照会からは呼ばない（要件 3.5）。
-    // 上流の emo-atlas `manifest.rs` の `bind_only_paths` がこの 7 語と正規化を写して持つ
-    // （emo-atlas は emo-compose を参照できない）。ここを変えたらそちらも直す。
-    let canon = crate::method::canonical_method_name(method);
-    matches!(
-        canon.as_str(),
-        "start"
-            | "stop"
-            | "alternativestart"
-            | "alternativestop"
-            | "parallelstart"
-            | "parallelstop"
-            | "insert"
-    )
+    // 語の見分けは `pattern_word` 1 か所に置く（記録を出さない・綴りの比べ方は
+    // `ComposeMethod::from_name` と同じ）。上流の emo-atlas `manifest.rs` の `bind_only_paths` が
+    // 8 語と正規化を写して持つ（emo-atlas は emo-compose を参照できない）。ここを変えたらそちらも直す。
+    use crate::pattern_word::{PatternWord, pattern_word};
+    !matches!(pattern_word(method), PatternWord::Draw | PatternWord::Move)
 }
 
 #[cfg(test)]

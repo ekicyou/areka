@@ -37,6 +37,7 @@ pub use film::{FilmSheet, FilmSheets, FilmSkip, FilmSkipReason};
 pub mod nesting;
 pub mod normalized;
 pub mod pattern;
+pub mod pattern_word;
 pub use bind::BindSet;
 pub use composed::ComposedSurface;
 pub use nesting::{
@@ -45,6 +46,7 @@ pub use nesting::{
 };
 pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
 pub use pattern::{Cell, PatternFrame, PatternState};
+pub use pattern_word::{PatternWord, UnreadableTarget, call_targets, pattern_word};
 pub mod world;
 pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, SurfaceIndex};
 pub mod atlas_bind;
