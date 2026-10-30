@@ -2,7 +2,8 @@
 //!
 //! rmcp の stdio の輸送（`AsyncRwTransport`）は JSON として読めない行を黙って捨てるので、
 //! 行の形のエラー 2 つ（`-32700`・`-32600`）を自分で 1 行書く輸送を持つ（要件 1.6・1.7）。
-//! 標準出力へ書くのは、応答の行とこの 2 つのエラーの行だけ（要件 5.1）。
+//! `params` の形だけが誤る要求には、受け口と同じ `id` 付きの答えを書く（spec: mcp-strict-errors 要件 6.5）。
+//! 標準出力へ書くのは、応答の行とこれらのエラーの行だけ（要件 5.1）。
 
 use std::future::Future;
 use std::io;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 use rmcp::RoleServer;
 use rmcp::model::{ClientJsonRpcMessage, ServerJsonRpcMessage};
 use rmcp::transport::Transport;
+use serde_json::Value;
 use serde_json::error::Category;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
@@ -93,20 +95,10 @@ where
             let parsed = parse(&self.line, self.first);
             self.line.clear();
             self.first = false;
-            let error = match parsed {
+            let reply = match parsed {
                 None => continue,
                 Some(Ok(message)) => return Some(message),
-                Some(Err(error)) => error,
-            };
-            let reply = match error.classify() {
-                Category::Syntax | Category::Eof => {
-                    tracing::debug!(%error, "[bridge] a line is not JSON; answering -32700");
-                    errors::parse_error()
-                }
-                Category::Data | Category::Io => {
-                    tracing::debug!(%error, "[bridge] a line is not a JSON-RPC message; answering -32600");
-                    errors::invalid_request()
-                }
+                Some(Err(reply)) => reply,
             };
             let writer = self.writer.clone();
             self.replying = Some(tokio::spawn(async move {
@@ -123,15 +115,44 @@ where
     }
 }
 
-/// 1 行を要求として読む。`None` は空の行（空白だけの行を含む＝要件 1.5）。
+/// 1 行を要求として読む。`None` は空の行（空白だけの行を含む＝要件 1.5）、`Err` は読めない行へ書く答え。
 /// 行末の CR・LF と前後の空白を落とし、最初の行だけ頭の BOM も落とす。
-fn parse(line: &[u8], first: bool) -> Option<serde_json::Result<ClientJsonRpcMessage>> {
+fn parse(line: &[u8], first: bool) -> Option<Result<ClientJsonRpcMessage, Value>> {
     let line = match line.strip_prefix(UTF8_BOM) {
         Some(rest) if first => rest,
         _ => line,
     };
     let line = line.trim_ascii();
-    (!line.is_empty()).then(|| serde_json::from_slice(line))
+    if line.is_empty() {
+        return None;
+    }
+    let error = match serde_json::from_slice(line) {
+        Ok(message) => return Some(Ok(message)),
+        Err(error) => error,
+    };
+    Some(Err(match error.classify() {
+        Category::Syntax | Category::Eof => {
+            tracing::debug!(%error, "[bridge] a line is not JSON; answering -32700");
+            errors::parse_error()
+        }
+        Category::Data | Category::Io => {
+            // 受け口が rmcp の 415 の後に返すのと同じ答え（同じ `areka-mcp` の関数）。
+            let shape = serde_json::from_slice(line)
+                .ok()
+                .and_then(|raw| areka_mcp::request_shape_error(&raw))
+                .and_then(|answer| serde_json::to_value(answer).ok());
+            match shape {
+                Some(answer) => {
+                    tracing::debug!(%error, "[bridge] params of a request is not an object; answering with its id");
+                    answer
+                }
+                None => {
+                    tracing::debug!(%error, "[bridge] a line is not a JSON-RPC message; answering -32600");
+                    errors::invalid_request()
+                }
+            }
+        }
+    }))
 }
 
 /// 1 行＋LF を、書き手の鍵を持ったまま 1 度で書いて掃き出す（行の途中にほかの行が混ざらない）。

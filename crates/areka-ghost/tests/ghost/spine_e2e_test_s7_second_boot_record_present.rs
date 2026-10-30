@@ -135,6 +135,7 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
     let surface_records = surface_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: ghost.root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

@@ -2,9 +2,9 @@
 //!
 //! `on_notify`（任意の名前の GET を 1 つ送り、応答待ちの控えを置く）と `on_notify_reply`（控えを
 //! 必ず取り出し、空でない台本なら外からの台本と同じ掃除と採番で新しいトークを始める）を固定する。
-//! 翻訳の Reference（外からの台本・返った台本）と strict の控えもここで縛る。
+//! 翻訳の Reference（外からの台本・返った台本）と strict の印もここで縛る。
 
-use super::{NOTIFY_ORIGIN, NotifyStage, StrictNote, accepts};
+use super::{NOTIFY_ORIGIN, NotifyStage, accepts};
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
 use crate::msg::{
     ChoiceInput, CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure,
@@ -65,7 +65,7 @@ fn steady(talk: Option<ActiveTalk>) -> State {
 /// 状態の見比べの指紋（`State` は `PartialEq` を持たないので、腕が触り得る欄を綴りにする）。
 fn fingerprint(s: &State) -> String {
     format!(
-        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} strict={:?} notify={:?} reply={}",
+        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} notify={:?} reply={}",
         phase_label(&s.phase),
         current_talk_id(&s.phase).map(|t| t.0),
         s.next_talk_id,
@@ -74,7 +74,6 @@ fn fingerprint(s: &State) -> String {
         s.pending_close.is_some(),
         s.pending_change.is_some(),
         s.translate.is_some(),
-        s.sstp_strict,
         s.sstp_notify,
         s.reply_source.is_some(),
     )
@@ -205,7 +204,7 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
 }
 
 /// ⑹ 返り値なし・空・空白だけ（エラー応答は殻が 204 に写す）は一括が空で、今のトークと
-/// 選択肢と strict の控えが残る（要件 2.4・3.2）。
+/// 選択肢が残り、talk は始まらない（要件 2.4・3.2・3.4）。
 #[test]
 fn no_value_empty_or_blank_keeps_the_current_talk() {
     let outcomes = [
@@ -227,11 +226,8 @@ fn no_value_empty_or_blank_keeps_the_current_talk() {
             deadline: Some(MonotonicMs(1_000)),
             phase: ChoicePhase::Waiting,
         });
-        state.sstp_strict = Some(StrictNote {
-            talk_id: TalkId(7),
-            strict: Some(false),
-        });
         let mut out = None;
+
         let events = capture(|| {
             out = Some(notify_then_reply(
                 state,
@@ -246,14 +242,9 @@ fn no_value_empty_or_blank_keeps_the_current_talk() {
         assert_eq!(current_talk_id(&state.phase), Some(TalkId(9)), "{label}");
         assert_eq!(state.next_talk_id, 10, "{label}: 採番しない");
         assert!(state.choice.is_some(), "{label}: 選択肢は残る");
-        assert!(state.translate.is_none(), "{label}");
-        assert_eq!(
-            state.sstp_strict,
-            Some(StrictNote {
-                talk_id: TalkId(7),
-                strict: Some(false)
-            }),
-            "{label}: strict の控えは変えない"
+        assert!(
+            state.translate.is_none(),
+            "{label}: strict の台本は始まらない"
         );
         assert!(warn_or_above(&events).is_empty(), "{label}: {events:#?}");
         logged_once(&events, Level::DEBUG, "sstp_notify_no_script");
@@ -594,9 +585,10 @@ fn translate_references_for_send_and_returned_script() {
     );
 }
 
-/// ⑼ strict が真・偽・省略の 3 通りで、返った台本のトークの番号と値が控えと一致する（要件 5.1・5.3）。
+/// ⑼ strict が真・偽・省略の 3 通りで、返った台本のトークの再生の開始に真のときだけ印が立ち、
+/// 翻訳の後も残る（要件 3.2・3.3・5.1・5.3）。
 #[test]
-fn strict_is_noted_with_the_returned_talk_id() {
+fn strict_is_marked_on_the_returned_talk_and_survives_translate() {
     for strict in [Some(true), Some(false), None] {
         let (state, _) = notify_then_reply(
             steady(None),
@@ -605,12 +597,28 @@ fn strict_is_noted_with_the_returned_talk_id() {
             strict,
             ShioriOutcome::Value("\\h返\\e".to_string(), areka_talk::SecurityLevel::Local),
         );
-        assert_eq!(
-            state.sstp_strict,
-            Some(StrictNote {
-                talk_id: TalkId(10),
-                strict
-            })
+        let want = strict == Some(true);
+        assert!(
+            matches!(
+                state.translate.as_ref().map(|w| w.deferred.as_slice()),
+                Some([Action::StartTalk(start)]) if start.talk_id == TalkId(10) && start.strict == want
+            ),
+            "strict={strict:?}"
+        );
+        let (_, actions) = step(
+            state,
+            Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+                "\\h訳\\e",
+            ))),
+            &config(),
+        );
+        assert!(
+            matches!(
+                actions.as_slice(),
+                [Action::StartTalk(start)] if start.talk_id == TalkId(10) && start.script == "\\h訳\\e"
+                    && start.strict == want
+            ),
+            "strict={strict:?}: 翻訳の後も印が残る"
         );
     }
 }

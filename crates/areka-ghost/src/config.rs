@@ -8,6 +8,8 @@ use areka_kanade::KanadeConfig;
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use areka_parsers::package::MountModel;
+use areka_sakura::strict::{StrictHooks, StrictJudges};
+use std::sync::Arc;
 
 /// shell descript のファイル名（`{shell.dir}/descript.txt`）。
 const SHELL_DESCRIPT_FILE: &str = "descript.txt";
@@ -52,6 +54,18 @@ fn listed_ghost_name(mount: &MountModel) -> String {
         .to_string()
         .trim_end_matches(['\\', '/'])
         .to_string()
+}
+
+/// strict の記録の束ね（spec mcp-strict-errors 要件 2.2）。名は `script` の記録と同じ
+/// [`listed_ghost_name`] で作るので `get_log` の `ghost_name` の絞り込みに当たる。判定の差し込みが無ければ束ねない。
+pub(crate) fn strict_hooks(
+    mount: &MountModel,
+    judges: Option<Arc<dyn StrictJudges>>,
+) -> Option<StrictHooks> {
+    judges.map(|judges| StrictHooks {
+        ghost: listed_ghost_name(mount).into(),
+        judges,
+    })
 }
 
 /// shell descript から `name` キーを読み取る。読取不能・欠落は shell ディレクトリ
@@ -199,6 +213,48 @@ mod tests {
         assert_eq!(config.ghost_name, expected_root_value(&root));
         assert!(std::path::Path::new(&config.ghost_name).is_absolute());
         assert!(!config.ghost_name.ends_with(['\\', '/']));
+    }
+
+    /// 判定を入れない（記録の名だけを見る）。
+    struct NoJudges;
+
+    impl StrictJudges for NoJudges {
+        fn command_handled(&self, _name: &str, _first: Option<&str>) -> bool {
+            true
+        }
+        fn font(&self, _args: &[String]) -> Option<areka_sakura::strict::DetectionPoint> {
+            None
+        }
+    }
+
+    /// strict の記録の名は `script` の記録（`KanadeConfig.ghost_name`）と同じ一覧の名になる
+    /// （descript の名がある時も、無くて根のパスになる時も・spec mcp-strict-errors 要件 2.2）。
+    #[test]
+    fn strict_hooks_name_the_ghost_as_listed() {
+        for (tag, name_line) in [("strict-name", Some("name,えみり")), ("strict-path", None)] {
+            let temp = unique_temp_dir(tag);
+            let root = temp.path().to_path_buf();
+            let mount = resolve_mount_with_ghost_name(&root, name_line);
+            let listed = resolve_kanade_config(&mount, DefaultEncoding::Utf8).ghost_name;
+
+            let hooks = strict_hooks(&mount, Some(Arc::new(NoJudges))).expect("judges given");
+
+            assert_eq!(&*hooks.ghost, listed);
+            let want = match name_line {
+                Some(_) => "えみり".to_string(),
+                None => expected_root_value(&root),
+            };
+            assert_eq!(&*hooks.ghost, want);
+        }
+    }
+
+    #[test]
+    fn strict_hooks_are_absent_without_judges() {
+        let temp = unique_temp_dir("strict-none");
+        let root = temp.path().to_path_buf();
+        let mount = resolve_mount_with_ghost_name(&root, Some("name,えみり"));
+
+        assert!(strict_hooks(&mount, None).is_none());
     }
 
     #[test]

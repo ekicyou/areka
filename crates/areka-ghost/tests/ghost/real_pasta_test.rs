@@ -183,6 +183,7 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
     let text_records = text_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Helper { helper_exe },

@@ -66,3 +66,11 @@
 - 完了の全体テスト（`tools/test-all.ps1 -Format -License`・コミット `2f1ab6ec2`・main の `23760486d` を取り込んだ後）で、`script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` だけが赤になった。i686 の helper の初回の LOAD が `LoadReturnedFalse { last_error: 203 }` で断られた。この spec は emo-text・emo-atlas のログと `validrect` の読みしか変えておらず、SHIORI の読み込みには触れていない。
 - そのテストだけを排他テストの机で単独で回し直しても、同じ形で赤になった（3.6 秒）。2026-10-24 の観測では単独なら緑だったので、それとは違う。同じ枝を main の取り込み前に回した全体テスト（`afcb94acd`・`/kiro-validate-impl`）では緑だった。
 - 開発者の決まり（触っていない所だけが赤なら 1 回だけ回し直し、変わらなければ申し送りをもって緑）に従い、ここへ申し送った。
+
+## 2026-10-30 startup-install-option の完了から（件 4）
+
+- `startup-install-option` の実機の試験 `crates/areka/tests/startup_install_real_run.rs` で、`vendors/sample_ghost/konnoyayame.nar`（SHIORI は YAYA・pasta ではない）を起動の引数で入れて切り替えたとき、32 ビットの補助プログラムの標準エラーに `[helper] SHIORI 初期化の入口: loadu` と、その後に `HRESULT(0x80004005)` が出た。
+- それでも試験は緑で、MCP のゴーストの一覧には「はろーYAYAわーるど」が出た＝切り替えた先のゴーストは起きている。どの段の失敗か（初回の LOAD が断られて読み直しで通ったのか、別の呼び出しの失敗か）は調べていない。
+- 完了 spec `areka-P0-emo2-real-run-stability` の brief（157 行目）にある、以前の LOAD の失敗と同じ形の文（`loadu` の後に `HRESULT(0x80004005)`）。あちらは試験が赤になった。今回は赤にならなかった点が違う。
+- pasta 以外の SHIORI（YAYA）でも出た。断られるのが pasta の側の事情ではない手がかりになる。
+- ここへ足した訳: 触る場所（補助プログラムの初回の LOAD）が同じで、確かめるのに実物の走行を何度も回す必要がある。

@@ -141,6 +141,7 @@ fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -187,6 +188,7 @@ fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
     let _ = std::fs::remove_dir_all(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Ansi,
         shiori: ShioriWiring::Custom(Box::new(|| -> Result<Box<dyn ShioriBackend>, String> {
@@ -242,6 +244,7 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -283,6 +286,7 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -401,6 +405,7 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -460,6 +465,7 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -600,6 +606,7 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
     let records = recording.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::InProc,

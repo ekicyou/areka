@@ -130,6 +130,7 @@ fn ghost_without_shiori_line_boots_and_closes_through_empty_connect() {
     let (seen_tx, seen_rx) = channel();
     let connect = empty_connect();
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

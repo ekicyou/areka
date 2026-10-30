@@ -270,3 +270,98 @@ SSP で問題なく動く台本に、strict 真で出うる記録:
   - 6: 触るファイルの一覧は案 2 と rmcp の直しで組み直す（設計で確定）。
 - 範囲が広がったので、本 spec はウェーブ C11 から外す。要件までを PR して main に入れ、並走の相手の着地を待ってから設計に進む（順と待ちは brief.md の 2026-10-23 の節と roadmap.md）。
 - 7 節の案 2 の「触るファイル」に、rmcp の直しの分（根の `Cargo.toml`・`Cargo.lock`・`deny.toml`・`THIRD-PARTY-NOTICES.md`・`crates/areka-mcp/Cargo.toml`）を足して読む。4.3 節の P1 は退けた案として残す。
+
+---
+
+## 11. 設計の段の調べ（2026-10-29・`/kiro-spec-design`）
+
+> 測った main は `932d2c30`。発見の種類は「拡張」（既存の再生の道に印を足す）＝軽い発見（`design-discovery-light.md`）に、rmcp の版の外部の調べを足した。調べは 3 本の下調べ（rmcp の版と上流・印の通り道・再生の側の検出点）に分け、結論だけを受け取って本文で合わせた。
+> 使った手順: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。SSP の MCP は使っていない（打つ前に毎回の許しが要るため。要件 6.8 は実装の最初のタスクへ回した）。
+
+### 11.1 印の通り道（今の姿）
+
+- `strict` は kanade の控え `StrictNote`（`schedule/sstp.rs` 20 行・`State::sstp_strict`）で止まり、テストのほかは誰も読まない。
+- 出どころ `origin` は `start_talk`（`schedule/mod.rs` 111 行）→ 翻訳の `on_done`（`translate.rs` 280〜319 行・台本だけを `clone_from`）→ `Action::StartTalk` → 配り口 `on_start`（`areka-ghost/src/dispatcher.rs` 325〜360 行）と運ばれる。`StartTalk` に欄を 1 つ足せば同じ道を通る。`talk_origin::stamp` は `origin` だけを書き換える。
+- 台本の駆動（`areka-sakura/src/drive.rs` 186〜226 行）は `parse`（`parse_noted` の写しで、位置と印を捨てる）→ `compile`（全部を先に）→ 最初の `Tick` で `CuePlayer` に sink を登録する。`CuePlayer::tick`（`dola/src/cue/runtime.rs` 242 行）は合図ごとに、登録順に全 sink へ `emit` する。
+- `compile` の合図は時刻が減らない順に作られ、`TimedSchedule` は安定な並べ替え（`schedule.rs` 142 行）なので、配られる順＝作った順。
+- ゴースト名は `areka-ghost/src/config.rs` の `listed_ghost_name(mount)` が kanade の `script` の記録の名を作っている（`get_active_ghost_list` と同じ値）。
+
+### 11.2 再生の側の検出点（今の姿）
+
+| 誤り | 今の分岐 | スレッド | 位置・talk・ゴーストを持つか |
+|---|---|---|---|
+| 読みの印 4 つ | `parse` が捨てる（`compile` の除外の腕は `debug!`） | talk | 持たない |
+| 誰も拾わない `\!` | 実行時の分岐は無い（各 sink が名前で自分の分だけ拾う）。台帳 `ConsumerLedger` は `check_script` だけが引く | — | — |
+| `choicetimeout` の読めない時間・アンカー 3 つ | `compile.rs` 205・249・259・281 行の `warn!` | talk | 命令の添字だけ |
+| `\f` の受け取るだけ・知らないキー | 文字の層 `state_decoration.rs` 331 行（UI） | UI | 持たない |
+| 解けない surface・範囲外のバルーン | seriko `handle_message` の `error!`（`actor.rs` 697・747 行） | seriko | 持たない |
+| シェルに無い数の surface・バルーンに無い ID | 表示の層 `apply_show` の「合成失敗」（`show.rs` 226 行） | UI | 持たない |
+| 名前の形の `\b` の箱が無い | 文字の層 `route_select`（`state_route.rs` 137 行）の `warn!` | UI | 持たない |
+
+- 注意 1: seriko は無い ID でも状態を替える（`states.apply` が `Changed`）ので、同じ無い ID が続くと 2 回目は表示の層まで届かない＝表示の層の分岐だけで数えると `check_script` より少なくなる。
+- 注意 2: 表示の層の分岐はスレッドが違うので、talk スレッドの分岐と同じ時刻の合図で前後が入れ替わる。
+- 窓の無いゴースト: sink は `LogSink`・`DiscardSink` だけ（`boot_config.rs` 572〜595 行）。`\s`・`\b`・`\f` はどこでも失敗しない。
+- シェル・バルーンの切替: `frame/switch.rs` は kanade の「台詞の切れ目」（`TalkGap::Reached`＝再生中の台詞が無い）を待ってから資産を作り、`send_replace` で seriko へ差し替えを送る。切れ目の後に kanade が台詞を止めておく仕組みは無いので、差し替えが台詞の途中の合図の間に入ることはある。seriko は差し替えと合図を 1 本の受信口で順に捌く。差し替え（シェル）には新しいシェルの面の番号（`ShellSurfaceFallback.surface_ids`＝`EmoWorld::surface_ids`）が既に載っている。
+- `check_script` の事実（`ScriptFactsSnapshot::copy`）は表示の層の `surface_ids`（＝`EmoWorld::surface_ids`）と scope 0 の別名の表から写している＝差し替えの荷物の `EmoWorld` から同じものを組める。
+
+### 11.3 比べた形と、退けた理由
+
+| 案 | 中身 | 退けた理由 |
+|---|---|---|
+| A: 各層の今の分岐でその場で書く | seriko・表示の層・文字の層・`compile` がそれぞれのスレッドで書く | 注意 1・2 のとおり、要件 2.5・2.7 の「順」と「同じ集まり」が守れない |
+| B: 誤りを dola の新しい合図（`CueCommand` の 1 種）にして seriko の受信口で順にそろえる | 台本の解釈の誤りを合図に載せ、seriko が全部を書く | dola の合図の語彙に「誤り」を足すことになる。表示の層の分岐の取りこぼし（注意 1）は残る。窓の無いゴーストで別の道が要る |
+| C: 合図ごとに返事を待って順をそろえる | 判定の返事が来るまで後ろの記録を止める | 返事が来ない分岐が 1 つでもあると後ろが全部止まる。分岐ごとに必ず返事をする約束が重い |
+| D: スレッドに結びついた置き場（thread local）で位置を渡す | 配る前に置き場へ位置を入れ、各 sink が読む | 隠れた結びつき。テストで組みにくい |
+| **採用: 配り口の覆い（StrictTap）＋ `emit_with`＋各層の判定を受け取りの場で** | 台本の解釈の誤りは命令ごとに控えて合図の順で書く。seriko は受け口 `SerikoSink` で、差し替えと同じ鍵の下の事実で判定する。名前の形の `\b` だけ UI で決めて知らせる | talk スレッドの 1 本の順で書けるので順と集まりが `check_script` と合う。dola に足すのは既定つきの 1 つの関数と知らせの口だけ |
+
+- 入口で台本の字面だけを確かめる形（案 1）は要件の討議（2026-10-23）で退けた。採用の形は、再生が実際に届いた合図だけ・翻訳の後の台本・その時の事実で判定する。
+- `\!`（台帳）と `\f`（分類）は字面だけで決まる判定で、層の状態に依らない。台本の解釈の腕で判定すれば窓の無いゴーストでも記録できる（要件 4.3 の「ほかの種類だけを記録する」）。依存の向きを守るため、判定は `StrictJudges` として `areka` から差し込む。
+
+### 11.4 rmcp（外部の調べ）
+
+- crates.io の最新は 3.8.0（2026-10-26）。3.5.0 の後は 3.5.1（10-05）・3.6.0（10-20）・3.7.0（10-22）・3.8.0（10-26）。出典: https://crates.io/api/v1/crates/rmcp/versions ・ https://raw.githubusercontent.com/modelcontextprotocol/rust-sdk/main/crates/rmcp/CHANGELOG.md
+- タグ `rmcp-v3.8.0` と `main` の `transport/common/server_side_http.rs` の `expect_json` は 3.5.0 と同じで、読めない本文に 415 の平文を返し、`id` を拾わない。CHANGELOG にも 415・本文の読み込みの直しは無い＝**版を上げても直らない**（要件 6.3 の ⑵ へ進む）。
+- 関わる上流の話: issue #1347（開いている。`"params": []` に `id` の無い `-32600` が返ると書かれている）、PR #1375（開いている。`params` の型が合わない要求に `-32602`。オブジェクトでない `params` の件は先送り。HTTP の 415 には触れない）。415 そのものを扱う issue・PR は無い。
+- 3.5.0 の中身: 415 は `server_side_http.rs` 254〜265 行、呼び手は `tower.rs` 2026〜2029 行の `handle_post`（版の経路を決める `is_legacy_request`・2032 行より前）。HTTP の状態の写し `jsonrpc_http_status`（646〜660 行）は `-32602` を 400、`-32600` を 200 にし、無状態の版の経路だけで使われる（旧式の版は 200）。型は `ErrorData::invalid_request`・`invalid_params`・`JsonRpcError::new(Option<RequestId>, ErrorData)`。
+- 直しの形: `handle_post` で読めなかった（分類が `Data`）ときだけ `serde_json::Value` として読み直し、公開の関数 `request_shape_error` が `Some` なら `id` 付きのエラーを返す。HTTP の状態はヘッダ `MCP-Protocol-Version` が無状態の版なら `jsonrpc_http_status`、ほかは 200。中継も同じ関数を使う。
+- 枝は `rmcp-v3.5.0` から切り、版の番号を `3.5.0` のままにする（3 つの `Cargo.toml` の `=3.5.0` に合わせる。合わないと cargo は黙って公開版を使う）。git の出どころでは同じリポジトリの `rmcp-macros` も git から来る（`Cargo.lock`・`deny.toml` に表れる）。
+- 上流への直しは `main`（3.8 系）向けに出す。取り込まれて公開されたら、その版へ上げて `[patch]` を外す（そのときは版の上げで振る舞いの差が出る所＝3.8.0 の無状態の経路の `-32602` の状態などを測り直す）。
+- **2026-10-30 追記（フォークの道は退けた）**: 開発者の裁定で、外の crate はそのまま使う（rmcp のフォーク・`[patch.crates-io]`・上流への PR はしない）。理由は、直した写しを持つと安全の直しを取り込むのが重くなるため。上の 2 行（枝の切り方・上流への直し）は経緯として残す。代わりに、受け口の `forward`（本文を集めてから rmcp を呼んでいる）が rmcp を先に呼び、415 のときだけ持っている本文を読み直して、`request_shape_error`（`areka-mcp` に置く・中継も同じ関数）が `Some` なら rmcp の公開の型 `JsonRpcError` で答える。rmcp が読めた要求は rmcp の答えのまま。HTTP の状態は `jsonrpc_http_status` が非公開なので areka が同じ対応（無状態の版の `-32602` だけ 400・ほかは 200）を 1 か所に持ち、rmcp 自身が無状態の経路で `-32602` を返す別の要求の状態と突き合わせるテストで固定する。4.3 節の P1（rmcp の手前で読む）とは、rmcp を先に呼ぶ点が違う。
+
+### 11.5 合わせ（design-synthesis）
+
+- **一般化**: 「誤りの判定」を層ごとに 1 つの関数にし、`check_script` と再生の両方がそれを引く（`surface_missing`・`balloon_missing` は seriko へ、`judge_font` は文字の層の `classify_font_tag` へ、文面の定数は `areka-sakura::strict` へ）。種類と文面と判定の物差しが 1 つになる。
+- **作るか借りるか**: プロトコルの答えは rmcp に任せる（フォークで直して上流へ出す）。記録は既存の `tracing`＋`log_history` の取り決めを使い、新しい記録の口は作らない。
+- **削ったもの**: 新しい sink は足さない（`\!` と `\f` は判定の差し込みで済む）。`StrictNote` は消して印の正本を `StartTalk.strict` の 1 つにする。dola の合図の語彙は増やさない。`label` は付けない（既定の `Error`）。
+
+### 11.6 危うさ
+
+- 名前の形の `\b` の記録だけは UI で決まり、ほかの記録との前後が台本の順と違うことがある（文書に書く）。
+- 要件 2.7 の「同じ集まり」は、名前の形の `\b[名前]` の箱が見つからない台本では成り立たない（`check_script` が診ないため）。brief の 10-08 の申し送りはこの差を見込んでいる。要件の文に条件を足すかは設計の討議で決める。
+- 要件 4.1: areka の切替は台詞の切れ目で効くので、同じ台本の中の切替の後ろは切替の前の事実で判定される。SSP（切替がすぐ効く）とは記録が違いうる（文書の「SSP との違い」に書く）。
+- 中継は前に話した areka の案内文を控えて返すことがあり、areka を新しくした直後の 1 回は古い文が返りうる（要件 5.2 の組み込みの答えは直る）。
+- `GhostBootOptions` の素の構築（テストが多い）に欄を 1 つ足す手間。
+- `Cargo.lock` の席を使う（1 ウェーブに 1 本）。上流への直し・フォークの作成・SSP の実測は、どれも打つ前に開発者の許しが要る。
+
+### 11.7 規模の見立て
+
+- タスク: 印と kanade 1・dola の口 1・語彙と記録 1・`compile_strict` 1・`StrictTap` と駆動 1・配り口とゴーストの配線 1・seriko の事実と判定 1・事実の組み立てと切替 1・文字の層の名前の形 1・`areka` の判定の差し込みと構築 1・`check_script` の付け替え 1・`sakurascript` の答え 1・文書の表と約束 1・17 行と表の一致のテスト 1・案内文 1・rmcp のフォークと `[patch]` 1・受け口の 5 つの版のテスト 1・中継 1・差の一覧 1・SSP の実測 1・実機 1＝およそ 21。brief の 10-23 の節の切り方（20 を超えたら分ける）に当たるかはタスクの段で決める。
+
+---
+
+## 12. 設計の討議の結論（2026-10-29）
+
+> 入力: `design.md`・`design-validation.md`（判定 GO・条件つき・指摘 3 つ）。開発者の答えは「承認」＝4 議題とも推奨案で確定し、議題 1 の実測の許しもこの承認で取った。
+
+- **自明な修正（1 件・`a5ec8da3`）**: 検証の指摘 3。命令と合図を走査中の `cues.len()` で結ぶと、走査の後の先頭の全消し（`compile.rs` 337 行の `cues.insert(0, …ClearAll)`）で番号が 1 つずれ、末尾の選択待ちの区切り（`emit_barrier`・配られない）も数に入る。番号は差し込みの後の最終の列で、sink へ配られる合図だけを数えて決める形に直した。選択肢で終わる台本は、区切りが列の末尾の 1 か所にしか置かれないので、選択待ちの始まり（`choice_wait_began`）で残りの控えを全部書く（選択の後に閉じられても落ちない）。
+- **議題 1（SSP の実測をいつ打つか）**: 討議の中で今、測った。結果は `doc/ssp-mcp/survey.md` 8 節。
+  - `sakurascript` の答えの文は要件 1.1 と同じ。SSP の `<n>` はエラーログの最後の番号（areka は全種類の通しの最後の番号＝要件 1.2 のまま・違いとして文書に書く）。
+  - 記録は表示の語 `Error`・名はゴースト名・本文は `[GHOST/Script] surface not found (99999) at position 2 : <その位置から後ろ>`。areka の本文は要件 2.4 どおり `check_script` の種類と文面（違いとして文書に書く）。SSP は `\y` を記録しなかった。
+  - `raise_event` は strict 真で台本が返ったときだけ、1 行目に strict の文が付く＝要件 3.10 に実測の文を書き足し、設計に RaiseEventStrictAnswer を足した（`raise_event.rs` を触るファイルに足す）。要件 7.4・7.8 に 3.10 を足した。
+  - 呼んだ先の台本に及ぶかは測っていない（誤りを含む台本を返すゴーストが手元に無い）＝3.8 は既定の「及ばない」。
+  - `params` がオブジェクトでない要求: SSP は旧式の版で形を見ずに普通に答え、無状態の版では `_meta` の検査の 400・`-32602` が先に出る。areka は要件 6.1・6.2 のまま（SSP と違う・`transport-diff-areka.md` に写す）。
+  - 測る前に、ウェーブ C12 の兄弟の 7 セッションへ「SSP を少し使う」と知らせた。
+- **議題 2（名前の形の `\b[名前]`）**: 要件 2.7 に条件「名前の形の `\b[名前]` で箱が見つからない箇所を持たない」を、2.5 に「この記録だけは前後しうる（位置で並べ直せる）」の例外を足した。要件 7.1 に「出ない台本」がこの形の行は今のサーフェスに在る箱の名前で確かめると足した。退けた案: 箱の名前の事実を seriko へ写して talk スレッドで判定する（今のバルーンの面の状態を二重に持つ）。
+- **議題 3（同じ台本の中の切替の後ろ）**: 「再生が実際に使うシェル・バルーンで確かめる（切替が効く前は前の、効いた後は後の）」で確定し、要件 4.1 の文を直した。SSP との違いとして文書に書く。退けた案: 切替を台詞の途中ですぐ効かせる（再生のしかたを変える＝範囲外）。
+- **議題 4（rmcp のフォーク）**: 開発者のアカウントの `ekicyou/rust-sdk` にフォークし、タグ `rmcp-v3.5.0` から枝を切る（版の番号は 3.5.0 のまま・`rev` で固定・`deny.toml` の `allow-git` に名指し）。上流へは `main` 向けに PR。フォークの作成と PR は、実装でその段に来たときに改めて許しを取る。
+- タスクはおよそ 21 本の見込み（11.7 に `raise_event` の答え 1 を足すが、SSP の実測 1 は済んだので数は変わらない）。brief の「20 を超えたら分ける」はタスクの段で決める。

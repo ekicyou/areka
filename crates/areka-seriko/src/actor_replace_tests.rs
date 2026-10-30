@@ -27,6 +27,11 @@ fn arm_resolver() -> BindResolver {
     BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
 }
 
+/// 差し替えの事実（この檻は判定を見ない）。
+fn no_facts() -> crate::SkinFacts {
+    crate::SkinFacts::new(BTreeMap::new(), BTreeMap::new(), BTreeMap::new())
+}
+
 /// `\![bind,腕,伸び,1]` の cue。
 fn arm_on_cue(scope: &str) -> TalkCue {
     TalkCue {
@@ -97,14 +102,17 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
     CueSink::emit(&mut sink, arm_on_cue("0")); // 動的な着せ替え {1100,1207,1300}
 
     let new = table_single(2100, 0, Interval::Random { k: 4 }, &[(3000, 0)]);
-    assert!(sink.send_replace(SerikoReplace::Shell {
-        epoch: 7,
-        resolver: resolver_of("笑顔", 2200),
-        static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([1500])),
-        bind_resolver: BindResolver::empty(),
-        shell_table: new,
-        fallback: crate::ShellSurfaceFallback::default(),
-    }));
+    assert!(sink.send_replace(
+        SerikoReplace::Shell {
+            epoch: 7,
+            resolver: resolver_of("笑顔", 2200),
+            static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([1500])),
+            bind_resolver: BindResolver::empty(),
+            shell_table: new,
+            fallback: crate::ShellSurfaceFallback::default(),
+        },
+        no_facts()
+    ));
     sink.send_tick(1150); // 古い表なら 2110 が出る時刻
     sink.send_tick(2000); // 新しい表で発火（3000）
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "笑顔")); // 新しい別名表で引ける
@@ -185,10 +193,13 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
     sink.send_tick(1000); // シェルのループが発火（2106）
     CueSink::emit(&mut sink, arm_on_cue("0"));
 
-    assert!(sink.send_replace(SerikoReplace::Balloon {
-        epoch: 9,
-        balloon_tables: BTreeMap::from([(ActorKey::from("0"), AnimationTable::empty())]),
-    }));
+    assert!(sink.send_replace(
+        SerikoReplace::Balloon {
+            epoch: 9,
+            balloon_tables: BTreeMap::from([(ActorKey::from("0"), AnimationTable::empty())]),
+        },
+        no_facts()
+    ));
     sink.send_tick(1150); // シェルのループは続く（2110）
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
@@ -243,13 +254,16 @@ fn balloon_replace_reports_unseen_scopes_from_new_tables_with_surface_zero() {
     );
 
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // seriko が見たのは scope 0 だけ
-    assert!(sink.send_replace(SerikoReplace::Balloon {
-        epoch: 3,
-        balloon_tables: BTreeMap::from([
-            (ActorKey::from("0"), AnimationTable::empty()),
-            (ActorKey::from("1"), AnimationTable::empty()),
-        ]),
-    }));
+    assert!(sink.send_replace(
+        SerikoReplace::Balloon {
+            epoch: 3,
+            balloon_tables: BTreeMap::from([
+                (ActorKey::from("0"), AnimationTable::empty()),
+                (ActorKey::from("1"), AnimationTable::empty()),
+            ]),
+        },
+        no_facts()
+    ));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
@@ -317,20 +331,23 @@ fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() 
 
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // scope 0 は面 2100
     CueSink::emit(&mut sink, emote_cue(0.0, "1", "-1")); // scope 1 は非表示
-    assert!(sink.send_replace(SerikoReplace::Shell {
-        epoch: 4,
-        resolver: resolver_of("通常", 5),
-        static_binds: crate::DefaultBinds::uniform(BindSet::default()),
-        bind_resolver: BindResolver::empty(),
-        shell_table: AnimationTable::empty(),
-        fallback: crate::ShellSurfaceFallback {
-            surface_ids: [0, 5, 10].into_iter().collect(),
-            candidates: BTreeMap::from([
-                (ActorKey::from("0"), vec![5, 0]),
-                (ActorKey::from("1"), vec![10]),
-            ]),
+    assert!(sink.send_replace(
+        SerikoReplace::Shell {
+            epoch: 4,
+            resolver: resolver_of("通常", 5),
+            static_binds: crate::DefaultBinds::uniform(BindSet::default()),
+            bind_resolver: BindResolver::empty(),
+            shell_table: AnimationTable::empty(),
+            fallback: crate::ShellSurfaceFallback {
+                surface_ids: [0, 5, 10].into_iter().collect(),
+                candidates: BTreeMap::from([
+                    (ActorKey::from("0"), vec![5, 0]),
+                    (ActorKey::from("1"), vec![10]),
+                ]),
+            },
         },
-    }));
+        no_facts()
+    ));
     // 今の面が 5 になっていれば、同じ面の再指定は冪等で出ない。
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常"));
     sink.close().expect("Close を送れること");

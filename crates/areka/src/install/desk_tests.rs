@@ -188,6 +188,25 @@ fn submit_queues_and_logs_origin_and_count() {
     assert_eq!(queued[0].field("count"), Some("2"));
 }
 
+/// 起動の依頼の出どころは、記録の `origin` 欄に `StartupArgs`・`InitialInstall` の綴りで載る（要件 2.5・4.8）。
+#[test]
+fn submit_logs_startup_origin_spellings() {
+    for (origin, word) in [
+        (InstallOrigin::StartupArgs, "StartupArgs"),
+        (InstallOrigin::InitialInstall, "InitialInstall"),
+    ] {
+        let mut rig = Rig::new();
+        let order = InstallOrder {
+            archives: vec![PathBuf::from("C:/a.nar")],
+            origin,
+        };
+        let (_, events) = capture(|| submit(&mut rig.world, order));
+        let queued = events_named(&events, "install_order_queued");
+        assert_eq!(queued.len(), 1, "{events:?}");
+        assert_eq!(queued[0].field("origin"), Some(word));
+    }
+}
+
 /// 書庫 0 本・窓口なし・終了中は断って `warn!` を 1 件残し、待ち行列に積まない。
 #[test]
 fn submit_refuses_empty_no_desk_and_closing() {
@@ -247,7 +266,12 @@ fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
     rig.drain();
     assert_eq!(rig.orders.try_iter().count(), 0, "手続きの最中は渡さない");
 
-    rig.asks.send(DeskAsk::OrderDone).unwrap();
+    rig.asks
+        .send(DeskAsk::OrderDone {
+            order: order("C:/1.nar"),
+            ends: Vec::new(),
+        })
+        .unwrap();
     rig.drain();
     let second: Vec<Vec<PathBuf>> = rig.orders.try_iter().map(|o| o.archives).collect();
     assert_eq!(second, vec![vec![PathBuf::from("C:/2.nar")]]);
@@ -259,7 +283,12 @@ fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
         "終わりの知らせまで次は渡さない"
     );
 
-    rig.asks.send(DeskAsk::OrderDone).unwrap();
+    rig.asks
+        .send(DeskAsk::OrderDone {
+            order: order("C:/1.nar"),
+            ends: Vec::new(),
+        })
+        .unwrap();
     rig.drain();
     let third: Vec<Vec<PathBuf>> = rig.orders.try_iter().map(|o| o.archives).collect();
     assert_eq!(third, vec![vec![PathBuf::from("C:/3.nar")]]);
@@ -764,3 +793,7 @@ fn is_busy_while_running_queued_or_holding_an_overwrite() {
 /// 終了の後始末での窓口の片付け（task 9・要件 8.2・8.5・8.6・11.8）。
 #[path = "desk_exit_tests.rs"]
 mod exit_tests;
+
+/// 起動の依頼（`--install` と `initial_install.nar`）との結線（startup-install-option）。
+#[path = "desk_startup_tests.rs"]
+mod startup_tests;

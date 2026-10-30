@@ -39,7 +39,9 @@
 
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
+use std::sync::{Arc, PoisonError, RwLock};
 
+use areka_sakura::strict::DetectionPoint;
 use areka_sakura::{ActorKey, CueCommand, CueTarget, TalkCue, cue_target_of};
 
 use crate::bind::{
@@ -48,6 +50,7 @@ use crate::bind::{
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
 use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
+use crate::skin_facts::{SkinFacts, balloon_missing, surface_missing};
 use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot, StageNote};
 use crate::table::AnimationTable;
 
@@ -128,6 +131,10 @@ pub struct SerikoSink {
     tx: std::sync::mpsc::Sender<SerikoMsg>,
     /// 窓の知らせに載せる時刻を読む時計（[`spawn_seriko_clocked`] が渡したもの・無ければ `None`）。
     clock: Option<SerikoClock>,
+    /// 今のシェルとバルーンの事実（複製はみな同じ置き場を指す・装着の前は `None`）。
+    /// 差し替えの依頼は書き込みの鍵の中で、知らせ付きの合図は読みの鍵の中で送るので、
+    /// どの合図も seriko の本体が使う定義と同じ事実で判定される（spec: mcp-strict-errors 要件 4.1）。
+    facts: Arc<RwLock<Option<SkinFacts>>>,
 }
 
 impl SerikoSink {
@@ -136,7 +143,11 @@ impl SerikoSink {
     /// 後続 3.2 の `spawn_seriko` がアクター inbox の送信端から構築する。std mpsc の
     /// `Sender` は `Clone`（複製すれば複数 sink 口へ配れる）だが、本タスクでは単一送出端で足りる。
     pub(crate) fn new(tx: std::sync::mpsc::Sender<SerikoMsg>) -> Self {
-        Self { tx, clock: None }
+        Self {
+            tx,
+            clock: None,
+            facts: Arc::default(),
+        }
     }
 
     /// アクターへ [`SerikoMsg::Close`] を送り、正常停止を要求する（R1.4）。
@@ -178,10 +189,19 @@ impl SerikoSink {
         }
     }
 
+    /// 装着の時に、判定に使う事実を入れる（spec: mcp-strict-errors 要件 4.1）。
+    pub fn set_facts(&self, facts: SkinFacts) {
+        // 毒は前の持ち主の panic で、置き場そのものは壊れていない。
+        *self.facts.write().unwrap_or_else(PoisonError::into_inner) = Some(facts);
+    }
+
     /// 定義の差し替えの依頼を inbox へ送る（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
     ///
+    /// 書き込みの鍵の中で事実を `facts` へ替えてから送る（spec: mcp-strict-errors 要件 4.1）。
     /// 受信端が消えていれば `false` を返す（呼び手が `error!` を残す）。
-    pub fn send_replace(&self, replace: SerikoReplace) -> bool {
+    pub fn send_replace(&self, replace: SerikoReplace, facts: SkinFacts) -> bool {
+        let mut cell = self.facts.write().unwrap_or_else(PoisonError::into_inner);
+        *cell = Some(facts);
         self.tx.send(SerikoMsg::Replace(Box::new(replace))).is_ok()
     }
 
@@ -217,6 +237,27 @@ impl SerikoSink {
 impl dola::cue::CueSink for SerikoSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(cue);
+    }
+
+    /// 読みの鍵の中で、事実が在れば `\s`・数の `\b` を判定して知らせてから今の送り出しをする
+    /// （spec: mcp-strict-errors 要件 2.7・4.1・4.2）。
+    fn emit_with(&mut self, cue: TalkCue, probe: &dola::cue::CueProbe) {
+        let cell = Arc::clone(&self.facts);
+        let facts = cell.read().unwrap_or_else(PoisonError::into_inner);
+        if let Some(point) = facts.as_ref().and_then(|f| judge(f, &cue)) {
+            probe.report(point.finding());
+        }
+        self.deliver(cue);
+    }
+}
+
+/// 合図 1 つを事実で判定する。話し手のスコープが数でなければ判定しない。
+fn judge(facts: &SkinFacts, cue: &TalkCue) -> Option<DetectionPoint> {
+    let scope = cue.actor.as_str().parse::<u32>().ok()?;
+    match &cue.command {
+        CueCommand::Emote { key } => surface_missing(facts, scope, key),
+        CueCommand::BalloonSurface { key } => balloon_missing(facts, scope, key),
+        _ => None,
     }
 }
 
@@ -788,6 +829,9 @@ mod replace_tests;
 #[cfg(test)]
 #[path = "actor_stage_tests.rs"]
 mod stage_tests;
+#[cfg(test)]
+#[path = "actor_strict_tests.rs"]
+mod strict_tests;
 #[cfg(test)]
 #[path = "actor_talk_tests.rs"]
 mod talk_tests;

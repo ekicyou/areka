@@ -14,7 +14,8 @@
 use std::ops::ControlFlow;
 
 use areka_actor::{UiSendError, UiSender};
-use areka_sakura::contract::TalkCue;
+use areka_sakura::contract::{CueCommand, TalkCue};
+use dola::cue::CueProbe;
 
 /// UI ドレインへの搬送 envelope（`Send + 'static`・design.md 結線層 正本）。
 ///
@@ -25,6 +26,9 @@ use areka_sakura::contract::TalkCue;
 pub enum TextMsg {
     /// sakura からの cue（後出し優先で即時適用される）。
     Cue(TalkCue),
+    /// strict の台本の名前の形の `\b[名前]`（[`dola::cue::CueSink::emit_with`] の写し）。`Cue` と同じに捌き、
+    /// 箱が見つからなければ口へ知らせる。複製・表示・等しさは口（[`CueProbe`]）の実装に従う。
+    ProbedCue(TalkCue, CueProbe),
     /// 再生の前に渡された、これから届く合図の全部（[`dola::cue::CueSink::preview`] の写し）。
     /// 同じ送り手が続けて積む最初の合図より必ず前に届く。
     Upcoming(Vec<TalkCue>),
@@ -102,8 +106,11 @@ impl EmoTextSink {
     /// 送信失敗（UI ドレイン停止後）は失われた cue の文脈付き `tracing::error!` のみで、
     /// panic せず infallible 契約に従い戻り値なし（R1.5・log-first）。後続の `emit` も
     /// 引き続き受理される（受信口は失敗で壊れない）。
-    fn deliver(&mut self, cue: TalkCue) {
-        if let Err(UiSendError(TextMsg::Cue(lost))) = self.tx.send(TextMsg::Cue(cue)) {
+    fn deliver(&mut self, msg: TextMsg) {
+        self.started = true;
+        if let Err(UiSendError(TextMsg::Cue(lost) | TextMsg::ProbedCue(lost, _))) =
+            self.tx.send(msg)
+        {
             tracing::error!(
                 at = lost.at,
                 actor = ?lost.actor,
@@ -124,8 +131,18 @@ impl EmoTextSink {
 /// `TextSink` 実装を撤去し `CueSink` 一本へ集約）。
 impl dola::cue::CueSink for EmoTextSink {
     fn emit(&mut self, cue: TalkCue) {
-        self.started = true;
-        self.deliver(cue);
+        self.deliver(TextMsg::Cue(cue));
+    }
+
+    /// 名前の形の `\b[名前]`（鍵が整数として読めない＝`resolve_balloon_key` の名前の形）だけ口付きで積む。
+    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる（要件 4.2）。ほかは `emit` と同じ。
+    fn emit_with(&mut self, cue: TalkCue, probe: &CueProbe) {
+        match &cue.command {
+            CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
+                self.deliver(TextMsg::ProbedCue(cue, probe.clone()));
+            }
+            _ => self.emit(cue),
+        }
     }
 
     /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（要件 2.1）。
@@ -153,7 +170,7 @@ impl dola::cue::CueSink for EmoTextSink {
 /// 終了規律の正準写像（design.md 結線層——drain handler の器）。
 ///
 /// UI ドレインの handler は本関数へ委譲し、cue の処理（状態機械適用等）だけを `on_cue` で
-/// 差し込む。終了経路はちょうど 2 つ（R1.4 相当）:
+/// 差し込む（[`TextMsg::ProbedCue`] も口を捨てて `on_cue` へ渡す）。終了経路はちょうど 2 つ（R1.4 相当）:
 ///
 /// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（`on_cue` は呼ばれない・
 ///   基盤 `spawn_ui` が error ログなしで drain を終了する）。
@@ -170,23 +187,26 @@ pub fn handle_text_msg<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
 ) -> Result<ControlFlow<()>, E> {
-    handle_text_msg_with(msg, on_cue, |_| Ok(()), |_| Ok(()))
+    handle_text_msg_with(msg, |cue, _| on_cue(cue), |_| Ok(()), |_| Ok(()))
 }
 
 /// [`handle_text_msg`] に先渡しの受け取り `on_upcoming` と、トークの印（[`TextMsg::TalkEnded`]・
 /// [`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）の受け取り `on_talk_mark` を差し込める形
-/// （終了規律は同じ）。
+/// （終了規律は同じ）。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
 ///
 /// 先渡し・印の受け取りの失敗も `Err` として返し、基盤が `error!`＋継続する。
 pub fn handle_text_msg_with<E>(
     msg: TextMsg,
-    on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
+    on_cue: impl FnOnce(TalkCue, Option<CueProbe>) -> Result<(), E>,
     on_upcoming: impl FnOnce(Vec<TalkCue>) -> Result<(), E>,
     on_talk_mark: impl FnOnce(TextMsg) -> Result<(), E>,
 ) -> Result<ControlFlow<()>, E> {
     match msg {
         TextMsg::Close => Ok(ControlFlow::Break(())),
-        TextMsg::Cue(cue) => on_cue(cue).map(|()| ControlFlow::Continue(())),
+        TextMsg::Cue(cue) => on_cue(cue, None).map(|()| ControlFlow::Continue(())),
+        TextMsg::ProbedCue(cue, probe) => {
+            on_cue(cue, Some(probe)).map(|()| ControlFlow::Continue(()))
+        }
         TextMsg::Upcoming(upcoming) => on_upcoming(upcoming).map(|()| ControlFlow::Continue(())),
         mark @ (TextMsg::TalkEnded | TextMsg::ChoiceWaitBegan) => {
             on_talk_mark(mark).map(|()| ControlFlow::Continue(()))
@@ -496,7 +516,7 @@ mod tests {
         let got = std::cell::RefCell::new(None);
         let result = handle_text_msg_with::<String>(
             TextMsg::Upcoming(list.clone()),
-            |_| panic!("on_cue must not be called for Upcoming"),
+            |_, _| panic!("on_cue must not be called for Upcoming"),
             |u| {
                 *got.borrow_mut() = Some(u);
                 Ok(())
@@ -508,7 +528,7 @@ mod tests {
 
         let failed = handle_text_msg_with(
             TextMsg::Upcoming(list),
-            |_| -> Result<(), String> { panic!("on_cue must not be called") },
+            |_, _| -> Result<(), String> { panic!("on_cue must not be called") },
             |_| Err("busy".to_string()),
             |_| panic!("on_talk_mark must not be called"),
         );
@@ -526,7 +546,7 @@ mod tests {
                 move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
                     handle_text_msg_with(
                         msg,
-                        |c| {
+                        |c, _| {
                             recs.lock().expect("records lock").push(TextMsg::Cue(c));
                             Ok(())
                         },

@@ -41,6 +41,7 @@ use crate::emo2_boot::shell_balloon_switch::{
 };
 use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
+use crate::emo2_boot::skin_facts_copy;
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapPayload};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::balloon_lock::replace_balloon_lock_descript;
@@ -274,6 +275,14 @@ fn commit(
         );
         return false;
     };
+    // 判定の事実は荷物を分ける前に組む（分けると `EmoWorld` は荷物の置き場へ動く）。
+    let scopes: Vec<u32> = world
+        .get_resource::<GhostWindows>()
+        .into_iter()
+        .flat_map(GhostWindows::scopes)
+        .filter_map(|s| u32::try_from(s).ok())
+        .collect();
+    let facts = skin_facts_copy::swapped(wiring.presenter(), &scopes, &built);
     let (targets, replace, finish) = split(built, epoch);
     // seriko は差し替えの依頼で静的な着せ替えを新しいシェルの既定へ置き直す。結線の写しも依頼が届いた
     // 時点で置き直す（ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。
@@ -296,7 +305,7 @@ fn commit(
     });
     let sent = session(world)
         .and_then(GhostSession::seriko_sink)
-        .is_some_and(|sink| sink.send_replace(replace));
+        .is_some_and(|sink| sink.send_replace(replace, facts));
     if !sent {
         error!(
             event = "skin_switch_failed",

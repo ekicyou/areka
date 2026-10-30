@@ -346,6 +346,7 @@ fn start_with_epilogue() -> StartTalk {
             tokens: vec!["記録".to_string()],
         }],
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }
 }
 

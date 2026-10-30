@@ -256,6 +256,7 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
     write_named_ghost_fixture(&root, "むらさき", Some("紫"), Some("エモ"));
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -336,6 +337,7 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
     write_named_ghost_fixture(&root, "むらさき", None, None);
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| {
@@ -394,6 +396,7 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
         .with_get("OnBoot", r"\s[0]hello\e");
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
@@ -446,6 +449,7 @@ fn username_no_content_is_absent_from_boot_talk_snapshot() {
     let backend = MapShioriBackend::new().with_get("OnBoot", r"\s[0]hello\e");
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

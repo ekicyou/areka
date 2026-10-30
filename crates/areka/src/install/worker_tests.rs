@@ -335,17 +335,24 @@ fn worker_runs_an_order_and_reports_done() {
 
     // 読めない書庫: 始まりの知らせ → 失敗の知らせ → 依頼の終わり。
     let mut raised = Vec::new();
-    loop {
+    let (order, ends) = loop {
         match asks.recv().expect("頼みが届く") {
             DeskAsk::Raise { id, reply, .. } => {
                 raised.push(id);
                 let _ = reply.send(RaiseOutcome::NoReply);
             }
-            DeskAsk::OrderDone => break,
+            DeskAsk::OrderDone { order, ends } => break (order, ends),
             _ => panic!("読めない書庫ではイベントの頼みと終わりだけが届く"),
         }
-    }
+    };
     assert_eq!(raised, ["OnInstallBegin", "OnInstallFailure"]);
+    // 終わりの知らせは終わった依頼そのものと、書庫ごとの終わり方を運ぶ。
+    assert_eq!(order.archives, vec![dir.child("missing.nar")]);
+    assert_eq!(order.origin, InstallOrigin::Menu);
+    assert!(
+        matches!(ends.as_slice(), [ArchiveEnd::Failed(_)]),
+        "{ends:?}"
+    );
 
     // 依頼を終えた門には何も残らない（失敗した書庫を途中でやめた書庫として記録しない）。
     let mut world = World::new();
@@ -395,7 +402,7 @@ fn worker_names_the_archive_on_the_gate_before_the_first_event() {
 
     drop(reply);
     assert!(
-        matches!(asks.recv(), Ok(DeskAsk::OrderDone)),
+        matches!(asks.recv(), Ok(DeskAsk::OrderDone { .. })),
         "閉じた扱いで抜けて依頼の終わりが届く"
     );
     drop(orders);

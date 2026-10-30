@@ -213,8 +213,12 @@ fn name_outside_eleven_is_invalid_params() {
     assert_invalid_params("no_such_tool", json!({}), "tool not found");
 }
 
-/// (要件 4.1) 指示文（旧式は `initialize`・無状態版は `server/discover`）は `check_script` の案内と、
-/// 今ある 2 つの案内（先に `get_active_ghost_list`・未実装の結果の形）を含む。
+/// 消した後の指示文（定数を写さず、前の 3 文を字のまま書く）。
+const THREE_SENTENCES: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript.";
+
+/// (要件 4.1・spec: mcp-strict-errors 要件 5.1) 指示文（旧式は `initialize`・無状態版は
+/// `server/discover`）は `check_script` の案内と先に `get_active_ghost_list` の案内を含む 3 文で、
+/// 「まだのツール」の 1 文（`not implemented yet`）は消えている。前の 3 文は 1 字も変わらない。
 #[test]
 fn instructions_name_check_script_and_keep_existing_guidance() {
     let (registry, _rx) = all_entrances(LONG_WAIT);
@@ -240,13 +244,14 @@ fn instructions_name_check_script_and_keep_existing_guidance() {
             "without playing it",
             "use it before sakurascript",
             "call get_active_ghost_list first",
-            "\"NG:not implemented yet\"",
         ] {
             assert!(
                 instructions.contains(phrase),
                 "{path}: {phrase}: {instructions}"
             );
         }
+        assert_eq!(instructions, THREE_SENTENCES, "{path}");
+        assert!(!instructions.contains("not implemented yet"), "{path}");
     }
 }
 
