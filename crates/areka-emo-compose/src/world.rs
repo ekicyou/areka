@@ -101,7 +101,22 @@ impl EmoWorld {
         emo.world.insert_resource(report);
         // 子の当たり判定の領域を親へ持ち込む（持ち込みが在るサーフェスにだけ付く・要件 4.1〜4.10）。
         crate::hit_import::attach_hit_regions(&mut emo);
+        // 着せ替えの描く手順は面の表が出来上がった後に 1 度だけ作る（seriko-pattern-calls 6.8）。
+        let steps = crate::bind_steps::BindSteps::build(&emo);
+        emo.world.insert_resource(steps);
         emo
+    }
+
+    /// 面 `surface` の着せ替え animation `animation` の描く手順（`bind` 種でなければ空）。
+    #[allow(dead_code)] // shortcut: 合成（task 2.2）が使うまで lib では読まれない。2.2 で外す。
+    pub(crate) fn bind_steps(
+        &self,
+        surface: u32,
+        animation: u32,
+    ) -> &[crate::bind_steps::BindStep] {
+        self.world
+            .get_resource::<crate::bind_steps::BindSteps>()
+            .map_or(&[], |s| s.get(surface, animation))
     }
 
     /// 当たり判定に使う領域の列（要件 4.1・4.2）。子から持ち込んだ分が在ればその列

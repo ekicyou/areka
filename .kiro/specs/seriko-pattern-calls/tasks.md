@@ -17,7 +17,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 9.2_
 
 - [ ] 2. 合成: 着せ替えの手順と差し込み
-- [ ] 2.1 (P) 着せ替えの描く手順を読み込みのときに 1 度だけ作る
+- [x] 2.1 (P) 着せ替えの描く手順を読み込みのときに 1 度だけ作る
   - 合成の世界を作る終わりに、面 × animation ごとの手順の資源を作る。純 `bind` は全部の pattern を番号の昇順に、`bind+random` は今のまま pattern0 だけをたどる
   - 描く語（今は overlay）で番号が 0 以上のコマは「描く」、純 `bind` の `insert` で相手が同じ面の純 `bind` なら「差し込む」、それ以外は手順に入れない。手順を作るときに記録は出さない
   - 手順の資源の兄弟テストで、3 コマの A（後ろ・`insert,B`・前）、`bind+random` の pattern0 だけ、相手が無い／`bind` でない `insert` が手順に入らないこと、が緑になる
@@ -161,3 +161,4 @@
 - 1.1: 欄 2 の原文（`Pattern.target`）は欄ごとに前後の空白を落としてから `,` で継ぐので、`( 0 , 1 )` は `( 0,1 )` になる。並びを読む側（1.2）は項目ごとに空白を落とすこと。
 - 1.1: `cargo clippy --no-deps` で `areka-seriko` の `actor.rs:89`・`looper.rs:426`、依存込みで `dola` にもとからの指摘がある（この spec の差分の外）。
 - 1.2: 8 語の見分けは `areka_emo_compose::pattern_word`（`pattern_word`・`call_targets`）。`start`/`stop`/`insert` の括弧つきの番号 `(1)` は読めない相手。`clippy --all-targets --no-deps` は emo-compose のテストのファイル（触っていない）に `chunks_exact` の指摘が 5 件もとからある（`tools/test-all.ps1` は clippy を回さない）。
+- 2.1: 描く語の判定は design の `quiet_method` でなく既存の `method::is_implemented_name`（記録なし・Overlay だけ真）。`BindStep`・`EmoWorld::bind_steps` の `#[allow(dead_code)]` は 2.2 で使い始めたら外す。自分自身への `insert` は手順に残り、巡回の打ち切りは 2.2 の展開側。
