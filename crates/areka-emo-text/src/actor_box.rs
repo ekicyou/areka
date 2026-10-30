@@ -65,6 +65,10 @@ impl TextLayerRuntime {
         self.choice_hover.retain(|k, _| !is_box(k));
         self.choice_snapshot.retain(|k, _| !is_box(k));
         self.box_sites.clear();
+        let boxes: Vec<PlaceKey> = self.scrolls.keys().filter(|k| is_box(k)).cloned().collect();
+        for key in &boxes {
+            self.drop_box_scroll(key);
+        }
         self.box_overflow_warned.clear();
         self.box_definition_warned.clear();
         self.shown_boxes.clear();
@@ -446,6 +450,7 @@ impl TextLayerRuntime {
         self.routing.remove(key);
         self.layout_input.remove(key);
         self.box_sites.remove(key);
+        self.drop_box_scroll(key);
         // 見えない箱の当たり行を残さない（次の提示で再び導く）。
         self.choice_snapshot.remove(key);
         if let (Some(boxes), TextPlace::Box(name)) =

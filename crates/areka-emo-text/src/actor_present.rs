@@ -16,12 +16,14 @@ use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
+use crate::scroll_marker::{ScrollChange, window_for};
 use crate::segment::segment_plan;
 use crate::state::TextLayerState;
 use crate::surface::TextSurface;
 use crate::wrap::WrapMode;
 
 use super::decoration;
+use super::scroll;
 use super::{ActorRender, ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, is_settled_ordinal};
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
@@ -272,7 +274,16 @@ fn present_actor(
         // 直前の arrange_lines が状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
         return Ok(true);
     };
-    let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
+    // 見える字の数の観測を見える範囲の決めより**先に**呼ぶ（字が増えたフレームを自動の位置で
+    // 描く・後に呼ぶと 1 フレーム遅れる・要件 8.1）。手動の位置が在ればその行から見せる（要件 8.5）。
+    let scroll_state = runtime.scrolls.entry(place.clone()).or_default();
+    if let Some(reason) = scroll_state.observe_visible(actor_state.reveal().visible(talk_time)) {
+        scroll::record(place, ScrollChange::Stopped(reason), "提示");
+    }
+    let (window, reached) = window_for(&lines, &resolved.region, resolved.mode, scroll_state);
+    if let Some(reason) = reached {
+        scroll::record(place, ScrollChange::Stopped(reason), "提示");
+    }
 
     // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
     // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。

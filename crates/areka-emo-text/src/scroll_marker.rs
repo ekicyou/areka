@@ -87,6 +87,8 @@ pub struct PlaceScroll {
     last_visible: usize,
     /// 前のフレームの自動の先頭行（押下・ホイールの限り）。
     auto_first: usize,
+    /// 前のフレームの自動の範囲に見えていた行の数（ホイールの「1 画面ずつ」の量）。
+    page_lines: usize,
 }
 
 impl PlaceScroll {
@@ -184,6 +186,11 @@ impl PlaceScroll {
     pub fn has_hidden_lines(&self) -> bool {
         self.auto_first > 0 || self.manual.is_some()
     }
+
+    /// 前のフレームの自動の範囲に見えていた行の数（[`WheelLines::Page`] の 1 目盛りの量）。
+    pub fn page_lines(&self) -> usize {
+        self.page_lines
+    }
 }
 
 /// 矢印の種類。`Up`＝`arrow0`（古い側へ送る）・`Down`＝`arrow1`（新しい側へ送る）。
@@ -219,6 +226,8 @@ pub fn window_for(
 ) -> (VisibleWindow, Option<StopReason>) {
     let auto = LayoutEngine::visible_window(lines, region, mode);
     scroll.auto_first = auto.first_visible_line;
+    // shortcut: 自動の範囲（最新の行から収まる分）の行数を 1 画面とみなす。行の丈が揃わない台本では手動の位置の見えている数とずれうる。
+    scroll.page_lines = lines.len() - auto.first_visible_line;
     match scroll.manual {
         Some(line) if line >= scroll.auto_first => {
             scroll.forget(StopReason::ReachedAuto);

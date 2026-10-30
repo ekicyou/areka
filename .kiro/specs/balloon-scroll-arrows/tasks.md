@@ -51,7 +51,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.7, 4.1, 4.2, 7.1, 7.2, 7.7, 8.5, 8.7, 11.1_
 
 - [ ] 4. 文字の層への組み込み（emo-text）
-- [ ] 4.1 文字の層の実行時に手動の送りの公開の口と見える範囲の差し替えを組み込む
+- [x] 4.1 文字の層の実行時に手動の送りの公開の口と見える範囲の差し替えを組み込む
   - 実行時に場所ごとの手動の状態の表を持ち、送り・ホイール・隠れた行の有無・手動を捨てる口（場所ごと・アクターとその箱の全部）を新しいファイルの impl に置く
   - 毎フレームの提示で、同じフレームの中で見える字の数の観測を見える範囲の決めより先に呼び、自動の見える範囲の呼び出しを手動を考える決めに替える（送りの描き直しと選択肢の当たりは渡された見える範囲に今の仕組みで従う）
   - 消去の腕と箱の登録を外すときに手動を捨て、手動の始まりと終わりは場所と理由を debug、1 段ごとの送りは trace にする
@@ -175,3 +175,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 2.3: 面 0 以外で自分の設定ファイルを持たない面は束に入れず、`for_face` が面 0 の定義を返す（要件 1.6）。矢印の絵は `(scope, arrow.filename)` ごとに 1 回だけ解いて `Arc` で共有する。
 - 3.1: emo-text の clippy も既存のファイルで今も赤（47 件）。新しいファイルだけを見る。`PlaceScroll` の `auto_first` を書くのは 3.2 の `window_for`（同じモジュール）。
 - 3.2: `ResolvedMarkerPlacement` は design.md の `{up: Option<MarkerAt>, down: …}`・`Default` でなく `{up: (i32,i32), down: (i32,i32)}` と `resolve(&ArrowKeys, extent)`（座標なしは SSP で測った既定へ先に解く。`MarkerAt` は設計に未定義）。絵の有無は `MarkerPair` が決める。`MarkerKind {Up, Down}` と `MarkerKind::dir()` は `crate::scroll_marker` にある。自動の式は `LayoutEngine::block_offset_at`（pub(crate)）へ切り出した（式は不変）。
+- 4.1: 実行時の口は `crates/areka-emo-text/src/actor_scroll.rs`（`scroll_manual_at`・`wheel_at`・`has_hidden_lines_at`・`forget_manual_at`・`forget_manual_of`）。`actor_scroll.rs` は PURE_SOURCES に載る（windows を直に import しない）ので、4.2 の描画は `marker_surface.rs` 側に置く。`WheelLines::Page` は `PlaceScroll::page_lines()`（`window_for` が書く）を使う（行の高さが混ざると見えている行の数とずれる。shortcut の注記あり）。`scrolls` の欄は初回の提示で作られる。

@@ -28,6 +28,7 @@ use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
 use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
+use crate::scroll_marker::{PlaceScroll, StopReason};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use crate::state::{SpanKind, SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
@@ -283,6 +284,9 @@ pub struct TextLayerRuntime {
     /// 先渡しで偽）。真のときだけ押下の口 [`settle_choices_at`](Self::settle_choices_at) が場所を済ませる。
     /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（件 1）。
     choice_wait_open: bool,
+    /// 場所 → 手動の送りの状態（balloon-scroll-arrows・要件 8.8）。書くのは `actor_scroll.rs`・
+    /// 提示（`actor_present.rs`）・本ファイルの消去の腕・箱の登録を外す口だけ。
+    scrolls: HashMap<PlaceKey, PlaceScroll>,
 }
 
 impl TextLayerRuntime {
@@ -315,6 +319,7 @@ impl TextLayerRuntime {
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),
             choice_wait_open: false,
+            scrolls: HashMap::new(),
         }
     }
 
@@ -356,6 +361,7 @@ impl TextLayerRuntime {
                 // 隙間を塞ぎ、5.2 の原子性を照会時点で成立させるため（次 present の空再導出と冪等）。
                 self.choice_hover.remove(&place);
                 self.choice_snapshot.remove(&place);
+                self.forget_manual_at(&place, StopReason::Cleared);
             }
             CueCommand::ClearAll => {
                 for render in self.surfaces.values_mut() {
@@ -369,6 +375,7 @@ impl TextLayerRuntime {
                 self.choice_snapshot.clear();
                 // 箱を隠す印は次の台詞の頭まで（design.md「箱を数に入れた表示の判断」）。
                 self.hidden_boxes.clear();
+                self.forget_all_manual(StopReason::Cleared);
             }
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
@@ -686,6 +693,9 @@ mod boxes;
 #[path = "actor_present.rs"]
 mod present;
 
+#[path = "actor_scroll.rs"]
+mod scroll;
+
 /// その序数の範囲が済んだ選択肢か（範囲が無い序数は済んでいない扱い）。押下の口・トークの終わりの口と
 /// 提示（`actor_present.rs`）が同じ判定で写しと強調から外す。
 fn is_settled_ordinal(state: &crate::state::ActorTextState, ordinal: usize) -> bool {
@@ -769,6 +779,10 @@ mod box_sync_tests;
 #[cfg(test)]
 #[path = "actor_box_present_tests.rs"]
 mod box_present_tests;
+
+#[cfg(test)]
+#[path = "actor_scroll_tests.rs"]
+mod scroll_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

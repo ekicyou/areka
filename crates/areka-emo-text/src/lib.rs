@@ -402,6 +402,12 @@ mod tests {
             "scroll_marker_tests.rs",
             include_str!("scroll_marker_tests.rs"),
         ),
+        // balloon-scroll-arrows の手動の送りの公開の口。
+        ("actor_scroll.rs", include_str!("actor_scroll.rs")),
+        (
+            "actor_scroll_tests.rs",
+            include_str!("actor_scroll_tests.rs"),
+        ),
     ];
     /// 純粋層の走査面へ**載せない**ファイルの明示（タスク 9.4）。
     ///
@@ -478,7 +484,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 79, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 81, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
