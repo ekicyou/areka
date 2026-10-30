@@ -751,7 +751,7 @@ pub(in crate::input_events) fn pick_shape<F: Clone>(
 ### E2E（実機・排他テストの机）
 
 1. ぱすたの手順書の段 3（7.3）: 身体の点 `custom`・× とボール `HAND`・白地 `ARROW` を `mouse-input.ps1 -Action cursor` で読む。
-2. 同じ机で、身体の上で左を押して `custom`（握った手）、放して `custom`（開いた手）を `GetCursorInfo` の handle の違いで見る。ホイールと止まったは、ぱすたに行が無いので形が替わらない（SSP と同じ）ことを読む。
+2. 同じ机で、身体の上で左を押して `HAND`（指差し。ぱすたには `mousedown` の行が無く、当たり判定の名前も `bust` ではないので要件 3.1 により指差し）、放して `custom`（開いた手・押す前と同じ handle）を `GetCursorInfo` の handle の違いで見る。握った手は `bust` の当たり判定か `mousedown` の行があるときだけ出るので、`cursor_pick` の単体テスト（`cursor_pick_tests.rs`）で見る。ホイールと止まったは、ぱすたに行が無いので形が替わらない（SSP と同じ）ことを読む。
 3. シェルの切り替えの後に身体の上で読み、前のシェルの形が出ないこと。
 
 ### Performance
