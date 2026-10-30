@@ -699,83 +699,104 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 """
 
 [entry."ukadoc:descript_balloon:arrow.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.51"
-owner = "balloon-canon-residue"
+owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
-正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
-両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-31 から読んで使う（balloon-scroll-arrows）。areka-parsers の balloon::marker::read_arrow_keys が、バルーンの descript.txt に面ごとの設定ファイルを重ねた表から読み（読む所に正典 URL を置いた）、areka-emo-present の balloon_marker::resolve_marker_pair が矢印の絵の名前の元に使う。
+書かれていればその名前の `0`（上・縦書きでは右）と `1`（下・縦書きでは左）を本体・相方・三人目以降のどのスコープにも使う。書かれていなければ正典の個別の既定を番号ごとに探す（本体 arrowp0def→arrows→arrow、相方 arrowp1def→arrowk→arrowp0def→arrows→arrow、三人目以降 arrowp{n}def→arrowk→arrowp0def→arrows→arrow）。
+書かれた名前の絵がバルーンのフォルダに無ければ、その順で探し直し、名前と番号を添えた warn! を出す。スコープごとに名前を変えたいときは面ごとの設定ファイル（balloonk*s.txt など）に書けば変わる（SSP の claudia バルーンが同じ使い方をしている）。
+絵は大小を区別せずに照らし、拡張子 .png だけを探す（.webp などを受けるのは balloon-webp-names の持ち分）。同じ名前の選び方を、クリック待ちの印の名前（clickwait 系・名前の鍵 clickwaitmarker.filename）にも使える形にしてある（印を出すのは talk-fast-forward）。
+シェルの balloon.*ブレスに書いた同じ鍵は、シェル内バルーン（箱）の矢印の絵の名前として読む。箱の絵はシェルのフォルダを先に探し、無い番号はそのスコープの普通のバルーンが解いた矢印の絵を使う。
+正典が黙る所と正典から離れた所の areka の決め（出る条件・送る量・話し終えた後の押下・当たり・座標なしの置き場・新しい文字・箱の絵のフォルダ・箱の上のホイール・名前の絵が無いときの戻り・縦書きの読み・面の切り替えでの位置）は doc/COMPAT_ARCHITECTURE.md の §8 に、SSP 2.9.26 で測った答えとともに書いた。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+担当 spec は balloon-scroll-arrows（2026-10-31 に balloon-canon-residue から移し、読んで使うようにした）。
 """
 
 [entry."ukadoc:descript_balloon:arrow0.x_2c_5ea7_6a19_20_2a1:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
-縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-31 から読んで使う（balloon-scroll-arrows）。areka-parsers の balloon::marker::read_arrow_keys が、バルーンの descript.txt に面ごとの設定ファイル（balloons*s.txt・balloonk*s.txt・balloonp*def*s.txt）を重ねた表から読む（読む所に正典 URL を置いた）。`\\b[ID]` で面が替わればその面の設定ファイルを重ね直した値になる。
+値は横の位置で、0 以上は画像の左上から、マイナスは画像の右端・下端から、`--数値` はマイナスの座標そのもの（正典の脚注 *1）。縦書きでも座標の意味は入れ替えない。数として読めない値は書かれていないものとして扱い、鍵と値を添えた warn! をスコープにつき 1 回出す。
+役目: 古い側（横書きでは上・縦書きでは右）に押し出された行があるときに出す矢印の左上の位置。x と y の片方でも書かれていなければ、SSP 2.9.26 で測った置き場（arrow0 は右端から 20・上から 15、arrow1 は右端から 20・下から 15）に置く。
+シェルの balloon.*ブレスに書いた同じ鍵は、シェル内バルーン（箱）の矢印の位置として、箱の左上を原点に同じ決まりで読む。
+正典が黙る所と正典から離れた所の areka の決め（出る条件・送る量・話し終えた後の押下・当たり・座標なしの置き場・新しい文字・箱の絵のフォルダ・箱の上のホイール・名前の絵が無いときの戻り・縦書きの読み・面の切り替えでの位置）は doc/COMPAT_ARCHITECTURE.md の §8 に、SSP 2.9.26 で測った答えとともに書いた。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。2026-10-31 に読んで使うようにした。
 """
 
 [entry."ukadoc:descript_balloon:arrow0.y_2c_5ea7_6a19_20_2a1:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
-縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-31 から読んで使う（balloon-scroll-arrows）。areka-parsers の balloon::marker::read_arrow_keys が、バルーンの descript.txt に面ごとの設定ファイル（balloons*s.txt・balloonk*s.txt・balloonp*def*s.txt）を重ねた表から読む（読む所に正典 URL を置いた）。`\\b[ID]` で面が替わればその面の設定ファイルを重ね直した値になる。
+値は縦の位置で、0 以上は画像の左上から、マイナスは画像の右端・下端から、`--数値` はマイナスの座標そのもの（正典の脚注 *1）。縦書きでも座標の意味は入れ替えない。数として読めない値は書かれていないものとして扱い、鍵と値を添えた warn! をスコープにつき 1 回出す。
+役目: 古い側（横書きでは上・縦書きでは右）に押し出された行があるときに出す矢印の左上の位置。x と y の片方でも書かれていなければ、SSP 2.9.26 で測った置き場（arrow0 は右端から 20・上から 15、arrow1 は右端から 20・下から 15）に置く。
+シェルの balloon.*ブレスに書いた同じ鍵は、シェル内バルーン（箱）の矢印の位置として、箱の左上を原点に同じ決まりで読む。
+正典が黙る所と正典から離れた所の areka の決め（出る条件・送る量・話し終えた後の押下・当たり・座標なしの置き場・新しい文字・箱の絵のフォルダ・箱の上のホイール・名前の絵が無いときの戻り・縦書きの読み・面の切り替えでの位置）は doc/COMPAT_ARCHITECTURE.md の §8 に、SSP 2.9.26 で測った答えとともに書いた。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。2026-10-31 に読んで使うようにした。
 """
 
 [entry."ukadoc:descript_balloon:arrow1.x_2c_5ea7_6a19_20_2a1:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
-縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-31 から読んで使う（balloon-scroll-arrows）。areka-parsers の balloon::marker::read_arrow_keys が、バルーンの descript.txt に面ごとの設定ファイル（balloons*s.txt・balloonk*s.txt・balloonp*def*s.txt）を重ねた表から読む（読む所に正典 URL を置いた）。`\\b[ID]` で面が替わればその面の設定ファイルを重ね直した値になる。
+値は横の位置で、0 以上は画像の左上から、マイナスは画像の右端・下端から、`--数値` はマイナスの座標そのもの（正典の脚注 *1）。縦書きでも座標の意味は入れ替えない。数として読めない値は書かれていないものとして扱い、鍵と値を添えた warn! をスコープにつき 1 回出す。
+役目: 手動で戻している間に新しい側（横書きでは下・縦書きでは左）に見えていない行があるときに出す矢印の左上の位置。x と y の片方でも書かれていなければ、SSP 2.9.26 で測った置き場（arrow0 は右端から 20・上から 15、arrow1 は右端から 20・下から 15）に置く。
+シェルの balloon.*ブレスに書いた同じ鍵は、シェル内バルーン（箱）の矢印の位置として、箱の左上を原点に同じ決まりで読む。
+正典が黙る所と正典から離れた所の areka の決め（出る条件・送る量・話し終えた後の押下・当たり・座標なしの置き場・新しい文字・箱の絵のフォルダ・箱の上のホイール・名前の絵が無いときの戻り・縦書きの読み・面の切り替えでの位置）は doc/COMPAT_ARCHITECTURE.md の §8 に、SSP 2.9.26 で測った答えとともに書いた。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。2026-10-31 に読んで使うようにした。
 """
 
 [entry."ukadoc:descript_balloon:arrow1.y_2c_5ea7_6a19_20_2a1:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "balloon-scroll-arrows"
 priority = "A13"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
-縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+壊れ方: 見た目の差。記録: warn!・debug!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-31 から読んで使う（balloon-scroll-arrows）。areka-parsers の balloon::marker::read_arrow_keys が、バルーンの descript.txt に面ごとの設定ファイル（balloons*s.txt・balloonk*s.txt・balloonp*def*s.txt）を重ねた表から読む（読む所に正典 URL を置いた）。`\\b[ID]` で面が替わればその面の設定ファイルを重ね直した値になる。
+値は縦の位置で、0 以上は画像の左上から、マイナスは画像の右端・下端から、`--数値` はマイナスの座標そのもの（正典の脚注 *1）。縦書きでも座標の意味は入れ替えない。数として読めない値は書かれていないものとして扱い、鍵と値を添えた warn! をスコープにつき 1 回出す。
+役目: 手動で戻している間に新しい側（横書きでは下・縦書きでは左）に見えていない行があるときに出す矢印の左上の位置。x と y の片方でも書かれていなければ、SSP 2.9.26 で測った置き場（arrow0 は右端から 20・上から 15、arrow1 は右端から 20・下から 15）に置く。
+シェルの balloon.*ブレスに書いた同じ鍵は、シェル内バルーン（箱）の矢印の位置として、箱の左上を原点に同じ決まりで読む。
+正典が黙る所と正典から離れた所の areka の決め（出る条件・送る量・話し終えた後の押下・当たり・座標なしの置き場・新しい文字・箱の絵のフォルダ・箱の上のホイール・名前の絵が無いときの戻り・縦書きの読み・面の切り替えでの位置）は doc/COMPAT_ARCHITECTURE.md の §8 に、SSP 2.9.26 で測った答えとともに書いた。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。
 束: 送り読みの矢印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 6——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。
+束の名前と順位は、読む経路が無かった当時の仕分けの綴りをそのまま残している（同じ束のほかの項目と揃えるため。優先度は変えていない）。
+担当 spec は balloon-scroll-arrows。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は balloon-canon-residue）。2026-10-31 に読んで使うようにした。
 """
 
 [entry."ukadoc:descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1"]

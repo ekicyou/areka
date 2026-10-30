@@ -77,6 +77,10 @@ pub(super) fn read_arrow_keys(merged: &BTreeMap<String, String>) -> ArrowKeys {
         }
         parsed
     };
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#arrow0.x_2c_5ea7_6a19_20_2a1:1
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#arrow0.y_2c_5ea7_6a19_20_2a1:1
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#arrow1.x_2c_5ea7_6a19_20_2a1:1
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#arrow1.y_2c_5ea7_6a19_20_2a1:1
     let arrow0 = MarkerPoint {
         x: coord("arrow0.x"),
         y: coord("arrow0.y"),
@@ -88,6 +92,7 @@ pub(super) fn read_arrow_keys(merged: &BTreeMap<String, String>) -> ArrowKeys {
     ArrowKeys {
         arrow0,
         arrow1,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#arrow.filename_2c_30d5_30a1_30a4_30eb_540d:1
         filename: merged.get("arrow.filename").cloned(),
         issues,
     }
