@@ -109,8 +109,6 @@ pub struct Emo2Wiring {
     /// 受信端は起動の結線が [`Emo2Wiring::attach_window_state_rx`] で後から渡す。結線状態と
     /// 一緒に作り直される経路（ゴーストの切り替え・読み直し・終了）で消え、残る経路
     /// （SHIORI だけの読み直し・シェルとバルーンの切り替え）では保たれる。
-    // 5.1 で外す（フレームの相から読むまで本番でもテストでも読まない）。
-    #[allow(dead_code)]
     pub(super) window_state: StayOnTopState,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///

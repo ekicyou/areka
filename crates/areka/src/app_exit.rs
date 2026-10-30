@@ -106,6 +106,10 @@ pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
 /// 受け口 [`AppExit`] が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）は
 /// `error!` を残して戻る——窓は閉じたが終了は指示できない。
 pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
+    crate::emo2_boot::frame::log_stay_on_top_discard(
+        world,
+        crate::emo2_boot::frame::DiscardReason::Exit,
+    );
     let closed = despawn_app_windows(world);
     if world.contains_resource::<FirstExit>() {
         tracing::debug!(

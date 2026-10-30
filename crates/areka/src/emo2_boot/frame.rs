@@ -53,6 +53,7 @@ mod switch;
 mod wiring;
 // 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
 mod window_state;
+pub(crate) use self::window_state::{DiscardReason, log_stay_on_top_discard};
 mod work_area_sync;
 mod zorder_descript;
 mod zorder_drain;

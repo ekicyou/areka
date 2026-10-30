@@ -13,6 +13,7 @@ use areka_ghost::BasewareRoot;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 
+use super::super::Emo2Wiring;
 use super::super::test_support::spawn_resnap_windows;
 use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
@@ -379,4 +380,52 @@ fn log_ghost_falls_back_to_dash_and_raise_reports_normal_band() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].field_str("ghost"), Some("-"));
     assert_eq!(events[0].field_str("band"), Some("normal"));
+}
+
+// ---------------------------------------------------------------------------
+// オンのまま降ろした記録（task 3.2・要件 4.1／4.2／6.4）
+// ---------------------------------------------------------------------------
+
+/// 結線（状態 `on`）と起動の文脈を持つ World。
+fn world_with_wiring(on: bool) -> World {
+    let mut world = World::new();
+    world.insert_resource(boot_context());
+    let mut wiring = super::super::test_support::headless_wiring_with(
+        channel().1,
+        super::super::test_support::zero_clock(),
+    );
+    wiring.window_state.on = on;
+    world.insert_non_send(wiring);
+    world
+}
+
+/// オンなら理由ごとに 1 行（`info!`・ゴースト・理由）を残し、状態は動かさない。
+#[test]
+fn discard_log_reports_reason_while_on() {
+    for (reason, text) in [
+        (DiscardReason::Exit, "exit"),
+        (DiscardReason::Switch, "switch"),
+        (DiscardReason::Reload, "reload"),
+    ] {
+        let world = world_with_wiring(true);
+        let ((), events) = capture(|| log_stay_on_top_discard(&world, reason));
+        let events = window_state_events(&events);
+        assert_eq!(events.len(), 1, "{reason:?}");
+        assert_eq!(events[0].level, tracing::Level::INFO);
+        assert_eq!(events[0].field_str("ghost"), Some("pasta"));
+        assert_eq!(events[0].field_str("reason"), Some(text));
+        assert!(world.get_non_send::<Emo2Wiring>().unwrap().window_state.on);
+    }
+}
+
+/// オフのとき・結線が無いときは何も書かない。
+#[test]
+fn discard_log_is_silent_while_off_or_unwired() {
+    let off = world_with_wiring(false);
+    let ((), events) = capture(|| log_stay_on_top_discard(&off, DiscardReason::Exit));
+    assert!(window_state_events(&events).is_empty());
+
+    let unwired = World::new();
+    let ((), events) = capture(|| log_stay_on_top_discard(&unwired, DiscardReason::Switch));
+    assert!(window_state_events(&events).is_empty());
 }

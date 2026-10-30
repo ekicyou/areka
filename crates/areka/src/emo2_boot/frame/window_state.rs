@@ -164,6 +164,38 @@ fn push_band_op(world: &mut World, op: BandOp, targets: &[Entity]) {
         .push(op, targets.to_vec());
 }
 
+/// オンのまま降ろした理由（design「DiscardLog」）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscardReason {
+    /// アプリを終える
+    Exit,
+    /// ゴーストの切り替え（既定へ戻す道を含む）
+    Switch,
+    /// ゴーストの読み直し
+    Reload,
+}
+
+/// オンのまま降ろすときだけ `info!` で残す（オフ・結線が無いなら何も書かない・状態は動かさない）。
+///
+/// 状態そのものは `Emo2Wiring` と一緒に消える（要件 4.1・4.2・6.4）。
+pub(crate) fn log_stay_on_top_discard(world: &World, reason: DiscardReason) {
+    let on = world
+        .get_non_send::<super::Emo2Wiring>()
+        .is_some_and(|wiring| wiring.window_state.on);
+    if !on {
+        return;
+    }
+    let reason = match reason {
+        DiscardReason::Exit => "exit",
+        DiscardReason::Switch => "switch",
+        DiscardReason::Reload => "reload",
+    };
+    info!(
+        ghost = ghost_name(world),
+        reason, "[window_state] 常に手前のまま降ろした（状態は捨てる）"
+    );
+}
+
 /// 記録のゴーストの名（今のゴーストのフォルダの名・無ければ `-`）。
 fn ghost_name(world: &World) -> String {
     world
