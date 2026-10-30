@@ -108,7 +108,6 @@ impl EmoWorld {
     }
 
     /// 面 `surface` の着せ替え animation `animation` の描く手順（`bind` 種でなければ空）。
-    #[allow(dead_code)] // shortcut: 合成（task 2.2）が使うまで lib では読まれない。2.2 で外す。
     pub(crate) fn bind_steps(
         &self,
         surface: u32,

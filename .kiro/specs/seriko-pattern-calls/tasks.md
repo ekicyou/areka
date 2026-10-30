@@ -25,7 +25,7 @@
   - _Depends: 1.2_
   - _Requirements: 5.5, 6.5, 6.7, 6.8_
 
-- [ ] 2.2 合成が着せ替えの手順を積み、insert を展開する
+- [x] 2.2 合成が着せ替えの手順を積み、insert を展開する
   - コマの無い有効な着せ替えの静的な寄与を、合成のたびの語の引き直しから、手順を積む形に置き換える
   - `insert,B` の位置に、B が有効なら B の寄与（今のコマがあればそのコマ、無ければ B の手順）を B 自身の座標で積む。B が無効なら何も積まない。差し込まれた B は本来の位置で積まない。差し込む A が無効で展開されなければ B は本来の位置に積む
   - 入れ子は同じ規則で再帰し、1 つの段の中で各着せ替えは 1 度だけ積む（巡回は打ち切る・2 つの差し込み手は描く順で先の方だけ）
@@ -162,3 +162,6 @@
 - 1.1: `cargo clippy --no-deps` で `areka-seriko` の `actor.rs:89`・`looper.rs:426`、依存込みで `dola` にもとからの指摘がある（この spec の差分の外）。
 - 1.2: 8 語の見分けは `areka_emo_compose::pattern_word`（`pattern_word`・`call_targets`）。`start`/`stop`/`insert` の括弧つきの番号 `(1)` は読めない相手。`clippy --all-targets --no-deps` は emo-compose のテストのファイル（触っていない）に `chunks_exact` の指摘が 5 件もとからある（`tools/test-all.ps1` は clippy を回さない）。
 - 2.1: 描く語の判定は design の `quiet_method` でなく既存の `method::is_implemented_name`（記録なし・Overlay だけ真）。`BindStep`・`EmoWorld::bind_steps` の `#[allow(dead_code)]` は 2.2 で使い始めたら外す。自分自身への `insert` は手順に残り、巡回の打ち切りは 2.2 の展開側。
+- 2.2: 入れ子の側の合流の門（nesting.rs の ③・`SurfaceParts.bind_random_ids`）は 2.2 で前倒し済み。2.3 に残るのは入れ子の辺の相手を BindSteps の「描く」コマから作ることと外形（plan_extent.rs）の数え。
+- 2.2: 期待を直したテスト（根拠）: plan_ops_tests::coexisting_pattern0_and_pattern1_composes_only_index0（M6）・golden_tests_blink_static_tests::emo2_blink_binds_are_statically_inactive（M6・1403 の pattern2 が増える）・plan_nesting_tests::part_frames_go_through_the_same_bind_and_method_rules（M5）・plan_ops_tests::non_overlay_pattern0_logs_debug_and_is_not_drawn（5.5）・plan_issues_tests::composing_repeatedly_adds_no_warn（5.5）・nesting_visible_tests::inactive_bind_frames_are_not_counted → inactive_bind_random_frames_are_not_counted（M5）・nesting_visible_tests::fixture_table_lists_children_and_bind_targets／bind_targets_keep_only_drawable_pattern0（M5）・nesting_visible_tests::inactive_bind_frames_change_neither_ops_nor_parts（M5）。
+- 2.2: 「有効な A に今のコマがある間は A の手順を展開せず B は本来の位置」は SSP で測っていない読み（設計 453 行と 424 行の組み合わせ）。7 の互換の文書 §8 に「展開されない（無効・コマあり）とき」と書く。合成のたびの debug「有効な着せ替えに描く手順が無い」は旧来の「pattern0 が無い」と同じ頻度。

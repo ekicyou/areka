@@ -924,8 +924,9 @@ fn pattern0_less_bind_contributes_no_ops() {
     assert!(ops.is_empty(), "静的 element も無いので命令ゼロ");
 }
 
-/// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → **index==0（pattern0）のみ**合成し、
-/// index==1 フレームは静的合成に現れない（index==0 厳密選択の固定）。
+/// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` は **index==0（pattern0）のみ**
+/// 合成し、index==1 フレームは静的合成に現れない（index==0 厳密選択の固定）。純 `bind` は全部のコマを
+/// 番号の順に重ねる（seriko-pattern-calls 6.8・SSP の測り M6 で期待を直した）。
 #[test]
 fn coexisting_pattern0_and_pattern1_composes_only_index0() {
     let base = Path::new("shell/master");
@@ -933,9 +934,9 @@ fn coexisting_pattern0_and_pattern1_composes_only_index0() {
     let map = id_to_path(&atlas, &["open_eye.png", "closed_eye.png"]);
 
     // bind id=1: pattern0(index0)→open(surface 1100)、pattern1(index1)→closed(surface 1200)。
-    let anim = Animation {
+    let anim = |interval| Animation {
         id: 1,
-        interval: Interval::Bind,
+        interval,
         interval_written: true,
         patterns: vec![
             Pattern {
@@ -958,27 +959,35 @@ fn coexisting_pattern0_and_pattern1_composes_only_index0() {
             },
         ],
     };
-    let host = surface_with_anims(1000, Vec::new(), vec![anim]);
-    let open = surface(1100, vec![elem(0, "open_eye.png", 0, 0)]);
-    let closed = surface(1200, vec![elem(0, "closed_eye.png", 0, 0)]);
-    let shell = shell_of(vec![host, open, closed]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let paths = |interval| {
+        let host = surface_with_anims(1000, Vec::new(), vec![anim(interval)]);
+        let open = surface(1100, vec![elem(0, "open_eye.png", 0, 0)]);
+        let closed = surface(1200, vec![elem(0, "closed_eye.png", 0, 0)]);
+        let shell = shell_of(vec![host, open, closed]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
 
-    let binds = BindSet::from_ids([1]);
-    let mut ops = Vec::new();
-    derive_ops(
-        &mut ops,
-        &mut Vec::new(),
-        &world,
-        &atlas,
-        1000,
-        &binds,
-        &PatternState::default(),
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        derive_ops(
+            &mut ops,
+            &mut Vec::new(),
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        );
+        ops_to_paths(&ops, &map)
+    };
+
+    // `bind+random`: index==0（open_eye）のみ合成。index==1（closed_eye）は静的合成に現れない。
+    assert_eq!(paths(Interval::BindRandom { k: 4 }), vec!["open_eye.png"]);
+    // 純 `bind`: 全部のコマを番号の順に（M6）。
+    assert_eq!(
+        paths(Interval::Bind),
+        vec!["open_eye.png", "closed_eye.png"]
     );
-
-    // index==0（open_eye）のみ合成。index==1（closed_eye）は静的合成に現れない。
-    assert_eq!(ops_to_paths(&ops, &map), vec!["open_eye.png"]);
 }
 
 // ── task 7.2: PatternState 合流と method ゲート（層(ii) の transient コマ合流・要件 4.2/4.6/5.3/8.4）─
@@ -1122,17 +1131,15 @@ fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
         vec!["base.png"],
         "非 Overlay pattern0 は不描画（残るは base）"
     );
+    // 描かない語は読み込みのときに着せ替えの手順から外れ（記録は `shape_issues` が 1 度だけ）、
+    // 合成のたびには語を引き直さない（seriko-pattern-calls 5.5 で期待を直した）。
     assert!(
-        logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
-        "非 Overlay pattern0 は DEBUG（組むたびの知らせ）: {logs}"
+        !logs.contains("level=WARN") && !logs.contains("method=Replace"),
+        "合成のたびに描かない語を知らせない: {logs}"
     );
     assert!(
-        logs.contains("method=Replace"),
-        "method 名（判別子）を載せる: {logs}"
-    );
-    assert!(
-        logs.contains("animation_id=1"),
-        "対象 animation id を載せる: {logs}"
+        logs.contains("level=DEBUG") && logs.contains("animation_id=1"),
+        "描く手順が無い着せ替えは DEBUG（対象 animation id つき）: {logs}"
     );
 }
 

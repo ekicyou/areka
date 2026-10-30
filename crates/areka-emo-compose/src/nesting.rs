@@ -80,7 +80,7 @@ pub fn element_kind(path: &ElementPath) -> ElementKind {
 
 /// サーフェスごとの静的な参照（要件 5.11・5.13）。面の表から 1 度作る不変の値（Send・seriko が写しを持つ）。
 ///
-/// `children`・`bind_targets`・`bind_ids`・`films`・`always_rest` のどれかが空でない番号だけを載せる
+/// `children`・`bind_targets`・`bind_random_ids`・`films`・`always_rest` のどれかが空でない番号だけを載せる
 /// （載せる条件はこの 1 か所）。入れ子も着せ替えの種類の animation も動く絵の子も `always` の経過 0 の
 /// 先も無いシェルでは空。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -96,8 +96,9 @@ pub struct SurfaceParts {
     /// 着せ替えの animation の pattern0 が指すサーフェス（animation の番号, 番号）。
     /// index が 0・番号が 0 以上・描画メソッドが動くものだけ。animation の番号の昇順。
     pub bind_targets: Vec<(u32, u32)>,
-    /// 着せ替えの種類（`bind`・`bind+random`）の animation の番号（昇順・重複なし）。
-    pub bind_ids: Vec<u32>,
+    /// `bind+random` の animation の番号（昇順・重複なし）。③ の合流の門が引く（無効ならコマを数えない）。
+    /// 純 `bind` のコマは呼ばれて始まったものだけなので門を通さない（seriko-pattern-calls 5.6・M5）。
+    pub bind_random_ids: Vec<u32>,
     /// element定義で置いた動く絵の子（昇順・重複なし）。
     pub films: Vec<FilmId>,
     /// `always` の animation の経過 0 の pattern が指すサーフェス（animation の番号, 番号）。
@@ -122,14 +123,16 @@ impl NestTable {
                     _ => None,
                 })
                 .collect();
-            let mut bind_ids: Vec<u32> = Vec::new();
+            let mut bind_random_ids: Vec<u32> = Vec::new();
             let mut bind_targets: Vec<(u32, u32)> = Vec::new();
             for anim in master
                 .animations
                 .iter()
                 .filter(|a| is_bind_interval(&a.interval))
             {
-                bind_ids.push(anim.id);
+                if matches!(anim.interval, Interval::BindRandom { .. }) {
+                    bind_random_ids.push(anim.id);
+                }
                 // flatten_surface と同じ辺: index==0・番号が 0 以上・描画メソッドが動く。
                 let target = anim
                     .patterns
@@ -142,8 +145,8 @@ impl NestTable {
                 }
             }
             // 同じ番号の animation は畳み込みで 1 つ（後勝ち）。並びだけを番号の昇順へ揃える
-            // （bind_ids は visible_parts が二分探索で引く）。
-            bind_ids.sort_unstable();
+            // （bind_random_ids は visible_parts が二分探索で引く）。
+            bind_random_ids.sort_unstable();
             bind_targets.sort_unstable();
             let mut films: Vec<FilmId> = master
                 .elements
@@ -169,7 +172,7 @@ impl NestTable {
             let row = SurfaceParts {
                 children,
                 bind_targets,
-                bind_ids,
+                bind_random_ids,
                 films,
                 always_rest,
             };
@@ -249,8 +252,8 @@ impl NestTable {
                 }
             }
         }
-        // ③ コマ。着せ替えの種類なら有効なものだけ。
-        let is_bind = |id: u32| parts.is_some_and(|p| p.bind_ids.binary_search(&id).is_ok());
+        // ③ コマ。`bind+random` なら有効なものだけ（純 `bind` のコマは無効でも数える・M5）。
+        let is_bind = |id: u32| parts.is_some_and(|p| p.bind_random_ids.binary_search(&id).is_ok());
         let top_frames = pattern.iter().filter(|_| is_top);
         let part_frames = pattern.part(surface).filter(|_| !is_top);
         for (id, frame) in top_frames.chain(part_frames) {

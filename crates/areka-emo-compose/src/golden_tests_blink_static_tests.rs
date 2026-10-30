@@ -98,10 +98,32 @@ fn emo2_blink_binds_are_statically_inactive() {
     )
     .expect("まばたき込みでも Ok");
 
-    // まばたき bind（1400/1403・pattern0 なし）は静的合成へ寄与しない＝BlitOp 列が完全一致。
+    // [1302,1403]（純 `bind` の 1403 だけを足す）。
+    let mut ops_pure = Vec::new();
+    let mut vis_pure = Vec::new();
+    build_plan(
+        &mut ops_pure,
+        &mut vis_pure,
+        &world,
+        &atlas,
+        1000,
+        &BindSet::from_ids([1302, 1403]),
+        &PatternState::default(),
+    )
+    .expect("純 bind 込みでも Ok");
+
+    // `bind+random` のまばたき 1400（pattern0 なし）は静的合成へ寄与しない＝BlitOp 列が完全一致。
     assert_eq!(
-        ops_base, ops_blink,
-        "まばたき bind を足しても BlitOp 列は不変（pattern0 なしは静的不活性・要件 9.1/9.5）",
+        ops_pure, ops_blink,
+        "まばたき bind+random を足しても BlitOp 列は不変（pattern0 なしは静的不活性・要件 9.1/9.5）",
+    );
+    // 純 `bind` の 1403 は有効なら全部のコマ（pattern2＝1414 の null）を重ねる（seriko-pattern-calls
+    // 6.8・SSP の測り M6 で期待を直した）。閉じ目（1412）は `bind+random` 側なので目は覆われない。
+    assert_eq!(ops_pure[..1], ops_base[..], "土台の 1302 はそのまま");
+    assert_eq!(
+        ops_pure.len(),
+        2,
+        "1403 の pattern2（1414）が 1 命令足される（M6）"
     );
     // 非空虚: 目/通常（1302）は pattern0 ありゆえ現に 1 命令を生む（空同士の空虚一致でない）。
     assert_eq!(
