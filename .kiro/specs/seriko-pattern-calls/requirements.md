@@ -145,20 +145,20 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 7. The areka shall `insert` の行のウェイト・X座標・Y座標を使わず、差し込んだ B のコマを B 自身のコマに書かれた座標で描く（正典は黙る・areka の読み）。
 8. The areka shall 有効な着せ替えのアニメーションの全部のコマを pattern の番号の順に重ねて描き、どのコマに書かれた `insert` もその位置に差し込む（M6・SSP の実測。今の「着せ替えは pattern0 だけ描く」を改める）。
 
-### Requirement 7: ベースレイヤの表示位置をずらす（move）
+### Requirement 7: キャラクターの表示位置をずらす（move）
 
 **Objective:** 利用者として、シェルが `move` で絵をずらす作りのとき、絵がそのとおりにずれてほしい。そうすれば、「．さくら」の面 12・22 の、絵が下へ落ちていく動きが SSP と同じに見える。
 
 #### Acceptance Criteria
 
-1. When 再生中のアニメーションが `move` のコマの番になったとき, the areka shall そのコマのウェイトの後に、ベースレイヤの表示位置を元の表示位置から X座標・Y座標の分（x は右が正・y は下が正・単位はほかのコマの X・Y 座標と同じ）ずらす。
+1. When 再生中のアニメーションが `move` のコマの番になったとき, the areka shall そのコマのウェイトの後に、キャラクターの表示位置（土台・element・ほかのアニメーションの層・当たり判定のすべて）を、元の表示位置から X座標・Y座標の分ずらす。x は右が正・y は下が正で、単位と表示の倍率のかけ方はほかのコマの X・Y 座標と同じ（M4・2026-10-30 議題 1・2。SSP は倍率をかけない＝§8 に違いを記す）。
 2. When 同じアニメーションの次の `move` のコマの番になったとき, the areka shall 元の表示位置からの新しいずれを当て、前のずれに足さない。
 3. The areka shall `move` によるずらしを瞬間的に行い、コマとコマの間を補って動かさない。
 4. The areka shall `move` のコマのサーフェス番号の欄を無視する。
-5. The areka shall `move` でずらしても、キャラクターの窓の位置と大きさを変えず、窓の外へ出た部分を見せない（例: 「．さくら」の `move,0,10,0,9999` で絵が窓の下へ出て見えなくなる）。
+5. The areka shall `move` のずれを、キャラクターの窓の大きさを変えずに窓ごとの表示位置のずれとして表し、絵を窓の端で欠けさせない（M4・2026-10-30 議題 1）。
 6. The areka shall `move` のずれを、そのアニメーションの終わり・`stop`・サーフェス番号 `-1` では戻さず、面を出したとき（同じ面の出し直しを含む）にだけ元へ戻す（M3・SSP の実測）。
 7. The areka shall `base` のコマで差し替えた土台も `move` でずらし、後の `move` のコマで `base` のコマを消さない（M7・SSP の実測）。
-8. The areka shall `move` でずれる範囲・ずれの単位と表示の倍率・デスクトップの下の端に揃える置き方とのかね合いを、要件 8 の M4 の実測（調べの記録 §3）と 2026-10-30 の議論の決めどおりにする。
+8. The areka shall `move` でずらした後のキャラクターの窓の位置にも、今ある置き方の決まり（デスクトップの下の端に揃える置き方の揃え直し・作業領域の中に置く決まり）をそのまま当てる。下の端に揃える置き方では揃えが勝ち、下へのずれは見えない（M4 の付記 2・SSP と同じ見え方・2026-10-30 議題 3。例: 「．さくら」の `move,0,10,0,9999` も作業領域の中へ戻される）。
 
 ### Requirement 8: SSP で測って決める点
 
@@ -187,7 +187,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 1. The areka shall 7 語と `move` の働き（要件 2〜7・11）を、時刻と選びを固定した決定論のテストで確かめる。
 2. The areka shall 候補の並びの読み（`( )`・`[ ]`・`,`・`.` の組み合わせと、欠けた欄）と、要件 5 の境目（相手が無い・巡回・使えない所）を決定論のテストで確かめる。
 3. The areka shall 「．さくら」のシェル `master` を読み込んで、7 語と `move` に由来する警告の記録が 0 件であることを決定論のテストで確かめる。
-4. When 「．さくら」を実機で 1 回動かしたとき（根・検体・一時フォルダはワークツリーの `target\` の下だけ）, the 開発者 shall 7 語と `move` に由来する WARN が 0 件であること、`surface0` などの `alternativestart` で animation0 か 1 が動くこと、`surface12`・`surface22` で絵が `move` のとおりにずれることを、記録と画面の写し（書き出しの写しには `move` が写らない＝6）で確かめる。
+4. When 「．さくら」を実機で 1 回動かしたとき（根・検体・一時フォルダはワークツリーの `target\` の下だけ）, the 開発者 shall 7 語と `move` に由来する WARN が 0 件であること、`surface0` などの `alternativestart` で animation0 か 1 が動くこと、`surface12`・`surface22` で `move` のとおりに窓がずれること（デスクトップの下の端に揃えない置き方で）と、下の端に揃える置き方ではずれが見えないことを、記録と窓の位置（書き出しの写しには `move` が写らない＝6）で確かめる。
 5. The areka shall 既存の SERIKO の再生と合成のテストを、この spec の変更の後も通す。
 6. The areka shall 面の書き出し（オフラインの書き出しと MCP の `dump_surface`）に `move` のずれを写さない（M8・SSP の実測）。
 
@@ -198,7 +198,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 #### Acceptance Criteria
 
 1. The 開発者 shall 網羅台帳（`doc/ukadoc-coverage/ledger/assets.toml`）の `start,ID`・`stop,ID`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert,ID`・`move` の 8 行と、interval の `never` の行（要件 11 の呼ばれる相手として）を、実装した状態と担当の spec に更新する。
-2. The 開発者 shall 正典が書いていない点の areka の読み（`alternativestart` の等しい確からしさ・巡回の扱い・`insert` の行の座標を使わないこと・使えない所と未定義の所を何もせず記録すること・要件 8 の測りの結果）を、`doc/COMPAT_ARCHITECTURE.md` の §8 に残す。
+2. The 開発者 shall 正典が書いていない点の areka の読み（`alternativestart` の等しい確からしさ・巡回の扱い・`insert` の行の座標を使わないこと・使えない所と未定義の所を何もせず記録すること・要件 8 の測りの結果・`move` に表示の倍率をかける SSP との違い）を、`doc/COMPAT_ARCHITECTURE.md` の §8 に残す。
 
 ### Requirement 11: 呼ばれるだけのアニメーション（interval の never）
 
