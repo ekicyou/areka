@@ -436,6 +436,7 @@ areka 本体の MIT ライセンスは本体だけのもので、同梱の作品
 　作者: ekicyou
 　条件: MIT ライセンス（LICENSE-MIT）。同梱のゴースト・シェル・バルーンには及びません。
 　本体が使っているライブラリの著作権表示とライセンスは THIRD-PARTY-NOTICES.md にあります。
+　手の形のカーソル 2 つの絵（system:hand・system:grip に出す絵）は、Ideogram で作りました（fal 経由で生成・Powered by Ideogram）。本体の一部として MIT ライセンスで配ります。
 
 ◆ ゴースト「えも？？」（ghost\emo2）の辞書・スクリプト
 　作者: えちょ（ekicyou）

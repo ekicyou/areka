@@ -1,0 +1,26 @@
+{
+  "feature_name": "shell-mouse-cursor",
+  "created_at": "2026-10-29T11:34:24Z",
+  "updated_at": "2026-10-30T02:45:14Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-30T02:45:14Z"
+    }
+  },
+  "ready_for_implementation": false
+}

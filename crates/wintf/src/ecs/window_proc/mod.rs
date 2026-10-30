@@ -14,7 +14,7 @@ mod window_pos;
 use crate::executor::util::WindowMessage;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::*;
-use windows::Win32::UI::Controls::WM_MOUSELEAVE;
+use windows::Win32::UI::Controls::{WM_MOUSEHOVER, WM_MOUSELEAVE};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use std::cell::RefCell;
@@ -59,6 +59,7 @@ pub(crate) fn dispatch_window_message(
         WM_NCHITTEST => mouse_move::WM_NCHITTEST(world, entity, hwnd, wparam, lparam),
         WM_MOUSEMOVE => mouse_move::WM_MOUSEMOVE(world, entity, hwnd, wparam, lparam),
         WM_MOUSELEAVE => mouse_move::WM_MOUSELEAVE(world, entity, hwnd, wparam, lparam),
+        WM_MOUSEHOVER => crate::ecs::cursor::answer::on_mouse_hover(world, entity),
         WM_LBUTTONDOWN => mouse_click::WM_LBUTTONDOWN(world, entity, hwnd, wparam, lparam),
         WM_LBUTTONUP => mouse_click::WM_LBUTTONUP(world, entity, hwnd, wparam, lparam),
         WM_RBUTTONDOWN => mouse_click::WM_RBUTTONDOWN(world, entity, hwnd, wparam, lparam),
