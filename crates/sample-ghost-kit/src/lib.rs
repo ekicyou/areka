@@ -196,6 +196,13 @@ pub const SAMPLES: &[Sample] = &[
         balloons: &["bottle"],
         source: SampleSource::Vendored,
     },
+    // areka の既定バルーン（自作）。配布物に必ず入る製品の資産なのでリポジトリの中に持つ。
+    Sample {
+        name: "areka-balloon",
+        kind: SampleKind::Balloon,
+        balloons: &[],
+        source: SampleSource::Vendored,
+    },
 ];
 
 /// 取得した検体。**この値を束縛している間だけ**パスを借りられる。

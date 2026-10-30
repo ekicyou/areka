@@ -3,7 +3,7 @@
 //! 確かめること: ゴースト 6 分岐（argv／記憶／唯一／既定／無作為／0 体）・バルーン 7 分岐
 //! （argv／記憶／同梱／唯一／既定／無作為／0）と、記憶の指す先が無い 2 通り・同梱の指す先が
 //! 無い 1 通り。無作為は固定の添字（`|n| n - 1`）を注入し、選ばれたものが列挙に含まれることと
-//! 経路が `Random` であることを見る。既定の分岐は `listed` に `"emo2"`／`"StayseeBalloon"` を
+//! 経路が `Random` であることを見る。既定の分岐は `listed` に `"emo2"`／[`DEFAULT_BALLOON_FOLDER`] を
 //! 並べるだけ（検体の登記に依存しない）。プロセス・fs・乱数には触れない。
 
 use std::path::{Path, PathBuf};
@@ -255,7 +255,7 @@ fn balloon_argv_wins_without_looking_at_anything_else() {
 #[test]
 fn balloon_memory_wins_over_companion() {
     let root = root();
-    let listed = names(&["mine", "bundled", "StayseeBalloon"]);
+    let listed = names(&["mine", "bundled", DEFAULT_BALLOON_FOLDER]);
     let (got, events) = balloon(&root, None, Some("mine"), Some("bundled"), &listed, no_pick);
     assert_eq!(got, Ok(balloon_at(&root, BalloonRoute::Memory, "mine")));
     assert!(events.is_empty(), "{events:?}");
@@ -265,7 +265,7 @@ fn balloon_memory_wins_over_companion() {
 #[test]
 fn balloon_companion_wins_over_default() {
     let root = root();
-    let listed = names(&["bundled", "StayseeBalloon"]);
+    let listed = names(&["bundled", DEFAULT_BALLOON_FOLDER]);
     let (got, _) = balloon(&root, None, None, Some("bundled"), &listed, no_pick);
     assert_eq!(
         got,
@@ -281,34 +281,53 @@ fn balloon_only_one_listed() {
     assert_eq!(got, Ok(balloon_at(&root, BalloonRoute::Only, "solo")));
 }
 
-/// 唯一は既定より先: 列挙が `StayseeBalloon` 1 つだけなら経路は `Only`（要件 5.4・5.5）。
+/// 唯一は既定より先: 列挙が既定の名前 1 つだけなら経路は `Only`（要件 5.4・5.5）。
 #[test]
-fn balloon_only_staysee_is_only_not_default() {
+fn balloon_only_default_name_is_only_not_default() {
     let root = root();
     let (got, _) = balloon(
         &root,
         None,
         None,
         None,
-        &names(&["StayseeBalloon"]),
+        &names(&[DEFAULT_BALLOON_FOLDER]),
         no_pick,
     );
     assert_eq!(
         got,
-        Ok(balloon_at(&root, BalloonRoute::Only, "StayseeBalloon"))
+        Ok(balloon_at(
+            &root,
+            BalloonRoute::Only,
+            DEFAULT_BALLOON_FOLDER
+        ))
     );
 }
 
-/// 既定: 2 つ以上で `StayseeBalloon` が列挙される（要件 5.5）。
+/// 既定: 2 つ以上で `areka-balloon` が列挙される（要件 5.5）。既定の名前を文字で比べるのは
+/// このテストだけ（ほかは定数を参照するので、定数の値を誤ったときに赤になるのはここ）。
 #[test]
-fn balloon_default_staysee_when_listed_among_many() {
+fn balloon_default_areka_balloon_when_listed_among_many() {
     let root = root();
-    let listed = names(&["a", "StayseeBalloon", "z"]);
+    let listed = names(&["a", "areka-balloon", "z"]);
     let (got, _) = balloon(&root, None, None, None, &listed, no_pick);
     assert_eq!(
         got,
-        Ok(balloon_at(&root, BalloonRoute::Default, "StayseeBalloon"))
+        Ok(balloon_at(&root, BalloonRoute::Default, "areka-balloon"))
     );
+}
+
+/// 既定を替えた後も、記憶が `StayseeBalloon`（2026-10 までの既定）の利用者は記憶の段で
+/// `StayseeBalloon` に決まり、新しい既定へ移らない（記録 0 件）（default-balloon-selfmade 要件 11.6）。
+#[test]
+fn balloon_memory_of_old_default_wins_over_new_default() {
+    let root = root();
+    let listed = names(&[DEFAULT_BALLOON_FOLDER, "StayseeBalloon"]);
+    let (got, events) = balloon(&root, None, Some("StayseeBalloon"), None, &listed, no_pick);
+    assert_eq!(
+        got,
+        Ok(balloon_at(&root, BalloonRoute::Memory, "StayseeBalloon"))
+    );
+    assert!(events.is_empty(), "{events:?}");
 }
 
 /// 無作為: 2 つ以上で既定が無い。注入した添字の候補が選ばれ、info を 1 件残す（要件 5.6）。
@@ -357,11 +376,15 @@ fn balloon_memory_not_listed_warns_then_companion() {
 #[test]
 fn balloon_companion_not_listed_warns_then_default() {
     let root = root();
-    let listed = names(&["a", "StayseeBalloon"]);
+    let listed = names(&["a", DEFAULT_BALLOON_FOLDER]);
     let (got, events) = balloon(&root, None, None, Some("gone"), &listed, no_pick);
     assert_eq!(
         got,
-        Ok(balloon_at(&root, BalloonRoute::Default, "StayseeBalloon"))
+        Ok(balloon_at(
+            &root,
+            BalloonRoute::Default,
+            DEFAULT_BALLOON_FOLDER
+        ))
     );
     assert_one_event(&events, "companion_balloon_not_found", tracing::Level::WARN);
     assert_eq!(count_event(&events, "last_balloon_not_found"), 0);
