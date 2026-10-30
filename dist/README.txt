@@ -294,7 +294,7 @@ zip を展開して使っているとき:
 
 ・areka の記憶: %LOCALAPPDATA%\areka\profile\areka\（置き場の並びもここに覚えます）
 ・ゴーストの記憶とシェルの記憶: そのゴーストのフォルダの中で、場所の形は上と同じです。同梱のゴーストは利用者ごとの置き場へ写して使うので、記憶は写しの中（たとえば えも？？ なら %LOCALAPPDATA%\areka\ghost\emo2\ghost\master\profile\areka\）にできます。
-・中継の控え: %LOCALAPPDATA%\areka\profile\areka\mcp-bridge\
+・中継の控え: %LOCALAPPDATA%\areka\profile\areka\mcp-bridge\（中継が控えを持たずに動く場面と、Microsoft Store 版の Claude Desktop が起動した中継のことは、下の段落を参照）
 ・AREKA_USER_ROOT で場所を変えたときは、%LOCALAPPDATA%\areka\ の所がそのフォルダになります。
 ・初めて利用者ごとの置き場を使うときに、areka.exe の隣の profile\areka\ に記憶があれば、それを利用者ごとの置き場へ写して続きから使います。areka.exe の隣の記憶は消さず、書き換えもしません。
 ・同梱のゴーストの写しは、areka を新しい版に上げ直しても上書きしません（写しの中の記憶を守るためです）。同梱のゴーストの新しい版は、そのゴーストを出しているときのメニューの「ネットワーク更新」で受け取ります。
@@ -305,7 +305,7 @@ zip を展開して使っているとき:
 今の版には、シェルの記憶を作る操作はありません（上の場所に記憶があれば読みますが、areka が書くことはありません）。
 
 これらのフォルダを消すと、areka が覚えていたことは初めての起動と同じ状態に戻ります。
-中継の控えは、中継を areka.exe と別の場所に置いたときは %LOCALAPPDATA%\areka\mcp-bridge\ にあります。Microsoft Store 版の Claude Desktop が起動した中継では、中継が %LOCALAPPDATA% の下へ書く物は %LOCALAPPDATA%\Packages\ の中の Claude_ で始まるフォルダの LocalCache\Local\ の下へ回されます（たとえば別の場所に置いたときは LocalCache\Local\areka\mcp-bridge\、利用者ごとの置き場を使っているときは LocalCache\Local\areka\profile\areka\mcp-bridge\）。控えは消しても、次に Claude Desktop を起動し直して areka へつないだときに作り直します。
+中継の控えは、中継を areka.exe と別の場所に置いたときは %LOCALAPPDATA%\areka\mcp-bridge\ にあります。中継は控えの置き場を決めるだけで、利用者ごとの置き場を作らず、areka.exe の隣の記憶を写しません。利用者ごとの置き場を使っているとき、areka をまだ一度も起動していない（利用者ごとの置き場が無い）間と、areka.exe の隣の記憶がまだ利用者ごとの置き場へ写されていない間は、中継は控えを持たずに動きます（areka が居なければ組み込みの答えで答えます）。areka を起動した後、次に Claude Desktop が中継を起こして areka へつないだときから控えを作ります。Microsoft Store 版の Claude Desktop が起動した中継では、中継が %LOCALAPPDATA% の下へ新しく作る物は、本当の %LOCALAPPDATA%\areka\ がまだ無いと、%LOCALAPPDATA%\Packages\ の中の Claude_ で始まるフォルダの LocalCache\Local\ の下へ回されます。これは Windows の決まりで、areka からは変えられません。利用者ごとの置き場を使っているときは、中継が控えを持つのは areka を起動して %LOCALAPPDATA%\areka\profile\areka\ ができた後だけなので、控えは本当の場所の %LOCALAPPDATA%\areka\profile\areka\mcp-bridge\ にできます。別の場所に置いたときは、本当の %LOCALAPPDATA%\areka\ が無ければ、控えは LocalCache\Local\areka\mcp-bridge\ にできます。前の版（0.0.3）の中継は、ここ（LocalCache\Local\areka\ の下、たとえば LocalCache\Local\areka\profile\areka\）に利用者ごとの置き場と areka の記憶の写しを作ったことがあります。areka はこの写しを使わないので、LocalCache\Local\areka\ のフォルダは消してかまいません。控えは消しても、次に Claude Desktop を起動し直して areka へつないだときに作り直します。
 
 
 ■ 入手のしかた
