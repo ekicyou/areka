@@ -104,8 +104,8 @@ graph TB
     Phase --> Band
     Phase --> Factory
     Rebase --> ZLedger
+    Band --> Pair
     Pair --> Chain
-    Chain --> Band
 ```
 
 **Architecture Integration**:
@@ -171,7 +171,7 @@ crates/
 - `crates/areka/src/emo2_boot/frame.rs`（636）— `mod window_state;`・`run_zorder_drain_phase` の直後に `run_window_state_phase` を 1 行。
 - `crates/areka/src/emo2_boot/ghost_switch.rs`（938）— `take_down` の 2 か所の直前に `log_stay_on_top_discard(world, …)` を 1 行ずつ（読み直しか切り替えかは `reload::carries_shell_state` で分ける）。
 - `crates/areka/src/app_exit.rs`（322）— `quit_app` の頭に `log_stay_on_top_discard(world, DiscardReason::Exit)` を 1 行。
-- `crates/areka/src/placement/spawn.rs`（810）— `wire_zorder_pair` の確定段の並びの末尾に `apply_window_band`（鎖の適用系の後）。
+- `crates/areka/src/placement/spawn.rs`（810）— `wire_zorder_pair` の確定段の並びの `establish_owner_links` の直後（組の是正と鎖の適用系の前）に `apply_window_band`。
 - `crates/areka/src/placement/zorder_group_ledger.rs`（657）— 欄 `pending_base` と口 `rebase_descript`、`reset_to_descript` が据え損ねた基底を据える 1 分岐、`set_descript_base` が `pending_base` を消す 1 行。兄弟の状態の檻のテストに分岐を足す。
 - `crates/areka/src/emo2_boot/frame/zorder_descript.rs`（105）— `apply_descript_rebase` を `rebase_descript` で書き直し、保った組・取り替えた基底・据えなかった基底を記録する。`zorder_descript_tests.rs` の `t_zdb13` を書き直し、5.1・5.2・5.5 の分岐を足す。
 - `crates/wintf/src/ecs/window/mod.rs` — `mod window_band; pub use window_band::*;`。
@@ -200,14 +200,14 @@ sequenceDiagram
     Note over Phase: Update の相 zorder drain の直後
     Phase->>Phase: decide transition and log
     Phase->>Band: StayOnTop marks and queue Enter
-    Note over Band: 同じ巡の確定段 chain apply の後
+    Note over Band: 同じ巡の確定段 組の是正と鎖の適用系の前
     Band->>OS: measure order back to front
     Band->>OS: SetWindowPos TOPMOST per window
     Band->>OS: read back band flag
 ```
 
 - 取り出しの相は `GhostWindows` が World に無い間は取り出さない（チャネルが保留を兼ねる。起動の台本の指令も落ちない）。
-- 1 巡に複数の指令が届けば到着順に状態を動かし、帯の指令の列へ同じ順に積む。帯の系は列を順に当てる。同じ巡で `\![set,zorder,…]` が先に届いていれば、鎖を組み終えた後の並びに当たる。
+- 1 巡に複数の指令が届けば到着順に状態を動かし、帯の指令の列へ同じ順に積む。帯の系は列を順に当てる。同じ巡で `\![set,zorder,…]` が先に届いていれば、帯を当てた後に鎖の適用系が帯の中で並びを組み直す（鎖の後押しは鎖の自分の窓の後ろへしか置かないので、帯の窓どうしで閉じ、帯から落とさない）。組の是正は帯を当てた後の重なりを測って決めるので、巡の終わりに流れる是正が帯を崩さない（設計の議題 1）。
 
 ### 常に手前の状態の寿命
 
@@ -452,7 +452,7 @@ pub(crate) fn log_stay_on_top_discard(world: &bevy_ecs::world::World, reason: Di
 
 **Responsibilities & Constraints**
 - 本番で `HWND_TOPMOST`・`HWND_NOTOPMOST` を書くのはこのファイルだけ（ツールチップの既存の 1 か所を除く）。状態（オン・オフ）は持たない。
-- 系 `apply_window_band` は areka の `wire_zorder_pair` で確定段の並び `(establish_owner_links, apply_zorder_pair_maintenance, apply_zorder_chain, apply_window_band).chain()` の末尾に載る（同じ巡・鎖の後押しの後）。UI スレッド固定（`NonSendMarker`）。
+- 系 `apply_window_band` は areka の `wire_zorder_pair` で確定段の並び `(establish_owner_links, apply_window_band, apply_zorder_pair_maintenance, apply_zorder_chain).chain()` の 2 番目に載る（同じ巡・組の是正と鎖の適用系の前）。組の是正は予約の列に積まれて巡の終わりに流れるので、帯を当てる前に置くと「帯を当てる前の観測で決めた是正が、帯を当てた後に上書きする」崩れ（バルーンが帯から落ちる・隣り合いが崩れる・オフの巡で他のアプリの帯の窓の後ろへ引き戻される）が起きない。UI スレッド固定（`NonSendMarker`）。
 - 系の 1 回の仕事: ⑴ 列の指令を積まれた順に当てる（「帯を当てる手順」）。entity が居ない・HWND がまだ無い窓は飛ばして `debug!`（後から HWND が付けば ⑵ が拾う）。⑵ この巡に HWND が付いた窓（`Added<WindowHandle>`）のうち印のある窓の帯を読み、帯に居なければ `Enter` を当てる（作る時点で間に合わなかったときの保険）。⑶ 列を空にする。
 - 書き込みは `guarded_set_window_pos` で直に行い、`SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` だけを立てる（位置・大きさ・活性・スタイルを変えない＝2.6）。`Raise` は `HWND_TOP` なので帯を変えない（オフで手前へ出した窓は普通の窓のまま＝他のアプリが活性になれば今の決まりで奥へ回る・2.10）。
 - オンのあいだ他のアプリが活性になっても、帯の窓は普通の窓の後ろへ回らない（OS の帯の性質・2.2）。組の是正と鎖の後押しが帯の窓を帯から落とさないことは PairFixBandCondition と研究 12.1 で押さえる。
@@ -474,7 +474,7 @@ impl WindowBandQueue {
     pub fn push(&mut self, op: BandOp, windows: Vec<bevy_ecs::entity::Entity>);
 }
 
-/// 確定段の系（鎖の適用系の後）
+/// 確定段の系（establish_owner_links の後・組の是正と鎖の適用系の前）
 pub fn apply_window_band(world: &mut bevy_ecs::world::World);
 
 /// 純関数：今の重なりの順位（0 が最上）で奥から手前へ並べる。順位が測れない窓は奥の端へ（元の順を保つ）
@@ -606,6 +606,7 @@ impl ZOrderGroupLedger {
 
 - 取り出しの相（`window_state_tests.rs`）: `GhostWindows` が無い間は取り出さず、生えた最初の巡で到着順に当たる。オンで全部の窓の entity（全スコープのキャラクターとバルーン）に印が付き、列に `Enter` が 1 件。オフで印が外れ `Leave`。重ねで列が空。`\v` で印が変わらず `Raise`。`GhostWindows` の外の entity に印が付かない（2.1・2.7・2.9・3.1・7.2）。
 - 帯の系（`window_band_tests.rs`・偽の OS）: 積まれた順に当たる・奥から手前の順で書く・HWND の無い窓を飛ばす・居ない entity を飛ばす・1 枚の書き込みの失敗の後も残りを書く・読み直しの不一致を記録する・印のある窓に HWND が付いた巡に帯の外なら `Enter` を当てる・帯に居れば書かない・列が空になる（2.1・2.3・3.1・6.3・7.3）。
+- 確定段の並び（`spawn.rs` の兄弟のテスト）: `apply_window_band` が `establish_owner_links` の後・`apply_zorder_pair_maintenance` と `apply_zorder_chain` の前に回ることを固定する。オンの指令と同じ巡に組の是正が要る場面（帯を当てる前は帯の外の観測）で、是正が帯を当てた後の観測から決まり、流れた後もバルーンが帯の中でキャラクターのすぐ手前に居ること（偽の OS）を 1 件（2.1・2.4・3.1・6.3・7.3）。
 - 窓の作り（`window_factory.rs` の兄弟のテスト）: 印のある窓は `WS_EX_TOPMOST` 付きで作る・印の無い窓の拡張スタイルは今と同じ（2.3・3.4）。
 - 寿命（`ghost_switch_reload_tests.rs` ほかの足場 `SwitchRig`）: オンにした後、ゴーストの読み直しでオフ・台本の組が空（descript の基底だけ）・オンのまま降ろした記録の理由が `reload`。ゴーストの切り替えでオフ・理由 `switch`。SHIORI だけの読み直しで状態と台本の組が残る。シェルの切り替え・バルーンの切り替えで状態と印が残る（4.1〜4.5・5.3・5.4・6.4・7.2・7.4）。
 - シェルの切り替えの後始末（`zorder_descript_tests.rs`・`switch_finish_tests.rs`）: `t_zdb13` を「台本の組を保ち基底を取り替える」へ書き直す・重なる基底の拒否の記録・保った組の記録・切り替えの後の `\![reset,zorder]` で新しい基底へ戻る（5.1・5.2・5.5・6.5）。
