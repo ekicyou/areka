@@ -97,6 +97,9 @@ pub(super) fn plan_hover(
     }
 }
 
+#[path = "cursor_pick.rs"]
+pub(super) mod cursor_pick;
+
 #[cfg(test)]
 #[path = "hover_region_tests.rs"]
 mod tests;

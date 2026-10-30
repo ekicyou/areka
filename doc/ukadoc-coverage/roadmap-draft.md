@@ -1035,8 +1035,8 @@ wave = "v0.1.0"
 [[spec]]
 name = "shell-mouse-cursor"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、surfaces.txt の mouseup* と system:hand の宛先をこの名前で記入した（2 件）"
-owner_count = 2
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、surfaces.txt の mouseup* と system:hand の宛先をこの名前で記入した（2 件）。2026-10-30 にこの spec が cursorブレスの 5 場面・system: の名前 10 種・ゴーストの descript のカーソルの欄 6 つの計 21 件の持ち主になった（19 件を実装済み・2 件を縮退）"
+owner_count = 21
 wave = "v0.1.0"
 
 [[spec]]

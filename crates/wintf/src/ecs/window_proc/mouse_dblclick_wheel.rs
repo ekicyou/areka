@@ -226,7 +226,7 @@ pub(super) fn WM_XBUTTONDBLCLK(
 /// WM_MOUSEWHEEL: 垂直ホイール回転
 #[inline]
 pub(super) fn WM_MOUSEWHEEL(
-    _world: &Rc<RefCell<EcsWorld>>,
+    world: &Rc<RefCell<EcsWorld>>,
     entity: Entity,
     _hwnd: HWND,
     wparam: WPARAM,
@@ -235,6 +235,11 @@ pub(super) fn WM_MOUSEWHEEL(
     // GET_WHEEL_DELTA_WPARAM: HIWORD of wParam (signed)
     let delta = ((wparam.0 >> 16) & 0xFFFF) as i16;
     crate::ecs::pointer::add_wheel_vertical(entity, delta);
+    crate::ecs::cursor::answer::push_cursor_rc(
+        world,
+        entity,
+        crate::ecs::cursor::CursorTrigger::Wheel,
+    );
 
     Some(LRESULT(0))
 }

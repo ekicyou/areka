@@ -212,6 +212,14 @@ pub(crate) fn evaluate_targets(
                 debug!(?window, ?desired, "clickthrough: ex-style トグル適用");
                 // 単一所有（design line 367）: 適用成功後にのみ last_applied を更新。
                 registry.set_last_applied(window, desired);
+                // 透過を外した直後は WM_SETCURSOR が次の移動まで来ないので、その場で出し直す。
+                if desired == DesiredState::Opaque {
+                    crate::ecs::cursor::answer::push_cursor(
+                        world,
+                        window,
+                        crate::ecs::cursor::CursorTrigger::Move,
+                    );
+                }
             }
             Err(e) => {
                 // グレースフル: 失敗窓のみ skip、last_applied は据え置き（次サイクル再試行）。

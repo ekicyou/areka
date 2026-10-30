@@ -51,8 +51,8 @@ use areka_emo_compose::{
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
-    AppendTarget, BoxDefinition, Element, ElementPath, Shell, ShellBoxes, Surface, parse_boxes,
-    parse_undrawn_elements,
+    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, ShellBoxes, Surface,
+    parse_boxes, parse_undrawn_elements,
 };
 
 use crate::balloon::face_digits_of;
@@ -210,6 +210,8 @@ pub struct ShellTarget {
     /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
     /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
     pub(crate) ignored_pna: usize,
+    /// cursorブレスの転記（[`load_shell_target`] が 1 度だけ転記する・検証は下流）。
+    cursor_braces: Vec<CursorBrace>,
     /// 読み込みで組んだ面の表（atlas は未装着・[`ShellTarget::take_world`] が 1 度だけ渡す）。
     world: Option<EmoWorld>,
 }
@@ -229,6 +231,7 @@ impl std::fmt::Debug for ShellTarget {
             .field("box_surfaces", &self.box_surfaces)
             .field("nest_report", &self.nest_report)
             .field("ignored_pna", &self.ignored_pna)
+            .field("cursor_braces", &self.cursor_braces)
             .field("world", &self.world.as_ref().map(|_| "EmoWorld"))
             .finish()
     }
@@ -248,6 +251,11 @@ impl ShellTarget {
     /// 箱の定義の表とサーフェス番号ごとの置き場所の表（箱の無いシェルでは空）。
     pub fn boxes(&self) -> &BoxLayout {
         &self.boxes
+    }
+
+    /// cursorブレスの転記（cursorブレスの無いシェルでは空）。
+    pub fn cursor_braces(&self) -> &[CursorBrace] {
+        &self.cursor_braces
     }
 
     /// 面の表を 1 つ組む（[`EmoWorld::build_with_images`] → `bind_atlas(SetId(0))`）。
@@ -378,8 +386,9 @@ pub fn load_shell_target(
         descript.as_deref(),
     );
 
-    let target =
+    let mut target =
         build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder, use_self_alpha);
+    target.cursor_braces = areka_parsers::shell::parse_cursor_braces(&content);
 
     if target.ignored_pna != 0 {
         tracing::warn!(
@@ -541,6 +550,7 @@ pub fn build_shell_target_with_boxes(
         box_surfaces,
         nest_report,
         ignored_pna: baked.ignored_pna,
+        cursor_braces: Vec::new(),
         world: Some(probe),
     }
 }

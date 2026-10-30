@@ -5,7 +5,7 @@
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
 //! だから主張は 9 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
-//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 10 個を
+//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 11 個を
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
 //! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
@@ -131,7 +131,7 @@ fn fetched_rows() -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-/// 書庫をリポジトリに置く今の 9 行は `Vendored`、ほかは URL の行
+/// 書庫をリポジトリに置く今の 10 行は `Vendored`、ほかは URL の行
 /// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。
 #[test]
 fn current_rows_are_registered_as_vendored() {
@@ -152,8 +152,9 @@ fn current_rows_are_registered_as_vendored() {
             "claudia",
             "emily4",
             "dot_sakura",
+            "areka-balloon",
         ],
-        "今の 9 行は Vendored のまま"
+        "今の 10 行は Vendored のまま"
     );
     assert_eq!(
         fetched_rows(),
@@ -198,7 +199,7 @@ fn only_vendored_rows_have_a_nar_in_the_repository() {
     }
 }
 
-/// 登記した 10 個の検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
+/// 登記した 11 個の検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
 /// （要件 1.1・1.2・1.3・7.4。URL の行は spec `areka-P0-sample-url-fetch` 要件 5.4・5.6）。
 ///
 /// 位置は `<根>/<格納先>/<名>` の等式で判定する。検体ごとの第 2 の表や専用関数があれば
@@ -206,7 +207,7 @@ fn only_vendored_rows_have_a_nar_in_the_repository() {
 /// （名前・探した場所・取り寄せの段のコマンド）で落ちる。
 #[test]
 fn every_registered_sample_lands_where_its_registry_row_says() {
-    assert_eq!(SAMPLES.len(), 10, "登記は検体 10 個");
+    assert_eq!(SAMPLES.len(), 11, "登記は検体 11 個");
     for sample in SAMPLES {
         let acquired = SampleRoot::acquire(sample.name).unwrap_or_else(|err| panic!("{err}"));
 
@@ -260,9 +261,9 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
     }
 }
 
-/// 未登録の検体名は、既知の名前 10 個を含む理由付きの失敗になる（要件 1.4）。
+/// 未登録の検体名は、既知の名前 11 個を含む理由付きの失敗になる（要件 1.4）。
 #[test]
-fn unknown_sample_fails_with_all_ten_known_names() {
+fn unknown_sample_fails_with_all_eleven_known_names() {
     let names = [
         "emo2",
         "R_POST_and_KOMAINU",
@@ -274,6 +275,7 @@ fn unknown_sample_fails_with_all_ten_known_names() {
         "emily4",
         "pasta-in-windows",
         "dot_sakura",
+        "areka-balloon",
     ];
     let err = SampleRoot::acquire("no-such-ghost").expect_err("未登録名は失敗するはず");
     let SampleError::UnknownSample { requested, known } = &err else {
@@ -444,6 +446,7 @@ fn registry_records_kind_and_bundled_balloons() {
         "emo2-kakukaku-offsetdpi",
         "emo2-kakukaku-wplimit",
         "StayseeBalloon",
+        "areka-balloon",
     ] {
         assert_eq!(by_name(name).kind, SampleKind::Balloon);
         assert!(by_name(name).balloons.is_empty(), "{name} は同梱バルーン 0");
@@ -499,8 +502,8 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
 fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     assert_eq!(
         SAMPLES.len(),
-        10,
-        "登記は検体 10 個（母数 0 で緑にならない較正）"
+        11,
+        "登記は検体 11 個（母数 0 で緑にならない較正）"
     );
     for sample in SAMPLES {
         let root = WorkDir::new().expect("空の根は取れるはず");

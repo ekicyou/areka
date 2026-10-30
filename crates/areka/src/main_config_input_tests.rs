@@ -162,7 +162,8 @@ mod boot {
 mod switch_balloon {
     use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
     use crate::boot_resolve::{
-        BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark, write_session_mark,
+        BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark,
+        write_session_mark,
     };
     use log_capture_kit::capture;
     use std::path::{Path, PathBuf};
@@ -179,7 +180,7 @@ mod switch_balloon {
         let master = ghost.join("ghost").join("master");
         std::fs::create_dir_all(&master).expect("フォルダを組む");
         std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
-        for folder in ["StayseeBalloon", "b1", "b2"] {
+        for folder in [DEFAULT_BALLOON_FOLDER, "b1", "b2"] {
             let dir = tmp.child("balloon").join(folder);
             std::fs::create_dir_all(&dir).expect("フォルダを組む");
             std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
@@ -252,7 +253,10 @@ mod switch_balloon {
         let ghost = fixture(&tmp);
         assert_eq!(
             resolve(&tmp, &ghost),
-            (BalloonRoute::Default, Some("StayseeBalloon".to_owned()))
+            (
+                BalloonRoute::Default,
+                Some(DEFAULT_BALLOON_FOLDER.to_owned())
+            )
         );
     }
 
@@ -279,7 +283,10 @@ mod switch_balloon {
         assert_eq!((b.route, b.dir), (BalloonRoute::Argv, argv_balloon));
         assert_eq!(
             resolve(&tmp, &ghost),
-            (BalloonRoute::Default, Some("StayseeBalloon".to_owned()))
+            (
+                BalloonRoute::Default,
+                Some(DEFAULT_BALLOON_FOLDER.to_owned())
+            )
         );
     }
 
@@ -447,7 +454,7 @@ mod switch_balloon {
         assert_eq!(ctx.current.ghost.folder.as_deref(), Some("g1"));
         assert_eq!(
             ctx.current.balloon.folder.as_deref(),
-            Some("StayseeBalloon")
+            Some(DEFAULT_BALLOON_FOLDER)
         );
         assert_eq!(
             ctx.roots.roots()[0].balloon_dir("b1"),
