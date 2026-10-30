@@ -170,12 +170,11 @@ crates/
     ├── placement/follow.rs              # 修正: mod move_shift と再輸出
     ├── placement/follow/move_shift.rs   # 新規: ずれの記録（部品）と窓への当て方
     ├── placement/follow/move_shift_tests.rs     # 新規
-    ├── placement/diag.rs                # 修正: PlacementRoute::PatternMove
-    ├── placement/visibility.rs          # 修正: 見える範囲の守りを当てる経路に足す
+    ├── placement/diag.rs                # 修正: PlacementRoute::PatternMove（is_system_reanchor の判定もここ＝見える範囲の守りの経路はこれで足りる）
     ├── placement/follow/window_move.rs  # 修正: 見送りが覆う経路に足す（2 行・上限超えの例外表に既にある）
-    ├── placement/follow/drag_follow.rs  # 修正: follow_balloon にずれを足す・ドラッグの終わりでずれを捨てる
-    ├── placement/persist.rs             # 修正: 位置を保存するときにずれを引く
-    └── placement/follow/sticky_follow.rs        # 修正: 組の相手の保存でずれを引く
+    ├── placement/follow/drag_follow.rs  # 修正（967 行・上限に近い）: follow_balloon とキャラ・バルーンのドラッグの終わりに、move_shift.rs の口を呼ぶ 1〜2 行ずつだけ
+    ├── placement/persist.rs             # 修正（928 行・上限に近い）: 保存のときに move_shift.rs の origin_position を呼ぶ 1 行だけ
+    └── placement/follow/sticky_follow.rs        # 修正: 組の相手の保存でずれを引く（origin_position を呼ぶ）
 doc/
 ├── ukadoc-coverage/ledger/assets.toml   # 修正: 9 行
 └── COMPAT_ARCHITECTURE.md               # 修正: §8
@@ -184,7 +183,7 @@ doc/
 ### Modified Files（機械的な追随）
 
 - `Pattern { … }` を構造体の書き方で作る所（約 24 ファイル・テストが大半・`emo-atlas`・`emo-compose`・`emo-present`・`parsers`・`seriko`）: `target: String::new()`（または欄 2 の原文）を足す。
-- `SerikoLoopConfig { … }` を書く 23 か所（本番 2・テスト 21）: `pick_rng` を足す。`SerikoLoopConfig::disabled()` は `seeded_rng(0)` を入れる。
+- `SerikoLoopConfig { … }` を書く所（文字列では 31 件当たる・構造体の定義などを含むので、構造体の書き方で作る所の数はタスクの段で数え直す）: `pick_rng` を足す。`SerikoLoopConfig::disabled()` は `seeded_rng(0)` を入れる。
 - `Playback { started_at_ms }` を作る 3 か所と `PartAnim::Playing { started_at_ms }`: `acts_through: None` を足す。
 - `LoopFrame { … }` を作る 8 か所（`table.rs`・`timeline.rs`・`timeline_repeat_tests.rs`）: `act: FrameAct::Draw` を足す。
 
@@ -653,7 +652,10 @@ impl LoopRuntime {
 - キャラ窓への当て方（`placement/follow/move_shift.rs` の `apply_char_shift`）:
   1. `base = 今の WindowPos − applied` とする（元の表示位置）。
   2. 当てる先は `base + (scale_signed(x, k), scale_signed(y, k))`（倍率は `\![move]` と同じ `scale_signed`・7.1・SSP との違いは §8）。`i64` の値は `i32` の範囲へ飽和させてから渡す（`9999` などの大きな値でも溢れない）。
-  3. `project_anchor`（下揃えでは y を作業領域の下の端に揃える）と `apply_visibility_guard`（見える範囲の守り）を通す（7.8）。下揃えでは揃えが勝ち、下へのずれは見えない（M4 の付記 2）。
+  3. 次の順で今の置き方の決まりを通す（7.8）。
+     1. `project_anchor`（下揃えでは y を作業領域の下の端に揃える）。下揃えでは揃えが勝ち、下へのずれは見えない（M4 の付記 2）。
+     2. `balloon_limit::clamp_rect_to_work_area`（作業領域の中への寄せ・`work_area_clamp.rs` と同じ式）。`apply_visibility_guard` は y を動かさず、`project_anchor` も Free・Left・Right では y をそのまま返すので、この寄せが無いと揃えない置き方で `move,0,10,0,9999` の窓が画面の下へ出たままになる（設計の検証の指摘 1）。
+     3. `apply_visibility_guard`（見える範囲の守り）。
   4. 新しい経路 `PlacementRoute::PatternMove` で `move_window_with_route` に書く。窓の大きさは書かない（7.5）。バルーンはこの書き込みで今のまま追う。
   5. `applied = 実際に書いた位置 − base` を記録する。揃えや守りで変わった分も正しく引ける。
 - バルーン窓への当て方（`apply_balloon_shift`）: バルーン窓の部品に `applied`（倍率をかけた値）を書き、そのキャラ窓の今の位置で `follow_balloon` を呼び直す。`follow_balloon` は提案の位置を「キャラ窓 ＋ 相対 offset ＋ バルーンのずれ」にする（1 行足す）。バルーンの面を出せば seriko が 0 を送るので、バルーンを置き直す経路とぶつからない。
@@ -664,7 +666,8 @@ impl LoopRuntime {
   - 見送りが覆う経路にも入れる。
 - 他の書き手との関係:
   - 再スナップ・作業領域の変化・`\![move]` など、ほかの書き手は今のまま窓ごと動かす（記録 `applied` は変えない＝ずれは、動いた後の窓にもそのまま残る）。
-  - 利用者のドラッグの終わり（`on_char_drag_end`）だけは、`applied` を 0 にする。利用者が置いた所を新しい元の位置にする。
+  - 利用者のドラッグの終わり（キャラ窓は `on_char_drag_end`、バルーン窓は `on_balloon_drag_end`）だけは、その窓の `applied` を 0 にする。利用者が置いた所を新しい元の位置にする。バルーンは、0 にしてから相対 offset を作る（ずれを含んだ offset の上に `follow_balloon` がずれをもう 1 度足す二重の数えを防ぐ・設計の検証の指摘 2）。
+  - 本体は `placement/follow/move_shift.rs` に置き、上限に近い `drag_follow.rs`（967 行）と `persist.rs`（928 行）には呼び出しの数行だけを足す（設計の検証の指摘 3）。
   - 位置を保存する所（`persist_unremembered_char_positions`・組の相手の保存）は、`applied` を引いた元の位置を保存する（ずれが起動のたびに積もらない）。
 
 **契約**: Service [x] / State [x]
@@ -689,7 +692,8 @@ pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> Po
   - 揃えない置き方でずれること。
   - `move,0,10,0,9999` の形が作業領域の中へ戻ること。
   - 0 で元へ戻ること。
-  - ドラッグの後のずれ 0。
+  - ドラッグの後のずれ 0（キャラ窓とバルーン窓の両方。バルーンをドラッグした後にずれが二重に足されないこと）。
+  - 揃えない置き方で `move,0,10,0,9999` の窓が作業領域の中へ寄ること。
   - 保存の値がずれを引くこと。
   - バルーンが追うこと。
 
