@@ -238,7 +238,7 @@ fn row8_named_box_on_current_surface_switches_without_warning() {
     // 要件 4.3・4.9.
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
-    let ((), events) = capture(|| state.apply_cue(&select("0", "b")));
+    let (_, events) = capture(|| state.apply_cue(&select("0", "b")));
     assert_eq!(state.destination(&key("0")), boxed("b"));
     assert!(
         warns(&events).is_empty(),
@@ -251,7 +251,7 @@ fn row9_missing_name_warns_once_with_name_surface_scope_and_keeps_destination() 
     // 要件 4.4・10.1: c はサーフェス 0 に無い。
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
-    let ((), events) = capture(|| state.apply_cue(&select("0", "c")));
+    let (_, events) = capture(|| state.apply_cue(&select("0", "c")));
     assert_eq!(state.destination(&key("0")), boxed("a"));
     let warned = warns(&events);
     assert_eq!(warned.len(), 1, "{events:?}");
@@ -261,7 +261,7 @@ fn row9_missing_name_warns_once_with_name_surface_scope_and_keeps_destination() 
 
     // 非表示なら番号の代わりに「非表示」。
     state.route_surface(&key("0"), SurfaceKeyOutcome::Hide);
-    let ((), events) = capture(|| state.apply_cue(&select("0", "a")));
+    let (_, events) = capture(|| state.apply_cue(&select("0", "a")));
     assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
     let warned = warns(&events);
     assert_eq!(warned.len(), 1, "{events:?}");

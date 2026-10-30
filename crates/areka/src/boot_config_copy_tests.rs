@@ -57,7 +57,7 @@ fn put_balloon(dir: &Path) {
 /// 根の外に写し（バルーン `b2` を指す）を置く。写しのフォルダを返す。
 fn fixture(tmp: &TempPath, folder: &str) -> PathBuf {
     put_ghost(&tmp.child("ghost").join(folder), "b1");
-    for b in ["b1", "b2", "StayseeBalloon"] {
+    for b in ["b1", "b2", crate::boot_resolve::DEFAULT_BALLOON_FOLDER] {
         put_balloon(&tmp.child("balloon").join(b));
     }
     let copy = tmp.child("copied").join(folder);

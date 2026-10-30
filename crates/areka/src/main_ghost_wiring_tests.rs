@@ -37,6 +37,8 @@ fn ghost_boot_options_wires_expected_fields() {
     assert_eq!(options.ghost_root, ghost_root);
     assert_eq!(options.app_profile_dir, Some(app_profile_dir));
     assert_eq!(options.default_encoding, DefaultEncoding::Ansi);
+    // 窓の無いゴーストにも strict の判定を入れる（無いと strict の記録が無言で 0 件・mcp-strict-errors）。
+    assert!(options.strict_judges.is_some(), "strict の判定が入っている");
     match options.shiori {
         ShioriWiring::Helper {
             helper_exe: actual, ..

@@ -17,6 +17,7 @@ fn empty_script_talk_returns_talkdone_immediately_without_tick() {
         script: String::new(), // 空 script → 空 Instruction 列 → 空 sheet。
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
 
     let sink = RecordingSink::new();
@@ -28,6 +29,7 @@ fn empty_script_talk_returns_talkdone_immediately_without_tick() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // TalkDone が即座に到達すること（Tick 不要・時間軸駆動なし）。
@@ -55,6 +57,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: id_a,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -63,6 +66,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
         done_a_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 2 本目 Start(B)（別 script）を inbox へ。自己投函の Start(A) の後に処理され、無視される。
@@ -72,6 +76,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
         script: r"\s[77]DIFFERENT\e".to_string(),
         talk_id: id_b,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     handle
         .inbox
@@ -114,6 +119,7 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(4),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -122,6 +128,7 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     drop(done_rx); // 終端 TalkDone 送出前に受信端を drop（送出は Err になる）。
@@ -157,6 +164,7 @@ fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
         script: r"\0".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -166,6 +174,7 @@ fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("無視タグのみの script も空 sheet 経路で即座に TalkDone を返すべき");
@@ -198,6 +207,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
         script: r"\0\-".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -207,6 +217,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("quit 相当のみの script も空 sheet 経路で即座に TalkDone を返すべき");
@@ -241,6 +252,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
         script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -250,6 +262,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 初回 Tick(0.0) 刻印＋at=0.0 群を発火（world は at=0.75・未達）。
@@ -299,12 +312,14 @@ fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
             script: script.to_string(),
             talk_id,
             origin: ScriptOrigin::GHOST,
+            strict: false,
         };
         let handle = spawn_talk(
             start,
             done_tx,
             two_sinks(NoopSink, NoopSink),
             SystemVarSnapshot::default(),
+            None,
         );
         for t in ticks {
             handle.inbox.send(SakuraMsg::Tick(*t)).expect("Tick 投函");
@@ -362,12 +377,14 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
         done_tx,
         two_sinks(NoopSink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 自然終端まで駆動する（0.0 刻印 → 占有 horizon=0.60 を跨ぐ 1.0）。
@@ -409,6 +426,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: id_a,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink_a = RecordingSink::new();
     let records_a = sink_a.records();
@@ -421,6 +439,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         script: r"\s[20]bye\_w[100]done\-".to_string(),
         talk_id: id_b,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink_b = RecordingSink::new();
     let records_b = sink_b.records();
@@ -430,12 +449,14 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         done_a_tx,
         two_sinks(sink_a, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
     let handle_b = spawn_talk(
         start_b,
         done_b_tx,
         two_sinks(sink_b, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     handle_a
@@ -510,6 +531,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
         script: r"\s[10]hello\_w[800]\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -518,6 +540,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     // 期待値は本番と同一の算術で導出（10 進直書きの表現誤差を排除・注入時刻決定論）。
@@ -579,6 +602,7 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
         script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -587,6 +611,7 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
         done_tx,
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     let d_hello = text_playback_duration("hello"); // 0.25
@@ -646,12 +671,14 @@ fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
         script: r"\s[10]ab\_w[600]\e".to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
         done_tx,
         two_sinks(NoopSink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     let d_ab = text_playback_duration("ab"); // 0.1
@@ -716,12 +743,14 @@ fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
         script: script.to_string(),
         talk_id,
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     let handle = spawn_talk(
         start,
         done_tx,
         two_sinks(NoopSink, NoopSink),
         SystemVarSnapshot::default(),
+        None,
     );
 
     let d_hi = text_playback_duration("hi"); // 0.1（末尾 Wait の発火時刻＝entry 枯渇点）
@@ -787,10 +816,12 @@ fn spawn_with_drop_marker(
             script: r"\s[10]hello\_w[100]world\e".to_string(),
             talk_id,
             origin: ScriptOrigin::GHOST,
+            strict: false,
         },
         done_tx,
         vec![Box::new(DropMarkerSink { tx: marker_tx })],
         SystemVarSnapshot::default(),
+        None,
     );
     (done_rx, marker_rx, handle)
 }

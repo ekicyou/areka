@@ -390,9 +390,23 @@ cargo install areka では使えません。areka が動くのに必要なファ
 
 ■ 同梱しているバルーンについて
 
-えも？？ に付いてくるバルーン emo2-kakukaku は えも？？ の同梱物で、下の「1 つ」には数えていません（条件は下の「■ 同梱物とライセンス」の中の ◆ バルーン「emo2-kakukaku」の欄にあります）。
+えも？？ に付いてくるバルーン emo2-kakukaku は えも？？ の同梱物で、下の「2 つ」には数えていません（条件は下の「■ 同梱物とライセンス」の中の ◆ バルーン「emo2-kakukaku」の欄にあります）。
 
-areka には、インストールした直後から使えるバルーン（ゴーストのせりふを表示する枠）が 1 つ入っています。
+areka には、インストールした直後から使えるバルーン（ゴーストのせりふを表示する枠）が 2 つ入っています。
+バルーンを持たず、使うバルーンの指定も無いゴーストは、1 つ目の areka バルーンで話します。2 つ目の Balloon for Staysee Syncfield は、メニューの「バルーン」から選べます。前の版の areka で Balloon for Staysee Syncfield を使っていたゴーストは、そのまま Balloon for Staysee Syncfield で話します。
+
+1. areka バルーン（areka の既定のバルーン）
+
+・名前　areka バルーン
+・フォルダ名　areka-balloon
+・作者　ekicyou
+・ライセンス　絵と設定ファイルは CC0 1.0 Universal（パブリックドメイン提供）
+　https://creativecommons.org/publicdomain/zero/1.0/deed.ja
+・見た目　白い地に灰色の縁のシンプルな吹き出し
+
+areka のために作ったバルーンです。寸法と設定の数値は、作者が以前に作ったバルーン「ボトル（でふぉ改）」から引き継ぎましたが、絵は新しく描いたものです。説明はバルーンのフォルダの中の readme.txt にもあります。
+
+2. Balloon for Staysee Syncfield
 
 ・名前　Balloon for Staysee Syncfield
 ・フォルダ名　StayseeBalloon
@@ -428,7 +442,7 @@ use_self_alpha が書いていないバルーンは、絵の中身を見て決�
 
 ◆ 同梱しているバルーンについてのもう 1 つの注意
 
-このバルーンには、相方（2 人目のキャラクター）用の枠の絵が 2 種類だけ入っています。相方が 3 種類目・4 種類目の枠を使うときは、本体（1 人目）用の枠の絵をそのまま借りて表示します。これも不具合ではなく、絵が用意されていないときの決められた振る舞いです。
+どちらのバルーンにも、相方（2 人目のキャラクター）用の枠の絵が 2 種類だけ入っています。相方が 3 種類目・4 種類目の枠を使うときは、本体（1 人目）用の枠の絵をそのまま借りて表示します。これも不具合ではなく、絵が用意されていないときの決められた振る舞いです。
 
 
 ■ 同梱物とライセンス
@@ -441,6 +455,7 @@ areka 本体の MIT ライセンスは本体だけのもので、同梱の作品
 　作者: ekicyou
 　条件: MIT ライセンス（LICENSE-MIT）。同梱のゴースト・シェル・バルーンには及びません。
 　本体が使っているライブラリの著作権表示とライセンスは THIRD-PARTY-NOTICES.md にあります。
+　手の形のカーソル 2 つの絵（system:hand・system:grip に出す絵）は、Ideogram で作りました（fal 経由で生成・Powered by Ideogram）。本体の一部として MIT ライセンスで配ります。
 
 ◆ ゴースト「えも？？」（ghost\emo2）の辞書・スクリプト
 　作者: えちょ（ekicyou）
@@ -472,6 +487,11 @@ areka 本体の MIT ライセンスは本体だけのもので、同梱の作品
 　条件: 画像素材はフキダシデザインの利用規約に従います（著作権の表記は不要、アプリへの組み込みは 1 つにつき 20 素材まで無料、データの再配布は禁止）。
 　　areka と えも？？ のバルーンとして使うことはできますが、画像を抜き出して利用することはできません。
 　出どころ: ghost\emo2\readme.txt（「利用バルーン」の節）、フキダシデザインの利用規約 https://fukidesign.com/terms
+
+◆ バルーン「areka バルーン」（balloon\areka-balloon）
+　作者: ekicyou
+　条件: 絵と設定ファイルは CC0 1.0（パブリックドメイン）。絵を描く道具のコードは areka 本体と同じ MIT ライセンス。
+　出どころ: balloon\areka-balloon\readme.txt、https://github.com/ekicyou/areka
 
 ◆ バルーン「Balloon for Staysee Syncfield」（balloon\StayseeBalloon）
 　作者: ぽな

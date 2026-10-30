@@ -3,9 +3,12 @@ use areka_parsers::balloon::{
 };
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
+use log_capture_kit::{CapturedEvent, capture};
+use tracing::Level;
 
 use super::test_support::{com_world, cue, geo_model, opaque_count, spawn_reserved_slot};
-use super::{TextLayerRuntime, TextSlotBinding, present_frame};
+use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
+use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
@@ -327,5 +330,262 @@ fn refresh_actor_scale_for_unregistered_actor_is_noop() {
     assert!(
         !rt.routing.contains_key(&PlaceKey::balloon(&actor)),
         "再追従は装着経路ではない（routing を生やさない）"
+    );
+}
+
+// ══ spec real-run-log-noise 要件 1.1・1.2・1.6・5.1・5.6: 入力が前と同じ再追従は解き直さない ══
+//
+// 「`debug` まで開けた記録」は捕捉した全水準のうち `TRACE` を除いたものとして数える
+// （`capture_under_filter` の機能 `env-filter` は wintf だけが引く決まり・log-capture-kit の doc）。
+
+/// 件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
+const ORIGIN_TO_CORNER: &str = "未指定の origin 成分を書字開始角へ寄せる";
+/// 件 1 と同じ解決の中のもう 1 つの `debug!`（要件 1.5）。
+const DEFAULT_EDGE: &str = "未指定座標成分を既定辺へ縮退する";
+/// 件 2（`actor_attach.rs`・何も変わらなかった再追従）。
+const NOTHING_CHANGED: &str = "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）";
+
+/// `origin`・`wordwrappoint`・`validrect` を書かないバルーン（解き直すたびに件 1 が成分ごとに出る）。
+fn unspecified_model() -> BalloonModel {
+    BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        None,
+        None,
+    )
+}
+
+/// `TRACE` を除いた（＝`debug` まで開けた記録に載る）事象のうち、本文が `message` のものの数。
+fn count_at_debug(events: &[CapturedEvent], message: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.level != Level::TRACE && e.message() == message)
+        .count()
+}
+
+/// T1（要件 1.1・1.2・1.5・5.1）: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
+/// 既定辺へ縮退を 1 件も出さない。件 2 は `trace` で、1 回の再追従にちょうど 1 件出る。
+#[test]
+fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line() {
+    let mut world = World::new();
+    let (window, slot) = spawn_reserved_slot(&mut world);
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let binding = TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE);
+    let model = unspecified_model();
+
+    let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), binding, &model));
+    // 対照: 装着では解き直すので、同じ発行点が出ることを同じ捕捉の形で確かめておく。
+    assert_eq!(
+        count_at_debug(&attached, ORIGIN_TO_CORNER),
+        2,
+        "装着では未指定の origin 成分ごとに 1 件（x・y）"
+    );
+    assert!(
+        count_at_debug(&attached, DEFAULT_EDGE) > 0,
+        "装着では既定辺への縮退も出る"
+    );
+
+    let (answers, events) = capture(|| {
+        (0..3)
+            .map(|_| rt.refresh_actor_binding(&actor, binding, &model))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(answers, vec![false; 3], "判定の答えは今と同じ「変化なし」");
+    for message in [ORIGIN_TO_CORNER, DEFAULT_EDGE, NOTHING_CHANGED] {
+        assert_eq!(
+            count_at_debug(&events, message),
+            0,
+            "値の同じ再追従 3 回で `debug` まで開けた記録に出ない: {message}"
+        );
+    }
+
+    let (answer, one) = capture(|| rt.refresh_actor_binding(&actor, binding, &model));
+    assert!(!answer);
+    let traced: Vec<_> = one
+        .iter()
+        .filter(|e| e.message() == NOTHING_CHANGED)
+        .collect();
+    assert_eq!(traced.len(), 1, "1 回の再追従に件 2 がちょうど 1 件");
+    assert_eq!(traced[0].level, Level::TRACE, "件 2 の水準は TRACE");
+}
+
+/// T3（要件 1.6・5.6）: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
+///
+/// ⑴ 文字の設定が変わる定義への付け替えは `true` ⑵ 文字の設定に効かないキー（`windowposition`）
+/// だけを替えた定義は解き直したうえで `false`、その後の同じ定義の再追従 3 回は解き直さない
+/// （記憶が新しい定義へ替わった）⑶ 直の登録口 `register_actor` で登録した場所は記憶を持たず、
+/// 今と同じく解き直して比べる（記憶に頼って「変化なし」と答えない）。
+#[test]
+fn refresh_skips_only_same_inputs_and_answers_as_before() {
+    let mut world = World::new();
+    let (window, slot) = spawn_reserved_slot(&mut world);
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let binding = TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE);
+    let model = unspecified_model();
+    rt.register_actor_binding(actor.clone(), binding, &model);
+
+    // ⑴ 文字の大きさの変わる定義。
+    let taller = BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, Some(30), FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    assert!(
+        rt.refresh_actor_binding(&actor, binding, &taller),
+        "⑴ 文字の設定が変わる定義は作り直す（今の答え）"
+    );
+
+    // ⑵ 文字の層が読まないキーだけを替える。
+    let moved = BalloonModel::new(
+        WindowPosition::new(Some(10), Some(20)),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, Some(30), FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    let (answer, changed_input) = capture(|| rt.refresh_actor_binding(&actor, binding, &moved));
+    assert!(!answer, "⑵ 解いた値が同じなら今と同じく作り直さない");
+    assert_eq!(
+        count_at_debug(&changed_input, ORIGIN_TO_CORNER),
+        2,
+        "⑵ 入力が変わったフレームは解き直す（変わり目の 1 回）"
+    );
+    let (answers, events) = capture(|| {
+        (0..3)
+            .map(|_| rt.refresh_actor_binding(&actor, binding, &moved))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(answers, vec![false; 3]);
+    assert_eq!(
+        count_at_debug(&events, ORIGIN_TO_CORNER) + count_at_debug(&events, DEFAULT_EDGE),
+        0,
+        "⑵ 記憶が新しい定義へ替わったので、その後の同じ再追従は解き直さない"
+    );
+
+    // ⑶ 直の登録口で、`moved` から解いたのでない値を入れる——記憶は消え、再追従は解き直して違いを見つける。
+    let stale =
+        ResolvedBalloonText::resolve_with_background(&model, NATIVE, DEFAULT_BALLOON_BACKGROUND);
+    rt.register_actor(actor.clone(), binding, stale);
+    let (answer, direct) = capture(|| rt.refresh_actor_binding(&actor, binding, &moved));
+    assert!(
+        answer,
+        "⑶ 直の道の場所は解き直して比べ、違えば作り直す（今の答え）"
+    );
+    assert_eq!(
+        count_at_debug(&direct, ORIGIN_TO_CORNER),
+        2,
+        "⑶ 直の道の場所では記憶に頼らず解き直す"
+    );
+    // ⑶ 直の道でも解いた値が等しければ、今と同じく「変化なし」。
+    let same =
+        ResolvedBalloonText::resolve_with_background(&moved, NATIVE, DEFAULT_BALLOON_BACKGROUND);
+    rt.register_actor(actor.clone(), binding, same);
+    assert!(
+        !rt.refresh_actor_binding(&actor, binding, &moved),
+        "⑶ 解いた値が等しければ作り直さない（今の答え）"
+    );
+}
+
+/// T2（要件 1.4・1.5）: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
+/// （x・y の計 2 件）・返り値 `true`。その後の同じ再追従 3 回では 0 件（変わり目ごとに 1 件）。
+#[test]
+fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
+    let mut world = World::new();
+    let (window, slot) = spawn_reserved_slot(&mut world);
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let model = unspecified_model();
+    rt.register_actor_binding(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE),
+        &model,
+    );
+
+    let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), NATIVE);
+    let (answer, turned) = capture(|| rt.refresh_actor_binding(&actor, scaled, &model));
+    assert!(answer, "拡大率の変わる再追従は作り直す（今の答え）");
+    assert_eq!(
+        count_at_debug(&turned, ORIGIN_TO_CORNER),
+        2,
+        "変わり目の 1 回は解き直し、未指定の origin 成分ごとに 1 件（x・y）"
+    );
+
+    let (answers, events) = capture(|| {
+        (0..3)
+            .map(|_| rt.refresh_actor_binding(&actor, scaled, &model))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(answers, vec![false; 3]);
+    assert_eq!(
+        count_at_debug(&events, ORIGIN_TO_CORNER) + count_at_debug(&events, DEFAULT_EDGE),
+        0,
+        "変わり目の後の同じ再追従 3 回は解き直さない"
+    );
+}
+
+/// 要件 1.7 の代表（`draw.rs`・解き直しの中の作者向けの `warn!`）。
+const FONT_HEIGHT_ZERO: &str =
+    "font.height が 0（DirectWrite fontsize は正値必須）のため既定値 12 へフォールバックする";
+
+/// `WARN` の事象のうち、本文が `message` のものの数。
+fn count_warn(events: &[CapturedEvent], message: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.level == Level::WARN && e.message() == message)
+        .count()
+}
+
+/// T7（要件 1.7・5.1 の代表）: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
+/// 再追従 3 回で 0 件、拡大率の変わる再追従（＝解き直し）で 1 件。
+#[test]
+fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
+    let mut world = World::new();
+    let (window, slot) = spawn_reserved_slot(&mut world);
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let binding = TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE);
+    let model = BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, Some(0), FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+
+    let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), binding, &model));
+    assert_eq!(count_warn(&attached, FONT_HEIGHT_ZERO), 1, "装着に 1 件");
+
+    let (answers, events) = capture(|| {
+        (0..3)
+            .map(|_| rt.refresh_actor_binding(&actor, binding, &model))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(answers, vec![false; 3]);
+    assert_eq!(
+        count_warn(&events, FONT_HEIGHT_ZERO),
+        0,
+        "値の同じ再追従 3 回で 0 件"
+    );
+
+    let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), NATIVE);
+    let (answer, turned) = capture(|| rt.refresh_actor_binding(&actor, scaled, &model));
+    assert!(answer);
+    assert_eq!(
+        count_warn(&turned, FONT_HEIGHT_ZERO),
+        1,
+        "拡大率の変わる再追従（解き直し）で 1 件"
     );
 }

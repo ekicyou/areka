@@ -12,7 +12,7 @@ use crate::testkit::{MCP_V1, RPC_ACCEPT, Response, post_rpc, request, rpc, serve
 /// `initialize` を持つ旧式の 4 版（要件 3.1）。
 const LEGACY_VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 /// rmcp が対応する 5 版（`server/discover` の `supportedVersions` に古い順で並ぶ）。
-const SUPPORTED_VERSIONS: [&str; 5] = [
+pub(super) const SUPPORTED_VERSIONS: [&str; 5] = [
     "2024-11-05",
     "2025-03-26",
     "2025-06-18",
@@ -448,7 +448,7 @@ fn body_over_limit_is_413() {
 /// 版ごとの話し方で要求 1 件を送る。旧式の 4 版は `MCP-Protocol-Version` を付ける（`initialize` だけは
 /// 付けない＝クライアントの送り方どおり）。`2026-07-28` は `MCP-Protocol-Version`・`Mcp-Method` を付け、
 /// `params` に `_meta` を入れる（`name` が文字列なら `Mcp-Name` も付ける）。
-fn speak(
+pub(super) fn speak(
     addr: std::net::SocketAddr,
     version: &str,
     id: u64,

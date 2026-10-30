@@ -32,6 +32,7 @@ fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
         script: r"\s[0]hi\e".to_string(),
         epilogue: Vec::new(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     };
     match DispatcherMsg::from(TalkCommand::Start(start.clone())) {
         DispatcherMsg::Start(got) => {
@@ -110,6 +111,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     let talk_a = TalkId(1);
@@ -121,6 +123,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(A)");
 
@@ -130,6 +133,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         talk_id: talk_b,
         script: r"\s[2]B\_w[100]B_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(B)");
 
@@ -190,6 +194,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     let talk_a = TalkId(11);
@@ -200,6 +205,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Start(StartTalk {
@@ -207,6 +213,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
         talk_id: talk_b,
         script: r"\s[2]B\_w[100]B_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(B)");
 
@@ -274,6 +281,7 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     // 長い待ちを持つ script（Close 時点では自然完了していない）。
@@ -282,6 +290,7 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
         talk_id: TalkId(21),
         script: r"\s[1]X\_w[2500]X_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start");
 
@@ -314,6 +323,7 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     // \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
@@ -324,6 +334,7 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         talk_id: TalkId(31),
         script: r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start");
 
@@ -417,6 +428,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         kanade_tx,
         vec![Box::new(surface), Box::new(text)],
         test_system_vars(),
+        None,
     );
 
     let talk_c = TalkId(41);
@@ -425,6 +437,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         talk_id: talk_c,
         script: r"\s[9]hello\_w[100]world\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(C)");
     tx.send(DispatcherMsg::Tick {
@@ -455,6 +468,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         talk_id: talk_d,
         script: r"\s[8]again\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(D)");
     // D（`again`＝5 char・D=0.25）の占有 horizon=0.25 を跨ぐため base(10_000)＋elapsed 0.3 の 2 tick。
@@ -548,8 +562,12 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         snapshot
     });
 
-    let (tx, handle) =
-        spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)], provider);
+    let (tx, handle) = spawn_dispatcher(
+        kanade_tx,
+        vec![Box::new(surface), Box::new(text)],
+        provider,
+        None,
+    );
 
     // broadcast: text sink には ClearAll/Emote 等の担当外 cue も届く。次の Text 発火まで読み飛ばす。
     let recv_text = |want: &str| -> TalkCue {
@@ -569,6 +587,7 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         talk_id: TalkId(61),
         script: r"\s[0]%username\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(1)");
     // 初回 Tick で base_now 刻印＋elapsed=0.0 群（ClearAll/Emote/Text@0.0）を発火。
@@ -594,6 +613,7 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         talk_id: TalkId(62),
         script: r"\s[0]%username\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(2)");
     tx.send(DispatcherMsg::Tick {

@@ -134,7 +134,10 @@ impl TextLayerState {
     /// 今のサーフェスの箱の列にその名前が無ければ、名前・サーフェス番号・スコープを含む
     /// `warn!` を 1 行残して行き先を変えない（要件 4.4・10.1）。空回しの写し
     /// （[`TextLayerState::rehearsal_copy`]）では `warn!` を残さない（本番の適用が残す）。
-    pub fn route_select(&mut self, actor: &ActorKey, name: &str) {
+    ///
+    /// 箱が見つからず空回しの写しでもない（＝`warn!` を残した）ときだけ真を返す（strict の知らせ・
+    /// mcp-strict-errors 要件 4.2）。
+    pub fn route_select(&mut self, actor: &ActorKey, name: &str) -> bool {
         let surface = self.current_surface(actor);
         let found = boxes_of(&self.box_index, surface)
             .iter()
@@ -144,8 +147,9 @@ impl TextLayerState {
             Some(name) => {
                 tracing::debug!(actor = %actor, name = name.as_str(), "\\b[名前] で行き先を箱へ切り替え");
                 self.set_dest(actor, TextPlace::Box(name));
+                false
             }
-            None if self.rehearsal => {}
+            None if self.rehearsal => false,
             None => {
                 let surface = surface.map_or_else(|| "非表示".to_owned(), |id| id.to_string());
                 tracing::warn!(
@@ -154,6 +158,7 @@ impl TextLayerState {
                     actor = %actor,
                     "\\b[名前] の箱が今のサーフェスに無い——行き先を切り替えない"
                 );
+                true
             }
         }
     }

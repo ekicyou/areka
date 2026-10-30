@@ -137,3 +137,45 @@ SSP 2.9.07（`baseware.version` → `SSP/2.9.07 (20261001-0; Windows NT 10.0.263
 
 areka の宛先の解決（`crates/areka/src/mcp/resolve.rs` の `resolve`・`mcp-tool-entrances` の要件 3.2〜3.5）との違いは 4 つ: ⑴ 名前の英字の大小（areka は区別する）、⑵ 本体側名（areka は照合しない）、⑶ 名前の前後の空白（areka は削らない）、⑷ 空文字（areka は省略と同じに扱い、`get_expression_table` では `NG:Specified ghost is not active` と答える）。パスの照合（大小・区切り・末尾の区切りを同じとみなす・フォルダ名だけは不一致）は同じ。
 （2026-10-06 追記）この 4 つの違いは `areka-P0-mcp-ghost-name-match` の着地で無くなった。areka は上の表のどの行にも SSP と同じ答えを返す（実機の記録は同 spec の `verification/signoff.md`）。
+
+## 8. strict と `params` の形の実測（2026-10-29・`mcp-strict-errors` の設計の段）
+
+> 打つ前に開発者の許しを取って測った（設計の討議の承認）。宛先のゴーストは SSP に居た `窓際のぱすたさん`（台本を流す側）と `悪役令嬢クローディア`（`raise_event` で台本を返した側）。
+
+### 8.1 `sakurascript` に `strict` 真
+
+- 送った台本: `\0\s[99999]試し\![nosuch]\b[99]\y\e`
+- 答え: `OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=154)`。`154` はその時点のエラーログの最後の番号（ほかの種類の記録を含む通しの最後の番号ではなかった）。
+- `get_log(log_type=error, since_id=154)` の答え（3 件・台本の順）:
+  ```
+  #253 2026/10/29 21:09 [Error] 窓際のぱすたさん : [GHOST/Script] surface not found (99999) at position 2 : \s[99999]試し\![nosuch]\b[99]\y\e
+  #254 2026/10/29 21:09 [Error] 窓際のぱすたさん : [GHOST/Script] unknown command (nosuch) at position 13 : \![nosuch]\b[99]\y\e
+  #255 2026/10/29 21:09 [Error] 窓際のぱすたさん : [GHOST/Script] balloon not found (99) at position 23 : \b[99]\y\e
+  ```
+- 読み取れること:
+  - 表示の語は `Error`、記録の名はゴースト名。
+  - 本文は `[GHOST/Script] <何が無いか> (<引数>) at position <文字の位置> : <その位置から台本の終わりまで>`。
+  - 位置は台本の先頭を 0 とした文字の数（`試し` の 2 字を 2 と数えている）。
+  - 知らないタグ `\y` は記録されなかった。
+
+### 8.2 `raise_event` に `strict` 真
+
+- `悪役令嬢クローディア` へ `OnMouseDoubleClick` を送り、台本が返ったときの答え:
+  `OK:the ghost returned a script and it is being played. strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=255)` の後に、改行と `Script: <台本>` の行。
+  - `strict` が無いときの文（`OK:the ghost returned a script and it is being played.`）の後ろに、空白 1 つと `sakurascript` と同じ strict の文が続く形。
+- 台本が返らなかったとき（`窓際のぱすたさん` へ `OnMouseDoubleClick`・`OnAiTalk`）: `OK:the ghost returned no script.`（`strict` の有無で同じ）。
+
+### 8.3 測っていないもの
+
+- strict の台本の中から呼んだ別の台本（`\![raise,…]` に返った台本など）に記録が及ぶか。誤りを含む台本を返すゴーストが手元に無く、測れなかった。
+
+### 8.4 `params` がオブジェクトでない要求
+
+- `POST /api/mcp/v1` へ `{"jsonrpc":"2.0","id":7,"method":"tools/list","params":<値>}` を、`params` の値を `7`・`"x"`・`true`・`[1]` にして、版のヘッダ 2 つで送った。
+
+  | 版のヘッダ（`MCP-Protocol-Version`） | 4 つの値のどれでも | 比べ: `params` が `{}` |
+  |---|---|---|
+  | `2025-06-18` | HTTP 200・`id: 7` の `result`（ツールの一覧）＝`params` の形を見ずに普通に答える | 同じ |
+  | `2026-07-28` | HTTP 400・`id: 7` の `-32602`（`Invalid params: _meta requires protocolVersion and clientCapabilities`） | 同じ |
+
+- 無状態の版の 400 は、`params` の形より先に `_meta` の有無を確かめた答えで、`{}` でも同じ。`params` の形そのものへの答えは、どの版でも SSP からは見えない。

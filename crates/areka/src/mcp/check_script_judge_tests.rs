@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use areka_parsers::sakura::parse_noted;
-use areka_seriko::SurfaceResolver;
+use areka_seriko::{SurfaceResolver, SurfaceTarget};
 
 use super::*;
 
@@ -24,7 +24,7 @@ fn has(table: &[(u32, &[u32])], scope: u32, id: u32) -> Option<bool> {
         .map(|(_, ids)| ids.contains(&id))
 }
 
-impl ScriptFacts for Table {
+impl SkinLookup for Table {
     fn resolve_surface(&self, key: &str) -> SurfaceTarget {
         self.resolver.resolve(key)
     }
@@ -48,7 +48,7 @@ fn ghost() -> Table {
     }
 }
 
-fn check_with(script: &str, facts: Option<&dyn ScriptFacts>) -> Vec<Diagnostic> {
+fn check_with(script: &str, facts: Option<&dyn SkinLookup>) -> Vec<Diagnostic> {
     diagnose(
         script,
         &parse_noted(script),

@@ -117,6 +117,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     let surface_records = surface_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

@@ -152,13 +152,14 @@ impl Desk {
 }
 
 /// その版のクライアントが送る要求 1 件。`2026-07-28` は `params._meta` に版・名乗り・できることを
-/// 載せる。旧式の版は `params` をそのまま（無ければ欄ごと省く）。
+/// 載せる。旧式の版は `params` をそのまま（無ければ欄ごと省く）。`params` がオブジェクトでない要求は
+/// `_meta` を入れられないので、どの版でもそのまま送る。
 fn request(version: &str, case: &Value) -> Value {
     let mut message = json!({"jsonrpc": "2.0", "id": case["id"], "method": case["method"]});
     if let Some(params) = case.get("params") {
         message["params"] = params.clone();
     }
-    if version == STATELESS {
+    if version == STATELESS && case.get("params").is_none_or(Value::is_object) {
         message["params"]["_meta"] = json!({
             "io.modelcontextprotocol/protocolVersion": version,
             "io.modelcontextprotocol/clientCapabilities": {},
@@ -206,6 +207,15 @@ async fn compare(version: &str) {
         {"id": 7, "method": "tools/call", "params": {"name": "no_such_tool", "arguments": {}},
             "at": "/error/code", "is": -32602},
         {"id": 8, "method": "tools/call", "params": {"name": 7}, "at": "/error/code", "is": -32602},
+        // `params` がオブジェクトでない要求（spec: mcp-strict-errors 要件 6.5〜6.7）: 受け口は rmcp の
+        // 415 の後に、中継は受け口へ送らずに、同じ `request_shape_error` で `id` 付きの答えを返す。
+        // 数・文字列・真偽値は `-32600`、配列は `-32602`（知らない名前のメソッドでも同じ）。
+        {"id": 9, "method": "tools/list", "params": 7, "at": "/error/code", "is": -32600},
+        {"id": "s10", "method": "nope/unknown", "params": "x", "at": "/error/code", "is": -32600},
+        {"id": 11, "method": "tools/list", "params": true, "at": "/error/code", "is": -32600},
+        {"id": 12, "method": "tools/call", "params": [1], "at": "/error/code", "is": -32602},
+        // 答えた後の要求はいつもどおり（要件 6.6）。
+        {"id": 13, "method": "tools/list", "at": "/result/tools/0/name", "is": TOOL},
     ]);
 
     for case in cases.as_array().expect("配列") {
@@ -312,6 +322,16 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
             );
             let at = case["at"].as_str().expect("ポインタ");
             assert_eq!(direct.pointer(at), Some(&case["is"]), "{version}: {direct}");
+            if case["id"] == 1 {
+                // 組み込みの最初の答えの案内文は受け口と同じ定数で、「まだのツール」の 1 文は無い
+                // （spec: mcp-strict-errors 要件 5.2）。
+                let instructions = built_in["result"]["instructions"].as_str();
+                assert_eq!(instructions, Some(areka_mcp::INSTRUCTIONS), "{version}");
+                assert!(
+                    !areka_mcp::INSTRUCTIONS.contains("not implemented yet"),
+                    "{version}"
+                );
+            }
         }
         // 中継は受け口と話していない（控えは空のまま＝答えは自分で持っているもの）。
         let cache = Cache::new(Some(desk.cache_dir.path().to_owned()));

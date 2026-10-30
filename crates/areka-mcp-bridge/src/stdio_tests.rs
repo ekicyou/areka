@@ -188,6 +188,9 @@ async fn non_object_lines_get_invalid_request_and_the_next_line_passes() {
         r#"{"jsonrpc":"2.0","id":1}"#,
         r#"{"jsonrpc":"1.0","id":1,"method":"ping"}"#,
         r#"{"jsonrpc":"2.0","id":1,"method":7}"#,
+        // `params` の形だけが誤っても、`id` の無い通知と `id` が `null` の要求は今のまま。
+        r#"{"jsonrpc":"2.0","method":"ping","params":7}"#,
+        r#"{"jsonrpc":"2.0","id":null,"method":"ping","params":[1]}"#,
     ];
     let lines = format!("{}\n{}\n", wrong.join("\n"), ping(json!(2)));
     input.write_all(lines.as_bytes()).await.expect("書ける");

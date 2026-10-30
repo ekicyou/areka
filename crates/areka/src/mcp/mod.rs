@@ -6,7 +6,7 @@
 mod resolve;
 
 mod check_script;
-mod check_script_judge;
+pub(crate) mod check_script_judge;
 mod dump_balloon;
 mod dump_surface;
 mod get_active_ghost_list;
