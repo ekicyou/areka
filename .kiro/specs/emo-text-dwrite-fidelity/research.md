@@ -471,6 +471,61 @@
 
 この 3 点を「SSP と揃った」と見るかどうかは、上の写しを並べて開発者が決める（要件 6.6）。
 
+### 11.5 SSP との差の切り分け（2026-10-30）
+
+§11.4 の差のうち「列の位置（−2px）」と「太さ（墨の量）」の 2 点を、(A) `fid1` の写しの手元での解析と、(B) 実物の SSP 2.9.26 での測りの 2 つで切り分けた。
+
+**(A) `fid1` の写しの手元での解析**（写しは `<w>\target\pasta-verify\shots\fid1\`）
+
+- **列のずれは位置のずれで、墨の幅の違いではない**。4 列・48 字の字ごとに、墨の左端と右端の差（areka − SSP）を出した:
+
+| 墨の閾 | 左端の差 | 右端の差 |
+|---|---|---|
+| 濃さ > 0 | −2.10 | −1.85 |
+| 濃さ ≥ 0.25 | −2.21 | −1.71 |
+| 濃さ ≥ 0.5 | −2.62 | −1.42 |
+| 墨の重心（平均） | −2.01（−2.52〜−1.48） | — |
+
+  - 4 列とも同じ −2px。列の送りはどちらも 22。
+- **areka の列の置き方は設計どおり**。1 列目の行の矩形は [origin.x−20, origin.x]＝[411,431] で、em の箱をその真ん中に置くので中心は 421（`crates/areka-emo-text/src/region.rs:283`・`layout_scan.rs:414-419`・`draw.rs:505-510` の `SetLineSpacing(UNIFORM, h, h/2)`）。「繋」の墨は 412〜430・中心 421 で、そのとおりになっている。
+- **墨の量の差は描き手（レンダラー）の違いで、書体の顔の違いではない**:
+  - SSP は GDI のグレースケールのアンチエイリアス（`ANTIALIASED_QUALITY`）で描いている。手元で GDI に `@游ゴシック Medium`・高さ −20px・escapement 2700 を描かせると、SSP の写しと画素ごとに合う（差の絶対値の和 SAD 0.9〜3.6）。アンチエイリアス無しでは SAD 30〜74、ClearType では 20〜41 で合わない。SSP の写しの 31 色は、濃さの 15 段＋地の 2 色の分。
+  - 顔はどちらも Yu Gothic Medium（500）。Regular で描くと合わない（「暑」で SAD 84・「繋」の墨の量 55.7 に対し SSP は 73.8）。
+  - 理想の面積（8 倍の超標本化で出した墨の量）と較べると、SSP は 0.63〜0.93 倍、areka は 1.07〜1.13 倍（areka／理想: 繋 132.9／118.0・暑 127.0／112.7・み 69.2／64.6・言 101.7／94.2）。
+  - areka-emo-text は `SetTextAntialiasMode` も `SetTextRenderingParams` も呼んでいない（D2D の既定のまま）。
+  - 分類: DirectWrite の連続した被覆と、GDI の 16 段・グリッド合わせの違い。書体の顔の違いではない。**開発者の決め（2026-10-30）: 真似しない**。
+- 使った台本: `C:\Users\maz-o\AppData\Local\Temp\claude\C--home-maz-git-areka--claude-worktrees-kiro-start-emo-text-dwrite-fidelity-1b24fd\e97c516e-d601-464c-94cc-eea978e53196\scratchpad\inv\` の `a3.py`・`gdi.py`・`cmp.py`・`ideal.py`・`ref.py`。
+
+**(B) 実物の SSP 2.9.26 での測り**（排他テストの机を取って回した。写しは `<w>\target\pasta-verify\shots\rule1\` の `yu-base.png`・`msgothic.png`・`meiryo.png`・`meiryoui.png`・`yu-origin420.png`。台本は同じ scratchpad の `inv\cols.py`・`inv\fit2.py`）
+
+- 1 列目・`font.height,20`。GDI の `TA_TOP` の基準の x は、GDI で描いたものを写しに合わせて逆に解いた（3 字で一致・SAD 0〜4）。列の送りはどの書体でも 22。
+
+| 場合 | tmHeight／ascent／descent／internal leading | 基準の x | 墨 x | 墨の重心 |
+|---|---|---|---|---|
+| 游ゴシック Medium（既定） | 28／21／7／8 | 436 | 413〜432 | 422.90 |
+| ＭＳ ゴシック | 22／18／4／2 | 433 | 413〜430 | 421.54 |
+| メイリオ | 32／22／10／12 | 438 | 414〜433 | 423.67 |
+| Meiryo UI | 27／22／5／7 | 435 | 411〜430 | 420.39 |
+| 游ゴシック・origin.x を 431→420 にした写し | 28／21／7／8 | 425（ちょうど −11） | 402〜421 | 411.90 |
+
+  - 既定の場合の写しは、`fid1` の SSP の写しと同じだった。
+- **規則**:
+  - 基準は `origin.x` で、validrect の右端ではない（`origin.x` を −11 動かすと全部が −11 動く）。
+  - GDI の字の枠（幅 tmHeight）は、x＝origin.x − 9 を真ん中にして置かれる。基準の x（`TA_TOP`）＝ origin.x − 9 ＋ trunc(tmHeight/2)（C の整数の割り算で 0 の向きへ切り捨て。tmHeight 27 の Meiryo UI で切り捨ての向きが決まる）。
+  - 列の枠は [origin.x−20, origin.x+2]・幅 22＝列の送り。
+  - 「ascent の基線が決まった位置に来る」の仮説はメイリオで 1px 外れた。「枠の真ん中が決まった位置に来る」は 4 書体とも合う。
+- **字の位置**: SSP は `@` 付きの書体の横書きの字を 90° 回して描く。横書きの基線は縦の線になり、x＝基準 − tmAscent（游ゴシックとＭＳ ゴシックで 415）に来る。漢字・かなの em の箱は基線から約 0.12em 下に沈むので、em の箱の中心＝基線＋約 0.38em で、游ゴシックでは約 422.6。areka は em の箱の中心を 421 に置くので約 −1.6px で、これが §11.4 の −2px。
+- 測っていないこと: 「+2」（列の送り 22 と font.height 20 の差）が行間の設定で変わるかどうか。下の案 A／B は areka でまだ試していない。
+- 後始末: 一時のフォルダ `C:\wintools\ssp\balloon\zz-tmp-origin-test` は消した。SSP は クローディア だけで起こし直した。9276 は空いている。
+
+**要件との突き合わせ（開発者の決め待ち）**:
+
+- areka は今、要件 5.1（em の箱の中心＝行の矩形の中心 ±1px）を満たしている。SSP に合わせると、em の箱の中心が行の矩形の中心から約 +1.6px（游ゴシックで）外れる。だから要件の段の決めになる。
+- 案:
+  - A: GDI の `@` 付き書体の置き方をそのまま真似る。
+  - B: em の箱の中心を、書体の寸法から出した量だけずらす。
+  - C: 今の設計のままにして、差を受け入れる。
+
 ## 出典
 
 - [Vertical Text（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/directwrite/vertical-text)
