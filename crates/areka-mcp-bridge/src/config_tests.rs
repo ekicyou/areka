@@ -6,6 +6,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use areka_user_data::AppProfile;
+
 use super::*;
 
 fn candidates_of(port_value: Option<&str>) -> Vec<u16> {
@@ -43,91 +45,68 @@ fn port_value_maps_to_candidates_in_four_ways() {
 }
 
 fn cache_dir_of(
-    profile_dir: Option<&str>,
-    beside_profile: Option<&str>,
-    local_app_data: Option<&str>,
+    profile_dir: Option<PathBuf>,
+    beside: Option<AppProfile>,
+    local_app_data: Option<PathBuf>,
 ) -> Option<PathBuf> {
-    Config::from_values(
+    Config::from_values(None, profile_dir, beside, local_app_data).cache_dir
+}
+
+/// ワークツリーの `target\` の下の見本のパス（組むだけで開かない）。
+fn under_target(rel: &str) -> PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(r"..\..\target\config-tests")
+        .join(rel)
+}
+
+/// 控えの置き場の表の 5 行（bridge-store-user-root 要件 2.4〜2.10・6.4・設計「`from_values` の控えの置き場」）。
+#[test]
+fn cache_dir_follows_the_table() {
+    let local = under_target("Local");
+    let ready = under_target(r"Local\areka\profile\areka");
+    let root = under_target(r"Local\areka");
+
+    // ⑴ `AREKA_PROFILE_DIR` があれば、隣の答えがどれでもその下（2.9）。
+    for beside in [
         None,
-        profile_dir.map(PathBuf::from),
-        beside_profile.map(PathBuf::from),
-        local_app_data.map(PathBuf::from),
-    )
-    .cache_dir
-}
-
-/// `LOCALAPPDATA` の値の見本（組むだけで開かない）。
-const LOCAL: &str = r"C:\Users\u\AppData\Local";
-
-/// 控えの置き場の段の順（user-data-root 要件 6.1〜6.3）: 記憶の置き場の環境変数 →
-/// 隣の areka と同じに決めた記憶の置き場 → `LOCALAPPDATA\areka` → なし。どれもその下の `mcp-bridge`。
-#[test]
-fn cache_dir_follows_the_steps_in_order() {
-    let beside = Some(r"C:\Users\u\AppData\Local\areka\profile\areka");
-
-    // ⑴ `AREKA_PROFILE_DIR` があれば、ほかが揃っていてもその下。
+        Some(AppProfile::Ready(ready.clone())),
+        Some(AppProfile::Unlocatable),
+    ] {
+        assert_eq!(
+            cache_dir_of(Some(under_target("prof")), beside, Some(local.clone())),
+            Some(under_target(r"prof\mcp-bridge"))
+        );
+    }
+    // ⑵ 使える形なら、その下の `mcp-bridge`（2.6・2.8）。
     assert_eq!(
-        cache_dir_of(Some("prof"), beside, Some(LOCAL)),
-        Some(PathBuf::from(r"prof\mcp-bridge"))
+        cache_dir_of(
+            None,
+            Some(AppProfile::Ready(ready.clone())),
+            Some(local.clone())
+        ),
+        Some(ready.join("mcp-bridge"))
     );
-    // ⑵ 無ければ、隣の areka と同じに決めた記憶の置き場の下。
+    // ⑶ 使える形以外の 3 つは、`LOCALAPPDATA` が在っても控え無し（そこへ落ちない・2.4・2.5・2.7）。
+    for beside in [
+        AppProfile::RootMissing { root: root.clone() },
+        AppProfile::MigrationPending { root: root.clone() },
+        AppProfile::Unlocatable,
+    ] {
+        assert_eq!(
+            cache_dir_of(None, Some(beside.clone()), Some(local.clone())),
+            None,
+            "{beside:?}"
+        );
+    }
+    // ⑷ 隣に areka が居ないなら `LOCALAPPDATA\areka\mcp-bridge`（今どおり・2.10）。
     assert_eq!(
-        cache_dir_of(None, beside, Some(LOCAL)),
-        Some(PathBuf::from(
-            r"C:\Users\u\AppData\Local\areka\profile\areka\mcp-bridge"
-        ))
+        cache_dir_of(None, None, Some(local.clone())),
+        Some(local.join(r"areka\mcp-bridge"))
     );
-    // ⑶ 隣に areka が居ない（決めた置き場が無い）なら `LOCALAPPDATA` の下（今どおり・6.2）。
-    assert_eq!(
-        cache_dir_of(None, None, Some(LOCAL)),
-        Some(PathBuf::from(r"C:\Users\u\AppData\Local\areka\mcp-bridge"))
-    );
-    // どの段も取れなければ控えなし（6.3）。
+    // ⑸ 無い・空・相対の `LOCALAPPDATA` は使わない（起こされた場所しだいの相対の置き場に黙って書かない）。
     assert_eq!(cache_dir_of(None, None, None), None);
-}
-
-/// 隣の areka の置き場を areka と同じ関数（`app_profile_dir`）で決めて渡すと（要件 6.1・10.5）、
-/// 書ける根を使う形なら `<書ける根>\profile\areka\mcp-bridge`、今の形なら exe の隣の木の下になる。
-#[test]
-fn beside_profile_from_the_shared_rule_lands_under_the_areka_profile() {
-    let exe_dir = std::path::Path::new(r"C:\app");
-    let user_root = areka_user_data::Layout {
-        user_root: Some(areka_user_data::UserRoot {
-            dir: PathBuf::from(r"C:\Users\u\AppData\Local\areka"),
-            origin: areka_user_data::UserRootOrigin::Default,
-        }),
-        reason: areka_user_data::Reason::Unwritable,
-    };
-    let beside = areka_user_data::Layout {
-        user_root: None,
-        reason: areka_user_data::Reason::Neither,
-    };
-    let cache = |layout: &areka_user_data::Layout| {
-        Config::from_values(
-            None,
-            None,
-            areka_user_data::app_profile_dir(None, layout, Some(exe_dir)),
-            Some(PathBuf::from(LOCAL)),
-        )
-        .cache_dir
-    };
-    assert_eq!(
-        cache(&user_root),
-        Some(PathBuf::from(
-            r"C:\Users\u\AppData\Local\areka\profile\areka\mcp-bridge"
-        ))
-    );
-    assert_eq!(
-        cache(&beside),
-        Some(PathBuf::from(r"C:\app\profile\areka\mcp-bridge"))
-    );
-}
-
-/// 空・相対の `LOCALAPPDATA` は使わない（起こされた場所しだいの相対の置き場に黙って書かない）。
-#[test]
-fn cache_dir_ignores_a_local_app_data_that_is_not_absolute() {
-    assert_eq!(cache_dir_of(None, None, Some("")), None);
-    assert_eq!(cache_dir_of(None, None, Some("local")), None);
+    assert_eq!(cache_dir_of(None, None, Some(PathBuf::new())), None);
+    assert_eq!(cache_dir_of(None, None, Some(PathBuf::from("local"))), None);
 }
 
 /// 待つ時間の既定は 3 つの定数（設計 D-11）。

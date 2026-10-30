@@ -292,6 +292,7 @@ dependencies = [
  "futures",
  "http",
  "httparse",
+ "log-capture-kit",
  "rmcp",
  "serde_json",
  "sse-stream",

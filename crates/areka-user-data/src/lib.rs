@@ -10,8 +10,8 @@ mod establish;
 
 pub use copy::{CopyDone, CopyError, CopyStats, copy_tree_atomic};
 pub use establish::{
-    establish, establish_readonly, establish_readonly_from, open_dir_for_add, probe,
-    readonly_app_profile_dir,
+    establish, establish_readonly, establish_readonly_from, locate_app_profile, open_dir_for_add,
+    probe, readonly_app_profile_dir,
 };
 
 use std::ffi::{OsStr, OsString};
@@ -115,6 +115,20 @@ pub struct Layout {
     /// `None`＝今の形（実行ファイルの隣）。
     pub user_root: Option<UserRoot>,
     pub reason: Reason,
+}
+
+/// 記憶の置き場を決めるだけの答え（作らない・写さない。spec: bridge-store-user-root 要件 2.1〜2.9）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AppProfile {
+    /// 記憶の置き場。[`app_profile_dir`] と同じ値（[`PROFILE_DIR_ENV`]・在る書ける根の
+    /// `profile\areka`・今の形なら実行ファイルの隣の `profile\areka`）。
+    Ready(PathBuf),
+    /// 書ける根を使う形だが、根のフォルダがまだ無い（`root` は決めた根）。
+    RootMissing { root: PathBuf },
+    /// 根は在るが、実行ファイルの隣の記憶がまだ写されていない（`migrate_source` の条件）。
+    MigrationPending { root: PathBuf },
+    /// 書ける根を使う形だが、場所を決められない（[`Decision::Fallback`]）。
+    Unlocatable,
 }
 
 /// 純粋な判断（要件 1.1〜1.4・2.1・2.3・2.4 の「決められない」）。フォルダを作るのは `establish`。
