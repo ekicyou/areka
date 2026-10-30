@@ -119,3 +119,4 @@
 - 5.1 のレビューで、`doc/ukadoc-coverage/ledger/sakura-script.toml` の `\f[name]` の行は今も「FontCatalog::family_for」と書き、GDI の名前での引き直しに触れていないと分かった（誤りではない・本 spec の範囲は `font.name` の行だけ）。完了の棚卸で揃えるか決める。
 - 5.3（実機 fid1）: 括弧 7 字の墨の始まりの行は areka と SSP 2.9.26 で一致。違いは 2 つで開発者の判定待ち: areka の列が SSP より 2px 左（4 列とも）・墨の量が 1.2〜1.8 倍（SSP は色 31 通りで縁のぼかし方が違い、太さの比そのものではない）。SSP は動いていなかったので持ち主（window-work-area-clamp）の了解を得て起こし、ぱすたへの切り替えの後もクローディアと 2 体で並んで動いたまま残した。
 - 最終検証の是正（validate-fix-1）: `viewbox_draw_decoration_tests.rs` が 1192 行で行数の番人（1000 行）が赤。D1〜D3・F3・F4 後半を兄弟の `viewbox_draw_decoration_face_tests.rs` へ逐語で移した（859／346 行・許可表は触らない）。emo-text に新しいテストのファイルを 1 本足したので、ウェーブの約束「emo-text に新しいソースファイルを足さない」から外れる（C12 の 6 本へ知らせ済み・default-balloon-selfmade は届かず）。
+- 6.6 の決め（開発者・10-30）: 案 C＝列の位置は今の設計（em の箱を行の矩形の真ん中）のまま、SSP との約 1.6px の差は受け入れて記録だけ（research.md §11.5）。墨の量は描き手の違い（GDI の 16 段のぼかし）で真似しない。最後の確かめの `script_security_real_run` の赤は、5.3 で起こした SSP のぱすたが 9276 を握っていたためで、降ろした後の回し直しは緑。
