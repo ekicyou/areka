@@ -128,7 +128,7 @@
   - _Depends: 3.2, 4.2, 5.1_
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.3, 5.4, 6.4, 7.2, 7.4_
 
-- [ ] 6. 網羅台帳と互換の対応表を実物に合わせる
+- [x] 6. 網羅台帳と互換の対応表を実物に合わせる
   - `sakura-script.toml`: `\![set,windowstate,stayontop]`・`!stayontop` を `implemented`、`\v` を `degraded`（注記に SSP 2.9.26 の働きに合わせたことと研究 11 節の証拠）、持ち主をこの spec に。`minimize` の行は変えない
   - `shiori.toml`: `alwaysstayontopbutton.caption` を `vocabulary-only` のまま、持ち主と注記（メニューの項目を作らない・裁定 11）
   - `doc/COMPAT_ARCHITECTURE.md` §8 に新しい行を足し、既にある 3 行（基底を据えるとき台本の組を残さない裁量・`window-link-directives` の行の「食い違う」・シェルの差し替えの行の定義点）を起動の段とシェルの切り替えに分けて書き直し、上書きを名指しで残す。`doc/pasta-real-run.md` 段 1 の「着地で変わるはずの所」を改める
