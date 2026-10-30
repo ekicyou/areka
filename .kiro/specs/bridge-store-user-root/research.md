@@ -532,6 +532,94 @@ INFO areka_mcp_bridge::redirect: [bridge] writes under LOCALAPPDATA are redirect
 
 **戻し**: S3 で作った本当の `%LOCALAPPDATA%\areka`（空）を消した。S5・S5b で作った箱の中の `areka\`（控えの 2 つを含む）を消した。`after\user-root\` はできていない。10:02 の時点で、箱の中に `areka\` は無く、本当の `%LOCALAPPDATA%\areka` も無い。控えは `after\backup\` に置いたまま（戻すのは 6.3 の終わり）。
 
+### 11.5 M-2 の本番（Store 版の Claude Desktop から起こした・2026-10-30 10:34〜18:07）
+
+**共通の形**:
+
+- 検体は 11.4 の `after\areka-mcp-bridge.exe`（S2）と `after-alone\areka-mcp-bridge.exe`（S4）。どちらも同じ SHA256 `99906F75…95B0`。開発者が `claude_desktop_config.json` の `areka` の `command` を検体へ向け直し、Claude Desktop を起動し直した（S2 で 1 回・S4 で 2 回）。
+- 起こす直前と直後に `m2\snap.ps1` で箱・本当の置き場・検体の木を写した（`m2\s2\`・`m2\s4\` の `pre*.txt`・`post*.txt`）。中継の標準エラーは 11.3 と同じ Claude Desktop の記録 `mcp-server-areka.log` から、測った時間帯の行を写した（`*-log-excerpt.log`・時刻は UTC・下の表は日本の時刻）。
+- 測る前の形は `m2\pre-measure.txt`（11.4）。控えは `after\backup\box-LocalCache-Local-areka\` に置いたまま測った。
+
+**S2**（本当の `%LOCALAPPDATA%\areka\profile\areka\` を、測りの間だけ PowerShell の道具から空で作った・10:34:46・直前の形は `m2\s2\pre.txt`）:
+
+| 点 | 見たこと |
+|---|---|
+| 場面の作り方 | 本当の `areka\profile\areka\` を空で作った。検体は `after\`（`areka.exe` の隣に中継）で、利用者ごとの置き場の形 |
+| 起動し直し | 11:42:03 と 11:42:06 に検体の中継が 2 つ起きた。どちらもパッケージの名乗りは無し（pid 6848・10964・`GetPackageFamilyName` が 15700） |
+| areka | 9802 の areka につないだ（11:42:06・11:42:07）。この areka は測る側がワークツリーの areka を `target\bridge-store-measure\areka-host\` の根で起こしたもので、9801・9821 が使用中だったので 9802 で待ち受けた（10:34:08〜11:44:35・`areka-host\logs\s4-160312\stdout.log`） |
+| (a) できたフォルダ | 本当の置き場に `profile\areka\mcp-bridge\` が 1 つ。箱の中は 0（測った後も `areka\` が無い） |
+| (b) 記憶の写し | 0。exe の隣の記憶の SHA256 は `EB18050A…C900` のまま |
+| (c) 控え | 本当の `%LOCALAPPDATA%\areka\profile\areka\mcp-bridge\` に `server-info.json`（625）と `tools.json`（6807）が書かれた（11:42:07） |
+| 控えを持たない理由 | 無し（根が在り写しも済んでいる形） |
+| 箱の行 | 1 つ目の中継は B2 `why="not_there_yet"`（起きた時点で `mcp-bridge\` がまだ無かった）。2 つ目は箱の行が無い（1 つ目がつないで `mcp-bridge\` を作った後に起き、見立てが「箱の外」になった。箱の外は記録を出さない） |
+| 裏の書き | 2 件（下） |
+
+S2 の 1 つ目の中継の行（ASCII のまま・時刻を省き、利用者名だけ置き換えた・候補・待つ時間・`answered the first inquiry` の行は省いた。下の S4 も同じ）:
+
+```
+INFO areka_user_data::establish: user data layout decided event="user_data_layout" mode="user_root" reason="winget_install" user_root=C:\Users\<利用者>\AppData\Local\areka origin="default" marker="Areka.Areka.Portable_measure.db"
+INFO areka_mcp_bridge::redirect: [bridge] cannot tell whether writes under LOCALAPPDATA are redirected why="not_there_yet" asked=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\profile\areka\mcp-bridge
+INFO areka_mcp_bridge::service: [bridge] connected to areka port=9802
+```
+
+2 つ目は 2 行目（箱の行）が無く、ほかは同じ。
+
+S2 の裏の書き（どちらも開発者の本物の中継・測りの数には入れない）:
+
+1. 10:34:27 に、箱の中の `areka\mcp-bridge\server-info.json`（625・SHA256 `4F3F1CEC…EEBA`）が書かれていた（`m2\s2-pre-raw.txt`）。6.2 の後に箱の中を空にした後の書きで、測る側が起こした 9802 の areka が待ち受けを始めた 19 秒後に当たる（開発者の本物の中継がその areka へつないで書いた）。本当の置き場を作る前に `m2\ura-before-s2-box-areka\` へ移し、箱の中を空にした（`m2\s2\pre.txt` で箱の中は無し）。
+2. 11:41:14 と 11:41:20 に、記録の形が検体と違う中継が 2 つ起きた（判断の行も箱の行も無く、`cache dir` は `%LOCALAPPDATA%\areka\mcp-bridge`）。設定を検体へ向け直す前の、開発者の本物の中継と見る。測る側が起こした 9802 の areka へつなぎ、11:41:21 に `server-info.json`（625）と `tools.json`（6807）を**本当の** `%LOCALAPPDATA%\areka\mcp-bridge\` へ書いた。測りで本当の `areka\` を作っていたので、箱の中へは回されなかった。この 2 つは 11:41:46 に終わり、11:42:03 から検体の中継が起きた。写しは `m2\s2\after-real-areka\mcp-bridge\`。
+
+**S4**（`after-alone\` に中継の exe だけを置き、本当の `%LOCALAPPDATA%\areka` も箱の中の `areka\` も無い・直前の形は `m2\s4\pre1b.txt`。11:43 の `pre1.txt` は S4 を始める前の写しで、使っていない）:
+
+| 点 | 1 回目の起動し直し（16:01:58・16:02:03） | 1 回目の後の MCP の要求（16:03:29） | 2 回目の起動し直し（18:05:21・18:05:26） |
+|---|---|---|---|
+| areka | 居ない（areka を起こす前に起動し直しが来た・下の「タスクの見込みと違ったこと」） | 測る側がワークツリーの areka（えも？？・9801）を起こし、`get_status` を 1 回呼んだ | 止めてあった（居ない） |
+| 中継の答え | 組み込みの答え（`areka not found; answered from the built-in definitions`） | `connected to areka port=9801` | `initialize` は控えから（`areka not found; answered from the cache`）・`tools/list` は組み込みの答え |
+| 箱の行 | 2 つとも B2 `why="not_there_yet"`・`asked` は本当の `%LOCALAPPDATA%\areka\mcp-bridge` | （起動し直しではないので出ない） | 2 つとも B1。`resolved` と `box_dir` は箱の中を指す |
+| (a) できたフォルダ | 0 | 箱の中に `areka\`・`areka\mcp-bridge\`。本当の置き場は 0 | 0 |
+| (b) 記憶の写し | 0 | 0 | 0 |
+| (c) 控え | 書かれない | 箱の中の `areka\mcp-bridge\server-info.json`（625・SHA256 `4F3F1CEC…EEBA`）。`tools.json` はツールの一覧を取り直す要求が来なかったので書かれない | 書かれない（箱の中の木は 1 回目の後と同じ・`post2.txt`） |
+| 本当の `%LOCALAPPDATA%\areka` | 無い | 無い | 無い |
+| 裏の書き | 無し | 無し | 無し |
+
+1 回目の起動し直しの行（2 つとも同じ形）:
+
+```
+INFO areka_mcp_bridge::redirect: [bridge] cannot tell whether writes under LOCALAPPDATA are redirected why="not_there_yet" asked=C:\Users\<利用者>\AppData\Local\areka\mcp-bridge
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\mcp-bridge
+INFO areka_mcp_bridge::service: [bridge] areka not found; answered from the built-in definitions method="initialize"
+```
+
+2 回目の起動し直しの行（2 つとも同じ形）:
+
+```
+INFO areka_mcp_bridge::redirect: [bridge] writes under LOCALAPPDATA are redirected into the app's private folder (Microsoft Store app) asked=C:\Users\<利用者>\AppData\Local\areka\mcp-bridge resolved=\\?\C:\Users\<利用者>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\areka\mcp-bridge box_dir=\\?\C:\Users\<利用者>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local
+INFO areka_mcp_bridge: [bridge] cache dir dir=C:\Users\<利用者>\AppData\Local\areka\mcp-bridge
+INFO areka_mcp_bridge::service: [bridge] areka not found; answered from the cache method="initialize"
+```
+
+Claude Desktop から起こした中継でも、`canonicalize` は箱の中の場所を返し、`resolved` と `box_dir` には 11.4 の S5b と同じく `\\?\` の頭が付いた。B1 を出すのに areka は要らない（控えのフォルダが箱の中に在れば出る）。2 回目で B1 が出て箱のフォルダの場所が箱を指したので、設計に戻る理由は無い。
+
+**タスクの見込みと違ったこと**: 6.3 のタスクは、1 回目の起動し直しで B2 の行と箱の中の控えの両方が出ると見込んでいた。実際は、1 回目の起動し直しの時点では areka が居らず控えは書かれなかった。段取りは areka を先に起こす順だったが、測る側が机を取り直して areka を起こす前に、開発者が Claude Desktop を起動し直したため。測る側はその後に机を取り、areka（9801）を起こして `get_status` を 1 回呼んだ。控えは、その後に areka を起こして最初の MCP の要求を送ったとき（16:03:29）に、起動し直しをしないまま箱の中にできた（中継は要求のたびに areka を探し、つながったときに控えを書く・11.3 の共通の形）。そのため 3 回目の起動し直しは要らず、2 回目の起動し直しで B1 を見た。タスクの「つながらず控えが書かれなかったときは、つながる形を整えて測り直す」に当たるが、測り直しは起動し直しでなく MCP の要求 1 回で足りた。
+
+**M-2 の本番で分かったこと**:
+
+1. 本当の `profile\areka\` が在ると（S2）、直した中継は根を作らず写さず、控えを本当の `profile\areka\mcp-bridge\` に書く。箱の中には何もできず、箱の行は B2（`mcp-bridge\` がまだ無いとき）か無し（在るとき）で、B1 は出ない（要件 2.6・3.6）。
+2. 中継を `areka.exe` と別の場所に置き本当の `%LOCALAPPDATA%\areka` が無いと（S4）、控えの置き場は `%LOCALAPPDATA%\areka\mcp-bridge` に決まり、areka へつないだときに箱の中の `LocalCache\Local\areka\mcp-bridge\` にできる。次の起動では B1 で、箱の中と箱のフォルダの場所が記録に出る（要件 3.5・3.9）。
+3. 箱の中にできた控えは、次の起動で読まれる（`answered from the cache`）。
+4. 本当の `%LOCALAPPDATA%\areka` が在る間は、開発者の本物の中継の書きも箱へ回されず本当の場所へ行く（S2 の裏の書き 2）。説明書の「本当の %LOCALAPPDATA%\areka\ がまだ無いと、…回されます」のとおり。
+
+**戻し**（S2 の後・S4 の後・PowerShell の道具から）:
+
+1. S2 で作った本当の `%LOCALAPPDATA%\areka` を、写しを `m2\s2\after-real-areka\` に取った上で消した（S4 の直前の `pre1b.txt` で本当の置き場は無し）。
+2. S4 の後、箱の中の `areka\` を `m2\s4\box-areka-after-s4\` へ写してから消した。
+3. `after\backup\box-LocalCache-Local-areka\` を箱の中の元の場所へ写して戻した（`server-info.json` 625・SHA256 `4F3F1CEC…EEBA`、`tools.json` 6807・SHA256 `CFF68DF9…7989`、どちらも元の時刻 09:02:51）。
+4. 開発者が設定の `command` を元の `C:\\home\\maz\\store\\.areka-mcp\\areka-mcp-bridge.exe` へ戻し、Claude Desktop を起動し直した（本物の中継が 2 つ・pid 36844・27652・18:07:34〜35・どちらも `C:\home\maz\store\.areka-mcp\areka-mcp-bridge.exe`・`m2\s4\restore-bridges.txt` と `m2\s4\restore-desktop-log-excerpt.log`）。
+5. 戻した後の写し `m2\s4\after-restore.txt` を測る前の `m2\pre-measure.txt` と見比べた。違うのは、箱の中の `\mcp-bridge` のフォルダの時刻（戻した 18:06:21）と、測りのフォルダの `after\backup\` の木（6.2 で作った控え）だけ。本当の `%LOCALAPPDATA%\areka` は無い。
+
+**排他テストの机**: S2 では、測る側が机を取って 10:34 ごろに 9802 の areka を起こし、開発者からほかのテストのために机を空けてほしいと頼まれた 11:44 ごろに止めて、机を返した。S4 で areka を起こして `get_status` を呼ぶ間だけ机を取った。返しに行ったとき、机の記録はもう別のセッションへ渡っていた。2 回目の起動し直しは areka も SSP も要らないので、机は取らなかった。
+
 ## 12. 設計の討議で決めたこと（2026-10-29）
 
 - 議題 1（承認）: 実機の測りで Claude Desktop の起動し直しを頼むのは 4 回（M-1 の S1・S2、M-2 の S2 を 2 回）。M-2 の S1・S3 は Bash の道具（その子も同じ箱へ回される）から検体の中継を起こして測る。本物の Claude Desktop でしか確かめられない「箱の行と箱のフォルダの場所」は M-2 の S2 の 2 回目に入る。
