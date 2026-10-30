@@ -136,6 +136,13 @@ fn row05_reload_spellings_are_known_but_makoto_and_aigraph_are_not() {
     );
 }
 
+/// 常に手前の指令の 3 つは表に担当があり、`unknown_tag`・`unknown_command` を出さない
+/// （stay-on-top-directives 要件 1.8）。
+#[test]
+fn row05_window_state_directives_are_known() {
+    silent(r"\![set,windowstate,stayontop]\![set,windowstate,!stayontop]\v");
+}
+
 #[test]
 fn row06_raw_surface_id_missing_or_out_of_range() {
     fires(r"\s[99999]", Kind::MissingSurface, MSG_MISSING_SURFACE);
