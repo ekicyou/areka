@@ -123,10 +123,10 @@
 #### Acceptance Criteria
 
 1. When ぱすたを手順書 `doc/pasta-real-run.md` 4 節の起動の塊（`AREKA_APP_SMOKE_EXIT_MS=360000`・6 分で自分を終える）で起こし、何も操作せずに置く, the areka shall 最初の 60 秒を除いた 5 秒ごとの値で、CPU（1 コアに対する割合の中央値と最大）・WorkingSet・答えなくなった回数・panic と ERROR の数・終了コードを、debug 版と release 版の両方で記録に残す。
-2. The areka shall release 版・debug 版のどちらでも、CPU の中央値を直す前（release 20%・debug 69%）より下げる。
+2. The areka shall release 版・debug 版のどちらでも、CPU の中央値を直す前（2026-10-30 に同じ条件で取り直した基準: release 13.1%・debug 47.4%・`verification.md`）より下げる。
 3. If release 版の CPU の中央値が、同じ面を出した SSP の基準の中央値を上回る, the areka shall その差と理由を記録に書き、開発者の判断を仰ぐ（黙って合格にしない）。
 4. The areka shall 測りのあいだに、面 1002（動くボールが動いている面）が出ていたことを記録から確かめる。
-5. The areka shall WorkingSet が測りのあいだに増え続けないことを確かめ、直す前（release 176 MB・debug 197 MB）との差を記録に残す。
+5. The areka shall WorkingSet が測りのあいだに増え続けないことを確かめ、直す前（同じく取り直した基準: release 176 MB・debug 193 MB）との差を記録に残す。
 6. The areka shall 測りの条件（持っていた机・機械ぜんたいの CPU の中央値・版・コミット）を記録に残し、測りはほかのセッションの重い仕事と重ならない静かな机で行う。
 7. The areka shall 測りの根・記録・一時のフォルダを、ワークツリーの `target\` の下だけに置く。
 
@@ -174,7 +174,7 @@
 
 1. **記録の出し方**（要件 1・2）: brief の案 ⒜。コマ送りだけの適用の行は `debug!` で出す（⒞ と同じ結果）。`trace!` は性能の道具（`areka_emo_present=debug`）から行が消えるので取らない。⒝（まとめて 1 行）は `judge-perf.py` の 1 適用 1 行を壊すので取らない。
 2. **「コマ送りだけの適用」の範囲**（要件 1 の定義・1.5）: 動く絵のコマと SERIKO のアニメーションのコマの両方を含める。着せ替えと拡大率の替わりは INFO に残す。隠されていた窓を出し直す適用は、見えなかった窓が見えた状態の替わりなので INFO に残す（要件 1.5）。
-3. **CPU の合格の線**（要件 6.2・6.3）: release 版・debug 版とも、直す前（release 20%・debug 69%）より下がることを必須にする。release 版が同じ面の SSP の中央値を上回ったら、差と理由を書いて開発者に仰ぐ。wintf の全面の描き直し（WUC の `BeginDraw`）は本 spec では縮められないので、SSP に届かないことがある。
+3. **CPU の合格の線**（要件 6.2・6.3）: release 版・debug 版とも、直す前（2026-10-30 に同じ条件で取り直した基準: release 13.1%・debug 47.4%・`verification.md`）より下がることを必須にする。release 版が同じ面の SSP の中央値を上回ったら、差と理由を書いて開発者に仰ぐ。wintf の全面の描き直し（WUC の `BeginDraw`）は本 spec では縮められないので、SSP に届かないことがある。
 4. **「変わらない層を作り直さない」の読み**（要件 3.1）: 前の絵を写し、前の適用から変わった範囲の中だけを全部の層ごと重ね直す形を、要件 3.1 を満たすものとする。範囲の外は前の絵をそのまま使う。
 5. **emo-present の中に収める約束**（Boundary Context）: 約束は外す。emo-present の中だけでは要件 3.1 を満たせないため。emo-compose で触るのは `lib.rs`（口を 1 つ足す）と `blit.rs` の兄弟の新しいファイルだけで、`plan.rs`・`pattern.rs` の中身は変えない。設計に入る前に、触る行を `seriko-pattern-calls` のセッションと合わせる。回避の形（控えを増やす・GPU の絵だけ使い回す）へは逃げない。
 6. **同じ面を出した SSP の基準**（要件 7）: 測る。SSP を面 1002 にそろえ（areka の直す前の値をそのまま比べに使える）、測りの始めと終わりに面 1002 が出ていたことを SSP の MCP で確かめる。SSP の操作の前には、毎回開発者の許しを取る。
