@@ -7,7 +7,10 @@
 //! [`face_digits_of`]（大小無視・`.png`・全数字）を共有する（要件 2.6）。
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
+
+use areka_emo_atlas::{AlphaParams, ElementDecoder, Normalizer};
 
 use crate::balloon::{SeriesFamily, SeriesPrefix, face_digits_of, prefix_chain};
 
@@ -126,6 +129,159 @@ pub struct MarkerPair {
     pub down: Option<Arc<MarkerImage>>,
 }
 
+/// 印の絵を順の付いたフォルダの列から解いて読む（fs と記録の入口・読み込みの時だけ呼ぶ）。
+///
+/// 番号ごとに、列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（要件 7.3）。
+/// 書かれた名前の絵が無ければ既定の連鎖へ落ちて番号ごとに `warn!`（要件 2.3）、片方だけなら
+/// 無い番号を `warn!`（要件 2.5）、1 枚も無ければ両方 `None`（要件 2.4）。絵はバルーンの面と同じ
+/// [`Normalizer`] と `alpha` で乗算済み BGRA にし、読めない絵は場所と理由を `warn!` してその番号
+/// だけ `None` で続ける（要件 9.4）。解決 1 回につき `debug!` を 1 行残す（要件 9.1）。
+pub fn resolve_marker_pair(
+    dirs: &[&Path],
+    family: &SeriesFamily,
+    scope: u32,
+    explicit: Option<&str>,
+    decoder: &impl ElementDecoder,
+    alpha: AlphaParams,
+) -> MarkerPair {
+    let chain = marker_chain(family, scope, explicit);
+    let per_dir: Vec<(&Path, MarkerNames)> = dirs
+        .iter()
+        .map(|dir| (*dir, select_marker_names(&list_file_names(dir), &chain)))
+        .collect();
+    let find = |pick: fn(&MarkerNames) -> &Option<MarkerName>| {
+        per_dir
+            .iter()
+            .find_map(|(dir, names)| pick(names).as_ref().map(|n| (*dir, n)))
+    };
+    let up = find(|n| &n.up);
+    let down = find(|n| &n.down);
+
+    let sides = [("0", up), ("1", down)];
+    if let Some(name) = &chain.explicit {
+        for (number, found) in sides {
+            if !found.is_some_and(|(_, n)| n.explicit) {
+                tracing::warn!(
+                    scope,
+                    name = %name,
+                    number,
+                    "balloon_marker: 書かれた名前の絵が無いので既定の名前の順で探し直す"
+                );
+            }
+        }
+    }
+    match (up.is_some(), down.is_some()) {
+        (true, false) | (false, true) => {
+            let missing = if up.is_none() { "0" } else { "1" };
+            tracing::warn!(
+                scope,
+                base = family.base,
+                missing,
+                "balloon_marker: 印の絵が片方しか無い（無い方は出さない）"
+            );
+        }
+        _ => {}
+    }
+
+    let load = |found: Option<(&Path, &MarkerName)>| {
+        let (dir, name) = found?;
+        let path = dir.join(&name.file_name);
+        match decoder.decode(&path) {
+            Ok(img) => Some(Arc::new(to_marker_image(Normalizer.normalize(img, alpha)))),
+            Err(e) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "balloon_marker: 印の絵が読めない（その印は出さない）"
+                );
+                None
+            }
+        }
+    };
+    let pair = MarkerPair {
+        up: load(up),
+        down: load(down),
+    };
+
+    let chain_text: Vec<&str> = chain
+        .explicit
+        .iter()
+        .map(String::as_str)
+        .chain(chain.chain.iter().map(|p| p.prefix.as_str()))
+        .collect();
+    let describe = |found: Option<(&Path, &MarkerName)>, image: &Option<Arc<MarkerImage>>| match (
+        found, image,
+    ) {
+        (Some((dir, n)), Some(img)) => format!(
+            "{} {}x{}",
+            dir.join(&n.file_name).display(),
+            img.width,
+            img.height
+        ),
+        (Some((dir, n)), None) => format!("{} unreadable", dir.join(&n.file_name).display()),
+        (None, _) => "none".to_string(),
+    };
+    tracing::debug!(
+        scope,
+        base = family.base,
+        chain = %chain_text.join(">"),
+        up = %describe(up, &pair.up),
+        down = %describe(down, &pair.down),
+        "balloon_marker: 印の絵を解いた"
+    );
+    pair
+}
+
+/// フォルダ直下のファイル名を集める（読めないフォルダは `warn!` して空・印は無くても失敗にしない）。
+fn list_file_names(dir: &Path) -> Vec<String> {
+    match std::fs::read_dir(dir) {
+        Ok(entries) => entries
+            .filter_map(|entry| {
+                entry
+                    .inspect_err(|e| {
+                        tracing::warn!(
+                            dir = %dir.display(),
+                            error = %e,
+                            "balloon_marker: ディレクトリエントリの取得に失敗（スキップ）"
+                        );
+                    })
+                    .ok()
+            })
+            .filter_map(|e| e.file_name().to_str().map(str::to_string))
+            .collect(),
+        Err(e) => {
+            tracing::warn!(
+                dir = %dir.display(),
+                error = %e,
+                "balloon_marker: フォルダが読めない（印の絵は無いものとする）"
+            );
+            Vec::new()
+        }
+    }
+}
+
+/// 行の詰め物（stride の余り）を除いて原寸の BGRA にする。
+fn to_marker_image(img: areka_emo_atlas::NormalizedImage) -> MarkerImage {
+    let row = img.width as usize * 4;
+    let bgra = if img.stride as usize == row {
+        img.pbgra
+    } else {
+        img.pbgra
+            .chunks(img.stride as usize)
+            .flat_map(|r| &r[..row])
+            .copied()
+            .collect()
+    };
+    MarkerImage {
+        width: img.width,
+        height: img.height,
+        bgra,
+    }
+}
+
+#[cfg(test)]
+#[path = "balloon_marker_load_tests.rs"]
+mod load_tests;
 #[cfg(test)]
 #[path = "balloon_marker_tests.rs"]
 mod tests;
