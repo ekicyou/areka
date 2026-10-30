@@ -8,7 +8,7 @@
 //! | `draw.rs`（本ファイル） | 既定値・[`ResolvedFont`]・[`DirectionRecipe`]・書式生成・TextLayout の唯一の生成口（[`create_line_layout`]・縦書きの列のレシピ）・D2D ターゲット bitmap・比較専用オラクル |
 //! | `draw_metrics.rs` | [`DWriteMetrics`]（計測専用 probe layout・行ボックス比の実測） |
 //! | `draw_line_store.rs` | [`LineLayoutStore`]（行 TextLayout の生成・キャッシュ・インクはみ出しの実測） |
-//! | `draw_catalog.rs` | [`FontCatalog`]（フォント候補列→実在する名前の解決・記憶・記録の 1 度化） |
+//! | `draw_catalog.rs` | [`FontCatalog`]（フォント候補列→顔（家族・太さ・幅・斜体）の解決＝家族名、無ければ GDI の名前で引く・記憶・記録の 1 度化） |
 //!
 //! 子は `super::` でファサードの定数・型・ヘルパを辿り、ファサードが再輸出するので
 //! crate 内から見た入口（`crate::draw::DWriteMetrics` 等）は分割前と同一。
