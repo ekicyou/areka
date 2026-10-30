@@ -144,3 +144,5 @@
 - 5.1: 実機では面の縮退の WARN は 1 回の起動で 6 件（2 件 × 装着 3 回）だった。今の作りどおり。`cursor.blendmethod` の WARN が毎フレーム出る件は `real-run-log-noise` に起票済み（数は `verification/real-machine.md`）。
 - 5.1: `/kiro-complete` の棚卸で `/kiro-discovery` に起票する候補（areka の文字の層・生きている spec に持ち主が無い）: 半角の行を折り返すと、次の行の先頭に空白が残る（`verification/real-machine.md` の振り分け 3）。
 - 5.1: `/kiro-complete` の棚卸で `/kiro-discovery` に起票する候補（areka の文字の層）: 数字の並び（`0123456789`）が行をまたいで割れる。行の頭に `:` が来る件は `text-typesetting`（禁則）が持つが、数字の並びを割らないことはその brief に明記が無い（`verification/real-machine.md` の振り分け 4）。
+- 完了時にその場で解決: `verification/README.md` の実装の段の表に要件 11.6 の行が無かったので足した（最終検証の指摘）。
+- 完了時に起票（既存の brief への追記 2 件）: 上の 5.1 の候補 2 件（折り返した後の行頭の空白・数字の並びが割れる）を `text-typesetting` の brief へ足した。正しい振る舞いが ukadoc で決まらず SSP の測りと裁定が要る＋`text-typesetting` の担当範囲と重なるため。

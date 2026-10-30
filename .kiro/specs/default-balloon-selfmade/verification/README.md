@@ -18,3 +18,4 @@
 |---|---|---|
 | 12.6〜12.9・6.5・6.6・13.8・13.9 実機の確かめ（タスク 5.1） | emo2 とどっとさくらを 100% と 200% で見た（125% の画面が無く 200% で代えた）。見えたこと・記録の grep の数・崩れの振り分け | このフォルダの `real-machine.md` |
 | 同上の撮った画像 | バルーンの辺りを切り出して半分に縮めたもの 6 枚 | このフォルダの `real-emo2-100-small.png`・`real-emo2-200-small.png`・`real-emo2-200-big.png`・`real-dot_sakura-100-small.png`・`real-dot_sakura-200-small.png`・`real-dot_sakura-200-big.png` |
+| 11.6 記憶に `StayseeBalloon` が残る利用者の起動（タスク 6.1） | 根に `areka-balloon` と `StayseeBalloon` が在り記憶が `StayseeBalloon` のとき、記憶の段で `StayseeBalloon` に決まる | `crates/areka/src/boot_resolve_tests.rs` の `balloon_memory_of_old_default_wins_over_new_default` |
