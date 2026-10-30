@@ -150,3 +150,4 @@
 
 - **前提の変化**: `emo-text-dwrite-fidelity` が `FontCatalog`（`crates/areka-emo-text/src/draw_catalog.rs`）の公開の口を変えた。名前は顔 `FontFace`（家族・太さ・幅・斜体）へ解き、`face_for`・`face_or_default`・`face_or` が顔を返す。候補ごとに家族名で引き、無ければ GDI の名前（例「游ゴシック Medium」）で引く。`family_for` は `face_for` の家族名だけを返す薄い口になった。書式は `draw.rs::try_create_format`（顔＋太字・斜体）で作る。
 - **この spec への影響**: 「`.ttf` などを読み飛ばす所」と「書式を作る所」の位置と形が変わった。着手時に、同梱フォントを引く計画（読み込んだフォントの名前を候補列で引く所・書式を作る所）をこの口に合わせて引き直すこと。
+- **件（申し送り・完了の棚卸で足した）**: 束縛の顔で書式が作れず ＭＳ ゴシック Regular で作り直したとき、計測（`draw_metrics.rs` の `bound_face`）と描画（`viewbox_draw_decoration.rs::apply_font_ranges` の `face_or_default`）は作り直す前の顔を覚えたまま。全滅の計測鍵は失敗した顔で書式を作り直そうとして `Device` の誤りになりうる。直すには `create_text_format` が実際に使った顔を返す形などへ変え、呼び手 3 か所（`viewbox_draw_render.rs`・`DrawExecutor`・`draw_metrics.rs`）を揃える設計の判断が要る。`CreateTextFormat` は名前が無くても失敗しないので、今の作りでは作り直しを決定論の試験で起こせない（偽物を差し込む口が要る）。同梱フォントを読むと書式の作り方が変わる本 spec で、書式を作る所と一緒に扱う。
