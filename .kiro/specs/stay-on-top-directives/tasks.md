@@ -35,7 +35,7 @@
   - 兄弟のテストで純関数の全分岐と G1 が緑
   - _Requirements: 2.4, 2.5, 2.10, 7.3, 7.5_
 
-- [ ] 2.2 確定段の帯の系を作り、偽の OS で分岐を確かめる
+- [x] 2.2 確定段の帯の系を作り、偽の OS で分岐を確かめる
   - 列を積まれた順に当てる: 対象の窓の順位を最上から辿って測り（上限 4096 枚・測れなければ奥の端へ置き `warn!`）、奥から手前へ 1 枚ずつ `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` で直に書く。居ない entity・HWND の無い窓は飛ばして `debug!`
   - 入る・出るの後に帯の印を読み直し、合わない窓を `warn!`。1 枚の書き込みの失敗の後も残りを書く。当てた結果（指令・当てた数・飛ばした数）を `debug!`
   - この巡に HWND が付いた印のある窓が帯の外なら入るを当て、帯に居れば書かない。最後に列を空にする
@@ -156,3 +156,4 @@
 - 1.2: `emo2_boot/mod.rs` の `window_state_cue` 宣言に付けた `#[cfg_attr(not(test), allow(dead_code))]` は 5.1 の結線で外す。受け口が `tick_wake::mark(ZORDER)` を呼ぶので旗の生産者の名簿（areka の `AREKA_PRODUCERS`・wintf `tick_wake.rs` の注記）に登記が要る。
 - `cargo clippy -D warnings` は dola・areka の既存の指摘で赤（全体テストの段には clippy が無い）。判定は触ったファイルの指摘 0 件で行う。
 - 2.1: `window_band.rs` の `#[cfg_attr(not(test), allow(dead_code))]` は 2.2 で外す。G1 の先送りの語の表は 6 語・帯の語 3 語に分けた。areka 側 G2 の表（9 語）は 5.1 で同じ分け方に直すまで食い違う。
+- 2.2: `apply_window_band` はまだどの並びにも載っていない（5.2 で確定段へ）。偽の OS（`double`）は `window_band_tests.rs` の中に置いた。wintf の他のテストが使うなら `window_band_test_support.rs` へ分ける。
