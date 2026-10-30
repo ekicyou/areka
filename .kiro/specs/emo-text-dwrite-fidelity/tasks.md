@@ -88,7 +88,7 @@
   - _Requirements: 1.7, 5.4, 5.5, 6.4, 6.5_
 
 - [ ] 5. 記録・台帳・実機の確かめ
-- [ ] 5.1 (P) 網羅台帳の `font.name` の行の注記を改める
+- [x] 5.1 (P) 網羅台帳の `font.name` の行の注記を改める
   - 注記の流れの文を「記述順に、家族名で、無ければ GDI の名前（家族名＋太さ・斜体・幅）として問い合わせ、最初に当たった顔で描画と計測を行う」へ改める。status・owner・ファイル名の扱いは変えない
   - 台帳の検査（網羅台帳の試験）が緑
   - _Boundary: Ledger_
@@ -116,3 +116,4 @@
 - L4 はこの機械では弁別力が無い（ZWJ の家族・国旗とも既定で合成されず、機能を値 0 にしても緑）。入力は design どおり。
 - 3.2 の後の見込みどおりの赤は 4 件（`actor_underline_present_tests` の vertical_lr k=1 の 2 本・`decoration_readback/vertical.rs` の underline／strike の 2 本）。選択肢の帯の読み戻しは緑に戻った。
 - 4.3 の後、vertical_lr の最初の列で英字（横倒し）の墨が em の箱から左へ約 3px はみ出し、validrect の左端で切れる（切れる前 −3..25）。validrect は超えてはならない上限という決めなので受け入れた帰結として注記だけ（`COLUMN_LR` の注記）。最初の列の下線は 2 方向とも面の外へ出るので既存の寄せ（`areka-P0-balloon-text-bugs` 3.4）が効き、太さそのままで x=0 へ寄る。
+- 5.1 のレビューで、`doc/ukadoc-coverage/ledger/sakura-script.toml` の `\f[name]` の行は今も「FontCatalog::family_for」と書き、GDI の名前での引き直しに触れていないと分かった（誤りではない・本 spec の範囲は `font.name` の行だけ）。完了の棚卸で揃えるか決める。
