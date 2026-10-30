@@ -11,7 +11,16 @@
 //!   を送り、端数は送れる間だけ持ち越す（要件 6.3〜6.6）。
 //! - 見える字の数が前より増えたら手動を捨てる（要件 8.1）。
 //!
+//! - 見える範囲（[`window_for`]）・矢印の出る条件（[`marker_visibility`]）・置き場
+//!   （[`ResolvedMarkerPlacement`]）もここで純粋に決める（要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7）。
+//!
 //! **層規律**: 純粋層。時計も窓も `World` も見ない（`PURE_SOURCES` に載せて走査する）。
+
+use areka_parsers::balloon::{ArrowKeys, MarkerPoint};
+
+use crate::layout::{LayoutEngine, PositionedLine, VisibleWindow};
+use crate::region::TextRegion;
+use crate::writing::WritingMode;
 
 /// 矢印のクリック 1 回で送る行数（SSP 2.9.26 で測った量・要件 5.1・5.2）。
 pub const ARROW_STEP_LINES: usize = 2;
@@ -174,6 +183,108 @@ impl PlaceScroll {
     /// 押し出された行か、見えていない新しい行があるか（ホイールを受けるかの判断）。
     pub fn has_hidden_lines(&self) -> bool {
         self.auto_first > 0 || self.manual.is_some()
+    }
+}
+
+/// 矢印の種類。`Up`＝`arrow0`（古い側へ送る）・`Down`＝`arrow1`（新しい側へ送る）。
+/// 古い側は書字方向の正準表で決まる（横書き＝上・`vertical_rl`＝右・`vertical_lr`＝左）が、
+/// 矢印の役目と座標の意味は書字方向で入れ替えない（要件 4.1・4.2）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerKind {
+    /// `arrow0`。
+    Up,
+    /// `arrow1`。
+    Down,
+}
+
+impl MarkerKind {
+    /// この矢印の押下で送る向き。
+    pub fn dir(self) -> ScrollDir {
+        match self {
+            MarkerKind::Up => ScrollDir::Older,
+            MarkerKind::Down => ScrollDir::Newer,
+        }
+    }
+}
+
+/// このフレームの見える範囲。自動の先頭行を覚え直し、手動の位置が自動の位置に追い付いて
+/// いたら捨てる（捨てた理由を返す＝呼び手が `debug!` する）。手動の位置が在れば、その行から
+/// 自動と同じ式で範囲を作る（行 0 なら一番古い行が描画範囲の始まりに来る・要件 5.3・8.5・8.7）。
+/// 同じフレームの [`PlaceScroll::observe_visible`] の**後**に呼ぶ（字が増えたフレームを自動で描く）。
+pub fn window_for(
+    lines: &[PositionedLine],
+    region: &TextRegion,
+    mode: WritingMode,
+    scroll: &mut PlaceScroll,
+) -> (VisibleWindow, Option<StopReason>) {
+    let auto = LayoutEngine::visible_window(lines, region, mode);
+    scroll.auto_first = auto.first_visible_line;
+    match scroll.manual {
+        Some(line) if line >= scroll.auto_first => {
+            scroll.forget(StopReason::ReachedAuto);
+            (auto, Some(StopReason::ReachedAuto))
+        }
+        // line < auto_first ≤ lines.len() − 1 なので添字は範囲内。
+        Some(line) => (
+            VisibleWindow {
+                first_visible_line: line,
+                block_offset: LayoutEngine::block_offset_at(&lines[line], region, mode),
+            },
+            None,
+        ),
+        None => (auto, None),
+    }
+}
+
+/// どの矢印を出すか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MarkerShown {
+    /// `arrow0`（古い側に隠れた行が在る）。
+    pub up: bool,
+    /// `arrow1`（手動の位置に居る＝新しい側に隠れた行が在る）。
+    pub down: bool,
+}
+
+/// 出る条件: 見えている先頭の行 > 0 で `arrow0`、手動の位置が在れば `arrow1`。
+/// どちらも無ければ出さない（要件 3.1〜3.3・4.1・7.2。書字方向に依らず同じ）。
+pub fn marker_visibility(window: &VisibleWindow, scroll: &PlaceScroll) -> MarkerShown {
+    MarkerShown {
+        up: window.first_visible_line > 0,
+        down: scroll.manual.is_some(),
+    }
+}
+
+/// 座標が無いときの置き場（左上・image px）。SSP 2.9.26 で測った値:
+/// `arrow0`＝`(幅 − 20, 15)`・`arrow1`＝`(幅 − 20, 高さ − 15)`（要件 3.7・7.7）。
+pub fn default_marker_position(kind: MarkerKind, extent: (i32, i32)) -> (i32, i32) {
+    let (w, h) = extent;
+    match kind {
+        MarkerKind::Up => (w - 20, 15),
+        MarkerKind::Down => (w - 20, h - 15),
+    }
+}
+
+/// 2 つの矢印の左上（image px）。広がりは普通のバルーン＝面の画像、箱＝箱の大きさ。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResolvedMarkerPlacement {
+    /// `arrow0` の左上。
+    pub up: (i32, i32),
+    /// `arrow1` の左上。
+    pub down: (i32, i32),
+}
+
+impl ResolvedMarkerPlacement {
+    /// x・y がそろった座標は広がりに解き、無ければ（片方だけも）既定の置き場にする
+    /// （要件 3.4・3.7・4.2・7.1・7.7）。
+    pub fn resolve(keys: &ArrowKeys, extent: (i32, i32)) -> Self {
+        let at = |kind, point: &MarkerPoint| match point.both() {
+            Some((x, y)) => (x.resolve(extent.0), y.resolve(extent.1)),
+            _ => default_marker_position(kind, extent),
+        };
+        Self {
+            up: at(MarkerKind::Up, &keys.arrow0),
+            down: at(MarkerKind::Down, &keys.arrow1),
+        }
     }
 }
 
