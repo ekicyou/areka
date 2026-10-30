@@ -344,8 +344,9 @@ pub(crate) fn accept_switch(
         return SwitchVerdict::NoContext;
     };
     let current_folder = ctx.current.ghost.folder.clone();
-    let elsewhere =
-        (current_folder.as_deref()).is_none_or(|f| !same_folder_name(f, &target.folder));
+    // 直にパスで起こしたゴーストはフォルダ名が無いので、同じ場所を指すかでも見る
+    let elsewhere = target.dir != ctx.current.ghost.dir
+        && (current_folder.as_deref()).is_none_or(|f| !same_folder_name(f, &target.folder));
     let session = world
         .get_non_send::<GhostSlot>()
         .and_then(|slot| slot.0.as_ref());

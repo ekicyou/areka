@@ -122,3 +122,4 @@
 - 5: 説明書は約束の 3 か所のほか、食い違いを無くすため「効く起動オプション」の一覧（11 個）・短い形 `/i` `-i`・31 行目の重ねたときの扱いも直した（兄弟の spec とマージで競合しうる）。
 - 6.1（範囲外・起票の候補）: 置き場にバルーンが 1 つも無く、ゴーストもバルーンを持たないとき、切り替えで今のバルーン（起動の行で渡したバルーン）を使わず `ghost_switch_boot_failed stage="balloon"` で落ち、既定ゴーストが目録に無いと `ghost_switch_fatal` で終わる（SSP は既定のバルーンで続ける見込み）。実機の走りで konnoyayame（YAYA）の stderr に `[helper] SHIORI 初期化の入口: loadu` の後 `HRESULT(0x80004005)` が出た件も未調査。`/kiro-complete` の棚卸で `/kiro-discovery` に回す。
 - 7.1: 全テストの前に `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` も要る（無いと `smoke_boot_loop_exit` の 1 本が `real-run-kit/src/i686.rs:77` で止まる・建て済み）。
+- 完了時にその場で解決: 1.2 の端（フォルダ名が無いゴーストで同じ場所への受理も数えた）を、切り替え先が今のゴーストと同じ場所かでも見るよう直した（`ghost_switch.rs` の `accept_switch`・テストは `switch_accept_count_grows_only_for_another_folder` に足した）。

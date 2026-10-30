@@ -422,6 +422,16 @@ fn switch_accept_count_grows_only_for_another_folder() {
     assert_eq!(ask(&mut rig, "a"), (SwitchVerdict::Accepted, 1));
     rig.world.remove_non_send::<SwitchInFlight>();
     assert_eq!(ask(&mut rig, "nobody"), (SwitchVerdict::NotFound, 1));
+
+    // 直にパスで起こしたゴースト（フォルダ名なし）でも、同じ場所への受理は数えない
+    rig.world
+        .resource_mut::<crate::boot_config::BootContext>()
+        .current
+        .ghost
+        .folder = None;
+    assert_eq!(ask(&mut rig, "A"), (SwitchVerdict::Accepted, 1));
+    rig.world.remove_non_send::<SwitchInFlight>();
+    assert_eq!(ask(&mut rig, "B"), (SwitchVerdict::Accepted, 2));
 }
 
 /// `callghost` は最後に入ったゴーストへメニューと同じ形（知らせあり・`manual`）で切り替えを頼み、
