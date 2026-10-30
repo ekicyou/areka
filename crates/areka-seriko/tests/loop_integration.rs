@@ -209,6 +209,7 @@ fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
         shell_table,
         balloon_tables: BTreeMap::new(),
         rng,
+        pick_rng: areka_seriko::seeded_rng(0),
     }
 }
 

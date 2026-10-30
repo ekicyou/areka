@@ -204,7 +204,10 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
     };
     assert_eq!(
         once(&rt),
-        Some(PartAnim::Playing { started_at_ms: 0 }),
+        Some(PartAnim::Playing {
+            started_at_ms: 0,
+            acts_through: None
+        }),
         "見えた出来事の時刻（直前の刻み 0）で生まれる"
     );
     rt.on_tick(150, &mut states);
@@ -217,7 +220,13 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
     assert_eq!(once(&rt), None, "見えなくなった回数つきの時計は捨てる");
     let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(3)).expect("3 へ");
     assert_eq!(film_cell(tests::pattern_of(&cmd), ONCE), None, "経過 0");
-    assert_eq!(once(&rt), Some(PartAnim::Playing { started_at_ms: 150 }));
+    assert_eq!(
+        once(&rt),
+        Some(PartAnim::Playing {
+            started_at_ms: 150,
+            acts_through: None
+        })
+    );
 
     rt.on_tick(200, &mut states);
     assert_eq!(
@@ -247,7 +256,10 @@ fn hiding_top_drops_finite_shell_clocks_only() {
     assert_eq!(clock(&rt, ONCE), None, "回数つきは捨てる");
     assert_eq!(
         clock(&rt, ENDLESS),
-        Some(PartAnim::Playing { started_at_ms: 0 }),
+        Some(PartAnim::Playing {
+            started_at_ms: 0,
+            acts_through: None
+        }),
         "終わりなしは残す"
     );
 }
@@ -262,6 +274,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
         shell_table: film_table(),
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng: loop_rng,
+        pick_rng: crate::seeded_rng(0),
     });
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 

@@ -56,7 +56,12 @@ use part_trigger::fire_part_triggers;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PartAnim {
     /// 再生中（開始の時刻）。今のコマは `frame_at(経過)` で求める。
-    Playing { started_at_ms: u64 },
+    Playing {
+        started_at_ms: u64,
+        /// 働きのコマを当て終えた時刻（まだなら `None`・spec: seriko-pattern-calls）。
+        #[allow(dead_code)] // 5.3 で Calls に読ませ始めたら外す。
+        acts_through: Option<u64>,
+    },
     /// `-1` の無い末尾まで進んで、最後のコマを保っている（抽選の対象）。
     Residual { frame_index: usize },
 }
@@ -123,7 +128,7 @@ fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now_ms: u64) -> Look {
     match clock {
         None => Look::Nothing,
         Some(PartAnim::Residual { frame_index }) => Look::Frame(frame_index),
-        Some(PartAnim::Playing { started_at_ms }) => {
+        Some(PartAnim::Playing { started_at_ms, .. }) => {
             let elapsed = now_ms.saturating_sub(started_at_ms);
             match frame_at(&anim.frames, elapsed) {
                 FrameStatus::Pending => Look::Nothing,
@@ -249,11 +254,17 @@ fn always_start(
     slot: Slot,
     finite: bool,
 ) -> Option<u64> {
-    if let Some(PartAnim::Playing { started_at_ms }) = clocks.get(&key) {
+    if let Some(PartAnim::Playing { started_at_ms, .. }) = clocks.get(&key) {
         return Some(*started_at_ms);
     }
     let at = at_ms?;
-    clocks.insert(key, PartAnim::Playing { started_at_ms: at });
+    clocks.insert(
+        key,
+        PartAnim::Playing {
+            started_at_ms: at,
+            acts_through: None,
+        },
+    );
     tracing::debug!(
         scope = scope.as_str(),
         slot = ?slot,
@@ -619,7 +630,7 @@ impl PartClocks {
                     }
                     // 3 語と呼ばれるだけ: 抽選せず乱数も引かない。在る時計を進めるだけ（始めるかは 2 段目）。
                     Gate::Trigger => {
-                        if let Some(&PartAnim::Playing { started_at_ms }) = clocks.get(&key) {
+                        if let Some(&PartAnim::Playing { started_at_ms, .. }) = clocks.get(&key) {
                             was_playing.push((key, started_at_ms));
                         }
                         progress(
@@ -643,6 +654,7 @@ impl PartClocks {
                         key,
                         PartAnim::Playing {
                             started_at_ms: now_ms,
+                            acts_through: None,
                         },
                     );
                     tracing::info!(

@@ -141,7 +141,10 @@ impl Rig {
 }
 
 fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing { started_at_ms: at })
+    Some(PartAnim::Playing {
+        started_at_ms: at,
+        acts_through: None,
+    })
 }
 
 /// 一番上 0 が子 100 を置き、一番上 1 は何も置かない。100 の `runonce`（animation 0）は頭のコマで

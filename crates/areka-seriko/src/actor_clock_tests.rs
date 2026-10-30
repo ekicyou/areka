@@ -161,6 +161,7 @@ fn balloon_cue_starts_always_at_the_clock_time_of_processing() {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), table_of(TOP_ALWAYS))]),
         rng: always_fire(),
+        pick_rng: crate::seeded_rng(0),
     };
     let mut rig = Rig::new(config, Some(clock));
     rig.tick(0);

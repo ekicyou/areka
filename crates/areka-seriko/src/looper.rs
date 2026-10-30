@@ -73,6 +73,9 @@ pub struct SerikoLoopConfig {
     pub balloon_tables: BTreeMap<ActorKey, AnimationTable>,
     /// 1/N 抽選の乱数注入シーム（本番は `seeded_rng(seed)`・テストは注入列）。
     pub rng: LoopRng,
+    /// 呼び出しの選び（`alternative*`）の乱数注入シーム。抽選の `rng` とは別にし、選びが抽選の
+    /// 乱数を引かないようにする（spec: seriko-pattern-calls 要件 3.6・3.7）。
+    pub pick_rng: LoopRng,
 }
 
 impl SerikoLoopConfig {
@@ -85,6 +88,7 @@ impl SerikoLoopConfig {
             shell_table: AnimationTable::empty(),
             balloon_tables: BTreeMap::new(),
             rng: seeded_rng(0),
+            pick_rng: seeded_rng(0),
         }
     }
 }
@@ -94,6 +98,9 @@ impl SerikoLoopConfig {
 struct Playback {
     /// 再生開始絶対時刻（ms）。`frame_at` へ渡す経過＝`now_ms - started_at_ms`。
     started_at_ms: u64,
+    /// 働きのコマを当て終えた時刻（まだなら `None`・spec: seriko-pattern-calls）。
+    #[allow(dead_code)] // 5.2 で Calls に読ませ始めたら外す。
+    acts_through: Option<u64>,
 }
 
 /// per-slot の再生中アニメ表（animation id → [`Playback`]）。エントリを持つ id が「再生中」＝抽選対象外。
@@ -191,6 +198,7 @@ fn start_top_always(
             anim.id,
             Playback {
                 started_at_ms: at_ms,
+                acts_through: None,
             },
         );
         tracing::debug!(
@@ -459,6 +467,7 @@ impl LoopRuntime {
             shell_table,
             balloon_tables,
             rng,
+            pick_rng: _,
         } = config;
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性・
         // 要件 5.6）。`BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
@@ -519,6 +528,7 @@ impl LoopRuntime {
                             anim.id,
                             Playback {
                                 started_at_ms: now_ms,
+                                acts_through: None,
                             },
                         );
                         tracing::info!(

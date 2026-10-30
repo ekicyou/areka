@@ -81,7 +81,7 @@
   - _Requirements: 7.1, 7.6_
 
 - [ ] 5. 再生への組み込み
-- [ ] 5.1 選びの乱数と当て終えた時刻の欄を足す
+- [x] 5.1 選びの乱数と当て終えた時刻の欄を足す
   - 再生の設定に選びの乱数を足し、設定を書くすべての所を直す（止めた設定と書き出しは種 0）。seriko の中だけでなく、areka の起動（`emo2_boot` の本体・背骨・フィルムの通しのテスト）にも書く所があるので、この task は areka の起動の層へまたがる機械的な追随を含む
   - 本番は抽選とは別の種で作り、今の起動の記録に 2 つの種を並べて出す。背骨の「生きた駆動」は抽選の乱数と選びの乱数の 2 つを運ぶ形にし、呼び手（起動の本体とテスト）が 2 つを渡す
   - 一番上の再生と部品の再生に「働きのコマを当て終えた時刻」を足し、作る所を直す
@@ -173,3 +173,4 @@
 - 3.3: `timeline::visible_frame`（`#[allow(dead_code)]`・5.2/5.3 で使い始めたら外す）。`always_at` にも同じ「描くコマの負の番号だけで止まる」を当てた。5.2/5.3 まで、働きのコマが今のコマになると looper の `pattern_frame` がその `surface_id` を欄に置く途中の状態（`move,-1` なら u32::MAX）— 5.2/5.3 で `visible_frame` に置き換える。`always` の 2 周目以降で周の頭が働きのコマだと `visible_frame` は None になるので、前の周の描くコマを残すかは 5.2 で扱う。`looper.rs` の `pattern_frame` の doc「負は Stopped」も 5.2 で直す。
 - 4.1: 係は `calls.rs` の `run_calls`（口は `CallPlays`・`mod calls` に `#[allow(dead_code)]`、5.2/5.3 で外す）。`CallPlays::start` の実装は当て終えた印を None に戻すこと。止めた `always` の印は 5.2 の `CallPlays::stop` の実装側で付ける。5.2 は抽選・`always`・引き金の始まりを係の呼び出しより前に置く（同じ時刻の 2 度目の開始の止めはこの順が前提）。
 - 4.2: `PresentCommand::MoveShift { target, x, y }`・読み口 `EmoPresenter::move_shift(target)`。`ReplaceTarget` ではずれを引き継がず 0 から（design 596 行・5.4 で差し替え時に (0,0) を送る）。areka の背骨の写し `spine_conformance_support.rs` の `project_display` では MoveShift は `Unknown` に写る — 5.4 で要るなら足す。
+- 5.1: `SerikoLoopConfig.pick_rng`（止めた設定・`settle.rs` の書き出し・テストは種 0）・本番は `entropy_seed()` を 2 回引いて `seed` と `pick_seed` を同じ info に出す。背骨は `LoopDriver::Live(rng, pick_rng)`。`Playback.acts_through`・`PartAnim::Playing.acts_through`（`Option<u64>`・`#[allow(dead_code)]`）と `on_tick` の `pick_rng: _` は 5.2/5.3 で使い始めて外す。actor_bind_loop_tests.rs はもとから 1,346 行（上限超え）。

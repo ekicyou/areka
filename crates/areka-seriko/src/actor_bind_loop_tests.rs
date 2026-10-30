@@ -1071,6 +1071,7 @@ mod tick_loop_tests {
             shell_table,
             balloon_tables: BTreeMap::new(),
             rng,
+            pick_rng: crate::seeded_rng(0),
         }
     }
 

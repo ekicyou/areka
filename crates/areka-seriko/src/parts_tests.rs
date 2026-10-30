@@ -119,7 +119,8 @@ fn lottery_only_at_visible_boundary_ticks_then_progress() {
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 2000
+            started_at_ms: 2000,
+            acts_through: None,
         })
     );
     assert!(part_frames(&p, 100).is_empty(), "Pending はコマ無し");
@@ -193,7 +194,8 @@ fn playing_part_resumes_from_elapsed_after_being_hidden() {
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 
@@ -310,7 +312,8 @@ fn frame_pointing_to_another_surface_is_evaluated_in_the_same_tick() {
     assert_eq!(
         clocks.clock(&scope(), 200, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 }
@@ -358,7 +361,8 @@ fn element_child_and_pattern_target_share_one_clock() {
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 }
@@ -452,7 +456,8 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     assert_eq!(
         clocks.clock(&scope(), 40, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 3000
+            started_at_ms: 3000,
+            acts_through: None,
         }),
         "絵に出ていない 40 の時計が動き出す"
     );
@@ -519,6 +524,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     assert_eq!(calls(&probe), 1);
     let playing = Some(PartAnim::Playing {
         started_at_ms: 1000,
+        acts_through: None,
     });
 
     for _ in 0..3 {
@@ -597,7 +603,8 @@ fn peek_does_not_write_inactive_bind_random_frames() {
     assert_eq!(
         clocks.clock(&scope(), 100, 5),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 
@@ -871,6 +878,7 @@ fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself()
             (areka_emo_compose::PartKey::Surface(100), 0),
             PartAnim::Playing {
                 started_at_ms: 1000,
+                acts_through: None,
             },
         );
 
@@ -880,7 +888,8 @@ fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself()
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 

@@ -59,7 +59,10 @@ fn cell_of(p: &PatternState, part: u32) -> Option<Option<u32>> {
 }
 
 fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing { started_at_ms: at })
+    Some(PartAnim::Playing {
+        started_at_ms: at,
+        acts_through: None,
+    })
 }
 
 /// 一番上 0 と 1 が子 100 を置き、2 は何も置かない。100 の `always` は 101（待ち 0＝経過 0）→

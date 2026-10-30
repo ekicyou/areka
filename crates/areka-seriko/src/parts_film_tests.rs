@@ -122,7 +122,10 @@ fn clock(clocks: &PartClocks, slot: Slot, film: FilmId) -> Option<PartAnim> {
 }
 
 fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing { started_at_ms: at })
+    Some(PartAnim::Playing {
+        started_at_ms: at,
+        acts_through: None,
+    })
 }
 
 /// 見えた刻みの時刻で、乱数を引かずに時計が生まれる。経過 0（1 枚目）は欄に載らない（要件 3.1・7.4）。
