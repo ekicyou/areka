@@ -60,3 +60,9 @@
 
 - `cargo test -p areka`（クレートの試験・机なし）の中で `script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` が、i686 の helper の初回の LOAD が `LoadReturnedFalse` で断られて 2 回続けて赤になった。そのテストだけを単独で回すと緑（47 秒）。同じ検体を使う `emo2_real_run`・`mcp_get_log_real_run`・`smoke_boot_loop_exit` は同じ走行で緑。変えたのは既定の面の値を渡す道だけで、本番の値は組み込みの値と同じだった（`descript-window-keys` の task 3.1 の実装ノート）。初回の LOAD の断りが real-run のテストにも出る例として、原因を調べるときの材料にする。
 - 起票でなくここへ足した訳: 触る場所（helper の初回の LOAD）が同じで、確かめるのに実物の走行を何度も回す必要がある（kiro-complete 冒頭ステップの手順 3 の 4 つ目）。
+
+## 2026-10-30 `real-run-log-noise` の完了の全体テストで足した観測
+
+- 完了の全体テスト（`tools/test-all.ps1 -Format -License`・コミット `2f1ab6ec2`・main の `23760486d` を取り込んだ後）で、`script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` だけが赤になった。i686 の helper の初回の LOAD が `LoadReturnedFalse { last_error: 203 }` で断られた。この spec は emo-text・emo-atlas のログと `validrect` の読みしか変えておらず、SHIORI の読み込みには触れていない。
+- そのテストだけを排他テストの机で単独で回し直しても、同じ形で赤になった（3.6 秒）。2026-10-24 の観測では単独なら緑だったので、それとは違う。同じ枝を main の取り込み前に回した全体テスト（`afcb94acd`・`/kiro-validate-impl`）では緑だった。
+- 開発者の決まり（触っていない所だけが赤なら 1 回だけ回し直し、変わらなければ申し送りをもって緑）に従い、ここへ申し送った。
