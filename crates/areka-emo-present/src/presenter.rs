@@ -120,6 +120,9 @@ mod dpi_scale_tests;
 #[path = "presenter_fractional_scale_tests.rs"]
 mod fractional_scale_tests;
 #[cfg(test)]
+#[path = "presenter_frame_log_tests.rs"]
+mod frame_log_tests;
+#[cfg(test)]
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
 #[cfg(test)]

@@ -508,9 +508,19 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
         "2 適用目の対が隣接していない: {events:?}"
     );
 
-    for i in &infos {
-        assert_info_line_contract(&events[*i]);
-    }
+    // 1 適用目（最初の表示）は INFO。2 適用目は同じ入力のコマ送りだけゆえ DEBUG で、欄の集合は同じ
+    // （`animated-surface-log-flood` 要件 1.1・2.1・2.2）。
+    assert_info_line_contract(&events[infos[0]]);
+    assert_eq!(
+        events[infos[1]].level,
+        tracing::Level::DEBUG,
+        "同じ入力の 2 回目（コマ送りだけ）の表示の行が DEBUG でない"
+    );
+    assert_eq!(
+        events[infos[1]].field_names_sorted(),
+        INFO_LINE_FIELDS.to_vec(),
+        "コマ送りだけの表示の行の欄の集合が INFO の行と違う"
+    );
     for i in &perfs {
         assert_perf_line_contract(&events[*i]);
     }

@@ -42,9 +42,14 @@ impl EmoPresenter {
     /// [`VisibilityOwnership::External`] の target では、末尾の可視化（`set_visible(true)`／`visible=true`）
     /// と mount 遅延生成の初期可視性だけが変わり、**それ以外の全手順は所有権に依らず共通**である
     /// （k 導出・合成・キャッシュ・表示記録・配置・マスク・`applied`／`native_size`／
-    /// `last_show`／`pending_resize`・下の `info!`）。表示成立点が 1 つであることを崩さないための境界であり、
+    /// `last_show`／`pending_resize`・下の表示の行）。表示成立点が 1 つであることを崩さないための境界であり、
     /// 「不可視のまま配置先と面が確立する」（Requirement 1.3）はこの共通部分がそのまま与える。
     /// 可視化は [`EmoPresenter::show_target`] が同じ漏斗を再通過したうえで付与する。
+    ///
+    /// `reveal` は「呼び手がこの適用の後に窓を見えるようにする」こと。見えていなかった外から所有される
+    /// 窓を出し直す [`EmoPresenter::show_target`] だけが真を渡し、表示の行の水準の判定（コマ送りだけの
+    /// 適用か）に使う（`animated-surface-log-flood` 要件 1.5）。
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_show(
         &mut self,
         world: &mut World,
@@ -53,6 +58,7 @@ impl EmoPresenter {
         binds: BindSet,
         pattern: PatternState,
         reply: Option<ReplySender<PresentOutcome>>,
+        reveal: bool,
     ) {
         // (−1) 段階計時の起点（Requirement 1.1・design D5）。**無条件**に開始する——ログ設定を
         // 一切参照しないため、計時ログの有効・無効で表示経路が分岐しない（Requirement 1.5）ことが
@@ -76,6 +82,19 @@ impl EmoPresenter {
         let window = target.window;
         let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
         let scale = derive_scale(target.policy, window_dpi);
+
+        // (0.5) コマ送りだけの適用か（`animated-surface-log-flood` 要件 1.1〜1.5）。**どの状態も上書きする
+        // 前に**決める: 前に成立した面の番号と着せ替えが同じ・前に適用した拡大率が同じ・見えていなかった
+        // 窓がこの適用で見えるようにならない、の 3 つが揃うとき真。シェル（指令で見える窓）はこの漏斗の
+        // 末尾で見えるようになり、バルーン（外から所有）は呼び手が `reveal` を渡したときだけ見えるようになる。
+        let becomes_visible = !target.visible
+            && (reveal || matches!(target.ownership, VisibilityOwnership::CommandDriven));
+        let frame_step = !becomes_visible
+            && target.applied == Some(scale)
+            && target
+                .last_show
+                .as_ref()
+                .is_some_and(|(id, b, _)| *id == surface_id && *b == binds);
 
         // (1) 引き当て: 合成入力（id＋binds＋pattern）の完全一致のみヒット＝再合成しない（R4.2/R5.2）。
         // **k はキーに参加しない**（要件 5.2）——面・マスク・表示記録はいずれも原寸で k を含まないため、
@@ -378,31 +397,43 @@ impl EmoPresenter {
         let key_hash = compose_key_hash(surface_id, &binds, &pattern);
         target.last_show = Some((surface_id, binds, pattern));
 
-        // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。実機サインオフは有界 auto-exit で
-        // 起動し `RUST_LOG` を grep してここを読むため、**`info!` レベル**であることが契約である
-        // （`debug!` へ落とすと既定の観測条件で消える）。k 導出値（`k`・`k_ratio`）と適用寸（`native_*`・
-        // `scaled_*`＝物理寸・要件 2.8／7.5）が揃うことで、2 水準（125%/200%）の実行が「異なる物理寸で
-        // 描かれた」ことをログだけで決定論的に判定できる。フィールドの名と意味は不変。
-        tracing::info!(
-            ?target_id,
-            surface_id,
-            cache_hit,
-            // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
-            k_ratio = ?scale,
-            k = scale.as_f32(),
-            author_dpi = target.policy.author_dpi,
-            // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
-            window_dpi = ?window_dpi,
-            native_w = native.0,
-            native_h = native.1,
-            scaled_w = physical.0,
-            scaled_h = physical.1,
-            // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
-            size_changed,
-            "apply(ShowSurface): 表示・マスクを更新"
-        );
+        // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。**最初の表示と状態の替わりは INFO・
+        // コマ送りだけは DEBUG**（`animated-surface-log-flood` 要件 1・2）。実機サインオフは `RUST_LOG` を
+        // grep して面・着せ替え・拡大率・窓の大きさの替わりと隠した後の出し直しをここで読み、コマ送りだけの
+        // 適用は `areka_emo_present=debug` で同じ文言・同じ欄のまま 1 適用 1 行で読める。k 導出値（`k`・
+        // `k_ratio`）と適用寸（`native_*`・`scaled_*`＝物理寸・要件 2.8／7.5）が揃うことで、2 水準
+        // （125%/200%）の実行が「異なる物理寸で描かれた」ことをログだけで決定論的に判定できる。
+        // フィールドの名と意味は不変。欄の並びはこのマクロ 1 か所に置く（水準は字面で渡す決まりのため）。
+        macro_rules! show_line {
+            ($level:expr) => {
+                tracing::event!(
+                    $level,
+                    ?target_id,
+                    surface_id,
+                    cache_hit,
+                    // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
+                    k_ratio = ?scale,
+                    k = scale.as_f32(),
+                    author_dpi = target.policy.author_dpi,
+                    // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
+                    window_dpi = ?window_dpi,
+                    native_w = native.0,
+                    native_h = native.1,
+                    scaled_w = physical.0,
+                    scaled_h = physical.1,
+                    // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
+                    size_changed,
+                    "apply(ShowSurface): 表示・マスクを更新"
+                )
+            };
+        }
+        if frame_step && !size_changed {
+            show_line!(tracing::Level::DEBUG);
+        } else {
+            show_line!(tracing::Level::INFO);
+        }
 
-        // perf サマリ行（Requirement 1.1/1.3・design.md §Data Models）。上の info! と**同一適用の対**
+        // perf サマリ行（Requirement 1.1/1.3・design.md §Data Models）。上の表示の行と**同一適用の対**
         // として隣接して出る別行である。ここが唯一の emit 点＝早期復帰の経路では 1 行も出ない。
         //
         // `take_delta` は増分を取り出して器を 0 に戻す。早期復帰で取り出されなかった増分は次の適用へ

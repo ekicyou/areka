@@ -194,7 +194,15 @@ impl EmoPresenter {
 
         // 成否は応答で読む（状態の後追いで推測しない・`show_target` と同じ）。
         let (tx, rx) = reply_channel::<PresentOutcome>();
-        self.apply_show(world, target_id, surface_id, binds, pattern, Some(tx));
+        self.apply_show(
+            world,
+            target_id,
+            surface_id,
+            binds,
+            pattern,
+            Some(tx),
+            false,
+        );
         let outcome = rx.recv().unwrap_or_else(|e| {
             tracing::error!(
                 ?target_id,
