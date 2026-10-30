@@ -254,3 +254,30 @@
 ### ついでに見つけたこと
 
 - SSP の `claudia` バルーンは `balloonk0s.txt` などに `arrow.filename,arrowb` を書き、相方だけ別の矢印の絵（`arrowb0.png`）を使う＝面ごとの設定ファイルでスコープごとに名前を変える実例（要件の議題 5 の推奨どおりの使い方）。
+
+## areka での実機の走り（2026-10-31・タスク 8.2・要件 11.3・途中で止まった）
+
+### やり方
+
+- 根: `<w>\target\bsa-verify\root`（`<w>` はワークツリー `C:\home\maz\git\areka\.claude\worktrees\emo2-specimen-freshness-check-b831f3`）。`nar-sample-path` で開いた `emo2` を `ghost\emo2` に、`areka-balloon` を `balloon\areka-balloon` に写した。記憶（`profile`）は空。
+- 起動: debug 版 `target\debug\areka.exe` に、ゴーストとバルーンのフォルダを絶対パスの位置の引数で渡した（`route=Argv`）。`RUST_LOG=info,areka_emo_present::balloon_marker=debug,areka_emo_text::actor_scroll=trace,areka::emo2_boot::frame::balloon_face=debug,areka::boot_config=debug`、`AREKA_APP_SMOKE_EXIT_MS=900000`。起動の前に 9276・9801・9821 の待受が無いことを確かめた。pid 12344、MCP は 9801。
+- 記録: `<w>\target\bsa-verify\logs\run1.stdout.log`。
+- 台本は MCP の `sakurascript` で送った。`\_q` は areka が知らないタグ（`check_script` が `unknown_tag`）なので外し、`\![set,balloontimeout,600000]` の後に 15 行を `\n` で並べた。
+
+### 確かめられたこと
+
+- 矢印の絵の解決（要件 9.1）。スコープごとに 1 行ずつ出た:
+
+```text
+2026-10-30T18:09:06.208103Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow1.png 11x10
+2026-10-30T18:09:06.238838Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=1 base="arrow" chain=arrowp1def>arrowk>arrowp0def>arrows>arrow up=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow1.png 11x10
+2026-10-30T18:09:06.487875Z DEBUG areka::emo2_boot::frame::balloon_face: balloon_face: 今の定義を差し替えた scope=0 previous=None face=0 cause=Attach
+```
+
+- 長い台詞で `arrow0` が出た（要件 3.1）。15 行を送り、話し終えた後の `dump_balloon`（scope 0）が `evidence/01-long-arrow0.png`。1〜4 行目が押し出され、5 行目の上半分が切れて見え、右上の (303,10) に上向きの矢印が出ている。`arrow1` は出ていない（自動の位置なので正しい）。バルーンの窓の矩形は `1412,610,2064,948`（物理の画素・326×169 の 2 倍）。
+
+### 確かめられなかったこと（走りを止めた理由）
+
+- クリック・ホイールで戻すことと、新しい台詞で最新の行へ戻ることは回せなかった。矢印を押す前に点 (2028,640) の窓の持ち主を確かめると、areka（pid 12344）でなく explorer（pid 10284）で、画面の撮影（`mouse-input.ps1 -Action shot`）も失敗した。スクリーンセーバー（`Mystify.scr`）が動いていた。この状態では SendInput が効かないので、押さずに止めた。
+- 止め方: MCP の `sakurascript` で `\0\-\e` を送り、`app_exit origin=KanadeStopped(Quit) closed=4`・終了コード 0 で終わった。記録の ERROR・panic は 0 件。
+- そのため「手動の送りを始めた」「手動の送りを終えて自動へ戻した」の行はまだ無い。在席のとき（スクリーンセーバーが動いていないとき）に、同じ根でもう一度回す。
