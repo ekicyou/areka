@@ -8,7 +8,7 @@
   - `decode.rs` は `script-small-tags` と直列（着地の順を確かめてから触る）
   - _Requirements: 1.1, 1.8, 7.1_
 
-- [ ] 1.2 常に手前の指令の受け口と第 2 引数の読み分けを作る
+- [x] 1.2 常に手前の指令の受け口と第 2 引数の読み分けを作る
   - 自分宛（手前へ出す指令の運搬名と `set`＋`windowstate`）だけを拾い、他は読み飛ばす。開けない荷物の警告は重なりの受け口に任せ、ここは `debug!` だけ
   - 第 2 引数は小文字ちょうどで読み分け、`stayontop`→オン・`!stayontop`→オフ・それ以外（`minimize`・空・大文字の混じり・無い）→状態を変えず値を `warn!` で残して送らない。第 3 引数以降は第 2 引数で決めて余りを `debug!` で残す。`\v` は引数の有無に関わらず手前へ出す。書いたスコープは読まない
   - 送った後に重なりの仕事の旗を立てる。受信端が閉じていれば `warn!` を残して台本を続ける
@@ -151,3 +151,7 @@
   - 違えば原因を調べ、本 spec の範囲なら直し、範囲外なら `/kiro-discovery` で起票して記録に残す
   - 見比べの結果と処置が `verification.md` に記録されている
   - _Requirements: 8.3_
+
+## Implementation Notes
+- 1.2: `emo2_boot/mod.rs` の `window_state_cue` 宣言に付けた `#[cfg_attr(not(test), allow(dead_code))]` は 5.1 の結線で外す。受け口が `tick_wake::mark(ZORDER)` を呼ぶので旗の生産者の名簿（areka の `AREKA_PRODUCERS`・wintf `tick_wake.rs` の注記）に登記が要る。
+- `cargo clippy -D warnings` は dola・areka の既存の指摘で赤（全体テストの段には clippy が無い）。判定は触ったファイルの指摘 0 件で行う。

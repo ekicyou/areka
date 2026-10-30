@@ -65,6 +65,10 @@ pub mod talk_lifecycle;
 pub mod target_map;
 mod update_cue;
 pub(crate) mod user_break_cue;
+/// `\v`／`\![set,windowstate,…]` の受け口（stay-on-top-directives）。
+// 起動への結線（task 5.1）までは本番から呼ばれないので、その間だけ未使用の警告を止める。
+#[cfg_attr(not(test), allow(dead_code))]
+pub mod window_state_cue;
 pub mod zorder_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部

@@ -19,7 +19,7 @@
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
 /// （現在は 1 ファイル 1 旗である。`balloon_visibility_phase.rs` が `REARM` と `ZORDER` の
 /// 2 行を持っていたのは、退役したバルーン再表示の追随トリガのぶんである。）
-const AREKA_PRODUCERS: [(&str, &str, &str); 7] = [
+const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
         "emo2_boot/adapter.rs",
         include_str!("emo2_boot/adapter.rs"),
@@ -49,6 +49,11 @@ const AREKA_PRODUCERS: [(&str, &str, &str); 7] = [
         "emo2_boot/talk_lifecycle.rs",
         include_str!("emo2_boot/talk_lifecycle.rs"),
         "PRESENT",
+    ),
+    (
+        "emo2_boot/window_state_cue.rs",
+        include_str!("emo2_boot/window_state_cue.rs"),
+        "ZORDER",
     ),
     (
         "emo2_boot/zorder_cue.rs",
