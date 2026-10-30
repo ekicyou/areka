@@ -190,3 +190,4 @@
 - 6.1: 本番の構築は 3 つ（boot_config.rs の ghost_boot_options・runtime_boot.rs・spine.rs）。dispatcher のテストは strict_hooks_for を直接見るだけなので、on_start→spawn_talk の配線は 6.2／9.2 で通して確かめる。
 - 9.1→8.2/8.3: transport-diff-areka.md の params の形の行の「測ったテスト名」はファイル単位で書いた。8.2 で関数名へ直す。bridge-diff の real_receiver_test.rs の行も 8.3 で合わせる。
 - 8（2026-10-30 開発者の裁定）: 外の crate はそのまま使う。rmcp のフォーク・`[patch.crates-io]`・上流への PR はしない（直した写しを持つと安全の直しが重くなる）。8.1〜8.3 を「rmcp を先に呼び、415 のときだけ areka が rmcp の型で答える」形に書き直した。
+- 9.4: dola の合図の予定表の組み立てが 2 乗だった（合図ごとに Vec::insert を前の方へ）。`TimedSchedule::insert_each` で 1 回のソートに直した（同じ時刻の先入れ先出しも同じ）。4 MiB の台本の試験は 15 分→4 秒。実機の試験は 1 回目で緑（35.5 秒）。残りは全体テスト（8 の後）。

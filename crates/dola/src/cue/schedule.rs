@@ -124,6 +124,29 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.entries.insert(pos, entry);
     }
 
+    /// `entries` を順に [`insert`](Self::insert) したのと同じ並びを、まとめて作る（同一オフセットは
+    /// 後に入れたものが前＝先に入れたものから配る FIFO）。`insert` を 1 件ずつ呼ぶと昇順の台本で
+    /// 毎回先頭へ挿すので全体が台本の長さの 2 乗になる。ここは逆順に積んで安定ソートする
+    /// （昇順の台本なら既に降順の 1 本の並びで、ソートは 1 回の走査で済む）。
+    pub fn insert_each(&mut self, entries: impl IntoIterator<Item = Entry<T>>) {
+        let mut all: Vec<Entry<T>> = entries.into_iter().collect();
+        for entry in &all {
+            debug_assert!(
+                entry.offset() >= 0.0,
+                "Entry offset must be non-negative: {}",
+                entry.offset()
+            );
+        }
+        all.reverse();
+        all.append(&mut self.entries);
+        all.sort_by(|a, b| {
+            b.offset()
+                .partial_cmp(&a.offset())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        self.entries = all;
+    }
+
     /// 複数エントリを一括挿入（内部で再ソート）。
     ///
     /// NOTE(D3-V): NaN オフセットの扱いは insert() と同様（debug_assert 発火 /
