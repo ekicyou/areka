@@ -85,6 +85,27 @@ pub(crate) fn rebase_shift(world: &mut World, window: Entity) {
     }
 }
 
+/// 絶対の位置へ書いた軸（`\![move]` の基準が自分の窓でなく `fix` でもない軸）だけ、書いた位置を
+/// 新しい元の位置にし、今のずれをその上へすぐ当て直す。
+///
+/// 残りの軸は今の位置からの相対なので当てた分を残す（外すとずれを二度数える）。記録が無ければ何もしない。
+pub(crate) fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
+    let Some(mut r) = world.get::<MoveShiftApplied>(window).copied() else {
+        return;
+    };
+    if !(x || y) {
+        return;
+    }
+    if x {
+        r.applied.x = 0;
+    }
+    if y {
+        r.applied.y = 0;
+    }
+    world.entity_mut(window).insert(r);
+    apply_char_shift(world, window, r.want, r.ratio);
+}
+
 /// 利用者のドラッグの終わりで、その窓の当てた分を 0 にする（置いた所が新しい元の位置）。
 ///
 /// `want`・`ratio` は残すので、毎フレームの相は同じずれを当て直さない。

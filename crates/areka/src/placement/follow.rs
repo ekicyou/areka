@@ -151,10 +151,12 @@ pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 use self::keyword_base::rederive_keyword_balloon_offset;
 // 面の `move` のずれ（task 6.1〜6.3）。当てる口の呼び手は毎フレームのずれの相
 // （`emo2_boot/frame/move_shift.rs`）。ドラッグの終わりと保存の側は当てた分を 0 にする・引く口、
-// 位置の初期化は記録を外す口だけを使う。
+// 位置の初期化は記録を外す口、絶対の位置への `\![move]` は軸ごとに当て直す口だけを使う。
 // 消費者は emo2_boot だけで、`#[path]` で placement を取り込む examples では未使用に見える。
 #[allow(unused_imports)]
-pub(crate) use self::move_shift::{apply_balloon_shift, apply_char_shift, shift_is_current};
+pub(crate) use self::move_shift::{
+    apply_balloon_shift, apply_char_shift, rebase_shift_axes, shift_is_current,
+};
 use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::move_shift::{origin_position, rebase_shift};
 pub(crate) use self::sticky_follow::{is_char_dragging, sync_drag_writer};

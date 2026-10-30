@@ -547,7 +547,7 @@ ukadoc は pattern定義の描画メソッドに、ほかのアニメーショ�
 - バルーンはずれた窓を今までどおり追う。バルーンの面の `move` は、そのバルーンの窓だけをずらす。組の相手（ほかのキャラクター）は一緒に動かさない。
 - 利用者が窓をドラッグし終えたら、その窓のずれは捨て、置いた所を新しい元の位置にする。位置を保存するときは、ずれを引いた元の位置を保存する（起動のたびにずれが積もらない）。
 - 位置の初期化で窓を並べ直したときは、並べた位置を新しい元の位置にする（ずれはその位置からもう一度当てる）。
-- さくらスクリプトの絶対位置への `\![move]` は、今はずれの記録を残したまま窓を動かす。そのため、後でずれが 0 に戻ると、窓は `\![move]` の行き先から当てていたずれの分だけ動いた位置へ移る。SSP では測っていない。
+- さくらスクリプトの絶対位置への `\![move]`（基準が自分の窓でない軸で、`fix` でない軸）は、行き先を新しい元の位置にし、ずれはその上へすぐ当て直す。後でずれが 0 に戻ると、窓は `\![move]` の行き先へ戻る。`fix` の軸と、自分の窓を基準にした `\![move]` は今の位置からの相対なので、ずれは元の位置からのまま残る（二度数えない）。SSP では測っていない（開発者裁定 2026-10-31）。
 
 判定は `crates/areka-emo-compose/src/pattern_word_tests.rs`・`crates/areka-emo-compose/src/bind_steps_tests.rs`・`crates/areka-seriko/src/table_calls_tests.rs`・`crates/areka-seriko/src/calls_tests.rs`・`crates/areka-seriko/src/looper_calls_tests.rs`・`crates/areka-seriko/src/parts_calls_tests.rs`・`crates/areka/src/placement/follow_move_shift_tests.rs`・`crates/areka/src/emo2_boot/frame/move_shift_tests.rs` が固定する。SSP の測りの手順と検体は `.kiro/specs/seriko-pattern-calls/research.md` の §3・§6.1 にある。
 
