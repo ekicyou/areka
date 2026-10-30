@@ -12,7 +12,7 @@
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
 //! 1. **純粋層**（[`state`]／[`place`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
-//!    [`viewbox`]／[`look`]／[`color`]）——
+//!    [`viewbox`]／[`look`]／[`color`]／[`scroll_marker`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
 //! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
@@ -55,6 +55,7 @@ pub mod look;
 mod lookahead;
 pub mod place;
 pub mod region;
+pub mod scroll_marker;
 pub mod segment;
 pub mod sink;
 pub mod state;
@@ -395,6 +396,12 @@ mod tests {
         ),
         // areka-P0-balloon-text-bugs 件 3 の下線の幾何（純粋）。
         ("underline.rs", include_str!("underline.rs")),
+        // balloon-scroll-arrows の手動の位置と送りの規則（純粋）。
+        ("scroll_marker.rs", include_str!("scroll_marker.rs")),
+        (
+            "scroll_marker_tests.rs",
+            include_str!("scroll_marker_tests.rs"),
+        ),
     ];
     /// 純粋層の走査面へ**載せない**ファイルの明示（タスク 9.4）。
     ///
@@ -471,7 +478,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 77, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 79, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
