@@ -140,3 +140,5 @@
 - 5.2: 台帳の検査（実装済みには証拠が要る）のため `shell_cursor_table.rs` に `// ukadoc:` の注記 19 行、整合のテストのため `briefing.md`・`roadmap-draft.md` の数も直した（境界の外・道具の求め）
 - 5.3: 実機（2026-10-31・areka pid 33288・exit=0）で身体 `custom`・× とボール `HAND`・髪（当たり判定の外）`ARROW`・押下 `HAND`（指差し）→ 放すと押す前の `custom` の handle・ホイールと 1.5 秒の止まりで不変・`shell\nocursor`（cursorブレスを抜いた写し）へのシェル切り替えの後は `HAND` で前の `custom` は出ない、を読んだ。記録は `target\pasta-verify\logs\cursor1.cursor-excerpt.txt`。押下で握った形を期待していた手順書と design の E2E 2 は要件 3.1 に合わせて直した
 - 最終検証 1 回目 NO-GO（ファイルの長さの番人）: 4.3 のカーソルのテストを `frame/switch_cursor_tests.rs` へ分けた。`switch_finish_tests.rs` は上限ちょうどの 1000 行。wintf のテストは areka の絵を読まず中で組む `.cur` に替えた（1.2 の注記は解消）
+- 完了時にその場で解決: シェルの `.ani` を読む正の道にテストが無かった（失敗の道だけ）。Windows の `Cursors\aero_busy.ani` を写して読み、寸法によらず同じカーソルが返ることを固定した（`shell_ani_is_loaded_and_returned_whatever_the_size`）
+- 完了時の棚卸: その場で解決 1 件・起票 0 件。横ホイール（design の表どおり縦だけ・§8 に既知の限り）・descript のキーの大小（areka のほかの読みと同じ・§8）・`-Press` を Ctrl+C で止めたときの左の放し（`click`・`drag` と同じ作り・押す時間は 80 ミリ秒）は直さない。spine の揺れるテストは最終検証と完了の全体テストでは再発せず

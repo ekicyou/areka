@@ -192,6 +192,27 @@ fn shell_folder_wins_over_ghost_master() {
 }
 
 #[test]
+fn shell_ani_is_loaded_and_returned_whatever_the_size() {
+    // 正しい `.ani` を組む代わりに、Windows に必ず在る動くカーソルを写して使う。
+    let windir = std::env::var_os("SystemRoot").expect("SystemRoot");
+    let ani = std::fs::read(Path::new(&windir).join(r"Cursors\aero_busy.ani")).unwrap();
+    let fx = fixture("cursor-assets-ani");
+    put(&fx.shell, "busy.ani", &ani);
+    let (assets, events) =
+        capture(|| build(&fx, "sakura.cursor\n{\nmouseup0,Head,busy.ani\n}\n", &[]));
+
+    assert!(warns_for(&events, "busy.ani").is_empty());
+    assert_eq!(
+        assets.rows.rows.get(&key(0, "Head", CursorScene::Up)),
+        Some(&Shape::File(0))
+    );
+    assert!(matches!(assets.files.as_slice(), [CursorFile::Ani(_)]));
+    let small = assets.cursor_for(0, cursor_size_for_dpi(96));
+    assert!(small.is_some());
+    assert_eq!(assets.cursor_for(0, cursor_size_for_dpi(192)), small);
+}
+
+#[test]
 fn missing_broken_outside_warn_once_per_name_and_drop_rows() {
     let fx = fixture("cursor-assets-fail");
     put(&fx.shell, "bad.cur", b"not a cursor");
