@@ -240,3 +240,74 @@
 | 3 下の端に揃える置き方 | ずらした窓の位置にも、今ある置き方（揃え直し・作業領域の中に置く決まり）を後から当てる。下揃えでは揃えが勝つ＝SSP と同じ見え方 | 要件 7.8・9.4 |
 
 設計への申し送り: `move` は合成の命令（`plan.rs`）ではなく、窓の位置のずれとして置き方（`crates/areka/src/placement/`・`emo2_boot` の揃え直し）へ運ぶ形が素直。§1.6 の決めごと 5（M-a／M-b）は、この形を前提に設計の段で解く。当たり判定も窓ごと動くので、当たり判定の座標は直さなくてよい見込み。
+
+## 5. 設計の調べと決め（2026-10-30・`/kiro-spec-design -y`）
+
+### 5.1 調べの範囲
+
+- 種類: 今ある仕組みの拡張（light discovery）。外部の依存の調べは要らない（新しいクレートを足さない）。
+- 使った手引き: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。steering は `tech.md`・`structure.md`（テストの置き場と 1,000 行の目安）・`logging.md`。
+- コードの調べ（下の 5.2）は、seriko の再生と、`move` から窓の位置までの道の 2 つを、読むだけの調べの係に分けて行い、要約だけを受けた。合成・読み手・提示の境目は直接読んだ。
+
+### 5.2 わかったこと
+
+- **seriko の出口は `DisplayCommand` の 1 本だけ**（`output.rs`・`#[non_exhaustive]` でない）。areka の `PresentBridge`（`emo2_boot/adapter.rs`）が `PresentCommand` へ写し、UI のフレームの drain（`frame/drain_resnap.rs`）が提示へ当てる。位置を運ぶ道は無い。だから、ずれは新しい variant で運ぶ。`Show` と同じ FIFO に載るので、順が崩れない。
+- **窓の位置の正本は `WindowPos` だけ**。「元の位置」の考えは無い。書き込みは `enqueue_window_set_pos` に集まる。下揃えは `project_anchor`、見える範囲の守りは `apply_visibility_guard` が受け持つ。`\![move]` の倍率は `scale_signed` と `applied_ratio`。当たり判定は窓の中の座標なので、窓と一緒に動く。バルーンは `follow_balloon` で「キャラ窓 ＋ 相対 offset」を追う。
+  - だから、ずれは「当てた分」の記録を部品に持つ。元の位置は「今の位置 − 当てた分」で求める。
+  - 保存とドラッグの終わりだけは、ずれを引くか捨てる（そうしないと、起動のたびにずれが積もる）。
+- **同じ面の出し直しは、looper へ届かない**。`states.apply` が `Unchanged` を返し、`on_surface_changed` を呼ばない。だから、戻す口（`on_surface_shown`）は actor が `Changed`／`Unchanged` の両方で呼ぶ。
+- **過去の時刻に始まった再生を入れる先例がある**。`Armed::poll`・`fire_top_triggers` が `Playback { started_at_ms: 過去 }` を入れる。だから、呼び出しの開始は「予定の時刻の `Playback` を入れる」だけで、今の進め方（経過から今のコマを計算する）を変えずに済む。
+- **今の進行の段は、再生中の番号の写しを先に取る**。この刻みで始まった相手は、次の刻みまで描かれない。だから、`run_calls` を写しの前に置く（1 フレーム遅らせない）。
+- **一番上と部品の進め方は、2 本に分かれている**（`looper.rs` の `put_top_play` と `parts.rs` の `progress`）。だから、働きのコマの当て方は 1 つの純粋な関数（`calls.rs`）にし、`CallPlays` の 2 つの実装で両方から呼ぶ（実装が 2 つ本当にあるので口を作る）。
+- **`SerikoLoopConfig { … }` を書く所は 23 か所**（本番 2・テスト 21）。選びの乱数を後から差す口も考えたが、本番の構築は `spawn_seriko_clocked` の中にあるので、結局 `config` に欄が要る。だから、欄を足して 23 か所を機械的に直す。
+- **読み込みのときの記録は 2 つの型がある**。
+  - emo-compose の `shape_issues`: シェルだけ。`shell_target.rs` が出す。バルーンの読み込みは呼ばない。
+  - seriko の表を作るときの `warn!`: シェルは読み込みにつき 1 度、バルーンはスコープの読み込みごとに 1 度。
+  - だから、8 語の記録（insert を含む）は seriko の表を作るとき（`table_calls.rs`）に集める。そうすると、シェルとバルーンの両方で 1 度ずつ出る。8 語以外の未知の語の記録は今のまま（`shape_issues`・表の `from_name`）。
+- **合成の D9-3 の門**（`plan.rs` の `is_bind_animation`・`nesting.rs` の ③）は、`bind` と `bind+random` の両方で、無効な着せ替えのコマを止めている。このままでは 5.6（無効の純 `bind` を `start` で描く）を満たせない。純 `bind` は今まで seriko のコマを持たなかったので、門を `bind+random` だけに狭めても、今の守りは崩れない。
+- **外形**（`plan_extent.rs`）は、着せ替えの pattern0 と `always` の全部のコマを数えている。純 `bind` の全部のコマを描くなら、外形も全部を数える（窓の大きさは静的なまま・7.5）。
+- **`settle_surface` は出力を捨てる**（`Discard`）。ずれを `PatternState` の外に持てば、書き出しには構造の上で写らない（9.6・M8）。
+
+### 5.3 まとめの 3 つの見方（design-synthesis）
+
+- **一般化**:
+  - 8 語の見分けと相手の欄の読みは、1 つの関数の組（`pattern_word`・`call_targets`）にする。seriko の表・合成の手順・入れ子の辺・外形・emo-atlas の写しは、その答えだけを使う。
+  - 着せ替えの描き方（全部のコマ・`insert`）は 1 つの手順の表（`BindSteps`）にし、合成と入れ子の辺が同じ表を読む。
+- **作るか借りるか**: 外の部品で解ける所は無い。乱数は今の `seeded_rng` を 2 本目に使う。待ち行列は標準の `BinaryHeap` を使う。窓の当て方は今の `project_anchor`・`apply_visibility_guard`・`move_window_with_route`・`scale_signed` をそのまま使う。
+- **削ったもの**:
+  - ずれを `PatternState` に入れる案。emo-present の合成の覚えの鍵が `move` のコマごとに外れる。並走の `animated-surface-log-flood` の持ち場（`pattern.rs`・`cache.rs`）にも触れる。
+  - areka の側に別の mpsc を作る案。`Show` との順が崩れる。
+  - `LoopFrame` に「見える描くコマ」の欄を足す案。後ろ向きに探す小さな関数 `visible_frame` で足りる。
+  - `settle_time` を呼び出しの連なりまで延ばす案。要件に無い。
+
+### 5.4 設計の決め
+
+| 決めごと（§1.6） | 決め | 理由 |
+|------|------|------|
+| 1 並びの読みの置き場 | R-b の変形: `decode_animations` が、pattern定義の欄 2 が `(` で始まるときだけ `)` まで継ぎ直す（語は見ない） | ほかの行を構造で守る（2.6）。読み手が語の意味を知らずに済む |
+| 2 相手の運び方 | T-b: `Pattern.target`（欄 2 の原文）。数への読みは emo-compose の `call_targets` | 「読み手は写すだけ」。約 24 ファイルの構造体の書き方は機械的に直す |
+| 3 呼ばれる相手の範囲 | `never` と純 `bind` を `CallOnly` で表に載せる。未知の interval は載せない | 議題 2・M5（無効の着せ替えも `start` で描く） |
+| 4 `insert` の範囲 | I-b: 有効な純 `bind` は全部のコマを描き、どのコマの `insert` も展開する。`bind+random` は pattern0 だけ | M6。`bind+random` の 2 コマ目以降を静的に描くと、閉じ目が目を覆う実機の欠陥に戻る |
+| 5 `move` の運び方 | M-a でも M-b でもなく、seriko が (scope, 面の段) のずれを持ち、`DisplayCommand::MoveShift` で提示へ、置き方が窓へ。働きのコマは欄を書き換えない（`visible_frame`） | §4 の決め（窓ごと・置き方へ運ぶ）。M7（`base` が消えない）と M3（終わりで戻らない）を構造で満たす |
+| 6 部品とバルーン | 同じ `run_calls` を `CallPlays` の 2 つの実装で呼ぶ。部品の `move` もキャラクター全体のずれ。バルーンの面のずれはバルーン窓に当てる | 議題 5（同じ規則） |
+| 7 選びの乱数 | `SerikoLoopConfig.pick_rng`（23 か所を直す）。本番は別の `RandomState` の種。`info!` に 2 つの種 | 3.6・3.7。後から差す口は本番の構築の中に届かない |
+| 8 呼び出しの時刻 | 予定の時刻 `開始 ＋ 累積の待ち`（`always` は周ごと）の待ち行列。`run_calls` は写しの前・`refresh` でも呼ぶ | 時刻は正確に・1 フレーム遅らせない |
+| 9 記録の置き場 | 8 語の記録は seriko の表を作るとき（`table_calls.rs`）。element定義は今の `undrawn.rs` のまま | シェルとバルーンの両方で 1 度ずつ出る |
+| 10 `plan.rs` の合成ごとの `from_name` | `BindSteps` を読み込みのときに作り（記録なしの `quiet_method`）、合成は手順を読むだけ | 議題 7。未知の語の記録は `shape_issues` が 1 度出す |
+| 11 書き出しの写し | ずれを `PatternState` の外に持つので、書き出しには写らない | M8・9.6 |
+| 12 emo-atlas の写し | 写しを残し、`move` を足す | emo-atlas は emo-compose を引けない |
+
+### 5.5 正典が黙る所の areka の読み（§8 へ）
+
+- 「着せ替え」は純 `bind`（`interval,bind`）と読む。要件 5.3・5.6・5.7・6 の括弧書きのとおりである。`bind+random` は抽選で動く animation として、7 語と `move` を `random` と同じに働かせる。`insert` は差し込まない（6.6 の記録の対象）。
+- `always` を `stop` したら、止めた時刻から周の頭で始め直す（`always` は interval がいつも再生する規則なので、止めた後の次の開始がその時刻に来る＝4.5）。SSP では測っていない。
+- 差し込む着せ替え A が無効で展開されなかったとき、差し込まれる B は本来の位置に描く。2 つの着せ替えが同じ B を差し込むときは、描く順で先に当たった方だけが描く。SSP では測っていない（M6 は A が有効のときだけ）。
+- 利用者のドラッグの終わりで、ずれは捨てる（置いた所が新しい元の位置）。位置を保存するときは、ずれを引いた位置を保存する。
+- 3.6 の読み: 選びは抽選の乱数を引かない。呼び出しが animation を再生中にすれば、その animation が抽選から外れるのは今の規則どおりである。
+
+### 5.6 危うさと手当て
+
+- **純 `bind` の全部のコマを描く変更で、黄金のテストの期待が変わりうる** → M6 の測りを根拠に期待を直し、直したテストの名を作業の記録に残す。
+- **`looper.rs`・`parts.rs`・`actor.rs` が 1,000 行に近い** → 本体を `calls.rs`・`table_calls.rs` に置き、足すのは呼び出しの数行と欄だけにする。
+- **並走の `animated-surface-log-flood` と `plan.rs`・`lib.rs` が重なる** → `build_plan` の引数を変えない。`plan.rs` は着せ替えの静的な寄与の塊を 1 つの呼び出しに替えるだけにする。`lib.rs` は `mod` 2 行と `pub use` だけにする。`pattern.rs`・`cache.rs` には触らない。
+- **置き方の書き手が多い** → ずれの記録は「当てた分」だけを持ち、ほかの書き手は今のまま窓ごと動かす。引く所は保存の 2 か所とドラッグの終わりだけに限る。
