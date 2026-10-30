@@ -178,3 +178,7 @@ fn log_without_cache(beside: Option<&AppProfile>, config: &Config) {
 #[cfg(test)]
 #[path = "config_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "config_prepare_tests.rs"]
+mod prepare_tests;

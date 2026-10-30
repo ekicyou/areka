@@ -54,6 +54,8 @@ tracing-subscriber = { workspace = true }
 [dev-dependencies]
 # 控えの置き場などの一時フォルダ（target の下）。
 temp-path-kit = { path = "../temp-path-kit" }
+# 控えを持たない理由の記録を捕まえる（テスト専用・[dependencies] へは置かない）。
+log-capture-kit = { path = "../log-capture-kit" }
 # #[tokio::test] と、偽の受け口を回しながら子プロセス（建てた exe）を待つテストのための機能。
 # 本番の exe は current_thread のまま（上の [dependencies] の機能だけで建つ）。
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
