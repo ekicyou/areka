@@ -8,6 +8,8 @@
 
 **変わること**: 今は「起動の初期配置」「記憶からの戻し（窓ごと）」「バルーン」だけが作業領域を見ている。この spec の後は、起動の並べ直しと詰め直しが置いた窓・既定の位置で大きくなった `free` の窓・記憶から戻した組も作業領域の中に置かれる。寄せの式は今ある `balloon_limit::clamp_rect_to_work_area`（左辺・上辺を優先する式）だけを使い、新しい式は書かない。どの決まりも特定のゴーストを名指ししない（要件 7.8）。
 
+**実装の後の改め（2026-10-30・要件 5.3〜5.8）**: キャラ窓は収まっているのにバルーンだけが横にはみ出すときは、バルーンを押し込まずにキャラ窓の反対の側へ並べ替える（SSP 2.9.26 と同じ・`research.md` 13 節）。並べ替えは今のバルーンの関門（`placement/balloon_limit.rs`）の中に置き、反対の側にも入らなければ今の押し込みに倒す。完了 spec `areka-P0-windowposition-limit` の押し込みの決まりをこの spec が改める。
+
 ### Goals
 
 - 件 1〜3 の場面で、キャラクター窓を置くその時点で作業領域の中に解く（1 フレーム遅らせない・要件 7.3）。
@@ -33,6 +35,7 @@
 - 記憶から戻した組を同じ量だけ動かすこと（`persist::apply_restored_placements` の中）と、「この起動で記憶の位置を寄せて表示した」を並べ終えた時点の保存まで運ぶ値（資源 `RestoredPositionsClamped`）。
 - 件 5 の測りの道具（`\![move]` の記録に拡大率と窓の大きさを足す・拡大率が決まる前に当てたことの記録）と、測りの結果に応じた直し（見込み H1 の形はここで決める）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の行（件 1〜5）。
+- バルーンの関門（起動の関門 `apply_balloon_limit`・書き込みの関門 `apply_balloon_limit_gate`）で、キャラ窓が収まっていてバルーンだけが横にはみ出すときの反対の側への並べ替え（BalloonFlip・要件 5.3〜5.8）。完了 spec `areka-P0-windowposition-limit` の押し込みの決まりを、この spec が倒し先へ改める（改めた事実は §8 の件 4 の行・要件 8.4）。
 
 ### Out of Boundary
 
@@ -40,7 +43,7 @@
 - 窓の属するモニタの決め方（`follow::work_area_for_window`）。呼ぶだけで変えない（要件 7.1）。
 - 隣り合いの解き（`chain_finalize::resolve_chain`）と組ごとの決め（`boot_pair_decision`・`judge_adjacency`）。呼ぶだけで変えない。
 - 記憶から戻した窓ごとの今の判定（`persist::project_restore`＝作業領域とまったく交わらない窓だけを寄せる）。保つ（要件 4.3・4.5）。
-- バルーンを作業領域に収める今の決まり（`areka-P0-windowposition-limit`）。要件 5.3 の場面が見つからない限り変えない（要件 5.4）。
+- バルーンの押し込みの式（`limit_correction`）・解放の補正（`on_balloon_drag_end` の `apply_release_limit_correction`）・`windowposition.limit` の有効の判定（`BalloonLimit`）。変えない（要件 5.5・5.6）。並べ替えはその手前の 1 段として足すだけ。
 - 起動の初期配置（`resolver.rs` の P4＝窓ごとの寄せ）と、作業領域の変化での沿わせ直し（`work_area_sync`）。
 - kanade の起動のイベントの順。見込み H3 は H1 の直しで areka の側だけで消える形を取り、kanade には触らない。
 - `placement/mod.rs`・`placement/spawn.rs`・`emo2_boot/consumer_ledger.rs`（C12 の約束。触らない）。
@@ -58,6 +61,8 @@
 - `restore_merged_placements` の戻り値の形（この spec で 3 つ組にする）が変わる・`GhostWindows` に記憶の寄せの印を持たせる形へ移す。
 - 位置の指令の線（`PositionCue`）の取り出しの門（見込み H1 の直しで、対象の窓と基準の窓の最初の面の表示を待つ形にする）が変わる。
 - `extra-character-windows` が 3 体目以降を出したとき（鎖の寄せの「反対の側」が別の窓と重なりうる・Risks）。
+- バルーンの左右のずらしの符号（右に出すときの `balloon.offsetx` の向き）を正典へ合わせる spec や、`offsetxl`／`offsetxr` などの向きごとのずらしを読む spec が入ったとき（並べ替えの「映した位置」の式と食い違いうる・Risks）。
+- バルーンの関門の形（`apply_balloon_limit_one`・`apply_balloon_limit_gate` の判定の順）が変わる。
 
 ## Architecture
 
@@ -135,7 +140,8 @@ crates/areka/src/placement/
 ├── follow_work_area_clamp_chain_tests.rs       # 新規: 鎖の寄せの檻（10.1 ⑴⑵⑸⑹⑺）
 ├── follow_work_area_clamp_grow_tests.rs        # 新規: 面の拡大の寄せの檻（10.1 ⑶⑹）
 ├── follow_work_area_clamp_restore_tests.rs     # 新規: 記憶の組の寄せの檻（10.1 ⑷）
-└── persist_restore_group_tests.rs              # 新規: apply_restored_placements の組の結線と寄せた起動の印（10.1 ⑷⑻）
+├── persist_restore_group_tests.rs              # 新規: apply_restored_placements の組の結線と寄せた起動の印（10.1 ⑷⑻）
+└── balloon_limit_flip_tests.rs                 # 新規（2026-10-30 の改め）: バルーンの反対の側への並べ替えの檻（10.1 ⑾）
 crates/areka/src/emo2_boot/
 ├── frame_chain_finalize_clamp_tests.rs         # 新規: 並べ直しの寄せのフレームの檻（10.1 ⑴⑻⑼）
 └── frame_move_hold_tests.rs                    # 新規（H1 と決まったとき）: 位置の指令が対象・基準の窓の最初の面の表示まで待つ檻（10.1 ⑽）
@@ -155,7 +161,9 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/emo2_boot/move_cue_place.rs`（222 行）— `move_applied` の記録に拡大率 `k` と動かす窓の大きさを足す（測りの道具）。
 - `crates/areka/src/emo2_boot/frame.rs`（615 行）— 新しい兄弟の檻 2 つの接続宣言だけ（相の順は変えない）。
 - `restore_merged_placements` を呼ぶテスト 4 ファイル（`emo2_boot/frame_chain_finalize_persist_tests.rs`・`_persist_nowrite_tests.rs`・`_persist_restart_tests.rs`・`main_restore_seam_tests.rs`〔呼び出し 5 か所〕）— 3 つ組の受け方に合わせる。
-- `doc/COMPAT_ARCHITECTURE.md` — §8 の末尾へ件 1〜件 5 の行を足す（要件 8.3・8.4）。
+- `doc/COMPAT_ARCHITECTURE.md` — §8 の末尾へ件 1〜件 5 の行を足す（要件 8.3・8.4）。2026-10-30 の改めで、件 4 の行に完了 spec の決まりを改めた事実と理由を足す。
+- `crates/areka/src/placement/balloon_limit.rs`（231 行）— 2026-10-30 の改め: 並べ替えの純関数 `place_balloon_in_work_area` と結果の型を足し、`apply_balloon_limit_one` の `limit_correction` の呼び出しをそれに替え、記録に `how` を足す。テストの接続宣言 1 つ（`balloon_limit_flip_tests.rs`）。
+- `crates/areka/src/placement/follow/window_move.rs` — 2026-10-30 の改め: `apply_balloon_limit_gate` の末尾の `limit_correction(proposed, target_size, area)` の呼び出しを、キャラ窓の矩形（関門が既に組んだ `char_rect`）を渡す `place_balloon_in_work_area` に替え、記録に `how` を足すだけ（数行の置き換え・判定の本体は `balloon_limit.rs`）。
 
 ## System Flows
 
@@ -228,6 +236,27 @@ sequenceDiagram
     Save->>Save: skip marks for old memory when flag is true and log it
 ```
 
+### バルーンだけが横にはみ出すときの並べ替え（件 4・要件 5.3〜5.8・2026-10-30 の改め）
+
+```mermaid
+flowchart TD
+    Gate[balloon gate boot or runtime] --> Limit{limit enabled}
+    Limit -- no --> Pass[keep proposed]
+    Limit -- yes --> Area{work area of char window resolved}
+    Area -- no --> Unresolved[keep proposed and warn unresolved]
+    Area -- yes --> Fits{balloon fits}
+    Fits -- yes --> Pass
+    Fits -- no --> CharIn{char window fits and balloon overflows horizontally}
+    CharIn -- no --> Push[push in by limit correction]
+    CharIn -- yes --> Mirror[mirror balloon about char center line]
+    Mirror --> MirrorFits{mirrored fits horizontally and moved}
+    MirrorFits -- yes --> Flip[place mirrored with vertical clamp]
+    MirrorFits -- no --> Push
+```
+
+- 並べ替えは関門の中の 1 段で、関門の前提（`limit` の有効・作業領域はキャラ窓のモニタ・縮退は `Unresolved`）はそのまま。解放の補正（利用者がバルーンを離したとき）は通らない（要件 5.6）。
+- 書き込みの関門は、キャラ窓が動いて付いて動くバルーンの書き込み（`BalloonFollow`）にも、起動の後のどの書き込みにも同じに当たる。だから窓が作業領域の端へ寄れば並べ替わり、余裕のある所へ戻れば相対の位置のとおりの側へ戻る（焼き付けない・要件 5.7）。
+
 ## Requirements Traceability
 
 | 要件 | 要約 | 部品 | 口 | 流れ |
@@ -254,8 +283,12 @@ sequenceDiagram
 | 4.6 | 寄せた起動では古い記憶へ印を書き足さず記録 | ClampedFlag・SaveAtFinalize | `RestoredPositionsClamped` | 同上 |
 | 5.1 | 窓もバルーンも収まるならバルーンを寄せない | 既存 `balloon_limit` | `limit_correction` が `None` | — |
 | 5.2 | シェルを収めてバルーンだけの寄せを起こさない | ChainClamp・GrowClamp・GroupClamp | キャラ窓を先に収める | 全部 |
-| 5.3 | 窓が収まりバルーンだけはみ出す場面が見つかれば SSP ⑷ の後に決める | 実機の測り（タスク） | — | — |
-| 5.4 | 見つからなければ今の決まりを保つ | 既存 `balloon_limit` | 変えない | — |
+| 5.3 | 窓が収まりバルーンだけ横にはみ出すなら反対の側へ並べ替える（どのスコープも） | BalloonFlip・起動の関門・書き込みの関門 | `place_balloon_in_work_area` | 並べ替え |
+| 5.4 | 反対の側＝キャラ窓の縦の中心線で映した位置・縦は変えない（縦だけはみ出せば縦だけ収める） | BalloonFlip | `place_balloon_in_work_area` の映しの 1 行と `clamp_rect_to_work_area` | 同上 |
+| 5.5 | 反対の側も入らない・映しても動かない・縦だけはみ出す → 今の押し込み | BalloonFlip | `limit_correction`（今の式） | 同上 |
+| 5.6 | 窓がはみ出している・`limit=0`・解放の補正は並べ替えない | 関門の前提・解放の補正 | `BalloonLimit`・`apply_release_limit_correction` は変えない | 同上 |
+| 5.7 | 表示の位置だけ・相対の位置に焼き付けない・`dontmove` は止めない | 起動の関門・書き込みの関門 | `balloon_pos`／書き込みの位置だけ（DD6 のまま） | 同上 |
+| 5.8 | `[balloon-limit] Clamp` に `how`（`flipped`／`pushed`） | 起動の関門・書き込みの関門 | 記録の欄 | — |
 | 6.1 | 件 5 の原因を測って残す | MoveMeasure | `move_applied` の欄・`move_ratio_unset` | 件 5 |
 | 6.2 | 起動のトークの指令を正しい拡大率と大きさで当てる | MoveHold（H1） | 対象・基準の窓の表示の待ち | 件 5 |
 | 6.3 | トークの後にずらさない | MoveHold（H1） | 最初の当てが正しい | 件 5 |
@@ -274,7 +307,7 @@ sequenceDiagram
 | 8.4 | 完了 spec の要件を改めたら §8 に残す | §8 の行 | — | — |
 | 9.1 | 動かした記録 | Vocab | `[work-area-clamp] Clamp`（`info!`） | — |
 | 9.2 | 動かさなかった理由 | Vocab | `[work-area-clamp] Keep`（`debug!`） | — |
-| 10.1 | 決定論のテスト ⑴〜⑽ | 各テストファイル | — | — |
+| 10.1 | 決定論のテスト ⑴〜⑾ | 各テストファイル | — | — |
 | 10.2 | 今ある檻を保つ | 檻の一覧 | — | — |
 | 10.3 | 実機の必達 ⑴〜⑷ | 実機の確かめ（タスク） | — | — |
 | 10.4 | ぱすたの初回起動の通し | 実機の確かめ（タスク） | — | — |
@@ -290,6 +323,7 @@ sequenceDiagram
 | ClampedFlag | 記憶 | 寄せた起動の印を保存まで運ぶ | 4.6 | bevy Resource（P0） | State |
 | 呼び手の結線（Finalize・Realign・Resize・Restore・SaveAtFinalize） | フレーム・配置・記憶 | いつ・どの窓に当てるか | 1〜4・7.5 | 上の部品（P0） | — |
 | MoveMeasure・MoveHold | フレーム | 件 5 の測りと直し | 6 | Emo2Wiring（P0） | — |
+| BalloonFlip（2026-10-30 の改め） | 配置 | バルーンだけが横にはみ出すとき反対の側へ並べ替える | 5.3〜5.8 | clamp_rect_to_work_area（P0）・limit_correction（P0） | Service |
 
 ### 配置の層: `placement/follow/work_area_clamp.rs`
 
@@ -479,6 +513,55 @@ pub(crate) fn keep_restored_groups(
 - 吸着: 下端に吸着した組では、和の矩形の下端は当て直しで作業領域の下端にあるので縦の差はふつう 0。縦にも入らない組だけ縦の差が出る（左辺・上辺の優先）。
 - 限界: 一緒に動く組（`\![set,sticky-window,…]`）でも、離れて置かれていたものは拾えない（要件の話し合い 4）。組は隣り合う番号の対だけで決める（覚えた印と同じ単位）。
 
+### 配置の層: `placement/balloon_limit.rs` の足し（2026-10-30 の改め）
+
+#### BalloonFlip
+
+| 欄 | 中身 |
+|---|---|
+| Intent | キャラ窓が作業領域に収まっているのにバルーンだけが横にはみ出すとき、バルーンをキャラ窓の反対の側へ並べ替え、入らなければ今の押し込みに倒す |
+| Requirements | 5.3〜5.8・7.2・7.8 |
+
+**責務と縛り**
+- 置き場は今のバルーンの関門の式のファイル（`balloon_limit.rs`）。2 つの関門（起動の関門 `apply_balloon_limit_one`・書き込みの関門 `apply_balloon_limit_gate`）が、今 `limit_correction` を呼んでいる 1 か所をこの関数に替える。解放の補正は替えない（要件 5.6）。
+- 「収まるか」「横にはみ出すか」は `clamp_rect_to_work_area` を当てて位置が変わるか・x が変わるかで決める（式は 1 本・ChainClamp と同じ手口）。押し込みは `limit_correction` をそのまま使う。新しく足す式は映しの 1 行（`x' = char.left + char.right − (pos.x + size.w)`）だけ。
+- 左右の側を表す値は持たない: 映しの式は側によらず 1 本で、左隣のバルーンは右隣へ、右隣のバルーンは左隣へ移る。真上・真下で中央に揃ったバルーンは映しても x が（ほぼ）変わらないので、横に入らず押し込みに倒れる（要件 5.5）。`placement/spawn.rs`（C12 の約束）に側の印を足す形は取らない。
+- 縦は映さない（要件 5.4）。映した位置が縦にだけはみ出すときは同じ式で縦だけ収める（x は変わらないことを確かめてから使う）。
+- 表示の位置だけを返す。`balloon_offset`・`BalloonFollow` の追従のずらし・記憶には触らない（今の DD6 のまま・要件 5.7）。`balloon.dontmove`・`\![lock,balloonmove]` の帳簿（`BalloonLockLedger`）は読まない（利用者のドラッグの止めであって置き方ではない・要件 5.7）。
+
+**依存**
+- Inbound: `apply_balloon_limit_one`（起動の関門）・`apply_balloon_limit_gate`（書き込みの関門・`window_move.rs`）
+- Outbound: `clamp_rect_to_work_area`（P0）・`limit_correction`（P0）
+
+**Contracts**: Service [x]
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BalloonPlace {
+    Fits,             // 動かさない（今の None と同じ・記録もしない）
+    Flipped(PointPx), // 反対の側へ並べ替えた（縦だけ収めた場合を含む）
+    Pushed(PointPx),  // 今の押し込み
+}
+impl BalloonPlace { pub(crate) fn how(self) -> &'static str; } // "flipped" / "pushed"
+
+/// 純関数。`char_rect` はキャラ窓の今の矩形、`area` はキャラ窓のモニタの作業領域。
+pub(crate) fn place_balloon_in_work_area(
+    pos: PointPx,
+    size: SizePx,
+    char_rect: RectPx,
+    area: RectPx,
+) -> BalloonPlace;
+```
+
+- 事前条件: `size` は正（関門が寸の未確定を先に落としている）。`area` は関門がキャラ窓の矩形から決めたもの。
+- 事後条件: `Fits` は `limit_correction` が `None` のときだけ。`Flipped` の矩形は作業領域に横は入り、x は映した値。`Pushed` は今の `limit_correction` の戻りと同じ（今の檻の押し込みの主張はそのまま成り立つ）。パニックしない（飽和演算）。
+- 記録: 関門が今の `[balloon-limit] Clamp` の行に `how = place.how()` を足して出す（`context` の語は今のまま）。新しい記録の語は作らない。
+
+**実装の注**
+- キャラ窓が「収まっている」は `clamp_rect_to_work_area(char の左上, char の寸, area) == char の左上`。作業領域より大きいキャラ窓が左上に揃っている形も「収まっている」に入るが、そのときは映した位置が横に入らないので押し込みに倒れる。
+- 起動の関門は `ScopePlacement` の `char_pos`・`char_size` から矩形を組む（今の関門がすでに組んでいる `char_rect` をそのまま渡す）。書き込みの関門も `window_rect_of` で組んだ `char_rect` を渡す。
+- 檻: 兄弟の新しいテスト `balloon_limit_flip_tests.rs`（純関数と、起動の関門・書き込みの関門の 2 つを通す形）。
+
 ### 記憶の層: `placement/persist.rs` の足し
 
 #### Restore の組の結線
@@ -593,16 +676,18 @@ pub fn restore_and_judge(
 | ⑻ 並べ終えた時点の保存 | `frame_chain_finalize_clamp_tests.rs`・`persist_restore_group_tests.rs` | 寄せた相方の記憶に書かれる位置が寄せた後の位置（下端中央の x に直した値）。記憶から戻して寄せた窓・詰め直した窓の位置は書かれない。`RestoredPositionsClamped(true)` のとき古い記憶へ印が書き足されず、その行が出る。`false` なら今どおり書き足される |
 | ⑼ キャラ窓が収まりバルーンもずらしどおりで収まる | `frame_chain_finalize_clamp_tests.rs` | ⑴ の並べ替えの後、相方のバルーンが `char + offset` に立ち、`[balloon-limit] Clamp` が出ない（要件 5.1・5.2） |
 | ⑽ 起動のトークの位置の指令が表示の前に届く | `frame_move_hold_tests.rs`（H1 と決まったとき） | 装着の前に送った `\![move]` は窓を動かさず預かられる。**装着の後でも最初の面をまだ表示していない窓**（対象・基準のどちらでも）への指令も預かられる。その窓が表示した巡で、同じ巡の表示の指令・再スナップの後に当たる（相の順は今の `frame_move_order_tests.rs` が固定）。同じ窓へ後から来た指令は追い越さず、関わりの無い窓への指令は先に当たる。H2 と決まったときは柵の檻に替える |
+| ⑾ キャラ窓が収まりバルーンだけ横にはみ出す（2026-10-30 の改め） | `balloon_limit_flip_tests.rs` | 左端の窓（0〜1108）の左隣のバルーン（x=−872・幅 872）が右隣（x=1108）へ、右端の窓の右隣のバルーンが左隣へ映され、y は変わらない。映した位置が縦にだけはみ出すと縦だけ収まる。両方の側に入らない・縦だけはみ出す・中央揃え・キャラ窓がはみ出している → 今の押し込みと同じ位置。`limit=0` と解放の補正は並べ替えない。`BalloonLockLedger` に descript の止めがあっても並べ替える。起動の関門で `balloon_offset` が変わらない・書き込みの関門でキャラ窓が戻ると元の側へ戻る。記録の行に `how="flipped"`／`how="pushed"` が載る（ログ捕捉・対照のイベントつき） |
 
 ### 今ある檻（要件 10.2）
 
+- 2026-10-30 の改めで見直す（期待が変わりうる）: キャラ窓が作業領域に収まっていて、バルーンだけを横に外へ出し、押し込みを期待している檻。grep で当たった候補は `placement/balloon_limit_gate_tests.rs`（`boot_gate_clamps_display_position_and_keeps_offset_raw`・`boot_gate_never_touches_balloon_offset_on_any_edge`・`boot_gate_limit_arms_cover_every_edge_at_every_dpi_level` ほか）・`placement/follow_balloon_limit_tests.rs`（`enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true`・`move_window_to_clamps_the_trailing_balloon_but_never_the_char_window`・`follow_balloon_clamps_for_every_trigger`・`visibility_guard_runs_first_and_the_limit_correction_has_the_last_word` ほか）・`placement/placement_windowposition_tests.rs`・`placement/follow_visibility_balloon_wiring_tests.rs`・`placement/follow_visibility_guard_tests.rs`・`placement/follow_drag_tests.rs`・`placement/spawn_assembly_tests.rs`・`input_events/balloon_wiring_tests.rs`・`ghost_session_scope_rect_tests.rs`・`mcp/get_property_tests.rs`。当たるのは「キャラ窓が収まり・横にはみ出し・映した位置が入る」形だけで、押し込みを主張する檻は前提（キャラ窓を作業領域の外へ出す・作業領域を狭めて両方の側に入らなくする・縦だけはみ出させる）を合わせて押し込みの主張を保つ。`balloon_limit_tests.rs`（式そのもの）と `follow_drag_end_limit_tests.rs`（解放の補正）は変わらない。
 - 保つ: 表情の差し替えで横へ動かない（`placement/follow_resize_tests.rs` の下端中央の檻・`emo2_boot/frame_chain_finalize_tests.rs` の一度きりの檻）・記憶の寄せと書き戻さない（`placement/persist_restore_tests.rs`）・バルーンを作業領域へ収める（`placement/balloon_limit_tests.rs`・`balloon_limit_gate_tests.rs`・`follow_balloon_limit_tests.rs`・`placement_windowposition_tests.rs`）。`resize_window_to_free_keeps_position_and_updates_size_only` は `CharWindowMarker`・`GhostWindows` を持たない窓なので寄せの対象外のまま緑。
 - 見直す（期待が変わりうる）: `MonitorSnapshot` を入れて、解いた x が作業領域の外へ出る並びを期待している鎖の檻（`emo2_boot/frame_chain_finalize_*_tests.rs`・`frame_chain_realign_*_tests.rs`・`placement/chain_realign_script_moved_tests.rs`）・既定の位置にいる `Free` の窓を作業領域の外へ育てる檻（`follow_*`・`emo2_boot/frame_resnap_tests.rs`・`frame_balloon_offset_follow_tests.rs`）・`restore_merged_placements` の 2 つ組を受けるテスト 3 ファイル。H1 と決まったときは、未装着の配線で位置の指令が当たることを前提にしている檻（`frame_move_order_tests.rs`・`frame_window_link_drain_tests.rs`・`frame_transition_branch_tests.rs`・`frame_drain_text_tests.rs` のうち該当するもの・`spine_move_cue_tests.rs`・`spine_conformance_lap_tests.rs`）が装着を立ててから流す形へ変わる。どれも本質（並べ方・相の順・指令の中身）は変えず、前提の状態だけを合わせる。
 
 ### 実機（要件 10.3・10.4）
 
 - 排他テストの机を持ち、開発者の机（主の画面 2880×1800・200%、左の画面 150%）で、emo2 を写した検体（根・記憶・記録はワークツリーの `target\` の下）で回す。⑴ 記憶に本体だけを主の画面の左端で書いた検体 → 相方が右の隣に並ぶ ⑵ 起動の台本で既定の面より大きい面へ替える `free` の検体 → 作業領域の中 ⑶ 記憶の位置がどのモニタとも交わらない隣り合った組の検体 → 組のまま作業領域の中、`[work-area-clamp] Clamp scene=restore-group` が出る ⑷ 起動のトークで `\![move]` を流す検体 → トークの最中から結果の並び、トークの後にずれない。
-- 同じ机でぱすたを記憶の空から初回起動し、トークの間も後も窓が作業領域の中・並びがずれない・縦書きのバルーンの 1 列目に × と横線がかからないことを 1 回確かめる（要件 10.4）。このとき相方の側のバルーンの `[balloon-limit] Clamp` の行も読み、要件 5.3 の場面（キャラ窓が収まっているのにバルーンだけはみ出す）があるかを見る。あれば SSP の測り ⑷ に進み、扱いを開発者に諮る。
+- 同じ机でぱすたを記憶の空から初回起動し、トークの間も後も窓が作業領域の中・並びがずれない・縦書きのバルーンの 1 列目に × と横線がかからないことを 1 回確かめる（要件 10.4）。このとき相方の側のバルーンの `[balloon-limit] Clamp` の行も読む。2026-10-30 の 1 回目でキャラ窓が収まっているのにバルーンだけはみ出す場面が見つかり（`research.md` 13 節）、裁定で BalloonFlip を足したので、BalloonFlip の後にもう 1 回通し、相方のバルーンが窓の右隣に `how="flipped"` で立ち窓に重ならないことを確かめる。
 - 終わったら机と画面の操作をすぐ返す。
 
 ## SSP との違いと記録（要件 8）
@@ -614,7 +699,7 @@ pub fn restore_and_judge(
 | 件 1 | 起動の並べ直し・拡大率の後の詰め直し・記憶からの隣り合わせで、並べた窓が基準の窓のモニタの作業領域からはみ出すなら反対の側へ並べ替え、入らなければ端へ寄せる（重なってよい）。基準の窓と台本が置いた窓は動かさない |
 | 件 2 | 既定の位置にいる `free` の窓が大きい面ではみ出したら、はみ出した向きにだけ収める。**SSP には無い安全網**（SSP は何もしない見込み・測り ⑵ は任意） |
 | 件 3 | 記憶の位置と今の大きさから隣り合い・重なりを推し、組を同じ量だけ寄せる。離れて置かれた一緒に動く組は拾えない。寄せた起動では古い記憶へ印を書き足さない |
-| 件 4 | キャラ窓を収めることでバルーンだけの寄せを起こさない。要件 5.3 の場面が見つかったときだけ、SSP の測り ⑷ の後に完了 spec `areka-P0-windowposition-limit` の決まりを改め、改めた事実を同じ表に残す（要件 8.4） |
+| 件 4 | キャラ窓を収めることでバルーンだけの寄せを起こさない。それでもキャラ窓が収まっていてバルーンだけが横にはみ出すときは、キャラ窓の縦の中心線で映した反対の側へ並べ替え、入らなければ押し込む。**完了 spec `areka-P0-windowposition-limit` の押し込みの決まりを改めた**事実と理由（4.4 の通しで相方のバルーンが押し込まれて窓に重なった・SSP 2.9.26 は反対の側へ並べ替えていた・2026-10-30 の裁定）を同じ行に残す（要件 8.4）。根拠は `research.md` 13 節 |
 | 件 5 | 測り ⑸ の結果と、決まった直し（H1 なら位置の指令は対象・基準の窓の最初の面の表示を待つ） |
 
 SSP を測った ⑴〜⑷ があれば、その版・手順・結果を `research.md` に残し、§8 の根拠の欄から指す（測っていないものは書かない）。
@@ -624,4 +709,6 @@ SSP を測った ⑴〜⑷ があれば、その版・手順・結果を `resear
 - **3 体以上の鎖**: 反対の側へ並べ替えた窓が、さらに前の窓と重なりうる（例: 本体の左に 1、その左の 2 が外へ出て 1 の右＝本体の上へ）。要件 1.2 の字面どおりで、3 体目は今は出ない（`extra-character-windows`）。そちらの spec で見直す（Revalidation Triggers）。
 - **件 5 が H2 だった場合**: 直しが C12 の ① のファイルに及ぶと、この wave では直せない。MoveHold の表の扱い（切り出して報告）に従う。
 - **見直す檻が多い**: 鎖・面の拡大・H1 の待ちは、どれも前提の状態を合わせるだけの書き換えになる見込み。本質の主張を外す書き換えはしない。
+- **バルーンの横のずらしの符号（2026-10-30 の改め）**: 並べ替えはキャラ窓の縦の中心線で映すので、シェルからの横の間合いが左右で同じになる（ukadoc の「横の＋はどちらの側でもシェルに近づく向き」に沿う）。一方、今の初期配置（`resolver.rs` P5）は右に出すときも `balloon.offsetx` を画面の右向きに足しており、作者が `balloon.alignment,right` と横のずらしを書いたバルーンでは、初めから右に出たバルーンと、左から並べ替えて右に来たバルーンの位置が食い違う。SSP で横のずらしのあるバルーンの並べ替えは測っていない（測ったぱすたの相方のずらしは 0）。初期配置の符号はこの spec の外（Revalidation Triggers）。
+- **書き込みの関門のファイル**: 並べ替えは `window_move.rs` の `apply_balloon_limit_gate` の呼び出し 1 か所の置き換えで、判定の本体は `balloon_limit.rs` に置く。C12 の約束「`window_move.rs` に足さない」は 10-29 の承認（1 文）の外になるので、置き換えの前に開発者の承認を取る（書き換えは `/kiro-complete` で一緒に）。
 - **重なっていた組の片方だけが外にある場合**: 見えている窓を動かさない決め（設計の話し合い 1）のため、外の窓は窓ごとに寄せられ、重なりの互いの位置は保たれない。見えている窓が一部でも作業領域にかかり、それと重なる窓が作業領域とまったく交わらない形に限られる（まれ）。記録 `Keep reason=partner-visible` で見分けられる。
