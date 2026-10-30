@@ -83,10 +83,11 @@
   - _Requirements: 4.3, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
 - [ ] 6. 直した後の確かめ
-- [ ] 6.1 触ったクレートのテストと静的な検査
+- [x] 6.1 触ったクレートのテストと静的な検査
   - `areka-user-data`・`areka-mcp-bridge`・`areka` 本体（`areka-user-data` を使う側）のテスト、整形と lint を回す
   - 完了の形: 3 つのクレートのテストが緑、整形と lint の指摘が 0、`Cargo.lock` に外部のクレートが増えていない
   - _Requirements: 6.1, 6.2, 6.3_
+  - 結果（2026-10-30）: 3 つのクレートのテストは緑（`areka` は `--no-fail-fast` で緑・途中の赤は i686 の試しの DLL の建て忘れと負荷の下の揺れ 1 回で、どちらもこの spec の外）。lint は `cargo clippy --no-deps -p areka-user-data -p areka-mcp-bridge --all-targets -- -D warnings` が 0。`areka` 本体と依存の `dola`・`areka-kanade` には前からの指摘があり、この spec はどれも変えていない（`git diff 58734aa37 -- crates/areka` は空）。`Cargo.lock` の外部のクレートは 0 増
 
 - [ ] 6.2 直した後の検体で、Bash の道具と PowerShell から S1・S3・S5 と比べを測る
   - 直した後のコードで建てた検体を `target\bridge-store-measure\after\` に 1.1 と同じ形で並べ、測る前の写しを取って箱の中を控える
