@@ -1,9 +1,12 @@
-//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢とアンカーの確定の発行・送れた選択肢の場所の選択肢を済みにすることと、末尾で利用者の中断へ渡す）。
-//! 足す予定の spec: talk-fast-forward・balloon-markers（矢印のクリック）。
+//! balloon の子: クリック（`on_balloon_pointer_pressed`・話し終えた後の矢印の押下を先に取り、選択肢とアンカーの確定の発行・送れた選択肢の場所の選択肢を済みにすることと、末尾で利用者の中断へ渡す）。
+//! 足す予定の spec: talk-fast-forward。
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
+use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::place::PlaceKey;
+use areka_emo_text::scroll_marker::ARROW_STEP_LINES;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -12,6 +15,7 @@ use wintf::ecs::pointer::{Phase, PointerState};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::placement::spawn::BalloonWindowMarker;
 
+use super::user_break::UserBreakWiring;
 use super::{BalloonWiring, click_selection, selection_events, settle_after_selection};
 
 /// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）。
@@ -102,6 +106,14 @@ pub(crate) fn on_balloon_pointer_pressed(
         );
         return false;
     };
+
+    // ── 矢印（balloon-scroll-arrows 要件 5.1・5.2・5.5・5.6）──────────────────────────────────
+    // 話し終えた後だけ、矢印の当たり（α ≥ 0.5 の画素）を先に取る。当たれば送って押下を消費し、
+    // 閉じる働き・選択肢やリンクの確定へ流さない。話している最中・当たらないなら今の流れへ。
+    // 矢印かどうかは送り手の entity でなく押下の点で決める（不透明な絵の上では送り手は絵の entity）。
+    if finished_talking(world) && press_arrow(&runtime, &actor, (x, y), scope) {
+        return true;
+    }
 
     // ── 借用規律 ② BalloonWiring 存在確認（共有借用即解放）──────────────────────────────────
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
@@ -196,3 +208,50 @@ pub(crate) fn on_balloon_pointer_pressed(
     let accepted = super::user_break::on_left_press(world, scope, state.double_click, selected_now);
     selected_now || accepted
 }
+
+/// 話し終えているか（矢印の押下を先に取ってよいか・普通のバルーンの窓と箱の押下が共有する）。
+///
+/// 利用者の中断の入口（[`super::user_break::on_left_press`]）・箱の押下（`on_box_press`）が
+/// 早送り・中断へ回すかを決めるのと同じ状態（`UserBreakWiring` の「話している最中」）から引く。
+/// 話している最中かはゴーストに 1 つ（スコープごとには持たない）。持ち物が無い（結線前）は箱の
+/// 押下と同じく話していない扱い。
+pub(crate) fn finished_talking(world: &World) -> bool {
+    world
+        .get_non_send::<UserBreakWiring>()
+        .is_none_or(|w| !w.talking())
+}
+
+/// 押下の点（窓のクライアント物理 px）がそのスコープの普通のバルーンの矢印に当たれば、その向きへ
+/// [`ARROW_STEP_LINES`] 行送って `true`。当たらない（矢印が無い・透けた画素）なら `false`。
+fn press_arrow(
+    runtime: &RefCell<TextLayerRuntime>,
+    actor: &ActorKey,
+    point: (f32, f32),
+    scope: usize,
+) -> bool {
+    let Ok(mut rt) = runtime.try_borrow_mut() else {
+        tracing::error!(
+            event = "balloon_runtime_borrow_failed",
+            scope,
+            "runtime try_borrow_mut 失敗（矢印の押下）: 矢印として扱わない"
+        );
+        return false;
+    };
+    let place = PlaceKey::balloon(actor);
+    let Some(kind) = rt.marker_at_point(&place, point) else {
+        return false;
+    };
+    let change = rt.scroll_manual_at(&place, kind.dir(), ARROW_STEP_LINES);
+    tracing::trace!(
+        event = "balloon_arrow_pressed",
+        scope,
+        ?kind,
+        ?change,
+        "矢印の押下: 送りだけをしてクリックにしない"
+    );
+    true
+}
+
+#[cfg(test)]
+#[path = "balloon_pressed_tests.rs"]
+mod tests;

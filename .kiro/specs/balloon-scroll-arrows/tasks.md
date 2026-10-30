@@ -110,7 +110,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Depends: 4.1_
   - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6, 6.7, 11.1_
 
-- [ ] 6.2 (P) バルーンの押下で、話し終えた後の矢印を先に取る
+- [x] 6.2 (P) バルーンの押下で、話し終えた後の矢印を先に取る
   - 「そのスコープが話し終えたか」の判断を、今の利用者の中断の入口（`user_break` の左押下）が早送り・中断へ回すかを決めるのと同じ状態から引く小さな共有の判断として `balloon_pressed.rs` の中に 1 か所置く（6.3 も使う・新しいモジュールは作らない）
   - 左押下の確認の直後、話し終えているときだけ矢印の当たりを見て、当たれば 2 行送って押下を消費する（閉じる働き・選択肢やリンクの確定へ流さない）
   - 話している最中・当たらない（透けた画素を含む）なら今までどおり早送り・中断・閉じる・選択肢へ流す
@@ -184,3 +184,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 5.2: 箱の矢印の絵は `BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>`（スコープごと・`ActorKey::from(scope.to_string())`）。`set_box_markers` の引数もこの形。装着と切り替えは今は `definitions.face0().model.clone()` を使う（5.3 が書き手に替える）。テストの支えは `assets::empty_definitions(scope)` と `ScopeBalloonDefinitions::single`。emo-present に `ShellTarget::use_self_alpha()` を足した。
 - 5.3: 今の定義の書き手は `emo2_boot/frame/balloon_face.rs` の `select_balloon_face`（`balloon_models` へ書くのはここだけ）。`wiring.balloon_definitions`・`wiring.balloon_faces` を持つ。隠す枝は `HideScopes` のたびに `hide_scope_boxes` へ入り、箱に届くなら `forget_manual_of`、Clear などでは普通のバルーンだけ `forget_manual_at`（要件 8.3）。
 - 6.1: `input_events/balloon_wheel.rs` の系は `ghost_session::register_systems` で `register_char_watch` の隣に登録（design.md は mod.rs と書くがコードの型に合わせた）。`frame::test_support` と `manual_balloon_runtime`・`balloon_is_manual` は `pub(crate)`（cfg(test)）。
+- 6.2: 「話し終えたか」は `balloon_pressed.rs` の `finished_talking(world)`（`UserBreakWiring.talking`・ゴーストに 1 つ。スコープごとの状態はコードに無い）。6.3 は balloon.rs から `pub(crate) use` で使う。話している最中の矢印の押下は、今は既存のクリックの流れ（`balloon_break_detected`）へ回る。片クリックの早送りは `talk-fast-forward` が入れば自動で効く（要件 5.6 は「本 spec の前と同じクリック」）。消費した矢印の押下は `prev_press_selected` を上書きしない（選択肢のクリック→矢印→矢印の外のダブルクリックで中断を取らない端の場合がある）。
