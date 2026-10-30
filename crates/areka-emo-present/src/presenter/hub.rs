@@ -86,6 +86,7 @@ impl EmoPresenter {
                 stage_generation: 0,
                 acked_generation: 0,
                 pending_resize: None,
+                partial_base: false,
             },
         );
         Ok(())
@@ -265,6 +266,8 @@ impl EmoPresenter {
         // 原寸を返し続けるのが正しい（R4.3: キャッシュ無効化は表示を変えない）。以後は必ずミス＝
         // 再合成が走り、対が再構築される。
         target.cache.invalidate_all();
+        // 控えの前の絵が無くなったので、次の外れはいちから合成する（要件 3.1・4.2）。
+        target.partial_base = false;
         tracing::debug!(
             ?target_id,
             "apply(InvalidateCache): キャッシュ全破棄（表示は継続）"

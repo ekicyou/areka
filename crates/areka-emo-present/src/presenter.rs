@@ -71,8 +71,8 @@ use bevy_ecs::world::World;
 use areka_actor::{ReplySender, reply_channel};
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, RegionPriority,
-    ScaleRatio,
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose,
+    RegionPriority, ScaleRatio,
 };
 use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
@@ -125,6 +125,9 @@ mod frame_log_tests;
 #[cfg(test)]
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
+#[cfg(test)]
+#[path = "presenter_partial_recompose_tests.rs"]
+mod partial_recompose_tests;
 #[cfg(test)]
 #[path = "presenter_perf_log_tests.rs"]
 mod perf_log_tests;

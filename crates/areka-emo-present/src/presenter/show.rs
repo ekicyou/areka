@@ -9,8 +9,8 @@ use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
-    PresentError, PresentOutcome, ReplySender, TargetId, VisibilityOwnership, VisualMount, World,
-    derive_scale,
+    PresentError, PresentOutcome, Recompose, ReplySender, TargetId, VisibilityOwnership,
+    VisualMount, World, derive_scale,
 };
 
 impl EmoPresenter {
@@ -109,7 +109,13 @@ impl EmoPresenter {
         // 専用の檻（`presenter_cache_capacity_tests.rs`）だけが捕まえる。
         let cache_hit = target.cache.touch(surface_id, &binds, &pattern);
         timing.mark(Stage::CacheLookup);
+        // 合成の仕方（控えに外れた回だけ意味を持つ・重ね直しの範囲の行が読む・要件 3.5）。
+        let mut recompose = Recompose::Full;
         if !cache_hit {
+            // 下敷きの印は合成の**前に**偽にする（要件 4.2）。この適用が合成の後で失敗して戻っても、
+            // 合成器の前の命令列（`base_ops`）は控えの前の絵と食い違っているので、次は必ずいちからになる。
+            let partial_base = std::mem::replace(&mut target.partial_base, false);
+
             // 合成先は [`FrameBudget`] の常設席（設計 D2⑴・Flow 2）。`compose_into` は席の容量を
             // 再利用するため、外形の変わらない反復では 1 バイトも確保しない。席を**閉包で借りる**のは、
             // 合成外形が `compose_into` の内側で決まり、伸長の観測を「席を使い終えた直後」にしか
@@ -118,24 +124,51 @@ impl EmoPresenter {
             //
             // 合成結果を先に束縛して境界を作る（計時点 `Stage::Compose` を合成の直後に置くため）。
             // 分岐・呼出順序・エラー経路は下の `match` がそのまま担い、挙動は不変である。
-            let composed = target.budget.native_scratch(|scratch| {
+            //
+            // 動きの無い面（`pattern` が空）は今の `compose_into` のまま＝いちから（要件 3.4）。動きのある面は
+            // 下敷き形の口を呼び、印が真で前に成立した面の絵が控えに在る（`get`＝順序を動かさない）ときだけ
+            // その絵を下敷きに渡す（要件 3.1）。印が真なら合成器の前の命令列はその絵を作った命令列である。
+            let base = if partial_base {
                 target
-                    .composer
-                    // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
-                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない）。外形は席
-                    // そのものが持つ——エントリの `composed` 外形として下流が読む。
-                    .compose_into(
+                    .last_show
+                    .as_ref()
+                    .and_then(|(id, b, p)| target.cache.get(*id, b, p))
+                    .map(|e| &e.composed)
+            } else {
+                None
+            };
+            let composed = target.budget.native_scratch(|scratch| {
+                // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
+                // 合成は常に native 原寸（emo-compose の合成経路は k を知らない）。外形は席
+                // そのものが持つ——エントリの `composed` 外形として下流が読む。
+                if pattern.is_empty() {
+                    target
+                        .composer
+                        .compose_into(
+                            scratch,
+                            &target.emo_world,
+                            &target.atlas,
+                            surface_id,
+                            &binds,
+                            &pattern,
+                        )
+                        .map(|()| Recompose::Full)
+                } else {
+                    target.composer.compose_into_reusing(
                         scratch,
+                        base,
                         &target.emo_world,
                         &target.atlas,
                         surface_id,
                         &binds,
                         &pattern,
                     )
+                }
             });
             timing.mark(Stage::Compose);
             match composed {
-                Ok(()) => {
+                Ok(how) => {
+                    recompose = how;
                     // (1a) 表示の記録（設計 Flow 1・要件 1.1／7.1）: 合成した**原寸**バイトから
                     // 閉じたコマンドリストを起こし、下の `insert` でエントリへ束ねる。記録は k を
                     // 含まない（拡大は wintf の変換行列が掛ける）。
@@ -395,6 +428,9 @@ impl EmoPresenter {
         // `last_show` への move の**直前**に取る。全段の `mark` が済んだ後なので、この走査
         // （借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。
         let key_hash = compose_key_hash(surface_id, &binds, &pattern);
+        // 下敷きの印（要件 3.1・4.2）: 控えに外れ、動きのある面（下敷き形の口で合成した）ときだけ真。
+        // このとき合成器の前の命令列は、いま控えへ入れた `last_show` の鍵の絵を作った命令列である。
+        target.partial_base = !cache_hit && !pattern.is_empty();
         target.last_show = Some((surface_id, binds, pattern));
 
         // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。**最初の表示と状態の替わりは INFO・
@@ -426,6 +462,24 @@ impl EmoPresenter {
                     "apply(ShowSurface): 表示・マスクを更新"
                 )
             };
+        }
+        // 重ね直しの範囲の行（要件 3.5）: 控えに外れて成立した適用だけ、表示の行の**直前**に 1 行。
+        // 表示の行と perf の行のあいだには何も挟まない（要件 2.3）。
+        if !cache_hit {
+            let (kind, (rect_x, rect_y, rect_w, rect_h)) = match recompose {
+                Recompose::Full => ("full", (0, 0, native.0, native.1)),
+                Recompose::Partial { x, y, w, h } => ("partial", (x, y, w, h)),
+            };
+            tracing::debug!(
+                ?target_id,
+                surface_id,
+                recompose = kind,
+                rect_x,
+                rect_y,
+                rect_w,
+                rect_h,
+                "apply(ShowSurface): 重ね直しの範囲"
+            );
         }
         if frame_step && !size_changed {
             show_line!(tracing::Level::DEBUG);
