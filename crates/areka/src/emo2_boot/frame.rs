@@ -532,6 +532,12 @@ mod ghost_quit_logsink_tests;
 #[path = "frame_ghost_quit_switch_tests.rs"]
 mod ghost_quit_switch_tests;
 
+// 常に手前の状態と台本の組の寿命（ゴーストの読み直し・切り替え・SHIORI だけの読み直し）
+// （stay-on-top-directives タスク 5.3）。
+#[cfg(test)]
+#[path = "frame_stay_on_top_lifecycle_tests.rs"]
+mod stay_on_top_lifecycle_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;

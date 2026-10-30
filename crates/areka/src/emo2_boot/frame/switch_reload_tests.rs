@@ -186,3 +186,7 @@ fn foreign_phase_keeps_the_normal_finish_and_overtakes_the_reload() {
         "((窓口の終わり, kanade への便り), LastShell が新しいシェル)"
     );
 }
+
+// 常に手前の状態と印の寿命（シェルとバルーンの切り替え・stay-on-top-directives タスク 5.3）。
+#[path = "switch_stay_on_top_tests.rs"]
+mod stay_on_top_tests;
