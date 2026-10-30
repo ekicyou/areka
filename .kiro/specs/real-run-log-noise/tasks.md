@@ -74,7 +74,7 @@
   - _Requirements: 5.4, 6.1, 6.2, 6.3, 6.5, 6.6_
 
 - [ ] 5. 全体の確かめ
-- [ ] 5.1 触ったクレートのテスト・整形・静的検査を通し、変えないものを確かめる
+- [x] 5.1 触ったクレートのテスト・整形・静的検査を通し、変えないものを確かめる
   - `areka-emo-text`・`areka-emo-atlas`・`areka` のテストと、整形と静的検査をワークスペースの決まりどおりに回す
   - 変えないものを差分で確かめる: `draw.rs` の差分 0・新しいソースファイル 0・失敗と作者の誤りの記録（潰れの `warn`・戻りの `info`・範囲外の `origin` の `warn`・折返し基準の `warn`・0 寸の `warn`）の文言と水準の差分 0・触ったファイルがどれも 1,000 行の内
   - 完了の状態: 全部緑で、上の 4 つの「差分 0」をコマンドの出力で示せる
@@ -99,3 +99,5 @@
 - 3.1: `bind_only_paths` は `pattern.surface_id` を方式によらず面の参照と数える（`insert`・`start`・`alternativestart` の番号はアニメーションの番号）。3.2 で方式を見て面を指さない参照を除くか、少なくとも説明に書く（迷ったら警告の側）。
 - 3.2: 3.1 の申し送りは片付けた。`bind_only_paths` は番号がアニメーションの番号の 7 方式（start・stop・alternativestart・alternativestop・parallelstart・parallelstop・insert）を数えない（emo-compose の `targets_animation_id` と同じ並びと正規化の写し。片方を変えたら他方も）。
 - 3.2（spec の外・完了の棚卸へ）: 実装係の観察では、`format!("{:?}", table)` で焼き込みの結果を比べると、ページのバイトが走るたびに違うことがある。原因は調べていない。審査係は、`lib.rs` の `HashMap<ElementId, Placement>` を回す順が走るたびに変わることが原因かもしれないと見ている（コードを読んでの見立てで、HEAD で 2 回焼いて確かめてはいない）。
+- 5.1: 確かめの結果（基準 933b8bfb）。`areka-emo-text` と `areka-emo-atlas` のテストは緑。`areka` のテストは、排他テストの机を借り、i686 の補助を作ってから回すと 9 本の束がどれも緑。整形は緑。触ったファイルへの clippy の指摘は 4 件あるが、どれも 933b8bfb より前からある行（blame で確かめた）。差分で見たこと: `draw.rs` の差分は 0、新しいソースファイルは 0、どのファイルも 1,000 行の内（いちばん長いのは `region_vertical_canon_tests.rs` の 863 行）。消えた `warn!` は 3 つで、全透明の 1 つは同じ文言で else の側へ移り、飾りの 2 つは同じ文言で `actor_decoration.rs` へ移った。失敗と作者の誤りの記録の文言と水準は変わっていない。
+- 5.1: `cargo test -p areka` には、areka を立ち上げる走りのテスト（`smoke_boot_loop_exit`・`mcp_get_log_real_run`・`script_security_real_run`）が `#[ignore]` なしで入っている。机の基準の 1 行目に当たるので排他テストの机が要る。i686 の補助を作らずに回すと、すぐに赤になる。
