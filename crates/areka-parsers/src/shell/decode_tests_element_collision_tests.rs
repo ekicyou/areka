@@ -186,6 +186,7 @@ animation0.pattern0,overlay,100,0,0,0
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
                 surface_id: 100,
+                target: "100".into(),
                 wait: 0,
                 x: 0,
                 y: 0,

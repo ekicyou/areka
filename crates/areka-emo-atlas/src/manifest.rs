@@ -237,6 +237,7 @@ mod tests {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
                 surface_id: ref_surface_id,
+                target: ref_surface_id.to_string(),
                 wait: 0,
                 x: 0,
                 y: 0,

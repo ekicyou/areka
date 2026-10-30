@@ -463,6 +463,7 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
                 surface_id: 5000,
+                target: "5000".into(),
                 wait: 0,
                 x: LAYERED_BIND_AT.0,
                 y: LAYERED_BIND_AT.1,

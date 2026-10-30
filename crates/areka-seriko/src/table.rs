@@ -573,6 +573,7 @@ mod tests {
             index,
             method: DrawMethod::new(method.to_string()),
             surface_id,
+            target: surface_id.to_string(),
             wait,
             x,
             y,
