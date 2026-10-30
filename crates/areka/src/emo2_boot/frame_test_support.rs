@@ -912,9 +912,7 @@ pub(super) fn window_move_routes_of(events: &[LogEvent], entity: Entity) -> Vec<
 ///
 /// 手動の位置の表は提示で作られるので、実 GPU（本番の UI スレッドと同じ MTA）で小さいバルーンに
 /// あふれる行を流して 1 フレーム提示し、古い側へ 1 行送る。返す World は提示の資源を持つ。
-pub(in crate::emo2_boot) fn manual_balloon_runtime(
-    actor: &str,
-) -> (World, Rc<RefCell<TextLayerRuntime>>) {
+pub(crate) fn manual_balloon_runtime(actor: &str) -> (World, Rc<RefCell<TextLayerRuntime>>) {
     use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
     use areka_emo_text::place::PlaceKey;
     use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
@@ -965,7 +963,7 @@ pub(in crate::emo2_boot) fn manual_balloon_runtime(
 }
 
 /// 普通のバルーンの場所が手動の位置にいるか（新しい側へ 1 行送って、自動なら何も起きない）。
-pub(in crate::emo2_boot) fn balloon_is_manual(rt: &RefCell<TextLayerRuntime>, actor: &str) -> bool {
+pub(crate) fn balloon_is_manual(rt: &RefCell<TextLayerRuntime>, actor: &str) -> bool {
     use areka_emo_text::place::PlaceKey;
     use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
     rt.borrow_mut().scroll_manual_at(

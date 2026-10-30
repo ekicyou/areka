@@ -102,7 +102,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Requirements: 1.6, 1.7, 8.3, 8.4, 8.6, 11.1, 11.2_
 
 - [ ] 6. 押下とホイールの受け口（areka input）
-- [ ] 6.1 (P) 普通のバルーンの窓のホイールの系を足す
+- [x] 6.1 (P) 普通のバルーンの窓のホイールの系を足す
   - キャラクターの窓のホイールと同じ入力の段で、バルーンの窓の縦の回転を受けた時だけ OS の「1 回にスクロールする行数」を読み、そのスコープのバルーンの場所の手動の送りへ渡す
   - `OnMouseWheel` は送らず、横の回転は読まず、結線が無いときは debug で何もしない
   - 完了の姿: 上へ回すと古い側・下へ回すと新しい側へ送り、`OnMouseWheel` が積まれないことを固定した兄弟のテストが緑
@@ -183,3 +183,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 5.1: `placement::face_windowposition::apply_face_windowposition` は呼び手（5.3）ができるまで `expect(dead_code)` 付き。5.3 で外す。`GhostWindows` が無いと材料を入れ替える前に戻る（起動後は揃うので実害は低い）。
 - 5.2: 箱の矢印の絵は `BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>`（スコープごと・`ActorKey::from(scope.to_string())`）。`set_box_markers` の引数もこの形。装着と切り替えは今は `definitions.face0().model.clone()` を使う（5.3 が書き手に替える）。テストの支えは `assets::empty_definitions(scope)` と `ScopeBalloonDefinitions::single`。emo-present に `ShellTarget::use_self_alpha()` を足した。
 - 5.3: 今の定義の書き手は `emo2_boot/frame/balloon_face.rs` の `select_balloon_face`（`balloon_models` へ書くのはここだけ）。`wiring.balloon_definitions`・`wiring.balloon_faces` を持つ。隠す枝は `HideScopes` のたびに `hide_scope_boxes` へ入り、箱に届くなら `forget_manual_of`、Clear などでは普通のバルーンだけ `forget_manual_at`（要件 8.3）。
+- 6.1: `input_events/balloon_wheel.rs` の系は `ghost_session::register_systems` で `register_char_watch` の隣に登録（design.md は mod.rs と書くがコードの型に合わせた）。`frame::test_support` と `manual_balloon_runtime`・`balloon_is_manual` は `pub(crate)`（cfg(test)）。

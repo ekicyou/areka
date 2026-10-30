@@ -413,7 +413,7 @@ pub fn emo2_frame_system(world: &mut World) {
 
 #[cfg(test)]
 #[path = "frame_test_support.rs"]
-pub(in crate::emo2_boot) mod test_support;
+pub(crate) mod test_support;
 
 // 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
 // x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。
