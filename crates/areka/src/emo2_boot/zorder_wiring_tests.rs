@@ -218,9 +218,9 @@ fn raise_the_dirty_mark(mut plan: ResMut<ZOrderChainPlan>) {
     plan.dirty = true;
 }
 
-/// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 3 本を先に載せる）。
+/// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 4 本を先に載せる）。
 ///
-/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 3 本を
+/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 4 本を
 /// 載せる。同じ段に後から載せる仕事は、順序指定を落とすと適用系との前後が定まらない。
 fn wired_finalize_world() -> World {
     let mut world = World::new();
@@ -352,7 +352,7 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
         "旧い段内の順序指定（`.before(apply_zorder_chain)`）が残っている（段をまたぐ順序は指定できない）"
     );
 
-    // 適用系は末尾の段に載る（`wire_zorder_pair` が 3 本を据える）。
+    // 適用系は末尾の段に載る（`wire_zorder_pair` が 4 本を据える）。
     let world = wired_finalize_world();
     assert!(
         world.resource::<Schedules>().contains(FrameFinalize),

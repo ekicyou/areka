@@ -114,11 +114,11 @@
   - _Depends: 1.3, 3.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.3, 7.1, 7.5_
 
-- [ ] 5.2 確定段の並びに帯の系を載せ、同じ巡の是正の場面を確かめる
+- [x] 5.2 確定段の並びに帯の系を載せ、同じ巡の是正の場面を確かめる
   - 組の結線の確定段の並びを「所有の結び → 帯の系 → 組の維持 → 鎖の適用」にする
   - 組の結線で帯の指令の列の資源を World に入れる
   - 守り G3 の注記を「既定はオフ・オンは印と窓の作りで足す」へ改める（主張は残す）
-  - 兄弟のテストで、並びが固定されていること、列の資源が入っていること、オンの指令と同じ巡に組の是正が要る場面（偽の OS）で是正が帯を当てた後の観測から決まり、流れた後もバルーンが帯の中でキャラクターのすぐ手前に居ることが通る
+  - 兄弟のテストで、並びが固定されていること、列の資源が入っていること、オンの指令と同じ巡に組の是正が要る場面（偽の OS でなく wintf の実窓の門 `AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]` の内側）で是正が帯を当てた後の観測から決まり、流れた後もバルーンが帯の中でキャラクターのすぐ手前に居ることが通る
   - _Depends: 2.2, 2.4, 3.1_
   - _Requirements: 2.1, 2.4, 3.1, 6.3, 7.3, 7.5_
 
@@ -163,4 +163,5 @@
 - 3.2: 切り替え先の起動に失敗して既定へ戻す道では降ろした記録が 2 行（switch/reload の後に switch）出る。5.3 の寿命テストの期待行数で意識する。
 - 4.2: rebase の記録は既存の入口 `log_group_applied` の `debug!`（design の記録の表を追随）。7.1 の実機では zorder の記録を debug まで開ける。t_zdw08 は切り替えの後に `\![reset,zorder]` を送って組の並びへ戻る形に直した（完了 spec の要件 4.5 の「切り替えで解ける」枝は本 spec の要件 5.1 で上書き・task 6 で名指し）。全体実行で `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が 1 回赤・単独で緑（本 spec と無関係）。
 - 5.1: frame.rs の `run_window_state_phase` の呼び出しを直に固定するテストは無い（台本のテストは相を直に呼ぶ）。5.3 の寿命テストか 7.1 の実機で通す。
+- 5.2: 同じ巡の是正の場面は偽の OS でなく実窓の門（`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）で測る（wintf `window_band_pipeline_real_tests.rs`）。組の維持の実測（`zorder_pair.rs` の `measure_*`）に偽の OS の継ぎ目が無く、開発者が偽の OS を足さずに実窓の門を選んだ。並びそのものの固定は areka の `spawn_window_band_wiring_tests.rs`。
 - 5.3: `switch_finish_tests.rs` は 1,000 行ちょうどで行数の番人（`log-capture-kit` の `file_length_guard_test`）の上限。足すときは兄弟（`switch_reload_tests.rs` の末尾など）に宣言を置く。ゴースト側の寿命テストは `SwitchRig` に `GhostWindows` が無いので状態を直に入れる。

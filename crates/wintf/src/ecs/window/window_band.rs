@@ -264,3 +264,7 @@ mod tests;
 #[cfg(test)]
 #[path = "window_band_real_tests.rs"]
 mod real_tests;
+
+#[cfg(test)]
+#[path = "window_band_pipeline_real_tests.rs"]
+mod pipeline_real_tests;

@@ -606,7 +606,7 @@ impl ZOrderGroupLedger {
 
 - 取り出しの相（`window_state_tests.rs`）: `GhostWindows` が無い間は取り出さず、生えた最初の巡で到着順に当たる。オンで全部の窓の entity（全スコープのキャラクターとバルーン）に印が付き、列に `Enter` が 1 件。オフで印が外れ `Leave`。重ねで列が空。`\v` で印が変わらず `Raise`。`GhostWindows` の外の entity に印が付かない（2.1・2.7・2.9・3.1・7.2）。
 - 帯の系（`window_band_tests.rs`・偽の OS）: 積まれた順に当たる・奥から手前の順で書く・HWND の無い窓を飛ばす・居ない entity を飛ばす・1 枚の書き込みの失敗の後も残りを書く・読み直しの不一致を記録する・印のある窓に HWND が付いた巡に帯の外なら `Enter` を当てる・帯に居れば書かない・列が空になる（2.1・2.3・3.1・6.3・7.3）。
-- 確定段の並び（`spawn.rs` の兄弟のテスト）: `apply_window_band` が `establish_owner_links` の後・`apply_zorder_pair_maintenance` と `apply_zorder_chain` の前に回ることを固定する。オンの指令と同じ巡に組の是正が要る場面（帯を当てる前は帯の外の観測）で、是正が帯を当てた後の観測から決まり、流れた後もバルーンが帯の中でキャラクターのすぐ手前に居ること（偽の OS）を 1 件（2.1・2.4・3.1・6.3・7.3）。
+- 確定段の並び（`spawn.rs` の兄弟のテスト）: `apply_window_band` が `establish_owner_links` の後・`apply_zorder_pair_maintenance` と `apply_zorder_chain` の前に回ることを固定する。オンの指令と同じ巡に組の是正が要る場面（帯を当てる前は帯の外の観測）で、是正が帯を当てた後の観測から決まり、流れた後もバルーンが帯の中でキャラクターのすぐ手前に居ることを 1 件——この場面だけは偽の OS でなく wintf の実窓の門（`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の内側で、本番と同じ並びを 2 巡（是正を決めて流す 1 巡と検証の 1 巡）回して測る（`window_band_pipeline_real_tests.rs`）。組は案 B（`ExplicitMaintenance`・owner を張らない）で組む——案 A では帯へ入るキャラクターに OS が持たれたバルーンを連れて行き、是正が生まれない（2.1・2.4・3.1・6.3・7.3）。
 - 窓の作り（`window_factory.rs` の兄弟のテスト）: 印のある窓は `WS_EX_TOPMOST` 付きで作る・印の無い窓の拡張スタイルは今と同じ（2.3・3.4）。
 - 寿命（`ghost_switch_reload_tests.rs` ほかの足場 `SwitchRig`）: オンにした後、ゴーストの読み直しでオフ・台本の組が空（descript の基底だけ）・オンのまま降ろした記録の理由が `reload`。ゴーストの切り替えでオフ・理由 `switch`。SHIORI だけの読み直しで状態と台本の組が残る。シェルの切り替え・バルーンの切り替えで状態と印が残る（4.1〜4.5・5.3・5.4・6.4・7.2・7.4）。
 - シェルの切り替えの後始末（`zorder_descript_tests.rs`・`switch_finish_tests.rs`）: `t_zdb13` を「台本の組を保ち基底を取り替える」へ書き直す・重なる基底の拒否の記録・保った組の記録・切り替えの後の `\![reset,zorder]` で新しい基底へ戻る（5.1・5.2・5.5・6.5）。
