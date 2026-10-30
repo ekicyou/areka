@@ -32,6 +32,7 @@ pub use self::descript_window_keys::DefaultSurfaces;
 pub mod diag;
 /// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。
 pub(crate) mod dpi_sync;
+pub(crate) mod face_windowposition;
 pub mod follow;
 pub mod measure;
 pub mod persist;

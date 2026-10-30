@@ -76,7 +76,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.8, 4.1, 5.7, 7.1, 7.2, 7.3, 8.6, 11.1_
 
 - [ ] 5. 面ごとの定義と資産づくりの結線（areka）
-- [ ] 5.1 (P) 面の `windowposition` を配置の材料へ入れ、標準の位置のバルーンだけを置き直す
+- [x] 5.1 (P) 面の `windowposition` を配置の材料へ入れ、標準の位置のバルーンだけを置き直す
   - 新しい面の値をスコープの配置の材料に入れ、値が前と同じなら何もしない
   - 前の材料の標準のずらしと今のずらしが等しいスコープだけを、シェルの切り替えの入れ直しと同じ部品で新しい面の標準の位置へ置き直し、動かしてあるスコープは位置を保つ。窓の位置の記憶は書かず、変化 1 回につき info を 1 行残す
   - 完了の姿: 標準の位置のバルーンだけが動き、ドラッグで動かしたバルーンは動かず、値が同じなら何もしないことを固定した兄弟のテストが緑
@@ -180,3 +180,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 4.2→4.3: 印の面は窓の子なので、`ActorRender` を落とすだけでは残る。4.3 は (a) 描画範囲が潰れた場所の片付け（`actor_present.rs` 約 137 行）と (b) 再追従で描画資源を捨てる所（`actor_attach.rs` 約 417 行 `self.surfaces.remove(&place)`・World が要る）の両方で `markers` を despawn する。`marker_child_index` の `expect(dead_code)` は 4.3 で外す。
 - 4.2→6.2/6.3: wintf は窓の子を後ろの子から当てる（描画は先頭が手前）。不透明なバルーンの絵の上では押下の送り手は絵の entity になる。どちらでも窓の `OnPointerPressed` に届くので、矢印かどうかは送り手でなく点の座標（`marker_at_point`）で決める。
 - 4.3: 箱の矢印の絵は `set_box_layout` でなく別の口 `set_box_markers(BTreeMap<BoxName, MarkerPair>)` で受ける。`set_box_layout` は `box_markers` を消さないので、5.2/5.3 はシェルの切り替えで箱の束を入れるたびに（空の束でも）`set_box_markers` を呼ぶ。普通のバルーンは `set_balloon_markers`。当たりは `marker_at_point(&PlaceKey,(f32,f32)) -> Option<MarkerKind>`、`dump_balloon` は `marker_surface(&ActorKey) -> Option<&TextSurface>`。印の面の失敗は `present_frame` の Err になるが、その場所は `presented` に残る（印だけ出ない）。
+- 5.1: `placement::face_windowposition::apply_face_windowposition` は呼び手（5.3）ができるまで `expect(dead_code)` 付き。5.3 で外す。`GhostWindows` が無いと材料を入れ替える前に戻る（起動後は揃うので実害は低い）。
