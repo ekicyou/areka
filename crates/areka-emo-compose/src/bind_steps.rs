@@ -154,6 +154,16 @@ pub(crate) fn push_bind_contribution(
         );
         return;
     }
+    // `bind+random` はコマがあるときだけ描く（再生していないあいだ pattern0 を静的に積まない・
+    // animated-surface-log-flood 件 26 の決めに合わせる）。手順は `insert` の行き先の数えに残す。
+    let bind_random = level
+        .master
+        .animations
+        .iter()
+        .any(|anim| anim.id == a && matches!(anim.interval, Interval::BindRandom { .. }));
+    if bind_random {
+        return;
+    }
     for step in steps {
         match *step {
             BindStep::Draw { surface, x, y } => level.flatten(out_ops, visited, surface, x, y),

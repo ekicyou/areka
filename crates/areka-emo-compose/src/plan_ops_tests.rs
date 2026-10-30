@@ -924,8 +924,8 @@ fn pattern0_less_bind_contributes_no_ops() {
     assert!(ops.is_empty(), "静的 element も無いので命令ゼロ");
 }
 
-/// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` は **index==0（pattern0）のみ**
-/// 合成し、index==1 フレームは静的合成に現れない（index==0 厳密選択の固定）。純 `bind` は全部のコマを
+/// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
+/// 静的に積まない（animated-surface-log-flood 件 26 の決めで期待を直した）。純 `bind` は全部のコマを
 /// 番号の順に重ねる（seriko-pattern-calls 6.8・SSP の測り M6 で期待を直した）。
 #[test]
 fn coexisting_pattern0_and_pattern1_composes_only_index0() {
@@ -981,8 +981,8 @@ fn coexisting_pattern0_and_pattern1_composes_only_index0() {
         ops_to_paths(&ops, &map)
     };
 
-    // `bind+random`: index==0（open_eye）のみ合成。index==1（closed_eye）は静的合成に現れない。
-    assert_eq!(paths(Interval::BindRandom { k: 4 }), vec!["open_eye.png"]);
+    // `bind+random`: コマが無いあいだは pattern0 も積まない（animated-surface-log-flood 件 26）。
+    assert!(paths(Interval::BindRandom { k: 4 }).is_empty());
     // 純 `bind`: 全部のコマを番号の順に（M6）。
     assert_eq!(
         paths(Interval::Bind),
