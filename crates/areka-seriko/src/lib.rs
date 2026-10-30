@@ -25,8 +25,7 @@
 
 mod actor;
 mod bind;
-// 働きのコマを時刻の順に当てる係（spec: seriko-pattern-calls）。5.2（一番上）・5.3（部品）で配線したら allow を外す。
-#[allow(dead_code)]
+// 働きのコマを時刻の順に当てる係（spec: seriko-pattern-calls）。
 mod calls;
 mod looper;
 mod output;

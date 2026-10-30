@@ -89,7 +89,7 @@
   - _Depends: 3.1_
   - _Requirements: 3.6, 3.7_
 
-- [ ] 5.2 一番上とバルーンの面の刻みと合図で呼び出しを当てる
+- [x] 5.2 一番上とバルーンの面の刻みと合図で呼び出しを当てる
   - 面の段ごとに、引き金の判定と `always` の始まりの後、コマを置く前に係を呼ぶ。台本の合図の時刻で動く更新でも頭のコマを置く前に呼ぶ
   - 一番上の再生の表と作りかけの欄を一緒に借りる口を実装する（停止で欄も外す）。終わって最後のコマを残したものは再生中に数えない
   - `always` を止めたら、止めた印がある間は始め直さない。印は面を出したとき（同じ面の出し直しを含む）に消す。そのために、再生の実行時の「面を出した」口をこの task で作り、actor から面を出す合図を解いた後（変わった・同じ面の出し直し・シェルの差し替えのどれでも）に呼ぶ（5.4 はこの口にずれの戻しを足すだけ）
@@ -174,3 +174,4 @@
 - 4.1: 係は `calls.rs` の `run_calls`（口は `CallPlays`・`mod calls` に `#[allow(dead_code)]`、5.2/5.3 で外す）。`CallPlays::start` の実装は当て終えた印を None に戻すこと。止めた `always` の印は 5.2 の `CallPlays::stop` の実装側で付ける。5.2 は抽選・`always`・引き金の始まりを係の呼び出しより前に置く（同じ時刻の 2 度目の開始の止めはこの順が前提）。
 - 4.2: `PresentCommand::MoveShift { target, x, y }`・読み口 `EmoPresenter::move_shift(target)`。`ReplaceTarget` ではずれを引き継がず 0 から（design 596 行・5.4 で差し替え時に (0,0) を送る）。areka の背骨の写し `spine_conformance_support.rs` の `project_display` では MoveShift は `Unknown` に写る — 5.4 で要るなら足す。
 - 5.1: `SerikoLoopConfig.pick_rng`（止めた設定・`settle.rs` の書き出し・テストは種 0）・本番は `entropy_seed()` を 2 回引いて `seed` と `pick_seed` を同じ info に出す。背骨は `LoopDriver::Live(rng, pick_rng)`。`Playback.acts_through`・`PartAnim::Playing.acts_through`（`Option<u64>`・`#[allow(dead_code)]`）と `on_tick` の `pick_rng: _` は 5.2/5.3 で使い始めて外す。actor_bind_loop_tests.rs はもとから 1,346 行（上限超え）。
+- 5.2: 一番上の口は `looper_calls.rs` の `TopPlays`・`run_top_calls`・`put_visible`。「面を出した」口は `looper.rs` の `on_surface_shown(scope, slot) -> bool`（5.4 で設計どおり `Option<DisplayCommand>` にしてずれの戻しを足す）。`CallOutcome.shift` はまだ誰も読まない（5.4）。actor の差し替え（Replace／Rebased）の枝で全スコープへ口を呼ぶ処理にテストが無い — 5.4 で 1 本足す。部品の `acts_through` の allow は 5.3 で外す。looper.rs は 979 行。

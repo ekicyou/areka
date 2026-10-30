@@ -383,7 +383,18 @@ where
                     }
                 };
                 tracing::info!(epoch, ?kind, "seriko: 定義を差し替えた");
-                emit_display(&mut out, rebased(epoch, kind, &states, extra));
+                let command = rebased(epoch, kind, &states, extra);
+                // 差し替えも面を出す合図（spec: seriko-pattern-calls 3.5）。
+                if let DisplayCommand::Rebased { shows, .. } = &command {
+                    let slot = match kind {
+                        RebaseKind::Shell => Slot::Shell,
+                        RebaseKind::Balloon => Slot::Balloon,
+                    };
+                    for show in shows {
+                        loop_runtime.on_surface_shown(&show.scope, slot);
+                    }
+                }
+                emit_display(&mut out, command);
                 return Ok(ControlFlow::Continue(()));
             }
             Ok(handle_message(
@@ -493,6 +504,25 @@ fn on_stage<O: SurfaceOutput>(
     states.note_stage(&note);
     if let Some(command) = loop_runtime.refresh(scope, Slot::Balloon, at_ms, states) {
         emit_display(out, command);
+    }
+}
+
+/// 面を出す合図を解いた後に、止めた `always` の印を消す（変わった・同じ面の出し直しのどちらでも・
+/// spec: seriko-pattern-calls 3.5・M2）。同じ面の出し直しで印を消したら、合図の時刻で始め直した絵を
+/// 出す（変わったときは続く [`LoopRuntime::refresh`] が始める）。
+fn on_surface_shown<O: SurfaceOutput>(
+    states: &mut ScopeStates,
+    loop_runtime: &mut LoopRuntime,
+    out: &mut O,
+    scope: &ActorKey,
+    slot: Slot,
+    outcome: &ApplyOutcome,
+) {
+    if loop_runtime.on_surface_shown(scope, slot) && matches!(outcome, ApplyOutcome::Unchanged) {
+        let at_ms = loop_runtime.event_ms();
+        if let Some(command) = loop_runtime.refresh(scope, slot, at_ms, states) {
+            emit_display(out, command);
+        }
     }
 }
 
@@ -744,7 +774,16 @@ pub(crate) fn handle_message<O: SurfaceOutput>(
             }
         };
         // 状態更新（2.2 の鏡映）＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等・R4.3）。
-        if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
+        let outcome = states.apply_balloon(&cue.actor, target);
+        on_surface_shown(
+            states,
+            loop_runtime,
+            out,
+            &cue.actor,
+            Slot::Balloon,
+            &outcome,
+        );
+        if let ApplyOutcome::Changed(command) = outcome {
             // バルーン面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
             // PatternState クリアは apply_balloon の責務、playback クリアはループ統括器の責務。
             loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
@@ -794,7 +833,9 @@ pub(crate) fn handle_message<O: SurfaceOutput>(
     }
 
     // 状態更新（2.2）＋発行（2.3）: 状態が実際に変化したときだけ単一発行点から発行する（冪等ガード）。
-    if let ApplyOutcome::Changed(command) = states.apply(&cue.actor, target) {
+    let outcome = states.apply(&cue.actor, target);
+    on_surface_shown(states, loop_runtime, out, &cue.actor, Slot::Shell, &outcome);
+    if let ApplyOutcome::Changed(command) = outcome {
         // シェル面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
         // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。部品の時計は捨てない。
         loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
@@ -814,6 +855,9 @@ pub(crate) fn handle_message<O: SurfaceOutput>(
 #[cfg(test)]
 #[path = "actor_bind_loop_tests.rs"]
 mod bind_loop_tests;
+#[cfg(test)]
+#[path = "actor_calls_tests.rs"]
+mod calls_tests;
 #[cfg(test)]
 #[path = "actor_clock_tests.rs"]
 mod clock_tests;

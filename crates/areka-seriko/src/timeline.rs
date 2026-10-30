@@ -144,7 +144,6 @@ pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Opti
 ///
 /// 働きのコマは絵を重ねないので、今のコマが働きのコマでも前の絵（`base` のコマを含む）を残す。
 /// 一番上と部品の再生が共有する。
-#[allow(dead_code)] // 5.2（一番上）・5.3（部品）で使い始めたら外す。
 pub(crate) fn visible_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
     let end = frames.len().min(i.saturating_add(1));
     frames[..end].iter().rposition(|f| f.act == FrameAct::Draw)
