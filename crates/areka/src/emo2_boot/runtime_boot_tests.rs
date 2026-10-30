@@ -122,6 +122,22 @@ fn sinks_are_twelve_with_reload_last() {
     );
 }
 
+/// 窓の在るゴーストの起動の選択肢（本番と spine が共に使う）には strict の判定が入る
+/// （無いと strict の記録が無言で 0 件になる・spec mcp-strict-errors 要件 2.7）。
+#[test]
+fn runtime_boot_options_carry_strict_judges() {
+    let options = runtime_boot_options(
+        PathBuf::from("runtime_boot_tests/使わない/ghost"),
+        ShioriWiring::Helper {
+            helper_exe: PathBuf::from("runtime_boot_tests/使わない/helper.exe"),
+        },
+        Vec::new(),
+        None,
+        TickerMode::Disabled,
+    );
+    assert!(options.strict_judges.is_some(), "strict の判定が入っている");
+}
+
 /// 起動に失敗したとき World は変わらない（受信端は 1 つも据わらない）。
 #[test]
 fn failed_boot_leaves_world_unchanged() {

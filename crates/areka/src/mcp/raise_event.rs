@@ -11,7 +11,9 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{ActiveGhost, listed_value};
-use super::sakurascript::{NOT_NOW, ScriptTarget, UNAVAILABLE, script_target};
+use super::sakurascript::{
+    NOT_NOW, ScriptTarget, UNAVAILABLE, script_target, since_id_if_strict, strict_note,
+};
 
 /// 台本が返ったときの 1 行目（SSP の実測の文言・要件 2.3）。
 const SCRIPT_RETURNED: &str = "OK:the ghost returned a script and it is being played.";
@@ -45,6 +47,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
         return;
     };
     let (tx, rx) = reply_channel::<SstpNotifyOutcome>();
+    let since_id = since_id_if_strict(args.strict);
     let msg = KanadeMsg::SstpNotify {
         event: args.event,
         references: args.references,
@@ -61,9 +64,14 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
     }
     super::later(world, reply, move |_| match rx.try_recv() {
         Ok(None) => None,
-        Ok(Some(SstpNotifyOutcome::Script(script))) => Some(outcome::value(format!(
-            "{SCRIPT_RETURNED}{SCRIPT_LINE_BREAK}Script: {script}"
-        ))),
+        Ok(Some(SstpNotifyOutcome::Script(script))) => {
+            // strict 真のときだけ 1 行目の末尾に strict の文を足す（SSP の実測・要件 3.10）。
+            let note = since_id.map(|n| format!(" {}", strict_note(n)));
+            Some(outcome::value(format!(
+                "{SCRIPT_RETURNED}{}{SCRIPT_LINE_BREAK}Script: {script}",
+                note.unwrap_or_default()
+            )))
+        }
         Ok(Some(SstpNotifyOutcome::NoScript)) => Some(outcome::ok(NO_SCRIPT)),
         Ok(Some(SstpNotifyOutcome::NotAccepted)) => {
             tracing::debug!(

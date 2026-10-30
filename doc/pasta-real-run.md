@@ -53,6 +53,7 @@ function Open-Sample([string]$Name) {
     $h = @{}; foreach ($l in $lines) { $k, $val = $l -split '=', 2; $h[$k] = $val }; $h
 }
 $emo2 = Open-Sample 'emo2'
+$arekaBalloon = Open-Sample 'areka-balloon'
 $staysee = Open-Sample 'StayseeBalloon'
 $pasta = Open-Sample 'pasta-in-windows'
 
@@ -61,6 +62,7 @@ Remove-Item -LiteralPath "$v\root", "$v\profile" -Recurse -Force -ErrorAction Si
 $null = New-Item -ItemType Directory -Force -Path "$v\root\ghost", "$v\root\balloon", "$v\profile", "$v\logs", "$v\shots"
 Copy-Item -LiteralPath $emo2['folder'] -Destination "$v\root\ghost\emo2" -Recurse
 Copy-Item -LiteralPath $emo2['balloon.emo2-kakukaku'] -Destination "$v\root\balloon\emo2-kakukaku" -Recurse
+Copy-Item -LiteralPath $arekaBalloon['folder'] -Destination "$v\root\balloon\areka-balloon" -Recurse
 Copy-Item -LiteralPath $staysee['folder'] -Destination "$v\root\balloon\StayseeBalloon" -Recurse
 Copy-Item -LiteralPath $pasta['folder'] -Destination "$v\root\ghost\pasta-in-windows" -Recurse
 Get-ChildItem -LiteralPath "$v\root\ghost", "$v\root\balloon" -Directory | Select-Object -ExpandProperty FullName
@@ -74,14 +76,14 @@ pwsh -NoProfile -File "$w\tools\sync-i686-helper.ps1"; "sync exit=$LASTEXITCODE"
 通った形:
 
 - `fetch exit=0`・`build exit=0`・`build i686 exit=0`・`sync exit=0`（`sync` は `helper is i686: ...` か `placed i686 helper: ...` の行を出す）。
-- 根の一覧が `ghost\emo2`・`ghost\pasta-in-windows`・`balloon\emo2-kakukaku`・`balloon\StayseeBalloon` の 4 つ。
+- 根の一覧が `ghost\emo2`・`ghost\pasta-in-windows`・`balloon\areka-balloon`・`balloon\emo2-kakukaku`・`balloon\StayseeBalloon` の 5 つ（`areka-balloon` は既定のバルーン、`StayseeBalloon` は配布物に同梱する選べるバルーン）。
 - `nar-sample-path` が終了コード 3 で落ちたら、置き場の書庫か `.sha256` が無いか合わない。1 の取り寄せを回し直す。
 
 置き場の形（根・記録・撮った物は、すべてワークツリーの `target\` の下。`C:\` の直下や `C:\tmp` は使わない）:
 
 ```text
 <w>\target\pasta-verify\
-├─ root\       走行の根（ghost\emo2・ghost\pasta-in-windows・balloon\emo2-kakukaku・balloon\StayseeBalloon）
+├─ root\       走行の根（ghost\emo2・ghost\pasta-in-windows・balloon\areka-balloon・balloon\emo2-kakukaku・balloon\StayseeBalloon）
 ├─ profile\    areka の記憶（走行ごとに空）
 ├─ logs\       <回>.stdout.log・<回>.stderr.log・<回>.pid.txt・<回>.exitcode.txt
 ├─ shots\<回>\ 撮った物
@@ -122,7 +124,7 @@ Remove-Item Env:AREKA_NO_ALERT, Env:AREKA_USER_ROOT -ErrorAction SilentlyContinu
 Remove-Item Env:PASTA_DEBUG -ErrorAction SilentlyContinue   # ぱすたのデバッグの待受を開かせない（2 節）
 $env:AREKA_ROOT = "$v\root"
 $env:AREKA_PROFILE_DIR = "$v\profile"
-$env:RUST_LOG = 'info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug'
+$env:RUST_LOG = 'info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka::input_events=debug'
 $env:AREKA_APP_SMOKE_EXIT_MS = '3600000'
 $env:NO_COLOR = '1'
 $p = Start-Process -FilePath "$w\target\debug\areka.exe" -ArgumentList @('--ghost', "`"$v\root\ghost\pasta-in-windows`"") -WorkingDirectory $v -WindowStyle Hidden -RedirectStandardOutput "$v\logs\$run.stdout.log" -RedirectStandardError "$v\logs\$run.stderr.log" -PassThru
@@ -136,7 +138,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 |---|---|---|
 | `AREKA_ROOT` | `<w>\target\pasta-verify\root` | 根 |
 | `AREKA_PROFILE_DIR` | `<w>\target\pasta-verify\profile`（準備で毎回空にする） | 記憶の置き場。空なので、起動のイベントは `OnFirstBoot` になる |
-| `RUST_LOG` | `info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug` | バルーンの決め方の分岐が記録に出る水準。段の判定に別の分岐が要るときは、その対象を足し、足した値を記録に書く |
+| `RUST_LOG` | `info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka::input_events=debug` | バルーンの決め方の分岐と、マウスの形が替わったこと（段 3）が記録に出る水準。段の判定に別の分岐が要るときは、その対象を足し、足した値を記録に書く |
 | `AREKA_APP_SMOKE_EXIT_MS` | `3600000`（60 分） | 安全弁。7 段の所要（30〜45 分の見込み）より長く |
 | `NO_COLOR` | `1` | 記録を色の制御文字の無い平文にする |
 | `AREKA_NO_ALERT`・`AREKA_USER_ROOT` | 消す | 本物の利用者の置き場（`%LOCALAPPDATA%\areka`）に触らない |
@@ -157,7 +159,7 @@ Get-NetTCPConnection -LocalPort 9276 -State Listen -ErrorAction SilentlyContinue
 
 取り寄せる書庫（10-20 版）は `install.txt` にバルーンの鍵が無く、縦書きのバルーンはゴーストのフォルダの直下（`ghost\pasta-in-windows\pasta_tategaki`）に置かれたままになる。areka も SSP もそこをバルーンとして探さないので、配布物の既定のバルーンで話す（ぱすたの側が `install.txt` を直した・次のリリースの書庫から入る）。縦書きのバルーンでしか見えない崩れ（列と枠の並び・縦書きの選択肢）を早く見るため、本走行の後に、縦書きのバルーンを根の `balloon\` に写した別の根で段 1〜2 だけを回してよい。結果は「参考（代わりの置き方）」として、段の 3 値の数と分けて書く。直した書庫で回すときは要らない。
 
-本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶の `StayseeBalloon` になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
+本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶のバルーン（本走行で使った既定の `areka-balloon`。2026-10 までは `StayseeBalloon`）になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
 
 ```powershell
 $v = "$w\target\pasta-verify-alt"   # 置き場を本走行と分ける
@@ -180,7 +182,7 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 |---|---|---|---|---|---|
 | 1 起動 | 起動の命令で起こし、最初の台詞が出終わるまで待つ | 画面の `shot`（重なりの順）・`dump_surface`（`\0` と `\1`）・`dump_balloon`・`get_log` | ぱすたが着せ替えの面 1000 で立ち、奥に窓の枠（`\1` の面 10）が別の窓で重なり、縦書きのバルーンで台詞が出る（測った SSP の縦書きのバルーンは、SSP の根の `balloon\` に置いた写しから出た。配布の書庫〔10-20 版〕は `install.txt` にバルーンの鍵が無く、入れただけでは縦書きのバルーンが入らない。ぱすたの側が直した・未リリース）。重なりは窓（奥）→ バルーン → ぱすた（手前）。SSP の基準は、ゴーストをぱすたへ替えて SSP を起こし直した起動で測ったので `OnBoot`（2026-10-23 07:59:49 に測った。台本の頭は `\0\s[1000]\1\s[10]`）。areka は空の記憶で `OnFirstBoot`（台詞の文の違いは起動イベントの違いとして分けて書く）（測りの記録 段 1） | ぱすたの側（書庫の `install.txt` に縦書きのバルーンの鍵が無い・直した・未リリース）・`descript-window-keys`（`sakura.seriko.defaultsurface`・`balloon.dontmove`）・`stay-on-top-directives`（`\1\v`・`\![set,windowstate,!stayontop]`）・`script-small-tags`（`\_u[0x3000]`）・`mouse-click-wheel-events`（初回の台本がボールのクリックを待つので、身体が映らない）・`mcp-scope-rect-property`（位置を `get_property` で読む・着地済み・確かめる）・`animated-surface-log-flood`（記録が `apply(ShowSurface)` の行で埋もれる）。重なりの指定は完了 `zorder-scope-inversion`（着地した結果として確かめる）。着地済み: `window-link-directives`（`seriko.sticky-window`・main の PR#360）。起動の並べ直しで窓の枠が別の画面へ送られた件も #360 が直した（台本の `\![move]` が置いた窓の印 `ScriptPlaced`）。どちらも着地した結果として確かめる | バルーンが既定のバルーンから縦書きのバルーンに替わる。最初の面が 1000 になる。ぱすたの窓が画面の下端を越えない。窓の枠がぱすたに重なって付く（#360 で着地済み・確かめる）。窓の枠が奥へ回る。ボールのクリックで身体が映る。位置を `get_property` で読める（着地済み・確かめる） |
 | 2 縦書きの会話 | `raise_event` で `選択肢テスト` を起こし、出た選択肢を 1 つ選び、選んだ後の会話が終わるまで待つ（30 秒の時間切れに注意・表の下の注） | 画面の `shot`（重なりの順・列と枠の並び）・`dump_balloon`・`get_log` | 縦書きのバルーンに、`\_l[x,y]` で並べた列と枠が崩れずに並び、選択肢が出て、選ぶと続きの会話が出る。重なりは段 1 と同じ（測りの記録 段 2） | ぱすたの側（縦書きのバルーン・段 1 と同じ）・`script-small-tags`（`\_u[0x3000]`・`\![bind-noevent]`・選択肢の前の `\![*]`）・`vertical-choice-hover-band`（縦書きの選択肢の反転の帯） | 会話が縦書きで出る。全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く。縦書きの選択肢の反転の帯が列に合う |
-| 3 撫で・× に乗る・ボール | ぱすたを `move` で少しずつ撫でる。× の印の上に乗せる。ボールを `click` | 撫での前後と × に乗ったときの `shot`・`dump_surface`・`get_log`（`OnMouseMove`・`OnMouseEnter`・`OnMouseClick` の届き） | 撫でると反応の台詞が出る。× の印に乗ると × が赤くなる。ボールを押すとボールのトークが出る。当たり判定ごとにマウスの形が替わる（測りの記録 段 3） | `mouse-click-wheel-events`（`OnMouseClick`・`OnMouseEnter`／`OnMouseLeave`）・`shell-mouse-cursor`（`sakura.cursor` ブレス） | × が赤くなる。ボールのトークが出る。マウスの形が替わる |
+| 3 撫で・× に乗る・ボール | ぱすたを `move` で少しずつ撫でる。× の印の上に乗せる。ボールを `click` | 撫での前後と × に乗ったときの `shot`・`dump_surface`・`get_log`（`OnMouseMove`・`OnMouseEnter`・`OnMouseClick` の届き）・マウスの形を `cursor` で読んだ行（表の下の「段 3 のマウスの形の読み方」） | 撫でると反応の台詞が出る。× の印に乗ると × が赤くなる。ボールを押すとボールのトークが出る。当たり判定ごとにマウスの形が替わる（測りの記録 段 3） | `mouse-click-wheel-events`（`OnMouseClick`・`OnMouseEnter`／`OnMouseLeave`）・`shell-mouse-cursor`（`sakura.cursor` ブレス） | × が赤くなる。ボールのトークが出る。マウスの形が替わる |
 | 4 2 つの窓を一緒にドラッグ | ぱすたを `drag` で同じ画面の中で動かして離す | ドラッグの前・後の `shot`・`get_log` | ぱすたと窓の枠が離れずに一緒に動き、落とした後も重なった形に付き直る（測りの記録 段 4） | `mcp-scope-rect-property`（位置を `get_property` で読む・着地済み・確かめる）。着地済み: `window-link-directives`（`seriko.sticky-window`・`--option=ignore-sticky-window`・main の PR#360。組の相手をドラッグと `\![move]` で連れて動かす） | 窓の枠がぱすたについて動き、落とした後に付き直る（#360 で着地済み・確かめる。付いてこなければ起票する） |
 | 5 拡大率の違う画面への移動 | ぱすたを `drag` で拡大率の違うもう 1 つの画面へ動かして離す | 移った後の `shot`・`dump_surface`・`get_log` | 200% の画面へ移っても大きさは変わらない（831x1026 のまま・`scaling` は 150,150）。ぱすたと窓の枠は同じ rect のまま重なって並び、バルーンはぱすたの左上から 60,87 の所のまま。移動に伴うイベント（`OnShellScaling` など）は届かない（測りの記録 段 5） | `dpi-realign-remembered-chain`（拡大率の違う画面をまたぐドラッグ・落とした点のずれ）・`mcp-scope-rect-property`（位置を `get_property` で読む・着地済み・確かめる）・`shell-scale-linkage`（倍率の連動。この手順の範囲の外）。着地済み: `window-link-directives`（窓の枠が付いてくる・main の PR#360） | 移った先の画面でぱすたと窓の枠とバルーンの並びが保たれ、落とした点に置かれる（窓の枠が付いてくることは #360 で着地済み・確かめる）。大きさが画面の拡大率に合わせて変わるのは areka の方針（DPI 追従・2026-07-18 開発者）で、「方針で受けない」と書く。倍率の連動（`balloon.syncscale`・`OnShellScaling`）はこの手順の範囲の外なので、それに由来する見た目の違いは「違う」の数と分けて書く |
 | 6 右クリックメニュー | ぱすたを `rightclick`。着せ替えのメニューを開き、1 つ選ぶ | メニューの `shot`・着せ替えの後の `shot` と `dump_surface`・`get_log` | 自前の色（`menu.*`。普通の Windows のメニューに見せる色）のメニューが出て、着せ替えのメニューから選ぶと着せ替えが替わる（測りの記録 段 6） | `popup-menu-shell-look`（`menu.*` の色と絵・`sakura.menu,auto`） | メニューの色と絵がシェルの指定どおりになる。着せ替えのメニューが出る |
@@ -188,9 +190,45 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 
 - 段 1 と段 2 では、重なりの順（窓が奥 → バルーン → ぱすたが手前）が見える範囲を `shot` で撮り、開発者が目視で決める。
 - 段 2 の選択肢は、表示が終わってから 30 秒で `OnChoiceTimeout` になって消える。`raise_event` の前に、カーソルを選ぶ選択肢の出る位置へ `move` で置いておき、選択肢が出たら 30 秒のうちに `click` する（alt2 の 1 回目は 4 秒遅れて時間切れになった）。
+- 段 3 のマウスの形は、表の下の「段 3 のマウスの形の読み方」の手順で読む。
 - 段 6 でメニューが見えずに閉じたときは `popup-menu-residue` の件 12 に当たる。記録に書くだけで、直さない。
 - 当たりの決まりの違い: areka は α が 0.5 以上（128 以上）の画素だけを当たりにし、SSP には合わせない（2026-10-22 開発者の裁定）。薄い影や縁を撫でても反応しない違いは、崩れでなく「方針で受けない」と書く。
 - この手順の範囲の外（見た目が違っても「違う」の数に入れず、分けて書く）: `balloon.syncscale` と `OnShellScaling`／`OnBalloonScaling`（引き取る spec `shell-scale-linkage`。`\![get,property]` で聞く倍率と DPI も同じ）・縦書きのバルーンのスクロールの矢印（`balloon-scroll-arrows`）・`communicatebox`（`balloon-communicatebox`）・`\![reload,shiori]`・禁則と縦中横・SSP の作りの癖。
+
+### 段 3 のマウスの形の読み方
+
+マウスの形は目で見ず、`tools/mouse-input.ps1` の `cursor` で読む（6 節）。`cursor` は点へ動かして位置を読み戻した後、今のマウスの形を Windows の標準の形 14 種と比べて、`ok cursor x=<X> y=<Y> shape=<名前|custom> handle=0x<16進>` の 1 行を出す。標準の形のどれでもなければ `custom`。SSP の測り（`.kiro/specs/completed/shell-mouse-cursor/research.md` の 8 節）と同じ読み方。
+
+点はぱすたの窓の位置（6 節の「位置の読み方」）から、測りの記録の点を左上からの差で写して決める。
+
+```powershell
+pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <身体の点の X> -Y <身体の点の Y>
+pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <× の点の X> -Y <× の点の Y>
+pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <ボールの点の X> -Y <ボールの点の Y>
+pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <白地の点の X> -Y <白地の点の Y>
+```
+
+| 点 | 期待の `shape` | わけ |
+|---|---|---|
+| ぱすたの身体 | `custom` | シェルの指定（`system:hand`）で、areka 同梱の手を開いた形が出る |
+| × の印 | `HAND` | 指定の無い当たり判定は指差しの形（SSP と同じ） |
+| ボール | `HAND` | × と同じ |
+| 当たり判定の無い窓の白地 | `ARROW` | 当たり判定の外は矢印 |
+
+押したときと放したときの形:
+
+- 身体の上で左を押すと指差しの形（`HAND`）、放すと手を開いた形（`custom`）に戻る。ぱすたのシェルには押したときの行（`mousedown`）が無く、当たり判定の名前も `bust` ではないので、押したときは指差しの形になる（要件 3.1。握った形は、当たり判定の名前が `bust` のときか、押したときの行があるときだけ出る）。`cursor` に `-Press` を付けると、点へ動かして左を押し、押したままの形を読んで ` pressed=1` の付いた行を出し、左を放してもう一度読んだ行を出す（読むのに失敗しても、左は必ず放す）。
+
+```powershell
+pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <身体の点の X> -Y <身体の点の Y> -Press
+```
+
+- 1 行目（`pressed=1`）が `shape=HAND`（指差しの形）で、`handle` が手を開いた形の値と違うこと。2 行目が `shape=custom`（手を開いた形）で、`handle` が押す前に同じ点で読んだ値と同じであること。
+- 2 行目は放した直後に、動かさずに読んだ形。手を開いた形に戻っていること。
+- 記録の `areka::input_events` の行でも、押したときと放したときに形が替わったことを見て、2 つ目の証跡にする。
+- ぱすたのシェルには止まったときとホイールのときの行が無いので、止めてもホイールを回しても形は替わらない（SSP と同じ）。
+
+記録: 起動の命令の `RUST_LOG` に `areka::input_events=debug` を入れてあるので、形が替わったときの行が `<回>.stderr.log` に出る。読んだ `ok cursor` の行と一緒に段 3 の結果へ写す。
 
 ### 最後の確かめで決める項目（案 B）
 
@@ -249,11 +287,13 @@ pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action click -X 1500 -Y 900
 pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action rightclick -X 1500 -Y 900
 pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action drag -X 1500 -Y 900 -X2 -1200 -Y2 1000 -Steps 40
 pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action shot -X 0 -Y 0 -X2 2880 -Y2 1800 -Out "$v\shots\$run\1-boot-zorder.png"
+pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X 1500 -Y 900
 ```
 
 - 撫では `move` を少しずつ違う点へ続けて打つ。
 - 画面をまたぐドラッグも `drag` で送る（段 5）。
-- 成功は終了コード 0 と `ok <動作> x=<X> y=<Y>`、引数の誤りは終了コード 2。
+- マウスの形は `cursor` で読む（段 3）。
+- 成功は終了コード 0 と `ok <動作> x=<X> y=<Y>`（`cursor` は後ろに `shape=<名前|custom> handle=0x<16進>` が付く。`-Press` のときは ` pressed=1` の付いた押したままの行と、放した後の行の 2 行）、引数の誤りは終了コード 2。
 
 ### 数え方
 

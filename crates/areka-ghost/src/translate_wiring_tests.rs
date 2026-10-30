@@ -211,6 +211,7 @@ fn boot_sends_on_translate_with_the_expanded_script() {
     let (seen_tx, seen_rx) = channel();
     let calls = Arc::new(AtomicUsize::new(0));
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

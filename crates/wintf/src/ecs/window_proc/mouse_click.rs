@@ -235,6 +235,16 @@ pub(super) fn WM_LBUTTONDOWN(
     )
 }
 
+/// 解放の後にカーソルを出し直す（捕まえている間は `WM_SETCURSOR` が来ないため）。
+/// 押下・解放の処理が世界の借用を返した後に呼ぶ。
+fn push_release_cursor(world: &Rc<RefCell<EcsWorld>>, entity: Entity) {
+    crate::ecs::cursor::answer::push_cursor_rc(
+        world,
+        entity,
+        crate::ecs::cursor::CursorTrigger::Release,
+    );
+}
+
 /// WM_LBUTTONUP: 左ボタン解放
 #[inline]
 pub(super) fn WM_LBUTTONUP(
@@ -244,7 +254,7 @@ pub(super) fn WM_LBUTTONUP(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    handle_button_message(
+    let result = handle_button_message(
         world,
         entity,
         hwnd,
@@ -252,7 +262,9 @@ pub(super) fn WM_LBUTTONUP(
         lparam,
         crate::ecs::pointer::PointerButton::Left,
         false,
-    )
+    );
+    push_release_cursor(world, entity);
+    result
 }
 
 /// WM_RBUTTONDOWN: 右ボタン押下
@@ -284,7 +296,7 @@ pub(super) fn WM_RBUTTONUP(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    handle_button_message(
+    let result = handle_button_message(
         world,
         entity,
         hwnd,
@@ -292,7 +304,9 @@ pub(super) fn WM_RBUTTONUP(
         lparam,
         crate::ecs::pointer::PointerButton::Right,
         false,
-    )
+    );
+    push_release_cursor(world, entity);
+    result
 }
 
 /// WM_MBUTTONDOWN: 中ボタン押下
@@ -324,7 +338,7 @@ pub(super) fn WM_MBUTTONUP(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    handle_button_message(
+    let result = handle_button_message(
         world,
         entity,
         hwnd,
@@ -332,7 +346,9 @@ pub(super) fn WM_MBUTTONUP(
         lparam,
         crate::ecs::pointer::PointerButton::Middle,
         false,
-    )
+    );
+    push_release_cursor(world, entity);
+    result
 }
 
 /// WM_XBUTTONDOWN: 拡張ボタン押下
@@ -369,7 +385,9 @@ pub(super) fn WM_XBUTTONUP(
     } else {
         crate::ecs::pointer::PointerButton::XButton2
     };
-    handle_button_message(world, entity, hwnd, wparam, lparam, button, false)
+    let result = handle_button_message(world, entity, hwnd, wparam, lparam, button, false);
+    push_release_cursor(world, entity);
+    result
 }
 
 /// target_entity自身または祖先（ChildOf辿り）からDragConfigを持つエンティティを探す。

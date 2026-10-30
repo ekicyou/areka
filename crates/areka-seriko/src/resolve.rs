@@ -23,6 +23,7 @@ pub enum SurfaceTarget {
 ///
 /// emo-compose の alias 解決表を所有スナップショットとして保持し、`Emote{key}` を
 /// 決定論的に [`SurfaceTarget`] へ写す。同一入力に対し常に同一出力（要件 7・純粋）。
+#[derive(Clone)]
 pub struct SurfaceResolver {
     /// alias／name → surface id 群（emo-compose の `alias_snapshot()` 由来・正本二重定義しない）。
     aliases: BTreeMap<String, Vec<u32>>,

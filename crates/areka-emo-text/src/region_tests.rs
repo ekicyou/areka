@@ -73,7 +73,8 @@ fn fixture_validrect_resolves_to_nondegenerate_absolute_rect() {
     assert!(region.bottom() > region.top(), "非退化（高さ > 0）");
 }
 
-/// 非負値は絶対座標として素通し（resolve(v, extent) = v for v >= 0）。
+/// 正の値は絶対座標として素通し（resolve(v, extent) = v for v > 0）。右辺・下辺の 0 は
+/// 画像の端と読むので素通しに入らない——要件 6（requirements.md の正典の段）。
 #[test]
 fn nonnegative_validrect_passes_through_as_absolute() {
     let region = TextRegion::resolve(
@@ -105,12 +106,15 @@ fn missing_validrect_components_fall_back_to_image_edges() {
     assert_eq!(region.bottom(), 224.0);
 }
 
-/// fixture の descript 基層のみ（validrect 全 0）は潰れた矩形として返り、解決は警告を
-/// 1 行も出さない（spec `areka-P0-balloon-text-bugs` 件 2・要件 2.2）。解決は再追従の
-/// 判定キーを得るために毎フレーム呼ばれるため、ここで書くと記録が洪水になる——潰れの
-/// 記録は actor の登録口が状態の変わり目に 1 回だけ書く。
+/// fixture の descript 基層のみ（validrect 全 0）は画像全体 (0, 0, 400, 224) に解け、潰れで
+/// なく、解決は警告を 1 行も出さない。右辺・下辺の 0 は画像の右端・下端と読む——要件 6
+/// （requirements.md の正典の段）。かつてはこの基層を潰れとして固定していたが、読みの変更で
+/// 期待値が変わった。「解決は潰れでも警告を書かない」（spec `areka-P0-balloon-text-bugs`
+/// 件 2・要件 2.2）の主張は、0 でない値で潰す `is_collapsed_counts_zero_negative_and_nan_extent`
+/// が持つ。解決は装着と入力の変わり目に呼ばれ、潰れの記録は actor の登録口が状態の変わり目に
+/// 1 回だけ書く。
 #[test]
-fn base_layer_only_validrect_is_collapsed_and_resolve_does_not_warn() {
+fn base_layer_only_validrect_resolves_to_whole_image_and_resolve_does_not_warn() {
     // descript.txt 基層実測: origin 0,0・wordwrappoint.x,-34・validrect 全 0。
     let base = model(
         (Some(0), Some(0)),
@@ -120,10 +124,52 @@ fn base_layer_only_validrect_is_collapsed_and_resolve_does_not_warn() {
     let (region, warns) = count_warns(|| {
         TextRegion::resolve(&base, FIXTURE_IMAGE_SIZE, WritingMode::HorizontalTb)
     });
-    assert_eq!(region.left(), 0.0);
-    assert_eq!(region.right(), 0.0);
-    assert!(region.is_collapsed(), "幅 0・高さ 0 は潰れ");
-    assert_eq!(warns, 0, "解決は潰れた矩形でも警告を書かない");
+    assert_eq!(
+        (region.left(), region.top(), region.right(), region.bottom()),
+        (0.0, 0.0, 400.0, 224.0)
+    );
+    assert!(!region.is_collapsed(), "全 0 は画像全体で潰れでない");
+    assert_eq!(warns, 0, "解決は警告を書かない");
+}
+
+/// 要件 6（requirements.md の正典の段）: `validrect.right`・`validrect.bottom` の 0 は画像の
+/// 右端・下端と読む。正典（ukadoc の descript.txt（バルーン）の脚注 *1「マイナス座標は
+/// 右下からの相対」）は 0 の意味を書かず、既定値は「不明」。同じ頁の記述例が
+/// `validrect.right,0` を書き、SSP の測り（2026-10-29・`bottle`）が右辺 0 を「左端から 0」と
+/// 読まないことを示した。下辺の 0 は SSP で測っておらず、右辺と脚注の対称で読む。
+/// 左辺・上辺の 0・正の値・負の値の読みは今のまま。どの行も解決は `warn` を書かない。
+#[test]
+fn validrect_far_edge_zero_reads_as_image_edge() {
+    // (説明, validrect (top, bottom, left, right), 期待 (left, top, right, bottom))。
+    type Rect = (Option<i32>, Option<i32>, Option<i32>, Option<i32>);
+    type Row = (&'static str, Rect, (f32, f32, f32, f32));
+    let cases: [Row; 6] = [
+        ("右辺 0 → 画像の右端", (Some(10), Some(100), Some(20), Some(0)), (20.0, 10.0, 400.0, 100.0)),
+        ("下辺 0 → 画像の下端", (Some(10), Some(0), Some(20), Some(300)), (20.0, 10.0, 300.0, 224.0)),
+        ("左辺・上辺の 0 → 0（今のまま）", (Some(0), Some(100), Some(0), Some(300)), (0.0, 0.0, 300.0, 100.0)),
+        ("正の値（今のまま）", (Some(10), Some(200), Some(20), Some(300)), (20.0, 10.0, 300.0, 200.0)),
+        ("負の値（今のまま）", (Some(10), Some(-56), Some(20), Some(-44)), (20.0, 10.0, 356.0, 168.0)),
+        ("4 辺とも 0 → 画像全体", (Some(0), Some(0), Some(0), Some(0)), (0.0, 0.0, 400.0, 224.0)),
+    ];
+    for (label, vr, expected) in cases {
+        let (region, warns) = count_warns(|| {
+            TextRegion::resolve(&model((None, None), (None, None), vr), FIXTURE_IMAGE_SIZE, WritingMode::HorizontalTb)
+        });
+        assert_eq!((region.left(), region.top(), region.right(), region.bottom()), expected, "{label}");
+        assert!(!region.is_collapsed(), "{label}: 潰れでない");
+        assert_eq!(warns, 0, "{label}: 解決は warn を書かない");
+    }
+
+    // vertical_rl で右辺 0・origin 未指定 → 書き始めは (画像の右端, top)。
+    let (region, warns) = count_warns(|| {
+        TextRegion::resolve(
+            &model((None, None), (None, None), (Some(10), Some(100), Some(20), Some(0))),
+            FIXTURE_IMAGE_SIZE,
+            WritingMode::VerticalRl,
+        )
+    });
+    assert_eq!(region.start(), (400.0, 10.0), "vertical_rl の書き始めは右辺 0＝画像の右端");
+    assert_eq!(warns, 0, "vertical_rl: 解決は warn を書かない");
 }
 
 /// 潰れの判定（要件 2.1）: 幅か高さが正でなければ潰れ。幅 0・高さ 0・負の幅・負の高さ・
@@ -164,8 +210,9 @@ fn is_collapsed_counts_zero_negative_and_nan_extent() {
     }
 }
 
-/// 2層マージ（balloon-parse 実機構）を通した fixture 再現:
-/// 基層（退化）＋画像別上書きの合成後のみ非退化になる。
+/// 2層マージ（balloon-parse 実機構）を通した fixture 再現: 基層（validrect 全 0）だけでも
+/// 画像全体に解けるが、画像別上書きとの合成で (36, 46, 356, 168) になる。基層は右辺・下辺の
+/// 0 を画像の端と読むので退化しない——要件 6（requirements.md の正典の段）。
 #[test]
 fn two_layer_merged_fixture_yields_nondegenerate_region() {
     use areka_parsers::balloon::parse;

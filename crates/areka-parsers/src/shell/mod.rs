@@ -50,6 +50,13 @@ mod undrawn;
 #[cfg(test)]
 mod undrawn_tests;
 
+// cursorブレスの転記（shell-mouse-cursor）: 画像の読み手とは別に、同じ文面から cursorブレスだけを
+// 原文のまま並べる。検証と記録は下流（areka の emo2_boot）。
+mod cursor;
+
+#[cfg(test)]
+mod cursor_tests;
+
 // 表情の表の転記（areka-P0-mcp-expression-table）: surfacetable.txt を行の列へ写すだけ。
 // lexer・decode・model は使わない。
 mod surfacetable;
@@ -63,6 +70,7 @@ mod surfacetable_tests;
 pub use boxes::{
     BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, ShellBoxes, parse_boxes,
 };
+pub use cursor::{CursorBrace, parse_cursor_braces};
 pub use model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
     ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,

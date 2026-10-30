@@ -465,6 +465,7 @@ Step 'extract samples' {
     $script:GhostDir = $emo2['folder']
     $script:KakukakuDir = $emo2['balloon.emo2-kakukaku']
     $script:StayseeDir = (Read-SamplePaths 'StayseeBalloon' @('folder'))['folder']
+    $script:ArekaBalloonDir = (Read-SamplePaths 'areka-balloon' @('folder'))['folder']
 }
 
 # zip の項目名（区切りを / に揃える・大文字小文字を区別する）→ 項目。呼ぶ側が .Zip を Dispose する。
@@ -493,7 +494,7 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
 
         # 1. 必須の項目
         foreach ($r in @('areka.exe', 'areka-mcp-bridge.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/descript.txt', 'ghost/emo2/install.txt',
-                'balloon/emo2-kakukaku/descript.txt', 'balloon/StayseeBalloon/descript.txt',
+                'balloon/emo2-kakukaku/descript.txt', 'balloon/StayseeBalloon/descript.txt', 'balloon/areka-balloon/descript.txt',
                 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')) {
             if (-not $map.ContainsKey($r)) { $bad.Add("1 required entry missing: $r") }
         }
@@ -501,7 +502,7 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
         $allowed = @{
             ''         = @('areka.exe', 'areka-mcp-bridge.exe', 'shiori-host32-helper.exe', 'ghost', 'balloon', 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')
             'ghost/'   = @('emo2')
-            'balloon/' = @('emo2-kakukaku', 'StayseeBalloon')
+            'balloon/' = @('emo2-kakukaku', 'StayseeBalloon', 'areka-balloon')
         }
         foreach ($prefix in $allowed.Keys) {
             $kids = $names | Where-Object { $_.StartsWith($prefix, [StringComparison]::Ordinal) } |
@@ -561,13 +562,14 @@ foreach ($a in $script:BuildArchs) {
     Step "$a assemble" {
         if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
         $null = New-Item -ItemType Directory -Path "$stage/ghost", "$stage/balloon"
-        # 設計の「zip の中身」の 10 行だけ（写す元が無ければ Copy-Item が throw）。areka.exe と areka-mcp-bridge.exe だけ CPU 種別ごと
+        # 配布物の 11 項目だけ（完了 alpha-package の設計「zip の中身」に以後の spec が足した分を含む。写す元が無ければ Copy-Item が throw）。areka.exe と areka-mcp-bridge.exe だけ CPU 種別ごと
         Copy-Item -LiteralPath "$OUT_DIR/$($ARCHS[$a].Target)/release/areka.exe" -Destination $stage
         Copy-Item -LiteralPath "$OUT_DIR/$($ARCHS[$a].Target)/release/areka-mcp-bridge.exe" -Destination $stage
         Copy-Item -LiteralPath $script:HelperExe -Destination $stage
         Copy-Item -LiteralPath $script:GhostDir -Destination "$stage/ghost/emo2" -Recurse
         Copy-Item -LiteralPath $script:KakukakuDir -Destination "$stage/balloon/emo2-kakukaku" -Recurse
         Copy-Item -LiteralPath $script:StayseeDir -Destination "$stage/balloon/StayseeBalloon" -Recurse
+        Copy-Item -LiteralPath $script:ArekaBalloonDir -Destination "$stage/balloon/areka-balloon" -Recurse
         Copy-Item -LiteralPath 'dist/README.txt' -Destination $stage
         Copy-Item -LiteralPath 'LICENSE-MIT' -Destination $stage
         Copy-Item -LiteralPath $script:Notices -Destination $stage

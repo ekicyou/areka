@@ -62,6 +62,7 @@ fn connect_failure_reaches_quit_app_without_real_sink_wiring() {
 
     // LogSink 側の起動と同じ sink の組（`boot_config::ghost_boot_options`）で、SHIORI だけ接続失敗にする。
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: temp.path().to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_string()))),
