@@ -114,7 +114,7 @@
   - _Requirements: 3.8, 7.1, 7.2, 7.6, 9.6, 8.1_
 
 - [ ] 6. 置き方: ずれを窓の位置へ当てる
-- [ ] 6.1 (P) ずれを窓の位置へ当てる口と経路を作る
+- [x] 6.1 (P) ずれを窓の位置へ当てる口と経路を作る
   - キャラ窓とバルーン窓に「欲しいずれ・倍率・当てた分」の記録を持たせる。キャラ窓は、元の位置（今の位置 − 当てた分）に倍率をかけたずれ（`i32` に飽和）を足し、下揃えの揃え直し・作業領域の中への寄せ・見える範囲の守りの順に通して、新しい経路で位置だけを書き、実際に書いた位置 − 元の位置を当てた分にする
   - バルーン窓は当てた分を記録し、キャラ窓の今の位置で追い直す。バルーンの追いの提案に、そのずれを足す 1 行を入れる
   - 新しい経路を表示の側の置き直しとして、利用者が動かしたと数えない判定・見える範囲の守りを当てる経路・見送りが覆う経路に入れる
@@ -177,3 +177,4 @@
 - 5.2: 一番上の口は `looper_calls.rs` の `TopPlays`・`run_top_calls`・`put_visible`。「面を出した」口は `looper.rs` の `on_surface_shown(scope, slot) -> bool`（5.4 で設計どおり `Option<DisplayCommand>` にしてずれの戻しを足す）。`CallOutcome.shift` はまだ誰も読まない（5.4）。actor の差し替え（Replace／Rebased）の枝で全スコープへ口を呼ぶ処理にテストが無い — 5.4 で 1 本足す。部品の `acts_through` の allow は 5.3 で外す。looper.rs は 979 行。
 - 5.3: 部品の口は `parts_calls.rs` の `PartPlays`・`run_part_calls`（働きのコマの無い部品は飛ばす）。`always` の周の見え方は `timeline::always_visible` を一番上と共有。見えなくなった部品の `CallOnly` の時計は抽選の時計と同じく残す（`called_never_clock_survives_while_the_part_is_hidden`）。部品の `CallOutcome`（`move`）はまだ捨てている — 5.4 で読む。引き金の相（runonce/periodic/talk の後に呼び出しを当て直す道）は一番上・部品ともテストが無い — 5.4 か最終検証で 1 本。parts.rs 962・looper.rs 981 行。
 - 5.4: `on_surface_shown` は `bool` のまま（5.2 の注の「Option にする」は取り下げ）。ずれの持ち主は `looper_calls.rs` の `Shifts`、(0, 0) は送り箱に積んで `take_shifts` で合図の `Show`／`Rebased` の後に出す（design.md の契約の行を追随済み）。命令は `DisplayCommand::MoveShift`／`MoveShiftBalloon`、areka の `adapter.rs` で `PresentCommand::MoveShift` に写す。`\s[-1]`（Hide）でもずれは 0 へ戻る（SSP で未測定・7 の互換の文書に 1 行）。背骨の写し `project_display` は MoveShift を `Unknown` のまま。引き金の相（periodic/talk の後の当て直し）の刻みのテストはまだ無い — 最終検証に持ち越し。looper.rs 993・parts.rs 973・actor.rs 908 行。
+- 6.1: 口は `placement/follow/move_shift.rs` の `apply_char_shift`・`apply_balloon_shift`・`balloon_shift`（記録 `MoveShiftApplied`、`want`・`ratio` は 6.3 まで `#[allow(dead_code)]`）。新しい経路 `PlacementRoute::PatternMove`（system reanchor・見送りが覆う・見える範囲の守りの対象。経路の表の檻を 12→13 語に直した）。バルーンのずれは `follow_balloon` と `move_window_with_route` の随伴の 2 か所で足す（飽和の足し算）。作業領域はずらした後の矩形で選ぶ（複数モニターでは隣へ寄りうる・SSP で未測定）。`origin_position` は 6.2。window_move.rs はもとから 1,227 行（上限超え）→ 1,231 行。

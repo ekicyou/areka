@@ -229,6 +229,13 @@ pub enum PlacementRoute {
     /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
     // 発行者は `placement::chain_realign::realign_chain_once_with`（task 5.6 で着地）。
     ChainRealign,
+    /// 面の `move` のずれを窓の位置へ当てる書込（seriko-pattern-calls「MoveShiftPlacement」・
+    /// `follow::move_shift::apply_char_shift`）。
+    ///
+    /// 台本の明示の `\![move]`（[`MoveCue`](Self::MoveCue)）と違い、面の表示に従う**表示の側の
+    /// 置き直し**である。ゆえに「利用者が動かした」と数えず（既定の位置もずれに従う）、見える範囲の
+    /// 守りを当て、窓の書き込みの見送りが覆う経路に入れる。
+    PatternMove,
 }
 
 impl PlacementRoute {
@@ -239,7 +246,7 @@ impl PlacementRoute {
     // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
     // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
     #[allow(dead_code)]
-    pub const ALL: [PlacementRoute; 12] = [
+    pub const ALL: [PlacementRoute; 13] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,
         PlacementRoute::AnchorChange,
@@ -252,6 +259,7 @@ impl PlacementRoute {
         PlacementRoute::BalloonLimitRelease,
         PlacementRoute::WorkAreaResnap,
         PlacementRoute::ChainRealign,
+        PlacementRoute::PatternMove,
     ];
 
     /// ログ上の表示語（診断手順書の grep 判定語と 1:1）。
@@ -269,6 +277,7 @@ impl PlacementRoute {
             PlacementRoute::BalloonLimitRelease => "BalloonLimitRelease",
             PlacementRoute::WorkAreaResnap => "WorkAreaResnap",
             PlacementRoute::ChainRealign => "ChainRealign",
+            PlacementRoute::PatternMove => "PatternMove",
         }
     }
 
@@ -302,7 +311,9 @@ impl PlacementRoute {
             | PlacementRoute::DpiReproject
             | PlacementRoute::ReportedSizeReconcile
             | PlacementRoute::WorkAreaResnap
-            | PlacementRoute::ChainRealign => true,
+            | PlacementRoute::ChainRealign
+            // 面の `move` のずれ（表示の側の置き直し・seriko-pattern-calls）。
+            | PlacementRoute::PatternMove => true,
             // 明示操作（`MoveCue`・`Restore`・`BalloonLimitRelease`。ドラッグは route を
             // 持たない＝`None` ゆえ呼び手側で除かれる）と、既定位置を持たない窓側の経路
             // （`SpawnInitial` は既定位置そのものを作る点・`KeepPositionResize`／

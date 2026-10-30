@@ -12,9 +12,9 @@ use super::{
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonKeywordBase, BalloonLimit,
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot, OffsetBase,
     PlacementRoute, PointPx, SizePx, VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries,
-    char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos, evaluate_visibility_guard,
-    limit_correction, persist_entries, project_anchor, rect_at, route_applies_visibility_guard,
-    work_area_for_window,
+    balloon_shift, char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos,
+    evaluate_visibility_guard, limit_correction, persist_entries, project_anchor, rect_at,
+    route_applies_visibility_guard, work_area_for_window,
 };
 // 組の連れ動き（areka-P0-window-link-directives・設計の決め 4・6・12）。
 use super::super::balloon_lock::{balloon_drag_held, end_balloon_drag};
@@ -382,10 +382,17 @@ pub(crate) fn follow_balloon(
         "char window position out of virtual-screen range: {pos:?} + {:?}",
         follow.offset()
     );
-    // 相対位置の恒等式（4.4: `balloon_pos − char_pos ≡ offset`）が出す提案位置。
+    // 相対位置の恒等式（4.4: `balloon_pos − char_pos ≡ offset`）に面の `move` のずれを足した提案位置。
+    let shift = balloon_shift(world, follow.balloon);
     let proposed = PointPx {
-        x: pos.x + follow.offset().x,
-        y: pos.y + follow.offset().y,
+        x: pos
+            .x
+            .saturating_add(follow.offset().x)
+            .saturating_add(shift.x),
+        y: pos
+            .y
+            .saturating_add(follow.offset().y)
+            .saturating_add(shift.y),
     };
     // 遷移ガード（S3′ 是正）。適用外の引き金では 1 bit も触らない。
     let decided = if trigger.applies_visibility_guard() {

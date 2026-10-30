@@ -34,6 +34,8 @@
 mod anchor;
 mod drag_follow;
 mod keyword_base;
+// 面の `move` のずれを窓の位置へ当てる口（seriko-pattern-calls・task 6.1）。
+mod move_shift;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
 // 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
@@ -147,6 +149,10 @@ pub use self::window_move::{
 pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
 use self::keyword_base::rederive_keyword_balloon_offset;
+// 面の `move` のずれ（task 6.1）。呼び手は毎フレームの相（task 6.3）で、まだ本番では未使用に見える。
+use self::move_shift::balloon_shift;
+#[allow(unused_imports)]
+pub(crate) use self::move_shift::{MoveShiftApplied, apply_balloon_shift, apply_char_shift};
 pub(crate) use self::sticky_follow::{is_char_dragging, sync_drag_writer};
 // ドラッグの始めの控え。呼び手は `input_events::drag` だけで、`#[path]` で src を取り込む
 // examples には input_events が無いので、そちらのビルドでは未使用に見える。
@@ -171,7 +177,7 @@ use super::transition_diag;
 // 見張る相手は**見送りが覆うべき経路**に限る（task 7.5）——利用者のドラッグ（route 無し）や
 // `\![move]`・ドラッグ解放時の補正といった**明示操作**は設計上そもそも見送らないので、鳴らせば
 // 偽の警報になる（debug ビルドではドラッグ 1 回で落ちていた）。どの経路語で鳴るかの分類は
-// `window_move::deferral_covers_route` が 12 語＋route 無しの網羅 match で 1 本に持つ。
+// `window_move::deferral_covers_route` が 13 語＋route 無しの網羅 match で 1 本に持つ。
 use super::dpi_sync::DpiSyncHold;
 
 // =============================================================================
@@ -202,6 +208,9 @@ mod drag_tests;
 #[cfg(test)]
 #[path = "follow_keyword_base_tests.rs"]
 mod keyword_base_tests;
+#[cfg(test)]
+#[path = "follow_move_shift_tests.rs"]
+mod move_shift_tests;
 #[cfg(test)]
 #[path = "follow_offset_component_tests.rs"]
 mod offset_component_tests;
