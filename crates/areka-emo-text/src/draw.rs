@@ -531,19 +531,13 @@ pub(crate) fn create_line_layout(
     Ok(layout)
 }
 
-/// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると
-/// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す。
+/// 行 TextLayout の format 前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
+/// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため
+/// format と行キャッシュを組み直す（本番 `ViewboxExecutor` の `FormatKey` と同じ形・viewbox_draw.rs）。
 ///
-/// 比較専用オラクル [`DrawExecutor`] 専用（本番 `ViewboxExecutor` は自前のインライン
-/// `FormatKey` を持つ・viewbox_draw.rs）——ゆえにオラクルと同じ `#[cfg(test)]` で保全する。
+/// 比較専用オラクル [`DrawExecutor`] 専用——ゆえにオラクルと同じ `#[cfg(test)]` で保全する。
 #[cfg(test)]
-#[derive(Clone, Debug, PartialEq)]
-struct FormatKey {
-    font_name: String,
-    /// f32 のビット表現（PartialEq の全順序比較を避ける・同値判定のみ）。
-    font_height_bits: u32,
-    mode: WritingMode,
-}
+type FormatKey = (crate::look::FontKey, WritingMode);
 
 /// **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み・除去は本ユニットの
 /// 範囲外——別決断）。live-diff で viewbox とバイト比較するために全域再描画方式を
@@ -729,11 +723,7 @@ impl DrawExecutor {
         font: &ResolvedFont,
         mode: WritingMode,
     ) -> Result<IDWriteTextFormat, TextLayerError> {
-        let key = FormatKey {
-            font_name: font.name.clone(),
-            font_height_bits: font.height.to_bits(),
-            mode,
-        };
+        let key: FormatKey = (font.looks.default.font_key(), mode);
         if let Some((cached_key, format)) = &self.format {
             if *cached_key == key {
                 return Ok(format.clone());
