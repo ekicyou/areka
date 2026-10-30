@@ -145,7 +145,7 @@ crates/areka-emo-text/tests/
 - `doc/COMPAT_ARCHITECTURE.md` 381 行目 — 段の並びの「既定（`StayseeBalloon`）」。
 - `doc/pasta-real-run.md` 56〜84 行目 — 実機の根を配布物と同じ形にするため、`areka-balloon` を引いて写す行と、根の一覧の書き（4 つ → 5 つ）を足す。`StayseeBalloon` の行は残す（決め 8）。
 - `.kiro/specs/balloon-markers/brief.md` — 1 枚の動く絵のオンラインの印の検体ができたことの申し送り（要件 3.7）。
-- `.kiro/specs/default-balloon-selfmade/verification/` — 実機の確かめの記録・`real-run-log-noise` への相談の結果。
+- `.kiro/specs/completed/default-balloon-selfmade/verification/` — 実機の確かめの記録・`real-run-log-noise` への相談の結果。
 
 ## System Flows
 
