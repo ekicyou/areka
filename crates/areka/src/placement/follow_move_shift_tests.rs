@@ -12,9 +12,10 @@ use wintf::ecs::WindowPos;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
 
+use super::super::test_support::capture_logs;
 use super::test_support::{
-    drag_end_event_at, drag_event, fake_handle, position_of, single_monitor_snapshot, size_of,
-    window_pos_at, window_pos_sized,
+    OFFSCREEN_PULL_TAG, drag_end_event_at, drag_event, fake_handle, guard_events, position_of,
+    single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, OffsetBase, apply_balloon_shift, apply_char_shift, move_window_to,
@@ -120,6 +121,32 @@ fn a_huge_shift_is_pulled_into_the_work_area_and_zero_returns_to_base() {
         Point { x: 100, y: 100 },
         "当てた分（寄せで縮んだ分も）を引いて元へ戻る"
     );
+}
+
+/// 作者の大きなずれを自分の寄せで作業領域へ戻すのは意図どおりで、勝手に飛んだ窓ではない。
+/// 揃えの有無を問わず `[visibility-guard] OffscreenPull` を出さない（task 8.3 の実機で見つけた件・要件 9.4）。
+#[test]
+fn a_huge_shift_pulled_back_by_our_own_clamp_does_not_warn_offscreen_pull() {
+    for anchor in [Anchor::Bottom, Anchor::Free] {
+        let (mut world, window) = char_world(anchor, 100, BOTTOM_Y);
+
+        let (applied, events) =
+            capture_logs(|| apply_char_shift(&mut world, window, (0, 9999), ScaleRatio::ONE));
+
+        assert!(applied, "{anchor:?}: 当てる");
+        assert!(
+            guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
+            "{anchor:?}: 自分の寄せを画面外からの引き寄せとして報告している: {events:?}"
+        );
+        assert_eq!(
+            position_of(&world, window),
+            Point {
+                x: 100,
+                y: BOTTOM_Y
+            },
+            "{anchor:?}: 作業領域の中に収まる"
+        );
+    }
 }
 
 /// `i64` の極端な値でも溢れずに作業領域の中へ寄る（`i32` へ飽和）。

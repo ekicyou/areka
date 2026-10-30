@@ -146,12 +146,13 @@ pub(crate) fn apply_char_shift(
     let anchored = project_anchor(anchor, raw, size, snapshot);
     let clamped = clamp_rect_to_work_area(anchored, size, area);
     let old_rect = Some(rect_at(PointPx { x: pos.x, y: pos.y }, size));
+    // 守りの入力は寄せた後の位置（`raw` だと自分の寄せを勝手に飛んだ窓＝OffscreenPull と見誤る）。
     let to = apply_visibility_guard(
         window,
         PlacementRoute::PatternMove,
         snapshot,
         old_rect,
-        raw,
+        clamped,
         clamped,
         size,
     );

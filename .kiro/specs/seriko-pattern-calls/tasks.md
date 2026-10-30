@@ -141,7 +141,7 @@
   - 台帳の検査（ukadoc-survey の検査）が通る
   - _Requirements: 10.1, 10.2, 8.2_
 
-- [ ] 8. 確かめ
+- [x] 8. 確かめ
 - [x] 8.1 「．さくら」のシェルで 8 語の警告が 0 件であることを固定する
   - 検体の「．さくら」のシェル `master` から再生表と合成の形の記録を作り、8 語に由来する警告が 0 件で、`surface0` の animation2 が「並び [0, 1] から 1 つを選んで開始」であることを兄弟テストで固定し、緑になる
   - _Depends: 2.2, 3.2_
@@ -152,7 +152,7 @@
   - 対象のクレートのテストが全部緑である
   - _Requirements: 9.5_
 
-- [ ] 8.3 「．さくら」を実機で 1 回動かして確かめる
+- [x] 8.3 「．さくら」を実機で 1 回動かして確かめる
   - 根・検体・一時フォルダはワークツリーの `target\` の下だけ。絶対パスで起こし、seriko の `debug` まで記録を開ける
   - 記録に 8 語に由来する WARN が 0 件、`surface0` などで `alternativestart` が animation0 か 1 を始めた記録、areka の MCP で `\s[12]`・`\s[22]` を出して揃えない置き方では窓の矩形が `move` のとおり下へずれ（`9999` は作業領域の中へ戻る）、下揃えではずれが見えないこと、書き出しの写しにずれが写らないこと、を記録と窓の矩形で確かめて作業の記録に残す
   - _Requirements: 9.4, 9.6_
@@ -182,3 +182,4 @@
 - 6.3: ずれの相は `emo2_boot/frame/move_shift.rs` の `run_move_shift_phase`（`run_move_drain_phase` の直後・見送りの門は `defers_window_write`・観測点の語 `pattern-move`）。位置の初期化は `rebase_shift` で記録を外す（design.md の「他の書き手との関係」に追記済み）。裁定待ち: 絶対の `\![move]`（base が me 以外）は design どおり `applied` を残すので、後でずれが 0 に戻ると窓が「`\![move]` の行き先 − 当てた分」へ動く（SSP で未測定）— 案 A: 位置の初期化と同じく `rebase_shift` を呼ぶ／案 B: 今のまま互換の文書 §8 に書く。下揃えの窓は揃えの y の差も当てた分に入るが、保存の後の戻しで y は揃えが決め直すので害は無い。
 - 7: 台帳の 9 行を implemented・担当 seriko-pattern-calls に。COMPAT_ARCHITECTURE §8 に「pattern定義の呼び出しと `move`」。check を通すため `pattern_word.rs` の 8 本の腕に `// ukadoc:` の証跡、`table.rs` の never の URL に `:1`、briefing.md の数・roadmap-draft.md に spec の行（C13）を足した。絶対の `\![move]` は今の振る舞いとして §8 に書いた（裁定で変われば書き直す）。
 - 8.2: 6 クレートのテスト（--ignored なし）は緑・期待を直したテストは無し。clippy はこの枝が増やした 1 件（looper_calls_tests.rs の type_complexity）を直し、残る 106 件は main からの持ち越し。引き金の相の後の呼び出しは一番上だけ `periodic_start_applies_its_head_call_in_the_same_tick` で固定（部品の側は無し）。areka の tests/ の実機の 9 本は机が要るので最終検証・完了の全体テストで確かめる。
+- 8.3（実機・2026-10-31・SSP 2.9 相当の机の上・dpi 192）: 1 回目（`target\sp83\log\run1.log`）で `route=PatternMove` の `[visibility-guard] OffscreenPull` が 4 件出た（`apply_char_shift` が寄せる前の位置を守りに渡していた）。守りの入力を寄せた後の位置に直し（`a_huge_shift_pulled_back_by_our_own_clamp_does_not_warn_offscreen_pull`）、2 回目（`run.log`）で確かめた。WARN は 27 件で、8 語と `move` に由来するものは 0 件（atlas 全透明 4・バルーンの縮退 6・`base` を描かない 6・カーソルの ROP 2・kanade の OnTranslate 400 9）。`OffscreenPull` 0・`move_shift_skipped` 0。「呼び出しで再生を始めた」12 件（animation0 6・animation1 6）。下揃えの `\s[12]` は y=1028（物理）のまま。揃えない置き方（土台を作るため `\![set,alignmenttodesktop,free]` と `\![move,0,-300,0,me]` を使った）では `\s[12]` が 428→440,524,716,812,1004,1028,1028、`\s[22]` が 428→440,476,524,716,812,1004,1028,1028 で、9999 は作業領域の下端に止まり、`\s[0]` で 428 に戻った（途中の値の一部は刻みに畳まれて記録に出ない）。バルーンも同じ量だけ追った。書き出し（`--offline-dump`）は written=3 failed=0・写しは 228x338 で大きさが変わらない（12・22 は全透明の土台と `base` を描かないため中身では見分けられず、ずれが写らないことは 9.6 の決定論のテストが担保）。
