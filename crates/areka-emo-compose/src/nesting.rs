@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
+use crate::bind_steps::BindStep;
 use crate::method::{is_implemented_name, is_move_name};
 use crate::pattern::{Cell, PatternState};
 use crate::plan::is_bind_interval;
@@ -93,8 +94,8 @@ pub struct NestTable {
 pub struct SurfaceParts {
     /// element定義で置いた子（面の表に在る番号だけ・element定義の番号の昇順）。
     pub children: Vec<u32>,
-    /// 着せ替えの animation の pattern0 が指すサーフェス（animation の番号, 番号）。
-    /// index が 0・番号が 0 以上・描画メソッドが動くものだけ。animation の番号の昇順。
+    /// 着せ替えの animation の手順の「描く」コマが指すサーフェス（animation の番号, 番号）。
+    /// 純 `bind` は全部のコマ・`bind+random` は pattern0 だけ（seriko-pattern-calls 6.8）。昇順・重複なし。
     pub bind_targets: Vec<(u32, u32)>,
     /// `bind+random` の animation の番号（昇順・重複なし）。③ の合流の門が引く（無効ならコマを数えない）。
     /// 純 `bind` のコマは呼ばれて始まったものだけなので門を通さない（seriko-pattern-calls 5.6・M5）。
@@ -133,21 +134,19 @@ impl NestTable {
                 if matches!(anim.interval, Interval::BindRandom { .. }) {
                     bind_random_ids.push(anim.id);
                 }
-                // flatten_surface と同じ辺: index==0・番号が 0 以上・描画メソッドが動く。
-                let target = anim
-                    .patterns
-                    .iter()
-                    .find(|p| p.index == 0)
-                    .filter(|p| is_implemented_name(p.method.as_str()))
-                    .and_then(|p| u32::try_from(p.surface_id).ok());
-                if let Some(target) = target {
-                    bind_targets.push((anim.id, target));
-                }
+                // 合成と同じ辺: 着せ替えの手順の「描く」コマ（純 `bind` は全部・`bind+random` は pattern0）。
+                bind_targets.extend(world.bind_steps(id, anim.id).iter().filter_map(
+                    |s| match *s {
+                        BindStep::Draw { surface, .. } => Some((anim.id, surface)),
+                        BindStep::Insert { .. } => None,
+                    },
+                ));
             }
             // 同じ番号の animation は畳み込みで 1 つ（後勝ち）。並びだけを番号の昇順へ揃える
             // （bind_random_ids は visible_parts が二分探索で引く）。
             bind_random_ids.sort_unstable();
             bind_targets.sort_unstable();
+            bind_targets.dedup();
             let mut films: Vec<FilmId> = master
                 .elements
                 .iter()
@@ -238,7 +237,7 @@ impl NestTable {
             for &child in &p.children {
                 self.enter(child, top, binds, pattern, out);
             }
-            // ② 有効な着せ替えの pattern0（コマが在ればコマが置き換える＝③で数える）。
+            // ② 有効な着せ替えの描くコマ（コマが在ればコマが置き換える＝③で数える）。
             for &(id, target) in &p.bind_targets {
                 if binds.contains(id) && frame_of(id).is_none() {
                     self.enter(target, top, binds, pattern, out);

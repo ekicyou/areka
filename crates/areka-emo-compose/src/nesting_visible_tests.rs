@@ -243,9 +243,10 @@ element0,overlay,eye.png,0,0
     assert_eq!(visible(&table, 0, &[], &not_drawn), vec![5]);
 }
 
-/// 着せ替えの pattern0 の先は index 0・0 以上・描画メソッドが動くものだけ（欄 2 が animation の番号の語も除く）。
+/// 着せ替えの先は手順の「描く」コマ（0 以上・描画メソッドが動く・欄 2 が animation の番号の語を除く）だけ。
+/// 純 `bind` は pattern0 に限らない（animation4 の pattern1・seriko-pattern-calls M6）。
 #[test]
-fn bind_targets_keep_only_drawable_pattern0() {
+fn bind_targets_keep_only_drawable_steps() {
     let text = "\
 surface0
 {
@@ -277,7 +278,7 @@ element0,overlay,eye.png,0,0
         table.parts(0),
         Some(&SurfaceParts {
             children: vec![],
-            bind_targets: vec![(5, 3)],
+            bind_targets: vec![(4, 3), (5, 3)],
             ..Default::default()
         })
     );
@@ -285,6 +286,53 @@ element0,overlay,eye.png,0,0
         visible(&table, 0, &[1, 2, 3, 4, 5, 6], &PatternState::default()),
         vec![3]
     );
+}
+
+/// seriko-pattern-calls 6.8・M6: 入れ子の辺は着せ替えの手順の「描く」コマから作る。純 `bind` は全部の
+/// コマ（呼び出しの語は除く）、`bind+random` は pattern0 だけ。
+#[test]
+fn bind_targets_come_from_bind_steps_draws() {
+    let text = "\
+surface0
+{
+element0,overlay,body.png,0,0
+animation1.interval,bind
+animation1.pattern0,overlay,3,0,0,0
+animation1.pattern1,overlay,4,0,0,0
+animation1.pattern2,start,5,0,0,0
+animation2.interval,bind+random,2
+animation2.pattern0,overlay,6,0,0,0
+animation2.pattern1,overlay,7,0,0,0
+}
+surface3
+{
+element0,overlay,eye.png,0,0
+}
+surface4
+{
+element0,overlay,eye.png,0,0
+}
+surface5
+{
+element0,overlay,eye.png,0,0
+}
+surface6
+{
+element0,overlay,eye.png,0,0
+}
+surface7
+{
+element0,overlay,eye.png,0,0
+}
+";
+    let table = table_of(text);
+    assert_eq!(
+        table.parts(0).map(|p| p.bind_targets.clone()),
+        Some(vec![(1, 3), (1, 4), (2, 6)])
+    );
+    let empty = PatternState::default();
+    assert_eq!(visible(&table, 0, &[1, 2], &empty), vec![3, 4, 6]);
+    assert_eq!(visible(&table, 0, &[2], &empty), vec![6]);
 }
 
 /// 先祖へ戻る辺は進まない（自分自身・相互・コマが一番上へ戻る）。有限で終わる。

@@ -1,6 +1,7 @@
 //! キャンバス外形（[`Extent`]）の算出（`plan.rs` から中身を変えずに移した・animated-image-playback）。
 
 use areka_emo_atlas::AtlasTable;
+use areka_parsers::shell::Interval;
 
 use super::{Extent, is_bind_interval, surface_and_binding};
 use crate::nesting::{ElementKind, is_always_interval};
@@ -11,9 +12,10 @@ use super::*;
 
 /// キャンバス外形（[`Extent`]）を**有効 bind 集合に依存せず静的に**算出する（要件 6.5・議題2裁定 (A)）。
 ///
-/// 母集合は **surface の全定義層**＝全 element ＋**全 bind animation の pattern0**（`binds` に
-/// 含まれるか否かに関係なく全部）。各層 element の「累積配置オフセット＋原寸（[`AtlasEntry::original`]）」
-/// の和集合を、原点 (0,0) 固定・負オフセット分は原点でクリップして取る。`extent = (max_x, max_y)`、
+/// 母集合は **surface の全定義層**＝全 element ＋**全 bind animation の描くコマ**（純 `bind` は全部の
+/// pattern・`bind+random` は番号の最も小さい 1 つ・`binds` に含まれるか否かに関係なく全部）。
+/// 各層 element の「累積配置オフセット＋原寸（[`AtlasEntry::original`]）」の和集合を、原点 (0,0)
+/// 固定・負オフセット分は原点でクリップして取る。`extent = (max_x, max_y)`、
 /// 各層で `max_x = max(max_x, max(0, offset_x + original.w))`・同様に `max_y`。**`placement: None`
 /// （全透明）の element も原寸は既知ゆえ外形へ寄与する**（design 明記）。
 ///
@@ -126,9 +128,10 @@ fn flatten_extent(
             *max_y = (*max_y).max((offset_y + h as i64).max(0));
         }
 
-        // **全** bind animation の pattern0 を母集合として辿る（有効/非有効を問わない・6.5 の核心）。
-        // `always` の animation は表示中ずっと全部のコマを通るので、**全部**の pattern を同じやり方で
-        // 辿る（animated-image-playback design b-2・外形はコマに依らない静的な量のまま）。
+        // **全** bind animation を母集合として辿る（有効/非有効を問わない・6.5 の核心）。
+        // `always` の animation は表示中ずっと全部のコマを通り、純 `bind` は全部のコマを重ねるので、
+        // **全部**の pattern を同じやり方で辿る（animated-image-playback design b-2・seriko-pattern-calls
+        // M6・外形はコマに依らない静的な量のまま）。
         // 描画順は外形に無関係（max の和集合ゆえ順序不変）だが、決定性のため id 昇順で走査する。
         let mut bind_ids: Vec<u32> = master
             .animations
@@ -143,21 +146,22 @@ fn flatten_extent(
             let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
                 continue;
             };
-            let always = is_always_interval(&anim.interval);
-            let patterns = if always {
+            // `always` と純 `bind` は全部の pattern（着せ替えの手順と同じ・seriko-pattern-calls 6.8・M6）。
+            // `bind+random` は今のまま番号の最も小さい 1 つ（pattern0 の無い再生のコマも大きさに数える）。
+            let all = is_always_interval(&anim.interval) || matches!(anim.interval, Interval::Bind);
+            let patterns = if all {
                 &anim.patterns[..]
             } else {
                 let pattern0 = anim.patterns.iter().min_by_key(|p| p.index);
                 pattern0.map_or(&[][..], std::slice::from_ref)
             };
             for pattern in patterns {
-                // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。`always` の欄 2 が
-                // animation の番号になる 7 語（`start` 等）の先は面ではなく、`move` はサーフェスの
-                // 番号を無視する（ukadoc）ので数えない。
+                // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。欄 2 が animation の
+                // 番号になる 7 語（`start` 等）の先は面ではなく、`move` はサーフェスの番号を無視する
+                // （ukadoc）ので数えない。
                 if pattern.surface_id < 0
-                    || (always
-                        && (targets_animation_id(pattern.method.as_str())
-                            || crate::method::is_move_name(pattern.method.as_str())))
+                    || targets_animation_id(pattern.method.as_str())
+                    || crate::method::is_move_name(pattern.method.as_str())
                 {
                     continue;
                 }

@@ -16,7 +16,7 @@
   - 語の見分けと欄の読みの兄弟テストが、大文字・`-`・`_`・空白の綴りと、番号・並び・読めない欄の全部の形で緑になる
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 9.2_
 
-- [ ] 2. 合成: 着せ替えの手順と差し込み
+- [x] 2. 合成: 着せ替えの手順と差し込み
 - [x] 2.1 (P) 着せ替えの描く手順を読み込みのときに 1 度だけ作る
   - 合成の世界を作る終わりに、面 × animation ごとの手順の資源を作る。純 `bind` は全部の pattern を番号の昇順に、`bind+random` は今のまま pattern0 だけをたどる
   - 描く語（今は overlay）で番号が 0 以上のコマは「描く」、純 `bind` の `insert` で相手が同じ面の純 `bind` なら「差し込む」、それ以外は手順に入れない。手順を作るときに記録は出さない
@@ -34,7 +34,7 @@
   - 合成の兄弟テストで、B が無効・入れ子・巡回・2 つの差し込み手・無効の純 `bind` の今のコマが描かれる・有効の純 `bind` が止められても残る、が緑になり、合成を何度組んでも「未知の合成メソッド名」の記録が 0 件である（ログの捕まえで確かめる）。emo-compose のテストが全部緑である
   - _Requirements: 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.7, 6.8, 8.1, 9.5_
 
-- [ ] 2.3 外形と入れ子の辺を同じ規則に揃える
+- [x] 2.3 外形と入れ子の辺を同じ規則に揃える
   - 外形の数えで、純 `bind` を `always` と同じく全部の pattern で数える（8 語と負の番号は数えない）
   - 入れ子の辺の相手を手順の資源の「描く」コマから作り、入れ子の側の合流の門も `bind+random` だけに狭める
   - 外形と入れ子の変更で期待が変わる既存のテストだけを、M6 の測りを根拠に直し、直したテストの名を作業の記録に残す
@@ -165,3 +165,4 @@
 - 2.2: 入れ子の側の合流の門（nesting.rs の ③・`SurfaceParts.bind_random_ids`）は 2.2 で前倒し済み。2.3 に残るのは入れ子の辺の相手を BindSteps の「描く」コマから作ることと外形（plan_extent.rs）の数え。
 - 2.2: 期待を直したテスト（根拠）: plan_ops_tests::coexisting_pattern0_and_pattern1_composes_only_index0（M6）・golden_tests_blink_static_tests::emo2_blink_binds_are_statically_inactive（M6・1403 の pattern2 が増える）・plan_nesting_tests::part_frames_go_through_the_same_bind_and_method_rules（M5）・plan_ops_tests::non_overlay_pattern0_logs_debug_and_is_not_drawn（5.5）・plan_issues_tests::composing_repeatedly_adds_no_warn（5.5）・nesting_visible_tests::inactive_bind_frames_are_not_counted → inactive_bind_random_frames_are_not_counted（M5）・nesting_visible_tests::fixture_table_lists_children_and_bind_targets／bind_targets_keep_only_drawable_pattern0（M5）・nesting_visible_tests::inactive_bind_frames_change_neither_ops_nor_parts（M5）。
 - 2.2: 「有効な A に今のコマがある間は A の手順を展開せず B は本来の位置」は SSP で測っていない読み（設計 453 行と 424 行の組み合わせ）。7 の互換の文書 §8 に「展開されない（無効・コマあり）とき」と書く。合成のたびの debug「有効な着せ替えに描く手順が無い」は旧来の「pattern0 が無い」と同じ頻度。
+- 2.3: 期待を直したテスト: nesting_visible_tests::bind_targets_keep_only_drawable_pattern0 → bind_targets_keep_only_drawable_steps（[(5,3)] → [(4,3),(5,3)]・M6）。`bind+random` の外形は今のまま最小の番号の pattern（`min_by_key`）で数える（pattern0 の無い瞬きを大きさに数える既存の意図）。
