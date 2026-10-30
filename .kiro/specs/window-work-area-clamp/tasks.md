@@ -162,7 +162,7 @@
   - _Boundary: §8 の行_
   - _Depends: 5.1_
   - _Requirements: 8.2, 8.4_
-- [ ] 5.4 触ったクレートの全テスト・整形・静的検査と、約束の確かめを通す
+- [x] 5.4 触ったクレートの全テスト・整形・静的検査と、約束の確かめを通す
   - areka のテストを回して全部緑。整形と clippy で、5.1・5.2 が書いた行に新しい警告が無い
   - 約束の確かめ: 書き込みの関門のファイルの差分が呼び出しの置き換えと記録の欄だけ・配置の層のモジュールの一覧・キャラ窓の一式の型・起動の消費の台帳に差分が無い・新しいテストファイルが 1,000 行以下
   - 結果が実装の記録に残っている
@@ -202,3 +202,8 @@
   - `follow_balloon_limit_tests.rs` の 6 本（enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true・follow_balloon_clamps_for_every_trigger・resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area・runtime_gate_result_is_identical_for_hidden_and_visible_balloons・undetermined_balloon_size_warns_but_an_explicit_size_still_clamps・the_window_move_record_carries_the_corrected_position_and_the_original_route）: 新しい道具 `char_overflowing_world` でキャラ窓の縦を 600 → 640 にし、下辺（1043）からはみ出させた（要件 5.6）。the_reference_work_area_is_the_one_the_char_window_belongs_to の 1 本は、その場でキャラ窓の縦を 720 にし、左モニタの下辺からはみ出させた（要件 5.6）。
   - `main_restore_seam_tests.rs` の restore_seam_clamps_balloon_display_position_but_keeps_offset_raw: キャラ窓をはみ出させると復元の寄せで `char_pos` が変わるため、作業領域の右端を 1920 → 450 に狭めた。キャラ窓（30〜430）は収まり、映したバルーン（280〜480）も右へはみ出すので押し込みになる（要件 5.5）。
   - あわせて `window_move.rs` の `apply_balloon_limit_gate` の doc の切れたリンク `[limit_correction]` を `place_balloon_in_work_area` の `BalloonPlace::Fits` の説明へ言い直した（doc だけ）。
+- 5.4 の確かめ（2026-10-30・比べる元は 5.1 の手前の `707ff1d82`）:
+  - テスト: `cargo test -p areka --no-fail-fast`（`--ignored` なし・32bit の `shiori_loadu.dll` は 4.2 で建てたものが在る）は全部緑。本体 3836 件通過（無視 3）・結合テスト 8 本も全部緑。新しい `placement/balloon_limit_flip_tests.rs` の 12 件も全部通った。
+  - 整形: `cargo fmt --all -- --check` は差分なし。clippy: `cargo clippy -p areka --all-targets` の警告のうち、5.1・5.2 が触ったファイルに出るのは 3 件（`follow/window_move.rs:450`・`follow_balloon_limit_tests.rs:474,576`）。どれも 5.1・5.2 が変えた行の外で、`git blame` では 2026-08-10・08-15 の前からある行。5.1・5.2 が書いた行には警告が無い。
+  - 約束: 書き込みの関門のファイル（`placement/follow/window_move.rs`）の差分は、呼び出しの置き換え（`limit_correction` を `place_balloon_in_work_area` と `BalloonPlace` の受けに替えた 2 行と、そのための `use` の名前の入れ替え）・記録の欄 `how` の 1 行・関門の注記の書き換え（4 行を 5 行へ）だけ。窓の束ね口（`placement/follow.rs`）は `use` の 1 行だけ。配置の層のモジュールの一覧（`placement/mod.rs`）・キャラ窓の一式の型（`placement/spawn.rs` の `GhostWindows`）・起動の消費の台帳（`emo2_boot/consumer_ledger.rs`）は差分なし。新しいテストファイル `balloon_limit_flip_tests.rs` は 337 行・`balloon_limit.rs` は 301 行（どれも 1,000 行以下）。`window_move.rs` は前から 1,000 行を超えていて、今 1,227 行（新しいファイルではないので約束の外）。
+  - ゴーストの名前と初回起動: 5.1・5.2 の `crates/` の追加行に `pasta`・`ぱすた`・`ghost_dev`・`emo2`・`OnFirstBoot`・`first_boot`・「初回」は 0 件。製品のコードの追加行（`balloon_limit.rs`・`follow.rs`・`window_move.rs`）には、スコープの番号で分ける行もゴーストや起動を見る行も 0 件。要件 7.8 に反する箇所は無い。
