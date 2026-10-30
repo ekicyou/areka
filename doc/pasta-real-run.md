@@ -197,7 +197,7 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 
 ### 段 3 のマウスの形の読み方
 
-マウスの形は目で見ず、`tools/mouse-input.ps1` の `cursor` で読む（6 節）。`cursor` は点へ動かして位置を読み戻した後、今のマウスの形を Windows の標準の形 14 種と比べて、`ok cursor x=<X> y=<Y> shape=<名前|custom> handle=0x<16進>` の 1 行を出す。標準の形のどれでもなければ `custom`。SSP の測り（`.kiro/specs/shell-mouse-cursor/research.md` の 8 節）と同じ読み方。
+マウスの形は目で見ず、`tools/mouse-input.ps1` の `cursor` で読む（6 節）。`cursor` は点へ動かして位置を読み戻した後、今のマウスの形を Windows の標準の形 14 種と比べて、`ok cursor x=<X> y=<Y> shape=<名前|custom> handle=0x<16進>` の 1 行を出す。標準の形のどれでもなければ `custom`。SSP の測り（`.kiro/specs/completed/shell-mouse-cursor/research.md` の 8 節）と同じ読み方。
 
 点はぱすたの窓の位置（6 節の「位置の読み方」）から、測りの記録の点を左上からの差で写して決める。
 
