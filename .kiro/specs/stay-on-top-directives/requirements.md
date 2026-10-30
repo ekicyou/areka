@@ -1,0 +1,168 @@
+# Requirements Document
+
+## Project Description (Input)
+ゴーストの作者は、台本の `\v` と `\![set,windowstate,stayontop]` でゴーストを「常に手前に表示」にできない。`\![set,windowstate,!stayontop]` で普通の重なりへ戻すこともできない。areka はどれも黙って捨てる（裸の `\v` は「知らないタグ」として台本の組み立てで捨てられ、`\![set,windowstate,…]` は受け手の表に受け手が無い）。
+
+ゴースト「窓際のぱすたさん」は、重なりを指定した直後に `\1\v` を出し（辞書 `dic/tategaki.pasta` の「重ね順」が `\![reset,zorder]\![set,zorder,s0,b0,s1]\1\v\0` を出す）、起動の台本でも `\![set,windowstate,!stayontop]` を出す。SSP ではこれらが効く見込みで、areka では何も起きない＝見え方が SSP と違う（完了 `areka-P0-pasta-in-windows-verification` の件 19）。また、台本の `\![set,zorder]` で作った重なりの組が、シェルの切り替えで捨てられる（同じく「ゴースト終了まで有効」の正典に反する・`window-link-directives` の完了からの申し送りの件 1）。
+
+この spec は、3 つの指令を読んで、ゴーストのキャラクターの窓とバルーンの窓を他のアプリの窓より常に手前に出す・普通に戻すことと、「ゴースト終了まで有効」の指令（常に手前と台本の重なりの組）の寿命をシェルの切り替えと読み直しで決めることを入れる。v0.1.0 のゴール「ぱすたが SSP と同じレベルで動く」の一部。詳細は同じフォルダの `brief.md`。
+
+## Introduction
+
+ukadoc は、この spec が受け持つ指令を次のように定めている（2026-10-30 に ukadoc MCP で読み直した）。
+
+- **`\v`**（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_v ）: 「手前に表示する。このスクリプト以降、常に最前面に表示されるようになる。ただしスコープごとの重なり(本体側と相方側どちらが上にくるか)はユーザの操作次第。」「ゴースト終了まで有効。」
+- **`\![set,windowstate,stayontop]`**（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_set%2Cwindowstate%2Cstayontop_ ）: 「手前に表示する。このスクリプト以降、常に最前面に表示されるようになる。」「ゴースト終了まで有効。」
+- **`\![set,windowstate,!stayontop]`**（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_set%2Cwindowstate%2C!stayontop_ ）: 「手前に表示しない。このスクリプト以降、他のウィンドウと同様に重なりが処理される。」「ゴースト終了まで有効。」
+- **SHIORI リソース `alwaysstayontopbutton.caption`**（https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#alwaysstayontopbutton.caption ）: 「常に手前に表示の名称。」（メニューの項目の名前。本 spec の範囲外）
+
+今の areka のゴーストの窓は、常に手前ではない普通の窓である（完了 `areka-P0-ghost-window-zorder` の要件 4.3・8.1）。同じ spec の要件 8.2 は、バルーンがキャラクターのすぐ手前に居る決まりを保ったまま `\v` 相当を後から足せる構造を約束し、要件 8.3 は `\v` などをそこでは解釈しないとした。本 spec はその約束の上に乗る。完了 spec は直さず、要件 4.3・8.1 は「台本が常に手前を求めたときを除く」と読み替えて互換の記録に書く。
+
+ukadoc が黙っている点は、下の「要件の段での裁定」に推奨案で答えを置いた。要件ディスカッションで確定する。
+
+### 用語
+
+- **スコープ**: 本体側（0）・相方側（1）・3 人目から（2 以降）のキャラクターの区別。
+- **ゴーストの窓**: 1 体のゴーストが持つ、全部のスコープのキャラクターの窓とバルーンの窓。表示中か隠れているかを問わず、後から作られる窓・作り直された窓も含む。
+- **常に手前**: 窓が、他のアプリの普通の窓（常に手前ではない窓）より、活性の窓がどれであっても手前に出る重なり。
+- **常に手前の状態**: ゴーストごとに 1 つ持つ、オンかオフかの値。オンのあいだ、そのゴーストの窓は常に手前に出る。既定はオフ。
+- **3 つの指令**: `\v`・`\![set,windowstate,stayontop]`（この 2 つを「オンの指令」）・`\![set,windowstate,!stayontop]`（「オフの指令」）。
+- **重なりの組**: 台本の `\![set,zorder,…]` またはシェルの descript の `seriko.zorder` で決めた、窓の重なりの順のまとまり。台本から来たものを「台本の組」、descript から来たものを「descript の組」と呼ぶ。
+- **ゴーストの読み直し**: 同じゴーストを終えて起こし直すこと（SSP ヘルプの「ゴースト再読み込み」・MCP の `reload` のゴースト）。**SHIORI だけの読み直し**は窓を残しゴーストを終えない読み直しで、これとは別。
+- **シェルの切り替え**: 台本やメニューでシェルを替えること。シェルの読み直しを含む。ゴーストの終了ではない。
+
+## 要件の段での裁定
+
+下の表は、要件を書く途中で答えが要った点に推奨案で答えを置いたもの。要件ディスカッションで確定する。「SSP で未測」の行は、確定の前に開発者の機械の SSP で測る（`brief.md` の議題 1。測るときは SSP の環境を変える許可を取る）。
+
+| # | 問い | 推奨の答え | 根拠 | 該当 |
+|---|---|---|---|---|
+| 1 | `\1\v`（相方側で出した `\v`）は、どの窓を常に手前にするか | **そのゴーストの窓の全部**（全スコープのキャラクターの窓とバルーンの窓）。指令を出したスコープを問わない | `brief.md` の Desired Outcome は「ゴーストのキャラクターの窓とバルーンの窓が、他のアプリの窓より常に手前に出る」と書く。正典はスコープを書かずに「常に最前面に表示されるようになる」と書き、そのうえで「スコープごとの重なり…はユーザの操作次第」と添える＝一式が上がり、一式の中の並びは利用者しだい、と読める。SSP で未測 | 1.1・2.1・2.5 |
+| 2 | ゴーストの窓のほかに、常に手前にする窓はあるか | **無い**。右クリックのメニュー・入力の箱・ツールチップ・タスクトレイのバルーンなどは今の扱いのまま | `brief.md` の Desired Outcome が挙げるのはキャラクターの窓とバルーンの窓だけ。メニューは OS が最前面に出す。入力の箱などの重なりは本 spec の範囲外で、隠れる不具合が実機で見つかれば起票する。SSP で未測 | 用語「ゴーストの窓」・Boundary Context |
+| 3 | ゴーストの読み直しの後に、常に手前の状態と台本の組を保つか | **保たない**（オフへ戻し、組は descript の値から始める）。SHIORI だけの読み直しでは両方保つ | SSP ヘルプ「ゴースト再読み込み」は「いま起動しているゴースト自身を選び直したのと同じ」＝ゴーストの終了を伴う。兄弟の裁定（完了 `areka-P0-window-link-directives` の裁定 1・完了 `descript-window-keys` の裁定 5）も、台本で決めた窓の決まりを読み直しで捨て、SHIORI だけの読み直しで保つ。SSP で未測 | 4.2・4.3・5.3・5.5 |
+| 4 | シェルの切り替え（とシェルの読み直し）・バルーンの切り替えの後に、常に手前の状態と台本の組を保つか | **保つ**。descript の組だけを新しいシェルの `seriko.zorder` の値へ取り替える | 正典は 4 つとも「ゴースト終了まで有効」と書き、シェルの切り替えはゴーストの終了ではない。兄弟の裁定（`areka-P0-window-link-directives` の裁定 2）が台本の吸着と組をシェルの切り替えで保つのと揃える。今の areka が台本の重なりの組をシェルの切り替えで捨てるのは、この食い違い（申し送りの件 1）。SSP で未測 | 4.4・4.5・5.1 |
+| 5 | 既にオンのときにオンの指令を、既にオフのときにオフの指令を受けたとき | オンの重ねは**状態を変えず、組とバルーンの並びを保ったままゴーストの窓を常に手前に出し直す**。オフの重ねは**何も動かさない** | ぱすたは重なりを指定した直後に `\1\v` を出し、奥の窓を並べ直して手前の窓を揃える狙いを辞書に書いている＝重ねて出す `\v` に「出し直し」を期待している。オフは既定なので、起動の台本の `\![set,windowstate,!stayontop]` で窓を動かす理由が無い。SSP で未測（起動の重なりは要件 8.3 で SSP の基準と見比べる） | 2.8・3.2 |
+| 6 | `\![set,windowstate,…]` の第 2 引数が `stayontop`・`!stayontop` 以外のとき（`minimize` を含む） | 常に手前の状態を変えず、ゴーストを止めず、書かれていた値を記録する。`minimize` は `tasktray-minimize` が後で受け持つ | `brief.md` の Out は `\![set,windowstate,minimize]` を `tasktray-minimize` に置く。読めない値で状態を動かすと、作者の書き損じで重なりが変わる | 1.5 |
+| 7 | 第 3 引数以降が付いていたとき | 第 2 引数で決め、余りを記録に残す | 正典はどの指令にも第 3 引数を書かない。余りで指令ごと捨てると、書き損じ 1 つで作者の意図が丸ごと消える | 1.6 |
+| 8 | 第 2 引数の大文字・小文字 | **小文字ちょうど**で読む。違う綴りは行 6 の扱い | 兄弟の重なりの指令（`\![set,zorder]` の `bN`・`sN`）と同じ流儀。正典に無い綴りを areka が独自に受け付けない | 1.7 |
+| 9 | OS が窓を常に手前へ上げられない（または外せない）とき | その窓と理由を記録し、残りの窓は続けて処理し、ゴーストと台本を止めない。常に手前の状態は指令のとおりに持ち、後から現れる窓にも当てる | `brief.md` の Constraints「失敗は記録を残し、ゴーストを止めない」。1 枚の失敗はアプリの失敗ではない（開発者の方針） | 6.3 |
+| 10 | シェルの切り替えで、新しいシェルの descript の組が、保った台本の組と同じスコープを含むとき | その descript の組は作らずに、スコープと理由を記録に残す | 1 つのスコープは 1 つの組にしか入れない決まり（台本の組の重ねての指名は今も記録して断る）。兄弟（`areka-P0-window-link-directives` 要件 6.5）が、台本の組と重なる descript の組を作らずに記録するのと揃える | 5.2 |
+| 11 | 右クリックのメニューの「常に手前に表示」と `alwaysstayontopbutton.caption` | **作らない**。網羅台帳に「対応しない」と理由を書く | `brief.md` の議題 3 の推し。作るなら `menu/` を触り、`popup-menu-residue`・`popup-menu-shell-look` と重なる | 9.2・Boundary Context |
+| 12 | 同時に複数のゴーストが起きているとき | 常に手前の状態はゴーストごとに持ち、指令を出したゴーストの窓だけに効く | `brief.md` の Approach「「常に手前」の状態をゴーストに 1 つ持ち」。正典は「ゴースト終了まで有効」とゴースト単位で書く | 2.7 |
+
+## Boundary Context
+
+- **In scope**:
+  - 台本の `\v`・`\![set,windowstate,stayontop]`・`\![set,windowstate,!stayontop]` の読み取りと受け手
+  - ゴーストの窓を常に手前へ出す・常に手前から外す働き。後から現れる窓・作り直された窓・重なりの組とバルーンの並びを、常に手前のあいだも保つこと
+  - 常に手前の状態の寿命（ゴーストの終了・切り替え・読み直し、SHIORI だけの読み直し、シェルとバルーンの切り替え）
+  - 台本の重なりの組（`\![set,zorder]`）の、シェルの切り替えとゴーストの読み直しでの寿命（申し送りの件 1）
+  - 記録・決定論のテスト・実機の確かめ・網羅台帳（`sakura-script.toml`・`shiori.toml`）と互換の対応表（`doc/COMPAT_ARCHITECTURE.md` §8）の改め
+  - ぱすた（「窓際のぱすたさん」）での確かめ（完了 `areka-P0-pasta-in-windows-verification` の件 19）
+- **Out of scope**:
+  - 右クリックのメニューの「常に手前に表示」の項目と `alwaysstayontopbutton.caption`（裁定 11）
+  - `\![set,windowstate,minimize]` と最小化・復帰（`tasktray-minimize`）
+  - 全画面のアプリを見た自動の最小化（`OnFullScreenAppMinimize` ほか）
+  - 常に手前の状態を次の起動へ持ち越すこと（正典は「ゴースト終了まで有効」）
+  - スコープどうしの並びの決まり（`\![set,zorder]` の解釈そのもの・`zorder-scope-inversion` が決めた鎖と組の形）
+  - 窓の位置と大きさ
+  - ゴーストの窓でない窓（メニュー・入力の箱・ツールチップ・タスクトレイのバルーン）の重なり（裁定 2）
+- **Adjacent expectations**:
+  - 完了 `areka-P0-ghost-window-zorder` の決まり（バルーンは自分のキャラクターのすぐ手前・スコープどうしは利用者しだい・他のアプリが活性になったら奥へ回る）は、常に手前の状態がオフのあいだ今のまま働く。オンのあいだは「他のアプリが活性になったら奥へ回る」だけを行わない。
+  - 完了 `areka-P0-zorder-scope-inversion`・`areka-P0-scope-zorder-pinning` が決めた重なりの組の並び（書かれた順・組の結び目を外す場合を含む）は、常に手前のあいだもそのまま保つ。本 spec は並びの決まりを変えない。
+  - `tasktray-minimize` は、同じ `\![set,windowstate,…]` の受け手に `minimize` を足し、最小化から戻すときに常に手前の状態も戻す。本 spec はその足し場所を塞がない。
+  - `pasta-in-windows-verification` の手順書 `doc/pasta-real-run.md` は、本 spec の着地の後の確かめに使う。
+
+## Requirements
+
+### Requirement 1: 3 つの指令の読み取り
+**Objective:** As a ゴーストの作者, I want 台本の `\v` と `\![set,windowstate,stayontop|!stayontop]` を areka に読んでほしい, so that SSP と同じ台本で常に手前に出したり戻したりできる
+
+#### Acceptance Criteria
+1. When 台本の再生が `\v` の所へ来た, the areka shall そのゴーストの常に手前の状態をオンにし、`\![set,windowstate,stayontop]` と同じに扱う（指令を書いた所のスコープを問わない）。
+2. When 台本の再生が `\![set,windowstate,stayontop]` の所へ来た, the areka shall そのゴーストの常に手前の状態をオンにする。
+3. When 台本の再生が `\![set,windowstate,!stayontop]` の所へ来た, the areka shall そのゴーストの常に手前の状態をオフにする。
+4. If 台本の再生が 3 つの指令の所へ来る前に中断された, the areka shall 常に手前の状態を変えない。
+5. If `\![set,windowstate,…]` の第 2 引数が `stayontop`・`!stayontop` のどちらでもない（`minimize` と空を含む）, the areka shall 常に手前の状態を変えず、ゴーストと台本を止めず、書かれていた値を記録に残す。
+6. If オンかオフの指令に第 3 引数以降が付いている, the areka shall 第 2 引数で状態を決め、余りの引数を記録に残す。
+7. The areka shall 第 2 引数を小文字ちょうどの綴りで読み、大文字の混じった綴りは受け付けずに 1.5 の扱いにする。
+8. When MCP の `check_script` が 3 つの指令を含む台本を確かめる, the areka shall 3 つの指令を「知らない命令」と答えない。
+
+### Requirement 2: 常に手前のあいだの見え方
+**Objective:** As a ゴーストを常駐させる利用者, I want 台本が常に手前を求めたあいだ、ゴーストが他のアプリの窓に隠れないこと, so that SSP と同じにゴーストがいつも見える
+
+#### Acceptance Criteria
+1. When 常に手前の状態がオフからオンになる, the areka shall そのゴーストの今在る全部の窓を、指令を受けた時点で（後のフレームへ持ち越さずに）常に手前へ出す。
+2. While 常に手前の状態がオン, when 他のアプリの窓が活性になった, the areka shall ゴーストの窓を他のアプリの普通の窓の後ろへ回さない。
+3. While 常に手前の状態がオン, when ゴーストの窓が新しく現れた（後から出るバルーンの窓・作り直された窓・後から作られるキャラクターの窓）, the areka shall その窓を現れた時点から常に手前で出し、他のアプリの普通の窓の後ろに出る瞬間を作らない。
+4. While 常に手前の状態がオン, the areka shall 各スコープのバルーンの窓を自分のキャラクターの窓のすぐ手前に保ち、重なりの組の並び（書かれた順）を保つ。
+5. While 常に手前の状態がオン, the areka shall 重なりの組で決まっていないスコープどうしの上下（本体側と相方側のどちらが上か）を、利用者の操作に任せる。
+6. While 常に手前の状態がオン, the areka shall 窓の透過・クリックの通り抜け・ドラッグ・位置・大きさを、常に手前でないときと同じに保つ。
+7. Where 同時に複数のゴーストが起きている, the areka shall 指令を出したゴーストの窓だけを常に手前にし、ほかのゴーストの窓の重なりを変えない。
+8. When 常に手前の状態が既にオンのときにオンの指令を受けた, the areka shall 状態を変えず、2.4 の並びを保ったままゴーストの窓を常に手前に出し直す。
+
+### Requirement 3: 普通の重なりへ戻す
+**Objective:** As a ゴーストの作者, I want `\![set,windowstate,!stayontop]` でゴーストを普通の重なりへ戻せること, so that 常に手前が要らない場面で利用者の作業を邪魔しない
+
+#### Acceptance Criteria
+1. When 常に手前の状態がオンからオフになる, the areka shall そのゴーストの全部の窓を常に手前から外し、他のアプリの窓と同じに活性の窓が手前に来る重なりへ戻し、2.4 の並びを保つ。
+2. When 常に手前の状態が既にオフのときにオフの指令を受けた, the areka shall 窓の重なりを動かさない。
+3. While 常に手前の状態がオフ, the areka shall ゴーストの窓の重なりを今と同じ決まり（完了 `areka-P0-ghost-window-zorder` の要件。他のアプリが活性になったら奥へ回る・既に常に手前に居る他のアプリの窓を並べる基準にしない）で扱う。
+4. The areka shall 起動したゴーストの常に手前の状態をオフから始め、前の起動の状態を持ち越さない。
+
+### Requirement 4: 常に手前の状態の寿命
+**Objective:** As a ゴーストの作者, I want 常に手前の指定が正典どおり「ゴースト終了まで」続くこと, so that シェルを着せ替えても指定がいつの間にか消えない
+
+#### Acceptance Criteria
+1. When ゴーストが終わった（終了・別のゴーストへの切り替え）, the areka shall そのゴーストの常に手前の状態を捨て、切り替え先のゴーストをオフから始める。
+2. When ゴーストの読み直しで同じゴーストを起こし直した, the areka shall 起こし直したゴーストの常に手前の状態をオフから始める。
+3. When SHIORI だけを読み直した, the areka shall 常に手前の状態を保つ。
+4. When シェルを切り替えた（シェルの読み直しを含む）, the areka shall 常に手前の状態を保ち、作り直された窓と新しいシェルの窓を 2.3 のとおり常に手前で出す。
+5. When バルーンを切り替えた, the areka shall 常に手前の状態を保ち、新しいバルーンの窓を 2.3 のとおり常に手前で出す。
+
+### Requirement 5: 台本の重なりの組の寿命
+**Objective:** As a ゴーストの作者, I want 台本の `\![set,zorder]` で作った重なりの組が正典どおり「ゴースト終了まで」続くこと, so that シェルを着せ替えても作った重なりが崩れない
+
+#### Acceptance Criteria
+1. When シェルを切り替えた（シェルの読み直しを含む）, the areka shall 台本の組を保ち、descript の組だけを新しいシェルの descript の `seriko.zorder` の値へ取り替える。
+2. If 新しいシェルの descript の組が、保った台本の組と同じスコープを含む, the areka shall その descript の組を作らずに、スコープと理由を記録に残す。
+3. When ゴーストの読み直しで同じゴーストを起こし直した, the areka shall 台本の組を捨て、重なりの組をそのシェルの descript の値から始める。
+4. When SHIORI だけを読み直した, the areka shall 台本の組を保つ。
+5. When シェルの切り替えの後に `\![reset,zorder]` を受けた, the areka shall 台本の組を落とし、今のシェルの descript の組へ戻す。
+
+### Requirement 6: 記録と失敗の扱い
+**Objective:** As a areka の開発者, I want 常に手前の状態の変化と失敗を記録で追えること, so that 実機でしか見えない重なりの不具合を切り分けられる
+
+#### Acceptance Criteria
+1. When 常に手前の状態が変わった, the areka shall ゴースト・どの指令から（`\v`・`stayontop`・`!stayontop`）・前と後の状態・扱った窓の数を記録に残す。
+2. When 状態と同じ指令を受けて状態が変わらなかった, the areka shall 変わらなかったことを記録に残す。
+3. If OS が窓を常に手前へ上げられない、または常に手前から外せない, the areka shall その窓と理由を記録に残し、残りの窓を続けて扱い、ゴーストと台本を止めず、常に手前の状態は指令のとおりに持つ。
+4. When ゴーストの終了・読み直しで常に手前の状態をオフへ戻した, the areka shall 戻したことと理由（終了・切り替え・読み直し）を記録に残す。
+5. When シェルの切り替えで台本の組を保った、または descript の組を取り替えた, the areka shall 保った組と取り替えた組を記録に残す。
+
+### Requirement 7: 決定論のテスト
+**Objective:** As a areka の開発者, I want 判断の分岐を実際の画面を使わずに確かめられること, so that 重なりの不具合を「直ったつもり」で再発させない
+
+#### Acceptance Criteria
+1. The areka shall 3 つの指令の読み取り（綴り・知らない第 2 引数・余りの引数・中断）の各分岐を、実際の画面を使わない決定論のテストで確かめられるようにする。
+2. The areka shall 常に手前の状態の遷移（オン・オフ・重ね・ゴーストの終了・切り替え・読み直し・SHIORI だけの読み直し・シェルとバルーンの切り替え）の各分岐を、決定論のテストで確かめられるようにする。
+3. The areka shall 常に手前のあいだの並べ方の判断（全部の窓を上げる・後から現れる窓・組とバルーンの並び・常に手前でないときの今の判断が変わらないこと）を、決定論のテストで確かめられるようにする。
+4. The areka shall 台本の組の寿命（シェルの切り替えで保つ・descript の組の取り替え・重なる descript の組を作らない・ゴーストの読み直しで捨てる・SHIORI だけの読み直しで保つ）の各分岐を、決定論のテストで確かめられるようにする。
+5. When この spec が着地する, the areka shall `\v` を先送りの語として見張っている 2 つの守り（wintf の重なりの組の側と、areka の窓を作る側）を、両方そろえて着地に合わせて改め、片方だけを古いまま残さない。
+
+### Requirement 8: 実機での確かめ
+**Objective:** As a areka の開発者, I want 実際の画面で常に手前の効きを確かめること, so that 決定論のテストが隠す OS の振る舞いの違いを見落とさない
+
+#### Acceptance Criteria
+1. When 実機で確かめる, the 確かめの手順 shall 画面のロックを外した排他テストの机で、他のアプリの窓を前に出して、オンの指令の後にキャラクターの窓とバルーンの窓が手前に出ること・後から出たバルーンの窓も手前に出ること・オフの指令の後とゴーストの切り替えの後に他のアプリの窓の後ろへ回ることを確かめて記録する。
+2. When 実機で確かめる, the 確かめの手順 shall 常に手前のあいだに、バルーンが自分のキャラクターのすぐ手前に居ることと、`\![set,zorder]` の組の並びが保たれることを確かめて記録する。
+3. When ぱすたで確かめる, the 確かめの手順 shall `doc/pasta-real-run.md` 5 節の段 1 で起動の重なりを SSP の基準（窓の枠が奥・バルーンの字・ぱすたが手前）と見比べて記録し、違えば原因を調べ、本 spec の範囲なら直し、範囲外なら `/kiro-discovery` で起票して記録に残す。
+4. When 実機で確かめる, the 確かめの手順 shall シェルの切り替えの後に、台本の `\![set,zorder]` の組と常に手前の状態が残ることを確かめて記録する。
+
+### Requirement 9: 網羅台帳と互換の対応表
+**Objective:** As a ukadoc 互換ベースウェアの開発者, I want 網羅台帳と互換の対応表が実物と合うこと, so that どの正典をどの spec が受け持ったかを後から辿れる
+
+#### Acceptance Criteria
+1. When この spec が着地する, the areka shall 網羅台帳 `sakura-script.toml` の `\v`・`\![set,windowstate,stayontop]`・`\![set,windowstate,!stayontop]` の 3 行を実物の対応に合わせ、持ち主をこの spec にする（`\![set,windowstate,minimize]` の行は変えない）。
+2. When この spec が着地する, the areka shall 網羅台帳 `shiori.toml` の `alwaysstayontopbutton.caption` の行に、対応しないことと理由（メニューの「常に手前に表示」の項目を作らない・裁定 11）を書く。
+3. When この spec が着地する, the areka shall `doc/COMPAT_ARCHITECTURE.md` §8 に、3 つの指令の対応・完了 `areka-P0-ghost-window-zorder` の要件 4.3・8.1 の読み替え（台本が常に手前を求めたときを除く）・常に手前の状態と台本の重なりの組の寿命の裁定を書く。
