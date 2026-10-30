@@ -59,7 +59,8 @@ fn smoke_exit_ms_from(value: Option<&str>) -> Option<u64> {
 }
 
 /// 環境変数 [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む。
-fn smoke_exit_ms() -> Option<u64> {
+/// 終わりの告知（`alert::raise`）も、これが立つ走行＝人が見ていない走行と読む。
+pub(crate) fn smoke_exit_ms() -> Option<u64> {
     smoke_exit_ms_from(std::env::var(SMOKE_EXIT_ENV).ok().as_deref())
 }
 
