@@ -205,3 +205,7 @@ mod server_protocol_tests;
 #[cfg(test)]
 #[path = "server_gate_help_tests.rs"]
 mod server_gate_help_tests;
+
+#[cfg(test)]
+#[path = "server_params_shape_tests.rs"]
+mod server_params_shape_tests;

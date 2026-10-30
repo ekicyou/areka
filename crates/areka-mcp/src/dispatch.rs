@@ -13,7 +13,8 @@ use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{ALLOW, CONTENT_TYPE, HOST, HeaderName, HeaderValue, ORIGIN};
 use hyper::{Method, Request, Response, StatusCode};
-use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, RequestId};
+use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, ProtocolVersion, RequestId};
+use rmcp::transport::common::http_header::HEADER_MCP_PROTOCOL_VERSION;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use tokio_util::sync::CancellationToken;
@@ -29,8 +30,6 @@ pub(crate) const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 /// MCP の受け口のパス（method を問わず rmcp へ）。
 pub const MCP_PATH: &str = "/api/mcp/v1";
-/// 要求の版のヘッダ（rmcp の `HEADER_MCP_PROTOCOL_VERSION` と同じ綴り）。
-const MCP_PROTOCOL_VERSION: &str = "mcp-protocol-version";
 /// 登録案内のパス（GET だけ）。
 const HELP_PATH: &str = "/api/mcp/help";
 
@@ -142,7 +141,7 @@ async fn forward(
     };
     let rpc = peek(&bytes);
     let header = |name| parts.headers.get(name).and_then(|v| v.to_str().ok());
-    let protocol_version = header(MCP_PROTOCOL_VERSION).map(str::to_owned);
+    let protocol_version = header(HEADER_MCP_PROTOCOL_VERSION).map(str::to_owned);
     // rmcp と同じ見方。JSON でない `Content-Type` の 415 は今のまま（要件 6.7）。
     let json_body =
         header(CONTENT_TYPE.as_str()).is_some_and(|v| v.starts_with("application/json"));
@@ -194,10 +193,12 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError> {
 }
 
 /// rmcp の `jsonrpc_http_status`（非公開）の写しのうち、`request_shape_error` の 2 つの番号の分。
-/// 無状態の版（`2026-07-28`）の `-32602` だけ 400、ほかは 200（旧式の版は rmcp も 200）。
+/// `2026-07-28` 以降（rmcp と同じ文字列の比較）の `-32602` だけ 400、ほかは 200（旧式の版は rmcp も 200）。
 /// rmcp の版を上げたら、rmcp 自身の `-32602` の状態と突き合わせるテストで確かめる（要件 6.4）。
 fn shape_error_status(protocol_version: Option<&str>, code: ErrorCode) -> StatusCode {
-    if protocol_version == Some("2026-07-28") && code == ErrorCode::INVALID_PARAMS {
+    if protocol_version.is_some_and(|v| v >= ProtocolVersion::V_2026_07_28.as_str())
+        && code == ErrorCode::INVALID_PARAMS
+    {
         StatusCode::BAD_REQUEST
     } else {
         StatusCode::OK

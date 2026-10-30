@@ -97,6 +97,16 @@ fn status_is_400_only_for_invalid_params_on_the_stateless_version() {
         shape_error_status(stateless, ErrorCode::INVALID_REQUEST),
         StatusCode::OK
     );
+    // rmcp と同じ文字列の比較: `2026-07-28` より後の版も無状態の扱い（415 の経路では rmcp はヘッダを見ない）。
+    let newer = Some("2099-01-01");
+    assert_eq!(
+        shape_error_status(newer, ErrorCode::INVALID_PARAMS),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        shape_error_status(newer, ErrorCode::INVALID_REQUEST),
+        StatusCode::OK
+    );
     for legacy in [
         None,
         Some("2024-11-05"),
