@@ -800,7 +800,7 @@ fn apply_name(
     values: &[&str],
 ) -> Result<Option<Note>, FontTagIssue> {
     // 候補が 1 つも無い（値なし・空文字列だけ）——[`TextLook::name`] は空にしない。
-    // 途中の空トークン（`[name,a,,b]`）は落とさず候補列に残す: 解読層が空を潰さずに
+    // 途中の空トークン（`\f[name,a,,b]`）は落とさず候補列に残す: 解読層が空を潰さずに
     // 渡してくる（要件 2.2）ので、この層でも記述順を変えない。実在しない候補として
     // 描画層の [`FontCatalog`] が読み飛ばす（要件 9.1・9.2）。
     if values.iter().all(|candidate| candidate.is_empty()) {
