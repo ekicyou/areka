@@ -483,6 +483,25 @@ pub struct ZOrderGroupLedger {
     next_id: u32,
     /// 内容が動いた回数。射影を組み直すかどうかの判定に使う。
     version: u64,
+    /// 据え損ねた基底: シェルの切り替えで台本の組と重なり据えなかった新しい基底。
+    /// `\![reset,zorder]` で据わり、起動の基底と次の切り替えで消える
+    /// （`stay-on-top-directives` 要件 5.2／5.5）。組として載らないので不変条件⑴を破らない。
+    pending_base: Option<Vec<GroupElement>>,
+}
+
+/// [`ZOrderGroupLedger::rebase_descript`] の結果（記録の本文を組む材料）。
+// 本番の呼び手（シェルの切り替えの後始末 `apply_descript_rebase`）は task 4.2 で結ぶ。結んだら外す。
+#[allow(dead_code)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RebaseOutcome {
+    /// 残した台本の組の ID（追加の順）
+    pub kept_tag_ids: Vec<u32>,
+    /// 外した古い基底の ID（無ければ None）
+    pub dropped_base_id: Option<u32>,
+    /// 据えた新しい基底の ID（無い・据えなかったら None）
+    pub seated_base_id: Option<u32>,
+    /// 台本の組と重なって据えなかったスコープ（重なりが無ければ空）
+    pub refused_scopes: Vec<u32>,
 }
 
 impl ZOrderGroupLedger {
@@ -536,17 +555,12 @@ impl ZOrderGroupLedger {
         // 何かが載っていたか、これから載るものがあるときだけ内容が動く。
         let changed = !self.groups.is_empty() || !members.is_empty();
 
+        self.pending_base = None;
         self.groups.clear();
         self.has_base = false;
 
         if !members.is_empty() {
-            let id = self.allocate_id();
-            self.groups.push(ZOrderGroup {
-                id,
-                members,
-                source: GroupSource::Descript,
-            });
-            self.has_base = true;
+            self.seat_base(members);
         }
 
         if changed {
@@ -560,15 +574,78 @@ impl ZOrderGroupLedger {
     /// 0 本）へ戻る。基底は ID ごと生き残るので、基底が押さえているスコープは解除の
     /// 後も再指定の拒否対象であり続ける（要件 5.5）。落とされた側のスコープは空くので、
     /// 新しい組み合わせとして受け付けられる（要件 4.3）。
+    ///
+    /// シェルの切り替えで据え損ねた基底があり、基底が無ければ、台本の組を落とした後に
+    /// それを先頭へ据える（`stay-on-top-directives` 要件 5.5）。
     pub fn reset_to_descript(&mut self) {
         let keep = usize::from(self.has_base);
-        if self.groups.len() == keep {
-            // 落とすものが無い＝内容は動かない。版も進めない。
+        let seat = if self.has_base {
+            None
+        } else {
+            self.pending_base.take()
+        };
+        if self.groups.len() == keep && seat.is_none() {
+            // 落とすものも据えるものも無い＝内容は動かない。版も進めない。
             return;
         }
 
         self.groups.truncate(keep);
+        if let Some(members) = seat {
+            self.seat_base(members);
+        }
         self.version += 1;
+    }
+
+    /// シェルの切り替え専用：台本の組を残し、基底だけを取り替える（空の列＝基底なし）。
+    ///
+    /// 新しい基底は先頭に新しい ID で据える。台本の組とスコープが重なる基底は据えず、
+    /// 据え損ねた基底として持ち、重なったスコープを返す（`stay-on-top-directives`
+    /// 要件 5.1／5.2）。古い基底は取り替えられる側なので重なりに数えない。
+    // 本番の呼び手（シェルの切り替えの後始末 `apply_descript_rebase`）は task 4.2 で結ぶ。結んだら外す。
+    #[allow(dead_code)]
+    pub fn rebase_descript(&mut self, members: Vec<GroupElement>) -> RebaseOutcome {
+        self.pending_base = None;
+
+        let dropped_base_id = if self.has_base {
+            self.has_base = false;
+            Some(self.groups.remove(0).id)
+        } else {
+            None
+        };
+        let kept_tag_ids = self.groups.iter().map(|group| group.id).collect();
+
+        let mut seated_base_id = None;
+        let refused_scopes = self.colliding_scopes(&members);
+        if !refused_scopes.is_empty() {
+            self.pending_base = Some(members);
+        } else if !members.is_empty() {
+            seated_base_id = Some(self.seat_base(members));
+        }
+
+        if dropped_base_id.is_some() || seated_base_id.is_some() {
+            self.version += 1;
+        }
+        RebaseOutcome {
+            kept_tag_ids,
+            dropped_base_id,
+            seated_base_id,
+            refused_scopes,
+        }
+    }
+
+    /// 基底を先頭に新しい ID で据える（基底が無いことが前提）。版は呼び出し側が進める。
+    fn seat_base(&mut self, members: Vec<GroupElement>) -> u32 {
+        let id = self.allocate_id();
+        self.groups.insert(
+            0,
+            ZOrderGroup {
+                id,
+                members,
+                source: GroupSource::Descript,
+            },
+        );
+        self.has_base = true;
+        id
     }
 
     /// グループの読み口（射影が読む）。基底が先頭・以降はタグの追加順。
@@ -634,6 +711,11 @@ mod tests;
 #[cfg(test)]
 #[path = "zorder_group_ledger_state_tests.rs"]
 mod state_tests;
+
+// シェルの切り替え専用の口と据え損ねた基底の檻（`stay-on-top-directives` 要件 5.1／5.2／5.5）。
+#[cfg(test)]
+#[path = "zorder_group_ledger_rebase_tests.rs"]
+mod rebase_tests;
 
 // 書かれた順のまま受け取る解釈の檻（`areka-P0-zorder-scope-inversion` 要件 1〜3）。
 #[cfg(test)]
