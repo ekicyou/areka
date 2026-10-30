@@ -23,6 +23,19 @@ pub(crate) struct StartupOptions {
     pub offline: Option<OfflineDumpRequest>,
     /// `--option readonly` が渡された（readonly-mode 要件 1.1）。既定は偽。
     pub readonly: bool,
+    /// `--install` の値と語（startup-install-option 要件 1）。
+    pub install: InstallArgs,
+}
+
+/// 起動の引数で入れる書庫と語（読むのは `install::startup`）。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct InstallArgs {
+    /// `--install` の値（書いた順・書いた綴りのまま・空の値は入らない）。
+    pub archives: Vec<PathBuf>,
+    /// `--option callghost`（値が 0 本なら偽に下ろす）。
+    pub call_ghost: bool,
+    /// `--option deletesource`（値が 0 本なら偽に下ろす）。
+    pub delete_source: bool,
 }
 
 /// オフラインの書き出しの生の値（空の値は None）。解釈は offline_dump が写しの中で行う。

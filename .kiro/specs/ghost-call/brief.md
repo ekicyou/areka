@@ -114,3 +114,7 @@
 - **要件定義のモデル**: Opus のまま（イベントと Reference の並びは ukadoc、名前の解決は完了 `ghost-change-name-resolution` の使い回し、起動の出どころの 1 種は前例どおり。周りへ送る順は ukadoc の「同じとき」の並べ方の選びで、新しい順の保証は `multi-ghost-runtime` の後半が持つ）。
 - **分割の案**: 切らない。
 - **見つけた穴・古くなった記述**: 棚卸㉘の「同じウェーブに置けない相手」の `script-security-level`・`window-link-directives` は 10-23 に着地した（外す）。`consumer_ledger.rs` の行数（472）は 496 に読み替える。
+
+## 2026-10-30 `startup-install-option` からの申し送り
+- 起動オプション `--option callghost`（`--install` で入れた最後のゴーストを起こす）は、いまはメニューの「ゴースト」と同じ切り替え（`GhostSpec::Folder`・知らせあり・Reference1 `manual`）で今のゴーストと入れ替える（`crates/areka/src/install/startup.rs` の `callghost_request`・要件討議 議題 1）。
+- 正典の「呼び出される」は 2 体目として呼ぶ形なので、この spec で 2 体目を呼ぶ働きが着地したら、`callghost` をその形（今のゴーストを残して入れたゴーストを呼ぶ）へ移すこと。移すときは `startup.rs` の `callghost_request` と `decide_call_ghost`、`dist/README.txt` の `--option callghost` の行を直す。
