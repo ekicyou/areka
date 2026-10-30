@@ -147,7 +147,7 @@
   - _Depends: 2.2, 3.2_
   - _Requirements: 1.4, 9.3_
 
-- [ ] 8.2 既存のテストを全部通す
+- [x] 8.2 既存のテストを全部通す
   - parsers・emo-atlas・emo-compose・seriko・emo-present・areka のテストと clippy を通す。期待を直したテストがあれば名と根拠（M6 など）を作業の記録に残す
   - 対象のクレートのテストが全部緑である
   - _Requirements: 9.5_
@@ -181,3 +181,4 @@
 - 6.2: 口は `move_shift.rs` の `origin_position`・`reset_applied`。既定のキャラ位置は `PatternMove`（system reanchor）でずれに付いて動き、ずれが 0 に戻れば既定も戻る（設計どおり）。保存は `origin_position`（今の位置 − 当てた分）。残る穴: 絶対位置で書く書き手（`reset_pos.rs:116` の位置の初期化・絶対の `\![move]`）は `applied` を残すので、ずれが 0 に戻ると「既定 − 当てた分」へ動く — 6.3 で扱う。
 - 6.3: ずれの相は `emo2_boot/frame/move_shift.rs` の `run_move_shift_phase`（`run_move_drain_phase` の直後・見送りの門は `defers_window_write`・観測点の語 `pattern-move`）。位置の初期化は `rebase_shift` で記録を外す（design.md の「他の書き手との関係」に追記済み）。裁定待ち: 絶対の `\![move]`（base が me 以外）は design どおり `applied` を残すので、後でずれが 0 に戻ると窓が「`\![move]` の行き先 − 当てた分」へ動く（SSP で未測定）— 案 A: 位置の初期化と同じく `rebase_shift` を呼ぶ／案 B: 今のまま互換の文書 §8 に書く。下揃えの窓は揃えの y の差も当てた分に入るが、保存の後の戻しで y は揃えが決め直すので害は無い。
 - 7: 台帳の 9 行を implemented・担当 seriko-pattern-calls に。COMPAT_ARCHITECTURE §8 に「pattern定義の呼び出しと `move`」。check を通すため `pattern_word.rs` の 8 本の腕に `// ukadoc:` の証跡、`table.rs` の never の URL に `:1`、briefing.md の数・roadmap-draft.md に spec の行（C13）を足した。絶対の `\![move]` は今の振る舞いとして §8 に書いた（裁定で変われば書き直す）。
+- 8.2: 6 クレートのテスト（--ignored なし）は緑・期待を直したテストは無し。clippy はこの枝が増やした 1 件（looper_calls_tests.rs の type_complexity）を直し、残る 106 件は main からの持ち越し。引き金の相の後の呼び出しは一番上だけ `periodic_start_applies_its_head_call_in_the_same_tick` で固定（部品の側は無し）。areka の tests/ の実機の 9 本は机が要るので最終検証・完了の全体テストで確かめる。

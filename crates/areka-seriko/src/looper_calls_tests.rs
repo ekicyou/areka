@@ -215,6 +215,32 @@ fn refresh_applies_calls_at_the_event_time_and_always_lap_head_keeps_last_draw()
     );
 }
 
+/// 引き金の相（`periodic` が刻みの中で鳴った後）でも、鳴った時刻の頭の働きのコマを同じ刻みで当てる
+/// （3.1・3.9）。
+#[test]
+fn periodic_start_applies_its_head_call_in_the_same_tick() {
+    const PERIODIC: &str = "surface0
+{
+        animation0.interval,periodic,1
+        animation0.pattern0,start,1
+        animation0.pattern1,overlay,120,100,0,0
+        animation1.interval,never
+        animation1.pattern0,overlay,110,0,0,0
+        animation1.pattern1,overlay,111,500,0,0
+}
+";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
+    let mut states = no_binds();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    assert_eq!(started(&rt, Slot::Shell, 1), None, "切り替えでは鳴らない");
+
+    rt.on_tick(1150, &mut states); // periodic は 1030 に鳴り、100 ms で終わる。
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(1030), "鳴った時刻に呼ぶ");
+    assert_eq!(cell(&states, Slot::Shell, 1), Some(110));
+}
+
 /// バルーンの面でも同じに動く（3.8）。
 #[test]
 fn balloon_surface_applies_calls_the_same_way() {
@@ -280,7 +306,9 @@ fn move_shift_is_emitted_when_it_changes_and_reset_only_when_the_surface_is_show
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shell_shown(MOVES, lottery, seeded_rng(0));
     rt.on_tick(0, &mut states);
-    let expect: [(u64, usize, &[(i64, i64)]); 6] = [
+    // (刻みの時刻, Show の数, ずれ)
+    type Step = (u64, usize, &'static [(i64, i64)]);
+    let expect: [Step; 6] = [
         (1000, 1, &[]),
         (1100, 0, &[(3, 5)]),
         (1200, 1, &[(7, 5)]),
