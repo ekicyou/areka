@@ -99,7 +99,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 3. When 再生中のアニメーションが `alternativestart` のコマの番になったとき, the areka shall 並びの候補から等しい確からしさで 1 つを選んで再生させる。
 4. The areka shall 呼び出したアニメーションを、呼び出しのコマで止めずに次のコマへ進める。
 5. The areka shall 呼ばれて始まったアニメーションのコマの進み・重なりの順・サーフェス番号 `-1` による停止・終わったあとのコマの残り方を、interval で自動に始まったときと同じ規則で扱う。
-6. The areka shall `alternativestart` と `alternativestop` の選びに使う偶然で、interval の抽選（`sometimes`・`rarely`・`random` など）の結果を変えない（同じ乱数の種なら、この spec の前と同じ時刻に同じアニメーションが抽選で始まる）。
+6. The areka shall `alternativestart` と `alternativestop` の選びに、interval の抽選（`sometimes`・`rarely`・`random` など）の乱数を使わない。呼び出しを持たないシェル（`never` のアニメーションを足しただけのシェルを含む）では、同じ乱数の種なら、この spec の前と同じ時刻に同じアニメーションが抽選で始まる（呼び出しで始まったアニメーションは再生中として抽選から外れる＝抽選の順が変わるのは呼び出しそのものの結果・2026-10-30 設計議題 2）。
 7. The areka shall `alternativestart` と `alternativestop` の選びを、決定論のテストから決め打ちできるようにする。
 8. The areka shall 要件 3〜7 の働きを、一番上のシェルの面のアニメーションと同じ規則で、入れ子の部品のアニメーションとバルーンの面のアニメーションにも当てる。
 9. When `start`・`parallelstart`・`alternativestart` が再生中のアニメーションを指したとき, the areka shall そのアニメーションを捨てずに、pattern0 から頭でやり直させる（M1・SSP の実測）。
@@ -114,7 +114,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 2. When 再生中のアニメーションが `parallelstop` のコマの番になったとき, the areka shall 並びのすべてのアニメーションを、1 と同じ見え方で同じ時刻に止める。
 3. When 再生中のアニメーションが `alternativestop` のコマの番になったとき, the areka shall 並びの全部の候補から等しい確からしさで 1 つを選び（再生中かどうかで候補を絞らない）、1 と同じ見え方で止める。選んだ相手が再生中でなければ 4 のとおり何もしない（M2・SSP の実測）。
 4. If 止める相手のアニメーションが再生中でないとき, the areka shall 何もしない。
-5. The areka shall 止めた後のアニメーションのその後の扱い（interval による次の開始）を、サーフェス番号 `-1` で止まったときと同じにする。
+5. The areka shall 止めた後のアニメーションのその後の扱い（interval による次の開始）を、サーフェス番号 `-1` で止まったときと同じにする。ただし interval が `always` のアニメーションは、止めた後、面を出すまで（同じ面の出し直しを含む）始め直さない（SSP の測り M2・2026-10-30 設計議題 1）。
 
 ### Requirement 5: 呼び出しの境目
 
