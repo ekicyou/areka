@@ -57,7 +57,7 @@ fn boot_remembered(
     GhostWindows,
     Vec<crate::placement::resolver::ScopePlacement>,
 ) {
-    let (placements, restored) = crate::restore_merged_placements(
+    let (placements, restored, _) = crate::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),
@@ -100,7 +100,7 @@ fn boot_remembered(
 fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     let ghost = MinimalGhost::plant("nowrite");
     let store = PersistStore::real(&ghost);
-    let (placements, restored) = crate::restore_merged_placements(
+    let (placements, restored, _) = crate::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),

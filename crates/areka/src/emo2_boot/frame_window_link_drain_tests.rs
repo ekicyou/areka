@@ -27,8 +27,8 @@ use crate::placement::shared_test_support::{WA, balloon_root, emo2_root, with_co
 use crate::placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
 use crate::placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
 
-use super::test_support::{pos_of, resnap_world, synth_assets, zero_clock};
-use super::{Emo2Wiring, run_move_drain_phase};
+use super::test_support::{all_shown, pos_of, resnap_world, synth_assets, zero_clock};
+use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};
 
 /// 位置の線の送り口を持つ受け口と、それを受ける headless な結線。
 fn sink_and_wiring() -> (MoveCueSink, Emo2Wiring) {
@@ -93,7 +93,8 @@ fn set_sticky_then_move_applies_in_arrival_order_and_partner_follows() {
             sink.emit(sticky);
         }
 
-        run_move_drain_phase(&wiring, &mut world);
+        // 前提: 窓はどれも最初の面を表示済み（位置の指令を預からない）。
+        run_move_drain_with(&wiring, &all_shown, &mut world);
 
         let moved = diff(pos_of(&world, target).unwrap(), t0);
         let followed = diff(pos_of(&world, partner).unwrap(), p0);

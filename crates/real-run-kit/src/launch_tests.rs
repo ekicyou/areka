@@ -51,6 +51,8 @@ fn removes_four_developer_vars_and_sets_defaults() {
     assert_eq!(set(&e, "AREKA_MCP_PORT"), "4321");
     assert_eq!(set(&e, "AREKA_NO_ALERT"), "1");
     assert_eq!(set(&e, "NO_COLOR"), "1");
+    // 開発者の環境の PASTA_DEBUG=1 を受け継ぐと、ほかの pasta が握る 9276 とぶつかって LOAD に失敗する。
+    assert_eq!(set(&e, "PASTA_DEBUG"), "0");
     let safety = Limits::default().safety_exit.as_millis().to_string();
     assert_eq!(set(&e, "AREKA_APP_SMOKE_EXIT_MS"), safety);
     assert_eq!(set(&e, "RUST_LOG"), "info");

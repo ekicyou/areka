@@ -775,11 +775,13 @@ fn restore_merged_placements(
 ) -> (
     Vec<placement::resolver::ScopePlacement>,
     std::collections::BTreeMap<usize, Option<placement::chain_finalize::AdjacencyMark>>,
+    bool,
 ) {
     // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
     let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
-    // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）。
-    let merged = placement::persist::apply_restored_placements(placements, &entries, snapshot);
+    // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）と、記憶の位置を
+    // 寄せて表示したかの判定（窓を作る閉包が `RestoredPositionsClamped` へ据える・window-work-area-clamp 4.6）。
+    let (merged, clamped) = placement::persist::restore_and_judge(placements, &entries, snapshot);
     // 起動時関門（areka-P0-windowposition-limit design C6・要件 2.2/4.7/4.9/5.5/6.1）:
     // 経路①（spawn 初期値）と経路②（復元 merge）はどちらもこの合流点の出力を消費するため、
     // ここ 1 点で両方が被覆される。merge **後**に置くのは保存値優先の合流規則（4.7）を
@@ -792,7 +794,7 @@ fn restore_merged_placements(
     // （char-position-save-on-exit 2.6・判定は merge と同じ読み取り `has_saved_char_pos`）。
     // 値は覚えた隣り合いの印（無ければ None）で、窓を作る閉包が窓の一式へ据える。
     let restored = placement::persist::restored_scope_marks(&entries, &merged);
-    (merged, restored)
+    (merged, restored, clamped)
 }
 
 /// `PersistWiring`（NonSend）を、ゴースト窓を保持する同一 World へ挿入するシーム抽出

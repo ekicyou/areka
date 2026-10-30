@@ -50,7 +50,7 @@ const SCOPES: [(usize, PointPx, SizePx); 3] = [
 ];
 
 /// 記憶にある体の値（「書き換えない」を噛ませるための、どの書く値とも重ならない値）。
-const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
+pub(super) const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
 
 /// 共有の偽の保存先（アクターへ渡す分と、観測する分が同じストアを指す）。
 struct SharedFakeIo(Arc<FakePersistIo>);
@@ -63,16 +63,16 @@ impl PersistIo for SharedFakeIo {
     }
 }
 
-struct Rig {
-    world: World,
+pub(super) struct Rig {
+    pub(super) world: World,
     shared: Arc<FakePersistIo>,
     roots: ScopeRoots,
-    parts: SylphyaParts,
+    pub(super) parts: SylphyaParts,
 }
 
 impl Rig {
     /// 3 スコープの窓の一式と、記憶の送り口（`wired` のときだけ）を持つ World を組む。
-    fn new(wired: bool) -> Self {
+    pub(super) fn new(wired: bool) -> Self {
         let shared = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
@@ -120,7 +120,7 @@ impl Rig {
         }
     }
 
-    fn char_window(&self, scope: usize) -> Entity {
+    pub(super) fn char_window(&self, scope: usize) -> Entity {
         self.world
             .resource::<GhostWindows>()
             .char_window(scope)
@@ -128,7 +128,7 @@ impl Rig {
     }
 
     /// 記憶に位置があるスコープとして標す（本番の起動の `clear_default_char_pos` と同じ口）。
-    fn mark_remembered(&mut self, scope: usize) {
+    pub(super) fn mark_remembered(&mut self, scope: usize) {
         assert!(
             self.world
                 .resource_mut::<GhostWindows>()
@@ -142,7 +142,7 @@ impl Rig {
     }
 
     /// 送ったものの書き込みが済むのを待ってから、記憶を読み戻す。
-    fn load(&self) -> HashMap<PersistKey, String> {
+    pub(super) fn load(&self) -> HashMap<PersistKey, String> {
         self.parts
             .publisher
             .barrier()
@@ -156,14 +156,14 @@ impl Rig {
         .collect()
     }
 
-    fn finish(self) {
+    pub(super) fn finish(self) {
         self.parts.publisher.close();
         let _ = self.parts.handle.join();
     }
 }
 
 /// 種: スコープ 0 の記憶の位置・全スコープのバルーンの相対位置・起動の記録。
-fn seed_entries() -> Vec<(PersistKey, String)> {
+pub(super) fn seed_entries() -> Vec<(PersistKey, String)> {
     let mut entries = char_pos_entries(0, SENTINEL_POS);
     for &(scope, _, _) in &SCOPES {
         entries.extend(balloon_offset_entries(
@@ -203,7 +203,7 @@ fn save_events(events: &[LogEvent]) -> Vec<&LogEvent> {
     events.iter().filter(|e| e.target == SAVE_TARGET).collect()
 }
 
-fn find<'a>(events: &'a [LogEvent], needle: &str, scope: usize) -> Vec<&'a LogEvent> {
+pub(super) fn find<'a>(events: &'a [LogEvent], needle: &str, scope: usize) -> Vec<&'a LogEvent> {
     events
         .iter()
         .filter(|e| {

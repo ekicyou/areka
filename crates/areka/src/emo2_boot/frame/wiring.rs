@@ -1,7 +1,7 @@
 //! 毎フレーム結線の NonSend 状態 [`Emo2Wiring`]（構築・アクセサ・test-support 読み口）。
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 use std::sync::{Mutex, Weak};
@@ -64,6 +64,8 @@ pub struct Emo2Wiring {
     /// `mpsc::channel::<PositionCue>()` の受信端を受け渡し、frame 相の [`emo2_frame_system`] が
     /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
     pub(super) move_rx: Receiver<PositionCue>,
+    /// 対象か基準の窓が最初の面を表示するまで預かった位置の指令（順のまま・`move_hold.rs`）。
+    pub(super) move_held: RefCell<VecDeque<PositionCue>>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
     /// （バルーン可視性相が消費・Requirements 4.1／4.5）。
     ///
@@ -191,6 +193,7 @@ impl Emo2Wiring {
             presenter,
             rx,
             move_rx,
+            move_held: RefCell::default(),
             lifecycle_rx,
             zorder_rx,
             // 台帳は既定（グループ 0 本）から始める。shell 設定由来の基底を据えるのは
