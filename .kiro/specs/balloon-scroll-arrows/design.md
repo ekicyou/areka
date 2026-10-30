@@ -155,7 +155,7 @@ crates/areka-emo-present/src/
 ├── balloon_definitions.rs # 新: ScopeBalloonDefinitions（面ごとのモデル＋その面の矢印の絵）と load_scope_balloon_definitions（読み込みの時だけ）
 └── balloon_definitions_tests.rs
 crates/areka-emo-text/src/
-├── scroll_marker.rs       # 新（純粋）: PlaceScroll（手動の位置・ホイールの端数・最後に見えた字の数）・手動の VisibleWindow・矢印の出る条件・矢印の置き場（座標あり・座標なしの暫定）・送りの限り
+├── scroll_marker.rs       # 新（純粋）: PlaceScroll（手動の位置・ホイールの端数・最後に見えた字の数）・手動の VisibleWindow・矢印の出る条件・矢印の置き場（座標あり・座標なし＝SSP で測った値）・送りの限り
 ├── scroll_marker_tests.rs
 ├── actor_scroll.rs        # 新: TextLayerRuntime の手動の送りと印の公開の口（impl ブロック）と、present_actor から呼ぶ印の提示
 ├── actor_scroll_tests.rs
@@ -295,7 +295,7 @@ graph TB
 | 5.7 | 当たりを画面の位置と大きさに合わせる | ActorScroll（物理 px の写し）・MarkerSurface（マスク） | `marker_at_point` | — |
 | 6.1 | 上へ回すと古い側へ | BalloonWheel・ScrollMarker | `wheel_at` | 押下の振り分け |
 | 6.2 | 下へ回すと新しい側へ | 同上 | 同上 | 同上 |
-| 6.3 | 120 ごとに 1 行・端数を持ち越す | ScrollMarker（`PlaceScroll::wheel`） | `wheel_at` | — |
+| 6.3 | 120 ごとに OS の行数（1 画面ずつなら見えている行数）・端数を持ち越す | ScrollMarker（`PlaceScroll::wheel`） | `wheel_at` | — |
 | 6.4 | ホイールにも限りと戻り方 | ScrollMarker | `PlaceScroll::step` | — |
 | 6.5 | 隠れた行が無ければ何もしない | ScrollMarker | `wheel_at` | — |
 | 6.6 | 矢印の絵が無くてもホイールで送れる | ScrollMarker（絵と無関係） | `wheel_at` | — |
@@ -519,11 +519,11 @@ pub fn load_scope_balloon_definitions(
 
 - 見える範囲: 手動の位置が無ければ `LayoutEngine::visible_window` をそのまま返す。在れば先頭の行の番号 `line` から、自動と同じ式（`block_offset = -block_dir × (near(lines[line]) − origin)`・書字方向の正準表）で作る。行 0 でも同じ式を使うので、一番古い行が描画範囲の始まりに来る（冒頭の保留改行の空きは見せない・要件 5.3。自動の送りが先頭行 0 であふれを解いたときと同じ見え方）。
 - 古い側と新しい側は書字方向の正準表で決まる（横書き＝上が古い、`vertical_rl`＝右が古い、areka 独自の `vertical_lr`＝左が古い）。`arrow0` はいつも「古い側へ送る矢印」、`arrow1` は「新しい側へ送る矢印」（`vertical,1` で右・左＝要件 4.1。`vertical_lr` の読みは §8 に登記）。座標の意味は書字方向で入れ替えない（要件 4.2）。
-- 出る条件（暫定・要件 10 の測りで確かめる）: `up = 見えている先頭の行 > 0`（要件 3.1）、`down = 手動の位置が在る`（手動の位置は必ず自動の先頭より古い＝新しい側に隠れた行が在る・要件 3.2）。どちらも偽なら出さない（要件 3.3）。
-- 送り（暫定・1 段＝1 行／1 列）: `step(dir)` は `Older` で `line − 1`、`Newer` で `line + 1`。手動の位置はいつも `0 ≤ line < auto_first`。`Older` は `line == 0` で止まり、`Newer` で `line + 1 == auto_first` に達したら手動を捨てて自動へ戻る（要件 5.3・5.4）。隠れた古い行が無い（`auto_first == 0` で手動も無い）なら何もしない（要件 6.5）。
-- ホイール: 端数 `wheel_remainder: i32` を足し、`±120` ごとに 1 段（正＝向こう側＝古い側・要件 6.1〜6.3）。何も送れない間は端数を 0 に戻す（持ち越しは送れる間だけ）。絵の有無と無関係（要件 6.6）。
+- 出る条件（SSP 2.9.26 の測りで横書き・縦書きとも同じと確かめた）: `up = 見えている先頭の行 > 0`（要件 3.1）、`down = 手動の位置が在る`（手動の位置は必ず自動の先頭より古い＝新しい側に隠れた行が在る・要件 3.2）。どちらも偽なら出さない（要件 3.3）。
+- 送り（SSP 2.9.26 に合わせる）: `step(dir, n)` は `Older` で `line − n`、`Newer` で `line + n`（行の数 `n`）。矢印のクリックは `ARROW_STEP_LINES = 2`（要件 5.1・5.2）。手動の位置はいつも `0 ≤ line < auto_first`。`Older` は `0` で止まり（行き過ぎは `0` に詰める）、`Newer` で `auto_first` 以上に達したら手動を捨てて自動へ戻る（要件 5.3・5.4）。隠れた古い行が無い（`auto_first == 0` で手動も無い）なら何もしない（要件 6.5）。
+- ホイール: 端数 `wheel_remainder: i32` を足し、`±120` ごとに 1 目盛り（正＝向こう側＝古い側・要件 6.1〜6.3）。1 目盛りで送る行数は呼び手が渡す `WheelLines`（`Lines(n)`＝OS の「1 回にスクロールする行数」、`Page`＝OS が「1 画面ずつ」の設定＝見えている行の数）。何も送れない間は端数を 0 に戻す（持ち越しは送れる間だけ）。絵の有無と無関係（要件 6.6）。
 - 新しい文字（要件 8.1）: `observe_visible(count)` は前のフレームの見える字の数より増えたら手動を捨て、理由 `NewText` を返す（台本の届いた時でなく見える字が増えた時＝バルーンの可視の相の `Content` と同じ合図）。数が減った（消去）ときは覚え直すだけ。`present_actor` は同じフレームで `observe_visible` を `window_for` より**先に**呼ぶ（字が増えたそのフレームを自動の位置で描く。後に呼ぶと戻りが次のフレームになり、1 フレーム遅れの解になる）。
-- 置き場: 座標が x・y とも在れば `(x.resolve(幅), y.resolve(高さ))`（広がりは普通のバルーン＝面の画像、箱＝箱の大きさ・要件 3.4・7.1）。座標が無いのに絵が在れば `default_marker_position`（暫定: 描画範囲の右端に右寄せ、`arrow0` は描画範囲の上端、`arrow1` は描画範囲の下端に下寄せ。SSP の測り ⑷ の答えでこの 1 関数だけを替える・要件 3.7・7.7）。
+- 置き場: 座標が x・y とも在れば `(x.resolve(幅), y.resolve(高さ))`（広がりは普通のバルーン＝面の画像、箱＝箱の大きさ・要件 3.4・7.1）。座標が無い（x・y の片方だけを含む）のに絵が在れば `default_marker_position`（SSP 2.9.26 で測った値: `arrow0` の左上＝`(幅 − 20, 15)`、`arrow1` の左上＝`(幅 − 20, 高さ − 15)`。広がりは普通のバルーン＝面の画像、箱＝箱の大きさ・要件 3.7・7.7）。
 - 拡大率: 手動の位置は行の番号で持つので、再追従で描画資源を作り直しても同じ行が古い側に残る（要件 8.7）。
 - 選択肢の当たり: 手動の `VisibleWindow` が `render_styled` に渡り、executor の `committed` がその送りを反映し、`to_window_physical` がそれを読む（要件 8.5・`choice.rs` は触らない）。
 
@@ -546,8 +546,8 @@ pub struct PlaceScroll {
     auto_first: usize,          // 前のフレームの自動の先頭行（押下・ホイールの限り）
 }
 impl PlaceScroll {
-    pub fn step(&mut self, dir: ScrollDir) -> ScrollChange;
-    pub fn wheel(&mut self, delta: i32) -> ScrollChange;
+    pub fn step(&mut self, dir: ScrollDir, lines: usize) -> ScrollChange;
+    pub fn wheel(&mut self, delta: i32, per_notch: WheelLines, visible_lines: usize) -> ScrollChange;
     pub fn observe_visible(&mut self, count: usize) -> Option<StopReason>;
     pub fn forget(&mut self, reason: StopReason) -> ScrollChange;
     pub fn has_hidden_lines(&self) -> bool; // auto_first > 0 || manual.is_some()
@@ -560,7 +560,10 @@ pub struct MarkerShown { pub up: bool, pub down: bool }
 pub fn marker_visibility(window: &VisibleWindow, scroll: &PlaceScroll) -> MarkerShown;
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ResolvedMarkerPlacement { pub up: Option<MarkerAt>, pub down: Option<MarkerAt> } // image px の左上（座標なしは None）
-pub fn default_marker_position(kind: MarkerKind, region: &TextRegion, marker: (u32, u32)) -> (i32, i32);
+pub const ARROW_STEP_LINES: usize = 2; // 矢印のクリック 1 回で送る行数（SSP 2.9.26）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WheelLines { Lines(u32), Page } // OS の SPI_GETWHEELSCROLLLINES（WHEEL_PAGESCROLL は Page）
+pub fn default_marker_position(kind: MarkerKind, extent: (i32, i32)) -> (i32, i32); // (幅−20, 15) / (幅−20, 高さ−15)
 ```
 
 - State model: 場所（`PlaceKey`）ごとに 1 つ（要件 8.8）。`window_for` は毎フレーム `auto_first` を覚え直し、手動の位置が新しい `auto_first` 以上になっていたら捨てる（`ReachedAuto`）。
@@ -591,8 +594,8 @@ pub enum MarkerKind { Up, Down } // Up＝arrow0（古い側へ）・Down＝arrow
 impl TextLayerRuntime {
     pub fn set_balloon_markers(&mut self, actor: ActorKey, markers: MarkerPair);
     pub fn marker_at_point(&self, place: &PlaceKey, client_px: (f32, f32)) -> Option<MarkerKind>;
-    pub fn scroll_manual_at(&mut self, place: &PlaceKey, dir: ScrollDir) -> ScrollChange;
-    pub fn wheel_at(&mut self, place: &PlaceKey, delta: i32) -> ScrollChange;
+    pub fn scroll_manual_at(&mut self, place: &PlaceKey, dir: ScrollDir, lines: usize) -> ScrollChange;
+    pub fn wheel_at(&mut self, place: &PlaceKey, delta: i32, per_notch: WheelLines) -> ScrollChange;
     pub fn has_hidden_lines_at(&self, place: &PlaceKey) -> bool;
     pub fn forget_manual_at(&mut self, place: &PlaceKey, reason: StopReason);
     pub fn forget_manual_of(&mut self, actor: &ActorKey, reason: StopReason); // 普通のバルーンとその箱の全部
@@ -697,9 +700,9 @@ pub(crate) fn apply_face_windowposition(
 
 #### BalloonWheel・BalloonPress・BoxPress・CharWatchBoxWheel
 
-- **BalloonWheel**（新しい系・`char_watch` と同じ `Input` の段・`dispatch_pointer_events` の前）: `PointerState` の持ち主から `BalloonWindowMarker` の窓を引き、`wheel.vertical != 0` なら `wheel_at(PlaceKey::balloon(actor), delta)`。`OnMouseWheel` は送らない・横は読まない（要件 6.7）。`Emo2Wiring` 不在は正常縮退（`debug!`）。
-- **BalloonPress**: `on_balloon_pointer_pressed` の左押下の確認の直後に `marker_at_point` を見て、当たれば `scroll_manual_at` して `true`（選択肢の確定・中断・閉じる働きへ流さない・要件 5.5）。当たらなければ今の流れ（要件 5.6）。
-- **BoxPress**: 箱の押下の判断の前に、押された箱の場所で `marker_at_point` を見て、当たれば送りだけをして `OnMouseClick` などのクリックとして扱わない（要件 7.4）。
+- **BalloonWheel**（新しい系・`char_watch` と同じ `Input` の段・`dispatch_pointer_events` の前）: `PointerState` の持ち主から `BalloonWindowMarker` の窓を引き、`wheel.vertical != 0` なら、そのとき OS の `SPI_GETWHEELSCROLLLINES` を読んで（ホイールを受けた時だけ読む＝毎フレームは読まない・設定の変わり目は OS が知らせないので受けた時に引く）`wheel_at(PlaceKey::balloon(actor), delta, per_notch)`。`OnMouseWheel` は送らない・横は読まない（要件 6.7）。`Emo2Wiring` 不在は正常縮退（`debug!`）。
+- **BalloonPress**: `on_balloon_pointer_pressed` の左押下の確認の直後に、そのスコープが**話し終えている**（今の流れが早送り・中断へ回さない状態）ときだけ `marker_at_point` を見て、当たれば `scroll_manual_at(…, ARROW_STEP_LINES)` して `true`（閉じる働き・選択肢の確定へ流さない・要件 5.5）。話している最中・当たらない（矢印の絵の透けた画素を含む）なら今の流れ（早送り・中断・閉じる・要件 5.6。SSP 2.9.26 と同じ）。
+- **BoxPress**: 箱の押下の判断の前に、そのスコープが話し終えているときだけ、押された箱の場所で `marker_at_point` を見て、当たれば送りだけをして `OnMouseClick` などのクリックとして扱わない（要件 7.4）。
 - **CharWatchBoxWheel**: `char_watch` の 5 番の段で、回転を `rotations` に積む前（透けた所の判断より前）に `box_under_point(shown_boxes(actor), client)` を引き、その箱が `has_hidden_lines_at` なら `wheel_at(箱の場所, delta)` して `OnMouseWheel` に積まない（要件 7.5）。隠れた行が無ければ今のまま（要件 7.6）。
 
 #### ShellBoxMarkers・DumpBalloonOverlay
@@ -745,17 +748,18 @@ pub(crate) fn apply_face_windowposition(
 - **読み手**（`marker_tests.rs`）: `-12`・`--12`・`12`・`0`・`abc`・`---1`・空白、面ごとの設定ファイルが descript を上書きすること、片方だけの座標、`arrow.filename` の素通し、鍵の無い定義が `ArrowKeys::default()` で `BalloonModel` の等しさを変えないこと。
 - **名前の選び方**（`balloon_marker_tests.rs`）: スコープ 0・1・2 の連鎖の順、`arrows0`＋`arrow1` だけのとき上＝`arrows0`・下＝`arrow1`（番号ごと）、旧名 `arrow` だけ、`arrow.filename` が在る・無いときの戻り、大小違い、片方だけ、0 枚、壊れた絵（偽の decoder で失敗を返す）、`CLICKWAIT_FAMILY` の連鎖が要件 2.1〜2.3 と同じ順で解けること（要件 2.7）。
 - **定義の束**（`balloon_definitions_tests.rs`）: 面 2 の `balloons2s.txt` の `validrect`・書体・矢印の鍵が面 2 の定義にだけ入ること、面 0 以外の設定ファイルを持たないバルーンで全部の面が面 0 と同じ値になること、読めない値の警告が重複しないこと（log-capture-kit）。
-- **純粋な判断**（`scroll_marker_tests.rs`）: 横書き・`vertical_rl`・`vertical_lr` の出る条件、`step` の限りと自動の位置への戻り、ホイールの 120 ごとと端数の持ち越し・送れない間の端数の扱い、`observe_visible` で字が増えたら捨てること・減ったら覚え直すこと・字が増えたそのフレームの `VisibleWindow` が自動の位置であること（1 フレーム遅れが無い）、行 0 の手動の位置の `block_offset`、拡大率の再追従を挟んでも手動の位置が残ること、座標あり・なしの置き場（普通のバルーンは画像・箱は箱の大きさ）。
+- **純粋な判断**（`scroll_marker_tests.rs`）: 横書き・`vertical_rl`・`vertical_lr` の出る条件、`step` の 2 行の送りと限り（行き過ぎを端に詰める）と自動の位置への戻り、ホイールの 120 ごとと端数の持ち越し・`Lines(3)`・`Lines(1)`・`Page` の送る量・送れない間の端数の扱い、座標なしの置き場が `(幅−20, 15)`・`(幅−20, 高さ−15)` になること、`observe_visible` で字が増えたら捨てること・減ったら覚え直すこと・字が増えたそのフレームの `VisibleWindow` が自動の位置であること（1 フレーム遅れが無い）、行 0 の手動の位置の `block_offset`、拡大率の再追従を挟んでも手動の位置が残ること、座標あり・なしの置き場（普通のバルーンは画像・箱は箱の大きさ）。
 - **公開の口**（`actor_scroll_tests.rs`）: 消去・`Hidden`・`FaceChanged`・`BoxRemoved` で手動を捨てること、場所ごとに別々なこと、手動の位置で選択肢の当たりの写しが戻した分だけずれること（`committed` を通る）、`marker_at_point` が α < 0.5 の画素で当たらないこと、箱の足りない番号がスコープの絵で埋まること。
 - **面の切り替え**（`balloon_face_tests.rs`）: 面 0 → 2 → 0 で今の定義と矢印の絵が替わり手動が捨てられること、動く絵のコマ（同じ面の番号）で差し替えないこと、バルーンの切り替えで束が入れ替わること。
 - **配置**（`face_windowposition_tests.rs`）: 標準の位置のバルーンだけが新しい面の位置へ動き、ドラッグで動かしたバルーンは動かないこと、値が同じなら何もしないこと。
-- **入力**（`balloon_wheel_tests.rs`・`balloon_pointer_handler_tests.rs`・`shell_box_handler_tests.rs`・`char_watch_tests.rs` に足す）: 矢印の押下が選択肢・中断へ流れないこと、矢印の無い所は今までどおり、隠れた行のある箱の上のホイールが `OnMouseWheel` にならず、無い箱では今までどおり。
+- **入力**（`balloon_wheel_tests.rs`・`balloon_pointer_handler_tests.rs`・`shell_box_handler_tests.rs`・`char_watch_tests.rs` に足す）: 話し終えた後の矢印の押下が閉じる働き・選択肢へ流れないこと、話している最中の矢印の押下が今までどおり早送り・中断になること、透けた画素の押下が今までどおりのクリックになること、矢印の無い所は今までどおり、隠れた行のある箱の上のホイールが `OnMouseWheel` にならず、無い箱では今までどおり。
 - **GPU**（`marker_surface_tests.rs`・実 GPU）: 印の面が文字の面より手前（`Children` で直前）に挿され、箱が複数あっても element番号の順が崩れないこと、描いた矢印の画素が読み戻しに出ること、拡大率 1.5 で位置と大きさが合うこと、マスクが出ている矢印だけを持つこと。
 - **既存のテスト**: 矢印の鍵を持たないバルーンの既存のテストは期待値を変えずに通す（要件 11.2）。`validation_tests.rs` はコメントだけを直す。
 
 ### SSP の測り（要件 10・開発者の許しと排他テストの机）
 
-- 測る 6 点は要件 10.1 のとおり。答えを入れる所は 1 か所ずつ: ⑴ 出る条件＝`marker_visibility`、⑵ 送る量＝`PlaceScroll::step`・`wheel`（1 段の行数と 120）、⑶ 新しい文字＝`observe_visible`、⑷ 座標なしの置き場＝`default_marker_position`、⑸ ぱすたの位置＝実機の絵の比べ、⑹ 矢印の押下と早送り・閉じる働き＝`balloon_pressed.rs` の分岐。答えが推奨と違えば要件 10.3 のとおり開発者に諮る。
+- **済み（2026-10-30・SSP 2.9.26・答えは research.md の「SSP での測り」）**: ⑴⑶⑺ は推奨と同じ。⑵（クリック 2 行・ホイールは OS の行数）・⑷（`(幅−20, 15)`・`(幅−20, 高さ−15)`）・⑹（話している最中は早送り）は SSP に合わせ、⑸（透明な矢印も SSP は押せる）は areka の当たりの決まりを守ると決めて本設計に入れた（開発者「承認」）。実装の段で測り直す点は無い。
+- 測る 7 点は要件 10.1 のとおり。答えを入れる所は 1 か所ずつ: ⑴ 出る条件＝`marker_visibility`、⑵ 送る量＝`PlaceScroll::step`・`wheel`（1 段の行数と 120）、⑶ 新しい文字＝`observe_visible`、⑷ 座標なしの置き場＝`default_marker_position`、⑸ ぱすたの位置＝実機の絵の比べ、⑹ 矢印の押下と早送り・閉じる働き＝`balloon_pressed.rs` の分岐。答えが推奨と違えば要件 10.3 のとおり開発者に諮る。
 - 測りのやり方（SSP の版・バルーンと台本・操作）と答えは `research.md` に残す（要件 10.2）。画面の操作は排他テストの机で順を取り、測り終えたらすぐ手放す（要件 10.4）。
 
 ### 実機（要件 11.3〜11.5）
@@ -783,7 +787,8 @@ pub(crate) fn apply_face_windowposition(
 
 - 印の面を窓の子として挿すのは箱で前例があるが、普通のバルーンの窓では初めて。予約スロットの直前（手前）に挿す並びは装着の檻で固定する。
 - 印の面がマスクで押下を受けたとき、その押下が普通のバルーンの窓の受け口（`on_balloon_pointer_pressed`）へ届くこと（子の面が別の持ち主にならないこと）を、実装の最初の GPU のテストか実機で確かめる。届かなければ受け口の側で印の面の持ち主もバルーンの窓として引く。
-- 面ごとの `windowposition` でバルーンが動く振る舞いは SSP で測っていない（Open Questions 1）。
+- 面ごとの `windowposition` でバルーンが動く振る舞いは SSP 2.9.26 で確かめた（`\b[2]` で動き `\b[0]` で戻る）。ドラッグで動かした後の振る舞いは測っていない（ゴーストが `balloon.dontmove`）ので、「動かしてあるスコープは位置を保つ」は areka の決めとして §8 に残す。
+- 座標が無いときの置き場は 326×169 のバルーン 1 つでしか測っていない（「端から固定の px」か「`wordwrappoint` などに連動」かは分けられていない）。§8 に測った条件を添える。
 - 測り（要件 10）の答えが推奨と違えば、純粋な判断の関数を替え、要件を改める（設計の形は変わらない）。
 
 ## Open Questions（設計の討議で諮る点）
@@ -793,4 +798,6 @@ pub(crate) fn apply_face_windowposition(
 1. **面ごとの `windowposition` で配置を置き直すか**: 要件 1.7 の「すべての鍵」に `windowposition.x`・`windowposition.y`・`windowposition.limit` も入る（正典はこれらを面ごとの設定ファイルの鍵とし、descript.txt に書けるのを「SSP に限り」とする）ので、本設計は面の切り替えで配置の材料を替え、まだ動かしていないバルーンだけを新しい面の標準の位置へ置き直す（FaceWindowPosition）。SSP がどう振る舞うかは測りの 6 点に無い。推奨: 本設計のまま進め、測りに「`\b[ID]` で面ごとの `windowposition` が違うときの SSP のバルーンの位置」を足す。代案: 配置の鍵は面 0 の値のまま（今と同じ）とし、要件 1.7 の「すべての鍵」を文字の層が読む鍵に限ると改める。
 2. **バルーンの切り替えでも `windowposition` が新しいバルーンの値になる**: `finish_balloon` も `select_balloon_face` を通すので、今は入れ直していない新しいバルーンの `windowposition` が配置に入る（今の作りの抜けの直し・1 の決めに従う）。
 3. **箱の矢印の絵の「バルーンのフォルダ」の側**: シェルのフォルダに無い番号は、そのスコープの普通のバルーンが解いた矢印の絵を使う（要件の表の理由「シェルが何も用意しなくても、バルーンの矢印で読み返せる」どおり）。箱が自分の `arrow.filename` を書き、その名前の絵がシェルに無くバルーンのフォルダにだけある、という形はバルーンの絵の側の名前で解く（§8 に登記）。
-4. **座標が無いときの置き場の暫定**: 描画範囲の右端に右寄せ、`arrow0` は上端・`arrow1` は下端（SSP の測り ⑷ の答えで `default_marker_position` だけを替える）。
+4. **座標が無いときの置き場**: SSP の測り ⑷ の答え（`arrow0`＝`(幅−20, 15)`・`arrow1`＝`(幅−20, 高さ−15)`）に決めた（2026-10-30）。
+
+**SSP の測りの後の決め（2026-10-30・開発者「承認」）**: (a) 送る量は SSP に合わせる（クリック 2 行・ホイールは OS の行数・「1 画面ずつ」なら見えている行の数）。(b) 話している最中の矢印のクリックは今までどおりのバルーンのクリック（早送り）。(c) 矢印の当たりは絵の α ≥ 0.5 の画素だけ（SSP は矩形・ぱすたの透明な矢印は areka では押せない）。(d) 座標なしの置き場は 4 のとおり。1（FaceWindowPosition）は ⑺ で SSP が動かすと分かったので残す。
