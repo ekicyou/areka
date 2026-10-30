@@ -73,7 +73,7 @@
   - _Requirements: 2.4, 2.6, 2.9, 3.1, 7.3, 7.5_
 
 - [ ] 3. areka の常に手前の状態
-- [ ] 3.1 常に手前の状態・遷移の判断・取り出しの相を作る
+- [x] 3.1 常に手前の状態・遷移の判断・取り出しの相を作る
   - ゴーストごとの状態（受信端と `on`・既定はオフ）を窓の結線の欄に置き、受信端を後から渡す口を足す（結線の作りの引数は変えない）
   - 遷移の判断の純関数（オン・オフ・変わらない・手前へ出す）を作る
   - 取り出しの相: ゴーストの窓の正本が無い間は取り出さない。到着順に当て、オフ→オン・オン→オフでゴーストの窓の全部の entity（全スコープのキャラクターとバルーン）に印を付け外し、帯の指令の列へ入る・出るを積む。変わらないときは何も積まずに記録。手前へ出すは状態を変えずに列へ積む。正本の外の entity には触れない
@@ -159,3 +159,4 @@
 - 2.2: `apply_window_band` はまだどの並びにも載っていない（5.2 で確定段へ）。偽の OS（`double`）は `window_band_tests.rs` の中に置いた。wintf の他のテストが使うなら `window_band_test_support.rs` へ分ける。
 - 2.4: キャラクターの帯は新しい `measure_below_is_always_on_top`（失敗で `warn!`＋`false`）で測る。既存の `measure_window_is_always_on_top` は失敗を `true` に倒すので使わない（design.md を追随）。G5 の注記の書き直しと帯の中の組の実窓の場合は 2.6。
 - 4.1: `rebase_descript`・`RebaseOutcome` の `#[allow(dead_code)]` は 4.2 で結んだら外す。
+- 3.1: `Emo2Wiring.window_state`・`attach_window_state_rx` の `#[allow(dead_code)]` と `run_window_state_phase` の `cfg_attr` は 5.1 で外す。`WindowBandQueue` に読み出しの口は無く、テストは `Debug` の写しで比べる。

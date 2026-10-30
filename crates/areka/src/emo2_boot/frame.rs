@@ -51,6 +51,8 @@ pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
 mod switch;
 mod wiring;
+// 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
+mod window_state;
 mod work_area_sync;
 mod zorder_descript;
 mod zorder_drain;

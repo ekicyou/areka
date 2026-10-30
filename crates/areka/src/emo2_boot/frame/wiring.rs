@@ -25,8 +25,10 @@ use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::shell_carry::ShellCarry;
 use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
+use super::super::window_state_cue::WindowStateDirective;
 use super::super::zorder_cue::ZOrderDirective;
 use super::status_report::BalloonStatusLedger;
+use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
@@ -102,6 +104,14 @@ pub struct Emo2Wiring {
     /// 起動の段が [`Emo2Wiring::seed_zorder_descript_base`] で 1 度だけ据える
     /// （取り出しの相が 1 度も走る前＝タグの実行より前・要件 5.1）。
     pub(super) zorder_ledger: ZOrderGroupLedger,
+    /// ゴーストの常に手前の状態（既定＝受信端なし・オフ・stay-on-top-directives 要件 3.4）。
+    ///
+    /// 受信端は起動の結線が [`Emo2Wiring::attach_window_state_rx`] で後から渡す。結線状態と
+    /// 一緒に作り直される経路（ゴーストの切り替え・読み直し・終了）で消え、残る経路
+    /// （SHIORI だけの読み直し・シェルとバルーンの切り替え）では保たれる。
+    // 5.1 で外す（フレームの相から読むまで本番でもテストでも読まない）。
+    #[allow(dead_code)]
+    pub(super) window_state: StayOnTopState,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///
     /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
@@ -199,6 +209,8 @@ impl Emo2Wiring {
             // 台帳は既定（グループ 0 本）から始める。shell 設定由来の基底を据えるのは
             // 起動の段の担当であり、結線はその器を用意するところまでを負う。
             zorder_ledger: ZOrderGroupLedger::default(),
+            // 常に手前はオフ・受信端なしから始める（受信端は起動の結線が後から渡す）。
+            window_state: StayOnTopState::default(),
             // 可視性の持ち越し状態は初期値（未観測・計測なし）から始める。
             balloon_visibility: BalloonVisibilityState::default(),
             // 届けた組の台帳も新品（何も届けていない）から始める。
@@ -237,6 +249,16 @@ impl Emo2Wiring {
     /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
     pub(in crate::emo2_boot) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
         apply_descript_base(&mut self.zorder_ledger, zorder_raw);
+    }
+
+    /// 常に手前の指令の受信端を渡す（起動の結線の口・`Emo2Wiring::new` の引数は変えない）。
+    // 5.1 で外す（起動の結線から呼ぶまで本番でもテストでも使わない）。
+    #[allow(dead_code)]
+    pub(in crate::emo2_boot) fn attach_window_state_rx(
+        &mut self,
+        rx: Receiver<WindowStateDirective>,
+    ) {
+        self.window_state.rx = Some(rx);
     }
 
     /// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す
