@@ -147,7 +147,7 @@ crates/
 │   └── emo2_e2e.rs                 # 同梱の emo2 の焼き込みで null.png の warn が 0 件の檻
 doc/
 └── COMPAT_ARCHITECTURE.md          # §8 の表に要件 6 の読みを 1 行足す
-.kiro/specs/real-run-log-noise/
+.kiro/specs/completed/real-run-log-noise/
 └── verification.md                 # 新規（spec の文書）: 実機の数え直しの命令・上限・行数の表
 target\real-run-log-noise-verify\   # git に残らない: 使い捨ての命令・記録・数えた結果
 ```
@@ -569,7 +569,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
   - 要件 1.7 の 5 つの文言は、数える命令を書くときにソースから逐語で写す（表の名前は ASCII の見出し）。
   - 数えない: 折返し基準の `WARN`（討議 5）・確かめの道具が終わり際に起こす `WARN`（`kanade: 強制終了指示`・`MCP: areka が終了の途中で答えなかった`）。
 - **出力**（要件 4.4）: 端末へは ASCII だけ。1 文言 1 行で `name count cap PASS|FAIL`、最後に `RESULT PASS|FAIL`。どれかが上限を超えたら `FAIL` とし、その名前と行数を出す。
-- **記録**（要件 4.5・4.6）: `.kiro/specs/real-run-log-noise/verification.md` に、命令の全文・コミット・走行の時刻と長さ・終了コード・記録の全行数・上の表の行数と上限と合否を走行ごとに書く。直す前の数（2026-10-10: 検体つきの走行 51 秒で全 32,194 行のうち件 1 が 20,484・件 2 が 10,240、同梱の emo2 そのままの走行 46 秒で全 42,845 行のうち件 1 と件 2 で 32,008・`null.png` の `WARN` 2 件。2026-10-23: どっとさくら 2 分 12 秒で件 3 が 20,764）を同じ表に並べる。`r6-collapse`・`r6-surface` の直す前の数は、2026-10-23 の記録に残っていれば並べ、無ければ「測っていない」と書く（`bottle` が潰れていた事実は requirements.md の要件 6 の背景が根拠）。
+- **記録**（要件 4.5・4.6）: `.kiro/specs/completed/real-run-log-noise/verification.md` に、命令の全文・コミット・走行の時刻と長さ・終了コード・記録の全行数・上の表の行数と上限と合否を走行ごとに書く。直す前の数（2026-10-10: 検体つきの走行 51 秒で全 32,194 行のうち件 1 が 20,484・件 2 が 10,240、同梱の emo2 そのままの走行 46 秒で全 42,845 行のうち件 1 と件 2 で 32,008・`null.png` の `WARN` 2 件。2026-10-23: どっとさくら 2 分 12 秒で件 3 が 20,764）を同じ表に並べる。`r6-collapse`・`r6-surface` の直す前の数は、2026-10-23 の記録に残っていれば並べ、無ければ「測っていない」と書く（`bottle` が潰れていた事実は requirements.md の要件 6 の背景が根拠）。
 - **やり直し**: 赤なら直してから同じ命令で回し直す（記録は上書きでなく別の名前）。見張りは要件 5.1 の決定論のテストが担い、この命令は残さない（要件 4.6）。
 
 ## Data Models
