@@ -89,8 +89,18 @@ fn boot(
     mark: Option<AdjacencyMark>,
     shown: [(u32, u32); 2],
 ) -> (usize, Vec<String>) {
+    boot_from(world, &remembered_placements(), mark, shown)
+}
+
+/// [`boot`] の配置を `placements` に替えた形。
+fn boot_from(
+    world: &mut World,
+    placements: &[ScopePlacement],
+    mark: Option<AdjacencyMark>,
+    shown: [(u32, u32); 2],
+) -> (usize, Vec<String>) {
     let not_shown = PerTargetSizes::new([(0, None), (1, None)]);
-    let _gw = spawn_shown(world, &remembered_placements(), &not_shown);
+    let _gw = spawn_shown(world, placements, &not_shown);
     let restored: BTreeMap<usize, Option<AdjacencyMark>> = [(0, None), (1, mark)].into();
     {
         let mut gw = world.resource_mut::<GhostWindows>();
@@ -243,5 +253,48 @@ fn old_memory_without_mark_stands_at_its_position() {
         logs.iter()
             .any(|l| l.contains(PAIR_LINE) && l.contains("decision=\"no-remembered-mark\"")),
         "印が無いことも組ごとに残る: {logs:?}"
+    );
+}
+
+/// ⑹ 隣り合っていた組（印 `left`）で、本体が作業領域の左端に見えていて相方が作業領域の外に
+/// 戻った形。相方は見えている本体の隣へ付け直され、左の隣は作業領域の外なので右の隣へ並べ替えて
+/// 作業領域の中に立つ。本体は動かず、隣り合わせた位置は記憶に書かない（window-work-area-clamp
+/// 要件 2.2・2.4・design Testing Strategy ⑵）。
+#[test]
+fn remembered_left_partner_outside_rejoins_inside_work_area() {
+    let mut world = persist_world();
+    let store = PersistStore::fake();
+    store.wire(&mut world);
+    let mut placements = remembered_placements();
+    // 置き直しは下端の中央を保って今の幅で立つので、今の幅で作業領域の左端に立つ x を置く。
+    placements[0].char_pos.x = WORK_AREA.left - (HIGH[0].0 - LOW[0].0) as i32 / 2;
+    // 相方はどの作業領域とも交わらない位置（本体の左の隣は作業領域の外）。
+    placements[1].char_pos.x = WORK_AREA.left - 3000;
+
+    let (moved, logs) = boot_from(&mut world, &placements, Some(AdjacencyMark::Left), LOW);
+
+    let gw = world.resource::<GhostWindows>();
+    let body = pos_of(&world, gw.char_window(0).unwrap()).unwrap();
+    let partner = pos_of(&world, gw.char_window(1).unwrap()).unwrap();
+    assert_eq!(body.x, WORK_AREA.left, "本体は動かない");
+    assert_eq!(
+        (moved > 0, partner.x),
+        (true, body.x + LOW[0].0 as i32),
+        "(並べ直しで窓へ指令が出た, 相方は本体の右の隣)"
+    );
+    assert!(
+        partner.x + LOW[1].0 as i32 <= WORK_AREA.right && partner.y >= WORK_AREA.top,
+        "相方は作業領域の中: {partner:?}"
+    );
+    assert!(
+        logs.iter().any(|l| l.contains("[work-area-clamp] Clamp")
+            && l.contains("scene=\"remembered-join\"")
+            && l.contains("how=\"flipped\"")),
+        "記憶からの隣り合わせの場面で並べ替えた行が出る: {logs:?}"
+    );
+    assert_eq!(
+        window_pos_keys(&store.load()),
+        Vec::<String>::new(),
+        "隣り合わせて寄せた位置は記憶に書かない（2.4）"
     );
 }

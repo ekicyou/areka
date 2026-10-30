@@ -1,0 +1,223 @@
+# Implementation Plan
+
+> どのタスクも、特定のゴースト（ぱすたを含む）や初回起動を名指しした扱いを入れない（要件 7.8）。判定の入力は窓の幾何と印だけにする。寄せの式は今ある「左辺・上辺を優先する収めの式」だけを使い、写しを作らない。
+
+- [x] 1. 土台: キャラ窓を作業領域へ寄せる部品（新しい 1 ファイル）
+- [x] 1.1 寄せの部品のファイルを立て、記録の語と、鎖を作業領域の中に置く純関数の核を作る
+  - 窓の追随のファサードに新しい子のモジュールと crate 内の再束縛を足す（配置の層のモジュールの一覧には触らない）。examples（`collision-probe`・`window-placement`）は `#[path]` で配置の層を取り込み本番の呼び手を持たないので、ファサードの今の再束縛と同じく、そちらのビルドで未使用になる項目に理由の注記つきの `#[allow(unused_imports)]`／`#[allow(dead_code)]` を付ける
+  - 記録の 3 語（`[work-area-clamp] Clamp`／`Keep`／`Unresolved`）と、場面の 5 語（起動の並べ直し・記憶からの隣り合わせ・拡大率の後の詰め直し・面の切り替え・記憶からの組の戻し）を 1 か所に置く
+  - 鎖の核は先頭を動かさず 2 番目から昇順に置き、基準は前の窓の置いた後の矩形とそのモニタの作業領域にする。隣の位置と反対の側の位置は今の隣り合いの解きに 2 スロットを渡して得る（隣の式を新しく書かない）。横に入るかは収めの式を当てて x が変わらないかで決め、入れば y だけ収め、どちらの側にも入らなければ並べた位置を作業領域の端へ寄せる（基準の窓と重なってよい）
+  - 組の決めが「動かさない」の窓（台本で置いた窓・ドラッグの窓ほか）は今の位置のまま返し、作業領域が取れなければ並べた位置のまま「取れない」で返す。パニックしない（飽和演算）
+  - 兄弟の新しいテスト `follow_work_area_clamp_chain_tests.rs` で、x=−1108 の形の並びが右の隣へ並べ替えられる・右にも入らない並びが端へ寄る・どちらでも本体が動かない・3 体の鎖で 3 番目が並べ替えた後の 2 番目に付く・窓が作業領域より大きいと左辺と上辺が合う・空のモニタの写しで動かない・収まっている並びは動かない・動かさない窓は今の位置のまま、が緑になる
+  - examples を含めた clippy（`--all-targets`）が未使用の警告なしで通る
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 7.1, 7.2, 7.3, 7.6, 7.8, 10.1_
+- [x] 1.2 鎖の寄せの World の口を作り、寄せた・寄せなかった・取れなかったを記録する
+  - 走査済みの窓の一覧と組の決めを受け、窓の高さを窓の位置の成分から、作業領域をモニタの写しの資源から読んで核を呼ぶ
+  - 置いた位置が並べた位置と違えば `Clamp`（info・場面・スコープ・how＝flipped／edge・from・to・作業領域）、収まっていた・動かさない窓は `Keep`（debug・理由の語）、モニタの写しが無い・窓の高さが読めないときは `Unresolved`（warn）を出し、ほかのスロットは続ける
+  - 1.1 のテストファイルに、World を組んだ形で同じ置き方になることと、モニタの写しの無い World で warn の行が対照のイベントつきのログ捕捉で出ることを足し、緑になる
+  - 新しい World の口と語も examples のビルドで未使用になる分は 1.1 と同じ形で扱い、examples を含めた clippy（`--all-targets`）が未使用の警告なしで通る
+  - _Requirements: 7.4, 9.1, 9.2, 10.1_
+- [x] 1.3 既定の位置にいる `free` のキャラ窓が大きくなってはみ出したら、はみ出した向きにだけ収める判定を作る
+  - 当てる条件を全部満たす窓だけを収める: 吸着が free・経路が面の再スナップか窓寸の照合・キャラ窓・既定の位置が有り今の位置と同じ・台本で置いた印が無い・ドラッグ中でない
+  - 作業領域は提案の位置に置いた窓のモニタで決め、収め方は今ある「はみ出した分だけの補正」を使う。拡大率の変化・吸着の変化・作業領域の変化の経路には当てない
+  - 記録は 1.2 と同じ 3 語（how＝grown）。free でない窓・対象外の経路・キャラ窓でない窓は記録しない
+  - 兄弟の新しいテスト `follow_work_area_clamp_grow_tests.rs` を窓の追随のファサードに繋ぎ、200% で y=864 の 640×840 が 1108×1368 になると下端が 1704 以下で x が変わらない・既定の位置と違う窓・台本の印の窓・ドラッグ中の窓・既定の位置の無い窓・拡大率の変化の経路は動かない・大きすぎる窓は左辺と上辺が合う・モニタの写しが無いと動かず warn が出る、が緑になる
+  - _Requirements: 3.1, 3.2, 3.4, 3.5, 7.1, 7.2, 7.4, 7.6, 9.1, 9.2, 10.1_
+- [x] 1.4 記憶から戻した組の窓を同じ量だけ動かす判定を作る
+  - 組は隣り合う番号の対で決め、覚えた印が left／right か、記憶の矩形（今の大きさ）どうしの隣り合いの判定が左・右・重なりなら繋ぐ。離れていれば窓ごと
+  - 組の全員が今の判定で寄せられている（どの窓も作業領域と交わらない）ときだけ、吸着の当て直しだけをした矩形の和を収めの式で和の矩形のモニタの作業領域へ収め、その差を全員に足す。見えている窓のある組は見えている窓を動かさない（重なっていた組の外の窓は窓ごとの結果のまま・理由 partner-visible）
+  - 記録は `Clamp`（場面＝記憶からの組の戻し・how＝shifted）・`Keep`（remembered-visible ほか）・`Unresolved`
+  - 兄弟の新しいテスト `follow_work_area_clamp_restore_tests.rs` を繋ぎ、全員が外の隣り合っていた組・重なっていた組（印 none）で互いの差が保たれる・見えている窓が動かない・離れていた組は返さない・どれも見えている組は返さない・大きすぎる和は左辺と上辺が合う・モニタの写しが無いと返さず warn が出る、が緑になる
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 7.1, 7.2, 7.4, 9.1, 9.2, 10.1_
+
+- [x] 2. 呼び手の結線: 5 つの場面から寄せを呼ぶ
+- [x] 2.1 起動の並べ直しが寄せを通してから x と y を書き、既定の位置へ寄せた後の位置を運ぶ
+  - 起動の並べ直しで隣り合いの解きの代わりに 1.2 の口を呼ぶ（既定の位置が有れば起動の並べ直し、無ければ記憶からの隣り合わせの場面）。置いた位置が今の位置と違う窓だけを書く
+  - 既定の位置の有る窓は x を寄せた後の値にし、y は寄せで変わったときだけ寄せた後の値にする（台本の縦の移動を既定へ入れない今の決まりを保つ）。既定の位置の無い窓は運ばない＝記憶に書かない
+  - 兄弟の新しいテスト `frame_chain_finalize_clamp_tests.rs` をフレームの接続宣言に繋ぎ、x=−1108 の形で相方が右の隣に立ち本体が動かない・並べ終えた時点の保存に寄せた後の位置（下端中央の x に直した値）が書かれる・並べ替えた後の相方のバルーンがずらしどおりに立ち `[balloon-limit] Clamp` が出ない、が緑になる
+  - 今ある記憶からの隣り合わせのテストの並びに、隣り合っていた組の外の窓が見えている窓の隣へ付け直され作業領域の中に立つ形を 1 つ足し、緑になる
+  - 解いた x が作業領域の外へ出る並びを期待していた起動の並べ直しの檻は、本質（並べ方・一度きり）を変えずに前提の状態だけを合わせ、全部緑になる
+  - _Depends: 1.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.4, 5.1, 5.2, 7.3, 7.5, 7.7, 10.1, 10.2_
+- [x] 2.2 (P) 拡大率の後の詰め直しが寄せを通してから x と y を書く
+  - 詰め直しで隣り合いの解きの代わりに 1.2 の口を呼び（場面は詰め直し）、置いた位置が今の位置と違う窓を詰め直しの経路で書く。詰め直しは保存を呼ばない
+  - 持ち場の檻はこの 5 つだけ: `frame_chain_realign_tests.rs`・`frame_chain_realign_adjacency_tests.rs`・`frame_chain_realign_arm_tests.rs`・`frame_chain_realign_exclusion_tests.rs`（フレーム）・`chain_realign_script_moved_tests.rs`（配置）。`follow_*` の檻と再スナップの檻には触らない（2.3 の持ち場）
+  - `frame_chain_realign_adjacency_tests.rs` に、詰め直した窓が作業領域の外になる形が反対の側へ並べ替えられる形を 1 つ足し、緑になる
+  - 上の 5 つのうち外へ出る並びを期待していた檻は前提だけを合わせ、全部緑になる
+  - _Boundary: Realign_
+  - _Depends: 1.2_
+  - _Requirements: 2.1, 2.3, 2.4, 7.7, 10.1, 10.2_
+- [x] 2.3 (P) 窓の大きさを変える書き込みの中で面の拡大の寄せを呼ぶ
+  - 窓の大きさを変える関数の可視性の関門の直後に、1.3 の判定を呼ぶ 1 文（と注記 1 行）だけを足す。ほかの行は変えない
+  - 1.3 のテストファイルに、大きさを変える書き込みを通したとき書き込みが 1 回で、既定の位置が寄せた先へ運ばれ、バルーンが同じだけ付いて動くことを足し、緑になる
+  - フレームを通す形（`frame_resnap_tests.rs` に 1 つ足す）で、同じフレームの `\![move,--base=0,…]` が寄せた後の矩形を基準に置かれ、並べ直しがやり直されないことが緑になる
+  - 持ち場の檻: `follow_work_area_clamp_grow_tests.rs`・配置の `follow_*_tests.rs` 全部（free の窓を育てる檻は `follow_resize_tests.rs` ほか）・フレームの `frame_resnap_tests.rs`・`frame_balloon_offset_follow_tests.rs`。2.1 の `frame_chain_finalize_*` と 2.2 の詰め直しの 5 つには触らない
+  - 持ち場の檻のうち既定の位置にいる free の窓を作業領域の外へ育てていたものは前提だけを合わせ、表情の差し替えで横へ動かない檻・free の窓の大きさだけを変える檻を含めて全部緑になる
+  - _Boundary: Resize_
+  - _Depends: 1.3_
+  - _Requirements: 3.1, 3.3, 3.4, 7.3, 7.5, 7.7, 10.1, 10.2_
+- [x] 2.4 (P) 記憶から戻した配置に組の寄せを当てる
+  - 記憶から戻す純関数で、窓ごとの写像の後に記憶から位置を戻したスコープの組を組み、1.4 の判定の結果を窓の位置とバルーンの位置に同じ量だけ当てる（バルーンの相対の位置は変えない）。純関数のまま記憶へ書き戻さない
+  - 記憶の矩形と吸着の当て直しだけをした位置は計算し直さず、窓ごとの判定が計算した値を一緒に返させて使う。印は警告を出さない読みで取る
+  - 「本関数自身は寄せない」の注記を「窓ごとの寄せと組の寄せ」の記述へ直す
+  - 窓ごとの判定（`project_restore`）と窓ごとの写像（`merge_scope`）の署名・戻り値を変えたら、呼び手とテストを crate 全体の検索で全部挙げて直す（`placement/persist_restore_tests.rs`・`placement/persist_saved_form_tests.rs`・`input_events/drag_sticky_tests.rs` が `project_restore` を呼ぶ）。設計が据え置きとする `persist_restore_tests.rs` の檻を動かさないため、署名は変えず、追加の値を返す兄弟の関数を足す形を先に選ぶ。挙げた呼び手が全部直り緑になる
+  - 兄弟の新しいテスト `persist_restore_group_tests.rs` を記憶のモジュールに繋ぎ、全員が外の組が互いの差を保って戻る・バルーンの位置が同じ量だけ動きずらしは変わらない・どれも見えている組は動かない・離れていた組は窓ごと、が緑になり、記憶の寄せと書き戻さない今の檻も緑のまま
+  - _Boundary: Restore_
+  - _Depends: 1.4_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 7.7, 10.1, 10.2_
+- [x] 2.5 「記憶の位置を寄せて表示した起動」を並べ終えた時点の保存まで運び、古い記憶へ印を書き足さない
+  - 記憶のモジュールに、窓の一式ごとの真偽の資源と、組の寄せの後の配置で記憶から戻したスコープのどれかが吸着の当て直しだけの位置と違うかの判定を足す
+  - 並べ終えた時点の保存で、印の無い古い記憶のスコープが有り資源が真なら印を書き足さず、そのことを info で残す。資源が無い・偽なら今どおり書き足す
+  - 記憶から戻して配置を作る関数（起動の入口）の戻り値に真偽を足して 3 つ組にし（起動の入口の増分は約 3 行）、窓を作る閉包が窓の一式を作るたびに資源を据える（約 3 行）。キャラ窓の一式の型には持たせない
+  - 2 つ組を受けていたテスト 4 ファイル（`frame_chain_finalize_persist_tests.rs`・`frame_chain_finalize_persist_nowrite_tests.rs`・`frame_chain_finalize_persist_restart_tests.rs`・`main_restore_seam_tests.rs` の呼び出し 5 か所）を 3 つ組の受け方に合わせ、全部緑になる
+  - 2.4 のテストファイルに、資源が真のとき印が書き足されず info の行が出る・偽なら書き足される・判定が組の寄せの後で真になる、を足し、緑になる
+  - 起動の入口のファイルが 1,000 行以下であることを、同じウェーブの起動オプションの spec の増分（約 2 行）を含めて確かめる。超える見込みなら記憶から配置を作る関数を記憶のモジュールへ移す
+  - _Depends: 2.1, 2.4_
+  - _Requirements: 4.5, 4.6, 7.5, 10.1, 10.2_
+
+- [x] 3. 起動のトークの位置の指令（件 5）: 測ってから直す
+- [x] 3.1 位置の指令の当たりを測る記録を足す
+  - 位置の指令を当てた記録に、拡大率と動かす窓の今の幅と高さの欄を足す
+  - 位置の指令の取り出しで拡大率が取れない（表示の前）ときに、`move_ratio_unset` の行で「拡大率 1 で当てる」をスコープつきで残す
+  - 今ある位置の指令の檻が全部緑のままで、ログ捕捉のテスト 1 つで、表示の前の指令に `move_ratio_unset` が出て、当てた記録に拡大率と大きさの欄が載ることが緑になる
+  - _Boundary: MoveMeasure_
+  - _Requirements: 6.1, 9.1_
+- [x] 3.2 SSP と areka で起動のトークの要求の並びと時機を測り、原因を決める（SSP の測り ⑸・必須）
+  - 排他テストの机を持ち、SSP の初回起動を作る手順と reload は毎回開発者の許しを取り、ウェーブの兄弟のセッションに知らせてから測る
+  - SSP は起動の前に SHIORI の要求の記録のバイト位置を控えて差分を読み、起動のイベントの並びと時機を取る
+  - areka は emo2 を写した検体（根・記憶・記録はワークツリーの `target\` の下だけ）で、info と窓の書き込みの記録を開け、起動のイベントの行・GPU の装着の行・`move_ratio_unset`・当てた記録（拡大率・大きさ）・面の書き込みの並びを読む
+  - 見込み H1（表示の前に当たる）・H2（面の指令と位置の指令が別の巡に割れる）・H3（起動のイベントの時機の差）・どれでもない、のどれかに決め、手順・測った版・結果・決めた見込みが spec の調べの記録と実装の記録に残っている。どれでもないなら直しを決めずに止め、開発者へ報告する
+  - 測り終えたら机と画面の操作をすぐ返す
+  - _Depends: 3.1_
+  - _Requirements: 6.1, 8.1_
+- [x] 3.3 （H1 か H3 と決まったとき）位置の指令を、対象の窓と基準の窓が最初の面を表示するまで預かる
+  - 待ちの判定は位置の指令の取り出しの兄弟の新しいファイルに置き、取り出しの関数は判定を呼んで預かるか当てるかを決める
+  - 指令ごとに、対象の窓と `--base` の窓の両方が最初の面を表示して拡大率が取れるまで預かる。GPU の装着だけを待つ形は取らない。預かった指令に関わる窓への後の指令は追い越さず、関わりの無い窓の指令は先に当てる。預かる間は順のまま取りこぼさない
+  - ゴースト・初回起動・特定のイベントを見ない門にする。取り出しの「装着を待たない」理由の注記を新しい決まりに書き換える
+  - 兄弟の新しいテスト `frame_move_hold_tests.rs` をフレームの接続宣言に繋ぎ、装着の前の指令が預かられる・装着の後でも最初の面をまだ表示していない窓（対象・基準のどちらでも）への指令が預かられる・その窓が表示した巡で同じ巡の表示の指令と再スナップの後に当たる・同じ窓への後の指令は追い越さない・関わりの無い窓の指令は先に当たる、が緑になる
+  - 同じタスクの中で、未装着・未表示の配線で位置の指令が当たることを前提にしている今の檻（`frame_move_order_tests.rs`・`frame_window_link_drain_tests.rs`・`frame_transition_branch_tests.rs`・`frame_drain_text_tests.rs`・`spine_move_cue_tests.rs`・`spine_conformance_lap_tests.rs` のうち該当するもの）を、窓を表示させてから流す形へ前提だけ合わせる。並べ方・相の順・指令の中身の主張は変えない
+  - 完了の形: 新しい檻と合わせた檻を含めて emo2_boot のテストが全部緑になり、該当した檻と合わせ方が実装の記録に残っている
+  - _Boundary: MoveHold_
+  - _Depends: 3.2_
+  - _Requirements: 6.2, 6.3, 6.4, 7.3, 7.8, 10.1, 10.2_
+- [x] 3.4 （H2 と決まったとき・3.2 で H1 と決まったので行わない）順の柵の触る所を決め、他の spec の持ち物に及ぶなら先に相談する
+  - 柵（位置の指令を、同じ台本でそれより前に流れた面の指令が表示に当たるまで待たせる）の材料を取る場所を挙げる
+  - 触る所が同じウェーブの `mcp-strict-errors` の持ち物（seriko の actor・emo-present の表示の presenter ほか）に及ぶなら、切り出す前に必ずそのセッションと相談する（この相談を通るまで柵のコードを書かない）。向こうが先に着地するならそれを取り込んでからこの spec で直し、間に合わないときだけ別の spec へ切り出す
+  - 起動の消費の台帳に行を足す形が要るなら別の spec へ切り出す（`/kiro-discovery`）。切り出したときはその事実を `brief.md` と `roadmap.md` に残し、開発者へ報告する
+  - この spec で直すときは柵と檻（`frame_move_hold_tests.rs` を柵の檻に替える）を足して緑になる。切り出したときは切り出し先の名前と相談の結果が実装の記録に残っている
+  - _Depends: 3.2_
+  - _Requirements: 6.2, 6.3, 6.4, 10.1_
+
+- [x] 4. 記録と受け入れの確認
+- [x] 4.1 決めた寄せ方を互換の記録に残す
+  - `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾に、件 1〜件 5 の行を表の列（項目・裁量・根拠・出典 spec）に揃えて足す。件 2 は SSP に無い安全網と書き、件 5 は 3.2 の測りの結果と決まった直し（または切り出し）を書く
+  - SSP を測ったもの（⑸ と、測ったなら ⑴〜⑷）だけを、版・手順・結果とともに spec の調べの記録に残して §8 の根拠から指す。測っていないものは書かない
+  - 5 行が表に揃って入り、SSP と食い違った点がその理由とともに書かれている
+  - _Depends: 3.2_
+  - _Requirements: 8.2, 8.3, 8.4_
+- [x] 4.2 触ったクレートの全テスト・整形・静的検査と、約束の確かめを通す
+  - areka のテストを回し、表情の差し替えで横へ動かない・記憶の寄せと書き戻さない・バルーンを作業領域へ収める今の檻を含めて全部緑になる
+  - 整形と clippy が警告なしで通る
+  - 約束の確かめ: 窓の大きさを変える書き込みのファイルの差分が呼ぶ 1 文（と注記 1 行）だけ・起動の入口は増分約 3 行で 1,000 行以下・窓を作る閉包のファイルは約 3 行・配置の層のモジュールの一覧・キャラ窓の一式の型・起動の消費の台帳に差分が無い・新しいファイルとテストファイルがどれも 1,000 行以下
+  - この spec の差分にゴーストの名前（ぱすたを含む）や初回起動だけの分岐が無いことを検索で確かめる
+  - 結果が実装の記録に残っている
+  - 件 5 は 3.2 が選んだ道（3.3 か 3.4）が済んでから回す
+  - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5, 3.3 または 3.4（3.2 が選んだ方）_
+  - _Requirements: 7.8, 10.2_
+- [x] 4.3 実機で件ごとの道を通す（emo2 を写した検体・必達）
+  - 排他テストの机を持ち、開発者の机（主の画面 2880×1800・200%、左の画面 150%）で、emo2 を写した検体（根・記憶・記録はワークツリーの `target\` の下だけ）を使い、`RUST_LOG` に info と配置の層の debug を開ける
+  - ⑴ 記憶に本体だけを主の画面の左端で書いた検体 → 相方が左隣のモニタへ渡らず作業領域の中に並ぶ ⑵ 起動の台本で既定の面より大きい free の面へ替える検体 → 窓が作業領域の中に収まる ⑶ 記憶の位置がどのモニタとも交わらない隣り合った組の検体 → 組が離れずに戻り `[work-area-clamp] Clamp` の記憶からの組の戻しの行が出る ⑷ 起動のトーク（初回を含む）で `\![move]` を流す検体 → トークの最中から結果の並びで、トークの後にずれない
+  - 4 つの結果と `[work-area-clamp] ` のログの抜き出しが実装の記録に残っている。終わったら机と画面の操作をすぐ返す
+  - ⑷ は 3.2 が選んだ道（H1・H3 なら 3.3、H2 なら 3.4）が済んでから通す。件 5 を 3.4 で別の spec へ切り出したときは ⑷ を回して今の症状を記録し、切り出し先の名前とともに報告する
+  - _Depends: 2.2, 2.3, 2.5, 3.2, 3.3 または 3.4（3.2 が選んだ方）_
+  - _Requirements: 10.3_
+- [x] 4.4 v0.1.0 のゴールの通しとして、記憶の空のぱすたを同じ机で 1 回初回起動する（**2026-10-30 の 1 回目の後、5.1〜5.4 が済んでから回し直す**）
+  - 起動のトークの間も後も本体と窓の枠が作業領域の中・トークの後に並びがずれない・縦書きのバルーンの 1 列目に × と横線がかからないことを確かめる
+  - 1 回目（2026-10-30・`research.md` 13 節）: 窓・並び・× と横線は緑。キャラ窓は収まっているのに相方のバルーンだけがはみ出して押し込まれ、窓に重なる場面が見つかった（`[balloon-limit] Clamp scope=1 context="boot-gate" from=(-872,336) to=(0,336)`）。SSP の測り ⑷ で SSP は反対の側へ並べ替えていたので、裁定で要件 5.3〜5.8 と 5.1〜5.4 を足した
+  - 回し直し: 同じ検体（配布版のぱすたとバルーン `pasta_tategaki` の写し・`target\wwac44`・記憶を消して初回起動）で、`RUST_LOG` に info と配置の層の debug を開ける。相方のバルーンの `[balloon-limit] Clamp` が `how="flipped"` で、窓の右隣（窓の右端＝バルーンの左端）に立ち、窓に重ならないこと。上の確かめも同じ回でもう一度見る
+  - 両方の回の結果と `[balloon-limit] ` の行の抜き出しが実装の記録に残り、終わったら机と画面の操作をすぐ返す
+  - _Depends: 4.3, 5.1, 5.2, 5.3, 5.4_
+  - _Requirements: 5.3, 5.4, 8.1, 8.4, 10.4_
+
+- [x] 5. バルーンだけが横にはみ出すときの反対の側への並べ替え（2026-10-30 の裁定・`research.md` 13 節）
+- [x] 5.1 バルーンの関門に、反対の側への並べ替えを足す
+  - 置き換えの前に、書き込みの関門のファイル（`placement/follow/window_move.rs`）の呼び出しの置き換えについて開発者の承認を取る（10-29 に認めた 1 文の外のため）
+  - バルーンの関門の式のファイル（`placement/balloon_limit.rs`）に並べ替えの純関数と結果の型（動かさない・並べ替えた・押し込んだ）を足す。キャラ窓が収まっていて、バルーンが横にはみ出すときだけ、キャラ窓の縦の中心線で映した位置を試し、横に入れば縦だけ収めて置く。入らない・映しても動かない・縦だけはみ出す・キャラ窓がはみ出しているときは今の押し込みの式の戻りをそのまま返す。収める式は今の 1 本だけを使い、写しを作らない
+  - 起動の関門と書き込みの関門で、今の押し込みの式を呼んでいる 1 か所ずつをこの関数に替え、今の `[balloon-limit] Clamp` の行に `how`（`flipped`／`pushed`）を足す。解放の補正・`limit` の有効の判定・縮退の `Unresolved` は変えない。バルーンの相対の位置（配置のずらし・追従のずらし・記憶）には触らず、動かせない指定の帳簿は読まない
+  - 兄弟の新しいテスト `balloon_limit_flip_tests.rs` を式のファイルに繋ぎ、次が緑になる: 左端の窓（0〜1108）の左隣で外へ出るバルーン（x=−872・幅 872）が右隣（x=1108）へ映され y は変わらない（相方の形・スコープ 1）／右端の窓の右隣で外へ出る本体のバルーン（スコープ 0）が左隣へ映される／映した位置が縦にだけはみ出すと縦だけ収まる／作業領域が窓とバルーン 2 つ分より狭く両方の側に入らない・縦だけはみ出す・真上の中央揃え・キャラ窓がはみ出している → 今の押し込みと同じ位置／`limit=0` と解放の補正は並べ替えない／descript と台本の動かせない指定がある窓でも並べ替える／起動の関門でずらしが変わらない／書き込みの関門でキャラ窓を作業領域の中ほどへ戻すと元の側へ戻る／記録の行に `how="flipped"`・`how="pushed"` が載る（ログ捕捉・対照のイベントつき）
+  - 差分にゴーストの名前・スコープの番号を名指しした分岐が無い
+  - _Boundary: BalloonFlip_
+  - _Depends: 4.2_
+  - _Requirements: 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 7.2, 7.8, 10.1_
+- [x] 5.2 押し込みだけを期待していた今のバルーンの檻の前提を合わせる
+  - キャラ窓が作業領域に収まり、バルーンだけが横にはみ出し、映した位置が入る形で押し込みを期待していた檻を、`cargo test -p areka --bin areka` の赤から挙げる。grep で当たった候補: `placement/balloon_limit_gate_tests.rs`・`placement/follow_balloon_limit_tests.rs`・`placement/placement_windowposition_tests.rs`・`placement/follow_visibility_balloon_wiring_tests.rs`・`placement/follow_visibility_guard_tests.rs`・`placement/follow_drag_tests.rs`・`placement/spawn_assembly_tests.rs`・`input_events/balloon_wiring_tests.rs`・`ghost_session_scope_rect_tests.rs`・`mcp/get_property_tests.rs`
+  - 押し込みを主張する檻は、前提（キャラ窓を作業領域の外へ出す・作業領域を狭めて両方の側に入らなくする・縦だけはみ出させる）だけを合わせて押し込みの主張を保つ。並べ替えの主張は 5.1 の檻に置き、ここでは足さない。式そのもの（`balloon_limit_tests.rs`）と解放の補正（`follow_drag_end_limit_tests.rs`）の檻は変えない
+  - 合わせた檻と合わせ方が実装の記録に残り、areka のテストが全部緑になる
+  - _Boundary: 檻の一覧_
+  - _Depends: 5.1_
+  - _Requirements: 10.2_
+- [x] 5.3 互換の記録の件 4 の行に、完了 spec の決まりを改めた事実と理由を足す
+  - `doc/COMPAT_ARCHITECTURE.md` §8 の件 4 の行の「バルーンを収める今の決まりは変えない（完了 spec の要件は改めていない）」と「SSP のバルーンとシェルの扱いは測っていない」を、並べ替えの決まり（映した位置・縦は変えない・入らなければ押し込み・焼き付けない・動かせない指定は止めない）と、完了 spec `areka-P0-windowposition-limit` の押し込みの決まりを改めた事実と理由（4.4 の 1 回目で窓に重なった・SSP 2.9.26 の測り ⑷・2026-10-30 の裁定）へ書き直す。根拠の欄から `research.md` 13 節を指し、出典の欄に要件 5.3〜5.8・8.4 を足す。アーカイブ済みの spec の本文は書き換えない
+  - 横のずらしのある右に出すバルーンの初期配置の符号が正典と食い違いうること（測っていない）を、同じ行に「測っていない」と分けて書く
+  - _Boundary: §8 の行_
+  - _Depends: 5.1_
+  - _Requirements: 8.2, 8.4_
+- [x] 5.4 触ったクレートの全テスト・整形・静的検査と、約束の確かめを通す
+  - areka のテストを回して全部緑。整形と clippy で、5.1・5.2 が書いた行に新しい警告が無い
+  - 約束の確かめ: 書き込みの関門のファイルの差分が呼び出しの置き換えと記録の欄だけ・配置の層のモジュールの一覧・キャラ窓の一式の型・起動の消費の台帳に差分が無い・新しいテストファイルが 1,000 行以下
+  - 結果が実装の記録に残っている
+  - _Depends: 5.1, 5.2_
+  - _Requirements: 7.8, 10.2_
+
+## Implementation Notes
+- areka は bin だけの crate: テストは `cargo test -p areka --bin areka <filter>`（`--lib` は無い）。clippy は workspace に既存の警告があるので `-D warnings` は使えず、変えたファイルに新しい警告が無いことで見る。
+- 組の寄せ（1.4 `keep_restored_groups`）は「寄せられている」を `shown != projected` で判定する。2.4 で結線するときは、同じ窓の `projected`＝吸着の当て直しだけの位置（project_anchor の結果）・`shown`＝窓ごとの判定の結果（project_restore）を渡すこと。
+- 3.2 の測り（2026-10-30・research.md 12 節）: 見込みは H1。位置の指令は装着の後に k=2 で当たるが、トークの先頭の指令は基準の窓（`--base`）が最初の面を表示する前に、表示の前の仮の矩形（868×1374）を基準に当たり、本体との間に 52px の隙間が残る。H2（巡の割れ）は起きなかった。SSP は初回の台本をシェルを出し終えた後に流す。→ 3.3 を実施し、3.4 は行わない。検体（`target\wwac32\root`・初回のトークの先頭に `\1\![move,…left.bottom…right.bottom]` を足した emo2 の写し）は 3.3 と 4.3 ⑷ で使い回せる。
+- 3.3 で前提を合わせた檻（2026-10-30・並べ方・相の順・指令の中身の主張は変えていない）: 表示の成立は GPU 無しで作れないので、どの檻も「窓はどれも表示済み（拡大率 1）」とする読み口 `all_shown`（`frame_test_support.rs`）を渡し `run_move_drain_with` で流す形に替えた。`frame_move_order_tests.rs`（`run_resnap_move_finalize` と対照 `a_move_before_the_resnap_misses_the_right_edge`）・`frame_window_link_drain_tests.rs`（1 か所）・`frame_drain_text_tests.rs`（2 か所と、3.1 の `move_ratio_unset` の檻を「預けた巡に 1 行・当たらない・表示の後に当たる」へ書き直し）・`frame_resnap_tests.rs`（1 か所・候補外だったが赤になった）・`spine_move_cue_tests.rs`（2 か所）・`spine_conformance_lap_tests.rs`（1 か所）。`frame_transition_branch_tests.rs` は変更なし。
+- 3.3 の預かりの決まり: 並べ直し（ResetWindowPos）は前に預かった移動を捨てて `move_hold_superseded` を残す（並べ直しがスコープを読み飛ばしたときは、捨てた移動は後で表示しても当たらない）。バルーン位置初期化は預かったバルーン側の指令とだけ順を保つ（窓の移動とは入れ替えても同じ結果。例外: 預かった移動が窓を別のモニタへ運ぶと、標準のずらしの作業領域の選びが変わりうる・まれで次の初期化か移動で直る）。
+- 範囲外（`/kiro-complete` の棚卸で扱う）: `\![execute,resetwindowpos]` 自体は最初の表示を待たないので、起動の直後に流すと表示の前の仮の大きさで並べ、3.2 と同じ形の隙間が出うる（3.3 のレビューの観察・要件 6.2 は移動・前後・組の指令だけ）。4.3 ⑷ の実機で様子を見る。
+- 4.2 の確かめ（2026-10-30・比べる元は main との分かれ目 `932d2c307`）:
+  - テスト: `cargo test -p areka`（`--ignored` なし）は全部緑。本体 3824 件通過（無視 3）・結合テスト 8 本も全部緑。1 回目は `smoke_boot_loop_exit` の 1 件が「32bit の `shiori_loadu.dll` がこのワークツリーに建っていない」で落ちた（テストの前提の不足で、この spec とは無関係）。`cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で建てて結合テストを回し直し、5 件とも緑。
+  - 今の檻の緑を名指しで確かめた: 表情の差し替えで横へ動かない＝`placement/follow_resize_tests.rs` の `resize_window_to_free_keeps_position_and_updates_size_only`・`resize_window_to_bottom_resnaps_size_and_position_once`・`resize_window_to_top_pins_top_edge_and_keeps_x`、新しい `follow_work_area_clamp_grow_tests.rs` の `grown_default_free_window_is_lifted_only_vertically`・`explicitly_placed_or_remembered_windows_are_kept`。記憶の寄せと書き戻さない＝`placement/persist_restore_tests.rs` の `project_restore_free_clamps_both_axes_with_identity_projection`・`project_restore_bottom_x_outside_clamps_into_work_area`、`emo2_boot/frame_chain_finalize_persist_nowrite_tests.rs` の `memory_is_unchanged_by_resize_move_work_area_close_and_quit`・`offscreen_saved_position_survives_finalize_while_shown_pulled_in`。バルーンを作業領域へ収める＝`placement/follow_balloon_limit_tests.rs` の `enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true`・`move_window_to_clamps_the_trailing_balloon_but_never_the_char_window`・`follow_balloon_clamps_for_every_trigger`・`resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area`。
+  - 整形: `cargo fmt --all -- --check` は差分なし。clippy: `cargo clippy -p areka --all-targets` の警告のうち、この spec が触ったファイルに出るのは 8 件（`frame/wiring.rs:181`・`frame_test_support.rs:290`・`spine_conformance_lap_tests.rs:191,380`・`ghost_session.rs:430,697`・`follow/window_move.rs:450`・`persist.rs:330`）。どれもこの spec が変えた行の外で、`git blame` では 2026-07-25〜09-27 の前からある行（この spec の追加で関数の引数の数なども変わっていない）。この spec が書いた行には警告が無い。
+  - 約束: 窓の大きさを変える書き込み（`placement/follow/window_move.rs`）の差分は注記 1 行と呼ぶ 1 文（整形で 2 行に折れた）の +3 行だけ。起動の入口（`main.rs`）は +5／−3 で増分 2 行・全体 983 行。窓を作る閉包（`ghost_session.rs`）は +5／−1 で増分 4 行（呼ぶ 1 文が整形で 3 行に折れた分）。配置の層のモジュールの一覧（`placement/mod.rs`）・キャラ窓の一式の型（`placement/spawn.rs` の `GhostWindows`）・起動の消費の台帳（`emo2_boot/consumer_ledger.rs`）は差分なし。新しいファイルの行数: `follow/work_area_clamp.rs` 509・`frame/move_hold.rs` 270・`follow_work_area_clamp_chain_tests.rs` 421・`follow_work_area_clamp_grow_tests.rs` 285・`follow_work_area_clamp_restore_tests.rs` 228・`persist_restore_group_tests.rs` 241・`frame_chain_finalize_clamp_tests.rs` 160・`frame_move_hold_tests.rs` 385（どれも 1,000 行以下）。なお `window_move.rs` は前から 1,221 行で、この spec の +3 で 1,224 行（新しいファイルではないので約束の外。前からの超過）。
+  - ゴーストの名前と初回起動: この spec の `crates/` の追加行に `pasta`・`ぱすた`・`ghost_dev`・`OnFirstBoot`・`first_boot` は 0 件。`Emo` の当たりは描画のクレートの型名（`EmoPresenter`・`EmoWorld`）で、ゴーストの名前ではない。「初回起動」はコードの注記 2 か所だけで、どれも「ゴーストや初回起動を見ない」と書いた文（要件 7.8 の言い直し）。`ぱすた`・`OnFirstBoot` は `doc/COMPAT_ARCHITECTURE.md` の互換の記録の根拠の欄だけ（実機で見た場面と SSP の測りの記録）で、分岐ではない。要件 7.8 に反する箇所は無い。
+- 4.3 の実機の通し（2026-10-30・排他テストの机・開発者の机＝主の画面 0,0–2880,1800 の 200%（作業領域 0,0–2880,1704）・左の画面 -2560,195–0,1795 の 150%）: ⑴〜⑷ はすべて緑。
+  - 検体と回し方: emo2 の原本（`vendors\sample_ghost\emo2.nar` を展開した読み取り専用の写し）をケースごとに `target\wwac43\c1`〜`c4` へ写した（根・記憶・記録はワークツリーの `target\` の下だけ）。記憶は `ghost\master\profile\areka\sylphya.toml`（`AREKA_USER_ROOT` の下ではなくゴーストの `profile\areka` に置かれる）へ手で書いた。起動は `target\debug\areka.exe` に絶対パスでゴーストとバルーンを渡し、`AREKA_USER_ROOT=<ケース>\user`・`AREKA_APP_SMOKE_EXIT_MS=30000`・`RUST_LOG=info,areka::placement=debug,areka::emo2_boot=debug`・`AREKA_NO_ALERT=1`・`PASTA_DEBUG=0`（どちらもその起動の中だけ）。どれも初回起動（ぱすたの記憶なし）。
+  - ⑴ 記憶に本体だけ（`[window.0] x="382" y="610"`＝主の画面の左端）→ 緑。本体は最初の面の後に `0,610 764×1094`。相方は左隣のモニタへ渡らず本体の右へ返された（`how="flipped"`・`-672` → `764`）。2 人とも作業領域の中。ログ `target\wwac43\c1\areka.out`。
+  - ⑵ 本体を `free`（シェルの descript に `sakura.seriko.alignmenttodesktop,free`）にし、434×800 の 1 枚の絵の `surface9000` を足し、初回のトークの 1 行目の終わりに `\0\s[9000]` を足した検体 → 緑。既定の位置（y=330）にいる本体が 868×1600 へ大きくなって下端が 1930 になるところを、横へは動かさず y=104 へ持ち上げた（下端 1704）。その後に小さい面へ戻っても位置は動かない。相方は本体の右へ返された。ログ `target\wwac43\c2\areka.out`（失敗した回は `c2\run1`〜`run3`）。
+  - ⑵ は 4 回目で通った。1 回目: `surface0.png` を 2 つ（2 つ目を 0,113 にずらして）重ねて大きい面を作ったが、外形は 434×687 のままで大きくならず、確かめにならなかった。外形は層ごとの原寸の軸ごとの最大で決まり、層の位置は数えない（`crates/areka-emo-compose/src/plan.rs` の `compute_extent`・檻は `crates/areka-emo-present/src/shell_target_base_image_tests.rs` の表イ）ので、これは決まりどおりで不具合ではない（土台の絵が面の大きさを決める）。1 枚の大きい絵に替えた。2・3 回目: ぱすたの読み込みが `debug transport bind failed addr=127.0.0.1:9276 (os error 10048)` で失敗した。開発者の環境は `PASTA_DEBUG=1`・`PASTA_DEBUG_PORT=9276` を全体に設定しており、同じ時に別のセッションが使っていた SSP（`C:\wintools\ssp\ssp.exe`）のぱすたのゴーストがこの口を持っていた。起動の中だけ `PASTA_DEBUG=0` にして解いた（全体の設定と検体の `pasta.toml` は変えていない）。2 回目は SHIORI の失敗を告げるメッセージボックス（`alert.rs` の `MessageBoxW`・モーダル）が出たまま 30 秒の自動終了の後もプロセスが残ったので、自分で起こしたプロセスだけを閉じた。決まりどおりの動き（抑えるのは `AREKA_NO_ALERT`）で不具合ではない。
+  - 人の手を介さない検体の起動では `AREKA_NO_ALERT=1` を付ける。別のぱすたのゴースト（SSP の中のものなど）がデバッグの口を持っているときは `PASTA_DEBUG=0` も付ける。
+  - ⑶ どのモニタとも交わらない隣り合った組（`[window.0] x="6382" y="610"`・`[window.1] x="5664" y="904"`・`[window-adjacent] 1="left"`）→ 緑。窓ごとの寄せの後、組を同じ量だけ寄せる行が出て（`scene="restore-group" how="shifted"`）、相方 `x=1392`（右端 2064）と本体 `x=2064` が離れずに戻った。ログ `target\wwac43\c3\areka.out`。
+  - ⑷ 初回のトークの先頭に `\1\![move,--X=0,--Y=0,--base=0,--base-offset=left.bottom,--move-offset=right.bottom]` を足した検体（`target\wwac32\root` の写し・profile を消して初回起動）→ 緑。本体が最初の面を出した（`25.316` に `2064,610 764×1094`）後の `25.318` に位置の指令が当たり、基準は表示後の矩形 `2064,610–2828,1704`、相方は `x=1392`（右端 2064）で本体に接した。3.2 で見た 52px の隙間は無い。トークの後に相方の窓は一度も動かず、並びはずれない。ログ `target\wwac43\c4\areka.out`。範囲外の注記にあった `\![execute,resetwindowpos]` の場面はこの検体では起きない（流していない）ので、様子は見ていない。
+  - `[work-area-clamp] ` のログの抜き出し（時刻は UTC の秒・`Clamp` は info・`Keep` は debug）:
+    - ⑴ `53.740 Clamp キャラ窓を作業領域の中へ寄せた scene="boot-repack" scope=1 how="flipped" joined={x:-672,y:904} from={x:1340,y:904} to={x:764,y:904} work_area=Some(0,0,2880,1704)`
+    - ⑵ `55.168 Keep 大きくなった窓が作業領域に収まっている scene="surface-grow" scope=0 reason="fits" at={x:0,y:330}`（面 1000 への切り替え）／`57.901 Clamp 大きくなった窓を作業領域の中へ寄せた scene="surface-grow" scope=0 how="grown" from={x:0,y:330} to={x:0,y:104} work_area=Some(0,0,2880,1704)`（面 9000・868×1600）／`57.917 Clamp キャラ窓を作業領域の中へ寄せた scene="boot-repack" scope=1 how="flipped" joined={x:-672,y:904} from={x:0,y:904} to={x:868,y:904}`／`00.588 Keep … scene="surface-grow" scope=0 reason="fits" at={x:0,y:104}`（面 1000 へ戻る）
+    - ⑶ `52.571 Clamp 記憶の組を同じ量だけ作業領域の中へ寄せた scene="restore-group" scope=1 how="shifted" from={x:2208,y:904} to={x:1392,y:904} work_area=Some(0,0,2880,1704)`／`56.835 Keep 並べた位置が作業領域に収まっている scene="remembered-join" scope=1 reason="fits" at={x:1392,y:904}`
+    - ⑷ `25.318 Keep 組の決めで動かさない窓 scene="boot-repack" scope=1 reason="explicitly-placed" at={x:1392,y:904}`（直前の `move_applied scope=1 k=2/1 base_left=2064 base_top=610 base_right=2828 base_bottom=1704 to_x=1392 to_y=904`）
+- 組 5 の決めごと（2026-10-30・開発者が推奨どおり一括承認）: ① 5.1 で `window_move.rs` の書き込み時の関門の呼び出しを 1 つ差し替え、記録の欄を足すことを認める（10-29 の「呼ぶ 1 文と注記 1 行」の約束の外）② 反対の側での横のずらしは ukadoc どおり（シェルへ向かう向き・両側で同じ距離）、測っていない点として記録し、初期配置（`resolver.rs` P5）との食い違いは完了の棚卸で起票 ③ 縦の位置は保つ ④ 利用者がドラッグで動かしたバルーンも、はみ出せば並べ替える。
+- 5.1 の後、押し込みを期待していた檻 13 本が並べ替えで赤（balloon_limit_gate_tests 5・follow_balloon_limit_tests 7・main_restore_seam_tests の restore_seam_clamps_balloon_display_position_but_keeps_offset_raw 1）。5.2 で前提を合わせる。window_move.rs の 984 行目付近の doc の `[limit_correction]` へのリンクが切れているので 5.2 で言い直す。
+- 5.2 で合わせた檻 13 本と合わせ方（期待値・相対の位置・記録の欄・基準の作業領域の主張は 1 つも変えていない。前提だけを変えて押し込みの道を通す）:
+  - `balloon_limit_gate_tests.rs` の 5 本（boot_gate_clamps_display_position_and_keeps_offset_raw・boot_gate_logs_only_for_scopes_it_actually_moved（scope 1）・boot_gate_skips_scopes_with_limit_disabled（両 scope）・boot_gate_uses_work_area_of_monitor_owning_char_window・boot_gate_never_touches_balloon_offset_on_any_edge）: 新しい道具 `char_overflowing` でキャラ窓の縦を 600 → 800 にし、下辺からはみ出させた。キャラ窓がはみ出しているときは並べ替えず押し込む（要件 5.6）。中心は域内なので帰属モニタは変わらない。
+  - `follow_balloon_limit_tests.rs` の 6 本（enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true・follow_balloon_clamps_for_every_trigger・resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area・runtime_gate_result_is_identical_for_hidden_and_visible_balloons・undetermined_balloon_size_warns_but_an_explicit_size_still_clamps・the_window_move_record_carries_the_corrected_position_and_the_original_route）: 新しい道具 `char_overflowing_world` でキャラ窓の縦を 600 → 640 にし、下辺（1043）からはみ出させた（要件 5.6）。the_reference_work_area_is_the_one_the_char_window_belongs_to の 1 本は、その場でキャラ窓の縦を 720 にし、左モニタの下辺からはみ出させた（要件 5.6）。
+  - `main_restore_seam_tests.rs` の restore_seam_clamps_balloon_display_position_but_keeps_offset_raw: キャラ窓をはみ出させると復元の寄せで `char_pos` が変わるため、作業領域の右端を 1920 → 450 に狭めた。キャラ窓（30〜430）は収まり、映したバルーン（280〜480）も右へはみ出すので押し込みになる（要件 5.5）。
+  - あわせて `window_move.rs` の `apply_balloon_limit_gate` の doc の切れたリンク `[limit_correction]` を `place_balloon_in_work_area` の `BalloonPlace::Fits` の説明へ言い直した（doc だけ）。
+- 5.4 の確かめ（2026-10-30・比べる元は 5.1 の手前の `707ff1d82`）:
+  - テスト: `cargo test -p areka --no-fail-fast`（`--ignored` なし・32bit の `shiori_loadu.dll` は 4.2 で建てたものが在る）は全部緑。本体 3836 件通過（無視 3）・結合テスト 8 本も全部緑。新しい `placement/balloon_limit_flip_tests.rs` の 12 件も全部通った。
+  - 整形: `cargo fmt --all -- --check` は差分なし。clippy: `cargo clippy -p areka --all-targets` の警告のうち、5.1・5.2 が触ったファイルに出るのは 3 件（`follow/window_move.rs:450`・`follow_balloon_limit_tests.rs:474,576`）。どれも 5.1・5.2 が変えた行の外で、`git blame` では 2026-08-10・08-15 の前からある行。5.1・5.2 が書いた行には警告が無い。
+  - 約束: 書き込みの関門のファイル（`placement/follow/window_move.rs`）の差分は、呼び出しの置き換え（`limit_correction` を `place_balloon_in_work_area` と `BalloonPlace` の受けに替えた 2 行と、そのための `use` の名前の入れ替え）・記録の欄 `how` の 1 行・関門の注記の書き換え（4 行を 5 行へ）だけ。窓の束ね口（`placement/follow.rs`）は `use` の 1 行だけ。配置の層のモジュールの一覧（`placement/mod.rs`）・キャラ窓の一式の型（`placement/spawn.rs` の `GhostWindows`）・起動の消費の台帳（`emo2_boot/consumer_ledger.rs`）は差分なし。新しいテストファイル `balloon_limit_flip_tests.rs` は 337 行・`balloon_limit.rs` は 301 行（どれも 1,000 行以下）。`window_move.rs` は前から 1,000 行を超えていて、今 1,227 行（新しいファイルではないので約束の外）。
+  - ゴーストの名前と初回起動: 5.1・5.2 の `crates/` の追加行に `pasta`・`ぱすた`・`ghost_dev`・`emo2`・`OnFirstBoot`・`first_boot`・「初回」は 0 件。製品のコードの追加行（`balloon_limit.rs`・`follow.rs`・`window_move.rs`）には、スコープの番号で分ける行もゴーストや起動を見る行も 0 件。要件 7.8 に反する箇所は無い。
+- 4.4 の通し（2026-10-30・排他テストの机・4.3 と同じ開発者の机・主の画面の作業領域 0,0–2880,1704）: 2 回回した。1 回目で「キャラ窓は収まっているのにバルーンだけがはみ出す場面」が見つかり、裁定（反対の側へ並べ替える）を受けて 5.1〜5.4 を行い、2 回目で受け入れの項目がすべて緑になった。
+  - 検体と回し方: 配布版の窓際のぱすたさん（SSP に入っている `C:\wintools\ssp\ghost\pasta-in-windows` と同梱のバルーン `C:\wintools\ssp\balloon\pasta_tategaki`「窓際のぱすたさん縦書き」。どちらも読むだけで写した）を `target\wwac44\root\ghost\pasta-in-windows`・`target\wwac44\root\balloon\pasta_tategaki` へ写した。開発用の `ghost_dev` の写しはバルーンが DEBUG 版でトークの間隔も開発用なので使っていない。写しのゴーストの `ghost\master\profile` とバルーンの `profile` を消し、`AREKA_USER_ROOT=target\wwac44\user` を空にして、記憶の空の初回起動にした（根・記憶・記録・撮影はワークツリーの `target\` の下だけ）。起動は `target\debug\areka.exe` に絶対パスでゴーストとバルーンを渡し、`AREKA_APP_SMOKE_EXIT_MS=90000`・`RUST_LOG=info,areka::placement=debug,areka::emo2_boot=debug`・`AREKA_NO_ALERT=1`・`PASTA_DEBUG=0`（どれもその起動のプロセスの中だけ。全体の設定と検体の `pasta.toml` は変えていない）。起動と同時に、画面全体を 5 秒ごとに 21 枚 PNG に撮った（クリック・SendInput・computer-use は使っていない）。2 回とも 90 秒の自動終了で終わった（終了コード 0）。
+  - 1 回目（5.1 の前）: 本体と相方のキャラ窓はどちらも `0,336` の 1108×1368（右端 1108・下端 1704）で作業領域の中。トークの後に窓は動かず、縦書きのバルーンの 1 列目に × と横線はかからなかった（× は 1 列目の上の余白）。初回のトークはボールのクリックを待つ「ボール叩いて」の呼びかけで止まった（ぱすたは映らない）。`[balloon-limit] Clamp` は相方（scope 1）の側だけで 2 行、どちらも押し込みだった: `04:01:42.491 起動時関門 scope=1 context="boot-gate" from=(-872,336) to=(0,336) balloon_size=872×900`／`04:01:43.614 runtime 関門 scope=1 context="runtime-gate" route=BalloonFollow from=(-872,336) to=(0,336)`。キャラ窓は収まっているのに、窓の左に置かれる 872×900 のバルーンだけが作業領域の左へはみ出し、x=0 へ押し込まれてキャラ窓（0..1108）に重なった。これが探していた場面で、ここで止めて裁定を仰いだ（裁定と 5.1〜5.4 は `research.md` 13 節・タスク 5）。ログと撮影は `target\wwac44\run1\`（`areka.out` の 38・313 行目、`shots\s00_t000.png`〜`s20_t107.png`）。
+  - 2 回目（5.1〜5.4 の後・`9d0657ecb` を建て直し、32bit の補助も置き直した）: 1 回目に緑だったものはすべてそのまま緑。窓の枠は `0,336` の 1108×1368 で作業領域の中、トークの最中（22 秒目）とバルーンが閉じた後（87 秒目）で枠の位置は同じでずれない。1 列目に × と横線はかからない（× は 1 列目の上の余白）。`[balloon-limit] Clamp` は 3 行で、どれも相方の側の並べ替え（`how="flipped"`）:
+    - `05:07:01.348 起動時関門 scope=1 context="boot-gate" how="flipped" from=(-872,336) to=(1108,336) balloon_size=872×900 work_area=(0,0,2880,1704)`（`areka.out` 38 行目）
+    - `05:07:03.306 runtime 関門 scope=1 context="runtime-gate" how="flipped" route=BalloonFollow from=(-872,336) to=(1108,336)`（377 行目）
+    - `05:07:38.309 runtime 関門 scope=1 context="runtime-gate" how="flipped" route=BalloonFollow from=(-872,336) to=(1108,336)`（6291 行目）
+    - 相方のバルーンは x 1108..1980 に置かれ、キャラ窓 0..1108 の右端に接して重ならない。押し込みの行は 0 件。相方のバルーンの絵 `balloonk0.png` は全部が透明（起動の時に「全透明」の警告が出る）なので撮影には写らず、位置はログだけで確かめた。
+    - `[work-area-clamp]` は `Keep surface-grow scope=0/1 reason="fits" at=(0,336)`（207・370 行目）と `Keep boot-repack scope=1 reason="explicitly-placed"`（388 行目）。ゴーストの `\![move]` の当たり `move_applied scope=1 … to=(0,336)` は 2 回（383・6293 行目）で、どちらも位置は変わらない。
+    - クリックの代わりは送っていないが、`05:07:16.649` に机の前の人の手とみられる左のダブルクリックがボール（画面の 197,1122）に入り、`OnMouseClick scope=0 region="セキュリティボール"` から初回のトークの後半（ぱすたが映って名乗る）が流れた（2339〜2348 行目）。後半の間も窓の枠・× の位置・相方のバルーンの並べ替えは同じく緑で、38 秒目の 3 行目の Clamp と 2 回目の move はこの後半の中のもの。
+    - ログ `target\wwac44\areka.out`、撮影 `target\wwac44\shots\s00_t000.png`〜`s20_t108.png`（見た主なもの: `s04_t022.png` トークの最中・`s16_t087.png` バルーンが閉じた後）、見るために切り出した絵 `target\wwac44\crop_s04_t022.png`・`crop_s16_t087.png`・`zoom_s04_t022.png`。撮影は仮想画面の全体（6293×2393）で、主の画面は x=3413 から（左の画面は縮んで写る）。左の画面に写るぱすたは別のセッションの SSP のもので areka ではない。
+- 最終検証（2026-10-30・`/kiro-validate-impl`・`41b177ad0`）: 判定は申し送りつきの GO（開発者の裁定）。タスクをまたぐ確かめ（つなぎ・要件 1〜10 の網羅・設計・境界・TODO・秘密の値）は GO。全体テスト `tools/test-all.ps1` は 13 段のうち 12 段が緑、`x64 workspace tests` の 1 本 `script_security_real_run::real_boot_path_carries_request_origin_and_mcp_script_enters_no_user_break` だけ赤。原因は環境: 開発者の環境の `PASTA_DEBUG=1` で、ほかのセッションの SSP（pid 31280）のぱすたが 127.0.0.1:9276 を握り、検体の pasta が LOAD 失敗（pasta.log の `debug transport bind failed`）。そのままの回し直しも赤、そのプロセスにだけ `PASTA_DEBUG=0` を付けると緑。この spec のコードによるものではない。
+- `/kiro-complete` の棚卸へ渡す範囲外の項目: ① `\![execute,resetwindowpos]` が最初の表示を待たず、起動の直後に流すと仮の大きさで並べて隙間が出うる ② 右に出すバルーンの初期配置（`resolver.rs` P5）の横のずらしの向きが ukadoc と食い違う疑い（測っていない） ③ 並べ替えたバルーンが相方のキャラ窓に重なりうる（バルーンの並べ替えは相方の窓を見ない） ④ 環境の `PASTA_DEBUG=1` で SSP などのぱすたが 9276 を握ると、emo2 の実機テストと検体が LOAD 失敗する ⑤ `window_move.rs` は前から 1,000 行を超えている（今 1,227 行）。
+- 完了時の棚卸（2026-10-30）: その場で解決 1 件＝real-run-kit が起こす子へ `PASTA_DEBUG=0` を渡す（`a5dbd16be`・赤になるテストつき・本 spec の外）。起票 2 本＝`balloon-flip-side-rules`（並べ替えたバルーンが相方の窓に重なりうる・右側の初期配置のずらしの向きの疑い。裁定と SSP の測りが要る）・`window-resetwindowpos-hold`（`resetwindowpos` が最初の表示を待たない。直し方が複数あり実機の確かめが要る）。`window_move.rs` の行数の超過は前からのもので、`audit-placement-follow` が見直すので起票しない。

@@ -210,6 +210,8 @@ impl RealRun {
             .env("AREKA_MCP_PORT", port.to_string())
             .env("AREKA_NO_ALERT", "1")
             .env("NO_COLOR", "1")
+            // 開発者の PASTA_DEBUG=1 を受け継ぐと、SSP などのほかの pasta が握る 9276 とぶつかり LOAD に失敗する
+            .env("PASTA_DEBUG", "0")
             .env(
                 "AREKA_APP_SMOKE_EXIT_MS",
                 self.limits.safety_exit.as_millis().to_string(),

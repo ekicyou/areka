@@ -36,7 +36,8 @@
 //! 5. 控えの矩形どうしが隣り合っていた → 左／右へ付ける（`adjacent-left`／`adjacent-right`）
 //! 6. 離れていた・重なっていた → 動かさない（`apart`／`overlapped`）
 //!
-//! 決めは揃った後の今の x と幅で [`resolve_chain`] が解き、横にだけ動かす（y は据え置き）。
+//! 決めは揃った後の今の x と幅で [`resolve_chain`] が解き、作業領域の中へ寄せてから書く
+//! （y は寄せが縦に収めたときだけ変わる・window-work-area-clamp 要件 2.1）。
 //! 既定の位置も台本の印も読まないので、記憶から戻した窓（既定の位置が無い）も、変わる直前に
 //! 隣り合っていれば詰まる。組ごとに 1 行、判断の語・動かした窓・量・直前の隙間を `info!` に
 //! 残す。詰め直した位置は記憶に書かない（要件 6.1）。
@@ -57,6 +58,7 @@
 //! 2 度目以降の遷移で待ちが生じても警告は各回一度ずつ出る（要件 6.3）。
 //!
 //! [`CHAIN_FINALIZE_STALL_FRAMES`]: super::chain_finalize::CHAIN_FINALIZE_STALL_FRAMES
+//! [`resolve_chain`]: super::chain_finalize::resolve_chain
 //! [`GhostWindows::set_default_char_pos`]: super::spawn::GhostWindows::set_default_char_pos
 
 use bevy_ecs::entity::Entity;
@@ -70,11 +72,11 @@ use wintf::ecs::drag::DraggingState;
 use super::chain_finalize::{
     Adjacency, ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainRect, ChainSlot,
     KeepReason, PairDecision, ScopeChainState, judge_adjacency, mark_non_positive_widths,
-    note_chain_deferral, resolve_chain,
+    note_chain_deferral,
 };
 use super::diag::PlacementRoute;
 use super::dpi_sync::{self, DpiSyncHold};
-use super::follow::move_window_with_route;
+use super::follow::{ClampScene, move_window_with_route, place_chain_in_work_area};
 use super::resolver::PointPx;
 use super::spawn::GhostWindows;
 use super::sticky_group_ledger::StickyGroupLedger;
@@ -315,14 +317,17 @@ where
     }
 
     mark_non_positive_widths(&mut slots);
-    let moves = resolve_chain(&slots);
+    // 解いた鎖を基準の窓のモニタの作業領域の中に置く（window-work-area-clamp 要件 2.1・2.3）。
+    let moves: Vec<_> =
+        place_chain_in_work_area(world, &slots, &targets, |_| ClampScene::DpiRealign)
+            .into_iter()
+            .filter(|p| p.to != p.from)
+            .collect();
     let mut applied: Vec<(Entity, i32, i32)> = Vec::new();
     for (i, slot) in slots.iter().enumerate().skip(1) {
         let decision = slot.decision.as_str();
-        let to_x = moves
-            .iter()
-            .find(|m| m.scope == slot.scope)
-            .map_or(slot.current_x, |m| m.new_x);
+        let to = moves.iter().find(|m| m.scope == slot.scope).map(|m| m.to);
+        let to_x = to.map_or(slot.current_x, |p| p.x);
         info!(
             prev_scope = slots[i - 1].scope,
             scope = slot.scope,
@@ -333,15 +338,15 @@ where
             dx = to_x.saturating_sub(slot.current_x),
             "chain_realign: 拡大率の後の詰め直しで組の判断を下した（要件 7.1）"
         );
-        if to_x != slot.current_x
-            && let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == slot.scope)
+        if let Some(to) = to
+            && let Some(&(_, entity, _)) = targets.iter().find(|(s, _, _)| *s == slot.scope)
         {
-            applied.push((entity, to_x, pos.y));
+            applied.push((entity, to.x, to.y));
         }
     }
     // 経路は `ChainRealign`＝**システム由来**（D9／D16）。既定位置は単一の窓書込口が
     // 同じ量を運ぶので、ここで `set_default_char_pos` を重ねて呼ばない。
-    // Y は今の値を据え置く（要件 1.4・下端吸着は各窓の再射影が既に保っている）。
+    // Y は寄せが縦に収めたときだけ変わる（それ以外は今の Y＝下端吸着は各窓の再射影が保つ・要件 1.4）。
     for (entity, x, y) in applied {
         move_window_with_route(world, entity, x, y, PlacementRoute::ChainRealign);
     }

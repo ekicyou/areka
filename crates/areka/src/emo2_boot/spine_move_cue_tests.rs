@@ -1,6 +1,6 @@
 use super::{
     Duration, Entity, GhostWindows, HINSTANCE, HWND, Instant, Point, SPIN_WAIT, SpineHarness,
-    WindowHandle, WindowPos, World, run_move_drain_phase,
+    WindowHandle, WindowPos, World, all_shown, run_move_drain_with,
 };
 
 // ===========================================================================
@@ -120,7 +120,8 @@ fn spine_move_cue_drives_window_move_end_to_end() {
         now += 1;
         harness.inject_dispatcher_tick(now);
         // 実 frame 相 drain（task 9.2）: move channel を try_iter し apply_move_directive で即時反映。
-        run_move_drain_phase(&harness.wiring, &mut harness.world);
+        // 前提: 本 e2e は表示の線を GPU 無しで回すので、窓はどれも最初の面を表示済みとする読み口で流す。
+        run_move_drain_with(&harness.wiring, &all_shown, &mut harness.world);
         if window_position(&harness.world, target) != baseline {
             moved = true;
             break;
@@ -144,7 +145,7 @@ fn spine_move_cue_drives_window_move_end_to_end() {
     );
 
     // 二重適用なし: move cue は 1 発ゆえ、追加 drain で窓はさらに動かない（channel は drain 済みで空）。
-    run_move_drain_phase(&harness.wiring, &mut harness.world);
+    run_move_drain_with(&harness.wiring, &all_shown, &mut harness.world);
     assert_eq!(
         window_position(&harness.world, target),
         Point { x: 1208, y: 1063 },

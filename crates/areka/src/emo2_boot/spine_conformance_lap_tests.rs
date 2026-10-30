@@ -70,8 +70,8 @@ use super::conformance_support::{
 use super::{
     ActorKey, CloseReason, Entity, GhostWindows, HINSTANCE, HWND, LoopDriver, Point,
     PresentCommand, RecordedCall, RecordedStatus, ScriptedShioriHandle, SpineHarness,
-    TalkLifecycleSignal, WindowHandle, WindowPos, World, capture_logs, count_level,
-    run_attach_phase, run_move_drain_phase,
+    TalkLifecycleSignal, WindowHandle, WindowPos, World, all_shown, capture_logs, count_level,
+    run_attach_phase, run_move_drain_with,
 };
 use areka_kanade::{ChoiceInput, MouseButton, MouseEventKind, MouseInput};
 
@@ -256,7 +256,9 @@ impl StageSink for LapSink<'_> {
                 }
             }
             // 移動指令の受信端を実 frame 相で drain し、対象窓の位置を読み直す（design D1 位置調整段）。
-            run_move_drain_phase(&self.harness.wiring, &mut self.harness.world);
+            // 前提: 表示指令は採取するだけで表示層へ当てないので、窓はどれも最初の面を表示済み
+            // （拡大率 1）とする読み口で流す（位置の指令を預からない・`frame/move_hold.rs`）。
+            run_move_drain_with(&self.harness.wiring, &all_shown, &mut self.harness.world);
             observed.move_target_pos = window_position(&self.harness.world, self.move_target);
         }
         let collected = StageSink::collect(self.harness);
