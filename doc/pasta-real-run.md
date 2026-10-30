@@ -53,6 +53,7 @@ function Open-Sample([string]$Name) {
     $h = @{}; foreach ($l in $lines) { $k, $val = $l -split '=', 2; $h[$k] = $val }; $h
 }
 $emo2 = Open-Sample 'emo2'
+$arekaBalloon = Open-Sample 'areka-balloon'
 $staysee = Open-Sample 'StayseeBalloon'
 $pasta = Open-Sample 'pasta-in-windows'
 
@@ -61,6 +62,7 @@ Remove-Item -LiteralPath "$v\root", "$v\profile" -Recurse -Force -ErrorAction Si
 $null = New-Item -ItemType Directory -Force -Path "$v\root\ghost", "$v\root\balloon", "$v\profile", "$v\logs", "$v\shots"
 Copy-Item -LiteralPath $emo2['folder'] -Destination "$v\root\ghost\emo2" -Recurse
 Copy-Item -LiteralPath $emo2['balloon.emo2-kakukaku'] -Destination "$v\root\balloon\emo2-kakukaku" -Recurse
+Copy-Item -LiteralPath $arekaBalloon['folder'] -Destination "$v\root\balloon\areka-balloon" -Recurse
 Copy-Item -LiteralPath $staysee['folder'] -Destination "$v\root\balloon\StayseeBalloon" -Recurse
 Copy-Item -LiteralPath $pasta['folder'] -Destination "$v\root\ghost\pasta-in-windows" -Recurse
 Get-ChildItem -LiteralPath "$v\root\ghost", "$v\root\balloon" -Directory | Select-Object -ExpandProperty FullName
@@ -74,14 +76,14 @@ pwsh -NoProfile -File "$w\tools\sync-i686-helper.ps1"; "sync exit=$LASTEXITCODE"
 通った形:
 
 - `fetch exit=0`・`build exit=0`・`build i686 exit=0`・`sync exit=0`（`sync` は `helper is i686: ...` か `placed i686 helper: ...` の行を出す）。
-- 根の一覧が `ghost\emo2`・`ghost\pasta-in-windows`・`balloon\emo2-kakukaku`・`balloon\StayseeBalloon` の 4 つ。
+- 根の一覧が `ghost\emo2`・`ghost\pasta-in-windows`・`balloon\areka-balloon`・`balloon\emo2-kakukaku`・`balloon\StayseeBalloon` の 5 つ（`areka-balloon` は既定のバルーン、`StayseeBalloon` は配布物に同梱する選べるバルーン）。
 - `nar-sample-path` が終了コード 3 で落ちたら、置き場の書庫か `.sha256` が無いか合わない。1 の取り寄せを回し直す。
 
 置き場の形（根・記録・撮った物は、すべてワークツリーの `target\` の下。`C:\` の直下や `C:\tmp` は使わない）:
 
 ```text
 <w>\target\pasta-verify\
-├─ root\       走行の根（ghost\emo2・ghost\pasta-in-windows・balloon\emo2-kakukaku・balloon\StayseeBalloon）
+├─ root\       走行の根（ghost\emo2・ghost\pasta-in-windows・balloon\areka-balloon・balloon\emo2-kakukaku・balloon\StayseeBalloon）
 ├─ profile\    areka の記憶（走行ごとに空）
 ├─ logs\       <回>.stdout.log・<回>.stderr.log・<回>.pid.txt・<回>.exitcode.txt
 ├─ shots\<回>\ 撮った物
@@ -157,7 +159,7 @@ Get-NetTCPConnection -LocalPort 9276 -State Listen -ErrorAction SilentlyContinue
 
 取り寄せる書庫（10-20 版）は `install.txt` にバルーンの鍵が無く、縦書きのバルーンはゴーストのフォルダの直下（`ghost\pasta-in-windows\pasta_tategaki`）に置かれたままになる。areka も SSP もそこをバルーンとして探さないので、配布物の既定のバルーンで話す（ぱすたの側が `install.txt` を直した・次のリリースの書庫から入る）。縦書きのバルーンでしか見えない崩れ（列と枠の並び・縦書きの選択肢）を早く見るため、本走行の後に、縦書きのバルーンを根の `balloon\` に写した別の根で段 1〜2 だけを回してよい。結果は「参考（代わりの置き方）」として、段の 3 値の数と分けて書く。直した書庫で回すときは要らない。
 
-本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶の `StayseeBalloon` になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
+本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶のバルーン（本走行で使った既定の `areka-balloon`。2026-10 までは `StayseeBalloon`）になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
 
 ```powershell
 $v = "$w\target\pasta-verify-alt"   # 置き場を本走行と分ける

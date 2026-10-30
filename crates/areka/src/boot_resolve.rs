@@ -31,7 +31,7 @@ use areka_sylphya::{
 /// 既定ゴースト（要件 4.4・4.11。配布物に必ず同梱＝裁定 3）。
 pub(crate) const DEFAULT_GHOST_FOLDER: &str = "emo2";
 /// 既定バルーン（要件 5.5・5.9。フォルダ名と id はバイト一致＝完了 spec で実測済み）。
-pub(crate) const DEFAULT_BALLOON_FOLDER: &str = "StayseeBalloon";
+pub(crate) const DEFAULT_BALLOON_FOLDER: &str = "areka-balloon";
 
 /// ゴーストが決まった経路（要件 4.10 の記録に載せる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
