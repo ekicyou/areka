@@ -8,7 +8,9 @@
 
 use crate::alert::AlertScene;
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
-use crate::boot_resolve::{BalloonRoute, GhostDecision, GhostRoute, running_name};
+use crate::boot_resolve::{
+    BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostDecision, GhostRoute, running_name,
+};
 use crate::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use log_capture_kit::{CapturedEvent, capture};
@@ -101,7 +103,7 @@ fn default_ghost_and_balloon_are_adopted_from_the_lower_root() {
     put_ghost(&low, "b", "");
     let emo2 = put_ghost(&low, "emo2", "");
     put_balloon(&top, "x");
-    let staysee = put_balloon(&low, "StayseeBalloon");
+    let default_balloon = put_balloon(&low, DEFAULT_BALLOON_FOLDER);
     let app_dir = tmp.child("app-profile");
     let (got, _) = capture(|| {
         resolve_boot_from(
@@ -116,7 +118,7 @@ fn default_ghost_and_balloon_are_adopted_from_the_lower_root() {
     assert_eq!((ghost.route, ghost.dir), (GhostRoute::Default, emo2));
     assert_eq!(
         (balloon.route, balloon.dir),
-        (BalloonRoute::Default, staysee)
+        (BalloonRoute::Default, default_balloon)
     );
     assert_eq!(cfg.ghost_root, tmp.child("low").join("ghost").join("emo2"));
 }
@@ -132,7 +134,7 @@ fn companion_balloon_is_found_in_the_lower_root() {
         "charset,UTF-8\nballoon.directory,bundled\n",
     )
     .expect("install.txt");
-    put_balloon(&top, "StayseeBalloon");
+    put_balloon(&top, DEFAULT_BALLOON_FOLDER);
     let bundled = put_balloon(&low, "bundled");
     let (got, events) = capture(|| resolve_balloon_for_ghost(&roots, &ghost, no_pick));
     let got = got.expect("決まる");
@@ -150,7 +152,7 @@ fn memory_folder_name_hits_by_the_one_rule_across_roots() {
     let (top, low, roots) = two_roots(&tmp);
     let ghost = put_ghost(&top, "g", "");
     put_balloon_memory(&ghost, "MINE");
-    put_balloon(&top, "StayseeBalloon");
+    put_balloon(&top, DEFAULT_BALLOON_FOLDER);
     let mine = put_balloon(&low, "mine");
     let (got, events) = capture(|| resolve_balloon_for_ghost(&roots, &ghost, no_pick));
     let got = got.expect("決まる");
@@ -170,10 +172,13 @@ fn memory_in_no_root_warns_with_store_list_and_falls_through() {
     let ghost = put_ghost(&top, "g", "");
     put_balloon_memory(&ghost, "gone");
     put_balloon(&top, "x");
-    let staysee = put_balloon(&low, "StayseeBalloon");
+    let default_balloon = put_balloon(&low, DEFAULT_BALLOON_FOLDER);
     let (got, events) = capture(|| resolve_balloon_for_ghost(&roots, &ghost, no_pick));
     let got = got.expect("決まる");
-    assert_eq!((got.route, got.dir), (BalloonRoute::Default, staysee));
+    assert_eq!(
+        (got.route, got.dir),
+        (BalloonRoute::Default, default_balloon)
+    );
     let warned = named(&events, "last_balloon_not_found");
     assert_eq!(warned.len(), 1, "{events:?}");
     let stores = format!(

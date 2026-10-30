@@ -47,6 +47,8 @@ pub(crate) mod shell_balloon_switch;
 pub(crate) mod shell_box_assets;
 /// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。
 pub(crate) mod shell_carry;
+pub(crate) mod shell_cursor_assets;
+pub(crate) mod shell_cursor_table;
 /// 表示の層から今のシェルとバルーンの事実を写す（mcp-strict-errors）。
 pub(crate) mod skin_facts_copy;
 mod special_name;
@@ -509,6 +511,7 @@ pub fn wire_emo2_boot(
         shell_author_dpi,
         balloon_author_dpi,
         boxes,
+        cursors,
     } = assets;
     // SERIKO ループ構成（design「本番は実時間・実 entropy 接続」・R7.4）: シェル／バルーンの 2 表は
     // `BootAssets.loop_tables`（task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）を
@@ -574,6 +577,8 @@ pub fn wire_emo2_boot(
         balloon_author_dpi,
         // 箱の束は装着の相が文字の層へ渡す（seriko は読まない）。
         boxes,
+        // シェルのカーソルも装着の相が箱の束の隣で入れる。
+        cursors,
     };
 
     // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する。全 clone は単一 seriko

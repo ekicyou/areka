@@ -234,12 +234,15 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         shell_author_dpi,
         balloon_author_dpi,
         boxes,
+        cursors,
     } = assets;
     // 箱の束（areka-P0-shell-balloon「箱の束の結線」）: 置き場所の表・`\s` の解決の閉包・
     // フォントを探す場所の順を文字の層へ渡す。全スコープで共有する 1 束ゆえループの前に 1 度。
     // ゴーストの切替は文字の層ごと作り直し、この相がもう 1 度走って新しいシェルの束を渡す
     // （要件 6.8 のゴーストの側）。
     boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
+    // シェルのカーソルも同じく新しいシェルの分へ入れ替える（shell-mouse-cursor 要件 6.8）。
+    cursors.hand_to(world);
     let author_dpis = AuthorDpis {
         shell: shell_author_dpi,
         balloon: balloon_author_dpi,

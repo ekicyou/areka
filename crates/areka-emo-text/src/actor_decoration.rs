@@ -23,7 +23,7 @@ use wintf::ecs::GraphicsCore;
 
 use super::{ActorRender, ResolvedBalloonText, TextLayerRuntime};
 use crate::TextLayerError;
-use crate::choice::ResolvedChoiceStyle;
+use crate::choice::{CursorFallback, ResolvedChoiceStyle};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, FontCatalog, ResolvedFont};
 use crate::look::GlyphStyles;
 use crate::region::TextRegion;
@@ -127,6 +127,43 @@ pub(super) fn warn_ignored_origin(
             range_max,
             corner,
             "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた"
+        );
+    }
+}
+
+/// 選択肢の飾りの縮退（`cursor.blendmethod` の ROP 系・`cursor.style` の下線系）を、置き場ごとに
+/// 値が決まったときだけ `warn!` で知らせる（spec real-run-log-noise 要件 2.1〜2.4）。
+///
+/// 以前は純粋な解決（[`ResolvedChoiceStyle::resolve`]）の中にあり、解き直しのたびに出ていた。
+/// 文言は移動の前後で 1 文字も変えず、名前の欄 `balloon` だけを足した（ほかの作者向けの警告と
+/// 同じ取り方）。
+///
+/// # 件数
+///
+/// `previous` は当該の置き場の**前の**解き直しの入力から取り出した値（無ければ `None`）。成分
+/// ごとに「新しい値が在り、前と違う」ときだけ 1 件書く——装着は 1 件、値の同じ再追従は 0 件、
+/// 値の変わる再追従は変わった成分だけ 1 件。普通のバルーンの呼び手は、記憶を消す直の登録口
+/// （[`TextLayerRuntime::register_actor`]）を呼ぶ**前に** `previous` を取り出す。直の登録口の
+/// 後の最初の再追従は「前は無い」になりもう 1 件出るが、本番の結線は直の登録口を使わない。
+pub(super) fn warn_cursor_fallback(
+    balloon: &str,
+    now: &CursorFallback,
+    previous: Option<&CursorFallback>,
+) {
+    if let Some(blendmethod) = now.blendmethod.as_deref()
+        && previous.is_none_or(|p| p.blendmethod.as_deref() != Some(blendmethod))
+    {
+        warn!(
+            balloon,
+            blendmethod, "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退"
+        );
+    }
+    if let Some(style) = now.underline_style.as_deref()
+        && previous.is_none_or(|p| p.underline_style.as_deref() != Some(style))
+    {
+        warn!(
+            balloon,
+            style, "cursor.style underline 系は M1 未対応: SquareFill へ縮退"
         );
     }
 }

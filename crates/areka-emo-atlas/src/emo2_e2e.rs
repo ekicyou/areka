@@ -201,6 +201,45 @@ fn emo2_shell_all_elements_baked() {
     });
 }
 
+/// 檻 T10（real-run-log-noise 要件 3.1・3.6・5.2）: 同梱の emo2 のシェルを本物の読み手で焼くと、
+/// `purple/a/null.png`（着せ替えの「無し」の絵）は `warn` 0 件・見分けた `debug` 1 件。
+#[test]
+fn emo2_null_png_logs_debug_not_warn() {
+    let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
+        .expect("emo2 surfaces.txt readable");
+    let shell = areka_parsers::shell::parse(&content);
+    let base = shell_master_dir();
+
+    with_com_initialized(|| {
+        let dec = WicDecoderArm::new().expect("WIC factory under COM init");
+        let set = SurfaceSet {
+            surfaces: &shell.surfaces,
+            base_dir: &base,
+            alpha_params: on_params(),
+        };
+        let out = crate::log_capture::capture_logs(|| {
+            let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
+            assert!(result.errors.is_empty(), "{:?}", result.errors);
+        });
+        let null_lines: Vec<&str> = out
+            .lines()
+            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_KEY_COLOR_KEY}\"")))
+            .collect();
+        assert!(
+            !null_lines.iter().any(|l| l.contains("level=WARN")),
+            "{SHELL_KEY_COLOR_KEY} の warn は 0 件: {out}"
+        );
+        let debug: Vec<&&str> = null_lines
+            .iter()
+            .filter(|l| {
+                l.contains("level=DEBUG")
+                    && l.contains("着せ替え（bind）のアニメーションからだけ参照される面の絵です")
+            })
+            .collect();
+        assert_eq!(debug.len(), 1, "見分けた debug は 1 件: {out}");
+    });
+}
+
 /// テスト②: emo2 balloon — shell と同一の bake 経路で処理される（1.4）。
 ///
 /// balloon 画像を surface 表現に手組みし（design D1）、shell set と **1 度の bake** で
