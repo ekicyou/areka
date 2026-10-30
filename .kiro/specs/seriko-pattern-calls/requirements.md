@@ -136,6 +136,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 5. If `insert` の相手が今の面に無いか、interval が `bind` でないとき, the areka shall その位置に何も描かず、読み込みのときに 1 度だけ記録を残す。
 6. If `insert` が着せ替えでないアニメーションか element定義に書かれているとき（正典は未定義）, the areka shall 何も描かず、読み込みのときに 1 度だけ記録を残す。
 7. The areka shall `insert` の行のウェイト・X座標・Y座標を使わず、差し込んだ B のコマを B 自身のコマに書かれた座標で描く（正典は黙る・areka の読み）。
+8. The areka shall 着せ替えの何コマ目までを描き、どのコマの `insert` を差し込むかを、要件 8 の M6 の実測どおりにする。
 
 ### Requirement 7: ベースレイヤの表示位置をずらす（move）
 
@@ -148,7 +149,7 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 3. The areka shall `move` によるずらしを瞬間的に行い、コマとコマの間を補って動かさない。
 4. The areka shall `move` のコマのサーフェス番号の欄を無視する。
 5. The areka shall `move` でずらしても、キャラクターの窓の位置と大きさを変えず、窓の外へ出た部分を見せない（例: 「．さくら」の `move,0,10,0,9999` で絵が窓の下へ出て見えなくなる）。
-6. The areka shall `move` のずれを元に戻す時（そのアニメーションの停止・終わり・面の切り替え）と、ずれる範囲（ほかのアニメーションの層・当たり判定がついて動くか）を、要件 8 の M3・M4 の実測どおりにする。
+6. The areka shall `move` のずれを元に戻す時（そのアニメーションの停止・終わり・面の切り替え）と、ずれる範囲（ほかのアニメーションの層・当たり判定がついて動くか・`base` で置き換えた土台もずれるか）を、要件 8 の M3・M4・M7 の実測どおりにする。
 
 ### Requirement 8: SSP で測って決める点
 
@@ -156,12 +157,14 @@ pattern定義そのものの書式（`animation*.pattern*,描画メソッド,サ
 
 #### Acceptance Criteria
 
-1. The areka shall 次の M1〜M5 を、SSP の MCP で測った振る舞いと同じにする。
+1. The areka shall 次の M1〜M7 を、SSP の MCP で測った振る舞いと同じにする。
    - M1: 再生中のアニメーションを `start`・`parallelstart`・`alternativestart` で呼んだとき（頭からやり直すか・そのまま続けるか・呼び出しを捨てるか）。
    - M2: `alternativestop` が選ぶ範囲（並びの全部から選ぶか・再生中のものから選ぶか）。
    - M3: `move` のずれが元に戻る時（そのアニメーションの停止・`runonce` などの終わり・面の切り替え）。
    - M4: `move` でずれる範囲（ベースレイヤだけか、ほかのアニメーションの層や当たり判定もずれるか）。
    - M5: 着せ替え（interval が `bind`）のアニメーションを `start` 系・`stop` 系の相手に指したとき。
+   - M6: interval が `bind` だけの着せ替えの pattern1 以降を重ねて描くか、pattern1 以降に書いた `insert` が差し込まれるか（要件 6 の「A のそのコマの位置」が pattern0 の外にもあるか）。
+   - M7: 同じアニメーションの `base` のコマの後の `move` が、`base` で置き換えた土台をずらすか（「．さくら」の `surface22` の形）。
 2. When 測りを終えたとき, the 開発者 shall 測りの手順・検体・結果を設計の前に spec の調べの記録へ残し、要件 3〜7 の該当する所を測りの結果で確定する。
 3. If SSP が記録を出さず黙って捨てる振る舞いであったとき, the areka shall 見え方は SSP に合わせ、記録は要件 5 の決まりで残す（記録は areka の足しとして §8 に書く）。
 
