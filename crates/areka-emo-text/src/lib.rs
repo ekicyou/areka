@@ -450,6 +450,8 @@ mod tests {
         "draw_metrics_styled_tests.rs",
         "draw_oracle_tests.rs",
         "draw_test_support.rs",
+        "marker_surface.rs",
+        "marker_surface_tests.rs",
         "sink.rs",
         "sink_probe_tests.rs",
         "sink_talk_end_tests.rs",

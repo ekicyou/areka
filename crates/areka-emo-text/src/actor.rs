@@ -188,6 +188,8 @@ struct ActorRender {
     executor: ViewboxExecutor,
     /// 計測専用 probe 由来の実測 metrics（actor の font/mode に束縛）。
     metrics: DWriteMetrics,
+    /// 印の面（スクロールの矢印・窓の子として文字の面の直前）。矢印を出すまでは `None`。
+    markers: Option<MarkerSurface>,
 }
 
 /// `\s` の鍵を今のシェルで解決する閉包（結線が渡す・文字の層は seriko の型を名指ししない）。
@@ -695,6 +697,10 @@ mod present;
 
 #[path = "actor_scroll.rs"]
 mod scroll;
+
+#[path = "marker_surface.rs"]
+mod marker;
+pub use marker::{MarkerSurface, PlacedMarker};
 
 /// その序数の範囲が済んだ選択肢か（範囲が無い序数は済んでいない扱い）。押下の口・トークの終わりの口と
 /// 提示（`actor_present.rs`）が同じ判定で写しと強調から外す。

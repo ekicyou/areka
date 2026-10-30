@@ -63,6 +63,7 @@ pub(super) fn build_actor_render(
         surface,
         executor,
         metrics,
+        markers: None,
     })
 }
 

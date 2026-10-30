@@ -59,7 +59,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Depends: 2.2_
   - _Requirements: 5.3, 5.4, 8.1, 8.2, 8.3, 8.5, 8.7, 8.8, 9.2, 9.3, 11.1, 11.2_
 
-- [ ] 4.2 印の面を窓の子として文字の面の手前に挿し、矢印を描いて当たりのマスクを焼く
+- [x] 4.2 印の面を窓の子として文字の面の手前に挿し、矢印を描いて当たりのマスクを焼く
   - 普通のバルーンは面の画像全体の大きさ、箱は箱の大きさとずらしで、文字の面の直前（先頭ほど手前の並びで手前）に窓の子として挿す。箱の挿し位置の数え方を印の面も数えるように直す
   - 矢印をバルーンの絵と同じ補間で拡大率どおりの位置と大きさに描き、出ている矢印の絵の α ≥ 0.5 の画素だけを当たりのマスクにする（空でも面の大きさの空のマスク）
   - 読み戻し・片付けを文字の面と同じ形で持ち、失敗は既存の log-first の流れに乗せる
@@ -176,3 +176,6 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 3.1: emo-text の clippy も既存のファイルで今も赤（47 件）。新しいファイルだけを見る。`PlaceScroll` の `auto_first` を書くのは 3.2 の `window_for`（同じモジュール）。
 - 3.2: `ResolvedMarkerPlacement` は design.md の `{up: Option<MarkerAt>, down: …}`・`Default` でなく `{up: (i32,i32), down: (i32,i32)}` と `resolve(&ArrowKeys, extent)`（座標なしは SSP で測った既定へ先に解く。`MarkerAt` は設計に未定義）。絵の有無は `MarkerPair` が決める。`MarkerKind {Up, Down}` と `MarkerKind::dir()` は `crate::scroll_marker` にある。自動の式は `LayoutEngine::block_offset_at`（pub(crate)）へ切り出した（式は不変）。
 - 4.1: 実行時の口は `crates/areka-emo-text/src/actor_scroll.rs`（`scroll_manual_at`・`wheel_at`・`has_hidden_lines_at`・`forget_manual_at`・`forget_manual_of`）。`actor_scroll.rs` は PURE_SOURCES に載る（windows を直に import しない）ので、4.2 の描画は `marker_surface.rs` 側に置く。`WheelLines::Page` は `PlaceScroll::page_lines()`（`window_for` が書く）を使う（行の高さが混ざると見えている行の数とずれる。shortcut の注記あり）。`scrolls` の欄は初回の提示で作られる。
+- 4.2: `MarkerSurface`（`actor.rs` の `#[path="marker_surface.rs"] mod marker`）の `attach` は `physical_offset: (f32,f32)`、`draw` は `core` を取らない（面が自分の D2D の DC を持つ）。design.md の Service Interface の字面とは違う。
+- 4.2→4.3: 印の面は窓の子なので、`ActorRender` を落とすだけでは残る。4.3 は (a) 描画範囲が潰れた場所の片付け（`actor_present.rs` 約 137 行）と (b) 再追従で描画資源を捨てる所（`actor_attach.rs` 約 417 行 `self.surfaces.remove(&place)`・World が要る）の両方で `markers` を despawn する。`marker_child_index` の `expect(dead_code)` は 4.3 で外す。
+- 4.2→6.2/6.3: wintf は窓の子を後ろの子から当てる（描画は先頭が手前）。不透明なバルーンの絵の上では押下の送り手は絵の entity になる。どちらでも窓の `OnPointerPressed` に届くので、矢印かどうかは送り手でなく点の座標（`marker_at_point`）で決める。
