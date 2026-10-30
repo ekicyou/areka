@@ -139,3 +139,4 @@
 - 5.1: 押したままの握った形を `handle` で読むため、`cursor` の動詞に `-Press`（押す → `pressed=1` の行 → 放す → 放した後の行）を足した（進行役の判断・tasks の段 3 の期待に合わせる）
 - 5.2: 台帳の検査（実装済みには証拠が要る）のため `shell_cursor_table.rs` に `// ukadoc:` の注記 19 行、整合のテストのため `briefing.md`・`roadmap-draft.md` の数も直した（境界の外・道具の求め）
 - 5.3: 実機（2026-10-31・areka pid 33288・exit=0）で身体 `custom`・× とボール `HAND`・髪（当たり判定の外）`ARROW`・押下 `HAND`（指差し）→ 放すと押す前の `custom` の handle・ホイールと 1.5 秒の止まりで不変・`shell\nocursor`（cursorブレスを抜いた写し）へのシェル切り替えの後は `HAND` で前の `custom` は出ない、を読んだ。記録は `target\pasta-verify\logs\cursor1.cursor-excerpt.txt`。押下で握った形を期待していた手順書と design の E2E 2 は要件 3.1 に合わせて直した
+- 最終検証 1 回目 NO-GO（ファイルの長さの番人）: 4.3 のカーソルのテストを `frame/switch_cursor_tests.rs` へ分けた。`switch_finish_tests.rs` は上限ちょうどの 1000 行。wintf のテストは areka の絵を読まず中で組む `.cur` に替えた（1.2 の注記は解消）

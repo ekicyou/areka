@@ -57,18 +57,6 @@ fn reads_header_and_entries() {
 }
 
 #[test]
-fn reads_bundled_hand_cur() {
-    let bytes = include_bytes!("../../../../areka/cursor/hand.cur");
-    let entries = read_cur_directory(bytes).expect("同梱の hand.cur");
-    let sizes: Vec<u32> = entries.iter().map(|e| e.width).collect();
-    assert_eq!(sizes.len(), 10);
-    assert_eq!((sizes[0], sizes[9]), (32, 128));
-    for e in &entries {
-        assert!(u32::from(e.hotspot.0) < e.width && u32::from(e.hotspot.1) < e.height);
-    }
-}
-
-#[test]
 fn short_header_is_broken() {
     assert_eq!(
         read_cur_directory(&[0, 0, 2, 0]),
