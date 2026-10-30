@@ -353,7 +353,7 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     );
     assert_eq!(code.matches(write).count(), 1, "原寸の更新点が 1 つでない");
 
-    let record_at = at(".native_scratch(|scratch| record_display(dc, scratch))");
+    let record_at = at(".native_scratch(|scratch| record_display(dc, scratch, None))");
     assert_eq!(
         lines[record_at + 1..record_at + 6].join(" "),
         "{ Ok(list) => list, Err(e) => { Self::reply(reply, Err(e)); return;",

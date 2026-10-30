@@ -135,19 +135,32 @@ pub enum PresentError {
 /// `windows_core::Error` を [`PresentError::Device`]（ログ＋`HRESULT`＋文脈）へ写像するクロージャ。
 ///
 /// 失敗経路はログ規律（`error!` ＋ `Err` 戻り値・パニック禁止）に従い、発生箇所の静的文脈を添えて
-/// 構造化エラーへ畳む。`.map_err(device_err("<where>"))?` の形で D2D/D3D/DXGI 呼び出しを包む。
+/// 構造化エラーへ畳む。`.map_err(device_err("<where>", repeat))?` の形で D2D/D3D/DXGI 呼び出しを包む。
 ///
 /// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`chain`）
 /// からも同一の形で使える（同形の写像を各モジュールへ複写しないため）。
+///
+/// `repeat` は前に記録した同じ対象の失敗の原因（`context`・`hresult`）。今の原因と同じなら同じ
+/// 文言・同じ欄で `debug!` に落とし（同じ原因の続きを積まない・要件 4.3）、それ以外（`None` を
+/// 含む）は今と同じ `error!`（要件 1.6）。
 pub(crate) fn device_err(
     context: &'static str,
+    repeat: Option<(&'static str, i32)>,
 ) -> impl FnOnce(windows::core::Error) -> PresentError {
     move |e| {
         let hresult = e.code().0;
-        tracing::error!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+        if repeat == Some((context, hresult)) {
+            tracing::debug!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+        } else {
+            tracing::error!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+        }
         PresentError::Device { hresult, context }
     }
 }
+
+#[cfg(test)]
+#[path = "command_device_err_tests.rs"]
+mod device_err_tests;
 
 #[cfg(test)]
 mod tests {

@@ -148,7 +148,7 @@ impl EmoPresenter {
                         // 起きないため確保の計数も動かない。
                         match target
                             .budget
-                            .native_scratch(|scratch| record_display(dc, scratch))
+                            .native_scratch(|scratch| record_display(dc, scratch, None))
                         {
                             Ok(list) => list,
                             // record_display は内部で error! 済み（display.rs device_err）。

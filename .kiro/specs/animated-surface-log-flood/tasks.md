@@ -33,7 +33,7 @@
   - _Requirements: 3.1, 3.6_
 
 - [ ] 3. 表示の側: 記録の出し分けと、コマ替えの重ね直し
-- [ ] 3.1 (P) 装置の失敗の記録に「同じ原因の続き」を渡せるようにする
+- [x] 3.1 (P) 装置の失敗の記録に「同じ原因の続き」を渡せるようにする
   - 装置の失敗を記録に変える所に「前に記録した原因」を受ける引数を足し、同じ文脈と同じ HRESULT なら同じ文言・同じ欄で DEBUG、それ以外は今と同じ ERROR にする
   - 表示の記録の関数とテスト用の失敗の注入点も同じ引数を通す。今の呼び手（表示の適用と既存のテスト）は「前の原因なし」を渡し、振る舞いを今のまま保つ
   - 終わった形: 既存の表示の失敗のテスト（target・ERROR・文言の主張）がそのまま緑で、同じ原因を渡すと DEBUG になることを新しい小さなテストで確かめている
@@ -146,3 +146,4 @@
 ## Implementation Notes
 - 2.1: `blit_rect.rs` の頭の `#![cfg_attr(not(test), expect(dead_code, ...))]`（と直前の注記）は、2.2 で口につないだら必ず消す（残すと clippy が赤）。
 - 範囲外: 今の clippy 1.99.1 の lint `chunks_exact_to_as_chunks` が、emo-compose の既存のテスト 4 本（blit_transparent_alpha_tests.rs:60・golden_tests_surface1000_bind_tests.rs:89・golden_tests_test_support.rs:168・composer_tests.rs:841/893）で `--all-targets -D warnings` を赤にする。本 spec の差分とは関係ない。完了の棚卸で扱う。
+- 範囲外: `cargo clippy -p areka-emo-present -- -D warnings` は依存の `dola` の既存の指摘 21 件（collapsible_if など）で止まる。`--no-deps` でも `presenter/hub.rs:269` の collapsible_if と、テスト 5 本（balloon_target_tests・display_tests・presenter_budget_steady_state_tests・presenter_budget_equivalence_tests・shell_target_template_tests）の既存の lint が赤。本 spec の差分とは関係ない。完了の棚卸で扱う。emo-present の clippy の確かめは `--no-deps` で、変えたファイルの指摘 0 件を見る。
