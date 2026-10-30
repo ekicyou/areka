@@ -174,3 +174,52 @@
   - 普通のバルーンの窓へ文字の面より手前の子の面を足せるか（wintf の子の並びと emo-present の装着の口）。
   - 箱を持つ実機の検体の有無（無ければ `target\` の下に組む）。
   - 矢印の絵を拡大率で描くときの補間（バルーンの絵と同じ見え方になるか）。
+
+## 設計の段の記録（2026-10-30・`/kiro-spec-design balloon-scroll-arrows -y`）
+
+### 要約
+
+- **発見の種類**: 拡張（light）。既存の族の表・見える範囲の 1 か所・窓の子の面・`char_watch` の前例・`dump_balloon` の重ねに乗る。外の crate は足さない（Web の調べは不要）。
+- **使った決まりと資料**: スキル `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、テンプレート `.kiro/settings/templates/specs/design.md`・`research.md`、steering の `product.md`・`tech.md`・`structure.md`・`focus.md`・`roadmap.md`（ウェーブ C13 の兄弟）、記憶の開発者の方針（本質の設計・1 フレーム遅らせない・変わる時点が分かるならプッシュ・当たりは α ≥ 0.5・外の crate はそのまま・実機の根はワークツリーの `target\`・メッセージボックスを出さない）。ukadoc MCP で `arrow0.x` と `windowposition.x`／`.y`／`.limit` の項を引き直した。
+- **鍵になった発見**:
+  1. 面ごとの定義は `BalloonScopeAssets.model`（面 0 の設定ファイルだけ）→ `Emo2Wiring.balloon_models` → 毎フレームの再追従で使われる。面の番号の一次の情報源は presenter の `current_surface_id`、面が替わる時点は drain の相（`drain_resnap.rs`）で分かる。文字の層の再追従は既にモデルの値で比べている（`ResolveInputs::is`）ので、「今の定義」を差し替えれば同じフレームで作り直る。
+  2. 正典は `windowposition.x`・`.y`・`.limit` を「SSP に限り、descript.txt にも書ける」とする＝本来は面ごとの設定ファイルの鍵。要件 1.7 の「すべての鍵」は配置の鍵も含む。今の作りは配置へ面 0 の値を起動とシェルの切り替えの時だけ入れ、バルーンの切り替え（`finish_balloon`）でも入れ直していない。
+  3. `dump_balloon` の `overlay_text` は「物理寸の面を原寸へ縮めて重ねる」だけの純粋な関数なので、印の面を画像全体の大きさで作れば、ずらし 0 でそのまま使える（新しい重ねの関数が要らない）。
+
+### 要件 1.7 の重なりの確かめ（2026-10-30・`main` `484263230`）
+
+- 調べたもの: `.kiro/specs/` 直下の spec（`completed/` と本 spec を除く）で design.md／tasks.md を持つもの＝このワークツリーでは 0 本。並走のワークツリー（`git worktree list`）のブランチ: `claude/blissful-wing-97d9e5`（`stay-on-top-directives`・要件まで）・`claude/seriko-pattern-calls-175601`（`seriko-pattern-calls`・要件まで）・`claude/animated-surface-log-flood-54fed6`（`animated-surface-log-flood`・要件まで）・`claude/kiro-next-725a46`（差分なし）。どれも roadmap の C13 の兄弟で design.md・tasks.md は無い。各ブランチの brief・requirements・research を `git show` で読み、ファイル名を拾った。
+- 結果:
+  - 要件 1.7 の対象（`crates/areka/src/emo2_boot/assets.rs`・`crates/areka/src/placement/mod.rs`・`crates/areka-emo-present/src/balloon.rs`・`crates/areka-emo-text/src/actor*.rs`・`viewbox*.rs`）を直すと書いた並走の spec は **0 本**。
+  - `animated-surface-log-flood`: `crates/areka-emo-present/src/balloon.rs` は調べた範囲に挙げただけ。`crates/areka-emo-text/src/actor_scroll_retain_tests.rs` は「水準の主張があるものだけ直す」候補のテスト（本 spec は触らない）。
+  - `stay-on-top-directives`: `crates/areka/src/emo2_boot/frame/switch.rs`（`finish_shell` の重なりの基底・491 行あたり）・`frame/wiring.rs`・`frame.rs` を今の姿として引く。本 spec は同じ `switch.rs` の `finish_balloon`、`wiring.rs` の欄、`frame.rs` の `mod` の行を触る＝同じファイルの別の所（許す重なりの候補・向こうの設計の後に着地の順で合わせる）。
+  - `seriko-pattern-calls`: `crates/areka/src/emo2_boot/mod.rs` と seriko・emo-compose で、重なり 0。
+  - brief だけの後のウェーブで同じファイルを名指すもの: `placement-measure-bake-once`（`assets.rs`・`placement/mod.rs`・案 B なら `balloon.rs`＝C14・本 spec の後と決めてある）・`extra-character-windows`・`balloon-font-file`・`ghost-alias-file`・`multi-ghost-runtime`・`placement-crate-split`・`shell-scale-linkage`・`shell-balloon-scale-setting`・`balloon-canon-residue`・`balloon-webp-names`・`balloon-markers`・`talk-fast-forward`。本 spec は `balloon.rs` を触らず（新しい `balloon_definitions.rs`・`balloon_marker.rs` へ）、`placement/mod.rs` は `mod` の 1 行だけ。
+
+### 設計の決め（research の 6 節の 2・3・4・6・7・8・9・10。1・5・11 は要件の討議で決まった）
+
+| 番号 | 決め | 理由 |
+|---|---|---|
+| 1（議題 7） | 番号ごと（`select_faces` と同じ）。明示の名前は連鎖の先頭 | 要件 2.1 の改訂どおり |
+| 2 | `--数値` は読み手の新しい型 `MarkerCoord` で矢印の鍵だけ読む。型は後の印（クリック待ち・状態の印）と共有 | 他の鍵へ広げるのは範囲の外（要件 1.2） |
+| 3 | 読み手は事実（`KeyIssue`）を返すだけ。警告は fs の入口 `load_scope_balloon_definitions` がスコープにつき重複なしで 1 回 | emo の「記録は入口 1 か所」。descript の値は全部の面に重なるので面ごとに鳴らさない |
+| 4 | 印の面は場所ごとに 1 枚・画像（箱）全体の大きさ・文字の面の直後の窓の子。描画範囲の外の矢印も出て、送りの blit と独立、`dump_balloon` はずらし 0 で `overlay_text` を流用 | 案 A は blit で矢印が動き面の原点が動く・案 C は emo-present が emo-text を知る逆向きの流れが要る |
+| 5（議題 2） | 見える字の数が増えた時（`observe_visible`） | 要件 8.1 |
+| 6 | 隠したときは可視の相（`balloon_visibility_phase.rs`）から `forget_manual_at(…, Hidden)`。消去は `apply_cue` の腕、箱の登録を外すのは `actor_box.rs`、面の切り替えは `select_balloon_face`、ゴーストの切り替えは結線ごと作り直る | どれも変わる時点が分かる所から届ける（プッシュ） |
+| 7 | 箱の矢印の押下は箱の押下の判断の頭で `marker_at_point`。箱の上のホイールは `char_watch` の 5 番の段で、回転を積む前（透けた所の判断より前）に `box_under_point` と `has_hidden_lines_at` を見て横取り | 箱の当たり（字の矩形）に手を入れず、印の面のマスクで矢印の画素を受ける |
+| 8 | 印の面の当たりのマスクを矢印の絵の α ≥ 0.5 の画素にする＝バルーンの絵が透けた所の矢印も押せる | 当たりの原則（α ≥ 0.5）に合い、SSP を写さない |
+| 9 | `arrow0`＝古い側へ送る矢印（`vertical_rl` は右・areka 独自の `vertical_lr` は左）。§8 に登記 | 書字方向の正準表に揃える |
+| 10 | 手動の位置は行 0 でも自動と同じ式（一番古い行が描画範囲の始まりに来る・冒頭の保留改行の空きは見せない） | 要件 5.3 の字面。自動の送りが先頭行 0 であふれを解いたときと同じ見え方 |
+| 11（議題 8） | 定義は面ごとに読み込みの時に作り（`ScopeBalloonDefinitions`）、今の定義の書き手は `select_balloon_face` の 1 つ。drain の後に presenter の面の番号を見て差し替え、文字の層・手動の位置・配置の `windowposition` へ同じ点から届ける | 1 か所で直す（要件 1.7）。文字の層の作り直しは今の唯一の権威に任せ、第 2 の道を作らない。1 フレーム遅れなし |
+
+### 統合の 3 つの見方（design-synthesis）
+
+- **一般化**: 印の族（`ARROW_FAMILY`・`CLICKWAIT_FAMILY`）・明示の名前つきの連鎖・`MarkerCoord`・`MarkerPair`・印の面は、`balloon-markers`・`talk-fast-forward` がそのまま乗る口にする。中身（描く・出す）は矢印の分だけ作る。
+- **作るか採るか**: wintf の `BitmapSource`（パスから非同期に読む）は採らない＝UI スレッドで読み込みが起き、`dump_balloon` に画素が要り、拡大率と当たりのマスクを文字の面と同じ規約で扱えないため。絵の読みは emo-atlas の `ElementDecoder`＋`Normalizer`、面は文字の層の `TextSurface` と `attach_window_child` の前例を採る。重ねは `overlay_text` を採る。
+- **削ったもの**: 矢印 1 枚ごとの面（場所ごとに 1 枚で足りる）・emo-present の `balloon.rs` の改造（新しいファイルで足りる）・`BalloonModel` の座標の他の鍵への `--数値`・ホイールの間引き（端数の持ち越しだけ）・箱の矢印の「バルーンのフォルダの名前を箱の名前で探し直す」読み込み（スコープの普通のバルーンの絵で埋める＝要件の表の理由どおり）。
+
+### 危うさと手当て
+
+- 面ごとの `windowposition` でバルーンが動く振る舞いは SSP で測っていない → 設計の討議の議題 1。測りに 1 点足すことを推す。
+- 普通のバルーンの窓へ文字の面より手前の子を挿すのは初めて → 装着の檻（子の並び）と実 GPU のテストで固定。
+- 測りの答えが推奨と違う → 差し込み点は `marker_visibility`・`PlaceScroll::step`／`wheel`・`observe_visible`・`default_marker_position`・`balloon_pressed.rs` の分岐の 1 か所ずつ。
