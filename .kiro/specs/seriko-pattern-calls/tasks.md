@@ -42,7 +42,7 @@
   - _Requirements: 5.6, 6.3, 6.8, 9.5_
 
 - [ ] 3. 再生表: 働きのコマと呼ばれるだけの animation
-- [ ] 3.1 (P) 再生表のコマを描くコマと働きのコマに分ける
+- [x] 3.1 (P) 再生表のコマを描くコマと働きのコマに分ける
   - 再生表のコマに働き（描く・開始・停止・ずらす・何もしない）を持たせる。呼び出しの 6 語は相手の列と「1 つを選ぶか」を持ち、待ちを 0 にする。`move` は待ちと X・Y をそのまま持ち、欄 2 を読まない。`insert` と読めない相手は何もしないコマで、待ちは 0
   - 8 語以外の語は今と同じに解き、今と同じ記録を出す。働きのコマには記録なしの未知の合成メソッドを入れ、描く面を持たせない（絵の番号は無し・面の番号として数えない）
   - interval の純 `bind` と `never` を「呼ばれるだけ」として表に載せ、未知の interval は今のまま載せない。動く部品の数えから働きのコマを外す
@@ -166,3 +166,5 @@
 - 2.2: 期待を直したテスト（根拠）: plan_ops_tests::coexisting_pattern0_and_pattern1_composes_only_index0（M6）・golden_tests_blink_static_tests::emo2_blink_binds_are_statically_inactive（M6・1403 の pattern2 が増える）・plan_nesting_tests::part_frames_go_through_the_same_bind_and_method_rules（M5）・plan_ops_tests::non_overlay_pattern0_logs_debug_and_is_not_drawn（5.5）・plan_issues_tests::composing_repeatedly_adds_no_warn（5.5）・nesting_visible_tests::inactive_bind_frames_are_not_counted → inactive_bind_random_frames_are_not_counted（M5）・nesting_visible_tests::fixture_table_lists_children_and_bind_targets／bind_targets_keep_only_drawable_pattern0（M5）・nesting_visible_tests::inactive_bind_frames_change_neither_ops_nor_parts（M5）。
 - 2.2: 「有効な A に今のコマがある間は A の手順を展開せず B は本来の位置」は SSP で測っていない読み（設計 453 行と 424 行の組み合わせ）。7 の互換の文書 §8 に「展開されない（無効・コマあり）とき」と書く。合成のたびの debug「有効な着せ替えに描く手順が無い」は旧来の「pattern0 が無い」と同じ頻度。
 - 2.3: 期待を直したテスト: nesting_visible_tests::bind_targets_keep_only_drawable_pattern0 → bind_targets_keep_only_drawable_steps（[(5,3)] → [(4,3),(5,3)]・M6）。`bind+random` の外形は今のまま最小の番号の pattern（`min_by_key`）で数える（pattern0 の無い瞬きを大きさに数える既存の意図）。
+- 3.1: 働きは `FrameAct`（`table_calls.rs`）・呼ばれるだけは `LoopTrigger::CallOnly`。部品の番人は `CallOnly` を `Gate::Trigger` に写す（在る時計を進めるだけ・自分では始めない・乱数なし）。`Gate::Off` は `bind+random` で外れたときだけ。見えなくなった部品の `CallOnly` の時計は `drop_transient_where`（`is_trigger`）で捨てられず残る — 5.3 で決めてテストで固定する。
+- 3.1: 期待を直したテスト: table::tests::only_random_and_bindrandom_are_recorded_others_debug_logged・table::always_tests::combinations_and_other_words_keep_the_debug_arm（11.1）。純 `bind` を使う actor_clock_tests（BIND_ALWAYS）・table_parts_tests の bind の件は「表に載らない」を前提にしておらず（着せ替えのコマは compose の BindSet・一番上の looper は CallOnly を抽選しない・has_animated_parts は描くコマで決まる）期待を変えずに緑。働きのコマは `p.surface_id` を保つので `move,-1,…` の止まりは 3.3 で直す。looper.rs 927・table.rs 926・parts.rs 896・parts_tests.rs 905 行で上限が近い。

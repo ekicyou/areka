@@ -194,6 +194,7 @@ mod tests {
             surface_id,
             picture: None,
             method: ComposeMethod::Overlay,
+            act: crate::table::FrameAct::Draw,
             wait_ms,
             x: 0,
             y: 0,

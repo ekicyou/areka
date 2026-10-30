@@ -12,8 +12,9 @@
 //! `random,2`・`rarely` は `random,4` と同じ引き金へ読み替え、以降の手順（`k == 0` の検査・コマの
 //! 整列・空の検査）へそのまま流す（小文字の完全一致・spec: areka-P0-shell-implicit-surface
 //! 要件 11.1/11.2）。読み替えたときは元の語（`vocab`）と読み替え先の `k` を `debug!` に残す
-//! （要件 11.7）。`Interval::Bind`（静的着せ替え）・**それ以外の** `Other` の語彙・`#[non_exhaustive]`
-//! の将来 variant は**採録せず `debug!` で記録**する。非採録の `Other` は**元語彙文字列込み**で記録
+//! （要件 11.7）。純 `Interval::Bind`（静的着せ替え）と `Other("never")` は呼ばれるだけ
+//! （[`LoopTrigger::CallOnly`]・spec: seriko-pattern-calls 要件 11.1）として載せる。**それ以外の**
+//! `Other` の語彙・`#[non_exhaustive]` の将来 variant は**採録せず `debug!` で記録**する。非採録の `Other` は**元語彙文字列込み**で記録
 //! するため、「`yen-e` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
 //! `\i[N]`・動的 bind・talk cue は構造的に interval アニメではないため、この採録フィルタが自然に
 //! 除外する（要件 8.3）。
@@ -46,7 +47,8 @@
 //! コマの描画メソッドは構築時に [`ComposeMethod::from_name`] で 1 回だけ解決し、完全語彙の型値として
 //! 保持する（`overlay`/`add`/`bind` → [`ComposeMethod::Overlay`]・未知名 → `Unknown`）。実際の駆動は
 //! 下流 plan の method ゲート（`is_implemented()`）が選別する。コマ列は pattern index 昇順に整列して
-//! 保持する（疎 index 許容・kero の 0/1/3 実例）。
+//! 保持する（疎 index 許容・kero の 0/1/3 実例）。8 語（呼び出しの 6 語・`insert`・`move`）のコマは
+//! 働きのコマとして記録なしで作る（`table_calls.rs`・spec: seriko-pattern-calls 要件 1.1・1.5）。
 
 use std::collections::BTreeMap;
 
@@ -56,7 +58,9 @@ use areka_emo_compose::{
     ComposeMethod, EmoWorld, FilmId, FilmSheet, FilmSkip, NestTable, PartKey, is_always_interval,
 };
 
-/// 駆動トリガ（採録はこの 6 種のみ・要件 8.1）。
+pub use crate::table_calls::FrameAct;
+
+/// 駆動トリガ（採録はこの 7 種のみ・要件 8.1）。
 ///
 /// `k` は 1/N 抽選の頻度パラメータ（`k == 0` は構築時ガードで弾かれるため、採録済み値は常に `k >= 1`）。
 /// 後ろの 3 つ（`runonce`・`periodic,数値`・`talk,数値`）は抽選しない（乱数を引かない・spec:
@@ -92,6 +96,9 @@ pub enum LoopTrigger {
         /// 区切りの文字数（採録済みは `>= 1`）。
         every: NonZeroU32,
     },
+    /// 純 `interval,bind`・`interval,never`: 抽選も引き金の判定もせず、働きのコマに呼ばれたときだけ
+    /// 再生する（spec: seriko-pattern-calls 要件 11.1・11.3）。
+    CallOnly,
 }
 
 /// 1 コマ（method は構築時解決済みの完全形・`wait_ms` は 1ms 単位・要件 4.5/8.4）。
@@ -103,6 +110,9 @@ pub struct LoopFrame {
     pub picture: Option<u32>,
     /// 描画メソッド（完全語彙・要件 8.4）。合成の実駆動は `Overlay` のみ（下流 method ゲートが選別）。
     pub method: ComposeMethod,
+    /// コマの働き（描くコマか働きのコマか・spec: seriko-pattern-calls 要件 1.1・1.3）。働きのコマは
+    /// 描く面を持たない（`method` は記録なしの `Unknown`・`picture` は `None`）。
+    pub act: FrameAct,
     /// 前コマからこのコマへの遅延（1ms 単位・要件 4.5）。
     pub wait_ms: u32,
     /// コマの X オフセット。
@@ -120,6 +130,14 @@ pub struct LoopAnimation {
     pub trigger: LoopTrigger,
     /// pattern index 昇順・非空保証のコマ列（構築時ガード）。
     pub frames: Vec<LoopFrame>,
+}
+
+impl LoopAnimation {
+    /// 呼ばれずに自分で動きうるか（呼ばれるだけの animation は偽・動く部品の数えに使う・spec:
+    /// seriko-pattern-calls 要件 11.1）。
+    pub(crate) fn moves_by_itself(&self) -> bool {
+        self.trigger != LoopTrigger::CallOnly
+    }
 }
 
 /// 表示 surface id → 採録済みループアニメ列の boot 時不変表（要件 8.1-8.4）。
@@ -167,8 +185,8 @@ impl AnimationTable {
     ///
     /// 全 surface を昇順に走査し、各 surface の SERIKO animation 群から `Random`/`BindRandom` と、
     /// `random,2`／`random,4` へ読み替える `Other("sometimes")`／`Other("rarely")` を採録する
-    /// （要件 11.1/11.2）。`Bind`・それ以外の `Other`・将来 variant は `debug!` で記録して非採録
-    /// （`Other` は元語彙込み）。
+    /// （要件 11.1/11.2）。純 `Bind` と `Other("never")` は呼ばれるだけ（`CallOnly`）として載せ、
+    /// それ以外の `Other`・将来 variant は `debug!` で記録して非採録（`Other` は元語彙込み）。
     /// `k == 0`・コマ列空は `warn!` で記録して非採録。method は [`ComposeMethod::from_name`] で構築時
     /// 1 回解決し、コマ列は pattern index 昇順へ整列する。面種非依存（シェル/バルーン双方に同型適用）。
     pub fn from_world(world: &EmoWorld) -> AnimationTable {
@@ -191,7 +209,7 @@ impl AnimationTable {
 
             for anim in &master.animations {
                 // 採録は Random/BindRandom・always の単独と、読み替える Other("sometimes")／Other("rarely") のみ。
-                // Bind・それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
+                // 純 Bind と never は呼ばれるだけ。それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
                 // match は Bind/Other 明示腕＋catch-all で将来 additive シームを保つ）。
                 // `always` の単独は周期が要るので、コマを並べた後で引き金を作る（下・`None`）。
                 let trigger = match &anim.interval {
@@ -223,13 +241,12 @@ impl AnimationTable {
                             continue;
                         }
                     },
-                    areka_parsers::shell::Interval::Bind => {
-                        tracing::debug!(
-                            surface_id,
-                            animation_id = anim.id,
-                            "seriko table: interval,bind は静的着せ替えゆえ非採録（要件 8.2）"
-                        );
-                        continue;
+                    // 純 `bind` は呼ばれるだけ（spec: seriko-pattern-calls 要件 11.1）。
+                    areka_parsers::shell::Interval::Bind => Some(LoopTrigger::CallOnly),
+                    // 純 `bind` と同じく呼ばれるだけ（spec: seriko-pattern-calls 要件 11.1）。
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#never
+                    areka_parsers::shell::Interval::Other(vocab) if &**vocab == "never" => {
+                        Some(LoopTrigger::CallOnly)
                     }
                     areka_parsers::shell::Interval::Other(vocab) => {
                         // `sometimes`／`rarely` は `random,2`／`random,4` と同じ引き金へ読み替えて
@@ -298,21 +315,14 @@ impl AnimationTable {
                     continue;
                 }
 
-                // コマ列を pattern index 昇順へ整列（疎 index 許容）し、method を構築時 1 回解決する
-                // （完全語彙の型値・要件 8.4）。
+                // コマ列を pattern index 昇順へ整列（疎 index 許容）し、method と働きを構築時 1 回
+                // 解決する（完全語彙の型値・要件 8.4・spec: seriko-pattern-calls 要件 1.1）。
                 let mut patterns: Vec<&areka_parsers::shell::Pattern> =
                     anim.patterns.iter().collect();
                 patterns.sort_by_key(|p| p.index);
                 let frames: Vec<LoopFrame> = patterns
                     .iter()
-                    .map(|p| LoopFrame {
-                        surface_id: p.surface_id,
-                        picture: None,
-                        method: ComposeMethod::from_name(p.method.as_str()),
-                        wait_ms: p.wait,
-                        x: p.x,
-                        y: p.y,
-                    })
+                    .map(|p| crate::table_calls::loop_frame(p))
                     .collect();
 
                 // 縮退ガード（要件 8.3）: コマ列空のアニメは非採録。
@@ -356,7 +366,8 @@ impl AnimationTable {
                     LoopTrigger::Talk { every } => Some(("talk", Some(u64::from(every.get())))),
                     LoopTrigger::Random { .. }
                     | LoopTrigger::BindRandom { .. }
-                    | LoopTrigger::Always { .. } => None,
+                    | LoopTrigger::Always { .. }
+                    | LoopTrigger::CallOnly => None,
                 };
                 if let Some((vocab, value)) = adopted {
                     tracing::debug!(
@@ -399,6 +410,7 @@ impl AnimationTable {
                     surface_id: -1,
                     picture: Some(picture),
                     method: ComposeMethod::Overlay,
+                    act: FrameAct::Draw,
                     wait_ms,
                     x: 0,
                     y: 0,
@@ -438,13 +450,20 @@ impl AnimationTable {
                 .chain(p.bind_targets.iter().map(|&(_, target)| target))
                 .chain(p.always_rest.iter().map(|&(_, target)| target))
         });
+        // 働きのコマの欄 2 は面の番号として数えない（spec: seriko-pattern-calls 要件 1.3）。呼ばれる
+        // だけの animation しか無い面は、呼ぶコマも同じ面に在るので自分では動かない。
         let framed = table
             .values()
             .flatten()
             .flat_map(|a| &a.frames)
+            .filter(|f| f.act == FrameAct::Draw)
             .filter_map(|f| u32::try_from(f.surface_id).ok());
-        let has_animated_parts = nested.chain(framed).any(|id| table.contains_key(&id))
-            || rows().any(|p| p.films.iter().any(|f| films.contains_key(f)));
+        let has_animated_parts = nested.chain(framed).any(|id| {
+            table
+                .get(&id)
+                .is_some_and(|a| a.iter().any(LoopAnimation::moves_by_itself))
+        }) || rows()
+            .any(|p| p.films.iter().any(|f| films.contains_key(f)));
         let has_always = !films.is_empty()
             || table
                 .values()
@@ -618,9 +637,9 @@ mod tests {
     // ── 3 点完了ケージ (1): 採録フィルタ ──────────────────────────────────────
 
     /// (1) kero(`interval,random,4`)＋sakura(`interval,bind+random,4`)＋非駆動(Bind/Other) を含む
-    /// 世界から、採録されるのは Random/BindRandom の 2 アニメのみ。Bind と**読み替えの対象でない**
-    /// `Other` は非採録かつ `debug!` で記録され、`Other` は元語彙 `yen-e` を含む（要件 8.1/8.2・
-    /// 討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
+    /// 世界から、抽選で動くのは Random/BindRandom の 2 アニメのみ。純 Bind は呼ばれるだけ（`CallOnly`）
+    /// として載り（spec: seriko-pattern-calls 要件 11.1）、**読み替えの対象でない** `Other` は非採録
+    /// かつ `debug!` で記録され、元語彙 `yen-e` を含む（要件 8.1/8.2・討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
     /// `table_interval_words_tests.rs` が留める（要件 11.1/11.2/11.4）。
     #[test]
     fn only_random_and_bindrandom_are_recorded_others_debug_logged() {
@@ -705,23 +724,25 @@ mod tests {
             .collect();
         assert_eq!(sakura_surfaces, vec![1412, 1411, 1410]);
 
-        // 非駆動 surface30 は 1 本も採録されない（Bind/Other 双方非採録）。
-        assert!(
-            table.animations(30).is_empty(),
-            "Bind/Other は非採録＝surface30 は空"
+        // 非駆動 surface30 は純 Bind だけが呼ばれるだけとして載り、Other は非採録。
+        let call_only: Vec<(u32, LoopTrigger)> = table
+            .animations(30)
+            .iter()
+            .map(|a| (a.id, a.trigger))
+            .collect();
+        assert_eq!(
+            call_only,
+            vec![(1, LoopTrigger::CallOnly)],
+            "純 Bind は CallOnly・Other は非採録"
         );
 
         // 全体で採録アニメは 2 本のみ（kero+sakura）。
         assert!(!table.is_empty());
 
-        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 yen-e を含む。
+        // debug! ログ: Other が非採録として記録され、元語彙 yen-e を含む。
         assert!(
             logs.contains("level=DEBUG"),
             "非採録は debug! で記録: {logs}"
-        );
-        assert!(
-            logs.contains("interval,bind は静的着せ替え"),
-            "Bind の非採録が debug! 記録される: {logs}"
         );
         assert!(
             logs.contains("yen-e"),
@@ -885,7 +906,10 @@ mod tests {
                     assert_eq!(period_ms.get(), total, "周期は待ちの合計");
                 }
                 // この検体は 3 語を書いていない（型が 0 を持てないので確かめる値も無い）。
-                LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. } => {}
+                LoopTrigger::Runonce
+                | LoopTrigger::Periodic { .. }
+                | LoopTrigger::Talk { .. }
+                | LoopTrigger::CallOnly => {}
             }
         }
     }

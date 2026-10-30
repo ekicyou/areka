@@ -149,7 +149,8 @@ enum Gate {
     },
     /// `runonce`・`periodic`・`talk`（抽選しない・乱数を引かない・着せ替えに依らない・spec:
     /// areka-P0-seriko-trigger-intervals 要件 5.7）。1 段目は在る時計を進めるだけで、始めるかは
-    /// 2 段目の判定が決める。
+    /// 2 段目の判定が決める。呼ばれるだけ（`CallOnly`）もここ: 2 段目は選ばないので自分では
+    /// 始めず、呼ばれて在る時計だけを着せ替えに依らず進める（spec: seriko-pattern-calls 要件 11.1）。
     Trigger,
     /// 対象外（`bind+random` で `binds` に無い・要件 5.12）。
     Off,
@@ -161,9 +162,10 @@ fn gate(anim: &LoopAnimation, binds: &BindSet) -> Gate {
         LoopTrigger::BindRandom { k } if binds.contains(anim.id) => Gate::Lottery(k),
         LoopTrigger::BindRandom { .. } => Gate::Off,
         LoopTrigger::Always { period_ms, laps } => Gate::Always { period_ms, laps },
-        LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. } => {
-            Gate::Trigger
-        }
+        LoopTrigger::Runonce
+        | LoopTrigger::Periodic { .. }
+        | LoopTrigger::Talk { .. }
+        | LoopTrigger::CallOnly => Gate::Trigger,
     }
 }
 
@@ -615,7 +617,7 @@ impl PartClocks {
                         write_always(pattern, part, anim, period_ms, laps, elapsed);
                         continue;
                     }
-                    // 3 語: 抽選せず乱数も引かない。在る時計を進めるだけ（始めるかは 2 段目）。
+                    // 3 語と呼ばれるだけ: 抽選せず乱数も引かない。在る時計を進めるだけ（始めるかは 2 段目）。
                     Gate::Trigger => {
                         if let Some(&PartAnim::Playing { started_at_ms }) = clocks.get(&key) {
                             was_playing.push((key, started_at_ms));
@@ -791,11 +793,12 @@ impl PartClocks {
     ) -> bool {
         let nest = table.nest_table();
         nest.visible_parts(surface_id, binds, pattern, &mut self.visible);
-        if self
-            .visible
-            .iter()
-            .any(|&p| !table.animations(p).is_empty())
-        {
+        if self.visible.iter().any(|&p| {
+            table
+                .animations(p)
+                .iter()
+                .any(LoopAnimation::moves_by_itself)
+        }) {
             return true;
         }
         nest.visible_films(surface_id, &self.visible, &mut self.films);

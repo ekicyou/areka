@@ -38,6 +38,7 @@ mod shell_fallback;
 mod skin_facts;
 mod state;
 mod table;
+mod table_calls;
 // 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上の面の配線。
 mod talk;
 mod timeline;
@@ -66,7 +67,7 @@ pub use skin_facts::{SkinFacts, SkinLookup, balloon_missing, surface_missing};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
 };
-pub use table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
+pub use table::{AnimationTable, FrameAct, LoopAnimation, LoopFrame, LoopTrigger};
 pub use timeline::{
     AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, frame_at, lap_of, seeded_rng,
     should_fire,

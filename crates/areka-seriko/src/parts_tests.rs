@@ -839,3 +839,67 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
     // 発火 3・末尾残留 2（5 は待ち 0 の 1 コマなので発火の刻みで保つ）・停止 1・外れた停止 1。
     assert_eq!(part_lines.len(), 7, "{part_lines:#?}");
 }
+
+/// 呼ばれるだけ（純 `bind`）の部品の animation は、着せ替えに無くても在る時計を消さずに進め、
+/// 自分では始めない（spec: seriko-pattern-calls 要件 11.1・5.6）。着せ替えの番人は `bind+random` だけ。
+#[test]
+fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself() {
+    let table = table_of(
+        "surface0\n{\nelement0,overlay,100,0,0\n}\n\
+         surface100\n{\nanimation0.interval,bind\n\
+         animation0.pattern0,overlay,101,50,0,0\n\
+         animation0.pattern1,overlay,102,50,0,0\n}\n",
+    );
+    let (mut rng, probe) = counting_rng(&[]);
+    let mut clocks = PartClocks::default();
+    let top = PatternState::default();
+    let b = no_binds();
+
+    // 境界を跨いでも自分では始めない（乱数も引かない）。
+    let p = tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
+    assert!(p.is_empty());
+    assert_eq!(clocks.clock(&scope(), 100, 0), None);
+
+    // 呼ばれて時計が在る（呼び出しの経路の代わりに手で置く）。
+    clocks
+        .clocks
+        .get_mut(&scope())
+        .and_then(|slots| slots.get_mut(&Slot::Shell))
+        .expect("advance が入れ物を作る")
+        .clocks
+        .insert(
+            (areka_emo_compose::PartKey::Surface(100), 0),
+            PartAnim::Playing {
+                started_at_ms: 1000,
+            },
+        );
+
+    // 着せ替えに無くても消さずに経過から進める。
+    let p = tick(&mut clocks, &table, 0, &b, 1060, true, &mut rng, &top);
+    assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
+    assert_eq!(
+        clocks.clock(&scope(), 100, 0),
+        Some(PartAnim::Playing {
+            started_at_ms: 1000
+        })
+    );
+
+    // 抽選も作り直しも同じ時計を読む（`refresh` も欄を書く）。
+    let mut p = top.clone();
+    clocks.refresh(
+        &scope(),
+        Slot::Shell,
+        0,
+        &b,
+        &table,
+        Some(1110),
+        true,
+        &mut p,
+    );
+    assert_eq!(part_frames(&p, 100), vec![(0, 102)]);
+    assert_eq!(
+        calls(&probe),
+        0,
+        "呼ばれるだけの animation は乱数を引かない"
+    );
+}

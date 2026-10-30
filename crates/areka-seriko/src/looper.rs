@@ -509,6 +509,9 @@ impl LoopRuntime {
                         LoopTrigger::Runonce
                         | LoopTrigger::Periodic { .. }
                         | LoopTrigger::Talk { .. } => continue,
+                        // 呼ばれるだけの animation も抽選しない（乱数を引く前に飛ばす・spec:
+                        // seriko-pattern-calls 要件 11.1・11.3）。
+                        LoopTrigger::CallOnly => continue,
                     };
                     // (c) 1/N 抽選（ここで初めて乱数を消費）。
                     if should_fire(k, rng) {
