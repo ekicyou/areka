@@ -11,7 +11,7 @@
 ### Goals
 
 - 押し出された行があるとき、正典どおりの座標（マイナスは右端・下端から、`--数値` はマイナスそのもの）に正典どおりの名前の矢印を出す（要件 1〜4・7）。
-- 矢印のクリックとホイールで 1 行（縦書きは 1 列）ずつ戻し、限りと戻り方・新しい文字・消去・面の切り替え・拡大率・選択肢の当たりとの関係を決まった形にする（要件 5・6・8）。
+- 矢印のクリックで 2 行（縦書きは 2 列）ずつ、ホイールで OS の行数ずつ戻し、限りと戻り方・新しい文字・消去・面の切り替え・拡大率・選択肢の当たりとの関係を決まった形にする（要件 5・6・8）。
 - `\b[ID]` で面が替わったら、その面の設定ファイルを重ねた定義をすべての消費者が使う（要件 1.7）。
 - 正典が黙る所の決めを §8 に、SSP で測った値を `research.md` に残し、決定論のテストと実機で固定する（要件 9〜11）。
 
@@ -286,8 +286,8 @@ graph TB
 | 4.2 | 縦書きでも座標の意味を入れ替えない | MarkerCoord・ScrollMarker | `MarkerCoord::resolve` | — |
 | 4.3 | ぱすたで SSP と同じ所 | 実機の確かめ（Testing） | — | — |
 | 4.4 | SSP と違えば合わせて要件を改める | SSP の測り（Testing・research） | — | — |
-| 5.1 | arrow0 の押下で古い側へ 1 行 | ActorScroll・BalloonPress | `marker_at_point`・`scroll_manual_at` | 押下の振り分け |
-| 5.2 | arrow1 の押下で新しい側へ 1 行 | 同上 | 同上 | 押下の振り分け |
+| 5.1 | arrow0 の押下で古い側へ 2 行 | ActorScroll・BalloonPress | `marker_at_point`・`scroll_manual_at` | 押下の振り分け |
+| 5.2 | arrow1 の押下で新しい側へ 2 行 | 同上 | 同上 | 押下の振り分け |
 | 5.3 | 古い限りと自動の位置の限り | ScrollMarker | `PlaceScroll::step` | 手動の位置 |
 | 5.4 | 自動の位置に戻ったら手動を捨てる | ScrollMarker | `PlaceScroll::step` | 手動の位置 |
 | 5.5 | 矢印の押下をバルーンのクリックにしない | BalloonPress | `on_balloon_pointer_pressed` の頭の分岐 | 押下の振り分け |
@@ -321,7 +321,7 @@ graph TB
 | 9.4 | 読めない絵は警告・その矢印だけ出さない | MarkerFamilies | `resolve_marker_pair` | — |
 | 9.5 | §8 に登記・既存 2 行を直す | Docs | — | — |
 | 9.6 | 台帳 5 行・数の行・検査を緑 | Docs | — | — |
-| 10.1 | 6 点を SSP で測る | SSP の測り（Testing） | — | — |
+| 10.1 | 7 点を SSP で測る | SSP の測り（Testing） | — | — |
 | 10.2 | 測りのやり方と答えを research.md に | SSP の測り | — | — |
 | 10.3 | 推奨と違えば開発者に諮る | SSP の測り（差し込み点の一覧） | — | — |
 | 10.4 | 画面の操作は排他テストの机で | SSP の測り | — | — |
@@ -696,7 +696,7 @@ pub(crate) fn apply_face_windowposition(
 
 **Implementation Notes**
 
-- Risks: 本来は SSP の測りで確かめたい振る舞い（`\b[ID]` で面ごとの `windowposition` が違うとき SSP がバルーンを動かすか）。要件 10.1 の 6 点には入っていないので、設計の議題として出す（下の Open Questions 1）。
+- Risks: 本来は SSP の測りで確かめたい振る舞い（`\b[ID]` で面ごとの `windowposition` が違うとき SSP がバルーンを動かすか）。要件 10.1 の ⑺ として測り、SSP は面の windowposition へ動かすと確かめた（2026-10-30）。
 
 #### BalloonWheel・BalloonPress・BoxPress・CharWatchBoxWheel
 
