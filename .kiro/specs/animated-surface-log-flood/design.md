@@ -2,6 +2,7 @@
 
 > 2026-10-30・ブランチ `claude/animated-surface-log-flood-54fed6`（main `484263230` の上）。行番号はこの時点のもの。実装の着手時に引き直すこと。
 > 入力: `requirements.md`（末尾の「要件討議の決め」6 件は開発者の承認済み）・`research.md`（ギャップ分析と、本設計の段の記録）。
+> 2026-10-30 追記: 開発者の決め（同日・推奨の案）で **件 26**（まばたきの閉じた絵が残る・要件 9）を足した。節「件 26: 止まったアニメーションの重ね絵が残る件（原因の決め方）」と、境界・対応表の行を足した。ほかの節の決めは変えていない。
 
 ## Overview
 
@@ -36,6 +37,7 @@
 - 装置の失敗の記録を、同じ対象・同じ原因で続くあいだ 1 回にする仕組み（`device_err`・`record_display` の引数 1 つ）。
 - 表示の行の水準に触れている注記・行の位置の参照（テスト・例・性能の道具・手順書・`doc/COMPAT_ARCHITECTURE.md`）の追随。
 - 実機の測り（要件 5〜7）の手順と、その記録 `.kiro/specs/animated-surface-log-flood/verification.md`。
+- （件 26・要件 9）SERIKO のアニメーションが止まって外したコマが、表示の指令に載って emo-present の絵になるまでの道の正しさ。道は、seriko がコマを外して指令を出す所（`crates/areka-seriko/src/looper.rs` の停止の道と載せ直し `refresh`・`actor.rs` の呼び手・`commit_pattern`）と、emo-present がその指令で絵を作る所（`show.rs`・控えの引き当て・`blit_rect.rs`）。直すのは原因の 1 か所だけ。
 
 ### Out of Boundary
 
@@ -44,7 +46,8 @@
 - perf の行（`timing.rs` の `timing.emit`）の水準・文言・項目（`present-emit-tail-latency` の持ち物）。
 - 控え（`cache.rs` の容量 3 の LRU）の形と容量。
 - 記録の仕組み（`tracing` の設定・`RUST_LOG` の読み方）と、MCP の `get_log` の履歴の振り分け（`log_history.rs`。この行はもともと履歴に載っていない）。
-- seriko のコマの進み（適用の回数・時刻）。
+- seriko のコマの進み（適用の回数・時刻）。件 26 の直しでも、抽選・コマの時刻・回数は変えない。直してよいのは、外したコマが指令と絵に正しく届くかどうかだけ。
+- 件 26 の原因が、上の道の外（emo-compose の `plan.rs`・`pattern.rs`・`blit.rs`、wintf、シェルの定義の読み込み〔`areka-parsers`〕など）にある場合の直し。そのときは直さずに止まって報告する（要件 9.5）。
 
 ### Allowed Dependencies
 
@@ -138,6 +141,7 @@ crates/areka-emo-present/src/
 - テストの追随: `display_fault_tests.rs`・`display_gpu_tests.rs`（`record_display` の引数・`gpu_dc` と `replay_and_read_back` を `pub(crate)` に）・`presenter/transition_record_tests.rs`（`record_display` の引数）・`presenter_perf_log_tests.rs`（同じ入力の 2 回目の適用の行は DEBUG）・`presenter_refresh_and_log_tests.rs`（注記）。
 - 性能の道具: `tools/perf/judge-perf.py`（506 行目の注記の行の位置と水準・報告の見出しの「表示成立点 info!」を「表示成立点の行」へ。判定は変えない）・`tools/perf/judge-followup.py`（107 行目の行の位置）・`tools/perf/fixtures/generate.py` と `tools/perf/fixtures-loop/compare/measure_failed/case.txt`（注記の「info!」）。
 - 例: `crates/areka/examples/{collision-probe.rs, emo-present.rs, emo-present/state.rs, emo-present/systems.rs, window-placement.rs}` — 水準に触れる注記があれば合わせる（最初の表示は INFO のままなので、多くは直しが要らない。要らないことを確かめて記録する）。
+- （件 26）原因の 1 か所と、その兄弟の失敗するテスト。どのファイルになるかはテストで決める（節「件 26: 止まったアニメーションの重ね絵が残る件（原因の決め方）」）。候補は `crates/areka-seriko/src/looper.rs`・`actor.rs`・`state` の指令の保持と、emo-present の `show.rs`・`cache.rs`・新しい `blit_rect.rs`。
 - 手順書: `doc/pasta-real-run.md`（127・141 行目の `RUST_LOG` の値はそのまま・すべての適用を見たいときの足し方の注記を足す、183 行目の表の `animated-surface-log-flood` の項、314 行目の「外して読む」の注記の書き直し）・`doc/COMPAT_ARCHITECTURE.md`（178 行目の `presenter/show.rs:194`/`:221` の行の位置）。
 
 ### emo-compose で触る所（`seriko-pattern-calls` と合わせるための一覧）
@@ -231,6 +235,12 @@ flowchart TB
 | 8.5 | 失敗を注入するテスト | テスト | `arm_display_fault`・GraphicsCore を抜く | — |
 | 8.6 | 手順書を書き直す | 注記の追随 | `doc/pasta-real-run.md` | — |
 | 8.7 | 範囲外の問題は起票 | 実装の進め方 | `/kiro-discovery` | — |
+| 9.1 | 外したコマを画面に出さない | 件 26 の原因の 1 か所 | 原因の決め方の節 | 停止→指令→表示の適用 |
+| 9.2 | アニメーションのコマを時刻のとおりに出す | 同上 | 同上 | 同上 |
+| 9.3 | 直す前に失敗するテストで再現 | テスト | seriko と emo-present の境目の決定論テスト | — |
+| 9.4 | 原因を 1 か所で直し、回数・時刻・画素の同じさを変えない | 件 26 の原因の 1 か所 | 既存の檻が緑のまま | — |
+| 9.5 | 原因が境界の外なら止まって報告 | 実装の進め方 | Out of Boundary の件 26 の項 | — |
+| 9.6 | 実機 6 分で目が開くことを両版で確かめる | 実機の測り | `dump_surface` を何度か撮る・`verification.md` | — |
 
 ## Components and Interfaces
 
@@ -242,6 +252,7 @@ flowchart TB
 | 装置の失敗の記録（`device_err`・`record_display`） | emo-present | 同じ原因の続きを DEBUG にする | 1.6・4.3 | `tracing`（P2） | Service |
 | 注記の追随 | 道具・手順書 | 実物と合わせる | 2.4・2.6・8.6 | — | — |
 | 実機の測り | 手順 | 記録の量・CPU・記憶・SSP の基準 | 5.1〜7.4 | 手順書・impl-watch の机・SSP の MCP | Batch |
+| 件 26 の原因の 1 か所 | seriko か emo-present（テストで決める） | 外したコマが画面に残らないようにする | 9.1〜9.6 | seriko の停止の道・表示の適用 | — |
 
 ### emo-compose
 
@@ -440,6 +451,30 @@ pub(crate) fn record_display(
 - **作る前の測り（設計討議の決め 1・2026-10-30）**: 実装のタスクの最初に、コードを変えずに、ぱすたの面 1002 を `RUST_LOG` に `areka_emo_present=debug` を足して短く走らせる（release 版と debug 版）。perf の行の `t_compose_us`・`t_mask_us`・`t_upload_us`・`t_total_us` の中央値と、`t_total_us` に対する合成の割合を `verification.md` に書く。合成の割合が小さく、合成を縮めても要件 6.2（両版とも直す前より下がる）に届く見込みが無ければ、実装に入る前に段ごとの所要を添えて止まり、開発者に仰ぐ（マスクと GPU の上げを矩形にする・wintf に触る、を決め直す）。届く見込みがあれば実装へ進む。前の絵の「消してから写す」二度なめは、今ある `ComposedSurface` の口だけで写すだけに縮められるかを実装で確かめる（`composed.rs` は境界の外なので、足りなければ二度なめのまま）。
 - **合格の線（要件 6.2・6.3）**: 両版とも中央値が直す前より下なら合格。release 版の中央値が SSP の基準の中央値を上回ったら、差と、`areka_emo_present=debug` を足した短い走行で取った perf の行の段別の所要（合成・表示の記録・マスク）と、wintf の全面の描き直しが残ることを書いて、開発者の判断を仰ぐ（黙って合格にしない）。
 - **SSP の基準（要件 7）**: SSP を起こす・面を替える・測る、のそれぞれの前にタスクの中で止まって開発者の許しを取る。SSP 2.9.23 のぱすたを面 1002 にし、areka と同じ測り方で 6 分。測りの始めと終わりに SSP の MCP（`dump_surface` か `get_property`）で面 1002 を確かめて書く。測れなかったら、理由と、件 25 の 10% の条件の違い（面を確かめていない）を書く。
+
+### 件 26: 止まったアニメーションの重ね絵が残る件（原因の決め方）
+
+> 2026-10-30 に開発者の決めで足した節（要件 9）。原因はまだ確かめていない。この節は、原因をどこでどう決めるかを決める。直しの形は原因が決まってから選ぶ。
+
+**分かっていること**（`brief.md` の件 26 の節。main `484263230`・2026-10-30 に引き直した行）
+- ぱすたさん（面 1000）が、まばたきの閉じた絵（1410）のまま戻らない。ボールの動く WebP は動き続けている。着せ替え（目＝ノーマル・まばたき＝ふつう）は正しく効いている。
+- seriko の判定は対になっている: 「`seriko: loop 抽選発火`」と約 170ms 後の「`seriko: loop 停止（負 surface でベース復帰・要件 4.3）`」が 70 回ずつ。停止の道は `looper.rs` 293〜321 行で、コマを外し（310 行）、再生の記録を外す（311〜313 行）。
+- 載せ直しの `LoopRuntime::refresh` は `looper.rs` 757 行。保持している指令の写し（`states.current_pattern`）から作り直し、`commit_pattern` が変化を返したら `Show` を出す。呼び手は `actor.rs` 494・688・755・806 行（688 行は着せ替えが替わった直後の道）。
+
+**見立て（未確定）**: 停止で外した重ね絵が、ボールのコマ替えの載せ直しで古い状態のまま使われる。候補は 3 つ。
+1. seriko の側: 停止の道で外したコマが、保持している指令（`current_pattern`）に届かず、載せ直しやコマ替えの指令が古い写しから作られる。
+2. 表示の側の控え: 外したコマのある指令と無い指令が、控えの引き当てで同じ絵に当たる。
+3. 本 spec の重ね直し（`blit_rect.rs`）: 外したコマの位置が矩形に入らず、前の絵の閉じた目が残る。ただし症状は本 spec の前の main で出ているので、1 か 2 が先に疑わしい。3 は本 spec が新しく持ち込みうる同じ形の不具合で、同じテストで縛る。
+
+**決め方**
+1. 直す前に、失敗する決定論テストを立てる（要件 9.3）。境目は seriko と emo-present のあいだ: 外から与えた時刻で、まばたき（`-1` で終わる重ね）と動く絵のコマ替えを同じ面で進め、停止の後の指令に外したコマが無いこと（seriko の側）と、その指令で成立した表示の絵に閉じた目が無いこと（表示の側・控えを通す道と、本 spec の矩形の道の両方）を判定する。ぱすたの animation1400 の並び（0ms・120ms・50ms の `-1`）と同じ時刻の見本を使う。
+2. テストがどちらの側で赤になるかで、原因の場所を決める。赤の出た所の 1 か所だけを直す。両方の側を同時に直さない。
+3. 原因が「分かっていること」の道の外（Out of Boundary の件 26 の項）にあると分かったら、直さずに止まり、場所と根拠を開発者に報告する（要件 9.5）。seriko の中を直すことになったら、触る行を、seriko に触る並走の spec のセッションと先に合わせる。
+4. テストで再現できなかったら、推測で直さない。再現できなかった入力と、次に記録で確かめること（`RUST_LOG` で seriko と表示の判定の分岐まで開ける）を書いて止まり、開発者に仰ぐ。
+
+**変えないこと**: 抽選・コマの時刻・適用の回数（要件 1.7）、要件 3.2 の画素の同じさ、表示の行の文言と欄（要件 2.2）、控えの容量 3 の LRU の形（原因が控えの鍵の比べなら、比べの誤りだけを直す）。
+
+**確かめ（要件 9.6）**: 実機の測りと同じ置き場（`target\animated-surface-log-flood\blink\`）で、手順書 4 節の起動の塊（6 分）を debug 版と release 版で 1 回ずつ。排他テストの机を取って回す。areka の MCP の `dump_surface` で面 1000 を何度か撮り、閉じる・半目・開くが見え、閉じた絵が残らないことを確かめ、撮った時刻と見えた目の状態を `verification.md` に書く。
 
 ## Data Models
 
