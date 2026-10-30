@@ -241,8 +241,6 @@ pub(crate) struct State {
     ///
     /// 書くのは [`translate::after`]、SHIORI の応答の入力で 1 回だけ取り出すのは [`translate::before`]。
     pub reply_source: Option<events::SourceEvent>,
-    /// 最後に始めた外からの台本のトークの strict（次の外からの台本で上書き・[`sstp::StrictNote`]）。
-    pub sstp_strict: Option<sstp::StrictNote>,
     /// 任意の名前の GET の応答待ちの控え（送る直前に置き、応答で必ず取り出す・[`sstp::NotifyStage`]）。
     ///
     /// 往復は殻の 1 つの一括の中で閉じるので、知らせの切れ目では常に `None`。
@@ -272,7 +270,6 @@ impl State {
             external: ExternalStates::default(),
             translate: None,
             reply_source: None,
-            sstp_strict: None,
             sstp_notify: None,
         }
     }

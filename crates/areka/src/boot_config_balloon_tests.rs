@@ -7,7 +7,7 @@
 //! 記録の件数だけ。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
 
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
-use crate::boot_resolve::BalloonRoute;
+use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
@@ -18,7 +18,7 @@ fn no_pick(n: usize) -> usize {
 }
 
 /// 根にゴースト `g1`（descript.txt に `extra` を足す）と、バルーン（フォルダ名と `name`）を組む。
-/// 既定のバルーン `StayseeBalloon` はいつも置く。ゴーストのフォルダを返す。
+/// 既定のバルーン（[`DEFAULT_BALLOON_FOLDER`]）はいつも置く。ゴーストのフォルダを返す。
 fn fixture(tmp: &TempPath, extra: &str, balloons: &[(&str, &str)]) -> PathBuf {
     let ghost = tmp.child("ghost").join("g1");
     let master = ghost.join("ghost").join("master");
@@ -28,7 +28,7 @@ fn fixture(tmp: &TempPath, extra: &str, balloons: &[(&str, &str)]) -> PathBuf {
         format!("charset,UTF-8\n{extra}"),
     )
     .expect("descript");
-    for (folder, name) in [("StayseeBalloon", "Staysee")].iter().chain(balloons) {
+    for (folder, name) in [(DEFAULT_BALLOON_FOLDER, "Staysee")].iter().chain(balloons) {
         put_balloon(&tmp.child("balloon").join(folder), name);
     }
     ghost
@@ -160,7 +160,7 @@ fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
         got,
         (
             BalloonRoute::Default,
-            tmp.child("balloon").join("StayseeBalloon")
+            tmp.child("balloon").join(DEFAULT_BALLOON_FOLDER)
         )
     );
     let warned = warnings(&events);

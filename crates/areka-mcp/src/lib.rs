@@ -26,7 +26,8 @@ pub mod tools;
 // 名乗り・受け口のパス・中継の exe の名前は中継（areka-mcp-bridge）が同じ定数を読む。
 // 中継は、areka が居ないときの組み込みの答えの元（サーバーの版・説明の文・`tools::all_specs` の
 // 定義の列）もここから読む。
-pub use dispatch::MCP_PATH;
+// `request_shape_error` だけは例外で rmcp の型（`JsonRpcError`）を返す（中継が同じ答えを書く）。
+pub use dispatch::{MCP_PATH, request_shape_error};
 pub use handler::{INSTRUCTIONS, SERVER_NAME, SERVER_VERSION};
 pub use help::BRIDGE_EXE_FILE_NAME;
 pub use port::{

@@ -77,8 +77,12 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         })
     };
 
-    let (tx, handle) =
-        spawn_dispatcher(kanade_tx, vec![sink("s0"), sink("s1")], test_system_vars());
+    let (tx, handle) = spawn_dispatcher(
+        kanade_tx,
+        vec![sink("s0"), sink("s1")],
+        test_system_vars(),
+        None,
+    );
 
     let talk_a = TalkId(7);
     let talk_b = TalkId(8);
@@ -89,6 +93,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Tick {
@@ -103,6 +108,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         talk_id: talk_b,
         script: r"\s[2]B\_w[2500]B_END\e".to_string(),
         origin: ScriptOrigin::GHOST,
+        strict: false,
     }))
     .expect("send Start(B)");
     tx.send(DispatcherMsg::Tick {
@@ -206,7 +212,7 @@ fn each_talk_start_hands_its_origin_to_every_clone() {
             seen: Arc::clone(&seen),
         })
     };
-    let (tx, handle) = spawn_dispatcher(kanade_tx, vec![sink(), sink()], test_system_vars());
+    let (tx, handle) = spawn_dispatcher(kanade_tx, vec![sink(), sink()], test_system_vars(), None);
 
     for (id, origin) in [(1, ScriptOrigin::MCP_SEND), (2, ScriptOrigin::GHOST)] {
         tx.send(DispatcherMsg::Start(StartTalk {
@@ -214,6 +220,7 @@ fn each_talk_start_hands_its_origin_to_every_clone() {
             talk_id: TalkId(id),
             script: r"\s[0]X\_w[2500]\e".to_string(),
             origin,
+            strict: false,
         }))
         .expect("send Start");
     }

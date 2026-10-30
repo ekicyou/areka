@@ -9,6 +9,11 @@
     rightclick  move to (X, Y), right press, short pause, right release
     drag        left press at (X, Y), move to (X2, Y2) in -Steps steps (default 20), release
     shot        copy the rectangle (X, Y)-(X2, Y2) of the screen to the PNG file -Out
+    cursor      move to (X, Y), then read the cursor shape (GetCursorInfo) and name it by
+                comparing the handle with the 14 stock cursors (LoadCursorW(NULL, IDC_*));
+                any other handle is 'custom'
+                with -Press: left press at (X, Y), read and print the line with ' pressed=1',
+                then left release and read again (the release is sent even if the read fails)
   Coordinates are physical pixels of the virtual screen. Every call first makes the process
   per-monitor DPI aware (V2), so 200% and 150% monitors do not shift the coordinates.
   After each move the cursor position is read back (GetCursorPos); a mismatch is a failure
@@ -19,11 +24,13 @@
 
   Output (ASCII, one line):
     exit 0  ok <action> x=<X> y=<Y>
+            ok cursor x=<X> y=<Y> shape=<ARROW|IBEAM|...|HELP|custom> handle=0x<hex>
+            (with -Press: the same line with ' pressed=1' first, then the released line)
     exit 1  error <reason>
     exit 2  error <reason>   (missing or malformed arguments)
 
   Run: pwsh -NoProfile -File tools/mouse-input.ps1 -Action <action> -X <int> -Y <int>
-         [-X2 <int> -Y2 <int>] [-Steps <int>] [-Out <absolute PNG path>]
+         [-X2 <int> -Y2 <int>] [-Steps <int>] [-Out <absolute PNG path>] [-Press]
 #>
 #Requires -Version 7
 param(
@@ -33,7 +40,8 @@ param(
     [string]$X2,
     [string]$Y2,
     [string]$Steps = '20',
-    [string]$Out
+    [string]$Out,
+    [switch]$Press
 )
 
 Set-StrictMode -Version 3.0
@@ -54,10 +62,11 @@ function ConvertTo-Int([string]$Name, [string]$Text) {
 }
 
 # ---- arguments ---------------------------------------------------------------
-$actions = @('move', 'click', 'rightclick', 'drag', 'shot')
+$actions = @('move', 'click', 'rightclick', 'drag', 'shot', 'cursor')
 if ($actions -notcontains $Action) {
     Exit-With 2 "error -Action must be one of: $($actions -join ', ')"
 }
+if ($Press -and $Action -ne 'cursor') { Exit-With 2 'error -Press works only with -Action cursor' }
 $px = ConvertTo-Int 'X' $X
 $py = ConvertTo-Int 'Y' $Y
 $needEnd = $Action -in @('drag', 'shot')
@@ -89,6 +98,8 @@ public class AkMouseInputW32 {
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT pt);
     [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint count, [In] INPUT[] inputs, int size);
     [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool GetCursorInfo(ref CURSORINFO info);
+    [DllImport("user32.dll")] public static extern IntPtr LoadCursorW(IntPtr instance, IntPtr id);
 
     [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT {
@@ -97,6 +108,9 @@ public class AkMouseInputW32 {
     // On x64, INPUT is 40 bytes (type 4 + padding 4 + MOUSEINPUT 32). Adding the padding by hand
     // makes it 48 bytes and SendInput returns ERROR_INVALID_PARAMETER(87). Do not add it.
     [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public MOUSEINPUT mi; }
+    [StructLayout(LayoutKind.Sequential)] public struct CURSORINFO {
+        public int cbSize; public uint flags; public IntPtr hCursor; public POINT ptScreenPos;
+    }
 
     public static int InputSize() { return Marshal.SizeOf(typeof(INPUT)); }
 }
@@ -136,6 +150,24 @@ function Assert-CursorAt([int]$AtX, [int]$AtY) {
     if ($p.X -ne $AtX -or $p.Y -ne $AtY) {
         throw "cursor at x=$($p.X) y=$($p.Y), wanted x=$AtX y=$AtY (input refused or point off screen)"
     }
+}
+
+function Read-CursorLine {
+    $info = New-Object AkMouseInputW32+CURSORINFO
+    $info.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($info)
+    if (-not [AkMouseInputW32]::GetCursorInfo([ref]$info)) {
+        throw "GetCursorInfo failed (lasterr=$([System.Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
+    }
+    $stock = [ordered]@{
+        ARROW = 32512; IBEAM = 32513; WAIT = 32514; CROSS = 32515; UPARROW = 32516
+        SIZENWSE = 32642; SIZENESW = 32643; SIZEWE = 32644; SIZENS = 32645; SIZEALL = 32646
+        NO = 32648; HAND = 32649; APPSTARTING = 32650; HELP = 32651
+    }
+    $shape = 'custom'
+    foreach ($name in $stock.Keys) {
+        if ([AkMouseInputW32]::LoadCursorW([IntPtr]::Zero, [IntPtr]$stock[$name]) -eq $info.hCursor) { $shape = $name; break }
+    }
+    return ("ok cursor x=$px y=$py shape=$shape handle=0x{0:x}" -f $info.hCursor.ToInt64())
 }
 
 # ---- actions -----------------------------------------------------------------
@@ -179,6 +211,20 @@ try {
                 try { $g.CopyFromScreen($px, $py, 0, 0, $bmp.Size) } finally { $g.Dispose() }
                 $bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
             } finally { $bmp.Dispose() }
+        }
+        'cursor' {
+            Send-Mouse $px $py 0
+            Assert-CursorAt $px $py
+            if ($Press) {
+                $pressed = $LEFTUP  # the catch below releases if the read throws
+                Send-Mouse $px $py $LEFTDOWN
+                Start-Sleep -Milliseconds 80
+                Write-Output ((Read-CursorLine) + ' pressed=1')
+                Send-Mouse $px $py $LEFTUP
+                $pressed = 0
+                Start-Sleep -Milliseconds 30
+            }
+            Exit-With 0 (Read-CursorLine)
         }
     }
 } catch {

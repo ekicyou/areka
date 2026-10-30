@@ -913,3 +913,48 @@ fn barrier_already_past_at_exact_absolute_deadline_is_skipped() {
     assert!(sched.current_barrier().is_none());
     assert_eq!(sched.ready(), &["after".to_string()]);
 }
+
+// ============================================================================
+// まとめて入れる（insert_each）
+// ============================================================================
+
+/// 同じ時刻の群・区切り・配送の制御・時刻の逆行を混ぜた見本（記述順）。
+fn mixed_entries() -> Vec<Entry<String>> {
+    vec![
+        Entry::Payload(0.0, "a0".into()),
+        Entry::Payload(0.0, "a1".into()),
+        Entry::Routing(
+            0.0,
+            RoutingCommand::RouteRemove {
+                target: CueTarget::Shell,
+            },
+        ),
+        Entry::Payload(0.5, "b0".into()),
+        Entry::Barrier(0.5, BarrierKind::WaitForInput { timeout: None }),
+        Entry::Payload(0.5, "b1".into()),
+        Entry::Payload(0.25, "late".into()),
+        Entry::Barrier(1.0, BarrierKind::Timeout { duration: 0.5 }),
+        Entry::Payload(1.0, "c0".into()),
+        Entry::Payload(2.0, "d0".into()),
+        Entry::Payload(2.0, "d1".into()),
+    ]
+}
+
+/// まとめて入れた並びは 1 件ずつ `insert` した並びと同じ（同じ時刻は記述順に配る）。
+/// 空のスケジュールへも、既に入っているスケジュールへも同じ（mcp-strict-errors 9.4・長い台本）。
+#[test]
+fn insert_each_matches_per_entry_insert_including_equal_time_fifo() {
+    for prefilled in [vec![], mixed_entries()] {
+        let mut one_by_one = TimedSchedule::<String>::new(0.0);
+        let mut bulk = TimedSchedule::<String>::new(0.0);
+        for entry in prefilled {
+            one_by_one.insert(entry.clone());
+            bulk.insert(entry);
+        }
+        for entry in mixed_entries() {
+            one_by_one.insert(entry);
+        }
+        bulk.insert_each(mixed_entries());
+        assert_eq!(format!("{bulk:?}"), format!("{one_by_one:?}"));
+    }
+}

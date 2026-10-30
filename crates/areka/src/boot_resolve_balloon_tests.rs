@@ -108,7 +108,7 @@ fn all_hit(root: &BasewareRoot) -> Vec<BalloonEntry> {
     entries(
         root,
         &[
-            ("StayseeBalloon", Some("Staysee")),
+            (DEFAULT_BALLOON_FOLDER, Some("Staysee")),
             ("bundled", None),
             ("by_name", Some("名前で当たる")),
             ("by_path", None),
@@ -162,7 +162,11 @@ fn companion_wins_over_default() {
     let root = root();
     let listed = entries(
         &root,
-        &[("StayseeBalloon", None), ("a", None), ("bundled", None)],
+        &[
+            (DEFAULT_BALLOON_FOLDER, None),
+            ("a", None),
+            ("bundled", None),
+        ],
     );
     let given = Given {
         companion: Some("bundled"),
@@ -263,14 +267,17 @@ fn companion_first_missing_goes_to_default_not_second() {
     let root = root();
     let listed = entries(
         &root,
-        &[("StayseeBalloon", None), ("claudia_vertical", None)],
+        &[(DEFAULT_BALLOON_FOLDER, None), ("claudia_vertical", None)],
     );
     let given = Given {
         companion: Some("claudia"),
         ..Default::default()
     };
     let (got, events) = chain(&root, given, &listed, no_pick);
-    assert_eq!(got, Ok(at(&root, BalloonRoute::Default, "StayseeBalloon")));
+    assert_eq!(
+        got,
+        Ok(at(&root, BalloonRoute::Default, DEFAULT_BALLOON_FOLDER))
+    );
     let companion = hits(&events, "companion_balloon_not_found");
     assert_eq!(companion.len(), 1, "{events:?}");
     assert_eq!(companion[0].field_str("companion"), Some("claudia"));
@@ -285,7 +292,7 @@ fn companion_with_separator_is_not_rewritten() {
     let listed = entries(
         &root,
         &[
-            ("StayseeBalloon", None),
+            (DEFAULT_BALLOON_FOLDER, None),
             ("mine", None),
             ("x_mine", None),
             ("xmine", None),
@@ -297,7 +304,10 @@ fn companion_with_separator_is_not_rewritten() {
             ..Default::default()
         };
         let (got, events) = chain(&root, given, &listed, no_pick);
-        assert_eq!(got, Ok(at(&root, BalloonRoute::Default, "StayseeBalloon")));
+        assert_eq!(
+            got,
+            Ok(at(&root, BalloonRoute::Default, DEFAULT_BALLOON_FOLDER))
+        );
         let companion = hits(&events, "companion_balloon_not_found");
         assert_eq!(companion.len(), 1, "{events:?}");
         assert_eq!(companion[0].field_str("companion"), Some(value));

@@ -118,6 +118,7 @@ fn boot_holding(tag: &str, hold_on_close: bool) -> Booted {
     let (holding_tx, holding_rx) = mpsc::channel();
     let backend_gate = Arc::clone(&gate);
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: temp.path().to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

@@ -7,8 +7,8 @@
 //!
 //! ## 焼くもの・焼かないもの
 //!
-//! 焼くのはフォント家族名・大きさ・太さ・斜体・打ち消し線の 5 項目だけで、いずれも
-//! **既定と値が違うときだけ**発行する（既定と同じ項目への範囲指定は意味が無く COM 呼出が
+//! 焼くのはフォント家族名・幅・大きさ・太さ・斜体・打ち消し線の 6 項目だけで、いずれも
+//! **既定（家族名・幅・太さ・斜体は束縛の顔）と値が違うときだけ**発行する（既定と同じ項目への範囲指定は意味が無く COM 呼出が
 //! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」を
 //! 実際に担っているのは、呼び手 `line_layout_for` の `line.default_only` 短絡と、下の
 //! `apply_font_ranges` が外側で行う `if run.style == StyleId::DEFAULT { continue; }` の 2 点で、
@@ -38,10 +38,7 @@
 use std::collections::HashMap;
 
 use windows::Win32::Graphics::Direct2D::{ID2D1DeviceContext, ID2D1SolidColorBrush};
-use windows::Win32::Graphics::DirectWrite::{
-    DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD,
-    DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_RANGE, IDWriteTextLayout,
-};
+use windows::Win32::Graphics::DirectWrite::{DWRITE_TEXT_RANGE, IDWriteTextLayout};
 use windows::core::{HSTRING, IUnknown};
 use wintf::com::d2d::D2D1DeviceContextExt;
 
@@ -156,12 +153,15 @@ pub(crate) fn line_styles(
     }
 }
 
-/// 既定と異なる区間にだけ、既定と異なるフォント系項目を焼く（要件 5.1／5.2／5.6／5.7／5.8／9.8）。
-/// 下線は焼かない（[`LineStyles::underlines`] の区間を areka が塗る・areka-P0-balloon-text-bugs 件 3）。
+/// 既定と異なる区間にだけ、束縛と異なるフォント系項目を焼く（要件 5.1／5.2／5.6／5.7／5.8／9.8・
+/// 3.2／4.1／4.3／4.6／4.10）。下線は焼かない（[`LineStyles::underlines`] の区間を areka が塗る・
+/// areka-P0-balloon-text-bugs 件 3）。
 ///
 /// 行 TextLayout の**生成時に 1 度だけ**呼ばれる（[`crate::draw::LineLayoutStore::line_layout_decorated`]
-/// の `decorate` 口）。家族名は [`FontCatalog::family_for`] が解決した名前だけを渡す——
-/// 実在しない候補列は解決に失敗して `None` になり、そのときは既定の家族名のまま描く（要件 9.8）。
+/// の `decorate` 口）。顔で考える: 束縛の顔は `pick` と同じ規則（[`FontCatalog::face_or_default`]）で
+/// 引き、区間の名前が既定と違えば区間の候補列の顔（GDI の名前を含む・全滅なら束縛の顔＝要件 4.10）を
+/// 使う。家族名・幅は束縛の顔と違えば焼き、太さ・斜体は「区間の顔＋区間の太字・斜体」と
+/// 「束縛の顔＋既定の太字・斜体」を同じ [`crate::draw::FontFace`] の規則で比べて違えば焼く。
 /// 失敗は log-first（`error!`＋`Err`）で当該フレームを見送る（要件 13.3）。
 pub(crate) fn apply_font_ranges(
     layout: &IDWriteTextLayout,
@@ -170,41 +170,42 @@ pub(crate) fn apply_font_ranges(
     default: &TextLook,
     fonts: &FontCatalog,
 ) -> Result<(), TextLayerError> {
+    let bound = fonts.face_or_default(&default.name);
     for run in runs {
         if run.style == StyleId::DEFAULT {
             continue;
         }
         let look = styles.resolve(run.style, default);
+        let face = if look.name != default.name {
+            fonts.face_or(&look.name, &bound)
+        } else {
+            bound.clone()
+        };
 
-        if look.name != default.name
-            && let Some(family) = fonts.family_for(&look.name)
-        {
+        if face.family != bound.family {
             note_range_call();
-            unsafe { layout.SetFontFamilyName(&HSTRING::from(family.as_str()), run.range) }
+            unsafe { layout.SetFontFamilyName(&HSTRING::from(face.family.as_str()), run.range) }
                 .map_err(device_err("SetFontFamilyName(装飾の区間)"))?;
+        }
+        if face.stretch != bound.stretch {
+            note_range_call();
+            unsafe { layout.SetFontStretch(face.stretch, run.range) }
+                .map_err(device_err("SetFontStretch(装飾の区間)"))?;
         }
         if look.height != default.height {
             note_range_call();
             unsafe { layout.SetFontSize(look.height, run.range) }
                 .map_err(device_err("SetFontSize(装飾の区間)"))?;
         }
-        if look.bold != default.bold {
+        let weight = face.weight_with(look.bold);
+        if weight != bound.weight_with(default.bold) {
             note_range_call();
-            let weight = if look.bold {
-                DWRITE_FONT_WEIGHT_BOLD
-            } else {
-                DWRITE_FONT_WEIGHT_NORMAL
-            };
             unsafe { layout.SetFontWeight(weight, run.range) }
                 .map_err(device_err("SetFontWeight(装飾の区間)"))?;
         }
-        if look.italic != default.italic {
+        let style = face.style_with(look.italic);
+        if style != bound.style_with(default.italic) {
             note_range_call();
-            let style = if look.italic {
-                DWRITE_FONT_STYLE_ITALIC
-            } else {
-                DWRITE_FONT_STYLE_NORMAL
-            };
             unsafe { layout.SetFontStyle(style, run.range) }
                 .map_err(device_err("SetFontStyle(装飾の区間)"))?;
         }

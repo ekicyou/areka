@@ -112,6 +112,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     let text_records = text_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {

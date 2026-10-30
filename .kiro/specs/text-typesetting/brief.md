@@ -145,3 +145,9 @@
 - 起票時の実測: DirectWrite の TextLayout は自分では詰めない（送り幅は全部 20.0）。`IDWriteTypography` で `vchw`・`vhal`・`vpal`・`halt` を当てても括弧の送り幅は 20.0 のまま。詰めるなら areka が送り幅を決め、1 字の計測（`draw_metrics.rs`）と行の TextLayout（`draw_line_store.rs`）の両方に同じに効かせる要がある。
 - 開き括弧「「」の墨が枠の上端に描かれる件（本来は下端）は詰めとは別のバグで、`emo-text-dwrite-fidelity` が直す。本 spec の詰めは、その直しの後の位置を前提にする。
 - 小書きかな（っ・ょ）の下の空きはフォントの縦書き用の字形どおり（Chromium でも同じ）で、直さない。
+
+## 2026-10-30 追記（`default-balloon-selfmade` の完了の棚卸で）
+
+- **件: 折り返した後の行頭の空白**: 半角の行を折り返すと、次の行の先頭に空白が残る（` brown fox …` のように 1 字下がって始まる）。2026-10-29 の実機で、`areka-balloon` を被せた emo2 とどっとさくらを 100% と 200% で見て気付いた（記録は `.kiro/specs/completed/default-balloon-selfmade/verification/real-machine.md` の振り分け 3）。折り返しの切れ目の空白を次の行へ持ち越すか、切れ目で消すか（CSS の `white-space: normal` は行頭の空白を消す）を本 spec で決める。SSP がどう組むかは測っていない。
+- **件: 数字の並びが行をまたいで割れる**: `0123456789` が `0`／`123456789` のように行をまたいで割れ、行の頭に `:` が来る（同じ記録の振り分け 4）。行頭の `:` は本 spec の禁則が持つ（既定は `anywhere`）。数字の並び（と英単語）を 1 つの塊として割らないか、どこでも割るかは本 brief に明記が無く、本 spec で決める。SSP がどう組むかは測っていない。
+- どちらも正しい振る舞いが ukadoc で決まらず、SSP の測りと開発者の裁定が要るので、`default-balloon-selfmade` ではその場で直さずここへ足した。

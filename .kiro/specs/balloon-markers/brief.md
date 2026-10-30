@@ -58,7 +58,7 @@
 ## Constraints
 
 - `viewbox.rs` 871 行・`layout.rs` 977 行＝新しいファイルで足す。1 ファイル 1,000 行。
-- 決定論テスト網羅は必達。印の画像の検体はリポジトリ内に作る（既定バルーン `StayseeBalloon` が装飾の系列を持つかは着手時に確かめる）。
+- 決定論テスト網羅は必達。印の画像の検体はリポジトリ内に作る（既定バルーン `StayseeBalloon` が装飾の系列を持つかは着手時に確かめる）。（2026-10-30 から既定は `areka-balloon`。`StayseeBalloon` は配布物に同梱する選べるバルーン）
 
 
 ---
@@ -66,7 +66,7 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 規模 M〜L（14〜19 タスク）。文字まわりの直列の列（`shell-balloon` の後）。
-- 合っていた点: `SeriesFamily`（emo-present の `balloon.rs`）は旧名の列を積める・パーサにこれらのキーは無い。既定バルーン（Staysee）には `arrow0/1.png`・`online0〜8.png`・`sstp.png`・`marker.png` が在り、`clickwait*` と数字の画像は無い。
+- 合っていた点: `SeriesFamily`（emo-present の `balloon.rs`）は旧名の列を積める・パーサにこれらのキーは無い。既定バルーン（Staysee）には `arrow0/1.png`・`online0〜8.png`・`sstp.png`・`marker.png` が在り、`clickwait*` と数字の画像は無い。（2026-10-30 から既定は `areka-balloon`。`StayseeBalloon` は配布物に同梱する選べるバルーン。`areka-balloon` は `arrow0/1.png`・`sstp.png`・動く `online0.webp` を持ち、`marker.png`・`clickwait*`・数字の画像は無い）
 - **触るファイル**: `crates/areka-parsers/src/balloon/{model.rs 774, parse.rs}`（キーが多く 850 行を超えうる＝新しいファイルへ）・emo-present の `balloon.rs`・emo-text の `viewbox` 系・`layout` 系（`visible_window`）・`actor` 系・`state.rs`（`balloonnum`）・`crates/areka/src/input_events/` のバルーン（矢印のクリックとホイール）・通信のきっかけの配線（`emo2_boot/update_cue.rs` か `crates/areka/src/update/`）・台帳。
 
 
@@ -159,3 +159,10 @@
 - **Downstream の「SSTP の受信（登記だけの行）」は 2026-10-23 に `sstp-receive` として起票した**。`sstpmarker`／`sstpmessage` が画面に出るのは同 spec の後。縮退の口は同 spec が本物の値でつなぐ。
 - 議題: 棚卸㉑〜㉓の ⑴〜⑷（箱の印の絵の引き先・手動で戻している最中・印を描く層・時間切れ）は `balloon-scroll-arrows` へ移った＝本 spec はあちらの答えに従う。本 spec に残るのは 10-10 の「オンラインの印を 1 枚の動く絵でも持つ」の 1 件。
 - 要件定義のモデル: 棚卸㉓の Fable は前半の分かれ目が理由だった。後半だけになったので Opus。
+
+## 2026-10-29 `default-balloon-selfmade` からの申し送り（要件 3.7）
+
+- **1 枚の動く絵のオンラインの印の検体ができた**。新しい既定バルーン「areka バルーン」（フォルダ名と `id` は `areka-balloon`）の書庫 `vendors/sample_ghost/areka-balloon.nar` の中にある。試験からは `sample-ghost-kit` の名前 `areka-balloon` で取り出す。
+- **オンラインの印**: `online0.webp` の 1 枚（77×36・3 コマ・1 コマ 300 ミリ秒・終わりなく繰り返す）。`descript.txt` は `onlinemarker.x/y` だけを書き、`onlinemarker.filename`・`onlinemarker.interval` は書かない＝既定の `online` の連番の 0 番目に収まる。10-10 の議題「連番が 1 枚だけでその絵が動く絵のとき」の形そのもの。コマの時間は絵の中の時間割りを使うつもりで作った（決めるのは本 spec）。
+- **矢印と SSTP の印**: `arrow0.png`・`arrow1.png`（11×10）と `sstp.png`（7×9）・どれも α 付きの PNG。位置は `arrow0/1.x/y`・`sstpmarker.x/y` に書いた（矢印は `balloon-scroll-arrows` の持ち物）。
+- **測っていないこと**: SSP が `.webp` の名前の印を読むか（`default-balloon-selfmade` の research.md 9.2 の 2）は測っていない。SSP で同じ印が出るかを比べるなら、ここから測る。

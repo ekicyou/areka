@@ -374,6 +374,7 @@ fn capture_real_pasta_snapshots() {
     let text_records = text_sink.records();
 
     let options = GhostBootOptions {
+        strict_judges: None,
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: wiring,

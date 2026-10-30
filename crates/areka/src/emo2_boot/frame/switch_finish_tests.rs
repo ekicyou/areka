@@ -40,6 +40,7 @@ use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
 };
 use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
+use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
 use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::reseed::BalloonPlacementInputs;
@@ -126,6 +127,7 @@ fn shell_finish() -> SwapFinish {
         },
         restored: Vec::new(),
         boxes: ShellBoxAssets::default(),
+        cursors: ShellCursorAssets::default(),
     }
 }
 
@@ -619,6 +621,7 @@ fn shell_finish_moves_char_windows_to_the_new_alignment() {
         },
         restored: Vec::new(),
         boxes: ShellBoxAssets::default(),
+        cursors: ShellCursorAssets::default(),
     };
     let mut rig = rig_on(world, SkinKind::Shell, false, finish);
     answer(&mut rig, 0, Ok(()));
@@ -687,6 +690,7 @@ fn shell_finish_replaces_only_the_descript_sticky_group() {
         },
         restored: Vec::new(),
         boxes: ShellBoxAssets::default(),
+        cursors: ShellCursorAssets::default(),
     };
     let run = |setup: &dyn Fn(&mut World), sticky: Option<&str>| {
         let (mut world, _windows) = reseed_tests::booted_world(96);
@@ -751,6 +755,7 @@ fn shell_finish_replaces_only_the_descript_balloon_lock() {
         },
         restored: Vec::new(),
         boxes: ShellBoxAssets::default(),
+        cursors: ShellCursorAssets::default(),
     };
     let mut rig = rig_on(world, SkinKind::Shell, false, finish);
     answer(&mut rig, 0, Ok(()));
@@ -859,6 +864,7 @@ fn shell_switch_hands_the_new_box_bundle_to_the_text_layer() {
         balloon,
         restored,
         boxes: box_bundle(NEW_SHELL),
+        cursors: ShellCursorAssets::default(),
     };
     let mut rig = rig_on(World::new(), SkinKind::Shell, false, finish);
     // 起動の装着の相が渡した前のシェルの束と、面 10 の箱 `old` に出ている文字。
@@ -927,6 +933,7 @@ fn shell_switch_falls_the_text_layer_back_to_the_bundle_candidates() {
         balloon,
         restored,
         boxes,
+        cursors: ShellCursorAssets::default(),
     };
     let mut rig = rig_on(World::new(), SkinKind::Shell, false, finish);
     box_bundle(OLD_SHELL_WITH_20).hand_to(&mut rig.wiring.runtime.borrow_mut(), &mut rig.world);
@@ -987,6 +994,7 @@ fn balloon_switch_renames_the_balloon_warning_field() {
     );
 }
 
-/// 読み直しの分かれ目（areka-P0-mcp-reload task 7.4）は、この土台をそのまま使う。
+#[path = "switch_cursor_tests.rs"]
+mod cursor_tests;
 #[path = "switch_reload_tests.rs"]
 mod reload_tests;

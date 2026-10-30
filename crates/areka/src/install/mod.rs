@@ -25,6 +25,7 @@ pub(crate) mod judge;
 pub(crate) mod names;
 pub(crate) mod pick;
 mod procedure;
+pub(crate) mod startup;
 mod terms;
 mod worker;
 
@@ -42,6 +43,10 @@ pub(crate) enum InstallOrigin {
     Script,
     /// 窓への投げ込み（areka-P0-file-drop）。
     WindowDrop,
+    /// 起動の引数 `--install`（startup-install-option）。
+    StartupArgs,
+    /// exe の隣の `initial_install.nar`（startup-install-option）。
+    InitialInstall,
 }
 
 /// 受付の判定。

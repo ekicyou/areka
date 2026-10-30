@@ -7,6 +7,7 @@
 
 use super::*;
 use areka_parsers::balloon::{BalloonCursor, CursorColor};
+use log_capture_kit::capture;
 
 /// fixture 実導出の cursor.*（square・brush=(105,25,25)・font=(255,255,255)・pen/blend 未指定）。
 fn fixture_cursor() -> BalloonCursor {
@@ -101,9 +102,9 @@ fn resolve_specified_colors_without_style_defaults_to_square_fill() {
     );
 }
 
-// ── resolve: underline 系 → warn-once + SquareFill 縮退（縮退表・6.5） ──
+// ── resolve: underline 系 → SquareFill 縮退（縮退表・6.5・記録は出さない） ──
 
-/// `cursor.style,underline` → SquareFill へ縮退（在る色を採る・warn は解決時 1 回）。
+/// `cursor.style,underline` → SquareFill へ縮退（在る色を採る・警告は登録の側が出す）。
 #[test]
 fn resolve_underline_degrades_to_square_fill() {
     let c = cursor(
@@ -139,10 +140,10 @@ fn resolve_square_plus_underline_degrades_to_square_fill() {
     );
 }
 
-// ── resolve: blendmethod ROP 系 → warn-once + none 扱い（variant は変えない・6.5） ──
+// ── resolve: blendmethod ROP 系 → none 扱い（variant は変えない・6.5・記録は出さない） ──
 
 /// `cursor.blendmethod,notmaskpen`（ROP 系）→ none 扱い（色ベース）へ縮退し variant は
-/// style（square）どおり SquareFill のまま（blend は無視・warn は解決時 1 回）。
+/// style（square）どおり SquareFill のまま（blend は無視・警告は登録の側が出す）。
 #[test]
 fn resolve_rop_blendmethod_is_treated_as_none_and_keeps_square_fill() {
     let c = cursor(
@@ -160,7 +161,7 @@ fn resolve_rop_blendmethod_is_treated_as_none_and_keeps_square_fill() {
     );
 }
 
-/// `cursor.blendmethod,none`（大小無視）は縮退警告を出さず variant はスタイルどおり。
+/// `cursor.blendmethod,none`（大小無視）は縮退ではなく variant はスタイルどおり。
 #[test]
 fn resolve_blendmethod_none_keeps_square_fill_without_degrade() {
     let c = cursor(
@@ -215,4 +216,79 @@ fn paint_invert_uses_default_font_fill_and_per_component_complement() {
 #[test]
 fn paint_no_marker_is_none() {
     assert_eq!(ResolvedChoiceStyle::NoMarker.paint((10, 20, 30)), None);
+}
+
+// ══ spec real-run-log-noise T6（要件 2.5・2.6・5.4）: resolve は記録を出さず、縮退の値は取り出し口が返す ══
+
+/// 白抜きの fixture 色で `style`・`blendmethod` だけを替えた cursor。
+fn styled(style: Option<&str>, blend: Option<&str>) -> BalloonCursor {
+    cursor(
+        style,
+        (Some(105), Some(25), Some(25)),
+        (Some(255), Some(255), Some(255)),
+        blend,
+    )
+}
+
+/// ROP 系・下線系のバルーンで resolve の返り値は今のまま（SquareFill）・記録は 0 件
+/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・要件 2.5・2.7）。
+#[test]
+fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
+    let square = ResolvedChoiceStyle::SquareFill {
+        fill: (105, 25, 25),
+        text: (255, 255, 255),
+    };
+    for c in [
+        styled(Some("square"), Some("mergepennot")),
+        styled(Some("underline"), None),
+        styled(Some("square+underline"), Some("xor")),
+    ] {
+        let (answer, events) = capture(|| ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)));
+        assert_eq!(answer, square, "返り値は今のまま: {c:?}");
+        assert!(
+            events.is_empty(),
+            "resolve は記録を出さない: {c:?} → {events:?}"
+        );
+    }
+}
+
+/// 取り出し口は ROP 系の `blendmethod` と下線系の `style` の元の値を返す。
+#[test]
+fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
+    assert_eq!(
+        CursorFallback::of(&styled(Some("square"), Some("mergepennot"))),
+        CursorFallback {
+            blendmethod: Some("mergepennot".to_string()),
+            underline_style: None,
+        }
+    );
+    assert_eq!(
+        CursorFallback::of(&styled(Some("underline"), None)),
+        CursorFallback {
+            blendmethod: None,
+            underline_style: Some("underline".to_string()),
+        }
+    );
+    assert_eq!(
+        CursorFallback::of(&styled(Some("square+underline"), None)),
+        CursorFallback {
+            blendmethod: None,
+            underline_style: Some("square+underline".to_string()),
+        }
+    );
+}
+
+/// `blendmethod` が `none`（大小無視）・未指定、`style` が `square`・未指定・`none` では縮退の値は無し。
+#[test]
+fn cursor_fallback_is_empty_for_none_unspecified_and_square() {
+    for c in [
+        styled(Some("square"), Some("none")),
+        styled(Some("square"), Some("NONE")),
+        styled(Some("square"), None),
+        styled(None, None),
+        styled(Some("none"), None),
+        BalloonCursor::default(),
+    ] {
+        assert_eq!(CursorFallback::of(&c), CursorFallback::default(), "{c:?}");
+    }
 }

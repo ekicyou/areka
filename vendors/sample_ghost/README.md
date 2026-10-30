@@ -6,22 +6,23 @@
 
 | 形 | 登記の `source` | 書庫の在処 | 引く前に要ること |
 |---|---|---|---|
-| 書庫を置く行（今の 9 本） | `SampleSource::Vendored` | このフォルダの `<名前>.nar`（リポジトリが追跡する） | 何も要らない |
+| 書庫を置く行（今の 10 本） | `SampleSource::Vendored` | このフォルダの `<名前>.nar`（リポジトリが追跡する） | 何も要らない |
 | URL の行 | `SampleSource::Fetched { url }` | 取り寄せ先の URL。手元では `target\` の下の置き場（リポジトリは追跡しない） | 取り寄せの段を 1 回回す（下の「取り寄せの段」） |
 
 書庫を置く行の検体:
 
 | ファイル | 種別 | 中のファイル数 | 大きさ |
 |---|---|---|---|
-| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 114 | 4,663,324 バイト |
-| `R_POST_and_KOMAINU.nar` | ゴースト | 43 | 1,625,603 バイト |
+| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 113 | 4,568,887 バイト |
+| `R_POST_and_KOMAINU.nar` | ゴースト（里々・「Ｒポストと狛犬 with 里々Unicode版」・UTF-8・**配布物そのまま**＝下の節） | 42 | 823,413 バイト |
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
-| `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 125 | 820,368 バイト |
-| `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
-| `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 135 | 3,651,357 バイト |
+| `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 65 | 1,310,683 バイト |
+| `StayseeBalloon.nar` | バルーン（配布物に同梱する選べるバルーン・CC0） | 29 | 73,021 バイト |
+| `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 164 | 5,390,305 バイト |
 | `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・同梱バルーン `emily4` は書庫に無く入らない・**受け取ったバイト列そのまま**＝下の節） | 260 | 2,677,923 バイト |
 | `dot_sakura.nar` | ゴースト（華和梨 32bit・「．さくら」・同梱バルーン `bottle`・**受け取ったバイト列そのまま**＝下の節） | 204 | 1,425,534 バイト |
+| `areka-balloon.nar` | バルーン（areka の既定バルーン「areka バルーン」・開発者が作った・CC0・**道具が書く**＝下の節） | 23 | 28,014 バイト |
 
 URL の行の検体:
 
@@ -29,22 +30,77 @@ URL の行の検体:
 |---|---|---|---|---|
 | `pasta-in-windows` | ゴースト（「窓際のぱすたさん」・同梱バルーン無し） | URL（取り寄せの段が取る＝下の節） | 版で変わる | 版で変わる |
 
-- `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。areka の既定バルーンで、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
+- `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。2026-10 まで areka の既定バルーンだった。今は配布物に同梱する選べるバルーン（既定は下の `areka-balloon.nar`）で、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
+
+### `areka-balloon.nar` の出どころと権利と作り直し
+
+- 出どころ: 開発者（ekicyou）が areka のために作ったバルーン「areka バルーン」。areka の既定バルーンで、バルーンを指定しないときはこれを使う（2026-10 に `StayseeBalloon` から替えた）。絵（面と印）も設定ファイルも、リポジトリの中の道具 `crates/areka-emo-atlas/examples/gen_default_balloon/` が書く。**展開形はどこにも置かず、追跡するのはこの `.nar` だけ**で、中を手で直さない。直したいときは道具の中の値（絵柄は `draw.rs`、文は `texts.rs`）を直して作り直す。
+- 権利（書庫の中の `readme.txt` にも同じことを書いてある）: **絵と設定ファイルは CC0**（自由に使い、直し、配ってよい）。**絵を描く道具のコードはこのリポジトリと同じ MIT**。
+- 手本: 寸法と設定の数値は、開発者が自作したバルーン「ボトル（でふぉ改）」（上の `dot_sakura.nar` の同梱バルーン `bottle`）から引き継いだ。**引き継いだのは数値だけで、絵は写しておらず、新しく描いたもの**である。
+- 畳み方は「書庫を置く行で足す」の `fold-samples` を通らない。道具が書庫まで直に書く（ファイルは名前順・時刻を持たない形）ので、同じ道具からは同じバイト列が出る。
+
+#### 作り直しの手順
+
+どのディレクトリからでも同じに動く。
+
+1. **道具を回して書く。**
+
+   ```
+   cargo run --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-atlas --example gen_default_balloon
+   ```
+
+   出力は `<ワークツリー>\vendors\sample_ghost\areka-balloon.nar`（このフォルダ）。通れば `wrote areka-balloon.nar: 23 files, <大きさ> bytes` の 1 行を出して終了コード 0。途中の書き込みは `<ワークツリー>\target\gen-default-balloon\` の下の一時のファイルへ行い、全部できてから名前を替えるので、寸法が合わない・書けないなどで失敗しても今の `.nar` はそのまま残る（`error: <理由>` を出して終了コード 1）。
+2. **書かずに比べる。** 同じ呼び方の末尾に `-- --check` を足す。
+
+   ```
+   cargo run --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-atlas --example gen_default_balloon -- --check
+   ```
+
+   置いてある `.nar` が道具の今の出力と同じなら `check: areka-balloon.nar is identical` を出して終了コード 0。違えば `error: check: areka-balloon.nar differs at byte <位置> (stored <大きさ> bytes, built <大きさ> bytes)` を出して終了コード 1（このときは手順 1 で書き直す）。
+3. **見張りのテストを回す。**
+
+   ```
+   cargo test --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-atlas --test default_balloon_drift_test
+   ```
+
+   道具の組み立てをそのまま読み、登記した書庫とバイトで比べる。全体テストでも毎回回るので、道具を直して作り直し忘れたときや、絵を書く依存（`image`）の版が上がって出力が変わったときは、ここが赤になる。
+4. **中身のテストを回す。** 書庫の中身が決めた形（ファイルの集合・絵の寸法・半透明・設定の値・折り返し）どおりかを確かめる。
+
+   ```
+   cargo test --manifest-path <ワークツリーの絶対パス>\Cargo.toml -p areka-emo-text --test areka_balloon_fixture_test
+   ```
+
+5. **絵柄を変えたときは実機で 1 度見る。** emo2 と、このバルーンを被せた `dot_sakura` を、拡大率 100% と 100% でない値（125% など）で喋らせ、文字がバルーンの中に描かれ、欠けたりはみ出したりしないことを見る。根はワークツリーの `target\` の下に組む。
+6. `.nar` の大きさが変わったら、上の表の大きさを書き直す（ファイルの数が変わったら数も）。
+
+### `emo2.nar` の出どころ
+
+- 出どころ: 開発者のゴースト開発リポジトリ ghost_dev の `release/emo2/emo2.nar`（コミット `26415a2`・2026-10-25・pasta.dll v0.4.3）。隣の `emo2.nar.sha256` と同じハッシュ。
+  sha256 `24456269ea525c8a64784c8108728a7cb942fe7c94cd704712d8f8872a3c45f7`
+- 差し替えるとき: ghost_dev の新しい `release/emo2/emo2.nar` をそのまま置き、この節のコミット・ハッシュと上の表の 2 つの数を書き直す。
+
+### `R_POST_and_KOMAINU.nar` の出どころとライセンス
+
+- 出どころ: 里々 wiki の「改造版ポストと狛犬」の配布場所 <https://soliton.sub.jp/post/topics.cgi> の 2026-10-09 版（里々 Mc203-6・添付 `files/11-1.zip`・2026-10-30 取得）。`.zip` のバイト列をそのまま `.nar` の名で置いた（最上位に `install.txt` が在る配布形）。
+  sha256 `7bdfc490977c3d42a12f02a7b75d1954f20e625a9e9345de06fb458f29825cb1`
+- 2026-10-04 の版から全テキストが UTF-8 になった（それまでは Shift_JIS）。Shift_JIS の宣言とバイト列を見る判定は `dot_sakura` を使う。
+- ライセンス（書庫の中の `readme.txt`）: 「ポストと狛犬」のサンプルスクリプトは著作権放棄、`satori.dll` は「一定の条件に従って自由に再配布できる」。その条件の文書 `satori_license.txt` は 2026-10-09 の版の書庫には無い（前の版には在った）ので、条件は里々の配布元 <https://github.com/ukatech/satoriya-shiori> で見る。開発用の検体としてだけ使い、areka の配布物へ同梱しない。
+- 差し替えるとき: 配布場所の新しい版をそのまま置き、この節の日・版・ハッシュと上の表の 2 つの数を書き直す。
 
 ### `konnoyayame.nar` の出どころとライセンス
 
-- 出どころ: <https://github.com/YAYA-shiori/konnoyayame/releases> のタグ `35438213310`（2026-09-19 10:44 UTC 公開・自動リリース）の添付 `konnoyayame.nar`。あちらは辞書のチェックが通るたびに最新版を出し直すので、**タグと次のハッシュで 1 本に固定している**。
-  sha256 `e15637f1e286a016608432216dc3489e1b4a6b4691b277a29b8732c7245d7cd2`
+- 出どころ: <https://github.com/YAYA-shiori/konnoyayame/releases> のタグ `40829307071`（2026-10-29 06:27 UTC 公開・自動リリース・2026-10-30 取得）の添付 `konnoyayame.nar`。あちらは辞書のチェックが通るたびに最新版を出し直すので、**タグと次のハッシュで 1 本に固定している**。
+  sha256 `a884a766bff92c55b04ef71bc49236a820f29d623339e870ec9d5538dbbf0e27`
 - ライセンス（書庫の中の `README.md`「ライセンス」節と `shell/master/descript.txt` が出どころ）: 全体は Public Domain (Unlicense)。**ただしシェル `shell/master/` は SATO M 氏（サトウ Ｍ・<http://sgmh.sakura.ne.jp/tcg/>）の作品で CC BY-NC-ND 2.1 JP**（<http://creativecommons.org/licenses/by-nc-nd/2.1/jp/>）。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。
 - だから守ること 2 つ——**畳み直さない**（改変禁止なので `fold-samples` を通さず、ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮なのはそのため）。**営利の配布物に入れない**（開発用の検体としてだけ使い、areka の配布物へ同梱しない）。
 - 差し替えるとき: 新しいタグの `.nar` をそのまま置き、この節のタグ・ハッシュと上の表の 2 つの数を書き直す。
-- 書庫にはゴースト作者向けの開発キット（`.claude/`・`.mcp.json`・`CLAUDE.md`・`AGENTS.md`・`tools/*.ps1`）が入っており、展開先 `ghost/konnoyayame/` にもそのまま置かれる。areka はこれらを読まない。**展開先のフォルダを作業場所にして Claude Code などを起動しないこと**（よその設定とフックが効いてしまう）。
+- 2026-09-19 の版には書庫にゴースト作者向けの開発キット（`.claude/`・`.mcp.json`・`CLAUDE.md`・`AGENTS.md`・`tools/*.ps1`）が入っていたが、2026-10-29 の版には無い。上流が戻すこともあるので、**展開先のフォルダを作業場所にして Claude Code などを起動しないこと**（よその設定とフックが効いてしまう）。
 
 ### `claudia.nar` の出どころとライセンス
 
-- 出どころ: <https://github.com/ponapalt/claudia/releases> のタグ `35799705884` の添付 `claudia.nar`（2026-09-22 23:55 UTC 公開・`github-actions[bot]` の自動リリース・2026-09-24 取得）。`konnoyayame` から作られたゴーストで、同じく出し直されるので、**タグと次のハッシュで 1 本に固定している**。
+- 出どころ: <https://github.com/ponapalt/claudia/releases> のタグ `37863574936` の添付 `claudia.nar`（2026-10-09 00:12 UTC 公開・`github-actions[bot]` の自動リリース・2026-10-30 取得）。`konnoyayame` から作られたゴーストで、同じく出し直されるので、**タグと次のハッシュで 1 本に固定している**。
   **上流は最新の 1 本しかリリースを残さない。** 2026-09-24 に確かめたところ、両リポジトリともリリースは 1 本だけで、上の `konnoyayame` の固定タグ `35438213310` は既に 404 だった。だから**このように上流のリリースが消えていく検体は、URL の行にせず書庫をこのフォルダに置く**（URL だけを登記すると数日で取れなくなる）。URL の行を使ってよいのは、開発者が管理していて、書庫の隣にハッシュのファイル `<URL>.sha256` を公開する取り寄せ先から取るときだけである（今は `pasta-in-windows` の 1 本＝下の節。取り寄せ先に求める条件は「検体を 1 本足す手順」）。
-  sha256 `93a34c502231581c550c236052a64e1a915d8e3dac277153caed6774d23a790a`
+  sha256 `6513e177d0746ef51116aa69600f24d8681aa9853aeafd9e85e85adc5c226601`
 - ライセンス（書庫の中の `README.md`「ライセンス」節が出どころ）: 辞書・シェル画像・同梱バルーン 2 つを含め全体が Unlicense（パブリックドメイン）。改変・再配布・二次利用は自由。
 - 手元で畳み直していない（ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮）。Unlicense なので畳み直してもよいが、揃える利得が無い。
 - 同梱バルーンが 2 つ（`balloon0.directory,claudia`・`balloon1.directory,claudia_vertical`）で、**同梱が複数の検体はこれが唯一**。
@@ -216,7 +272,7 @@ git check-ignore --no-index crates/areka/dic09_Test.txt                         
 - **`install.txt` が書庫の最上位に在ること。** 包みフォルダ 1 段は黙って剥がさず拒否する（`<名>/install.txt` は最上位ではない）。手順 1 が「フォルダの直下に `install.txt`」と言っているのはこのためである。
 - 名前とその中身が `install.txt` の解釈どおりであること。展開先の写像（同梱バルーンをどこへ置くか）は `install.txt` の `directory`・`*.directory`・`*.source.directory` だけから決まり、登記表の綴りは使わない。
 
-ここで畳んだ 4 本（`R_POST_and_KOMAINU.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（`konnoyayame.nar`・`claudia.nar` と、2026-10-17 に最新版へ差し替えた `emo2.nar` は全エントリが deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
+ここで畳んだ 3 本（`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（配布物そのままの `konnoyayame.nar`・`claudia.nar`・`emo2.nar`・`R_POST_and_KOMAINU.nar` は deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
 
 同じ入力からは同じバイト列が出る。走査順を名前順に固定し、書庫に書く日時を 1980-01-01 00:00 に固定してあるので、畳み直しても `.nar` のハッシュは変わらない。
 

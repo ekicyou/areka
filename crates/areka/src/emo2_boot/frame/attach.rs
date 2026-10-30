@@ -12,7 +12,8 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-use crate::emo2_boot::shell_carry;
+use crate::emo2_boot::{shell_carry, skin_facts_copy};
+use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::descript_window_keys::fallback_candidates;
 use crate::placement::spawn::GhostWindows;
 
@@ -233,12 +234,15 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         shell_author_dpi,
         balloon_author_dpi,
         boxes,
+        cursors,
     } = assets;
     // 箱の束（areka-P0-shell-balloon「箱の束の結線」）: 置き場所の表・`\s` の解決の閉包・
     // フォントを探す場所の順を文字の層へ渡す。全スコープで共有する 1 束ゆえループの前に 1 度。
     // ゴーストの切替は文字の層ごと作り直し、この相がもう 1 度走って新しいシェルの束を渡す
     // （要件 6.8 のゴーストの側）。
     boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
+    // シェルのカーソルも同じく新しいシェルの分へ入れ替える（shell-mouse-cursor 要件 6.8）。
+    cursors.hand_to(world);
     let author_dpis = AuthorDpis {
         shell: shell_author_dpi,
         balloon: balloon_author_dpi,
@@ -449,6 +453,17 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     // ghost の読み直しの前の面と着せ替えを、台本の `\s[面]`・`\![bind,…]` と同じ道で seriko へ出し直す
     // （target は装着済み）。
     shell_carry::replay(world, &carried_shows, &carried_binds);
+
+    // strict の判定に使う今のシェルとバルーンの事実を、装着した表示の層から入れる
+    // （spec: mcp-strict-errors 要件 4.1）。置き場のゴーストが無ければ判定もしない。
+    if let Some(sink) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(GhostSession::seriko_sink)
+    {
+        let scopes = window_scopes.iter().filter_map(|&s| u32::try_from(s).ok());
+        sink.set_facts(skin_facts_copy::copy(wiring.presenter(), scopes));
+    }
 
     // ゲートを通過した attach 試行の完了。以降は no-op（高々 1 回）。
     wiring.attached = true;

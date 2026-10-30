@@ -25,13 +25,13 @@ use windows::core::HSTRING;
 use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
 
 /// R の書体（本番と同じ解決に通す）と、引けるはずの書体の名前（違えば赤）。ぱすたの
-/// `pasta_tategaki` の `font.name` は候補列のまま書き、`FontCatalog::pick` で「游ゴシック」に引ける
-/// （`research.md` 17.1 節）。
+/// `pasta_tategaki` の `font.name` は候補列のまま書き、`FontCatalog::pick` で先頭の「游ゴシック Medium」が
+/// GDI の名前として引け、その家族名「Yu Gothic」になる（emo-text-dwrite-fidelity 要件 3.1・タスク 1.2）。
 pub(super) const R_FONTS: [(&str, &str); 2] = [
     ("Yu Gothic UI", "Yu Gothic UI"),
     (
         "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ",
-        "游ゴシック",
+        "Yu Gothic",
     ),
 ];
 /// ぱすたの測りと同じ 4 つの選択肢（列ごと）。

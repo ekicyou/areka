@@ -29,7 +29,9 @@ use tracing::error;
 use super::BootWiringError;
 use super::balloon_background;
 use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs};
+use super::shell_cursor_assets::{ShellCursorAssets, build_shell_cursors};
 use crate::placement::DefaultSurfaces;
+use crate::placement::source::read_kv_lenient;
 
 /// descript 定義ファイル名（読めないシェルを起動の失敗にするために読む）。
 const DESCRIPT_TXT: &str = "descript.txt";
@@ -162,6 +164,8 @@ pub struct BootAssets {
     pub balloon_author_dpi: u16,
     /// 箱の束（装着の相が文字の層へ渡す・areka-P0-shell-balloon「箱の束の結線」）。
     pub boxes: ShellBoxAssets,
+    /// シェルのカーソル（装着の相が箱の束の隣で NonSend へ入れる・shell-mouse-cursor 要件 6.8）。
+    pub cursors: ShellCursorAssets,
 }
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
@@ -266,6 +270,7 @@ pub fn build_boot_assets_with_shell(
         shell_author_dpi: shell_assets.author_dpi,
         balloon_author_dpi: balloon_assets.author_dpi,
         boxes: shell_assets.boxes,
+        cursors: shell_assets.cursors,
     })
 }
 
@@ -292,6 +297,8 @@ pub struct ShellAssets {
     pub bake_failures: Vec<String>,
     /// 箱の束（置き場所の表・別名の写し・面の表の番号・フォントを探す場所の順）。
     pub boxes: ShellBoxAssets,
+    /// シェルのカーソル（cursorブレスとゴーストの descript の差し替え・読んだファイル）。
+    pub cursors: ShellCursorAssets,
 }
 
 /// バルーンの側だけの資産（[`build_balloon_assets`] の戻り値・[`BootAssets`] のバルーンの欄の一括）。
@@ -374,6 +381,14 @@ pub fn build_shell_assets(
             .collect(),
     };
     let resolver = SurfaceResolver::new(aliases);
+    // カーソルはシェルのフォルダ → `ghost\master` の順でファイルを探す（shell-mouse-cursor 要件 6.4）。
+    let ghost_kv = read_kv_lenient(&model.shiori.dir.join(DESCRIPT_TXT));
+    let cursors = build_shell_cursors(
+        target.cursor_braces(),
+        &ghost_kv,
+        &shell_dir,
+        &model.shiori.dir,
+    );
 
     // 着せ替えの読みは descript.txt が無くても空で返るので、読めないシェルの起動の失敗はここで残す。
     let descript_path = shell_dir.join(DESCRIPT_TXT);
@@ -404,6 +419,7 @@ pub fn build_shell_assets(
         author_dpi,
         bake_failures,
         boxes,
+        cursors,
     })
 }
 

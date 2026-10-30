@@ -1,0 +1,22 @@
+{
+  "feature_name": "mcp-strict-errors",
+  "created_at": "2026-10-23T10:31:40Z",
+  "updated_at": "2026-10-30T04:02:59Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

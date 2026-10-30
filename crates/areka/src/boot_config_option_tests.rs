@@ -5,7 +5,9 @@
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・11.5）。
 
 use crate::boot_config::{BootResolved, resolve_boot_from};
-use crate::boot_resolve::{BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark};
+use crate::boot_resolve::{
+    BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
+};
 use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
@@ -32,7 +34,7 @@ fn fixture(label: &str) -> TempPath {
     for g in ["g1", DEFAULT_GHOST_FOLDER] {
         put_ghost(&tmp.child("ghost").join(g));
     }
-    for b in ["StayseeBalloon", "b1"] {
+    for b in [DEFAULT_BALLOON_FOLDER, "b1"] {
         let dir = tmp.child("balloon").join(b);
         std::fs::create_dir_all(&dir).expect("フォルダを組む");
         std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
