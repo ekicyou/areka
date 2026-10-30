@@ -53,7 +53,7 @@
   - _Depends: 1.2_
   - _Requirements: 1.1, 1.3, 1.5, 2.4, 7.4, 11.1, 11.3, 11.4_
 
-- [ ] 3.2 8 語の誤りを読み込みのときに 1 度だけ記録する
+- [x] 3.2 8 語の誤りを読み込みのときに 1 度だけ記録する
   - 面ごとの表を作った後に、読めない相手・表に無い相手・純 `bind` の呼び出しと `move`・純 `bind` でない animation の `insert`・相手が無いか純 `bind` でない `insert`・巡回する `insert` の 6 種を検査し、1 件ごとに 1 度だけ警告を出す（面・animation・pattern・語・原文の欄）。そのコマは何もしない
   - 表を作るのはシェルで 1 度、バルーンはスコープの読み込みごとに 1 度なので、刻みや合成のたびには出ない
   - 再生表の兄弟テストで、6 種がそれぞれ 1 度だけ出ること、表を使って刻みを回しても増えないこと、が緑になる
@@ -168,3 +168,5 @@
 - 2.3: 期待を直したテスト: nesting_visible_tests::bind_targets_keep_only_drawable_pattern0 → bind_targets_keep_only_drawable_steps（[(5,3)] → [(4,3),(5,3)]・M6）。`bind+random` の外形は今のまま最小の番号の pattern（`min_by_key`）で数える（pattern0 の無い瞬きを大きさに数える既存の意図）。
 - 3.1: 働きは `FrameAct`（`table_calls.rs`）・呼ばれるだけは `LoopTrigger::CallOnly`。部品の番人は `CallOnly` を `Gate::Trigger` に写す（在る時計を進めるだけ・自分では始めない・乱数なし）。`Gate::Off` は `bind+random` で外れたときだけ。見えなくなった部品の `CallOnly` の時計は `drop_transient_where`（`is_trigger`）で捨てられず残る — 5.3 で決めてテストで固定する。
 - 3.1: 期待を直したテスト: table::tests::only_random_and_bindrandom_are_recorded_others_debug_logged・table::always_tests::combinations_and_other_words_keep_the_debug_arm（11.1）。純 `bind` を使う actor_clock_tests（BIND_ALWAYS）・table_parts_tests の bind の件は「表に載らない」を前提にしておらず（着せ替えのコマは compose の BindSet・一番上の looper は CallOnly を抽選しない・has_animated_parts は描くコマで決まる）期待を変えずに緑。働きのコマは `p.surface_id` を保つので `move,-1,…` の止まりは 3.3 で直す。looper.rs 927・table.rs 926・parts.rs 896・parts_tests.rs 905 行で上限が近い。
+- 申し送り（10-30・animated-surface-log-flood から）: ぱすたの 1400（`bind+random`・pattern0 が閉じた目）が再生していないあいだも pattern0 が静的に描かれ、目が閉じたまま戻らない。あちらが先に main で「`bind+random` は静的に積まない（コマがあるときだけ描く）」を直す。main を取り込むときは `bind_steps.rs` の `BindSteps::build` の `bind+random` の枝を空の手順にして合わせる。
+- 3.2: 8 語の検査は `table_calls.rs` の `check_calls`（表を作る `from_world_and_films` の中で 1 度）。巡回する `insert` は巡回の上のコマごとに 1 件（A↔B で 2 件）。純 `bind` の中の働きのコマは `Inert`（待ち・x・y 0）に書き換える。8.1 の「．さくら」の確かめはこの 6 種の WARN が 0 件であることを見る。

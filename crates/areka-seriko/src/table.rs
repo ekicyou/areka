@@ -387,6 +387,9 @@ impl AnimationTable {
             }
         }
 
+        // 8 語の誤りを読み込みのときに 1 度だけ記録する（spec: seriko-pattern-calls 要件 5.4）。
+        crate::table_calls::check_calls(world, &mut table);
+
         // 動く絵の子: 子 1 つにつき `always` を 1 本（animation の番号 0）。pattern i の待ちはコマ i−1 の
         // 待ち時間（pattern 0 は 0）、周期はコマの待ち時間の合計、回数はファイルの値。
         let mut films: BTreeMap<FilmId, LoopAnimation> = BTreeMap::new();
