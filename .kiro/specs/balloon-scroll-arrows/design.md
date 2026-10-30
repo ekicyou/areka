@@ -58,7 +58,7 @@
 
 - `ScopeBalloonDefinitions`・`MarkerPair`・`MarkerImage` の形が変わったとき（`balloon-markers`・`talk-fast-forward` が乗る）。
 - `PlaceScroll` の公開の口（`scroll_manual_at`・`wheel_at`・`forget_manual_at`・`marker_at_point`・`has_hidden_lines_at`）の意味が変わったとき（`balloon-scroll-fade` が乗る）。
-- 印の面の窓の子の並び（文字の面の直後）が変わったとき（下流の印の面が同じ並びに乗る）。
+- 印の面の窓の子の並び（文字の面の直前＝手前）が変わったとき（下流の印の面が同じ並びに乗る）。
 - SSP の測り（要件 10）で、出る条件・送る量・座標が無いときの置き場・新しい文字の扱いが推奨と違ったとき（要件 10.3 で要件を改めた後に設計を合わせ直す）。
 - `select_balloon_face` の呼び手（drain・装着・バルーンの切り替え）が増減したとき。
 
@@ -180,8 +180,8 @@ crates/areka/src/input_events/
 - `crates/areka-parsers/src/balloon/validation_tests.rs` — 「arrow… は accessor が無い」のコメントを今の姿へ直す（期待値は変えない）。
 - `crates/areka-emo-present/src/lib.rs` — `pub mod balloon_marker;`・`pub mod balloon_definitions;`。`balloon.rs` は触らない（公開の `prefix_chain`・`select_faces`・`load_scope_balloon_model` と crate 内の `face_digits_of` を使う）。
 - `crates/areka-emo-text/src/actor.rs` — `TextLayerRuntime` に欄 `scrolls: HashMap<PlaceKey, PlaceScroll>`・`balloon_markers: HashMap<ActorKey, MarkerPair>`、`ActorRender` に欄 `markers: Option<MarkerSurface>`、`ResolvedBalloonText` に欄 `markers: ResolvedMarkerPlacement`、`apply_cue` の `Clear`／`ClearAll` の腕に `forget_manual_at` を 1 行ずつ。`mod` の行。
-- `crates/areka-emo-text/src/actor_present.rs` — `LayoutEngine::visible_window` の呼び出しを `scroll_marker::window_for(…)` に替える 1 か所、字の数の観測（新しい文字で手動を捨てる）の 1 行、`changed` の後の `present_markers` の 1 行、潰れた場所の片付けで印の面も外す 1 行。
-- `crates/areka-emo-text/src/actor_box.rs` — 箱の束に箱ごとの `MarkerPair` を受ける欄、箱の登録を外すときの `forget_manual_at`。
+- `crates/areka-emo-text/src/actor_present.rs` — `LayoutEngine::visible_window` の呼び出しを `scroll_marker::window_for(…)` に替える 1 か所、その**直前**に字の数の観測（新しい文字で手動を捨てる・`observe_visible`）の 1 行（同じフレームで先に呼ぶ）、`changed` の後の `present_markers` の 1 行、潰れた場所の片付けで印の面も外す 1 行。
+- `crates/areka-emo-text/src/actor_box.rs` — 箱の束に箱ごとの `MarkerPair` を受ける欄、箱の登録を外すときの `forget_manual_at`、`box_child_index` が印の面も数えること（MarkerSurface の「並び」）。
 - `crates/areka-emo-text/src/lib.rs` — `PURE_SOURCES`（`scroll_marker.rs`・`scroll_marker_tests.rs`・`actor_scroll.rs`・`actor_scroll_tests.rs`）と `SOURCES_OUTSIDE_THE_PURE_SCAN`（`marker_surface.rs`・`marker_surface_tests.rs`）と数の行。
 - `crates/areka/src/emo2_boot/assets.rs` — `BalloonScopeAssets.model` を `definitions: ScopeBalloonDefinitions` へ（`load_scope_balloon_definitions` を呼ぶ）、シェルの資産づくりで箱ごとの `MarkerPair` を解く（シェルのフォルダ）。
 - `crates/areka/src/emo2_boot/shell_box_assets.rs` — `ShellBoxAssets` に `markers: BTreeMap<BoxName, MarkerPair>`、`hand_to` で文字の層へ渡す。
@@ -278,7 +278,7 @@ graph TB
 | 3.2 | 手動で新しい側に隠れた行で arrow1 | ScrollMarker | `marker_visibility` | 手動の位置 |
 | 3.3 | どちらも無ければ出さない | ScrollMarker | `marker_visibility` | — |
 | 3.4 | 左上＋座標・絵の大きさ・同じ拡大率 | ScrollMarker・MarkerSurface | `ResolvedMarkerPlacement`・`MarkerSurface::draw` | — |
-| 3.5 | バルーンの絵より手前・範囲の外でも絵の中は出す | MarkerSurface（画像全体の面・文字の面の直後の子） | `MarkerSurface::attach` | — |
+| 3.5 | バルーンの絵より手前・範囲の外でも絵の中は出す | MarkerSurface（画像全体の面・文字の面の直前＝手前の子） | `MarkerSurface::attach` | — |
 | 3.6 | `dump_balloon` に同じ位置で写す | DumpBalloonOverlay | `MarkerSurface::read_back`・`overlay_text` | — |
 | 3.7 | 座標なしで絵があれば SSP の置き場・§8 | ScrollMarker（`default_marker_position`）・Docs | `default_marker_position` | — |
 | 3.8 | 有無が変わったら次の描き直しで合わせる | ActorScroll（`present_markers`） | `present_markers` | — |
@@ -520,9 +520,9 @@ pub fn load_scope_balloon_definitions(
 - 見える範囲: 手動の位置が無ければ `LayoutEngine::visible_window` をそのまま返す。在れば先頭の行の番号 `line` から、自動と同じ式（`block_offset = -block_dir × (near(lines[line]) − origin)`・書字方向の正準表）で作る。行 0 でも同じ式を使うので、一番古い行が描画範囲の始まりに来る（冒頭の保留改行の空きは見せない・要件 5.3。自動の送りが先頭行 0 であふれを解いたときと同じ見え方）。
 - 古い側と新しい側は書字方向の正準表で決まる（横書き＝上が古い、`vertical_rl`＝右が古い、areka 独自の `vertical_lr`＝左が古い）。`arrow0` はいつも「古い側へ送る矢印」、`arrow1` は「新しい側へ送る矢印」（`vertical,1` で右・左＝要件 4.1。`vertical_lr` の読みは §8 に登記）。座標の意味は書字方向で入れ替えない（要件 4.2）。
 - 出る条件（暫定・要件 10 の測りで確かめる）: `up = 見えている先頭の行 > 0`（要件 3.1）、`down = 手動の位置が在る`（手動の位置は必ず自動の先頭より古い＝新しい側に隠れた行が在る・要件 3.2）。どちらも偽なら出さない（要件 3.3）。
-- 送り（暫定・1 段＝1 行／1 列）: `step(dir)` は `Older` で `line − 1`、`Newer` で `line + 1`。限りは `0 ≤ line ≤ auto_first`。`line == auto_first` に達したら手動を捨てる（要件 5.3・5.4）。隠れた古い行が無い（`auto_first == 0` で手動も無い）なら何もしない（要件 6.5）。
+- 送り（暫定・1 段＝1 行／1 列）: `step(dir)` は `Older` で `line − 1`、`Newer` で `line + 1`。手動の位置はいつも `0 ≤ line < auto_first`。`Older` は `line == 0` で止まり、`Newer` で `line + 1 == auto_first` に達したら手動を捨てて自動へ戻る（要件 5.3・5.4）。隠れた古い行が無い（`auto_first == 0` で手動も無い）なら何もしない（要件 6.5）。
 - ホイール: 端数 `wheel_remainder: i32` を足し、`±120` ごとに 1 段（正＝向こう側＝古い側・要件 6.1〜6.3）。何も送れない間は端数を 0 に戻す（持ち越しは送れる間だけ）。絵の有無と無関係（要件 6.6）。
-- 新しい文字（要件 8.1）: `observe_visible(count)` は前のフレームの見える字の数より増えたら手動を捨て、理由 `NewText` を返す（台本の届いた時でなく見える字が増えた時＝バルーンの可視の相の `Content` と同じ合図）。数が減った（消去）ときは覚え直すだけ。
+- 新しい文字（要件 8.1）: `observe_visible(count)` は前のフレームの見える字の数より増えたら手動を捨て、理由 `NewText` を返す（台本の届いた時でなく見える字が増えた時＝バルーンの可視の相の `Content` と同じ合図）。数が減った（消去）ときは覚え直すだけ。`present_actor` は同じフレームで `observe_visible` を `window_for` より**先に**呼ぶ（字が増えたそのフレームを自動の位置で描く。後に呼ぶと戻りが次のフレームになり、1 フレーム遅れの解になる）。
 - 置き場: 座標が x・y とも在れば `(x.resolve(幅), y.resolve(高さ))`（広がりは普通のバルーン＝面の画像、箱＝箱の大きさ・要件 3.4・7.1）。座標が無いのに絵が在れば `default_marker_position`（暫定: 描画範囲の右端に右寄せ、`arrow0` は描画範囲の上端、`arrow1` は描画範囲の下端に下寄せ。SSP の測り ⑷ の答えでこの 1 関数だけを替える・要件 3.7・7.7）。
 - 拡大率: 手動の位置は行の番号で持つので、再追従で描画資源を作り直しても同じ行が古い側に残る（要件 8.7）。
 - 選択肢の当たり: 手動の `VisibleWindow` が `render_styled` に渡り、executor の `committed` がその送りを反映し、`to_window_physical` がそれを読む（要件 8.5・`choice.rs` は触らない）。
@@ -613,9 +613,9 @@ impl TextLayerRuntime {
 **Responsibilities & Constraints**
 
 - 大きさと置き場: 普通のバルーンは面の画像全体（`ceil(画像 × k)`・ずらし 0）、箱は箱の大きさ（`ceil(箱 × k)`・ずらし `箱の (X,Y) × k`）。矢印が描画範囲の外でも絵の中なら出る（要件 3.5）。絵の外へはみ出す分は面の端で切れる。
-- 並び: 窓の直接の子として、文字の面（普通のバルーンは予約スロット、箱は箱の文字の面）の直後に挿す（`attach_window_child` の前例）。バルーンの絵より手前・文字より手前。
+- 並び: wintf の `Children` は**先頭の子ほど手前**（`areka-emo-present/src/mount.rs` 43・163〜186 行）。印の面は窓の直接の子として、文字の面（普通のバルーンは予約スロット、箱は箱の文字の面）の**直前**（同じ添字に挿して文字の面を 1 つ後ろへ送る）に挿す（`attach_window_child` の前例）。これでバルーンの絵より手前・文字より手前になる。箱の挿し位置を数える `box_child_index`（`actor_box.rs` 465 行）は、差し込み口の後ろに箱の文字の面しか無い前提で数えているので、印の面も数えるように直す（同じスコープで面を持つより大きい element番号の箱の、文字の面と印の面の両方の数だけ後ろへずらす）。並びは装着の檻で固定する。
 - 描画: 矢印の絵を D2D のビットマップにして `(位置 × k, 大きさ × k)` へ `D2D1_INTERPOLATION_MODE_LINEAR` で描く（要件 3.4）。出す矢印が変わったフレームだけ全面を描き直す。
-- 当たり: 出ている矢印の絵の α ≥ 0.5 の画素を物理寸のマスクへ写す（`hit_cells_mask` と同じ `AlphaMask` の組み立て・空のときも面の大きさの空のマスクを入れる）。これで矢印の下のバルーンの絵が透けていても押せる（議題 8）。
+- 当たり: 出ている矢印の絵の α ≥ 0.5 の画素を物理寸のマスクへ写す（`hit_cells_mask` と同じ `AlphaMask` の組み立て・空のときも面の大きさの空のマスクを入れる）。これで矢印の下のバルーンの絵が透けていても押せる（research.md §6 の決める点 8。当たりは矢印の絵そのものの α ≥ 0.5 の画素だけ）。
 - 寿命: `ActorRender` の欄なので、再追従で描画資源を捨てると一緒に捨て、次のフレームで新しい物理寸で作り直す。描画範囲が潰れた場所の片付けでも外す。
 - 読み戻し: `read_back()` は文字の面と同じ（乗算済み BGRA・物理寸）。
 
@@ -745,12 +745,12 @@ pub(crate) fn apply_face_windowposition(
 - **読み手**（`marker_tests.rs`）: `-12`・`--12`・`12`・`0`・`abc`・`---1`・空白、面ごとの設定ファイルが descript を上書きすること、片方だけの座標、`arrow.filename` の素通し、鍵の無い定義が `ArrowKeys::default()` で `BalloonModel` の等しさを変えないこと。
 - **名前の選び方**（`balloon_marker_tests.rs`）: スコープ 0・1・2 の連鎖の順、`arrows0`＋`arrow1` だけのとき上＝`arrows0`・下＝`arrow1`（番号ごと）、旧名 `arrow` だけ、`arrow.filename` が在る・無いときの戻り、大小違い、片方だけ、0 枚、壊れた絵（偽の decoder で失敗を返す）、`CLICKWAIT_FAMILY` の連鎖が要件 2.1〜2.3 と同じ順で解けること（要件 2.7）。
 - **定義の束**（`balloon_definitions_tests.rs`）: 面 2 の `balloons2s.txt` の `validrect`・書体・矢印の鍵が面 2 の定義にだけ入ること、面 0 以外の設定ファイルを持たないバルーンで全部の面が面 0 と同じ値になること、読めない値の警告が重複しないこと（log-capture-kit）。
-- **純粋な判断**（`scroll_marker_tests.rs`）: 横書き・`vertical_rl`・`vertical_lr` の出る条件、`step` の限りと自動の位置への戻り、ホイールの 120 ごとと端数の持ち越し・送れない間の端数の扱い、`observe_visible` で字が増えたら捨てること・減ったら覚え直すこと、行 0 の手動の位置の `block_offset`、拡大率の再追従を挟んでも手動の位置が残ること、座標あり・なしの置き場（普通のバルーンは画像・箱は箱の大きさ）。
+- **純粋な判断**（`scroll_marker_tests.rs`）: 横書き・`vertical_rl`・`vertical_lr` の出る条件、`step` の限りと自動の位置への戻り、ホイールの 120 ごとと端数の持ち越し・送れない間の端数の扱い、`observe_visible` で字が増えたら捨てること・減ったら覚え直すこと・字が増えたそのフレームの `VisibleWindow` が自動の位置であること（1 フレーム遅れが無い）、行 0 の手動の位置の `block_offset`、拡大率の再追従を挟んでも手動の位置が残ること、座標あり・なしの置き場（普通のバルーンは画像・箱は箱の大きさ）。
 - **公開の口**（`actor_scroll_tests.rs`）: 消去・`Hidden`・`FaceChanged`・`BoxRemoved` で手動を捨てること、場所ごとに別々なこと、手動の位置で選択肢の当たりの写しが戻した分だけずれること（`committed` を通る）、`marker_at_point` が α < 0.5 の画素で当たらないこと、箱の足りない番号がスコープの絵で埋まること。
 - **面の切り替え**（`balloon_face_tests.rs`）: 面 0 → 2 → 0 で今の定義と矢印の絵が替わり手動が捨てられること、動く絵のコマ（同じ面の番号）で差し替えないこと、バルーンの切り替えで束が入れ替わること。
 - **配置**（`face_windowposition_tests.rs`）: 標準の位置のバルーンだけが新しい面の位置へ動き、ドラッグで動かしたバルーンは動かないこと、値が同じなら何もしないこと。
 - **入力**（`balloon_wheel_tests.rs`・`balloon_pointer_handler_tests.rs`・`shell_box_handler_tests.rs`・`char_watch_tests.rs` に足す）: 矢印の押下が選択肢・中断へ流れないこと、矢印の無い所は今までどおり、隠れた行のある箱の上のホイールが `OnMouseWheel` にならず、無い箱では今までどおり。
-- **GPU**（`marker_surface_tests.rs`・実 GPU）: 印の面が文字の面の直後に挿され、描いた矢印の画素が読み戻しに出ること、拡大率 1.5 で位置と大きさが合うこと、マスクが出ている矢印だけを持つこと。
+- **GPU**（`marker_surface_tests.rs`・実 GPU）: 印の面が文字の面より手前（`Children` で直前）に挿され、箱が複数あっても element番号の順が崩れないこと、描いた矢印の画素が読み戻しに出ること、拡大率 1.5 で位置と大きさが合うこと、マスクが出ている矢印だけを持つこと。
 - **既存のテスト**: 矢印の鍵を持たないバルーンの既存のテストは期待値を変えずに通す（要件 11.2）。`validation_tests.rs` はコメントだけを直す。
 
 ### SSP の測り（要件 10・開発者の許しと排他テストの机）
@@ -781,7 +781,8 @@ pub(crate) fn apply_face_windowposition(
 
 ### 危うさ
 
-- 印の面を窓の子として挿すのは箱で前例があるが、普通のバルーンの窓では初めて。予約スロットの直後に挿す並びは装着の檻で固定する。
+- 印の面を窓の子として挿すのは箱で前例があるが、普通のバルーンの窓では初めて。予約スロットの直前（手前）に挿す並びは装着の檻で固定する。
+- 印の面がマスクで押下を受けたとき、その押下が普通のバルーンの窓の受け口（`on_balloon_pointer_pressed`）へ届くこと（子の面が別の持ち主にならないこと）を、実装の最初の GPU のテストか実機で確かめる。届かなければ受け口の側で印の面の持ち主もバルーンの窓として引く。
 - 面ごとの `windowposition` でバルーンが動く振る舞いは SSP で測っていない（Open Questions 1）。
 - 測り（要件 10）の答えが推奨と違えば、純粋な判断の関数を替え、要件を改める（設計の形は変わらない）。
 
