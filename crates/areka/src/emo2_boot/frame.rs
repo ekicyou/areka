@@ -42,6 +42,8 @@
 mod attach;
 // 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6）。
 mod balloon_offset_follow;
+// 今の定義の唯一の書き手（balloon-scroll-arrows design「BalloonFaceSelector」）。
+mod balloon_face;
 mod dpi;
 mod drain_resnap;
 // 位置の指令の預かり（window-work-area-clamp design「MoveHold」）。
@@ -411,7 +413,7 @@ pub fn emo2_frame_system(world: &mut World) {
 
 #[cfg(test)]
 #[path = "frame_test_support.rs"]
-mod test_support;
+pub(in crate::emo2_boot) mod test_support;
 
 // 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
 // x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。

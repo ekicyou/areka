@@ -75,7 +75,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - 完了の姿: 押し出された行の有無が変わった次の提示で矢印が合うこと、モデルを替えると置き場が替わること、α < 0.5 の画素で当たらないこと、箱の足りない番号がスコープの絵で埋まることを固定したテストが緑
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.8, 4.1, 5.7, 7.1, 7.2, 7.3, 8.6, 11.1_
 
-- [ ] 5. 面ごとの定義と資産づくりの結線（areka）
+- [x] 5. 面ごとの定義と資産づくりの結線（areka）
 - [x] 5.1 (P) 面の `windowposition` を配置の材料へ入れ、標準の位置のバルーンだけを置き直す
   - 新しい面の値をスコープの配置の材料に入れ、値が前と同じなら何もしない
   - 前の材料の標準のずらしと今のずらしが等しいスコープだけを、シェルの切り替えの入れ直しと同じ部品で新しい面の標準の位置へ置き直し、動かしてあるスコープは位置を保つ。窓の位置の記憶は書かず、変化 1 回につき info を 1 行残す
@@ -92,7 +92,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Depends: 2.3_
   - _Requirements: 1.7, 7.3, 11.2_
 
-- [ ] 5.3 今の定義の唯一の書き手を作り、装着・drain・バルーンの切り替え・隠す枝を結ぶ
+- [x] 5.3 今の定義の唯一の書き手を作り、装着・drain・バルーンの切り替え・隠す枝を結ぶ
   - 書き手は束から面の定義を引き、今のモデルを差し替え、その面の矢印の絵を文字の層へ入れ、面が前と違えば手動を捨て、面の `windowposition` を配置へ届け、今の面の番号を覚える
   - 装着は面 0 で、drain の後はそのフレームで ShowSurface を受けた balloon の target だけを presenter の今の面と比べて、バルーンの切り替えは新しい束で、同じ書き手を通す（同じ面の番号のコマ送りでは差し替えない）
   - 文字の層の作り直しは呼ばず、同じフレームの後段の再追従の唯一の権威に任せる（drain → 書き手 → 文字層スケール相 → 文字の相）
@@ -182,3 +182,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 4.3: 箱の矢印の絵は `set_box_layout` でなく別の口 `set_box_markers(BTreeMap<BoxName, MarkerPair>)` で受ける。`set_box_layout` は `box_markers` を消さないので、5.2/5.3 はシェルの切り替えで箱の束を入れるたびに（空の束でも）`set_box_markers` を呼ぶ。普通のバルーンは `set_balloon_markers`。当たりは `marker_at_point(&PlaceKey,(f32,f32)) -> Option<MarkerKind>`、`dump_balloon` は `marker_surface(&ActorKey) -> Option<&TextSurface>`。印の面の失敗は `present_frame` の Err になるが、その場所は `presented` に残る（印だけ出ない）。
 - 5.1: `placement::face_windowposition::apply_face_windowposition` は呼び手（5.3）ができるまで `expect(dead_code)` 付き。5.3 で外す。`GhostWindows` が無いと材料を入れ替える前に戻る（起動後は揃うので実害は低い）。
 - 5.2: 箱の矢印の絵は `BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>`（スコープごと・`ActorKey::from(scope.to_string())`）。`set_box_markers` の引数もこの形。装着と切り替えは今は `definitions.face0().model.clone()` を使う（5.3 が書き手に替える）。テストの支えは `assets::empty_definitions(scope)` と `ScopeBalloonDefinitions::single`。emo-present に `ShellTarget::use_self_alpha()` を足した。
+- 5.3: 今の定義の書き手は `emo2_boot/frame/balloon_face.rs` の `select_balloon_face`（`balloon_models` へ書くのはここだけ）。`wiring.balloon_definitions`・`wiring.balloon_faces` を持つ。隠す枝は `HideScopes` のたびに `hide_scope_boxes` へ入り、箱に届くなら `forget_manual_of`、Clear などでは普通のバルーンだけ `forget_manual_at`（要件 8.3）。

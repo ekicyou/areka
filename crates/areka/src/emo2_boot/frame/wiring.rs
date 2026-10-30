@@ -16,6 +16,7 @@ use bevy_ecs::world::World;
 // このグループで非 test ビルドの未使用は `TargetId` のみ（`#[cfg(test)]` メソッド
 // `read_back_target` の引数型）。`EmoPresenter`・`PresentCommand` は構造体フィールドが使う。
 // 属性は use 文単位で効くためグループ全体に付く。
+use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
 #[allow(unused_imports)]
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::TextLayerRuntime;
@@ -127,6 +128,11 @@ pub struct Emo2Wiring {
     /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
     /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す（Req 4.1/4.2）。
     pub(in crate::emo2_boot) balloon_models: HashMap<u32, BalloonModel>,
+    /// scope → 面ごとの定義の束（装着・バルーンの切り替えが入れる・balloon-scroll-arrows 要件 1.7）。
+    /// 今の定義（`balloon_models`）はここから書き手 [`super::balloon_face::select_balloon_face`] が引く。
+    pub(in crate::emo2_boot) balloon_definitions: HashMap<u32, ScopeBalloonDefinitions>,
+    /// scope → 今の定義の面の番号（書き手 [`super::balloon_face::select_balloon_face`] だけが書く）。
+    pub(in crate::emo2_boot) balloon_faces: HashMap<u32, u32>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
     ///
     /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
@@ -206,6 +212,8 @@ impl Emo2Wiring {
             runtime,
             // attach 相が装着した scope ごとに埋める（D11-3）。
             balloon_models: HashMap::new(),
+            balloon_definitions: HashMap::new(),
+            balloon_faces: HashMap::new(),
             // 縮退警告のエッジガード（初期は未警告＝最初の縮退で 1 回鳴る）。
             text_scale_warned: BTreeSet::new(),
             clock,

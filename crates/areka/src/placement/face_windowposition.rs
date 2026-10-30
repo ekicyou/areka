@@ -24,10 +24,6 @@ use super::spawn::{BalloonKeywordBase, GhostWindows};
 ///   （ドラッグ・台本・記憶）バルーンは位置を保ち、材料だけを替える。
 /// - 材料・窓の一式が無ければ `warn!(event = "balloon_face_windowposition_skipped")` を出して
 ///   何もしない。変化 1 回につき `info!(event = "balloon_face_windowposition")` を 1 行。
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "呼び手は task 5.3 の select_balloon_face")
-)]
 pub(crate) fn apply_face_windowposition(
     world: &mut World,
     scope: usize,

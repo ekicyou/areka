@@ -21,14 +21,15 @@ use std::time::Instant;
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_emo_present::PresentOutcome;
+use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
 use areka_kanade::{GapLeft, KanadeMsg, MarkedEnd, ShioriMethod, TalkGap};
-use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use areka_seriko::SerikoReplace;
 use areka_sylphya::{PersistKey, SylphyaPublisher};
 use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
+use super::balloon_face::{FaceCause, select_balloon_face};
 use super::{Emo2Wiring, reconcile_reported_sizes};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell};
@@ -525,23 +526,28 @@ fn finish_shell(
     );
 }
 
-/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: scope ごとの文字の模型と
-/// 背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
+/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: scope ごとの定義の束（今の
+/// 面の定義を書き手 [`select_balloon_face`] で入れる・balloon-scroll-arrows 要件 1.7）と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
 /// `OnBalloonChange`。
 fn finish_balloon(
     wiring: &mut Emo2Wiring,
     world: &mut World,
     target: &SkinCandidate,
-    scopes: Vec<(u32, BalloonModel, (u8, u8, u8))>,
+    scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,
 ) {
-    for (scope, model, background) in scopes {
+    for (scope, definitions, background) in scopes {
         // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直り、
         // 警告の名前の欄も新しいバルーンのフォルダ名になる・areka-P0-shell-balloon 要件 3.12）。
         let actor = ActorKey::from(scope.to_string());
-        let mut runtime = wiring.runtime.borrow_mut();
-        runtime.set_balloon_label(&actor, target.folder.clone());
-        runtime.set_balloon_background(actor, background);
-        wiring.balloon_models.insert(scope, model);
+        {
+            let mut runtime = wiring.runtime.borrow_mut();
+            runtime.set_balloon_label(&actor, target.folder.clone());
+            runtime.set_balloon_background(actor, background);
+        }
+        // 新しい束の、今の面と同じ番号の定義を今の定義にする（windowposition も新しいバルーンの値）。
+        wiring.balloon_definitions.insert(scope, definitions);
+        let face = wiring.balloon_faces.get(&scope).copied().unwrap_or(0);
+        select_balloon_face(wiring, world, scope, face, FaceCause::BalloonSwitch);
         wiring.balloon_visibility.forget_scope(scope);
     }
     // 読み直し（areka-P0-mcp-reload 要件 6.3）は決め方も `LastBalloon` も `OnBalloonChange` も替えない。
@@ -669,12 +675,7 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
             let mut scopes = Vec::new();
             for b in assets.balloons {
                 targets.push((b.scope, b.emo_world, b.atlas, assets.author_dpi));
-                // 面 0 のモデルを今の定義にする（面の書き手が束を持つまでの形・振る舞いは前と同じ）。
-                scopes.push((
-                    b.scope,
-                    b.definitions.face0().model.clone(),
-                    b.background_color,
-                ));
+                scopes.push((b.scope, b.definitions, b.background_color));
             }
             (
                 targets,
