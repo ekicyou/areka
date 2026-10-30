@@ -311,6 +311,8 @@ impl EmoWorld {
 pub(crate) fn targets_animation_id(method: &str) -> bool {
     // 正規化は `ComposeMethod::from_name` と同じ 1 本（`method::canonical_method_name`）を引く。
     // `from_name` 自体は未知の語で `warn!` を出すのでこの照会からは呼ばない（要件 3.5）。
+    // 上流の emo-atlas `manifest.rs` の `bind_only_paths` がこの 7 語と正規化を写して持つ
+    // （emo-atlas は emo-compose を参照できない）。ここを変えたらそちらも直す。
     let canon = crate::method::canonical_method_name(method);
     matches!(
         canon.as_str(),
