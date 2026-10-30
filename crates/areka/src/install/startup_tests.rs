@@ -317,6 +317,8 @@ fn new_makes_relative_paths_absolute_from_the_current_folder() {
         .collect();
     assert_eq!(warns.len(), 1, "直せない 1 本だけ warn");
     assert_eq!(warns[0].level, tracing::Level::WARN);
+    assert_eq!(warns[0].field("archive"), Some(""), "直せない綴りを載せる");
+    assert!(warns[0].field("error").is_some(), "理由を載せる");
     std::mem::forget(startup); // 落としたときの記録はこのテストの外
 }
 
@@ -325,6 +327,12 @@ fn dropping_unsubmitted_startup_warns_boot_stopped_once() {
     let ((), events) =
         log_capture_kit::capture(|| drop(StartupInstall::new_with(args(&[r"C:\a.nar"]), None)));
     assert_eq!(not_submitted(&events), ["boot_stopped"]);
+    let warn = startup_events(&events, "startup_install_not_submitted");
+    assert_eq!(
+        warn[0].field("archives"),
+        Some(format!("{:?}", paths(&[r"C:\a.nar"])).as_str())
+    );
+    assert!(warn[0].field("initial_install").is_some());
 }
 
 #[test]
@@ -441,6 +449,10 @@ fn absent_initial_install_is_debug_only_and_refused_args_keep_no_followup() {
         .collect();
     assert_eq!(absent.len(), 1);
     assert_eq!(absent[0].level, tracing::Level::DEBUG);
+    assert_eq!(
+        absent[0].field("dir"),
+        Some(format!("{:?}", Some(&dir)).as_str())
+    );
     assert!(
         !events.iter().any(|e| e.level <= tracing::Level::WARN),
         "warn 以上は無い"
@@ -508,9 +520,26 @@ fn order_done_deletes_installed_copies_and_goes_on_past_absent_and_folder() {
     let ok = startup_events(&events, "startup_source_deleted");
     assert_eq!(ok.len(), 1);
     assert_eq!(ok[0].level, tracing::Level::INFO);
+    assert_eq!(ok[0].field("origin"), Some("StartupArgs"));
+    assert_eq!(
+        ok[0].field("archive"),
+        Some(deleted.display().to_string().as_str())
+    );
     let failed = startup_events(&events, "startup_source_delete_failed");
     assert_eq!(failed.len(), 2, "既に無い・フォルダの 2 本は warn で次へ");
-    assert!(failed.iter().all(|e| e.level == tracing::Level::WARN));
+    assert!(failed.iter().all(|e| e.level == tracing::Level::WARN
+        && e.field("origin") == Some("StartupArgs")
+        && e.field("error").is_some()));
+    assert_eq!(
+        failed
+            .iter()
+            .map(|e| e.field("archive").unwrap_or_default())
+            .collect::<Vec<_>>(),
+        [
+            order.archives[1].display().to_string(),
+            folder.display().to_string()
+        ]
+    );
     assert!(
         startup_events(&events, "startup_callghost_skipped").is_empty(),
         "callghost の語が無ければ判断しない"
@@ -669,6 +698,7 @@ fn closing_keeps_copies_and_warns_once_per_origin() {
         .iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::WARN);
+            assert!(e.field("delete_source").is_some() && e.field("call_ghost").is_some());
             e.field("origin").unwrap_or_default().to_owned()
         })
         .collect();
