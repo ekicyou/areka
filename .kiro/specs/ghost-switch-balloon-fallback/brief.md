@@ -13,7 +13,7 @@
 - 失敗すると既定のゴーストへ戻す（`switch_to_default`・723 行目）。既定のゴーストがカタログに無いと `ghost_switch_fatal` で終わる（`fatal`・892 行目）。
 - `resolve_balloon_for_ghost`（`crates/areka/src/boot_config.rs` 456 行目）は、そのゴーストの最後のバルーンの記憶 → descript.txt の `default.balloon.path` → `balloon` → 同梱の最初の 1 個 → 唯一 → 既定 → 無作為の順に解く。候補の一覧（ゴーストの中の `balloon\` と根の和）が空なら `NoBalloon` を返す（`crates/areka/src/boot_resolve.rs` 319 行目）。**今使っているバルーン（起動の行で渡したもの・切り替えの前に使っていたもの）は候補に入らない。**
 - 起動の行でバルーンを渡したときは、起動ではそのバルーンが使える。切り替えでだけ落ちる。
-- `startup-install-option` の実機の試験 `crates/areka/tests/startup_install_real_run.rs` は、emo2 の同梱バルーン（`ghost\emo2\balloon\emo2-kakukaku`）を根の `balloon\` へ写して、この件を避けた（51〜67 行目）。
+- `startup-install-option` の実機の試験 `crates/areka/tests/startup_install_real_run.rs` は、根の `balloon\` に既定のバルーン（検体 `areka-balloon`）を写して、この件を避けている（配布物と同じ形）。2026-10-30 までは emo2 の同梱バルーン `emo2-kakukaku` を写しており、切替先のゴーストが emo2 のバルーンのままになっていた（段 5「唯一」で選ばれるため）。
 - `default-balloon-selfmade`（2026-10-30 着地）で既定のバルーンは `areka-balloon` になった（`boot_resolve.rs` 34 行目の `DEFAULT_BALLOON_FOLDER`）。配布物には `balloon\areka-balloon` が入る（`tools/package.ps1`・`dist/README.txt`）。ただしこれは置き場にフォルダを置くだけで、解き方の鎖は変わらない。置き場が空のとき（試験の根・利用者が消したとき）は今も `NoBalloon` になる。既定のバルーンが「候補の一覧に 2 つ以上あるとき」の段 6 でしか参照されないのも変わらない。
 
 ## Desired Outcome
@@ -26,7 +26,7 @@
 
 - 要件の段の最初に、ukadoc でバルーンの決め方（切り替えのときの決め方・バルーンが無いとき）を読む。読めない点は SSP の MCP で測る（打つ前に許し）。
 - 第一の案は、切り替えのときだけ「今使っているバルーン」を鎖の最後（`NoBalloon` の前）の段として足す。起動の鎖も同じにするかは要件の段で決める。
-- 直す前に赤になる決定論テストを置く（空の置き場・バルーンを持たないゴーストへの切り替え）。直した後、`startup_install_real_run.rs` の写しの回避を外せるかを確かめる。
+- 直す前に赤になる決定論テストを置く（空の置き場・バルーンを持たないゴーストへの切り替え）。直した後、`startup_install_real_run.rs` の写し（根の `areka-balloon`）を外しても切り替えが通るかを確かめる。
 
 ## Scope
 
