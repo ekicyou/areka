@@ -146,3 +146,4 @@
 - 5.1: `/kiro-complete` の棚卸で `/kiro-discovery` に起票する候補（areka の文字の層）: 数字の並び（`0123456789`）が行をまたいで割れる。行の頭に `:` が来る件は `text-typesetting`（禁則）が持つが、数字の並びを割らないことはその brief に明記が無い（`verification/real-machine.md` の振り分け 4）。
 - 完了時にその場で解決: `verification/README.md` の実装の段の表に要件 11.6 の行が無かったので足した（最終検証の指摘）。
 - 完了時に起票（既存の brief への追記 2 件）: 上の 5.1 の候補 2 件（折り返した後の行頭の空白・数字の並びが割れる）を `text-typesetting` の brief へ足した。正しい振る舞いが ukadoc で決まらず SSP の測りと裁定が要る＋`text-typesetting` の担当範囲と重なるため。
+- 完了の全体テスト: x64 の段で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` の 1 本だけが負荷の下の 30 秒の打ち切りで赤。既定のバルーンに頼らないテストで、単独では 3 回とも緑・最終検証の全体テストも緑。既知の揺れとして `areka-test-binary-stability` の brief に申し送った。
