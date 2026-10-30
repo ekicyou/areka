@@ -35,6 +35,8 @@
 /// 2 層マージ（`load_scope_balloon_model`）を公開し、`build_balloon_target` が
 /// `attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
 pub mod balloon;
+/// スコープのバルーンの面ごとの定義の束（`ScopeBalloonDefinitions`・読み込みの時に作る）。
+pub mod balloon_definitions;
 /// 印の族（スクロールの矢印・クリック待ち）の表と名前の連鎖、番号ごとの絵の選び（`balloon_marker`）。
 pub mod balloon_marker;
 pub mod cache;
