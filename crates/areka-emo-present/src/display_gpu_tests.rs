@@ -165,7 +165,7 @@ fn make_bitmap(
 ///
 /// 再生の引数は本番 `render_surface`（wintf `ecs/graphics/systems/render.rs`）と同一
 /// （透明クリア → `DrawImage(list, None, None, LINEAR, SOURCE_OVER)`）。
-fn replay_and_read_back(
+pub(crate) fn replay_and_read_back(
     dc: &ID2D1DeviceContext,
     list: &GraphicsCommandList,
     w: u32,

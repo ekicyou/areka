@@ -231,7 +231,7 @@ mod tests;
 
 #[cfg(test)]
 #[path = "display_gpu_tests.rs"]
-mod gpu_tests;
+pub(crate) mod gpu_tests;
 
 #[cfg(test)]
 #[path = "display_fault_tests.rs"]

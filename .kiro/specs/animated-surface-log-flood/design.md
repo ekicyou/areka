@@ -138,7 +138,7 @@ crates/areka-emo-present/src/
 - `crates/areka-emo-present/src/display.rs` — `record_display(dc, surface, repeat)`、`fault_point(at, repeat)`、テストの接続宣言 `mod gpu_tests;` を `pub(crate) mod gpu_tests;` に（新しい実 GPU のテストが読み戻しの手順を使うため・`#[cfg(test)]` のまま）。
 - `crates/areka-emo-present/src/presenter/timing.rs` — 注記（35・92 行目）の「表示成立点 info!」を「表示成立点の行」へ。本体は変えない。
 - `crates/areka-emo-present/src/presenter.rs` — 新しいテスト 3 本の接続宣言。
-- テストの追随: `display_fault_tests.rs`・`display_gpu_tests.rs`（`record_display` の引数・`gpu_dc` と `replay_and_read_back` を `pub(crate)` に）・`presenter/transition_record_tests.rs`（`record_display` の引数）・`presenter_perf_log_tests.rs`（同じ入力の 2 回目の適用の行は DEBUG）・`presenter_refresh_and_log_tests.rs`（注記）。
+- テストの追随: `display_fault_tests.rs`・`display_gpu_tests.rs`（`record_display` の引数・`replay_and_read_back` を `pub(crate)` に。表示の記録は World の GraphicsCore の装置で作られるので、再生は同じ DC で行い、別の装置を作る `gpu_dc` は使わない）・`presenter/transition_record_tests.rs`（`record_display` の引数）・`presenter_perf_log_tests.rs`（同じ入力の 2 回目の適用の行は DEBUG）・`presenter_refresh_and_log_tests.rs`（注記）。
 - 性能の道具: `tools/perf/judge-perf.py`（506 行目の注記の行の位置と水準・報告の見出しの「表示成立点 info!」を「表示成立点の行」へ。判定は変えない）・`tools/perf/judge-followup.py`（107 行目の行の位置）・`tools/perf/fixtures/generate.py` と `tools/perf/fixtures-loop/compare/measure_failed/case.txt`（注記の「info!」）。
 - 例: `crates/areka/examples/{collision-probe.rs, emo-present.rs, emo-present/state.rs, emo-present/systems.rs, window-placement.rs}` — 水準に触れる注記があれば合わせる（最初の表示は INFO のままなので、多くは直しが要らない。要らないことを確かめて記録する）。
 - （件 26）原因の 1 か所と、その兄弟の失敗するテスト。どのファイルになるかはテストで決める（節「件 26: 止まったアニメーションの重ね絵が残る件（原因の決め方）」）。候補は `crates/areka-seriko/src/looper.rs`・`actor.rs`・`state` の指令の保持と、emo-present の `show.rs`・`cache.rs`・新しい `blit_rect.rs`。
