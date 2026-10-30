@@ -13,6 +13,7 @@ use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{ALLOW, CONTENT_TYPE, HOST, HeaderName, HeaderValue, ORIGIN};
 use hyper::{Method, Request, Response, StatusCode};
+use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, RequestId};
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use tokio_util::sync::CancellationToken;
@@ -28,6 +29,8 @@ pub(crate) const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 /// MCP の受け口のパス（method を問わず rmcp へ）。
 pub const MCP_PATH: &str = "/api/mcp/v1";
+/// 要求の版のヘッダ（rmcp の `HEADER_MCP_PROTOCOL_VERSION` と同じ綴り）。
+const MCP_PROTOCOL_VERSION: &str = "mcp-protocol-version";
 /// 登録案内のパス（GET だけ）。
 const HELP_PATH: &str = "/api/mcp/help";
 
@@ -138,12 +141,67 @@ async fn forward(
         Err(_) => return (plain(StatusCode::BAD_REQUEST), None),
     };
     let rpc = peek(&bytes);
+    let header = |name| parts.headers.get(name).and_then(|v| v.to_str().ok());
+    let protocol_version = header(MCP_PROTOCOL_VERSION).map(str::to_owned);
+    // rmcp と同じ見方。JSON でない `Content-Type` の 415 は今のまま（要件 6.7）。
+    let json_body =
+        header(CONTENT_TYPE.as_str()).is_some_and(|v| v.starts_with("application/json"));
     let Ok(response) = state
         .mcp
         .clone()
-        .call(Request::from_parts(parts, Full::new(bytes)))
+        .call(Request::from_parts(parts, Full::new(bytes.clone())))
         .await;
-    (response, Some(rpc))
+    // rmcp が読めた要求は rmcp の答えのまま。415 のときだけ本文を読み直す（要件 6.3・6.7）。
+    if !json_body || response.status() != StatusCode::UNSUPPORTED_MEDIA_TYPE {
+        return (response, Some(rpc));
+    }
+    let shape_error = serde_json::from_slice(&bytes)
+        .ok()
+        .and_then(|raw| request_shape_error(&raw));
+    let Some(err) = shape_error else {
+        return (response, Some(rpc));
+    };
+    let status = shape_error_status(protocol_version.as_deref(), err.error.code);
+    let body = serde_json::to_vec(&err).expect("JsonRpcError は JSON に書ける");
+    (
+        with_body(status, "application/json", body.into()),
+        Some(rpc),
+    )
+}
+
+/// rmcp が 415 で断る本文のうち、理由が `params` の形だけのものへの答え（中継も使う）。
+///
+/// JSON-RPC 2.0 の要求（`jsonrpc` が `"2.0"`・`method` が文字列・`id` が数か文字列）で、
+/// `params` が在り `null` でもオブジェクトでもないときだけ `Some`。数・文字列・真偽値は
+/// `-32600`、配列は `-32602`。メソッドの名前は見ない。答えは rmcp の公開の型で、`id` は要求のまま。
+pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError> {
+    use serde_json::Value;
+    if raw.get("jsonrpc")?.as_str()? != "2.0" || !raw.get("method")?.is_string() {
+        return None;
+    }
+    let id: RequestId = serde_json::from_value(raw.get("id")?.clone()).ok()?;
+    let error = match raw.get("params")? {
+        Value::Null | Value::Object(_) => return None,
+        Value::Array(_) => {
+            ErrorData::invalid_params("Invalid params: params must be an object", None)
+        }
+        _ => ErrorData::invalid_request(
+            "Invalid Request: params must be an array or an object",
+            None,
+        ),
+    };
+    Some(JsonRpcError::new(Some(id), error))
+}
+
+/// rmcp の `jsonrpc_http_status`（非公開）の写しのうち、`request_shape_error` の 2 つの番号の分。
+/// 無状態の版（`2026-07-28`）の `-32602` だけ 400、ほかは 200（旧式の版は rmcp も 200）。
+/// rmcp の版を上げたら、rmcp 自身の `-32602` の状態と突き合わせるテストで確かめる（要件 6.4）。
+fn shape_error_status(protocol_version: Option<&str>, code: ErrorCode) -> StatusCode {
+    if protocol_version == Some("2026-07-28") && code == ErrorCode::INVALID_PARAMS {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::OK
+    }
 }
 
 /// 本文から `method` と `id` を寛容に覗く（JSON の object でなければ・欄が無ければ `-`）。
@@ -186,3 +244,7 @@ fn with_body(status: StatusCode, content_type: &'static str, body: Bytes) -> Htt
         .insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
     response
 }
+
+#[cfg(test)]
+#[path = "dispatch_shape_tests.rs"]
+mod dispatch_shape_tests;
