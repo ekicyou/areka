@@ -667,6 +667,7 @@ impl LoopRuntime {
 - 他の書き手との関係:
   - 再スナップ・作業領域の変化・`\![move]` など、ほかの書き手は今のまま窓ごと動かす（記録 `applied` は変えない＝ずれは、動いた後の窓にもそのまま残る）。
   - 利用者のドラッグの終わり（キャラ窓は `on_char_drag_end`、バルーン窓は `on_balloon_drag_end`）だけは、その窓の `applied` を 0 にする。利用者が置いた所を新しい元の位置にする。バルーンは、0 にしてから相対 offset を作る（ずれを含んだ offset の上に `follow_balloon` がずれをもう 1 度足す二重の数えを防ぐ・設計の検証の指摘 2）。
+  - 位置の初期化（`reset_pos.rs` の `reset_window_positions`）も、絶対の位置へ書くので、書いた後に `MoveShiftApplied` を外す（`rebase_shift`）。並べた位置が新しい元の位置になり、今のずれはずれの相が同じフレームで当て直す。保存は記録の無い並べた位置になる（実装 6.3 で決めた形）。
   - 本体は `placement/follow/move_shift.rs` に置き、上限に近い `drag_follow.rs`（967 行）と `persist.rs`（928 行）には呼び出しの数行だけを足す（設計の検証の指摘 3）。
   - 位置を保存する所（`persist_unremembered_char_positions`・組の相手の保存）は、`applied` を引いた元の位置を保存する（ずれが起動のたびに積もらない）。
 

@@ -38,7 +38,8 @@ use wintf::ecs::{DPI, WindowPos};
 use super::follow::MonitorDpiTable;
 use super::transition_diag::{
     self, HOLD_DECISION_HOLD, HOLD_DECISION_PROCEED, HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
-    HOLD_SITE_DPI, HOLD_SITE_RECONCILE, HOLD_SITE_RESNAP, HOLD_SITE_WORK_AREA_RESNAP,
+    HOLD_SITE_DPI, HOLD_SITE_PATTERN_MOVE, HOLD_SITE_RECONCILE, HOLD_SITE_RESNAP,
+    HOLD_SITE_WORK_AREA_RESNAP,
 };
 
 /// 整合待ちの上限フレーム数（設計 C5・C7）。
@@ -98,6 +99,8 @@ pub(crate) enum HoldSite {
     /// [`Resnap`](HoldSite::Resnap) と別の語を持つ——「再スナップ」という日本語が別々の
     /// 2 関数を指しており、同じ語にするとログ上でどちらが見送ったのか判らないからである。
     WorkAreaResnap,
+    /// 面の `move` のずれの相（`emo2_boot/frame/move_shift.rs`・seriko-pattern-calls）。
+    PatternMove,
 }
 
 impl HoldSite {
@@ -108,6 +111,7 @@ impl HoldSite {
             HoldSite::Reconcile => HOLD_SITE_RECONCILE,
             HoldSite::Resnap => HOLD_SITE_RESNAP,
             HoldSite::WorkAreaResnap => HOLD_SITE_WORK_AREA_RESNAP,
+            HoldSite::PatternMove => HOLD_SITE_PATTERN_MOVE,
         }
     }
 }

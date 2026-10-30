@@ -113,7 +113,7 @@
   - _Depends: 4.2_
   - _Requirements: 3.8, 7.1, 7.2, 7.6, 9.6, 8.1_
 
-- [ ] 6. 置き方: ずれを窓の位置へ当てる
+- [x] 6. 置き方: ずれを窓の位置へ当てる
 - [x] 6.1 (P) ずれを窓の位置へ当てる口と経路を作る
   - キャラ窓とバルーン窓に「欲しいずれ・倍率・当てた分」の記録を持たせる。キャラ窓は、元の位置（今の位置 − 当てた分）に倍率をかけたずれ（`i32` に飽和）を足し、下揃えの揃え直し・作業領域の中への寄せ・見える範囲の守りの順に通して、新しい経路で位置だけを書き、実際に書いた位置 − 元の位置を当てた分にする
   - バルーン窓は当てた分を記録し、キャラ窓の今の位置で追い直す。バルーンの追いの提案に、そのずれを足す 1 行を入れる
@@ -129,7 +129,7 @@
   - 置き方の兄弟テストで、ドラッグの後のずれ 0（キャラ窓とバルーン窓の両方・バルーンで二重に足されない）と、保存の値がずれを引くこと、が緑になり、触ったファイルが 1,000 行を超えない
   - _Requirements: 7.5, 7.8_
 
-- [ ] 6.3 ずれの相をフレームに組み込む
+- [x] 6.3 ずれの相をフレームに組み込む
   - 毎フレーム、移動の相の直後に、各ゴーストの窓について提示のずれと当てた倍率を読み、倍率がまだ無ければ何もせず、記録と同じなら何もせず、窓の書き込みの見送りの門の間は次のフレームへ回し、そうでなければ 6.1 の口で当てる
   - ずれの相の兄弟テストで、提示のずれが窓へ当たる・値と倍率が変わったフレームだけ書く・見送りの間は書かずに後で当てる、が緑になる
   - _Depends: 4.2, 5.4, 6.1_
@@ -179,3 +179,4 @@
 - 5.4: `on_surface_shown` は `bool` のまま（5.2 の注の「Option にする」は取り下げ）。ずれの持ち主は `looper_calls.rs` の `Shifts`、(0, 0) は送り箱に積んで `take_shifts` で合図の `Show`／`Rebased` の後に出す（design.md の契約の行を追随済み）。命令は `DisplayCommand::MoveShift`／`MoveShiftBalloon`、areka の `adapter.rs` で `PresentCommand::MoveShift` に写す。`\s[-1]`（Hide）でもずれは 0 へ戻る（SSP で未測定・7 の互換の文書に 1 行）。背骨の写し `project_display` は MoveShift を `Unknown` のまま。引き金の相（periodic/talk の後の当て直し）の刻みのテストはまだ無い — 最終検証に持ち越し。looper.rs 993・parts.rs 973・actor.rs 908 行。
 - 6.1: 口は `placement/follow/move_shift.rs` の `apply_char_shift`・`apply_balloon_shift`・`balloon_shift`（記録 `MoveShiftApplied`、`want`・`ratio` は 6.3 まで `#[allow(dead_code)]`）。新しい経路 `PlacementRoute::PatternMove`（system reanchor・見送りが覆う・見える範囲の守りの対象。経路の表の檻を 12→13 語に直した）。バルーンのずれは `follow_balloon` と `move_window_with_route` の随伴の 2 か所で足す（飽和の足し算）。作業領域はずらした後の矩形で選ぶ（複数モニターでは隣へ寄りうる・SSP で未測定）。`origin_position` は 6.2。window_move.rs はもとから 1,227 行（上限超え）→ 1,231 行。
 - 6.2: 口は `move_shift.rs` の `origin_position`・`reset_applied`。既定のキャラ位置は `PatternMove`（system reanchor）でずれに付いて動き、ずれが 0 に戻れば既定も戻る（設計どおり）。保存は `origin_position`（今の位置 − 当てた分）。残る穴: 絶対位置で書く書き手（`reset_pos.rs:116` の位置の初期化・絶対の `\![move]`）は `applied` を残すので、ずれが 0 に戻ると「既定 − 当てた分」へ動く — 6.3 で扱う。
+- 6.3: ずれの相は `emo2_boot/frame/move_shift.rs` の `run_move_shift_phase`（`run_move_drain_phase` の直後・見送りの門は `defers_window_write`・観測点の語 `pattern-move`）。位置の初期化は `rebase_shift` で記録を外す（design.md の「他の書き手との関係」に追記済み）。裁定待ち: 絶対の `\![move]`（base が me 以外）は design どおり `applied` を残すので、後でずれが 0 に戻ると窓が「`\![move]` の行き先 − 当てた分」へ動く（SSP で未測定）— 案 A: 位置の初期化と同じく `rebase_shift` を呼ぶ／案 B: 今のまま互換の文書 §8 に書く。下揃えの窓は揃えの y の差も当てた分に入るが、保存の後の戻しで y は揃えが決め直すので害は無い。

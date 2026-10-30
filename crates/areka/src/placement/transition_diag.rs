@@ -132,14 +132,17 @@ pub const HOLD_SITE_RESNAP: &str = "resnap";
 /// [`HOLD_SITE_RESNAP`] と別語なのは、日本語の「再スナップ」が別々の 2 関数を指すからである
 /// ——同じ語にすると、ログ上でどちらの点が見送ったのかが判らない（task 6.5）。
 pub const HOLD_SITE_WORK_AREA_RESNAP: &str = "work-area-resnap";
+/// 判定を下した観測点: 面の `move` のずれの相（提示のずれを窓へ当てる点・seriko-pattern-calls）。
+pub const HOLD_SITE_PATTERN_MOVE: &str = "pattern-move";
 
-/// 観測点語の全体（design C5 の「4 点すべて」＝待ち札の守備範囲そのもの）。
+/// 観測点語の全体（design C5 の「4 点すべて」と面の `move` のずれの相＝待ち札の守備範囲そのもの）。
 #[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_SITE_ALL: &[&str] = &[
     HOLD_SITE_DPI,
     HOLD_SITE_RECONCILE,
     HOLD_SITE_RESNAP,
     HOLD_SITE_WORK_AREA_RESNAP,
+    HOLD_SITE_PATTERN_MOVE,
 ];
 
 // ---------------------------------------------------------------------------

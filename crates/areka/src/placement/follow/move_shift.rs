@@ -4,8 +4,7 @@
 //! 提示が覚えたずれ（作者基準）に倍率をかけ、元の位置（今の位置 − 当てた分）へ足してから、
 //! 今の置き方の決まり（吸い付き・作業領域の中への寄せ・見える範囲の守り）を後から当てる。
 //! 書くのは位置だけで、窓の寸は変えない（7.5）。補わずに一度で当てる（7.3）。
-//!
-//! 毎フレームの相（task 6.3）がまだこの口を呼ばないので、本番のビルドでは未使用に見える。
+//! 呼び手は毎フレームのずれの相（`emo2_boot/frame/move_shift.rs`）。
 
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::*;
@@ -26,7 +25,6 @@ const ZERO: PointPx = PointPx { x: 0, y: 0 };
 ///
 /// `applied` はキャラ窓では「実際に書いた位置 − 元の位置」（揃えや寄せで縮んだ分も正しく
 /// 引ける）、バルーン窓では倍率をかけたずれそのもの。
-#[allow(dead_code)] // `want`・`ratio` を読むのは毎フレームの相（task 6.3）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MoveShiftApplied {
     want: (i64, i64),
@@ -63,6 +61,30 @@ pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> Po
     }
 }
 
+/// 記録の (ずれ, 倍率) がこの値と同じか（毎フレームの相が書かずに済ますかの判定）。
+///
+/// 記録が無い窓はずれ 0 を当てたのと同じに見る（まだ一度も動かしていない窓へ書かない）。
+pub(crate) fn shift_is_current(
+    world: &World,
+    window: Entity,
+    want: (i64, i64),
+    k: ScaleRatio,
+) -> bool {
+    world
+        .get::<MoveShiftApplied>(window)
+        .map_or(want == (0, 0), |r| r.want == want && r.ratio == k)
+}
+
+/// 窓を絶対の位置へ書いた書き手（位置の初期化）が、書いた位置を新しい元の位置にする。
+///
+/// 記録ごと外すので、毎フレームの相は今のずれをその上へ当て直す（ずれは元の位置からの相対・
+/// 書いた位置から当てた分を引いて元の位置を見誤らない）。
+pub(crate) fn rebase_shift(world: &mut World, window: Entity) {
+    if let Ok(mut e) = world.get_entity_mut(window) {
+        e.remove::<MoveShiftApplied>();
+    }
+}
+
 /// 利用者のドラッグの終わりで、その窓の当てた分を 0 にする（置いた所が新しい元の位置）。
 ///
 /// `want`・`ratio` は残すので、毎フレームの相は同じずれを当て直さない。
@@ -76,7 +98,6 @@ pub(super) fn reset_applied(world: &mut World, window: Entity) {
 ///
 /// 窓・位置・寸・作業領域のどれかが無ければ `warn!` のうえ `false`（記録は変えないので、
 /// 次のフレームで当て直す）。
-#[allow(dead_code)] // 呼び手は毎フレームの相（task 6.3）。
 pub(crate) fn apply_char_shift(
     world: &mut World,
     window: Entity,
@@ -156,7 +177,6 @@ pub(crate) fn apply_char_shift(
 /// バルーン窓へずれを当てる（記録してから、そのキャラ窓の今の位置で追い直す）。書いたら `true`。
 ///
 /// バルーン窓・その持ち主のキャラ窓・キャラ窓の位置のどれかが無ければ `warn!` のうえ `false`。
-#[allow(dead_code)] // 呼び手は毎フレームの相（task 6.3）。
 pub(crate) fn apply_balloon_shift(
     world: &mut World,
     balloon: Entity,
