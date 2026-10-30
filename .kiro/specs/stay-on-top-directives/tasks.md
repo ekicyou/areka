@@ -28,7 +28,7 @@
   - _Requirements: 1.8, 7.5_
 
 - [ ] 2. wintf の帯の働き
-- [ ] 2.1 帯の印・帯の指令の列・並べ方の純関数を作り、wintf の語の守りを改める
+- [x] 2.1 帯の印・帯の指令の列・並べ方の純関数を作り、wintf の語の守りを改める
   - 窓の印 `StayOnTop`・指令 `BandOp`（入る・出る・手前へ出す）・帯の指令の列を作り、`ecs::window` から公開する
   - 今の重なりの順位で奥から手前へ並べる純関数（測れない窓は奥の端・元の順を保つ）、指令から挿入位置を決める純関数（入る＝`HWND_TOPMOST`・出る＝`HWND_NOTOPMOST`・手前へ出す＝`HWND_TOP`）、当てた後に期待する帯の純関数（手前へ出すは確かめない）を作る
   - 守り G1（wintf の語の走査）を同じタスクで書き直す: 先送りの語と「帯を書くのは帯の働きのファイルだけ」の語に分け、`zorder_*` の本番ファイルに帯の語が無いこと、帯の働きのファイルに `HWND_TOPMOST` が在ることを主張する。注記の古い行番号を直す
@@ -155,3 +155,4 @@
 ## Implementation Notes
 - 1.2: `emo2_boot/mod.rs` の `window_state_cue` 宣言に付けた `#[cfg_attr(not(test), allow(dead_code))]` は 5.1 の結線で外す。受け口が `tick_wake::mark(ZORDER)` を呼ぶので旗の生産者の名簿（areka の `AREKA_PRODUCERS`・wintf `tick_wake.rs` の注記）に登記が要る。
 - `cargo clippy -D warnings` は dola・areka の既存の指摘で赤（全体テストの段には clippy が無い）。判定は触ったファイルの指摘 0 件で行う。
+- 2.1: `window_band.rs` の `#[cfg_attr(not(test), allow(dead_code))]` は 2.2 で外す。G1 の先送りの語の表は 6 語・帯の語 3 語に分けた。areka 側 G2 の表（9 語）は 5.1 で同じ分け方に直すまで食い違う。

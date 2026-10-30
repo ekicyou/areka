@@ -30,10 +30,20 @@
 //! 他フィーチャーの持ち物でもあるため全文走査の対象には入れない——他所の追記で赤くなると、
 //! 本フィーチャーへの誤った告発になる。
 //!
+//! # 先送りの語と帯の語（`stay-on-top-directives` で分けた）
+//!
+//! 走査の語は 2 つの表に分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
+//! 先送りのままである（持ち主 `tasktray-minimize` ほか）。常に手前の帯の語
+//! （`BAND_NEEDLES`＝`topmost`・`stayontop`・`windowstate`）は `stay-on-top-directives` が
+//! 実装したが、帯を書くのは帯の働きのファイル `window_band.rs` だけと決めてある。よって
+//! どちらの表の語も、重なり順の機構の本番ファイルには 1 つも無いことを主張し続ける。
+//! 対照として、`window_band.rs` のコードに `HWND_TOPMOST` が在ることも主張する
+//! （帯の働きが別の場所へ移れば、この守りの前提が崩れたと赤くなる）。
+//!
 //! # `api.rs` に常時最前面の語が 1 つある（要件 8.3 の違反ではない）
 //!
-//! 上の継ぎ目のうち `is_window_always_on_top` だけは、下の走査の第 1 語である `topmost` を
-//! **コード行に持つ**——`crates/wintf/src/api.rs:126` の
+//! 上の継ぎ目のうち `is_window_always_on_top` だけは、下の走査の帯の語である `topmost` を
+//! **コード行に持つ**——`crates/wintf/src/api.rs:131` の
 //! `Ok((ex_style as u32) & WS_EX_TOPMOST.0 != 0)` である。本フィーチャー以前の `api.rs` に
 //! この語は 1 つも無く（`git show HEAD:crates/wintf/src/api.rs` を数えて 0 件）、
 //! 持ち込んだのは本フィーチャーである。事実として明記しておく。
@@ -47,7 +57,7 @@
 //!
 //! よって `api.rs` は走査の対象に**入れない**。入れれば、帯へ書かないための読み取りが
 //! 「帯へ書いた」と告発されることになり、主張が裏返る。`api.rs` を走査対象一覧
-//! （`PRODUCTION_FILES`）へ入れない判断と、走査語（`DEFERRED_NEEDLES`）の 9 語は、
+//! （`PRODUCTION_FILES`）へ入れない判断と、走査語（先送りの 6 語と帯の 3 語）は、
 //! グループ機構のファイルを足した後も変えない。帯へ**書く**側が対象のファイルへ
 //! 入り込めば、下の走査がそのまま捕まえる。
 //!
@@ -88,15 +98,10 @@ const PRODUCTION_FILES: [&str; 8] = [
 
 /// 先送り語彙（小文字で保持し、走査も小文字化して行う）と、それが何の入口かの説明。
 ///
-/// 兄弟の areka 側テスト（`spawn_zorder_pair_deferred_tests.rs`）と同じ表を持つ。
+/// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
+/// ままである。兄弟の areka 側テスト（`spawn_zorder_pair_deferred_tests.rs`）と同じ表を持つ。
 /// 片方だけを増やすと守りが片肺になるので、足すときは両方へ足すこと。
-const DEFERRED_NEEDLES: [(&str, &str); 9] = [
-    (
-        "topmost",
-        "常時最前面（`\\v`／`\\![set,windowstate,stayontop]` の実装面・要件 8.1／8.3）",
-    ),
-    ("stayontop", "`\\![set,windowstate,stayontop]`（要件 8.3）"),
-    ("windowstate", "`\\![set,windowstate,...]`（要件 8.3）"),
+const DEFERRED_NEEDLES: [(&str, &str); 6] = [
     (
         "minimize",
         "最小化（`\\![set,windowstate,minimize]`／`OnWindowStateMinimize`・要件 8.3／8.4／8.5）",
@@ -116,6 +121,20 @@ const DEFERRED_NEEDLES: [(&str, &str); 9] = [
         "タスクバー・アプリ切り替え一覧の扱い（要件 8.5）",
     ),
 ];
+
+/// 帯の語（小文字）。常に手前の帯を書くのは帯の働きのファイル [`BAND_FILE`] だけであり
+/// （`stay-on-top-directives`）、重なり順の機構（組・鎖）の本番ファイルには 1 つも無い。
+const BAND_NEEDLES: [(&str, &str); 3] = [
+    (
+        "topmost",
+        "常に手前の帯（`\\v`／`\\![set,windowstate,stayontop]` の働き）",
+    ),
+    ("stayontop", "`\\![set,windowstate,stayontop]`"),
+    ("windowstate", "`\\![set,windowstate,...]`"),
+];
+
+/// 帯を書く唯一の本番ファイル（`stay-on-top-directives` の帯の働き）。
+const BAND_FILE: &str = "src/ecs/window/window_band.rs";
 
 fn source_path(relative: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -139,11 +158,12 @@ fn code_only(source: &str) -> String {
         .join("\n")
 }
 
-/// 本文に現れた先送り語彙（説明つき）。
+/// 本文に現れた語（先送りの語と帯の語・説明つき）。
 fn deferred_hits(code: &str) -> Vec<(&'static str, &'static str)> {
     let lowered = code.to_lowercase();
     DEFERRED_NEEDLES
         .iter()
+        .chain(BAND_NEEDLES.iter())
         .filter(|(needle, _)| lowered.contains(*needle))
         .copied()
         .collect()
@@ -171,7 +191,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_wintf_sources()
         let hits = deferred_hits(&code);
         assert!(
             hits.is_empty(),
-            "{relative}: 先送りした語彙が本番コードに現れている（要件 8.3〜8.5）: {hits:?}"
+            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯を書くのは {BAND_FILE} だけ）: {hits:?}"
         );
 
         scanned_files += 1;
@@ -193,13 +213,13 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_wintf_sources()
 /// 走査の道具が実際に語を見つけられること、そしてコメントだけを落としていることを固定する。
 ///
 /// 上のテストは「無い」を主張するので、道具が壊れていても緑になりうる。ここでは
-/// ①合成した本文で 9 語すべてが検出されること、②本番ファイルの素の全文には
+/// ①合成した本文で 2 つの表の 9 語すべてが検出されること、②本番ファイルの素の全文には
 /// 常時最前面の語があり、コードだけの本文には無いこと、③コードだけの本文にコードが
 /// 残っていること、の 3 点を名指しで確かめる。
 #[test]
 fn the_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
     // ① 各語がそれぞれ独立に検出される（表のどれかが死んでいれば落ちる）。
-    for (needle, why) in DEFERRED_NEEDLES {
+    for (needle, why) in DEFERRED_NEEDLES.into_iter().chain(BAND_NEEDLES) {
         let sample = format!("let handle = SomeApi::{needle}(hwnd);");
         let hits = deferred_hits(&sample);
         assert!(
@@ -245,6 +265,28 @@ fn the_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
     assert!(
         maintain.contains("pub fn apply_zorder_pair_maintenance"),
         "コードだけの本文から維持系の定義が消えている"
+    );
+}
+
+/// 帯を書くのは帯の働きのファイルであり、そのコード（コメントを除く）に `HWND_TOPMOST` が在る。
+///
+/// 上の「無い」の主張の対照である。帯の働きが改名・移動されたり、帯へ入れる書き込みが
+/// 消えたりすれば、ここが赤くなって守りの前提の見直しを促す。
+#[test]
+fn the_band_work_file_is_where_the_band_is_written() {
+    let code = code_only(&read_source(BAND_FILE));
+    assert!(
+        code.contains("HWND_TOPMOST"),
+        "{BAND_FILE}: 帯へ入れる挿入位置 HWND_TOPMOST がコードに無い（帯を書く持ち主が動いた？）"
+    );
+    assert!(
+        deferred_hits(&code).iter().any(|(n, _)| *n == "topmost"),
+        "{BAND_FILE}: 帯の語の走査が帯の働きのファイルで語を見つけられない（道具の較正）"
+    );
+    // 帯の働きのファイルは `zorder_` の名簿に入らない（帯の語の不在を主張する対象ではない）。
+    assert!(
+        !zorder_production_sources().contains(&BAND_FILE.to_string()),
+        "{BAND_FILE} が重なり順の機構の名簿に入っている"
     );
 }
 
