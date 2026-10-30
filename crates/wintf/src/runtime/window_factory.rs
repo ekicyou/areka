@@ -47,7 +47,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::HSTRING;
 
 use crate::ecs::HasGraphicsResources;
-use crate::ecs::window::{Window, WindowHandle, WindowPos, WindowStyle};
+use crate::ecs::window::{StayOnTop, Window, WindowHandle, WindowPos, WindowStyle};
 use crate::ecs::world::EcsWorld;
 use crate::runtime::window_registry::WindowRegistry;
 use crate::runtime::wndproc_bridge::{WndState, make_wndproc};
@@ -67,6 +67,16 @@ fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE {
     (style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP
 }
 
+/// 窓を作るときの拡張スタイル（`stay-on-top-directives` 要件 2.3・design.md「CreationExStyle」）。
+///
+/// 常に手前の印 [`StayOnTop`] のある窓は、初めから帯に居るよう [`compute_ex_style`] に
+/// `WS_EX_TOPMOST` を足す。印の無い窓は [`compute_ex_style`] のまま。
+fn creation_ex_style(style: &WindowStyle, stay_on_top: bool) -> WINDOW_EX_STYLE {
+    use windows::Win32::UI::WindowsAndMessaging::WS_EX_TOPMOST;
+    let ex = compute_ex_style(style);
+    if stay_on_top { ex | WS_EX_TOPMOST } else { ex }
+}
+
 /// 宣言的ウィンドウ生成をライブラリ経由へ橋渡しする移行ファクトリ。
 ///
 /// 後続タスク 4.3 の書き換え後 `create_windows`（`&mut World` 排他システム）から
@@ -80,7 +90,7 @@ impl EcsWindowFactory {
     /// 手順（借用は最小限・`new_checked_ex` 越しに World 借用を保持しない＝再入安全）:
     /// 1. `entity` の `Window`/`WindowStyle`/`WindowPos`/`title` を
     ///    `World` から読み取り（immutable・即解放）。`Window` 不在なら no-op。
-    /// 2. `ex_style` を [`compute_ex_style`] で算出。
+    /// 2. `ex_style` を [`creation_ex_style`] で算出（[`StayOnTop`] の印があれば `WS_EX_TOPMOST` 付き）。
     /// 3. `WndState{ world: Weak<RefCell<EcsWorld>>, entity }` と [`make_wndproc`] で
     ///    `LibWindow::new_checked_ex(WindowType::TopLevel, ex_style, state, wndproc)` を生成。
     ///    ※ ライブラリは生成時に WM_CREATE 等を同期送出しうるが、本関数は World 借用を
@@ -114,9 +124,10 @@ impl EcsWindowFactory {
         let parent = window.parent;
         let style = entity_ref.get::<WindowStyle>().copied().unwrap_or_default();
         let pos = entity_ref.get::<WindowPos>().copied().unwrap_or_default();
+        let stay_on_top = entity_ref.contains::<StayOnTop>();
 
-        // --- 2. ex_style 算出（要件 4.1/4.2/4.3・branchless） ---
-        let ex_style = compute_ex_style(&style);
+        // --- 2. ex_style 算出（要件 4.1/4.2/4.3・branchless。印があれば帯で作る） ---
+        let ex_style = creation_ex_style(&style, stay_on_top);
 
         // --- 3. ライブラリ生成（要件 2.1） ---
         // `new_ex`（`Fn`・RefCell ラップなし＝**wndproc 再入可**）を採用する。
@@ -266,6 +277,10 @@ impl EcsWindowFactory {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "window_factory_stay_on_top_tests.rs"]
+mod window_factory_stay_on_top_tests;
 
 #[cfg(test)]
 mod tests {
