@@ -316,13 +316,15 @@ fn intruded(trigger: PairTrigger, strategy: ZOrderPairStrategy) -> PairObservati
         measured_above_of_below: Some(intruder_front()),
         // その割り込み窓は普通の窓（常時最前面ではない）
         measured_above_of_below_is_always_on_top: false,
+        // キャラ自身も帯の外（今の振る舞い）
+        measured_below_is_always_on_top: false,
     }
 }
 
 /// 判断の入力として与えうる観測の形（ラベルつき）を網羅列挙する。
 ///
 /// 「全分岐」の主張はこの列挙の網羅性に乗る——列挙側に穴があれば
-/// [`decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top`] の
+/// [`decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_character_in_the_band`] の
 /// 出現確認（各腕が最低 1 回出ること）が落ちる。
 fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
     let mut matrix = Vec::new();
@@ -350,6 +352,29 @@ fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
                 "キャラの手前の窓が常時最前面（帯の中）",
                 PairObservation {
                     measured_above_of_below_is_always_on_top: true,
+                    ..base.clone()
+                },
+            ));
+            matrix.push((
+                "キャラも手前の窓も常時最前面（帯の中の組）",
+                PairObservation {
+                    measured_above_of_below_is_always_on_top: true,
+                    measured_below_is_always_on_top: true,
+                    ..base.clone()
+                },
+            ));
+            matrix.push((
+                "キャラだけが常時最前面（手前の窓は帯の外）",
+                PairObservation {
+                    measured_below_is_always_on_top: true,
+                    ..base.clone()
+                },
+            ));
+            matrix.push((
+                "キャラが常時最前面で手前に窓が無い",
+                PairObservation {
+                    measured_above_of_below: None,
+                    measured_below_is_always_on_top: true,
                     ..base.clone()
                 },
             ));
@@ -509,6 +534,75 @@ fn decide_pair_fix_avoids_pointing_at_an_always_on_top_window_as_the_insert_posi
             }
         }
     }
+}
+
+/// 手前へ置く腕の決めの表（stay-on-top-directives design.md の PairFixBandCondition）の
+/// 4 行を、全トリガ・全ストラテジで手前へ寄せる腕が出るときに固定する。
+///
+/// | 手前の窓 | 手前の窓が帯 | キャラが帯 | 決め |
+/// |---|---|---|---|
+/// | 有る | はい | いいえ | `TopOfNormalBand`（今と同じ） |
+/// | 有る | はい | はい | `After(手前の窓)`（帯の中ですぐ手前） |
+/// | 有る | いいえ | どちらでも | `After(手前の窓)`（今と同じ） |
+/// | 無い | — | どちらでも | `TopEdge`（今と同じ） |
+#[test]
+fn decide_pair_fix_follows_the_band_table_for_the_place_above_arm() {
+    let rows: [(Option<HWND>, bool, bool, InsertSpec); 7] = [
+        (
+            Some(intruder_front()),
+            true,
+            false,
+            InsertSpec::TopOfNormalBand,
+        ),
+        (
+            Some(intruder_front()),
+            true,
+            true,
+            InsertSpec::After(intruder_front()),
+        ),
+        (
+            Some(intruder_front()),
+            false,
+            false,
+            InsertSpec::After(intruder_front()),
+        ),
+        (
+            Some(intruder_front()),
+            false,
+            true,
+            InsertSpec::After(intruder_front()),
+        ),
+        (None, false, false, InsertSpec::TopEdge),
+        (None, false, true, InsertSpec::TopEdge),
+        (None, true, true, InsertSpec::TopEdge),
+    ];
+    let mut checked = 0usize;
+    for trigger in ALL_TRIGGERS {
+        for strategy in ALL_STRATEGIES {
+            for (front, front_in_band, character_in_band, expected) in rows {
+                let obs = PairObservation {
+                    measured_above_of_below: front,
+                    measured_above_of_below_is_always_on_top: front_in_band,
+                    measured_below_is_always_on_top: character_in_band,
+                    ..intruded(trigger, strategy)
+                };
+                if let PairFixDecision::PlaceAboveOverBelow { insert_after } = decide_pair_fix(&obs)
+                {
+                    assert_eq!(
+                        insert_after, expected,
+                        "{trigger:?}／{strategy:?}: 手前の窓={front:?} 手前が帯={front_in_band} キャラが帯={character_in_band}"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+    }
+    // 手前へ寄せる腕は Establish・Reassert（全ストラテジ）と RaisedBelow（案 B）で出る＝7 組。
+    assert_eq!(
+        checked,
+        7 * rows.len(),
+        "表の行が手前へ寄せる腕で確かめられていない"
+    );
 }
 
 /// バルーン側の重なりが動いたら、キャラをバルーンのすぐ背後へ引き上げる（要件 1.3）。
@@ -714,15 +808,24 @@ fn decide_pair_fix_always_skips_when_already_adjacent() {
 ///   足されれば同じくコンパイルできなくなる。
 /// - 対照: 「最上位へ置く」（`TopEdge`）は実際に返り得る。常時最前面が返らないという主張が
 ///   「そもそも何も返らない」による恒真になっていない。
+/// - 帯の条件（stay-on-top-directives 要件 2.4・3.3）: 帯の外のキャラには帯の窓を基準に
+///   選ばない（帯の外のキャラのときの決めは今のまま）。キャラも帯に居れば、手前の帯の窓の
+///   すぐ背後へ入れる（帯の中ですぐ手前）。どちらの形も行列の中で実際に出ることを確かめる。
 #[test]
-fn decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top() {
+fn decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_character_in_the_band()
+ {
     let mut seen_skips: Vec<SkipReason> = Vec::new();
     let mut seen_after = false;
     let mut seen_top_edge = false;
     let mut seen_top_of_normal_band = false;
     let mut seen_place_below = false;
+    let mut seen_after_band_window_in_band = false;
+    let mut seen_avoid_band_window_out_of_band = false;
 
     for (label, obs) in observation_matrix() {
+        // 手前の窓が帯の中に居る観測か（基準の候補が帯の窓）
+        let front_is_band_window =
+            obs.measured_above_of_below.is_some() && obs.measured_above_of_below_is_always_on_top;
         match decide_pair_fix(&obs) {
             PairFixDecision::Skip(reason) => {
                 if !seen_skips.contains(&reason) {
@@ -737,9 +840,23 @@ fn decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top() {
                         balloon(),
                         "{label}: 動かす窓自身を挿入位置にはしない（自己参照の指令）"
                     );
+                    if front_is_band_window && obs.measured_above_of_below == Some(hwnd) {
+                        assert!(
+                            obs.measured_below_is_always_on_top,
+                            "{label}: 帯の外のキャラに帯の窓を基準に選んでいる"
+                        );
+                        seen_after_band_window_in_band = true;
+                    }
                 }
                 InsertSpec::TopEdge => seen_top_edge = true,
-                InsertSpec::TopOfNormalBand => seen_top_of_normal_band = true,
+                InsertSpec::TopOfNormalBand => {
+                    seen_top_of_normal_band = true;
+                    assert!(
+                        front_is_band_window && !obs.measured_below_is_always_on_top,
+                        "{label}: 通常帯の最上へ逃げるのは、帯の外のキャラの手前が帯の窓のときだけ"
+                    );
+                    seen_avoid_band_window_out_of_band = true;
+                }
             },
             PairFixDecision::PlaceBelowUnderAbove { insert_after } => {
                 seen_place_below = true;
@@ -772,6 +889,14 @@ fn decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top() {
         "「通常帯の最上へ」（挿入位置が常時最前面だった場合）が一度も出ていない"
     );
     assert!(seen_place_below, "「キャラを背後へ」が一度も出ていない");
+    assert!(
+        seen_after_band_window_in_band,
+        "「キャラも帯なら手前の帯の窓の背後へ」が一度も出ていない"
+    );
+    assert!(
+        seen_avoid_band_window_out_of_band,
+        "「帯の外のキャラには帯の窓を基準に選ばない」が一度も出ていない"
+    );
 }
 
 /// 動かす対象は宣言されたペアの 2 窓に限られる（要件 3.4／3.1〜3.3）。

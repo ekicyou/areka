@@ -270,6 +270,12 @@ pub(crate) struct PairObservation {
     /// （[`measure_window_is_always_on_top`]）。窓が居ない（`measured_above_of_below` が
     /// `None`）ときは偽であり、判断側もその場合はこの値を見ない。
     pub measured_above_of_below_is_always_on_top: bool,
+    /// 背後側（キャラ窓）**自身**が常時最前面の帯に居るかの実測。
+    ///
+    /// キャラも帯に居るなら、手前の帯の窓のすぐ背後へ入れても帯の中ですぐ手前に並ぶだけで
+    /// あり、避ける理由が無い（stay-on-top-directives 要件 2.4）。測るのは実測層
+    /// （[`measure_below_is_always_on_top`]）で、測れないときは偽（帯の外＝今の避け方へ倒す）。
+    pub measured_below_is_always_on_top: bool,
 }
 
 /// 是正の挿入位置。
@@ -290,8 +296,9 @@ pub(crate) enum InsertSpec {
     TopEdge,
     /// 通常帯（常時最前面ではない窓の帯）の最上へ（`ZOrder::Top` へ写像）。
     ///
-    /// 実測した挿入位置が**常時最前面の窓**だったときに選ぶ。その窓のすぐ背後へ入れると
-    /// 対象窓まで帯へ引き込まれてしまうため（要件 8.1 の毀損）、帯の中の窓は指さずに
+    /// 実測した挿入位置が**常時最前面の窓**で、キャラ窓が帯の外に居るときに選ぶ（キャラも
+    /// 帯に居れば帯の中ですぐ手前に置けるので [`InsertSpec::After`] になる）。その窓のすぐ
+    /// 背後へ入れると対象窓まで帯へ引き込まれてしまうため（要件 8.1 の毀損）、帯の中の窓は指さずに
     /// 通常帯の最上——すなわち帯のすぐ背後——へ置く。キャラ窓が通常帯の最上に居るのが
     /// この分岐の起きる形なので、結果としてバルーンはキャラのすぐ手前に入る（要件 1.2）。
     ///
@@ -361,11 +368,19 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     // `hWndInsertAfter` はその窓の**すぐ背後**へ対象を置くので、間に挟まっていた不可視窓
     // （OS が owner の直上に置く補助窓）より**手前**に入る。
     //
-    // ただしその窓が常時最前面の帯に居る場合だけは、指すと対象まで帯へ引き込まれる
-    // （要件 8.1 の毀損）。帯の中の窓は指さず、帯のすぐ背後＝通常帯の最上へ置く。
+    // ただしその窓が常時最前面の帯に居て、キャラが帯の外に居る場合だけは、指すと対象まで
+    // 帯へ引き込まれる（要件 8.1 の毀損）。帯の中の窓は指さず、帯のすぐ背後＝通常帯の最上へ置く。
+    // キャラも帯に居るなら、その帯の窓のすぐ背後が帯の中でのキャラのすぐ手前である
+    // （stay-on-top-directives 要件 2.4）。帯の窓の手前の窓は必ず帯の窓なので、`After` が
+    // 帯の外の窓を帯へ引き込むことは無く、返り値に帯へ入れる指定は要らない。
     let place_above = PairFixDecision::PlaceAboveOverBelow {
         insert_after: match obs.measured_above_of_below {
-            Some(_) if obs.measured_above_of_below_is_always_on_top => InsertSpec::TopOfNormalBand,
+            Some(_)
+                if obs.measured_above_of_below_is_always_on_top
+                    && !obs.measured_below_is_always_on_top =>
+            {
+                InsertSpec::TopOfNormalBand
+            }
             Some(front_of_below) => InsertSpec::After(front_of_below),
             None => InsertSpec::TopEdge,
         },
@@ -607,6 +622,27 @@ pub(crate) fn measure_window_is_always_on_top(hwnd: HWND) -> bool {
                 message = err.message(),
             );
             true
+        }
+    }
+}
+
+/// 背後側（キャラ窓）**自身**が常時最前面の帯に居るかを実測する。
+///
+/// 結果は [`PairObservation::measured_below_is_always_on_top`] に載る。読み取りに失敗した
+/// 場合は**帯の外として扱う**（`false` へ倒す）——[`measure_window_is_always_on_top`] と逆向き
+/// なのは、こちらの真が「帯の窓を挿入位置に指してよい」を開くためである。偽へ倒せば判断は
+/// 今の避け方（通常帯の最上）に留まり、帯の外のキャラのバルーンを帯へ引き込まない（要件 3.3）。
+pub(crate) fn measure_below_is_always_on_top(hwnd: HWND) -> bool {
+    match is_window_always_on_top(hwnd) {
+        Ok(is_top) => is_top,
+        Err(err) => {
+            warn!(
+                "キャラ窓が常時最前面かを読めませんでした（帯の外として扱います） hwnd={hwnd} error={code:?} message={message}",
+                hwnd = hwnd_field(Some(hwnd)),
+                code = err.code(),
+                message = err.message(),
+            );
+            false
         }
     }
 }

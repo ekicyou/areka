@@ -5,7 +5,7 @@
 //!
 //! 判断そのものが常時最前面を返さないこと（返り値の型にその値が存在しないこと）は
 //! `zorder_pair_tests.rs` の
-//! `decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top` が既に固定して
+//! `decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_character_in_the_band` が既に固定して
 //! いる。本ファイルが受け持つのは**窓の側**である——実際の窓を作り、確立系と維持系を
 //! 通したあとに OS から拡張スタイルを読み戻して、常時最前面の印が付いていないことを
 //! 測る。判断の型が正しくても、適用の経路（`SetWindowPos` の挿入位置）が窓を常時最前面の
@@ -590,6 +590,8 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
         measured_above_of_below: Some(foreign_top),
         // 実測層が測った帯の所属（本テストでは代役の窓から実際に読み取る）
         measured_above_of_below_is_always_on_top: measure_window_is_always_on_top(foreign_top),
+        // ペアは帯の外で始まる（今の振る舞い）
+        measured_below_is_always_on_top: false,
     };
     let PairFixDecision::PlaceAboveOverBelow { insert_after } = decide_pair_fix(&observation)
     else {
@@ -670,6 +672,8 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
         measured_below_of_above: None,
         measured_above_of_below: Some(foreign_top),
         measured_above_of_below_is_always_on_top: measure_window_is_always_on_top(foreign_top),
+        // ペアは帯の外で始まる（今の振る舞い）
+        measured_below_is_always_on_top: false,
     };
     assert_eq!(
         decide_pair_fix(&observation),

@@ -498,7 +498,7 @@ pub(crate) fn expected_band(op: BandOp) -> Option<bool>;
 
 #### PairFixBandCondition（`zorder_pair.rs`・`zorder_pair_maintain.rs`）
 
-- `PairObservation` に `measured_below_is_always_on_top: bool`（キャラクターが帯に居るか）を足す。維持の系が `measure_window_is_always_on_top(キャラクター)` で測り、測れなければ `false`（今の避け方へ倒す）。
+- `PairObservation` に `measured_below_is_always_on_top: bool`（キャラクターが帯に居るか）を足す。維持の系が `measure_below_is_always_on_top(キャラクター)`（`zorder_pair.rs`・読み取りに失敗したら `warn!` を出して `false`）で測り、測れなければ `false`（今の避け方へ倒す）。挿入位置の窓を測る `measure_window_is_always_on_top` は失敗を `true` に倒すので使わない。
 - 手前に置く腕の決め:
 
 | キャラクターの手前の窓 | 手前の窓が帯 | キャラクターが帯 | 決め |
@@ -624,7 +624,7 @@ impl ZOrderGroupLedger {
 | G1 | wintf の語の走査（`zorder_pair_deferred_vocabulary_tests.rs`） | 語の表を 2 つに分ける。`minimize`・`iconic`・`onwindowstate`・`onfullscreenapp`・`appwindow`・`taskbar` は「先送りの語」のまま（持ち主 `tasktray-minimize` ほか）。`topmost`・`stayontop`・`windowstate` は「帯を書くのは `window_band.rs` だけ」の語へ言い直し、`zorder_*` の本番ファイルに無いことを主張し続ける。対照として `window_band.rs` のコードに `HWND_TOPMOST` が在ることを足す。注記の行番号（`api.rs:126`）を直す |
 | G2 | areka の語の走査（`spawn_zorder_pair_deferred_tests.rs`） | G1 と同じ分け方。帯の語の持ち主は `emo2_boot/window_state_cue.rs`・`emo2_boot/frame/window_state.rs`。既定のスタイルに `WS_EX_TOPMOST` が無いことの主張は残す |
 | G3 | `spawn_assembly_tests.rs` の `t_i2_no_window_has_ws_ex_topmost` | 残す（起動の作りはオフ）。注記を「既定はオフ・オンは印と窓の作りで足す」へ |
-| G4 | `decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top` | 観測の行列に新しい欄を足す。「帯の外のキャラクターに帯の窓を基準に選ばない」「キャラクターが帯なら手前の帯の窓の後ろ」を主張へ。名前を中身に合わせる |
+| G4 | `decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top`（改名後 `decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_character_in_the_band`） | 観測の行列に新しい欄を足す。「帯の外のキャラクターに帯の窓を基準に選ばない」「キャラクターが帯なら手前の帯の窓の後ろ」を主張へ。名前を中身に合わせる |
 | G5 | `zorder_pair_maintain_always_on_top_tests.rs` | オフの主張（確立と維持が帯の印を付けない・帯の外の組は帯の外のまま）は残す。注記「本番の経路へ常時最前面の指定を持ち込まない」を「組と鎖は帯を書かない・帯は `window_band.rs`」へ。上の 1 件を足す |
 | G6 | `consumer_ledger_tests.rs:94`・`:138-148` | 「担当なし」と「後から別の担当を足せる」の例の選別子を表に無い語へ替える |
 | G7 | 手書きの数（`consumer_ledger_tests.rs:298`）と `consumer_ledger.rs` の一覧 | 着地のときの値に 2 を足す。一覧に 2 行 |
