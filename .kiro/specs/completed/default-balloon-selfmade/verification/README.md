@@ -9,7 +9,7 @@
 | 1.4 手本の絵を写さない | 引き継ぐのは数値だけ（書体・色・寸法など） | `requirements.md` の「議題の確定」の「議題 4 引き継ぐ値」 |
 | 6.1 SSP での `validrect.right,0` の測り | 手順・結果・ukadoc の項 | `requirements.md` の「SSP での測り（2026-10-29・要件 6.1）」 |
 | 6.1 撮った絵 | SSP の「ボトル（でふぉ改）」の面 0 | このフォルダの `ssp-bottle-validrect-right0.png` |
-| 6.4 areka の 0 の読みの直しの引き受け | `real-run-log-noise` が引き受けた（2026-10-29・起票は不要） | `requirements.md` の「Requirement 6」の 6.4 の「結果」・`.kiro/specs/real-run-log-noise/` |
+| 6.4 areka の 0 の読みの直しの引き受け | `real-run-log-noise` が引き受けた（2026-10-29・起票は不要） | `requirements.md` の「Requirement 6」の 6.4 の「結果」・`.kiro/specs/completed/real-run-log-noise/` |
 | 3.7 印の spec への申し送り | オンラインの印・矢印・SSTP の印の検体ができたこと | `.kiro/specs/balloon-markers/brief.md` の「2026-10-29 `default-balloon-selfmade` からの申し送り」 |
 
 ## 実装の段の記録

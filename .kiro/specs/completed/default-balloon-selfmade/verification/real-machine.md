@@ -60,7 +60,7 @@
 
 1. **`cursor.blendmethod` の WARN が 1 回あたり 3 万〜6 万行あふれる → areka の欠陥・`real-run-log-noise` 件 2 で起票済み。**
    - `areka-balloon` の `cursor.blendmethod,mergepennot` は手本のバルーンの値（research.md 10.2）で、正典の値なので、バルーンは変えない。
-   - areka が、この値を none 扱いへ縮退したことを毎フレーム記録するのが欠陥である（1 回だけ出すはず）。同じ件が、生きている spec `.kiro/specs/real-run-log-noise/`（`completed/` でない）に起票済み。場所は brief の「どっとさくらで見えた事実」の節で、`bottle` で `cursor.blendmethod` の WARN が毎フレーム出る件である（根拠は完了 `areka-P0-dot-sakura-specimen` の verification.md 8 節の件 2）。重ねて起票しない。
+   - areka が、この値を none 扱いへ縮退したことを毎フレーム記録するのが欠陥である（1 回だけ出すはず）。同じ件が、生きている spec `.kiro/specs/completed/real-run-log-noise/`（`completed/` でない）に起票済み。場所は brief の「どっとさくらで見えた事実」の節で、`bottle` で `cursor.blendmethod` の WARN が毎フレーム出る件である（根拠は完了 `areka-P0-dot-sakura-specimen` の verification.md 8 節の件 2）。重ねて起票しない。
    - 測った数: emo2 100% 34,264 件・emo2 200% 40,504 件・どっとさくら 100% 62,044 件・どっとさくら 200% 44,676 件。
 2. **面の縮退の WARN は 1 回あたり 6 件 → 今の作りどおり（崩れではない）。**
    - 相方側は面 0・1 しか持たない（要件 2.2）ので、面 2・3 が本体側の系列へ縮退する 2 件が、装着のたびに出る。

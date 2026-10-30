@@ -7,10 +7,13 @@
 // （`register_actor_binding`／`refresh_actor_binding` は純粋な導出と HashMap 更新のみ）。
 
 use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
+    WordWrapPoint,
 };
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::prelude::World;
+use log_capture_kit::{CapturedEvent, capture};
+use tracing::Level;
 
 use super::test_support::spawn_reserved_slot;
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
@@ -226,5 +229,89 @@ fn resolve_is_resolve_with_a_white_background() {
         ResolvedBalloonText::resolve(&model, NATIVE),
         ResolvedBalloonText::resolve_with_background(&model, NATIVE, DEFAULT_BALLOON_BACKGROUND),
         "背景を知らない呼び手は白で解決する"
+    );
+}
+
+// ══ spec real-run-log-noise 要件 2.1〜2.4・5.1: 選択肢の飾りの警告は置き場ごとに値が決まったときだけ ══
+
+/// ROP 系の飾りの警告の文言（今のまま 1 文字も変えない）。
+const ROP_FALLBACK: &str = "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";
+/// 下線系の飾りの警告の文言（今のまま 1 文字も変えない）。
+const UNDERLINE_FALLBACK: &str = "cursor.style underline 系は M1 未対応: SquareFill へ縮退";
+
+/// `cursor.style` と `cursor.blendmethod` を書いたバルーン（色は在る＝未指定バルーンでない）。
+fn cursor_model(style: &str, blendmethod: &str) -> BalloonModel {
+    styled_model().with_cursor(BalloonCursor::new(
+        Some(style.to_string()),
+        CursorColor::new(Some(105), Some(25), Some(25)),
+        CursorColor::new(None, None, None),
+        CursorColor::new(Some(255), Some(255), Some(255)),
+        Some(blendmethod.to_string()),
+    ))
+}
+
+/// 本文が `message` の `warn` だけを拾う。
+fn warns<'a>(events: &'a [CapturedEvent], message: &str) -> Vec<&'a CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.level == Level::WARN && e.message() == message)
+        .collect()
+}
+
+/// T4（要件 2.1〜2.4・5.1）: ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
+/// 1 件ずつ（`balloon` の欄が入れた名前）。値の同じ再追従 3 回で 0 件、拡大率の変わる再追従でも
+/// 0 件、`blendmethod` だけ `xor` に替えた再追従で ROP 系だけ 1 件。
+///
+/// 較正: 前の値を直の登録口の後に読む誤りを再現すると、拡大率の変わる再追従（作り直し）で
+/// 2 件とも出直して赤になる。
+#[test]
+fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
+    let mut world = World::new();
+    let (bind, actor) = binding(&mut world);
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.set_balloon_label(&actor, "飾りの検体".to_string());
+    let model = cursor_model("underline", "mergepennot");
+
+    let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), bind, &model));
+    let rop = warns(&attached, ROP_FALLBACK);
+    let underline = warns(&attached, UNDERLINE_FALLBACK);
+    assert_eq!(rop.len(), 1, "装着で ROP 系の warn が 1 件");
+    assert_eq!(underline.len(), 1, "装着で下線系の warn が 1 件");
+    assert_eq!(rop[0].field_str("balloon"), Some("飾りの検体"));
+    assert_eq!(rop[0].field_str("blendmethod"), Some("mergepennot"));
+    assert_eq!(underline[0].field_str("balloon"), Some("飾りの検体"));
+    assert_eq!(underline[0].field_str("style"), Some("underline"));
+
+    let (answers, same) = capture(|| {
+        (0..3)
+            .map(|_| rt.refresh_actor_binding(&actor, bind, &model))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(answers, vec![false; 3]);
+    assert_eq!(
+        warns(&same, ROP_FALLBACK).len() + warns(&same, UNDERLINE_FALLBACK).len(),
+        0,
+        "値の同じ再追従 3 回で 0 件"
+    );
+
+    let (window, slot) = (bind.window, bind.slot);
+    let scaled = TextSlotBinding::new(slot, window, 1.5, (600, 336), NATIVE);
+    let (answer, rescaled) = capture(|| rt.refresh_actor_binding(&actor, scaled, &model));
+    assert!(answer, "拡大率の変わる再追従は作り直す");
+    assert_eq!(
+        warns(&rescaled, ROP_FALLBACK).len() + warns(&rescaled, UNDERLINE_FALLBACK).len(),
+        0,
+        "拡大率の変わる再追従でも飾りの値は同じなので 0 件"
+    );
+
+    let xor = cursor_model("underline", "xor");
+    let (_, changed) = capture(|| rt.refresh_actor_binding(&actor, scaled, &xor));
+    let rop = warns(&changed, ROP_FALLBACK);
+    assert_eq!(rop.len(), 1, "blendmethod だけ替えると ROP 系だけ 1 件");
+    assert_eq!(rop[0].field_str("blendmethod"), Some("xor"));
+    assert_eq!(
+        warns(&changed, UNDERLINE_FALLBACK).len(),
+        0,
+        "下線系は 0 件"
     );
 }
