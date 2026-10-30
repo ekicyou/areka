@@ -149,7 +149,7 @@
   - _Boundary: BalloonFlip_
   - _Depends: 4.2_
   - _Requirements: 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 7.2, 7.8, 10.1_
-- [ ] 5.2 押し込みだけを期待していた今のバルーンの檻の前提を合わせる
+- [x] 5.2 押し込みだけを期待していた今のバルーンの檻の前提を合わせる
   - キャラ窓が作業領域に収まり、バルーンだけが横にはみ出し、映した位置が入る形で押し込みを期待していた檻を、`cargo test -p areka --bin areka` の赤から挙げる。grep で当たった候補: `placement/balloon_limit_gate_tests.rs`・`placement/follow_balloon_limit_tests.rs`・`placement/placement_windowposition_tests.rs`・`placement/follow_visibility_balloon_wiring_tests.rs`・`placement/follow_visibility_guard_tests.rs`・`placement/follow_drag_tests.rs`・`placement/spawn_assembly_tests.rs`・`input_events/balloon_wiring_tests.rs`・`ghost_session_scope_rect_tests.rs`・`mcp/get_property_tests.rs`
   - 押し込みを主張する檻は、前提（キャラ窓を作業領域の外へ出す・作業領域を狭めて両方の側に入らなくする・縦だけはみ出させる）だけを合わせて押し込みの主張を保つ。並べ替えの主張は 5.1 の檻に置き、ここでは足さない。式そのもの（`balloon_limit_tests.rs`）と解放の補正（`follow_drag_end_limit_tests.rs`）の檻は変えない
   - 合わせた檻と合わせ方が実装の記録に残り、areka のテストが全部緑になる
@@ -197,3 +197,8 @@
     - ⑷ `25.318 Keep 組の決めで動かさない窓 scene="boot-repack" scope=1 reason="explicitly-placed" at={x:1392,y:904}`（直前の `move_applied scope=1 k=2/1 base_left=2064 base_top=610 base_right=2828 base_bottom=1704 to_x=1392 to_y=904`）
 - 組 5 の決めごと（2026-10-30・開発者が推奨どおり一括承認）: ① 5.1 で `window_move.rs` の書き込み時の関門の呼び出しを 1 つ差し替え、記録の欄を足すことを認める（10-29 の「呼ぶ 1 文と注記 1 行」の約束の外）② 反対の側での横のずらしは ukadoc どおり（シェルへ向かう向き・両側で同じ距離）、測っていない点として記録し、初期配置（`resolver.rs` P5）との食い違いは完了の棚卸で起票 ③ 縦の位置は保つ ④ 利用者がドラッグで動かしたバルーンも、はみ出せば並べ替える。
 - 5.1 の後、押し込みを期待していた檻 13 本が並べ替えで赤（balloon_limit_gate_tests 5・follow_balloon_limit_tests 7・main_restore_seam_tests の restore_seam_clamps_balloon_display_position_but_keeps_offset_raw 1）。5.2 で前提を合わせる。window_move.rs の 984 行目付近の doc の `[limit_correction]` へのリンクが切れているので 5.2 で言い直す。
+- 5.2 で合わせた檻 13 本と合わせ方（期待値・相対の位置・記録の欄・基準の作業領域の主張は 1 つも変えていない。前提だけを変えて押し込みの道を通す）:
+  - `balloon_limit_gate_tests.rs` の 5 本（boot_gate_clamps_display_position_and_keeps_offset_raw・boot_gate_logs_only_for_scopes_it_actually_moved（scope 1）・boot_gate_skips_scopes_with_limit_disabled（両 scope）・boot_gate_uses_work_area_of_monitor_owning_char_window・boot_gate_never_touches_balloon_offset_on_any_edge）: 新しい道具 `char_overflowing` でキャラ窓の縦を 600 → 800 にし、下辺からはみ出させた。キャラ窓がはみ出しているときは並べ替えず押し込む（要件 5.6）。中心は域内なので帰属モニタは変わらない。
+  - `follow_balloon_limit_tests.rs` の 6 本（enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true・follow_balloon_clamps_for_every_trigger・resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area・runtime_gate_result_is_identical_for_hidden_and_visible_balloons・undetermined_balloon_size_warns_but_an_explicit_size_still_clamps・the_window_move_record_carries_the_corrected_position_and_the_original_route）: 新しい道具 `char_overflowing_world` でキャラ窓の縦を 600 → 640 にし、下辺（1043）からはみ出させた（要件 5.6）。the_reference_work_area_is_the_one_the_char_window_belongs_to の 1 本は、その場でキャラ窓の縦を 720 にし、左モニタの下辺からはみ出させた（要件 5.6）。
+  - `main_restore_seam_tests.rs` の restore_seam_clamps_balloon_display_position_but_keeps_offset_raw: キャラ窓をはみ出させると復元の寄せで `char_pos` が変わるため、作業領域の右端を 1920 → 450 に狭めた。キャラ窓（30〜430）は収まり、映したバルーン（280〜480）も右へはみ出すので押し込みになる（要件 5.5）。
+  - あわせて `window_move.rs` の `apply_balloon_limit_gate` の doc の切れたリンク `[limit_correction]` を `place_balloon_in_work_area` の `BalloonPlace::Fits` の説明へ言い直した（doc だけ）。

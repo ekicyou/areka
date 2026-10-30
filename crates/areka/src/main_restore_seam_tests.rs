@@ -216,11 +216,14 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     // 既定は保存値と別位置（保存値優先＝合流順序の証明のため）。
     let default_char_pos = PointPx { x: 900, y: 200 };
     let placements = vec![synthetic_placement(default_char_pos)];
+    // 作業領域の右端は 450（window-work-area-clamp task 5.2 の前提合わせ）: キャラ窓
+    // (30,300)-(430,900) は収まるが、反対の側へ映したバルーン (280,310)-(480,610) も右へ
+    // はみ出すので並べ替えず今の押し込みになる（要件 5.5）。
     let snapshot = MonitorSnapshot {
         work_areas: vec![RectPx {
             left: 0,
             top: 0,
-            right: 1920,
+            right: 450,
             bottom: 1080,
         }],
     };
