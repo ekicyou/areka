@@ -250,7 +250,7 @@ fn one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0() {
     );
     // 控えは `AREKA_PROFILE_DIR` の下に書かれた（環境を読む口から控えまでの通し）。
     assert!(cache_dir.join("server-info.json").is_file());
-    // 要件 3.9: 控えのフォルダは `target` の下で、起動のときにはまだ無いので、箱かどうかは見分けられない。
+    // 要件 3.9: 控えのフォルダは `target` の下で `LOCALAPPDATA` の下ではないので、箱かどうかは見分けられない（`why="not_under_local_app_data"`）。
     // その 1 件は環境を読む口が 1 回だけ出し、`main.rs` の候補の行より前に並ぶ。
     const B2: &str = "[bridge] cannot tell whether writes under LOCALAPPDATA are redirected";
     assert_eq!(stderr.matches(B2).count(), 1, "stderr: {stderr}");

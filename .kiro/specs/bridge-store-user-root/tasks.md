@@ -4,7 +4,7 @@
 > 1.1〜1.2 と 6.2 のあいだも、Claude Desktop は開発者の本物の中継を起こしたままで、その中継が箱の中の `areka\mcp-bridge\` へ控えを書きうる。測りの数は検体を起こす直前と直後の箱の木の差だけで数え、本物の中継が書いた `areka\mcp-bridge\` の下の物は「裏の書き」として分けて記録する。戻すときは、箱の中にできた `areka\`（本物の中継のものも測りのものも）を消してから、控えた物を戻し、測る前の写しと比べる。
 > 測りの検体・控え・一時フォルダは、どれもワークツリーの `target\bridge-store-measure\` の下だけに置く。Claude Desktop の設定の向け直しと起動し直しは開発者に頼み、自分では行わない。止めるプロセスは自分で起こしたと確かめたものだけ。
 
-- [ ] 1. 直す前の実機の測り（M-1）
+- [x] 1. 直す前の実機の測り（M-1）
 - [x] 1.1 直す前の検体を組み、測る前の形を写して控える
   - 直す前のコード（ワークツリーの今の先頭）で `areka.exe` と中継を建て、`target\bridge-store-measure\before\` に、2 つの exe・空の winget の控えのファイル・中身の決まった exe の隣の記憶（`profile\areka\sylphya.toml`）を並べる
   - PowerShell の道具（箱の外の見え方）から、箱の中の `LocalCache\Local\areka\` と本当の `%LOCALAPPDATA%\areka\` の木と、検体の exe の隣の記憶の SHA256 を写し取る
