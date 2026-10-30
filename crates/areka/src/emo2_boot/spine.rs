@@ -90,7 +90,7 @@ use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    Emo2Wiring, KanadeNoticeRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
+    Emo2Wiring, KanadeNoticeRx, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with,
     run_text_phase, run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, PositionCue};

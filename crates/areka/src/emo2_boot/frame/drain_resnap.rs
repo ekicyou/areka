@@ -31,6 +31,7 @@ use crate::placement::sticky_group_ledger::{
     StickyGroupLedger, apply_reset_sticky, apply_set_sticky,
 };
 
+use super::move_hold::{ShownRatioSource, release_ready};
 use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 
 // ---------------------------------------------------------------------------
@@ -132,25 +133,42 @@ pub(super) fn drain_present_commands(
 /// `placement` の各関数（areka-P0-window-link-directives）。
 ///
 /// `PresentBridge`（[`run_drain_phase`]）と同型の跨ぎパターンだが、ゲートは `attached`（GPU）でなく
-/// **`GhostWindows` の存在**である——move は GPU 表示層でなくキャラ窓 entity（`GhostWindows` が spawn 時
-/// に生成）へ作用するため、GPU attach を待つ必要がない。`GhostWindows` 未挿入の間はチャネルが保留
-/// バッファを兼ね（[`Receiver::try_iter`] を呼ばず取りこぼさない）、窓が生成された最初のフレームで
-/// 一括適用する（OnFirstBoot の位置調整を早期に取りこぼさないための buffering・present drain の
-/// 「attach 前は保留」と同じ意図）。
+/// **指令ごとの預かり**である（window-work-area-clamp design「MoveHold」・要件 6.2／6.3／6.4）。
+/// `\![move]` は動かす窓と基準の窓（`--base`）の両方が最初の面を表示して拡大率が取れるまで預かる
+/// （判定は兄弟の [`release_ready`]）。GPU の装着だけを待つ形は取らない——装着の後でも最初の `\s` の
+/// 前の窓は表示の前の仮の矩形のままで、そこを基準に当てると表示の後の照合で隙間が残る（research 12 節）。
+/// 預かった指令に関わる窓への後の指令は追い越さず、関わりの無い窓の指令は先に当てる。窓が表示した巡では
+/// 同じ巡の表示の指令・窓寸の照合・再スナップの後に当たる（本相の置き場がそれらの後ろ）。
+/// `GhostWindows` 未挿入の間はチャネルが保留バッファを兼ねる（[`Receiver::try_iter`] を呼ばず取りこぼさない）。
 ///
 /// 各指令の適用は [`apply_move_directive`]／[`reset_window_positions`] が完結させる: 窓/`WindowPos`/
 /// 作業領域/主モニタ/並べ直しの材料の不在はいずれも同関数内で `warn!`＋`false`（log-first・非 panic・R5.5）ゆえ、本フェーズは
 /// 戻り値を捨てて次 directive へ進む（1 件の縮退が他 directive・talk を巻き込まない）。`try_iter` は
 /// チャネルが空か全送信端 drop で尽きる（ブロックしない・empty/disconnected でも panic しない）。
 pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
+    run_move_drain_with(wiring, &wiring.presenter, world);
+}
+
+/// [`run_move_drain_phase`] の本体（表示の拡大率を読み口で受ける形・GPU 無しの檻へ入れるためのシーム）。
+pub(crate) fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
+    wiring: &Emo2Wiring,
+    shown: &S,
+    world: &mut World,
+) {
     // GhostWindows 未挿入の間はチャネルが保留バッファを兼ねる（try_iter を呼ばず取りこぼさない）。
-    // 窓生成後の最初のフレームで一括適用する（OnFirstBoot 移動の早期取りこぼし防止・present drain と同意図）。
-    if world.get_resource::<GhostWindows>().is_none() {
+    let Some(windows) = world.get_resource::<GhostWindows>() else {
         return;
-    }
-    // try_iter: 現時点でキュー済みの PositionCue を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
-    // wiring.move_rx（shared 借用）と world（mut 借用・別オブジェクト）は互いに素ゆえ両立する。
-    for cue in wiring.move_rx.try_iter() {
+    };
+    // 前の巡から預かった指令を先に、この巡に届いた指令（try_iter・非ブロック）を後に、順のまま判定する。
+    // 当てない指令は預かりの列へ順のまま戻る（取りこぼさない）。wiring は shared 借用ゆえ列は RefCell。
+    let ready = release_ready(
+        &mut wiring.move_held.borrow_mut(),
+        wiring.move_rx.try_iter(),
+        windows,
+        shown,
+        world.get_resource::<StickyGroupLedger>(),
+    );
+    for cue in ready {
         let directive = match cue {
             PositionCue::Move(directive) => directive,
             // 並べ直しは拡大率の値を読まない（今の窓の大きさがすでに今の拡大率で描いた大きさ・
@@ -189,20 +207,11 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
         // 導出しただけで適用に失敗した k は漏れてこない。k はこの 1 か所からだけ取り、モニタの DPI から
         // 計算し直さない（将来の利用者の倍率もこの値に含めれば追従する・research §13 議題 1）。
         //
-        // 表示未成立（初回 ShowSurface 前）・未登録 target は `None`。このとき恒等へ縮退する——
-        // まだ拡大が掛かっていない状態であり、従来（k 非適用）と同じ値になる安全側の既定である。
-        let k = wiring
-            .presenter
-            .applied_ratio(shell_target(directive.scope))
-            .unwrap_or_else(|| {
-                // 件 5 の測り（MoveMeasure・要件 6.1）: 表示の前に指令が当たったかを記録で読む。
-                info!(
-                    event = "move_ratio_unset",
-                    scope = directive.scope,
-                    "表示の前なので \\![move] を拡大率 1 で当てる"
-                );
-                ScaleRatio::ONE
-            });
+        // 預かりを抜けた移動は拡大率が取れている。取れないのは窓の無いスコープだけで（待っても表示されない）、
+        // そのとき当てる側が窓の不在を warn! で残すので、ここは恒等で渡す。
+        let k = shown
+            .shown_ratio(directive.scope)
+            .unwrap_or(ScaleRatio::ONE);
         // 適用の全縮退（窓・作業領域・主モニタの不在）は apply_move_directive 内で warn!＋false 済み
         // （log-first・R5.5）。戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
         apply_move_directive(world, &directive, k);

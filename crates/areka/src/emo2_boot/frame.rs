@@ -44,6 +44,8 @@ mod attach;
 mod balloon_offset_follow;
 mod dpi;
 mod drain_resnap;
+// 位置の指令の預かり（window-work-area-clamp design「MoveHold」）。
+mod move_hold;
 mod scale_text;
 pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
@@ -124,7 +126,13 @@ use super::target_map::{balloon_target, shell_target};
 pub use self::attach::{AttachPlan, PlannedAttach, plan_attachments, run_attach_phase};
 pub use self::dpi::run_dpi_phase;
 pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
+// 表示の拡大率を読み口で受ける move drain（GPU 無しの檻が窓を「表示した」前提で流すためのシーム）。
+#[cfg(test)]
+pub(crate) use self::drain_resnap::run_move_drain_with;
 pub use self::scale_text::{run_text_phase, run_text_scale_phase};
+// 窓がどれも表示した前提の読み口（spine の檻も同じものを使う）。
+#[cfg(test)]
+pub(crate) use self::test_support::all_shown;
 pub use self::wiring::Emo2Wiring;
 pub use self::zorder_drain::run_zorder_drain_phase;
 
@@ -367,7 +375,9 @@ pub fn emo2_frame_system(world: &mut World) {
     // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた PositionCue を drain し、`Move` は
     // apply_move_directive で実窓へ即時反映し、`ResetWindowPos` は並べ直しの手続きへ渡す
     // （GhostWindows ゲート・R5・task 9.2・areka-P0-move-canon 3.2）。present drain とは独立で、GPU
-    // attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
+    // attach は待たず、`\![move]` ごとに対象と基準の窓が最初の面を表示するまで預かる
+    // （window-work-area-clamp design「MoveHold」・`frame/move_hold.rs`）。表示した巡では、上の
+    // 表示の指令・窓寸の照合・再スナップの後に当たる。
     // resnap の**後**に置く（areka-P0-move-canon design D4・要件 2.5／2.12）: 同じフレームで表示の面の
     // 大きさが変わったとき、移動は再スナップが書いた**新しい大きさ**で位置を決める。前に置くと古い
     // 大きさで右下などをそろえ、続く再スナップが下端中央を保って大きさだけ変えるので位置がずれる。
@@ -486,6 +496,12 @@ mod work_area_resnap_hold_tests;
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_move_order_tests.rs"]
 mod move_order_tests;
+
+// 位置の指令の預かり（window-work-area-clamp task 3.3・design MoveHold）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_hold_tests.rs"]
+mod move_hold_tests;
 
 // 窓の組・吸着・バルーン位置初期化の指令が位置の線で当たる檻（areka-P0-window-link-directives task 6）。
 #[cfg(all(test, target_pointer_width = "64"))]

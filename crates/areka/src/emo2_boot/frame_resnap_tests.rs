@@ -1,4 +1,4 @@
-use super::test_support::{FakeSizes, pos_of, resnap_world, size_of};
+use super::test_support::{FakeSizes, all_shown, pos_of, resnap_world, size_of};
 use super::*;
 
 // ── task 3.2: resnap シーム（resnap_from_sizes／resnap_shell_targets）の檻 ────────
@@ -393,7 +393,8 @@ fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
     // scope0 は y=757 の 434×687（下端 1444＝作業領域の下端）から 434×900 へ。
     let sizes = PerTargetSizes::new([(0, Some((434, 900))), (1, Some(SPAWN_SIZE_1))]);
     harness.run_resnap(&sizes);
-    run_move_drain_phase(&wiring, &mut harness.world);
+    // 前提: 窓はどれも最初の面を表示済み（位置の指令を預からない）。
+    run_move_drain_with(&wiring, &all_shown, &mut harness.world);
     harness.run_chain_finalize(&sizes);
 
     let clamped = Point {

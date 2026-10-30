@@ -6,7 +6,8 @@ use crate::emo2_boot::move_cue::MoveDirective;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 
 use super::test_support::{
-    capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, synth_assets, zero_clock,
+    all_shown, capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, synth_assets,
+    zero_clock,
 };
 use super::*;
 
@@ -288,7 +289,8 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 
-    run_move_drain_phase(&wiring, &mut world);
+    // 前提: 対象と基準の窓は最初の面を表示済み（位置の指令を預からない）。
+    run_move_drain_with(&wiring, &all_shown, &mut world);
 
     // channel→drain→apply→move_window_to で対象窓が fixture 検算位置へ即時移動する。
     assert_eq!(
@@ -331,7 +333,8 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 
-    let logs = capture_logs(|| run_move_drain_phase(&wiring, &mut world));
+    // 前提: 対象と基準の窓は最初の面を表示済み（位置の指令を預からない）。
+    let logs = capture_logs(|| run_move_drain_with(&wiring, &all_shown, &mut world));
 
     assert_eq!(
         logs.iter()
@@ -348,13 +351,15 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     assert!(wiring.drain_move_directives().is_empty(), "全件消費");
 }
 
-/// 件 5 の測り（window-work-area-clamp 3.1・要件 6.1）: 表示の前（`applied_ratio` が無い）の指令は
-/// `move_ratio_unset` をスコープつきで残し、当てた記録には拡大率と動かす窓の大きさが載る。
+/// 件 5 の測り（window-work-area-clamp 3.1・要件 6.1）と預かり（3.3・design MoveHold）: 表示の前
+/// （`applied_ratio` が無い）の指令は当てずに預かり、`move_ratio_unset` をスコープつきで 1 行だけ残す。
+/// 窓が表示した後の巡で当たり、当てた記録には拡大率と動かす窓の大きさが載る。
 ///
-/// target scope1 は (1049,1087,278,357)。表示していない presenter ゆえ k は 1。
+/// target scope1 は (1049,1087,278,357)。表示の後の k は 1 とする。
 #[test]
 fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
-    let (mut world, _gw) = resnap_world();
+    let (mut world, gw) = resnap_world();
+    let target = gw.char_window(1).unwrap();
     let (tx, rx) = mpsc::channel::<PositionCue>();
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
@@ -371,17 +376,34 @@ fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 
-    let logs = capture_logs(|| run_move_drain_phase(&wiring, &mut world));
+    // 表示していない presenter（拡大率が取れない）→ 預かって記録だけ残す。
+    let before = capture_logs(|| run_move_drain_phase(&wiring, &mut world));
+    let again = capture_logs(|| run_move_drain_phase(&wiring, &mut world));
 
-    let unset: Vec<&String> = logs
+    let unset: Vec<&String> = before
         .iter()
         .filter(|l| l.contains("move_ratio_unset"))
         .collect();
-    assert_eq!(unset.len(), 1, "表示の前の指令は 1 行残す: {logs:?}");
+    assert_eq!(unset.len(), 1, "表示の前の指令は 1 行残す: {before:?}");
     assert!(
         unset[0].contains("level=INFO") && unset[0].contains("scope=1"),
         "info でスコープつき: {unset:?}"
     );
+    assert!(
+        !again.iter().any(|l| l.contains("move_ratio_unset")),
+        "預かり続ける巡ごとには記録しない: {again:?}"
+    );
+    assert!(
+        !before
+            .iter()
+            .chain(&again)
+            .any(|l| l.contains("move_applied")),
+        "表示の前に当たっている"
+    );
+    assert_eq!(pos_of(&world, target), Some(Point { x: 1049, y: 1087 }));
+
+    // 窓が表示した巡で当たる。
+    let logs = capture_logs(|| run_move_drain_with(&wiring, &all_shown, &mut world));
     let applied: Vec<&String> = logs.iter().filter(|l| l.contains("move_applied")).collect();
     assert_eq!(applied.len(), 1, "{logs:?}");
     for field in [
@@ -391,4 +413,8 @@ fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
     ] {
         assert!(applied[0].contains(field), "{field} が無い: {}", applied[0]);
     }
+    assert!(
+        !logs.iter().any(|l| l.contains("move_ratio_unset")),
+        "表示の後の当てでは記録しない: {logs:?}"
+    );
 }

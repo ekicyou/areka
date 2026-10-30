@@ -533,7 +533,7 @@ pub fn restore_and_judge(
 #### MoveMeasure（件 5 の測りの道具・必ず入れる）
 
 - `emo2_boot/move_cue_place.rs` の `move_applied` の記録に `k = ?k`・`target_w`・`target_h`（動かす窓の今の大きさ）を足す。今の記録は拡大率も動かす窓の大きさも出していない（research R4 の確かめの答え）。
-- `run_move_drain_phase` で `applied_ratio(..)` が `None` のとき、`info!(event = "move_ratio_unset", scope, …)` で「表示の前なので拡大率 1 で当てる」を残す。
+- `run_move_drain_phase` で対象か基準の窓の `applied_ratio(..)` が `None` のとき、指令を預けた巡に 1 度だけ `info!(event = "move_ratio_unset", scope, waiting, …)` で「表示の前なので預かる」を残す（MoveHold の H1）。
 - 測りの手順（要件 6.1・8.1 ⑸）: areka は `RUST_LOG` に `info` と `areka::placement::diag=debug`（窓の書き込みの記録）を開け、`kanade` の `boot_*` の行・GPU の装着の行・`move_ratio_unset`・`move_applied`・`Resnap`／`ReportedSizeReconcile` の書き込みの並びを読む。SSP は `ghost\master\ssp_shiori_log.txt` の起動の前のバイト位置を控えて差分を読み、`OnFirstBoot` など起動のイベントの並びと時機を比べる。SSP の初回起動を作る手順と reload は毎回開発者の許しを取り、ウェーブの兄弟に知らせる。検体・記録の置き場はワークツリーの `target\` の下だけ。
 
 #### MoveHold（件 5 の直し・測りで決まった見込みごとの形）
@@ -546,6 +546,7 @@ pub fn restore_and_judge(
 | どれでもない | 上のどれとも合わない | 直しを決めずに止め、測りの結果を記録して開発者へ報告する | — |
 
 - どの形もゴースト・初回起動・特定のイベントを見ない（要件 6.4・7.8）。2 回目以降のトークは窓が表示された後なので、H1 の待ちは何も変えない。
+- 関わる窓（H1）: 移動は対象・基準・連れ動く組の相手、組の作成は名指しの窓、台本の組を解く指令は台本の組の窓、吸着の向き・バルーンの lock は実行者の窓、並べ直しは全部の窓、バルーン位置初期化は預かった吸着の向き・バルーンの lock の窓だけ（窓ごとに自分のキャラ窓の今の位置から置き直し、後の移動がバルーンを連れ動かすので、移動とは入れ替えても同じ）。並べ直しは、それより前に預かった移動を当てずに捨てて `info!(event = "move_hold_superseded")` を残す（並べ直しが全部の窓を既定の位置へ置くので、順のまま当てたのと結果が同じ。捨てないと最初の面を表示しない窓が 1 つで後の全部の指令が預かられ続ける）。
 - H1 の待ちは 1 フレーム遅らせる形ではない: 指令は入力（表示の大きさと拡大率）がそろった巡の、その相で当たる（要件 7.3）。
 
 ## Data Models
