@@ -67,7 +67,7 @@ fn main() -> io::Result<()> {
     } else {
         info!(ports = ?config.candidates, "[bridge] candidates on 127.0.0.1");
     }
-    // 控えを持たないときの理由の 1 件は `Config::from_env`（の内側の `from_inputs`）が出している。
+    // 控えを持たないときの 1 件と箱の行は `Config::from_env` が出している。
     if let Some(dir) = &config.cache_dir {
         info!(dir = %dir.display(), "[bridge] cache dir");
     }

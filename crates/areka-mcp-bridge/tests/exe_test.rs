@@ -250,6 +250,18 @@ fn one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0() {
     );
     // 控えは `AREKA_PROFILE_DIR` の下に書かれた（環境を読む口から控えまでの通し）。
     assert!(cache_dir.join("server-info.json").is_file());
+    // 要件 3.9: 控えのフォルダは `target` の下で、起動のときにはまだ無いので、箱かどうかは見分けられない。
+    // その 1 件は環境を読む口が 1 回だけ出し、`main.rs` の候補の行より前に並ぶ。
+    const B2: &str = "[bridge] cannot tell whether writes under LOCALAPPDATA are redirected";
+    assert_eq!(stderr.matches(B2).count(), 1, "stderr: {stderr}");
+    let b2 = stderr.find(B2).expect("the B2 line");
+    let candidates = stderr
+        .find("[bridge] candidates")
+        .expect("the candidates line");
+    assert!(
+        b2 < candidates,
+        "the B2 line is not before the candidates line: {stderr}"
+    );
 }
 
 /// 要件 5.1・5.2: 要求・通知・空の行・空白だけの行を混ぜて流しても、標準出力は `id` を持つ要求の

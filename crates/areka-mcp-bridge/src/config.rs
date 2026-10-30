@@ -71,12 +71,19 @@ impl Config {
         // 共有の関数が `warn!` を 1 件残して既定の 20 個にする（要件 2.5）。
         let port_value =
             std::env::var_os(areka_mcp::PORT_ENV).map(|v| v.to_string_lossy().into_owned());
-        Config::from_inputs(
+        let local_app_data = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+        let config = Config::from_inputs(
             port_value.as_deref(),
             profile_env.as_deref(),
             areka_dir.as_deref().zip(signals.as_ref()),
-            std::env::var_os("LOCALAPPDATA").map(PathBuf::from),
-        )
+            local_app_data.clone(),
+        );
+        // 箱の見立ては、控えを決めた後に 1 回（読んだのと同じ `LOCALAPPDATA` で・要件 3.5〜3.9）。
+        crate::redirect::report(&crate::redirect::observe(
+            local_app_data.as_deref(),
+            config.cache_dir.as_deref(),
+        ));
+        config
     }
 
     /// [`Config::from_env`] の内側（本物の環境を読まない）。`areka` は隣に areka.exe が在るときの
