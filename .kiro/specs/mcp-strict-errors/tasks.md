@@ -192,3 +192,4 @@
 - 8（2026-10-30 開発者の裁定）: 外の crate はそのまま使う。rmcp のフォーク・`[patch.crates-io]`・上流への PR はしない（直した写しを持つと安全の直しが重くなる）。8.1〜8.3 を「rmcp を先に呼び、415 のときだけ areka が rmcp の型で答える」形に書き直した。
 - 9.4: dola の合図の予定表の組み立てが 2 乗だった（合図ごとに Vec::insert を前の方へ）。`TimedSchedule::insert_each` で 1 回のソートに直した（同じ時刻の先入れ先出しも同じ）。4 MiB の台本の試験は 15 分→4 秒。実機の試験は 1 回目で緑（35.5 秒）。残りは全体テスト（8 の後）。
 - 8.1→8.2: 知らない名前のメソッドに数の params を付けた要求を rmcp が読めてしまい 415 にならないかを、受け口の経路で必ず確かめる（rmcp の CustomRequest の params は Option<Value>）。ヘッダ名と版の綴りは rmcp の公開の定数（HEADER_MCP_PROTOCOL_VERSION・ProtocolVersion::V_2026_07_28）へ寄せられる。
+- 完了時にその場で解決: 5.1 の `areka-emo-text/src/look.rs` のコメントの 0x0C を `\f` の 2 文字に戻した（コメントだけ）。1.3 の `drive::choice_wait_began_tests` の揺れは最終検証の全体テストで再発せず、起票しない。棚卸の数: その場で解決 1 件・起票 0 件。
