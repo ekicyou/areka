@@ -41,7 +41,7 @@
   - emo-compose のテストが全部緑のままである
   - _Requirements: 5.6, 6.3, 6.8, 9.5_
 
-- [ ] 3. 再生表: 働きのコマと呼ばれるだけの animation
+- [x] 3. 再生表: 働きのコマと呼ばれるだけの animation
 - [x] 3.1 (P) 再生表のコマを描くコマと働きのコマに分ける
   - 再生表のコマに働き（描く・開始・停止・ずらす・何もしない）を持たせる。呼び出しの 6 語は相手の列と「1 つを選ぶか」を持ち、待ちを 0 にする。`move` は待ちと X・Y をそのまま持ち、欄 2 を読まない。`insert` と読めない相手は何もしないコマで、待ちは 0
   - 8 語以外の語は今と同じに解き、今と同じ記録を出す。働きのコマには記録なしの未知の合成メソッドを入れ、描く面を持たせない（絵の番号は無し・面の番号として数えない）
@@ -59,7 +59,7 @@
   - 再生表の兄弟テストで、6 種がそれぞれ 1 度だけ出ること、表を使って刻みを回しても増えないこと、が緑になる
   - _Requirements: 2.5, 5.1, 5.3, 5.4, 6.4, 6.5, 6.6, 8.3_
 
-- [ ] 3.3 働きのコマで絵を重ねず、前の絵を残す
+- [x] 3.3 働きのコマで絵を重ねず、前の絵を残す
   - コマの計算の「`-1` で止まる」判定を描くコマの負の番号だけにする（`move,-1,…` で止めない）
   - ある位置以下で最後の描くコマを答える照会を足し、一番上と部品が共有できるようにする
   - 時の流れの兄弟テストで、`move` や呼び出しのコマが今のコマでも前の描くコマ（`base,2` を含む）が選ばれ、描くコマが無ければ欄が外れる、が緑になる
@@ -170,3 +170,4 @@
 - 3.1: 期待を直したテスト: table::tests::only_random_and_bindrandom_are_recorded_others_debug_logged・table::always_tests::combinations_and_other_words_keep_the_debug_arm（11.1）。純 `bind` を使う actor_clock_tests（BIND_ALWAYS）・table_parts_tests の bind の件は「表に載らない」を前提にしておらず（着せ替えのコマは compose の BindSet・一番上の looper は CallOnly を抽選しない・has_animated_parts は描くコマで決まる）期待を変えずに緑。働きのコマは `p.surface_id` を保つので `move,-1,…` の止まりは 3.3 で直す。looper.rs 927・table.rs 926・parts.rs 896・parts_tests.rs 905 行で上限が近い。
 - 申し送り（10-30・animated-surface-log-flood から）: ぱすたの 1400（`bind+random`・pattern0 が閉じた目）が再生していないあいだも pattern0 が静的に描かれ、目が閉じたまま戻らない。あちらが先に main で「`bind+random` は静的に積まない（コマがあるときだけ描く）」を直す。main を取り込むときは `bind_steps.rs` の `BindSteps::build` の `bind+random` の枝を空の手順にして合わせる。
 - 3.2: 8 語の検査は `table_calls.rs` の `check_calls`（表を作る `from_world_and_films` の中で 1 度）。巡回する `insert` は巡回の上のコマごとに 1 件（A↔B で 2 件）。純 `bind` の中の働きのコマは `Inert`（待ち・x・y 0）に書き換える。8.1 の「．さくら」の確かめはこの 6 種の WARN が 0 件であることを見る。
+- 3.3: `timeline::visible_frame`（`#[allow(dead_code)]`・5.2/5.3 で使い始めたら外す）。`always_at` にも同じ「描くコマの負の番号だけで止まる」を当てた。5.2/5.3 まで、働きのコマが今のコマになると looper の `pattern_frame` がその `surface_id` を欄に置く途中の状態（`move,-1` なら u32::MAX）— 5.2/5.3 で `visible_frame` に置き換える。`always` の 2 周目以降で周の頭が働きのコマだと `visible_frame` は None になるので、前の周の描くコマを残すかは 5.2 で扱う。`looper.rs` の `pattern_frame` の doc「負は Stopped」も 5.2 で直す。
