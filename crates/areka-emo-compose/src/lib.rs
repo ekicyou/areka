@@ -63,6 +63,8 @@ pub use plan::BlitOp;
 pub use plan_bounds::{ShellBounds, shell_bounds};
 pub use plan_issues::{ShapeIssue, shape_issues};
 pub mod blit;
+mod blit_rect;
+pub use blit_rect::Recompose;
 pub mod hit;
 pub use hit::{RegionPriority, ScaledHit, hit_region, hit_region_scaled};
 mod hit_import;
