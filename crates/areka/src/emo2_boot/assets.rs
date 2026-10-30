@@ -2,7 +2,7 @@
 //!
 //! `build_boot_assets`（shell: `areka_emo_present::shell_target::load_shell_target` を 1 回→scope
 //! ごとに `ShellTarget::build_world`／balloon: scope ごとに `resolve_balloon_faces`→
-//! `build_balloon_target_from_faces`＋`load_scope_balloon_model`＝[`BalloonScopeAssets`]／
+//! `build_balloon_target_from_faces`＋`load_scope_balloon_definitions`＝[`BalloonScopeAssets`]／
 //! `SurfaceResolver`＝`alias_snapshot()`／既定の着せ替えと名前の表＝シェルの着せ替えの読みから
 //! スコープごとに `DefaultBinds::from_groups`・`BindResolver::from_groups`）を所有する。
 //! 戻り値だけで以後ファイル I/O 不要にする（parse／bake は 1 回・`AtlasTable` は Clone 共有）。
@@ -11,15 +11,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, WicDecoderArm};
+use areka_emo_atlas::{AlphaParams, AtlasTable, WicDecoderArm};
 use areka_emo_compose::{ComposeError, EmoWorld};
 use areka_emo_present::PresentError;
 use areka_emo_present::balloon::{
-    build_balloon_target_from_faces, load_balloon_use_self_alpha, load_scope_balloon_model,
-    resolve_balloon_faces,
+    build_balloon_target_from_faces, load_balloon_use_self_alpha, resolve_balloon_faces,
+};
+use areka_emo_present::balloon_definitions::{
+    ScopeBalloonDefinitions, load_scope_balloon_definitions,
 };
 use areka_emo_present::shell_target::load_shell_target;
-use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
 use areka_sakura::ActorKey;
@@ -28,7 +29,7 @@ use tracing::error;
 
 use super::BootWiringError;
 use super::balloon_background;
-use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs};
+use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs, resolve_box_markers};
 use super::shell_cursor_assets::{ShellCursorAssets, build_shell_cursors};
 use crate::placement::DefaultSurfaces;
 use crate::placement::source::read_kv_lenient;
@@ -68,8 +69,9 @@ pub struct BalloonScopeAssets {
     pub emo_world: EmoWorld,
     /// 当該 scope の bake 済みアトラス。
     pub atlas: AtlasTable,
-    /// scope 別 2 層マージ済み定義（文字層・`windowposition`／`validrect` の源・Req 2.1）。
-    pub model: BalloonModel,
+    /// scope 別の面ごとの定義の束（面ごとに 2 層マージ済みのモデル＋その面の矢印の絵・
+    /// 文字層・`windowposition`／`validrect` の源・Req 2.1・balloon-scroll-arrows 要件 1.7）。
+    pub definitions: ScopeBalloonDefinitions,
     /// バルーンの背景色（面 0 の焼き込み済み画像の原点画素・sRGB 非 premultiplied・要件 4.6）。
     ///
     /// 無効表示（`\f[disable]`）の文字色を「既定の文字色を背景色の側へ寄せた色」として導く
@@ -178,7 +180,7 @@ pub struct BootAssets {
 /// scope ごとに `ShellTarget::build_world`（`EmoWorld` は非 Clone・装着で move 消費ゆえ scope 数だけ
 /// 組む。`AtlasTable` は安価 Clone）。
 /// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
-/// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_model`）を行い
+/// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_definitions`）を行い
 /// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・Req 2.1）。
 /// `SurfaceResolver` は `EmoWorld::alias_snapshot()` から、static bindset は shell descript KV の
 /// シェルの着せ替えの読み（`MountModel.bindgroups`）からスコープごとに組む（要件 14.1〜14.3）。
@@ -379,6 +381,16 @@ pub fn build_shell_assets(
                 (ActorKey::from(scope.to_string()), candidates)
             })
             .collect(),
+        // 箱の矢印の絵は面の絵と同じ透過の宣言で読む（balloon-scroll-arrows 要件 7.3）。
+        markers: resolve_box_markers(
+            target.boxes(),
+            scopes,
+            &shell_dir,
+            decoder,
+            AlphaParams {
+                use_self_alpha: target.use_self_alpha(),
+            },
+        ),
     };
     let resolver = SurfaceResolver::new(aliases);
     // カーソルはシェルのフォルダ → `ghost\master` の順でファイルを探す（shell-mouse-cursor 要件 6.4）。
@@ -434,7 +446,7 @@ pub fn build_balloon_assets(
 ) -> Result<BalloonAssets, BootWiringError> {
     // バルーン: scope ごとに 解決 → 構築 → 定義読込 を **同一箇所で**導出する（単一導出点）。
     // 系列解決（`resolve_balloon_faces`）は scope あたり 1 回だけ呼び、その戻りを構築
-    // （`build_balloon_target_from_faces`）と定義読込（`load_scope_balloon_model`）の双方へ
+    // （`build_balloon_target_from_faces`）と定義読込（`load_scope_balloon_definitions`）の双方へ
     // 使い回す——公開ラッパ `build_balloon_target` を使うとディレクトリ列挙が scope あたり
     // 2 回走るため、解決済み面列を受ける版を直接呼ぶ。
     // 2 層マージ規則・層別ログレベル（D8）・確定値の info!（R6.3）はすべて権威クレート
@@ -472,7 +484,14 @@ pub fn build_balloon_assets(
                 ComposeError::EmptyComposition(0),
             )));
         };
-        let model = load_scope_balloon_model(balloon_root, scope, face0);
+        // 面ごとの定義と矢印の絵の束（読むのはここだけ・警告はスコープにつき 1 回）。
+        let definitions = load_scope_balloon_definitions(
+            balloon_root,
+            scope,
+            &faces,
+            decoder,
+            AlphaParams { use_self_alpha },
+        );
         // 無効表示の混色の相手＝面 0 の原点画素（要件 4.6）。採れないときは白＋`debug!`。
         let background_color = balloon_background::face_origin_color(&atlas, &face0.file_name);
         // 表は World を資産へ move する前に、この scope の World から導出する（単一導出点）。
@@ -481,7 +500,7 @@ pub fn build_balloon_assets(
             scope,
             emo_world,
             atlas,
-            model,
+            definitions,
             background_color,
             name: name.clone(),
         });
@@ -496,6 +515,18 @@ pub fn build_balloon_assets(
     })
 }
 
+/// 空の定義の面 0 だけの束（ファイルを読まないテストの支えが組む資産用）。
+#[cfg(test)]
+pub(crate) fn empty_definitions(scope: u32) -> ScopeBalloonDefinitions {
+    ScopeBalloonDefinitions::single(
+        scope,
+        areka_emo_present::balloon_definitions::FaceDefinition {
+            model: areka_parsers::balloon::parse_str("", None),
+            arrows: Default::default(),
+        },
+    )
+}
+
 #[cfg(test)]
 #[path = "assets_tests.rs"]
 mod tests;
@@ -503,3 +534,7 @@ mod tests;
 #[cfg(test)]
 #[path = "assets_shell_tests.rs"]
 mod shell_tests;
+
+#[cfg(test)]
+#[path = "assets_markers_tests.rs"]
+mod markers_tests;

@@ -212,6 +212,8 @@ pub struct ShellTarget {
     pub(crate) ignored_pna: usize,
     /// cursorブレスの転記（[`load_shell_target`] が 1 度だけ転記する・検証は下流）。
     cursor_braces: Vec<CursorBrace>,
+    /// 透過の宣言（面の絵を焼いたのと同じ値・箱の矢印の絵も同じ扱いで読む）。
+    use_self_alpha: UseSelfAlpha,
     /// 読み込みで組んだ面の表（atlas は未装着・[`ShellTarget::take_world`] が 1 度だけ渡す）。
     world: Option<EmoWorld>,
 }
@@ -232,6 +234,7 @@ impl std::fmt::Debug for ShellTarget {
             .field("nest_report", &self.nest_report)
             .field("ignored_pna", &self.ignored_pna)
             .field("cursor_braces", &self.cursor_braces)
+            .field("use_self_alpha", &self.use_self_alpha)
             .field("world", &self.world.as_ref().map(|_| "EmoWorld"))
             .finish()
     }
@@ -256,6 +259,11 @@ impl ShellTarget {
     /// cursorブレスの転記（cursorブレスの無いシェルでは空）。
     pub fn cursor_braces(&self) -> &[CursorBrace] {
         &self.cursor_braces
+    }
+
+    /// 透過の宣言（シェルの `seriko.use_self_alpha`・面の絵を焼いたのと同じ値）。
+    pub fn use_self_alpha(&self) -> UseSelfAlpha {
+        self.use_self_alpha
     }
 
     /// 面の表を 1 つ組む（[`EmoWorld::build_with_images`] → `bind_atlas(SetId(0))`）。
@@ -551,6 +559,7 @@ pub fn build_shell_target_with_boxes(
         nest_report,
         ignored_pna: baked.ignored_pna,
         cursor_braces: Vec::new(),
+        use_self_alpha,
         world: Some(probe),
     }
 }

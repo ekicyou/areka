@@ -817,6 +817,7 @@ fn box_bundle(text: &str) -> ShellBoxAssets {
         surface_ids: world.surface_ids().collect(),
         font_dirs: Vec::new(),
         fallback_candidates: std::collections::BTreeMap::new(),
+        markers: Default::default(),
     }
 }
 

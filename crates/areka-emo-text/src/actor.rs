@@ -295,8 +295,9 @@ pub struct TextLayerRuntime {
     scrolls: HashMap<PlaceKey, PlaceScroll>,
     /// スコープ → 普通のバルーンの矢印の絵（`set_balloon_markers`・`actor_scroll.rs`）。
     balloon_markers: HashMap<ActorKey, MarkerPair>,
-    /// 箱の名前 → 箱の矢印の絵（`set_box_markers`）。足りない番号はスコープの普通のバルーンの絵で埋める。
-    box_markers: BTreeMap<BoxName, MarkerPair>,
+    /// スコープ → 箱の名前 → 箱の矢印の絵（`set_box_markers`・名前の順はスコープごと・要件 2.1・7.3）。
+    /// 足りない番号はスコープの普通のバルーンの絵で埋める。
+    box_markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
     /// World の無い所（再追従）で描画資源と一緒に外した印の面。次の [`present_frame`] の頭で窓の子ごと消す。
     retired_markers: Vec<MarkerSurface>,
 }

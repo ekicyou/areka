@@ -84,7 +84,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - 配置だけの純粋な部分は先に書けるが、areka のテストは 4 の emo-text が通る形になってから回す
   - _Requirements: 1.7, 11.1_
 
-- [ ] 5.2 起動とシェル・バルーンの切り替えの資産づくりで定義の束と箱の矢印の絵を作る
+- [x] 5.2 起動とシェル・バルーンの切り替えの資産づくりで定義の束と箱の矢印の絵を作る
   - スコープのバルーンの資産を単一のモデルから面ごとの定義の束へ替える（背景の資産づくりと起動の資産づくりの時だけファイルを読む）
   - シェルの資産づくりで箱の定義ごとにシェルのフォルダから矢印の絵を解き、シェルの箱の資産に載せて文字の層へ渡す
   - 欄の差し替えで壊れる消費者（装着・バルーンの切り替え・frame のテストの支え・資産の写しのテスト）は、振る舞いを変えずに束の面 0 のモデルを使う形へ機械的に直す（5.3 が書き手に置き換える）
@@ -181,3 +181,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 4.2→6.2/6.3: wintf は窓の子を後ろの子から当てる（描画は先頭が手前）。不透明なバルーンの絵の上では押下の送り手は絵の entity になる。どちらでも窓の `OnPointerPressed` に届くので、矢印かどうかは送り手でなく点の座標（`marker_at_point`）で決める。
 - 4.3: 箱の矢印の絵は `set_box_layout` でなく別の口 `set_box_markers(BTreeMap<BoxName, MarkerPair>)` で受ける。`set_box_layout` は `box_markers` を消さないので、5.2/5.3 はシェルの切り替えで箱の束を入れるたびに（空の束でも）`set_box_markers` を呼ぶ。普通のバルーンは `set_balloon_markers`。当たりは `marker_at_point(&PlaceKey,(f32,f32)) -> Option<MarkerKind>`、`dump_balloon` は `marker_surface(&ActorKey) -> Option<&TextSurface>`。印の面の失敗は `present_frame` の Err になるが、その場所は `presented` に残る（印だけ出ない）。
 - 5.1: `placement::face_windowposition::apply_face_windowposition` は呼び手（5.3）ができるまで `expect(dead_code)` 付き。5.3 で外す。`GhostWindows` が無いと材料を入れ替える前に戻る（起動後は揃うので実害は低い）。
+- 5.2: 箱の矢印の絵は `BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>`（スコープごと・`ActorKey::from(scope.to_string())`）。`set_box_markers` の引数もこの形。装着と切り替えは今は `definitions.face0().model.clone()` を使う（5.3 が書き手に替える）。テストの支えは `assets::empty_definitions(scope)` と `ScopeBalloonDefinitions::single`。emo-present に `ShellTarget::use_self_alpha()` を足した。

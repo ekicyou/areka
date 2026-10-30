@@ -248,7 +248,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         balloon: balloon_author_dpi,
     };
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
-    // 文字層へ渡すバルーン定義は各 scope 自身の [`BalloonScopeAssets::model`]（scope 別 2 層マージ
+    // 文字層へ渡すバルーン定義は各 scope 自身の [`BalloonScopeAssets::definitions`] の面 0（scope 別 2 層マージ
     // 済み・Req 2.1）。World／アトラスと**同一の資産 1 件から**取り出すため、ある scope のバルーンが
     // 別 scope の系列由来の定義で駆動される取り違えが構造的に起こり得ない（Req 4.1）。
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
@@ -355,7 +355,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         let Some(BalloonScopeAssets {
             emo_world: balloon_world,
             atlas: balloon_atlas,
-            model: balloon_model,
+            definitions: balloon_definitions,
             background_color,
             name: balloon_name,
             ..
@@ -368,6 +368,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             );
             continue;
         };
+        // 面 0 のモデルを今の定義にする（面の書き手が束を持つまでの形・振る舞いは前と同じ）。
+        let balloon_model = balloon_definitions.face0().model.clone();
         if let Err(e) = wiring.presenter.attach_target(
             world,
             item.balloon_target,

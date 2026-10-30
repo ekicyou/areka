@@ -669,7 +669,12 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
             let mut scopes = Vec::new();
             for b in assets.balloons {
                 targets.push((b.scope, b.emo_world, b.atlas, assets.author_dpi));
-                scopes.push((b.scope, b.model, b.background_color));
+                // 面 0 のモデルを今の定義にする（面の書き手が束を持つまでの形・振る舞いは前と同じ）。
+                scopes.push((
+                    b.scope,
+                    b.definitions.face0().model.clone(),
+                    b.background_color,
+                ));
             }
             (
                 targets,

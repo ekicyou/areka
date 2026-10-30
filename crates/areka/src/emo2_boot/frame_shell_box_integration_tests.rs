@@ -98,6 +98,7 @@ impl Cage {
             surface_ids: BTreeSet::from([0, 10]),
             font_dirs: Vec::new(),
             fallback_candidates: BTreeMap::new(),
+            markers: Default::default(),
         }
         .hand_to(&mut wiring.runtime.borrow_mut(), &mut world);
 

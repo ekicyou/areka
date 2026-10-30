@@ -47,6 +47,15 @@ impl ScopeBalloonDefinitions {
     pub fn face0(&self) -> &FaceDefinition {
         &self.face0
     }
+
+    /// 面 0 だけの束（ファイルを読まずに組む呼び手・テストの支え用）。
+    pub fn single(scope: u32, face0: FaceDefinition) -> Self {
+        Self {
+            scope,
+            face0,
+            others: BTreeMap::new(),
+        }
+    }
 }
 
 /// 採用した面ごとの定義の束を作る（fs と記録の入口・読み込みの時だけ呼ぶ）。

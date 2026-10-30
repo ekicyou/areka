@@ -3,10 +3,12 @@
 //! 文字の層（`TextLayerRuntime::set_box_layout`）へ渡す材料を 1 つに束ね、`\s` の鍵の解決と
 //! フォントを探す場所の順を純関数で決める。組み立てと受け渡しは起動・装着の相とシェルの切替が行う。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
-use areka_emo_compose::BoxLayout;
+use areka_emo_atlas::{AlphaParams, ElementDecoder};
+use areka_emo_compose::{BoxLayout, BoxName};
+use areka_emo_present::balloon_marker::{ARROW_FAMILY, MarkerPair, resolve_marker_pair};
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::{SurfaceFallback, SurfaceKeyOutcome};
 use areka_sakura::ActorKey;
@@ -26,6 +28,9 @@ pub(crate) struct ShellBoxAssets {
     pub font_dirs: Vec<PathBuf>,
     /// スコープごとの戻り先の候補の並び（`DefaultSurfaces::candidates`・descript-window-keys 要件 3.2）。
     pub fallback_candidates: BTreeMap<ActorKey, Vec<u32>>,
+    /// スコープ → 箱の名前 → 矢印の絵（シェルのフォルダから解いたもの・[`resolve_box_markers`]）。
+    /// 足りない番号は文字の層がスコープの普通のバルーンの絵で埋める（balloon-scroll-arrows 要件 7.3）。
+    pub markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
 }
 
 impl ShellBoxAssets {
@@ -38,6 +43,7 @@ impl ShellBoxAssets {
             surface_ids,
             font_dirs,
             fallback_candidates,
+            markers,
         } = self;
         let resolver = SurfaceResolver::new(aliases);
         let fallback = SurfaceFallback {
@@ -52,7 +58,53 @@ impl ShellBoxAssets {
         );
         // シェルの切替で今の面が無いスコープを seriko と同じ戻り先へ替える（descript-window-keys 要件 3.2・3.5）。
         runtime.fall_back_box_surfaces(&fallback);
+        // `set_box_layout` は前の矢印の絵を消さないので、空の束でも毎回入れ替える。
+        runtime.set_box_markers(markers);
     }
+}
+
+/// スコープごと・置き場所を持つ箱ごとに、矢印の絵をシェルのフォルダから解く
+/// （読み込みの時だけ呼ぶ・名前の順はスコープごと・要件 2.1・7.3）。
+///
+/// 同じ (スコープ, `arrow.filename`) は 1 回だけ解いて共有する（警告を箱の数だけ出さない）。
+pub(crate) fn resolve_box_markers(
+    layout: &BoxLayout,
+    scopes: &[u32],
+    shell_dir: &Path,
+    decoder: &impl ElementDecoder,
+    alpha: AlphaParams,
+) -> BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>> {
+    let names: BTreeSet<&BoxName> = layout
+        .surfaces()
+        .flat_map(|(_, placements)| placements.iter().map(|p| &p.name))
+        .collect();
+    let mut by_filename: HashMap<(u32, Option<String>), MarkerPair> = HashMap::new();
+    scopes
+        .iter()
+        .map(|&scope| {
+            let boxes = names
+                .iter()
+                .filter_map(|&name| {
+                    let filename = layout.def(name)?.model.arrow_keys().filename.clone();
+                    let pair = by_filename
+                        .entry((scope, filename.clone()))
+                        .or_insert_with(|| {
+                            resolve_marker_pair(
+                                &[shell_dir],
+                                &ARROW_FAMILY,
+                                scope,
+                                filename.as_deref(),
+                                decoder,
+                                alpha,
+                            )
+                        })
+                        .clone();
+                    Some((name.clone(), pair))
+                })
+                .collect();
+            (ActorKey::from(scope.to_string()), boxes)
+        })
+        .collect()
 }
 
 /// 箱のフォントを探す場所の順（シェルのフォルダ、ゴーストのフォルダの順・要件 3.10）。

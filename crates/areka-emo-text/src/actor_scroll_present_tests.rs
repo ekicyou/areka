@@ -230,11 +230,14 @@ fn box_missing_arrow_is_filled_from_the_scope_balloon() {
     )]);
     let name = layout().placements(0)[0].name.clone();
     let boxes = BTreeMap::from([(
-        name.clone(),
-        MarkerPair {
-            up: Some(Arc::clone(&box_up)),
-            down: None,
-        },
+        actor.clone(),
+        BTreeMap::from([(
+            name.clone(),
+            MarkerPair {
+                up: Some(Arc::clone(&box_up)),
+                down: None,
+            },
+        )]),
     )]);
     let at = ResolvedMarkerPlacement {
         up: (1, 2),
@@ -246,7 +249,7 @@ fn box_missing_arrow_is_filled_from_the_scope_balloon() {
     };
     let box_place = PlaceKey {
         actor: actor.clone(),
-        place: TextPlace::Box(name),
+        place: TextPlace::Box(name.clone()),
     };
     let got = placed_markers(&balloon, &boxes, &box_place, both, at);
     assert_eq!(got.len(), 2);
@@ -277,6 +280,14 @@ fn box_missing_arrow_is_filled_from_the_scope_balloon() {
     assert!(
         placed_markers(&balloon, &boxes, &other, both, at).is_empty(),
         "絵が無い"
+    );
+    let other_box = PlaceKey {
+        actor: ActorKey::from("1"),
+        place: TextPlace::Box(name),
+    };
+    assert!(
+        placed_markers(&balloon, &boxes, &other_box, both, at).is_empty(),
+        "箱の絵はスコープごと（別のスコープの同じ名前の箱の絵は使わない）"
     );
 }
 

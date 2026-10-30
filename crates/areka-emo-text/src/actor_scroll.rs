@@ -37,7 +37,7 @@ impl TextLayerRuntime {
 
     /// 箱の名前ごとの矢印の絵を入れ替える（シェルの箱の束と一緒に入れる・要件 7.3）。
     /// 足りない番号は、提示のときにそのスコープの普通のバルーンの絵で埋める。
-    pub fn set_box_markers(&mut self, markers: BTreeMap<BoxName, MarkerPair>) {
+    pub fn set_box_markers(&mut self, markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>) {
         debug!(boxes = markers.len(), "箱の矢印の絵を受け取った");
         self.box_markers = markers;
     }
@@ -149,7 +149,7 @@ pub(super) fn record(place: &PlaceKey, change: ScrollChange, via: &str) {
 /// 絵で、箱の足りない番号はスコープの普通のバルーンの絵で埋める（要件 7.3）。絵の無い矢印は出さない。
 pub(super) fn placed_markers(
     balloon: &HashMap<ActorKey, MarkerPair>,
-    boxes: &BTreeMap<BoxName, MarkerPair>,
+    boxes: &BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
     place: &PlaceKey,
     shown: MarkerShown,
     at: ResolvedMarkerPlacement,
@@ -157,7 +157,7 @@ pub(super) fn placed_markers(
     let scope = balloon.get(&place.actor);
     let own = match &place.place {
         TextPlace::Balloon => None,
-        TextPlace::Box(name) => boxes.get(name),
+        TextPlace::Box(name) => boxes.get(&place.actor).and_then(|m| m.get(name)),
     };
     let pick = |of: fn(&MarkerPair) -> &Option<Arc<MarkerImage>>| {
         own.and_then(|p| of(p).clone())
