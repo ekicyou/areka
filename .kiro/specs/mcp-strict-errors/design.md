@@ -3,6 +3,7 @@
 > 2026-10-29 `/kiro-spec-design`（`/kiro-design` の中の段）。測った main は `932d2c30`。行の番号はこの時点のもの。
 > 調べものの詳しい中身は `research.md` の 11 節。ここでは決めたことと約束だけを書く。
 > 2026-10-29 の設計の討議で 4 議題を推奨案で確定し、SSP の実測（要件 6.8）をした（`research.md` 12 節・`doc/ssp-mcp/survey.md` 8 節）。
+> 2026-10-30 の開発者の裁定で、議題 4（rmcp のフォーク）を改めた。外の crate はそのまま使い、フォーク・`[patch.crates-io]`・上流への直しはしない。`params` の形の答えは areka の受け口が rmcp の 415 の後に rmcp の型で返す（ArekaShapeAnswer）。
 
 ## Overview
 
@@ -16,7 +17,7 @@
 - strict の台本の再生が当たった誤りを、`check_script` と同じ種類・文面で、当たった順にエラーログへ残す（要件 1〜4）。
 - 検出点を 1 つの表に持ち、表と実装の一致をテストで判定する（要件 4.4・4.5・7.6）。
 - 案内文の最後の 1 文を消す（要件 5）。
-- `params` がオブジェクトでない要求に、受け口でも中継ごしでも、その `id` 付きの JSON-RPC のエラーで答える。直しは rmcp の中に置く（要件 6）。
+- `params` がオブジェクトでない要求に、受け口でも中継ごしでも、その `id` 付きの JSON-RPC のエラーで答える。rmcp はそのまま使い、rmcp が 415 で断った要求だけに areka が rmcp の型で答える（要件 6）。
 
 ### Non-Goals
 - SSTP の `Option: strict`（印は同じ `StartTalk.strict` を SSTP の口が立てれば済む形にしておく）。
@@ -35,7 +36,7 @@
 - seriko の「今のシェルとバルーンの事実」（`SkinFacts`）と、`\s`・`\b` の判定の関数（`check_script` から移す）。
 - `sakurascript` の strict の答え（`since_id` 付き）。
 - 案内文の定数 `INSTRUCTIONS` の 1 文。
-- rmcp の直し（フォーク・`[patch.crates-io]`・上流への直し）と、中継の同じ答え。
+- `params` の形の判定の関数 `request_shape_error`（`areka-mcp`）と、受け口が rmcp の 415 の後に返す答え、中継の同じ答え。
 - 文書: `doc/ssp-mcp/areka-tools.md` の strict の節と検出点の表、`transport-diff-areka.md`・`bridge-diff-areka.md`・`survey.md` の該当の行。
 
 ### Out of Boundary
@@ -44,20 +45,21 @@
 - シェル・バルーンの切替の時機（今は「台詞の切れ目」まで待つ）。本 spec はその時機をそのまま受け入れる。
 - エラーログの上限・本文の上限・記録の取り決め（`mcp-log-history` の持ち物）。
 - 選択肢の `script:` や `\![raise]` で始まる別の台本への印の引き継ぎ（既定は引き継がない。要件 3.8）。
-- rmcp の他の振る舞い・版の上げ下げ（版は `3.5.0` のまま）。
+- rmcp の振る舞いと版の上げ下げ（版は `3.5.0` のまま・中身は 1 字も変えない）。
 
 ### Allowed Dependencies
 - 依存の向き（左が下・右は左だけを使う）: `dola` → `areka-talk` → `areka-sakura` → `areka-seriko`・`areka-emo-text` → `areka-kanade`・`areka-ghost` → `areka`。`areka-mcp`（rmcp）→ `areka-mcp-bridge`。
 - `areka-sakura` は `ConsumerLedger`（`areka`）と `apply_font_tag`（`areka-emo-text`）を直接使わない。判定は `StrictJudges` の約束を通して `areka` から差し込む。
 - seriko と emo-text は `areka-sakura::strict` の語彙だけを使い、記録は `CueProbe` を通す（自分で target を書かない）。
-- rmcp は `=3.5.0` のまま、`[patch.crates-io]` で直しの入った枝（版の番号は `3.5.0`）を使う。新しい crate は足さない。
+- rmcp は `=3.5.0` の公開版をそのまま使う（フォーク・`[patch.crates-io]`・git の出どころは使わない。2026-10-30 の裁定）。使うのは rmcp の公開の型（`ErrorData`・`JsonRpcError`・`RequestId`）と、`areka-mcp` が既に持つ `serde_json`。新しい crate は足さず、`Cargo.lock`・`deny.toml`・`THIRD-PARTY-NOTICES.md` は変えない。
+- `areka-mcp-bridge` は既に `areka-mcp` に依存しているので、判定の関数を同じものを使う。
 
 ### Revalidation Triggers
 - `doc/ssp-mcp/areka-tools.md` の ⑶ の表（種類・文面・行）か、検出点の表が変わる。
 - `DetectionPoint` の増減、`CueSink::emit_with`・`CueProbe` の形、`StartTalk.strict` の形が変わる。
 - シェル・バルーンの切替が台詞の途中で効くように変わる（判定の事実を替える時機が変わる）。
 - `ConsumerLedger::consumer_of` の形が変わる。
-- rmcp の版を上げる・上流が直しを取り込む（`[patch]` を外す）。
+- rmcp の版を上げる（415 を返す条件・無状態の版の HTTP の状態の写し `jsonrpc_http_status`・公開の型が変わりうる。HTTP の状態を突き合わせるテストが赤で知らせる）。rmcp が自分で `params` の形に `id` 付きで答えるようになったら、ArekaShapeAnswer は通らなくなる（消してよい）。
 - SSP の実測（要件 6.8）が既定と違う答えを示す（3.8・3.10・文書の「SSP との違い」）。
 
 ## Architecture
@@ -108,7 +110,7 @@ graph LR
 **Architecture Integration**:
 - 守る前例: `origin` の運び方（`StartTalk` の欄・翻訳で保つ）、`\!` の汎用キャリアと名前の自己選別、`check_script` の「再生が使う関数の答えを写すだけ」、記録の取り決め（`log-convention.md`）。
 - 新しく足すもの: `StrictTap`（strict の talk だけに挟む配り口の覆い）・`StrictTrace`（命令の位置と控えた誤り）・`DetectionPoint`・`StrictJudges`・`SkinFacts`・`CueProbe`。どれも「位置と順を保ったまま層をまたいで知らせる」ために要る最小のもの。
-- steering との整合: 時刻・順を正確に扱う、ログの無い失敗経路を作らない、UI スレッドを塞がない、プロトコルは公式 SDK に任せる（rmcp の中で直す）。
+- steering との整合: 時刻・順を正確に扱う、ログの無い失敗経路を作らない、UI スレッドを塞がない、プロトコルは公式 SDK に任せる（rmcp が読めた要求は rmcp の答えのまま・rmcp が断った要求だけを rmcp の型で答える）。外の crate はそのまま使う（2026-10-30 の裁定）。
 
 ### Technology Stack
 
@@ -118,7 +120,7 @@ graph LR
 | 台本の駆動 | `areka-sakura` | `strict` の語彙・`compile_strict`・`StrictTap` | `parse_noted` を使う（`parse` はその写し） |
 | 表情 | `areka-seriko` | `SkinFacts` と `\s`・`\b` の判定 | 判定の関数を `check_script_judge.rs` から移す |
 | 文字の層 | `areka-emo-text` | 名前の形の `\b` の知らせ・`\f` の分類の関数 | `judge_font` を `look` へ移す |
-| MCP の受け口 | `rmcp` `=3.5.0`＋`[patch.crates-io]` | 本文が読めない要求のうち `params` の形だけが誤るものに、`id` 付きのエラーで答える | 3.8.0（2026-10-26 時点の最新）でも直っていない。上流へ直しを出す（許しを取ってから） |
+| MCP の受け口 | `rmcp` `=3.5.0`（公開版のまま）＋`serde_json` | rmcp が 415 で断った要求のうち `params` の形だけが誤るものに、areka が rmcp の型で `id` 付きのエラーを返す | 3.8.0（2026-10-26 時点の最新）でも直っていない。フォーク・`[patch]`・上流への直しはしない（2026-10-30 の裁定） |
 | 記録 | `tracing`＋`log_history` | target `areka::log::error`・`warn!` | 取り決めの欄 `ghost` を使う。`label` は付けない（既定の `Error`） |
 
 ## File Structure Plan
@@ -165,16 +167,15 @@ crates/
 │   └── mcp/raise_event.rs           # strict 真で台本が返ったときの答え（since_id）
 ├── areka-mcp/src/
 │   ├── handler.rs                   # INSTRUCTIONS から 1 文を消す
+│   ├── dispatch.rs                  # forward が rmcp の 415 の後に本文を読み直して答える・request_shape_error・状態の写し
+│   ├── dispatch_shape_tests.rs      # 新: request_shape_error と状態の写しの単体テスト（dispatch.rs に #[path] 1 行）
 │   └── server_params_shape_tests.rs # 新: 5 つの版の params の形の答え（server.rs に #[path] 1 行）
 └── areka-mcp-bridge/src/
-    └── stdio.rs                     # 読めない行のうち params の形だけの誤りに rmcp の同じ答え
+    └── stdio.rs                     # 読めない行のうち params の形だけの誤りに areka-mcp の同じ関数の答え
 ```
 
 ### Modified Files（上の木に出ないもの・テスト）
-- `Cargo.toml`（根）— `[patch.crates-io]` に `rmcp = { git = "https://github.com/ekicyou/rust-sdk", rev = "<直しの rev>" }` を足す。
-- `Cargo.lock` — rmcp（と同じリポジトリの `rmcp-macros`）の出どころが git に替わる。依存の席を使う（1 ウェーブに 1 本）。
-- `deny.toml` — `allow-git` にフォークの URL を名指しで足す（`image-webp` の前例）。
-- `THIRD-PARTY-NOTICES.md` — rmcp の行に出どころ（フォークの rev）を書く。許諾は同じ（Apache-2.0）。
+- 根の `Cargo.toml`・`Cargo.lock`・`deny.toml`・`THIRD-PARTY-NOTICES.md` は変えない（2026-10-30 の裁定で rmcp のフォークを使わない）。
 - StartTalk の素の構築を持つ所 — `areka-kanade/src/schedule/close.rs`・`boot.rs`、`areka-ghost/src/prop_sink.rs`、テストの構築（`strict: false` を足す）。
 - GhostBootOptions の素の構築を持つテスト — `strict_judges: None` を足す。
 - `doc/ssp-mcp/areka-tools.md` — ⑶ の 2 つの表を印で挟む・「⑺ strict の記録」を足す（約束・本文の形・検出点の表）・⑸ の行を直す。
@@ -277,13 +278,13 @@ sequenceDiagram
 | 5.1 | 案内文の 1 文を消す | Instructions | `INSTRUCTIONS` | — |
 | 5.2 | 中継の組み込みの答え | Instructions | 中継は同じ定数を読む | — |
 | 5.3 | `NG:not implemented yet` を返さない | Instructions | 本番のファイルにその文字列が無いことを見るテスト | — |
-| 6.1 | 数・文字列・真偽値は `-32600` | RmcpShapePatch | `request_shape_error` | — |
-| 6.2 | 配列は `-32602` | RmcpShapePatch | 同上 | — |
-| 6.3 | rmcp の形で返す | RmcpShapePatch | フォーク＋`[patch]`・上流へ | — |
-| 6.4 | HTTP の状態 | RmcpShapePatch | 版の経路ごとの状態 | — |
-| 6.5 | 中継も同じ | BridgeShapeAnswer | 同じ rmcp の関数 | — |
-| 6.6 | 次の要求はいつもどおり | RmcpShapePatch・BridgeShapeAnswer | 1 件で閉じる | — |
-| 6.7 | ほかの答えは変えない | RmcpShapePatch・BridgeShapeAnswer | 当たらなければ今の道 | — |
+| 6.1 | 数・文字列・真偽値は `-32600` | ArekaShapeAnswer | `request_shape_error` | — |
+| 6.2 | 配列は `-32602` | ArekaShapeAnswer | 同上 | — |
+| 6.3 | rmcp の型で返す・rmcp の 415 の後だけ | ArekaShapeAnswer | `forward` が rmcp を先に呼ぶ・`JsonRpcError` | rmcp の 415 |
+| 6.4 | HTTP の状態 | ArekaShapeAnswer | `shape_error_status`（rmcp の答えと突き合わせるテスト） | — |
+| 6.5 | 中継も同じ | BridgeShapeAnswer | 同じ `areka-mcp` の関数 | — |
+| 6.6 | 次の要求はいつもどおり | ArekaShapeAnswer・BridgeShapeAnswer | 1 件で閉じる | — |
+| 6.7 | ほかの答えは変えない | ArekaShapeAnswer・BridgeShapeAnswer | 当たらなければ今の道 | — |
 | 6.8 | SSP の実測 | SspMeasurement | 許しを取ってから | — |
 | 6.9 | `transport-diff-areka.md` の行 | DiffDocs | — | — |
 | 6.10 | `bridge-diff-areka.md` の行 | DiffDocs | — | — |
@@ -312,7 +313,7 @@ sequenceDiagram
 | ArekaStrictJudges・SkinFactsCopy | areka | 台帳・`\f` の分類の差し込み、事実の組み立て | 2.7, 4.1 | ConsumerLedger (P0) | Service |
 | SakuraScriptStrictAnswer・RaiseEventStrictAnswer | areka mcp | strict 真の答え | 1.1〜1.5, 3.10 | log_history (P0) | API |
 | Instructions | areka-mcp | 案内文 | 5.1〜5.3 | — | API |
-| RmcpShapePatch・BridgeShapeAnswer | rmcp フォーク・中継 | `params` の形の誤りへの答え | 6.1〜6.7 | rmcp (P0) | API |
+| ArekaShapeAnswer・BridgeShapeAnswer | areka-mcp の受け口・中継 | `params` の形の誤りへの答え | 6.1〜6.7 | rmcp の公開の型 (P0) | API |
 | ArekaToolsDoc・DiffDocs・SspMeasurement | 文書 | 約束・差の一覧・実測 | 4.4, 4.6, 4.7, 6.8〜6.10 | SSP の MCP (P1) | — |
 
 ### dola
@@ -657,31 +658,34 @@ impl SerikoSink {
 
 ### rmcp と中継
 
-#### RmcpShapePatch
+#### ArekaShapeAnswer
 
 | Field | Detail |
 |-------|--------|
-| Intent | 本文が `ClientJsonRpcMessage` に読めず、理由が `params` の形だけのとき、その `id` を付けた JSON-RPC のエラーで答える |
+| Intent | rmcp が 415 で断った本文のうち、理由が `params` の形だけのものに、その `id` を付けた JSON-RPC のエラーを rmcp の型で返す |
 | Requirements | 6.1, 6.2, 6.3, 6.4, 6.6, 6.7 |
 
 **Responsibilities & Constraints**
-- 版を上げても直らない（3.5.1〜3.8.0 の `expect_json` は 415 の平文のまま。`research.md` 11.4）。よって要件 6.3 の ⑵: 上流へ直しを出し、取り込まれるまではフォークの枝を `[patch.crates-io]` で使う。
-- 枝は上流のタグ `rmcp-v3.5.0` から切り、版の番号は `3.5.0` のまま（3 つの `Cargo.toml` の `=3.5.0` に合う。合わないと cargo は黙って公開版を使う）。
-- 直す所: `transport/streamable_http_server/tower.rs` の `handle_post` で `expect_json` が読めなかったとき（`serde_json` の分類が `Data` のとき）だけ、本文を `serde_json::Value` として読み直し、下の関数が `Some` を返せばその答えを返す。`None` なら今の 415 のまま。
-- HTTP の状態: 要求のヘッダ `MCP-Protocol-Version` が無状態の版（`2026-07-28`）なら `jsonrpc_http_status(code)`（`-32600` は 200・`-32602` は 400）、それ以外の版は 200。本文は `application/json` の JSON-RPC のエラー 1 件（要件 6.4）。
+- 版を上げても直らない（3.5.1〜3.8.0 の `expect_json` は 415 の平文のまま。`research.md` 11.4）。2026-10-30 の開発者の裁定で、外の crate はそのまま使う（フォーク・`[patch.crates-io]`・上流への直しはしない。直した写しを持つと安全の直しを取り込むのが重くなるため）。よって答えは areka の受け口が組む。
+- 時機: `crates/areka-mcp/src/dispatch.rs` の `forward` は本文を集めてから rmcp を呼んでいる。まず今のとおり rmcp を呼び、rmcp の答えが 415 のときだけ、既に持っている本文を読み直す。rmcp が読めた要求は rmcp の答えのまま 1 バイトも変えない（要件 6.7）。
+- 答えの組み立て: 本文を `serde_json::Value` として読み、下の `request_shape_error` が `Some` ならその答え（`application/json` の JSON-RPC のエラー 1 件）を返す。`None`（JSON でない・`id` が無い・`params` が無い／`null`／オブジェクト）なら rmcp の 415 をそのまま返す。
+- HTTP の状態: rmcp の `jsonrpc_http_status` は非公開なので、areka が同じ対応を 1 か所（`shape_error_status`）に持つ。要求のヘッダ `MCP-Protocol-Version` が無状態の版（`2026-07-28`）で番号が `-32602` なら 400、ほかは全部 200（`-32600` は無状態の版でも 200）。この写しが rmcp とずれないよう、rmcp 自身が無状態の経路で `-32602` を返す別の要求（例: `_meta` の無い要求）の HTTP の状態と突き合わせるテストで固定する（要件 6.4）。
 - 1 件の答えで閉じ、次の要求はいつもどおり（要件 6.6）。
-- フォークは開発者のアカウントの `ekicyou/rust-sdk`（2026-10-29 の設計の討議で確定）。上流へは `main`（3.8 系）向けに PR を出し、取り込まれて公開されたらその版へ上げて `[patch]` を外す。
-- 上流へ直しを出す（フォークを作る・PR を出す）のは外へ出す操作なので、実装でその段に来たときに改めて開発者の許しを取ってから行う。
+- 上流への issue・PR は今は出さない（2026-10-30 の裁定）。
 
 **Contracts**: API [x]
 
 ##### API Contract
 ```rust
-// rmcp::model（フォークで足す公開の関数）
-/// JSON として読めたが要求の形でない本文について、id を読める要求で、params が在り、
+// areka_mcp（dispatch.rs・公開。中継も同じ関数を使う）
+/// JSON として読めた本文について、id が在り、params が在り、
 /// null でもオブジェクトでもないときだけ Some を返す。
 /// 数・文字列・真偽値 → ErrorData::invalid_request（-32600）、配列 → ErrorData::invalid_params（-32602）。
+/// 答えは rmcp の公開の型 JsonRpcError（要求の id のまま）。
 pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
+
+// dispatch.rs（非公開）: rmcp の jsonrpc_http_status の無状態の版の写し
+fn shape_error_status(protocol_version: Option<&str>, code: ErrorCode) -> StatusCode;
 ```
 
 | 要求 | 受け口の答え | HTTP（旧式の 4 版／`2026-07-28`） |
@@ -694,7 +698,7 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 
 #### BridgeShapeAnswer
 
-- `crates/areka-mcp-bridge/src/stdio.rs` の `LineTransport::receive` で、serde の分類が `Data`（今 `-32600`・`id: null` を返す所）のとき、行を `serde_json::Value` として読み直し、`rmcp::model::request_shape_error` が `Some` ならその答えを書く。`None` なら今の `-32600`・`id: null` のまま（要件 6.5・6.7）。
+- `crates/areka-mcp-bridge/src/stdio.rs` の `LineTransport::receive` で、serde の分類が `Data`（今 `-32600`・`id: null` を返す所）のとき、行を `serde_json::Value` として読み直し、`areka_mcp::request_shape_error`（ArekaShapeAnswer と同じ関数・中継は既に `areka-mcp` に依存している）が `Some` ならその答えを書く。`None` なら今の `-32600`・`id: null` のまま（要件 6.5・6.7）。
 - 中継は areka の有無に関わらず自分で答える所なので、受け口と同じ関数を使うことで同じ答えになる。`tests/real_receiver_test.rs` の 5 つの版の比較に行を足して固定する。
 - 注意: 中継は前に話した areka の案内文を控えて返すことがある（`service.rs` 377 行）。控えは次に areka と話した時に新しくなる。要件 5.2 の「組み込みの答え」は定数なので直る。
 
@@ -765,6 +769,7 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 2. **要件 4.1**（議題 3）: areka の切替は台詞の切れ目まで待つので、同じ台本の中の切替の後ろの `\s`・`\b` は、再生でも切替の前のシェル・バルーンで扱われる。判定は seriko の本体が実際に使う定義と同じ事実で行う（差し替えと同じ鍵）。差し替えが効いた後の合図は新しい事実で判定する。要件 4.1 の文をこの形に直した。文書の「SSP との違い」に書く。
 3. **要件 2.5 の順**（議題 2）: talk スレッドで決まる 15 の点は合図の順で書く。名前の形の `\b`（`BalloonBoxMissing`）だけは UI で決まるので、当たった時点で書き、ほかの記録との前後は台本の順と違うことがある。要件 2.5 にこの例外を足した。
 4. **記録の本文**: `<kind> <start>-<end> <message>: <text>` に取り決めの欄 `point` が続く。表示の語は既定の `Error`（SSP の実測と同じ）。本文の形は SSP と違う（`check_script` の種類と文面に揃えるのが要件 2.4）ので、文書の「SSP との違い」に書く。
+5. **要件 6.3**（議題 4・2026-10-30 の開発者の裁定で改めた）: 10-29 は「rmcp を `ekicyou/rust-sdk` にフォークし `[patch.crates-io]` で使い、上流へ PR を出す」で確定したが、10-30 に開発者が「外の crate はそのまま使う（フォーク・`[patch]`・上流への PR はしない。直した写しを持つと安全の直しが重くなる）」と裁定した。受け口は rmcp を先に呼び、415 のときだけ持っている本文から areka が rmcp の型で答える（ArekaShapeAnswer）。要件 6.3 の文をこの形に直した。
 
 ## Error Handling
 
@@ -796,7 +801,8 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 - `areka-sakura/src/drive_strict_tests.rs`: 窓の無い sink の組（`LogSink`・`DiscardSink`）で、台本の解釈の誤りだけが記録される（4.3）。翻訳で書き換えた台本の位置は書き換えた後の台本に対するもの（3.3）。
 - `areka/src/mcp/sakurascript_tests.rs`: strict 真の答えの文と `<n>`（送る前の `last_id`）、`since_id` で記録が全部読める、strict 偽・省略は `OK`、NG の 4 つの場合は今の答えで記録が増えない（1.1〜1.5・7.4・7.5）。
 - `areka/src/mcp/raise_event_tests.rs`（追記）: strict 真で台本が返ったときの 1 行目の文と `<n>`（送る前の `last_id`）・`Script: ` の行は今のまま、strict 偽・省略と台本が返らないときは今の答え（3.10・7.4）。
-- `areka-mcp/src/server_params_shape_tests.rs`: 5 つの版で、数・文字列・真偽値・配列の `params` に `id` 付きの `-32600`／`-32602` と表の HTTP の状態、知らない名前のメソッドでも同じ、その後の要求がいつもどおり、通知・`null`・JSON でない本文は今のまま。案内文から 1 文が消え、ほかが同じ（5.1・6.1〜6.7・7.7）。
+- `areka-mcp/src/dispatch_shape_tests.rs`（単体）: `request_shape_error` が数・文字列・真偽値で `-32600`、配列で `-32602`、`id` は要求のまま（数・文字列）、`id` が無い・`params` が無い／`null`／オブジェクトでは `None`。`shape_error_status` が無状態の版の `-32602` だけ 400、ほかは 200（6.1・6.2・6.4）。
+- `areka-mcp/src/server_params_shape_tests.rs`: 5 つの版で、数・文字列・真偽値・配列の `params` に `id` 付きの `-32600`／`-32602` と表の HTTP の状態、知らない名前のメソッドでも同じ、その後の要求がいつもどおり、通知・`null`・JSON でない本文は今のまま（rmcp の 415）、rmcp が読める要求の答えは変わらない。HTTP の状態の写しは、rmcp 自身が無状態の経路で `-32602` を返す別の要求の状態と同じであることを突き合わせる。案内文から 1 文が消え、ほかが同じ（5.1・6.1〜6.7・7.7）。
 - `areka-mcp-bridge/tests/real_receiver_test.rs`: 同じ要求を中継へ送ると受け口へ直接と同じ答え（5 つの版）。areka が居ないときの組み込みの `initialize` の案内文（5.2・6.5・7.7）。
 
 ### 既存のテスト
@@ -809,8 +815,8 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError>;
 - 長い台本（4 MiB）の strict の再生で、UI スレッドの 1 フレームの仕事が増えない（判定と記録は talk スレッド）。`compile_strict` の追加の手間は台本の長さに比例する 1 回の走査だけ（3.11）。
 
 ## Security Considerations
-- rmcp のフォークは開発者のアカウントのリポジトリに置き、`deny.toml` の `allow-git` に名指しで足す。`rev` を固定し、枝の更新で知らぬ間に中身が替わらないようにする。
+- 外の crate は公開版をそのまま使う（2026-10-30 の裁定）。rmcp の安全の直しは版を上げるだけで取り込める。areka の答えは rmcp が断った本文だけを読み、本文の上限（4 MiB）は今の `forward` のまま。
 - 記録の本文に台本の綴りをそのまま入れる。エラーログは MCP の `get_log` で読まれるだけで外へ出ない。
 
 ## Supporting References
-- 調べの詳細・退けた案・rmcp の版の調べ: `research.md` 11 節。
+- 調べの詳細・退けた案・rmcp の版の調べ・フォークの案を退けた経緯（10-30）: `research.md` 11 節。
