@@ -84,7 +84,8 @@ use areka_emo_atlas::AtlasTable;
 ///   visual/window/WUC 描画 API には依存しない。
 /// - **結果を保持しない**（要件 9.4）: `Composer` の内部フィールドは走査スクラッチ（`ops`／`visited`）
 ///   のみで、[`ComposedSurface`] を一切キャッシュしない。前回の合成結果は次回呼び出しへ持ち越さず、
-///   surface→結果のキャッシュ・無効化は下流 `emo-present` の責務である。
+///   surface→結果のキャッシュ・無効化は下流 `emo-present` の責務である。絵は持たないが、下敷き形
+///   （[`compose_into_reusing`]）が最後に成功させた合成の命令列 1 本（`base_ops`）だけは持つ。
 /// - **buffer 再利用でゼロアロケーション定常状態**（要件 10.3）: [`compose_into`] は呼び手の `out`
 ///   と自身のスクラッチ（`ops`／`visited`）を再利用するため、外形が変わらない毎フレーム経路で
 ///   途中アロケーションを発生させず O(elements) で合成する。
@@ -109,6 +110,10 @@ pub struct Composer {
     ops: Vec<BlitOp>,
     /// 入れ子 flatten の循環検出用祖先スタックのスクラッチ（`build_plan` が走査入口で clear・再利用）。
     visited: Vec<u32>,
+    /// 最後に [`compose_into_reusing`] が成功させた合成の命令列（絵は持たない・`compose_into` は触らない）。
+    ///
+    /// [`compose_into_reusing`]: Composer::compose_into_reusing
+    base_ops: Vec<BlitOp>,
 }
 
 impl Composer {
@@ -117,6 +122,7 @@ impl Composer {
         Composer {
             ops: Vec::new(),
             visited: Vec::new(),
+            base_ops: Vec::new(),
         }
     }
 
@@ -159,6 +165,46 @@ impl Composer {
         // execute: 命令列を out へ premultiplied SourceOver 転写（out は resize_and_clear で再利用）。
         crate::blit::execute(out, extent, &self.ops, atlas);
         Ok(())
+    }
+
+    /// 下敷き形（コマ替えの経路）。`base` は、この合成器が直前に `compose_into_reusing` で
+    /// 成功させた合成の絵でなければならない（呼び手の責任）。
+    ///
+    /// 命令列を [`compose_into`] と同じ引数で作り、前の命令列との違いの矩形だけを重ね直す
+    /// （下敷きが無い・使えないならいちから）。`out` の中身は [`compose_into`] と画素単位で同じ。
+    /// 成功したら確保なしで今の命令列を前の命令列（`base_ops`）にする。命令列を作るのに失敗したら
+    /// `base_ops` を変えずにその `Err` を返す。
+    ///
+    /// [`compose_into`]: Composer::compose_into
+    #[allow(clippy::too_many_arguments)]
+    pub fn compose_into_reusing(
+        &mut self,
+        out: &mut ComposedSurface,
+        base: Option<&ComposedSurface>,
+        world: &EmoWorld,
+        atlas: &AtlasTable,
+        surface_id: u32,
+        active_binds: &BindSet,
+        pattern: &PatternState,
+    ) -> Result<Recompose, ComposeError> {
+        let extent = crate::plan::build_plan(
+            &mut self.ops,
+            &mut self.visited,
+            world,
+            atlas,
+            surface_id,
+            active_binds,
+            pattern,
+        )?;
+        let recompose = crate::blit_rect::execute_reusing(
+            out,
+            extent,
+            &self.ops,
+            base.map(|b| (b, self.base_ops.as_slice())),
+            atlas,
+        );
+        std::mem::swap(&mut self.ops, &mut self.base_ops);
+        Ok(recompose)
     }
 
     /// 新規割り当て形（初回・テスト向け便宜）。

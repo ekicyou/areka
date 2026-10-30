@@ -5,8 +5,6 @@
 //! いちから合成した値になる（合成は画素ごとに独立）。矩形の中は消してから全命令を重ねる。
 //! 重ね方は [`crate::blit`] と同じ整数の premultiplied SourceOver をこのファイルの中に持ち、
 //! 浮動小数を使わない。下敷きは読むだけで、確保をしない（`out` の容量を使い回す）。
-// 2.2 の口（`Composer::compose_into_reusing`）がつながるまで本番から呼ばれない。つないだらこの行を消す。
-#![cfg_attr(not(test), expect(dead_code, reason = "Composer の口から呼ぶまでの間"))]
 
 use areka_emo_atlas::AtlasTable;
 

@@ -403,3 +403,134 @@ fn hot_path_has_no_name_relookup() {
         "blit_rect.rs の hot path は atlas.resolve を呼ばない（要件 4.3）"
     );
 }
+
+// ── 合成器の口 `Composer::compose_into_reusing`（タスク 2.2・要件 3.1・3.6） ──
+
+/// 面 1 枚（不透明の背景 8×6 と半透明の小物 3×2）を fold・bind 済みの world と atlas。
+fn composer_world() -> (crate::EmoWorld, AtlasTable) {
+    use areka_emo_atlas::{AlphaParams, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake};
+    use areka_parsers::shell::{DefRef, Element, ElementPath, Shell, Surface};
+
+    let el = |layer, path: &str, x, y| Element {
+        layer,
+        path: ElementPath::new(path.to_string()),
+        x,
+        y,
+    };
+    let surfaces = vec![Surface {
+        id: 0,
+        targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
+        elements: vec![el(0, "a.png", 0, 0), el(1, "b.png", 2, 1)],
+        collisions: Vec::new(),
+        animations: Vec::new(),
+    }];
+    let base = std::path::Path::new("shell/master");
+    let mut dec = MemoryDecoder::new();
+    dec.insert(
+        base.join("a.png"),
+        8,
+        6,
+        32,
+        [9, 8, 7, 255].repeat(48),
+        true,
+    );
+    dec.insert(
+        base.join("b.png"),
+        3,
+        2,
+        12,
+        [40, 30, 20, 128].repeat(6),
+        true,
+    );
+    let set = SurfaceSet {
+        surfaces: &surfaces,
+        base_dir: base,
+        alpha_params: AlphaParams {
+            use_self_alpha: UseSelfAlpha::On,
+        },
+    };
+    let baked = bake(&[set], &dec, PackConfig::default());
+    assert!(baked.errors.is_empty(), "bake は失敗しない");
+    let shell = Shell {
+        surfaces,
+        appends: Vec::new(),
+        aliases: Vec::new(),
+        animation_sort: None,
+        collision_sort: None,
+        definitions: vec![DefRef::Surface(0)],
+    };
+    let mut world = crate::EmoWorld::build(&shell);
+    world.bind_atlas(&baked.table, SetId(0));
+    (world, baked.table)
+}
+
+/// 2 回目から矩形を報告し（同じ入力なので幅 0 の矩形＝前の命令列を覚えている）、絵はいちからと同じ。
+#[test]
+fn composer_reports_rect_from_second_call() {
+    let (world, atlas) = composer_world();
+    let (binds, pat) = (crate::BindSet::default(), crate::PatternState::default());
+    let mut c = crate::Composer::new();
+    let expect = c.compose(&world, &atlas, 0, &binds, &pat).expect("Ok");
+
+    let mut first = ComposedSurface::new(0, 0);
+    let r1 = c
+        .compose_into_reusing(&mut first, None, &world, &atlas, 0, &binds, &pat)
+        .expect("Ok");
+    assert_eq!(r1, Recompose::Full, "下敷きなしの 1 回目はいちから");
+    assert_eq!(first.bytes(), expect.bytes());
+
+    let mut second = ComposedSurface::new(0, 0);
+    let r2 = c
+        .compose_into_reusing(&mut second, Some(&first), &world, &atlas, 0, &binds, &pat)
+        .expect("Ok");
+    let zero = Recompose::Partial {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+    };
+    assert_eq!(
+        r2, zero,
+        "2 回目は前の命令列と比べた矩形（同じ入力なので空）"
+    );
+    assert_eq!(second.bytes(), expect.bytes());
+}
+
+/// 命令列を作るのに失敗したら失敗を返し、前の命令列は変わらない（次の呼び出しの矩形が空のまま）。
+#[test]
+fn composer_failure_keeps_previous_ops() {
+    let (world, atlas) = composer_world();
+    let (binds, pat) = (crate::BindSet::default(), crate::PatternState::default());
+    let mut c = crate::Composer::new();
+    let mut first = ComposedSurface::new(0, 0);
+    c.compose_into_reusing(&mut first, None, &world, &atlas, 0, &binds, &pat)
+        .expect("Ok");
+
+    let mut scratch = ComposedSurface::new(0, 0);
+    let err = c.compose_into_reusing(
+        &mut scratch,
+        Some(&first),
+        &world,
+        &atlas,
+        9999,
+        &binds,
+        &pat,
+    );
+    assert_eq!(err, Err(crate::ComposeError::SurfaceNotFound(9999)));
+
+    let mut again = ComposedSurface::new(0, 0);
+    let r = c
+        .compose_into_reusing(&mut again, Some(&first), &world, &atlas, 0, &binds, &pat)
+        .expect("Ok");
+    assert_eq!(
+        r,
+        Recompose::Partial {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0
+        },
+        "失敗の前の命令列が残っている"
+    );
+    assert_eq!(again.bytes(), first.bytes());
+}
