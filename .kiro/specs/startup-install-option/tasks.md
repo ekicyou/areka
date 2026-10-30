@@ -96,8 +96,8 @@
   - _Boundary: Readme_
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 6. 実機で `--install` から起動中までを確かめる
-- [ ] 6.1 実機の試験 `crates/areka/tests/startup_install_real_run.rs` を足し、入れたゴーストが起動中になり写しが消えることを確かめる
+- [x] 6. 実機で `--install` から起動中までを確かめる
+- [x] 6.1 実機の試験 `crates/areka/tests/startup_install_real_run.rs` を足し、入れたゴーストが起動中になり写しが消えることを確かめる
   - 検体 `emo2` を起こし、起動の行に `--install <写し> --option callghost,deletesource` を足す
   - 写しは `target\` の下に、利用条件の無いゴーストの書庫（第一候補 `vendors/sample_ghost/konnoyayame.nar`）を写したもの。areka で起動中まで行かなければ、利用条件の無いほかの書庫に替えて理由を記録に残す
   - MCP の `get_active_ghost_list` で入れたゴーストが起動中になったこと・置き場に `ghost\<フォルダ>` が在ること・写しが消えたことを確かめ、利用者と同じ閉じ方で閉じる
@@ -120,3 +120,4 @@
 - 3.3: 終了の後に終わった起動の引数の依頼の warn `startup_followup_dropped` は、語（`deletesource`・`callghost`）が立っているときだけ（レビューの差し戻しで design.md 478 行もそろえた）。
 - 4.1: このワークツリーでは i686 の補助 exe が建っていないため、`crates/areka/tests` の実機寄りの結合テスト 7 本が `real-run-kit/src/i686.rs:77` で止まる（環境・差分と無関係）。全体テストの前に `cargo build -p <pkg> --target i686-pc-windows-msvc` が要る。
 - 5: 説明書は約束の 3 か所のほか、食い違いを無くすため「効く起動オプション」の一覧（11 個）・短い形 `/i` `-i`・31 行目の重ねたときの扱いも直した（兄弟の spec とマージで競合しうる）。
+- 6.1（範囲外・起票の候補）: 置き場にバルーンが 1 つも無く、ゴーストもバルーンを持たないとき、切り替えで今のバルーン（起動の行で渡したバルーン）を使わず `ghost_switch_boot_failed stage="balloon"` で落ち、既定ゴーストが目録に無いと `ghost_switch_fatal` で終わる（SSP は既定のバルーンで続ける見込み）。実機の走りで konnoyayame（YAYA）の stderr に `[helper] SHIORI 初期化の入口: loadu` の後 `HRESULT(0x80004005)` が出た件も未調査。`/kiro-complete` の棚卸で `/kiro-discovery` に回す。
