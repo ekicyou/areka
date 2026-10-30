@@ -16,7 +16,7 @@ use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
-use crate::scroll_marker::{ScrollChange, window_for};
+use crate::scroll_marker::{ScrollChange, marker_visibility, window_for};
 use crate::segment::segment_plan;
 use crate::state::TextLayerState;
 use crate::surface::TextSurface;
@@ -24,7 +24,10 @@ use crate::wrap::WrapMode;
 
 use super::decoration;
 use super::scroll;
-use super::{ActorRender, ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, is_settled_ordinal};
+use super::{
+    ActorRender, ChoiceHitRow, MarkerSurface, PlacedMarker, ResolvedBalloonText, TextLayerRuntime,
+    is_settled_ordinal,
+};
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
 /// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・R3.3）。
@@ -49,6 +52,10 @@ pub fn present_frame(
     world: &mut World,
     talk_time: f64,
 ) -> Result<(), TextLayerError> {
+    // 再追従が描画資源と一緒に外した印の面を窓の子ごと消す（World はここで初めて持つ）。
+    for markers in std::mem::take(&mut runtime.retired_markers) {
+        markers.despawn(world);
+    }
     // 状態を持つ actor だけが提示対象（binding 登録済みでも cue が無ければ描くものがない）。
     //
     // 「状態を持つ」の判定は **中身か既に作った供給面のどちらかがある**こと（task 7.2）。
@@ -73,7 +80,13 @@ pub fn present_frame(
     let mut presented: Vec<PlaceKey> = Vec::new();
     for place in &places {
         let actor = &place.actor;
-        match present_actor(runtime, world, place, talk_time) {
+        // 印の面の失敗はその場所の矢印だけを出さない（文字・箱の写し・当たりの写しは成功と同じ）。
+        let mut marker_err = None;
+        let result = present_actor(runtime, world, place, talk_time, &mut marker_err);
+        if let Some(e) = marker_err {
+            first_err.get_or_insert(e);
+        }
+        match result {
             Ok(true) => presented.push(place.clone()),
             // 描画範囲の潰れた場所: 描かなかったので「提示した場所」に数えない（箱の写しに載せない）。
             Ok(false) => {}
@@ -113,11 +126,13 @@ pub fn present_frame(
 ///
 /// binding 未解決は [`TextLayerError::SlotNotAttached`]（呼び手が skip 写像）。
 /// 描画範囲の潰れた場所は描かずに `Ok(false)`、それ以外の成功は `Ok(true)`（提示した場所）。
+/// 印の面の失敗は `marker_err` へ置き、文字の提示の答えは変えない（その場所の矢印だけが出ない）。
 fn present_actor(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
     place: &PlaceKey,
     talk_time: f64,
+    marker_err: &mut Option<TextLayerError>,
 ) -> Result<bool, TextLayerError> {
     let actor = &place.actor;
     // ── 解決確認: binding＋layout 入力が揃うまでは蓄積のみ（描画スキップ） ──
@@ -135,6 +150,9 @@ fn present_actor(
     // （要件 2.9）。当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
     if resolved.region.is_collapsed() {
         if let Some(render) = runtime.surfaces.remove(place) {
+            if let Some(markers) = render.markers {
+                markers.despawn(world);
+            }
             render.surface.release(world, binding.slot);
         }
         runtime.choice_snapshot.remove(place);
@@ -284,6 +302,13 @@ fn present_actor(
     if let Some(reason) = reached {
         scroll::record(place, ScrollChange::Stopped(reason), "提示");
     }
+    let shown = scroll::placed_markers(
+        &runtime.balloon_markers,
+        &runtime.box_markers,
+        place,
+        marker_visibility(&window, scroll_state),
+        resolved.markers,
+    );
 
     // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
     // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
@@ -382,7 +407,91 @@ fn present_actor(
         }
         render.surface.present()?;
     }
+    *marker_err = present_markers(runtime, world, place, &binding, origin, &shown).err();
     Ok(true)
+}
+
+/// 提示の最後: 出す矢印・絵・置き場・拡大率が前と違うときだけ印の面を描き直す（当たりの写しも
+/// 一緒に作り直す・要件 3.8）。印の面は初めて矢印を出すときに、面の画像（箱は箱）全体の物理寸で
+/// 文字の面の直前に挿す（要件 3.5）。失敗は失敗源で `error!` 済み（その場所の矢印だけが出ない）。
+fn present_markers(
+    runtime: &mut TextLayerRuntime,
+    world: &mut World,
+    place: &PlaceKey,
+    binding: &super::TextSlotBinding,
+    origin: (f32, f32),
+    shown: &[PlacedMarker],
+) -> Result<(), TextLayerError> {
+    let contract = ScaleContract::new(binding.scale, None);
+    let Some(render) = runtime.surfaces.get(place) else {
+        return Ok(());
+    };
+    match &render.markers {
+        Some(markers) if markers.is_drawn(shown, contract.scale) => return Ok(()),
+        // まだ一度も出していない: 面を作らない。
+        None if shown.is_empty() => return Ok(()),
+        _ => {}
+    }
+    if render.markers.is_none() {
+        let children: Vec<bevy_ecs::entity::Entity> = world
+            .get::<Children>(binding.window)
+            .map(|c| c.iter().copied().collect())
+            .unwrap_or_default();
+        let Some(index) = runtime.marker_child_index(&children, place) else {
+            error!(actor = %place.actor, place = ?place.place, "印の面: 文字の面が窓の子に無い（矢印を出せない）");
+            return Err(TextLayerError::Device {
+                hresult: 0,
+                context: "marker child index",
+            });
+        };
+        let Some(compositor) = world
+            .get_resource::<WucGraphicsResource>()
+            .and_then(|resource| resource.compositor().cloned())
+        else {
+            error!(actor = %place.actor, "印の面: WucGraphicsResource/Compositor 不在");
+            return Err(TextLayerError::Device {
+                hresult: 0,
+                context: "WucGraphicsResource::compositor",
+            });
+        };
+        let physical_size = (
+            contract.physical_extent(ImagePx(binding.image_size.0 as f32)),
+            contract.physical_extent(ImagePx(binding.image_size.1 as f32)),
+        );
+        let physical_offset = (
+            contract.to_physical(ImagePx(origin.0)).0,
+            contract.to_physical(ImagePx(origin.1)).0,
+        );
+        let markers = world.resource_scope(|world, core: bevy_ecs::world::Mut<GraphicsCore>| {
+            MarkerSurface::attach(
+                world,
+                binding.window,
+                index,
+                &compositor,
+                &core,
+                physical_size,
+                physical_offset,
+            )
+        })?;
+        debug!(actor = %place.actor, place = ?place.place, ?physical_size, "印の面を文字の面の直前に挿した");
+        if let Some(render) = runtime.surfaces.get_mut(place) {
+            render.markers = Some(markers);
+        }
+    }
+    if let Some(markers) = runtime
+        .surfaces
+        .get_mut(place)
+        .and_then(|r| r.markers.as_mut())
+    {
+        markers.draw(world, shown, &contract)?;
+        debug!(
+            actor = %place.actor,
+            place = ?place.place,
+            kinds = ?shown.iter().map(|m| m.kind).collect::<Vec<_>>(),
+            "出す矢印が変わったので印の面を描き直した"
+        );
+    }
+    Ok(())
 }
 
 /// 場所 1 つの行の割り当てを作る（「見える数 → 区切り → 配置」の 1 つの手順）。場所に状態が無ければ `None`。

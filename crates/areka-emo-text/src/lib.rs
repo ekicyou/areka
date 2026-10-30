@@ -436,6 +436,7 @@ mod tests {
         "actor_route_tests.rs",
         "actor_runtime_frame_tests.rs",
         "actor_scale_refresh_tests.rs",
+        "actor_scroll_present_tests.rs",
         "actor_scroll_retain_tests.rs",
         "actor_test_support.rs",
         "actor_tests.rs",

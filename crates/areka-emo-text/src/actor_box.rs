@@ -490,7 +490,6 @@ impl TextLayerRuntime {
 
     /// 印の面を窓の `Children` のどこへ挿すか: その場所の文字の面（普通のバルーンは差し込み口・箱は
     /// 箱の文字の面）の位置＝文字の面の直前（先頭ほど手前）。文字の面がまだ無い・子に無ければ `None`。
-    #[cfg_attr(not(test), expect(dead_code, reason = "4.3 の present_markers が呼ぶ"))]
     pub(super) fn marker_child_index(
         &self,
         children: &[Entity],

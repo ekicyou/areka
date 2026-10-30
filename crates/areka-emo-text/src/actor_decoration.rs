@@ -27,6 +27,7 @@ use crate::choice::{CursorFallback, ResolvedChoiceStyle};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, FontCatalog, ResolvedFont};
 use crate::look::GlyphStyles;
 use crate::region::TextRegion;
+use crate::scroll_marker::ResolvedMarkerPlacement;
 use crate::state::{ActorTextState, TextLayerConfig};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::ViewboxExecutor;
@@ -197,6 +198,10 @@ impl ResolvedBalloonText {
             font,
             wrap: WrapMode::resolve(model),
             choice_style,
+            markers: ResolvedMarkerPlacement::resolve(
+                model.arrow_keys(),
+                (image_size.0 as i32, image_size.1 as i32),
+            ),
         }
     }
 }

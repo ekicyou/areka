@@ -54,6 +54,14 @@ pub struct PlacedMarker {
 pub struct MarkerSurface {
     surface: TextSurface,
     dc: ID2D1DeviceContext,
+    /// 窓のクライアント原点から面の左上までの物理 px（当たりの写しの原点）。
+    offset: (f32, f32),
+    /// 最後に描けた矢印（当たりの写しの絵と置き場・次のフレームの「前と同じか」の比べ）。
+    drawn: Vec<PlacedMarker>,
+    /// 最後に描けた拡大率。
+    scale: f32,
+    /// 最後に描けた当たりのマスク（wintf へ渡したのと同じもの・面の物理寸）。
+    mask: Option<AlphaMask>,
 }
 
 impl MarkerSurface {
@@ -93,7 +101,14 @@ impl MarkerSurface {
                 .entity_mut(entity)
                 .insert(Name::new("emo-text-marker-surface"));
         }
-        Ok(MarkerSurface { surface, dc })
+        Ok(MarkerSurface {
+            surface,
+            dc,
+            offset: physical_offset,
+            drawn: Vec::new(),
+            scale: 0.0,
+            mask: None,
+        })
     }
 
     /// 全面を透明にして `shown` の矢印を `(at × k, 大きさ × k)` へ描き、提示し、当たりのマスクを
@@ -137,15 +152,55 @@ impl MarkerSurface {
         self.surface.flip();
         self.surface.present()?;
 
+        let mask = marker_hit_mask(self.surface.size(), k, shown);
         let entity = self.surface.window_child();
         match entity.and_then(|e| world.get_mut::<AlphaMaskResource>(e)) {
-            Some(mut res) => res.set(marker_hit_mask(self.surface.size(), k, shown)),
+            Some(mut res) => res.set(mask.clone()),
             None => tracing::warn!(
                 ?entity,
                 "印の面の entity に当たりのマスクが無い——矢印でクリックを受けられない"
             ),
         }
+        self.drawn = shown.to_vec();
+        self.scale = k;
+        self.mask = Some(mask);
         Ok(())
+    }
+
+    /// 最後に描けた矢印と拡大率が `shown`・`k` と同じか（同じなら描き直さない・要件 3.8）。
+    pub fn is_drawn(&self, shown: &[PlacedMarker], k: f32) -> bool {
+        self.mask.is_some() && self.scale == k && self.drawn == shown
+    }
+
+    /// 点（窓のクライアント物理 px）が最後に描けた矢印のどれかの矩形の中で、その画素が当たりの
+    /// マスク（矢印の絵の α ≥ 0.5）に入っていれば、その矢印の種類（要件 5.7）。
+    pub fn hit(&self, client_px: (f32, f32)) -> Option<MarkerKind> {
+        let mask = self.mask.as_ref()?;
+        let (x, y) = (client_px.0 - self.offset.0, client_px.1 - self.offset.1);
+        if x < 0.0 || y < 0.0 {
+            return None;
+        }
+        let (px, py) = (x.floor() as u32, y.floor() as u32);
+        if !mask.is_hit(px, py) {
+            return None;
+        }
+        let k = self.scale;
+        // 当たった画素を描いた矢印（マスクと同じ矩形の取り方）。重なりは先の矢印を採る。
+        self.drawn
+            .iter()
+            .find(|m| {
+                let inside = |p: u32, at: i32, len: u32| {
+                    (at as f32 * k).floor() <= p as f32
+                        && (p as f32) < ((at as i64 + len as i64) as f32 * k).ceil()
+                };
+                inside(px, m.at.0, m.image.width) && inside(py, m.at.1, m.image.height)
+            })
+            .map(|m| m.kind)
+    }
+
+    /// 文字の面と同じ型の供給面（`dump_balloon` の読み戻し）。
+    pub fn surface(&self) -> &TextSurface {
+        &self.surface
     }
 
     /// 矢印の絵を D2D のビットマップへ上げる（DC の DPI を与える・emo-present `display.rs` と同じ）。

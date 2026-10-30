@@ -414,7 +414,10 @@ impl TextLayerRuntime {
             );
             return true;
         }
-        self.surfaces.remove(&place);
+        // 印の面は窓の子なので、World を持つ次の提示の頭で消す（描画資源と一緒に捨てると残る）。
+        if let Some(markers) = self.surfaces.remove(&place).and_then(|r| r.markers) {
+            self.retired_markers.push(markers);
+        }
         info!(
             actor = %actor,
             k_old,

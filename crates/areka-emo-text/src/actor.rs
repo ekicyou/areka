@@ -9,13 +9,14 @@
 //! `Err` 戻し→基盤が `error!`＋継続（log-first・ループを殺さない）。
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use areka_actor::UiSpawnError;
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
+use areka_emo_present::balloon_marker::MarkerPair;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_sakura::strict::DetectionPoint;
@@ -28,7 +29,7 @@ use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
 use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
-use crate::scroll_marker::{PlaceScroll, StopReason};
+use crate::scroll_marker::{PlaceScroll, ResolvedMarkerPlacement, StopReason};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use crate::state::{SpanKind, SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
@@ -141,6 +142,9 @@ pub struct ResolvedBalloonText {
     /// hover ハイライトスタイルの解決正規形（balloon `cursor.*` モデル＋既定文字色から一点解決）。
     /// 装飾（`decorate_canvas`）が hover 行へ焼く塗り/文字色の源（design.md RuntimeContract・R4.2/4.3）。
     pub choice_style: ResolvedChoiceStyle,
+    /// スクロールの矢印の置き場（`arrow0`／`arrow1` の左上・image px）。モデルの矢印の鍵を
+    /// 広がり（普通のバルーン＝面の画像・箱＝箱の大きさ）で解いた値（要件 3.4・3.7・7.1・7.7）。
+    pub markers: ResolvedMarkerPlacement,
 }
 
 impl ResolvedBalloonText {
@@ -289,6 +293,12 @@ pub struct TextLayerRuntime {
     /// 場所 → 手動の送りの状態（balloon-scroll-arrows・要件 8.8）。書くのは `actor_scroll.rs`・
     /// 提示（`actor_present.rs`）・本ファイルの消去の腕・箱の登録を外す口だけ。
     scrolls: HashMap<PlaceKey, PlaceScroll>,
+    /// スコープ → 普通のバルーンの矢印の絵（`set_balloon_markers`・`actor_scroll.rs`）。
+    balloon_markers: HashMap<ActorKey, MarkerPair>,
+    /// 箱の名前 → 箱の矢印の絵（`set_box_markers`）。足りない番号はスコープの普通のバルーンの絵で埋める。
+    box_markers: BTreeMap<BoxName, MarkerPair>,
+    /// World の無い所（再追従）で描画資源と一緒に外した印の面。次の [`present_frame`] の頭で窓の子ごと消す。
+    retired_markers: Vec<MarkerSurface>,
 }
 
 impl TextLayerRuntime {
@@ -322,6 +332,9 @@ impl TextLayerRuntime {
             lookahead: TalkLookahead::default(),
             choice_wait_open: false,
             scrolls: HashMap::new(),
+            balloon_markers: HashMap::new(),
+            box_markers: BTreeMap::new(),
+            retired_markers: Vec::new(),
         }
     }
 
@@ -789,6 +802,10 @@ mod box_present_tests;
 #[cfg(test)]
 #[path = "actor_scroll_tests.rs"]
 mod scroll_tests;
+
+#[cfg(test)]
+#[path = "actor_scroll_present_tests.rs"]
+mod scroll_present_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

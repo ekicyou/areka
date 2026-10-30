@@ -5,15 +5,56 @@
 //! `present_actor` が [`crate::scroll_marker::window_for`] の見える範囲で今の送りの描き直しを出す）。
 //! 手動の始まり・終わりは場所と理由を `debug!`（要件 9.2）、1 段ごとの送りは `trace!`（要件 9.3）。
 
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+
+use areka_emo_compose::BoxName;
+use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_sakura::contract::ActorKey;
 use tracing::{debug, trace};
 
-use crate::place::PlaceKey;
-use crate::scroll_marker::{ScrollChange, ScrollDir, StopReason, WheelLines};
+use crate::place::{PlaceKey, TextPlace};
+use crate::scroll_marker::{
+    MarkerKind, MarkerShown, ResolvedMarkerPlacement, ScrollChange, ScrollDir, StopReason,
+    WheelLines,
+};
+use crate::surface::TextSurface;
 
-use super::TextLayerRuntime;
+use super::{PlacedMarker, TextLayerRuntime};
 
 impl TextLayerRuntime {
+    /// スコープの普通のバルーンの矢印の絵を入れ替える（面の切り替えが入れる・要件 3.4・7.3）。
+    /// 次の提示で出す矢印が前と違えば描き直す。
+    pub fn set_balloon_markers(&mut self, actor: ActorKey, markers: MarkerPair) {
+        debug!(
+            actor = %actor,
+            up = markers.up.is_some(),
+            down = markers.down.is_some(),
+            "普通のバルーンの矢印の絵を受け取った"
+        );
+        self.balloon_markers.insert(actor, markers);
+    }
+
+    /// 箱の名前ごとの矢印の絵を入れ替える（シェルの箱の束と一緒に入れる・要件 7.3）。
+    /// 足りない番号は、提示のときにそのスコープの普通のバルーンの絵で埋める。
+    pub fn set_box_markers(&mut self, markers: BTreeMap<BoxName, MarkerPair>) {
+        debug!(boxes = markers.len(), "箱の矢印の絵を受け取った");
+        self.box_markers = markers;
+    }
+
+    /// 点（窓のクライアント物理 px・選択肢の行と同じ空間）が、最後に提示した矢印の矩形の中で、
+    /// その画素が矢印の絵の α ≥ 0.5 なら矢印の種類（要件 5.7）。押下の振り分けは送り手でなく
+    /// この点の答えで決める。
+    pub fn marker_at_point(&self, place: &PlaceKey, client_px: (f32, f32)) -> Option<MarkerKind> {
+        self.surfaces.get(place)?.markers.as_ref()?.hit(client_px)
+    }
+
+    /// 普通のバルーンの印の面（`dump_balloon` の写し）。矢印をまだ出していなければ `None`。
+    pub fn marker_surface(&self, actor: &ActorKey) -> Option<&TextSurface> {
+        let render = self.surfaces.get(&PlaceKey::balloon(actor))?;
+        Some(render.markers.as_ref()?.surface())
+    }
+
     /// 場所の手動の位置を `dir` の向きへ `lines` 行送る（矢印の押下・要件 5.1〜5.4）。
     /// まだ一度も提示していない場所は送れない（`Unchanged`）。
     pub fn scroll_manual_at(
@@ -102,4 +143,40 @@ pub(super) fn record(place: &PlaceKey, change: ScrollChange, via: &str) {
         }
         ScrollChange::Unchanged => {}
     }
+}
+
+/// 出す矢印（[`MarkerShown`]）を絵と置き場に引き当てる。普通のバルーンはスコープの絵、箱は箱の名前の
+/// 絵で、箱の足りない番号はスコープの普通のバルーンの絵で埋める（要件 7.3）。絵の無い矢印は出さない。
+pub(super) fn placed_markers(
+    balloon: &HashMap<ActorKey, MarkerPair>,
+    boxes: &BTreeMap<BoxName, MarkerPair>,
+    place: &PlaceKey,
+    shown: MarkerShown,
+    at: ResolvedMarkerPlacement,
+) -> Vec<PlacedMarker> {
+    let scope = balloon.get(&place.actor);
+    let own = match &place.place {
+        TextPlace::Balloon => None,
+        TextPlace::Box(name) => boxes.get(name),
+    };
+    let pick = |of: fn(&MarkerPair) -> &Option<Arc<MarkerImage>>| {
+        own.and_then(|p| of(p).clone())
+            .or_else(|| scope.and_then(|p| of(p).clone()))
+    };
+    let mut out = Vec::new();
+    if let (true, Some(image)) = (shown.up, pick(|p| &p.up)) {
+        out.push(PlacedMarker {
+            kind: MarkerKind::Up,
+            at: at.up,
+            image,
+        });
+    }
+    if let (true, Some(image)) = (shown.down, pick(|p| &p.down)) {
+        out.push(PlacedMarker {
+            kind: MarkerKind::Down,
+            at: at.down,
+            image,
+        });
+    }
+    out
 }
