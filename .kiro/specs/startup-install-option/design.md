@@ -111,7 +111,7 @@ graph TB
 | 起動オプション | `crates/areka/src/cli`（自前） | `--install` と 2 つの語を読む | 依存なし |
 | アプリの World | `bevy_ecs`（ワークスペースのピンのまま） | 持ち物 `StartupInstall` を資源として置く | 新しい依存なし |
 | ファイル | `std::path::absolute`・`std::fs::remove_file`・`Path::is_file` | 相対パスの絶対化・消す・exe の隣を見る | `offline_dump` と同じ絶対化 |
-| 記録 | `tracing`（`logging.md` の形） | 新しい記録 9 種 | テストは `log-capture-kit` |
+| 記録 | `tracing`（`logging.md` の形） | 新しい記録 11 種 | テストは `log-capture-kit` |
 
 ## File Structure Plan
 
