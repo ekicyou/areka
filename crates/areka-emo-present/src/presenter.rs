@@ -117,6 +117,9 @@ mod display_tests;
 #[path = "presenter_dpi_scale_tests.rs"]
 mod dpi_scale_tests;
 #[cfg(test)]
+#[path = "presenter_failure_note_tests.rs"]
+mod failure_note_tests;
+#[cfg(test)]
 #[path = "presenter_fractional_scale_tests.rs"]
 mod fractional_scale_tests;
 #[cfg(test)]

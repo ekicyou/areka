@@ -87,6 +87,7 @@ impl EmoPresenter {
                 acked_generation: 0,
                 pending_resize: None,
                 partial_base: false,
+                failure_note: None,
             },
         );
         Ok(())

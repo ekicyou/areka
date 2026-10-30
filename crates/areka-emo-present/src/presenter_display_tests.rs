@@ -138,7 +138,11 @@ fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
 /// `Err(ComposeError::EmptyComposition(7000))` を返す。単なる全透明 element は非ゼロ外形の
 /// `Ok`（`all_transparent_surface_is_ok_transparent_nonzero_extent`）で EmptyComposition では
 /// ないため、退化は「定義層皆無 → 0×0」の経路で作る。
-fn build_assets_with_valid_and_empty(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
+pub(super) fn build_assets_with_valid_and_empty(
+    w: u32,
+    h: u32,
+    salt: u8,
+) -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     // surface 1000: 全不透明 element 1 本。surface 7000: element/animation ゼロ（定義層皆無）。
     let surfaces = vec![

@@ -183,10 +183,20 @@ impl EmoPresenter {
                             .get_resource::<GraphicsCore>()
                             .and_then(|gfx| gfx.device_context())
                         else {
-                            tracing::error!(
-                                ?target_id,
-                                "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
-                            );
+                            // 同じ原因の続きは 2 回目から DEBUG（要件 4.3）。原因は返す `Device` の値と同じ。
+                            const NO_GFX: (&str, i32) = ("GraphicsCore resource", 0);
+                            if target.failure_note == Some(NO_GFX) {
+                                tracing::debug!(
+                                    ?target_id,
+                                    "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
+                                );
+                            } else {
+                                tracing::error!(
+                                    ?target_id,
+                                    "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
+                                );
+                            }
+                            target.failure_note = Some(NO_GFX);
                             Self::reply(
                                 reply,
                                 Err(PresentError::Device {
@@ -198,13 +208,17 @@ impl EmoPresenter {
                         };
                         // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
                         // 起きないため確保の計数も動かない。
+                        let repeat = target.failure_note;
                         match target
                             .budget
-                            .native_scratch(|scratch| record_display(dc, scratch, None))
+                            .native_scratch(|scratch| record_display(dc, scratch, repeat))
                         {
                             Ok(list) => list,
-                            // record_display は内部で error! 済み（display.rs device_err）。
+                            // record_display は内部で記録済み（display.rs device_err・同じ原因の続きは debug!）。
                             Err(e) => {
+                                if let PresentError::Device { hresult, context } = &e {
+                                    target.failure_note = Some((*context, *hresult));
+                                }
                                 Self::reply(reply, Err(e));
                                 return;
                             }
@@ -270,6 +284,7 @@ impl EmoPresenter {
                     target.visible = false;
                     // EmptyComposition 縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
                     target.current_surface_id = None;
+                    target.failure_note = None;
                     Self::reply(reply, Ok(()));
                     return;
                 }
@@ -281,6 +296,7 @@ impl EmoPresenter {
                         error = %e,
                         "apply(ShowSurface): 合成失敗 → 表示は適用前のまま（reply Err）"
                     );
+                    target.failure_note = None;
                     Self::reply(reply, Err(PresentError::Compose(e)));
                     return;
                 }
@@ -431,6 +447,8 @@ impl EmoPresenter {
         // 下敷きの印（要件 3.1・4.2）: 控えに外れ、動きのある面（下敷き形の口で合成した）ときだけ真。
         // このとき合成器の前の命令列は、いま控えへ入れた `last_show` の鍵の絵を作った命令列である。
         target.partial_base = !cache_hit && !pattern.is_empty();
+        // 成立をはさんだので、次の装置の失敗は新しい続き＝ERROR（要件 4.3）。
+        target.failure_note = None;
         target.last_show = Some((surface_id, binds, pattern));
 
         // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。**最初の表示と状態の替わりは INFO・

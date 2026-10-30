@@ -187,4 +187,9 @@ pub(super) struct PresentTarget {
     /// 作るとき偽・控えに外れたら合成の前に偽・`InvalidateCache` で偽・表示の成立点で「控えに外れ、
     /// 動きのある面だった」なら真。合成の後で失敗した適用のあとは偽のまま＝次はいちから合成する。
     pub(super) partial_base: bool,
+    /// **最後に記録した装置の失敗の原因**（`context`・`hresult`・要件 1.6・4.3）。
+    ///
+    /// 成立をはさまずに同じ原因が続くあいだだけ値を持ち、その間の失敗の行は `debug!` になる。対象を
+    /// 作るとき空・装置の失敗で `Some`・表示の成立点と装置以外の失敗（合成の失敗・全透明の縮退）で空。
+    pub(super) failure_note: Option<(&'static str, i32)>,
 }
