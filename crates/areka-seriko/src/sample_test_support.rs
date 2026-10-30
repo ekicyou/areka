@@ -37,6 +37,15 @@ pub(crate) fn konnoyayame_shell_root() -> PathBuf {
     KONNOYAYAME.folder().join("shell/master")
 }
 
+/// 「．さくら」検体（spec: seriko-pattern-calls 要件 9.3）。
+static DOT_SAKURA: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("dot_sakura").expect("dot_sakura は登記済みの検体"));
+
+/// 「．さくら」検体のシェルのフォルダ（`shell/master/`）。
+pub(crate) fn dot_sakura_shell_root() -> PathBuf {
+    DOT_SAKURA.folder().join("shell/master")
+}
+
 #[cfg(test)]
 #[path = "sample_test_support_tests.rs"]
 mod tests;

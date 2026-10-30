@@ -227,3 +227,7 @@ mod tests;
 #[cfg(test)]
 #[path = "table_calls_check_tests.rs"]
 mod check_tests;
+
+#[cfg(test)]
+#[path = "table_calls_dot_sakura_tests.rs"]
+mod dot_sakura_tests;
