@@ -146,7 +146,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - _Requirements: 3.7, 9.5, 9.6, 10.2, 10.3_
 
 - [ ] 8. 受け入れの確認
-- [ ] 8.1 触った crate の決定論のテストを通し、既存の期待値が変わっていないことを確かめる
+- [x] 8.1 触った crate の決定論のテストを通し、既存の期待値が変わっていないことを確かめる
   - `areka-parsers`・`areka-emo-present`・`areka-emo-text`・`areka` のテストを排他テストの机で順を取って回し、矢印の鍵を持たないバルーンの既存のテストの期待値を変えていないことを差分で確かめる
   - 完了の姿: 4 つの crate のテストが緑で、既存のテストの期待値の差分が 0（`validation_tests.rs` のコメントの直しだけ）
   - _Requirements: 11.1, 11.2_
@@ -186,3 +186,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 6.1: `input_events/balloon_wheel.rs` の系は `ghost_session::register_systems` で `register_char_watch` の隣に登録（design.md は mod.rs と書くがコードの型に合わせた）。`frame::test_support` と `manual_balloon_runtime`・`balloon_is_manual` は `pub(crate)`（cfg(test)）。
 - 6.2: 「話し終えたか」は `balloon_pressed.rs` の `finished_talking(world)`（`UserBreakWiring.talking`・ゴーストに 1 つ。スコープごとの状態はコードに無い）。6.3 は balloon.rs から `pub(crate) use` で使う。話している最中の矢印の押下は、今は既存のクリックの流れ（`balloon_break_detected`）へ回る。片クリックの早送りは `talk-fast-forward` が入れば自動で効く（要件 5.6 は「本 spec の前と同じクリック」）。消費した矢印の押下は `prev_press_selected` を上書きしない（選択肢のクリック→矢印→矢印の外のダブルクリックで中断を取らない端の場合がある）。
 - 6.3: 箱の矢印の押下は `shell_box_handler.rs` の `press_box_arrow`（true を返すと `by_box` になりクリックにならない）。箱の上のホイールは `char_watch.rs` の `char_watch_with`／`wheel_box`（隠れた行がある箱だけ横取り）。手前の箱の四角が奥の箱の矢印に重なると、その矢印は押せない（選択肢の当たりと同じ規則）。
+- 8.1（2026-10-31）: 排他テストの机で 4 crate を 1 回ずつ回して緑（areka-parsers 596・areka-emo-present 355・areka-emo-text 1281＋4 ignored・areka 4051＋3 ignored・失敗 0）。基点 484263230 からの既存のテスト 9 本の差分は期待値の変更 0（機械的な欄の付け替え・新しいテストの追加・`validation_tests.rs` のコメントだけ）。
