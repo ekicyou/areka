@@ -1,5 +1,6 @@
 //! descript の既定の面（`*.seriko.defaultsurface`）の読みと、戻り先の候補の並び
-//! （descript-window-keys 要件 1・2.6）と、バルーンの動かせない指定（`*.balloon.dontmove`）の読み（要件 4）。
+//! （descript-window-keys 要件 1・2.6）と、バルーンの動かせない指定（`*.balloon.dontmove`）の読み（要件 4）と、
+//! バルーンの倍率をシェルに連動させる指定（`*.balloon.syncscale`）の読み（shell-scale-linkage 要件 6）。
 //!
 //! 組み込みの既定の面（本体側 0・それ以外 10）を持つのはこのモジュールだけ。
 //! 既定の面はゴーストの descript だけから読む（シェルの KV を引数に持たない＝要件 1.6 を型で守る）。
@@ -7,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::config::{scope_prefixes, scoped_value};
 
@@ -75,17 +76,7 @@ pub fn read_default_surfaces(ghost_kv: &BTreeMap<String, String>) -> DefaultSurf
     }
     // スコープ 2 以降は `char<n>.`（n は 10 進の 2 以上・先頭の 0 なし）だけ。
     for (key, raw) in ghost_kv {
-        let Some(n) = key
-            .strip_prefix("char")
-            .and_then(|rest| rest.strip_suffix(DEFAULT_SURFACE_SUFFIX))
-            .and_then(|rest| rest.strip_suffix('.'))
-        else {
-            continue;
-        };
-        if let Ok(scope) = n.parse::<usize>()
-            && scope >= 2
-            && scope.to_string() == n
-        {
+        if let Some(scope) = numbered_scope(key, DEFAULT_SURFACE_SUFFIX) {
             insert_readable(&mut written, scope, key, raw);
         }
     }
@@ -175,6 +166,85 @@ fn insert_readable(written: &mut BTreeMap<usize, u32>, scope: usize, key: &str, 
             "descript_value_unreadable: 既定の面が 0 以上の整数として読めない——組み込みの既定の面を使う"
         ),
     }
+}
+
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#balloon.syncscale_2ctrue:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.balloon.syncscale_2ctrue:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.balloon.syncscale_2ctrue:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#char_2a.balloon.syncscale_2ctrue:1
+/// バルーンの倍率をシェルに連動させる指定のキーのスコープの後ろの綴り（ゴーストの段はこの綴りそのもの）。
+const BALLOON_SYNCSCALE: &str = "balloon.syncscale";
+
+/// `balloon.syncscale` の指定（shell-scale-linkage 要件 6）: ゴーストの段の真偽と、シェルの段で連動するスコープ。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BalloonSyncScale {
+    ghost: bool,
+    shell_scopes: BTreeSet<u32>,
+}
+
+impl BalloonSyncScale {
+    /// スコープのバルーンの倍率をシェルに連動させるか（ゴーストの段かシェルの段のどちらかが `true`・要件 6.3）。
+    pub fn is_synced(&self, scope: u32) -> bool {
+        self.ghost || self.shell_scopes.contains(&scope)
+    }
+}
+
+/// ゴーストの `balloon.syncscale` と、シェルの `sakura.`＞`char0.`・`kero.`＞`char1.`・`char<n>.`（n≥2）の
+/// `balloon.syncscale` を読む。値は前後の空白を除いて `true` と完全に一致するときだけ有効（要件 6.1〜6.4）。
+pub fn read_balloon_syncscale(
+    ghost_kv: &BTreeMap<String, String>,
+    shell_kv: &BTreeMap<String, String>,
+) -> BalloonSyncScale {
+    let ghost = ghost_kv
+        .get(BALLOON_SYNCSCALE)
+        .is_some_and(|raw| read_syncscale("all", BALLOON_SYNCSCALE, raw));
+    let mut shell_scopes = BTreeSet::new();
+    let mut read = |scope: usize, key: &str, raw: &str| {
+        // 収まらない番号の窓は在り得ないので、読んだ記録だけ残して集合には入れない。
+        if read_syncscale(scope, key, raw)
+            && let Ok(scope) = u32::try_from(scope)
+        {
+            shell_scopes.insert(scope);
+        }
+    };
+    for scope in [0usize, 1] {
+        if let Some((key, raw)) = scoped_entry(shell_kv, scope, BALLOON_SYNCSCALE) {
+            read(scope, &key, raw);
+        }
+    }
+    for (key, raw) in shell_kv {
+        if let Some(scope) = numbered_scope(key, BALLOON_SYNCSCALE) {
+            read(scope, key, raw);
+        }
+    }
+    BalloonSyncScale {
+        ghost,
+        shell_scopes,
+    }
+}
+
+/// 連動の指定の値を読み、鍵ごとに警告より下の段の記録を 1 件残す（`true` 以外は指定なし・要件 6.4・6.7）。
+fn read_syncscale(scope: impl std::fmt::Display, key: &str, raw: &str) -> bool {
+    let synced = raw.trim() == "true";
+    debug!(
+        event = "balloon_syncscale_read",
+        %key,
+        %scope,
+        value = ?raw,
+        synced,
+        "balloon_syncscale_read: バルーンの倍率をシェルに連動させる指定を読んだ"
+    );
+    synced
+}
+
+/// `char<n>.<suffix>` のスコープ番号（n は 10 進の 2 以上・先頭の 0 なし）。
+fn numbered_scope(key: &str, suffix: &str) -> Option<usize> {
+    let n = key
+        .strip_prefix("char")?
+        .strip_suffix(suffix)?
+        .strip_suffix('.')?;
+    let scope = n.parse::<usize>().ok()?;
+    (scope >= 2 && scope.to_string() == n).then_some(scope)
 }
 
 #[cfg(test)]
