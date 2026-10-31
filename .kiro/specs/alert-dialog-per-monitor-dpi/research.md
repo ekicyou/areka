@@ -140,3 +140,45 @@
 - [SetProcessDpiAwarenessContext（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-setprocessdpiawarenesscontext) — DPI の扱いに頼る API より前に呼ぶ決まり
 - [Supporting Per-Monitor (V2) DPI Awareness（Appeon・第三者）](https://docs.appeon.com/pb2025r2/application_techniques/Supporting_PerMonitorV2.html) — v2 で Win32 のダイアログ（その製品の MessageBox を含む）が拡大を追うとする
 - [AutoHotkey の掲示板](https://www.autohotkey.com/boards/viewtopic.php?p=70977) — v2 にしてもメッセージボックスがぼやけるという利用者の報告（第三者・裏づけは弱い）
+
+## 設計の段の調べと決めたこと（2026-11-01・`/kiro-spec-design -y`）
+
+### 調べの範囲
+
+- **種類**: 既にある仕組みの手直し（Extension）＝軽い調べ（light discovery）。触るのは `crates/areka/src/alert.rs` と新しい兄弟のテストのファイルだけ。新しい依存は無い。
+- **使った手引き**: `kiro-spec-design` の決まり（設計の原則・軽い調べ・まとめ・審査の関門）、steering の `tech.md`（`unsafe` は Windows の API の呼び出しだけ・安全の理由を書く）・`logging.md`（構造化の欄・`log-capture-kit`）・`doc/impl-watch.md`（`#[ignore]` の実機テストを `--ignored` で回すのは排他テストの机）。
+
+### 分かったこと
+
+1. **機能はそろっている**: 囲みと関門 0 の測りに要る API（`SetThreadDpiAwarenessContext`・`GetWindowDpiAwarenessContext`・`GetAwarenessFromDpiAwarenessContext`・`GetDpiForWindow`・`GetDpiForMonitor`・`GetDpiForSystem`・`SetTimer`・`EnumThreadWindows`・`PostMessageW`・`MonitorFromWindow`・`GetCurrentThreadId`）は、ワークスペースの `Cargo.toml` で既に有効な `Win32_UI_HiDpi`・`Win32_UI_WindowsAndMessaging`・`Win32_Graphics_Gdi`・`Win32_System_Threading` にある。`Cargo.toml` は触らない。
+2. **申告に DPI の行は無い**: `crates/areka/areka.manifest` は comctl32 の版 6 の申告だけ。areka.exe もテストの実行ファイルも、プロセスの既定は非対応で始まる。bin のユニットテストの実行ファイルにも同じ申告が埋まる（`build.rs`）ので、関門 0 は本番と同じメッセージボックスの部品で測れる。
+3. **2026-10-31 の値 1 が正しければ、案 A は効かない見込みが強い**: 7.2 では画面の前にプロセスを v2 に立てていた。スレッドは何も替えていなければプロセスの既定を受けるので、そのときスレッドは既に v2 だった見込みが高い。その状態で画面の窓が system（1）だったのなら、スレッドを v2 に囲んでも同じ状態を作り直すだけで、結果は変わらない。外の報告にも「古い `MessageBox` は v2 に合わせて直されておらず、タスクダイアログは正しく拡大される」という Stack Overflow の答えと、AutoHotkey の掲示板の報告がある（どちらも第三者・公式の記述ではない）。一方、7.2 の値は別のプロセスから読んだもので、窓の取り違えを除けていない。だから関門 0 で、7.2 と同じ形（プロセスを v2 に立てて、スレッドは替えない）も areka のコードの中から測る（場合 `process_v2_default`）。
+4. **最後のエラーの順（調べること 3）は問わずに済む**: `MessageBoxW` が戻った直後、スレッドを戻す前に最後のエラーを読んで持ち帰る形にすれば、戻す呼び出しが値を上書きしても記録の中身は今と同じ。
+5. **画面の窓は同じスレッドから見つけられる**: 持ち主の窓の無いメッセージボックスもモーダルの間に同じスレッドのメッセージを配るので、スレッドのタイマーの呼び戻しから `EnumThreadWindows` でクラス名 `#32770` の窓を見つけ、読んで、`WM_COMMAND`＋`IDOK` で閉じられる。見つからないときは `PostQuitMessage` でモーダルを抜けさせる。
+
+### 決めたこと
+
+| 点 | 決めたこと | 理由 |
+|---|---|---|
+| 形（まとめ: 一般化） | 3 つの口の `MessageBoxW` を 1 つの `show_box` に集め、その中で `with_thread_per_monitor` が囲む | 3 つの画面は同じ問題の変種。1 つの道にすれば 1.3・1.4 が形で満たされる |
+| 差し込みの口（まとめ: 簡素化） | `with_thread_per_monitor` だけが切り替えの関数を引数で受ける。`MessageBoxW` は差し込まない | 「替えられなかった」道は本物の API では起こせない（4.1）。画面の方は決定論のテストで出さないので差し込む要が無い |
+| 作るか取り入れるか | OS の標準のメッセージボックスをそのまま使い、スレッドの扱いだけを替える（案 A）。タスクダイアログ（案 B）と自前の窓（案 C）は関門 0 で効かなかったときの開発者の裁定 | 要件の討議で決めた。見た目と旗を変えずに済む（2.1） |
+| 案 A′（プロセスも立てる） | 取らない | スレッドを囲めば窓のアプリの前でも足りる（関門 0 の `wrapped_from_unaware` で確かめる）。プロセスの扱いを立てる時を増やすと「UI を作る前に 1 回だけ」の決まりに順が効く |
+| 設計で決めること 6（warn の語） | 3 つの画面で 1 つの語 `alert_dpi_context_unchanged`（warn）・どの画面かは欄 `dialog`（"alert"・"ask"・"install_warning_dialog"） | 拾う側は語 1 つで足りる。前例 `scope_rect_dpi_context_unchanged` は debug で水準が違うので混ぜない |
+| 設計で決めること 7（テストの置き場） | 新しい兄弟 `crates/areka/src/alert_dpi_tests.rs`（`alert.rs` の `#[path]`） | `alert.rs` の兄弟なのでウェーブ C15 の約束の内。今の `alert_tests.rs` は文面と抑止のテストで、見るものが違う |
+| 設計で決めること 8（要件 4.4） | 当たらない。窓のアプリの前と後で道を分けない | スレッドだけを替えるので、プロセスが非対応でも v2 でも同じ道。プロセスが非対応の前の画面は関門 0 の `wrapped_from_unaware` が中から確かめる |
+| 要件 4.6 の「設計の最初」 | 実装のタスクの 1 番目（関門 0）で測る。関門 0 は囲みの関数と測りだけを作り、3 つの口へは繋がない。通るまで先へ進まない | 設計を書く段では画面を出せない。測りが本番の `show_box` を通るには、その関数が先に要る |
+| 実装の後の実機の画面 | 起動の前のインストールの利用条件の画面（7.2 と同じ形）。窓の DPI はプロセスの番号で絞った窓をその場限りのスクリプトで読む | 「はい」で起動が続くので 4.5 を同じ 1 回で見られる。番号で絞れば 7.2 の取り違えの見込みを除ける |
+
+### 危うさと手当て
+
+- **案 A が効かない見込みが小さくない**（上の 3）— 関門 0 を実装の最初に置き、効かなければ 3 つの口へ繋ぐ前に止めて開発者へ戻す。本番の振る舞いはその時点で変わっていない。
+- **測りが別の窓を拾う**— 同じスレッドの窓だけを、クラス名と測りの題名で絞って読む。
+- **測りの画面が閉じずに止まる**— 20 回（およそ 6 秒）で `PostQuitMessage` で抜け、赤として返す。
+- **プロセスを v2 に立てる場合は戻せない**— 最後の場合に置き、名指しと `--test-threads=1` でこの測りだけを走らせる。
+
+### 出典（設計の段で足した物）
+
+- [Stack Overflow の答え（kiwix の写し）](https://kiwix.lema.org/stackoverflow.com_en_all_2023-11/a/43234355) — 古い MessageBox は v2 に合わせて直されておらず、タスクダイアログは正しく拡大されるという報告（第三者）
+- [DPI_AWARENESS_CONTEXT handle（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/desktop/hidpi/dpi-awareness-context) — v2 の扱いと、v2 で作ったダイアログが拡大を追うこと
+- [AutoHotkey の掲示板](https://www.autohotkey.com/boards/viewtopic.php?p=70977) — 既出・v2 でもメッセージボックスがぼやける報告（第三者）
