@@ -308,3 +308,7 @@ mod animation_tests;
 #[cfg(test)]
 #[path = "wic_arm_test_support.rs"]
 mod test_support;
+
+#[cfg(test)]
+#[path = "wic_arm_palette_tests.rs"]
+mod palette_tests;
