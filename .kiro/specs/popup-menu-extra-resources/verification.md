@@ -1,5 +1,18 @@
 # popup-menu-extra-resources 検証の記録
 
+## 4.1 3 クレートのテストと変えないファイル（要件 5.5・6.2・3.3）
+
+2026-11-01・`cargo test -p areka` の実機の結合テストは排他テストの机を持って回した。
+
+| 命令 | 結果 |
+|---|---|
+| `cargo test -p areka-kanade` | 緑・706・86・0 通過・0 失敗 |
+| `cargo test -p ukadoc-survey` | 緑・601・0・6・113・5 通過・0 失敗 |
+| `cargo test -p areka` | 1 回目は 4161 通過・1 失敗（`smoke_boot_loop_exit` の 1 本が i686 の `shiori_loadu.dll` 未ビルドで `real-run-kit` の `i686.rs:77` で落ちた・本 spec の差分とは無関係）。`cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` の後、赤の実行ファイルだけ回し直して 5 通過・0 失敗 |
+| `tools/test-all.ps1`（最終検証・commit `86ed7ceb`） | 全段緑（fmt・x64 ワークスペース・i686・エンコード・ロードマップの検査ほか） |
+
+`git diff main...HEAD --stat` に `crates/areka/src/menu/plan.rs`・`mod.rs`・`win32.rs`・`trigger.rs`・`update_frame.rs`、kanade の `actor_resources.rs`・`actor_resources_tests.rs`・`actor.rs`・`shiori/real.rs`、`shiori-host32-host` の `shiori2.rs` は現れない（grep で 0 件）。
+
 ## 4.2 「．さくら」を areka と SSP で開いた右クリックメニュー（要件 1.6・3.4・5.6〜5.8）
 
 2026-11-01（日本時間 01:54〜02:00）・排他テストの机を持って 1 回。記録の時刻は UTC（areka の記録の書き方のまま）。
