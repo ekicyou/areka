@@ -74,17 +74,20 @@ impl dola::cue::CueSink for ReadmeCueSink {
                     if command == NAME_OPEN || command == JUMP_TAG_CARRIER =>
                 {
                     warn!(
+                        event = "readme_cue_unopenable",
                         command = ?cue.command,
-                        "ReadmeCueSink: 自分宛（open・\\j）の開けない荷物を良性に読み飛ばす（宛名の規律）"
+                        "[readme] 自分宛（open・\\j）の開けない荷物を良性に読み飛ばす（宛名の規律）"
                     )
                 }
                 CueCommand::Custom { .. } => debug!(
+                    event = "readme_cue_skip",
                     command = ?cue.command,
-                    "ReadmeCueSink: 他人宛の開けない荷物を良性に読み飛ばす（担当外・宛名の規律）"
+                    "[readme] 他人宛の開けない荷物を良性に読み飛ばす（担当外・宛名の規律）"
                 ),
                 _ => debug!(
+                    event = "readme_cue_skip",
                     command = ?cue.command,
-                    "ReadmeCueSink: キャリアでない cue を良性に読み飛ばす（担当外）"
+                    "[readme] キャリアでない cue を良性に読み飛ばす（担当外）"
                 ),
             }
             return;
@@ -97,8 +100,9 @@ impl dola::cue::CueSink for ReadmeCueSink {
             // ukadoc の正典 URL は担当の定義箇所（`CommandConsumer::ReadmeSink` の doc）に 1 行置く。
             if params.len() > 1 {
                 warn!(
+                    event = "readme_cue_unsupported",
                     arguments = ?&params[1..],
-                    "ReadmeCueSink: 引数付きの説明書タグは語彙のみのため何もしない（要件 4.6）"
+                    "[readme] 引数付きの説明書タグは語彙のみのため何もしない（要件 4.6）"
                 );
                 return;
             }
@@ -110,8 +114,8 @@ impl dola::cue::CueSink for ReadmeCueSink {
             match classify(name, &params) {
                 None => {
                     debug!(
-                        name,
-                        selector, "ReadmeCueSink: 担当外のコマンドを良性に読み飛ばす（自己選別）"
+                        event = "readme_cue_skip",
+                        name, selector, "[readme] 担当外のコマンドを良性に読み飛ばす（自己選別）"
                     );
                     return;
                 }
@@ -120,7 +124,7 @@ impl dola::cue::CueSink for ReadmeCueSink {
                         event = "open_external_rejected",
                         tag = %rejected.tag,
                         reason = ?rejected.reason,
-                        "ReadmeCueSink: 開く系のタグを断った（開かない）"
+                        "[readme] 開く系のタグを断った（開かない）"
                     );
                     return;
                 }
@@ -130,7 +134,10 @@ impl dola::cue::CueSink for ReadmeCueSink {
 
         // 4) 送り出し。受信端が閉じていても台本は殺さない（記録して継続・非 panic）。
         if self.tx.send(request).is_err() {
-            warn!("ReadmeCueSink: 開く系の要求を送り出せなかった（受信端が閉じている）");
+            warn!(
+                event = "readme_cue_send_failed",
+                "[readme] 開く系の要求を送り出せなかった（受信端が閉じている）"
+            );
         }
     }
 }
