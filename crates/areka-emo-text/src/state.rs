@@ -632,6 +632,7 @@ impl TextLayerState {
             // 良性スキップ（従来どおり読み飛ばす）。
             // 印の合図（`\![*]`・`%*`）は書式の見分けの前に見て、今の場所に目印の字を 1 つ積む
             // （本文の字と同じ時刻と見た目・要件 4.1・4.2・4.5・5.6・5.7）。
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5b_2a_5d:1
             CueCommand::Custom { .. } if is_marker_carrier(&cue.command) => {
                 tracing::debug!(actor = %cue.actor, at = cue.at, "印の cue 適用（目印の字を 1 つ追記）");
                 let state = self.place_entry(&dest);

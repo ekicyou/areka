@@ -95,6 +95,8 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
             }
             // 文字の番号 `\_u[…]`・`\_m[…]`（script-small-tags 要件 1・2）: サロゲートの組を
             // 作るのに次のトークンを先読みするので、ここで読む。
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_u_5b0x0000_5d:1
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_m_5b0x00_5d:1
             Token::Tag { word, args } if is_char_code_tag(&word) => {
                 decode_char_code(&word, &args, &mut it, &mut end)
             }
@@ -213,6 +215,7 @@ fn decode_token(token: Token, notes: &mut Vec<ReadNote>) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
         // `%*` は `\![*]` と同じ印の命令（script-small-tags 要件 4.3）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25_2a:1
         Token::SysVar(keyword) if keyword == MARKER_COMMAND => Instruction::GenericCommand {
             name: keyword,
             raw_args: Vec::new(),

@@ -8,7 +8,7 @@
 
 `kero-balloon` が確立した系列解決権威（`SeriesFamily` テーブル・`crates/areka-emo-present/src/balloon.rs:62`）は balloon 本体系列（`balloons`/`balloonk`/`balloonp{n}def`）のみを収載する。正典にはさらに以下があり、いずれも**縮退シーム済み・実装なし**:
 
-1. **装飾系列の per-scope 化＋深い旧名**: `arrow*`（矢印）・`marker*`（マーカー）・`sstp_new*`・`clickwait*` 等の付属画像族。旧名がさらに深い（例: `arrows`→`arrow` の 2 段旧名）ため `SeriesFamily.scope0_legacy` が**複数要素の配列**として設計済み（COMPAT §8 :141 に「装飾族はより深い旧名」と記録済み）。テーブル 1 行追加で拡張可能。**追加軸（2026-08-27・bvc 討議 5 から登記）**: 縦書きバルーン（`vertical,1`・SSP 2.8.80/2.8.83）では `arrow0`／`arrow1` のスクロール方向が**右／左**へ再解釈される（横書きの上／下に対応する縦書き写像・正典の明文は descript `vertical` 項のみ＝bvc requirements SC10 が「クリア・改行・スクロールの縦書き挙動は未規定・矢印の説明から間接推測のみ」と疑義登記済み）。系列解決の軸（本項の従来分）とは独立の第 3 軸であり、実装時は両軸を同時に満たすこと。語彙の出典＝bvc Requirement 5.4。
+1. **装飾系列の per-scope 化＋深い旧名**: `arrow*`（矢印）・`marker*`（マーカー。行の中の印の絵 `marker.filename` は除く＝2026-10-31 に `script-small-tags` が引き取った）・`sstp_new*`・`clickwait*` 等の付属画像族。旧名がさらに深い（例: `arrows`→`arrow` の 2 段旧名）ため `SeriesFamily.scope0_legacy` が**複数要素の配列**として設計済み（COMPAT §8 :141 に「装飾族はより深い旧名」と記録済み）。テーブル 1 行追加で拡張可能。**追加軸（2026-08-27・bvc 討議 5 から登記）**: 縦書きバルーン（`vertical,1`・SSP 2.8.80/2.8.83）では `arrow0`／`arrow1` のスクロール方向が**右／左**へ再解釈される（横書きの上／下に対応する縦書き写像・正典の明文は descript `vertical` 項のみ＝bvc requirements SC10 が「クリア・改行・スクロールの縦書き挙動は未規定・矢印の説明から間接推測のみ」と疑義登記済み）。系列解決の軸（本項の従来分）とは独立の第 3 軸であり、実装時は両軸を同時に満たすこと。語彙の出典＝bvc Requirement 5.4。
 2. **面 ID 偶奇＝左右向き面集合＋自動切替**: 正典は偶数面=左向き・奇数面=右向きの対を規定し、バルーンがキャラのどちら側に出るかで自動選択される。areka は面 0 固定（kero-balloon R2.6 の attach `surface_id: 0` literal）。
 3. **`balloon.defaultsurface`／`kero.balloon.defaultsurface` の非追従**: descript でバルーン初期面を指定する語彙。未実装（COMPAT §8 :144 登記済み）。
 4. **`\![reload,balloon]`**: 実行時のバルーン資産再解決。未実装。

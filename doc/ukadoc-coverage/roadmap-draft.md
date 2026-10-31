@@ -698,7 +698,7 @@ wave = "W13"
 name = "balloon-canon-residue"
 stage = "D"
 bundle = "SSTP"
-owner_count = 16
+owner_count = 15
 wave = "W14"
 
 [[spec]]
@@ -1054,8 +1054,8 @@ wave = "v0.1.0"
 [[spec]]
 name = "script-small-tags"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、さくらスクリプトの \\![*]・\\![bind-noevent]・\\_u[0x0000] の宛先をこの名前で記入した（3 件）"
-owner_count = 3
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、さくらスクリプトの \\![*]・\\![bind-noevent]・\\_u[0x0000] の宛先をこの名前で記入した（3 件）。2026-10-31 にこの spec が着地の合わせで、持ち主の空いていた \\_m[0x00]・%* の 2 件と、balloon-canon-residue から移したバルーンの descript の marker.filename の 1 件を足して 6 件になった"
+owner_count = 6
 wave = "v0.1.0"
 
 [[spec]]

@@ -1016,6 +1016,7 @@ not_applicable = 0
 2026-10-23 に `areka-P0-window-link-directives` が両ページの `seriko.alignmenttodesktop` 系（各 4 項目）を未対応から縮退へ移し、`descript_ghost` は 6・`descript_shell` は 5 になった（areka はこの欄を読んでいて、`top`・`left`・`right` は起動の直後の既定の位置だけが `bottom` と同じになるため）。同じ spec が `descript_shell` の `seriko.sticky-window` を語彙のみから実装済みへ、`list_shiori_resource` の `resetballoonpositionbutton.caption` を語彙のみから実装済みへ移した。
 2026-10-30 に `shell-mouse-cursor` がシェルの cursorブレスの 5 つの場面と `system:` の名前 10 種（`descript_shell_surfaces` の 15 項目）と、ゴーストの descript の `cursor`／`mousecursor`・`mousecursor.arrow`・`mousecursor.hand`・`mousecursor.grip` の 4 項目を未対応から実装済みへ、`mousecursor.text`・`mousecursor.wait` の 2 項目を未対応から縮退へ移した（読むが、キャラクターの窓には使う場面が無いので出さないため）。`descript_ghost` は実装済み 23・縮退 8・未対応 42、`descript_shell_surfaces` は実装済み 25・未対応 52 になった。
 2026-10-31 に `balloon-scroll-arrows` がバルーンの descript のスクロールの矢印の 5 項目（`arrow0.x`・`arrow0.y`・`arrow1.x`・`arrow1.y`・`arrow.filename`）を未対応から実装済みへ移した。`descript_balloon` は実装済み 36・未対応 110 になった。
+同じ日に `script-small-tags` がバルーンの descript の行の中の印の絵 `marker.filename` を未対応から実装済みへ移した（持ち主を `balloon-canon-residue` から移した）。`descript_balloon` は実装済み 37・未対応 109 になった。
 
 ```toml
 [[barrier]]
@@ -1029,10 +1030,10 @@ not_applicable = 0
 
 [[barrier]]
 page = "descript_balloon"
-implemented = 36
+implemented = 37
 vocabulary_only = 9
 degraded = 7
-absent = 110
+absent = 109
 alias = 0
 not_applicable = 0
 
