@@ -196,21 +196,6 @@ pub(crate) struct CurrentGhost {
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
-/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）・アプリの記憶・起動した exe の本当の場所を読んで [`resolve_boot_with`] へ渡す薄い口。
-pub(crate) fn resolve_boot(
-    request: &crate::cli::BootRequest,
-) -> Result<BootResolved, crate::alert::AlertScene> {
-    let app_profile_dir = default_app_profile_dir();
-    resolve_boot_with(
-        crate::roots::resolve_roots(&app_profile_dir),
-        request,
-        None,
-        &app_profile_dir,
-        crate::boot_resolve::pick_index,
-        crate::roots::user_root::writable_ghost,
-    )
-}
-
 /// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
 #[cfg(test)]
 pub(crate) fn resolve_boot_from(
@@ -627,7 +612,7 @@ pub(crate) fn shiori_wiring_for(
 /// `GhostBootError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
 /// へ分類する純粋関数（design.md「main の ghost boot／shutdown 結線」・要件 8.2）。
 ///
-/// 起動前の解決（`boot_config::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
+/// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
 /// 限られる。分類は `wire_emo2_boot` のフォールバックが使い続けるため残す。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される

@@ -222,8 +222,6 @@ pub(crate) fn before_boot_alert_suppressed(no_alert: bool, smoke_exit_ms: Option
 
 /// 本物の口（`main` から 1 回）。env・記憶・exe の場所・読み取りだけの旗・告知の抑止を読み、
 /// [`resolve_boot_with_env`] を本番の根の解決と選び方で呼ぶ。
-// main の呼ぶ所（タスク 5.1）が呼ぶまでは使われない。
-#[allow(dead_code, reason = "5.1 が呼ぶ")]
 pub(crate) fn resolve_boot(
     request: &BootRequest,
     startup: &mut StartupInstall,

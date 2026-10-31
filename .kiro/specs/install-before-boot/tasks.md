@@ -98,8 +98,8 @@
   - _Depends: 4.3_
   - _Requirements: 3.2, 3.4, 9.12, 10.6_
 
-- [ ] 5. 起動の入口の結線
-- [ ] 5.1 main の起動の解決を起動の前の道へ差し替え、起動の解決の本番の薄い口を消す
+- [x] 5. 起動の入口の結線
+- [x] 5.1 main の起動の解決を起動の前の道へ差し替え、起動の解決の本番の薄い口を消す
   - main の呼ぶ所 1 か所を 4.5 の本番の口に替え、持ち物を可変にし、起動の解決の再公開から本番の薄い口を外す。持ち物を World へ移す行はそのまま（中身が 4.6 の引き継ぎになる）
   - 起動の解決の本番の薄い口を消し、それを名指す注釈を新しい口の名前に書き直す
   - `--offline-dump` の早い戻りが今のまま持ち物を作る前にあることを確かめる
@@ -149,3 +149,4 @@
 - 4.3: `StartupInstall::run_before_boot(&mut self, roots, alert_suppressed: bool)` は途中の形。4.4 で設計 StartupFlow の署名（`request`・`BeforeBootEnv`・戻り値 `Option<String>`）にそろえる。debug の語 `startup_install_nothing` は設計の記録の語の表に無い（要件 1.5 の debug だけ）。
 - 4.4: 今の Rust の `std::fs::remove_file` は Windows で読み取り専用のファイルも消すので、完了の形の「読み取り専用の写しは消せずに warn」は「使われている（`FILE_SHARE_READ` で握った）写しは消せずに warn」で確かめた（要件 5.5・9.6 の「消せないとき」の同じ道）。本番でも読み取り専用の書庫は消える。
 - 4.5: `startup_tests.rs` が 1,000 行を超えるので、4.5 のテスト（抑止の旗の関数を含む）は兄弟の `install/startup_flow_tests.rs` に置いた（設計の File Structure Plan に無い名前）。本番の口 `install::startup::resolve_boot` の `#[allow(dead_code)]` は 5.1 で外す。
+- 5.1: 机を持った `cargo test -p areka --tests` は見込みどおり `startup_install_real_run` だけが赤で止まり、`stay_on_top_real_run`・`window_link_real_run` は走っていない（最後の全体の走りで確かめる）。
