@@ -145,7 +145,7 @@
   - _Depends: 4.2, 5.3, 7.2, 7.3_
   - _Requirements: 7.1, 7.2_
 
-- [ ] 8.3 互換の対応表 §8 と roadmap の行を書く
+- [x] 8.3 互換の対応表 §8 と roadmap の行を書く
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾に設計の 8 行（綴り・捨てる番号・埋め込みのまとめ・既定の丸・絵の大きさ・アンカーの中の印・面ごとの `marker.filename`・カテゴリ単位の形）を、測っていない所を明記して足す
   - `roadmap.md` の「1 本だけの席」の C14 を `script-small-tags` が使うに改め、C14 の行の触るファイルに `lexer.rs`・emo-present・emo-text・面の切り替えのファイルを足す
   - 完了の姿: §8 に 8 行が並び、roadmap の C14 の行が実際に触ったファイルと合う
