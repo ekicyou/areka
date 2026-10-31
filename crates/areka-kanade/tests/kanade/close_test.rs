@@ -52,6 +52,10 @@ mod boot_greeting_tests;
 #[cfg(test)]
 #[path = "close_test_handshake_tests.rs"]
 mod handshake_tests;
+// 終了のスコープが OnClose の References まで届く通しの檻（popup-menu-residue 要件 7）。
+#[cfg(test)]
+#[path = "close_test_scope_references_tests.rs"]
+mod scope_references_tests;
 // 停止通知（areka-P0-emo2-conformance-e2e タスク 6.9・R15.3）。
 #[cfg(test)]
 #[path = "close_test_stop_notify_tests.rs"]
