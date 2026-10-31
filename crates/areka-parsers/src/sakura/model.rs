@@ -72,7 +72,30 @@ pub enum Instruction {
     AnchorEnd,
     /// 寛容パススルー: 構文区切りできたが意味未対応／不正の生保持（要件 10/13.8）。
     Raw(String),
+    /// 出せない・読めない文字の番号を捨てた（`\_u[…]`・`\_m[…]`・script-small-tags 要件 2）。
+    ///
+    /// `raw` はタグの元の綴り。警告を出すかどうかは消費側の責務（本層は記録を出さない）。
+    CharCodeDropped { raw: String, reason: CharCodeDrop },
 }
+
+/// 文字の番号を捨てた理由（script-small-tags 要件 2.1〜2.4・2.6）。
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CharCodeDrop {
+    /// 番号 0。
+    Zero,
+    /// 制御の文字（U+0001〜U+001F・U+007F〜U+009F）。
+    Control,
+    /// 組にならない片割れのサロゲート。
+    LoneSurrogate,
+    /// U+10FFFF より上（32 ビットに入らない桁も含む）。
+    OutOfRange,
+    /// 番号として読めない綴り（空・`0x` だけ・符号・ほかの字・引数なし）。
+    Unreadable,
+}
+
+/// 選択肢の印 `\![*]`・`%*` を載せる汎用コマンドの名前（script-small-tags 要件 4）。
+pub const MARKER_COMMAND: &str = "*";
 
 /// `\j[ID]`（ジャンプ）を載せる汎用コマンドの運搬名（open-external-tags 要件 1.5）。
 ///
