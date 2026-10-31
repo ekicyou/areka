@@ -257,7 +257,7 @@ fn with_thread_per_monitor<T>(
 **責務と制約**
 - `MessageBoxW(None, 本文, 題名, 旗)` を呼ぶ。持ち主の窓は渡さない（2.3）。旗は口から受けた値をそのまま渡す（2.1）。
 - `MessageBoxW` が戻った直後、スレッドを戻す前に最後のエラー（`windows::core::Error::from_thread()`）を読み、戻り値と一緒に返す。
-- `alert.rs` の `unsafe` はこの関数の中の 2 つ（`SetThreadDpiAwarenessContext` を呼ぶ切り替えの関数と `MessageBoxW`）だけにし、どちらにも安全の理由の注釈を書く（steering `tech.md`）。
+- `alert.rs` の `unsafe` は 2 つ（`SetThreadDpiAwarenessContext` を呼ぶ名前の付いた非公開の切り替えの関数と、この関数の中の `MessageBoxW`）だけにし、どちらにも安全の理由の注釈を書く（steering `tech.md`）。切り替えの関数を名前で持つのは、決定論のテスト D4 が画面を出さずに本物の切り替えを渡せるようにするため（タスクの段で決めた）。
 - 記録は残さない（失敗の記録は口の持ち物・替えられなかった記録は `with_thread_per_monitor` の持ち物）。
 
 **依存**
@@ -398,4 +398,4 @@ fn show_box(
 
 ## Security Considerations
 
-- 新しい入力の口は無い。題名と本文は今と同じ口から来る。`unsafe` は `show_box` の 2 か所に閉じ、どちらも呼び出しの間に生きている値と定数だけを渡す。
+- 新しい入力の口は無い。題名と本文は今と同じ口から来る。`unsafe` は本物の切り替えの関数と `show_box` の中の `MessageBoxW` の 2 か所に閉じ、どちらも呼び出しの間に生きている値と定数だけを渡す。
