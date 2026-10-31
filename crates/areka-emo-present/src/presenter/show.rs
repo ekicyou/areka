@@ -5,6 +5,7 @@ use wintf::ecs::window::transition_diag;
 
 use crate::display::record_display;
 
+use super::scale_change::{AppliedScale, ScaleChange};
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
@@ -435,6 +436,19 @@ impl EmoPresenter {
         }
 
         target.applied = Some(scale);
+        // 倍率の記録は `applied` を書くこの点だけで積む（装着ごとの起点と比べる・要件 4.4・5.7）。
+        let now = AppliedScale {
+            ratio: scale,
+            dpi_x: window_dpi.map(|(x, _)| x),
+        };
+        if target.scale_baseline != Some(now) {
+            self.scale_changes.push(ScaleChange {
+                target: target_id,
+                before: target.scale_baseline,
+                after: now,
+            });
+            target.scale_baseline = Some(now);
+        }
         // いま表示に使ったエントリ由来の原寸をそのまま写す（合成した回か否かで分岐しない——分岐させると
         // 「insert 済みのまま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する）。
         // 容量 3 ではヒットしたエントリが直前の挿入とは限らないため、エントリの `composed` 外形から

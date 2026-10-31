@@ -74,7 +74,7 @@ pub use areka_emo_compose::ScaleRatio;
 pub use balloon::{build_balloon_target, build_balloon_target_from_faces};
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
-pub use presenter::{ClientHit, EmoPresenter, TextSlotView};
+pub use presenter::{AppliedScale, ClientHit, EmoPresenter, ScaleChange, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
 pub use shell_target::{
     ShellLoadError, ShellTarget, SurfaceImageSelection, build_shell_target,

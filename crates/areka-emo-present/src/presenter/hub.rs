@@ -5,6 +5,7 @@
 //! 分かれる（いずれも同一型 `EmoPresenter` の別 `impl` ブロック）。
 
 use super::budget::FrameBudget;
+use super::scale_change::ScaleChange;
 use super::visibility::strip_finite_films;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, HashMap, PatternState,
@@ -20,6 +21,8 @@ use super::{
 pub struct EmoPresenter {
     /// target 識別子 → 表示コンテキスト。
     pub(super) targets: HashMap<TargetId, PresentTarget>,
+    /// 表示成立点で積んだ倍率の記録（取り出すまで積んだ順に持つ・[`Self::take_scale_changes`]）。
+    pub(super) scale_changes: Vec<ScaleChange>,
     /// `!Send`/`!Sync` を型で担保するマーカー（UI スレッドアフィニティの構造的強制・R7.1）。
     _not_send: PhantomData<*const ()>,
 }
@@ -29,6 +32,7 @@ impl EmoPresenter {
     pub fn new() -> Self {
         Self {
             targets: HashMap::new(),
+            scale_changes: Vec::new(),
             _not_send: PhantomData,
         }
     }
@@ -80,6 +84,8 @@ impl EmoPresenter {
                 // アプリ管理拡大率は本仕様では ONE 固定の縮退シーム（要件 1.6）。
                 policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),
                 applied: None,
+                // 起点は装着ごと（差し替えもここを通るので空から始まる・要件 5.7）。
+                scale_baseline: None,
                 native_size: None,
                 last_show: None,
                 held_pattern: None,
