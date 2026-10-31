@@ -9,6 +9,7 @@ SERIKO の引き金と抽選に、決まりの食い違いが 3 件残ってい�
 - **件 1（旧 `seriko-trigger-teardown-gaps`・区分 B）**: interval の 3 語（`talk`・`runonce`・`periodic`）の引き金の後始末（構え直し・隠す・捨てる）が、一番上の面と部品で食い違う。
 - **件 2（旧 `seriko-lottery-ended-play-skip`・区分 B）**: 抽選の animation が、境界より前に終わった再生の片付けが残っていると、その境界のくじを 1 回飛ばし、乱数も引かない。
 - **件 3（旧 `seriko-rebuild-hidden-lottery`・区分 C）**: 部品の組み直し（`rebuild`）の 1 回目が、外側の今のコマでは見えない部品にも回り、抽選のくじを引く。
+- **件 4（2026-10-31 `animated-surface-log-flood` から・区分 B）**: 見える部品の数え方（emo-compose の `nesting.rs` の `visible_parts`）が、有効でコマの無い `bind+random` の pattern0 の先を見える部品に数え、描く側（`plan.rs` の `flatten_surface`）と食い違う。
 
 どれもコードの読みと決定論のテストから出た件で、実機で絵の誤りを見たものは無い。
 
@@ -298,3 +299,47 @@ SERIKO の引き金と抽選に、決まりの食い違いが 3 件残ってい�
 - 要件定義のモデル: **Opus に改める**（本文は Fable）。正典の黙る所を 5 つ以上選ぶのは「議題が多い」で、10-15 の基準では Fable にならない。件 2 の「境界の時刻で測る」は、着地済み `seriko-trigger-intervals` の時計の決まりの上での直しで、時刻の順の新しい設計ではない。
 - 分割の案: 無し（10-11 にわざと 1 本にまとめた＝20 を少し越えるだけなら割らない。引き直すテストの本数を要件の段で先に数える）。
 - 見つけた穴・古くなった記述: 件 1 の節の Adjacent に、今はこの spec に入った旧名 `seriko-rebuild-hidden-lottery`・`seriko-lottery-ended-play-skip` が並んでいる（同じ spec の中の話と読む）。
+
+## 件 4（2026-10-31 `animated-surface-log-flood` の申し送り）: 見える部品の数え方が、コマの無い `bind+random` の pattern0 を描く絵と食い違う
+
+> 出どころ: `animated-surface-log-flood` の件 26（まばたきを `-1` で止めた後に閉じた目が残る）の直し（コミット `7b3c2d956`・同 spec 要件 9.1）。同 spec は描く側（emo-compose の `plan.rs`）だけを直し、見える部品の数え方は範囲の外として残した。場所と行数は 2026-10-31 のもの＝着手時に引き直す。区分 B。
+
+### Problem
+
+- 開発者の裁定（2026-10-31・案 1）で、合成の再帰 `crates/areka-emo-compose/src/plan.rs` の `flatten_surface` は、有効な着せ替えの pattern0 を静的に積むのを純 `bind` だけにした。`bind+random` は再生しているあいだのコマだけを描き、コマが無ければ何も積まない（ぱすたの animation1400 の pattern0＝閉じた目の overlay 1410 が、`-1` で外した後も残っていた）。
+- 見える部品を数える `crates/areka-emo-compose/src/nesting.rs` は、この直しに追いついていない。
+  - 面の表の構築（`NestTable` の作り）は、`is_bind_interval`（`bind` と `bind+random` の両方）に当たる animation の pattern0 の先を、区別なく `bind_targets` に入れる（130〜142 行目あたり）。
+  - `visible_parts` の辺 ②（`walk` の中・238〜243 行目あたり）は、着せ替えが有効で同じ animation の番号にコマが無ければ、`bind_targets` の先を見える部品に数えてその先へ進む。
+  - ＝`bind+random` が有効でコマが無いとき、絵には出ない pattern0 の先（ぱすたなら面 1410）を、見える部品として数える。
+- 数え方の答えを使う所は seriko（`crates/areka-seriko`）:
+  - `parts.rs` の `rebuild`（377 行目あたり）＝見えると数えた部品を評価する。数えた先に animation が在れば、絵に出ない部品で抽選のくじを引き・時計を進める（件 3 と同じ形の、見えない部品への評価）。
+  - `parts.rs` の `moving_visible`（793 行目あたり）＝見える部品に animation が在れば「動いている」と答える。
+  - `table.rs` の「部品になりうるサーフェス」（438 行目あたり）は `bind_targets` を広めに取るだけで、注記のとおり答えは変わらない（直さなくてよい見込み）。
+- 規則と合成の一致を確かめる檻（`crates/areka-emo-compose/src/nesting_visible_tests.rs` の「合成との一致の檻」・task 4.4）は、この食い違いを捕まえない。檻の文面の `bind+random`（`layered_case` の animation7）は pattern0 を持たないので、`bind_targets` に入らない。
+
+### Current State
+
+- 絵の誤りは無い（描く側は直っている・`presenter_blink_stop_tests.rs` の 2 本と `plan_bind_random_tests.rs` が固定）。ずれは、見えると数える部品の集合と、それを使う seriko の評価・「動いている」の答えだけ。
+- ぱすたの面 1410 が自分の animation を持つかは確かめていない＝実機で乱数の並びや刻みに出ているかは分からない。
+
+### Desired Outcome
+
+- `visible_parts` の辺 ② が `flatten_surface` と同じ辺になる: `bind+random` は pattern0 の先を数えず、コマが在るときだけ辺 ③ でコマの先を数える。純 `bind` は今のまま。
+- 合成との一致の檻に、pattern0 を持つ `bind+random`（コマが在る・無い・着せ替えが有効・無効）の文面を足し、規則と合成の結論が一致することを固定する。直す前は赤になることを確かめる。
+- seriko の抽選の決定論のテストで、絵に出ない pattern0 の先の部品が評価されない（くじを引かない）ことを固定する。件 3 と同じ引き直しの並びで扱う（乱数の並びが動くなら、件 2・件 3 の引き直しと 1 度で済ませる）。
+
+### Approach
+
+- 直す場所は 1 か所: 面の表の構築で `bind_targets` に入れるのを純 `bind` だけにする（`plan.rs` の直しと同じ条件。`bind_ids` は今のまま＝辺 ③ の「着せ替えなら有効なものだけ」に要る）。`table.rs` の広めの取り方は変えない。
+- 件 3（`rebuild` の 1 回目が見えない部品にも回る）と同じ「見えない部品の評価」の件なので、同じタスクの並びで扱う。
+
+### Scope
+
+- **In**: `crates/areka-emo-compose/src/nesting.rs`（`bind_targets` の作り）・兄弟のテスト `nesting_visible_tests.rs`（一致の檻の文面）・seriko の抽選の決定論のテストの足し・`doc/COMPAT_ARCHITECTURE.md` §8 か網羅台帳の備考に 1 文（`bind+random` の pattern0 は静的に描かない・見える部品に数えない）。
+- **Out**: 描く側（`plan.rs`・`animated-surface-log-flood` で確定）・`bind+random` の抽選の確率と間隔・`+` の組み合わせのほかの語（`seriko-interval-combinations`）。
+
+### Constraints
+
+- 本 spec の触るファイルに emo-compose の `nesting.rs` と兄弟のテストが加わる。emo-compose の `plan.rs`・`nesting.rs` を触るほかの spec（シェルの element の列・`draw-methods-canon` ほか）とは同じウェーブに置かない。
+- `nesting.rs` の行数を足しすぎない（1 ファイル 1,000 行の番人）。直しは数行の見込み。
+- 規模の見立て: 2〜3 タスク（直し 1・一致の檻と seriko のテスト 1〜2）。本 spec の合計は 10〜24 に上がる＝上限 20 を越えそうなら、件 2・件 3 の「直す／記録して閉じる」を決めるときに一緒に数える。

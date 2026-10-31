@@ -172,3 +172,17 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
   - steering の roadmap の spec 台帳の本 spec の行（「段 1＝`dola`・`shiori-abi`・`areka-mcp` は空き席でも取れる」）は古い。今の段 1 は `dola` の 3 フォルダと `shiori-host32-host/tests/` の 2 本（同じ roadmap の「列に属さず、いつでも単独で取れる」の行のほうが正しい）。
   - 本文の「`areka` 約 19」は古いまま（実数は数倍の見込み）。
   - v0.1.0 の後の見直し `audit-dola`・`audit-shiori-host32` が段 1 のファイルを持つ。段 1 を先に済ませれば、見直しの差分が小さくなる。
+
+## 件 1（2026-10-31 `animated-surface-log-flood` の申し送り）: emo-compose のテストの `chunks_exact` が今も残り、emo-present のテストにも 7 件ある
+
+> 出どころ: `animated-surface-log-flood` の実装中の clippy（rustc・clippy 1.99.1）。どれも同 spec の前からの指摘で、同 spec は自分が変えた所の指摘だけを直した。2026-10-31 に `cargo clippy -p <クレート> --no-deps --all-targets` で測り直した（worktree の HEAD `c7b1fdb47`）。
+
+- **`areka-emo-compose` のテスト 5 か所（列挙済み・今も残る）**: `chunks_exact` を定数の幅で使う（`chunks_exact_to_as_chunks`）。`blit_transparent_alpha_tests.rs:60`・`golden_tests_surface1000_bind_tests.rs:89`・`golden_tests_test_support.rs:168`・`composer_tests.rs:841`・`composer_tests.rs:893`。上の 10-07 の申し送りの 5 か所と同じ（行は動いた）。`-p areka-emo-compose --no-deps --all-targets` の指摘はこの 5 件だけ（`plan.rs` の `collapsible_if` は出ない）。
+- **`areka-emo-present` のテスト 7 件（列挙の外・新しく見つけた）**: `--no-deps --all-targets` の指摘は全部テストのファイルで、本番のコードは 0 件。
+  - `chunks_exact_to_as_chunks` 4 件: `shell_target_template_tests.rs:153`・`presenter_budget_steady_state_tests.rs:230`・`presenter_budget_equivalence_tests.rs:228`・`presenter_budget_equivalence_tests.rs:341`。
+  - `type_complexity` 2 件: `display_tests.rs:63`・`balloon_target_tests.rs:378`。
+  - `assertions_on_constants` 1 件: `presenter_budget_equivalence_tests.rs:533`。
+  - 実装中に見た `hub.rs:269` の `collapsible_if` は、同 spec のタスク 3.6 の後は出ない（10-31 の測りで 0）。
+- **`--no-deps` を付けないと**、`-p areka-emo-present -- -D warnings` は依存の `dola` の既存の 21 件（`collapsible_if` ほか）で止まる。上の列挙の段 1（`dola` の `validate/`・`runtime/`・`compile/`）と同じもの＝新しい起票はしない。
+- **触るファイル**: 本 spec の段 2 に `crates/areka-emo-present/src/` のテスト 5 本（`balloon_target_tests.rs`・`display_tests.rs`・`presenter_budget_steady_state_tests.rs`・`presenter_budget_equivalence_tests.rs`・`shell_target_template_tests.rs`）が加わる。クレートの数は 9（`areka-emo-present` を足す）。emo-present の `presenter/` を触るほかの spec とは、テストのファイルが重ならないか着手のときに照らす。
+- **規模**: +1 タスク（emo-present のテスト 5 本・機械的な直し）。
