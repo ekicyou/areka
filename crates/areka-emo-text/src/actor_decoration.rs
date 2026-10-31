@@ -236,10 +236,19 @@ impl TextLayerRuntime {
             image = ?image.as_ref().map(|i| (i.width, i.height)),
             "行の中の印の絵を受け取った（無ければ既定の丸）"
         );
-        match image {
-            Some(image) => self.inline_marker.insert(actor, image),
+        let previous = match image {
+            Some(image) => self.inline_marker.insert(actor.clone(), image),
             None => self.inline_marker.remove(&actor),
         };
+        // 箱は登録の時にしか押さないので、変わった actor を次の箱の同期へ知らせる。
+        let changed = match (&previous, self.inline_marker.get(&actor)) {
+            (Some(old), Some(new)) => !Arc::ptr_eq(old, new),
+            (None, None) => false,
+            _ => true,
+        };
+        if changed {
+            self.inline_marker_changed.insert(actor);
+        }
     }
 
     /// 覚えている印の見た目（未設定は既定の丸）。

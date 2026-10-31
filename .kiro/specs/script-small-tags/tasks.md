@@ -168,3 +168,4 @@
 - 5.1 の追い直し: ソースに書く ukadoc の URL はカタログ（`doc/ukadoc-coverage/catalog.toml`）の綴りに合わせる（`#marker.filename_2c_..._540d:1`）。合わないと `ukadoc-survey` の `consistency` が 16 件赤になる（全体テストでだけ見える）。
 - 7.4: 設計は箱が面の切り替えに追従することを求めていない（design の TextLayerMarker は箱の解決の時点で押すとだけ書く）。箱が出ている最中の面の切り替えでは前の印のまま。完了の棚卸で扱う。`cargo test -p areka` の `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は時刻の待ちで 1 度赤・単独で緑（揺れ）。
 - 8.1 → 8.3: §8 の行に折り返しの結果を書く（目印の字は後ろの字と同じ塊に入る・印と選択肢の字が別の行に分かれるのは 1 行より長い塊の 1 字ずつの縮退と `validrect` の無条件の折り返しのときだけ・SSP の折り返しは測っていない）。根拠は verification.md。
+- 完了時にその場で解決: 箱が出ている最中の面の切り替えで印が変わっても箱が前の印のままだった件（6.3・7.4 の申し送り）。`set_inline_marker` が値の変わったアクターを覚え、`sync_box_bindings` がそのアクターの箱を登録し直す（押し出しの形・毎フレームの比べは足さない）。テスト `changing_the_image_while_a_box_is_shown_restamps_the_box`。

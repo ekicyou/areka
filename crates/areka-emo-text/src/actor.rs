@@ -256,6 +256,9 @@ pub struct TextLayerRuntime {
     /// actor → 行の中の印の絵（結線が [`set_inline_marker`](Self::set_inline_marker) で入れる・
     /// 無ければ既定の丸・要件 5.1）。装着・再追従・箱の解決の直後に押す。
     inline_marker: HashMap<ActorKey, Arc<MarkerImage>>,
+    /// 印の絵が変わった actor（`set_inline_marker` が入れ、次の箱の同期がその actor の箱を
+    /// 登録し直して空にする・箱は登録の時にしか印を押さないため・要件 5.1）。
+    inline_marker_changed: BTreeSet<ActorKey>,
     /// actor → 普通のバルーンの名前（結線が入れるバルーンのフォルダ名）。折り返しの基準と無視した
     /// 書き出し位置の 2 つの警告の名前の欄に出す（未設定は `スコープ{番号}のバルーン`・要件 3.12）。
     /// 入れる口は [`set_balloon_label`](Self::set_balloon_label)（`actor_decoration.rs`）。
@@ -325,6 +328,7 @@ impl TextLayerRuntime {
             cursor_warn: CursorWarnGuard::default(),
             balloon_background: HashMap::new(),
             inline_marker: HashMap::new(),
+            inline_marker_changed: BTreeSet::new(),
             balloon_label: HashMap::new(),
             surface_resolver: None,
             box_font_dirs: Vec::new(),

@@ -144,3 +144,38 @@ fn a_box_uses_the_marker_of_its_scope() {
         "ほかのスコープの絵は箱に効かない"
     );
 }
+
+/// 箱の出ているあいだに絵が変わると、次の箱の同期で登録し直して新しい印を押す（要件 5.1）。
+/// 同じ絵を入れ直しても登録し直さない（無用な組み直しをしない）。
+///
+/// 較正: 変わった actor を覚えないと、置き場所も装着先も同じなので登録し直されず古い印のまま赤になる。
+#[test]
+fn changing_the_image_while_a_box_is_shown_restamps_the_box() {
+    let img = image();
+    let mut f = fixture();
+    f.rt.set_inline_marker(ActorKey::from("0"), Some(Arc::clone(&img)));
+    f.show("0");
+    f.rt.apply_cue(&text("0", "あ"));
+    f.sync(Some(1.0));
+    let key = f.key(0, "a");
+    assert_eq!(look_at(&f.rt, &key), InlineMarkerLook::Image(img.clone()));
+
+    let other = other_image();
+    f.rt.set_inline_marker(ActorKey::from("0"), Some(Arc::clone(&other)));
+    f.sync(Some(1.0));
+    assert_eq!(
+        look_at(&f.rt, &key),
+        InlineMarkerLook::Image(Arc::clone(&other)),
+        "絵が変わったら箱も新しい印"
+    );
+
+    // 目印: 登録し直せば押し直されて消える値を置く。
+    f.rt.layout_input.get_mut(&key).unwrap().font.inline_marker = InlineMarkerLook::Dot;
+    f.rt.set_inline_marker(ActorKey::from("0"), Some(Arc::clone(&other)));
+    f.sync(Some(1.0));
+    assert_eq!(
+        look_at(&f.rt, &key),
+        InlineMarkerLook::Dot,
+        "同じ絵の入れ直しでは登録し直さない"
+    );
+}

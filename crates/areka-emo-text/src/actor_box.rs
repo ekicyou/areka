@@ -330,13 +330,16 @@ impl TextLayerRuntime {
             .box_sites
             .keys()
             .filter(|key| {
-                desired.get(*key).is_none_or(|want| {
-                    self.routing.get(*key) != Some(&want.binding)
-                        || self.box_sites.get(*key) != Some(&want.site)
-                })
+                // 印の絵が変わった actor の箱も登録し直して押し直す（要件 5.1）。
+                self.inline_marker_changed.contains(&key.actor)
+                    || desired.get(*key).is_none_or(|want| {
+                        self.routing.get(*key) != Some(&want.binding)
+                            || self.box_sites.get(*key) != Some(&want.site)
+                    })
             })
             .cloned()
             .collect();
+        self.inline_marker_changed.clear();
         for key in &stale {
             self.unregister_box(world, key);
         }
