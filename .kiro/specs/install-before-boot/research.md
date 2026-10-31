@@ -152,10 +152,10 @@
 3. **イベントを送らない口の返し方**: (a) `Raised::NoReply` を返す（`procedure.rs` に触らない・ただし「送りました」の記録 `install_event` が出て `OnInstallComplete` まで「送る」）(b) `Raised` に「送らない」の腕を足し、`send` が記録を「送らない」に分ける（`procedure.rs` の `send` と `Raised` の照合に数行・記録が正しい）。要件 3.1・6.2 の読める記録には (b) が合う。
 4. **`callghost` の段の形**: (a) 起動の求めの写しの `ghost` に入れたゴーストを入れて今の指し先の段に乗せる（`resolve_ghost` に触らない・経路の記録は `Pointed`・R3 の差）(b) `GhostInputs` に段を 1 つ足し `GhostRoute` に `CallGhost` を足す（`boot_resolve.rs` に触る・記録が正しい・`main.rs` 846 行の `Switched` の比べなど経路の照合を確かめる）。どちらでも、使わない理由の語（指定あり・ゴーストが入らなかった・読み取りだけ）と、`--ghost` が当たらなかった（`Pointed::Miss`）ときを「指定あり」と数えるかを決める（要件 4.5 の読み）。
 5. **定常の後の道の始末**: `startup::on_steady`・`ArgsFollowup`・`discard_for_exit`・`on_order_done` の起動の引数の腕・`call_ghost`（切り替え）を消し、`startup_tests.rs`・`desk_startup_tests.rs` の陳腐化した本を除く範囲。`InstallOrigin::{StartupArgs, InitialInstall}` は記録と断りの語として残す。
-6. **起動の前に入れた「最後に入れた物」の控え**: 窓口の `record_installed` が立てる資源（`LastInstalledGhost`・`LastInstalledShell`・`LastInstalledBalloon`）と置換語（`names::update`）は、起動の前には World が無い。(a) 運ばない（起動の前のインストールは起動中のゴーストの出来事ではない＝要件 3.2 と同じ読み・`\![change,ghost,lastinstalled]` は起動の前に入れた物を指さない）(b) 起動の持ち物に控えて World へ移す（要件 3.2 の「後から送らない」には反しないが、要件に書かれていない振る舞いを足す）。要件に書いていない所なので、要件の討議で決めるか設計で決める。
+6. **起動の前に入れた「最後に入れた物」の控え**: 窓口の `record_installed` が立てる資源（`LastInstalledGhost`・`LastInstalledShell`・`LastInstalledBalloon`）と置換語（`names::update`）は、起動の前には World が無い。(a) 運ばない（起動の前のインストールは起動中のゴーストの出来事ではない＝要件 3.2 と同じ読み・`\![change,ghost,lastinstalled]` は起動の前に入れた物を指さない）(b) 起動の持ち物に控えて World へ移す（要件 3.2 の「後から送らない」には反しないが、要件に書かれていない振る舞いを足す）。→ **要件の討議（2026-10-31）で (b) 引き継ぐに確定**（要件 3.4・9.12・10.6）。運び方は設計で決める。
 7. **画面と DPI（R1）**: 起動の前の画面を `SetThreadDpiAwarenessContext` で包むか、DPI の設定を前へ動かすか、確かめた上で今のままにするか。
 8. **記録の語**: 起動の前と読める形（`startup_install_done` に欄を足すか、新しい語にするか）・根が決まらないときの `startup_install_not_submitted` の理由の語（`boot_stopped` のままか `root_missing` か）・受け取るゴーストが居なくて断ったときの記録（`install_refused` の `running` が空の綴りになる所）。
-9. **範囲の端**: `doc/pasta-real-run.md` の 248 行目（新しい書庫を窓へ落として入れる手順）を、この spec の説明書の段で 1 行の `--install` に改めるか（要件 8 は `dist/README.txt` だけ・この文書は areka の持ち物）。
+9. **範囲の端**: `doc/pasta-real-run.md` の 248 行目（新しい書庫を窓へ落として入れる手順）を、この spec の説明書の段で 1 行の `--install` に改めるか → **要件の討議（2026-10-31）で直すに確定**（要件 8.7・10.7）。
 10. **読み取りだけの断りの共有**: `install::submit` の先頭の断り（World の印）と起動の前の断り（プロセスの旗）を 1 つの関数にまとめるか、起動の前の道に同じ記録を書くか。
 
 11. **（要件の討議で設計へ回した）R2・R3・R4 の確かめ**: 空の根が「見つかる根」に入るか（R2）・`callghost` の相手の渡し方（R3）・空の根の実機の足場（R4）。
