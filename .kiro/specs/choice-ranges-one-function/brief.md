@@ -55,74 +55,13 @@
 
 - 規模は S 見込み（数タスク）。`crates/areka-emo-text/src/lib.rs` の純粋な一覧・1 ファイル 1,000 行の番人を守る。ビルドとテストは `-j 2`。
 
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- **前提の変化**: 起票（10-06）の後、関係のファイルは変わっていない。`crates/areka-emo-text/src/actor_present.rs` の `present_actor` の並び（`annotate_lines` → `line_bands` → 強調の描画 → 描き替えがあったときだけ `derive_hit_rows`）も、検査 8 が同じ 3 つを呼び直している所（`actor_lookahead_shapes_tests.rs`）もそのまま。
-- **触るファイル**:
-  - `crates/areka-emo-text/src/choice.rs`（744 行）か `actor_present.rs`（410 行）のどちらかにまとめた関数を置く。
-  - `crates/areka-emo-text/src/actor.rs`（検査用の読み口）・`actor_lookahead_shapes_tests.rs`（421 行）。
-  - 新しいファイルは足さない＝`lib.rs` に触らない。
-- **規模**: S（3〜4 タスク）。
-- **先に要るもの**: 無い（`budoux-reveal-reflow` は着地済み）。
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: ✅ `vertical-choice-hover-band`（10-24・`choice.rs` の帯の関数 `line_bands` の縦書きの枝）・✅ `real-run-log-noise`・✅ `balloon-scroll-arrows`（10-31・`present_actor` に読み返しの窓と矢印の印を足した）が着地し、`crates/areka-emo-text/src/actor_present.rs` は 435→555 行、`choice.rs` は 748→790 行、`choice_anchor_tests.rs` は 273→340 行になった。本番の並び（`actor_present.rs` の 316 行目の範囲 → 325 行目の帯 → 336 行目の強調の描画 → 347 行目の描画 → 描き替えがあったときだけ 367 行目の当たり）は同じで、読み返しの窓は並びの前（301 行目）で決まる。検査の側で同じ 3 つを並べ直す 2 か所は `actor_lookahead_shapes_tests.rs` 183〜185 行目と `choice_anchor_tests.rs` 131〜133 行目（ずれた）。
+- **触るファイル**（行数）: `actor_present.rs`（555）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（340）。まとめた関数を `choice.rs`（790）に置くならそれも。`actor.rs` は検査用の読み口 `arrange_for_test` をそのまま使えば触らない。新しいファイルは足さない＝emo-text の `lib.rs` の一覧の席を使わない・依存の追加も無い。
+- **規模**: 3〜5 タスク。上限 20 の内。
+- **先に要るもの**: 無い（先頭）。v0.1.0 との重なり: まとめた関数を `actor_present.rs` に置けば 0。`choice.rs` に置くと、`script-small-tags` が議題（`\![*]` の印を描くか）で emo-text の選択肢の飾り `choice.rs` に触れるときに重なる＝隙間に入れるなら `actor_present.rs` に置く形に限る。済んだ選択肢を外す絞りとホバーの絞りは今も 3 つの関数の外（呼び手の側）＝まとめた関数に入れるかは設計で決める。
+- **人の待ち・机**: 要らない（見た目と当たりを変えない直しで、決まった字幅の検査だけで確かめる）。静かな机・前後の全体テストの比べも要らない。
 - **優先度の区分**: C（バグではない。検査が本番の並びを見張れない穴＝`budoux-reveal-reflow` の持ち越し）。
-- **要件定義のモデル**: Opus。
+- **要件定義のモデル**: Opus（新しい境目も並行の決めごとも無い）。
 - **分割の案**: 切らない。
-- **見つけた穴・古くなった記述**:
-  - `anchor-tag-canon`・`range-choice-tag`・`choice-marker-styling` と `choice.rs`・`actor_present.rs`・`actor.rs` が重なる＝同じウェーブに置けない。
-  - **`anchor-tag-canon` の前に置くのが素直**（後にすると、アンカーの範囲を足した後の並びをもう一度まとめ直す）。前に置く席が無ければ、`anchor-tag-canon` の最初のタスクに入れる手もある（合わせて 16〜20 タスク）。
-  - `reflow-scroll-path-test` とは、あちらが `actor_lookahead_tests.rs` に足す形なら重ならない。`balloon-text-bugs` の件 2 とは、あちらが `actor_present.rs` で止める設計なら重なる。
-
-## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
-
-- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。上の棚卸㉓の「起票の後、関係のファイルは変わっていない」と「`anchor-tag-canon` の前に置くのが素直」は古い。
-  - `present_actor` の並び（`annotate_lines` → `line_bands` → 強調の描画 → 描き替えがあったときだけ `derive_hit_rows`）は同じ。3 つの関数は、選択肢とアンカーを種類つきの同じ列で扱うようになった。
-  - **同じ 3 つを検査の側で呼び直す所が 2 か所に増えた**: 前からの `actor_lookahead_shapes_tests.rs` に加えて、`anchor-tag-canon` の新しい検査 `choice_anchor_tests.rs` の補助の関数も、同じ順で 3 つを呼んでいる。まとめた関数へ替えるのは 2 か所。
-- **触るファイル**: `crates/areka-emo-text/src/actor_present.rs`（411 行・呼び替えは必ず要る）・`choice.rs`（748 行・まとめた関数をここに置くなら）・`actor.rs`（663 行・検査用の読み口）・`actor_lookahead_shapes_tests.rs`（421 行）・`choice_anchor_tests.rs`（273 行）。新しいファイルは足さない＝`lib.rs` の席は使わない。
-- **規模**: S（3〜5 タスク）。
-- **先に要るもの**: 無い＝今すぐ着手できる。
-- **優先度の区分**: C のまま。**要件定義のモデル**: Opus のまま。
-- **見つけた穴・古くなった記述**:
-  - 同じウェーブに置けない相手: `range-choice-tag`・`balloon-font-file`（`actor.rs`）・`balloon-text-bugs`（`actor_present.rs`）。`choice-marker-styling` とは、まとめた関数を `actor_present.rs` に置けば重ならない（`choice.rs` に置くと重なる）。
-  - 並べられる相手: `font-size-keywords`・`real-run-log-noise`（重なり 0）。
-  - `range-choice-tag` より前に入れると、あちらが範囲の選択肢の検査を書くときに、まとめた関数を最初から呼べる。後になっても直す所は増えない見込み（範囲の選択肢は、種類つきの同じ列に乗るだけ）。
-
-## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
-
-- **前提の変化**: `balloon-text-bugs` が着地し（10-16）、先に要るものは無くなった。`crates/areka-emo-text/src/actor_present.rs` の `present_actor` の並び（行の割り当て → 行の帯 → 強調の描画 → 描き替えがあったときだけ当たりの行）は同じ。変わったのは次の 3 つ:
-  - 描画範囲が潰れた場所は、並びに入る前に描かずに抜ける入口が足された。
-  - 済んだ選択肢を強調から外す絞り（ホバーの印）と、当たりの写しから外す絞りが足された。どちらも 3 つの関数の外（呼び手の側）にある。まとめた関数にこの絞りを入れるかは設計で決める（入れなくても見た目と当たりは今と同じ）。
-  - 検査の側で 3 つを並べ直す所は 2 か所のまま（`actor_lookahead_shapes_tests.rs` と `choice_anchor_tests.rs` の補助の関数）。`layout_cluster_tests.rs` も 3 つを同じ順で呼ぶが、関数ごとの検査で本番の並びの見張りではない。`layout_styled_tests.rs` に足された検査は当たりの行の関数だけを呼ぶ。
-- **触るファイル**（行数）: `crates/areka-emo-text/src/actor_present.rs`（435）・`choice.rs`（748・まとめた関数をここに置くなら）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（273）。`actor.rs`（768）は、検査用の読み口 `arrange_for_test` をそのまま使い、決まった字幅を検査の側からまとめた関数へ渡せば触らずに済む。
-- **新しいファイルと依存**: 足さない＝emo-text の `lib.rs` の一覧の席を使わない。依存の追加も無い。
-- **規模**: 3〜5 タスク。
-- **人の手・机**: 実機の確かめは要らない（見た目と当たりを変えない直しで、決定論の検査だけで確かめられる）。静かな机・前後の全体テストの比べも要らない。
-- **先に要るもの**: 無い。v0.0.3 の 2 本とは触るファイルが重ならない。同じウェーブに置けない相手: `actor.rs` を触る形にしたときの `range-choice-tag`・`balloon-font-file`、`choice.rs` に置いたときの `choice-marker-styling`、`actor_present.rs` を触る `bottom-row-text-clip`。本 spec が `actor.rs` に触らず、`range-choice-tag` が `actor_present.rs`・`choice.rs` に触らなければ、`range-choice-tag` と同じウェーブに置ける。`real-run-log-noise` とは重なり 0。
-- **優先度の区分**: C のまま（バグではない。検査が本番の並びを見張れない穴）。
-- **要件定義のモデル**: Opus のまま（新しい境目も並行の決めごとも無い）。
-- **分割の案**: 切らない。
-- **見つけた穴・古くなった記述**: 上の棚卸㉔の行数（`actor_present.rs` 411・`actor.rs` 663）は古い。`actor.rs` を「検査用の読み口」として触る前提は要らない見込み。
-
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 10-16 の後、`crates/areka-emo-text/src/` への変更は 0。`actor_present.rs` の `present_actor` の並び（行の割り当て → 行の帯 → 強調の描画 → 描き替えがあったときだけ当たりの行）と、検査の側で同じ 3 つを並べ直す 2 か所（`actor_lookahead_shapes_tests.rs`・`choice_anchor_tests.rs` の補助の関数）はそのまま。
-- 触るファイル（行数）: `crates/areka-emo-text/src/actor_present.rs`（435）・`choice.rs`（748・まとめた関数をここに置くなら）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（273）。`actor.rs`（768）は触らない見込み。新しいファイルは足さない。
-- 規模: 3〜5 タスク。
-- 先に要るもの: 無し。
-- v0.1.0 との重なり: 0。v0.1.0 の brief に emo-text の `actor_present.rs`・`choice.rs` を触ると書くものは無い（`mouse-click-wheel-events` の `choice.rs` は kanade の `schedule/choice.rs`＝別のファイル。`emo2-real-run-stability` は `actor_present.rs` の記録を読むだけで触らない）。
-- 1 本だけの席: 取らない（emo-text の `lib.rs` の一覧に触らない・依存の追加なし）。
-- 人の待ち・机: 要らない（見た目と当たりを変えない直しで、決定論の検査だけで確かめる）。静かな机・前後の全体テストの比べも要らない。
-- 版の席: 版に縛らない列。上限 5＝v0.1.0 のウェーブの空き席に入れられる見込み。`real-run-log-noise` とも重なり 0＝同じウェーブに並べられる。
-- 優先度の区分: C（バグではない。検査が本番の並びを見張れない穴）。
-- 要件定義のモデル: Opus。
-- 分割の案: 切らない。
-- 見つけた穴・古くなった記述: v0.1.0 の後の見直し `audit-emo-text-state-actor` が `actor*`・`choice*` を持つ＝この spec を v0.1.0 の間に取れば先に済む。後に回すなら同じウェーブに置かない。
-
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 10-22 の後も関係のファイルは動いていない（C10 の emo-text の直しは説明の字だけで、`actor_present.rs`・`choice.rs`・検査の 2 本は 0 行）。本番の並び（`crates/areka-emo-text/src/actor_present.rs` の 280 行目の範囲 → 289 行目の帯 → 300 行目の強調の描画 → 331 行目の当たり）と、検査の側で同じ 3 つを並べ直す 2 か所（`actor_lookahead_shapes_tests.rs` 183〜185 行目・`choice_anchor_tests.rs` 123〜125 行目）はそのまま。新しく v0.1.0 に `vertical-choice-hover-band` が入った＝同じ `choice.rs` の帯の関数 `line_bands` の縦書きの枝を直す spec。
-- **触るファイル**（行数）: `actor_present.rs`（435）・`choice.rs`（748・まとめた関数をここに置くなら）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（273）。`actor.rs`（768）は触らない。新しいファイルは足さない。
-- **規模**: 3〜5 タスク。
-- **先に要るもの**: 無い。同じウェーブに置けない相手（v0.1.0）: `balloon-scroll-arrows`（`actor_present.rs`）・まとめた関数を `choice.rs` に置くなら `vertical-choice-hover-band`。まとめた関数を `actor_present.rs` に置けば `vertical-choice-hover-band` と並べられる（帯の関数を呼ぶだけで中身に触らない）。`balloon-communicatebox` とは重なり 0。**1 本だけの席**: 取らない（emo-text の `lib.rs` の一覧に触らない・依存の追加なし）。人の待ち・机: 要らない（見た目と当たりを変えない直しで、決まった字幅の検査だけで確かめる）。
-- **版の席**: 版に縛らない列。上限 5＝v0.1.0 のウェーブの空き席に入れられる見込み（そのウェーブで一番大きい v0.1.0 の spec の下限が 5 以上のとき）。
-- **優先度の区分**: C（バグではない。検査が本番の並びを見張れない穴＝`budoux-reveal-reflow` の持ち越し）。
-- **要件定義のモデル**: Opus。
-- **分割の案**: 切らない。
-- **見つけた穴・古くなった記述**: 棚卸㉘の「v0.1.0 の brief に emo-text の `actor_present.rs`・`choice.rs` を触ると書くものは無い」は古い（10-23 に `vertical-choice-hover-band`〔`choice.rs`〕と `balloon-scroll-arrows`〔`actor_present.rs`〕が v0.1.0 に入った）。`vertical-choice-hover-band` を先にすると、まとめた関数の検査に右から左の縦書きの見本を最初から入れられる。
+- **見つけた穴・古くなった記述**: 同じウェーブに置かない相手は roadmap の文字とバルーンの列（`range-choice-tag`・`choice-marker-styling`・`balloon-font-file`・`text-typesetting`・`anchor-style-canon`）。v0.1.0 の後の見直し `audit-emo-text-state-actor` が `actor*`・`choice*` を持つ＝この spec を先に取れば先に済む。後に回すなら同じウェーブに置かない。

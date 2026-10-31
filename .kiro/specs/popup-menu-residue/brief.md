@@ -2,14 +2,6 @@
 
 起票: 2026-09-19（`areka-P0-popup-menu-minimal` の最終検証が「重大ではないが引受先が無い」と数えた残件の受け皿・開発者指示「どこにも分類されていない問題は起票」）
 
-## 2026-09-20 棚卸⑮の再測定
-
-**残件 1・2 は `areka-P0-wintf-drag-state-rest-contract`へ移した。** どちらも潜在バグで、同 spec と同じ `crates/areka/src/menu/trigger.rs` を触るためである。本仕様に残るのは 3〜10 の 8 件（記録の文言と接頭辞 4・5・6・7／テストの穴 3・8／語彙 4 件の引受先 9／World 借用中の `ShellExecuteW` 10）＝いずれも α にもバグ修正にも属さないので、当面着手しない。
-
-**実測（main `fe157df1`）**: 残件 3〜10 は全件が実在する。ただし 7 番（`crates/areka/src/emo2_boot/spine.rs` の「現在は 4 本」「4-sink 構成」）は、本文の「実際は 6 本」も古くなった——`areka-P0-balloon-break` の `no_user_break_sink` で **7 本**（`crates/areka/src/emo2_boot/mod.rs` の `sinks: vec![…]`）。
-
-サブメニューの登記は `areka-P0-ghost-shell-balloon-switch`（「ゴースト」枠）と `areka-P0-shell-balloon-switch`（「シェル」「バルーン」枠）が行う。`baseware-root-layout` は行わない。
-
 ## Problem
 
 `areka-P0-popup-menu-minimal`（右クリックメニューの第 1 スライス）は最終検証 GO で閉じるが、検証とレビューが挙げた「直すほどではない／範囲外」の指摘が、tasks.md の記録に書かれただけで**引受先を持っていない**。完了アーカイブへ入ると、その記録は誰も読まなくなる（完了済み spec への先送りは消化不能）。利用者から見える影響は小さいものばかりだが、1 件は条件が揃うと別の窓へ右ダブルクリックが届く誤配で、1 件は無害な場面で `error!` が出る記録の重さの誤りである。
@@ -78,69 +70,6 @@
 
 ---
 
-## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
-
-- 優先度 低。残件 1・2 は完了 `wintf-drag-state-rest-contract` で済み。項目 7 の sink の数は今 **11**（`emo2_boot/mod.rs`）。項目 4・5・6・9 は残っている。
-- 項目 9（引受先の無い語彙 4 件＝`shiori.toml` の `char_2a.popupmenu.type`・`char_2a.popupmenu.visible`・`kero.popupmenu.type`・`sakura.popupmenu.type`。台帳の持ち主は完了 `popup-menu-minimal` のまま）の持ち主の付け替えは `coverage-roadmap-refresh` が行う。
-- **本文の古い記述**: 43・48 行あたりが `ghost-shell-balloon-switch`・`baseware-root-layout` を「これから行う」と書いているが、どちらも完了済み。3 人目以降のキャラクターの窓（`char{n≧2}`）は今どの spec も持っていない（説明書の既知の制限）。
-- 単独で回すより、次に `crates/areka/src/menu/` を触る spec へ相乗りするのが安い。
-
-
----
-
-## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
-
-- 規模: S（5〜7 タスク）。切る: なし。段は「その他」のまま。
-- 前提の状態: 上流なし。10-02 の後に `crates/areka/src/menu/`・`readme.rs`・`emo2_boot/readme_cue.rs` を触ったコミットは 0。
-- 崩れた前提／古くなった位置:
-  - 項目 7: sink の数は今も **11**（`emo2_boot/mod.rs` の `wire_emo2_boot` の `sinks: vec![…]`。`shell-balloon` は足していない）。`spine.rs` のコメントは今も「現在は 4 本」「4-sink 構成」。
-  - 項目 4: `menu/trigger.rs` の `finish` の「`[menu] TrackPopupMenuEx failed`」は残っている（`trigger_show_tests.rs` が同じ文言を逐語で見ている＝文言を変えるとテストも直す）。
-  - 項目 6: `areka-kanade/src/actor.rs` の往復の失敗の 3 か所（「——終了系列（Fault）へ」）は残っている。
-  - 項目 9: `menu/captions.rs` の `UNQUERIED_POPUPMENU_RESOURCES` は残っている。台帳の 4 行の持ち主は完了 `popup-menu-minimal` のまま＝付け替えは `coverage-roadmap-refresh`。
-  - 本文の「`ghost-shell-balloon-switch` へ渡す」（3 人目以降の窓）は、渡し先が完了済みで持ち主が居ない（roadmap の覚え書き）。
-- 触るファイル（並走の照合用）:
-  - `crates/areka/src/menu/{trigger.rs, win32.rs, captions.rs}`・`menu/trigger_show_tests.rs`
-  - `crates/areka/src/readme.rs`・`crates/areka/src/emo2_boot/readme_cue.rs`
-  - `crates/areka/src/emo2_boot/spine.rs`（コメントだけ）
-  - `crates/areka-kanade/src/actor.rs`（記録の文言 3 か所）
-  - `crates/areka-kanade/src/actor_resources.rs`（接頭辞を揃えるなら）
-  - 共有しうる相手: `menu/` を触る未完了 spec は 0。`emo2_boot/spine.rs` は C2〜C3 の `emo2_boot` を触る spec（`shell-balloon` の後継・`balloon-lifecycle-events`）が近くを触りうるがコメント 1 か所。`areka-kanade/src/actor.rs` は kanade の進行の列（`mouse-drag-events`・`balloon-lifecycle-events` は `msg.rs`・`schedule/` で別のファイル）と重ならないが、`property-query-channels` は `actor.rs` に触る。
-- 議題（答えで作業が変わるものだけ）: なし（10 件の仕分けは要件の段で）。
-- 見つけた穴: なし。
-
-
-## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
-
-- 規模: S（5〜7 タスク）。切る: なし。段は「その他」のまま。
-- 前提の状態: 上流なし。今すぐ着手できる。
-- 崩れた前提／古くなった位置: なし。C3 で `crates/areka/src/menu/`・`readme.rs`・`emo2_boot/readme_cue.rs`・`emo2_boot/mod.rs`・`crates/areka-kanade/src/actor.rs`・`actor_resources.rs` に入った変更は 0。`emo2_boot/spine.rs` は棚卸㉑の PR で `#[allow(dead_code)]` の 2 か所に理由のコメントが付いただけ。棚卸㉑の指し先を引き直した結果:
-  - 項目 7: `wire_emo2_boot` の `sinks: vec![…]` は今も 11 本。`spine.rs` の 2 つのコメント（「現在は 4 本」「4-sink 構成」）は残っている。
-  - 項目 4: `menu/trigger.rs` の `finish` の「`[menu] TrackPopupMenuEx failed`」は残り、`trigger_show_tests.rs` が同じ文言を 2 か所で見ている。
-  - 項目 6: `areka-kanade/src/actor.rs` の SHIORI の往復の失敗の 3 か所（「——終了系列（Fault）へ」）は残っている。
-  - 項目 9: `menu/captions.rs` の `UNQUERIED_POPUPMENU_RESOURCES` は残り、台帳の 4 行の持ち主は完了 `popup-menu-minimal` のまま（付け替えは `coverage-roadmap-refresh`）。
-- 触るファイル（並走の照合用）: 棚卸㉑のまま＝`crates/areka/src/menu/{trigger.rs, win32.rs, captions.rs}`・`menu/trigger_show_tests.rs`・`crates/areka/src/readme.rs`・`emo2_boot/readme_cue.rs`・`emo2_boot/spine.rs`（コメントだけ）・`crates/areka-kanade/src/actor.rs`（記録の文言 3 か所）・（接頭辞を揃えるなら）`actor_resources.rs`。
-- 共有しうる相手: `menu/` を触る未完了 spec は 0。`areka-kanade/src/actor.rs` は `property-query-channels` が触る。`emo2_boot/spine.rs` はコメント 1 か所なので、近くを触る spec と並べても行の重なりは起きにくい。
-- 議題（答えで作業が変わるものだけ）: なし。
-- 見つけた穴: なし。
-
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- **前提の変化**: 項目 10（World を借りたままの `ShellExecuteW`）は `open-external-tags`（10-06）で済んだ＝開く処理は `crates/areka/src/readme/opener.rs` の専用のスレッドへ移った。項目 2 も済み（説明書が無ければ OS を呼ばずに warn で止まる。`crates/areka/src/readme_tests.rs` に檻がある）。残りは 3〜9 の 7 件:
-  - 4: `crates/areka/src/menu/trigger.rs` の、メニューを出せなかったときの記録「`[menu] TrackPopupMenuEx failed`」と、それを逐語で見る `menu/trigger_show_tests.rs` の 2 か所。
-  - 5: `crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」で始まる 3 行（`open-external-tags` が文を書き換えたが、接頭辞の形は同じ）。
-  - 6: `crates/areka-kanade/src/actor.rs` の SHIORI の往復の失敗の 3 か所（「——終了系列（Fault）へ」）。
-  - 7: `crates/areka/src/emo2_boot/spine.rs` の 2 つの注記（「現在は 4 本」「4-sink 構成」）。本番は今も 11 本（`emo2_boot/mod.rs` の `sinks: vec![…]`）。
-  - 3・8: テストの穴 2 件（台本の文字列から開く処理までの端から端・scope 1 の終了の指示の端から端）。部品ごとのテストは `open-external-tags` で厚くなった。
-  - 9: `crates/areka/src/menu/captions.rs` の、照会しないメニューの語彙 4 件。台帳の持ち主の付け替えは `coverage-roadmap-refresh`。
-- **触るファイル**: `crates/areka/src/menu/{trigger.rs（573 行）, win32.rs, captions.rs, trigger_show_tests.rs}`・`emo2_boot/readme_cue.rs`・`emo2_boot/spine.rs`（937 行・注記だけ）・`crates/areka-kanade/src/actor.rs`（**900 行＝上限の近く**。文言だけなので増えない）・接頭辞を揃えるなら `actor_resources.rs`・新しいテスト 1〜2 本。`readme.rs` は項目 2・10 が済んだので触らない見込み。
-- **規模**: S（4〜6）。
-- **先に要るもの**: なし。ファイルの重なり: kanade の `actor.rs`（`mcp-kanade-tools` ほか kanade の進行の列）・`menu/captions.rs`（`extra-character-windows`）・`emo2_boot/spine.rs`（`areka-test-binary-stability` の件 1・2 が同じファイルの足場に触りうる）。
-- **測定の仕事ではない**（重い回 0）。
-- **優先度の区分**: C（バグでない持ち越し・記録の文言とテストの穴）。
-- **要件定義のモデル**: Opus。
-- **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 冒頭の「本仕様に残るのは 3〜10 の 8 件」は 7 件になった。項目 7 の注記 2 か所は、spec を待たずに直せる（即時の直し候補）。
-
 ## 2026-10-16 追記: 件 11（バグ・`areka-P0-baseware-root-list` の完了時の棚卸）
 
 **件 11: 右クリックメニューを開いている間、うにゅう側（kero）のバルーンの窓が黒い四角で塗られて見えることがある。**
@@ -151,24 +80,6 @@
 - **まとめた理由**: 同じ右クリックメニューを開く所（`menu/`）の残件で、この spec の触る場所と重なる（「小さいバグの起票は触る場所が同じものを 1 本にまとめる」）。原因が wintf の合成の側と分かったら、要件の段でその持ち主へ渡す。
 - **区分**: この件だけバグ（区分 B）。残りの件（区分 C）より先に取ってよい。まずは再現の条件を測る（実機・メニューを開く前後の画面と記録）。
 
-## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
-- 前提の変化: `baseware-root-list`（PR#317）が `menu/` を広く触って着地し（`captions.rs`・`mod.rs`・新しい `roots_frame.rs` ほか）、完了の棚卸で件 11（メニューを開いている間、うにゅう側のバルーンが黒い四角）をここへ足した。待つ相手は無くなった。
-- 件ごとの今（どれも残っている）:
-  - 4: `crates/areka/src/menu/trigger.rs` 487 行の「`[menu] TrackPopupMenuEx failed`」と、それを逐語で見る `menu/trigger_show_tests.rs` の 263・439 行。
-  - 5: `crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」で始まる 7 か所（78〜133 行）。
-  - 6: `crates/areka-kanade/src/actor.rs` の 719・729・738 行（「——終了系列（Fault）へ」）。
-  - 7: `crates/areka/src/emo2_boot/spine.rs` の 752・759 行（「現在は 4 本」「4-sink 構成」）。本番は今も 11 本（`emo2_boot/mod.rs` の 653〜665 行）。
-  - 9: `menu/captions.rs` 76 行の `UNQUERIED_POPUPMENU_RESOURCES`。
-  - 3・8: テストの穴 2 件のまま。11: 再現の条件はまだ測っていない。
-- 本文の古い記述: 7 行目の「本仕様に残るのは 3〜10 の 8 件」は、今は 3〜9 と 11 の 8 件（2 と 10 は済み）。
-- 触るファイル: `menu/{trigger,win32,captions}.rs`・`menu/trigger_show_tests.rs`・`emo2_boot/readme_cue.rs`・`emo2_boot/spine.rs`（注記だけ・937 行）・`crates/areka-kanade/src/actor.rs`（901 行・文言だけで増えない）・揃えるなら `actor_resources.rs`・新しいテスト 1〜2 本。件 11 の原因が窓の表示（wintf の合成）の側と分かれば、その持ち主へ渡す。
-- 規模: 6〜9 タスク（件 3〜9 の 4〜6 に、件 11 の再現と直し）。分割の案: 無し。
-- 先に要るもの: 無し＝先頭。
-- 重なり: 今の版の 2 本（`user-data-root`・`write-failure-notice`）とは 0（どちらも `menu/`・kanade・`spine.rs`・`readme_cue.rs` に触らない）。重なる相手は kanade の列（`mcp-kanade-tools` ほか・`actor.rs`）・`extra-character-windows`（`captions.rs`）・`tasktray-icon`（`menu/mod.rs` を触るとき）。
-- 版の席: 1 本だけの席（依存・emo-text の新しいファイル）を取らず、静かな机も全体テストの比べも要らない。見立ての上限 9 は `user-data-root` の下限 11 以下＝`user-data-root` と同じウェーブなら隙間に入る。`write-failure-notice` だけのウェーブ（下限 7）では超える。
-  - ただし件 11 の再現は、実機でメニューを開いて画面を撮る仕事。areka の窓はクリックを通すので、前回は開発者の許しを得て入力を送った＝人の待ちになりうる。隙間に入れるなら、件 11 を人の手を待たずに撮れるかを先に確かめるか、件 11 だけ後へ回す。
-- 優先度の区分: C（記録の文言とテストの穴）。件 11 だけ B（見た目の不具合）。要件定義のモデル: Opus。
-- すぐ直せる候補: 件 7 の `spine.rs` 752・759 行の注記（spec を待たずに直せる）。
 ## 2026-10-18 追記: 件 12（バグ・`areka-P0-emily-ghost-verification` の完了時の棚卸）
 
 **件 12: 右クリックメニューが、何も選ばれないまま閉じる・「出した」の記録はあるのに画面に見えないことがある。**
@@ -178,38 +89,6 @@
 - 記録の穴: 選ばれずに閉じたときの記録 `menu_dismissed`（`crates/areka/src/menu/trigger.rs`）は DEBUG で、`info` の水準では見えずに閉じたのか、見えないまま開いているのかを区別できない。区別できるよう水準か文言を見直す。
 - 再現を測るときは `RUST_LOG` に `areka::menu=debug` を足す。実機でメニューを開いて撮る仕事なので、件 11 と同じく人の待ち（入力を送る許し）になりうる。
 - 優先度の区分: B（使えなくなることがある不具合）。起票の理由: 確かめるのに実機の走行を何度も回す必要がある（完了時の棚卸の起票の条件 4）。
-
-## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
-- 前提の変化: 10-18 の件 12 の追記の後、ソースは変わっていない。
-- 棚卸㉗の振り分け: 本文 Scope の Out の「オーナードロー」は、新しい spec `popup-menu-shell-look`（v0.1.0）が持つ（`menu.*` の見た目と、着せ替えのメニュー `sakura.menu,auto`）。
-- 重なり: `popup-menu-shell-look`（`menu/win32.rs`・`menu/mod.rs`・`menu/plan.rs`）と同じウェーブに置かない。件 11（メニューを開いている間の黒い四角）と件 12（メニューが見えずに閉じる）は、オーナードローの描画と同じ「メニューを出す所」の話＝向こうの要件の段で、どちらが先に直すかを決める。件 12 は `pasta-in-windows-verification` の実機の手順（右クリックメニューを押す）にも効く。
-- 版: 版に縛らない列のまま。
-- 優先度の区分: C のまま（件 11・12 は B）。要件定義のモデル: Opus のまま。
-
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 10-18 から `menu/` に入ったのは `startup-options-core` の `menu/roots_frame.rs` だけ（一時の置き場の扱い）＝件の場所は動いていない。件ごとの今: 件 4＝`crates/areka/src/menu/trigger.rs` 487 行と `menu/trigger_show_tests.rs` 263・439 行。件 5＝`crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」7 か所。件 6＝`crates/areka-kanade/src/actor.rs` の 742・752・761 行（行がずれた）。件 9＝`menu/captions.rs` 82 行。件 3・8・11・12 は手つかず。
-- 件 7 が再び古くなった: `crates/areka/src/emo2_boot/spine.rs` 752 行の注記は 10-16 に「現在は 11 本＝`mod.rs` の `sinks`」へ直ったが、`mcp-reload`（10-22）が読み直しの受け口を足して本番の受け口は 12 本になり、組み立ての場所も `crates/areka/src/emo2_boot/runtime_boot.rs` の `runtime_sinks`（`mod.rs` ではない）に移っている。
-- 触るファイル: `menu/{trigger,win32,captions}.rs`・`menu/trigger_show_tests.rs`・`emo2_boot/readme_cue.rs`（140）・`emo2_boot/spine.rs`（940・注記だけ）・`crates/areka-kanade/src/actor.rs`（837・文言だけで増えない）・揃えるなら `actor_resources.rs`（107）・新しいテスト 1〜2 本。
-- 規模: 6〜9（件 3〜9 の 4〜6 に件 11・12 の再現と直し）。
-- 先に要るもの: なし。同じウェーブに置けない相手（v0.1.0）: `popup-menu-shell-look`（`menu/win32.rs`）・`mouse-click-wheel-events`（議題 3 で `menu/trigger.rs` を触るとき）・`script-security-level`（kanade の `actor.rs` の SHIORI の往復の所に手を入れるとき）・`areka-test-binary-stability`（`spine.rs`）。後の版: `menu-thumbnail-preview`（v0.4.0・`menu/`）。1 本だけの席は取らない。版に縛らない列として v0.1.0 の隙間に入れるなら、件 11・12 の実機の再現は人の待ち（クリックを通す窓へ入力を送る許し）になる＝件 3〜9 だけの形（4〜6・人の待ち無し・静かな机も前後の比べも要らない）に限る。
-- 優先度の区分: C のまま（件 11・12 は B）。
-- 要件定義のモデル: Opus のまま。
-- 分割の案: 新しくは切らない。隙間に入れるときは、棚卸㉖のとおり件 11・12 を後へ回す。
-- 見つけた穴・古くなった記述: 件 7 の `spine.rs` 752 行の注記（「現在は 11 本＝`mod.rs` の `sinks`」→ 12 本・`runtime_boot.rs` の `runtime_sinks`）は spec を待たずに直せる。
-
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 件 7 は済んだ＝`crates/areka/src/emo2_boot/spine.rs` 752 行の注記は「現在は 12 本＝`runtime_boot.rs` の `runtime_sinks`」に直っていて（`script-security-level`・10-23）、本番の受け口の数（`crates/areka/src/emo2_boot/runtime_boot.rs` の `runtime_sinks` の 12 個）と合う。`menu/` には `window-link-directives` が `reset_balloon_pos_frame.rs`（新しい）・`mod.rs`・`plan.rs`・`captions.rs` を、`ghost-inner-balloon` が `balloon_frame.rs` を足した＝本 spec の件の場所は `captions.rs` の行がずれただけ。ぱすたの実機（10-22・`pasta-in-windows-verification`）でメニューは普通に出た＝件 12 は再現していない。
-- **件ごとの今**: 件 4＝`crates/areka/src/menu/trigger.rs` 487 行と `menu/trigger_show_tests.rs` 263・439 行。件 5＝`emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」7 か所。件 6＝`crates/areka-kanade/src/actor.rs` の 750・760・769 行（ずれた）。件 9＝`menu/captions.rs` 87 行（ずれた）。件 3・8・11・12 は手つかず。
-- **触るファイル**: `menu/{trigger,win32,captions}.rs`（573・137・324 行）・`menu/trigger_show_tests.rs`（504）・`emo2_boot/readme_cue.rs`（140）・`crates/areka-kanade/src/actor.rs`（845・文言だけで増えない）・揃えるなら `actor_resources.rs`（107）・新しいテスト 1〜2 本。件 7 が済んだので `spine.rs`（940）には触らない。
-- **規模**: 件 3〜6・8・9 だけなら 4〜6、件 11・12 の再現と直しを入れて 6〜9。
-- **先に要るもの**: 働きの上では無し。同じウェーブに置けない相手（v0.1.0）: `popup-menu-shell-look`（`menu/win32.rs`・`trigger.rs`・裁定待ち）・`shiori2-protocol`（新しく足された相手＝kanade の `actor.rs` の SHIORI の往復 `round_trip_request` に手を入れる。件 6 の 3 つの文はその往復の失敗の所）・`mouse-click-wheel-events`（議題 3 で `menu/trigger.rs` を触るとき）。`spine.rs` に触らなくなったので `areka-test-binary-stability` とは重ならない。1 本だけの席は取らない。
-- **版の席**: 件 3〜9 だけの形（4〜6・人の待ち無し・静かな机も前後の比べも要らない）なら、上の 3 本が居ないウェーブの隙間に入れられる。件 11・12 は実機でメニューを開いて撮る仕事＝人の待ち（入力を送る許し）になりうるので、隙間に入れるなら後へ回す（棚卸㉖のとおり）。
-- **優先度の区分**: C（記録の文言とテストの穴）。件 11・12 だけ B（見た目の不具合・使えなくなることがある不具合）。
-- **要件定義のモデル**: Opus。
-- **分割の案**: 新しくは切らない。隙間に入れるときは件 11・12 を後へ回す。
-- **見つけた穴・古くなった記述**:
-  - steering の roadmap の spec 台帳の本 spec の行の「残り 7 件」は古い。今は件 3〜6・8・9 と件 11・12 の 8 件（件 2・7・10 は済み）。
-  - 棚卸㉘の節の件 6・件 9 の行の番号は上のとおり動いた。
 
 ## 2026-10-24 追記: 件 13（`shiori2-protocol` のタスク 5.4・「．さくら」の右クリックメニューの資源）
 
@@ -224,3 +103,15 @@
 - 実機の 1 回（`shiori2-protocol` 5.1・2026-10-24）では右クリックメニューを開いていないので、画面では見ていない（メニューを開いたときに問う作りなので、記録にも出ない）。
 - まとめた理由: 触る場所が件 9 と同じ（`menu/captions.rs` と問う名前の表）。⑵ は項目を足す仕事なので、要件の段で大きすぎると分かったら別の spec に切り出す。
 - 優先度の区分: C（ukadoc の拾い残し）。直したら「．さくら」で右クリックメニューを開き、項目名を SSP と見比べる。
+
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: 棚卸㉙（10-23）の後、件の場所のソースは動いていない（`menu/` に入ったのは `mouse-click-wheel-events` の `mod.rs` と `readonly-mode` の `install_frame.rs`・`update_frame.rs` だけで、10-24 より後は 0）。変わったのは 10-24 に件 13（「．さくら」の古い資源の名前と、無い項目）が足されたこと。済んだ件は 1・2・7・10＝残りは件 3〜6・8・9・11〜13。
+- **件ごとの今**: 件 4＝`crates/areka/src/menu/trigger.rs` 487 行と `menu/trigger_show_tests.rs` 263・439 行。件 5＝`crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」7 か所。件 6＝`crates/areka-kanade/src/actor.rs` 750・760・769 行。件 9＝`menu/captions.rs` 87 行の `UNQUERIED_POPUPMENU_RESOURCES`。件 12 の記録 `menu_dismissed` は `trigger.rs` 492 行で今も DEBUG。件 13 ⑴＝問う名前の表 `crates/areka-kanade/src/schedule/resources.rs`（370 行）は `updatebutton.caption` だけ（49 行目）。件 3・8・11・12 は手つかず（件 12 は 10-22 のぱすたの実機で再現していない）。
+- **触るファイル**: `menu/{trigger,win32,captions}.rs`（573・137・324）・`menu/trigger_show_tests.rs`（504）・`emo2_boot/readme_cue.rs`（140）・`crates/areka-kanade/src/actor.rs`（845・文言だけで増えない）・揃えるなら `actor_resources.rs`（107）・新しいテスト 1〜2 本。件 13 を入れるなら `schedule/resources.rs` とその兄弟のテスト・台帳 `shiori.toml` の 9 行。`spine.rs` には触らない。
+- **規模**: 件 3〜6・8・9 だけなら 4〜6。件 13 ⑴（古い名前も問う）で +1。件 11・12 の再現と直しで +2〜3。件 13 ⑵（項目を足す）は大きければ切り出す（件 13 の節のとおり）。
+- **先に要るもの**: 働きの上では無し。同じウェーブに置かない相手: `popup-menu-shell-look`（`menu/{mod,win32,plan}.rs`・件 11・12 をどちらが直すかは向こうの要件で決める・件 13 ⑵ のおすすめは向こうの件 15 と分け方を決める）・kanade の `actor.rs` の SHIORI の往復に手を入れる spec・`extra-character-windows`（`captions.rs`）・`tasktray-icon`（`menu/mod.rs`）・`menu-thumbnail-preview`（`menu/`）。v0.1.0 の `script-small-tags`・`install-before-boot`・`placement-measure-bake-once` とは重なり 0。1 本だけの席は取らない。
+- **版の席**: 隙間に入れるなら件 3〜6・8・9 だけの形（4〜6・人の待ち無し・静かな机も前後の全体テストの比べも要らない）。件 11・12 は実機でメニューを開いて撮る仕事＝人の待ち（入力を送る許し）になりうるので後へ回す。件 13 も直した後に「．さくら」で SSP と見比べる確かめが要るので後へ回す。
+- **優先度の区分**: C（記録の文言とテストの穴・件 13 は ukadoc の拾い残し）。件 11・12 だけ B。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 新しくは切らない。隙間に入れるときは件 11〜13 を後へ回す。
+- **見つけた穴・古くなった記述**: 本文の Approach・Scope・Adjacent の「`ghost-shell-balloon-switch`・`baseware-root-layout` がこれから行う」は古い（どちらも完了）。3 人目以降のキャラクターの窓（件 9 の `char{n≧2}`）を持つ spec は今も決まっていない。冒頭の残件の数の書き方（「3〜10 の 8 件」）は上の「残り」に読み替える。

@@ -171,3 +171,7 @@
 - **`clickwaitmarker.*` の鍵と、印を出す振る舞いは今も本 spec の物**（`balloon-scroll-arrows` の Scope の Out に「`clickwaitmarker` の振る舞い（`talk-fast-forward`）」）。
 - 本文の 46・75・84・93・98・123・141 行目の `balloon-markers` は `balloon-scroll-arrows` と読み替える。列の順は「`balloon-scroll-arrows` が先に系列の土台を作り、本 spec はそれを使う」見込みで、「先に着地した方が作る」の取り合いは無くなる。印を文字の面の中で描くか emo-present で重ねるか（議題 3）も、あちらの答えに合わせる。
 - 並走: `balloon-scroll-arrows` とは emo-text の `actor*.rs`・`viewbox*.rs`・`input_events/shell_box.rs`・`user_break.rs`・emo-present の `balloon.rs` が重なる＝同じウェーブに置かない。
+
+## 2026-10-31 棚卸㉛の追記（完了 `balloon-scroll-arrows` の残り物）
+
+- **件 A（区分 B・小さい）**: 矢印の押下が中断の判定の「前の押下で選択したか」を上書きしない。`crates/areka/src/input_events/user_break.rs` の `prev_press_selected` は、バルーンの押下の道（269〜270 行目・371〜372 行目）でだけ書き替わり、矢印が押下を使い切ったときは書き替わらない。このため「選択肢をクリック → 矢印をクリック → 矢印の外をダブルクリック」で、ダブルクリックの 1 打目が前の選択の続きと読まれ、中断を取らない（完了 `balloon-scroll-arrows` の `tasks.md` の 6.2 の記録）。早送りも同じ押下の道を触るので、この spec の要件の段で一緒に直すか、決まりとして記録して閉じるかを決める。規模は 1 タスク（直しと端の場合のテスト）。

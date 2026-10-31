@@ -2591,3 +2591,103 @@ Opus
 ### 覚え書きから外した行（棚卸㉚）
 
 - **SHIORI へ渡す置き場所のパスの形**（XS）。持ち主が決まった＝`shiori4-api` の決定 6（2026-10-23 開発者「helper の道にも絶対パス・OS の区切り・末尾に区切りあり」・変えた直後に検体のゴーストで起動を確かめる条件つき）。登記の全文は history「2026-10-23 棚卸㉙退避」。棚卸㉙で brief の持ち物になったので、次の棚卸でこの行を消す。helper の道は `shiori2-protocol` で前倒し済み（2026-10-23 開発者承認・華和梨の「．さくら」が辞書を読めなかった）。
+
+## 2026-10-31 棚卸㉛退避（`roadmap.md` から逐語で移した・main `4068422f`）
+
+> 棚卸㉛で `roadmap.md` から移した。中身は書き換えていない。順に、旧「ウェーブ編成」の表と注・開始コマンド・その先のウェーブ（C12〜C15）、旧「版の段」の組済みのウェーブの行、旧「直接修正候補」、棚卸㉚の裁定。
+
+## ウェーブ編成（着手順の正本・2026-10-24 棚卸㉚）
+
+> 各ウェーブは**フルライフサイクル**（要件 → 設計 → タスク → 実装 → `/kiro-complete`＝PR の squash マージ）を完走してから次へ。1 spec ＝ 1 worktree ＝ 1 PR。**同じウェーブに入れるのは、棚卸㉚までの実測で触るソースファイルの重なりが 0 の組だけ**。許す重なりは 5 つだけ＝表の末尾への追記（`doc/COMPAT_ARCHITECTURE.md` §8）・生成物（`THIRD-PARTY-NOTICES.md`・`doc/ukadoc-coverage/report/`＝手で直さず作り直す）・steering・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の**別々の行**・説明書 `dist/README.txt` の**別々の行**。文書だけの段は置かない。
+> **並び順の決まり（2026-10-07 開発者・10-05 の 3 段を改めた）**: 依存の木（働きの依存＋同じソースファイルを触る spec＋直列の列の順）の**先頭**だけを候補にし、**① ぶら下がる未完了の spec が多い ② 区分が高い（A ＞ B ＞ C ＞ D）③ 起票が古い**の順に並べ、上から互いに触るファイルが重ならないものを**最大 8 本**取る。据え置き・保留・取り下げ予定は木に入れない。**測ることが本体の spec はウェーブに並べない**（ほかの仕事を汚し、汚される）。区分 A でぶら下がる数が同じものは、開発者が「高」「早めに」と言ったものを先にした（棚卸㉓の読み＝違えば直す）。
+> **版の段が最上位の物差し（2026-10-15 開発者・`/kiro-discovery`「版の段」・2026-10-16 改め）**: **今の版（まだ公開していない最も若い版）が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者「ゴールが近いので他の版の割り込みは避けて」）。空いた席に入れてよいのは「版に縛らない」列のうち、今の版の着地までのウェーブ数を増やさないものだけ（同日・開発者「版に含めてもよいが、その場合、0.0.3 の着地（ウェーブ数）が増えることのないように」）＝先頭で、今の版の spec と触るファイルが重ならず、今の版が使う 1 本だけの席を取らず、見立ての上限がそのウェーブで一番大きい今の版の spec の下限以下で、人や外の待ちも、静かな机も、前後の全体テストの比べも要らないもの（判定の正本は `/kiro-next` のスキルの「Version gate」）。迷ったら席は空けておく。今の版の中は上の並び順の決まりで並べ、先頭を全部取ってから、空いた席を版に縛らない列の先頭（同じ並び順）で埋める。版に縛らない列の後続は待つ相手が着地してから・v0.2.0 の間は改造に触れないものだけ（「版の段」の注意）。棚卸㉕（C7）からこの形で組んだ（C8〜C11 も同じ）。C9〜C12 は今の版 v0.1.0 の先頭だけで 8 席が埋まったので、割り込みは取らなかった。
+> **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C12 では誰も使わなかった（① ✅ `mcp-strict-errors` は rmcp を直す形をやめた＝2026-10-30 開発者「rmcpの改造は許可しない。crateから使えるもので利用せよ」・rmcp の 415 の後に areka の側で rmcp の公開の型で答えを組む＝`Cargo.toml`・`Cargo.lock`・`deny.toml`・`THIRD-PARTY-NOTICES.md` は動かない）⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行）＝C12 では誰も使わない（③ ✅ `emo-text-dwrite-fidelity` と ④ ✅ `real-run-log-noise` は今あるファイルへ足す約束）。次に使うのは `balloon-scroll-arrows`（v0.1.0・C13 の見込み）。C11 で使ったのは ⑤ `vertical-choice-hover-band`（兄弟のテストのファイル 2 つ・2026-10-24 の完了の棚卸で直した）。
+> **C11（2026-10-23 棚卸㉙・8 本）**: 7 本（`descript-window-keys`・`mouse-click-wheel-events`・`readonly-mode`・`mcp-scope-rect-property`・`vertical-choice-hover-band`・`dpi-realign-remembered-chain`・`shiori2-protocol`）は 10-24 までに着地した。⑦ `mcp-strict-errors` は 10-23 の要件の討議で外し、要件だけを main に入れた＝C12 の ① として設計から続ける。C11 の行の全文と棚卸㉙の裁定は history「2026-10-24 棚卸㉚退避」。C10 より前は、そこから辿る。
+
+| Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
+|---|---|---|---|
+| **C12**（8 本並走・今の版 v0.1.0 の 8 本・割り込み 0・Opus 8・想定タスクの合計＝約 58〜90） | ① ✅ `mcp-strict-errors`（10-30 完了・A・約 4＝`consumer_ledger.rs` に行を足す残りの 4 本〔stay-on-top-directives・script-small-tags・shell-scale-linkage・balloon-communicatebox〕・14〜22・**要件は済み＝設計から**） ∥ ② ✅ `shell-mouse-cursor`（10-30 完了・A・約 1＝balloon-scroll-arrows〔`input_events/mod.rs`〕・6〜9） ∥ ③ ✅ `emo-text-dwrite-fidelity`（10-30 完了・A・0・9〜13・2026-10-24 開発者「ロードマップ優先度は高いです。次のバージョンに入れたい」） ∥ ④ ✅ `real-run-log-noise`（10-30 完了・A・0・4〜7） ∥ ⑤ ✅ `startup-install-option`（10-30 完了・A・0・5〜8〔議題 2 まで 8〜11〕） ∥ ⑥ ✅ `default-balloon-selfmade`（10-30 完了・A・0・8〜12） ∥ ⑦ ✅ `window-work-area-clamp`（10-30 完了・B・0・8〜12） ∥ ⑧ ✅ `bridge-store-user-root`（10-30 完了・B・0・4〜7） | ① `/kiro-design <名>`・②〜⑧ `/kiro-start <名>` | ①＝`crates/areka/src/mcp/{sakurascript,raise_event,check_script,check_script_judge}.rs` と兄弟のテスト・`crates/areka-mcp/src/handler.rs`（`INSTRUCTIONS` の最後の文＝棚卸㉘からの渡し・要件 5）・中継の `stdio.rs`・`errors.rs`・`areka-talk` の `lib.rs`・kanade の `msg.rs`・`schedule/{sstp,translate}.rs`・`areka-sakura` の `{compile,drive}.rs`・seriko の `actor.rs`・`resolve.rs`・emo-present の `presenter/show.rs`・`emo2_boot/consumer_ledger.rs`（行を足す・今は 504 行・38 件）と兄弟のテスト・`doc/ssp-mcp/` の 3 つ・依存の席（rmcp）＝使わなかった（10-30 の裁定で rmcp を直さない）。**約束**: 中継の `config.rs` に触らない（⑧）・emo-text に触らない（③ ④）。②＝`crates/areka/src/input_events/{hover_region,char_watch}.rs`（出入りの追跡を読む口を足す）・`areka-parsers` の新しい `shell/cursor.rs` と `shell/mod.rs`・emo-present の `shell_target.rs`・wintf の `window_proc/mouse_move.rs`（632 行）と新しいカーソルの口のファイル・網羅台帳 `assets.toml` の行。**約束**: なし（このウェーブにほかの持ち主は居ない）。③＝emo-text の `draw.rs`・`draw_catalog.rs`・`draw_metrics.rs`・`draw_line_store.rs` と今ある兄弟のテスト・`tests/decoration_readback/vertical.rs`・網羅台帳 `assets.toml` の `font.name` の行（② と別の行）。**約束**: emo-text に新しいソースファイルを足さない（GDI 流の名前の引き当ては `draw_catalog.rs` に置く）・`layout.rs`・`viewbox_draw_render.rs` に触らない・`draw_format_metrics_tests.rs`（922 行）に足さない。④＝emo-text の `region.rs`・`actor_attach.rs`・`actor_decoration.rs`・`choice.rs`・emo-atlas の `lib.rs` と兄弟のテスト（`actor_region_warn_tests.rs` は 894 行）。**約束**: emo-text の `draw.rs` に触らない（③・毎回の描画で出る警告は `choice.rs` の解き直しか登録の側で止める）・新しいソースファイルを足さない。⑤＝`crates/areka/src/cli/{mod,parse}.rs` と新しい兄弟のテスト・`install/{mod,desk}.rs`・`install/judge.rs` か `procedure.rs`・`boot_config.rs` の `exe_location` を呼ぶ所・`dist/README.txt`（起動オプションの 1 文と、読み取りだけで断る物の並び）。**約束**: `ghost_session.rs`（935 行）に触らない（`on_steady` を使う）。⑥＝`crates/areka/src/boot_resolve.rs`（既定のバルーンの名前の定数 1 行と段 6）と既定の名前を書く 4 つのテスト・`tools/package.ps1`・`sample-ghost-kit` の `lib.rs`・`lib_tests.rs`（登記 10 → 11）・`vendors/sample_ghost/` の新しい `.nar`・`dist/README.txt`・`README.md`・新しい絵の道具とそのテスト。**約束**: `boot_resolve.rs` の書き込みの関数に触らない・emo-text の `region.rs` に触らない（④）＝`validrect.right,0` を areka の側で直すと決めたら、その足し分は次のウェーブへ回す。⑦＝`crates/areka/src/placement/{chain_finalize,chain_realign,persist}.rs`・`emo2_boot/frame/drain_resnap.rs`・寄せる純粋な関数（新しいファイルは `placement/follow/` の下）・`placement/follow/balloon_limit.rs`（件 4）・§8（追記）。**約束**: `placement/mod.rs`（969 行）に mod の行を足さない・`placement/follow/window_move.rs`（1,221 行）に足さない（兄弟のファイルへ）・`placement/spawn.rs` に触らない。⑧＝`crates/areka-mcp-bridge/src/config.rs` と `config_tests.rs`・`dist/README.txt` の中継の控えの段落。**約束**: 中継の `stdio.rs`・`errors.rs` に触らない（①）・`areka-user-data` の `establish.rs` は読むだけ。**重なりの確かめ**: `dist/README.txt` は ⑤ ⑥ ⑧ が別々の行（許す重なり）。網羅台帳 `assets.toml` は ② ③ が別々の行。③ ④ はどちらも emo-text だが別のファイル。① ⑧ はどちらも中継だが別のファイル。seriko の `actor.rs` を触る `seriko-pattern-calls`・`script-small-tags` と、`presenter/show.rs` を触る `animated-surface-log-flood` は ① と重なるので C12 に入れない。実機の確かめは排他の机を順に使う（① ⑥ は SSP で測る前に毎回開発者に許しを取る・③ は SSP と並べる前にほかのセッションへ知らせる・⑧ は開発者が Store 版の Claude Desktop の中継の指定を替えて起動し直す）。 |
+| **次のウェーブの候補**（次の棚卸で組む・C12 の着地で brief が動く） | **今の版は v0.1.0**。下の「その先のウェーブ」が見込み（C13〜C15）。C12 に入れなかった今の版の先頭＝✅ `stay-on-top-directives`（10-31 着地・`consumer_ledger.rs` の席を ① が使う）・✅ `seriko-pattern-calls`（10-31 着地・seriko の `actor.rs` が ① と重なる＝① は開発者の裁定の案 2〔再生の途中まで印を運ぶ〕でここを触る）・✅ `animated-surface-log-flood`（10-31 着地・`presenter/show.rs` が ① と重なる・前後の静かな机の測りが中にある）・✅ `balloon-scroll-arrows`（10-31 着地・`input_events/mod.rs` が ② と重なる・emo-text の席を使う）・`placement-measure-bake-once`（区分 C・案 A なら `ghost_session.rs` が ⑤ と、案 B なら emo-present の `shell_target.rs` が ② と重なる・最後に静かな机で前後の計時を 1 回）。その後ろに `script-small-tags`・`shell-scale-linkage`・`balloon-communicatebox`（**Fable**＝窓へキーボードの入力と日本語の変換を渡す前例が無い）。**v0.1.0 の着地まで約 5 ウェーブ（C12〜C16）**（長い鎖＝`consumer_ledger.rs` に行を足す 5 本を 1 本ずつ〔① → ✅ `stay-on-top-directives`（10-31 着地） → `script-small-tags` → `shell-scale-linkage` → `balloon-communicatebox`〕。鎖を縮めるには、登記の手書きの数 38〔`consumer_ledger_tests.rs`〕の檻を替えるかの開発者の裁定が要る＝「棚卸㉚の裁定」の 10）。その後、ウェーブの外の 3 本と `doc/pasta-real-run.md` の実機の確かめが済めば `/release 0.1.0`。／**割り込み**（版に縛らない列）は C12 では取らない（8 席とも v0.1.0 の先頭で埋まった）。v0.1.0 の席が空いたときの候補は棚卸㉙のまま＝`actor-thread-log-capture`（3〜5）・`test-roots-under-target`（4〜7）・`clippy-199-lints` の段 1（3〜5・切り出すかは開発者）＝どれもテストの実行ファイルの計測中は着地させない・`choice-ranges-one-function`（3〜5）・`popup-menu-residue`（4〜6）・`background-result-tick-wake`（6〜10・⑤ と `install/desk.rs`）。見直しの 33 本は v0.1.0 の版の門の後。 | — | 先頭の判定は棚卸㉚の測り（各 brief の「2026-10-24 棚卸㉚の再測定」）。割り込みの候補は測り直していない（席が空かなかった・棚卸㉙の測りのまま）。 |
+| **ウェーブの外** | 測ることが本体（静かな机で 1 本ずつ）＝`areka-test-binary-stability`（v0.1.0・`offline-surface-dump` が COM を開くテストを 36 本足した＝切り分けの対照から外す）・`present-emit-tail-latency`・`install-live-target-hazards`・`real-run-input-guard-observations`・`helper-first-load-refusal`（2026-10-24 起票）／裁定待ち＝`popup-menu-shell-look`（v0.1.0・生きている決まり 6「オーナードローと着せ替えメニューは予約のまま」を解くかを開発者が決めるまで並べない。着せ替えのメニューだけなら Opus、Win32 の描き分けまでなら **Fable**＝OS のメニューの中で `WM_DRAWITEM` に同期で答える新しい約束）／外の待ち＝`winget-release-automation`（v0.1.0・winget-pkgs の手提出 PR 450070 は 10-24 も開いたまま（`gh` で確かめた）〔自動の検査は通過・10-11 から動き無し〕）／余力の枠＝`multi-ghost-runtime`（24〜30・要件で前半「席と区別」〔12〜15・Opus〕と後半「止まり方と記憶」〔10〜14・**Fable**＝N 体の終わり方の順の約束〕に切る） → `ghost-call`（後半の後・v0.1.0 の残りが待ちで止まったときに） | — | 机の空きを開発者が決めたときに 1 本ずつ挟む。重い走行は赤が出たテストに絞り、全体の負荷の走行は最後の 1 回だけ（1 回 約 50 分） |
+| **保留** | `tick-gate-adoption` | — | 「長い試行はしない」と両立する短い A/B の測り方を先に組む。計測を汚すので他と並べない |
+
+**C12 の開始コマンド**（`/kiro-next` の報告と同じ形・俯瞰の HTML がこの塊と下の「その先のウェーブ」の塊を 1 つにしてコピーのボタンつきで出す・`/kiro-wave` はこの塊だけを読む・① `mcp-strict-errors` は要件が済んでいるので `/kiro-design`＝`/kiro-wave` は起動せずに WARN を出すので、手で打つ）（✅ ① `mcp-strict-errors`・✅ ② `shell-mouse-cursor`・✅ ③ `emo-text-dwrite-fidelity`・✅ ④ `real-run-log-noise`・✅ ⑤ `startup-install-option`・✅ ⑥ `default-balloon-selfmade`・✅ ⑦ `window-work-area-clamp`・✅ ⑧ `bridge-store-user-root` は 10-30 に着地した＝その行は打たない）:
+
+```
+Wave C12 8本（v0.1.0 8本）
+【本来の次の版 v0.1.0】
+Opus
+/kiro-design mcp-strict-errors
+/kiro-start shell-mouse-cursor
+/kiro-start emo-text-dwrite-fidelity
+/kiro-start real-run-log-noise
+/kiro-start startup-install-option
+/kiro-start default-balloon-selfmade
+/kiro-start window-work-area-clamp
+/kiro-start bridge-store-user-root
+```
+
+### その先のウェーブ（2026-10-24 の見込み）
+
+C12 が全部着地した前提の見込み。次の棚卸で測り直して確かめる（割り込みは棚卸ごとに選ぶので見込みには書かない）。v0.1.0 はこの後に C16（`balloon-communicatebox`・**Fable**）が残り、`/release 0.1.0` は C16 と、ウェーブの外の 3 本（`areka-test-binary-stability`・`popup-menu-shell-look`・`winget-release-automation`）と、`doc/pasta-real-run.md` の実機の確かめの後。
+
+| ウェーブ | spec | 入る条件 | 要件定義 |
+|---|---|---|---|
+| C13 | ✅ `stay-on-top-directives`（10-31 着地）・✅ `seriko-pattern-calls`（10-31 着地）・✅ `animated-surface-log-flood`（10-31 着地）・✅ `balloon-scroll-arrows`（10-31 着地） | ① の着地（`consumer_ledger.rs`・seriko の `actor.rs`・`presenter/show.rs`）・② の着地（`input_events/mod.rs`）。`seriko-pattern-calls` と `animated-surface-log-flood` は emo-compose の `plan.rs` で条件つき＝`animated-surface-log-flood` が直しを emo-present の中に収める約束で並べる | Opus |
+| C14 | `script-small-tags`・`placement-measure-bake-once` | `stay-on-top-directives` の着地（`consumer_ledger.rs`・`sakura/decode.rs`・✅ 10-31 に着地した＝こちら側の待ちは無い）。`placement-measure-bake-once` は、案 A なら `stay-on-top-directives` の新しい受け手の mod の行（`emo2_boot/mod.rs`）、案 B なら `balloon-scroll-arrows`（emo-present の `balloon.rs`）の着地の後（✅ どちらも 10-31 に着地した＝待ちは無い） | Opus |
+| C15 | `shell-scale-linkage` | `script-small-tags` の着地（`consumer_ledger.rs`）・`placement-measure-bake-once` の着地（案 A の `placement/mod.rs`） | Opus |
+
+（✅ `seriko-pattern-calls`・✅ `balloon-scroll-arrows`・✅ `stay-on-top-directives`・✅ `animated-surface-log-flood` は 10-31 に着地した＝その行は打たない）:
+
+```
+Wave C13（見込み）4本（v0.1.0 4本）
+【本来の次の版 v0.1.0】
+Opus
+/kiro-start stay-on-top-directives
+/kiro-start seriko-pattern-calls
+/kiro-start animated-surface-log-flood
+/kiro-start balloon-scroll-arrows
+```
+
+```
+Wave C14（見込み）2本（v0.1.0 2本）
+【本来の次の版 v0.1.0】
+Opus
+/kiro-start script-small-tags
+/kiro-start placement-measure-bake-once
+```
+
+```
+Wave C15（見込み）1本（v0.1.0 1本）
+【本来の次の版 v0.1.0】
+Opus
+/kiro-start shell-scale-linkage
+```
+
+### 旧「版の段」の組済みのウェーブの行（棚卸㉚）
+
+- **組済みのウェーブ**: **C12（2026-10-24 棚卸㉚・8 本）＝今の版 v0.1.0 の 8 本**（「ウェーブ編成」の表・割り込みは無し）＝✅ `mcp-strict-errors`（10-30 着地）・✅ `shell-mouse-cursor`（10-30 着地）・✅ `emo-text-dwrite-fidelity`（10-30 着地）・✅ `real-run-log-noise`（10-30 着地）・✅ `startup-install-option`（10-30 着地）・✅ `default-balloon-selfmade`（10-30 着地）・✅ `window-work-area-clamp`（10-30 着地）・✅ `bridge-store-user-root`（10-30 着地）。**v0.1.0 の着地まで約 5 ウェーブ（C12〜C16）**（長い鎖＝`emo2_boot/consumer_ledger.rs` に行を足す 5 本を 1 本ずつ）。C11 の 7 本は 10-24 までに着地し、`mcp-strict-errors` は要件だけ着地して C12 へ持ち越した。C11 より前のウェーブの記述は history「2026-10-24 棚卸㉚退避」。
+
+### 旧「直接修正候補」（棚卸㉚）
+
+
+> **2026-10-24 棚卸㉚で直した**（どれも動きを変えない）: ⑴ この roadmap の「版の段」の v0.1.0 の行・spec 台帳・テーマの節で、縦書きの開き括弧を「「」と書いていた 5 か所と、閉じ括弧を「」」と書いていた 2 か所を `「`・`」` に（括弧の数が合わず、棚卸のスクリプトが v0.1.0 の `real-run-log-noise` を読み落としていた）⑵ `bridge-store-user-root` の brief の `write-failure-notice` を「進行中」から「2026-10-17 着地」に ⑶ 直列の列の `main.rs` の行数（981 行）と spec 台帳の 2 行の規模（`mcp-strict-errors`・`window-work-area-clamp`）⑷ 覚え書きの「SHIORI へ渡す置き場所のパスの形」の行を消した（棚卸㉙で brief の持ち物になった・全文は history「2026-10-24 棚卸㉚退避」）⑸ `focus.md` の数の行と `product.md` のウェーブの行。
+>
+> **直さずに各 spec へ渡したもの（棚卸㉙から続くもの）**: ⑴ `crates/areka-mcp/src/handler.rs` の `INSTRUCTIONS` の最後の文＝`mcp-strict-errors`（C12 ①・要件 5）⑵ テストの説明に残る「WARP 可」（10 ファイル）＝`areka-test-binary-stability` ⑶ 網羅台帳 `shiori.toml` の起票されなかった spec の名前の注＝`balloon-communicatebox` ⑷ `doc/ukadoc-coverage/README.md` の転送先と `roadmap-draft.md` の W-2＝`coverage-roadmap-refresh` ⑸ `crates/shiori-abi/src/lib.rs` の説明＝`shiori4-api`。棚卸㉙で渡した `placement/chain_realign.rs` の説明は ✅ `dpi-realign-remembered-chain` が直した。`real-run-log-noise` の brief の「2026-10-23 棚卸㉙の追記」の節に残る古い前置き（`vertical-choice-hover-band` を待つ）は、同 spec の要件の段で読み替える。
+>
+> **2026-10-23 棚卸㉙で直したもの・渡したもの**の全文は history「2026-10-24 棚卸㉚退避」の旧「直接修正候補」節。それより前は、そこから辿る。
+
+## 棚卸㉚の裁定（2026-10-24・main `9318cdb0`・開発者指示＝`/kiro-next` の定めどおり）
+
+> 棚卸㉙（10-23・main `aa8da8a7`）の後、C11 の 7 本（`descript-window-keys`・`mouse-click-wheel-events`・`readonly-mode`・`mcp-scope-rect-property`・`vertical-choice-hover-band`・`dpi-realign-remembered-chain`・`shiori2-protocol`）が 10-24 までに着地した。⑦ `mcp-strict-errors` は要件だけが着地した。あいだに `/kiro-discovery` で v0.1.0 に `emo-text-dwrite-fidelity` を起票し、完了の棚卸で数本を起票した。この棚卸から、pasta の `/kiro-next` から取り込んだ軽い測り方（スキャンのスクリプト・今の版だけを測る・再測定の節は 15 行までで最新の 1 つだけ）で回した。
+
+1. **測り直した範囲**: 今の版 v0.1.0 の残り 19 本のうち 16 本（3 組の計 3 サブエージェント・Opus）。各 brief の古い再測定の節を消し、「2026-10-24 棚卸㉚の再測定」の 1 つにまとめた（まだ効く行は引き継いだ）。測らなかった 3 本＝ウェーブの外の `areka-test-binary-stability`（測ることが本体）・`popup-menu-shell-look`（裁定待ち）・`winget-release-automation`（手提出の PR 450070 は 10-24 も開いたまま＝`gh` で確かめた）。割り込みの候補・余力の枠・見直しの 33 本・v0.2.0 より後は測っていない（席が空かなかった）。速い道（見込みをずらすだけ）は使っていない（C11 の ⑦ を外した・新しい起票がある・棚卸㉙は見込みを書いていない）。着地した 7 本の残り物は、それぞれの完了の棚卸で片づくか起票済みだった。`image-webp` は crates.io でまだ 0.2.4＝取り込みは外さない。
+2. **前提の変化**: `consumer_ledger.rs` は 504 行・38 件の登記。`main.rs` は 981 行（残り 19 行）。`mcp-strict-errors` の待ち（`descript-window-keys`・`mouse-click-wheel-events`）は解けた。✅ `readonly-mode` が `install::submit` の中で断るので、`startup-install-option` の `--install` と `initial_install.nar` は読み取りだけのとき何も足さずに断られる（確かめのテストと説明書の行だけが残る）。✅ `readonly-mode` の `establish_readonly` が `bridge-store-user-root` の案 2 そのもの（`areka-user-data` に新しい口は要らない）。✅ `mouse-click-wheel-events` が出入りの追跡（`input_events/hover_region.rs`・tick ごと）とホイールの運び（wintf の `PointerState`）を作った＝`shell-mouse-cursor` は読む口だけを足し、`balloon-scroll-arrows` はホイールの道がある前提になった。
+3. **モデル**: 変えたものは無い。Fable のまま＝`balloon-communicatebox`（キーボードのフォーカスと日本語の変換を、ふだんフォーカスを取らないゴーストの窓へ渡す前例が無い＝wintf の入力は `WM_KEYDOWN` だけ）・`popup-menu-shell-look`・`multi-ghost-runtime` の後半。
+4. **分割は無し**: `mcp-strict-errors` は 14〜22（rmcp の直しの分が足された）＝20 を超えたら 10-23 の切り方（⒜ 印の道・記録の入口・`\s\b\i` → ⒝ 知らない字・`\!`・`\&`・読む段の種類）で設計の段で切る。`seriko-pattern-calls`・`balloon-communicatebox`・`multi-ghost-runtime` は棚卸㉙の案のまま。
+5. **起票は無し**（覚え書きから格上げしたものも無い）。覚え書きの「SHIORI へ渡す置き場所のパスの形」の行は、棚卸㉙の予告どおり消した。
+6. **ウェーブ C12 を v0.1.0 の 8 本で組んだ**（Opus 8・約 58〜90 タスク）: ① `mcp-strict-errors`（設計から） ② `shell-mouse-cursor` ③ `emo-text-dwrite-fidelity` ④ `real-run-log-noise` ⑤ `startup-install-option` ⑥ `default-balloon-selfmade` ⑦ `window-work-area-clamp` ⑧ `bridge-store-user-root`。登記の鎖の先頭の席は ① と `stay-on-top-directives` がどちらも区分 A・ぶら下がる数 4 で並び、起票が古い ①（SSP MCP の移植の群れ）を取った。① は要件が済んでいるので開始コマンドは `/kiro-design`＝`/kiro-wave` はこの行を起動せず WARN を出す（この棚卸で `read-wave.py` に足した）＝手で打つ。
+7. **入れなかった先頭**: `stay-on-top-directives`（登記の席を ① が使う）・`seriko-pattern-calls`（seriko の `actor.rs` が ①）・`animated-surface-log-flood`（`presenter/show.rs` が ①）・`balloon-scroll-arrows`（`input_events/mod.rs` が ②）・`placement-measure-bake-once`（区分 C・案しだいで ② か ⑤ と重なる）。この 5 本と鎖の残りで C13〜C15 の見込みを組んだ（「その先のウェーブ」）。
+8. **v0.1.0 の着地まで約 5 ウェーブ（C12〜C16）**、その後にウェーブの外の 3 本と `doc/pasta-real-run.md` の実機の確かめ → `/release 0.1.0`。棚卸㉙の見立て（C11〜C15）より 1 ウェーブ延びた（`mcp-strict-errors` が C11 から外れて登記の鎖に入ったため）。
+9. **見つけた穴**: ⑴ `window-work-area-clamp` に ✅ `dpi-realign-remembered-chain` の要件の引き渡し（並べ直しの寄せ・起動の隣り合わせの寄せ）が届いていなかった＝brief の再測定の節に書いた（`placement/chain_realign.rs` が範囲に入る・8〜12）⑵ `shell-mouse-cursor`＝出入りの追跡は tick ごとなので、`WM_SETCURSOR` が追跡の値だけで形を選ぶと当たりの境を越えた直後の 1 tick だけ古い形が残る（「1 フレーム遅らせる解は取らない」に当たる）＝要件で、`WM_SETCURSOR` の中で当たりを引くか、境が変わった tick に `SetCursor` するかを決める ⑶ `default-balloon-selfmade`＝どっとさくらの同梱バルーン `bottle` の `validrect.right,0`（字の幅が 0）で、✅ `shiori2-protocol` の後「．さくら」は話すが字が出ない＝要件の最初に決める ⑷ `mcp-strict-errors` の research は rmcp の席を `areka-mcp` の `Cargo.toml` だけと書くが、版を上げるなら `areka-mcp-bridge`・`real-run-kit` も動く ⑸ 棚卸のスクリプトが、v0.1.0 の行の「「」（縦書きの開き括弧を括弧で書いた所）で括弧の数を数え違え、`real-run-log-noise` を読み落としていた＝書き方を直した（直接修正候補 ⑴）。
+10. **開発者に決めてほしいこと**（どれも C12 の着手を止めない）: ⑴ `consumer_ledger.rs` の鎖を縮めるために、登記の手書きの数の檻を替えるか（替えなければ v0.1.0 は C16 まで・測り直しの係は替えないことを勧めた）⑵ `bridge-store-user-root` を v0.1.0 に残すか（棚卸㉘から持ち越し・C12 に入れた）⑶ `winget-release-automation`＝PR 450070 は 10-11 から動かない。v0.1.0 の版の門に残すか ⑷ `popup-menu-shell-look`＝生きている決まり 6 を解くか ⑸ `startup-install-option` の議題 1（`callghost` の読み）⑹ `clippy-199-lints` の段 1 を切り出すか・`ghost-alias-file` を v0.2.0 に置くか（棚卸㉙から持ち越し）。

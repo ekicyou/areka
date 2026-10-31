@@ -81,17 +81,6 @@
   3. **着衣の写し**: メニューを組む時点で seriko の部品の着衣を、areka の側でどう読むか（写しを持つか・聞きに行くか）。
   4. **SSP で測る**: 着せ替えのメニューの並び（カテゴリの順・仕切り・`mustselect` の印）と、選んだときに `OnDressupChanged` が来るか。
 
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-- 前提の変化: 10-18 から触るファイルは動いていない（`crates/areka/src/menu/plan.rs` 135・`menu/mod.rs` 368〔枠は 11 種のまま・着せ替えの枠は無い〕・`menu/win32.rs` 137・wintf の `crates/wintf/src/ecs/window_proc/mod.rs` 380〔`WM_MEASUREITEM`・`WM_DRAWITEM` の腕は今も無い〕・着衣を持つ `crates/areka-seriko/src/state.rs` 728・`crates/areka-parsers/src/package/resolve_shell.rs` 127）。生きている決まり 6（オーナードローと着せ替えメニューは予約）を解くかの開発者の裁定はまだ出ていない＝ウェーブの外のまま。
-- 新しく起票された相手: v0.4.0 の `menu-thumbnail-preview`（10-20）が同じ `menu/{mod,win32,plan}.rs` と `window_proc/mod.rs` を挙げる（向こうはメニューとは別の小さな窓で出すと決め、決まり 6 を待たない）＝同じウェーブに置かない相手が 1 本増えた（版が違うので当面は並ばない）。
-- 触るファイル: 棚卸㉗の見立てのとおり。
-- 規模: 14〜18 のまま。
-- 先に要るもの: 開発者の裁定（決まり 6 を解くか・右クリックメニューを後で WinUI3 へ移すか）。同じウェーブに置けない相手: `popup-menu-residue`（`menu/win32.rs`・版に縛らない）。v0.1.0 の他とは 0（✅ `ghost-inner-balloon` は main #364 で完了・触ったのは `menu/balloon_frame.rs` で別のファイルだった・`mouse-click-wheel-events` が触りうるのは `menu/trigger.rs` で本 spec の外）。1 本だけの席は取らない。実機の確かめ（メニューを開いて撮る）は、クリックを通す窓へ入力を送る許し＝人の待ちになりうる。議題 4 は SSP で測る。
-- 優先度の区分: A のまま（開発者の指示＝v0.1.0 のゴール・ぱすたの `menu.*` と `sakura.menu,auto`）。
-- 要件定義のモデル: Fable のまま（オーナードローの側だけ。基準＝先例の無い境目の約束: wintf の窓の手続きが OS のメニューの待ちの中で同期して描画の知らせを areka へ渡し、その中で World を借りない決まりを新しく引く。場所は `window_proc/mod.rs` と `menu/win32.rs`。今ある `WM_SETCURSOR` の口は wintf の中で閉じた診断で、先例にならない）。着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）。
-- 分割の案: 前のまま（オーナードローの見た目／着せ替えのメニュー）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残し、オーナードローの側は別の 1 本として後へ回す。
-- 見つけた穴・古くなった記述: `popup-menu-residue` の件 11（メニューを開いている間の黒い四角）・件 12（メニューが見えずに閉じる）とどちらが先に直すかは未決のまま。
-
 ## 本 spec からの申し送り（2026-10-23・`areka-P0-pasta-in-windows-verification` のタスク 6）
 
 - 出どころ: `areka-P0-pasta-in-windows-verification` の検証の記録 `verification.md`（5 節の崩れた所の表。件の番号は表の番号）と、SSP の測りの記録 `ssp-measurement.md`（SSP 2.9.23・書庫の sha256 `ad473d5d…a43a6`＝`pasta.toml` 1.0.0）。撮った物と記録は git の外の `<w>\target\pasta-verify\`（本走行 run1。`logs\`・`shots\run1\`・SSP の撮った物は `ssp\`）・`<w>\target\pasta-verify-alt\`（補いの走り alt2。縦書きのバルーンを根の `balloon\` へ写した置き方）・`<w>\target\pasta-verify-rerun\`（直しの後の回し直し rerun1。alt2 と同じ置き方）に在る（`<w>` は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-pasta-windows-d4ed7a`）。記録の時刻は世界標準時（`Z`）のまま。日本時間は 9 時間足す。
@@ -112,12 +101,13 @@
 - 網羅台帳の宛先: 2026-10-23 に 22 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 6）: メニューの色と絵がシェルの指定どおりになり、着せ替えのメニューが出て、選ぶと着せ替えが替わる。
 
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-- **前提の変化**: 生きている決まり 6（オーナードローと着せ替えのメニューは予約のまま）を解くかの開発者の裁定は今も出ていない（roadmap の「棚卸㉘の裁定」9 の ⑶）＝ウェーブの外のまま。メニューの枠は `window-link-directives`（10-23）が「バルーン位置初期化」を足して 12 種になった（`crates/areka/src/menu/mod.rs` 49〜74 行目の `Frame`・着せ替えの枠は今も無い）。行数: `menu/mod.rs` 373・`menu/plan.rs` 139・`menu/win32.rs` 137・wintf の `crates/wintf/src/ecs/window_proc/mod.rs` 381（`WM_MEASUREITEM`・`WM_DRAWITEM` の腕は今も無い）・`crates/areka-seriko/src/state.rs` 728。steering の `tech.md` 161 行目は今も「自前の窓もオーナードローも持たない」。
-- **触るファイル**: 棚卸㉗の見立てのとおり。OS のメニューの待ちの中に届く知らせは、wintf の起こし方の表（`crates/wintf/src/ecs/world/tick_wake.rs` の `wake_bits_for_message`・表に無い知らせは全部を回す側へ落とす）にも関わる＝オーナードローの側は、この表に 2 つの知らせを足すかを設計で決める。
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: 生きている決まり 6 を解くか（右クリックメニューを後で WinUI3 へ移すか）の開発者の裁定は今も出ていない＝ウェーブの外のまま。`crates/areka/src/menu/` は 10-24（`9318cdb0`）から動いていない（`menu/mod.rs` 386〔`mouse-click-wheel-events` で 373→386・枠は 12 種のまま・着せ替えの枠は無い〕・`menu/plan.rs` 139・`menu/win32.rs` 137）。steering `tech.md` 161 行目は今も「自前の窓もオーナードローも持たない」。
+- **wintf の窓の手続き**: `shell-mouse-cursor`（10-30）が `crates/wintf/src/ecs/window_proc/mod.rs`（382）に `WM_MOUSEHOVER` の腕を足し、`crates/wintf/src/ecs/cursor/answer.rs` に「窓の手続きの中で使う側の関数（`CursorQuery`）を呼んでその場で答え、World が借りられているときは前に出した形の写し（`plan_unborrowed`・スレッドごとの表）で答える」形を入れた。起こし方の表 `crates/wintf/src/ecs/world/tick_wake.rs`（375）にも `WM_MOUSEHOVER` が入った。`WM_MEASUREITEM`・`WM_DRAWITEM` の腕は今も無い。
+- **触るファイル**: 棚卸㉗の見立てに `tick_wake.rs` の起こし方の表（棚卸㉙で足した）を加えたもの。
 - **規模**: 14〜18 のまま。
-- **先に要るもの**: 開発者の裁定（決まり 6 を解くか・右クリックメニューを後で WinUI3 へ移すか）。同じウェーブに置けない相手: `popup-menu-residue`（`menu/win32.rs`・版に縛らない）・`balloon-communicatebox`（入口をメニューに足すと決めたら `menu/`）・後の版の `menu-thumbnail-preview`。`mouse-click-wheel-events` が触りうるのは `menu/trigger.rs` だけで、本 spec の外＝0。1 本だけの席は取らない。メニューを開いて撮る実機の確かめと、着せ替えのメニューの並びの SSP の測りが要る（ぱすたの申し送りで並びは撮ってある）。
+- **先に要るもの**: 開発者の裁定（決まり 6 を解くか・右クリックメニューを後で WinUI3 へ移すか）。同じウェーブに置けない相手: `popup-menu-residue`（`menu/win32.rs`・`trigger.rs`・版に縛らない）・`balloon-communicatebox`（入口をメニューに足すと決めたら `menu/`）・後の版の `menu-thumbnail-preview`（`menu/{mod,win32,plan}.rs`・`window_proc/mod.rs`）。1 本だけの席は取らない。メニューを開いて撮る実機の確かめと、着せ替えのメニューの並びの SSP の測りが要る（ぱすたの申し送りで並びは撮ってある）。
 - **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・申し送りの件 14・15）。
-- **要件定義のモデル**: オーナードローまで作るなら Fable のまま。当たる基準＝前例の無い境目の約束: OS のメニューを出している間、areka の側は World を借りたまま待っており、wintf の窓の手続きに届く描画の知らせ（`WM_MEASUREITEM`・`WM_DRAWITEM`）にはその場で描いて答えなければならない＝借りられない間に同期で描く口を、wintf と areka の間に新しく引く（場所は `window_proc/mod.rs` と `menu/win32.rs`）。借りられない間の知らせを預かって後で読む前例（wintf の `drag/reentry.rs`・`world/vsync.rs`）はあるが、どれも後回しにする形で、その場で答える形の前例にはならない。着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）。
-- **分割の案**: 前のまま（オーナードローの見た目／着せ替えのメニュー・共通は `menu/plan.rs`・`menu/mod.rs` だけ）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残す。
-- **見つけた穴・古くなった記述**: 本文 Current State の「枠 11 種」は 12 種。オーナードローの側の触るファイルに `tick_wake.rs` の起こし方の表が抜けていた（上のとおり）。この brief だけ行末が LF で、末尾に改行が無かった。
+- **要件定義のモデル**: 分け方は前のまま＝着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）・Win32 のオーナードローまで作るなら Fable（当たる基準＝前例の無い境目の約束: OS のメニューを出している間、World を借りたまま待つ areka の側に代わって、`WM_MEASUREITEM`・`WM_DRAWITEM` にその場で描いて答える口を wintf と areka の間に引く。場所は `window_proc/mod.rs` と `menu/win32.rs`）。ただし上の `CursorQuery`／`plan_unborrowed` は「窓の手続きの中でその場で答え、借りられないときは前もって持った写しで答える」先例に近い（棚卸㉘の「`WM_SETCURSOR` の口は wintf の中で閉じた診断」はもう当たらない）＝設計でこの形に乗ると決まれば、オーナードローの側も Opus で足りうる（要件の段で確かめる）。
+- **分割の案**: 前のまま（オーナードローの見た目／着せ替えのメニュー・共通は `menu/plan.rs`・`menu/mod.rs` だけ・wintf を触るのはオーナードローの側だけ）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残し、オーナードローの側は別の 1 本として後へ回す。
+- **見つけた穴・古くなった記述**: `popup-menu-residue` の件 11（メニューを開いている間の黒い四角）・件 12（メニューが見えずに閉じる）とどちらを先に直すかは未決のまま。本文 Current State の「枠 11 種」は 12 種。
