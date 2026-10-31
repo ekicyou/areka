@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::sync::mpsc::channel;
 
 use areka_ghost::prop_sink::PROP_SET_CUE_NAME;
-use areka_parsers::sakura::{JUMP_TAG_CARRIER, RAISE_TAG_CARRIER};
+use areka_parsers::sakura::{JUMP_TAG_CARRIER, MARKER_COMMAND, RAISE_TAG_CARRIER};
 use areka_sakura::contract::FONT_TAG_CARRIER;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
@@ -135,6 +135,10 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
         // window_state_cue_tests.rs の常に手前の指令と `\v`（stay-on-top-directives 要件 1.8）
         ("set", Some("windowstate"), vec!["windowstate", "stayontop"]),
         (RAISE_TAG_CARRIER, None, vec![]),
+        // areka-seriko の着せ替えの別名（script-small-tags 要件 3.1・3.7）
+        ("bind-noevent", None, vec!["腕", "伸び", "1"]),
+        // 文字の層の印の合図（script-small-tags 要件 4.1・4.2）
+        (MARKER_COMMAND, None, vec![]),
     ]
 }
 
