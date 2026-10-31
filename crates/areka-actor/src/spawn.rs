@@ -246,6 +246,10 @@ pub enum ActorError {
 mod hook_tests;
 
 #[cfg(test)]
+#[path = "spawn_log_capture_tests.rs"]
+mod log_capture_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::convert::Infallible;
