@@ -377,8 +377,9 @@ fn measure_balloon_surface0(balloon_root: &Path, decoder: &impl ElementDecoder, 
 
 - **D1 採寸の読み手**: 包む形（`FirstFrameDecoder`）を `placement/measure_first_frame.rs` に置き、`measure` の子のモジュールにする（`placement/mod.rs` に `mod` の行を足さない）。
 - **D2 黙らせる道**: 採寸と `windowposition` の読みを黙らせ、起動の資産の組み立てで出す。理由: (1) 表示に使う読み込み（全コマで焼いた結果）の事実を記録に残せる。(2) `switch_assets.rs` と `build_shell_assets`・`build_balloon_assets` の本文を変えずに済む。(3) 準備を通らないで資産を組むテストや手本の道も今どおり記録を出す。(4) 配置の scope の集まりはいつも資産の scope の集まり `[0, 1]` の内（`detect_scopes` は scope 1 まで）なので、採寸が測る scope の記録は必ず資産の組み立てが 1 行出す（要件 3.5）。資産だけが読む scope（`kero.*` の無いゴーストの scope 1）は今も資産の組み立てだけが出しており、変わらない。
-- **D3 「descript が読めない」の範囲**: 要件 3.2 の「descript が読めない」は、透過の宣言を読む入口 `load_balloon_use_self_alpha` の `warn!` を指す（要件の並び「透過の宣言・`.pna` を使わない・descript が読めない」はこの入口の 3 つの記録と同じ）。`load_scope_balloon_model` の中の基層の読みの `warn!` は 2 層マージの一部で、要件 3.7 と Out of scope のとおり変えない（`windowposition` の読みと資産の面ごとの定義の読みから今と同じ数だけ出る・壊れたバルーンのときだけ）。
+- **D3 「descript が読めない」の範囲**: 要件 3.2 の「descript が読めない」は、透過の宣言を読む入口 `load_balloon_use_self_alpha` の `warn!` を指す（要件の並び「透過の宣言・`.pna` を使わない・descript が読めない」はこの入口の 3 つの記録と同じ）。`load_scope_balloon_model` の中の基層の読みの `warn!` は 2 層マージの一部で、要件 3.7 と Out of scope のとおり変えない（`windowposition` の読みと資産の面ごとの定義の読みから今と同じ数だけ出る・壊れたバルーンのときだけ）。設計討議で、この重なりを要件 3.2 の例外として受け入れ、完了の棚卸の「残る重なり」の起票に入れると決めた。
 - **D4 焼く段の記録（要件 3.7）**: 焼く段の 0 寸・全透明の `warn!` と畳み込みの `warn!` は、採寸がシェルとバルーンの面 0 を焼き面の表を組むのは今どおりなので、今と同じ数だけ出る。動く絵の 3 つの `warn!`（上限を超えた・動く絵として読めない・1 枚目を読めない）は、採寸の読み手が動く絵として見せないので採寸の道では出ない。これは議題 1 で決めた読み手の形（`probe_animation` を `None` にする・ギャップ分析 4 章 B-1）がそのまま持つ働きで、`areka-emo-atlas` の中身は変えない。
+  - 例外（設計討議で受け入れた）: 焼く段の「全透明」の `warn!`（`areka-emo-atlas/src/lib.rs:179`）は、動く絵なら全コマが透明なときだけ出し、静止画なら透明なら出す。採寸の読み手は動く絵を 1 枚目だけの静止画として見せるので、1 枚目が全透明の動く絵（フェードインで始まる絵など）では、採寸の道で 1 行増える。窓の外形は `original` で組むので大きさは変わらない。焼く段を変えずに消す手は無く、要件 3.7 の例外とし、完了の棚卸の「残る重なり」の起票に入れる。檻で固定する（Testing Strategy の単体 1）。
 - **D5 檻の置き方**: 焼く回数・コマの数は、読み手を差し込める関数の段（`measure_with_reader`・`build_shell_assets`・`build_balloon_assets`）の檻で、本番と同じ順（採寸 → 資産）に通して固定する。記録の行の数は、本番の順（`prepare_ghost_windows` → 起こす処理）の通しの檻で固定する。`boot_shell_tests.rs` の「シェルを 2 回読む」は、記録を出す道が 1 本になったので「資産の組み立ての 1 回」へ直す（壊れたテストではなく仕様が変わったための更新）。採寸のシェルは準備が置いた `BootShellChoice` で確かめる。
 - **D6 本文の走査（gap R6）**: `measure_template_tests.rs` の採寸側の走査に `measure_first_frame.rs` を足す。
 
@@ -400,7 +401,7 @@ fn measure_balloon_surface0(balloon_root: &Path, decoder: &impl ElementDecoder, 
 
 ### Unit Tests
 
-1. `measure_first_frame_tests.rs`（`MemoryDecoder`・COM 不要）: 動く絵の `decode` が `decode_first_frame` の絵を返す・1 枚目が `Err` なら `decode` に落ちる・静止画は `decode` をそのまま返す・`probe_animation` は `None`・`probe_pna` は素通し・包んだ相手の `decode_frames` は 1 度も呼ばれない（要件 1.1・1.4）。
+1. `measure_first_frame_tests.rs`（`MemoryDecoder`・COM 不要）: 動く絵の `decode` が `decode_first_frame` の絵を返す・1 枚目が `Err` なら `decode` に落ちる・静止画は `decode` をそのまま返す・`probe_animation` は `None`・`probe_pna` は素通し・包んだ相手の `decode_frames` は 1 度も呼ばれない（要件 1.1・1.4）。あわせて、1 枚目が全透明・2 枚目が不透明の動く絵を `MemoryDecoder` に入れ、`FirstFrameDecoder` で包んで `bake` に通し、焼く段の「全透明」の `warn!` がちょうど 1 行出ること（例外の固定）と、包まない読み手では 0 行であることを確かめる（要件 3.7 の例外）。
 2. `shell_target_quiet_tests.rs`: 記録を出す検体（重複・入れ子・箱・相手の無いコマ・`.pna`・画像だけ・descript が読めない）で、Quiet の記録が 0 行・Emit の記録が今と同じ（要件 3.1・3.4）・戻りの `ShellTarget`（面の数・焼いた表の鍵・脱落・箱）が Emit と等しい・フォルダが無い／`surfaces.txt` が読めない／面が無いの 3 つで Quiet でも `error!` が 1 行（要件 3.6）。
 3. `balloon_quiet_tests.rs`: 縮退する検体（相方側の系列を持たないバルーン）・`.pna` を持つ検体・descript が読めない検体で、Quiet の記録が 0 行・戻り値が Emit と等しい・面 0 が無い／フォルダが無いで Quiet でも `error!` が 1 行（要件 3.2・3.5・3.6）。
 4. `self_alpha_tests.rs`: 既存のテストが Emit を渡して緑（要件 3.4）。
