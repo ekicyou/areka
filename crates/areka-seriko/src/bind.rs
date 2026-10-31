@@ -544,6 +544,76 @@ pub fn apply_named_bind(
     NamedBindResult::Applied { id, outcome }
 }
 
+/// パーツ 1 つを当てた結果と、当てたパーツ・着脱（記録の欄を呼び手が埋めるため・spec: script-small-tags）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct AppliedBind {
+    pub category: String,
+    /// 当てた 1 つのパーツの名前（カテゴリ単位形でパーツが無いときは空）。
+    pub part: String,
+    /// 実際に当てた着脱（トグル形は反対にした後の値）。
+    pub on: bool,
+    pub result: NamedBindResult,
+}
+
+/// 読んだ着せ替えの指令を、パーツ 1 つずつ今の当て方（[`apply_named_bind`]）で当てる。返す列は当てた順。
+///
+/// SSP の測り（research.md 2.11）に合わせ、トグル形は今の着脱の反対を 1 回、カテゴリ単位形は定義の順
+/// （[`BindResolver::category_parts_in_order`]）に `0`／`1`／その時点の反対を 1 つずつ当てる（要件 3.8〜3.10）。
+/// カテゴリにパーツが無ければ `NotFound`、スコープに名前の空間が無ければ `NoNamespace` を 1 つ返す
+/// （空の列を返さない）。`Malformed` は呼び手が先に除く前提で、渡されたら空の列（状態を変えない）。
+#[cfg_attr(not(test), expect(dead_code, reason = "結線は script-small-tags 4.2"))]
+pub fn apply_bind_directive(
+    states: &mut crate::state::ScopeStates,
+    resolver: &BindResolver,
+    scope: &ActorKey,
+    directive: &BindDirective,
+) -> Vec<AppliedBind> {
+    // `on` が `None` ならトグル（今着ていれば脱ぐ・着ていない／解けない名前なら着る）。
+    let apply_one =
+        |states: &mut crate::state::ScopeStates, category: &str, part: &str, on: Option<bool>| {
+            let on = on.unwrap_or_else(|| {
+                scope_namespace(scope)
+                    .and_then(|ns| resolver.resolve(ns, category, part))
+                    .is_none_or(|id| !states.current_binds(scope).contains(id))
+            });
+            AppliedBind {
+                category: category.to_owned(),
+                part: part.to_owned(),
+                on,
+                result: apply_named_bind(states, resolver, scope, category, part, on),
+            }
+        };
+    match directive {
+        BindDirective::Apply { category, part, on } => {
+            vec![apply_one(states, category, part, Some(*on))]
+        }
+        BindDirective::Toggle { category, part } => vec![apply_one(states, category, part, None)],
+        BindDirective::CategoryWide { category, on } => {
+            let ns = scope_namespace(scope);
+            let parts = ns
+                .map(|ns| resolver.category_parts_in_order(ns, category))
+                .unwrap_or_default();
+            if parts.is_empty() {
+                return vec![AppliedBind {
+                    category: category.clone(),
+                    part: String::new(),
+                    on: on.unwrap_or(true),
+                    result: if ns.is_some() {
+                        NamedBindResult::NotFound
+                    } else {
+                        NamedBindResult::NoNamespace
+                    },
+                }];
+            }
+            parts
+                .iter()
+                .map(|part| apply_one(states, category, part, *on))
+                .collect()
+        }
+        BindDirective::Malformed => Vec::new(),
+    }
+}
+
 /// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・design 行 322）。
 ///
 /// 現在の着せ替え集合 `current` に対し、対象 animation ID `id` を `on` に従って積算した
@@ -581,3 +651,7 @@ mod tests;
 #[cfg(test)]
 #[path = "bind_named_tests.rs"]
 mod named_tests;
+
+#[cfg(test)]
+#[path = "bind_forms_tests.rs"]
+mod forms_tests;
