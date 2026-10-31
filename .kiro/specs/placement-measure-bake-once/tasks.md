@@ -112,3 +112,4 @@
 - 1.2: `.pna` の `warn!` は `read_use_self_alpha` の中でなく呼び手（`shell_target.rs` の `load_shell_target`・`balloon.rs` の `load_balloon_use_self_alpha`）に在る。2.1・2.2 で `records` を渡すときに合わせて囲む。
 - 書き込みの道具が文字列の `\n` を本物の改行に化かすことがある。テストの文字列を書いたらバイトで確かめる。
 - 4.4: 変更 0 の約束の 8 つは `git diff --stat da020c10` が 0・触ったファイルは最大 970 行（`placement/mod.rs`・970 のまま）。`cargo test -p areka-emo-present -p areka` で赤 2 本: `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は単独の回し直しで緑（負荷で揺れる・本 spec の範囲外）、`smoke_boot_loop_exit` の `fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert` はこのワークツリーに i686 の試験用 DLL が建っていないため（`real-run-kit/src/i686.rs:77`・全体テストは先に i686 を建てる）。どちらも本 spec の差分と無関係で、全体テストで確かめる。
+- 最終検証（2026-10-31）: `tools/test-all.ps1` が commit `d4cac59d` で全段緑（x64 workspace 1184 s・i686・fmt ほか）。4.4 の赤 2 本も全体テストでは緑。完了の棚卸で D3（バルーンの 2 層マージの中の descript の `warn!`）と D4（1 枚目が全透明の動く絵で採寸の道に「全透明」の `warn!` が 1 行増える）の「残る重なり」を起票すること。
