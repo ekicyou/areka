@@ -408,7 +408,8 @@ fn measure_balloon_surface0(balloon_root: &Path, decoder: &impl ElementDecoder, 
 ### Integration Tests（関数の段・本物の読み手）
 
 1. `measure_bake_count_tests.rs`・動く絵の検体（`animated-playback` のシェルとバルーン）: 検体のシェルを `target\` の下の小さなゴーストの形（`ghost\master\descript.txt` と `shell\master\`・`temp_path_kit`）へ写す。`CountingDecoder`（`WicDecoderArm` を包み、5 つの口の呼ばれた回数をファイルごとに数えるテスト専用の読み手）を `measure_with_reader` に渡し、続けて同じ検体で `crate::emo2_boot::assets::build_shell_assets`・`build_balloon_assets` に別の `CountingDecoder` を渡す（本番と同じ順）。採寸は動く絵 1 つ・1 回の焼きにつき `decode_first_frame` 1 回・`decode_frames` 0 回、資産はシェルの動く絵 1 つにつき `decode_frames` 1 回（シェルの全コマは計 1 度）。シェルの絵 1 枚ごとの焼き（`probe_animation` の回数）は採寸 1・資産 1（計 2）、バルーンの面の絵は scope ごとに採寸 1（面 0）・資産 1（計 2）（要件 1.1・1.2・4.1・4.2・4.6）。
-2. 同じファイル・emo2（`shared_test_support::emo2_root`）: 動く絵の口が 0 回・絵 1 枚ごとの焼きが採寸 1・資産 1（要件 1.4・4.3）。
+   - バルーンの数え方: 数える読み手はファイルごとに数え、scope を知らない。検体のバルーンは本体側の系列だけを持つので scope 1 が縮退し、scope 0 と 1 が同じファイルを焼く。そこで採寸に渡す scope を資産と同じ `[0, 1]` に揃え、期待値は「面のファイルごとに、採寸＝そのファイルを面 0 に使う scope の数・資産＝そのファイルを使う scope の数」と書く（scope ごとに 2 回を、ファイルごとの数の和で表す）。
+2. 同じファイル・emo2（`placement::shared_test_support::emo2_root`・ファイルは `placement/placement_shared_test_support.rs`・`placement/mod.rs:963` の `#[path]`）: 動く絵の口が 0 回・絵 1 枚ごとの焼きが採寸 1・資産 1（要件 1.4・4.3）。
 3. 同じファイル・窓の大きさの一致: 動く絵の検体と emo2 で `measure_with_reader(&arm)` と `measure_baked(&arm)`（全コマを焼いて測る今の採寸）の scope ごとの寸法が等しい（要件 2.1・2.2）。拡大率をかけた後の値は既存の `measure_tests.rs` が固定している（要件 2.3）。
 4. 同じファイル・採寸の道の記録: 動く絵の検体で `measure_scope_sizes` を通したとき、シェルとバルーンの読み込みの記録が 0 行・採寸自身の記録は今と同じ。シェルのフォルダが無い／バルーンの面 0 が無いとき、権威の `error!` と採寸の `error!` が今と同じ数だけ出て `Err`（要件 2.5・3.6）。
 
