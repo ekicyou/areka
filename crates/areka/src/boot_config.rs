@@ -196,20 +196,6 @@ pub(crate) struct CurrentGhost {
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
-/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）・アプリの記憶・起動した exe の本当の場所を読んで [`resolve_boot_with`] へ渡す薄い口。
-pub(crate) fn resolve_boot(
-    request: &crate::cli::BootRequest,
-) -> Result<BootResolved, crate::alert::AlertScene> {
-    let app_profile_dir = default_app_profile_dir();
-    resolve_boot_with(
-        crate::roots::resolve_roots(&app_profile_dir),
-        request,
-        &app_profile_dir,
-        crate::boot_resolve::pick_index,
-        crate::roots::user_root::writable_ghost,
-    )
-}
-
 /// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
 #[cfg(test)]
 pub(crate) fn resolve_boot_from(
@@ -222,6 +208,7 @@ pub(crate) fn resolve_boot_from(
     resolve_boot_with(
         resolved,
         &crate::cli::parse::parse(args).options.boot,
+        None,
         app_profile_dir,
         pick,
         prepare_ghost,
@@ -238,9 +225,13 @@ pub(crate) fn resolve_boot_from(
 /// 位置の引数のゴーストがある側は列挙も記憶も読まない（要件 4.1・5.1）。位置の引数のゴーストは
 /// 「ゴーストか」の 1 検査だけ（要件 4.8）。起動中の印は位置の引数のゴーストが無く `nobootcheck` でない
 /// ときに読む（startup-options 要件 6.2・6.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+///
+/// `call_ghost` は起こすゴーストのフォルダ名（起動の前に入れた道が決めたときだけ `Some`）。
+/// `GhostInputs` へ渡すだけで、記憶より先・起動中の印に関わらず目録から引かれる（install-before-boot 要件 4.3・4.7）。
 pub(crate) fn resolve_boot_with(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     request: &crate::cli::BootRequest,
+    call_ghost: Option<&str>,
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
@@ -332,6 +323,7 @@ pub(crate) fn resolve_boot_with(
             argv: argv_ghost,
             pointed: pointed_at,
             random: request.random,
+            call_ghost,
             memory: memory.as_deref(),
             listed: &listed,
             stores: &ghost_stores,
@@ -620,7 +612,7 @@ pub(crate) fn shiori_wiring_for(
 /// `GhostBootError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
 /// へ分類する純粋関数（design.md「main の ghost boot／shutdown 結線」・要件 8.2）。
 ///
-/// 起動前の解決（`boot_config::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
+/// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
 /// 限られる。分類は `wire_emo2_boot` のフォールバックが使い続けるため残す。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
@@ -660,3 +652,7 @@ mod option_tests;
 #[cfg(test)]
 #[path = "boot_config_readonly_tests.rs"]
 mod readonly_tests;
+
+#[cfg(test)]
+#[path = "boot_config_callghost_tests.rs"]
+mod callghost_tests;

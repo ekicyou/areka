@@ -75,6 +75,7 @@ fn ghost(
         argv,
         pointed: None,
         random: false,
+        call_ghost: None,
         memory,
         listed: &listed,
         stores: &[root.ghost_store()],

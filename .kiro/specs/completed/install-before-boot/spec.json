@@ -1,0 +1,22 @@
+{
+  "feature_name": "install-before-boot",
+  "created_at": "2026-10-31T05:47:02Z",
+  "updated_at": "2026-10-31T14:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

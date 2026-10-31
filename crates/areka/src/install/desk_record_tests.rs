@@ -294,3 +294,21 @@ fn a_balloon_not_hidden_by_the_running_ghost_is_not_recorded() {
     );
     assert!(rig.shutdown());
 }
+
+/// 根が無いとき、目録の綴りは書庫の綴りのまま・%lastghostname はゴーストなら `name`、他は関わった
+/// ゴーストのフォルダ名・関わったゴーストが無ければ None（窓口と起動の前の口の共通の決まり）。
+#[test]
+fn catalog_spelling_without_roots_keeps_the_archive_spelling() {
+    let record = |kind, ghost_folder: Option<&str>| InstalledRecord {
+        kind,
+        object_name: "名前".to_owned(),
+        folder: "dir".to_owned(),
+        ghost_folder: ghost_folder.map(str::to_owned),
+    };
+    let ghost = catalog_spelling(None, &record(InstallKind::Ghost, Some("dir")));
+    assert_eq!(ghost, ("dir".to_owned(), Some("名前".to_owned())));
+    let shell = catalog_spelling(None, &record(InstallKind::Shell, Some("g")));
+    assert_eq!(shell, ("dir".to_owned(), Some("g".to_owned())));
+    let balloon = catalog_spelling(None, &record(InstallKind::Balloon, None));
+    assert_eq!(balloon, ("dir".to_owned(), None));
+}

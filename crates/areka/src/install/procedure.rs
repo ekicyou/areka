@@ -33,7 +33,7 @@ const ON_INSTALL_COMPLETE_ALL: &str = "OnInstallCompleteAll";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallFailure:1
 const ON_INSTALL_FAILURE: &str = "OnInstallFailure";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallRefuse:1
-const ON_INSTALL_REFUSE: &str = "OnInstallRefuse";
+pub(super) const ON_INSTALL_REFUSE: &str = "OnInstallRefuse";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsAccept:1
 const ON_GHOST_TERMS_ACCEPT: &str = "OnGhostTermsAccept";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsDecline:1
@@ -76,6 +76,8 @@ pub(crate) enum Raised {
     NoReply,
     /// 終了が始まった・ゴーストが居ない。
     Closed,
+    /// 起動の前なので、送らなかった（受け取るゴーストが居ない）。
+    Unsent,
 }
 
 /// 起動中のゴーストへ入れた結果。
@@ -334,6 +336,14 @@ fn send(
     references: Vec<String>,
 ) -> Result<Raised, Closed> {
     let raised = ports.raise(id, references);
+    if raised == Raised::Unsent {
+        tracing::debug!(
+            event = "install_event_unsent",
+            id,
+            "[install] 起動の前なので、イベントを送りませんでした"
+        );
+        return Ok(raised);
+    }
     tracing::info!(event = "install_event", id, raised = ?raised, "[install] イベントを送りました");
     match raised {
         Raised::Closed => Err(Closed),

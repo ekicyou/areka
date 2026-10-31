@@ -25,7 +25,7 @@ use areka_sylphya::{
     load_scope, save_scope,
 };
 
-// 判断と記憶の直読みの消費者は起動前の解決（`boot_config::resolve_boot`）。記憶の書き込み
+// 判断と記憶の直読みの消費者は起動前の解決（`install::startup::resolve_boot`）。記憶の書き込み
 // （[`LastUsed`]）の消費者は boot 成功直後の `main::on_boot_ok`。
 
 /// 既定ゴースト（要件 4.4・4.11。配布物に必ず同梱＝裁定 3）。
@@ -39,6 +39,8 @@ pub(crate) enum GhostRoute {
     Argv,
     /// `--ghost` の指し先で決まった（記憶・印の書き込みは他の経路と同じ・areka-P0-startup-options-core 要件 3.9）。
     Pointed,
+    /// 起動の前の道が `callghost` で選んだ（記憶の前の段・ほかの起動と同じに扱う・install-before-boot 要件 4.3・4.10）。
+    CallGhost,
     Memory,
     Only,
     Default,
@@ -98,6 +100,8 @@ pub(crate) struct GhostInputs<'a> {
     pub pointed: Option<(&'a Path, &'a str)>,
     /// `--random`（記憶・唯一・既定の段を飛ばして列挙から無作為に選ぶ）。
     pub random: bool,
+    /// callghost の相手のフォルダ名（起動の前の道が決めたときだけ）。記憶より先に目録から引く。
+    pub call_ghost: Option<&'a str>,
     /// App スコープ `areka.last.ghost`
     pub memory: Option<&'a str>,
     /// 和の `list_ghosts`（フォルダ名の昇順）
@@ -206,6 +210,18 @@ pub(crate) fn resolve_ghost(
             "[boot_resolve] --random なので置き場のゴーストから無作為に選びました"
         );
         return Ok(at(GhostRoute::Random, entry));
+    }
+    // callghost の相手（記憶の前・印に関わらない・install-before-boot 要件 4.3・4.7）。在らねば warn して記憶へ。
+    if let Some(folder) = inputs.call_ghost {
+        match find(listed, folder) {
+            Some(entry) => return Ok(at(GhostRoute::CallGhost, entry)),
+            None => tracing::warn!(
+                event = "callghost_target_not_found",
+                folder,
+                ghost_store = %joined(inputs.stores),
+                "[boot_resolve] callghost の相手が置き場に見つからないので次の候補へ進みます"
+            ),
+        }
     }
     // 段 2: 記憶（列挙に在れば）。在らねば黙って読み替えず warn して次へ（要件 4.6）。
     if let Some(memory) = inputs.memory {

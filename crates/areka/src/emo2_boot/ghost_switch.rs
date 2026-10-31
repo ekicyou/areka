@@ -171,10 +171,6 @@ pub(crate) struct SwitchInFlight {
     pub copy: super::switch_copy::SwitchCopy,
 }
 
-/// よそのフォルダへの切替を受理した数（無ければ 0・読み手は install::startup）。
-#[derive(bevy_ecs::prelude::Resource, Default)]
-pub(crate) struct SwitchAcceptCount(pub u64);
-
 /// 予約の終わり（[`end_switch`] へ渡す出口の語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SwitchEnd {
@@ -345,9 +341,6 @@ pub(crate) fn accept_switch(
         return SwitchVerdict::NoContext;
     };
     let current_folder = ctx.current.ghost.folder.clone();
-    // 直にパスで起こしたゴーストはフォルダ名が無いので、同じ場所を指すかでも見る
-    let elsewhere = target.dir != ctx.current.ghost.dir
-        && (current_folder.as_deref()).is_none_or(|f| !same_folder_name(f, &target.folder));
     let session = world
         .get_non_send::<GhostSlot>()
         .and_then(|slot| slot.0.as_ref());
@@ -405,11 +398,6 @@ pub(crate) fn accept_switch(
         exe_dir.as_deref(),
         &target.dir,
     );
-    if elsewhere {
-        world
-            .get_resource_or_insert_with(SwitchAcceptCount::default)
-            .0 += 1;
-    }
     world.insert_non_send(SwitchInFlight {
         target,
         prev,

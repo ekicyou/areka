@@ -117,7 +117,7 @@ mod boot_config;
 
 pub(crate) use boot_config::{
     ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options,
-    is_benign_boot_error, resolve_boot,
+    is_benign_boot_error,
 };
 
 /// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
@@ -128,7 +128,7 @@ mod alert;
 mod write_failure;
 
 /// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
-/// 起動前の解決は `boot_config::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
+/// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 mod boot_resolve;
 
 /// `.nar` を入れる手続き（areka-P0-ghost-install）。
@@ -182,7 +182,7 @@ fn main() -> Result<()> {
         std::process::exit(offline_dump::run(req));
     }
     // 起動の依頼の持ち物（`--install` と exe の隣の initial_install.nar）は早い戻りの後に作る（要件 4.9）。
-    let startup_install = install::startup::StartupInstall::new(opts.install);
+    let mut startup_install = install::startup::StartupInstall::new(opts.install);
     // 読み取りだけかを 1 度だけ立てる（置き場の形と受け口が決まる前・readonly-mode 要件 1.1・1.5）。
     readonly::engage(opts.readonly);
     if opts.modules == cli::ModulePolicy::Skip {
@@ -210,7 +210,7 @@ fn main() -> Result<()> {
     // 4 つ目は起動中の印の値＝前回きれいに終わらなかったゴーストの名前（読むだけで消さない）。
     // 初回の起動の由来になる（要件 12.4）。
     let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) =
-        match resolve_boot(&opts.boot) {
+        match install::startup::resolve_boot(&opts.boot, &mut startup_install) {
             Ok(resolved) => resolved,
             Err(scene) => {
                 alert::raise(&scene, alert::suppressed());
