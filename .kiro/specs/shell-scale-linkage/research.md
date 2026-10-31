@@ -202,3 +202,24 @@ MCP の `get_property` で同じ時に読むと、`currentghost.scope(0).scaling
 - **4（値の無いとき）**: 無い名前・窓の無いスコープは空の Reference で番号を保つ（要件 1.4・3.9 のとおり）。**名前なしは送らない**（要件 2.4 の「Reference なしで送る」と違う）。**空の名前は空の `ID` のまま送る**（要件 2.2 の「送らず警告」と違う）。名前の大小は SSP では区別される（areka は完了 `areka-P0-property-name-case-fold` で MCP の名前の規則を決めており、要件 1.1 はそれに従う）。
 - **5・6（`OnShellScaling` を送る場面・小数の桁）**: 測っていない。SSP で倍率を変えるには利用者の設定か `\![set,scaling]` で開発者の SSP のぱすたの大きさを変えることになり、元へ戻す値が確かでないため。areka は作者の基準が 96 で Windows の DPI が 24 の倍数なので、表示の倍率ができるまで百分率は整数に限られる（3 節 3.7 の行）。
 - **7（起動の挨拶・終了の最中）**: 測っていない。ぱすたは起動の挨拶の中で `\![get,property]` を出さない（2.7 節）。
+
+## 11. SSP の測り その 2（2026-11-01・議題 2 のため）
+
+排他テストの机を持ち、止まっていた SSP（`C:\wintools\ssp\ssp.exe`）を起こした（ゴーストは「窓際のぱすたさんDEBUG」・150% の画面）。測った後は `\-` でゴーストを降ろし、SSP が終わったことと 9276 番が空いたことを確かめてから机を返した。利用者の設定は変えていない。
+
+**スコープごとの `\![set,scaling]`**（ukadoc「ユーザの設定する倍率を100％とした倍率」＝100 で利用者の設定の倍率へ戻る）:
+
+| 送った台本 | MCP の `get_property` | SSP が SHIORI へ送ったもの |
+|---|---|---|
+| `\0\![set,scaling,120]\e` | `scope(0).scaling` 150→`180,180`・`balloon.scope(0).scaling` も `180,180`・`scope(1)` は `150,150` のまま | `OnShellScaling`・`OnBalloonScaling` は **0 件** |
+| `\0\![set,scaling,100]\e` | `scope(0).scaling` `150,150` へ戻る | 0 件 |
+| `\1\![set,scaling,120]\e` | `scope(1).scaling`・`balloon.scope(1).scaling` が `180,180`・`scope(0)` は `150,150` のまま | 0 件 |
+| `\1\![set,scaling,100]\e` | `scope(1).scaling` `150,150` へ戻る | 0 件 |
+
+**同じゴーストの記録の過去分**（`ssp_shiori_log.txt` の全体・2026-10-18〜10-20・開発者が SSP の倍率の設定を変えた時のもの）: `OnShellScaling` と `OnBalloonScaling` が 30 件ずつ。どれも `GET`・`SenderType: internal`・**Reference は 4 つだけ**（スコープを示す Reference は無い）・値は利用者の設定の百分率（150・200・100・80・66・300 の間の行き来）。1 件を除き、`OnShellScaling` の 0〜4 ms 後に `OnBalloonScaling` が続く（ぱすたは `balloon.syncscale,true`）。1 回の設定の変更で、ゴーストあたり 1 回ずつ。
+
+分かったこと:
+- SSP の 2 つのイベントは「**利用者の設定の倍率（ゴースト全体に 1 つ）が変わった**」の合図で、スコープを持たない。
+- スコープごとの実効の倍率が変わっても（`\![set,scaling]`）、SSP は送らない。実効の倍率はスコープごとに `scope(ID).scaling` で読む。
+- 画面を移っても送らない（`ssp-measurement.md` の段 5）＝SSP の倍率の設定は画面の DPI と関係しない。
+- areka の画面の DPI への追従は、窓ごとの実効の倍率の変わりに当たる（`frame/dpi.rs` の `dpi_phase_with` は `Changed<DPI>` の窓ごとに、そのスコープの target だけを描き直す）。SSP の意味に当てると、`\![set,scaling]` と同じく「送らない」側になる。
