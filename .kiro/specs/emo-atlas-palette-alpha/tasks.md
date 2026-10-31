@@ -15,7 +15,7 @@
   - emo-atlas の今のテストが全部、前と同じ数で緑
   - _Requirements: 5.6_
 
-- [ ] 2. 赤のテストを先に立てる
+- [x] 2. 赤のテストを先に立てる
 - [x] 2.1 (P) emo-atlas でパレットの絵の判定と焼き込みの画素を確かめるテストを足し、直す前に赤を記録する
   - 6 本の検体を読み手で読み、α の有無が設計の表の「後」（真 4 本・偽 2 本）と一致することを確かめる
   - 透明度を持つ 4 本を `1`／`true` で正規化に通し、左上と同じ色の (1,0) が不透明のまま・透明の番号が全 0・半透明の番号が 128 のまま残ることを読み戻した画素で確かめる
@@ -27,7 +27,7 @@
   - _Boundary: AtlasPaletteTests_
   - _Depends: 1.1, 1.2_
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 5.1, 5.2, 5.3, 5.4, 5.6, 5.8_
-- [ ] 2.2 (P) wintf の絵の読み込みの α の有無の表のテストを足し、直す前に赤を記録する
+- [x] 2.2 (P) wintf の絵の読み込みの α の有無の表のテストを足し、直す前に赤を記録する
   - emo-atlas の検体 6 本を `CARGO_MANIFEST_DIR` からの相対パスで読み（crate の依存は足さない）、wintf の読み込みが返す α の有無が emo-atlas と同じ表と一致することを確かめる
   - テストの説明から作り手と README を名指しする
   - 直す前に走らせ、真の 4 本が赤、偽の 2 本が緑であることを記録に残す
@@ -86,3 +86,4 @@
 ## Implementation Notes
 
 - 2.1 直す前の赤（2026-10-31・`cargo test -p areka-emo-atlas palette_tests`）: 4 passed / 10 failed。赤＝has_alpha の真 4 本（idx8_mixed・idx4_mixed・gray8_trns・trans_gif が false）・`On` 4 本（(0,0)・(1,0) が 0,0,0,0 に抜かれる）・`Full` 2 本（(0,1) が 0,0,0,255・(1,1) が 128,0,0,255）。緑＝idx8_plain・idx8_opaque_trns の判定と `On` の 4 本。実際の値は設計の「直す前」の列と一致
+- 2.2 直す前の赤（2026-10-31・`cargo test -p wintf --test com wic_test`）: 10 passed / 4 failed。赤＝palette_{idx8_mixed,idx4_mixed,gray8_trns,trans_gif}_has_alpha（has_alpha が false）。緑＝idx8_plain・idx8_opaque_trns と既存 8 本
