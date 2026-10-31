@@ -4,12 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::same_folder_name;
 use bevy_ecs::world::World;
 
 use super::InstallOrigin;
 use super::procedure::ArchiveEnd;
-use crate::cli::InstallArgs;
+use crate::cli::{BootRequest, InstallArgs};
 
 /// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない＝要件 4.1）。
 pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";
@@ -186,99 +185,129 @@ pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Ve
     out
 }
 
-/// `callghost` の判断に要る事実（旧い形・タスク 4.2 で起動の前の形へ改める）。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+/// `callghost` の判断に要る事実（design「CallGhostDecision」）。
+// 起動の前の道（タスク 4.4）が呼ぶまでは使い手が無い。
 #[allow(dead_code)]
 pub(crate) struct CallGhostFacts<'a> {
-    pub archives: usize,
+    /// `--option callghost` が `--install` と一緒に渡された（cli が下ろした後の値）。
+    pub requested: bool,
+    pub readonly: bool,
+    /// 起動するゴーストの指定（位置引数・`--ghost` の値・`--random` のどれか）。在れば使わない。
+    pub boot_target: Option<BootTarget>,
+    /// `--install` の依頼の終わり方（`initial_install.nar` の分は渡さない＝要件 4.9）。
     pub ends: &'a [ArchiveEnd],
-    /// 窓口の門が閉じている（終了が始まっている）。
-    pub closing: bool,
-    /// 切替の予約 `SwitchInFlight` が在る。
-    pub switching: bool,
-    /// 依頼を積んだとき・終わりを受けたときの切り替えの受付の数。
-    pub switches_at_submit: u64,
-    pub switches_now: u64,
-    /// 今のゴーストのフォルダ名（`AlreadyRunning` の比べ）。
-    pub ghost_now: Option<&'a str>,
+}
+
+/// 起動するゴーストの指定の種類（記録 `startup_callghost_skipped` の `target`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BootTarget {
+    Positional,
+    GhostOption,
+    Random,
+}
+
+// 起動の前の道（タスク 4.4）が呼ぶまでは使い手が無い。
+#[allow(dead_code)]
+impl BootTarget {
+    /// 起動の求めに値が在るか（`--ghost` が置き場に当たらなくても指定あり＝要件 4.5）。
+    pub(crate) fn of(request: &BootRequest) -> Option<BootTarget> {
+        if request.positional_ghost.is_some() {
+            Some(BootTarget::Positional)
+        } else if request.ghost.is_some() {
+            Some(BootTarget::GhostOption)
+        } else if request.random {
+            Some(BootTarget::Random)
+        } else {
+            None
+        }
+    }
+
+    fn word(self) -> &'static str {
+        match self {
+            BootTarget::Positional => "positional",
+            BootTarget::GhostOption => "ghost_option",
+            BootTarget::Random => "random",
+        }
+    }
 }
 
 /// `callghost` の判断の答え。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CallGhost {
-    /// 切り替え先のフォルダ名（最後に入ったゴーストの書庫の本体の `place` の末尾）。
-    Request {
+    /// 起こすゴーストのフォルダ名（並びの最後に入ったゴーストの書庫の本体の `place` の末尾）。
+    Choose {
         folder: String,
     },
     Skip(CallGhostSkip),
+    /// `callghost` が渡されていない（記録を出さない）。
+    NotRequested,
 }
 
-/// 頼まない理由（記録 `startup_callghost_skipped` の `reason`）。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
+/// 使わない理由（記録 `startup_callghost_skipped` の `reason`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallGhostSkip {
-    Abandoned,
-    Closing,
+    Readonly,
+    BootTargetGiven(BootTarget),
     NoGhostInstalled,
-    Switching,
-    SwitchedMeanwhile,
-    AlreadyRunning,
 }
 
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
 impl CallGhostSkip {
-    /// 記録 `startup_callghost_skipped` の `reason` の語。
     fn word(self) -> &'static str {
         match self {
-            CallGhostSkip::Abandoned => "abandoned",
-            CallGhostSkip::Closing => "closing",
+            CallGhostSkip::Readonly => "readonly",
+            CallGhostSkip::BootTargetGiven(_) => "boot_target_given",
             CallGhostSkip::NoGhostInstalled => "no_ghost_installed",
-            CallGhostSkip::Switching => "switching",
-            CallGhostSkip::SwitchedMeanwhile => "switched_meanwhile",
-            CallGhostSkip::AlreadyRunning => "already_running",
         }
     }
 }
 
-/// 純粋: `callghost` を頼むか（design「`callghost` の判断」の順＝要件 5.1〜5.4）。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+/// `callghost` を使うか（順＝渡されていない → 読み取りだけ → 指定あり → ゴーストが無い → 選ぶ・
+/// 要件 4.3〜4.6・7.4）。判断は事実だけから決まり、答えを info で 1 件残す（`NotRequested` は残さない）。
+// 起動の前の道（タスク 4.4）が呼ぶまでは使い手が無い。
 #[allow(dead_code)]
 pub(crate) fn decide_call_ghost(facts: &CallGhostFacts<'_>) -> CallGhost {
-    let ends = facts.ends;
-    if ends.len() < facts.archives || ends.contains(&ArchiveEnd::Abandoned) {
-        return CallGhost::Skip(CallGhostSkip::Abandoned);
-    }
-    if facts.closing {
-        return CallGhost::Skip(CallGhostSkip::Closing);
-    }
-    let folder = ends.iter().rev().find_map(|end| match end {
-        ArchiveEnd::Installed(items) if items.first().is_some_and(|i| i.kind == "ghost") => {
-            Path::new(&items[0].place)
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
+    let answer = if !facts.requested {
+        CallGhost::NotRequested
+    } else if facts.readonly {
+        CallGhost::Skip(CallGhostSkip::Readonly)
+    } else if let Some(target) = facts.boot_target {
+        CallGhost::Skip(CallGhostSkip::BootTargetGiven(target))
+    } else {
+        let folder = facts.ends.iter().rev().find_map(|end| match end {
+            ArchiveEnd::Installed(items) if items.first().is_some_and(|i| i.kind == "ghost") => {
+                Path::new(&items[0].place)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            }
+            _ => None,
+        });
+        match folder {
+            Some(folder) => CallGhost::Choose { folder },
+            None => CallGhost::Skip(CallGhostSkip::NoGhostInstalled),
         }
-        _ => None,
-    });
-    let Some(folder) = folder else {
-        return CallGhost::Skip(CallGhostSkip::NoGhostInstalled);
     };
-    if facts.switching {
-        return CallGhost::Skip(CallGhostSkip::Switching);
+    match &answer {
+        CallGhost::Choose { folder } => tracing::info!(
+            event = "startup_callghost_chosen",
+            folder = %folder,
+            origin = ?InstallOrigin::StartupArgs,
+            "[install] 最後に入ったゴーストを起こすゴーストに選びました"
+        ),
+        CallGhost::Skip(reason) => {
+            let target = match reason {
+                CallGhostSkip::BootTargetGiven(target) => Some(target.word()),
+                _ => None,
+            };
+            tracing::info!(
+                event = "startup_callghost_skipped",
+                reason = reason.word(),
+                target,
+                "[install] callghost を使いません"
+            )
+        }
+        CallGhost::NotRequested => {}
     }
-    if facts.switches_now != facts.switches_at_submit {
-        return CallGhost::Skip(CallGhostSkip::SwitchedMeanwhile);
-    }
-    if facts
-        .ghost_now
-        .is_some_and(|now| same_folder_name(now, &folder))
-    {
-        return CallGhost::Skip(CallGhostSkip::AlreadyRunning);
-    }
-    CallGhost::Request { folder }
+    answer
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use super::*;
+use crate::cli::BootRequest;
 use crate::install::judge::{FailureWord, InstalledItem};
 
 fn item(kind: &'static str, place: &str) -> InstalledItem {
@@ -181,4 +182,208 @@ fn startup_events<'a>(
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
         .collect()
+}
+
+// ---- decide_call_ghost（要件 4.3〜4.6・4.9・7.4・9.5） ----
+
+fn facts(ends: &[ArchiveEnd]) -> CallGhostFacts<'_> {
+    CallGhostFacts {
+        requested: true,
+        readonly: false,
+        boot_target: None,
+        ends,
+    }
+}
+
+/// 判断を 1 回して、答えと `startup_callghost_*` の記録を返す。
+fn decide(facts: &CallGhostFacts<'_>) -> (CallGhost, Vec<log_capture_kit::CapturedEvent>) {
+    let (answer, events) = log_capture_kit::capture(|| decide_call_ghost(facts));
+    let events = events
+        .into_iter()
+        .filter(|e| {
+            e.field_str("event")
+                .is_some_and(|name| name.starts_with("startup_callghost"))
+        })
+        .collect();
+    (answer, events)
+}
+
+fn skipped_reason(events: &[log_capture_kit::CapturedEvent]) -> (String, Option<String>) {
+    assert_eq!(events.len(), 1, "記録は 1 件");
+    let e = &events[0];
+    assert_eq!(e.field_str("event"), Some("startup_callghost_skipped"));
+    assert_eq!(e.level, tracing::Level::INFO);
+    (
+        e.field_str("reason").unwrap_or_default().to_owned(),
+        e.field_str("target").map(str::to_owned),
+    )
+}
+
+#[test]
+fn not_requested_answers_not_requested_and_records_nothing() {
+    let ends = [ghost("tama")];
+    let (answer, events) = decide(&CallGhostFacts {
+        requested: false,
+        readonly: true,
+        boot_target: Some(BootTarget::Random),
+        ..facts(&ends)
+    });
+    assert_eq!(answer, CallGhost::NotRequested, "渡されていないが最初");
+    assert!(events.is_empty(), "渡されていなければ記録しない");
+}
+
+#[test]
+fn readonly_skips_before_boot_target() {
+    let ends = [ghost("tama")];
+    let (answer, events) = decide(&CallGhostFacts {
+        readonly: true,
+        boot_target: Some(BootTarget::Positional),
+        ..facts(&ends)
+    });
+    assert_eq!(answer, CallGhost::Skip(CallGhostSkip::Readonly));
+    assert_eq!(skipped_reason(&events), ("readonly".to_owned(), None));
+}
+
+#[test]
+fn each_boot_target_skips_with_its_word() {
+    let ends = [ghost("tama")];
+    for (target, word) in [
+        (BootTarget::Positional, "positional"),
+        (BootTarget::GhostOption, "ghost_option"),
+        (BootTarget::Random, "random"),
+    ] {
+        let (answer, events) = decide(&CallGhostFacts {
+            boot_target: Some(target),
+            ..facts(&ends)
+        });
+        assert_eq!(
+            answer,
+            CallGhost::Skip(CallGhostSkip::BootTargetGiven(target))
+        );
+        assert_eq!(
+            skipped_reason(&events),
+            ("boot_target_given".to_owned(), Some(word.to_owned()))
+        );
+    }
+}
+
+#[test]
+fn boot_target_is_read_from_the_request_even_when_ghost_name_misses() {
+    let of = |request: BootRequest| BootTarget::of(&request);
+    assert_eq!(of(BootRequest::default()), None);
+    assert_eq!(
+        of(BootRequest {
+            positional_ghost: Some(PathBuf::from(r"C:\ghost\tama")),
+            ..Default::default()
+        }),
+        Some(BootTarget::Positional)
+    );
+    assert_eq!(
+        of(BootRequest {
+            ghost: Some("置き場に無い名前".to_owned()),
+            ..Default::default()
+        }),
+        Some(BootTarget::GhostOption),
+        "--ghost が当たらなくても指定あり"
+    );
+    assert_eq!(
+        of(BootRequest {
+            random: true,
+            ..Default::default()
+        }),
+        Some(BootTarget::Random)
+    );
+}
+
+#[test]
+fn no_ghost_installed_skips() {
+    for ends in [
+        vec![installed("shell", r"C:\areka\ghost\tama\shell\alt")],
+        vec![installed("balloon", r"C:\areka\balloon\b")],
+        vec![
+            ArchiveEnd::Failed(FailureWord::Extraction),
+            ArchiveEnd::Refused,
+            ArchiveEnd::Declined,
+        ],
+        vec![],
+    ] {
+        let (answer, events) = decide(&facts(&ends));
+        assert_eq!(answer, CallGhost::Skip(CallGhostSkip::NoGhostInstalled));
+        assert_eq!(
+            skipped_reason(&events),
+            ("no_ghost_installed".to_owned(), None)
+        );
+    }
+}
+
+#[test]
+fn last_installed_ghost_is_chosen_and_recorded() {
+    let ends = [
+        ghost("first"),
+        ghost("last"),
+        installed("balloon", r"C:\areka\balloon\b"),
+        ArchiveEnd::Failed(FailureWord::Extraction),
+    ];
+    let (answer, events) = decide(&facts(&ends));
+    assert_eq!(
+        answer,
+        CallGhost::Choose {
+            folder: "last".to_owned()
+        }
+    );
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].field_str("event"),
+        Some("startup_callghost_chosen")
+    );
+    assert_eq!(events[0].level, tracing::Level::INFO);
+    assert_eq!(events[0].field("folder"), Some("last"));
+    assert_eq!(events[0].field("origin"), Some("StartupArgs"));
+}
+
+#[test]
+fn ghost_with_bundled_balloon_counts_by_its_body() {
+    let bundled = ArchiveEnd::Installed(vec![
+        item("ghost", r"C:\areka\ghost\tama"),
+        item("balloon", r"C:\areka\balloon\tama_b"),
+    ]);
+    let body_balloon = ArchiveEnd::Installed(vec![
+        item("balloon", r"C:\areka\balloon\b"),
+        item("ghost", r"C:\areka\ghost\not_body"),
+    ]);
+    let (answer, _) = decide(&facts(&[bundled, body_balloon]));
+    assert_eq!(
+        answer,
+        CallGhost::Choose {
+            folder: "tama".to_owned()
+        },
+        "本体（先頭）がゴーストの書庫だけを数える"
+    );
+}
+
+#[test]
+fn readonly_and_boot_target_come_before_no_ghost_installed() {
+    for ends in [
+        vec![],
+        vec![installed("shell", r"C:\areka\ghost\tama\shell\alt")],
+    ] {
+        let (answer, _) = decide(&CallGhostFacts {
+            readonly: true,
+            ..facts(&ends)
+        });
+        assert_eq!(
+            answer,
+            CallGhost::Skip(CallGhostSkip::Readonly),
+            "ゴーストが無くても読み取りだけが先"
+        );
+        let (answer, _) = decide(&CallGhostFacts {
+            boot_target: Some(BootTarget::GhostOption),
+            ..facts(&ends)
+        });
+        assert_eq!(
+            answer,
+            CallGhost::Skip(CallGhostSkip::BootTargetGiven(BootTarget::GhostOption)),
+            "ゴーストが無くても指定ありが先"
+        );
+    }
 }
