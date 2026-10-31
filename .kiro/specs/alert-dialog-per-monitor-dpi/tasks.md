@@ -26,6 +26,7 @@
   - 4 行と、プロセスを v2 に立てた後の場合の見分け（窓が 2 なら当時の測り方の取り違え・1 ならプロセスの既定を受けたスレッドの画面が system で作られる形・プロセスが v2 にならなければ見分けに使わない）をタスクの記録に書く
   - 完了: 「非対応から囲んで出す」の行が `thread_during=2` かつ `window_v2=true` なら関門を通り 2 へ進む。そうでなければ 2 本の 4 行を添えて開発者へ戻し、ここで止まる（足した部品と測りは消さない・口へは繋いでいないので本番は変わらない）
   - _Requirements: 1.3, 4.6_
+  - _Blocked: 関門 0 を通らない（2026-11-01 実機）。囲んでも MessageBoxW がモーダルの間スレッドを system aware（1）に替え、窓も system で作られる。案 B／C を開発者が決めるまで 2 と 3 へ進まない_
 
 - [ ] 2. 直しの本体: 決定論のテストと 3 つの口の置き換え
 - [ ] 2.1 (P) 囲みの部品の決定論のテスト D1〜D4 を足す
@@ -68,3 +69,14 @@
 ## 先送りする要件
 
 - 要件 5.2（完了のときに件 2 を持ち主の決まった起票として渡す）はコードの変更を持たず、`/kiro-complete` の未解決問題の棚卸（`/kiro-discovery` での起票）の持ち物。実装のタスクには置かない。
+
+## Implementation Notes
+
+- 関門 0（1.3・2026-11-01・主 200%＝system DPI 192）の 4 行:
+  - `case=unwrapped_unaware process=0 thread_before=0 thread_during=0 window=0 window_v2=false window_dpi=96 monitor_dpi=96 system_dpi=96 box=1`
+  - `case=wrapped_from_unaware process=0 thread_before=0 thread_during=1 window=1 window_v2=false window_dpi=192 monitor_dpi=192 system_dpi=192 box=1`
+  - `case=unwrapped_thread_v2 process=2 thread_before=2 thread_during=1 window=1 window_v2=false window_dpi=192 monitor_dpi=192 system_dpi=192 box=1`
+  - `case=process_v2_default process=2 thread_before=2 thread_during=1 window=1 window_v2=false window_dpi=192 monitor_dpi=192 system_dpi=192 box=1`
+- 見立て: スレッドが v2（囲んだ・明示・プロセスの既定のどれでも）で `MessageBoxW` を呼ぶと、画面が出ている間のスレッドの扱いが 1（system）に替わり、窓も system で作られる。`MessageBoxW` 自身が v2 を system へ落とす形で、案 A（スレッドを囲む）では直らない。非対応のスレッドからは非対応（96）のまま。
+- 2026-10-31 の見分け: `process_v2_default` は `process=2`・`thread_before=2` で見分けに使え、`window=1`。当時の「v2 に立てた後でも system」は測り方の取り違えではなく、上と同じ `MessageBoxW` の振る舞い。3.2 の条件（`window=2`）には当たらない。
+- 測りの不具合: 見つけた窓へ `PostMessageW(WM_COMMAND, IDOK, 0)` を送ってもメッセージボックスは閉じない（外から同じ合図を送って確かめた）。`WM_CLOSE` なら閉じる。今回は外から `WM_CLOSE` を送って 4 つとも閉じた（読みは閉じる前に画面の中で済んでいる）。測りを使い直す前に閉じ方を `WM_CLOSE` へ直す。
