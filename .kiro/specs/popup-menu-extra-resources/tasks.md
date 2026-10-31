@@ -25,7 +25,7 @@
   - 完了の状態: `cargo test -p areka` で 7 通りのテストと既存の項目名・時間切れ・メニューの組み立てのテストがすべて緑
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 3.1, 3.2, 5.1, 5.4_
 
-- [ ] 3. 網羅台帳と周りの文書を直し、整合の検査を通す
+- [x] 3. 網羅台帳と周りの文書を直し、整合の検査を通す
 - [x] 3.1 (P) 網羅台帳の `updatebuttoncaption` の行と `updatebutton.caption` の行の備考を直す
   - `updatebuttoncaption` の行を `implemented`・持ち主を本 spec にし、備考を `updatebutton.caption` の行と同じ組み立て（中身・壊れ方・ログ・根拠の場所・画面の材料・無いと失うもの）で書き、優先・測 1 の結果・測 2 と測 3 を測れなかった理由・`alias` にしない理由を書く。他の欄はそのまま
   - `updatebutton.caption` の行は状態と持ち主を変えず、「壊れ方」と「根拠の場所」の 2 文だけを落とし先に合わせる
@@ -36,7 +36,7 @@
   - _Depends: 1.1, 2.1_
   - _Requirements: 4.2, 4.3, 4.4_
 
-- [ ] 3.2 spec の一覧・状態の分布の数を直し、報告を道具で作り直して検査を通す
+- [x] 3.2 spec の一覧・状態の分布の数を直し、報告を道具で作り直して検査を通す
   - `roadmap-draft.md` に本 spec の `[[spec]]` を 1 行足し、`[briefs]` の数と日付・「追加」の段落・段階 A の表の「メニュー」の行を、足した後に数え直した値で直す
   - `briefing.md` の `list_shiori_resource` の `[[barrier]]` を数え直した値（見込み 15／144）にし、経緯の段落に 1 文足す
   - `report/` は手で書かず、`cargo run -p ukadoc-survey -- report` と `-- report-summary` で作り直す（台帳と文書の直しが済んでから）
