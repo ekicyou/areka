@@ -80,3 +80,9 @@
 - 見立て: スレッドが v2（囲んだ・明示・プロセスの既定のどれでも）で `MessageBoxW` を呼ぶと、画面が出ている間のスレッドの扱いが 1（system）に替わり、窓も system で作られる。`MessageBoxW` 自身が v2 を system へ落とす形で、案 A（スレッドを囲む）では直らない。非対応のスレッドからは非対応（96）のまま。
 - 2026-10-31 の見分け: `process_v2_default` は `process=2`・`thread_before=2` で見分けに使え、`window=1`。当時の「v2 に立てた後でも system」は測り方の取り違えではなく、上と同じ `MessageBoxW` の振る舞い。3.2 の条件（`window=2`）には当たらない。
 - 測りの不具合: 見つけた窓へ `PostMessageW(WM_COMMAND, IDOK, 0)` を送ってもメッセージボックスは閉じない（外から同じ合図を送って確かめた）。`WM_CLOSE` なら閉じる。今回は外から `WM_CLOSE` を送って 4 つとも閉じた（読みは閉じる前に画面の中で済んでいる）。測りを使い直す前に閉じ方を `WM_CLOSE` へ直す。
+- 案 B の測り（2026-11-01・開発者の指示・`probe_alert_task_dialog_window_dpi`・comctl32 v6 の `TaskDialog`、OK だけ・エラーのアイコン）の 3 行:
+  - `case=taskdialog_unaware process=0 thread_before=0 thread_during=0 window=0 window_v2=false window_dpi=96 monitor_dpi=96 system_dpi=96 box=0`
+  - `case=taskdialog_wrapped_from_unaware process=0 thread_before=0 thread_during=2 window=2 window_v2=true window_dpi=192 monitor_dpi=192 system_dpi=192 box=0`
+  - `case=taskdialog_thread_v2 process=2 thread_before=2 thread_during=2 window=2 window_v2=true window_dpi=192 monitor_dpi=192 system_dpi=192 box=0`
+- 見立て: タスクダイアログは `MessageBoxW` と違いスレッドの扱いを落とさず、囲めば（非対応のスレッドからでも）窓が v2 で作られる。案 B は 1.1 の `with_thread_per_monitor` と組めば効く。副のモニタ（150%）での DPI とにじみはまだ見ていない（測ったのは主のモニタだけ）。
+- 測りの閉じ方を直した: メッセージボックスは `WM_CLOSE`、タスクダイアログは `TDM_CLICK_BUTTON`（IDOK）。直した後の `probe_alert_box_window_dpi` は人の手なしで 2.6 秒で終わり、値は関門 0 と同じ（判定どおり赤）。
