@@ -223,3 +223,56 @@ MCP の `get_property` で同じ時に読むと、`currentghost.scope(0).scaling
 - スコープごとの実効の倍率が変わっても（`\![set,scaling]`）、SSP は送らない。実効の倍率はスコープごとに `scope(ID).scaling` で読む。
 - 画面を移っても送らない（`ssp-measurement.md` の段 5）＝SSP の倍率の設定は画面の DPI と関係しない。
 - areka の画面の DPI への追従は、窓ごとの実効の倍率の変わりに当たる（`frame/dpi.rs` の `dpi_phase_with` は `Changed<DPI>` の窓ごとに、そのスコープの target だけを描き直す）。SSP の意味に当てると、`\![set,scaling]` と同じく「送らない」側になる。
+
+## 12. 設計の段の調べと決め（2026-11-01・`/kiro-spec-design -y`）
+
+> 本ブランチ `claude/kiro-start-shell-scale-linkage-773a37`（`06701198`）のコードで確かめた。発見の型は **light（既存の仕組みへの足し）**。新しい外のクレートは足さない。読んだ手順: `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、テンプレート `.kiro/settings/templates/specs/design.md`・`research.md`。steering は `product.md`・`tech.md`・`structure.md`・`logging.md`・`roadmap.md` の C15 の行。
+
+### 12.1 調べて分かったこと（9 節の持ち越しの答え）
+
+| # | 点 | 分かったこと（どこで確かめたか） | 設計への効き |
+|---|---|---|---|
+| 1 | 絵にかかった k の唯一の更新点 | `areka-emo-present/src/presenter/show.rs` の `apply_show` の末尾 `target.applied = Some(scale)`。`refresh_scale`（DPI の替わり）・`apply_replace`（差し替え）・`show_target`（バルーンの出し直し）はどれもこの 1 か所を通る。同じ所が `pending_resize` を積み、`take_pending_resize` で毎フレームの相が取り出す先例がある | 「k が変わった」の印はこの 1 か所で積み、フレームの相が取り出す（プッシュ）。毎フレーム装着済みの target を見比べる形は取らない |
+| 2 | 切り替えで k が跳ぶ取り違え | `apply_replace` は `attach_target`（`applied: None` で登録し直す）の後に `DetachedState.applied` を書き戻すので、作者 DPI が違えば同じ target の k が前後で違って見える | 寸法の照合のための `applied` の引き継ぎは残し、**「装着ごとの起点」を別の欄に持つ**（`attach_target` が空にし、差し替えは引き継がない）。起点が空の初回は「初めて決まった」で、イベントを送らない（要件 5.7）＝状態の形で解く |
+| 3 | ゴーストの切り替え・読み直しで表示層はどうなるか | ゴーストの起動（切り替えも）は `ghost_session.rs` の `boot_wired` → `emo2_boot::wire_emo2_boot` が `Emo2Wiring`（表示層 `EmoPresenter` を含む）を新しく入れ、続けて `ghost_session_runtime::rewire_runtime_consumers` を呼ぶ。SHIORI だけの読み直し（`rebuild_runtime_in_place`）は窓・表示層を残し、実行系（sylphya の読み口を含む）だけを作り直して `rewire_runtime_consumers` をやり直す。どちらも毎フレームの排他の系の外（`ghost_quit_system`・読み直しの取り出しの系）から呼ばれる | 倍率の表は `Emo2Wiring` に持たせる（ゴーストの起動ごとに新しい・SHIORI だけの読み直しでは同じ表を新しい読み口へ登録し直す）。要件 4.5 は形で満たす |
+| 4 | 返しのイベントの受け口の置き場 | `areka-ghost/src/runtime.rs` の `boot_with_origin` の `spawn_dispatcher` 直前の単一登録点に、sylphya の読み口・ゴースト自身の問い手・kanade の送出端が揃っている（`PropSetCueSink` の先例）。`emo2_boot/runtime_boot.rs` の受け口の組み立ては起動の前に走るので、読み口も kanade も無い | 受け口は `areka-ghost` の `PropSetCueSink` の兄弟に置く。`emo2_boot/mod.rs`・`runtime_boot.rs` は触らない（ウェーブの表 ① の候補より狭い） |
+| 5 | 返しのイベントの kanade の道 | `EventId::Sstp` を足したときの腕は `msg.rs`（種類と `as_str`）・`request_origin.rs` の `of_event`（既定の腕なし）・`actor.rs` の記録の名札と送出の許可の判定・`schedule/types.rs` の `Input`・`schedule/mod.rs` の振り分け・`actor.rs` の `KanadeMsg` → `Input` の写し。応答は `schedule/mod.rs` の `on_shiori_reply` が今日の規則で再生する（`events::value_replaces_active_talk` は `OnSecondChange` 以外で今のトークを置き換える）。応答の台本の出どころは `schedule/translate.rs` の `Replied::reply_origin` が `RequestOrigin::base_of` で決める | 新しい種類 `EventId::Property` と知らせ `KanadeMsg::PropertyEvent` を足す。応答の再生は今日の道のまま（要件 1.7） |
+| 6 | 送る時点の運び | 受け口は dispatcher が再生の時刻を進めるにつれて cue を配る（`areka-ghost/src/dispatcher.rs` の `on_tick`）＝タグに届いた時点で `emit` が呼ばれる | SSP の測り（10 節）と同じく、タグの時点で値を引いて送る（要件 1.1・1.6） |
+| 7 | 正確な百分率 | `ScaleRatio`（`areka-emo-compose/src/scale.rs`）は分子・分母を外へ出さない。`as_f32` は使い道が 2 つに限られている | 読むだけの口 `parts()` を 1 つ足す（不変条件を崩さない・f32 を使わない）。百分率の文字は areka の側で整数だけで作る |
+| 8 | `scope(ID)` の読み | `ghost_session_scope_rect.rs` の私有の `scope_selector` が番号・負の番号・書式の誤りを読み分ける | `pub(crate)` に上げて使い回す（読みを 2 つに分けない） |
+| 9 | descript の読み直しの時点 | `DefaultPlacementBasis`（descript の生の KV の写しを持つ資源）は起動の窓づくり（`ghost_session.rs`）とシェルの差し替え（`frame/switch.rs`・シェルと descript の読み直しもここを通る）の 2 か所で入れ直される | この資源の変わり（bevy の変更検出）で `balloon.syncscale` を読み直す。`placement/mod.rs` には `mod` の 1 行だけ足す（約束の 1〜2 行の内） |
+| 10 | 台帳の実装済みの証拠 | `doc/ukadoc-coverage/README.md` 3 章: `implemented` は定義箇所の `// ukadoc: <URL>` の 1 行が要る（許可表の要素・分岐の腕・語彙表の 1 行） | 証拠の行を置く場所を設計に書く |
+| 11 | areka 独自の名前を書き残す先 | `doc/COMPAT_ARCHITECTURE.md` の 8 節「沈黙ルール対応表」が areka 裁量・areka 拡張キー（例 `writing_mode`）の正本 | `currentghost.balloon.scope(ID).currentmonitor.dpi`・`scaling` の意味・2 つのイベントの送る場面と Reference4 をここに行で書く |
+
+### 12.2 案の比べ（7 節の案を受けて）
+
+| 案 | 受け手 | 倍率の変わり | 強み | 弱み・危険 | 採否 |
+|---|---|---|---|---|---|
+| A | `emo2_boot` の新しい受け口＋UI の相 | 毎フレーム `applied_ratio` を見比べる | 表示層を触らない | 台本のスレッド → UI → kanade の 2 段の跨ぎ・値をタグの時点で引けない・開発者の基準（毎フレーム比べる案は推さない）に反する | 不採用 |
+| B | `areka-ghost` の兄弟の受け口 | 表示成立点で積み、相が取り出す | 受け手の道が最短・変わった時点のプッシュ | 表示層の公開の口が 1 つ増える | 中身を採る |
+| C（採用） | B と同じ | B と同じ・切り替えは「装着ごとの起点」で見分ける | 先例の形に一番多く乗る・`placement/mod.rs` は 1 行・`frame/dpi.rs`・`emo2_boot/mod.rs`・`runtime_boot.rs` に触らない | ウェーブの表 ① に無いファイルを触る（設計の File Structure Plan に列挙して開発者の承認を仰ぐ） | 採用 |
+
+### 12.3 設計の決め（design.md の「決めたこと」の根拠）
+
+- **D1 返しのイベントは新しい種類で運ぶ**: 代わりの案＝`KanadeMsg::RaiseEvent` に出どころの欄を足す（送り手 9 か所に触る・許可の表の規則と混ざる）／`EventId::Sstp` を使い回す（出どころが `external,sstp` に固定）。採用＝`EventId::Property(String)`＋`KanadeMsg::PropertyEvent`。名前の検査は `areka_kanade::sstp::validate_notify`（要件 2.2・2.3 の規則とちょうど同じ）を受け口と kanade の腕の両方で使う（受け口は理由とタグを記録するため・kanade は信頼の境界のため）。
+- **D2 定常でないときの返しのイベント**: `KanadeMsg::RaiseEvent` と同じく、定常（`Phase::Steady`・起動の挨拶の最中を含む）でだけ送り、ほかは `warn!` で捨てる（積まない）。終了の台本の応答で台本を差し替えると「終了イベントのトークは必ず終了で終わる」（2026-09-20 裁定）を崩すため。ぱすたは起動の挨拶と終了の中で `\![get,property]` を出さない（2.7 節）。
+- **D3 k の変わりの印は表示成立点で積む**: 代わりの案＝毎フレーム比べる（開発者の基準に反する）／`refresh_scale` の戻り値を使う（「k が変わったが丸めた寸が同じ」も `None` で使えない・2.3 節）。採用＝`apply_show` の表示成立点で「装着ごとの起点」と（k・その k を出した DPI）の組が違えば `ScaleChange` を積み、毎フレームの相の最後の段（`scale_notice`）が取り出す。比べるのは k を書き換えるその場の 1 回だけで、毎フレームの走査はしない（`pending_resize` と同じ形）。
+- **D4 切り替えの見分けは状態の形で**: 「装着ごとの起点」（`PresentTarget` の新しい欄）は `attach_target` が空にし、`apply_replace` は引き継がない。空からの最初の記録は表の書き込みだけでイベントを送らない（要件 5.7）。ゴーストの切り替え・読み直しは表示層ごと新しい（12.1 の 3）。1 フレーム遅らせる解・切り替えの印を別に配る解は取らない。
+- **D5 `currentmonitor.dpi` は k と同じ時点の DPI**: 表示成立点で k を出したその窓の `DPI` の `dpi_x` を一緒に積む。整合待ち（`DpiSyncHold`）や見えていない間に窓の DPI だけが先に新しくなっても、答える値は描いた絵と食い違わない（要件 4.2）。ぱすたの「拡大率 × 96 ÷ DPI」は常に作者の基準どおりの 100 を保つ。
+- **D6 百分率の文字**: 割り切れるときは整数、割り切れないときは小数第 3 位で四捨五入（0 から遠い側）して小数第 2 位まで書き、末尾の 0 は落とす（ただし小数点の後に少なくとも 1 桁は残す）。例: 96/96 → `100`・144/96 → `150`・120/144 → `83.33`・135/120 → `112.5`。SSP の桁は測っていない（10 節の 5・6）。areka は表示の倍率ができるまで作者の基準が 96 以外のときだけ小数が出る。測りで SSP の桁が分かったら、この 1 関数だけを直す（再確認の引き金に書く）。
+- **D7 倍率の表の持ち主は `Emo2Wiring`**: 代わりの案＝World の資源に置く（ゴーストの切り替えで前のゴーストのスコープの値が残る）／`wire` のたびに作る（SHIORI だけの読み直しで表示層の値を失う）。採用＝`Emo2Wiring` の欄（ゴーストの起動ごとに新しい・SHIORI だけの読み直しでは同じ表）。
+- **D8 `balloon.syncscale` は資源の変わりで読む**: 代わりの案＝`balloon_dontmove` と同じ運び方（`placement/mod.rs` に 5 行前後・約束を超える）。採用＝`DefaultPlacementBasis` が入れ直された巡で読む系 1 つ。読みは論理和（シェルの段かゴーストの段のどちらかが `true`）で、`balloon_dontmove` の「優先の順」と違う（要件 6.3）。
+- **D9 areka 独自の名前の書き残し**: ukadoc に無い `currentghost.balloon.scope(ID).currentmonitor.dpi` は網羅台帳に行を足さず（要件 3.11）、`doc/COMPAT_ARCHITECTURE.md` の 8 節に行を足す。同じ表に `scaling` の意味（DPI 追従の倍率 × 表示の倍率）と 2 つのイベントの送る場面・Reference4 も書く。
+
+### 12.4 合成のレンズ（design-synthesis）
+
+- **一般化**: `scope(ID).scaling`・`balloon.scope(ID).scaling`・`scope(ID).currentmonitor.dpi`・`balloon.scope(ID).currentmonitor.dpi` の 4 つは「窓の種類 × 量（倍率か DPI）」の掛け合わせ＝読み手の型 1 つ（`ScopeScaleSource`）を 4 つの形で登録する。`OnShellScaling`・`OnBalloonScaling` も同じ記録から窓の種類で名前を選ぶだけ。`\![get,property]` の受け手は名前に縛らず、MCP の `get_property` と同じ `resolve_dotted_str` を通す（`property-query-channels` が後で同じ受け口と読み手を使える）。
+- **作るか借りるか**: 外のクレートは足さない。値の口は ✅ `mcp-scope-rect-property` の `register_pull`、イベントの送出は `KanadeMsg::RaiseEvent`、名前の検査は `validate_notify`、受け口は `PropSetCueSink` の形、表示成立点の記録は `pending_resize` の形、descript の読みは `scoped_value`・`scope_prefixes`、選択子の読みは `scope_selector` を借りる。新しく作るのは kanade の 1 種類と表示層の記録の口だけ。
+- **削ったもの**: UI の側の相を通す受け手（案 A）・毎フレームの見比べ・切り替えの印を別に配る仕組み・`syncscale` を構造の欄で運ぶ形・倍率の表をスコープの窓の印から組み直す系（`scope_rect` の `FrameFinalize` の系に当たるもの）は作らない。`syncscale` の値は持つだけで、読む下流（`shell-balloon-scale-setting`）が来るまで読み口を 1 つ（`is_synced`）に留める。
+
+### 12.5 危険と手当て
+
+- **表示成立点の外で k が変わる道が後から足される** → 再確認の引き金に「`applied` の更新点を足す変更」を書き、檻（emo-present の記録の檻）が表示成立点の記録を固定する。
+- **`Emo2Wiring` が取り出されている最中に `rewire_runtime_consumers` が走る** → 今は 2 つの呼び手ともフレームの排他の系の外。`wire` は `Emo2Wiring` が無ければ空の表で登録して `debug!` を残す（LogSink の起動でも正しく「値なし」になる）。呼び手の場所が変わったら再確認の引き金。
+- **ウェーブ C15 の兄弟との重なり** → ⑤ `emo-bake-log-overlap` は emo-present の `shell_target.rs`・`balloon.rs` と emo-compose の `fold.rs`、⑥ `popup-menu-extra-resources` は kanade の `schedule/resources.rs`・`menu/captions.rs` と網羅台帳 `shiori.toml` の別の 1 行。本 spec が触る emo-present の `presenter/` 以下・`presenter.rs`・`lib.rs`、emo-compose の `scale.rs`、kanade の `schedule/{events,types,mod,change}.rs` とファイルは重ならない（`shiori.toml` は別の行）。
+- **SSP の小数の桁が後で分かる** → D6 の 1 関数だけを直す。
