@@ -72,6 +72,22 @@ struct ArgsFollowup {
     switches_at_submit: u64,
 }
 
+/// 起動の前に入れた物 1 本の控え（目録の綴りに直した後の値・起動の後に World へ移す）。
+// 起動の前の道（タスク 4.x）が持ち物に載せるまでは、起動の前の口とテストだけが使う。
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CarriedInstall {
+    pub kind: areka_nar::InstallKind,
+    /// 入れた先のフォルダ名（目録の綴り）。
+    pub folder: String,
+    /// 関わったゴーストのフォルダ名（シェル・追加ファイル）。
+    pub ghost_folder: Option<String>,
+    /// %lastobjectname の値（install.txt の name）。
+    pub object_name: String,
+    /// %lastghostname の値（バルーンは None＝前の値のまま）。
+    pub ghost_name: Option<String>,
+}
+
 impl StartupInstall {
     /// `main` から 1 度だけ（`--help`・`--offline-dump` の早い戻りの後・起動の解決の前）。
     pub(crate) fn new(args: InstallArgs) -> StartupInstall {

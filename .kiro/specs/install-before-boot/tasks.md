@@ -2,7 +2,7 @@
 
 > 設計 `design.md`（2026-10-31・設計の討議まで確定）から起こしたタスク。テストは兄弟の `*_tests.rs`、根と書庫の写しは `target\` の下だけ。`crates/areka/src/ghost_session.rs` と `install/desk_overwrite_tests.rs` には触らない（ウェーブ C14 の約束）。`main.rs` は 986 行から増やさない。
 
-- [ ] 1. 手続きと土台の小さな口
+- [x] 1. 手続きと土台の小さな口
 - [x] 1.1 (P) 手続きの口の答えに「起動の前なので送らなかった」を足す
   - 口が「送らなかった」と答えたとき、手続きは「イベントを送りました」の記録を出さず、送らなかったことを debug で残す
   - 「旧仕様の完了イベントへ続ける」分かれは「返事なし」だけを見るままにし、「送らなかった」では 2 本目を試さない
@@ -25,7 +25,7 @@
   - _Boundary: DeskCleanup_
   - _Requirements: 3.3, 3.4_
 
-- [ ] 2. 起動のゴーストの選び方に callghost の段を足す
+- [x] 2. 起動のゴーストの選び方に callghost の段を足す
 - [x] 2.1 (P) ゴーストの選び方に「callghost の相手」の段を足す
   - 選び方の入力に「callghost の相手のフォルダ名」を足し、`--random` の段の後・記憶の段の前で目録から引く
   - 目録に在れば経路「CallGhost」で選ぶ。在らなければ warn `callghost_target_not_found` を残して記憶の段へ進む
@@ -42,8 +42,8 @@
   - _Depends: 2.1_
   - _Requirements: 4.1, 4.3, 4.7, 4.11, 10.5_
 
-- [ ] 3. 起動の前の手続きの口
-- [ ] 3.1 ゴーストも窓口も無い起動の前の口を作る
+- [x] 3. 起動の前の手続きの口
+- [x] 3.1 ゴーストも窓口も無い起動の前の口を作る
   - どのイベントにも「送らなかった」を返し、「閉じた」は返さない。今のゴーストの素性は必ず「在る・中身は空」で返す
   - 受け取るゴーストを要する書庫の断りでは info `install_refused_no_ghost` を 1 件残す。ほかの所へ入れる口は窓へ落としたときと同じ置き場の決まりを直に呼ぶ
   - 利用条件と警告の画面は、抑止でなければ先に 1.2 の DPI の口を呼んでから今のダイアログで出し、抑止なら出さずに利用条件を拒否にする
@@ -142,3 +142,4 @@
 
 - 1.3: `cargo test -p areka` の全体で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` と `session_mark_tests::fallback::first_boot_falling_back_pins_mark_with_one_warn` が並べて走らせたときだけ赤になることがある（単独では緑・この spec の差分と無関係）。完了の棚卸で扱う。
 - 2.2: 並べて走らせたとき `session_mark_write_tests::switch_marks_unwritable_end_with_write_failed_and_no_reservation` も揺れて赤になったことがある（単独では緑・無関係）。
+- 3.1: `before_boot_ports` の mod 宣言と `CarriedInstall` に付けた `#[allow(dead_code)]` は、4.x で呼び手ができたら外す。上書きの口の debug の語 `install_overwrite_without_running` は設計の記録の語の表に無い（設計は語を決めていない）。

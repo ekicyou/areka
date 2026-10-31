@@ -33,7 +33,7 @@ const ON_INSTALL_COMPLETE_ALL: &str = "OnInstallCompleteAll";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallFailure:1
 const ON_INSTALL_FAILURE: &str = "OnInstallFailure";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallRefuse:1
-const ON_INSTALL_REFUSE: &str = "OnInstallRefuse";
+pub(super) const ON_INSTALL_REFUSE: &str = "OnInstallRefuse";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsAccept:1
 const ON_GHOST_TERMS_ACCEPT: &str = "OnGhostTermsAccept";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsDecline:1

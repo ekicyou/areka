@@ -16,6 +16,9 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::exit_wait::{self, WorkGate};
 
+// 起動の前の道（install::startup・タスク 4.x）が呼ぶまでは、テストだけが使う。
+#[allow(dead_code)]
+mod before_boot_ports;
 pub(crate) mod desk;
 mod destination;
 pub(crate) mod fetch_url;
