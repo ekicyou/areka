@@ -586,7 +586,7 @@ impl TextLayerRuntime {
 ### 文書
 
 - **CoverageLedgerDocs**: `sakura-script.toml` の `\_u[0x0000]`・`\_m[0x00]`（持ち主を `script-small-tags` に）・`\![bind-noevent,…]`・`%*`（持ち主を `script-small-tags` に）・`\![*]` を `implemented` と実物の説明に、`\![bind,…]` の「未登記の食い違い」を消してトグル形とカテゴリ単位形の実物の説明に書き直す（7.1）。`assets.toml` の `marker.filename` を `implemented`・持ち主 `script-small-tags` にし、`balloon-canon-residue` の brief の `marker*` の言及から `marker.filename` を外す（7.2）。
-- **CompatDocs**: §8 の表の末尾に、下の「互換の対応表 §8 に足す行」の 7 行を足す（3.10・7.3）。
+- **CompatDocs**: §8 の表の末尾に、下の「互換の対応表 §8 に足す行」の 8 行を足す（3.10・7.3）。
 - **RealRunCheck**: `doc/pasta-real-run.md` 5 節の段 2 を回し、撮った物と記録を `target\` の下に置き、この spec の検証の記録に書く（8.3）。
 
 ## Data Models
