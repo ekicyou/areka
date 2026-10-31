@@ -315,3 +315,79 @@
 ```
 
 - 段 2 の矢印で始まり（`via="矢印"`）、段 3 のホイールと段 4 の矢印は 1 段ごとの送り（`trace`）、段 5 のホイールで自動の位置に追い付いて終わり（`reason=ReachedAuto`）、段 6 のホイールで再び始まり、段 7 の新しい台詞で捨てられた（`reason=Cleared via="捨てる口"`）。
+
+## areka での実機の走り（2026-10-31・タスク 8.3・ぱすたの縦書きのバルーン・要件 4.3・11.4）
+
+### やり方（r1）
+
+- 根: `<w>\target\bsa-verify-83\root`（走りの前に作り直した）。`tools\sample-fetch.ps1` で取り寄せを確かめ（最新・`pasta-in-windows.nar` の sha256 `4d2b3efa9f3cd561b0dc3ec3e140e4fdd7b73551fd88f8ef9ba986ca1c206eb9`）、`nar-sample-path pasta-in-windows` で開いたゴーストを `ghost\pasta-in-windows` に、縦書きのバルーンを `balloon\pasta_tategaki` に、`areka-balloon` を `balloon\areka-balloon` に写した。記憶（`profile`）は空。この書庫は `install.txt` に `balloon.directory,pasta_tategaki` を持ち、バルーンをゴーストのフォルダの中の `balloon\pasta_tategaki` に置く。areka はこちらを解いた（記録の `印の絵を解いた` の `up=` の路）。中身は `balloon\` に写したものと同じ。
+- 測り用のバルーン: ぱすたの矢印は 8×8 の全画素 α=0 なので、そのままでは置き場が絵に写らない。SSP の測り（上の表の ⑴ 縦書き）と同じ考えで、`pasta_tategaki` の写し `balloon\pasta_tategaki_visarrow`（`name` だけ `窓際のぱすたさん縦書き矢印見える測り用` に替え、`arrow0.png` を不透明のマゼンタ・`arrow1.png` を不透明のシアンの 8×8 に替えた。座標の鍵 `arrow0.x,-12`・`arrow0.y,4`・`arrow1.x,-12`・`arrow1.y,-12` と面の絵は同じ）を置き、`\![change,balloon,…]` で切り替えて置き場を読んだ。その後、本物の `窓際のぱすたさん縦書き` へ戻して同じ操作を回した。
+- 起動: HEAD `6b2fd262d` の debug 版 `target\debug\areka.exe`（建て直して最新を確かめた・i686 の補助も `sync-i686-helper.ps1` で確かめた）に `--ghost <w>\target\bsa-verify-83\root\ghost\pasta-in-windows`（絶対パス）。`PASTA_DEBUG`・`PASTA_DEBUG_PORT` はその PowerShell の中だけ消した。`RUST_LOG=info,areka_emo_present::balloon_marker=debug,areka_emo_text::actor::scroll=trace,areka::emo2_boot::frame::balloon_face=debug,areka::boot_config=debug,areka::boot_resolve=debug,areka::input_events=debug`、`AREKA_APP_SMOKE_EXIT_MS=900000`。起動の前に 9276・9801・9821 の待受が無いこと、スクリーンセーバーと鍵の画面のプロセスが無いことを確かめた。pid 3208、MCP は 9801、走行中に 9276 は開かれなかった。
+- 記録: `<w>\target\bsa-verify-83\logs\r1.stdout.log`。
+- 台本は MCP の `sakurascript` で `\0\![set,balloontimeout,600000]` の後に `1列目`〜`30列目` を `\n` で 30 列並べた。バルーンの切り替えにはぱすたが `OnBalloonChange` で話すので、その話が終わってから台本を送った（最初の 1 回は台本がぱすたの話に上書きされたので回し直した）。
+- バルーンの窓の矩形は `get_property currentghost.balloon.scope(0).rect` で `80,452,952,1352`（物理の画素・436×450 の 2 倍＝画面の拡大率 200%）。ホイールはバルーンの中 (218,225) ＝画面 (516,902) で、`SendInput` で送った（1 目盛り 120・OS の行数の設定 3）。毎回カーソルをその点へ動かしてから、点の上の窓のプロセスが起こした areka（pid 3208）であることを確かめた（11 回とも 3208）。
+- 置き場は `dump_balloon`（scope 0・バルーンの画像の画素＝436×450）の絵の中で、マゼンタとシアンの画素の外接の矩形を数えて読んだ。
+
+### 結果（r1）
+
+測り用のバルーン（見える矢印・00:17:11〜00:17:24 UTC）:
+
+| 段 | 操作 | `dump_balloon` | `arrow0` の矩形（左上・大きさ） | `arrow1` の矩形 | 結果 |
+|---|---|---|---|---|---|
+| 1 | 30 列の台詞（自動の位置） | `evidence/t83-vis-01-pushed-out.png` | (424,4) 8×8 | 無し | 1〜11 列目が右へ押し出され、右上に `arrow0` だけが出た（要件 3.1・4.1） |
+| 2 | ホイールを上へ 1 目盛り | `evidence/t83-vis-02-after-wheel-up.png` | (424,4) 8×8 | (424,438) 8×8 | 右（古い側）へ 3 列戻った（右端の列が 12 列目→9 列目）。`arrow0` と右下の `arrow1` の両方が出た（要件 3.2・4.1・6.1・6.3） |
+| 3 | ホイールを上へ 10 目盛り | `evidence/t83-vis-03-oldest-end.png` | 無し | (424,438) 8×8 | 一番右（1 列目）まで戻って止まり、`arrow0` が消えた（要件 3.3・5.3） |
+| 4 | ホイールを下へ 1 目盛り | `evidence/t83-vis-04-after-wheel-down.png` | (424,4) 8×8 | (424,438) 8×8 | 左（新しい側）へ 3 列送った（要件 6.2） |
+| 5 | ホイールを下へ 10 目盛り | `evidence/t83-vis-05-back-to-auto.png` | (424,4) 8×8 | 無し | 自動の位置へ戻り、`arrow1` が消えた（要件 3.3・5.4） |
+
+本物の `pasta_tategaki`（透明な矢印・00:17:53〜00:18:13 UTC）:
+
+| 段 | 操作 | `dump_balloon` | 結果 |
+|---|---|---|---|
+| 1 | 30 列の台詞（自動の位置） | `evidence/t83-real-01-pushed-out.png` | 測り用と同じ列の並び（右端が 12 列目）。矢印は透明で何も見えない |
+| 2 | ホイールを上へ 1 目盛り | `evidence/t83-real-02-after-wheel-up.png` | 右（古い側）へ 3 列戻った（右端が 9 列目）＝ホイールで右へ読み返せた |
+| 3 | ホイールを上へ 10 目盛り | `evidence/t83-real-03-oldest-end.png` | 一番右（1 列目）まで戻って止まった |
+| 4 | ホイールを下へ 1 目盛り | `evidence/t83-real-04-after-wheel-down.png` | 左へ 3 列送った |
+| 5 | ホイールを下へ 10 目盛り | `evidence/t83-real-05-back-to-auto.png` | 自動の位置へ戻った |
+| 6 | 話し終えた後、自動の位置で透明な `arrow0` の中心 (428,8) ＝画面 (936,468) を左クリック | `evidence/t83-real-06-after-transparent-arrow0-click.png` | 送りは起きなかった（段 5 と同じ絵・手動の送りの記録は無い）。記録はバルーンのクリックとしての `choice_click_rejected reason="inactive"` だけ（要件 4.3・5.6・5.7 のとおり＝透明な矢印は押せない） |
+
+- 終わり方: MCP の `sakurascript` で `\0\-\e` を送り、`app_exit origin=KanadeStopped(Quit) closed=4`・終了コード 0。記録の ERROR・panic は 0 件。
+
+### SSP との比べ
+
+| 点 | SSP 2.9.26（上の「SSP での測り」） | areka（r1） | 比べ |
+|---|---|---|---|
+| `arrow0` の置き場 | (424,4) の 8×8（`436−12`, `4`） | (424,4) の 8×8 | 同じ |
+| `arrow1` の置き場 | 右下（`arrow1.x,-12`・`arrow1.y,-12` ＝ (424,438)） | (424,438) の 8×8 | 同じ |
+| 出る条件（縦書き） | 自動の位置では右上の `arrow0` だけ、戻している間は右下の `arrow1` も、一番右まで戻すと `arrow0` が消える | 同じ（測り用の段 1〜5） | 同じ |
+| ホイールの向きと量 | 上へ 1 目盛りで右（古い側）へ 3 列 | 上へ 1 目盛りで右へ 3 列・下へ 1 目盛りで左へ 3 列 | 同じ |
+| 透明な矢印の絵 | 何も見えない | 何も見えない | 同じ |
+| 透明な `arrow0` の所のクリック | 右へ 2 列送った（矢印の矩形で当たる） | 送らない（α ≥ 0.5 の画素だけが当たり） | 違う。ただし要件 4.3・5.7 で決めて §8 に残した既知の違い（上の表の ⑸）で、新しい違いではない |
+
+- 要件 4.4 で開発者に諮る新しい違いは無い。
+
+### 記録の行（r1）
+
+矢印の絵の解決（測り用へ切り替えた所と、本物へ戻した所）:
+
+```text
+2026-10-31T00:16:25.813724Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify-83\root\balloon\pasta_tategaki_visarrow\arrow0.png 8x8 down=<w>\target\bsa-verify-83\root\balloon\pasta_tategaki_visarrow\arrow1.png 8x8
+2026-10-31T00:16:25.868176Z DEBUG areka::emo2_boot::frame::balloon_face: balloon_face: 今の定義を差し替えた scope=0 previous=Some(0) face=0 cause=BalloonSwitch
+2026-10-31T00:17:53.449815Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify-83\root\ghost\pasta-in-windows\balloon\pasta_tategaki\arrow0.png 8x8 down=<w>\target\bsa-verify-83\root\ghost\pasta-in-windows\balloon\pasta_tategaki\arrow1.png 8x8
+2026-10-31T00:17:53.487236Z DEBUG areka_emo_text::actor::scroll: 普通のバルーンの矢印の絵を受け取った actor=0 up=true down=true
+```
+
+本物の `pasta_tategaki` での手動の送り（ホイールだけ。1 目盛りに 1 行）:
+
+```text
+2026-10-31T00:18:06.460136Z DEBUG areka_emo_text::actor::scroll: 手動の送りを始めた actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:07.401656Z TRACE areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:07.518421Z TRACE areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:07.643362Z TRACE areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:09.401693Z TRACE areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:10.277494Z TRACE areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:10.419024Z TRACE areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Balloon via="ホイール"
+2026-10-31T00:18:10.534912Z DEBUG areka_emo_text::actor::scroll: 手動の送りを終えて自動へ戻した actor=0 place=Balloon reason=ReachedAuto via="ホイール"
+```
+
+- 段 2 の 1 目盛りで始まり（3 列）、段 3 の 10 目盛りは 3 目盛り（9 列）で一番右に着いて止まった（残りの目盛りは限りで送らない＝要件 5.3・6.4）、段 4・5 の下への目盛りで自動の位置に追い付いて終わった（`reason=ReachedAuto`）。段 6 の透明な矢印のクリックでは手動の送りの行は出ていない。
