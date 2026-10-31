@@ -490,4 +490,45 @@ mod tests {
             .collect();
         assert_eq!(lens, vec![1, 2, 1, 1]);
     }
+    // ── script-small-tags 8.1: 目印の字（U+FFFC）の前後の改行の候補 ──
+
+    /// budouy は目印の字の直後に塊の境を置かない（印は後ろの字と同じ塊に入る）ので、分かち書きの
+    /// 折り返しでは印と選択肢の頭の字が別の行に分かれない。境は印の前には置かれうる
+    /// （「どうする？」｜「￼は」｜「い」）。塊が 1 行より長いときの字単位の縮退と validrect の
+    /// 無条件の折り返しは、この塊に依らない（別の行に分かれうる）。
+    #[test]
+    fn budouy_never_breaks_right_after_the_marker_glyph() {
+        let m = crate::inline_marker::MARKER_GLYPH;
+        let pinned = glyphs(&format!("どうする？{m}はい"));
+        assert_eq!(
+            segment_plan(&pinned).segments(),
+            [
+                Segment { start: 0, len: 5 },
+                Segment { start: 5, len: 2 },
+                Segment { start: 7, len: 1 },
+            ]
+        );
+        for s in [
+            format!("{m}はい"),
+            format!("{m}はい{m}いいえ"),
+            format!("{m}{m}はい"),
+            format!("今日は{m}いい天気ですね"),
+            format!("{m}Yes"),
+            format!("{m}選択肢その一"),
+            format!("天気{m}晴れ"),
+        ] {
+            let items = glyphs(&s);
+            let plan = segment_plan(&items);
+            for (i, g) in glyph_chars(&items).iter().enumerate() {
+                if *g == m && i + 1 < items.len() {
+                    assert!(
+                        plan.segment_starting_at(i + 1).is_none(),
+                        "{s:?}: 印の直後（{}）に塊の境がある: {:?}",
+                        i + 1,
+                        plan.segments()
+                    );
+                }
+            }
+        }
+    }
 }
