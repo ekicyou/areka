@@ -393,8 +393,8 @@ fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     }
 }
 
-/// OS の表示の結果。選ばれた識別子（何も選ばずに閉じたら `None`）か、表示の失敗。
-type ShowResult = windows::core::Result<Option<u32>>;
+/// OS の表示の結果。選ばれた識別子（何も選ばずに閉じたら `None`）か、組み立てか表示の失敗。
+type ShowResult = std::result::Result<Option<u32>, win32::ShowError>;
 
 /// 表示のタスク（UI スレッドの実行器に載る）。メニューを出し、閉じた後に動作を 1 回だけ行う。
 ///
@@ -478,7 +478,17 @@ fn finish(
 ) {
     let scope = request.scope;
     let selected = match outcome {
-        Err(error) => {
+        Err(win32::ShowError::Build(error)) => {
+            tracing::error!(
+                event = "menu_build_failed",
+                scope = scope,
+                error = %error,
+                hresult = format_args!("{:#010X}", error.code().0),
+                "[menu] building the menu failed"
+            );
+            None
+        }
+        Err(win32::ShowError::Track(error)) => {
             tracing::error!(
                 event = "menu_display_failed",
                 scope = scope,

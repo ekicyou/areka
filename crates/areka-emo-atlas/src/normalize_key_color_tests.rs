@@ -144,7 +144,8 @@ fn row_padding_is_neither_read_nor_written() {
 /// 要件 4.8: `tRNS` 相当（左上が完全に透明・他に半透明の画素）で、半透明はそのまま残る。
 #[test]
 fn trns_like_semi_transparent_pixels_survive() {
-    // パレット＋`tRNS` の絵は、抜き色の腕へ α の掛かった画素として届く。
+    // 読み手が α を持たないとした絵に α<255 の画素が混じって届いた場合の備え（パレットの番号
+    // ごとの透明度を持つ絵は、emo-atlas-palette-alpha の後は `has_alpha` が真で、この腕へ来ない）。
     let transparent = [0u8, 0, 0, 0]; // 左上＝tRNS で完全に透明
     let semi = [64u8, 0, 0, 128]; // 半透明（乗算済み）
     let opaque = [200u8, 100, 50, 255];

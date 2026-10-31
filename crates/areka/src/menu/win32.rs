@@ -21,13 +21,27 @@ use windows::core::{Error, HSTRING, Owned, Result};
 
 use super::plan::{MenuPlan, PlanEntry};
 
+/// 表示の関数の失敗。どの段で失敗したかを呼び手の記録へ渡す（記録は呼び手が出す）。
+#[derive(Debug)]
+pub(crate) enum ShowError {
+    /// `CreatePopupMenu` か `AppendMenuW` が失敗した（メニューを組み立てられなかった）。
+    Build(Error),
+    /// 組み立てたメニューを `TrackPopupMenuEx` で出せなかった。
+    Track(Error),
+}
+
 /// 計画をメニューとして `screen_pos`（画面座標）に出し、閉じるまで待って結果を返す。
 ///
 /// 戻り値で 3 つを区別する: `Ok(Some(id))`＝項目が選ばれた・`Ok(None)`＝何も選ばれずに
-/// 閉じた・`Err`＝組み立てか表示に失敗した（何も表示されていない・要件 1.7）。
+/// 閉じた・`Err`＝組み立て（[`ShowError::Build`]）か表示（[`ShowError::Track`]）に失敗した
+/// （どちらも何も表示されていない・要件 1.7）。
 /// `owner` はキャラクター窓の実ハンドルで、メニューのための窓は別に作らない（要件 7.5）。
-pub(crate) fn show(owner: HWND, screen_pos: (i32, i32), plan: &MenuPlan) -> Result<Option<u32>> {
-    let menu = build(&plan.entries)?;
+pub(crate) fn show(
+    owner: HWND,
+    screen_pos: (i32, i32),
+    plan: &MenuPlan,
+) -> std::result::Result<Option<u32>, ShowError> {
+    let menu = build(&plan.entries).map_err(ShowError::Build)?;
     let flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_LEFTALIGN | TPM_TOPALIGN;
 
     // 持ち主を前面にしてから出す。そうしないとメニューの外をクリックしても閉じない
@@ -63,7 +77,7 @@ pub(crate) fn show(owner: HWND, screen_pos: (i32, i32), plan: &MenuPlan) -> Resu
 
     match (selected, error) {
         (0, WIN32_ERROR(0)) => Ok(None),
-        (0, error) => Err(Error::from(error)),
+        (0, error) => Err(ShowError::Track(Error::from(error))),
         (id, _) => Ok(Some(id)),
     }
 }

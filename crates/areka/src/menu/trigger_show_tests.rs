@@ -151,18 +151,28 @@ impl Fixture {
 }
 
 fn access_denied() -> ShowResult {
-    Err(windows::core::Error::from_hresult(E_ACCESSDENIED))
+    Err(win32::ShowError::Track(windows::core::Error::from_hresult(
+        E_ACCESSDENIED,
+    )))
+}
+
+/// メニューを組み立てられなかった（`CreatePopupMenu`／`AppendMenuW` の失敗）。
+fn build_denied() -> ShowResult {
+    Err(win32::ShowError::Build(windows::core::Error::from_hresult(
+        E_ACCESSDENIED,
+    )))
 }
 
 /// World を借りられる終わり方 1 つ分: 名前・表示の結果・表示中に窓が消えていたか。
 type Exit = (&'static str, fn() -> ShowResult, bool);
 
-/// World を借りられる終わり方の全部（選択・未選択・表示失敗・窓が消えていた）。
-fn exits() -> [Exit; 4] {
+/// World を借りられる終わり方の全部（選択・未選択・表示失敗・組み立て失敗・窓が消えていた）。
+fn exits() -> [Exit; 5] {
     [
         ("selected", || Ok(Some(2)), false),
         ("dismissed", || Ok(None), false),
         ("failed", access_denied, false),
+        ("build failed", build_denied, false),
         ("window gone", || Ok(Some(2)), true),
     ]
 }
@@ -264,6 +274,29 @@ fn a_failed_display_logs_one_error_and_runs_nothing() {
             "error=",
             "hresult=0x80070005",
         ],
+    );
+    assert!(menu_lines(&lines, "INFO").is_empty(), "{lines:?}");
+    assert!(f.calls().is_empty());
+}
+
+/// 組み立てに失敗したら表示の失敗とは別の文で `error!` を 1 行出し、動作は呼ばない。
+#[test]
+fn a_failed_build_logs_one_build_error_and_runs_nothing() {
+    let f = fixture();
+    let lines = finish_captured(&f, build_denied());
+    assert_one_line(
+        &lines,
+        "ERROR",
+        &[
+            "[menu] building the menu failed",
+            "event=\"menu_build_failed\"",
+            "error=",
+            "hresult=0x80070005",
+        ],
+    );
+    assert!(
+        !menu_lines(&lines, "ERROR")[0].contains("TrackPopupMenuEx"),
+        "{lines:?}"
     );
     assert!(menu_lines(&lines, "INFO").is_empty(), "{lines:?}");
     assert!(f.calls().is_empty());

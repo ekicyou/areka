@@ -74,9 +74,9 @@ pub(crate) const KERO_POPUPMENU_VISIBLE: &str = "kero.popupmenu.visible";
 
 /// 正典にはあるが本仕様が**問い合わせない**名前（要件 3.6・3.8）。
 ///
-/// `char*.popupmenu.visible` は n≧2 のキャラクター窓が α に無いので尋ね先が無い。
-/// `*.popupmenu.type` の 3 名は、値 `1`（省略メニュー）の中身を正典が定めていないため
-/// どの値でも同じメニューを出す——値で中身が変わらないなら尋ねる意味が無く、往復も増やさない。
+/// `char*.popupmenu.visible` は 3 人目以降の窓が無いので尋ね先が無い（引受先 `extra-character-windows`）。
+/// `*.popupmenu.type` の 3 名は、値 `1`（省略メニュー）の中身を正典が定めていないので作り分けず、
+/// どの値でも同じメニューを出す（`popup-menu-residue` の裁定・見直す条件は網羅台帳の備考）。
 ///
 /// この表は運行（kanade）の許可表に 1 つも入っていないこと（＝実際に送られないこと）を
 /// 兄弟テストが確かめる。
