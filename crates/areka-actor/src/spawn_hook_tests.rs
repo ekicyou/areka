@@ -12,8 +12,12 @@ use std::time::Duration;
 /// フックが観測した（アクター名, 走ったスレッド）の記録。
 static OBSERVED: Mutex<Vec<(String, ThreadId)>> = Mutex::new(Vec::new());
 
-/// 検査用フック。名前と「今どのスレッドで走っているか」を記録するだけ。
+/// フックの中の記録の宛先（このファイル専用・ほかの試験の記録と混ざらない）。
+const TARGET: &str = "areka_actor::spawn_hook_tests";
+
+/// 検査用フック。名前と「今どのスレッドで走っているか」を記録し、追跡の記録を 1 件出す。
 fn probe_hook(name: &str) {
+    tracing::trace!(target: TARGET, actor = name, "フックの中の追跡");
     let mut seen = OBSERVED
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -57,4 +61,17 @@ fn hook_runs_on_the_spawned_thread_and_only_the_first_install_wins() {
     });
     drop(tx2);
     handle2.join().expect("2 本目も正常終了するはず");
+
+    // 窓の中で起こしたアクターでは、フックの中の記録も窓に入る（受け手を据えるのがフックより前）。
+    let ((), events) = log_capture_kit::capture(|| {
+        let (tx3, handle3) = spawn_actor::<(), _>("hook-probe-window", |_rx| {});
+        drop(tx3);
+        handle3.join().expect("3 本目も正常終了するはず");
+    });
+    assert!(
+        events
+            .iter()
+            .any(|e| e.target == TARGET && e.field_str("actor") == Some("hook-probe-window")),
+        "窓の中で起こしたアクターのフックの記録が窓に入るはず: {events:?}"
+    );
 }
