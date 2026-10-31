@@ -304,3 +304,7 @@ mod tests {
 #[cfg(test)]
 #[path = "wic_arm_tests.rs"]
 mod animation_tests;
+
+#[cfg(test)]
+#[path = "wic_arm_test_support.rs"]
+mod test_support;
