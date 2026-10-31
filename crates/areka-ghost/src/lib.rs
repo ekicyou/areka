@@ -29,6 +29,7 @@ pub mod catalog;
 pub mod catalog_roots;
 pub mod config;
 pub mod dispatcher;
+pub mod prop_get_sink;
 pub mod prop_sink;
 pub mod relay;
 pub mod runtime;

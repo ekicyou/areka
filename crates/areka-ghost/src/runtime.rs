@@ -26,6 +26,7 @@ use areka_talk::EpilogueCommand;
 
 use crate::config::resolve_kanade_config;
 use crate::dispatcher::{DispatcherMsg, spawn_dispatcher};
+use crate::prop_get_sink::PropGetCueSink;
 use crate::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use crate::relay::spawn_relay;
 use crate::sink::BootCueSink;
@@ -750,6 +751,12 @@ pub fn boot_with_origin(
     options
         .sinks
         .push(Box::new(PropSetCueSink::new(sylphya_publisher.clone())));
+    //     `\![get,property]` の受け口も同じ 1 点で足す（shell-scale-linkage 要件 1.1・MCP と同じ問い手）。
+    options.sinks.push(Box::new(PropGetCueSink::new(
+        sylphya_reader.clone(),
+        ghost_asker.clone(),
+        kanade_tx.clone(),
+    )));
     let (dispatcher_tx, dispatcher_handle) =
         spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source, strict);
 
