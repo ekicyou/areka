@@ -219,3 +219,118 @@ fn records_after_window_closes_do_not_reach_later_window() {
     drop(x_tx);
     x.join().expect("X は全 Sender を落とすと正常に終わるはず");
 }
+
+/// 目印に答えない最小の受け手（本番の全体の受け手の代わり）。既定には据えない。
+struct NotAWindow;
+
+impl tracing::Subscriber for NotAWindow {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+    fn event(&self, _: &tracing::Event<'_>) {}
+    fn enter(&self, _: &tracing::span::Id) {}
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// 今のスレッドの既定が「受け手なし」か。
+fn default_is_none() -> bool {
+    tracing::dispatcher::get_default(|d| d.is::<tracing::subscriber::NoSubscriber>())
+}
+
+/// 今のスレッドの既定が開いている窓か。
+fn default_is_window() -> bool {
+    tracing::dispatcher::get_default(|d| d.is::<CaptureWindowMarker>())
+}
+
+// ⑸⒜ 判定の関数: 受け手なし・目印に答えない受け手では据えず、開いている窓でだけ据える。
+#[test]
+fn inheritable_is_some_only_for_open_window() {
+    assert!(
+        inheritable(&tracing::Dispatch::none()).is_none(),
+        "受け手なしは子へ渡さないはず"
+    );
+    assert!(
+        inheritable(&tracing::Dispatch::new(NotAWindow)).is_none(),
+        "目印に答えない受け手（本番の全体の受け手の形）は子へ渡さないはず"
+    );
+    let ((), _events) = capture(|| {
+        assert!(
+            tracing::dispatcher::get_default(inheritable).is_some(),
+            "対照: 開いている窓は子へ渡すはず"
+        );
+    });
+}
+
+// ⑸⒝ 窓の無いスレッドから起こしたアクターの既定は、起こした側と同じ答えになる。
+#[test]
+fn actor_spawned_without_window_keeps_spawner_default() {
+    let spawner = default_is_none();
+    let (answer_tx, answer_rx) = mpsc::channel::<bool>();
+    let (_tx, handle) = spawn_actor::<(), _>("capture-plain-default", move |_rx| {
+        answer_tx.send(default_is_none()).expect("答えを返す");
+    });
+    let actor = answer_rx
+        .recv_timeout(WAIT)
+        .expect("アクターは答えを返すはず");
+    handle.join().expect("body は正常終了するはず");
+    assert_eq!(
+        actor, spawner,
+        "据えない子の既定は起こした側と同じはず（起こした側は受け手なし={spawner}）"
+    );
+}
+
+/// ⑹ の X への頼み。
+enum Ask {
+    /// 今の既定が開いている窓かを答える。
+    IsWindow(mpsc::Sender<bool>),
+    /// 孫 G を起こし、G の中の既定が「受け手なし」かを答える。
+    SpawnGrandchild(mpsc::Sender<bool>),
+}
+
+// ⑹ 窓 A の中で起こした X は、A を閉じた後は窓を持たず、その後に起こした孫も受け手なしになる。
+#[test]
+fn closed_window_is_not_inherited() {
+    let (reply_tx, reply_rx) = mpsc::channel::<bool>();
+    let ((x_tx, x), _events) = capture(|| {
+        let (x_tx, x) = spawn_actor::<Ask, _>("capture-closed-x", |rx| {
+            for ask in rx {
+                match ask {
+                    Ask::IsWindow(reply) => reply.send(default_is_window()).expect("答えを返す"),
+                    Ask::SpawnGrandchild(reply) => {
+                        let (_g_tx, g) = spawn_actor::<(), _>("capture-closed-g", move |_rx| {
+                            reply.send(default_is_none()).expect("答えを返す");
+                        });
+                        g.join().expect("孫は正常終了するはず");
+                    }
+                }
+            }
+        });
+        x_tx.send(Ask::IsWindow(reply_tx.clone()))
+            .expect("X へ送る");
+        assert!(
+            reply_rx.recv_timeout(WAIT).expect("X は答えを返すはず"),
+            "対照: A が開いているあいだ X の既定は窓のはず"
+        );
+        (x_tx, x)
+    });
+
+    x_tx.send(Ask::IsWindow(reply_tx.clone()))
+        .expect("X へ送る");
+    assert!(
+        !reply_rx.recv_timeout(WAIT).expect("X は答えを返すはず"),
+        "A を閉じた後の X の既定は窓でないはず"
+    );
+    x_tx.send(Ask::SpawnGrandchild(reply_tx)).expect("X へ送る");
+    assert!(
+        reply_rx.recv_timeout(WAIT).expect("孫は答えを返すはず"),
+        "A を閉じた後に X が起こした孫の既定は受け手なしのはず"
+    );
+
+    drop(x_tx);
+    x.join().expect("X は全 Sender を落とすと正常に終わるはず");
+}
