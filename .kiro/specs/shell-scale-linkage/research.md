@@ -276,3 +276,9 @@ MCP の `get_property` で同じ時に読むと、`currentghost.scope(0).scaling
 - **`Emo2Wiring` が取り出されている最中に `rewire_runtime_consumers` が走る** → 今は 2 つの呼び手ともフレームの排他の系の外。`wire` は `Emo2Wiring` が無ければ空の表で登録して `debug!` を残す（LogSink の起動でも正しく「値なし」になる）。呼び手の場所が変わったら再確認の引き金。
 - **ウェーブ C15 の兄弟との重なり** → ⑤ `emo-bake-log-overlap` は emo-present の `shell_target.rs`・`balloon.rs` と emo-compose の `fold.rs`、⑥ `popup-menu-extra-resources` は kanade の `schedule/resources.rs`・`menu/captions.rs` と網羅台帳 `shiori.toml` の別の 1 行。本 spec が触る emo-present の `presenter/` 以下・`presenter.rs`・`lib.rs`、emo-compose の `scale.rs`、kanade の `schedule/{events,types,mod,change}.rs` とファイルは重ならない（`shiori.toml` は別の行）。
 - **SSP の小数の桁が後で分かる** → D6 の 1 関数だけを直す。
+
+## 13. 設計討議の決め（2026-11-01・開発者「全部承認」）
+
+- 議題 1（ウェーブの表 ① に無いファイル）: design.md の表のファイルを触ってよい。roadmap の ① の欄は `/kiro-complete` の roadmap の更新で書き直す（兄弟のブランチとの roadmap のぶつかりを避ける）。兄弟の触るファイルとの重なりは 0（`design-validation.md`）。
+- 議題 2（最初の表示の後・定常の前の倍率の変わり）: 送り、kanade が `warn!(raise_event_not_steady)` で捨てるまま。起こるのは起動の SHIORI の往復の間に窓が画面をまたいだときだけ。表は書かれている。決定論のテストで固定する。
+- 議題 3（隠れていたバルーンが出たときの `OnBalloonScaling`）: 2 つのイベントの応答は、話している最中なら今の台詞を差し替えない（`events::value_replaces_active_talk` に 2 語・`OnSecondChange` と同じ扱い・要件 5.11 を足した）。SSP では利用者の設定の変更でだけ送るので差し替えて困らないが、areka ではドラッグや表示の副作用として起きる。

@@ -194,7 +194,7 @@ doc/
 
 - `crates/areka/src/placement/mod.rs`（970 行）— `pub(crate) mod balloon_syncscale;` の 1 行だけ（ウェーブの約束 1〜2 行の内）。
 - `crates/areka/src/ghost_session.rs`（940 行）— `#[path = "ghost_session_scope_scale.rs"] pub(crate) mod ghost_session_scope_scale;` の 2 行と `placement::balloon_syncscale::register(world);` の 1 行（＋3 行）。
-- `crates/areka-kanade/src/schedule/events.rs`（913 行）— 許可の表の 2 語（各 1 行の `// ukadoc:` 証拠つき）・冒頭の表の 2 行・構築関数 `property_event`（20 行前後）。上限の内。
+- `crates/areka-kanade/src/schedule/events.rs`（913 行）— 置き換えの述語に 2 語（数行）・許可の表の 2 語（各 1 行の `// ukadoc:` 証拠つき）・冒頭の表の 2 行・構築関数 `property_event`（20 行前後）。上限の内。
 - `crates/areka/src/emo2_boot/consumer_ledger.rs`（547 行）— 本 spec の 1 行だけ（42→43・ウェーブの約束）。
 
 ### ウェーブの表 ① に無いファイル（開発者の承認を仰ぐ）
@@ -324,6 +324,7 @@ stateDiagram-v2
 | 5.7 | 初めて決まるときは送らない | PresenterScaleRecord | 装着ごとの起点（D4） | Flow 3 |
 | 5.8 | 窓ごとに 1 回・スコープの若い順 | ScaleNoticePhase | `plan_scale_notices`（target ごとに畳み・`TargetId` の順） | Flow 2 |
 | 5.9 | どのスコープでも同じ規則 | ScaleNoticePhase | `target_scope` | Flow 2 |
+| 5.11 | 話している最中の 2 つのイベントの応答は台詞を差し替えない | ScaleEventIds | `events::value_replaces_active_talk` | — |
 | 5.10 | ドラッグでまたいだらドラッグの終わりに加えて届く | ScaleNoticePhase（実機の確かめ） | 今の `OnMouseDragEnd` は不変 | Flow 2 |
 | 6.1 | ゴーストの `balloon.syncscale` | BalloonSyncScaleReader | `read_balloon_syncscale` | — |
 | 6.2 | シェルの `sakura.`・`kero.`・`char*.` | BalloonSyncScaleReader | 同上 | — |
@@ -481,6 +482,7 @@ impl ScriptOrigin { pub const PROPERTY: ScriptOrigin; }
 - `ALLOWED_EVENT_IDS` に `"OnShellScaling"`・`"OnBalloonScaling"` を足す（64 → 66・数の檻 `events_change_tests.rs` を直す）。各要素の上に証拠の 1 行:
   - `// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellScaling:1`
   - `// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonScaling:1`
+- 応答の扱い（要件 5.11・設計討議の議題 3）: 応答の置き換えの述語 `events::value_replaces_active_talk` に `OnShellScaling`・`OnBalloonScaling` を足す（`OnSecondChange` と同じく、話している最中の Value は今の台詞を差し替えない）。捨てるときは `info!(target: "kanade", event = "scale_reply_dropped_while_talking", origin)` を残す。黙っているときの Value は今日の規則で再生する。
 - 冒頭の表に 2 行（`GET（汎用の入口）`・`Ref0〜3=横の後・横の前・縦の後・縦の前の百分率・Ref4=シェル番号（渡された列のまま）`）。
 
 ### areka-emo-present・areka-emo-compose
@@ -795,7 +797,7 @@ pub(crate) fn register(world: &mut World); // Update に読み直しの系を 1 
 3. 値の口（`ghost_session_scope_scale_tests.rs`・要件 7.2）: 4 つの形の答え・百分率の表・選択子の誤り・窓の無いスコープ・`dpi_x` 無し・MCP とゴーストの道の一致・表の差し替え後の値・ゴーストの切り替えの後に前の値を答えない。
 4. 応答の扱い（`schedule` の檻・要件 5.11）: 話している最中の `OnShellScaling`・`OnBalloonScaling` の Value は今の台詞を差し替えず `info!` を残して捨てる／黙っているときは再生する／ほかのイベント（例 `OnMouseClick`）は今までどおり差し替える。起動の途中（定常の前）の倍率の変わりは、`RaiseEvent` が kanade に届いて `raise_event_not_steady` の warn で捨てられる（同じフレームの檻の 1 場面・議題 2）。
 5. 計画（`scale_notice_tests.rs` の純粋な部・要件 7.3）: 送る場面と送らない場面・畳み・順・Reference の並び（Reference4 のスコープ番号）。
-5. `syncscale`（`descript_window_keys` の檻・`balloon_syncscale.rs` の檻・要件 7.4）: ゴーストだけ・シェルだけ・両方・`true` 以外・別名・切り替えで前の指定が消える。
+6. `syncscale`（`descript_window_keys` の檻・`balloon_syncscale.rs` の檻・要件 7.4）: ゴーストだけ・シェルだけ・両方・`true` 以外・別名・切り替えで前の指定が消える。
 
 ### Integration Tests
 
