@@ -14,6 +14,8 @@ use areka_emo_present::balloon_marker::MarkerImage;
 use areka_parsers::sakura::MARKER_COMMAND;
 use areka_sakura::contract::CueCommand;
 
+use crate::layout::PositionedGlyph;
+
 /// 項目の列に積む目印の字（1 つのクラスタ・UTF-16 で 1 単位）。
 pub const MARKER_GLYPH: &str = "\u{FFFC}";
 /// 測る・描くときの読み替え先（全角の空白・UTF-16 で 1 単位）。
@@ -69,6 +71,12 @@ pub fn stand_in(text: &str) -> &str {
     } else {
         text
     }
+}
+
+/// 行の文字列（DirectWrite で測る・描く字）。グリフの字を [`stand_in`] で読み替えて繋ぐ。
+/// 行の文字列を作る所（描き手・照合の写し）は全部この 1 つを通す。
+pub fn line_text(glyphs: &[PositionedGlyph]) -> String {
+    glyphs.iter().map(|g| stand_in(&g.text)).collect()
 }
 
 /// 1 字分の枠から、丸の中心 `(x, y)` と半径（直径＝`em × DOT_DIAMETER_RATIO`）。

@@ -476,6 +476,7 @@ mod tests {
         "viewbox_draw_decoration_face_tests.rs",
         "viewbox_draw_decoration_tests.rs",
         "viewbox_draw_frame_render_tests.rs",
+        "viewbox_draw_inline_marker_tests.rs",
         "viewbox_draw_live_diff_tests.rs",
         "viewbox_draw_oracle_regression_tests.rs",
         "viewbox_draw_png_dump_tests.rs",

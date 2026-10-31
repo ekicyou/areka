@@ -662,7 +662,7 @@ impl DrawExecutor {
             if run.glyphs.is_empty() {
                 continue;
             }
-            let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
+            let text = crate::inline_marker::line_text(&run.glyphs);
             let layout = self.line_layout(index, &text, &format, font.height, mode)?;
             let (dx, dy) = resident.transform.offset();
             let origin = match mode {

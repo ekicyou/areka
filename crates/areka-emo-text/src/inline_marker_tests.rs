@@ -83,3 +83,15 @@ fn look_defaults_to_dot_and_compares_images() {
     assert_eq!(look.clone(), InlineMarkerLook::Image(img));
     assert_ne!(look, InlineMarkerLook::Dot);
 }
+
+#[test]
+fn line_text_reads_only_the_marker_glyph_as_a_full_width_space() {
+    let glyph = |text: &str| PositionedGlyph {
+        text: text.into(),
+        inline_pos: 0.0,
+        advance: 0.0,
+        style: crate::look::StyleId::DEFAULT,
+    };
+    let glyphs = [glyph(MARKER_GLYPH), glyph("晴"), glyph(MARKER_GLYPH)];
+    assert_eq!(line_text(&glyphs), "\u{3000}晴\u{3000}");
+}

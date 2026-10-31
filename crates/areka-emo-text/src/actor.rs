@@ -719,6 +719,7 @@ mod scroll;
 
 #[path = "marker_surface.rs"]
 mod marker;
+pub(crate) use marker::marker_bitmap;
 pub use marker::{MarkerSurface, PlacedMarker};
 
 /// その序数の範囲が済んだ選択肢か（範囲が無い序数は済んでいない扱い）。押下の口・トークの終わりの口と

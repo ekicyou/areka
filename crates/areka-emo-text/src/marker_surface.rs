@@ -123,7 +123,7 @@ impl MarkerSurface {
         // 可謬な準備（絵の GPU への転送）は BeginDraw の前に済ませる。
         let bitmaps = shown
             .iter()
-            .map(|m| self.bitmap_of(&m.image).map(|b| (m, b)))
+            .map(|m| marker_bitmap(&self.dc, &m.image).map(|b| (m, b)))
             .collect::<Result<Vec<_>, _>>()?;
         let target = create_d2d_target_bitmap(&self.dc, self.surface.back_tex())?;
         unsafe { self.dc.SetTarget(&target) };
@@ -203,48 +203,6 @@ impl MarkerSurface {
         &self.surface
     }
 
-    /// 矢印の絵を D2D のビットマップへ上げる（DC の DPI を与える・emo-present `display.rs` と同じ）。
-    fn bitmap_of(&self, image: &MarkerImage) -> Result<ID2D1Bitmap1, TextLayerError> {
-        let (w, h) = (image.width, image.height);
-        if w == 0 || h == 0 || image.bgra.len() < w as usize * h as usize * 4 {
-            tracing::error!(
-                w,
-                h,
-                len = image.bgra.len(),
-                "印の絵の寸とバイト列が合わない（描けない）"
-            );
-            return Err(TextLayerError::Device {
-                hresult: 0,
-                context: "marker image size mismatch",
-            });
-        }
-        let (mut dpi_x, mut dpi_y) = (0.0f32, 0.0f32);
-        unsafe { self.dc.GetDpi(&mut dpi_x, &mut dpi_y) };
-        let props = D2D1_BITMAP_PROPERTIES1 {
-            pixelFormat: D2D1_PIXEL_FORMAT {
-                format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
-            },
-            dpiX: dpi_x,
-            dpiY: dpi_y,
-            bitmapOptions: D2D1_BITMAP_OPTIONS_NONE,
-            colorContext: ManuallyDrop::new(None::<ID2D1ColorContext>),
-        };
-        // SAFETY: バイト列は直前で `w × h × 4` 以上と確かめた（D2D は内容を複製する）。
-        unsafe {
-            self.dc.CreateBitmap(
-                D2D_SIZE_U {
-                    width: w,
-                    height: h,
-                },
-                Some(image.bgra.as_ptr() as *const _),
-                w * 4,
-                &props,
-            )
-        }
-        .map_err(device_err("CreateBitmap(marker)"))
-    }
-
     /// 最後に描いた面の読み戻し（乗算済み BGRA・物理寸・`stride = width × 4`）。
     pub fn read_back(&self) -> Result<Vec<u8>, TextLayerError> {
         self.surface.read_back()
@@ -299,6 +257,52 @@ pub(crate) fn marker_hit_mask(size: (u32, u32), k: f32, shown: &[PlacedMarker]) 
     }
     // α ≥ 128（≈ 0.5）で当たる 2 値化は AlphaMask の固定の閾値が行う。
     AlphaMask::from_pbgra32(&px, w, h, w * 4)
+}
+
+/// 印の絵（矢印・行の中の印）を D2D のビットマップへ上げる（DC の DPI を与える・emo-present `display.rs` と同じ）。
+/// 失敗は `error!` を残して `Err`。
+pub(crate) fn marker_bitmap(
+    dc: &ID2D1DeviceContext,
+    image: &MarkerImage,
+) -> Result<ID2D1Bitmap1, TextLayerError> {
+    let (w, h) = (image.width, image.height);
+    if w == 0 || h == 0 || image.bgra.len() < w as usize * h as usize * 4 {
+        tracing::error!(
+            w,
+            h,
+            len = image.bgra.len(),
+            "印の絵の寸とバイト列が合わない（描けない）"
+        );
+        return Err(TextLayerError::Device {
+            hresult: 0,
+            context: "marker image size mismatch",
+        });
+    }
+    let (mut dpi_x, mut dpi_y) = (0.0f32, 0.0f32);
+    unsafe { dc.GetDpi(&mut dpi_x, &mut dpi_y) };
+    let props = D2D1_BITMAP_PROPERTIES1 {
+        pixelFormat: D2D1_PIXEL_FORMAT {
+            format: DXGI_FORMAT_B8G8R8A8_UNORM,
+            alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+        },
+        dpiX: dpi_x,
+        dpiY: dpi_y,
+        bitmapOptions: D2D1_BITMAP_OPTIONS_NONE,
+        colorContext: ManuallyDrop::new(None::<ID2D1ColorContext>),
+    };
+    // SAFETY: バイト列は直前で `w × h × 4` 以上と確かめた（D2D は内容を複製する）。
+    unsafe {
+        dc.CreateBitmap(
+            D2D_SIZE_U {
+                width: w,
+                height: h,
+            },
+            Some(image.bgra.as_ptr() as *const _),
+            w * 4,
+            &props,
+        )
+    }
+    .map_err(device_err("CreateBitmap(marker)"))
 }
 
 /// `windows_core::Error` を [`TextLayerError::Device`] へ写す（log-first・surface.rs と同型）。
