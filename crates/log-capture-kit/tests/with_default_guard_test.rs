@@ -96,7 +96,8 @@ const KIT_DEFINITION_PREFIX: &str = "crates/log-capture-kit/src/";
 /// **初期値は空ではない**。移行（タスク 3.7）の実測で 3 件が原理的に移行不能と判明し、
 /// 較正（タスク 2.7）の 1 件と合わせて 4 件で始まる。起草時の「例外表は既定で空」は
 /// 着手前の見積りで、実測と食い違っていた（design.md はタスク 3.7 で、requirements.md 8.1 と
-/// tasks.md はタスク 6.2 で、いずれも実測側へ訂正済み）。
+/// tasks.md はタスク 6.2 で、いずれも実測側へ訂正済み）。後に actor-thread-log-capture
+/// （要件 5.3）でアクターの起動の 1 件が加わり 5 件。
 const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
     (
         "crates/areka/src/placement/diag_tests.rs",
@@ -118,10 +119,16 @@ const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
         "硬化なしの捕捉が取りこぼすことを別プロセスで示す較正（要件 3.4-b）の、意図的な素の呼出。\
          共有機構へ寄せると較正が空振りになり、本仕様の中心的な主張が無証跡に戻る",
     ),
+    (
+        "crates/areka-actor/src/spawn.rs",
+        "窓の中で起こしたアクターのスレッドへ窓の受け手を引き継ぐため、子のスレッドの既定を差す。\
+         差すのは起こした側の受け手が開いている捕捉の窓（目印に答える受け手）のときだけで、\
+         本番では差さない（actor-thread-log-capture 要件 3.6）",
+    ),
 ];
 
 /// [`ALLOWED_DIRECT_CALLS`] の件数（逐語）。表を増やすときはここも編集する（要件 8.2）。
-const ALLOWED_DIRECT_CALLS_COUNT: usize = 4;
+const ALLOWED_DIRECT_CALLS_COUNT: usize = 5;
 
 /// ⑵ の別表（相対パス・理由）。
 const ALLOWED_GLOBAL_CAPTURE: &[(&str, &str)] = &[
