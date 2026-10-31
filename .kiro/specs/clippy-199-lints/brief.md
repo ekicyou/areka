@@ -58,120 +58,15 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - 検証は `pwsh -NoProfile -File tools/test-all.ps1`（fmt＋全テスト）と `cargo clippy --workspace --all-targets -- -D warnings`。
 - **議題（要件の段）**: `tools/test-all.ps1` に clippy の段（`-D warnings`）を足すか。足せば今後の退行を止められるが、ツールチェーンが上がるたびに既存のコードで赤になり、関係の無い spec の完了が止まる。
 
-
----
-
-## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
-
-`cargo clippy` は走らせていない（共通の決まり）。下は git の履歴からの推定で、着手の最初のタスクで測り直す。
-
-- 規模: S〜M（8〜12 タスク）。切る: なし（20 を超えない）。ただし着手の順を 2 段に分ける案（下）。
-- 前提の状態: 上流なし。brief の実測は `mcp-server-core` の枝（main の `55067b63`＝PR#219 の時点）＝`emo-text-file-split`（PR#217）の分割の**後**なので、分割で動いたファイルは brief の列挙に影響しない。
-- 崩れた前提／古くなった位置（`55067b63..634032f6` の差分から）:
-  - **列挙のファイルはすべて今も在る**（移動・改名 0）。
-  - 列挙のうち、その後に書き換わったもの: `areka-kanade` の `shiori/real.rs`・`actor_raise_reply_tests.rs`（どちらも `translate-pipeline`）、`areka` の `emo2_boot/frame/wiring.rs`（`status-execution-states`）・`ghost_session.rs`（`mcp-tool-entrances`・`translate-pipeline`・`shell-balloon`）・`input_events/balloon.rs`（`shell-balloon`）。指摘の行は動いている見込み。
-  - 列挙のうち動いていないもの: `dola` の全件（`dola` の変更は `cue/sink.rs` と README だけ）・`areka-emo-compose` の `plan.rs` とテスト 4 本・`shiori-host32-host` の `tests/` 2 本・`shiori-abi` の `ergonomic.rs`・`areka` の `app_exit.rs`・`boot_config.rs`・`placement/*`・`update/procedure.rs`。
-  - **新しい指摘が増えている見込み**: C2 で約 2.3 万行が入った（新しいファイル: kanade の `translate.rs`・`schedule/translate.rs`・`online.rs`・`actor_translate.rs`、`areka-emo-compose` の `boxes.rs`、`areka-emo-text` の `actor_box.rs`・`place.rs`・`state_route.rs`・`surface_window_child.rs`（brief の列挙に `areka-emo-text` は無かった）、`areka-parsers` の `shell/boxes.rs`、`areka-ghost` の `translate_wiring.rs`、areka の `emo2_boot/shell_box_assets.rs`・`balloon_visibility_*`・`input_events/shell_box*.rs`・`src/mcp/`、`areka-mcp` の `tools/`）。各 spec のレビューは clippy を門にしていないので、0 とは言えない。
-- 触るファイル（並走の照合用・クレート単位）:
-  - 段 1（いつでも空き席に入れられる）: `crates/dola/src/{validate,runtime,compile}/**`・`crates/shiori-abi/src/ergonomic.rs`・`crates/shiori-host32-host/tests/lifecycle_{cyclic,kill}_e2e.rs`・`crates/areka-mcp/`（指摘が出れば）。今の列と C3 の 9 本のどれも触らない。`dola` は crates.io へ出すクレートだが、版上げ（スキル `/release`）は版の行しか触らないので重ならない（`too_many_arguments` を `#[expect]` で残す `compile/resolve.rs` は公開の API の形を変えない）。
-  - 段 2（列が空いてから）: `areka-emo-compose`（C3-③ `surface-element-nesting` が `plan.rs` を触る＝brief の `plan.rs` の `collapsible_if` と同じファイル）・`areka-kanade`（C2-⑦ `mouse-drag-events`・C3-④ `balloon-lifecycle-events` は `schedule/{steady,events}.rs`・`msg.rs` で、列挙の `shiori/real.rs` とは別のファイルだが、新しい指摘がどこに出るかは測るまで分からない）・`areka`（`emo2_boot/`・`input_events/` は C2-⑦・C3-②④ が、`boot_config.rs` は C3-⑥ `ghost-standard-balloon` が触る。`placement/*` は今どの列も持っていない）。
-- 議題（答えで作業が変わるものだけ）:
-  1. （既存）`tools/test-all.ps1` に clippy の段を足すか。
-  2. **2 段に分けて出すか**。⒜ 段 1 だけを 1 本目の PR として C3 の空き席で出し、段 2 は C3 の着地の後に同じ spec の 2 本目の PR で出す（1 spec 1 PR の決まりから外れる）⒝ spec 全体を C3 の着地の後まで待たせる（`areka` の `placement/*` と段 1 だけなら今でも重ならない）。1 本で出すなら ⒝。
-- 見つけた穴: なし。
-
-## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
-
-`cargo clippy` は走らせていない（共通の決まり）。git の履歴からの推定で、着手の最初のタスクで測り直す。
-
-- 規模: S〜M（8〜12）のまま。切らない。
-- 前提の状態: C3 は全部着地した＝㉑の議題 2 の ⒝（C3 の着地を待って 1 本で出す）の待ちは解けた。ただし次の C4 の候補が段 2 のクレートを触る（下）。
-- 崩れた前提／古くなった位置（`634032f6..f26aa1c1` の差分から）:
-  - 段 1（`dola`・`shiori-abi`・`shiori-host32-host/tests/`）は C3 でも触られていない＝列挙の位置はそのまま。
-  - `areka-emo-compose/src/plan.rs` は `surface-element-nesting` が約 230 行書き換えた＝列挙の `collapsible_if` の行は動いたか消えた見込み。`areka` の `emo2_boot/frame/wiring.rs`（`mcp-dump-images`）・`placement/{config,follow/window_move,persist,spawn}.rs`（㉑の直接修正で古い注記と `#[allow]` を消しただけ）も動いた。
-  - C3 で約 2.5 万行が入った（`crates/areka/src/mcp/` の 4 ツール・`areka-emo-atlas/src/decode/`・`areka-emo-compose` の `nesting.rs`・`hit_import.rs`・`areka-seriko` の部品の時計・`areka-parsers/src/shell/surfacetable.rs`・`areka-nar` ほか）。C3 の 11 本のうち 5 本（`mcp-get-property`・`mcp-expression-table`・`mcp-dump-images`・`animated-image-decode`・`host32-testdll-marker-race`）は「変えたファイルの指摘 0」を確かめた記録がある。残り 6 本の新しいファイルは未確認。
-- 触るファイル（並走の照合用・クレート単位）: 段 1 は㉑のまま。段 2 と C4 の候補の重なり: `areka-emo-compose`（`animated-image-playback` が `method.rs`・`plan.rs`・`atlas_bind.rs`）・`areka-kanade`（`balloon-lifecycle-events` が `schedule/`）・`areka` の `emo2_boot/`（`balloon-font-file`・`balloon-lifecycle-events`）・`boot_config.rs`（`ghost-standard-balloon`）。重ならない残り: `areka` の `placement/*`・`app_exit.rs`・`update/procedure.rs`・`input_events/balloon.rs`（`anchor-tag-canon` が `input_events/balloon*.rs` を触るなら外れる）。
-- 議題: ㉑の 1（test-all に clippy の段を足すか）は残る。㉑の 2 は「C4 と同じウェーブなら段 1＋重ならない `areka` のファイルだけ・それ以外は C4 の着地の後」と言い換わる＝1 本で出すならやはり C4 の着地の後。
-- 見つけた穴: なし。
-
 ## `areka-P0-animated-image-playback` からの申し送り（2026-10-07・完了時の棚卸）
 
 - 実装中（2026-10-06）に `cargo clippy --all-targets -- -D warnings` で、上の列挙の外の赤を 2 件見た: `areka-seriko` の `actor.rs` の `large_enum_variant` と `looper.rs` の `collapsible_if`（どちらも本 spec の前から）。
 - 列挙済みの赤も 10-06 時点で残っている: `areka-emo-compose` のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）と `dola` の 21 件。
 - 本 spec は `areka-seriko` の `table.rs`・`looper.rs`・`parts.rs`・`timeline.rs`・`state.rs`・`actor.rs` を触ったので、着手のときに行の位置を引き直す。
 
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-`cargo clippy` は走らせていない（共通の決まり）。brief の列挙と、完了した spec の記録からの数え直し。
-
-- **前提の変化（分かっている指摘の場所）**:
-  - 段 1: `dola` 23 か所（上の列挙の足し算。10-06 の実測は 21）・`shiori-abi` 1・`shiori-host32-host/tests/` 6。C4 でこれらのファイルに入った変更は 0（`dola` は `cue/sink.rs` とテストだけ）。
-  - 段 2: `areka-emo-compose` 6（テストの 5 か所は 10-06 に残っている。`plan.rs` は C4 で動いた）・`areka-seriko` 2（列挙の外・上の申し送り）・`areka-emo-text` のテスト 4 ファイル（列挙の外・下の穴）・`areka-kanade` 3・`areka` 約 19。
-  - 足すと約 60 か所・8 クレート。**実数はその 2〜3 倍の見込み**: 完了 `mcp-dump-images-residue` の記録（10-06）は、`areka` と `areka-emo-text` の 2 クレートだけ（テスト込み・依存を除く）で 127 件、完了 `open-external-tags` の記録は `areka` だけで約 73 件と書く。brief の「`areka` 約 19」は古い。
-- **触るファイル**: 8 クレート（`dola`・`shiori-abi`・`shiori-host32-host`・`areka-emo-compose`・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka`）。場所は最初のタスクで測り直す。
-- **規模**: M（12〜16）へ上げる（測り直し 1・クレートごとに 1〜2・`areka` は 4〜5・最後の確かめ 1）。20 は超えない見込み。
-- **段 1 のうち、ほかの未完了 spec が触らないもの**: `dola` の `validate/`・`runtime/`・`compile/`（ほかの spec が触るのは `cue/` だけ）と `shiori-host32-host/tests/` の 2 本。`shiori-abi` は 10-10 起票の `shiori4-api`（古い注釈の掃除で `shiori-abi` に触る）と重なりうる＝段 1 から外すか、行で照合する。`test-roots-under-target` が OS の一時フォルダを直に引く所まで直すなら `lifecycle_cyclic_e2e.rs` が重なる。
-- **段 2 はどのクレートも列の spec と重なる**: compose＝`extent-element-offset` ほかシェルの element の列・seriko＝`seriko-trigger-intervals`・emo-text のテスト＝文字とバルーンの列・kanade＝`mcp-kanade-tools`・`areka`＝多数。
-- **測定の仕事ではない**（clippy はビルドだけ・1 回 数分。全体テストは最後に 1 回）。
-- **先に要るもの**: なし。
-- **優先度の区分**: C（バグでない持ち越し・振る舞いは変えない）。
-- **要件定義のモデル**: Opus。
-- **分割の案**: 測り直して 20 を超えたときだけ、段 1（`dola`・`shiori-host32-host/tests/`・`shiori-abi`＝いつでも取れる）と段 2（残りの 5 クレート＝列が空いた席）の 2 本に切る。超えなければ 1 本のまま。
-- **見つけた穴・古くなった記述**:
-  - roadmap の「`wintf-tooltip` の持ち越し」が「申し送った」と書く 5 件は、この brief に節が無かった: `cargo clippy --workspace --all-targets` が止める水準の指摘 5 件で止まる（`crates/areka-emo-text/tests/` の `line_pitch_readback_test.rs`・`choice_fixture_test.rs`・`emo2_fixture_e2e_test.rs`・`decoration_readback_test.rs` と、kanade の `actor_raise_reply_tests.rs`。`absurd_extreme_comparisons` など）。
-  - roadmap の「段 1（`dola`・`shiori-abi`・`shiori-host32-host/tests/`）は空き席でも取れる」は、`shiori-abi` が上のとおり条件つきになった。
-  - 完了 `mcp-ghost-name-match` の記録に、`crates/areka/src/mcp/mcp_tests.rs` の `ok().expect()` 4 か所（10-03 から在る）。
-
-## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
-
-`cargo clippy` は走らせていない（共通の決まり）。git の履歴と完了した spec の記録からの数え。
-
-- 前提の変化: 段 1 のファイル（`dola` の `validate/`・`runtime/`・`compile/` と、`shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs`）は 10-10 から 1 行も動いていない。`balloon-text-bugs` が `dola` で触ったのは台本の再生の側（`cue/runtime.rs`・`cue/sink.rs`）とそのテストだけで、段 1 のフォルダの外。＝段 1 の指摘は前のまま（`dola` 23 か所・`shiori-host32-host` のテスト 6 か所・`shiori-abi` 1 か所）。
-- 段 2 は増えた見込み: ウェーブ C7 で約 2.7 万行が入った（`areka` の置き場の並び〔`roots/` ほか〕・emo-text の下線と描く範囲・`shiori-host32-host` の `process_host.rs` と新しいテスト `process_host_image_tests.rs`）。各 spec の検証は自分のクレートしか clippy を見ていない。`balloon-text-bugs` の記録は、emo-text のテスト 2 か所（`line_pitch_readback_test.rs` と `emo2_fixture_e2e_test.rs` の比べの式）が止める水準の指摘で落ちると書く（棚卸㉓の穴と同じもの・今も残る）。
-- ツールチェーンの版はリポジトリで固定していない（版を書いたファイルが無い）＝着手の日の clippy で数え直す。
-- 触るファイル: 8 クレート（`dola`・`shiori-abi`・`shiori-host32-host`・`areka-emo-compose`・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka`）。場所は最初のタスクで測る。
-- 規模: 12〜18 タスク（`areka` の分を上げた）。段 1 だけなら 3〜5。新しい依存は足さない。人の手の確かめ・静かな机・前後の全体テストの比べは要らない。
-- 先に要るもの: 働きの上では無し。ただし段 2 の `areka` は今の版の 2 本と同じファイルに触る見込み（起票のときの指摘に `boot_config.rs` があり、`main.rs`・`boot_resolve.rs`・`emo2_boot/` も触られたばかり）＝丸ごと 1 本のままでは今の版の席に入らない（上限 18 も `user-data-root` の下限 12 を超える）。
-- 段 1 だけなら今の版の 2 本と重なり 0。`shiori-abi` は `shiori4-api` と、`shiori-host32-host/tests/` の 2 本は `test-roots-under-target` が例外表の直しまでやるときに重なる。
-- 優先度の区分: C（バグでない持ち越し）。
-- 要件定義のモデル: Opus。
-- 分割の案: 段 1（`dola` の 3 フォルダ・`shiori-host32-host/tests/` の 2 本・3〜5 タスク）を別の 1 本に切ると、今の版のどのウェーブの空き席にも入れられる。切らなければ、今の版の 2 本が着地してから 1 本で出す。切るかは開発者が決める（20 を超えるからではなく、席に入れるための切り方）。
-- 見つけた穴・古くなった記述: 起票のときの「`areka` 約 19」は棚卸㉓のとおり古い（実数は数倍の見込み）。棚卸㉓が段 2 の重なる相手に挙げた名前（`extent-element-offset`・`mcp-kanade-tools` ほか）は v0.1.0 の spec で、今の版のウェーブでは相手にならない。
-
-## 2026-10-22 棚卸㉘の再測定（main 52b014de）
-`cargo clippy` は走らせていない（共通の決まり）。git の履歴と brief の突き合わせからの数え。
-- 前提の変化: 段 1 のファイル（`crates/dola/src/` の `validate/`・`runtime/`・`compile/`、`crates/shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs`、`crates/shiori-abi/src/ergonomic.rs`）は 10-16 の後も 1 行も動いていない＝段 1 の指摘は前のまま（`dola` 23 か所・`shiori-host32-host` のテスト 6 か所・`shiori-abi` 1 か所）。段 2 は、10-16 の後の着地（kanade を割った `mcp-kanade-tools`・`cli/` を作った `startup-options-core`・`mcp-reload` ほか約 12 本）で増えた見込み。
-- 段 1 だけを取るなら: 触るファイル＝上の `dola` の 3 フォルダと `shiori-host32-host/tests/` の 2 本（`shiori-abi` は `shiori4-api`〔いつか〕と分け合う＝入れるなら行を照らす）。規模 3〜5 タスク。新しい依存なし・1 本だけの席は取らない。
-- 丸ごと 1 本なら: 8 クレート・12〜18 タスク（変わらず。最初のタスクで測り直す）。
-- v0.1.0 との重なり: 段 1 は 0（v0.1.0 の brief に `dola`・`shiori-host32-host/tests/`・`shiori-abi` を書くものは無い）。段 2 は重なる: kanade（`mcp-strict-errors`・`script-security-level`・`mouse-click-wheel-events`）・`areka-parsers` の台本の読み手 `sakura/decode.rs`（`stay-on-top-directives`・`script-small-tags`。新しい指摘がそこに出れば）・`areka`（ほぼ全部）。＝v0.1.0 の間に取れるのは段 1 だけ。
-- 人の待ち・机: 要らない。clippy はビルドだけ（1 回数分）。振る舞いを変えない直しなので、全体テストは最後に 1 回で、前後の比べは要らない。静かな机も要らない。
-- 版の席: 段 1 だけなら上限 5 で、v0.1.0 のウェーブの空き席に入れられる見込み。丸ごと 1 本のままでは v0.1.0 の間は入らない。
-- 先に要るもの: 無し。
-- 優先度の区分: C（バグでない持ち越し・振る舞いを変えない）。
-- 要件定義のモデル: Opus。
-- 分割の案: 棚卸㉖のまま。段 1（`dola` の 3 フォルダ・`shiori-host32-host/tests/` の 2 本・3〜5 タスク）を別の 1 本に切れば、v0.1.0 のうちに空き席で取れる。段 2 は v0.1.0 の後。切るかは開発者が決める（20 を超えるからでなく、席に入れるための切り方）。
-- 見つけた穴・古くなった記述:
-  - v0.1.0 の後に取る見直しの spec が同じファイルを持つ（段 1 は `audit-dola`・`audit-shiori-host32`、段 2 は `audit-kanade`・`audit-parsers-sakura`・`audit-areka-*` ほか）。見直しは指摘を全部直すので、clippy の直しを先に済ませれば見直しの差分が小さくなる。後に回すなら見直しの着地を待つ（同じファイル）。
-  - 本文の「`areka` 約 19」は古い（棚卸㉓のとおり、実数は数倍の見込み）。
-- 2026-10-23 `property-name-case-fold` の完了の棚卸で再観測（rustc 1.99.1）: `cargo clippy -p dola -p areka-kanade --all-targets -- -D warnings` が `collapsible_if` 19・`type_complexity` 4・`manual_range_contains` 2・`never_loop` 1・`too_many_arguments` 2（8/7・15/7）・`doc_lazy_continuation` 1 で止まる。どれも本 brief の列挙の範囲（dola・kanade）なので新しい起票はしない。
-
 ## 2026-10-23 `shiori4-api` からの申し送り
 
 - 開発者の決定（10-23「COM-SHIORI インターフェースの作りかけは排除し、shiori4 に完全移行」）で、`crates/shiori-abi/`（COM の面）と `crates/shiori4-testdll/` は `shiori4-api` が消す。この spec が着手するときに、まだ残っていれば受け持ちから外してよい（直しても消えるファイル）。
-
-## 2026-10-23 棚卸㉙の再測定（main aa8da8a7）
-`cargo clippy` は走らせていない（共通の決まり）。git の履歴と brief の突き合わせからの数え。
-- **前提の変化**: 段 1 のファイル（`crates/dola/src/` の `validate/`・`runtime/`・`compile/`、`crates/shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs`）は 10-22 の後も 1 行も動いていない（`crates/dola/` への変更は 0）。`script-security-level`（10-23 着地）が触った `shiori-host32-host` は `src/` だけ（`client.rs`・`shiori3.rs`・`lib.rs`・新しい `request_headers.rs` とそのテスト）で、段 1 の `tests/` の 2 本とはぶつからない。ただしクレートを丸ごと clippy に掛けると、この新しい `src/` の指摘も出うる＝段 1 は `tests/` の 2 本だけに限る（`src/` へ広げると、v0.1.0 の `shiori2-protocol` が触る `src/client.rs`・`src/shiori3.rs` と重なる）。
-- **触るファイル**: 段 1＝`crates/dola/src/validate/{mod,rules}.rs`（178・406 行）・`compile/resolve.rs`（425）・`runtime/` の 6 ファイル（いちばん大きいのは `loop_controller/tests.rs` の 441）・`crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs`（426）・`lifecycle_kill_e2e.rs`（345）。どれも 1,000 行から遠い・新しいファイルは無し。丸ごとなら 8 クレートのまま。
-- **規模**: 段 1 だけなら 3〜5 タスク。丸ごと 1 本なら 12〜18（変わらず・最初のタスクで測り直す）。
-- **先に要るもの**: 働きの上では無し。v0.1.0 の残り 24 本と余力の枠 2 本の brief で `crates/dola/` か `shiori-host32-host/tests/` を書くものは 0 本＝段 1 は v0.1.0 のどの spec とも重ならない。`tests/` の 2 本を書く未完了の spec は `test-roots-under-target`（一時のフォルダの例外の表まで直すとき）だけ。1 本だけの席・静かな机・長い走行・人や外の待ちは要らない。
-- **優先度の区分**: C（バグでない持ち越し・振る舞いを変えない直し）。
-- **要件定義のモデル**: Opus（決まった直し方を当てるだけ・新しい境目も並行の約束も無い）。
-- **分割の案**: 棚卸㉖・㉘のまま。段 1 を別の 1 本（たとえば `clippy-dola-host32-tests`＝`dola` の 3 フォルダと `shiori-host32-host/tests/` の 2 本・3〜5 タスク）に切れば、v0.1.0 のウェーブの空き席に入れられる。残り（`areka-emo-compose`・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka` と `shiori-host32-host/src/`）は v0.1.0 の後。`shiori-abi` は v0.2.0 の `shiori4-api` が消すので、どちらにも入れない。切るかは開発者が決める（20 を超えるからでなく、席に入れるための切り方）。
-- **見つけた穴・古くなった記述**:
-  - steering の roadmap の spec 台帳の本 spec の行（「段 1＝`dola`・`shiori-abi`・`areka-mcp` は空き席でも取れる」）は古い。今の段 1 は `dola` の 3 フォルダと `shiori-host32-host/tests/` の 2 本（同じ roadmap の「列に属さず、いつでも単独で取れる」の行のほうが正しい）。
-  - 本文の「`areka` 約 19」は古いまま（実数は数倍の見込み）。
-  - v0.1.0 の後の見直し `audit-dola`・`audit-shiori-host32` が段 1 のファイルを持つ。段 1 を先に済ませれば、見直しの差分が小さくなる。
 
 ## 件 1（2026-10-31 `animated-surface-log-flood` の申し送り）: emo-compose のテストの `chunks_exact` が今も残り、emo-present のテストにも 7 件ある
 
@@ -186,3 +81,18 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - **`--no-deps` を付けないと**、`-p areka-emo-present -- -D warnings` は依存の `dola` の既存の 21 件（`collapsible_if` ほか）で止まる。上の列挙の段 1（`dola` の `validate/`・`runtime/`・`compile/`）と同じもの＝新しい起票はしない。
 - **触るファイル**: 本 spec の段 2 に `crates/areka-emo-present/src/` のテスト 5 本（`balloon_target_tests.rs`・`display_tests.rs`・`presenter_budget_steady_state_tests.rs`・`presenter_budget_equivalence_tests.rs`・`shell_target_template_tests.rs`）が加わる。クレートの数は 9（`areka-emo-present` を足す）。emo-present の `presenter/` を触るほかの spec とは、テストのファイルが重ならないか着手のときに照らす。
 - **規模**: +1 タスク（emo-present のテスト 5 本・機械的な直し）。
+
+## 2026-10-31 棚卸㉜の再測定（main d374f901）
+`cargo clippy` は走らせていない（共通の決まり）。git の履歴と完了した spec の記録からの数え。
+- **前提の変化**: 段 1 のファイル（`crates/dola/src/` の `validate/`・`runtime/`・`compile/`、`crates/shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs`）は棚卸㉙の後も動いていない（`dola` への変更は `mcp-strict-errors` の `cue/` だけ）。完了 `script-small-tags`（10-31）の記録（tasks.md の 3.1）は、`cargo clippy -p areka-sakura --all-targets -- -D warnings` が依存の `dola`（`compile/resolve.rs`・`validate/rules.rs` ほか＝段 1 の列挙と同じもの）と、**列挙の外の `areka-sakura`**（`src/drive.rs:184`・`:330`＝`mcp-strict-errors` が足した `strict_arm` の欄のまわり・`src/compile_arm_tests.rs:637-638`）で止まると書く＝受け持ちのクレートは 10（`areka-sakura` を足す）。
+- **触るファイル**: 段 1＝`crates/dola/src/validate/{mod,rules}.rs`・`compile/resolve.rs`・`runtime/` の 6 ファイル・`crates/shiori-host32-host/tests/lifecycle_{cyclic,kill}_e2e.rs`。段 2＝`areka-emo-compose`・`areka-emo-present`（テスト 5 本・件 1）・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka-sakura`（`drive.rs` 655 行・`compile_arm_tests.rs` 928 行）・`areka`（`emo2_boot/*`・`placement/*`・`boot_config.rs` ほか）と `shiori-host32-host/src/`。`shiori-abi` は `shiori4-api` が消すので受け持たない。
+- **規模**: 丸ごと 1 本なら 14〜20（棚卸㉙の 12〜18 に、件 1 の emo-present の 1 と `areka-sakura` の 1）。段 1 だけなら 3〜5、`areka-sakura` の 2 ファイルを段 1 に入れても 4〜6。最初のタスクで測り直す。
+- **先に要るもの**: 働きの上では無し。人や外の待ち・静かな机・長い走行・前後の全体テストの比べ・依存の追加・1 本だけの席は要らない（clippy はビルドだけ・全体テストは最後に 1 回）。
+- **`shell-scale-linkage` との重なり**: 丸ごと 1 本は重なる。段 2 の `areka` は起票のときに `emo2_boot/*`・`placement/*` に指摘があると測っており（`frame/wiring.rs:168`・`placement/config.rs:165` ほか）、その後に足されたコード（`emo2_boot/consumer_ledger*.rs`・`mod.rs`・`placement/mod.rs` を含む）は誰も workspace の clippy に掛けていない＝workspace を `-D warnings` で緑にするには、あちらの持ち場のファイルを直すことになりうる。段 1（と `areka-sakura` の 2 ファイル）は 0。
+- **優先度の区分**: C（バグでない持ち越し・振る舞いを変えない直し）。
+- **要件定義のモデル**: Opus（決まった直し方を当てるだけ・新しい境目も並行の約束も無い）。
+- **分割の案**: 棚卸㉖〜㉙のまま。段 1 を別の 1 本（たとえば `clippy-dola-host32-tests`）に切れば、v0.1.0 のウェーブの空き席に入れられる（棚卸㉛で開発者に尋ねた・答え待ち）。`areka-sakura` の 2 ファイルは段 1 に入れても上限 6 で、台本のコンパイルの列の `range-choice-tag`（`compile.rs`）・`talk-fast-forward`（`drive.rs`）と同じウェーブでなければ重ならない。残りは v0.1.0 の後。
+- **見つけた穴・古くなった記述**:
+  - 本文の「`areka` 約 19」は古い（実数は数倍の見込み・棚卸㉓）。roadmap の「列に属さず、いつでも単独で取れる」の行の「`shiori-abi` は `shiori4-api` と分け合う」は古い（`shiori4-api` が消すので受け持たない・上の申し送り）。
+  - v0.1.0 の後の見直し `audit-dola`・`audit-shiori-host32` が段 1 のファイルを、`audit-parsers-sakura` が `areka-sakura` の分を持つ。先に済ませれば見直しの差分が小さくなる。
+  - 段 1 の `shiori-host32-host/tests/` の 2 本は、`test-roots-under-target` が一時のフォルダの例外の表まで直すときに重なる。

@@ -47,3 +47,19 @@
 - **規模**: S〜M（⑴ だけなら 2〜3・⑵ を入れると 8〜12 の見込み・超えたら ⑵ を切り出す）。
 - **確かめ**: 直したら「．さくら」で右クリックメニューを開き、項目名を SSP と見比べる（画面を操る確かめ＝排他テストの机を取る）。
 - **要件定義のモデル**: Opus（先例のある資源の名前とメニューの項目の足し方で決まる）。
+
+## 2026-10-31 棚卸㉜の再測定（main d374f901）
+- **前提の変化**: 起票の後で触るファイルは動いていない。`crates/areka-kanade/src/schedule/resources.rs` 370 行（`updatebutton.caption` は 49 行）・`crates/areka/src/menu/captions.rs` 324（問わない名前の表 `UNQUERIED_POPUPMENU_RESOURCES` は 87 行）・`menu/mod.rs` 386・`menu/plan.rs` 139・`menu/win32.rs` 151・`menu/update_frame.rs` 37。台帳 `shiori.toml` の 9 行（`updatebuttoncaption` は 15329 行ほか）は今も `vocabulary-only`・持ち主なし。
+- **触るファイル**: ⑴＝`resources.rs`・`menu/captions.rs`（古い名前で引く所）と兄弟のテスト・台帳の 1 行。⑵＝加えて `menu/{plan,mod,win32}.rs` と項目の枠のファイル（新しい `*_frame.rs`）・サイトの一覧を開く道・台帳の 8 行。
+- **規模**: ⑴ 2〜3・⑴＋⑵ 8〜12 のまま。
+- **先に要るもの**: 働きの上では無い（先頭）。v0.1.0 の `shell-scale-linkage` とは重なり 0（向こうの kanade は `schedule/events.rs` で、`menu/` に触らない）。`popup-menu-shell-look`（裁定待ち・ウェーブの外）・`extra-character-windows`・`menu-thumbnail-preview`・`tasktray-icon` と同じウェーブに置かない。`dev-folder-alias` は `menu/roots_frame.rs`・`menu/shell_frame.rs` を挙げる＝⑵ で `menu/` に枠を足すときは照らす。
+- **隙間（割り込み）の席**: 全体（上限 12）は入らない。⑴ だけなら入る（2〜3・「．さくら」で右クリックメニューを 1 回開いて SSP と見比べる短い確かめ 1 回）。⑵ は要件の前に SSP の MCP の測り（古い名前と新しい名前が両方あるときの優先・`*.recommendsites` を問う時）が要る。
+- **優先度の区分**: C のまま（ukadoc の拾い残し）。
+- **要件定義のモデル**: Opus のまま。
+- **分割の案**: ⑴ と ⑵ を分けるかは brief のとおり要件の段で決める。
+- **見つけた穴**: 台帳には 9 つのほかに `char*.recommendbuttoncaption`・`char*.recommendsites`・`char*.recommendsites.caption`（`shiori.toml` 12525〜12573 行・同じく持ち主なし）がある＝3 人目以降の窓の名前で、`extra-character-windows` に回すか ⑵ に入れるかを決める。
+
+## 2026-10-31 棚卸㉜の後の開発者の決め
+- 開発者「メニュー関係はreactor解放されたら大改造するので、内容によっては後回しになりますが」。推奨の案 1 を承認した。
+- **この spec で取るのは ⑴ だけ**（古い名前 `updatebuttoncaption` を問う・kanade の `schedule/resources.rs` と `menu/captions.rs` の引き方・台帳の 1 行）。⑴ は SHIORI に何を問うかが大半で、メニューを作り直しても残る。
+- **⑵（消滅通告・おすすめ・ポータルの項目）は windows-reactor の作り直しの後へ回す**。`menu/{plan,mod,win32}.rs` に項目を組む仕事は作り直しで捨てるため。完了の棚卸で ⑵ を roadmap の「windows-reactor 待ち」の段へ渡す（新しい brief にするか、この brief の残りとして置くかは完了の棚卸で決める）。`char*.recommend*` の 3 つの名前も ⑵ と一緒に回す。

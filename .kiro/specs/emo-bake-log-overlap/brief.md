@@ -63,3 +63,15 @@
 - `placement/mod.rs` は 970 行なので、足すなら別のファイルへ。
 - `placement` は examples から `#[path]` で読まれるので、本番のファイルで `crate::` を使わない。
 - **優先度の区分**: C（ログの重なり・壊れた絵や特別な絵のときだけ出る）。
+
+## 2026-10-31 棚卸㉜の再測定（main d374f901）
+- **前提の変化**: 起票（同じ日・`placement-measure-bake-once` の着地）の後で触るファイルは動いていない。`placement/mod.rs` 970・`placement/measure.rs` 528・`emo2_boot/assets.rs` 540・emo-present の `balloon.rs` 754・`shell_target.rs` 917・`load_records.rs` 20・emo-atlas の `lib.rs` 818（焼く段の `warn!` は 171・193 行）・emo-compose の `fold.rs` 375。
+- **触るファイル（案 1）**: emo-atlas の `lib.rs`（か新しい兄弟）・emo-compose の `fold.rs`・emo-present の `shell_target.rs`・`balloon.rs`（`load_scope_balloon_model` 547 行に `LoadRecords` を通す）・`placement/measure.rs` と兄弟のテスト。例外 2 を消すには、`windowposition` の読み（`placement/mod.rs` 825 行の `load_scope_balloon_model`）を黙る入口へ替える 1 行が要る（資産の側 `balloon_definitions.rs` 98 行を黙らせると「記録は資産の組み立ての 1 回だけが出す」の取り決めに反する）。
+- **触るファイル（案 2）**: 採寸の物を運ぶので `ghost_session.rs`（940）・`placement/mod.rs`・`emo2_boot/assets.rs` に触る。
+- **規模**: brief に見立てが無かった。案 1 で 6〜9（口 3 つ・採寸の結線 1・`mod.rs` の 1 行・数える檻 1〜2・例外 1 の檻 `fade_in_animation_warns_all_transparent_only_when_wrapped` の書き直し 1）。案 2 は 8〜12 の見込み。
+- **先に要るもの**: 働きの上では無い（先頭）。`shell-scale-linkage`（C15 の見込み）が `placement/mod.rs` を触る（「足すなら 1〜2 行」）＝重なりを避けられるのは、案 1 で例外 2（`mod.rs` 825 行）を同じウェーブで取らない形だけ。例外 2 まで取るなら `shell-scale-linkage` の着地の後。案 2 はどちらでも重なる（`ghost_session.rs` は `clippy-199-lints` も挙げる）。
+- **机・席**: 1 本だけの席は取らない（依存の追加なし・emo-text に触らない）。静かな机・前後の比べ・長い走行・人の待ちは要らない（行の数を数える決定論の檻）。
+- **優先度の区分**: C のまま。
+- **要件定義のモデル**: Opus（`placement-measure-bake-once` の `LoadRecords`・`_quiet` の入口の型をほかのクレートへ広げるだけ＝前例がある）。
+- **分割の案**: なし。
+- **気をつけること**: emo-present の `shell_target.rs` は 917 行（上限まで 83）・emo-atlas の `lib.rs` は 818 行＝口を足すなら兄弟のファイルへ。
