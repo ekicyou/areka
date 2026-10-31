@@ -161,6 +161,13 @@
 9. **`readmebuttoncaption`（要件の「要件討議で決める点」の 1）**: 案 A の組の表にすれば仕組みは同じで足りる。ただし ukadoc の説明が `readmebutton.caption` と違う（「Read Me!の名称。」と「キャラクタについての名称。」）ので、同じ項目の古い名前と言えるかは測 4 で決める。
 10. **凍結のテストの否定側**: 要件 5.3 の「⑵ の名前が表に無いこと」を、今の `unqueried_menu_names_are_not_allowed` に ⑵ の 11 語を足して確かめるか、別のテストにするか。
 
+## 7-2. SSP の測りの結果（2026-10-31・要件討議の前）
+
+`requirements.md` の「測った結果」に書いた。設計に効くのは次の 2 点。
+
+- 照会の並び（議題 8）: SSP は古い名前を新しい名前の**直前**に問う（`updatebuttoncaption` → `sakura.updatebuttoncaption` → `updatebutton.caption`）。SSP の記録と見比べやすい並びは「古い名前を新しい名前の直前」。
+- `readmebuttoncaption`（議題 9）: SSP は `readmebutton.caption` の直前に同じ形で問う。使い道は値を返す検体が無く読めない。
+
 ## 8. 次の段
 
 - 要件討議（`/kiro-requirements-discussion popup-menu-extra-resources`）で 7 章の議題を決め、必要なら要件を直す。その前に測 1〜4 を SSP の MCP で測る（要件の決まり）。

@@ -31,6 +31,13 @@ ukadoc は、2 つの名前の優先（両方あるときにどちらを使う�
 | 測 3 | `updatebutton.caption` が空の値（`200` で値が空）を返し、`updatebuttoncaption` が非空の値を返すとき、SSP は古い名前の値に落ちるか（値なし〔`204`〕のときと同じか） | 要件 1 の 3 |
 | 測 4 | SSP は `readmebuttoncaption` を問い合わせるか。問うなら、どの項目の名前に使うか（下の「要件討議で決める点」の 1 の材料。本 spec の範囲は変えない） | なし（議題の材料） |
 
+**測った結果（2026-10-31・要件討議の前）**: SSP（`C:\wintools\ssp`）で動いている「窓際のぱすたさんDEBUG」の `ghost\master\ssp_shiori_log.txt`（SHIORI/3.0・これまでの右クリックメニューの記録 73〜74 回分）を、書き足さずに読んだ（reload も画面の操作もしていない）。
+
+- **測 1**: SSP は右クリックメニューを開くたびに `updatebuttoncaption` を問う（`sakura.popupmenu.visible` 73 回に対し `updatebuttoncaption`・`sakura.updatebuttoncaption`・`updatebutton.caption` が各 74 回）。並びは `homeurl` → **`updatebuttoncaption` → `sakura.updatebuttoncaption` → `updatebutton.caption`** → `readmebutton.visible` で、古い名前は新しい名前の**前**に隣り合って問われる。`sakura.updatebuttoncaption` は ukadoc にも台帳にも無い名前である。
+- **測 4**: SSP は `readmebuttoncaption` も毎回問い、並びは `readmebutton.visible` → **`readmebuttoncaption` → `readmebutton.caption`**（同じ形で `vanishbuttonvisible` → `vanishbutton.visible`、`vanishbuttoncaption` → `vanishbutton.caption`）。どの項目の名前に使うかは、値を返す検体が無いので読めない。
+- **測 2・測 3**: 測れていない。どちらの名前にも値を返すゴーストが SSP に無く、検体を SSP に入れるのは SSP の外の実物（`C:\wintools\ssp\ghost`）を動かすことになるため。
+- 「．さくら」の SSP の記録（`C:\wintools\ssp\ghost\dot_sakura\ghost\master\ssp_shiori_log.txt`・10-23）には右クリックメニューを開いた跡が無い（起動のときの `sakura.recommendsites` などだけ）。「．さくら」の辞書は `updatebuttoncaption`・`vanishbuttoncaption`・`vanishbuttonvisible`・`sakura.recommendbuttoncaption`・`kero.recommendbuttoncaption`・`sakura.portalbuttoncaption`・`*.recommendsites`・`sakura.portalsites` を持ち、`readmebuttoncaption`・`updatebutton.caption` は持たない。
+
 ### 要件討議で決める点（本書では範囲に入れていない）
 
 1. **`readmebuttoncaption`**: ukadoc の検索で、`updatebuttoncaption` と同じ形の名前がもう 1 つ見つかった。`readmebuttoncaption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#readmebuttoncaption>「Read Me!の名称。」）で、台帳の行は `vocabulary-only`・持ち主なし。ただし今 areka が問う `readmebutton.caption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#readmebutton.caption>「キャラクタについての名称。」）とは説明の言葉が違い、同じ項目の古い名前かどうかを ukadoc からは読めない。brief と開発者の決めは ⑴ を `updatebuttoncaption` に限っているので、本書は範囲に入れない。取り込むか・別に渡すかを、測 4 の結果とともに要件討議で決める。
