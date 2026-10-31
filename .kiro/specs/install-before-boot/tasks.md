@@ -122,7 +122,7 @@
   - _Depends: 5.1_
   - _Requirements: 8.7, 10.7_
 
-- [ ] 7. 実機の確かめ
+- [x] 7. 実機の確かめ
 - [x] 7.1 実機の試験を起動の前に入れる形に改め、空の根の試験を足して回す
   - 今の試験（emo2 の居る根に `--install` と `callghost,deletesource`）の確かめを、入れたゴーストが起動中・置き場に在る・写しが消えた・開始と終わり方と消去と callghost を選んだ記録・経路「CallGhost」・既定のバルーン、に改める
   - 空の根（`target\` の下・既定のバルーンだけを写す）に `--install <書庫の写し>` で入れる試験を足し、MCP の `get_active_ghost_list` に入れたゴーストが出る・置き場に在る・経路「Only」・写しが残る、を確かめる
@@ -131,7 +131,7 @@
   - _Depends: 5.1_
   - _Requirements: 9.9, 9.10, 9.11_
 
-- [ ] 7.2 起動の前の利用条件の画面の DPI を実機で 1 回確かめる
+- [x] 7.2 起動の前の利用条件の画面の DPI を実機で 1 回確かめる
   - 利用条件つきの書庫の写しを起動の前に入れ、画面がぼやけずに出ること、記録の DPI の設定が 1 回だけで失敗が出ないこと、起きたゴーストの窓が拡大率の違うモニタへ動かしても今どおり追うことを見る（SSP は動かさない）
   - 画面の操作は排他テストの机で順を取り、終わったらすぐ返す
   - 完了の形: 3 点の確かめの結果（記録の抜き書きと見た結果）が実装の記録に残っている
@@ -150,3 +150,4 @@
 - 4.4: 今の Rust の `std::fs::remove_file` は Windows で読み取り専用のファイルも消すので、完了の形の「読み取り専用の写しは消せずに warn」は「使われている（`FILE_SHARE_READ` で握った）写しは消せずに warn」で確かめた（要件 5.5・9.6 の「消せないとき」の同じ道）。本番でも読み取り専用の書庫は消える。
 - 4.5: `startup_tests.rs` が 1,000 行を超えるので、4.5 のテスト（抑止の旗の関数を含む）は兄弟の `install/startup_flow_tests.rs` に置いた（設計の File Structure Plan に無い名前）。本番の口 `install::startup::resolve_boot` の `#[allow(dead_code)]` は 5.1 で外す。
 - 5.1: 机を持った `cargo test -p areka --tests` は見込みどおり `startup_install_real_run` だけが赤で止まり、`stay_on_top_real_run`・`window_link_real_run` は走っていない（最後の全体の走りで確かめる）。
+- 7.2（2026-10-31 実機・排他テストの机・モニタ 2 枚＝主 200%／左 150%・空の根に `terms.txt` 付きの書庫を `--install`）: ⑴ 利用条件の画面は `GetDpiForWindow`=192・800×404 物理 px で、引き延ばしのにじみなし（主のモニタの上）。⑵ `[SetProcessDpiAwarenessContext] DPI awareness set context="PER_MONITOR_AWARE_V2"` は `install_accept` の直後・画面より前に 1 件だけ、`failed` は 0 件。流れは `startup_install_started stage="before_boot"` → `install_terms` → `startup_install_done stage="before_boot"` → `ghost_resolved route=Only` → `startup_install_carried count=1`。⑶ ゴーストの窓を 150% のモニタへ動かすと `WM_DPICHANGED dpi_x=144` で 520×780→390×585（0.75 倍）、バルーンの窓も追った。気づき: `MessageBoxW` の窓は system aware と返るので、拡大率の違う副のモニタに利用条件の画面が出たときは OS が縮めて描く見込み（未確かめ）。移した後のバルーンが枠なしで矢印だけ見えた件は範囲外で未確かめ。
