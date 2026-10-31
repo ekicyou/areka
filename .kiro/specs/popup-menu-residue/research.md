@@ -165,3 +165,27 @@
 - 論点 3（`*.popupmenu.type` の見直す条件）: `popup-menu-shell-look` がオーナードローのメニューを入れたときを足し、向こうの brief へも写す（要件 8.3・8.7）。
 - 論点 4（件 13）: 本 spec の完了時の棚卸で `/kiro-discovery` により新しい spec 1 本（⑴⑵ まとめ）として起票（要件 9.2）。
 - 論点 5〜7 は設計へ（7 節 6・7）・論点 8〜10 は要件 3.2・7.3・10.4 へ反映済み。
+
+## 11. 設計の段の調べ（2026-10-31・`/kiro-spec-design -y`）
+
+- 調べの型: 軽い調べ（既存の仕組みの延長・新しい依存なし・外の資料は ukadoc の 1 項目だけで、要件の段で読み済み）。下調べの子は使わず、本体でコードを読んだ。
+- 参照した決まり: `.claude/skills/kiro-spec-design/rules/`（design-principles・design-discovery-light・design-synthesis・design-review-gate）・steering `logging.md`（接頭辞と `event=`・ファイル単位で一貫）・`roadmap.md` の C14 の ⑦。ponytail（足すものを最小に・今ある形を使う）。
+
+### 7 節の持ち越しの答え
+
+1. **件 3・`GhostSlot`**: `boot_runtime` は席（`GhostSlot`）も開く処理の持ち物（`Opener`）も据えない（`register_readme_drain` は `ghost_session::register_systems` が呼ぶ）。`opener::submit` が見るのは World の `GhostSlot` の中身の `ghost_dir()`・`names()` と `Opener` の送信端だけなので、`boot_runtime` の後にテストが `GhostSlot(Some(GhostSession::for_test(None, 検体の根)))` を据えれば通る（`readme/opener_submit_tests.rs` の `world_with_ghost` と同じ据え方）。`boot_ghost` は使わない（窓・GPU は要らないが起こす物が増える）。COM は `runtime_boot_tests.rs` の `com()` で足りる（`script_security_e2e_tests.rs` が実証）。
+2. **件 3・偽の OS**: `Opener::from_sender(tx)` を World に入れ、取り出しの後に World から `Opener` を外して送信端を落とし、テストのスレッドで `opener::serve(rx, &mut FakeOs)` を回すと、溜まった分を処理して戻る（`serve` は受信端が閉じるまで回る本番のスレッドの中身そのもの）。プロセス共有の `REFUSED` を使わないので並走するテストと混ざらない。ただし `opener` と `opener_test_support` は `readme` の非公開の子なので、`readme.rs` にテストのビルドだけの `pub(crate) use` を 2 行足す。
+3. **件 3・待ち方**: 台本を `\0\![open,readme]\![enter,nouserbreakmode]\![leave,nouserbreakmode]\e` にし、中断の線の `Leave` が届くまで Tick を注入する（型紙と同じ `wait_until`）。`dola::cue::runtime` は 1 つの cue を全部の受け口へ登録順に配ってから次の cue へ進む（`runtime.rs` 242 行）ので、`Leave` が届いた時点で説明書の要求は既に `ReadmeWiring` の受信端に在る。その後に `drain_readme_requests` を 1 回呼ぶ。
+4. **件 3・ファイルが無い場合**: 使い捨ての複製（`acquire_emo2()`）の根の `readme.txt` を消す。emo2 の descript に `readme` キーは無い（`emo2.nar` を読んで確かめた）ので、開く先は根の `readme.txt`。
+5. **件 4**: 本物の OS で `CreatePopupMenu`／`AppendMenuW` を決定論的に失敗させる手は無い（`build` が自分でメニューを作り、無効なハンドルを渡せない）。テストは今の形どおり表示の関数を差し替えて失敗の種類を返させる。`win32::show` の中の写し（`map_err` の 1 か所と最後の `Err` の 1 か所）は配線なので再テストしない（開発規律「檻に入れるのは判断分岐のみ」）。
+6. **件 4・記録の名前**: 新しく `menu_build_failed` を立て、文は `[menu] building the menu failed`。`stage=` の欄は足さない（名前で分かれれば足りる）。どの API が失敗したかの欄も載せない（要件 4.1 は OS の符号だけを求め、符号で足りる）。
+7. **件 5・名前と言葉**: 隣の受け口（`change_cue.rs`・`install_cue.rs`）の名付けに揃える＝`readme_cue_unopenable`・`readme_cue_skip`（3 か所で共有）・`readme_cue_unsupported`・`readme_cue_send_failed`。`open_external_rejected` は変えない。文は日本語のまま（隣の受け口と同じ・検索は接頭辞と `event=` で引く）で、頭の `ReadmeCueSink:` を `[readme]` に替えるだけ。
+8. **件 6**: 3 行の文と、関数の説明（739〜740 行）を直す。照会の道の文のテストは `actor_resources_tests.rs` に 1 本（受信端を落とした口へ `answer` を呼び、`shiori_send_failed` の文に「終了」が無いことを見る）。捕まえ方は同じクレートの `schedule::log_capture::capture`。
+9. **件 8**: `close_test_test_support.rs` の `onclose_get_index` は期待値を `events::on_close` から作るので使わない。記録列（`RecordedCall`）の `method`・`id`・`references` を書き下した値と直接比べる。偽の SHIORI の既定（`Fixture::default()`）は `OnClose` に 204 を返す（無言終了）ので、挨拶なし（`without_boot_greeting`）で起こせば会話の再生の待ちが無く、kanade は終了まで走る。
+10. **件 9**: 案 B のとおり。`areka-P0-popup-menu-minimal` の `owner_count` は今の台帳で 10（shiori 8・assets 1・sakura-script 1）→ 4 行を空にして 6。`roadmap-draft.md` 1141 行の「メニュー」の束の行にある「`areka-P0-popup-menu-minimal`（A0・8 件）」も台帳と合わなくなる（4 件になる）が、これは検査の外の手書きの数で、要件 8.4 が直す行を `owner_count` の 1 行に限っているので触らない。手書きの数の洗い出しは `coverage-roadmap-refresh`（生きている spec・brief に「手書きの数の全数を洗い出し」）の仕事として記録に書く。
+
+### 合成（設計の 3 つの見方）
+
+- **まとめられるもの**: 件 4・5・6 は「記録の文と型を事実に合わせる」同じ種類の仕事だが、触る所が 3 クレート・3 ファイルに分かれ、共通の仕組みを作る理由は無い（それぞれ 1〜7 行の書き換え）。件 3・8 は「通しのテスト」で、どちらも今ある型紙（`script_security_e2e_tests.rs`・`close_test_*`）の兄弟を 1 本ずつ足すだけ。
+- **作るか借りるか**: 全部借りる。偽の SHIORI（`ScriptedShioriBackend`・kanade の `common` の偽物）・偽の OS（`FakeOs`）・ログの捕まえ方（`log_capture_kit`）・検体（`acquire_emo2`）。新しい依存も新しい道具も無い。
+- **削ったもの**: 件 4 の「関数を 2 つに割る案」（引数と偽物が倍になる）・`stage=` の欄・失敗した API の名前の欄。件 3 の `boot_ghost` から起こす案。件 9 の `[[spec]]` を足す案（要件の討議で却下済み）。`actor_resources.rs` の記録の型の揃え（要件 5.4 で直さないと決めた）。
