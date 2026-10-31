@@ -436,7 +436,7 @@ pub fn build_balloon_target_from_faces_quiet(balloon_dir: &Path, decoder: &impl 
 
 1. **`build_world` の約束（6 節の 3）**: いつも記録を出さない組み方にする。`ShellTarget` に `records` を持たせる案は取らない。全部の `ShellTarget` は核から作られ、核が面の表を 1 回組んで記録を出す（出す入口なら）ので、組み直しで出す理由が無い。欄を 1 つ増やさずに済む。起動の数は 2 案とも同じ（起動 1 回で 1 行）。
 2. **記録の口の形（6 節の 4）**: 公開するのは `_quiet` の兄弟の入口だけ（`bake_quiet`・`EmoWorld::build_with_images_quiet`・`build_balloon_target_from_faces_quiet`）。下の 2 クレートは中で `pub(crate)` の 2 値の型 `Records` を持つ。前例（`load_shell_target_quiet`・`LoadRecords`）と同じ形で、公開の型を増やさず、下のクレートが上のクレートの型を知らない。`areka-emo-atlas` に公開の型を 1 つ置いて上でも使う案は、`areka-emo-present` の `LoadRecords` と二重になるので取らない。
-3. **例外 1 の檻（6 節の 8）**: 置き換える。`measure_first_frame_tests.rs` の `fade_in_animation_warns_all_transparent_only_when_wrapped` を、「採寸が使う焼き（包んだ読み手＋`bake_quiet`）で『全透明』の `warn!` が 0 行・包まない読み手の `bake` でも 0 行」を主張する形へ書き直し、名前も 0 行を言う名前にする。包んだ読み手＋ふつうの `bake` で 1 行になる事実は、`bake_quiet` を使う理由として説明の文に残す（主張はしない）。採寸の道全体の 0 行は起動の準備の檻が主張する。
+3. **例外 1 の檻（6 節の 8）**: 置き換える。`measure_first_frame_tests.rs` の `fade_in_animation_warns_all_transparent_only_when_wrapped` を、次の 3 本の主張の形へ書き直し、名前も 0 行を言う名前にする。(1) 対照: 包んだ読み手＋ふつうの `bake` で「全透明」の `warn!` が 1 行（検体が本当に 1 枚目だけ全透明であることを確かめる。`bake_quiet` は絵の中身によらず 4 本を出さないので、対照が無いと 0 行の主張が何も確かめない）。(2) 採寸が使う焼き（包んだ読み手＋`bake_quiet`）で 0 行。(3) 包まない読み手の `bake` でも 0 行。採寸の道全体の 0 行は起動の準備の檻が主張する。
 4. **檻の検体（6 節の 9）**: ファイルの形（`ghost\master\descript.txt`・`shell\master\surfaces.txt`・面の画像の名前・`balloon\` の面の画像の名前）だけを `TempPath::under_target` の下に置き、絵の中身はメモリ上の復号器 `MemoryDecoder` が返す（0 寸・全透明・動く絵・読めない絵を自由に作れ、COM も WIC も要らない）。起動を止める失敗の記録は、バルーンの面 0 を `insert_corrupt` で読めない絵にして、採寸の道（記録を出さない焼き）で `error!` が出ることを確かめる。
 
 ## Error Handling
@@ -471,7 +471,7 @@ pub fn build_balloon_target_from_faces_quiet(balloon_dir: &Path, decoder: &impl 
 
 ### 書き直す檻
 
-8. **例外 1 の檻**（`measure_first_frame_tests.rs`）: 決めごと 3 のとおり、包んだ読み手＋`bake_quiet` で 0 行・包まない `bake` で 0 行を主張する（要件 6.2）。
+8. **例外 1 の檻**（`measure_first_frame_tests.rs`）: 決めごと 3 のとおり、対照（包んだ読み手＋`bake` で 1 行）・包んだ読み手＋`bake_quiet` で 0 行・包まない `bake` で 0 行の 3 本を主張する（要件 6.2・6.6）。
 
 ### 通り続けることを確かめる今のテスト（変えない）
 
@@ -479,6 +479,7 @@ pub fn build_balloon_target_from_faces_quiet(balloon_dir: &Path, decoder: &impl 
 
 ### Structure
 
+- **「0 行」は宛先まるごとでなく、黙らせる記録の文言ごとに数える**（上の 1〜7 の「宛先 … の記録を 0 行」はすべてこの意味）。宛先 `areka_emo_atlas` には `limits.rs` 77 行の `warn!`（環境変数 `AREKA_ANIMATED_IMAGE_MAX_*` が読めない値のとき、`OnceLock` の中でプロセスの最初の焼きに 1 回だけ出る）もあり、宛先まるごとで数えると、走る順で赤になるテストが変わるため（要件 6.5・6.6）。
 - どの檻も `MemoryDecoder` を使い、時間・実の画面・COM・ほかのセッションの机に依らない。ファイルが要る檻は `TempPath::under_target` で `target\` の下に作る（要件 6.5）。
 - 行の数は `assert_eq!` で固定し、違えば赤（要件 6.6）。
 - 足す先の行数: `measure_tests.rs`（1,000）・`fold_tests.rs`（976）には足さない。新しいファイルはどれも 300 行以下の見込み。
