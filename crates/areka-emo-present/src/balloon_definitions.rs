@@ -6,12 +6,16 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use std::sync::Arc;
 
 use areka_emo_atlas::{AlphaParams, ElementDecoder};
 use areka_parsers::balloon::BalloonModel;
 
 use crate::balloon::{ResolvedFace, load_scope_balloon_model};
-use crate::balloon_marker::{ARROW_FAMILY, MarkerPair, resolve_marker_pair};
+use crate::balloon_marker::{
+    ARROW_FAMILY, MARKER_FAMILY, MarkerImage, MarkerPair, resolve_marker_pair,
+    resolve_single_marker,
+};
 
 /// 面 1 つの定義（面の設定ファイルを重ねたモデル＋その面の矢印の絵）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +30,8 @@ pub struct ScopeBalloonDefinitions {
     scope: u32,
     face0: FaceDefinition,
     others: BTreeMap<u32, FaceDefinition>,
+    /// 面の番号 → 行の中の印の絵（面 0 以外は自分の設定ファイルを持つ面だけ）。
+    inline_markers: BTreeMap<u32, Option<Arc<MarkerImage>>>,
 }
 
 impl ScopeBalloonDefinitions {
@@ -48,12 +54,22 @@ impl ScopeBalloonDefinitions {
         &self.face0
     }
 
+    /// 面の行の中の印の絵（無い面は面 0 の値・絵が無いバルーンは `None`・script-small-tags 要件 5.2〜5.4）。
+    pub fn inline_marker_for_face(&self, face: u32) -> Option<Arc<MarkerImage>> {
+        self.inline_markers
+            .get(&face)
+            .or_else(|| self.inline_markers.get(&0))
+            .cloned()
+            .flatten()
+    }
+
     /// 面 0 だけの束（ファイルを読まずに組む呼び手・テストの支え用）。
     pub fn single(scope: u32, face0: FaceDefinition) -> Self {
         Self {
             scope,
             face0,
             others: BTreeMap::new(),
+            inline_markers: BTreeMap::new(),
         }
     }
 }
@@ -72,6 +88,8 @@ pub fn load_scope_balloon_definitions(
     let mut arrows_by_name: HashMap<Option<String>, MarkerPair> = HashMap::new();
     let mut issues: BTreeSet<(&'static str, String)> = BTreeSet::new();
     let mut defs: BTreeMap<u32, FaceDefinition> = BTreeMap::new();
+    let mut markers_by_name: HashMap<Option<String>, Option<Arc<MarkerImage>>> = HashMap::new();
+    let mut inline_markers: BTreeMap<u32, Option<Arc<MarkerImage>>> = BTreeMap::new();
     for face in faces {
         // 自分の設定ファイルを持たない面は面 0 の定義のまま（要件 1.6・for_face が面 0 へ落とす）。
         if face.surface_id != 0 && !balloon_dir.join(face.override_file_name()).exists() {
@@ -93,7 +111,39 @@ pub fn load_scope_balloon_definitions(
                 )
             })
             .clone();
+        let marker_name = model.marker_filename().map(str::to_string);
+        let marker = markers_by_name
+            .entry(marker_name.clone())
+            .or_insert_with(|| {
+                let found = resolve_single_marker(
+                    &[balloon_dir],
+                    &MARKER_FAMILY,
+                    scope,
+                    marker_name.as_deref(),
+                    decoder,
+                    alpha,
+                );
+                if found.explicit_missing {
+                    tracing::warn!(
+                        balloon_dir = %balloon_dir.display(),
+                        scope,
+                        name = %marker_name.as_deref().unwrap_or_default(),
+                        "balloon_definitions: 書いた印の絵が無いので既定の名前の順で探し直す"
+                    );
+                }
+                found.image
+            })
+            .clone();
+        inline_markers.insert(face.surface_id, marker);
         defs.insert(face.surface_id, FaceDefinition { model, arrows });
+    }
+    // 読み込み 1 回につき 1 回だけ（名前の違う面が並んでも・フレームごとには出さない・要件 5.4）。
+    if inline_markers.values().any(Option::is_none) {
+        tracing::info!(
+            balloon_dir = %balloon_dir.display(),
+            scope,
+            "balloon_definitions: 印の絵が無い面がある（既定の丸を描く）"
+        );
     }
     for (key, value) in &issues {
         tracing::warn!(
@@ -125,6 +175,7 @@ pub fn load_scope_balloon_definitions(
         scope,
         face0,
         others: defs,
+        inline_markers,
     }
 }
 

@@ -50,6 +50,7 @@ pub mod choice;
 pub mod color;
 pub mod cursor_tag;
 pub mod draw;
+pub mod inline_marker;
 pub mod layout;
 pub mod look;
 mod lookahead;
@@ -390,12 +391,19 @@ mod tests {
             "state_anchor_tests.rs",
             include_str!("state_anchor_tests.rs"),
         ),
+        // script-small-tags の印の目印の字を積む檻（純粋）。
+        (
+            "state_marker_tests.rs",
+            include_str!("state_marker_tests.rs"),
+        ),
         (
             "choice_anchor_tests.rs",
             include_str!("choice_anchor_tests.rs"),
         ),
         // areka-P0-balloon-text-bugs 件 3 の下線の幾何（純粋）。
         ("underline.rs", include_str!("underline.rs")),
+        // script-small-tags の行の中の印の目印の字と形の計算（純粋）。
+        ("inline_marker.rs", include_str!("inline_marker.rs")),
         // balloon-scroll-arrows の手動の位置と送りの規則（純粋）。
         ("scroll_marker.rs", include_str!("scroll_marker.rs")),
         (
@@ -428,6 +436,7 @@ mod tests {
         "actor_decoration.rs",
         "actor_decoration_frame_tests.rs",
         "actor_decoration_tests.rs",
+        "actor_inline_marker_tests.rs",
         "actor_lookahead_shapes_tests.rs",
         "actor_lookahead_tests.rs",
         "actor_region_collapse_present_tests.rs",
@@ -467,6 +476,7 @@ mod tests {
         "viewbox_draw_decoration_face_tests.rs",
         "viewbox_draw_decoration_tests.rs",
         "viewbox_draw_frame_render_tests.rs",
+        "viewbox_draw_inline_marker_tests.rs",
         "viewbox_draw_live_diff_tests.rs",
         "viewbox_draw_oracle_regression_tests.rs",
         "viewbox_draw_png_dump_tests.rs",
@@ -477,6 +487,7 @@ mod tests {
         "viewbox_draw_underline_tests.rs",
         "viewbox_draw_vertical_band_readback_tests.rs",
         "viewbox_draw_vertical_band_scroll_tests.rs",
+        "inline_marker_tests.rs",
         "underline_tests.rs",
     ];
 
@@ -487,7 +498,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 81, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 83, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

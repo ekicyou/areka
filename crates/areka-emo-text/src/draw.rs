@@ -108,6 +108,7 @@ use wintf::com::dwrite::DWriteFactoryExt;
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
 use crate::choice::ResolvedChoiceStyle;
+use crate::inline_marker::InlineMarkerLook;
 use crate::look::LookLayers;
 use crate::writing::WritingMode;
 
@@ -210,6 +211,9 @@ pub struct ResolvedFont {
     /// 採用した顔（家族名・太さ・幅・斜体・要件 3.2／3.10）。組み立ては [`name`](Self::name) の
     /// 未解決の Regular の顔で、[`FontCatalog::pick`] が解決した顔へ差し替える。
     pub face: FontFace,
+    /// 行の中の印（`\![*]`・`%*`）の見た目（要件 5.1）。解決は既定の丸を入れ、runtime が
+    /// アクターごとに覚えた印の絵を解いた直後に押す（`actor_decoration.rs` の `stamp_inline_marker`）。
+    pub inline_marker: InlineMarkerLook,
 }
 
 impl ResolvedFont {
@@ -313,6 +317,7 @@ impl ResolvedFont {
                 &overrides.font,
                 &overrides.disable,
             ),
+            inline_marker: InlineMarkerLook::default(),
         }
     }
 }
@@ -657,7 +662,7 @@ impl DrawExecutor {
             if run.glyphs.is_empty() {
                 continue;
             }
-            let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
+            let text = crate::inline_marker::line_text(&run.glyphs);
             let layout = self.line_layout(index, &text, &format, font.height, mode)?;
             let (dx, dy) = resident.transform.offset();
             let origin = match mode {

@@ -15,6 +15,11 @@ mod model;
 #[cfg(test)]
 mod model_tests;
 
+mod char_code;
+
+#[cfg(test)]
+mod char_code_tests;
+
 mod lexer;
 
 #[cfg(test)]
@@ -34,6 +39,9 @@ mod decode_anchor_tests;
 #[cfg(test)]
 mod decode_raise_tests;
 
+#[cfg(test)]
+mod decode_char_code_tests;
+
 mod parse;
 
 #[cfg(test)]
@@ -44,7 +52,7 @@ mod validation_tests;
 
 pub use lexer::substitute_system_vars;
 pub use model::{
-    Anchor, Choice, Instruction, JUMP_TAG_CARRIER, MoveArgs, NewLineRatio, RAISE_TAG_CARRIER, Read,
-    ReadNote, SurfaceArg,
+    Anchor, CharCodeDrop, Choice, Instruction, JUMP_TAG_CARRIER, MARKER_COMMAND, MoveArgs,
+    NewLineRatio, RAISE_TAG_CARRIER, Read, ReadNote, SurfaceArg,
 };
 pub use parse::{parse, parse_noted};

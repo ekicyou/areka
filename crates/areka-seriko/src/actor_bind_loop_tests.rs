@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 // `\![bind]` キャリアの名前自己選別（name=="bind"）→ 引数解釈（parse_bind_directive）→
 // scope 写像（scope_namespace）→ 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）
 // → 適用（apply_bind_exclusive／apply_bind／mustselect 脱衣は無視・bindopt 2.1/3.1/3.2）→ 単一発行点
-// （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide=warn／
+// （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide は当てる（script-small-tags 3.8・3.9）／
 // ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug／⑤scope 写像なし（数でない scope）=warn）を
 // 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で決定論的に檻化する。
 // 全 severity 枝は正カウント assert（優しい縮退の非空虚化・deterministic-test-coverage mandate）。
@@ -669,13 +669,15 @@ fn bind_apply_on_hidden_scope_state_only_no_emit() {
     );
 }
 
-/// ケース17（D8②）: トグル形（数値欄省略）は warn! を 1 回残し発行しない。
+/// ケース17（script-small-tags 3.9）: トグル形（数値欄省略）は今の着脱の反対を当てる。脱いでいる
+/// 「伸び」を着せ、表示中 scope へ新集合の Show を 1 件出し、適用の info! を残す。
 #[test]
-fn bind_toggle_form_warns_no_emit() {
+fn bind_toggle_form_flips_current_part() {
     let resolver = tiny_resolver();
     let bind_resolver = arm_bind_resolver();
     let mut states = fresh_states();
-    states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
     let mut out = MockSurfaceOutput::new();
     let mut loop_runtime = inert_runtime();
     let records = out.records();
@@ -692,34 +694,53 @@ fn bind_toggle_form_warns_no_emit() {
     });
 
     assert_eq!(flow.1, ControlFlow::Continue(()));
-    assert_eq!(
-        flow.0.matches("level=WARN").count(),
-        1,
-        "トグル形は warn! を 1 回残す（M1 縮退・R4.2・D8②）: {}",
-        flow.0
-    );
-    assert_eq!(
-        flow.0.matches("level=ERROR").count(),
-        0,
-        "トグル形は error! を残さない（D8②）: {}",
-        flow.0
-    );
     assert!(
-        records.lock().expect("records mutex poisoned").is_empty(),
-        "トグル形は発行しない"
+        flow.0.contains("seriko: bind 適用") && flow.0.contains("level=INFO"),
+        "トグル形は当てて info! を残す（3.9）: {}",
+        flow.0
+    );
+    assert_eq!(
+        flow.0.matches("level=WARN").count() + flow.0.matches("level=ERROR").count(),
+        0,
+        "トグル形は warn!／error! を残さない: {}",
+        flow.0
+    );
+    assert_eq!(
+        states.current_binds(&scope).ids(),
+        &[1100, 1207, 1302],
+        "脱いでいたパーツを着る"
+    );
+    assert_eq!(
+        records.lock().expect("records mutex poisoned").len(),
+        1,
+        "トグル形は新集合で 1 件出す"
     );
 }
 
-/// ケース18（D8②）: カテゴリ単位形（パーツ欄省略）は warn! を 1 回残し発行しない。
+/// ケース18（script-small-tags 3.8）: カテゴリ単位形（パーツ欄省略・数値 0）は、カテゴリのパーツを
+/// 定義の順に全部脱がせ、変わった分を 1 件だけ出す。
 #[test]
-fn bind_category_wide_form_warns_no_emit() {
+fn bind_category_wide_off_removes_all_parts() {
     let resolver = tiny_resolver();
-    let bind_resolver = arm_bind_resolver();
+    let groups = crate::bind::tests::groups_of(
+        "charset,UTF-8\r\nsakura.bindgroup1302.name,腕,伸び\r\nsakura.bindgroup1303.name,腕,曲げ\r\n",
+    );
+    let bind_resolver = BindResolver::from_groups(&groups);
     let mut states = fresh_states();
-    states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
     let mut out = MockSurfaceOutput::new();
     let mut loop_runtime = inert_runtime();
     let records = out.records();
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+    );
+    records.lock().expect("records mutex poisoned").clear();
 
     let flow = capture_logs_flow(|| {
         handle_message(
@@ -728,20 +749,28 @@ fn bind_category_wide_form_warns_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["腕"])),
+            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "", "0"])),
         )
     });
 
     assert_eq!(flow.1, ControlFlow::Continue(()));
     assert_eq!(
-        flow.0.matches("level=WARN").count(),
+        flow.0.matches("seriko: bind 適用").count(),
         1,
-        "カテゴリ単位形は warn! を 1 回残す（M1 縮退・R4.2・D8②）: {}",
+        "着ていた 1 つを脱がせて info! を残す（3.8）: {}",
         flow.0
     );
-    assert!(
-        records.lock().expect("records mutex poisoned").is_empty(),
-        "カテゴリ単位形は発行しない"
+    assert_eq!(
+        flow.0.matches("level=WARN").count() + flow.0.matches("level=ERROR").count(),
+        0,
+        "カテゴリ単位形は warn!／error! を残さない: {}",
+        flow.0
+    );
+    assert_eq!(states.current_binds(&scope).ids(), &[1100, 1207]);
+    assert_eq!(
+        records.lock().expect("records mutex poisoned").len(),
+        1,
+        "カテゴリ単位形は 1 件だけ出す"
     );
 }
 

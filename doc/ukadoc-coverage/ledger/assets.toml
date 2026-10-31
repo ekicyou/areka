@@ -1779,19 +1779,20 @@ note = """
 """
 
 [entry."ukadoc:descript_balloon:marker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.51"
-owner = "balloon-canon-residue"
+owner = "script-small-tags"
 priority = "A13"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はさくらスクリプトの目印表示で出す画像の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
-正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
-両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+壊れ方: 見た目の差。記録: warn!・info!。areka はこの欄を正典どおりに読んで使うので、正典どおりに書かれた値については崩れる先が無い。三段のうち最も弱い段を選んだ。
+2026-10-31 から読んで使う（script-small-tags）。areka-parsers の balloon::marker::read_marker_filename が、バルーンの descript.txt に面ごとの設定ファイルを重ねた表から生の値のまま読み（読む所に正典 URL を置いた・空は無いのと同じ）、areka-emo-present の balloon_marker::resolve_single_marker が行の中の印（\\![*]・%*）の絵 1 枚を選んで読む。
+書かれていればその名前を先に、無ければ正典の既定を探す（本体 markerp0def→markers→marker、相方 markerp1def→markerk→markerp0def→markers→marker、三人目以降 markerp{n}def→markerk→markerp0def→markers→marker）。番号の無い .png を大小を区別せずに照らす。書かれた名前の絵がフォルダに無ければ、その順で探し直して warn! を出す。面ごとの設定ファイルに書けば面の切り替えで絵が変わる。
+印の絵が 1 枚も無いバルーンでは、areka の既定の丸（その字の文字色で不透明度 0.64・直径はその字の大きさの半分）を描く。絵は 1 字分の枠の真ん中に置き、はみ出すなら縦横の比を保って縮める。
+前の担当 spec は balloon-canon-residue（付属画像族のスコープ別対応を持つ）。
 束: さくらスクリプトが出す目印・読む経路が無い（先に要る仕組み: バルーンに付属する画像の族）。束の順位: 39——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は script-small-tags（2026-10-31 に balloon-canon-residue から移し、読んで使うようにした）。
 """
 
 [entry."ukadoc:descript_balloon:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]

@@ -7,19 +7,20 @@ domain = "sakura-script"
 pages = ["list_sakura_script"]
 
 [entry."ukadoc:list_sakura_script:_25_2a:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "script-small-tags"
 priority = "A17"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（%* が台詞にそのまま出る）。字句の scan_sysvar は英数字と下線しか名前に取らないので、名前は空になり * は本文へ回る。画面に出る綴りは %* のまま変わらない。
-ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+壊れ方: 見た目の差 — 字句の scan_sysvar は % の直後の英数字の名前が空で次が * なら、* を名前に取る。areka-parsers の sakura::decode の decode_token が名前 * のシステム変数を \\![*] と同じ印の命令（名前 * の汎用コマンド）にする（読む所に正典 URL を置いた）。そこから先の積み方・測り方・描き方は \\![*] の行と同じ。
+ログ: 出る（文字の層の debug! 記録。\\![*] の行と同じ）。
 [群: 構文記録]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは %*。綴りが短く別の語の一部にも当たるぶん過大に出る。* と ? は文字としてそのまま引いたので実際の書かれ方には当たらず過小に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+2026-10-31 から実装済み（script-small-tags）。担当 spec は script-small-tags（ukadoc が「\\![*]と同じ機能」と書くので、同じ働きの綴りで見え方が割れないよう同じ spec で入れた）。
 """
 
 [entry."ukadoc:list_sakura_script:_25day:1"]
@@ -558,20 +559,21 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "script-small-tags"
 priority = "A14"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、選択肢のマーカーが描かれない）。
-ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
-単独形は fold_choice_marker が直後に現行の選択肢タグを見つけたときだけ畳むので、畳まれない単独形は名前が * の汎用コマンドになる。名前 * を選ぶ受け手は無く、areka-emo-present の face_id_of が読む吹き出し族の接頭辞にも marker 系は入らない。畳まれた場合もマーカーそのものは描かれない。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 見た目の差 — 名前 * の汎用の \\! の合図として最後まで運ばれ、areka-emo-text の文字の層が今の場所に目印の字（U+FFFC）を 1 つ、本文の字と同じ時刻と見た目で積む（受ける所に正典 URL を置いた）。目印の字は全角の空白 1 字分として測り、折り返し・スクロール・縦書き・\\c も本文の字と同じに扱う。開いているアンカーの範囲は伸ばすが題（Reference0）には足さない。
+描く段でその字の文字色で不透明度 0.64 の丸（直径はその字の大きさの半分）を描き、バルーンが印の絵（descript の marker.filename・無ければ markerp{n}def → markers／markerk → marker の順の番号の無い .png）を持てば丸の代わりにその絵を 1 字分の枠の真ん中に（はみ出すなら縦横の比を保って縮めて）描く。絵のファイルが読めなければ warn! を出して丸に戻し、描く段で絵を作れなければ記録してその印だけ描かない。
+直後の \\q とは畳まない（印と選択肢は別の命令のまま。選択肢の範囲は印の後ろから始まる）。続けて書けば印は書いた数だけ並ぶ。
+ログ: 出る（文字の層の debug! 記録。印の絵が無い・読めないときは warn!・info!）。
+正典が黙る所の areka の決め（印の絵が無いバルーンで出す丸の大きさと色・1 字分の枠）は doc/COMPAT_ARCHITECTURE.md の §8 の script-small-tags の行が持つ。
 [群: 選択肢マーカーの表示]
 [頻度: 里々 7 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\![*。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。* と ? は文字としてそのまま引いたので実際の書かれ方には当たらず過小に出る）]
-担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+2026-10-31 から実装済み（script-small-tags）。担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2coverlay_2cID_5d:1"]
@@ -708,21 +710,20 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.8.23"
 owner = "script-small-tags"
 priority = "B2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、イベントを起こさない着せ替えの着脱ができない）。
-ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
-areka-seriko の handle_message は名前の完全一致で bind だけを選ぶので、この綴りは着せ替えの経路へ入らない。crates 全体でこの綴りに当たるのはその分岐の説明文 1 行だけである。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 見た目の差 — areka-seriko の handle_message がキャリアを開いて名前の完全一致で bind と bind-noevent の 2 つを選び（受ける所に正典 URL を置いた）、actor_bind の on_bind が \\![bind,…] と同じに読んで当てる。2 つの違いは記録の name の欄だけで、どちらからも SHIORI へ送るイベントは 0（OnDressupChanged・OnNotifyDressupInfo を送るのは dressup-change-events の持ち分。送るときも bind-noevent からは送らない）。
+数値欄が空欄か省略のトグル形は、今の着脱の反対を 1 度だけ当てる（着ていれば脱ぐ・着ていないか名前が解けなければ着る）。パーツ名が空欄のカテゴリ単位形は、シェルの bindgroup に定義した順にそのカテゴリのパーツを 1 つずつ、0／1／その時点の反対（数値欄が空欄のとき）で当てる。当て方は 1 つずつ bindoption の mustselect・multiple の決まりに従い、変わった分があれば全部当てた後に 1 回だけ姿を出す（SSP で測った形・script-small-tags の research.md 2.11）。カテゴリにパーツが無ければ名前を解けなかったときと同じ error! を 1 行出す。
+ログ: 出る（当てたパーツごとの info!「seriko: bind 適用」に name="bind-noevent" が載る。名前が解けない・カテゴリ欠落は error!、mustselect の脱衣は warn!）。
 [群: 着せ替え]
 [テーマ: 知らせを出さない形の着せ替えができず、静かに着替える演出が組めない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![bind-noevent。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
-担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+2026-10-31 から実装済み（script-small-tags）。担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1"]
@@ -736,11 +737,12 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnNotifyDressupInfo:1" },
 ]
 note = """
-壊れ方: 見た目の差 — areka-seriko の handle_message がキャリアを開いて名前の完全一致で自分を選び、parse_bind_directive の適用形（カテゴリ名・パーツ名・0 か 1 の数値がそろう形）を着せ替えの着脱として実際に反映する。
-ログ: 出る（トグル形とカテゴリ単位形は M1 未実導出として warn!、カテゴリ欠落や on/off 値の破損は error!、担当外の名前は debug!）。
-[未登記の食い違い: 正典は「パーツ名を空欄にするとカテゴリ単位の動作」「数値欄を空欄または省略すると ON/OFF の繰り返し」と定めるが、handle_message はどちらも正当構文のまま warn! で読み飛ばす。doc/COMPAT_ARCHITECTURE.md にこの縮退を登記した行が無いので、DD-8 により状態を動かさず是正候補として出す]
+壊れ方: 見た目の差 — areka-seriko の handle_message がキャリアを開いて名前の完全一致で自分を選び（bind-noevent も同じ腕へ来る）、actor_bind の on_bind が parse_bind_directive で読んだ指令をパーツ 1 つずつ着せ替えの着脱として実際に反映する。カテゴリ名・パーツ名・0 か 1 の数値がそろう適用形はそのパーツ 1 つを当てる。
+数値欄が空欄か省略のトグル形は、今の着脱の反対を 1 度だけ当てる（着ていれば脱ぐ・着ていないか名前が解けなければ着る）。パーツ名が空欄のカテゴリ単位形は、シェルの bindgroup に定義した順にそのカテゴリのパーツを 1 つずつ、0／1／その時点の反対（数値欄が空欄のとき）で当てる。当て方は 1 つずつ bindoption の mustselect・multiple の決まりに従い、変わった分があれば全部当てた後に 1 回だけ姿を出す（SSP で測った形・script-small-tags の research.md 2.11）。カテゴリにパーツが無ければ名前を解けなかったときと同じ error! を 1 行出す。
+ログ: 出る（当てたパーツごとの info!「seriko: bind 適用」、名前が解けない・カテゴリ欠落・on/off 値の破損は error!、mustselect の脱衣は warn!、担当外の名前は debug!）。
 [テーマ: 着せ替えの着脱ができず、帽子も季節物も出せない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![bind。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![bind-noevent の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+正典が中身を書かない形の扱い（トグル形とカテゴリ単位形の当て方）は doc/COMPAT_ARCHITECTURE.md の §8 の script-small-tags の行が持つ（2026-10-31 に「未登記の食い違い」として読み飛ばしていた縮退を解いた）。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1"]
@@ -4255,17 +4257,20 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_m_5b0x00_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "script-small-tags"
 priority = "A5"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した文字コードの 1 文字が出ない。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 見た目の差 — areka-parsers の sakura::decode の decode_char_code が最初の引数だけを読み（前後の空白を削り、0x か 0X で始まれば 16 進、それ以外は 10 進。2 つ目からの引数は見ない）、出せる番号はその 1 字を本文の字として前後の本文につなぐ（読む所に正典 URL を置いた）。\\_m と \\_u は同じ決まりで読む。上位のサロゲートの直後に下位のサロゲートの埋め込み（\\_m と \\_u のどちらでも）が続けば、2 つを 1 字にする。
+出せない番号と読めない番号（0・制御の文字 U+0001〜U+001F と U+007F〜U+009F・組にならない片割れのサロゲート・U+10FFFF より上・空や 0x だけや符号やほかの字が混じる綴り・引数なし）は字を出さず、代わりの字も出さない。areka-sakura の compile が event="char_code_dropped" の warn! を元の綴りと理由を添えて 1 行出し、strict と check_script は同じ所を「読めない引数」（unreadable_argument）として知らせる。
+ログ: 出る（捨てた番号ごとの warn! 1 行。出せた番号は記録を出さない）。
+正典が黙る所の areka の決め（受け付ける綴り・捨てる番号の扱い）は doc/COMPAT_ARCHITECTURE.md の §8 の script-small-tags の行が持つ。
 [群: 文字コードの埋め込みと実体参照]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\_m。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+2026-10-31 から実装済み（script-small-tags）。担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_n:1"]
@@ -4333,18 +4338,20 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_u_5b0x0000_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "script-small-tags"
 priority = "A5"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した符号位置の 1 文字が出ない。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 見た目の差 — areka-parsers の sakura::decode の decode_char_code が最初の引数だけを読み（前後の空白を削り、0x か 0X で始まれば 16 進、それ以外は 10 進。2 つ目からの引数は見ない）、出せる番号はその 1 字を本文の字として前後の本文につなぐ（読む所に正典 URL を置いた）。\\_u と \\_m は同じ決まりで読む。上位のサロゲートの直後に下位のサロゲートの埋め込み（\\_u と \\_m のどちらでも）が続けば、2 つを 1 字にする。
+出せない番号と読めない番号（0・制御の文字 U+0001〜U+001F と U+007F〜U+009F・組にならない片割れのサロゲート・U+10FFFF より上・空や 0x だけや符号やほかの字が混じる綴り・引数なし）は字を出さず、代わりの字も出さない。areka-sakura の compile が event="char_code_dropped" の warn! を元の綴りと理由を添えて 1 行出し、strict と check_script は同じ所を「読めない引数」（unreadable_argument）として知らせる。
+ログ: 出る（捨てた番号ごとの warn! 1 行。出せた番号は記録を出さない）。
+正典が黙る所の areka の決め（受け付ける綴り・捨てる番号の扱い）は doc/COMPAT_ARCHITECTURE.md の §8 の script-small-tags の行が持つ。
 [群: 文字コードの埋め込みと実体参照]
 [頻度: 里々 7 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\_u）]
-担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+2026-10-31 から実装済み（script-small-tags）。担当 spec は script-small-tags。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1"]

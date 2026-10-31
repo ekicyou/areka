@@ -29,12 +29,6 @@ fn sixteen_points_name_kind_message() {
             MSG_DEFAULTED,
         ),
         (
-            ReadMarkerIgnored,
-            "ReadMarkerIgnored",
-            "ignored",
-            MSG_IGNORED,
-        ),
-        (
             CommandUnhandled,
             "CommandUnhandled",
             "unknown_command",
@@ -45,6 +39,12 @@ fn sixteen_points_name_kind_message() {
             "ChoiceTimeoutUnreadable",
             "unreadable_argument",
             MSG_DEFAULTED,
+        ),
+        (
+            CharCodeDropped,
+            "CharCodeDropped",
+            "unreadable_argument",
+            MSG_CHAR_CODE_DROPPED,
         ),
         (FontIgnored, "FontIgnored", "ignored", MSG_IGNORED),
         (
@@ -140,7 +140,7 @@ fn kinds_are_the_seven_without_reserved() {
     );
 }
 
-/// 文面の定数 10 個の文字列そのもの（`check_script` の答えを 1 バイトも変えない）。文面は `:` を含まない。
+/// 文面の定数 11 個の文字列そのもの（`check_script` の答えを 1 バイトも変えない）。文面は `:` を含まない。
 #[test]
 fn message_constants_verbatim() {
     let all = [
@@ -180,6 +180,10 @@ fn message_constants_verbatim() {
         (
             MSG_ANCHOR_STRAY_CLOSE,
             "no anchor is open; playback ignores this close",
+        ),
+        (
+            MSG_CHAR_CODE_DROPPED,
+            "areka cannot show this character number; playback drops it",
         ),
     ];
     for (got, want) in all {

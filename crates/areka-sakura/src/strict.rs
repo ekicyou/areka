@@ -31,6 +31,8 @@ pub const MSG_ANCHOR_UNCLOSED: &str =
 pub const MSG_ANCHOR_REOPENED: &str =
     "a new anchor opens before the previous one closes; playback closes the previous one here";
 pub const MSG_ANCHOR_STRAY_CLOSE: &str = "no anchor is open; playback ignores this close";
+pub const MSG_CHAR_CODE_DROPPED: &str =
+    "areka cannot show this character number; playback drops it";
 
 /// 再生の側で strict の記録を書く分岐の全部（設計「検出点の表」）。予約の種類
 /// （`missing_animation`・`unknown_entity`）の点は持たない（要件 2.8）。
@@ -39,9 +41,9 @@ pub enum DetectionPoint {
     ReadUnknownTag,
     ReadUnclosed,
     ReadDefaulted,
-    ReadMarkerIgnored,
     CommandUnhandled,
     ChoiceTimeoutUnreadable,
+    CharCodeDropped,
     FontIgnored,
     FontUnknownKey,
     AnchorReopened,
@@ -62,9 +64,9 @@ impl DetectionPoint {
             ReadUnknownTag,
             ReadUnclosed,
             ReadDefaulted,
-            ReadMarkerIgnored,
             CommandUnhandled,
             ChoiceTimeoutUnreadable,
+            CharCodeDropped,
             FontIgnored,
             FontUnknownKey,
             AnchorReopened,
@@ -85,9 +87,9 @@ impl DetectionPoint {
             ReadUnknownTag => "ReadUnknownTag",
             ReadUnclosed => "ReadUnclosed",
             ReadDefaulted => "ReadDefaulted",
-            ReadMarkerIgnored => "ReadMarkerIgnored",
             CommandUnhandled => "CommandUnhandled",
             ChoiceTimeoutUnreadable => "ChoiceTimeoutUnreadable",
+            CharCodeDropped => "CharCodeDropped",
             FontIgnored => "FontIgnored",
             FontUnknownKey => "FontUnknownKey",
             AnchorReopened => "AnchorReopened",
@@ -106,8 +108,10 @@ impl DetectionPoint {
         use DetectionPoint::*;
         match self {
             ReadUnknownTag | FontUnknownKey => "unknown_tag",
-            ReadUnclosed | ReadDefaulted | ChoiceTimeoutUnreadable => "unreadable_argument",
-            ReadMarkerIgnored | FontIgnored => "ignored",
+            ReadUnclosed | ReadDefaulted | ChoiceTimeoutUnreadable | CharCodeDropped => {
+                "unreadable_argument"
+            }
+            FontIgnored => "ignored",
             CommandUnhandled => "unknown_command",
             AnchorReopened | AnchorUnclosed | AnchorStrayClose => "unpaired_tag",
             SurfaceUnresolved | SurfaceAbsent => "missing_surface",
@@ -122,7 +126,8 @@ impl DetectionPoint {
             ReadUnknownTag | FontUnknownKey => MSG_UNKNOWN_TAG,
             ReadUnclosed => MSG_UNCLOSED,
             ReadDefaulted | ChoiceTimeoutUnreadable => MSG_DEFAULTED,
-            ReadMarkerIgnored | FontIgnored => MSG_IGNORED,
+            CharCodeDropped => MSG_CHAR_CODE_DROPPED,
+            FontIgnored => MSG_IGNORED,
             CommandUnhandled => MSG_UNKNOWN_COMMAND,
             AnchorReopened => MSG_ANCHOR_REOPENED,
             AnchorUnclosed => MSG_ANCHOR_UNCLOSED,

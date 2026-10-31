@@ -42,10 +42,13 @@
 //! byte 等価はこの構造共有に載る。
 
 use std::rc::Rc;
+use std::sync::Arc;
+
+use areka_emo_present::balloon_marker::MarkerImage;
 
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS, ID2D1DeviceContext,
+    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS, ID2D1Bitmap1, ID2D1DeviceContext,
 };
 use windows::Win32::Graphics::DirectWrite::{IDWriteFactory2, IDWriteTextFormat};
 use wintf::com::d2d::D2D1DeviceExt;
@@ -124,6 +127,8 @@ pub struct ViewboxExecutor {
     fonts: Rc<FontCatalog>,
     /// 装飾の色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。
     brushes: BrushCache,
+    /// 行の中の印の絵の D2D の絵（絵の `Arc` の同一性を鍵に 1 枚だけ覚える・毎フレーム作り直さない）。
+    marker_bitmap: Option<(Arc<MarkerImage>, ID2D1Bitmap1)>,
     /// 決定論観測統計（常時コンパイル・[`Self::stats`] で読む）。
     stats: DrawStats,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の
@@ -187,6 +192,7 @@ impl ViewboxExecutor {
             format: None,
             fonts,
             brushes: BrushCache::default(),
+            marker_bitmap: None,
             stats: DrawStats::default(),
             seam_warned: false,
             #[cfg(test)]
@@ -356,6 +362,9 @@ mod decoration_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_frame_render_tests.rs"]
 mod frame_render_tests;
+#[cfg(test)]
+#[path = "viewbox_draw_inline_marker_tests.rs"]
+mod inline_marker_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_live_diff_tests.rs"]
 mod live_diff_tests;

@@ -399,6 +399,7 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
 /// `%` で始まるシステム変数を走査する。`i` は `%` の位置。次の添字を返す。
 ///
 /// キーワードは英数字／アンダースコアを読み進める（続く非該当文字はテキストへ）。
+/// 英数字の名前が空で `%` の直後が `*` なら、`*` を名前に取る（`%*`・script-small-tags 要件 4.3）。
 fn scan_sysvar(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     let start = i + 1;
     let mut j = start;
@@ -408,6 +409,9 @@ fn scan_sysvar(chars: &[(usize, char)], i: usize) -> (Token, usize) {
         } else {
             break;
         }
+    }
+    if j == start && matches!(chars.get(j), Some(&(_, '*'))) {
+        j += 1;
     }
     let keyword: String = chars[start..j].iter().map(|&(_, c)| c).collect();
     (Token::SysVar(keyword), j)

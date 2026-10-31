@@ -62,6 +62,7 @@ pub struct BalloonModel {
     font_shadow_raw: FontShadowRaw,
     disable_font: DisableFont,
     arrow_keys: ArrowKeys,
+    marker_filename: Option<String>,
 }
 
 impl BalloonModel {
@@ -110,6 +111,7 @@ impl BalloonModel {
             font_shadow_raw: FontShadowRaw::default(),
             disable_font: DisableFont::default(),
             arrow_keys: ArrowKeys::default(),
+            marker_filename: None,
         }
     }
 
@@ -176,6 +178,13 @@ impl BalloonModel {
     /// balloon-scroll-arrows 要件 1.1〜1.6）。`new` では `ArrowKeys::default()`（全部無し）。
     pub fn with_arrow_keys(mut self, arrow_keys: ArrowKeys) -> Self {
         self.arrow_keys = arrow_keys;
+        self
+    }
+
+    /// 印の絵の名前 `marker.filename` を差し替えた値を返す additive ビルダ（`with_arrow_keys` 流儀・
+    /// script-small-tags 要件 5.2）。`new` では `None`（書いていない）。
+    pub fn with_marker_filename(mut self, marker_filename: Option<String>) -> Self {
+        self.marker_filename = marker_filename;
         self
     }
 
@@ -277,6 +286,12 @@ impl BalloonModel {
     /// 矢印の鍵 [`ArrowKeys`] を参照で読み取る（balloon-scroll-arrows 要件 1.1〜1.6）。
     pub fn arrow_keys(&self) -> &ArrowKeys {
         &self.arrow_keys
+    }
+
+    /// 印の絵の名前 `marker.filename`（拡張子なし・生の値のまま・空は `None`）を読み取る
+    /// （script-small-tags 要件 5.2）。面ごとの書き換えは 2 層の後勝ちで効いた後の値。
+    pub fn marker_filename(&self) -> Option<&str> {
+        self.marker_filename.as_deref()
     }
 }
 

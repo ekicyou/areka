@@ -234,3 +234,111 @@ fn missing_face_falls_back_to_face0_with_debug() {
             && e.field("face") == Some("5")
     }));
 }
+
+fn count(events: &[CapturedEvent], level: Level, prefix: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.level == level && e.message().starts_with(prefix))
+        .count()
+}
+
+/// 面ごとの `marker.filename` で印の絵を選び、設定ファイルを持たない面・番号の無い面は面 0 の値
+/// （script-small-tags 要件 5.2）。同じ名前は 1 回だけ読み、面どうしで共有する。
+#[test]
+fn inline_marker_per_face_and_face0_fallback() {
+    let dir = TempDir::new();
+    let mut dec = MemoryDecoder::new();
+    dir.write("descript.txt", "marker.filename,mine\r\n");
+    for face in 0..=3 {
+        dir.write(&format!("balloons{face}.png"), "");
+    }
+    dir.write("balloons2s.txt", "marker.filename,two\r\n");
+    dir.write("balloons3s.txt", "marker.filename,two\r\n");
+    dir.image(&mut dec, "mine.png", 5, 5);
+    dir.image(&mut dec, "two.png", 8, 8);
+    dir.image(&mut dec, "marker.png", 2, 2);
+
+    let (defs, events) = load(&dir, &dec);
+
+    assert_eq!(size(&defs.inline_marker_for_face(0)), Some((5, 5)));
+    assert_eq!(
+        size(&defs.inline_marker_for_face(1)),
+        Some((5, 5)),
+        "設定ファイルを持たない面は面 0 の値"
+    );
+    assert_eq!(size(&defs.inline_marker_for_face(2)), Some((8, 8)));
+    assert_eq!(
+        size(&defs.inline_marker_for_face(9)),
+        Some((5, 5)),
+        "番号の無い面は面 0 の値"
+    );
+    assert!(Arc::ptr_eq(
+        defs.inline_marker_for_face(2).as_ref().unwrap(),
+        defs.inline_marker_for_face(3).as_ref().unwrap()
+    ));
+    assert_eq!(
+        count(&events, Level::WARN, "balloon_definitions: 書いた印"),
+        0
+    );
+    assert_eq!(
+        count(&events, Level::INFO, "balloon_definitions: 印の絵が無い"),
+        0
+    );
+}
+
+/// 書いた名前の絵が無ければ warn（名前・スコープ・フォルダ）を 1 行出し、連鎖の残りで探す（要件 5.3）。
+#[test]
+fn inline_marker_missing_explicit_warns_and_falls_back() {
+    let dir = TempDir::new();
+    let mut dec = MemoryDecoder::new();
+    dir.write("descript.txt", "marker.filename,nothere\r\n");
+    dir.write("balloons0.png", "");
+    dir.image(&mut dec, "markers.png", 4, 4);
+
+    let (defs, events) = load(&dir, &dec);
+
+    assert_eq!(size(&defs.inline_marker_for_face(0)), Some((4, 4)));
+    let warns: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| {
+            e.level == Level::WARN && e.message().starts_with("balloon_definitions: 書いた印")
+        })
+        .collect();
+    assert_eq!(warns.len(), 1);
+    let w = warns[0];
+    assert_eq!(
+        w.field("name").map(|v| v.trim_matches('"')),
+        Some("nothere")
+    );
+    assert_eq!(w.field("scope"), Some("0"));
+    assert!(w.field("balloon_dir").is_some());
+}
+
+/// 絵が 1 枚も無いバルーンは「絵なし」で、info の記録は面と名前がいくつあっても 1 回だけ（要件 5.4）。
+#[test]
+fn inline_marker_none_records_info_once() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+    dir.write("descript.txt", "");
+    for face in 0..=2 {
+        dir.write(&format!("balloons{face}.png"), "");
+    }
+    dir.write("balloons1s.txt", "validrect.top,1\r\n");
+    dir.write("balloons2s.txt", "marker.filename,other\r\n");
+
+    let (defs, events) = load(&dir, &dec);
+
+    for face in 0..=2 {
+        assert_eq!(defs.inline_marker_for_face(face), None, "面 {face}");
+    }
+    assert_eq!(
+        count(&events, Level::INFO, "balloon_definitions: 印の絵が無い"),
+        1,
+        "名前の違う面があっても読み込み 1 回につき 1 回"
+    );
+    assert_eq!(
+        count(&events, Level::WARN, "balloon_definitions: 書いた印"),
+        1,
+        "面 2 の書いた名前 other が無い"
+    );
+}

@@ -107,3 +107,37 @@ fn no_keys_leaves_model_unchanged() {
     assert_eq!(model.clone().with_arrow_keys(ArrowKeys::default()), model);
     assert_eq!(model.font().height(), Some(12));
 }
+
+fn marker(descript: &str, image: Option<&str>) -> Option<String> {
+    parse_str(descript, image)
+        .marker_filename()
+        .map(str::to_owned)
+}
+
+#[test]
+fn marker_filename_written_value_passes_through() {
+    assert_eq!(
+        marker("marker.filename,mymarker\r\n", None).as_deref(),
+        Some("mymarker")
+    );
+}
+
+#[test]
+fn marker_filename_empty_or_missing_is_absent() {
+    assert_eq!(marker("marker.filename,\r\n", None), None);
+    assert_eq!(marker("marker.filename,  \r\n", None), None);
+    assert_eq!(marker("font.height,12\r\n", None), None);
+}
+
+#[test]
+fn marker_filename_per_surface_file_overrides_descript() {
+    assert_eq!(
+        marker("marker.filename,a\r\n", Some("marker.filename,b\r\n")).as_deref(),
+        Some("b")
+    );
+    // 面の設定ファイルに書いていなければ descript の値のまま。
+    assert_eq!(
+        marker("marker.filename,a\r\n", Some("font.height,9\r\n")).as_deref(),
+        Some("a")
+    );
+}

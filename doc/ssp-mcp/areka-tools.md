@@ -48,16 +48,17 @@ SSP の MCP サーバに無く、areka だけが出すツールの約束の正�
 | `message` | 何が起きているか・再生でどうなるかの英文 1 文（⑶ の文面） |
 
 - **位置の単位は文字**。台本の先頭を 0 として数えた文字の数（Unicode の符号位置の数）で、バイトでも UTF-16 の単位でもない。例: `あいう\xえお` の `\x` は `start: 3`・`end: 5`。主な手がかりは `text` で、位置は同じ綴りが 2 度出るときの区別に使う。
-- 診断は台本の順に並ぶ。1 つの命令に 2 件付くことがあり、そのときは 2 件が同じ位置になる（例: `\![*]\q[題]` は `ignored` と `unreadable_argument` の 2 件）。
+- 診断は台本の順に並ぶ。1 つの命令に 2 件付くことがあり、そのときは 2 件が同じ位置になる（例: `\_a[x]あ\_a[y]い` は 2 つ目の開き `\_a[y]` に `unpaired_tag` の 2 件。⑶ の 15 行目・14 行目の順）。印 `\![*]` は診断を出さないので、`\![*]\q[題]` は `\q[題]` だけを指す `unreadable_argument` の 1 件になる。
 - 影響の大きさ（どのくらい困るか）の欄は無い。
 
-例（宛先のシェルに surface 99999 が無い場合）:
+例（台本 `\x\s[99999]\f[sub,1]\_u[0]`・宛先のシェルに surface 99999 が無い場合）:
 
 ```
-OK:3 diagnostics
+OK:4 diagnostics
 {"end":2,"kind":"unknown_tag","message":"areka does not know this tag; playback drops it","start":0,"text":"\\x"}
 {"end":11,"kind":"missing_surface","message":"no such surface in the current shell; playback does not change the surface","start":2,"text":"\\s[99999]"}
 {"end":20,"kind":"ignored","message":"areka accepts this but it has no effect yet","start":11,"text":"\\f[sub,1]"}
+{"end":26,"kind":"unreadable_argument","message":"areka cannot show this character number; playback drops it","start":20,"text":"\\_u[0]"}
 ```
 
 ## ⑶ 診断の種類と文面
@@ -74,6 +75,7 @@ OK:3 diagnostics
 | `missing_balloon` | — | `no such balloon ID in the current balloon; playback does not change the balloon` |
 | `unreadable_argument` | 閉じていない | `the bracket or quote is not closed; playback drops everything from here to the end` |
 | `unreadable_argument` | 既定の値へ落とす | `the argument is missing or unreadable; playback uses the default value` |
+| `unreadable_argument` | 出せない文字の番号 | `areka cannot show this character number; playback drops it` |
 | `ignored` | — | `areka accepts this but it has no effect yet` |
 | `unpaired_tag` | 閉じが無い | `the anchor is not closed; playback extends it to the end of the script` |
 | `unpaired_tag` | 開いている間の新しい開き | `a new anchor opens before the previous one closes; playback closes the previous one here` |
@@ -98,19 +100,19 @@ OK:3 diagnostics
 | 9 | `unreadable_argument` | 閉じていない `[`／`"`（そこから台本の末尾までが捨てられる） | `\s[0` | `\s[0]` |
 | 10 | `unreadable_argument` | 台本を読む段が既定の値へ落とした引数 | `\_w[abc]`・`\n[abc]`・`\p[x]`・`\q[題]` | `\_w[500]`・`\n[half]`・`\p[1]`・`\q[題,ID]` |
 | 11 | `unreadable_argument` | `\![set,choicetimeout,…]` の読めない時間 | `\![set,choicetimeout,abc]` | `\![set,choicetimeout,5000]` |
-| 12 | `ignored` | 選択肢マーカー | `\![*]` | `\q[題,ID]` |
-| 13 | `ignored` | 受け取るが表示を変えない `\f` のキー | `\f[sub,1]`・`\f[align,center]`・`\f[height,large]` | `\f[bold,1]` |
-| 14 | `unknown_tag` | 知らない `\f` のキー・キーの無い `\f`（値の誤りは診ない） | `\f[colour,red]`・`\f[]` | `\f[color,red]`・`\f[bold,abc]` |
-| 15 | `unpaired_tag` | 閉じ `\_a` の無いアンカーの開き（アンカーは台本の終わりまで続く） | `\_a[x]` | `\_a[x]あ\_a` |
-| 16 | `unpaired_tag` | アンカーが開いている間の新しい開き（診断は新しい開きに付く） | `\_a[x]あ\_a[y]い\_a` | `\_a[x]あ\_a\_a[y]い\_a` |
-| 17 | `unpaired_tag` | アンカーが開いていない所の閉じ | `\_a` | `\_a[x]あ\_a` |
+| 12 | `ignored` | 受け取るが表示を変えない `\f` のキー | `\f[sub,1]`・`\f[align,center]`・`\f[height,large]` | `\f[bold,1]` |
+| 13 | `unknown_tag` | 知らない `\f` のキー・キーの無い `\f`（値の誤りは診ない） | `\f[colour,red]`・`\f[]` | `\f[color,red]`・`\f[bold,abc]` |
+| 14 | `unpaired_tag` | 閉じ `\_a` の無いアンカーの開き（アンカーは台本の終わりまで続く） | `\_a[x]` | `\_a[x]あ\_a` |
+| 15 | `unpaired_tag` | アンカーが開いている間の新しい開き（診断は新しい開きに付く） | `\_a[x]あ\_a[y]い\_a` | `\_a[x]あ\_a\_a[y]い\_a` |
+| 16 | `unpaired_tag` | アンカーが開いていない所の閉じ | `\_a` | `\_a[x]あ\_a` |
+| 17 | `unreadable_argument` | `\_u[…]`・`\_m[…]` の出せない番号（0・制御の文字・片割れのサロゲート・U+10FFFF より上）と読めない番号（再生はその埋め込みを捨てる） | `\_u[0]`・`\_u[0x09]`・`\_u[0xD83D]`・`\_u[0x110000]`・`\_u[abc]`・`\_m[0]` | `\_u[0x3000]`・`\_m[65]`・`\_u[ 0X22ee,1]` |
 
 <!-- diagnostic-rows:end -->
 
 - 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
 - `\s`・`\b` は、その場の話し手（`\0`・`\1`・`\h`・`\u`・`\p[n]`）のシェルとバルーンで判定する。
-- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、同じ 17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
-- `unpaired_tag`（15〜17 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 16 行目・15 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。
+- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
+- `unpaired_tag`（14〜16 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 15 行目・14 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。
 
 **名前だけ予約した種類**（今は出さない）:
 
@@ -129,7 +131,7 @@ OK:3 diagnostics
   - `\![open,readme|file|browser|explorer|editor|mailer,…]` と `\j[…]`（例: `\![open,readme,種類,名前]` の後ろの引数）
   - `\![execute,install,…]`・更新の 3 つ（`\![updatebymyself]`・`\![update,…]`・`\![updateother,…]`）
   - `\_l[x,y]` の座標
-- **`\f` の値の誤り**（`\f[bold,abc]` など）。知らないキーとキーの無い `\f` だけを `unknown_tag` で返す（⑶ の 14 行目）。
+- **`\f` の値の誤り**（`\f[bold,abc]` など）。知らないキーとキーの無い `\f` だけを `unknown_tag` で返す（⑶ の 13 行目）。
 - **`%` の変数**（`%username` など）。未対応の名前も診ない。SHIORI が置き換える中身も診ない。
 - **台本の字面で決まらないもの**
   - `\![change,shell,…]`・`\![change,ghost,…]`（`\+`・`\_+` を含む）の後ろの `\s`、`\![change,balloon,…]`・`\![change,ghost,…]` の後ろの `\b`（切り替えた先のシェルとバルーンは字面で分からない）。ほかの種類は切替の後ろも診る。
@@ -274,9 +276,9 @@ SSP の欄は [survey.md](survey.md) 8 節の実測（2026-10-29）。
 | ReadUnknownTag | `unknown_tag` | 台本の解釈: `compile_strict` の命令の頭（読みの印 `UnknownTag`） | 再生がその命令に届いた | `\x` | `\e` |
 | ReadUnclosed | `unreadable_argument`（閉じていない） | 同（印 `Unclosed`） | 同 | `\s[0` | `\s[0]` |
 | ReadDefaulted | `unreadable_argument`（既定の値へ落とす） | 同（印 `ArgumentDefaulted`） | 同 | `\_w[abc]` | `\_w[500]` |
-| ReadMarkerIgnored | `ignored` | 同（印 `MarkerIgnored`） | 同 | `\![*]` | `\q[題,ID]` |
-| CommandUnhandled | `unknown_command` | 台本の解釈: `GenericCommand`・`Move` の腕（`\!` の受け取り手の台帳 `consumer_of` が None。単独の `\![*]` を除く） | 同 | `\![nosuch]` | `\![open,readme]` |
+| CommandUnhandled | `unknown_command` | 台本の解釈: `GenericCommand`・`Move` の腕（`\!` の受け取り手の台帳 `consumer_of` が None） | 同 | `\![nosuch]` | `\![open,readme]` |
 | ChoiceTimeoutUnreadable | `unreadable_argument`（既定の値へ落とす） | 台本の解釈: `GenericCommand` の腕（`parse_choice_timeout` が `Unreadable`） | 同 | `\![set,choicetimeout,abc]` | `\![set,choicetimeout,5000]` |
+| CharCodeDropped | `unreadable_argument`（出せない文字の番号） | 台本の解釈: `CharCodeDropped` の腕（読み手が `\_u[…]`・`\_m[…]` の番号を捨てた） | 同 | `\_u[0]` | `\_u[0x3000]` |
 | FontIgnored | `ignored` | 台本の解釈: `Font` の腕（文字の層の `classify_font_tag` が受け取るだけ） | 同 | `\f[sub,1]` | `\f[bold,1]` |
 | FontUnknownKey | `unknown_tag` | 同（知らないキー・キーなし） | 同 | `\f[colour,red]` | `\f[color,red]` |
 | AnchorReopened | `unpaired_tag`（新しい開き） | 台本の解釈: `Anchor` の腕（`pair_anchors` が `Reopened`） | 同 | `\_a[x]あ\_a[y]い\_a` | `\_a[x]あ\_a\_a[y]い\_a` |

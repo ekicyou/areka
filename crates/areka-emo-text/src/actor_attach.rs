@@ -219,8 +219,9 @@ impl TextLayerRuntime {
         model: &BalloonModel,
     ) {
         let background = self.background_of(&actor);
-        let resolved =
+        let mut resolved =
             ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
+        self.stamp_inline_marker(&actor, &mut resolved);
         let place = PlaceKey::balloon(&actor);
         // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
         let previous = self.cursor_fallback_at(&place);
@@ -346,6 +347,11 @@ impl TextLayerRuntime {
                 .resolve_inputs
                 .get(&place)
                 .is_some_and(|it| it.is(model, binding.image_size, background))
+            // 印の見た目は解き直しの入力でなく解いた後に押す値なので、今の値と直に比べる。
+            && self
+                .layout_input
+                .get(&place)
+                .is_some_and(|it| it.font.inline_marker == self.inline_marker_of(actor))
         {
             trace!(
                 actor = %actor,
@@ -363,8 +369,9 @@ impl TextLayerRuntime {
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。
-        let resolved =
+        let mut resolved =
             ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
+        self.stamp_inline_marker(actor, &mut resolved);
         if current == binding && self.layout_input.get(&place) == Some(&resolved) {
             // 中の段: 解いた値が今と同じ——記憶だけを新しい入力へ替える（不変条件は保たれる）。
             let previous = self.cursor_fallback_at(&place);

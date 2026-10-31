@@ -2,11 +2,15 @@
 //! 足す予定の spec: text-typesetting（縦中横の塊）・text-reveal-fade・choice-marker-styling・anchor-style-canon（強調の矩形の見た目）。
 
 use std::rc::Rc;
+use std::sync::Arc;
+
+use areka_emo_present::balloon_marker::MarkerImage;
 
 use tracing::warn;
-use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_ANTIALIAS_MODE_ALIASED, ID2D1Brush, ID2D1Image, ID2D1SolidColorBrush,
+    D2D1_ANTIALIAS_MODE_ALIASED, D2D1_ELLIPSE, D2D1_INTERPOLATION_MODE_LINEAR, ID2D1Bitmap1,
+    ID2D1Brush, ID2D1Image, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_RANGE, IDWriteTextFormat, IDWriteTextLayout,
@@ -22,9 +26,13 @@ use super::plan::degrade_if_needed;
 use super::underline::collect_underlines;
 use super::{FormatKey, ViewboxExecutor, color_f, device_err};
 use crate::TextLayerError;
+use crate::actor::marker_bitmap;
 use crate::canvas::GlyphRunContent;
 use crate::canvas::{ContentCanvas, ResidentContent};
 use crate::draw::{ResolvedFont, create_d2d_target_bitmap, create_text_format};
+use crate::inline_marker::{
+    CellRect, DOT_OPACITY, InlineMarkerLook, MARKER_GLYPH, dot_in_cell, image_in_cell, line_text,
+};
 use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::look::StyleTable;
 use crate::region::ScaleContract;
@@ -72,7 +80,7 @@ impl ViewboxExecutor {
         for (index, resident) in canvas.residents.iter().enumerate() {
             let overhang = match &resident.content {
                 ResidentContent::GlyphRun(run) if !run.glyphs.is_empty() => {
-                    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
+                    let text = line_text(&run.glyphs);
                     self.line_layout_for(
                         index,
                         &text,
@@ -87,7 +95,7 @@ impl ViewboxExecutor {
                 }
                 // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
                 ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
-                    let text: String = choice.run.glyphs.iter().map(|g| &*g.text).collect();
+                    let text = line_text(&choice.run.glyphs);
                     self.line_layout_for(
                         index,
                         &text,
@@ -195,7 +203,7 @@ impl ViewboxExecutor {
                     if run.glyphs.is_empty() {
                         continue;
                     }
-                    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
+                    let text = line_text(&run.glyphs);
                     let (layout, line) = self.line_layout_for(
                         index,
                         &text,
@@ -326,6 +334,18 @@ impl ViewboxExecutor {
                             .collect()
                     };
 
+                    // 印（script-small-tags 6.4）: 目印の字ごとに 1 字分の枠を選択肢の帯と同じ式
+                    // （帯の太さは行の太さ・ずれ 0）で求め、丸か絵の塗りを組む。
+                    let markers = self.marker_paints(
+                        run,
+                        line.extent,
+                        font,
+                        styles,
+                        (dx, dy),
+                        block_offset,
+                        mode,
+                    )?;
+
                     draws.push((
                         index,
                         LineDraw {
@@ -333,6 +353,7 @@ impl ViewboxExecutor {
                             layout,
                             choice: choice_draw,
                             strokes,
+                            markers,
                         },
                     ));
                 }
@@ -411,6 +432,22 @@ impl ViewboxExecutor {
                             match stroke {
                                 Some(stroke) => self.dc.fill_rectangle(rect, stroke),
                                 None => self.dc.fill_rectangle(rect, &brush),
+                            }
+                        }
+                        // 印は下線と同じ段（字の後）に塗る。
+                        for marker in &d.markers {
+                            match marker {
+                                MarkerPaint::Dot(ellipse, fill) => {
+                                    self.dc.fill_ellipse(ellipse, fill)
+                                }
+                                MarkerPaint::Image(rect, bitmap) => self.dc.draw_bitmap(
+                                    bitmap,
+                                    Some(rect),
+                                    1.0,
+                                    D2D1_INTERPOLATION_MODE_LINEAR,
+                                    None,
+                                    None,
+                                ),
                             }
                         }
                     }
@@ -495,6 +532,89 @@ impl ViewboxExecutor {
         Ok((layout, line))
     }
 
+    /// 1 行の印の塗り（目印の字ごとに 1 つ・印の無い行は空）。
+    ///
+    /// 枠は [`highlight_rect`]（帯の太さ＝行の太さ `extent`・ずれ 0）なので行の矩形に収まり、
+    /// 描き直しの範囲からはみ出さない。丸はその字の見た目の大きさと文字色（不透明度
+    /// [`DOT_OPACITY`]）、絵は枠の真ん中（[`image_in_cell`]）。D2D の絵を作れない印は塗らない
+    /// （記録は [`marker_bitmap`] が残す）。ブラシの生成の失敗はフレームを見送る（`?`）。
+    #[allow(clippy::too_many_arguments)]
+    fn marker_paints(
+        &mut self,
+        run: &GlyphRunContent,
+        extent: f32,
+        font: &ResolvedFont,
+        styles: &StyleTable,
+        offset: (f32, f32),
+        block_offset: f32,
+        mode: WritingMode,
+    ) -> Result<Vec<MarkerPaint>, TextLayerError> {
+        let mut paints = Vec::new();
+        for g in run.glyphs.iter().filter(|g| &*g.text == MARKER_GLYPH) {
+            let r = highlight_rect(
+                (g.inline_pos, g.inline_pos + g.advance),
+                offset,
+                block_offset,
+                extent,
+                0.0,
+                mode,
+            );
+            let cell = CellRect {
+                left: r.left,
+                top: r.top,
+                right: r.right,
+                bottom: r.bottom,
+            };
+            match &font.inline_marker {
+                InlineMarkerLook::Dot => {
+                    let look = styles.resolve(g.style, &font.looks.default);
+                    let ((x, y), radius) = dot_in_cell(cell, look.height);
+                    let color = D2D1_COLOR_F {
+                        a: DOT_OPACITY,
+                        ..color_f(look.color)
+                    };
+                    let fill = self
+                        .dc
+                        .create_solid_color_brush(&color, None)
+                        .map_err(device_err("CreateSolidColorBrush(印の丸)"))?;
+                    let ellipse = D2D1_ELLIPSE {
+                        point: Vector2 { X: x, Y: y },
+                        radiusX: radius,
+                        radiusY: radius,
+                    };
+                    paints.push(MarkerPaint::Dot(ellipse, fill));
+                }
+                InlineMarkerLook::Image(image) => {
+                    let Some(bitmap) = self.marker_bitmap_for(image) else {
+                        continue;
+                    };
+                    let p = image_in_cell(cell, image.width, image.height);
+                    let rect = D2D_RECT_F {
+                        left: p.left,
+                        top: p.top,
+                        right: p.right,
+                        bottom: p.bottom,
+                    };
+                    paints.push(MarkerPaint::Image(rect, bitmap));
+                }
+            }
+        }
+        Ok(paints)
+    }
+
+    /// 印の絵の D2D の絵（同じ `Arc` なら覚えた 1 枚を返す）。作れないときは `None`
+    /// （[`marker_bitmap`] が `error!` を残す・その印だけ塗らない）。
+    fn marker_bitmap_for(&mut self, image: &Arc<MarkerImage>) -> Option<ID2D1Bitmap1> {
+        if let Some((held, bitmap)) = &self.marker_bitmap
+            && Arc::ptr_eq(held, image)
+        {
+            return Some(bitmap.clone());
+        }
+        let bitmap = marker_bitmap(&self.dc, image).ok()?;
+        self.marker_bitmap = Some((Arc::clone(image), bitmap.clone()));
+        Some(bitmap)
+    }
+
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
     /// 戻り値の `bool` は**format と [`LineLayoutStore`] を組み直したか**（`true`＝組み直し）。
@@ -540,6 +660,16 @@ struct LineDraw {
     /// 塗る下線（画像の画素・寄せ済み）と、その区間の効果のブラシ（`None`＝既定の文字色）。
     /// 下線の区間の無い行は空。
     strokes: Vec<(D2D_RECT_F, Option<ID2D1Brush>)>,
+    /// 塗る印（目印の字ごと・印の無い行は空）。
+    markers: Vec<MarkerPaint>,
+}
+
+/// 印 1 つの塗り（画像の画素・合成スケール k の変換の下で塗る）。
+enum MarkerPaint {
+    /// 既定の丸（中心と半径・その字の文字色に不透明度を掛けたブラシ）。
+    Dot(D2D1_ELLIPSE, ID2D1SolidColorBrush),
+    /// 印の絵（置く矩形と D2D の絵）。
+    Image(D2D_RECT_F, ID2D1Bitmap1),
 }
 
 /// Choice 行のハイライト描画資源（hover 時のみ塗り資源を持つ・非 hover は全範囲 None リセットのみ）。

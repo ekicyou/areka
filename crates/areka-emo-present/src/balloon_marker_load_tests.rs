@@ -237,3 +237,90 @@ fn stride_padding_is_removed() {
         [1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255]
     );
 }
+
+fn resolve_single(
+    dir: &TempDir,
+    scope: u32,
+    explicit: Option<&str>,
+    dec: &MemoryDecoder,
+) -> (SingleMarker, Vec<CapturedEvent>) {
+    log_capture_kit::capture(|| {
+        resolve_single_marker(&[dir.path()], &MARKER_FAMILY, scope, explicit, dec, ALPHA)
+    })
+}
+
+/// script-small-tags 要件 5.2: 書いた名前の 1 枚を読み、無い印は立てない。
+#[test]
+fn single_marker_loads_explicit_name() {
+    let dir = TempDir::new();
+    let mut dec = MemoryDecoder::new();
+    dir.image(&mut dec, "my.png", 4, 3);
+    dir.image(&mut dec, "marker.png", 9, 9);
+
+    let (got, events) = resolve_single(&dir, 0, Some("my"), &dec);
+
+    assert_eq!(size(&got.image), Some((4, 3)));
+    assert!(!got.explicit_missing);
+    assert!(marker_events(&events, Level::WARN).is_empty());
+}
+
+/// script-small-tags 要件 5.3: 書いた名前の絵が無ければ連鎖の残りで探し、無いことを結果に載せる。
+#[test]
+fn single_marker_explicit_missing_falls_back_and_flags() {
+    let dir = TempDir::new();
+    let mut dec = MemoryDecoder::new();
+    dir.image(&mut dec, "markerk.png", 5, 5);
+    dir.image(&mut dec, "marker.png", 9, 9);
+
+    let (got, _) = resolve_single(&dir, 1, Some("my"), &dec);
+    assert_eq!(size(&got.image), Some((5, 5)));
+    assert!(got.explicit_missing);
+
+    let (got, _) = resolve_single(&dir, 0, None, &dec);
+    assert_eq!(size(&got.image), Some((9, 9)));
+    assert!(!got.explicit_missing, "書いていなければ立てない");
+
+    let empty = TempDir::new();
+    let (got, _) = resolve_single(&empty, 0, Some("my"), &dec);
+    assert_eq!(got.image, None);
+    assert!(got.explicit_missing);
+}
+
+/// script-small-tags 要件 5.2: 壊れた絵は矢印と同じ warn を出し、次の候補へ進まず「絵なし」。
+#[test]
+fn single_marker_broken_image_is_no_image() {
+    let dir = TempDir::new();
+    let mut dec = MemoryDecoder::new();
+    dir.touch("markers.png");
+    dec.insert_corrupt(dir.path().join("markers.png"), "bad crc");
+    dir.image(&mut dec, "marker.png", 9, 9);
+
+    let (got, events) = resolve_single(&dir, 0, None, &dec);
+
+    assert_eq!(got.image, None);
+    assert!(!got.explicit_missing);
+    let warns = marker_events(&events, Level::WARN);
+    assert_eq!(warns.len(), 1);
+    assert!(field(warns[0], "path").ends_with("markers.png"));
+    assert!(field(warns[0], "error").contains("bad crc"));
+}
+
+/// フォルダの列は先頭から探す（先のフォルダで連鎖を全部辿ってから次へ・矢印と同じ）。
+#[test]
+fn single_marker_dirs_are_searched_in_order() {
+    let first = TempDir::new();
+    let second = TempDir::new();
+    let mut dec = MemoryDecoder::new();
+    first.image(&mut dec, "marker.png", 2, 2);
+    second.image(&mut dec, "markers.png", 6, 6);
+
+    let got = resolve_single_marker(
+        &[first.path(), second.path()],
+        &MARKER_FAMILY,
+        0,
+        None,
+        &dec,
+        ALPHA,
+    );
+    assert_eq!(size(&got.image), Some((2, 2)));
+}

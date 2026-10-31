@@ -38,7 +38,7 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 40 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 42 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
@@ -46,7 +46,7 @@
 //! `areka.prop.set`・`(set,balloontimeout)`・`(reload,ghost|shiori|shell|balloon|descript)`・
 //! `reloadsurface`・`(set,alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset,sticky-window)`・
 //! `(execute,resetballoonpos)`・`(lock,balloonmove)`・`(unlock,balloonmove)`・`(set,windowstate)`・
-//! `\v`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `\v`・`bind-noevent`・`*`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -138,7 +138,8 @@ pub enum CommandConsumer {
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breset_2csticky-window_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetballoonpos_5d:1
     MoveSink,
-    /// `\![bind]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する（task 7.2）。
+    /// `\![bind]`・`\![bind-noevent]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する
+    /// （task 7.2・script-small-tags 要件 3.7・6.4）。
     Seriko,
     /// 重なり指定・重なり解除の担当消費者
     /// （[`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)）。名前だけでは決まらず、
@@ -163,7 +164,8 @@ pub enum CommandConsumer {
     /// 文字装飾 `\f[...]` の担当消費者（文字レンダリング層——`areka_emo_text` の
     /// `state_decoration.rs` が運搬名で自己選別して適用する）。キーは第 1 引数
     /// （`bold`／`color`／`height` …）で分かれないので、登記は選別子なしの 1 行である
-    /// （areka-P0-text-decoration-canon 要件 2.4）。
+    /// （areka-P0-text-decoration-canon 要件 2.4）。印の合図 `*`（`\![*]`・`%*`）も選別子なしの
+    /// 1 行で担当する（script-small-tags 要件 4.1・6.5）。
     TextLayer,
     /// ゴーストの切替のタグの担当消費者
     /// （[`ChangeCueSink`](super::change_cue::ChangeCueSink)）。名前だけでは決まらず、
@@ -382,7 +384,9 @@ impl ConsumerLedger {
     /// `reloadsurface` → [`CommandConsumer::ReloadSink`]・`(set, alignmenttodesktop|alignmentondesktop|
     /// sticky-window)`・`(reset, sticky-window)`・`(execute, resetballoonpos)`・
     /// `(lock, balloonmove)`・`(unlock, balloonmove)` → [`CommandConsumer::MoveSink`]・
-    /// `(set, windowstate)` と運搬名 `\v` → [`CommandConsumer::WindowStateSink`]）。
+    /// `(set, windowstate)` と運搬名 `\v` → [`CommandConsumer::WindowStateSink`]・
+    /// `bind-noevent` → [`CommandConsumer::Seriko`]・印の合図 `*` →
+    /// [`CommandConsumer::TextLayer`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -516,6 +520,20 @@ impl ConsumerLedger {
                 CommandConsumer::WindowStateSink,
             )
             .expect("正準台帳: '\\v'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register(
+                areka_seriko::BIND_NOEVENT_COMMAND,
+                None,
+                CommandConsumer::Seriko,
+            )
+            .expect("正準台帳: 'bind-noevent'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register(
+                areka_parsers::sakura::MARKER_COMMAND,
+                None,
+                CommandConsumer::TextLayer,
+            )
+            .expect("正準台帳: '*'（選別子なし）は一意（重複・排他違反は編集ミス）");
         ledger
     }
 }

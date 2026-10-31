@@ -3,7 +3,7 @@
 //! 公開の道（`crate::sakura::…`）から引き、次を固定する（mcp-author-tools 要件 3.1・3.11）:
 //! - `parse(s)` と `parse_noted(s)` の命令の列が等しい（経路は 1 本）。
 //! - `span` は入力の順に並び、重ならず、文字の境界に在り、`&input[span]` が該当の綴り。
-//! - 隣り合うトークンを畳んだ命令（`\![*]`＋`\q[...]`・旧い 2 連の `\q[ID][題]`）の
+//! - 隣り合うトークンを畳んだ命令（旧い 2 連の `\q[ID][題]`）の
 //!   `span` は、畳んだ全部を覆う。
 
 use crate::sakura::{Instruction, Read, ReadNote, parse, parse_noted};
@@ -83,17 +83,24 @@ fn unclosed_span_runs_to_end_of_input() {
 }
 
 #[test]
-fn folded_choice_marker_span_covers_marker_and_q() {
+fn marker_and_choice_have_their_own_spans() {
     let s = r"前\![*]\q[はい,OnYes]後";
     let reads = parse_noted(s);
-    assert_eq!(slices(s, &reads), ["前", r"\![*]\q[はい,OnYes]", "後"]);
-    assert!(matches!(reads[1].instruction, Instruction::Choice(_)));
+    assert_eq!(slices(s, &reads), ["前", r"\![*]", r"\q[はい,OnYes]", "後"]);
+    assert!(matches!(reads[2].instruction, Instruction::Choice(_)));
 }
 
 #[test]
-fn lone_choice_marker_span_is_marker_only() {
+fn lone_marker_span_is_marker_only() {
     let s = r"\![*]単独";
     assert_eq!(slices(s, &parse_noted(s)), [r"\![*]", "単独"]);
+}
+
+/// `%*` の範囲は `%` と `*` の 2 字（要件 4.3）。
+#[test]
+fn percent_star_span_is_two_chars() {
+    let s = r"前%*\![*]後";
+    assert_eq!(slices(s, &parse_noted(s)), ["前", "%*", r"\![*]", "後"]);
 }
 
 #[test]
@@ -126,7 +133,7 @@ fn notes_are_read_notes() {
 // 全部を比べる（付くべき命令にだけ付き、他の命令には付かない）。
 // ───────────────────────────────────────────────────────────────────
 
-use ReadNote::{ArgumentDefaulted, MarkerIgnored, Unclosed, UnknownTag};
+use ReadNote::{ArgumentDefaulted, Unclosed, UnknownTag};
 
 /// 印の付いた命令だけを、綴りと印の組で返す。
 fn noted(s: &str) -> Vec<(&str, Vec<ReadNote>)> {
@@ -236,25 +243,24 @@ fn argument_defaulted_is_not_noted_when_read_or_carried_downstream() {
     ]);
 }
 
+/// 印は「無視した」の扱いを持たない: 単独でも `\q` の前でも `%*` でも印の命令に印は付かず、
+/// 直後の `\q` の引数が足りないときの既定へ落とした印は `\q` の命令にだけ付く（要件 4.4）。
 #[test]
-fn marker_ignored_is_noted_on_both_branches_of_the_choice_marker() {
-    // 単独。
-    assert_eq!(noted(r"\![*]単独"), [(r"\![*]", vec![MarkerIgnored])]);
-    // `\q` に畳む（畳んだ命令 1 つに付く）。
-    assert_eq!(
-        noted(r"前\![*]\q[題,ID]後"),
-        [(r"\![*]\q[題,ID]", vec![MarkerIgnored])]
-    );
-    // 畳んだ `\q` の引数が足りなければ、既定へ落とした印も同じ命令に付く。
+fn marker_carries_no_note() {
+    assert_no_notes(&[
+        r"\![*]単独",
+        r"前\![*]\q[題,ID]後",
+        r"%*",
+        r"\![*]%*",
+        r"\q[題,ID]",
+        r"\![raise,*]",
+        r"\![*,x]",
+        r"*",
+    ]);
     assert_eq!(
         noted(r"\![*]\q[題]"),
-        [(r"\![*]\q[題]", vec![MarkerIgnored, ArgumentDefaulted])]
+        [(r"\q[題]", vec![ArgumentDefaulted])]
     );
-}
-
-#[test]
-fn marker_ignored_is_not_noted_without_the_marker() {
-    assert_no_notes(&[r"\q[題,ID]", r"\![raise,*]", r"\![*,x]", r"*"]);
 }
 
 #[test]

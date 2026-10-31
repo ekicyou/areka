@@ -27,7 +27,8 @@ pub(in crate::emo2_boot) enum FaceCause {
 
 /// scope の今の定義を束の面 `face` の定義へ差し替える（今の定義の唯一の書き手）。
 ///
-/// (1) その面の矢印の絵を文字の層へ入れ、(2) 面が前と違えば手動の位置を捨て（要件 8.6）、
+/// (1) その面の矢印の絵と行の中の印の絵（script-small-tags 要件 5.1・5.2）を文字の層へ入れ、
+/// (2) 面が前と違えば手動の位置を捨て（要件 8.6）、
 /// (3) 面の `windowposition` を配置へ届け（要件 1.7）、(4) `balloon_models[scope]` を面の
 /// モデルにし、(5) 面の番号を覚える。束が無い scope は `error!` で何もしない。
 pub(in crate::emo2_boot) fn select_balloon_face(
@@ -53,6 +54,7 @@ pub(in crate::emo2_boot) fn select_balloon_face(
     {
         let mut runtime = wiring.runtime.borrow_mut();
         runtime.set_balloon_markers(actor.clone(), definition.arrows);
+        runtime.set_inline_marker(actor.clone(), definitions.inline_marker_for_face(face));
         if face_changed {
             runtime.forget_manual_of(&actor, StopReason::FaceChanged);
         }

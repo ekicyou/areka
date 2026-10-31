@@ -238,3 +238,50 @@ fn clickwait_resolves_like_arrow() {
         (None, None)
     );
 }
+
+/// script-small-tags 要件 5.2: 行の中の印の族の連鎖の順（スコープ 0・1・2・旧名 `marker` が最後）。
+#[test]
+fn inline_marker_chain_order_per_scope() {
+    assert_eq!(
+        prefixes(&MARKER_FAMILY, 0),
+        ["markerp0def", "markers", "marker"]
+    );
+    assert_eq!(
+        prefixes(&MARKER_FAMILY, 1),
+        ["markerp1def", "markerk", "markerp0def", "markers", "marker"]
+    );
+    assert_eq!(
+        prefixes(&MARKER_FAMILY, 2),
+        ["markerp2def", "markerk", "markerp0def", "markers", "marker"]
+    );
+}
+
+/// script-small-tags 要件 5.2: 番号の無い 1 枚を、書いた名前 → 連鎖の順で選ぶ（番号つきは選ばない）。
+#[test]
+fn single_marker_name_prefers_explicit_and_ignores_numbered() {
+    let pick = |names: &[&str], scope: u32, explicit: Option<&str>| {
+        select_single_marker_name(names, &marker_chain(&MARKER_FAMILY, scope, explicit))
+    };
+    let names = ["marker.png", "markers.png", "markerk.png", "my.png"];
+    assert_eq!(pick(&names, 0, Some("my")), s("my.png"));
+    assert_eq!(pick(&names, 0, None), s("markers.png"));
+    assert_eq!(pick(&names, 1, None), s("markerk.png"));
+    assert_eq!(pick(&names, 2, None), s("markerk.png"));
+    assert_eq!(
+        pick(&["marker.png", "markerp2def.png"], 2, None),
+        s("markerp2def.png")
+    );
+    // 書いた名前が無ければ連鎖の残りで探す。
+    assert_eq!(pick(&["marker.png"], 1, Some("my")), s("marker.png"));
+    // 番号つき・別の拡張子は選ばない。
+    assert_eq!(
+        pick(&["marker0.png", "markers1.png", "marker.bmp"], 0, None),
+        None
+    );
+    assert_eq!(pick(&["my0.png"], 0, Some("my")), None);
+    // 大小は無視し、大小違いが並ぶときは辞書順最小。
+    assert_eq!(
+        pick(&["Marker.PNG", "MARKER.png"], 0, None),
+        s("MARKER.png")
+    );
+}

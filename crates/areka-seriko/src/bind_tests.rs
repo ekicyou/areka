@@ -440,7 +440,7 @@ char2.bindoption0.group,服,multiple\r\n\
 sakura.bindgroup21.name,服,B\r\n";
 
 /// シェルの descript.txt `shell` を持つゴーストを作業フォルダ（`target\\` の下）に組み、着せ替えの読みを返す。
-fn groups_of(shell: &str) -> areka_parsers::package::BindGroupDefaults {
+pub(crate) fn groups_of(shell: &str) -> areka_parsers::package::BindGroupDefaults {
     let work = sample_ghost_kit::WorkDir::new().expect("作業フォルダを取れる");
     let master = work.path().join("ghost").join("master");
     std::fs::create_dir_all(&master).expect("ghost/master を作る");

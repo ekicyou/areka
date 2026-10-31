@@ -8,8 +8,10 @@ use super::{ArekaStrictJudges, production};
 #[test]
 fn command_handled_follows_the_canonical_ledger() {
     let judges = ArekaStrictJudges::canonical();
-    let rows: [(&str, Option<&str>, bool); 5] = [
+    let rows: [(&str, Option<&str>, bool); 6] = [
         ("move", None, true),
+        // 印 `\![*]`・`%*` は文字の層が拾う（script-small-tags 要件 6.5）。
+        (areka_parsers::sakura::MARKER_COMMAND, None, true),
         ("set", Some("zorder"), true),
         ("open", Some("readme"), true),
         ("open", Some("nosuchthing"), false),
@@ -290,14 +292,15 @@ element1,balloon,a,0,0
             .into_iter()
             .map(|c| (unquote(&c[0]), c[1].clone(), unquote(&c[2])))
             .collect();
-        assert_eq!(kinds.len(), 10, "種類と文面の表の行数");
+        assert_eq!(kinds.len(), 11, "種類と文面の表の行数");
         // 文面が 2 つ以上ある種類の行が引く「場合」（行の番号 → 種類の表の「場合」の欄）。
         let case_of = |row: usize| match row {
             9 => "閉じていない",
             10 | 11 => "既定の値へ落とす",
-            15 => "閉じが無い",
-            16 => "開いている間の新しい開き",
-            17 => "開いていない所の閉じ",
+            14 => "閉じが無い",
+            15 => "開いている間の新しい開き",
+            16 => "開いていない所の閉じ",
+            17 => "出せない文字の番号",
             _ => "—",
         };
         let rows = table("diagnostic-rows");
@@ -354,7 +357,7 @@ element1,balloon,a,0,0
     /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（7.2・2.7）。
     #[test]
     fn records_match_check_script_diagnostics() {
-        let script = r"\s[99999]あ\x\![nosuch]\b[99]\f[sub,1]\_w[abc]い\s[-2]\_a[x]う\_a[y]え\_a\![set,choicetimeout,abc]\f[colour,red]\_a";
+        let script = r"\s[99999]あ\x\![nosuch]\b[99]\f[sub,1]\_w[abc]い\_u[0]\s[-2]\_a[x]う\_a[y]え\_a\![set,choicetimeout,abc]\f[colour,red]\_a";
         let want: Vec<(String, usize, usize, String, String)> = diagnose(
             script,
             &parse_noted(script),
