@@ -204,6 +204,7 @@ pub(crate) fn resolve_boot(
     resolve_boot_with(
         crate::roots::resolve_roots(&app_profile_dir),
         request,
+        None,
         &app_profile_dir,
         crate::boot_resolve::pick_index,
         crate::roots::user_root::writable_ghost,
@@ -222,6 +223,7 @@ pub(crate) fn resolve_boot_from(
     resolve_boot_with(
         resolved,
         &crate::cli::parse::parse(args).options.boot,
+        None,
         app_profile_dir,
         pick,
         prepare_ghost,
@@ -238,9 +240,13 @@ pub(crate) fn resolve_boot_from(
 /// 位置の引数のゴーストがある側は列挙も記憶も読まない（要件 4.1・5.1）。位置の引数のゴーストは
 /// 「ゴーストか」の 1 検査だけ（要件 4.8）。起動中の印は位置の引数のゴーストが無く `nobootcheck` でない
 /// ときに読む（startup-options 要件 6.2・6.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+///
+/// `call_ghost` は起こすゴーストのフォルダ名（起動の前に入れた道が決めたときだけ `Some`）。
+/// `GhostInputs` へ渡すだけで、記憶より先・起動中の印に関わらず目録から引かれる（install-before-boot 要件 4.3・4.7）。
 pub(crate) fn resolve_boot_with(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     request: &crate::cli::BootRequest,
+    call_ghost: Option<&str>,
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
@@ -332,7 +338,7 @@ pub(crate) fn resolve_boot_with(
             argv: argv_ghost,
             pointed: pointed_at,
             random: request.random,
-            call_ghost: None,
+            call_ghost,
             memory: memory.as_deref(),
             listed: &listed,
             stores: &ghost_stores,
@@ -661,3 +667,7 @@ mod option_tests;
 #[cfg(test)]
 #[path = "boot_config_readonly_tests.rs"]
 mod readonly_tests;
+
+#[cfg(test)]
+#[path = "boot_config_callghost_tests.rs"]
+mod callghost_tests;

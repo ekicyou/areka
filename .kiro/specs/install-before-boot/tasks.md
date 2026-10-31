@@ -34,7 +34,7 @@
   - _Boundary: BootResolveCall_
   - _Requirements: 4.2, 4.3, 4.7, 4.10, 9.5_
 
-- [ ] 2.2 起動の解決の中身に callghost の相手を渡す口を足す
+- [x] 2.2 起動の解決の中身に callghost の相手を渡す口を足す
   - 起動の解決の中身（根の結果を受ける関数）に「callghost の相手」の引数を足して選び方へ渡す。テストだけの口は「無し」を渡す（今のテストの呼び出しは動かさない）
   - 前回がきれいに終わらなかった（起動中の印がある）起動でも相手が選ばれ、印の値は今のとおり返る
   - 入れた後もゴーストが 0 体なら、今と同じ「ゴーストなし」の告知の場面で止まる
@@ -141,3 +141,4 @@
 ## Implementation Notes
 
 - 1.3: `cargo test -p areka` の全体で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` と `session_mark_tests::fallback::first_boot_falling_back_pins_mark_with_one_warn` が並べて走らせたときだけ赤になることがある（単独では緑・この spec の差分と無関係）。完了の棚卸で扱う。
+- 2.2: 並べて走らせたとき `session_mark_write_tests::switch_marks_unwritable_end_with_write_failed_and_no_reservation` も揺れて赤になったことがある（単独では緑・無関係）。
