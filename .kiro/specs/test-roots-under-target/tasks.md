@@ -9,7 +9,7 @@
   - _Requirements: 3.2_
 
 - [ ] 2. 窓口と見張りの手当て
-- [ ] 2.1 `TempPath::new` の置き場を `target\test-roots\` へ替え、説明を合わせる
+- [x] 2.1 `TempPath::new` の置き場を `target\test-roots\` へ替え、説明を合わせる
   - `new` の本体を `under_target` と同じ置き場の式を通す形に替える。署名・名前・連番・破棄・作れないときの panic は変えない
   - crate の利用手順に置き場の短い節を足し、`new`・`under_target`・置き場の式の doc を「2 つの入口は同じ置き場・同じ働き、どちらを使ってもよい」に合わせる。廃止の印は付けない。doctest の例は変えない
   - `cargo test -p temp-path-kit` で既存の 8 本と doctest 1 本が緑のまま（今の `under_target` の 1 本も緑）
