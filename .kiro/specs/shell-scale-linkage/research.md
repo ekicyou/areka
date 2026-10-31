@@ -180,3 +180,25 @@
 10. 2 つのイベントの代表のスコープ（要件の表の 6）: ukadoc の 2 つのイベントはスコープを持たず、areka は窓ごとに k を持つ。ぱすたは `scope(0)` だけを聞く。
 11. 網羅台帳 `property.toml` の `scaling` の 2 行の注記（SSP の意味で書いてある）の書き直し。
 12. ウェーブの表に無いファイルを触ること（5 節の 6）を `roadmap.md` の ① の欄へ足すか。
+
+## 10. SSP の測り（2026-11-01・要件討議の前）
+
+開発者の機械の SSP（2.9 系）に居た「窓際のぱすたさんDEBUG」（`C:\home\maz\git\ghost_dev\debug\pasta-in-windows-debug`・150% の画面）へ MCP の `sakurascript` で台本を 2 本送り、`ghost\master\ssp_shiori_log.txt` の送る前のバイト位置から後ろを読んだ。reload・設定の変更・ゴーストの切り替えはしていない。strict の誤りの記録は 0 件。
+
+| 送った台本 | SSP が SHIORI へ送ったもの |
+|---|---|
+| `\0測り1\![get,property,OnArekaProbeGet,currentghost.scope(0).scaling,no.such.name,currentghost.scope(5).scaling,currentghost.scope(0).currentmonitor.dpi]\w9\w9\w9\w9\w9\w9後ろ\e` | 台本の受け取り（`OnTranslate` 00:01:09.711）の 0.16 秒後（00:01:09.873・後ろの待ち 2.7 秒より前）に `GET`・`ID: OnArekaProbeGet`・`Sender: SSP`・`SenderType: internal,property`・`SecurityLevel: local`・`Status: talking,balloon(0=0)`・Reference0 `150,150`・Reference1 空・Reference2 空・Reference3 `144` |
+| `\![get,property,OnArekaProbeNone]`（名前なし） | **何も送らない** |
+| `\![get,property,SSPからArekaProbe,currentghost.scope(0).scaling]` | `ID: SSPからArekaProbe`・Reference0 `150,150`（`On` で始まらない名前も受ける） |
+| `\![get,property,,currentghost.scope(0).scaling]`（空の名前） | **`ID:` を空のまま送る**・Reference0 `150,150` |
+| `\![get,property,OnArekaProbeCase,CurrentGhost.Scope(0).Scaling,currentghost.balloon.scope(0).scaling,currentghost.scope(1).scaling,currentghost.scope(1).currentmonitor.dpi]` | Reference0 **空**（SSP は名前の大小を区別する）・1 `150,150`・2 `150,150`・3 `144` |
+
+MCP の `get_property` で同じ時に読むと、`currentghost.scope(0).scaling`・`currentghost.balloon.scope(0).scaling` は `150,150`、`currentghost.scope(0).currentmonitor.dpi` は `144`、`currentghost.scope(5).scaling` は `NG:Cannot find such property name.`。
+
+分かったこと（6 節の表の番号）:
+- **1（送る時点）**: タグに届いた時点で送る（台本の再生の後ではない）。ukadoc の「このスクリプトの再生後」は、`\![get,property]` の後ろの台本の終わりを待つ意味ではなかった＝要件 1.2・1.6 のとおり。
+- **2（GET か NOTIFY か）**: `GET`＝応答の台本を受け取る形（要件 1.7 のとおり）。話している最中（`Status: talking`）でも送る。応答の台本が今の台本を置き換えるかは、ぱすたが 204 を返したので測れていない。
+- **3（出どころ）**: `SenderType: internal,property`・`Sender: SSP`・`SecurityLevel: local`（要件 1.3 のとおり）。
+- **4（値の無いとき）**: 無い名前・窓の無いスコープは空の Reference で番号を保つ（要件 1.4・3.9 のとおり）。**名前なしは送らない**（要件 2.4 の「Reference なしで送る」と違う）。**空の名前は空の `ID` のまま送る**（要件 2.2 の「送らず警告」と違う）。名前の大小は SSP では区別される（areka は完了 `areka-P0-property-name-case-fold` で MCP の名前の規則を決めており、要件 1.1 はそれに従う）。
+- **5・6（`OnShellScaling` を送る場面・小数の桁）**: 測っていない。SSP で倍率を変えるには利用者の設定か `\![set,scaling]` で開発者の SSP のぱすたの大きさを変えることになり、元へ戻す値が確かでないため。areka は作者の基準が 96 で Windows の DPI が 24 の倍数なので、表示の倍率ができるまで百分率は整数に限られる（3 節 3.7 の行）。
+- **7（起動の挨拶・終了の最中）**: 測っていない。ぱすたは起動の挨拶の中で `\![get,property]` を出さない（2.7 節）。

@@ -174,7 +174,7 @@
 2. When 実機でぱすたを起こし、200% と 150% の画面の間をドラッグでまたがせた, the 開発の手順 shall `OnPastaShellScale` が Reference に倍率と DPI を持って届くこと、`OnShellScaling` が届くこと、ぱすたが窓の位置と重なりの順を出し直すことを、areka の記録で確かめる。
 3. When 8.2 の確かめの各段（起動の直後・同じ画面の中でのドラッグの後・拡大率の違う画面へ移した後）に達した, the 開発の手順 shall MCP の `get_property` で 3 つの値を読み、窓の居る画面の拡大率と一致すること、ぱすたが倍率のずれの台詞（`＊バルーン倍率のずれ`）を出さないことを確かめる。
 4. The 開発の手順 shall 実機の値を SSP の基準（Introduction の表）と並べ、数の形が同じであること、倍率の値と `OnShellScaling` の届き方の違いが DPI 追従の方針によるものであることを書き分けて残す。
-5. When 本 spec の実装が終わった, the 開発の手順 shall 網羅台帳の `sakura-script.toml` の `\![get,property]`・`shiori.toml` の `OnShellScaling`・`OnBalloonScaling`・`property.toml` の 3 行・`assets.toml` のゴーストとシェルの `balloon.syncscale` の 4 行を実装済みを表す状態へ改め、根拠への道を添える（シェルの 3 行の持ち主に本 spec を書く）。
+5. When 本 spec の実装が終わった, the 開発の手順 shall 網羅台帳の `sakura-script.toml` の `\![get,property]`・`shiori.toml` の `OnShellScaling`・`OnBalloonScaling`・`property.toml` の 3 行・`assets.toml` のゴーストとシェルの `balloon.syncscale` の 4 行を実装済みを表す状態へ改め、根拠への道を添える（シェルの 3 行の持ち主に本 spec を書く・`property.toml` の `scaling` の 2 行の注記は SSP の意味〔利用者がベースウェアで決める拡大率〕で書いてあるので、areka の意味〔画面の DPI への追従の倍率 × 表示の倍率〕へ書き直す）。
 
 ## 要件討議の前に SSP で測る点と、討議で決める点
 
@@ -188,3 +188,5 @@ brief の議題 ⑴ ⑵ と、要件を書くときに ukadoc で決まらなか
 | 4 | SSP が `OnShellScaling` を送る場面（シェルの倍率の設定を変えたとき・画面を移ったとき・シェルの切り替え）（SSP で測る・brief の議題 2） | 本体の窓の実効の倍率が変わったときだけ・起動と切り替えでは送らない | 5.1・5.6 |
 | 5 | 割り切れない倍率の小数の桁（SSP で測る） | 小数点以下を付ける（桁は設計で決める） | 3.7・5.3 |
 | 6 | 2 つのイベントの代表のスコープ（areka は窓ごとに倍率を持つ・SSP はゴーストに 1 つ） | 本体（スコープ 0）の窓 | 5.1・5.2・5.7 |
+
+**2026-11-01 の SSP の測り（`research.md` 10 節）**: 表の 2 は測ったとおり（タグに届いた時点で `GET`・`SenderType: internal,property`・`SecurityLevel: local`・話している最中でも送る）。表の 3 は、無い名前と窓の無いスコープが空の Reference で番号を保つことを確かめた。ただし SSP は名前なしでは何も送らず、空の名前は空の `ID` のまま送る（2.2・2.4 と違う＝討議で決める）。名前の大小は SSP では区別されるが、1.1 は areka の MCP の名前の規則（完了 `areka-P0-property-name-case-fold`）に従う。表の 4・5 は測っていない（SSP の倍率を変えることになるため）。
