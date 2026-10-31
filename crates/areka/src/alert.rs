@@ -443,3 +443,7 @@ mod alert_tests;
 #[cfg(test)]
 #[path = "alert_memory_write_tests.rs"]
 mod alert_memory_write_tests;
+
+#[cfg(test)]
+#[path = "alert_dpi_tests.rs"]
+mod alert_dpi_tests;
