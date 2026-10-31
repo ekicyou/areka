@@ -101,7 +101,7 @@ pub(super) fn read_arrow_keys(merged: &BTreeMap<String, String>) -> ArrowKeys {
 /// マージ済みの表から印の絵の名前 `marker.filename` を生の値のまま読む（拡張子なし・空は無いのと同じ・
 /// script-small-tags 要件 5.2）。
 pub(super) fn read_marker_filename(merged: &BTreeMap<String, String>) -> Option<String> {
-    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#marker.filename
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#marker.filename_2c_30d5_30a1_30a4_30eb_540d:1
     merged
         .get("marker.filename")
         .filter(|v| !v.is_empty())
