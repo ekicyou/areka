@@ -39,6 +39,10 @@ use super::PlacementError;
 use super::descript_window_keys::{DefaultSurfaces, builtin_default_surface, first_existing};
 use super::resolver::{ScopeInput, SizePx};
 
+// 採寸の読み手（動く絵を 1 枚目だけで読む包み）。
+#[path = "measure_first_frame.rs"]
+mod first_frame;
+
 /// 採寸結果（design「placement::measure」Service Interface）。
 ///
 /// アセット（`EmoWorld`/`AtlasTable`）は持たない——素の物理 px 数値のみ
@@ -463,3 +467,8 @@ mod template_tests;
 #[cfg(test)]
 #[path = "measure_default_surface_tests.rs"]
 mod default_surface_tests;
+
+// 採寸の読み手 FirstFrameDecoder の檻（spec: placement-measure-bake-once 要件 1.1・1.4・3.7）。
+#[cfg(test)]
+#[path = "measure_first_frame_tests.rs"]
+mod first_frame_tests;
