@@ -69,7 +69,7 @@ ukadoc が黙っている点と、brief が要件の段の議題として残し�
   - 埋め込んだ文字の形・位置・折り返し・縦書き・一字ずつ出る速さは、今の文字の層が、同じ文字を本文に直に書いたときと同じ決まりで決める。この spec は文字の層の決まりを変えない。
   - 着せ替えの適用（名前の解決・`mustselect` などのカテゴリの決まり・記録）は、今の `\![bind,…]` の受け手の決まりをそのまま使う。この spec は着せ替えの決まりを変えない。
   - 印の絵の名前の選び方（書いた名前 → スコープ別の既定の名前 → 旧名）は、完了 `balloon-scroll-arrows` がスクロールの矢印とクリック待ちの印で作った「印の族」の決まりと同じ形にする。
-  - 受け手の表に担当を足す spec は 1 本ずつ（`shell-scale-linkage`・`balloon-communicatebox` がこの spec の着地を待つ）。この spec は 1 件だけ足す。
+  - 受け手の表に担当を足す spec は 1 本ずつ（`shell-scale-linkage`・`balloon-communicatebox` がこの spec の着地を待つ）。この spec は `bind-noevent` の 1 件を足す。印の運び方（設計で決める）で表に行が要るなら、それも同じ着地で足す。
   - ウェーブ C14 の約束: この spec は `emo2_boot/assets.rs`（`placement-measure-bake-once`）と emo-text の `actor_present.rs`（`choice-ranges-one-function`）に触らない。
   - 下流の `pasta-in-windows-verification` の手順書 `doc/pasta-real-run.md`（5 節の段 2）は、着地で「全角の空白・選択肢の前の印・`bind-noevent` が SSP と同じに効く」ことを確かめる。
 
