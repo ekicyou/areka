@@ -14,10 +14,12 @@ use areka_emo_atlas::{
     AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, WicDecoderArm,
 };
 use areka_emo_present::balloon::resolve_balloon_faces;
+use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::measure_with_reader;
+use super::{MeasureScaling, measure_baked, measure_scope_sizes, measure_with_reader};
 use crate::emo2_boot::assets::{build_balloon_assets, build_shell_assets};
+use crate::placement::PlacementError;
 use crate::placement::descript_window_keys::DefaultSurfaces;
 use crate::placement::shared_test_support::{balloon_root, emo2_root, with_com_initialized};
 
@@ -315,5 +317,156 @@ fn emo2_bakes_each_still_image_once_per_stage() {
                 );
             }
         }
+    });
+}
+
+/// 要件 2.1・2.2: 採寸の読み手を通した測りは、全コマを焼く今の測り（包まない読み手で
+/// `measure_baked`）と scope ごとの寸法が等しい（動く絵の検体と emo2）。
+#[test]
+fn first_frame_measure_matches_full_frame_measure() {
+    with_com_initialized(|| {
+        let ghost = animated_ghost();
+        let emo2 = emo2_root();
+        let cases = [
+            (
+                "動く絵の検体",
+                ghost.path().join("shell").join("master"),
+                ghost.path().join("balloon"),
+            ),
+            ("emo2", emo2.join("shell").join("master"), balloon_root()),
+        ];
+        let arm = WicDecoderArm::new().expect("WIC の読み手（COM 初期化済み）");
+        let defaults = DefaultSurfaces::builtin();
+        for (name, shell_dir, balloon_dir) in cases {
+            let first = measure_with_reader(&arm, &shell_dir, &balloon_dir, &SCOPES, &defaults)
+                .unwrap_or_else(|e| panic!("{name}: 採寸の読み手で測れる: {e:?}"));
+            let full = measure_baked(&arm, &shell_dir, &balloon_dir, &SCOPES, &defaults)
+                .unwrap_or_else(|e| panic!("{name}: 全コマを焼いて測れる: {e:?}"));
+            assert_eq!(first.len(), SCOPES.len(), "{name}: scope の数");
+            assert_eq!(first, full, "{name}: scope ごとの寸法");
+        }
+    });
+}
+
+/// シェルとバルーンの読み込みの記録の宛先（読み込みの権威）。
+const LOAD_TARGETS: [&str; 3] = [
+    "areka_emo_present::shell_target",
+    "areka_emo_present::balloon",
+    "areka_emo_present::self_alpha",
+];
+
+/// 採寸自身の記録の宛先（`measure.rs`）。
+const MEASURE_TARGET: &str = "areka::placement::measure";
+
+/// `target` の記録を（水準, 文言）の並びにする。
+fn records_of(events: &[CapturedEvent], targets: &[&str]) -> Vec<(tracing::Level, String)> {
+    events
+        .iter()
+        .filter(|e| targets.contains(&e.target.as_str()))
+        .map(|e| (e.level, e.message().to_string()))
+        .collect()
+}
+
+/// 要件 3.6・4.5: 動く絵の検体で公開の口 `measure_scope_sizes` を通すと、シェルとバルーンの
+/// 読み込みの記録は 0 行。採寸自身の記録は全コマを焼く今の測り（`measure_baked`）と同じで、
+/// この検体では 0 行（scope 0 と 1 の既定の面 0・10 がどちらもシェルに在り、合成も通る）。
+#[test]
+fn public_measure_emits_no_load_records_and_same_own_records() {
+    with_com_initialized(|| {
+        let ghost = animated_ghost();
+        let shell_dir = ghost.path().join("shell").join("master");
+        let balloon_dir = ghost.path().join("balloon");
+        let defaults = DefaultSurfaces::builtin();
+        let (sizes, events) = capture(|| {
+            measure_scope_sizes(
+                &shell_dir,
+                &balloon_dir,
+                &SCOPES,
+                &defaults,
+                &MeasureScaling::IDENTITY,
+            )
+        });
+        sizes.expect("採寸は通る");
+        assert_eq!(
+            records_of(&events, &LOAD_TARGETS),
+            vec![],
+            "採寸の道の読み込みの記録"
+        );
+
+        let arm = WicDecoderArm::new().expect("WIC の読み手（COM 初期化済み）");
+        let (_, full_events) =
+            capture(|| measure_baked(&arm, &shell_dir, &balloon_dir, &SCOPES, &defaults));
+        let own = records_of(&events, &[MEASURE_TARGET]);
+        assert_eq!(
+            own,
+            records_of(&full_events, &[MEASURE_TARGET]),
+            "採寸自身の記録は全コマを焼く今の測りと同じ"
+        );
+        assert_eq!(own, vec![], "この検体での採寸自身の記録");
+    });
+}
+
+/// `error!` の行の数を（読み込みの権威, 採寸）で数える。
+fn error_counts(events: &[CapturedEvent]) -> (usize, usize) {
+    let errors = |targets: &[&str]| {
+        records_of(events, targets)
+            .iter()
+            .filter(|(level, _)| *level == tracing::Level::ERROR)
+            .count()
+    };
+    (errors(&LOAD_TARGETS), errors(&[MEASURE_TARGET]))
+}
+
+/// 要件 2.5・3.6: 読めないときは記録を出さない道でも失敗の `error!` が出て `Err`。
+/// - シェルのフォルダが無い: 権威の一覧の失敗 `error!` 1 行・採寸は出し直さない（0 行・
+///   `build_shell_assets` の説明「真因のログは権威が出す」）。`Err` は scope 0。
+/// - バルーンの面 0 が無い: 権威の面 0 の `error!` 1 行・採寸の面 0 の失敗 `error!` 1 行
+///   （scope 0 で止まるので 1 回ずつ）。`Err` は scope 0・`balloon:` の理由。
+#[test]
+fn unreadable_shell_or_balloon_face0_errors_once_and_fails() {
+    with_com_initialized(|| {
+        let ghost = animated_ghost();
+        let shell_dir = ghost.path().join("shell").join("master");
+        let balloon_dir = ghost.path().join("balloon");
+        let defaults = DefaultSurfaces::builtin();
+        let measure = |shell: &Path, balloon: &Path| {
+            capture(|| {
+                measure_scope_sizes(
+                    shell,
+                    balloon,
+                    &SCOPES,
+                    &defaults,
+                    &MeasureScaling::IDENTITY,
+                )
+            })
+        };
+
+        let (result, events) = measure(&ghost.path().join("shell").join("absent"), &balloon_dir);
+        assert!(
+            matches!(result, Err(PlacementError::Measure { scope: 0, .. })),
+            "シェルのフォルダが無い: {result:?}"
+        );
+        assert_eq!(error_counts(&events), (1, 0), "シェルのフォルダが無い");
+        assert!(
+            records_of(&events, &LOAD_TARGETS)[0]
+                .1
+                .contains("シェルのフォルダの一覧に失敗"),
+            "権威の一覧の失敗: {events:?}"
+        );
+
+        // 面 0 の無いバルーン（面 1 だけ）。
+        std::fs::remove_file(balloon_dir.join("balloons0.png")).expect("面 0 を外す");
+        let (result, events) = measure(&shell_dir, &balloon_dir);
+        match &result {
+            Err(PlacementError::Measure { scope: 0, reason }) => {
+                assert!(reason.starts_with("balloon: "), "理由: {reason}")
+            }
+            other => panic!("バルーンの面 0 が無い: {other:?}"),
+        }
+        assert_eq!(
+            error_counts(&events),
+            (1, 1),
+            "バルーンの面 0 が無い: {events:?}"
+        );
     });
 }
