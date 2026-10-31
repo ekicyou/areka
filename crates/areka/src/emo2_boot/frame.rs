@@ -424,6 +424,9 @@ pub fn emo2_frame_system(world: &mut World) {
     // 済み）がどちらもこのフレームの最終の姿になってから組を作るので、届けが画面から 1 フレーム
     // 遅れない。可視性の相の中で届けると、箱の同期と提示より前なので写しが 1 フレーム古い。
     status_report::run_status_report_phase(&mut wiring, world);
+    // 倍率の変わり（shell-scale-linkage 設計 Flow 2・要件 5.5）: 並びの最後。k を書く点（dpi・drain・
+    // 差し替え・可視性の相）はどれもこれより前なので、k が変わったのと同じフレームで表とイベントが出る。
+    scale_notice::run_scale_notice_phase(&mut wiring, world);
     world.insert_non_send(wiring);
 }
 

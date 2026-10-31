@@ -595,3 +595,8 @@ mod shell_box_integration_tests;
 // 置き場のゴーストの kanade へ届くまでを、本ファイルの檻をそのまま使って見るため子に置く。
 #[path = "frame_balloon_timeout_notice_e2e_tests.rs"]
 mod balloon_timeout_notice_e2e_tests;
+
+// 倍率の変わりの相の同じフレームの檻（shell-scale-linkage task 6.2）。本ファイルの檻（GPU の World・
+// emo2 の結線・置き場のゴースト）をそのまま使うため子に置く。
+#[path = "frame_scale_notice_integration_tests.rs"]
+mod scale_notice_integration_tests;

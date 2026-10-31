@@ -100,7 +100,7 @@
   - _Boundary: ScaleNoticePhase_
   - _Depends: 1.3, 4.1, 5.1_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 7.3_
-- [ ] 6.2 統合: 相を毎フレームの並びの最後に入れ、表を書いてからイベントを送る殻を作る
+- [x] 6.2 統合: 相を毎フレームの並びの最後に入れ、表を書いてからイベントを送る殻を作る
   - 届けの相の後ろに 1 回呼び、記録が空ならすぐ戻る。表を全部書いてから計画の順に汎用の入口で GET を送る
   - 送り先はテストだけが入れる継ぎ目の資源があればそれ、無ければゴーストの実行系の kanade。送れないときは表を書いたまま、イベントごとに警告を残す。書き込みは警告より下の段、送出は情報の段で記録する
   - 多フレーム駆動の檻（実 GPU）で、窓の DPI を 144 → 192 に替えて毎フレームの系を 1 回回すと、その 1 回の中で表が `200,200` になり `OnShellScaling` の知らせが 1 件届くこと、装着の最初のフレームは 0 件、作者 DPI の違うシェルの差し替えの巡は 0 件を固定する
@@ -153,3 +153,4 @@
 ## Implementation Notes
 
 - 1.3: 逆写像は前から `crates/areka/src/placement/transition_judge.rs` の `WindowKey::from_target_id` にもある（doc は「正本は前向きしか持たない」と書いたまま）。`target_scope` との二重化は本 spec の範囲外・完了の棚卸で扱う。clippy は偶奇に `is_multiple_of(2)` を求める。
+- 6.2: `run_scale_notice_phase` は設計の `&mut World` でなく `&World` を取る（読むだけ）。同じフレームの檻は設計の `frame/scale_notice_tests.rs` でなく `emo2_boot/frame_scale_notice_integration_tests.rs`（`frame_visibility_integration_tests.rs` の子・ハーネスを共有）。設計の File Structure Plan を完了時に実態へ合わせる。`gpu_frame_world` の注釈の「WARP 可」は古い（実際は HARDWARE）。
