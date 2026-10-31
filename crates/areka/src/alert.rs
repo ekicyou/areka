@@ -18,9 +18,12 @@ use std::path::PathBuf;
 
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScope};
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     IDNO, IDYES, MB_ICONERROR, MB_ICONQUESTION, MB_ICONWARNING, MB_OK, MB_SETFOREGROUND,
-    MB_TOPMOST, MB_YESNO, MessageBoxW,
+    MB_TOPMOST, MB_YESNO, MESSAGEBOX_RESULT, MESSAGEBOX_STYLE, MessageBoxW,
 };
 use windows::core::HSTRING;
 
@@ -379,6 +382,58 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool) {
             "[alert] MessageBoxW failed: the warning was only logged"
         );
     }
+}
+
+/// 画面を出す間だけ、呼んだスレッドの DPI の扱いをモニタごとの v2 に替えて、出し終えたら戻す。
+/// 切り替えは引数で受ける（本番は [`set_thread_dpi_context`]・テストは偽物）。前の扱いが無効なら
+/// 替えられなかったとして warn `alert_dpi_context_unchanged` を 1 件残し、今の扱いのまま出して戻さない。
+/// `show` はどちらの場合もちょうど 1 回走る。
+#[cfg_attr(not(test), allow(dead_code))]
+fn with_thread_per_monitor<T>(
+    dialog: &'static str,
+    mut switch: impl FnMut(DPI_AWARENESS_CONTEXT) -> DPI_AWARENESS_CONTEXT,
+    show: impl FnOnce() -> T,
+) -> T {
+    let previous = switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    if previous.is_invalid() {
+        tracing::warn!(
+            event = "alert_dpi_context_unchanged",
+            dialog,
+            "[alert] 画面の DPI の扱いを替えられなかった（今の扱いのまま出す）"
+        );
+        return show();
+    }
+    let out = show();
+    switch(previous);
+    out
+}
+
+/// 呼んだスレッドの DPI の扱いを替え、前の扱いを返す（替えられなければ無効な値）。
+#[cfg_attr(not(test), allow(dead_code))]
+fn set_thread_dpi_context(context: DPI_AWARENESS_CONTEXT) -> DPI_AWARENESS_CONTEXT {
+    // SAFETY: 引数は OS の定数か、この関数が前に返した扱いの値。不正な値なら OS は無効な値を返すだけ。
+    unsafe { SetThreadDpiAwarenessContext(context) }
+}
+
+/// 画面を出した結果: 押されたボタンと、戻った直後（スレッドの扱いを戻す前）に読んだ最後のエラー。
+#[cfg_attr(not(test), allow(dead_code))]
+struct BoxOutcome {
+    result: MESSAGEBOX_RESULT,
+    last_error: windows::core::Error,
+}
+
+/// メッセージボックスを出す 1 つの道（持ち主の窓は渡さない・旗は呼び手のまま）。
+/// 出す間だけスレッドをモニタごとの v2 にする（[`with_thread_per_monitor`]）。
+#[cfg_attr(not(test), allow(dead_code))]
+fn show_box(dialog: &'static str, title: &str, body: &str, style: MESSAGEBOX_STYLE) -> BoxOutcome {
+    let (title, body) = (HSTRING::from(title), HSTRING::from(body));
+    with_thread_per_monitor(dialog, set_thread_dpi_context, || {
+        // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
+        let result = unsafe { MessageBoxW(None, &body, &title, style) };
+        // 扱いを戻す呼び出しで上書きされる前に読む。
+        let last_error = windows::core::Error::from_thread();
+        BoxOutcome { result, last_error }
+    })
 }
 
 #[cfg(test)]
