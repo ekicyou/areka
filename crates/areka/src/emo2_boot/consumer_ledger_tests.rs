@@ -282,7 +282,7 @@ fn exclusion_applies_only_within_the_same_name() {
     );
 }
 
-/// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性の検査が緑）。42 件が
+/// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性の検査が緑）。43 件が
 /// 共存しても檻は保たれ、既登記の組の再登記は [`LedgerError::Duplicate`] で検出され、
 /// 別名の追加は独立に成功する（task 7.2・要件 11.3）。
 ///
@@ -291,12 +291,12 @@ fn exclusion_applies_only_within_the_same_name() {
 /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register（42 行）が Ok（重複なら expect が panic する）。
+    // canonical() は内部 try_register（43 行）が Ok（重複なら expect が panic する）。
     let ledger = ConsumerLedger::canonical();
     assert_eq!(
         ledger.entry_count(),
-        42,
-        "正準台帳の登記は 42 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+        43,
+        "正準台帳の登記は 43 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
          (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
          (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
          (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
@@ -304,7 +304,7 @@ fn canonical_builds_without_duplicate() {
          areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\
          (reload,balloon)／(reload,descript)／reloadsurface／(set,alignmenttodesktop)／\
          (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)／(lock,balloonmove)／(unlock,balloonmove)／(set,windowstate)／運搬名 \\v／\
-         bind-noevent／運搬名 *）——増減させたら本檻と doc の 2 か所を編集すること"
+         bind-noevent／運搬名 *／(get,property)）——増減させたら本檻と doc の 2 か所を編集すること"
     );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
@@ -337,7 +337,13 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::ZOrderSink)
     );
 
-    // 42 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+    // プロパティの読みは areka_ghost の PropGetCueSink に結び付く（shell-scale-linkage 要件 1.8）。
+    assert_eq!(
+        ledger.consumer_of("get", Some("property")),
+        Some(CommandConsumer::PropertyRead)
+    );
+
+    // 43 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
     // 検出される。
     let mut ext = ledger.clone();
     let err = ext
@@ -349,7 +355,7 @@ fn canonical_builds_without_duplicate() {
             name: "bind".to_string(),
             selector: None,
         },
-        "42 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+        "43 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
     );
     // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));

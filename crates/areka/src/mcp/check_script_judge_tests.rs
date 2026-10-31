@@ -143,6 +143,13 @@ fn row05_window_state_directives_are_known() {
     silent(r"\![set,windowstate,stayontop]\![set,windowstate,!stayontop]\v");
 }
 
+/// プロパティの読みは表に担当があり、受け手の無い命令として報告しない
+/// （shell-scale-linkage 要件 1.8）。
+#[test]
+fn row05_property_read_is_known() {
+    silent(r"\![get,property,OnX,currentghost.scope(0).scaling]");
+}
+
 #[test]
 fn row06_raw_surface_id_missing_or_out_of_range() {
     fires(r"\s[99999]", Kind::MissingSurface, MSG_MISSING_SURFACE);

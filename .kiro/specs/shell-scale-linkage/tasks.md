@@ -53,7 +53,7 @@
   - _Boundary: PropGetCueSink_
   - _Depends: 2.1_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 7.1_
-- [ ] 3.2 受け手の表に `(get, property)` の行を足し、`check_script` が受け手の無い命令と報告しないことを固定する
+- [x] 3.2 受け手の表に `(get, property)` の行を足し、`check_script` が受け手の無い命令と報告しないことを固定する
   - 受け手の種類に「プロパティの読み」を足し、正典の表に 1 行（42 → 43）と説明の一覧を足す
   - 表の数と行の一覧の檻、emo2 の受け口との合意の檻（新しい種類は emo2 の外の担当）を直す
   - `\![get,property,OnX,currentghost.scope(0).scaling]` が受け手の無い命令として報告されない見本を `check_script` の判定の檻に 1 件足す
