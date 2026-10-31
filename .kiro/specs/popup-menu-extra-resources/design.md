@@ -339,9 +339,18 @@ pub(crate) const LEGACY_CAPTION_RESOURCES: &[(&str, &str)] =
 
 **Responsibilities & Constraints**
 - 排他テストの机を取ってから、`vendors/sample_ghost/dot_sakura.nar` を展開した根をワークツリーの `target\` の下に置き、areka で起こす（SHIORI/2.x・i686 helper 経由・起こし方は完了 `shiori2-protocol` の検証の記録と同じ）。一時フォルダも `target\` の下（5.8）。
-- 右クリックメニューを開き、「ネットワーク更新」の項目名が「．さくら」の辞書の `updatebuttoncaption` の言葉であること、他の項目名を記録する。SSP（`C:\wintools\ssp` に入っている「．さくら」）で同じゴーストのメニューを開いて並べる（5.6）。SSP の外の実物には何も足さない。
+- 右クリックメニューを開き、「ネットワーク更新」の項目名が「．さくら」の辞書の `updatebuttoncaption` の言葉であること、他の項目名を記録する（5.6）。
+- SSP の側（2026-11-01 設計討議 議題 1）: SSP（`C:\wintools\ssp`）は別のセッション（ぱすた開発）が「窓際のぱすたさんDEBUG」で使っている見込みがある。次の順で行う。
+  1. SSP を使っているセッションに「急がなくてよい・切れ目で」を先頭にして断り、答えを待つ。
+  2. 排他テストの机を取る（areka の側と同じ机の中で行う）。
+  3. 「．さくら」の `C:\wintools\ssp\ghost\dot_sakura\ghost\master\ssp_shiori_log.txt` のバイト位置を控える。
+  4. ぱすたさんを降ろさず、SSP の MCP の `sakurascript` で `\![call,ghost,．さくら]` を送って横に呼び出す（切り替えない）。
+  5. 「．さくら」の右クリックメニューを開いて項目名を記録し、areka の側と並べる。
+  6. 控えた位置から後ろを読み、SHIORI/2.x のゴーストでも SSP が `updatebuttoncaption` を問うか・その並びを記録する（測 1 の 2.x 版）。
+  7. 呼び出した「．さくら」を閉じ、ぱすたさんが元のまま動いていることを `get_active_ghost_list` で確かめてから机を返す。
+  SSP の外の実物（`C:\wintools\ssp\ghost` の中身）には何も足さない。
 - 消滅通告・おすすめ・ポータルの項目が areka に無いことは既知の差として書き、直さない（5.7）。
-- areka の記録から、照会を送ってから写すまでの時刻の差を読み、1,000 ms の上限に収まっているかを書く（1.6 の実機の見え方・Performance）。
+- 往復が 1 回増えた後の所要（2026-11-01 設計討議 議題 2）: areka で「．さくら」の右クリックメニューを 3 回以上開き、毎回、照会を送ってから写すまでの所要を areka の記録の時刻から読み、上限 1,000 ms までの余裕とともに書く（1.6・Performance）。時間切れ（`menu_resource_query_unanswered`）が 1 回でも出たら、既知の差にせず実装を止めて開発者に報告する。
 - 書く先: `.kiro/specs/popup-menu-extra-resources/verification.md`（先例 `shiori2-protocol` の検証の記録の形）。机は見比べが済んだらすぐ返す。
 
 ## Error Handling
@@ -383,7 +392,7 @@ pub(crate) const LEGACY_CAPTION_RESOURCES: &[(&str, &str)] =
 - `git diff main...HEAD --stat` に `crates/areka/src/menu/plan.rs`・`mod.rs`・`win32.rs` が現れない（6.2・3.3）。既存の `plan_tests.rs`・`update_frame_tests.rs`・`trigger_wired_tests.rs` は無改変で通る（3.1〜3.3）。
 
 ## Performance & Scalability
-- 「ネットワーク更新」の項目がある表示 1 回につき、SHIORI への往復が 1 回増える。kanade は名前を順に往復するので、照会全体の時間がその 1 往復の分だけ延びる。上限 `QUERY_TIMEOUT`（1,000 ms）は変えない（1.6）。上限を超えたときは今と同じく全件既定名に落ちる。「．さくら」（i686 helper 経由）での所要は C5 で記録の時刻から読む。
+- 「ネットワーク更新」の項目がある表示 1 回につき、SHIORI への往復が 1 回増える。kanade は名前を順に往復するので、照会全体の時間がその 1 往復の分だけ延びる。上限 `QUERY_TIMEOUT`（1,000 ms）は変えない（1.6）。上限を超えたときは今と同じく全件既定名に落ちる。「．さくら」（i686 helper 経由）での所要は C5 で 3 回以上読み、余裕を記録する。時間切れが 1 回でも出れば実装を止めて報告する（合否の線）。
 
 ## 確かめの手順
 1. `cargo test -p areka`・`cargo test -p areka-kanade`・`cargo test -p ukadoc-survey` が全部通る（5.5）。
