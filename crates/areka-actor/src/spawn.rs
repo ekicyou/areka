@@ -10,6 +10,12 @@
 //! - [`ActorError`] — join 時に panic を観測可能な失敗として写像するエラー型。
 //! - [`install_thread_start_hook`] — 生成されたスレッドの走り始めに 1 度呼ばれる
 //!   [`ThreadStartHook`] の呼ばれ口（何を行うかは統合側が決める・依存の向きは不変）。
+//!
+//! 起こす側のスレッドの今の受け手が開いている捕捉の窓（`log-capture-kit` の `capture`）の
+//! ときだけ、その受け手を子のスレッドの既定にする（窓の中で起こしたアクターの記録が窓に
+//! 入る）。判定は受け手が目印 `CaptureWindowMarker` に答えるかの 1 回だけで、ビルドの種類・
+//! 機能の旗・環境変数は読まない。本番には窓が無いので何も据えない。窓を開く前に起こした
+//! アクターの記録は窓に入らない（判定は起こした時点の 1 度きり）。
 
 use std::any::Any;
 use std::ops::ControlFlow;
@@ -33,6 +39,17 @@ pub type ThreadStartHook = fn(&str);
 #[derive(Debug, thiserror::Error)]
 #[error("thread start hook is already installed")]
 pub struct ThreadStartHookAlreadyInstalled;
+
+/// 捕捉の窓の受け手だけが答える目印。std の型だけで書いた大きさ 0 の型で、
+/// `log-capture-kit` の `src/capture.rs` に同じ形がある（2 か所は同じでなければならない。
+/// ずれると引き継ぎが止まり、`spawn_log_capture_tests.rs` の ⑴ が赤になる）。
+pub(crate) type CaptureWindowMarker = [(); 0x6172_656B];
+
+/// 起こす側のスレッドの今の受け手 `current` が開いている捕捉の窓なら、その写しを返す。
+/// 全体の受け手・受け手なし・窓でない差し替え・閉じた窓は `None`。
+fn inheritable(current: &tracing::Dispatch) -> Option<tracing::Dispatch> {
+    current.is::<CaptureWindowMarker>().then(|| current.clone())
+}
 
 /// プロセス共有のスレッド開始フック。未導入なら [`spawn_actor`] は何もしない
 /// （費用は `OnceLock::get` 1 回だけ）。
@@ -72,6 +89,11 @@ pub fn install_thread_start_hook(
 /// [`install_thread_start_hook`] でフックが導入されている場合のみ、生成されたスレッドの中
 /// で `body` より前に 1 度フックを呼ぶ（引数はアクター名）。未導入なら何もしない。
 ///
+/// 起こす時点で呼び出し側のスレッドの今の受け手が開いている捕捉の窓なら、その受け手を
+/// 生成されたスレッドの既定に据える（区間とフックより前・`body` の終わりまで）。判定は
+/// 起こす時点の 1 度きりで、後から差し替えない。本番には窓が無いので何も据えず、窓を開く
+/// 前に起こしたアクターの記録は窓に入らない。
+///
 /// # 運用規約（デッドロック注意）
 ///
 /// `join` は body の終了後に呼ぶ。呼び出し側が `Sender` を握ったまま Close も送らずに
@@ -91,10 +113,13 @@ where
     let (tx, rx) = mpsc::channel::<M>();
     let name: Box<str> = name.into();
     let span_name: String = name.to_string();
+    let inherited = tracing::dispatcher::get_default(inheritable);
 
     let spawn_result = thread::Builder::new()
         .name(name.to_string())
         .spawn(move || {
+            // 起こす時点の判定が窓だったときだけ据える（区間・フック・body の全部を覆う）。
+            let _window = inherited.map(|d| tracing::dispatcher::set_default(&d));
             let span = tracing::info_span!("actor", actor = %span_name);
             let _enter = span.enter();
             // 走り始めに 1 度だけフックを呼ぶ（body より前・生成された当のスレッドの中）。
