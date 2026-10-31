@@ -83,7 +83,7 @@
   - _Depends: 4.2_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 7.1, 7.2, 7.3, 7.4, 9.6, 9.8, 9.9_
 
-- [ ] 4.5 根を解いてから入れ、入れた後の置き場で起動の解決を続ける口を作る
+- [x] 4.5 根を解いてから入れ、入れた後の置き場で起動の解決を続ける口を作る
   - 本番の口は、env・記憶・exe の場所・読み取りだけの旗・告知の抑止を読み、中身の口を本番の根の解決と選び方で呼ぶ。告知の抑止は「`AREKA_NO_ALERT` の抑止」と「`AREKA_APP_SMOKE_EXIT_MS` の有無」の 2 つの値から起動の前の旗を組む純粋な関数に切り出し、本番の口はその値を読んで渡すだけにする
   - 中身の口は、根が決まれば 4.3〜4.4 の道を通し、決まらなければ入れる物を取り出して warn `startup_install_not_submitted reason=root_missing` を 1 件残す。どちらの後も 2.2 の口へ callghost の相手を渡す
   - 完了の形: 兄弟のテストで、空の根（バルーンだけ）に入れたゴーストが経路「Only」で選ばれる・callghost で記憶の前回のゴーストより先に入れたゴーストが選ばれる・ゴーストが `initial_install.nar` だけから入ったとき `no_ghost_installed` で今の選び方になる・根が決まらなければ warn 1 件で何も入らない・入れた後も 0 体なら「ゴーストなし」で `boot_stopped` が出ない・旗を組む関数が 2 つの値のどちらが立っても抑止にする（両方とも立たなければ抑止しない）、が緑（env はテストで触らない）
@@ -148,3 +148,4 @@
 - 4.1: 4.x で使う物（`Pending`・`end_word`・`delete_sources`・`sources_to_delete`・旧い `CallGhost*`・`decide_call_ghost`・`InstallOrigin::{StartupArgs,InitialInstall}`・`DeskAsk::OrderDone` の欄）に付けた `#[allow(dead_code)]` は、呼び手ができたら外す。
 - 4.3: `StartupInstall::run_before_boot(&mut self, roots, alert_suppressed: bool)` は途中の形。4.4 で設計 StartupFlow の署名（`request`・`BeforeBootEnv`・戻り値 `Option<String>`）にそろえる。debug の語 `startup_install_nothing` は設計の記録の語の表に無い（要件 1.5 の debug だけ）。
 - 4.4: 今の Rust の `std::fs::remove_file` は Windows で読み取り専用のファイルも消すので、完了の形の「読み取り専用の写しは消せずに warn」は「使われている（`FILE_SHARE_READ` で握った）写しは消せずに warn」で確かめた（要件 5.5・9.6 の「消せないとき」の同じ道）。本番でも読み取り専用の書庫は消える。
+- 4.5: `startup_tests.rs` が 1,000 行を超えるので、4.5 のテスト（抑止の旗の関数を含む）は兄弟の `install/startup_flow_tests.rs` に置いた（設計の File Structure Plan に無い名前）。本番の口 `install::startup::resolve_boot` の `#[allow(dead_code)]` は 5.1 で外す。

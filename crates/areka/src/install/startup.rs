@@ -116,8 +116,6 @@ impl StartupInstall {
     /// （`initial_install.nar` はいつも・`--install` は `deletesource` のときだけ）、控えを self に残す。
     /// 読み取りだけなら出どころごとに断り、何も入れず何も消さない。答えは `callghost` で起こす
     /// ゴーストのフォルダ名（使うときだけ・要件 1.1〜1.3・1.5・4.9・5.1〜5.7・6.1・6.2・7.1〜7.4）。
-    // 根を解く口（タスク 4.5）が呼ぶまでは、テストだけが呼ぶ。
-    #[allow(dead_code)]
     pub(crate) fn run_before_boot(
         &mut self,
         roots: &BasewareRoots,
@@ -216,6 +214,70 @@ impl StartupInstall {
 pub(crate) struct BeforeBootEnv {
     pub readonly: bool,
     pub alert_suppressed: bool,
+}
+
+/// 起動の前の告知の抑止（純粋）: `AREKA_NO_ALERT` の抑止か、`AREKA_APP_SMOKE_EXIT_MS` が立つ
+/// 有界の自動終了の走行（人が見ていない・自動終了の時計は窓のアプリの後に始まる）なら画面を出さない。
+pub(crate) fn before_boot_alert_suppressed(no_alert: bool, smoke_exit_ms: Option<u64>) -> bool {
+    no_alert || smoke_exit_ms.is_some()
+}
+
+/// 本物の口（`main` から 1 回）。env・記憶・exe の場所・読み取りだけの旗・告知の抑止を読み、
+/// [`resolve_boot_with_env`] を本番の根の解決と選び方で呼ぶ。
+// main の呼ぶ所（タスク 5.1）が呼ぶまでは使われない。
+#[allow(dead_code, reason = "5.1 が呼ぶ")]
+pub(crate) fn resolve_boot(
+    request: &BootRequest,
+    startup: &mut StartupInstall,
+) -> Result<crate::boot_config::BootResolved, crate::alert::AlertScene> {
+    let app_profile_dir = crate::boot_config::default_app_profile_dir();
+    let before = BeforeBootEnv {
+        readonly: crate::readonly::is_on(),
+        alert_suppressed: before_boot_alert_suppressed(
+            crate::alert::suppressed(),
+            crate::smoke_exit::smoke_exit_ms(),
+        ),
+    };
+    resolve_boot_with_env(
+        crate::roots::resolve_roots(&app_profile_dir),
+        request,
+        startup,
+        before,
+        &app_profile_dir,
+        crate::boot_resolve::pick_index,
+        crate::roots::user_root::writable_ghost,
+    )
+}
+
+/// 中身（テストは根の結果・旗・選び方を差し込む）。根が決まれば起動の前の道を通し、決まらなければ
+/// 入れる物を取り出して warn `root_missing` を 1 件残す。どちらの後も、`callghost` の相手を添えて
+/// 起動の解決へ渡す（根の記録と告知の場面は `resolve_boot_with` が出す＝要件 1.1・1.7・4.1・6.3）。
+pub(crate) fn resolve_boot_with_env(
+    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    request: &BootRequest,
+    startup: &mut StartupInstall,
+    before: BeforeBootEnv,
+    app_profile_dir: &Path,
+    pick: fn(usize) -> usize,
+    prepare_ghost: fn(&BasewareRoots, &Path) -> PathBuf,
+) -> Result<crate::boot_config::BootResolved, crate::alert::AlertScene> {
+    let call_ghost = match &resolved {
+        Ok(found) => startup.run_before_boot(&found.roots, request, before),
+        Err(_) => {
+            if let Some(pending) = startup.pending.take() {
+                pending.record_not_submitted("root_missing");
+            }
+            None
+        }
+    };
+    crate::boot_config::resolve_boot_with(
+        resolved,
+        request,
+        call_ghost.as_deref(),
+        app_profile_dir,
+        pick,
+        prepare_ghost,
+    )
 }
 
 impl Drop for StartupInstall {
@@ -410,3 +472,7 @@ pub(crate) fn decide_call_ghost(facts: &CallGhostFacts<'_>) -> CallGhost {
 #[cfg(test)]
 #[path = "startup_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "startup_flow_tests.rs"]
+mod flow_tests;
