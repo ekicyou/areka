@@ -22,7 +22,8 @@ use super::super::sticky_group_ledger::StickyGroupLedger;
 use super::{
     Anchor, Anchored, BalloonFollowTrigger, CharWindowMarker, MonitorSnapshot, PlacementRoute,
     PointPx, SizePx, char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos,
-    follow_balloon, move_window_to, persist_entries, project_anchor, resize_window_to,
+    follow_balloon, move_window_to, origin_position, persist_entries, project_anchor,
+    resize_window_to,
 };
 
 /// 相手の新しい位置（純）: 始めの位置＋量を、相手の向きで射影する（4.2・5.2）。
@@ -295,6 +296,8 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
             );
             continue;
         };
+        // 面の move のずれを引いた元の位置を書く（seriko-pattern-calls task 6.2）。
+        let pos = origin_position(world, partner.window, pos);
         let saved = char_pos_to_origin_x(form, pos, size_px(world, partner.window));
         persist_entries(world, char_pos_entries(partner.scope as u32, saved));
     }

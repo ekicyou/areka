@@ -64,6 +64,11 @@ pub enum DisplayCommand {
     /// seriko が `scope` のバルーンの新しい出番（`generation`）の知らせを受けた点に 1 件並ぶ。同じ
     /// 流れの FIFO ゆえ、前の指令はその出番を知る前に、後の指令は知った後に決めたコマである。
     StageAck { scope: ActorKey, generation: u64 },
+    /// キャラクターのずれ（spec: seriko-pattern-calls 要件 7.1・7.6）: 面の画素・元の表示位置からの
+    /// 絶対値で、`(0, 0)` は元へ戻す。値が変わったときだけ、同じ刻みの `Show` の後に出る。
+    MoveShift { scope: ActorKey, x: i64, y: i64 },
+    /// バルーンのずれ（[`DisplayCommand::MoveShift`] と同じ意味・要件 3.8）。
+    MoveShiftBalloon { scope: ActorKey, x: i64, y: i64 },
 }
 
 /// [`DisplayCommand::Rebased`] の種別（どちらの定義を替えたか）。

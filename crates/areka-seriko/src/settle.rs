@@ -63,6 +63,7 @@ pub fn settle_surface(
         shell_table: table.clone(),
         balloon_tables: BTreeMap::new(),
         rng: Box::new(|_| 1),
+        pick_rng: crate::seeded_rng(0),
     })
     .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst))));
     let actor = ActorKey::from(scope.to_string());

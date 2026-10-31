@@ -134,9 +134,9 @@ impl ManifestDeriver {
 /// 絵が入るのは、その絵を持つ面（持ち主）がどれも、同じセットのどこかのパターンから参照され、
 /// しかも参照するパターンがどれも `bind` か `bind+random` のアニメーションに属するときだけ。
 /// 参照されない持ち主・`bind` でないアニメーションから参照される持ち主が 1 つでもあれば入れない
-/// （迷ったら警告の側）。負の番号・無い番号の参照と、番号がアニメーションの番号のメソッド
+/// （迷ったら警告の側）。負の番号・無い番号の参照と、欄 2 が面の番号でないメソッド
 /// （`start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・
-/// `insert`）のパターンは数えない。抜き色の道か・α を持つかは見ない。
+/// `insert`・`move`）のパターンは数えない。抜き色の道か・α を持つかは見ない。
 /// 下流の emo-compose の `is_bind_interval` は使わず、同じ判定をここで持つ。純粋・決定的。
 pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)> {
     let mut out = BTreeSet::new();
@@ -152,8 +152,8 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
                     | areka_parsers::shell::Interval::BindRandom { .. }
             );
             for pattern in &animation.patterns {
-                // 番号がアニメーションの番号のメソッドは面を指さない（emo-compose の
-                // `targets_animation_id` と同じ 7 語・同じ綴りの比べ方）。
+                // 欄 2 が面の番号でない 8 語は面を指さない（emo-compose の `pattern_word` の
+                // 写し・同じ綴りの比べ方）。
                 let method = pattern
                     .method
                     .as_str()
@@ -169,6 +169,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
                         | "parallelstart"
                         | "parallelstop"
                         | "insert"
+                        | "move"
                 );
                 if !names_animation && pattern.surface_id >= 0 && ids.contains(&pattern.surface_id)
                 {
@@ -237,6 +238,7 @@ mod tests {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
                 surface_id: ref_surface_id,
+                target: ref_surface_id.to_string(),
                 wait: 0,
                 x: 0,
                 y: 0,
@@ -541,7 +543,14 @@ mod tests {
     /// パターンは面の参照と数えない（`bind` のアニメーションからでも持ち主を作らない・迷ったら警告の側）。
     #[test]
     fn bind_only_paths_ignores_patterns_whose_number_is_an_animation_id() {
-        for method in ["insert", "start", "Alternative-Start", "parallelstop"] {
+        for method in [
+            "insert",
+            "start",
+            "Alternative-Start",
+            "parallelstop",
+            "move",
+            " Mo_ve ",
+        ] {
             let mut anim = bind_anim(0, 3000);
             anim.patterns[0].method = DrawMethod::new(method.to_string());
             let got = bind_only_of(

@@ -378,11 +378,26 @@ fn part_frames_go_through_the_same_bind_and_method_rules() {
                 surface41\n{\nelement0,overlay,mouth_open.png,0,0\n}\n";
     let mut pattern = PatternState::default();
     pattern.set_part(10, 100, frame(41, 1, 1));
-    let (ops, logs) = compose_with(text, &[], 0, &BindSet::default(), &pattern);
+    // 外れた `bind+random` のコマは合流しない（D9-3 の門）。
+    let random = text.replace(
+        "animation100.interval,bind",
+        "animation100.interval,bind+random,4",
+    );
+    let (ops, logs) = compose_with(&random, &[], 0, &BindSet::default(), &pattern);
     assert_eq!(ops, vec![("body.png", 0, 0), ("eye.png", 20, 30)]);
     assert!(
         logs.contains("bind 集合に属さない"),
         "外れたコマを捨てた記録: {logs}"
+    );
+    // 純 `bind` のコマは呼ばれて始まったものだけなので、無効でも描く（seriko-pattern-calls 5.6・
+    // SSP の測り M5 で期待を直した）。
+    assert_eq!(
+        compose_with(text, &[], 0, &BindSet::default(), &pattern).0,
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", 20, 30),
+            ("mouth_open.png", 21, 31)
+        ]
     );
     assert_eq!(
         compose_with(text, &[], 0, &BindSet::from_ids([100]), &pattern).0,

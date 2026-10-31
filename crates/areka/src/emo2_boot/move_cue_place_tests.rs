@@ -21,7 +21,7 @@ use super::apply_move_directive;
 use crate::emo2_boot::move_cue::{MoveDirective, parse_move_directive};
 use crate::placement::diag::PlacementRoute;
 use crate::placement::follow::{
-    Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, resize_window_to,
+    Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, resize_window_to,
 };
 use crate::placement::persist::PersistWiring;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
@@ -504,4 +504,67 @@ fn missing_anchored_writes_script_position_with_warn() {
         PointPx { x: 700, y: 553 },
         "当て直さない"
     );
+}
+
+// -------------------------------------------------------------------------
+// 面の `move` のずれとの関係（seriko-pattern-calls・開発者裁定 2026-10-31・案 A）
+// -------------------------------------------------------------------------
+
+/// 絶対の位置へ書いた軸は行き先が新しい元の位置になり、ずれはその上へ当て直し、0 で行き先へ戻る。
+/// `fix` の軸は今の位置からの相対なので、ずれを二度数えずに元の位置へ戻る。
+#[test]
+fn absolute_move_rebases_the_pattern_shift_per_axis() {
+    let (mut world, gw) = world_with(Anchor::Free);
+    let target = gw.char_window(1).unwrap();
+    assert!(apply_char_shift(
+        &mut world,
+        target,
+        (10, 20),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(pos(&world, target), PointPx { x: 210, y: 520 });
+
+    // X だけ絶対（screen の左端から 50）・Y は fix。
+    assert!(apply_move_directive(
+        &mut world,
+        &args(&["--X=50"]),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(pos(&world, target), PointPx { x: 60, y: 520 });
+
+    assert!(apply_char_shift(
+        &mut world,
+        target,
+        (0, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(pos(&world, target), PointPx { x: 50, y: 500 });
+}
+
+/// 自分の窓を基準にした `\![move]` は相対なので、当てた分を残す（ずれを二度数えない）。
+#[test]
+fn relative_move_keeps_the_pattern_shift() {
+    let (mut world, gw) = world_with(Anchor::Free);
+    let target = gw.char_window(1).unwrap();
+    assert!(apply_char_shift(
+        &mut world,
+        target,
+        (10, 20),
+        ScaleRatio::ONE
+    ));
+
+    assert!(apply_move_directive(
+        &mut world,
+        &args(&["--X=5", "--Y=5", "--base=me"]),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(pos(&world, target), PointPx { x: 215, y: 525 });
+
+    assert!(apply_char_shift(
+        &mut world,
+        target,
+        (0, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(pos(&world, target), PointPx { x: 205, y: 505 });
 }

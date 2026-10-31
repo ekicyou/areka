@@ -191,6 +191,7 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
                     index: 0,
                     method: DrawMethod::new("overlay".to_string()),
                     surface_id: -1, // 負値センチネル保持（要件 5.5）
+                    target: "-1".into(),
                     wait: 100,
                     x: 0,
                     y: 0,

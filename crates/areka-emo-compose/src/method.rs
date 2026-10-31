@@ -185,9 +185,10 @@ pub(crate) fn is_implemented_name(name: &str) -> bool {
     known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
 }
 
-/// `move`（サーフェスの番号を無視して、土台の層の表示位置をずらす・描かない）か。綴りの比べ方は [`canonical_method_name`]。
+/// `move`（サーフェスの番号を無視して、土台の層の表示位置をずらす・描かない）か。
+/// 語の見分けは [`crate::pattern_word::pattern_word`] 1 か所に置く。
 pub(crate) fn is_move_name(name: &str) -> bool {
-    canonical_method_name(name) == "move"
+    crate::pattern_word::pattern_word(name) == crate::pattern_word::PatternWord::Move
 }
 
 /// 正規化済み（小文字・区切り除去）メソッド名を [`BlendMode`] へ写像する。

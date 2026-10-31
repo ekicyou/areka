@@ -72,6 +72,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     let cmds = rt.on_tick(1000, &mut states);
     let playing = Some(crate::parts::PartAnim::Playing {
         started_at_ms: 1000,
+        acts_through: None,
     });
     assert_eq!(rt.parts.clock(&scope, 100, 0), playing, "境界で部品が発火");
     assert_eq!(cmds.len(), 1, "部品のコマが載った Show が 1 件");
@@ -131,7 +132,8 @@ fn refresh_reloads_part_frames_at_last_tick_time() {
     assert_eq!(
         rt.parts.clock(&scope, 100, 0),
         Some(crate::parts::PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         }),
         "時計は書き換えない"
     );
@@ -235,7 +237,10 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
 }
 
 fn playing(at: u64) -> Option<crate::parts::PartAnim> {
-    Some(crate::parts::PartAnim::Playing { started_at_ms: at })
+    Some(crate::parts::PartAnim::Playing {
+        started_at_ms: at,
+        acts_through: None,
+    })
 }
 
 /// 面が隠れた（`\s[-1]`）ら、部品の 3 語の時計も引き金の状態も捨てる。面が戻ると、見えた部品の

@@ -267,6 +267,7 @@ fn closed_balloon_window_counts_nothing_and_recounts_on_open() {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(scope(), table_of(MOUTH))]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     });
     let note = |st: &mut Stage, open: bool, ms: u64| {
         st.clock.store(ms, Ordering::SeqCst);
@@ -612,7 +613,10 @@ fn part_clock(st: &Stage, slot: Slot, id: u32) -> Option<PartAnim> {
 }
 
 fn part_playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing { started_at_ms: at })
+    Some(PartAnim::Playing {
+        started_at_ms: at,
+        acts_through: None,
+    })
 }
 
 /// `\0` のシェルの面の部品 100 の欄（animation の番号, 絵）。
@@ -797,6 +801,7 @@ fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(scope(), table_of(MOUTH_ON_PART))]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     });
     let note = |st: &mut Stage, open: bool, ms: u64| {
         st.clock.store(ms, Ordering::SeqCst);

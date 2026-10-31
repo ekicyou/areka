@@ -143,6 +143,7 @@ fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
         index,
         method: DrawMethod::new("overlay".to_string()),
         surface_id,
+        target: surface_id.to_string(),
         wait,
         x: 0,
         y: 0,
@@ -208,6 +209,7 @@ fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
         shell_table,
         balloon_tables: BTreeMap::new(),
         rng,
+        pick_rng: areka_seriko::seeded_rng(0),
     }
 }
 

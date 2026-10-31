@@ -83,6 +83,7 @@ fn tick(
         true,
         None,
         rng,
+        &mut crate::seeded_rng(0),
         &mut pattern,
     );
     pattern
@@ -119,7 +120,8 @@ fn lottery_only_at_visible_boundary_ticks_then_progress() {
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 2000
+            started_at_ms: 2000,
+            acts_through: None,
         })
     );
     assert!(part_frames(&p, 100).is_empty(), "Pending はコマ無し");
@@ -193,7 +195,8 @@ fn playing_part_resumes_from_elapsed_after_being_hidden() {
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 
@@ -310,7 +313,8 @@ fn frame_pointing_to_another_surface_is_evaluated_in_the_same_tick() {
     assert_eq!(
         clocks.clock(&scope(), 200, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 }
@@ -358,7 +362,8 @@ fn element_child_and_pattern_target_share_one_clock() {
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 }
@@ -452,7 +457,8 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     assert_eq!(
         clocks.clock(&scope(), 40, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 3000
+            started_at_ms: 3000,
+            acts_through: None,
         }),
         "絵に出ていない 40 の時計が動き出す"
     );
@@ -487,6 +493,7 @@ fn peek_at(
         table,
         Some(now_ms),
         true,
+        &mut crate::seeded_rng(0),
         &mut pattern,
     );
     pattern
@@ -519,6 +526,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     assert_eq!(calls(&probe), 1);
     let playing = Some(PartAnim::Playing {
         started_at_ms: 1000,
+        acts_through: None,
     });
 
     for _ in 0..3 {
@@ -597,7 +605,8 @@ fn peek_does_not_write_inactive_bind_random_frames() {
     assert_eq!(
         clocks.clock(&scope(), 100, 5),
         Some(PartAnim::Playing {
-            started_at_ms: 1000
+            started_at_ms: 1000,
+            acts_through: None,
         })
     );
 
@@ -627,6 +636,7 @@ fn clear_drops_clocks_of_every_scope() {
         true,
         None,
         &mut rng,
+        &mut crate::seeded_rng(0),
         &mut p,
     );
     let mut p = PatternState::default();
@@ -641,6 +651,7 @@ fn clear_drops_clocks_of_every_scope() {
         true,
         None,
         &mut rng,
+        &mut crate::seeded_rng(0),
         &mut p,
     );
     assert!(clocks.clock(&scope(), 100, 0).is_some());
@@ -703,6 +714,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 true,
                 None,
                 &mut rng,
+                &mut crate::seeded_rng(0),
                 &mut p,
             );
             let mut p = PatternState::default();
@@ -717,6 +729,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 true,
                 None,
                 &mut rng,
+                &mut crate::seeded_rng(0),
                 &mut p,
             );
         }
@@ -838,4 +851,71 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
     );
     // 発火 3・末尾残留 2（5 は待ち 0 の 1 コマなので発火の刻みで保つ）・停止 1・外れた停止 1。
     assert_eq!(part_lines.len(), 7, "{part_lines:#?}");
+}
+
+/// 呼ばれるだけ（純 `bind`）の部品の animation は、着せ替えに無くても在る時計を消さずに進め、
+/// 自分では始めない（spec: seriko-pattern-calls 要件 11.1・5.6）。着せ替えの番人は `bind+random` だけ。
+#[test]
+fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself() {
+    let table = table_of(
+        "surface0\n{\nelement0,overlay,100,0,0\n}\n\
+         surface100\n{\nanimation0.interval,bind\n\
+         animation0.pattern0,overlay,101,50,0,0\n\
+         animation0.pattern1,overlay,102,50,0,0\n}\n",
+    );
+    let (mut rng, probe) = counting_rng(&[]);
+    let mut clocks = PartClocks::default();
+    let top = PatternState::default();
+    let b = no_binds();
+
+    // 境界を跨いでも自分では始めない（乱数も引かない）。
+    let p = tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
+    assert!(p.is_empty());
+    assert_eq!(clocks.clock(&scope(), 100, 0), None);
+
+    // 呼ばれて時計が在る（呼び出しの経路の代わりに手で置く）。
+    clocks
+        .clocks
+        .get_mut(&scope())
+        .and_then(|slots| slots.get_mut(&Slot::Shell))
+        .expect("advance が入れ物を作る")
+        .clocks
+        .insert(
+            (areka_emo_compose::PartKey::Surface(100), 0),
+            PartAnim::Playing {
+                started_at_ms: 1000,
+                acts_through: None,
+            },
+        );
+
+    // 着せ替えに無くても消さずに経過から進める。
+    let p = tick(&mut clocks, &table, 0, &b, 1060, true, &mut rng, &top);
+    assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
+    assert_eq!(
+        clocks.clock(&scope(), 100, 0),
+        Some(PartAnim::Playing {
+            started_at_ms: 1000,
+            acts_through: None,
+        })
+    );
+
+    // 抽選も作り直しも同じ時計を読む（`refresh` も欄を書く）。
+    let mut p = top.clone();
+    clocks.refresh(
+        &scope(),
+        Slot::Shell,
+        0,
+        &b,
+        &table,
+        Some(1110),
+        true,
+        &mut crate::seeded_rng(0),
+        &mut p,
+    );
+    assert_eq!(part_frames(&p, 100), vec![(0, 102)]);
+    assert_eq!(
+        calls(&probe),
+        0,
+        "呼ばれるだけの animation は乱数を引かない"
+    );
 }

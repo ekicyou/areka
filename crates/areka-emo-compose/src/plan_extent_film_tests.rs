@@ -178,6 +178,28 @@ fn hand_written_always_extent_is_union_of_all_patterns() {
     assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
 }
 
+/// seriko-pattern-calls 6.8・M6: 純 `bind` は `always` と同じく全部の pattern の先を数える（負の番号と
+/// 8 語の欄 2 は数えない）。`bind+random` は今のまま番号の最も小さい 1 つだけ（pattern1 の big は数えない）。
+#[test]
+fn pure_bind_extent_is_union_of_all_patterns() {
+    let text = "surface0\n{\nelement0,overlay,body.png,0,0\n\
+                animation0.interval,bind\n\
+                animation0.pattern0,overlay,30,0,2,0\n\
+                animation0.pattern1,overlay,31,0,0,4\n\
+                animation0.pattern2,overlay,-1,0,0,0\n\
+                animation0.pattern3,start,99,0,0,0\n\
+                animation0.pattern4,insert,99,0,0,0\n\
+                animation0.pattern5,move,99,0,0,0\n\
+                animation1.interval,bind+random,2\n\
+                animation1.pattern0,overlay,30,0,0,0\n\
+                animation1.pattern1,overlay,99,0,0,0\n}\n\
+                surface30\n{\nelement0,overlay,wide.png,0,0\n}\n\
+                surface31\n{\nelement0,overlay,tall.png,0,0\n}\n\
+                surface99\n{\nelement0,overlay,big.png,0,0\n}\n";
+    let (world, atlas) = build_with(text, &[]);
+    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
+}
+
 /// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ・消えている・動く絵の子のコマ）。
 #[test]
 fn cells_do_not_change_extent() {

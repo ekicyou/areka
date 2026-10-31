@@ -552,7 +552,8 @@ enum LoopDriver {
     /// 表示中 slot の評価対象アニメが常にゼロ＝何も発行しない（従来観測どおり）。
     Inert,
     /// 実 emo2 表（`BootAssets.loop_tables`）＋固定注入乱数列で駆動（まばたき e2e・R7.2/7.3）。
-    Live(LoopRng),
+    /// 乱数は抽選と選び（`alternative*`・spec: seriko-pattern-calls 要件 3.6・3.7）の 2 つ。
+    Live(LoopRng, LoopRng),
 }
 
 /// scripted ghost boot＋実 sink 結線＋GPU World＋frame 結線状態を束ねた spine ハーネス。
@@ -608,12 +609,12 @@ impl SpineHarness {
 
     /// 実 emo2 表＋固定注入乱数列で SERIKO ループを**活性化**して spine ハーネスを起動する（task 9.4）。
     ///
-    /// `rng` は 1/N 抽選の固定注入列（決定論・実 entropy 非依存・R7.1/7.2）。tick は loop ticker を起動せず
+    /// `rng` は 1/N 抽選の固定注入列（決定論・実 entropy 非依存・R7.1/7.2）、`pick_rng` は選びの注入列。tick は loop ticker を起動せず
     /// [`Self::inject_seriko_tick`]（`send_tick` 直接注入）で制御する（sleep 不使用・R7.3）。まばたき e2e が
     /// 使う（実 kero/sakura まばたき 1 周の full golden は task 10.2）。
-    fn boot_live(on_boot: &str, rng: LoopRng) -> SpineHarness {
+    fn boot_live(on_boot: &str, rng: LoopRng, pick_rng: LoopRng) -> SpineHarness {
         let (backend, shiori_handle) = Self::standard_backend(on_boot);
-        Self::boot_with(backend, shiori_handle, LoopDriver::Live(rng))
+        Self::boot_with(backend, shiori_handle, LoopDriver::Live(rng, pick_rng))
     }
 
     /// 標準 scripted backend（boot 系列＋OnBoot talk＋ForceQuit close 系列）を組む。
@@ -705,10 +706,11 @@ impl SpineHarness {
         let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
         let loop_config = match driver {
             LoopDriver::Inert => SerikoLoopConfig::disabled(),
-            LoopDriver::Live(rng) => SerikoLoopConfig {
+            LoopDriver::Live(rng, pick_rng) => SerikoLoopConfig {
                 shell_table,
                 balloon_tables,
                 rng,
+                pick_rng,
             },
         };
         // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）＋

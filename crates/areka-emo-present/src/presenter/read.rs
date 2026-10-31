@@ -207,6 +207,12 @@ impl EmoPresenter {
         Some(self.targets.get(&target)?.stage_generation)
     }
 
+    /// target の**ずれ**（合図 `MoveShift` で最後に受けた値・作者の座標・`seriko-pattern-calls`
+    /// 要件 7.1・7.6）。未登録・まだ受けていない target は `(0, 0)`。
+    pub fn move_shift(&self, target: TargetId) -> (i64, i64) {
+        self.targets.get(&target).map_or((0, 0), |t| t.move_shift)
+    }
+
     /// target がいま**可視か**（`areka-P0-balloon-visibility` Requirement 6.8 の可視性の単一真実源）。
     ///
     /// 未登録 target は `None`、登録済みなら `Some(可視か)` を返す。真実源は `PresentTarget.visible`
@@ -261,3 +267,7 @@ impl EmoPresenter {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "read_move_shift_tests.rs"]
+mod move_shift_tests;
