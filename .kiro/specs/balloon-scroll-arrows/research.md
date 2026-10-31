@@ -255,29 +255,46 @@
 
 - SSP の `claudia` バルーンは `balloonk0s.txt` などに `arrow.filename,arrowb` を書き、相方だけ別の矢印の絵（`arrowb0.png`）を使う＝面ごとの設定ファイルでスコープごとに名前を変える実例（要件の議題 5 の推奨どおりの使い方）。
 
-## areka での実機の走り（2026-10-31・タスク 8.2・要件 11.3・途中で止まった）
+
+## areka での実機の走り（2026-10-31・タスク 8.2・要件 11.3）
 
 ### やり方
 
-- 根: `<w>\target\bsa-verify\root`（`<w>` はワークツリー `C:\home\maz\git\areka\.claude\worktrees\emo2-specimen-freshness-check-b831f3`）。`nar-sample-path` で開いた `emo2` を `ghost\emo2` に、`areka-balloon` を `balloon\areka-balloon` に写した。記憶（`profile`）は空。
-- 起動: debug 版 `target\debug\areka.exe` に、ゴーストとバルーンのフォルダを絶対パスの位置の引数で渡した（`route=Argv`）。`RUST_LOG=info,areka_emo_present::balloon_marker=debug,areka_emo_text::actor_scroll=trace,areka::emo2_boot::frame::balloon_face=debug,areka::boot_config=debug`、`AREKA_APP_SMOKE_EXIT_MS=900000`。起動の前に 9276・9801・9821 の待受が無いことを確かめた。pid 12344、MCP は 9801。
-- 記録: `<w>\target\bsa-verify\logs\run1.stdout.log`。
-- 台本は MCP の `sakurascript` で送った。`\_q` は areka が知らないタグ（`check_script` が `unknown_tag`）なので外し、`\![set,balloontimeout,600000]` の後に 15 行を `\n` で並べた。
+- 根: `<w>\target\bsa-verify\root`（`<w>` はワークツリー `C:\home\maz\git\areka\.claude\worktrees\emo2-specimen-freshness-check-b831f3`）。走りの前に作り直した。`nar-sample-path` で開いた `emo2` を `ghost\emo2` に、`areka-balloon` を `balloon\areka-balloon` に写した。記憶（`profile`）は空。
+- 起動: debug 版 `target\debug\areka.exe` に、ゴーストとバルーンのフォルダを絶対パスの位置の引数で渡した（`route=Argv`）。`RUST_LOG=info,areka_emo_present::balloon_marker=debug,areka_emo_text::actor_scroll=trace,areka::emo2_boot::frame::balloon_face=debug,areka::boot_config=debug`、`AREKA_APP_SMOKE_EXIT_MS=900000`。起動の前に 9276・9801・9821 の待受が無いこと、スクリーンセーバーが動いていないことを確かめた。pid 31504、MCP は 9801。
+- 記録: `<w>\target\bsa-verify\logs\run2.stdout.log`。
+- 台本は MCP の `sakurascript` で送った。`\_q` と `\C` は areka が知らないタグ（`check_script` が `unknown_tag`）なので使わず、`\![set,balloontimeout,600000]` の後に 15 行を `\n` で並べた。
+- emo2 は約 20 秒ごとに自分から話す（`OnSecondChange`）ので、ゴーストの話が終わった直後に、台本 → 矢印のクリック → ホイール → 新しい台詞までを 1 つの PowerShell で続けて回した（22:56:43〜22:56:57 UTC。間に emo2 の話は入っていない）。
+- バルーンの窓の矩形は `get_property currentghost.balloon.scope(0).rect` で `1412,610,2064,948`（物理の画素・326×169 の 2 倍）。矢印の中心はここから求めた: `arrow0`＝(303,10) の 11×10 の中心 → 画面 (2029,640)、`arrow1`＝(303,169−20) の中心 → (2029,918)、ホイールはバルーンの中 (1732,770)。
+- 入力は `tools/mouse-input.ps1`（クリック）と、同じ SendInput の形でホイールを送る一時の道具。押す前に毎回、カーソルをその点へ動かしてから、点の上の窓のプロセスが起こした areka（pid 31504）であることを確かめた（6 回とも 31504）。カーソルを動かす前に確かめると explorer が返る（areka の窓は、カーソルが上に無いときはクリックが透ける作りのため）。
 
-### 確かめられたこと
+### 結果
 
-- 矢印の絵の解決（要件 9.1）。スコープごとに 1 行ずつ出た:
+| 段 | 操作（UTC） | `dump_balloon`（scope 0） | 結果 |
+|---|---|---|---|
+| 1 | 15 行の台詞（22:56:43.86・話し終わり 22:56:47.09） | `evidence/01-long-arrow0.png` | 1〜4 行目が押し出され、5 行目の上半分が切れて見え、右上に `arrow0` だけが出た（要件 3.1）。合う |
+| 2 | `arrow0` をクリック（22:56:48.31） | `evidence/02-after-arrow0-click.png` | 4〜13 行目が見え、`arrow0` と右下の `arrow1` の両方が出た（要件 3.2・5.1）。合う |
+| 3 | ホイールを上へ 1 目盛り（22:56:49.13） | `evidence/03-after-wheel-up.png` | 一番上（1 行目）まで戻り、`arrow0` が消えて `arrow1` だけが出た（要件 3.3・6.1）。**ただし 3 行目の字が上の一部しか描かれていない**（下の「見つかった崩れ」） |
+| 4 | `arrow1` をクリック（22:56:49.75） | `evidence/04-after-arrow1-click.png` | 下へ送られ、`arrow0` と `arrow1` の両方が出た（要件 5.2）。2 行目が上で切れ、3 行目の字は崩れたまま |
+| 5 | ホイールを下へ 1 目盛り（22:56:50.43） | `evidence/05-after-wheel-down.png` | 段 1 と同じ自動の位置（最新の行）へ戻り、`arrow1` が消えた（要件 3.3・8.2）。合う |
+| 6 | ホイールを上へ 2 目盛り（22:56:51.20） | `evidence/06-scrolled-back-before-new-talk.png` | 一番上まで戻り、`arrow1` だけが出た。**2 行目の字が上の一部しか描かれていない** |
+| 7 | 戻した最中に 12 行の新しい台詞（22:56:51.60・話し終わり 22:56:57.23） | `evidence/07-new-talk-latest.png` | 最新の行（新しい台詞 12 行目）が見える位置へ戻り、`arrow0` だけが出た（要件 8.1）。合う |
+
+- 終わり方: MCP の `sakurascript` で `\0\-\e` を送り、`app_exit origin=KanadeStopped(Quit) closed=4`・終了コード 0。記録の ERROR・panic は 0 件。WARN はバルーンの中身から出る既知のもの（`balloons2`・`balloons3` を本体側の系列へ縮退、`cursor.blendmethod` の ROP 系の縮退）だけで、矢印の行は無い。
+
+### 記録の行
+
+矢印の絵の解決（要件 9.1）は、スコープごとに 1 行ずつ出た:
 
 ```text
-2026-10-30T18:09:06.208103Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow1.png 11x10
-2026-10-30T18:09:06.238838Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=1 base="arrow" chain=arrowp1def>arrowk>arrowp0def>arrows>arrow up=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow1.png 11x10
-2026-10-30T18:09:06.487875Z DEBUG areka::emo2_boot::frame::balloon_face: balloon_face: 今の定義を差し替えた scope=0 previous=None face=0 cause=Attach
+2026-10-30T22:54:49.983405Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow1.png 11x10
+2026-10-30T22:54:50.005100Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=1 base="arrow" chain=arrowp1def>arrowk>arrowp0def>arrows>arrow up=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify\root\balloon\areka-balloon\arrow1.png 11x10
+2026-10-30T22:54:50.197611Z DEBUG areka::emo2_boot::frame::balloon_face: balloon_face: 今の定義を差し替えた scope=0 previous=None face=0 cause=Attach
 ```
 
-- 長い台詞で `arrow0` が出た（要件 3.1）。15 行を送り、話し終えた後の `dump_balloon`（scope 0）が `evidence/01-long-arrow0.png`。1〜4 行目が押し出され、5 行目の上半分が切れて見え、右上の (303,10) に上向きの矢印が出ている。`arrow1` は出ていない（自動の位置なので正しい）。バルーンの窓の矩形は `1412,610,2064,948`（物理の画素・326×169 の 2 倍）。
+手動の送りの始まり・終わり・1 段ごとの送りの行（要件 9.2・9.3）は **1 行も残らなかった**。送り自体は絵のとおり効いている。原因は記録の名指しの綴りで、`actor_scroll.rs` は `actor.rs` の中の `#[path = "actor_scroll.rs"] mod scroll;` なので、記録の出所は `areka_emo_text::actor::scroll` になる。design.md の Monitoring（と今回の `RUST_LOG`）が書く `areka_emo_text::actor_scroll` には当たらない。次に回すときは `areka_emo_text::actor::scroll=trace` を足す。
 
-### 確かめられなかったこと（走りを止めた理由）
+### 見つかった崩れ
 
-- クリック・ホイールで戻すことと、新しい台詞で最新の行へ戻ることは回せなかった。矢印を押す前に点 (2028,640) の窓の持ち主を確かめると、areka（pid 12344）でなく explorer（pid 10284）で、画面の撮影（`mouse-input.ps1 -Action shot`）も失敗した。スクリーンセーバー（`Mystify.scr`）が動いていた。この状態では SendInput が効かないので、押さずに止めた。
-- 止め方: MCP の `sakurascript` で `\0\-\e` を送り、`app_exit origin=KanadeStopped(Quit) closed=4`・終了コード 0 で終わった。記録の ERROR・panic は 0 件。
-- そのため「手動の送りを始めた」「手動の送りを終えて自動へ戻した」の行はまだ無い。在席のとき（スクリーンセーバーが動いていないとき）に、同じ根でもう一度回す。
+- 手動で上へ戻したとき、1 行だけ字の上の一部しか描かれない行が残る（段 3 の 3 行目・段 4 の 3 行目・段 6 の 2 行目）。段 3 は段 2（4 行目が先頭）から 3 行戻した所、段 6 は自動の位置（5 行目が半分切れた所）から 6 行戻した所で、崩れる行が違う。送りの blit の後に、新しく見えた行の描き直しが 1 行分足りないか、半分切れていた行の描き直しが漏れているように見える。直していない（タスク 8.2 は確かめの段）。
+- 自動の位置へ戻った絵（段 5・段 7）には崩れは無い。
