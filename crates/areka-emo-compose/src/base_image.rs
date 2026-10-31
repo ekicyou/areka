@@ -31,7 +31,7 @@ use bevy_ecs::world::World;
 use crate::method::ComposeMethod;
 use crate::nesting::ElementKind;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
-use crate::world::{SurfaceId, SurfaceIndex};
+use crate::world::{Records, SurfaceId, SurfaceIndex};
 
 /// 面の番号 → 面の画像のファイル名（元の綴りのまま）。
 ///
@@ -64,6 +64,7 @@ pub struct BaseImageReport {
 pub(crate) fn apply_base_images(
     world: &mut World,
     images: &BTreeMap<u32, String>,
+    records: Records,
 ) -> BaseImageReport {
     let mut report = BaseImageReport::default();
 
@@ -86,11 +87,13 @@ pub(crate) fn apply_base_images(
         let Some(mut master) = world.get_mut::<SurfaceMaster>(entity) else {
             // SurfaceIndex に載るが component 欠落（本来生じない不整合）。パニックせず観測可能化し、
             // 画像は使わなかったものとして数える（不変条件「和は渡した画像の全体」を保つ）。
-            tracing::warn!(
-                target: "areka_emo_compose",
-                id,
-                "SurfaceIndex は指すが SurfaceMaster component が欠落: 面の画像を使わずスキップ"
-            );
+            if records.emits() {
+                tracing::warn!(
+                    target: "areka_emo_compose",
+                    id,
+                    "SurfaceIndex は指すが SurfaceMaster component が欠落: 面の画像を使わずスキップ"
+                );
+            }
             report.shadowed.insert(id, file.clone());
             continue;
         };

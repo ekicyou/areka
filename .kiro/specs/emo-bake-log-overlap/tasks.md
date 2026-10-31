@@ -14,7 +14,7 @@
   - 1.2 と並べて回すときの注意: compose は atlas に依るので、同じワークツリーでは組み立てとテストの段を順に回す（片方の書きかけで他方の組み立てが壊れるため）
   - _Boundary: 焼く段の口_
   - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7, 3.2, 3.4_
-- [ ] 1.2 (P) 面の表を組む段に、記録を出さない組み方の入口を足す
+- [x] 1.2 (P) 面の表を組む段に、記録を出さない組み方の入口を足す
   - 面の表を組む中身を 1 本のまま、2 値を受ける内側の核へ移す。2 値の型はクレートの中だけで使える形にする。今の入口（`build`・`build_with_images`）は「出す」で核を呼び、働きを変えない
   - 畳み込みに 2 値を受ける形を足して中の関数（素の面・追記・アニメーションの合わせ・面の書き込み・追記の相手の展開）へ通し、記録の 10 本を口で囲む。面の画像の当て込みも 2 値を受け、1 本の `warn!` を囲む。今の畳み込みと追記の相手の展開の形は「出す」の包みとして残し、`fold_tests.rs`・`base_image_tests.rs`・`boxes.rs` の呼び手を変えない
   - 2 値は記録の行を出すかどうかだけを切り替え、枝の選び方と面の表への書き込みを変えない
@@ -74,3 +74,9 @@
   - 完了の棚卸の材料として、2 層マージの記録が窓の位置の読み（`placement/mod.rs`）と資産の組み立ての 2 か所から重ねて出ることを、今のコードの行番号で引き直して確かめる（起票そのものは `/kiro-complete` が行う）
   - 完了の状態: 4 クレートのテストが緑、上の差分と行数の確かめが全部通り、2 層マージの重なりの行番号が最新のコードと合っている
   - _Requirements: 3.2, 3.4, 4.1, 4.2, 5.1, 5.2_
+
+## Implementation Notes
+
+- 1.1/1.2: 2 値はクレートごとに `pub(crate) enum Records { Emit, Quiet }`（`emits()`）。atlas は `bake_quiet`、compose は `EmoWorld::build_with_images_quiet`。口は記録の行だけを囲み、枝の選び方を変えない。
+- 範囲外（完了の棚卸で起票）: clippy 1.99 の `chunks_exact` が `areka-emo-compose` の触っていないテスト 5 か所（blit_transparent_alpha_tests.rs:60・golden_tests_surface1000_bind_tests.rs:89・golden_tests_test_support.rs:168・composer_tests.rs:842/894）で `--all-targets -D warnings` を赤にする。`tools/test-all.ps1` は clippy を回さない。
+- 1.2 の小さな残り: `world.rs` の `populate_from_shell` の説明が「`fold_shell` が担う」のまま（本番は `fold_shell_with`）。
