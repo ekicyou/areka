@@ -7,7 +7,7 @@
 //! GUID_WICPixelFormat32bppPBGRA へ変換 → CopyPixels`）で PBGRA raw バッファを
 //! 抽出する（wintf の `load_bitmap_source` 相当・本層は wintf 本体へ依存せず
 //! `windows` を直接利用）。COM 依存は本モジュールに隔離し、MTA/COM 規律に従う。
-//! 変換前フレームのピクセルフォーマット由来の α 有無を `DecodedImage` へ確定する。
+//! 変換前フレームのピクセルフォーマット由来とパレット由来の α 有無を `DecodedImage` へ確定する。
 
 use std::fs::File;
 use std::io::BufReader;
@@ -17,8 +17,9 @@ use windows::Win32::Foundation::GENERIC_READ;
 // IWICImagingFactory2 は D2D サブモジュール経由で露出する（wintf の import 経路に倣う）。
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
 use windows::Win32::Graphics::Imaging::{
-    CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, GUID_WICPixelFormat32bppPBGRA,
-    GUID_WICPixelFormat32bppPRGBA, GUID_WICPixelFormat32bppRGBA,
+    CLSID_WICImagingFactory, GUID_WICPixelFormat1bppIndexed, GUID_WICPixelFormat2bppIndexed,
+    GUID_WICPixelFormat4bppIndexed, GUID_WICPixelFormat8bppIndexed, GUID_WICPixelFormat32bppBGRA,
+    GUID_WICPixelFormat32bppPBGRA, GUID_WICPixelFormat32bppPRGBA, GUID_WICPixelFormat32bppRGBA,
     GUID_WICPixelFormat32bppRGBA1010102, GUID_WICPixelFormat32bppRGBA1010102XR,
     GUID_WICPixelFormat64bppBGRA, GUID_WICPixelFormat64bppPBGRA, GUID_WICPixelFormat64bppPRGBA,
     GUID_WICPixelFormat64bppRGBA, GUID_WICPixelFormat128bppPRGBAFloat,
@@ -56,7 +57,8 @@ impl WicDecoderArm {
     /// WIC 経路で PBGRA バッファと変換前 α 有無を抽出する（`windows` エラーをそのまま返す）。
     ///
     /// wintf `com/wic.rs::load_bitmap_source` の手順を raw COM で再現する。
-    /// `has_alpha` は **変換前**フレームの `GetPixelFormat`（Critical Issue 1）から取る。
+    /// `has_alpha` は **変換前**フレームの `GetPixelFormat`（Critical Issue 1）由来と、
+    /// 番号つきの形式ならパレット由来の α 有無から取る。
     fn decode_inner(&self, path: &Path) -> windows::core::Result<DecodedImage> {
         let path_hstring = HSTRING::from(path.to_string_lossy().as_ref());
 
@@ -76,7 +78,12 @@ impl WicDecoderArm {
         // 変換前フォーマットから α 有無を確定（Critical Issue 1）。
         // PBGRA 変換後は必ず α 付きになり判別不能になるため、変換前にここで取る。
         let pre_format = unsafe { frame.GetPixelFormat()? };
-        let has_alpha = pixel_format_has_alpha(&pre_format);
+        // 番号つきの形式は形式の GUID に α が出ないので、パレットの透明度で決める。
+        let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
+            palette_has_alpha(&self.factory, &frame)?
+        } else {
+            pixel_format_has_alpha(&pre_format)
+        };
 
         // PBGRA32 へ変換（α 無し画像も 100% 不透明として埋める）
         let converter = unsafe { self.factory.CreateFormatConverter()? };
@@ -158,6 +165,27 @@ impl ElementDecoder for WicDecoderArm {
             path: path.to_path_buf(),
             source,
         })
+    }
+}
+
+/// 番号つきの形式（1・2・4・8 ビット）。この集合に入る形式だけパレットを読む。
+const INDEXED_FORMATS: &[GUID] = &[
+    GUID_WICPixelFormat1bppIndexed,
+    GUID_WICPixelFormat2bppIndexed,
+    GUID_WICPixelFormat4bppIndexed,
+    GUID_WICPixelFormat8bppIndexed,
+];
+
+/// フレームのパレットに透明度 255 未満の色が 1 つでも在るか（`IWICPalette::HasAlpha`）。
+/// パレットを作れない・写せない・聞けないときは WIC のエラーをそのまま返す。
+fn palette_has_alpha(
+    factory: &IWICImagingFactory2,
+    source: &IWICBitmapSource,
+) -> windows::core::Result<bool> {
+    unsafe {
+        let palette = factory.CreatePalette()?;
+        source.CopyPalette(&palette)?;
+        Ok(palette.HasAlpha()?.as_bool())
     }
 }
 

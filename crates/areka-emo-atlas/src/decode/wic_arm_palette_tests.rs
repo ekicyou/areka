@@ -142,3 +142,32 @@ fn on_keys_idx8_plain() {
 fn on_keys_idx8_opaque_trns() {
     assert_baked("idx8_opaque_trns.png", UseSelfAlpha::On, PLAIN_KEYED);
 }
+
+// 失敗の道（要件 4.1）: 番号つきでない絵でパレットを読むと偽を推測せず WIC のエラーを返す。
+
+#[test]
+fn palette_has_alpha_fails_on_non_indexed_image() {
+    use windows::Win32::Foundation::{GENERIC_READ, WINCODEC_ERR_PALETTEUNAVAILABLE};
+    use windows::Win32::Graphics::Imaging::{IWICBitmapSource, WICDecodeMetadataCacheOnDemand};
+    use windows::core::{HSTRING, Interface};
+
+    with_arm(|arm| {
+        let png = crate::sample_test_support::emo2_balloon_root().join("online0.png");
+        assert!(png.exists(), "fixture must exist: {}", png.display());
+        let frame: IWICBitmapSource = unsafe {
+            arm.factory
+                .CreateDecoderFromFilename(
+                    &HSTRING::from(png.to_string_lossy().as_ref()),
+                    None,
+                    GENERIC_READ,
+                    WICDecodeMetadataCacheOnDemand,
+                )
+                .and_then(|d| d.GetFrame(0))
+                .and_then(|f| f.cast())
+                .expect("online0.png frame 0")
+        };
+        let err = super::palette_has_alpha(&arm.factory, &frame)
+            .expect_err("non-indexed image has no palette");
+        assert_eq!(err.code(), WINCODEC_ERR_PALETTEUNAVAILABLE);
+    });
+}
