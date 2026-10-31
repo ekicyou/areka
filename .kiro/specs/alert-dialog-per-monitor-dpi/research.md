@@ -182,3 +182,8 @@
 - [Stack Overflow の答え（kiwix の写し）](https://kiwix.lema.org/stackoverflow.com_en_all_2023-11/a/43234355) — 古い MessageBox は v2 に合わせて直されておらず、タスクダイアログは正しく拡大されるという報告（第三者）
 - [DPI_AWARENESS_CONTEXT handle（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/desktop/hidpi/dpi-awareness-context) — v2 の扱いと、v2 で作ったダイアログが拡大を追うこと
 - [AutoHotkey の掲示板](https://www.autohotkey.com/boards/viewtopic.php?p=70977) — 既出・v2 でもメッセージボックスがぼやける報告（第三者）
+
+## 設計の討議で決めたこと（2026-11-01・全議題を推奨案で確定）
+
+1. **実装の後の実機の確かめで出す画面**: 関門 0 の結果で決める。`process_v2_default` の行が見分けに使えて `window=2` なら、利用条件の画面は直す前からにじまないので、無い根で止まるエラーの画面（窓のアプリの前・プロセスは非対応のまま）を副のモニタに出す短い 2 回目を足す。根拠: 直しで描き方が変わる画面を実物で見ないまま終えない（檻の外の穴は実機で出る）。要件 4.2 も同じ形に直した。
+2. **3 つの口が同じ道を通ることのテスト（旧 D5・D6）**: 置かない。3 つの口が `show_box` を呼ぶのも渡す画面の名も入力によらない配線で、開発者の原則「檻に入れるのは判断分岐だけ・配線は再テストしない」に当たる。抑止の分岐は既にある `alert_tests.rs` が押さえ、配線は実機の確かめで通る。ソースの字面を数えるテストは rustfmt の折り返しでもろくなる（設計の審査の指摘 3）点も消える。要件 4.1 も同じ形に直した。
