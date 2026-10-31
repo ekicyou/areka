@@ -344,3 +344,10 @@ t はすべて 0.0000 で、本番の寄せは t ＝ 0 の式 `highlight_band_of
 ### 5.3 ファイルの大きさ
 
 `viewbox_draw_line_gap_band_tests.rs` は 673 行で 1,000 行以下。記録だけの測りは兄弟のファイルへ分けていない（`lib.rs` は触っていない）。
+
+## 6. 既存の檻の確かめ（2026-11-01・タスク 4.1）
+
+排他テストの机を取り、`cargo test -p areka-emo-text`（lib・`tests/` の全部・doc）を 1 回だけ回してすぐ返した。結果は緑（lib 1179 passed・5 ignored、`tests/` の各ファイルも 0 failed。`tests/line_pitch_readback_test.rs`・既定の書体のバイト一致の檻・縦書きの帯の檻・層の檻・3.2 の読み戻しを含む）。
+
+- 消した檻 0・ゆるめた檻 0・書き換え 0 件（期待 0）。
+- 既存のテストのファイルへの手入れは、`draw_metrics_styled_tests.rs` に検査を 1 本足したこと（§9・期待値の書き換えなし）と、`viewbox_draw_vertical_band_readback_tests.rs` の `R_FILL_BGRA`・`bgra_y_span` を `pub(super)` へ上げた 2 語だけ。
