@@ -177,3 +177,77 @@
 2. §1.7 の決め 4: 縦書きの既定の逃げ道（`DWriteMetrics::vertical_em_box_left` の `None` の枝）は、本番で通らないことを設計で確かめ、確かめられたら値を変えず説明で示すだけ。通る道があれば行の箱を読まない形へ改める（要件 4.4）。
 3. §1.7 の決め 9: 測って「下」（今の帯がずれていない）だったら、帯の式に触らず、`line_box_height` の説明の直し・記録だけの検査・§8 の行を残して閉じる。止まらない（要件 1.4）。
 4. 設計の段へ回すもの: §1.7 の決め 5〜8（`line_box_height` の名前・検査の置き場・丸めの順・読み戻しの拡大率）と §1.6 の 5〜7（最後の行の帯のはみ出し・行間が負の書体・`None` の枝の到達）、案 2 の口の形と縮退（`warn!`＋0）。
+
+## 2. 設計の段の調べ（2026-11-01・`/kiro-spec-design -y`）
+
+### 2.1 まとめ
+
+- **調べの種類**: 軽い調べ（既存の仕組みの拡張）。外の資料は §1.5 で足りるので新しく引いていない。依存は足さない（`windows` の DirectWrite の型・`wintf` の生成口は既に使っている）。
+- **使った手引き**: `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、雛形 `.kiro/settings/templates/specs/design.md`・`research.md`、steering の `structure.md`（兄弟のテストのファイルの名前の決まり・1,000 行・助けの関数を写さない）と `roadmap.md` の C15 の行。
+- **結論**: 案 2 をそのまま設計に落とせる。口 1 つ（`GlyphMetrics::horizontal_char_box_top`・既定 0）・測り 1 つ（`DWriteMetrics` の生成時に 1 度）・帯の式の足し 1 か所（`line_bands` の横書きの腕）で済み、帯を読む下流（塗り・当たり・字の矩形・ダーティ帯）は値が変わるだけで形は変わらない。
+
+### 2.2 `None` の枝は本番で通らない（§1.6 の 7・要件 4.4）
+
+- **調べた所**: 本番で `GlyphMetrics::vertical_em_box_left` を呼ぶのは `choice.rs::line_bands` の縦書きの腕だけで、`line_bands` の本番の呼び手は `actor_present.rs::choice_ranges`（`present_frame` の 327 行から `resolved.mode` と `render.metrics` を渡す）だけ。
+- `render.metrics` は `actor_decoration.rs::build_actor_render`（`actor_present.rs:250`）が **同じ `resolved.mode`** で作る。作るのは場所に描画資源が無いときだけ（`actor_present.rs:168`）。
+- 解き直した値（`ResolvedBalloonText`・`mode` を欄に持ち `PartialEq` で比べる）が変わったときは、`actor_attach.rs::refresh_actor_binding` が描画資源を捨てる（425 行）。範囲が潰れたときだけ残すが、その場合は `present_frame` が帯を出す前に捨てて戻る（153〜161 行）。
+- 箱（`actor_box.rs`）は登録が無い場所だけを登録し（348 行）、変わった場所は登録ごと描画資源を捨てる（344 行→469 行）。箱の定義の入れ替えは箱の描画資源を全部捨てる（50〜58 行）。
+- 直の登録口 `register_actor` は描画資源に触らないが、本番の呼び手は `emo2_boot/frame/attach.rs:499` の装着（`wiring.attached` で高々 1 回・その時点で描画資源は無い）だけ。
+- **結論**: 本番では、計測器を束縛した向きと `line_bands` に渡る向きは常に同じ。横書きに束縛した計測器へ縦書きを問う道（`None` の枝）は本番で通らない。値は変えず、説明にこの根拠を書く（要件 4.4 の「確かめられたら説明で示すだけ」）。`FixedMetrics` の既定の実装は書体から測った寸法ではないので要件 4.4 の外として触らない。
+
+### 2.3 横書きの行の字の置き場の測り方
+
+- 本番の行は `draw.rs::create_line_layout`（横書きは何も足さず `create_text_layout(text, format, PROBE_MAX_EXTENT, block_extent)`）で組み、行矩形の左上を原点に描く。行の基線は行矩形の上辺から `GetLineMetrics()[0].baseline`。
+- 字の箱の上端 t ＝ 基線 − ascent（`DWRITE_FONT_METRICS::ascent × em ÷ upem`）。書体の寸法は大きさに比例するので、縦書きの前例と同じく比（t ÷ h）で 1 度だけ持ち、行の em を掛ける（要件 2.4: 行の最大の字の em）。
+- `draw_line_store_tests.rs` の L2（`only_create_line_layout_creates_text_layouts`）は、本番のファイルで TextLayout を作るのを `create_line_layout` の中だけに限る。新しい測りも `create_line_layout` を通す（縦書きの `measure_vertical_em_box_left_ratio` と同じ）。
+- ascent は今の `measure_line_box_ratio` が既に読む `DWRITE_FONT_METRICS` から取る。和だけを返す形を、`DWRITE_FONT_METRICS` をそのまま返す形（`measure_font_metrics`・`pub(crate)`）へ改める（新しい型を作らない）。比を作る式は呼び手に置く。
+
+### 2.4 帯を読む下流は形が変わらない（§1.6 の 5・6）
+
+- `highlight_rect`（`viewbox_draw_render.rs:699`）・`derive_hit_rows`（`choice.rs:304`）・`glyph_cells`（`choice.rs:432`）は `LineBand` の 2 値をそのまま足すだけ。
+- `expand_overhang_for_band`（`viewbox_draw_render.rs:738`）は横書きで遠端（下）だけを `offset + extent − font_height` で広げる。案 2 では寄せが 0 以上のままなら足りる。**寄せを 0 以上に保つ**（t を `max(0, t)` で読む）ことで、`viewbox_draw_render.rs` に触らずに済む。
+- 最後の行の帯は行矩形の下へ出る（游ゴシック 20・「上」の見込みで帯 8..30・行矩形 0..20）。字のインクも今から同じだけ下へ出ているので新しい問題ではない。ダーティ帯は上の式で遠端を 10 広げるので消し残らない見込み。読み戻しの検査で hover を外したフレームに塗りが残らないことも見る。
+- 行間が負の書体: 要件の用語で「書体の行間を持つ書体」は差が正の物だけ、要件 5.1 は差 0 の物だけを言う。負の書体は t が負になり得るが、`max(0, t)` で今の帯（行矩形の上端から寄せる形）へ戻る＝下流の不変条件（横書きの寄せは 0 以上）を保つ。手元に該当の書体は無い。
+
+### 2.5 丸めの順（§1.7 の 7）
+
+- `round(max(0, t) + max(0, B − E) / 2)` を取る（丸め 1 回）。`round(t) + round(...)` は丸めが 2 回で、要件 2.1 の「1 画素以内」の余りを使い切りやすい。
+- t ＝ 0 のとき `0.0 + x` は x とビットまで同じなので、今の `highlight_band_offset` の値と同じ（要件 5.1）。書体の行間 0 の書体で測った t が ±1e−6 程度の誤差を持っても、`max(0, ·)` が負を 0 に、丸めが正の誤差を吸う（`(B − E)/2` が x.5 の境にちょうど乗る書体は手元に無い・今ある画素の檻が見張る）。
+
+### 2.6 検査の置き場（§1.7 の 6）
+
+- 横書きの読み戻しは、縦書きの前例 `viewbox_draw_vertical_band_readback_tests.rs`（`viewbox_draw.rs` の子・`Rig`・`live_diff_model_font`・`block_axis_ink_span` を `viewbox_draw_test_support.rs` から借りる）と同じ形にする。`structure.md` は助けの関数の写しを禁じる（「複製は本文の同一性を壊す」）。
+- `tests/line_pitch_readback_test.rs`（709 行）へ足す案は、字の箱を出すのに要る `create_line_layout`（`pub(crate)`）と書体の寸法を crate の外から読めず、写しの道（TextLayout を直に作る）は L2 の趣旨と食い違うので取らない。同ファイルは触らない（`clippy-199-lints` の段 2 と重ならない）。
+- ゆえに新しいソースのファイル 1 つ（`src/viewbox_draw_line_gap_band_tests.rs`）を `viewbox_draw.rs` の子として足し、`lib.rs` の `SOURCES_OUTSIDE_THE_PURE_SCAN` に 1 行足す（C15 で本 spec だけが使える席）。偽の計測器で回す決定論のテストも同じファイルに置く（GPU を使わない `#[test]` として分ける）。
+- 触るファイルの一覧（要件の Boundary）に無い `viewbox_draw.rs`（子の宣言 3 行）と `lib.rs`（1 行）が増える。C15 のほかの 5 本は emo-text に触らない（roadmap の C15 の行）ので重なりは 0。要件は新しいファイルを足すとき `lib.rs` に行を足すことを既に見込んでいる。
+
+### 2.7 読み戻しの拡大率（§1.7 の 8）
+
+- 縦書きの前例（拡大率 1・2）に揃える。記録だけの検査も残す検査も k ＝ 1・2 の両方で回す。帯の寄せは image px で整数に丸めてから k を掛けるので、k ＝ 2 は丸めの余りが物理画素で 2 倍になる所を見る。
+
+### 2.8 大きさの違う行が隣り合うとき（設計の点検で見つけた・要件 2.7 の場面）
+
+- 行送りは閉じた行の最大の em から出す（`layout_styled.rs::LineHeights::close`・`line_pitch_of`）。`\f[height,40]` の行（行送り 42）の次に既定 20 の行が来ると、両方の帯は重なる見込み。
+- 見込み（行の上端 0・次の行の上端 42・20 の行の行送り 22）:
+
+| 書体 | 直し | 40 の行の帯 | 次の 20 の行の帯 | 重なり |
+|---|---|---|---|---|
+| Yu Gothic UI（行間 0） | 今（要件 5.1 で変えない） | 6..48 | 44..66 | 4 |
+| 游ゴシック | 今 | 5..47 | 44..66 | 3 |
+| 游ゴシック | 案 2（「上」の見込み） | 17..59 | 50..72 | 9 |
+
+- 原因は帯の式でなく配置: 40 の行の字の箱（51.5）が行送り（42）を超え、**字のインク同士が既に重なる**見込み（40 の行のインクの下端 ≒ 56.8・次の行のインクの上端 ≒ 50.4）。両方のインクを覆う帯は重ならざるを得ない＝要件 2.4（大きい字のインクも覆う）と要件 2.3（隣の行の帯と重ねない）がこの場面ではぶつかる。
+- 書体の行間 0 の書体でも今から重なっていて、要件 5.1 はそれを変えさせない。当たりは `crates/areka/src/input_events/balloon.rs` の `last_hit_of`（後ろから探して最初の 1 つ）で 1 点 1 選択肢に決まる＝要件 3.3 は形の上で満たされる。
+- 要件 2.7 は「どれを先にするかを自分で選ばず、測った値を添えて開発者の決めを仰ぐ」と定めるので、設計は選ばず、推奨（行ごとの帯のまま・要件 2.3 は同じ大きさの行どうしと読む）を添えて設計の討議へ回す。測りのタスク（要件 1.1）でこの組も記録し、測った値を添える。
+
+### 2.9 合成の 3 つのレンズ（`design-synthesis.md`）
+
+- **一般化**: 縦書きの「書体の基線から帯を置く」（`vertical_em_box_left`）と横書きの「字の箱の上端から帯を置く」は同じ問題（書体が字を置いた所を 1 度だけ測り、比で持つ）。口は向きごとの 2 つのまま（縦書きは符号つきの左・横書きは 0 以上の上）にし、1 つの汎用の口へまとめることはしない（意味と符号の約束が違い、まとめると縦書きの檻が動く＝要件 5.2）。
+- **作るか借りるか**: DirectWrite の `GetLineMetrics` の基線と `DWRITE_FONT_METRICS` をそのまま使う。書式に行の間隔を設定する案（`SetLineSpacing`・案 3）は字の置き場を動かすので取らない（要件 5.3）。新しい依存は無い。
+- **簡素化**: `highlight_band_offset` の形（引数 2 つ）は保ち、その中身を「字の箱の上端 0」の場合として新しい私的な関数 1 つへ委ねる（式の定義点を 1 つに保つ・上限に近い `choice_tests.rs`・`actor_choice_contract_tests.rs` に触らない）。`line_box_height` の名前は改めず説明だけを直す（名前を改めると上限に近い 3 ファイルを含む 20 か所余りに触る）。新しい型は作らない（`DWRITE_FONT_METRICS` をそのまま返す）。
+
+### 2.10 危険と手当て
+
+- **游ゴシックの上のインクが帯からはみ出す**（帯 22 は字の箱 25.74 より狭く、字の箱の中央に置くと上の余りが 1 画素前後の見込み）— 測りのタスク（要件 1.3）で案 2 の帯とインクを並べて確かめる。満たせなければ要件 2.7 で止まる。
+- **「下」の見込み（今の帯がずれていない）**— 要件 1.4 の出口: 帯の式・口・測りを足さず、説明の直し・記録だけの検査・§8 の行で閉じる。
+- **行の中の別の書体（`\f[name,…]`）やフォールバックの書体が行の基線を押し下げる**— 束縛の書体の比で見るのは今からの限界（`balloon-font-file`／`text-typesetting` の持ち分）。本 spec では扱わない（§1.3 の 2.4 の Constraint）。
