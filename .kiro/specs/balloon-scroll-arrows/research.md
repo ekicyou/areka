@@ -391,3 +391,86 @@
 ```
 
 - 段 2 の 1 目盛りで始まり（3 列）、段 3 の 10 目盛りは 3 目盛り（9 列）で一番右に着いて止まった（残りの目盛りは限りで送らない＝要件 5.3・6.4）、段 4・5 の下への目盛りで自動の位置に追い付いて終わった（`reason=ReachedAuto`）。段 6 の透明な矢印のクリックでは手動の送りの行は出ていない。
+
+## areka での実機の走り（2026-10-31・タスク 8.4・箱の矢印・要件 11.5）
+
+### やり方（r2）
+
+- 根: `<w>\target\bsa-verify-84\root`（走りの前に作り直した）。8.2 の根の `emo2` を `ghost\emo2` に、`areka-balloon` を `balloon\areka-balloon` に写した。記憶（`profile`）は空。
+- 箱を持つシェル: 写した `ghost\emo2\shell\master\surfaces.txt` に箱 `talk` を足した（`balloon.talk`ブレス＝`size,105,80`・`font.height,12`・`arrow0.x,-12`・`arrow0.y,2`・`arrow1.x,-12`・`arrow1.y,-12`、`surface0` の element定義に `element1,balloon,talk,250,470`）。置き場は `surface0.png` の α が全部 255 の所（服の上）を選んだ。矢印の置き場が絵に写るよう、シェルのフォルダに不透明な 10×10 の `arrow0.png`（マゼンタ）と `arrow1.png`（シアン）を置いた（要件 7.3 のとおりシェルのフォルダを先に探す）。
+- 起動: HEAD `479c1b043` の debug 版 `target\debug\areka.exe`（`cargo build -p areka` で最新を確かめた・i686 の補助は `sync-i686-helper.ps1` で i686 を確かめた）に、ゴーストとバルーンのフォルダを絶対パスの位置の引数で渡した。`RUST_LOG=info,areka_emo_present::balloon_marker=debug,areka_emo_text::actor::scroll=trace,areka::emo2_boot::frame::balloon_face=debug,areka::boot_config=debug,areka::input_events=debug,areka::input_events::char_watch=trace,areka::input_events::shell_box_handler=trace,kanade=debug`、`AREKA_APP_SMOKE_EXIT_MS=900000`。起動の前に 9276・9801・9821 の待受が無いこと、スクリーンセーバーと鍵の画面のプロセスが無いことを確かめた。pid 21468、MCP は 9801、走行中に 9276 は開かれなかった。
+- r1（pid 15940）でも同じ操作を回し、箱の矢印・押下・ホイールは r2 と同じ答えだった。ただし `OnMouseWheel` を送った行（`mouse_event_sent`）は kanade の debug の水準なので r1 の `RUST_LOG` では残らず、対照の確かめができなかった。`kanade=debug` を足して r2 を回し直した。下は r2 の記録。
+- 記録: `<w>\target\bsa-verify-84\logs\r2.stdout.log`。
+- 台本は MCP の `sakurascript` で `\0\s[0]\![set,balloontimeout,600000]` の後に `1行目`〜`20行目` を `\n` で並べた。emo2 は約 20 秒ごとに自分から話すので、その話が終わった直後に段 A（00:27:41〜00:27:50 UTC）と段 B（00:28:00〜00:28:09 UTC）をそれぞれ 1 つの PowerShell で続けて回した。
+- シェルの窓の矩形は `get_property currentghost.scope(0).rect` で `2064,610,2828,1704`（物理の画素）。絵は `tools/mouse-input.ps1 -Action shot` でこの矩形を撮り、マゼンタとシアンの画素の外接の矩形を数えて矢印の置き場を読んだ（`arrow0` は窓の中の (634,664) 20×20＝拡大率 2）。`evidence/t84-*` はそこから箱のまわり（窓の中の (420,620) から 280×240）を切り出したもの。切り出した絵の中で `arrow0` は (214,44)、`arrow1` は (214,176)。
+- 押下とホイールは `SendInput`（クリックは `tools/mouse-input.ps1`・ホイールは同じ形の一時の道具・1 目盛り 120・OS の行数の設定 3）。毎回カーソルをその点へ動かしてから、点の上の窓のプロセスが起こした areka（pid 21468）であることを確かめた（6 回とも 21468）。矢印の中心は撮った絵の矩形の中心、箱の中の点は面の (290,510) ＝画面 (2592,1350)、箱の外のシェルの点は面の (300,320)（顔）＝画面 (2612,970)。
+
+### 結果（r2）
+
+段 A（話し終えた後の矢印の押下と、隠れた行のある箱の上のホイール）:
+
+| 段 | 操作（UTC） | 絵 | `arrow0` | `arrow1` | 結果 |
+|---|---|---|---|---|---|
+| 1 | 20 行の台詞（話し終わり 00:27:44.69） | `evidence/t84-A1-overflow.png` | 出た | 無し | 16〜20 行目が見え、箱の右上に `arrow0` だけが出た（要件 7.1・7.2・3.1）。合う |
+| 2 | `arrow0` を左クリック（00:27:45.72） | `evidence/t84-A2-after-arrow0-click.png` | 出た | 出た | 古い側へ 2 行送られ 14〜19 行目が見え、右下の `arrow1` も出た（要件 7.4・5.1）。解放はクリックとして送られなかった（`mouse_click_not_sent reason="box_choice"`）。合う |
+| 3 | `arrow1` を左クリック（00:27:46.65） | `evidence/t84-A3-after-arrow1-click.png` | 出た | 無し | 新しい側へ 2 行送られ自動の位置へ戻り、`arrow1` が消えた（要件 7.4・5.2）。解放はクリックにならなかった。合う |
+| 4 | 箱の中でホイールを上へ 2 目盛り（00:27:47.67） | `evidence/t84-A4-after-wheel-up-over-box.png` | 出た | 出た | 1 目盛りに 3 行、古い側へ 6 行送られ 10〜15 行目が見えた（要件 7.5・6.1）。`OnMouseWheel` は送られなかった。合う |
+| 5 | 箱の中でホイールを下へ 10 目盛り（00:27:48.72） | `evidence/t84-A5-after-wheel-down-back-to-auto.png` | 出た | 無し | 2 目盛りで自動の位置に追い付き、`arrow1` が消えた。残りの 8 目盛りも、押し出された行が残る箱の上なので箱が受け取り（`change=Unchanged`）、`OnMouseWheel` は送られなかった（要件 7.5）。合う |
+
+段 B（対照）:
+
+| 段 | 操作（UTC） | 絵 | 結果 |
+|---|---|---|---|
+| 1 | 20 行の台詞（話し終わり 00:28:04.58） | `evidence/t84-B1-overflow-again.png` | 段 A の 1 と同じく `arrow0` だけが出た |
+| 2 | 箱の外のシェル（顔）でホイールを上へ 1 目盛り（00:28:05.82） | `evidence/t84-B2-after-wheel-outside-box.png` | 箱は動かず、`OnMouseWheel`（delta=120）が送られた（00:28:05.70）。箱に隠れた行があっても箱の外の回転は今までどおり（要件 7.5 の「その箱の上」の外）。合う |
+| 3 | 1 行の短い台詞（話し終わり 00:28:07.33） | `evidence/t84-B3-short-no-hidden-lines.png` | 隠れた行が無く、矢印はどちらも出なかった（要件 3.3） |
+| 4 | 箱の中でホイールを上へ 1 目盛り（00:28:08.10） | — | `OnMouseWheel`（delta=120）が送られた（00:28:07.97）。隠れた行の無い箱の上は今までどおり（要件 7.6）。合う |
+
+- 走り全体で `OnMouseWheel` を送った行はこの 2 つだけ（段 A の箱の上の 12 目盛りは 1 つも送っていない）。
+- 終わり方: MCP の `sakurascript` で `\0\-\e` を送り、`app_exit origin=KanadeStopped(Quit) closed=4`・終了コード 0。記録の ERROR・panic は 0 件（r1 も同じ）。
+- 要件のとおりでなかった点は無い。
+
+### 記録の行（r2）
+
+箱の矢印の絵の解決（シェルのフォルダから・要件 7.3・9.1）と、文字の層が受け取った行（普通のバルーンの行は比べのため）:
+
+```text
+2026-10-31T00:27:08.222433Z  INFO areka_emo_present::shell_target: shell: 箱を読んだ（書かれた balloon.*ブレスの数・箱の置き場所を持つサーフェスの数） braces=1 surfaces=1
+2026-10-31T00:27:08.420818Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify-84\root\ghost\emo2\shell\master\arrow0.png 10x10 down=<w>\target\bsa-verify-84\root\ghost\emo2\shell\master\arrow1.png 10x10
+2026-10-31T00:27:08.421426Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=1 base="arrow" chain=arrowp1def>arrowk>arrowp0def>arrows>arrow up=<w>\target\bsa-verify-84\root\ghost\emo2\shell\master\arrow0.png 10x10 down=<w>\target\bsa-verify-84\root\ghost\emo2\shell\master\arrow1.png 10x10
+2026-10-31T00:27:08.436605Z DEBUG areka_emo_present::balloon_marker: balloon_marker: 印の絵を解いた scope=0 base="arrow" chain=arrowp0def>arrows>arrow up=<w>\target\bsa-verify-84\root\balloon\areka-balloon\arrow0.png 11x10 down=<w>\target\bsa-verify-84\root\balloon\areka-balloon\arrow1.png 11x10
+2026-10-31T00:27:08.567126Z DEBUG actor{actor=emo-text}: areka_emo_text::actor::scroll: 箱の矢印の絵を受け取った boxes=2
+```
+
+- `boxes=2` はスコープの数（スコープ 0 と 1 がそれぞれ箱 `talk` の絵を持つ）。
+
+段 A の手動の送り（要件 7.4・7.5・9.2・9.3）:
+
+```text
+2026-10-31T00:27:45.725396Z DEBUG actor{actor=emo-text}: areka_emo_text::actor::scroll: 手動の送りを始めた actor=0 place=Box(BoxName("talk")) via="矢印"
+2026-10-31T00:27:45.725624Z TRACE actor{actor=emo-text}: areka::input_events::shell_box_handler: 箱の矢印の押下: 送りだけをしてクリックにしない event="box_arrow_pressed" scope=0 box="talk" kind=Up change=Started
+2026-10-31T00:27:45.797802Z  INFO actor{actor=emo-text}: areka::input_events::click: 解放をクリックにしない event="mouse_click_not_sent" reason="box_choice" scope=0 button="0"
+2026-10-31T00:27:46.658200Z DEBUG actor{actor=emo-text}: areka_emo_text::actor::scroll: 手動の送りを終えて自動へ戻した actor=0 place=Box(BoxName("talk")) reason=ReachedAuto via="矢印"
+2026-10-31T00:27:46.658432Z TRACE actor{actor=emo-text}: areka::input_events::shell_box_handler: 箱の矢印の押下: 送りだけをしてクリックにしない event="box_arrow_pressed" scope=0 box="talk" kind=Down change=Stopped(ReachedAuto)
+2026-10-31T00:27:46.741531Z  INFO actor{actor=emo-text}: areka::input_events::click: 解放をクリックにしない event="mouse_click_not_sent" reason="box_choice" scope=0 button="0"
+2026-10-31T00:27:47.674708Z DEBUG actor{actor=emo-text}: areka_emo_text::actor::scroll: 手動の送りを始めた actor=0 place=Box(BoxName("talk")) via="ホイール"
+2026-10-31T00:27:47.677373Z TRACE actor{actor=emo-text}: areka::input_events::char_watch: 隠れた行のある箱の上のホイール: 箱を送り OnMouseWheel にしない event="box_wheel_scrolled" scope=0 box="talk" delta=120 change=Started
+2026-10-31T00:27:47.791350Z TRACE actor{actor=emo-text}: areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Box(BoxName("talk")) via="ホイール"
+2026-10-31T00:27:47.794218Z TRACE actor{actor=emo-text}: areka::input_events::char_watch: 隠れた行のある箱の上のホイール: 箱を送り OnMouseWheel にしない event="box_wheel_scrolled" scope=0 box="talk" delta=120 change=Moved
+2026-10-31T00:27:48.724954Z TRACE actor{actor=emo-text}: areka_emo_text::actor::scroll: 手動の位置を送った actor=0 place=Box(BoxName("talk")) via="ホイール"
+2026-10-31T00:27:48.727221Z TRACE actor{actor=emo-text}: areka::input_events::char_watch: 隠れた行のある箱の上のホイール: 箱を送り OnMouseWheel にしない event="box_wheel_scrolled" scope=0 box="talk" delta=-120 change=Moved
+2026-10-31T00:27:48.858231Z DEBUG actor{actor=emo-text}: areka_emo_text::actor::scroll: 手動の送りを終えて自動へ戻した actor=0 place=Box(BoxName("talk")) reason=ReachedAuto via="ホイール"
+2026-10-31T00:27:48.861257Z TRACE actor{actor=emo-text}: areka::input_events::char_watch: 隠れた行のある箱の上のホイール: 箱を送り OnMouseWheel にしない event="box_wheel_scrolled" scope=0 box="talk" delta=-120 change=Stopped(ReachedAuto)
+2026-10-31T00:27:48.974992Z TRACE actor{actor=emo-text}: areka::input_events::char_watch: 隠れた行のある箱の上のホイール: 箱を送り OnMouseWheel にしない event="box_wheel_scrolled" scope=0 box="talk" delta=-120 change=Unchanged
+```
+
+- 00:27:48.97 の後に同じ `change=Unchanged` の行が 00:27:49.85 まで 7 行続く（段 5 の残りの目盛り）。00:27:45.51 の `OnMouseEnterAll` から 00:27:50.63 の `OnMouseLeaveAll` の間に `OnMouseWheel` の行は無い。
+
+段 B の対照（kanade が `OnMouseWheel` を送った行・要件 7.6）:
+
+```text
+2026-10-31T00:28:05.700117Z DEBUG actor{actor=kanade}: kanade: マウスのホイール・出入りを送る event="mouse_event_sent" id="OnMouseWheel" scope=0 delta=120
+2026-10-31T00:28:07.974991Z DEBUG actor{actor=kanade}: kanade: マウスのホイール・出入りを送る event="mouse_event_sent" id="OnMouseWheel" scope=0 delta=120
+```
+
+- 1 行目は箱の外のシェル（顔）の回転、2 行目は隠れた行の無い箱の上の回転。どちらにも `box_wheel_scrolled` の行は出ていない。
