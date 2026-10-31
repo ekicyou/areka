@@ -196,7 +196,7 @@
 
 | §7 | 決め |
 |---|---|
-| 3 検体の置き場 | コミットする。作り手は emo-atlas の example `gen_palette_samples.rs`（std だけ）1 つで、emo-atlas の `src/testdata/palette/` と wintf の `tests/assets/palette/` へ同じバイト列を書く。テストは走る間に書かない |
+| 3 検体の置き場 | コミットする。作り手は emo-atlas の example `gen_palette_samples.rs`（std だけ）1 つで、emo-atlas の `src/testdata/palette/` の 1 か所へだけ書き、wintf のテストは同じファイルを相対パスで読む（設計の討議 議題 1 で改めた）。テストは走る間に書かない |
 | 4 組み手を何か所に持つか | 作り手 1 か所（決め 3 の ⓑ）。テストの中で組む形は 2 つの crate に写すことになるので採らない |
 | 5 判定の形 | 番号つきの 4 個の集合で入口を決め、その枝でだけパレットを読む。`PALETTEUNAVAILABLE` を「無い」と読む形は採らない |
 | 6 要件 3.5 の確かめ方 | 同じバイト列を 2 つの crate のテストが同じ期待値の表で読む。`crates/areka` に突き合わせを置く形は採らない |
