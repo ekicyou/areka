@@ -46,3 +46,16 @@
 - 優先度の区分: B
 - 外部クレートはそのまま使う（`windows` の WIC の公開の型で組む）。
 - 実機の根・検体は作業木の `target\` の下だけ。
+
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: 起票（10-30）の後、`crates/areka-emo-atlas/src/decode/wic_arm.rs`（306 行・判定は 170 行目の `pixel_format_has_alpha`・79 行目で引く）と `crates/wintf/src/com/wic.rs`（217 行・71 行目・51 行目で引く）は動いていない。この節が初めての測り。
+- **触るファイル**: `wic_arm.rs` と兄弟のテスト `wic_arm_tests.rs`（155）・`crates/wintf/src/com/wic.rs` と wintf のテスト（`crates/wintf/tests/com/wic_test.rs`）・`doc/COMPAT_ARCHITECTURE.md` §8 の 273 行目の行（下の穴）。新しいソースファイルは要らない見込み。`IWICPalette` は wintf の `com/wic.rs` が既に使っている（155・168 行目）＝`windows` の機能も依存も足さない。
+- **規模**: 3〜5 タスク（赤の検体と決定論の読み戻し・emo-atlas の判定・wintf の写しの判定・§8 の行の書き直し）。読み戻しは WIC の `CopyPixels` で、GPU は要らない。
+- **先に要るもの**: 無い（先頭）。同じウェーブに置かない相手: `compose-f16-precision`（`wic_arm.rs` の変換の精度）。後で `menu-thumbnail-preview` が同じ WIC の道を使う。v0.1.0 の `script-small-tags`・`install-before-boot`・`placement-measure-bake-once` とは重なり 0。
+- **人の待ち・机**: 要らない（静かな机・排他の机・前後の全体テストの比べも要らない）。
+- **優先度の区分**: B（作者が透明にした所が透けず、透けない所が透けることがある）。
+- **要件定義のモデル**: Opus（画像を読む層の 1 か所の判定の直しで、今の判定の形に乗る）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - `doc/COMPAT_ARCHITECTURE.md` §8 の 273 行目は「パレット形式の `tRNS` を持つ絵を抜き色で扱うとき、`tRNS` の透明度を生かす」という決め（持ち主は完了 `areka-P0-shell-implicit-surface` の要件 4.8）。この直しの後は `tRNS` を持つパレットの絵が抜き色の腕へ来なくなる＝行の前提が変わる。要件で、この行をどう書き直すかを決める。
+  - 木の中のパレットの絵 `crates/areka/shell/x1.png`〜`x5.png`（どこからも読まれていない古い絵）は `tRNS` で番号 255 だけが透明だが、左上の画素がその番号 255＝抜き色の道でも結果が同じで、赤の検体にならない。左上が不透明の番号になる検体を作る（テストの中でバイト列から組むか、作業木の `target\` の下へ書く）。

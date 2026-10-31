@@ -50,3 +50,14 @@
 ## Constraints
 - 意味論は ukadoc から輸入する。ukadoc で読めない点は議題の前に SSP の MCP で測る（記憶 `no-ssp-measurement-import-semantics-from-ukadoc`）。
 - 優先度の区分: C（ukadoc の拾い残し）。版の置き場は次の棚卸で決める。
+
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: 起票（10-31・`e115e530`）の後に `stay-on-top-directives`（main #399）が同じ読み手 `crates/areka-parsers/src/sakura/decode.rs`（510）に `\v` の腕を足した（素の 1 文字のタグの腕の新しい先例）。本文の現状は今も当たる: 台帳 `sakura-script.toml` の `\C`（545 行目の項）・`\*`（3886 行目の項）はどちらも `status="absent"`・`owner=""`。`decode.rs` 226 行目の `decode_bare` の既定の腕から 486 行目の `decode_passthrough_bare` へ落ちる。組み立て `crates/areka-sakura/src/compile.rs`（625）の 471 行目が、内容のある台本の先頭へ `ClearAll` を置く。
+- **検体**: ぱすた（`pasta-in-windows` の辞書と Lua）と `dot_sakura` は `\C`・`\*` を使わない（`dot_sakura` の `\*` の 1 件は文字の逃がしの並びで、タグではない）。`\C` を書くのは YAYA の雛形の系統＝`emily4` 18 か所・`claudia` 12・`konnoyayame` 2（説明の行を含む数）。`\*` を書く検体は無い。
+- **触るファイル**: `crates/areka-parsers/src/sakura/decode.rs`・`model.rs`（`\*` の字句が要るなら `lexer.rs`）と兄弟のテスト・`crates/areka-sakura/src/compile.rs`（`\C` のとき `ClearAll` を置かない形）・文字の層の消去の側（`areka-emo-text`・場所は設計で）・選択肢の時間切れ `crates/areka-kanade/src/schedule/choice.rs`（376）・台帳の 2 行・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: S〜M（6〜9 タスクの見込み・見積もりは要件の段）。
+- **先に要るもの**: 働きの上では無い。同じウェーブに置かない相手（ファイル）: `script-small-tags`（`sakura/decode.rs`・`compile.rs`・`schedule/choice.rs`）・`seriko-script-triggers`（`sakura/decode.rs`・`compile.rs`）・`balloon-break-position`・`talk-fast-forward`（`compile.rs`）・`ukadoc-catalog-refresh`（`sakura/decode.rs`）・`anchor-style-canon`・`choice-ranges-one-function`・`range-choice-tag`・`text-ruby`・`text-typesetting`・`emo-text-line-gap`（`schedule/choice.rs`）。ukadoc で読めない点は SSP の MCP で測る（打つ前に許し）。
+- **優先度の区分**: C のまま（ukadoc の拾い残し）。版の推奨は **v0.3.0**（小さく早く出す版）: v0.1.0 のゴールの検体（ぱすた・dot_sakura）は使わない＝v0.1.0 には入れない。v0.2.0 は wintf・dola の基幹だけ。一方で `\C` は YAYA の雛形の系統（SSP に付く `emily4` を含む）が広く書くので、いつかに置くと、よく使うゴーストの会話が途切れて見えるまま残る。v0.3.0 を軽く保ちたいならいつかのままでもよい（開発者の決め）。
+- **要件定義のモデル**: Opus（今ある読み手・組み立て・選択肢の時間切れに腕と印を足す形・新しい境界や並行の設計に当たらない）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文に規模の見積もりが無い（上で 6〜9 と置いた）。

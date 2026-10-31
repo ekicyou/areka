@@ -60,3 +60,14 @@
 - 正典は ukadoc。読めない点は SSP の MCP で測る。
 - 決定論のテスト必達。
 - 優先度の区分は C（ukadoc の拾い残し）の見込み。版の段は次の棚卸で決める。
+
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: 上流の ✅ `seriko-pattern-calls`（10-31・main #397）が着地し、読み手の同じファイル（`crates/areka-parsers/src/shell/decode.rs`・`model.rs`）を触り終えた＝直列の相手は済んだ。本文の現状は今も当たる: `decode.rs` 313 行目の `decode_animations` は `animation` で始まらない行を飛ばす（322 行目）・`model.rs` 184〜185 行目の注記は旧形式（SERIKO 1.x）を Non-Goals と書く・`version` を読むのは `surfacetable.rs` 66 行目（読み飛ばすだけ）で、`surfaces.txt` の読み手には無い。
+- **検体**: ぱすた（`pasta-in-windows`）のシェルは `version,1` で、新しい書式の `animation*.pattern*` が 32 行・旧書式は 0 行。`vendors/sample_ghost` の書庫 10 本（`dot_sakura` は `version,1`・新しい書式 279 行）も、リポジトリのテストの検体も、旧書式の行は 0＝本文 Scope の「検体があれば実機の 1 回」は手元の検体では回せない（作った検体で回すか、決定論のテストだけにするかは要件の段で）。
+- **触るファイル**: `crates/areka-parsers/src/shell/lexer.rs`（222）・`decode.rs`（623）・`model.rs`（303）と兄弟のテスト（新しいファイル）・網羅台帳 `assets.toml` の旧定義の行・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: S（5〜8 タスクの見込み＝旧定義の語 4 種〔`*interval`・`*pattern*`・`*option`・旧 `alternativestart`〕の読みと欄の並べ替え・`version` の解釈と新旧の混ざり・読めない行の記録・テスト）。
+- **先に要るもの**: 働きの上では無い。同じウェーブに置かない相手（ファイル）: `script-small-tags`・`seriko-interval-combinations`（`shell/decode.rs`）・`config-parse-diagnostics`（`shell/decode.rs`・`shell/lexer.rs`）。1 本だけの席は取らない。ukadoc で読めない点は SSP の MCP で測る（打つ前に許し）。
+- **優先度の区分**: C（ukadoc の拾い残し。起票は `seriko-pattern-calls` の要件の討議で分けることを開発者が承認したもの＝機能の依頼ではない）。版の推奨は**いつか**: v0.1.0 のゴールの検体（ぱすた）も手元の検体も旧書式を使わない＝版の門に当たらない。v0.2.0（wintf・dola の基幹）の中身でもなく、道具や測ることでもない＝版に縛らない列にも当たらない。
+- **要件定義のモデル**: Opus（今ある読み手に行の読み分けを足し、新しい書式と同じ型へ写す形・新しい境界や並行の設計に当たらない）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: roadmap の spec 台帳にこの spec の行が無い（brief を持つ数 166 と台帳の 165 が合わない件の正体）。

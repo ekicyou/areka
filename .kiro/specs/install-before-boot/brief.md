@@ -74,3 +74,14 @@
   1. ゴーストが居るときも起動の前に入れるか、居ないときだけか。
   2. 起動の前に入れたゴーストへ `OnInstallComplete` などを送るか（SSP で測る）。
   3. 利用条件の画面と警告を、窓のアプリの前に出せるか。
+
+## 2026-10-31 棚卸㉛の再測定（main 4068422f）
+- **前提の変化**: 起票（10-30・`a1bf0556`）の後に触る所へ入ったのは `window-work-area-clamp`（`main.rs` の `restore_merged_placements` の戻り値を 1 つ足した）と `balloon-scroll-arrows`（`ghost_session.rs` 7 行）だけ。本文の位置は今も当たる（`install/desk.rs` 127 行目の `on_steady`・`install/startup.rs` 115 行目の `boot_stopped`・`main.rs` 185・213・259 行目・`install/procedure.rs` 119 行目の `run_order`・`readonly.rs` 33 行目の `is_on`）。ports の本番の中身は `install/worker.rs` 123 行目の `DeskPorts`（World の側）＝起動の前の形は別に要る。起動の解決は `boot_config.rs` 200 行目の `resolve_boot` が根からゴーストまでを 1 つの関数で決める＝根を決めてから入れ、その後でゴーストを選ぶには、根の段とゴーストの段を分けるか、先に解いた根を渡す形が要る（設計で決める）。
+- **触るファイル**: `install/startup.rs`（472）・新しい兄弟のファイル（起動の前に入れる道と ports・印: 新）と兄弟のテスト・`install/worker.rs`（276）・`install/desk.rs`（565・定常の後の道を残すか寄せるか）・`boot_config.rs`（662）・`main.rs`（**986**・呼ぶ所だけ・足す分は外へ）・`callghost` の扱いしだいで `emo2_boot/ghost_switch.rs`・実機の結合テスト `crates/areka/tests/startup_install_real_run.rs`（111）か新しい兄弟・`dist/README.txt` の起動オプションの行。`ghost_session.rs` は触らない見込み（`startup-install-option` も触っていない）。
+- **規模**: S〜M（6〜10）のまま。
+- **先に要るもの**: 働きの上では無い（`startup-install-option` は着地済み）。同じウェーブに置かない相手（ファイル）: `config-parse-diagnostics`・`dev-folder-alias`・`shell-companion-balloon`・`multi-ghost-runtime`（`boot_config.rs`）・`session-module-gather`／`session-crate-split`（`main.rs`・`boot_config.rs`・`install/desk.rs`）・`install-live-target-hazards`（`install/` の手続き）・`actor-thread-log-capture`（`install/desk_overwrite_tests.rs`）。v0.1.0 の残りの `script-small-tags`・`placement-measure-bake-once`・`shell-scale-linkage`・`balloon-communicatebox` とは 0（あちらは `ghost_session.rs`・`emo2_boot/` の側）。1 本だけの席は取らない。実機の確かめは本物の窓が出る（排他テストの机）。議題 2 は SSP の MCP で測る（打つ前に許し）。
+- **優先度の区分**: A のまま（開発者の指示「SSPなみの起動オプション」・`startup-install-option` 要件 10.2）。
+- **版の門（推奨）**: v0.1.0 の版の門に**数える**。訳: v0.1.0 のゴールの 1 つ目「SSP並みの自動試験」に直に当たる（Problem の 2 つ目＝空の試験の根に `--install` を渡して「入れる → 起こす → MCP で確かめる」を回せない）。ぱすたの手順書 `doc/pasta-real-run.md` も、新しい書庫は起こした areka の窓へ投げ込んで入れる手順のまま（248 行目）＝着地すれば空の根に `--install` で入れる 1 行で済む。
+- **要件定義のモデル**: Opus のまま（今ある手続き `run_order` を起動の前から呼ぶ形・新しい境界や並行の設計に当たらない）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文 Current State の「`main.rs` は 984 行」は今 986 行。roadmap の台帳の行も「984 行」と書く。

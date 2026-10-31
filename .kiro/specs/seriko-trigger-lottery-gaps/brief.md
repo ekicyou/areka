@@ -343,3 +343,7 @@ SERIKO の引き金と抽選に、決まりの食い違いが 3 件残ってい�
 - 本 spec の触るファイルに emo-compose の `nesting.rs` と兄弟のテストが加わる。emo-compose の `plan.rs`・`nesting.rs` を触るほかの spec（シェルの element の列・`draw-methods-canon` ほか）とは同じウェーブに置かない。
 - `nesting.rs` の行数を足しすぎない（1 ファイル 1,000 行の番人）。直しは数行の見込み。
 - 規模の見立て: 2〜3 タスク（直し 1・一致の檻と seriko のテスト 1〜2）。本 spec の合計は 10〜24 に上がる＝上限 20 を越えそうなら、件 2・件 3 の「直す／記録して閉じる」を決めるときに一緒に数える。
+
+## 2026-10-31 棚卸㉛の追記（完了 `seriko-pattern-calls` の残り物）
+
+- **件 5（区分 C・テストの穴）**: 引き金の相（`periodic`・`talk` ほか）の後に、pattern定義の呼び出しをもう一度当てる道は、一番上の面だけ `periodic_start_applies_its_head_call_in_the_same_tick` で固定されていて、部品の側にはテストが無い（完了 `seriko-pattern-calls` の `tasks.md` の 8.2 の記録）。件 1 が部品の引き金の後始末（`parts.rs`）を触るので、そのときに部品の側の同じテストを足す。規模は 1 タスク。
