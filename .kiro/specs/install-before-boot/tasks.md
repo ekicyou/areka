@@ -53,7 +53,7 @@
   - _Requirements: 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.4, 6.4, 6.5, 9.3, 9.4, 9.9, 10.2_
 
 - [ ] 4. 起動の前に入れる道
-- [ ] 4.1 定常の後に入れる今の道を外す
+- [x] 4.1 定常の後に入れる今の道を外す
   - 起動の持ち物の「定常に着いたら入れる」「終了で捨てる」「依頼が終わったら消す・切り替えを頼む」の部品と、窓口からの呼び出し 3 行を外す（窓口の依頼の終わりの形は変えない）
   - 読み手の無くなる切り替えの受け付けの数え（と、数えのためだけの局所の値）を切り替えの手続きから外す
   - 定常の後の道を固めた陳腐化のテスト（窓口の起動のテストのファイル全部と、起動の持ち物のテストのうち定常の後と切り替えを固めた物）を除く。消去の判断の 5 本と、持ち物を作る・落とすの 2 本は残す
@@ -143,3 +143,6 @@
 - 1.3: `cargo test -p areka` の全体で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` と `session_mark_tests::fallback::first_boot_falling_back_pins_mark_with_one_warn` が並べて走らせたときだけ赤になることがある（単独では緑・この spec の差分と無関係）。完了の棚卸で扱う。
 - 2.2: 並べて走らせたとき `session_mark_write_tests::switch_marks_unwritable_end_with_write_failed_and_no_reservation` も揺れて赤になったことがある（単独では緑・無関係）。
 - 3.1: `before_boot_ports` の mod 宣言と `CarriedInstall` に付けた `#[allow(dead_code)]` は、4.x で呼び手ができたら外す。上書きの口の debug の語 `install_overwrite_without_running` は設計の記録の語の表に無い（設計は語を決めていない）。
+- 4.1: `crates/areka/tests/startup_install_real_run.rs`（`#[ignore]` なし・実機）は外した道を確かめているので 7.1 で改めるまで赤のまま。`--install` は 4.3〜5.1 まで何も入れない途中の状態。5.1 の「クレートの全テストが緑」はこの試験を除いて読む。
+- 4.1: `crates/areka/tests/` の結合のテストには `#[ignore]` の無い実機の試験（areka を起こす）があるので、机を持たないときの確かめは `cargo test -p areka --bin areka` に限る（4.1 までの実装係は机なしで `cargo test -p areka` を回していた）。
+- 4.1: 4.x で使う物（`Pending`・`end_word`・`delete_sources`・`sources_to_delete`・旧い `CallGhost*`・`decide_call_ghost`・`InstallOrigin::{StartupArgs,InitialInstall}`・`DeskAsk::OrderDone` の欄）に付けた `#[allow(dead_code)]` は、呼び手ができたら外す。

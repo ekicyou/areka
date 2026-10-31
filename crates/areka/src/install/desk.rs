@@ -129,7 +129,6 @@ pub(crate) fn on_steady(world: &mut World) {
         desk.steady_count += 1;
     }
     overwrite::on_steady(world);
-    super::startup::on_steady(world);
 }
 
 /// 降ろして全窓を閉じた直後・起こす前（`ghost_switch::switch_to` から）。預かった宛先への切替の
@@ -267,7 +266,6 @@ fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallR
 /// 書庫を捨てて記録に残す（頼みの返信端を落とすので、背景のスレッドは閉じた扱いで止まる）。件数は
 /// 捨てた書庫の数（要件 8.5「待っている依頼（まだ始めていない書庫）」）。
 pub(crate) fn discard_for_exit(world: &mut World) {
-    super::startup::discard_for_exit(world);
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
@@ -291,9 +289,8 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 fn answer(world: &mut World, ask: DeskAsk) {
     let closing = world.non_send::<InstallDesk>().gate.is_closing();
     match ask {
-        DeskAsk::OrderDone { order, ends } => {
+        DeskAsk::OrderDone { .. } => {
             world.non_send_mut::<InstallDesk>().busy = false;
-            super::startup::on_order_done(world, &order, &ends, closing);
         }
         ask if closing => {
             drop(ask);

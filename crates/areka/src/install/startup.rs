@@ -1,33 +1,28 @@
 //! 起動の依頼の持ち物（`--install` と exe の隣の `initial_install.nar`・spec: startup-install-option）。
 //!
-//! このファイルの純粋な判断（消す書庫・`callghost` を頼むか・頼み方）は World にもファイルにも触らない。
+//! このファイルの純粋な判断（消す書庫・`callghost` の相手）は World にもファイルにも触らない。
 
 use std::path::{Path, PathBuf};
 
 use areka_ghost::same_folder_name;
-use areka_kanade::ChangeOrigin;
 use bevy_ecs::world::World;
 
+use super::InstallOrigin;
 use super::procedure::ArchiveEnd;
-use super::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
-use crate::boot_config::BootContext;
 use crate::cli::InstallArgs;
-use crate::emo2_boot::ghost_switch::{
-    GhostSpec, SwitchAcceptCount, SwitchInFlight, SwitchRequest, request_ghost_switch,
-};
 
-/// exe の隣に置くと最初の定常到達で 1 回だけ入れる書庫の名前（大小を問わない＝要件 4.1）。
+/// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない＝要件 4.1）。
 pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";
 
 /// 起動の依頼の持ち物（`main` が起動の解決の前に作り、[`install`] で World の資源へ移す）。
 #[derive(bevy_ecs::prelude::Resource, Debug, Default)]
 pub(crate) struct StartupInstall {
-    /// 最初の定常到達で取り出す（取り出したら None＝1 回だけ）。
+    /// 入れる物（取り出したら None＝1 回だけ）。
     pending: Option<Pending>,
-    /// 起動の引数の依頼が積まれた後の控え（終わりを受けたら None）。
-    args_followup: Option<ArgsFollowup>,
 }
 
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Pending {
     /// 絶対に直した `--install` の値（書いた順）。
@@ -61,15 +56,6 @@ impl Pending {
             "[install] 起動の依頼を出さずに終わります"
         );
     }
-}
-
-/// 起動の引数の依頼の終わりの控え（`submit` が `Queued` を返したときだけ置く）。
-#[derive(Debug)]
-struct ArgsFollowup {
-    call_ghost: bool,
-    delete_source: bool,
-    /// 依頼を積んだときの切り替えの受付の数（要件 5.3 の比べの片方）。
-    switches_at_submit: u64,
 }
 
 /// 起動の前に入れた物 1 本の控え（目録の綴りに直した後の値・起動の後に World へ移す）。
@@ -120,7 +106,6 @@ impl StartupInstall {
                 delete_source: args.delete_source,
                 exe_dir,
             }),
-            args_followup: None,
         }
     }
 }
@@ -138,89 +123,9 @@ pub(crate) fn install(world: &mut World, startup: StartupInstall) {
     world.insert_resource(startup);
 }
 
-fn take_pending(world: &mut World) -> Option<Pending> {
-    world
-        .get_resource_mut::<StartupInstall>()
-        .and_then(|mut startup| startup.pending.take())
-}
-
-/// どの定常到達でも呼ばれる（最初の 1 回だけ依頼を出す＝要件 2.1・4.1）。積むだけで終わりを待たない（要件 2.6）。
-pub(crate) fn on_steady(world: &mut World) {
-    let Some(pending) = take_pending(world) else {
-        return;
-    };
-    // initial_install.nar が先・別の依頼（要件 4.7）。
-    match pending.initial_install() {
-        Some(path) => {
-            submit(
-                world,
-                InstallOrder {
-                    archives: vec![path],
-                    origin: InstallOrigin::InitialInstall,
-                },
-            );
-        }
-        None => tracing::debug!(
-            event = "initial_install_absent",
-            dir = ?pending.exe_dir,
-            "[install] exe の隣に initial_install.nar はありません"
-        ),
-    }
-    let Pending {
-        archives,
-        call_ghost,
-        delete_source,
-        ..
-    } = pending;
-    if archives.is_empty() {
-        return;
-    }
-    let switches_at_submit = world.get_resource::<SwitchAcceptCount>().map_or(0, |c| c.0);
-    let verdict = submit(
-        world,
-        InstallOrder {
-            archives,
-            origin: InstallOrigin::StartupArgs,
-        },
-    );
-    // 断られたら控えない＝消さず頼まない（要件 6.3・6.4・7.4）。
-    if verdict == SubmitVerdict::Queued
-        && let Some(mut startup) = world.get_resource_mut::<StartupInstall>()
-    {
-        startup.args_followup = Some(ArgsFollowup {
-            call_ghost,
-            delete_source,
-            switches_at_submit,
-        });
-    }
-}
-
-/// 終了の後始末（定常の前に終わるなら出さずに warn 1 件＝要件 2.7・積んだ依頼の終わりを受けられないなら
-/// 語が立っていれば warn 1 件＝要件 2.8・7.2）。
-pub(crate) fn discard_for_exit(world: &mut World) {
-    if let Some(pending) = take_pending(world) {
-        pending.record_not_submitted("exit_before_steady");
-    }
-    if let Some(followup) = take_followup(world)
-        && (followup.delete_source || followup.call_ghost)
-    {
-        tracing::warn!(
-            event = "startup_followup_dropped",
-            origin = ?InstallOrigin::StartupArgs,
-            delete_source = followup.delete_source,
-            call_ghost = followup.call_ghost,
-            "[install] 起動の依頼の終わりを受ける前に終わるので、書庫を消さず切り替えも頼みません"
-        );
-    }
-}
-
-fn take_followup(world: &mut World) -> Option<ArgsFollowup> {
-    world
-        .get_resource_mut::<StartupInstall>()
-        .and_then(|mut startup| startup.args_followup.take())
-}
-
 /// 終わり方の語（記録 `startup_install_done` の `results`・並びの残りは `not_started`）。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 fn end_word(end: Option<&ArchiveEnd>) -> &'static str {
     match end {
         Some(ArchiveEnd::Installed(_)) => "installed",
@@ -232,81 +137,9 @@ fn end_word(end: Option<&ArchiveEnd>) -> &'static str {
     }
 }
 
-/// 依頼の終わり（起動の引数・初期インストールだけを扱う＝要件 2.5・2.8・3.1・3.3〜3.6・4.3〜4.5・5.1・5.5〜5.8）。
-///
-/// `closing`（終了が始まった後に終わった）なら消さず頼まない（要件 3.1 の終了の除き）。
-pub(crate) fn on_order_done(
-    world: &mut World,
-    order: &InstallOrder,
-    ends: &[ArchiveEnd],
-    closing: bool,
-) {
-    let origin = order.origin;
-    if !matches!(
-        origin,
-        InstallOrigin::StartupArgs | InstallOrigin::InitialInstall
-    ) {
-        return;
-    }
-    let results: Vec<(&Path, &str)> = order
-        .archives
-        .iter()
-        .enumerate()
-        .map(|(index, archive)| (archive.as_path(), end_word(ends.get(index))))
-        .collect();
-    tracing::info!(
-        event = "startup_install_done",
-        origin = ?origin,
-        results = ?results,
-        "[install] 起動の依頼が終わりました"
-    );
-    let delete = sources_to_delete(&order.archives, ends);
-    let followup = match origin {
-        InstallOrigin::StartupArgs => take_followup(world),
-        _ => None,
-    };
-    if closing {
-        // 初期インストールは語を持たず、いつも「入ったら消す」。
-        let (dropped, delete_source, call_ghost) = match &followup {
-            Some(f) => (
-                f.delete_source || f.call_ghost,
-                f.delete_source,
-                f.call_ghost,
-            ),
-            None => (
-                origin == InstallOrigin::InitialInstall && !delete.is_empty(),
-                true,
-                false,
-            ),
-        };
-        if dropped {
-            tracing::warn!(
-                event = "startup_followup_dropped",
-                origin = ?origin,
-                delete_source,
-                call_ghost,
-                "[install] 終了が始まった後に終わったので、書庫を消さず切り替えも頼みません"
-            );
-        }
-        return;
-    }
-    match followup {
-        // 初期インストールは語に関わらず入ったら消す（要件 4.3）。
-        None if origin == InstallOrigin::InitialInstall => delete_sources(origin, &delete),
-        Some(followup) => {
-            if followup.delete_source {
-                delete_sources(origin, &delete);
-            }
-            if followup.call_ghost {
-                call_ghost(world, order, ends, followup.switches_at_submit);
-            }
-        }
-        // 控えが無い（積まれなかった・既に受けた）なら何もしない。
-        None => {}
-    }
-}
-
 /// 1 本ずつ `remove_file`（フォルダは消えない・1 本の失敗でほかをやめない＝要件 3.3・3.4・3.6・4.5）。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 fn delete_sources(origin: InstallOrigin, archives: &[PathBuf]) {
     for archive in archives {
         match std::fs::remove_file(archive) {
@@ -327,46 +160,11 @@ fn delete_sources(origin: InstallOrigin, archives: &[PathBuf]) {
     }
 }
 
-/// `callghost` を頼む／頼まない（どちらも info 1 件＝要件 5.1〜5.6・5.8）。
-fn call_ghost(
-    world: &mut World,
-    order: &InstallOrder,
-    ends: &[ArchiveEnd],
-    switches_at_submit: u64,
-) {
-    let ghost_now = world
-        .get_resource::<BootContext>()
-        .and_then(|ctx| ctx.current.ghost.folder.clone());
-    let decision = decide_call_ghost(&CallGhostFacts {
-        archives: order.archives.len(),
-        ends,
-        closing: false,
-        switching: world.get_non_send::<SwitchInFlight>().is_some(),
-        switches_at_submit,
-        switches_now: world.get_resource::<SwitchAcceptCount>().map_or(0, |c| c.0),
-        ghost_now: ghost_now.as_deref(),
-    });
-    match decision {
-        CallGhost::Request { folder } => {
-            let verdict = request_ghost_switch(world, callghost_request(folder.clone()));
-            tracing::info!(
-                event = "startup_callghost_requested",
-                folder = %folder,
-                verdict = ?verdict,
-                "[install] 入れたゴーストへの切り替えを頼みました"
-            );
-        }
-        CallGhost::Skip(reason) => tracing::info!(
-            event = "startup_callghost_skipped",
-            reason = reason.word(),
-            "[install] 切り替えを頼みません"
-        ),
-    }
-}
-
 /// 純粋: 消す書庫（`Installed` のパスだけ・重ねは最初の 1 つ・書いた順＝要件 3.1・3.2・4.3・4.4）。
 ///
 /// `ends` が短い（途中でやめた）とき、終わり方の無い書庫は「まだ扱っていない」＝消さない。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Vec<PathBuf> {
     let key = |path: &Path| path.to_string_lossy().to_lowercase();
     let mut out: Vec<PathBuf> = Vec::new();
@@ -388,7 +186,9 @@ pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Ve
     out
 }
 
-/// `callghost` の判断に要る事実（集めるのは on_order_done）。
+/// `callghost` の判断に要る事実（旧い形・タスク 4.2 で起動の前の形へ改める）。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 pub(crate) struct CallGhostFacts<'a> {
     pub archives: usize,
     pub ends: &'a [ArchiveEnd],
@@ -396,7 +196,7 @@ pub(crate) struct CallGhostFacts<'a> {
     pub closing: bool,
     /// 切替の予約 `SwitchInFlight` が在る。
     pub switching: bool,
-    /// 依頼を積んだとき・終わりを受けたときの切り替えの受付の数（`SwitchAcceptCount`）。
+    /// 依頼を積んだとき・終わりを受けたときの切り替えの受付の数。
     pub switches_at_submit: u64,
     pub switches_now: u64,
     /// 今のゴーストのフォルダ名（`AlreadyRunning` の比べ）。
@@ -404,6 +204,8 @@ pub(crate) struct CallGhostFacts<'a> {
 }
 
 /// `callghost` の判断の答え。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CallGhost {
     /// 切り替え先のフォルダ名（最後に入ったゴーストの書庫の本体の `place` の末尾）。
@@ -414,6 +216,8 @@ pub(crate) enum CallGhost {
 }
 
 /// 頼まない理由（記録 `startup_callghost_skipped` の `reason`）。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallGhostSkip {
     Abandoned,
@@ -424,6 +228,8 @@ pub(crate) enum CallGhostSkip {
     AlreadyRunning,
 }
 
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 impl CallGhostSkip {
     /// 記録 `startup_callghost_skipped` の `reason` の語。
     fn word(self) -> &'static str {
@@ -439,6 +245,8 @@ impl CallGhostSkip {
 }
 
 /// 純粋: `callghost` を頼むか（design「`callghost` の判断」の順＝要件 5.1〜5.4）。
+// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
+#[allow(dead_code)]
 pub(crate) fn decide_call_ghost(facts: &CallGhostFacts<'_>) -> CallGhost {
     let ends = facts.ends;
     if ends.len() < facts.archives || ends.contains(&ArchiveEnd::Abandoned) {
@@ -471,16 +279,6 @@ pub(crate) fn decide_call_ghost(facts: &CallGhostFacts<'_>) -> CallGhost {
         return CallGhost::Skip(CallGhostSkip::AlreadyRunning);
     }
     CallGhost::Request { folder }
-}
-
-/// 純粋: メニューの「ゴースト」と同じ形の頼み（Folder・raise_event 真・Manual・boot_event なし＝要件 5.1・10.1）。
-pub(crate) fn callghost_request(folder: String) -> SwitchRequest {
-    SwitchRequest {
-        ghost: GhostSpec::Folder(folder),
-        raise_event: true,
-        origin: ChangeOrigin::Manual,
-        boot_event: None,
-    }
 }
 
 #[cfg(test)]
