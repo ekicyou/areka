@@ -27,6 +27,8 @@ use crate::emo2_boot::frame::{Emo2Wiring, balloon_target, shell_target};
 
 /// 書き手が文字の層へ矢印の絵を入れたときに文字の層が残す 1 行（`actor_scroll.rs`）。
 const MARKERS_MESSAGE: &str = "普通のバルーンの矢印の絵を受け取った";
+/// 書き手が文字の層へ行の中の印の絵を入れたときに文字の層が残す 1 行（`actor_decoration.rs`）。
+const INLINE_MARKER_MESSAGE: &str = "行の中の印の絵を受け取った";
 
 /// 面 0 は矢印の絵を持たず、面 2 は自分の設定ファイル（書体の大きさ・`arrow.filename,two`）と
 /// `two0.png` を持つバルーンの束（scope 0）。
@@ -35,11 +37,15 @@ fn two_face_definitions() -> ScopeBalloonDefinitions {
     let mut dec = MemoryDecoder::new();
     let write = |name: &str, text: &str| std::fs::write(dir.child(name), text).expect("ファイル");
     write("descript.txt", "font.height,10\r\n");
-    write("balloons2s.txt", "font.height,22\r\narrow.filename,two\r\n");
-    for name in ["balloons0.png", "balloons2.png", "two0.png"] {
+    write(
+        "balloons2s.txt",
+        "font.height,22\r\narrow.filename,two\r\nmarker.filename,mk\r\n",
+    );
+    for name in ["balloons0.png", "balloons2.png", "two0.png", "mk.png"] {
         write(name, "");
     }
     dec.insert(dir.child("two0.png"), 2, 2, 8, vec![0xff; 16], true);
+    dec.insert(dir.child("mk.png"), 3, 3, 12, vec![0xff; 36], true);
     let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
     let alpha = AlphaParams {
         use_self_alpha: UseSelfAlpha::On,
@@ -51,6 +57,7 @@ fn two_face_definitions() -> ScopeBalloonDefinitions {
         "前提: 面 2 は面 0 と違う定義"
     );
     assert!(defs.face0().arrows.up.is_none() && defs.for_face(2).arrows.up.is_some());
+    assert!(defs.inline_marker_for_face(0).is_none() && defs.inline_marker_for_face(2).is_some());
     defs
 }
 
@@ -118,6 +125,31 @@ fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
         !balloon_is_manual(&wiring.runtime, "0"),
         "面 2→0 で手動を捨てる"
     );
+}
+
+/// 書き手が面の行の中の印の絵を文字の層へ入れる: 印の絵のある面 2 は絵、無い面 0 は `None`
+/// （＝既定の丸・script-small-tags 要件 5.1・5.2）。面 2 → 0 で絵を外す。
+#[test]
+fn face_switch_hands_the_inline_marker_of_the_face() {
+    let (mut world, mut wiring, _) = rig();
+    let inline = |wiring: &mut Emo2Wiring, world: &mut World, face| {
+        let ((), events) =
+            capture(|| select_balloon_face(wiring, world, 0, face, FaceCause::FaceChange));
+        events
+            .iter()
+            .filter(|e| e.message().contains(INLINE_MARKER_MESSAGE))
+            .map(|e| {
+                (
+                    e.field("actor").map(str::to_string),
+                    e.field("image").map(str::to_string),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let got = |image: &str| vec![(Some("0".to_string()), Some(image.to_string()))];
+    assert_eq!(inline(&mut wiring, &mut world, 0), got("None"));
+    assert_eq!(inline(&mut wiring, &mut world, 2), got("Some((3, 3))"));
+    assert_eq!(inline(&mut wiring, &mut world, 0), got("None"));
 }
 
 /// 同じ面の番号で書き手を通っても（バルーンの切り替えなど）手動は捨てない。
