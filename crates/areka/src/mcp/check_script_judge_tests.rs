@@ -193,14 +193,22 @@ fn row11_unreadable_choice_timeout() {
     silent(r"\![set,choicetimeout,5000]");
 }
 
+/// 印 `\![*]`・`%*` は「無視した」とも「知らない命令」とも言わない（script-small-tags 要件 4.4・6.5）。
 #[test]
-fn row12_choice_marker() {
-    fires(r"\![*]", Kind::Ignored, MSG_IGNORED);
-    silent(r"\q[題,ID]");
+fn markers_are_neither_ignored_nor_unknown() {
+    for script in [
+        r"\![*]",
+        r"%*",
+        r"\![*]\q[題,ID]",
+        r"\![*]%*",
+        r"字%*\q[題,ID]",
+    ] {
+        silent(script);
+    }
 }
 
 #[test]
-fn row13_font_key_accepted_without_effect() {
+fn row12_font_key_accepted_without_effect() {
     for script in [r"\f[sub,1]", r"\f[align,center]", r"\f[height,large]"] {
         fires(script, Kind::Ignored, MSG_IGNORED);
     }
@@ -208,7 +216,7 @@ fn row13_font_key_accepted_without_effect() {
 }
 
 #[test]
-fn row14_unknown_or_missing_font_key() {
+fn row13_unknown_or_missing_font_key() {
     fires(r"\f[colour,red]", Kind::UnknownTag, MSG_UNKNOWN_TAG);
     fires(r"\f[]", Kind::UnknownTag, MSG_UNKNOWN_TAG);
     silent(r"\f[color,red]");
@@ -216,7 +224,7 @@ fn row14_unknown_or_missing_font_key() {
     silent(r"\f[bold,abc]");
 }
 
-// ---- アンカー `\_a`（anchor-tag-canon 要件 6.1〜6.3）: 表の 15〜17 行目 ----
+// ---- アンカー `\_a`（anchor-tag-canon 要件 6.1〜6.3）: 表の 14〜16 行目 ----
 
 /// 種類・位置・綴り・文言の並び（アンカーの診断の見比べ用）。
 fn rows(script: &str) -> Vec<(Kind, usize, usize, String, &'static str)> {
@@ -233,13 +241,13 @@ fn the_four_anchor_forms_are_not_reported() {
 }
 
 #[test]
-fn row15_anchor_without_a_close() {
+fn row14_anchor_without_a_close() {
     fires(r"\_a[x]", Kind::UnpairedTag, MSG_ANCHOR_UNCLOSED);
     silent(r"\_a[x]あ\_a");
 }
 
 #[test]
-fn row16_anchor_opened_while_another_is_open() {
+fn row15_anchor_opened_while_another_is_open() {
     // 診断は新しい開きに付く（直前の開きには付かない）。
     assert_eq!(
         rows(r"\_a[x]あ\_a[y]い\_a"),
@@ -255,7 +263,7 @@ fn row16_anchor_opened_while_another_is_open() {
 }
 
 #[test]
-fn row17_close_without_an_open_anchor() {
+fn row16_close_without_an_open_anchor() {
     fires(r"\_a", Kind::UnpairedTag, MSG_ANCHOR_STRAY_CLOSE);
     silent(r"\_a[x]あ\_a");
 }
@@ -326,17 +334,19 @@ fn positions_are_counted_in_characters() {
     );
 }
 
+/// 印の直後の `\q` は畳まれないので、引数の足りない `\q` の診断は `\q` だけを指す（要件 4.1・4.4）。
 #[test]
-fn two_notes_on_one_instruction_give_two_diagnostics_at_the_same_place() {
-    let script = r"字\![*]\q[題]";
-    let got = check(script);
-    assert_eq!(got.len(), 2, "{got:?}");
-    let mut kinds: Vec<_> = got.iter().map(|d| d.kind.as_str()).collect();
-    kinds.sort();
-    assert_eq!(kinds, ["ignored", "unreadable_argument"]);
-    for d in &got {
-        assert_eq!((d.start, d.end, d.text.as_str()), (1, 11, r"\![*]\q[題]"));
-    }
+fn marker_before_a_short_choice_leaves_only_the_choice_diagnostic() {
+    assert_eq!(
+        rows(r"字\![*]\q[題]"),
+        [(
+            Kind::UnreadableArgument,
+            6,
+            11,
+            r"\q[題]".to_string(),
+            MSG_DEFAULTED
+        )]
+    );
 }
 
 #[test]

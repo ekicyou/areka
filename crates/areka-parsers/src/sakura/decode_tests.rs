@@ -13,7 +13,7 @@
 
 use super::decode::decode;
 use super::lexer::lex;
-use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
+use super::model::{Choice, Instruction, MARKER_COMMAND, MoveArgs, NewLineRatio, SurfaceArg};
 use std::time::Duration;
 
 /// 文字列をレックスしてデコードするヘルパ（テスト題材は実スクリプト断片）。
@@ -370,44 +370,38 @@ fn empty_bang_to_generic_command_empty_name() {
     );
 }
 
-// ── `\![*]` 選択肢マーカー（要件 5.4）────────────────────────────────
+// ── 印 `\![*]`・`%*`（script-small-tags 要件 4）────────────────────────
 
-/// `\![*]` が後続の現行 `\q[...]` を伴う場合、マーカーを Choice へ畳み、
-/// 未デコードのマーカー文字列を残さない（要件 5.4・design L425）。
+/// 印の命令（名前 `MARKER_COMMAND` の汎用の `\!`・引数なし）。
+fn marker() -> Instruction {
+    Instruction::GenericCommand {
+        name: MARKER_COMMAND.to_string(),
+        raw_args: vec![],
+    }
+}
+
+/// `\![*]` の直後の `\q[...]` は畳まず、印の命令と選択肢の 2 つにする（要件 4.1）。
 #[test]
-fn choice_marker_folds_into_following_choice() {
+fn marker_before_choice_stays_separate() {
     assert_eq!(
         dec(r"\![*]\q[はい,OnYes]"),
-        vec![Instruction::Choice(Choice {
-            disp: "はい".to_string(),
-            target: "OnYes".to_string(),
-            references: vec![],
-        })],
+        vec![
+            marker(),
+            Instruction::Choice(Choice {
+                disp: "はい".to_string(),
+                target: "OnYes".to_string(),
+                references: vec![],
+            }),
+        ],
     );
 }
 
-/// `\![*]` 単独（後続が現行 `\q` でない）→ `GenericCommand { name:"*" }`（design L425）。
+/// 単独の `\![*]`・`%*`・`\![*]%*` はどれも印の命令になる（要件 4.2・4.3・4.5）。
 #[test]
-fn standalone_choice_marker_to_generic_command() {
-    assert_eq!(
-        dec(r"\![*]"),
-        vec![Instruction::GenericCommand {
-            name: "*".to_string(),
-            raw_args: vec![],
-        }],
-    );
-}
-
-// ── 旧 2 連ブラケット `\q` → Raw（Choice 化しない・要件 5.3）──────────
-
-/// 旧 2 連形 `\q[ID][タイトル]` は現行 Choice 化せず、丸ごと `Raw` で吸収する
-/// （要件 5.3・design L425「Choice 化せず…Raw で保持」）。
-#[test]
-fn legacy_double_bracket_q_to_raw_not_choice() {
-    assert_eq!(
-        dec(r"\q[ID][タイトル]"),
-        vec![Instruction::Raw(r"\q[ID][タイトル]".to_string())],
-    );
+fn lone_marker_and_percent_star_are_marker_commands() {
+    assert_eq!(dec(r"\![*]"), vec![marker()]);
+    assert_eq!(dec(r"%*"), vec![marker()]);
+    assert_eq!(dec(r"\![*]%*"), vec![marker(), marker()]);
 }
 
 /// 旧 2 連形 `\q*[ID][タイトル]`（`*` 付き）も丸ごと `Raw`（要件 5.3）。

@@ -1,15 +1,15 @@
 //! strict の語彙の檻（spec: mcp-strict-errors 要件 2.1・2.3・2.4・2.6・2.8）。
 //!
-//! 17 の検出点の名前・種類・文面の組、位置の数え方（前から 1 度だけ数え、戻ったら数え直す）、
+//! 16 の検出点の名前・種類・文面の組、位置の数え方（前から 1 度だけ数え、戻ったら数え直す）、
 //! 記録 1 件の宛先と欄と本文の形を固定する。
 
 use super::*;
 
-/// 17 の点と、その（名前・種類・文面）の組。文面は `check_script` の ⑶ の表と同じ定数。
+/// 16 の点と、その（名前・種類・文面）の組。文面は `check_script` の ⑶ の表と同じ定数。
 #[test]
-fn seventeen_points_name_kind_message() {
+fn sixteen_points_name_kind_message() {
     use DetectionPoint::*;
-    let expected: [(DetectionPoint, &str, &str, &str); 17] = [
+    let expected: [(DetectionPoint, &str, &str, &str); 16] = [
         (
             ReadUnknownTag,
             "ReadUnknownTag",
@@ -27,12 +27,6 @@ fn seventeen_points_name_kind_message() {
             "ReadDefaulted",
             "unreadable_argument",
             MSG_DEFAULTED,
-        ),
-        (
-            ReadMarkerIgnored,
-            "ReadMarkerIgnored",
-            "ignored",
-            MSG_IGNORED,
         ),
         (
             CommandUnhandled,
@@ -108,7 +102,7 @@ fn seventeen_points_name_kind_message() {
             MSG_MISSING_BALLOON,
         ),
     ];
-    assert_eq!(DetectionPoint::ALL.len(), 17);
+    assert_eq!(DetectionPoint::ALL.len(), 16);
     for (i, (point, name, kind, message)) in expected.into_iter().enumerate() {
         assert_eq!(DetectionPoint::ALL[i], point, "ALL の {i} 番目");
         assert_eq!(point.name(), name);

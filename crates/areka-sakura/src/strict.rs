@@ -41,7 +41,6 @@ pub enum DetectionPoint {
     ReadUnknownTag,
     ReadUnclosed,
     ReadDefaulted,
-    ReadMarkerIgnored,
     CommandUnhandled,
     ChoiceTimeoutUnreadable,
     CharCodeDropped,
@@ -58,14 +57,13 @@ pub enum DetectionPoint {
 }
 
 impl DetectionPoint {
-    /// 表の順の 17 個。
-    pub const ALL: [DetectionPoint; 17] = {
+    /// 表の順の 16 個。
+    pub const ALL: [DetectionPoint; 16] = {
         use DetectionPoint::*;
         [
             ReadUnknownTag,
             ReadUnclosed,
             ReadDefaulted,
-            ReadMarkerIgnored,
             CommandUnhandled,
             ChoiceTimeoutUnreadable,
             CharCodeDropped,
@@ -89,7 +87,6 @@ impl DetectionPoint {
             ReadUnknownTag => "ReadUnknownTag",
             ReadUnclosed => "ReadUnclosed",
             ReadDefaulted => "ReadDefaulted",
-            ReadMarkerIgnored => "ReadMarkerIgnored",
             CommandUnhandled => "CommandUnhandled",
             ChoiceTimeoutUnreadable => "ChoiceTimeoutUnreadable",
             CharCodeDropped => "CharCodeDropped",
@@ -114,7 +111,7 @@ impl DetectionPoint {
             ReadUnclosed | ReadDefaulted | ChoiceTimeoutUnreadable | CharCodeDropped => {
                 "unreadable_argument"
             }
-            ReadMarkerIgnored | FontIgnored => "ignored",
+            FontIgnored => "ignored",
             CommandUnhandled => "unknown_command",
             AnchorReopened | AnchorUnclosed | AnchorStrayClose => "unpaired_tag",
             SurfaceUnresolved | SurfaceAbsent => "missing_surface",
@@ -130,7 +127,7 @@ impl DetectionPoint {
             ReadUnclosed => MSG_UNCLOSED,
             ReadDefaulted | ChoiceTimeoutUnreadable => MSG_DEFAULTED,
             CharCodeDropped => MSG_CHAR_CODE_DROPPED,
-            ReadMarkerIgnored | FontIgnored => MSG_IGNORED,
+            FontIgnored => MSG_IGNORED,
             CommandUnhandled => MSG_UNKNOWN_COMMAND,
             AnchorReopened => MSG_ANCHOR_REOPENED,
             AnchorUnclosed => MSG_ANCHOR_UNCLOSED,

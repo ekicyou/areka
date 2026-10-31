@@ -109,7 +109,6 @@ impl Tracer<'_> {
                 ReadNote::UnknownTag => DetectionPoint::ReadUnknownTag,
                 ReadNote::Unclosed => DetectionPoint::ReadUnclosed,
                 ReadNote::ArgumentDefaulted => DetectionPoint::ReadDefaulted,
-                ReadNote::MarkerIgnored => DetectionPoint::ReadMarkerIgnored,
                 // 読む段が後から足す印は、その意味が決まるまで控えない（check_script と同じ）。
                 _ => continue,
             };
@@ -119,14 +118,6 @@ impl Tracer<'_> {
 
     /// `\!` の腕（`Move` は名前 `move`）: 誰も拾わない組と、読めない `choicetimeout`。
     fn command(&mut self, name: &str, raw_args: &[String]) {
-        // 単独のマーカー `\![*]` は読みの印 `ignored` だけで、台帳は引かない。
-        if name == "*"
-            && self.reads[self.index]
-                .notes
-                .contains(&ReadNote::MarkerIgnored)
-        {
-            return;
-        }
         let first = raw_args.first().map(String::as_str);
         if !self.judges.command_handled(name, first) {
             self.find(DetectionPoint::CommandUnhandled);

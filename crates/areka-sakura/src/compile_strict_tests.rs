@@ -9,18 +9,19 @@
 use super::test_support::cue_eq;
 use super::*;
 use crate::strict::{DetectionPoint, StrictJudges};
-use areka_parsers::sakura::{parse, parse_noted};
+use areka_parsers::sakura::{MARKER_COMMAND, parse, parse_noted};
 use dola::cue::{CuePlayer, CueSink, TalkCue};
 use std::sync::{Arc, Mutex};
 
-/// 拾う `\!` は `open`・`set`・`move`（`move` の第 1 引数 `nosuch` だけは拾わない）。
+/// 拾う `\!` は `open`・`set`・`move`（`move` の第 1 引数 `nosuch` だけは拾わない）と、
+/// 受け手の表で文字の層が拾う印 `*`（script-small-tags 要件 6.5）。
 /// `\f` は `sub` を受け取るだけ、`colour` を知らないキーとする。
 struct FakeJudges;
 
 impl StrictJudges for FakeJudges {
     fn command_handled(&self, name: &str, first: Option<&str>) -> bool {
         match name {
-            "open" | "set" => true,
+            "open" | "set" | MARKER_COMMAND => true,
             "move" => first != Some("nosuch"),
             _ => false,
         }
@@ -74,6 +75,8 @@ const SAMPLES: &[&str] = &[
     "\\_w[abc]",
     "\\_w[500]",
     "\\![*]",
+    "%*",
+    "\\![*]\\q[題,ID]%*",
     "\\q[題,ID]",
     "\\![nosuch]",
     "\\![open,readme]",
@@ -130,7 +133,6 @@ fn red_scripts_record_their_point() {
         ("\\x", &[(0, ReadUnknownTag, "\\x")]),
         ("\\s[0", &[(0, ReadUnclosed, "\\s[0")]),
         ("\\_w[abc]", &[(1, ReadDefaulted, "\\_w[abc]")]),
-        ("\\![*]", &[(1, ReadMarkerIgnored, "\\![*]")]),
         ("\\![nosuch]", &[(1, CommandUnhandled, "\\![nosuch]")]),
         (
             "\\![move,nosuch]",
@@ -163,6 +165,11 @@ fn green_scripts_record_nothing() {
         "\\s[0]",
         "\\_w[500]",
         "\\q[題,ID]",
+        // 印は「無視した」とも「知らない命令」とも言わない（script-small-tags 要件 4.4・6.5）。
+        "\\![*]",
+        "%*",
+        "\\![*]\\q[題,ID]",
+        "\\![*]%*",
         "\\![open,readme]",
         "\\![move,--X=10]",
         "\\![set,choicetimeout,5000]",
@@ -176,6 +183,25 @@ fn green_scripts_record_nothing() {
     ] {
         assert_eq!(pending(script), [], "{script}");
     }
+}
+
+/// 書いた印（`\![*]`・`%*`）の数だけ、名前 `*` の汎用の合図が出る（script-small-tags 要件 4.1〜4.3・4.5）。
+#[test]
+fn markers_compile_to_one_carrier_each() {
+    let compiled = compile(
+        &parse("\\![*]\\q[題,ID]%*\\![*]"),
+        &SystemVarSnapshot::default(),
+    );
+    let markers = compiled
+        .sheet
+        .cues()
+        .iter()
+        .filter(|c| {
+            matches!(&c.payload, CuePayload::Command(cmd)
+                if cmd.as_command_carrier() == Some((MARKER_COMMAND, vec![])))
+        })
+        .count();
+    assert_eq!(markers, 3);
 }
 
 /// 同じ命令の 2 件はアンカーの判定が返す順（重なり → 閉じ無し）、命令をまたいでは台本の順。

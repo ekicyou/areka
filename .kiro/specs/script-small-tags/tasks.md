@@ -108,7 +108,7 @@
   - _Depends: 4.2, 6.2_
   - _Requirements: 3.7, 6.4_
 
-- [ ] 7.2 `\![*]`・`%*` を印の命令にし、「無視した」の扱いを全部消す
+- [x] 7.2 `\![*]`・`%*` を印の命令にし、「無視した」の扱いを全部消す
   - 読み手の `\![*]` と `\q` の畳みと選択肢の印の見分けを消して汎用の `\!` の道に乗せ、`%*` のトークンを同じ印の命令にする。「無視した印」の記録の種類を消す
   - 組み立ての名前 `*` の特別扱いと「無視した印」の写し、strict の「無視した印」の検出点、`check_script` の判断の同じ特別扱いを消し、印の合図は表を引いて文字の層の答えを得る
   - 今の畳みの檻（読み手の `decode_tests.rs` の `\![*]\q[はい,OnYes]` の畳み・`parse_noted_tests.rs`・組み立ての `compile_strict_tests.rs`・`check_script` の判断のテスト）を新しい振る舞いへ書き直し、単独の `\![*]` の合図を見る `compile_arm_tests.rs` の檻が緑のままであることを確かめる
@@ -161,7 +161,8 @@
 ## Implementation Notes
 
 - 3.1: `cargo clippy -p areka-sakura --all-targets -- -D warnings` は依存の `dola`（resolve.rs・validate/rules.rs ほか）と areka-sakura の drive.rs:184/330・compile_arm_tests.rs:637-638 の既存の lint で止まる。この spec の外の既存の問題（完了の棚卸で扱う）。
-- 3.1: `doc/ssp-mcp/areka-tools.md` の check_script の診断の行の表で、捨てた文字の番号の行は 18 行目に足した（`row01`〜`row17` のテスト名を崩さないため）。7.3 で `check_script_judge_tests.rs` に `row18` を足し、地の文の「`row01`〜`row17` が固定」を直す。
+- 3.1: `doc/ssp-mcp/areka-tools.md` の check_script の診断の行の表で、捨てた文字の番号の行は 18 行目に足した（`row01`〜`row17` のテスト名を崩さないため）。7.2 で行を詰めたので、捨てた文字の番号の行は 17 行目になった。7.3 で `check_script_judge_tests.rs` に `row17` を足し、地の文の「`row01`〜`row16` が固定」を直す。
 - 3.1: `\_u[]` の警告の `raw` は `\_u` になる（字句の段が空の括弧を引数なしと同じに渡す・`\s[]` と同じ）。
 - 4.2: 着せ替えの記録の出元（target）は `areka_seriko::actor::bind_arm` に変わった（腕を `actor_bind.rs` へ出したため）。クレート単位の `areka_seriko=debug` はそのまま効く。
 - 6.3: 箱（`register_box`）は登録のときだけ印を押す。箱が出ている最中に面の切り替えで印の絵が変わると、登録し直すまで箱は前の印のまま。7.4 の結線で、箱にも面の印が届く必要があるか確かめる。
+- 5.1 の追い直し: ソースに書く ukadoc の URL はカタログ（`doc/ukadoc-coverage/catalog.toml`）の綴りに合わせる（`#marker.filename_2c_..._540d:1`）。合わないと `ukadoc-survey` の `consistency` が 16 件赤になる（全体テストでだけ見える）。

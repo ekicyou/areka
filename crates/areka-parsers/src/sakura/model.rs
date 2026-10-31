@@ -186,8 +186,6 @@ pub enum ReadNote {
     Unclosed,
     /// 引数が無い・読めないので、既定の値へ落とした。
     ArgumentDefaulted,
-    /// 選択肢マーカー `\![*]` を受け取ったが、何も作らない。
-    MarkerIgnored,
 }
 
 /// 命令 1 つと、その台本の中の位置・印（`parse_noted` の 1 要素）。

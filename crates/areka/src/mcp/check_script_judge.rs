@@ -57,7 +57,6 @@ pub(crate) fn diagnose(
                 ReadNote::UnknownTag => (Kind::UnknownTag, MSG_UNKNOWN_TAG),
                 ReadNote::Unclosed => (Kind::UnreadableArgument, MSG_UNCLOSED),
                 ReadNote::ArgumentDefaulted => (Kind::UnreadableArgument, MSG_DEFAULTED),
-                ReadNote::MarkerIgnored => (Kind::Ignored, MSG_IGNORED),
                 // 読む段が後から足す印は、その意味が決まるまで診ない（誤って知らせる枝を作らない）。
                 _ => continue,
             };
@@ -66,9 +65,6 @@ pub(crate) fn diagnose(
 
         match &read.instruction {
             Instruction::SpeakerScope { n } => scope = *n,
-            // 単独のマーカー（名前 `*`）は印の `ignored` だけで、表は引かない。
-            Instruction::GenericCommand { name, .. }
-                if read.notes.contains(&ReadNote::MarkerIgnored) && name == "*" => {}
             Instruction::GenericCommand { name, raw_args } => {
                 let first = raw_args.first().map(String::as_str);
                 if ledger.consumer_of(name, first).is_none() {

@@ -8,8 +8,10 @@ use super::{ArekaStrictJudges, production};
 #[test]
 fn command_handled_follows_the_canonical_ledger() {
     let judges = ArekaStrictJudges::canonical();
-    let rows: [(&str, Option<&str>, bool); 5] = [
+    let rows: [(&str, Option<&str>, bool); 6] = [
         ("move", None, true),
+        // 印 `\![*]`・`%*` は文字の層が拾う（script-small-tags 要件 6.5）。
+        (areka_parsers::sakura::MARKER_COMMAND, None, true),
         ("set", Some("zorder"), true),
         ("open", Some("readme"), true),
         ("open", Some("nosuchthing"), false),
@@ -282,7 +284,7 @@ element1,balloon,a,0,0
         assert_eq!(RECORD_TARGET, TARGET_ERROR);
     }
 
-    /// ⑶ の 18 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（7.1・2.4）。
+    /// ⑶ の 17 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（7.1・2.4）。
     #[test]
     fn diagnostic_rows_replay_as_the_document_says() {
         // （種類, 場合, 文面）。
@@ -295,10 +297,10 @@ element1,balloon,a,0,0
         let case_of = |row: usize| match row {
             9 => "閉じていない",
             10 | 11 => "既定の値へ落とす",
-            15 => "閉じが無い",
-            16 => "開いている間の新しい開き",
-            17 => "開いていない所の閉じ",
-            18 => "出せない文字の番号",
+            14 => "閉じが無い",
+            15 => "開いている間の新しい開き",
+            16 => "開いていない所の閉じ",
+            17 => "出せない文字の番号",
             _ => "—",
         };
         let rows = table("diagnostic-rows");
@@ -349,7 +351,7 @@ element1,balloon,a,0,0
             }
             checked += 1;
         }
-        assert_eq!((checked, rows.len()), (18, 18), "確かめた行の数と ⑶ の行数");
+        assert_eq!((checked, rows.len()), (17, 17), "確かめた行の数と ⑶ の行数");
     }
 
     /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（7.2・2.7）。

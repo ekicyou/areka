@@ -24,10 +24,10 @@
 //!
 //! **スコープ境界（タスク 4.1 / 4.2 シーム）**: 本ファイルは emo2 subset の
 //! 値正規化のみを行う。subset 外タグ・`move` 以外の `\!`・`\q` 旧 2 連形・
-//! `\![*]` マーカー・不正トークンの吸収（`GenericCommand` / `Raw`）は
+//! 不正トークンの吸収（`GenericCommand` / `Raw`）は
 //! **タスク 4.2 の領分**であり、ここでは `decode_passthrough_*` という明示的な
-//! シーム関数へ委ねる（`\q` 旧 2 連形・`\![*]` マーカーはシーケンス依存ゆえ
-//!   `fold_*` 群が捕捉する。いずれも実装済み）。
+//! シーム関数へ委ねる（`\q` 旧 2 連形はシーケンス依存ゆえ `fold_legacy_q` が捕捉する）。
+//! 印 `\![*]` は汎用の `\!` の道、`%*` は同じ印の命令になる（script-small-tags 要件 4）。
 
 // 本体 `decode_noted` は `parse_noted`（→ `parse`）から非テスト経路で結線済み
 // （範囲なしの `decode` はその上に載せた、テストだけの入口）。タスク 4.2 の
@@ -37,7 +37,8 @@
 use super::char_code::{CharCodeRead, read_char_code};
 use super::lexer::Token;
 use super::model::{
-    Anchor, CharCodeDrop, Choice, Instruction, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg,
+    Anchor, CharCodeDrop, Choice, Instruction, MARKER_COMMAND, MoveArgs, NewLineRatio, Read,
+    ReadNote, SurfaceArg,
 };
 use std::iter::Peekable;
 use std::ops::Range;
@@ -76,8 +77,6 @@ pub(crate) fn decode(tokens: Vec<Token>) -> Vec<Instruction> {
 /// 一部は隣接トークンを見て局所的に畳む（design L421）:
 /// - 旧 2 連 `\q[ID][タイトル]`（`Tag{q|q*,[1]}` ＋ 直後 `Text("[...]")`）→ 単一 `Raw`
 ///   （Choice 化せず丸ごと吸収・要件 5.3）。
-/// - 選択肢マーカー `\![*]`（`Tag{!,["*"]}`）＋ 直後の現行 `\q[...]` → マーカーを
-///   Choice へ畳む（要件 5.4）。単独なら `GenericCommand`。
 ///
 /// そのため `Vec<(Token, Range)>` を peekable に走査する（`map` でなく明示ループ）。
 pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
@@ -89,11 +88,6 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
         // 読む段が自分で下した扱いの印（下した関数がその場で積む）。
         let mut notes = Vec::new();
         let instruction = match token {
-            // 選択肢マーカー `\![*]`: 直後が現行 `\q[...]` なら畳んで Choice、単独なら
-            // GenericCommand（要件 5.4・design L425）。
-            Token::Tag { word, args } if is_choice_marker(&word, &args) => {
-                fold_choice_marker(&mut it, &mut end, &mut notes)
-            }
             // 旧 2 連 `\q[ID][タイトル]` / `\q*[...]`: 直後 `Text("[...]")` を併せて
             // 単一 `Raw` に吸収（Choice 化しない・要件 5.3）。
             Token::Tag { word, args } if is_legacy_q_head(&word, &args, it.peek()) => {
@@ -173,38 +167,6 @@ fn decode_char_code(
     }
 }
 
-/// `\![*]`（選択肢マーカー）か判定する: word=`!`・引数がちょうど `["*"]`（要件 5.4）。
-fn is_choice_marker(word: &str, args: &[String]) -> bool {
-    word == "!" && args.len() == 1 && args[0] == "*"
-}
-
-/// 選択肢マーカー `\![*]` を解決する。直後が現行 `\q[...]`（`Tag{q,..}`）なら
-/// その `\q` を Choice として消化し、マーカーを畳んで未デコード文字列を残さない
-/// （要件 5.4）。直後が現行 `\q` でなければ単独マーカー＝`GenericCommand { name:"*" }`。
-///
-/// どちらの枝もマーカーからは何も作らないので「選択肢マーカーを無視した」印を付ける。
-fn fold_choice_marker(
-    it: &mut SpannedTokens,
-    end: &mut usize,
-    notes: &mut Vec<ReadNote>,
-) -> Instruction {
-    notes.push(ReadNote::MarkerIgnored);
-    if let Some((Token::Tag { word, .. }, _)) = it.peek()
-        && word == "q"
-    {
-        // 現行 `\q[...]`（単一ブラケット）を消化して Choice 化（マーカーを吸収）。
-        if let Some((Token::Tag { args, .. }, span)) = it.next() {
-            *end = span.end;
-            return decode_choice(args, notes);
-        }
-    }
-    // 単独 `\![*]`: 種別 `*` の汎用コマンド。
-    Instruction::GenericCommand {
-        name: "*".to_string(),
-        raw_args: Vec::new(),
-    }
-}
-
 /// 旧 2 連 `\q` の先頭タグか判定する。
 ///
 /// lexer は `\q[ID][タイトル]` を `Tag{q,[ID]}` ＋ `Text("[タイトル]")` に分割し、
@@ -250,6 +212,11 @@ fn fold_legacy_q(
 fn decode_token(token: Token, notes: &mut Vec<ReadNote>) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
+        // `%*` は `\![*]` と同じ印の命令（script-small-tags 要件 4.3）。
+        Token::SysVar(keyword) if keyword == MARKER_COMMAND => Instruction::GenericCommand {
+            name: keyword,
+            raw_args: Vec::new(),
+        },
         Token::SysVar(keyword) => Instruction::SystemVar(keyword),
         // 短縮形 `\<word>N` の意味写像は語で分岐する。待ち `\wN` = n × 50ms（既存等価）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
@@ -455,7 +422,7 @@ fn decode_bang(args: Vec<String>) -> Instruction {
         Some("move") => Instruction::Move(MoveArgs {
             args: args.into_iter().skip(1).collect(),
         }),
-        // move 以外の `\!`（要件 7.2/7.3）・`\![*]` マーカー（要件 5.4）はタスク 4.2 領分。
+        // move 以外の `\!`（要件 7.2/7.3）はタスク 4.2 領分。
         _ => decode_passthrough_bang(args),
     }
 }
@@ -510,8 +477,8 @@ fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
 // `\!` は `GenericCommand`（種別＋生引数保持）、それ以外（subset 外正準タグ・
 // subset 外 bare＝**正典スコープ bare `\0`/`\1`/`\h`/`\u` を除く**・lexer Raw 断片）は
 // 生情報を失わない `Raw` へ。いずれもエラーを
-// 送出せず解析を中断しない（要件 10.2）。`\q` 旧 2 連形・`\![*]` マーカーは
-// シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_* 群）。
+// 送出せず解析を中断しない（要件 10.2）。`\q` 旧 2 連形は
+// シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_legacy_q）。
 // ───────────────────────────────────────────────────────────────────
 
 /// 【タスク 4.2】subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
@@ -533,8 +500,7 @@ fn decode_passthrough_tag(
 /// （意味解釈・構造化はしない・design L426/L517）。引数が空（`\![]`）の場合は
 /// 種別空・生引数空の汎用コマンドとし、情報を捨てずエラーも送出しない（要件 10.2）。
 ///
-/// なお `\![*]` 選択肢マーカー（要件 5.4）は `decode` のシーケンス走査で先に
-/// 捕捉されるため、本関数へは到達しない（到達しても種別 `*` の GenericCommand となり破綻しない）。
+/// 印 `\![*]` もこの道で `MARKER_COMMAND` の汎用コマンドになる（script-small-tags 要件 4.1・4.2）。
 fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
     let mut it = args.into_iter();
     let name = it.next().unwrap_or_default();
