@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use areka_emo_atlas::{AlphaParams, AtlasTable, WicDecoderArm};
+use areka_emo_atlas::{AlphaParams, AtlasTable, ElementDecoder, WicDecoderArm};
 use areka_emo_compose::{ComposeError, EmoWorld};
 use areka_emo_present::PresentError;
 use areka_emo_present::balloon::{
@@ -325,7 +325,7 @@ pub fn build_shell_assets(
     scopes: &[u32],
     author_dpi: u16,
     default_surfaces: &DefaultSurfaces,
-    decoder: &WicDecoderArm,
+    decoder: &impl ElementDecoder,
 ) -> Result<ShellAssets, BootWiringError> {
     // マウント解決で shell dir を得る（起点 ghost/master/descript.txt・placement source と同経路）。
     let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell)
@@ -442,7 +442,7 @@ pub fn build_balloon_assets(
     balloon_root: &Path,
     scopes: &[u32],
     author_dpi: u16,
-    decoder: &WicDecoderArm,
+    decoder: &impl ElementDecoder,
 ) -> Result<BalloonAssets, BootWiringError> {
     // バルーン: scope ごとに 解決 → 構築 → 定義読込 を **同一箇所で**導出する（単一導出点）。
     // 系列解決（`resolve_balloon_faces`）は scope あたり 1 回だけ呼び、その戻りを構築

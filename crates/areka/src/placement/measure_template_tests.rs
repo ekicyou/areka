@@ -311,13 +311,22 @@ fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
 /// その場では緑のまま通り抜けるので、本文の側でも見張る。
 #[test]
 fn the_measure_side_does_not_parse_the_shell_itself() {
-    let raw = include_str!("measure.rs");
-    assert_no_blind_spot_literals(raw, "measure.rs");
-    let code = code_only(raw);
-    assert!(
-        !code.contains(SHELL_PARSE),
-        "measure.rs の本文にシェルの解析が戻っている（読み込みの権威は load_shell_target 1 本）"
-    );
+    // 採寸の読み手（measure_first_frame.rs）も採寸側の本文として見張る（placement-measure-bake-once D6）。
+    let files = [
+        ("measure.rs", include_str!("measure.rs")),
+        (
+            "measure_first_frame.rs",
+            include_str!("measure_first_frame.rs"),
+        ),
+    ];
+    for (name, raw) in files {
+        assert_no_blind_spot_literals(raw, name);
+        let code = code_only(raw);
+        assert!(
+            !code.contains(SHELL_PARSE),
+            "{name} の本文にシェルの解析が戻っている（読み込みの権威は load_shell_target 1 本）"
+        );
+    }
 }
 
 /// 要件 3.6: 起動側（`emo2_boot::assets`）も同じく自前でやり直していない。
