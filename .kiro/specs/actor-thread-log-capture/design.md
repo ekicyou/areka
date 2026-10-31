@@ -58,6 +58,7 @@
 - `capture` の窓の受け手の形（`WindowSubscriber`）や閉じ方を変えるとき。
 - 本番のコードがスレッドごとの差し替え（`set_default`／`with_default`）を新しく使うとき（窓でない受け手は目印に答えないので引き継がれないが、`SCOPED_COUNT` の速い道の前提が本番で崩れる）。
 - 下流のテストが「窓の中でアクターを起こした記録」に頼り始めたとき（窓より前に起きたアクターは入らない、を読み違えないこと）。
+- アクターの本体が `tracing::enabled!` の答えで動きを変え始めたとき（窓生まれのアクターは閉じた後も `enabled!` が真＝WindowSubscriber の項）。
 
 ## Architecture
 
@@ -280,9 +281,9 @@ fn inheritable(current: &tracing::Dispatch) -> Option<tracing::Dispatch>;
 
 **Responsibilities & Constraints**
 
-- 中に今の `CaptureSubscriber` をそのまま持ち、`enabled`・`new_span`・`record`・`record_follows_from`・`enter`・`exit` はそのまま渡す。`event` は開いているときだけ渡す。
+- 中に今の `CaptureSubscriber` をそのまま持ち、`enabled`・`new_span`・`record`・`record_follows_from`・`enter`・`exit` はそのまま渡す。`event` は開いているときだけ渡す。**上書きするのはこの 7 つと `downcast_raw` の 8 つだけ**（`CaptureSubscriber` が上書きしている 7 つと同じ並び）。`register_callsite`・`max_level_hint`・`event_enabled`・`clone_span`・`try_close`・`current_span` は既定のまま（`CaptureSubscriber` も既定のまま＝窓の振る舞いは今と同じ）。
 - `downcast_raw`: 自分の型には今の既定と同じに答え、`CaptureWindowMarker` の `TypeId` には開いているときだけ `self` を指す印を返す。ほかは `None`。
-- `enabled` は閉じた後も真のまま（偽にすると、既定の `register_callsite` が `enabled` を通って発行点の interest に `never` を焼きうる＝`probe.rs` が閉じた道を開け直さない）。
+- `enabled` は閉じた後も真のまま。理由: 常駐 probe が動いている普段の形では、偽にしても interest は probe の `sometimes` と合わさり `never` には焼けない。焼けうるのは probe を切った実行（`AREKA_LOG_CAPTURE_PROBES=off`）だけで、そこで閉じた窓の受け手の答えが発行点に `never` を焼くと、後の窓が記録を取りこぼす。それを避けるため真に保つ。代わりに、窓生まれのアクターのスレッドでは閉じた後も `tracing::enabled!` が真を返す。今のアクターの本体にこの判定で動きを変える所は無い（前提として Revalidation Triggers に載せる）。
 - 使うのは `capture` だけ。全スレッドの捕捉（`global.rs`）・自己試験（`capture_tests.rs`）・濾過つきの捕捉は今の `CaptureSubscriber` のまま＝目印に答えない。
 - 窓の既定が `CaptureSubscriber` から `WindowSubscriber` に変わるので、窓の中の `Dispatch::is::<CaptureSubscriber>()` は偽になる。`CaptureSubscriber` は crate の外へ見えず、crate の中にもその問い合わせは無い（`downcast`・`is::<` を走査して 0 件）＝要件 5.2 の「窓の結果を変えない」に当たる変化は無い。
 
@@ -369,7 +370,9 @@ struct CloseOnDrop(Arc<AtomicBool>);
 - **結合（`areka-actor` の中・本物の `log-capture-kit`）**: ⑴〜⑹ とフックの 1 本。どれも本物のスレッドと本物の窓で、待ちは受信と join だけ。
 - **番人**: `with_default_guard_test.rs`（例外 5 件・陳腐化の検査・製品側の依存に現れない検査）・1,000 行の番人。
 - **全体テスト 1 回**（5.6）: 実装の最後に 1 回（静かな机・前後の比べは要らない）。`research.md` 6 の表の「中」「低」の赤をここで洗う。`areka-test-binary-stability` が測っているあいだは着地させない。
-- **檻の無い所（明示）**: 閉じた後に記録を捨てる 1 行（記憶と手間の性質で、公開の口から見えない）。同じ印が目印の答えを切り替えることは ⑹ が固める。
+- **檻の無い所（明示）**:
+  - 閉じた後に記録を捨てる 1 行（記憶と手間の性質で、公開の口から見えない）。同じ印が目印の答えを切り替えることは ⑹ が固める。
+  - 子へ「受け手なし」（`Dispatch::none()`）を据えてしまう誤り。このテストの実行ファイルには全体の受け手が無い（要件 5.1）ので、据えても据えなくても子の行き先は「受け手なし」で、⑸⒝ は緑のまま。本番では後から据えた全体の受け手へ子の記録が届かなくなる形（`research.md` 4.2）。檻の代わりに、子に据える配線は `spawn_actor` の閉包の先頭の `inherited.map(|d| ..set_default(&d))` の 1 か所だけとし、据える値は `inheritable` が `Some` を返したものに限る。レビューでは「`set_default` に渡る値が `inheritable` の `Some` 以外から来ていないか」を見る。
 
 ## Performance & Scalability
 
