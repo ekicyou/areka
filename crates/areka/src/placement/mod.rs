@@ -22,6 +22,7 @@
 pub(crate) mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
 pub(crate) mod balloon_lock;
+pub(crate) mod balloon_syncscale;
 pub mod chain_finalize;
 /// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
 pub mod chain_realign;
