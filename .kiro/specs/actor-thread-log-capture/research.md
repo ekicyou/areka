@@ -163,3 +163,76 @@
 
 - **議題 1（本番で子に受け手を据えるか）**: 案 ⓑ。起こした側のスレッドがスレッドごとの受け手（捕捉の窓）を持つときだけ引き継ぐ。本番の道は今のまま・「受け手なし」も渡さない（要件 3.6 を足し、3.2・3.5 を合わせた）。見分け方は設計の段で決める（9 の「調べること」の 2 つ目）。安定の手が見つからなければ、設計の段で開発者へ戻す。
 - **議題 2（ウェーブの表の外のファイル）**: 7 の表のファイルはすべて本 spec の中で触ってよい（Boundary の Adjacent に列挙）。`Cargo.lock` の 1 行は中の path 依存だけで、依存を足す spec の 1 本だけの席は取らない。`install/desk_overwrite_tests.rs` が赤なら、直す前に `install-before-boot` のセッションと合わせる。
+
+## 11. 設計の段の調べと決め（2026-10-31・`/kiro-spec-design -y`）
+
+### 要約
+
+- **Feature**: `actor-thread-log-capture`
+- **Discovery Scope**: Extension（既存の `spawn_actor` と捕捉の窓を広げる・light の調べ）。調べの部下は立てず、`tracing-core` 0.1.36 と `tracing-subscriber` 0.3.23 のソースを直に読んだ。
+- **使った手引き**: `kiro-spec-design` の rules（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、テンプレート `design.md`・`research.md`。
+- **Key Findings**:
+  - 全体の受け手かスレッドごとの差し替えかを見分ける公開の手は無いが、**受け手そのものに尋ねる**公開の口 `Subscriber::downcast_raw`（`Dispatch::is::<T>()` が通る）がある。窓の受け手だけが答える目印の型を決めれば、議題 1 の ⓑ は安定の API だけで書ける。
+  - 目印の型を std の型だけで書けば（`[(); 0x6172_656B]`）、`areka-actor` と `log-capture-kit` が互いに依存せずに同じ `TypeId` を名指せる。
+  - 全スレッドの捕捉（`global.rs`）も同じ `CaptureSubscriber` を据えるので、目印を `CaptureSubscriber` に答えさせると、全スレッドの捕捉を使う 3 本の実行ファイルで子に差し替えが据わり要件 3.6 の字面に反する。＝目印に答えるのは `capture` だけが差す窓専用の受け手にする。
+
+### 調べの記録
+
+#### 見分け方（9 の「調べること」の 2 つ目）
+
+- **Context**: 議題 1 で ⓑ（窓のときだけ引き継ぐ）に決まり、見分け方が設計の段に残った。
+- **Sources Consulted**: `tracing-core-0.1.36/src/dispatcher.rs`（`get_default` 379〜398 行・`Dispatch::is`／`downcast_ref` 717〜726 行）・`src/subscriber.rs`（既定の `register_callsite` 175〜181 行・`downcast_raw` 467〜498 行・`dyn Subscriber::is`／`downcast_ref` 500〜517 行）・`tracing-subscriber-0.3.23/src/filter/layer_filters/mod.rs`（`Filtered::downcast_raw` 873〜883 行・`MagicPlfDowncastMarker` 1273〜1281 行）・`src/layer/layered.rs`（`Layered::downcast_raw` 214・344 行）。
+- **Findings**:
+  - `Dispatch::is::<T>()` は `downcast_raw(TypeId::of::<T>())` が null でない印を返すかで決まる。`downcast_raw` の約束は「`Some` なら、その型の正しい値を指す」。大きさ 0・整列 1 の型なら、null でない任意の番地が正しい値になる。
+  - `tracing-subscriber` は自分の目印の型（`MagicPlfDowncastMarker`）を同じ口で答えさせ、層の性質を問い合わせている＝この口を目印に使うのはライブラリの作り手の形。
+  - 本番の受け手（`log_history` が組む `Layered`）は、自分の型・層の型・`fmt` 層の部品の型にしか答えない。目印の型に答える所は無い。「受け手なし」（`NoSubscriber`）も既定の答え（自分の型だけ）。
+  - `CaptureSubscriber` は `register_callsite` を持たない＝既定が `enabled` を通る。閉じた後に `enabled` を偽にすると、発行点の interest に `never` を焼きうる。
+- **Implications**: 判定は `get_default(|d| d.is::<目印>().then(|| d.clone()))` の形。本番は `None` で子に何も据えず、`SCOPED_COUNT == 0` の速い道は保たれる。閉じた後は `event` の側で捨て、`enabled` は真のまま。
+
+#### 捨てた案
+
+| 案 | 中身 | 捨てた理由 |
+|---|---|---|
+| `Debug` の字面（`Dispatch::Global`／`Scoped`） | 種類を文字で見分ける | 安定の約束が無い（要件討議で却下済み） |
+| 目印に `NoSubscriber` など `tracing` の既存の型を使う | 共有の型を借りる | `Dispatch::is::<NoSubscriber>()` の意味を壊す（窓が「受け手なし」に見える） |
+| `enabled` に決まった宛先を尋ねる（`tracing::enabled!` の問い） | 窓は常に真 | 本番で `RUST_LOG=trace` だと全体の受け手も真＝本番で据わる |
+| 全体の受け手の写しと比べる | 本物の全体を取り出す | 全体の受け手を取り出す公開の手が無い（窓の無いスレッドで尋ねるには新しいスレッドが要る＝要件 3.4 に反する） |
+| `CaptureSubscriber` 自身に目印を答えさせる | 1 か所の上書きで済む | 全スレッドの捕捉も同じ型＝その 3 本の実行ファイルで子に差し替えが据わる（要件 3.6 の字面に反する） |
+| `CaptureSubscriber` に印の欄を足す | 包む型を作らない | `capture_tests.rs` の `CaptureSubscriber(..)` の組み立てが壊れ、承認された触るファイルの表の外へ出る |
+
+### 設計の決め
+
+#### 決め: 見分け方は「窓専用の受け手が目印の型に答える」
+
+- **Context**: 要件 3.6・議題 1。
+- **Alternatives Considered**: 上の捨てた案の表。
+- **Selected Approach**: `capture` が差す `WindowSubscriber` が、窓が開いているあいだだけ `[(); 0x6172_656B]` の `TypeId` に `self` の番地を返す。`spawn_actor` は起こす前に `get_default` で今の受け手を尋ね、答えたときだけ写しを子へ渡して `set_default` する。
+- **Rationale**: 使うのは `tracing` の公開・文書化された API だけ。依存の向きは変わらない（両側が std の型の形を 1 つ写すだけ）。本番の道は 1 ビットも変わらない。
+- **Trade-offs**: 目印の型が両側の写しで、片方だけ変えると黙って引き継ぎが止まる。対照の試験 ⑴ が赤にする（両側の綴りのコメントで互いを指す）。
+- **Follow-up**: `tracing` の版上げのとき、`Dispatch::is` が `downcast_raw` を通る形を読み直す（Revalidation Triggers）。
+
+#### 決め: 窓が閉じた後は目印に答えず、記録を捨てる（9 の 2 つ目＝案 C の形）
+
+- **Selected Approach**: `WindowSubscriber` の `open`（`AtomicBool`）を、`capture` の中の `CloseOnDrop` が関数を抜けるとき（panic を含む）に偽にする。閉じる時点は `run_with_subscriber` の取り出しの後。`enabled` は真のまま、`event` で捨てる。
+- **Rationale**: 窓の中でゴーストを起こすテストで、テストの終わりまで記録が溜まり続ける形（4.4）を、量を測らずに閉じられる。同じ印が目印の答えも切り替えるので、閉じた後に窓生まれのアクターが起こす孫は引き継がない（要件 2.1 の「閉じた後に起こされた」）。
+- **Trade-offs**: 捨てる 1 行は公開の口から観測できない（檻に入れない・記憶の性質）。同じ印が目印の答えを切り替えることは試験 ⑹ が固める。
+
+#### 決め: そのほかの B の項目（9 の 3〜7）
+
+- **対照の試験の置き場**: 兄弟の新しい 1 本 `crates/areka-actor/src/spawn_log_capture_tests.rs`（`mod log_capture_tests`）。`spawn_hook_tests.rs` はフックの枠を取る 1 本の試験のまま、1.3 だけをそこへ足す。
+- **要件 3.5 をどこまで固めるか**: 判定の関数の両側（受け手なし・目印に答えない受け手で `None`）と、窓の無いスレッドから起こした子の既定が起こした側と同じ（「受け手なし」同士）まで。全体の受け手へ届くことそのものは要件 5.1 のため直には見ない。
+- **要件 1.3 を試験で固めるか**: 固める。`spawn_hook_tests.rs` の `probe_hook` に `trace!` を 1 件出させ、同じ 1 本の中で窓の中で起こしたアクターのフックの記録が入ることを確かめる（閉包の中の順＝据えるのが区間とフックより前、を檻に入れる）。
+- **説明の直し**: `log-capture-kit` の `lib.rs`（116〜118 行）と `capture.rs`（冒頭・96〜97 行）は本 spec の中で直す。steering `structure.md` は `/kiro-complete` の文書の同期で直す。
+- **赤の手当て**: `crates/areka/src/update/worker_path_tests.rs` 201 行を宛先 `areka::update::desk` に絞る。ほかは全体テスト 1 回で洗い、出たものを同じ形で直す。
+
+### 合成（design-synthesis）
+
+- **一般化**: 「窓の受け手を子へ渡す」は、素のスレッドへ広げるときも同じ判定の関数で足りる形（`inheritable` は `Dispatch` を受けて `Option<Dispatch>` を返すだけ）。本 spec では `spawn_actor` の 1 か所だけに使う（素のスレッドは範囲の外）。
+- **作るか借りるか**: `tracing` の `downcast_raw` を借りる。新しい外のクレートは要らない（`tracing-subscriber` の層や `tracing-core` の差し替えの仕組みで代わりになるものは無い）。
+- **削ったもの**: 目印の型を `log-capture-kit` から公開して両側の `TypeId` を比べる専用の試験（⑴ がずれを赤にするので要らない）・引き継ぎの有無を知らせる記録・`capture_tests.rs` の自己試験の追加（承認された表の外）。
+
+### 危うさと手当て
+
+- 目印の型の両側のずれ — ⑴ が赤にする・両側のコメントで互いを指す。
+- 赤に変わる既存のテスト（確実 1・疑い 4〜6）— 201 行は設計で直す・ほかは全体テスト 1 回で洗う・`install/desk_overwrite_tests.rs` は `install-before-boot` と合わせてから。
+- `areka-test-binary-stability` が測っているあいだの着地 — 着地させない（要件の Adjacent のとおり）。
