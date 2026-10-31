@@ -168,6 +168,11 @@
 - 照会の並び（議題 8）: SSP は古い名前を新しい名前の**直前**に問う（`updatebuttoncaption` → `sakura.updatebuttoncaption` → `updatebutton.caption`）。SSP の記録と見比べやすい並びは「古い名前を新しい名前の直前」。
 - `readmebuttoncaption`（議題 9）: SSP は `readmebutton.caption` の直前に同じ形で問う。使い道は値を返す検体が無く読めない。
 
+## 7-3. 要件討議の結果（2026-11-01・全議題を推奨案で承認）
+
+- 議題 1（状態の語）→ `implemented`・`alias` にしない理由を備考に。議題 6・7（台帳の範囲・根拠の場所）→ 検査を通すのに要る所まで広げ、`updatebutton.caption` の行は「壊れ方」と「根拠の場所」の 2 文を直す。議題 5（`debug` 行）→ 受け入れる。議題 9（`readmebuttoncaption`）→ 取らず ⑵ と一緒に渡す。`sakura.updatebuttoncaption` → 取らない。
+- 設計の段に残るのは議題 2・3・4・8・10（落とす場所・対応の持ち方・導く鍵・照会の並び・凍結テストの否定側）。
+
 ## 8. 次の段
 
 - 要件討議（`/kiro-requirements-discussion popup-menu-extra-resources`）で 7 章の議題を決め、必要なら要件を直す。その前に測 1〜4 を SSP の MCP で測る（要件の決まり）。

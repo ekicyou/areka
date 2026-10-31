@@ -18,7 +18,7 @@ ukadoc は 2 つの名前を別々の項目として載せ、どちらも同じ�
 - `updatebutton.caption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#updatebutton.caption>）: 「ネットワーク更新の名称。」
 - `updatebuttoncaption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#updatebuttoncaption>）: 「ネットワーク更新の名称。」
 
-ukadoc は、2 つの名前の優先（両方あるときにどちらを使うか）も、ベースウェアがいつ・どの順で問うかも書いていない。本書の優先（要件 1 の 2・3）は brief の Approach「新しい名前が無いときに古い名前で引く」に拠る。SSP と同じかは、要件討議の前に SSP の MCP で測る（下の「測りで決める点」）。測った結果が本書と違えば、要件討議で本書を直す。
+ukadoc は、2 つの名前の優先（両方あるときにどちらを使うか）も、ベースウェアがいつ・どの順で問うかも書いていない。本書の優先（要件 1 の 2・3）は brief の Approach「新しい名前が無いときに古い名前で引く」と、網羅台帳の仕訳の決まり（`doc/ukadoc-coverage/README.md`「同じ機能に複数の書き方があるときは最も新しい書き方を正典とする」）に拠る（2026-11-01 要件討議 議題 1 で確定）。SSP の優先は測れなかった（下の「測った結果」の測 2・測 3）ので、SSP と同じとは言わない。
 
 ### 測りで決める点（要件討議の前に SSP の MCP で測る・推測で埋めない）
 
@@ -38,10 +38,14 @@ ukadoc は、2 つの名前の優先（両方あるときにどちらを使う�
 - **測 2・測 3**: 測れていない。どちらの名前にも値を返すゴーストが SSP に無く、検体を SSP に入れるのは SSP の外の実物（`C:\wintools\ssp\ghost`）を動かすことになるため。
 - 「．さくら」の SSP の記録（`C:\wintools\ssp\ghost\dot_sakura\ghost\master\ssp_shiori_log.txt`・10-23）には右クリックメニューを開いた跡が無い（起動のときの `sakura.recommendsites` などだけ）。「．さくら」の辞書は `updatebuttoncaption`・`vanishbuttoncaption`・`vanishbuttonvisible`・`sakura.recommendbuttoncaption`・`kero.recommendbuttoncaption`・`sakura.portalbuttoncaption`・`*.recommendsites`・`sakura.portalsites` を持ち、`readmebuttoncaption`・`updatebutton.caption` は持たない。
 
-### 要件討議で決める点（本書では範囲に入れていない）
+### 要件討議で決めたこと（2026-11-01・開発者が全議題を推奨案で承認）
 
-1. **`readmebuttoncaption`**: ukadoc の検索で、`updatebuttoncaption` と同じ形の名前がもう 1 つ見つかった。`readmebuttoncaption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#readmebuttoncaption>「Read Me!の名称。」）で、台帳の行は `vocabulary-only`・持ち主なし。ただし今 areka が問う `readmebutton.caption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#readmebutton.caption>「キャラクタについての名称。」）とは説明の言葉が違い、同じ項目の古い名前かどうかを ukadoc からは読めない。brief と開発者の決めは ⑴ を `updatebuttoncaption` に限っているので、本書は範囲に入れない。取り込むか・別に渡すかを、測 4 の結果とともに要件討議で決める。
-2. **`updatebutton.caption` の行の備考**: 台帳のこの行は「空・値なし・失敗・時間切れのときは既定名「ネットワーク更新」に落ち」と書いており、本 spec の後は事実と食い違う。要件 4 の 3 で文だけを直すとした（brief は「台帳の 1 行」と書くが、隣の行の文が誤りになるのを残さないため）。この扱いでよいかを確かめる。
+1. **優先**: 新しい名前を先にする（要件 1 の 2・3）。測 2・測 3 は測れなかったことを、台帳の `updatebuttoncaption` の行の備考に書く（要件 4 の 2）。
+2. **`readmebuttoncaption`**（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#readmebuttoncaption>「Read Me!の名称。」）: 本 spec では取らない。今 areka が問う `readmebutton.caption`（<https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#readmebutton.caption>「キャラクタについての名称。」）と説明の言葉が違い、SSP は同じ形で問う（測 4）が使い道は読めず、「．さくら」もこの名前を持たないので実機で確かめられない。⑵ と一緒に「windows-reactor 待ち」の段へ渡す（要件 6 の 3）。
+3. **`sakura.updatebuttoncaption`**: 取らない。SSP は問う（測 1）が ukadoc にも台帳にも無く、意味を ukadoc から取れない。測りの事実として本書と `research.md` に残すだけにする。
+4. **台帳の状態の語**: `updatebuttoncaption` の行は `alias` でなく `implemented`・持ち主は本 spec にする（要件 4 の 2）。areka はこの名前を自分で問い、新しい名前が引けないときの落とし先に使う（新しい名前の写しとしてだけ読むのではない）ので、README の仕訳の決まり（新しくない書き方は `alias`）から外れる。その理由を備考に書く。
+5. **台帳まわりの範囲**: brief の「台帳の 1 行」を、台帳の整合の検査を通すのに要る所まで広げる（要件 4 の 3・5）。先例は `shiori2-protocol`・`seriko-pattern-calls`。
+6. **今のゴーストの `debug` の記録**: 新しい名前が引けたときも、古い名前が空または値なしなら「空または値なし」の記録に古い名前が載ることを受け入れる（要件 2 の 1 の字面どおり・`debug` の水準で 1 語増えるだけ）。要件 3 の 1 の「今と同じ」は項目名のことで、この記録の行の中身は含まない。
 
 ### この文書で使う言葉
 
@@ -57,12 +61,12 @@ ukadoc は、2 つの名前の優先（両方あるときにどちらを使う�
 - **In scope**:
   - 「ネットワーク更新」の項目名を、新しい名前で引けないときに古い名前で引くこと。
   - SHIORI に問い合わせてよい名前の表に古い名前を 1 つ足すことと、その兄弟のテスト。
-  - 網羅台帳の `updatebuttoncaption` の 1 行（状態と持ち主と備考）。
+  - 網羅台帳の `updatebuttoncaption` の行（状態と持ち主と備考）と、`updatebutton.caption` の行の備考の 2 つの文、台帳の整合の検査を通すのに要る周りの書き直し（要件 4 の 5）。
   - 「．さくら」で右クリックメニューを開き、SSP と見比べる実機の確かめ 1 回。
 - **Out of scope**:
   - ⑵ のすべて（消滅通告・おすすめ・ポータルの項目をメニューに足すこと、その 8 つの名前と `char*.recommend*` の 3 つを問うこと、おすすめ・ポータルのサイトの一覧の読み方と開く道）。理由: 開発者の決め（2026-10-31）。メニューの組み立てに項目を足す仕事は windows-reactor の後の作り直しで捨てるので、それまで待つ。⑵ は本 spec の完了の棚卸で roadmap の「windows-reactor 待ち」の段へ渡す（要件 6）。
   - メニューの組み立てと表示（`crates/areka/src/menu/{plan,mod,win32}.rs`）を変えること。開発者の決めにより、本 spec の直しは問う名前の表と項目名の引き方の所に収める。
-  - 「ネットワーク更新」以外の項目名の照会、`readmebuttoncaption`（要件討議で決める点の 1）。
+  - 「ネットワーク更新」以外の項目名の照会、`readmebuttoncaption`（要件討議で決めたことの 2・⑵ と一緒に渡す）、`sakura.updatebuttoncaption`（同 3・ukadoc に無い）。
   - メニューの見た目（オーナードロー・着せ替え＝`popup-menu-shell-look`）、3 人目以降のキャラクター窓のメニュー（`extra-character-windows`）、省略した形のメニューの作り分け（`popup-menu-residue` が作り分けないと裁定済み）。
   - 更新の項目を選べる条件と、選んだ後の更新の動き（`areka-P0-network-update` の持ち場）。
 - **Adjacent expectations**:
@@ -115,10 +119,10 @@ ukadoc は、2 つの名前の優先（両方あるときにどちらを使う�
 #### Acceptance Criteria
 
 1. The popup-menu-extra-resources spec shall SHIORI に問い合わせてよい名前の表（`crates/areka-kanade/src/schedule/resources.rs` の `ALLOWED_RESOURCE_IDS`）に古い名前を ukadoc の URL とともに 1 つだけ足し、⑵ の 8 つの名前と `char*.recommend*` の 3 つは足さない。
-2. The popup-menu-extra-resources spec shall 網羅台帳の `updatebuttoncaption` の行を、状態を実装済み（`implemented`）・持ち主を本 spec にし、備考を同じ台帳の `updatebutton.caption` の行と同じ組み立て（中身・壊れ方・ログ・根拠の場所・画面の材料・無いと失うもの）で書き、新しい名前との優先（要件 1 の 2・3）と測 1〜3 の結果を書く。
-3. The popup-menu-extra-resources spec shall 網羅台帳の `updatebutton.caption` の行の状態と持ち主を変えず、備考の「壊れ方」の文だけを、新しい名前が引けないときは古い名前に落ちることに合わせる。
+2. The popup-menu-extra-resources spec shall 網羅台帳の `updatebuttoncaption` の行を、状態を実装済み（`implemented`）・持ち主を本 spec にし、備考を同じ台帳の `updatebutton.caption` の行と同じ組み立て（中身・壊れ方・ログ・根拠の場所・画面の材料・無いと失うもの）で書き、新しい名前との優先（要件 1 の 2・3）、測 1 の結果、測 2・測 3 が測れなかったこととその理由、`alias` にしない理由（要件討議で決めたことの 4）を書く。
+3. The popup-menu-extra-resources spec shall 網羅台帳の `updatebutton.caption` の行の状態と持ち主を変えず、備考の「壊れ方」の文を新しい名前が引けないときは古い名前に落ちることに、「根拠の場所」の文を落とし先を決める所に合わせる。
 4. The popup-menu-extra-resources spec shall 網羅台帳の ⑵ の 8 行と `char*.recommend*` の 3 行を変えない。
-5. When 台帳の持ち主を本 spec にする, the popup-menu-extra-resources spec shall 台帳の整合の検査（持ち主の名前が spec の一覧に在ること・持ち主の行数など）が通る形にする。
+5. When 台帳の持ち主を本 spec にする, the popup-menu-extra-resources spec shall 台帳の整合の検査（持ち主の名前が spec の一覧に在ること・持ち主の行数・状態の分布・機械が作る報告の全文一致など）が通る形にし、そのために要る周り（`doc/ukadoc-coverage/roadmap-draft.md` の spec の一覧の行と数・`briefing.md` の状態の分布の数・`report/` の作り直し）も先例（`shiori2-protocol`・`seriko-pattern-calls`）と同じ形で直す。
 
 ### Requirement 5: 決定論テストと実機の確かめ
 
@@ -143,5 +147,5 @@ ukadoc は、2 つの名前の優先（両方あるときにどちらを使う�
 
 1. The popup-menu-extra-resources spec shall 消滅通告・おすすめ・ポータルの項目をメニューに足さず、⑵ の 8 つの名前と `char*.recommend*` の 3 つを SHIORI に問い合わせない。
 2. The popup-menu-extra-resources spec shall メニューの組み立てと表示（`crates/areka/src/menu/{plan,mod,win32}.rs`）を変えない。
-3. When 本 spec を完了する, the popup-menu-extra-resources spec shall 完了の棚卸で ⑵（8 つの名前と `char*.recommend*` の 3 つ・おすすめとポータルのサイトの一覧の読み方と開く道・`popup-menu-shell-look` の件 15 との分け方が未決であること）を、roadmap の「windows-reactor 待ち」の段へ、渡す理由（開発者の決め・メニューの作り直しで項目を組む仕事を捨てるため）とともに渡す。新しい brief にするか本 spec の brief の残りとして置くかは、その完了の棚卸で決める。
+3. When 本 spec を完了する, the popup-menu-extra-resources spec shall 完了の棚卸で ⑵（8 つの名前と `char*.recommend*` の 3 つ・`readmebuttoncaption`（要件討議で決めたことの 2）・おすすめとポータルのサイトの一覧の読み方と開く道・`popup-menu-shell-look` の件 15 との分け方が未決であること）を、roadmap の「windows-reactor 待ち」の段へ、渡す理由（開発者の決め・メニューの作り直しで項目を組む仕事を捨てるため）とともに渡す。新しい brief にするか本 spec の brief の残りとして置くかは、その完了の棚卸で決める。
 4. When ⑵ を渡す, the popup-menu-extra-resources spec shall 本 spec の brief に、渡した先と日付を書く。
