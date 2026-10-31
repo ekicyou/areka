@@ -60,7 +60,7 @@
   - 完了 `choice-ranges-one-function` の「帯と当たりを 1 つの関数から出す」形に乗る。本 spec はその形を崩さない。
   - `audit-emo-text-layout-draw`（v0.1.0 の後）・`text-typesetting`・`balloon-font-file`・`clippy-199-lints` の段 2 が同じファイルを後で触る。本 spec はそれらの持ち分（見直し・組版・書体の引き当て・既存の lint の指摘）を先取りしない。
 - **同じウェーブ（2026-10-31 C15）との約束**:
-  - 触るのは emo-text の `draw_metrics.rs`・`choice.rs`・`layout.rs`（字の寸法を渡す口）・`tests/line_pitch_readback_test.rs`・§8。C15 のほかの 5 本は emo-text に触らない。
+  - 触るのは emo-text の `draw_metrics.rs`・`choice.rs`・`layout.rs`（字の寸法を渡す口）・新しいテストのファイル `src/viewbox_draw_line_gap_band_tests.rs` とその子の宣言（`viewbox_draw.rs`）と `lib.rs` の一覧の 1 行・要るときだけ `viewbox_draw_vertical_band_readback_tests.rs` の助けの関数の可視性の 1 語・§8（設計の段で `tests/line_pitch_readback_test.rs` は触らないと決めた）。C15 のほかの 5 本は emo-text に触らない。
   - emo-text に新しいソースファイルを足してよいのは C15 では本 spec だけ（1 ウェーブに 1 本だけの席）。足すなら `lib.rs` の一覧の行も足す。
   - 依存を足さない。1 ファイル 1,000 行を超えない（上限に近い `choice_tests.rs`・`draw_format_metrics_tests.rs` へは検査を足さない）。
   - 実物の書体の読み戻しは GPU を使う検査で、排他テストの机を取って短く 1 回。静かな机・前後の全体テストの比べは要らない。
