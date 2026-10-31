@@ -51,7 +51,7 @@ mod trigger;
 #[cfg(test)]
 mod sample_test_support;
 
-pub use actor::BIND_COMMAND;
+pub use actor::{BIND_COMMAND, BIND_NOEVENT_COMMAND};
 pub use actor::{
     SerikoClock, SerikoMsg, SerikoReplace, SerikoSink, spawn_seriko, spawn_seriko_clocked,
 };

@@ -44,19 +44,21 @@ use std::sync::{Arc, PoisonError, RwLock};
 use areka_sakura::strict::DetectionPoint;
 use areka_sakura::{ActorKey, CueCommand, CueTarget, TalkCue, cue_target_of};
 
-use crate::bind::{
-    BindDirective, BindResolver, NamedBindResult, apply_named_bind, parse_bind_directive,
-};
+use crate::bind::BindResolver;
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
 use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 use crate::skin_facts::{SkinFacts, balloon_missing, surface_missing};
-use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot, StageNote};
+use crate::state::{ApplyOutcome, ScopeStates, Slot, StageNote};
 use crate::table::AnimationTable;
 
 /// seriko が名前自己選別で消費するキャリアの命令名（`\![bind,...]`）。areka の受け取り手の台帳も
 /// これを引き、綴りを 1 か所に保つ（spec: areka-P0-mcp-reload 要件 13.5）。
 pub const BIND_COMMAND: &str = "bind";
+
+/// `\![bind-noevent,...]` の命令名。`bind` と同じに当て、記録の `name` の欄だけで分かれる
+/// （SHIORI へ送るイベントは 0・spec: script-small-tags 要件 3.1〜3.6）。
+pub const BIND_NOEVENT_COMMAND: &str = "bind-noevent";
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 ///
@@ -554,7 +556,7 @@ pub(crate) fn handle_message<O: SurfaceOutput>(
 ///   `Emote{key}`／`BalloonSurface` のみが解決層へ進む一本経路。担当外（非 Shell・純粋 Wait）は
 ///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
 ///   `cue_target_of == None` 枝の内側（Wait 判定より前・D1）に `\![bind]` 名前自己選別分岐を持ち、
-///   `name == "bind"` のキャリアのみ `bind_resolver` で名前解決し [`ScopeStates::apply_bind`] を通す。
+///   名前が `bind` か `bind-noevent` のキャリアだけを着せ替えの腕（`actor_bind.rs`）へ渡す。
 fn dispatch_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     bind_resolver: &BindResolver,
@@ -630,8 +632,9 @@ fn dispatch_message<O: SurfaceOutput>(
                         // 非正準 params の Custom: 宛名規律（D8④）で severity を峻別する。`Custom{command}`
                         // フィールドは開封失敗でも読めるため宛名で判断する——宛名 `bind`＝自分宛の壊れ物
                         // ゆえ warn!（ワイヤ破損は宛名の担当者が報告）・他人宛/未知名＝担当外ゆえ debug!。
-                        if command == BIND_COMMAND {
+                        if command == BIND_COMMAND || command == BIND_NOEVENT_COMMAND {
                             tracing::warn!(
+                                name = command.as_str(),
                                 command = ?cue.command,
                                 "seriko: 自分宛（bind）の非正準 Custom params を読み飛ばす（ワイヤ破損・D8④）"
                             );
@@ -653,9 +656,9 @@ fn dispatch_message<O: SurfaceOutput>(
                 // 正準キャリア（`Custom` の String Array）。名前自己選別で bind のみ消費する。
                 Some((name, tokens)) => {
                     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1
-                    if name != BIND_COMMAND {
-                        // 未登記/他担当名（move 等・`bind-noevent` 等も含む）は静かに読み流す
-                        // （名前自己選別・R2.5・一意性は areka 消費者台帳が保証・D1/D10）。
+                    if name != BIND_COMMAND && name != BIND_NOEVENT_COMMAND {
+                        // 未登記/他担当名（move 等）は静かに読み流す。2 つの名前のどちらかに限り、
+                        // 前置きの一致では選ばない（名前自己選別・R2.5・一意性は areka 消費者台帳が保証・D1/D10）。
                         tracing::debug!(
                             name,
                             command = ?cue.command,
@@ -663,104 +666,15 @@ fn dispatch_message<O: SurfaceOutput>(
                         );
                         return ControlFlow::Continue(());
                     }
-
-                    // (step 3) 引数解釈（純関数・不透明保持）。M1 縮退の正典形／破損入力を severity 分けする。
-                    let (category, part, on) = match parse_bind_directive(&tokens) {
-                        BindDirective::Apply { category, part, on } => (category, part, on),
-                        BindDirective::Toggle { .. } | BindDirective::CategoryWide { .. } => {
-                            // トグル形・カテゴリ単位形＝M1 未実導出の正当構文（将来 additive シーム・R4.2・D8②）。
-                            tracing::warn!(
-                                command = ?cue.command,
-                                "seriko: bind のトグル形/カテゴリ単位形は M1 未実導出のため読み飛ばす（正当構文・将来 additive・R4.2・D8②）"
-                            );
-                            return ControlFlow::Continue(());
-                        }
-                        BindDirective::Malformed => {
-                            // カテゴリ欠落・on/off 値破損＝破損入力（D8③）。
-                            tracing::error!(
-                                command = ?cue.command,
-                                "seriko: bind の破損入力（カテゴリ欠落・on/off 値破損）を読み飛ばす（D8③）"
-                            );
-                            return ControlFlow::Continue(());
-                        }
-                    };
-
-                    // (step 4〜6) scope→名前空間（D7）→ 名前解決（R3.7）→ カテゴリの 3 値ポリシーで当てる
-                    // （bindopt 設計 D1/D2）。決め方は `--dump-bind` と共有の [`apply_named_bind`]（要件 14.2）。
-                    // ここは結果ごとの記録と発行だけを持つ。
-                    let (id, outcome) = match apply_named_bind(
-                        states,
+                    bind_arm::on_bind(
                         bind_resolver,
-                        &cue.actor,
-                        &category,
-                        &part,
-                        on,
-                    ) {
-                        NamedBindResult::Applied { id, outcome } => (id, outcome),
-                        NamedBindResult::NoNamespace => {
-                            // 写像なし（数でない scope・D7・D8⑤）。
-                            tracing::warn!(
-                                scope = %cue.actor,
-                                "seriko: bind の scope 写像なし（数でない scope）で読み飛ばす（D7・D8⑤）"
-                            );
-                            return ControlFlow::Continue(());
-                        }
-                        NamedBindResult::NotFound => {
-                            tracing::error!(
-                                scope = %cue.actor,
-                                category = %category,
-                                part = %part,
-                                "seriko: bind の (カテゴリ, パーツ) を名前解決できず読み飛ばす（未宣言・状態不変・発行なし・R3.7・D8①）"
-                            );
-                            return ControlFlow::Continue(());
-                        }
-                        NamedBindResult::MustSelectKept { id } => {
-                            // mustselect の脱衣は正典「解除不可」: 集合を変えず読み流し、痕跡を warn! で
-                            // 残す（bindopt 3.2・bindopt D1）。無言の握り潰しにしないため実機の既定ログ水準（info）で
-                            // 見える warn を選ぶ。
-                            tracing::warn!(
-                                scope = %cue.actor,
-                                category = %category,
-                                part = %part,
-                                id,
-                                on,
-                                "seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"
-                            );
-                            return ControlFlow::Continue(());
-                        }
-                    };
-                    match outcome {
-                        BindApplyOutcome::Changed(command) => {
-                            // 部品のコマを新しい着せ替えで載せ直した Show があればそれを、無ければ
-                            // apply の指令を 1 件だけ出す（spec: areka-P0-surface-element-nesting 要件 5.12）。
-                            // 時計は合図を処理する今読む（spec: areka-P0-animated-image-playback 要件 3.1）。
-                            let at_ms = loop_runtime.event_ms();
-                            let command = loop_runtime
-                                .refresh(&cue.actor, Slot::Shell, at_ms, states)
-                                .unwrap_or(command);
-                            emit_display(out, command); // 単一発行点（R3.5）
-                            // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
-                            tracing::info!(
-                                scope = %cue.actor,
-                                category = %category,
-                                part = %part,
-                                id,
-                                on,
-                                "seriko: bind 適用"
-                            );
-                        }
-                        // 非表示/未知 scope（StateOnly）または同値（Unchanged）は発行しない（D5・flow note (2)）。
-                        BindApplyOutcome::StateOnly | BindApplyOutcome::Unchanged => {
-                            tracing::debug!(
-                                scope = %cue.actor,
-                                category = %category,
-                                part = %part,
-                                id,
-                                on,
-                                "seriko: bind 集合を更新（非表示/未知 scope または同値ゆえ発行なし）"
-                            );
-                        }
-                    }
+                        states,
+                        loop_runtime,
+                        out,
+                        &cue,
+                        name,
+                        &tokens,
+                    );
                     return ControlFlow::Continue(());
                 }
             }
@@ -873,9 +787,14 @@ fn dispatch_message<O: SurfaceOutput>(
     ControlFlow::Continue(())
 }
 
+#[path = "actor_bind.rs"]
+mod bind_arm;
 #[cfg(test)]
 #[path = "actor_bind_loop_tests.rs"]
 mod bind_loop_tests;
+#[cfg(test)]
+#[path = "actor_bind_noevent_tests.rs"]
+mod bind_noevent_tests;
 #[cfg(test)]
 #[path = "actor_calls_tests.rs"]
 mod calls_tests;

@@ -409,18 +409,17 @@ pub enum BindDirective {
         /// `"1"`→`true`・`"0"`→`false`。
         on: bool,
     },
-    /// 数値欄が空欄／省略のトグル形。M1 では実導出せず安全縮退（`warn!`＋skip・R4.2）。
+    /// 数値欄が空欄／省略のトグル形。今の着脱の反対を当てる（[`apply_bind_directive`]・script-small-tags 3.9）。
     Toggle {
         /// bindgroup カテゴリ名（trim 済み）。
         category: String,
         /// bindgroup パーツ名（trim 済み）。
         part: String,
     },
-    /// パーツ名が空欄のカテゴリ単位形。M1 では実導出せず安全縮退（`warn!`＋skip・R4.2）。
+    /// パーツ名が空欄のカテゴリ単位形。定義の順にパーツを 1 つずつ当てる（[`apply_bind_directive`]・script-small-tags 3.8）。
     ///
-    /// `on` はカテゴリ単位では厳密に action されない M1 縮退ゆえ寛容に保持する
-    /// （`"1"`→`Some(true)`・`"0"`→`Some(false)`・欠落/空/その他→`None`）。不正値でも
-    /// `Malformed` にはしない（縮退形の中での不透明保持）。
+    /// `on` は `"1"`→`Some(true)`・`"0"`→`Some(false)`・欠落/空/その他→`None`（`None` はパーツごとのトグル）。
+    /// 不正値でも `Malformed` にはしない。
     CategoryWide {
         /// bindgroup カテゴリ名（trim 済み）。
         category: String,
@@ -561,7 +560,6 @@ pub struct AppliedBind {
 /// （[`BindResolver::category_parts_in_order`]）に `0`／`1`／その時点の反対を 1 つずつ当てる（要件 3.8〜3.10）。
 /// カテゴリにパーツが無ければ `NotFound`、スコープに名前の空間が無ければ `NoNamespace` を 1 つ返す
 /// （空の列を返さない）。`Malformed` は呼び手が先に除く前提で、渡されたら空の列（状態を変えない）。
-#[cfg_attr(not(test), expect(dead_code, reason = "結線は script-small-tags 4.2"))]
 pub fn apply_bind_directive(
     states: &mut crate::state::ScopeStates,
     resolver: &BindResolver,
@@ -646,7 +644,7 @@ pub fn accumulate(
 
 #[cfg(test)]
 #[path = "bind_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 #[cfg(test)]
 #[path = "bind_named_tests.rs"]
