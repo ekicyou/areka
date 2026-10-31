@@ -110,5 +110,4 @@
 ## Implementation Notes
 
 - 1.2: `.pna` の `warn!` は `read_use_self_alpha` の中でなく呼び手（`shell_target.rs` の `load_shell_target`・`balloon.rs` の `load_balloon_use_self_alpha`）に在る。2.1・2.2 で `records` を渡すときに合わせて囲む。
-- 書き込みの道具が文字列の `
-` を本物の改行に化かすことがある。テストの文字列を書いたらバイトで確かめる。
+- 書き込みの道具が文字列の `\n` を本物の改行に化かすことがある。テストの文字列を書いたらバイトで確かめる。
