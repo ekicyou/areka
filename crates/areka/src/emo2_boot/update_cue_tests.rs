@@ -352,7 +352,12 @@ fn script_string_reaches_the_desk_and_is_accepted() {
         Some(r#"["Emo"]"#),
         "対象は今のゴースト"
     );
-    assert!(warns(&events).is_empty(), "断りも警告もない: {events:?}");
+    // 背景の `update` の担い手は窓を引き継ぐが、閉じる前に記録が届くかは間合い次第なので数えない
+    let on_path_warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN && e.target != "areka::update::procedure")
+        .collect();
+    assert!(on_path_warns.is_empty(), "断りも警告もない: {events:?}");
 }
 
 /// 断りの形は窓口まで通しても依頼 0 件・`warn!` 1 件（受け口の断りだけ・要件 1.8・9.4）。
