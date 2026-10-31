@@ -8,7 +8,7 @@
   - Implementation Notes に、緑か赤か・赤なら止まった所（`boot` の失敗か・観測の 60 秒切れか・終了か）・`ghost\master\pasta.dll` までのパスの字数を「前」として書いてある
   - _Requirements: 3.2_
 
-- [ ] 2. 窓口と見張りの手当て
+- [x] 2. 窓口と見張りの手当て
 - [x] 2.1 `TempPath::new` の置き場を `target\test-roots\` へ替え、説明を合わせる
   - `new` の本体を `under_target` と同じ置き場の式を通す形に替える。署名・名前・連番・破棄・作れないときの panic は変えない
   - crate の利用手順に置き場の短い節を足し、`new`・`under_target`・置き場の式の doc を「2 つの入口は同じ置き場・同じ働き、どちらを使ってもよい」に合わせる。廃止の印は付けない。doctest の例は変えない
@@ -37,7 +37,7 @@
   - _Boundary: 検体の作業フォルダの説明_
   - _Requirements: 2.3_
 
-- [ ] 3. 確かめと記録
+- [x] 3. 確かめと記録
 - [x] 3.1 入口を戻すと見張りが赤になることを一度だけ確かめる
   - `new` の本体を一時的に OS の一時フォルダへ戻し、自己テストの 1 本が `new` の行で赤、迂回の見張りの主検査と窓口の 1 本が `lib.rs` の行を示して赤になるのを見てから戻す（コミットしない）
   - 戻した後に 2 つのテストが緑で、`git diff` に一時の変更が残っていない。結果を Implementation Notes に書いてある
@@ -52,7 +52,7 @@
   - _Depends: 1, 2.1_
   - _Requirements: 3.1, 3.2, 3.4_
 
-- [ ] 3.3 差分の範囲・行数・全体テストを確かめる
+- [x] 3.3 差分の範囲・行数・全体テストを確かめる
   - `git diff --stat main...HEAD -- crates` に出るのが設計の 4 本だけ（呼び出し側の書き換え 0・`Cargo.toml`／`Cargo.lock` 0）
   - 1,000 行の番人が緑で、4 本のどれも 1,000 行を下回る
   - 全体テストを 1 回回し、前に緑だったテストが緑のまま。置き場の移動で赤に変わるテストが出たら、呼び出し側を書き換えずに名前・赤の文・パスの長さを添えて裁定へ上げてある
@@ -66,3 +66,4 @@
 - タスク 3.1（2026-11-01・コミットしない一度きりの確かめ）: `lib.rs:108` の `new` の本体を一時的に OS の一時フォルダへ戻すと、窓口の自己テスト `both_entry_points_live_in_workspace_target_test_roots_and_are_removed_on_drop` が `new: 置き場が target\test-roots でない: C:\Users\maz-o\AppData\Local\Temp\areka-place-check-…` で赤（`lib_tests.rs:106`）。迂回の見張りは 16 本中 4 本が赤: 主検査 `no_temp_dir_entry_point_lives_outside_the_allow_table` と窓口の 1 本 `the_gateway_is_scanned_and_holds_no_entry_point` がどちらも `crates/temp-path-kit/src/lib.rs:108 （語: env::temp_dir(）` を示し、あわせて実測と表の一致の 1 本と較正の 1 件外しの 1 本も実測の集合に `lib.rs` が増えたことで赤。戻した後は `git diff` が空で、`cargo test -p temp-path-kit` は 9 本＋doctest 1 本、見張りは 16 本とも緑。
 - タスク 3.2（後・2026-11-01）: 入口を替えた後に `real_pasta_boot_observes_a_cue_then_shuts_down_cleanly` を回し、結果は赤。止まった所は観測の 60 秒切れ（`real_pasta_test.rs:223`・60.29 秒）。1 回目は helper の行を取り損ねたので机を取り直してもう 1 回だけ回し（60.56 秒・同じ赤）、helper の行が前と同じ `SHIORI 初期化の入口: loadu`／`LOAD 失敗（観測・ack[0]）: LoadReturnedFalse { last_error: 203 }` であることを確かめた。前（タスク 1）と同じ所・同じ色なので、helper の作業フォルダと DLL の読み込みはパスの長さのせいではないと読める。`ghost\master\pasta.dll` までのパスは `<ワークツリーの根 81 字>\target\test-roots\areka-ghost-real-pasta-boot-observes-a-cue-then-shuts-down-cleanly-{pid}-{serial}\ghost\master\pasta.dll` で 197 字（前は 131 字・pid 5 桁・serial 0 と置いて数えた）。この走行で確かめられるのは helper の作業フォルダと `pasta.dll` の読み込みまでで、Lua がファイルを開く経路は確かめていない。
 - タスク 3.2 の静的な見積もり（2026-11-01・pid 5 桁・serial 0 と置いて数え直した）: ⑴ `runtime_tests.rs` の `inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll` が `LoadLibraryW` に渡すパスは移った後 224 字で、上限 259 字まで余白 35 字（ワークツリーの名前が 76 字までなら通る。設計の見込みは 226 字・33 字・74 字）。⑵ `vendors/sample_ghost/emo2.nar` の `ghost/master/` の下で最も長い相対パスは 35 字（`scripts/pasta/shiori/event/boot.lua`）。`real_pasta_test.rs` の `ghost\master\` まで 188 字と足して 223 字、`snapshot_capture_test.rs`（回していない）の 179 字と足して 214 字で、どちらも 260 字未満。⑶ pasta が走行中に新しく書くファイル（保存など）の深さは測っていない。後だけの赤も前と違う所で止まることも無かったので、裁定へ上げる件は無く、名前を短くする備えも入れていない。
+- タスク 3.3（2026-11-01）: `git diff --stat main...HEAD -- crates` に出るのは設計の 4 本だけ（`temp-path-kit/src/lib.rs`・`lib_tests.rs`・`log-capture-kit/tests/temp_path_guard_test.rs`・`sample-ghost-kit/src/devroot.rs`）で、呼び出し側の書き換え 0・`Cargo.toml`／`Cargo.lock` 0。行数は 153・178・786・723 で、どれも 1,000 行を下回り、1,000 行の番人（`file_length_guard_test`）は 6 本緑。全体テスト（`tools/test-all.ps1`）を排他テストの机を取って 1 回回し `all steps green`（x64 のワークスペースのテスト 1461 秒・i686 44 秒・整形・文字コードほか全段緑）。置き場の移動で赤に変わったテストは無い。回す前に、取り寄せの検体 `pasta-in-windows` が無くて `sample-ghost-kit` の 2 本が赤だったので、開発者の許可を得て `tools\sample-fetch.ps1` で取り寄せ、83 本緑を確かめた。着地の前の確かめとして、`areka-impl-watch.exe status` は `sole=none`・`test=none` で、`areka-test-binary-stability` は机に参加しておらず静かな机で測っていない。`roadmap.md` の行も「測ることが本体・ウェーブの外」のままで、測りの走行中の印は無い。
