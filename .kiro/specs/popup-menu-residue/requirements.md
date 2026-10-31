@@ -44,7 +44,7 @@
 
 - **In scope**:
   - 13 件の仕分けと、その記録。
-  - 件 3・8 のテストの追加。
+  - 件 3・8 のテストの追加（件 8 は `crates/areka-kanade/tests/kanade/` の終了の通しのテストの兄弟・件 6 のテストは `actor_resources_tests.rs`）。
   - 件 4・5・6 の記録の文と型の修正（`crates/areka/src/menu/{trigger,win32}.rs`・`menu/trigger_show_tests.rs`・`emo2_boot/readme_cue.rs`・`crates/areka-kanade/src/actor.rs` の文だけ）。
   - 件 9 の網羅台帳の 4 行の持ち主と備考、`menu/captions.rs` の問い合わせない名前の表の説明の追随。
   - 件 11・12・13 を引受先の brief へ移すこと。
@@ -83,7 +83,7 @@
 1. The popup-menu-residue spec shall 件 1 について、返事待ちの間に別の窓で預けた右ダブルクリックを今の要求の判定で送らず、記録 1 行（`trace`）を残して捨てることと、それを確かめる決定論テストが在ることを、今の main で確かめて記録する。
 2. The popup-menu-residue spec shall 件 2 について、説明書のファイルが無いときの台本の `\![open,readme]` が OS へ渡さずに `warn` の記録 1 行で戻ることと、それを確かめる決定論テストが在ることを、今の main で確かめて記録する。
 3. The popup-menu-residue spec shall 件 7 について、`spine.rs` の受け口の本数に触れるコメントが、確かめた日の実際の本数と合っていることを記録する。
-4. The popup-menu-residue spec shall 件 10 について、説明書を開く OS の呼び出しが開く専用のスレッドで行われ、メニューと台本の両方の入口がそこを通ることを記録する。
+4. The popup-menu-residue spec shall 件 10 について、説明書を開く OS の呼び出しが開く専用のスレッドで行われ、メニューと台本の両方の入口がそこを通ることと、UI スレッドに残る OS の呼び出しがファイルの有無の確認だけであることを記録する。
 5. If 確かめた結果、件 1・2・7・10 のどれかが直っていない, then the popup-menu-residue spec shall その件を「済み」と記録せず、本 spec で直す件に移す。
 
 ### Requirement 3: 台本の入口から説明書を開くまでを通すテスト（件 3）
@@ -93,7 +93,7 @@
 #### Acceptance Criteria
 
 1. When 説明書のファイルが在るゴーストの台本に引数なしの `\![open,readme]` が 1 つ在り、その台本が再生される, the areka shall 説明書のファイルの絶対パスを行き先とする開く要求を、偽物の OS へちょうど 1 件渡す。
-2. If 1 と同じ台本で説明書のファイルが無い, then the areka shall 偽物の OS へ何も渡さず、`warn` の記録をちょうど 1 行残す。
+2. If 1 と同じ台本で説明書のファイルが無い, then the areka shall 偽物の OS へ何も渡さず、説明書を開く道の記録（`[readme]` の接頭辞を持つ行）として `warn` の記録をちょうど 1 行残す（起動の全体の他の警告は数えない）。
 3. The popup-menu-residue spec shall 1・2 を、台本の文字列を入れてから開く要求が偽物の OS に届くまでの全段を本物の部品で通す決定論テストで確かめる（途中の段を差し替えない）。
 4. The popup-menu-residue spec shall 件 3 の実機での観察を本 spec では行わず、その理由（OS へ渡す所はメニューの入口と同じで、実機ではメニューの入口が確かめ済み）を記録する。
 
@@ -131,6 +131,7 @@
 2. The areka shall 1 の記録の水準と記録の種類の名前（`shiori_send_failed`・`shiori_reply_dropped`・`shiori_reply_timeout`）を今と変えない。
 3. The areka shall 往復の失敗の後の振る舞いを、往復を呼ぶどの道（会話・終了・照会・翻訳）でも今と変えない（終了へ進むかどうかは、今と同じく呼んだ側が決める）。
 4. The popup-menu-residue spec shall 1 を、照会の道で往復が失敗したときの記録の文を見る決定論テストで確かめる。
+5. The popup-menu-residue spec shall 往復の関数の説明（コードの説明の文）にある「失敗は終了（Fault）へ倒す」の記述も、1 と同じく事実に合わせて直す（終了へ倒れるのは会話の道だけで、それを決めるのは呼んだ側）。
 
 ### Requirement 7: 相方の窓からの終了の指示を端から端まで通すテスト（件 8）
 
@@ -140,7 +141,7 @@
 
 1. When 相方の窓（スコープ 1）のメニューから終了が指示される, the areka shall ゴーストへの終了の知らせ（`OnClose`）を、Reference0 を `user`・Reference1 と Reference2 をどちらも `1` として送る。
 2. When 本体の窓（スコープ 0）のメニューから終了が指示される, the areka shall 同じ知らせを、Reference1 と Reference2 をどちらも `0` として送る。
-3. The popup-menu-residue spec shall 1・2 を、終了の指示を kanade の入口に入れてから SHIORI への要求に現れるまでを本物の運行で通す決定論テストで確かめる。
+3. The popup-menu-residue spec shall 1・2 を、終了の指示を kanade の入口に入れてから SHIORI への要求に現れるまでを本物の運行で通す決定論テストで確かめる。期待する References は `["user","1","1"]`・`["user","0","0"]` のように書き下し、知らせを組む関数から導かない（組む関数そのものの誤りにも気付けるように）。
 4. The areka shall Reference1 を Reference2 と同じ値にすることを今と変えない（理由: 正典では Reference1 だけが `popupmenu.type` の影響を受けるが、areka は省略した形のメニューを作り分けないので、メニューの持ち主は常に右クリックした窓である）。
 
 ### Requirement 8: 語彙のみの 4 つの名前の引受先を確定する（件 9）
