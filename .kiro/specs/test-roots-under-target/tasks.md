@@ -2,7 +2,7 @@
 
 > 触るファイルは設計の File Structure Plan の 4 本だけ（窓口の `lib.rs`・`lib_tests.rs`、迂回の見張り、`devroot.rs` のコメント）。呼び出し側・例外表・`Cargo.toml` は変えない。走行の記録は末尾の `## Implementation Notes` に書く。
 
-- [ ] 1. 入口を替える前の、実物の `pasta.dll` の較正の走行
+- [x] 1. 入口を替える前の、実物の `pasta.dll` の較正の走行
   - PowerShell 7 で i686 の `shiori-host32-helper` をビルドし、検体 `emo2` の `pasta.dll` の絶対パスを `nar-sample-path` で得る（取り寄せは要らない）
   - 同じ PowerShell の中だけで `PASTA_DEBUG` を消し `HOST32_PASTA_DLL` を与えて、`real_pasta_test.rs` の 1 本を有界で 1 度回す（コードは変えない）
   - Implementation Notes に、緑か赤か・赤なら止まった所（`boot` の失敗か・観測の 60 秒切れか・終了か）・`ghost\master\pasta.dll` までのパスの字数を「前」として書いてある
@@ -62,3 +62,4 @@
 
 ## Implementation Notes
 - 2.4（2026-11-01）: `cargo test -p sample-ghost-kit` は 81 緑・2 赤。赤の 2 本（`every_registered_sample_lands_where_its_registry_row_says`・`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`）は、取り寄せの検体 `pasta-in-windows` が `target\nar-samples\fetched\` に無いためで、コメントだけの差分とは関わりが無い。全体テストの前に `tools\sample-fetch.ps1` で取り寄せる（取り寄せは開発者の承認が要る）
+- タスク 1（前・較正・2026-11-01）: 入口を替える前に `real_pasta_boot_observes_a_cue_then_shuts_down_cleanly` を 1 回回し、結果は赤。止まった所は観測の 60 秒切れ（起動の失敗でも終了でもない・60.41 秒・終了コード 101・`real_pasta_test.rs:223` の panic）。helper は DLL を読み込んだ後、pasta.dll の load が false を返した（`LOAD 失敗（観測・ack[0]）: LoadReturnedFalse { last_error: 203 }`）。フィクスチャが pasta.dll だけを写して辞書を写さないための、既知の赤と同じ形。`ghost\master\pasta.dll` までのパスは、OS の一時フォルダ（`C:\Users\maz-o\AppData\Local\Temp`）の下の `areka-ghost-real-pasta-boot-observes-a-cue-then-shuts-down-cleanly-{pid}-{serial}\ghost\master\pasta.dll` で 131 字（実際のパスは出力に出ないので、pid 5 桁・serial 0 と置いてコードの組み立てから数えた）。この走行で確かめられるのは helper の作業フォルダと DLL の読み込みまでで、Lua がファイルを開く経路には触れない。i686 の helper は `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe`、pasta.dll は `target\nar-samples\manual\emo2\ghost\emo2\ghost\master\pasta.dll`。
