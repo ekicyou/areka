@@ -149,6 +149,8 @@
 9. The areka shall 送る窓を本体（スコープ 0）に限らず、どのスコープの窓でも同じ規則で送る。
 10. When ぱすたを拡大率の違う画面へドラッグでまたがせた, the areka shall 今も送っているドラッグの終わり（`OnMouseDragEnd`）に加えて、またいだ窓の倍率の変わり（`OnShellScaling`）を届け、ぱすたがどちらからも付け直しの印を付けられるようにする。
 
+11. While その窓のゴーストが話している最中, the areka shall `OnShellScaling`・`OnBalloonScaling` の応答が返した台本で今の台詞を差し替えず、記録に残して捨てる（黙っているときは、ほかのイベントの応答と同じ規則で再生する）（2026-11-01 設計討議の議題 3・areka ではこの 2 つがドラッグや表示の副作用として起きるため）。
+
 ### Requirement 6: `balloon.syncscale` を読み、値として持つ
 **Objective:** As a ゴーストの作者, I want descript に書いた `balloon.syncscale,true` が読まれ、バルーンの倍率をシェルに連動させる指定として持たれること, so that 利用者が倍率を変える道ができたときに、作者の指定が働く
 

@@ -41,7 +41,7 @@
 
 - 実効の倍率そのものの決め方（`derive_scale`・`ScalePolicy`）。本 spec は表示成立点で決まった k を読むだけで、k を計算し直さない。
 - 窓の DPI の追従・整合待ち（`run_dpi_phase`・`DpiSyncHold`）・窓寸の照合（`take_pending_resize`）。
-- 2 つのイベントの応答の台本の振る舞い（今日の `on_shiori_reply` の規則に乗る）。
+- 2 つのイベントの応答の台本の振る舞いのうち、黙っているときの再生（今日の `on_shiori_reply` の規則に乗る）。
 - `syncscale` の値をバルーンの倍率に効かせること（本 spec は持つだけ・要件 6.6）。
 - 汎用の通知の入口 `KanadeMsg::RaiseEvent` の受理の規則（定常だけ）そのもの。
 
@@ -213,6 +213,8 @@ doc/
 | `crates/areka-kanade/src/schedule/change_property_tests.rs`（新規）・`schedule/events_change_tests.rs`（数 64→66）・`request_origin_tests.rs`・`areka-talk/src/origin_tests.rs` | 檻 | 新しい腕の固定 |
 | `doc/COMPAT_ARCHITECTURE.md` | 8 節に行 | areka 独自の名前と意味の正本（D9） |
 
+**2026-11-01 開発者が承認**（設計討議の議題 1）: 上の表のファイルを触ってよい。`roadmap.md` の C15 の ① の欄は、完了のとき（`/kiro-complete` の roadmap の更新）にこの表で書き直す。
+
 ① の欄にあって本設計が**触らない**もの: `emo2_boot/mod.rs`・`emo2_boot/runtime_boot.rs`・`emo2_boot/frame/dpi.rs`・`placement/config.rs`。
 
 ## System Flows
@@ -276,6 +278,7 @@ stateDiagram-v2
 ```
 
 - 起点が空からの最初の記録は「初めて決まった」で、表を書くだけ（要件 5.7）。起動・ゴーストの切り替え・読み直しは表示層ごと新しく、シェル・バルーンの切り替え（`ReplaceTarget`）は `attach_target` を通るので起点が空になる。
+- 最初の表示の後、kanade が定常に入る前（起動の SHIORI の往復の間）に窓が別の DPI の画面へ移った記録は、起点があるのでイベントになり、kanade が `warn!(raise_event_not_steady)` で捨てる（意図した振る舞い・2026-11-01 設計討議の議題 2）。表は書かれているので、ゴーストは定常に入ってから `\![get,property]` で読める。
 - 起点があり k が変わった記録だけがイベントになる。DPI だけが変わり k が同じ（作者の基準と表示の倍率で打ち消す）記録は表を書くだけ（要件 5.6）。
 
 ## Requirements Traceability
@@ -790,7 +793,8 @@ pub(crate) fn register(world: &mut World); // Update に読み直しの系を 1 
 1. `PropGetCueSink`（`prop_get_sink.rs` の檻・要件 7.1）: 値の並ぶ順／無い名前の空の Reference で番号を保つ／名前を問わない（`baseware.name` など）／`On` で始まらない名前を送る／空の名前・空白だけ・イベント名が無いは送らず warn 1 件／名前なしは送らず debug／改行・NUL は送らず warn／担当外（`\![get,other]`・`\![set,property]`）は読み飛ばす／kanade が落ちていても panic しない。
 2. kanade（`change_property_tests.rs`・`request_origin_tests.rs`・`msg_tests.rs`・`origin_tests.rs`・`events_change_tests.rs`）: 定常で GET を 1 つ・定常でない（起動の段・終了の段）は空の一括と warn／検査の失敗は空の一括と warn／4 つのヘッダの文字列が `areka`・`internal,property`・`local`・`null`／応答の台本が `on_shiori_reply` の規則で再生され、話している最中は置き換える（要件 1.7）／許可の表の数 66。
 3. 値の口（`ghost_session_scope_scale_tests.rs`・要件 7.2）: 4 つの形の答え・百分率の表・選択子の誤り・窓の無いスコープ・`dpi_x` 無し・MCP とゴーストの道の一致・表の差し替え後の値・ゴーストの切り替えの後に前の値を答えない。
-4. 計画（`scale_notice_tests.rs` の純粋な部・要件 7.3）: 送る場面と送らない場面・畳み・順・Reference の並び（Reference4 のスコープ番号）。
+4. 応答の扱い（`schedule` の檻・要件 5.11）: 話している最中の `OnShellScaling`・`OnBalloonScaling` の Value は今の台詞を差し替えず `info!` を残して捨てる／黙っているときは再生する／ほかのイベント（例 `OnMouseClick`）は今までどおり差し替える。起動の途中（定常の前）の倍率の変わりは、`RaiseEvent` が kanade に届いて `raise_event_not_steady` の warn で捨てられる（同じフレームの檻の 1 場面・議題 2）。
+5. 計画（`scale_notice_tests.rs` の純粋な部・要件 7.3）: 送る場面と送らない場面・畳み・順・Reference の並び（Reference4 のスコープ番号）。
 5. `syncscale`（`descript_window_keys` の檻・`balloon_syncscale.rs` の檻・要件 7.4）: ゴーストだけ・シェルだけ・両方・`true` 以外・別名・切り替えで前の指定が消える。
 
 ### Integration Tests
