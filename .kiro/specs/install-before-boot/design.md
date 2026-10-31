@@ -37,7 +37,7 @@
 - 手続きの口の答えの語 `install::procedure::Raised::Unsent`（「起動の前なので送らない」）と、`send` がそれを「送りました」と書かないこと。
 - 持ち物 `install::startup::StartupInstall` の新しい中身（入れる物・起動の後へ運ぶ控え）と、その口（起動の前に 1 回だけ扱う・World へ控えを移す）。
 - 起動の前の `callghost` の判断（純粋な関数 `decide_call_ghost` の新しい形）と、使わない理由の語。
-- 起動のゴーストの選び方の段 `GhostRoute::CallGhost`（`boot_resolve::resolve_ghost` の記憶の段の前）と、その相手を運ぶ口（`GhostInputs::call_ghost`・`boot_config::resolve_boot_with_call`）。
+- 起動のゴーストの選び方の段 `GhostRoute::CallGhost`（`boot_resolve::resolve_ghost` の記憶の段の前）と、その相手を運ぶ口（`GhostInputs::call_ghost`・`boot_config::resolve_boot_with` の引数 `call_ghost`）。
 - 読み取りだけの断りの記録 `readonly_refused`（`what=install`）を 1 か所で出す関数（`install::record_readonly_refused`）。
 - プロセスの DPI の扱いを 1 回だけ立てる口 `wintf::ensure_process_dpi_awareness`（今の `WinApp::with_exit_policy` の中の 1 段を外へ出したもの）。
 - 定常の後に入れる道の撤去（`install::startup` の `on_steady`・`discard_for_exit`・`on_order_done`・切り替えの頼み、`install::desk` からの呼び出し 3 行、資源 `SwitchAcceptCount`）。
@@ -55,7 +55,7 @@
 
 ### Allowed Dependencies
 - `main` → `install::startup`（作る・`resolve_boot` を呼ぶ・`install` で World へ移す）。
-- `install::startup` → `install::before_boot_ports`・`install::procedure::{run_order, ArchiveEnd}`・`install::{InstallOrder, InstallOrigin, record_readonly_refused}`・`boot_config::{resolve_boot, default_app_profile_dir}`・`roots::resolve_roots`・`readonly::is_on`・`alert::suppressed`・`emo2_boot::ghost_switch::record_last_installed`・`emo2_boot::shell_balloon_resolve::{record_installed_balloon, record_installed_shell}`・`install::names::update`。
+- `install::startup` → `install::before_boot_ports`・`install::procedure::{run_order, ArchiveEnd}`・`install::{InstallOrder, InstallOrigin, record_readonly_refused}`・`boot_config::{resolve_boot_with, default_app_profile_dir}`・`roots::resolve_roots`・`readonly::is_on`・`alert::suppressed`・`emo2_boot::ghost_switch::record_last_installed`・`emo2_boot::shell_balloon_resolve::{record_installed_balloon, record_installed_shell}`・`install::names::update`。
 - `install::before_boot_ports` → `install::procedure::{InstallPorts, Raised, Overwritten, InstalledRecord}`・`install::destination::install_into`・`install::judge::GhostFacts`・`install::desk::catalog_spelling`（目録の綴り）・`alert::{ask_yes_no, warn_ok}`・`wintf::ensure_process_dpi_awareness`。
 - `boot_config` → `boot_resolve`（今のまま）。**`boot_config` と `boot_resolve` は `install` を知らない**（起動の解決は「起こすゴーストのフォルダ名」を受けるだけ）。
 - 依存の向き: `main` → `install::startup` → `boot_config` → `boot_resolve`。`install::startup` → `install::before_boot_ports` → `install::procedure`／`install::destination`。逆向きの `use` は誤りとして扱う。
@@ -67,7 +67,7 @@
 - `boot_resolve::resolve_ghost` の段の並びを変えるとき: `CallGhost` の段が「記憶の前・位置引数／`--ghost`／`--random` の後」にあることを見直す。
 - `GhostRoute` の読み手（記憶の書き込み・`argv_session`・`Switched` の比べ）が経路で分かれるようになるとき: `CallGhost` を「ほかの起動と同じ」に数えているかを見直す（要件 4.10）。
 - `main` の起動の順（`readonly::engage` → 起動の解決 → `WinApp`）を変えるとき: 読み取りだけの判定と DPI の口の順を見直す。
-- `install-package-type` が `bootghost` を読むとき: 起こすゴーストの名前を `boot_config::resolve_boot` の `call_ghost` と同じ口で渡せるかを見直す（この spec は受け口の形を決めない）。
+- `install-package-type` が `bootghost` を読むとき: 起こすゴーストの名前を `boot_config::resolve_boot_with` の `call_ghost` と同じ口で渡せるかを見直す（この spec は受け口の形を決めない）。
 - `session-module-gather`／`session-crate-split` が `main.rs`・`boot_config.rs`・`install/desk.rs` を動かすとき: 呼ぶ所の 1 か所と依存の向きを見直す。
 
 ## Architecture
@@ -94,7 +94,7 @@ graph TB
     Ports --> Destination[install destination install_into]
     Ports --> Alert[alert dialogs]
     Ports --> Dpi[wintf ensure_process_dpi_awareness]
-    StartupResolve --> BootConfig[boot_config resolve_boot]
+    StartupResolve --> BootConfig[boot_config resolve_boot_with]
     BootConfig --> BootResolve[boot_resolve resolve_ghost]
     Main --> WinApp[wintf WinApp]
     WinApp --> Dpi
@@ -135,7 +135,7 @@ crates/areka/src/
 │   ├── procedure.rs                # 改: Raised::Unsent と send の腕
 │   ├── procedure_branch_tests.rs   # 改: Unsent の記録のテストを 1〜2 本足す
 │   └── mod.rs                      # 改: before_boot_ports の宣言・readonly の断りの記録を関数へ
-├── boot_config.rs                  # 改: resolve_boot の引数（根の結果・callghost の相手）・resolve_boot_with_call
+├── boot_config.rs                  # 改: resolve_boot を消す（本番の口は install::startup へ）・resolve_boot_with に callghost の相手の引数
 ├── boot_config_callghost_tests.rs  # 新: callghost の段を通る起動の解決のテスト（前回がきれいに終わらなかった・指定あり）
 ├── boot_resolve.rs                 # 改: GhostInputs::call_ghost・GhostRoute::CallGhost・resolve_ghost の段
 ├── boot_resolve_option_tests.rs    # 改: GhostInputs の新しい欄（None）・CallGhost の段のテスト
@@ -155,7 +155,7 @@ doc/pasta-real-run.md               # 改: 新しい書庫の入れ方（248 行
 - `crates/areka/src/install/desk.rs` — `on_steady` の `super::startup::on_steady(world)`、`discard_for_exit` の `super::startup::discard_for_exit(world)`、`answer` の `OrderDone` の腕の `super::startup::on_order_done(...)` を外す（`busy = false` は残す）。`record_installed` の中の「目録の綴りのフォルダ名と関わったゴーストの名前」を純粋な `catalog_spelling` に切り出し、`BootPorts` と共有する（振る舞いは変えない・`desk_record_tests.rs` がそのまま通る）。
 - `crates/areka/src/install/procedure.rs` — `Raised` に `Unsent` を足し、`send` は `Unsent` のとき `install_event` を出さず debug `install_event_unsent` を出して `Ok(Unsent)` を返す。`archive_steps` の「`NoReply` なら `OnInstallComplete` へ続ける」は `NoReply` だけを見るので、`Unsent` では旧仕様へ続かない（変えない）。
 - `crates/areka/src/install/mod.rs` — `mod before_boot_ports;` を足す。`submit` の先頭の `readonly_refused` の記録を `pub(crate) fn record_readonly_refused(origin, count)` に切り出し、`submit` と起動の前の道の両方から呼ぶ（記録の語・欄は今のまま）。
-- `crates/areka/src/boot_config.rs` — `resolve_boot` の引数を `(resolved, request, call_ghost, app_profile_dir)` に改め（根の解決は呼び手が先に行う）、本体を `resolve_boot_with_call(resolved, request, call_ghost, app_profile_dir, pick, prepare_ghost)` に移す。`resolve_boot_with` はテストだけの口（`#[cfg(test)]`・`call_ghost` に `None` を渡す 1 行）に下ろし、テストの 37 か所の呼び出しは動かさない。
+- `crates/areka/src/boot_config.rs` — 本番の薄い口 `resolve_boot` を消す（env・記憶・exe の場所を読んで根を解く役は `install::startup::resolve_boot` へ移る）。`resolve_boot_with` に引数 `call_ghost: Option<&str>` を足し、`GhostInputs` へ渡す。今の呼び出しは同じファイルの 2 か所だけ（消える `resolve_boot` と、テストだけの口 `resolve_boot_from`）で、`resolve_boot_from` は `None` を渡す＝テストの約 20 か所の `resolve_boot_from` の呼び出しは動かない。`boot_config::resolve_boot` を名指す注釈（`boot_config.rs`・`boot_resolve.rs`・`emo2_boot/mod.rs`・`main.rs`）は `install::startup::resolve_boot` に書き直す。
 - `crates/areka/src/boot_resolve.rs` — `GhostInputs` に `call_ghost: Option<&str>`、`GhostRoute` に `CallGhost`、`resolve_ghost` の `--random` の段と記憶の段のあいだに `CallGhost` の段（下の「起動のゴーストの選び方」）。
 - `crates/areka/src/emo2_boot/ghost_switch.rs` — `SwitchAcceptCount` の型と、`accept_switch` の中で 1 増やす数行を外す（読み手は `install::startup` だけで、この spec で消える）。それで使われなくなる局所の値 `elsewhere`（数えのためだけに計算している）も一緒に外す。
 - `crates/areka/src/main.rs` — `let startup_install` を `let mut startup_install` に、`resolve_boot(&opts.boot)` を `install::startup::resolve_boot(&opts.boot, &mut startup_install)` に、`pub(crate) use boot_config::{…}` から `resolve_boot` を外す。周りの注釈は同じ行数で書き直す。986 行から増やさない（新しい呼び出しは 1 行に収まり、`use` の並びも行数が変わらない）。`readonly_tests.rs` の走査（`readonly::engage(` が `resolve_boot(&` の綴りより前）は新しい呼び出しの綴りでも当たる。`install::startup::install(…, startup_install)` の行はそのまま（中身が控えの引き継ぎに変わる）。
@@ -174,7 +174,7 @@ sequenceDiagram
     participant Roots as roots
     participant Ports as BootPorts
     participant Proc as run_order
-    participant Boot as boot_config resolve_boot
+    participant Boot as boot_config resolve_boot_with
     Main->>Startup: request and StartupInstall
     Startup->>Roots: resolve_roots
     alt root error
@@ -296,7 +296,7 @@ graph TB
 | CallGhostDecision（`decide_call_ghost`） | install（純粋） | callghost を使うか・相手 | 4.3〜4.6・4.9・7.4 | ArchiveEnd (P0) | Service |
 | BootPorts | install | 起動の前の手続きの口 | 1.4・2.x・3.1・3.4 | procedure (P0)・destination (P0)・alert (P1)・wintf (P1) | Service・State |
 | ProcedureUnsent（`Raised::Unsent`） | install::procedure | 送らないことを記録で正しく | 3.1・6.2 | — | Service |
-| BootConfigCall（`boot_config::resolve_boot`・`resolve_boot_with_call`） | 起動の解決 | 根の結果と callghost の相手を受けて解く | 4.1・4.11 | boot_resolve (P0) | Service |
+| BootConfigCall（`boot_config::resolve_boot_with`） | 起動の解決 | 根の結果と callghost の相手を受けて解く | 4.1・4.11 | boot_resolve (P0) | Service |
 | BootResolveCall（`GhostRoute::CallGhost`） | 起動の解決（純粋） | 記憶の前の段 | 4.2・4.3・4.7・4.10 | — | Service |
 | DpiOnce（`wintf::ensure_process_dpi_awareness`） | wintf | プロセスの DPI の扱いを 1 回だけ立てる | 2.2・2.3（DPI 追従を守る） | `windows` HiDpi (P0) | Service |
 | DeskCleanup | install::desk | 定常の後の道の撤去・綴りの共有 | 1.3・3.3 | — | — |
@@ -320,7 +320,7 @@ graph TB
 
 **Dependencies**
 - Inbound: `main` — 起動の 1 回（P0）
-- Outbound: `roots::resolve_roots`（P0）・`BootPorts`（P0）・`run_order`（P0）・`boot_config::resolve_boot`（P0）・`install::record_readonly_refused`（P1）
+- Outbound: `roots::resolve_roots`（P0）・`BootPorts`（P0）・`run_order`（P0）・`boot_config::resolve_boot_with`（P0）・`install::record_readonly_refused`（P1）
 - External: なし
 
 **Contracts**: Service [x] / State [ ]
@@ -328,14 +328,14 @@ graph TB
 ##### Service Interface
 ```rust
 /// 本物の口（main から 1 回）。env・記憶・exe の場所・読み取りだけの旗・告知の抑止を読み、
-/// resolve_boot_from を本番の選び方（pick_index・writable_ghost）で呼ぶ。
+/// resolve_boot_with_env を本番の根の解決・選び方（resolve_roots・pick_index・writable_ghost）で呼ぶ。
 pub(crate) fn resolve_boot(
     request: &crate::cli::BootRequest,
     startup: &mut StartupInstall,
 ) -> Result<crate::boot_config::BootResolved, crate::alert::AlertScene>;
 
 /// 中身（テストは根の結果・旗・選び方を差し込む）。
-pub(crate) fn resolve_boot_from(
+pub(crate) fn resolve_boot_with_env(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     request: &crate::cli::BootRequest,
     startup: &mut StartupInstall,
@@ -368,7 +368,7 @@ impl StartupInstall {
 - Invariants: 1 回の走りで `run_order` を呼ぶのは高々 2 回（initial と args）。`run_before_boot` の 2 回目は何もしない（要件 1.3）。
 
 **Implementation Notes**
-- Integration: `resolve_boot_from` は `resolved` が `Ok` なら `run_before_boot`、`Err` なら `pending` を取り出して `record_not_submitted("root_missing")`。どちらの後も `boot_config::resolve_boot_with_call(resolved, request, call_ghost.as_deref(), …)` へ渡す（根の記録と告知の場面は今の `resolve_boot_with` が出す）。
+- Integration: `resolve_boot_with_env` は `resolved` が `Ok` なら `run_before_boot`、`Err` なら `pending` を取り出して `record_not_submitted("root_missing")`。どちらの後も `boot_config::resolve_boot_with(resolved, request, call_ghost.as_deref(), …)` へ渡す（根の記録と告知の場面は今の `resolve_boot_with` が出す）。
 - Validation: 書庫の在る無しは手続きが見る（在らなければ手続きの失敗として記録・要件 2.6）。
 - Risks: 起動の前の画面が出ているあいだ、起動は止まる（利用者の答えを待つ）。SSP も同じ（利用条件の答えを待ってから起動を続ける）と読み、待つ時間の上限は設けない。
 
@@ -505,16 +505,9 @@ pub(crate) enum Raised {
 #### BootConfigCall（`boot_config`）
 
 ```rust
-/// アプリの記憶と本番の選び方で resolve_boot_with_call を呼ぶ薄い口（根の解決は呼び手）。
-pub(crate) fn resolve_boot(
-    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
-    request: &crate::cli::BootRequest,
-    call_ghost: Option<&str>,
-    app_profile_dir: &std::path::Path,
-) -> Result<BootResolved, crate::alert::AlertScene>;
-
-/// 今の resolve_boot_with の本体。call_ghost を GhostInputs へ渡すほかは変えない。
-pub(crate) fn resolve_boot_with_call(
+/// 今の resolve_boot_with に call_ghost を足したもの（呼び手は install::startup と、テストだけの口 resolve_boot_from）。
+/// call_ghost を GhostInputs へ渡すほかは変えない。
+pub(crate) fn resolve_boot_with(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     request: &crate::cli::BootRequest,
     call_ghost: Option<&str>,
@@ -523,9 +516,9 @@ pub(crate) fn resolve_boot_with_call(
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
 ) -> Result<BootResolved, crate::alert::AlertScene>;
 
-/// テストだけの口（今の 37 か所の呼び出しのため・call_ghost は None）。
+/// テストだけの口（今のまま・call_ghost は None を渡す）。
 #[cfg(test)]
-pub(crate) fn resolve_boot_with(/* 今の引数のまま */) -> Result<BootResolved, crate::alert::AlertScene>;
+pub(crate) fn resolve_boot_from(/* 今の引数のまま */) -> Result<BootResolved, crate::alert::AlertScene>;
 ```
 - `boot_config` は「起こすゴーストのフォルダ名」を受けるだけで、インストールも `callghost` の語も知らない。
 - 記憶の読み（`read_last_ghost`）の条件は変えない（`call_ghost` が目録に当たらなかったときの次の段に要る）。
@@ -634,10 +627,11 @@ pub(super) fn catalog_spelling(
 - `boot_resolve_option_tests.rs`: `CallGhost` の段が記憶より先・目録に無ければ warn して記憶へ・`--random` と指し先の後（要件 9.5）。
 
 ### Integration（起動の前の道 → 起動の解決）
-- 空の根（`TempPath` の空のフォルダ・バルーンだけを置く）に起動の前にゴーストを 1 本入れると、`resolve_boot_from` が `GhostRoute::Only` でそのゴーストを選ぶ（要件 9.1・4.2）。
+- 空の根（`TempPath` の空のフォルダ・バルーンだけを置く）に起動の前にゴーストを 1 本入れると、`resolve_boot_with_env` が `GhostRoute::Only` でそのゴーストを選ぶ（要件 9.1・4.2）。
 - `initial_install.nar` と `--install` があるとき、`startup_install_started` の並びが `InitialInstall` → `StartupArgs` で、どちらも `ghost_resolved` より前、2 回目の `run_before_boot` は何もしない（要件 9.2・1.3）。
 - 並びに「在らない・読めない・`accept` つき・利用条件つき（抑止で拒否）」を混ぜても、残りの書庫が入り、起動の解決が続く（要件 9.3）。
 - `callghost` で、記憶の前回のゴーストが在っても入れたゴーストが `CallGhost` で起き、起動中の印が在るときも同じで印の値が返る（要件 9.5・4.7・`boot_config_callghost_tests.rs`）。
+- `callghost` を渡し、ゴーストは `initial_install.nar` だけから入り `--install` ではゴーストが入らないとき、`startup_callghost_skipped reason=no_ghost_installed` が出て、今の選び方（記憶・唯一ほか）で選ぶ（要件 9.5 の「`initial_install.nar` だけ」・4.9）。
 - `deletesource` で入った写しだけが消え、失敗・断った写しが残る・同じパス 2 回は 1 回だけ・読み取り専用の写しは消せずに warn・`initial_install.nar` は入ったら消え入らなければ残る（要件 9.6）。
 - 根が決まらない（`Err(RootError::NoneFound)`）とき warn `root_missing` が 1 件で何も入らない・入れた後も 0 体（バルーンだけ入れた）なら `GhostMissing` で `boot_stopped` が出ない（要件 9.7）。
 - 読み取りだけのとき、`readonly_refused` に `InitialInstall`・`StartupArgs` の語が出て、写しが消えず、`startup_callghost_skipped reason=readonly`（要件 9.8）。

@@ -34,6 +34,7 @@
 - `resolve_boot_with` の中: `--ghost` の指し先（`point_ghost`・一時の置き場を並びの先頭へ）→ 根の記録 → 位置の引数の検査 → 起動中の印（`read_session_mark`）→ 記憶（`read_last_ghost`）→ `boot_resolve::resolve_ghost` → `prepare_ghost`（`user_root::writable_ghost`）→ バルーン。
 - `resolve_ghost` の段: 位置の引数 → 指し先（`GhostRoute::Pointed`）→ `--random` → 記憶 → 唯一（`Only`）→ 既定 `emo2` → 無作為。空の置き場に 1 体だけ入れば「唯一」で起きる（要件 4.2 の後半は今の選び方のままで満たす）。
 - `resolve_boot_with` を呼ぶ所は本体 1・テスト 8 ファイル（`main_config_input_tests.rs` ほか）に約 37 か所。引数を足すと全部が動く（§4 の比べに効く）。
+  - **（設計の検証 2026-10-31 で訂正）** `resolve_boot_with` を呼ぶのは `boot_config.rs` の中の 2 か所（`resolve_boot` とテストだけの口 `resolve_boot_from`）だけ。テストの約 20 か所が呼ぶのは `resolve_boot_from`。
 
 ### 2.3 手続き（`install/procedure.rs`・`judge.rs`・`destination.rs`）
 
@@ -238,7 +239,7 @@
 ### 9.4 設計の決め（§6 の 11 点への答え）
 
 1. **置き場**: 案 B。道と持ち物と純粋な判断は `install/startup.rs`（定常の後の部品を消した跡へ）、口は新しい `install/before_boot_ports.rs`。
-2. **継ぎ目**: 根を `install::startup::resolve_boot` が先に解き、入れてから `boot_config::resolve_boot(resolved, request, call_ghost, app_profile_dir)` へ渡す。本体は `resolve_boot_with_call`、今の `resolve_boot_with` はテストだけの 1 行の口（37 か所の呼び出しを動かさない）。関数を「根」と「ゴースト以降」に割らない。
+2. **継ぎ目**: 根を `install::startup::resolve_boot` が先に解き、入れてから `boot_config::resolve_boot_with(resolved, request, call_ghost, …)` へ渡す。`boot_config::resolve_boot` は消し、`resolve_boot_with` に `call_ghost` の引数を足す（呼ぶ所は同じファイルの 2 か所だけ・テストの `resolve_boot_from` は `None` を渡す）。関数を「根」と「ゴースト以降」に割らない（設計の検証 2026-10-31 の指摘で、入口が 2 つになる形から改めた）。
 3. **イベントを送らない返し方**: (b)。`Raised::Unsent` を足し、`send` は `install_event` を出さず debug `install_event_unsent`。`NoReply` を返す (a) は「送りました」の記録が 2〜4 件出て要件 3.1・6.2 と食い違う。
 4. **`callghost` の段**: (b)。`GhostInputs::call_ghost`（フォルダ名）と `GhostRoute::CallGhost`、段は `--random` の後・記憶の前。「指定あり」は起動の求めに値が在るか（`--ghost` が当たらなかったときも指定ありと数える＝要件 4.5 の字のまま）。使わない理由の語は `readonly`・`boot_target_given`（`target`＝`positional`・`ghost_option`・`random`）・`no_ghost_installed`。
 5. **定常の後の道の始末**: `startup::on_steady`・`ArgsFollowup`・`discard_for_exit`・`on_order_done`・`call_ghost`・`callghost_request`・旧い `CallGhostFacts`・`CallGhostSkip` の旧い腕を消す。`desk.rs` の呼び出し 3 行を外す。`desk_startup_tests.rs`（10 本）は消し、`startup_tests.rs` は `sources_to_delete` の 5 本と `new_with`・`Drop` の 2 本を残して書き直す（振る舞いが無くなった陳腐化のテスト）。`SwitchAcceptCount` を外す。
