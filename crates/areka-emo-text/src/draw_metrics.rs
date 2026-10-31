@@ -146,20 +146,22 @@ impl DWriteMetrics {
         // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
         // warn＋行送りピッチと同丈の比（`line_pitch(h) / h`）へ縮退する（帯はピッチで
         // 頭打ちゆえ縮退値でも隣接行を侵さない・R3.10・現行の縮退の意図を新式のまま保つ）。
-        let line_box_ratio = measure_line_box_ratio(factory, &format).unwrap_or_else(|| {
-            let fallback_ratio = if font.height > 0.0 {
-                config.line_pitch(font.height) / font.height
-            } else {
-                1.0
-            };
-            warn!(
-                font = %font.name,
-                line_gap = config.line_gap,
-                fallback = fallback_ratio,
-                "font face metrics を取得できない——行ボックス比を行送りピッチ相当へ縮退する"
-            );
-            fallback_ratio
-        });
+        let line_box_ratio = measure_font_metrics(factory, &format)
+            .map(|m| (m.ascent as f32 + m.descent as f32) / m.designUnitsPerEm as f32)
+            .unwrap_or_else(|| {
+                let fallback_ratio = if font.height > 0.0 {
+                    config.line_pitch(font.height) / font.height
+                } else {
+                    1.0
+                };
+                warn!(
+                    font = %font.name,
+                    line_gap = config.line_gap,
+                    fallback = fallback_ratio,
+                    "font face metrics を取得できない——行ボックス比を行送りピッチ相当へ縮退する"
+                );
+                fallback_ratio
+            });
         // 縦書きの em の箱の置き場も、行ボックス比と同じく生成時に 1 度だけ測る（書体の寸法は不変）。
         // 測れないときは 0（行の矩形の真ん中＝列のレシピが em の箱を置く場所）へ縮退する。
         let vertical_em_box_left_ratio = match mode {
@@ -356,6 +358,11 @@ impl GlyphMetrics for DWriteMetrics {
     /// 列のレシピ（行間 UNIFORM・基線は箱の幅の半分）の下の実測は Yu Gothic UI・ＭＳ ゴシック・
     /// 游ゴシックの 2 方向とも 0。列のレシピの前の値（Yu Gothic UI ∓0.1650・游ゴシック −0.3013）は
     /// spec `emo-text-dwrite-fidelity` research.md §10.3。
+    ///
+    /// `None` の枝（横書きに束縛した物へ縦書きを問う）は**本番では通らない**: 本番の呼び手は
+    /// `choice.rs::line_bands` だけで、`actor_present.rs` は計測器を作ったのと同じ `resolved.mode` を
+    /// 渡し、向きが変われば描画資源ごと計測器を作り直す（箱も同じ）。値は今の式のまま残す
+    /// （spec `emo-text-line-gap` research.md §2.2・design.md「設計の決め」7・要件 4.4）。
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
         match self.vertical_em_box_left_ratio {
             Some(ratio) if mode == self.mode => ratio * font_height,
@@ -377,12 +384,16 @@ fn degraded_advance(text: &str, height: f32) -> f32 {
     }
 }
 
-/// format が束縛したフォントの face metrics から行ボックス比 `(ascent + descent) ÷ upem` を実測する。
+/// format が束縛したフォントの face metrics（`DWRITE_FONT_METRICS`・upem ＞ 0 を確かめた物）を返す。
+/// 行ボックス比 `(ascent + descent) ÷ upem` などの比は呼び手が作る。
 ///
 /// format 自身が持つ family 名・フォント コレクション・weight/style/stretch を辿るため、
 /// [`create_text_format`] の既定フォント再試行（R4.2）後でも**実際に描画されるフォント**を測る。
 /// 取得経路のいずれかが失敗・不在（family 未発見・upem 0 等）なら `None`（呼び手が縮退）。
-fn measure_line_box_ratio(factory: &IDWriteFactory2, format: &IDWriteTextFormat) -> Option<f32> {
+pub(crate) fn measure_font_metrics(
+    factory: &IDWriteFactory2,
+    format: &IDWriteTextFormat,
+) -> Option<DWRITE_FONT_METRICS> {
     // family 名（format 焼込値）。
     let len = unsafe { format.GetFontFamilyNameLength() } as usize;
     let mut name = vec![0u16; len + 1];
@@ -416,11 +427,10 @@ fn measure_line_box_ratio(factory: &IDWriteFactory2, format: &IDWriteTextFormat)
     let face = unsafe { font.CreateFontFace() }.ok()?;
     let mut metrics = DWRITE_FONT_METRICS::default();
     unsafe { face.GetMetrics(&mut metrics) };
-    let upem = metrics.designUnitsPerEm as f32;
-    if upem <= 0.0 {
+    if metrics.designUnitsPerEm == 0 {
         return None;
     }
-    Some((metrics.ascent as f32 + metrics.descent as f32) / upem)
+    Some(metrics)
 }
 
 /// 束縛した書式で、縦書きの em の箱の左の比 `(x − h/2) ÷ h` を測る。
