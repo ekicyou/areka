@@ -117,7 +117,7 @@ crates/areka-emo-text/src/
 ├── viewbox_draw_line_gap_band_tests.rs    # 新規: 決定論のテスト・記録だけの測り・実物の游ゴシックの読み戻し
 └── lib.rs                                 # SOURCES_OUTSIDE_THE_PURE_SCAN に新しいファイルの 1 行だけ
 doc/COMPAT_ARCHITECTURE.md                 # §8 の表の末尾に 1 行
-.kiro/specs/emo-text-line-gap/research.md  # 測った数・書き換えた檻の記録（§3 以降）
+.kiro/specs/completed/emo-text-line-gap/research.md  # 測った数・書き換えた檻の記録（§3 以降）
 ```
 
 ### Modified Files
