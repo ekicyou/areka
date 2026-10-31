@@ -39,6 +39,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 
 use crate::command::PresentError;
+use crate::load_records::LoadRecords;
 
 /// 面画像の拡張子（小文字比較）。接頭辞は scope 番号から連鎖として導出するため定数を持たない。
 /// シェル側の面画像（`surface{ID}.png`）も同じ拡張子で、判定 [`face_digits_of`] ごと共有する。
@@ -319,7 +320,11 @@ pub fn select_faces<S: AsRef<str>>(names: &[S], chain: &[SeriesPrefix]) -> Vec<R
 /// （ASCII の接頭辞＋数字＋拡張子）を満たし得ないためこの段で落とす。
 ///
 /// ディレクトリ走査に失敗した場合は log-first で [`PresentError`] を返す（R6.4）。
-fn enumerate_file_names(balloon_dir: &Path) -> Result<Vec<String>, PresentError> {
+/// 1 件を飛ばす `warn!` は `records` が出すときだけ出し、走査の失敗の `error!` は常に出す。
+fn enumerate_file_names(
+    balloon_dir: &Path,
+    records: LoadRecords,
+) -> Result<Vec<String>, PresentError> {
     let read_dir = std::fs::read_dir(balloon_dir).map_err(|e| {
         tracing::error!(
             balloon_dir = %balloon_dir.display(),
@@ -335,7 +340,9 @@ fn enumerate_file_names(balloon_dir: &Path) -> Result<Vec<String>, PresentError>
             Ok(e) => e,
             Err(e) => {
                 // 個別エントリの取得失敗は致命ではない（他エントリ継続・log-first）。
-                tracing::warn!(error = %e, "balloon: ディレクトリエントリの取得に失敗（スキップ）");
+                if records.emits() {
+                    tracing::warn!(error = %e, "balloon: ディレクトリエントリの取得に失敗（スキップ）");
+                }
                 continue;
             }
         };
@@ -372,9 +379,32 @@ pub fn resolve_balloon_faces(
     balloon_dir: &Path,
     scope: u32,
 ) -> Result<Vec<ResolvedFace>, PresentError> {
+    resolve_balloon_faces_with(balloon_dir, scope, LoadRecords::Emit)
+}
+
+/// [`resolve_balloon_faces`] と同じ中身で解決し、読み込みの記録（縮退の `warn!`・解決の完了の
+/// `info!`・一覧の 1 件を飛ばす `warn!`）を出さない（採寸と windowposition の読み・spec:
+/// placement-measure-bake-once 要件 3.2・3.6）。戻り値は [`resolve_balloon_faces`] と等しい。
+///
+/// # Errors
+///
+/// [`resolve_balloon_faces`] と同じ 2 つ。走査の失敗と面 0 が解決できない失敗の `error!` は出す。
+pub fn resolve_balloon_faces_quiet(
+    balloon_dir: &Path,
+    scope: u32,
+) -> Result<Vec<ResolvedFace>, PresentError> {
+    resolve_balloon_faces_with(balloon_dir, scope, LoadRecords::Quiet)
+}
+
+/// 系列の解決の中身（1 本）。読み込みの記録は `records` が出すときだけ出す。
+fn resolve_balloon_faces_with(
+    balloon_dir: &Path,
+    scope: u32,
+    records: LoadRecords,
+) -> Result<Vec<ResolvedFace>, PresentError> {
     let chain = prefix_chain(&BALLOON_FAMILY, scope);
     // 列挙は 1 回のみ（接頭辞ごとに走査を繰り返さない）。
-    let names = enumerate_file_names(balloon_dir)?;
+    let names = enumerate_file_names(balloon_dir, records)?;
     let faces = select_faces(&names, &chain);
 
     // ログ用の簡約形（連鎖＝接頭辞列・採用面＝(id, prefix, file) 列）。
@@ -390,6 +420,9 @@ pub fn resolve_balloon_faces(
             "balloon: 面 ID 0 が連鎖のどの接頭辞でも解決できない"
         );
         return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
+    }
+    if !records.emits() {
+        return Ok(faces);
     }
 
     // R6.2: デフォルト定義側へ縮退した面を面ごとに記録する（scope 0 はデフォルト段を
@@ -435,15 +468,17 @@ fn read_decoded(path: &Path) -> Result<String, std::io::Error> {
 ///
 /// 基層の欠落はバルーン既定設定が丸ごと得られない事態であり、正常縮退ではない（相方側で
 /// 毎起動鳴る類の事象でもない）。ゆえに現行の `warn!` を維持し `debug!` へ降格しない。
-fn read_descript_layer(path: &Path) -> Option<String> {
+fn read_descript_layer(path: &Path, records: LoadRecords) -> Option<String> {
     match read_decoded(path) {
         Ok(text) => Some(text),
         Err(err) => {
-            tracing::warn!(
-                path = %path.display(),
-                error = %err,
-                "balloon: バルーン既定設定（descript.txt）の読取に失敗（空層で継続）"
-            );
+            if records.emits() {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %err,
+                    "balloon: バルーン既定設定（descript.txt）の読取に失敗（空層で継続）"
+                );
+            }
             None
         }
     }
@@ -515,7 +550,8 @@ pub fn load_scope_balloon_model(
     face0: &ResolvedFace,
 ) -> BalloonModel {
     // 基層: バルーン既定設定（読取失敗は warn!＋空層）。
-    let descript = read_descript_layer(&balloon_dir.join(DESCRIPT_TXT)).unwrap_or_default();
+    let descript =
+        read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), LoadRecords::Emit).unwrap_or_default();
 
     // 上書き層: 採用面に対応する 1 つのみ（不在は debug! の正常縮退・D8）。
     let override_name = face0.override_file_name();
@@ -602,21 +638,35 @@ pub fn build_balloon_target(
 /// 一覧が取れないときは [`enumerate_file_names`] の `error!` を通して `.pna` の数を 0 として続ける
 /// （続く系列の解決が同じ理由で失敗を返す）。
 pub fn load_balloon_use_self_alpha(balloon_dir: &Path) -> UseSelfAlpha {
-    let descript = read_descript_layer(&balloon_dir.join(DESCRIPT_TXT));
+    load_balloon_use_self_alpha_with(balloon_dir, LoadRecords::Emit)
+}
+
+/// [`load_balloon_use_self_alpha`] と同じ中身で読み、読み込みの記録（descript.txt が読めない
+/// `warn!`・透過の宣言の記録・`.pna` の `warn!`・一覧の 1 件を飛ばす `warn!`）を出さない（採寸の
+/// 読み・spec: placement-measure-bake-once 要件 3.2・3.6）。戻り値は [`load_balloon_use_self_alpha`]
+/// と等しい。フォルダの走査の失敗の `error!` は出す。
+pub fn load_balloon_use_self_alpha_quiet(balloon_dir: &Path) -> UseSelfAlpha {
+    load_balloon_use_self_alpha_with(balloon_dir, LoadRecords::Quiet)
+}
+
+/// 透過の宣言の読みの中身（1 本）。読み込みの記録は `records` が出すときだけ出す。
+fn load_balloon_use_self_alpha_with(balloon_dir: &Path, records: LoadRecords) -> UseSelfAlpha {
+    let descript = read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), records);
     let use_self_alpha = crate::self_alpha::read_use_self_alpha(
         "balloon",
         "use_self_alpha",
         balloon_dir,
         descript.as_deref(),
+        records,
     );
-    let ignored_pna = enumerate_file_names(balloon_dir)
+    let ignored_pna = enumerate_file_names(balloon_dir, records)
         .unwrap_or_default()
         .iter()
         .filter(|name| {
             name.to_ascii_lowercase().ends_with(".pna") && balloon_dir.join(name).is_file()
         })
         .count();
-    if ignored_pna != 0 {
+    if records.emits() && ignored_pna != 0 {
         tracing::warn!(
             balloon_dir = %balloon_dir.display(),
             ignored_pna,
@@ -690,6 +740,9 @@ mod alpha_tests;
 #[cfg(test)]
 #[path = "balloon_model_tests.rs"]
 mod model_tests;
+#[cfg(test)]
+#[path = "balloon_quiet_tests.rs"]
+mod quiet_tests;
 #[cfg(test)]
 #[path = "balloon_series_tests.rs"]
 mod series_tests;

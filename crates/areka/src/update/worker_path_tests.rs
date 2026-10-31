@@ -198,7 +198,13 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         rig.pump_input_until(|rig| rig.world.get_non_send::<SwitchInFlight>().is_some())
     });
     assert!(reserved, "読み直しの切替が予約される: {events:?}");
-    assert_eq!(named(&events, "update_reload_requested"), 1, "{events:?}");
+    // 背景のスレッド `update`（`areka::update::procedure`）の同名の記録も窓に入るので、UI の窓口の記録だけ数える。
+    let desk_reloads = events
+        .iter()
+        .filter(|e| e.target == "areka::update::desk")
+        .filter(|e| e.field_str("event") == Some("update_reload_requested"))
+        .count();
+    assert_eq!(desk_reloads, 1, "{events:?}");
     // 偽の取得の一周は掴まれた古い写しを作れないので、エンジンが走り終えた後（読み直しの予約の後）に
     // 成功した走行の残りを置く。
     let leftover = a_dir.join(".update-work").join("held-run");

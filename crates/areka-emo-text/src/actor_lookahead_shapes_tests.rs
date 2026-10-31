@@ -15,7 +15,6 @@ use super::lookahead_tests::{
     ANCHOR, Delivery, EMO2_BOOT_FINAL, EMO2_BOOT_TALK, NINE_WIDE, Rig, Stage, Talk, balloon_model,
     budoux_model, reveal_violations, rows_of, show, walk, warns,
 };
-use crate::choice::{annotate_lines, derive_hit_rows, line_bands};
 use crate::layout::FixedMetrics;
 use crate::place::PlaceKey;
 use crate::state::SurfaceKeyOutcome;
@@ -157,8 +156,8 @@ fn every_shape_reveals_without_moving_glyphs() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// 検査 8 の選択肢: 各段階で、選択肢の強調の範囲（`annotate_lines`）とクリックの範囲
-/// （`derive_hit_rows`）を、判定にかけたのと同じ行の列から本番の提示と同じ関数で出し、強調の範囲が
+/// 検査 8 の選択肢: 各段階で、選択肢の強調の範囲とクリックの範囲を、判定にかけたのと同じ行の列から
+/// 本番の提示と同じ関数（`choice_ranges`）で出し、強調の範囲が
 /// 覆う字が行の列に見えている選択肢の字と同じで、クリックの範囲が強調と同じ行内の範囲であること
 /// （要件 4.4）。
 #[test]
@@ -180,9 +179,15 @@ fn choice_highlight_and_click_ranges_come_from_the_judged_rows() {
             .place_state(&place)
             .map(|s| s.choices().to_vec())
             .unwrap_or_default();
-        let segments = annotate_lines(&lines, &spans);
-        let bands = line_bands(&lines, resolved.mode, &FixedMetrics);
-        let hits = derive_hit_rows(&lines, &segments, resolved.mode, &resolved.region, &bands);
+        let derived = super::present::choice_ranges(
+            &lines,
+            &spans,
+            resolved.mode,
+            &resolved.region,
+            &FixedMetrics,
+        );
+        let segments = &derived.segments;
+        let hits = derived.hit_rows();
 
         let shown: String = lines
             .iter()

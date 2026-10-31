@@ -9,18 +9,20 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::choice::{
-    annotate_lines, decorate_canvas, derive_hit_rows, glyph_cells, line_bands, to_window_physical,
+    CanvasHitRow, LineBand, LineChoiceSegment, annotate_lines, decorate_canvas, derive_hit_rows,
+    glyph_cells, line_bands, to_window_physical,
 };
 use crate::cursor_tag::CursorWarnGuard;
 use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
-use crate::region::{ImagePx, ScaleContract};
+use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::scroll_marker::{ScrollChange, marker_visibility, window_for};
 use crate::segment::segment_plan;
-use crate::state::TextLayerState;
+use crate::state::{ChoiceSpan, TextLayerState};
 use crate::surface::TextSurface;
 use crate::wrap::WrapMode;
+use crate::writing::WritingMode;
 
 use super::decoration;
 use super::scroll;
@@ -313,7 +315,7 @@ fn present_actor(
     // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
     // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
     let spans = actor_state.choices();
-    let segments = annotate_lines(&lines, spans);
+    // 範囲と帯は choice_ranges が 1 度だけ出す（当たりは描き替えたときだけ同じ値から ranges.hit_rows()）。
     // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
     // R3.3/R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
     // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
@@ -322,7 +324,13 @@ fn present_actor(
     // アクターに 1 つの既定の大きさではない——既定固定だと `[height,40]` の選択肢が表示 42 画素でも
     // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
     // 既定の大きさに等しいので、従来と 1 画素も変わらない。
-    let bands = line_bands(&lines, resolved.mode, &render.metrics);
+    let ranges = choice_ranges(
+        &lines,
+        spans,
+        resolved.mode,
+        &resolved.region,
+        &render.metrics,
+    );
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。済んだ選択肢を指す強調は
     // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・件 1 の要件 1.10／1.12）。
     let hover = runtime
@@ -335,13 +343,13 @@ fn present_actor(
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
     let canvas = decorate_canvas(
         canvas,
-        &segments,
+        &ranges.segments,
         hover,
         resolved.choice_style,
         resolved.font.color,
         &resolved.region,
         resolved.mode,
-        &bands,
+        &ranges.bands,
     );
     // 装飾入りの描画の入口（要件 14.2・既定だけの行は従来と同一の呼出列）。
     let changed = render.executor.render_styled(
@@ -364,7 +372,7 @@ fn present_actor(
         let committed = render.executor.scroll_state().committed;
         // 帯は装飾（描画）へ渡したのと**同一の行ごとの列**——描画とヒットの
         // 座標整合（R3.3/R13.2）。
-        let hit_rows = derive_hit_rows(&lines, &segments, resolved.mode, &resolved.region, &bands);
+        let hit_rows = ranges.hit_rows();
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()
@@ -397,7 +405,7 @@ fn present_actor(
         if matches!(place.place, TextPlace::Box(_)) {
             let cells = glyph_cells(
                 &lines,
-                &bands,
+                &ranges.bands,
                 resolved.mode,
                 &resolved.region,
                 committed,
@@ -552,4 +560,48 @@ pub(super) fn arrange_lines(
         &place.actor,
         cursor_warn,
     ))
+}
+
+/// 1 つの場所の行の列から出した選択肢の範囲と帯。クリックを受ける範囲は同じ値から
+/// [`ChoiceRanges::hit_rows`] で出す（描き替えたフレームでだけ呼ぶ）。
+pub(crate) struct ChoiceRanges<'a> {
+    lines: &'a [PositionedLine],
+    region: &'a TextRegion,
+    mode: WritingMode,
+    /// 選択肢の範囲（強調を塗る所）。
+    pub(crate) segments: Vec<LineChoiceSegment>,
+    /// 行ごとの帯。強調の描画・クリックを受ける範囲・箱の字の矩形へ同じ列を配る。
+    pub(crate) bands: Vec<LineBand>,
+}
+
+/// 行の列 → 選択肢の範囲・帯（本番の提示と検査が同じこの関数を呼ぶ・GPU の資源は要らない）。
+/// 字幅は呼び出しの間だけ借りる（続く描画の面の可変の借用と重ならない）。
+pub(crate) fn choice_ranges<'a>(
+    lines: &'a [PositionedLine],
+    spans: &[ChoiceSpan],
+    mode: WritingMode,
+    region: &'a TextRegion,
+    metrics: &dyn GlyphMetrics,
+) -> ChoiceRanges<'a> {
+    ChoiceRanges {
+        lines,
+        region,
+        mode,
+        segments: annotate_lines(lines, spans),
+        bands: line_bands(lines, mode, metrics),
+    }
+}
+
+impl ChoiceRanges<'_> {
+    /// 持っている行の列・範囲・帯からクリックを受ける範囲を出す（canvas-local image px）。
+    /// 引数を取らないので、別の行の列や別の帯で当たりを作る道が無い。
+    pub(crate) fn hit_rows(&self) -> Vec<CanvasHitRow> {
+        derive_hit_rows(
+            self.lines,
+            &self.segments,
+            self.mode,
+            self.region,
+            &self.bands,
+        )
+    }
 }

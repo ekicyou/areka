@@ -23,21 +23,34 @@
 //!
 //! 呼び出しスレッドは COM 初期化済みであること（`WicDecoderArm` 前提・本番は
 //! MTA UI スレッド）。wintf へは依存しない。
+//!
+//! # 読み手の段と記録（spec: placement-measure-bake-once）
+//!
+//! 採寸は窓の大きさを知るためだけの読み込みなので、読み込みの記録（シェル・透過の宣言・
+//! 系列の解決）は出さない入口（`_quiet`）を呼ぶ。記録は起動の資産の組み立ての 1 回だけが出す
+//! （要件 3.1・3.2）。採寸自身の記録（既定の面が無い・scope 0 で代える・失敗・k 適用）は残す。
+//! 読み手は [`measure_native_scope_sizes`]（本物の読み手を作る）→ [`measure_with_reader`]
+//! （動く絵を 1 枚目だけで読む [`first_frame::FirstFrameDecoder`] で包む・数える読み手の
+//! 差し込み口）→ [`measure_baked`]（受けた読み手で焼いて測る）の 3 段で渡る（要件 1.1）。
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, UseSelfAlpha, WicDecoderArm};
+use areka_emo_atlas::{AtlasTable, ElementDecoder, UseSelfAlpha, WicDecoderArm};
 use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState, ScaleRatio};
 use areka_emo_present::balloon::{
-    ResolvedFace, build_balloon_target_from_faces, load_balloon_use_self_alpha,
-    resolve_balloon_faces,
+    ResolvedFace, build_balloon_target_from_faces, load_balloon_use_self_alpha_quiet,
+    resolve_balloon_faces_quiet,
 };
-use areka_emo_present::shell_target::load_shell_target;
+use areka_emo_present::shell_target::load_shell_target_quiet;
 use tracing::{error, warn};
 
 use super::PlacementError;
 use super::descript_window_keys::{DefaultSurfaces, builtin_default_surface, first_existing};
 use super::resolver::{ScopeInput, SizePx};
+
+// 採寸の読み手（動く絵を 1 枚目だけで読む包み）。
+#[path = "measure_first_frame.rs"]
+mod first_frame;
 
 /// 採寸結果（design「placement::measure」Service Interface）。
 ///
@@ -164,9 +177,49 @@ fn measure_native_scope_sizes(
             reason: format!("WicDecoderArm 生成失敗: {e}"),
         }
     })?;
+    measure_with_reader(
+        &decoder,
+        shell_dir,
+        balloon_root,
+        scope_ids,
+        default_surfaces,
+    )
+    // decoder はここで破棄される（採寸後破棄の契約）。
+}
 
-    // shell アセット（シェル読み込みの権威 `load_shell_target` を 1 回・起動側と同じ入口）。
-    let (shell_world, shell_atlas) = build_shell_assets(shell_dir, &decoder)?;
+/// 受けた読み手を採寸の読み手（動く絵を 1 枚目だけで読む）で包んで測る（要件 1.1）。
+///
+/// 数える読み手を差し込む口。戻り値は [`measure_baked`] に包まない読み手を渡したときと
+/// 等しい（要件 2.2）。
+fn measure_with_reader(
+    reader: &impl ElementDecoder,
+    shell_dir: &Path,
+    balloon_root: &Path,
+    scope_ids: &[usize],
+    default_surfaces: &DefaultSurfaces,
+) -> Result<Vec<ScopeInput>, PlacementError> {
+    let decoder = first_frame::FirstFrameDecoder::new(reader);
+    measure_baked(
+        &decoder,
+        shell_dir,
+        balloon_root,
+        scope_ids,
+        default_surfaces,
+    )
+}
+
+/// 受けた読み手で焼いて scope ごとの原寸を測る（native 採寸の本体）。
+///
+/// 読み込みは記録を出さない入口で行う（要件 3.1・3.2）。採寸自身の記録は残す（要件 2.4・2.5）。
+fn measure_baked(
+    decoder: &impl ElementDecoder,
+    shell_dir: &Path,
+    balloon_root: &Path,
+    scope_ids: &[usize],
+    default_surfaces: &DefaultSurfaces,
+) -> Result<Vec<ScopeInput>, PlacementError> {
+    // shell アセット（シェル読み込みの権威 `load_shell_target` の記録を出さない入口を 1 回）。
+    let (shell_world, shell_atlas) = build_shell_assets(shell_dir, decoder)?;
     let mut composer = Composer::new();
 
     // スコープの測る面: 候補の並びのうちシェルに在る最初の面。どれも無ければ組み込みの面で
@@ -198,8 +251,8 @@ fn measure_native_scope_sizes(
             PlacementError::Measure { scope: 0, reason }
         })?;
 
-    // バルーンの透過の宣言は 1 回だけ読む（記録をスコープの数だけ出さない・起動側と同じ入口）。
-    let balloon_alpha = load_balloon_use_self_alpha(balloon_root);
+    // バルーンの透過の宣言は 1 回だけ読む（記録は出さない・起動側と同じ読みの記録を出さない入口）。
+    let balloon_alpha = load_balloon_use_self_alpha_quiet(balloon_root);
     let mut scopes = Vec::with_capacity(scope_ids.len());
     for &scope in scope_ids {
         let char_size = if scope == 0 {
@@ -223,7 +276,7 @@ fn measure_native_scope_sizes(
         // バルーンは **当該 scope が解決した系列の面 0**（全 scope 共通の 1 回へ畳まない・
         // 要件 3.1）。失敗は代替根拠が無く hard Err で、帰属は実 scope 番号。
         let balloon_size =
-            measure_balloon_surface0(balloon_root, &decoder, &mut composer, scope, balloon_alpha)?;
+            measure_balloon_surface0(balloon_root, decoder, &mut composer, scope, balloon_alpha)?;
         scopes.push(ScopeInput {
             scope,
             char_size,
@@ -231,7 +284,7 @@ fn measure_native_scope_sizes(
         });
     }
 
-    // shell_world／shell_atlas／decoder はここで破棄される（採寸後破棄の契約）。
+    // shell_world／shell_atlas はここで破棄される（採寸後破棄の契約）。
     Ok(scopes)
 }
 
@@ -337,10 +390,10 @@ fn scale_size_px(
 /// いるため、ここでは出し直さない。
 fn build_shell_assets(
     shell_dir: &Path,
-    decoder: &WicDecoderArm,
+    decoder: &impl ElementDecoder,
 ) -> Result<(EmoWorld, AtlasTable), PlacementError> {
     let target =
-        load_shell_target(shell_dir, decoder).map_err(|reason| PlacementError::Measure {
+        load_shell_target_quiet(shell_dir, decoder).map_err(|reason| PlacementError::Measure {
             scope: 0,
             reason: reason.to_string(),
         })?;
@@ -376,7 +429,7 @@ fn build_shell_assets(
 /// 散らさないため本関数が `usize` を受け、権威呼び出しの直前で 1 度だけ u32 へ変換する。
 fn measure_balloon_surface0(
     balloon_root: &Path,
-    decoder: &WicDecoderArm,
+    decoder: &impl ElementDecoder,
     composer: &mut Composer,
     scope: usize,
     use_self_alpha: UseSelfAlpha,
@@ -400,7 +453,7 @@ fn measure_balloon_surface0(
         .map_err(|_| balloon_err(format!("scope 番号が u32 に収まらない: {scope}")))?;
 
     // 系列解決（連鎖の導出・ディレクトリ列挙・面 ID 単位の選択はすべて権威側の 1 箇所）。
-    let faces = resolve_balloon_faces(balloon_root, scope_key)
+    let faces = resolve_balloon_faces_quiet(balloon_root, scope_key)
         .map_err(|e| balloon_err(format!("系列解決に失敗: {e}")))?;
     // 採寸対象は面 0 のみ（採用面列の残りは bake しない）。
     let face0: Vec<ResolvedFace> = faces.into_iter().filter(|f| f.surface_id == 0).collect();
@@ -463,3 +516,13 @@ mod template_tests;
 #[cfg(test)]
 #[path = "measure_default_surface_tests.rs"]
 mod default_surface_tests;
+
+// 採寸の読み手 FirstFrameDecoder の檻（spec: placement-measure-bake-once 要件 1.1・1.4・3.7）。
+#[cfg(test)]
+#[path = "measure_first_frame_tests.rs"]
+mod first_frame_tests;
+
+// 採寸と資産の組み立ての焼く回数の檻（spec: placement-measure-bake-once 要件 1.1・1.2・4.1）。
+#[cfg(test)]
+#[path = "measure_bake_count_tests.rs"]
+mod bake_count_tests;

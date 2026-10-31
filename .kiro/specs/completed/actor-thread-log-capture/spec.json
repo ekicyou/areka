@@ -1,0 +1,22 @@
+{
+  "feature_name": "actor-thread-log-capture",
+  "created_at": "2026-10-31T05:45:54Z",
+  "updated_at": "2026-10-31T11:33:40Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}
