@@ -299,3 +299,16 @@
 ### 3.4 出口
 
 **出口 (a)（直す）**。游ゴシックのずれは 20・28 × k ＝ 1・2 のすべてで 1 image px を超え（6.17・8.84）、案 2 は覆う・中心差 1 image px 以下（0.17・0.16）・同じ大きさの隣の行と重ならない、をすべて満たす。タスク 2〜4 をすべて行う。
+
+## 4. 直しを外した確かめ（タスク 3.1・要件 6.3）
+
+2026-11-01。決定論のテスト `line_gap_metrics_centre_the_horizontal_band_on_the_char_box`（偽の計測器: 字の箱の丈 1.287·h・字の箱の上端 0.315·h・行送り h ＋ 2）を、`choice.rs` の `line_bands` の横書きの腕で `band_offset_on_char_box` へ渡す上端を `metrics.horizontal_char_box_top(em)` から `0.0` へ一時的に変えて回した（`cargo test -p areka-emo-text --lib line_gap_band`）。
+
+- 結果: 赤。(a) で落ちた。
+
+  ```text
+  em 20 Choice 行 0: 帯 LineBand { extent: 22.0, offset: 2.0 } の中心と字の箱の中心の差 -6.170 が 1 image px を超える
+  ```
+
+- 直しのある式では em 20 で寄せ round(6.3 ＋ 1.87) ＝ 8・中心差 −0.17、em 28 で寄せ 12・中心差 ＋0.162（§3.2 の実物の游ゴシックと同じ数）。
+- 戻しは手で元の行へ書き戻し（`git checkout` は使わない）、`choice.rs` の差分が無いことと同じテストの緑を確かめた。

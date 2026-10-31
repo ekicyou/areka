@@ -9,17 +9,17 @@
 
 use super::ViewboxExecutor;
 use super::test_support::{Rig, block_axis_ink_span, glyph_items, live_diff_model_font};
-use crate::canvas::ContentCanvas;
-use crate::choice::{LineBand, line_bands};
+use crate::canvas::{ContentCanvas, ResidentContent};
+use crate::choice::{LineBand, ResolvedChoiceStyle, decorate_canvas, line_bands};
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{
     DWriteMetrics, FontCatalog, ResolvedFont, create_line_layout, create_text_format,
     measure_font_metrics,
 };
-use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use crate::layout::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::look::{GlyphStyles, StyleId, StyleTable, TextLook};
 use crate::region::{ScaleContract, TextRegion};
-use crate::state::{TextItem, TextLayerConfig};
+use crate::state::{ChoiceSpan, SpanKind, TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
 use windows::Win32::Graphics::DirectWrite::{
@@ -290,5 +290,139 @@ fn horizontal_line_gap_band_record() {
                 record_case(&mut rig, &factory, name, size, k);
             }
         }
+    }
+}
+
+/// 書体の行間を持つ偽の計測器（游ゴシックの見込みの数: 字の箱の丈 B ＝ 1.287·h・字の箱の上端
+/// t ＝ 0.315·h・行送り h ＋ 2）。字幅は `FixedMetrics` と同じ。
+struct LineGapMetrics;
+
+impl GlyphMetrics for LineGapMetrics {
+    fn advance(&self, text: &str, h: f32) -> f32 {
+        FixedMetrics.advance(text, h)
+    }
+    fn line_pitch(&self, h: f32) -> f32 {
+        h + 2.0
+    }
+    fn line_box_height(&self, h: f32) -> f32 {
+        1.287 * h
+    }
+    fn horizontal_char_box_top(&self, h: f32) -> f32 {
+        0.315 * h
+    }
+}
+
+/// 決定論のテスト（要件 2.1・2.2・2.3・2.5・3.1・3.3・6.1・GPU なし）: 書体の行間を持つ偽の
+/// 計測器で、同じ大きさの横書き 2 行（1 行ずつ選択肢／アンカー）の帯を本番と同じ道
+/// （配置 → `choice_ranges`（`line_bands`・`derive_hit_rows`）→ `decorate_canvas`）で出し、
+/// (a) 帯の中心が字の箱 [t, t ＋ B] の中心から 1 image px 以内、(b) 厚みが em 以上・行送り以下、
+/// (c) 2 行の帯が接するだけで重ならない（境の点はたかだか 1 行に当たる）、(d) 当たりのブロック軸の
+/// 範囲と焼いた帯が数値まで同じ、(e) アンカーの範囲も選択肢と同じ帯、を確かめる。
+///
+/// 較正（要件 6.3・research.md §4）: `line_bands` で t を読まないと (a) が赤（em 20 で中心差 −6.17）。
+#[test]
+fn line_gap_metrics_centre_the_horizontal_band_on_the_char_box() {
+    let mode = WritingMode::HorizontalTb;
+    let m = LineGapMetrics;
+    for size in [20u32, 28] {
+        let em = size as f32;
+        let (t, b, pitch) = (
+            m.horizontal_char_box_top(em),
+            m.line_box_height(em),
+            m.line_pitch(em),
+        );
+        assert!(t > 0.0 && b > em, "前提: 書体の行間を持つ（t {t}・B {b}）");
+        let model = live_diff_model_font(None, Some(size));
+        let region = TextRegion::resolve(&model, ((em * 7.0) as u32, (em * 4.0) as u32), mode);
+        let mut items = glyph_items(GAP_WORDS[0]);
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.extend(glyph_items(GAP_WORDS[1]));
+        let lines = LayoutEngine::layout(&items, 10, &region, mode, em, &m, WrapPlan::CharByChar);
+        assert_eq!(lines.len(), 2, "em {em}: 2 行に並ぶ");
+
+        let mut rows_by_kind = Vec::new();
+        for kind in [SpanKind::Choice, SpanKind::Anchor] {
+            let span = |ordinal, glyph_range| ChoiceSpan {
+                kind,
+                ordinal,
+                id: String::new(),
+                label: String::new(),
+                references: vec![],
+                glyph_range,
+            };
+            let spans = [span(0, 0..5), span(1, 5..10)];
+            let ranges = crate::actor::choice_ranges(&lines, &spans, mode, &region, &m);
+            let bands = &ranges.bands;
+            for (i, band) in bands.iter().enumerate() {
+                // (a) 字の箱の中心は帯の式ではなく偽の計測器の t・B から出す。
+                let diff = band.offset + band.extent / 2.0 - (t + b / 2.0);
+                assert!(
+                    diff.abs() <= 1.0,
+                    "em {em} {kind:?} 行 {i}: 帯 {band:?} の中心と字の箱の中心の差 {diff:+.3} が 1 image px を超える"
+                );
+                // (b)
+                assert!(
+                    band.extent >= em && band.extent <= pitch,
+                    "em {em} {kind:?} 行 {i}: 厚み {} が em {em}〜行送り {pitch} の外",
+                    band.extent
+                );
+            }
+            // (c) 前の行の帯の遠端と次の行の帯の近端が同じ（接する・重ならない）。
+            assert_eq!(
+                lines[0].rect.top + bands[0].offset + bands[0].extent,
+                lines[1].rect.top + bands[1].offset,
+                "em {em} {kind:?}: 2 行の帯が接するだけでない: {bands:?}"
+            );
+            // (d) 焼いた帯（住人原点 ＋ 寄せ 〜 ＋ 厚み）と当たりのブロック軸の範囲。
+            let rows = ranges.hit_rows();
+            assert_eq!(rows.len(), 2, "em {em} {kind:?}: 当たりの行 2 つ");
+            let out = decorate_canvas(
+                ContentCanvas::from_layout(&lines, &region, mode),
+                &ranges.segments,
+                None,
+                ResolvedChoiceStyle::NoMarker,
+                (0, 0, 0),
+                &region,
+                mode,
+                bands,
+            );
+            for (seg, row) in ranges.segments.iter().zip(&rows) {
+                let resident = &out.residents[seg.line_index];
+                let ResidentContent::Choice(c) = &resident.content else {
+                    panic!(
+                        "em {em} {kind:?}: 行 {} が Choice 住人でない",
+                        seg.line_index
+                    );
+                };
+                let y0 = resident.transform.offset().1 + c.band_offset;
+                assert_eq!(
+                    (y0, y0 + c.band_extent),
+                    (row.rect.top, row.rect.bottom),
+                    "em {em} {kind:?}: 行 {} の焼いた帯と当たりのブロック軸の範囲が違う",
+                    seg.line_index
+                );
+            }
+            // 境の点（半開区間 `y >= top && y < bottom`）はたかだか 1 行に当たる（要件 3.3）。
+            let x = rows[0].rect.left;
+            for y in [rows[0].rect.bottom, rows[0].rect.bottom - 0.5] {
+                let hits = rows
+                    .iter()
+                    .filter(|r| {
+                        let q = r.rect;
+                        x >= q.left && x < q.right && y >= q.top && y < q.bottom
+                    })
+                    .count();
+                assert_eq!(
+                    hits, 1,
+                    "em {em} {kind:?}: 点 ({x},{y}) が {hits} 行に当たる"
+                );
+            }
+            rows_by_kind.push(rows);
+        }
+        // (e) アンカーの当たりは選択肢と同じ帯。
+        assert_eq!(
+            rows_by_kind[0], rows_by_kind[1],
+            "em {em}: アンカーと選択肢の帯"
+        );
     }
 }
