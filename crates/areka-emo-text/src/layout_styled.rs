@@ -71,6 +71,8 @@ pub(super) fn glyph_style_advance(
     metrics: &dyn GlyphMetrics,
     styles: Option<&GlyphStyles<'_>>,
 ) -> (StyleId, f32, f32) {
+    // 目印の字は全角の空白として測る（描くときと同じ物差し・要件 5.5）。
+    let text = crate::inline_marker::stand_in(text);
     let default = || {
         (
             StyleId::DEFAULT,

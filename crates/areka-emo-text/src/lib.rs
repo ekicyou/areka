@@ -391,6 +391,11 @@ mod tests {
             "state_anchor_tests.rs",
             include_str!("state_anchor_tests.rs"),
         ),
+        // script-small-tags の印の目印の字を積む檻（純粋）。
+        (
+            "state_marker_tests.rs",
+            include_str!("state_marker_tests.rs"),
+        ),
         (
             "choice_anchor_tests.rs",
             include_str!("choice_anchor_tests.rs"),
@@ -491,7 +496,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 82, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 83, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

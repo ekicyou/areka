@@ -51,6 +51,7 @@ use std::sync::Arc;
 use areka_sakura::cluster::clusters;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
+use crate::inline_marker::{MARKER_GLYPH, is_marker_carrier};
 use crate::look::{StyleId, StyleTable};
 use crate::place::{PlaceKey, TextPlace};
 
@@ -629,6 +630,17 @@ impl TextLayerState {
             // `\f` 文字装飾の汎用キャリア（R2.4）は**名前で自己選別**して消費する。
             // 名前が合わない運搬（`\!` の他コマンド）と非正準 params は、下の腕と同じ
             // 良性スキップ（従来どおり読み飛ばす）。
+            // 印の合図（`\![*]`・`%*`）は書式の見分けの前に見て、今の場所に目印の字を 1 つ積む
+            // （本文の字と同じ時刻と見た目・要件 4.1・4.2・4.5・5.6・5.7）。
+            CueCommand::Custom { .. } if is_marker_carrier(&cue.command) => {
+                tracing::debug!(actor = %cue.actor, at = cue.at, "印の cue 適用（目印の字を 1 つ追記）");
+                let state = self.place_entry(&dest);
+                state.items.push(TextItem::glyph(MARKER_GLYPH));
+                // アンカーの題（Reference0）には足さない（範囲だけ伸ばす）。
+                state.extend_open_anchor_range(1);
+                state.reveal.extend_chunk(1, cue.at, cue.duration);
+                state.push_current_style(&cue.actor, 1, quiet);
+            }
             CueCommand::Custom { .. } => match font_tag_tokens(&cue.command) {
                 Some(tokens) => {
                     tracing::debug!(actor = %cue.actor, ?tokens, "\\f cue 適用（以降に追記される文字へ効く）");
@@ -753,3 +765,7 @@ mod place_tests;
 #[cfg(test)]
 #[path = "state_anchor_tests.rs"]
 mod anchor_tests;
+
+#[cfg(test)]
+#[path = "state_marker_tests.rs"]
+mod marker_tests;

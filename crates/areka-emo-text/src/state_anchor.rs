@@ -63,6 +63,14 @@ impl ActorTextState {
         span.label.extend(clusters.iter().copied());
     }
 
+    /// 目印の字を追記した直後に呼ぶ。開いている範囲の終わりだけを `n` 字伸ばし、題には足さない
+    /// （題は `OnAnchorSelectEx` の Reference0 として SHIORI へ渡る・U+FFFC を混ぜない）。
+    pub(super) fn extend_open_anchor_range(&mut self, n: usize) {
+        if let Some(span) = self.anchor_open.and_then(|i| self.choices.get_mut(i)) {
+            span.glyph_range.end += n;
+        }
+    }
+
     /// アンカーの範囲が開いているか。
     pub(super) fn anchor_is_open(&self) -> bool {
         self.anchor_open.is_some()

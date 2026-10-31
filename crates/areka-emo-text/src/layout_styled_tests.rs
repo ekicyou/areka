@@ -805,3 +805,31 @@ fn underline_changes_neither_line_positions_nor_fitting_lines_nor_hit_rows() {
     );
     assert_eq!(with.3, without.3, "当たり行が下線の有無で変わらない");
 }
+
+/// 目印の字（U+FFFC）は全角の空白（U+3000）として測る（要件 5.5）。測りの口へ渡る字を覚えて確かめる。
+#[test]
+fn marker_glyph_is_measured_as_an_ideographic_space() {
+    struct Recording(std::cell::RefCell<Vec<String>>);
+    impl GlyphMetrics for Recording {
+        fn advance(&self, text: &str, font_height: f32) -> f32 {
+            self.0.borrow_mut().push(text.to_owned());
+            font_height
+        }
+        fn line_pitch(&self, font_height: f32) -> f32 {
+            font_height
+        }
+        fn line_box_height(&self, font_height: f32) -> f32 {
+            font_height
+        }
+    }
+    let metrics = Recording(Default::default());
+    let (_, advance, _) = super::styled::glyph_style_advance(
+        crate::inline_marker::MARKER_GLYPH,
+        0,
+        10.0,
+        &metrics,
+        None,
+    );
+    assert_eq!(advance, 10.0);
+    assert_eq!(*metrics.0.borrow(), ["\u{3000}"]);
+}
