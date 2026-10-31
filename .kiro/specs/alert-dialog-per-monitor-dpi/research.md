@@ -187,3 +187,52 @@
 
 1. **実装の後の実機の確かめで出す画面**: 関門 0 の結果で決める。`process_v2_default` の行が見分けに使えて `window=2` なら、利用条件の画面は直す前からにじまないので、無い根で止まるエラーの画面（窓のアプリの前・プロセスは非対応のまま）を副のモニタに出す短い 2 回目を足す。根拠: 直しで描き方が変わる画面を実物で見ないまま終えない（檻の外の穴は実機で出る）。要件 4.2 も同じ形に直した。
 2. **3 つの口が同じ道を通ることのテスト（旧 D5・D6）**: 置かない。3 つの口が `show_box` を呼ぶのも渡す画面の名も入力によらない配線で、開発者の原則「檻に入れるのは判断分岐だけ・配線は再テストしない」に当たる。抑止の分岐は既にある `alert_tests.rs` が押さえ、配線は実機の確かめで通る。ソースの字面を数えるテストは rustfmt の折り返しでもろくなる（設計の審査の指摘 3）点も消える。要件 4.1 も同じ形に直した。
+
+## 案 B で作り直した設計の調べと決めたこと（2026-11-01・`/kiro-spec-design -y`・開発者の裁定「案 B で作り直す」）
+
+### 調べの範囲
+
+- **種類**: 既にある仕組みの手直し（Extension）＝軽い調べ。触るのは `crates/areka/src/alert.rs` と兄弟のテストのファイル `alert_dpi_tests.rs` だけ。新しい依存は無い。
+- **使った手引き**: `kiro-spec-design` の決まり（軽い調べ・まとめ・審査の関門）、steering の `tech.md`（`unsafe` は Windows の API の呼び出しだけ・安全の理由を書く）・`logging.md`（構造化の欄・`log-capture-kit`）。ponytail（足す物を最小に・消せる物は消す）の見方でまとめた。
+- **入力**: 関門 0 の 4 行と案 B の測りの 3 行（`tasks.md` の実装の記録）・要件の「案 B への切り替え」の節・既にコミットした `alert.rs` と `alert_dpi_tests.rs`。
+
+### 分かったこと
+
+1. **関門 0 の結論**: `MessageBoxW` はスレッドが v2（囲んだ・明示・プロセスの既定のどれでも）のとき、画面が出ている間スレッドの扱いを system（1）へ落とし、窓も system で作る。2026-10-31 の「v2 に立てた後でも system」は測り方の取り違えではなく、この振る舞い。案 A では直らない。
+2. **案 B の測り**: タスクダイアログ（comctl32 の版 6・`TaskDialog`）はスレッドの扱いを落とさない。`with_thread_per_monitor` で囲めば、非対応のスレッドからでも窓は v2（2）・窓の DPI 192＝モニタの DPI 192。囲まず非対応のスレッドから出すと非対応（96）。副のモニタ（150%）は未測定。
+3. **機能はそろっている**（`windows` 0.62.2 のソースで確かめた）: `TaskDialogIndirect(*const TASKDIALOGCONFIG, Option<*mut i32>, Option<*mut i32>, Option<*mut BOOL>) -> Result<()>`・`TASKDIALOGCONFIG`（`packed(1)`・`Default` あり・欄 `pszWindowTitle`・`pszContent`・`pszMainInstruction`・`Anonymous1.pszMainIcon`・`dwCommonButtons`・`dwFlags`・`pfCallback`）・`TD_ERROR_ICON`・`TD_WARNING_ICON`・`TD_INFORMATION_ICON`・`TDCBF_YES_BUTTON`・`TDCBF_NO_BUTTON`・`TDF_ALLOW_DIALOG_CANCELLATION`・`TDN_CREATED` は `Win32_UI_Controls`、`SetWindowPos`・`HWND_TOPMOST`・`SetForegroundWindow` は `Win32_UI_WindowsAndMessaging`。どちらもワークスペースの `Cargo.toml` で有効。`Cargo.toml` は触らない。
+4. **版 6 の申告は足りている**: `TaskDialogIndirect` は版 6 にだけある。`alert.rs` が入るのは bin と bin のユニットテストの実行ファイルだけ（lib は無い）で、`build.rs` が `rustc-link-arg-bins` で両方に申告を埋める。案 B の測りがテストの実行ファイルで S_OK を返したのがその証。申告の無い exe に `alert.rs` が入ると、関数が読み込みの時に結ばれるので exe が起動できなくなる（Revalidation Triggers に置いた）。
+5. **問いのアイコンは無い**: タスクダイアログの決まったアイコンは警告・エラー・情報・盾の 4 つ。要件 2.1 のとおり情報のアイコン。`HICON` を渡す形は固定の大きさの絵が引き延ばされるおそれがあるので取らない。
+6. **閉じるボタンの効き**: タスクダイアログは取り消しのボタンが無いと閉じるボタン・Esc・Alt+F4 を効かなくする。`TDF_ALLOW_DIALOG_CANCELLATION` で効かせられる（閉じた結果は `IDCANCEL`）。今の `MB_OK` は閉じられ、`MB_YESNO` は閉じられないので、OK だけの 2 つに旗を立て、はい／いいえには立てない。
+7. **最前面と前面に旗が無い**: `MB_TOPMOST`・`MB_SETFOREGROUND` に当たる旗は無いので、呼び戻しの `TDN_CREATED` で `SetWindowPos(HWND_TOPMOST)` と `SetForegroundWindow` を呼ぶ。
+8. **失敗は HRESULT で戻る**: `TaskDialogIndirect` は失敗を戻り値（E_OUTOFMEMORY・E_INVALIDARG・E_FAIL など）で返す。`GetLastError` を戻す前に読む必要が無くなり、`BoxOutcome` は要らない。
+9. **長い本文**: 利用条件の本文は呼び手が 25 行・1,200 字に切り詰める（`install/terms.rs`）。エラーの本文も数行。タスクダイアログは本文に合わせて縦に伸び、画面を超える見込みは無い（メッセージボックスと同じ）。リンクの旗を立てなければ本文の文字はそのまま出る。
+
+### 決めたこと
+
+| 点 | 決めたこと | 理由 |
+|---|---|---|
+| 形（一般化） | 3 つの口が 1 つの `show_box` を通る形は案 A のまま。中身だけ `MessageBoxW` → `TaskDialogIndirect` | 囲みの部品はそのまま効く（案 B の測り） |
+| 種類の渡し方（簡素化） | 旗の値でなく `Dialog`（`Alert`・`Ask`・`Warning`）を渡し、ボタン・アイコン・閉じるボタン・前面の要否・記録の欄の名を種類から決める | メッセージボックスの旗の値は使わなくなる。種類 1 つで全部決まる |
+| `BoxOutcome` | 消す。`show_box` は `windows::core::Result<MESSAGEBOX_RESULT>` を返す | 失敗は HRESULT で戻るので、最後のエラーを戻す前に読む順の決まりが要らない |
+| 答えの読み方 | 純粋な `yes_no_answer` を足し、決定論のテスト D5 で固定する | はいはインストールの同意。思わぬ値を同意に倒さない判断の分岐なので檻に入れる |
+| `Dialog` の表 | 決定論のテストに入れない | 入力によらない定数の配線。実機の測りと撮った画面で 1 回通す（開発者の原則） |
+| 最前面の失敗 | warn `alert_topmost_failed`（欄 `error`）を足す。`SetForegroundWindow` の偽は記録しない | 記録の無い失敗の道を作らない。前面の拒否は OS の決まりで、`MB_SETFOREGROUND` も黙って同じ |
+| メッセージボックスの測り 2 本 | 消す（案 B の測りは残す） | 本番はメッセージボックスを使わない。測りは消える形の `show_box` に頼る。結果は `tasks.md` と本書に残っている |
+| 3 つの画面の撮り（4.7）と 1.4 | 本番の 3 つの口を抑止なしで呼ぶ `#[ignore]` の測り `probe_alert_dialogs_production` を足し、窓を読んで数秒残してから閉じる | 警告の画面は本物の走行で出しにくい。同じ 1 回で 3 つの窓が v2 であることも見られる |
+| 要件 4.2 の 2 回目 | 走らせない | 条件（`process_v2_default` が `window=2`）が当たらない（`window=1`）。窓のアプリの前の道は `taskdialog_wrapped_from_unaware` が確かめた |
+| 要件 4.4 | 当たらない | 前と後で道を分けない |
+
+### 危うさと手当て
+
+- **副のモニタ（150%）では未測定**— 実機の 1 回目で窓の DPI＝144＝モニタの DPI を見る。違えば止めて開発者へ戻す（案 C かを開発者が決める）。
+- **出る場所がメッセージボックスと違うことがある**— どちらも持ち主の窓なしで OS が決める（2.3 の決まりは形で保つ）。副に出す手順は 4.3 のとおり走行の前に決める。
+- **見た目が替わる**— 要件 2.1 を緩めた（開発者の裁定）。3 つの画面を撮って開発者に見せる（4.7）。
+- **申告の無い exe**— 今は無い。Revalidation Triggers に置いた。
+
+### 出典（作り直しで足した物）
+
+- `windows` 0.62.2 のソース `src/Windows/Win32/UI/Controls/mod.rs`（`TaskDialogIndirect`・`TASKDIALOGCONFIG`・`TD_*`・`TDF_*`・`TDN_CREATED`）と `src/Windows/Win32/UI/WindowsAndMessaging/mod.rs`（`SetWindowPos`・`HWND_TOPMOST`・`SetForegroundWindow`・`IDCANCEL`）
+- [TASKDIALOGCONFIG（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/api/commctrl/ns-commctrl-taskdialogconfig) — `TDF_ALLOW_DIALOG_CANCELLATION`（取り消しのボタンが無くても Alt+F4・Esc・閉じるボタンで閉じられる）・決まったアイコン
+- [TaskDialogIndirect（Microsoft Learn）](https://learn.microsoft.com/en-us/windows/win32/api/commctrl/nf-commctrl-taskdialogindirect) — 戻りの HRESULT と押されたボタン
+- `tasks.md` の実装の記録（関門 0 の 4 行・案 B の 3 行・2026-11-01 実機）
