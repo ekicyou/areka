@@ -24,7 +24,7 @@
   - _Requirements: 2.1, 2.3, 3.2, 3.4_
 
 - [ ] 2. 結線: `areka-emo-present` で読み込みの口を下まで通す
-- [ ] 2.1 (P) シェルの読み込みの口を焼く段と面の表の口まで通し、組み直しは記録を出さない形にする
+- [x] 2.1 (P) シェルの読み込みの口を焼く段と面の表の口まで通し、組み直しは記録を出さない形にする
   - 今のシェルの組み立ての中身を、読み込みの口（`LoadRecords`）を受ける内側の核へ移す（関数の頭を 1 つ足すだけで本文は動かさない）。公開の組み立て 2 つは「出す」で核を呼ぶ。核は口に従って、焼く段と面の表の出す入口か出さない入口を選ぶ。読み込みの入口は核へ口を渡す
   - 面の表を組み直す関数（`build_world`）は、いつも記録を出さない組み方を使う。モジュールの冒頭の「記録を出す場所」とこの関数の説明を「畳み込みと面の画像の記録も出さない（読み込みの核が 1 度だけ出す）。装着の記録は組むたびに出る」へ書き直す
   - 失敗の 3 つの `error!` は口に関わらず出す（今のまま）
@@ -80,3 +80,5 @@
 - 1.1/1.2: 2 値はクレートごとに `pub(crate) enum Records { Emit, Quiet }`（`emits()`）。atlas は `bake_quiet`、compose は `EmoWorld::build_with_images_quiet`。口は記録の行だけを囲み、枝の選び方を変えない。
 - 範囲外（完了の棚卸で起票）: clippy 1.99 の `chunks_exact` が `areka-emo-compose` の触っていないテスト 5 か所（blit_transparent_alpha_tests.rs:60・golden_tests_surface1000_bind_tests.rs:89・golden_tests_test_support.rs:168・composer_tests.rs:842/894）で `--all-targets -D warnings` を赤にする。`tools/test-all.ps1` は clippy を回さない。
 - 1.2 の小さな残り: `world.rs` の `populate_from_shell` の説明が「`fold_shell` が担う」のまま（本番は `fold_shell_with`）。
+- 2.1: `shell_target.rs` の足した行は 43（消した 9・全体 951 行）で設計の「25 行まで」を超えた。rustfmt が 7 引数の `build_core` の頭と呼び出し 2 か所を縦に展開するため。上限の目的（1,000 行を余裕で割る）は満たし、レビューで受け入れ。
+- 範囲外（完了の棚卸で起票）: `areka-emo-present` の `clippy --all-targets` は依存先 `dola` の触っていないファイルで赤、`--no-deps` でも触っていないテスト 5 ファイル（balloon_target_tests・display_tests・presenter_budget_*・shell_target_template_tests）で赤。
