@@ -8,6 +8,9 @@
 //! （[`super::trigger`]）で、集まった返り値を [`interpret`] が項目名と表示可否へ写す。
 //!
 //! 値は持ち越さない。メニューを出すたびに全部引き直す（要件 3.2）。
+//!
+//! 新しい名前が引けない項目名は、[`LEGACY_CAPTION_RESOURCES`] の古い名前の値に落とす
+//! （popup-menu-extra-resources）。
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
@@ -91,6 +94,13 @@ pub(crate) const UNQUERIED_POPUPMENU_RESOURCES: &[&str] = &[
     "char*.popupmenu.type",
 ];
 
+/// 項目名の資源の新しい名前と古い名前の組（新しい名前, 古い名前）。
+/// 新しい名前が引けないとき、古い名前の値をその項目名に使う（popup-menu-extra-resources）。
+/// 正典は 2 つを別の項目として同じ説明で載せる:
+/// <https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#updatebuttoncaption>
+pub(crate) const LEGACY_CAPTION_RESOURCES: &[(&str, &str)] =
+    &[("updatebutton.caption", "updatebuttoncaption")];
+
 /// 返事を待つ上限。超えたら全件を既定名にしてメニューを出す（要件 3.4）。
 pub(crate) const QUERY_TIMEOUT: Duration = Duration::from_millis(1000);
 
@@ -139,11 +149,18 @@ pub(crate) fn query_ids(snapshot: &[(Frame, MenuItem)], scope: u32) -> Vec<&'sta
 }
 
 /// 項目とその子が使うリソース名を `ids` へ足す（既にあるものは足さない）。
+/// 古い名前を持つ名前は、先に古い名前を足す（SSP と同じく新しい名前の直前に問う）。
 fn collect_caption_resources(item: &MenuItem, ids: &mut Vec<&'static str>) {
-    if let Some(id) = item.caption_resource
-        && !ids.contains(&id)
-    {
-        ids.push(id);
+    if let Some(id) = item.caption_resource {
+        let legacy = LEGACY_CAPTION_RESOURCES
+            .iter()
+            .find(|(new, _)| *new == id)
+            .map(|(_, legacy)| *legacy);
+        for id in legacy.into_iter().chain([id]) {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
     }
     if let ItemBody::Submenu(children) = &item.body {
         for child in children {
@@ -291,6 +308,17 @@ pub(crate) fn interpret(
             ResourceOutcome::Value(value) if !value.is_empty() => captions.insert(id, value),
             ResourceOutcome::Value(_) | ResourceOutcome::NoContent => empty.push(id),
             ResourceOutcome::Failed(reason) => failed.push((id, reason)),
+        }
+    }
+
+    // 新しい名前が引けず古い名前が引けたら、古い名前の値を新しい名前の項目名にする。
+    // 表には非空の値しか入らないので「鍵が無い」＝空・値なし・失敗のどれか。
+    for (new, legacy) in LEGACY_CAPTION_RESOURCES {
+        if captions.get(new).is_none()
+            && let Some(value) = captions.get(legacy)
+        {
+            let value = value.to_string();
+            captions.insert(new, value);
         }
     }
 
