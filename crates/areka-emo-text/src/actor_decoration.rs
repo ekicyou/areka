@@ -15,6 +15,9 @@
 //! 持つ——書く時点は登録口のまま、置き場所だけが子である（`actor.rs` の行数の余白のため）。
 
 use std::rc::Rc;
+use std::sync::Arc;
+
+use areka_emo_present::balloon_marker::MarkerImage;
 
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::ActorKey;
@@ -25,6 +28,7 @@ use super::{ActorRender, ResolvedBalloonText, TextLayerRuntime};
 use crate::TextLayerError;
 use crate::choice::{CursorFallback, ResolvedChoiceStyle};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, FontCatalog, ResolvedFont};
+use crate::inline_marker::InlineMarkerLook;
 use crate::look::GlyphStyles;
 use crate::region::TextRegion;
 use crate::scroll_marker::ResolvedMarkerPlacement;
@@ -219,6 +223,37 @@ impl TextLayerRuntime {
             "バルーン背景色を受け取った（無効表示の色の混色に使う）"
         );
         self.balloon_background.insert(actor, background);
+    }
+
+    /// 行の中の印の絵を actor ごとに覚える（`None` は既定の丸へ戻す・要件 5.1）。
+    ///
+    /// 値を覚えるだけで、今の場所の値（`layout_input`）には押し直さない
+    /// （[`set_balloon_background`](Self::set_balloon_background) と同じ形）。次の再追従が、解いて
+    /// 押した値と `layout_input` の違いに気づいて組み直す。
+    pub fn set_inline_marker(&mut self, actor: ActorKey, image: Option<Arc<MarkerImage>>) {
+        debug!(
+            actor = %actor,
+            image = ?image.as_ref().map(|i| (i.width, i.height)),
+            "行の中の印の絵を受け取った（無ければ既定の丸）"
+        );
+        match image {
+            Some(image) => self.inline_marker.insert(actor, image),
+            None => self.inline_marker.remove(&actor),
+        };
+    }
+
+    /// 覚えている印の見た目（未設定は既定の丸）。
+    pub(super) fn inline_marker_of(&self, actor: &ActorKey) -> InlineMarkerLook {
+        self.inline_marker
+            .get(actor)
+            .map_or(InlineMarkerLook::Dot, |image| {
+                InlineMarkerLook::Image(Arc::clone(image))
+            })
+    }
+
+    /// 解いた直後の値へ、その actor の印の見た目を押す（装着・再追従・箱の解決の 3 か所）。
+    pub(super) fn stamp_inline_marker(&self, actor: &ActorKey, resolved: &mut ResolvedBalloonText) {
+        resolved.font.inline_marker = self.inline_marker_of(actor);
     }
 
     /// 普通のバルーンの名前（バルーンのフォルダ名）を actor ごとに覚える（結線が入れる・要件 3.12）。

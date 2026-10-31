@@ -12,11 +12,12 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use areka_actor::UiSpawnError;
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
-use areka_emo_present::balloon_marker::MarkerPair;
+use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_sakura::strict::DetectionPoint;
@@ -252,6 +253,9 @@ pub struct TextLayerRuntime {
     /// [`DEFAULT_BALLOON_BACKGROUND`]（白）。読み口は
     /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
     balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
+    /// actor → 行の中の印の絵（結線が [`set_inline_marker`](Self::set_inline_marker) で入れる・
+    /// 無ければ既定の丸・要件 5.1）。装着・再追従・箱の解決の直後に押す。
+    inline_marker: HashMap<ActorKey, Arc<MarkerImage>>,
     /// actor → 普通のバルーンの名前（結線が入れるバルーンのフォルダ名）。折り返しの基準と無視した
     /// 書き出し位置の 2 つの警告の名前の欄に出す（未設定は `スコープ{番号}のバルーン`・要件 3.12）。
     /// 入れる口は [`set_balloon_label`](Self::set_balloon_label)（`actor_decoration.rs`）。
@@ -320,6 +324,7 @@ impl TextLayerRuntime {
             choice_snapshot: HashMap::new(),
             cursor_warn: CursorWarnGuard::default(),
             balloon_background: HashMap::new(),
+            inline_marker: HashMap::new(),
             balloon_label: HashMap::new(),
             surface_resolver: None,
             box_font_dirs: Vec::new(),
@@ -819,6 +824,10 @@ mod decoration_tests;
 #[cfg(test)]
 #[path = "actor_decoration_frame_tests.rs"]
 mod decoration_frame_tests;
+
+#[cfg(test)]
+#[path = "actor_inline_marker_tests.rs"]
+mod inline_marker_tests;
 
 #[cfg(test)]
 #[path = "sink_probe_tests.rs"]

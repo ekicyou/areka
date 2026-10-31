@@ -400,11 +400,13 @@ impl TextLayerRuntime {
             );
             return;
         };
-        let resolved = ResolvedBalloonText::resolve_with_background(
+        let mut resolved = ResolvedBalloonText::resolve_with_background(
             &def.model,
             def.size,
             DEFAULT_BALLOON_BACKGROUND,
         );
+        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。
+        self.stamp_inline_marker(&key.actor, &mut resolved);
         if self.box_definition_warned.insert(want.site.name.clone()) {
             let name = want.site.name.as_str();
             attach::warn_coarse_wrap_threshold(name, &resolved, None);

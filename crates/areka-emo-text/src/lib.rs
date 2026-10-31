@@ -436,6 +436,7 @@ mod tests {
         "actor_decoration.rs",
         "actor_decoration_frame_tests.rs",
         "actor_decoration_tests.rs",
+        "actor_inline_marker_tests.rs",
         "actor_lookahead_shapes_tests.rs",
         "actor_lookahead_tests.rs",
         "actor_region_collapse_present_tests.rs",
