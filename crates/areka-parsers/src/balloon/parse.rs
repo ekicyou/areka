@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 use crate::kv::parse_kv;
 
-use super::marker::read_arrow_keys;
+use super::marker::{read_arrow_keys, read_marker_filename};
 use super::model::{
     BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
     FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint,
@@ -239,6 +239,8 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     .with_disable_font(disable_font)
     // 矢印の鍵（balloon-scroll-arrows 要件 1.1〜1.6）。同じマージ済みの表から読む＝面の後勝ちに乗る。
     .with_arrow_keys(read_arrow_keys(merged))
+    // 印の絵の名前（script-small-tags 要件 5.2）。矢印と同じに面の後勝ちに乗る。
+    .with_marker_filename(read_marker_filename(merged))
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を生文字列のまま複製する（数値化しない）。

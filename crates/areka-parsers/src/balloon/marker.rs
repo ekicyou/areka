@@ -98,6 +98,16 @@ pub(super) fn read_arrow_keys(merged: &BTreeMap<String, String>) -> ArrowKeys {
     }
 }
 
+/// マージ済みの表から印の絵の名前 `marker.filename` を生の値のまま読む（拡張子なし・空は無いのと同じ・
+/// script-small-tags 要件 5.2）。
+pub(super) fn read_marker_filename(merged: &BTreeMap<String, String>) -> Option<String> {
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#marker.filename
+    merged
+        .get("marker.filename")
+        .filter(|v| !v.is_empty())
+        .cloned()
+}
+
 /// `12` → `FromStart`、`-12` → `FromEnd`、`--12` → `Literal(-12)`。それ以外は `None`。
 /// 空白の扱いは他の数値の鍵と同じ（trim は kv 層が済ませ、ここでは削らない）。
 fn parse_marker_coord(value: &str) -> Option<MarkerCoord> {
