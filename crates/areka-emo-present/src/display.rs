@@ -102,19 +102,22 @@ fn injected_context(at: DisplayFault) -> &'static str {
 /// ＝`error!` で記録を残してから [`PresentError::Device`] を返す——で失敗させる。一致しなければ
 /// 旗はそのまま（後続の一致点まで武装が残る）。
 #[cfg(test)]
-fn fault_point(at: DisplayFault) -> Result<(), PresentError> {
+fn fault_point(at: DisplayFault, repeat: Option<(&'static str, i32)>) -> Result<(), PresentError> {
     if ARMED_DISPLAY_FAULT.with(|armed| armed.get()) != Some(at) {
         return Ok(());
     }
     ARMED_DISPLAY_FAULT.with(|armed| armed.set(None));
     let e = windows::core::Error::from_hresult(windows::core::HRESULT(0x8000_4005u32 as i32));
-    Err(device_err(injected_context(at))(e))
+    Err(device_err(injected_context(at), repeat)(e))
 }
 
 /// 失敗の注入点（通常ビルド）。何もしない空の処理＝常に `Ok(())`。
 #[cfg(not(test))]
 #[inline(always)]
-fn fault_point(_at: DisplayFault) -> Result<(), PresentError> {
+fn fault_point(
+    _at: DisplayFault,
+    _repeat: Option<(&'static str, i32)>,
+) -> Result<(), PresentError> {
     Ok(())
 }
 
@@ -136,12 +139,16 @@ pub(crate) fn clear_display_fault() {
 /// 戻さない（`draw_bitmap_sources` の踏襲）。生成した bitmap は閉じたリストが参照を保持するため
 /// 戻り値には含めない。
 ///
+/// `repeat` は前に記録した同じ対象の装置の失敗の原因（[`device_err`] へそのまま渡す）。同じ原因の
+/// 続きなら失敗の行は `debug!`、`None` なら今と同じ `error!`。
+///
 /// 事前条件: `surface` の外形は 1×1 以上（0 外形は上流 `EmptyComposition` が先に遮断する）。
 /// 事後条件: `Ok` なら返したリストは `Close` 済みで再利用できる。`Err` なら生成途中の GPU 資源も
 /// 含めて drop され、呼び手から見える副作用は無い。
 pub(crate) fn record_display(
     dc: &ID2D1DeviceContext,
     surface: &ComposedSurface,
+    repeat: Option<(&'static str, i32)>,
 ) -> Result<GraphicsCommandList, PresentError> {
     let recipe = DisplayRecipe::for_surface(surface);
 
@@ -167,7 +174,7 @@ pub(crate) fn record_display(
     };
 
     let (w, h) = recipe.bitmap_size;
-    fault_point(DisplayFault::CreateBitmap)?;
+    fault_point(DisplayFault::CreateBitmap, repeat)?;
     // SAFETY: Windows API 境界。`bytes` は本呼び出しの間だけ読まれ（D2D は内容を複製する）、
     // 長さは `pitch * h` 以上であることを `ComposedSurface` が不変条件として保証する。
     let bitmap = unsafe {
@@ -181,12 +188,12 @@ pub(crate) fn record_display(
             &props,
         )
     }
-    .map_err(device_err("CreateBitmap(composed native)"))?;
+    .map_err(device_err("CreateBitmap(composed native)", repeat))?;
 
-    fault_point(DisplayFault::CreateCommandList)?;
+    fault_point(DisplayFault::CreateCommandList, repeat)?;
     // SAFETY: Windows API 境界。共有 DC への COM 呼び出し（UI スレッド直列）。
     let command_list =
-        unsafe { dc.CreateCommandList() }.map_err(device_err("CreateCommandList"))?;
+        unsafe { dc.CreateCommandList() }.map_err(device_err("CreateCommandList", repeat))?;
 
     // SAFETY: Windows API 境界。ターゲット差し替えと描画命令の記録（UI スレッド直列）。
     unsafe { dc.SetTarget(&command_list) };
@@ -204,16 +211,16 @@ pub(crate) fn record_display(
     unsafe { dc.BeginDraw() };
     dc.draw_bitmap(&bitmap, Some(&dest), 1.0, recipe.interpolation, None, None);
     // SAFETY: Windows API 境界。直前の `BeginDraw` を閉じる。
-    unsafe { dc.EndDraw(None, None) }.map_err(device_err("EndDraw(display)"))?;
+    unsafe { dc.EndDraw(None, None) }.map_err(device_err("EndDraw(display)", repeat))?;
     // 注入点は実呼び出しの**後**に置く（前に置くと共有 DC が `BeginDraw` 開きっぱなしで残り、
     // 後続の記録を巻き添えにする）。観測される結果——`error!`＋`Err`・リストを返さない——は
     // 呼び出しが失敗した場合と同一である。
-    fault_point(DisplayFault::EndDraw)?;
+    fault_point(DisplayFault::EndDraw, repeat)?;
 
     command_list
         .close()
-        .map_err(device_err("CommandList::Close"))?;
-    fault_point(DisplayFault::Close)?;
+        .map_err(device_err("CommandList::Close", repeat))?;
+    fault_point(DisplayFault::Close, repeat)?;
 
     Ok(GraphicsCommandList::new(command_list))
 }
@@ -224,7 +231,7 @@ mod tests;
 
 #[cfg(test)]
 #[path = "display_gpu_tests.rs"]
-mod gpu_tests;
+pub(crate) mod gpu_tests;
 
 #[cfg(test)]
 #[path = "display_fault_tests.rs"]

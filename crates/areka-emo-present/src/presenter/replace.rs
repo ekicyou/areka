@@ -128,6 +128,7 @@ impl EmoPresenter {
                 binds,
                 PatternState::default(),
                 None,
+                false,
             );
         }
         Self::reply(reply, Ok(()));

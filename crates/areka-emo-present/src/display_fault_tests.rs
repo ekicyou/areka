@@ -77,6 +77,7 @@ fn record_with_armed_fault(
     dc: &ID2D1DeviceContext,
     at: DisplayFault,
     surface: &ComposedSurface,
+    repeat: Option<(&'static str, i32)>,
 ) -> Result<GraphicsCommandList, PresentError> {
     /// 生存期間の終わり（正常終了・panic による巻き戻しの双方）で必ず武装を降ろす番人。
     struct Disarm;
@@ -88,7 +89,7 @@ fn record_with_armed_fault(
 
     let _disarm = Disarm;
     arm_display_fault(at);
-    record_display(dc, surface)
+    record_display(dc, surface, repeat)
 }
 
 /// 1 点の検査本体: 注入して記録 → `Err` の形・`error!` 1 行 → 同じ DC で次の記録が成功する。
@@ -97,7 +98,7 @@ fn run_case(at: DisplayFault) {
     let surface = ComposedSurface::new(8, 6);
 
     // ── 注入した記録: Err と error! を 1 つの窓で同時に観る ────────────────
-    let (result, events) = capture(|| record_with_armed_fault(&dc, at, &surface));
+    let (result, events) = capture(|| record_with_armed_fault(&dc, at, &surface, None));
 
     let err = result.err().unwrap_or_else(|| {
         panic!("注入した失敗点 {at:?} で record_display は Err を返すはず（Ok が返った）")
@@ -154,7 +155,7 @@ fn run_case(at: DisplayFault) {
     // ── 副作用が残らないこと: 同じ共有 DC への次の記録が素通りで成功する ────
     // 上の窓で error! を 1 行捕まえているので、この窓の「0 行」が捕捉の空振りでないことは
     // 同一スレッド・同一発行点の陽性で担保されている。
-    let (recovered, quiet) = capture(|| record_display(&dc, &surface));
+    let (recovered, quiet) = capture(|| record_display(&dc, &surface, None));
     let list = recovered.unwrap_or_else(|e| {
         panic!("{at:?} の失敗の後、同じ DC への次の記録が失敗した（副作用が残っている）: {e:?}")
     });
@@ -197,6 +198,28 @@ fn end_draw_failure_logs_once_and_leaves_no_side_effect() {
 #[test]
 fn close_failure_logs_once_and_leaves_no_side_effect() {
     run_case(DisplayFault::Close);
+}
+
+/// 要件 4.3: 前の原因として同じ原因を渡すと、注入点の失敗は同じ文言・同じ欄の `debug!` 1 行に
+/// なり `error!` は出ない（`record_display` から注入点まで `repeat` が通っている）。
+#[test]
+fn same_cause_passed_as_repeat_logs_debug_not_error() {
+    let (_core, dc) = gpu_dc();
+    let surface = ComposedSurface::new(8, 6);
+    let at = DisplayFault::CreateBitmap;
+    let same = Some((injected_context(at), INJECTED_HRESULT));
+
+    let (result, events) = capture(|| record_with_armed_fault(&dc, at, &surface, same));
+
+    assert!(matches!(result, Err(PresentError::Device { .. })));
+    assert!(events.iter().all(|e| e.level != tracing::Level::ERROR));
+    let debugs: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::DEBUG && e.target == "areka_emo_present::command")
+        .collect();
+    assert_eq!(debugs.len(), 1, "同じ原因の続きは debug! ちょうど 1 行");
+    assert_eq!(debugs[0].message(), "D3D/DXGI 呼び出しが失敗");
+    assert_eq!(debugs[0].field_str("context"), Some(injected_context(at)));
 }
 
 /// 被覆の番人: `DisplayFault` に variant が増えたら [`ALL_FAULTS`] の欠落をコンパイルで気づかせ、

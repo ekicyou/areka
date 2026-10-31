@@ -32,7 +32,7 @@
 //!   （`wintf::transition`）の全レコードと同じ番号系列であり、段階別計時の行を遷移の時系列へ
 //!   差し込むための唯一の鍵である（`areka-P0-dpi-transition-atomicity` Requirement 2.8・D12）
 //!
-//! 既存の表示成立点 info!（`"apply(ShowSurface): 表示・マスクを更新"`）とは**別行**であり、
+//! 既存の表示成立点の行（`"apply(ShowSurface): 表示・マスクを更新"`）とは**別行**であり、
 //! 同一適用の対として隣接して出る（配線は show.rs の責務）。文言・フィールド名の変更は
 //! `judge-perf.py` と計時檻の再検証トリガである（design.md §Revalidation Triggers）。
 
@@ -89,7 +89,7 @@ impl Stage {
 /// perf サマリ行のうち、計時でも確保計数でもない同定情報（適用対象・引き当て・合成キー）。
 #[derive(Debug, Clone, Copy)]
 pub(super) struct EmitContext {
-    /// 適用対象（既存の表示成立点 info! と同一の識別子）。
+    /// 適用対象（既存の表示成立点の行 と同一の識別子）。
     pub(super) target_id: TargetId,
     /// 適用したサーフェス id（同上）。
     pub(super) surface_id: u32,

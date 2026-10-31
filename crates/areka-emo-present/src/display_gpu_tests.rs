@@ -165,7 +165,7 @@ fn make_bitmap(
 ///
 /// 再生の引数は本番 `render_surface`（wintf `ecs/graphics/systems/render.rs`）と同一
 /// （透明クリア → `DrawImage(list, None, None, LINEAR, SOURCE_OVER)`）。
-fn replay_and_read_back(
+pub(crate) fn replay_and_read_back(
     dc: &ID2D1DeviceContext,
     list: &GraphicsCommandList,
     w: u32,
@@ -245,7 +245,7 @@ fn identity_offscreen_roundtrip_equals_composed_native_bytes() {
         "fixture 前提: α=0 と中間 α が同居しなければ premultiplied の檻にならない"
     );
 
-    let list = record_display(&dc, &surface).expect("record_display は Ok");
+    let list = record_display(&dc, &surface, None).expect("record_display は Ok");
     let read_back = replay_and_read_back(&dc, &list, w, h);
 
     assert_eq!(
@@ -271,7 +271,7 @@ fn record_display_returns_a_non_empty_command_list() {
     let (_core, dc) = gpu_dc();
     let surface = composed_with_alpha_edges(4, 3);
 
-    let list = record_display(&dc, &surface).expect("record_display は Ok");
+    let list = record_display(&dc, &surface, None).expect("record_display は Ok");
 
     assert!(
         list.command_list().is_some(),

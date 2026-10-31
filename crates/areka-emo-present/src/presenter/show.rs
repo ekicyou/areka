@@ -9,8 +9,8 @@ use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
-    PresentError, PresentOutcome, ReplySender, TargetId, VisibilityOwnership, VisualMount, World,
-    derive_scale,
+    PresentError, PresentOutcome, Recompose, ReplySender, TargetId, VisibilityOwnership,
+    VisualMount, World, derive_scale,
 };
 
 impl EmoPresenter {
@@ -42,9 +42,14 @@ impl EmoPresenter {
     /// [`VisibilityOwnership::External`] の target では、末尾の可視化（`set_visible(true)`／`visible=true`）
     /// と mount 遅延生成の初期可視性だけが変わり、**それ以外の全手順は所有権に依らず共通**である
     /// （k 導出・合成・キャッシュ・表示記録・配置・マスク・`applied`／`native_size`／
-    /// `last_show`／`pending_resize`・下の `info!`）。表示成立点が 1 つであることを崩さないための境界であり、
+    /// `last_show`／`pending_resize`・下の表示の行）。表示成立点が 1 つであることを崩さないための境界であり、
     /// 「不可視のまま配置先と面が確立する」（Requirement 1.3）はこの共通部分がそのまま与える。
     /// 可視化は [`EmoPresenter::show_target`] が同じ漏斗を再通過したうえで付与する。
+    ///
+    /// `reveal` は「呼び手がこの適用の後に窓を見えるようにする」こと。見えていなかった外から所有される
+    /// 窓を出し直す [`EmoPresenter::show_target`] だけが真を渡し、表示の行の水準の判定（コマ送りだけの
+    /// 適用か）に使う（`animated-surface-log-flood` 要件 1.5）。
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_show(
         &mut self,
         world: &mut World,
@@ -53,6 +58,7 @@ impl EmoPresenter {
         binds: BindSet,
         pattern: PatternState,
         reply: Option<ReplySender<PresentOutcome>>,
+        reveal: bool,
     ) {
         // (−1) 段階計時の起点（Requirement 1.1・design D5）。**無条件**に開始する——ログ設定を
         // 一切参照しないため、計時ログの有効・無効で表示経路が分岐しない（Requirement 1.5）ことが
@@ -77,6 +83,19 @@ impl EmoPresenter {
         let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
         let scale = derive_scale(target.policy, window_dpi);
 
+        // (0.5) コマ送りだけの適用か（`animated-surface-log-flood` 要件 1.1〜1.5）。**どの状態も上書きする
+        // 前に**決める: 前に成立した面の番号と着せ替えが同じ・前に適用した拡大率が同じ・見えていなかった
+        // 窓がこの適用で見えるようにならない、の 3 つが揃うとき真。シェル（指令で見える窓）はこの漏斗の
+        // 末尾で見えるようになり、バルーン（外から所有）は呼び手が `reveal` を渡したときだけ見えるようになる。
+        let becomes_visible = !target.visible
+            && (reveal || matches!(target.ownership, VisibilityOwnership::CommandDriven));
+        let frame_step = !becomes_visible
+            && target.applied == Some(scale)
+            && target
+                .last_show
+                .as_ref()
+                .is_some_and(|(id, b, _)| *id == surface_id && *b == binds);
+
         // (1) 引き当て: 合成入力（id＋binds＋pattern）の完全一致のみヒット＝再合成しない（R4.2/R5.2）。
         // **k はキーに参加しない**（要件 5.2）——面・マスク・表示記録はいずれも原寸で k を含まないため、
         // k だけが変わった適用は同じエントリにヒットし、変換の係数（下の `set_layout`）だけが変わる。
@@ -90,7 +109,13 @@ impl EmoPresenter {
         // 専用の檻（`presenter_cache_capacity_tests.rs`）だけが捕まえる。
         let cache_hit = target.cache.touch(surface_id, &binds, &pattern);
         timing.mark(Stage::CacheLookup);
+        // 合成の仕方（控えに外れた回だけ意味を持つ・重ね直しの範囲の行が読む・要件 3.5）。
+        let mut recompose = Recompose::Full;
         if !cache_hit {
+            // 下敷きの印は合成の**前に**偽にする（要件 4.2）。この適用が合成の後で失敗して戻っても、
+            // 合成器の前の命令列（`base_ops`）は控えの前の絵と食い違っているので、次は必ずいちからになる。
+            let partial_base = std::mem::replace(&mut target.partial_base, false);
+
             // 合成先は [`FrameBudget`] の常設席（設計 D2⑴・Flow 2）。`compose_into` は席の容量を
             // 再利用するため、外形の変わらない反復では 1 バイトも確保しない。席を**閉包で借りる**のは、
             // 合成外形が `compose_into` の内側で決まり、伸長の観測を「席を使い終えた直後」にしか
@@ -99,24 +124,51 @@ impl EmoPresenter {
             //
             // 合成結果を先に束縛して境界を作る（計時点 `Stage::Compose` を合成の直後に置くため）。
             // 分岐・呼出順序・エラー経路は下の `match` がそのまま担い、挙動は不変である。
-            let composed = target.budget.native_scratch(|scratch| {
+            //
+            // 動きの無い面（`pattern` が空）は今の `compose_into` のまま＝いちから（要件 3.4）。動きのある面は
+            // 下敷き形の口を呼び、印が真で前に成立した面の絵が控えに在る（`get`＝順序を動かさない）ときだけ
+            // その絵を下敷きに渡す（要件 3.1）。印が真なら合成器の前の命令列はその絵を作った命令列である。
+            let base = if partial_base {
                 target
-                    .composer
-                    // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
-                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない）。外形は席
-                    // そのものが持つ——エントリの `composed` 外形として下流が読む。
-                    .compose_into(
+                    .last_show
+                    .as_ref()
+                    .and_then(|(id, b, p)| target.cache.get(*id, b, p))
+                    .map(|e| &e.composed)
+            } else {
+                None
+            };
+            let composed = target.budget.native_scratch(|scratch| {
+                // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
+                // 合成は常に native 原寸（emo-compose の合成経路は k を知らない）。外形は席
+                // そのものが持つ——エントリの `composed` 外形として下流が読む。
+                if pattern.is_empty() {
+                    target
+                        .composer
+                        .compose_into(
+                            scratch,
+                            &target.emo_world,
+                            &target.atlas,
+                            surface_id,
+                            &binds,
+                            &pattern,
+                        )
+                        .map(|()| Recompose::Full)
+                } else {
+                    target.composer.compose_into_reusing(
                         scratch,
+                        base,
                         &target.emo_world,
                         &target.atlas,
                         surface_id,
                         &binds,
                         &pattern,
                     )
+                }
             });
             timing.mark(Stage::Compose);
             match composed {
-                Ok(()) => {
+                Ok(how) => {
+                    recompose = how;
                     // (1a) 表示の記録（設計 Flow 1・要件 1.1／7.1）: 合成した**原寸**バイトから
                     // 閉じたコマンドリストを起こし、下の `insert` でエントリへ束ねる。記録は k を
                     // 含まない（拡大は wintf の変換行列が掛ける）。
@@ -131,10 +183,20 @@ impl EmoPresenter {
                             .get_resource::<GraphicsCore>()
                             .and_then(|gfx| gfx.device_context())
                         else {
-                            tracing::error!(
-                                ?target_id,
-                                "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
-                            );
+                            // 同じ原因の続きは 2 回目から DEBUG（要件 4.3）。原因は返す `Device` の値と同じ。
+                            const NO_GFX: (&str, i32) = ("GraphicsCore resource", 0);
+                            if target.failure_note == Some(NO_GFX) {
+                                tracing::debug!(
+                                    ?target_id,
+                                    "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
+                                );
+                            } else {
+                                tracing::error!(
+                                    ?target_id,
+                                    "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
+                                );
+                            }
+                            target.failure_note = Some(NO_GFX);
                             Self::reply(
                                 reply,
                                 Err(PresentError::Device {
@@ -146,13 +208,17 @@ impl EmoPresenter {
                         };
                         // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
                         // 起きないため確保の計数も動かない。
+                        let repeat = target.failure_note;
                         match target
                             .budget
-                            .native_scratch(|scratch| record_display(dc, scratch))
+                            .native_scratch(|scratch| record_display(dc, scratch, repeat))
                         {
                             Ok(list) => list,
-                            // record_display は内部で error! 済み（display.rs device_err）。
+                            // record_display は内部で記録済み（display.rs device_err・同じ原因の続きは debug!）。
                             Err(e) => {
+                                if let PresentError::Device { hresult, context } = &e {
+                                    target.failure_note = Some((*context, *hresult));
+                                }
                                 Self::reply(reply, Err(e));
                                 return;
                             }
@@ -218,6 +284,7 @@ impl EmoPresenter {
                     target.visible = false;
                     // EmptyComposition 縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
                     target.current_surface_id = None;
+                    target.failure_note = None;
                     Self::reply(reply, Ok(()));
                     return;
                 }
@@ -229,6 +296,7 @@ impl EmoPresenter {
                         error = %e,
                         "apply(ShowSurface): 合成失敗 → 表示は適用前のまま（reply Err）"
                     );
+                    target.failure_note = None;
                     Self::reply(reply, Err(PresentError::Compose(e)));
                     return;
                 }
@@ -376,33 +444,68 @@ impl EmoPresenter {
         // `last_show` への move の**直前**に取る。全段の `mark` が済んだ後なので、この走査
         // （借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。
         let key_hash = compose_key_hash(surface_id, &binds, &pattern);
+        // 下敷きの印（要件 3.1・4.2）: 控えに外れ、動きのある面（下敷き形の口で合成した）ときだけ真。
+        // このとき合成器の前の命令列は、いま控えへ入れた `last_show` の鍵の絵を作った命令列である。
+        target.partial_base = !cache_hit && !pattern.is_empty();
+        // 成立をはさんだので、次の装置の失敗は新しい続き＝ERROR（要件 4.3）。
+        target.failure_note = None;
         target.last_show = Some((surface_id, binds, pattern));
 
-        // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。実機サインオフは有界 auto-exit で
-        // 起動し `RUST_LOG` を grep してここを読むため、**`info!` レベル**であることが契約である
-        // （`debug!` へ落とすと既定の観測条件で消える）。k 導出値（`k`・`k_ratio`）と適用寸（`native_*`・
-        // `scaled_*`＝物理寸・要件 2.8／7.5）が揃うことで、2 水準（125%/200%）の実行が「異なる物理寸で
-        // 描かれた」ことをログだけで決定論的に判定できる。フィールドの名と意味は不変。
-        tracing::info!(
-            ?target_id,
-            surface_id,
-            cache_hit,
-            // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
-            k_ratio = ?scale,
-            k = scale.as_f32(),
-            author_dpi = target.policy.author_dpi,
-            // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
-            window_dpi = ?window_dpi,
-            native_w = native.0,
-            native_h = native.1,
-            scaled_w = physical.0,
-            scaled_h = physical.1,
-            // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
-            size_changed,
-            "apply(ShowSurface): 表示・マスクを更新"
-        );
+        // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。**最初の表示と状態の替わりは INFO・
+        // コマ送りだけは DEBUG**（`animated-surface-log-flood` 要件 1・2）。実機サインオフは `RUST_LOG` を
+        // grep して面・着せ替え・拡大率・窓の大きさの替わりと隠した後の出し直しをここで読み、コマ送りだけの
+        // 適用は `areka_emo_present=debug` で同じ文言・同じ欄のまま 1 適用 1 行で読める。k 導出値（`k`・
+        // `k_ratio`）と適用寸（`native_*`・`scaled_*`＝物理寸・要件 2.8／7.5）が揃うことで、2 水準
+        // （125%/200%）の実行が「異なる物理寸で描かれた」ことをログだけで決定論的に判定できる。
+        // フィールドの名と意味は不変。欄の並びはこのマクロ 1 か所に置く（水準は字面で渡す決まりのため）。
+        macro_rules! show_line {
+            ($level:expr) => {
+                tracing::event!(
+                    $level,
+                    ?target_id,
+                    surface_id,
+                    cache_hit,
+                    // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
+                    k_ratio = ?scale,
+                    k = scale.as_f32(),
+                    author_dpi = target.policy.author_dpi,
+                    // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
+                    window_dpi = ?window_dpi,
+                    native_w = native.0,
+                    native_h = native.1,
+                    scaled_w = physical.0,
+                    scaled_h = physical.1,
+                    // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
+                    size_changed,
+                    "apply(ShowSurface): 表示・マスクを更新"
+                )
+            };
+        }
+        // 重ね直しの範囲の行（要件 3.5）: 控えに外れて成立した適用だけ、表示の行の**直前**に 1 行。
+        // 表示の行と perf の行のあいだには何も挟まない（要件 2.3）。
+        if !cache_hit {
+            let (kind, (rect_x, rect_y, rect_w, rect_h)) = match recompose {
+                Recompose::Full => ("full", (0, 0, native.0, native.1)),
+                Recompose::Partial { x, y, w, h } => ("partial", (x, y, w, h)),
+            };
+            tracing::debug!(
+                ?target_id,
+                surface_id,
+                recompose = kind,
+                rect_x,
+                rect_y,
+                rect_w,
+                rect_h,
+                "apply(ShowSurface): 重ね直しの範囲"
+            );
+        }
+        if frame_step && !size_changed {
+            show_line!(tracing::Level::DEBUG);
+        } else {
+            show_line!(tracing::Level::INFO);
+        }
 
-        // perf サマリ行（Requirement 1.1/1.3・design.md §Data Models）。上の info! と**同一適用の対**
+        // perf サマリ行（Requirement 1.1/1.3・design.md §Data Models）。上の表示の行と**同一適用の対**
         // として隣接して出る別行である。ここが唯一の emit 点＝早期復帰の経路では 1 行も出ない。
         //
         // `take_delta` は増分を取り出して器を 0 に戻す。早期復帰で取り出されなかった増分は次の適用へ

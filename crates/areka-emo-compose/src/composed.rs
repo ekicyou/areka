@@ -105,6 +105,22 @@ impl ComposedSurface {
         self.bytes.resize(len, 0u8);
     }
 
+    /// `width×height` へ合わせ、中身を `src`（同じ寸法の premultiplied BGRA）の写しにする。
+    ///
+    /// 矩形の重ね直し（[`crate::blit_rect`]）が前の絵を土台に敷くときに使う。0 で埋めてから
+    /// 全部を上書きする 2 度書きを避ける（容量は [`resize_and_clear`] と同じく使い回す）。
+    ///
+    /// [`resize_and_clear`]: ComposedSurface::resize_and_clear
+    pub(crate) fn resize_from(&mut self, width: u32, height: u32, src: &[u8]) {
+        let stride = width * 4;
+        debug_assert_eq!(src.len(), stride as usize * height as usize);
+        self.width = width;
+        self.height = height;
+        self.stride = stride;
+        self.bytes.clear();
+        self.bytes.extend_from_slice(src);
+    }
+
     /// premultiplied BGRA バイト列の可変参照（`len == stride * height`）。
     ///
     /// blit 実行器が転写先として書き込む（本クレート内専用）。

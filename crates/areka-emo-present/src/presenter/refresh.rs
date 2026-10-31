@@ -118,7 +118,7 @@ impl EmoPresenter {
 
         // 表示更新は既存の単一漏斗をそのまま通す（`reply` なし＝内部再実行・design Flow 2）。成立点の記録・
         // 失敗時の early return・D10 ログ・状態照合報告はすべて `apply_show` 側の不変条件がそのまま効く。
-        self.apply_show(world, target_id, surface_id, binds, pattern, None);
+        self.apply_show(world, target_id, surface_id, binds, pattern, None, false);
 
         let t = self.targets.get(&target_id)?;
         if t.applied != Some(scale) {

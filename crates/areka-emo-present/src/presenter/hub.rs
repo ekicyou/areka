@@ -87,6 +87,8 @@ impl EmoPresenter {
                 acked_generation: 0,
                 move_shift: (0, 0),
                 pending_resize: None,
+                partial_base: false,
+                failure_note: None,
             },
         );
         Ok(())
@@ -212,7 +214,15 @@ impl EmoPresenter {
 
         // 成否は応答で読む（状態の後追いで推測しない・`show_target` と同じ）。
         let (tx, rx) = reply_channel::<PresentOutcome>();
-        self.apply_show(world, target_id, surface_id, binds, pattern, Some(tx));
+        self.apply_show(
+            world,
+            target_id,
+            surface_id,
+            binds,
+            pattern,
+            Some(tx),
+            false,
+        );
         let outcome = rx.recv().unwrap_or_else(|e| {
             tracing::error!(
                 ?target_id,
@@ -275,6 +285,8 @@ impl EmoPresenter {
         // 原寸を返し続けるのが正しい（R4.3: キャッシュ無効化は表示を変えない）。以後は必ずミス＝
         // 再合成が走り、対が再構築される。
         target.cache.invalidate_all();
+        // 控えの前の絵が無くなったので、次の外れはいちから合成する（要件 3.1・4.2）。
+        target.partial_base = false;
         tracing::debug!(
             ?target_id,
             "apply(InvalidateCache): キャッシュ全破棄（表示は継続）"

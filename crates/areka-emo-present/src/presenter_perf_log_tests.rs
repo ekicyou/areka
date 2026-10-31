@@ -12,13 +12,13 @@
 //!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（段 4・確保 2 ＋
 //!    同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
 //!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
-//! 2. **既存の表示成立点 info! 行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
+//! 2. **既存の表示成立点の行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
 //!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・12 フィールド
-//!    **ちょうど**。本ファイルはこの契約の防波堤であり、info! を 1 文字でも触ると RED になる
+//!    **ちょうど**。本ファイルはこの契約の防波堤であり、表示成立点の行を 1 文字でも触ると RED になる
 //! 3. **mark の設置位置**（Requirement 1.4）: 段が実行される入力では非 0、実行されない入力では
 //!    **厳密に 0**。どの段が 0 になるかは mark をどの分岐へ置いたかの構造的帰結であり、
 //!    測定マシンの速度では変わらない
-//! 4. **1 適用 1 行・成立点の対**（Requirement 1.1）: 表示が成立した適用は info! 行と perf 行を
+//! 4. **1 適用 1 行・成立点の対**（Requirement 1.1）: 表示が成立した適用は 表示成立点の行と perf 行を
 //!    **隣接する対**として各 1 本出し、早期復帰した適用は **1 本も出さない**
 //!
 //! # 実時間を合否条件に使わない（Requirement 6.2）
@@ -80,10 +80,10 @@ use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
 
 // ── 契約面の正本（この 3 つの定数がコード側と乖離したら RED）───────────────────────────
 
-/// 既存の表示成立点 info! の固定文言（show.rs の `info!`・実機サインオフ契約）。
+/// 既存の表示成立点の行の固定文言（show.rs の `info!`・実機サインオフ契約）。
 const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
-/// 表示成立点 info! のフィールド集合（show.rs の `info!` から逐語で写した**全項目**）。
+/// 表示成立点の行のフィールド集合（show.rs の `info!` から逐語で写した**全項目**）。
 ///
 /// design.md §Boundary Commitments「Out of Boundary」が「文言・水準・フィールドとも不変」と
 /// 定めた契約の正本である。**ちょうど**で照合するため、削除・改名だけでなく**追加**も RED。
@@ -143,7 +143,7 @@ fn perf_line_indices(events: &[CapturedEvent]) -> Vec<usize> {
         .collect()
 }
 
-/// 捕捉列中の表示成立点 info! 行の位置（固定文言の完全一致）。
+/// 捕捉列中の表示成立点の行の位置（固定文言の完全一致）。
 fn info_line_indices(events: &[CapturedEvent]) -> Vec<usize> {
     events
         .iter()
@@ -167,7 +167,7 @@ fn stage_us(ev: &CapturedEvent, name: &str) -> u64 {
         .unwrap_or_else(|e| panic!("`{name}` が u64 で出ていない（{e}）: {:?}", ev.fields))
 }
 
-/// 表示成立点 info! 行と perf 行が **同一適用の隣接する対**として各 1 本ずつ出ていることを
+/// 表示成立点の行と perf 行が **同一適用の隣接する対**として各 1 本ずつ出ていることを
 /// 確認し、`(info 行, perf 行)` を返す。
 ///
 /// 隣接（perf の位置 == info の位置 + 1）まで見るのは、design.md §Data Models の
@@ -198,7 +198,7 @@ fn expect_single_adjacent_pair(events: &[CapturedEvent]) -> (CapturedEvent, Capt
     (events[infos[0]].clone(), events[perfs[0]].clone())
 }
 
-/// 表示成立点 info! 行の**文言・水準・全フィールド**が不変であることを固定する。
+/// 表示成立点の行の**文言・水準・全フィールド**が不変であることを固定する。
 ///
 /// design.md §Boundary Commitments「Out of Boundary」の実機サインオフ契約の防波堤。
 /// `info!` を `debug!` へ落とす／フィールドを 1 つ改名する／1 つ足す、のいずれも RED。
@@ -364,7 +364,7 @@ fn attach(
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
 /// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ミス経路**）: 実際の `apply_show` が
-/// 表示成立点 info! 行と perf 行を**隣接する対**として各 1 本出し、perf 行が固定文言・
+/// 表示成立点の行と perf 行を**隣接する対**として各 1 本出し、perf 行が固定文言・
 /// debug 水準・13 フィールドちょうどを備え、4 段すべてに mark が効いていて、`alloc_*` が
 /// 実 `FrameBudget` の値（発生点 2）で埋まる。
 ///
@@ -378,7 +378,7 @@ fn attach(
 /// - `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
 /// - `target.budget.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
 /// - `timing.emit` を成立点から引き剥がす → 隣接判定で RED
-/// - info! の文言・水準・フィールドの変更 → [`assert_info_line_contract`] で RED
+/// - 表示成立点の行の文言・水準・フィールドの変更 → [`assert_info_line_contract`] で RED
 #[test]
 fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired() {
     let mut world = super::test_support::make_world_with_gpu();
@@ -403,7 +403,7 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
     assert_info_line_contract(&info);
     assert_perf_line_contract(&perf);
 
-    // 表示成立点 info! の値（実機サインオフが読む判定材料そのもの）。
+    // 表示成立点の行の値（実機サインオフが読む判定材料そのもの）。
     assert_eq!(field(&info, "target_id"), "TargetId(0)");
     assert_eq!(field(&info, "surface_id"), "1000");
     assert_eq!(field(&info, "cache_hit"), "false");
@@ -421,7 +421,7 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
         "k_ratio に既約 num/den が出ていない: {k_ratio}"
     );
 
-    // perf 行の同定情報は info! と同一適用を指す（対であることの内容側の担保）。
+    // perf 行の同定情報は表示成立点の行と同一適用を指す（対であることの内容側の担保）。
     assert_eq!(field(&perf, "target_id"), field(&info, "target_id"));
     assert_eq!(field(&perf, "surface_id"), field(&info, "surface_id"));
     assert_eq!(field(&perf, "cache_hit"), field(&info, "cache_hit"));
@@ -508,9 +508,19 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
         "2 適用目の対が隣接していない: {events:?}"
     );
 
-    for i in &infos {
-        assert_info_line_contract(&events[*i]);
-    }
+    // 1 適用目（最初の表示）は INFO。2 適用目は同じ入力のコマ送りだけゆえ DEBUG で、欄の集合は同じ
+    // （`animated-surface-log-flood` 要件 1.1・2.1・2.2）。
+    assert_info_line_contract(&events[infos[0]]);
+    assert_eq!(
+        events[infos[1]].level,
+        tracing::Level::DEBUG,
+        "同じ入力の 2 回目（コマ送りだけ）の表示の行が DEBUG でない"
+    );
+    assert_eq!(
+        events[infos[1]].field_names_sorted(),
+        INFO_LINE_FIELDS.to_vec(),
+        "コマ送りだけの表示の行の欄の集合が INFO の行と違う"
+    );
     for i in &perfs {
         assert_perf_line_contract(&events[*i]);
     }
@@ -559,7 +569,7 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 }
 
 /// Requirement 1.1／1.4 観測完了（**早期復帰では 1 行も出ない・陽性と陰性の対観測**）:
-/// 合成前後で早期復帰する 3 経路（未装着 target・合成失敗・全透明退化）は info! 行も perf 行も
+/// 合成前後で早期復帰する 3 経路（未装着 target・合成失敗・全透明退化）は 表示成立点の行も perf 行も
 /// 1 本も出さない。
 ///
 /// 陰性主張（「出ないこと」）は、**同一の捕捉窓の内側**で先に成立適用 1 本を
@@ -682,7 +692,7 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
 
 /// Requirement 1.1／1.4 観測完了（**表示記録前の早期復帰でも 1 行も出ない**）: 表示の記録に
 /// 必要な資源が World に無い経路（`GraphicsCore` 不在）と、記録そのものが失敗した経路
-/// （`record_display` の失敗注入）でも info! 行・perf 行はいずれも出ない。
+/// （`record_display` の失敗注入）でも 表示成立点の行・perf 行はいずれも出ない。
 ///
 /// どちらも**合成を済ませた後**に落ちる（＝確保計数は増えているのに行が出ない）ため、
 /// 「emit を成立点より手前へ動かす」改変を単独で殺す。`FrameTiming` が `emit` で `self` を
@@ -830,7 +840,7 @@ fn display_result_is_independent_of_log_configuration() {
             .is_ok()
         );
     });
-    // (b) subscriber なし（既定の NoSubscriber ＝ perf 行も info! 行も一切出ない）。
+    // (b) subscriber なし（既定の NoSubscriber ＝ perf 行も表示成立点の行も一切出ない）。
     assert!(
         show(
             &mut presenter,

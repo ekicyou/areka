@@ -26,7 +26,7 @@ fn arrangement_of(world: &World, surface_entity: Entity) -> Option<((u32, u32), 
     })
 }
 
-// ── 表示成立点 info ログ（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
+// ── 表示成立点の行（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
 // 実機サインオフ（R6.3）は有界 auto-exit で起動して `RUST_LOG` を grep し、**このログのフィールド名と
 // 値**から「2 水準が異なる k・異なる物理寸で描かれた」ことを決定論的に判定する。ゆえに level が
 // `info` であることと D10 各フィールドが正しい値で在ることは観測状態と同格の契約であり、檻に入れる。
@@ -44,7 +44,7 @@ fn arrangement_of(world: &World, surface_entity: Entity) -> Option<((u32, u32), 
 /// k 導出値（`k`・`k_ratio`）・`author_dpi`・`window_dpi`・native 寸・scaled 寸が揃う。
 ///
 /// k=2/1・native 4×3・物理 8×6 という**互いに弁別可能**な値で組むため、native と scaled の取り違え・
-/// k の取り違えはすべて RED になる。`info!` を `debug!` へ落とす改変も level assert が捕まえる
+/// k の取り違えはすべて RED になる。表示成立点の行を INFO 以外へ落とす改変も level assert が捕まえる
 /// （R6.3 の `RUST_LOG` grep は既定の観測条件で info を読むため、level 自体が契約である）。
 #[test]
 fn display_success_emits_d10_observation_log_at_info() {

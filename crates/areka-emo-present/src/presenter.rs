@@ -71,8 +71,8 @@ use bevy_ecs::world::World;
 use areka_actor::{ReplySender, reply_channel};
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, RegionPriority,
-    ScaleRatio,
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose,
+    RegionPriority, ScaleRatio,
 };
 use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
@@ -102,6 +102,9 @@ pub use self::transition_record::{
 };
 
 #[cfg(test)]
+#[path = "presenter_blink_stop_tests.rs"]
+mod blink_stop_tests;
+#[cfg(test)]
 #[path = "presenter_budget_steady_state_tests.rs"]
 mod budget_steady_state_tests;
 #[cfg(test)]
@@ -117,11 +120,23 @@ mod display_tests;
 #[path = "presenter_dpi_scale_tests.rs"]
 mod dpi_scale_tests;
 #[cfg(test)]
+#[path = "presenter_failure_note_tests.rs"]
+mod failure_note_tests;
+#[cfg(test)]
 #[path = "presenter_fractional_scale_tests.rs"]
 mod fractional_scale_tests;
 #[cfg(test)]
+#[path = "presenter_frame_log_tests.rs"]
+mod frame_log_tests;
+#[cfg(test)]
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
+#[cfg(test)]
+#[path = "presenter_partial_recompose_gpu_tests.rs"]
+mod partial_recompose_gpu_tests;
+#[cfg(test)]
+#[path = "presenter_partial_recompose_tests.rs"]
+mod partial_recompose_tests;
 #[cfg(test)]
 #[path = "presenter_perf_log_tests.rs"]
 mod perf_log_tests;

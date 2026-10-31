@@ -119,3 +119,7 @@
 - 見つけた穴・古くなった記述:
   - 読み手の `normalize_interval` は、知らない語のときは語だけを運び、後ろの数値を落とす（`bind+periodic,5` は `bind+periodic` として持ち上がる。読み手のテスト `decode_interval_trigger_tests.rs` がこの形を固定している）。議題 1・2 で数値つきの組み合わせを採るなら「読み手に触らない形」は取れず、`shell/decode.rs` とそのテストの直しが要る。`bind+always` は数値が無いので今のままで足りる。
   - seriko の `table.rs` は 900 行のうち後ろの約 350 行がファイルの中のテスト。兄弟のファイルへ出せば、腕を足す余裕ができる。
+
+## 2026-10-31 `animated-surface-log-flood` の完了時の申し送り
+
+- `bind+random` の着せ替えは、再生していないあいだ pattern0 を静的に描かない（件 26・閉じた目が残った件）。この決まりは今 `crates/areka-emo-compose/src/bind_steps.rs` の `push_bind_contribution` が `Interval::BindRandom` だけを見て当てている（main に入った `seriko-pattern-calls` が同じ決めを取り込んだ）。議題 1 で `bind+runonce`・`bind+periodic` などを新しい `Interval` の値として採るなら、その値にも「再生していないあいだ pattern0 を描くか」を決めて同じ所へ足す（SSP で測って決める）。黙って純 `bind` と同じ扱いにすると、2 コマ目以降の絵が静的に残る形の取りこぼしになりうる。

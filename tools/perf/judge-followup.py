@@ -104,7 +104,7 @@ SELFTEST_REQUIRED_RED_EXITS = (EXIT_FAIL, EXIT_INCONCLUSIVE)
 #
 # 下は本番コードの字面である。変更するときは必ず出所を確かめること。
 #   MSG_TOGGLE       crates/wintf/src/ecs/clickthrough/controller.rs:212
-#   MSG_SHOW         crates/areka-emo-present/src/presenter/show.rs:402
+#   MSG_SHOW         crates/areka-emo-present/src/presenter/show.rs:480
 #   TRANSITION_TAG   crates/wintf/src/ecs/window/transition_diag.rs:57
 #   MSG_WINDOWPOSCHANGED / MSG_DPICHANGED
 #                    crates/wintf/src/ecs/window/transition_diag.rs:104,102

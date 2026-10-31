@@ -503,7 +503,9 @@ PERCENTILE_METHOD = "nearest-rank（補間なし・ceil(q*n) 番目）"
 #: perf サマリ行の固定文言（`presenter/timing.rs:53,206`）。
 J_PERF_LINE_MESSAGE = "perf(apply_show): 段階別計時"
 
-#: 表示成立点 info! の固定文言（`presenter/show.rs:359`）。
+#: 表示成立点の行の固定文言（`presenter/show.rs:480`）。
+#: 水準は、最初の表示と状態の替わりが INFO・コマ送りだけの適用が DEBUG。
+#: 性能の走行は `areka_emo_present=debug`（invoke-perf-run.ps1・invoke-followup-checks.ps1）で全部拾う。
 J_SHOW_LINE_MESSAGE = "apply(ShowSurface): 表示・マスクを更新"
 
 #: 進行境界スキップ（catch-up）の実文言。
@@ -662,7 +664,7 @@ METRIC_RATIO_DECIMALS = 3
 #: ためランナーが別ファイルへ分けているだけであり、欠落扱いにしてはならない。
 J_REQUIRED_LOG_KINDS = (
     ("perf サマリ行", J_PERF_LINE_MESSAGE),
-    ("表示成立点 info!", J_SHOW_LINE_MESSAGE),
+    ("表示成立点の行", J_SHOW_LINE_MESSAGE),
 )
 
 #: CPU 時系列 CSV のヘッダ（`invoke-perf-run.ps1` の CSV_HEADER と対）。
@@ -689,7 +691,7 @@ J_PERF_IDENT_FIELDS = ("target_id", "surface_id", "cache_hit", "key_hash")
 J_PERF_REQUIRED_FIELDS = J_PERF_IDENT_FIELDS + J_PERF_STAGE_FIELDS + J_PERF_ALLOC_FIELDS
 
 #: マシン条件に必ず載せる DPI 構成の出どころ（2.1→2.2 申し送り 2）。
-#: run-meta.txt に DPI は無い。run.log の起動時ログ（`areka::placement`）と表示成立点 info!
+#: run-meta.txt に DPI は無い。run.log の起動時ログ（`areka::placement`）と表示成立点の行
 #: から拾う。合成コストは DPI に比例し、ベースラインは 2 モニタ混在 DPI で採取されるため、
 #: DPI を書かないレポートは再現できない。
 J_DPI_BOOT_FIELDS = (
@@ -1700,11 +1702,11 @@ def render_machine_conditions(report: Report, sections, scan: LogScan) -> None:
     else:
         report.line("  起動時 DPI ログ（primary_dpi を含む行）は run.log にありません。")
     if scan.show_dpi_variants:
-        report.line("  表示成立点 info! に現れた DPI/寸法の組み合わせ（出現数の多い順）:")
+        report.line("  表示成立点の行 に現れた DPI/寸法の組み合わせ（出現数の多い順）:")
         for variant, count in scan.show_dpi_variants.most_common():
             report.line(f"    [{count} 回] " + "  ".join(variant))
     else:
-        report.line("  表示成立点 info! からは DPI を拾えませんでした。")
+        report.line("  表示成立点の行 からは DPI を拾えませんでした。")
 
 
 def render_calibration(report: Report) -> None:
@@ -1862,7 +1864,7 @@ def render_calibration(report: Report) -> None:
             "",
         ),
         ("J_DPI_BOOT_FIELDS", list(J_DPI_BOOT_FIELDS), "run.log の起動時ログから"),
-        ("J_DPI_SHOW_FIELDS", list(J_DPI_SHOW_FIELDS), "表示成立点 info! から"),
+        ("J_DPI_SHOW_FIELDS", list(J_DPI_SHOW_FIELDS), "表示成立点の行 から"),
         ("J_CATCHUP_TARGETS", list(J_CATCHUP_TARGETS), "catch-up の系統・target フィールドの値"),
         (
             "J_TICK_LINE_MESSAGE",
@@ -3351,7 +3353,7 @@ def check_required(scan: LogScan, cpu: list[CpuSample], run_log: Path) -> None:
         )
     if scan.show_count == 0:
         missing.append(
-            f"表示成立点 info!（固定文言 {J_SHOW_LINE_MESSAGE!r}）が 1 本もありません。"
+            f"表示成立点の行（固定文言 {J_SHOW_LINE_MESSAGE!r}）が 1 本もありません。"
         )
     if not cpu:
         missing.append("CPU 時系列に観測が 1 点もありません。")
@@ -3490,7 +3492,7 @@ def render_required_check(report: Report, inputs: Inputs) -> None:
     scan, cpu, agg = inputs.scan, inputs.cpu, inputs.agg
     report.head("[4] 必要ログ種の検査（要件 2.5）")
     report.line(f"  perf サマリ行      : {len(scan.perf)} 本  → OK")
-    report.line(f"  表示成立点 info!   : {scan.show_count} 本  → OK")
+    report.line(f"  表示成立点の行   : {scan.show_count} 本  → OK")
     report.line(f"  CPU 時系列         : {len(cpu)} 点  → OK")
     report.line(
         f"  実行条件           : {sum(len(items) for _t, items in inputs.sections)} 項目 → OK"

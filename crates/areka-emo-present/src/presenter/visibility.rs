@@ -105,7 +105,15 @@ impl EmoPresenter {
         // 状態の後追い推測（`applied` や `current_surface_id` の照合）で成否を組み立てると、k 不変かつ
         // 失敗という組み合わせを成功と誤読するため、契約そのものを読む。
         let (tx, rx) = reply_channel::<PresentOutcome>();
-        self.apply_show(world, target, surface_id, binds, pattern, Some(tx));
+        self.apply_show(
+            world,
+            target,
+            surface_id,
+            binds,
+            pattern,
+            Some(tx),
+            !was_visible,
+        );
         match rx.recv() {
             Ok(Ok(())) => {}
             Ok(Err(e)) => {
