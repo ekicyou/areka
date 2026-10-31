@@ -21,8 +21,8 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GW_HWNDNEXT, GWL_EXSTYLE, GetTopWindow, GetWindow, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_EX_TOPMOST,
+    GW_HWNDNEXT, GWL_EXSTYLE, GetTopWindow, GetWindow, HWND_NOTOPMOST, HWND_TOPMOST,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, WS_EX_TOPMOST,
 };
 
 use super::WindowHandle;
@@ -79,13 +79,14 @@ pub(crate) fn back_to_front(
     keyed.into_iter().map(|(_, w)| w).collect()
 }
 
-/// 純関数：指令 → 挿入位置（Enter = `HWND_TOPMOST`・Leave = `HWND_NOTOPMOST`・Raise = `HWND_TOP`）。
+/// 純関数：指令 → 1 回目の挿入位置（Enter・Raise = `HWND_TOPMOST`・Leave = `HWND_NOTOPMOST`）。
+///
+/// Raise は当てる前に帯の外だった窓を、続けて `HWND_NOTOPMOST` で帯の外の最上へ戻す
+/// （[`apply_op`]・帯は変えない＝要件 2.10）。
 pub(crate) fn band_insert_after(op: BandOp) -> HWND {
     match op {
-        BandOp::Enter => HWND_TOPMOST,
+        BandOp::Enter | BandOp::Raise => HWND_TOPMOST,
         BandOp::Leave => HWND_NOTOPMOST,
-        // HWND_TOP は帯を変えない（オフで手前へ出した窓は普通の窓のまま・要件 2.10）。
-        BandOp::Raise => HWND_TOP,
     }
 }
 
@@ -158,17 +159,36 @@ fn apply_op(world: &World, op: BandOp, entities: &[Entity]) {
     }
     let ordered = back_to_front(&targets, |hwnd| ranks.get(&key(hwnd)).copied());
 
-    let insert_after = band_insert_after(op);
-    let mut applied = 0usize;
-    for (_, hwnd) in &ordered {
-        match os_write(*hwnd, insert_after) {
-            Ok(()) => applied += 1,
-            // 1 枚の失敗で止めず、残りの窓を書く。
-            Err(error) => {
-                warn!(hwnd = format!("0x{:X}", key(*hwnd)), ?op, %error, "[window_band] SetWindowPos failed")
-            }
+    // 裏のプロセスは HWND_TOP では入力先の窓の手前へ出られない（SetWindowPos の注記・7.1 の 5 回目）。
+    // Raise は帯の最上へ上げてから、当てる前に帯の外だった窓を帯の外の最上へ戻す（案 A）。
+    let back_out: Vec<HWND> = match op {
+        BandOp::Raise => ordered
+            .iter()
+            .map(|(_, hwnd)| *hwnd)
+            .filter(|hwnd| os_in_band(*hwnd) != Some(true))
+            .collect(),
+        _ => Vec::new(),
+    };
+    let mut failed = Vec::new();
+    let mut write = |hwnd: HWND, insert_after: HWND| {
+        // 1 枚の失敗で止めず、残りの窓を書く。
+        if let Err(error) = os_write(hwnd, insert_after) {
+            warn!(hwnd = format!("0x{:X}", key(hwnd)), ?op, %error, "[window_band] SetWindowPos failed");
+            failed.push(key(hwnd));
         }
+    };
+    let insert_after = band_insert_after(op);
+    for (_, hwnd) in &ordered {
+        write(*hwnd, insert_after);
     }
+    for hwnd in &back_out {
+        write(*hwnd, HWND_NOTOPMOST);
+    }
+    // 当てた数＝全部の書き込みが通った窓の数。
+    let applied = ordered
+        .iter()
+        .filter(|(_, hwnd)| !failed.contains(&key(*hwnd)))
+        .count();
 
     if let Some(expected) = expected_band(op) {
         for (_, hwnd) in &ordered {
@@ -248,7 +268,9 @@ fn os_in_band(hwnd: HWND) -> Option<bool> {
 
 /// 帯を直に書く（位置・大きさ・活性を変えない＝要件 2.6）。
 fn os_write(hwnd: HWND, insert_after: HWND) -> windows::core::Result<()> {
-    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+    // 持ち主の並べ直しを止める: 実機（task 7.1 の 2 回目）で持ち主の 1 回の書き込みが OS の
+    // 持ち主と持たれ窓の並べ直しに落とされ、持たれ窓だけが帯へ上がった。窓は 1 枚ずつ自分で書く。
+    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
     #[cfg(test)]
     if let Some(scripted) = tests::double::write(hwnd, insert_after, flags) {
         return scripted;

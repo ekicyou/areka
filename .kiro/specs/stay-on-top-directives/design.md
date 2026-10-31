@@ -120,13 +120,13 @@ graph TB
 オン・オフ・手前へ出すは、どれも「ゴーストの窓を、今の並びを保ったまま、ある帯の最上へ置く」である。帯の働きは次の 1 つの手順で 3 つを行う。
 
 1. 対象の窓（HWND の付いたゴーストの窓の全部・隠れている窓も含む）の今の重なりの順位を、最上の窓から `GW_HWNDNEXT` で辿って測る（上限 4096 枚・測れなかった窓は奥の端へ置き `warn!`）。
-2. 奥の窓から手前の窓の順に、1 枚ずつ `SetWindowPos(窓, 指定, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)` を直に書く（予約の列を通さない）。指定は 入る＝`HWND_TOPMOST`・出る＝`HWND_NOTOPMOST`・手前へ出す＝`HWND_TOP`。
+2. 奥の窓から手前の窓の順に、1 枚ずつ `SetWindowPos(窓, 指定, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER)` を直に書く（予約の列を通さない）。指定は 入る＝`HWND_TOPMOST`・出る＝`HWND_NOTOPMOST`・手前へ出す＝`HWND_TOPMOST`。手前へ出すは続けて、当てる前に帯の外だった窓だけへ、奥から順にもう 1 回 `HWND_NOTOPMOST` を書いて帯の外の最上へ戻す（帯の中の窓は 1 回だけ）。`HWND_TOP` を使わないのは、入力先を変える許しの無いプロセス（裏の areka）は `HWND_TOP` では入力先の窓の手前へ出られず、OS が挿入位置を黙って置き換えるからである（`SetWindowPos` の注記・7.1 の 5 回目で実測・6 回目の確かめ E で `HWND_TOPMOST` → `HWND_NOTOPMOST` なら出られることを実測・2026-10-31 開発者の裁定「案 A」）。
 3. 入る・出るのときは、当てた後に各窓の帯の印を読み直し、合わない窓を `warn!` で残す。
 
 どの指定も「その窓をその帯の最上へ置く」なので、奥から順に当てると最後の並びは当てた順＝元の並びになる。
 
 - **R1（所有の根を上げると持たれる窓も上がるか）に寄りかからない**: 上がっても上がらなくても、各窓の位置は最後に当てた 1 回で決まる。
-- **R3（`SWP_NOOWNERZORDER` の要否）に寄りかからない**: 持たれる窓が一緒に動いても動かなくても、続く窓への 1 回が上書きする。持ち主が奥・持たれる窓が手前の決まり（OS が守る）は、今の並びが既に満たしているので、奥から順に当てても破らない。
+- **R3（`SWP_NOOWNERZORDER` の要否）は実機で「要る」と分かった**: 当初は「持たれる窓が一緒に動いても動かなくても、続く窓への 1 回が上書きする」として寄りかからない形にしたが、7.1 の 2 回目の走りで、持ち主（キャラクター）への 1 回が OS の持ち主と持たれ窓の並べ直しに落とされ、持たれる窓（バルーン）だけが帯へ上がり持ち主は元の位置に残った（`band mismatch after apply`・他のアプリの窓が手前のときに出た）。よって持ち主の並べ直しを止め（`SWP_NOOWNERZORDER`）、各窓を自分への 1 回だけで置く。持たれる窓も的に入っていて 1 枚ずつ書かれるので、持ち主が持たれる窓を引き連れなくても、奥から順に当てた最後の並びは元の並び（持ち主が奥・持たれる窓が手前）のままになる。
 - **R2（帯から落とす既存の書き込み）**: 研究 12.1 で本番の書き込みを 2 か所に読み切り、帯の窓どうしでは落ちない形にする（組の是正への 1 条件・下の `PairFixBandCondition`）。それでも OS が帯を変えなかった窓は手順 3 が記録する。実機での確かめはタスクに置く。
 
 ### Technology Stack
@@ -261,7 +261,7 @@ flowchart TB
 | 2.7 | 指令を出したゴーストの窓だけ | WindowStatePhase（`GhostWindows` の entity だけに印） | — | — |
 | 2.8 | オンの重ねは動かさない | WindowStatePhase | `decide_transition` → `Unchanged` | 寿命 |
 | 2.9 | `\v` は並びを保ち同じ巡で 1 回・状態は変えない | WindowStatePhase・WindowBand | `BandOp::Raise` | 指令 1 つ |
-| 2.10 | `\v` の後に他のアプリが活性になればオフなら今の決まり | WindowBand（`HWND_TOP` は帯を変えない＝印を残さない） | — | — |
+| 2.10 | `\v` の後に他のアプリが活性になればオフなら今の決まり | WindowBand（`HWND_TOPMOST` の後に帯の外だった窓を `HWND_NOTOPMOST` で戻す＝印を残さない） | — | — |
 | 3.1 | オン→オフで全部の窓を帯から外し並びを保つ | WindowStatePhase・WindowBand | `BandOp::Leave` | 指令 1 つ |
 | 3.2 | オフの重ねは動かさない | WindowStatePhase | `Unchanged` | 寿命 |
 | 3.3 | オフのあいだは今の決まり | PairFixBandCondition（キャラクターが帯の外なら今と同じ） | `decide_pair_fix` | — |
@@ -454,7 +454,7 @@ pub(crate) fn log_stay_on_top_discard(world: &bevy_ecs::world::World, reason: Di
 - 本番で `HWND_TOPMOST`・`HWND_NOTOPMOST` を書くのはこのファイルだけ（ツールチップの既存の 1 か所を除く）。状態（オン・オフ）は持たない。
 - 系 `apply_window_band` は areka の `wire_zorder_pair` で確定段の並び `(establish_owner_links, apply_window_band, apply_zorder_pair_maintenance, apply_zorder_chain).chain()` の 2 番目に載る（同じ巡・組の是正と鎖の適用系の前）。組の是正は予約の列に積まれて巡の終わりに流れるので、帯を当てる前に置くと「帯を当てる前の観測で決めた是正が、帯を当てた後に上書きする」崩れ（バルーンが帯から落ちる・隣り合いが崩れる・オフの巡で他のアプリの帯の窓の後ろへ引き戻される）が起きない。UI スレッド固定（`NonSendMarker`）。
 - 系の 1 回の仕事: ⑴ 列の指令を積まれた順に当てる（「帯を当てる手順」）。entity が居ない・HWND がまだ無い窓は飛ばして `debug!`（後から HWND が付けば ⑵ が拾う）。⑵ この巡に HWND が付いた窓（`Added<WindowHandle>`）のうち印のある窓の帯を読み、帯に居なければ `Enter` を当てる（作る時点で間に合わなかったときの保険）。⑶ 列を空にする。
-- 書き込みは `guarded_set_window_pos` で直に行い、`SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` だけを立てる（位置・大きさ・活性・スタイルを変えない＝2.6）。`Raise` は `HWND_TOP` なので帯を変えない（オフで手前へ出した窓は普通の窓のまま＝他のアプリが活性になれば今の決まりで奥へ回る・2.10）。
+- 書き込みは `guarded_set_window_pos` で直に行い、`SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER` だけを立てる（位置・大きさ・活性・スタイルを変えない＝2.6・持ち主の並べ直しを止める＝上の R3）。`Raise` は帯の最上へ上げてから、当てる前に帯の外だった窓を `HWND_NOTOPMOST` で戻すので、帯を変えない（オフで手前へ出した窓は普通の窓のまま＝他のアプリが活性になれば今の決まりで奥へ回る・2.10）。帯の中の `Raise` は `HWND_TOPMOST` の 1 回。当てる前の帯の印が読めない窓は帯の外とみなして戻す（帯に残すと 2.10 を破るので、そちらへ倒す）。
 - オンのあいだ他のアプリが活性になっても、帯の窓は普通の窓の後ろへ回らない（OS の帯の性質・2.2）。組の是正と鎖の後押しが帯の窓を帯から落とさないことは PairFixBandCondition と研究 12.1 で押さえる。
 
 **Contracts**: Service [x] / State [x] / Batch [x]
@@ -480,7 +480,7 @@ pub fn apply_window_band(world: &mut bevy_ecs::world::World);
 /// 純関数：今の重なりの順位（0 が最上）で奥から手前へ並べる。順位が測れない窓は奥の端へ（元の順を保つ）
 pub(crate) fn back_to_front(windows: &[(bevy_ecs::entity::Entity, HWND)], rank: impl Fn(HWND) -> Option<usize>) -> Vec<(bevy_ecs::entity::Entity, HWND)>;
 
-/// 純関数：指令 → 挿入位置（Enter = HWND_TOPMOST・Leave = HWND_NOTOPMOST・Raise = HWND_TOP）
+/// 純関数：指令 → 1 回目の挿入位置（Enter・Raise = HWND_TOPMOST・Leave = HWND_NOTOPMOST。Raise は帯の外だった窓を続けて HWND_NOTOPMOST で戻す）
 pub(crate) fn band_insert_after(op: BandOp) -> HWND;
 
 /// 純関数：当てた後に帯の印が期待どおりか（Raise は確かめない＝None）

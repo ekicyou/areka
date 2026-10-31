@@ -269,3 +269,67 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
         destroy(hwnd);
     }
 }
+
+/// 実機の 2 回目の走りの形（task 7.1）: 組が 2 つ（鎖なし・キャラクターに持ち主なし）で、
+/// 普通の窓 1 枚の奥に居るところから入る。持ち主（キャラクター）も帯に入り、並びが元のまま、
+/// 普通の窓より手前に居る。実機では持ち主だけが帯へ入らず元の位置に残った
+/// （`[window_band] band mismatch after apply`）。
+///
+/// この試験は実機の赤を**再現しない**（直す前の `SWP_NOOWNERZORDER` なしでも同じプロセスの窓では緑
+/// だった。他のプロセスの窓・DComp・IME の窓が効くと見られる）。直したことの証ではなく、形の回帰の
+/// 見張りとして残す。直したことは 7.1 の実機の走りで確かめる。
+#[test]
+#[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
+fn owners_of_balloons_enter_the_band_from_behind_a_normal_window_on_real_windows() {
+    require_explicit_real_window_run();
+
+    let c1 = create_ghost_shaped(w!("wintf-band-behind-c1"), 40);
+    let b1 = create_ghost_shaped(w!("wintf-band-behind-b1"), 60);
+    let c0 = create_ghost_shaped(w!("wintf-band-behind-c0"), 80);
+    let b0 = create_ghost_shaped(w!("wintf-band-behind-b0"), 100);
+    set_window_owner(b1, c1).expect("owner");
+    set_window_owner(b0, c0).expect("owner");
+    raise_to_top(c1, HWND_TOP);
+    raise_to_top(c0, HWND_TOP);
+    // 他のアプリの窓の代わり（描かれる普通の窓）を組より手前へ。
+    let other = create_toplevel(w!("wintf-band-behind-other"), 0, 120);
+    raise_to_top(other, HWND_TOP);
+    let ours = [b0, c0, b1, c1];
+    assert_eq!(
+        relative_order(&[other, b0, c0, b1, c1]),
+        [other, b0, c0, b1, c1],
+        "前提: 手前から 普通の窓・B0・C0・B1・C1"
+    );
+    assert!(ours.iter().all(|h| !in_band(*h)), "前提: 全部帯の外");
+
+    let mut world = World::new();
+    world.init_resource::<WindowBandQueue>();
+    let entities: Vec<Entity> = ours
+        .iter()
+        .map(|&hwnd| {
+            world
+                .spawn(WindowHandle {
+                    hwnd,
+                    instance: HINSTANCE::default(),
+                })
+                .id()
+        })
+        .collect();
+    run_op(&mut world, BandOp::Enter, &entities);
+
+    let outside: Vec<_> = ours.iter().filter(|h| !in_band(**h)).collect();
+    let order = relative_order(&ours);
+    let other_in_front = visible_in_front_of(&ours).contains(&other);
+    for hwnd in [b0, b1] {
+        let _ = clear_window_owner(hwnd);
+    }
+    for hwnd in [b0, c0, b1, c1, other] {
+        destroy(hwnd);
+    }
+    assert!(
+        outside.is_empty(),
+        "入るの後に全部帯に居るはず（帯の外: {outside:?}・C0={c0:?} C1={c1:?}）"
+    );
+    assert_eq!(order, ours, "入るの後も並びは元のまま");
+    assert!(!other_in_front, "入るの後は普通の窓より手前に居るはず");
+}

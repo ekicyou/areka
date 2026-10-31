@@ -63,12 +63,12 @@ fn back_to_front_keeps_original_order_for_equal_ranks_and_empty_input() {
     assert!(back_to_front(&[], |_| Some(0)).is_empty());
 }
 
-/// 3 つの指令の挿入位置。
+/// 3 つの指令の挿入位置（手前へ出すは帯の最上へ上げる側。帯の外だった窓は後で戻す）。
 #[test]
 fn band_insert_after_maps_each_op_to_its_insert_position() {
     assert_eq!(band_insert_after(BandOp::Enter), HWND_TOPMOST);
     assert_eq!(band_insert_after(BandOp::Leave), HWND_NOTOPMOST);
-    assert_eq!(band_insert_after(BandOp::Raise), HWND_TOP);
+    assert_eq!(band_insert_after(BandOp::Raise), HWND_TOPMOST);
 }
 
 /// 入る・出るは帯の印を確かめ、手前へ出すは確かめない。
@@ -194,11 +194,12 @@ pub(super) mod double {
 
 use double::{Script, with_script};
 
+// 持ち主の並べ直しを止める（SWP_NOOWNERZORDER）: 実機（task 7.1 の 2 回目）で持ち主の書き込みが
+// OS の持ち主と持たれ窓の並べ直しに落とされ、持たれ窓だけが帯へ上がった。
 const FLAGS: SET_WINDOW_POS_FLAGS =
-    SET_WINDOW_POS_FLAGS(SWP_NOMOVE.0 | SWP_NOSIZE.0 | SWP_NOACTIVATE.0);
+    SET_WINDOW_POS_FLAGS(SWP_NOMOVE.0 | SWP_NOSIZE.0 | SWP_NOACTIVATE.0 | SWP_NOOWNERZORDER.0);
 const TOPMOST: isize = -1;
 const NOTOPMOST: isize = -2;
-const TOP: isize = 0;
 
 fn spawn_window(world: &mut World, raw: isize) -> Entity {
     world
@@ -260,10 +261,10 @@ fn applied_line(events: &[log_capture_kit::CapturedEvent]) -> &log_capture_kit::
     lines[0]
 }
 
-/// 今の重なりで奥の窓から手前の窓の順に、位置・大きさ・活性を変えないフラグで書く。
+/// 今の重なりで奥の窓から手前の窓の順に、位置・大きさ・活性と持ち主の並べ直しを変えないフラグで書く。
 /// 当てた結果（指令・当てた数・飛ばした数）が `debug!` に残る。
 #[test]
-fn enter_writes_from_back_to_front_with_no_move_size_activate() {
+fn enter_writes_from_back_to_front_with_no_move_size_activate_owner_zorder() {
     let mut world = new_world();
     let a = spawn_window(&mut world, 0x10);
     let b = spawn_window(&mut world, 0x20);
@@ -311,7 +312,11 @@ fn queued_ops_apply_in_pushed_order_and_queue_ends_empty() {
     let (_, used) = run_once(&mut world, &mut band_schedule(), script);
     assert_eq!(
         used.writes,
-        vec![(0x10, NOTOPMOST, FLAGS), (0x20, TOP, FLAGS)]
+        vec![
+            (0x10, NOTOPMOST, FLAGS),
+            (0x20, TOPMOST, FLAGS),
+            (0x20, NOTOPMOST, FLAGS)
+        ]
     );
     assert!(world.resource::<WindowBandQueue>().ops.is_empty());
 }
@@ -354,7 +359,16 @@ fn unmeasured_window_goes_to_the_back_with_warn() {
         ..Script::default()
     };
     let (events, used) = run_once(&mut world, &mut band_schedule(), script);
-    assert_eq!(used.writes, vec![(0x20, TOP, FLAGS), (0x10, TOP, FLAGS)]);
+    // 帯の印が読めない窓は帯の外とみなし、上げてから戻す（2 回とも奥から）。
+    assert_eq!(
+        used.writes,
+        vec![
+            (0x20, TOPMOST, FLAGS),
+            (0x10, TOPMOST, FLAGS),
+            (0x20, NOTOPMOST, FLAGS),
+            (0x10, NOTOPMOST, FLAGS)
+        ]
+    );
     let warns = warns_with(&events, "rank not measured");
     assert_eq!(warns.len(), 1, "{events:?}");
     assert_eq!(warns[0].field_str("hwnd"), Some("0x20"));
@@ -377,11 +391,19 @@ fn write_failure_is_warned_and_remaining_windows_are_written() {
     let (events, used) = run_once(&mut world, &mut band_schedule(), script);
     assert_eq!(
         used.writes,
-        vec![(0x30, TOP, FLAGS), (0x20, TOP, FLAGS), (0x10, TOP, FLAGS)]
+        vec![
+            (0x30, TOPMOST, FLAGS),
+            (0x20, TOPMOST, FLAGS),
+            (0x10, TOPMOST, FLAGS),
+            (0x30, NOTOPMOST, FLAGS),
+            (0x20, NOTOPMOST, FLAGS),
+            (0x10, NOTOPMOST, FLAGS)
+        ]
     );
+    // 失敗した窓は 2 回とも書いて 2 回とも残す。当てた数は全部の書き込みが通った窓の数。
     let warns = warns_with(&events, "SetWindowPos failed");
-    assert_eq!(warns.len(), 1, "{events:?}");
-    assert_eq!(warns[0].field_str("hwnd"), Some("0x20"));
+    assert_eq!(warns.len(), 2, "{events:?}");
+    assert!(warns.iter().all(|w| w.field_str("hwnd") == Some("0x20")));
     assert_eq!(applied_line(&events).field("applied"), Some("2"));
 }
 
@@ -424,6 +446,46 @@ fn band_mismatch_after_enter_and_leave_is_warned_but_raise_is_not_checked() {
         warns_with(&events, "band mismatch").is_empty(),
         "{events:?}"
     );
+}
+
+/// 手前へ出すは、全部の窓を奥から帯の最上へ上げ、当てる前に帯の外だった窓だけを奥から
+/// 帯の外の最上へ戻す（案 A・裏のプロセスでも入力先の窓の手前へ出る）。帯の中の窓は 1 回だけ。
+/// 戻した窓は帯の外のまま、帯の中の窓は帯のままで、帯の食い違いの `warn!` は出ない。
+#[test]
+fn raise_lifts_all_and_returns_only_windows_that_were_outside_the_band() {
+    let mut world = new_world();
+    let a = spawn_window(&mut world, 0x10);
+    let b = spawn_window(&mut world, 0x20);
+    let c = spawn_window(&mut world, 0x30);
+    world.clear_trackers();
+    queue(&mut world, BandOp::Raise, vec![a, b, c]);
+    let script = Script {
+        z: vec![0x10, 0x20, 0x30],
+        in_band: [(0x10, true), (0x20, false), (0x30, false)].into(),
+        ..Script::default()
+    };
+    let (events, used) = run_once(&mut world, &mut band_schedule(), script);
+    assert_eq!(
+        used.writes,
+        vec![
+            (0x30, TOPMOST, FLAGS),
+            (0x20, TOPMOST, FLAGS),
+            (0x10, TOPMOST, FLAGS),
+            (0x30, NOTOPMOST, FLAGS),
+            (0x20, NOTOPMOST, FLAGS)
+        ]
+    );
+    assert_eq!(
+        [0x10, 0x20, 0x30].map(|k| used.in_band.get(&k).copied()),
+        [Some(true), Some(false), Some(false)]
+    );
+    assert!(
+        warns_with(&events, "band mismatch").is_empty(),
+        "{events:?}"
+    );
+    let applied = applied_line(&events);
+    assert_eq!(applied.field("op"), Some("Raise"));
+    assert_eq!(applied.field("applied"), Some("3"));
 }
 
 /// この巡に HWND が付いた印のある窓が帯の外なら入るを当て、帯に居れば書かない。
@@ -473,7 +535,15 @@ fn window_beyond_rank_walk_limit_is_unmeasured_and_goes_to_the_back() {
         ..Script::default()
     };
     let (events, used) = run_once(&mut world, &mut band_schedule(), script);
-    assert_eq!(used.writes, vec![(0x20, TOP, FLAGS), (0x10, TOP, FLAGS)]);
+    assert_eq!(
+        used.writes,
+        vec![
+            (0x20, TOPMOST, FLAGS),
+            (0x10, TOPMOST, FLAGS),
+            (0x20, NOTOPMOST, FLAGS),
+            (0x10, NOTOPMOST, FLAGS)
+        ]
+    );
     let warns = warns_with(&events, "rank not measured");
     assert_eq!(warns.len(), 1, "{events:?}");
     assert_eq!(warns[0].field_str("hwnd"), Some("0x20"));
