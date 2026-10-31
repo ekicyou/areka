@@ -35,6 +35,10 @@
 //! 形の誤り（[`shape_issues`]）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
 //! ここで 1 度だけ出す。[`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
+//! 同じ中身を通る [`load_shell_target_quiet`]（採寸の読み）は上の読み込みの記録を 1 本も出さず、
+//! 読み込みを `Err` で終える 3 つの失敗の `error!` だけを出す（spec: placement-measure-bake-once
+//! 要件 3.1・3.6）。
+//!
 //! 宛先は既定の target（`areka_emo_present::shell_target`）、文言はスコープの接頭辞 `shell:`
 //! で始め、値は構造化フィールドで渡す（steering `logging.md`・design「Monitoring」）。
 
@@ -56,6 +60,7 @@ use areka_parsers::shell::{
 };
 
 use crate::balloon::face_digits_of;
+use crate::load_records::LoadRecords;
 
 /// シェルの面定義ファイル名（読むのは [`load_shell_target`] の 1 回だけ）。
 const SURFACES_TXT: &str = "surfaces.txt";
@@ -319,23 +324,48 @@ pub fn load_shell_target(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
 ) -> Result<ShellTarget, ShellLoadError> {
-    let names = list_file_names(shell_dir)?;
+    load_shell_target_with(shell_dir, decoder, LoadRecords::Emit)
+}
+
+/// [`load_shell_target`] と同じ中身で読み、読み込みの記録を出さない（採寸の読み・
+/// spec: placement-measure-bake-once 要件 3.1・3.6）。戻り値は [`load_shell_target`] と等しい。
+///
+/// # Errors
+///
+/// [`load_shell_target`] と同じ 3 つ。読み込みを `Err` で終えるその失敗の `error!` だけは出す。
+pub fn load_shell_target_quiet(
+    shell_dir: &Path,
+    decoder: &impl ElementDecoder,
+) -> Result<ShellTarget, ShellLoadError> {
+    load_shell_target_with(shell_dir, decoder, LoadRecords::Quiet)
+}
+
+/// 読み込みの中身（1 本）。読み込みの記録は `records` が出すときだけ出し、3 つの失敗の
+/// `error!` は `records` に関わらず出す。
+fn load_shell_target_with(
+    shell_dir: &Path,
+    decoder: &impl ElementDecoder,
+    records: LoadRecords,
+) -> Result<ShellTarget, ShellLoadError> {
+    let names = list_file_names(shell_dir, records)?;
     let selection = select_surface_images(&names);
 
     // 重複と桁溢れは [`build_shell_target`] へ渡すと消えるので、渡す前に記録する。
-    for (id, adopted, dropped) in &selection.duplicates {
-        tracing::warn!(
-            surface_id = *id,
-            adopted = adopted.as_str(),
-            dropped = ?dropped,
-            "shell: 同じ番号へ解決する面の画像が複数在る（ファイル名の辞書順で最小を採用・R1.5）"
-        );
-    }
-    for file in &selection.overflow {
-        tracing::debug!(
-            file = file.as_str(),
-            "shell: 数字が面の番号として大きすぎるので面の画像と認めない（R1.6）"
-        );
+    if records.emits() {
+        for (id, adopted, dropped) in &selection.duplicates {
+            tracing::warn!(
+                surface_id = *id,
+                adopted = adopted.as_str(),
+                dropped = ?dropped,
+                "shell: 同じ番号へ解決する面の画像が複数在る（ファイル名の辞書順で最小を採用・R1.5）"
+            );
+        }
+        for file in &selection.overflow {
+            tracing::debug!(
+                file = file.as_str(),
+                "shell: 数字が面の番号として大きすぎるので面の画像と認めない（R1.6）"
+            );
+        }
     }
 
     // `surfaces.txt` が無い（NotFound）ときは空の定義として続け、面の画像だけで組む（要件 6.1）。
@@ -379,11 +409,13 @@ pub fn load_shell_target(
     let descript = match std::fs::read(&descript_path) {
         Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Ansi)),
         Err(error) => {
-            tracing::warn!(
-                path = %descript_path.display(),
-                error = %error,
-                "shell: descript.txt が読めないので透過の宣言なしとして続ける"
-            );
+            if records.emits() {
+                tracing::warn!(
+                    path = %descript_path.display(),
+                    error = %error,
+                    "shell: descript.txt が読めないので透過の宣言なしとして続ける"
+                );
+            }
             None
         }
     };
@@ -392,81 +424,83 @@ pub fn load_shell_target(
         "seriko.use_self_alpha",
         shell_dir,
         descript.as_deref(),
-        crate::load_records::LoadRecords::Emit,
+        records,
     );
 
     let mut target =
         build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder, use_self_alpha);
     target.cursor_braces = areka_parsers::shell::parse_cursor_braces(&content);
 
-    if target.ignored_pna != 0 {
-        tracing::warn!(
-            shell_dir = %shell_dir.display(),
-            ignored_pna = target.ignored_pna,
-            "shell: 絵に添えてある .pna を使わずに表示する"
-        );
-    }
+    if records.emits() {
+        if target.ignored_pna != 0 {
+            tracing::warn!(
+                shell_dir = %shell_dir.display(),
+                ignored_pna = target.ignored_pna,
+                "shell: 絵に添えてある .pna を使わずに表示する"
+            );
+        }
 
-    for (&surface_id, file) in &target.base_images.shadowed {
-        tracing::debug!(
-            surface_id,
-            file = file.as_str(),
-            "shell: element0 が在るため面の画像を土台に使わなかった（R6.2）"
-        );
-    }
-    for &(surface_id, dangling_target) in &target.dangling {
-        tracing::warn!(
-            surface_id,
-            target = dangling_target,
-            "shell: コマの相手の面が宣言も画像も無い（描かずに続行・R3.5）"
-        );
-    }
-    for error in &target.bake_errors {
-        tracing::error!(error = %error, "shell: shell bake で脱落した element");
-    }
-    for issue in &target.nest_report.issues {
-        log_nest_issue(issue);
-    }
-    if let Some(world) = &target.world {
-        log_shape_issues(&shape_issues(world));
-    }
-    for issue in &target.box_report.issues {
-        log_box_issue(issue);
-    }
-    for line in &undrawn {
-        tracing::warn!(
-            heading = line.heading.as_str(),
-            element = line.element.as_str(),
-            method = line.method.as_str(),
-            "shell: areka が描けない描画メソッドの element定義を描かない"
-        );
-    }
-    if !target.boxes.is_empty() {
-        tracing::info!(
-            braces = boxes
-                .definitions
-                .iter()
-                .filter(|d| matches!(d, BoxDefinition::Brace(_)))
-                .count(),
-            surfaces = target.box_surfaces,
-            "shell: 箱を読んだ（書かれた balloon.*ブレスの数・箱の置き場所を持つサーフェスの数）"
-        );
-    }
-    if image_only {
+        for (&surface_id, file) in &target.base_images.shadowed {
+            tracing::debug!(
+                surface_id,
+                file = file.as_str(),
+                "shell: element0 が在るため面の画像を土台に使わなかった（R6.2）"
+            );
+        }
+        for &(surface_id, dangling_target) in &target.dangling {
+            tracing::warn!(
+                surface_id,
+                target = dangling_target,
+                "shell: コマの相手の面が宣言も画像も無い（描かずに続行・R3.5）"
+            );
+        }
+        for error in &target.bake_errors {
+            tracing::error!(error = %error, "shell: shell bake で脱落した element");
+        }
+        for issue in &target.nest_report.issues {
+            log_nest_issue(issue);
+        }
+        if let Some(world) = &target.world {
+            log_shape_issues(&shape_issues(world));
+        }
+        for issue in &target.box_report.issues {
+            log_box_issue(issue);
+        }
+        for line in &undrawn {
+            tracing::warn!(
+                heading = line.heading.as_str(),
+                element = line.element.as_str(),
+                method = line.method.as_str(),
+                "shell: areka が描けない描画メソッドの element定義を描かない"
+            );
+        }
+        if !target.boxes.is_empty() {
+            tracing::info!(
+                braces = boxes
+                    .definitions
+                    .iter()
+                    .filter(|d| matches!(d, BoxDefinition::Brace(_)))
+                    .count(),
+                surfaces = target.box_surfaces,
+                "shell: 箱を読んだ（書かれた balloon.*ブレスの数・箱の置き場所を持つサーフェスの数）"
+            );
+        }
+        if image_only {
+            tracing::info!(
+                shell_dir = %shell_dir.display(),
+                surfaces_txt,
+                surfaces = target.images.len(),
+                "shell: surfaces.txt が面を定義しないので、面の画像だけで面を組んだ（要件 7.3）"
+            );
+        }
         tracing::info!(
             shell_dir = %shell_dir.display(),
-            surfaces_txt,
-            surfaces = target.images.len(),
-            "shell: surfaces.txt が面を定義しないので、面の画像だけで面を組んだ（要件 7.3）"
+            recognized = target.images.len(),
+            used = target.base_images.used.len(),
+            shadowed = target.base_images.shadowed.len(),
+            "shell: シェルの面の画像の一覧が終わった（R6.1）"
         );
     }
-    tracing::info!(
-        shell_dir = %shell_dir.display(),
-        recognized = target.images.len(),
-        used = target.base_images.used.len(),
-        shadowed = target.base_images.shadowed.len(),
-        "shell: シェルの面の画像の一覧が終わった（R6.1）"
-    );
 
     Ok(target)
 }
@@ -759,7 +793,7 @@ fn log_box_issue(issue: &BoxIssue) {
 ///
 /// バルーンの `enumerate_file_names` を流用しないのは、失敗の型がバルーン専用
 /// （`PresentError`）で、フォルダを除かないためである。
-fn list_file_names(shell_dir: &Path) -> Result<Vec<String>, ShellLoadError> {
+fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>, ShellLoadError> {
     let read_dir = std::fs::read_dir(shell_dir).map_err(|source| {
         tracing::error!(
             shell_dir = %shell_dir.display(),
@@ -779,11 +813,13 @@ fn list_file_names(shell_dir: &Path) -> Result<Vec<String>, ShellLoadError> {
         let entry = match entry {
             Ok(entry) => entry,
             Err(error) => {
-                tracing::warn!(
-                    shell_dir = %shell_dir.display(),
-                    error = %error,
-                    "shell: フォルダの 1 件の取得に失敗（その 1 件を飛ばして続行）"
-                );
+                if records.emits() {
+                    tracing::warn!(
+                        shell_dir = %shell_dir.display(),
+                        error = %error,
+                        "shell: フォルダの 1 件の取得に失敗（その 1 件を飛ばして続行）"
+                    );
+                }
                 continue;
             }
         };
@@ -792,11 +828,13 @@ fn list_file_names(shell_dir: &Path) -> Result<Vec<String>, ShellLoadError> {
             // フォルダ（とその他の種別）は面の画像と認めない＝失敗ではないので記録しない。
             Ok(_) => continue,
             Err(error) => {
-                tracing::warn!(
-                    file = %entry.file_name().to_string_lossy(),
-                    error = %error,
-                    "shell: フォルダの 1 件の種別の読み取りに失敗（その 1 件を飛ばして続行）"
-                );
+                if records.emits() {
+                    tracing::warn!(
+                        file = %entry.file_name().to_string_lossy(),
+                        error = %error,
+                        "shell: フォルダの 1 件の種別の読み取りに失敗（その 1 件を飛ばして続行）"
+                    );
+                }
                 continue;
             }
         }
@@ -873,3 +911,7 @@ mod element_base_tests;
 #[cfg(test)]
 #[path = "shell_target_shape_issues_tests.rs"]
 mod shape_issues_tests;
+
+#[cfg(test)]
+#[path = "shell_target_quiet_tests.rs"]
+mod quiet_tests;
