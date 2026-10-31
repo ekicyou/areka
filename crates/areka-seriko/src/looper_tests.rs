@@ -15,6 +15,7 @@ fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
         index,
         method: DrawMethod::new("overlay".to_string()),
         surface_id,
+        target: surface_id.to_string(),
         wait,
         x: 0,
         y: 0,
@@ -119,6 +120,7 @@ pub(crate) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig
         shell_table,
         balloon_tables: BTreeMap::new(),
         rng,
+        pick_rng: crate::seeded_rng(0),
     }
 }
 
@@ -461,6 +463,7 @@ fn lottery_consumes_shell_before_balloon() {
         shell_table: shell_t,
         balloon_tables: BTreeMap::from([(scope.clone(), balloon_t)]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     });
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     states.apply(&scope, SurfaceTarget::Show(10)); // Shell shown surface 10
@@ -490,6 +493,7 @@ fn balloon_tables_are_looked_up_per_scope() {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0), (ActorKey::from("1"), t1)]),
         rng: always_fire(),
+        pick_rng: crate::seeded_rng(0),
     });
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let s0 = ActorKey::from("0");
@@ -539,6 +543,7 @@ fn absent_scope_balloon_table_is_inert() {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0)]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     });
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
     let s1 = ActorKey::from("1");

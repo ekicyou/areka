@@ -66,6 +66,7 @@ impl Rig {
             shell_table: AnimationTable::empty(),
             balloon_tables: BTreeMap::from([(scope(), film_table())]),
             rng: always_fire(),
+            pick_rng: crate::seeded_rng(0),
         })
     }
 
@@ -220,6 +221,7 @@ fn flows_without_notes_emit_no_stage_ack() {
         shell_table: emo2_shell_table(),
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng: always_fire(),
+        pick_rng: crate::seeded_rng(0),
     });
     rig.tick(0);
     rig.cue(CueCommand::Emote { key: "0".into() });
@@ -265,6 +267,7 @@ fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
             shell_table: AnimationTable::empty(),
             balloon_tables: BTreeMap::from([(scope(), film_table())]),
             rng: always_fire(),
+            pick_rng: crate::seeded_rng(0),
         },
         out,
         Some(clock),

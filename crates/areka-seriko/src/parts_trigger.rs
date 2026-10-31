@@ -86,14 +86,23 @@ pub(super) fn fire_part_triggers<'a>(
         let before = was_playing
             .iter()
             .find(|(k, _)| *k == key)
-            .map(|&(_, started_at_ms)| PartAnim::Playing { started_at_ms });
+            .map(|&(_, started_at_ms)| PartAnim::Playing {
+                started_at_ms,
+                acts_through: None,
+            });
         let playing_at = |at| {
             before.is_some() && matches!(look(anim, before, at), Look::Nothing | Look::Frame(_))
         };
         let Some(started_at_ms) = state.poll(anim, at_ms, playing_at, talk) else {
             continue;
         };
-        clocks.insert(key, PartAnim::Playing { started_at_ms });
+        clocks.insert(
+            key,
+            PartAnim::Playing {
+                started_at_ms,
+                acts_through: None,
+            },
+        );
         match anim.trigger {
             LoopTrigger::Runonce => tracing::info!(
                 scope = scope.as_str(),

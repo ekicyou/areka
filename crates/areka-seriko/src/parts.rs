@@ -33,17 +33,19 @@
 //! 時計は [`PartClocks::clear`]（その面の種類の表の差し替え）で捨てる（要件 5.8）。抽選の発火・停止・
 //! 末尾での保持の記録は `advance` だけが出す。`always` の時計の誕生と破棄は、生まれた・捨てたところで出す。
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::num::{NonZeroU32, NonZeroU64};
 
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
+use crate::calls::CallOutcome;
 use crate::looper::{log_play_end, pattern_frame};
 use crate::state::Slot;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
 use crate::timeline::{
-    AlwaysView, FrameStatus, LoopRng, always_at, current_frame_index, frame_at, should_fire,
+    AlwaysView, FrameStatus, LoopRng, always_visible, current_frame_index, frame_at, should_fire,
+    visible_frame,
 };
 use crate::trigger::{Armed, TalkWindow};
 
@@ -52,11 +54,20 @@ use crate::trigger::{Armed, TalkWindow};
 mod part_trigger;
 use part_trigger::fire_part_triggers;
 
+// 部品の働きのコマの配線（spec: seriko-pattern-calls 要件 3.8）。
+#[path = "parts_calls.rs"]
+mod part_calls;
+use part_calls::{place, run_part_calls};
+
 /// animation 1 本の時計。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PartAnim {
     /// 再生中（開始の時刻）。今のコマは `frame_at(経過)` で求める。
-    Playing { started_at_ms: u64 },
+    Playing {
+        started_at_ms: u64,
+        /// 働きのコマを当て終えた時刻（まだなら `None`・spec: seriko-pattern-calls）。
+        acts_through: Option<u64>,
+    },
     /// `-1` の無い末尾まで進んで、最後のコマを保っている（抽選の対象）。
     Residual { frame_index: usize },
 }
@@ -72,6 +83,8 @@ struct Container {
     /// 見えている部品 → 引き金の状態（spec: areka-P0-seriko-trigger-intervals 要件 5.9）。`runonce`・
     /// `periodic`・`talk` を持つ部品が見えている間だけ在る（部品は文字の数えを持たない）。
     armed: BTreeMap<PartKey, Armed>,
+    /// 呼び出しで止めた `always`（面を出すまで始め直さない・spec: seriko-pattern-calls 4.5・3.8）。
+    stopped: BTreeSet<ClockKey>,
 }
 
 /// スコープ → 面の種類の 2 段で持つのは、刻みごとにスコープの名前を写さずに引くため。
@@ -123,7 +136,7 @@ fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now_ms: u64) -> Look {
     match clock {
         None => Look::Nothing,
         Some(PartAnim::Residual { frame_index }) => Look::Frame(frame_index),
-        Some(PartAnim::Playing { started_at_ms }) => {
+        Some(PartAnim::Playing { started_at_ms, .. }) => {
             let elapsed = now_ms.saturating_sub(started_at_ms);
             match frame_at(&anim.frames, elapsed) {
                 FrameStatus::Pending => Look::Nothing,
@@ -143,13 +156,11 @@ enum Gate {
     /// 抽選する（頻度 K）。
     Lottery(u32),
     /// `always`（抽選しない・乱数を引かない）。
-    Always {
-        period_ms: NonZeroU64,
-        laps: Option<NonZeroU32>,
-    },
+    Always { laps: Option<NonZeroU32> },
     /// `runonce`・`periodic`・`talk`（抽選しない・乱数を引かない・着せ替えに依らない・spec:
     /// areka-P0-seriko-trigger-intervals 要件 5.7）。1 段目は在る時計を進めるだけで、始めるかは
-    /// 2 段目の判定が決める。
+    /// 2 段目の判定が決める。呼ばれるだけ（`CallOnly`）もここ: 2 段目は選ばないので自分では
+    /// 始めず、呼ばれて在る時計だけを着せ替えに依らず進める（spec: seriko-pattern-calls 要件 11.1）。
     Trigger,
     /// 対象外（`bind+random` で `binds` に無い・要件 5.12）。
     Off,
@@ -160,10 +171,11 @@ fn gate(anim: &LoopAnimation, binds: &BindSet) -> Gate {
         LoopTrigger::Random { k } => Gate::Lottery(k),
         LoopTrigger::BindRandom { k } if binds.contains(anim.id) => Gate::Lottery(k),
         LoopTrigger::BindRandom { .. } => Gate::Off,
-        LoopTrigger::Always { period_ms, laps } => Gate::Always { period_ms, laps },
-        LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. } => {
-            Gate::Trigger
-        }
+        LoopTrigger::Always { laps, .. } => Gate::Always { laps },
+        LoopTrigger::Runonce
+        | LoopTrigger::Periodic { .. }
+        | LoopTrigger::Talk { .. }
+        | LoopTrigger::CallOnly => Gate::Trigger,
     }
 }
 
@@ -224,11 +236,13 @@ fn write_always(
     laps: Option<NonZeroU32>,
     elapsed_ms: u64,
 ) {
-    let rest = always_at(&anim.frames, period_ms, laps, 0);
-    match always_at(&anim.frames, period_ms, laps, elapsed_ms) {
+    // 働きのコマは前の描くコマを残す（spec: seriko-pattern-calls 1.3・7.7）。`None` は欄に置かない。
+    let rest = always_visible(&anim.frames, period_ms, laps, 0);
+    match always_visible(&anim.frames, period_ms, laps, elapsed_ms) {
         now if now == rest => {}
-        AlwaysView::Frame(i) => write(pattern, part, anim, i),
-        AlwaysView::Nothing => {
+        None => {}
+        Some(AlwaysView::Frame(i)) => write(pattern, part, anim, i),
+        Some(AlwaysView::Nothing) => {
             // 子のコマは全部が絵を指すので「何も出さない」は来ない（子の欄は「消えている」を持てない）。
             if let PartKey::Surface(id) = part {
                 pattern.set_part_blank(id, anim.id);
@@ -247,11 +261,17 @@ fn always_start(
     slot: Slot,
     finite: bool,
 ) -> Option<u64> {
-    if let Some(PartAnim::Playing { started_at_ms }) = clocks.get(&key) {
+    if let Some(PartAnim::Playing { started_at_ms, .. }) = clocks.get(&key) {
         return Some(*started_at_ms);
     }
     let at = at_ms?;
-    clocks.insert(key, PartAnim::Playing { started_at_ms: at });
+    clocks.insert(
+        key,
+        PartAnim::Playing {
+            started_at_ms: at,
+            acts_through: None,
+        },
+    );
     tracing::debug!(
         scope = scope.as_str(),
         slot = ?slot,
@@ -485,9 +505,11 @@ fn progress(
     }
 }
 
-/// コマ `i` を部品 `part` の欄へ書く（絵を指すコマは動く絵の子の欄へ）。
+/// コマ `i` を部品 `part` の欄へ書く（絵を指すコマは動く絵の子の欄へ）。働きのコマなら `i` 以下で
+/// 最後の描くコマを書き、無ければ欄を外す（spec: seriko-pattern-calls 1.3）。
 fn write(pattern: &mut PatternState, part: PartKey, anim: &LoopAnimation, i: usize) {
-    let Some(f) = anim.frames.get(i) else {
+    let Some(f) = visible_frame(&anim.frames, i).and_then(|d| anim.frames.get(d)) else {
+        unwrite(pattern, part, anim.id);
         return;
     };
     match part {
@@ -524,8 +546,9 @@ impl PartClocks {
         open: bool,
         talk: Option<&TalkWindow<'_>>,
         rng: &mut LoopRng,
+        pick: &mut LoopRng,
         pattern: &mut PatternState,
-    ) {
+    ) -> CallOutcome {
         let PartClocks {
             clocks,
             warned_negative,
@@ -538,18 +561,25 @@ impl PartClocks {
             clocks.insert(scope.clone(), HashMap::new());
         }
         let Some(clocks) = clocks.get_mut(scope) else {
-            return;
+            return CallOutcome::default();
         };
         let container = clocks.entry(slot).or_default();
         if !open {
             close(container, table, scope, slot);
         }
-        let Container { clocks, armed } = &mut *container;
+        let Container {
+            clocks,
+            armed,
+            stopped,
+        } = &mut *container;
         // この評価の 1 段目が進める前に再生中だった 3 語の時計の（鍵, 開始の時刻）。2 段目が「開始の
         // 時刻に再生中だったか」を測るのに読む（1 段目が片付けた再生も、ここには残る）。
         let mut was_playing: Vec<(ClockKey, u64)> = Vec::new();
+        // 見える部品の働きのコマの結果（時刻が後の move が勝つ・一番上と合わせるのは呼び手）。
+        let mut shift = CallOutcome::default();
 
-        // 部品 1 つの評価（animation の番号の昇順・design.md「部品 1 つの評価」）。
+        // 部品 1 つの評価（animation の番号の昇順・design.md「部品 1 つの評価」）。始まり（抽選・
+        // `always`・引き金）→ 働きのコマ → コマを置く、の順（spec: seriko-pattern-calls 3.8）。
         let step = |phase: Phase, part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
             if let Phase::Trigger = phase {
@@ -567,11 +597,19 @@ impl PartClocks {
                     talk,
                     false,
                 );
-                for anim in &started {
-                    // 始まった再生を、開始の時刻からこの刻みまでの経過の分だけ進める。コマが無ければ
-                    // （頭の待ちの前・もう止まった）、1 段目が書いた前の再生のコマを外す＝鳴り直した
-                    // 後は新しい再生の経過だけで決まる。
-                    if !progress(
+                if started.is_empty() {
+                    return false;
+                }
+                let (outcome, called) = run_part_calls(
+                    clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
+                );
+                shift = shift.then(outcome);
+                let called = anims.iter().filter(|a| called.contains(&a.id));
+                for anim in started.iter().copied().chain(called) {
+                    // 始まった再生を、開始の時刻からこの刻みまでの経過の分だけ進める。1 段目が書いた
+                    // 前の再生のコマは外す＝鳴り直した後は新しい再生の経過だけで決まる。
+                    unwrite(pattern, part, anim.id);
+                    place(
                         clocks,
                         warned_negative,
                         pattern,
@@ -580,11 +618,9 @@ impl PartClocks {
                         part,
                         anim,
                         now_ms,
-                    ) {
-                        unwrite(pattern, part, anim.id);
-                    }
+                    );
                 }
-                return !started.is_empty();
+                return true;
             }
             sort_by_id(anims, order);
             for &i in order.iter() {
@@ -606,30 +642,19 @@ impl PartClocks {
                         continue;
                     }
                     // `always`: 乱数を引かず、時計が無ければこの時刻で作る（要件 3.1・4.1・4.4）。
-                    // 窓が閉じている間は作らない（無ければ経過 0）。
-                    Gate::Always { period_ms, laps } => {
-                        let at = open.then_some(now_ms);
-                        let started = always_start(clocks, key, at, scope, slot, laps.is_some())
-                            .unwrap_or(now_ms);
-                        let elapsed = now_ms.saturating_sub(started);
-                        write_always(pattern, part, anim, period_ms, laps, elapsed);
+                    // 窓が閉じている間と、呼び出しで止めた間は作らない（無ければ経過 0）。
+                    Gate::Always { laps } => {
+                        if !stopped.contains(&key) {
+                            let at = open.then_some(now_ms);
+                            always_start(clocks, key, at, scope, slot, laps.is_some());
+                        }
                         continue;
                     }
-                    // 3 語: 抽選せず乱数も引かない。在る時計を進めるだけ（始めるかは 2 段目）。
+                    // 3 語と呼ばれるだけ: 抽選せず乱数も引かない。在る時計を進めるだけ（始めるかは 2 段目）。
                     Gate::Trigger => {
-                        if let Some(&PartAnim::Playing { started_at_ms }) = clocks.get(&key) {
+                        if let Some(&PartAnim::Playing { started_at_ms, .. }) = clocks.get(&key) {
                             was_playing.push((key, started_at_ms));
                         }
-                        progress(
-                            clocks,
-                            warned_negative,
-                            pattern,
-                            scope,
-                            slot,
-                            part,
-                            anim,
-                            now_ms,
-                        );
                         continue;
                     }
                 };
@@ -641,6 +666,7 @@ impl PartClocks {
                         key,
                         PartAnim::Playing {
                             started_at_ms: now_ms,
+                            acts_through: None,
                         },
                     );
                     tracing::info!(
@@ -651,16 +677,25 @@ impl PartClocks {
                         "seriko: part 抽選発火（再生開始・先頭コマから・要件 5.1）"
                     );
                 }
-                progress(
-                    clocks,
-                    warned_negative,
-                    pattern,
-                    scope,
-                    slot,
-                    part,
-                    anim,
-                    now_ms,
-                );
+            }
+            let (outcome, _) = run_part_calls(
+                clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
+            );
+            shift = shift.then(outcome);
+            for &i in order.iter() {
+                let anim = &anims[i];
+                if !matches!(gate(anim, binds), Gate::Off) {
+                    place(
+                        clocks,
+                        warned_negative,
+                        pattern,
+                        scope,
+                        slot,
+                        part,
+                        anim,
+                        now_ms,
+                    );
+                }
             }
             false
         };
@@ -670,6 +705,7 @@ impl PartClocks {
         );
 
         drop_unseen_transient(container, table, scope, slot, visible, films);
+        shift
     }
 
     /// 面の切り替え・着せ替えの変化の直後（出来事の時刻 `at_ms`）に、抽選せずに `pattern` の部品の欄を
@@ -690,8 +726,9 @@ impl PartClocks {
         table: &AnimationTable,
         at_ms: Option<u64>,
         open: bool,
+        pick: &mut LoopRng,
         pattern: &mut PatternState,
-    ) {
+    ) -> CallOutcome {
         let PartClocks {
             clocks,
             visible,
@@ -708,10 +745,38 @@ impl PartClocks {
         if !open {
             close(container, table, scope, slot);
         }
-        let Container { clocks, armed } = &mut *container;
+        let Container {
+            clocks,
+            armed,
+            stopped,
+        } = &mut *container;
         let now_ms = at_ms.unwrap_or(0);
         // 窓が閉じている間は時計を作らない（今ある時計を読むだけ）。
         let create_at = at_ms.filter(|_| open);
+        let mut shift = CallOutcome::default();
+        // 時計を書き換えずに今のコマを読んで置く（`always` は周の答え・時計が無ければ載せない）。
+        let put = |clocks: &BTreeMap<ClockKey, PartAnim>,
+                   pattern: &mut PatternState,
+                   part: PartKey,
+                   anim: &LoopAnimation,
+                   at: u64| {
+            let clock = clocks.get(&(part, anim.id)).copied();
+            match (anim.trigger, clock) {
+                (
+                    LoopTrigger::Always { period_ms, laps },
+                    Some(PartAnim::Playing { started_at_ms, .. }),
+                ) => {
+                    let elapsed = at.saturating_sub(started_at_ms);
+                    write_always(pattern, part, anim, period_ms, laps, elapsed);
+                }
+                (LoopTrigger::Always { .. }, _) => {}
+                _ => {
+                    if let Look::Frame(i) | Look::Finished(i) = look(anim, clock, at) {
+                        write(pattern, part, anim, i);
+                    }
+                }
+            }
+        };
         let step = |phase: Phase, part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
             if let Phase::Trigger = phase {
@@ -736,37 +801,46 @@ impl PartClocks {
                     None,
                     true,
                 );
-                for anim in &started {
-                    // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
-                    if let Look::Frame(i) | Look::Finished(i) =
-                        look(anim, clocks.get(&(part, anim.id)).copied(), at)
-                    {
-                        write(pattern, part, anim, i);
-                    }
+                if started.is_empty() {
+                    return false;
                 }
-                return !started.is_empty();
+                let (outcome, called) =
+                    run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+                shift = shift.then(outcome);
+                let called = anims.iter().filter(|a| called.contains(&a.id));
+                for anim in started.iter().copied().chain(called) {
+                    // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
+                    unwrite(pattern, part, anim.id);
+                    put(clocks, pattern, part, anim, at);
+                }
+                return true;
             }
             sort_by_id(anims, order);
             for &i in order.iter() {
                 let anim = &anims[i];
-                let key = (part, anim.id);
-                match gate(anim, binds) {
-                    Gate::Lottery(_) | Gate::Trigger => {}
-                    Gate::Off => continue,
-                    Gate::Always { period_ms, laps } => {
-                        if let Some(started) =
-                            always_start(clocks, key, create_at, scope, slot, laps.is_some())
-                        {
-                            let elapsed = now_ms.saturating_sub(started);
-                            write_always(pattern, part, anim, period_ms, laps, elapsed);
-                        }
-                        continue;
-                    }
-                }
-                if let Look::Frame(i) | Look::Finished(i) =
-                    look(anim, clocks.get(&key).copied(), now_ms)
+                if let Gate::Always { laps } = gate(anim, binds)
+                    && !stopped.contains(&(part, anim.id))
                 {
-                    write(pattern, part, anim, i);
+                    always_start(
+                        clocks,
+                        (part, anim.id),
+                        create_at,
+                        scope,
+                        slot,
+                        laps.is_some(),
+                    );
+                }
+            }
+            // 働きのコマを合図の時刻で当てる（頭のコマを置く前・spec: seriko-pattern-calls 3.8）。
+            if let Some(at) = at_ms {
+                let (outcome, _) =
+                    run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+                shift = shift.then(outcome);
+            }
+            for &i in order.iter() {
+                let anim = &anims[i];
+                if !matches!(gate(anim, binds), Gate::Off) {
+                    put(clocks, pattern, part, anim, now_ms);
                 }
             }
             false
@@ -775,6 +849,7 @@ impl PartClocks {
             table, surface_id, binds, pattern, visible, evaluated, films, step,
         );
         drop_unseen_transient(container, table, scope, slot, visible, films);
+        shift
     }
 
     /// 一番上の再生が無い刻みで部品の経路を通すか: `pattern` の絵に見える部品か見える動く絵の子に、
@@ -791,11 +866,12 @@ impl PartClocks {
     ) -> bool {
         let nest = table.nest_table();
         nest.visible_parts(surface_id, binds, pattern, &mut self.visible);
-        if self
-            .visible
-            .iter()
-            .any(|&p| !table.animations(p).is_empty())
-        {
+        if self.visible.iter().any(|&p| {
+            table
+                .animations(p)
+                .iter()
+                .any(LoopAnimation::moves_by_itself)
+        }) {
             return true;
         }
         nest.visible_films(surface_id, &self.visible, &mut self.films);
@@ -891,3 +967,7 @@ pub(crate) mod film_tests;
 #[cfg(test)]
 #[path = "parts_trigger_tests.rs"]
 mod trigger_tests;
+
+#[cfg(test)]
+#[path = "parts_calls_tests.rs"]
+mod calls_tests;

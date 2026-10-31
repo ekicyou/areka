@@ -6049,27 +6049,37 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:alternativestart_2c_28ID1_2cID2..._29:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+並びの中から等しい確からしさで 1 つを選んで頭から始める。選びは抽選（`random` など）とは別の乱数を引くので、呼び出しを持たないシェルの抽選の結果は変わらない。並びは `(`〜`)` か `[`〜`]` で囲み、`,` か `.` で区切る。
+相手の欄が読めない・相手の番号が表に無い・純 `bind` の中に書いた、のどれも、そのコマは何もせず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:alternativestop_2c_28ID1_2cID2..._29:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+並びの全部から等しい確からしさで 1 つを選んで止める。再生していないものを選んだときは何もしない（SSP で測った結果と同じ）。
+相手の欄が読めない・相手の番号が表に無い・純 `bind` の中に書いた、のどれも、そのコマは何もせず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:always:1"]
@@ -7100,15 +7110,20 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:insert_2cID:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+着せ替え（interval が `bind` だけの animation）の pattern に書いた `insert` は、その位置に相手の着せ替えの絵を差し込む。相手が無効なら何も描かない。行の座標は使わず、相手は自分の座標で描く。巡回する差し込みは 1 度だけ描いて打ち切り、表を作るときに warn! を出す。差し込む側が無効なら、相手は本来の位置に描く。
+相手の欄が読めない・相手が今の面に無いか着せ替えでない・着せ替えでない animation に書いた、のどれも、その位置に何も描かず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:interpolate:1"]
@@ -7267,15 +7282,20 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:move:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。同じ綴りの `move` はさくらスクリプトの命令にもあり areka はそちらを扱うが、それは別のドメインの命令であって、ここの描画メソッドではない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻の順に当てる。この語を描画メソッドとして重ねることはしない（窓の位置のずれとして運ぶ）。
+そのコマの待ちの後に、キャラクター全体（すべての層と当たり判定）を窓ごと、元の表示位置から指定の座標だけずらす。窓の大きさは変えない。ずれは表示の倍率をかけて当てる（SSP はかけない）。ずれは面を出したとき（同じ面の出し直しを含む）にだけ元へ戻る。下の端に揃える置き方では揃えが勝つ。書き出しの写しにはずれは写らない。ずれの持ち主は areka-seriko、窓への当て方は areka の placement::follow::move_shift。
+純 `bind` の中に書いたときは何もせず、表を作るときに warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 絵の重ね方の語・名前を知らず警告を残して描かない（先に要る仕組み: emo の合成器）。束の順位: 72——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:name_2c_5b9a_7fa9_540d:1"]
@@ -7295,18 +7315,19 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 """
 
 [entry."ukadoc:descript_shell_surfaces:never:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+areka-seriko の table::AnimationTable::from_world が `never` の animation を「呼ばれるだけ」の引き金 `LoopTrigger::CallOnly` として表に載せる（純 `bind` と同じ扱い）。自分では始まらず、抽選もせず乱数も引かない。pattern定義の `start`・`alternativestart`・`parallelstart` で始まり、`stop` 系で止まる。`insert` の相手は純 `bind` だけなので、`never` を指した `insert` は何もせず記録を出す。さくらスクリプトから呼ぶ口は担当外（seriko-script-triggers）。
+`never` 以外の知らない interval の語は、今までどおり元の綴りを添えた debug! を残して表に載せない。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。`never` を呼ばれる相手として載せた担当は seriko-pattern-calls（2026-10-31）。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束のほかの間隔語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:overlay-fast:1"]
@@ -7374,27 +7395,37 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:parallelstart_2c_28ID1_2cID2..._29:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+並びの全部を同じ時刻に頭から始める。同じ時刻の中で同じ animation を 2 度目に始めようとしたら何もしない（呼び合う形でも止まる）。
+相手の欄が読めない・相手の番号が表に無い・純 `bind` の中に書いた、のどれも、そのコマは何もせず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:parallelstop_2c_28ID1_2cID2..._29:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+並びの全部を同じ時刻に止める。再生していないものは何もしない。
+相手の欄が読めない・相手の番号が表に無い・純 `bind` の中に書いた、のどれも、そのコマは何もせず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:periodic_2c_6570_5024:1"]
@@ -7643,15 +7674,20 @@ areka-parsers の shell::normalize_interval が名前として認めるのは 6 
 """
 
 [entry."ukadoc:descript_shell_surfaces:start_2cID:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+再生中かどうかにかかわらず、相手を pattern0 から頭でやり直す（SSP で測った結果と同じ）。呼んだ側の再生は止めない。
+相手の欄が読めない・相手の番号が表に無い・純 `bind` の中に書いた、のどれも、そのコマは何もせず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:starttalk:1"]
@@ -7670,15 +7706,20 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:stop_2cID:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "seriko-pattern-calls"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた書き方の記録はこの下の行に書く）。
+語の見分けは areka-emo-compose の pattern_word::pattern_word だけが持ち、相手の欄（pattern定義の欄 2）は同じファイルの call_targets が animation の番号の列として読む。areka-seriko の table_calls が表を作るときに働きのコマへ変え、calls::run_calls が予定の時刻（開始 ＋ それまでの待ちの合計）の順に当てる。一番上の面・入れ子の部品・バルーンの面のどれにも同じ規則で当たる。
+相手の再生と今のコマを外す（サーフェス番号 `-1` のコマと同じ見え方）。再生していなければ何もしない。止めた `always` は、面を出し直すまで止まったままになる。
+相手の欄が読めない・相手の番号が表に無い・純 `bind` の中に書いた、のどれも、そのコマは何もせず、表を作るときに面・animation・pattern・語・原文を添えた warn! を 1 回だけ出す。element定義に書いたときは今までどおり描かずに warn! を出す。
+正典が黙っている所の決めごとと SSP 2.9.26 で測った結果は doc/COMPAT_ARCHITECTURE.md の §8「pattern定義の呼び出しと `move`」に登記してある。担当は seriko-pattern-calls（2026-10-31）。
 束: 他のアニメーションを操る語・名前を知らず警告を残して描かない（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 73——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が描かれなかった当時の仕分けの綴りをそのまま残している（同じ束のほかの語と揃えるため。優先度は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3aarrow:1"]

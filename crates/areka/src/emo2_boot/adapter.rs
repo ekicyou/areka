@@ -33,6 +33,8 @@ use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 ///   `pattern` はシェル面 `Show` と同様に非改変で転写する（R5.1・cue 由来は空 pattern＝R5.4）。
 /// - `HideBalloon { scope }` → バルーン表示対象の `Hide`（R3.4／R5.2）。
 /// - `StageAck { scope, generation }` → バルーン表示対象の `StageAck`（世代はそのまま）。
+/// - `MoveShift { scope, x, y }` / `MoveShiftBalloon { scope, x, y }` → シェル／バルーン表示対象の
+///   `MoveShift`（値はそのまま・spec: seriko-pattern-calls 要件 7.1・7.6）。
 ///
 /// `reply` は常に `None`（撃ちっぱなし・fire-and-forget）。scope（`ActorKey`）が非数値のとき
 /// （`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
@@ -86,6 +88,17 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
         DisplayCommand::StageAck { scope, generation } => PresentCommand::StageAck {
             target: balloon_target(scope_of(&scope)?),
             generation,
+        },
+        // ずれ: シェル／バルーンの表示対象へ値をそのまま（spec: seriko-pattern-calls 要件 7.1・7.6）。
+        DisplayCommand::MoveShift { scope, x, y } => PresentCommand::MoveShift {
+            target: shell_target(scope_of(&scope)?),
+            x,
+            y,
+        },
+        DisplayCommand::MoveShiftBalloon { scope, x, y } => PresentCommand::MoveShift {
+            target: balloon_target(scope_of(&scope)?),
+            x,
+            y,
         },
     })
 }
@@ -232,6 +245,9 @@ const _: fn() = || {
     assert_send_static::<PresentBridge>();
 };
 
+#[cfg(test)]
+#[path = "adapter_move_shift_tests.rs"]
+mod move_shift_tests;
 #[cfg(test)]
 #[path = "adapter_rebased_tests.rs"]
 mod rebased_tests;

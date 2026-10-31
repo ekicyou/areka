@@ -416,6 +416,7 @@ fn pattern(index: u32, method: &str, surface_id: i64) -> Pattern {
         index,
         method: DrawMethod::new(method.to_string()),
         surface_id,
+        target: surface_id.to_string(),
         wait: 0,
         x: 0,
         y: 0,

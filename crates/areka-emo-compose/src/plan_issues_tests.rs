@@ -131,11 +131,13 @@ fn composing_repeatedly_adds_no_warn() {
         !logs.contains("level=WARN"),
         "合成は warn を出さない: {logs}"
     );
-    for kind in [
-        "循環",
-        "非 Overlay method の bind pattern0",
-        "非 Overlay method の現在コマ",
-    ] {
+    // 描かない語の pattern0 は読み込みのときに着せ替えの手順から外れ、合成のたびには知らせない
+    // （seriko-pattern-calls 5.5 で「非 Overlay method の bind pattern0」を外した）。
+    assert!(
+        !logs.contains("非 Overlay method の bind pattern0"),
+        "合成のたびに語を引き直さない: {logs}"
+    );
+    for kind in ["循環", "非 Overlay method の現在コマ"] {
         assert!(
             logs.lines()
                 .any(|l| l.contains("level=DEBUG") && l.contains(kind)),

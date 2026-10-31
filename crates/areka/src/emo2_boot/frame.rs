@@ -48,6 +48,8 @@ mod dpi;
 mod drain_resnap;
 // 位置の指令の預かり（window-work-area-clamp design「MoveHold」）。
 mod move_hold;
+// 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」）。
+mod move_shift;
 mod scale_text;
 pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
@@ -386,6 +388,11 @@ pub fn emo2_frame_system(world: &mut World) {
     // 連鎖の確定の**前**でもある（確定は一度きりで、定常のフレームでは何もしない）。面の指令と
     // `\![move]` は別の線で届くので、別のフレームに割れて届いた場合の隙間はここでは扱わない。
     run_move_drain_phase(&wiring, world);
+    // 面の `move` のずれ（seriko-pattern-calls design「MoveShiftPlacement」・要件 3.8・7.1・7.3・7.6）:
+    // 移動の相の**直後**。表示の指令（ずれは `Show` と同じ線で届く）・再スナップ・`\![move]` が
+    // 窓を置いた後に、その位置を元にずれを当てる。連鎖の確定・解き直しより前に置き、それらが
+    // ずらした後の位置を読む。
+    move_shift::run_move_shift_phase(&wiring.presenter, world);
     // 初期配置の確定（scg 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
     // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
     // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。

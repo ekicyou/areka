@@ -6,6 +6,7 @@
 //! [`AlertScene`] 1 つの型で数え、利用者向けのメッセージボックス（`MessageBoxW`）と
 //! 同じ内容の `error!` を出す。文面は [`alert_text`] が純粋に組む（テストで固定する）。
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
+//! 終わりの告知（[`raise`]）は有界の自動終了 `AREKA_APP_SMOKE_EXIT_MS` が立つ走行でも抑える。
 //! 終了コードは呼び手（`main`）の責務で、ここは告げるだけ。
 //!
 //! はい／いいえを尋ねる口 [`ask_yes_no`]（areka-P0-ghost-install 要件 4.4）と、
@@ -268,7 +269,10 @@ pub(crate) fn suppressed() -> bool {
 
 /// `error!(event = "alert")` を必ず 1 件残し、`suppressed` が偽なら `MessageBoxW` を出す
 /// （`hwnd` 無し＝`WinApp` の有無を問わない）。戻ったら呼び手が `Err` を返す。
+/// 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）が立つ走行も抑える: 人が見ていない走行で箱が
+/// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない（2026-10-31）。
 pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
+    let suppressed = suppressed || crate::smoke_exit::smoke_exit_ms().is_some();
     let (title, body) = alert_text(scene);
     tracing::error!(
         event = "alert",

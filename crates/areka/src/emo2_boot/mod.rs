@@ -525,21 +525,20 @@ pub fn wire_emo2_boot(
     // バルーン表の転送（要件 5.6）: `LoopTables.balloon` は既に scope 別の写像（`build_boot_assets` の
     // 構築ループ内で単一導出済み）ゆえ、ここは scope キーをアクタ鍵語彙へ写す値移送だけを行う。
     let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
-    let seed: u64 = {
-        use std::hash::{BuildHasher, Hasher};
-        std::collections::hash_map::RandomState::new()
-            .build_hasher()
-            .finish()
-    };
+    // 選び（`alternative*`）の種は抽選とは別に引く（spec: seriko-pattern-calls 要件 3.6）。
+    let seed = entropy_seed();
+    let pick_seed = entropy_seed();
     // 再現可能性の観測点（R7.4/7.5）: 本番 seed を info! に出力し、同一 seed で run を再現可能にする。
     info!(
         seed,
-        "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）"
+        pick_seed,
+        "emo2-boot: SERIKO ループ乱数 seed（抽選・選び／RandomState 由来・実 entropy・再現用）"
     );
     let loop_config = SerikoLoopConfig {
         shell_table,
         balloon_tables,
         rng: seeded_rng(seed),
+        pick_rng: seeded_rng(pick_seed),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
@@ -714,11 +713,27 @@ pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {
         .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
 }
 
+/// 実 entropy の種（`RandomState` はプロセスごとのランダム鍵で初期化され、作るたびに鍵が変わる）。
+/// 空書込みの `finish()` はその鍵由来の値を返す（新規 crates.io 依存なし）。
+fn entropy_seed() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish()
+}
+
 #[cfg(test)]
 mod wire_tests {
     use super::sample_test_support::{emo2_balloon_root, emo2_root};
     use super::*;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+    /// 選びの種は抽選の種と別に引く（spec: seriko-pattern-calls 要件 3.6）: 続けて引いた 2 つの種が
+    /// 違う（同じ種だと選びと抽選が同じ列を引き、別にした意味が無い）。
+    #[test]
+    fn lottery_and_pick_seeds_are_drawn_separately() {
+        assert_ne!(entropy_seed(), entropy_seed());
+    }
 
     /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
     /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと

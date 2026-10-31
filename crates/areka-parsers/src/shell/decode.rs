@@ -348,6 +348,8 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
             // 全 pattern 行を忠実転記する（要件 4.6/8.4）。overlay フィルタは撤去済み＝
             // 非 overlay（replace/base/制御系 等）も落とさず method を運ぶ。意味解釈
             // （合成方法・実装可否）は下流の責務（parser は原文を無加工で運ぶ）。
+            // 欄 2 が `(` の並びなら `)` まで継ぎ直し、待ち・X・Y はその次から読む（要件 2.2）。
+            let (target, tail) = pattern_target(fields);
             let pattern = Pattern {
                 // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。
                 index: index_text.parse::<u32>().unwrap_or(0),
@@ -356,9 +358,10 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
                 method: DrawMethod::new(field_string(fields, 1)),
                 // surface_id は i64・負センチネル（-1/-2）を失わない（要件 5.5）。
                 surface_id: field_i64(fields, 2),
-                wait: field_u32(fields, 3),
-                x: field_i64(fields, 4),
-                y: field_i64(fields, 5),
+                target,
+                wait: field_u32(fields, tail),
+                x: field_i64(fields, tail + 1),
+                y: field_i64(fields, tail + 2),
             };
             let anim = animation_slot(&mut animations, id);
             anim.patterns.push(pattern);
@@ -369,6 +372,22 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
     }
 
     animations
+}
+
+/// pattern定義の欄 2 の原文と、待ちを読む欄の位置を返す（要件 2.2・2.3・2.6）。
+///
+/// 字句の段は `[ ]` の中のカンマしか守らないので、欄 2 が `(` で始まり `)` を含まないときだけ、
+/// `)` を含む欄（無ければ行の終わり）までを `,` で継ぎ直す。語の意味は知らない（原文を写すだけ）。
+fn pattern_target(fields: &[String]) -> (String, usize) {
+    let col = field_string(fields, 2);
+    if !col.starts_with('(') || col.contains(')') {
+        return (col, 3);
+    }
+    let end = fields[2..]
+        .iter()
+        .position(|f| f.contains(')'))
+        .map_or(fields.len(), |p| 2 + p + 1);
+    (fields[2..end].join(","), end)
 }
 
 /// `animations` 内の ID `id` の `Animation` への可変参照を返す。無ければ既定 `Interval::Bind`
@@ -596,3 +615,9 @@ mod charset_tests;
 #[cfg(test)]
 #[path = "decode_interval_trigger_tests.rs"]
 mod interval_trigger_tests;
+
+/// pattern定義の欄 2 の原文（`(` で始まる並びの継ぎ直しを含む）を固定する兄弟テスト
+/// （seriko-pattern-calls 要件 2.2・2.3・2.6・2.7）。
+#[cfg(test)]
+#[path = "decode_tests_pattern_target_tests.rs"]
+mod pattern_target_tests;

@@ -141,7 +141,8 @@ impl Armed {
             }
             LoopTrigger::Random { .. }
             | LoopTrigger::BindRandom { .. }
-            | LoopTrigger::Always { .. } => None,
+            | LoopTrigger::Always { .. }
+            | LoopTrigger::CallOnly => None,
         }
     }
 

@@ -565,6 +565,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(scope(), table_of(TRIGGERS))]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     });
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
     let note = |states: &mut ScopeStates, open: bool| {

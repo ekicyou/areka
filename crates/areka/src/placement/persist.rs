@@ -39,7 +39,7 @@ use super::chain_finalize::{AdjacencyMark, ChainRect, ScriptPlaced, judge_adjace
 use super::chain_realign::snapshot_char_rects;
 use super::follow::{
     AnchorSource, Anchored, MonitorSnapshot, OffsetBase, RestoredWindow, keep_restored_groups,
-    project_anchor, work_area_for_window,
+    origin_position, project_anchor, work_area_for_window,
 };
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::spawn::GhostWindows;
@@ -860,7 +860,9 @@ pub fn persist_unremembered_char_positions(world: &World) {
             w: size.width,
             h: size.height,
         };
-        let saved = char_pos_to_origin_x(anchor, current, char_size);
+        // 既定の位置はずれに付いて動くので今の位置で比べ、書くのはずれを引いた元の位置（task 6.2）。
+        let saved =
+            char_pos_to_origin_x(anchor, origin_position(world, entity, current), char_size);
         info!(
             target: "areka::persist::save",
             scope,
