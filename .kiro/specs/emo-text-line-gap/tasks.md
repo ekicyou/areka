@@ -37,7 +37,7 @@
   - 純粋層の檻（`windows` を読まない）が緑で、既存の emo-text のテストが書き換えなしで緑のまま
   - _Requirements: 1.4, 2.1, 2.4, 4.1_
 
-- [ ] 2.2 (P) 帯の寄せに字の箱の上端を足す
+- [x] 2.2 (P) 帯の寄せに字の箱の上端を足す
   - 横書きの腕だけで、寄せを `round(max(0, t) ＋ max(0, B − E) ÷ 2)`（丸め 1 回）にする。厚み E の決まりは変えない
   - 寄せの式の定義点を私的な関数 1 つに置き、公開の `highlight_band_offset` は上端 0 を渡してそれへ委ねる（引数の形を保ち、`choice_tests.rs`・`draw_format_metrics_tests.rs` に触らない）
   - 縦書きの腕は 1 文字も変えない。`highlight_band_offset` と `LineBand::offset` の説明を「字の箱の中央」へ直す
