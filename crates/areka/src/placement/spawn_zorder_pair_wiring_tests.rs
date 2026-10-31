@@ -186,8 +186,9 @@ fn wire_logs_the_strategy_it_actually_inserted() {
 // 確定段への登録
 // -------------------------------------------------------------------------
 
-/// 結線は確立系・ペア維持系・鎖の適用系の 3 本を確定段（`FrameFinalize`）へ載せる
-/// （要件 1.1。3 本目は areka-P0-scope-zorder-pinning task 3.2 の追加）。
+/// 結線は確立系・帯の系・ペア維持系・鎖の適用系の 4 本を確定段（`FrameFinalize`）へ載せる
+/// （要件 1.1。鎖の適用系は areka-P0-scope-zorder-pinning task 3.2・帯の系は
+/// stay-on-top-directives task 5.2 の追加）。
 #[test]
 fn wire_registers_the_zorder_systems_into_frame_finalize() {
     let mut world = World::new();
@@ -206,8 +207,8 @@ fn wire_registers_the_zorder_systems_into_frame_finalize() {
         .expect("結線後は確定段が存在する");
     assert_eq!(
         frame_finalize.systems_len(),
-        3,
-        "確定段へ載るのは確立系・ペア維持系・鎖の適用系のちょうど 3 本（要件 1.1・task 3.2）"
+        4,
+        "確定段へ載るのは確立系・帯の系・ペア維持系・鎖の適用系のちょうど 4 本（要件 1.1）"
     );
 }
 

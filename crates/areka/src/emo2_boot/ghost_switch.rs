@@ -25,6 +25,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
+use super::frame::{DiscardReason, log_stay_on_top_discard};
 #[cfg(test)]
 use super::special_name::UnresolvedReason;
 pub(crate) use super::special_name::{LastInstalledGhost, NameResolution, resolve_special_name};
@@ -659,6 +660,12 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     }
     // ghost の読み直し（窓口自身の予約）だけは、窓を閉じる前に表示中の面を控える（要件 3.8）。
     let carry = super::shell_carry::capture_for_reload(world);
+    let reason = if super::reload::carries_shell_state(world) {
+        DiscardReason::Reload
+    } else {
+        DiscardReason::Switch
+    };
+    log_stay_on_top_discard(world, reason);
     take_down(world);
     // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
     // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
@@ -740,6 +747,7 @@ pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
         );
         return;
     };
+    log_stay_on_top_discard(world, DiscardReason::Switch);
     take_down(world);
     let closed = close_windows_for_restart(world);
     let ghost = GhostDecision {

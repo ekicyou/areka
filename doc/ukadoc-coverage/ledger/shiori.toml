@@ -12075,11 +12075,15 @@ note = """
 [entry."ukadoc:list_shiori_resource:alwaysstayontopbutton.caption:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "stay-on-top-directives"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
+対応しない（意図して語彙のみに留める）: areka は右クリックのメニューに「常に手前に表示」の項目を
+作らないので、この名前を引く相手が無い。常に手前は台本の \\![set,windowstate,stayontop]・
+\\![set,windowstate,!stayontop] だけで切り替える（stay-on-top-directives の要件の段の裁定 11。
+作るならメニューを触り、メニューの見た目を扱う他の spec と重なるため）。
 壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
 文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
 らしい見え方が出ないという形で現れる。
@@ -12090,8 +12094,8 @@ note = """
 載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「常に手前に表示の名称」とされ、その項目に
 出る言葉である。
-無いと失うもの: 右クリックのメニューの「常に手前に表示」の項目が、そのゴーストらしい言い回しにならず、
-areka の素の言葉のままになる。
+無いと失うもの: SSP の右クリックのメニューの「常に手前に表示」の項目の言い回しだが、areka にはその
+項目自体が無いので、失うものは無い。
 """
 
 [entry."ukadoc:list_shiori_resource:alwaystrayiconvisiblebutton.caption:1"]

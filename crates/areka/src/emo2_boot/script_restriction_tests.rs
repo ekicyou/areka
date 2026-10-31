@@ -172,7 +172,8 @@ fn probe_for(consumer: CommandConsumer) -> Probe {
         | CommandConsumer::ScriptCompile
         | CommandConsumer::PropertyWrite
         | CommandConsumer::LifecycleSink
-        | CommandConsumer::ReloadSink => {
+        | CommandConsumer::ReloadSink
+        | CommandConsumer::WindowStateSink => {
             panic!("{consumer:?} が担当する行が実装済みになった。ここに受け口と合図の見方を足す")
         }
     }

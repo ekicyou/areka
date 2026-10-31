@@ -254,6 +254,14 @@ fn decode_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
         // アンカーの閉じ（anchor-tag-canon 要件 1.4）: 角括弧の無い `\_a`。開きとの対応
         // （閉じ無し・重なり・開いていない閉じ）は読まない（判定は消費側）。
         "_a" => Instruction::AnchorEnd,
+        // 手前へ出す裸の `\v`（stay-on-top-directives 要件 1.1）: `\j` の前例と同じく運搬名の
+        // 汎用コマンドへ写す（窓をどう動かすかは消費側）。角括弧付きの `\v[…]` は正典に無いので
+        // `decode_tag` に腕を作らない。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cv:1
+        "v" => Instruction::GenericCommand {
+            name: super::model::RAISE_TAG_CARRIER.to_owned(),
+            raw_args: Vec::new(),
+        },
         // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_n` `\__q` 等）は
         // タスク 4.2 のパススルー領分。
         other => decode_passthrough_bare(other, notes),

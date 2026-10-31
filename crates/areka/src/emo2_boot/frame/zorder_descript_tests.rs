@@ -487,10 +487,11 @@ fn t_zdb12_the_boot_entry_point_leaves_the_ledger_default_without_a_setting() {
 }
 
 // ---------------------------------------------------------------------------
-// シェルの差し替えで置き直す（areka-P0-shell-balloon-switch 要件 2.7・task 9.2）
+// シェルの差し替え——台本の組を保ち基底だけを取り替える
+// （areka-P0-shell-balloon-switch 要件 2.7・stay-on-top-directives 要件 5.1／5.2／5.5／6.5）
 // ---------------------------------------------------------------------------
 
-/// 前のシェルの基底とタグ由来のグループが載った台帳を組む（置き直しの出発点）。
+/// 前のシェルの基底（ID 0・scope 0,1）と台本の組（ID 1・scope 2,3）が載った台帳を組む。
 fn ledger_with_base_and_tag() -> ZOrderGroupLedger {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("1,0"));
@@ -502,49 +503,213 @@ fn ledger_with_base_and_tag() -> ZOrderGroupLedger {
     ledger
 }
 
-/// 新しいシェルの値は、前の基底とタグ由来のグループを落として基底 1 本として据わる。
+/// 台本の組だけを要素の字面で引く（追加の順）。
+fn tag_members(ledger: &ZOrderGroupLedger) -> Vec<String> {
+    ledger
+        .groups()
+        .iter()
+        .filter(|group| group.source == GroupSource::Tag)
+        .map(|group| members_text(&group.members))
+        .collect()
+}
+
+/// 新しいシェルの値は基底として先頭に据わり、台本の組は残る。記録は保った組と旧→新の 1 行。
 #[test]
-fn t_zdb13_rebase_seats_the_new_shell_value_as_the_only_group() {
+fn t_zdb13_rebase_keeps_the_script_group_and_replaces_the_base() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("0,1")));
 
-    assert_eq!(ledger.groups().len(), 1, "置き直しの後が基底 1 本でない");
+    assert_eq!(ledger.groups().len(), 2, "基底と台本の組の 2 本でない");
+    assert_eq!(
+        ledger.groups()[0].source,
+        GroupSource::Descript,
+        "新しい基底が先頭でない"
+    );
     let base = base_of(&ledger).expect("新しいシェルの基底が据わっていない");
     assert_eq!(members_text(&base.members), "b0,s0,b1,s1");
+    assert_eq!(base.id, 2, "取り替えた基底に新しい ID が配られていない");
     assert_eq!(
-        lines_with(&logs, "[zorder-group] applied").len(),
+        tag_members(&ledger),
+        vec!["b2,s2,b3,s3"],
+        "台本の組が保たれていない（要件 5.1）"
+    );
+
+    let applied = lines_with(&logs, "[zorder-group] applied");
+    assert_eq!(
+        applied.len(),
         1,
-        "受理の記録が起動と同じ口を通っていない: {logs:?}"
+        "受理の記録がちょうど 1 本でない: {logs:?}"
+    );
+    assert!(applied[0].contains(GROUP_TARGET), "{}", applied[0]);
+    assert!(
+        applied[0].contains("action=rebase kept=[1] base=0→2"),
+        "保った組と取り替えた基底が記録に載っていない（要件 6.5）: {}",
+        applied[0]
+    );
+    assert!(
+        lines_with(&logs, "[zorder-group] rejected").is_empty(),
+        "重なりが無いのに拒否の記録が出た: {logs:?}"
     );
 }
 
-/// 新しいシェルに設定が無ければ基底なし（前のシェルの基底を残さない）。記録は出さない。
+/// 新しいシェルに設定が無ければ基底なしで取り替え、台本の組は残る。記録は保った組と旧→`-`。
 #[test]
-fn t_zdb14_rebase_without_a_setting_leaves_no_base() {
+fn t_zdb14_rebase_without_a_setting_drops_only_the_base() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, None));
 
-    assert!(
-        ledger.groups().is_empty(),
-        "設定の無いシェルへ替えたのに前のグループが残った"
+    assert!(base_of(&ledger).is_none(), "前のシェルの基底が残った");
+    assert_eq!(
+        tag_members(&ledger),
+        vec!["b2,s2,b3,s3"],
+        "台本の組が落ちた"
     );
-    assert!(logs.is_empty(), "設定が無いのに記録が出た: {logs:?}");
+    let applied = lines_with(&logs, "[zorder-group] applied");
+    assert_eq!(applied.len(), 1, "{logs:?}");
+    assert!(
+        applied[0].contains("action=rebase kept=[1] base=0→-"),
+        "{}",
+        applied[0]
+    );
+    assert!(
+        lines_with(&logs, "[zorder-group] rejected").is_empty(),
+        "{logs:?}"
+    );
 }
 
-/// 解釈できない値も基底なしへ倒し、拒否は起動と同じ記録で 1 本残す。
+/// 逆側——保つものも取り替えるものも無い切り替えでは台帳も記録も動かない。
 #[test]
-fn t_zdb15_rebase_with_an_unreadable_setting_leaves_no_base_and_records_the_rejection() {
+fn t_zdb14b_rebase_with_nothing_to_keep_or_replace_records_nothing() {
+    let mut ledger = ZOrderGroupLedger::default();
+    let before = ledger.version();
+
+    let logs = capture_logs(|| apply_descript_rebase(&mut ledger, None));
+
+    assert!(ledger.groups().is_empty());
+    assert_eq!(ledger.version(), before, "動いていないのに版が進んだ");
+    assert!(logs.is_empty(), "報せることが無いのに記録が出た: {logs:?}");
+}
+
+/// 解釈できない値も基底なしで取り替え、拒否は起動と同じ記録で 1 本残す。台本の組は残る。
+#[test]
+fn t_zdb15_rebase_with_an_unreadable_setting_drops_the_base_and_records_the_rejection() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("1,x")));
 
     assert!(
-        ledger.groups().is_empty(),
-        "解釈できない値なのに前のグループが残った"
+        base_of(&ledger).is_none(),
+        "解釈できない値なのに前の基底が残った"
+    );
+    assert_eq!(
+        tag_members(&ledger),
+        vec!["b2,s2,b3,s3"],
+        "台本の組が落ちた"
     );
     let rejected = lines_with(&logs, "[zorder-group] rejected");
     assert_eq!(rejected.len(), 1, "拒否の記録が 1 本でない: {logs:?}");
+    assert!(
+        rejected[0].contains("reason=UnparsableToken(x)"),
+        "{}",
+        rejected[0]
+    );
     assert!(rejected[0].contains("tokens=1,x"), "{}", rejected[0]);
+    let applied = lines_with(&logs, "[zorder-group] applied");
+    assert_eq!(applied.len(), 1, "{logs:?}");
+    assert!(
+        applied[0].contains("action=rebase kept=[1] base=0→-"),
+        "{}",
+        applied[0]
+    );
+}
+
+/// 台本の組と重なる新しい基底は据えず、重なったスコープと値を拒否として残す（要件 5.2）。
+#[test]
+fn t_zdb16_rebase_refuses_a_base_overlapping_the_script_group() {
+    let mut ledger = ledger_with_base_and_tag();
+
+    let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("3,0")));
+
+    assert!(base_of(&ledger).is_none(), "台本の組と重なる基底が据わった");
+    assert_eq!(
+        tag_members(&ledger),
+        vec!["b2,s2,b3,s3"],
+        "台本の組が落ちた"
+    );
+    let rejected = lines_with(&logs, "[zorder-group] rejected");
+    assert_eq!(
+        rejected.len(),
+        1,
+        "重なりの拒否の記録が 1 本でない: {logs:?}"
+    );
+    assert!(rejected[0].contains("level=WARN"), "{}", rejected[0]);
+    assert!(
+        rejected[0].contains("reason=CrossGroupRedesignation(3)"),
+        "理由と重なったスコープが読めない: {}",
+        rejected[0]
+    );
+    assert!(
+        rejected[0].contains("tokens=3,0"),
+        "値が記録に載っていない: {}",
+        rejected[0]
+    );
+    let applied = lines_with(&logs, "[zorder-group] applied");
+    assert_eq!(applied.len(), 1, "{logs:?}");
+    assert!(
+        applied[0].contains("action=rebase kept=[1] base=0→-"),
+        "据えなかった基底が旧→新に載った: {}",
+        applied[0]
+    );
+}
+
+/// 切り替えの後の `\![reset,zorder]` で台本の組が落ち、据え損ねた新しい基底へ戻る（要件 5.5）。
+#[test]
+fn t_zdb17_reset_after_rebase_returns_to_the_new_shell_base() {
+    let mut ledger = ledger_with_base_and_tag();
+    apply_descript_rebase(&mut ledger, Some("3,0"));
+    assert!(
+        base_of(&ledger).is_none(),
+        "檻の前提: 重なる基底は据わっていない"
+    );
+
+    let mut world = world_with_scopes(&[0, 3]);
+    let (tx, rx) = channel::<ZOrderDirective>();
+    tx.send(ZOrderDirective::Reset).unwrap();
+    run_zorder_drain_phase(&rx, &mut ledger, &mut world);
+
+    assert_eq!(
+        ledger.groups().len(),
+        1,
+        "reset の後が新しい基底 1 本でない"
+    );
+    let base = base_of(&ledger).expect("reset で新しいシェルの基底へ戻っていない");
+    assert_eq!(members_text(&base.members), "b3,s3,b0,s0");
+    let chain = world
+        .get_resource::<ZOrderChainPlan>()
+        .and_then(|plan| plan.chain.as_ref())
+        .expect("新しい基底が射影まで届いていない");
+    assert_eq!(
+        chain.members,
+        vec![
+            window_of(&world, 3, GroupWindowKind::Balloon),
+            window_of(&world, 3, GroupWindowKind::Char),
+            window_of(&world, 0, GroupWindowKind::Balloon),
+            window_of(&world, 0, GroupWindowKind::Char),
+        ]
+    );
+}
+
+/// 重なりの無い切り替えの後の reset も、取り替えた新しい基底へ戻る（要件 5.5）。
+#[test]
+fn t_zdb18_reset_after_a_clean_rebase_keeps_the_new_base() {
+    let mut ledger = ledger_with_base_and_tag();
+    apply_descript_rebase(&mut ledger, Some("0,1"));
+
+    ledger.reset_to_descript();
+
+    assert_eq!(ledger.groups().len(), 1);
+    let base = base_of(&ledger).expect("新しい基底が残っていない");
+    assert_eq!(members_text(&base.members), "b0,s0,b1,s1");
 }

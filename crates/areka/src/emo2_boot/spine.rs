@@ -749,7 +749,7 @@ impl SpineHarness {
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
         // talk スレッドの MoveCueSink が送出端、UI スレッドの Emo2Wiring が受信端 move_rx（frame 相
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替え、production `wire_emo2_boot` の sink 構成（現在は 12 本＝`runtime_boot.rs` の `runtime_sinks`）を spine でも
+        // 差し替え、production `wire_emo2_boot` の sink 構成（現在は 13 本＝`runtime_boot.rs` の `runtime_sinks`）を spine でも
         // 忠実に再現する。
         let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
         let move_sink = MoveCueSink::new(move_tx);

@@ -114,7 +114,13 @@ fn emit_every_record() {
         expected_order(),
         Some(intruder_front()),
     );
-    log_sink_observed(balloon_entity, true, Some(intruder_front()), Some(true));
+    log_sink_observed(
+        balloon_entity,
+        true,
+        Some(intruder_front()),
+        Some(true),
+        Some(false),
+    );
 }
 
 /// 捕捉した出力から、指定タグを含む行をすべて取り出す。
@@ -317,9 +323,16 @@ fn owner_establish_failed_line_carries_the_error() {
 #[test]
 fn sink_observed_line_carries_adjacency_and_foreground_relation() {
     let (balloon_entity, _) = pair_entities();
-    let line = super::sink_observed_line(balloon_entity, true, Some(intruder_front()), Some(true));
+    let line = super::sink_observed_line(
+        balloon_entity,
+        true,
+        Some(intruder_front()),
+        Some(true),
+        Some(false),
+    );
 
     assert!(line.contains("[zorder-pair] sink-observed"), "{line}");
+    assert!(line.contains("in_band=false"), "{line}");
     assert!(
         line.contains(&format!("entity={balloon_entity:?}")),
         "{line}"
@@ -330,14 +343,17 @@ fn sink_observed_line_carries_adjacency_and_foreground_relation() {
 
     // 対照: 判定が偽・前面窓が取れなかった場合も同じフィールドで出る
     // （成立時だけ出る記録では「沈まなかった」を観測できない）
-    let negative = super::sink_observed_line(balloon_entity, false, None, Some(false));
+    let negative = super::sink_observed_line(balloon_entity, false, None, Some(false), Some(true));
     assert!(negative.contains("adjacency_ok=false"), "{negative}");
     assert!(negative.contains("foreground=-"), "{negative}");
     assert!(negative.contains("behind_foreground=false"), "{negative}");
+    // 帯に居るあいだの `behind_foreground=false` は正しい動き（要件 6.6）——欄で読み分けられる
+    assert!(negative.contains("in_band=true"), "{negative}");
 
-    // 前面窓との相対そのものが取れなかった場合は番兵（偽と混同しない）
-    let unknown = super::sink_observed_line(balloon_entity, true, None, None);
+    // 前面窓との相対・帯の所属が取れなかった場合は番兵（偽と混同しない）
+    let unknown = super::sink_observed_line(balloon_entity, true, None, None, None);
     assert!(unknown.contains("behind_foreground=-"), "{unknown}");
+    assert!(unknown.contains("in_band=-"), "{unknown}");
 }
 
 // -------------------------------------------------------------------------
@@ -432,6 +448,12 @@ fn failures_and_verification_mismatch_are_recorded_at_error_level() {
             "`{tag}` は診断水準（debug）で出す: {line}"
         );
     }
+    // 帯の欄を足しても沈降観測の水準は debug のまま（要件 6.6）
+    let sink = only_line_with(&out, "[zorder-pair] sink-observed");
+    assert!(
+        sink.contains("in_band=false"),
+        "帯の欄が載っていない: {sink}"
+    );
 }
 
 // -------------------------------------------------------------------------

@@ -55,6 +55,10 @@ pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
 mod switch;
 mod wiring;
+// 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
+mod window_state;
+use self::window_state::run_window_state_phase;
+pub(crate) use self::window_state::{DiscardReason, log_stay_on_top_discard};
 mod work_area_sync;
 mod zorder_descript;
 mod zorder_drain;
@@ -365,13 +369,16 @@ pub fn emo2_frame_system(world: &mut World) {
     // スレッドが送り出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳と窓の
     // 在庫から**望む鎖 1 本**を組み、内容が前回と異なるときだけ wintf の受け口
     // （`ZOrderChainPlan`）へ公開するところまでを行う。
-    // 鎖の適用系（確定段の 3 本目）より**前**である必要がある——後ろだと、ここで公開した
+    // 鎖の適用系（確定段の末尾）より**前**である必要がある——後ろだと、ここで公開した
     // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない
     // （要件 14.5）。その順序は**段そのものの並び**が担う——本 system は `Update` に載り
     // （`wire_emo2_boot` 手順 6・裁定 2026-09-12）、適用系が載る確定段（`FrameFinalize`）は
     // 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので `.before` は使わない）。
     // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
+    // 常に手前の指令の取り出し（stay-on-top-directives design「WindowStatePhase」）: 重なりの
+    // 取り出しの直後。印と帯の指令の列を同じ巡の確定段（帯の系）が読む。
+    run_window_state_phase(&mut wiring.window_state, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
@@ -533,6 +540,12 @@ mod ghost_quit_logsink_tests;
 #[cfg(test)]
 #[path = "frame_ghost_quit_switch_tests.rs"]
 mod ghost_quit_switch_tests;
+
+// 常に手前の状態と台本の組の寿命（ゴーストの読み直し・切り替え・SHIORI だけの読み直し）
+// （stay-on-top-directives タスク 5.3）。
+#[cfg(test)]
+#[path = "frame_stay_on_top_lifecycle_tests.rs"]
+mod stay_on_top_lifecycle_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

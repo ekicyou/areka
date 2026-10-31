@@ -220,8 +220,11 @@ fn t_zdw07_reset_keeps_the_descript_inversion_and_pairs_the_rest() {
     assert_eq!(dirty(&world), Some(true), "解除が同じ相で公開されていない");
 }
 
-/// シェルの切り替えに伴う descript の読み直しで逆転のタグが解け、計画は新しい
+/// シェルの切り替えの後の `\![reset,zorder]` で逆転のタグが解け、計画は新しい
 /// シェルの組の並びへ戻る。設定の無いシェルなら既定（鎖なし）へ戻る（要件 4.5）。
+///
+/// 切り替えそのものは台本の組を保つ（`stay-on-top-directives` 要件 5.1）ので、
+/// 台本の組と重なる新しい基底は reset で据わる（同 要件 5.5）。
 #[test]
 fn t_zdw08_descript_reload_returns_the_plan_to_pairs() {
     // 新しいシェルが数字だけの記法を書いている → 組の並び。
@@ -233,6 +236,7 @@ fn t_zdw08_descript_reload_returns_the_plan_to_pairs() {
     clear_dirty(&mut world);
 
     apply_descript_rebase(&mut ledger, Some("0,1"));
+    tx.send(ZOrderDirective::Reset).unwrap();
     run_zorder_drain_phase(&rx, &mut ledger, &mut world);
     assert_eq!(
         chain_members(&world),
@@ -254,6 +258,7 @@ fn t_zdw08_descript_reload_returns_the_plan_to_pairs() {
     run_zorder_drain_phase(&rx, &mut ledger, &mut world);
     clear_dirty(&mut world);
     apply_descript_rebase(&mut ledger, None);
+    tx.send(ZOrderDirective::Reset).unwrap();
     run_zorder_drain_phase(&rx, &mut ledger, &mut world);
     assert_eq!(
         chain(&world),

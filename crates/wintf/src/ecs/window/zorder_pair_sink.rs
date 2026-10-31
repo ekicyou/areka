@@ -42,7 +42,7 @@ use super::zorder_pair::{
 };
 use super::zorder_pair_maintain::HandleQuery;
 use super::{KeepDirectlyAbove, WindowHandle};
-use crate::api::get_foreground_window;
+use crate::api::{get_foreground_window, is_window_always_on_top};
 
 // ============================================================================
 // SinkObservationPending - 非活性化の巡に付く観測の目印
@@ -202,7 +202,10 @@ pub(crate) fn observe_marked_pair_sinks(
         let scan = measure_windows_in_front(above_hwnd);
         let behind_foreground = is_behind_foreground(above_hwnd, foreground, &scan);
 
-        log_sink_observed(entity, adjacency_ok, foreground, behind_foreground);
+        // 帯に居るあいだは沈まないのが正しい動き。記録の読み手が読み分ける欄（要件 6.6）。
+        let in_band = is_window_always_on_top(above_hwnd).ok();
+
+        log_sink_observed(entity, adjacency_ok, foreground, behind_foreground, in_band);
     }
 }
 

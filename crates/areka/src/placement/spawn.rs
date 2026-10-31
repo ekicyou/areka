@@ -67,9 +67,9 @@
 //!
 //! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
 //! **挿入した当の値を起動時ログへ 1 行残し**（要件 5.6・実機ゲートの結論をバイナリ自身が
-//! 名乗る）、wintf の確立系 → ペア維持系 → 鎖の適用系を clickthrough 登録と同じ確定段
-//! （`FrameFinalize`）へこの順で載せる。呼び手は `ghost_session::register_systems`（プロセスに 1 回・同 1.1／5.6／6.1）。
-//! 3 本目の鎖の適用系は areka-P0-scope-zorder-pinning task 3.2 の追加であり、順序と
+//! 名乗る）、wintf の確立系 → 帯の系 → ペア維持系 → 鎖の適用系を clickthrough 登録と同じ確定段
+//! （`FrameFinalize`）へこの順で載せる（帯の系は stay-on-top-directives task 5.2）。呼び手は `ghost_session::register_systems`（プロセスに 1 回・同 1.1／5.6／6.1）。
+//! 末尾の鎖の適用系は areka-P0-scope-zorder-pinning task 3.2 の追加であり、順序と
 //! 同期点の両方に意味がある（[`wire_zorder_pair`] の doc「なぜ順序を付けるのか」）。
 
 use std::collections::BTreeMap;
@@ -87,7 +87,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
-use wintf::ecs::window::apply_zorder_chain;
+use wintf::ecs::window::{WindowBandQueue, apply_window_band, apply_zorder_chain};
 use wintf::ecs::{
     DpiSuggestedRectPolicy, FrameFinalize, KeepDirectlyAbove, Point, SizeI, Window, WindowHandle,
     WindowPos, WindowStyle, ZOrderPairStrategy, apply_zorder_pair_maintenance,
@@ -670,8 +670,9 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 ///   [`log_zorder_pair_strategy`] で起動時ログへも 1 行残す——判定表は spec 配下の文書で
 ///   あって、目の前のバイナリが本当にその結論どおりに動いているかは、バイナリ自身が
 ///   名乗る以外に確かめようがない（要件 5.6）。
-/// - **確立系 → ペア維持系 → 鎖の適用系**を `FrameFinalize` へこの順で載せる
-///   （[`IntoScheduleConfigs::chain`]）。
+/// - **確立系 → 帯の系 → ペア維持系 → 鎖の適用系**を `FrameFinalize` へこの順で載せる
+///   （[`IntoScheduleConfigs::chain`]）。帯の指令の列 [`WindowBandQueue`] もここで入れる
+///   （取り出しの相が積み、帯の系が空にする・stay-on-top-directives task 5.2）。
 ///
 /// # なぜ順序を付けるのか
 ///
@@ -681,15 +682,20 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 /// 消費が 1 巡遅れる。必要なのは順序だけではなく `chain` が置く**同期点**でもある——要求は
 /// `Commands` 経由で挿さるため、同期点が無ければ同じ巡ではまだ実体に付いていない。
 ///
-/// 3 本目の鎖の適用系（[`apply_zorder_chain`]・areka-P0-scope-zorder-pinning task 3.2）が
+/// 鎖の適用系（[`apply_zorder_chain`]・areka-P0-scope-zorder-pinning task 3.2）が
 /// 末尾に来るのも、順序と同期点の両方が要るからである。あちらが書くのは**スコープを
-/// またぐ**繋ぎだけで、書込先は前 2 本と交わらないが、書く前提として⑴確立系が張った
+/// またぐ**繋ぎだけで、書込先は確立系・ペア維持系と交わらないが、書く前提として⑴確立系が張った
 /// owner と⑵ペア機構が直したスコープ内の隣接が**同じ巡のうちに済んでいる**必要がある
-/// ——前 2 本はどちらも `Commands`（遅延コマンド）で実体を触るため、同期点が無ければ
-/// その結果は同じ巡の 3 本目からは見えない。順序と同期点のどちらが欠けても、鎖は
+/// ——その 2 本はどちらも `Commands`（遅延コマンド）で実体を触るため、同期点が無ければ
+/// その結果は同じ巡の末尾からは見えない。順序と同期点のどちらが欠けても、鎖は
 /// 1 巡古い姿の上に張られる。`chain` を `chain_ignore_deferred` へ替える書き換えが
 /// まさにその形なので、結線の字面ごと兄弟テストが押さえている
 /// （`spawn_zorder_chain_wiring_tests.rs`）。
+///
+/// 2 本目の帯の系（[`apply_window_band`]）が組の維持と鎖の適用より前に来るのは、組の是正が
+/// 予約の列に積まれて巡の終わりに流れるからである。帯を当てる前に是正を決めると、帯の外の
+/// 観測で決めた是正が帯を当てた後に上書きし、バルーンが帯から落ちる・隣り合いが崩れる。
+/// 帯を先に当てれば、是正は帯を当てた後の重なりを測って決まる（stay-on-top-directives 設計の議題 1）。
 ///
 /// # なぜ確定段なのか
 ///
@@ -709,10 +715,13 @@ pub fn wire_zorder_pair(world: &mut World) {
     };
     world.insert_resource(strategy);
     log_zorder_pair_strategy(strategy);
+    // 取り出しの相が先に入れていれば積まれた指令を残す（init は上書きしない）。
+    world.init_resource::<WindowBandQueue>();
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
         (
             establish_owner_links,
+            apply_window_band,
             apply_zorder_pair_maintenance,
             apply_zorder_chain,
         )
@@ -796,6 +805,9 @@ mod follow_pipeline_tests;
 #[cfg(test)]
 #[path = "spawn_test_support.rs"]
 mod test_support;
+#[cfg(test)]
+#[path = "spawn_window_band_wiring_tests.rs"]
+mod window_band_wiring_tests;
 #[cfg(test)]
 #[path = "spawn_zorder_chain_wiring_tests.rs"]
 mod zorder_chain_wiring_tests;

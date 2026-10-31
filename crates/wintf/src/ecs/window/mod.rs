@@ -7,6 +7,8 @@ pub mod monitor;
 /// 判定側（areka の `transition_judge`）とサインオフ手順書が語彙を直接参照するため、
 /// `pub` で crate 外へ開いてある。
 pub mod transition_diag;
+/// 帯の働き（窓の印・帯の指令の列・常に手前の帯を書く唯一の所）。
+mod window_band;
 mod window_handle;
 mod window_pos;
 pub(crate) mod window_system;
@@ -26,6 +28,7 @@ mod zorder_pair_sink;
 pub use command::*;
 pub use components::*;
 pub use dpi::*;
+pub use window_band::*;
 pub use window_handle::*;
 pub use window_pos::*;
 pub use zorder_chain::*;

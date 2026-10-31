@@ -35,7 +35,9 @@
 
 use wintf::ecs::window::{log_group_applied, log_group_rejected};
 
-use crate::placement::zorder_group_ledger::{GroupSource, ZOrderGroupLedger, parse_zorder_tokens};
+use crate::placement::zorder_group_ledger::{
+    GroupSource, RebaseOutcome, ZOrderGroupLedger, ZOrderReject, parse_zorder_tokens,
+};
 
 use super::zorder_drain::{reject_reason_text, set_applied_detail};
 
@@ -87,17 +89,62 @@ pub(super) fn apply_descript_base(ledger: &mut ZOrderGroupLedger, raw: Option<&s
     }
 }
 
-/// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す
-/// （areka-P0-shell-balloon-switch 要件 2.7・design「SwitchPhase」の完了の後始末）。
+/// シェルの差し替えで、台本の組を保ち基底だけを新しいシェルの `seriko.zorder` へ取り替える
+/// （areka-P0-shell-balloon-switch 要件 2.7・`stay-on-top-directives` 要件 5.1／5.2／6.5）。
 ///
-/// 起動の [`apply_descript_base`] と違い、`None` も解釈できない値も「基底なし」へ倒す——
-/// 前のシェルの基底を新しいシェルの下に残さないためである。台帳の既存の規則
-/// （[`ZOrderGroupLedger::set_descript_base`]）どおりタグ由来のグループも落ち、
-/// 「新しいシェルで起きた直後」と同じ状態になる。解釈と記録（受理・拒否）は起動と同じ口を通す。
+/// `None` も解釈できない値も「基底なし」で取り替える——前のシェルの基底を新しいシェルの下に
+/// 残さないためである（解釈できないときは起動と同じ拒否の記録を残す）。台本の組は正典どおり
+/// ゴースト終了まで続くので落とさない。台本の組とスコープが重なる基底は台帳が据えずに持ち、
+/// `\![reset,zorder]` で据わる（要件 5.5）。ここは重なったスコープを拒否として残す。
+///
+/// 保った組と取り替えた基底は `action=rebase kept=[…] base=旧→新`（ID・無ければ `-`）の 1 行で
+/// 残す。保つものも取り替えるものも無ければ報せることは無いので出さない。
 pub(super) fn apply_descript_rebase(ledger: &mut ZOrderGroupLedger, raw: Option<&str>) {
-    // 先に基底なしへ戻し（空の列＝基底なし・タグ由来も落ちる）、受理できた値だけを据え直す。
-    ledger.set_descript_base(Vec::new());
-    apply_descript_base(ledger, raw);
+    let members = match raw {
+        None => Vec::new(),
+        Some(raw) => {
+            let tokens: Vec<&str> = raw.split(SEPARATOR).collect();
+            match parse_zorder_tokens(&tokens) {
+                Ok((members, _)) => members,
+                Err(reject) => {
+                    log_group_rejected(&reject_reason_text(&reject), raw);
+                    Vec::new()
+                }
+            }
+        }
+    };
+
+    let outcome = ledger.rebase_descript(members);
+    if !outcome.refused_scopes.is_empty() {
+        // 理由の語彙は「台本の組がスコープを持つ」＝タグの重ねての指名の拒否と同じ語を使う。
+        let reject = ZOrderReject::CrossGroupRedesignation {
+            scopes: outcome.refused_scopes.clone(),
+        };
+        log_group_rejected(&reject_reason_text(&reject), raw.unwrap_or_default());
+    }
+    if outcome.kept_tag_ids.is_empty()
+        && outcome.dropped_base_id.is_none()
+        && outcome.seated_base_id.is_none()
+    {
+        return;
+    }
+    log_group_applied(&rebase_applied_detail(&outcome));
+}
+
+/// 受理（シェルの切り替え）の本文——保った台本の組の ID と、取り替えた基底の旧→新の ID。
+fn rebase_applied_detail(outcome: &RebaseOutcome) -> String {
+    let id_text = |id: Option<u32>| id.map_or_else(|| "-".to_string(), |id| id.to_string());
+    format!(
+        "action=rebase kept=[{kept}] base={old}→{new}",
+        kept = outcome
+            .kept_tag_ids
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(","),
+        old = id_text(outcome.dropped_base_id),
+        new = id_text(outcome.seated_base_id),
+    )
 }
 
 #[cfg(test)]

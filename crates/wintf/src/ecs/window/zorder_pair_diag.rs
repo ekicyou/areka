@@ -216,16 +216,22 @@ pub(crate) fn owner_establish_failed_line(entity: Entity, error: &windows::core:
 ///
 /// `behind_foreground` は「当該窓が前面窓より背面に居るか」の判定で、前面窓が取れない
 /// ／比較できない場合は番兵になる（偽と混同させない）。
+///
+/// `in_band` はバルーンが常に手前の帯に居るか（測れなければ番兵）。帯に居るあいだは
+/// 他のアプリが活性になっても沈まないのが正しい動きで、`behind_foreground=false` を
+/// 失敗でないと読み分けるための欄である（要件 6.6）。
 pub(crate) fn sink_observed_line(
     entity: Entity,
     adjacency_ok: bool,
     foreground: Option<HWND>,
     behind_foreground: Option<bool>,
+    in_band: Option<bool>,
 ) -> String {
     format!(
         "{SINK_OBSERVED_TAG} entity={entity:?} adjacency_ok={adjacency_ok} \
-         foreground={foreground} behind_foreground={behind}",
+         foreground={foreground} behind_foreground={behind} in_band={in_band}",
         foreground = hwnd_field(foreground),
         behind = tristate_field(behind_foreground),
+        in_band = tristate_field(in_band),
     )
 }

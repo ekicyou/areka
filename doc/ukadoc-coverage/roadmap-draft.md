@@ -1061,8 +1061,8 @@ wave = "v0.1.0"
 [[spec]]
 name = "stay-on-top-directives"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、さくらスクリプトの \\![set,windowstate,!stayontop] の宛先をこの名前で記入した（1 件）"
-owner_count = 1
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification がぱすたの走行の崩れの引き取り先として、さくらスクリプトの \\![set,windowstate,!stayontop] の宛先をこの名前で記入した（1 件）。2026-10-31 に本 spec の実装で \\![set,windowstate,stayontop]・\\![set,windowstate,!stayontop] を実装済み、\\v を SSP の働きに合わせた縮退、シェルのリソース alwaysstayontopbutton.caption を語彙のみ（メニューの項目を作らない）とし、持ち主＝本 spec に書き直した（4 件）"
+owner_count = 4
 wave = "v0.1.0"
 
 [[spec]]

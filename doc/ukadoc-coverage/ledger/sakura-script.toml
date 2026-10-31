@@ -3376,20 +3376,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "stay-on-top-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、手前への固定を解く指定も届かない。固定する側も効かないので、解く相手がそもそも無い）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 無し — WindowStateCueSink が名前 set と選別子 windowstate と第 2 引数 !stayontop の組で自分を選び（parse_window_state の分岐の腕に正典 URL）、取り出しの相がゴーストごとに持つ常に手前の状態をオフにして、そのゴーストの窓の全部（全スコープのキャラクターの窓とバルーンの窓）を重なりの組の並びを保ったまま普通の帯へ戻す。既にオフなら窓は動かさない。常に手前の状態はゴーストの終了・切り替え・読み直しで消え、新しいゴーストはオフから始まる。SHIORI だけの読み直しとシェル・バルーンの切り替えでは残る。正典が黙っている所の扱いは doc/COMPAT_ARCHITECTURE.md §8 に登記済み。
+ログ: 出る（状態が変わったら info!、変わらなければ debug!、読めない第 2 引数は warn!、帯へ当て損ねた窓は wintf の [window_band] が warn!）。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1・ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
-担当 spec は stay-on-top-directives。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
+担当 spec は stay-on-top-directives。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で見つかった、ぱすたが起動の台本で使うこの項目の崩れを引き取って直した。
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1"]
@@ -3410,16 +3409,15 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "stay-on-top-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓を常に手前へ固定できず、他の窓の下へ隠れる）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 無し — WindowStateCueSink が名前 set と選別子 windowstate と第 2 引数 stayontop の組で自分を選び（parse_window_state の分岐の腕に正典 URL）、取り出しの相がゴーストごとに持つ常に手前の状態をオンにして、そのゴーストの窓の全部（全スコープのキャラクターの窓とバルーンの窓）を重なりの組の並びを保ったまま常に手前の帯へ上げる。オンのあいだに後から出た窓（バルーン・新しいスコープ・シェルの切り替えで作り直した窓）も帯へ入る。正典の「ゴースト終了まで有効」どおり、状態はゴーストの終了・切り替え・読み直しで消える（オンのまま降ろしたら info! で理由と一緒に記録）。SSP 2.9.26 が stayontop のあいだ重なりの組の並びを逆にする癖（stay-on-top-directives の research.md 11 節 M2）は写さない。正典が黙っている所の扱いは doc/COMPAT_ARCHITECTURE.md §8 に登記済み。
+ログ: 出る（状態が変わったら info!、変わらなければ debug!、余りの引数は debug!、帯へ当て損ねた窓は wintf の [window_band] が warn!）。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1・ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -5544,15 +5542,16 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cv:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "stay-on-top-directives"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。最前面に上がらず、他の窓の下に隠れたままになる。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 正典の字面との差（意図した差）— decode_bare の腕（正典 URL）が汎用コマンドの運搬名へ写し、WindowStateCueSink が取り出しの相へ運ぶ。働きは ukadoc の字面（「常に最前面に表示されるようになる」「ゴースト終了まで有効」）でなく SSP 2.9.26 の働きに合わせた: 常に手前の状態を変えず（WS_EX_TOPMOST を付けない）、指令を出したスコープを問わずそのゴーストの窓の全部を、重なりの組とバルーンの並びを保ったまま今いる帯の最上へ 1 回だけ出す。後で他のアプリを前に出せばゴーストは後ろへ回る。ぱすたの辞書の \\1\\v はこの働きを当てにしている。
+証拠: stay-on-top-directives の research.md 11 節（2026-10-30・SSP 2.9.26 を MCP の sakurascript で動かし EnumWindows と GetWindowLong(GWL_EXSTYLE) で読んだ）の M4（\\0\\v・\\1\\v とも WS_EX_TOPMOST は付かず、ゴーストの窓の全部が並びを保って普通の窓の最上へ上がった）と M5（その後に他の窓を前に出すと 4 秒後もゴーストは後ろのまま）。ずれは doc/COMPAT_ARCHITECTURE.md §8 に登記済み。
+ログ: 出る（手前へ出したら debug! にゴースト・今いる帯・窓の数）。
 [群: キャラの移動と重なり]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\v。綴りが短く別の語の一部にも当たるぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]

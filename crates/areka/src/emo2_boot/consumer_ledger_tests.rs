@@ -1,4 +1,4 @@
-use areka_parsers::sakura::JUMP_TAG_CARRIER;
+use areka_parsers::sakura::{JUMP_TAG_CARRIER, RAISE_TAG_CARRIER};
 use areka_sakura::contract::FONT_TAG_CARRIER;
 
 use super::*;
@@ -75,7 +75,7 @@ fn selectorless_registration_owns_every_first_parameter() {
 
 /// 選別子つきの登記は、その選別子ちょうどの出現だけを担当する。名簿に無い第 1 引数と、
 /// 第 1 引数の無い出現は、どちらも担当なし＝良性未処理（要件 11.2）。
-/// **両側から挟む**: 名簿にある `zorder` は引けて、名簿に無い `windowstate` と裸の `set` は
+/// **両側から挟む**: 名簿にある `zorder` は引けて、名簿に無い `nosuch` と裸の `set` は
 /// 引けない。
 #[test]
 fn selector_bearing_registration_owns_only_listed_selectors() {
@@ -91,7 +91,7 @@ fn selector_bearing_registration_owns_only_listed_selectors() {
         "第 1 引数の無い裸の set は担当なし（名前まるごとの登記ではない・要件 11.2）"
     );
     assert_eq!(
-        ledger.consumer_of("set", Some("windowstate")),
+        ledger.consumer_of("set", Some("nosuch")),
         None,
         "名簿に無い第 1 引数は担当なし＝将来の担当のための余地（要件 11.3）"
     );
@@ -135,7 +135,7 @@ fn duplicate_registration_is_detected() {
 fn different_selector_under_same_name_registers_as_another_consumer() {
     let mut ledger = ConsumerLedger::canonical();
     ledger
-        .try_register("set", Some("windowstate"), CommandConsumer::Seriko)
+        .try_register("set", Some("nosuch"), CommandConsumer::Seriko)
         .expect("同名・別選別子は重複でない（将来の担当の余地・要件 11.3）");
 
     // 2 つの選別子が別々の担当を引く（相互に混ざらない）。
@@ -145,7 +145,7 @@ fn different_selector_under_same_name_registers_as_another_consumer() {
         "先の登記は後から足した選別子に押しのけられない"
     );
     assert_eq!(
-        ledger.consumer_of("set", Some("windowstate")),
+        ledger.consumer_of("set", Some("nosuch")),
         Some(CommandConsumer::Seriko),
         "後から足した選別子は自分の担当を引く（要件 11.3 の余地）"
     );
@@ -291,19 +291,19 @@ fn exclusion_applies_only_within_the_same_name() {
 /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register（38 行）が Ok（重複なら expect が panic する）。
+    // canonical() は内部 try_register（40 行）が Ok（重複なら expect が panic する）。
     let ledger = ConsumerLedger::canonical();
     assert_eq!(
         ledger.entry_count(),
-        38,
-        "正準台帳の登記は 38 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+        40,
+        "正準台帳の登記は 40 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
          (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
          (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
          (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
          updatebymyself／update／updateother／(set,choicetimeout)／\
          areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\
          (reload,balloon)／(reload,descript)／reloadsurface／(set,alignmenttodesktop)／\
-         (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)／(lock,balloonmove)／(unlock,balloonmove)）——増減させたら本檻と doc の 2 か所を編集すること"
+         (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)／(lock,balloonmove)／(unlock,balloonmove)／(set,windowstate)／運搬名 \\v）——増減させたら本檻と doc の 2 か所を編集すること"
     );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
@@ -327,7 +327,7 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::ZOrderSink)
     );
 
-    // 38 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+    // 40 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
     // 検出される。
     let mut ext = ledger.clone();
     let err = ext
@@ -339,7 +339,7 @@ fn canonical_builds_without_duplicate() {
             name: "bind".to_string(),
             selector: None,
         },
-        "38 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+        "40 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
     );
     // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -588,4 +588,24 @@ fn canonical_registers_the_five_window_link_pairs_for_the_move_sink() {
             "({name},{selector}) は担当なし"
         );
     }
+}
+
+/// 常に手前の指令の 2 行（stay-on-top-directives 要件 1.8）: `\![set,windowstate,…]` は第 2 引数に
+/// 関わらず、運搬名の `\v` は引数に関わらず [`CommandConsumer::WindowStateSink`] の担当。
+#[test]
+fn window_state_rows_belong_to_window_state_sink() {
+    let ledger = ConsumerLedger::canonical();
+    assert_eq!(
+        ledger.consumer_of("set", Some("windowstate")),
+        Some(CommandConsumer::WindowStateSink)
+    );
+    assert_eq!(
+        ledger.consumer_of(RAISE_TAG_CARRIER, None),
+        Some(CommandConsumer::WindowStateSink)
+    );
+    assert_eq!(
+        ledger.consumer_of("reset", Some("windowstate")),
+        None,
+        "reset,windowstate は表に無い"
+    );
 }

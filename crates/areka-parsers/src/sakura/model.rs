@@ -81,6 +81,12 @@ pub enum Instruction {
 /// ため `\!` のコマンド名とは衝突しない。ID の意味付けは消費側の責務。
 pub const JUMP_TAG_CARRIER: &str = "\\j";
 
+/// 裸の `\v`（手前へ出す）を載せる汎用コマンドの運搬名（stay-on-top-directives 要件 1.1）。
+///
+/// [`JUMP_TAG_CARRIER`] と同じ流儀で、台本から `\![…]` では書けない綴りにする。
+/// `\v` は引数を持たないので `raw_args` は空。窓をどう動かすかは消費側の責務。
+pub const RAISE_TAG_CARRIER: &str = "\\v";
+
 /// `\s[...]` の不透明中身（NewType・surface 層が解釈）。要件 2.2/2.3。
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceArg(String);
