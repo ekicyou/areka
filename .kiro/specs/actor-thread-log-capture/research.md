@@ -51,7 +51,7 @@
 | 5.3 番人 | 例外表と件数へ理由つきで足す | 番人あり | **Missing**（`with_default_guard_test.rs` の 2 か所） |
 | 5.4 1,000 行 | — | 余裕あり | 変更 0 |
 | 5.5 赤の手当て | 下の 6 の表 | — | **Constraint**: 直す所が `crates/areka/src/update/` など境界の外のファイルになる |
-| 5.6 静かな机の全体テスト 1 回 | — | — | 最後に 1 回 |
+| 5.6 全体テスト 1 回（静かな机は要らない） | — | — | 最後に 1 回 |
 | 6.1〜6.5 対照の試験 | `areka-actor` の中の試験と `log-capture-kit` の窓口 | `[dev-dependencies]` に無い | **Missing**（`Cargo.toml`・`Cargo.lock`） |
 
 ## 4. 記録の受け手の仕組みで分かったこと（tracing-core 0.1.36 の実コード）
