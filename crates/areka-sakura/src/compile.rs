@@ -413,6 +413,19 @@ fn scan<'a>(
                     cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
                 }
             }
+            // 出せない・読めない文字の番号（`\_u[…]`・`\_m[…]`・script-small-tags 要件 2）。合図を作らず
+            // 警告を 1 行残して続ける（代わりの字は出さない・2.7）。strict では「読めない引数」（6.3）。
+            Instruction::CharCodeDropped { raw, reason } => {
+                tracing::warn!(
+                    event = "char_code_dropped",
+                    raw = %raw,
+                    reason = ?reason,
+                    "[compile] 文字の番号を出せないので捨てる"
+                );
+                if let Some(t) = tracer.as_deref_mut() {
+                    t.find(DetectionPoint::CharCodeDropped);
+                }
+            }
             // 残る除外（`Raw` および `#[non_exhaustive]` の未知 variant）は無視ログを記録し cue を
             // 生成せず継続する（寛容・非 panic・型シーム・R8.2/8.3/R11.2）。Choice/Cursor は task 4.1、
             // Move/GenericCommand/SystemVar は task 4.2、Font と Anchor/AnchorEnd もその後に専用アームへ
@@ -608,6 +621,9 @@ mod anchor_tests;
 #[cfg(test)]
 #[path = "compile_arm_tests.rs"]
 mod arm_tests;
+#[cfg(test)]
+#[path = "compile_char_code_tests.rs"]
+mod char_code_tests;
 #[cfg(test)]
 #[path = "compile_choice_timeout_tests.rs"]
 mod choice_timeout_tests;

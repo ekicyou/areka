@@ -282,7 +282,7 @@ element1,balloon,a,0,0
         assert_eq!(RECORD_TARGET, TARGET_ERROR);
     }
 
-    /// ⑶ の 17 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（7.1・2.4）。
+    /// ⑶ の 18 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（7.1・2.4）。
     #[test]
     fn diagnostic_rows_replay_as_the_document_says() {
         // （種類, 場合, 文面）。
@@ -290,7 +290,7 @@ element1,balloon,a,0,0
             .into_iter()
             .map(|c| (unquote(&c[0]), c[1].clone(), unquote(&c[2])))
             .collect();
-        assert_eq!(kinds.len(), 10, "種類と文面の表の行数");
+        assert_eq!(kinds.len(), 11, "種類と文面の表の行数");
         // 文面が 2 つ以上ある種類の行が引く「場合」（行の番号 → 種類の表の「場合」の欄）。
         let case_of = |row: usize| match row {
             9 => "閉じていない",
@@ -298,6 +298,7 @@ element1,balloon,a,0,0
             15 => "閉じが無い",
             16 => "開いている間の新しい開き",
             17 => "開いていない所の閉じ",
+            18 => "出せない文字の番号",
             _ => "—",
         };
         let rows = table("diagnostic-rows");
@@ -348,7 +349,7 @@ element1,balloon,a,0,0
             }
             checked += 1;
         }
-        assert_eq!((checked, rows.len()), (17, 17), "確かめた行の数と ⑶ の行数");
+        assert_eq!((checked, rows.len()), (18, 18), "確かめた行の数と ⑶ の行数");
     }
 
     /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（7.2・2.7）。

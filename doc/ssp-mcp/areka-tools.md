@@ -74,6 +74,7 @@ OK:3 diagnostics
 | `missing_balloon` | — | `no such balloon ID in the current balloon; playback does not change the balloon` |
 | `unreadable_argument` | 閉じていない | `the bracket or quote is not closed; playback drops everything from here to the end` |
 | `unreadable_argument` | 既定の値へ落とす | `the argument is missing or unreadable; playback uses the default value` |
+| `unreadable_argument` | 出せない文字の番号 | `areka cannot show this character number; playback drops it` |
 | `ignored` | — | `areka accepts this but it has no effect yet` |
 | `unpaired_tag` | 閉じが無い | `the anchor is not closed; playback extends it to the end of the script` |
 | `unpaired_tag` | 開いている間の新しい開き | `a new anchor opens before the previous one closes; playback closes the previous one here` |
@@ -104,12 +105,13 @@ OK:3 diagnostics
 | 15 | `unpaired_tag` | 閉じ `\_a` の無いアンカーの開き（アンカーは台本の終わりまで続く） | `\_a[x]` | `\_a[x]あ\_a` |
 | 16 | `unpaired_tag` | アンカーが開いている間の新しい開き（診断は新しい開きに付く） | `\_a[x]あ\_a[y]い\_a` | `\_a[x]あ\_a\_a[y]い\_a` |
 | 17 | `unpaired_tag` | アンカーが開いていない所の閉じ | `\_a` | `\_a[x]あ\_a` |
+| 18 | `unreadable_argument` | `\_u[…]`・`\_m[…]` の出せない番号（0・制御の文字・片割れのサロゲート・U+10FFFF より上）と読めない番号（再生はその埋め込みを捨てる） | `\_u[0]`・`\_u[0x09]`・`\_u[0xD83D]`・`\_u[0x110000]`・`\_u[abc]`・`\_m[0]` | `\_u[0x3000]`・`\_m[65]`・`\_u[ 0X22ee,1]` |
 
 <!-- diagnostic-rows:end -->
 
 - 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
 - `\s`・`\b` は、その場の話し手（`\0`・`\1`・`\h`・`\u`・`\p[n]`）のシェルとバルーンで判定する。
-- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、同じ 17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
+- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、18 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
 - `unpaired_tag`（15〜17 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 16 行目・15 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。
 
 **名前だけ予約した種類**（今は出さない）:
@@ -277,6 +279,7 @@ SSP の欄は [survey.md](survey.md) 8 節の実測（2026-10-29）。
 | ReadMarkerIgnored | `ignored` | 同（印 `MarkerIgnored`） | 同 | `\![*]` | `\q[題,ID]` |
 | CommandUnhandled | `unknown_command` | 台本の解釈: `GenericCommand`・`Move` の腕（`\!` の受け取り手の台帳 `consumer_of` が None。単独の `\![*]` を除く） | 同 | `\![nosuch]` | `\![open,readme]` |
 | ChoiceTimeoutUnreadable | `unreadable_argument`（既定の値へ落とす） | 台本の解釈: `GenericCommand` の腕（`parse_choice_timeout` が `Unreadable`） | 同 | `\![set,choicetimeout,abc]` | `\![set,choicetimeout,5000]` |
+| CharCodeDropped | `unreadable_argument`（出せない文字の番号） | 台本の解釈: `CharCodeDropped` の腕（読み手が `\_u[…]`・`\_m[…]` の番号を捨てた） | 同 | `\_u[0]` | `\_u[0x3000]` |
 | FontIgnored | `ignored` | 台本の解釈: `Font` の腕（文字の層の `classify_font_tag` が受け取るだけ） | 同 | `\f[sub,1]` | `\f[bold,1]` |
 | FontUnknownKey | `unknown_tag` | 同（知らないキー・キーなし） | 同 | `\f[colour,red]` | `\f[color,red]` |
 | AnchorReopened | `unpaired_tag`（新しい開き） | 台本の解釈: `Anchor` の腕（`pair_anchors` が `Reopened`） | 同 | `\_a[x]あ\_a[y]い\_a` | `\_a[x]あ\_a\_a[y]い\_a` |

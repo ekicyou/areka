@@ -24,8 +24,8 @@
   - _Boundary: Lexer_
   - _Requirements: 4.3_
 
-- [ ] 3. 組み立て: 捨てた番号の警告と strict の控え
-- [ ] 3.1 捨てた番号ごとの警告の 1 行と、strict の検出点・文言を足す
+- [x] 3. 組み立て: 捨てた番号の警告と strict の控え
+- [x] 3.1 捨てた番号ごとの警告の 1 行と、strict の検出点・文言を足す
   - 組み立ては「捨てた文字の番号」の命令ごとに `event="char_code_dropped"`・元の綴り・理由の警告を 1 行出し、合図を作らない。strict の連れが居れば新しい検出点（種類「読めない引数」・ASCII の文言）を控える
   - 埋め込みの台本と、同じ字を直に書いた台本の合図の列が等しいことを確かめる（全角の空白だけの台本・ぱすたの起動の形 `\_u[0x3000]` → 重なりの指令 → `\c` を含む）
   - strict の検出点の一覧は文書の表から読む檻がある。`doc/ssp-mcp/areka-tools.md` の検出点の表・診断の種類の表・診断の行の表に、捨てた文字の番号の行を 1 つずつ足し、`areka-sakura` の `strict_tests.rs`（検出点の数 16 → 17・名前の一覧）と `areka` の `emo2_boot/strict_judges_tests.rs`（種類と行の数・行の番号）を直す
@@ -157,3 +157,9 @@
   - 完了の姿: spec の検証の記録に 3 件の結果と置き場が書かれ、手順書の 5 節の段 2 の確かめの欄が埋まっている
   - _Depends: 4.2, 6.4, 7.2, 7.3, 7.4_
   - _Requirements: 8.3_
+
+## Implementation Notes
+
+- 3.1: `cargo clippy -p areka-sakura --all-targets -- -D warnings` は依存の `dola`（resolve.rs・validate/rules.rs ほか）と areka-sakura の drive.rs:184/330・compile_arm_tests.rs:637-638 の既存の lint で止まる。この spec の外の既存の問題（完了の棚卸で扱う）。
+- 3.1: `doc/ssp-mcp/areka-tools.md` の check_script の診断の行の表で、捨てた文字の番号の行は 18 行目に足した（`row01`〜`row17` のテスト名を崩さないため）。7.3 で `check_script_judge_tests.rs` に `row18` を足し、地の文の「`row01`〜`row17` が固定」を直す。
+- 3.1: `\_u[]` の警告の `raw` は `\_u` になる（字句の段が空の括弧を引数なしと同じに渡す・`\s[]` と同じ）。

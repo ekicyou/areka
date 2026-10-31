@@ -90,6 +90,9 @@ const SAMPLES: &[&str] = &[
     "\\_a",
     "\\![move,nosuch]",
     "\\![move,--X=10]",
+    "\\_u[0]",
+    "\\_u[0x3000]",
+    "あ\\_u[0x09]い",
     "\\h\\s[5]こんにちは\\w9\\n\\u\\s[10]\\b[2]やあ%username\\c\\_l[0,5em]",
     "あ\\![nosuch]い\\q[題,ID]\\q[次,ID2]\\![set,choicetimeout,abc]",
     "\\_w[1000]あ\\e\\![nosuch]",
@@ -143,6 +146,9 @@ fn red_scripts_record_their_point() {
         ("\\_a[x]あ\\_a[y]い\\_a", &[(3, AnchorReopened, "\\_a[y]")]),
         ("\\_a[x]", &[(1, AnchorUnclosed, "\\_a[x]")]),
         ("\\_a", &[(0, AnchorStrayClose, "\\_a")]),
+        // 捨てた文字の番号（script-small-tags 要件 6.3）。合図を作らないので次に作られる合図の順番。
+        ("\\_u[0]", &[(0, CharCodeDropped, "\\_u[0]")]),
+        ("あ\\_m[abc]い", &[(2, CharCodeDropped, "\\_m[abc]")]),
     ];
     for (script, expected) in cases {
         assert_eq!(pending(script), expected.to_vec(), "{script}");
@@ -164,6 +170,9 @@ fn green_scripts_record_nothing() {
         "\\f[color,red]",
         "\\_a[x]あ\\_a\\_a[y]い\\_a",
         "\\_a[x]あ\\_a",
+        "\\_u[0x3000]",
+        "\\_m[65]",
+        "\\_u[ 0X22ee,1]",
     ] {
         assert_eq!(pending(script), [], "{script}");
     }

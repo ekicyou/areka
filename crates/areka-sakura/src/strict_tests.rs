@@ -1,15 +1,15 @@
 //! strict の語彙の檻（spec: mcp-strict-errors 要件 2.1・2.3・2.4・2.6・2.8）。
 //!
-//! 16 の検出点の名前・種類・文面の組、位置の数え方（前から 1 度だけ数え、戻ったら数え直す）、
+//! 17 の検出点の名前・種類・文面の組、位置の数え方（前から 1 度だけ数え、戻ったら数え直す）、
 //! 記録 1 件の宛先と欄と本文の形を固定する。
 
 use super::*;
 
-/// 16 の点と、その（名前・種類・文面）の組。文面は `check_script` の ⑶ の表と同じ定数。
+/// 17 の点と、その（名前・種類・文面）の組。文面は `check_script` の ⑶ の表と同じ定数。
 #[test]
-fn sixteen_points_name_kind_message() {
+fn seventeen_points_name_kind_message() {
     use DetectionPoint::*;
-    let expected: [(DetectionPoint, &str, &str, &str); 16] = [
+    let expected: [(DetectionPoint, &str, &str, &str); 17] = [
         (
             ReadUnknownTag,
             "ReadUnknownTag",
@@ -45,6 +45,12 @@ fn sixteen_points_name_kind_message() {
             "ChoiceTimeoutUnreadable",
             "unreadable_argument",
             MSG_DEFAULTED,
+        ),
+        (
+            CharCodeDropped,
+            "CharCodeDropped",
+            "unreadable_argument",
+            MSG_CHAR_CODE_DROPPED,
         ),
         (FontIgnored, "FontIgnored", "ignored", MSG_IGNORED),
         (
@@ -102,7 +108,7 @@ fn sixteen_points_name_kind_message() {
             MSG_MISSING_BALLOON,
         ),
     ];
-    assert_eq!(DetectionPoint::ALL.len(), 16);
+    assert_eq!(DetectionPoint::ALL.len(), 17);
     for (i, (point, name, kind, message)) in expected.into_iter().enumerate() {
         assert_eq!(DetectionPoint::ALL[i], point, "ALL の {i} 番目");
         assert_eq!(point.name(), name);
@@ -140,7 +146,7 @@ fn kinds_are_the_seven_without_reserved() {
     );
 }
 
-/// 文面の定数 10 個の文字列そのもの（`check_script` の答えを 1 バイトも変えない）。文面は `:` を含まない。
+/// 文面の定数 11 個の文字列そのもの（`check_script` の答えを 1 バイトも変えない）。文面は `:` を含まない。
 #[test]
 fn message_constants_verbatim() {
     let all = [
@@ -180,6 +186,10 @@ fn message_constants_verbatim() {
         (
             MSG_ANCHOR_STRAY_CLOSE,
             "no anchor is open; playback ignores this close",
+        ),
+        (
+            MSG_CHAR_CODE_DROPPED,
+            "areka cannot show this character number; playback drops it",
         ),
     ];
     for (got, want) in all {
