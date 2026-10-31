@@ -18,7 +18,7 @@
   - _Boundary: DpiOnce_
   - _Requirements: 2.2, 2.3, 10.3_
 
-- [ ] 1.3 (P) 入れた物の目録の綴りを決める部分を窓口から切り出す
+- [x] 1.3 (P) 入れた物の目録の綴りを決める部分を窓口から切り出す
   - 窓口の「入れた物を記録する」中の、目録の綴りのフォルダ名と `%lastghostname` の値を決める部分を純粋な関数にし、窓口はそれを呼ぶ
   - 振る舞いは変えない
   - 完了の形: 窓口の記録の今のテストがそのまま緑で、切り出した関数が起動の前の口から呼べる
@@ -137,3 +137,7 @@
   - 完了の形: 3 点の確かめの結果（記録の抜き書きと見た結果）が実装の記録に残っている
   - _Depends: 5.1_
   - _Requirements: 2.2, 2.3, 10.3_
+
+## Implementation Notes
+
+- 1.3: `cargo test -p areka` の全体で `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` と `session_mark_tests::fallback::first_boot_falling_back_pins_mark_with_one_warn` が並べて走らせたときだけ赤になることがある（単独では緑・この spec の差分と無関係）。完了の棚卸で扱う。

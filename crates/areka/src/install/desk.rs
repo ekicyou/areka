@@ -361,25 +361,10 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
     let roots = world
         .get_resource::<BootContext>()
         .map(|ctx| ctx.roots.clone());
-    let ghost_entry = |folder: &str| roots.as_ref().and_then(|roots| find_ghost(roots, folder));
-    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
-        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
-            Some(name) => name,
-            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
-            None => folder.to_owned(),
-        }
-    });
+    let (folder, ghost_name) = catalog_spelling(roots.as_ref(), &record);
     match record.kind {
-        InstallKind::Ghost => {
-            let folder = ghost_entry(&record.folder)
-                .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
-            record_last_installed(world, folder);
-        }
+        InstallKind::Ghost => record_last_installed(world, folder),
         InstallKind::Balloon => {
-            let folder = roots
-                .as_ref()
-                .and_then(|roots| find_balloon(roots, &record.folder))
-                .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
             record_installed_balloon(world, folder.clone());
             remember_balloon(world, folder);
             note_hidden_by_ghost(world, &record.folder);
@@ -397,6 +382,33 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
             "[install] 今のゴーストの記憶の書き手が止まっているので、入れた後の記録の反映を確かめられません"
         );
     }
+}
+
+/// 目録の綴りに直したフォルダ名と、%lastghostname の値（窓口と起動の前の口の共通の決まり）。
+/// フォルダ名はゴースト・バルーンなら根の目録の綴り（目録に無ければ書庫の綴りのまま）、他は書庫の
+/// 綴りのまま。%lastghostname は関わったゴーストの目録の `name`（無ければゴーストは `install.txt` の
+/// `name`・他はそのフォルダ名）で、関わったゴーストが無ければ None。
+pub(super) fn catalog_spelling(
+    roots: Option<&areka_ghost::BasewareRoots>,
+    record: &InstalledRecord,
+) -> (String, Option<String>) {
+    let ghost_entry = |folder: &str| roots.and_then(|roots| find_ghost(roots, folder));
+    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
+        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
+            Some(name) => name,
+            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
+            None => folder.to_owned(),
+        }
+    });
+    let folder = match record.kind {
+        InstallKind::Ghost => ghost_entry(&record.folder).map(|e| e.identity.folder),
+        InstallKind::Balloon => {
+            roots.and_then(|roots| find_balloon(roots, &record.folder).map(|e| e.identity.folder))
+        }
+        InstallKind::Shell | InstallKind::Supplement => None,
+    }
+    .unwrap_or_else(|| record.folder.clone());
+    (folder, ghost_name)
 }
 
 /// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info
