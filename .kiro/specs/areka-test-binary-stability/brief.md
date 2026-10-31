@@ -249,3 +249,11 @@
 - **観測**: `crates/areka` の `emo2_boot::ghost_switch::boot_event_tests::a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today` が、`ghost_switch_test_support.rs:222`（検体を組む間の `std::fs::remove_dir(sample.folder().join("balloon"))`）の io エラーの `expect` で 1 回赤。単独の回し直し（`cargo test -p areka --bin areka a_switch_without_a_boot_event_boots_the_target`）で緑（2026-10-31・`cargo test -p areka`・負荷は掛けていない）。
 - **起票の条件**: この spec の持ち場（同じ足場のファイル `ghost_switch_test_support.rs`）と重なる。
 - **見立て**: 中身を移した直後のフォルダの一時的な握り（Windows のファイルの掴み）。行数は 2026-10-31 の main（`4068422f` の後）のもの＝着手時に引き直す。
+
+## 2026-10-31 `install-before-boot` の完了の棚卸で足した件（件 5）
+
+### 件 5: 起動中の印のテストが並べて走らせたときだけ赤
+
+- **観測**: `install-before-boot` の実装中、`cargo test -p areka --bin areka` を並べて走らせた回で `session_mark_tests::fallback::first_boot_falling_back_pins_mark_with_one_warn`（`crates/areka/src/main_session_mark_fallback_tests.rs:17`）と `session_mark_write_tests::switch_marks_unwritable_end_with_write_failed_and_no_reservation`（`crates/areka/src/main_session_mark_write_tests.rs:193`）が 1 回ずつ赤。どちらも単独で回すと緑。`install-before-boot` は起動中の印のコードに触れていない。同じ回に件の上の `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` も 1 回赤になった。
+- **起票でなくここへ足した訳**: 確かめるのに負荷つきの全体の走行を何度も回す要がある（完了の棚卸の例外の 4 つ目）。並べて走らせたときだけの揺れで、件 2（テストの待ち）と同じ切り分けの手順で見る。
+- **見立て**: 記録の捕まえ（警告の件数を数える）か印のファイルの置き場が、並走する別のテストと重なっている疑い。着手時に赤の文を採り直す（今回は文を控えていない）。

@@ -437,6 +437,7 @@ Opus
 | `popup-menu-shell-look`（**10-18 起票**・棚卸㉗・v0.1.0） | 優先・区分 A | シェルの `menu.*`（右クリックメニューの色・絵・文字）をオーナードローで描き、着せ替えのメニュー（`sakura.menu,auto`・bindgroup の名前・`mustselect`）を出す。生きている決まり 6（オーナードローと着せ替えメニューは予約）を解くかが先＝裁定待ち。ぱすたの `menu.*` は Windows 11 の明るいメニューを写したものなので、見た目の差が大きいのは着せ替えのメニュー | M（14〜18・超えたら描き分けと着せ替えのメニューの 2 本） | メニュー（`menu/{mod,win32,plan}.rs`・wintf の `window_proc/mod.rs`） | 開発者の裁定 | ○（wintf と areka の間に、OS のメニューの中で同期に描く新しい約束・着せ替えのメニューだけなら −） |
 | `popup-menu-extra-resources`（**10-31 起票**・`popup-menu-residue` の完了時の棚卸・同 spec の件 13・出どころは `shiori2-protocol` の 5.4） | その他・区分 C | 「．さくら」のような古いゴーストが持つ右クリックメニューの資源を問う。⑴ 古い名前 `updatebuttoncaption` も問い、「ネットワーク更新」をゴーストの言葉にする。⑵ 消滅通告（`vanishbuttoncaption`・`vanishbuttonvisible`）・おすすめ（`*.recommendbuttoncaption`・`*.recommendsites`）・ポータル（`sakura.portalbuttoncaption`・`sakura.portalsites`）の項目を足す。台帳 `shiori.toml` の 9 行（`vocabulary-only`・持ち主なし）の持ち主を決める | S〜M（⑴ だけなら 2〜3・⑵ を入れて 8〜12・超えたら ⑵ を切り出す） | メニュー（kanade の `schedule/resources.rs`・`menu/`）。`popup-menu-shell-look` と同じウェーブに置かない（おすすめは同 spec の件 15 と分け方を決める） | なし | − |
 | `emo-bake-log-overlap`（**10-31 起票**・`placement-measure-bake-once` の完了時の棚卸） | その他・区分 C | 起動の準備で採寸と資産の組み立てが同じ絵を 2 回焼くため、焼く段（0 寸・全透明の `warn!`）・面の表の畳み込みの `warn!`・バルーンの 2 層マージの基層の `descript.txt` の `warn!` が同じ絵・同じ面について 2 行ずつ出る。1 行ずつにする（案 1＝記録を出さない口を emo-atlas の `bake`・emo-compose の畳み込み・`load_scope_balloon_model` に足し採寸の道だけ黙らせる／案 2＝焼くのを 1 回にする・要件の段で裁定）。起動を止める失敗の記録はどの道でも出す | S（案 1 で 4〜6 の見込み） | いつでも | ✅ `placement-measure-bake-once` | − |
+| `alert-dialog-per-monitor-dpi`（**10-31 起票**・`install-before-boot` の完了時の棚卸） | バグ・区分 B | 件 1: 告知の画面（`alert.rs` の `MessageBoxW`）が system aware で、拡大率の違う副のモニタに出るとにじむ見込みを直す（案 A＝`SetThreadDpiAwarenessContext` で囲む／案 B＝`TaskDialogIndirect`／案 C＝自前の窓・要件の段で裁定）。件 2: ゴーストを拡大率の違うモニタへ移した後にバルーンが枠なしで矢印だけ見えた件を見分け、描き直しの欠けなら直す | S〜M（件 1 は案 A で 3〜5） | いつでも | ✅ `install-before-boot` | − |
 | `ondestroy-on-exit`（**10-22 起票**・棚卸㉘・完了 `mcp-reload` の残り物） | その他・区分 C | 終了とゴーストの切り替えで、SHIORI を降ろす前に `OnDestroy`（NOTIFY）を送る（リロードの場面は `mcp-reload` が済ませた）・網羅台帳の行の直し・送る順は SSP で測る | S（4〜7） | kanade の列（✅ `script-security-level`〔10-23 着地＝済み〕・`mouse-click-wheel-events` と同じウェーブに置かない） | — | − |
 | `install-package-type`（**10-23 起票**・棚卸㉙・覚え書きから格上げ・いつか） | その他・区分 C | `install.txt` の `type,package`（ゴースト・シェル・バルーンなどをまとめた書庫）を、今の「知らない種類」で断る形から、中の 1 つずつを入れる形へ。1 つが断られたら残りを入れるか・完了のイベントの送り方は SSP で測る | S〜M（5〜8） | インストールの列（`crates/areka-nar/src/{manifest,plan,lib}.rs`・`crates/areka/src/install/{procedure,judge}.rs`＝`startup-install-option` と `judge.rs`・`readonly-mode` と `install/`） | なし（`bootghost` を起動の道へ渡すのは `startup-install-option` の後） | − |
 | `sstp-receive`（**10-23 起票**・棚卸㉙・覚え書きから格上げ・いつか） | その他・区分 C | SSTP の受信（SEND・NOTIFY・Option・共通のヘッダ・`OnSSTPBreak`）。kanade には SEND と NOTIFY の入口がもうある（`msg.rs`）＝足りないのは網の側。MCP の待受（SSP と 9801 を早い者勝ち）と同じ口で受け、最初の行で振り分ける案が議題。`balloon-markers` の `sstpmarker`／`sstpmessage` が画面に出るのはこの後 | L（24〜30＝要件で ① 受け口と SEND・NOTIFY〔14〜17〕／② `sstp-receive-methods`〔COMMUNICATE・EXECUTE・GIVE・INSTALL・HTTP 越し・10〜13〕に切る） | kanade の列（`schedule/sstp.rs`・`msg.rs`）と MCP の待受（`crates/areka-mcp/src/server.rs`）・`cli/listen.rs` | なし（`X-SSTP-PassThru-*` は `mcp-shiori-query`、`nobreak` は `shiori4-api` の列の後） | − |
@@ -1104,7 +1105,7 @@ Opus
 |---|---|---|---|
 | `balloon-text-bugs` | 件 1 `choice-balloon-timeout-stuck`・件 2 `balloon-text-area-collapse`・件 3 `underline-bottom-row-clip` | 文字の層（`crates/areka-emo-text`）＝文字とバルーンの列 | 11〜20 |
 | `seriko-trigger-lottery-gaps` | 件 1 `seriko-trigger-teardown-gaps`・件 2 `seriko-lottery-ended-play-skip`・件 3 `seriko-rebuild-hidden-lottery`（区分 C） | `crates/areka-seriko` の `looper.rs`・`parts.rs` ほか＝シェルの element の列 | 8〜21 |
-| `areka-test-binary-stability` | 件 1 `areka-test-threads-av`・件 2 `test-wait-marker-gaps`・件 3 wintf の lib の AV・件 4 ghost_switch の足場の揺れ（10-31 追記） | `cargo test -p areka --bin areka` のテストと足場＝ウェーブの外（静かな机） | 13〜20 |
+| `areka-test-binary-stability` | 件 1 `areka-test-threads-av`・件 2 `test-wait-marker-gaps`・件 3 wintf の lib の AV・件 4 ghost_switch の足場の揺れ（10-31 追記）・件 5 起動中の印のテストの並走の揺れ（10-31 `install-before-boot` の棚卸） | `cargo test -p areka --bin areka` のテストと足場＝ウェーブの外（静かな机） | 13〜20 |
 | `emo2-real-run-stability` | 件 1 `emo2-real-run-wrap-timeout`・件 2 `shiori-load-first-run-flake` | `crates/areka/tests/emo2_real_run.rs` と emo2 の実機の走行 | 4〜13 |
 | `mcp-receiver-bugs` | 件 1 `mcp-malformed-call-code`・件 2 `dump-balloon-debug-timeout` | `crates/areka-mcp/src/handler.rs`・`crates/areka/src/mcp/dump_balloon.rs` | 4〜12 |
 
@@ -1512,6 +1513,7 @@ Opus
 - [ ] currentghost-property-others -- 件 6: MCP の `get_property` で `currentghost.*` の名前が引けない。持ち主をこの spec と開発者が決めた。Dependencies: なし
 - [ ] draw-methods-canon -- 議題「`move`（位置の語）を範囲に入れるか」を `seriko-pattern-calls` へ移した。Dependencies: なし
 - [ ] areka-test-binary-stability -- 完了時の棚卸: 負荷の下で止まった会話のテスト（`spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`）。Dependencies: なし
+- [ ] areka-test-binary-stability -- 完了時の棚卸（`install-before-boot`・件 5）: 並べて走らせたときだけ赤になる起動中の印のテスト 2 本（`first_boot_falling_back_pins_mark_with_one_warn`・`switch_marks_unwritable_end_with_write_failed_and_no_reservation`）。Dependencies: なし
 
 #### Specs (dependency order)
 
@@ -1777,6 +1779,7 @@ pasta（SHIORI のエンジン・`C:\home\maz\git\pasta`）の `novel-areka-cont
 #### Specs (dependency order)
 
 - [ ] install-before-boot -- `--install` と `initial_install.nar` を起動の解決の前に入れてから起動を続け、空の置き場からも起こす（優先・区分 A・v0.1.0）。Dependencies: startup-install-option
+- [ ] alert-dialog-per-monitor-dpi -- 告知の画面を拡大率の違うモニタでもにじまず出し、モニタを移した後のバルーンの描き直しの欠けを見分ける（バグ・区分 B・install-before-boot の完了時の棚卸）。Dependencies: install-before-boot
 - [ ] ghost-switch-balloon-fallback -- 切替先にも置き場にもバルーンが無いとき、切り替えを落とさず代わりのバルーンで続ける（バグ・区分 B・v0.2.0）。Dependencies: なし
 
 ### window-work-area-clamp の持ち越し（2026-10-30 完了時の棚卸で `/kiro-discovery` で起票）
