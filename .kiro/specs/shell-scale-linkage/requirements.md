@@ -64,7 +64,7 @@
 
 - **In scope**:
   - `\![get,property,イベント名,プロパティ名,…]` の受け手と、返しのイベント（`SenderType: internal,property`）。読める値なら名前を問わず返す。
-  - `currentghost.scope(ID).scaling`・`currentghost.balloon.scope(ID).scaling`・`currentghost.scope(ID).currentmonitor.dpi` の 3 つの値（MCP の `get_property` とゴーストの道）。
+  - `currentghost.scope(ID).scaling`・`currentghost.balloon.scope(ID).scaling`・`currentghost.scope(ID).currentmonitor.dpi` の 3 つの値と、areka 独自の `currentghost.balloon.scope(ID).currentmonitor.dpi`（合わせて 4 つの値・MCP の `get_property` とゴーストの道）。
   - `OnShellScaling`・`OnBalloonScaling` を送る場面と Reference。
   - ゴーストの descript の `balloon.syncscale` と、シェルの descript の `sakura.`・`kero.`・`char*.balloon.syncscale` の読み取りと、その値を持つこと。
   - 台本の命令の受け手の一覧に 1 行（`check_script` の判定に載る）・決定論のテスト・網羅台帳の行・ぱすたの実機の確かめ（200% と 150% の画面をまたぐドラッグ）。
@@ -117,8 +117,9 @@
 6. The areka shall 倍率の横と縦に同じ数を入れ、`,` でつなぎ、空白・符号の `+`・前ゼロを入れない（SSP の `150,150` と同じ形）。
 7. The areka shall 倍率が整数の百分率で割り切れるときは整数で、割り切れないときは小数点以下を付けて答える（ukadoc「小数点以下が出る場合あり」）。
 8. While ぱすたのように作者の基準の DPI が 96 で、窓が 150%（DPI 144）の画面に居る, the areka shall `currentghost.scope(0).scaling` に `150,150`、`currentghost.scope(0).currentmonitor.dpi` に `144` を答える（200%〔DPI 192〕の画面なら `200,200` と `192`）。
-9. If 聞かれたスコープの窓をゴーストが持たない（そのゴーストに無い番号・負の番号・起動の途中で窓がまだ無い）, the areka shall 3 つの名前に値なしで答える（MCP では今の `NG:Cannot find such property name.`、ゴーストの道では今の「プロパティが無い」の失敗・新しい答えの文を作らない）。
+9. If 聞かれたスコープの窓をゴーストが持たない（そのゴーストに無い番号・負の番号・起動の途中で窓がまだ無い）, the areka shall 4 つの名前に値なしで答える（バルーンの 2 つは、そのスコープのバルーンの窓がまだ無いときも）（MCP では今の `NG:Cannot find such property name.`、ゴーストの道では今の「プロパティが無い」の失敗・新しい答えの文を作らない）。
 10. The areka shall MCP の `get_property` とゴーストのプロパティの道で、同じ時点に同じ名前を読んだら同じ値を答える。
+11. When `currentghost.balloon.scope(ID).currentmonitor.dpi` が読まれた, the areka shall そのスコープのバルーンの窓が居る画面の DPI を、3.5 と同じ形（10 進の整数）で答える（areka 独自の名前・ukadoc の `currentmonitor` 系は `currentghost.scope(ID).currentmonitor.*` だけ・2026-11-01 開発者「足す」）。
 
 ### Requirement 4: 値は変わった時点で新しくなり、ゴーストごとに分かれ、保存しない
 **Objective:** As a ゴーストと自動試験の道具, I want 画面を移った直後に読んでも古い倍率と取り違えず、読み取りが動きを重くしないこと, so that 倍率の変わりの合図を受けてすぐ聞き直しても、新しい値が返る
@@ -126,10 +127,10 @@
 #### Acceptance Criteria
 1. When 窓が拡大率の違う画面へ移り、新しい倍率が絵にかかった, the areka shall それより後に受けた読み取りに、新しい倍率と移った先の画面の DPI を答える。
 2. The areka shall 新しい倍率が絵にかかる前に新しい値を答えず、かかった後に古い値を答えない（答える値と描かれた絵の倍率を食い違わせない）。
-3. The areka shall 3 つの値の読み取りに、窓を持つスレッドやほかのスレッドの処理の終わりを待たずに答える（完了 spec `areka-P0-sylphya` の要件 2.7 と同じ約束）。
+3. The areka shall 4 つの値の読み取りに、窓を持つスレッドやほかのスレッドの処理の終わりを待たずに答える（完了 spec `areka-P0-sylphya` の要件 2.7 と同じ約束）。
 4. The areka shall 窓が動くたび（ドラッグの毎フレームなど）に、倍率と DPI の値を作り直したり値の置き場へ出し直したりせず、倍率か DPI が変わった時点でだけ出す。
 5. When ゴーストを替えた・読み直した・areka を起動し直した, the areka shall 前のゴーストや前の起動の値を答えず、新しい窓の値を答える。
-6. The areka shall 3 つの値を保存のファイルに書かない。
+6. The areka shall 4 つの値を保存のファイルに書かない。
 
 ### Requirement 5: 窓の描画の倍率が変わったときの `OnShellScaling`・`OnBalloonScaling`
 **Objective:** As a ゴーストの作者, I want あるスコープのシェルやバルーンの描画の倍率が変わったときに、どのスコープの話かが分かる正典のイベントが届くこと, so that 画面の DPI の変わりでも表示の倍率の変わりでも、変わった窓に合わせて付け直しや倍率のずれの確かめができる
@@ -175,7 +176,7 @@
 #### Acceptance Criteria
 1. When 実機の確かめを行う, the 開発の手順 shall 排他テストの机を持ってから areka を起こし、終わったらすぐ机を返す。
 2. When 実機でぱすたを起こし、200% と 150% の画面の間をドラッグでまたがせた, the 開発の手順 shall `OnPastaShellScale` が Reference に倍率と DPI を持って届くこと、`OnShellScaling` が届くこと、ぱすたが窓の位置と重なりの順を出し直すことを、areka の記録で確かめる。
-3. When 8.2 の確かめの各段（起動の直後・同じ画面の中でのドラッグの後・拡大率の違う画面へ移した後）に達した, the 開発の手順 shall MCP の `get_property` で 3 つの値を読み、窓の居る画面の拡大率と一致すること、ぱすたが倍率のずれの台詞（`＊バルーン倍率のずれ`）を出さないことを確かめる。
+3. When 8.2 の確かめの各段（起動の直後・同じ画面の中でのドラッグの後・拡大率の違う画面へ移した後）に達した, the 開発の手順 shall MCP の `get_property` で 4 つの値を読み、窓の居る画面の拡大率と一致すること、ぱすたが倍率のずれの台詞（`＊バルーン倍率のずれ`）を出さないことを確かめる。
 4. The 開発の手順 shall 実機の値を SSP の基準（Introduction の表）と並べ、数の形が同じであること、倍率の値と `OnShellScaling` の届き方の違いが DPI 追従の方針によるものであることを書き分けて残す。
 5. When 本 spec の実装が終わった, the 開発の手順 shall 網羅台帳の `sakura-script.toml` の `\![get,property]`・`shiori.toml` の `OnShellScaling`・`OnBalloonScaling`・`property.toml` の 3 行・`assets.toml` のゴーストとシェルの `balloon.syncscale` の 4 行を実装済みを表す状態へ改め、根拠への道を添える（シェルの 3 行の持ち主に本 spec を書く・`property.toml` の `scaling` の 2 行の注記は SSP の意味〔利用者がベースウェアで決める拡大率〕で書いてあるので、areka の意味〔画面の DPI への追従の倍率 × 表示の倍率〕へ書き直す・`shiori.toml` の 2 行の注記に、送る場面が窓ごとの最終の描画の倍率の変わりであることと、areka が Reference4 にシェル番号を足したことを書く）。
 
@@ -201,3 +202,4 @@ brief の議題 ⑴ ⑵ と、要件を書くときに ukadoc で決まらなか
 - 表の 6 の続き（2026-11-01）: SSP を測った（`research.md` 11 節＝SSP は利用者の設定の変わりでだけゴースト全体に 1 回・Reference 4 つ・スコープごとの `\![set,scaling]` では送らない）うえで、開発者の裁定「OnShellScalingは、『そのシェルの最終倍率が変わったとき』に出るべき…シェルに対して、描画スケールが変わったとき、に出るべき」＝窓ごとの最終の描画の倍率の変わりで、理由を問わず送る。どのスコープかは Reference4 に入れる（案 A）。要件 5 を書き直した。SSP の送る場面とは違う（意図した違い）。
 - シェル番号の Reference（2026-11-01）: 開発者「リファレンスに、『シェル番号』がなければ追加すべきです」→ 案 1 で確定（開発者「OKです」）＝Reference4 にシェル番号（`OnMouseClick` の Reference3 と同じ番号）・正典の 0〜3 は動かさない。5.1〜5.3・8.5 を書き揃えた。
 - ぱすた側の確認（2026-11-01・「ぱすた開発」セッション）: 仕様案（`scaling` の意味・`\![get,property]` の往復・窓ごとの 2 つのイベントと Reference4 のシェル番号）のままで困らない＝areka 側の直しは無し。ぱすたは Reference4 を見ずにどの窓の通知でも付け直す（相方のボールも付け直したいため）。バルーンが本体と別の画面へはみ出したときに出る「＊バルーン倍率のずれ」の台詞（areka では倍率の違いが正しい値）と、話している最中に `OnShellScaling` の応答で台詞を切る点は、ぱすた側で直す（作者の判断待ち）。ぱすたの問い `currentghost.balloon.scope(ID).currentmonitor.dpi` は ukadoc に無い名前なので、本 spec では足さない（足すなら areka 独自の名前＝開発者の判断）。話している最中の応答の台本は、areka も SSP と同じく今の台詞を差し替える（`areka-kanade` の `events::value_replaces_active_talk`・要件 1.7）と答えた。
+- バルーンの DPI のプロパティ（2026-11-01）: ぱすたの問いを受け、開発者「足す」＝areka 独自の `currentghost.balloon.scope(ID).currentmonitor.dpi` を足す（3.11・3.9・4.3・4.6・8.3）。ukadoc に無い名前なので網羅台帳には行を足さず、どこに独自の名前として書き残すかは設計で決める。
