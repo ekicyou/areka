@@ -29,6 +29,9 @@
 //! 採寸は窓の大きさを知るためだけの読み込みなので、読み込みの記録（シェル・透過の宣言・
 //! 系列の解決）は出さない入口（`_quiet`）を呼ぶ。記録は起動の資産の組み立ての 1 回だけが出す
 //! （要件 3.1・3.2）。採寸自身の記録（既定の面が無い・scope 0 で代える・失敗・k 適用）は残す。
+//! 焼く段と面の表を組む段の記録も黙る（spec: emo-bake-log-overlap 要件 1.4・1.5・1.6・3.1）:
+//! シェルは `load_shell_target_quiet`（焼く段と面の表の組み方も出さない）、バルーンの面 0 は
+//! `build_balloon_target_from_faces_quiet` を通る。起動を止める失敗の `error!` は出す（要件 3.5）。
 //! 読み手は [`measure_native_scope_sizes`]（本物の読み手を作る）→ [`measure_with_reader`]
 //! （動く絵を 1 枚目だけで読む [`first_frame::FirstFrameDecoder`] で包む・数える読み手の
 //! 差し込み口）→ [`measure_baked`]（受けた読み手で焼いて測る）の 3 段で渡る（要件 1.1）。
@@ -38,7 +41,7 @@ use std::path::Path;
 use areka_emo_atlas::{AtlasTable, ElementDecoder, UseSelfAlpha, WicDecoderArm};
 use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState, ScaleRatio};
 use areka_emo_present::balloon::{
-    ResolvedFace, build_balloon_target_from_faces, load_balloon_use_self_alpha_quiet,
+    ResolvedFace, build_balloon_target_from_faces_quiet, load_balloon_use_self_alpha_quiet,
     resolve_balloon_faces_quiet,
 };
 use areka_emo_present::shell_target::load_shell_target_quiet;
@@ -410,8 +413,8 @@ fn build_shell_assets(
 /// ディレクトリ走査も固定名（かつての `balloons0.png` 決め打ち）も持たない——列挙規則が
 /// 独立 2 実装へ分かれると「採寸した窓寸 ≠ 実際に合成された枠」という実機でしか現れない
 /// 欠陥になるため（design「最重要の構造リスク」）。合成も権威の
-/// [`build_balloon_target_from_faces`] をそのまま用い、synthetic surfaces.txt の書式まで
-/// 含めて実装を 1 本に保つ（起動時資産構築と採寸が同じ絵を見る保証）。
+/// [`build_balloon_target_from_faces_quiet`]（記録を出さない兄弟の入口）をそのまま用い、
+/// synthetic surfaces.txt の書式まで含めて実装を 1 本に保つ（起動時資産構築と採寸が同じ絵を見る保証）。
 ///
 /// 採寸に要るのは面 0 のみゆえ、権威が返した採用面列から**面 0 だけ**を構築へ渡す
 /// （他の面を bake しない）。面 0 の必在は権威側の単一施行点（R1.7）であり、ここで
@@ -459,7 +462,7 @@ fn measure_balloon_surface0(
     let face0: Vec<ResolvedFace> = faces.into_iter().filter(|f| f.surface_id == 0).collect();
 
     let (world, atlas) =
-        build_balloon_target_from_faces(balloon_root, decoder, &face0, use_self_alpha)
+        build_balloon_target_from_faces_quiet(balloon_root, decoder, &face0, use_self_alpha)
             .map_err(|e| balloon_err(format!("面 0 の採寸資産の構築に失敗: {e}")))?;
 
     compose_size(composer, &world, &atlas, 0).map_err(balloon_err)
