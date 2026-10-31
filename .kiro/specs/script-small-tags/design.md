@@ -444,6 +444,16 @@ pub enum CharCodeDrop { Zero, Control, LoneSurrogate, OutOfRange, Unreadable }
 ##### Service Interface
 
 ```rust
+/// パーツ 1 つを当てた結果と、当てたパーツ・着脱（記録の欄を呼び手が埋めるため）。
+pub struct AppliedBind {
+    pub category: String,
+    /// カテゴリ単位形でも、当てた 1 つのパーツの名前（トグル形はその名前）。
+    pub part: String,
+    /// 実際に当てた着脱（トグル形は反対にした後の値）。
+    pub on: bool,
+    pub result: NamedBindResult,
+}
+
 /// 読んだ着せ替えの指令を、パーツ 1 つずつ今の当て方で当てる（`Malformed` は呼び手が先に除く）。
 /// 返す列はパーツを当てた順。
 pub fn apply_bind_directive(
@@ -451,8 +461,11 @@ pub fn apply_bind_directive(
     resolver: &BindResolver,
     scope: &ActorKey,
     directive: &BindDirective,
-) -> Vec<NamedBindResult>;
+) -> Vec<AppliedBind>;
 ```
+
+- 呼び手（`actor.rs`）は列の 1 つずつについて、今の記録の行（`category`・`part`・`on` の欄を持つ行。`seriko: bind 適用` を含む）を `AppliedBind` の値で埋め、`name` の欄を足して出す＝トグル形・カテゴリ単位形でも、パーツ名つきの形と同じ水準と同じ欄の記録になる（3.3・3.5）。
+- 表示: `Changed` が 1 つ以上あれば、全部を当てた後に 1 回だけ `refresh` する。`refresh` が出す物を返さないときは、今の `unwrap_or(command)` と同じに、最後の `Changed` の表示の指令を出す。
 
 - 前提: 呼び手は `Malformed` を先に `error!` の腕で除く。`Malformed` を渡されたときは空の列を返す（状態を変えない）。
 - `Malformed` 以外では、空の列を返さない（少なくとも 1 つの結果＝記録の 1 行がある）。
@@ -512,11 +525,11 @@ impl ScopeBalloonDefinitions {
 
 **決まり**
 - 目印の字 `MARKER_GLYPH = "\u{FFFC}"`（1 つのクラスタ・UTF-16 で 1 単位）。測るときと描くときは全角の空白 `MARKER_STAND_IN = "\u{3000}"`（UTF-16 で 1 単位）に読み替える。
-- `state.rs` の `Custom` の腕は、`\f` の見分けの前に `is_marker_carrier(&cue.command)`（名前が `MARKER_COMMAND`）を見て、今の行き先の場所に目印の字を 1 つ積む。積み方は `Text` の腕と同じ（開いているアンカーを伸ばす・現れる時刻は `cue.at`・今の見た目の番号を与える）。
+- `state.rs` の `Custom` の腕は、`\f` の見分けの前に `is_marker_carrier(&cue.command)`（名前が `MARKER_COMMAND`）を見て、今の行き先の場所に目印の字を 1 つ積む。積み方は `Text` の腕と同じ（現れる時刻は `cue.at`・今の見た目の番号を与える）。ただし開いているアンカーは**字の範囲（`glyph_range`）だけを伸ばし、題（`label`）には足さない**。`label` は `OnAnchorSelectEx` の Reference0 として SHIORI へ渡るので、`\_a[ID]\![*]本文\_a` で U+FFFC を混ぜない（印はアンカーの当たりの中に入るが、渡す題は「本文」だけ）。SSP がこの場面で Reference0 に何を入れるかは測っていない＝§8 に書く。
 - 選択肢の `Choice` の合図より前に積むので、選択肢の範囲の始まり（`Glyph` の数）は印の後ろになる。選択肢の数・当たり・反転の帯は印の無いときと同じ選択肢を指す（5.7）。
 - `glyph_style_advance` は目印の字を全角の空白として測る（1 行）。描くときも行の文字列で全角の空白に替えるので、印の後ろの字の位置は DirectWrite が描いた字と同じ物差しで決まる（5.5・横書きは行の向き・縦書きは列の向き）。
 - 消去（`\c`・新しいトーク）・行の押し出し・スクロール・空回しは、目印の字が `Glyph` として項目の列に居るので、今の仕組みのまま字と一緒に動く（5.6）。
-- 印の見た目: `ResolvedFont` に `inline_marker: InlineMarkerLook` を足す（既定は `Dot`）。runtime はアクターごとの印の絵（`set_inline_marker` で受ける）を覚え、解いた直後に `stamp_inline_marker` で押す。押す所は、装着（`register_actor_binding`）・再追従（`refresh_actor_binding` の比較の前）・箱（`actor_box.rs` の解決）の 3 か所。`set_inline_marker` は値が前と違うとき、そのアクターの今の場所の値にも押し直す（`layout_input` の値＝解いた値に、その時点の印の見た目を押したもの、という決まりを保つ）。箱でも、そのスコープの普通のバルーンの印を使う。
+- 印の見た目: `ResolvedFont` に `inline_marker: InlineMarkerLook` を足す（既定は `Dot`）。runtime はアクターごとの印の絵（`set_inline_marker` で受ける）を覚え、解いた直後に `stamp_inline_marker` で押す。押す所は、装着（`register_actor_binding`）・再追従（`refresh_actor_binding` の比較の前）・箱（`actor_box.rs` の解決）の 3 か所。`set_inline_marker` は**値を覚えるだけ**で、今の場所の値（`layout_input`）には押し直さない（背景色の `set_balloon_background` と同じ形）。次の再追従で、解いて押した値が `layout_input` と違うことに気づいて組み直すので、面の切り替えで印の絵だけが変わったときも、描いてある行が古い絵のまま残らない。箱でも、そのスコープの普通のバルーンの印を使う。
 
 ##### Service Interface
 
@@ -587,6 +600,7 @@ impl TextLayerRuntime {
 | 結合文字などの埋め込み | 埋め込んだ字は隣の本文と 1 つの字の並びにまとめる（`e\_u[0x0301]` は `é`） | SSP の測り（research.md 2.10） |
 | `\![*]`・`%*` の印の絵が無いバルーン | 字の大きさの半分の直径の丸を、その字の色の不透明度 0.64 で 1 字分の枠の真ん中に塗る。送り幅は全角の空白 1 つ | SSP の測り（research.md 2.10・2.11・字の大きさ 20 で 10×10 画素・中ほどの色は字の色 140,128,116 に対し 184,174,164）。色を別の色のバルーンで測ってはいない |
 | 印の絵の大きさと送り幅 | 絵は原寸で 1 字分の枠の真ん中に置き、はみ出すときは縦横の比を保って枠に収める。送り幅は絵の大きさに依らず全角の空白 1 つ | 正典は「マーカーを表示する」だけ。SSP の絵ありのバルーンでは測っていない |
+| アンカーの中の印 | 印はアンカーの当たりの中に入るが、`OnAnchorSelectEx` の Reference0（アンカーの題）には印を入れない | 正典は黙っている。SSP の Reference0 は測っていない。目印の字（U+FFFC）をゴーストへ渡さないための areka の決め |
 | `marker.filename` の面ごとの書き換え | 面ごとに読む（矢印と同じ） | 正典は descript の鍵としか書かない。矢印の扱いと揃えた |
 | `\![bind,…]`・`\![bind-noevent,…]` のカテゴリ単位の `1` とカテゴリのトグル | カテゴリのパーツを定義の順に 1 つずつ、`1` なら着せる・空なら反対にする、を今の決まり（排他・`mustselect`・`multiple`）で続けて当てる。排他では最後のパーツが残る。`mustselect` の `,,0` は何も脱がない | 正典は中身を書かない。SSP 2.9.23 で測った 7 行の答えと全部合う（research.md 2.11）。`multiple` のカテゴリは測っていない |
 
@@ -633,7 +647,7 @@ impl TextLayerRuntime {
 
 ### 結合のテスト（決定論）
 
-- 文字の層の純粋な状態: `\![*]\q[晴れてる,X1]` の合図で、目印の字が 1 つ・選択肢の範囲がその後ろ・選択肢の数 1（5.7）。`\c` で印が消える・スクロールの窓に印の行が入る（5.6）。縦書きで印の位置が列の向きに 1 字分（5.5）。
+- 文字の層の純粋な状態: `\![*]\q[晴れてる,X1]` の合図で、目印の字が 1 つ・選択肢の範囲がその後ろ・選択肢の数 1（5.7）。`\c` で印が消える・スクロールの窓に印の行が入る（5.6）。縦書きで印の位置が列の向きに 1 字分（5.5）。`\_a[ID]\![*]本文\_a` でアンカーの字の範囲は印を含み、題は「本文」だけ（U+FFFC を含まない）。面の切り替えで印の絵だけが変わったとき、次の再追従で組み直しが起きる（`set_inline_marker` は値を覚えるだけ）。
 - `check_script_judge_tests.rs`: 6.1・6.2（範囲）・6.4・6.5・6.6。`strict` の判定が同じ（6.3・`compile_strict_tests.rs`）。
 - 受け手の表: 登記 42 件・見本の表と行が同じ組・`bind-noevent` と `*` がそれぞれ 1 つの受け口だけに届く（3.7・6.4・6.5）。
 - `lexer_substitute_tests.rs`: `%*` が環境変数の展開で変わらない（4.3）。
@@ -645,6 +659,11 @@ impl TextLayerRuntime {
 ### 実機（8.3）
 
 - `doc/pasta-real-run.md` 5 節の段 2: 全角の空白の埋め込み（件 17）・選択肢の前の印（件 3・撮った物）・`bind-noevent` とカテゴリ単位の形（件 18・見た目に出なければ `name="bind-noevent"` の記録で確かめた旨）。撮った物と記録はワークツリーの `target\` の下。
+
+### 実装の段で確かめること
+
+- 目印の字（U+FFFC）が文字の層の外（`dump_balloon` の答え・記録・MCP）へ字として出ないこと（grep で確かめる）。検証で見つかった漏れ口はアンカーの題だけで、上の決まりで塞いだ。
+- 分かち書き（BudouX）が U+FFFC の前後でどこに改行の候補を置くか（印の直後で折り返して、印と選択肢の字が別の行に分かれることがある。SSP の折り返しは測っていない）。
 
 ## Performance & Scalability
 
