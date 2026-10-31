@@ -29,6 +29,8 @@ use std::time::{Duration, Instant};
 
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{ShownBox, TextLayerRuntime};
+use areka_emo_text::place::PlaceKey;
+use areka_emo_text::scroll_marker::StopReason;
 use areka_kanade::KanadeMsg;
 use areka_sakura::{ActorKey, TalkId};
 use bevy_ecs::prelude::{Entity, With};
@@ -555,16 +557,17 @@ fn issue_actions(
                     );
                     hidden.push(scope);
                 }
-                if hide_reaches_boxes(*trigger, state.break_latch) {
-                    hide_scope_boxes(runtime, scopes, *trigger);
-                }
+                let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
+                hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
             }
         }
     }
     IssueOutcome { hidden, not_shown }
 }
 
-/// 列挙した scope の箱を隠す印を立てる（印は次の台詞の頭で文字の層が自分で下ろす）。
+/// 隠した scope の普通のバルーンの手動の位置を捨て（balloon-scroll-arrows 要件 8.3）、隠す契機が
+/// 箱に届くなら（`reaches_boxes`）箱の手動の位置も捨てて箱を隠す印を立てる（印は次の台詞の頭で
+/// 文字の層が自分で下ろす）。時間切れの数え方には触らない（要件 8.4）。
 ///
 /// 文字層ランタイムを借りられなければ当該の行動だけを見送って誤りレベルで記録する（印が
 /// 立たないので、箱の文字は次の判断まで出たまま＝消えない側の縮退）。
@@ -572,6 +575,7 @@ fn hide_scope_boxes(
     runtime: &Rc<RefCell<TextLayerRuntime>>,
     scopes: &[u32],
     trigger: VisibilityTrigger,
+    reaches_boxes: bool,
 ) {
     let Ok(mut runtime) = runtime.try_borrow_mut() else {
         error!(
@@ -582,7 +586,13 @@ fn hide_scope_boxes(
         return;
     };
     for &scope in scopes {
-        runtime.hide_boxes(&ActorKey::from(scope.to_string()));
+        let actor = ActorKey::from(scope.to_string());
+        if reaches_boxes {
+            runtime.forget_manual_of(&actor, StopReason::Hidden);
+            runtime.hide_boxes(&actor);
+        } else {
+            runtime.forget_manual_at(&PlaceKey::balloon(&actor), StopReason::Hidden);
+        }
     }
 }
 

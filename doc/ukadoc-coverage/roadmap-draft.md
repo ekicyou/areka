@@ -698,7 +698,7 @@ wave = "W13"
 name = "balloon-canon-residue"
 stage = "D"
 bundle = "SSTP"
-owner_count = 17
+owner_count = 16
 wave = "W14"
 
 [[spec]]
@@ -1089,8 +1089,8 @@ wave = "v0.1.0"
 [[spec]]
 name = "balloon-scroll-arrows"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたの縦書きのバルーンが使う arrow0.x/y・arrow1.x/y の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（4 件）"
-owner_count = 4
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたの縦書きのバルーンが使う arrow0.x/y・arrow1.x/y の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（4 件）。2026-10-31 にこの spec が arrow.filename の宛先を balloon-canon-residue から移して 5 件の持ち主になり、5 件とも実装済みにした"
+owner_count = 5
 wave = "v0.1.0"
 
 [[spec]]
@@ -1140,7 +1140,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `currentghost-property-tree`（W15・15 件）／`shell-mouse-cursor`（v0.1.0・2 件） | 第 2 波 |
 | 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件）／`areka-P0-window-link-directives`（C10-②・1 件）／`popup-menu-shell-look`（v0.1.0・22 件） | 第 2 波 |
 | 12 | 撫で | `areka-P0-touch-events-canon` | `currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件）／`mouse-click-wheel-events`（v0.1.0・3 件） | 第 2 波 |
-| 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `balloon-canon-residue`（W14・5 件）／`balloon-scroll-arrows`（v0.1.0・4 件） | 第 2 波 |
+| 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `balloon-canon-residue`（W14・4 件）／`balloon-scroll-arrows`（v0.1.0・5 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `choice-marker-styling`（W16・39 件）／`script-small-tags`（v0.1.0・1 件） | 第 2 波 |
 | 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `draw-methods-canon`（シェルの element の列・2 件）／`areka-P0-self-alpha-declaration`（C4-⑬・2 件）／`seriko-pattern-calls`（C13・1 件） | 第 2 波 |

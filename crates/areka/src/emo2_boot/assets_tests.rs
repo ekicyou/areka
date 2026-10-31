@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use areka_emo_text::actor::ResolvedBalloonText;
+use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::decode;
 use areka_seriko::{
     BindChoicePolicy, BindNamespace, NamedBindResult, ScopeStates, SurfaceTarget, apply_named_bind,
@@ -96,7 +97,7 @@ fn build_boot_assets_from_emo2_fixture() {
     // --- balloons[*].model: descript 基層 + **採用面に対応する**面別層の 2 層後勝ちマージ ---
     // scope0 は balloons0.png を採用 → balloons0s.txt が上書き層。
     // descript.txt は validrect 全 0（degenerate）・balloons0s.txt が 46/-56/36/-44 で後勝ち上書き。
-    let vr0 = boot.balloons[0].model.validrect();
+    let vr0 = boot.balloons[0].definitions.face0().model.validrect();
     assert_eq!(
         vr0.top(),
         Some(46),
@@ -106,12 +107,12 @@ fn build_boot_assets_from_emo2_fixture() {
     assert_eq!(vr0.left(), Some(36));
     assert_eq!(vr0.right(), Some(-44));
     // windowposition は面別層のみが供給するキー（descript.txt に不在）。
-    let wp0 = boot.balloons[0].model.windowposition();
+    let wp0 = boot.balloons[0].definitions.face0().model.windowposition();
     assert_eq!(wp0.x(), Some(266), "windowposition は面別層のみ供給");
     assert_eq!(wp0.y(), Some(-129));
 
     // scope1 は balloonk0.png を採用 → balloonk0s.txt が上書き層（balloons0s.txt ではない・R2.2）。
-    let vr1 = boot.balloons[1].model.validrect();
+    let vr1 = boot.balloons[1].definitions.face0().model.validrect();
     assert_eq!(
         vr1.top(),
         Some(40),
@@ -120,7 +121,7 @@ fn build_boot_assets_from_emo2_fixture() {
     assert_eq!(vr1.bottom(), Some(-70));
     assert_eq!(vr1.left(), Some(24));
     assert_eq!(vr1.right(), Some(-48));
-    let wp1 = boot.balloons[1].model.windowposition();
+    let wp1 = boot.balloons[1].definitions.face0().model.windowposition();
     assert_eq!(
         wp1.x(),
         Some(-190),
@@ -367,8 +368,8 @@ fn build_boot_assets_holds_per_scope_balloon_models() {
         "balloons の scope 集合は shells の scope 集合と一致する（不変条件 (a)）"
     );
 
-    let scope0 = &boot.balloons[0].model;
-    let scope1 = &boot.balloons[1].model;
+    let scope0 = &boot.balloons[0].definitions.face0().model;
+    let scope1 = &boot.balloons[1].definitions.face0().model;
 
     // windowposition: 本体側 balloons0s.txt vs 相方側 balloonk0s.txt の実値。
     assert_eq!(scope0.windowposition().x(), Some(266));
@@ -543,12 +544,14 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
     );
 
     assert_eq!(
-        boot.balloons[0].model, oracle,
+        boot.balloons[0].definitions.face0().model,
+        oracle,
         "本体側 scope の定義は適用前の固定名 2 層マージと同一（R5.5）"
     );
 
     // 文字描画領域（`validrect` 絶対矩形・描画開始点・折返し閾値）まで同一である。
-    let now = ResolvedBalloonText::resolve(&boot.balloons[0].model, SAKURA_FACE0);
+    let now =
+        ResolvedBalloonText::resolve(&boot.balloons[0].definitions.face0().model, SAKURA_FACE0);
     assert_eq!(
         now,
         ResolvedBalloonText::resolve(&oracle, SAKURA_FACE0),
@@ -557,11 +560,12 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
 
     // 判別力: 相方側 scope の定義から解決すると別領域になる（＝上の等式は空虚でない）。
     assert_ne!(
-        boot.balloons[1].model, oracle,
+        boot.balloons[1].definitions.face0().model,
+        oracle,
         "相方側まで神託と一致するなら本 fixture は判別力を持たない"
     );
     assert_ne!(
-        ResolvedBalloonText::resolve(&boot.balloons[1].model, SAKURA_FACE0),
+        ResolvedBalloonText::resolve(&boot.balloons[1].definitions.face0().model, SAKURA_FACE0),
         now,
         "相方側 scope の validrect は別値ゆえ文字描画領域も別になる"
     );

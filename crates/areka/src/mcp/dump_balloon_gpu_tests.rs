@@ -13,6 +13,9 @@
 
 use std::time::Duration;
 
+use std::sync::Arc;
+
+use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_kanade::RaiseOutcome;
 use areka_mcp::tools::dump_balloon::Args;
 use areka_mcp::{ToolContent, ToolOutcome};
@@ -73,7 +76,11 @@ fn reveals(world: &World) -> Option<(usize, f64)> {
 /// スコープ 0 の台詞の字が現れ切るまで、巡ごとに Tick の時刻を `step_ms` 進めて回す
 /// （期限切れは `false`・判定はファイルの頭の説明のとおり）。
 fn speak(gpu: &mut GpuRig, step_ms: u64) -> bool {
-    let words = WORDS.chars().count();
+    speak_words(gpu, step_ms, WORDS.chars().count())
+}
+
+/// [`speak`] の字の数を `words` にしたもの（[`WORDS`] でない台詞の待ち）。
+fn speak_words(gpu: &mut GpuRig, step_ms: u64, words: usize) -> bool {
     // 字の列が揃ったのを見た時刻（`T`）と、前の巡で台詞の時刻が末尾を越えていたか。
     let mut all_by: Option<f64> = None;
     let mut past_before = false;
@@ -583,5 +590,91 @@ fn balloon_job_runs_on_the_encoding_body_without_error() {
         ),
         (true, true, true, true, 0),
         "（字が現れ切った, 読む前に文字の面が変わった, 降ろせた, 画像つきの成功, ERROR の件数）"
+    );
+}
+
+/// 1 字ずつ 16 行の台詞（バルーンからあふれて古い行が隠れ、上の矢印が出る・字の数は [`TALL_WORDS`]）。
+const TALL_LINE: &str =
+    r"\0\s[1101]あ\nい\nう\nえ\nお\nか\nき\nく\nけ\nこ\nさ\nし\nす\nせ\nそ\nた\e";
+const TALL_WORDS: usize = 16;
+
+/// 8×6 の不透明な矢印（乗算済み BGRA の赤）。
+fn red_arrow() -> Arc<MarkerImage> {
+    Arc::new(MarkerImage {
+        width: 8,
+        height: 6,
+        bgra: [0, 0, 255, 255].repeat(8 * 6),
+    })
+}
+
+/// 矢印が出ているバルーン（要件 3.6・11.1）: あふれた台詞の後に矢印の絵を入れて提示し直すと、
+/// `dump_balloon` の画素が、背景の合成の上へ文字の面を文字の領域の原点へ、さらに印の面の読み戻しを
+/// 窓の原点（ずらし 0）へそのまま重ねたものと一致する。
+///
+/// # 非空虚性
+/// 印の面が在って透明でない画素を持つこと、印を重ねない期待の絵（文字だけ）と答えが食い違うことを
+/// 確かめる。印を重ねないと文字だけの絵と一致して赤。印の面を文字の領域の原点へずらすと画素が
+/// 食い違って赤。
+#[test]
+fn balloon_with_arrows_shows_the_arrows_where_the_screen_does() {
+    let mut gpu = GpuRig::new(TALL_LINE, 96);
+    let spoke = speak_words(&mut gpu, 100, TALL_WORDS);
+    let actor = ActorKey::from("0".to_owned());
+    gpu.rig
+        .world
+        .non_send::<Emo2Wiring>()
+        .runtime()
+        .borrow_mut()
+        .set_balloon_markers(
+            actor.clone(),
+            MarkerPair {
+                up: Some(red_arrow()),
+                down: Some(red_arrow()),
+            },
+        );
+    gpu.frames(3);
+    let text = text_surface(&gpu.rig.world, 0);
+    let marker = {
+        let runtime = gpu.rig.world.non_send::<Emo2Wiring>().runtime().borrow();
+        runtime
+            .marker_surface(&actor)
+            .map(|m| (m.size(), m.read_back().expect("印の面を読める")))
+    };
+    let pending = gpu.dump_balloon(None);
+    let answer = gpu.answer_of(&pending);
+    let background = gpu.balloon_composed(0);
+    let origin = gpu.text_area_origin(0, (background.0, background.1));
+    let down = gpu.shutdown();
+
+    let text = text.expect("台詞の後は文字の面が在る");
+    let marker = marker.expect("あふれた台詞の後は印の面が在る");
+    assert!(has_ink(&marker.1), "印の面に矢印が描かれている");
+    assert_eq!(
+        marker.0,
+        (background.0, background.1),
+        "拡大率 1 の印の面はバルーンの絵と同じ大きさ"
+    );
+    let with_text = place_text(&background, &text, (origin.0 as u32, origin.1 as u32));
+    let text_only = (background.0, background.1, unpremultiply(&with_text));
+    let expected = (
+        background.0,
+        background.1,
+        unpremultiply(&place_text(
+            &(background.0, background.1, with_text),
+            &marker,
+            (0, 0),
+        )),
+    );
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
+    let (is_error, body, _, picture) = read_picture(&answer.outcome);
+    assert_ne!(
+        differing(&picture, &text_only),
+        Some(0),
+        "文字だけの絵と違う（矢印が写っている）"
+    );
+    assert_eq!(
+        (spoke, down, is_error, body, differing(&picture, &expected)),
+        (true, true, false, ok_text(0), Some(0)),
+        "（字が現れ切った, 降ろせた, isError, 本文, 期待の絵と食い違った画素の数）"
     );
 }

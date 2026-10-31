@@ -67,7 +67,18 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     // wiring.rx（受信端＝shared 借用）と wiring.presenter（mut 借用）は互いに素なフィールドゆえ両立する。
     // apply は () を返し、失敗は cmd.reply（本経路は常に None）経由。未装着等の異常は presenter 内部で
     // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
-    drain_present_commands(&wiring.rx, |cmd| wiring.presenter.apply(world, cmd));
+    // このフレームで ShowSurface を適用した target を控え、適用の後に今の定義の書き手へ渡す
+    // （drain → 書き手 → 文字層スケール相 → 文字の相・balloon-scroll-arrows 要件 1.7・8.6）。
+    let mut shown: Vec<TargetId> = Vec::new();
+    drain_present_commands(&wiring.rx, |cmd| {
+        if let PresentCommand::ShowSurface { target, .. } = &cmd
+            && !shown.contains(target)
+        {
+            shown.push(*target);
+        }
+        wiring.presenter.apply(world, cmd);
+    });
+    super::balloon_face::after_drain(wiring, world, &shown);
 }
 
 /// 1 フレームの drain が受信端から取り出す指令の上限（送り手が受け手より速いときもフレームを終わらせる）。

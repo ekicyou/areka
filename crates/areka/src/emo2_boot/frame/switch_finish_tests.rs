@@ -51,6 +51,7 @@ use crate::placement::sticky_group_ledger::{
     StickyGroup, StickyGroupLedger, StickySource, apply_set_sticky, seed_sticky_descript,
 };
 use crate::placement::zorder_group_ledger::GroupSource;
+use face_tests::new_balloon_definitions;
 
 // ---------------------------------------------------------------- 土台
 
@@ -131,17 +132,11 @@ fn shell_finish() -> SwapFinish {
     }
 }
 
-/// 新しいバルーンの後始末の残り（scope 0・1 の文字の模型と背景色）。
+/// 新しいバルーンの後始末の残り（scope 0・1 の面ごとの定義の束と背景色）。
 fn balloon_finish() -> SwapFinish {
     SwapFinish::Balloon {
         scopes: [0, 1]
-            .map(|scope| {
-                (
-                    scope,
-                    areka_parsers::balloon::parse_str("", None),
-                    (10, 20, 30),
-                )
-            })
+            .map(|scope| (scope, new_balloon_definitions(scope), (10, 20, 30)))
             .into(),
     }
 }
@@ -817,6 +812,7 @@ fn box_bundle(text: &str) -> ShellBoxAssets {
         surface_ids: world.surface_ids().collect(),
         font_dirs: Vec::new(),
         fallback_candidates: std::collections::BTreeMap::new(),
+        markers: Default::default(),
     }
 }
 
@@ -996,5 +992,7 @@ fn balloon_switch_renames_the_balloon_warning_field() {
 
 #[path = "switch_cursor_tests.rs"]
 mod cursor_tests;
+#[path = "switch_finish_face_tests.rs"]
+mod face_tests;
 #[path = "switch_reload_tests.rs"]
 mod reload_tests;

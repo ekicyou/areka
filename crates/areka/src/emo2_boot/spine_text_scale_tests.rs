@@ -233,6 +233,7 @@ element1,balloon,talk,10,10
         surface_ids: text_world.surface_ids().collect(),
         font_dirs: Vec::new(),
         fallback_candidates: std::collections::BTreeMap::new(),
+        markers: Default::default(),
     };
     let actor = ActorKey::from("0");
     {

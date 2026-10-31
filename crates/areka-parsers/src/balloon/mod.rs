@@ -7,8 +7,12 @@
 //! 依存方向は `model ← parse`。本 `mod.rs` は `model` のモデル型と
 //! `parse`/`parse_str` facade を公開面へ `pub use` で集約する（`sakura/mod.rs`・`kv/mod.rs` 流儀）。
 
+mod marker;
 mod model;
 mod parse;
+
+#[cfg(test)]
+mod marker_tests;
 
 #[cfg(test)]
 mod model_tests;
@@ -19,6 +23,7 @@ mod parse_tests;
 #[cfg(test)]
 mod validation_tests;
 
+pub use marker::{ArrowKeys, KeyIssue, MarkerCoord, MarkerPoint};
 pub use model::{
     BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
     FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint,

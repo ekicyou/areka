@@ -317,8 +317,8 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
     );
     // 期待値は資産そのものから取る（fixture 実値との突き合わせは assets.rs の檻が所有するが、
     // 非空虚性のため両 scope の実値が実際に異なることをここでも 1 点だけ固定する）。
-    let sakura = assets.balloons[0].model.clone();
-    let kero = assets.balloons[1].model.clone();
+    let sakura = assets.balloons[0].definitions.face0().model.clone();
+    let kero = assets.balloons[1].definitions.face0().model.clone();
     assert_eq!(
         (sakura.validrect().top(), kero.validrect().top()),
         (Some(46), Some(40)),
@@ -692,7 +692,7 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
     let (_gpu, mut world, _gw) = gpu_attach_world();
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
-    let kero = assets.balloons[1].model.clone();
+    let kero = assets.balloons[1].definitions.face0().model.clone();
 
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),

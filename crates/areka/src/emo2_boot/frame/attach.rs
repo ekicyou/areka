@@ -17,6 +17,7 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::descript_window_keys::fallback_candidates;
 use crate::placement::spawn::GhostWindows;
 
+use super::balloon_face::{FaceCause, select_balloon_face};
 use super::{
     AuthorDpis, BalloonScopeAssets, BootAssets, Emo2Wiring, ScopeAssets, balloon_target,
     shell_target,
@@ -248,7 +249,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         balloon: balloon_author_dpi,
     };
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
-    // 文字層へ渡すバルーン定義は各 scope 自身の [`BalloonScopeAssets::model`]（scope 別 2 層マージ
+    // 文字層へ渡すバルーン定義は各 scope 自身の [`BalloonScopeAssets::definitions`] の面 0（scope 別 2 層マージ
     // 済み・Req 2.1）。World／アトラスと**同一の資産 1 件から**取り出すため、ある scope のバルーンが
     // 別 scope の系列由来の定義で駆動される取り違えが構造的に起こり得ない（Req 4.1）。
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
@@ -355,7 +356,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         let Some(BalloonScopeAssets {
             emo_world: balloon_world,
             atlas: balloon_atlas,
-            model: balloon_model,
+            definitions: balloon_definitions,
             background_color,
             name: balloon_name,
             ..
@@ -425,21 +426,22 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             .runtime
             .borrow_mut()
             .set_balloon_label(&actor, balloon_name);
+        // 束を入れ、面 0 の定義を今の定義にする（唯一の書き手・矢印の絵と windowposition も届く）。
+        // 文字層へ渡すのと再追従が使うのは書き手が入れた**同一の** `balloon_models[scope]`
+        // （R4.1/4.2・D11-3）——装着が `text_slot_view` None で次フレームへ委ねられた場合でも
+        // モデル自体は有効ゆえ、接続成否に関わらず入れる（再追従は未登録 actor を静穏 skip する）。
+        wiring
+            .balloon_definitions
+            .insert(scope, balloon_definitions);
+        select_balloon_face(wiring, world, scope, 0, FaceCause::Attach);
         connect_balloon_text(
             &wiring.runtime,
             view,
             actor,
-            &balloon_model,
+            &wiring.balloon_models[&scope],
             // 面 0 の原点画素（要件 4.6）——無効表示の文字色の混色の相手。
             background_color,
         );
-        // 文字層 k 再追従（D11-3・R8.1）の再利用源: **いま文字層へ渡したのと同一の**モデルを
-        // scope キーで記憶する（借用→move の 1 値ゆえ二つの供給先が別値になり得ない——別値になると
-        // 「装着時と再追従時で別定義」という静かな食い違いが生まれる・R4.1/4.2）。文字層スケール相
-        // （[`run_text_scale_phase`]）はこれを再利用して binding を組み直す（再パースしない）。
-        // 装着が `text_slot_view` None で次フレームへ委ねられた場合でもモデル自体は有効ゆえ、
-        // 接続成否に関わらず記憶する（再追従は未登録 actor を静穏 skip する・7.1 の契約）。
-        wiring.balloon_models.insert(scope, balloon_model);
     }
 
     info!(
