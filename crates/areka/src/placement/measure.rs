@@ -529,3 +529,8 @@ mod first_frame_tests;
 #[cfg(test)]
 #[path = "measure_bake_count_tests.rs"]
 mod bake_count_tests;
+
+// 起動の準備 1 回の行の数の檻（spec: emo-bake-log-overlap 要件 6.1・6.3〜6.6）。
+#[cfg(test)]
+#[path = "measure_bake_log_tests.rs"]
+mod bake_log_tests;

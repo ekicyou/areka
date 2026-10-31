@@ -53,7 +53,7 @@
   - _Boundary: 採寸の結線_
   - _Depends: 2.1, 2.2_
   - _Requirements: 1.4, 1.5, 1.6, 3.1, 6.2, 6.6_
-- [ ] 3.2 起動の準備 1 回の行の数の檻を作る
+- [x] 3.2 起動の準備 1 回の行の数の檻を作る
   - 新しい兄弟のテストのファイルを採寸のモジュールから `#[cfg(test)] #[path]` で読む宣言を足す（`measure.rs` のこの 1 行は本タスクの持ち物）
   - 検体はファイルの形（`descript.txt`・`surfaces.txt`・面の画像の名前・バルーンの面の画像の名前）だけを `target\` の下の一時フォルダ（`TempPath::under_target`。同じウェーブの `test-roots-under-target` が名前を変えていたら合わせる）に置き、絵の中身はメモリの読み手が返す。シェルに面 0 と面 10（見える絵）・0 寸・全透明・着せ替えの「無し」・抜き色・1 枚目だけ全透明の動く絵・全コマを読めない動く絵・追記の相手の無い追記・アニメーションの番号を書き直す追記、バルーンに抜き色の面 0 と全透明の面 1 を持たせる
   - 資産の側は `crate::emo2_boot::assets::{build_shell_assets, build_balloon_assets}` を使う（`measure.rs` の中の同じ名前の非公開の関数ではない。`measure_bake_count_tests.rs` と同じ引き方・テストのファイルは `crate::` を使ってよい）。そのため検体は、ゴーストの根（`ghost\master\descript.txt`）からシェルのフォルダが解決でき、シェルの名前と既定の面（`DefaultSurfaces`）を渡せる形にする
