@@ -218,9 +218,9 @@ fn raise_the_dirty_mark(mut plan: ResMut<ZOrderChainPlan>) {
     plan.dirty = true;
 }
 
-/// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 3 本を先に載せる）。
+/// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 4 本を先に載せる）。
 ///
-/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 3 本を
+/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 4 本を
 /// 載せる。同じ段に後から載せる仕事は、順序指定を落とすと適用系との前後が定まらない。
 fn wired_finalize_world() -> World {
     let mut world = World::new();
@@ -295,14 +295,14 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
         "指令の受け渡し口（チャネル 1 組）が本文に無い: {squeezed}"
     );
     assert!(
-        squeezed.contains("zorder_tx, };"),
+        squeezed.contains("zorder_tx, window_state_tx, };"),
         "送出端が受け口の送出端の束（CueSinkSources）へ渡されていない"
     );
     assert!(
         runtime_squeezed.contains(
-            "vec![ Box::new(surface), Box::new(ClockedTextSink::new(text, clock.clone())), Box::new(MoveCueSink::new(move_tx)), Box::new(BalloonLifecycleSink::new(lifecycle_tx, clock)), Box::new(ZOrderCueSink::new(zorder_tx)), Box::new(ReadmeCueSink::new(readme_tx)), Box::new(NoUserBreakCueSink::new(no_user_break_tx)), Box::new(ChangeCueSink::new(change_tx)), Box::new(InstallCueSink::new(crate::install::desk::raw_sender(world))), Box::new(UpdateCueSink::new(crate::update::desk::raw_sender(world))), Box::new(SwitchCueSink::new(switch_tx)), Box::new(ReloadCueSink::new(reload_tx)), ];"
+            "vec![ Box::new(surface), Box::new(ClockedTextSink::new(text, clock.clone())), Box::new(MoveCueSink::new(move_tx)), Box::new(BalloonLifecycleSink::new(lifecycle_tx, clock)), Box::new(ZOrderCueSink::new(zorder_tx)), Box::new(ReadmeCueSink::new(readme_tx)), Box::new(NoUserBreakCueSink::new(no_user_break_tx)), Box::new(ChangeCueSink::new(change_tx)), Box::new(InstallCueSink::new(crate::install::desk::raw_sender(world))), Box::new(UpdateCueSink::new(crate::update::desk::raw_sender(world))), Box::new(SwitchCueSink::new(switch_tx)), Box::new(ReloadCueSink::new(reload_tx)), Box::new(WindowStateCueSink::new(window_state_tx)), ];"
         ),
-        "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口＋中断を禁じる旗の受け口＋切替の受け口＋インストールの受け口＋更新の受け口＋シェル・バルーンの切替の受け口＋読み直しの受け口の形になっていない"
+        "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口＋中断を禁じる旗の受け口＋切替の受け口＋インストールの受け口＋更新の受け口＋シェル・バルーンの切替の受け口＋読み直しの受け口＋常に手前の受け口の形になっていない"
     );
     assert!(
         squeezed.contains("lifecycle_rx, zorder_rx,"),
@@ -352,7 +352,7 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
         "旧い段内の順序指定（`.before(apply_zorder_chain)`）が残っている（段をまたぐ順序は指定できない）"
     );
 
-    // 適用系は末尾の段に載る（`wire_zorder_pair` が 3 本を据える）。
+    // 適用系は末尾の段に載る（`wire_zorder_pair` が 4 本を据える）。
     let world = wired_finalize_world();
     assert!(
         world.resource::<Schedules>().contains(FrameFinalize),

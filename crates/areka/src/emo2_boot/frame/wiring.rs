@@ -16,6 +16,7 @@ use bevy_ecs::world::World;
 // このグループで非 test ビルドの未使用は `TargetId` のみ（`#[cfg(test)]` メソッド
 // `read_back_target` の引数型）。`EmoPresenter`・`PresentCommand` は構造体フィールドが使う。
 // 属性は use 文単位で効くためグループ全体に付く。
+use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
 #[allow(unused_imports)]
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::TextLayerRuntime;
@@ -25,8 +26,10 @@ use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::shell_carry::ShellCarry;
 use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
+use super::super::window_state_cue::WindowStateDirective;
 use super::super::zorder_cue::ZOrderDirective;
 use super::status_report::BalloonStatusLedger;
+use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
@@ -102,6 +105,12 @@ pub struct Emo2Wiring {
     /// 起動の段が [`Emo2Wiring::seed_zorder_descript_base`] で 1 度だけ据える
     /// （取り出しの相が 1 度も走る前＝タグの実行より前・要件 5.1）。
     pub(super) zorder_ledger: ZOrderGroupLedger,
+    /// ゴーストの常に手前の状態（既定＝受信端なし・オフ・stay-on-top-directives 要件 3.4）。
+    ///
+    /// 受信端は起動の結線が [`Emo2Wiring::attach_window_state_rx`] で後から渡す。結線状態と
+    /// 一緒に作り直される経路（ゴーストの切り替え・読み直し・終了）で消え、残る経路
+    /// （SHIORI だけの読み直し・シェルとバルーンの切り替え）では保たれる。
+    pub(super) window_state: StayOnTopState,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///
     /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
@@ -127,6 +136,11 @@ pub struct Emo2Wiring {
     /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
     /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す（Req 4.1/4.2）。
     pub(in crate::emo2_boot) balloon_models: HashMap<u32, BalloonModel>,
+    /// scope → 面ごとの定義の束（装着・バルーンの切り替えが入れる・balloon-scroll-arrows 要件 1.7）。
+    /// 今の定義（`balloon_models`）はここから書き手 [`super::balloon_face::select_balloon_face`] が引く。
+    pub(in crate::emo2_boot) balloon_definitions: HashMap<u32, ScopeBalloonDefinitions>,
+    /// scope → 今の定義の面の番号（書き手 [`super::balloon_face::select_balloon_face`] だけが書く）。
+    pub(in crate::emo2_boot) balloon_faces: HashMap<u32, u32>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
     ///
     /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
@@ -199,6 +213,8 @@ impl Emo2Wiring {
             // 台帳は既定（グループ 0 本）から始める。shell 設定由来の基底を据えるのは
             // 起動の段の担当であり、結線はその器を用意するところまでを負う。
             zorder_ledger: ZOrderGroupLedger::default(),
+            // 常に手前はオフ・受信端なしから始める（受信端は起動の結線が後から渡す）。
+            window_state: StayOnTopState::default(),
             // 可視性の持ち越し状態は初期値（未観測・計測なし）から始める。
             balloon_visibility: BalloonVisibilityState::default(),
             // 届けた組の台帳も新品（何も届けていない）から始める。
@@ -206,6 +222,8 @@ impl Emo2Wiring {
             runtime,
             // attach 相が装着した scope ごとに埋める（D11-3）。
             balloon_models: HashMap::new(),
+            balloon_definitions: HashMap::new(),
+            balloon_faces: HashMap::new(),
             // 縮退警告のエッジガード（初期は未警告＝最初の縮退で 1 回鳴る）。
             text_scale_warned: BTreeSet::new(),
             clock,
@@ -237,6 +255,14 @@ impl Emo2Wiring {
     /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
     pub(in crate::emo2_boot) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
         apply_descript_base(&mut self.zorder_ledger, zorder_raw);
+    }
+
+    /// 常に手前の指令の受信端を渡す（起動の結線の口・`Emo2Wiring::new` の引数は変えない）。
+    pub(in crate::emo2_boot) fn attach_window_state_rx(
+        &mut self,
+        rx: Receiver<WindowStateDirective>,
+    ) {
+        self.window_state.rx = Some(rx);
     }
 
     /// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す

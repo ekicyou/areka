@@ -30,6 +30,14 @@
 //! `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 //! 実在するファイルと名簿の両方向で見張る（要件 10.4）。
 //!
+//! # 先送りの語と帯の語（`stay-on-top-directives` で分けた）
+//!
+//! wintf 側と同じく語の表は 2 つに分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
+//! 先送りのまま。常に手前の帯の語（`BAND_NEEDLES`）は `stay-on-top-directives` が実装したが、
+//! areka 側でそれを持つのは受け口（`emo2_boot/window_state_cue.rs`）と取り出しの相
+//! （`emo2_boot/frame/window_state.rs`）だけと決めてある。よってどちらの表の語も重なり順の機構の
+//! 本番ファイルには無いことを主張し続け、対照として帯の語の持ち主に語が在ることも主張する。
+//!
 //! # 行コメントを除いてから探す理由
 //!
 //! `spawn.rs` の doc コメントには「`WS_EX_TOPMOST` を含めない」という**否定の説明**が
@@ -68,15 +76,11 @@ const PRODUCTION_FILES: [&str; 7] = [
 
 /// 先送り語彙（小文字）と、それが何の入口かの説明。
 ///
-/// 兄弟の wintf 側テスト（`zorder_pair_deferred_vocabulary_tests.rs`）と同じ表を持つ。
-/// 片方だけを増やすと守りが片肺になるので、足すときは両方へ足すこと。
-const DEFERRED_NEEDLES: [(&str, &str); 9] = [
-    (
-        "topmost",
-        "常時最前面（`\\v`／`\\![set,windowstate,stayontop]` の実装面・要件 8.1／8.3）",
-    ),
-    ("stayontop", "`\\![set,windowstate,stayontop]`（要件 8.3）"),
-    ("windowstate", "`\\![set,windowstate,...]`（要件 8.3）"),
+/// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
+/// ままである。兄弟の wintf 側テスト（`zorder_pair_deferred_vocabulary_tests.rs`）と同じ 2 つの表
+/// （この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、どちらの表へ
+/// 足すときも両方のファイルへ足すこと。
+const DEFERRED_NEEDLES: [(&str, &str); 6] = [
     (
         "minimize",
         "最小化（`\\![set,windowstate,minimize]`／`OnWindowStateMinimize`・要件 8.3／8.4／8.5）",
@@ -95,6 +99,23 @@ const DEFERRED_NEEDLES: [(&str, &str); 9] = [
         "taskbar",
         "タスクバー・アプリ切り替え一覧の扱い（要件 8.5）",
     ),
+];
+
+/// 帯の語（小文字）。常に手前を読むのは受け口と取り出しの相のファイル [`BAND_FILES`] だけであり
+/// （`stay-on-top-directives`）、重なり順の機構の本番ファイルには 1 つも無い。
+const BAND_NEEDLES: [(&str, &str); 3] = [
+    (
+        "topmost",
+        "常に手前の帯（`\\v`／`\\![set,windowstate,stayontop]` の働き）",
+    ),
+    ("stayontop", "`\\![set,windowstate,stayontop]`"),
+    ("windowstate", "`\\![set,windowstate,...]`"),
+];
+
+/// 帯の語を持つ areka 側の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
+const BAND_FILES: [&str; 2] = [
+    "src/emo2_boot/window_state_cue.rs",
+    "src/emo2_boot/frame/window_state.rs",
 ];
 
 fn source_path(relative: &str) -> PathBuf {
@@ -120,6 +141,7 @@ fn deferred_hits(code: &str) -> Vec<(&'static str, &'static str)> {
     let lowered = code.to_lowercase();
     DEFERRED_NEEDLES
         .iter()
+        .chain(BAND_NEEDLES.iter())
         .filter(|(needle, _)| lowered.contains(*needle))
         .copied()
         .collect()
@@ -147,7 +169,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources()
         let hits = deferred_hits(&code);
         assert!(
             hits.is_empty(),
-            "{relative}: 先送りした語彙が本番コードに現れている（要件 8.3〜8.5）: {hits:?}"
+            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯の語を持つのは {BAND_FILES:?} だけ）: {hits:?}"
         );
 
         scanned_files += 1;
@@ -168,7 +190,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources()
 /// 走査の道具が実際に語を見つけられること、そしてコメントだけを落としていることを固定する。
 #[test]
 fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
-    for (needle, why) in DEFERRED_NEEDLES {
+    for (needle, why) in DEFERRED_NEEDLES.into_iter().chain(BAND_NEEDLES) {
         let sample = format!("let handle = SomeApi::{needle}(hwnd);");
         let hits = deferred_hits(&sample);
         assert!(
@@ -209,6 +231,25 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
         code.contains("WS_EX_TOOLWINDOW"),
         "コードだけの本文から窓スタイルの実体が消えている"
     );
+}
+
+/// 帯の語を持つのは受け口と取り出しの相のファイルであり、そのコード（コメントを除く）で帯の語の
+/// 走査が語を見つける（上の「無い」の主張の対照・持ち主が改名や移動をすれば赤くなる）。
+#[test]
+fn the_band_files_are_where_the_band_words_live() {
+    for relative in BAND_FILES {
+        let code = code_only(&read_source(relative));
+        assert!(
+            deferred_hits(&code)
+                .iter()
+                .any(|(n, _)| BAND_NEEDLES.iter().any(|(b, _)| b == n)),
+            "{relative}: 帯の語が見つからない（帯の語の持ち主が動いた？）"
+        );
+        assert!(
+            !PRODUCTION_FILES.contains(&relative),
+            "{relative} が重なり順の機構の名簿に入っている"
+        );
+    }
 }
 
 // -------------------------------------------------------------------------

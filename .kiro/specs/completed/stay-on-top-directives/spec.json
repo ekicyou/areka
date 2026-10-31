@@ -1,0 +1,29 @@
+{
+  "feature_name": "stay-on-top-directives",
+  "created_at": "2026-10-30T10:44:51Z",
+  "updated_at": "2026-10-31T03:44:29Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-30T11:05:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-30T11:26:40Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-30T12:30:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-31T03:44:29Z"
+    }
+  },
+  "ready_for_implementation": true
+}

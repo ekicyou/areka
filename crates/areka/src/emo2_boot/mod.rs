@@ -65,6 +65,8 @@ pub mod talk_lifecycle;
 pub mod target_map;
 mod update_cue;
 pub(crate) mod user_break_cue;
+/// `\v`／`\![set,windowstate,…]` の受け口（stay-on-top-directives）。
+mod window_state_cue;
 pub mod zorder_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
@@ -399,7 +401,7 @@ const _: fn() = || {
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動 `runtime_boot::boot_runtime`
-///    （束の複製から 12 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
+///    （束の複製から 13 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
 ///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
@@ -490,7 +492,7 @@ pub fn wire_emo2_boot(
     // 荷物の返信の送り手も消える。seriko の送り手は Emo2Wiring に持たせない）。
     let swap_slot = switch_assets::SwapSlot::default();
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
-    // 受信端が窓の側にある 3 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
+    // 受信端が窓の側にある 4 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
     // UI スレッドの Emo2Wiring が受信端を持つ。送出端は束（`CueSinkSources`）に載り、実行系を
     // 起こすたびに複製されて受け口になる（`runtime_boot::runtime_sinks`）。
     // - move（task 9.1）: frame 相 drain＝task 9.2 が消費。
@@ -498,9 +500,13 @@ pub fn wire_emo2_boot(
     //   届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
     // - 重なり（areka-P0-scope-zorder-pinning task 6.2）: 解釈前のトークン列を運び、意味付けは
     //   台帳の状態を要するので取り出しの相（run_zorder_drain_phase）が行う。
+    // - 常に手前（stay-on-top-directives）: 読み分けた指令を運び、取り出しの相
+    //   （run_window_state_phase）がゴーストの状態へ当てる。
     let (move_tx, move_rx) = std::sync::mpsc::channel::<PositionCue>();
     let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
     let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
+    let (window_state_tx, window_state_rx) =
+        std::sync::mpsc::channel::<window_state_cue::WindowStateDirective>();
     let BootAssets {
         shells,
         balloons,
@@ -525,21 +531,20 @@ pub fn wire_emo2_boot(
     // バルーン表の転送（要件 5.6）: `LoopTables.balloon` は既に scope 別の写像（`build_boot_assets` の
     // 構築ループ内で単一導出済み）ゆえ、ここは scope キーをアクタ鍵語彙へ写す値移送だけを行う。
     let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
-    let seed: u64 = {
-        use std::hash::{BuildHasher, Hasher};
-        std::collections::hash_map::RandomState::new()
-            .build_hasher()
-            .finish()
-    };
+    // 選び（`alternative*`）の種は抽選とは別に引く（spec: seriko-pattern-calls 要件 3.6）。
+    let seed = entropy_seed();
+    let pick_seed = entropy_seed();
     // 再現可能性の観測点（R7.4/7.5）: 本番 seed を info! に出力し、同一 seed で run を再現可能にする。
     info!(
         seed,
-        "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）"
+        pick_seed,
+        "emo2-boot: SERIKO ループ乱数 seed（抽選・選び／RandomState 由来・実 entropy・再現用）"
     );
     let loop_config = SerikoLoopConfig {
         shell_table,
         balloon_tables,
         rng: seeded_rng(seed),
+        pick_rng: seeded_rng(pick_seed),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
@@ -589,7 +594,7 @@ pub fn wire_emo2_boot(
     // 持ち主は `GhostSession` だけで、降ろす最初の段で落ちる。boot 失敗時は下で tick_sink と一緒に落とす。
     let session_sink = surface_sink.clone();
     // 受け口の送出端の束（areka-P0-mcp-reload 要件 4.2）: 窓の側がここで 1 度組み、実行系を
-    // 起こすたびに複製から 12 本の sink を組む。
+    // 起こすたびに複製から 13 本の sink を組む。
     let sources = CueSinkSources {
         surface: surface_sink,
         text: emo_text_sink,
@@ -597,6 +602,7 @@ pub fn wire_emo2_boot(
         move_tx,
         lifecycle_tx,
         zorder_tx,
+        window_state_tx,
     };
 
     // 手順5: 実行系の側の起動（`runtime_boot::boot_runtime`）。sink の並び・boot の失敗の分類と記録・
@@ -636,6 +642,8 @@ pub fn wire_emo2_boot(
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
+    // 常に手前の指令の受信端も同じ所で渡す（状態は既定のオフから・stay-on-top-directives 要件 3.4）。
+    wiring.attach_window_state_rx(window_state_rx);
     world.insert_non_send(wiring);
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms で、seriko と
@@ -689,7 +697,7 @@ fn loop_ticker_config(clock: &SerikoClock) -> LoopTickerConfig {
 /// の順で回るので、相がここで挿した描画命令と配置は、同じ巡の伝播（`PostLayout`）・面の
 /// 生成（`PreRenderSurface`）・描画（`RenderSurface`）が拾う。末尾の段に載せると絵の着地が
 /// 次の巡へずれ、文字だけが 1 コマ先に出る。
-/// 重なりの鎖の適用系（末尾の段の 3 本目）との前後は、`.before` ではなくこの相順そのものが
+/// 重なりの鎖の適用系（末尾の段の最後の系）との前後は、`.before` ではなくこの相順そのものが
 /// 担う（段をまたぐ順序指定は書けない）——`Update` は末尾の段より前なので、相が組んだ
 /// 望む鎖は同じ巡のうちに適用系が読む（要件 14.5 の「そのイベントへの応答としての完了」）。
 /// 上流の鎖より後に置くのは、拡大率の相が読むモニタ表がその巡の最新であるためで、DPI 遷移の
@@ -714,11 +722,27 @@ pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {
         .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
 }
 
+/// 実 entropy の種（`RandomState` はプロセスごとのランダム鍵で初期化され、作るたびに鍵が変わる）。
+/// 空書込みの `finish()` はその鍵由来の値を返す（新規 crates.io 依存なし）。
+fn entropy_seed() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish()
+}
+
 #[cfg(test)]
 mod wire_tests {
     use super::sample_test_support::{emo2_balloon_root, emo2_root};
     use super::*;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+    /// 選びの種は抽選の種と別に引く（spec: seriko-pattern-calls 要件 3.6）: 続けて引いた 2 つの種が
+    /// 違う（同じ種だと選びと抽選が同じ列を引き、別にした意味が無い）。
+    #[test]
+    fn lottery_and_pick_seeds_are_drawn_separately() {
+        assert_ne!(entropy_seed(), entropy_seed());
+    }
 
     /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
     /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと

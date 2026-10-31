@@ -36,6 +36,7 @@ fn runtime(shell: AnimationTable) -> LoopRuntime {
         shell_table: shell,
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     })
 }
 
@@ -44,7 +45,10 @@ fn clock(rt: &LoopRuntime, slot: Slot, film: FilmId) -> Option<PartAnim> {
 }
 
 fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing { started_at_ms: at })
+    Some(PartAnim::Playing {
+        started_at_ms: at,
+        acts_through: None,
+    })
 }
 
 /// `slot` の面の子 `film` の欄の絵（`None`＝載っていない＝経過 0）。
@@ -220,6 +224,7 @@ fn runtime_of(text: &str, rng: LoopRng) -> LoopRuntime {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(scope(), table)]),
         rng,
+        pick_rng: crate::seeded_rng(0),
     })
 }
 

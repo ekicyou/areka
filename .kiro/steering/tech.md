@@ -118,7 +118,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **32bit 可搬性制約の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体（x64+arm64）の spec に i686 ビルド検証を課さない（`api.rs` の isize 契約で元々 i686 非対象）
 
 ### 環境変数と開発者の机の道具
-- **本番の環境変数は `AREKA_` の名前空間でドメインの語で名付ける**（例: 根の `AREKA_ROOT`・`AREKA_USER_ROOT`・`AREKA_PROFILE_DIR`、MCP の待受の `AREKA_MCP_PORT`、有界の自動終了の `AREKA_APP_SMOKE_EXIT_MS`、利用者向けのメッセージボックスの告知を抑える `AREKA_NO_ALERT`（自動テストでモーダルが止まらないように））。意味の正本は読む側のコードで、ここには並べ尽くさない
+- **本番の環境変数は `AREKA_` の名前空間でドメインの語で名付ける**（例: 根の `AREKA_ROOT`・`AREKA_USER_ROOT`・`AREKA_PROFILE_DIR`、MCP の待受の `AREKA_MCP_PORT`、有界の自動終了の `AREKA_APP_SMOKE_EXIT_MS`、利用者向けのメッセージボックスの告知を抑える `AREKA_NO_ALERT`（自動テストでモーダルが止まらないように。終わりの告知は `AREKA_APP_SMOKE_EXIT_MS` が立つ走行でも抑え、記録 `event="alert"` を残して即座に終了コード 1 で終える））。意味の正本は読む側のコードで、ここには並べ尽くさない
 - **開発者の机に置く exe は環境変数の置き場所へ道具で置き直す**: 中継 `areka-mcp-bridge.exe` は `AREKA_MCP_HOME`（`tools/mcp-bridge-install.ps1`・上の rmcp の項）、机の貸し出しの `areka-impl-watch.exe` は `AREKA_IMPL_WATCH_HOME`（`tools/impl-watch-install.ps1`・手順は `doc/impl-watch.md`）。どちらも release で組み、走っているものは止めずに入れ替える
 - 実物・実機の試験の入口（`AREKA_EMO2_REAL_RUN`・`AREKA_WINDOW_LINK_REAL_RUN`・`HOST32_PASTA_DLL` など）は、無ければ飛ばす（Testing 節）
 - アイコンを描き直したら `tools/app-icon.ps1` で寸法ごとの PNG 16 枚から `crates/areka/icon/` の `app.ico`・`tray.ico`・`icons.res` を作り直す（2026-10-16 `areka-P0-app-icon`）

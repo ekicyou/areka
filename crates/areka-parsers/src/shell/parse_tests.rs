@@ -118,6 +118,7 @@ smile,[0,1,2]
                     // task 1.2: overlay 行の method を忠実転記（field[1]＝"overlay"）。
                     method: DrawMethod::new("overlay".to_string()),
                     surface_id: 100,
+                    target: "100".into(),
                     wait: 50,
                     x: 0,
                     y: 0,

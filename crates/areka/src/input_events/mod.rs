@@ -8,6 +8,7 @@
 //! task 2.6／2.7 で本 mod へ増設される。
 
 pub(crate) mod balloon;
+pub(crate) mod balloon_wheel;
 pub(crate) mod char_watch;
 pub(crate) mod choice_drain;
 pub(crate) mod click;

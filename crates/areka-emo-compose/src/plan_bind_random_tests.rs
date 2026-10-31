@@ -19,6 +19,7 @@ fn overlay(index: u32, surface_id: i64) -> Pattern {
         index,
         method: DrawMethod::new("overlay".to_string()),
         surface_id,
+        target: surface_id.to_string(),
         wait: 0,
         x: 0,
         y: 0,

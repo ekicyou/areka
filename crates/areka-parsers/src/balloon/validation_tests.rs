@@ -187,9 +187,10 @@ fn r5_3_descript_plus_kero_image_inherits_wordwrappoint() {
 /// `font.color.r` 由来であり distractor 由来ではないこと、`font.height()==Some(28)` は
 /// `font.name`/`font.height` 由来であり `number.*`/`sstpmessage.*` 由来ではないことを確認する。
 ///
-/// なお arrow/number/onlinemarker/sstpmarker/sstpmessage は**そもそもモデルに accessor が無い**
-/// （`BalloonModel` は幾何＋フォント subset のみ公開）ため、subset 逸脱抽象が追加されていないこと自体は
-/// 型で保証される。ここでは「同名前綴 distractor が採用値を汚染しない」完全一致引きの生き証人を置く。
+/// なお number/onlinemarker/sstpmarker/sstpmessage は**そもそもモデルに accessor が無い**
+/// ため、subset 逸脱抽象が追加されていないこと自体は型で保証される。arrow は
+/// balloon-scroll-arrows で `arrow_keys()` として読むようになったが、`arrow*` の鍵は完全一致で別に引く
+/// ため、ここで見る幾何＋フォントの値を汚さない。ここでは「同名前綴 distractor が採用値を汚染しない」完全一致引きの生き証人を置く。
 #[test]
 fn r2_7_distractor_keys_do_not_leak_into_subset() {
     let descript = load_decoded("descript.txt");

@@ -42,15 +42,23 @@
 mod attach;
 // 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6）。
 mod balloon_offset_follow;
+// 今の定義の唯一の書き手（balloon-scroll-arrows design「BalloonFaceSelector」）。
+mod balloon_face;
 mod dpi;
 mod drain_resnap;
 // 位置の指令の預かり（window-work-area-clamp design「MoveHold」）。
 mod move_hold;
+// 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」）。
+mod move_shift;
 mod scale_text;
 pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
 mod switch;
 mod wiring;
+// 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
+mod window_state;
+use self::window_state::run_window_state_phase;
+pub(crate) use self::window_state::{DiscardReason, log_stay_on_top_discard};
 mod work_area_sync;
 mod zorder_descript;
 mod zorder_drain;
@@ -361,13 +369,16 @@ pub fn emo2_frame_system(world: &mut World) {
     // スレッドが送り出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳と窓の
     // 在庫から**望む鎖 1 本**を組み、内容が前回と異なるときだけ wintf の受け口
     // （`ZOrderChainPlan`）へ公開するところまでを行う。
-    // 鎖の適用系（確定段の 3 本目）より**前**である必要がある——後ろだと、ここで公開した
+    // 鎖の適用系（確定段の末尾）より**前**である必要がある——後ろだと、ここで公開した
     // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない
     // （要件 14.5）。その順序は**段そのものの並び**が担う——本 system は `Update` に載り
     // （`wire_emo2_boot` 手順 6・裁定 2026-09-12）、適用系が載る確定段（`FrameFinalize`）は
     // 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので `.before` は使わない）。
     // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
+    // 常に手前の指令の取り出し（stay-on-top-directives design「WindowStatePhase」）: 重なりの
+    // 取り出しの直後。印と帯の指令の列を同じ巡の確定段（帯の系）が読む。
+    run_window_state_phase(&mut wiring.window_state, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
@@ -384,6 +395,11 @@ pub fn emo2_frame_system(world: &mut World) {
     // 連鎖の確定の**前**でもある（確定は一度きりで、定常のフレームでは何もしない）。面の指令と
     // `\![move]` は別の線で届くので、別のフレームに割れて届いた場合の隙間はここでは扱わない。
     run_move_drain_phase(&wiring, world);
+    // 面の `move` のずれ（seriko-pattern-calls design「MoveShiftPlacement」・要件 3.8・7.1・7.3・7.6）:
+    // 移動の相の**直後**。表示の指令（ずれは `Show` と同じ線で届く）・再スナップ・`\![move]` が
+    // 窓を置いた後に、その位置を元にずれを当てる。連鎖の確定・解き直しより前に置き、それらが
+    // ずらした後の位置を読む。
+    move_shift::run_move_shift_phase(&wiring.presenter, world);
     // 初期配置の確定（scg 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
     // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
     // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
@@ -411,7 +427,7 @@ pub fn emo2_frame_system(world: &mut World) {
 
 #[cfg(test)]
 #[path = "frame_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 // 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
 // x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。
@@ -524,6 +540,12 @@ mod ghost_quit_logsink_tests;
 #[cfg(test)]
 #[path = "frame_ghost_quit_switch_tests.rs"]
 mod ghost_quit_switch_tests;
+
+// 常に手前の状態と台本の組の寿命（ゴーストの読み直し・切り替え・SHIORI だけの読み直し）
+// （stay-on-top-directives タスク 5.3）。
+#[cfg(test)]
+#[path = "frame_stay_on_top_lifecycle_tests.rs"]
+mod stay_on_top_lifecycle_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

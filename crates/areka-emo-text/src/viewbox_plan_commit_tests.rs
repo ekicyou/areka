@@ -708,3 +708,41 @@ fn plan_shrunk_content_degrades_to_full_domain() {
         other => panic!("後方縮退は全域 Update を期待したが {other:?}"),
     }
 }
+
+/// 古い側への送り（内容は同じ・可視窓だけを戻す）は全域ダーティ Update へ縮退する（実機 8.2）。
+/// 前回の面は可視窓より前の行を描かず原点の上の余白を空けたままなので、blit するとその余白が
+/// 新しく見える行の上へ写る。3 つの書字方向とも、前へ送った位置を確定した後に戻す計画は
+/// blit=0・面全域 1 枚。
+#[test]
+fn scroll_back_toward_older_degrades_to_full_domain_across_modes() {
+    let contract = ScaleContract::new(1.0, None);
+    let surface = (48u32, 36u32);
+    // (mode, 前へ送った block_offset)——axis_mapping_end_to_end と同じ向き。
+    let cases = [
+        (WritingMode::HorizontalTb, -12.0f32),
+        (WritingMode::VerticalRl, 12.0),
+        (WritingMode::VerticalLr, -12.0),
+    ];
+    for (mode, forward) in cases {
+        let canvas = canvas_for(
+            &broken_lines(3),
+            mode,
+            (Some(0), Some(200), Some(0), Some(400)),
+            10.0,
+        );
+        let mut planner = ScrollPlanner::new();
+        commit_initial(&mut planner, &canvas, mode, &contract, surface);
+        let fw = window(1, forward);
+        let ahead = planner.plan(&canvas, &fw, mode, &contract, surface);
+        planner.commit(&canvas, &fw, mode, &contract, &ahead);
+
+        let back = planner.plan(&canvas, &window(0, 0.0), mode, &contract, surface);
+        let (blit, dirty) = expect_update(&back);
+        assert_eq!(blit, (0, 0), "{mode:?}: 古い側への送りは blit しない");
+        assert_eq!(
+            dirty,
+            vec![phys(0, 0, surface.0, surface.1)],
+            "{mode:?}: ダーティは面全域 1 枚"
+        );
+    }
+}

@@ -405,8 +405,10 @@ fn balloon_limit_never_attached_to_char_windows() {
 // T-I2: z-order 既定（5.1・DD13）
 // -------------------------------------------------------------------------
 
-/// T-I2: 全窓の `WindowStyle.ex_style` に `WS_EX_TOPMOST` が含まれない
-/// （既定 z-order 非 topmost・5.1／DD13。style/ex_style の正値も固定する）。
+/// T-I2（守り G3）: 全窓の `WindowStyle.ex_style` に `WS_EX_TOPMOST` が含まれない
+/// （既定はオフ・5.1／DD13。style/ex_style の正値も固定する）。常に手前のオンは、ここの既定の
+/// スタイルではなく、印 `StayOnTop` と窓の作り（印のある窓だけ `WS_EX_TOPMOST` を足す）で足す
+/// （stay-on-top-directives 要件 2.3・6.3）。
 /// 全窓が投げ込みの受け入れの宣言 `WS_EX_ACCEPTFILES` を含む（areka-P0-file-drop 要件 1.1・9.9）。
 #[test]
 fn t_i2_no_window_has_ws_ex_topmost() {

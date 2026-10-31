@@ -14,8 +14,9 @@ use super::{
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit, BalloonPlace,
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
-    apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
-    rect_at, rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
+    apply_visibility_guard, balloon_shift, diag, follow_balloon, place_balloon_in_work_area,
+    project_anchor, rect_at, rederive_keyword_balloon_offset, transition_diag,
+    work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -74,6 +75,7 @@ pub fn move_window_with_route(
     }
 
     if let Some(follow) = follow {
+        let shift = balloon_shift(world, follow.balloon);
         let offset = follow.offset();
         debug_assert!(
             x.checked_add(offset.x).is_some() && y.checked_add(offset.y).is_some(),
@@ -84,8 +86,8 @@ pub fn move_window_with_route(
         enqueue_window_set_pos(
             world,
             follow.balloon,
-            x + offset.x,
-            y + offset.y,
+            x.saturating_add(offset.x).saturating_add(shift.x),
+            y.saturating_add(offset.y).saturating_add(shift.y),
             None,
             Some(PlacementRoute::BalloonFollow),
         );
@@ -537,7 +539,9 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
         // 登録されておらず、呼ぶのは決定論テストだけ）ゆえ現に到達しないが、由来は表示環境の
         // 変化を受けた基盤側の置き直しであり、結線されたときに見送りが要る側である。鳴る側に
         // 置いておけば、結線した瞬間に「どちらへ倒すか」を必ず決めさせられる。
-        | PlacementRoute::AnchorChange => true,
+        | PlacementRoute::AnchorChange
+        // 面の `move` のずれ（seriko-pattern-calls）。毎フレームの相が見送りの門で次のフレームへ回す。
+        | PlacementRoute::PatternMove => true,
 
         // ---- 見送らないことが正しい経路（届くのは仕様どおり＝鳴らない）----
         //
@@ -657,7 +661,7 @@ pub(super) fn enqueue_window_set_pos(
     // 待ち札の適用範囲の不変条件（atom 設計 C5・要件 5.8）: 「[`DpiSyncHold`] を持つ窓への
     // 窓書込は 0」。ただし**その 0 を作るのは見送りの側**であって本監視ではない。ゆえに鳴らす
     // 相手は「見送りが覆うべき経路」に限る——判定は [`deferral_covers_route`] が 1 本で持ち、
-    // 12 の経路語と route 無しを網羅 match で分類している（task 7.5）。**書込口は本関数 1 つ**
+    // 13 の経路語と route 無しを網羅 match で分類している（task 7.5）。**書込口は本関数 1 つ**
     // なので、覆うべき経路がすり抜けたかどうかはここでしか構造的に見張れない。実機では
     // `warn!` として見え、テストビルドでは `debug_assert!` がその場で落とす。
     //

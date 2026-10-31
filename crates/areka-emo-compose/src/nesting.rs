@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
+use crate::bind_steps::BindStep;
 use crate::method::{is_implemented_name, is_move_name};
 use crate::pattern::{Cell, PatternState};
 use crate::plan::is_bind_interval;
@@ -80,7 +81,7 @@ pub fn element_kind(path: &ElementPath) -> ElementKind {
 
 /// サーフェスごとの静的な参照（要件 5.11・5.13）。面の表から 1 度作る不変の値（Send・seriko が写しを持つ）。
 ///
-/// `children`・`bind_targets`・`bind_ids`・`films`・`always_rest` のどれかが空でない番号だけを載せる
+/// `children`・`bind_targets`・`bind_random_ids`・`films`・`always_rest` のどれかが空でない番号だけを載せる
 /// （載せる条件はこの 1 か所）。入れ子も着せ替えの種類の animation も動く絵の子も `always` の経過 0 の
 /// 先も無いシェルでは空。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -93,11 +94,12 @@ pub struct NestTable {
 pub struct SurfaceParts {
     /// element定義で置いた子（面の表に在る番号だけ・element定義の番号の昇順）。
     pub children: Vec<u32>,
-    /// 着せ替えの animation の pattern0 が指すサーフェス（animation の番号, 番号）。
-    /// index が 0・番号が 0 以上・描画メソッドが動くものだけ。animation の番号の昇順。
+    /// 着せ替えの animation の手順の「描く」コマが指すサーフェス（animation の番号, 番号）。
+    /// 純 `bind` は全部のコマ・`bind+random` は pattern0 だけ（seriko-pattern-calls 6.8）。昇順・重複なし。
     pub bind_targets: Vec<(u32, u32)>,
-    /// 着せ替えの種類（`bind`・`bind+random`）の animation の番号（昇順・重複なし）。
-    pub bind_ids: Vec<u32>,
+    /// `bind+random` の animation の番号（昇順・重複なし）。③ の合流の門が引く（無効ならコマを数えない）。
+    /// 純 `bind` のコマは呼ばれて始まったものだけなので門を通さない（seriko-pattern-calls 5.6・M5）。
+    pub bind_random_ids: Vec<u32>,
     /// element定義で置いた動く絵の子（昇順・重複なし）。
     pub films: Vec<FilmId>,
     /// `always` の animation の経過 0 の pattern が指すサーフェス（animation の番号, 番号）。
@@ -122,29 +124,29 @@ impl NestTable {
                     _ => None,
                 })
                 .collect();
-            let mut bind_ids: Vec<u32> = Vec::new();
+            let mut bind_random_ids: Vec<u32> = Vec::new();
             let mut bind_targets: Vec<(u32, u32)> = Vec::new();
             for anim in master
                 .animations
                 .iter()
                 .filter(|a| is_bind_interval(&a.interval))
             {
-                bind_ids.push(anim.id);
-                // flatten_surface と同じ辺: index==0・番号が 0 以上・描画メソッドが動く。
-                let target = anim
-                    .patterns
-                    .iter()
-                    .find(|p| p.index == 0)
-                    .filter(|p| is_implemented_name(p.method.as_str()))
-                    .and_then(|p| u32::try_from(p.surface_id).ok());
-                if let Some(target) = target {
-                    bind_targets.push((anim.id, target));
+                if matches!(anim.interval, Interval::BindRandom { .. }) {
+                    bind_random_ids.push(anim.id);
                 }
+                // 合成と同じ辺: 着せ替えの手順の「描く」コマ（純 `bind` は全部・`bind+random` は pattern0）。
+                bind_targets.extend(world.bind_steps(id, anim.id).iter().filter_map(
+                    |s| match *s {
+                        BindStep::Draw { surface, .. } => Some((anim.id, surface)),
+                        BindStep::Insert { .. } => None,
+                    },
+                ));
             }
             // 同じ番号の animation は畳み込みで 1 つ（後勝ち）。並びだけを番号の昇順へ揃える
-            // （bind_ids は visible_parts が二分探索で引く）。
-            bind_ids.sort_unstable();
+            // （bind_random_ids は visible_parts が二分探索で引く）。
+            bind_random_ids.sort_unstable();
             bind_targets.sort_unstable();
+            bind_targets.dedup();
             let mut films: Vec<FilmId> = master
                 .elements
                 .iter()
@@ -169,7 +171,7 @@ impl NestTable {
             let row = SurfaceParts {
                 children,
                 bind_targets,
-                bind_ids,
+                bind_random_ids,
                 films,
                 always_rest,
             };
@@ -235,7 +237,7 @@ impl NestTable {
             for &child in &p.children {
                 self.enter(child, top, binds, pattern, out);
             }
-            // ② 有効な着せ替えの pattern0（コマが在ればコマが置き換える＝③で数える）。
+            // ② 有効な着せ替えの描くコマ（コマが在ればコマが置き換える＝③で数える）。
             for &(id, target) in &p.bind_targets {
                 if binds.contains(id) && frame_of(id).is_none() {
                     self.enter(target, top, binds, pattern, out);
@@ -249,8 +251,8 @@ impl NestTable {
                 }
             }
         }
-        // ③ コマ。着せ替えの種類なら有効なものだけ。
-        let is_bind = |id: u32| parts.is_some_and(|p| p.bind_ids.binary_search(&id).is_ok());
+        // ③ コマ。`bind+random` なら有効なものだけ（純 `bind` のコマは無効でも数える・M5）。
+        let is_bind = |id: u32| parts.is_some_and(|p| p.bind_random_ids.binary_search(&id).is_ok());
         let top_frames = pattern.iter().filter(|_| is_top);
         let part_frames = pattern.part(surface).filter(|_| !is_top);
         for (id, frame) in top_frames.chain(part_frames) {

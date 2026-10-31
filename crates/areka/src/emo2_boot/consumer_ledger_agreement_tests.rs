@@ -1,18 +1,18 @@
-//! 正準台帳と `emo2_boot` の 10 の受け口の自己選別の一致の檻（areka-P0-mcp-author-tools
+//! 正準台帳と `emo2_boot` の 11 の受け口の自己選別の一致の檻（areka-P0-mcp-author-tools
 //! 要件 3.2・3.11・design「`\!` の表の仕上げ」の「一致のテスト」）。
 //!
 //! 表は宣言するだけで、受け口は自分の名前と第 1 引数で自己選別する（両者は依存しない）。
 //! `check_script` は表を引いて「知らない `\!`」を答えるので、表と受け口の選別がずれると
 //! 「検査だけが通して再生で落ちる」「検査だけが落として再生で通る」が生まれる。ここで固定する。
 //!
-//! 10 の受け口をそれぞれ本物の送信端つきで組み、1 つの `\!` の cue を全員へ配って、どの送信端に
+//! 11 の受け口をそれぞれ本物の送信端つきで組み、1 つの `\!` の cue を全員へ配って、どの送信端に
 //! 指令が届いたかを見る（配送は全員へ同じ cue を配る broadcast なので、本番と同じ形）。
 //!
 //! 1. 表が担当を言う各行（受け口の既存のテストから取った引数つきの見本）→ その担当の受け口だけに
 //!    届く。担当が `emo2_boot` の外（seriko の `bind`・文字の層の `\f`・台本の組み立ての
-//!    `set,choicetimeout`・プロパティの書き込み）の行は、10 のどれにも届かない。
+//!    `set,choicetimeout`・プロパティの書き込み）の行は、11 のどれにも届かない。
 //! 2. 表に出てくる名前の全部 × 表に出てくる第 1 引数の全部（＋第 1 引数なし＋どこにも無い語）の
-//!    掛け合わせのうち、表に無い組 → 10 のどれにも届かない（受け口が表に無い組を拾えば赤）。
+//!    掛け合わせのうち、表に無い組 → 11 のどれにも届かない（受け口が表に無い組を拾えば赤）。
 //!    引数の列は「第 1 引数＋同じ名前の見本の第 2 引数から先（尾）」で組む。切替・書庫の受け口は
 //!    選別子の後ろに引数が無いと何も送らないので、尾を付けないと選別がゆるんでも赤にならない。
 //!    尾の無い形（第 1 引数だけ）も配り、第 1 引数なしは裸と空の第 1 引数（`""`＋尾）の両方を配る。
@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::sync::mpsc::channel;
 
 use areka_ghost::prop_sink::PROP_SET_CUE_NAME;
-use areka_parsers::sakura::JUMP_TAG_CARRIER;
+use areka_parsers::sakura::{JUMP_TAG_CARRIER, RAISE_TAG_CARRIER};
 use areka_sakura::contract::FONT_TAG_CARRIER;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
@@ -38,6 +38,7 @@ use super::super::talk_clock::TalkClock;
 use super::super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::super::update_cue::UpdateCueSink;
 use super::super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
+use super::super::window_state_cue::WindowStateCueSink;
 use super::super::zorder_cue::ZOrderCueSink;
 use super::{CommandConsumer, ConsumerLedger, LedgerKey};
 
@@ -131,12 +132,15 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
         // move_cue_balloon_lock_tests.rs（descript-window-keys 要件 5.1・5.7）
         ("lock", Some("balloonmove"), vec!["balloonmove"]),
         ("unlock", Some("balloonmove"), vec!["balloonmove"]),
+        // window_state_cue_tests.rs の常に手前の指令と `\v`（stay-on-top-directives 要件 1.8）
+        ("set", Some("windowstate"), vec!["windowstate", "stayontop"]),
+        (RAISE_TAG_CARRIER, None, vec![]),
     ]
 }
 
 // ---------------------------------------------------------------- 道具立て
 
-/// 表の担当のうち、`emo2_boot` の 10 の受け口のどれか（外の担当は `None`）。
+/// 表の担当のうち、`emo2_boot` の 11 の受け口のどれか（外の担当は `None`）。
 ///
 /// 網羅の `match` にしておく——担当の種類を足した人は、ここで受け口か外かを決めることになる。
 fn emo2_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
@@ -150,7 +154,8 @@ fn emo2_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
         | CommandConsumer::InstallSink
         | CommandConsumer::UpdateSink
         | CommandConsumer::LifecycleSink
-        | CommandConsumer::ReloadSink => Some(consumer),
+        | CommandConsumer::ReloadSink
+        | CommandConsumer::WindowStateSink => Some(consumer),
         CommandConsumer::Seriko
         | CommandConsumer::TextLayer
         | CommandConsumer::ScriptCompile
@@ -168,7 +173,7 @@ fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
     }
 }
 
-/// 10 の受け口を本物の送信端つきで組み、1 つの cue を全員へ配って、指令が届いた受け口を返す。
+/// 11 の受け口を本物の送信端つきで組み、1 つの cue を全員へ配って、指令が届いた受け口を返す。
 ///
 /// 中断の無効化の受け口は、どの cue でも最初に話の始まり・落とすと話の終わりを送るので、
 /// 出入り（`Enter`／`Leave`）だけを「届いた」と数える。書庫の受け口は取得の口を差し替え、
@@ -186,6 +191,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
     let (update_tx, update_rx) = channel();
     let (lifecycle_tx, lifecycle_rx) = channel();
     let (reload_tx, reload_rx) = channel();
+    let (window_state_tx, window_state_rx) = channel();
     let fetch: StartFetch = Arc::new(move |url, _| {
         fetch_tx.send(url).expect("取得の記録を受け取れる");
     });
@@ -203,6 +209,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
             TalkClock::new(Arc::new(|| 0.0)),
         )),
         Box::new(ReloadCueSink::new(reload_tx)),
+        Box::new(WindowStateCueSink::new(window_state_tx)),
     ];
     for sink in &mut sinks {
         sink.emit(carrier_cue(name, args));
@@ -251,6 +258,10 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
             reload_rx.try_iter().count() > 0,
             CommandConsumer::ReloadSink,
         ),
+        (
+            window_state_rx.try_iter().count() > 0,
+            CommandConsumer::WindowStateSink,
+        ),
     ];
     hits.into_iter()
         .filter_map(|(hit, consumer)| hit.then_some(consumer))
@@ -288,8 +299,8 @@ fn samples_cover_exactly_the_ledger_rows() {
     }
 }
 
-/// ⑴ 表が担当を言う各行の見本は、その担当の受け口だけに届く（外の担当なら 10 のどれにも
-/// 届かない）。10 の受け口のどれもが少なくとも 1 つの見本で届くことも確かめる
+/// ⑴ 表が担当を言う各行の見本は、その担当の受け口だけに届く（外の担当なら 11 のどれにも
+/// 届かない）。11 の受け口のどれもが少なくとも 1 つの見本で届くことも確かめる
 /// （届いたかを見る仕掛けが受け口ごとに生きていること）。
 #[test]
 fn each_ledger_row_reaches_only_its_own_sink() {
@@ -314,13 +325,13 @@ fn each_ledger_row_reaches_only_its_own_sink() {
     }
     assert_eq!(
         seen.len(),
-        10,
-        "10 の受け口のどれにも届く見本がある: {seen:?}"
+        11,
+        "11 の受け口のどれにも届く見本がある: {seen:?}"
     );
 }
 
 /// ⑵ 表に出てくる名前 × 表に出てくる第 1 引数（＋第 1 引数なし＋どこにも無い語）の掛け合わせの
-/// うち、表に担当の無い組は 10 のどれにも届かない。
+/// うち、表に担当の無い組は 11 のどれにも届かない。
 ///
 /// 引数の列は第 1 引数の後ろに同じ名前の見本の尾（第 2 引数から先）を付ける。尾が無いと
 /// 切替先の名前や書庫のパスを要る受け口へ届きえず、選別がゆるんでも赤にならないため。
@@ -372,7 +383,7 @@ fn pairs_without_a_ledger_row_reach_no_sink() {
 }
 
 /// 位置の指定・解除（`\![set,position,…]`・`\![reset,position]`）は SSP 2.9.18 も受けないので、
-/// 表に行が無く、10 のどれにも届かない（areka-P0-move-canon 要件 7.1）。
+/// 表に行が無く、11 のどれにも届かない（areka-P0-move-canon 要件 7.1）。
 #[test]
 fn set_and_reset_position_reach_no_sink() {
     let ledger = ConsumerLedger::canonical();
@@ -390,7 +401,7 @@ fn set_and_reset_position_reach_no_sink() {
     }
 }
 
-/// 本 spec が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、10 の受け口の
+/// 本 spec が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
 /// どれにも届かない（areka-P0-mcp-reload 要件 10.3・11.1・11.3）。
 #[test]
 fn reload_makoto_and_aigraph_reach_no_sink() {

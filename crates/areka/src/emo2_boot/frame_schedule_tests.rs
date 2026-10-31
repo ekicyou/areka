@@ -80,11 +80,11 @@ fn register_like_the_boot(world: &mut World) {
         .add_systems(Update, emo2_frame_system.after(update_typewriters));
 }
 
-/// 鎖の適用系（末尾の段の 3 本）を**先に**載せた World。
+/// 鎖の適用系（末尾の段の 4 本）を**先に**載せた World。
 ///
 /// 本番の登録の入口（`ghost_session::register_systems`）も相の登録と `wire_zorder_pair` の両方を載せる。
 /// 末尾の段を空のままにすると「載らない」の主張が「段そのものが無い」で通ってしまうので、
-/// ここで実際に 3 本を載せておく。
+/// ここで実際に 4 本を載せておく。
 fn world_with_the_chain_apply_wired() -> World {
     let mut world = World::new();
     world.init_resource::<Schedules>();
@@ -147,7 +147,7 @@ fn t_n10_the_boot_registers_the_frame_system_into_update() {
 
 /// 本番と同じ登録を行うと、当の相は `Update` に載り、鎖の適用系が居る末尾の段には載らない。
 ///
-/// 末尾の段は空ではない（適用系ほか 3 本が先に載っている）ので、「載らない」の主張は
+/// 末尾の段は空ではない（適用系ほか 4 本が先に載っている）ので、「載らない」の主張は
 /// 「段そのものが無い」で成り立っているのではない。
 #[test]
 fn t_n10_the_registration_lands_the_frame_system_in_update_only() {
@@ -176,9 +176,9 @@ fn t_n10_the_registration_lands_the_frame_system_in_update_only() {
     assert_eq!(
         schedules
             .get(FrameFinalize)
-            .expect("末尾の段は結線済み（確立系・ペア維持系・鎖の適用系）")
+            .expect("末尾の段は結線済み（確立系・帯の系・ペア維持系・鎖の適用系）")
             .systems_len(),
-        3,
+        4,
         "末尾の段が空になっている＝「相が載らない」の主張が空虚（対照が成立していない）"
     );
 }

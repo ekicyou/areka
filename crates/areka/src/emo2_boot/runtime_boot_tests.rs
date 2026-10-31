@@ -1,6 +1,7 @@
 //! 実行系の側の起動（`boot_runtime`）の決定論テスト（areka-P0-mcp-reload 要件 4.2・13.4）。
 //!
-//! 確かめること: 束から 12 本の sink が今の並びで組まれ、12 本目が読み直しの受け口であること・
+//! 確かめること: 束から 13 本の sink が今の並びで組まれ、12 本目が読み直しの受け口・13 本目が
+//! 常に手前の受け口（線へ届く）であること・
 //! 起動に失敗したとき World が変わらないこと・成功したときだけ受信端 5 つが World に据わること。
 
 use std::cell::RefCell;
@@ -39,6 +40,8 @@ struct Rig {
     _move_rx: Receiver<crate::emo2_boot::move_cue::PositionCue>,
     _lifecycle_rx: Receiver<crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal>,
     _zorder_rx: Receiver<crate::emo2_boot::zorder_cue::ZOrderDirective>,
+    /// 常に手前の線の受信端（窓の側が 1 度だけ作る・読み直しで組み直した受け口も同じ線へ送る）。
+    window_state_rx: Receiver<crate::emo2_boot::window_state_cue::WindowStateDirective>,
     _text: Box<dyn std::any::Any>,
     _runtime: Rc<RefCell<TextLayerRuntime>>,
 }
@@ -61,6 +64,7 @@ fn rig() -> Rig {
     let (move_tx, move_rx) = mpsc::channel();
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
     let (zorder_tx, zorder_rx) = mpsc::channel();
+    let (window_state_tx, window_state_rx) = mpsc::channel();
     Rig {
         sources: CueSinkSources {
             surface,
@@ -69,11 +73,13 @@ fn rig() -> Rig {
             move_tx,
             lifecycle_tx,
             zorder_tx,
+            window_state_tx,
         },
         _present_rx: present_rx,
         _move_rx: move_rx,
         _lifecycle_rx: lifecycle_rx,
         _zorder_rx: zorder_rx,
+        window_state_rx,
         _text: Box::new(text_pump),
         _runtime: runtime,
     }
@@ -100,13 +106,18 @@ fn com() {
     }
 }
 
-/// 束から 12 本が組まれ、12 本目が読み直しの受け口（受信端へ届く）である。
+/// 束から 13 本が組まれ、12 本目が読み直しの受け口・13 本目が常に手前の受け口（どちらも
+/// 受信端へ届く）である。
 #[test]
-fn sinks_are_twelve_with_reload_last() {
+fn sinks_are_thirteen_with_reload_then_window_state_last() {
     let rig = rig();
     let world = World::new();
     let (mut sinks, lines) = runtime_sinks(&world, &rig.sources);
-    assert_eq!(sinks.len(), 12, "11 本の今の並びの後ろに読み直しの受け口");
+    assert_eq!(
+        sinks.len(),
+        13,
+        "11 本の今の並びの後ろに読み直しの受け口、その後ろに常に手前の受け口"
+    );
 
     let cue = TalkCue {
         at: 0.0,
@@ -114,11 +125,62 @@ fn sinks_are_twelve_with_reload_last() {
         command: CueCommand::command_carrier("reload", vec!["ghost".to_string()]),
         duration: 0.0,
     };
-    sinks.last_mut().expect("12 本目").emit(cue);
+    sinks[11].emit(cue);
     assert_eq!(
         lines.reload_rx.try_iter().count(),
         1,
         "12 本目の受け口は読み直しの受信端へ送る"
+    );
+
+    let cue = TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("0"),
+        command: CueCommand::command_carrier(
+            "set",
+            vec!["windowstate".to_string(), "stayontop".to_string()],
+        ),
+        duration: 0.0,
+    };
+    sinks.last_mut().expect("13 本目").emit(cue);
+    assert_eq!(
+        rig.window_state_rx.try_iter().count(),
+        1,
+        "13 本目の受け口は常に手前の受信端へ送る"
+    );
+    assert_eq!(
+        lines.reload_rx.try_iter().count(),
+        0,
+        "常に手前の指令は読み直しの線へ行かない"
+    );
+}
+
+/// SHIORI だけの読み直しで受け口を組み直しても、常に手前の指令は窓の側の同じ線に届く
+/// （送出端は束が持つ・stay-on-top-directives 要件 4.3）。
+#[test]
+fn rebuilt_window_state_sink_reaches_the_same_line() {
+    let rig = rig();
+    let world = World::new();
+    let on = || TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("0"),
+        command: CueCommand::command_carrier(
+            "set",
+            vec!["windowstate".to_string(), "stayontop".to_string()],
+        ),
+        duration: 0.0,
+    };
+
+    let (mut first, _) = runtime_sinks(&world, &rig.sources);
+    first.last_mut().expect("13 本目").emit(on());
+    // 読み直し: 前の受け口を落とし、同じ束から組み直す。
+    drop(first);
+    let (mut rebuilt, _) = runtime_sinks(&world, &rig.sources);
+    rebuilt.last_mut().expect("13 本目").emit(on());
+
+    assert_eq!(
+        rig.window_state_rx.try_iter().count(),
+        2,
+        "組み直す前と後の受け口が同じ受信端へ送る"
     );
 }
 

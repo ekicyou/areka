@@ -113,7 +113,6 @@ fn fixture_table_lists_children_and_bind_targets() {
         Some(&SurfaceParts {
             children: vec![10, 30],
             bind_targets: vec![(100, 40)],
-            bind_ids: vec![100],
             ..Default::default()
         })
     );
@@ -177,9 +176,10 @@ fn frame_replaces_bind_pattern0() {
     assert_eq!(visible(&table, 0, &[100], &not_drawn), vec![10, 30, 31, 32]);
 }
 
-/// ③ 有効でない着せ替えの種類のコマは数えない。着せ替えでないコマは無条件に数える。
+/// ③ 有効でない `bind+random` のコマは数えない。純 `bind`・着せ替えでないコマは無条件に数える
+/// （純 `bind` のコマは呼ばれて始まったものだけ・seriko-pattern-calls 5.6・M5 で期待を直した）。
 #[test]
-fn inactive_bind_frames_are_not_counted() {
+fn inactive_bind_random_frames_are_not_counted() {
     let text = "\
 surface0
 {
@@ -212,15 +212,15 @@ element0,overlay,eye.png,0,0
         Some(&SurfaceParts {
             children: vec![],
             bind_targets: vec![],
-            bind_ids: vec![7],
+            bind_random_ids: vec![7],
             ..Default::default()
         })
     );
 
-    // 一番上の欄: 無効な着せ替え 9 のコマは数えない。
+    // 一番上の欄: 無効な純 `bind` 9 のコマも数える（M5）。
     let mut top = PatternState::default();
     top.set(9, frame(7));
-    assert_eq!(visible(&table, 0, &[], &top), vec![5]);
+    assert_eq!(visible(&table, 0, &[], &top), vec![5, 7]);
     assert_eq!(visible(&table, 0, &[9], &top), vec![5, 7]);
 
     // 部品の欄: 無効な着せ替え 7 のコマは数えない・random 8 は数える。
@@ -243,9 +243,10 @@ element0,overlay,eye.png,0,0
     assert_eq!(visible(&table, 0, &[], &not_drawn), vec![5]);
 }
 
-/// 着せ替えの pattern0 の先は index 0・0 以上・描画メソッドが動くものだけ（欄 2 が animation の番号の語も除く）。
+/// 着せ替えの先は手順の「描く」コマ（0 以上・描画メソッドが動く・欄 2 が animation の番号の語を除く）だけ。
+/// 純 `bind` は pattern0 に限らない（animation4 の pattern1・seriko-pattern-calls M6）。
 #[test]
-fn bind_targets_keep_only_drawable_pattern0() {
+fn bind_targets_keep_only_drawable_steps() {
     let text = "\
 surface0
 {
@@ -277,8 +278,7 @@ element0,overlay,eye.png,0,0
         table.parts(0),
         Some(&SurfaceParts {
             children: vec![],
-            bind_targets: vec![(5, 3)],
-            bind_ids: vec![1, 2, 3, 4, 5],
+            bind_targets: vec![(4, 3), (5, 3)],
             ..Default::default()
         })
     );
@@ -286,6 +286,53 @@ element0,overlay,eye.png,0,0
         visible(&table, 0, &[1, 2, 3, 4, 5, 6], &PatternState::default()),
         vec![3]
     );
+}
+
+/// seriko-pattern-calls 6.8・M6: 入れ子の辺は着せ替えの手順の「描く」コマから作る。純 `bind` は全部の
+/// コマ（呼び出しの語は除く）、`bind+random` は pattern0 だけ。
+#[test]
+fn bind_targets_come_from_bind_steps_draws() {
+    let text = "\
+surface0
+{
+element0,overlay,body.png,0,0
+animation1.interval,bind
+animation1.pattern0,overlay,3,0,0,0
+animation1.pattern1,overlay,4,0,0,0
+animation1.pattern2,start,5,0,0,0
+animation2.interval,bind+random,2
+animation2.pattern0,overlay,6,0,0,0
+animation2.pattern1,overlay,7,0,0,0
+}
+surface3
+{
+element0,overlay,eye.png,0,0
+}
+surface4
+{
+element0,overlay,eye.png,0,0
+}
+surface5
+{
+element0,overlay,eye.png,0,0
+}
+surface6
+{
+element0,overlay,eye.png,0,0
+}
+surface7
+{
+element0,overlay,eye.png,0,0
+}
+";
+    let table = table_of(text);
+    assert_eq!(
+        table.parts(0).map(|p| p.bind_targets.clone()),
+        Some(vec![(1, 3), (1, 4), (2, 6)])
+    );
+    let empty = PatternState::default();
+    assert_eq!(visible(&table, 0, &[1, 2], &empty), vec![3, 4, 6]);
+    assert_eq!(visible(&table, 0, &[2], &empty), vec![6]);
 }
 
 /// 先祖へ戻る辺は進まない（自分自身・相互・コマが一番上へ戻る）。有限で終わる。
@@ -697,13 +744,13 @@ fn equivalence_cage_reaches_pattern_targets_and_inner_part_frames() {
     );
 }
 
-/// 着せ替えの集合から外れた着せ替えの種類のコマ（一番上の欄・部品の欄）を足しても、命令列も
-/// 部品の列も変わらない（要件 5.12）。
+/// 着せ替えの集合から外れた `bind+random` のコマ（一番上の欄・部品の欄）を足しても、命令列も
+/// 部品の列も変わらない（要件 5.12・純 `bind` は M5 で外した）。
 #[test]
 fn inactive_bind_frames_change_neither_ops_nor_parts() {
+    let mut rows = 0;
     for case in cases() {
         let ids = case.ids();
-        let mut rows = 0;
         for binds in &case.binds {
             for (k, pattern) in case.patterns.iter().enumerate() {
                 for &top in &ids {
@@ -713,7 +760,11 @@ fn inactive_bind_frames_change_neither_ops_nor_parts() {
                         let Some(parts) = case.table.parts(s) else {
                             continue;
                         };
-                        for &b in parts.bind_ids.iter().filter(|&&b| !binds.contains(b)) {
+                        for &b in parts
+                            .bind_random_ids
+                            .iter()
+                            .filter(|&&b| !binds.contains(b))
+                        {
                             let mut added = pattern.clone();
                             added.set_part(s, b, frame(MARKER));
                             if s == top {
@@ -731,8 +782,8 @@ fn inactive_bind_frames_change_neither_ops_nor_parts() {
                 }
             }
         }
-        assert!(rows > 0, "{}: 外れた着せ替えの行が在る", case.name);
     }
+    assert!(rows > 0, "外れた bind+random の行が在る");
 }
 
 /// 合成が先祖へ戻るとして切った element定義の辺（`debug!` の行から）を (親, element, 子) で返す。

@@ -22,12 +22,16 @@ use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::{DefaultPlacementBasis, reset_window_positions};
 use crate::placement::config::build_placement_config;
-use crate::placement::follow::{Anchored, BalloonFollow, OffsetBase};
+use areka_emo_compose::ScaleRatio;
+
+use crate::placement::follow::{
+    Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, shift_is_current,
+};
 use crate::placement::persist::PersistWiring;
 use crate::placement::prepare_ghost_windows_with_work_area;
 use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::resolver::{
-    Anchor, PointPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
+    Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
 };
 use crate::placement::shared_test_support::{WA, balloon_root, emo2_root, with_com_initialized};
 use crate::placement::source::{DescriptSource, GhostTitles};
@@ -292,6 +296,62 @@ fn shifted_windows_return_to_default_and_are_persisted() {
             "scope {scope} の位置が記憶へ届く: {store:?}"
         );
     }
+    rig.finish();
+}
+
+/// 面の `move` のずれを当てていた窓を並べ直すと、並べた位置が新しい元の位置になる
+/// （seriko-pattern-calls task 6.3・要件 7.5・7.8）。記憶はずれを引かずに並べた位置を書き、
+/// ずれはその上へ当て直り、ずれが 0 に戻れば並べた位置へ戻る（並べた位置 − 前に当てた分へ行かない）。
+#[test]
+fn reset_rebases_the_pattern_shift() {
+    let mut rig = Rig::new();
+    rig.world.insert_resource(MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: WORK.0,
+            top: WORK.1,
+            right: WORK.2,
+            bottom: WORK.3,
+        }],
+    });
+    let char1 = rig.gw().char_window(1).unwrap();
+    assert!(apply_char_shift(
+        &mut rig.world,
+        char1,
+        (10, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(rig.char_pos(1).x, SCOPES[1].1.x + 10);
+
+    assert!(reset_window_positions(&mut rig.world));
+    assert_eq!(rig.char_pos(1), EXPECTED[1]);
+    let store = rig.load();
+    assert_eq!(
+        saved(&store, 1).map(|(x, _)| x),
+        Some((EXPECTED[1].x + SCOPES[1].2.w / 2).to_string()),
+        "記憶は並べた位置（ずれを引かない）"
+    );
+
+    // 毎フレームの相: 記録が外れたので今のずれを並べた位置の上へ当て直す。
+    assert!(!shift_is_current(
+        &rig.world,
+        char1,
+        (10, 0),
+        ScaleRatio::ONE
+    ));
+    assert!(apply_char_shift(
+        &mut rig.world,
+        char1,
+        (10, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(rig.char_pos(1).x, EXPECTED[1].x + 10);
+    assert!(apply_char_shift(
+        &mut rig.world,
+        char1,
+        (0, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(rig.char_pos(1), EXPECTED[1], "ずれ 0 で並べた位置へ戻る");
     rig.finish();
 }
 

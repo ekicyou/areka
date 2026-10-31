@@ -12,7 +12,7 @@
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
 //! 1. **純粋層**（[`state`]／[`place`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
-//!    [`viewbox`]／[`look`]／[`color`]）——
+//!    [`viewbox`]／[`look`]／[`color`]／[`scroll_marker`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
 //! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
@@ -55,6 +55,7 @@ pub mod look;
 mod lookahead;
 pub mod place;
 pub mod region;
+pub mod scroll_marker;
 pub mod segment;
 pub mod sink;
 pub mod state;
@@ -395,6 +396,18 @@ mod tests {
         ),
         // areka-P0-balloon-text-bugs 件 3 の下線の幾何（純粋）。
         ("underline.rs", include_str!("underline.rs")),
+        // balloon-scroll-arrows の手動の位置と送りの規則（純粋）。
+        ("scroll_marker.rs", include_str!("scroll_marker.rs")),
+        (
+            "scroll_marker_tests.rs",
+            include_str!("scroll_marker_tests.rs"),
+        ),
+        // balloon-scroll-arrows の手動の送りの公開の口。
+        ("actor_scroll.rs", include_str!("actor_scroll.rs")),
+        (
+            "actor_scroll_tests.rs",
+            include_str!("actor_scroll_tests.rs"),
+        ),
     ];
     /// 純粋層の走査面へ**載せない**ファイルの明示（タスク 9.4）。
     ///
@@ -423,6 +436,7 @@ mod tests {
         "actor_route_tests.rs",
         "actor_runtime_frame_tests.rs",
         "actor_scale_refresh_tests.rs",
+        "actor_scroll_present_tests.rs",
         "actor_scroll_retain_tests.rs",
         "actor_test_support.rs",
         "actor_tests.rs",
@@ -437,6 +451,8 @@ mod tests {
         "draw_metrics_styled_tests.rs",
         "draw_oracle_tests.rs",
         "draw_test_support.rs",
+        "marker_surface.rs",
+        "marker_surface_tests.rs",
         "sink.rs",
         "sink_probe_tests.rs",
         "sink_talk_end_tests.rs",
@@ -471,7 +487,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 77, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 81, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

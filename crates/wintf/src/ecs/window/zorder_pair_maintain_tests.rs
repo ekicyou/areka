@@ -927,6 +927,7 @@ fn plan_pair_fix_picks_the_moved_window_per_arm() {
         measured_below_of_above: None,
         measured_above_of_below: Some(front_of_below),
         measured_above_of_below_is_always_on_top: false,
+        measured_below_is_always_on_top: false,
     };
 
     let plan = plan_pair_fix(

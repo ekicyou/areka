@@ -66,16 +66,17 @@ fn placement_route_vocabulary_is_fixed() {
     );
     assert_eq!(PlacementRoute::WorkAreaResnap.as_str(), "WorkAreaResnap");
     assert_eq!(PlacementRoute::ChainRealign.as_str(), "ChainRealign");
+    assert_eq!(PlacementRoute::PatternMove.as_str(), "PatternMove");
 }
 
-/// `ALL` は 12 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
+/// `ALL` は 13 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
 #[test]
-fn placement_route_all_covers_twelve_distinct_variants() {
+fn placement_route_all_covers_thirteen_distinct_variants() {
     let all = PlacementRoute::ALL;
     assert_eq!(
         all.len(),
-        12,
-        "経路語彙は 12 種（dpi-transition-atomicity 要件 9.4・D13・windowposition-limit C10）"
+        13,
+        "経路語彙は 13 種（dpi-transition-atomicity 要件 9.4・D13・windowposition-limit C10・seriko-pattern-calls の PatternMove）"
     );
     for route in [
         PlacementRoute::SpawnInitial,
@@ -90,6 +91,7 @@ fn placement_route_all_covers_twelve_distinct_variants() {
         PlacementRoute::BalloonLimitRelease,
         PlacementRoute::WorkAreaResnap,
         PlacementRoute::ChainRealign,
+        PlacementRoute::PatternMove,
     ] {
         assert!(all.contains(&route), "ALL に {route} が無い");
     }

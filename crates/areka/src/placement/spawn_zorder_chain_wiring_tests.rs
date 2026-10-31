@@ -3,11 +3,12 @@
 //!
 //! # 本ファイルが受け持つ主題——仕上げの処理列の末尾に鎖の適用系が居るか
 //!
-//! 本番の確定段（`FrameFinalize`）には 3 本が**この順で**載る。
+//! 本番の確定段（`FrameFinalize`）には 4 本が**この順で**載る。
 //!
 //! 1. 所有関係の確立（[`establish_owner_links`](wintf::ecs::window::establish_owner_links)）
-//! 2. スコープ内ペアの維持（[`apply_zorder_pair_maintenance`](wintf::ecs::window::apply_zorder_pair_maintenance)）
-//! 3. **鎖の適用**（[`apply_zorder_chain`](wintf::ecs::window::apply_zorder_chain)）
+//! 2. 帯の系（[`apply_window_band`](wintf::ecs::window::apply_window_band)・stay-on-top-directives task 5.2）
+//! 3. スコープ内ペアの維持（[`apply_zorder_pair_maintenance`](wintf::ecs::window::apply_zorder_pair_maintenance)）
+//! 4. **鎖の適用**（[`apply_zorder_chain`](wintf::ecs::window::apply_zorder_chain)）
 //!
 //! 鎖の適用が末尾なのは、同じ巡のうちに⑴確立系が張った owner と⑵ペア機構が直したスコープ
 //! 内の隣接の**両方が済んだ姿**を前提に、スコープをまたぐ繋ぎだけを書きたいからである
@@ -22,7 +23,7 @@
 //!   受け口を読むこと（[`the_wired_route_runs_the_chain_apply_in_the_same_pass`]・対照つき）
 //! - グループ指定が一つも無い走行では、既存のペア機構の記録が従来どおりの語彙で出て、
 //!   重なり系の新しい記録は 1 行も出ないこと（要件 6.4）
-//! - 3 本の並び順そのもの（[`the_wiring_chains_the_three_systems_with_a_sync_point`]）
+//! - 4 本の並び順そのもの（[`the_wiring_chains_the_four_systems_with_a_sync_point`]）
 //!
 //! # 決定論の担保——測るのは「積まれた指令」と「受け口の印」だけ
 //!
@@ -111,7 +112,7 @@ fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
 ///
 /// # 何が壊れると赤くなるか
 ///
-/// 確定段の 3 本目を落とす、退役した維持系へ戻す、別のスケジュールへ載せ替える——いずれも
+/// 確定段の末尾（鎖の適用系）を落とす、退役した維持系へ戻す、別のスケジュールへ載せ替える——いずれも
 /// 印が立ったまま残る。挙動としての差は「重なりが組み替わらない」だけであり、判断だけを
 /// 測っている wintf 側の決定論テストは 1 本も赤くならない。
 ///
@@ -219,10 +220,14 @@ fn a_run_without_group_declarations_keeps_the_pair_records_in_their_old_vocabula
 // 結線の字面——並び順と同期点を消す書き換えを名指しで塞ぐ
 // -------------------------------------------------------------------------
 
-/// 結線は 3 本を**この並びの・同期点つきの連なり**で確定段へ載せる
-/// （所有関係の確立 → スコープ内ペアの維持 → 鎖の適用。`*_ignore_deferred` を使わない）。
+/// 結線は 4 本を**この並びの・同期点つきの連なり**で確定段へ載せる
+/// （所有関係の確立 → 帯の系 → スコープ内ペアの維持 → 鎖の適用。`*_ignore_deferred` を使わない）。
 ///
-/// 上の挙動の檻は「鎖の適用系が居ること」までしか測れない——**3 本目であること**は、
+/// 帯の系が組の維持より前であることも字面でしか押さえられない——組の是正は予約の列に積まれて
+/// 巡の終わりに流れるので、帯の系を後ろへ回すと帯の外の観測で決めた是正が帯を崩すが、その差は
+/// 実窓の帯の中でしか現れない（stay-on-top-directives 要件 2.4・7.3）。
+///
+/// 上の挙動の檻は「鎖の適用系が居ること」までしか測れない——**末尾であること**は、
 /// 書込先の交わらない 2 機構の前後を入れ替えても挙動に現れないので、字面でしか押さえら
 /// れない。同期点の有無も同様に「同じ巡のうちに前段の結果が見えるか」という形でしか現れず、
 /// その観測は実窓と実 Win32 を要する。
@@ -230,18 +235,18 @@ fn a_run_without_group_declarations_keeps_the_pair_records_in_their_old_vocabula
 /// 走査は**説明文を落とした本文**へ当てる。素の全文には本 doc の語も入るので、当てる先を
 /// 間違えると検査が恒真になる（対照はこのテストの末尾 3 本）。
 #[test]
-fn the_wiring_chains_the_three_systems_with_a_sync_point() {
+fn the_wiring_chains_the_four_systems_with_a_sync_point() {
     let raw = include_str!("spawn.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
 
     assert!(
         squeezed.contains(
-            "FrameFinalize, ( establish_owner_links, apply_zorder_pair_maintenance, apply_zorder_chain, ) .chain(),"
+            "FrameFinalize, ( establish_owner_links, apply_window_band, apply_zorder_pair_maintenance, apply_zorder_chain, ) .chain(),"
         ) || squeezed.contains(
-            "FrameFinalize, (establish_owner_links, apply_zorder_pair_maintenance, apply_zorder_chain).chain(),"
+            "FrameFinalize, (establish_owner_links, apply_window_band, apply_zorder_pair_maintenance, apply_zorder_chain).chain(),"
         ),
-        "確定段へ載る 3 本の連なり（末尾が鎖の適用系）が本文に見当たらない（結線の回帰）: {squeezed}"
+        "確定段へ載る 4 本の連なり（2 本目が帯の系・末尾が鎖の適用系）が本文に見当たらない（結線の回帰）: {squeezed}"
     );
     assert!(
         !code.contains("apply_zorder_group_maintenance"),

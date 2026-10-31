@@ -9,13 +9,14 @@
 //! `Err` 戻し→基盤が `error!`＋継続（log-first・ループを殺さない）。
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use areka_actor::UiSpawnError;
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
+use areka_emo_present::balloon_marker::MarkerPair;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_sakura::strict::DetectionPoint;
@@ -28,6 +29,7 @@ use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
 use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
+use crate::scroll_marker::{PlaceScroll, ResolvedMarkerPlacement, StopReason};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use crate::state::{SpanKind, SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
@@ -140,6 +142,9 @@ pub struct ResolvedBalloonText {
     /// hover ハイライトスタイルの解決正規形（balloon `cursor.*` モデル＋既定文字色から一点解決）。
     /// 装飾（`decorate_canvas`）が hover 行へ焼く塗り/文字色の源（design.md RuntimeContract・R4.2/4.3）。
     pub choice_style: ResolvedChoiceStyle,
+    /// スクロールの矢印の置き場（`arrow0`／`arrow1` の左上・image px）。モデルの矢印の鍵を
+    /// 広がり（普通のバルーン＝面の画像・箱＝箱の大きさ）で解いた値（要件 3.4・3.7・7.1・7.7）。
+    pub markers: ResolvedMarkerPlacement,
 }
 
 impl ResolvedBalloonText {
@@ -187,6 +192,8 @@ struct ActorRender {
     executor: ViewboxExecutor,
     /// 計測専用 probe 由来の実測 metrics（actor の font/mode に束縛）。
     metrics: DWriteMetrics,
+    /// 印の面（スクロールの矢印・窓の子として文字の面の直前）。矢印を出すまでは `None`。
+    markers: Option<MarkerSurface>,
 }
 
 /// `\s` の鍵を今のシェルで解決する閉包（結線が渡す・文字の層は seriko の型を名指ししない）。
@@ -283,6 +290,16 @@ pub struct TextLayerRuntime {
     /// 先渡しで偽）。真のときだけ押下の口 [`settle_choices_at`](Self::settle_choices_at) が場所を済ませる。
     /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（件 1）。
     choice_wait_open: bool,
+    /// 場所 → 手動の送りの状態（balloon-scroll-arrows・要件 8.8）。書くのは `actor_scroll.rs`・
+    /// 提示（`actor_present.rs`）・本ファイルの消去の腕・箱の登録を外す口だけ。
+    scrolls: HashMap<PlaceKey, PlaceScroll>,
+    /// スコープ → 普通のバルーンの矢印の絵（`set_balloon_markers`・`actor_scroll.rs`）。
+    balloon_markers: HashMap<ActorKey, MarkerPair>,
+    /// スコープ → 箱の名前 → 箱の矢印の絵（`set_box_markers`・名前の順はスコープごと・要件 2.1・7.3）。
+    /// 足りない番号はスコープの普通のバルーンの絵で埋める。
+    box_markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
+    /// World の無い所（再追従）で描画資源と一緒に外した印の面。次の [`present_frame`] の頭で窓の子ごと消す。
+    retired_markers: Vec<MarkerSurface>,
 }
 
 impl TextLayerRuntime {
@@ -315,6 +332,10 @@ impl TextLayerRuntime {
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),
             choice_wait_open: false,
+            scrolls: HashMap::new(),
+            balloon_markers: HashMap::new(),
+            box_markers: BTreeMap::new(),
+            retired_markers: Vec::new(),
         }
     }
 
@@ -356,6 +377,7 @@ impl TextLayerRuntime {
                 // 隙間を塞ぎ、5.2 の原子性を照会時点で成立させるため（次 present の空再導出と冪等）。
                 self.choice_hover.remove(&place);
                 self.choice_snapshot.remove(&place);
+                self.forget_manual_at(&place, StopReason::Cleared);
             }
             CueCommand::ClearAll => {
                 for render in self.surfaces.values_mut() {
@@ -369,6 +391,7 @@ impl TextLayerRuntime {
                 self.choice_snapshot.clear();
                 // 箱を隠す印は次の台詞の頭まで（design.md「箱を数に入れた表示の判断」）。
                 self.hidden_boxes.clear();
+                self.forget_all_manual(StopReason::Cleared);
             }
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
@@ -686,6 +709,13 @@ mod boxes;
 #[path = "actor_present.rs"]
 mod present;
 
+#[path = "actor_scroll.rs"]
+mod scroll;
+
+#[path = "marker_surface.rs"]
+mod marker;
+pub use marker::{MarkerSurface, PlacedMarker};
+
 /// その序数の範囲が済んだ選択肢か（範囲が無い序数は済んでいない扱い）。押下の口・トークの終わりの口と
 /// 提示（`actor_present.rs`）が同じ判定で写しと強調から外す。
 fn is_settled_ordinal(state: &crate::state::ActorTextState, ordinal: usize) -> bool {
@@ -769,6 +799,14 @@ mod box_sync_tests;
 #[cfg(test)]
 #[path = "actor_box_present_tests.rs"]
 mod box_present_tests;
+
+#[cfg(test)]
+#[path = "actor_scroll_tests.rs"]
+mod scroll_tests;
+
+#[cfg(test)]
+#[path = "actor_scroll_present_tests.rs"]
+mod scroll_present_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

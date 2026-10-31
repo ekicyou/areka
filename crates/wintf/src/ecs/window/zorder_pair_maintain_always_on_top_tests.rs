@@ -5,7 +5,7 @@
 //!
 //! 判断そのものが常時最前面を返さないこと（返り値の型にその値が存在しないこと）は
 //! `zorder_pair_tests.rs` の
-//! `decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top` が既に固定して
+//! `decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_character_in_the_band` が既に固定して
 //! いる。本ファイルが受け持つのは**窓の側**である——実際の窓を作り、確立系と維持系を
 //! 通したあとに OS から拡張スタイルを読み戻して、常時最前面の印が付いていないことを
 //! 測る。判断の型が正しくても、適用の経路（`SetWindowPos` の挿入位置）が窓を常時最前面の
@@ -18,8 +18,10 @@
 //! ゴースト一式をこの帯へ移すということである（要件 8.2）。よって独立性の主張は
 //! 「一式が同じ帯に居ても、ペアの隣接は同じように成立する」という形で確かめられる。
 //!
-//! **この確認はテストの中に閉じている**。本番の経路へ常時最前面の指定を持ち込むことは
-//! しない——ここで帯を作るのはテストが自分で生成した窓に対してだけである。
+//! **組と鎖は帯を書かない**。本番で窓を帯へ入れる・帯から出すのは帯の働きのファイル
+//! （`window_band.rs`）だけであり、ここで帯を作るのはテストが自分で生成した窓に対してだけである。
+//! 組の是正が帯の窓を挿入位置に指すのは、キャラクターも帯に居るときだけである
+//! （`stay-on-top-directives` 要件 2.4・末尾の 1 件）。
 //!
 //! # トップレベル窓と子窓の使い分け
 //!
@@ -350,7 +352,7 @@ fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome
 /// 片側だけを見て「成立した」と言うと、帯の有無に関係なく成立する主張と区別できない
 /// ——2 本並べて突き合わせることで、独立性そのものが観測の対象になる。
 ///
-/// この確認はテストの中に閉じている（本番の窓へ常時最前面を付ける経路は足していない）。
+/// 組と鎖は帯を書かない（帯を当てるのは `window_band.rs`。ここでは親窓をテストが自分で帯へ置く）。
 #[test]
 fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_band() {
     let (outside, outside_band) = run_pair_convergence(w!("wintf-zorder-band-outside"), false);
@@ -590,6 +592,8 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
         measured_above_of_below: Some(foreign_top),
         // 実測層が測った帯の所属（本テストでは代役の窓から実際に読み取る）
         measured_above_of_below_is_always_on_top: measure_window_is_always_on_top(foreign_top),
+        // ペアは帯の外で始まる（今の振る舞い）
+        measured_below_is_always_on_top: false,
     };
     let PairFixDecision::PlaceAboveOverBelow { insert_after } = decide_pair_fix(&observation)
     else {
@@ -670,6 +674,8 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
         measured_below_of_above: None,
         measured_above_of_below: Some(foreign_top),
         measured_above_of_below_is_always_on_top: measure_window_is_always_on_top(foreign_top),
+        // ペアは帯の外で始まる（今の振る舞い）
+        measured_below_is_always_on_top: false,
     };
     assert_eq!(
         decide_pair_fix(&observation),
@@ -833,6 +839,82 @@ fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_ba
 
     let _ = clear_window_owner(balloon);
     for hwnd in [character, balloon, lone_character, lone_balloon] {
+        destroy_test_window(hwnd);
+    }
+}
+
+// -------------------------------------------------------------------------
+// stay-on-top-directives 要件 2.4: 帯の中の組の是正
+// -------------------------------------------------------------------------
+
+/// キャラクターとバルーンが帯に居て間に他の帯の窓が居るとき、是正はバルーンを帯の中で
+/// キャラクターのすぐ手前に置き、次の巡の検証が通る。
+///
+/// キャラクターも帯に居るので、手前の帯の窓（割り込み）のすぐ背後を挿入位置にしてよい。
+/// キャラクターが帯の外のときの避け方（通常帯の最上＝`HWND_TOP`）のままだと、バルーンは
+/// 帯の最上へ出て割り込みの手前に留まり、隣り合わない——この 1 件はその違いを見分ける。
+#[test]
+#[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
+fn a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band() {
+    require_explicit_real_window_run();
+
+    let character_hwnd = create_always_on_top_toplevel(w!("wintf-zorder-inband-character"));
+    let intruder_hwnd = create_always_on_top_toplevel(w!("wintf-zorder-inband-intruder"));
+    let balloon_hwnd = create_always_on_top_toplevel(w!("wintf-zorder-inband-balloon"));
+    for hwnd in [character_hwnd, intruder_hwnd, balloon_hwnd] {
+        show_without_activating(hwnd);
+    }
+    // 手前 → 背後: バルーン／割り込み／キャラ（どれも帯の中）
+    insert_after(intruder_hwnd, balloon_hwnd);
+    insert_after(character_hwnd, intruder_hwnd);
+    assert_eq!(
+        measure_window_below(balloon_hwnd),
+        Some(intruder_hwnd),
+        "前提: バルーンの 1 つ背後は帯の割り込み窓"
+    );
+    assert_eq!(
+        measure_window_above(character_hwnd),
+        Some(intruder_hwnd),
+        "前提: キャラの 1 つ手前は帯の割り込み窓"
+    );
+
+    let mut world = World::new();
+    world.insert_resource(ZOrderPairStrategy::default());
+    let character = spawn_window(&mut world, character_hwnd);
+    let balloon = spawn_window(&mut world, balloon_hwnd);
+    world
+        .entity_mut(balloon)
+        .insert(KeepDirectlyAbove { peer: character });
+    world.entity_mut(balloon).insert(ReassertZOrder::default());
+
+    let mut schedule = maintain_schedule();
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
+        schedule.run(&mut world);
+        SetWindowPosCommand::flush();
+        schedule.run(&mut world);
+    });
+
+    assert_eq!(
+        measure_window_below(balloon_hwnd),
+        Some(character_hwnd),
+        "バルーンは帯の中でキャラのすぐ手前に居るはず（要件 2.4）"
+    );
+    assert_eq!(
+        measure_window_above(character_hwnd),
+        Some(balloon_hwnd),
+        "逆向きの実測でも隣接しているはず"
+    );
+    for hwnd in [character_hwnd, intruder_hwnd, balloon_hwnd] {
+        assert!(is_always_on_top(hwnd), "是正で帯から落ちた窓がある");
+    }
+    assert_eq!(count_lines(&out, FIX_TAG), 1, "是正の記録は 1 本: {out}");
+    assert_eq!(
+        count_lines(&out, VERIFY_FAILED_TAG),
+        0,
+        "検証は通るはず: {out}"
+    );
+
+    for hwnd in [character_hwnd, intruder_hwnd, balloon_hwnd] {
         destroy_test_window(hwnd);
     }
 }

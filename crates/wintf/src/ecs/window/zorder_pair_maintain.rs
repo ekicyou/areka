@@ -84,8 +84,8 @@ use super::zorder_chain::pair_released_by_chain;
 use super::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, PeerLoss, SkipReason,
     decide_pair_fix, log_orphan_request_dropped, log_owner_detach_failed, log_owner_detached,
-    log_unbacked_verification_dropped, measure_window_above, measure_window_below,
-    measure_window_is_always_on_top, record_decision, record_verification,
+    log_unbacked_verification_dropped, measure_below_is_always_on_top, measure_window_above,
+    measure_window_below, measure_window_is_always_on_top, record_decision, record_verification,
 };
 use super::zorder_pair_sink::{SinkMarkQuery, observe_marked_pair_sinks};
 use super::{
@@ -488,6 +488,11 @@ pub fn apply_zorder_pair_maintenance(
         let measured_above_of_below_is_always_on_top = measured_above_of_below
             .map(measure_window_is_always_on_top)
             .unwrap_or(false);
+        // キャラ自身の帯も同じ理由で判断の前に測る。測れなければ帯の外（今の避け方）へ倒す。
+        let measured_below_is_always_on_top = match below_hwnd {
+            Some(below) if below_alive => measure_below_is_always_on_top(below),
+            _ => false,
+        };
         let observation = PairObservation {
             trigger: PairTrigger::Reassert,
             strategy,
@@ -499,6 +504,7 @@ pub fn apply_zorder_pair_maintenance(
             measured_below_of_above,
             measured_above_of_below,
             measured_above_of_below_is_always_on_top,
+            measured_below_is_always_on_top,
         };
 
         // 判断結果は必ず `record_decision` を通す——見送りはそこで理由つきの記録になり、

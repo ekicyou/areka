@@ -114,10 +114,13 @@ pub(super) fn fire_top_triggers<'a>(
         if let Some(elapsed) = since_prev(started_at_ms) {
             put_top_play(pattern, playback, warned_negative, key, anim, elapsed);
         }
-        playback
-            .entry(key.clone())
-            .or_default()
-            .insert(anim.id, Playback { started_at_ms });
+        playback.entry(key.clone()).or_default().insert(
+            anim.id,
+            Playback {
+                started_at_ms,
+                acts_through: None,
+            },
+        );
         match anim.trigger {
             LoopTrigger::Runonce => tracing::info!(
                 scope = key.0.as_str(),

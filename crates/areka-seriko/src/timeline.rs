@@ -14,7 +14,7 @@
 //! - [`lap_of`]／[`always_at`]／[`AlwaysView`] — `always`（手書きと動く絵の子）の繰り返しの計算
 //!   （spec: areka-P0-animated-image-playback・経過を周期で割る・丸めない）。
 
-use crate::table::LoopFrame;
+use crate::table::{FrameAct, LoopFrame};
 use std::num::{NonZeroU32, NonZeroU64};
 
 /// 乱数注入シーム（クロック注入と同型・7.1）。`[0, bound)` の一様整数を返す。
@@ -106,7 +106,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
     match current_frame_index(frames, elapsed_ms) {
         None => FrameStatus::Pending,
         Some(i) => {
-            if frames[i].surface_id < 0 {
+            if frames[i].surface_id < 0 && frames[i].act == FrameAct::Draw {
                 FrameStatus::Stopped
             } else if i == frames.len() - 1 {
                 FrameStatus::FinishedResidual(i)
@@ -140,6 +140,15 @@ pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Opti
     current
 }
 
+/// `i` 以下で最後の描くコマ（無ければ `None`＝欄を外す・spec: seriko-pattern-calls 1.3/7.7）。
+///
+/// 働きのコマは絵を重ねないので、今のコマが働きのコマでも前の絵（`base` のコマを含む）を残す。
+/// 一番上と部品の再生が共有する。
+pub(crate) fn visible_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
+    let end = frames.len().min(i.saturating_add(1));
+    frames[..end].iter().rposition(|f| f.act == FrameAct::Draw)
+}
+
 /// `always` の今のコマ（[`always_at`] の答え）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlwaysView {
@@ -157,7 +166,7 @@ pub enum AlwaysView {
 /// - 回数つきで経過が「周期 × N」以上なら最後のコマ。
 /// - そうでなければ周の頭からの経過で [`frame_at`] と同じ累積の待ちを引く（待ち 0 のコマは同じ時刻を
 ///   共有し後ろが勝つ）。最初の待ちの前は、1 周目なら何も出さず、2 周目以降は前の周の最後のコマ。
-/// - 負の番号のコマ（絵を指すコマは除く）に居る間は何も出さない。
+/// - 負の番号の描くコマ（絵を指すコマは除く）に居る間は何も出さない（働きのコマの `-1` は止めない）。
 pub fn always_at(
     frames: &[LoopFrame],
     period_ms: NonZeroU64,
@@ -174,14 +183,48 @@ pub fn always_at(
         current_frame_index(frames, in_lap).or((lap > 0).then_some(last))
     };
     match index {
-        Some(i) if frames[i].picture.is_some() || frames[i].surface_id >= 0 => AlwaysView::Frame(i),
+        Some(i)
+            if frames[i].picture.is_some()
+                || frames[i].surface_id >= 0
+                || frames[i].act != FrameAct::Draw =>
+        {
+            AlwaysView::Frame(i)
+        }
         _ => AlwaysView::Nothing,
     }
+}
+
+/// `always` の経過 `elapsed_ms` で欄に出す答え（[`always_at`] の今のコマが働きのコマなら、その周の
+/// 最後の描くコマ。周の頭から働きのコマなら前の周の最後の描くコマ）。`None` は描くコマがまだ無い
+/// （1 周目の頭から働きのコマ）＝欄を外す。一番上と部品が共有する（spec: seriko-pattern-calls 1.3・7.7）。
+pub(crate) fn always_visible(
+    frames: &[LoopFrame],
+    period_ms: NonZeroU64,
+    laps: Option<NonZeroU32>,
+    elapsed_ms: u64,
+) -> Option<AlwaysView> {
+    let AlwaysView::Frame(i) = always_at(frames, period_ms, laps, elapsed_ms) else {
+        return Some(AlwaysView::Nothing);
+    };
+    let previous_lap = (elapsed_ms >= period_ms.get()).then(|| frames.len() - 1);
+    let d =
+        visible_frame(frames, i).or_else(|| previous_lap.and_then(|l| visible_frame(frames, l)))?;
+    Some(
+        if frames[d].picture.is_some() || frames[d].surface_id >= 0 {
+            AlwaysView::Frame(d)
+        } else {
+            AlwaysView::Nothing
+        },
+    )
 }
 
 #[cfg(test)]
 #[path = "timeline_repeat_tests.rs"]
 mod repeat_tests;
+
+#[cfg(test)]
+#[path = "timeline_calls_tests.rs"]
+mod calls_tests;
 
 #[cfg(test)]
 mod tests {
@@ -194,6 +237,7 @@ mod tests {
             surface_id,
             picture: None,
             method: ComposeMethod::Overlay,
+            act: crate::table::FrameAct::Draw,
             wait_ms,
             x: 0,
             y: 0,

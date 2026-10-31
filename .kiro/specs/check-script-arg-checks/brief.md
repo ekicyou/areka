@@ -118,3 +118,11 @@ MCP のツール `check_script` は、台本を再生せずに「areka で効く
 - 直す所: テストの補助（`dispatch_and_wait`）か期待の形。その場で断る答え（`NG:`）と別のスレッドの答えを、届いた時刻でなく中身で分ける形を推す（例: その場で返る `NG:` は名前が付かない、別のスレッドの答えは名前が付く、で判定する）。本番の `check_script` の振る舞いは変えない。
 - 守る決まり: テストの本質（省略と当たる名前が起動中の 1 体へ解決され、そのゴーストの名前を添えて答える）を外さない。待ちを長くする・回し直すで逃げない。
 - 規模: +1 タスク（本文の M〔8〜12〕に足す）。
+
+## 追記（2026-10-30 `stay-on-top-directives` の要件ディスカッション・議題 5）
+
+- **件: `\![set,windowstate,…]` の第 2 引数の誤り**。`stay-on-top-directives` が受け手の表に `(set, windowstate)` の行を足すと、`check_script` と strict の記録は第 1 引数までしか見ないので、`\![set,windowstate,minimize]`（`tasktray-minimize` の着地まで受け手が無い）・`\![set,windowstate,StayOnTop]`（大文字の混じった綴り＝受け付けない）・`\![set,windowstate]`（第 2 引数なし）にも何も言わなくなる。受け手は状態を変えずに記録を残す（`stay-on-top-directives` 要件 1.5・1.7）が、作者には見えない。
+- 開発者の決め（2026-10-30「全部推奨で承認」）: この診断は `stay-on-top-directives` では作らず、引数の診断の仕組みを受け持つこの spec へ申し送る（同 spec の要件の段の裁定 14）。
+- やること: 上の表のタグに `\![set,windowstate,…]` を足し、第 2 引数が `stayontop`・`!stayontop` 以外のもの（`minimize` は `tasktray-minimize` の着地の後は外す）を、受け手が使う判定と同じ関数の答えで `unreadable_argument` か `ignored` として返す。第 3 引数以降の余り（同要件 1.6・状態は第 2 引数で決まる）も同じ形で診るかは設計で決める。
+- 先に要るもの: `stay-on-top-directives` の着地（受け手と判定の関数が要る）。
+- 規模: +1 タスク。

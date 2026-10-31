@@ -85,6 +85,7 @@ impl EmoPresenter {
                 held_pattern: None,
                 stage_generation: 0,
                 acked_generation: 0,
+                move_shift: (0, 0),
                 pending_resize: None,
                 partial_base: false,
                 failure_note: None,
@@ -121,7 +122,24 @@ impl EmoPresenter {
             PresentCommand::StageAck { target, generation } => {
                 self.apply_stage_ack(target, generation)
             }
+            PresentCommand::MoveShift { target, x, y } => self.apply_move_shift(target, x, y),
         }
+    }
+
+    /// 合図 `MoveShift` の適用: 対象の欄にずれを書くだけ（合成・可視性・合成の覚えには触らない・
+    /// 応答なし）。未装着の対象（ゴーストの入れ替えの継ぎ目）は `StageAck` と同じく `debug!` を出して捨てる。
+    fn apply_move_shift(&mut self, target_id: TargetId, x: i64, y: i64) {
+        let Some(t) = self.targets.get_mut(&target_id) else {
+            tracing::debug!(
+                ?target_id,
+                x,
+                y,
+                attached = false,
+                "apply(MoveShift): 捨てた"
+            );
+            return;
+        };
+        t.move_shift = (x, y);
     }
 
     /// 合図 `StageAck` の適用: 追い付いた世代を「今の値と受けた番号の大きい方」にするだけ（合成・

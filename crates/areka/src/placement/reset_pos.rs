@@ -19,7 +19,7 @@ use wintf::ecs::{DPI, WindowPos};
 use super::chain_finalize::ScriptPlaced;
 use super::chain_realign::note_script_moved;
 use super::config::build_placement_config;
-use super::follow::move_window_to;
+use super::follow::{move_window_to, rebase_shift};
 use super::persist::persist_unremembered_char_positions;
 use super::primary_monitor;
 use super::reseed::BalloonPlacementInputs;
@@ -112,6 +112,8 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         if !move_window_to(world, char_window, p.char_pos.x, p.char_pos.y) {
             continue;
         }
+        // 並べた位置が面の `move` のずれの新しい元の位置（ずれは毎フレームの相がこの上へ当て直す）。
+        rebase_shift(world, char_window);
         if let Some(mut gw) = world.get_resource_mut::<GhostWindows>() {
             gw.set_default_char_pos(p.scope, p.char_pos);
         }

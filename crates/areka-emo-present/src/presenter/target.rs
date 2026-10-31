@@ -158,6 +158,11 @@ pub(super) struct PresentTarget {
     /// これが出番の世代より小さい間、外から所有される対象へ着く `ShowSurface` は回数つきの子の欄を
     /// 外される。0 始まり・対象の差し替えで引き継ぐ。
     pub(super) acked_generation: u64,
+    /// **ずれ**（合図 `MoveShift` で最後に受けた値・作者の座標・`seriko-pattern-calls` 要件 7.1・7.6）。
+    /// 0 始まり。置き方の層が [`EmoPresenter::move_shift`] で読んで窓の位置へ当てる。
+    ///
+    /// [`EmoPresenter::move_shift`]: super::EmoPresenter::move_shift
+    pub(super) move_shift: (i64, i64),
     /// **未消費の窓寸 reconcile 要求**（表示成立点の状態照合が積む・design Flow 1 キー決定／議題 #2 裁定）。
     ///
     /// 表示成立点で今回の物理寸（k 適用後の scaled 寸）を**前回適用の物理寸**と照合し、異なるときだけ

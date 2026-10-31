@@ -98,6 +98,7 @@ impl Cage {
             surface_ids: BTreeSet::from([0, 10]),
             font_dirs: Vec::new(),
             fallback_candidates: BTreeMap::new(),
+            markers: Default::default(),
         }
         .hand_to(&mut wiring.runtime.borrow_mut(), &mut world);
 
@@ -407,3 +408,8 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
 // 使うため子に置く。
 #[path = "frame_shell_box_align_tests.rs"]
 mod align_tests;
+
+// 箱の矢印の押下と箱の上のホイール（balloon-scroll-arrows task 6.3）。本ファイルの `Cage` をそのまま
+// 使うため子に置く。
+#[path = "frame_shell_box_arrow_tests.rs"]
+mod arrow_tests;

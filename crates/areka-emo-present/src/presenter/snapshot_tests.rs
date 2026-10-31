@@ -66,6 +66,7 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
                     index: 0,
                     method: DrawMethod::new("overlay".to_string()),
                     surface_id: i64::from(PART),
+                    target: i64::from(PART).to_string(),
                     wait: 0,
                     x: 0,
                     y: 0,

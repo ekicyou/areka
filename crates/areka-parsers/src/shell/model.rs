@@ -166,6 +166,8 @@ pub struct Pattern {
     pub method: DrawMethod,
     /// 参照 surface ID。負値はレイヤクリア/停止センチネル（要件 5.5・下流解釈）。
     pub surface_id: i64,
+    /// 欄 2 の原文（`(` で始まる並びは `)` まで継ぎ直した原文）。8 語の相手の欄として下流が読む。
+    pub target: String,
     /// WAIT（ミリ秒・値保持のみ）。
     pub wait: u32,
     /// X 座標。
