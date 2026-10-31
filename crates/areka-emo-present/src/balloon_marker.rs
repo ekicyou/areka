@@ -185,18 +185,7 @@ pub fn resolve_marker_pair(
 
     let load = |found: Option<(&Path, &MarkerName)>| {
         let (dir, name) = found?;
-        let path = dir.join(&name.file_name);
-        match decoder.decode(&path) {
-            Ok(img) => Some(Arc::new(to_marker_image(Normalizer.normalize(img, alpha)))),
-            Err(e) => {
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %e,
-                    "balloon_marker: 印の絵が読めない（その印は出さない）"
-                );
-                None
-            }
-        }
+        load_marker_image(&dir.join(&name.file_name), decoder, alpha)
     };
     let pair = MarkerPair {
         up: load(up),
@@ -230,6 +219,93 @@ pub fn resolve_marker_pair(
         "balloon_marker: 印の絵を解いた"
     );
     pair
+}
+
+/// 印の絵 1 枚を乗算済み BGRA に読む。読めない絵は場所と理由を `warn!` して `None`（要件 9.4）。
+fn load_marker_image(
+    path: &Path,
+    decoder: &impl ElementDecoder,
+    alpha: AlphaParams,
+) -> Option<Arc<MarkerImage>> {
+    match decoder.decode(path) {
+        Ok(img) => Some(Arc::new(to_marker_image(Normalizer.normalize(img, alpha)))),
+        Err(e) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %e,
+                "balloon_marker: 印の絵が読めない（その印は出さない）"
+            );
+            None
+        }
+    }
+}
+
+/// 行の中の印の族（`markerp{n}def`・`markers`／`markerk`・旧名 `marker` が最後・script-small-tags 要件 5.2）。
+pub const MARKER_FAMILY: SeriesFamily = SeriesFamily {
+    base: "marker",
+    scope0_legacy: &["markers", "marker"],
+    scope1_legacy: &["markerk"],
+};
+
+/// 番号の無い `<候補>.png`（大小無視）を、書かれた名前 → 連鎖の順で探し、最初に在った実ファイル名を返す
+/// 純核（fs 非依存）。大小違いが並ぶときは辞書順最小を採る（[`select_marker_names`] と同じ決め方）。
+pub fn select_single_marker_name<S: AsRef<str>>(
+    names: &[S],
+    chain: &MarkerChain,
+) -> Option<String> {
+    chain
+        .explicit
+        .iter()
+        .map(String::as_str)
+        .chain(chain.chain.iter().map(|p| p.prefix.as_str()))
+        .find_map(|prefix| {
+            let want = format!("{}.png", prefix.to_ascii_lowercase());
+            names
+                .iter()
+                .map(AsRef::as_ref)
+                .filter(|name| name.to_ascii_lowercase() == want)
+                .min()
+                .map(str::to_string)
+        })
+}
+
+/// 行の中の印の絵 1 枚の選びの答え。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SingleMarker {
+    /// 読んだ絵（1 枚も無いか読めなければ `None`）。
+    pub image: Option<Arc<MarkerImage>>,
+    /// 書いた名前があり、その絵がフォルダに無かった（記録は呼び手が出す・要件 5.3）。
+    pub explicit_missing: bool,
+}
+
+/// 行の中の印の絵を順の付いたフォルダの列から 1 枚選んで読む（fs の入口・読み込みの時だけ呼ぶ）。
+///
+/// 列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（矢印と同じ）。読みは矢印と同じ
+/// 手順で、読めない絵は `warn!` して次の候補へは進まず「絵なし」とする。
+pub fn resolve_single_marker(
+    dirs: &[&Path],
+    family: &SeriesFamily,
+    scope: u32,
+    explicit: Option<&str>,
+    decoder: &impl ElementDecoder,
+    alpha: AlphaParams,
+) -> SingleMarker {
+    let chain = marker_chain(family, scope, explicit);
+    let found = dirs.iter().find_map(|dir| {
+        select_single_marker_name(&list_file_names(dir), &chain).map(|name| dir.join(name))
+    });
+    let explicit_missing = chain.explicit.as_deref().is_some_and(|e| {
+        let want = format!("{}.png", e.to_ascii_lowercase());
+        !found.as_ref().is_some_and(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.to_ascii_lowercase() == want)
+        })
+    });
+    SingleMarker {
+        image: found.and_then(|path| load_marker_image(&path, decoder, alpha)),
+        explicit_missing,
+    }
 }
 
 /// フォルダ直下のファイル名を集める（読めないフォルダは `warn!` して空・印は無くても失敗にしない）。
