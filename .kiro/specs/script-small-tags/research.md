@@ -241,3 +241,57 @@
 
 - この分析を要件の討議（`kiro-requirements-discussion`）の材料にする。特に議題 1（描く持ち主）と、上の 2・3・4 は要件の書き直しにつながる。
 - 討議の後、`/kiro-design script-small-tags` で設計へ進む。
+
+## 9. 設計の段の調べ（2026-10-31・`/kiro-spec-design -y`）
+
+- 種類: 既にある仕組みへの追加（Extension）＝軽い調べ。新しい外部の依存は 0（足す依存なし）なので、外の文書の調べはしない。
+- 使ったスキルと手引き: `kiro-spec-design`（`rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。ソースの読みは 2 本の読むだけの調べ係（emo-text の行の中の印・seriko の着せ替えと印の絵の読み込み）に分けた。
+
+### 9.1 読んで確かめた事実（基準 `185fefd5`）
+
+- **字句の段**: 本文のひと続きは 1 つの `Text` トークンになり、`\\`・`\%` の逃がしも同じかたまりへ入る（`lexer.rs` 165 行目あたり）＝**今の読み手の出力に `Text` が 2 つ続くことは無い**。続くのは、これから足す文字の番号の埋め込みの隣だけ。
+- **`Instruction` の外の使い手**: `anchor_pair.rs`・`duration.rs`・`sysvar.rs`（`join_texts`）・`readme/destination.rs`・`spine_conformance_script.rs` はどれも残りの腕（`_ =>`）を持ち、新しい種類は「何もしない」に落ちる。困る所は無い。
+- **`check_script`** は `parse_noted` の結果だけを診て、組み立て（`compile`）を呼ばない＝組み立てで出す警告は `check_script` では出ない。
+- **着せ替え**: `bind.rs`（583 行）の `parse_bind_directive` はもう `Toggle`・`CategoryWide{on: Option<bool>}` を読み分けている。読み飛ばしは `actor.rs` 670〜677 行目の 1 か所。カテゴリのパーツを定義の順に返す `BindResolver::category_parts_in_order`（282 行目）と、今の着脱の集合 `ScopeStates::current_binds`（`state.rs` 415 行目）が既にある。トグルの関数は無い。
+- **印の絵**: `balloon_marker.rs` の名前の連鎖（`prefix_chain`・`SeriesFamily`）は番号つきの絵の対（`arrow0`／`arrow1`）を選ぶ。番号の無い 1 枚を選ぶ関数は無い。`ScopeBalloonDefinitions` の欄は非公開で、構造体の書き下しはファイルの中だけ＝欄を足しても `emo2_boot/assets.rs` は壊れない（`FaceDefinition` には足さない）。
+- **文字の層**: 序数（現れる時刻・見た目の番号・選択肢の範囲・行の中の位置）は `TextItem::Glyph` だけを数える。選択肢の範囲の始まりは `Choice` の合図を受けた時点の `Glyph` の数（`state.rs` 586〜590 行目）＝**選択肢の前に積んだ印は選択肢の範囲の外に出る**。送り幅は `layout_styled.rs` の `glyph_style_advance` 1 か所で測る。描画は行ごとに字の列を 1 本の文字列にして DirectWrite に組ませ、字の位置（`inline_pos`）は帯と当たりの矩形にだけ使う。下線は「字の後に塗る」段（`viewbox_draw_render.rs` 410〜415 行目）で塗る。wintf に `fill_ellipse`・`draw_bitmap` があり、BGRA を D2D の絵にする手順は `marker_surface.rs` の `bitmap_of` にある。
+- **描き手へ渡る値**: 描き手（`ViewboxExecutor::render_styled`）は `actor_present.rs` の中で作られ・呼ばれ、毎フレーム `resolved.font`（`ResolvedFont`）を受け取る。バルーン背景色は「アクターごとに runtime が覚えた値を解決のときに混ぜる」先例（`set_balloon_background`・`background_of`）。
+- **emo-text の一覧**: `lib.rs` の `PURE_SOURCES`（数 81 を檻が見る）と `SOURCES_OUTSIDE_THE_PURE_SCAN` のどちらかに、新しいソースファイルを載せる。
+
+### 9.2 道の評価
+
+| 候補 | 中身 | 良い点 | 悪い点 | 結論 |
+|---|---|---|---|---|
+| 印＝新しい `TextItem` の種類 | 並べ・分かち書き・描画に新しい腕 | 意味がはっきり | `layout_scan.rs`・`segment.rs`（2 か所）・序数の数え方の全部に手が入る | 採らない |
+| **印＝目印の字（U+FFFC）の `Glyph`** | 測るときと描くときだけ全角の空白に読み替え、字の後に丸か絵を塗る | 現れる時刻・選択肢の範囲・消去・押し出し・スクロール・空回し・縦書きがそのまま付く。触る所が 3 か所 | 字の列を外へ出す所があれば U+FFFC が見える（今は無い見込み） | **採る** |
+| DirectWrite の行の中の物（`IDWriteInlineObject`） | 行の文字列に物を差す | 正攻法 | 前例が無い・縦書きと拡大率の答え方を一から作る | 採らない |
+| 印の運び＝運搬名 `*` の汎用の合図＋受け手の表の行 | `\f` と同じ形 | dola・他の受け手に波及しない | 表が 2 件増える（42 件） | **採る**（要件 Adjacent が許す） |
+| 印の運び＝dola の合図の新しい種類 | アンカーと同じ形 | 表は増えない | 網羅の match を持つ受け手 3 か所とテストの支えへ波及 | 採らない |
+| 捨てた番号＝新しい命令の種類（道 A1） | 組み立てで `warn!` | 再生の道で必ず警告・`check_script` では出ない・読み手は記録を出さないまま | `model.rs` が少し広がる | **採る** |
+| 捨てた番号＝読み手で警告（道 A2・A3） | — | 小さい | 読み手が初めて記録を出す・A3 は文言が実物と食い違う | 採らない |
+| `%*` を字句の段で（道 B1） | `scan_sysvar` が `%` の直後の `*` を名前に取る | 1 か所・範囲が正しい | `lexer.rs` を触る（C14 の兄弟は触らない） | **採る** |
+| 印の絵を `ResolvedFont` に押す | 背景色の先例 | `actor_present.rs` に触らずに描き手まで届く | 「字の書式の束」に絵が入る | **採る**（他に `actor_present.rs` を触らずに届く道が無い） |
+
+### 9.3 合成（design-synthesis）
+
+- **まとめられる所**: 文字の番号の埋め込みの「隣の本文と 1 つにする」と「サロゲートの組を 1 字にする」は、どちらも「読み手が隣どうしを 1 つの `Text` へまとめる」同じ仕事。読み手の 1 か所（`decode_noted` の走査）で行う。着せ替えのカテゴリ単位の形とトグル形は、どちらも「パーツの列に 1 つずつ今の決まりで当てる」に還元でき、`bind.rs` に関数を 1 つ足せば済む（決まりそのものは変えない）。
+- **作るか借りるか**: 外の部品は使わない（依存 0）。名前の連鎖は `balloon_marker.rs` の `prefix_chain`・`SeriesFamily` を借り、絵の読み込みは矢印の手順（`resolve_marker_pair` と同じ `ElementDecoder`）を借り、D2D の描き方は wintf の `fill_ellipse`・`draw_bitmap` と `marker_surface.rs` の手順を借りる。
+- **削ったもの**: `fold_choice_marker`・`is_choice_marker`・`ReadNote::MarkerIgnored`・`DetectionPoint::ReadMarkerIgnored` と、名前 `*` を特別に扱う 2 か所（`compile.rs`・`check_script_judge.rs`）。印の大きさを変える設定・印の色の設定・印の送り幅を絵の幅に合わせる仕組みは作らない（要件に無い）。
+
+### 9.4 決め（design.md に結論を書いた）
+
+1. 捨てた番号の警告の出し所は道 A1（`Instruction::CharCodeDropped` を組み立てが `warn!`）。`check_script` と strict は新しい文言で「読めない引数」に写す。
+2. 印の運びは運搬名 `*` の汎用の合図＋受け手の表の行（`*` → `TextLayer`）。表は 40 → 42 件。
+3. `%*` は字句の段（道 B1）。
+4. `\![*]` は `\q` と畳まない（読み手は「印」と「選択肢」の 2 つを出す）。
+5. 着せ替えの記録は、着せ替えの道の全部の行に `name` の欄（`bind`／`bind-noevent`）を足す。実機の確かめは `seriko: bind 適用` の行の `name="bind-noevent"` で見る。
+6. 結合文字などは、読み手が埋め込みの字を隣の本文と 1 つの `Text` にまとめて、要件 1.5 を守る（SSP は `e\_u[0x0301]` を é にした・2.10）。
+7. 既定の印は図形として描く（絵を同梱しない）。直径は字の大きさの半分、色はその位置の字の色を不透明度 0.64 で塗る（2.11 の測りで、字の色 140,128,116 に対し中ほどが 184,174,164＝白い地に 0.64 で重ねた値に合う）。
+8. `marker.filename` は面ごとに読む（矢印と同じ・面の設定ファイルで書き換えたらその面で効く）。
+9. 着せ替えの `,,1` とカテゴリ単位のトグル `,,`（と `,,` の省略形）は「カテゴリのパーツを定義の順に 1 つずつ、`,,1` なら着せる・`,,` なら反対にする、を今の決まり（排他・`mustselect`・`multiple`）のもとで続けて当てる」（2.11 の 4 行の測りと全部合う）。`multiple` のカテゴリは測っていないが、同じ規則から「全部着る／それぞれ反対」になる。§8 に書く。
+
+### 9.5 危うさ
+
+- U+3000 の送り幅を DirectWrite の測りと同じ物差しで測るので、印の後ろの字の位置は描いた字とずれない。ただし書体に全角の空白が無く、代わりの書体でも幅が 1 字と違うと、印の幅が 1 字にならない（位置はずれない）。実機の確かめで見る。
+- 折り返しで印が行の末尾に残り、選択肢の字が次の行へ行くことがある（SSP の振る舞いは測っていない）。
+- `,,0` の `mustselect` は、パーツごとに `MustSelectKept` の警告が出る（件数はパーツの数）。水準はパーツ名つきの `0` と同じ。
