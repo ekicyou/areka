@@ -63,3 +63,14 @@
 
 - **優先度の区分**: B（バグ）。
 - **版**: 版に縛らない。ぱすたの唯一のバルーン `pasta_tategaki` は縦書き（`font.name` は游ゴシックに引けるが、縦書きの帯は基線から置く形で済んでいる）で、ぱすたの横書きのバルーンは無い＝v0.1.0 のゴール「ぱすたが SSP と同じに動く」には当たらない。
+
+## 2026-10-31 棚卸㉜の再測定（main d374f901）
+- **前提の変化**: Downstream に挙げた `choice-ranges-one-function` が 10-31 に着地した。選択肢の範囲・帯・当たりは `crates/areka-emo-text/src/actor_present.rs` の `choice_ranges`（579 行目）1 つで出し、帯は `line_bands`、当たりはその帯から作る（`hit_rows`）＝`choice.rs` の横書きの帯の式を直せば、塗りと当たりが一緒に動く（Desired Outcome の「当たりの範囲も同じ所」は直す所 1 か所で満たせる）。`choice.rs` は同 spec に触られていない（`highlight_band_extent` 137 行目・`highlight_band_offset` 175 行目・`line_bands` 211 行目・横書きの枝は 225〜236 行目）。`script-small-tags` は `draw.rs` に行の中の印を足したが、行の箱の比（`draw_metrics.rs` の `measure_line_box_ratio` 385 行目）と書式（`draw.rs` の `create_text_format` 403 行目）は変わっていない。
+- **触るファイル**: `crates/areka-emo-text/src/draw_metrics.rs`（462 行）・`choice.rs`（790）・案 2 なら `layout.rs` の `GlyphMetrics`（今ある口に足す）と `draw_metrics.rs` の実装・実物の読み戻しは `crates/areka-emo-text/tests/line_pitch_readback_test.rs`（709）・扱いを変えたら `doc/COMPAT_ARCHITECTURE.md` §8。**上限に近い**: `choice_tests.rs` 980・`draw_format_metrics_tests.rs` 922＝決定論の檻を `src/` に足すなら新しいテストのファイルが要り、`lib.rs` の一覧の席を使う（`tests/` に置けば使わない）。
+- **規模**: 4〜7 タスクのまま。
+- **先に要るもの**: 働きの上では無し（先頭）。直し方の裁定（案 1／案 2）は要件の段の議題で、外の待ちではない。実物の書体（游ゴシック・Windows に入っている）の読み戻しは GPU を使う検査で、排他テストの机を使う。静かな机・前後の全体テストの比べ・依存の追加は要らない。
+- **重なり**: `shell-scale-linkage` とは 0。`balloon-font-file`（`draw_metrics.rs` の `DWriteMetrics`・書式を作る所）・`text-typesetting`（`draw_metrics.rs`）・`clippy-199-lints` の段 2（`tests/line_pitch_readback_test.rs` の既存の指摘）・`audit-emo-text-layout-draw`（v0.1.0 の後）と重なる。
+- **優先度の区分**: B（バグ・行間を持つ書体で横書きの帯がずれる見込み）。
+- **要件定義のモデル**: Opus（前例＝`vertical-choice-hover-band` の基線から置く形）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文 Upstream / Downstream の「Downstream: `choice-ranges-one-function`」と Adjacent の同じ名前は、相手が着地して用済み。

@@ -64,3 +64,15 @@
 - 送る道に失敗があれば記録を残す（黙って落とさない）。
 - seriko の `actor.rs` は 1,000 行の上限が近い（908 行・`script-small-tags` の着地でさらに増える）＝足す物は兄弟のファイルへ。
 - 正典で読めない点は、議題の前に SSP の MCP で測る。
+
+## 2026-10-31 棚卸㉜の再測定（main d374f901）
+- **前提の変化**: ✅ `script-small-tags`（10-31）が着地した＝`bind-noevent` は受け手の表に Seriko の担当として登記され（`consumer_ledger.rs`・登記 42 件）、seriko の着せ替えの受け手は兄弟の `crates/areka-seriko/src/actor_bind.rs`（新・109）へ出た。`actor.rs` は 908→828 行（本文 Constraints の「908 行・さらに増える」は古い）。2 つの名前は `actor.rs` 635・660 行目で分けて運ばれる。`schedule/events.rs`（913）・`shell_carry.rs`（388）は変わらず、2 つのイベントは今もどこにも無い（網羅台帳 `shiori.toml` の 2 行は absent・持ち主なし）。
+- **ぱすたは使わない（今回測った）**: 「窓際のぱすたさん」（ghost_dev の `release/pasta-in-windows`・取り寄せた書庫）の辞書と Lua に `OnDressupChanged`・`OnNotifyDressupInfo` の受けは無い（`\![bind,…]` は多く使う）。SSP の要求の記録（`debug/pasta-in-windows-debug/ghost/master/ssp_shiori_log.txt`）では SSP は送っているが、答えはすべて `204 No Content`。
+- **触るファイル**: 着せ替えの結果を返す seriko の兄弟（`actor_bind.rs` か新しいファイル）と `actor.rs`（828）の数行・`state.rs`（777）・kanade の `schedule/events.rs`（`ALLOWED_EVENT_IDS` に 2 語と構築関数・起動の列に `OnNotifyDressupInfo`）・結果を UI から kanade へ渡す道（`emo2_boot/runtime_boot.rs`・`emo2_boot/mod.rs`・相を足すなら `emo2_boot/frame.rs`・`frame/wiring.rs`）・持ち越しの `shell_carry.rs` 369 行目（`BIND_COMMAND` を `BIND_NOEVENT_COMMAND` に替えれば「送らない」が 1 語で済む見込み）・網羅台帳 `shiori.toml` の 2 行。受け手の表 `consumer_ledger.rs` には行を足さない（`bind`・`bind-noevent` はもう登記済み）。
+- **規模**: 6〜10 タスク（要件の段で詰める）。上限 20 の内。
+- **先に要るもの**: 働きの上ではなし（✅ `script-small-tags`）。`shell-scale-linkage`・`balloon-communicatebox` と `schedule/events.rs`（と、結果の道を UI に通すなら `emo2_boot/{mod,runtime_boot}.rs`）で重なる＝その 2 本と同じウェーブに置かない。正典で読めない点（1 本の台本の中の何度もの `\![bind]` の束ね方・トーク中に送る時機）は議題の前に SSP の MCP で測る（上の記録の 2 本の GET／NOTIFY の並びも手がかり）。静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: C（ukadoc の拾い残し・`shiori.toml` の 2 行が absent・起票は `script-small-tags` の議題 3 の推奨案の承認で、開発者の依頼ではない）。
+- **版の置き場の推奨**: 版に縛らない列（v0.1.0 には入れない＝ゴールの「ぱすたが SSP と同じに動く」に当たらない。ぱすたは 2 つのイベントに何も答えない）。`schedule/events.rs` を `shell-scale-linkage`（C15）と `balloon-communicatebox`（C16）が使うので、席は早くて C17。メニューからの着せ替え（`popup-menu-shell-look`）より先に着地すれば、向こうは Reference4 `user` の口を使うだけで済む。
+- **要件定義のモデル**: Opus（送る口は既存の `KanadeMsg::RaiseEvent` の GET／NOTIFY、受け手は seriko の既存の着せ替えの道に乗る＝新しい境も並行の約束も無い）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文 Constraints の「908 行」（今は 828・着せ替えは `actor_bind.rs` へ出た）。本文 Problem の「`script-small-tags` が 2 つの名前を受け手まで区別して運ぶところまで作る」は済んだ。
