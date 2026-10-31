@@ -77,3 +77,145 @@ fn records_of_child_spawned_by_inherited_actor_are_captured() {
     assert_eq!(hits[0].level, tracing::Level::WARN);
     assert_eq!(hits[0].message(), "子の警告");
 }
+
+// ⑶ 窓の外で起こしたアクター・ほかの窓の記録は、この窓に入らない。
+// ⒜ 窓を開く前に起こしたアクター ⒝ 窓の無い別のスレッドが起こしたアクター
+// ⒞ 別のスレッドが自分の窓の中で起こしたアクター、のどれもこの窓が開いているあいだに出す。
+#[test]
+fn records_of_actors_spawned_outside_this_window_are_not_captured() {
+    // ⒜ 窓を開く前に起こす。出すのは窓の中から済みの送り口を受けたとき。
+    let (before_tx, before) = spawn_actor::<mpsc::Sender<()>, _>("capture-outside-before", |rx| {
+        for done in rx {
+            tracing::warn!(target: TARGET, probe = "outside-before", "窓の前に起こしたアクター");
+            done.send(()).expect("済みを返す");
+        }
+    });
+
+    // ⒝ 窓の無いスレッド。起こすのは窓の中から送り口を受けた後（＝窓が開いているあいだ）。
+    let (plain_go, plain_go_rx) = mpsc::channel::<mpsc::Sender<()>>();
+    let plain = thread::spawn(move || {
+        let done = plain_go_rx
+            .recv_timeout(WAIT)
+            .expect("窓から合図が来るはず");
+        let (_tx, h) = spawn_actor::<(), _>("capture-outside-plain", move |_rx| {
+            tracing::warn!(target: TARGET, probe = "outside-plain", "窓の無いスレッドのアクター");
+            done.send(()).expect("済みを返す");
+        });
+        h.join().expect("body は正常終了するはず");
+    });
+
+    // ⒞ 自分の窓を開いたスレッド。その窓の中で、合図を受けてから起こす。
+    let (other_go, other_go_rx) = mpsc::channel::<mpsc::Sender<()>>();
+    let other = thread::spawn(move || {
+        let (h, events) = capture(|| {
+            let done = other_go_rx
+                .recv_timeout(WAIT)
+                .expect("窓から合図が来るはず");
+            let (inner_tx, inner_rx) = mpsc::channel::<()>();
+            let (_tx, h) = spawn_actor::<(), _>("capture-outside-other", move |_rx| {
+                tracing::warn!(target: TARGET, probe = "outside-other", "ほかの窓のアクター");
+                inner_tx.send(()).expect("済みを返す");
+            });
+            // 自分の窓を閉じる前に済みを受け、この窓の側へも済みを返す。
+            inner_rx
+                .recv_timeout(WAIT)
+                .expect("アクターは済みを返すはず");
+            done.send(()).expect("済みを返す");
+            h
+        });
+        h.join().expect("body は正常終了するはず");
+        events
+    });
+
+    let (control, events) = capture(|| {
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+        before_tx.send(done_tx.clone()).expect("⒜ へ送る");
+        plain_go.send(done_tx.clone()).expect("⒝ へ送る");
+        other_go.send(done_tx.clone()).expect("⒞ へ送る");
+        // 対照: 同じ窓の中で起こしたアクター。
+        let (_tx, h) = spawn_actor::<(), _>("capture-outside-control", move |_rx| {
+            tracing::warn!(target: TARGET, probe = "outside-control", "この窓のアクター");
+            done_tx.send(()).expect("済みを返す");
+        });
+        for _ in 0..4 {
+            done_rx.recv_timeout(WAIT).expect("4 つとも済みを返すはず");
+        }
+        h
+    });
+    control.join().expect("body は正常終了するはず");
+    drop(before_tx);
+    before
+        .join()
+        .expect("⒜ は全 Sender を落とすと正常に終わるはず");
+    plain.join().expect("⒝ のスレッドは正常終了するはず");
+    let other_events = other.join().expect("⒞ のスレッドは正常終了するはず");
+
+    let control_hits = probed(&events, "outside-control");
+    assert_eq!(
+        control_hits.len(),
+        1,
+        "対照: この窓のアクターは入るはず: {control_hits:?}"
+    );
+    for probe in ["outside-before", "outside-plain", "outside-other"] {
+        let hits = probed(&events, probe);
+        assert!(hits.is_empty(), "{probe} はこの窓に入らないはず: {hits:?}");
+    }
+    let other_hits = probed(&other_events, "outside-other");
+    assert_eq!(
+        other_hits.len(),
+        1,
+        "対照: ⒞ は自分の窓に入るはず（捕捉が素通りしていない）: {other_hits:?}"
+    );
+}
+
+// ⑷ 窓 A の中で起こしたアクターが A を閉じた後に出した記録は、後から開いた窓 B に入らない。
+#[test]
+fn records_after_window_closes_do_not_reach_later_window() {
+    let ((x_tx, x), events_a) = capture(|| {
+        let (x_tx, x) = spawn_actor::<mpsc::Sender<()>, _>("capture-late-x", |rx| {
+            for done in rx {
+                tracing::warn!(target: TARGET, probe = "late-x", "X の警告");
+                done.send(()).expect("済みを返す");
+            }
+        });
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+        x_tx.send(done_tx).expect("X へ送る");
+        done_rx.recv_timeout(WAIT).expect("X は済みを返すはず");
+        (x_tx, x)
+    });
+    let a_hits = probed(&events_a, "late-x");
+    assert_eq!(
+        a_hits.len(),
+        1,
+        "対照: A の中の X の記録は A に入るはず: {a_hits:?}"
+    );
+
+    let (y, events_b) = capture(|| {
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+        x_tx.send(done_tx.clone()).expect("X へ送る");
+        let (_tx, y) = spawn_actor::<(), _>("capture-late-y", move |_rx| {
+            tracing::warn!(target: TARGET, probe = "late-y", "Y の警告");
+            done_tx.send(()).expect("済みを返す");
+        });
+        for _ in 0..2 {
+            done_rx.recv_timeout(WAIT).expect("X と Y は済みを返すはず");
+        }
+        y
+    });
+    y.join().expect("Y の body は正常終了するはず");
+
+    let y_hits = probed(&events_b, "late-y");
+    assert_eq!(
+        y_hits.len(),
+        1,
+        "対照: B の中で起こした Y は B に入るはず: {y_hits:?}"
+    );
+    let x_hits = probed(&events_b, "late-x");
+    assert!(
+        x_hits.is_empty(),
+        "A を閉じた後の X の記録は B に入らないはず: {x_hits:?}"
+    );
+
+    drop(x_tx);
+    x.join().expect("X は全 Sender を落とすと正常に終わるはず");
+}
