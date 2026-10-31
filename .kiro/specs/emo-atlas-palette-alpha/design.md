@@ -32,8 +32,8 @@
 
 - **静止画の「α の有無」の判定のうち、番号つきの形式の枝**: emo-atlas の `decode/wic_arm.rs` と wintf の `com/wic.rs` の 2 か所。物差しは「フレームのパレットに透明度 255 未満の色が 1 つでも在るか」（WIC の `IWICPalette::HasAlpha` の定義そのもの）。
 - **番号つきの形式の集合**: `GUID_WICPixelFormat{1,2,4,8}bppIndexed` の 4 個。この集合に入る形式だけがパレットを読む。
-- **パレットの検体 6 本と、その作り手**: `crates/areka-emo-atlas/examples/gen_palette_samples.rs` が、同じバイト列を emo-atlas と wintf の 2 つの検体のフォルダへ書く。検体のバイト列の持ち主はこの作り手だけ。
-- **赤のテスト**: emo-atlas の `decode/wic_arm_palette_tests.rs`、wintf の `tests/com/wic_test.rs` に足す分。
+- **パレットの検体 6 本と、その作り手**: `crates/areka-emo-atlas/examples/gen_palette_samples.rs` が、emo-atlas の `src/testdata/palette/` の 1 か所へ書く。wintf のテストは同じファイルを相対パスで読む（設計の討議 議題 1）。検体のバイト列の持ち主はこの作り手だけ。
+- **赤のテスト**: emo-atlas の `decode/wic_arm_palette_tests.rs`、wintf の `tests/com/wic_test.rs` に足す分と、wintf の兄弟 `src/com/wic_tests.rs`（失敗の道）。
 - **説明の書き直し**: emo2 の焼き込みのテストと golden の説明（要件 2.7）、正規化のテストの説明 2 か所（要件 2.8）、§8 の 2 行（要件 6）。
 
 ### Out of Boundary
@@ -51,12 +51,13 @@
 - `windows` 0.62.2 の今の機能だけ（`Win32_Graphics_Imaging` の `IWICImagingFactory::CreatePalette`・`IWICBitmapSource::CopyPalette`・`IWICPalette::HasAlpha`・`GUID_WICPixelFormat{1,2,4,8}bppIndexed`）。機能も依存も足さない。
 - emo-atlas は wintf を参照しない（今のまま・判定は写しで持つ）。
 - 作り手は std だけを使う（`image` も `png` も使わない）。
-- テストの依存は今の dev-dependencies だけ（emo-atlas の `sample-ghost-kit`・wintf の `tests/com/common`）。
+- テストの依存は今の dev-dependencies だけ（emo-atlas の `sample-ghost-kit`・wintf の `tests/com/common`）。wintf のテストが emo-atlas の検体のファイルを `CARGO_MANIFEST_DIR` からの相対パスで読むのはファイルの読みだけで、crate の依存の線は足さない（前例 `crates/areka/src/tick_gate_config_producers_tests.rs`）。
 
 ### Revalidation Triggers
 
 - 2 つの判定のどちらかの形が変わる（集合の増減・パレットの読み方）→ もう片方と、2 つの crate のテストの期待値の表をそろえ直す。
-- 作り手を走らせ直して検体のバイト列が変わる → 2 つのフォルダを同時に書き直したことを確かめる（作り手はいつも両方を書く）。
+- 作り手を走らせ直して検体のバイト列が変わる → 2 つの crate のテストの期待値の表を同時にそろえ直す（検体は 1 か所なので、写しのずれは起きない）。
+- emo-atlas の `src/testdata/palette/` の場所が変わる → wintf の `tests/com/wic_test.rs` の相対パスも直す。
 - `compose-f16-precision` が `wic_arm.rs` の変換を変える → 本 spec の判定（変換の前で決める）を取り込んでから設計する。
 - `menu-thumbnail-preview` が同じ読み手でサムネイルを読む → 透明度を持つパレットの絵が α を持つ絵として届くことを前提にする。
 - `crates/areka` の `placement/measure.rs` など `WicDecoderArm` の使い手 → `has_alpha` を直に読まないので形は変わらない。ただし透明度を持つパレットの絵の画素の扱い（抜き色→α）が変わる点は、焼き込みの結果として受け取る。
@@ -75,9 +76,8 @@
 ```mermaid
 graph TB
     Generator[gen palette samples] --> AtlasSamples[emo-atlas testdata palette]
-    Generator --> WintfSamples[wintf tests assets palette]
     AtlasSamples --> AtlasTests[wic arm palette tests]
-    WintfSamples --> WintfTests[wic test]
+    AtlasSamples --> WintfTests[wic test]
     AtlasTests --> WicArm[emo-atlas WicDecoderArm]
     AtlasTests --> Normalizer[emo-atlas Normalizer]
     WintfTests --> LoadBitmap[wintf load bitmap source]
@@ -87,9 +87,9 @@ graph TB
 ```
 
 - **選んだ形**: 案 A（今の 2 つのファイルをそれぞれ広げる・写しを保つ）。判定はどちらのファイルでも同じ数行。
-- **持ち場の分け方**: 判定は 2 つの読み手がそれぞれ持ち、同じ答えであることは「同じ作り手が書いた同じバイト列」と「2 つの crate のテストの同じ期待値の表」で見張る。
+- **持ち場の分け方**: 判定は 2 つの読み手がそれぞれ持ち、同じ答えであることは「2 つの crate のテストが同じ検体のファイルを読む」ことと「同じ期待値の表」で見張る。
 - **保つ形**: emo-atlas は wintf を参照しない・`windows` の WIC 型を直に使う・テストは兄弟のファイル・検体はコミットして作り手で作り直す（`testdata/animated/` と `gen_animated_samples.rs` の前例）。
-- **新しく足すもの**: パレットを読む小さな関数（各 crate に 1 つ）・番号つきの形式の集合（各 crate に 1 つ）・作り手 1 つ・検体 6 本（2 か所）・emo-atlas のテストの兄弟 2 つ。
+- **新しく足すもの**: パレットを読む小さな非公開の関数（各 crate に 1 つ）・番号つきの形式の集合（各 crate に 1 つ）・作り手 1 つ・検体 6 本（1 か所）・emo-atlas のテストの兄弟 2 つ・wintf のテストの兄弟 1 つ。
 - **steering との合い方**: 外部クレートはそのまま使う・依存も機能も足さない・ログの無い失敗の道を作らない（`?` で今の失敗へつなぐ）・テストの本体を本番のファイルに書かない・テストは走る間にファイルを書かない。
 
 ### Technology Stack
@@ -106,7 +106,7 @@ graph TB
 ```
 crates/areka-emo-atlas/
 ├── examples/
-│   └── gen_palette_samples.rs        # 新規: 検体 6 本を 2 か所へ書く作り手（std だけ）
+│   └── gen_palette_samples.rs        # 新規: 検体 6 本を testdata/palette/ へ書く作り手（std だけ）
 └── src/
     ├── decode/
     │   ├── wic_arm.rs                # 変更: 番号つきの枝・パレットを読む関数・テストの接続宣言 2 つ
@@ -116,25 +116,27 @@ crates/areka-emo-atlas/
     └── testdata/
         └── palette/                  # 新規: 検体 6 本と README.md（作り直しの手順・中身の表）
 crates/wintf/
-├── src/com/wic.rs                    # 変更: 番号つきの枝・pub fn palette_has_alpha
+├── src/com/
+│   ├── wic.rs                        # 変更: 番号つきの枝・非公開の palette_has_alpha・テストの接続宣言
+│   └── wic_tests.rs                  # 新規: 失敗の道の檻（非公開の palette_has_alpha を呼ぶ）
 └── tests/
-    ├── assets/palette/               # 新規: emo-atlas と同じ検体 6 本（同じ作り手が書く）
-    └── com/wic_test.rs               # 変更: 判定の表のテストと失敗の道のテストを足す
+    └── com/wic_test.rs               # 変更: 判定の表のテストを足す（検体は emo-atlas の testdata/palette/ を相対で読む）
 ```
 
 ### Modified Files
 
 - `crates/areka-emo-atlas/src/decode/wic_arm.rs` — `decode_inner` の `has_alpha` を「番号つきならパレット・それ以外は今の集合」にする。`INDEXED_FORMATS` と `palette_has_alpha` を足す。末尾に `#[cfg(test)] #[path = "wic_arm_test_support.rs"] mod test_support;` と `#[cfg(test)] #[path = "wic_arm_palette_tests.rs"] mod palette_tests;` を足す。モジュールと関数の説明の「変換前フレームのピクセルフォーマット由来の α 有無」を「…とパレット由来の」に直す。
 - `crates/areka-emo-atlas/src/decode/wic_arm_tests.rs` — 自前の `with_arm` を消し、`super::test_support::with_arm` を使う（テストの中身は変えない）。structure.md の「テーマ間で共有するヘルパは `<stem>_test_support.rs` へ集約する」に従う。
-- `crates/wintf/src/com/wic.rs` — `load_bitmap_source` の `has_alpha` に同じ枝を足す。`INDEXED_FORMATS`（非公開）と `pub fn palette_has_alpha` を足す。関数の説明の Returns を直す。
-- `crates/wintf/tests/com/wic_test.rs` — 検体 6 本の `has_alpha` の表と、番号つきでない絵の `palette_has_alpha` が失敗することを足す。
+- `crates/wintf/src/com/wic.rs` — `load_bitmap_source` の `has_alpha` に同じ枝を足す。`INDEXED_FORMATS` と `palette_has_alpha`（どちらも非公開）を足す。末尾に `#[cfg(test)] #[path = "wic_tests.rs"] mod tests;` を足す。関数の説明の Returns を直す。
+- `crates/wintf/src/com/wic_tests.rs`（新規）— 番号つきでない絵の `palette_has_alpha` が失敗することの檻（前例 `src/ecs/cursor/cur_file_tests.rs`）。
+- `crates/wintf/tests/com/wic_test.rs` — 検体 6 本（`CARGO_MANIFEST_DIR` から `../areka-emo-atlas/src/testdata/palette/`）の `has_alpha` の表を足す。
 - `crates/areka-emo-atlas/src/emo2_e2e.rs` — 説明 4 か所（80〜84・92〜93・168〜169・281〜282 行目）と定数名 `SHELL_KEY_COLOR_KEY` → `SHELL_NULL_PNG_KEY`（同じファイルの中の 9 か所だけ・値は同じ）（要件 2.7）。
 - `crates/areka-emo-atlas/src/emo2_golden.rs` — 説明 2 か所（172〜173・200〜203 行目）（要件 2.7）。
 - `crates/areka-emo-atlas/src/normalize_key_color_tests.rs` — 143〜145 行目の説明（要件 2.8）。
 - `crates/areka-emo-atlas/src/normalize_rule_tests.rs` — 119〜120 行目の説明（要件 2.8）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の 273・274 行目（要件 6）。
 
-新しいソースの本番のファイルは無い。触るファイルは roadmap の C14 の ④ の行（`wic_arm.rs`・`wic_arm_tests.rs`・wintf の `com/wic.rs`・`tests/com/wic_test.rs`・§8）に、新しい兄弟 2 つ・作り手・検体のフォルダ 2 つ・要件 2.7／2.8 の説明の 4 ファイルを足したもの。同じウェーブのほかの 6 本はどれも `crates/areka-emo-atlas/` と `crates/wintf/src/com/` に触らない。§8 はほかの spec も着地のときに行を足すが、本 spec は既存の 2 行をその場で書き直すだけなので、行の追加とは競合しない。
+新しいソースの本番のファイルは無い。触るファイルは roadmap の C14 の ④ の行（`wic_arm.rs`・`wic_arm_tests.rs`・wintf の `com/wic.rs`・`tests/com/wic_test.rs`・§8）に、新しい兄弟 3 つ（emo-atlas 2・wintf 1）・作り手・検体のフォルダ 1 つ・要件 2.7／2.8 の説明の 4 ファイルを足したもの。同じウェーブのほかの 6 本はどれも `crates/areka-emo-atlas/` と `crates/wintf/src/com/` に触らない。§8 はほかの spec も着地のときに行を足すが、本 spec は既存の 2 行をその場で書き直すだけなので、行の追加とは競合しない。
 
 ## System Flows
 
@@ -177,7 +179,7 @@ flowchart TB
 | 3.2 | wintf が「無し」を返す | WintfJudgment | 同上 | 番号つきの枝 |
 | 3.3 | wintf のパレットでない形式は変えない | WintfJudgment | 12 個の集合をそのまま残す | 番号つきでない枝 |
 | 3.4 | wintf の画素を変えない | WintfJudgment | 変換器とその引数を触らない | — |
-| 3.5 | 2 つの読み手が同じ答え | PaletteSamples・AtlasPaletteTests・WintfPaletteTests | 同じバイト列・同じ期待値の表 | — |
+| 3.5 | 2 つの読み手が同じ答え | PaletteSamples・AtlasPaletteTests・WintfPaletteTests | 同じ検体のファイル・同じ期待値の表 | — |
 | 4.1 | emo-atlas はパレットが読めなければ失敗 | WicArmJudgment | `?` → `DecodeError::Decode { path }` | 失敗の枝 |
 | 4.2 | wintf はパレットが読めなければ失敗 | WintfJudgment | `?` → `Err` | 失敗の枝 |
 | 5.1 | `1`／`true` の赤のテスト | AtlasPaletteTests | 読み戻した画素 | — |
@@ -197,15 +199,15 @@ flowchart TB
 | 部品 | 層 | 役目 | 要件 | 主な依存 | 契約 |
 |---|---|---|---|---|---|
 | WicArmJudgment | emo-atlas の読み手 | 番号つきの形式でパレットを見て `has_alpha` を決める | 1.1, 1.5, 1.6, 2.1, 2.2, 2.3, 4.1 | WIC（P0） | Service |
-| WintfJudgment | wintf の COM 層 | 同じ判定の写し・`palette_has_alpha` を公開 | 3.1, 3.2, 3.3, 3.4, 4.2 | WIC（P0） | Service |
-| PaletteSamples | テストの検体 | 6 本の検体を 2 か所へ同じバイト列で書く | 3.5, 5.4, 5.7, 5.8 | std（P2） | Batch |
+| WintfJudgment | wintf の COM 層 | 同じ判定の写し（`palette_has_alpha` は非公開） | 3.1, 3.2, 3.3, 3.4, 4.2 | WIC（P0） | Service |
+| PaletteSamples | テストの検体 | 6 本の検体を emo-atlas の 1 か所へ書く | 3.5, 5.4, 5.7, 5.8 | std（P2） | Batch |
 | AtlasPaletteTests | emo-atlas のテスト | 判定・焼き込みの画素・失敗の道の檻 | 1.2〜1.6, 2.1, 2.2, 3.5, 4.1, 5.1〜5.4, 5.6, 5.8 | WicArmJudgment（P0）・Normalizer（P0） | — |
 | WintfPaletteTests | wintf のテスト | 判定の表と失敗の道の檻 | 3.1, 3.2, 3.5, 4.2, 5.5, 5.6 | WintfJudgment（P0） | — |
 | Emo2TestDocs | emo-atlas のテストの説明 | `null.png` の説明を事実に合わせる | 2.6, 2.7 | — | — |
 | NormalizeTestDocs | emo-atlas のテストの説明 | 正規化のテストの説明の前提を直す | 2.8 | — | — |
 | CompatDocRows | 文書 | §8 の 2 行の書き直し | 6.1, 6.2, 6.3 | — | — |
 
-部品とファイル: WicArmJudgment＝`crates/areka-emo-atlas/src/decode/wic_arm.rs`・WintfJudgment＝`crates/wintf/src/com/wic.rs`・PaletteSamples＝`crates/areka-emo-atlas/examples/gen_palette_samples.rs` と 2 つの検体のフォルダ・AtlasPaletteTests＝`crates/areka-emo-atlas/src/decode/wic_arm_palette_tests.rs`（共有の `wic_arm_test_support.rs`）・WintfPaletteTests＝`crates/wintf/tests/com/wic_test.rs`・Emo2TestDocs＝`emo2_e2e.rs`・`emo2_golden.rs`・NormalizeTestDocs＝`normalize_key_color_tests.rs`・`normalize_rule_tests.rs`・CompatDocRows＝`doc/COMPAT_ARCHITECTURE.md`。
+部品とファイル: WicArmJudgment＝`crates/areka-emo-atlas/src/decode/wic_arm.rs`・WintfJudgment＝`crates/wintf/src/com/wic.rs`・PaletteSamples＝`crates/areka-emo-atlas/examples/gen_palette_samples.rs` と `crates/areka-emo-atlas/src/testdata/palette/`・AtlasPaletteTests＝`crates/areka-emo-atlas/src/decode/wic_arm_palette_tests.rs`（共有の `wic_arm_test_support.rs`）・WintfPaletteTests＝`crates/wintf/tests/com/wic_test.rs`（判定の表）と `crates/wintf/src/com/wic_tests.rs`（失敗の道）・Emo2TestDocs＝`emo2_e2e.rs`・`emo2_golden.rs`・NormalizeTestDocs＝`normalize_key_color_tests.rs`・`normalize_rule_tests.rs`・CompatDocRows＝`doc/COMPAT_ARCHITECTURE.md`。
 
 Normalizer（`normalize.rs`）は変えない。2.4・2.5・1.2〜1.4 は「`has_alpha` が正しくなれば今の `plan` がそのまま満たす」ことで満たす。
 
@@ -276,7 +278,7 @@ let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
 
 **責務と決まり**
 
-- WicArmJudgment と同じ枝・同じ集合・同じ失敗の扱い。違いは `palette_has_alpha` を `pub` にすること（wintf のテストは `tests/` の結合テストで、非公開の関数を呼べないため。要件 4.2 の失敗の道を決定論で檻に入れるのに要る）。
+- WicArmJudgment と同じ枝・同じ集合・同じ失敗の扱い・同じく非公開。失敗の道（要件 4.2）は兄弟の `src/com/wic_tests.rs`（`#[cfg(test)] #[path]` でつなぐ子のモジュール）から非公開の関数を呼んで檻に入れる。テストのために公開の口は足さない（設計の討議 議題 2）。
 - 変換器とその引数は触らない（要件 3.4）。戻り値の型 `Result<(IWICBitmapSource, bool)>` は変えない。
 
 **Contracts**: Service [x]
@@ -287,7 +289,7 @@ let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
 /// フレームのパレットに透明度 255 未満の色が 1 つでも在るか（`IWICPalette::HasAlpha`）。
 /// `load_bitmap_source` が番号つきの形式のときに使う。パレットを持たない絵では
 /// WIC のエラー（`WINCODEC_ERR_PALETTEUNAVAILABLE`）をそのまま返す。
-pub fn palette_has_alpha(
+fn palette_has_alpha(
     factory: &IWICImagingFactory2,
     source: &IWICBitmapSource,
 ) -> Result<bool>;
@@ -302,7 +304,7 @@ pub fn palette_has_alpha(
 
 | 項目 | 中身 |
 |---|---|
-| 役目 | 6 本の検体のバイト列を組み、2 つのフォルダへ同じものを書く |
+| 役目 | 6 本の検体のバイト列を組み、emo-atlas の `src/testdata/palette/` へ書く |
 | 要件 | 3.5, 5.4, 5.7, 5.8 |
 
 **Contracts**: Batch [x]
@@ -311,10 +313,10 @@ pub fn palette_has_alpha(
 
 - 起動: 人が `cargo run -p areka-emo-atlas --example gen_palette_samples` を走らせたときだけ（テストからは走らせない）。
 - 入力: 無し（中身は作り手の中に書く）。
-- 出力: `crates/areka-emo-atlas/src/testdata/palette/` と `crates/wintf/tests/assets/palette/` の 2 か所へ、下の表の 6 本を同じバイト列で書く。フォルダが無ければ作り、在れば上書きする。書き先は `CARGO_MANIFEST_DIR` からの相対で組む（作業木の中だけ）。
+- 出力: `crates/areka-emo-atlas/src/testdata/palette/` の 1 か所へ、下の表の 6 本を書く。フォルダが無ければ作り、在れば上書きする。書き先は `CARGO_MANIFEST_DIR` からの相対で組む（自分の crate の中だけ。前例 `gen_animated_samples.rs` と同じ）。
 - 冪等: 圧縮しない（zlib の無圧縮の 1 ブロック）ので、何度走らせても、どの版の Rust でも同じバイト列になる。
 - 作り方: PNG は `IHDR`・`PLTE`（パレットのときだけ）・`tRNS`（在るときだけ）・`IDAT`・`IEND` を手で組む。`IDAT` は行ごとにフィルタ 0 を付けた生の行を、zlib の見出し `78 01`・無圧縮の最後のブロック・Adler-32 で包む。CRC32 は作り手の中の数行（`gen_animated_samples.rs` の `crc32` と同じ形）。GIF は GIF89a・大域の色の表 4 色・図形の制御の拡張で透明の番号 1・LZW は最小の符号の長さ 2 で、符号ごとに消去の符号を挟んで 3 ビットのまま書く。
-- README: `src/testdata/palette/README.md` に、作り直しの手順・下の表・「第三者の著作物は 0 件」を書く。wintf のフォルダには README を置かず、`wic_test.rs` の説明から作り手を名指しする。
+- README: `src/testdata/palette/README.md` に、作り直しの手順・下の表・「第三者の著作物は 0 件」・「wintf の `tests/com/wic_test.rs` もこの検体を読む」を書く。`wic_test.rs` の説明からも作り手と README を名指しする。
 
 ## Data Models
 
@@ -360,7 +362,7 @@ pub fn palette_has_alpha(
 
 ### 赤を先に立てる順
 
-1. 作り手と検体 6 本（2 か所）をコミットし、AtlasPaletteTests と WintfPaletteTests を足す。
+1. 作り手と検体 6 本（1 か所）をコミットし、AtlasPaletteTests と WintfPaletteTests を足す。
 2. 直す前に走らせ、下の「直す前に赤」の印のテストが赤になることを確かめて記録する（要件 5.1・5.2・5.5・5.8）。
 3. 2 つの判定を直して緑にする。
 
@@ -373,10 +375,10 @@ pub fn palette_has_alpha(
 - **失敗の道**（要件 4.1）: 番号つきでない絵（emo2 の `online0.png`・`crate::sample_test_support::emo2_balloon_root()` から引く）のフレームを `arm.factory` で開き、`palette_has_alpha` が `Err`（コードは `WINCODEC_ERR_PALETTEUNAVAILABLE`）を返す。関数がパレットの読めない絵で偽を推測しないことを決定論で示す。`?` から `DecodeError::Decode { path }` へつながる所は、今の `non_image_file_yields_decode_error` が既に檻に入れている。
 - 検体のパスは `CARGO_MANIFEST_DIR` の下の `src/testdata/palette/`（`wic_arm_tests.rs` の `sample` と同じ組み方）。テストは走る間にファイルを書かない。
 
-### Integration Tests（wintf・`tests/com/wic_test.rs`）
+### Integration Tests（wintf・`tests/com/wic_test.rs`）と Unit Tests（wintf・`src/com/wic_tests.rs`）
 
-- **判定の表**（要件 3.1・3.2・3.5・5.5）: 6 本の検体を `load_bitmap_source` で読み、2 つ目の戻り値が emo-atlas と同じ表（真 4 本・偽 2 本）と一致する。真の 4 本は直す前に赤（要件 5.5 の「1. と 8. の検体」）。
-- **失敗の道**（要件 4.2）: 今の `decode_first_frame("test_8x8_rgba.png")` のフレームで `palette_has_alpha` が `Err` を返す。
+- **判定の表**（要件 3.1・3.2・3.5・5.5・`tests/com/wic_test.rs`）: emo-atlas と同じ検体のファイル 6 本（`CARGO_MANIFEST_DIR` から `../areka-emo-atlas/src/testdata/palette/`）を `load_bitmap_source` で読み、2 つ目の戻り値が emo-atlas と同じ表（真 4 本・偽 2 本）と一致する。真の 4 本は直す前に赤（要件 5.5 の「1. と 8. の検体」）。
+- **失敗の道**（要件 4.2・`src/com/wic_tests.rs`）: 番号つきでない絵（wintf の `tests/assets/test_8x8_rgba.png` を `CARGO_MANIFEST_DIR` から引く）のフレームで、非公開の `palette_has_alpha` が `Err`（コードは `WINCODEC_ERR_PALETTEUNAVAILABLE`）を返す。
 - **パレットでない絵は今のまま**（要件 3.3）: 今の `bitmap_source_integration_test.rs` の `test_has_alpha_true_for_rgba_png`・`test_has_alpha_false_for_rgb_bmp` がそのまま緑であること（足さない）。
 - 要件 3.4（画素を変えない）は、変換器とその引数の行が差分に現れないことで示す（静的な証跡）。
 
@@ -390,9 +392,9 @@ pub fn palette_has_alpha(
 
 1. **写しを保つ（案 A）**: 判定は 10 行前後で、葉の crate を足して 1 か所に寄せる（案 B）と依存の線と責務が増え、今の「emo-atlas は wintf を参照しない・同じ判定を写す」決めを覆す。釣り合わないので採らない。2 つが同じ答えであることはテストで見張る（決め 5）。
 2. **判定の形**: 番号つきの 4 個の集合で入口を決め、その枝でだけパレットを読む（System Flows のとおり）。どの形式でもパレットを試す形は採らない（要件 4 と合わない）。
-3. **検体の置き場と作り手の在処**: 検体はコミットし、作り手は emo-atlas の example 1 つ（`testdata/animated/` と `gen_animated_samples.rs` の前例）。作り手は std だけで、2 つの crate のフォルダへ同じバイト列を書く。テストの中でバイト列を組む形は、組み手を 2 つの crate に写すことになり（互いに参照できない）、写しの食い違いを生む余地が増えるので採らない。テスト専用の葉（`sample-ghost-kit`）に組み手を置く形は、その葉の役目（検体ゴースト／バルーンを名前で引く窓口）と違い、wintf に依存の行を足すことになるので採らない。テストが走る間にはファイルを書かない（要件 5.7）。
-4. **要件 4 の失敗の道の檻**: 本物の WIC で、番号つきでない絵のフレームに `CopyPalette` を呼ぶと必ず `WINCODEC_ERR_PALETTEUNAVAILABLE` で失敗する（2026-10-31 に `windows` 0.62.2 で確かめた）。これを使い、`palette_has_alpha` が失敗を返すことを決定論で檻に入れる。emo-atlas では子のテストのモジュールから非公開の関数を呼ぶ。wintf では関数を `pub` にして結合テストから呼ぶ。
-5. **要件 3.5 の確かめ方**: 同じ作り手が書いた同じバイト列を、2 つの crate のテストが同じ期待値の表で読む。両方に依存する `crates/areka` に突き合わせのテストを置く形は、触るファイルが本 spec の範囲の外へ広がるので採らない。
+3. **検体の置き場と作り手の在処**: 検体はコミットし、作り手は emo-atlas の example 1 つ（`testdata/animated/` と `gen_animated_samples.rs` の前例）。作り手は std だけで、emo-atlas の `src/testdata/palette/` の 1 か所へ書く。wintf のテストは同じファイルを相対パスで読む（2026-10-31 設計の討議 議題 1・一括承認。二重に持つと写しのずれを見張るものが無く、作り手がよその crate の木へ書くことになるため）。テストの中でバイト列を組む形は、組み手を 2 つの crate に写すことになり（互いに参照できない）、写しの食い違いを生む余地が増えるので採らない。テスト専用の葉（`sample-ghost-kit`）に組み手を置く形は、その葉の役目（検体ゴースト／バルーンを名前で引く窓口）と違い、wintf に依存の行を足すことになるので採らない。テストが走る間にはファイルを書かない（要件 5.7）。
+4. **要件 4 の失敗の道の檻**: 本物の WIC で、番号つきでない絵のフレームに `CopyPalette` を呼ぶと必ず `WINCODEC_ERR_PALETTEUNAVAILABLE` で失敗する（2026-10-31 に `windows` 0.62.2 で確かめた）。これを使い、`palette_has_alpha` が失敗を返すことを決定論で檻に入れる。emo-atlas でも wintf でも、子のテストのモジュール（兄弟のファイル）から非公開の関数を呼ぶ（2026-10-31 設計の討議 議題 2・一括承認。テストのために公開の口を足さない）。
+5. **要件 3.5 の確かめ方**: 同じ検体のファイルを、2 つの crate のテストが同じ期待値の表で読む。両方に依存する `crates/areka` に突き合わせのテストを置く形は、触るファイルが本 spec の範囲の外へ広がるので採らない。
 6. **emo-atlas のテストのファイル**: 新しい兄弟 `wic_arm_palette_tests.rs`（動く絵の檻の `wic_arm_tests.rs` とはテーマが違う）。共有する `with_arm` は structure.md の決まりどおり `wic_arm_test_support.rs` へ移す。焼き込みの画素は `WicDecoderArm`＋`Normalizer` で読む（焼き込みの本番は `lib.rs` で同じ `plan`→`apply_to` を通る）ので、読み手の兄弟に置く。wintf は roadmap が名指しした `tests/com/wic_test.rs`（`decode_first_frame` が手元に在る）。
 7. **要件 2.8 の書き直しの中身**: `normalize_key_color_tests.rs` の `trns_like_semi_transparent_pixels_survive` の説明は「パレット＋`tRNS` の絵は、抜き色の腕へ α の掛かった画素として届く」を「読み手が α を持たないとした絵に α<255 の画素が混じって届いた場合の備え（パレットの番号ごとの透明度を持つ絵は、本 spec の後は `has_alpha` が真で、この腕へ来ない）」に直す。`normalize_rule_tests.rs` の `row4_full_without_alpha_flag_forces_translucent_pixels_opaque` の説明は「（パレットの PNG の透明の情報など）」を「（WIC の静止画の読み手からは、パレットの番号ごとの透明度を持つ絵はこの形で来ない。正規化器の単体の備え）」に直す。テストの名前・中身・期待値は変えない。
 8. **要件 2.7 の書き直しの中身**: `emo2_e2e.rs`・`emo2_golden.rs` の「α チャンネルを持たない」「α 無し」「左上の色を抜く」「抜き色の腕を通って」を、「番号ごとの透明度を持つパレットの絵（番号 1 が透明度 0）として α の道を通り、全画素が透明」に直す。golden の説明の「抜き色の腕の追加によって 1 文字も変わらない（R5.4）」は残す（完了 spec の決めの記録で、本 spec の事実と食い違わない）。定数名 `SHELL_KEY_COLOR_KEY` は「抜き色の絵」を名乗るので `SHELL_NULL_PNG_KEY` に改める（値と使い方は同じ）。
