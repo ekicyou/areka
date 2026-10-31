@@ -177,3 +177,56 @@
 
 - 要件討議（`/kiro-requirements-discussion popup-menu-extra-resources`）で 7 章の議題を決め、必要なら要件を直す。その前に測 1〜4 を SSP の MCP で測る（要件の決まり）。
 - 決まったら `/kiro-design popup-menu-extra-resources` で設計へ。
+
+## 9. 設計の段（2026-11-01・`kiro-spec-design -y`）
+
+### 9-1. 調べの種類と使った手引き
+
+- 種類: 軽い調べ（既存の仕組みへの追加・`design-discovery-light.md`）。新しい依存も外の API も無いので、外の調べ（WebSearch）は要らなかった。調べは 2 章のギャップ分析の事実を、設計に効く所だけコードで読み直した。
+- 使った手引き: `kiro-spec-design` の `rules/`（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と `.kiro/settings/templates/specs/design.md`。メモの決まり「配線は再テストしない」「零は明示的に書く」を、テストの組み方（9-3 の D5 と C1 の注記）に使った。
+
+### 9-2. 設計の段で読み直した事実
+
+- `menu/captions.rs` の `interpret` は `Ok` の枝だけで 1 件ずつ写し、`Err` の枝は空の `CaptionMap` を返して終わる。落とし先の解決を `Ok` の枝のループの後に置けば、時間切れの全件既定名（要件 1.6）は手を入れずに保たれる。
+- `CaptionMap` は非空の値しか入れない（`insert` が空を捨てる）ので、「鍵がある」＝「引けた」。空の値・値なし・失敗の 3 通りは、どれも「鍵が無い」として同じに扱える。
+- `plan.rs` の `caption_for` は `item.caption_resource` の鍵で引くだけなので、古い名前の値を新しい名前の鍵へ入れれば、`&` の素通し・前後を削らない扱い（要件 1.5）がそのまま揃う。
+- `doc/ukadoc-coverage/README.md` 3 章: 証拠は定義箇所の `ukadoc:` 1 行。ページ URL の行の直後のスライス定数は、要素の最初の文字列を名前として拾う。古い名前の組の表に `ukadoc:` の行を置くと、最初の文字列＝新しい名前が拾われ、「呼び出し側には書かない」にも反するので、置かない。証拠は許可表の 1 行だけ。
+- 検査の種類（`check/finding.rs`）に「語彙のみの行に証拠がある」を咎めるものは無い。`SourceUrlNotInCatalog` はカタログの URL `#updatebuttoncaption:1` に当たるので通る。
+- `roadmap-draft.md` の先例 `shiori2-protocol` は `wave = "C11-⑧"`（ウェーブと席の番号）。本 spec は roadmap の C15 の ⑥ なので `wave = "C15-⑥"`（6 章の調べること 3 の答え）。
+- 往復の配線のテスト（`actor_resources_tests.rs` の `reset_balloon_position_caption_is_looked_up_from_the_ghost` の型）は、送出の関門と 2.x の印がどちらも `is_allowed_resource_id` 1 つで決まるので、名前ごとに足さない。
+
+### 9-3. 設計の決め（7 章の議題 2・3・4・8・10）
+
+#### D1: 落とし先を解決する場所＝`interpret`（議題 2・案 A-1）
+- **Alternatives**: A-1 `interpret` のループの後で新しい名前の鍵へ写す ／ A-2 `CaptionMap::get` で新しい名前が無ければ古い名前を引く。
+- **Selected**: A-1。
+- **Rationale**: 「引ける・引けない」を決めている所に優先の決めも置ける。`CaptionMap` は「名前 → その名前自身の値」の表のままで、`get` に意味を足さない（テストが直接組む `CaptionMap` の振る舞いも変わらない）。記録は今のループが古い名前も数えるので、記録の手当ては要らない。
+- **Trade-offs**: `CaptionMap` に古い名前の鍵も残る（引く項目が無いので害は無い）。コードの大きさは A-2 と同じ。
+
+#### D2: 対応の持ち方＝1 行の組の表（議題 3）
+- **Alternatives**: 組の表 `&[(&str, &str)]` ／ `updatebutton.caption` に決め打ちの 1 組の定数。
+- **Selected**: `LEGACY_CAPTION_RESOURCES: &[(&str, &str)] = &[("updatebutton.caption", "updatebuttoncaption")]`。
+- **Rationale**: 同じファイルの名前の表（`FRAME_CAPTIONS`・`UNQUERIED_POPUPMENU_RESOURCES`）と同じ形で、兄弟テストが許可表との突き合わせを同じ書き方でできる。決め打ちとコードの大きさは同じ。行を足す予定は無い（`readmebuttoncaption` は取らない裁定）。
+
+#### D3: 古い名前を導く鍵＝資源名（議題 4）
+- **Selected**: `caption_resource` が表の新しい名前に等しいとき。`Frame` は使わない。
+- **Rationale**: `interpret` は名前の列しか持たず、サブメニューの子には `Frame` が無い。資源名から導けば要件 1.7 が分岐なしで満たされ、`query_ids` の型も変わらない。
+- **Follow-up**: 既存テスト `query_ids_collects_submenu_children_and_collapses_duplicates` の期待の列に古い名前が 1 つ増える（直す）。
+
+#### D4: 照会の並び＝古い名前を新しい名前の直前（議題 8）
+- **Rationale**: SSP の並び（測 1）と同じで、記録を見比べやすい。優先は往復の後にまとめて決めるので、並びは優先に効かない。
+
+#### D5: 凍結のテストの否定側＝kanade に別のテストを 1 本（議題 10）
+- **Selected**: `resources.rs` の `mod tests` に `deferred_menu_item_names_are_not_allowed`。⑵ の 8 つ・`char*.recommend*` の 3 つ（台帳の綴りと `char2.` の綴りの両方）・取らない裁定の `readmebuttoncaption`・`sakura.updatebuttoncaption` が許可されないことを明示して確かめる。
+- **Rationale**: 今の `unqueried_menu_names_are_not_allowed` は「問い合わせない裁定」の名前で、⑵ は「windows-reactor 待ち」の名前。理由の違う名前を同じ失敗文に混ぜない。完全一致の凍結のテストでも無いことは導けるが、無いことは明示して書く（メモの決まり）。
+
+### 9-4. まとめ方の見直し（`design-synthesis.md`）
+
+- **一般化**: 「新しい名前が引けないとき古い名前で引く」は他の項目名にもありうる形（`readmebuttoncaption` など）なので、仕組みを組の表で受けた。ただし行は 1 つだけで、足す仕組み・選択肢は作らない（今の要件が求めるのは 1 組だけ）。
+- **作るか借りるか**: 外の部品で解く問題ではない。既存の `query_ids`・`interpret`・`CaptionMap`・許可表をそのまま使う。
+- **削ったもの**: `MenuItem` に欄を足す案（案 B）・kanade で読み替える案（案 C）は取らない（要件 6.2 と kanade の「名前を不透明に往復する」契約に反する）。名前ごとの往復の配線テストは足さない。`briefing-shiori.md` の経緯の段落は検査の対象でなく要件 4.5 の挙げる周りにも入らないので書かない。
+
+### 9-5. 危うさ
+
+- 同じウェーブの `shell-scale-linkage` も `roadmap-draft.md`・`briefing.md`・報告に触れる。数を共有する所（`[briefs].count`・行数・`[[barrier]]`・報告）は、後から着地する側が main に合わせて数え直し、報告を作り直す。
+- 往復が 1 回増える。上限 1,000 ms は変えない。「．さくら」（i686 helper 経由）での所要を実機の確かめで記録の時刻から読む。
