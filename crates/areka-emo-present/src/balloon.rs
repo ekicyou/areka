@@ -608,6 +608,7 @@ pub fn load_balloon_use_self_alpha(balloon_dir: &Path) -> UseSelfAlpha {
         "use_self_alpha",
         balloon_dir,
         descript.as_deref(),
+        crate::load_records::LoadRecords::Emit,
     );
     let ignored_pna = enumerate_file_names(balloon_dir)
         .unwrap_or_default()

@@ -9,6 +9,7 @@ use areka_emo_atlas::UseSelfAlpha;
 use log_capture_kit::CapturedEvent;
 
 use super::{parse, read_use_self_alpha};
+use crate::load_records::LoadRecords;
 
 const KIND: &str = "shell";
 const KEY: &str = "seriko.use_self_alpha";
@@ -61,7 +62,13 @@ fn assert_one_info(events: &[CapturedEvent], treatment: &str, declared: bool) {
 
 fn read(descript: Option<&str>) -> (UseSelfAlpha, Vec<CapturedEvent>) {
     log_capture_kit::capture(|| {
-        read_use_self_alpha(KIND, KEY, Path::new("shells/master"), descript)
+        read_use_self_alpha(
+            KIND,
+            KEY,
+            Path::new("shells/master"),
+            descript,
+            LoadRecords::Emit,
+        )
     })
 }
 
@@ -117,4 +124,27 @@ fn use_input_alpha_alone_is_same_as_missing_line() {
     assert_eq!(got, UseSelfAlpha::Undeclared);
     assert_one_info(&events, "none", false);
     assert_eq!(count(&events, tracing::Level::WARN), 0, "{events:?}");
+}
+
+/// 記録を出さない口: 宣言あり・読めない値のどちらでも記録は 0 行で、戻りは出す口と同じ（spec:
+/// placement-measure-bake-once 要件 3.4）。
+#[test]
+fn quiet_emits_no_records_and_returns_the_same_value() {
+    for descript in [
+        "seriko.use_self_alpha,full\n",
+        "seriko.use_self_alpha,false\n",
+    ] {
+        let (got, events) = log_capture_kit::capture(|| {
+            read_use_self_alpha(
+                KIND,
+                KEY,
+                Path::new("shells/master"),
+                Some(descript),
+                LoadRecords::Quiet,
+            )
+        });
+        assert_eq!(got, read(Some(descript)).0, "{descript:?}");
+        assert_eq!(count(&events, tracing::Level::INFO), 0, "{events:?}");
+        assert_eq!(count(&events, tracing::Level::WARN), 0, "{events:?}");
+    }
 }

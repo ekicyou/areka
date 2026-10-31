@@ -8,20 +8,24 @@ use std::path::Path;
 
 use areka_emo_atlas::UseSelfAlpha;
 
+use crate::load_records::LoadRecords;
+
 /// descript.txt の本文から透過の宣言を読む。
 ///
 /// `descript` は descript.txt の本文（読めなかったら `None`）。`kind` は "shell" か "balloon"。
 /// 呼ぶたびに `info!` を 1 行（採った扱い・宣言によるかどうか）、値が読めないときは値つきの
-/// `warn!` をもう 1 行出す（要件 7.1・7.2）。同じキーが 2 行在るときは後の行が勝つ（`parse_kv` の決まり）。
+/// `warn!` をもう 1 行出す（要件 7.1・7.2）。`records` が [`LoadRecords::Quiet`] ならどちらも出さない。
+/// 同じキーが 2 行在るときは後の行が勝つ（`parse_kv` の決まり）。
 pub(crate) fn read_use_self_alpha(
     kind: &'static str,
     key: &'static str,
     dir: &Path,
     descript: Option<&str>,
+    records: LoadRecords,
 ) -> UseSelfAlpha {
     let value = descript.and_then(|text| areka_parsers::kv::parse_kv(text).remove(key));
     let declared = value.as_deref().and_then(parse);
-    if let (Some(value), None) = (&value, declared) {
+    if let (true, Some(value), None) = (records.emits(), &value, declared) {
         tracing::warn!(
             kind,
             key,
@@ -36,14 +40,16 @@ pub(crate) fn read_use_self_alpha(
         Some(UseSelfAlpha::Off) => "0",
         Some(UseSelfAlpha::Undeclared) | None => "none",
     };
-    tracing::info!(
-        kind,
-        key,
-        dir = %dir.display(),
-        treatment,
-        declared = declared.is_some(),
-        "self_alpha: 透過の扱いを決めた"
-    );
+    if records.emits() {
+        tracing::info!(
+            kind,
+            key,
+            dir = %dir.display(),
+            treatment,
+            declared = declared.is_some(),
+            "self_alpha: 透過の扱いを決めた"
+        );
+    }
     declared.unwrap_or(UseSelfAlpha::Undeclared)
 }
 

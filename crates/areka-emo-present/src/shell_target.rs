@@ -392,6 +392,7 @@ pub fn load_shell_target(
         "seriko.use_self_alpha",
         shell_dir,
         descript.as_deref(),
+        crate::load_records::LoadRecords::Emit,
     );
 
     let mut target =
