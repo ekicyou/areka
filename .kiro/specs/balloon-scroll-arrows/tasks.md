@@ -151,7 +151,7 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
   - 完了の姿: 4 つの crate のテストが緑で、既存のテストの期待値の差分が 0（`validation_tests.rs` のコメントの直しだけ）
   - _Requirements: 11.1, 11.2_
 
-- [ ] 8.2 既定のバルーンで実機の走行を確かめる
+- [x] 8.2 既定のバルーンで実機の走行を確かめる
   - emo2 を写した検体（ワークツリーの `target\` の下）に `areka-balloon` を置き、長い台詞で `arrow0` が出ること、クリックとホイールで戻せること、新しい台詞で最新の行へ戻ることを、記録（矢印の解決・手動の始まりと終わりの debug の行）と `dump_balloon` の絵で確かめる
   - 完了の姿: 記録の行と `dump_balloon` の絵が spec の文書に残っている
   - _Requirements: 11.3_
@@ -187,4 +187,4 @@ SSP での測り（要件 10.1・10.2・10.4）は設計の段で済み、答え
 - 6.2: 「話し終えたか」は `balloon_pressed.rs` の `finished_talking(world)`（`UserBreakWiring.talking`・ゴーストに 1 つ。スコープごとの状態はコードに無い）。6.3 は balloon.rs から `pub(crate) use` で使う。話している最中の矢印の押下は、今は既存のクリックの流れ（`balloon_break_detected`）へ回る。片クリックの早送りは `talk-fast-forward` が入れば自動で効く（要件 5.6 は「本 spec の前と同じクリック」）。消費した矢印の押下は `prev_press_selected` を上書きしない（選択肢のクリック→矢印→矢印の外のダブルクリックで中断を取らない端の場合がある）。
 - 6.3: 箱の矢印の押下は `shell_box_handler.rs` の `press_box_arrow`（true を返すと `by_box` になりクリックにならない）。箱の上のホイールは `char_watch.rs` の `char_watch_with`／`wheel_box`（隠れた行がある箱だけ横取り）。手前の箱の四角が奥の箱の矢印に重なると、その矢印は押せない（選択肢の当たりと同じ規則）。
 - 8.1（2026-10-31）: 排他テストの机で 4 crate を 1 回ずつ回して緑（areka-parsers 596・areka-emo-present 355・areka-emo-text 1281＋4 ignored・areka 4051＋3 ignored・失敗 0）。基点 484263230 からの既存のテスト 9 本の差分は期待値の変更 0（機械的な欄の付け替え・新しいテストの追加・`validation_tests.rs` のコメントだけ）。
-- 8.2（途中・2026-10-31）: 矢印の絵の解決と長い台詞での arrow0 は実機で確かめた（`evidence/01-long-arrow0.png`）。スクリーンセーバーが動いていて SendInput が届かず、クリック・ホイール・最新の行への戻りは未確認。開発者が在席のときに `targetsa-verify` の根を作り直して走らせ直す。範囲外の発見: `\_q` を areka の `check_script` が `unknown_tag` と答える（完了の棚卸で起票を判断）。
+- 8.2（2026-10-31）: run3（`4e0e4a1d6` の後）で arrow0・矢印のクリックとホイールでの戻し・欠けの無い描き直し・手動の始まり／送り／自動へ戻る記録（出所は `areka_emo_text::actor::scroll`）を確かめた。段 7（新しい台詞で最新の行へ戻る）は run3 の記録 `reason=Cleared` と run2 の絵（run3 の絵は emo2 自身の話に上書きされた）で受けた（research.md の 8.2 の節）。範囲外の発見: `\_q`・`\C` を areka の `check_script` が `unknown_tag` と答える（完了の棚卸で起票を判断）。
