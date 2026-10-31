@@ -484,7 +484,7 @@ pub fn apply_bind_directive(
 - 名前の連鎖: `MARKER_FAMILY = SeriesFamily { base: "marker", scope0_legacy: &["markers", "marker"], scope1_legacy: &["markerk"] }` を足し、今の `prefix_chain` を使う。候補の順は、書いた名前 → スコープの名前（本体側 `markerp0def`・`markers`／相方側 `markerp1def`・`markerk`／3 人目から `markerp{n}def`・`markerk`）→ 本体側の名前 → `marker`（5.2・完了 `balloon-scroll-arrows` の印の族と同じ形）。
 - 選び: `select_single_marker_name` は番号の無い `<候補>.png`（矢印と同じ拡張子の扱い）を候補の順に探し、最初に在った 1 つを返す。
 - 読み込み: `resolve_single_marker` は選んだ名前を矢印と同じ `ElementDecoder`・`AlphaParams` で BGRA の `MarkerImage` に読む。読めない絵（壊れたファイル）は今の矢印と同じ水準で記録して、次の候補へは進まず「絵なし」とする。
-- `load_scope_balloon_definitions` は面ごとに、その面の `marker_filename()` で `resolve_single_marker` を呼ぶ（同じ名前は 1 回だけ読む記憶を使う・矢印の記憶と同じ形）。書いた名前の絵が無ければ `warn!`（書いた名前・スコープ・バルーンのフォルダ）を出して連鎖の残りで探し直す（5.3）。絵が 1 枚も無ければ `info!`（スコープ・バルーンのフォルダ・「既定の丸を描く」）を、同じ名前の記憶につき 1 回だけ出す（5.4・フレームごとには出さない）。
+- `load_scope_balloon_definitions` は面ごとに、その面の `marker_filename()` で `resolve_single_marker` を呼ぶ（同じ名前は 1 回だけ読む記憶を使う・矢印の記憶と同じ形）。書いた名前の絵が無ければ `warn!`（書いた名前・スコープ・バルーンのフォルダ）を出して連鎖の残りで探し直す（5.3）。絵の無い面があれば `info!`（スコープ・バルーンのフォルダ・「既定の丸を描く」）を、バルーンを 1 回読むにつき 1 回だけ出す（5.4・フレームごとには出さない）。
 - `ScopeBalloonDefinitions` に非公開の欄（面の番号 → `Option<Arc<MarkerImage>>`）を足し、`single()` は「絵なし」で作る。`FaceDefinition` と `load_scope_balloon_definitions` の形は変えない（`emo2_boot/assets.rs` は触らない）。
 
 ##### Service Interface
