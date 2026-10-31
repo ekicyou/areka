@@ -169,8 +169,8 @@ fn emo2_shell_bake_is_deterministic() {
             "same emo2 shell input must bake to an identical placement snapshot (5.5)"
         );
 
-        // 失敗集合も同一。α 無しの `purple/a/null.png` も抜き色の腕を通って全透明の絵
-        // として載るので、両実行とも**失敗 0 件**である（R5.5/5.6）。
+        // 失敗集合も同一。パレットの絵の `purple/a/null.png` も α の道を通って全透明の
+        // 絵として載るので、両実行とも**失敗 0 件**である（R5.5/5.6）。
         let err_a = snapshot_errors(&a.errors);
         let err_b = snapshot_errors(&b.errors);
         assert_eq!(
@@ -197,8 +197,8 @@ fn emo2_shell_bake_is_deterministic() {
 /// （`src/testdata/emo2_shell_golden.txt`）と比較する。不一致（配置アルゴリズムの
 /// 意図しない変更）は `assert_eq!` が actual/expected を並べて検出する。
 ///
-/// golden は 55 行＝参照される全 element を持つ。α 無しの `purple/a/null.png` は
-/// 抜き色の腕で全画素が透明になるため `0\tpurple/a/null.png\tEMPTY orig=382x547` の
+/// golden は 55 行＝参照される全 element を持つ。`purple/a/null.png` は番号ごとの透明度を
+/// 持つパレットの絵（番号 1 が透明度 0）として α の道を通り、全画素が透明になるため `0\tpurple/a/null.png\tEMPTY orig=382x547` の
 /// 行として載る（脱落ではない・R5.5/5.6）。残る 54 行は α チャンネルの腕を通った絵で、
 /// 抜き色の腕の追加によって 1 文字も変わらない（R5.4）。
 ///
