@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. 問い合わせてよい名前の表に古い名前を足す
-- [ ] 1.1 kanade の許可表に古い名前 `updatebuttoncaption` を 1 つ足し、凍結のテストを 15 名にする
+- [x] 1. 問い合わせてよい名前の表に古い名前を足す
+- [x] 1.1 kanade の許可表に古い名前 `updatebuttoncaption` を 1 つ足し、凍結のテストを 15 名にする
   - 許可表の末尾に、出どころの 1 行のコメントと ukadoc の `// ukadoc:` の 1 行を添えて古い名前を足す。表の doc コメントの内訳と数を 15 に合わせる
   - 凍結のテストを 15 名の書き下しに改め（名前・doc コメントの経緯・失敗文の数も直す）、⑵ の 8 つ・`char*.recommend*` の 3 つ（台帳の綴りと `char2.` の綴りの両方）・`readmebuttoncaption`・`sakura.updatebuttoncaption` が許可されないことを確かめるテストを、今の「問い合わせない名前」のテストとは別に、その隣へ 1 本足す（失敗文は「windows-reactor 待ち・本 spec では問わない」の意味）
   - SHIORI/2.x の印と送出の関門は同じ判定を使うので、往復の道には手を入れない（名前ごとの往復のテストは足さない）
