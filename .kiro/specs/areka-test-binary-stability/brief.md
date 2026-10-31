@@ -8,6 +8,8 @@
 
 - **件 1（旧 `areka-test-threads-av`）**: テストのプロセスが `STATUS_ACCESS_VIOLATION`（`0xc0000005`）で落ちる。`--test-threads=4` で再現し、負荷の下では既定のスレッドの数でも 3 度落ちた。
 - **件 2（旧 `test-wait-marker-gaps`）**: テストの待ちのうち、steering `tech.md` の「テストの待ちと、負荷の下で許す赤」に揃っていないものが 5 種類残っている。
+- **件 3（2026-10-31 追記）**: `cargo test -p wintf --lib` のプロセスが `0xc0000005` で落ちる（MTA を張るテストと ASTA の Compositor を作るテストが同時に走るとき）。細部は末尾の節。
+- **件 4（2026-10-31 追記）**: `ghost_switch_test_support.rs` の検体を組む間の `remove_dir` が io エラーで 1 回赤。細部は末尾の節。
 
 ## Current State
 
@@ -230,3 +232,20 @@
   - 足場の説明の「WARP 可」は 9 ファイル 13 か所（棚卸㉙が挙げた 4 ファイルより多い・数は 10-23 から同じ）: `emo2_boot/frame_attach_tests.rs` 225・232・`frame_visibility_integration_tests.rs` 9・42・`frame_shell_box_integration_tests.rs` 4・`spine.rs` 4・439・644・`spine_boot_smoke_tests.rs` 17・`spine_talk_close_tests.rs` 16・`spine_test_support.rs` 8・`mcp/dump_surface_gpu_test_support.rs` 4・`crates/areka/src/shell_balloon_switch_session_lap_tests.rs` 6 行目。開発の決まりは「GPU のテストは本物の GPU」＝説明の直し候補（その場で直せる）。`doc/testing.md` に WARP の語は無い。
   - 本文の決まりの節の「`assets_tests.rs` 979 行は先に分ける」は古い（今 891 行）。件 2 の `shell_balloon_switch_session_*_tests.rs` は `emo2_boot/` でなく `crates/areka/src/` の直下に在る。
   - 別の実行ファイルにも同じ名の `join_bounded` がある（`crates/areka-ghost/tests/ghost/` の 3 本・`crates/areka-kanade/tests/kanade/common/` の 2 本）＝範囲に入れるかは要件で決める。`GpuPermit` の説明（`spine_wait.rs` 446 行目）は 1 つのテストで許可を 2 つ取ると待ち合いうると書く＝上限を付けるとき、その形も檻に入れる。
+
+## 2026-10-31 `emo-atlas-palette-alpha` の完了の棚卸で足した件（件 3・件 4）
+
+どちらも優先度の区分は B。新しい spec を立てず、触る場所と切り分けの手順が重なるこの spec へ足した（件 3 は件 1 と同じ形の落ち・件 4 は件 2 と同じ足場のファイル）。
+
+### 件 3: wintf の lib のテストの `STATUS_ACCESS_VIOLATION`
+
+- **観測**: `cargo test -p wintf --lib` で、MTA（`CoInitializeEx(MULTITHREADED)`）を張るテスト（`com::alpha_mask_resource` 系・`com::bitmap_source` 系）と、ASTA の Compositor を作る `com::wuc::tests::begin_draw_roundtrip` が同時に走ると、プロセスが `0xc0000005` で落ちることがある。名前の順で隣り合うので同時に始まりやすい。
+- **再現**: 2026-10-31 に `cargo test -p wintf --lib -- begin_draw_roundtrip alpha_mask_resource bitmap_source` を 8 回で 2 回（`emo-atlas-palette-alpha` の 3.2 のレビュー）。`emo-atlas-palette-alpha` が足した `crates/wintf/src/com/wic_tests.rs` は、最初 MTA で書いて同じ組で 10 回中 10 回落ちたので、テストのスレッドだけの STA にして避けた（この件の原因は直していない）。
+- **起票の条件**: 原因が分かっておらず直し方が 1 通りに決まらない・確かめに繰り返しの走行が要る。
+- **件 1 との関係**: 件 1（areka の MTA の Compositor の族の AV）と同じ形の疑い。件 1 の切り分けの対照と一緒に見る。brief の「Out」にある wintf の graphics の一度だけの AV（10-04）とは別の実行ファイル（lib）。
+
+### 件 4: `ghost_switch` の足場の `remove_dir` の揺れ
+
+- **観測**: `crates/areka` の `emo2_boot::ghost_switch::boot_event_tests::a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today` が、`ghost_switch_test_support.rs:222`（検体を組む間の `std::fs::remove_dir(sample.folder().join("balloon"))`）の io エラーの `expect` で 1 回赤。単独の回し直し（`cargo test -p areka --bin areka a_switch_without_a_boot_event_boots_the_target`）で緑（2026-10-31・`cargo test -p areka`・負荷は掛けていない）。
+- **起票の条件**: この spec の持ち場（同じ足場のファイル `ghost_switch_test_support.rs`）と重なる。
+- **見立て**: 中身を移した直後のフォルダの一時的な握り（Windows のファイルの掴み）。行数は 2026-10-31 の main（`4068422f` の後）のもの＝着手時に引き直す。

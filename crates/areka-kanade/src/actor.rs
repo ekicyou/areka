@@ -737,7 +737,8 @@ fn round_trip_unload(shiori: &Sender<ShioriMsg>) -> ShioriOutcome {
 
 /// 送出＋応答受領の共通往復。shiori 切断（送出 Err）・応答 oneshot 切断（`ReplyError::Dropped`）を
 /// いずれも error!＋`ShioriOutcome::Failed(ShioriFailure::Ipc)` へ写像する（Req 6.2/6.3・宙吊りなし）。
-/// 再投入された Failed は状態機械を Unloading{Fault} へ倒す。
+/// 失敗の後どうするかは呼び手が決める（例: 会話の道は再投入した Failed で状態機械を Unloading{Fault}
+/// へ倒し、照会の道は `ResourceOutcome::Failed` として返すだけ）。
 fn round_trip(
     shiori: &Sender<ShioriMsg>,
     msg: ShioriMsg,
@@ -747,7 +748,7 @@ fn round_trip(
         tracing::error!(
             target: "kanade",
             event = "shiori_send_failed",
-            "SHIORI 呼出の送出に失敗（shiori 切断）——終了系列（Fault）へ"
+            "SHIORI への要求を送れなかった（shiori の口が閉じている）——失敗として呼び手へ返す"
         );
         return ShioriOutcome::Failed(ShioriFailure::Ipc("shiori channel disconnected".into()));
     }
@@ -757,7 +758,7 @@ fn round_trip(
             tracing::error!(
                 target: "kanade",
                 event = "shiori_reply_dropped",
-                "SHIORI 応答 oneshot が切断（shiori アクター異常終了等）——終了系列（Fault）へ"
+                "SHIORI の答えの口が答えの前に閉じた（shiori アクターが落ちた等）——失敗として呼び手へ返す"
             );
             ShioriOutcome::Failed(ShioriFailure::Ipc("shiori reply dropped".into()))
         }
@@ -766,7 +767,7 @@ fn round_trip(
             tracing::error!(
                 target: "kanade",
                 event = "shiori_reply_timeout",
-                "SHIORI 応答が期限内に受信されず——終了系列（Fault）へ"
+                "SHIORI の答えが期限内に届かなかった——失敗として呼び手へ返す"
             );
             ShioriOutcome::Failed(ShioriFailure::Ipc("shiori reply timeout".into()))
         }
