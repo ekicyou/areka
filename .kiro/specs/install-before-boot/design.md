@@ -55,7 +55,7 @@
 
 ### Allowed Dependencies
 - `main` → `install::startup`（作る・`resolve_boot` を呼ぶ・`install` で World へ移す）。
-- `install::startup` → `install::before_boot_ports`・`install::procedure::{run_order, ArchiveEnd}`・`install::{InstallOrder, InstallOrigin, record_readonly_refused}`・`boot_config::{resolve_boot_with, default_app_profile_dir}`・`roots::resolve_roots`・`readonly::is_on`・`alert::suppressed`・`emo2_boot::ghost_switch::record_last_installed`・`emo2_boot::shell_balloon_resolve::{record_installed_balloon, record_installed_shell}`・`install::names::update`。
+- `install::startup` → `install::before_boot_ports`・`install::procedure::{run_order, ArchiveEnd}`・`install::{InstallOrder, InstallOrigin, record_readonly_refused}`・`boot_config::{resolve_boot_with, default_app_profile_dir}`・`roots::resolve_roots`・`readonly::is_on`・`alert::suppressed`・`install::desk::place_last_installed`（窓口の記録と同じ受け皿・置換語へ置く口。実装で 1 つにまとめた＝`desk` は `startup::CarriedInstall` を受け取る）。
 - `install::before_boot_ports` → `install::procedure::{InstallPorts, Raised, Overwritten, InstalledRecord}`・`install::destination::install_into`・`install::judge::GhostFacts`・`install::desk::catalog_spelling`（目録の綴り）・`alert::{ask_yes_no, warn_ok}`・`wintf::ensure_process_dpi_awareness`。
 - `boot_config` → `boot_resolve`（今のまま）。**`boot_config` と `boot_resolve` は `install` を知らない**（起動の解決は「起こすゴーストのフォルダ名」を受けるだけ）。
 - 依存の向き: `main` → `install::startup` → `boot_config` → `boot_resolve`。`install::startup` → `install::before_boot_ports` → `install::procedure`／`install::destination`。逆向きの `use` は誤りとして扱う。
@@ -128,9 +128,10 @@ crates/areka/src/
 │   ├── before_boot_ports.rs        # 新: 起動の前の手続きの口 BootPorts（InstallPorts の実装）
 │   ├── before_boot_ports_tests.rs  # 新: 口の決定論のテスト（イベント 0・空の素性・控え・断りの記録）
 │   ├── startup.rs                  # 改: 起動の前の道（resolve_boot）・持ち物・純粋な判断・控えの引き継ぎ
-│   ├── startup_tests.rs            # 改（書き直し）: 道の決定論のテスト（順・1 回・消す・callghost・readonly・止まり方・引き継ぎ）
+│   ├── startup_tests.rs            # 改（書き直し）: 道の決定論のテスト（順・1 回・消す・callghost・readonly）
+│   ├── startup_flow_tests.rs       # 新（実装で足した）: 根を解いた後の道・止まり方・抑止の旗・引き継ぎのテスト（startup_tests.rs が 1,000 行を超えるので分けた）
 │   ├── desk_startup_tests.rs       # 消: 定常の後の道を固めた 10 本（陳腐化）
-│   ├── desk.rs                     # 改: startup への呼び出し 3 行を外す・目録の綴りの部分を切り出す
+│   ├── desk.rs                     # 改: startup への呼び出し 3 行を外す・目録の綴りの部分を切り出す・受け皿へ置く部分を place_last_installed として共有
 │   ├── desk_tests.rs               # 改: desk_startup_tests の mod 宣言 3 行を外す
 │   ├── procedure.rs                # 改: Raised::Unsent と send の腕
 │   ├── procedure_branch_tests.rs   # 改: Unsent の記録のテストを 1〜2 本足す
@@ -145,7 +146,8 @@ crates/areka/src/
 crates/areka/tests/
 └── startup_install_real_run.rs     # 改: 今の試験の確かめを起動の前の形へ・空の根の試験を 1 本足す
 crates/wintf/src/runtime/
-└── mod.rs                          # 改: ensure_process_dpi_awareness（1 回だけ）を外へ出し、with_exit_policy から呼ぶ
+├── mod.rs                          # 改: ensure_process_dpi_awareness（1 回だけ）を外へ出し、with_exit_policy から呼ぶ
+└── dpi_once_tests.rs               # 新（実装で足した）: 2 回目の呼び出しが何もしないことのテスト
 dist/README.txt                     # 改: 「--install と initial_install.nar」と起動オプションの 40・44・45 行目
 doc/pasta-real-run.md               # 改: 新しい書庫の入れ方（248 行目の段落）を起動の 1 行へ
 ```
@@ -584,6 +586,8 @@ pub(super) fn catalog_spelling(
 | `startup_install_started` | info | `stage="before_boot"`・`origin`・`count` | 依頼を扱い始めた（要件 6.1・6.2） |
 | `startup_install_done` | info | `stage="before_boot"`・`origin`・`results`（書庫ごとの `installed`・`refused`・`declined`・`failed`・`not_started`） | 依頼を扱い終えた（今の語に `stage` を足す） |
 | `install_event_unsent` | debug | `id` | 起動の前なので送らなかった（`install_event` の代わり） |
+| `install_overwrite_without_running` | debug | `archive` | 起動の前の上書きの口が呼ばれた（起動中のゴーストが居ないので何もしない・実装で決めた語） |
+| `startup_install_nothing` | debug | — | 入れる物が無く手続きを呼ばなかった（要件 1.5・実装で決めた語） |
 | `install_refused_no_ghost` | info | `archive` | 受け取るゴーストを要する書庫を断った（要件 2.5） |
 | `install_balloon_memory_skipped` | info | `folder` | バルーンを入れ、記憶に書かなかった（要件 2.7） |
 | `startup_source_deleted`／`startup_source_delete_failed` | info／warn | `origin`・`archive`（・`error`） | 今のまま（要件 5.4・5.5） |
