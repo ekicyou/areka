@@ -292,6 +292,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
             strict,
         } => sstp::on_notify(state, event, references, strict),
 
+        // PropertyEvent: 定常の判定と名前の検査ごと change::on_property_event へ渡す。
+        Input::PropertyEvent { id, references } => change::on_property_event(state, id, references),
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。

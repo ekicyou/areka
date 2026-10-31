@@ -30,6 +30,7 @@
 //! | `OnGhostChanging` | GET | Ref0〜3=切替先の本体側の名前・出どころ・名前・フォルダの絶対パス |
 //! | `OnGhostChanged` | GET | Ref0〜3=直前のゴーストの本体側の名前・切替時の台本・名前・パス・Ref4〜6=空・Ref7=シェルのフォルダ名 |
 //! | 汎用の入口（許可表の名前） | GET／NOTIFY | 渡された列のまま |
+//! | 返しのイベント（`\![get,property]` の逐語の名前） | GET | Ref0 以降=値の列（欠番は空・詰めない） |
 //! | `OnInstallBegin` | GET（汎用の入口） | References なし |
 //! | `OnInstallComplete` | GET（汎用の入口） | Ref0=識別子・Ref1=`install.txt` の `name`・Ref2=同梱バルーンの名前（旧仕様・渡された列のまま） |
 //! | `OnInstallCompleteEx` | GET（汎用の入口） | Ref0〜2=識別子・名前・場所（複数は byte 値 1 区切り・渡された列のまま） |
@@ -821,6 +822,25 @@ pub fn sstp_notify(
 ) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Sstp(id),
+        references,
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `\![get,property]` の返しのイベントの往復に殻が載せる記録の名札（固定のラベル）。
+pub(crate) const PROPERTY_EVENT_ORIGIN: &str = "PropertyEvent";
+
+/// `\![get,property]` の返しのイベントの GET（`EventId::Property`・渡された Reference をそのまま）。
+///
+/// 名前は逐語（`On` で始まらなくてよい）、Reference は欠番を詰めず台本の順。名前と Reference の検査は
+/// 呼び手（`change::on_property_event`）が済ませている。本関数は `EventId::Property` を構成する唯一点である。
+pub fn property_event(
+    id: String,
+    references: Vec<String>,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Property(id),
         references,
         status: ExecutionStatus::derive(snapshot),
     }
