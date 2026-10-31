@@ -52,7 +52,7 @@
   - 完了の状態: 既存の採寸と配置のテスト（`measure_tests.rs`・`measure_template_tests.rs`・`measure_default_surface_tests.rs`・`placement_*_tests.rs`）が変更なしで緑
   - _Depends: 2.1, 2.2, 2.3_
   - _Requirements: 1.1, 1.3, 2.1, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.6_
-- [ ] 3.2 windowposition の読みを記録を出さない入口へ付け替え、資産の組み立てに読み手の差し込み口を開ける
+- [x] 3.2 windowposition の読みを記録を出さない入口へ付け替え、資産の組み立てに読み手の差し込み口を開ける
   - 配置の `windowposition` の読みが呼ぶ系列の解決を、記録を出さない入口へ付け替える（呼ぶ所と `use` の付け替えだけで、`placement/mod.rs` の行数を増やさない）
   - 起動の資産の組み立てのシェルとバルーンの組み立ての読み手の引数を、読み手の性質（`ElementDecoder`）で受ける形にする。本文は変えず、起動の組み立ては今どおり本物の読み手で記録を出す入口を呼ぶ
   - 完了の状態: `areka` が組み立てを通り、`switch_assets.rs` の差分が 0 のまま着替えの道のテストが緑。`placement/mod.rs` の行数が 970 のまま
