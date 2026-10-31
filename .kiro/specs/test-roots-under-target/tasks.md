@@ -38,7 +38,7 @@
   - _Requirements: 2.3_
 
 - [ ] 3. 確かめと記録
-- [ ] 3.1 入口を戻すと見張りが赤になることを一度だけ確かめる
+- [x] 3.1 入口を戻すと見張りが赤になることを一度だけ確かめる
   - `new` の本体を一時的に OS の一時フォルダへ戻し、自己テストの 1 本が `new` の行で赤、迂回の見張りの主検査と窓口の 1 本が `lib.rs` の行を示して赤になるのを見てから戻す（コミットしない）
   - 戻した後に 2 つのテストが緑で、`git diff` に一時の変更が残っていない。結果を Implementation Notes に書いてある
   - _Depends: 2.2, 2.3_
@@ -63,3 +63,4 @@
 ## Implementation Notes
 - 2.4（2026-11-01）: `cargo test -p sample-ghost-kit` は 81 緑・2 赤。赤の 2 本（`every_registered_sample_lands_where_its_registry_row_says`・`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`）は、取り寄せの検体 `pasta-in-windows` が `target\nar-samples\fetched\` に無いためで、コメントだけの差分とは関わりが無い。全体テストの前に `tools\sample-fetch.ps1` で取り寄せる（取り寄せは開発者の承認が要る）
 - タスク 1（前・較正・2026-11-01）: 入口を替える前に `real_pasta_boot_observes_a_cue_then_shuts_down_cleanly` を 1 回回し、結果は赤。止まった所は観測の 60 秒切れ（起動の失敗でも終了でもない・60.41 秒・終了コード 101・`real_pasta_test.rs:223` の panic）。helper は DLL を読み込んだ後、pasta.dll の load が false を返した（`LOAD 失敗（観測・ack[0]）: LoadReturnedFalse { last_error: 203 }`）。フィクスチャが pasta.dll だけを写して辞書を写さないための、既知の赤と同じ形。`ghost\master\pasta.dll` までのパスは、OS の一時フォルダ（`C:\Users\maz-o\AppData\Local\Temp`）の下の `areka-ghost-real-pasta-boot-observes-a-cue-then-shuts-down-cleanly-{pid}-{serial}\ghost\master\pasta.dll` で 131 字（実際のパスは出力に出ないので、pid 5 桁・serial 0 と置いてコードの組み立てから数えた）。この走行で確かめられるのは helper の作業フォルダと DLL の読み込みまでで、Lua がファイルを開く経路には触れない。i686 の helper は `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe`、pasta.dll は `target\nar-samples\manual\emo2\ghost\emo2\ghost\master\pasta.dll`。
+- タスク 3.1（2026-11-01・コミットしない一度きりの確かめ）: `lib.rs:108` の `new` の本体を一時的に OS の一時フォルダへ戻すと、窓口の自己テスト `both_entry_points_live_in_workspace_target_test_roots_and_are_removed_on_drop` が `new: 置き場が target\test-roots でない: C:\Users\maz-o\AppData\Local\Temp\areka-place-check-…` で赤（`lib_tests.rs:106`）。迂回の見張りは 16 本中 4 本が赤: 主検査 `no_temp_dir_entry_point_lives_outside_the_allow_table` と窓口の 1 本 `the_gateway_is_scanned_and_holds_no_entry_point` がどちらも `crates/temp-path-kit/src/lib.rs:108 （語: env::temp_dir(）` を示し、あわせて実測と表の一致の 1 本と較正の 1 件外しの 1 本も実測の集合に `lib.rs` が増えたことで赤。戻した後は `git diff` が空で、`cargo test -p temp-path-kit` は 9 本＋doctest 1 本、見張りは 16 本とも緑。
