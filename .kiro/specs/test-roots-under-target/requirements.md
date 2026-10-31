@@ -40,18 +40,20 @@
   - `TempPath::new` の置き場を、`under_target` と同じ置き場へ替えること（入口の中身だけ。名前・一意性・破棄は今のまま）。
   - 窓口の説明（`lib.rs` の利用手順・入口の説明）を新しい置き場に合わせること。
   - 見張りの手当て: 窓口の自己テストに「`new` も置き場の下に作る」確かめを足すこと、見張りの「窓口の中に OS の一時フォルダを引く呼び出しが 1 か所ある」確かめを「0 件である」確かめに改めること。
+  - 古くなるコメント 1 か所の書き直し: `crates/sample-ghost-kit/src/devroot.rs` の冒頭の doc の「一時パスの窓口は OS の一時フォルダの下に置き場を取る」（コメントだけ・働きの変更 0。2026-10-31 要件討議の議題 3）。
 - **Out of scope**:
   - **`TempPath::new` の呼び出しの書き換え**（80 ファイル・240 か所。書き換え 0 か所）。`TempPath::new` を消すこと・`under_target` へ名前を寄せること（入口は 2 つのまま。ウェーブ C15 の約束）。
   - **見張りの例外表の 19 ファイル**（OS の一時フォルダを直に引くファイル。テストが使う 18 ファイル＝`shiori-host32-*`・`areka-ghost`・`areka` の `placement/` のテスト・`areka-emo-present`（うち `shiori_proxy.rs`・`process_host.rs` の 2 つは本番のファイルの中のテストの部分）、本番のダウンロードの置き場 `crates/areka/src/install/fetch_url.rs` の 1 ファイル）。本 spec は 1 ファイルも動かさない（足す 0・外す 0・書き換え 0）。この 18 ファイルのテストは本 spec の後も OS の一時フォルダを使う（下の「未決の点」の 3）。
   - ほかのクレートのテスト・本番のコード（変更 0）。テストの主張・期待値・本数（変更 0）。
-  - 一時フォルダを作らないテストの書き換え・`sample-ghost-kit` の `devroot::fresh_root`（既に `target\nar-samples` の下）・`real-run-kit`（既に `under_target`）・実機の手順書。
+  - 一時フォルダを作らないテストの書き換え・`sample-ghost-kit` の `devroot::fresh_root` の働き（既に `target\nar-samples` の下。冒頭の doc のコメント 1 か所だけは In scope）・`real-run-kit`（既に `under_target`）・実機の手順書。
   - 1,000 行の番人などほかの見張りの変更。
 - **Adjacent expectations**:
   - **同じウェーブ C15 のほかの 5 本**（`shell-scale-linkage`・`emo-text-line-gap`・`alert-dialog-per-monitor-dpi`・`emo-bake-log-overlap`・`popup-menu-extra-resources`）: 上の 3 本のファイルを挙げる spec は無い（重なり 0）。ただし、本 spec が着地すると、ほかの 5 本のテストが `TempPath::new` で作る一時フォルダも置き場の下へ移る（働きは同じ）。
   - **`clippy-199-lints`**: 例外表の `shiori-host32-host/tests/lifecycle_{cyclic,kill}_e2e.rs` と重なるので、本 spec は例外表に触らない（上の Out of scope）。
   - **`areka-test-binary-stability`（ウェーブの外・静かな机で測ることが本体）**: 本 spec が着地すると全部のテストの一時フォルダの置き場が動き、測りの基準が変わる。そちらが静かな机で測っているあいだは本 spec を着地させない（要件 5.1）。
   - **`audit-test-kits`（v0.1.0 の後の見直し）**: `temp-path-kit` を受け持つ。本 spec が先に着地しても困らない。
-  - **steering `structure.md` の「Temp Path Kit Crate」の節**: 「置き場は 2 つ＝`TempPath::new`（OS の一時フォルダ）…」の記述が古くなる。完了の手順の文書の更新で直す（本 spec の 3 本のファイルの外だが、完了の手順の持ち物）。
+  - **steering `structure.md` の「Temp Path Kit Crate」の節**: 「置き場は 2 つ＝`TempPath::new`（OS の一時フォルダ）…」の記述が古くなる。完了の手順の文書の更新で直す（本 spec の 4 本のファイルの外だが、完了の手順の持ち物）。
+  - **例外表の 18 ファイルを移す追跡の spec**: 本 spec の完了の棚卸で `/kiro-discovery` により 1 本起票する（2026-10-31 要件討議の議題 4。`clippy-199-lints` と重なるファイルがあるので本 spec とは分ける）。
 
 ## Requirements
 
@@ -77,7 +79,7 @@
 
 1. The 本 spec shall `TempPath::new` の呼び出し（80 ファイル・240 か所）を 1 か所も書き換えない（書き換え 0 か所）。呼び出しはそのままで、全部が要件 1 の置き場へ移る。
 2. The 本 spec shall `TempPath::under_target` の呼び出し（その名前が出るファイル 96）の置き場・名前・働きを変えない（変更 0）。
-3. The 本 spec shall 触るファイルを `crates/temp-path-kit/src/lib.rs`・`crates/temp-path-kit/src/lib_tests.rs`・`crates/log-capture-kit/tests/temp_path_guard_test.rs` の 3 本に限り、ほかのクレートのテスト・本番のコード・`Cargo.toml`・`Cargo.lock` を変えない（変更 0）。
+3. The 本 spec shall 触るファイルを `crates/temp-path-kit/src/lib.rs`・`crates/temp-path-kit/src/lib_tests.rs`・`crates/log-capture-kit/tests/temp_path_guard_test.rs` の 3 本と、コメントだけを直す `crates/sample-ghost-kit/src/devroot.rs` の 1 本（働きの変更 0）に限り、ほかのクレートのテスト・本番のコード・`Cargo.toml`・`Cargo.lock` を変えない（変更 0。ウェーブ C15 のほかの 5 本に `sample-ghost-kit` を挙げるものは無い＝重なり 0）。
 4. When 本 spec の実装の後に全体テストを回した, the ワークスペースのテスト shall 前に緑だったテストを、置き場の移動によって赤に変えない（主張・期待値・本数は変更 0）。
 5. If 置き場の移動によって赤に変わるテストが見つかった（パスの長さ・ワークスペースの中にあることに頼る判定など）, then the 本 spec shall 3 本のファイルの外の呼び出し側を書き換える前に、その件を開発者の裁定へ上げる（ウェーブの約束の外に黙って手を広げない）。
 6. The 窓口 shall 説明（利用手順と入口の説明）で、`new` と `under_target` のどちらも置き場の下に作ることを述べ、利用手順の例が今と同じく doctest として通る。
@@ -89,9 +91,9 @@
 #### Acceptance Criteria
 
 1. The 窓口 shall 置き場の移動でパスが長くなる分（このワークツリーで、根 81 字＋`\target\test-roots\` で約 100 字。今の OS の一時フォルダ `C:\Users\<名>\AppData\Local\Temp\` は約 34 字）を見込んでも、既存のテストがパスの長さで失敗しない長さの一時フォルダを配る。
-2. When 実物の `pasta.dll` を読むテスト（`crates/areka-ghost/tests/ghost/real_pasta_test.rs`・環境変数 `HOST32_PASTA_DLL` を与えた走行）を本 spec の後に回した, the テスト shall パスの長さで失敗しない。
+2. When 実物の `pasta.dll` を読むテスト（`crates/areka-ghost/tests/ghost/real_pasta_test.rs`）を、本 spec の実装の中で環境変数 `HOST32_PASTA_DLL` を与えて 1 度回した, the テスト shall パスの長さで失敗しない。その走行の結果（このワークツリーでのパスの長さと緑か赤か）と、既定で走るテストの静的な見積もり（`LoadLibraryW` で読むテストの余白 33 字・ギャップ分析の 4 節）を、実装の記録に残す。`snapshot_capture_test.rs` は本物のゴーストの木が要るので回さず、見積もりの記録だけにする（2026-10-31 要件討議の議題 2）。
 3. When 札の長いテスト（直書きの札で最長 39 字・`format!` で札を組むテストは最長 87 字＝`areka-ghost` の `runtime_tests.rs` ほか。ギャップ分析の 4 節）を本 spec の後に回した, the テスト shall パスの長さで失敗しない。
-4. If パスの長さのために名前を短くする必要が出た, then the 窓口 shall 呼び出し側の札を書き換えずに（要件 2.1）、失敗の後に残ったフォルダ名からどのテスト群の一時フォルダかが分かることを保つ。
+4. If パスの長さのために名前を短くする必要が出た, then the 本 spec shall 名前を短くする備えを先回りして入れず、その件を開発者の裁定へ上げる（要件 2.5 と同じ扱い）。裁定で短くすると決まったときも、窓口は呼び出し側の札を書き換えずに（要件 2.1）、失敗の後に残ったフォルダ名からどのテスト群の一時フォルダかが分かることを保つ。
 
 ### Requirement 4: 以後、OS の一時フォルダを使う一時フォルダが黙って入らない
 
@@ -115,7 +117,16 @@
 1. While `areka-test-binary-stability` が静かな机で測っている, the 本 spec shall 着地しない（全部のテストの一時フォルダの置き場が動き、測りの基準が変わるため）。
 2. When 本 spec の実装が済んだ, the 本 spec shall 全体テスト 1 回で、要件 2.4 と要件 4 の見張りが緑であることを確かめる（静かな机・前後の全体テストの比べ・長い負荷の走行・人の待ちは要らない）。OS の一時フォルダの中身を走行の前後で比べる確かめは置かない（並べて回るほかのワークツリーの古いコードが同じ形の名前のフォルダを作るので、本 spec の働きを測れない。要件 1.2 は要件 4.1・4.2 の見張りで確かめる）。
 
-## 未決の点（要件討議の議題の候補・どれも要件を止めない）
+## 要件討議で決まった点（2026-10-31・4 件とも推奨案で一括承認）
+
+1. **`CARGO_TARGET_DIR` は見ない**（要件 1.5 のまま）。いつもワークツリーの根の `target\test-roots\` に作り、ワークツリーの外へは出ない。
+2. **パスの長さは、実物の `pasta.dll` のテストを 1 度回して確かめ、静的な見積もりと一緒に記録する**（要件 3.2）。名前を短くする備えは入れず、赤が出たら裁定へ上げる（要件 3.4・2.5）。
+3. **`devroot.rs` の古いコメントは本 spec で直す**（要件 2.3・触るファイルは 4 本）。`structure.md` は完了の手順で直す。
+4. **例外表の 18 ファイルを移す追跡の spec は、完了の棚卸で `/kiro-discovery` により起票する**（Boundary Context の Adjacent）。
+
+設計フェーズへ回す事項（ギャップ分析の 8 節・9 節）: 見張りの形（除外を残すか、なくして例外表 1 つの規則にするか）・要件 4.1 の確かめの置き場と形・名前を短くするときの要件 1.6 と 3.4 の優先・2 つの入口の説明での位置づけ・R2（Defender の走査）・R3（残ったフォルダの掃除）。
+
+## 要件討議の前の未決の点（記録として残す）
 
 1. **`CARGO_TARGET_DIR` を見るか**: 今の `under_target` はこの設定を見ず、いつもワークツリーの根の `target` を使う（開発の決まり「ワークツリーの `target\` の下だけ」には合う。設定がワークツリーの外を指すと、見る形では決まりを破る）。要件 1.5 は今の働きのまま（見ない）とした。`sample-ghost-kit` の `devroot` は設定を見る（設定が無ければ実行ファイルの祖先の `target`）、`real-run-kit` は見ない。brief の Approach の「`OUT_DIR` や `CARGO_TARGET_DIR` を使うビルドでも `target` の位置を正しく引ける」は、この違いを決める話になる。見る形を選ぶなら要件 1.5 を改める。
 2. **パスの長さをどう確かめるか**: 要件 3.2 の実物の `pasta.dll` のテストは `HOST32_PASTA_DLL` が無いと何もせずに抜けるので、全体テスト 1 回では確かめにならない。実装の中で 1 度その走行を回すか、パスの長さを静的に見積もって記録するかを決める。この機械は OS の長いパスの許可（`LongPathsEnabled`）が 1 だが、DLL を読む側（`pasta.dll` の中の Lua）がそれに従うかは確かめていない。名前を短くする要が出たときの形（要件 3.4）も設計で決める。
