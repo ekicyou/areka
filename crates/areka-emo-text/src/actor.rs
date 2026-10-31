@@ -726,6 +726,8 @@ fn is_settled_ordinal(state: &crate::state::ActorTextState, ordinal: usize) -> b
 }
 
 pub use boxes::ShownBox;
+#[cfg(test)]
+pub(crate) use present::choice_ranges;
 pub use present::present_frame;
 
 #[cfg(test)]

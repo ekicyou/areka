@@ -77,19 +77,18 @@ fn hand_surface(id: u32, rel: &str) -> Surface {
 /// emo2 shell の実測フィクスチャ事実（本統合テストが依拠する）。
 ///
 /// `surfaces.txt` が参照する 55 の distinct element 画像は全て実在する。そのうち
-/// ちょうど 1 枚 `purple/a/null.png`（382×547）は **α チャンネルを持たない** PNG
-/// ゆえ、`use_self_alpha=On` の下では正規化器が**左上の色を抜く**。この絵は全画素が
-/// 左上の画素と同じ色なので、抜き色の結果は**全画素が透明**になり、トリム後 0 寸の
-/// 空エントリ（`placement == None`）として索引表に載る。失敗ではない（R5.5/5.6）。
+/// ちょうど 1 枚 `purple/a/null.png`（382×547）は**番号ごとの透明度を持つパレットの絵**
+/// （番号 1 が透明度 0）ゆえ α の道を通る。全画素が番号 1 なので**全画素が透明**になり、
+/// トリム後 0 寸の空エントリ（`placement == None`）として索引表に載る。失敗ではない（R5.5/5.6）。
 /// 残る 54 枚は α をそのまま使う。すなわち本 fixture の bake は**失敗 0 件**で、
 /// 55 の manifest key が全て索引表に載る。
-const SHELL_KEY_COLOR_KEY: &str = "purple/a/null.png";
+const SHELL_NULL_PNG_KEY: &str = "purple/a/null.png";
 
 /// テスト①: emo2 shell — 全 element が索引表に載り頁が生成される（1.1/6.1/6.2＋
 /// 5.5/5.6 を実 fixture で行使）。
 ///
 /// 実 `surfaces.txt` を parse → SurfaceSet として bake。参照 element は全て実在するため
-/// デコード失敗は無く、α 無しの `purple/a/null.png` も左上の色を抜かれて全透明の絵として
+/// デコード失敗は無く、パレットの絵の `purple/a/null.png` も α の道を通って全透明の絵として
 /// 載るので、**失敗は 0 件**・全 manifest key が resolve→Some、頁生成、surface0.png が
 /// 配置される。
 #[test]
@@ -123,13 +122,13 @@ fn emo2_shell_all_elements_baked() {
             .any(|k| k.set == SetId(0) && k.rel_path == "surface0.png"),
         "manifest contains known key surface0.png"
     );
-    // fixture 事実の前提: α 無しの key が manifest に含まれる（含まれなければ本テストの前提が崩れる）。
+    // fixture 事実の前提: 全透明のパレットの絵の key が manifest に含まれる（含まれなければ本テストの前提が崩れる）。
     assert!(
         manifest
             .keys
             .iter()
-            .any(|k| k.set == SetId(0) && k.rel_path == SHELL_KEY_COLOR_KEY),
-        "manifest contains the documented key-color key {SHELL_KEY_COLOR_KEY}"
+            .any(|k| k.set == SetId(0) && k.rel_path == SHELL_NULL_PNG_KEY),
+        "manifest contains the documented null.png key {SHELL_NULL_PNG_KEY}"
     );
 
     with_com_initialized(|| {
@@ -165,21 +164,21 @@ fn emo2_shell_all_elements_baked() {
             );
         }
 
-        // α 無しの null.png は「全画素が透明な絵」として載る＝索引表に在り、原寸は
+        // パレットの絵の null.png は α の道を通り「全画素が透明な絵」として載る＝索引表に在り、原寸は
         // 382×547 のまま、トリム後 0 寸ゆえ placement は None（R5.5）。
         let null_id = result
             .table
-            .resolve(SetId(0), SHELL_KEY_COLOR_KEY)
-            .unwrap_or_else(|| panic!("{SHELL_KEY_COLOR_KEY} resolves in the table"));
+            .resolve(SetId(0), SHELL_NULL_PNG_KEY)
+            .unwrap_or_else(|| panic!("{SHELL_NULL_PNG_KEY} resolves in the table"));
         let null_entry = result.table.entry(null_id);
         assert_eq!(
             (null_entry.original.w, null_entry.original.h),
             (382, 547),
-            "{SHELL_KEY_COLOR_KEY} keeps its original extent"
+            "{SHELL_NULL_PNG_KEY} keeps its original extent"
         );
         assert!(
             null_entry.placement.is_none(),
-            "{SHELL_KEY_COLOR_KEY} is fully transparent after key-color → empty placement"
+            "{SHELL_NULL_PNG_KEY} is fully transparent via palette alpha → empty placement"
         );
 
         // 頁が生成されている（6.1）。
@@ -223,11 +222,11 @@ fn emo2_null_png_logs_debug_not_warn() {
         });
         let null_lines: Vec<&str> = out
             .lines()
-            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_KEY_COLOR_KEY}\"")))
+            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_NULL_PNG_KEY}\"")))
             .collect();
         assert!(
             !null_lines.iter().any(|l| l.contains("level=WARN")),
-            "{SHELL_KEY_COLOR_KEY} の warn は 0 件: {out}"
+            "{SHELL_NULL_PNG_KEY} の warn は 0 件: {out}"
         );
         let debug: Vec<&&str> = null_lines
             .iter()
@@ -278,8 +277,8 @@ fn emo2_balloon_same_bake_path_as_shell() {
         // shell(set0) と balloon(set1) を 1 度の bake で同一機構により処理（1.4）。
         let result = bake(&[shell_set, balloon_set], &dec, PackConfig::default());
 
-        // balloon 画像（RGBA）はデコード・正規化を通過。shell 側の α 無し null.png も
-        // 抜き色の腕を通るので、併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
+        // balloon 画像（RGBA）はデコード・正規化を通過。shell 側のパレットの絵の null.png も
+        // α の道を通って全画素が透明になるので、併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
         assert!(
             result.errors.is_empty(),
             "combined shell+balloon bake has zero failures, got {:?}",
