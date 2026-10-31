@@ -58,3 +58,8 @@
 - **要件定義のモデル**: Opus のまま。
 - **分割の案**: ⑴ と ⑵ を分けるかは brief のとおり要件の段で決める。
 - **見つけた穴**: 台帳には 9 つのほかに `char*.recommendbuttoncaption`・`char*.recommendsites`・`char*.recommendsites.caption`（`shiori.toml` 12525〜12573 行・同じく持ち主なし）がある＝3 人目以降の窓の名前で、`extra-character-windows` に回すか ⑵ に入れるかを決める。
+
+## 2026-10-31 棚卸㉜の後の開発者の決め
+- 開発者「メニュー関係はreactor解放されたら大改造するので、内容によっては後回しになりますが」。推奨の案 1 を承認した。
+- **この spec で取るのは ⑴ だけ**（古い名前 `updatebuttoncaption` を問う・kanade の `schedule/resources.rs` と `menu/captions.rs` の引き方・台帳の 1 行）。⑴ は SHIORI に何を問うかが大半で、メニューを作り直しても残る。
+- **⑵（消滅通告・おすすめ・ポータルの項目）は windows-reactor の作り直しの後へ回す**。`menu/{plan,mod,win32}.rs` に項目を組む仕事は作り直しで捨てるため。完了の棚卸で ⑵ を roadmap の「windows-reactor 待ち」の段へ渡す（新しい brief にするか、この brief の残りとして置くかは完了の棚卸で決める）。`char*.recommend*` の 3 つの名前も ⑵ と一緒に回す。
