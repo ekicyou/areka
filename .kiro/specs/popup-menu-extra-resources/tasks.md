@@ -43,7 +43,7 @@
   - 完了の状態: `cargo test -p ukadoc-survey` が緑（持ち主・行数・状態の分布・`implemented` の証拠・報告の全文一致）
   - _Requirements: 4.5_
 
-- [ ] 4. 全体を確かめ、「．さくら」で SSP と見比べる
+- [x] 4. 全体を確かめ、「．さくら」で SSP と見比べる
 - [x] 4.1 3 つのクレートのテストと、変えないファイルを確かめる
   - `cargo test -p areka`・`cargo test -p areka-kanade`・`cargo test -p ukadoc-survey` を回す
   - `git diff main...HEAD --stat` に `menu/plan.rs`・`mod.rs`・`win32.rs`・`trigger.rs`・`update_frame.rs`、kanade の `actor_resources.rs`・`actor_resources_tests.rs`・`actor.rs`・`shiori/real.rs`、`shiori-host32-host` の `shiori2.rs` が現れないことを見る
@@ -51,7 +51,7 @@
   - _Depends: 2.2, 3.2_
   - _Requirements: 3.3, 3.5, 5.5, 6.2_
 
-- [ ] 4.2 「．さくら」を areka と SSP で開き、項目名と所要を検証の記録に残す
+- [x] 4.2 「．さくら」を areka と SSP で開き、項目名と所要を検証の記録に残す
   - 机を取る前に、areka と i686 helper を完了 `shiori2-protocol` の検証の記録と同じ手順でビルドしておく（机はこのタスクの区切りの中だけで持つ）
   - 排他テストの机を取り、`dot_sakura.nar` を展開した根と一時フォルダをワークツリーの `target\` の下に置いて areka で起こす（i686 helper 経由）
   - 右クリックメニューを 3 回以上開き、「ネットワーク更新」の項目名が辞書の `updatebuttoncaption` の言葉であることと他の項目名を記録し、毎回の所要を読んで上限 1,000 ms までの余裕を書く。照会を送る時に記録の行は無いので、右クリックを送った時刻（SendInput の時刻）から `menu_shown`（`info`）の時刻までを所要とし、`RUST_LOG` は `areka::menu` と kanade の資源の往復を `trace` まで開ける。新しい記録の行は足さない。時間切れが 1 回でも出たら実装を止めて開発者に報告する
@@ -65,3 +65,4 @@
 
 ## Implementation Notes
 - 4.1: `cargo test -p areka` は実機の結合テストを含み、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` を先に建てておかないと `real-run-kit` の i686.rs:77 で落ちる（本 spec の差分とは無関係・建てた後は `smoke_boot_loop_exit` 5/5 緑）。
+- 4.2: `tools/mouse-input.ps1` はこの機械（主画面 2880×1800・負の座標の 2 枚目）で毎回 1 画素ずれて自分で止まる（範囲の外・完了の棚卸で起票の候補）。実機の右クリックは `SetCursorPos`＋`mouse_event` で代えた。
