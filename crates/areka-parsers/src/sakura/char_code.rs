@@ -22,7 +22,6 @@ pub(crate) enum CharCodeRead {
 ///
 /// 前後の空白を除き、`0x`／`0X` に続く 16 進か 10 進だけを読む。判定の順は
 /// 0 → 制御の文字 → U+10FFFF より上 → サロゲート → 字。
-#[cfg_attr(not(test), expect(dead_code, reason = "結線は script-small-tags 2.1"))]
 pub(crate) fn read_char_code(arg: Option<&str>) -> CharCodeRead {
     let Some(arg) = arg else {
         return CharCodeRead::Drop(CharCodeDrop::Unreadable);

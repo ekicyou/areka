@@ -39,6 +39,9 @@ mod decode_anchor_tests;
 #[cfg(test)]
 mod decode_raise_tests;
 
+#[cfg(test)]
+mod decode_char_code_tests;
+
 mod parse;
 
 #[cfg(test)]

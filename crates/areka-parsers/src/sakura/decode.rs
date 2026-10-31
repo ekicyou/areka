@@ -34,9 +34,10 @@
 // シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag` / `decode_bang`
 // 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
 
+use super::char_code::{CharCodeRead, read_char_code};
 use super::lexer::Token;
 use super::model::{
-    Anchor, Choice, Instruction, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg,
+    Anchor, CharCodeDrop, Choice, Instruction, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg,
 };
 use std::iter::Peekable;
 use std::ops::Range;
@@ -98,8 +99,26 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
             Token::Tag { word, args } if is_legacy_q_head(&word, &args, it.peek()) => {
                 fold_legacy_q(&word, &args, &mut it, &mut end, &mut notes)
             }
+            // 文字の番号 `\_u[…]`・`\_m[…]`（script-small-tags 要件 1・2）: サロゲートの組を
+            // 作るのに次のトークンを先読みするので、ここで読む。
+            Token::Tag { word, args } if is_char_code_tag(&word) => {
+                decode_char_code(&word, &args, &mut it, &mut end)
+            }
             other => decode_token(other, &mut notes),
         };
+        // 本文が続くのは埋め込みの隣だけ。前の本文へつなぎ、出力に本文を 2 つ続けない（要件 1.5）。
+        if let Instruction::Text(s) = &instruction
+            && let Some(Read {
+                instruction: Instruction::Text(prev),
+                span: prev_span,
+                notes: prev_notes,
+            }) = out.last_mut()
+        {
+            prev.push_str(s);
+            prev_span.end = end;
+            prev_notes.extend(notes);
+            continue;
+        }
         out.push(Read {
             instruction,
             span: span.start..end,
@@ -107,6 +126,51 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
         });
     }
     out
+}
+
+/// `\_u`・`\_m`（文字の番号の埋め込み）の綴りか。2 つは同じ決まりで読む（要件 2.5）。
+fn is_char_code_tag(word: &str) -> bool {
+    word == "_u" || word == "_m"
+}
+
+/// `\_u[…]`・`\_m[…]` を最初の引数だけで読み（要件 1.4）、出せる番号は本文の字、捨てる番号は
+/// `CharCodeDropped` にする。上位のサロゲートの直後が下位のサロゲートの埋め込みなら、その
+/// トークンも消化して 1 字にする（要件 1.9）。組にならない片割れは捨てる（要件 2.3）。
+fn decode_char_code(
+    word: &str,
+    args: &[String],
+    it: &mut SpannedTokens,
+    end: &mut usize,
+) -> Instruction {
+    let reason = match read_char_code(args.first().map(String::as_str)) {
+        CharCodeRead::Char(c) => return Instruction::Text(c.to_string()),
+        CharCodeRead::Drop(reason) => reason,
+        CharCodeRead::HighSurrogate(high) => {
+            if let Some((
+                Token::Tag {
+                    word: next,
+                    args: next_args,
+                },
+                _,
+            )) = it.peek()
+                && is_char_code_tag(next)
+                && let CharCodeRead::LowSurrogate(low) =
+                    read_char_code(next_args.first().map(String::as_str))
+                && let Some(Ok(c)) = char::decode_utf16([high, low]).next()
+            {
+                if let Some((_, span)) = it.next() {
+                    *end = span.end;
+                }
+                return Instruction::Text(c.to_string());
+            }
+            CharCodeDrop::LoneSurrogate
+        }
+        CharCodeRead::LowSurrogate(_) => CharCodeDrop::LoneSurrogate,
+    };
+    Instruction::CharCodeDropped {
+        raw: reconstruct_tag(word, args),
+        reason,
+    }
 }
 
 /// `\![*]`（選択肢マーカー）か判定する: word=`!`・引数がちょうど `["*"]`（要件 5.4）。
