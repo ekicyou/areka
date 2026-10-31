@@ -44,7 +44,7 @@
   - _Requirements: 4.5_
 
 - [ ] 4. 全体を確かめ、「．さくら」で SSP と見比べる
-- [ ] 4.1 3 つのクレートのテストと、変えないファイルを確かめる
+- [x] 4.1 3 つのクレートのテストと、変えないファイルを確かめる
   - `cargo test -p areka`・`cargo test -p areka-kanade`・`cargo test -p ukadoc-survey` を回す
   - `git diff main...HEAD --stat` に `menu/plan.rs`・`mod.rs`・`win32.rs`・`trigger.rs`・`update_frame.rs`、kanade の `actor_resources.rs`・`actor_resources_tests.rs`・`actor.rs`・`shiori/real.rs`、`shiori-host32-host` の `shiori2.rs` が現れないことを見る
   - 完了の状態: 3 クレートのテストが全部緑で、変えないファイルが差分に無い
@@ -62,3 +62,6 @@
 
 ## 完了の棚卸に回す要件
 - 6.3・6.4（⑵ と `readmebuttoncaption` などを roadmap の「windows-reactor 待ち」の段へ渡すこと・brief に渡した先と日付を書くこと）は、要件と設計（確かめの手順 5）が `/kiro-complete` の完了の棚卸に置いている。コードの変更ではないので実装のタスクにしない。
+
+## Implementation Notes
+- 4.1: `cargo test -p areka` は実機の結合テストを含み、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` を先に建てておかないと `real-run-kit` の i686.rs:77 で落ちる（本 spec の差分とは無関係・建てた後は `smoke_boot_loop_exit` 5/5 緑）。
