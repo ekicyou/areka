@@ -78,3 +78,4 @@
 - `cargo test -p areka` は結合テスト `mcp_get_log_real_run` で止まる（この作業木に i686 の `shiori-host32-helper.exe` が無いため・本 spec と無関係）。crate のテストは `cargo test -p areka --bins` か絞った名前で回す
 - 完了時にその場で解決: `shiori.toml` の `char*.popupmenu.type`・`char*.popupmenu.visible` の備考に残っていた「α」と「2 人目以降（n≧2）」を「今の」「3 人目以降（n≧2）」に揃えた（最終検証の軽い指摘）
 - 完了時の棚卸で起票: 件 13 を `popup-menu-extra-resources` として `/kiro-discovery` で起票（条件＝規模が spec 1 本に相当・生きている spec に受け手が居ない）
+- 完了の全体テスト（`31d84b47`・`-Format -License`）: x64 の段で、触っていない `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` の 1 本だけが負荷の下の 30 秒の待ちの打ち切りで赤（`spine_third_scope_talk_tests.rs:141`・4073 本緑）。その 1 本だけを回し直して 4.17 秒で緑。同じ字面は `areka-test-binary-stability` の brief に起票済み（申し送りをもって緑）。ほかの段（fmt・i686・cargo deny・謝辞を含む）は全部緑
