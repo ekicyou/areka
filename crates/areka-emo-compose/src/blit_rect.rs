@@ -153,10 +153,9 @@ pub(crate) fn execute_reusing(
     };
     let area = dirty_area(base_ops, ops, canvas, atlas);
 
-    out.resize_and_clear(extent.w, extent.h);
+    out.resize_from(extent.w, extent.h, base_img.bytes());
     let stride = out.stride() as usize;
     let dst = out.bytes_mut();
-    dst.copy_from_slice(base_img.bytes());
 
     if area.is_empty() {
         return Recompose::Partial {
