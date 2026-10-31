@@ -193,6 +193,14 @@ fn unqueried_resources_are_absent_from_the_real_allow_table() {
     }
     assert!(is_allowed_resource_id(SAKURA_POPUPMENU_VISIBLE));
     assert!(is_allowed_resource_id(KERO_POPUPMENU_VISIBLE));
+    assert_eq!(
+        LEGACY_CAPTION_RESOURCES,
+        [("updatebutton.caption", "updatebuttoncaption")].as_slice()
+    );
+    for (new, legacy) in LEGACY_CAPTION_RESOURCES {
+        assert!(is_allowed_resource_id(new), "{new} を引けない");
+        assert!(is_allowed_resource_id(legacy), "{legacy} を引けない");
+    }
 }
 
 /// 問い合わせる名前は「表示可否が先頭・続いて写しに現れた順」。第 1 スライスは 3 件。
@@ -245,9 +253,45 @@ fn query_ids_collects_submenu_children_and_collapses_duplicates() {
             "sakura.popupmenu.visible",
             "ghostrootbutton.caption",
             "closebutton.caption",
+            "updatebuttoncaption",
             "updatebutton.caption",
         ]
     );
+}
+
+/// 「ネットワーク更新」の項目があれば、古い名前を新しい名前の直前に 1 回だけ問う。
+/// 項目を 2 つ置いても重ならない（popup-menu-extra-resources 要件 1.1・5.2）。
+#[test]
+fn query_ids_puts_the_legacy_name_just_before_the_new_name_once() {
+    let snapshot = vec![
+        (Frame::Readme, leaf("説明書", Some("readmebutton.caption"))),
+        (
+            Frame::Update,
+            leaf("ネットワーク更新", Some("updatebutton.caption")),
+        ),
+        (
+            Frame::Update,
+            leaf("ネットワーク更新", Some("updatebutton.caption")),
+        ),
+        (Frame::Close, leaf("終了", Some("closebutton.caption"))),
+    ];
+    assert_eq!(
+        query_ids(&snapshot, 0),
+        [
+            "sakura.popupmenu.visible",
+            "readmebutton.caption",
+            "updatebuttoncaption",
+            "updatebutton.caption",
+            "closebutton.caption",
+        ]
+    );
+}
+
+/// 「ネットワーク更新」の項目が無い写しでは古い名前を問わない（popup-menu-extra-resources 要件 1.7）。
+#[test]
+fn query_ids_omits_the_legacy_name_without_the_update_item() {
+    let ids = query_ids(&readme_and_close_snapshot(), 0);
+    assert!(!ids.contains(&"updatebuttoncaption"), "{ids:?}");
 }
 
 /// 値が非空ならその文言をそのまま使う（`&` もそのまま・要件 3.2）。
