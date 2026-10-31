@@ -486,3 +486,103 @@ fn send_query_reports_send_failed_when_kanade_is_gone() {
         Err(QueryFailure::SendFailed)
     ));
 }
+
+/// 新しい名前と古い名前（popup-menu-extra-resources）。
+const NEW_UPDATE: &str = "updatebutton.caption";
+const OLD_UPDATE: &str = "updatebuttoncaption";
+
+/// 新しい名前だけが引ければ、その値を使う（要件 1.2・3.1）。
+#[test]
+fn update_caption_uses_the_new_name_when_only_it_answers() {
+    let (interpreted, _) = interpret_capturing(Ok(vec![
+        (OLD_UPDATE, ResourceOutcome::NoContent),
+        value(NEW_UPDATE, "新しい名前"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい名前"));
+}
+
+/// 新しい名前が値なしで古い名前が引ければ、古い名前の値をそのまま使う（`&` も前後の空白も・要件 1.3・1.5）。
+#[test]
+fn update_caption_falls_back_to_the_old_name_verbatim() {
+    let (interpreted, _) = interpret_capturing(Ok(vec![
+        value(OLD_UPDATE, " 更新(&U) "),
+        (NEW_UPDATE, ResourceOutcome::NoContent),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some(" 更新(&U) "));
+}
+
+/// 両方引ければ新しい名前の値を使う（要件 1.2・3.1）。
+#[test]
+fn update_caption_prefers_the_new_name_when_both_answer() {
+    let (interpreted, _) = interpret_capturing(Ok(vec![
+        value(OLD_UPDATE, "古い"),
+        value(NEW_UPDATE, "新しい"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい"));
+}
+
+/// どちらも値なしなら既定名（鍵なし）で、空の記録は 1 行に両方の名前を載せる（要件 1.4・2.1・2.3）。
+#[test]
+fn update_caption_without_either_value_defaults_with_one_debug_line() {
+    let (interpreted, lines) = interpret_capturing(Ok(vec![
+        value(SAKURA_POPUPMENU_VISIBLE, "1"),
+        (OLD_UPDATE, ResourceOutcome::NoContent),
+        (NEW_UPDATE, ResourceOutcome::NoContent),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), None);
+    let debug = lines_at(&lines, "DEBUG");
+    assert_eq!(debug.len(), 1, "{lines:?}");
+    assert!(
+        debug[0].contains(&format!("\"{OLD_UPDATE}\"")),
+        "{:?}",
+        debug[0]
+    );
+    assert!(
+        debug[0].contains(&format!("\"{NEW_UPDATE}\"")),
+        "{:?}",
+        debug[0]
+    );
+    assert!(matches!(interpreted.visibility, Visibility::Show));
+}
+
+/// 新しい名前が空の値でも、古い名前が引ければその値を使う（要件 1.3）。
+#[test]
+fn update_caption_falls_back_when_the_new_name_is_empty() {
+    let (interpreted, _) =
+        interpret_capturing(Ok(vec![value(OLD_UPDATE, "古い"), value(NEW_UPDATE, "")]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("古い"));
+}
+
+/// 新しい名前が失敗しても古い名前が引ければその値を使い、警告 1 行に新しい名前を載せる（要件 1.3・2.2）。
+#[test]
+fn update_caption_falls_back_when_the_new_name_fails() {
+    let (interpreted, lines) = interpret_capturing(Ok(vec![
+        value(OLD_UPDATE, "古い"),
+        failed(NEW_UPDATE, "shiori down"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("古い"));
+    let warns = lines_at(&lines, "WARN");
+    assert_eq!(warns.len(), 1, "{lines:?}");
+    assert!(
+        warns[0].contains(&format!("\"{NEW_UPDATE}\"")),
+        "{:?}",
+        warns[0]
+    );
+}
+
+/// 古い名前が失敗しても新しい名前が引ければその値を使い、警告 1 行に古い名前を載せる（要件 1.2・2.2）。
+#[test]
+fn update_caption_keeps_the_new_name_when_the_old_name_fails() {
+    let (interpreted, lines) = interpret_capturing(Ok(vec![
+        failed(OLD_UPDATE, "broken reply"),
+        value(NEW_UPDATE, "新しい"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい"));
+    let warns = lines_at(&lines, "WARN");
+    assert_eq!(warns.len(), 1, "{lines:?}");
+    assert!(
+        warns[0].contains(&format!("\"{OLD_UPDATE}\"")),
+        "{:?}",
+        warns[0]
+    );
+}

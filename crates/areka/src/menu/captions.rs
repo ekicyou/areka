@@ -311,6 +311,17 @@ pub(crate) fn interpret(
         }
     }
 
+    // 新しい名前が引けず古い名前が引けたら、古い名前の値を新しい名前の項目名にする。
+    // 表には非空の値しか入らないので「鍵が無い」＝空・値なし・失敗のどれか。
+    for (new, legacy) in LEGACY_CAPTION_RESOURCES {
+        if captions.get(new).is_none()
+            && let Some(value) = captions.get(legacy)
+        {
+            let value = value.to_string();
+            captions.insert(new, value);
+        }
+    }
+
     if !empty.is_empty() {
         tracing::debug!(
             event = "menu_resource_empty",
