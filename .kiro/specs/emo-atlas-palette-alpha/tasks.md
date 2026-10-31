@@ -35,7 +35,7 @@
   - _Depends: 1.1_
   - _Requirements: 3.1, 3.2, 3.5, 5.5, 5.6_
 
-- [ ] 3. 2 つの読み手の判定を直す
+- [x] 3. 2 つの読み手の判定を直す
 - [x] 3.1 (P) emo-atlas の読み手で、番号つきの形式の α の有無をパレットの透明度で決める
   - 番号つきの形式（1・2・4・8 ビット）の集合を足し、その形式のときだけフレームのパレットを写して 255 未満の透明度が在るかを聞く。ほかの形式は今の 12 個の集合のまま
   - パレットの作成・写し・問い合わせの失敗は今の読みの失敗（パス付き）へそのままつなぎ、偽に読み替えない
@@ -45,7 +45,7 @@
   - _Boundary: WicArmJudgment, AtlasPaletteTests_
   - _Depends: 2.1_
   - _Requirements: 1.1, 1.5, 1.6, 2.1, 2.2, 2.3, 2.6, 4.1_
-- [ ] 3.2 (P) wintf の読み込みに同じ判定を写す
+- [x] 3.2 (P) wintf の読み込みに同じ判定を写す
   - emo-atlas と同じ集合・同じ枝・同じ失敗の扱いを、どちらも非公開で足す。戻り値の型と変換器とその引数は変えない。関数の説明の Returns を直す
   - 番号つきでない絵（wintf の `tests/assets/test_8x8_rgba.png`）のフレームで非公開の関数が `WINCODEC_ERR_PALETTEUNAVAILABLE` の失敗を返すことの檻を、テストの時だけつなぐ兄弟のファイルに置く（公開の口は足さない）
   - 2.2 の赤が緑になり、今の `bitmap_source_integration_test.rs` の α の有無のテストがそのまま緑
@@ -87,3 +87,4 @@
 
 - 2.1 直す前の赤（2026-10-31・`cargo test -p areka-emo-atlas palette_tests`）: 4 passed / 10 failed。赤＝has_alpha の真 4 本（idx8_mixed・idx4_mixed・gray8_trns・trans_gif が false）・`On` 4 本（(0,0)・(1,0) が 0,0,0,0 に抜かれる）・`Full` 2 本（(0,1) が 0,0,0,255・(1,1) が 128,0,0,255）。緑＝idx8_plain・idx8_opaque_trns の判定と `On` の 4 本。実際の値は設計の「直す前」の列と一致
 - 2.2 直す前の赤（2026-10-31・`cargo test -p wintf --test com wic_test`）: 10 passed / 4 failed。赤＝palette_{idx8_mixed,idx4_mixed,gray8_trns,trans_gif}_has_alpha（has_alpha が false）。緑＝idx8_plain・idx8_opaque_trns と既存 8 本
+- 範囲外（3.2 で見つけた・既存）: wintf の lib のテストで、MTA を張るテスト（`alpha_mask_resource`・`bitmap_source`）と ASTA の Compositor を作る `com::wuc::tests::begin_draw_roundtrip` が同時に走ると、プロセスが 0xc0000005 で落ちることがある（`cargo test -p wintf --lib -- begin_draw_roundtrip alpha_mask_resource bitmap_source` を 8 回で 2 回）。全体テストの揺れの元。本 spec の `wic_tests.rs` はテストのスレッドだけの STA で避けた。`/kiro-complete` の棚卸で起票する
