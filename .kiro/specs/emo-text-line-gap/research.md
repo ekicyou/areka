@@ -351,3 +351,5 @@ t はすべて 0.0000 で、本番の寄せは t ＝ 0 の式 `highlight_band_of
 
 - 消した檻 0・ゆるめた檻 0・書き換え 0 件（期待 0）。
 - 既存のテストのファイルへの手入れは、`draw_metrics_styled_tests.rs` に検査を 1 本足したこと（§9・期待値の書き換えなし）と、`viewbox_draw_vertical_band_readback_tests.rs` の `R_FILL_BGRA`・`bgra_y_span` を `pub(super)` へ上げた 2 語だけ。
+
+- 検証の後（2026-11-01）: 要件 2.4（行の中の大きい字）を書体の行間で確かめる決定論のテスト `line_gap_metrics_band_follows_the_big_glyph_of_the_line` を `viewbox_draw_line_gap_band_tests.rs` に足した（既定の em 20 と `\f[height,40]` の混ざる 1 行で、厚みと寄せが em 40 から出て帯の中心が字の箱の中心から 1 image px 以内・寄せ 17・厚み 42）。

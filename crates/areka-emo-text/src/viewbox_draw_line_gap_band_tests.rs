@@ -671,3 +671,68 @@ fn line_gap_band_covers_char_box_readback() {
         red.join("\n")
     );
 }
+
+/// 決定論のテスト（要件 2.4・GPU なし）: 書体の行間を持つ偽の計測器で、既定の em 20 の字と
+/// `\f[height,40]` の字が混ざる横書きの 1 行の帯が、その行の最大の em（40）から厚みと寄せを決め、
+/// 帯の中心がその行の字の箱 [t(40), t(40) ＋ B(40)] の中心から 1 image px 以内に在るかを確かめる。
+#[test]
+fn line_gap_metrics_band_follows_the_big_glyph_of_the_line() {
+    let mode = WritingMode::HorizontalTb;
+    let m = LineGapMetrics;
+    let default = TextLook {
+        height: 20.0,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let big = table.intern(
+        &TextLook {
+            height: 40.0,
+            ..default.clone()
+        },
+        &default,
+    );
+    // 「あい」は既定・「うえお」は大きい字（同じ行）。
+    let items = glyph_items(GAP_WORDS[0]);
+    let ids = [StyleId::DEFAULT, StyleId::DEFAULT, big, big, big];
+    let model = live_diff_model_font(None, Some(20));
+    let region = TextRegion::resolve(&model, (40 * 7, 200), mode);
+    let styles = GlyphStyles {
+        table: &table,
+        ids: &ids,
+        default: &default,
+        current: &default,
+    };
+    let lines = LayoutEngine::layout_styled(
+        &items,
+        ids.len(),
+        &region,
+        mode,
+        20.0,
+        &m,
+        WrapPlan::CharByChar,
+        styles,
+        &ActorKey::from("0"),
+        &mut CursorWarnGuard::default(),
+    );
+    assert_eq!(lines.len(), 1, "混ざった字が 1 行に並ぶ");
+    let em = 40.0;
+    assert_eq!(
+        lines[0].rect.bottom - lines[0].rect.top,
+        em,
+        "前提: 行の大きさは大きい字の em"
+    );
+    let (t, b) = (m.horizontal_char_box_top(em), m.line_box_height(em));
+    let band = line_bands(&lines, mode, &m)[0];
+    let extent = b.max(em).min(em.max(em + 2.0));
+    assert_eq!(band.extent, extent, "厚みは em 40 から: {band:?}");
+    assert_eq!(
+        band.offset,
+        (t + (b - extent).max(0.0) / 2.0).round(),
+        "寄せは em 40 の t・B から: {band:?}"
+    );
+    let diff = band.offset + band.extent / 2.0 - (t + b / 2.0);
+    assert!(
+        diff.abs() <= 1.0,
+        "帯 {band:?} の中心と em 40 の字の箱の中心の差 {diff:+.3} が 1 image px を超える"
+    );
+}
