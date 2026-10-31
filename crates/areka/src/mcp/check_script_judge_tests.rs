@@ -268,6 +268,76 @@ fn row16_close_without_an_open_anchor() {
     silent(r"\_a[x]あ\_a");
 }
 
+// ---- 文字の番号の埋め込み（script-small-tags 要件 6.1・6.2・6.6）: 表の 17 行目 ----
+
+/// 捨てる番号（0・制御の文字・片割れ・範囲の外）と読めない番号は、埋め込みの綴りを「読めない引数」で指す。
+#[test]
+fn row17_dropped_character_number() {
+    for script in [
+        r"\_u[0]",
+        r"\_u[0x09]",
+        r"\_u[0xD83D]",
+        r"\_u[0xDE00]",
+        r"\_u[0x110000]",
+        r"\_u[abc]",
+        r"\_u[]",
+        r"\_u[0x]",
+        r"\_u[-1]",
+        r"\_m[0]",
+        r"\_m[abc]",
+    ] {
+        fires(script, Kind::UnreadableArgument, MSG_CHAR_CODE_DROPPED);
+    }
+    silent(r"\_u[0x3000]");
+    silent(r"\_m[65]");
+    silent(r"\_u[ 0X22ee,1]");
+}
+
+/// 出せる番号は本文の字になるので何も診ない。SSP に合わせて受け付ける綴り（`0X`・前後の空白・
+/// 2 つ目の引数）と `\_m` の ASCII の外・組になるサロゲートも誤りでない（要件 6.1・6.6）。
+#[test]
+fn printable_character_numbers_are_not_reported() {
+    for script in [
+        r"\_u[8942]",
+        r"\_u[0x1F600]",
+        r"\_u[0X22EE]",
+        r"\_u[0x022ee]",
+        r"\_u[ 0x22EE ]",
+        r"\_u[0x22EE,1]",
+        r"\_m[0x41]",
+        r"\_m[0x3042]",
+        r"\_m[12354]",
+        r"\_u[0xD83D]\_u[0xDE00]",
+        r"あ\_u[0x3000]い",
+    ] {
+        silent(script);
+    }
+}
+
+/// 範囲は埋め込みの綴りだけで、前後の本文を含まない（文字の数で数える）。
+#[test]
+fn dropped_character_number_points_at_the_embed_only() {
+    assert_eq!(
+        rows(r"あ\_m[abc]い\_u[0]"),
+        [
+            (
+                Kind::UnreadableArgument,
+                1,
+                9,
+                r"\_m[abc]".to_string(),
+                MSG_CHAR_CODE_DROPPED
+            ),
+            (
+                Kind::UnreadableArgument,
+                10,
+                16,
+                r"\_u[0]".to_string(),
+                MSG_CHAR_CODE_DROPPED
+            ),
+        ]
+    );
+}
+
 /// 重なった開きが閉じられないまま終わると、その開きに 2 件（重なり → 閉じ無し の順）が付く。
 #[test]
 fn reopened_and_never_closed_gives_two_diagnostics_on_the_second_open() {
@@ -316,6 +386,32 @@ fn anchors_after_end_or_quit_are_not_reported() {
 }
 
 // ---- 位置・スコープ・診ない規則 ----
+
+/// `doc/ssp-mcp/areka-tools.md` ⑵ の答えの例の 4 件（種類・位置・綴り・文面）。
+#[test]
+fn answer_example_in_the_doc() {
+    assert_eq!(
+        rows(r"\x\s[99999]\f[sub,1]\_u[0]"),
+        [
+            (Kind::UnknownTag, 0, 2, r"\x".to_string(), MSG_UNKNOWN_TAG),
+            (
+                Kind::MissingSurface,
+                2,
+                11,
+                r"\s[99999]".to_string(),
+                MSG_MISSING_SURFACE
+            ),
+            (Kind::Ignored, 11, 20, r"\f[sub,1]".to_string(), MSG_IGNORED),
+            (
+                Kind::UnreadableArgument,
+                20,
+                26,
+                r"\_u[0]".to_string(),
+                MSG_CHAR_CODE_DROPPED
+            ),
+        ]
+    );
+}
 
 #[test]
 fn positions_are_counted_in_characters() {

@@ -48,16 +48,17 @@ SSP の MCP サーバに無く、areka だけが出すツールの約束の正�
 | `message` | 何が起きているか・再生でどうなるかの英文 1 文（⑶ の文面） |
 
 - **位置の単位は文字**。台本の先頭を 0 として数えた文字の数（Unicode の符号位置の数）で、バイトでも UTF-16 の単位でもない。例: `あいう\xえお` の `\x` は `start: 3`・`end: 5`。主な手がかりは `text` で、位置は同じ綴りが 2 度出るときの区別に使う。
-- 診断は台本の順に並ぶ。1 つの命令に 2 件付くことがあり、そのときは 2 件が同じ位置になる（例: `\![*]\q[題]` は `ignored` と `unreadable_argument` の 2 件）。
+- 診断は台本の順に並ぶ。1 つの命令に 2 件付くことがあり、そのときは 2 件が同じ位置になる（例: `\_a[x]あ\_a[y]い` は 2 つ目の開き `\_a[y]` に `unpaired_tag` の 2 件。⑶ の 15 行目・14 行目の順）。印 `\![*]` は診断を出さないので、`\![*]\q[題]` は `\q[題]` だけを指す `unreadable_argument` の 1 件になる。
 - 影響の大きさ（どのくらい困るか）の欄は無い。
 
-例（宛先のシェルに surface 99999 が無い場合）:
+例（台本 `\x\s[99999]\f[sub,1]\_u[0]`・宛先のシェルに surface 99999 が無い場合）:
 
 ```
-OK:3 diagnostics
+OK:4 diagnostics
 {"end":2,"kind":"unknown_tag","message":"areka does not know this tag; playback drops it","start":0,"text":"\\x"}
 {"end":11,"kind":"missing_surface","message":"no such surface in the current shell; playback does not change the surface","start":2,"text":"\\s[99999]"}
 {"end":20,"kind":"ignored","message":"areka accepts this but it has no effect yet","start":11,"text":"\\f[sub,1]"}
+{"end":26,"kind":"unreadable_argument","message":"areka cannot show this character number; playback drops it","start":20,"text":"\\_u[0]"}
 ```
 
 ## ⑶ 診断の種類と文面
@@ -110,7 +111,7 @@ OK:3 diagnostics
 
 - 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
 - `\s`・`\b` は、その場の話し手（`\0`・`\1`・`\h`・`\u`・`\p[n]`）のシェルとバルーンで判定する。
-- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row16` が固定している。strict の再生でも、17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
+- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
 - `unpaired_tag`（14〜16 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 15 行目・14 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。
 
 **名前だけ予約した種類**（今は出さない）:

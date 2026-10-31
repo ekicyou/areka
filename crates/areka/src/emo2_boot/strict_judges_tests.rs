@@ -357,7 +357,7 @@ element1,balloon,a,0,0
     /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（7.2・2.7）。
     #[test]
     fn records_match_check_script_diagnostics() {
-        let script = r"\s[99999]あ\x\![nosuch]\b[99]\f[sub,1]\_w[abc]い\s[-2]\_a[x]う\_a[y]え\_a\![set,choicetimeout,abc]\f[colour,red]\_a";
+        let script = r"\s[99999]あ\x\![nosuch]\b[99]\f[sub,1]\_w[abc]い\_u[0]\s[-2]\_a[x]う\_a[y]え\_a\![set,choicetimeout,abc]\f[colour,red]\_a";
         let want: Vec<(String, usize, usize, String, String)> = diagnose(
             script,
             &parse_noted(script),

@@ -26,6 +26,7 @@ pub(in crate::mcp) const MSG_IGNORED: &str = strict::MSG_IGNORED;
 pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED;
 pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
 pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str = strict::MSG_ANCHOR_STRAY_CLOSE;
+pub(in crate::mcp) const MSG_CHAR_CODE_DROPPED: &str = strict::MSG_CHAR_CODE_DROPPED;
 
 /// 命令を台本の順に 1 つずつ見て診断の列を作る。`facts` が None＝窓の無いゴースト（surface とバルーンを診ない）。
 /// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。アンカーの対応の崩れだけは、
@@ -109,6 +110,10 @@ pub(crate) fn diagnose(
                 {
                     out.push(Kind::MissingBalloon, &span, MSG_MISSING_BALLOON);
                 }
+            }
+            // 読み手が捨てた `\_u[…]`・`\_m[…]`（範囲は埋め込みの綴り）。出せる番号は `Text` で来るので診ない。
+            Instruction::CharCodeDropped { .. } => {
+                out.push(Kind::UnreadableArgument, &span, MSG_CHAR_CODE_DROPPED);
             }
             // 同じ開きに 2 件（重なり → 閉じ無し）付くことがあるので、その位置の分を全部出す。
             Instruction::Anchor(_) | Instruction::AnchorEnd => {
