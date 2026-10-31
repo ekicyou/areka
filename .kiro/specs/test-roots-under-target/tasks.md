@@ -61,5 +61,4 @@
   - _Requirements: 2.1, 2.3, 2.4, 2.5, 3.3, 3.4, 4.6, 5.1, 5.2_
 
 ## Implementation Notes
-- 2.4（2026-11-01）: `cargo test -p sample-ghost-kit` は 81 緑・2 赤。赤の 2 本（`every_registered_sample_lands_where_its_registry_row_says`・`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`）は、取り寄せの検体 `pasta-in-windows` が `target
-ar-samplesetched\` に無いためで、コメントだけの差分とは関わりが無い。全体テストの前に `tools\sample-fetch.ps1` で取り寄せる（取り寄せは開発者の承認が要る）
+- 2.4（2026-11-01）: `cargo test -p sample-ghost-kit` は 81 緑・2 赤。赤の 2 本（`every_registered_sample_lands_where_its_registry_row_says`・`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`）は、取り寄せの検体 `pasta-in-windows` が `target\nar-samples\fetched\` に無いためで、コメントだけの差分とは関わりが無い。全体テストの前に `tools\sample-fetch.ps1` で取り寄せる（取り寄せは開発者の承認が要る）
