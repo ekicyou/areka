@@ -26,7 +26,7 @@
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 3.1, 3.2, 5.1, 5.4_
 
 - [ ] 3. 網羅台帳と周りの文書を直し、整合の検査を通す
-- [ ] 3.1 (P) 網羅台帳の `updatebuttoncaption` の行と `updatebutton.caption` の行の備考を直す
+- [x] 3.1 (P) 網羅台帳の `updatebuttoncaption` の行と `updatebutton.caption` の行の備考を直す
   - `updatebuttoncaption` の行を `implemented`・持ち主を本 spec にし、備考を `updatebutton.caption` の行と同じ組み立て（中身・壊れ方・ログ・根拠の場所・画面の材料・無いと失うもの）で書き、優先・測 1 の結果・測 2 と測 3 を測れなかった理由・`alias` にしない理由を書く。他の欄はそのまま
   - `updatebutton.caption` の行は状態と持ち主を変えず、「壊れ方」と「根拠の場所」の 2 文だけを落とし先に合わせる
   - ⑵ の 8 行と `char*.recommend*` の 3 行は変えない
