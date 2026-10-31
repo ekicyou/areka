@@ -72,7 +72,7 @@
   - _Requirements: 3.3, 3.4, 4.2, 4.4, 5.6, 5.7, 7.2_
 
 - [ ] 5. 値の口: 4 つのプロパティの名前に倍率と DPI の表から答える
-- [ ] 5.1 スコープの倍率と DPI の表と、4 つの名前の読み手と、百分率の文字を作る
+- [x] 5.1 スコープの倍率と DPI の表と、4 つの名前の読み手と、百分率の文字を作る
   - スコープごとにキャラクター・バルーンの（倍率・DPI）を持つ共有の表を作り、鍵を短く取って読み、毒されても中身で続ける
   - 4 つの形（`currentghost.scope(*).scaling`・`currentghost.balloon.scope(*).scaling`・`currentghost.scope(*).currentmonitor.dpi`・areka 独自の `currentghost.balloon.scope(*).currentmonitor.dpi`）を読み口に登録する口を作り、ukadoc の証拠の行と、独自の名前には互換の設計書 8 節を指す注記を置く
   - スコープの選択子の読みは窓の矩形のプロパティと同じものを使う（可視性を crate の中へ上げるだけ）。新しいモジュールと檻の宣言をゴーストの起動のモジュールに足す

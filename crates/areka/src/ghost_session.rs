@@ -35,6 +35,8 @@ use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_scope_rect.rs"]
 pub(crate) mod ghost_session_scope_rect;
+#[path = "ghost_session_scope_scale.rs"]
+pub(crate) mod ghost_session_scope_scale;
 
 #[path = "ghost_session_runtime.rs"]
 mod ghost_session_runtime;

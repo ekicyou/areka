@@ -183,7 +183,7 @@ impl ScopeRectSource {
 
 /// 名前の選択子の読み。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ScopeSelector {
+pub(crate) enum ScopeSelector {
     /// 番号のスコープ。
     Index(usize),
     /// 負の番号＝窓を持たないスコープ。
@@ -191,7 +191,7 @@ enum ScopeSelector {
 }
 
 /// 区切り「scope」の選択子を読む。`None` は書式の誤り（`x`・空・`+1` など・要件 3.6）。
-fn scope_selector(path: &PropPath) -> Option<ScopeSelector> {
+pub(crate) fn scope_selector(path: &PropPath) -> Option<ScopeSelector> {
     let seg = path.segs.iter().find(|seg| seg.name == "scope")?;
     match seg.selector.as_ref()? {
         Selector::ByIndex(n) => Some(ScopeSelector::Index(*n as usize)),
