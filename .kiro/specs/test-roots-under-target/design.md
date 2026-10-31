@@ -199,10 +199,11 @@ let entries: [(&str, fn(&str) -> TempPath); 2] =
 
 - 消すもの: 定数 `GATEWAY_DEFINITION_PREFIX` とその doc、`gateway_sources()`、`watched_sources()` の絞り込み（`watched_sources()` は全ソースを返す）。
 - 足すもの: 窓口のファイルを名指しする定数 `GATEWAY_FILES: [&str; 2] = ["crates/temp-path-kit/src/lib.rs", "crates/temp-path-kit/src/lib_tests.rs"]`。
-- 置き換える 1 本 `the_gateway_is_scanned_and_holds_no_entry_point`: ⑴ `watched_sources()` が `GATEWAY_FILES` の 2 つを含む（陽性の対・要件 4.3）。⑵ `scan_sources(GATEWAY_FILES)` の当たりが 0 件で、当たりがあれば `render` でファイルと行を示す（要件 4.2）。
+- 置き換える 1 本 `the_gateway_is_scanned_and_holds_no_entry_point`: ⑴ `watched_sources()` が `GATEWAY_FILES` の 2 つを含む（陽性の対・要件 4.3）。⑵ 同じ 2 ファイルを `TOKEN_PROCESS_ID`（`std::process::id(`）で走査すると `lib.rs` に 1 件以上当たる（`compose_name` の呼び出しのコードの行。2 ファイルの中身を本当に走査していることの陽性の対・要件 4.3）。⑶ `scan_sources(GATEWAY_FILES)` の当たりが 0 件で、当たりがあれば `render` でファイルと行を示す（要件 4.2）。
 - 主検査の名前を `no_temp_dir_entry_point_lives_outside_the_allow_table` に改める（窓口の除外がなくなるため）。主張・文面の中身は変えない。
 - module doc の「窓口 crate の定義と例外表の外に 1 件も無いこと」「入口の呼出は、窓口の中か例外表の中にしか存在してはならない」を、「例外表の中にしか存在してはならない（窓口の中にも置かない。窓口は置き場の式だけから一時フォルダを作る）」に改める。
-- 変えないもの: 例外表・件数の定数・ほかの 15 本の主張。窓口のファイルに当たりが 0 件なので、主検査・「実測の集合が表と一致する」・「表の全項目に当たりがある」は今と同じ結果になる。本数は 16 本のまま。
+- 例外表 `ALLOWED_ENTRY_POINT_USES` の doc の「窓口の `src/` を除き」（2026-08-27 の実測の方法）は中身を直さず、それが当時の測り方の記録であることを一言添える（今の規則と取り違えないため）。
+- 変えないもの: 例外表の中身・件数の定数・ほかの 15 本の主張。窓口のファイルに当たりが 0 件なので、主検査・「実測の集合が表と一致する」・「表の全項目に当たりがある」は今と同じ結果になる。本数は 16 本のまま。
 
 ### 実物の `pasta.dll` の走行（要件 3.2）
 
@@ -210,8 +211,9 @@ let entries: [(&str, fn(&str) -> TempPath); 2] =
 
 - 前に要るもの: PowerShell 7（Git Bash では i686 のリンクが落ちる）・i686 の helper（`cargo build --manifest-path "<w>\Cargo.toml" -p shiori-host32-helper --target i686-pc-windows-msvc`。テストは `HOST32_HELPER_EXE` か `target\i686-pc-windows-msvc\{debug,release}\` から探す）・検体 `emo2` の `pasta.dll`（`cargo run -q --locked --manifest-path "<w>\Cargo.toml" -p sample-ghost-kit --bin nar-sample-path -- emo2` が出す `folder=` の `ghost\master\pasta.dll`。リポジトリの書庫なので取り寄せは要らない）。
 - 回し方: 同じ PowerShell の中だけで `PASTA_DEBUG` を消し（SSP のぱすたが 127.0.0.1:9276 を持っていても LOAD が落ちないように）、`HOST32_PASTA_DLL` に `pasta.dll` の絶対パスを入れ、`cargo test --manifest-path "<w>\Cargo.toml" -p areka-ghost --test ghost real_pasta_boot_observes_a_cue_then_shuts_down_cleanly -- --nocapture` を回す。有界（観測 60 秒＋終了 30 秒）。排他テストの机は要らない（画面の操作も負荷も無い 1 本）。
-- 回す回数（推す形）: 入口を替える**前**に 1 度（較正）、替えた**後**に 1 度。`write_real_pasta_ghost_fixture` は `pasta.dll` を単体で写すので、辞書が無くて起動の一周が 60 秒で切れる既知の赤がある（完了 `areka-P0-shiori4-test-ghost` の `tasks.md` 6.2）。前と後が同じ所で同じ色なら、パスの長さのせいではないと読める。
-- 記録（`tasks.md` の `## Implementation Notes`）: 前と後それぞれの、緑か赤か・赤なら止まった所（`boot` の失敗か、観測の 60 秒切れか、終了か）・`ghost\master\pasta.dll` までのパスの長さ（ワークツリーの根の字数＋`\target\test-roots\`＋名前＋`\ghost\master\pasta.dll` を数えたもの）。あわせて静的な見積もり 2 つ: 既定で走る `runtime_tests.rs` の `inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll`（移った後 226 字・上限 259 字まで余白 33 字・ワークツリーの名前が 74 字までなら通る）と、回さない `snapshot_capture_test.rs`（`ghost\master\` まで約 183 字・写す本物の木の深さは測っていない）。
+- 回す回数（推す形）: 入口を替える**前**に 1 度（較正）、替えた**後**に 1 度。`write_real_pasta_ghost_fixture` は `pasta.dll` を単体で写すので、辞書が無くて起動の一周が 60 秒で切れる既知の赤がある（完了 `areka-P0-shiori4-test-ghost` の `tasks.md` 6.2）。前と後が同じ所で同じ色なら、**helper の作業フォルダと DLL の読み込みは**パスの長さのせいではないと読める。
+- **この走行で確かめられる範囲**: helper の作業フォルダと `pasta.dll` の読み込み（`LoadLibraryW`）まで。フィクスチャが辞書を写さないので、`pasta.dll` の中の Lua がゴーストの下のファイルを開く経路（C の実行時ライブラリの `fopen`）には一度も触れない。記録にもこの範囲をそのまま書く（設計の検証の重大な問題 1）。
+- 記録（`tasks.md` の `## Implementation Notes`）: 前と後それぞれの、緑か赤か・赤なら止まった所（`boot` の失敗か、観測の 60 秒切れか、終了か）・`ghost\master\pasta.dll` までのパスの長さ（ワークツリーの根の字数＋`\target\test-roots\`＋名前＋`\ghost\master\pasta.dll` を数えたもの・このワークツリーで約 198 字）・上の「確かめられる範囲」の一文。あわせて静的な見積もり 3 つ: ⑴ 既定で走る `runtime_tests.rs` の `inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll`（移った後 226 字・上限 259 字まで余白 33 字・ワークツリーの名前が 74 字までなら通る）。⑵ Lua が開くファイルの深さ: 検体 `vendors/sample_ghost/emo2.nar` の `ghost/master/` の下で最も長い相対パス（2026-11-01 で 35 字・`scripts/pasta/shiori/event/boot.lua`）を実装の時に数え直し、`real_pasta_test.rs` の `ghost\master\` まで約 189 字と足して約 224 字、`snapshot_capture_test.rs`（回さない）の約 183 字と足して約 218 字（どちらも 260 字未満）と書く。⑶ pasta が走行中に新しく書くファイル（保存など）の深さは測っていない、と書く。
 - 後だけが赤、または前と違う所で止まったときは、名前を短くする備えを入れずに裁定へ上げる（要件 3.4）。
 
 ## Error Handling
@@ -247,7 +249,7 @@ let entries: [(&str, fn(&str) -> TempPath); 2] =
 
 1. **見張りの形**: **推す＝案 B（窓口の除外をなくし、窓口のファイルも主検査に入れる）**。もう一つは案 A（除外を残し、外した領域に当たりが 0 件・窓口のファイルが 2 つあることを確かめる）。B は規則が「例外表の中にしか無い」の 1 つになり、何も外さない除外が残らない。A は差分が少し小さく、姉妹の `sample_path_guard_test.rs` と形がそろう（姉妹は窓口が検体の置き場を綴る必要があるので除外が要る。こちらは綴ってはならない側に変わる）。
 2. **要件 4.1 の確かめの形**: **推す＝今の `under_target` の 1 本を、2 つの入口を表で回す 1 本に改める**。もう一つは `new` 用を 1 本足す（`under_target` の 1 本はそのまま・本数は 10 本）。前者は確かめの式が 1 つで済む。後者は今のテストの名前と中身が動かない。
-3. **要件 3.2 の走行の回数**: **推す＝入口を替える前と後に 1 度ずつ（後の 1 度が要件の走行、前の 1 度はコードを変えない較正）**。もう一つは後の 1 度だけで、赤なら止まった所から読む。`pasta.dll` を単体で写す既知の欠陥があるため、後の 1 度だけでは赤の原因がパスの長さか辞書の欠けかを読み分けにくい。前の 1 度の手間は 1〜2 分。
+3. **要件 3.2 の走行の回数**: **推す＝入口を替える前と後に 1 度ずつ（後の 1 度が要件の走行、前の 1 度はコードを変えない較正）**。もう一つは後の 1 度だけで、赤なら止まった所から読む。`pasta.dll` を単体で写す既知の欠陥があるため、後の 1 度だけでは赤の原因がパスの長さか辞書の欠けかを読み分けにくい。前の 1 度の手間は 1〜2 分。どちらの形でも、走行が確かめるのは DLL の読み込みまで（Lua が開くファイルの深さは静的な見積もり ⑵ で補う）。
 4. **2 つの入口の説明での位置づけ**: **推す＝「同じ置き場・同じ働き。呼び出しを書き換えずに済ませるために 2 つ残している。どちらを使ってもよい」と書き、廃止の印は付けない**。もう一つは「新しく書くテストは `new` を使う」のように片方を勧める。片方へ寄せる仕事は呼び出しの書き換えになり、ウェーブの約束の外なので、本 spec では勧めを書かない形を推す。
 
 決まり済みで選ぶ余地の無いこと: `CARGO_TARGET_DIR` は見ない（要件 1.5）・名前を短くする備えは入れない（要件 3.4）・`devroot.rs` は本 spec で、`structure.md` は完了の手順で直す（要件 2.3）・例外表の 18 ファイルの追跡の spec は完了の棚卸で起票する・Defender の走査は何もしない（設定に触らない）・残ったフォルダの掃除の仕組みは足さない（`cargo clean` かワークツリーの削除で消える）。
