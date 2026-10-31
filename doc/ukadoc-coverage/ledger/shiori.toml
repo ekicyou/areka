@@ -12468,7 +12468,7 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.type:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = ""
 priority = "A11"
 values = ["装い"]
 links = [
@@ -12476,13 +12476,19 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_resource:sakura.popupmenu.type:1" },
 ]
 note = """
-語彙のみ。理由が 2 つ重なる。⑴ 問い合わせないと決めた（本仕様の裁定）——値 1 が指す
+語彙のみ。理由が 2 つ重なる。⑴ 問い合わせないと決めた（popup-menu-residue の裁定）——値 1 が指す
 「省略した形」の中身を正典が定めていないので、どの値でも同じメニューを出す。⑵ この名前が
 受け持つ 2 人目以降（n≧2）の窓が α に 1 枚も無い。名前は問い合わせない名前の表
 （crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
 入っていないことを兄弟テストが確かめている。
-引受先: 省略した形のメニューを作り分ける仕様と、3 人目以降のキャラクター窓を作る仕様。
-2026-09-18 の時点でどちらも起票は 0 本なので、先に起こした側が本欄を引き取る。
+裁定: 省略した形のメニューを作り分けない（popup-menu-residue の裁定・2026-10-31）。理由: 正典は
+値 1 を「省略メニュー」と名前だけ挙げ、中身を定めていない。見直す条件: popup-menu-shell-look が
+オーナードローのメニューを入れたとき（正典はこの値を「オーナードローメニューの変更」と書く）、または
+中身を決める根拠が得られたとき。どちらも新しく起票する。
+3 人目以降の窓の部分の引受先は extra-character-windows（3 人目以降のキャラクター窓を作る spec）。
+同 spec が引き取らないと決めたら、そのときに新しく起票する。
+宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の
+完了済み spec の列挙（[[owner_completed]]）の名前でなければならず、表へ足すのは棚卸の仕事である。
 壊れ方: 見た目の差。該当する窓が無いので、今日の利用者に見える違いは無い。
 ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
@@ -12493,7 +12499,7 @@ note = """
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = ""
 priority = "A11"
 values = ["装い"]
 links = [
@@ -12505,8 +12511,10 @@ note = """
 （n≧2）の窓が 1 枚も無い。尋ねる先が無いので引かない。名前は問い合わせない名前の表
 （crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
 入っていないことを兄弟テストが確かめている。
-引受先: 3 人目以降のキャラクター窓を作る仕様。2026-09-18 の時点で起票は 0 本なので、
-その仕様を起こす人が本欄を引き取る。
+引受先: extra-character-windows（3 人目以降のキャラクター窓を作る spec）。同 spec が引き取らないと
+決めたら、そのときに新しく起票する。決めたのは popup-menu-residue（2026-10-31）。
+宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の
+完了済み spec の列挙（[[owner_completed]]）の名前でなければならず、表へ足すのは棚卸の仕事である。
 壊れ方: 見た目の差。該当する窓が無いので、今日の利用者に見える違いは無い。
 ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
@@ -13359,20 +13367,24 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.type:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = ""
 priority = "A11"
 values = ["装い"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_resource:sakura.popupmenu.type:1" },
 ]
 note = """
-語彙のみ。理由: 問い合わせないと決めた（本仕様の裁定）。値 1 が指す「省略した形」の中身を正典が
+語彙のみ。理由: 問い合わせないと決めた（popup-menu-residue の裁定）。値 1 が指す「省略した形」の中身を正典が
 定めていないので、どの値でも同じメニューを出す。値で中身が変わらないなら尋ねる意味が無く、
 1 回の表示あたりの往復も増やさない。名前は問い合わせない名前の表
 （crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
 入っていないことを兄弟テストが確かめている。
-引受先: 省略した形のメニューを作り分ける仕様。2026-09-18 の時点で起票は 0 本なので、
-その仕様を起こす人が本欄を引き取る。
+裁定: 省略した形のメニューを作り分けない（popup-menu-residue の裁定・2026-10-31）。理由: 正典は
+値 1 を「省略メニュー」と名前だけ挙げ、中身を定めていない。見直す条件: popup-menu-shell-look が
+オーナードローのメニューを入れたとき（正典はこの値を「オーナードローメニューの変更」と書く）、または
+中身を決める根拠が得られたとき。どちらも新しく起票する。
+宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の
+完了済み spec の列挙（[[owner_completed]]）の名前でなければならず、表へ足すのは棚卸の仕事である。
 壊れ方: 見た目の差。どの値でも同じメニューが出る。
 ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 相方側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
@@ -14434,18 +14446,22 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.type:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = ""
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。理由: 問い合わせないと決めた（本仕様の裁定）。値 1 が指す「省略した形」の中身を正典が
+語彙のみ。理由: 問い合わせないと決めた（popup-menu-residue の裁定）。値 1 が指す「省略した形」の中身を正典が
 定めていないので、どの値でも同じメニューを出す。値で中身が変わらないなら尋ねる意味が無く、
 1 回の表示あたりの往復も増やさない。名前は問い合わせない名前の表
 （crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
 入っていないことを兄弟テストが確かめている。
-引受先: 省略した形のメニューを作り分ける仕様。2026-09-18 の時点で起票は 0 本なので、
-その仕様を起こす人が本欄を引き取る。
+裁定: 省略した形のメニューを作り分けない（popup-menu-residue の裁定・2026-10-31）。理由: 正典は
+値 1 を「省略メニュー」と名前だけ挙げ、中身を定めていない。見直す条件: popup-menu-shell-look が
+オーナードローのメニューを入れたとき（正典はこの値を「オーナードローメニューの変更」と書く）、または
+中身を決める根拠が得られたとき。どちらも新しく起票する。
+宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の
+完了済み spec の列挙（[[owner_completed]]）の名前でなければならず、表へ足すのは棚卸の仕事である。
 壊れ方: 見た目の差。どの値でも同じメニューが出る。
 ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 本体側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
