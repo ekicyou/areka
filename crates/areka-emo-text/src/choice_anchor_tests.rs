@@ -351,3 +351,58 @@ fn vertical_choice_across_columns_has_a_band_on_each_column() {
         );
     }
 }
+
+/// 強調へ渡す帯（`ranges.bands`）とクリックを受ける範囲のブロック軸は同じ帯から出る（要件 3.6・
+/// 4.2）。期待値は帯と行の矩形から組み直すので、片方の帯だけをずらすと決まった字幅のまま赤になる。
+#[test]
+fn highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode() {
+    let horizontal = applied(&[text("あい"), choice("x", "うえおか"), text("き")]);
+    let vertical = applied(&[
+        text("あいうえおかきくけこさしすせそたちつて"),
+        choice("x", "はいいえ"),
+    ]);
+    for (mode, state) in [
+        (WritingMode::HorizontalTb, &horizontal),
+        (WritingMode::VerticalRl, &vertical),
+        (WritingMode::VerticalLr, &vertical),
+    ] {
+        let (lines, region) = arranged(state, 0.0, mode);
+        let spans = state
+            .actor_state(&ActorKey::from(ACTOR))
+            .expect("場所の状態")
+            .choices();
+        let ranges = crate::actor::choice_ranges(&lines, spans, mode, &region, &FixedMetrics);
+        let hit_rows = ranges.hit_rows();
+        // 2 行目（列）の帯を見ないまま緑になるのを防ぐ。
+        assert!(
+            ranges
+                .segments
+                .iter()
+                .any(|s| s.line_index != ranges.segments[0].line_index),
+            "{mode:?}: 選択肢が 2 行（列）以上にまたがる"
+        );
+        assert_eq!(
+            hit_rows.len(),
+            ranges.segments.len(),
+            "{mode:?}: 当たりの行は範囲ごとに 1 つ"
+        );
+        for (seg, row) in ranges.segments.iter().zip(&hit_rows) {
+            let band = ranges.bands[seg.line_index];
+            let line = lines[seg.line_index].rect;
+            let (near, far) = match mode {
+                WritingMode::HorizontalTb => (row.rect.top, row.rect.bottom),
+                _ => (row.rect.left, row.rect.right),
+            };
+            let expected_near = match mode {
+                WritingMode::HorizontalTb => line.top + band.offset - region.top(),
+                _ => line.left + band.offset - region.left(),
+            };
+            assert_eq!(
+                (row.ordinal, near, far),
+                (seg.ordinal, expected_near, expected_near + band.extent),
+                "{mode:?}: 行 {} の当たりのブロック軸は強調の帯から出る",
+                seg.line_index
+            );
+        }
+    }
+}
