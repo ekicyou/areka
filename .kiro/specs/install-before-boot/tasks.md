@@ -67,7 +67,7 @@
   - 完了の形: 判断の表のテスト（渡されていない・読み取りだけ・指定 3 種・ゴーストが入った／シェルだけ／バルーンだけ／全部失敗・最後のゴーストを選ぶ・同梱バルーンつきのゴーストは本体で数える）が緑
   - _Requirements: 4.3, 4.4, 4.5, 4.6, 4.9, 7.4, 9.5, 10.4_
 
-- [ ] 4.3 起動の持ち物を「入れる物」と「起動の後へ運ぶ控え」の形にし、起動の前に 1 回だけ入れる
+- [x] 4.3 起動の持ち物を「入れる物」と「起動の後へ運ぶ控え」の形にし、起動の前に 1 回だけ入れる
   - 持ち物に、入れる物（根が決まったときに 1 回だけ取り出す）と控え（3.1 の控えの型・入れた順）を持たせる。入れる物が残ったまま落ちたときだけ warn `boot_stopped` を出す。窓のアプリの資源でなくすのは 4.6（World へ移す口を書き直すとき）で行い、このタスクでは資源のまま組める形を保つ
   - 根が決まった後の口で、`initial_install.nar` の依頼を先に・`--install` の並びを後に、別々の依頼として 3.1 の口で手続きへ渡し、依頼ごとに `stage="before_boot"` の開始と終わり方の記録を今の語で残す
   - 入れる物が何も無ければ手続きを呼ばず、warn 以上を残さない。2 回目の呼び出しは何もしない
@@ -146,3 +146,4 @@
 - 4.1: `crates/areka/tests/startup_install_real_run.rs`（`#[ignore]` なし・実機）は外した道を確かめているので 7.1 で改めるまで赤のまま。`--install` は 4.3〜5.1 まで何も入れない途中の状態。5.1 の「クレートの全テストが緑」はこの試験を除いて読む。
 - 4.1: `crates/areka/tests/` の結合のテストには `#[ignore]` の無い実機の試験（areka を起こす）があるので、机を持たないときの確かめは `cargo test -p areka --bin areka` に限る（4.1 までの実装係は机なしで `cargo test -p areka` を回していた）。
 - 4.1: 4.x で使う物（`Pending`・`end_word`・`delete_sources`・`sources_to_delete`・旧い `CallGhost*`・`decide_call_ghost`・`InstallOrigin::{StartupArgs,InitialInstall}`・`DeskAsk::OrderDone` の欄）に付けた `#[allow(dead_code)]` は、呼び手ができたら外す。
+- 4.3: `StartupInstall::run_before_boot(&mut self, roots, alert_suppressed: bool)` は途中の形。4.4 で設計 StartupFlow の署名（`request`・`BeforeBootEnv`・戻り値 `Option<String>`）にそろえる。debug の語 `startup_install_nothing` は設計の記録の語の表に無い（要件 1.5 の debug だけ）。

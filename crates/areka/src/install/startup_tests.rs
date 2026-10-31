@@ -387,3 +387,207 @@ fn readonly_and_boot_target_come_before_no_ghost_installed() {
         );
     }
 }
+
+// ---- 起動の前に 1 回だけ入れる（タスク 4.3・要件 1.1〜1.3・1.5・2.6・6.1・6.2・6.4・9.2・9.3） ----
+
+/// `install.txt` の行と足すファイルで書庫を `dir` へ置く。
+fn nar(
+    dir: &temp_path_kit::TempPath,
+    file: &str,
+    lines: &[&str],
+    extra: &[(&str, &[u8])],
+) -> PathBuf {
+    let path = dir.child(file);
+    let mut builder = sample_ghost_kit::NarBuilder::new()
+        .file("install.txt", &sample_ghost_kit::install_txt(lines))
+        .done();
+    for (name, body) in extra {
+        builder = builder.file(*name, body).done();
+    }
+    builder.write_to(&path).expect("書庫を置ける");
+    path
+}
+
+/// ゴーストの書庫（`directory` が `folder`・`accept` などは `more` で足す）。
+fn ghost_nar(
+    dir: &temp_path_kit::TempPath,
+    folder: &str,
+    more: &[&str],
+    extra: &[(&str, &[u8])],
+) -> PathBuf {
+    let directory = format!("directory,{folder}");
+    let mut lines = vec![
+        "charset,UTF-8",
+        "type,ghost",
+        "name,入る",
+        directory.as_str(),
+    ];
+    lines.extend_from_slice(more);
+    let mut files: Vec<(&str, &[u8])> = vec![(
+        "ghost/master/descript.txt",
+        b"charset,UTF-8\r\nname,Newbie\r\n",
+    )];
+    files.extend_from_slice(extra);
+    nar(dir, &format!("{folder}.nar"), &lines, &files)
+}
+
+fn roots_of(root: &temp_path_kit::TempPath) -> BasewareRoots {
+    BasewareRoots::single(root.path().to_path_buf())
+}
+
+/// `startup_install_started`／`done` の (origin, 欄) の並び。どれも info で `stage="before_boot"`。
+fn before_boot(
+    events: &[log_capture_kit::CapturedEvent],
+    name: &str,
+    field: &str,
+) -> Vec<(String, String)> {
+    startup_events(events, name)
+        .into_iter()
+        .map(|e| {
+            assert_eq!(e.level, tracing::Level::INFO, "{name}");
+            assert_eq!(e.field_str("stage"), Some("before_boot"), "{name}");
+            (
+                e.field("origin").unwrap_or_default().to_owned(),
+                e.field(field).unwrap_or_default().to_owned(),
+            )
+        })
+        .collect()
+}
+
+fn warn_or_worse(
+    events: &[log_capture_kit::CapturedEvent],
+) -> Vec<&log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.level <= tracing::Level::WARN)
+        .collect()
+}
+
+/// `initial_install.nar` の依頼が先、`--install` の並びが後で別々の依頼になり、どちらも入る。
+/// 2 回目は何もしない。控えは入れた順（要件 1.1・1.3・6.1・6.2・9.2）。
+#[test]
+fn initial_install_goes_first_then_args_and_the_second_call_does_nothing() {
+    let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
+    let exe = temp_path_kit::TempPath::under_target("startup-before-boot-exe");
+    let initial = ghost_nar(&exe, "first", &[], &[]);
+    std::fs::rename(&initial, exe.child(INITIAL_INSTALL_FILE)).expect("exe の隣へ");
+    let args_nar = ghost_nar(&exe, "second", &[], &[]);
+    let mut startup = StartupInstall::new_with(
+        InstallArgs {
+            archives: vec![args_nar],
+            ..Default::default()
+        },
+        Some(exe.path().to_path_buf()),
+    );
+    let ((), events) = log_capture_kit::capture(|| startup.run_before_boot(&roots_of(&root), true));
+    assert_eq!(
+        before_boot(&events, "startup_install_started", "count"),
+        [
+            ("InitialInstall".to_owned(), "1".to_owned()),
+            ("StartupArgs".to_owned(), "1".to_owned())
+        ]
+    );
+    let done = before_boot(&events, "startup_install_done", "results");
+    assert_eq!(
+        done.iter()
+            .map(|(origin, _)| origin.as_str())
+            .collect::<Vec<_>>(),
+        ["InitialInstall", "StartupArgs"]
+    );
+    assert!(
+        done.iter()
+            .all(|(_, results)| results.contains("installed")),
+        "{done:?}"
+    );
+    for folder in ["first", "second"] {
+        assert!(
+            root.path()
+                .join("ghost")
+                .join(folder)
+                .join("ghost/master/descript.txt")
+                .is_file()
+        );
+    }
+    let carried: Vec<_> = startup.carried.iter().map(|c| c.folder.as_str()).collect();
+    assert_eq!(carried, ["first", "second"]);
+    assert!(warn_or_worse(&events).is_empty(), "{events:?}");
+
+    let ((), again) = log_capture_kit::capture(|| startup.run_before_boot(&roots_of(&root), true));
+    assert!(again.is_empty(), "2 回目は何もしない: {again:?}");
+    assert_eq!(startup.carried.len(), 2);
+    let ((), dropped) = log_capture_kit::capture(|| drop(startup));
+    assert!(
+        not_submitted(&dropped).is_empty(),
+        "取り出した後は boot_stopped を出さない"
+    );
+}
+
+/// 在らない・読めない・`accept` 付き・利用条件付き（抑止で拒否）を混ぜても残りが入り、
+/// 書庫ごとの終わり方が記録に並ぶ（要件 2.6・6.4・9.3）。
+#[test]
+fn missing_unreadable_accept_and_terms_do_not_stop_the_rest() {
+    let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
+    let dir = temp_path_kit::TempPath::under_target("startup-before-boot-nar");
+    let missing = dir.child("missing.nar");
+    let unreadable = dir.child("broken.nar");
+    std::fs::write(&unreadable, b"not a zip").expect("壊れた書庫");
+    let picky = ghost_nar(&dir, "picky", &["accept,さくら"], &[]);
+    let terms = ghost_nar(
+        &dir,
+        "termsy",
+        &[],
+        &[("terms.txt", "読んでください".as_bytes())],
+    );
+    let good = ghost_nar(&dir, "good", &[], &[]);
+    let mut startup = StartupInstall::new_with(
+        InstallArgs {
+            archives: vec![missing, unreadable, picky, terms, good],
+            ..Default::default()
+        },
+        None,
+    );
+    let ((), events) = log_capture_kit::capture(|| startup.run_before_boot(&roots_of(&root), true));
+    assert_eq!(
+        before_boot(&events, "startup_install_started", "count"),
+        [("StartupArgs".to_owned(), "5".to_owned())]
+    );
+    let done = before_boot(&events, "startup_install_done", "results");
+    assert_eq!(done.len(), 1);
+    let words: Vec<_> = ["failed", "failed", "refused", "declined", "installed"]
+        .iter()
+        .map(|w| format!("\"{w}\""))
+        .collect();
+    let mut at = 0;
+    for word in &words {
+        at += done[0].1[at..]
+            .find(word.as_str())
+            .unwrap_or_else(|| panic!("{word} が順に在る: {}", done[0].1))
+            + 1;
+    }
+    assert!(
+        root.path()
+            .join("ghost/good/ghost/master/descript.txt")
+            .is_file()
+    );
+    for folder in ["picky", "termsy"] {
+        assert!(!root.path().join("ghost").join(folder).exists(), "{folder}");
+    }
+    let carried: Vec<_> = startup.carried.iter().map(|c| c.folder.as_str()).collect();
+    assert_eq!(carried, ["good"]);
+}
+
+/// 入れる物が何も無ければ手続きを呼ばず、warn 以上を残さない（要件 1.5）。
+#[test]
+fn nothing_to_install_calls_nothing_and_warns_nothing() {
+    let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
+    let exe = temp_path_kit::TempPath::under_target("startup-before-boot-exe");
+    let mut startup =
+        StartupInstall::new_with(InstallArgs::default(), Some(exe.path().to_path_buf()));
+    let ((), events) = log_capture_kit::capture(|| {
+        startup.run_before_boot(&roots_of(&root), true);
+        drop(startup);
+    });
+    assert!(warn_or_worse(&events).is_empty(), "{events:?}");
+    assert!(startup_events(&events, "startup_install_started").is_empty());
+    assert!(!root.path().join("ghost").exists(), "何も入らない");
+}

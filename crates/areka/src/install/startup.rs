@@ -4,10 +4,12 @@
 
 use std::path::{Path, PathBuf};
 
+use areka_ghost::BasewareRoots;
 use bevy_ecs::world::World;
 
-use super::InstallOrigin;
-use super::procedure::ArchiveEnd;
+use super::before_boot_ports::BootPorts;
+use super::procedure::{ArchiveEnd, run_order};
+use super::{InstallOrder, InstallOrigin};
 use crate::cli::{BootRequest, InstallArgs};
 
 /// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない＝要件 4.1）。
@@ -16,17 +18,22 @@ pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";
 /// 起動の依頼の持ち物（`main` が起動の解決の前に作り、[`install`] で World の資源へ移す）。
 #[derive(bevy_ecs::prelude::Resource, Debug, Default)]
 pub(crate) struct StartupInstall {
-    /// 入れる物（取り出したら None＝1 回だけ）。
+    /// 入れる物（根が決まったときに取り出す＝1 回だけ）。
     pending: Option<Pending>,
+    /// 起動の前に入れた物の控え（入れた順・起動の後に World へ移す）。
+    // World へ移す口（タスク 4.6）が読むまでは、テストだけが読む。
+    #[allow(dead_code)]
+    carried: Vec<CarriedInstall>,
 }
 
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
 #[derive(Debug)]
 struct Pending {
     /// 絶対に直した `--install` の値（書いた順）。
     archives: Vec<PathBuf>,
+    // 消す・callghost の段（タスク 4.4）が読むまでは使い手が無い。
+    #[allow(dead_code)]
     call_ghost: bool,
+    #[allow(dead_code)]
     delete_source: bool,
     /// exe の本当の場所のフォルダ（解けなければ None＝`initial_install.nar` を見ない）。
     exe_dir: Option<PathBuf>,
@@ -58,8 +65,6 @@ impl Pending {
 }
 
 /// 起動の前に入れた物 1 本の控え（目録の綴りに直した後の値・起動の後に World へ移す）。
-// 起動の前の道（タスク 4.x）が持ち物に載せるまでは、起動の前の口とテストだけが使う。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CarriedInstall {
     pub kind: areka_nar::InstallKind,
@@ -105,7 +110,64 @@ impl StartupInstall {
                 delete_source: args.delete_source,
                 exe_dir,
             }),
+            carried: Vec::new(),
         }
+    }
+
+    /// 根が決まった後に 1 回だけ（2 回目からは何もしない）。`initial_install.nar` の依頼を先に、
+    /// `--install` の並びを後に、別々の依頼として起動の前の口で手続きへ渡し、控えを self に残す
+    /// （要件 1.1〜1.3・1.5・6.1・6.2）。
+    // 根を解く口（タスク 4.5）が呼ぶまでは、テストだけが呼ぶ。
+    #[allow(dead_code)]
+    pub(crate) fn run_before_boot(&mut self, roots: &BasewareRoots, alert_suppressed: bool) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let orders: Vec<InstallOrder> = [
+            pending.initial_install().map(|path| InstallOrder {
+                archives: vec![path],
+                origin: InstallOrigin::InitialInstall,
+            }),
+            (!pending.archives.is_empty()).then(|| InstallOrder {
+                archives: pending.archives.clone(),
+                origin: InstallOrigin::StartupArgs,
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if orders.is_empty() {
+            tracing::debug!(
+                event = "startup_install_nothing",
+                "[install] 起動の前に入れる物はありません"
+            );
+            return;
+        }
+        let mut ports = BootPorts::new(roots.clone(), alert_suppressed);
+        for order in &orders {
+            tracing::info!(
+                event = "startup_install_started",
+                stage = "before_boot",
+                origin = ?order.origin,
+                count = order.archives.len(),
+                "[install] 起動の前に起動の依頼を扱い始めます"
+            );
+            let ends = run_order(order, &mut ports);
+            let results: Vec<(&Path, &str)> = order
+                .archives
+                .iter()
+                .enumerate()
+                .map(|(index, archive)| (archive.as_path(), end_word(ends.get(index))))
+                .collect();
+            tracing::info!(
+                event = "startup_install_done",
+                stage = "before_boot",
+                origin = ?order.origin,
+                results = ?results,
+                "[install] 起動の依頼が終わりました"
+            );
+        }
+        self.carried.extend(ports.take_carried());
     }
 }
 
@@ -123,8 +185,6 @@ pub(crate) fn install(world: &mut World, startup: StartupInstall) {
 }
 
 /// 終わり方の語（記録 `startup_install_done` の `results`・並びの残りは `not_started`）。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
 fn end_word(end: Option<&ArchiveEnd>) -> &'static str {
     match end {
         Some(ArchiveEnd::Installed(_)) => "installed",

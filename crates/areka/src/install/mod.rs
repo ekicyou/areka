@@ -16,8 +16,6 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::exit_wait::{self, WorkGate};
 
-// 起動の前の道（install::startup・タスク 4.x）が呼ぶまでは、テストだけが使う。
-#[allow(dead_code)]
 mod before_boot_ports;
 pub(crate) mod desk;
 mod destination;
@@ -46,12 +44,9 @@ pub(crate) enum InstallOrigin {
     Script,
     /// 窓への投げ込み（areka-P0-file-drop）。
     WindowDrop,
-    // 起動の前の道（タスク 4.x）が作るまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
     /// 起動の引数 `--install`（startup-install-option）。
-    #[allow(dead_code)]
     StartupArgs,
     /// exe の隣の `initial_install.nar`（startup-install-option）。
-    #[allow(dead_code)]
     InitialInstall,
 }
 
