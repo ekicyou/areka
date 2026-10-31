@@ -228,7 +228,8 @@ fn big_line_overlap_record(
     let font = ResolvedFont::resolve(&model);
     let metrics = DWriteMetrics::new(factory, &font, mode, &TextLayerConfig::default())
         .expect("DWriteMetrics 生成");
-    let region = TextRegion::resolve(&model, ((em * 7.0) as u32, 200), mode);
+    // 40 の行が折り返さない幅（既定の em の 7 倍では足りない）。
+    let region = TextRegion::resolve(&model, (40 * 7, 200), mode);
     let styles = GlyphStyles {
         table: &table,
         ids: &ids,
