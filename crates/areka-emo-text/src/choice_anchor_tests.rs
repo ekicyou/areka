@@ -100,12 +100,12 @@ fn hit(
     hit_in(state, t, WritingMode::HorizontalTb)
 }
 
-/// [`hit`] の書字方向を選べる形。
-fn hit_in(
+/// 時刻 `t` に出ている字までを決まった字幅で配置した行の列と、その描画範囲。
+fn arranged(
     state: &TextLayerState,
     t: f64,
     mode: WritingMode,
-) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
+) -> (Vec<PositionedLine>, TextRegion) {
     let actor = ActorKey::from(ACTOR);
     let place = state.actor_state(&actor).expect("場所の状態");
     let model = BalloonModel::new(
@@ -127,15 +127,28 @@ fn hit_in(
         &FixedMetrics,
         WrapPlan::CharByChar,
     );
-    let spans = place.choices();
-    let segments = annotate_lines(&lines, spans);
-    let bands = line_bands(&lines, mode, &FixedMetrics);
-    let rows = derive_hit_rows(&lines, &segments, mode, &region, &bands)
+    (lines, region)
+}
+
+/// [`hit`] の書字方向を選べる形。範囲・帯・当たりの行は本番の提示と同じ関数で出す。
+fn hit_in(
+    state: &TextLayerState,
+    t: f64,
+    mode: WritingMode,
+) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
+    let (lines, region) = arranged(state, t, mode);
+    let spans = state
+        .actor_state(&ActorKey::from(ACTOR))
+        .expect("場所の状態")
+        .choices();
+    let ranges = crate::actor::choice_ranges(&lines, spans, mode, &region, &FixedMetrics);
+    let rows = ranges
+        .hit_rows()
         .iter()
         // 通し番号は列の添字に等しい（崩れていればここで落ちる）。
         .map(|row| (spans[row.ordinal].kind, row.ordinal, row.rect))
         .collect();
-    (segments, rows)
+    (ranges.segments, rows)
 }
 
 /// 折り返しをまたぐアンカーの範囲は、またいだ行ごとに当たりの区間を 1 つずつ持つ（要件 2.1・2.3）。
