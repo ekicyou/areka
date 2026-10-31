@@ -55,9 +55,9 @@ pub(crate) enum DeskAsk {
     /// （途中でやめたら依頼の書庫より短い）を運ぶ。
     // 窓口は今は終わりの合図だけを使う（起動の依頼の読み手はタスク 4.1 で外した・形は変えない）。
     OrderDone {
-        #[allow(dead_code)]
+        #[cfg_attr(not(test), allow(dead_code))]
         order: InstallOrder,
-        #[allow(dead_code)]
+        #[cfg_attr(not(test), allow(dead_code))]
         ends: Vec<ArchiveEnd>,
     },
 }

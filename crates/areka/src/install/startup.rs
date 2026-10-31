@@ -1,4 +1,4 @@
-//! 起動の依頼の持ち物（`--install` と exe の隣の `initial_install.nar`・spec: startup-install-option）。
+//! 起動の依頼の持ち物（`--install` と exe の隣の `initial_install.nar`・spec: startup-install-option・install-before-boot）。
 //!
 //! このファイルの純粋な判断（消す書庫・`callghost` の相手）は World にもファイルにも触らない。
 
