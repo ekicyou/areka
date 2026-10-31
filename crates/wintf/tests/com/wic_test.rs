@@ -188,3 +188,51 @@ fn copy_pixels_with_undersized_buffer_fails() {
         assert!(result.is_err(), "undersized buffer should fail");
     });
 }
+
+// ============================================================
+// load_bitmap_source の α の有無（番号つきの形式）
+// ============================================================
+
+/// 検体は emo-atlas と共有する（作り手 `crates/areka-emo-atlas/examples/gen_palette_samples.rs`、
+/// 表と作り直しの手順は `crates/areka-emo-atlas/src/testdata/palette/README.md`）。
+/// crate の依存は足さず、ファイルを相対パスで読むだけ。
+fn palette_has_alpha_of(filename: &str) -> bool {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../areka-emo-atlas/src/testdata/palette")
+        .join(filename);
+    with_com_initialized(|| {
+        let factory = wic_factory().expect("wic_factory");
+        let (_source, has_alpha) = load_bitmap_source(&factory, &path).expect("load_bitmap_source");
+        has_alpha
+    })
+}
+
+#[test]
+fn palette_idx8_mixed_has_alpha() {
+    assert!(palette_has_alpha_of("idx8_mixed.png"));
+}
+
+#[test]
+fn palette_idx4_mixed_has_alpha() {
+    assert!(palette_has_alpha_of("idx4_mixed.png"));
+}
+
+#[test]
+fn palette_gray8_trns_has_alpha() {
+    assert!(palette_has_alpha_of("gray8_trns.png"));
+}
+
+#[test]
+fn palette_trans_gif_has_alpha() {
+    assert!(palette_has_alpha_of("trans.gif"));
+}
+
+#[test]
+fn palette_idx8_plain_has_no_alpha() {
+    assert!(!palette_has_alpha_of("idx8_plain.png"));
+}
+
+#[test]
+fn palette_idx8_opaque_trns_has_no_alpha() {
+    assert!(!palette_has_alpha_of("idx8_opaque_trns.png"));
+}
