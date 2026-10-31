@@ -52,6 +52,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
             index: 0,
             method: DrawMethod::new("overlay".to_string()),
             surface_id: ref_surface_id,
+            target: ref_surface_id.to_string(),
             wait: 0,
             x,
             y,

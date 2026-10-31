@@ -79,6 +79,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     input_events::shell_box_handler::register_box_leave_system(world);
     input_events::choice_drain::register_choice_drain(world);
     input_events::char_watch::register_char_watch(world);
+    input_events::balloon_wheel::register_balloon_wheel(world);
     crate::install::register(world);
     crate::update::register(world);
     crate::mcp::register(world);

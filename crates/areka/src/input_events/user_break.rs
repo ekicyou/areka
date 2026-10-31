@@ -65,8 +65,8 @@ impl UserBreakWiring {
         self.no_user_break
     }
 
-    /// 話している最中か（テスト専用の読み口。本番の読み手は [`on_box_press`] で欄を直に読む）。
-    #[cfg(test)]
+    /// 話している最中か（読み手は話し終えたかの判断 `finished_talking`・`balloon_pressed.rs`。
+    /// [`on_box_press`] は欄を直に読む）。
     pub(crate) fn talking(&self) -> bool {
         self.talking
     }

@@ -44,7 +44,11 @@ fn always_fire_rng() -> LoopRng {
 #[test]
 fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
     // 実表＋常時発火固定 rng でループ活性化（既存テストは Inert＝非退行・本テストのみ Live）。
-    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+    let mut harness = SpineHarness::boot_live(
+        r"\s[2100]\e",
+        always_fire_rng(),
+        areka_seriko::seeded_rng(0),
+    );
 
     // surface2100（kero まばたき random,4）を表示させる: \s[2100] cue を dispatcher tick で駆動し、
     // rx に shell ShowSurface{2100} が現れる（＝seriko が表示中 slot を記録済み）まで有界待機。
@@ -252,7 +256,11 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
 #[test]
 fn spine_e2e_kero_blink_one_cycle_golden() {
     // 実表＋常時発火固定 rng でループ活性化（既存 spine テストは Inert＝非退行・本テストのみ Live）。
-    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+    let mut harness = SpineHarness::boot_live(
+        r"\s[2100]\e",
+        always_fire_rng(),
+        areka_seriko::seeded_rng(0),
+    );
     // 表示中ゲート前提: surface2100 を scope0 shell へ表示（seriko ScopeStates に記録）。bind 不要（Random）。
     drive_shell_shown(&mut harness, 2100, None);
 
@@ -305,8 +313,11 @@ fn spine_e2e_kero_blink_one_cycle_golden() {
 fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
     // \s[1000]（sakura 着せ替え surface）＋ \![bind,まばたき,通常,1]（1400 bindgroup ON）。常時発火 rng で
     // ループ活性化（bind ゲート ON の 1400 のみ発火・半目 1401/ジトー 1402 は OFF ゆえ非発火）。
-    let mut harness =
-        SpineHarness::boot_live(r"\s[1000]\![bind,まばたき,通常,1]\e", always_fire_rng());
+    let mut harness = SpineHarness::boot_live(
+        r"\s[1000]\![bind,まばたき,通常,1]\e",
+        always_fire_rng(),
+        areka_seriko::seeded_rng(0),
+    );
     // 表示中＋bind ON 前提: scope0 shell surface1000 が binds に 1400 を含んで表示される
     // （\![bind] 貫通で current_binds へ 1400 が書き込まれた end-to-end 証跡＝bind 再発行 Show）。
     drive_shell_shown(&mut harness, 1000, Some(1400));
@@ -360,7 +371,11 @@ fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
 #[test]
 fn spine_e2e_sakura_blink_default_off_emits_nothing() {
     // fixture 既定（bind OFF・\![bind] なし）で surface1000 を表示。always_fire でもゲートが塞ぐ＝発行ゼロ。
-    let mut harness = SpineHarness::boot_live(r"\s[1000]\e", always_fire_rng());
+    let mut harness = SpineHarness::boot_live(
+        r"\s[1000]\e",
+        always_fire_rng(),
+        areka_seriko::seeded_rng(0),
+    );
     drive_shell_shown(&mut harness, 1000, None); // bind なし＝1400/1401/1402 は全 OFF（R3.4 既定）
 
     // 境界を複数跨ぐ seriko tick を注入し、発行が一切現れないことを固定する（起動 tick→1000/2000/…の境界跨ぎ）。
@@ -524,7 +539,11 @@ fn seriko_tick_apply_one(
 #[test]
 fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。
-    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+    let mut harness = SpineHarness::boot_live(
+        r"\s[2100]\e",
+        always_fire_rng(),
+        areka_seriko::seeded_rng(0),
+    );
 
     // 実 attach（視覚資源を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));

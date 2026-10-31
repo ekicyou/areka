@@ -39,8 +39,7 @@ use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
 use crate::talk::{TalkEpoch, TalkFeed};
 use crate::timeline::{
-    AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, current_frame_index, frame_at,
-    seeded_rng, should_fire,
+    FrameStatus, LoopRng, LotteryBoundary, current_frame_index, frame_at, seeded_rng, should_fire,
 };
 use crate::trigger::{Armed, TalkWindow};
 
@@ -50,6 +49,11 @@ mod top_trigger;
 use top_trigger::{
     arm_slot, fire_top_triggers, glyph_wall_ms, restart_talk, revealed_at, settle_talk,
 };
+
+// 一番上の面の働きのコマの配線と、描くコマの置き方（spec: seriko-pattern-calls）。
+#[path = "looper_calls.rs"]
+mod top_calls;
+use top_calls::{Shifts, StoppedAlways, put_top_always, put_visible, run_top_calls};
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
 /// [`LoopRuntime`] へ値渡しする。
@@ -73,6 +77,9 @@ pub struct SerikoLoopConfig {
     pub balloon_tables: BTreeMap<ActorKey, AnimationTable>,
     /// 1/N 抽選の乱数注入シーム（本番は `seeded_rng(seed)`・テストは注入列）。
     pub rng: LoopRng,
+    /// 呼び出しの選び（`alternative*`）の乱数注入シーム。抽選の `rng` とは別にし、選びが抽選の
+    /// 乱数を引かないようにする（spec: seriko-pattern-calls 要件 3.6・3.7）。
+    pub pick_rng: LoopRng,
 }
 
 impl SerikoLoopConfig {
@@ -85,6 +92,7 @@ impl SerikoLoopConfig {
             shell_table: AnimationTable::empty(),
             balloon_tables: BTreeMap::new(),
             rng: seeded_rng(0),
+            pick_rng: seeded_rng(0),
         }
     }
 }
@@ -94,6 +102,8 @@ impl SerikoLoopConfig {
 struct Playback {
     /// 再生開始絶対時刻（ms）。`frame_at` へ渡す経過＝`now_ms - started_at_ms`。
     started_at_ms: u64,
+    /// 働きのコマを当て終えた時刻（まだなら `None`・spec: seriko-pattern-calls）。
+    acts_through: Option<u64>,
 }
 
 /// per-slot の再生中アニメ表（animation id → [`Playback`]）。エントリを持つ id が「再生中」＝抽選対象外。
@@ -132,6 +142,10 @@ pub(crate) struct LoopRuntime {
     /// シェルかバルーンのどれかの表に `talk` が在るか（文字の cue を写すかの門・要件 8.1）。表を
     /// 差し替えるたびに組み直す。
     has_talk: bool,
+    /// 呼び出しで止めた一番上の `always`（面を出すまで始め直さない・spec: seriko-pattern-calls 3.5）。
+    stopped_always: StoppedAlways,
+    /// ずれの持ち主（spec: seriko-pattern-calls 7.1・7.6）。
+    shifts: Shifts,
 }
 
 /// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
@@ -142,10 +156,10 @@ fn slot_rank(slot: Slot) -> u8 {
     }
 }
 
-/// 表のコマ 1 枚を合成へ渡すコマにする（一番上と部品で共有）。
+/// 表の描くコマ 1 枚を合成へ渡すコマにする（一番上と部品で共有）。
 ///
-/// [`frame_at`] が `Active`/`FinishedResidual` を返したコマにだけ使う（その時点で `surface_id` は
-/// 非負・負は `Stopped`）。
+/// 一番上は描くコマ（[`crate::timeline::visible_frame`] の答え）だけを渡す（働きのコマの `surface_id`
+/// は絵でない・spec: seriko-pattern-calls 1.3）。部品は今のコマを渡す（5.3 で描くコマへ揃える）。
 pub(crate) fn pattern_frame(f: &LoopFrame) -> PatternFrame {
     PatternFrame {
         surface_id: f.surface_id as u32,
@@ -155,24 +169,11 @@ pub(crate) fn pattern_frame(f: &LoopFrame) -> PatternFrame {
     }
 }
 
-/// 一番上の `always` の経過 `elapsed_ms` の答えを欄へ置く: 経過 0 のコマと同じなら載せない／
-/// コマならコマ／何も出さないなら「消えている」（spec: areka-P0-animated-image-playback 要件 4.1・
-/// 4.2・4.5・7.4）。再生は末尾でも負の番号でも捨てない（周の頭へ戻って続く）。
-fn put_top_always(pattern: &mut PatternState, anim: &LoopAnimation, elapsed_ms: u64) {
-    let LoopTrigger::Always { period_ms, laps } = anim.trigger else {
-        return;
-    };
-    let rest = always_at(&anim.frames, period_ms, laps, 0);
-    match always_at(&anim.frames, period_ms, laps, elapsed_ms) {
-        now if now == rest => pattern.remove(anim.id),
-        AlwaysView::Frame(i) => pattern.set(anim.id, pattern_frame(&anim.frames[i])),
-        AlwaysView::Nothing => pattern.set_blank(anim.id),
-    }
-}
-
 /// 一番上 `surface_id` の `always` に再生が無ければ `at_ms` で作る（乱数を引かない・要件 4.1）。
+/// 呼び出しで止めた印のあるものは作らない（spec: seriko-pattern-calls 3.5）。
 fn start_top_always(
     playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
+    stopped: &StoppedAlways,
     table: &AnimationTable,
     scope: &ActorKey,
     slot: Slot,
@@ -180,7 +181,9 @@ fn start_top_always(
     at_ms: u64,
 ) {
     for anim in table.animations(surface_id) {
-        if !matches!(anim.trigger, LoopTrigger::Always { .. }) {
+        if !matches!(anim.trigger, LoopTrigger::Always { .. })
+            || stopped.contains(&(scope.clone(), slot, anim.id))
+        {
             continue;
         }
         let slot_playback = playback.entry((scope.clone(), slot)).or_default();
@@ -191,6 +194,7 @@ fn start_top_always(
             anim.id,
             Playback {
                 started_at_ms: at_ms,
+                acts_through: None,
             },
         );
         tracing::debug!(
@@ -271,8 +275,9 @@ fn put_top_play(
             new_pattern.remove(anim_id);
         }
         // 現在コマ 1 枚を搬送（4.2）。Active は再生継続、FinishedResidual は残留のうえ playback 除去。
+        // 働きのコマなら前の描くコマを置く（spec: seriko-pattern-calls 1.3・7.7）。
         FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) => {
-            new_pattern.set(anim_id, pattern_frame(&anim.frames[i]));
+            put_visible(new_pattern, anim, i);
             // 末尾非負到達（FinishedResidual）＝もう「再生中」ではない → playback のみ除去
             // （コマは残す・IdleResidual へ・4.4/9.4）。Active は再生継続でここは通らない。
             let is_last = i == anim.frames.len() - 1;
@@ -338,6 +343,8 @@ impl LoopRuntime {
             epoch: TalkEpoch::default(),
             feeds: HashMap::new(),
             has_talk,
+            stopped_always: StoppedAlways::new(),
+            shifts: Shifts::default(),
         }
     }
 
@@ -453,12 +460,15 @@ impl LoopRuntime {
             armed,
             epoch,
             feeds,
+            stopped_always,
+            shifts,
             ..
         } = self;
         let SerikoLoopConfig {
             shell_table,
             balloon_tables,
             rng,
+            pick_rng,
         } = config;
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性・
         // 要件 5.6）。`BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
@@ -509,6 +519,9 @@ impl LoopRuntime {
                         LoopTrigger::Runonce
                         | LoopTrigger::Periodic { .. }
                         | LoopTrigger::Talk { .. } => continue,
+                        // 呼ばれるだけの animation も抽選しない（乱数を引く前に飛ばす・spec:
+                        // seriko-pattern-calls 要件 11.1・11.3）。
+                        LoopTrigger::CallOnly => continue,
                     };
                     // (c) 1/N 抽選（ここで初めて乱数を消費）。
                     if should_fire(k, rng) {
@@ -516,6 +529,7 @@ impl LoopRuntime {
                             anim.id,
                             Playback {
                                 started_at_ms: now_ms,
+                                acts_through: None,
                             },
                         );
                         tracing::info!(
@@ -570,7 +584,7 @@ impl LoopRuntime {
             // 一番上の `always` は抽選を待たず、再生が無ければこの刻みの時刻で始まる（要件 4.1）。
             // 窓が閉じている間は作らない。
             if has_always && *open {
-                start_top_always(playback, table, scope, *slot, *sid, now_ms);
+                start_top_always(playback, stopped_always, table, scope, *slot, *sid, now_ms);
             }
             // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
             // 再発火したアニメは playback を持つのでここで frame_at のみに従い更新される＝残留の即時クリア。
@@ -605,6 +619,18 @@ impl LoopRuntime {
                     window.as_ref(),
                 );
             }
+
+            // 働きのコマを予定の時刻の順に当てる（抽選・`always`・引き金の始まりの後、コマを置く前＝
+            // 呼ばれて始まった相手の今のコマもこの刻みに載る・spec: seriko-pattern-calls 3.1・3.9）。
+            let (mut shift, _) = run_top_calls(
+                playback,
+                &mut new_pattern,
+                stopped_always,
+                &key,
+                table.animations(*sid),
+                now_ms,
+                pick_rng,
+            );
 
             // 再生中 animation id を昇順で処理（決定論の warn! 順・D-7 と同一方針）。
             let mut playing_ids: Vec<u32> = playback
@@ -682,7 +708,7 @@ impl LoopRuntime {
             // 部品: 一番上の進行を済ませた絵で部品の欄を作り直す（一番上の抽選は全スコープぶん済み）。
             // 部品の `talk` はこの面の文字の窓 `window` を借りる（部品は文字の数えを持たない）。
             if with_parts {
-                parts.advance(
+                shift = shift.then(parts.advance(
                     scope,
                     *slot,
                     *sid,
@@ -693,8 +719,9 @@ impl LoopRuntime {
                     *open,
                     window.as_ref(),
                     rng,
+                    pick_rng,
                     &mut new_pattern,
-                );
+                ));
             }
 
             // (4) 差分反映: 変化した slot のみ指令を返す（Unchanged は無発行・要件 6.2）。
@@ -703,7 +730,9 @@ impl LoopRuntime {
             {
                 commands.push(cmd);
             }
+            shifts.apply(scope, *slot, shift);
         }
+        commands.extend(shifts.take_all());
 
         // 全部の面が文字の窓を読み終えた: 数えを今現れている数まで進め、数え終えた文字を刈り込む
         // （表に `talk` が無ければ文字の列は空で、何もしない）。
@@ -725,6 +754,18 @@ impl LoopRuntime {
         // 残留 warn! 記録も当該 slot ぶんは無効化（新面での負 surface は再度 1 回 warn! されるべき）。
         self.warned_negative
             .retain(|(s, sl, _)| !(s == scope && *sl == slot));
+    }
+
+    /// 面を出した（変わった・同じ面の出し直し・シェルの差し替え）ときに actor が呼ぶ口
+    /// （spec: seriko-pattern-calls 3.5・7.6・M2・M3）。ずれを 0 へ戻し（0 でなければ (0, 0) の命令を
+    /// 積む＝[`LoopRuntime::take_shifts`]）、`scope` の `slot` の止めた `always` の印を消し、消したら
+    /// 真を返す（actor は合図の時刻で [`LoopRuntime::refresh`] して始め直す）。
+    pub(crate) fn on_surface_shown(&mut self, scope: &ActorKey, slot: Slot) -> bool {
+        self.shifts.reset(scope, slot);
+        let before = self.stopped_always.len();
+        self.stopped_always
+            .retain(|(s, sl, _)| !(s == scope && *sl == slot));
+        self.parts.on_surface_shown(scope, slot) | (self.stopped_always.len() != before)
     }
 
     /// シェルの表の差し替え（spec: areka-P0-shell-balloon-switch 要件 2.8）。
@@ -770,11 +811,19 @@ impl LoopRuntime {
             armed,
             epoch,
             feeds,
+            stopped_always,
+            shifts,
             ..
         } = self;
+        let SerikoLoopConfig {
+            shell_table,
+            balloon_tables,
+            pick_rng,
+            ..
+        } = config;
         let table = match slot {
-            Slot::Shell => &config.shell_table,
-            Slot::Balloon => config.balloon_tables.get(scope)?,
+            Slot::Shell => &*shell_table,
+            Slot::Balloon => balloon_tables.get(scope)?,
         };
         if !table.is_continuous() {
             return None;
@@ -789,20 +838,14 @@ impl LoopRuntime {
         };
         let at_ms = at_ms.or(*last_seen);
         let mut pattern = states.current_pattern(scope, slot).clone();
+        let mut shift = Default::default();
         if let Some(at) = at_ms {
             if open {
-                start_top_always(playback, table, scope, slot, sid, at);
+                start_top_always(playback, stopped_always, table, scope, slot, sid, at);
             }
             let key = (scope.clone(), slot);
-            let always = table
-                .animations(sid)
-                .iter()
-                .filter(|a| matches!(a.trigger, LoopTrigger::Always { .. }));
-            for anim in always {
-                if let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) {
-                    put_top_always(&mut pattern, anim, at.saturating_sub(p.started_at_ms));
-                }
-            }
+            // 頭のコマを置く `always` 以外の再生（鳴らした `runonce` と呼び出しで始まったもの）。
+            let mut heads = Vec::new();
             // 引き金: 構える条件を満たす面でだけ構え（面に入った）、`runonce` を出来事の時刻で鳴らして
             // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。`periodic` は刻みで鳴らす。
             let (_, has_trigger) = top_kinds(table, sid);
@@ -825,18 +868,38 @@ impl LoopRuntime {
                     at,
                     None,
                 );
-                for (anim, started) in fired {
-                    if let FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) =
-                        frame_at(&anim.frames, at.saturating_sub(started))
-                    {
-                        pattern.set(anim.id, pattern_frame(&anim.frames[i]));
-                    }
+                heads.extend(fired.iter().map(|(anim, _)| anim.id));
+            }
+            // 働きのコマを合図の時刻で当てる（頭のコマを置く前・spec: seriko-pattern-calls 3.1）。
+            let (top, called) = run_top_calls(
+                playback,
+                &mut pattern,
+                stopped_always,
+                &key,
+                table.animations(sid),
+                at,
+                pick_rng,
+            );
+            shift = top;
+            heads.extend(called);
+            for anim in table.animations(sid) {
+                let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) else {
+                    continue;
+                };
+                let elapsed = at.saturating_sub(p.started_at_ms);
+                if matches!(anim.trigger, LoopTrigger::Always { .. }) {
+                    put_top_always(&mut pattern, anim, elapsed);
+                } else if heads.contains(&anim.id)
+                    && let FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) =
+                        frame_at(&anim.frames, elapsed)
+                {
+                    put_visible(&mut pattern, anim, i);
                 }
             }
         }
         // 部品は面の種類を問わない（バルーンの面の着せ替えの集合は空）。
         if table.has_animated_parts() {
-            parts.refresh(
+            shift = shift.then(parts.refresh(
                 scope,
                 slot,
                 sid,
@@ -844,10 +907,13 @@ impl LoopRuntime {
                 table,
                 at_ms,
                 open,
+                pick_rng,
                 &mut pattern,
-            );
+            ));
         }
-        match states.commit_pattern(scope, slot, pattern) {
+        let shown = states.commit_pattern(scope, slot, pattern);
+        shifts.apply(scope, slot, shift);
+        match shown {
             PatternApplyOutcome::Changed(cmd) => Some(cmd),
             PatternApplyOutcome::Unchanged => None,
         }
@@ -898,6 +964,9 @@ mod always_tests;
 #[cfg(test)]
 #[path = "looper_balloon_tests.rs"]
 mod balloon_tests;
+#[cfg(test)]
+#[path = "looper_calls_tests.rs"]
+mod calls_tests;
 #[cfg(test)]
 #[path = "looper_film_count_tests.rs"]
 mod film_count_tests;

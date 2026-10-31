@@ -48,6 +48,7 @@ fn build_target_assets_with_bind(
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
                 surface_id: 5000,
+                target: "5000".into(),
                 wait: 0,
                 x: 0,
                 y: 0,

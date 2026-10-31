@@ -39,6 +39,8 @@
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
 
+use super::marker::ArrowKeys;
+
 /// バルーンの幾何＋フォント subset モデル（クロスエンジン I/O 契約の正本）。
 ///
 /// 「1 バルーンの幾何＋フォント設定」を表す不変値オブジェクト（集約ルート）。
@@ -59,6 +61,7 @@ pub struct BalloonModel {
     font_decoration_raw: FontDecorationRaw,
     font_shadow_raw: FontShadowRaw,
     disable_font: DisableFont,
+    arrow_keys: ArrowKeys,
 }
 
 impl BalloonModel {
@@ -106,6 +109,7 @@ impl BalloonModel {
             font_decoration_raw: FontDecorationRaw::default(),
             font_shadow_raw: FontShadowRaw::default(),
             disable_font: DisableFont::default(),
+            arrow_keys: ArrowKeys::default(),
         }
     }
 
@@ -165,6 +169,13 @@ impl BalloonModel {
     /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 2.8/5.1）。
     pub fn with_disable_font(mut self, disable_font: DisableFont) -> Self {
         self.disable_font = disable_font;
+        self
+    }
+
+    /// 矢印の鍵 [`ArrowKeys`] を差し替えた値を返す additive ビルダ（`with_cursor` 流儀・
+    /// balloon-scroll-arrows 要件 1.1〜1.6）。`new` では `ArrowKeys::default()`（全部無し）。
+    pub fn with_arrow_keys(mut self, arrow_keys: ArrowKeys) -> Self {
+        self.arrow_keys = arrow_keys;
         self
     }
 
@@ -261,6 +272,11 @@ impl BalloonModel {
     /// `disable.font.*` が 1 本も無いバルーンでは `DisableFont::default()`（全キー未指定）となる。
     pub fn disable_font(&self) -> &DisableFont {
         &self.disable_font
+    }
+
+    /// 矢印の鍵 [`ArrowKeys`] を参照で読み取る（balloon-scroll-arrows 要件 1.1〜1.6）。
+    pub fn arrow_keys(&self) -> &ArrowKeys {
+        &self.arrow_keys
     }
 }
 

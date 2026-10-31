@@ -17,11 +17,11 @@ use wintf::ecs::window::monitor::Monitor;
 use areka_emo_compose::ScaleRatio;
 
 use super::geometry::{BaseFrame, FrameNote, compute_move_target};
-use super::{BaseposResolver, CanonDefaultBasepos, MoveBase, MoveDirective};
+use super::{AxisSpec, BaseposResolver, CanonDefaultBasepos, MoveBase, MoveDirective};
 use crate::placement::chain_finalize::ScriptPlaced;
 use crate::placement::follow::{
     Anchored, MonitorSnapshot, follow_sticky_move, log_sticky_ignored, move_window_to,
-    project_anchor, work_area_for_window,
+    project_anchor, rebase_shift_axes, work_area_for_window,
 };
 use crate::placement::primary_monitor;
 use crate::placement::resolver::{PointPx, RectPx, SizePx};
@@ -218,6 +218,11 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
     } else {
         follow_sticky_move(world, scope, delta);
     }
+    // 絶対の位置へ書いた軸は、書いた位置が面の `move` のずれの新しい元の位置（開発者裁定 2026-10-31・案 A）。
+    let relative =
+        matches!(directive.base, MoveBase::Me) || directive.base == MoveBase::Scope(scope);
+    let absolute = |axis: AxisSpec| !relative && matches!(axis, AxisSpec::Px(_));
+    rebase_shift_axes(world, target, absolute(directive.x), absolute(directive.y));
     true
 }
 

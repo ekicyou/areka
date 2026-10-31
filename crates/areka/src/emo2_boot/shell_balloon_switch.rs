@@ -20,8 +20,8 @@ use std::time::Instant;
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_emo_present::PresentOutcome;
+use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
 use areka_kanade::{GapRaise, KanadeMsg, MarkedEnd, ShioriMethod, TalkGap};
-use areka_parsers::balloon::BalloonModel;
 use areka_sylphya::PersistKey;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -151,9 +151,9 @@ pub(crate) enum SwapFinish {
         boxes: ShellBoxAssets,
         cursors: ShellCursorAssets,
     },
-    /// バルーン: scope ごとの文字の模型と背景色。
+    /// バルーン: scope ごとの面ごとの定義の束と背景色。
     Balloon {
-        scopes: Vec<(u32, BalloonModel, (u8, u8, u8))>,
+        scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,
     },
 }
 

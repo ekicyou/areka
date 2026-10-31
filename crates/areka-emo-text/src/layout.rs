@@ -444,10 +444,10 @@ impl LayoutEngine {
         // 正規化ブロック座標（行送り方向が正）: near＝行の開始側・far＝行の遠端・
         // boundary＝validrect の行送り側境界。正準表のあふれ判定行と 1:1。
         type Edge = fn(&PositionedLine) -> f32;
-        let (near, far, boundary, block_dir): (Edge, Edge, f32, f32) = match mode {
-            WritingMode::HorizontalTb => (|l| l.rect.top, |l| l.rect.bottom, region.bottom(), 1.0),
-            WritingMode::VerticalRl => (|l| -l.rect.right, |l| -l.rect.left, -region.left(), -1.0),
-            WritingMode::VerticalLr => (|l| l.rect.left, |l| l.rect.right, region.right(), 1.0),
+        let (near, far, boundary): (Edge, Edge, f32) = match mode {
+            WritingMode::HorizontalTb => (|l| l.rect.top, |l| l.rect.bottom, region.bottom()),
+            WritingMode::VerticalRl => (|l| -l.rect.right, |l| -l.rect.left, -region.left()),
+            WritingMode::VerticalLr => (|l| l.rect.left, |l| l.rect.right, region.right()),
         };
         let last_far = far(last);
         if last_far <= boundary {
@@ -457,22 +457,13 @@ impl LayoutEngine {
                 block_offset: 0.0,
             };
         }
-        // 送り量の原点は**描画範囲の開始側**（`layout` と同じ軸読み替え正準表で正規化ブロック
-        // 座標へ写す）。最初の行の開始側ではない——冒頭の保留改行で空いた分を送りの候補に
-        // 含めるためである（D17／R17.1・症状 F）。空きの無い入力では両者は同値。
-        let start = region.start();
-        let origin = match mode {
-            WritingMode::HorizontalTb => start.1,
-            WritingMode::VerticalRl => -start.0,
-            WritingMode::VerticalLr => start.0,
-        };
+        let origin = Self::block_origin(region, mode);
         // 行単位スクロール: 最新行が収まる最小スキップ数を探す（全行超過は最新行へ飽和）。
         let first_visible_line = lines
             .iter()
             .position(|line| last_far - (near(line) - origin) <= boundary)
             .unwrap_or(lines.len() - 1);
-        // 実軸の平行移動量: 正規化座標のスキップ距離を行送り方向の符号で戻す。
-        let block_offset = -block_dir * (near(&lines[first_visible_line]) - origin);
+        let block_offset = Self::block_offset_at(&lines[first_visible_line], region, mode);
         tracing::debug!(
             ?mode,
             first_visible_line,
@@ -484,6 +475,34 @@ impl LayoutEngine {
             first_visible_line,
             block_offset,
         }
+    }
+
+    /// 送り量の原点＝**描画範囲の開始側**の正規化ブロック座標（行送り方向が正）。
+    /// 最初の行の開始側ではない——冒頭の保留改行で空いた分を送りの候補に含めるためである
+    /// （D17／R17.1・症状 F）。空きの無い入力では両者は同値。
+    fn block_origin(region: &TextRegion, mode: WritingMode) -> f32 {
+        let start = region.start();
+        match mode {
+            WritingMode::HorizontalTb => start.1,
+            WritingMode::VerticalRl => -start.0,
+            WritingMode::VerticalLr => start.0,
+        }
+    }
+
+    /// 行 `line` の開始側を描画範囲の開始側へ重ねる実軸の平行移動量（`visible_window` と
+    /// 手動の見える範囲〔`scroll_marker::window_for`〕が共有する唯一の式）。
+    /// 正規化座標のスキップ距離を行送り方向の符号で戻す。
+    pub(crate) fn block_offset_at(
+        line: &PositionedLine,
+        region: &TextRegion,
+        mode: WritingMode,
+    ) -> f32 {
+        let (near, block_dir) = match mode {
+            WritingMode::HorizontalTb => (line.rect.top, 1.0),
+            WritingMode::VerticalRl => (-line.rect.right, -1.0),
+            WritingMode::VerticalLr => (line.rect.left, 1.0),
+        };
+        -block_dir * (near - Self::block_origin(region, mode))
     }
 }
 

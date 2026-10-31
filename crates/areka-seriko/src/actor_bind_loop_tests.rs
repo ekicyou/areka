@@ -1012,6 +1012,7 @@ mod tick_loop_tests {
             index,
             method: DrawMethod::new("overlay".to_string()),
             surface_id,
+            target: surface_id.to_string(),
             wait,
             x: 0,
             y: 0,
@@ -1070,6 +1071,7 @@ mod tick_loop_tests {
             shell_table,
             balloon_tables: BTreeMap::new(),
             rng,
+            pick_rng: crate::seeded_rng(0),
         }
     }
 

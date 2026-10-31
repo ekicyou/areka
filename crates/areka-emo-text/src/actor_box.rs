@@ -56,6 +56,9 @@ impl TextLayerRuntime {
             .collect();
         for key in &stale {
             if let Some(render) = self.surfaces.remove(key) {
+                if let Some(markers) = render.markers {
+                    markers.despawn(world);
+                }
                 render.surface.despawn_window_child(world);
             }
         }
@@ -65,6 +68,10 @@ impl TextLayerRuntime {
         self.choice_hover.retain(|k, _| !is_box(k));
         self.choice_snapshot.retain(|k, _| !is_box(k));
         self.box_sites.clear();
+        let boxes: Vec<PlaceKey> = self.scrolls.keys().filter(|k| is_box(k)).cloned().collect();
+        for key in &boxes {
+            self.drop_box_scroll(key);
+        }
         self.box_overflow_warned.clear();
         self.box_definition_warned.clear();
         self.shown_boxes.clear();
@@ -446,6 +453,7 @@ impl TextLayerRuntime {
         self.routing.remove(key);
         self.layout_input.remove(key);
         self.box_sites.remove(key);
+        self.drop_box_scroll(key);
         // 見えない箱の当たり行を残さない（次の提示で再び導く）。
         self.choice_snapshot.remove(key);
         if let (Some(boxes), TextPlace::Box(name)) =
@@ -454,6 +462,9 @@ impl TextLayerRuntime {
             boxes.retain(|b| b.name != *name);
         }
         if let Some(render) = self.surfaces.remove(key) {
+            if let Some(markers) = render.markers {
+                markers.despawn(world);
+            }
             render.surface.despawn_window_child(world);
         }
         debug!(actor = %key.actor, place = ?key.place, "箱の置き場所の登録を外した（文字は保つ）");
@@ -461,20 +472,33 @@ impl TextLayerRuntime {
 
     /// 箱の面を窓の `Children`（`children`）のどこへ挿すか: 差し込み口の直後から、element番号の
     /// 大きい順（絵より前＝手前・要件 3.7・3.9）。同じスコープで面を持つ、より大きい element番号の
-    /// 箱の数だけ後ろへずらす。差し込み口が子に無い・登録されていない箱は `None`。
+    /// 箱の面の数（文字の面と印の面の両方）だけ後ろへずらす。差し込み口が子に無い・登録されていない
+    /// 箱は `None`。
     pub(super) fn box_child_index(&self, children: &[Entity], place: &PlaceKey) -> Option<usize> {
         let element = self.box_sites.get(place)?.element;
         let slot = self.routing.get(place)?.slot;
         let slot_at = children.iter().position(|child| *child == slot)?;
-        let in_front = self
+        let in_front: usize = self
             .box_sites
             .iter()
-            .filter(|(key, site)| {
-                key.actor == place.actor
-                    && site.element > element
-                    && self.surfaces.contains_key(*key)
-            })
-            .count();
+            .filter(|(key, site)| key.actor == place.actor && site.element > element)
+            .filter_map(|(key, _)| self.surfaces.get(key))
+            .map(|render| 1 + usize::from(render.markers.is_some()))
+            .sum();
         Some(slot_at + 1 + in_front)
+    }
+
+    /// 印の面を窓の `Children` のどこへ挿すか: その場所の文字の面（普通のバルーンは差し込み口・箱は
+    /// 箱の文字の面）の位置＝文字の面の直前（先頭ほど手前）。文字の面がまだ無い・子に無ければ `None`。
+    pub(super) fn marker_child_index(
+        &self,
+        children: &[Entity],
+        place: &PlaceKey,
+    ) -> Option<usize> {
+        let text = match &place.place {
+            TextPlace::Balloon => self.routing.get(place)?.slot,
+            TextPlace::Box(_) => self.surfaces.get(place)?.surface.window_child()?,
+        };
+        children.iter().position(|child| *child == text)
     }
 }

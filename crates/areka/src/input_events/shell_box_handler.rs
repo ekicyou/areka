@@ -20,6 +20,7 @@ use std::rc::Rc;
 use areka_emo_compose::BoxName;
 use areka_emo_text::actor::{ChoiceHitRow, ShownBox, TextLayerRuntime};
 use areka_emo_text::place::{PlaceKey, TextPlace};
+use areka_emo_text::scroll_marker::ARROW_STEP_LINES;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
@@ -29,7 +30,7 @@ use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
 use super::balloon::{
-    BalloonWiring, ChoiceSelection, HoverAction, hover_action, selection_events,
+    BalloonWiring, ChoiceSelection, HoverAction, finished_talking, hover_action, selection_events,
     settle_after_selection,
 };
 use super::shell_box::{
@@ -52,7 +53,7 @@ pub(super) struct BoxPoint {
 }
 
 /// 箱の場所の鍵。
-fn box_place(scope: usize, name: &BoxName) -> PlaceKey {
+pub(super) fn box_place(scope: usize, name: &BoxName) -> PlaceKey {
     PlaceKey {
         actor: ActorKey::from(scope.to_string()),
         place: TextPlace::Box(name.clone()),
@@ -228,10 +229,54 @@ pub(super) fn on_box_pointer_pressed(
     entity: Entity,
     state: &PointerState,
 ) -> bool {
-    let Some((scope, _, point)) = locate(world, entity, state) else {
+    let Some((scope, runtime, point)) = locate(world, entity, state) else {
         return false;
     };
+    // 矢印（balloon-scroll-arrows 要件 7.4）: 話し終えた後の左押下が押された箱の矢印に当たれば、
+    // 送りだけをして消費する（中断・選択・`OnMouseClick` へ流さない）。矢印かどうかは送り手でなく点で決める。
+    let at = (state.client_point.x as f32, state.client_point.y as f32);
+    if state.left_down
+        && finished_talking(world)
+        && press_box_arrow(&runtime, scope, point.hit.as_ref(), at)
+    {
+        return true;
+    }
     press_with_point(world, scope, state, point)
+}
+
+/// 点（シェルの窓のクライアント物理 px）が押された箱の矢印に当たれば、その向きへ
+/// [`ARROW_STEP_LINES`] 行送って `true`。箱の外・矢印が無い・透けた画素なら `false`。
+fn press_box_arrow(
+    runtime: &RefCell<TextLayerRuntime>,
+    scope: usize,
+    hit: Option<&ShownBox>,
+    at: (f32, f32),
+) -> bool {
+    let Some(hit) = hit else {
+        return false;
+    };
+    let Ok(mut rt) = runtime.try_borrow_mut() else {
+        tracing::error!(
+            event = "balloon_runtime_borrow_failed",
+            scope,
+            "runtime try_borrow_mut 失敗（箱の矢印の押下）: 矢印として扱わない"
+        );
+        return false;
+    };
+    let place = box_place(scope, &hit.name);
+    let Some(kind) = rt.marker_at_point(&place, at) else {
+        return false;
+    };
+    let change = rt.scroll_manual_at(&place, kind.dir(), ARROW_STEP_LINES);
+    tracing::trace!(
+        event = "box_arrow_pressed",
+        scope,
+        r#box = hit.name.as_str(),
+        ?kind,
+        ?change,
+        "箱の矢印の押下: 送りだけをしてクリックにしない"
+    );
+    true
 }
 
 /// 押下 1 回の本体。箱の中の押下はすべて中断の入口を通す（直前の押下の記憶を普通のバルーンの

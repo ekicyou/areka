@@ -306,9 +306,9 @@ fn a_restored_scope_stays_marked_as_not_default_placed() {
 // 区分そのもの（定義元が 1 本であること）
 // ---------------------------------------------------------------------------
 
-/// システム由来の再アンカーは D9 が挙げる 6 経路**ちょうど**である。
+/// システム由来の再アンカーは D9 が挙げる 6 経路と、面の `move` のずれ（PatternMove）**ちょうど**である。
 #[test]
-fn the_system_reanchor_partition_is_exactly_the_six_routes_named_by_d9() {
+fn the_system_reanchor_partition_is_exactly_the_six_routes_named_by_d9_and_pattern_move() {
     let system: Vec<PlacementRoute> = PlacementRoute::ALL
         .into_iter()
         .filter(|r| r.is_system_reanchor())
@@ -322,8 +322,10 @@ fn the_system_reanchor_partition_is_exactly_the_six_routes_named_by_d9() {
             PlacementRoute::ReportedSizeReconcile,
             PlacementRoute::WorkAreaResnap,
             PlacementRoute::ChainRealign,
+            // 面の `move` のずれ（表示の側の置き直し・seriko-pattern-calls 設計 MoveShiftPlacement）。
+            PlacementRoute::PatternMove,
         ],
-        "システム由来の経路集合が D9 の 6 経路と食い違う"
+        "システム由来の経路集合が D9 の 6 経路＋PatternMove と食い違う"
     );
 }
 

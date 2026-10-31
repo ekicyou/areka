@@ -95,7 +95,7 @@ fn balloon_built() -> SwapBuilt {
                     scope,
                     emo_world: world_of(NEW_BALLOON),
                     atlas: atlas(),
-                    model: areka_parsers::balloon::parse_str("", None),
+                    definitions: crate::emo2_boot::assets::empty_definitions(scope),
                     background_color: (255, 255, 255),
                     name: String::new(),
                 })

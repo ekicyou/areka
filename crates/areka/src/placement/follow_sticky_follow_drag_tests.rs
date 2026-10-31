@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use areka_emo_compose::ScaleRatio;
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
@@ -26,7 +27,7 @@ use super::sticky_follow::{
     follow_partners_on_drag,
 };
 use super::test_support::{fake_handle, position_of, single_monitor_snapshot, window_pos_sized};
-use super::{Anchored, BalloonFollow, CharWindowMarker, OffsetBase};
+use super::{Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift};
 use crate::placement::resolver::{Anchor, PointPx};
 
 /// キャラクターの窓の大きさ（物理 px・96 の倍数を避ける）。
@@ -221,6 +222,59 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
         scope: 0,
         axis: Axis::X
     }));
+
+    parts.publisher.close();
+    let _ = parts.handle.join();
+    finish(world);
+}
+
+/// 組の相手に面の `move` のずれが当たっていれば、記憶にはずれを引いた元の位置を書く
+/// （seriko-pattern-calls task 6.2・要件 7.8）。窓はずれたまま動く。
+#[test]
+fn finish_persists_partner_position_without_its_pattern_shift() {
+    let shared = Arc::new(FakePersistIo::new());
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    let parts = spawn_sylphya(SylphyaInit {
+        roots: roots.clone(),
+        io: Box::new(SharedFakeIo(shared.clone())),
+        runtime_sink: None,
+    });
+    let mut world = world_with_snapshot();
+    world.insert_non_send(PersistWiring {
+        publisher: parts.publisher.clone(),
+    });
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    group(&mut world, &["0", "1"]);
+    assert!(apply_char_shift(
+        &mut world,
+        partner.char,
+        (15, 25),
+        ScaleRatio::ONE
+    ));
+
+    begin_char_drag(&mut world, dragged.char);
+    finish_char_drag(&mut world, dragged.char, point(537, 180));
+
+    assert_eq!(
+        position_of(&world, partner.char),
+        Point {
+            x: 900 + 15 + 37,
+            y: 150 + 25 - 20
+        }
+    );
+    parts.publisher.barrier().expect("barrier");
+    let loaded: HashMap<PersistKey, String> =
+        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
+            .into_iter()
+            .collect();
+    // 揃えない置き方の記憶は左上のまま。
+    let key = |axis| PersistKey::WindowPos { scope: 1, axis };
+    assert_eq!(loaded.get(&key(Axis::X)), Some(&(900 + 37).to_string()));
+    assert_eq!(loaded.get(&key(Axis::Y)), Some(&(150 - 20).to_string()));
 
     parts.publisher.close();
     let _ = parts.handle.join();

@@ -39,7 +39,7 @@ fn answers_no_window_with_an_empty_world() {
 /// `ui_us` が 1234・`encode_us` が数として読める（要件 5.3・7.1）。
 #[test]
 fn success_record_carries_ui_us_and_encode_us() {
-    let job = balloon_job(0, vec![0, 0, 0, 0], (1, 1), None);
+    let job = balloon_job(0, vec![0, 0, 0, 0], (1, 1), None, None);
 
     let (answered, events) =
         log_capture_kit::capture(|| finish(TOOL, 0, job, Duration::from_micros(1234)));

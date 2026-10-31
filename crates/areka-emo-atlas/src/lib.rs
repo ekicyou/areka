@@ -695,6 +695,7 @@ mod bake_entry_tests {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
                 surface_id: 3000,
+                target: "3000".into(),
                 wait: 0,
                 x: 0,
                 y: 0,

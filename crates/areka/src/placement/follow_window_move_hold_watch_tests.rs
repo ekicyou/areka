@@ -10,7 +10,7 @@
 //! `BalloonFollow` の 1 語しか無いあいだ、これらの正当な書込は偽の警報を鳴らし、
 //! debug ビルドでは `debug_assert!` で落ちていた。
 //!
-//! 本ファイルは 2 種類の証拠を置く——⑴ 経路語ごとの分類（12 語＋route 無しを 1 つも
+//! 本ファイルは 2 種類の証拠を置く——⑴ 経路語ごとの分類（13 語＋route 無しを 1 つも
 //! 落とさない）を純関数に対して総当たりで確かめる ⑵ 本物の書込口を実際に通して、免除側は
 //! 鳴らず・鳴る側は従来どおり落ちることを実行で示す。⑵ の対は**同じ土台・同じ札**で
 //! 組み、変えるのは経路語 1 点だけである。
@@ -66,12 +66,12 @@ fn drop_queued_writes() {
 }
 
 // -------------------------------------------------------------------------
-// ⑴ 経路語ごとの分類（12 語＋route 無しを 1 つも落とさない）
+// ⑴ 経路語ごとの分類（13 語＋route 無しを 1 つも落とさない）
 // -------------------------------------------------------------------------
 
 /// 各経路語について「監視が鳴るか」を**テスト側にも独立に書き下し**、本番の網羅 match と
 /// 突き合わせる（二重記帳）。本番だけが正しいと仮定しないための対である。
-const EXPECTED: [(PlacementRoute, bool); 12] = [
+const EXPECTED: [(PlacementRoute, bool); 13] = [
     // 見送りが覆う経路（鳴る）。
     (PlacementRoute::AnchorChange, true),
     (PlacementRoute::Resnap, true),
@@ -80,6 +80,7 @@ const EXPECTED: [(PlacementRoute, bool); 12] = [
     (PlacementRoute::ReportedSizeReconcile, true),
     (PlacementRoute::WorkAreaResnap, true),
     (PlacementRoute::ChainRealign, true),
+    (PlacementRoute::PatternMove, true),
     // 見送らないことが正しい経路（鳴らない）。
     (PlacementRoute::SpawnInitial, false),
     (PlacementRoute::Restore, false),
@@ -88,7 +89,7 @@ const EXPECTED: [(PlacementRoute, bool); 12] = [
     (PlacementRoute::BalloonLimitRelease, false),
 ];
 
-/// 12 語すべてが分類され、期待と一致する（語の取りこぼしが無い）。
+/// 13 語すべてが分類され、期待と一致する（語の取りこぼしが無い）。
 #[test]
 fn every_placement_route_is_classified_for_the_hold_watch() {
     assert_eq!(
