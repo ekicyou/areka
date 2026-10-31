@@ -22,7 +22,7 @@
 
 **用語**:
 
-- **書体の行間**: 書体の表（hhea）が持つ lineGap。游ゴシック Regular と Medium は 1024（upem 2048）、Yu Gothic UI とＭＳ ゴシックは 0。**行送りの行間**（設定の `line_pitch = font.height ＋ 行間` の「行間」＝既定の定数 2 image px・`doc/COMPAT_ARCHITECTURE.md` §8）とは別物で、本 spec は行送りの行間に触らない。
+- **書体の行間**: DirectWrite が組む行の高さと、字の箱の丈（ascent ＋ descent）との差。游ゴシックでは、表の hhea の lineGap は 1024（upem 2048）だが、DirectWrite の ascent・descent は OS/2 の win の値（2017／619）、行の高さは hhea の和（1802＋455＋1024）なので、差は 645 設計単位（大きさ 20 で 6.30・28 で 8.82）。Yu Gothic UI とＭＳ ゴシックは 0。「書体の行間を持つ書体」はこの差が 0 より大きい書体を言う（hhea の lineGap の欄の値だけでは決めない）。**行送りの行間**（設定の `line_pitch = font.height ＋ 行間` の「行間」＝既定の定数 2 image px・`doc/COMPAT_ARCHITECTURE.md` §8）とは別物で、本 spec は行送りの行間に触らない。
 - **字の箱**: その行の字について、書体の ascent ＋ descent の丈を持ち、DirectWrite が実際に字を置いた所に在る箱。書体の行間 0 の書体では行の箱と同じ。
 - **帯**: マウスを乗せた選択肢（とアンカー）を塗る四角（`cursor.style,square` の塗り）。
 - **当たり**: マウスを乗せた・クリックしたと判じる範囲。
