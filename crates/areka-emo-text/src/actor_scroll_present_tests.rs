@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
-use areka_parsers::balloon::{ArrowKeys, MarkerCoord, MarkerPoint};
+use areka_parsers::balloon::{ArrowKeys, BalloonModel, MarkerCoord, MarkerPoint};
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::Children;
@@ -19,10 +19,12 @@ use wintf::ecs::WucGraphicsResource;
 use super::box_sync_tests::{emote, layout, select, text};
 use super::region_collapse_tests::model as parse_model;
 use super::scroll::placed_markers;
-use super::test_support::{com_world, cue, geo_model};
+use super::test_support::{com_world, cue, geo_model, opaque_count};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
-use crate::scroll_marker::{MarkerKind, MarkerShown, ResolvedMarkerPlacement, ScrollDir};
+use crate::scroll_marker::{
+    MarkerKind, MarkerShown, ResolvedMarkerPlacement, ScrollDir, WheelLines,
+};
 use crate::state::TextLayerConfig;
 
 /// 小さいバルーン（既定の 12px の字で 2〜3 行しか入らない）。
@@ -364,4 +366,93 @@ fn marker_failure_keeps_the_box_in_the_shown_copy() {
         rt.surfaces[&place].markers.is_none(),
         "印の面は挿せていない"
     );
+}
+
+/// 既定のバルーン（`areka-balloon` の `descript.txt`）: 面 326×169・描画範囲の上端 0・文字の原点 y 11。
+/// 描画範囲の上端と文字の原点の間に 11 の余白があり、先頭の行より前の行はそこへ描かない。
+fn default_balloon_model() -> BalloonModel {
+    parse_model(concat!(
+        "origin.x,14\n",
+        "origin.y,11\n",
+        "validrect.left,0\n",
+        "validrect.top,0\n",
+        "validrect.right,326\n",
+        "validrect.bottom,-20\n",
+        "font.name,ＭＳ ゴシック\n",
+        "font.height,12\n",
+    ))
+}
+
+/// 今の提示の面が、同じ見える範囲を全域で描き直した面と行ごとに同じこと。描き直しは再追従と同じく
+/// 描画資源だけを捨てて次の提示で作り直す（手動の位置は場所の状態なので残る）。
+fn assert_matches_full_redraw(
+    rt: &mut TextLayerRuntime,
+    world: &mut World,
+    place: &PlaceKey,
+    label: &str,
+) {
+    present_frame(rt, world, DONE).expect(label);
+    let live = rt
+        .surface(&place.actor)
+        .expect("面")
+        .read_back()
+        .expect("read_back");
+    rt.surfaces.remove(place);
+    present_frame(rt, world, DONE).expect("描き直しの提示");
+    let full = rt
+        .surface(&place.actor)
+        .expect("描き直しの面")
+        .read_back()
+        .expect("read_back");
+    assert!(opaque_count(&full) > 0, "{label}: 描き直しの面に字が在る");
+    assert_eq!(live.len(), full.len());
+    // 面の幅は描画範囲 326 × 2 倍。違う行（物理 px）を挙げる。
+    let row = 326 * 2 * 4;
+    let differing: Vec<usize> = (0..full.len() / row)
+        .filter(|y| live[y * row..(y + 1) * row] != full[y * row..(y + 1) * row])
+        .collect();
+    assert!(
+        differing.is_empty(),
+        "{label}: 差分の描き直しの面が全域の描き直しと {} 行違う（物理 px の行 {:?}..={:?}）\
+         ——行の上の一部しか描かれていない（実機 8.2 の段 3・段 6）",
+        differing.len(),
+        differing.first(),
+        differing.last()
+    );
+}
+
+/// 手動で古い側へ戻した提示は、同じ見える範囲を全域で描き直した面と同じ（実機 8.2: 既定のバルーン・
+/// 2 倍・15 行で、戻した後に 1 行が上の一部しか描かれなかった）。自動の位置（6 行目が先頭）から
+/// arrow0 で 2 行、ホイール 1 目盛り（3 行）で一番上へ戻す。
+#[test]
+fn scrolling_back_matches_a_full_redraw_of_the_same_window() {
+    const K: f32 = 2.0;
+    const BALLOON: (u32, u32) = (326, 169);
+    let (mut world, window, slot) = com_world();
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let actor = ActorKey::from("0");
+    let place = PlaceKey::balloon(&actor);
+    let physical = (
+        (BALLOON.0 as f32 * K).ceil() as u32,
+        (BALLOON.1 as f32 * K).ceil() as u32,
+    );
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, K, physical, BALLOON),
+        ResolvedBalloonText::resolve(&default_balloon_model(), BALLOON),
+    );
+    for i in 0..15 {
+        let at = i as f64;
+        rt.apply_cue(&cue("0", at, CueCommand::Text(format!("{}行目", i + 1))));
+        if i + 1 < 15 {
+            rt.apply_cue(&cue("0", at + 0.5, CueCommand::NewLine { ratio: 1.0 }));
+        }
+    }
+    present_frame(&mut rt, &mut world, DONE).expect("自動の位置の提示");
+    assert!(rt.has_hidden_lines_at(&place), "15 行はあふれる前提");
+
+    rt.scroll_manual_at(&place, ScrollDir::Older, 2);
+    assert_matches_full_redraw(&mut rt, &mut world, &place, "arrow0 で 2 行戻した");
+    rt.wheel_at(&place, 120, WheelLines::Lines(3));
+    assert_matches_full_redraw(&mut rt, &mut world, &place, "ホイールで一番上まで戻した");
 }

@@ -56,6 +56,16 @@ impl ScrollPlanner {
         })
     }
 
+    /// 古い側（行送りの向き）への送りの判定（純粋・DD-9）。前回の面は可視窓より前の行を描かず
+    /// 文字の原点までの余白を空けたままなので、古い側へ blit するとその余白が新しく見える行の上へ写る。
+    pub(super) fn is_scroll_toward_older(blit: (i32, i32), mode: WritingMode) -> bool {
+        match mode {
+            WritingMode::HorizontalTb => blit.1 > 0,
+            WritingMode::VerticalRl => blit.0 < 0,
+            WritingMode::VerticalLr => blit.0 > 0,
+        }
+    }
+
     /// ダーティ矩形と描画対象行を導出する（純粋・状態不変・DD4）。
     ///
     /// dirty ＝（a）露出帯（`blit` の逆側に生じる未保持領域・blit≠0 のとき 1 枚）∪（b）変化行

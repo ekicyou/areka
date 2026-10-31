@@ -603,7 +603,7 @@ impl TextLayerRuntime {
 }
 ```
 
-- Postconditions: `scroll_manual_at`・`wheel_at` は描き直しを直接しない。次のフレームの `present_actor` が新しい `VisibleWindow` で `ScrollPlanner` の blit とダーティ描画を出す（今の送りの描き直しの仕組み）。
+- Postconditions: `scroll_manual_at`・`wheel_at` は描き直しを直接しない。次のフレームの `present_actor` が新しい `VisibleWindow` で `ScrollPlanner` の blit とダーティ描画を出す（今の送りの描き直しの仕組み）。ただし古い側（行送りの向き）への送りは、前回の面の原点の上の描いていない余白が blit で新しく見える行に重なるので、blit せず面の全域を描き直す（`is_scroll_toward_older`・DD-9 の縮退と同じ経路）。
 - Invariants: `scrolls` を書くのは本ファイルと `apply_cue` の消去の腕だけ。
 
 #### MarkerSurface（GPU）
@@ -739,7 +739,7 @@ pub(crate) fn apply_face_windowposition(
 
 ### Monitoring
 
-- 実機の確かめは `RUST_LOG` に `areka_emo_present::balloon_marker=debug,areka_emo_text::actor_scroll=debug,areka::emo2_boot::frame::balloon_face=debug` を足して、解決・手動の始まりと終わり・面の差し替えの行を読む。
+- 実機の確かめは `RUST_LOG` に `areka_emo_present::balloon_marker=debug,areka_emo_text::actor::scroll=trace,areka::emo2_boot::frame::balloon_face=debug` を足して、解決・手動の始まりと終わり（`debug`）・1 段ごとの送り（`trace`・要件 9.3）・面の差し替えの行を読む。
 
 ## Testing Strategy
 
