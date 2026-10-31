@@ -66,3 +66,4 @@
 ## Implementation Notes
 - 4.1: `cargo test -p areka` は実機の結合テストを含み、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` を先に建てておかないと `real-run-kit` の i686.rs:77 で落ちる（本 spec の差分とは無関係・建てた後は `smoke_boot_loop_exit` 5/5 緑）。
 - 4.2: `tools/mouse-input.ps1` はこの機械（主画面 2880×1800・負の座標の 2 枚目）で毎回 1 画素ずれて自分で止まる（範囲の外・完了の棚卸で起票の候補）。実機の右クリックは `SetCursorPos`＋`mouse_event` で代えた。
+- 完了時の棚卸（2026-11-01）: その場で解決 0 件・起票 0 本・roadmap の「直接修正候補」への登記 1 件（4.2 の `mouse-input.ps1` の 1 画素のずれ・確かめに画面の操作が要るため）。4.1 の i686 の前提は直さない（`real-run-kit` の i686.rs の失敗の文が建て方のコマンドをそのまま示し、`tools/test-all.ps1` は先に建てる＝設計どおり）。⑵ は brief の「完了の棚卸」の節と roadmap の「windows-reactor 待ち」の段へ渡した（要件 6.3・6.4）。
