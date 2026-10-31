@@ -182,7 +182,7 @@ crates/
 - 守りの書き直し（G1〜G8）: `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`・`zorder_pair_tests.rs`・`zorder_pair_maintain_always_on_top_tests.rs`・`crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs`・`spawn_assembly_tests.rs`（内容は Testing Strategy）。
 - `crates/areka/src/mcp/check_script_judge.rs` の兄弟のテスト — 3 つの指令が `unknown_tag`・`unknown_command` を出さない 1 件（判定のコードは変えない）。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/ledger/shiori.toml`・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/pasta-real-run.md`（段 1 の「着地で変わるはずの所」）。
-- `.kiro/specs/stay-on-top-directives/verification.md`（新・タスクで作る）— 実機の確かめの手順と記録（要件 8・R1〜R3 の測り）。
+- `.kiro/specs/completed/stay-on-top-directives/verification.md`（新・タスクで作る）— 実機の確かめの手順と記録（要件 8・R1〜R3 の測り）。
 
 ## System Flows
 
