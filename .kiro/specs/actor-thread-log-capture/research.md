@@ -236,3 +236,7 @@
 - 目印の型の両側のずれ — ⑴ が赤にする・両側のコメントで互いを指す。
 - 赤に変わる既存のテスト（確実 1・疑い 4〜6）— 201 行は設計で直す・ほかは全体テスト 1 回で洗う・`install/desk_overwrite_tests.rs` は `install-before-boot` と合わせてから。
 - `areka-test-binary-stability` が測っているあいだの着地 — 着地させない（要件の Adjacent のとおり）。
+
+## 12. 設計討議の決着（2026-10-31・一括承認）
+
+- **設計議題 1（目印の型を両側に同じ形で書く約束）**: 推奨案のまま。`[(); 0x6172_656B]` を `crates/areka-actor/src/spawn.rs` と `crates/log-capture-kit/src/capture.rs` の 2 か所に同じ形で書き、ずれは対照の試験 ⑴ が赤にする。共有の小さなクレートを新しく作る案は取らない（`Cargo.lock` に新しいクレートが載り、依存を足す spec の 1 本だけの席を取るため）。
