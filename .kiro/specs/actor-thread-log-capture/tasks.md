@@ -2,7 +2,7 @@
 
 > 設計は `design.md`、要件は `requirements.md`。触ってよいファイルは design.md の File Structure Plan と requirements.md の Boundary Context（2026-10-31 要件討議の議題 2）に挙げたものだけ。`crates/areka/src/install/` は `install-before-boot` の持ち物なので、赤になっても直す前にそのセッションと合わせる。
 
-- [ ] 1. 試験の道具を areka-actor から使えるようにする
+- [x] 1. 試験の道具を areka-actor から使えるようにする
   - areka-actor の試験だけの依存に、共有の捕捉の部品（log-capture-kit）をワークスペースの中の道で 1 行足す。理由の一言をほかの crate の書き方に揃えて添える
   - 本番の依存（`[dependencies]`）には足さない。ロックファイルは道具の自動の追随だけで、手で書かない（外のクレートは増えない）
   - 完了の姿: areka-actor の試験のビルドが通り、ロックファイルの差分が areka-actor の依存の並びの 1 行だけで、areka-actor の本番の依存の並びは変わっていない
