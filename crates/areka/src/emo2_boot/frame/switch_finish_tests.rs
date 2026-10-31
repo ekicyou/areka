@@ -14,7 +14,6 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use areka_actor::{ReplySender, reply_channel};
-use areka_emo_present::balloon_definitions::{FaceDefinition, ScopeBalloonDefinitions};
 use areka_emo_present::{PresentError, PresentOutcome, TargetId};
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
 use areka_emo_text::place::TextPlace;
@@ -52,6 +51,7 @@ use crate::placement::sticky_group_ledger::{
     StickyGroup, StickyGroupLedger, StickySource, apply_set_sticky, seed_sticky_descript,
 };
 use crate::placement::zorder_group_ledger::GroupSource;
+use face_tests::new_balloon_definitions;
 
 // ---------------------------------------------------------------- 土台
 
@@ -139,17 +139,6 @@ fn balloon_finish() -> SwapFinish {
             .map(|scope| (scope, new_balloon_definitions(scope), (10, 20, 30)))
             .into(),
     }
-}
-
-/// 新しいバルーンの束（面 0 だけ・前の束と見分けられる書体の大きさ）。
-fn new_balloon_definitions(scope: u32) -> ScopeBalloonDefinitions {
-    ScopeBalloonDefinitions::single(
-        scope,
-        FaceDefinition {
-            model: areka_parsers::balloon::parse_str("font.height,33", None),
-            arrows: Default::default(),
-        },
-    )
 }
 
 /// 起動の文脈（今のバルーンは argv で決まった `kaku`）。
@@ -561,37 +550,6 @@ fn balloon_success_raises_on_balloon_change_and_records_only_last_balloon() {
         ),
         "((便り, 完了, LastBalloon の記録, 失敗, 印, 文字の模型の scope, 今のバルーン), 記憶)"
     );
-}
-
-/// バルーンの切り替えは新しい束を入れ、今の面（ここでは面 0）の定義を書き手が今の定義にする
-/// （balloon-scroll-arrows 要件 1.7・task 5.3）。前の束・前のモデルは残らない。
-#[test]
-fn balloon_switch_installs_the_new_bundle_through_the_face_writer() {
-    let mut rig = rig(SkinKind::Balloon, false);
-    for scope in [0, 1] {
-        rig.wiring
-            .balloon_definitions
-            .insert(scope, crate::emo2_boot::assets::empty_definitions(scope));
-        rig.wiring
-            .balloon_models
-            .insert(scope, areka_parsers::balloon::parse_str("", None));
-    }
-    answer(&mut rig, 0, Ok(()));
-    answer(&mut rig, 1, Ok(()));
-    frame(&mut rig);
-    for scope in [0, 1] {
-        let new = new_balloon_definitions(scope);
-        assert_eq!(
-            rig.wiring.balloon_definitions[&scope], new,
-            "scope {scope} の束"
-        );
-        assert_eq!(
-            rig.wiring.balloon_models[&scope],
-            new.face0().model,
-            "scope {scope} の今の定義"
-        );
-        assert_eq!(rig.wiring.balloon_faces[&scope], 0);
-    }
 }
 
 /// 記憶の書き手が無ければ `warn!(skin_memory_not_recorded)` 1 件で、切替は成功として扱う
@@ -1034,5 +992,7 @@ fn balloon_switch_renames_the_balloon_warning_field() {
 
 #[path = "switch_cursor_tests.rs"]
 mod cursor_tests;
+#[path = "switch_finish_face_tests.rs"]
+mod face_tests;
 #[path = "switch_reload_tests.rs"]
 mod reload_tests;
