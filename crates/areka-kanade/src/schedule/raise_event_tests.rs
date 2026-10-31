@@ -142,6 +142,45 @@ fn second_change_reply_during_talk_is_still_discarded() {
     assert!(matches!(s.phase, Phase::Steady { talk: Some(t) } if t.talk_id == TalkId(4)));
 }
 
+/// 倍率の 2 つのイベント（shell-scale-linkage 要件 5.1・5.2・5.11）: 話している最中の応答は台詞を
+/// 差し替えず情報の段で記録を残し、黙っているときは再生する。ほかのイベントは今までどおり差し替える。
+#[test]
+fn scale_event_reply_keeps_the_talk_while_talking_and_plays_when_silent() {
+    let refs = ["150", "100", "150", "100", "0"];
+    for id in ["OnShellScaling", "OnBalloonScaling"] {
+        // 話している最中: 送りはするが、応答は今の台詞を差し替えない。
+        let (s, actions) = raise(steady_talking("OnMouseMove"), id, &refs, ShioriMethod::Get);
+        assert_eq!(
+            only_get(&actions),
+            (id.to_string(), refs.map(String::from).to_vec())
+        );
+        let mut out = None;
+        let ev = capture(|| out = Some(reply_from(s, id, "\\0倍率\\e")));
+        let (s, actions) = out.expect("step は必ず結果を返す");
+        logged_once(&ev, Level::INFO, "scale_reply_dropped_while_talking");
+        assert_eq!(warn_count(&ev), 0, "{id}: warn! は出さない");
+        assert!(actions.is_empty(), "{id}: 話している最中は再生しない");
+        assert!(
+            matches!(s.phase, Phase::Steady { talk: Some(t) } if t.talk_id == TalkId(4)),
+            "{id}: 今のトークのまま"
+        );
+
+        // 黙っているとき: 応答の台本を再生する。
+        let (s, _) = raise(steady(), id, &refs, ShioriMethod::Get);
+        let (s, actions) = reply_from(s, id, "\\0倍率\\e");
+        assert!(
+            matches!(actions.as_slice(), [Action::StartTalk(_)]),
+            "{id}: 黙っているときは再生する"
+        );
+        assert!(matches!(s.phase, Phase::Steady { talk: Some(t) } if t.origin == id));
+    }
+
+    // ほかのイベント（`OnMouseClick`）は今までどおり差し替える。
+    let (s, actions) = reply_from(steady_talking("OnMouseMove"), "OnMouseClick", "\\0押\\e");
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(t)] if t.talk_id == TalkId(5)));
+    assert!(matches!(s.phase, Phase::Steady { talk: Some(t) } if t.origin == "OnMouseClick"));
+}
+
 /// NOTIFY の応答（`Notified`）は定常のどちらの形でも何もしない（`warn!` 0・動作 0・相もトークも不変）。
 #[test]
 fn notify_reply_in_steady_is_a_silent_no_op() {

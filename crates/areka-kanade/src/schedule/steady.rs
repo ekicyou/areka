@@ -753,6 +753,7 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
 ///   上書き＋StartTalk（dispatcher の既存 Close-then-spawn が旧 talk を閉じ、旧 Done を stale 破棄する・
 ///   kanade 側は slot 上書きと採番のみ＝新調停なし・Req 4.3・DD-IE-2）。
 /// - `talk: Some` + `Value` + origin が `OnSecondChange` → 既存 DD-6 防御破棄・warn!＋破棄・維持。
+/// - `talk: Some` + `Value` + origin が `OnShellScaling`・`OnBalloonScaling` → info!＋破棄・維持。
 /// - `talk: Some` + `Notified` → NOTIFY pump の応答・`Steady{Some}` 維持（無視）。
 fn on_reply(
     mut state: State,
@@ -826,7 +827,7 @@ fn on_reply(
                 (state, Vec::new())
             }
             // 出所別の Value 政策（DD-IE-2）。置き換えるかの判断は述語
-            // `events::value_replaces_active_talk` の 1 か所に置く（`OnSecondChange` 以外は置き換える）。
+            // `events::value_replaces_active_talk` の 1 か所に置く（`OnSecondChange` と倍率の 2 語以外は置き換える）。
             ShioriOutcome::Value(script, _) => match origin {
                 origin if events::value_replaces_active_talk(origin) => {
                     // 置換（Req 4.3・DD-IE-2）: マウス 2 語・汎用の入口の Value は active talk を差し替える。
@@ -852,10 +853,14 @@ fn on_reply(
                         vec![Action::StartTalk(StartTalk::new(talk_id, script))],
                     )
                 }
-                // DD-6 防御破棄（`OnSecondChange` 限定）。本アームの意味は「全 origin 防御」から
-                // **「pump の応答限定の防御」へ狭まった**——それ以外の origin は上の置換アームへ
-                // 抜けるため、ここへ届くのは pump（OnSecondChange）の Value のみ。active
-                // talk は NOTIFY を発行するため構造上ここへは届かないはずだが、万一届いても
+                // 倍率の 2 語の応答は話している最中なら台詞を差し替えない（shell-scale-linkage 要件 5.11）。
+                "OnShellScaling" | "OnBalloonScaling" => {
+                    tracing::info!(target: "kanade", event = "scale_reply_dropped_while_talking", origin = origin, "話している最中の倍率のイベントの応答——台詞を差し替えずに捨てる");
+                    (state, Vec::new())
+                }
+                // DD-6 防御破棄（`OnSecondChange` 限定）。上の置換アームへ抜けない出どころは `OnSecondChange`
+                // と倍率の 2 語だけで、倍率の 2 語はすぐ上の腕が捌くため、ここへ届くのは pump（OnSecondChange）
+                // の Value のみ。active talk は NOTIFY を発行するため構造上ここへは届かないはずだが、万一届いても
                 // StartTalk・キュー・中断を一切行わず破棄し、idle-talk 檻の防御規律を保存する。
                 _ => {
                     tracing::warn!(target: "kanade", event = "steady_value_during_talk", origin = origin, "active talk 中に OnSecondChange の Value——構造上想定外・破棄（キュー/中断なし・DD-6）");

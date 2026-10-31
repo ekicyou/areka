@@ -70,6 +70,8 @@
 //! | `OnAnchorSelectEx` | GET | Ref0=アンカーの範囲の文字・Ref1=ID・Ref2 以降=引数（記述順・無ければ位置なし） |
 //! | `OnAnchorSelect` | GET | Ref0=ID |
 //! | `OnResetWindowPos` | GET（汎用の入口） | References なし（メニューの「シェル位置初期化」から） |
+//! | `OnShellScaling` | GET（汎用の入口） | Ref0〜3=横の後・横の前・縦の後・縦の前の百分率・Ref4=シェル番号（渡された列のまま） |
+//! | `OnBalloonScaling` | GET（汎用の入口） | Ref0〜3=横の後・横の前・縦の後・縦の前の百分率・Ref4=シェル番号（渡された列のまま） |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -265,6 +267,11 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnMouseEnterAll",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseLeaveAll:1
     "OnMouseLeaveAll",
+    // シェル・バルーンにかかった倍率の 2 語（shell-scale-linkage 要件 5.1・5.2・64→66 語）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellScaling:1
+    "OnShellScaling",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonScaling:1
+    "OnBalloonScaling",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -288,10 +295,13 @@ pub fn allowed_static(id: &str) -> Option<&'static str> {
 
 /// 再生中に届いた GET の応答（台本）で今のトークを置き換えるか（要件 7.3）。
 ///
-/// `OnSecondChange` の応答だけは今日どおり捨て、それ以外（マウス 2 語・汎用の入口・
-/// `OnGhostChanging`）は置き換える。
+/// `OnSecondChange` と倍率の 2 語（`OnShellScaling`・`OnBalloonScaling`・shell-scale-linkage
+/// 要件 5.11）の応答は捨て、それ以外（マウス・汎用の入口・`OnGhostChanging`）は置き換える。
 pub fn value_replaces_active_talk(origin: &str) -> bool {
-    origin != "OnSecondChange"
+    !matches!(
+        origin,
+        "OnSecondChange" | "OnShellScaling" | "OnBalloonScaling"
+    )
 }
 
 /// **選択起源**（[`crate::msg::EventId::Choice`]）の任意名イベント受理規則（Req2.6／2.9・DD-2）。
