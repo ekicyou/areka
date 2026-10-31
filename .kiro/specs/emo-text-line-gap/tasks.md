@@ -11,7 +11,7 @@
   - どの出口（a・b・c）になってもこの置き換えと説明は残る
   - _Requirements: 1.1, 4.2, 4.4_
 
-- [ ] 1.2 新しいテストのファイルを置き、記録だけの測りの検査を書く
+- [x] 1.2 新しいテストのファイルを置き、記録だけの測りの検査を書く
   - `viewbox_draw` の子として新しいテストのファイルを足し、子の宣言（縦書きの読み戻しの前例と同じ形）と `lib.rs` の純粋の走査の外の一覧の 1 行を足す
   - 助けの関数は `viewbox_draw_test_support.rs` から借り、兄弟のファイルの私的な助けの関数（`bgra_y_span` など）が要るときは写さずに `pub(super)` へ上げる 1 語だけを変える
   - 普段は回らない（`#[ignore]`）記録だけの検査で、{游ゴシック・Yu Gothic UI・ＭＳ ゴシック} × {20, 28} × {k ＝ 1, 2} の横書きについて、引けた書体の名前・DirectWrite の行の高さと基線・ascent と descent・字の箱・字の箱の上端 t・仮名と漢字のインクの上下・今の帯の厚みと置く所・帯とインクの上下の余白（物理画素）を標準出力へ出す
@@ -89,3 +89,4 @@
 ## Implementation Notes
 - テストの名前の絞りは実際のモジュールの道で書く（`draw::metrics`・`draw::format_metrics`。`draw_metrics` では 0 本に当たる）。
 - `cargo clippy -p areka-emo-text --all-targets -- -D warnings` は clippy 0.1.99 の前からある警告（dola 21 件・emo-text の他ファイル 46 件）で赤。本 spec が触るファイルに警告が無いことを `--no-deps` の出力で見る（持ち物は `clippy-199-lints`）。
+- `draw::metrics` は私的なので、`measure_font_metrics` は `draw.rs` に `#[cfg(test)] pub(crate) use` で再公開して `viewbox_draw` の子から読む（設計の変更一覧の外の 2 行・1.2）。

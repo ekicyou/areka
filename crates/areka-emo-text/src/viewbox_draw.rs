@@ -366,6 +366,9 @@ mod frame_render_tests;
 #[path = "viewbox_draw_inline_marker_tests.rs"]
 mod inline_marker_tests;
 #[cfg(test)]
+#[path = "viewbox_draw_line_gap_band_tests.rs"]
+mod line_gap_band_tests;
+#[cfg(test)]
 #[path = "viewbox_draw_live_diff_tests.rs"]
 mod live_diff_tests;
 #[cfg(test)]

@@ -151,6 +151,8 @@ mod catalog;
 pub use catalog::{FontCatalog, FontFace};
 pub(crate) use line_store::LineLayoutStore;
 pub use metrics::DWriteMetrics;
+#[cfg(test)]
+pub(crate) use metrics::measure_font_metrics;
 
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
 pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
