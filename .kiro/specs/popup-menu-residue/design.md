@@ -201,7 +201,7 @@ sequenceDiagram
 | 10 | 済み（`areka-P0-open-external-tags`・#251） | OS の起動（`ShellExecuteExW`）は開く専用のスレッド `open-external`（`readme/opener.rs` の `Opener::spawn`）で行い、メニューの「説明書」（`menu/mod.rs` の `open_readme`）と台本の `\![open,readme]`（`drain_readme_requests`）の両方が `open_from_world` → `submit` を通る。UI スレッドに残る OS の呼び出しは、ファイルの有無の確認（`Path::exists`）と、パスを絶対にする計算（`std::path::absolute`・`GetFullPathNameW`・ディスクを読まない文字列の計算）だけで、待ちうるのは有無の確認だけ。テスト: `readme_tests.rs` の絶対パスを渡すテスト・`readme/opener_*_tests.rs`・`ShellExecute` を綴るのが OS の境界のファイルだけであることを見るテスト。2.4 |
 | 11 | 渡した → `popup-menu-shell-look` | 同 brief へ見つけた所・まだ分かっていないこと・見立て・再現の測り方を写す（9.1） |
 | 12 | 渡した → `popup-menu-shell-look` | 同上。選ばれずに閉じたときの記録 `menu_dismissed`（`trigger.rs`・`debug!`）が `info` で見えないことも一緒に写す（9.1・9.4 によりコードは変えない） |
-| 13 | 渡した → 本 spec の完了時の棚卸で `/kiro-discovery` が起票する新しい spec 1 本 | ⑴ 古い名前も問う直し・⑵ 無い項目を足す仕事をまとめる。`popup-menu-shell-look` の件 15（おすすめの資源）との分け方が未決であることも brief に書く。理由: 生きている spec に受け手が居ない（`popup-menu-shell-look` は項目の増減を範囲の外に置く）（9.2） |
+| 13 | 渡した → 本 spec の完了時の棚卸で `/kiro-discovery` が起票する新しい spec 1 本 | ⑴ 古い名前も問う直し・⑵ 無い項目を足す仕事をまとめる。`popup-menu-shell-look` の件 15（おすすめの資源）との分け方が未決であることも brief に書く。理由: 生きている spec に受け手が居ない（`popup-menu-shell-look` は項目の増減を範囲の外に置く）（9.2）。実装のタスクの間は「完了時に起票」のまま残し、渡し先の名前・日付・生きていることの確かめ（1.3・9.3）は `/kiro-complete` の棚卸がアーカイブの前に本表と本 spec の brief へ書き込む（実装の検証はこの件を欠けとして数えない） |
 
 - 「済み」の 4 件は、最後のタスクが確かめた日の main でもう一度場所とテストを見てから記録する（2.1〜2.4）。どれかが直っていなければ「済み」と書かず、本 spec で直す件に移す（2.5）。
 - 「渡した」は、渡す日の main で渡し先の `.kiro/specs/<名前>/brief.md` が在り、`completed/` に入っていないことを確かめてから書く（1.3）。
@@ -286,7 +286,7 @@ sequenceDiagram
 | 要件 | 4.1・4.2・4.3・4.4・5.3・10.1 |
 
 **Responsibilities & Constraints**
-- `win32.rs` が型を持ち、記録は出さない（今の取り決め）。`trigger.rs` の `finish` が記録を出す。
+- `win32.rs` が型を持ち、失敗の記録は出さない（今の取り決め・`show` の中の `debug!` 2 行はそのまま）。`trigger.rs` の `finish` が記録を出す。
 - 組み立ての失敗も表示の失敗も、今と同じく `selected = None` として続ける（4.4）。動作は呼ばない・預かりは捨てる・旗は降りる（今の `finish` の後半をそのまま通る）。
 - 「出した」（`menu_shown`）は今と同じく表示の関数を呼ぶ前に出る。組み立てに失敗したときも「出した」→「組み立ての失敗」の順になる（今の表示の失敗と同じ並び・記録の場面は変えない）。
 
@@ -420,7 +420,8 @@ pub(crate) use opener_test_support::FakeOs;
 | `shiori_reply_timeout` | SHIORI 応答が期限内に受信されず——終了系列（Fault）へ | SHIORI の答えが期限内に届かなかった——失敗として呼び手へ返す |
 
 - 新しい文は「終了」の語を含まない（6.4 のテストがそれで見る）。
-- 関数の説明（今の「再投入された Failed は状態機械を Unloading{Fault} へ倒す」）は「失敗の後どうするかは呼び手が決める（会話の道は再投入した Failed で状態機械を Unloading{Fault} へ倒し、照会の道は `ResourceOutcome::Failed` として返すだけ）」に直す（6.5）。
+- 関数の説明（今の「再投入された Failed は状態機械を Unloading{Fault} へ倒す」）は「失敗の後どうするかは呼び手が決める（例: 会話の道は再投入した Failed で状態機械を Unloading{Fault} へ倒し、照会の道は `ResourceOutcome::Failed` として返すだけ）」に直す（6.5）。「例:」と書くのは、終了・翻訳・SSTP の道も通るので、2 つの道で全部を言い尽くしたように読ませないため。
+- 6.4 のテストは `shiori_send_failed` だけを捕まえるので、残る 2 行（`shiori_reply_dropped`・`shiori_reply_timeout`）は実装のタスクで `actor.rs` の `round_trip` を「終了」で文字列検索して 0 件であることを確かめる。
 - 触らない: `schedule/mod.rs` の `shiori_down`・`shiori_failed`、`schedule/translate.rs` の `translate_failed` の「終了系列（Fault）へ」（状態機械の中で実際に終了へ進むので正しい）。
 
 **Implementation Notes**
@@ -439,6 +440,7 @@ pub(crate) use opener_test_support::FakeOs;
 - 組み方: スコープ 0 と 1 について、`spawn_harness(KanadeConfig::new("master", "1.0.0"), Fixture::default().without_boot_greeting(), QuitPolicy::PerTalk(vec![]))` → `Boot` → `CloseRequest { reason: CloseReason::User { scope } }` → `join_bounded` で kanade が終わるのを待つ（`OnClose` は既定で 204＝無言終了なので、会話の再生を待たずに終わる）→ `shiori.recorded()`。
 - 確かめ: 記録列の中で `method == CallMethod::Get` かつ `id == "OnClose"` の呼び出しがちょうど 1 件で、その `references` がスコープ 0 なら `["user","0","0"]`、1 なら `["user","1","1"]`（どちらも文字列の配列で書き下す）。`events::on_close` も `onclose_get_index` も使わない（7.3）。
 - テストの名前: `a_user_close_carries_the_window_scope_into_onclose_references`（スコープ 2 つを表で回す 1 本）。
+- 足場の決まりとの関係: `tests/kanade/common/common_recording.rs` の説明（30〜31 行）は「期待する References は `events::*` から組み、書き下さない」と決めている。このテストはその意図した例外で、ファイルの冒頭の説明に「`events::on_close` そのものの誤りに気付くため書き下す（要件 7.3）」と理由を書く（後の人が足場の決まりに戻さないように）。
 
 **Implementation Notes**
 - 7.4 は `events::on_close` を触らないことで守り、このテストの書き下した `["user","1","1"]` が Ref1＝Ref2 を檻に入れる。
@@ -495,4 +497,4 @@ pub(crate) use opener_test_support::FakeOs;
 1. `cargo test -p areka`・`cargo test -p areka-kanade`・`cargo test -p ukadoc-survey` が全部通る（10.4）。
 2. 13 件の仕分けの記録を、確かめた日の main で見直す: 済みの 4 件の場所とテスト（2.1〜2.4）・渡し先の brief が生きていること（1.3）・仕分けの無い件が 0（1.5）。
 3. 書いた文書の `\![open,readme]` のような綴りが逆斜線 1 つであることを、バイトで読んで確かめる（書き込みの道具が逃がしを化かすことがある）。
-4. 完了時の棚卸で件 13 を `/kiro-discovery` で起票し、本 spec の brief の件 13 の節に名前と日付を書く（9.2・9.3）。
+4. 完了時の棚卸（`/kiro-complete`・アーカイブの前）で件 13 を `/kiro-discovery` で起票し、本書の 13 件の表の件 13 の行と本 spec の brief の件 13 の節に名前と日付を書く（1.3・9.2・9.3）。
