@@ -26,7 +26,7 @@
   - _Requirements: 3.3, 3.4_
 
 - [ ] 2. 起動のゴーストの選び方に callghost の段を足す
-- [ ] 2.1 (P) ゴーストの選び方に「callghost の相手」の段を足す
+- [x] 2.1 (P) ゴーストの選び方に「callghost の相手」の段を足す
   - 選び方の入力に「callghost の相手のフォルダ名」を足し、`--random` の段の後・記憶の段の前で目録から引く
   - 目録に在れば経路「CallGhost」で選ぶ。在らなければ warn `callghost_target_not_found` を残して記憶の段へ進む
   - 今の選び方のテストと、起動の解決の中身が選び方の入力を組む所（`boot_config.rs`）は、新しい入力を「無し」で渡して動かさない

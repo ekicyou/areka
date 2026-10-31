@@ -332,6 +332,7 @@ pub(crate) fn resolve_boot_with(
             argv: argv_ghost,
             pointed: pointed_at,
             random: request.random,
+            call_ghost: None,
             memory: memory.as_deref(),
             listed: &listed,
             stores: &ghost_stores,
