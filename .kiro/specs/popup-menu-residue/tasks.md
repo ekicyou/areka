@@ -77,3 +77,4 @@
 ## Implementation Notes
 - `cargo test -p areka` は結合テスト `mcp_get_log_real_run` で止まる（この作業木に i686 の `shiori-host32-helper.exe` が無いため・本 spec と無関係）。crate のテストは `cargo test -p areka --bins` か絞った名前で回す
 - 完了時にその場で解決: `shiori.toml` の `char*.popupmenu.type`・`char*.popupmenu.visible` の備考に残っていた「α」と「2 人目以降（n≧2）」を「今の」「3 人目以降（n≧2）」に揃えた（最終検証の軽い指摘）
+- 完了時の棚卸で起票: 件 13 を `popup-menu-extra-resources` として `/kiro-discovery` で起票（条件＝規模が spec 1 本に相当・生きている spec に受け手が居ない）
