@@ -32,7 +32,7 @@
   - _Requirements: 3.6, 4.2_
 
 - [ ] 3. 並びを崩す変異で赤を確かめ、全体を緑に戻す
-- [ ] 3.1 変異 V1〜V7 を 1 つずつ入れて検査の赤を確かめ、記録する
+- [x] 3.1 変異 V1〜V7 を 1 つずつ入れて検査の赤を確かめ、記録する
   - 設計の変異の表の V1〜V7 を本番の関数と当たりの手続きにだけ 1 つずつ入れ、`cargo test -p areka-emo-text -j 2` の選択肢の検査（2.1・2.2・2.3 の検査と選択肢の檻）を回して戻す
   - V4・V5 は GPU を使わない検査だけで赤にならなければならない。どれかが赤にならなければ、判定を緩めずに止めて報告する
   - できあがり: このファイルの実装の記録に、変異ごとの中身と赤になった検査の名前の表があり、7 つとも赤が記録されている
@@ -42,3 +42,29 @@
   - `git diff` で変異の跡が無いことと、`choice.rs`・`lib.rs`・`Cargo.toml` に差分が無いことを確かめる
   - できあがり: `cargo test -p areka-emo-text -j 2` が全部緑（1,000 行の番人と純粋層の一覧の番人を含む）で、触ったファイルがどれも 1,000 行以下
   - _Requirements: 2.5, 4.5, 5.2, 5.3, 5.4, 5.7, 5.8_
+
+## Implementation Notes
+
+### 3.1 変異の確かめ（2026-10-31）
+
+変異は `crates/areka-emo-text/src/actor_present.rs` の `ChoiceRanges`・`choice_ranges`・`hit_rows` にだけ 1 つずつ入れ、そのたびに `cargo test -p areka-emo-text -j 2 --no-fail-fast` を回して、変異の前の写しへ戻した。7 つとも赤になった。全部を戻した後の同じ回し方（`--no-fail-fast` なし）は全部緑。
+
+赤になった検査は、何度も出るものを次の組にまとめて書く。
+
+- **アンカーの檻（GPU を使わない・決まった字幅）** — `choice::anchor_tests` の 7 本: `anchor_across_a_wrap_has_a_hit_segment_on_each_line`・`highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode`（帯の共有の検査）・`hit_area_stops_at_what_has_been_revealed`・`mixed_choices_and_anchors_keep_their_rects_and_kinds`・`same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice`・`vertical_anchor_band_has_the_same_shape_as_a_choice`・`vertical_choice_across_columns_has_a_band_on_each_column`
+- **折り返しの検査（GPU を使わない・決まった字幅）** — `actor::lookahead_shapes_tests::choice_highlight_and_click_ranges_come_from_the_judged_rows`
+- **提示の檻（GPU を使う・`present_frame` を通る）** — 17 本: `actor::choice_contract_tests` の 7 本（`a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame`・`choice_rows_render_at_indented_positions_readback_pixel_cage`・`hover_move_and_release_leave_no_residue_with_band_offset_readback`・`hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`・`invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_cage`・`present_populates_choice_hit_rows_and_nochange_preserves_snapshot`・`present_with_hover_adds_highlight_pixels_over_non_hover_frame`）、`actor::choice_settle_tests` の 2 本（`settled_balloon_row_is_unpressable_and_unlit_on_the_gpu`・`settled_box_row_is_unpressable_and_unlit_on_the_gpu`）、`actor::clear_atomicity_tests` の 6 本（`clear_all_resets_hover_and_hit_rows_for_every_actor`・`clear_drops_anchor_hit_rows_and_hit_active_atomically`・`clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic`・`clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight`・`hit_rows_carry_the_kind_of_their_span`・`new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic`）、`actor::region_collapse_present_tests::collapsing_after_drawing_releases_the_surface_and_recovery_reattaches`、`actor::scroll_tests::manual_position_shifts_choice_hit_rows_by_the_lines_scrolled_back`
+- **結合の檻（GPU を使う）** — 3 本: `tests/choice_fixture_test.rs` の `real_font_menu_hover_render_dumps_png`、`tests/emo2_fixture_e2e_test.rs` の `real_emo2_menu_cue_sequence_renders_and_hovers_headless`、`tests/line_pitch_readback_test.rs` の `hover_band_centers_in_the_line_box_and_contains_choice_ink`
+
+| 変異 | 入れた中身（具体的に） | 赤になった検査の名前（GPU を使うかどうか添える） |
+|---|---|---|
+| V1 | `choice_ranges` の `annotate_lines(lines, spans)` を `annotate_lines(lines.get(1..).unwrap_or(&[]), spans)` に替えた（範囲の割り当てへ先頭の行を落とした列を渡す） | アンカーの檻 7 本（GPU なし）・折り返しの検査（GPU なし）・提示の檻 17 本（GPU）・結合の檻 3 本（GPU）。lib の中で 25 本 |
+| V2 | `choice_ranges` の `line_bands(lines, mode, metrics)` を `line_bands(&[], mode, metrics)` に替えた（帯へ空の列を渡す） | V1 と同じ全部に加えて `actor::box_present_tests::box_choice_rows_equal_balloon_rows_shifted_by_the_box_position`（GPU）。lib の中で 26 本 |
+| V3 | `hit_rows` が `derive_hit_rows` へ渡す `self.lines` を `self.lines.get(1..).unwrap_or(&[])` に替えた（当たりへ先頭の行を落とした列を渡す） | V1 と同じ（アンカーの檻 7 本・折り返しの検査は GPU なし、提示の檻 17 本・結合の檻 3 本は GPU） |
+| V4 | `ChoiceRanges` に変異の間だけの欄 `hit_bands: Vec<LineBand>` を足し、返す `bands` は `line_bands(..)` の各帯の `offset` を `+ 3.0` ずらした列、`hit_bands` はずらす前の `line_bands(..)`、`hit_rows` は `&self.hit_bands` を使う（強調の側だけ崩す） | `choice::anchor_tests::highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode`（**GPU なし**）、`actor::choice_contract_tests` の `hover_move_and_release_leave_no_residue_with_band_offset_readback`・`hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`・`invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_cage`（GPU）、結合の檻 3 本（GPU） |
+| V5 | `hit_rows` が `derive_hit_rows` へ渡す `&self.bands` を、各帯の `offset` を `+ 3.0` ずらした写し（`self.bands.iter().map(..).collect::<Vec<_>>()`）に替え、返す `bands` は元のまま（クリックの側だけ崩す） | アンカーの檻 7 本（**GPU なし**・帯の共有の検査を含む）、`actor::choice_contract_tests` の `choice_rows_render_at_indented_positions_readback_pixel_cage`・`hover_move_and_release_leave_no_residue_with_band_offset_readback`・`invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_cage`（GPU）、結合の檻 3 本（GPU） |
+| V6 | `choice_ranges` の `segments` を `{ let _ = annotate_lines(lines, spans); Vec::new() }` に替えた（範囲の割り当てを抜いて空の列） | V2 と同じ（アンカーの檻 7 本・折り返しの検査は GPU なし、提示の檻 17 本・`box_choice_rows_equal_balloon_rows_shifted_by_the_box_position`・結合の檻 3 本は GPU） |
+| V7 | `hit_rows` を `let _ = derive_hit_rows(..);` の後に `Vec::new()` を返す形に替えた（当たりを抜いて空の列） | V2 と同じ（アンカーの檻 7 本・折り返しの検査は GPU なし、提示の檻 17 本・`box_choice_rows_equal_balloon_rows_shifted_by_the_box_position`・結合の檻 3 本は GPU） |
+
+- V4・V5 は、GPU を使わない検査（V4 は帯の共有の検査、V5 はアンカーの檻 7 本）だけでも赤になる（要件 4.2）。
+- 判定はどれも緩めていない。戻した後の `git diff -- crates/` は空。
