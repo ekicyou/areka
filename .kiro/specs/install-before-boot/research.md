@@ -177,3 +177,87 @@
 ## 次の段
 
 - 要件の討議（`kiro-requirements-discussion`）で、要件 10 の議題 1〜4 に加え、本書 §6 の 6（「最後に入れた物」の控え）と 9（`doc/pasta-real-run.md`）を要件の議題に回すかを決める。残りは設計の段（`/kiro-design install-before-boot`）で決める。
+  → 2026-10-31 の要件の討議で議題 1〜7 を全部推奨案で確定した。設計の段の調べと決めは下の §9。
+
+## 9. 設計の段の調べと決め（2026-10-31・`kiro-spec-design -y`）
+
+### 9.1 要約
+
+- **調べの種類**: 軽い調べ（今ある仕組みの延長）。新しいクレートの依存は無く、外の文書は Microsoft の `SetProcessDpiAwarenessContext` の 1 本だけを読んだ。
+- **使ったスキル・決まり**: `kiro-spec-design` の決まり（design-principles・design-discovery-light・design-synthesis・design-review-gate）・`.kiro/settings/templates/specs/design.md`・steering（product・tech・structure・logging・roadmap のウェーブ C14 の約束）。
+- **大きな見つけ**:
+  - 継ぎ目は今のままで足りる: `boot_config::resolve_boot_with` は根の結果を引数で受けるので、根を先に解いて入れてから渡せる。`boot_config` は「起こすゴーストのフォルダ名」を 1 つ受けるだけでよく、install を知らない。
+  - R1 は文書で答えが出る: UI を作る前にプロセスの DPI の扱いを立てる決まりがある。`wintf` の今の 1 段を「1 回だけの口」として外へ出せば、起動の前の画面より先に立てられる。
+  - R2・R4 は今のコードで解けた（空のフォルダも見つかる根・`real-run-kit` の `Launch::Empty`）。
+
+### 9.2 調べの記録
+
+#### R1: 起動の前の画面と DPI
+- **きっかけ**: 起動の前の利用条件と警告の画面（`alert::ask_yes_no`・`alert::warn_ok`＝持ち主の窓の無い `MessageBoxW`）は、`WinApp::with_exit_policy` が `SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)` を呼ぶより前に出る。
+- **見たもの**: Microsoft「SetProcessDpiAwarenessContext function」 https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext ／`crates/wintf/src/runtime/mod.rs` の `WinApp::with_exit_policy`（成否を info／warn で残す）／`crates/areka/areka.manifest`（comctl32 v6 の申告だけ・DPI の申告なし）／`crates/areka/src/ghost_session_scope_rect.rs` の `os_window_rect`（`SetThreadDpiAwarenessContext` で包む先例）。
+- **分かったこと**:
+  - 文書は「DPI の扱いに依る API を呼ぶ前（プロセスで UI を作る前を含む）に呼ばなければならない」「一度立てると、以後の呼び出しは失敗する（`ERROR_ACCESS_DENIED`）」と書く（逐語の引用は一句だけ: "before creating any UI in your process"）。
+  - 今の起動を止める告知（`alert::raise`）も `WinApp` の前に `MessageBoxW` を出すが、出した後すぐ終わるので、後の DPI の設定には響かない。起動の前のインストールは、画面の後に起動が続く＝初めて「UI の後に DPI を立てる」形になる。
+- **決め**: `wintf` に `ensure_process_dpi_awareness()`（`std::sync::Once` で 1 回だけ・記録は今と同じ）を外へ出し、`with_exit_policy` と、起動の前の口の画面の直前（告知の抑止が無いときだけ）から呼ぶ。プロセスの既定が画面より先に立つ。
+- **比べた案**: ⑴ `SetThreadDpiAwarenessContext` で画面を包む（先例あり・小さい）＝プロセスの既定を立てる前に UI を作ることは変わらず、文書の決まりの外。後の `SetProcessDpiAwarenessContext` が成るかは実機の振る舞いしだい＝取らない。⑵ 申告（manifest）で PerMonitorV2 を立てる＝`wintf` の呼び出しが毎回 `ERROR_ACCESS_DENIED` の warn を出し、その記録で DPI の失敗を見分ける今の観測（`wintf` の注釈の Req 7.4）が壊れる＝取らない。⑶ `WinApp` を起動の解決より前へ動かす（案 C）＝`main.rs` の上限と `ghost_session.rs` の約束にぶつかる＝取らない。
+- **残る確かめ**: 実機で 1 回（利用条件つきの書庫を起動の前に入れ、画面がぼやけない・`DPI awareness set` が 1 回だけ・窓が今どおり DPI を追う）。決定論のテストは画面を出さないので見えない。SSP は動かさない。
+
+#### R2: 空の根は「見つかる根」か
+- **見たもの**: `crates/areka/src/roots/resolve.rs` の `resolve_roots_from`（`found: dir.is_dir()`）・`areka_ghost::BasewareRoots::present`（`is_dir`）・`crates/areka-nar/src/install.rs`（作業フォルダと格納先の親を `create_dir_all`）。
+- **分かったこと**: 中身の無いフォルダも根として見つかり、`CatalogDestinations::new` は作れる。`ghost\` が無くても `areka-nar` が作る。⇒ 要件 1.1 の「空の置き場」は今のまま入る（`install_no_root` にならない）。根のフォルダそのものが無いときは、今の根の告知（`NoneFound`）で止まる（要件 1.7）。
+
+#### R3: `callghost` の相手の渡し方
+- **見たもの**: `boot_config::point_ghost`（名前は `name` が先・フォルダ名が後）・`boot_resolve::resolve_ghost`・`install::destination::CatalogDestinations::copied_root`。
+- **分かったこと**: `--ghost` の写しに名前を入れると、別のゴーストの `name` が入れたフォルダ名と同じときに取り違える。絶対パスにすると `Pointed::Path` になり書く前の写し（`prepare_ghost`）を飛ばし、`BootRequest::ghost` が `String` なので綴りの変わるパスで崩れうる。
+- **決め**: `GhostInputs` に `call_ghost`（フォルダ名）を足し、記憶の段と同じ突き合わせ（`same_folder_name`）で入れた後の目録から引く。`GhostInputs` を組む所は本体 1・テスト 2 だけ。経路は `GhostRoute::CallGhost`（網羅の `match` は今のコードに無い）。書く前の写しも記憶の書き込みもほかの起動と同じに通る（要件 4.10）。
+
+#### R4: 空の根の実機の足場
+- **見たもの**: `crates/real-run-kit/src/launch.rs` の `Launch::Empty`（回ごとの空の根 `<回>\root`・`evidence.rs` が作る）と `before_spawn`。
+- **分かったこと**: 足場の追加は要らない。`Launch::Empty` に `before_spawn` で既定のバルーンを根の `balloon\` へ写せば、要件 9.10 の「ゴーストが 1 体も無い根」になる。
+
+#### R5: SSP の振る舞い（議題 2・4）
+- 要件の討議で ukadoc の読みで決めた（測らない）。設計でも SSP を動かさない。測った答えが違えば要件 3.2・4.9 とテスト 9.4・9.5 が変わる（要件 10.2・10.4 のとおり）。
+
+#### そのほかのコードの読み（設計の前提）
+- `run_order` は口が `Raised::Closed` を返すか `ghost_facts` が `None` なら並びの残りもやめる（`install/procedure.rs` の `run_archive`・`archive_steps`）。⇒ 起動の前の口はこの 2 つを返さない。
+- `judge_accept`（`install/judge.rs`）は空の素性で `accept` を持つ書庫を必ず `Refused`、`accept` の無いシェル・追加ファイルを `AcceptMissing` にする。`destination_of` は `folder: None` で `Elsewhere`。⇒ 起動の前の口に照合の特別な腕は要らない。
+- `GhostRoute` の読み手は `== Argv`（`main.rs` の `argv_session`・`boot_resolve::LastUsed::record`）・`== Switched`（`main.rs`）・記録の `?route` だけ。
+- 窓口の `record_installed`（`install/desk.rs`）が置く物は、どれもプロセスの中だけの資源（`LastInstalledGhost`・`LastInstalledShell`・`LastInstalledBalloon`・`LastInstallNames`）。`names::update` は起動中のゴーストが居なければ載せず資源だけを置き、`names::reseed`（`ghost_session_runtime::rewire_runtime_consumers` から）が起こしたゴーストへ載せる。⇒ 控えを `main` の今の行（`install::startup::install`）で移せば、起動の後に今の道で届く。
+- `SwitchAcceptCount`（`emo2_boot/ghost_switch.rs`）の読み手は `install::startup` だけ。⇒ この spec で読み手が消えるので外す。
+- `main.rs` の `readonly_tests.rs` の走査は `resolve_boot(&` の綴りを探す。`install::startup::resolve_boot(&opts.boot, …)` でも当たる。
+- `desk_overwrite_tests.rs` の前提（定常の数）: `desk::on_steady` の `steady_count` を数える所と `overwrite::on_steady` は残るので変わらない。
+
+### 9.3 案の比べ（置き場）
+
+| 案 | 中身 | 良い所 | 危うい所 | 決め |
+|---|---|---|---|---|
+| A | `startup.rs` と `boot_config.rs` に足す | 新しいファイル 0 | `boot_config` が install を知る（層の向きが逆） | 取らない |
+| B | 起動の前の道は `install::startup`、口は新しい `install/before_boot_ports.rs`、起動の解決は「起こすゴーストのフォルダ名」だけ受ける | 層の向きが今のまま・`main.rs` は呼ぶ所 1 か所・テストが閉じる | ファイルが 2 つ増える（口と口のテスト） | **取る** |
+| C | `WinApp` を前へ動かして窓口の道を使う | R1 が消える・道が 1 本 | `main.rs` の上限・`ghost_session.rs` の約束・規模 L | 取らない |
+
+### 9.4 設計の決め（§6 の 11 点への答え）
+
+1. **置き場**: 案 B。道と持ち物と純粋な判断は `install/startup.rs`（定常の後の部品を消した跡へ）、口は新しい `install/before_boot_ports.rs`。
+2. **継ぎ目**: 根を `install::startup::resolve_boot` が先に解き、入れてから `boot_config::resolve_boot(resolved, request, call_ghost, app_profile_dir)` へ渡す。本体は `resolve_boot_with_call`、今の `resolve_boot_with` はテストだけの 1 行の口（37 か所の呼び出しを動かさない）。関数を「根」と「ゴースト以降」に割らない。
+3. **イベントを送らない返し方**: (b)。`Raised::Unsent` を足し、`send` は `install_event` を出さず debug `install_event_unsent`。`NoReply` を返す (a) は「送りました」の記録が 2〜4 件出て要件 3.1・6.2 と食い違う。
+4. **`callghost` の段**: (b)。`GhostInputs::call_ghost`（フォルダ名）と `GhostRoute::CallGhost`、段は `--random` の後・記憶の前。「指定あり」は起動の求めに値が在るか（`--ghost` が当たらなかったときも指定ありと数える＝要件 4.5 の字のまま）。使わない理由の語は `readonly`・`boot_target_given`（`target`＝`positional`・`ghost_option`・`random`）・`no_ghost_installed`。
+5. **定常の後の道の始末**: `startup::on_steady`・`ArgsFollowup`・`discard_for_exit`・`on_order_done`・`call_ghost`・`callghost_request`・旧い `CallGhostFacts`・`CallGhostSkip` の旧い腕を消す。`desk.rs` の呼び出し 3 行を外す。`desk_startup_tests.rs`（10 本）は消し、`startup_tests.rs` は `sources_to_delete` の 5 本と `new_with`・`Drop` の 2 本を残して書き直す（振る舞いが無くなった陳腐化のテスト）。`SwitchAcceptCount` を外す。
+6. **「最後に入れた物」の運び方**: 口の `record` が目録の綴りに直した控え `CarriedInstall` を `StartupInstall` に積み、`main` の今の行 `install::startup::install` が World の資源へ入れた順に移す（`LastInstalled*` と置換語 `%lastobjectname`・`%lastghostname`）。綴りの決まりは窓口の `record_installed` から純粋な `catalog_spelling` を切り出して共有する。
+7. **画面と DPI**: 上の R1 の決め（`wintf::ensure_process_dpi_awareness` を 1 回だけの口に）。
+8. **記録の語**: `startup_install_started`／`startup_install_done` に `stage="before_boot"`・根が決まらないときは `reason=root_missing`（`Drop` の `boot_stopped` は守りとして残す）・受け取るゴーストが居なくて断ったときは口が info `install_refused_no_ghost` を足す（手続きの `install_refused` の `running` は空のまま）・バルーンは info `install_balloon_memory_skipped`。
+9. **範囲の端**: `doc/pasta-real-run.md` を直す（要件の討議で確定）。
+10. **読み取りだけの断り**: `install::record_readonly_refused(origin, count)` に切り出し、`submit` と起動の前の道から呼ぶ（記録は 1 か所）。
+11. **R2・R3・R4**: 上の §9.2 のとおり（R2＝足りる・R3＝フォルダ名で目録から引く・R4＝`Launch::Empty`）。
+
+### 9.5 まとめ直し（synthesis）
+
+- **一般化**: 「起動の前に入れる」は「窓口の外から手続きを呼ぶ」の 1 つの場合で、口 `InstallPorts` の 2 つ目の実装がそれを受ける。`bootghost`（`install-package-type`）が来ても、起こすゴーストの名前は同じ `call_ghost` の口で渡せる（受け口の形は決めない・今は作らない）。
+- **作るか借りるか**: 手続き・置き場・照合・告知は全部今の部品を使う。新しく作るのは口 1 つと段 1 つと DPI の口の切り出しだけ。
+- **削ったもの**: 窓口と背景のスレッドを起動の前に使う形（案 C）・`--ghost` の写しで渡す形・「入れますか」の画面・途中でやめる扱い（口が閉じないので `Abandoned` は出ない）・callghost の「切り替え中」「途中で切り替わった」「起動中のゴーストと同じ」の判断（起動の前には起きない）・`SwitchAcceptCount`。
+
+### 9.6 危うさと手当て
+
+- **DPI（R1）**: 文書の決まりに沿う形にしたが、画面の見た目と後の窓の DPI 追従は実機でしか見えない → 実機の確かめの段で 1 回見る（決まりの手順は design の Testing Strategy）。
+- **振る舞いの変わり（ゴーストが居る起動）**: 起動の引数で入れる書庫がゴーストへ知らせなくなる・`accept` を持つ書庫が入らなくなる → 説明書に書く（要件 8.2）。要件の討議 議題 1 で受け入れ済み。
+- **テストの作り直しの量**: 約 40 本を除いて作り直す → 除くのは振る舞いが無くなったものだけ（純粋な判断のテストは残す）。
+- **`main.rs` の上限**: 呼ぶ所の差し替えだけで 986 行のまま。
