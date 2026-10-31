@@ -51,6 +51,8 @@ mod move_hold;
 // 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」）。
 mod move_shift;
 mod scale_text;
+// 倍率の変わりの相（shell-scale-linkage design「ScaleNoticePhase」）。
+mod scale_notice;
 pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
 mod switch;
