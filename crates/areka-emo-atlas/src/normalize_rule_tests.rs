@@ -116,8 +116,9 @@ fn row4_full_without_alpha_is_fully_opaque_and_keeps_top_left_color() {
     assert_eq!(out, img.bgra, "左上と同じ色の画素も α=255 のまま残る");
 }
 
-/// 表の 4 行目の備え（要件 4.2）: α の印が偽なのに α<255 の画素を持つ絵（パレットの PNG の
-/// 透明の情報など）も、`Full` では全画素 α=255 になる。色のバイトは触らない。
+/// 表の 4 行目の備え（要件 4.2）: α の印が偽なのに α<255 の画素を持つ絵（WIC の静止画の読み手
+/// からは、パレットの番号ごとの透明度を持つ絵はこの形で来ない。正規化器の単体の備え）も、
+/// `Full` では全画素 α=255 になる。色のバイトは触らない。
 #[test]
 fn row4_full_without_alpha_flag_forces_translucent_pixels_opaque() {
     let img = image(

@@ -5,6 +5,8 @@
 //! `--random` は記憶・唯一・既定を飛ばし、0 体＝ゴーストなし・1 体＝その 1 体・2 体以上＝注入した
 //! 添字で選び、選んだものと候補の数を info `ghost_random_requested` で 1 件残す。
 //! 一時の置き場が消えた次の起動（記憶が列挙に無い）は今の `last_ghost_not_found` で次の段へ。
+//! callghost の相手（install-before-boot 要件 4.2・4.3・4.7・4.10・9.5）は記憶より先で経路 `CallGhost`、
+//! 目録に無ければ warn `callghost_target_not_found` で記憶へ、位置引数・指し先・`--random` が先。
 //! プロセス・fs・乱数には触れない。
 
 use std::path::{Path, PathBuf};
@@ -34,6 +36,20 @@ fn ghost(
     listed: &[&str],
     pick: impl FnOnce(usize) -> usize,
 ) -> (Result<GhostDecision, NoGhost>, Vec<CapturedEvent>) {
+    ghost_call(root, None, None, pointed, random, memory, listed, pick)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ghost_call(
+    root: &BasewareRoot,
+    argv: Option<&Path>,
+    call_ghost: Option<&str>,
+    pointed: Option<(&Path, &str)>,
+    random: bool,
+    memory: Option<&str>,
+    listed: &[&str],
+    pick: impl FnOnce(usize) -> usize,
+) -> (Result<GhostDecision, NoGhost>, Vec<CapturedEvent>) {
     let listed: Vec<GhostEntry> = listed
         .iter()
         .map(|folder| GhostEntry {
@@ -46,9 +62,10 @@ fn ghost(
         })
         .collect();
     let inputs = GhostInputs {
-        argv: None,
+        argv,
         pointed,
         random,
+        call_ghost,
         memory,
         listed: &listed,
         stores: &[root.ghost_store()],
@@ -171,4 +188,108 @@ fn random_zero_is_no_ghost() {
         })
     );
     assert!(events.is_empty(), "{events:?}");
+}
+
+// ---------------------------------------------------------------- callghost（install-before-boot 要件 4.2・4.3・4.7・4.10・9.5）
+
+/// 相手は記憶（列挙に在る）・既定より先に立つ。経路は `CallGhost`・記録は出さない。
+#[test]
+fn call_ghost_wins_over_memory_and_default() {
+    let root = root();
+    let (got, events) = ghost_call(
+        &root,
+        None,
+        Some("new_ghost"),
+        None,
+        false,
+        Some("a"),
+        &["a", "emo2", "new_ghost"],
+        no_pick,
+    );
+    assert_eq!(got, Ok(at(&root, GhostRoute::CallGhost, "new_ghost")));
+    assert!(events.is_empty(), "{events:?}");
+}
+
+/// 前回がきれいに終わらなかった（記憶を読まない＝None）ときも相手が立つ（要件 4.7）。
+#[test]
+fn call_ghost_stands_without_memory() {
+    let root = root();
+    let (got, _) = ghost_call(
+        &root,
+        None,
+        Some("new_ghost"),
+        None,
+        false,
+        None,
+        &["emo2", "new_ghost"],
+        no_pick,
+    );
+    assert_eq!(got, Ok(at(&root, GhostRoute::CallGhost, "new_ghost")));
+}
+
+/// 相手が目録に無い: warn `callghost_target_not_found` を 1 件残して記憶の段へ。
+#[test]
+fn call_ghost_not_listed_warns_and_falls_to_memory() {
+    let root = root();
+    let (got, events) = ghost_call(
+        &root,
+        None,
+        Some("gone"),
+        None,
+        false,
+        Some("a"),
+        &["a", "emo2"],
+        no_pick,
+    );
+    assert_eq!(got, Ok(at(&root, GhostRoute::Memory, "a")));
+    let hits: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("callghost_target_not_found"))
+        .collect();
+    assert_eq!(hits.len(), 1, "{events:?}");
+    assert_eq!(hits[0].level, tracing::Level::WARN);
+    assert_eq!(hits[0].field_str("folder"), Some("gone"));
+}
+
+/// 位置引数・指し先・`--random` は相手より先（相手は見ない＝記録も出ない）。
+#[test]
+fn argv_pointed_and_random_win_over_call_ghost() {
+    let root = root();
+    let listed = ["a", "new_ghost", "z"];
+    let argv = PathBuf::from(r"D:\dev\argv_ghost");
+    let (got, _) = ghost_call(
+        &root,
+        Some(&argv),
+        Some("new_ghost"),
+        None,
+        false,
+        None,
+        &listed,
+        no_pick,
+    );
+    assert_eq!(got.map(|g| g.route), Ok(GhostRoute::Argv));
+    let dir = PathBuf::from(r"D:\dev\ghosts\my_ghost");
+    let (got, _) = ghost_call(
+        &root,
+        None,
+        Some("new_ghost"),
+        Some((&dir, "my_ghost")),
+        false,
+        None,
+        &listed,
+        no_pick,
+    );
+    assert_eq!(got.map(|g| g.route), Ok(GhostRoute::Pointed));
+    let (got, events) = ghost_call(
+        &root,
+        None,
+        Some("new_ghost"),
+        None,
+        true,
+        None,
+        &listed,
+        last,
+    );
+    assert_eq!(got, Ok(at(&root, GhostRoute::Random, "z")));
+    assert_random_info(&events, "z", "3");
 }

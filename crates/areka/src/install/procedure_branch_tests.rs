@@ -589,3 +589,27 @@ fn missing_ghost_facts_abandons_before_anything_is_written() {
     assert_eq!(asks(&ports), 0);
     assert_eq!(entries_under(ports.root.path()), before);
 }
+
+/// 口が「送らなかった」と答えたら「送りました」を残さず、旧仕様の完了へも続けない（要件 3.1・6.2・9.4）。
+#[test]
+fn unsent_logs_unsent_and_does_not_fall_back_to_legacy_complete() {
+    let mut ports = FakePorts::new();
+    for id in ["OnInstallBegin", "OnInstallCompleteEx", "OnInstallComplete"] {
+        ports.replies.insert(id, Raised::Unsent);
+    }
+    let (ends, events) = run_one(&mut ports, ghost_nar("newbie", &[]));
+    assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
+    assert_eq!(
+        ports.raised_ids(),
+        vec!["OnInstallBegin", "OnInstallCompleteEx"],
+        "送らなかったときは OnInstallComplete を試さない"
+    );
+    assert!(logged(&events, "install_event").is_empty());
+    let unsent = logged(&events, "install_event_unsent");
+    assert_eq!(unsent.len(), 2);
+    assert!(
+        unsent
+            .iter()
+            .all(|event| event.level == tracing::Level::DEBUG)
+    );
+}

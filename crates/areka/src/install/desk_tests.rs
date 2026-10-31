@@ -793,7 +793,3 @@ fn is_busy_while_running_queued_or_holding_an_overwrite() {
 /// 終了の後始末での窓口の片付け（task 9・要件 8.2・8.5・8.6・11.8）。
 #[path = "desk_exit_tests.rs"]
 mod exit_tests;
-
-/// 起動の依頼（`--install` と `initial_install.nar`）との結線（startup-install-option）。
-#[path = "desk_startup_tests.rs"]
-mod startup_tests;

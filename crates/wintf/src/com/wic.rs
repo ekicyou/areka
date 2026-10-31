@@ -24,7 +24,9 @@ pub fn wic_factory() -> Result<IWICImagingFactory2> {
 /// * `path` - 画像ファイルパス
 ///
 /// # Returns
-/// `(PBGRA32 に変換した IWICBitmapSource, 変換前フレームの α 有無)`
+/// `(PBGRA32 に変換した IWICBitmapSource, 変換前フレームの α 有無)`。
+/// α 有無は番号つきの形式ならパレットの透明度から、それ以外は形式の GUID から取る。
+/// パレットを読めないときは WIC のエラーを返す。
 pub fn load_bitmap_source(
     factory: &IWICImagingFactory2,
     path: &Path,
@@ -48,7 +50,12 @@ pub fn load_bitmap_source(
     // PBGRA 変換後は必ず α 付きフォーマットになり判別不能になるため、
     // 変換前にここで確定させる。
     let pre_format = unsafe { frame.GetPixelFormat()? };
-    let has_alpha = pixel_format_has_alpha(&pre_format);
+    // 番号つきの形式は形式の GUID に α が出ないので、パレットの透明度で決める。
+    let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
+        palette_has_alpha(factory, &frame.cast()?)?
+    } else {
+        pixel_format_has_alpha(&pre_format)
+    };
 
     // PBGRA32 に変換（α チャネルがなくても 100% 不透明として変換）
     let converter = factory.create_format_converter()?;
@@ -62,6 +69,25 @@ pub fn load_bitmap_source(
     )?;
 
     Ok((converter.cast()?, has_alpha))
+}
+
+/// 番号つきの形式（1・2・4・8 ビット）。この集合に入る形式だけパレットを読む。
+const INDEXED_FORMATS: &[GUID] = &[
+    GUID_WICPixelFormat1bppIndexed,
+    GUID_WICPixelFormat2bppIndexed,
+    GUID_WICPixelFormat4bppIndexed,
+    GUID_WICPixelFormat8bppIndexed,
+];
+
+/// フレームのパレットに透明度 255 未満の色が 1 つでも在るか（`IWICPalette::HasAlpha`）。
+/// `load_bitmap_source` が番号つきの形式のときに使う。パレットを持たない絵では
+/// WIC のエラー（`WINCODEC_ERR_PALETTEUNAVAILABLE`）をそのまま返す。
+fn palette_has_alpha(factory: &IWICImagingFactory2, source: &IWICBitmapSource) -> Result<bool> {
+    unsafe {
+        let palette = factory.CreatePalette()?;
+        source.CopyPalette(&palette)?;
+        Ok(palette.HasAlpha()?.as_bool())
+    }
 }
 
 /// WIC ピクセルフォーマット GUID が α チャンネルを持つかを判定する。
@@ -215,3 +241,7 @@ impl WICBitmapSourceExt for IWICBitmapSource {
         unsafe { self.CopyPixels(rect_ptr, stride, buffer) }
     }
 }
+
+#[cfg(test)]
+#[path = "wic_tests.rs"]
+mod tests;

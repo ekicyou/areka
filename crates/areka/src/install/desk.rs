@@ -32,6 +32,7 @@ use super::judge::GhostFacts;
 use super::names;
 use super::pick::{self, PickError};
 use super::procedure::InstalledRecord;
+use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
@@ -129,7 +130,6 @@ pub(crate) fn on_steady(world: &mut World) {
         desk.steady_count += 1;
     }
     overwrite::on_steady(world);
-    super::startup::on_steady(world);
 }
 
 /// 降ろして全窓を閉じた直後・起こす前（`ghost_switch::switch_to` から）。預かった宛先への切替の
@@ -267,7 +267,6 @@ fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallR
 /// 書庫を捨てて記録に残す（頼みの返信端を落とすので、背景のスレッドは閉じた扱いで止まる）。件数は
 /// 捨てた書庫の数（要件 8.5「待っている依頼（まだ始めていない書庫）」）。
 pub(crate) fn discard_for_exit(world: &mut World) {
-    super::startup::discard_for_exit(world);
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
@@ -291,9 +290,8 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 fn answer(world: &mut World, ask: DeskAsk) {
     let closing = world.non_send::<InstallDesk>().gate.is_closing();
     match ask {
-        DeskAsk::OrderDone { order, ends } => {
+        DeskAsk::OrderDone { .. } => {
             world.non_send_mut::<InstallDesk>().busy = false;
-            super::startup::on_order_done(world, &order, &ends, closing);
         }
         ask if closing => {
             drop(ask);
@@ -357,37 +355,25 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 要件 1.10・1.11）。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りとフォルダ名の
 /// 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
 /// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
-fn record_installed(world: &mut World, record: InstalledRecord) {
+pub(super) fn record_installed(world: &mut World, record: InstalledRecord) {
     let roots = world
         .get_resource::<BootContext>()
         .map(|ctx| ctx.roots.clone());
-    let ghost_entry = |folder: &str| roots.as_ref().and_then(|roots| find_ghost(roots, folder));
-    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
-        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
-            Some(name) => name,
-            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
-            None => folder.to_owned(),
-        }
-    });
-    match record.kind {
-        InstallKind::Ghost => {
-            let folder = ghost_entry(&record.folder)
-                .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
-            record_last_installed(world, folder);
-        }
-        InstallKind::Balloon => {
-            let folder = roots
-                .as_ref()
-                .and_then(|roots| find_balloon(roots, &record.folder))
-                .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
-            record_installed_balloon(world, folder.clone());
-            remember_balloon(world, folder);
-            note_hidden_by_ghost(world, &record.folder);
-        }
-        InstallKind::Shell => record_installed_shell(world, record.ghost_folder, record.folder),
-        InstallKind::Supplement => {}
+    let (folder, ghost_name) = catalog_spelling(roots.as_ref(), &record);
+    if record.kind == InstallKind::Balloon {
+        remember_balloon(world, folder.clone());
+        note_hidden_by_ghost(world, &record.folder);
     }
-    names::update(world, record.object_name, ghost_name);
+    place_last_installed(
+        world,
+        CarriedInstall {
+            kind: record.kind,
+            folder,
+            ghost_folder: record.ghost_folder,
+            object_name: record.object_name,
+            ghost_name,
+        },
+    );
     if let Some(runtime) = names::current_runtime(world)
         && let Err(err) = runtime.sylphya_publisher().barrier()
     {
@@ -397,6 +383,47 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
             "[install] 今のゴーストの記憶の書き手が止まっているので、入れた後の記録の反映を確かめられません"
         );
     }
+}
+
+/// 「最後に入れた物」の受け皿（ゴースト・シェル・バルーン・追加ファイルは無し）と置換語へ置く
+/// （窓口の記録と起動の前の控えの引き継ぎの共通の口・記憶へは書かない）。
+pub(super) fn place_last_installed(world: &mut World, installed: CarriedInstall) {
+    match installed.kind {
+        InstallKind::Ghost => record_last_installed(world, installed.folder),
+        InstallKind::Balloon => record_installed_balloon(world, installed.folder),
+        InstallKind::Shell => {
+            record_installed_shell(world, installed.ghost_folder, installed.folder)
+        }
+        InstallKind::Supplement => {}
+    }
+    names::update(world, installed.object_name, installed.ghost_name);
+}
+
+/// 目録の綴りに直したフォルダ名と、%lastghostname の値（窓口と起動の前の口の共通の決まり）。
+/// フォルダ名はゴースト・バルーンなら根の目録の綴り（目録に無ければ書庫の綴りのまま）、他は書庫の
+/// 綴りのまま。%lastghostname は関わったゴーストの目録の `name`（無ければゴーストは `install.txt` の
+/// `name`・他はそのフォルダ名）で、関わったゴーストが無ければ None。
+pub(super) fn catalog_spelling(
+    roots: Option<&areka_ghost::BasewareRoots>,
+    record: &InstalledRecord,
+) -> (String, Option<String>) {
+    let ghost_entry = |folder: &str| roots.and_then(|roots| find_ghost(roots, folder));
+    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
+        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
+            Some(name) => name,
+            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
+            None => folder.to_owned(),
+        }
+    });
+    let folder = match record.kind {
+        InstallKind::Ghost => ghost_entry(&record.folder).map(|e| e.identity.folder),
+        InstallKind::Balloon => {
+            roots.and_then(|roots| find_balloon(roots, &record.folder).map(|e| e.identity.folder))
+        }
+        InstallKind::Shell | InstallKind::Supplement => None,
+    }
+    .unwrap_or_else(|| record.folder.clone());
+    (folder, ghost_name)
 }
 
 /// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info

@@ -35,6 +35,10 @@ pub use message_loop::AppExit;
 /// NonSend リソース型。`new()`/`get_non_send` の型推論を確定させるために用いる。
 type ProdWindowRegistry = WindowRegistry<crate::executor::util::Window<WndState>>;
 
+#[cfg(test)]
+#[path = "dpi_once_tests.rs"]
+mod dpi_once_tests;
+
 /// メッセージループ層。ライブラリ（`wintf-winmsg-executor`）の `block_on` /
 /// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
 mod message_loop;
@@ -73,6 +77,39 @@ pub enum ExitPolicy {
     /// 明示の指示（[`AppExit::request_exit`]）でだけ終了する。窓 0 になってもループは回り続け、
     /// 後から新しい窓を開ける。
     Explicit,
+}
+
+/// プロセスの既定の DPI の扱いを、モニタごとの v2 に 1 回だけ立てる（2 回目からは何もしない）。
+///
+/// 成否はどちらも 1 行残す。起動の前に画面を出すときは UI を作る前にこれを呼び、
+/// [`WinApp::with_exit_policy`] の呼び出しは何もしない（2 回目の `ERROR_ACCESS_DENIED` の
+/// warn を出さない）。
+pub fn ensure_process_dpi_awareness() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // SAFETY: Win32 境界。SetProcessDpiAwarenessContext はプロセスグローバルな
+        // DPI awareness をスレッドセーフに設定する。既に設定済み／不可の場合はエラーを
+        // 返すが、レガシー同様にプロセス起動は止めない（致命的ではない）。
+        //
+        // Req 7.4: **戻り値を握り潰さない**。旧実装は `let _ =` で捨てていたため、
+        // per-monitor v2 の設定が失敗していても観測できず、`WM_DPICHANGED` が
+        // 実機で 0 件だった機序（診断レポート §2.7）の切り分けができなかった。
+        // 成否のどちらも必ず 1 行残す——「点灯しない観測点を『発生 0 回』の根拠に
+        // 用いない」（Req 1.5）の直接適用である。
+        unsafe {
+            match SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) {
+                Ok(()) => info!(
+                    context = "PER_MONITOR_AWARE_V2",
+                    "[SetProcessDpiAwarenessContext] DPI awareness set"
+                ),
+                Err(e) => warn!(
+                    context = "PER_MONITOR_AWARE_V2",
+                    error = ?e,
+                    "[SetProcessDpiAwarenessContext] failed (process continues with the inherited awareness)"
+                ),
+            }
+        }
+    });
 }
 
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
@@ -124,28 +161,7 @@ impl WinApp {
             }
         }
 
-        // SAFETY: Win32 境界。SetProcessDpiAwarenessContext はプロセスグローバルな
-        // DPI awareness をスレッドセーフに設定する。既に設定済み／不可の場合はエラーを
-        // 返すが、レガシー同様にプロセス起動は止めない（致命的ではない）。
-        //
-        // Req 7.4: **戻り値を握り潰さない**。旧実装は `let _ =` で捨てていたため、
-        // per-monitor v2 の設定が失敗していても観測できず、`WM_DPICHANGED` が
-        // 実機で 0 件だった機序（診断レポート §2.7）の切り分けができなかった。
-        // 成否のどちらも必ず 1 行残す——「点灯しない観測点を『発生 0 回』の根拠に
-        // 用いない」（Req 1.5）の直接適用である。
-        unsafe {
-            match SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) {
-                Ok(()) => info!(
-                    context = "PER_MONITOR_AWARE_V2",
-                    "[SetProcessDpiAwarenessContext] DPI awareness set"
-                ),
-                Err(e) => warn!(
-                    context = "PER_MONITOR_AWARE_V2",
-                    error = ?e,
-                    "[SetProcessDpiAwarenessContext] failed (process continues with the inherited awareness)"
-                ),
-            }
-        }
+        ensure_process_dpi_awareness();
 
         // 呼び出しスレッド＝UI スレッド（メッセージループを回す本体）である。ここで 1 度だけ
         // 役割を宣言してスレッド名簿へ載せる（要件 2.3）。COM/DPI の初期化を済ませた後・

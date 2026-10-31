@@ -342,3 +342,98 @@ fn sink_agrees_with_link_destinations() {
     assert_eq!(extracted.len(), 8, "見本の台本は 8 件の行き先を持つ");
     assert_eq!(sent, extracted, "受け口と取り出しは同じ列を返す");
 }
+
+// ---------------------------------------------------------------- 記録の型（popup-menu-residue）
+
+/// 7 つの場面の記録はどれもちょうど 1 行で、`[readme]` の接頭辞・表の `event=`・表の水準を
+/// 持つ（popup-menu-residue 要件 5.1・5.2・5.5）。
+#[test]
+fn every_readme_cue_line_carries_the_prefix_and_an_event() {
+    let unopenable = |command: &str| TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("0"),
+        command: CueCommand::Custom {
+            command: command.into(),
+            params: DynamicValue::Null,
+        },
+        duration: 0.0,
+    };
+    let text = TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("0"),
+        command: CueCommand::Text("アヒル".into()),
+        duration: 0.0,
+    };
+    // (場面, cue, 受信端を落とすか, 水準, event)
+    let cases: Vec<(&str, TalkCue, bool, &str, &str)> = vec![
+        (
+            "自分宛の開けない荷物",
+            unopenable("open"),
+            false,
+            "WARN",
+            "readme_cue_unopenable",
+        ),
+        (
+            "他人宛の開けない荷物",
+            unopenable("move"),
+            false,
+            "DEBUG",
+            "readme_cue_skip",
+        ),
+        (
+            "キャリアでない cue",
+            text,
+            false,
+            "DEBUG",
+            "readme_cue_skip",
+        ),
+        (
+            "引数付きの説明書タグ",
+            carrier_cue("open", &["readme", "ghost", "x"]),
+            false,
+            "WARN",
+            "readme_cue_unsupported",
+        ),
+        (
+            "担当外のコマンド",
+            carrier_cue("open", &["help"]),
+            false,
+            "DEBUG",
+            "readme_cue_skip",
+        ),
+        (
+            "規則が断った",
+            carrier_cue("open", &["file"]),
+            false,
+            "WARN",
+            "open_external_rejected",
+        ),
+        (
+            "送り出しの失敗",
+            carrier_cue("open", &["readme"]),
+            true,
+            "WARN",
+            "readme_cue_send_failed",
+        ),
+    ];
+    for (scene, cue, drop_rx, level, event) in cases {
+        let (mut sink, rx) = sink();
+        if drop_rx {
+            drop(rx);
+        }
+        let logs = capture_logs(|| sink.emit(cue));
+        assert_one_line(scene, &logs, level, event);
+    }
+}
+
+/// 捕まえた行がちょうど 1 行で、水準・`[readme]`・`event=` の名前を持つことを確かめる。
+fn assert_one_line(scene: &str, logs: &[String], level: &str, event: &str) {
+    assert_eq!(logs.len(), 1, "{scene}: 記録はちょうど 1 行: {logs:?}");
+    let line = &logs[0];
+    assert!(
+        line.contains(&format!("level={level}"))
+            && line.contains("[readme]")
+            && line.contains(&format!("event=\"{event}\"")),
+        "{scene}: 水準 {level}・[readme]・event={event} が要る: {line}"
+    );
+}

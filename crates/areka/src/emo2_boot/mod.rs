@@ -338,7 +338,7 @@ fn build_boot_assets_for(
 /// [`BootWiringError`] を「起点不在（良性・`warn!`）」と「それ以外（予期しない・`error!`）」へ
 /// 分類して log-first 観測する（design「Error Categories and Responses」構築時・R7.3）。
 ///
-/// 起動前の解決（`boot_config::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
+/// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// 結線するので、`MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ
 /// `warn!` どまり。他（読取不能／bake／
 /// balloon／`spawn_ui` 失敗等）は真に予期しない失敗として `error!` で区別する（main の

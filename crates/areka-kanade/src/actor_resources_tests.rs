@@ -276,3 +276,35 @@ fn dropped_reply_receiver_does_not_panic() {
         reply_tx,
     );
 }
+
+/// 照会の道で SHIORI の口が閉じていても、往復の失敗の記録は終了へ進むと書かない
+/// （照会は失敗を返すだけ・popup-menu-residue 要件 6.1・6.3・6.4）。
+#[test]
+fn a_failed_round_trip_on_the_query_path_does_not_claim_termination() {
+    use crate::schedule::log_capture::{capture, logged_once};
+    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+    drop(shiori_rx);
+    let (reply_tx, reply_rx) = reply_channel();
+    let events = capture(|| {
+        answer(
+            &state_in(Phase::Steady { talk: None }),
+            &shiori_tx,
+            vec!["readmebutton.caption"],
+            reply_tx,
+        );
+    });
+    let logged = logged_once(&events, tracing::Level::ERROR, "shiori_send_failed");
+    let message = logged.message.as_deref().unwrap_or_default();
+    assert!(
+        !message.contains("終了"),
+        "照会の往復の失敗は終了を述べない: {message}"
+    );
+    let replied = reply_rx.recv().expect("応答は必ず 1 回返る");
+    assert_eq!(replied.len(), 1);
+    assert_eq!(replied[0].0, "readmebutton.caption");
+    assert!(
+        matches!(replied[0].1, ResourceOutcome::Failed(_)),
+        "その id の失敗として返る: {:?}",
+        replied[0].1
+    );
+}

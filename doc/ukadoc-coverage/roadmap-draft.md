@@ -705,7 +705,7 @@ wave = "W14"
 name = "areka-P0-popup-menu-minimal"
 stage = "A"
 bundle = "メニュー"
-owner_count = 10
+owner_count = 6
 wave = "A0"
 
 [[spec]]

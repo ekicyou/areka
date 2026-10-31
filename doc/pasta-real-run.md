@@ -246,7 +246,7 @@ pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <身体の点
 | 右クリックメニューの見た目（崩れ 15） | 段 6 のメニューの `shot` を SSP の `stage6-menu-shot.png` と比べる | `popup-menu-shell-look` の着地の後 |
 | 縦書きのバルーンが書庫から入って出るか（崩れ 1・2） | 新しい書庫（`install.txt` に `balloon.directory,pasta_tategaki`・ghost_dev の `c32229e`）を入れて段 1・段 2 を回す。縦書きのバルーンで起動し（`balloon_resolved route=Descript`・`descript_balloon_not_found` が 0）、`\_l[x,0]` の後の段と選択肢が前の行に重ならないこと。入れ方は表の下 | ぱすたの新しい書庫のリリースの後（リリースは開発者が決める） |
 
-崩れ 1・2 の確かめの準備: 3 節の根を組む塊は書庫を写すだけで `install.txt` を読まない。新しいぱすたの書庫は、areka 自身のインストールで入れる（3 節の根で起こした areka のゴーストの窓へ `.nar` を投げ込む）。同梱のバルーンは、main #364 の決めのとおりゴーストの中の `ghost\pasta-in-windows\balloon\pasta_tategaki\` に入る。この入れ方は案 B の前に実機で確かめる。
+崩れ 1・2 の確かめの準備: 3 節の根を組む塊は書庫を写すだけで `install.txt` を読まない。新しいぱすたの書庫は、areka 自身のインストールで入れる（取り寄せた `.nar` を `$v` の下へ写し、4 節の起動の命令の `-ArgumentList` に `` '--install', "`"$v\pasta-in-windows.nar`"" `` を足して打つ。書庫は起動の前に 3 節の根へ入り、そのまま起動が続く）。同梱のバルーンは、main #364 の決めのとおりゴーストの中の `ghost\pasta-in-windows\balloon\pasta_tategaki\` に入る。この入れ方は案 B の前に実機で確かめる。
 
 ### 代わりの操作（`mouse-click-wheel-events` の着地まで・任意）
 

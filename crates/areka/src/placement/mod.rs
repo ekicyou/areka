@@ -94,7 +94,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use areka_emo_compose::ScaleRatio;
-use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces};
+use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces_quiet};
 use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use areka_parsers::package::MountError;
 use tracing::{error, info, warn};
@@ -800,7 +800,7 @@ fn scope_windowposition(
             return None;
         }
     };
-    let faces = match resolve_balloon_faces(balloon_root, scope_key) {
+    let faces = match resolve_balloon_faces_quiet(balloon_root, scope_key) {
         Ok(faces) => faces,
         Err(err) => {
             warn!(
