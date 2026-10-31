@@ -273,7 +273,7 @@ impl ChoiceRanges<'_> {
 
 #### 検査の呼び替え（summary）
 
-- `actor_lookahead_shapes_tests.rs` の `choice_highlight_and_click_ranges_come_from_the_judged_rows`: 行の列は今の `rig.lines(&place, t)`（中は `arrange_for_test`・5.5）のまま。183〜185 行目を `let ranges = choice_ranges(&lines, &spans, resolved.mode, &resolved.region, &FixedMetrics); let segments = &ranges.segments; let hits = ranges.hit_rows();` に替える。以降の判定の文（覆う字の比べ・行内の区間の比べ・最後の「ええと、」）は変えない（3.4）。
+- `actor_lookahead_shapes_tests.rs` の `choice_highlight_and_click_ranges_come_from_the_judged_rows`: 行の列は今の `rig.lines(&place, t)`（中は `arrange_for_test`・5.5）のまま。183〜185 行目を `let derived = choice_ranges(&lines, &spans, resolved.mode, &resolved.region, &FixedMetrics); let segments = &derived.segments; let hits = derived.hit_rows();` に替える（名前を `ranges` にしないのは、207 行目に判定の側の `let ranges: Vec<_> = …` が既にあり、判定の文は変えないため）。以降の判定の文（覆う字の比べ・行内の区間の比べ・最後の「ええと、」）は変えない（3.4）。
 - `choice_anchor_tests.rs` の `hit_in`: 今の配置（`BalloonModel`・`TextRegion::resolve`・`LayoutEngine::layout(…, &FixedMetrics, WrapPlan::CharByChar)`）を支え `arranged(state, t, mode) -> (Vec<PositionedLine>, TextRegion)` へそのまま切り出す（5.5）。`hit_in` は `arranged` → `choice_ranges(&lines, place.choices(), mode, &region, &FixedMetrics)` → `hit_rows()` に替え、返す値（範囲の列と、種類・通し番号・矩形の組）は今と同じ。`hit`／`hit_in` を使う既存の検査の判定は変えない（3.4, 2.5）。
 - 2 か所とも `annotate_lines`・`line_bands`・`derive_hit_rows` を自分で呼ばなくなる（3.2）。`choice_anchor_tests.rs` の `use super::*` は残るが、3 つの関数を呼ぶ文は無くなる。
 
@@ -285,8 +285,9 @@ impl ChoiceRanges<'_> {
 | Requirements | 3.6, 4.2 |
 
 - 置き場所: `choice_anchor_tests.rs`。名前は `highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode`。
-- 台本: 折り返しをまたぐ選択肢（例: 「あい」＋選択肢「うえおか」＋「き」＝1 行目と 2 行目に区間）。
+- 台本: 書字方向ごとに、行（縦書きでは列）をまたぐ選択肢を使う。横書きは「あい」＋選択肢「うえおか」＋「き」（1 行目と 2 行目に区間）。縦書きは `hit_in` と同じ描画範囲で 1 列に 20 字入り、上の台本では折り返さないので、`vertical_choice_across_columns_has_a_band_on_each_column` と同じ前置き 19 字＋選択肢「はいいえ」（1 列目と 2 列目に区間）を使う。
 - 書字方向: 横書き・縦書き右から左・縦書き左から右の 3 つ。
+- 判定の前に、どの向きでも選択肢の範囲が 2 行（列）以上に分かれていることを確かめる（台本が折り返さず、2 行目の帯を見ないまま緑になるのを防ぐ）。
 - 手順: `arranged` で行の列と描画範囲を得る → `choice_ranges(…, &FixedMetrics)` → `hit_rows()`。
 - 判定:
   - 当たりの行の数が選択肢の範囲の数と同じで、0 でない（帯や範囲が消える変異でも赤）。
@@ -299,7 +300,7 @@ impl ChoiceRanges<'_> {
 
 | 変異 | 中身 | 要件 | 赤になる見込みの検査 |
 |---|---|---|---|
-| V1 | 範囲の割り当てへ別の行の列（先頭の行を落とした列）を渡す | 4.1 | 検査 8 の選択肢・アンカーの檻・帯の共有の検査 |
+| V1 | 範囲の割り当てへ別の行の列（先頭の行を落とした列）を渡す | 4.1 | 検査 8 の選択肢・アンカーの檻（帯の共有の検査は横書きでは緑になり得る・縦書きは範囲が空になり赤） |
 | V2 | 帯へ別の行の列（空の列）を渡す | 4.1 | 同上 |
 | V3 | `hit_rows` で当たりへ別の行の列（先頭の行を落とした列）を渡す | 4.1 | アンカーの檻・帯の共有の検査 |
 | V4 | 強調の側だけ崩す: 返す `bands` の寄せをずらし、`hit_rows` は崩す前の帯（変異の間だけ持たせる写し）を使う | 4.2 | 帯の共有の検査（決まった字幅） |
