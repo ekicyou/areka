@@ -8,9 +8,14 @@
 //! `t` 字の箱の上端（基線 − ascent）・`E` 帯の厚み・案 2 の寄せ `round(max(0, t) + max(0, B − E) / 2)`。
 
 use super::ViewboxExecutor;
+use super::choice_hover_tests::bgra_x_span;
 use super::test_support::{Rig, block_axis_ink_span, glyph_items, live_diff_model_font};
+use super::vertical_band_readback_tests::{R_FILL_BGRA, R_FONTS, bgra_y_span};
 use crate::canvas::{ContentCanvas, ResidentContent};
-use crate::choice::{LineBand, ResolvedChoiceStyle, decorate_canvas, line_bands};
+use crate::choice::{
+    LineBand, ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows,
+    highlight_band_offset, line_bands, to_window_physical,
+};
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{
     DWriteMetrics, FontCatalog, ResolvedFont, create_line_layout, create_text_format,
@@ -425,4 +430,244 @@ fn line_gap_metrics_centre_the_horizontal_band_on_the_char_box() {
             "em {em}: アンカーと選択肢の帯"
         );
     }
+}
+
+/// 実物の読み戻しの 1 組（書体 × 大きさ × 拡大率）。本番と同じ道（配置 → `line_bands` → 塗りの住人へ
+/// 焼く → 描く → 読み戻す）で横書きの選択肢 2 行を描き、赤になった確かめを返す。
+/// `expect` が `Some` の書体は書体の行間を持つ書体として (a)〜(f) を、`None` の書体は行間 0 の書体と
+/// して (g) を確かめる。測った数は標準出力へ出す（`research.md` §5 の材料）。
+fn readback_case(
+    rig: &mut Rig,
+    factory: &IDWriteFactory2,
+    name: &str,
+    expect: Option<&str>,
+    size: u32,
+    k: f32,
+) -> Vec<String> {
+    let mode = WritingMode::HorizontalTb;
+    let em = size as f32;
+    let mut red = Vec::new();
+    let model = live_diff_model_font(Some(name), Some(size));
+    let font = ResolvedFont::resolve(&model);
+    let picked = FontCatalog::new(factory)
+        .expect("FontCatalog 生成")
+        .pick(&font);
+    let tag = format!("[{} {size} k={k}]", picked.name);
+    let metrics = DWriteMetrics::new(factory, &font, mode, &TextLayerConfig::default())
+        .expect("DWriteMetrics 生成");
+    // 本番の計測器が測った字の箱の上端（帯の式が読む値）。
+    let t = metrics.horizontal_char_box_top(em);
+    let b = metrics.line_box_height(em);
+
+    let image = ((em * 7.0) as u32, (em * 4.0) as u32);
+    let region = TextRegion::resolve(&model, image, mode);
+    let mut items = Vec::new();
+    let mut spans = Vec::new();
+    let mut glyphs = 0usize;
+    for (ordinal, word) in GAP_WORDS.iter().enumerate() {
+        if !items.is_empty() {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        let word_items = glyph_items(word);
+        let start = glyphs;
+        glyphs += word_items.len();
+        items.extend(word_items);
+        spans.push(ChoiceSpan {
+            kind: SpanKind::Choice,
+            ordinal,
+            id: format!("OnLgTest{}", ordinal + 1),
+            label: (*word).to_owned(),
+            references: Vec::new(),
+            glyph_range: start..glyphs,
+        });
+    }
+    let lines = LayoutEngine::layout(
+        &items,
+        glyphs,
+        &region,
+        mode,
+        em,
+        &metrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(lines.len(), GAP_WORDS.len(), "{tag} 2 行に並ぶ");
+    let bands = line_bands(&lines, mode, &metrics);
+    println!("{tag} t {t:.4}・B {b:.3}・帯 {bands:?}");
+
+    let Some(expect) = expect else {
+        // (g) 行間 0 の書体: 本番の寄せが t ＝ 0 の式の値と等しい（要件 5.1）。
+        for (i, band) in bands.iter().enumerate() {
+            let want = highlight_band_offset(b, band.extent);
+            if band.offset != want {
+                red.push(format!(
+                    "{tag} 行 {i} (g): 寄せ {} が t ＝ 0 の式の値 {want} でない（t {t:.4}）",
+                    band.offset
+                ));
+            }
+        }
+        return red;
+    };
+    // (a) 本番の解決で引けた書体の名前（代わりの書体のまま緑にしない）。
+    if picked.name != expect {
+        red.push(format!(
+            "{tag} (a): 書体 {name} が {} に引けた（{expect} のはず）",
+            picked.name
+        ));
+    }
+    // (b) 測った比が正（行間 0 の書体へ縮退していない）。
+    if t <= 0.0 {
+        red.push(format!("{tag} (b): 字の箱の上端 t {t} が正でない"));
+        return red;
+    }
+    // (d) の基準: 字の箱は帯の式でなく DirectWrite の基線 − ascent から出す。
+    let (box_top, box_height) = char_box(factory, &picked, em, &tag);
+
+    let window = LayoutEngine::visible_window(&lines, &region, mode);
+    let segments = annotate_lines(&lines, &spans);
+    let base = ContentCanvas::from_layout(&lines, &region, mode);
+    let contract = ScaleContract::new(k, None);
+    let style = ResolvedChoiceStyle::SquareFill {
+        fill: (105, 25, 25),
+        text: (255, 255, 255),
+    };
+    let decorate = |hovered: Option<usize>| {
+        decorate_canvas(
+            base.clone(),
+            &segments,
+            hovered,
+            style,
+            font.color,
+            &region,
+            mode,
+            &bands,
+        )
+    };
+    // 乗せていない面: 行ごとのインク（その行の住人だけを描いて読む）。
+    let ink: Vec<Option<(u32, u32)>> = (0..lines.len())
+        .map(|i| {
+            let only = ContentCanvas {
+                residents: vec![base.residents[i].clone()],
+                size: base.size,
+            };
+            let mut surface = rig.attach(image, k);
+            let (w, h) = surface.size();
+            let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+            exec.render(&only, &window, &font, mode, &contract, &mut surface)
+                .expect("横書きの描画に失敗");
+            let px = surface.read_back().expect("read_back 失敗");
+            block_axis_ink_span(&px, w, h, mode)
+        })
+        .collect();
+    let hit_rows = derive_hit_rows(&lines, &segments, mode, &region, &bands);
+    let plain = decorate(None);
+
+    for seg in &segments {
+        let word = GAP_WORDS[seg.ordinal];
+        let line = &lines[seg.line_index];
+        let band = bands[seg.line_index];
+        // 乗せたフレームと、同じ描き手で hover を外したフレーム（キャッシュを使い回す本番の形）。
+        let mut surface = rig.attach(image, k);
+        let (w, h) = surface.size();
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        let hovered = decorate(Some(seg.ordinal));
+        exec.render(&hovered, &window, &font, mode, &contract, &mut surface)
+            .expect("乗せたフレームの描画に失敗");
+        let px = surface.read_back().expect("read_back(乗せた) 失敗");
+        let committed = exec.scroll_state().committed;
+        exec.render(&plain, &window, &font, mode, &contract, &mut surface)
+            .expect("hover を外したフレームの描画に失敗");
+        let off = surface.read_back().expect("read_back(外した) 失敗");
+
+        let (Some(fx), Some(fy)) = (
+            bgra_x_span(&px, w, h, R_FILL_BGRA),
+            bgra_y_span(&px, w, h, R_FILL_BGRA),
+        ) else {
+            red.push(format!("{tag} {word}: 乗せたのに塗りが 1 画素も無い"));
+            continue;
+        };
+        println!(
+            "{tag} {word} に乗せた: 塗り x{}..{}・y{}..{}・インク {:?}",
+            fx.0, fx.1, fy.0, fy.1, ink[seg.line_index]
+        );
+        // (c) 帯の塗りが行のインク（仮名の行・漢字の行）を上下とも覆う。
+        match ink[seg.line_index] {
+            Some(i) if i.0 >= fy.0 && i.1 <= fy.1 => {}
+            Some(i) => red.push(format!(
+                "{tag} {word} (c): インク y{}..{} が塗り y{}..{} の外へ出る（上 {}・下 {}）",
+                i.0,
+                i.1,
+                fy.0,
+                fy.1,
+                i64::from(fy.0) - i64::from(i.0),
+                i64::from(i.1) - i64::from(fy.1)
+            )),
+            None => red.push(format!("{tag} {word}: 乗せていない面に行のインクが無い")),
+        }
+        // (e) 当たりの行の矩形（物理）が塗りの範囲を含む＝帯の中のインクの上の点が当たる。
+        let row = hit_rows
+            .iter()
+            .find(|r| r.ordinal == seg.ordinal)
+            .expect("選択肢ごとに当たりの行が 1 つ");
+        let hit = to_window_physical(row, &region, mode, committed, &contract, (0.0, 0.0));
+        let (x1, y1) = ((fx.1 + 1) as f32, (fy.1 + 1) as f32);
+        let contains = hit.left <= fx.0 as f32
+            && hit.top <= fy.0 as f32
+            && hit.right >= x1
+            && hit.bottom >= y1;
+        if !contains {
+            red.push(format!(
+                "{tag} {word} (e): 当たり {hit:?} が塗り x{}..{x1}・y{}..{y1} を含まない",
+                fx.0, fy.0
+            ));
+        }
+        // (d) 塗りの中心と字の箱の中心の差が k 物理画素以内。写像の足し分は当たりの矩形から取る。
+        let shift = hit.top - k * (line.rect.top + band.offset);
+        let box_centre = shift + k * (line.rect.top + box_top + box_height / 2.0);
+        let fill_centre = (fy.0 + fy.1 + 1) as f32 / 2.0;
+        println!("{tag} {word}: 塗りの中心 {fill_centre:.2}・字の箱の中心 {box_centre:.2}");
+        if (fill_centre - box_centre).abs() > k {
+            red.push(format!(
+                "{tag} {word} (d): 塗りの中心 {fill_centre:.2} が字の箱の中心 {box_centre:.2} から {k} 物理画素より離れる"
+            ));
+        }
+        // (f) hover を外したフレームに塗りが残らない（ダーティ帯が遠端まで広がる）。
+        if let Some(rest) = bgra_y_span(&off, w, h, R_FILL_BGRA) {
+            red.push(format!(
+                "{tag} {word} (f): hover を外したフレームに塗りが y{}..{} に残る",
+                rest.0, rest.1
+            ));
+        }
+    }
+    red
+}
+
+/// 実物の読み戻し（要件 2.1・2.2・3.2・5.1・6.2・6.4）: 游ゴシック（ぱすたの候補列・`R_FONTS` と
+/// 同じ固定で `Yu Gothic` に引ける）20・28 × k ＝ 1・2 の横書きの選択肢 2 行で (a)〜(f) を、行間 0 の
+/// 書体（Yu Gothic UI・ＭＳ ゴシック）の同じ組で (g) を確かめる。
+///
+/// 赤の確かめは組ごとに集めて最後に 1 度だけ落とす。測った数は標準出力へ出る（`--nocapture`）。
+#[test]
+fn line_gap_band_covers_char_box_readback() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let mut rig = Rig::new();
+    let (yu_gothic, expect) = R_FONTS[1];
+    let fonts = [
+        (yu_gothic, Some(expect)),
+        (GAP_FONTS[1], None),
+        (GAP_FONTS[2], None),
+    ];
+    let mut red = Vec::new();
+    for (name, expect) in fonts {
+        for size in [20u32, 28] {
+            for k in [1.0f32, 2.0] {
+                red.extend(readback_case(&mut rig, &factory, name, expect, size, k));
+            }
+        }
+    }
+    assert!(
+        red.is_empty(),
+        "横書きの帯の読み戻しで {} 件が赤:\n{}",
+        red.len(),
+        red.join("\n")
+    );
 }
