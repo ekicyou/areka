@@ -75,6 +75,9 @@ pub struct DWriteMetrics {
     /// 縦書きの em の箱の左の比（`(left + baseline − h/2) ÷ h`・生成時に一度だけ実測）。
     /// 横書きに束縛した物は `None`（既定の実装）。縦書きで測れなかった物は 0（行の矩形の真ん中）。
     vertical_em_box_left_ratio: Option<f32>,
+    /// 横書きの字の箱の上端の比（`(基線 − ascent) ÷ h`・生成時に 1 度だけ実測）。
+    /// 縦書きに束縛した物と、測れなかった物は 0（字の箱の上端＝行矩形の上端）。
+    horizontal_char_box_top_ratio: f32,
     /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（probe 成功値のみ・
     /// 失敗は縮退値を返しキャッシュしない）。既定の見た目は [`default_key`](Self::default_key)
     /// の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く（引くときに割り当てない）。
@@ -146,7 +149,8 @@ impl DWriteMetrics {
         // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
         // warn＋行送りピッチと同丈の比（`line_pitch(h) / h`）へ縮退する（帯はピッチで
         // 頭打ちゆえ縮退値でも隣接行を侵さない・R3.10・現行の縮退の意図を新式のまま保つ）。
-        let line_box_ratio = measure_font_metrics(factory, &format)
+        let font_metrics = measure_font_metrics(factory, &format);
+        let line_box_ratio = font_metrics
             .map(|m| (m.ascent as f32 + m.descent as f32) / m.designUnitsPerEm as f32)
             .unwrap_or_else(|| {
                 let fallback_ratio = if font.height > 0.0 {
@@ -179,6 +183,25 @@ impl DWriteMetrics {
                     }),
             ),
         };
+        // 横書きの字の箱の上端も生成時に 1 度だけ測る。書体の寸法そのものが測れないときは
+        // 上の warn! 1 件で足りる（同じ失敗に 2 件目を出さない）ので黙って 0。
+        let horizontal_char_box_top_ratio = match (mode, font_metrics) {
+            (WritingMode::HorizontalTb, Some(m)) => measure_horizontal_char_box_top_ratio(
+                factory,
+                &format,
+                font.height,
+                m.ascent as f32 / m.designUnitsPerEm as f32,
+            )
+            .unwrap_or_else(|step| {
+                warn!(
+                    font = %picked.name,
+                    step,
+                    "横書きの字の箱の上端を測れない——行矩形の上端へ縮退する"
+                );
+                0.0
+            }),
+            _ => 0.0,
+        };
         Ok(DWriteMetrics {
             factory: factory.clone(),
             format,
@@ -186,6 +209,7 @@ impl DWriteMetrics {
             config: *config,
             line_box_ratio,
             vertical_em_box_left_ratio,
+            horizontal_char_box_top_ratio,
             cache: RefCell::new(HashMap::new()),
             fonts,
             bound_face: picked.face,
@@ -372,6 +396,11 @@ impl GlyphMetrics for DWriteMetrics {
             }
         }
     }
+
+    /// 横書きの字の箱の上端＝生成時に実測した比 × `font_height`（縦書きに束縛した物・測れなかった物は 0）。
+    fn horizontal_char_box_top(&self, font_height: f32) -> f32 {
+        self.horizontal_char_box_top_ratio * font_height
+    }
 }
 
 /// 実測できないときの決定論の縮退送り幅（`FixedMetrics` と同式: ASCII だけのクラスタ＝
@@ -460,6 +489,43 @@ fn measure_vertical_em_box_left_ratio(
         return Err("GetLineMetrics: 行が 0 本");
     }
     let ratio = (text.left + lines[0].baseline - font_height / 2.0) / font_height;
+    if ratio.is_finite() {
+        Ok(ratio)
+    } else {
+        Err("値が有限でない")
+    }
+}
+
+/// 束縛した書式で、横書きの字の箱の上端の比 `(基線 − ascent_ratio × h) ÷ h` を測る。
+///
+/// 基線は本番の行と同じ書式・同じ生成口（[`create_line_layout`]・横書き）・同じ箱の高さ h の
+/// 仮名 1 字（「あ」）の TextLayout の `GetLineMetrics()[0].baseline`。書体の行間を DirectWrite が
+/// 行の上に置く分だけ正になる（游ゴシック 20 で 6.2988・行間 0 の書体は 0・research.md §3）。
+/// 失敗は失敗した所の名前を `Err` で返す（生成口の失敗は `error!` 済み・呼び手が `warn!` に載せて縮退）。
+fn measure_horizontal_char_box_top_ratio(
+    factory: &IDWriteFactory2,
+    format: &IDWriteTextFormat,
+    font_height: f32,
+    ascent_ratio: f32,
+) -> Result<f32, &'static str> {
+    if font_height <= 0.0 {
+        return Err("font_height <= 0");
+    }
+    let layout = create_line_layout(
+        factory,
+        "あ",
+        format,
+        font_height,
+        WritingMode::HorizontalTb,
+    )
+    .map_err(|_| "create_line_layout")?;
+    let mut lines = [DWRITE_LINE_METRICS::default(); 4];
+    let mut count = 0;
+    unsafe { layout.GetLineMetrics(Some(&mut lines), &mut count) }.map_err(|_| "GetLineMetrics")?;
+    if count == 0 {
+        return Err("GetLineMetrics: 行が 0 本");
+    }
+    let ratio = (lines[0].baseline - ascent_ratio * font_height) / font_height;
     if ratio.is_finite() {
         Ok(ratio)
     } else {
