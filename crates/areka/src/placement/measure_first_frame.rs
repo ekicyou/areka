@@ -13,14 +13,10 @@ use std::path::Path;
 use areka_emo_atlas::{DecodeError, DecodedImage, ElementDecoder};
 
 /// 動く絵を 1 枚目だけで読む読み手（採寸の道だけで使う）。
-// 3.1 で採寸に結線する。
-#[allow(dead_code)]
 pub(super) struct FirstFrameDecoder<'a, D: ElementDecoder> {
     inner: &'a D,
 }
 
-// 3.1 で採寸に結線する。
-#[allow(dead_code)]
 impl<'a, D: ElementDecoder> FirstFrameDecoder<'a, D> {
     pub(super) fn new(inner: &'a D) -> Self {
         Self { inner }
