@@ -16,7 +16,7 @@
   - _Depends: 1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.2, 2.6, 3.1_
 
-- [ ] 2.2 窓口の自己テストで 2 つの入口の置き場を確かめる
+- [x] 2.2 窓口の自己テストで 2 つの入口の置き場を確かめる
   - 今の `under_target` の置き場の 1 本を、`new` と `under_target` を表で回す 1 本に改める。各入口で、親が `test-roots`・その親が `target`・そのまた親に `crates/temp-path-kit/Cargo.toml`・破棄で消える、の 4 つを確かめ、失敗の文に入口の名前を入れる
   - OS の一時フォルダを引く呼び出しは使わない。module doc に 2 つの入口を回すことを 1 文足す
   - `cargo test -p temp-path-kit` が 9 本＋doctest 1 本で緑
