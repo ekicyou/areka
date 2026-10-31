@@ -46,8 +46,8 @@
   - 13 件の仕分けと、その記録。
   - 件 3・8 のテストの追加（件 8 は `crates/areka-kanade/tests/kanade/` の終了の通しのテストの兄弟・件 6 のテストは `actor_resources_tests.rs`）。
   - 件 4・5・6 の記録の文と型の修正（`crates/areka/src/menu/{trigger,win32}.rs`・`menu/trigger_show_tests.rs`・`emo2_boot/readme_cue.rs`・`crates/areka-kanade/src/actor.rs` の文だけ）。
-  - 件 9 の網羅台帳の 4 行の持ち主と備考、`menu/captions.rs` の問い合わせない名前の表の説明の追随。
-  - 件 11・12・13 を引受先の brief へ移すこと。
+  - 件 9 の網羅台帳の 4 行の持ち主と備考、`roadmap-draft.md` の `areka-P0-popup-menu-minimal` の `owner_count` の 1 行、`menu/captions.rs` の問い合わせない名前の表の説明の追随。
+  - 件 11・12 を `popup-menu-shell-look` の brief へ移すこと、件 13 を完了時の棚卸で新しい spec として起票すること。
 - **Out of scope**:
   - 件 11・12・13 の再現・原因の特定・修正（引受先が行う）。
   - 省略した形のメニューを作り分けること、3 人目以降のキャラクターの窓を出すこと。
@@ -150,10 +150,11 @@
 
 #### Acceptance Criteria
 
-1. The popup-menu-residue spec shall 網羅台帳の `char*.popupmenu.visible` の行の持ち主と備考の引受先を `extra-character-windows` にする。
-2. The popup-menu-residue spec shall 網羅台帳の `sakura.popupmenu.type`・`kero.popupmenu.type`・`char*.popupmenu.type` の 3 行について、省略した形のメニューを作り分けないことを本 spec の裁定として備考に確定させ、理由（正典が省略した形の中身を定めていない）と見直す条件（中身を決める根拠が得られたら新しく起票する）を書く。
-3. Where `char*.popupmenu.type` の行が 3 人目以降の窓を待つ理由も持つ, the popup-menu-residue spec shall その部分の引受先を `extra-character-windows` と書く。
-4. The popup-menu-residue spec shall 4 行の対応の状態（語彙のみ）を変えない。
+1. The popup-menu-residue spec shall 網羅台帳の 4 行の持ち主の欄（`owner`）を空にし、引受先は備考に書く（先例: `doc/ukadoc-coverage/ledger/assets.toml` の「宛先の欄は空にした」の行。台帳の検査は `owner` に spec の一覧〔`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]`〕に在る名前だけを許し、一覧へ spec を足すのは棚卸の仕事なので）。
+2. The popup-menu-residue spec shall `char*.popupmenu.visible` の行の備考に、引受先を `extra-character-windows` と書き、同 spec が引き取らないと決めた場合はそのときに新しく起票することを書く。
+3. The popup-menu-residue spec shall 網羅台帳の `sakura.popupmenu.type`・`kero.popupmenu.type`・`char*.popupmenu.type` の 3 行について、省略した形のメニューを作り分けないことを本 spec の裁定として備考に確定させ、理由（正典が省略した形の中身を定めていない）と見直す条件（`popup-menu-shell-look` がオーナードローのメニューを入れたとき〔正典はこの値を「オーナードローメニューの変更」と書く〕、または中身を決める根拠が得られたとき。どちらも新しく起票する）を書く。`char*.popupmenu.type` の行には、3 人目以降の窓の部分の引受先が `extra-character-windows` であることも書く。
+4. The popup-menu-residue spec shall 4 行の対応の状態（語彙のみ）を変えず、spec の一覧（`roadmap-draft.md`）では `areka-P0-popup-menu-minimal` の持ち主の行数（`owner_count`）だけを台帳に合わせて直す（`[[spec]]` の行も、共有の数 `[briefs].count` も変えない）。
+7. The popup-menu-residue spec shall 3 の見直す条件を、`popup-menu-shell-look` の brief にも 1 行写す。
 5. The popup-menu-residue spec shall 問い合わせない名前の表（`menu/captions.rs` の `UNQUERIED_POPUPMENU_RESOURCES`）の説明を 1・2 と同じ引受先と理由に合わせ、表の中身（4 つの名前）は変えない。
 6. The areka shall 右クリックメニューを、どの `*.popupmenu.type` の値でも今と同じ項目で出し、4 つの名前を SHIORI に問い合わせないことを今と変えない。
 
@@ -164,7 +165,7 @@
 #### Acceptance Criteria
 
 1. The popup-menu-residue spec shall 件 11（メニューを開いている間の相方のバルーンの黒い四角）と件 12（メニューが選ばれずに閉じる・見えない・選ばれずに閉じたときの記録が `debug` で見えない）を、`popup-menu-shell-look` の brief に、見つけた所・まだ分かっていないこと・見立て・再現の測り方とともに写す。
-2. The popup-menu-residue spec shall 件 13（「．さくら」の古い資源の名前を問わない・項目が無い）を、本 spec を閉じる前に生きている spec の brief へ写し、`popup-menu-shell-look` の件 15（おすすめの資源）との分け方が未決であることも一緒に書く。
+2. The popup-menu-residue spec shall 件 13（「．さくら」の古い資源の名前を問わない・項目が無い）を、本 spec の完了時の棚卸で `/kiro-discovery` により新しい spec 1 本として起票して渡す（⑴ 古い名前も問う直しと ⑵ 無い項目を足す仕事をまとめる。分けるのは起票の段で大きいと分かったとき）。その brief に、`popup-menu-shell-look` の件 15（おすすめの資源）との分け方が未決であることも一緒に書く。理由: 生きている spec に受け手が居ない（`popup-menu-shell-look` は項目の増減を範囲の外に置く）。
 3. When 件 11・12・13 を写す, the popup-menu-residue spec shall 本 spec の brief のその件の節に、写した先の spec の名前と日付を書く。
 4. The popup-menu-residue spec shall 件 11・12・13 のためにメニューを開く所・メニューの表示・SHIORI に問う名前の表（`crates/areka-kanade/src/schedule/resources.rs`）のコードを変えない。
 
@@ -177,4 +178,4 @@
 1. The areka shall 右クリックメニューの項目・項目名の問い合わせ・抑止の判定・選んだ後の動作を今と変えない。
 2. The areka shall メニューの「説明書」と台本の `\![open,readme]` が開くもの・開かないときの振る舞いを今と変えない。
 3. The popup-menu-residue spec shall 新しいテストを、確かめる実装と同じディレクトリの兄弟のファイルか、そのクレートの今在るテストの束に置く。
-4. When 本 spec の変更が済む, the popup-menu-residue spec shall 触ったクレート（`areka`・`areka-kanade`）のテストがすべて通ることを確かめる。
+4. When 本 spec の変更が済む, the popup-menu-residue spec shall 触ったクレート（`areka`・`areka-kanade`）と、網羅台帳を検査するクレート（`ukadoc-survey`）のテストがすべて通ることを確かめる。

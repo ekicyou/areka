@@ -157,3 +157,11 @@
 
 - 要件の討議（`/kiro-requirements-discussion popup-menu-residue`）で 8 節の論点を決め、要件 8・9 の文言を確定させる。
 - その後 `/kiro-design popup-menu-residue`。
+
+## 10. 要件の討議の結論（2026-10-31・全議題を推奨案で承認）
+
+- 論点 1（件 9 の `owner`）: 案 B＝4 行の `owner` を空にし備考に引受先・`roadmap-draft.md` は `areka-P0-popup-menu-minimal` の `owner_count` の 1 行だけ直す・要件 10.4 に `ukadoc-survey` を足した（要件 8.1・8.4・10.4）。
+- 論点 2（`char*.popupmenu.visible`）: `extra-character-windows` へ渡す。引き取らないと決めたらそのときに新しく起票（要件 8.2）。
+- 論点 3（`*.popupmenu.type` の見直す条件）: `popup-menu-shell-look` がオーナードローのメニューを入れたときを足し、向こうの brief へも写す（要件 8.3・8.7）。
+- 論点 4（件 13）: 本 spec の完了時の棚卸で `/kiro-discovery` により新しい spec 1 本（⑴⑵ まとめ）として起票（要件 9.2）。
+- 論点 5〜7 は設計へ（7 節 6・7）・論点 8〜10 は要件 3.2・7.3・10.4 へ反映済み。
