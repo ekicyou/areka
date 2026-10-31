@@ -111,3 +111,17 @@ fn resolve_receives_lexed_names_in_order() {
     assert_eq!(out, "%a1_b+%username\\%x[%y]%");
     assert_eq!(seen, ["a1_b", "username", "y", ""]);
 }
+
+/// `%*` は名前 `*` で引かれ、答えが無いので台本は 1 バイトも変わらない（script-small-tags 要件 4.3）。
+#[test]
+fn percent_star_is_looked_up_as_star_and_left_unchanged() {
+    let mut seen = Vec::new();
+    let input = r"\0%*\q[はい,OnYes]%username%*\e";
+    let out = substitute_system_vars(input, &mut |name| {
+        seen.push(name.to_string());
+        (name == "username").then(|| "太郎".to_string())
+    });
+    assert_eq!(out, r"\0%*\q[はい,OnYes]太郎%*\e");
+    assert_eq!(seen, ["*", "username", "*"]);
+    assert_eq!(sub_taro("%*"), "%*");
+}

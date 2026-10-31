@@ -462,3 +462,36 @@ fn balloon_bare_shorthand_preserves_neighbors() {
         ],
     );
 }
+
+/// `%*` は名前 `*` の環境変数 1 つ（範囲は `%` と `*` の 2 字・script-small-tags 要件 4.3）。
+/// `*` を名前に取るのは英数字の名前が空のときだけで、`%a*` の `*` は本文に残る。
+#[test]
+fn percent_star_is_sysvar_named_star() {
+    use super::lexer::lex_spanned;
+    assert_eq!(
+        lex_spanned(r"あ%*\q[い,OnX]"),
+        vec![
+            (Token::Text("あ".to_string()), 0..3),
+            (Token::SysVar("*".to_string()), 3..5),
+            (
+                Token::Tag {
+                    word: "q".to_string(),
+                    args: vec!["い".to_string(), "OnX".to_string()],
+                },
+                5..16,
+            ),
+        ],
+    );
+    assert_eq!(
+        lex(r"%*%*"),
+        vec![
+            Token::SysVar("*".to_string()),
+            Token::SysVar("*".to_string()),
+        ],
+    );
+    assert_eq!(
+        lex(r"%a*"),
+        vec![Token::SysVar("a".to_string()), Token::Text("*".to_string()),],
+    );
+    assert_eq!(lex(r"\%*"), vec![Token::Text("%*".to_string())]);
+}
