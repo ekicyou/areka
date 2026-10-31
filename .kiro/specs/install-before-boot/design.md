@@ -239,7 +239,7 @@ graph TB
 | 2.1 | 今の手続きで扱う | BootPorts | `run_order` をそのまま呼ぶ | 同上 |
 | 2.2 | 利用条件の画面を出す | BootPorts・DpiOnce | `ask_terms` → `alert::ask_yes_no` | 同上 |
 | 2.3 | 警告の画面を出す | BootPorts・DpiOnce | `warn_skipped` → `alert::warn_ok` | 同上 |
-| 2.4 | 画面を出せない設定では拒否 | BootPorts | `alert_suppressed` → `YesNo::Suppressed` | 同上 |
+| 2.4 | 画面を出せない設定では拒否 | BootPorts | `alert_suppressed`（`AREKA_NO_ALERT` か `AREKA_APP_SMOKE_EXIT_MS`）→ `YesNo::Suppressed` | 同上 |
 | 2.5 | 受け取るゴーストを要する書庫は入れず記録 | BootPorts | 空の素性・`install_refused_no_ghost` | 同上 |
 | 2.6 | 失敗の後も続ける | BootPorts | `Closed` を返さない・`ghost_facts` は必ず `Some` | 同上 |
 | 2.7 | バルーンの記憶に書かず info | BootPorts | `install_balloon_memory_skipped` | 同上 |
@@ -345,7 +345,8 @@ pub(crate) fn resolve_boot_with_env(
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
 ) -> Result<crate::boot_config::BootResolved, crate::alert::AlertScene>;
 
-/// 起動の前の道が読むプロセスの旗（本番は readonly::is_on と alert::suppressed）。
+/// 起動の前の道が読むプロセスの旗（本番は readonly::is_on と、alert::suppressed() || smoke_exit::smoke_exit_ms().is_some()）。
+/// 有界の自動終了が立つ走行は人が見ていないので画面を出さない（alert::raise の 2026-10-31 の決まりと同じ・設計の討議 議題 1）。
 #[derive(Clone, Copy)]
 pub(crate) struct BeforeBootEnv {
     pub readonly: bool,
@@ -640,7 +641,7 @@ pub(super) fn catalog_spelling(
 ### E2E（実機・排他テストの机・`real-run-kit`）
 - 新: `Launch::Empty`（`target\` の下の空の根）・`before_spawn` で既定のバルーン `areka-balloon` だけを根の `balloon\` へ写す・`--install <konnoyayame.nar の写し>`。`get_active_ghost_list` に「はろーYAYAわーるど」が出る・根に `ghost\konnoyayame` が在る・`ghost_resolved route=Only`・写しは残る（`deletesource` なし）（要件 9.10）。
 - 改: emo2 の居る根に `--install` と `callghost,deletesource`。確かめを「入れたゴーストが起動中・置き場に在る・写しが消えた・`startup_install_done`・`startup_source_deleted`・`startup_callghost_chosen`・`ghost_resolved` の経路が `CallGhost`・`balloon_resolved` が既定のバルーン」に改める（要件 9.11）。
-- 実機で 1 回確かめること（決定論のテストでは画面を出さないので見えない）: 利用条件つきの書庫を起動の前に入れ、⑴ 画面がぼやけずに出る ⑵ 記録の `[SetProcessDpiAwarenessContext] DPI awareness set` が 1 回だけで `failed` が出ない ⑶ 起きたゴーストの窓が拡大率の違うモニタへ動かしても今どおり追う。これは実機の確かめの段（タスクの最後）で行い、SSP は動かさない。
+- 実機で 1 回確かめること（決定論のテストでは画面を出さないので見えない）: 利用条件つきの書庫を起動の前に入れ、⑴ 画面がぼやけずに出る ⑵ 記録の `[SetProcessDpiAwarenessContext] DPI awareness set` が 1 回だけで `failed` が出ない ⑶ 起きたゴーストの窓が拡大率の違うモニタへ動かしても今どおり追う。これは実機の確かめの段（タスクの最後）で行い、SSP は動かさない。 「画面の前に DPI を立てる」は判断の分かれ目でなく配線なので、決定論のテストでは固めず、この実機の確かめで見る（設計の討議 議題 3）。
 
 ## 説明書と手順書（要件 8）
 
@@ -652,6 +653,14 @@ pub(super) fn catalog_spelling(
 
 - 振る舞いの移り変わり（利用者に見える）: 起動の引数と `initial_install.nar` は、ゴーストが居る起動でも、起動の前に入るようになる。ゴーストへインストールの知らせが行かなくなり、`accept` を持つ書庫は起動の引数では入らなくなり、`callghost` は切り替えでなく起動のゴーストの選び方になる（要件の討議 議題 1 の決め）。説明書でそう書く。
 - テストの移り変わり: `desk_startup_tests.rs`（10 本）と `startup_tests.rs` のうち定常の後の道・切り替えを固めた約 30 本は、振る舞いが無くなった陳腐化のテストとして除き、起動の前の道で作り直す（`sources_to_delete` の 5 本と `new_with`・`Drop` の 2 本は残す）。
+
+## 設計の討議の決め（2026-10-31・開発者「承認」＝全議題を推奨案で確定）
+
+1. **自動で閉じる試し走りの画面**: 起動の前の道は、`AREKA_NO_ALERT` のほか `AREKA_APP_SMOKE_EXIT_MS` が立つ走行でも利用条件と警告の画面を出さない（利用条件は拒否・要件 2.4）。自動終了の時計は窓のアプリの後に始まるので、起動の前に画面を出すと走行が止まったままになる。`BeforeBootEnv.alert_suppressed` の本番の値に入れる。テスト: 抑止の判定（2 つの env のどちらでも抑止）を `startup_tests.rs` で固める。
+2. **DPI**: `wintf::ensure_process_dpi_awareness()`（1 回だけ）を外へ出し、起動の前の画面の直前と `WinApp::with_exit_policy` から呼ぶ（上の DpiOnce のまま）。
+3. **DPI の配線のテスト**: 決定論のテストでは固めず、実機の確かめ（Testing Strategy の E2E の 3 点）で見る。
+4. **`--ghost` が当たらなかったとき**: 「指定あり」と数え、`callghost` を使わない（CallGhostDecision のまま）。
+5. **置換語の引き継ぎ**: `%lastobjectname`・`%lastghostname` も `lastinstalled` の受け皿と一緒に引き継ぐ（StartupCarry のまま）。
 
 ## Supporting References
 
