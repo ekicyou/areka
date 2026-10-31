@@ -75,7 +75,7 @@
   - _Depends: 3.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 2.6, 6.1, 6.2, 6.4, 9.2, 9.3, 9.9_
 
-- [ ] 4.4 起動の前の道に消去・読み取りだけの断り・callghost の判断をつなぐ
+- [x] 4.4 起動の前の道に消去・読み取りだけの断り・callghost の判断をつなぐ
   - `initial_install.nar` は入ったら消し、`--install` は `deletesource` のときだけ入った書庫を消す（今の消去の判断と記録をそのまま使い、起動の解決の続きより前に行う）
   - 読み取りだけなら、窓口の断りと同じ記録を 1 か所の関数に切り出して両方から出し、出どころごとに断り、何も入れず何も消さない
   - `--install` の依頼の後に 4.2 の判断を呼び、選んだときだけ起こすゴーストのフォルダ名を返す
@@ -147,3 +147,4 @@
 - 4.1: `crates/areka/tests/` の結合のテストには `#[ignore]` の無い実機の試験（areka を起こす）があるので、机を持たないときの確かめは `cargo test -p areka --bin areka` に限る（4.1 までの実装係は机なしで `cargo test -p areka` を回していた）。
 - 4.1: 4.x で使う物（`Pending`・`end_word`・`delete_sources`・`sources_to_delete`・旧い `CallGhost*`・`decide_call_ghost`・`InstallOrigin::{StartupArgs,InitialInstall}`・`DeskAsk::OrderDone` の欄）に付けた `#[allow(dead_code)]` は、呼び手ができたら外す。
 - 4.3: `StartupInstall::run_before_boot(&mut self, roots, alert_suppressed: bool)` は途中の形。4.4 で設計 StartupFlow の署名（`request`・`BeforeBootEnv`・戻り値 `Option<String>`）にそろえる。debug の語 `startup_install_nothing` は設計の記録の語の表に無い（要件 1.5 の debug だけ）。
+- 4.4: 今の Rust の `std::fs::remove_file` は Windows で読み取り専用のファイルも消すので、完了の形の「読み取り専用の写しは消せずに warn」は「使われている（`FILE_SHARE_READ` で握った）写しは消せずに warn」で確かめた（要件 5.5・9.6 の「消せないとき」の同じ道）。本番でも読み取り専用の書庫は消える。

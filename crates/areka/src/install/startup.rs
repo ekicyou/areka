@@ -30,10 +30,7 @@ pub(crate) struct StartupInstall {
 struct Pending {
     /// 絶対に直した `--install` の値（書いた順）。
     archives: Vec<PathBuf>,
-    // 消す・callghost の段（タスク 4.4）が読むまでは使い手が無い。
-    #[allow(dead_code)]
     call_ghost: bool,
-    #[allow(dead_code)]
     delete_source: bool,
     /// exe の本当の場所のフォルダ（解けなければ None＝`initial_install.nar` を見ない）。
     exe_dir: Option<PathBuf>,
@@ -114,15 +111,20 @@ impl StartupInstall {
         }
     }
 
-    /// 根が決まった後に 1 回だけ（2 回目からは何もしない）。`initial_install.nar` の依頼を先に、
-    /// `--install` の並びを後に、別々の依頼として起動の前の口で手続きへ渡し、控えを self に残す
-    /// （要件 1.1〜1.3・1.5・6.1・6.2）。
+    /// 根が決まった後に 1 回だけ（2 回目からは何もせず None）。`initial_install.nar` の依頼を先に、
+    /// `--install` の並びを後に、別々の依頼として起動の前の口で手続きへ渡し、入った書庫を消し
+    /// （`initial_install.nar` はいつも・`--install` は `deletesource` のときだけ）、控えを self に残す。
+    /// 読み取りだけなら出どころごとに断り、何も入れず何も消さない。答えは `callghost` で起こす
+    /// ゴーストのフォルダ名（使うときだけ・要件 1.1〜1.3・1.5・4.9・5.1〜5.7・6.1・6.2・7.1〜7.4）。
     // 根を解く口（タスク 4.5）が呼ぶまでは、テストだけが呼ぶ。
     #[allow(dead_code)]
-    pub(crate) fn run_before_boot(&mut self, roots: &BasewareRoots, alert_suppressed: bool) {
-        let Some(pending) = self.pending.take() else {
-            return;
-        };
+    pub(crate) fn run_before_boot(
+        &mut self,
+        roots: &BasewareRoots,
+        request: &BootRequest,
+        before: BeforeBootEnv,
+    ) -> Option<String> {
+        let pending = self.pending.take()?;
         let orders: Vec<InstallOrder> = [
             pending.initial_install().map(|path| InstallOrder {
                 archives: vec![path],
@@ -141,10 +143,40 @@ impl StartupInstall {
                 event = "startup_install_nothing",
                 "[install] 起動の前に入れる物はありません"
             );
-            return;
+            return None;
         }
-        let mut ports = BootPorts::new(roots.clone(), alert_suppressed);
-        for order in &orders {
+        let mut args_ends = Vec::new();
+        if before.readonly {
+            for order in &orders {
+                super::record_readonly_refused(order.origin, order.archives.len());
+            }
+        } else {
+            args_ends = self.install_orders(roots, &orders, pending.delete_source, before);
+        }
+        let facts = CallGhostFacts {
+            requested: pending.call_ghost,
+            readonly: before.readonly,
+            boot_target: BootTarget::of(request),
+            ends: &args_ends,
+        };
+        match decide_call_ghost(&facts) {
+            CallGhost::Choose { folder } => Some(folder),
+            CallGhost::Skip(_) | CallGhost::NotRequested => None,
+        }
+    }
+
+    /// 依頼を順に手続きへ渡し、記録して入った書庫を消す。答えは `--install` の依頼の終わり方
+    /// （`initial_install.nar` の分は `callghost` の判断へ渡さない＝要件 4.9）。
+    fn install_orders(
+        &mut self,
+        roots: &BasewareRoots,
+        orders: &[InstallOrder],
+        delete_source: bool,
+        before: BeforeBootEnv,
+    ) -> Vec<ArchiveEnd> {
+        let mut args_ends = Vec::new();
+        let mut ports = BootPorts::new(roots.clone(), before.alert_suppressed);
+        for order in orders {
             tracing::info!(
                 event = "startup_install_started",
                 stage = "before_boot",
@@ -166,9 +198,24 @@ impl StartupInstall {
                 results = ?results,
                 "[install] 起動の依頼が終わりました"
             );
+            let is_args = order.origin == InstallOrigin::StartupArgs;
+            if !is_args || delete_source {
+                delete_sources(order.origin, &sources_to_delete(&order.archives, &ends));
+            }
+            if is_args {
+                args_ends = ends;
+            }
         }
         self.carried.extend(ports.take_carried());
+        args_ends
     }
+}
+
+/// 起動の前の道が読むプロセスの旗（本番は `readonly::is_on` と、告知の抑止または有界の自動終了）。
+#[derive(Clone, Copy)]
+pub(crate) struct BeforeBootEnv {
+    pub readonly: bool,
+    pub alert_suppressed: bool,
 }
 
 impl Drop for StartupInstall {
@@ -197,8 +244,6 @@ fn end_word(end: Option<&ArchiveEnd>) -> &'static str {
 }
 
 /// 1 本ずつ `remove_file`（フォルダは消えない・1 本の失敗でほかをやめない＝要件 3.3・3.4・3.6・4.5）。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
 fn delete_sources(origin: InstallOrigin, archives: &[PathBuf]) {
     for archive in archives {
         match std::fs::remove_file(archive) {
@@ -222,8 +267,6 @@ fn delete_sources(origin: InstallOrigin, archives: &[PathBuf]) {
 /// 純粋: 消す書庫（`Installed` のパスだけ・重ねは最初の 1 つ・書いた順＝要件 3.1・3.2・4.3・4.4）。
 ///
 /// `ends` が短い（途中でやめた）とき、終わり方の無い書庫は「まだ扱っていない」＝消さない。
-// 起動の前の道（タスク 4.x）が呼ぶまでは使い手が無い（定常の後の道はタスク 4.1 で外した）。
-#[allow(dead_code)]
 pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Vec<PathBuf> {
     let key = |path: &Path| path.to_string_lossy().to_lowercase();
     let mut out: Vec<PathBuf> = Vec::new();
@@ -246,8 +289,6 @@ pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Ve
 }
 
 /// `callghost` の判断に要る事実（design「CallGhostDecision」）。
-// 起動の前の道（タスク 4.4）が呼ぶまでは使い手が無い。
-#[allow(dead_code)]
 pub(crate) struct CallGhostFacts<'a> {
     /// `--option callghost` が `--install` と一緒に渡された（cli が下ろした後の値）。
     pub requested: bool,
@@ -266,8 +307,6 @@ pub(crate) enum BootTarget {
     Random,
 }
 
-// 起動の前の道（タスク 4.4）が呼ぶまでは使い手が無い。
-#[allow(dead_code)]
 impl BootTarget {
     /// 起動の求めに値が在るか（`--ghost` が置き場に当たらなくても指定あり＝要件 4.5）。
     pub(crate) fn of(request: &BootRequest) -> Option<BootTarget> {
@@ -323,8 +362,6 @@ impl CallGhostSkip {
 
 /// `callghost` を使うか（順＝渡されていない → 読み取りだけ → 指定あり → ゴーストが無い → 選ぶ・
 /// 要件 4.3〜4.6・7.4）。判断は事実だけから決まり、答えを info で 1 件残す（`NotRequested` は残さない）。
-// 起動の前の道（タスク 4.4）が呼ぶまでは使い手が無い。
-#[allow(dead_code)]
 pub(crate) fn decide_call_ghost(facts: &CallGhostFacts<'_>) -> CallGhost {
     let answer = if !facts.requested {
         CallGhost::NotRequested

@@ -78,13 +78,7 @@ pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
     let count = order.archives.len();
     let origin = order.origin;
     if crate::readonly::of(world) {
-        tracing::info!(
-            event = "readonly_refused",
-            what = "install",
-            origin = ?origin,
-            count,
-            "[install] 読み取りだけなので、インストールの依頼を断ります"
-        );
+        record_readonly_refused(origin, count);
         return SubmitVerdict::ReadOnly;
     }
     let verdict = match world.get_non_send_mut::<desk::InstallDesk>() {
@@ -113,6 +107,17 @@ pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
         );
     }
     verdict
+}
+
+/// 読み取りだけの断りの記録（窓口の `submit` と起動の前の道の共通・readonly-mode 要件 7.1・7.2）。
+pub(crate) fn record_readonly_refused(origin: InstallOrigin, count: usize) {
+    tracing::info!(
+        event = "readonly_refused",
+        what = "install",
+        origin = ?origin,
+        count,
+        "[install] 読み取りだけなので、インストールの依頼を断ります"
+    );
 }
 
 /// 窓口の待ち行列の中身（届いた順の写し・テストが依頼の中身と順を読む口・本番には無い）。
