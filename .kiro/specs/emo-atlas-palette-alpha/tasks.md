@@ -74,8 +74,8 @@
   - _Depends: 3.1, 3.2_
   - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 5. 全体の確かめ
-- [ ] 5.1 2 つの crate のテストを通し、変えてはならない所の差分が無いことを確かめる
+- [x] 5. 全体の確かめ
+- [x] 5.1 2 つの crate のテストを通し、変えてはならない所の差分が無いことを確かめる
   - emo-atlas と wintf のテストを全部走らせ、緑であることを記録する（GPU・実機・人の操作・排他の机を要らない）
   - `WicDecoderArm` を使う `crates/areka` のテスト（配置の測りと golden を含む）も走らせ、値を変えずに緑であることを記録する
   - 差分に、変換器とその引数・12 個の集合・正規化の本番のコード・動く絵の読み手の行が現れないことを確かめる
@@ -88,3 +88,5 @@
 - 2.1 直す前の赤（2026-10-31・`cargo test -p areka-emo-atlas palette_tests`）: 4 passed / 10 failed。赤＝has_alpha の真 4 本（idx8_mixed・idx4_mixed・gray8_trns・trans_gif が false）・`On` 4 本（(0,0)・(1,0) が 0,0,0,0 に抜かれる）・`Full` 2 本（(0,1) が 0,0,0,255・(1,1) が 128,0,0,255）。緑＝idx8_plain・idx8_opaque_trns の判定と `On` の 4 本。実際の値は設計の「直す前」の列と一致
 - 2.2 直す前の赤（2026-10-31・`cargo test -p wintf --test com wic_test`）: 10 passed / 4 failed。赤＝palette_{idx8_mixed,idx4_mixed,gray8_trns,trans_gif}_has_alpha（has_alpha が false）。緑＝idx8_plain・idx8_opaque_trns と既存 8 本
 - 範囲外（3.2 で見つけた・既存）: wintf の lib のテストで、MTA を張るテスト（`alpha_mask_resource`・`bitmap_source`）と ASTA の Compositor を作る `com::wuc::tests::begin_draw_roundtrip` が同時に走ると、プロセスが 0xc0000005 で落ちることがある（`cargo test -p wintf --lib -- begin_draw_roundtrip alpha_mask_resource bitmap_source` を 8 回で 2 回）。全体テストの揺れの元。本 spec の `wic_tests.rs` はテストのスレッドだけの STA で避けた。`/kiro-complete` の棚卸で起票する
+- 5.1（2026-10-31）: emo-atlas lib 202 passed/1 ignored＋21・wintf 全対象緑（lib 1244/22 ignored・com 68）・areka の bin 4069 passed/1 failed（下）・placement 1182・golden 2・assets 18・offline_dump 57。変えてはならない所（変換器と引数・12 個の集合・normalize.rs・image_arm.rs・sniff.rs・crates/areka）の差分 0。2.1 の赤 10 本・2.2 の赤 4 本は全部緑
+- 範囲外（5.1 で見つけた・既存）: `emo2_boot::ghost_switch::boot_event_tests::a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today` が `ghost_switch_test_support.rs:222`（`remove_dir`）の io エラーで 1 回赤・単独の回し直しで緑。検体を組む間のフォルダの握りの揺れと見る。`/kiro-complete` の棚卸で起票
