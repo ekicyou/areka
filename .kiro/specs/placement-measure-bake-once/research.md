@@ -212,3 +212,86 @@
   4. `boot_shell_tests.rs` の「シェルを 2 回読む」の期待値（読み込みの `info!` の行で数えている）。記録を出さない道を足すと行の数が焼いた回数を表さなくなるので、焼いた回数は数える読み手の檻へ移し、記録の行は要件 3 の数として固定し直す（仕様が変わったための更新）。
   5. 測り直しの道具（6.2 の R3）。
   6. 調べ残し R2・R4・R6。
+
+## 7. 設計の段（2026-10-31・`/kiro-spec-design -y`）
+
+> ブランチ `claude/kiro-start-placement-measure-bake-once-80df62`（`a6da785f`）で読み直した。決めた形の正本は `design.md`。ここに置くのは、調べたこと・決めの理由・選ばなかった案・危うさである。
+
+### 7.1 要約
+
+- **調べ方**: 軽い調べ（既存の道の拡張）。新しい依存は無いので外の文書は引いていない。読んだ所: `placement/measure.rs` 全体・`placement/mod.rs` の 420-510・770-870・`placement/config.rs` の `detect_scopes`・`emo2_boot/assets.rs` の 200-540・`emo2_boot/mod.rs` の 285-470・`ghost_session.rs` の 112-230・`shell_target.rs` の 1-60・295-565・755-815・`balloon.rs` の 315-701・`balloon_definitions.rs`・`self_alpha.rs`・`areka-emo-atlas` の `decode.rs`・`animated.rs`・`decode/wic_arm.rs`・`boot_shell_tests.rs`・`measure_template_tests.rs` の走査・検体 `animated-playback`。
+- **使った手引き**: スキル `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・設計の雛形。steering は `structure.md`（テストの兄弟のファイル・本文の走査の列挙・1,000 行）と `logging.md`（ログの無い失敗の道を作らない）。
+- **いちばん効いた事実**: 配置の scope の集まりは scope 1 まで（`config.rs:142-148`・`char{n}.`（n≥2）からは足さない）なので、いつも資産の scope の集まり `derive_scopes()` の `[0, 1]` の内に収まる。だから採寸の側を黙らせても、採寸が測る scope の記録は資産の組み立てが必ず 1 行出す。
+
+### 7.2 調べたこと
+
+#### 黙らせる道をどちらにするか（6.4 の 2）
+
+- **案 M（採寸と `windowposition` を黙らせ、資産の組み立てで出す）**: 触るのは `measure.rs` の呼ぶ所 3 つと `placement/mod.rs` の呼ぶ所 1 つ（`use` の行と 803 行目）だけ。資産の組み立て・着替えの道の本文は変えない。記録は全コマで焼いた表示の側の事実になる（焼く段で落ちた絵の `error!` が表示の絵と一致する）。準備を通らずに資産を組むテスト・手本（`spine.rs`・`ghost_switch_test_support.rs`）も今どおり記録を出す。
+- **案 S（採寸で出し、資産の組み立てを黙らせる）**: `build_shell_assets`・`build_balloon_assets` は着替えの道（`switch_assets.rs:219`・251）と共有なので、起動の側だけを黙らせる兄弟か引数が `assets.rs` に要る。記録は 1 枚目で焼いた採寸の側の事実になり、表示の絵とずれ得る。窓の前に記録が出る利点はある。
+- scope の集まりの食い違い（6.1 の 6）: 案 M で記録が消えるのは「配置にだけ在る scope」、案 S で消えるのは「資産にだけ在る scope」。前者は今のコードでは起きない（上の要約）。後者は `kero.*` の無いゴーストの scope 1 で起きる。→ **案 M を取った**（design D2）。
+- 起動の結線の手順 1 が資産の組み立てなので、案 M で記録が出る時点は窓の後・SHIORI の起動の前。準備の後で資産の前に起動が止まると、その起動では読み込みの記録が出ないが、止まった理由の記録は別に出る（採寸の失敗は採寸の道の `error!`）。
+
+#### 「descript が読めない」の範囲（要件 3.2）
+
+- バルーンの基層 `descript.txt` を読む `read_descript_layer` は 2 か所から呼ばれる: 透過の宣言の入口 `load_balloon_use_self_alpha`（採寸と資産で 1 回ずつ）と 2 層マージ `load_scope_balloon_model`（`windowposition` の読みで scope ごと・資産の面ごとの定義 `load_scope_balloon_definitions` で「自分の設定ファイルを持つ面」ごと）。
+- 後者は資産の組み立ての 1 回の中でも面の数だけ出るので、起動の重なりを外しても 1 行にはならない。2 層マージは要件 3.7 と Out of scope で「変えない」とした記録の持ち主である。
+- → 要件 3.2 の「descript が読めない」は透過の宣言の入口の `warn!` と読む（要件の並び「透過の宣言・`.pna` を使わない・descript が読めない」がこの入口の 3 つの記録と同じ）。2 層マージの中の読みは変えない（design D3）。壊れたバルーンのときだけ出る記録である。
+
+#### 焼く段の記録（要件 3.7）と採寸の読み手
+
+- 採寸の読み手は `probe_animation` を `None` にする（議題 1 の決まり・ギャップ分析 4 章 B-1「焼きの段は動く絵の道に入らず、上限の判定も `warn!` も出ない」）。そのため `areka-emo-atlas` の動く絵の 3 つの `warn!`（上限を超えた・動く絵として読めない・1 枚目を読めない）は採寸の道では出なくなり、資産の組み立ての 1 回だけになる。
+- 0 寸・全透明の `warn!` と畳み込みの `warn!` は、採寸が今どおり焼いて面の表を組むので今と同じ数。
+- → 要件 3.7 の「変えない」は `areka-emo-atlas`・`areka-emo-compose` の中身と、静止画として焼く段の記録の数を指すと読み、動く絵の 3 つの `warn!` が採寸の道で出なくなるのは議題 1 の読み手の形がそのまま持つ働きとして design D4 に書いた（設計討議で確かめる候補）。
+
+#### 読み手の契約と寸法（gap R2）
+
+- `ElementDecoder` は 5 つの口（`decode`・`probe_pna`・`probe_animation`・`decode_frames`・`decode_first_frame`）。`decode_frames` は見出しどおりの枚数・寸法でなければ焼く段が失敗として縮める（`animated.rs:60-68`）。`decode_first_frame` は `decode_frames` の 0 番のコマと同じ画素・同じ `has_alpha`。
+- 資産の側の縮め方（`shrink`）は `decode_first_frame` → `decode` の順。採寸の読み手の `decode` も同じ順なので、採寸が焼く絵の寸法は資産の 0 番のコマと同じ。APNG の既定の絵が動きに含まれない形でも、`decode_first_frame` を先に使うので同じになる（R2 は設計で閉じ、`rgb.apng` の検体の檻で確かめる）。
+- 焼いた表の項目は元の寸法（`AtlasEntry::original`）を持つ。1 枚目が全透明の動く絵で外形が変わり得るかは、要件 2.2 の檻（全コマで測った値との一致）で落とす。
+
+#### 数える口（6.4 の 3・4）
+
+- `load_shell_target`・`build_balloon_target_from_faces`・`load_scope_balloon_definitions`・`resolve_box_markers` はすでに `&impl ElementDecoder` を受ける。`&WicDecoderArm` に固まっているのは `measure.rs` の `build_shell_assets`・`measure_balloon_surface0` と、`assets.rs` の `build_shell_assets`・`build_balloon_assets` だけ。後者 2 つを `&impl ElementDecoder` にしても、`switch_assets.rs` は `&WicDecoderArm` を渡したまま組み立てが通る（変更 0）。
+- `measure_bake_count_tests.rs` は `measure` の子なので私有の `measure_with_reader`・`measure_baked` を呼べる。`#[cfg(test)]` なので examples の `#[path]` の制約（`crate::` を使えない）にも当たらず、`crate::emo2_boot::assets` を呼べる（`emo2_boot` は `pub mod assets`）。採寸 → 資産を本番と同じ順で 1 つのテストに通せるので、数える読み手は共有の支えに置かず、このファイルの中だけに置く。
+- `build_shell_assets`（資産）は `ghost_root` から `resolve_with_shell` でシェルを引くので、動く絵の検体はゴーストの形に写す（`target\` の下）。
+- `boot_shell_tests.rs` は読み込みの `info!`（欄 `recognized`・`shell_dir`）で「採寸と資産の 2 回」を数えていた。採寸を黙らせると 1 行になるので、期待値を 1 つへ直し、採寸のシェルは準備が置く `BootShellChoice`（`ghost_session.rs:120`・`pub(crate)`・起こす処理が取り出す前に読める）で確かめる。
+
+#### 本文の走査（gap R6）
+
+- `measure_template_tests.rs` の `the_measure_side_does_not_parse_the_shell_itself` は `measure.rs` の本文だけを見ている。新しい `measure_first_frame.rs` は解析をしないが、steering `structure.md` の「兄弟の `<stem>_*.rs` も走査に列挙する」に合わせて足す（design D6）。
+
+#### 測り直しの道具（gap R3）
+
+- 9.14 節は `areka-emo-atlas` の例に一時に置いた捨てる測定プログラムで、`load_shell_target` を通さずに焼く入力を作り直していた。本 spec で測りたいのは採寸の関数そのものなので、`measure` の子に一時の `#[ignore]` テストを置けば、私有の `measure_baked`（前＝全コマ）と `measure_with_reader`（後）を同じ組み立ての中で交互に回せる（前の木を別に組まずに済む）。絵の作り手は 9.14 節と同じ（`image` の png・webp を持つ `areka-emo-atlas` の側で作る）。どちらもコミットしない。
+
+#### バルーンの縮退の記録（gap R4）
+
+- 通しの檻は、どのバルーンでも必ず出る記録（系列の解決が完了した `info!`・透過の宣言の `info!`）で数えるので、emo2 のバルーンで縮退が起きるかどうかに左右されない。縮退の `warn!` そのものを黙らせる働きは、相方側の系列を持たない検体（`animated-playback` のバルーン）で関数の段に固定する。R4 は設計の段では調べ切らず、要らなくなった。
+
+### 7.3 設計の合成（design-synthesis）
+
+- **一般化**: 要件 3.1 と 3.2 は「読み込みの権威が記録を出す道を選べること」の 2 つの場合。3 つの入口（シェル・系列の解決・透過の宣言）に同じ 1 つの切り替え `LoadRecords` を通す。中で呼ぶ私有の関数（`list_file_names`・`enumerate_file_names`・`read_descript_layer`・`read_use_self_alpha`）も同じ値を受ける。
+- **作るか借りるか**: 読み手は `ElementDecoder` を包むだけ（9.14 節の「前」と同じ手）。テストの読み手も `MemoryDecoder`・`WicDecoderArm` を包むだけ。記録の数えは既存の `log_capture_kit`、通しは既存の `SwitchRig`。新しい依存は 0。
+- **削ったもの**: 上限を渡す入口（B-2）・焼いた物を運ぶ置き場（案 A）・`build_boot_assets_with_decoder` のような新しい入口（`build_shell_assets`・`build_balloon_assets` を直接呼べば足りる）・共有のテストの支えへの数える読み手（使うのは 1 ファイル）・`placement/mod.rs` の `mod` の行（`measure` の子にした）。
+
+### 7.4 選ばなかった案
+
+| 案 | 何か | 選ばなかった理由 |
+|----|------|-----------------|
+| 案 S | 採寸で記録を出し、資産の組み立てを黙らせる | 着替えと共有の `build_*_assets` に兄弟か引数が要る・記録が表示の絵の事実でなくなる・`kero.*` の無いゴーストの scope 1 の記録が 0 行になる |
+| 記録の口を `bool` で渡す | `emit: bool` | 呼ぶ所で意味が読めない。2 値の列挙にしても大きさは同じ |
+| 記録を出さない入口を公開の列挙で受ける 1 本 | `load_shell_target_with(…, LoadRecords)` を `pub` に | 外のクレートに切り替えの型を見せることになる。呼び手が要るのは「出さない」1 通りだけ |
+| `read_use_self_alpha` に `_quiet` の兄弟 | 名前を増やす | `pub(crate)` で呼び手は 3 か所だけ。引数を足して 3 か所を直すほうが小さい |
+
+### 7.5 危うさと手当て
+
+- 新しい読み込みの記録を足す人が `emits()` で囲み忘れると、採寸の道で 2 行に戻る → 通しの檻（記録の行の数）が赤になる。
+- 配置の scope の集まりが scope 2 以上へ広がると（`extra-character-windows`）、資産の組み立てが読まない scope のバルーンの記録が 0 行になる → design の Revalidation Triggers に書いた。
+- 動く絵の 1 枚目が全透明・寸法の契約の外の絵で、採寸の寸法が全コマの値とずれ得る → 要件 2.2 の檻が落とす。
+- `balloon-webp-names` が `balloon.rs` に触る → 着地の順で直列（要件の Adjacent expectations のまま）。
+
+### 7.6 設計の検査の結果（design-review-gate）
+
+- 機械の検査: 要件の番号 29 個（1.1〜1.5・2.1〜2.6・3.1〜3.7・4.1〜4.6・5.1〜5.5）がすべて対応表に在る。境界の 4 節・ファイルの計画に空欄・仮置きなし。部品はすべてファイルに対応する（数える読み手は `measure_bake_count_tests.rs` の中）。
+- 判断の検査: 1 回目の直し（数える読み手を共有の支えから検査のファイルの中へ移す・資産の側の検体をゴーストの形へ写すことを書く・根拠の無い道具の記述を消す・examples の制約がテストに当たらないことを書く）の後、2 回目で通った。要件の穴として差し戻すものは無い。設計討議で確かめる候補は D3（descript の範囲）と D4（動く絵の 3 つの `warn!`）。
