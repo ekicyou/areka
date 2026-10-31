@@ -53,6 +53,7 @@
 - 3 つの口の署名や答え（`YesNo`）が変わる。今回は変えない。
 - プロセスの DPI の扱いを立てる時を変える（`ensure_process_dpi_awareness` の呼ぶ所が増える・減る）。`show_box` はスレッドだけを見るので働きは変わらないが、関門 0 の測りの場合分けを見直す。
 - 新しい記録の語 `alert_dpi_context_unchanged` を名前で拾う道具や試験が足される。
+- 窓のアプリを作る前に画面を出し、**その後も起動を続ける**道が足される。スレッドを戻す呼び出しは扱いを明示で置くので、プロセスの既定に従っていたスレッドは、戻した後は前の扱い（非対応）に固まり、後でプロセスを v2 にしても追わない。今は響かない: 窓のアプリの前の画面は出した後にプロセスを終える（`main.rs` の `resolve_boot` の失敗・`check_boot` の失敗）か、出す前にプロセスを v2 に立てる（`BootPorts::before_dialog`）。背景のスレッド `install` はプロセスを v2 にした後に生まれる。
 
 ## Architecture
 
@@ -155,7 +156,7 @@ sequenceDiagram
 ```mermaid
 graph TB
     Probe[関門0の測りを1回走らせる]
-    Found{4つの場合で画面の窓を読めたか}
+    Found{2本の4つの場合で画面の窓を読めたか}
     Wrapped{囲んだ場合の画面の窓が v2 か}
     Go[案Aで先へ進む]
     Fix[測りを直して走らせ直す]
@@ -310,6 +311,7 @@ fn show_box(
 | D5 | 3 つの口が同じ道を通る | `include_str!("alert.rs")` を `//` で始まる行を除いて読み、`MessageBoxW(` がちょうど 1 回、`SetThreadDpiAwarenessContext(` がちょうど 1 回、`show_box(` が定義と 3 つの口の呼び出しの 4 回 | 1.4 |
 | D6 | 3 つの口が渡す画面の名 | D5 と同じ読み方で、`raise`・`ask_yes_no`・`warn_ok` の `show_box` の呼び出しがそれぞれ "alert"・"ask"・"install_warning_dialog" を渡す | 1.5 |
 
+- 偽の切り替えが「有効な前の扱い」として返す値は `DPI_AWARENESS_CONTEXT_SYSTEM_AWARE`（-2）に限る。`windows` 0.62 の `is_invalid()` は -1（＝`DPI_AWARENESS_CONTEXT_UNAWARE`）と null を無効と読むので、この 2 つは「替えられなかった」の側にしか使わない。本物の API が非対応のスレッドで返す前の扱いが無効と読まれないことは D4 が見る（読まれれば戻されず、後の扱いが非対応でなくなって赤）。
 - テストは本物の画面を出さない（`MessageBoxW` は D1〜D6 のどれでも呼ばない）。D4 の処理は画面の代わりに `GetThreadDpiAwarenessContext` を読むだけ。
 - 記録は `log-capture-kit` の `capture` で見る（steering `logging.md`）。
 
@@ -325,8 +327,9 @@ fn show_box(
 
 ### 置き場と走らせ方
 
-- 置き場: `crates/areka/src/alert_dpi_tests.rs` の `#[test] #[ignore = "real dialog: shows a message box on the desktop"] fn probe_alert_box_window_dpi()`。bin のユニットテストの実行ファイルには本番と同じ comctl32 の版 6 の申告が埋まる（`build.rs`）ので、本番の areka.exe と同じメッセージボックスの部品で測れる。
-- 走らせ方: 主の会話が排他テストの机を取ってから（`request --desk test`）、`cargo test -p areka --bin areka alert_dpi_tests::probe_alert_box_window_dpi -- --ignored --nocapture --test-threads=1` を 1 回。画面はそれぞれ 0.3 秒ほどで自分で閉じる。終わったらすぐ机を返す。画面がロックされていない・スクリーンセーバーでないときに走らせる。
+- 置き場: `crates/areka/src/alert_dpi_tests.rs` の 2 本の `#[test] #[ignore = "real dialog: shows a message box on the desktop"]`。`fn probe_alert_box_window_dpi()`（下の表の初めの 3 つの場合）と `fn probe_alert_box_window_dpi_process_v2()`（4 つ目の場合だけ）。bin のユニットテストの実行ファイルには本番と同じ comctl32 の版 6 の申告が埋まる（`build.rs`）ので、本番の areka.exe と同じメッセージボックスの部品で測れる。
+- 4 つ目を別の 1 本にするのは、プロセスの扱いは UI を作る前に立てる決まり（`SetProcessDpiAwarenessContext`）で、同じプロセスで先に画面を 3 つ作った後では立てられないか、2026-10-31 と同じ形にならないおそれがあるから。別の `cargo test` の 1 回で走らせ、そのテストの最初にプロセスを立てる。
+- 走らせ方: 主の会話が排他テストの机を取ってから（`request --desk test`）、`cargo test -p areka --bin areka alert_dpi_tests::probe_alert_box_window_dpi -- --ignored --nocapture --test-threads=1 --exact` と `cargo test -p areka --bin areka alert_dpi_tests::probe_alert_box_window_dpi_process_v2 -- --ignored --nocapture --test-threads=1 --exact` を 1 回ずつ（別のプロセス）。画面はそれぞれ 0.3 秒ほどで自分で閉じる。終わったらすぐ机を返す。画面がロックされていない・スクリーンセーバーでないときに走らせる。
 - どのモニタに出てもよい（窓の扱いの値はモニタによらない）。モニタの DPI と system DPI も一緒に読んで記録に残す。
 
 ### 測る場合（それぞれ新しいスレッドで・この順）
@@ -338,7 +341,7 @@ fn show_box(
 | `unwrapped_thread_v2` | `SetThreadDpiAwarenessContext(PER_MONITOR_AWARE_V2)` | `MessageBoxW` を直に | スレッドが明示で v2 のとき |
 | `process_v2_default` | 先に `wintf::ensure_process_dpi_awareness()` でプロセスを v2 にし、スレッドは何も替えない | `MessageBoxW` を直に | 2026-10-31 の実機（`install-before-boot` 7.2）と同じ形＝プロセスを v2 に立てた後の画面 |
 
-- `process_v2_default` はプロセスの扱いを戻せないので最後に置く（`--test-threads=1` と名指しで、この測りだけが走る）。
+- `process_v2_default` はプロセスの扱いを戻せないので、別の 1 本（`probe_alert_box_window_dpi_process_v2`）で、新しいプロセスの最初に立てる（上の「置き場と走らせ方」）。
 
 ### 画面の窓の見つけ方と読むもの
 
@@ -352,11 +355,12 @@ fn show_box(
 
 ### 出すもの・判定
 
-- 場合ごとに ASCII の 1 行を標準出力へ出す: `ALERT-DPI-PROBE case=<場合> thread_before=<0|1|2> thread_during=<0|1|2> window=<0|1|2> window_v2=<true|false> window_dpi=<数> monitor_dpi=<数> system_dpi=<数> box=<戻り値>`（数は 0＝非対応・1＝system・2＝モニタごと）。
-- 4 行をすべて出してから判定の assert をする。
-  - 4 つの場合のどれかで窓が見つからない → 赤（測りの不具合・直して走らせ直す・関門は通らない）。
+- 場合ごとに ASCII の 1 行を標準出力へ出す: `ALERT-DPI-PROBE case=<場合> process=<0|1|2> thread_before=<0|1|2> thread_during=<0|1|2> window=<0|1|2> window_v2=<true|false> window_dpi=<数> monitor_dpi=<数> system_dpi=<数> box=<戻り値>`（数は 0＝非対応・1＝system・2＝モニタごと。`process` は `GetAwarenessFromDpiAwarenessContext(GetDpiAwarenessContextForProcess(GetCurrentProcess()))`）。
+- 1 本目は 3 行をすべて出してから判定の assert をする。2 本目は 1 行を出して、窓が見つかったことだけを assert する。
+  - どの場合でも窓が見つからない → 赤（測りの不具合・直して走らせ直す・関門は通らない）。
+  - `process_v2_default` の行は `process=2` かつ `thread_before=2` のときだけ見分けに使う。そうでなければ「プロセスが v2 にならなかった」として、見分けに使わずに記録に書く（関門の判定には響かない）。
   - `wrapped_from_unaware` の `thread_during=2` かつ `window_v2=true` → 関門を通る（案 A で先へ進む）。
-  - そうでなければ赤 → 止めて、4 行を添えて開発者へ戻す（4.6）。
+  - そうでなければ赤 → 止めて、2 本の 4 行を添えて開発者へ戻す（4.6）。
 - 残りの 3 つの場合は判定に使わず、比べるために残す。`process_v2_default` の値で 2026-10-31 の「v2 に立てた後でも system と返った」件を見分ける（2 なら当時の測り方の取り違え、1 ならプロセスの既定を受けたスレッドの画面が system で作られる＝囲めば直る形）。結果と見分けをタスクの記録に書く。
 
 ## 実装の後の実機の確かめ（4.2〜4.5）
