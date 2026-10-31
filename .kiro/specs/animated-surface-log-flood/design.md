@@ -119,6 +119,8 @@ crates/areka-emo-compose/src/
 ├── blit_rect.rs          # 前の絵を写し、命令列の違う所の矩形だけを重ね直す（Recompose・execute_reusing）
 └── blit_rect_tests.rs    # 上の兄弟のテスト（同値・矩形・倒れ方・長い連なり・hot path の静的検査）
 crates/areka-emo-present/src/
+├── command_device_err_tests.rs               # 装置の失敗の記録が前の原因を運ぶ（タスク 3.1・要件 4.1・4.2）
+├── presenter_failure_note_tests.rs           # 同じ原因の装置の失敗を間引く（タスク 3.4・要件 4.1〜4.3）
 ├── presenter_frame_log_tests.rs              # 記録の出し分け（要件 1.1〜1.6・2.1〜2.3・8.1・8.2）
 ├── presenter_partial_recompose_tests.rs      # 重ね直しの回数と形・失敗の道（要件 3.1・3.3〜3.6・4.1〜4.3・8.3・8.5）
 └── presenter_partial_recompose_gpu_tests.rs  # 実 GPU で画素が同じ（要件 3.2・3.7・8.4）
