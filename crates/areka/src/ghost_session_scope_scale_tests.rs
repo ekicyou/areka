@@ -217,3 +217,6 @@ fn wire_without_table_answers_nothing() {
         assert_eq!(resolve(&r, &name(shape, "0")), None, "{shape}");
     }
 }
+
+#[path = "ghost_session_scope_scale_boot_tests.rs"]
+mod boot;
