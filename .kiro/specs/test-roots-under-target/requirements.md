@@ -90,7 +90,7 @@
 
 1. The 窓口 shall 置き場の移動でパスが長くなる分（このワークツリーで、根 81 字＋`\target\test-roots\` で約 100 字。今の OS の一時フォルダ `C:\Users\<名>\AppData\Local\Temp\` は約 34 字）を見込んでも、既存のテストがパスの長さで失敗しない長さの一時フォルダを配る。
 2. When 実物の `pasta.dll` を読むテスト（`crates/areka-ghost/tests/ghost/real_pasta_test.rs`・環境変数 `HOST32_PASTA_DLL` を与えた走行）を本 spec の後に回した, the テスト shall パスの長さで失敗しない。
-3. When 札の長いテスト（直書きの札で最長 39 字・`format!` で札を組むテストは 60 字を超えるものがある＝`areka-ghost` の `runtime_tests.rs` ほか）を本 spec の後に回した, the テスト shall パスの長さで失敗しない。
+3. When 札の長いテスト（直書きの札で最長 39 字・`format!` で札を組むテストは最長 87 字＝`areka-ghost` の `runtime_tests.rs` ほか。ギャップ分析の 4 節）を本 spec の後に回した, the テスト shall パスの長さで失敗しない。
 4. If パスの長さのために名前を短くする必要が出た, then the 窓口 shall 呼び出し側の札を書き換えずに（要件 2.1）、失敗の後に残ったフォルダ名からどのテスト群の一時フォルダかが分かることを保つ。
 
 ### Requirement 4: 以後、OS の一時フォルダを使う一時フォルダが黙って入らない
