@@ -317,7 +317,7 @@ stateDiagram-v2
 | 5.3 | Reference0〜3 は正典・Reference4 にシェル番号 | ScaleNoticePhase | `ScaleEvent::references` | — |
 | 5.4 | Reference の数の形は `scaling` と同じ | ScaleNoticePhase | `percent_text` | — |
 | 5.5 | 同じフレームで送る・応答の照会は新しい値 | ScaleNoticePhase | 相の位置・表 → イベントの順 | Flow 2 |
-| 5.6 | 同じ DPI・同じ百分率なら送らない | PresenterScaleRecord・ScaleNoticePhase | 起点の比べ・`before.ratio != after.ratio` | Flow 3 |
+| 5.6 | 同じ DPI・同じ百分率なら送らない | PresenterScaleRecord・ScaleNoticePhase | 起点の比べ・`percent_text(before.ratio) != percent_text(after.ratio)`（要件 5.6 の「百分率が同じ」を答える文字で比べる・既約の比が違っても同じ文字なら送らない＝Reference0 と 1 が同じ数のイベントを出さない） | Flow 3 |
 | 5.7 | 初めて決まるときは送らない | PresenterScaleRecord | 装着ごとの起点（D4） | Flow 3 |
 | 5.8 | 窓ごとに 1 回・スコープの若い順 | ScaleNoticePhase | `plan_scale_notices`（target ごとに畳み・`TargetId` の順） | Flow 2 |
 | 5.9 | どのスコープでも同じ規則 | ScaleNoticePhase | `target_scope` | Flow 2 |
@@ -617,7 +617,7 @@ pub(crate) fn scaling_text(ratio: ScaleRatio) -> String;
 **Responsibilities & Constraints**
 - `emo2_frame_system` の相の並びの最後（`run_status_report_phase` の後）に 1 回呼ぶ。記録が空なら何もしない。
 - 純粋な計画 `plan_scale_notices` と、書き込み・送出の殻に分ける（判断は計画にだけ置く）。
-- 計画: target ごとに畳む（最初の `before`・最後の `after`）→ `TargetId` の昇順（＝スコープの若い順・同じスコープはシェル → バルーン）→ 各 target について表への書き込みを 1 つ、`before` が `Some` かつ `before.ratio != after.ratio` のときだけイベントを 1 つ。
+- 計画: target ごとに畳む（最初の `before`・最後の `after`）→ `TargetId` の昇順（＝スコープの若い順・同じスコープはシェル → バルーン）→ 各 target について表への書き込みを 1 つ、`before` が `Some` かつ `percent_text(before.ratio) != percent_text(after.ratio)` のときだけイベントを 1 つ。
 - イベントの名前は窓の種類で決める（シェル → `OnShellScaling`・バルーン → `OnBalloonScaling`）。Reference は `[percent(after), percent(before), percent(after), percent(before), scope]`（横と縦は同じ数・要件 5.3・5.4）。
 - 殻は表を全部書いてから、イベントを計画の順に `KanadeMsg::RaiseEvent { id, references, method: Get, reply: None }` で送る。送り先は `ScaleEventSeam`（テストだけが入れる資源）があればそれ、無ければ `GhostSlot` の実行系の `kanade()`。
 - `TargetId` → スコープと窓の種類は `target_map::target_scope`（採番の正本の逆）。
