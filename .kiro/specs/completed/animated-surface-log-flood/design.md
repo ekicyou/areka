@@ -37,7 +37,7 @@
 - 重ね直しの形を読むための DEBUG の行 `apply(ShowSurface): 重ね直しの範囲`（新しい行・要件 3.5）。
 - 装置の失敗の記録を、同じ対象・同じ原因で続くあいだ 1 回にする仕組み（`device_err`・`record_display` の引数 1 つ）。
 - 表示の行の水準に触れている注記・行の位置の参照（テスト・例・性能の道具・手順書・`doc/COMPAT_ARCHITECTURE.md`）の追随。
-- 実機の測り（要件 5〜7）の手順と、その記録 `.kiro/specs/animated-surface-log-flood/verification.md`。
+- 実機の測り（要件 5〜7）の手順と、その記録 `.kiro/specs/completed/animated-surface-log-flood/verification.md`。
 - （件 26・要件 9）SERIKO のアニメーションが止まって外したコマが、表示の指令に載って emo-present の絵になるまでの道の正しさ。道は、seriko がコマを外して指令を出す所（`crates/areka-seriko/src/looper.rs` の停止の道と載せ直し `refresh`・`actor.rs` の呼び手・`commit_pattern`）と、emo-present がその指令で絵を作る所（`show.rs`・控えの引き当て・`blit_rect.rs`）。直すのは原因の 1 か所だけ。
 - （件 26・2026-10-31 の開発者の決め・案 1）原因の 1 か所である emo-compose の `plan.rs` の `flatten_surface` のうち、コマの無い id の pattern0 を静的に積む道の 1 か所。`bind+random`（`Interval::BindRandom`）はコマが無いとき pattern0 を積まない、の 1 つの条件だけを足す。
 
@@ -124,7 +124,7 @@ crates/areka-emo-present/src/
 ├── presenter_frame_log_tests.rs              # 記録の出し分け（要件 1.1〜1.6・2.1〜2.3・8.1・8.2）
 ├── presenter_partial_recompose_tests.rs      # 重ね直しの回数と形・失敗の道（要件 3.1・3.3〜3.6・4.1〜4.3・8.3・8.5）
 └── presenter_partial_recompose_gpu_tests.rs  # 実 GPU で画素が同じ（要件 3.2・3.7・8.4）
-.kiro/specs/animated-surface-log-flood/
+.kiro/specs/completed/animated-surface-log-flood/
 └── verification.md       # 実機の測りの記録（要件 5〜7）
 ```
 
@@ -450,7 +450,7 @@ pub(crate) fn record_display(
 
 **Contracts**: Batch [x]
 
-- 置き場: ワークツリーの `target\animated-surface-log-flood\` の下だけ（`flood\`・`quiet-debug\`・`quiet-release\`・`ssp\`）。結果は `.kiro/specs/animated-surface-log-flood/verification.md`。
+- 置き場: ワークツリーの `target\animated-surface-log-flood\` の下だけ（`flood\`・`quiet-debug\`・`quiet-release\`・`ssp\`）。結果は `.kiro/specs/completed/animated-surface-log-flood/verification.md`。
 - 机: 測りの前に impl-watch の排他テストの机を取り、ほかのセッションの重い仕事と重ならないことを `tools/perf/check-quiet.ps1` で確かめ、持っていた机・機械ぜんたいの CPU の中央値・版・コミットを書く（要件 6.6）。
 - **記録の量（要件 5.1〜5.3）**: 手順書の起動の塊と `RUST_LOG` の値のまま、件 21 と同じ段を通す走行を 1 回（`flood\run-info`）。数えるのは、面 1002 の表示の行（0 行のはず）・表示の行の全部・記録の全部の行数で、直す前（6,546 行のうち 6,073 行）と並べる。同じ段を `RUST_LOG` に `areka_emo_present=debug` を足して 1 回（`flood\run-debug`）。こちらで、面 1002 の表示の行が毎秒およそ 14 本であること（要件 5.3）と、INFO の表示の行それぞれが「対象の最初・面の番号の替わり・`k` の替わり・`size_changed=true`・直前に同じ対象の `apply(Hide)` の行か `show_target: 可視化した` の行がある」のどれかに当たり、当たらない行が着せ替えの替わりで説明できることを、小さな PowerShell で数えて確かめる（要件 5.2）。
 - **何もしていないあいだ（要件 6）**: 件 25 と同じ測り方（完了 `areka-P0-pasta-in-windows-verification` の `verification.md` 6 節: `AREKA_APP_SMOKE_EXIT_MS=360000`・5 秒ごとに WorkingSet・`Responding`・5 秒あたりの CPU 秒・機械ぜんたいの CPU を `health.csv` へ・最初の 60 秒を除く）で、debug 版と release 版を 1 回ずつ。`RUST_LOG` は件 25 と同じ既定の値。面 1002 が出ていたこと（要件 6.4）は、シェルの対象の INFO の表示の行のうち、測りの窓の前の最後の行が `surface_id=1002` で、窓の中に別の面の INFO の表示の行が無いことで確かめる（コマ送りだけの行は既定の水準では出ないので、面の替わりは必ず INFO の行に出る）。

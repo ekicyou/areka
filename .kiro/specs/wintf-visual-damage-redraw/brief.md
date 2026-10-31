@@ -84,7 +84,7 @@
 
 ## 件 1（2026-10-31 `animated-surface-log-flood` の申し送り）: ぱすたの面 1002 で、何もしていないあいだの CPU が SSP の約 3 倍
 
-> 出どころ: `animated-surface-log-flood` の測り（`.kiro/specs/animated-surface-log-flood/verification.md` のタスク 1 の「作る前の測り」の節〔「適用 1 回の所要を areka の CPU と比べる」〕と、タスク 5.2 の節〔「release の交互の測り直し」〕と、タスク 5.3 の「SSP の基準」）。同 spec の設計の判断 D4 は、wintf の全面の描き直しを縮めないと決めていた＝範囲の外として申し送る。場所と数は 2026-10-31 のもの＝着手時に引き直す。
+> 出どころ: `animated-surface-log-flood` の測り（`.kiro/specs/completed/animated-surface-log-flood/verification.md` のタスク 1 の「作る前の測り」の節〔「適用 1 回の所要を areka の CPU と比べる」〕と、タスク 5.2 の節〔「release の交互の測り直し」〕と、タスク 5.3 の「SSP の基準」）。同 spec の設計の判断 D4 は、wintf の全面の描き直しを縮めないと決めていた＝範囲の外として申し送る。場所と数は 2026-10-31 のもの＝着手時に引き直す。
 
 ### Problem
 
