@@ -303,3 +303,48 @@
 - 根拠: どちらも壊れた絵や特別な絵のときだけ出る記録である。(1) を根本で消すには `areka-emo-atlas` の焼く段に記録を出さない口が要り、同じウェーブの `emo-atlas-palette-alpha` と同じクレートに触れる。(2) は意図して重ねている 2 層マージの中に在る。
 - 2 件とも、完了の棚卸で起票する「残る重なり」（焼く段・畳み込みの記録）に入れる。(1) は `MemoryDecoder` の検体で檻に入れる。
 - 問題 3（バルーンの檻の数え方）は自明な修正として design.md の結合テスト 1 に書き足した（採寸の scope を `[0, 1]` に揃え、期待値をファイルごとの数の和で書く）。
+
+## 8. 実機の確かめ（要件 5.5）
+
+### 8.1 直す前
+
+- 日時: 2026-10-31（タスク 1.1・排他テストの机を持って 1 体 1 回ずつ）。
+- ビルド: ブランチ `52163052`（main `da020c10` に文書だけを足したもの・`crates/` の差分 0）の debug 版。比べのために写しを残した: `target\pm\before\areka.exe`（SHA256 `73E0536775C8695292479D72939C4A57AD221FA3EB0F62782A5BF68FB8DDB0DC`）・`target\pm\before\shiori-host32-helper.exe`（SHA256 `75BD8EC6959976179C2AB461772DCCD4897252D3753CED54490BC8326F49100B`）。
+- 画面: 主モニタ DISPLAY1 は 2880x1800・dpi=192（200%）・作業領域 `0,0,2880,1704`。副の DISPLAY2 は dpi=144（150%）で、今回は使っていない。
+- 9276 の待受: 起こす前の時点で 0 行（SSP のぱすたは起きていない）。areka の MCP は 2 回とも 127.0.0.1:9801 で待ち受けた。
+- 根: `target\pm\root`（`doc/pasta-real-run.md` の 3 節と同じ 5 つのフォルダ）。ぱすたの書庫の sha256 は `4d2b3efa9f3cd561b0dc3ec3e140e4fdd7b73551fd88f8ef9ba986ca1c206eb9`。記憶 `target\pm\profile` は空から始め、ぱすた → emo2 の順に同じ記憶で起こした（5.2 も同じ順で回す）。
+- 起こし方: `doc/pasta-real-run.md` の 4 節の塊で、exe を `target\pm\before\areka.exe`、`RUST_LOG=info,areka::boot_resolve=debug`、`AREKA_APP_SMOKE_EXIT_MS=180000`（有界の自動終了）にした。`PASTA_DEBUG` は消した。`--ghost` には絶対パスを渡した。記録は `target\pm\logs\{pasta1,emo2a}.stdout.log`。
+- 終わり方: 2 回とも自動終了で閉じた（`ghost shutdown sequence completed`・`session_mark_cleared`）。起こした pid 13512 と 28088 は残っていない。
+- 撮った面: `target\pm\shots\before\` に置いた（MCP の `dump_surface` の PNG）。
+
+#### ぱすた（窓際のぱすたさん）
+
+| 項目 | 直す前の値 |
+|---|---|
+| k₀ | `primary_dpi=192`・`k_shell=2.0`・`k_balloon=2.0` |
+| 窓の大きさの行（`placement: k₀ 倍後の物理窓寸で窓を生成する`・1 行） | scope 0: `char_size 1108x1368`・`balloon_size 872x900`。scope 1: `char_size 1108x1368`・`balloon_size 872x900` |
+| 位置の記録（`merge_scope restore`） | scope 0: `anchor=Free char=(0,336) balloon_off=(80,116) balloon=(80,452)`。scope 1: `anchor=Free char=(0,336) balloon_off=(-872,0) balloon=(-872,336)` |
+| バルーンの補正 | scope 1 の起動時関門で `flipped (-872,336)→(1108,336)`。runtime 関門でも同じ補正が 1 行出た |
+| 並べ終えた時点の保存 | scope 0 は `char=(0,336) saved=(0,336) char_w=1108` を書いた。scope 1 は台本が置いた窓なので書かない |
+| MCP `get_property` の `currentghost.scope(n).rect` | scope 0: `0,336,1108,1704`。scope 1: `0,336,1108,1704` |
+| `dump_surface`（いま映っている面） | scope 0 は面 1002（ボールだけ。初回の台本がクリックを待つので身体は映らない）。554x684・`pasta-s0-shown-1002.png`（SHA256 先頭 `41D32521DBA6E343`）。scope 1 は面 10（窓の枠）。554x684・`pasta-s1-shown-10.png`（`F869B7418E05C096`） |
+| `dump_surface`（面 1000 を単独で描いたもの） | 554x684・`pasta-s0-surface1000.png`（`BB2642F198E258C4`）。身体・ボール・× が描かれる |
+| 「全透明」の `warn!` | 4 行。`pasta/null.png` が 2 行、`balloonk0.png` が 2 行。動く WebP のものは 0 行（記録の中に `webp` の語は 0 回） |
+| WARN 以上のほかの行 | `seriko: mustselect` が 64 行。ERROR は 0 行 |
+
+#### emo2（えも？？）
+
+| 項目 | 直す前の値 |
+|---|---|
+| k₀ | `primary_dpi=192`・`k_shell=2.0`・`k_balloon=2.0` |
+| 窓の大きさの行（1 行） | scope 0: `char_size 868x1374`・`balloon_size 800x448`。scope 1: `char_size 672x800`・`balloon_size 576x406` |
+| 位置の記録（`merge_scope restore`） | scope 0: `anchor=Bottom char=(2012,330) balloon_off=(-268,-258) balloon=(1744,72)`。scope 1: `anchor=Bottom char=(1340,904) balloon_off=(292,-150) balloon=(1632,754)` |
+| windowposition（2 層マージ） | scope 0: `(266,-129)`。scope 1: `(-190,-75)` |
+| 並べ終えた時点の保存 | scope 0: `char=(2064,610) saved=(2446,610) char_w=764`。scope 1: `char=(1392,904) saved=(1728,904) char_w=672` |
+| MCP `get_property` の `currentghost.scope(n).rect` | scope 0: `2064,610,2828,1704`。scope 1: `1340,904,2012,1704` |
+| `dump_surface`（いま映っている面） | scope 0 は面 1000。382x547・`emo2-s0-shown-1000.png`（`189FB6158126CD52`）。scope 1 は面 2105。336x400・`emo2-s1-shown-2105.png`（`D2234D887690130E`） |
+| 「全透明」の `warn!` | 0 行 |
+| WARN 以上の行 | 2 行。折返し基準が描画範囲の外に解決された件が 1 行と、自動終了の `force_quit` が 1 行。ERROR は 0 行 |
+
+- 5.2 で比べる所: 窓の大きさの行・`merge_scope restore` の値・保存の値・`rect`・面の番号と PNG の寸法は、そのまま一致を見る。PNG のハッシュは動く絵のコマの位相で変わりうる。ハッシュが違うときは、面 1000 を単独で描いたもの（`pasta-s0-surface1000.png`）を基準にして見比べる。
+- 注: emo2 の scope 0 の `rect` と保存の `char_x`（2064・幅 764）は、記録の `char=(2012,330)`（幅 868）と違う。これは並べた後の窓の矩形を読んだ値で、直す前の今の動きのまま控えた。
