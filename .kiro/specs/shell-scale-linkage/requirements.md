@@ -137,9 +137,9 @@
 > 2026-11-01 開発者の裁定「OnShellScalingは、『そのシェルの最終倍率が変わったとき』に出るべきです。理由はDPIチェンジの時もあるし、実効倍率の変更の時もあるとは思いますが、とにかく、シェルに対して、描画スケールが変わったとき、に出るべきだと思います。」。SSP は利用者の倍率の設定が変わったときだけゴースト全体で 1 回送り、スコープごとの `\![set,scaling]` では送らない（`research.md` 11 節）。areka は窓ごとに倍率が違いうるので、SSP の送る場面に合わせず、窓ごとの最終の描画の倍率の変わりで送る。
 
 #### Acceptance Criteria
-1. When あるスコープのキャラクターの窓にかかる最終の描画の倍率（要件 3 の実効の倍率）が変わった, the areka shall 変わった理由（拡大率の違う画面へ移った・表示の倍率が変わった・ほかの実効の倍率の掛け算が変わった）を問わず、そのゴーストの SHIORI へ `OnShellScaling` を送り、Reference0 に横の変わった後、Reference1 に横の変わる前、Reference2 に縦の変わった後、Reference3 に縦の変わる前の倍率を入れ、Reference4 にそのスコープの番号を入れる。
-2. When あるスコープのバルーンの窓にかかる最終の描画の倍率が変わった, the areka shall 同じく理由を問わず `OnBalloonScaling` を、`OnShellScaling` と同じ並びの Reference（Reference4 はそのバルーンのスコープの番号）で送る。
-3. The areka shall Reference0〜3 を正典の並びのまま変えず、スコープの番号を正典の 4 つの後ろの Reference4 に足す（Reference0〜3 だけを読むゴーストには SSP と同じ形に見える）。
+1. When あるスコープのキャラクターの窓にかかる最終の描画の倍率（要件 3 の実効の倍率）が変わった, the areka shall 変わった理由（拡大率の違う画面へ移った・表示の倍率が変わった・ほかの実効の倍率の掛け算が変わった）を問わず、そのゴーストの SHIORI へ `OnShellScaling` を送り、Reference0 に横の変わった後、Reference1 に横の変わる前、Reference2 に縦の変わった後、Reference3 に縦の変わる前の倍率を入れ、Reference4 にそのシェル番号（本体は 0、相方は 1、2 以降もある・正典の `OnMouseClick` の Reference3 と同じ番号）を入れる。
+2. When あるスコープのバルーンの窓にかかる最終の描画の倍率が変わった, the areka shall 同じく理由を問わず `OnBalloonScaling` を、`OnShellScaling` と同じ並びの Reference（Reference4 はそのバルーンが付いているシェル番号）で送る。
+3. The areka shall Reference0〜3 を正典の並びのまま変えず、シェル番号を正典の 4 つの後ろの Reference4 に足す（Reference0〜3 だけを読むゴーストには SSP と同じ形に見える・後から足す Reference を末尾に置くのは、SSP が `OnMouseClick` の Reference6 で取った形）。
 4. The areka shall 2 つのイベントの Reference の倍率を、要件 3 の `scaling` の横・縦の数と同じ数の形（百分率・割り切れないときは小数）で入れる。
 5. The areka shall 2 つのイベントを、新しい倍率が絵にかかったのと同じ時点で送り、1 フレーム遅らせて送らない。そのイベントの応答の台本から `\![get,property]` で聞いたそのスコープの `scaling` には、変わった後の倍率が返る。
 6. If 窓が同じ DPI の画面の間を移った・倍率の百分率が変わる前と同じ, the areka shall 2 つのイベントを送らない。
@@ -177,7 +177,7 @@
 2. When 実機でぱすたを起こし、200% と 150% の画面の間をドラッグでまたがせた, the 開発の手順 shall `OnPastaShellScale` が Reference に倍率と DPI を持って届くこと、`OnShellScaling` が届くこと、ぱすたが窓の位置と重なりの順を出し直すことを、areka の記録で確かめる。
 3. When 8.2 の確かめの各段（起動の直後・同じ画面の中でのドラッグの後・拡大率の違う画面へ移した後）に達した, the 開発の手順 shall MCP の `get_property` で 3 つの値を読み、窓の居る画面の拡大率と一致すること、ぱすたが倍率のずれの台詞（`＊バルーン倍率のずれ`）を出さないことを確かめる。
 4. The 開発の手順 shall 実機の値を SSP の基準（Introduction の表）と並べ、数の形が同じであること、倍率の値と `OnShellScaling` の届き方の違いが DPI 追従の方針によるものであることを書き分けて残す。
-5. When 本 spec の実装が終わった, the 開発の手順 shall 網羅台帳の `sakura-script.toml` の `\![get,property]`・`shiori.toml` の `OnShellScaling`・`OnBalloonScaling`・`property.toml` の 3 行・`assets.toml` のゴーストとシェルの `balloon.syncscale` の 4 行を実装済みを表す状態へ改め、根拠への道を添える（シェルの 3 行の持ち主に本 spec を書く・`property.toml` の `scaling` の 2 行の注記は SSP の意味〔利用者がベースウェアで決める拡大率〕で書いてあるので、areka の意味〔画面の DPI への追従の倍率 × 表示の倍率〕へ書き直す）。
+5. When 本 spec の実装が終わった, the 開発の手順 shall 網羅台帳の `sakura-script.toml` の `\![get,property]`・`shiori.toml` の `OnShellScaling`・`OnBalloonScaling`・`property.toml` の 3 行・`assets.toml` のゴーストとシェルの `balloon.syncscale` の 4 行を実装済みを表す状態へ改め、根拠への道を添える（シェルの 3 行の持ち主に本 spec を書く・`property.toml` の `scaling` の 2 行の注記は SSP の意味〔利用者がベースウェアで決める拡大率〕で書いてあるので、areka の意味〔画面の DPI への追従の倍率 × 表示の倍率〕へ書き直す・`shiori.toml` の 2 行の注記に、送る場面が窓ごとの最終の描画の倍率の変わりであることと、areka が Reference4 にシェル番号を足したことを書く）。
 
 ## 要件討議の前に SSP で測る点と、討議で決める点
 
@@ -199,3 +199,4 @@ brief の議題 ⑴ ⑵ と、要件を書くときに ukadoc で決まらなか
 - SSP と違う 2 つの扱い: 推奨案で確定＝名前なしは SSP に合わせて送らない（2.4 を改めた）。空の名前は送らずに警告を残す（2.2 のまま・空の `ID` の要求は SHIORI が振り分けられない・SSTP の `validate_notify` と同じ線）。
 - 表の 6（2 つのイベントの代表のスコープ）: 開発者「SSPとちがい、arekaは窓ごとに違う倍率になりうる。対応が『ぱすたさん』専用になってはならない」＝本体の窓で代表させる案は取らず、個別に討議する。
 - 表の 6 の続き（2026-11-01）: SSP を測った（`research.md` 11 節＝SSP は利用者の設定の変わりでだけゴースト全体に 1 回・Reference 4 つ・スコープごとの `\![set,scaling]` では送らない）うえで、開発者の裁定「OnShellScalingは、『そのシェルの最終倍率が変わったとき』に出るべき…シェルに対して、描画スケールが変わったとき、に出るべき」＝窓ごとの最終の描画の倍率の変わりで、理由を問わず送る。どのスコープかは Reference4 に入れる（案 A）。要件 5 を書き直した。SSP の送る場面とは違う（意図した違い）。
+- シェル番号の Reference（2026-11-01）: 開発者「リファレンスに、『シェル番号』がなければ追加すべきです」→ 案 1 で確定（開発者「OKです」）＝Reference4 にシェル番号（`OnMouseClick` の Reference3 と同じ番号）・正典の 0〜3 は動かさない。5.1〜5.3・8.5 を書き揃えた。
