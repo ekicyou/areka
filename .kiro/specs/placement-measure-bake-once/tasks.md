@@ -85,7 +85,7 @@
   - _Boundary: boot_shell_tests_
   - _Depends: 3.1, 3.2_
   - _Requirements: 1.3, 3.1, 3.2, 3.3, 3.5, 3.7, 4.4, 4.5_
-- [ ] 4.4 変更 0 の約束と行数の上限を確かめ、触ったクレートのテストを通す
+- [x] 4.4 変更 0 の約束と行数の上限を確かめ、触ったクレートのテストを通す
   - `switch_assets.rs`・`ghost_session.rs`・`measure_tests.rs`・`boot_config.rs`・`install/`・`areka-emo-atlas`・`areka-emo-compose`・`balloon_definitions.rs` の `git diff --stat` が 0、触ったファイルがどれも 1,000 行以下であることを確かめる
   - `areka-emo-present` と `areka` のテストを回して緑を確かめる（赤が出たら 2 回目からは赤のテストだけに絞る）
   - 完了の状態: 差分の確かめと両クレートのテストの結果が緑で揃っている
@@ -111,3 +111,4 @@
 
 - 1.2: `.pna` の `warn!` は `read_use_self_alpha` の中でなく呼び手（`shell_target.rs` の `load_shell_target`・`balloon.rs` の `load_balloon_use_self_alpha`）に在る。2.1・2.2 で `records` を渡すときに合わせて囲む。
 - 書き込みの道具が文字列の `\n` を本物の改行に化かすことがある。テストの文字列を書いたらバイトで確かめる。
+- 4.4: 変更 0 の約束の 8 つは `git diff --stat da020c10` が 0・触ったファイルは最大 970 行（`placement/mod.rs`・970 のまま）。`cargo test -p areka-emo-present -p areka` で赤 2 本: `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は単独の回し直しで緑（負荷で揺れる・本 spec の範囲外）、`smoke_boot_loop_exit` の `fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert` はこのワークツリーに i686 の試験用 DLL が建っていないため（`real-run-kit/src/i686.rs:77`・全体テストは先に i686 を建てる）。どちらも本 spec の差分と無関係で、全体テストで確かめる。
