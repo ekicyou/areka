@@ -15,14 +15,12 @@ use crate::cli::{BootRequest, InstallArgs};
 /// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない＝要件 4.1）。
 pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";
 
-/// 起動の依頼の持ち物（`main` が起動の解決の前に作り、[`install`] で World の資源へ移す）。
-#[derive(bevy_ecs::prelude::Resource, Debug, Default)]
+/// 起動の依頼の持ち物（`main` が起動の解決の前に作って持ち、[`install`] で控えを World へ移して落とす）。
+#[derive(Debug, Default)]
 pub(crate) struct StartupInstall {
     /// 入れる物（根が決まったときに取り出す＝1 回だけ）。
     pending: Option<Pending>,
     /// 起動の前に入れた物の控え（入れた順・起動の後に World へ移す）。
-    // World へ移す口（タスク 4.6）が読むまでは、テストだけが読む。
-    #[allow(dead_code)]
     carried: Vec<CarriedInstall>,
 }
 
@@ -288,9 +286,21 @@ impl Drop for StartupInstall {
     }
 }
 
-/// `main` から 1 度だけ（`readonly::install` の次）。持ち物を World の資源へ移す。
-pub(crate) fn install(world: &mut World, startup: StartupInstall) {
-    world.insert_resource(startup);
+/// `main` から 1 度だけ（系の登録の後）。控えを入れた順に、窓口の記録と同じ受け皿と置換語へ置き
+/// （最後の 1 本が「最後に入れた物」）、持ち物を落とす。記憶へは書かず、ゴーストへイベントは送らない
+/// （要件 3.2・3.4）。
+pub(crate) fn install(world: &mut World, mut startup: StartupInstall) {
+    let carried = std::mem::take(&mut startup.carried);
+    if !carried.is_empty() {
+        tracing::info!(
+            event = "startup_install_carried",
+            count = carried.len(),
+            "[install] 起動の前に入れた物の控えを起動の後へ引き継ぎます"
+        );
+    }
+    for installed in carried {
+        super::desk::place_last_installed(world, installed);
+    }
 }
 
 /// 終わり方の語（記録 `startup_install_done` の `results`・並びの残りは `not_started`）。

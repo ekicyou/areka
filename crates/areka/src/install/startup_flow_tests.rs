@@ -270,3 +270,130 @@ fn either_value_suppresses_the_alert_before_boot() {
     assert!(before_boot_alert_suppressed(false, Some(0)));
     assert!(before_boot_alert_suppressed(true, Some(5000)));
 }
+
+fn carried(
+    kind: areka_nar::InstallKind,
+    folder: &str,
+    ghost_folder: Option<&str>,
+    ghost_name: Option<&str>,
+) -> CarriedInstall {
+    CarriedInstall {
+        kind,
+        folder: folder.to_owned(),
+        ghost_folder: ghost_folder.map(str::to_owned),
+        object_name: format!("{folder} の書庫"),
+        ghost_name: ghost_name.map(str::to_owned),
+    }
+}
+
+/// 控えは入れた順に窓口の記録と同じ受け皿と置換語へ置かれ（最後の値が残る）、info
+/// `startup_install_carried` が 1 件。続けて窓口の記録の口で入れた物がそれを置き換える
+/// （要件 3.2・3.4・9.12・10.6）。
+#[test]
+fn carried_installs_reach_the_desk_receivers_and_the_desk_replaces_them() {
+    use crate::emo2_boot::ghost_switch::LastInstalledGhost;
+    use crate::emo2_boot::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
+    use crate::install::names::LastInstallNames;
+    use areka_nar::InstallKind;
+
+    let mut world = World::new();
+    let startup = StartupInstall {
+        pending: None,
+        carried: vec![
+            carried(
+                InstallKind::Ghost,
+                "first",
+                Some("first"),
+                Some("ファースト"),
+            ),
+            carried(
+                InstallKind::Shell,
+                "dress",
+                Some("first"),
+                Some("ファースト"),
+            ),
+            carried(InstallKind::Balloon, "round", None, None),
+            carried(
+                InstallKind::Ghost,
+                "second",
+                Some("second"),
+                Some("セカンド"),
+            ),
+            carried(
+                InstallKind::Supplement,
+                "extra",
+                Some("second"),
+                Some("セカンド"),
+            ),
+            carried(InstallKind::Balloon, "square", None, None),
+        ],
+    };
+    let ((), events) = log_capture_kit::capture(|| install(&mut world, startup));
+    assert_eq!(
+        world
+            .get_resource::<LastInstalledGhost>()
+            .map(|g| g.0.as_str()),
+        Some("second")
+    );
+    assert_eq!(
+        world.get_resource::<LastInstalledShell>(),
+        Some(&LastInstalledShell {
+            ghost_folder: Some("first".to_owned()),
+            folder: "dress".to_owned(),
+        })
+    );
+    assert_eq!(
+        world
+            .get_resource::<LastInstalledBalloon>()
+            .map(|b| b.0.as_str()),
+        Some("square")
+    );
+    assert_eq!(
+        world.get_resource::<LastInstallNames>(),
+        Some(&LastInstallNames {
+            ghost: Some("セカンド".to_owned()),
+            object: Some("square の書庫".to_owned()),
+        }),
+        "バルーンは %lastghostname を前の値のまま"
+    );
+    let carried_log = named(&events, "startup_install_carried");
+    assert_eq!(carried_log.len(), 1);
+    assert_eq!(carried_log[0].level, tracing::Level::INFO);
+    assert_eq!(carried_log[0].field("count"), Some("6"));
+
+    super::super::desk::record_installed(
+        &mut world,
+        crate::install::procedure::InstalledRecord {
+            kind: InstallKind::Ghost,
+            object_name: "あとの書庫".to_owned(),
+            folder: "later".to_owned(),
+            ghost_folder: Some("later".to_owned()),
+        },
+    );
+    assert_eq!(
+        world
+            .get_resource::<LastInstalledGhost>()
+            .map(|g| g.0.as_str()),
+        Some("later")
+    );
+    assert_eq!(
+        world.get_resource::<LastInstallNames>(),
+        Some(&LastInstallNames {
+            ghost: Some("あとの書庫".to_owned()),
+            object: Some("あとの書庫".to_owned()),
+        })
+    );
+}
+
+/// 控えが無ければ何も置かず、`startup_install_carried` も残さない。
+#[test]
+fn nothing_carried_places_nothing_and_logs_nothing() {
+    let mut world = World::new();
+    let ((), events) = log_capture_kit::capture(|| install(&mut world, StartupInstall::default()));
+    assert!(
+        world
+            .get_resource::<crate::install::names::LastInstallNames>()
+            .is_none()
+    );
+    assert!(named(&events, "startup_install_carried").is_empty());
+}
