@@ -177,3 +177,42 @@
 
 - `ShellTarget` の記録の口を変えたあと、`shell_target_*_tests.rs` で `build_world` の後の記録を数えているテスト（`shell_target_load_tests.rs` 404〜420 行ほか）と、`emo-compose` の `log_firing_tests.rs`（`EmoWorld::build` の中で畳み込みの警告が出ることを主張）が、公開の入口の既定を「出す」のまま保てば通ることを確かめる。
 - 同じウェーブの `test-roots-under-target` が `temp-path-kit` の入口を差し替える。新しい檻は今の `measure_bake_count_tests.rs` と同じ `TempPath::under_target` を使い、着地の順で名前が変わったら合わせる。
+
+## 8. 設計の段の記録（2026-11-01）
+
+> 本ブランチ `50b60c63` でコードを読み直した。発見の型は **軽い発見**（既存の仕組みの拡張・新しい依存なし・外の調べ物なし）。使った手順は `kiro-spec-design` の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。
+
+### 8.1 6 節の残り（3・4・8・9）への答え
+
+`design.md` の「決めごと」が正本。要点だけ写す。
+
+| 点 | 取った案 | 取らなかった案と理由 |
+|---|---|---|
+| 3. `build_world` の約束 | いつも記録を出さない組み方 | `ShellTarget` に `records` を持たせる案: 全部の `ShellTarget` は核から作られ、核が 1 回組んで記録を出すので、欄を足す理由が無い（数はどちらも起動 1 回で 1 行） |
+| 4. 記録の口の形 | 公開は `_quiet` の兄弟の入口だけ・下の 2 クレートは `pub(crate)` の 2 値の型 `Records` | `areka-emo-atlas` に公開の型を置く案: `LoadRecords` と二重になり、公開の型が増える |
+| 8. 例外 1 の檻 | 置き換える（採寸が使う焼きで 0 行・包まない焼きで 0 行）。採寸の道全体の 0 行は起動の準備の檻 | 「包んだ読み手＋ふつうの焼きで 1 行」を主張として残す案: 直した後も通ってしまい、例外 1 を固定しない |
+| 9. 檻の検体 | ファイルの形だけを `target\` の下に置き、絵は `MemoryDecoder`（`insert`・`insert_animated`・`insert_corrupt`）。止める失敗はバルーンの面 0 を読めない絵にする | 本物の PNG と WIC: 0 寸の絵が作れず、COM が要る |
+
+### 8.2 7 節の確かめ（コードを読んだ結果）
+
+- `shell_target_load_tests.rs` 404〜420 行: 主張は「`build_world` の中で宛先 `areka_emo_present::shell_target` の記録が 0 行」と「宛先が `areka_emo_compose` で始まる記録が 1 本以上ある（対照）」。対照の記録は焼けなかった `parts1.png` の装着の `debug!`（`atlas_bind.rs` 44 行）で、本 spec は装着を黙らせないので通る。
+- `shell_target_base_image_tests.rs` の `append_to_an_unknown_surface_warns_and_creates_nothing`: 記録を出す核 `build_shell_target` の中の 1 行を数えている。核の既定は出すので通る（`build_world` は数えの窓の外）。
+- `areka-emo-compose` の `log_firing_tests.rs`: `EmoWorld::build` を通して畳み込みの記録を主張している。`build` の既定は出すので通る。
+- `shell_target_quiet_tests.rs`・`balloon_quiet_tests.rs`: 数えるのは宛先 `areka_emo_present::*` だけで、戻り値の写し（`fingerprint`）も中身が同じなので通る。
+- `measure_bake_count_tests.rs`: 焼く回数（読み手の口の呼ばれた回数）と読み込みの記録を数える。焼く回数は変えないので通る。
+- `test-roots-under-target` の入口の差し替え: 新しい檻は `TempPath::under_target` を使う。着地の順で名前が変わったら合わせる（`design.md` の Revalidation Triggers）。
+
+### 8.3 読み直しで分かったこと
+
+- **`fold.rs` の記録は 10 本**（`warn!` 9 本＝40・51・62・71・179・189・244・300・357 行、`debug!` 1 本＝95 行の id 重複）。要件討議の決定 3（全部を 1 行に）に従い、`debug!` も黙らせる。
+- **`expand_targets` は `boxes.rs` からも呼ばれる**（箱の表）。`boxes.rs` は触ってよいファイルの外で、通る `warn!` は今の型では通らない枝だけなので、`expand_targets` を出す形の包みとして残し、`boxes.rs` は今のまま出す。
+- **動く絵の 3 本の `warn!`（`animated.rs`）は触らずに済む**。採寸の読み手 `FirstFrameDecoder` が `probe_animation` を既定の `None` にするので、採寸の道では動く絵の道に入らない。`animated.rs` は触ってよいファイル（`lib.rs` か新しい兄弟）の外なので触らない。この前提が崩れると重なりが戻る（Revalidation Triggers）。
+- **`fold_shell`・`apply_base_images` の呼び手**: `fold_shell` はテスト（`fold_tests.rs` 976 行・`base_image_tests.rs`）から 20 か所以上呼ばれるので、出す形の包みとして残す。`apply_base_images` の呼び手は `world.rs` だけなので引数を足す。
+- **`measure_first_frame.rs` の説明**（「例外 D4: 『全透明』の `warn!` が 1 行増える」）は直した後に誤りになる。`measure.rs` の中の `mod first_frame` の中身なので、説明だけを書き直す（コードは変えない）。
+- 行数: `lib.rs` 818・`world.rs` 418・`fold.rs` 375・`base_image.rs` 125・`shell_target.rs` 917・`balloon.rs` 754・`measure.rs` 528・`shell_target_load_tests.rs` 517・`shell_target_quiet_tests.rs` 241・`balloon_quiet_tests.rs` 142・`measure_bake_count_tests.rs` 472。上限に近いのは `shell_target.rs` だけ（足すのは 25 行まで）。
+
+### 8.4 まとめ方（synthesis）
+
+- **一般化**: 3 つの口（焼く段・面の表・バルーン）は同じ問題（呼ぶ回数だけ出る記録）の変種なので、前例 `LoadRecords` と同じ 1 つの形（兄弟の入口＋中身 1 本＋`if records.emits()`＋失敗の `error!` は囲まない）にそろえた。
+- **作るか借りるか**: `tracing` の購読者を採寸の間だけ差し替える案（借りる側）は、`error!` まで巻き込むので取らない（4 節の「取らない案」と同じ）。
+- **削ったもの**: 公開の型・`ShellTarget` の新しい欄・`lib.rs` の記録の塊を別のファイルへ移すこと（上限に届かない）・2 層マージの口（使われない）。
