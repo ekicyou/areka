@@ -1075,8 +1075,8 @@ wave = "v0.1.0"
 [[spec]]
 name = "shell-scale-linkage"
 none = true
-reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたが使う倍率の連動の項目（\\![get,property]・currentghost.scope(ID).scaling・currentghost.balloon.scope(ID).scaling・currentghost.scope(ID).currentmonitor.dpi・OnShellScaling・OnBalloonScaling・ゴーストの descript の balloon.syncscale）の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（7 件）"
-owner_count = 7
+reason = "束はまだ割り当てていない。2026-10-23 に areka-P0-pasta-in-windows-verification が、ぱすたが使う倍率の連動の項目（\\![get,property]・currentghost.scope(ID).scaling・currentghost.balloon.scope(ID).scaling・currentghost.scope(ID).currentmonitor.dpi・OnShellScaling・OnBalloonScaling・ゴーストの descript の balloon.syncscale）の宛先を、v0.1.0 の中で片づけるために起票したこの名前で記入した（7 件）。2026-11-01 に本 spec の実装でこの 7 件を実装済みに書き直し、シェルの descript の sakura.・kero.・char*.balloon.syncscale の 3 件を実装済み・持ち主＝本 spec として足した（10 件）"
+owner_count = 10
 wave = "v0.1.0"
 
 [[spec]]
