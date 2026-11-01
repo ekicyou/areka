@@ -213,19 +213,21 @@ impl SwitchRig {
         let sample = acquire_emo2();
         let root = BasewareRoot::new(sample.root().to_path_buf());
         // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る・areka-P0-ghost-inner-balloon
-        // 要件 7.1）。A／B の複製へ持ち込まないよう、写す前に根へ移す。
-        std::fs::create_dir_all(root.balloon_store()).expect("根の balloon を組む");
-        std::fs::rename(
+        // 要件 7.1）。根へは写し、A／B の複製へは持ち込まない。移す（rename）・消す（remove_dir）は
+        // 写した直後の木を他のプロセスが握っていると拒まれるので使わない（件 4・load-repro.md ⑼）。
+        // 元の `ghost\emo2\balloon\` は残るが、emo2 は今のゴーストにならないので誰も読まない。
+        copy_tree(
             sample.balloon(BALLOON).expect("emo2 の同梱バルーン"),
-            root.balloon_dir(BALLOON),
-        )
-        .expect("既定のバルーンを根へ移す");
-        std::fs::remove_dir(sample.folder().join("balloon")).expect("空になった balloon を消す");
+            &root.balloon_dir(BALLOON),
+            None,
+        );
+        let inner = sample.folder().join("balloon");
         for folder in ["A", "B"] {
             copy_ghost(
                 sample.folder(),
                 &sample.root().join("ghost").join(folder),
                 folder,
+                &inner,
             );
         }
 
@@ -381,7 +383,7 @@ impl SwitchRig {
     }
 
     fn copy_balloon_to(&self, to: &Path, name: &str) {
-        copy_tree(&self.root.balloon_dir(BALLOON), to);
+        copy_tree(&self.root.balloon_dir(BALLOON), to, None);
         rewrite_lines(&to.join("descript.txt"), |line| {
             if line.starts_with("name,") {
                 format!("name,{name}")
@@ -673,8 +675,8 @@ fn folder_of(ghost_root: &Path) -> String {
 
 /// 検体のゴーストを `to` へ複製し、`descript.txt` の `name` をフォルダ名に、`sakura.name` を
 /// 「フォルダ名のさくら」に書き換える（切替先の名前と本体側の名前を体ごとに見分ける）。
-fn copy_ghost(from: &Path, to: &Path, folder: &str) {
-    copy_tree(from, to);
+fn copy_ghost(from: &Path, to: &Path, folder: &str, skip: &Path) {
+    copy_tree(from, to, Some(skip));
     rewrite_lines(
         &to.join("ghost").join("master").join("descript.txt"),
         |line| {
@@ -689,8 +691,8 @@ fn copy_ghost(from: &Path, to: &Path, folder: &str) {
     );
 }
 
-/// フォルダ `from` を `to` へ再帰で複製する。
-fn copy_tree(from: &Path, to: &Path) {
+/// フォルダ `from` を `to` へ再帰で複製する（`skip` のフォルダは中ごと写さない）。
+fn copy_tree(from: &Path, to: &Path, skip: Option<&Path>) {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");
@@ -698,7 +700,9 @@ fn copy_tree(from: &Path, to: &Path) {
             let entry = entry.expect("検体の要素");
             let target = dst.join(entry.file_name());
             if entry.file_type().expect("要素の種別").is_dir() {
-                stack.push((entry.path(), target));
+                if skip != Some(entry.path().as_path()) {
+                    stack.push((entry.path(), target));
+                }
             } else {
                 std::fs::copy(entry.path(), &target).expect("検体のファイルを写す");
             }

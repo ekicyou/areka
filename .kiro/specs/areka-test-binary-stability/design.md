@@ -3,6 +3,8 @@
 > 2026-11-01 `/kiro-spec-design`（`-y`）。枝 `claude/kiro-start-areka-test-binary-stability-dec94e`（main `0cd4577f` の上・`497d1829`）のコードを読んで書いた。テスト・ビルド・負荷の走行は回していない。行の番号はこのコミットのもの。調べた中身と比べた案は `research.md`（ギャップ分析と、末尾の「設計の段」の節）。
 >
 > 2026-11-01 実装の段で CrashReport を改めた。測った事実: Y1 の落ち 4 回が報告の行を出さず、最後の受け手は差し替えられていなかった（番地が同じ）＝AV が最後の受け手まで届かなかった。届かなかった訳の見立て（確かめていない）: 落ちた番地がどのモジュールにも当たらず枠を巻き戻せない（`load-repro.md` ⑹「Y1 の 2 回目」）。そこで AV は最初の受け手（`AddVectoredExceptionHandler`）で書く形にした。
+>
+> 2026-11-02 実装の段で SampleLayout を改めた。測った事実: X1 で `remove_dir` の 1 つ前の `rename` も `Os { code: 5 }` で 6 回拒まれた（`load-repro.md` ⑼）。そこで `rename` と `remove_dir` をどちらも使わず、既定のバルーンを根へ `copy_tree` で写す形にした。
 
 ## Overview
 
@@ -138,7 +140,7 @@ crates/wintf/src/
 - `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs`（959 行）— 分けた後、残る 470・635 行の待ちを目印つきへ。檻の偽の受け手に目印を書く。
 - `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs`・`spine_close_wiring_tests.rs`・`spine_hold_tests.rs`・`spine_seriko_loop_tests.rs`・`crates/areka/src/session_end_deadline_tests.rs`・`crates/areka/src/ghost_session_restart_tests.rs` — `spin_wait_until` の直の呼び出しを目印つきの `wait_until` へ。
 - `crates/areka/src/mcp/dump_surface.rs`（`#[cfg(test)]` の `WaitAnswer` だけ）と呼び手 `mcp/check_script_tests.rs`・`mcp/dump_surface_gpu_tests.rs` — 答えの待ちに目印を渡す。
-- `crates/areka/src/emo2_boot/ghost_switch_test_support.rs`（722 行）— 件 4 の `remove_dir` を無くす。件 5 の原因がここに在れば直す。
+- `crates/areka/src/emo2_boot/ghost_switch_test_support.rs`（722 行）— 件 4 の `rename` と `remove_dir` を無くし、写すだけにする。件 5 の原因がここに在れば直す。
 - `crates/areka-nar/src/install.rs`（666 行）— `rename_patiently` の拒みの枝に `#[cfg(test)]` の継ぎ目。`install_commit_tests.rs`（857 行）— 檻を継ぎ目で放す形へ。
 - `tools/load-flake.ps1`（297 行）— 口を広げる（下の LoadFlake の節）。
 - `.kiro/steering/tech.md` — 許す赤の範囲の書き足し（要件 4.3）と、件 1・件 3 の直しが決まりを生んだ場合の足場の決まり（要件 10.7）。
@@ -294,7 +296,7 @@ flowchart TD
 | StageProbe | 足場 | `StageSink` の目印の既定を無くす | 7.1, 7.4 | WaitCore（P1） | Service |
 | WaitMigration | テスト | 15 か所を目印つきへ | 7.2〜7.6 | WaitCore・各足場の数え（P1） | — |
 | RenameSeam・HoldCage | `areka-nar` | 拒みを檻が観測し、同じスレッドで放す | 5.1〜5.4 | — | Service |
-| SampleLayout | 足場 | 件 4: 移した直後のフォルダを消さない | 8.1 | — | — |
+| SampleLayout | 足場 | 件 4: 写した直後の木の名前を変えず、消さない（写すだけ） | 8.1 | — | — |
 | Case5Fix | 足場 | 件 5・third scope の足場の側の原因の直し | 8.4, 8.6 | MeasureRecord（P0） | — |
 | FileSplit | 構造 | 上限に近いファイルを先に分ける | 10.4 | — | — |
 | SteeringAddendum | steering | 許す赤の範囲と足場の決まりの書き足し | 4.2, 4.3, 10.7 | — | — |
@@ -502,12 +504,15 @@ pub(crate) fn manual_balloon_runtime(actor: &str) -> (GpuPermit, World, Rc<RefCe
 - 移す先はどれも `wait_until(what, Progress::Count(&probe), cond)`。打ち切りの扱い（`false` を返して呼び手の assert で落とす）は今の `spin_wait_until` と同じに保ち、確かめの内容は変えない（要件 7.5）。移した後に `git grep -n "spin_wait_until(" -- crates/areka/src` が定義の 1 行だけになることを見る。`spin_wait_until` そのものは、呼び手が 0 になったら消す。
 - 15 か所の外（`recv_timeout` の自前の上限・`Instant` の締切・`run_bounded` の呼び手）は MeasureRecord に数えて書き、本 spec の走行で赤になったものだけ同じ形へ移す（要件 7.6）。
 
-#### SampleLayout（件 4・`ghost_switch_test_support.rs` 223 行）
+#### SampleLayout（件 4・`ghost_switch_test_support.rs` の `SwitchRig::new`）
 
-- 空になった `balloon\` を消す `remove_dir` をやめる（1 行を消す）。消さない空のフォルダは、ゴーストの中のバルーンの走査（`areka-ghost` の `scan_ghost_balloons`→`subdirs`）で 0 件になり、無いのと同じに扱われる（`catalog.rs` 225 行・警告も出ない）。A／B への複製にも空のフォルダが写るだけで、同じく 0 件。
-- 消す操作が無くなるので、移した直後のフォルダの一時的な握りに当たる操作そのものが無くなる（要件 8.1）。sleep も試し直しも足さない（要件 10.1）。
-- 実装の段で、`SwitchRig` の検体の `ghost\<名>\balloon` が「無いこと」を確かめるテストが無いことを grep で確かめる（在れば、その確かめを「中のバルーンが 0 件」に読み替える）。
-- 見立て（要件 8.2）: 同じフォルダの中の `rename` が通った直後に親の `remove_dir` だけが拒まれた＝子の中を開いている者は居らず、親のフォルダそのものを共有の削除なしで開いた者（検索のインデクサー・ウイルス対策の走査）が居た、と読む。根拠は、件 4 の観測の文と、同じ切り分けの走行で再び出たときの io のエラーの番号（`expect` の文に `Os { code: … }` として出る）。記録に書く。
+> 2026-11-02 実装の段で改めた（冒頭の注）。設計の段の形は「空になった `balloon\` の `remove_dir` の 1 行を消す」だった。
+
+- 既定のバルーンは根の `balloon\emo2-kakukaku\` へ `copy_tree` で写す。A／B の複製は `copy_tree(..., Some(ghost\emo2\balloon))` で、そのフォルダを飛ばして写す（A／B にバルーンを持ち込まないのは今までと同じ）。`rename` も `remove_dir` も使わない。
+- 元の `ghost\emo2\balloon\` は残る。ゴーストの中のバルーンを読むのは今のゴーストの分だけ（`catalog_roots.rs` の `balloons_for(今のゴーストの ghost_dir)`）で、`SwitchRig` のテストは emo2 を今のゴーストにしないので、誰も読まない。
+- 足場に残る操作は新しいフォルダを作ってファイルを写すだけになり、写した直後の木の一時的な握りに当たる操作そのものが無くなる（要件 8.1）。sleep も試し直しも足さない（要件 10.1）。
+- 実装の段で、`SwitchRig` の検体の `ghost\<名>\balloon` が「無いこと」を確かめるテストが無いことを grep で確かめた（無かった・`load-repro.md` ⑼）。
+- 見立て（要件 8.2・`load-repro.md` ⑼）: 起票の回は `rename` が通った直後の `remove_dir` が拒まれ、X1 では `rename` そのものが `Os { code: 5 }`（`ERROR_ACCESS_DENIED`）で拒まれた。同じ掴みの違う時点に当たったと読む。掴み手はこのテストのプロセスの外で、写したばかりの木を共有の削除なしで開く者（検索のインデクサー・ウイルス対策の走査）と読む（確かめてはいない）。根拠は、拒みの番号が 5 であること、拒まれたのが写した直後の木の名前の変更と削除だけで同じ木を読む `copy_tree` の赤は 0 回だったこと。
 
 #### Case5Fix
 
