@@ -26,6 +26,16 @@
 - タスクダイアログの見出し・展開・確かめの欄・リンクなどの新しい見せ方。本文は今の文字列をそのまま 1 つの欄に置く。
 - 件 2（モニタを移した後のバルーン）。フォルダや書庫を選ぶ OS の画面（`roots/pick.rs`・`install/pick.rs`）。
 
+## 設計の討議で決めたこと（2026-11-01・案 B の作り直し・全議題を推奨案で確定）
+
+1. 本文は全部タスクダイアログの本文の欄（`pszContent`）に置き、太字の見出しの欄は使わない。
+2. はい／いいえの画面のアイコンは情報のアイコン（`TD_INFORMATION_ICON`）。問いの絵（`IDI_QUESTION`）を渡す形は絵がにじむおそれがあるので取らない。
+3. メッセージボックスの測り 2 本は消す（関門 0 の値は `tasks.md` と `research.md` に残る）。`BoxOutcome` も消し、`show_box` は HRESULT の結果を返す。
+4. 失敗の記録の欄 `error` の中身が HRESULT の文になり、記録の文の「MessageBoxW failed」が「TaskDialogIndirect failed」に替わるのを受け入れる（名前・水準・欄は同じ＝要件 2.2 は守れる）。
+5. 最前面にできなかったときの warn `alert_topmost_failed`（欄 `error`）を足す。
+6. タスクダイアログが出るモニタがメッセージボックスと違うことがあるのを受け入れ、どこに出たかを実機の確かめの記録に書く。
+7. 3 つの画面の撮影は、本番の 3 つの口を数秒ずつ出す `#[ignore]` の測り `probe_alert_dialogs_production` で行う。
+
 ## Boundary Commitments
 
 ### This Spec Owns
