@@ -574,6 +574,16 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 数えた）で、うち束を持つ行が **42 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 66 に合わせ、`snapshot_on` は
 **2026-10-31** にした。
 
+**2026-11-01 の追加（`popup-menu-extra-resources`）**: `popup-menu-extra-resources` の行を 1 行足した。この spec が
+右クリックメニューの「ネットワーク更新」の項目名を、新しい名前 `updatebutton.caption` が引けないときに古い名前
+`updatebuttoncaption` の値で出すようにしたので、台帳 `ledger/shiori.toml` の 1 項目（`updatebuttoncaption`）を語彙のみから
+実装済みへ移し、宛先をこの spec にした（それまで宛先が空だった）。この項目は `linkage.md` の束「メニュー」に属するので、
+段階 A の表の「メニュー」の行にこの spec（1 件）を足した。1 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の
+欄は変えていない。足した行の中身は `stage = "A"`・`bundle = "メニュー"`・`owner_count = 1`・`wave = "C15-⑥"` で、段階は
+「メニュー」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。あわせて `briefing.md` の
+`list_shiori_resource` の状態の数を数え直した値に直した。行数は **67 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
+**43 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 67 に合わせ、`snapshot_on` は **2026-11-01** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -608,8 +618,8 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 
 ```toml
 [briefs]
-count = 66
-snapshot_on = "2026-10-31"
+count = 67
+snapshot_on = "2026-11-01"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -1113,6 +1123,13 @@ stage = "A"
 bundle = "サーフェスアニメーション"
 owner_count = 9
 wave = "C13"
+
+[[spec]]
+name = "popup-menu-extra-resources"
+stage = "A"
+bundle = "メニュー"
+owner_count = 1
+wave = "C15-⑥"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -1138,7 +1155,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | descript の転記 | `areka-P0-descript-transcribe` | `balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-ghost-standard-balloon`（C4-⑪・2 件）／`descript-window-keys`（v0.1.0・1 件） | 第 2 波 |
 | 10 | バルーンのリンク | `anchor-style-canon`（既存 spec がそのまま引受先・構成 60 件のうち未対応の 59 件の全数を `owner` に持つ。残る 1 件は `areka-P0-anchor-tag-canon` が実装済みにした） | `anchor-style-canon`（文字とバルーンの列・59 件）／`areka-P0-anchor-tag-canon`（C5-①・1 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `currentghost-property-tree`（W15・15 件）／`shell-mouse-cursor`（v0.1.0・2 件） | 第 2 波 |
-| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件）／`areka-P0-window-link-directives`（C10-②・1 件）／`popup-menu-shell-look`（v0.1.0・22 件） | 第 2 波 |
+| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件）／`areka-P0-window-link-directives`（C10-②・1 件）／`popup-menu-shell-look`（v0.1.0・22 件）／`popup-menu-extra-resources`（C15-⑥・1 件） | 第 2 波 |
 | 12 | 撫で | `areka-P0-touch-events-canon` | `currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件）／`mouse-click-wheel-events`（v0.1.0・3 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `balloon-canon-residue`（W14・4 件）／`balloon-scroll-arrows`（v0.1.0・5 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `property-query-channels`（W14・1 件） | 第 2 波 |

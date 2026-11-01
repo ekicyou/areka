@@ -124,15 +124,15 @@ pub trait GlyphMetrics {
     /// 実装は自前で足し算をせずそこへ委譲する（design.md §4.1・R3.5）。
     fn line_pitch(&self, font_height: f32) -> f32;
 
-    /// **実レンダリング行ボックス丈**（image px・descent 込み＝`ascent + descent`）。
+    /// **字の箱の丈**（image px・descent 込み＝`ascent + descent`）。
     ///
-    /// em ボックス丈（`font_height`）ではなく、フォントが実際にインクを置く行ボックスの
-    /// ブロック軸寸。DirectWrite は行を `ascent + descent`（design metrics）で組むため、
+    /// em ボックス丈（`font_height`）ではなく、フォントが字のインクを置く箱のブロック軸寸。
     /// 和文フォントでは `font_height` を大きく超える（実測: Yu Gothic UI ＝ `1.3301em`
-    /// ゆえ 28px で 37.24px・ＭＳ ゴシック ＝ ちょうど `1.0em`）。**行矩形（em ボックス）を
-    /// そのまま帯として使うと descent 側のインクが帯の外へ出る**——選択肢 hover ハイライト
-    /// 矩形／ヒット矩形のブロック軸帯はこの実測丈を源にする（design.md R3.3 の座標整合を
-    /// 保ったまま「文字の下が切れる」を構造的に排除する・[`crate::choice::highlight_band_extent`]）。
+    /// ゆえ 28px で 37.24px・ＭＳ ゴシック ＝ ちょうど `1.0em`）。DirectWrite が組む行の高さは
+    /// 書体の行間（lineGap）を含み、これより大きいことがある（游ゴシック 20px で本値 25.74 に
+    /// 対し行の高さ 32.04・spec `emo-text-line-gap` research.md §3.1）。ゆえに本値は
+    /// **帯の厚みの源として読み、行の箱としては読まない**——帯の置く所は字の箱の上端
+    /// （[`GlyphMetrics::horizontal_char_box_top`]）から決める（[`crate::choice::highlight_band_extent`]）。
     ///
     /// 実装: COM 層 `DWriteMetrics` は**実 font face metrics**
     /// （`GetMetrics` の `ascent`/`descent`/`designUnitsPerEm`）から算出し、
@@ -162,6 +162,19 @@ pub trait GlyphMetrics {
     /// （列のレシピの前の DirectWrite の列の箱の置き方の模型）。
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
         column_centred_em_box_left(self.line_box_height(font_height), font_height, mode)
+    }
+
+    /// 横書きの行で、字の箱の上端の、行矩形の上端からの量（image px・丸める前）。
+    ///
+    /// 字の箱 ＝ その行の字について ascent＋descent（[`GlyphMetrics::line_box_height`]）の丈を持ち、
+    /// DirectWrite が実際に字を置いた所に在る箱。その上端 ＝ 行の基線 − ascent。書体の行間を
+    /// 持つ書体では行矩形の上端より下に在る（spec `emo-text-line-gap` 要件 2.1・4.1）。
+    /// 縦書きでは意味を持たない（呼ばれない）。
+    ///
+    /// 既定の実装は 0（字の箱の上端＝行矩形の上端・[`FixedMetrics`] と偽の計測器の模型）。
+    /// 本番（COM 層 `DWriteMetrics`）は生成時に 1 度だけ測った比 × em で上書きする。
+    fn horizontal_char_box_top(&self, _font_height: f32) -> f32 {
+        0.0
     }
 }
 

@@ -18,7 +18,7 @@ use crate::base_image::SurfaceImages;
 use crate::method::ComposeMethod;
 use crate::nesting::element_kind;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
-use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
+use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 
 /// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む（要件 1.7）。
 ///
@@ -30,12 +30,25 @@ use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
 /// `AliasMap` へ収集し、同一キーは登場順で後勝ちとする（要件 3.1/3.2）。
 ///
 /// 欠落・不整合はパニックせず `warn` で観測可能化する（要件 1.4）。
+///
+/// 中身は [`fold_shell_with`] の「出す」の包み。本番の呼び手は [`fold_shell_with`] を使い、
+/// 本関数を呼ぶのはテスト（`fold_tests.rs`・`base_image_tests.rs`）だけになった。
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "テストの呼び手と説明の参照先として残す")
+)]
 pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
+    fold_shell_with(world, shell, Records::Emit);
+}
+
+/// [`fold_shell`] と同じ畳み込みで、記録の行を出すかどうかを `records` で切り替える
+/// （枝の選び方と面の表への書き込みは変えない・spec: emo-bake-log-overlap 要件 2.3）。
+pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records) {
     for def in &shell.definitions {
         match *def {
             DefRef::Surface(index) => match shell.surfaces.get(index) {
-                Some(surface) => fold_plain_surface(world, surface),
-                None => {
+                Some(surface) => fold_plain_surface(world, surface, records),
+                None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
                         target: "areka_emo_compose",
@@ -43,10 +56,11 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
                         "DefRef::Surface が surfaces 範囲外を指す: スキップ"
                     );
                 }
+                None => {}
             },
             DefRef::Append(index) => match shell.appends.get(index) {
-                Some(append) => fold_append(world, append),
-                None => {
+                Some(append) => fold_append(world, append, records),
+                None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
                         target: "areka_emo_compose",
@@ -54,10 +68,11 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
                         "DefRef::Append が appends 範囲外を指す: スキップ"
                     );
                 }
+                None => {}
             },
             DefRef::Alias(index) => match shell.aliases.get(index) {
                 Some(alias) => fold_alias(world, alias),
-                None => {
+                None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
                         target: "areka_emo_compose",
@@ -65,15 +80,17 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
                         "DefRef::Alias が aliases 範囲外を指す: スキップ"
                     );
                 }
+                None => {}
             },
             // `DefRef` は `#[non_exhaustive]`。未知の定義種別はパニックせず観測可能化する（要件 1.4）。
-            other => {
+            other if records.emits() => {
                 tracing::warn!(
                     target: "areka_emo_compose",
                     def = ?other,
                     "未知の DefRef 種別: スキップ"
                 );
             }
+            _ => {}
         }
     }
 }
@@ -84,23 +101,25 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
 /// から正規化 [`SurfaceMaster`] を id ごとに生成する。無い id は新設し、既にある id（前の波括弧・
 /// 追記で定義された番号）は前の定義へ後のブレスの行を足す（[`merge_brace`]・同じ名前の行は後勝ち・
 /// spec: areka-P0-emily-ghost-verification 開発者の決め 2026-10-17「足し合わせる」）。
-fn fold_plain_surface(world: &mut World, surface: &Surface) {
-    for id in expand_targets(&surface.targets) {
+fn fold_plain_surface(world: &mut World, surface: &Surface, records: Records) {
+    for id in expand_targets_with(&surface.targets, records) {
         let later = normalize_surface(id, surface);
         let existing = world.resource::<SurfaceIndex>().0.get(&id).copied();
         let merged = existing.and_then(|entity| world.get_mut::<SurfaceMaster>(entity));
         match merged {
             Some(mut master) => {
                 // 失敗ではなく定めた振る舞い（えみりは 1 本のシェルで百数十回当たる）なので debug。
-                tracing::debug!(
-                    target: "areka_emo_compose",
-                    id,
-                    "surface id 重複: 前の定義へ後のブレスの行を足す（同じ名前の行は後勝ち）"
-                );
+                if records.emits() {
+                    tracing::debug!(
+                        target: "areka_emo_compose",
+                        id,
+                        "surface id 重複: 前の定義へ後のブレスの行を足す（同じ名前の行は後勝ち）"
+                    );
+                }
                 merge_brace(&mut master, later);
             }
             None => {
-                upsert_surface(world, id, later);
+                upsert_surface(world, id, later, records);
             }
         }
     }
@@ -150,12 +169,12 @@ fn merge_brace(master: &mut SurfaceMaster, later: SurfaceMaster) {
 /// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う（要件 3.7・C6）。
 /// どちらにも無い id は新設せず `warn` でスキップする（要件 1.4/2.2/3.8）。
 /// 登場順の走査（[`fold_shell`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
-fn fold_append(world: &mut World, append: &SurfaceAppend) {
+fn fold_append(world: &mut World, append: &SurfaceAppend, records: Records) {
     // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
     let append_elements: Vec<NormalizedElement> =
         append.elements.iter().map(normalize_element).collect();
 
-    for id in expand_targets(&append.targets) {
+    for id in expand_targets_with(&append.targets, records) {
         // 存在条件: その時点でツリーに在る id と、ファイル名だけで置かれた絵を持つ id が対象
         // （どちらにも無ければ新設しない・要件 2.2/3.7/3.8）。
         let entity = match world.resource::<SurfaceIndex>().0.get(&id).copied() {
@@ -173,24 +192,29 @@ fn fold_append(world: &mut World, append: &SurfaceAppend) {
                         collisions: Vec::new(),
                         animations: Vec::new(),
                     },
+                    records,
                 )
             }
             None => {
-                tracing::warn!(
-                    target: "areka_emo_compose",
-                    id,
-                    "surface.append 対象 id が未存在: 新設せずスキップ（存在条件付き）"
-                );
+                if records.emits() {
+                    tracing::warn!(
+                        target: "areka_emo_compose",
+                        id,
+                        "surface.append 対象 id が未存在: 新設せずスキップ（存在条件付き）"
+                    );
+                }
                 continue;
             }
         };
         let Some(mut master) = world.get_mut::<SurfaceMaster>(entity) else {
             // SurfaceIndex に載るが component 欠落（本来生じない不整合）。観測可能化してスキップ。
-            tracing::warn!(
-                target: "areka_emo_compose",
-                id,
-                "SurfaceIndex は指すが SurfaceMaster component が欠落: スキップ"
-            );
+            if records.emits() {
+                tracing::warn!(
+                    target: "areka_emo_compose",
+                    id,
+                    "SurfaceIndex は指すが SurfaceMaster component が欠落: スキップ"
+                );
+            }
             continue;
         };
 
@@ -202,7 +226,7 @@ fn fold_append(world: &mut World, append: &SurfaceAppend) {
         master.collisions.extend(append.collisions.iter().cloned());
 
         // animation: 同一 id は後勝ち置換（+warn）・新 id は追加（要件 2.4）。
-        merge_animations(id, &mut master.animations, &append.animations);
+        merge_animations(id, &mut master.animations, &append.animations, records);
     }
 }
 
@@ -238,15 +262,18 @@ fn merge_animations(
     surface_id: u32,
     existing: &mut Vec<areka_parsers::shell::Animation>,
     additions: &[areka_parsers::shell::Animation],
+    records: Records,
 ) {
     for add in additions {
         if let Some(slot) = existing.iter_mut().find(|a| a.id == add.id) {
-            tracing::warn!(
-                target: "areka_emo_compose",
-                surface_id,
-                animation_id = add.id,
-                "append が既存 animation id を再定義: 後勝ちで置換する（de-facto）"
-            );
+            if records.emits() {
+                tracing::warn!(
+                    target: "areka_emo_compose",
+                    surface_id,
+                    animation_id = add.id,
+                    "append が既存 animation id を再定義: 後勝ちで置換する（de-facto）"
+                );
+            }
             *slot = add.clone();
         } else {
             existing.push(add.clone());
@@ -264,6 +291,11 @@ fn merge_animations(
 ///
 /// emo2 は除外を使用しないため実処理は型シームだが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
 pub(crate) fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
+    expand_targets_with(targets, Records::Emit)
+}
+
+/// [`expand_targets`] と同じ展開で、知らない記述子の記録を出すかどうかを `records` で切り替える。
+fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
     use std::collections::BTreeSet;
 
     // (1) 包含 id を記述順に列挙（重複はそのまま保つ）。
@@ -297,11 +329,13 @@ pub(crate) fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
             }
             // `AppendTarget` は `#[non_exhaustive]`。未知の記述子はパニックせず観測可能化する（要件 1.4）。
             ref other => {
-                tracing::warn!(
-                    target: "areka_emo_compose",
-                    target_desc = ?other,
-                    "未知の AppendTarget 記述子: 包含集合から除外"
-                );
+                if records.emits() {
+                    tracing::warn!(
+                        target: "areka_emo_compose",
+                        target_desc = ?other,
+                        "未知の AppendTarget 記述子: 包含集合から除外"
+                    );
+                }
             }
         }
     }
@@ -351,14 +385,16 @@ fn normalize_element(element: &Element) -> NormalizedElement {
 /// id を新設して id→entity を登録し、その entity を返す。既にある id の定義へは波括弧なら
 /// [`merge_brace`]・追記なら in-place で足すので、ここへ来るのは無い id だけ（索引は在るが
 /// component が欠けた不整合のときだけ、古い entity を除いて作り直す）。
-fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) -> Entity {
+fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster, records: Records) -> Entity {
     if let Some(stale) = world.resource::<SurfaceIndex>().0.get(&id).copied() {
         // 本来生じない不整合（索引は指すが SurfaceMaster が無い）。黙らずに残して作り直す。
-        tracing::warn!(
-            target: "areka_emo_compose",
-            id,
-            "SurfaceIndex は指すが SurfaceMaster component が欠落: 作り直す"
-        );
+        if records.emits() {
+            tracing::warn!(
+                target: "areka_emo_compose",
+                id,
+                "SurfaceIndex は指すが SurfaceMaster component が欠落: 作り直す"
+            );
+        }
         world.despawn(stale);
     }
     let entity = world.spawn((SurfaceId(id), master)).id();

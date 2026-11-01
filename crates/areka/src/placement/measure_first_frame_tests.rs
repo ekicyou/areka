@@ -1,5 +1,5 @@
 //! 採寸の読み手 `FirstFrameDecoder` の檻（spec: placement-measure-bake-once 要件 1.1・1.4・2.2・
-//! 3.7、design「FirstFrameDecoder」・D4 の全透明の例外）。
+//! 3.7、design「FirstFrameDecoder」。D4 の全透明の例外は emo-bake-log-overlap 要件 1.5 で解けた）。
 //!
 //! 偽の読み手 `MemoryDecoder` を数える包みで覆い、包んだ相手の全コマ読みが 1 度も呼ばれない
 //! ことまで確かめる。ファイルにも COM にも依存しない。
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use areka_emo_atlas::{
     AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, BakeResult, DecodeError,
     DecodedImage, ElementDecoder, LoopCount, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha,
-    bake,
+    bake, bake_quiet,
 };
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
 
@@ -184,8 +184,16 @@ fn hides_animation_and_passes_pna_through() {
     assert!(!ffd.probe_pna(&path("anim.png")));
 }
 
+/// 焼き方: 包んだ読み手＋出す焼き（対照）・包んだ読み手＋出さない焼き（採寸）・包まない読み手＋出す焼き。
+#[derive(Clone, Copy, PartialEq)]
+enum Way {
+    WrappedBake,
+    WrappedQuiet,
+    RawBake,
+}
+
 /// 1 枚目が全透明・2 枚目が不透明の anim.png を持つシェルを焼き、「全透明」の `warn!` を数える。
-fn bake_fade_in_warns(wrap: bool) -> (BakeResult, usize) {
+fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
     let mut inner = MemoryDecoder::new();
     inner.insert_animated(
         path("anim.png"),
@@ -216,30 +224,37 @@ fn bake_fade_in_warns(wrap: bool) -> (BakeResult, usize) {
             use_self_alpha: UseSelfAlpha::On,
         },
     }];
-    let (result, events) = capture_logs(|| {
-        if wrap {
-            bake(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default())
-        } else {
-            bake(&sets, &dec, PackConfig::default())
+    let (result, events) = capture_logs(|| match way {
+        Way::WrappedBake => bake(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default()),
+        Way::WrappedQuiet => {
+            bake_quiet(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default())
         }
+        Way::RawBake => bake(&sets, &dec, PackConfig::default()),
     });
     let warns = events
         .iter()
         .filter(|e| e.level == tracing::Level::WARN && e.message().contains("全透明"))
         .count();
-    if wrap {
+    if way != Way::RawBake {
         assert_eq!(dec.frames.get(), 0, "包んだ焼きは全コマ読みを呼ばない");
     }
     (result, warns)
 }
 
-/// 要件 3.7 の例外（design D4）: 包んだ読み手では 1 枚目だけの静止画として見えるので
-/// 「全透明」の `warn!` がちょうど 1 行、包まない読み手（動く絵の道）では 0 行。
+/// emo-bake-log-overlap 要件 1.5・6.2（例外 D4 の書き直し）: 採寸が使う焼き（包んだ読み手＋
+/// `bake_quiet`）でも、包まない読み手の焼きでも「全透明」の `warn!` は 0 行。対照として包んだ
+/// 読み手＋出す焼きで 1 行出ることを確かめ、検体が本当に 1 枚目だけ全透明であることを示す
+/// （`bake_quiet` は絵によらず出さないので、対照が無いと 0 行の主張が何も確かめない）。
 #[test]
-fn fade_in_animation_warns_all_transparent_only_when_wrapped() {
-    let (wrapped, wrapped_warns) = bake_fade_in_warns(true);
-    let (raw, raw_warns) = bake_fade_in_warns(false);
-    assert!(wrapped.errors.is_empty() && raw.errors.is_empty());
-    assert_eq!(wrapped_warns, 1, "包んだ読み手は 1 行");
-    assert_eq!(raw_warns, 0, "包まない読み手は 0 行");
+fn fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake() {
+    let (control, control_warns) = bake_fade_in_warns(Way::WrappedBake);
+    let (quiet, quiet_warns) = bake_fade_in_warns(Way::WrappedQuiet);
+    let (raw, raw_warns) = bake_fade_in_warns(Way::RawBake);
+    assert!(control.errors.is_empty() && quiet.errors.is_empty() && raw.errors.is_empty());
+    assert_eq!(control_warns, 1, "対照: 包んだ読み手＋出す焼きは 1 行");
+    assert_eq!(
+        quiet_warns, 0,
+        "採寸の焼き（包んだ読み手＋出さない焼き）は 0 行"
+    );
+    assert_eq!(raw_warns, 0, "包まない読み手＋出す焼きは 0 行");
 }

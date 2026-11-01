@@ -74,6 +74,53 @@ pub fn bake_with_limits(
     cfg: PackConfig,
     limits: AnimationLimits,
 ) -> BakeResult {
+    bake_core(sets, decoder, cfg, limits, Records::Emit)
+}
+
+/// 記録を出さない焼きの入口（spec: emo-bake-log-overlap 要件 1.1〜1.3・1.6）。
+///
+/// [`bake`] と同じ中身で焼き、戻り値も等しい。絵ごとの記録（抜き色の `debug!`・元画像が
+/// 0 寸の `warn!`・着せ替えの「無し」の絵の `debug!`・全透明の `warn!`）だけを出さない。
+/// 動く絵の上限は [`bake`] と同じく [`AnimationLimits::from_env`] で決める。
+///
+/// 動く絵の 3 本の `warn!` はこの入口でも出る。採寸の道で出ないのは採寸の読み手が動く絵の
+/// 道へ入らせないため。前提の崩れの `error!`（`bake.rs`・`pack.rs`）もいつも出る
+/// （同 要件 1.7）。
+pub fn bake_quiet(
+    sets: &[SurfaceSet<'_>],
+    decoder: &impl ElementDecoder,
+    cfg: PackConfig,
+) -> BakeResult {
+    bake_core(
+        sets,
+        decoder,
+        cfg,
+        AnimationLimits::from_env(),
+        Records::Quiet,
+    )
+}
+
+/// 記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Records {
+    Emit,
+    Quiet,
+}
+
+impl Records {
+    pub(crate) fn emits(self) -> bool {
+        self == Records::Emit
+    }
+}
+
+/// 焼きの中身（入口 3 つが共有する 1 本）。絵ごとの記録を出すのは `records` が出すときだけ。
+fn bake_core(
+    sets: &[SurfaceSet<'_>],
+    decoder: &impl ElementDecoder,
+    cfg: PackConfig,
+    limits: AnimationLimits,
+    records: Records,
+) -> BakeResult {
     // 1. マニフェスト導出（列挙・重複排除・決定的採番）。
     let manifest = ManifestDeriver.derive(sets);
     // 着せ替え（bind）のアニメーションからだけ参照される面の絵（全透明でも警告しない側・
@@ -135,7 +182,9 @@ pub fn bake_with_limits(
         used_pixels += frames_pixels;
 
         // 抜き色で扱った絵は、抜いた色を記録する（spec: areka-P0-shell-implicit-surface 要件 6.3）。
-        if let Some([b, g, r, a]) = rule.key {
+        if let Some([b, g, r, a]) = rule.key
+            && records.emits()
+        {
             tracing::debug!(
                 target: "areka_emo_atlas",
                 set = key.set.0,
@@ -167,7 +216,7 @@ pub fn bake_with_limits(
         // 0 寸/全透明 element の早期警告（ゴースト制作者ミスの可能性が高いため・設計ディスカッション #1）。
         // **ログのみの増分**: bake の生成結果（索引表・placement・trim 矩形）は一切変更しない。
         // (a) 元画像 0 寸（0×0）／(b) α=0 トリム後 0 寸（全透明→placement None）を判別してログ。
-        if trim.original.w == 0 || trim.original.h == 0 {
+        if records.emits() && (trim.original.w == 0 || trim.original.h == 0) {
             tracing::warn!(
                 target: "areka_emo_atlas",
                 set = key.set.0,
@@ -176,7 +225,10 @@ pub fn bake_with_limits(
                 original_h = trim.original.h,
                 "bake: element の元画像が 0 寸です（ゴースト制作者ミスの可能性）"
             );
-        } else if trim.placement.is_none() && frames.as_ref().is_none_or(|f| f.all_transparent()) {
+        } else if records.emits()
+            && trim.placement.is_none()
+            && frames.as_ref().is_none_or(|f| f.all_transparent())
+        {
             // 動く絵の透明なコマは正当な 1 コマ。全部のコマが透明な動く絵にだけ出す（要件 3.5）。
             if bind_only.contains(&(key.set.0, key.rel_path.clone())) {
                 // 着せ替えの「無し」の絵（作者の意図した空の絵）は警告せず記録だけ残す
@@ -306,6 +358,11 @@ mod log_capture;
 // image-webp を固定コミットから取り込んでいることの検査（spec: areka-P0-animated-image-decode 要件 7.6）。
 #[cfg(test)]
 mod webp_pin_tests;
+
+// 記録を出さない焼きの入口の檻（spec: emo-bake-log-overlap 要件 1.1〜1.3・1.6・3.2・3.4）。
+#[cfg(test)]
+#[path = "bake_quiet_tests.rs"]
+mod bake_quiet_tests;
 
 // 本物の読み手で動く絵の検体のフォルダを焼く結合テスト（spec: areka-P0-animated-image-decode 要件 8.3〜8.6）。
 #[cfg(test)]

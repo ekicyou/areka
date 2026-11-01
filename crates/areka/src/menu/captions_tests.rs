@@ -193,6 +193,14 @@ fn unqueried_resources_are_absent_from_the_real_allow_table() {
     }
     assert!(is_allowed_resource_id(SAKURA_POPUPMENU_VISIBLE));
     assert!(is_allowed_resource_id(KERO_POPUPMENU_VISIBLE));
+    assert_eq!(
+        LEGACY_CAPTION_RESOURCES,
+        [("updatebutton.caption", "updatebuttoncaption")].as_slice()
+    );
+    for (new, legacy) in LEGACY_CAPTION_RESOURCES {
+        assert!(is_allowed_resource_id(new), "{new} を引けない");
+        assert!(is_allowed_resource_id(legacy), "{legacy} を引けない");
+    }
 }
 
 /// 問い合わせる名前は「表示可否が先頭・続いて写しに現れた順」。第 1 スライスは 3 件。
@@ -245,9 +253,45 @@ fn query_ids_collects_submenu_children_and_collapses_duplicates() {
             "sakura.popupmenu.visible",
             "ghostrootbutton.caption",
             "closebutton.caption",
+            "updatebuttoncaption",
             "updatebutton.caption",
         ]
     );
+}
+
+/// 「ネットワーク更新」の項目があれば、古い名前を新しい名前の直前に 1 回だけ問う。
+/// 項目を 2 つ置いても重ならない（popup-menu-extra-resources 要件 1.1・5.2）。
+#[test]
+fn query_ids_puts_the_legacy_name_just_before_the_new_name_once() {
+    let snapshot = vec![
+        (Frame::Readme, leaf("説明書", Some("readmebutton.caption"))),
+        (
+            Frame::Update,
+            leaf("ネットワーク更新", Some("updatebutton.caption")),
+        ),
+        (
+            Frame::Update,
+            leaf("ネットワーク更新", Some("updatebutton.caption")),
+        ),
+        (Frame::Close, leaf("終了", Some("closebutton.caption"))),
+    ];
+    assert_eq!(
+        query_ids(&snapshot, 0),
+        [
+            "sakura.popupmenu.visible",
+            "readmebutton.caption",
+            "updatebuttoncaption",
+            "updatebutton.caption",
+            "closebutton.caption",
+        ]
+    );
+}
+
+/// 「ネットワーク更新」の項目が無い写しでは古い名前を問わない（popup-menu-extra-resources 要件 1.7）。
+#[test]
+fn query_ids_omits_the_legacy_name_without_the_update_item() {
+    let ids = query_ids(&readme_and_close_snapshot(), 0);
+    assert!(!ids.contains(&"updatebuttoncaption"), "{ids:?}");
 }
 
 /// 値が非空ならその文言をそのまま使う（`&` もそのまま・要件 3.2）。
@@ -441,4 +485,104 @@ fn send_query_reports_send_failed_when_kanade_is_gone() {
         send_query(&tx, vec!["readmebutton.caption"]),
         Err(QueryFailure::SendFailed)
     ));
+}
+
+/// 新しい名前と古い名前（popup-menu-extra-resources）。
+const NEW_UPDATE: &str = "updatebutton.caption";
+const OLD_UPDATE: &str = "updatebuttoncaption";
+
+/// 新しい名前だけが引ければ、その値を使う（要件 1.2・3.1）。
+#[test]
+fn update_caption_uses_the_new_name_when_only_it_answers() {
+    let (interpreted, _) = interpret_capturing(Ok(vec![
+        (OLD_UPDATE, ResourceOutcome::NoContent),
+        value(NEW_UPDATE, "新しい名前"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい名前"));
+}
+
+/// 新しい名前が値なしで古い名前が引ければ、古い名前の値をそのまま使う（`&` も前後の空白も・要件 1.3・1.5）。
+#[test]
+fn update_caption_falls_back_to_the_old_name_verbatim() {
+    let (interpreted, _) = interpret_capturing(Ok(vec![
+        value(OLD_UPDATE, " 更新(&U) "),
+        (NEW_UPDATE, ResourceOutcome::NoContent),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some(" 更新(&U) "));
+}
+
+/// 両方引ければ新しい名前の値を使う（要件 1.2・3.1）。
+#[test]
+fn update_caption_prefers_the_new_name_when_both_answer() {
+    let (interpreted, _) = interpret_capturing(Ok(vec![
+        value(OLD_UPDATE, "古い"),
+        value(NEW_UPDATE, "新しい"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい"));
+}
+
+/// どちらも値なしなら既定名（鍵なし）で、空の記録は 1 行に両方の名前を載せる（要件 1.4・2.1・2.3）。
+#[test]
+fn update_caption_without_either_value_defaults_with_one_debug_line() {
+    let (interpreted, lines) = interpret_capturing(Ok(vec![
+        value(SAKURA_POPUPMENU_VISIBLE, "1"),
+        (OLD_UPDATE, ResourceOutcome::NoContent),
+        (NEW_UPDATE, ResourceOutcome::NoContent),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), None);
+    let debug = lines_at(&lines, "DEBUG");
+    assert_eq!(debug.len(), 1, "{lines:?}");
+    assert!(
+        debug[0].contains(&format!("\"{OLD_UPDATE}\"")),
+        "{:?}",
+        debug[0]
+    );
+    assert!(
+        debug[0].contains(&format!("\"{NEW_UPDATE}\"")),
+        "{:?}",
+        debug[0]
+    );
+    assert!(matches!(interpreted.visibility, Visibility::Show));
+}
+
+/// 新しい名前が空の値でも、古い名前が引ければその値を使う（要件 1.3）。
+#[test]
+fn update_caption_falls_back_when_the_new_name_is_empty() {
+    let (interpreted, _) =
+        interpret_capturing(Ok(vec![value(OLD_UPDATE, "古い"), value(NEW_UPDATE, "")]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("古い"));
+}
+
+/// 新しい名前が失敗しても古い名前が引ければその値を使い、警告 1 行に新しい名前を載せる（要件 1.3・2.2）。
+#[test]
+fn update_caption_falls_back_when_the_new_name_fails() {
+    let (interpreted, lines) = interpret_capturing(Ok(vec![
+        value(OLD_UPDATE, "古い"),
+        failed(NEW_UPDATE, "shiori down"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("古い"));
+    let warns = lines_at(&lines, "WARN");
+    assert_eq!(warns.len(), 1, "{lines:?}");
+    assert!(
+        warns[0].contains(&format!("\"{NEW_UPDATE}\"")),
+        "{:?}",
+        warns[0]
+    );
+}
+
+/// 古い名前が失敗しても新しい名前が引ければその値を使い、警告 1 行に古い名前を載せる（要件 1.2・2.2）。
+#[test]
+fn update_caption_keeps_the_new_name_when_the_old_name_fails() {
+    let (interpreted, lines) = interpret_capturing(Ok(vec![
+        failed(OLD_UPDATE, "broken reply"),
+        value(NEW_UPDATE, "新しい"),
+    ]));
+    assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい"));
+    let warns = lines_at(&lines, "WARN");
+    assert_eq!(warns.len(), 1, "{lines:?}");
+    assert!(
+        warns[0].contains(&format!("\"{OLD_UPDATE}\"")),
+        "{:?}",
+        warns[0]
+    );
 }

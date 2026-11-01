@@ -2,9 +2,9 @@
 //!
 //! # 何を見張るか
 //!
-//! 一時ディレクトリの**入口**（`std::env::temp_dir`）の呼出が、窓口 crate の定義
-//! （`crates/temp-path-kit/src/`）と例外表 [`ALLOWED_ENTRY_POINT_USES`] の外に 1 件も
-//! 無いこと。入口は 2 通りの綴りで書けるので両方を走査する（[`entry_point_tokens`]）。
+//! 一時ディレクトリの**入口**（`std::env::temp_dir`）の呼出が、例外表
+//! [`ALLOWED_ENTRY_POINT_USES`] の外に 1 件も無いこと。窓口 crate（`crates/temp-path-kit/src/`）
+//! も走査から外さない（[`the_gateway_is_scanned_and_holds_no_entry_point`]）。入口は 2 通りの綴りで書けるので両方を走査する（[`entry_point_tokens`]）。
 //!
 //! # なぜログ捕捉 crate に住んでいるのか
 //!
@@ -21,8 +21,8 @@
 //! 壊れる**（本仕様は既に「自作の走査器が例外を吐きながら一致と報告した」事故を
 //! 記録している）。
 //!
-//! 代わりに規則は 1 行で言える——**入口の呼出は、窓口の中か例外表の中にしか存在しては
-//! ならない。** 固定名の新設はこの規則の**部分集合**なので、要件 12.4 が求める検知は
+//! 代わりに規則は 1 行で言える——**入口の呼出は、例外表の中にしか存在してはならない
+//! （窓口の中にも置かない。窓口は置き場の式だけから一時フォルダを作る）。** 固定名の新設はこの規則の**部分集合**なので、要件 12.4 が求める検知は
 //! 含まれる。新しく入口を叩くコードは、一意名を組んでいても例外表への明示的な編集を
 //! 求められる。**それが表の目的**である（要件 12.4「追加は明示的な編集としてのみ許す」）。
 //!
@@ -92,14 +92,6 @@ fn entry_point_tokens() -> Vec<&'static str> {
 // 例外表
 // ---------------------------------------------------------------------------
 
-/// 窓口の**定義**が置かれた領域。走査から外す唯一の領域。
-///
-/// 窓口が入口を叩くのは当然なので表の項目にはしない。外すのが飾りでない
-/// （＝この領域に確かに入口の呼出がある）ことは
-/// [`the_gateway_is_the_only_excluded_region_and_it_really_holds_the_entry_point`] が縛る。
-/// 外すのは `src/` だけで、窓口 crate の `tests/` があれば走査する（姉妹の見張りと同じ規律）。
-const GATEWAY_DEFINITION_PREFIX: &str = "crates/temp-path-kit/src/";
-
 /// 例外を認める理由の**種別**。理由欄の散文だけでなく機械で裏の取れる分類を持たせる。
 ///
 /// 散文の理由は書いた本人以外には検証できない。種別を付けておけば
@@ -121,7 +113,8 @@ enum Why {
 /// **初期値は移行（タスク 10.2・10.3・10.4）と、その取りこぼしの是正（タスク 10.7）が
 /// 完了した後の実測 16 件**で、この見張り自身が空の表で走ったときに返した集合と逐語で
 /// 一致する（`crates/**/*.rs` を列挙し、窓口の `src/` を除き、コメント除去後に入口の
-/// 呼出を持つファイル＝**16 ファイル・20 箇所**。2026-08-27 実測）。
+/// 呼出を持つファイル＝**16 ファイル・20 箇所**。2026-08-27 実測）。「窓口の `src/` を除き」は
+/// 当時の測り方の記録で、今は窓口も走査に入る（窓口の当たりは 0 件なので集合は変わらない）。
 ///
 /// # 起草の「16 ファイル」との突合
 ///
@@ -304,6 +297,12 @@ const INTENTIONALLY_FIXED_COUNT: usize = 1;
 /// 窓口を迂回する唯一の意図的な箇所＝この見張りが本来鳴るべき当の形を選ぶ。
 const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka-ghost/tests/ghost/inproc_fixture.rs";
 
+/// 窓口の 2 ファイル（[`the_gateway_is_scanned_and_holds_no_entry_point`] が名指しで確かめる）。
+const GATEWAY_FILES: [&str; 2] = [
+    "crates/temp-path-kit/src/lib.rs",
+    "crates/temp-path-kit/src/lib_tests.rs",
+];
+
 /// 本ファイル自身の相対パス（自己検査で使う）。
 const THIS_GUARD: &str = "crates/log-capture-kit/tests/temp_path_guard_test.rs";
 
@@ -322,20 +321,9 @@ struct Hit {
     token: String,
 }
 
-/// 見張りの対象（窓口の定義を除いた全ソース）。
+/// 見張りの対象（窓口を含む全ソース。窓口も外さない）。
 fn watched_sources() -> Vec<String> {
     walk_workspace_sources()
-        .into_iter()
-        .filter(|p| !p.starts_with(GATEWAY_DEFINITION_PREFIX))
-        .collect()
-}
-
-/// 窓口の定義（走査から外した領域）。
-fn gateway_sources() -> Vec<String> {
-    walk_workspace_sources()
-        .into_iter()
-        .filter(|p| p.starts_with(GATEWAY_DEFINITION_PREFIX))
-        .collect()
 }
 
 /// 与えられたファイル群を走査する。
@@ -390,7 +378,7 @@ fn render(hits: &[Hit]) -> String {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn no_temp_dir_entry_point_lives_outside_the_gateway_and_the_allow_table() {
+fn no_temp_dir_entry_point_lives_outside_the_allow_table() {
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
     let violations = unlisted(&hits, &allowed_paths());
     assert!(
@@ -584,15 +572,30 @@ fn the_measurement_is_not_vacuous_and_matches_the_allow_table() {
 }
 
 #[test]
-fn the_gateway_is_the_only_excluded_region_and_it_really_holds_the_entry_point() {
-    // 除外が「効いている」ことの陽性側。除外領域には確かに入口の呼出があり、
-    // 除外を外せば主検査は赤になる（＝除外が飾りでない）。
-    let hits = scan_sources(&gateway_sources(), &entry_point_tokens());
-    let files: BTreeSet<&str> = hits.iter().map(|h| h.path.as_str()).collect();
-    assert_eq!(
-        files,
-        BTreeSet::from(["crates/temp-path-kit/src/lib.rs"]),
-        "窓口が入口を叩く箇所が動いている。要件 12.1 は入口の組み立てを 1 箇所に保つことを求めている"
+fn the_gateway_is_scanned_and_holds_no_entry_point() {
+    // 窓口も主検査の走査に入る（案 B）。⑴ 2 ファイルが走査の一覧に在る
+    // ⑵ 同じ 2 ファイルが確かに読めている（プロセス識別子の語で lib.rs に当たる）
+    // ⑶ そのうえで入口の語の当たりが 0 件。⑴⑵ が「0 件」を空振りから区別する陽性の対。
+    let watched = watched_sources();
+    for file in GATEWAY_FILES {
+        assert!(
+            watched.iter().any(|p| p == file),
+            "窓口のファイルが走査の一覧に無い＝主検査が窓口を見ていない: {file}"
+        );
+    }
+
+    let gateway: Vec<String> = GATEWAY_FILES.iter().map(|p| p.to_string()).collect();
+    let pid_hits = scan_sources(&gateway, &[TOKEN_PROCESS_ID]);
+    assert!(
+        pid_hits.iter().any(|h| h.path == GATEWAY_FILES[0]),
+        "窓口の lib.rs にプロセス識別子の語が 1 件も無い＝走査が空振りしている疑い"
+    );
+
+    let hits = scan_sources(&gateway, &entry_point_tokens());
+    assert!(
+        hits.is_empty(),
+        "窓口が OS の一時フォルダの入口を叩いている。窓口は置き場の式（target の下の test-roots）だけから一時フォルダを作ること:\n{}",
+        render(&hits)
     );
 }
 
