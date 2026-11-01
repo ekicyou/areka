@@ -33,7 +33,8 @@
 //! 宛先で 1 行）、画像だけで面を組んだ `info!`（同 要件 7.3）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! 形の誤り（[`shape_issues`]）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
-//! ここで 1 度だけ出す。[`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
+//! ここで 1 度だけ出す。[`ShellTarget::build_world`] は新しい記録を出さず、畳み込みと面の画像の記録も
+//! 出さない（読み込みの核が 1 度だけ出す・emo-bake-log-overlap 要件 2.2）。装着の記録は組むたびに出る。
 //!
 //! 同じ中身を通る [`load_shell_target_quiet`]（採寸の読み）は上の読み込みの記録を 1 本も出さず、
 //! 読み込みを `Err` で終える 3 つの失敗の `error!` だけを出す（spec: placement-measure-bake-once
@@ -47,7 +48,7 @@ use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId, SurfaceSet,
-    UseSelfAlpha, bake,
+    UseSelfAlpha, bake, bake_quiet,
 };
 use areka_emo_compose::{
     BaseImageReport, BoxIssue, BoxLayout, BoxReport, ElementKind, EmoWorld, NestIssue, NestReport,
@@ -275,10 +276,10 @@ impl ShellTarget {
     ///
     /// スコープの数だけ呼んでよい。同じ入力から組むので、返る面の表の内容は毎回同じである。
     /// 本仕様が足す記録はここでは出さない（0 本・要件 6 の記録はすべて [`load_shell_target`]
-    /// が読み込み 1 回につき 1 度だけ出す）——畳み込みと装着の既存の `warn!` は今日と同じく
-    /// 組むたびに出る。
+    /// が読み込み 1 回につき 1 度だけ出す）。畳み込みと面の画像の記録も出さない（読み込みの核が
+    /// 1 度だけ出す・spec: emo-bake-log-overlap 要件 2.2）。装着の記録は組むたびに出る。
     pub fn build_world(&self) -> EmoWorld {
-        let mut world = EmoWorld::build_with_images(&self.shell, &self.images);
+        let mut world = EmoWorld::build_with_images_quiet(&self.shell, &self.images);
         world.bind_atlas(&self.atlas, SetId(0));
         world
     }
@@ -427,8 +428,15 @@ fn load_shell_target_with(
         records,
     );
 
-    let mut target =
-        build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder, use_self_alpha);
+    let mut target = build_core(
+        shell,
+        &boxes,
+        selection,
+        shell_dir,
+        decoder,
+        use_self_alpha,
+        records,
+    );
     target.cursor_braces = areka_parsers::shell::parse_cursor_braces(&content);
 
     if records.emits() {
@@ -544,12 +552,37 @@ pub fn build_shell_target_with_boxes(
     decoder: &impl ElementDecoder,
     use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
+    build_core(
+        shell,
+        boxes,
+        selection,
+        shell_dir,
+        decoder,
+        use_self_alpha,
+        LoadRecords::Emit,
+    )
+}
+
+/// 核の中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える（要件 2.1）。
+fn build_core(
+    shell: Shell,
+    boxes: &ShellBoxes,
+    selection: SurfaceImageSelection,
+    shell_dir: &Path,
+    decoder: &impl ElementDecoder,
+    use_self_alpha: UseSelfAlpha,
+    records: LoadRecords,
+) -> ShellTarget {
     let images = selection.images;
 
     // どの画像を土台に使うかは面の表を組んで初めて決まる（`element0` が在る面では使わない）。
     // ここで組む面の表で「使う画像と、相手の無いコマ」を聞き、捨てずに持つ（`take_world` が 1 度渡す）。
     // 入口が記録に使う事実もここで採る（記録のために組み直さないため）。
-    let probe = EmoWorld::build_with_images(&shell, &images);
+    let probe = if records.emits() {
+        EmoWorld::build_with_images(&shell, &images)
+    } else {
+        EmoWorld::build_with_images_quiet(&shell, &images)
+    };
     let base_images = probe.base_images().clone();
     let dangling = probe.dangling_pattern_targets();
     let (box_layout, box_report) = fold_boxes(boxes, &images, &probe);
@@ -579,7 +612,8 @@ pub fn build_shell_target_with_boxes(
         base_dir: shell_dir,
         alpha_params: AlphaParams { use_self_alpha },
     };
-    let baked = bake(std::slice::from_ref(&set), decoder, PackConfig::default());
+    let bake_with = if records.emits() { bake } else { bake_quiet };
+    let baked = bake_with(std::slice::from_ref(&set), decoder, PackConfig::default());
 
     ShellTarget {
         shell,

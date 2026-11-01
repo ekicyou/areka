@@ -515,3 +515,45 @@ fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
         assert_eq!(count_from_shell_target(&events, tracing::Level::WARN), 0);
     });
 }
+
+/// spec: emo-bake-log-overlap 要件 2.2・4.1: 面の表を組み直しても畳み込みの記録は出ない
+/// （読み込みの核が 1 度だけ出す）。追記の相手の無い面を持つ読み込みの結果で 2 回組み直す。
+#[test]
+fn build_world_does_not_repeat_fold_records() {
+    let dir = TempPath::new("shell-target-build-world-fold");
+    std::fs::write(
+        dir.child("surfaces.txt"),
+        concat!(
+            "charset,UTF-8\n",
+            "surface0\n{\nelement0,overlay,base.png,0,0\n}\n",
+            "surface.append5\n{\nelement1,overlay,base.png,0,0\n}\n",
+        ),
+    )
+    .expect("記述ファイル作成");
+    write_descript(dir.path());
+    let mut dec = MemoryDecoder::new();
+    let (w, h, s, px, a) = opaque_1x1();
+    dec.insert(dir.child("base.png"), w, h, s, px, a);
+
+    let (target, loaded) = capture_events(|| load_shell_target(dir.path(), &dec).expect("読める"));
+    let fold = |events: &[CapturedEvent]| {
+        events
+            .iter()
+            .filter(|e| {
+                e.level == tracing::Level::WARN
+                    && e.message().contains("surface.append 対象 id が未存在")
+            })
+            .count()
+    };
+    assert_eq!(fold(&loaded), 1, "対照: 読み込みは 1 行出す: {loaded:?}");
+
+    let (_, again) = capture_events(|| {
+        let _ = target.build_world();
+        let _ = target.build_world();
+    });
+    assert_eq!(
+        fold(&again),
+        0,
+        "組み直しは畳み込みの記録を出さない: {again:?}"
+    );
+}

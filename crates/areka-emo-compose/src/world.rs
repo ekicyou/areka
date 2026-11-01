@@ -67,6 +67,19 @@ pub struct EmoWorld {
     world: World,
 }
 
+/// 面の表を組む段の記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Records {
+    Emit,
+    Quiet,
+}
+
+impl Records {
+    pub(crate) fn emits(self) -> bool {
+        self == Records::Emit
+    }
+}
+
 impl EmoWorld {
     /// `Shell` から single-pass fold で構築する（寛容・非パニック・欠落は warn ログ）。
     ///
@@ -86,6 +99,19 @@ impl EmoWorld {
     /// 結果は [`BaseImageReport`] として面の表に常駐し、以後は読むだけである
     /// （[`EmoWorld::base_images`]）。画素は持たない（要件 10.6 の不変条件のまま）。
     pub fn build_with_images(shell: &Shell, images: &BTreeMap<u32, String>) -> EmoWorld {
+        EmoWorld::build_with(shell, images, Records::Emit)
+    }
+
+    /// 記録を出さない組み方の入口（spec: emo-bake-log-overlap 要件 2.1・2.3・3.2・3.4）。
+    ///
+    /// [`EmoWorld::build_with_images`] と同じ面の表を組み、畳み込み（`fold.rs`）と土台の絵の決定
+    /// （`base_image.rs`）の記録だけを出さない。装着・合成・アニメーションの表の記録は対象の外。
+    pub fn build_with_images_quiet(shell: &Shell, images: &BTreeMap<u32, String>) -> EmoWorld {
+        EmoWorld::build_with(shell, images, Records::Quiet)
+    }
+
+    /// 面の表を組む中身（入口 3 つが共有する 1 本）。`records` は記録の行を出すかどうかだけを切り替える。
+    fn build_with(shell: &Shell, images: &BTreeMap<u32, String>, records: Records) -> EmoWorld {
         let mut world = World::new();
         world.insert_resource(SurfaceIndex::default());
         world.insert_resource(AliasMap::default());
@@ -96,8 +122,8 @@ impl EmoWorld {
         world.insert_resource(SurfaceImages(images.clone()));
 
         let mut emo = EmoWorld { world };
-        emo.populate_from_shell(shell);
-        let report = crate::base_image::apply_base_images(&mut emo.world, images);
+        emo.populate_from_shell(shell, records);
+        let report = crate::base_image::apply_base_images(&mut emo.world, images, records);
         emo.world.insert_resource(report);
         // 子の当たり判定の領域を親へ持ち込む（持ち込みが在るサーフェスにだけ付く・要件 4.1〜4.10）。
         crate::hit_import::attach_hit_regions(&mut emo);
@@ -190,10 +216,10 @@ impl EmoWorld {
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
     /// plain `surface` ヘッダの展開（無い id は新設・既にある id へは行を足す・task 3.2、
-    /// spec: areka-P0-emily-ghost-verification）は [`crate::fold::fold_shell`] が担う。
+    /// spec: areka-P0-emily-ghost-verification）は [`crate::fold::fold_shell_with`] が担う。
     /// append/alias の意味論は後続 task が同 fold 経路へ差し込む。
-    fn populate_from_shell(&mut self, shell: &Shell) {
-        crate::fold::fold_shell(&mut self.world, shell);
+    fn populate_from_shell(&mut self, shell: &Shell, records: Records) {
+        crate::fold::fold_shell_with(&mut self.world, shell, records);
     }
 
     /// アトラス束縛（`resolve` は本呼び出しの一度きり・要件 4.3）。
@@ -329,6 +355,11 @@ pub(crate) fn targets_animation_id(method: &str) -> bool {
     use crate::pattern_word::{PatternWord, pattern_word};
     !matches!(pattern_word(method), PatternWord::Draw | PatternWord::Move)
 }
+
+// 記録を出さない組み方の入口の檻（spec: emo-bake-log-overlap 要件 2.1・2.3・3.2・3.4）。
+#[cfg(test)]
+#[path = "world_quiet_tests.rs"]
+mod quiet_tests;
 
 #[cfg(test)]
 mod tests {

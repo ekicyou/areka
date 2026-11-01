@@ -140,3 +140,97 @@ fn quiet_missing_folder_still_records_the_error() {
     assert_single_error(&events, "走査に失敗");
     assert_eq!(alpha, UseSelfAlpha::Undeclared);
 }
+
+/// 焼く段（`areka_emo_atlas`）の抜き色の記録の文言。
+const KEY_COLOR: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
+/// 焼く段の脱落の `error!` の文言。
+const BAKE_FAILED: &str = "balloon: 面画像の bake に失敗";
+
+/// `needle` を文言に含む記録の行の数（宛先まるごとでなく文言ごとに数える）。
+fn count_message(events: &[CapturedEvent], needle: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.message().contains(needle))
+        .count()
+}
+
+/// 組んだ組の比べられる写し（索引表の鍵と配置・面の表の面の番号）。
+fn target_fingerprint((world, table): &(EmoWorld, AtlasTable)) -> String {
+    let entries: Vec<String> = (0..table.len() as u32)
+        .map(|i| {
+            let id = areka_emo_atlas::ElementId(i);
+            format!("{:?}={:?}", table.key(id), table.entry(id).placement)
+        })
+        .collect();
+    let surfaces: Vec<u32> = world.surface_ids().collect();
+    format!("{entries:?}|{surfaces:?}")
+}
+
+/// spec: emo-bake-log-overlap 要件 1.4・6.4: 抜き色の面 0 で、出す入口は抜き色の記録を 1 行出し、
+/// 出さない入口はその文言が 0 行・戻り値は等しい。
+#[test]
+fn quiet_faces_build_silences_key_color_and_is_equal() {
+    let dir = TempDir::new();
+    dir.touch("balloons0.png");
+    let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 を解決できる");
+    let mut dec = areka_emo_atlas::MemoryDecoder::new();
+    // 左上と違う色の画素を 1 つ持たせ、抜いた後も全透明にならない絵にする。
+    dec.insert(
+        dir.path().join("balloons0.png"),
+        2,
+        1,
+        8,
+        vec![10u8, 20, 30, 255, 40, 50, 60, 255],
+        false,
+    );
+
+    let (emit, emit_events) = capture_events(|| {
+        build_balloon_target_from_faces(dir.path(), &dec, &faces, UseSelfAlpha::Off)
+            .expect("出す入口で組める")
+    });
+    let (quiet, quiet_events) = capture_events(|| {
+        build_balloon_target_from_faces_quiet(dir.path(), &dec, &faces, UseSelfAlpha::Off)
+            .expect("出さない入口で組める")
+    });
+
+    assert_eq!(count_message(&emit_events, KEY_COLOR), 1, "{emit_events:?}");
+    assert_eq!(
+        count_message(&quiet_events, KEY_COLOR),
+        0,
+        "{quiet_events:?}"
+    );
+    assert_eq!(
+        target_fingerprint(&quiet),
+        target_fingerprint(&emit),
+        "戻り値が両入口で違う"
+    );
+}
+
+/// spec: emo-bake-log-overlap 要件 3.5・6.4: 面 0 を読めない絵にすると、出さない入口でも
+/// 「面画像の bake に失敗」の `error!` が 1 行出て `Err` を返す。
+#[test]
+fn quiet_faces_build_still_records_the_bake_failure() {
+    let dir = TempDir::new();
+    dir.touch("balloons0.png");
+    let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 を解決できる");
+    // 絵を登録しない＝読めない面 0。
+    let dec = areka_emo_atlas::MemoryDecoder::new();
+
+    let (result, events) = capture_events(|| {
+        build_balloon_target_from_faces_quiet(dir.path(), &dec, &faces, UseSelfAlpha::Off)
+    });
+    let failures: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(BAKE_FAILED))
+        .collect();
+    assert_eq!(failures.len(), 1, "{events:?}");
+    assert_eq!(failures[0].level, tracing::Level::ERROR, "{failures:?}");
+    assert!(
+        matches!(
+            result,
+            Err(PresentError::Compose(ComposeError::EmptyComposition(0)))
+        ),
+        "{:?}",
+        result.err()
+    );
+}
