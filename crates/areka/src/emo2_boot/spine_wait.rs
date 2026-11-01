@@ -9,10 +9,12 @@
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
 
 use std::fmt;
-use std::sync::{Condvar, Mutex, PoisonError, mpsc};
+use std::sync::{Condvar, LazyLock, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use areka_actor::{ActorError, ActorHandle};
+
+use crate::emo2_boot::crash_report_test_support as crash_report;
 
 /// **別スレッドの進行を待つ**有界待ちの基準の時間（30 秒）。
 ///
@@ -405,7 +407,23 @@ pub(super) struct GpuSlots {
 /// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
 /// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
 /// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。
-static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
+///
+/// 測りの間だけ（areka-test-binary-stability タスク 2.1・X2）: `AREKA_TEST_GPU_SLOTS` があればその数、無い・壊れた
+/// 値なら 4（要件 6.7）。5.1 の直しか 7.1 で口を外し、4 の const に戻す。
+static GPU_SLOTS: LazyLock<GpuSlots> = LazyLock::new(|| {
+    GpuSlots::new(parse_gpu_slots(
+        std::env::var("AREKA_TEST_GPU_SLOTS").ok().as_deref(),
+    ))
+});
+
+/// 測りの間だけの許可の数の口の読み取り（純粋な関数）。1 から持ち手の表の行の数までの数ならその数、
+/// それ以外（無い・数でない・0・大きすぎる）は 4。
+pub(super) fn parse_gpu_slots(value: Option<&str>) -> usize {
+    value
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| (1..=crash_report::HOLDER_ROWS).contains(n))
+        .unwrap_or(4)
+}
 
 impl GpuSlots {
     pub(super) const fn new(cap: usize) -> Self {
@@ -424,7 +442,8 @@ impl GpuSlots {
             .wait_while(held, |held| *held >= self.cap)
             .unwrap_or_else(PoisonError::into_inner);
         *held += 1;
-        GpuPermit(self)
+        drop(held);
+        GpuPermit::new(self)
     }
 
     /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
@@ -434,7 +453,8 @@ impl GpuSlots {
             return None;
         }
         *held += 1;
-        Some(GpuPermit(self))
+        drop(held);
+        Some(GpuPermit::new(self))
     }
 }
 
@@ -445,9 +465,23 @@ impl GpuSlots {
 /// 組で返すときは**先頭**に置く（構造体の欄は宣言の順に、`let` の組の束縛は後のものから捨てられる）。
 /// 1 つのテストで 2 つ取ると、同じことをするテストが並んだとき互いに待ち合って止まりうる。2 つ取る
 /// テストは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` の 1 本だけにしておくこと。
-pub(crate) struct GpuPermit(&'static GpuSlots);
+pub(crate) struct GpuPermit {
+    slots: &'static GpuSlots,
+    /// 落ちの報告の許可の持ち手の表の行（`crash_report_test_support::hold`）。
+    row: usize,
+    taken: Instant,
+}
 
 impl GpuPermit {
+    /// 数えを 1 つ増やした後に、持つスレッドを持ち手の表に載せる。
+    fn new(slots: &'static GpuSlots) -> Self {
+        Self {
+            slots,
+            row: crash_report::hold(),
+            taken: Instant::now(),
+        }
+    }
+
     /// プロセスに 1 つの数えから許可を取る（空きが出るまで待つ）。
     pub(crate) fn take() -> Self {
         GPU_SLOTS.take()
@@ -456,7 +490,12 @@ impl GpuPermit {
 
 impl Drop for GpuPermit {
     fn drop(&mut self) {
-        *self.0.held.lock().unwrap_or_else(PoisonError::into_inner) -= 1;
-        self.0.freed.notify_one();
+        crash_report::release(self.row, self.taken.elapsed());
+        *self
+            .slots
+            .held
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) -= 1;
+        self.slots.freed.notify_one();
     }
 }

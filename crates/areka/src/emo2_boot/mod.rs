@@ -76,6 +76,11 @@ pub mod zorder_cue;
 #[cfg(test)]
 pub(crate) mod spine;
 
+// テストのプロセスの落ちの報告（areka-test-binary-stability）。捕まえられなかった例外で落ちたスレッドと
+// GPU の装置の許可の持ち手を標準エラーへ書く。
+#[cfg(test)]
+mod crash_report_test_support;
+
 // emo2 検体の共有の受け口（spec: areka-P0-nar-install 要件 1.6）。`emo2_boot` 配下のテストが
 // 検体をここから引くので、保持（＝段 ③ の複製）はテストバイナリあたり 1 回で済む。
 #[cfg(test)]
