@@ -2,7 +2,8 @@ use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 
 use super::wait::{
-    DENSE_SPIN, GpuSlots, WAIT_CAP, join_bounded, parse_gpu_slots, run_bounded_watching, wait_recv,
+    DENSE_SPIN, GpuSlots, WAIT_CAP, join_bounded, join_thread_bounded, parse_gpu_slots,
+    run_bounded_watching, wait_recv, wait_thread_end_with,
 };
 use super::{
     BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
@@ -331,6 +332,93 @@ fn join_bounded_returns_the_actor_result() {
         }
         other => panic!("panic を ActorError::Panicked で返す: {other:?}"),
     }
+}
+
+/// スレッドの終わりの待ちの芯を、読むたびに `step` 進む偽の時計で回す（休みは眠らない）。
+fn drive_thread_end(
+    step: Duration,
+    what: &str,
+    inner: Option<&dyn Fn() -> u64>,
+    is_finished: impl Fn() -> bool,
+) {
+    let base = Instant::now();
+    let reads = Cell::new(0u32);
+    wait_thread_end_with(
+        || {
+            reads.set(reads.get() + 1);
+            base + step * reads.get()
+        },
+        |_| {},
+        what,
+        inner,
+        is_finished,
+    );
+}
+
+/// `f` の panic の文（panic しなければ赤）。
+fn panic_text(f: impl FnOnce()) -> String {
+    let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .expect_err("終わらないスレッドは打ち切りで panic する");
+    payload
+        .downcast_ref::<String>()
+        .cloned()
+        .unwrap_or_else(|| "（文字列でない panic）".into())
+}
+
+/// 相手のスレッドの中の数えが増え続ける間は、`SPIN_WAIT` を何倍越えても `［止まった］` で打ち切らない
+/// （要件 4.1）。中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
+#[test]
+fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
+    let inner = Cell::new(0u64);
+    let tick = || {
+        inner.set(inner.get() + 1);
+        inner.get()
+    };
+    // 1 秒ずつ進む時計で 120 回確かめた後に終わる＝待ち始めから約 120 秒（SPIN_WAIT の 4 倍）。
+    let checks = Cell::new(0u32);
+    drive_thread_end(
+        Duration::from_secs(1),
+        "進み続けるスレッド",
+        Some(&tick),
+        || {
+            checks.set(checks.get() + 1);
+            checks.get() > 120
+        },
+    );
+    assert!(checks.get() > 120, "終わるまで待った");
+}
+
+/// 終わらないスレッドの打ち切りの文は、std のスレッドでもアクターでも同じ頭で始まる（要件 4.4）。
+/// 本物のスレッドを止めておき、読むたびに `SPIN_WAIT` 進む偽の時計で芯を回す（実時間は待たない）。
+#[test]
+fn a_thread_that_never_ends_reads_the_same_head_for_both_handles() {
+    let head = |what: &str| {
+        format!("'{what}' join did not complete (possible hang) — 待ちの打ち切り［止まった］")
+    };
+
+    let (std_tx, std_rx) = mpsc::channel::<()>();
+    let std_handle = std::thread::spawn(move || {
+        let _ = std_rx.recv();
+    });
+    let std_text = panic_text(|| {
+        drive_thread_end(SPIN_WAIT, "std のスレッド", None, || {
+            std_handle.is_finished()
+        })
+    });
+
+    let (actor_tx, actor) = areka_actor::spawn_actor::<(), _>("never-ends", |rx| {
+        let _ = rx.recv();
+    });
+    let actor_text =
+        panic_text(|| drive_thread_end(SPIN_WAIT, "アクター", None, || actor.is_finished()));
+
+    assert!(std_text.starts_with(&head("std のスレッド")), "{std_text}");
+    assert!(actor_text.starts_with(&head("アクター")), "{actor_text}");
+
+    // 止めておいた相手を放し、本物の待ちで終わりを受け取る（返り値も握り潰さない）。
+    drop((std_tx, actor_tx));
+    assert!(join_thread_bounded("std のスレッド", None, std_handle).is_ok());
+    assert!(join_bounded("アクター", actor).is_ok());
 }
 
 // ===========================================================================

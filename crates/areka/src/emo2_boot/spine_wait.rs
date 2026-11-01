@@ -1,15 +1,16 @@
-//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`spin_wait_until`・`run_bounded`・`join_bounded`）。
+//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`spin_wait_until`・`run_bounded`・スレッドの終わりの待ち）。
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
 //! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名（`spin_wait_until`・
-//! `run_bounded`）は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。`join_bounded` は
-//! 見張りのスレッドをやめ、body の終わりを目印に芯で待つ形にした（総時間の引数は無くした）。
+//! `run_bounded`）は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。スレッドの終わりの
+//! 待ちは見張りのスレッドをやめ、芯 [`wait_thread_end`] 1 本で std 版とアクター版を待つ（総時間の引数は無い）。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
 
 use std::fmt;
 use std::sync::{Condvar, LazyLock, Mutex, PoisonError, mpsc};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use areka_actor::{ActorError, ActorHandle};
@@ -378,17 +379,49 @@ pub(crate) fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Dur
     }
 }
 
-/// `ActorHandle::join` を芯 [`wait_until`] の上で待つ。目印は body が終わったか（`is_finished` の 0→1）で、
-/// 30 秒立たなければ `［止まった］` で panic する。立った後の `join` は OS のスレッドの後始末だけを待つので
-/// 打ち切らない（負荷の下ではローダーの錠を待って遅れうるが、待つ相手の処理はもう終わっている）。
+/// スレッドの終わりを待つ芯。目印は「相手のスレッドの中の進み（`inner`・あれば）＋終わったか（0→1）」で、
+/// 打ち切りは芯 [`wait_until`] のまま（目印が 30 秒増えなければ `［止まった］`）。どの呼び手も
+/// `'{what}' join did not complete (possible hang) — {failure}` で panic する（要件 4.1・4.4）。
 /// 見張りのスレッドは生まない（生まれるスレッドもローダーの錠を待ち、負荷の下で `［進みは不明］` の赤になった・
-/// `load-repro.md` の 4.3 の 7）。目印は条件と同時にしか増えないので、打ち切りの文言の進みは常に 0 回で、
-/// 出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・要件 2.7 の読み）だけ。
-pub(super) fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
-    let finished = || u64::from(handle.is_finished());
-    if let Err(failure) = wait_until(what, Progress::Count(&finished), || handle.is_finished()) {
+/// `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
+/// 常に 0 回で、出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・要件 2.7 の読み）だけ。
+pub(crate) fn wait_thread_end(
+    what: &str,
+    inner: Option<&dyn Fn() -> u64>,
+    is_finished: impl Fn() -> bool,
+) {
+    wait_thread_end_with(Instant::now, std::thread::sleep, what, inner, is_finished);
+}
+
+/// 時計と休みを差し替えられる [`wait_thread_end`]（檻が偽の時計を渡す継ぎ目）。
+pub(super) fn wait_thread_end_with(
+    now: impl FnMut() -> Instant,
+    pause: impl FnMut(Duration),
+    what: &str,
+    inner: Option<&dyn Fn() -> u64>,
+    is_finished: impl Fn() -> bool,
+) {
+    let count = || inner.map_or(0, |f| f()) + u64::from(is_finished());
+    if let Err(failure) = wait_until_with(now, pause, what, Progress::Count(&count), &is_finished) {
         panic!("'{what}' join did not complete (possible hang) — {failure}");
     }
+}
+
+/// std のスレッドの終わりを [`wait_thread_end`] で待ってから同じスレッドで `join` する。立った後の `join` は
+/// OS のスレッドの後始末だけを待つので打ち切らない（待つ相手の処理はもう終わっている）。
+pub(crate) fn join_thread_bounded<T>(
+    what: &str,
+    inner: Option<&dyn Fn() -> u64>,
+    handle: JoinHandle<T>,
+) -> std::thread::Result<T> {
+    wait_thread_end(what, inner, || handle.is_finished());
+    handle.join()
+}
+
+/// `ActorHandle::join` の [`join_thread_bounded`] と同じ形。アクターは中の進みを外から読む口が無いので
+/// `inner = None`（目印は body が終わったかの 0→1 だけ）。
+pub(super) fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
+    wait_thread_end(what, None, || handle.is_finished());
     handle.join()
 }
 
