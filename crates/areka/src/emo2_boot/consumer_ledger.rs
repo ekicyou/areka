@@ -38,7 +38,7 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 42 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 43 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
@@ -46,7 +46,7 @@
 //! `areka.prop.set`・`(set,balloontimeout)`・`(reload,ghost|shiori|shell|balloon|descript)`・
 //! `reloadsurface`・`(set,alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset,sticky-window)`・
 //! `(execute,resetballoonpos)`・`(lock,balloonmove)`・`(unlock,balloonmove)`・`(set,windowstate)`・
-//! `\v`・`bind-noevent`・`*`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `\v`・`bind-noevent`・`*`・`(get,property)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -117,6 +117,9 @@ type LedgerKey = (String, Option<String>);
 ///   `areka_ghost` の `PropSetCueSink`。正準台帳が運搬名
 ///   [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) を選別子なしで登記する
 ///   （areka-P0-mcp-author-tools 要件 3.2）。
+/// - [`PropertyRead`](CommandConsumer::PropertyRead): プロパティの読みの cue を消費する
+///   `areka_ghost` の `PropGetCueSink`。正準台帳が `(get, property)` の 1 組を登記する
+///   （shell-scale-linkage 要件 1.8）。
 /// - [`ReloadSink`](CommandConsumer::ReloadSink): `\![reload,…]`・`\![reloadsurface]` を消費する
 ///   [`ReloadCueSink`](super::reload_cue::ReloadCueSink)。正準台帳が `(reload, ghost|shiori|shell|
 ///   balloon|descript)` の 5 組と `reloadsurface`（選別子なし）を登記する（areka-P0-mcp-reload
@@ -208,6 +211,12 @@ pub enum CommandConsumer {
     /// [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) で自己選別する）。
     /// 第 1 引数は書き込む key であって担当を分けないので、登記は選別子なしの 1 行である。
     PropertyWrite,
+    /// プロパティの読み `\![get,property,イベント名,名前…]` の担当（`areka_ghost` の
+    /// `PropGetCueSink` が名前 `get` と第 1 引数 `property` で自己選別する）。emo2 の外の担当である
+    /// （shell-scale-linkage 要件 1.8）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1
+    PropertyRead,
     /// バルーンの寿命の受け口の担当消費者
     /// （[`BalloonLifecycleSink`](super::talk_lifecycle::BalloonLifecycleSink)）。名前だけでは
     /// 決まらず、第 1 引数が `balloontimeout` の `set` の出現だけを担当する（時間切れまでの待ち時間の
@@ -386,7 +395,7 @@ impl ConsumerLedger {
     /// `(lock, balloonmove)`・`(unlock, balloonmove)` → [`CommandConsumer::MoveSink`]・
     /// `(set, windowstate)` と運搬名 `\v` → [`CommandConsumer::WindowStateSink`]・
     /// `bind-noevent` → [`CommandConsumer::Seriko`]・印の合図 `*` →
-    /// [`CommandConsumer::TextLayer`]）。
+    /// [`CommandConsumer::TextLayer`]・`(get, property)` → [`CommandConsumer::PropertyRead`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -534,6 +543,10 @@ impl ConsumerLedger {
                 CommandConsumer::TextLayer,
             )
             .expect("正準台帳: '*'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        // プロパティの読み（shell-scale-linkage 要件 1.8）。受け口は emo2 の外（areka_ghost）。
+        ledger
+            .try_register("get", Some("property"), CommandConsumer::PropertyRead)
+            .expect("正準台帳: ('get','property') は一意（重複・排他違反は編集ミス）");
         ledger
     }
 }

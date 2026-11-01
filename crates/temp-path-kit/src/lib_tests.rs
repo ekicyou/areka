@@ -10,6 +10,9 @@
 //! 併せて「違う名前になる」の主張が恒真でないことの較正を対で置く——**同じ札・同じ識別子・
 //! 同じ連番なら同じ名前になる**ことを確かめれば、比較そのものが常に不一致を返す壊れた
 //! 道具ではないと分かる。
+//!
+//! 置き場の確かめは `new` と `under_target` の 2 つの入口を表で回し、どちらも
+//! `<ワークスペース>\target\test-roots` の直下に作ることを固定する。
 
 use super::*;
 
@@ -82,36 +85,46 @@ fn dropping_removes_the_directory_and_its_contents() {
     assert!(!child.exists(), "破棄しても中身が残っている");
 }
 
-/// `under_target` は `<ワークスペース>\target\test-roots` の直下に作り、破棄で消える。
+/// `new` と `under_target` はどちらも `<ワークスペース>\target\test-roots` の直下に作り、
+/// 破棄で消える。
 ///
 /// ワークスペースの根は「`crates/temp-path-kit/Cargo.toml` を持つフォルダ」で確かめる
 /// （置き場を求める式をそのまま使い回すと、式が壊れても一致してしまう）。
 #[test]
-fn under_target_lives_in_workspace_target_test_roots_and_is_removed_on_drop() {
-    let dir = TempPath::under_target("under-target-check");
-    let kept = dir.path().to_path_buf();
-    let roots = kept.parent().expect("置き場の下にある");
-    let target = roots.parent().expect("target の下にある");
-    let workspace = target.parent().expect("ワークスペースの下にある");
-    assert_eq!(
-        (
-            roots.file_name().and_then(|n| n.to_str()),
-            target.file_name().and_then(|n| n.to_str()),
-        ),
-        (Some("test-roots"), Some("target"))
-    );
-    assert!(
-        workspace
-            .join("crates")
-            .join("temp-path-kit")
-            .join("Cargo.toml")
-            .is_file(),
-        "target の親がワークスペースの根でない: {}",
-        workspace.display()
-    );
-    assert!(kept.is_dir(), "破棄前にディレクトリが無い");
-    drop(dir);
-    assert!(!kept.exists(), "破棄してもディレクトリが残っている");
+fn both_entry_points_live_in_workspace_target_test_roots_and_are_removed_on_drop() {
+    // 型は注記でなく先頭の cast で揃える（注記の形は clippy::type_complexity に掛かる）。
+    let entries = [
+        ("new", TempPath::new as fn(&str) -> TempPath),
+        ("under_target", TempPath::under_target),
+    ];
+    for (name, make) in entries {
+        let dir = make("place-check");
+        let kept = dir.path().to_path_buf();
+        let roots = kept.parent().expect("置き場の下にある");
+        let target = roots.parent().expect("target の下にある");
+        let workspace = target.parent().expect("ワークスペースの下にある");
+        assert_eq!(
+            (
+                roots.file_name().and_then(|n| n.to_str()),
+                target.file_name().and_then(|n| n.to_str()),
+            ),
+            (Some("test-roots"), Some("target")),
+            "{name}: 置き場が target\\test-roots でない: {}",
+            kept.display()
+        );
+        assert!(
+            workspace
+                .join("crates")
+                .join("temp-path-kit")
+                .join("Cargo.toml")
+                .is_file(),
+            "{name}: target の親がワークスペースの根でない: {}",
+            workspace.display()
+        );
+        assert!(kept.is_dir(), "{name}: 破棄前にディレクトリが無い");
+        drop(dir);
+        assert!(!kept.exists(), "{name}: 破棄してもディレクトリが残っている");
+    }
 }
 
 /// `child` は配られたディレクトリの下を指す（宛先の種類を増やさない形）。

@@ -156,6 +156,8 @@ fn existing_eight_kanade_msg_variants_are_unchanged_by_additive_growth() {
             // SSTP の 2 つの入口（additive・既存の判別結果を変えない）。
             KanadeMsg::SstpSend { .. } => "SstpSend",
             KanadeMsg::SstpNotify { .. } => "SstpNotify",
+            // `\![get,property]` の返しのイベント（additive・既存の判別結果を変えない）。
+            KanadeMsg::PropertyEvent { .. } => "PropertyEvent",
         }
     }
     let existing = [
@@ -235,6 +237,11 @@ fn event_id_as_str_is_verbatim_wire_form_for_both_origins() {
     assert_eq!(
         EventId::Sstp("UserDefined".to_string()).as_str(),
         "UserDefined"
+    );
+    // `\![get,property]` の返しのイベントも逐語（`On` で始まらなくてよい）。
+    assert_eq!(
+        EventId::Property("PastaShellScale".to_string()).as_str(),
+        "PastaShellScale"
     );
 }
 

@@ -2586,21 +2586,20 @@ areka の placement::descript_window_keys::read_balloon_dontmove が、シェル
 """
 
 [entry."ukadoc:descript_ghost:balloon.syncscale_2ctrue:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "shell-scale-linkage"
 priority = "A2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの拡大率を本体に合わせる宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka のバルーンの拡大率は、画面の DPI とバルーンの定義が申告する推奨 DPI から決まる（areka の placement::source が読む）。ゴースト側から連動を強制する道は無い。
+壊れ方: 黙って壊れる。記録: debug!（読んだ結果）。値を読んで持つが、バルーンの倍率をシェルに連動させる処理はまだ無いので、`true` を書いてもバルーンの見た目は変わらない。
+この欄はゴーストの段で、シェルの `*.balloon.syncscale` と論理和を取る（どちらかが `true` なら連動の指定あり）。
 正典本文は登場を 2.7 RC1 と書いているが、カタログの版番号の欄は空である。登場した版はカタログから選ぶ規則に従って空のままにした。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+読んで持つだけ。areka の placement::descript_window_keys::read_balloon_syncscale が、ゴーストの descript の `balloon.syncscale` と、シェルの descript の `sakura.`（無ければ `char0.`）・`kero.`（無ければ `char1.`）・`char<n>.`（n≥2）の `balloon.syncscale` を読み、どちらかの段が `true`（前後の空白を除いて完全に一致）ならそのスコープを連動の指定ありとして持つ（論理和）。`true` 以外の値は指定なしとして扱い、起動を止めない。読んだ結果は `balloon_syncscale_read` の debug! を読んだ鍵ごとに 1 件（ゴーストの段も 1 件・scope="all"）残す。持った値は World の資源 BalloonSyncScaleState に置き、ゴーストやシェルの切り替え・読み直しで配置の基準（DefaultPlacementBasis）が入れ替わるたびに読み直す。バルーンの倍率へ効かせる処理はまだ無い（効かせるのは shell-balloon-scale-setting）。証拠は crates/areka/src/placement/descript_window_keys.rs の `// ukadoc:` の URL（World の資源 BalloonSyncScaleState と基準の入れ直しでの読み直しは crates/areka/src/placement/balloon_syncscale.rs）。テスト: crates/areka/src/placement/balloon_syncscale_tests.rs・crates/areka/src/placement/descript_window_keys_tests.rs。
+担当 spec は shell-scale-linkage（読んで持つまで）。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
@@ -4241,20 +4240,19 @@ areka の placement::descript_window_keys::read_balloon_dontmove がシェルの
 """
 
 [entry."ukadoc:descript_shell:char_2a.balloon.syncscale_2ctrue:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-scale-linkage"
 priority = "A2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの拡大率をゴーストと連動させることを強いる宣言を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+壊れ方: 黙って壊れる。記録: debug!（読んだ結果）。値を読んで持つが、バルーンの倍率をシェルに連動させる処理はまだ無いので、`true` を書いてもバルーンの見た目は変わらない。
+この欄はシェルの段の `charN.` の綴りで、`char0.`・`char1.` は `sakura.`・`kero.` が無いときの別名として、`char<n>.`（n≥2）はそのスコープの指定として読む。キャラクタの人数には効かない（areka の placement::config::detect_scopes）。
+読んで持つだけ。areka の placement::descript_window_keys::read_balloon_syncscale が、ゴーストの descript の `balloon.syncscale` と、シェルの descript の `sakura.`（無ければ `char0.`）・`kero.`（無ければ `char1.`）・`char<n>.`（n≥2）の `balloon.syncscale` を読み、どちらかの段が `true`（前後の空白を除いて完全に一致）ならそのスコープを連動の指定ありとして持つ（論理和）。`true` 以外の値は指定なしとして扱い、起動を止めない。読んだ結果は `balloon_syncscale_read` の debug! を読んだ鍵ごとに 1 件（ゴーストの段も 1 件・scope="all"）残す。持った値は World の資源 BalloonSyncScaleState に置き、ゴーストやシェルの切り替え・読み直しで配置の基準（DefaultPlacementBasis）が入れ替わるたびに読み直す。バルーンの倍率へ効かせる処理はまだ無い（効かせるのは shell-balloon-scale-setting）。証拠は crates/areka/src/placement/descript_window_keys.rs の `// ukadoc:` の URL（World の資源 BalloonSyncScaleState と基準の入れ直しでの読み直しは crates/areka/src/placement/balloon_syncscale.rs）。テスト: crates/areka/src/placement/balloon_syncscale_tests.rs・crates/areka/src/placement/descript_window_keys_tests.rs。
+担当 spec は shell-scale-linkage（読んで持つまで）。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.addid_2cID:1"]
@@ -4713,20 +4711,19 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.syncscale_2ctrue:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-scale-linkage"
 priority = "A2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの拡大率をゴーストと連動させることを強いる宣言を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+壊れ方: 黙って壊れる。記録: debug!（読んだ結果）。値を読んで持つが、バルーンの倍率をシェルに連動させる処理はまだ無いので、`true` を書いてもバルーンの見た目は変わらない。
+この欄はシェルの段の相方（スコープ 1）の綴りで、`char1.` より先に引く。
+読んで持つだけ。areka の placement::descript_window_keys::read_balloon_syncscale が、ゴーストの descript の `balloon.syncscale` と、シェルの descript の `sakura.`（無ければ `char0.`）・`kero.`（無ければ `char1.`）・`char<n>.`（n≥2）の `balloon.syncscale` を読み、どちらかの段が `true`（前後の空白を除いて完全に一致）ならそのスコープを連動の指定ありとして持つ（論理和）。`true` 以外の値は指定なしとして扱い、起動を止めない。読んだ結果は `balloon_syncscale_read` の debug! を読んだ鍵ごとに 1 件（ゴーストの段も 1 件・scope="all"）残す。持った値は World の資源 BalloonSyncScaleState に置き、ゴーストやシェルの切り替え・読み直しで配置の基準（DefaultPlacementBasis）が入れ替わるたびに読み直す。バルーンの倍率へ効かせる処理はまだ無い（効かせるのは shell-balloon-scale-setting）。証拠は crates/areka/src/placement/descript_window_keys.rs の `// ukadoc:` の URL（World の資源 BalloonSyncScaleState と基準の入れ直しでの読み直しは crates/areka/src/placement/balloon_syncscale.rs）。テスト: crates/areka/src/placement/balloon_syncscale_tests.rs・crates/areka/src/placement/descript_window_keys_tests.rs。
+担当 spec は shell-scale-linkage（読んで持つまで）。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.addid_2cID:1"]
@@ -5558,20 +5555,19 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.syncscale_2ctrue:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "shell-scale-linkage"
 priority = "A2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの拡大率をゴーストと連動させることを強いる宣言を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
+壊れ方: 黙って壊れる。記録: debug!（読んだ結果）。値を読んで持つが、バルーンの倍率をシェルに連動させる処理はまだ無いので、`true` を書いてもバルーンの見た目は変わらない。
+この欄はシェルの段の本体（スコープ 0）の綴りで、`char0.` より先に引く。
+読んで持つだけ。areka の placement::descript_window_keys::read_balloon_syncscale が、ゴーストの descript の `balloon.syncscale` と、シェルの descript の `sakura.`（無ければ `char0.`）・`kero.`（無ければ `char1.`）・`char<n>.`（n≥2）の `balloon.syncscale` を読み、どちらかの段が `true`（前後の空白を除いて完全に一致）ならそのスコープを連動の指定ありとして持つ（論理和）。`true` 以外の値は指定なしとして扱い、起動を止めない。読んだ結果は `balloon_syncscale_read` の debug! を読んだ鍵ごとに 1 件（ゴーストの段も 1 件・scope="all"）残す。持った値は World の資源 BalloonSyncScaleState に置き、ゴーストやシェルの切り替え・読み直しで配置の基準（DefaultPlacementBasis）が入れ替わるたびに読み直す。バルーンの倍率へ効かせる処理はまだ無い（効かせるのは shell-balloon-scale-setting）。証拠は crates/areka/src/placement/descript_window_keys.rs の `// ukadoc:` の URL（World の資源 BalloonSyncScaleState と基準の入れ直しでの読み直しは crates/areka/src/placement/balloon_syncscale.rs）。テスト: crates/areka/src/placement/balloon_syncscale_tests.rs・crates/areka/src/placement/descript_window_keys_tests.rs。
+担当 spec は shell-scale-linkage（読んで持つまで）。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済みへ移したが、束の下位区分と順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分なので、この行の束の綴りは書き換えていない。
 """
 
 [entry."ukadoc:descript_shell:sakura.bindgroup_2a.addid_2cID:1"]

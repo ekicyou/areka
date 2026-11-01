@@ -52,6 +52,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use areka_emo_present::TargetId;
 use areka_emo_present::presenter::{
     KIND_SURFACE, SURFACE_FIELD_REASON, SURFACE_FIELD_TARGET_ID, SURFACE_FIELDS,
     SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
@@ -63,6 +64,8 @@ use wintf::ecs::window::transition_diag::{
     KIND_WRITE, MISSING, MONITOR_FIELDS, MSG_FIELDS, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG,
     STAGE_END, STAGE_SYNC, Stamp, WINDPI_FIELDS, WRITE_FIELDS, WRITE_OPTIONAL_FIELDS,
 };
+
+use crate::emo2_boot::target_map::{TargetWindow, target_scope};
 
 use super::diag::{PlacementRoute, WindowKind};
 use super::transition_diag::{
@@ -172,22 +175,22 @@ impl WindowKey {
     /// `target_id` の規則（shell = 2·scope ／ balloon = 2·scope+1）から窓を写像する。
     ///
     /// **偶数側が `char`** である（shell＝キャラ窓）。`surface` レコードは scope も種別も
-    /// 運ばない（それは areka の語彙であり emo-present は知らない）ため、判定側が唯一
-    /// この写像を持つ。
+    /// 運ばない（それは areka の語彙であり emo-present は知らない）ため、判定側が
+    /// 採番の番号から窓を引く。
     ///
-    /// 採番の正本は [`crate::emo2_boot::target_map`]（`shell_target`／`balloon_target`）で
-    /// あり、こちらはその**逆写像**である（正本は前向きしか持たない）。両者が食い違えば
+    /// 採番の正本は [`crate::emo2_boot::target_map`]（`shell_target`／`balloon_target`）で、
+    /// 逆写像も正本の [`crate::emo2_boot::target_map::target_scope`] に任せる。両者が食い違えば
     /// 判定は窓種別を取り違えたまま静かに緑になるので、往復が一致することは
     /// `transition_judge_tests::summarize_maps_the_surface_target_id_to_a_scope_and_a_kind`
     /// が正本の関数を呼んで固定する。
     pub fn from_target_id(target_id: u32) -> Self {
-        let kind = if target_id.is_multiple_of(2) {
-            WindowKind::Char
-        } else {
-            WindowKind::Balloon
+        let (scope, window) = target_scope(TargetId(target_id));
+        let kind = match window {
+            TargetWindow::Shell => WindowKind::Char,
+            TargetWindow::Balloon => WindowKind::Balloon,
         };
         Self {
-            scope: Some(target_id / 2),
+            scope: Some(scope),
             kind: kind.as_str().to_owned(),
         }
     }

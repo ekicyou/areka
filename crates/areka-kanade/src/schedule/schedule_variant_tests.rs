@@ -121,6 +121,8 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::SstpSend { .. } => "SstpSend",
             // mcp-kanade-tools で外から頼まれたイベント（`SstpNotify`）の腕を足した。
             Input::SstpNotify { .. } => "SstpNotify",
+            // shell-scale-linkage で `\![get,property]` の返しのイベント（`PropertyEvent`）の腕を足した。
+            Input::PropertyEvent { .. } => "PropertyEvent",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");

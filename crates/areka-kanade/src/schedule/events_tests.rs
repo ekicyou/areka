@@ -284,6 +284,8 @@ fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
             "OnMouseLeave",
             "OnMouseEnterAll",
             "OnMouseLeaveAll",
+            "OnShellScaling",
+            "OnBalloonScaling",
         ]
     );
     assert!(

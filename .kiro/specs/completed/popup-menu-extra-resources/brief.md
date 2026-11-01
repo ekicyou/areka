@@ -63,3 +63,14 @@
 - 開発者「メニュー関係はreactor解放されたら大改造するので、内容によっては後回しになりますが」。推奨の案 1 を承認した。
 - **この spec で取るのは ⑴ だけ**（古い名前 `updatebuttoncaption` を問う・kanade の `schedule/resources.rs` と `menu/captions.rs` の引き方・台帳の 1 行）。⑴ は SHIORI に何を問うかが大半で、メニューを作り直しても残る。
 - **⑵（消滅通告・おすすめ・ポータルの項目）は windows-reactor の作り直しの後へ回す**。`menu/{plan,mod,win32}.rs` に項目を組む仕事は作り直しで捨てるため。完了の棚卸で ⑵ を roadmap の「windows-reactor 待ち」の段へ渡す（新しい brief にするか、この brief の残りとして置くかは完了の棚卸で決める）。`char*.recommend*` の 3 つの名前も ⑵ と一緒に回す。
+
+## 2026-11-01 完了の棚卸: ⑵ を windows-reactor 待ちの段へ渡す
+- **渡した先**: `.kiro/steering/roadmap.md` の「windows-reactor 待ち」の段（2026-11-01）。新しい brief は立てず、この節を ⑵ の残りの正本とする（メニューは windows-reactor の後に作り直すので、今 spec に切り出しても組み方の前提が変わる）。
+- **渡す理由**: 開発者の決め（2026-10-31「メニュー関係はreactor解放されたら大改造する」）。`menu/{plan,mod,win32}.rs` に項目を組む仕事は作り直しで捨てるため。
+- **渡すもの**:
+  - ⑵ の 8 つの名前: `vanishbuttoncaption`・`vanishbuttonvisible`・`sakura.recommendbuttoncaption`・`kero.recommendbuttoncaption`・`sakura.recommendsites`・`kero.recommendsites`・`sakura.portalbuttoncaption`・`sakura.portalsites`。
+  - 3 人目以降の窓の名前 3 つ: `char*.recommendbuttoncaption`・`char*.recommendsites`・`char*.recommendsites.caption`。
+  - `readmebuttoncaption`（要件討議の決めの 2 で本 spec では取らなかった。SSP は「．さくら」に `readmebuttoncaption` と `readmebutton.caption` の両方を問う＝検証の記録 4.2）。
+  - おすすめ・ポータルのサイトの一覧の読み方と、選んだときに開く道（未決）。
+  - `popup-menu-shell-look` の件 15（SSP がメニューを組むときに `sakura.recommendsites` を問う）との分け方（未決）。
+- **測った事実**（検証の記録 4.2）: SSP は「．さくら」に `updatebutton.visible`→`updatebuttoncaption`→`readmebutton.visible`→`readmebuttoncaption`→`readmebutton.caption`→`vanishbuttonvisible`→`vanishbuttoncaption` の順に問い、「燃やすゾ！」「さくらのお勧め」「ポータルサイト」の項目を出す。

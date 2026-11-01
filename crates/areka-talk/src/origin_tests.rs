@@ -128,6 +128,18 @@ fn constants_render_and_level() {
     assert_eq!(ScriptOrigin::MCP_NOTIFY.level, SecurityLevel::Local);
 }
 
+// ── 返しのイベントの出どころ（shell-scale-linkage 1.3） ──
+
+#[test]
+fn property_constant_renders_internal_property() {
+    assert_eq!(
+        ScriptOrigin::PROPERTY.sender_type.render(),
+        "internal,property"
+    );
+    assert_eq!(ScriptOrigin::PROPERTY.sstp, SstpKind::NotSstp);
+    assert_eq!(ScriptOrigin::PROPERTY.level, SecurityLevel::Local);
+}
+
 // ── is_external_treated／is_sstp の真理表 ──
 
 fn not_owned_sstp() -> ScriptOrigin {

@@ -61,6 +61,11 @@ impl RequestOrigin {
                 origin: ScriptOrigin::MCP_NOTIFY,
             },
             EventId::Translate(origin) => *origin,
+            // `\![get,property]` の返しのイベント（shell-scale-linkage 要件 1.3）。
+            EventId::Property(_) => RequestOrigin {
+                sender: SenderName::Areka,
+                origin: ScriptOrigin::PROPERTY,
+            },
         }
     }
 

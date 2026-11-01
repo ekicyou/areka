@@ -15,6 +15,7 @@ use bevy_ecs::world::World;
 use super::{GhostBootInputsSource, GhostSlot};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
+use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::runtime_boot;
 use crate::input_events;
 use crate::menu;
@@ -66,6 +67,12 @@ pub(crate) fn rewire_runtime_consumers(
     input_events::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
     // 窓の矩形の読み手を新しい実行系へ登録する（mcp-scope-rect-property 要件 6.1〜6.3）。
     super::ghost_session_scope_rect::wire(world, runtime);
+    // 倍率と DPI の読み手を毎フレームの配線の表で登録する（shell-scale-linkage 要件 4.5・D7）。
+    // 配線が無い（LogSink の起動）ときは空の表で登録する。
+    let table = world
+        .get_non_send::<Emo2Wiring>()
+        .map(Emo2Wiring::scope_scale_table);
+    super::ghost_session_scope_scale::wire(runtime.sylphya_reader(), table);
 }
 
 /// shiori だけの読み直しの答え（呼び手 `switch_to` が段・既定への戻し・致命を選ぶ）。

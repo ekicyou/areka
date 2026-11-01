@@ -1,7 +1,7 @@
 //! 実際の描画を通るテストの土台（spec: areka-P0-mcp-dump-images・design「Integration Tests」・
 //! `dump_surface_gpu_tests.rs` と `dump_balloon_gpu_tests.rs` で共用・x64 だけ接続）。
 //!
-//! 偽の SHIORI の土台（[`SwitchRig`]・emo2 の複製のゴースト A）に、GPU 資源（WARP 可）と、本物の
+//! 偽の SHIORI の土台（[`SwitchRig`]・emo2 の複製のゴースト A）に、GPU 資源（実 GPU）と、本物の
 //! 配置の準備（作業領域だけ合成）で組んだ窓の一式（偽 HWND・`DPI` は呼び手が選ぶ）を据え、本番の
 //! `Input`・`Update` の段をそのまま回す。組み方は `shell_balloon_switch_session_lap_tests.rs` の
 //! `lap_rig_of`・`spawn_windows` と同じ（2 つ目のシェルは足さない）。台本は A の `OnBoot` の応答で

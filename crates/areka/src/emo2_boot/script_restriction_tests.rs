@@ -171,6 +171,7 @@ fn probe_for(consumer: CommandConsumer) -> Probe {
         | CommandConsumer::UpdateSink
         | CommandConsumer::ScriptCompile
         | CommandConsumer::PropertyWrite
+        | CommandConsumer::PropertyRead
         | CommandConsumer::LifecycleSink
         | CommandConsumer::ReloadSink
         | CommandConsumer::WindowStateSink => {

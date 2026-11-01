@@ -1,7 +1,7 @@
 // =============================================================================
 // 箱の結線の通し（areka-P0-shell-balloon task 12.3）
 //
-// 親（`frame_visibility_integration_tests.rs`）と同じ檻——実 emo2 fixture ＋ 実 GPU（WARP 可・MTA）で
+// 親（`frame_visibility_integration_tests.rs`）と同じ檻——実 emo2 fixture ＋ 実 GPU（MTA）で
 // 本番の `emo2_frame_system` を回す——に、箱の束（サーフェス 0 にだけ箱 `talk`）を渡して、
 // 可視性の相・文字の層の拡大率の相（`sync_boxes`）・提示（`shown_boxes` の写し）・`Status` の届けが
 // 本番の相順でつながっていることを確かめる。

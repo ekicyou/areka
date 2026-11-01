@@ -977,21 +977,22 @@ items = 166
 「綴りは台帳に載っているが areka はその値を一度も問い合わせない」状態を指す（状態の 7 語の定義は
 `README.md`）。上と同じ手順で数え、`status` の値が `absent` の行がこのページに 1 つも無いことを
 確かめた 0 である。
+2026-11-01 に `popup-menu-extra-resources` が `updatebuttoncaption` を語彙のみから実装済みへ移し（右クリックメニューの「ネットワーク更新」の項目名を、新しい名前 `updatebutton.caption` が引けないときにこの古い名前の値で出す）、`list_shiori_resource` は実装済み 15・語彙のみ 144 になった。
 
 ```toml
 [[barrier]]
 page = "list_shiori_event"
-implemented = 62
+implemented = 64
 vocabulary_only = 0
 degraded = 1
-absent = 224
+absent = 222
 alias = 3
 not_applicable = 0
 
 [[barrier]]
 page = "list_shiori_resource"
-implemented = 14
-vocabulary_only = 145
+implemented = 15
+vocabulary_only = 144
 degraded = 0
 absent = 0
 alias = 0
@@ -1021,10 +1022,10 @@ not_applicable = 0
 ```toml
 [[barrier]]
 page = "descript_ghost"
-implemented = 23
+implemented = 24
 vocabulary_only = 1
 degraded = 8
-absent = 42
+absent = 41
 alias = 0
 not_applicable = 0
 
@@ -1039,10 +1040,10 @@ not_applicable = 0
 
 [[barrier]]
 page = "descript_shell"
-implemented = 21
+implemented = 24
 vocabulary_only = 1
 degraded = 5
-absent = 75
+absent = 72
 alias = 0
 not_applicable = 0
 

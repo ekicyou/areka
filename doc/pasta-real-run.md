@@ -95,11 +95,11 @@ pwsh -NoProfile -File "$w\tools\sync-i686-helper.ps1"; "sync exit=$LASTEXITCODE"
 ```powershell
 pwsh -NoProfile -Command {
     Add-Type -Namespace W -Name U -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr v);
+[DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr v);
 [DllImport("user32.dll")] public static extern System.IntPtr MonitorFromPoint(System.Drawing.Point p, uint f);
 [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(System.IntPtr m, int t, out uint x, out uint y);
 '@ -ReferencedAssemblies System.Drawing.Primitives
-    $null = [W.U]::SetProcessDpiAwarenessContext([IntPtr]-4)
+    $null = [W.U]::SetThreadDpiAwarenessContext([IntPtr]-4)
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
         $m = [W.U]::MonitorFromPoint($_.Bounds.Location, 2); $x = 0; $y = 0

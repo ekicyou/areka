@@ -5,7 +5,7 @@ use super::{DPI, Entity, GhostWindows, PresentCommand, SpineHarness};
 //
 // 6.1 の `SpineHarness` の上に構築する。実 sink 経路の末端（`EmoPresenter::apply` の実描画→
 // `read_back`）まで観測境界を延ばす（R8.2）。sleep 不使用・注入 Tick と有界 drain のみ（R8.3）・
-// headless GPU（WARP・MTA・R8.4）・x64 完結（R8.6）。
+// 実 GPU（MTA・R8.4）・x64 完結（R8.6）。
 // ===========================================================================
 
 /// BGRA 密配列（`stride=width*4`）のうち α バイト（各 4 バイト画素の index 3）が非 0 の画素数を数える。

@@ -128,7 +128,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 ///
 /// 行ボックス丈 37.24 を丈 30 では覆いきれないため、帯をどこへ置くかで見え方が変わる。帯を
 /// 行矩形のブロック軸**近端**へ揃えていた頃の読み戻しは「上に 7 画素の余白を残したまま下で
-/// 2 画素を切る」であった。**帯を広げるのではなく、行ボックスの中央へ寄せる**のが正しい
+/// 2 画素を切る」であった。**帯を広げるのではなく、字の箱の中央へ寄せる**のが正しい
 /// ——寄せる量は [`highlight_band_offset`] が決める（spec `areka-P0-emo2-conformance-e2e`
 /// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
 /// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
@@ -139,7 +139,8 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
     line_box_height.clamp(font_height, upper)
 }
 
-/// ハイライト帯／ヒット帯を行ボックスの中央へ寄せる量を決める（純粋・**描画とヒットの唯一の源**）。
+/// ハイライト帯／ヒット帯を字の箱の中央へ寄せる量を決める（純粋・**描画とヒットの唯一の源**）。
+/// 本関数は字の箱の上端 t ＝ 0 の場合で、本番の横書きの帯は t を足した同じ式から出る。
 ///
 /// ## なぜ寄せるのか（開発者裁定 2026-09-06 第 2 回・R13.1）
 ///
@@ -149,7 +150,9 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// 帯は上に余りながら下でインクを切る。読み戻しの実測は 帯 y0..29／インク y7..31 ＝
 /// **上に 7 画素の余白を残したまま下で 2 画素を切る**であった。開発者は実機の目視でこれを
 /// 「色反転位置が 2 ドット程上すぎる」と判じ、同日の第 1 の裁定（2 画素のはみ出しを許容する）を
-/// 覆した。あるべき姿は**帯を広げることではなく、帯を行ボックスの中央へ寄せること**である。
+/// 覆した。あるべき姿は**帯を広げることではなく、帯を字の箱の中央へ寄せること**である
+/// （当時は「行ボックスの中央」と書いた・行間を持つ書体では行ボックスが字の箱より高いので
+/// 字の箱の中央が正しい・spec `emo-text-line-gap`）。
 ///
 /// ```text
 /// band_offset = round(max(0, line_box_height − band_extent) / 2)
@@ -171,9 +174,24 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// **接するだけで重ならない**。ヒット判定は半開区間（`crates/areka/src/input_events/balloon.rs`
 /// の `y >= top && y < bottom`）ゆえ、共有する辺の上の 1 点はたかだか 1 行にしか当たらない。
 ///
+/// ## 字の箱の中央（spec `emo-text-line-gap` 要件 2.1）
+///
+/// 書体が行間を持つと、DirectWrite の行の箱は字の箱（ascent＋descent）より高く、字の箱は
+/// 行矩形の上端から `t`（[`GlyphMetrics::horizontal_char_box_top`]）だけ下に在る。帯の寄せは
+/// 本番では `round(max(0, t) + max(0, 行ボックス − 帯) / 2)`（丸め 1 回）＝帯を**字の箱の中央**へ
+/// 置く量で、本関数はそのうち字の箱の上端が行矩形の上端に在る（`t = 0`）ときの値を返す。
+/// `t = 0` では `0.0 + x` が `x` とビットまで同じなので、上の表の値は変わらない（要件 5.1）。
+///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
-    ((line_box_height - band_extent).max(0.0) / 2.0).round()
+    band_offset_on_char_box(0.0, line_box_height, band_extent)
+}
+
+/// 帯の寄せの式の唯一の定義点（横書き・字の箱の上端 `char_box_top` から字の箱の中央へ置く量）。
+///
+/// 負の上端は 0 に切る＝寄せは 0 以上（`expand_overhang_for_band` の横書きは遠端だけを広げる）。
+fn band_offset_on_char_box(char_box_top: f32, line_box_height: f32, band_extent: f32) -> f32 {
+    (char_box_top.max(0.0) + (line_box_height - band_extent).max(0.0) / 2.0).round()
 }
 
 /// 1 行分のハイライト帯／ヒット帯（丈と寄せ量・**描画とヒットの単一の源**）。
@@ -184,8 +202,10 @@ pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
 pub struct LineBand {
     /// 帯のブロック軸の丈。横書き＝[`highlight_band_extent`] の出力・縦書き＝列の em。
     pub extent: f32,
-    /// 行矩形の左辺（横書きは上辺）から帯の起点までの**符号つき**の量。横書き＝
-    /// [`highlight_band_offset`] の出力（0 以上）・縦書き＝
+    /// 行矩形の左辺（横書きは上辺）から帯の起点までの**符号つき**の量。横書き＝帯を字の箱の
+    /// 中央へ置く量 `round(max(0, t) + max(0, 行ボックス − 帯) / 2)`（`t` は
+    /// [`GlyphMetrics::horizontal_char_box_top`]・`t = 0` で [`highlight_band_offset`] の出力・
+    /// 0 以上）・縦書き＝
     /// `round(metrics.vertical_em_box_left(em, mode))`（em の箱を書体の縦書きの基線に中央で
     /// 重ねた所・右から左は負になり得る＝帯は行矩形の左へ出る）。
     pub offset: f32,
@@ -233,7 +253,11 @@ pub fn line_bands<M: GlyphMetrics + ?Sized>(
                     let extent = highlight_band_extent(em, line_box_height, metrics.line_pitch(em));
                     LineBand {
                         extent,
-                        offset: highlight_band_offset(line_box_height, extent),
+                        offset: band_offset_on_char_box(
+                            metrics.horizontal_char_box_top(em),
+                            line_box_height,
+                            extent,
+                        ),
                     }
                 }
             }
@@ -279,7 +303,8 @@ pub struct HitRectPx {
 /// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝行矩形の
 /// 左辺（横書きは上辺）＋符号つきの `band_offset` から `band_extent` 分**
 /// （[`LineBand`] の 2 値。横書きは [`highlight_band_extent`] の descent 込みの帯を
-/// [`highlight_band_offset`] が行ボックスの中央へ寄せた位置、縦書きは列の em の帯を em の箱へ
+/// [`LineBand::offset`] が字の箱の中央へ寄せた位置（[`highlight_band_offset`] は字の箱の
+/// 上端 t ＝ 0 のとき）、縦書きは列の em の帯を em の箱へ
 /// 重ねた位置で、右から左の寄せは負。ハイライト描画（`highlight_rect`）と同一の
 /// 2 値を受け取ることで帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px の
 /// ヒット矩形を組む。これを

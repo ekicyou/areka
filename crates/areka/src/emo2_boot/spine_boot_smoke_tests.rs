@@ -14,7 +14,7 @@ use super::{
 /// - **scripted boot 発火**: boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が
 ///   scripted backend へ (method,id) 順で届く（＝「scripted ghost を boot させた」直接証跡）。
 /// - **Tick 注入の疎通**: `dispatcher()` への Tick 送出が Ok（ghost スタック生存・sleep 不使用）。
-/// - **attach 到達**: headless GPU World（WARP・MTA）＋合成 `GhostWindows` 上で `run_attach_phase`
+/// - **attach 到達**: 実 GPU の World（MTA）＋合成 `GhostWindows` 上で `run_attach_phase`
 ///   が **panic せず** 完走し、DD-12 の縮退がバグを隠さない檻＝`planned==attached==2`（全 scope の
 ///   シェル装着成功）を装着サマリ `info!` で観測でき、ERROR は 0 件。
 /// - **ハンドル生存**: attach 後も seriko worker は稼働中・dispatcher は再度 Tick を受理する。

@@ -1,6 +1,6 @@
 //! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（task 7.2・要件 1.6・3.6・3.7・9.4）。
 //!
-//! GPU/WUC は headless 実資源（`GraphicsCore::new()`・WARP 可・`surface.rs` の既存テストと同じ方針）。
+//! GPU/WUC は headless 実資源（`GraphicsCore::new()`・`surface.rs` の既存テストと同じ方針）。
 
 use super::*;
 

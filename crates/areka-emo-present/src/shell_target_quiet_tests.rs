@@ -239,3 +239,66 @@ fn quiet_empty_failure_still_records_the_error() {
     let error = assert_quiet_failure(dir.path(), "面が 1 つも無い");
     assert!(matches!(error, ShellLoadError::Empty { .. }), "{error:?}");
 }
+
+/// 焼く段（`areka_emo_atlas`）の 0 寸の記録の文言。
+const ZERO_SIZED: &str = "bake: element の元画像が 0 寸です";
+/// 畳み込み（`areka_emo_compose`）の追記の相手の無い面の記録の文言。
+const APPEND_NO_TARGET: &str = "surface.append 対象 id が未存在";
+
+/// `needle` を文言に含む記録の行の数（宛先まるごとでなく文言ごとに数える）。
+fn count_message(events: &[CapturedEvent], needle: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.message().contains(needle))
+        .count()
+}
+
+/// spec: emo-bake-log-overlap 要件 1.1・2.1・3.3: 出す読み込みは焼く段と畳み込みの記録を 1 行ずつ
+/// 出し、出さない読み込みはその文言が 0 行・戻り値は等しい。
+#[test]
+fn quiet_load_silences_bake_and_fold_records() {
+    let dir = TempPath::new("shell-quiet-bake-fold");
+    std::fs::write(
+        dir.child("surfaces.txt"),
+        concat!(
+            "charset,UTF-8\n",
+            "surface0\n{\nelement0,overlay,base.png,0,0\nelement1,overlay,zero.png,0,0\n}\n",
+            "surface.append5\n{\nelement2,overlay,base.png,0,0\n}\n",
+        ),
+    )
+    .expect("記述ファイル作成");
+    write_descript(dir.path());
+    let mut dec = decoder_with(dir.path(), &["base.png"]);
+    dec.insert(dir.child("zero.png"), 0, 0, 0, Vec::new(), true);
+
+    let (emit, emit_events) =
+        capture_events(|| load_shell_target(dir.path(), &dec).expect("出す入口で読める"));
+    let (quiet, quiet_events) =
+        capture_events(|| load_shell_target_quiet(dir.path(), &dec).expect("出さない入口で読める"));
+
+    assert_eq!(
+        count_message(&emit_events, ZERO_SIZED),
+        1,
+        "{emit_events:?}"
+    );
+    assert_eq!(
+        count_message(&emit_events, APPEND_NO_TARGET),
+        1,
+        "{emit_events:?}"
+    );
+    assert_eq!(
+        count_message(&quiet_events, ZERO_SIZED),
+        0,
+        "{quiet_events:?}"
+    );
+    assert_eq!(
+        count_message(&quiet_events, APPEND_NO_TARGET),
+        0,
+        "{quiet_events:?}"
+    );
+    assert_eq!(
+        fingerprint(&quiet),
+        fingerprint(&emit),
+        "戻り値が両入口で違う"
+    );
+}

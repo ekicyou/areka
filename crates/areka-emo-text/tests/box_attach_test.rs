@@ -11,7 +11,7 @@
 //! - 箱の位置が `(X + 領域の左, Y + 領域の上) × 拡大率`
 //! - 箱の束の差し替えで箱の面の entity が消える
 //!
-//! 流儀は `attach_wiring_test.rs` と同じ（GPU/WUC は headless 実資源・WARP 可・時刻は注入）。
+//! 流儀は `attach_wiring_test.rs` と同じ（GPU/WUC は headless 実資源・時刻は注入）。
 //! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない・tasks.md 1）。
 
 use std::collections::BTreeMap;

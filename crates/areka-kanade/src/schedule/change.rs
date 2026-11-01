@@ -16,7 +16,7 @@
 //! 相ごとに今日の終了の握手へ合流する（[`yield_to_close`]）。
 //!
 //! 汎用の通知の入口（外から頼まれた許可表のイベントを定常でだけ送る）の判断
-//! [`on_raise_event`] もここに置く。
+//! [`on_raise_event`] と、`\![get,property]` の返しのイベントの判断 [`on_property_event`] もここに置く。
 
 use super::close::deadline_from;
 use super::{
@@ -96,6 +96,28 @@ pub(super) fn on_raise_event(
         return (state, Vec::new());
     }
     let call = events::raise(id, references, method, &state.snapshot());
+    (state, vec![Action::ShioriRequest(call)])
+}
+
+/// 横断の腕 `Input::PropertyEvent`（`\![get,property]` の返しのイベント）の判断。
+///
+/// 定常以外での依頼と、名前か Reference が [`crate::sstp::validate_notify`] を破るものは `warn!` の上で
+/// 捨てる（積まない）。それ以外は逐語の名前の GET を 1 つ送る。応答は定常の応答の腕へ流れ、
+/// 再生中なら [`events::value_replaces_active_talk`] に従って今のトークを置き換える。
+pub(super) fn on_property_event(
+    state: State,
+    id: String,
+    references: Vec<String>,
+) -> (State, Vec<Action>) {
+    if !matches!(state.phase, Phase::Steady { .. }) {
+        tracing::warn!(target: "kanade", event = "property_event_not_steady", id = ?id, phase = phase_label(&state.phase), "定常以外での返しのイベント——送らずに捨てる（積まない）");
+        return (state, Vec::new());
+    }
+    if let Err(error) = crate::sstp::validate_notify(&id, &references) {
+        tracing::warn!(target: "kanade", event = "property_event_invalid", error = ?error, name = ?id, reference_count = references.len(), "返しのイベントの名前か Reference が検査を破っている——送らない");
+        return (state, Vec::new());
+    }
+    let call = events::property_event(id, references, &state.snapshot());
     (state, vec![Action::ShioriRequest(call)])
 }
 

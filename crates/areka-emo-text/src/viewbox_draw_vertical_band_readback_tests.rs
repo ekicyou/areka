@@ -39,10 +39,10 @@ pub(super) const R_CHOICES: [&str; 4] = ["晴れてる", "雨だよ", "曇って
 /// 記録だけの横倒しの欧文の列（選択肢にしない・合否に入れない）。
 pub(super) const R_LATIN: &str = "Ag";
 /// 塗りの色（premultiplied BGRA・α=255）＝ `SquareFill { fill: (105, 25, 25) }`。
-const R_FILL_BGRA: [u8; 4] = [25, 25, 105, 255];
+pub(super) const R_FILL_BGRA: [u8; 4] = [25, 25, 105, 255];
 
 /// premultiplied BGRA 密配列の全域から、指定 BGRA を持つ画素の y 範囲（上端, 下端）を返す。
-fn bgra_y_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Option<(u32, u32)> {
+pub(super) fn bgra_y_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Option<(u32, u32)> {
     let rows: Vec<u32> = (0..h)
         .filter(|&y| {
             (0..w).any(|x| {
