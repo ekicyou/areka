@@ -187,13 +187,188 @@ AREKA-CRASH-STACK   12: wintf::test_crash_report::crash_report_names_the_running
 
 - 拾いの限り: 呼び手は足場の入口の名前の grep で拾ったので、別の名前の手伝いの関数を通して足場を作るファイルは漏れうる。
 
+**X1・X1b・Y1 の条件**（2026-11-01・走らせる前に書いた・コミット `c432692b`）
+
+| 走行 | 範囲 | 負荷 | スレッドの数 | 回数 | 1 回の上限 |
+|---|---|---|---|---|---|
+| X1 | 上の 70 の道（`areka` の実行ファイル・989 本） | 論理 CPU の 2 倍＝44 本（論理 CPU 22・`load-flake.ps1` の `-Burners` の既定） | 既定（`--test-threads` を渡さない） | 報告つきの落ちが 1 回出たら止める・最大 20 | 10 分 |
+| X1b | X1 と同じ（X1 が 20 回で 0 件のときだけ） | なし（`-Burners 0`） | 4（`-TestThreads 4`＝`--test-threads 4`） | X1 と同じ止め方・最大 20 | 10 分 |
+| Y1 | `begin_draw_roundtrip`・`alpha_mask_resource`・`bitmap_source`（`wintf` の lib） | なし | 既定 | 報告つきの落ちが 1 回出たら止める・最大 20 | 5 分 |
+
+- X1・X1b は `-SetEnv AREKA_TEST_PERMIT_HOLD=1` を渡し、回ごとの `summary.txt` に写る `AREKA-PERMIT-HOLD` の最後の 1 行（＝その回の許可の持ち時間の最長）を ⑻ の材料に採る。Y1 は `wintf` の lib なので渡さない（`wintf` に許可は無い）。
+- 止め方の作り: `load-flake.ps1` には「落ちの報告が出たら止める」口が無い。`-Rounds 20` だと落ちた後も回り続けるので、`-Rounds 1` を 1 回ずつ呼び、その回の `summary.txt` の `rounds_with_crash_report:` が 1 以上なら止める（下の繰り返し）。呼ぶたびにビルドの確かめ（作り済みなら数秒）と CPU の採り（負荷の前と最中に 5 秒ずつ）と負荷の子の起こし直しが足されるが、落ちの後の回（X1 で最大 1 回あたり約 2.4 分）を回さずに済む方が安い。
+- `-Filter` の値は上の「X1 の全体」の囲みの `-Filter emo2_boot::frame,...` の行をこの記録から読み、写しを作らない。
+- third scope（`emo2_boot::spine::third_scope_talk_tests`）は X1 の範囲に入っているので、赤になればその回の `summary.txt` の赤の名前に出る（⑽ に写す）。
+
+コマンド（どのディレクトリからでも動く形・PowerShell 7）:
+
+```powershell
+# X1（X1b は -Label を x1b-r に、-Burners 0 -TestThreads 4 を足す）
+$wt = 'C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-test-binary-stability-dec94e'
+$f = ((Get-Content -Encoding utf8 "$wt\.kiro\specs\areka-test-binary-stability\load-repro.md") -match '^-Filter emo2_boot::frame,')[0] -replace '^-Filter ', ''
+for ($n = 1; $n -le 20; $n++) {
+    $label = 'x1-r{0:d2}' -f $n
+    pwsh -NoProfile -File "$wt\tools\load-flake.ps1" -Label $label -Rounds 1 -RoundTimeoutMin 10 -SetEnv AREKA_TEST_PERMIT_HOLD=1 -Filter $f
+    $d = Get-ChildItem "$wt\target\load-flake" -Directory -Filter "$label-*" | Sort-Object Name | Select-Object -Last 1
+    if ((Get-Content -Encoding utf8 "$($d.FullName)\summary.txt") -match '^rounds_with_crash_report: [1-9]') { break }
+}
+
+# Y1
+for ($n = 1; $n -le 20; $n++) {
+    $label = 'y1-r{0:d2}' -f $n
+    pwsh -NoProfile -File "$wt\tools\load-flake.ps1" -Label $label -Rounds 1 -RoundTimeoutMin 5 -Binary wintf-lib -Burners 0 -Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source
+    $d = Get-ChildItem "$wt\target\load-flake" -Directory -Filter "$label-*" | Sort-Object Name | Select-Object -Last 1
+    if ((Get-Content -Encoding utf8 "$($d.FullName)\summary.txt") -match '^rounds_with_crash_report: [1-9]') { break }
+}
+```
+
+所要時間の見込み（走らせる前・系列ごとに「最大の回数 × 1 回の見込み」）:
+
+| 系列 | 1 回の見込み | 見積もりの元 | 最大 |
+|---|---|---|---|
+| X1 | 約 3 分 | 前の記録の負荷の下の全体 1 回が約 10 分（5 回で約 50 分・design「測りの条件」）。4153 本のうち 989 本（約 0.24）で約 2.4 分、呼ぶたびの手間（ビルドの確かめ・CPU の採り 10 秒・負荷の子の起こし）約 0.5 分を足す | 20 × 3＝60 分 |
+| X1b | 約 2 分 | 静かな机の `areka` の実行ファイルは 4153 本で 93.8 秒（⑷）＝989 本で約 22 秒。スレッドを 4 本に絞ると数倍に延びる見込みで約 1.5 分、手間を足す | 20 × 2＝40 分（X1 が 0 件のときだけ） |
+| Y1 | 約 0.5 分 | 較正の `wintf` の lib は 1 本で 9.1 秒（⑸）。3 つの絞りと手間を足す | 20 × 0.5＝10 分 |
+
+- 最悪（X1 が 20 回とも 0 件で X1b も 20 回・Y1 も 20 回）: 約 110 分。X1 で落ちが出れば X1b は回さないので最悪で約 70 分。前の率（負荷の下でおおむね 5 回に 1 回）なら X1 は 5 回前後・約 15 分の見込み。
+- 1 回の上限（X1・X1b 10 分・Y1 5 分）に毎回当たる場合の上限は、X1 200 分・X1b 200 分・Y1 100 分（上の見込みの外・当たったらその回は「上限越え」と書かれる）。
+- 開発者へ伝えた時刻: 2026-11-01 16:49（見込み約 15 分・最悪 70 分・X1b 込みで 110 分）。机は 16:50 に握った。X1 の 1 回目の後の言い直し: 2026-11-01 17:30 頃に進行役から開発者へ「1 回 8.5〜9.5 分・X1 の残り約 2 時間 20 分＋X1b 約 1 時間」（1 回目は 557 秒）。見込みの 1 回約 3 分は約 3 倍外れた。外れの元は、前の記録の「負荷の下の全体 1 回約 10 分」を本数の比で縮めたこと（X1 の範囲は COM と GPU の装置を開く重いテストに偏っていて、本数の比では縮まらない）。
+
+**X1b の回数と上限の改め**（2026-11-01 20:05 頃・開発者の承認）
+
+- X1b は最大 10 回（もとは 20 回）。訳: X1 が 20 回で報告つきの落ち 0 件。前の率（負荷の下でおおむね 5 回に 1 回）なら、10 回で 1 度も落ちない見込みは約 11%（0.8^10）。X1 の 20 回と合わせれば、X1b も 0 件なら件 1 を閉じるに足りる。
+- X1・X1b の 1 回の上限は 20 分（もとは 10 分・`-RoundTimeoutMin 20` を系列の呼び出しで渡す。`load-flake.ps1` の既定 30 分はそのまま）。訳: X1 の 1 回は 7.5〜10 分で、10 分の上限に 20 回のうち 5 回当たった。
+- `load-flake.ps1` の直し（4.1 の中）: 上限越えで回の木を止めた直後に `round-N.log` を読み、まだ書き手が握っていて読めずにスクリプトごと落ち、その回の結果が `summary.txt` に残らないことがあった（X1 で 3 回）。止める前に子孫を握って全部の終わりを待ち、ログが放されるのを待ってから（最大 60 秒）共有で読むようにした。放されなかったときは回の欄に `log_released: no` と書く。
+- 伝えた見込み（進行役から開発者へ・2 回）: 20:00 頃「終わりは 20:45〜21:10 ごろ（X1b 1 回 1.5〜3 分の推定で 20 回 30〜60 分＋Y1 約 10 分）」。20:03 頃の推奨の中で「推奨どおりなら Y1 と X1b で最悪およそ 1.5 時間（21:45 ごろまで）」（20:05 頃に承認されたのはこちら）。1.5 時間の裏の見積もりは進行役の「Y1 約 10 分＋X1b 10 回 × 1 回約 8 分（X1 の 1 回の実測 7.5〜10 分に寄せた）」。走らせる順は Y1 → X1b。
+- X1b のコマンド: 上の繰り返しで `-Label` を `x1b-r`、回数を 10、`-RoundTimeoutMin 20 -Burners 0 -TestThreads 4` にする。
+
+**X1 の結果**（2026-11-01 16:50〜20:01（r20 の `summary.txt` の終わりは 20:00:57）・コミット `c432692b`・`target\load-flake\x1-r01-*`〜`x1-r20-*`・負荷 44 本・既定スレッド・上限 10 分）
+
+| 回 | 終了コード | 秒 | 緑／赤 | 待ちの打ち切りの行 | `AREKA-CRASH` |
+|---|---|---|---|---|---|
+| r01 | 101 | 557 | 984／4 | 4 | 0 |
+| r02 | 0 | 526.7 | 988／0 | 0 | 0 |
+| r03 | 0 | 500.4 | 988／0 | 0 | 0 |
+| r04 | 101 | 452.5 | 987／1 | 0 | 0 |
+| r05 | 0 | 526.6 | 988／0 | 0 | 0 |
+| r06 | 0 | 535.5 | 988／0 | 0 | 0 |
+| r07 | 0 | 497.3 | 988／0 | 0 | 0 |
+| r08 | 101 | 584.5 | 987／1 | 1 | 0 |
+| r09 | 101 | 525.9 | 987／1 | 1 | 0 |
+| r10 | 101 | 534.7 | 987／1 | 1 | 0 |
+| r11 | 上限越え | 約 600 | （途中まで）966／14 | 0（途中で切れた） | 0 |
+| r12 | 101 | 492.7 | 986／2 | 0 | 0 |
+| r13 | 上限越え（killed） | 609.2 | 984／4 | 4 | 0 |
+| r14 | 101 | 506.5 | 985／3 | 1 | 0 |
+| r15 | 101 | 525.8 | 984／4 | 4 | 0 |
+| r16 | 上限越え | 約 600 | （途中まで）958／12 | 0（途中で切れた） | 0 |
+| r17 | 101 | 509.9 | 987／1 | 0 | 0 |
+| r18 | 上限越え（killed） | 603.6 | 986／2 | 2 | 0 |
+| r19 | 上限越え | 約 600 | （途中まで）904／1 | 0（途中で切れた） | 0 |
+| r20 | 101 | 509 | 987／1 | 0 | 0 |
+
+- 落ちの報告: 20 回とも 0 件（`rounds_with_crash_report: 0`。r11・r16・r19 は `round-1.log` を直に探して `AREKA-CRASH` 0 行）。
+- r11・r16・r19 は上限越えの直後に、直す前の `load-flake.ps1` が `round-1.log` を読めずに `script failed` になり、`summary.txt` に回の欄が無い。表の値は `round-1.log` の `test ... ok`／`FAILED` の行を数えたもので、libtest が赤の文を最後にまとめて出す前に切れたので、赤の文は無い（上の「改め」の直しはこの回のため）。負荷の子は 3 回とも全部止まっていた。
+- 赤の中身は ⑽（third scope）と「X1 のほかの赤」（下）。
+
+**X1b の結果**（2026-11-01 20:09〜20:35・`target\load-flake\x1b-r01-*`〜`x1b-r10-*`・負荷なし・`--test-threads 4`・上限 20 分・直した `load-flake.ps1`・10 回ともコミット `bfa0b364`）
+
+| 回 | r01 | r02 | r03 | r04 | r05 | r06 | r07 | r08 | r09 | r10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 秒 | 135.9 | 150.1 | 150.9 | 128.8 | 125.7 | 125.2 | 138 | 209.2 | 169 | 141.3 |
+
+- 10 回とも終了コード 0・988 緑／0 赤・待ちの打ち切り 0・上限越え 0・`AREKA-CRASH` 0・`log_released: no` 0。
+
+**Y1 の結果**（2026-11-01 20:06〜20:09・`target\load-flake\y1-r01-*`〜`y1-r20-*`・`wintf` の lib の 52 本・負荷なし・既定スレッド・上限 5 分）
+
+- コミット: r01〜r11 は `c432692b`、r12〜r20 は `bfa0b364`（系列の途中で道具の直しがコミットされた。どの回も作業ツリーには直した `load-flake.ps1` があり（`conditions.txt` の `dirty: yes`）、上限越えも無いので、結果への影響は無い）。
+
+- 20 回のうち 4 回（r06・r07・r12・r20）でテストのプロセスが落ちた。終了コード `-1073741819`（`0xC0000005`）。cargo の行は「process didn't exit successfully: `...\wintf-4b394095060166ca.exe begin_draw_roundtrip alpha_mask_resource bitmap_source` (exit code: 0xc0000005, STATUS_ACCESS_VIOLATION)」。`test result:` の行は無い。
+- 落ちた 4 回とも、`AREKA` を含む行が `round-1.log` に 1 行も無い（落ちの報告が出なかった）。止め方は「報告つきの落ち」なので止まらず、20 回を回し切った。⑸ の較正（`--ignored --exact` で較正のテスト 1 本）では `wintf` の lib の報告は出ていた。
+- 落ちた回に終わっていなかったテストは、4 回とも `com::wuc::tests::begin_draw_roundtrip` を含む。ほかに `ecs::widget::bitmap_source::tests::test_bitmap_source_graphics_new` などの bitmap_source の組と `ecs::widget::bitmap_source::task_pool::tests::with_threads_one_builds_a_single_thread_pool`。終わっていたのは r06 23 本・r07 5 本・r12 35 本・r20 35 本（52 本のうち）。
+- ほかの 16 回は緑（52 passed・1 回 0.1 秒前後）。
+
+**件 1 と件 3 の扱い**
+
+- 件 1（`areka` の実行ファイルの落ち）: 再現せずとして閉じる（要件 1.9・2.4）。条件と結果: X1（上の 70 の道・負荷 44 本・既定スレッド）20 回で報告つきの落ち 0 件、X1b（同じ範囲・負荷なし・4 スレッド）10 回で 0 件。前の率（5 回に 1 回）なら、30 回で 1 度も落ちない見込みは約 0.1%（0.8^30）。落ちの報告はそのまま残り、以後に落ちれば持ち手と生きているテストを名指す。
+- 件 3（`wintf` の lib の落ち）: 再現した（20 回で 4 回）。ただし落ちの報告が出なかったので、まだ開いている。次の手は、4.2 の Y2 の前に「この絞りで `wintf` の lib の落ちの報告が出ない訳」を調べること。
+
+**X1 のほかの赤**（third scope は ⑽・記録だけ・直しは決めない・後の 6.x・7.2 の材料）
+
+文の頭で分けた。`A が定常に着く` や `assertion ... failed` の後追いの文は、同じテストの先の待ちの打ち切りの続き。
+
+| 文の頭 | 回とテスト |
+|---|---|
+| 「既定のバルーンを根へ移す: Os { code: 5, kind: PermissionDenied, ... }」（件 4 の形） | r04 `install::desk::overwrite_tests::a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failure`・r12 `emo2_boot::frame::ghost_quit_switch_tests::stop_with_handoff_under_reservation_switches_without_exit`・r14 `ghost_session::shell_balloon_switch_session_update_tests::a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon`・r14 `install::desk::record_tests::a_balloon_not_hidden_by_the_running_ghost_is_not_recorded`・r17 `emo2_boot::frame::stay_on_top_lifecycle_tests::a_shiori_reload_keeps_the_stay_on_top_state_and_the_script_group`・r20 `ghost_session::switch_tests::switch_to_self_takes_down_and_reboots_a` |
+| 「待ちの打ち切り［止まった］: 「crates\areka\src\install\desk_overwrite_tests.rs:237」— 相手が 30.0 秒のあいだ状態を進めなかった（…進み 0 回…）」 | r01 `install::desk::overwrite_tests::a_switch_to_another_ghost_does_not_install_and_returns_the_archive`・同 `a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_once`・r15 `...::a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failure` |
+| 「待ちの打ち切り［止まった］: 「crates\areka\src\shell_balloon_switch_session_balloon_tests.rs:246」」（進み 0 回・2 回） | r01・r15 `ghost_session::shell_balloon_switch_session_balloon_tests::script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot` |
+| 「待ちの打ち切り［止まった］: 「crates\areka\src\shell_balloon_switch_session_abort_tests.rs:232」」（進み 1 回） | r01 `ghost_session::shell_balloon_switch_session_abort_tests::undecodable_shell_keeps_the_old_mount_and_records_one_error` |
+| 「待ちの打ち切り［止まった］: 「crates\areka\src\ghost_session_switch_tests.rs:252」」（待ち始めから 61.7〜91.4 秒・進み 4〜5 回） | r13 `ghost_session::switch_tests::switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`・`...::fallback_tests::target_connect_fail_boots_default_with_halt_and_no_alert`・`...::script_change_tag_switches_a_to_b_and_reaches_steady` |
+| 「待ちの打ち切り［止まった］: 「置き場のゴーストを降ろす」」（進み 2 回） | r13 `install::desk::overwrite_tests::a_switch_to_another_ghost_does_not_install_and_returns_the_archive` |
+| 「待ちの打ち切り［止まった］: 「crates\areka\src\mcp\check_script_tests.rs:244」」（進み 0 回） | r15 `mcp::check_script::check_script_tests::real_unit_answers_two_scripts_without_running_them` |
+| 「待ちの打ち切り［止まった］: 「放した符号化の仕事が走り終える」」（進み 0 回） | r15 `mcp::dump_surface::dump_surface_tests::abandoned_while_encoding_drops_the_pair_without_ui_errors` |
+| 「待ちの打ち切り［止まった］: 「crates\areka\src\emo2_boot\frame_stay_on_top_lifecycle_tests.rs:157」」・「…:42」 | r18 `emo2_boot::frame::stay_on_top_lifecycle_tests::a_ghost_switch_starts_the_target_off_and_logs_the_switch_discard`・`...::a_ghost_reload_starts_off_with_no_script_group_and_logs_the_reload_discard` |
+| 「送り手が送り続けるあいだ drain が戻らない（1 フレームが終わらない）: Timeout」（`recv_timeout` の自前の上限・⑵ の「その外の文言の無い待ち」の `frame/drain_resnap_tests.rs`） | r12 `emo2_boot::frame::drain_resnap::tests::drain_returns_while_the_sender_keeps_sending` |
+| 上限越えで文が切れた（`FAILED` の行だけ） | r11 の 14 本（`emo2_boot::ghost_switch::balloon_tests` の 6 本・`boot_event_tests` の 2 本・`ghost_session::shell_balloon_switch_session_lap_tests` の 2 本・`ghost_session::switch_tests` の 2 本・`shell_balloon_switch_session_balloon_tests` の 1 本・third scope）・r16 の 12 本（`emo2_boot::ghost_switch::balloon_tests` の 4 本・`boot_event_tests` の 1 本・`reload_tests` の 2 本・`install::desk::overwrite_tests` の 3 本・`shell_balloon_switch_session_abort_tests::marked_talk_break_cancels_the_shell_switch_without_quitting`・`ghost_session::switch_translate_tests::switch_sends_each_on_translate_to_its_own_ghost`） |
+
+- X1b（負荷なし・4 スレッド）の 10 回では、上のどれも赤にならなかった。
+
 ## ⑺ 原因の経路と直し
 
 ## ⑻ 許可の待ちの上限の値と決めた訳
 
+**4.1 で採った許可の持ち時間の最長**（回ごとの `AREKA-PERMIT-HOLD` の最後の行・5.2 で値を決める材料・値はまだ決めていない）
+
+X1（負荷 44 本・既定スレッド）: 55〜249 秒。
+
+| 回 | ms | 持ち手 |
+|---|---|---|
+| r01 | 90406 | `emo2_boot::frame::visibility_integration_tests::shell_box_integration_tests::align_tests::window_and_box_swap_with_the_picture_when_the_script_surface_arrives_first` |
+| r02 | 118555 | `emo2_boot::frame::visibility_integration_tests::new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch`（以下「new_ghost_holdings」） |
+| r03 | 96842 | new_ghost_holdings |
+| r04 | 83081 | new_ghost_holdings |
+| r05 | 116017 | new_ghost_holdings |
+| r06 | 62267 | `...::align_tests::window_and_box_swap_with_the_picture_when_the_picture_arrives_first` |
+| r07 | 81294 | `emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion`（以下「conformance_lap」） |
+| r08 | 117472 | conformance_lap |
+| r09 | 86111 | new_ghost_holdings |
+| r10 | 105890 | conformance_lap |
+| r11 | 249246 | new_ghost_holdings（上限越えの回・`round-1.log` から） |
+| r12 | 99717 | new_ghost_holdings |
+| r13 | 137177 | conformance_lap |
+| r14 | 55230 | new_ghost_holdings |
+| r15 | 104113 | `ghost_session::shell_balloon_switch_session_update_tests::a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon` |
+| r16 | 143516 | `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind`（上限越えの回・`round-1.log` から） |
+| r17 | 215243 | new_ghost_holdings |
+| r18 | 197500 | new_ghost_holdings |
+| r19 | 116784 | new_ghost_holdings（上限越えの回・`round-1.log` から） |
+| r20 | 143379 | conformance_lap |
+
+X1b（負荷なし・4 スレッド）: 2.7〜8.3 秒。
+
+| 回 | ms | 持ち手 |
+|---|---|---|
+| r01 | 3219 | `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_after_a_shell_swap_unloads_the_session` |
+| r02 | 3490 | `...::align_tests::window_and_box_swap_with_the_picture_when_the_script_surface_arrives_first` |
+| r03 | 3280 | `...::ghost_switch_after_a_shell_swap_unloads_the_session` |
+| r04 | 2776 | `...::align_tests::window_and_box_swap_with_the_picture_when_the_picture_arrives_first` |
+| r05 | 2720 | `...::ghost_switch_after_a_shell_swap_unloads_the_session` |
+| r06 | 2864 | `...::align_tests::box_only_after_hiding_the_window_reports_without_a_warning` |
+| r07 | 2830 | `...::align_tests::window_and_box_swap_with_the_picture_when_the_picture_arrives_first` |
+| r08 | 8267 | `mcp::dump_balloon::dump_balloon_gpu_tests::scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost` |
+| r09 | 4650 | `...::align_tests::window_and_box_swap_with_the_picture_when_the_script_surface_arrives_first` |
+| r10 | 2974 | `...::ghost_switch_after_a_shell_swap_unloads_the_session` |
+
 ## ⑼ 件 4 の見立てと根拠
 
 ## ⑽ third scope の読み分け
+
+**4.1 の X1 で見たもの**（記録だけ・直しは決めない）
+
+- 赤になった回: `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が X1 の 20 回のうち 6 回（r08・r09・r10・r11・r14・r19）。X1b の 10 回では 0 回。
+- 文（文が残った r08・r09・r10・r14）: 「待ちの打ち切り［止まった］: 「起動の会話」— 相手が 30.0 秒のあいだ状態を進めなかった（待ち始めから 35.4 秒・それまでの進み 10 回・最後の 1 回の確かめに 0.0 秒）／起動の会話: 会話が止まった（再生の終わりまで進まない）」。4 回とも、止まったのは「起動の会話」、進みは 10 回、待ち始めからは 33.6〜39.1 秒。r11・r19 は上限越えで文が切れ、`FAILED` の行だけ残った。
+- 足場: `SpineHarness`（`emo2_boot/spine.rs` の `make_world_with_gpu`、445 行で `GpuPermit::take`）＝COM と GPU の装置を開く足場。待ちは `spine_third_scope_talk_tests.rs` の `drive_talk`（`wait_until` の芯・`Progress::Count`）。進みの目印は SHIORI の呼び出しの数と、受けた面の指令・知らせの数の和。
+- 読み分けの候補: (a) 重い負荷の下での止まり。進みが 10 回まで来た後、30 秒のあいだ呼び出しも指令も知らせも増えなかった。負荷なしの X1b では一度も赤にならない。(b) 足場の側の取り違え。会話は進んでいるのに、目印に数えるもの（受けた指令・知らせ）を取り落としているか、`done` の条件が満たされない形。今の文は件数だけで、どの指令まで届いていたか（`seen`）は出ないので、この記録だけでは (a) と (b) を分けられない。
 
 ## ⑾ 修正の後の静かな机の全体テストと 1.20 倍の線
 
