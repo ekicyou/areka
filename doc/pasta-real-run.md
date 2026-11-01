@@ -10,7 +10,7 @@
 ## 1. 何を確かめる手順か
 
 - ぱすたが areka で「SSP と同じレベル」で動くかを、7 段（下の 5 節の表）で確かめる。段ごとに、SSP での動き（基準）と areka の結果を並べ、「同じ」「違う」「回せなかった」のどれかを書く。
-- 崩れる見込みの所の多くは、まだ着地していない兄弟の spec が引き取っている。表の「今の引き取る spec」の欄の spec が着地するたびに、その段の結果が変わるはずである。
+- 表の「今の引き取る spec」の欄の spec は、2026-11-01 の版の門の最後の確かめまでに着地した（`popup-menu-shell-look` だけは windows-reactor 待ちへ移した）。その回の結果は `doc/v0.1.0-gate-real-run.md`。
 - 「SSP と同じレベル」の最後の確かめは、兄弟の spec がすべて着地した後に、この手順をもう一度回して行う（v0.1.0 の版の門の最後の確かめ）。そのための別の spec は起こさない。
 - 書庫の版は固定しない。毎回取り寄せから始め、いつも最新のぱすたで回す。回した書庫は `.sha256` の値で記録に書く。
 
@@ -155,22 +155,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 Get-NetTCPConnection -LocalPort 9276 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { 'listen 9276 pid={0} path={1}' -f $_.OwningProcess, (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Path }
 ```
 
-### 補いの走り（ぱすたの新しい書庫まで・任意）
-
-取り寄せる書庫（10-20 版）は `install.txt` にバルーンの鍵が無く、縦書きのバルーンはゴーストのフォルダの直下（`ghost\pasta-in-windows\pasta_tategaki`）に置かれたままになる。areka も SSP もそこをバルーンとして探さないので、配布物の既定のバルーンで話す（ぱすたの側が `install.txt` を直した・次のリリースの書庫から入る）。縦書きのバルーンでしか見えない崩れ（列と枠の並び・縦書きの選択肢）を早く見るため、本走行の後に、縦書きのバルーンを根の `balloon\` に写した別の根で段 1〜2 だけを回してよい。結果は「参考（代わりの置き方）」として、段の 3 値の数と分けて書く。直した書庫で回すときは要らない。
-
-本走行の根を写すと、本走行で areka とぱすたがゴーストのフォルダの中に作った記憶（`ghost\master\profile\`）まで写る。そのままだと起動が `OnBoot`、バルーンが記憶のバルーン（本走行で使った既定の `areka-balloon`。2026-10 までは `StayseeBalloon`）になり、縦書きのバルーンで `OnFirstBoot` を見られない（alt1）。下の塊の最後の行で、写した記憶を消す。
-
-```powershell
-$v = "$w\target\pasta-verify-alt"   # 置き場を本走行と分ける
-Remove-Item -LiteralPath "$v\root", "$v\profile" -Recurse -Force -ErrorAction SilentlyContinue
-$null = New-Item -ItemType Directory -Force -Path "$v\profile", "$v\logs", "$v\shots"
-Copy-Item -LiteralPath "$w\target\pasta-verify\root" -Destination "$v\root" -Recurse
-Copy-Item -LiteralPath "$v\root\ghost\pasta-in-windows\pasta_tategaki" -Destination "$v\root\balloon\pasta_tategaki" -Recurse
-Remove-Item -LiteralPath "$v\root\ghost\pasta-in-windows\ghost\master\profile" -Recurse -Force -ErrorAction SilentlyContinue   # 本走行が作ったゴーストの記憶を写さない
-```
-
-この後、同じ PowerShell で起動の命令を `$run = 'alt1'` にして打つ。
+縦書きのバルーン: 2026-11-01 に取り寄せた書庫（sha256 `b363b88c…`）は `install.txt` に `balloon.directory,pasta_tategaki` を持ち、書庫の中の `balloon\pasta_tategaki` が 3 節の根を組む塊でそのまま `ghost\pasta-in-windows\balloon\pasta_tategaki` に入る。areka はそれをゴーストの中のバルーンとして選ぶ（記録 `balloon_resolved route=Descript`）。以前の「補いの走り」（縦書きのバルーンを根の `balloon\` に写す別の根）は要らなくなったので外した。
 
 ## 5. 7 段の表
 
@@ -185,7 +170,7 @@ SSP の基準の欄は、SSP での動きの要点（初回の測りは SSP 2.9.
 | 3 撫で・× に乗る・ボール | ぱすたを `move` で少しずつ撫でる。× の印の上に乗せる。ボールを `click` | 撫での前後と × に乗ったときの `shot`・`dump_surface`・`get_log`（`OnMouseMove`・`OnMouseEnter`・`OnMouseClick` の届き）・マウスの形を `cursor` で読んだ行（表の下の「段 3 のマウスの形の読み方」） | 撫でると反応の台詞が出る。× の印に乗ると × が赤くなる。ボールを押すとボールのトークが出る。当たり判定ごとにマウスの形が替わる（測りの記録 段 3） | `mouse-click-wheel-events`（`OnMouseClick`・`OnMouseEnter`／`OnMouseLeave`）・`shell-mouse-cursor`（`sakura.cursor` ブレス） | × が赤くなる。ボールのトークが出る。マウスの形が替わる |
 | 4 2 つの窓を一緒にドラッグ | ぱすたを `drag` で同じ画面の中で動かして離す | ドラッグの前・後の `shot`・`get_log` | ぱすたと窓の枠が離れずに一緒に動き、落とした後も重なった形に付き直る（測りの記録 段 4） | `mcp-scope-rect-property`（位置を `get_property` で読む・着地済み・確かめる）。着地済み: `window-link-directives`（`seriko.sticky-window`・`--option=ignore-sticky-window`・main の PR#360。組の相手をドラッグと `\![move]` で連れて動かす） | 窓の枠がぱすたについて動き、落とした後に付き直る（#360 で着地済み・確かめる。付いてこなければ起票する） |
 | 5 拡大率の違う画面への移動 | ぱすたを `drag` で拡大率の違うもう 1 つの画面へ動かして離す | 移った後の `shot`・`dump_surface`・`get_log` | 200% の画面へ移っても大きさは変わらない（831x1026 のまま・`scaling` は 150,150）。ぱすたと窓の枠は同じ rect のまま重なって並び、バルーンはぱすたの左上から 60,87 の所のまま。移動に伴うイベント（`OnShellScaling` など）は届かない（測りの記録 段 5） | `dpi-realign-remembered-chain`（拡大率の違う画面をまたぐドラッグ・落とした点のずれ）・`mcp-scope-rect-property`（位置を `get_property` で読む・着地済み・確かめる）・`shell-scale-linkage`（倍率の連動。この手順の範囲の外）。着地済み: `window-link-directives`（窓の枠が付いてくる・main の PR#360） | 移った先の画面でぱすたと窓の枠とバルーンの並びが保たれ、落とした点に置かれる（窓の枠が付いてくることは #360 で着地済み・確かめる）。大きさが画面の拡大率に合わせて変わるのは areka の方針（DPI 追従・2026-07-18 開発者）で、「方針で受けない」と書く。倍率の連動（`balloon.syncscale`・`OnShellScaling`）はこの手順の範囲の外なので、それに由来する見た目の違いは「違う」の数と分けて書く |
-| 6 右クリックメニュー | ぱすたを `rightclick`。着せ替えのメニューを開き、1 つ選ぶ | メニューの `shot`・着せ替えの後の `shot` と `dump_surface`・`get_log` | 自前の色（`menu.*`。普通の Windows のメニューに見せる色）のメニューが出て、着せ替えのメニューから選ぶと着せ替えが替わる（測りの記録 段 6） | `popup-menu-shell-look`（`menu.*` の色と絵・`sakura.menu,auto`） | メニューの色と絵がシェルの指定どおりになる。着せ替えのメニューが出る |
+| 6 右クリックメニュー | ぱすたを `rightclick`。着せ替えのメニューを開き、1 つ選ぶ | メニューの `shot`・着せ替えの後の `shot` と `dump_surface`・`get_log` | 自前の色（`menu.*`。普通の Windows のメニューに見せる色）のメニューが出て、着せ替えのメニューから選ぶと着せ替えが替わる（測りの記録 段 6） | `popup-menu-shell-look`（windows-reactor 待ち・`menu.*` の色と絵・`sakura.menu,auto`） | メニューの色と絵がシェルの指定どおりになる。着せ替えのメニューが出る |
 | 7 × で終わる | × の印を `click`。効かなければ右クリックメニューの「終了」 | 終わりの台詞の `shot`・`get_log`・`<回>.exitcode.txt` | × を押すと終わりの台詞の後に終わる（測りの記録 段 7） | `mouse-click-wheel-events`（× の `OnMouseClick`） | × で終われる（今は右クリックメニューの「終了」で終える見込み）。どちらで終えたかと終了コードを書く。終了コードは 0 が合格 |
 
 - 段 1 と段 2 では、重なりの順（窓が奥 → バルーン → ぱすたが手前）が見える範囲を `shot` で撮り、開発者が目視で決める。
@@ -214,7 +199,7 @@ pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <白地の点
 | ぱすたの身体 | `custom` | シェルの指定（`system:hand`）で、areka 同梱の手を開いた形が出る |
 | × の印 | `HAND` | 指定の無い当たり判定は指差しの形（SSP と同じ） |
 | ボール | `HAND` | × と同じ |
-| 当たり判定の無い窓の白地 | `ARROW` | 当たり判定の外は矢印 |
+| 窓の白地 | `HAND` | 2026-11-01 に取り寄せた書庫のシェルは窓の面（`surface10`〜`12`）全体に当たり判定 `窓` を持つ（クリックでランダムトーク）。指定の無い当たり判定なので指差しの形（SSP の基準を測った古い書庫には `窓` が無く `ARROW` だった） |
 
 押したときと放したときの形:
 
@@ -239,26 +224,14 @@ pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <身体の点
 |---|---|---|
 | シェル `seriko.alignmenttodesktop`（`free`）・`sakura.defaultx`（`0`） | 段 1 の起動の位置（手で動かす前の `shot`）。SSP の基準は記憶のある起動（`OnBoot`）の位置なので、起動の種類の違いを分けて書く | `descript-window-keys` の着地の後 |
 | シェル `sakura.balloon.offsetx`（`476`）・`offsety`（`58`） | 段 1・段 2 のバルーンのぱすたからのずれ（SSP は等倍で 40,58） | ぱすたの新しい書庫の後（縦書きのバルーンが手当てなしで出る形で見る） |
-| リソース `sakura.recommendsites` | 段 6 のメニュー（崩れ 15 と一緒に見る） | `popup-menu-shell-look` の着地の後 |
+| リソース `sakura.recommendsites` | 段 6 のメニュー（崩れ 15 と一緒に見る） | `popup-menu-shell-look`（windows-reactor 待ち）の着地の後 |
 | バルーン `anchor.font.color.*` | リンク（`\_a`）の字の色。7 段のどれにもリンクの字が出なければ「見た目・振る舞いに効かない」へ移す | 兄弟の spec の着地の後の回し直しで |
 | `collision*` | 段 3 の、顔を撫でたときの当たり（身体が映る起動で見る） | `mouse-click-wheel-events` の着地の後 |
 | `\![move,…]` | 段 1 の窓の枠（`\1`）の位置（手で動かす前の `shot`。`\0` の左上に重なって出るか） | 着地済みの `window-link-directives`（main の PR#360）の上で、次の回し直しで |
-| 右クリックメニューの見た目（崩れ 15） | 段 6 のメニューの `shot` を SSP の `stage6-menu-shot.png` と比べる | `popup-menu-shell-look` の着地の後 |
+| 右クリックメニューの見た目（崩れ 15） | 段 6 のメニューの `shot` を SSP の `stage6-menu-shot.png` と比べる | `popup-menu-shell-look`（windows-reactor 待ち）の着地の後 |
 | 縦書きのバルーンが書庫から入って出るか（崩れ 1・2） | 新しい書庫（`install.txt` に `balloon.directory,pasta_tategaki`・ghost_dev の `c32229e`）を入れて段 1・段 2 を回す。縦書きのバルーンで起動し（`balloon_resolved route=Descript`・`descript_balloon_not_found` が 0）、`\_l[x,0]` の後の段と選択肢が前の行に重ならないこと。入れ方は表の下 | ぱすたの新しい書庫のリリースの後（リリースは開発者が決める） |
 
 崩れ 1・2 の確かめの準備: 3 節の根を組む塊は書庫を写すだけで `install.txt` を読まない。新しいぱすたの書庫は、areka 自身のインストールで入れる（取り寄せた `.nar` を `$v` の下へ写し、4 節の起動の命令の `-ArgumentList` に `` '--install', "`"$v\pasta-in-windows.nar`"" `` を足して打つ。書庫は起動の前に 3 節の根へ入り、そのまま起動が続く）。同梱のバルーンは、main #364 の決めのとおりゴーストの中の `ghost\pasta-in-windows\balloon\pasta_tategaki\` に入る。この入れ方は案 B の前に実機で確かめる。
-
-### 代わりの操作（`mouse-click-wheel-events` の着地まで・任意）
-
-`mouse-click-wheel-events` が着地するまで、areka はボールのクリック（`OnMouseClick`）をぱすたへ送らない。ぱすたの初回の起動の台本（`OnFirstBoot`）は最後に `\0\s[1002]`（ボールと × だけの面）を出してボールのクリックを待つので、身体が最後まで映らない。身体と窓の枠を見るために、段 1 を撮り終えた後に、areka の MCP の `sakurascript` で次の台本を送ってよい（2026-10-23 開発者の承認の案 A）。
-
-```text
-\0\s[1000]\1\s[10]
-```
-
-- `ghost_name` は `get_active_ghost_list` で得た名前。送る前に `check_script` で確かめる。
-- 段 1 の判定は、代わりの操作の前の姿で決める。代わりの操作の後の結果（撮った物の名前は `1s-subst-` から始める）は「代わりの操作」として別に書き、段の 3 値の数には入れない。
-- `mouse-click-wheel-events` の着地の後は要らない（ボールのクリックで身体が映る）。この小節ごと外す。
 
 ## 6. 撮り方と数え方
 
@@ -274,7 +247,7 @@ pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <身体の点
 | `raise_event` | 段の台本を起こして原文を取るとき |
 | `get_property` | 窓の位置（表の下の「位置の読み方」） |
 | `get_log` | その段のあいだの記録 |
-| `sakurascript`・`check_script` | 5 節の代わりの操作 |
+| `check_script` | MCP の道具が areka を指していることの確かめ（2 節） |
 
 位置の読み方: 窓の位置は `get_property` で読み、測りの記録の rect と比べる。`currentghost.scope(0).rect` がぱすた、`currentghost.scope(1).rect` が窓の枠、`currentghost.balloon.scope(0).rect` がぱすたのバルーン。答えは「左,上,右,下」の物理の画素で、右と下はその画素を含まない。窓の無い番号は、`currentghost.scope(n).rect` が `0,0,0,0` で、`currentghost.balloon.scope(n).rect` が値なし（`NG`）で答える。
 
