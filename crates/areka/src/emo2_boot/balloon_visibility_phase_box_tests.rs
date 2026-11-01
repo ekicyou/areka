@@ -354,7 +354,7 @@ fn hiding_forgets_the_manual_position() {
         balloon_is_manual, manual_balloon_runtime,
     };
     for trigger in [VisibilityTrigger::Timeout, VisibilityTrigger::Clear] {
-        let (_gpu, runtime) = manual_balloon_runtime("0");
+        let (_permit, _gpu_world, runtime) = manual_balloon_runtime("0");
         let mut world = world_at(0.0);
         let mut presenter = EmoPresenter::new();
         attach_headless(&mut presenter, &mut world, 0);

@@ -11,7 +11,14 @@ use super::*;
 ///
 /// 手動の位置の表は提示で作られるので、実 GPU（本番の UI スレッドと同じ MTA）で小さいバルーンに
 /// あふれる行を流して 1 フレーム提示し、古い側へ 1 行送る。返す World は提示の資源を持つ。
-pub(crate) fn manual_balloon_runtime(actor: &str) -> (World, Rc<RefCell<TextLayerRuntime>>) {
+/// GPU の装置の許可は組の先頭で返す（束縛は後ろから捨てられるので、許可は装置より後に返る）。
+pub(crate) fn manual_balloon_runtime(
+    actor: &str,
+) -> (
+    crate::emo2_boot::spine::GpuPermit,
+    World,
+    Rc<RefCell<TextLayerRuntime>>,
+) {
     use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
     use areka_emo_text::place::PlaceKey;
     use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
@@ -24,6 +31,7 @@ pub(crate) fn manual_balloon_runtime(actor: &str) -> (World, Rc<RefCell<TextLaye
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
+    let permit = crate::emo2_boot::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore");
     let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
         .expect("WucGraphicsResource");
@@ -58,7 +66,7 @@ pub(crate) fn manual_balloon_runtime(actor: &str) -> (World, Rc<RefCell<TextLaye
         ScrollChange::Started,
         "前提: 古い行が押し出されていて手動の位置に入る"
     );
-    (world, Rc::new(RefCell::new(rt)))
+    (permit, world, Rc::new(RefCell::new(rt)))
 }
 
 /// 普通のバルーンの場所が手動の位置にいるか（新しい側へ 1 行送って、自動なら何も起きない）。

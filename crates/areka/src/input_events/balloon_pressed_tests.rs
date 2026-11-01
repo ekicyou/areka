@@ -61,11 +61,13 @@ struct Rig {
     flag_tx: mpsc::Sender<NoUserBreakSignal>,
     lifecycle: Receiver<TalkLifecycleSignal>,
     kanade: Receiver<KanadeMsg>,
+    /// GPU の装置の許可。World の装置より後に返すので欄の最後。
+    _permit: crate::emo2_boot::spine::GpuPermit,
 }
 
 /// 上下の矢印が出ている普通のバルーン（scope 0）の窓と、その受け口・結線。
 fn rig() -> Rig {
-    let (mut world, runtime) = manual_balloon_runtime("0");
+    let (permit, mut world, runtime) = manual_balloon_runtime("0");
     let actor = ActorKey::from("0");
     {
         let mut rt = runtime.borrow_mut();
@@ -104,6 +106,7 @@ fn rig() -> Rig {
         flag_tx,
         lifecycle,
         kanade,
+        _permit: permit,
     }
 }
 
