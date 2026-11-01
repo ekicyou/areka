@@ -1,15 +1,14 @@
 //! 画面を出す間だけスレッドを v2 に囲む部品のテスト（alert-dialog-per-monitor-dpi）。
 //!
-//! 関門 0（要件 4.6）: 実機でメッセージボックスを出し、その窓の DPI の扱いを areka のコードの中から
-//! 読む 2 本（`#[ignore]`・排他テストの机を取ってから 1 本ずつ別のプロセスで走らせる）。
-//! 画面が出ている間に同じスレッドのタイマーの呼び戻しで題名 [`PROBE_TITLE`] の `#32770` の窓を探し、
-//! 読んだら閉じる（メッセージボックスは `WM_CLOSE`・タスクダイアログは `TDM_CLICK_BUTTON`）。
-//! 場合ごとに ASCII の `ALERT-DPI-PROBE ...` を 1 行出す。案 B の測り（タスクダイアログ）も同じ道で読む。
+//! 実機の測り（`#[ignore]`・排他テストの机を取ってから走らせる）: タスクダイアログを出し、その窓の
+//! DPI の扱いを areka のコードの中から読む。画面が出ている間に同じスレッドのタイマーの呼び戻しで、
+//! 場合ごとに置いた題名の `#32770` の窓を探し、読んだら `TDM_CLICK_BUTTON` で閉じる。
+//! 場合ごとに ASCII の `ALERT-DPI-PROBE ...` を 1 行出す。
 //!
-//! 測りが直に出すメッセージボックス・タイマー・窓の読み取り・スレッドの局所の置き場の `unsafe` は
-//! このファイルに閉じ、`alert.rs` には置かない（`MessageBoxW` は本番の 1 か所のまま）。
+//! 測りが直に出すタスクダイアログ・タイマー・窓の読み取り・スレッドの局所の置き場の `unsafe` は
+//! このファイルに閉じ、`alert.rs` には置かない。
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
@@ -23,14 +22,14 @@ use windows::Win32::UI::HiDpi::{
     MDT_EFFECTIVE_DPI,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumThreadWindows, GetClassNameW, GetWindowTextW, IDOK, KillTimer, MB_OK, MessageBoxW,
-    PostMessageW, PostQuitMessage, SetTimer, WM_CLOSE,
+    EnumThreadWindows, GetClassNameW, GetWindowTextW, IDOK, KillTimer, PostMessageW,
+    PostQuitMessage, SetTimer,
 };
 use windows::core::{BOOL, HSTRING, PCWSTR};
 
-// ---------------------------------------------------------------- 関門 0 の測り（実機・#[ignore]）
+// ---------------------------------------------------------------- 実機の測り（#[ignore]）
 
-/// 測りの画面の題名（窓を探す鍵）。
+/// 測りの画面の題名（案 B の測りの窓を探す鍵）。
 const PROBE_TITLE: &str = "areka-alert-dpi-probe";
 /// 測りの画面の本文。
 const PROBE_BODY: &str = "areka alert DPI probe (closes by itself)";
@@ -62,9 +61,8 @@ thread_local! {
     static TICKS: Cell<u32> = const { Cell::new(0) };
     /// 見つけた窓から読んだ値。
     static FOUND: Cell<Option<WindowRead>> = const { Cell::new(None) };
-    /// 読んだ後に窓へ送る閉じる知らせ（メッセージ, wParam）。`WM_COMMAND`＋`IDOK` では
-    /// メッセージボックスは閉じない（実機で確かめた）。タスクダイアログは `WM_CLOSE` で閉じない。
-    static CLOSE: Cell<(u32, usize)> = const { Cell::new((WM_CLOSE, 0)) };
+    /// 窓を探す鍵の題名。場合ごとに [`probe_case`] が置く。
+    static KEY: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 /// 扱いの値を 0＝非対応・1＝system・2＝モニタごとの数にする（無効なら -1）。
@@ -79,7 +77,7 @@ fn thread_awareness() -> i32 {
     awareness(unsafe { GetThreadDpiAwarenessContext() })
 }
 
-/// `EnumThreadWindows` の呼び戻し: クラス `#32770`・題名 [`PROBE_TITLE`] の窓を `lparam` の先へ書いて止める。
+/// `EnumThreadWindows` の呼び戻し: クラス `#32770`・題名が [`KEY`] の窓を `lparam` の先へ書いて止める。
 unsafe extern "system" fn find_probe(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let (mut class, mut title) = ([0u16; 64], [0u16; 64]);
     // SAFETY: `hwnd` は OS が列挙で渡した窓、バッファはこの関数の中で生きている。
@@ -91,7 +89,7 @@ unsafe extern "system" fn find_probe(hwnd: HWND, lparam: LPARAM) -> BOOL {
     };
     let class = String::from_utf16_lossy(&class[..class_len.max(0) as usize]);
     let title = String::from_utf16_lossy(&title[..title_len.max(0) as usize]);
-    if class == "#32770" && title == PROBE_TITLE {
+    if class == "#32770" && KEY.with_borrow(|key| title == *key) {
         // SAFETY: `lparam` は `on_tick` の局所の `HWND` を指し、列挙の間ずっと生きている。
         unsafe { *(lparam.0 as *mut HWND) = hwnd };
         return BOOL(0);
@@ -139,10 +137,11 @@ unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
             }
         };
         FOUND.set(Some(read));
+        // 閉じる知らせではタスクダイアログは閉じないので OK のボタンを押す。
         // SAFETY: 窓は生きている画面の窓、`timer` は OS が渡したこのスレッドのタイマー。
         unsafe {
-            let (message, wparam) = CLOSE.get();
-            let _ = PostMessageW(Some(hwnd), message, WPARAM(wparam), LPARAM(0));
+            let button = WPARAM(IDOK.0 as usize);
+            let _ = PostMessageW(Some(hwnd), TDM_CLICK_BUTTON.0 as u32, button, LPARAM(0));
             let _ = KillTimer(None, timer);
         }
         return;
@@ -159,10 +158,12 @@ unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
     }
 }
 
-/// 新しいスレッドで `setup` の後に `show` で画面を 1 つ出して測り、1 行を出して返す。
-/// `show` の戻り値は行の `box=`（メッセージボックスは押されたボタン・タスクダイアログは HRESULT）。
-fn probe_case(case: &'static str, setup: fn(), show: fn() -> i32) -> ProbeRow {
+/// 新しいスレッドで題名 `title` を窓を探す鍵に置き、`setup` の後に `show` で画面を 1 つ出して測り、
+/// 1 行を出して返す。`show` の戻り値は行の `box=`（タスクダイアログの HRESULT）。
+fn probe_case(case: &'static str, title: &str, setup: fn(), show: fn() -> i32) -> ProbeRow {
+    let title = title.to_owned();
     let row = std::thread::spawn(move || {
+        KEY.set(title);
         setup();
         // SAFETY: 呼んだプロセスの疑似ハンドルで扱いを読むだけ。
         let process =
@@ -207,26 +208,8 @@ fn thread_v2() {
     super::set_thread_dpi_context(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 }
 
-/// 何も替えない（プロセスの既定を受ける）。
-fn thread_inherit() {}
-
-/// `MessageBoxW` を直に出す。
-fn box_direct() -> i32 {
-    let (title, body) = (HSTRING::from(PROBE_TITLE), HSTRING::from(PROBE_BODY));
-    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
-    unsafe { MessageBoxW(None, &body, &title, MB_OK) }.0
-}
-
-/// 本番の道（[`super::show_box`]）で出す。
-fn box_wrapped() -> i32 {
-    super::show_box("alert", PROBE_TITLE, PROBE_BODY, MB_OK)
-        .result
-        .0
-}
-
 /// タスクダイアログ（OK だけ・エラーの絵）を直に出し、HRESULT を返す（失敗も行に載せる）。
 fn task_dialog() -> i32 {
-    CLOSE.set((TDM_CLICK_BUTTON.0 as u32, IDOK.0 as usize));
     let (title, body) = (HSTRING::from(PROBE_TITLE), HSTRING::from(PROBE_BODY));
     // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、絵は OS の定数、
     // 主の指示は空、持ち主・インスタンス・押されたボタンの出力先は None。
@@ -252,48 +235,24 @@ fn task_dialog_wrapped() -> i32 {
     super::with_thread_per_monitor("alert", super::set_thread_dpi_context, task_dialog)
 }
 
-/// 関門 0 の初めの 3 つの場合。判定は `wrapped_from_unaware` の窓が v2 であること。
-#[test]
-#[ignore = "real dialog: shows a message box on the desktop"]
-fn probe_alert_box_window_dpi() {
-    let rows = [
-        probe_case("unwrapped_unaware", thread_unaware, box_direct),
-        probe_case("wrapped_from_unaware", thread_unaware, box_wrapped),
-        probe_case("unwrapped_thread_v2", thread_v2, box_direct),
-    ];
-    for row in &rows {
-        assert!(row.read.is_some(), "画面の窓が見つからない: {}", row.line);
-    }
-    let wrapped = rows[1].read.expect("上で確かめた");
-    assert!(
-        wrapped.thread_during == 2 && wrapped.window_v2,
-        "囲んだ画面の窓が v2 でない（関門 0 を通らない）: {}",
-        rows[1].line
-    );
-}
-
-/// 関門 0 の 4 つ目の場合: プロセスを先に v2 に立て、スレッドは替えずに直に出す。
-/// プロセスの扱いは戻せないので別の 1 本（別のプロセスで走らせる）。
-#[test]
-#[ignore = "real dialog: shows a message box on the desktop"]
-fn probe_alert_box_window_dpi_process_v2() {
-    wintf::ensure_process_dpi_awareness();
-    let row = probe_case("process_v2_default", thread_inherit, box_direct);
-    assert!(row.read.is_some(), "画面の窓が見つからない: {}", row.line);
-}
-
 /// 案 B の測り: タスクダイアログ（comctl32 v6）の窓の扱い。測るだけで v2 は判定しない（進行役が読む）。
 #[test]
 #[ignore = "real dialog: shows a task dialog on the desktop"]
 fn probe_alert_task_dialog_window_dpi() {
     let rows = [
-        probe_case("taskdialog_unaware", thread_unaware, task_dialog),
+        probe_case(
+            "taskdialog_unaware",
+            PROBE_TITLE,
+            thread_unaware,
+            task_dialog,
+        ),
         probe_case(
             "taskdialog_wrapped_from_unaware",
+            PROBE_TITLE,
             thread_unaware,
             task_dialog_wrapped,
         ),
-        probe_case("taskdialog_thread_v2", thread_v2, task_dialog),
+        probe_case("taskdialog_thread_v2", PROBE_TITLE, thread_v2, task_dialog),
     ];
     for row in &rows {
         assert!(row.read.is_some(), "画面の窓が見つからない: {}", row.line);
