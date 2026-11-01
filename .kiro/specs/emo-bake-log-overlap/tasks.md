@@ -86,3 +86,5 @@
 - 4.1（完了の棚卸の材料）: 2 層マージ `load_scope_balloon_model`（`areka-emo-present/src/balloon.rs:548`）は、窓の位置の読み `crates/areka/src/placement/mod.rs:825` と、資産の組み立ての `areka-emo-present/src/balloon_definitions.rs:98`（`build_balloon_target` の読み込み）の 2 か所から呼ばれ、基層・上書き層の読めない `warn!` と確定の記録が重ねて出る（e8ee67f6 の上で引き直し・design の 825 行と一致）。直すには `placement/mod.rs` を記録を出さない入口へ替える。`shell-scale-linkage` の着地の後に取る。
 - 4.1 の確かめ（e8ee67f6・基準 9604677a）: 触らない約束のファイルの差分 0、`measure_first_frame.rs` は説明の 2 行だけ、触ったファイルの最大は `shell_target.rs` 951 行、`placement` の本番のファイルの `crate::` は `measure_first_frame.rs` の説明文（前からある）だけ。
 - 4.1 のテスト: 4 クレートの単体テストは緑（areka 4099・present 408・compose 429・atlas 204＋21）。areka の実機の統合テスト（`smoke_boot_loop_exit` ほか 7 本）は、この作業木に 32bit の `shiori-host32-helper.exe` が未ビルドで即座に落ちる（前提の欠け・areka を立てる前）。これは排他テストの机で回す全体テストの範囲で、`/kiro-validate-impl` が受け持つ。
+- 完了時にその場で解決: `areka-emo-compose/src/world.rs` の `populate_from_shell` の説明が古い `fold_shell` を指していたのを `fold_shell_with` に直した（説明だけ）。
+- 完了時の棚卸: clippy 1.99 の赤（compose・present のテスト・dola）は `clippy-199-lints` の brief（件 1）に、spine の揺れは `areka-test-binary-stability` の brief に起票済み。例外 2（2 層マージの重なり）は `/kiro-discovery` で起票した。
