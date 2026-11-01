@@ -1,5 +1,9 @@
 //! 画面を出す間だけスレッドを v2 に囲む部品のテスト（alert-dialog-per-monitor-dpi）。
 //!
+//! 決定論のテスト D1〜D5（画面は出さない・`TaskDialogIndirect` は呼ばない）: 偽の切り替えで
+//! 囲んで戻す順と替えられなかったときの記録（D1〜D3）、本物の切り替えでの前と後（D4・新しいスレッド）、
+//! はい／いいえの答えの読み方（D5）。記録は `log-capture-kit` で見る。
+//!
 //! 実機の測り（`#[ignore]`・排他テストの机を取ってから走らせる）: タスクダイアログを出し、その窓の
 //! DPI の扱いを areka のコードの中から読む。画面が出ている間に同じスレッドのタイマーの呼び戻しで、
 //! 場合ごとに置いた題名の `#32770` の窓を探し、読んだら `TDM_CLICK_BUTTON` で閉じる。
@@ -10,22 +14,157 @@
 
 use std::cell::{Cell, RefCell};
 
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use log_capture_kit::capture;
+use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, WPARAM};
 use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
 use windows::Win32::System::Threading::{GetCurrentProcess, GetCurrentThreadId};
 use windows::Win32::UI::Controls::{TD_ERROR_ICON, TDCBF_OK_BUTTON, TDM_CLICK_BUTTON, TaskDialog};
 use windows::Win32::UI::HiDpi::{
     AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT,
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, DPI_AWARENESS_CONTEXT_UNAWARE,
-    GetAwarenessFromDpiAwarenessContext, GetDpiAwarenessContextForProcess, GetDpiForMonitor,
-    GetDpiForSystem, GetDpiForWindow, GetThreadDpiAwarenessContext, GetWindowDpiAwarenessContext,
-    MDT_EFFECTIVE_DPI,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,
+    DPI_AWARENESS_CONTEXT_UNAWARE, GetAwarenessFromDpiAwarenessContext,
+    GetDpiAwarenessContextForProcess, GetDpiForMonitor, GetDpiForSystem, GetDpiForWindow,
+    GetThreadDpiAwarenessContext, GetWindowDpiAwarenessContext, MDT_EFFECTIVE_DPI,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumThreadWindows, GetClassNameW, GetWindowTextW, IDOK, KillTimer, PostMessageW,
-    PostQuitMessage, SetTimer,
+    EnumThreadWindows, GetClassNameW, GetWindowTextW, IDCANCEL, IDNO, IDOK, IDYES, KillTimer,
+    MESSAGEBOX_RESULT, PostMessageW, PostQuitMessage, SetTimer,
 };
 use windows::core::{BOOL, HSTRING, PCWSTR};
+
+// ---------------------------------------------------------------- 決定論のテスト D1〜D5（画面なし）
+
+/// 偽の切り替えと処理が呼ばれた順の 1 歩。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Switch(DPI_AWARENESS_CONTEXT),
+    Show,
+}
+
+/// 偽の切り替え（前の扱いとして `previous` を返す）で `show` を囲み、戻り値と歩みと記録を返す。
+fn wrap_with_fake<T>(
+    previous: DPI_AWARENESS_CONTEXT,
+    show: impl FnOnce() -> T,
+) -> (T, Vec<Step>, Vec<log_capture_kit::CapturedEvent>) {
+    let steps = RefCell::new(Vec::new());
+    let (out, events) = capture(|| {
+        super::with_thread_per_monitor(
+            "ask",
+            |context| {
+                steps.borrow_mut().push(Step::Switch(context));
+                previous
+            },
+            || {
+                steps.borrow_mut().push(Step::Show);
+                show()
+            },
+        )
+    });
+    (out, steps.into_inner(), events)
+}
+
+/// D1（要件 3.1）: 前の扱いが有効なら「v2」「処理」「前の扱い」の順で、処理の戻り値がそのまま返り、記録は 0 件。
+#[test]
+fn d1_wraps_and_restores_previous_context_in_order() {
+    let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || 42);
+    assert_eq!(out, 42);
+    assert_eq!(
+        steps,
+        [
+            Step::Switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2),
+            Step::Show,
+            Step::Switch(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE),
+        ]
+    );
+    assert!(events.is_empty(), "記録は 0 件: {events:?}");
+}
+
+/// D2（要件 1.5）: 替えられなかったら戻さずに今の扱いのまま 1 回出し、warn を欄 `dialog` 付きで 1 件残す。
+#[test]
+fn d2_unchanged_context_shows_once_without_restore_and_warns() {
+    let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT::default(), || 7);
+    assert_eq!(out, 7);
+    assert_eq!(
+        steps,
+        [
+            Step::Switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2),
+            Step::Show,
+        ]
+    );
+    assert_eq!(events.len(), 1, "記録はちょうど 1 件: {events:?}");
+    let ev = &events[0];
+    assert_eq!(ev.level, tracing::Level::WARN);
+    assert_eq!(ev.field_str("event"), Some("alert_dpi_context_unchanged"));
+    assert_eq!(ev.field_str("dialog"), Some("ask"));
+}
+
+/// D3（要件 3.2）: 処理が失敗を返しても前の扱いへ戻し、失敗をそのまま返す。
+#[test]
+fn d3_restores_context_even_when_show_fails() {
+    let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || {
+        windows::core::Result::<MESSAGEBOX_RESULT>::Err(E_FAIL.into())
+    });
+    assert_eq!(out.map_err(|e| e.code()), Err(E_FAIL));
+    assert_eq!(
+        steps,
+        [
+            Step::Switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2),
+            Step::Show,
+            Step::Switch(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE),
+        ]
+    );
+    assert!(events.is_empty(), "記録は 0 件: {events:?}");
+}
+
+/// 呼んだスレッドの今の扱いが `context` と同じか。
+fn thread_is(context: DPI_AWARENESS_CONTEXT) -> bool {
+    // SAFETY: どちらも読むだけの関数。引数は OS が返したスレッドの扱いと OS の定数。
+    unsafe { AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), context) }.as_bool()
+}
+
+/// D4 の本体: 新しいスレッドで扱いを `start` にしてから本物の切り替えで囲み、
+/// 処理の中は v2・戻った後は `start`・記録は 0 件であることを確かめる。
+fn real_switch_wraps_and_restores(start: DPI_AWARENESS_CONTEXT) {
+    // 扱いの値は窓のハンドルと同じくスレッドをまたいで送れないので、整数にして渡す。
+    let start = start.0 as isize;
+    std::thread::spawn(move || {
+        let start = DPI_AWARENESS_CONTEXT(start as *mut _);
+        super::set_thread_dpi_context(start);
+        assert!(thread_is(start), "前提: スレッドを始めの扱いにできた");
+        let (during, events) = capture(|| {
+            super::with_thread_per_monitor("alert", super::set_thread_dpi_context, || {
+                thread_is(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+            })
+        });
+        assert!(during, "処理の中のスレッドの扱いは v2");
+        assert!(thread_is(start), "戻った後は始めの扱い");
+        assert!(events.is_empty(), "替えられたので記録は 0 件: {events:?}");
+    })
+    .join()
+    .expect("D4 のスレッドが panic した");
+}
+
+/// D4（要件 1.3・3.1）: 非対応のスレッドから本物の切り替えで囲む。
+#[test]
+fn d4_real_switch_from_unaware_thread() {
+    real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_UNAWARE);
+}
+
+/// D4（要件 1.3・3.1）: v2 のスレッドから本物の切り替えで囲む。
+#[test]
+fn d4_real_switch_from_v2_thread() {
+    real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+}
+
+/// D5（要件 2.1）: 「はい」と読むのは `IDYES` だけで、閉じたと失敗は「出せなかった」。
+#[test]
+fn d5_yes_no_answer_mapping() {
+    use super::{YesNo, yes_no_answer};
+    assert_eq!(yes_no_answer(&Ok(IDYES)), YesNo::Yes);
+    assert_eq!(yes_no_answer(&Ok(IDNO)), YesNo::No);
+    assert_eq!(yes_no_answer(&Ok(IDCANCEL)), YesNo::Unavailable);
+    assert_eq!(yes_no_answer(&Err(E_FAIL.into())), YesNo::Unavailable);
+}
 
 // ---------------------------------------------------------------- 実機の測り（#[ignore]）
 
