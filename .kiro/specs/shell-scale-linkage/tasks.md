@@ -156,3 +156,8 @@
 - 6.2: `run_scale_notice_phase` は設計の `&mut World` でなく `&World` を取る（読むだけ）。同じフレームの檻は設計の `frame/scale_notice_tests.rs` でなく `emo2_boot/frame_scale_notice_integration_tests.rs`（`frame_visibility_integration_tests.rs` の子・ハーネスを共有）。設計の File Structure Plan を完了時に実態へ合わせる。`gpu_frame_world` の注釈の「WARP 可」は古い（実際は HARDWARE）。
 - 9.2: 段 4（本体とバルーンを DPI の違う画面に分ける）は、バルーンが本体の画面の作業領域へ押し戻され（`balloon-limit`・`BalloonFollow`）、`\![set,balloonoffset]`／`\![set,balloonalign]` も未対応のため作れない。開発者の裁定（2026-11-01・案 A）で「起きない形」として閉じ、離して置ける仕組みができたら確かめ直す件を完了の棚卸で `/kiro-discovery` に起票する。
 - 9.2: `doc/pasta-real-run.md` の DPI の測り方と `tools/mouse-input.ps1` は `SetProcessDpiAwarenessContext` を使うため pwsh の中では効かず（既に意識が決まっている）、DPI は 192 のまま・座標は 1 画素ずれる。`SetThreadDpiAwarenessContext` に替えると正しい。完了の棚卸で起票する（その場で直すかは棚卸で決める）。
+- 完了時にその場で解決: 1.3 の逆写像の二重化は `WindowKey::from_target_id` を `target_map::target_scope` に任せて 1 つにした（`cd4f636e`）。
+- 完了時にその場で解決: 実 GPU の檻の注釈の古い「WARP 可」を、本 spec の外（areka-emo-text の檻）も含めて外した（`438e6701`）。
+- 完了時にその場で解決: `tools/mouse-input.ps1`・`tools/perf/invoke-followup-checks.ps1`・`doc/pasta-real-run.md` の DPI の取り方を `SetThreadDpiAwarenessContext` に替えた（`bf997862`・手順書の測りで DISPLAY2 が 144dpi と出ることを確かめた）。
+- 完了時にその場で解決: 設計の File Structure Plan と `run_scale_notice_phase` の型、台帳 `shiori.toml` の 2 行の檻の道（`raise_event_tests.rs` を足す）を実物に合わせた（`69bcbbc0`）。
+- 完了時に起票: 段 4 の確かめ直しと `\![set,balloonoffset]`／`\![set,balloonalign]` の実装を `balloon-script-offset-align` として起票した（条件: 規模が spec 1 本・新しい仕組み）。
