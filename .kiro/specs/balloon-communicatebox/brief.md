@@ -86,3 +86,7 @@
   - 本文 Scope の「ぱすたの実機の確かめ（`ghost-inner-balloon` の着地の後）」は古い（着地済み）。本文 Constraints の「ゴーストの窓は普段フォーカスを取らない」は言い過ぎ（キャラクターの窓は `WS_EX_NOACTIVATE` を持たず活性化を受ける＝入力欄を出すときの活性化の扱いは要件で決める）。
   - 状態の語 `opening(communicate)`（`status.rs` の `OpeningKind::Communicate`）を立てるかは要件の段で決める（MCP の `get_status` の答えが変わる）。
   - 棚卸㉙の追記の台帳の注記は、今 `shiori.toml` 16231 行目（16142・16163〜16165・16215 行目は古い）。ukadoc の `communicatebox.placeholder.color.r/g/b`（2.9.10）は台帳にも写し（`catalog.toml`）にも行が無いまま＝範囲に入れるなら、行の無いまま作るか写しの更新（`ukadoc-catalog-refresh`）を先にするかを決める。
+
+## 2026-11-01 棚卸㉝の後の開発者の決め
+
+2026-11-01 開発者「コミュニケーションボックスはリアクター待ちです」＝v0.1.0 から windows-reactor 待ちの段へ移した（入力の部品は WinUI3 の側に任せる見込み）。棚卸㉝の C16 で `/kiro-wave` が始めたセッションは止めて消した＝マージしない。windows-reactor のアプリ化の仕様が下りてきたら、この brief を測り直してから要件の段へ進む。ぱすたの申し送りの 1 本であることは変わらない。

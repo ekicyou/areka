@@ -108,3 +108,7 @@
 ## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
 
 - `communicatebox`（`\![open,communicatebox]`・`\![close,communicatebox]`・`OnCommunicate`・`OnCommunicateInputCancel`・バルーンの `communicatebox.*`）は v0.1.0 の新しい spec `balloon-communicatebox` が持つ（ぱすたの縦書きのバルーンが鍵を持つ・`verification.md` 10 節）。areka で初めての文字の入力欄の部品は同 spec が先に作る＝本 spec は同 spec の後に置き、その部品を使う。
+
+## 2026-11-01 棚卸㉝の後の開発者の決め
+
+2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」）＝v0.3.0 から windows-reactor 待ちの段へ移した。入力欄は WinUI3 で描ける部品で、`balloon-communicatebox` と同じ扱い。windows-reactor のアプリ化の仕様が下りてきたら測り直す。
