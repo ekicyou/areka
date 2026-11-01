@@ -94,7 +94,7 @@ using System;
 using System.Runtime.InteropServices;
 
 public class AkMouseInputW32 {
-    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT pt);
     [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint count, [In] INPUT[] inputs, int size);
     [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
@@ -118,7 +118,7 @@ public class AkMouseInputW32 {
 }
 
 # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4 (all coordinates below are physical pixels)
-$null = [AkMouseInputW32]::SetProcessDpiAwarenessContext([IntPtr](-4))
+$null = [AkMouseInputW32]::SetThreadDpiAwarenessContext([IntPtr](-4))
 
 $MOVE = 0x0001; $LEFTDOWN = 0x0002; $LEFTUP = 0x0004; $RIGHTDOWN = 0x0008; $RIGHTUP = 0x0010
 $ABSOLUTE = 0x8000; $VIRTUALDESK = 0x4000

@@ -151,7 +151,7 @@ public class AkFollowupW32 {
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     public delegate bool MonitorEnumProc(IntPtr hMon, IntPtr hdc, IntPtr rect, IntPtr data);
 
-    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
@@ -185,7 +185,7 @@ public class AkFollowupW32 {
 }
 
 # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4（以降の座標はすべて物理 px）
-$null = [AkFollowupW32]::SetProcessDpiAwarenessContext([IntPtr](-4))
+$null = [AkFollowupW32]::SetThreadDpiAwarenessContext([IntPtr](-4))
 
 $GWL_EXSTYLE        = -20
 $WS_EX_TRANSPARENT  = 0x20
