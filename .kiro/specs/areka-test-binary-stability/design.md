@@ -183,17 +183,18 @@ flowchart TD
 | 走行 | 範囲（libtest の絞り込み） | 負荷 | スレッドの数 | 回数 | 1 回の上限 |
 |---|---|---|---|---|---|
 | 較正 | 較正のテスト 1 本（`--ignored --exact`）を `areka`・`wintf` の lib でそれぞれ | なし | 既定 | 各 1 | 5 分 |
-| X1 | `emo2_boot::frame`・`frame_scale_notice_integration_tests`・自分で COM と GPU の装置を開く 28 ファイルのモジュール名（数え直しで並べる） | 論理 CPU の 2 倍 | 既定 | 10（0 件ならさらに 10） | 10 分 |
-| X1b | X1 と同じ | なし | 4 | 20 | 10 分 |
-| X2 | X1 と同じ | X1 と同じ | X1 と同じ | X1 と同じ | 10 分 |
-| X3 | X1 と同じ | X1 と同じ | X1 と同じ | X1 と同じ | 10 分 |
-| Y1 | `begin_draw_roundtrip alpha_mask_resource bitmap_source`（`wintf` の lib） | なし | 既定 | 20 | 5 分 |
-| Y2 | Y1 と同じ | なし | 既定 | 20 | 5 分 |
+| X1 | `emo2_boot::frame`（`scale_notice_integration_tests` を含む）と、自分で COM と GPU の装置を開く 28 ファイルのモジュールの道（数え直しで並べる・ファイルの名前でなくモジュールの道で書く） | 論理 CPU の 2 倍 | 既定 | 報告つきの落ちが 1 回出たら止める・最大 20 | 10 分 |
+| X1b | X1 と同じ（X1 が 20 回で 0 件のときだけ） | なし | 4 | 報告つきの落ちが 1 回出たら止める・最大 20 | 10 分 |
+| X2 | X1 の報告の持ち手の行と生きているテストの一覧に出たテストのモジュール（並走の相手が要るなら X1 の範囲を残し、その訳を記録に書く） | X1 と同じ | X1 と同じ | 落ちたら止める・落ちなければ 20 | 10 分 |
+| X3 | X2 と同じ | X1 と同じ | X1 と同じ | 落ちたら止める・落ちなければ 20 | 10 分 |
+| Y1 | `begin_draw_roundtrip alpha_mask_resource bitmap_source`（`wintf` の lib） | なし | 既定 | 報告つきの落ちが 1 回出たら止める・最大 20 | 5 分 |
+| Y2 | Y1 と同じ | なし | 既定 | 落ちたら止める・落ちなければ 20 | 5 分 |
 | 件 5 | `session_mark`（`areka`） | なし | 既定 | 10 | 10 分 |
 
 - X2 は許可の数を 1 にする（`AREKA_TEST_GPU_SLOTS=1`）。X3・Y2 はテストのプロセスの初めに `CoIncrementMTAUsage` を呼ぶ（`AREKA_TEST_MTA_KEEPER=1`）。どちらも測りの間だけの口で、ふだんの走行では読まれない値が無ければ今と同じ（下の GpuSlots・CrashReport の節）。
 - 回数の訳: 前の記録（`load-repro.md` の 4.7〜4.9）では負荷の下でおおむね 5 回に 1 回落ちた。その率なら 20 回で 1 度も落ちない見込みは約 1%、件 3 の 8 回で 2 回の率なら 20 回で 0 件の見込みは 1% 未満。
-- 所要時間の見込みは、X1 の 1 回目を回し終えた所で言い直す（要件 9.2）。全体の負荷 5 回は約 50 分（前の記録）。
+- 止め方は左右で分ける（要件 9.3・開発者の決まり「2 回目からは赤のテストに絞って短く」）: 落ちを採る走行（X1・X1b・Y1）と「落ちが残る」側の対照は、報告つきの落ちが 1 回出た時点で決まるので止める。「落ちが消える」側は見逃しの見込みが約 1% になる 20 回を回す。X2・X3 は X1 の報告が名指したテストへ絞る。
+- 所要時間の見込みは、系列ごとに「最大の回数 × 1 回の見込み」を始める前に `load-repro.md` へ書いて開発者へ伝え、X1 の 1 回目を回し終えた所で言い直す（要件 9.2）。全体の負荷 5 回は約 50 分（前の記録）。
 
 ### 原因ごとの直し（要件 1.5〜1.8・2.2・2.3）
 
@@ -237,7 +238,7 @@ flowchart TD
 | 5.2 | 放す時機を拒みの観測に結ぶ | RenameSeam・HoldCage | 同上 | — |
 | 5.3 | 確かめの内容を弱めない | HoldCage | — | — |
 | 5.4 | 本番の試し直しを変えない | RenameSeam | `#[cfg(test)]` だけ | — |
-| 6.1 | 許可の待ちに上限 | GpuSlots | `take_with`・`GPU_PERMIT_IDLE` | — |
+| 6.1 | 許可の待ちに上限 | GpuSlots | `judge_permit_wait`・`GPU_PERMIT_IDLE` | — |
 | 6.2 | 打ち切りの文言 | GpuSlots | `PermitWaitFailure` | — |
 | 6.3 | 2 つ取りの待ち合いの檻 | GpuSlots（檻） | `GpuSlots::new(2)`・偽の時計 | — |
 | 6.4 | 全ての GPU の足場が許可を取る | BalloonRuntimeScaffold | `manual_balloon_runtime` | Align |
@@ -311,7 +312,8 @@ flowchart TD
 - 置き場は `crates/areka/src/emo2_boot/crash_report_test_support.rs` と、同じ中身の写し `crates/wintf/src/test_crash_report.rs`（どちらも `#[cfg(test)]`）。新しいクレートを作らない（依存を足さない）ための写しで、2 つのファイルの頭に「写しの相手」を 1 行書く。
 - 据え付けは `#[used] #[unsafe(link_section = ".CRT$XCU")] static` の初期化子から `SetUnhandledExceptionFilter` を 1 度呼ぶ。テストの実行ファイルの根のクレートの中に置くので、リンクで落ちない（較正で確かめる）。`main.rs` は触らない。
 - 受け手は書いた後に `EXCEPTION_CONTINUE_SEARCH` を返す（前の受け手があればそれを呼ぶ）。プロセスはこれまでどおり `0xc0000005` で終わり、`load-flake.ps1` の終了コードの数えは変わらない。
-- 書く順は、割り当ての無い 1 行目（例外のコード・番地・スレッドの番号）→ 落ちたスレッドの名前とモジュール → 生きているスレッドの一覧 → `std::backtrace::Backtrace::force_capture()`。後ろの段で錠やヒープが壊れて止まっても、前の行は残る（止まったときは回の上限の時間で `load-flake.ps1` が木を止める）。
+- 許可の持ち手の表: `GpuSlots` の `take`／許可の `Drop` で、許可を持つスレッドの番号と名前を固定の配列（上限 4 本・割り当て無し）に載せ降ろしする。落ちたスレッドが名前の無いドライバや COM のスレッドでも、どのテストが GPU の装置を持っていたかを `AREKA-CRASH-HOLDER` の行で名指す（要件 1.1）。`wintf` の lib の写しは並ぶテストが少ないので表を持たず、生きているスレッドの一覧で読む。
+- 書く順は、割り当ての無い 1 行目（例外のコード・番地・スレッドの番号）→ 落ちたスレッドの名前とモジュール → 許可の持ち手の表 → 生きているスレッドの一覧 → `std::backtrace::Backtrace::force_capture()`。後ろの段で錠やヒープが壊れて止まっても、前の行は残る（止まったときは回の上限の時間で `load-flake.ps1` が木を止める）。
 - 書き先は標準エラーの OS のハンドルへ直に書く（`io::stderr().as_raw_handle()` を `ManuallyDrop<File>` で包む）。libtest の捕まえ（`print!` の横取り）を通らず、`std` の標準エラーの錠も取らない。
 - 測りの間だけの口: 初期化子は `AREKA_TEST_MTA_KEEPER` が `1` なら `CoIncrementMTAUsage` を呼ぶ（X3・Y2）。候補 B が原因と決まれば、口を外して無条件に呼ぶ形が直しになる。B でなければ口ごと外す。
 
@@ -328,9 +330,10 @@ extern "C" fn install();
 /// 捕まえられなかった例外の最後の受け手。書き終えたら次の受け手へ回す。
 unsafe extern "system" fn report(info: *const EXCEPTION_POINTERS) -> i32; // EXCEPTION_CONTINUE_SEARCH
 
-/// 較正（`#[ignore = "..."]`・`--ignored --exact` でだけ回す）。名前の無いスレッドを 1 本起こし、
-/// そこで `RaiseException(0xC0000005)` を起こす。出力に落ちたスレッド（名前なし）と、生きている
-/// スレッドの一覧の中の自分のテストの名前が出ることを、`load-flake.ps1` の summary で見る。
+/// 較正（`#[ignore = "..."]`・`--ignored --exact` でだけ回す）。areka では許可を 1 つ取り `GraphicsCore` を
+/// 作った後に（GPU の DLL を読み込んだ後も受け手が生きていることを見るため）、名前の無いスレッドを 1 本起こし、
+/// そこで `RaiseException(0xC0000005)` を起こす。出力に落ちたスレッド（名前なし）・持ち手の行の自分のテストの名前・
+/// 生きているスレッドの一覧が出ることを、`load-flake.ps1` の summary で見る。wintf の lib は装置を作らずに同じ形で起こす。
 #[test]
 #[ignore = "較正: わざとプロセスを落とす（要件 1.2）"]
 fn crash_report_names_the_running_test();
@@ -338,6 +341,7 @@ fn crash_report_names_the_running_test();
 - 出力の行の形（ASCII の頭・`load-flake.ps1` が拾う）:
   - `AREKA-CRASH code=0xC0000005 addr=0x... tid=1234`
   - `AREKA-CRASH module=<落ちた番地のモジュールのパス>+0x<ずれ> thread="<落ちたスレッドの名前・無ければ空>"`
+  - `AREKA-CRASH-HOLDER tid=<番号> name="<許可を持つテストの名前>"`（許可の持ち手ごとに 1 行・areka だけ）
   - `AREKA-CRASH-THREAD tid=<番号> name="<名前>"`（生きているスレッドごとに 1 行）
   - `AREKA-CRASH-STACK <積み上げの行>`
 - Preconditions: デバッガが付いていない（付いていれば受け手は呼ばれない）。
@@ -413,22 +417,23 @@ pub(super) struct GpuSlots { held: Mutex<usize>, freed: Condvar, cap: usize, ret
 pub(super) struct PermitWaitFailure { pub held: usize, pub cap: usize, pub failure: WaitFailure }
 // Display: 「GPU の装置の許可の待ち（持たれている数 {held}／上限 {cap}）— {failure}」
 
+/// 決め手（純粋な関数）。目印は「許可が返された回数」（returned）。返り続けている間は止まったと見ない。
+pub(super) enum PermitVerdict { Continue, Stalled, Capped }
+pub(super) fn judge_permit_wait(
+    started: Instant, now: Instant, last_return_at: Instant, idle: Duration,
+) -> PermitVerdict; // idle を越えて返りが無い＝Stalled・WAIT_CAP を越えた＝Capped
+
 impl GpuSlots {
-    /// 目印は「許可が返された回数」（returned）。返り続けている間は止まったと見ない。
-    /// 休みは freed の時間つきの待ちで、許可が返ればすぐ起きる。
-    pub(super) fn take_with(
-        &'static self,
-        now: impl FnMut() -> Instant,
-        pause: impl FnMut(Duration),
-        idle: Duration,
-    ) -> Result<GpuPermit, PermitWaitFailure>;
-    /// 本物の時計で take_with(GPU_PERMIT_IDLE) を呼び、打ち切ったら PermitWaitFailure の文で panic する。
+    /// `const fn` のまま（檻が `static SLOTS: GpuSlots = GpuSlots::new(2)` を作れるように・`returned` の AtomicU64 も const で作る）。
+    pub(super) const fn new(cap: usize) -> Self;
+    /// 本物の待ち。freed.wait_timeout_while の輪の中で judge_permit_wait を呼ぶだけ（許可が返ればすぐ起きる）。
+    /// Stalled／Capped なら PermitWaitFailure の文で panic する。
     fn take(&'static self) -> GpuPermit;
 }
 ```
 - Preconditions: 許可を待つ足場は装置を作る前に取る（今の決まりのまま）。
 - Postconditions: 返り値の許可を捨てると `held` が 1 減り、`returned` が 1 増え、待っている足場を起こす。
-- 檻（`spine_wait_tests.rs`・要件 6.3）: `static SLOTS: GpuSlots = GpuSlots::new(2)`（檻の数えは `const` のまま作れる）で 2 つを `try_take` で取り（2 つ取りのテストが 1 つずつ持った形）、`take_with` を偽の時計で呼んで `Err` になり、文に「許可」「2／上限 2」「［止まった］」「待った秒数」が出ることを見る。実時間は待たない。
+- 檻（`spine_wait_tests.rs`・要件 6.3）: 本物の `take` と同じ決め手を通すため、檻は `judge_permit_wait` を偽の時刻で呼び（返りの無いまま idle を越えると Stalled・返りがあれば Continue）、`static SLOTS: GpuSlots = GpuSlots::new(2)` で 2 つを `try_take` で取った形（2 つ取りのテストが 1 つずつ持った形）から作る `PermitWaitFailure` の文に「許可」「2／上限 2」「［止まった］」「待った秒数」が出ることを見る。実時間は待たない。
 - Risks: 負荷の下で GPU のテストが 4 つとも長く許可を持つと、待つ側が `［止まった］` で赤になりうる。上限の値を件 1 の直しの後に測って決めるのはこのため。
 
 #### JoinBounded
@@ -549,13 +554,13 @@ thread_local! {
 ## Testing Strategy
 
 ### 単体（檻）
-- 許可の待ち合い（要件 6.3）: 上限 2 の数えで 2 つ持った状態から偽の時計で `take_with` → `Err`・文の中身（許可・2／上限 2・`［止まった］`・秒数）。許可を 1 つ返すと `take_with` が通る（打ち切りが返りを進みとして数えること）。
+- 許可の待ち合い（要件 6.3）: 上限 2 の数えで 2 つ持った状態の決め手 `judge_permit_wait` を偽の時刻で呼ぶ → 返りの無いまま idle を越えると `Stalled`・文の中身（許可・2／上限 2・`［止まった］`・秒数）。途中で許可が 1 つ返る（`last_return_at` が進む）と `Continue`（打ち切りが返りを進みとして数えること）。
 - `join_thread_bounded`（要件 4.1・4.4）: 中の数えが増え続けるスレッドは `［止まった］` で打ち切られない（偽の時計）・終わらないスレッドの文が `'{what}' join did not complete (possible hang) — 待ちの打ち切り［止まった］` で始まる・ActorHandle 版と std 版で同じ頭。
 - 短い掴みの檻（要件 5.1〜5.3）: 継ぎ目が 1 回以上呼ばれ、確定し、宛先が書庫の中身になる。放す側のスレッドを持たない。
 - `wait_until_idle_with`（要件 6.1）: `idle` を渡した上限で `Stalled` になり、`wait_until_with` は今の 30 秒のまま（今の檻 `spine_wait_tests.rs` が緑のまま）。
 
 ### 結合
-- 較正（要件 1.2）: `areka` と `wintf` の lib で較正のテストを 1 回ずつ回し、`AREKA-CRASH-THREAD` の行に較正のテストの名前が出ることを見る。
+- 較正（要件 1.2）: `areka` と `wintf` の lib で較正のテストを 1 回ずつ回し、`AREKA-CRASH-THREAD` の行（areka では `AREKA-CRASH-HOLDER` の行も）に較正のテストの名前が出ることを見る。
 - lap の 25 か所（要件 3.3）と、15 か所を移したテスト（要件 7.5）を静かな机で回して緑。
 - `manual_balloon_runtime` の 4 本（要件 6.4）を静かな机で回して緑。
 - 件 4・件 5 の足場の直しの後、件 5 の走行（`session_mark` 10 回）と `ghost_switch` の族を静かな机で回して緑。
