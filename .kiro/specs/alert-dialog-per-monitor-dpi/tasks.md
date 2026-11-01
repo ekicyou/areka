@@ -84,7 +84,7 @@
   - 完了: タスクの記録に、副に出した手順と出たモニタ・窓の DPI＝144＝モニタの DPI・窓の扱い＝2・撮った画面の見立て・閉じた後の追従の記録の抜き書き・2 回目と 4.4 を走らせない理由が書かれている
   - _Depends: 2.2, 2.3_
   - _Requirements: 1.1, 1.2, 1.3, 2.3, 3.3, 4.2, 4.3, 4.4, 4.5_
-- [ ] 3.2 本番の 3 つの口の画面を 1 つずつ出して撮り、替わった見た目を開発者に見せる
+- [x] 3.2 本番の 3 つの口の画面を 1 つずつ出して撮り、替わった見た目を開発者に見せる
   - 排他テストの机を取ってから、画面がロックされていないときに、抑止の環境変数が立っていないことを確かめて `cargo test -p areka --bin areka alert_dpi_tests::probe_alert_dialogs_production -- --ignored --nocapture --test-threads=1 --exact` を 1 回走らせる（主のモニタでよい）。終わったらすぐ机を返す
   - 3 つの画面がそれぞれ残っている数秒の間に撮り、題名・本文・ボタン（OK／はい・いいえ）・アイコン（エラー・情報・警告）と、はい／いいえの画面の閉じるボタンが効かない（灰色）ことを見る
   - 3 行の `ALERT-DPI-PROBE` で、3 つの窓が v2 で窓の DPI＝モニタの DPI であること、最前面と前面の読みを見る
@@ -112,3 +112,9 @@
   - `case=taskdialog_thread_v2 process=2 thread_before=2 thread_during=2 window=2 window_v2=true window_dpi=192 monitor_dpi=192 system_dpi=192 box=0`
 - 見立て: タスクダイアログは `MessageBoxW` と違いスレッドの扱いを落とさず、囲めば（非対応のスレッドからでも）窓が v2 で作られる。案 B は 1.1 の `with_thread_per_monitor` と組めば効く。副のモニタ（150%）での DPI とにじみはまだ見ていない（測ったのは主のモニタだけ）。
 - 測りの閉じ方を直した: メッセージボックスは `WM_CLOSE`、タスクダイアログは `TDM_CLICK_BUTTON`（IDOK）。直した後の `probe_alert_box_window_dpi` は人の手なしで 2.6 秒で終わり、値は関門 0 と同じ（判定どおり赤）。
+- 3.2 の実機（2026-11-01・主 200%＝system DPI 192・排他テストの机を取って 1 回・26.3 秒で緑）の 3 行:
+  - `case=alert process=0 thread_before=0 thread_during=2 window=2 window_v2=true window_dpi=192 monitor_dpi=192 system_dpi=192 topmost=false foreground=true box=()`
+  - `case=ask process=0 thread_before=0 thread_during=2 window=2 window_v2=true window_dpi=192 monitor_dpi=192 system_dpi=192 topmost=true foreground=false box=Yes`
+  - `case=install_warning_dialog process=0 thread_before=0 thread_during=2 window=2 window_v2=true window_dpi=192 monitor_dpi=192 system_dpi=192 topmost=true foreground=false box=()`
+- 3.2 の撮った 3 枚の見立て（`targetlert-dpi-shotslert-dialogs-taskdialog.png`・リポジトリに入れない）: 3 つとも主のモニタに出て、字はにじまない。エラーの画面は題名・本文 3 行・エラーのアイコン・OK・閉じるボタンあり。はい／いいえの画面は情報のアイコン・はい(Y)／いいえ(N)・閉じるボタンなし（設計どおり）。警告の画面は警告のアイコン・OK・閉じるボタンあり。
+- 3.2 の前面の読み: はい／いいえと警告の画面は最前面になったが前面にはならなかった（題名の帯が灰色）。テストの実行ファイルが前面のプロセスでないので、OS が `SetForegroundWindow` を断ったと見る（今の `MB_SETFOREGROUND` も同じ OS の決まりに従う）。設計どおり記録しない・assert しない。
