@@ -41,12 +41,12 @@
 - 本番のコードの振る舞い（件 1・件 3 の原因が本番の欠陥と分かったときの `crates/wintf/src/ecs/graphics/` などの直しを除く。`#[cfg(test)]` の部分は範囲に入る）。
 - 許す赤の線の理由、`GpuPermit` の数（件 1 の直しが求めるときを除く）、`rename_patiently` の振る舞い。
 - WER のダンプの置き場の設定・`procdump` などの外の道具・デバッガの導入。
-- 依存の追加（新しいクレートもワークスペースの新しいクレートも作らない）。`windows` の機能を `areka`・`wintf` の `[dev-dependencies]` で足すのは依存の追加に数えない（版は変えない・議題 3）。
+- 依存の追加（新しいクレートもワークスペースの新しいクレートも作らない）。`Cargo.toml` には触らない。今の `windows` の機能に無い kernel32 の関数は、落ちの報告のファイルの中で `#[link(name = "kernel32")] unsafe extern "system"` で直に宣言する（2026-11-01 設計の議題 2: dev の側だけで機能を足すと `windows` の機能の組が `cargo build` と `cargo test` で分かれ、上の全部のクレートが 2 組組み直されるため）。
 - 文字の層のクレート、`main.rs`、`tools/test-all.ps1`、テストの一時フォルダの置き場（`temp-path-kit`）。
 
 ### Allowed Dependencies
 - 上流の `ghost-session-test-load-flake`（完了）の待ちの部品・打ち切りの文言・許す赤の線・`tools/load-flake.ps1`。
-- `std`（`std::backtrace`・`LazyLock`・`thread_local!`）と、既にある `windows` 0.62 の機能（足すのは `Win32_System_Diagnostics_Debug`・`Win32_System_Diagnostics_ToolHelp` の 2 つ・`[dev-dependencies]` だけ）。
+- `std`（`std::backtrace`・`LazyLock`・`thread_local!`）と、既にある `windows` 0.62 の今の機能（機能は足さない）。足りない kernel32 の関数（`SetUnhandledExceptionFilter`・`RaiseException`・`CreateToolhelp32Snapshot`・`Thread32First`・`Thread32Next` など）はテスト専用のファイルで直に宣言する。
 - 依存の向き: テストの足場 → 待ちの部品（`spine_wait.rs`）→ `std`。待ちの部品は足場を知らない。落ちの報告はどのクレートの足場にも依らない（`windows` と `std` だけ）。`install/` のテストは `crate::emo2_boot::spine` の出し直しを通して待ちの部品を使う（今の `fetch_url_tests.rs` と同じ道）。
 
 ### Revalidation Triggers
@@ -103,7 +103,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | テストの土台 | Rust 2024・`rustc 1.99.1`・libtest | 落ちの報告・待ち・足場 | libtest はテストごとにテストの名前のスレッドを起こし、std はその名前を `SetThreadDescription` で OS へ渡す（較正で確かめる） |
-| Windows の口 | `windows` 0.62.2（ワークスペースの版のまま） | `SetUnhandledExceptionFilter`・`CreateToolhelp32Snapshot`・`GetThreadDescription`・`GetModuleHandleExW`・`RaiseException` | 足す機能は `Win32_System_Diagnostics_Debug`・`Win32_System_Diagnostics_ToolHelp`。`areka`・`wintf` の `[dev-dependencies]` に同じ版で書き、本番のビルドの機能は変えない |
+| Windows の口 | `windows` 0.62.2（ワークスペースの版のまま） | `SetUnhandledExceptionFilter`・`CreateToolhelp32Snapshot`・`GetThreadDescription`・`GetModuleHandleExW`・`RaiseException` | 機能は足さない。今の機能に無い関数は落ちの報告のファイルで `extern "system"` に直に宣言する（`Cargo.toml` に触らない・議題 2） |
 | 測りの道具 | PowerShell 7（`tools/load-flake.ps1`） | 負荷・回数・上限の時間・記録 | 端末へ出す文は ASCII だけ（`encoding check` の段） |
 | 記録 | Markdown（spec のフォルダ） | 条件・結果・原因・数え直し | `load-repro.md` 1 つ |
 
@@ -122,7 +122,6 @@ crates/wintf/src/
 ```
 
 ### Modified Files
-- `crates/areka/Cargo.toml`・`crates/wintf/Cargo.toml` — `[dev-dependencies]` に `windows = { workspace = true, features = ["Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_ToolHelp"] }` を足す。
 - `crates/areka/src/emo2_boot/mod.rs`（828 行）— `#[cfg(test)] mod crash_report_test_support;` の 2 行。
 - `crates/wintf/src/lib.rs`（13 行）— `#[cfg(test)] mod test_crash_report;` の 2 行。
 - `crates/areka/src/emo2_boot/frame.rs`（663 行）— 新しい足場のファイルを `#[cfg(test)] #[path]` で引く 3 行。
@@ -318,7 +317,8 @@ flowchart TD
 - 測りの間だけの口: 初期化子は `AREKA_TEST_MTA_KEEPER` が `1` なら `CoIncrementMTAUsage` を呼ぶ（X3・Y2）。候補 B が原因と決まれば、口を外して無条件に呼ぶ形が直しになる。B でなければ口ごと外す。
 
 **Dependencies**
-- External: `windows` — `Win32::System::Diagnostics::Debug`（`SetUnhandledExceptionFilter`・`EXCEPTION_POINTERS`・`RaiseException`）・`Win32::System::Diagnostics::ToolHelp`（`CreateToolhelp32Snapshot`・`Thread32First/Next`）・`Win32::System::Threading`（`OpenThread`・`GetThreadDescription`）・`Win32::System::LibraryLoader`（`GetModuleHandleExW`・`GetModuleFileNameW`）（P0）
+- External: kernel32 の関数。今の `windows` の機能に在るもの（`Win32::System::Threading` の `OpenThread`・`GetThreadDescription`、`Win32::System::LibraryLoader` の `GetModuleHandleExW`・`GetModuleFileNameW` など・各クレートで有効かは実装の段で確かめる）はそのまま使い、無いもの（`SetUnhandledExceptionFilter`・`RaiseException`・`CreateToolhelp32Snapshot`・`Thread32First/Next` と `EXCEPTION_POINTERS`・`THREADENTRY32` の構造体）はファイルの中で `#[link(name = "kernel32")] unsafe extern "system"` と `#[repr(C)]` で直に宣言する（P0・議題 2）
+- 写しの扱い: areka と wintf に同じ中身を 1 つずつ置き、それぞれの頭に「写しの相手」を 1 行書く（2026-11-01 設計の議題 1）。
 
 **Contracts**: Service [x] / State [x]
 
@@ -407,6 +407,8 @@ pub(super) fn wait_until_idle_with(
 ```rust
 /// 許可の待ちの「許可が 1 つも返らない」上限。値は件 1 の直しの後に、負荷の下で測った許可の持ち時間から決めて
 /// load-repro.md に書く（要件 6.6）。決めるまでは SPIN_WAIT と同じ 30 秒。
+/// 決め方（2026-11-01 設計の議題 4）: X1・X2 で測った許可の持ち時間の最大の 2 倍以上・SPIN_WAIT の 30 秒を下回らない。
+/// 許可の待ちの［止まった］は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
 pub(super) const GPU_PERMIT_IDLE: Duration;
 
 /// 測りの間だけ: AREKA_TEST_GPU_SLOTS があればその数、無ければ 4（要件 6.7）。測りが終われば口を外し、4 の const に戻す。
