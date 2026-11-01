@@ -2,8 +2,9 @@ use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 
 use super::wait::{
-    DENSE_SPIN, GpuSlots, WAIT_CAP, join_bounded, join_thread_bounded, parse_gpu_slots,
-    run_bounded_watching, wait_recv, wait_thread_end_with,
+    DENSE_SPIN, GPU_PERMIT_IDLE, GpuSlots, PermitVerdict, WAIT_CAP, join_bounded,
+    join_thread_bounded, judge_permit_wait, parse_gpu_slots, run_bounded_watching, wait_recv,
+    wait_thread_end_with, wait_until_idle_with,
 };
 use super::{
     BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
@@ -457,4 +458,139 @@ fn gpu_slots_knob_reads_a_count_and_falls_back_to_four() {
     assert_eq!(parse_gpu_slots(Some("0")), 4, "0 では誰も取れない");
     assert_eq!(parse_gpu_slots(Some("-1")), 4);
     assert_eq!(parse_gpu_slots(Some("1000")), 4, "持ち手の表に入らない数");
+}
+
+// ===========================================================================
+// 許可の待ちの上限の檻（areka-test-binary-stability タスク 5.2・要件 6.1〜6.3）
+//
+// 本物の `take` と同じ決め手 `judge_permit_wait` と同じ文の作り `GpuSlots::wait_failure` を、偽の時刻で
+// 呼ぶ（実時間は待たない）。上限 2 の数えで 2 つを取った形＝2 つ取りのテストが 1 つずつ持って待ち合った形。
+// ===========================================================================
+
+/// 返りの無いまま `idle` を越えると `Stalled`、途中で 1 つ返れば `Continue`。打ち切りの文に「許可」
+/// 「2／上限 2」「［止まった］」と待った秒数が出る。
+#[test]
+fn a_permit_wait_with_no_return_stalls_and_names_the_permits() {
+    static SLOTS: GpuSlots = GpuSlots::new(2);
+    let _first = SLOTS.try_take().expect("1 つ目は取れる");
+    let _second = SLOTS.try_take().expect("2 つ目は取れる");
+    assert!(SLOTS.try_take().is_none(), "上限 2 を持ち切った");
+
+    let idle = Duration::from_secs(40);
+    let started = Instant::now();
+    let at = |secs: u64| started + Duration::from_secs(secs);
+    assert_eq!(
+        judge_permit_wait(at(39), started, idle),
+        PermitVerdict::Continue,
+        "idle の手前は待ち続ける"
+    );
+    let verdict = judge_permit_wait(at(41), started, idle);
+    assert_eq!(
+        verdict,
+        PermitVerdict::Stalled,
+        "返りの無いまま idle を越えた"
+    );
+    // 途中で 1 つ返った（最後の返りが 20 秒目）なら、41 秒目でも返りから 21 秒で止まっていない。
+    assert_eq!(
+        judge_permit_wait(at(41), at(20), idle),
+        PermitVerdict::Continue,
+        "返りを進みとして数える"
+    );
+
+    let failure = SLOTS
+        .wait_failure(
+            2,
+            verdict,
+            started,
+            at(41),
+            started,
+            0,
+            Duration::from_secs(1),
+        )
+        .expect("Stalled は打ち切りの文になる");
+    let text = failure.to_string();
+    for want in ["許可", "2／上限 2", "［止まった］", "41.0 秒"] {
+        assert!(text.contains(want), "「{want}」が文に無い: {text}");
+    }
+    assert!(
+        SLOTS
+            .wait_failure(
+                2,
+                PermitVerdict::Continue,
+                started,
+                at(41),
+                started,
+                0,
+                Duration::ZERO
+            )
+            .is_none(),
+        "Continue は文にならない"
+    );
+}
+
+/// 返りが続く限り、待ち始めから [`WAIT_CAP`] の 300 秒をまたいでも打ち切らない。返りが止まって
+/// [`GPU_PERMIT_IDLE`] の 500 秒が過ぎたら `［止まった］`（2026-11-02 裁定「案 2」・総時間の上限は効かせない）。
+#[test]
+fn a_permit_wait_with_returns_is_never_cut_by_the_total_limit() {
+    static SLOTS: GpuSlots = GpuSlots::new(2);
+    let started = Instant::now();
+    let at = |secs: u64| started + Duration::from_secs(secs);
+    // 100 秒ごとに 1 つ返る待ち。1,000 秒（WAIT_CAP の 3 倍余り）まで、どの時点でも打ち切らない。
+    for secs in (0..=1_000).step_by(10) {
+        let last_return_at = at(secs / 100 * 100);
+        assert_eq!(
+            judge_permit_wait(at(secs), last_return_at, GPU_PERMIT_IDLE),
+            PermitVerdict::Continue,
+            "{secs} 秒目（最後の返りは {} 秒目）",
+            secs / 100 * 100
+        );
+    }
+    // 1,000 秒目で返りが止まる。1,499 秒目はまだ待ち、1,500 秒目（返りから 500 秒）で止まった。
+    let last = at(1_000);
+    assert_eq!(
+        judge_permit_wait(at(1_499), last, GPU_PERMIT_IDLE),
+        PermitVerdict::Continue
+    );
+    let verdict = judge_permit_wait(at(1_500), last, GPU_PERMIT_IDLE);
+    assert_eq!(verdict, PermitVerdict::Stalled);
+    let text = SLOTS
+        .wait_failure(
+            2,
+            verdict,
+            started,
+            at(1_500),
+            last,
+            10,
+            Duration::from_secs(1),
+        )
+        .expect("Stalled は打ち切りの文になる")
+        .to_string();
+    for want in ["2／上限 2", "［止まった］", "500.0 秒", "1500.0 秒"] {
+        assert!(text.contains(want), "「{want}」が文に無い: {text}");
+    }
+}
+
+/// 芯の内側の形は渡した `idle` で `［止まった］` にする（`wait_until_with` の 30 秒より短くても）。
+#[test]
+fn the_inner_wait_core_stalls_at_the_given_idle() {
+    let base = Instant::now();
+    let reads = Cell::new(0u32);
+    let zero = || 0u64;
+    let result = wait_until_idle_with(
+        || {
+            reads.set(reads.get() + 1);
+            base + Duration::from_secs(1) * reads.get()
+        },
+        |_| {},
+        "短い idle",
+        Progress::Count(&zero),
+        Duration::from_secs(5),
+        || false,
+    );
+    match result {
+        Err(WaitFailure::Stalled { idle, .. }) => {
+            assert_eq!(idle, Duration::from_secs(5), "渡した idle で打ち切る")
+        }
+        other => panic!("［止まった］のはず: {other:?}"),
+    }
 }

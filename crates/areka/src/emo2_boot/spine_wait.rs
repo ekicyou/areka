@@ -9,6 +9,7 @@
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
 
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, LazyLock, Mutex, PoisonError, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -198,10 +199,23 @@ impl fmt::Display for WaitFailure {
 /// - 反復の間は、待ち始めから [`DENSE_SPIN`] までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
 ///   で CPU を返す（要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
 pub(crate) fn wait_until_with(
+    now: impl FnMut() -> Instant,
+    pause: impl FnMut(Duration),
+    what: &str,
+    progress: Progress<'_>,
+    cond: impl FnMut() -> bool,
+) -> Result<(), WaitFailure> {
+    wait_until_idle_with(now, pause, what, progress, SPIN_WAIT, cond)
+}
+
+/// 芯の内側の形。`idle` は目印つきの待ちの「相手が進まない」上限（[`wait_until_with`] では [`SPIN_WAIT`]）。
+/// 目印なし（[`Progress::Unknown`]）の総時間 [`SPIN_WAIT`] と、総時間の上限 [`WAIT_CAP`] は変わらない。
+pub(super) fn wait_until_idle_with(
     mut now: impl FnMut() -> Instant,
     mut pause: impl FnMut(Duration),
     what: &str,
     progress: Progress<'_>,
+    idle_limit: Duration,
     mut cond: impl FnMut() -> bool,
 ) -> Result<(), WaitFailure> {
     if cond() {
@@ -246,7 +260,7 @@ pub(crate) fn wait_until_with(
             last_move = t;
         }
         let idle = t.saturating_duration_since(last_move);
-        if idle >= SPIN_WAIT {
+        if idle >= idle_limit {
             return Err(WaitFailure::Stalled {
                 what: what(),
                 waited,
@@ -435,6 +449,57 @@ pub(super) struct GpuSlots {
     held: Mutex<usize>,
     freed: Condvar,
     cap: usize,
+    /// 返された許可の数（増えるだけ）。許可の待ちの進みの目印。
+    returned: AtomicU64,
+}
+
+/// 許可の待ちの「許可が 1 つも返らない」上限（要件 6.1・6.6）。
+///
+/// 決め方（設計の議題 4）: 許可の持ち時間の最長の 2 倍以上・[`SPIN_WAIT`] の 30 秒を下回らない。件 1 の直しは
+/// 当てていないので材料は 4.1 の X1（負荷 44 本・最長 249.2 秒）で、その 2 倍を丸めた 500 秒（`load-repro.md` の ⑻）。
+/// 許可の待ちには総時間の上限（[`WAIT_CAP`]）を効かせない（2026-11-02 開発者の裁定「案 2」・⑻）。返りが目印で、
+/// GPU のテストは有限なので、返り続ける限り待ちはいつか終わる。要件 6.1 の上限はこの 500 秒の線で満たす。
+/// 許可の待ちの `［止まった］` は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
+pub(super) const GPU_PERMIT_IDLE: Duration = Duration::from_secs(500);
+
+/// 許可の待ちの決め手の答え。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PermitVerdict {
+    Continue,
+    /// `idle` のあいだ許可が 1 つも返らなかった。
+    Stalled,
+}
+
+/// 許可の待ちの決め手（純粋な関数）。目印は許可が返された回数で、最後に返りを見た時刻 `last_return_at`
+/// から `idle` を越えれば `Stalled`。待ち始めからの総時間では打ち切らない（[`GPU_PERMIT_IDLE`] の doc）。
+pub(super) fn judge_permit_wait(
+    now: Instant,
+    last_return_at: Instant,
+    idle: Duration,
+) -> PermitVerdict {
+    if now.saturating_duration_since(last_return_at) >= idle {
+        PermitVerdict::Stalled
+    } else {
+        PermitVerdict::Continue
+    }
+}
+
+/// 許可の待ちの打ち切り（要件 6.2）。持たれている数と上限を頭に付けた [`WaitFailure`]。
+#[derive(Debug)]
+pub(super) struct PermitWaitFailure {
+    pub held: usize,
+    pub cap: usize,
+    pub failure: WaitFailure,
+}
+
+impl fmt::Display for PermitWaitFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "GPU の装置の許可の待ち（持たれている数 {}／上限 {}）— {}",
+            self.held, self.cap, self.failure
+        )
+    }
 }
 
 /// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
@@ -464,19 +529,87 @@ impl GpuSlots {
             held: Mutex::new(0),
             freed: Condvar::new(),
             cap,
+            returned: AtomicU64::new(0),
         }
     }
 
-    /// 空きが出るまで眠って待ち、許可を取る。
+    /// 空きが出るまで眠って待ち、許可を取る。許可が返ればすぐ起き、1 秒ごとにも起きて決め手
+    /// [`judge_permit_wait`] を呼ぶ。`Stalled` なら [`PermitWaitFailure`] の文で panic する。
     fn take(&'static self) -> GpuPermit {
-        let held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut held = self
-            .freed
-            .wait_while(held, |held| *held >= self.cap)
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
+        if *held >= self.cap {
+            let started = Instant::now();
+            let first = self.returned.load(Ordering::Relaxed);
+            let (mut seen, mut last_return_at, mut t) = (first, started, started);
+            while *held >= self.cap {
+                held = self
+                    .freed
+                    .wait_timeout_while(held, Duration::from_secs(1), |h| *h >= self.cap)
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .0;
+                let before = t;
+                t = Instant::now();
+                // 返りは錠の中で数えるので、錠を持つここでの読みは Relaxed で足りる。
+                let returned = self.returned.load(Ordering::Relaxed);
+                if returned > seen {
+                    seen = returned;
+                    last_return_at = t;
+                }
+                if *held < self.cap {
+                    break;
+                }
+                let verdict = judge_permit_wait(t, last_return_at, GPU_PERMIT_IDLE);
+                let moves = seen - first;
+                if let Some(failure) = self.wait_failure(
+                    *held,
+                    verdict,
+                    started,
+                    t,
+                    last_return_at,
+                    moves,
+                    t - before,
+                ) {
+                    drop(held);
+                    panic!("{failure}");
+                }
+            }
+        }
         *held += 1;
         drop(held);
         GpuPermit::new(self)
+    }
+
+    /// 決め手の答えを打ち切りの文にする（`Continue` なら `None`）。本物の `take` と檻が同じ文を作る。
+    /// `moves` は待ち始めから返された許可の数、`last_step` は最後の 1 回の起きと起きの間。
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn wait_failure(
+        &self,
+        held: usize,
+        verdict: PermitVerdict,
+        started: Instant,
+        now: Instant,
+        last_return_at: Instant,
+        moves: u64,
+        last_step: Duration,
+    ) -> Option<PermitWaitFailure> {
+        let what = "GPU の装置の許可".to_owned();
+        let waited = now.saturating_duration_since(started);
+        let idle = now.saturating_duration_since(last_return_at);
+        let failure = match verdict {
+            PermitVerdict::Continue => return None,
+            PermitVerdict::Stalled => WaitFailure::Stalled {
+                what,
+                waited,
+                idle,
+                moves,
+                last_step,
+            },
+        };
+        Some(PermitWaitFailure {
+            held,
+            cap: self.cap,
+            failure,
+        })
     }
 
     /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
@@ -524,11 +657,14 @@ impl GpuPermit {
 impl Drop for GpuPermit {
     fn drop(&mut self) {
         crash_report::release(self.row, self.taken.elapsed());
-        *self
+        let mut held = self
             .slots
             .held
             .lock()
-            .unwrap_or_else(PoisonError::into_inner) -= 1;
+            .unwrap_or_else(PoisonError::into_inner);
+        *held -= 1;
+        self.slots.returned.fetch_add(1, Ordering::Relaxed);
+        drop(held);
         self.slots.freed.notify_one();
     }
 }

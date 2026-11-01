@@ -412,7 +412,9 @@ pub(super) fn wait_until_idle_with(
 
 ```rust
 /// 許可の待ちの「許可が 1 つも返らない」上限。値は件 1 の直しの後に、負荷の下で測った許可の持ち時間から決めて
-/// load-repro.md に書く（要件 6.6）。決めるまでは SPIN_WAIT と同じ 30 秒。
+/// load-repro.md に書く（要件 6.6）。タスク 5.2 で 500 秒に決めた（X1 の最長 249.2 秒の 2 倍を丸めた値・⑻）。
+/// 許可の待ちには総時間の上限（WAIT_CAP）を効かせない（2026-11-02 開発者の裁定「案 2」）。返りが目印で、
+/// GPU のテストは有限なので返り続ける限り待ちはいつか終わる。要件 6.1 の上限はこの線で満たす。
 /// 決め方（2026-11-01 設計の議題 4）: X1・X2 で測った許可の持ち時間の最大の 2 倍以上・SPIN_WAIT の 30 秒を下回らない。
 /// 許可の待ちの［止まった］は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
 pub(super) const GPU_PERMIT_IDLE: Duration;
@@ -426,16 +428,16 @@ pub(super) struct PermitWaitFailure { pub held: usize, pub cap: usize, pub failu
 // Display: 「GPU の装置の許可の待ち（持たれている数 {held}／上限 {cap}）— {failure}」
 
 /// 決め手（純粋な関数）。目印は「許可が返された回数」（returned）。返り続けている間は止まったと見ない。
-pub(super) enum PermitVerdict { Continue, Stalled, Capped }
+pub(super) enum PermitVerdict { Continue, Stalled }
 pub(super) fn judge_permit_wait(
-    started: Instant, now: Instant, last_return_at: Instant, idle: Duration,
-) -> PermitVerdict; // idle を越えて返りが無い＝Stalled・WAIT_CAP を越えた＝Capped
+    now: Instant, last_return_at: Instant, idle: Duration,
+) -> PermitVerdict; // idle を越えて返りが無い＝Stalled・それ以外は Continue（待ち始めからの総時間では打ち切らない・裁定 2026-11-02 案 2）
 
 impl GpuSlots {
     /// `const fn` のまま（檻が `static SLOTS: GpuSlots = GpuSlots::new(2)` を作れるように・`returned` の AtomicU64 も const で作る）。
     pub(super) const fn new(cap: usize) -> Self;
     /// 本物の待ち。freed.wait_timeout_while の輪の中で judge_permit_wait を呼ぶだけ（許可が返ればすぐ起きる）。
-    /// Stalled／Capped なら PermitWaitFailure の文で panic する。
+    /// Stalled なら PermitWaitFailure の文で panic する（総時間の上限は無い）。
     fn take(&'static self) -> GpuPermit;
 }
 ```
@@ -544,7 +546,7 @@ thread_local! {
 ## Error Handling
 
 ### Error Strategy
-- 待ちの打ち切りは今の 4 つの文言（`［止まった］`・`［進んではいた］`・`［進みは不明］`・`［相手が居ない］`）のまま。許可の待ちは頭に「GPU の装置の許可の待ち（持たれている数／上限）」を付けた `［止まった］`・`［進んではいた］`。`join_bounded` はどれも `'{what}' join did not complete (possible hang) —` を頭に付ける。
+- 待ちの打ち切りは今の 4 つの文言（`［止まった］`・`［進んではいた］`・`［進みは不明］`・`［相手が居ない］`）のまま。許可の待ちは頭に「GPU の装置の許可の待ち（持たれている数／上限）」を付けた `［止まった］` だけ（総時間の上限 `WAIT_CAP` は許可の待ちに効かせないので `［進んではいた］` は出ない・裁定 2026-11-02 案 2）。`join_bounded` はどれも `'{what}' join did not complete (possible hang) —` を頭に付ける。
 - プロセスの落ちは `AREKA-CRASH` の行。落ちの後でも行が出ない場合（`__fastfail`・受け手の中の止まり）は、終了コードと最後の行を記録に書く。
 
 ### 赤が出たときの読み方（本 spec が足すもの）
@@ -562,7 +564,7 @@ thread_local! {
 ## Testing Strategy
 
 ### 単体（檻）
-- 許可の待ち合い（要件 6.3）: 上限 2 の数えで 2 つ持った状態の決め手 `judge_permit_wait` を偽の時刻で呼ぶ → 返りの無いまま idle を越えると `Stalled`・文の中身（許可・2／上限 2・`［止まった］`・秒数）。途中で許可が 1 つ返る（`last_return_at` が進む）と `Continue`（打ち切りが返りを進みとして数えること）。
+- 許可の待ち合い（要件 6.3）: 上限 2 の数えで 2 つ持った状態の決め手 `judge_permit_wait` を偽の時刻で呼ぶ → 返りの無いまま idle を越えると `Stalled`・文の中身（許可・2／上限 2・`［止まった］`・秒数）。途中で許可が 1 つ返る（`last_return_at` が進む）と `Continue`（打ち切りが返りを進みとして数えること）。返りが続く限り、注入した時刻で `WAIT_CAP` の 300 秒をまたいでも `Continue` で、返りが止まって `GPU_PERMIT_IDLE` が過ぎると `Stalled`（裁定 2026-11-02 案 2）。
 - `join_thread_bounded`（要件 4.1・4.4）: 中の数えが増え続けるスレッドは `［止まった］` で打ち切られない（偽の時計）・終わらないスレッドの文が `'{what}' join did not complete (possible hang) — 待ちの打ち切り［止まった］` で始まる・ActorHandle 版と std 版で同じ頭。
 - 短い掴みの檻（要件 5.1〜5.3）: 継ぎ目が 1 回以上呼ばれ、確定し、宛先が書庫の中身になる。放す側のスレッドを持たない。
 - `wait_until_idle_with`（要件 6.1）: `idle` を渡した上限で `Stalled` になり、`wait_until_with` は今の 30 秒のまま（今の檻 `spine_wait_tests.rs` が緑のまま）。
