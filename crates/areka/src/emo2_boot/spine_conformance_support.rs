@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use super::conformance_script::{LapStage, TICK_STEP_MS};
 use super::{
     ExitKind, LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle,
-    ShioriBackend, SpineHarness, WaitFailure, shell_target, spin_wait_until, wait_until_with,
+    ShioriBackend, SpineHarness, WaitFailure, shell_target, wait_until, wait_until_with,
 };
 use areka_emo_present::PresentCommand;
 use areka_ghost::dispatcher::DispatcherMsg;
@@ -432,12 +432,11 @@ pub(super) trait StageSink {
         true
     }
 
-    /// 段の待ちの進みの目印（単調に増える数）。既定は `None`＝目印なしで、待ちは総時間 30 秒で
-    /// 打ち切る（`［進みは不明］`）。目印を渡すと、相手が 30 秒のあいだ進まなかったときに打ち切る
-    /// （`［止まった］`・areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。
-    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
-        None
-    }
+    /// 段の待ちの進みの目印（単調に増える数）。既定は持たず、実装の全部が書く（areka-test-binary-stability
+    /// 要件 7.2・7.4）。目印を渡すと、相手が 30 秒のあいだ進まなかったときに打ち切る（`［止まった］`）。
+    /// `None` は目印なしで、待ちは総時間 30 秒で打ち切る（`［進みは不明］`）——その形そのものを確かめる
+    /// 檻だけが理由の注記つきで返す（要件 7.3 の例外・`load-repro.md` の ⑵）。
+    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>>;
 }
 
 impl StageSink for SpineHarness {
@@ -460,8 +459,25 @@ impl StageSink for SpineHarness {
     }
 
     fn collect(&mut self) -> Vec<PresentCommand> {
-        self.wiring.drain_received()
+        let taken = self.wiring.drain_received();
+        TAKEN_PRESENTS.with(|n| n.set(n.get() + taken.len() as u64));
+        taken
     }
+
+    /// SHIORI の呼び出し（`Status` を除く）の数＋採った表示の指令の数。
+    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
+        let handle = self.shiori_handle.clone();
+        Some(Box::new(move || {
+            handle.call_count() + TAKEN_PRESENTS.with(std::cell::Cell::get)
+        }))
+    }
+}
+
+thread_local! {
+    /// [`SpineHarness`] が採った表示の指令の数（`spine.rs` に口を足さないための置き場）。
+    /// shortcut: 同じスレッドの足場どうしで数を共有する（増えるだけなので目印には足りる）。足場が
+    /// 自分の数を持つ必要が出たら `SpineHarness` の欄へ移す。
+    static TAKEN_PRESENTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// 段を順に駆動する駆動器（design D6）。注入時刻を走行を通じて 1 つだけ持つ。

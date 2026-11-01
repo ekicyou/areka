@@ -38,6 +38,7 @@
 - 既定: `emo2_boot/spine_conformance_support.rs:438`（`None` を返す）。待ちは同じファイルの 546（`sink.progress_probe()`）→ 556（`wait_until_with`・`None` なら `Progress::Unknown`＝`［進みは不明］`）。
 - 既定のまま（`progress_probe` を書いていない）の実装: `emo2_boot/spine_conformance_support.rs:443`（`SpineHarness`）・`emo2_boot/spine_conformance_support_tests.rs:83`（`FakeStageSink`）・`emo2_boot/spine_conformance_support_tests.rs:565`（`HoldingSink`）。
 - 目印を書いている実装は `emo2_boot/spine_conformance_lap_tests.rs:270`（`LapSink`）だけ。
+- 6.4 の後: 既定 `None` を消し、4 つの実装の全部が `progress_probe` を書く（`SpineHarness`＝SHIORI の呼び出しの数＋採った表示の指令の数・`FakeStageSink`／`HoldingSink`＝受けた注入の数・`LapSink` は今どおり）。**例外（要件 7.3）**: `spine_conformance_support_tests.rs` の `stage_driver_returns_named_timeout_instead_of_silent_success` だけは `FakeStageSink::silent_unmarked`（`None`）で回す。この檻は打ち切りの文言が `［進みは不明］` で始まることそのものを確かめるので、目印を持つと打ち切りが `［止まった］` になり確かめたい形を踏めない。
 
 **その外の文言の無い待ち（要件 7.6・数えて記録するだけ・本 spec の走行で赤になったものだけ移す）**
 

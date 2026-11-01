@@ -9,7 +9,9 @@
 //! 本ファイルは**期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
 //! 檻は自分が使う段を自前で宣言する（借りると、台本の宣言を変えたときに檻が黙って追随する）。
 
+use std::cell::Cell;
 use std::collections::VecDeque;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use super::{
@@ -17,7 +19,7 @@ use super::{
     StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
 };
 use super::{ExitKind, LoopDriver, ScriptedShioriBackend, ScriptedShioriHandle, SpineHarness};
-use super::{shell_target, spin_wait_until};
+use super::{Progress, shell_target, wait_until};
 use areka_kanade::{ChoiceInput, CloseReason, MouseEventKind, MouseInput};
 
 // 段の駆動器の受け入れ確認（task 2.3・R2.10・R3.2）
@@ -51,6 +53,8 @@ struct FakeStageSink {
     handout: VecDeque<usize>,
     /// 閉じている（投函が `Err` を返す）と見なす受信端。
     closed_inbox: Option<Inbox>,
+    /// 受けた注入の数（進みの目印）。`None` は目印を持たない（`［進みは不明］` の形を確かめる檻だけ）。
+    injections: Option<Rc<Cell<u64>>>,
 }
 
 impl FakeStageSink {
@@ -60,6 +64,16 @@ impl FakeStageSink {
             injected: Vec::new(),
             handout: VecDeque::new(),
             closed_inbox: None,
+            injections: Some(Rc::default()),
+        }
+    }
+
+    /// 目印を持たない投函先。`［進みは不明］` の形そのものを確かめる檻だけが使う（目印を持つと
+    /// 打ち切りが `［止まった］` になり、確かめたい形を踏めない・要件 7.3 の例外・`load-repro.md` の ⑵）。
+    fn silent_unmarked() -> Self {
+        FakeStageSink {
+            injections: None,
+            ..FakeStageSink::silent()
         }
     }
 
@@ -83,6 +97,9 @@ impl FakeStageSink {
 impl StageSink for FakeStageSink {
     fn inject(&mut self, injection: &Injection, now_ms: u64) -> Result<(), Inbox> {
         self.injected.push((injection_kind(injection), now_ms));
+        if let Some(n) = &self.injections {
+            n.set(n.get() + 1);
+        }
         match self.closed_inbox {
             Some(inbox) => Err(inbox),
             None => Ok(()),
@@ -97,6 +114,11 @@ impl StageSink for FakeStageSink {
                 reply: None,
             })
             .collect()
+    }
+
+    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
+        let n = Rc::clone(self.injections.as_ref()?);
+        Some(Box::new(move || n.get()))
     }
 }
 
@@ -115,7 +137,7 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
         once: vec![Injection::KanadeTick],
         waiting: WaitInjection::DispatcherTick,
     };
-    let mut sink = FakeStageSink::silent();
+    let mut sink = FakeStageSink::silent_unmarked();
     let mut driver = LapDriver::new();
 
     // 1 回読むごとに 10 秒進む時計。待ちの芯は 1 反復目の後に待ち始めの時刻を読み、以後は反復ごとに
@@ -465,9 +487,14 @@ fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none(
         .build();
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
 
-    // 起動系列 5 呼出が揃うまで待つ（既存の手本と同じ「条件が満たされるまで待つ」形）。
+    // 起動系列 5 呼出が揃うまで待つ（目印は SHIORI の呼び出しの数）。
+    let calls = || handle.call_count();
     assert!(
-        spin_wait_until(|| handle.non_status_calls().len() >= 5),
+        wait_until("起動系列 5 呼出", Progress::Count(&calls), || {
+            handle.non_status_calls().len() >= 5
+        })
+        .inspect_err(|failure| eprintln!("{failure}"))
+        .is_ok(),
         "起動系列 5 呼出が有界内に揃わない"
     );
     assert_eq!(
@@ -559,13 +586,21 @@ struct HoldingSink {
     /// 投函の記録（注入時刻・投函順）。
     injected: Vec<u64>,
     /// 残りの据え置き回数（0 になったら注入時刻を進めてよい）。
-    hold_rounds: std::cell::Cell<usize>,
+    hold_rounds: Cell<usize>,
+    /// 受けた注入の数（進みの目印）。
+    injections: Rc<Cell<u64>>,
 }
 
 impl StageSink for HoldingSink {
     fn inject(&mut self, _injection: &Injection, now_ms: u64) -> Result<(), Inbox> {
         self.injected.push(now_ms);
+        self.injections.set(self.injections.get() + 1);
         Ok(())
+    }
+
+    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
+        let n = Rc::clone(&self.injections);
+        Some(Box::new(move || n.get()))
     }
 
     fn collect(&mut self) -> Vec<PresentCommand> {
@@ -605,7 +640,8 @@ fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
     };
     let mut sink = HoldingSink {
         injected: Vec::new(),
-        hold_rounds: std::cell::Cell::new(5),
+        hold_rounds: Cell::new(5),
+        injections: Rc::default(),
     };
     let mut driver = LapDriver::new();
     let mut rounds = 0usize;

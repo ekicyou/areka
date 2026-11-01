@@ -6,9 +6,9 @@
 //! ファイルの冒頭の説明と同じで、期待値は持たない。
 
 use super::driver_tests::{second_change_calls, stage};
-use super::spin_wait_until;
 use super::{ExitKind, LoopDriver, ScriptedShioriBackend, SpineHarness};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
+use super::{Progress, wait_until};
 use areka_kanade::CloseReason;
 
 /// 受信端の開閉の探りは交信の列を **1 件も**増やさず、終了段の自己終了はその探りだけで観測できる
@@ -92,8 +92,13 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
         .unload(Ok(ExitKind::Clean))
         .build();
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
+    let mark = harness.progress_probe().expect("足場は進みの目印を持つ");
     assert!(
-        spin_wait_until(|| handle.non_status_calls().len() >= 5),
+        wait_until("起動系列 5 呼出", Progress::Count(&*mark), || {
+            handle.non_status_calls().len() >= 5
+        })
+        .inspect_err(|failure| eprintln!("{failure}"))
+        .is_ok(),
         "起動系列 5 呼出が有界内に揃わない"
     );
 
@@ -154,7 +159,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
         .expect("kanade の受信端は生きている（直前の段で探りが 12 本通っている）");
     let probe = handle.clone();
     let mut dispatcher_closed = false;
-    let began = spin_wait_until(|| {
+    let began = wait_until("OnClose の照会", Progress::Count(&*mark), || {
         // 据え置いた注入時刻の再生側 Tick を毎反復 1 本。SHIORI 呼出は 1 件も起こさない。
         if harness
             .inject(&Injection::DispatcherTick, CLOSE_HOLD_MS)
@@ -166,7 +171,9 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
             .non_status_calls()
             .iter()
             .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
-    });
+    })
+    .inspect_err(|failure| eprintln!("{failure}"))
+    .is_ok();
     assert!(
         began,
         "終了指示のあと OnClose の照会が有界内に現れない（dispatcher の受信端が閉じたか: {dispatcher_closed}）: {:?}",
@@ -274,13 +281,20 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
 
     // 上の檻の (ii-a) と同じ待ち（据え置き時刻の再生側 Tick）。
     let probe = handle.clone();
-    let began = spin_wait_until(|| {
-        let _ = harness.inject(&Injection::DispatcherTick, 11_000);
-        probe
-            .non_status_calls()
-            .iter()
-            .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
-    });
+    let mark = harness.progress_probe().expect("足場は進みの目印を持つ");
+    let began = wait_until(
+        "boot 中の終了指示の OnClose の照会",
+        Progress::Count(&*mark),
+        || {
+            let _ = harness.inject(&Injection::DispatcherTick, 11_000);
+            probe
+                .non_status_calls()
+                .iter()
+                .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+        },
+    )
+    .inspect_err(|failure| eprintln!("{failure}"))
+    .is_ok();
     assert!(
         began,
         "boot 中に届いた終了指示が握手を始めていない: {:?}",
