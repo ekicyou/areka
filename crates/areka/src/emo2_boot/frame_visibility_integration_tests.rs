@@ -6,7 +6,7 @@
 // 可視性能力は、それぞれ `balloon_visibility_tests.rs` 群・`balloon_visibility_phase_tests.rs`・
 // `areka-emo-present` の in-crate テストが所有しており、ここでは重ねない。
 //
-// 実 emo2 fixture ＋ 実 GPU（WARP 可・MTA）で本番の `emo2_frame_system` をそのまま駆動する。
+// 実 emo2 fixture ＋ 実 GPU（MTA）で本番の `emo2_frame_system` をそのまま駆動する。
 // 表示層の可視化（`show_target`）は「表示が一度も確立していない」と必ず失敗するため、確立が
 // 成立する実 attach を通さない限り、以下の性質はどれも観測できない。
 //
@@ -39,7 +39,7 @@ use super::*;
 ///
 /// attach 相のゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の
 /// 連言ゆえ、本番の相順を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を
-/// 初期化する（記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
+/// 初期化する（記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 ///
 /// ポインタ配線（`BalloonWiring`）も本番同様に置く。不在でも「抑止なし」へ倒れるだけだが、
 /// その縮退の誤りログが相順の観測窓へ毎回混ざるため、観測を濁さないために揃えておく。

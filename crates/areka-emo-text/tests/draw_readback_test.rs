@@ -20,7 +20,7 @@
 //! テストが直結）で同種の述語を張るのに対し、本テストは結線層〜COM 層の**実配線**
 //! （`spawn_emo_text` の実 pump ドレイン・`present_frame` の装着/描画/提示）を通す。
 //!
-//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・WARP 可）＝ attach_wiring_test
+//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`）＝ attach_wiring_test
 //!   と同一方針。時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 //! - R9.1: 横書きテストは実 `EmoPresenter` の公開経路（`text_slot_view` →
 //!   `register_actor_view`）で予約スロットへ到達する。

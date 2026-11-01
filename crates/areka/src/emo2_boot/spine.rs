@@ -1,7 +1,7 @@
 //! 決定論 spine テストハーネス（R8・tasks.md task 6.1）。
 //!
 //! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
-//! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**headless GPU（WARP・MTA）** で通す
+//! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す
 //!
 //! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: 本ファイルで言う sleep 不使用とは
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
@@ -436,7 +436,7 @@ fn settle_bounded_with(mut now: impl FnMut() -> Instant, mut step: impl FnMut() 
 
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU・R8.4）。
 ///
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
+/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 fn make_world_with_gpu() -> (GpuPermit, World) {
     // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
     unsafe {
@@ -641,7 +641,7 @@ impl SpineHarness {
         shiori_handle: ScriptedShioriHandle,
         driver: LoopDriver,
     ) -> SpineHarness {
-        // ── headless GPU World（MTA COM＋WARP 可・R8.4）＋合成 GhostWindows（scope [0,1]） ──
+        // ── headless GPU World（MTA COM＋実 GPU・R8.4）＋合成 GhostWindows（scope [0,1]） ──
         let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
 
