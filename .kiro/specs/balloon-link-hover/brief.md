@@ -111,3 +111,7 @@
 - **先に要るもの**: `link-context-copy`（その前に `range-choice-tag`）。まだ列の先頭ではない。
 - **優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
 - **見つけた穴・古くなった記述**: 穴は無い。kanade の同じファイルを触る `mcp-kanade-tools`・`mcp-shiori-query`・`talk-fast-forward` とは同じウェーブに置けない（`farewell-talk-status` は着地した）。
+
+## 2026-11-01 棚卸㉝の後の開発者の決め
+
+2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」）＝版に縛らない列から windows-reactor 待ちの段へ移した。`OnChoiceHover`・`OnAnchorHover` のイベントは描画と関係ないが、返った文を見せる先がツールチップなので、イベントだけ先に作ると使い道の無い段になる。前の `link-context-copy` は今のまま先に進められる。

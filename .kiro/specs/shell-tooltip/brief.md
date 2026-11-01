@@ -81,3 +81,7 @@
 - **要件定義のモデル**: Opus のまま（wintf の口・当たり判定の追跡・リソースの照会のどれも先例がある）。
 - **分割の案**: 無し（プロパティは `currentghost-property-tree` 側へ）。
 - **見つけた穴・古くなった記述**: 正典は「シェル側設定がある場合はそちらが優先される」＝tooltipブレスが SHIORI の `tooltip` より先で、プロパティの差し替えとの順だけが議題に残る（棚卸㉓のまま）。台帳 `property.toml` の `currentghost.seriko.tooltip.*` の 5 行（1007〜1063 行目）の持ち主は `currentghost-property-tree`＝本 spec は文字の表と差し替えの口まで。本文 Constraints の「シェルの element の列（`shell/{model,decode}.rs`）に掛かる見込み」は 2 つ目の転記にすれば掛からない。本文 Out の「マウスカーソルの差し替え」の持ち主は ✅ `shell-mouse-cursor`（着地済み）。
+
+## 2026-11-01 棚卸㉝の後の開発者の決め
+
+2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」）＝版に縛らない列から windows-reactor 待ちの段へ移した。中身の大半はツールチップを出すことで、読み取り（surfaces.txt の tooltipブレス・SHIORI の `tooltip`）は小さいので、描き方が決まってから一緒に作る。
