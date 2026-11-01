@@ -1588,7 +1588,7 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "shell-scale-linkage"
 priority = "C10"
@@ -1598,13 +1598,14 @@ links = [
   { kind = "queries", to = "ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth.initial:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プロパティの値を尋ねる要求が届かず、名指ししたイベントで値が返ってこない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。areka は台本の再生でこのタグに届くと、書かれた順のプロパティ名の値を MCP の get_property と同じ問い手・同じ名前の規則で引き、イベント名のイベントをそのゴーストの SHIORI へ SenderType `internal,property` で送る（n 番目の名前の値を Reference(n−1) へ・値の無い名前は空の文字列で番号をずらさない）。台本の再生は止めない。イベント名は `On` で始まる名前に限らない。
+ログ: イベント名が無い・空・空白だけなら送らずに warn!（`property_get_empty_event`）、イベント名か値に改行・NUL があれば送らずに warn!（`property_get_control_char`）、プロパティ名が 1 つも無ければ送らずに warn! より下の debug!（`property_get_no_names`・SSP も名前なしでは何も送らない）、送ったときは debug!（`property_get_sent`）。kanade が定常でないときは kanade が warn!（`property_event_not_steady`）を残して何も送らない。
 [群: プロパティの照会と設定]
 [テーマ無し: 値を尋ねるための配管で、利用者に見える手応えは返事を受け取った台本の側に現れる]
 [頻度: 里々 6 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![get。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 [読み書き: 読み（プロパティシステムの値を取り出し、指定したイベントの Reference へ入れる）。相手のプロパティ名は引数で決まるので 188 件のどれにでも向く。links に載せたのは正典本文の記述例が名指しする 2 件だけ]
+実装: タグを選ぶのは crates/areka-ghost/src/prop_get_sink.rs（PropGetCueSink）、送るのは crates/areka-kanade/src/schedule/change.rs（KanadeMsg::PropertyEvent の受け口）。証拠は prop_get_sink.rs の `// ukadoc:` の URL。
+テスト: crates/areka-ghost/src/prop_get_sink_tests.rs・crates/areka-kanade/src/schedule/change_property_tests.rs。
 担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は property-query-channels）。
 """
 

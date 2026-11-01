@@ -10,7 +10,7 @@
 //!
 //! 1. 表が担当を言う各行（受け口の既存のテストから取った引数つきの見本）→ その担当の受け口だけに
 //!    届く。担当が `emo2_boot` の外（seriko の `bind`・文字の層の `\f`・台本の組み立ての
-//!    `set,choicetimeout`・プロパティの書き込み）の行は、11 のどれにも届かない。
+//!    `set,choicetimeout`・プロパティの書き込みと読み）の行は、11 のどれにも届かない。
 //! 2. 表に出てくる名前の全部 × 表に出てくる第 1 引数の全部（＋第 1 引数なし＋どこにも無い語）の
 //!    掛け合わせのうち、表に無い組 → 11 のどれにも届かない（受け口が表に無い組を拾えば赤）。
 //!    引数の列は「第 1 引数＋同じ名前の見本の第 2 引数から先（尾）」で組む。切替・書庫の受け口は
@@ -139,6 +139,12 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
         ("bind-noevent", None, vec!["腕", "伸び", "1"]),
         // 文字の層の印の合図（script-small-tags 要件 4.1・4.2）
         (MARKER_COMMAND, None, vec![]),
+        // areka-ghost の prop_get_sink.rs のプロパティの読み（shell-scale-linkage 要件 1.8）
+        (
+            "get",
+            Some("property"),
+            vec!["property", "OnX", "currentghost.scope(0).scaling"],
+        ),
     ]
 }
 
@@ -163,7 +169,8 @@ fn emo2_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
         CommandConsumer::Seriko
         | CommandConsumer::TextLayer
         | CommandConsumer::ScriptCompile
-        | CommandConsumer::PropertyWrite => None,
+        | CommandConsumer::PropertyWrite
+        | CommandConsumer::PropertyRead => None,
     }
 }
 

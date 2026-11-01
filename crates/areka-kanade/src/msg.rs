@@ -311,6 +311,14 @@ pub enum KanadeMsg {
         strict: Option<bool>,
         reply: areka_actor::ReplySender<crate::sstp::SstpNotifyOutcome>,
     },
+    /// `\![get,property]` の返しのイベント（台本のスレッド → kanade）。定常でだけ送る。
+    /// 名前と Reference は運行表の腕が `sstp::validate_notify` で検査し、破れていれば送らない。
+    PropertyEvent {
+        /// 逐語のイベント名（`On` で始まらなくてよい）。
+        id: String,
+        /// 値の列（欠番は空文字列・詰めない）。
+        references: Vec<String>,
+    },
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -355,6 +363,8 @@ pub enum EventId {
     /// `on_translate`・`on_translate_sstp` だけが作る）。受理の判定・欠番の印・記録の名札は
     /// `Static("OnTranslate")` と同じに扱う。
     Translate(crate::request_origin::RequestOrigin),
+    /// `\![get,property]` の返しのイベント（`schedule::events::property_event` だけが作る・逐語）。
+    Property(String),
 }
 
 impl EventId {
@@ -365,6 +375,7 @@ impl EventId {
             EventId::Choice(name) => name.as_str(),
             EventId::Sstp(name) => name.as_str(),
             EventId::Translate(_) => "OnTranslate",
+            EventId::Property(name) => name.as_str(),
         }
     }
 }

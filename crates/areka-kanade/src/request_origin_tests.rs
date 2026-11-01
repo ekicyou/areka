@@ -81,6 +81,20 @@ fn raise_event_reply_translate_is_areka_external_sstp() {
 }
 
 #[test]
+fn property_event_is_areka_internal_property_local() {
+    // `\![get,property]` の返しのイベント（shell-scale-linkage 要件 1.3）。名前を問わず同じ 4 つの文字。
+    for name in ["OnPastaShellScale", "PastaShellScale"] {
+        let id = EventId::Property(name.to_string());
+        assert_eq!(
+            RequestOrigin::of_event(&id).wire(),
+            row("local", "areka", "internal,property"),
+            "{name}"
+        );
+        assert_eq!(RequestOrigin::base_of(&id), ScriptOrigin::PROPERTY);
+    }
+}
+
+#[test]
 fn base_origins_of_the_four_categories() {
     // 応答の台本の基本の出どころ（1.1・1.3・1.7）。
     assert_eq!(

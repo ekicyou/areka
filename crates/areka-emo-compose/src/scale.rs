@@ -150,6 +150,11 @@ impl ScaleRatio {
         self.num == self.den
     }
 
+    /// 既約の分子・分母（読むだけ・不変条件は変えない・spec `shell-scale-linkage` 要件 3.7）。
+    pub fn parts(self) -> (u32, u32) {
+        (self.num, self.den)
+    }
+
     /// 照会契約の出口ビュー（`num as f32 / den as f32`・要件 1.2/1.6）。
     ///
     /// 下流（`collision-dpi-hittest` の ÷k・`emo-text-layer` の行寸）が参照する

@@ -50,6 +50,7 @@ mod hub;
 mod read;
 mod refresh;
 mod replace;
+mod scale_change;
 mod show;
 mod snapshot;
 mod target;
@@ -89,6 +90,7 @@ pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
 pub use self::replace::DetachedState;
+pub use self::scale_change::{AppliedScale, ScaleChange};
 use self::target::PresentTarget;
 pub use self::target::VisibilityOwnership;
 // 遷移観測のサーフェス記録の**語彙**（design C3・Requirement 2.7）。判定側（areka の
@@ -152,6 +154,9 @@ mod replace_tests;
 #[cfg(test)]
 #[path = "presenter_resize_report_tests.rs"]
 mod resize_report_tests;
+#[cfg(test)]
+#[path = "presenter_scale_change_tests.rs"]
+mod scale_change_tests;
 #[cfg(test)]
 #[path = "presenter_test_support.rs"]
 mod test_support;

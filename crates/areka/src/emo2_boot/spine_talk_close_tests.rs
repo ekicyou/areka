@@ -13,7 +13,7 @@ use super::{
 // 6.1 の `SpineHarness`＋6.2 の観測ヘルパの上に構築する。S2 は実 sink 経路の末端
 // （seriko→shell 面切替の実描画 readback／emo-text typewriter の `present_frame` 駆動→
 // text 供給面 readback）まで観測境界を延ばす（R8.2/R8.5）。sleep 不使用・注入 Tick と
-// 注入 talk_time のみ（R8.3）・headless GPU（WARP・MTA・R8.4）・x64 完結（R8.6）。
+// 注入 talk_time のみ（R8.3）・実 GPU（MTA・R8.4）・x64 完結（R8.6）。
 // ===========================================================================
 
 /// 装着済み balloon text actor の供給面（emo-text `TextLayerRuntime::surface`）の非透明画素数。

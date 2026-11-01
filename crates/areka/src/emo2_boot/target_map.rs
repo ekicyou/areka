@@ -7,7 +7,7 @@
 //!
 //! 不変条件（DD-3）: `shell_target` は偶数・`balloon_target` は奇数の `TargetId` を返すため、
 //! 全 scope にわたりシェル表示対象とバルーン表示対象は決して衝突しない（互いに素）。
-//! この 3 関数のみが本仕様の新正本であり、M-dual 拡張はこのモジュールだけを触る。
+//! この 3 関数と逆写像 `target_scope` のみが採番の正本であり、M-dual 拡張はこのモジュールだけを触る。
 
 use areka_emo_present::TargetId;
 use areka_sakura::ActorKey;
@@ -35,6 +35,27 @@ pub fn balloon_target(scope: u32) -> TargetId {
 /// `warn!` ＋当該指令 drop で握り潰さず観測する（log-first・R3 前提）。
 pub fn scope_of(key: &ActorKey) -> Option<u32> {
     key.as_str().parse::<u32>().ok()
+}
+
+/// 表示対象の窓の種類（採番の偶奇で決まる）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetWindow {
+    /// シェル（偶数の `TargetId`）。
+    Shell,
+    /// バルーン（奇数の `TargetId`）。
+    Balloon,
+}
+
+/// 表示対象 → (scope 番号, 窓の種類)。`shell_target`／`balloon_target` の逆写像。
+///
+/// DD-3 の採番規約により、偶数ならシェル・奇数ならバルーンで、scope は `id / 2`。
+pub fn target_scope(target: TargetId) -> (u32, TargetWindow) {
+    let window = if target.0.is_multiple_of(2) {
+        TargetWindow::Shell
+    } else {
+        TargetWindow::Balloon
+    };
+    (target.0 / 2, window)
 }
 
 #[cfg(test)]
@@ -113,6 +134,21 @@ mod tests {
         for scope in [0u32, 1, 5, 42, 1000] {
             let key = ActorKey::from(scope.to_string());
             assert_eq!(scope_of(&key), Some(scope));
+        }
+    }
+
+    /// 正写像 → 逆写像の往復で恒等（スコープ 0・1・2 × シェル・バルーン）。
+    #[test]
+    fn target_scope_roundtrips_shell_and_balloon_targets() {
+        for scope in [0u32, 1, 2] {
+            assert_eq!(
+                target_scope(shell_target(scope)),
+                (scope, TargetWindow::Shell)
+            );
+            assert_eq!(
+                target_scope(balloon_target(scope)),
+                (scope, TargetWindow::Balloon)
+            );
         }
     }
 }

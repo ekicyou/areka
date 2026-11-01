@@ -562,3 +562,6 @@ mod cancel_tests;
 
 #[path = "raise_event_tests.rs"]
 mod raise_event_tests;
+
+#[path = "change_property_tests.rs"]
+mod property_tests;

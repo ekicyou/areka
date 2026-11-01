@@ -227,6 +227,9 @@ pub fn spawn_kanade_translating(
                         strict,
                     }
                 }
+                KanadeMsg::PropertyEvent { id, references } => {
+                    Input::PropertyEvent { id, references }
+                }
             };
             let (flow, first_reply) = drive_translating(
                 &mut state,
@@ -507,6 +510,7 @@ fn execute_batch(
                         EventId::Choice(_) => "OnChoiceEvent",
                         EventId::Sstp(_) => crate::schedule::sstp::NOTIFY_ORIGIN,
                         EventId::Translate(_) => "OnTranslate",
+                        EventId::Property(_) => crate::schedule::events::PROPERTY_EVENT_ORIGIN,
                     },
                 };
                 last_reply = Some((round_trip_request(shiori, call), origin));
@@ -668,6 +672,8 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
         EventId::Sstp(name) => crate::sstp::validate_notify(name, references).is_ok(),
         // 翻訳の要求: 今の `Static("OnTranslate")` と同じ（許可表の `OnTranslate`）。
         EventId::Translate(_) => crate::schedule::events::is_allowed_event_id("OnTranslate"),
+        // `\![get,property]` の返しのイベント: 運行表の腕と同じ検査を満たすかだけで決める（許可の表は通さない）。
+        EventId::Property(name) => crate::sstp::validate_notify(name, references).is_ok(),
     };
     if !allowed {
         tracing::error!(

@@ -35,6 +35,8 @@ use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_scope_rect.rs"]
 pub(crate) mod ghost_session_scope_rect;
+#[path = "ghost_session_scope_scale.rs"]
+pub(crate) mod ghost_session_scope_scale;
 
 #[path = "ghost_session_runtime.rs"]
 mod ghost_session_runtime;
@@ -94,6 +96,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     placement::spawn::wire_zorder_pair(world);
     // スコープ → 窓の印の表を出す系（mcp-scope-rect-property 要件 3.3）。
     ghost_session_scope_rect::register(world);
+    placement::balloon_syncscale::register(world);
 }
 
 /// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ

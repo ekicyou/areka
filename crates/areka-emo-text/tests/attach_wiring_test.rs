@@ -7,7 +7,7 @@
 //! へ**独立に**描画されることを readback で検証する。
 //!
 //! - emo-present は読み取り消費のみ（TextSlotView 経由）——本テストは emo-present を改変しない。
-//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・WARP 可・presenter.rs テストと同一方針）。
+//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・presenter.rs テストと同一方針）。
 //! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 
 use std::cell::RefCell;

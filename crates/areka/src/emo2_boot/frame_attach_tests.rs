@@ -222,14 +222,14 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
 // 実 emo2 fixture（`emo2-kakukaku`）では scope0 が `balloons0.png`／scope1 が `balloonk0.png`
 // を採用し、面別上書き（`balloons0s.txt`／`balloonk0s.txt`）の `validrect`／`windowposition`
 // が互いに異なる。ゆえに「先頭 scope の定義を全 scope へ配る」実装はこの檻で必ず落ちる。
-// attach は GPU 資源ゲート越しにしか走らないため、檻も headless GPU（WARP 可・MTA）で
+// attach は GPU 資源ゲート越しにしか走らないため、檻も 実 GPU（MTA）で
 // 本番 [`run_attach_phase`] をそのまま駆動する（シームを噛ませない）。
 
 /// [`resnap_world`]（2 スコープ窓＋偽 `WindowHandle`）へ実 GPU 資源を載せた attach 檻の World。
 ///
 /// attach ゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の連言ゆえ、
 /// 本番 attach を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を初期化する
-/// （記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
+/// （記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 ///
 /// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
 fn gpu_attach_world() -> (crate::emo2_boot::spine::GpuPermit, World, GhostWindows) {

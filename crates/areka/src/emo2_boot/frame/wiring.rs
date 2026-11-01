@@ -32,6 +32,7 @@ use super::status_report::BalloonStatusLedger;
 use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
+use crate::ghost_session::ghost_session_scope_scale::SharedScopeScaleTable;
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
@@ -182,6 +183,9 @@ pub struct Emo2Wiring {
     /// 今のシェルの静的な着せ替えの既定（起動の資産から・シェルの差し替えで置き直す）。ghost の読み直しで
     /// 控える着せ替えを「この既定との差」にするのに使う（areka-P0-mcp-reload 要件 3.8）。
     pub(in crate::emo2_boot) static_binds: areka_seriko::DefaultBinds,
+    /// スコープの倍率と DPI の表（spec shell-scale-linkage D7・ゴーストの起動ごとに新しい）。
+    /// 書き手は毎フレームの相、読み手は実行系の読み口（`rewire_runtime_consumers` が登録する）。
+    pub(super) scope_scale: SharedScopeScaleTable,
 }
 
 impl Emo2Wiring {
@@ -238,7 +242,14 @@ impl Emo2Wiring {
             // 控えは読み直しの起こし直しだけが渡す（ふつうの起動・切替は無し）。
             shell_carry: None,
             static_binds,
+            // 表は空から始める（表示が成立したスコープから相が書く）。
+            scope_scale: SharedScopeScaleTable::default(),
         }
+    }
+
+    /// スコープの倍率と DPI の表（同じ表を共有する）。
+    pub(crate) fn scope_scale_table(&self) -> SharedScopeScaleTable {
+        self.scope_scale.clone()
     }
 
     /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。

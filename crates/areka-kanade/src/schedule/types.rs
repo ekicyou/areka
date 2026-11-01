@@ -105,6 +105,12 @@ pub(crate) enum Input {
         /// 呼び手の strict（真・偽・省略）。返った台本のトークの番号と結んで控える。
         strict: Option<bool>,
     },
+    /// `\![get,property]` の返しのイベント（台本のスレッド → kanade）。判断は [`change::on_property_event`] が持つ。
+    PropertyEvent {
+        id: String,
+        /// 値の列（欠番は空文字列・詰めない）。
+        references: Vec<String>,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した

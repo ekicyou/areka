@@ -5,7 +5,7 @@
 //! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]・task 8.2）が
 //! 共有する道具だけをここに置く。中身は 4 つ:
 //!
-//! 1. **描画環境の用意**——headless の GPU World（WARP 可）と予約スロット。
+//! 1. **描画環境の用意**——headless の GPU World（実 GPU）と予約スロット。
 //! 2. **実行時の組み立て**——`TextLayerRuntime` へ台本を流し、本番の 1 フレーム経路
 //!    （`present_frame`）で描く。
 //! 3. **画素の読み戻し**——供給面の premultiplied BGRA を密配列で取る。

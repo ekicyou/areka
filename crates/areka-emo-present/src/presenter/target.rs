@@ -6,6 +6,7 @@
 //! 閉じる（`pub(super)` はその範囲を表す＝分割前の「`presenter` 私有」と可視集合が同一）。
 
 use super::budget::FrameBudget;
+use super::scale_change::AppliedScale;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
     ScaleRatio, VisualMount,
@@ -113,6 +114,11 @@ pub(super) struct PresentTarget {
     /// 成立していない間は `None` で、[`EmoPresenter::text_slot_view`] もその間は `None` を返す
     /// （「まだ何も適用していない」を 1.0 で塗り潰さない）。
     pub(super) applied: Option<ScaleRatio>,
+    /// **装着ごとの起点**（最後に記録した（k・DPI）・`shell-scale-linkage` 要件 5.7）。
+    ///
+    /// 装着（`attach_target`）で `None` から始まり、差し替えでは引き継がない（`applied` は寸法の照合の
+    /// ために引き継ぐ）。更新は `applied` と同じ表示成立点だけで、そこで違えば記録を積む。
+    pub(super) scale_baseline: Option<AppliedScale>,
     /// 表示中サーフェスの **native 原寸**（k 適用**前**の合成外形・照会契約 `surface_size()` の供給源）。
     ///
     /// 物理寸との関係は `物理寸 == applied.scaled_extent(native_size)`（丸め権威は

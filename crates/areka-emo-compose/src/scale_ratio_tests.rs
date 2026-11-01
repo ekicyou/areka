@@ -20,6 +20,12 @@ fn new_reduces_to_canonical_form() {
     }
 }
 
+/// shell-scale-linkage 要件 3.7: 読む口は既約の分子・分母を返す（120/96 → (5, 4)）。
+#[test]
+fn parts_reads_reduced_numerator_and_denominator() {
+    assert_eq!(ScaleRatio::new(120, AUTHOR_DPI).unwrap().parts(), (5, 4));
+}
+
 /// 要件 1.1: 0 は分子・分母のいずれでも構築失敗（パニックしない）。
 #[test]
 fn new_rejects_zero() {

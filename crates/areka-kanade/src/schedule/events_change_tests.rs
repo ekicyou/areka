@@ -42,8 +42,9 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // shiori の読み直しの `OnDestroy` を足して 55 語（areka-P0-mcp-reload 要件 4.1）、
     // マウスの解放・クリック・ホイール・出入りの 9 語（`OnMouseUp`・`OnMouseUpEx`・`OnMouseClick`・
     // `OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave`・`OnMouseEnterAll`・
-    // `OnMouseLeaveAll`）を足して 64 語（mouse-click-wheel-events 要件 10.1）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 64);
+    // `OnMouseLeaveAll`）を足して 64 語（mouse-click-wheel-events 要件 10.1）、
+    // 倍率の `OnShellScaling`・`OnBalloonScaling` を足して 66 語（shell-scale-linkage 要件 5.1・5.2）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 66);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",
@@ -257,5 +258,10 @@ fn value_replaces_active_talk_except_second_change() {
     for origin in ["OnMouseMove", "OnMouseDoubleClick", "OnGhostChanging"] {
         assert!(value_replaces_active_talk(origin), "{origin} は置き換える");
     }
-    assert!(!value_replaces_active_talk("OnSecondChange"));
+    for origin in ["OnSecondChange", "OnShellScaling", "OnBalloonScaling"] {
+        assert!(
+            !value_replaces_active_talk(origin),
+            "{origin} は置き換えない"
+        );
+    }
 }

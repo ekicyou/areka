@@ -156,6 +156,17 @@ impl ScriptOrigin {
         level: SecurityLevel::Local,
     };
 
+    /// `\![get,property]` の返しのイベント: `internal,property`・SSTP でない・`local`
+    /// （shell-scale-linkage 1.3・SSP の実測どおり）。
+    pub const PROPERTY: ScriptOrigin = ScriptOrigin {
+        sender_type: SenderType {
+            head: SenderHead::Internal,
+            rest: &[SenderWord::Property],
+        },
+        sstp: SstpKind::NotSstp,
+        level: SecurityLevel::Local,
+    };
+
     /// 実効のレベルを下げるだけ（`External` を `Local` に戻さない・3.2）。
     pub fn lowered_by(self, level: SecurityLevel) -> ScriptOrigin {
         ScriptOrigin {

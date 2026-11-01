@@ -226,3 +226,126 @@ fn unreadable_ghost_value_locks_nothing() {
     assert_eq!(keys, ["kero.balloon.dontmove", "balloon.dontmove"]);
     assert!(events.iter().all(|e| e.expect_field("scope") == "1"));
 }
+
+/// ゴーストの `balloon.syncscale,true` はすべてのスコープを連動させ、鍵ごとに警告より下の段の記録を 1 件残す
+/// （ゴーストの鍵のスコープは「all」・shell-scale-linkage 要件 6.1・6.7）。
+#[test]
+fn ghost_syncscale_true_links_every_scope() {
+    let ghost = kv(&[("balloon.syncscale", "true")]);
+    let (sync, events) = capture_logs(|| read_balloon_syncscale(&ghost, &kv(&[])));
+    for scope in [0, 1, 2, 7] {
+        assert!(sync.is_synced(scope), "scope={scope}");
+    }
+    let ev = expect_one(&events, "balloon_syncscale_read");
+    assert_eq!(ev.level, tracing::Level::DEBUG);
+    assert_eq!(ev.expect_field("key"), "balloon.syncscale");
+    assert_eq!(ev.expect_field("scope"), "all");
+    assert_eq!(ev.expect_field("value"), "\"true\"");
+    assert_eq!(ev.expect_field("synced"), "true");
+}
+
+/// シェルの鍵はそのスコープだけを連動させる: `sakura.`・別名 `char0.`・`kero.`・`char2.`（要件 6.2・6.7）。
+#[test]
+fn shell_syncscale_links_only_its_scope() {
+    for (key, scope) in [
+        ("sakura.balloon.syncscale", 0u32),
+        ("char0.balloon.syncscale", 0),
+        ("kero.balloon.syncscale", 1),
+        ("char1.balloon.syncscale", 1),
+        ("char2.balloon.syncscale", 2),
+    ] {
+        let shell = kv(&[(key, "true")]);
+        let (sync, events) = capture_logs(|| read_balloon_syncscale(&kv(&[]), &shell));
+        for other in 0..4u32 {
+            assert_eq!(
+                sync.is_synced(other),
+                other == scope,
+                "key={key} scope={other}"
+            );
+        }
+        let ev = expect_one(&events, "balloon_syncscale_read");
+        assert_eq!(ev.level, tracing::Level::DEBUG);
+        assert_eq!(ev.expect_field("key"), key);
+        assert_eq!(ev.expect_field("scope"), scope.to_string());
+        assert_eq!(ev.expect_field("synced"), "true");
+    }
+}
+
+/// 正典の綴りが別名に勝つ（`sakura.`＞`char0.`・`kero.`＞`char1.`・要件 6.2）。
+#[test]
+fn shell_syncscale_canonical_prefix_beats_alias() {
+    let shell = kv(&[
+        ("sakura.balloon.syncscale", "false"),
+        ("char0.balloon.syncscale", "true"),
+        ("kero.balloon.syncscale", "true"),
+        ("char1.balloon.syncscale", "false"),
+    ]);
+    let sync = read_balloon_syncscale(&kv(&[]), &shell);
+    assert!(!sync.is_synced(0));
+    assert!(sync.is_synced(1));
+}
+
+/// 先頭の 0 のある `char02.` は読まない（記録も残さない・要件 6.2）。
+#[test]
+fn shell_syncscale_ignores_leading_zero_scope() {
+    let shell = kv(&[("char02.balloon.syncscale", "true")]);
+    let (sync, events) = capture_logs(|| read_balloon_syncscale(&kv(&[]), &shell));
+    assert_eq!(sync, BalloonSyncScale::default());
+    assert!(events.is_empty(), "{events:?}");
+}
+
+/// ゴーストとシェルの両方が書けば論理和（要件 6.3）。ゴーストが `false` でもシェルの `true` が効く。
+#[test]
+fn ghost_and_shell_syncscale_combine_by_or() {
+    let both = read_balloon_syncscale(
+        &kv(&[("balloon.syncscale", "true")]),
+        &kv(&[("kero.balloon.syncscale", "true")]),
+    );
+    assert!(both.is_synced(0) && both.is_synced(1) && both.is_synced(3));
+
+    let shell_only = read_balloon_syncscale(
+        &kv(&[("balloon.syncscale", "false")]),
+        &kv(&[("kero.balloon.syncscale", "true")]),
+    );
+    assert!(!shell_only.is_synced(0));
+    assert!(shell_only.is_synced(1));
+}
+
+/// `true` と前後の空白を除いて完全に一致するときだけ有効。ほかは「指定なし」で、警告を出さず
+/// 警告より下の段に `synced = false` を残す（要件 6.4・6.7）。
+#[test]
+fn syncscale_values_other_than_true_mean_unspecified() {
+    for (raw, synced) in [
+        ("true", true),
+        (" true ", true),
+        ("false", false),
+        ("", false),
+        ("True", false),
+        ("1", false),
+    ] {
+        let (sync, events) = capture_logs(|| {
+            read_balloon_syncscale(
+                &kv(&[("balloon.syncscale", raw)]),
+                &kv(&[("sakura.balloon.syncscale", raw)]),
+            )
+        });
+        assert_eq!(sync.is_synced(0), synced, "raw={raw:?}");
+        assert_eq!(sync.is_synced(1), synced, "raw={raw:?}");
+        assert_eq!(events.len(), 2, "raw={raw:?}: {events:?}");
+        for ev in &events {
+            assert_eq!(ev.level, tracing::Level::DEBUG, "raw={raw:?}");
+            assert_eq!(ev.expect_field("value"), format!("{raw:?}"));
+            assert_eq!(ev.expect_field("synced"), synced.to_string());
+        }
+    }
+}
+
+/// どちらにも書かれていなければ指定なしで、記録も残さない。
+#[test]
+fn unwritten_syncscale_is_unspecified_silently() {
+    let (sync, events) =
+        capture_logs(|| read_balloon_syncscale(&kv(&[("name", "x")]), &kv(&[("name", "y")])));
+    assert_eq!(sync, BalloonSyncScale::default());
+    assert!(!sync.is_synced(0));
+    assert!(events.is_empty(), "{events:?}");
+}
