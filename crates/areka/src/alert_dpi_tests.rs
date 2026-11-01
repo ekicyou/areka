@@ -27,8 +27,9 @@ use windows::Win32::UI::HiDpi::{
     GetThreadDpiAwarenessContext, GetWindowDpiAwarenessContext, MDT_EFFECTIVE_DPI,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumThreadWindows, GetClassNameW, GetWindowTextW, IDCANCEL, IDNO, IDOK, IDYES, KillTimer,
-    MESSAGEBOX_RESULT, PostMessageW, PostQuitMessage, SetTimer,
+    EnumThreadWindows, GWL_EXSTYLE, GetClassNameW, GetForegroundWindow, GetWindowLongPtrW,
+    GetWindowTextW, IDCANCEL, IDNO, IDOK, IDYES, KillTimer, MESSAGEBOX_RESULT, PostMessageW,
+    PostQuitMessage, SetTimer, WS_EX_TOPMOST,
 };
 use windows::core::{BOOL, HSTRING, PCWSTR};
 
@@ -176,6 +177,8 @@ const PROBE_BODY: &str = "areka alert DPI probe (closes by itself)";
 const TICK_MS: u32 = 300;
 /// 探す回数の上限（およそ 6 秒）。超えたらモーダルを抜けて「見つからない」とする。
 const MAX_TICKS: u32 = 20;
+/// 本番の口の画面を見つけてから閉じるまで残す回数（およそ 8 秒・撮るため）。上限とは別に数える。
+const HOLD_TICKS: u32 = 27;
 
 /// 画面が出ている間に読んだ値。
 #[derive(Debug, Clone, Copy)]
@@ -186,13 +189,18 @@ struct WindowRead {
     window_dpi: u32,
     monitor_dpi: u32,
     system_dpi: u32,
+    /// 拡張の様式に最前面（`WS_EX_TOPMOST`）が立っているか。
+    topmost: bool,
+    /// 前面の窓がその窓か（読むだけで assert しない）。
+    foreground: bool,
 }
 
-/// 1 つの場合の結果。
+/// 1 つの場合の結果。`result` は画面を出した関数の戻り値。
 #[derive(Debug, Clone)]
-struct ProbeRow {
+struct ProbeRow<R> {
     line: String,
     read: Option<WindowRead>,
+    result: R,
 }
 
 thread_local! {
@@ -202,6 +210,12 @@ thread_local! {
     static FOUND: Cell<Option<WindowRead>> = const { Cell::new(None) };
     /// 窓を探す鍵の題名。場合ごとに [`probe_case`] が置く。
     static KEY: RefCell<String> = const { RefCell::new(String::new()) };
+    /// 閉じるときに押すボタン。場合ごとに [`probe_case`] が置く。
+    static BUTTON: Cell<MESSAGEBOX_RESULT> = const { Cell::new(IDOK) };
+    /// 見つけてから閉じるまで残す回数。場合ごとに [`probe_case`] が置く。
+    static HOLD: Cell<u32> = const { Cell::new(0) };
+    /// 見つけてから数えた回数。
+    static HELD: Cell<u32> = const { Cell::new(0) };
 }
 
 /// 扱いの値を 0＝非対応・1＝system・2＝モニタごとの数にする（無効なら -1）。
@@ -236,8 +250,8 @@ unsafe extern "system" fn find_probe(hwnd: HWND, lparam: LPARAM) -> BOOL {
     BOOL(1)
 }
 
-/// タイマーの呼び戻し（モーダルの間も同じスレッドで配られる）。見つけたら読んで閉じ、
-/// [`MAX_TICKS`] 回で見つからなければモーダルを抜けさせる。
+/// タイマーの呼び戻し（モーダルの間も同じスレッドで配られる）。見つけてから [`HOLD`] 回残した後に
+/// 読んで [`BUTTON`] で閉じ、[`MAX_TICKS`] 回で見つからなければモーダルを抜けさせる。
 unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
     let mut hwnd = HWND::default();
     // SAFETY: 呼び戻しは上の `find_probe`、`lparam` は呼び出しの間生きている局所の `hwnd` を指す。
@@ -250,6 +264,11 @@ unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
         )
     };
     if !hwnd.is_invalid() {
+        let held = HELD.get();
+        if held < HOLD.get() {
+            HELD.set(held + 1);
+            return;
+        }
         let mut monitor_dpi = (0u32, 0u32);
         // SAFETY: `hwnd` は今このスレッドで出ている画面の窓。読むだけの関数と、
         // この関数の中で生きている出力先だけを渡す。
@@ -273,13 +292,15 @@ unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
                 window_dpi: GetDpiForWindow(hwnd),
                 monitor_dpi: monitor_dpi.0,
                 system_dpi: GetDpiForSystem(),
+                topmost: GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOPMOST.0 != 0,
+                foreground: GetForegroundWindow() == hwnd,
             }
         };
         FOUND.set(Some(read));
-        // 閉じる知らせではタスクダイアログは閉じないので OK のボタンを押す。
+        // 閉じる知らせではタスクダイアログは閉じないので、場合ごとのボタンを押す。
         // SAFETY: 窓は生きている画面の窓、`timer` は OS が渡したこのスレッドのタイマー。
         unsafe {
-            let button = WPARAM(IDOK.0 as usize);
+            let button = WPARAM(BUTTON.get().0 as usize);
             let _ = PostMessageW(Some(hwnd), TDM_CLICK_BUTTON.0 as u32, button, LPARAM(0));
             let _ = KillTimer(None, timer);
         }
@@ -297,12 +318,21 @@ unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
     }
 }
 
-/// 新しいスレッドで題名 `title` を窓を探す鍵に置き、`setup` の後に `show` で画面を 1 つ出して測り、
-/// 1 行を出して返す。`show` の戻り値は行の `box=`（タスクダイアログの HRESULT）。
-fn probe_case(case: &'static str, title: &str, setup: fn(), show: fn() -> i32) -> ProbeRow {
+/// 新しいスレッドで題名 `title` を窓を探す鍵に、`button` を閉じるボタンに、`hold` を残す回数に置き、
+/// `setup` の後に `show` で画面を 1 つ出して測り、1 行を出して返す。`show` の戻り値は行の `box=`。
+fn probe_case<R: std::fmt::Debug + Send + 'static>(
+    case: &'static str,
+    title: &str,
+    button: MESSAGEBOX_RESULT,
+    hold: u32,
+    setup: fn(),
+    show: fn() -> R,
+) -> ProbeRow<R> {
     let title = title.to_owned();
     let row = std::thread::spawn(move || {
         KEY.set(title);
+        BUTTON.set(button);
+        HOLD.set(hold);
         setup();
         // SAFETY: 呼んだプロセスの疑似ハンドルで扱いを読むだけ。
         let process =
@@ -318,18 +348,20 @@ fn probe_case(case: &'static str, title: &str, setup: fn(), show: fn() -> i32) -
         );
         let line = match read {
             Some(r) => format!(
-                "{head} thread_during={} window={} window_v2={} window_dpi={} monitor_dpi={} system_dpi={} box={}",
+                "{head} thread_during={} window={} window_v2={} window_dpi={} monitor_dpi={} system_dpi={} topmost={} foreground={} box={:?}",
                 r.thread_during,
                 r.window,
                 r.window_v2,
                 r.window_dpi,
                 r.monitor_dpi,
                 r.system_dpi,
+                r.topmost,
+                r.foreground,
                 result
             ),
-            None => format!("{head} found=false box={result}"),
+            None => format!("{head} found=false box={result:?}"),
         };
-        ProbeRow { line, read }
+        ProbeRow { line, read, result }
     })
     .join()
     .expect("測りのスレッドが panic した");
@@ -382,18 +414,103 @@ fn probe_alert_task_dialog_window_dpi() {
         probe_case(
             "taskdialog_unaware",
             PROBE_TITLE,
+            IDOK,
+            0,
             thread_unaware,
             task_dialog,
         ),
         probe_case(
             "taskdialog_wrapped_from_unaware",
             PROBE_TITLE,
+            IDOK,
+            0,
             thread_unaware,
             task_dialog_wrapped,
         ),
-        probe_case("taskdialog_thread_v2", PROBE_TITLE, thread_v2, task_dialog),
+        probe_case(
+            "taskdialog_thread_v2",
+            PROBE_TITLE,
+            IDOK,
+            0,
+            thread_v2,
+            task_dialog,
+        ),
     ];
     for row in &rows {
         assert!(row.read.is_some(), "画面の窓が見つからない: {}", row.line);
     }
+}
+
+/// 本番の測りのエラーの画面の場面（起動窓を開けない）。
+fn startup_window_scene() -> super::AlertScene {
+    super::AlertScene::StartupWindow {
+        reason: "areka alert DPI probe".to_owned(),
+    }
+}
+
+/// 本番の口 `raise` を抑止なしで呼ぶ（エラーの画面・起動窓の場面）。
+fn production_alert() {
+    super::raise(&startup_window_scene(), false);
+}
+
+/// 本番の口 `ask_yes_no` を抑止なしで呼ぶ（測りの題名と本文）。
+fn production_ask() -> super::YesNo {
+    super::ask_yes_no(PROBE_TITLE, PROBE_BODY, false)
+}
+
+/// 本番の口 `warn_ok` を抑止なしで呼ぶ（測りの題名と本文）。
+fn production_warning() {
+    super::warn_ok(PROBE_TITLE, PROBE_BODY, false);
+}
+
+/// 本番の 3 つの口を 1 つずつ、非対応のスレッドから抑止なしで出し、窓が v2 で、最前面が
+/// はい／いいえと警告だけに立ち、はい／いいえの答えが「はい」であることを確かめる（要件 1.4・2.1・4.7）。
+/// 画面ごとにおよそ 8 秒残すので、その間に撮る。前面は行に載せるだけで assert しない。
+///
+/// 走らせる前の注意: `AREKA_APP_SMOKE_EXIT_MS`（`raise` が自分で読んで抑える）や `AREKA_NO_ALERT`
+/// （呼び手が読む抑止）が立っていると画面が出ない。測りは抑止を偽で渡すので前者だけが効くが、
+/// どちらも外してから走らせる。
+#[test]
+#[ignore = "real dialog: shows the three production dialogs on the desktop"]
+fn probe_alert_dialogs_production() {
+    let (alert_title, _) = super::alert_text(&startup_window_scene());
+    let alert = probe_case(
+        "alert",
+        &alert_title,
+        IDOK,
+        HOLD_TICKS,
+        thread_unaware,
+        production_alert,
+    );
+    let ask = probe_case(
+        "ask",
+        PROBE_TITLE,
+        IDYES,
+        HOLD_TICKS,
+        thread_unaware,
+        production_ask,
+    );
+    let warning = probe_case(
+        "install_warning_dialog",
+        PROBE_TITLE,
+        IDOK,
+        HOLD_TICKS,
+        thread_unaware,
+        production_warning,
+    );
+    for (line, read, topmost) in [
+        (&alert.line, alert.read, false),
+        (&ask.line, ask.read, true),
+        (&warning.line, warning.read, true),
+    ] {
+        let read = read.unwrap_or_else(|| panic!("画面の窓が見つからない: {line}"));
+        assert!(read.window_v2, "窓が v2 でない: {line}");
+        assert_eq!(read.topmost, topmost, "最前面の読みが違う: {line}");
+    }
+    assert_eq!(
+        ask.result,
+        super::YesNo::Yes,
+        "はい／いいえの答え: {}",
+        ask.line
+    );
 }
