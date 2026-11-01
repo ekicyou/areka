@@ -3,7 +3,7 @@
 //! 起動を止める 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
 //! SHIORI が動かなくなった場面（areka-P0-shiori-fault-notice 要件 1・5）と
 //! 記憶を書けない場面（areka-P0-write-failure-notice 要件 2.4・2.7・6.2）を
-//! [`AlertScene`] 1 つの型で数え、利用者向けのメッセージボックス（`MessageBoxW`）と
+//! [`AlertScene`] 1 つの型で数え、利用者向けのタスクダイアログ（`TaskDialogIndirect`）と
 //! 同じ内容の `error!` を出す。文面は [`alert_text`] が純粋に組む（テストで固定する）。
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
 //! 終わりの告知（[`raise`]）は有界の自動終了 `AREKA_APP_SMOKE_EXIT_MS` が立つ走行でも抑える。
@@ -12,20 +12,30 @@
 //! はい／いいえを尋ねる口 [`ask_yes_no`]（areka-P0-ghost-install 要件 4.4）と、
 //! OK だけの警告の口 [`warn_ok`]（areka-P0-emily-ghost-verification 要件 1.12）も置く。
 //!
-//! この module の `unsafe` は [`raise`]・[`ask_yes_no`]・[`warn_ok`] の `MessageBoxW` 呼び出しに閉じる。
+//! 3 つの口はどれも [`show_box`] 1 つの道で画面を出し、出す間だけスレッドの DPI の扱いを
+//! モニタごとの v2 にする（alert-dialog-per-monitor-dpi）。
+//!
+//! この module の `unsafe` は [`set_thread_dpi_context`]・[`show_box`] の中の `TaskDialogIndirect`・
+//! [`bring_to_front`] の 3 か所に閉じる。
 
 use std::path::PathBuf;
 
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScope};
+use windows::Win32::Foundation::{HWND, LPARAM, S_OK, WPARAM};
+use windows::Win32::UI::Controls::{
+    TASKDIALOG_FLAGS, TASKDIALOG_NOTIFICATIONS, TASKDIALOGCONFIG, TD_ERROR_ICON,
+    TD_INFORMATION_ICON, TD_WARNING_ICON, TDCBF_NO_BUTTON, TDCBF_OK_BUTTON, TDCBF_YES_BUTTON,
+    TDF_ALLOW_DIALOG_CANCELLATION, TDN_CREATED, TaskDialogIndirect,
+};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    IDNO, IDYES, MB_ICONERROR, MB_ICONQUESTION, MB_ICONWARNING, MB_OK, MB_SETFOREGROUND,
-    MB_TOPMOST, MB_YESNO, MESSAGEBOX_RESULT, MESSAGEBOX_STYLE, MessageBoxW,
+    HWND_TOPMOST, IDNO, IDYES, MESSAGEBOX_RESULT, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow,
+    SetWindowPos,
 };
-use windows::core::HSTRING;
+use windows::core::{HRESULT, HSTRING, PCWSTR};
 
 use crate::roots::{RootError, RootsOrigin};
 
@@ -270,7 +280,7 @@ pub(crate) fn suppressed() -> bool {
     }
 }
 
-/// `error!(event = "alert")` を必ず 1 件残し、`suppressed` が偽なら `MessageBoxW` を出す
+/// `error!(event = "alert")` を必ず 1 件残し、`suppressed` が偽ならエラーの画面を出す
 /// （`hwnd` 無し＝`WinApp` の有無を問わない）。戻ったら呼び手が `Err` を返す。
 /// 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）が立つ走行も抑える: 人が見ていない走行で箱が
 /// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない（2026-10-31）。
@@ -288,18 +298,13 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
     if suppressed {
         return;
     }
-    let (title, body) = (HSTRING::from(title), HSTRING::from(body));
-    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
-    let result = unsafe { MessageBoxW(None, &body, &title, MB_OK | MB_ICONERROR) };
-    // 0 は出せなかった（対話デスクトップが無い・資源不足等）。押されたボタンは OK だけなので
-    // 0 以外は見ない。出せなくても `alert` の記録は残っているので、原因を別の event で足す。
-    if result.0 == 0 {
-        // GetLastError を読む（windows-core 0.62 で from_win32 は from_thread に改名）。
-        let e = windows::core::Error::from_thread();
+    // 出せなかった（対話デスクトップが無い・資源不足等）ときだけ見る。押されたボタンは見ない。
+    // 出せなくても `alert` の記録は残っているので、原因を別の event で足す。
+    if let Err(e) = show_box(Dialog::Alert, &title, &body) {
         tracing::error!(
             event = "alert_box_failed",
             error = %e,
-            "[alert] MessageBoxW failed: the alert was only logged"
+            "[alert] TaskDialogIndirect failed: the alert was only logged"
         );
     }
 }
@@ -323,29 +328,29 @@ pub(crate) fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
     if suppressed {
         return YesNo::Suppressed;
     }
-    let (title, body) = (HSTRING::from(title), HSTRING::from(body));
-    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
-    let result = unsafe {
-        MessageBoxW(
-            None,
-            &body,
-            &title,
-            MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST,
-        )
-    };
-    match result {
-        IDYES => YesNo::Yes,
-        IDNO => YesNo::No,
-        // 0 は出せなかった。`MB_YESNO` は閉じるボタンが効かないので、他の値は来ない。
-        _ => {
-            let e = windows::core::Error::from_thread();
-            tracing::error!(
-                event = "ask_box_failed",
-                error = %e,
-                "[alert] MessageBoxW failed: the question was not shown"
-            );
-            YesNo::Unavailable
-        }
+    let shown = show_box(Dialog::Ask, title, body);
+    let answer = yes_no_answer(&shown);
+    if answer == YesNo::Unavailable {
+        let error = match &shown {
+            Err(e) => e.to_string(),
+            Ok(button) => format!("unexpected button {}", button.0),
+        };
+        tracing::error!(
+            event = "ask_box_failed",
+            error = %error,
+            "[alert] TaskDialogIndirect failed: the question was not shown"
+        );
+    }
+    answer
+}
+
+/// はい／いいえの画面の結果を答えへ写す（純粋）。「はい」と読むのは `IDYES` だけ
+/// （はいはインストールの同意なので、思わぬ値を同意に倒さない）。
+fn yes_no_answer(shown: &windows::core::Result<MESSAGEBOX_RESULT>) -> YesNo {
+    match shown {
+        Ok(IDYES) => YesNo::Yes,
+        Ok(IDNO) => YesNo::No,
+        _ => YesNo::Unavailable,
     }
 }
 
@@ -363,23 +368,12 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool) {
     if suppressed {
         return;
     }
-    let (title, body) = (HSTRING::from(title), HSTRING::from(body));
-    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
-    let result = unsafe {
-        MessageBoxW(
-            None,
-            &body,
-            &title,
-            MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST,
-        )
-    };
-    // 0 は出せなかった。押されたボタンは OK だけなので 0 以外は見ない。
-    if result.0 == 0 {
-        let e = windows::core::Error::from_thread();
+    // 出せなかったときだけ見る。押されたボタンは見ない。
+    if let Err(e) = show_box(Dialog::Warning, title, body) {
         tracing::error!(
             event = "warning_box_failed",
             error = %e,
-            "[alert] MessageBoxW failed: the warning was only logged"
+            "[alert] TaskDialogIndirect failed: the warning was only logged"
         );
     }
 }
@@ -388,7 +382,6 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool) {
 /// 切り替えは引数で受ける（本番は [`set_thread_dpi_context`]・テストは偽物）。前の扱いが無効なら
 /// 替えられなかったとして warn `alert_dpi_context_unchanged` を 1 件残し、今の扱いのまま出して戻さない。
 /// `show` はどちらの場合もちょうど 1 回走る。
-#[cfg_attr(not(test), allow(dead_code))]
 fn with_thread_per_monitor<T>(
     dialog: &'static str,
     mut switch: impl FnMut(DPI_AWARENESS_CONTEXT) -> DPI_AWARENESS_CONTEXT,
@@ -409,31 +402,111 @@ fn with_thread_per_monitor<T>(
 }
 
 /// 呼んだスレッドの DPI の扱いを替え、前の扱いを返す（替えられなければ無効な値）。
-#[cfg_attr(not(test), allow(dead_code))]
 fn set_thread_dpi_context(context: DPI_AWARENESS_CONTEXT) -> DPI_AWARENESS_CONTEXT {
     // SAFETY: 引数は OS の定数か、この関数が前に返した扱いの値。不正な値なら OS は無効な値を返すだけ。
     unsafe { SetThreadDpiAwarenessContext(context) }
 }
 
-/// 画面を出した結果: 押されたボタンと、戻った直後（スレッドの扱いを戻す前）に読んだ最後のエラー。
-#[cfg_attr(not(test), allow(dead_code))]
-struct BoxOutcome {
-    result: MESSAGEBOX_RESULT,
-    last_error: windows::core::Error,
+/// 告知の画面の種類。種類からボタン・アイコン・閉じるボタンの効き・前面の要否が決まる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Dialog {
+    /// エラーの画面（[`raise`]）。
+    Alert,
+    /// はい／いいえの画面（[`ask_yes_no`]）。
+    Ask,
+    /// OK だけの警告の画面（[`warn_ok`]）。
+    Warning,
 }
 
-/// メッセージボックスを出す 1 つの道（持ち主の窓は渡さない・旗は呼び手のまま）。
-/// 出す間だけスレッドをモニタごとの v2 にする（[`with_thread_per_monitor`]）。
-#[cfg_attr(not(test), allow(dead_code))]
-fn show_box(dialog: &'static str, title: &str, body: &str, style: MESSAGEBOX_STYLE) -> BoxOutcome {
+impl Dialog {
+    /// 記録の欄 `dialog` の名（その口の記録の語と同じ）。
+    fn name(self) -> &'static str {
+        match self {
+            Dialog::Alert => "alert",
+            Dialog::Ask => "ask",
+            Dialog::Warning => "install_warning_dialog",
+        }
+    }
+}
+
+/// 告知の画面を 1 つ出す（持ち主の窓は渡さない）。出す間だけスレッドをモニタごとの v2 にする。
+/// 押されたボタン（IDOK・IDYES・IDNO・閉じたときの IDCANCEL）か、出せなかった HRESULT を返す。
+fn show_box(dialog: Dialog, title: &str, body: &str) -> windows::core::Result<MESSAGEBOX_RESULT> {
     let (title, body) = (HSTRING::from(title), HSTRING::from(body));
-    with_thread_per_monitor(dialog, set_thread_dpi_context, || {
-        // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
-        let result = unsafe { MessageBoxW(None, &body, &title, style) };
-        // 扱いを戻す呼び出しで上書きされる前に読む。
-        let last_error = windows::core::Error::from_thread();
-        BoxOutcome { result, last_error }
+    // OK だけの画面は閉じるボタンと Esc で閉じられるようにする（取り消しのボタンが無いと既定で効かない）。
+    // はい／いいえの画面は閉じるボタンを効かなくする。最前面と前面は問いと警告の画面だけ。
+    let (buttons, icon, flags, front) = match dialog {
+        Dialog::Alert => (
+            TDCBF_OK_BUTTON,
+            TD_ERROR_ICON,
+            TDF_ALLOW_DIALOG_CANCELLATION,
+            false,
+        ),
+        Dialog::Ask => (
+            TDCBF_YES_BUTTON | TDCBF_NO_BUTTON,
+            TD_INFORMATION_ICON,
+            TASKDIALOG_FLAGS(0),
+            true,
+        ),
+        Dialog::Warning => (
+            TDCBF_OK_BUTTON,
+            TD_WARNING_ICON,
+            TDF_ALLOW_DIALOG_CANCELLATION,
+            true,
+        ),
+    };
+    let mut config = TASKDIALOGCONFIG {
+        cbSize: size_of::<TASKDIALOGCONFIG>() as u32,
+        dwFlags: flags,
+        dwCommonButtons: buttons,
+        pszWindowTitle: PCWSTR(title.as_ptr()),
+        pszContent: PCWSTR(body.as_ptr()),
+        pfCallback: if front { Some(bring_to_front) } else { None },
+        ..Default::default()
+    };
+    config.Anonymous1.pszMainIcon = icon;
+    with_thread_per_monitor(dialog.name(), set_thread_dpi_context, || {
+        let mut button = 0i32;
+        // SAFETY: `config` が指す `title`／`body` は終端 0 付きでこの呼び出しの間ずっと生存し、
+        // `button` はこの呼び出しの間生きている局所の値。他の欄は空か OS の定数。
+        unsafe { TaskDialogIndirect(&config, Some(&mut button as *mut i32), None, None) }
+            .map(|()| MESSAGEBOX_RESULT(button))
     })
+}
+
+/// タスクダイアログの呼び戻し。画面ができた知らせ（TDN_CREATED）で窓を最前面にし、前面へ出す。
+/// 前面にできなかったことは記録しない（OS の前面の決まりでも起きる）。ここでは panic しない。
+unsafe extern "system" fn bring_to_front(
+    hwnd: HWND,
+    msg: TASKDIALOG_NOTIFICATIONS,
+    _: WPARAM,
+    _: LPARAM,
+    _: isize,
+) -> HRESULT {
+    if msg == TDN_CREATED {
+        // SAFETY: `hwnd` は OS がこの知らせに渡した、いま生きている画面の窓。他の引数は OS の定数。
+        let topmost = unsafe {
+            SetWindowPos(
+                hwnd,
+                Some(HWND_TOPMOST),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE,
+            )
+        };
+        if let Err(e) = topmost {
+            tracing::warn!(
+                event = "alert_topmost_failed",
+                error = %e,
+                "[alert] 画面を最前面にできなかった（画面はそのまま出す）"
+            );
+        }
+        // SAFETY: 同じく OS が渡した生きている窓だけを使う。
+        let _ = unsafe { SetForegroundWindow(hwnd) };
+    }
+    S_OK
 }
 
 #[cfg(test)]
