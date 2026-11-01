@@ -569,3 +569,49 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
     );
     assert_eq!(probe(&bold).1, 700, "全滅の太字の鍵は束縛の顔＋太字");
 }
+
+// ────────────────────────── §9 横書きの字の箱の上端の実測（spec emo-text-line-gap 要件 2.1・4.1・4.2）
+
+/// 横書きに束縛した計測器の `horizontal_char_box_top` は、生成時に測った「あ」1 字の行の基線から
+/// ascent を引いた量（research.md §3: 游ゴシック 20 → 6.2988・28 → 8.8184、行間 0 の
+/// Yu Gothic UI・ＭＳ ゴシックは 0）。縦書きに束縛した物は 0。
+///
+/// 較正: 比を測らず 0 のままにすると游ゴシックの組が赤。
+#[test]
+fn horizontal_char_box_top_is_measured_from_the_line_baseline() {
+    use areka_parsers::balloon::{Font, FontColor};
+
+    const PASTA: &str =
+        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let bound = |name: &str, size: u32, mode: WritingMode| {
+        let font = ResolvedFont::resolve(&model_with_font(Font::new(
+            Some(name.to_owned()),
+            Some(size),
+            FontColor::new(None, None, None),
+        )));
+        DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成")
+    };
+    require_yu_gothic(&bound(PASTA, 20, WritingMode::HorizontalTb));
+    for (name, size, expected) in [
+        (PASTA, 20u32, 6.2988f32),
+        (PASTA, 28, 8.8184),
+        ("Yu Gothic UI", 20, 0.0),
+        ("ＭＳ ゴシック", 28, 0.0),
+    ] {
+        let em = size as f32;
+        let top = bound(name, size, WritingMode::HorizontalTb).horizontal_char_box_top(em);
+        assert!(
+            (top - expected).abs() <= 0.01,
+            "{name} {size}: 字の箱の上端 {top} が {expected} でない"
+        );
+    }
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        assert_eq!(
+            bound(PASTA, 20, mode).horizontal_char_box_top(20.0),
+            0.0,
+            "{mode:?} に束縛した物"
+        );
+    }
+}
