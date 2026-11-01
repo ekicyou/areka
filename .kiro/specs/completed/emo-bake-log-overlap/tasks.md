@@ -1,0 +1,90 @@
+# Implementation Plan
+
+> 設計（design.md）の行番号は 2026-11-01 の本ブランチ（main `9604677a` の上）で読んだもの。各タスクの着手時に引き直すこと。並走の約束（ウェーブ C15）: `crates/areka/src/placement/mod.rs`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/emo2_boot/assets.rs`・`emo2_boot/switch_assets.rs`・各 `Cargo.toml` は変更 0。`placement/measure_first_frame.rs` は説明の文だけ。`measure_tests.rs`（1,000 行）・`fold_tests.rs`（976 行）には足さない。1 ファイル 1,000 行以下。検体と一時のフォルダはワークツリーの `target\` の下だけ。
+>
+> 要件 5.2（2 層マージの重なりの起票）は完了の手順（`/kiro-complete` の棚卸）が行う。本計画では 4.1 で起票の材料を確かめて残すところまでを持つ。
+
+- [x] 1. 中身: 下の 2 クレートに記録を出さない入口を足す
+- [x] 1.1 (P) 焼く段に、記録を出さない焼きの入口を足す
+  - 今の焼きの中身を 1 本のまま、記録を出すか出さないかの 2 値を受ける内側の核へ移す。2 値の型はクレートの中だけで使える形にする。今の入口 2 つ（`bake`・`bake_with_limits`）は「出す」で核を呼び、引数と働きを変えない
+  - 記録を出さない入口を足す（動く絵の上限は今の入口と同じく環境から読む）。核の繰り返しの中の 4 本（抜き色の `debug!`・元画像が 0 寸の `warn!`・着せ替えの「無し」の絵の `debug!`・全透明の `warn!`）だけを口で囲み、文言と欄は動かさない。`animated.rs`・`bake.rs`・`pack.rs` には触らない（前提の崩れの `error!` は囲まない）
+  - 新しい入口の説明に「動く絵の 3 本の `warn!` はこの入口でも出る。採寸の道で出ないのは採寸の読み手が動く絵の道へ入らせないため」を書く
+  - 兄弟のテストで、0 寸・全透明・着せ替えの「無し」・抜き色の絵を持つ検体を両入口で焼き、出す入口は 4 種を絵ごとに 1 行ずつ出し（対照）、出さない入口はその 4 種の文言が 0 行（宛先まるごとでなく文言ごとに数える）、戻り値（索引表の鍵の並び・各エントリ・`errors`・`ignored_pna`）が等しいことを確かめる
+  - 完了の状態: 新しい兄弟のテストと `areka-emo-atlas` の既存のテスト（`lib.rs` の中の警告のテストを含む）が緑で、`lib.rs` が 1,000 行以下
+  - 1.2 と並べて回すときの注意: compose は atlas に依るので、同じワークツリーでは組み立てとテストの段を順に回す（片方の書きかけで他方の組み立てが壊れるため）
+  - _Boundary: 焼く段の口_
+  - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7, 3.2, 3.4_
+- [x] 1.2 (P) 面の表を組む段に、記録を出さない組み方の入口を足す
+  - 面の表を組む中身を 1 本のまま、2 値を受ける内側の核へ移す。2 値の型はクレートの中だけで使える形にする。今の入口（`build`・`build_with_images`）は「出す」で核を呼び、働きを変えない
+  - 畳み込みに 2 値を受ける形を足して中の関数（素の面・追記・アニメーションの合わせ・面の書き込み・追記の相手の展開）へ通し、記録の 10 本を口で囲む。面の画像の当て込みも 2 値を受け、1 本の `warn!` を囲む。今の畳み込みと追記の相手の展開の形は「出す」の包みとして残し、`fold_tests.rs`・`base_image_tests.rs`・`boxes.rs` の呼び手を変えない
+  - 2 値は記録の行を出すかどうかだけを切り替え、枝の選び方と面の表への書き込みを変えない
+  - 兄弟のテストで、追記の相手の面が無い・既に在るアニメーションの番号を追記で書き直す・同じ番号の面を 2 度書く、を持つシェルを両入口で組み、出す入口はその記録を出し（対照）、出さない入口は畳み込みと面の画像の記録の文言が 0 行、面の番号の列・各面の定義・別名・面の画像の表が等しいことを確かめる
+  - 完了の状態: 新しい兄弟のテストと `areka-emo-compose` の既存のテスト（`log_firing_tests.rs`・`fold_tests.rs`・`base_image_tests.rs` を含む）が緑で、触ったファイルがどれも 1,000 行以下
+  - _Boundary: 面の表の口_
+  - _Requirements: 2.1, 2.3, 3.2, 3.4_
+
+- [x] 2. 結線: `areka-emo-present` で読み込みの口を下まで通す
+- [x] 2.1 (P) シェルの読み込みの口を焼く段と面の表の口まで通し、組み直しは記録を出さない形にする
+  - 今のシェルの組み立ての中身を、読み込みの口（`LoadRecords`）を受ける内側の核へ移す（関数の頭を 1 つ足すだけで本文は動かさない）。公開の組み立て 2 つは「出す」で核を呼ぶ。核は口に従って、焼く段と面の表の出す入口か出さない入口を選ぶ。読み込みの入口は核へ口を渡す
+  - 面の表を組み直す関数（`build_world`）は、いつも記録を出さない組み方を使う。モジュールの冒頭の「記録を出す場所」とこの関数の説明を「畳み込みと面の画像の記録も出さない（読み込みの核が 1 度だけ出す）。装着の記録は組むたびに出る」へ書き直す
+  - 失敗の 3 つの `error!` は口に関わらず出す（今のまま）
+  - `shell_target_quiet_tests.rs` に追記: 0 寸の絵と追記の相手の無い面を持つ検体で、出す読み込みは焼く段と畳み込みの記録を 1 行ずつ出し、出さない読み込みはその文言が 0 行、戻り値の指紋が等しい
+  - `shell_target_load_tests.rs`（517 行）に追記: 追記の相手の無い面を持つ読み込みの結果で組み直しを 2 回呼んでも、畳み込みの `warn!` が 0 行
+  - 完了の状態: 追記したテストと既存の `shell_target_load_tests.rs`（404〜420 行の権威の記録 0 行・装着の記録の対照）・`shell_target_base_image_tests.rs`・`shell_target_quiet_tests.rs` が緑で、`shell_target.rs` の足した行が 25 行以下
+  - 2.2 と並べて回すときの注意: 同じクレート（`areka-emo-present`）なので、同じワークツリーでは組み立てとテストの段を順に回す
+  - _Boundary: シェルの結線_
+  - _Depends: 1.1, 1.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.5, 2.1, 2.2, 3.3, 3.5, 4.1, 4.2_
+- [x] 2.2 (P) バルーンの組み立てに、記録を出さない入口を足す
+  - 今のバルーンの組み立ての中身を 2 値を受ける内側の核へ移し、今の入口は「出す」、新しい入口は「出さない」で呼ぶ。核は口に従って、焼く段と面の表の出す入口か出さない入口を選ぶ。クレートの再公開には足さない
+  - 面の列が空の `error!`＋`Err` と、焼く段の脱落の `error!`＋`Err` は囲まない
+  - 兄弟のテストに追記: 抜き色の面 0 で、出す入口は抜き色の記録を出し、出さない入口はその文言が 0 行・戻り値が等しい。面 0 を読めない絵にすると、出さない入口でも「面画像の bake に失敗」の `error!` が 1 行出て `Err` を返す
+  - 完了の状態: 追記したテストと既存の `balloon_quiet_tests.rs` のテストが緑で、`balloon.rs` が 1,000 行以下
+  - _Boundary: バルーンの口_
+  - _Depends: 1.1, 1.2_
+  - _Requirements: 1.4, 1.6, 3.5, 6.4_
+
+- [x] 3. 結線と檻: 採寸の道を黙らせ、起動の準備 1 回の行の数を固定する
+- [x] 3.1 採寸のバルーンの面 0 を記録を出さない入口へ付け替え、例外 1 の檻を書き直す
+  - 採寸のバルーンの面 0 の組み立てを、記録を出さない入口へ替える（呼ぶ所と `use` の 1 行ずつ）。モジュールの冒頭の「読み手の段と記録」に、焼く段と面の表の記録も黙ることを書き足す。本番のファイルで `crate::` を使わない
+  - 採寸の読み手のファイルは、説明の「例外（D4）… `warn!` が 1 行増える」を「採寸は記録を出さない焼きを通るので、この `warn!` は出ない」へ書き直すだけにし、コードは変えない
+  - 例外 1 の檻を 3 本の主張へ書き直し、名前を 0 行を言う名前にする: (1) 対照＝包んだ読み手＋出す焼きで「全透明」が 1 行、(2) 包んだ読み手＋出さない焼きで 0 行、(3) 包まない読み手＋出す焼きで 0 行
+  - 完了の状態: 書き直した檻と、既存の採寸と配置のテスト（`measure_tests.rs`・`measure_bake_count_tests.rs` の `public_measure_emits_no_load_records_and_same_own_records` を含む）が変更なしで緑
+  - _Boundary: 採寸の結線_
+  - _Depends: 2.1, 2.2_
+  - _Requirements: 1.4, 1.5, 1.6, 3.1, 6.2, 6.6_
+- [x] 3.2 起動の準備 1 回の行の数の檻を作る
+  - 新しい兄弟のテストのファイルを採寸のモジュールから `#[cfg(test)] #[path]` で読む宣言を足す（`measure.rs` のこの 1 行は本タスクの持ち物）
+  - 検体はファイルの形（`descript.txt`・`surfaces.txt`・面の画像の名前・バルーンの面の画像の名前）だけを `target\` の下の一時フォルダ（`TempPath::under_target`。同じウェーブの `test-roots-under-target` が名前を変えていたら合わせる）に置き、絵の中身はメモリの読み手が返す。シェルに面 0 と面 10（見える絵）・0 寸・全透明・着せ替えの「無し」・抜き色・1 枚目だけ全透明の動く絵・全コマを読めない動く絵・追記の相手の無い追記・アニメーションの番号を書き直す追記、バルーンに抜き色の面 0 と全透明の面 1 を持たせる
+  - 資産の側は `crate::emo2_boot::assets::{build_shell_assets, build_balloon_assets}` を使う（`measure.rs` の中の同じ名前の非公開の関数ではない。`measure_bake_count_tests.rs` と同じ引き方・テストのファイルは `crate::` を使ってよい）。そのため検体は、ゴーストの根（`ghost\master\descript.txt`）からシェルのフォルダが解決でき、シェルの名前と既定の面（`DefaultSurfaces`）を渡せる形にする
+  - 本番と同じ順に、採寸 → シェルの資産 → バルーンの資産を scope 0・1 で通し、黙らせる記録を文言ごとに数える（宛先まるごとで数えない。`limits.rs` の 1 度だけの `warn!` を拾わないため）
+  - 固定する数: 採寸の窓で焼く段と面の表の記録が 0 行。起動の準備 1 回でシェルの 0 寸・全透明・「無し」・抜き色が絵ごとに 1 行、1 枚目だけ全透明の動く絵の「全透明」が 0 行、動く絵の読めない `warn!` が 1 行、畳み込みの 2 件が 1 行ずつ、バルーンの面 0 の抜き色と面 1 の全透明が scope ごとに 1 行（計 2 行ずつ）。シェルの資産の窓で畳み込みの 2 件が 1 行ずつ
+  - 止める失敗の檻: バルーンの面 0 を読めない絵にして採寸を通すと、scope 0 の採寸の失敗が返り、バルーンの `error!` が 1 行・採寸の `error!` が 1 行出る（公開の採寸の口は本物の読み手を作るので使わない）
+  - 行の数は `assert_eq!` で固定し、時間・実の画面・COM・ほかのセッションの机に依らない
+  - 完了の状態: 新しい檻が緑で、檻の数をどれか 1 つ変えると赤になることを一度確かめてある（確かめたら戻す）
+  - _Boundary: 起動の準備の檻_
+  - _Depends: 3.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 3.1, 3.3, 3.5, 4.1, 6.1, 6.3, 6.4, 6.5, 6.6_
+
+- [x] 4. 確かめ: 触らない約束と、今のテストが通り続けること
+- [x] 4.1 4 クレートのテストと触らない約束を確かめ、完了の棚卸の材料を残す
+  - `areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka` のテストを回し、緑であることを確かめる（赤が出たら、2 回目は赤のテストだけに絞る）
+  - 触らない約束の差分が 0: `placement/mod.rs`・`ghost_session.rs`・`emo2_boot/assets.rs`・`emo2_boot/switch_assets.rs`・各 `Cargo.toml`・`areka-emo-atlas` の `animated.rs`・`bake.rs`・`pack.rs`・`areka-emo-compose` の `boxes.rs`・`areka-emo-present` の `load_records.rs`・`balloon_definitions.rs`（2 層マージの道）。`measure_first_frame.rs` の差分が説明の文だけ
+  - 触ったファイルがどれも 1,000 行以下で、`measure_tests.rs`・`fold_tests.rs` の差分が 0。`placement` の本番のファイルに `crate::` が無い
+  - 完了の棚卸の材料として、2 層マージの記録が窓の位置の読み（`placement/mod.rs`）と資産の組み立ての 2 か所から重ねて出ることを、今のコードの行番号で引き直して確かめる（起票そのものは `/kiro-complete` が行う）
+  - 完了の状態: 4 クレートのテストが緑、上の差分と行数の確かめが全部通り、2 層マージの重なりの行番号が最新のコードと合っている
+  - _Requirements: 3.2, 3.4, 4.1, 4.2, 5.1, 5.2_
+
+## Implementation Notes
+
+- 1.1/1.2: 2 値はクレートごとに `pub(crate) enum Records { Emit, Quiet }`（`emits()`）。atlas は `bake_quiet`、compose は `EmoWorld::build_with_images_quiet`。口は記録の行だけを囲み、枝の選び方を変えない。
+- 範囲外（完了の棚卸で起票）: clippy 1.99 の `chunks_exact` が `areka-emo-compose` の触っていないテスト 5 か所（blit_transparent_alpha_tests.rs:60・golden_tests_surface1000_bind_tests.rs:89・golden_tests_test_support.rs:168・composer_tests.rs:842/894）で `--all-targets -D warnings` を赤にする。`tools/test-all.ps1` は clippy を回さない。
+- 1.2 の小さな残り: `world.rs` の `populate_from_shell` の説明が「`fold_shell` が担う」のまま（本番は `fold_shell_with`）。
+- 2.1: `shell_target.rs` の足した行は 43（消した 9・全体 951 行）で設計の「25 行まで」を超えた。rustfmt が 7 引数の `build_core` の頭と呼び出し 2 か所を縦に展開するため。上限の目的（1,000 行を余裕で割る）は満たし、レビューで受け入れ。
+- 範囲外（完了の棚卸で起票）: `areka-emo-present` の `clippy --all-targets` は依存先 `dola` の触っていないファイルで赤、`--no-deps` でも触っていないテスト 5 ファイル（balloon_target_tests・display_tests・presenter_budget_*・shell_target_template_tests）で赤。
+- 範囲外（揺れ）: `cargo test -p areka` の全体回しで `emo2_boot::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が負荷の下で時間切れ（単独では緑・触っていない）。
+- 4.1（完了の棚卸の材料）: 2 層マージ `load_scope_balloon_model`（`areka-emo-present/src/balloon.rs:548`）は、窓の位置の読み `crates/areka/src/placement/mod.rs:825` と、資産の組み立ての `areka-emo-present/src/balloon_definitions.rs:98`（`build_balloon_target` の読み込み）の 2 か所から呼ばれ、基層・上書き層の読めない `warn!` と確定の記録が重ねて出る（e8ee67f6 の上で引き直し・design の 825 行と一致）。直すには `placement/mod.rs` を記録を出さない入口へ替える。`shell-scale-linkage` の着地の後に取る。
+- 4.1 の確かめ（e8ee67f6・基準 9604677a）: 触らない約束のファイルの差分 0、`measure_first_frame.rs` は説明の 2 行だけ、触ったファイルの最大は `shell_target.rs` 951 行、`placement` の本番のファイルの `crate::` は `measure_first_frame.rs` の説明文（前からある）だけ。
+- 4.1 のテスト: 4 クレートの単体テストは緑（areka 4099・present 408・compose 429・atlas 204＋21）。areka の実機の統合テスト（`smoke_boot_loop_exit` ほか 7 本）は、この作業木に 32bit の `shiori-host32-helper.exe` が未ビルドで即座に落ちる（前提の欠け・areka を立てる前）。これは排他テストの机で回す全体テストの範囲で、`/kiro-validate-impl` が受け持つ。
+- 完了時にその場で解決: `areka-emo-compose/src/world.rs` の `populate_from_shell` の説明が古い `fold_shell` を指していたのを `fold_shell_with` に直した（説明だけ）。
+- 完了時の棚卸: clippy 1.99 の赤（compose・present のテスト・dola）は `clippy-199-lints` の brief（件 1）に、spine の揺れは `areka-test-binary-stability` の brief に起票済み。例外 2（2 層マージの重なり）は `/kiro-discovery` で起票した。

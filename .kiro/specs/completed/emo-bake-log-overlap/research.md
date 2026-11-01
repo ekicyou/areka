@@ -1,0 +1,218 @@
+# ギャップ分析: emo-bake-log-overlap
+
+> 2026-10-31・本ブランチ（main `9604677a` の上の `b65dae92`）でコードを読み直して書いた。行番号はこの時点のもの。
+> 決めることは「設計で決める点」に並べた。ここでは案と材料だけを出し、どれを取るかは決めない。
+
+## 1. まとめ
+
+- **記録が重なる理由はコードで確かめた**。焼く段（`areka-emo-atlas` の `bake_with_limits`）も畳み込み（`areka-emo-compose` の `fold_shell`）も、記録を出すかどうかを選ぶ口を持たない。呼ばれた回数だけ `warn!` が出る。
+- **畳み込みの警告は scope が N 個のとき起動 1 回で 3＋N 行**（scope 2 つなら 5 行）。要件の見込みどおりだった（2.1 節）。
+- **要件 2.2 は `emo2_boot/assets.rs`・`placement/mod.rs`・`ghost_session.rs` に触らずに満たせる**。`ShellTarget::build_world` を「記録を出さない組み方」にし、記録は読み込み（`load_shell_target`）の中の 1 回目の組み方だけが出す形にすればよい（2.2 節）。
+- **ただし、ウェーブ C15 の約束の「触ってよいファイル」の外へ 1 つ出る見込み**。畳み込みに記録を出さない入口を外から渡すには、`areka-emo-compose` の `world.rs`（`EmoWorld::build_with_images` が在る所）に触るのが素直である。`fold.rs` だけで済ませる案もある（4 節の案 A の A-1・A-2）。C15 のほかの 5 本は `areka-emo-compose` に触らないので、重なりは 0 である。
+- **採寸の側の `measure.rs` の変更は 1 行で済む**（バルーンの組み立てを記録を出さない兄弟へ替える）。シェルの側は、今ある `load_shell_target_quiet` がそのまま焼く段と畳み込みを黙らせる形にできる。
+- 規模は S（ロードマップの見立て 6〜9 タスクのまま）。危うさは小さい（前例 `LoadRecords`・`_quiet` の型を広げるだけ）。
+
+## 2. 今のコード（読んだ結果）
+
+### 2.1 畳み込みの警告は何回出るか（調べること (a)）
+
+畳み込みの `warn!` は `fold.rs` の `fold_shell` とその下の関数の中に直に書かれている（40・51・62・71・179・189・244・300・357 行）。`fold_shell` は `EmoWorld::build_with_images`（`world.rs` 88 行 → `populate_from_shell` 196 行）からだけ呼ばれる。面の表を 1 回組むたびに、同じ警告が 1 回出る。
+
+起動の準備でシェルの面の表を組む所は次の 4 か所である。
+
+| # | 場所 | 何をするか | 回数 |
+|---|---|---|---|
+| ① | `shell_target.rs` 552 行（`build_shell_target_with_boxes` の `probe`） | 採寸の読み込み `load_shell_target_quiet` の中で組む | 1 |
+| ② | `measure.rs` 401 行（`target.build_world()`） | 採寸がもう 1 度組む | 1 |
+| ③ | `shell_target.rs` 552 行（同上） | 資産の組み立ての読み込み `load_shell_target` の中で組む | 1 |
+| ④ | `assets.rs` 355 行（scope ごとの `target.build_world()`） | 資産の組み立てが scope ごとに組む | N |
+
+合計は **3＋N 行**（N＝scope の数）。emo2 とぱすたは scope 2 つなので 5 行になる。①で組んだ面の表は `ShellTarget.world` に持たれるが、`take_world` を使うのは面の書き出し（`offline_dump/mod.rs` 193 行）だけで、起動の準備（②・④）は `build_world` を呼ぶので使われない。
+
+着替え（`switch_assets.rs` 219 行）も `build_shell_assets` を通るので、③＋④＝1＋N 行が出る。読み込み直しとゴーストの切り替えは `ghost_session.rs` の `prepare_ghost_windows`（214 行・採寸）→ `wire_emo2_boot`（860 行・資産）の同じ道を通る（要件 3.1 は起動と同じ形で満たせる）。
+
+バルーンの面の表は、採用した面の列から作った決まった形の `surfaces.txt`（`balloon.rs` 590 行 `synthetic_surfaces_txt`）を組むだけなので、畳み込みの警告は構造として出ない（面の番号が重ならない・追記が無い）。
+
+### 2.2 要件 2.2 は禁じられた 3 ファイルに触らずに満たせるか（調べること (b)）
+
+満たせる。理由は次のとおり。
+
+- ④の N 回は、`assets.rs` が `ShellTarget::build_world`（`shell_target.rs` 280 行）を呼ぶ回数である。`build_world` の中身は `shell_target.rs` にあるので、ここを「記録を出さない組み方」に替えれば、`assets.rs` を変えずに④が 0 行になる。
+- ③は資産の組み立ての読み込みの中で 1 回だけ組む所なので、ここで今どおり記録を出せば、資産の組み立て全体で 1 行になる。これは「記録を出すのは fs を触る入口 `load_shell_target` だけ・読み込み 1 回につき 1 度」という `shell_target.rs` の冒頭の決まり（18〜40 行）と同じ形である。
+- ①は `load_shell_target_quiet` の中なので、その記録を出さない口を畳み込みにも渡せば 0 行。②は `build_world` なので上と同じく 0 行。`measure.rs` を変える必要は無い。
+- 結果は **起動 1 回で 1 行**（③だけ）。scope の数に関わらない。
+
+気をつけること:
+
+- `build_world` の説明（277〜279 行）は「畳み込みと装着の既存の `warn!` は今日と同じく組むたびに出る」と書いている。この約束を替えることになる（説明の書き直しが要る）。
+- `build_world` を呼ぶほかの入口（examples の `collision-probe/setup.rs` 133 行・`emo-present/setup.rs` 105 行・`window-placement.rs` 293・302 行）は、どれも先に `load_shell_target`（記録を出す入口）を呼ぶ。だから 1 呼びにつき 1 行は残り、今より増えない（要件 4.2）。
+- 面の書き出し（`offline_dump`・MCP の面の書き出し）は `load_shell_target` ＋ `take_world` で、今も 1 行・この後も 1 行（変わらない）。
+- 記録を出さない組み方でも、装着（`bind_atlas`）の記録（`atlas_bind.rs` 44 行の `debug!`）は今どおり組むたびに出る。これは畳み込みではないので要件 2 の外である（`shell_target_load_tests.rs` 413〜420 行の対照の主張もこの記録で成り立っており、壊れない）。
+
+### 2.3 焼く段の `warn!` の場所と、記録を出さない口の通し方（調べること (c)）
+
+焼く段の記録は `areka-emo-atlas/src/lib.rs` の `bake_with_limits`（71 行）の 1 本の繰り返しの中にある。
+
+| 行 | 水準 | 中身 | 要件 |
+|---|---|---|---|
+| 139 | `debug!` | 抜き色で透過した | 要件 1 の一覧には無い |
+| 171 | `warn!` | 元画像が 0 寸 | 1.1・1.4 |
+| 184 | `debug!` | 全透明で、着せ替えの「無し」の絵とみなした | 1.3 |
+| 193 | `warn!` | 全透明（動く絵なら全コマ透明） | 1.2・1.4・1.5 |
+
+ほかに `animated.rs` に動く絵の `warn!` が 3 本（48・91・123 行）、`bake.rs`・`pack.rs` に起こらないはずの前提の崩れの `error!` が 4 本ある。動く絵の 3 本は、採寸の読み手 `FirstFrameDecoder`（`measure_first_frame.rs`）が `probe_animation` を `None` のままにするので、採寸の道では通らない（重ならない）。
+
+焼く回数（今）:
+
+- シェル: 採寸の読み込み 1 回＋資産の組み立ての読み込み 1 回＝起動 1 回で 2 回。
+- バルーン: 採寸が scope ごとに面 0 だけを焼く（`measure.rs` 462 行）＋資産の組み立てが scope ごとに全部の面を焼く（`assets.rs` 473 行）。面 0 の絵は scope ごとに 2 回、ほかの面は 1 回。
+
+どちらも、採寸の道の焼きを黙らせれば 1 回分になる。資産の組み立ての道は今どおり出す。
+
+例外 1（1 枚目が全透明の動く絵）: 採寸の道では `FirstFrameDecoder` が動く絵を静止画として見せるので、193 行の `warn!` が採寸の道でだけ出る（資産の組み立ての道は全コマを見るので出ない）。採寸の道の焼きを黙らせれば消える（要件 1.5）。
+
+口の通し方（`placement-measure-bake-once` の `LoadRecords` と同じ型）:
+
+1. **`areka-emo-atlas`**: 今の `bake`・`bake_with_limits` の引数は変えず、記録を出さない兄弟（たとえば `bake_quiet`）を足す。中身は 1 本のまま、記録の行を「出すときだけ」にする。`lib.rs` は 818 行なので、記録の出し分けの中身（167〜202 行の塊）を新しい兄弟のファイルへ移すと、`lib.rs` はむしろ短くなる。`bake` を呼ぶのはテストと `areka-emo-compose` のテスト・`shell_target.rs`・`balloon.rs` だけで、引数を変えないので呼び手は壊れない。
+2. **`areka-emo-present` の `shell_target.rs`**: `load_shell_target_with` は今 `records` を持つのに、核 `build_shell_target_with_boxes`（539 行）へ渡していない。核の中身を `records` つきの内側の関数にし、`records` が `Quiet` なら焼く段と畳み込みの記録を出さない入口を呼ぶ。公開の `build_shell_target`・`build_shell_target_with_boxes` は今どおり出す（呼び手はテストと `nesting_fixture_tests.rs`）。917 行に十数行足す見込み（上限まで 83）。
+3. **`balloon.rs`**: `build_balloon_target_from_faces`（690 行）に記録を出さない兄弟（たとえば `build_balloon_target_from_faces_quiet`）を足し、中身は 1 本にする。今の関数の引数は変えない（`areka-emo-text` のテストも呼んでおり、同じウェーブの `emo-text-line-gap` と重ならない）。焼く段の脱落の `error!`（721 行）と `Err` は、記録を出さない道でも必ず出す（要件 3.5）。
+4. **`measure.rs`**: 462 行を記録を出さない兄弟へ替える 1 行。シェルの側（396 行の `load_shell_target_quiet`・401 行の `build_world`）は 2 の変更で黙るので変えない。
+
+`LoadRecords` は `areka-emo-present` の `pub(crate)` なので、下のクレート（`areka-emo-atlas`・`areka-emo-compose`）からは使えない。下のクレートには自分の口が要る（設計で決める点 4）。
+
+### 2.4 `base_image.rs`・`world.rs` の警告は要件 2 に入るか（調べること (d)）
+
+| 場所 | いつ出るか | 起動の準備で重なるか | 見立て |
+|---|---|---|---|
+| `base_image.rs` 89 行（索引は指すが面の定義が無い） | 面の表を組むたび（`build_with_images` の中の `apply_base_images`） | 重なる（畳み込みと同じ 3＋N 回） | 畳み込みと同じ段。ただし面の表の約束が崩れたときだけ出る、本来起きない記録 |
+| `world.rs` 279 行（別名のキーが無い） | `resolve_alias` を呼んだとき | 起動の準備では呼ばれない（本番の呼び手は 0・テストだけ） | 要件 2 の外 |
+| `method.rs` 158 行（知らない合成メソッド名） | `areka-seriko` の `AnimationTable::from_world` が面の表を読むとき | 資産の組み立てでシェル 1 回だけ（採寸は呼ばない） | 重ならない・要件 2 の外 |
+| `scale.rs` 129 行・`blit.rs` 106 行・`blit_rect.rs` 181 行 | 合成（compose）のとき | 採寸と実際の表示の両方で合成するが、壊れた焼き表のときだけ | 畳み込みではない・要件 2 の外 |
+
+`fold.rs` の中にも、本来起きない約束の崩れの `warn!`（51・62・189・357 行）と、`#[non_exhaustive]` の型の今は通らない枝（71・300 行）がある。要件 2.1 の「知らない追記の記述・知らない定義の種類・定義の並びの不整合」はこれにあたる。今のパーサーの型の全部の種類は手前の枝で受けているので、71・300 行は今は通らない。
+
+`base_image.rs` 89 行を要件 2 に入れるかは設計で決める（設計で決める点 6）。入れるなら `base_image.rs` にも触る（約束の一覧の外・ほかの 5 本とは重ならない）。
+
+### 2.5 テストの置き場と使える道具
+
+- 行の数を数える道具は `log_capture_kit::capture`（TRACE を含む全部の水準を拾う）と、配置の `test_support::capture_logs`。
+- 採寸 → 資産の組み立ての順で通す型は `measure_bake_count_tests.rs`（472 行）の `measure_then_assets` に在る。`measure_with_reader` も `build_shell_assets`・`build_balloon_assets` も読み手を `impl ElementDecoder` で受けるので、`assets.rs` に触らずに、テストから起動の準備 1 回分の記録を数えられる。
+- 検体は `TempPath::under_target`（`temp-path-kit`）で `target\` の下に作る型が在る（`animated_ghost`）。
+- 1,000 行の上限: `measure_tests.rs` は 1,000 行ちょうどで足せない。`fold_tests.rs` 976 行・`lib.rs` 818 行（中にテストを持つ）・`shell_target.rs` 917 行。新しいテストは兄弟のファイルへ置く。
+- 例外 1 の檻 `fade_in_animation_warns_all_transparent_only_when_wrapped`（`measure_first_frame_tests.rs` 239 行）は、ふつうの `bake` に包んだ読み手を渡して「1 行」を主張している。ふつうの `bake` は今後も記録を出すので、この主張は変えなくても通ってしまう。採寸が実際に使う入口（記録を出さない焼き）か、採寸の道全体で「0 行」を主張する形に書き直す必要がある（要件 6.2）。
+
+## 3. 要件と今のコードの対応
+
+| 要件 | 今あるもの | 足りないもの | 印 |
+|---|---|---|---|
+| 1.1・1.2・1.4 | 焼く段の `warn!`（`lib.rs` 171・193 行） | 記録を出さない焼きの入口・採寸の道でそれを使う結線 | 足りない |
+| 1.3 | 着せ替えの「無し」の絵の `debug!`（184 行） | 同上 | 足りない |
+| 1.5 | `FirstFrameDecoder`・例外 1 の檻 | 採寸の道の焼きを黙らせる・檻の書き直し | 足りない |
+| 2.1・2.2 | 畳み込みの `warn!`（`fold.rs`）・`ShellTarget` の読み込みの記録の決まり | 記録を出さない畳み込みの入口・`build_world` を黙らせる | 足りない |
+| 2.3 | — | 記録の口だけを変える（中身は変えない） | 制約 |
+| 3.1 | 読み込み直し・切り替えは起動と同じ道 | 要件 1・2 の口がそのまま効く | ほぼ済み |
+| 3.2 | — | 水準・文言・欄を変えない（出す・出さないだけを切り替える） | 制約 |
+| 3.3 | 資産の組み立ての道は今どおり出す | — | 済み（形の上で） |
+| 3.4 | 焼く・組む中身は 1 本 | 中身を 2 本に分けない | 制約 |
+| 3.5 | `LoadRecords` の「失敗の `error!` は常に出す」型・バルーンの焼きの脱落の `error!` | 記録を出さない焼きでも脱落の `error!` と `Err` を残す | 制約 |
+| 4.1 | 着替えは `build_shell_assets` を通る | 黙らせた後も 1 行は残る（③） | 済み（形の上で） |
+| 4.2 | 面の書き出し・examples は `load_shell_target` を通る | 公開の入口の既定を「出す」のまま保つ | 制約 |
+| 5.1 | 2 層マージの記録 | 触らない | 済み |
+| 5.2 | — | 完了の棚卸で起票 | 手順 |
+| 6.1〜6.6 | 数える道具・`measure_then_assets` の型 | 新しい檻（行の数・例外 1・失敗の記録） | 足りない |
+
+印の「研究が要る」は無い。下の 4 節の 2 点だけ、設計で確かめる。
+
+## 4. 実装の案
+
+### 案 A: 記録を出さない口を足す（brief の案 1）
+
+- **`areka-emo-atlas`**: 記録を出さない焼きの入口を足す（`lib.rs` ＋ 新しい兄弟）。
+- **`areka-emo-compose`**: 記録を出さない畳み込みの入口を足す。置き場は 2 通り。
+  - **A-1（はっきりした入口）**: `world.rs` に `EmoWorld::build_with_images` の記録を出さない兄弟を足し、`fold.rs` の関数へ記録の口を渡す。`EmoWorld` の欄 `world` は `world.rs` の中だけで見えるので、入口を `fold.rs` に置くことはできない。約束の一覧の外の `world.rs` に触る（ほかの 5 本とは重ならない）。
+  - **A-2（`fold.rs` だけ）**: `fold.rs` に「この閉じた範囲の中では記録を出さない」というスレッドごとの印（`thread_local!` ＋戻すための守り）を置き、`shell_target.rs` がその範囲で `EmoWorld::build_with_images` を呼ぶ。約束の一覧に収まるが、隠れた状態で記録を切り替える形になる（呼び手の引数を見ても分からない）。
+- **`areka-emo-present`**: `shell_target.rs` の核に `records` を通す・`build_world` を黙らせる。`balloon.rs` に記録を出さない兄弟を足す。
+- **`measure.rs`**: 1 行。
+- 良い点: 約束の禁止 3 ファイルに触らない。前例の型のまま。配置の層の「素の値だけを運ぶ」取り決めを保つ。
+- 悪い点: 焼く回数・組む回数は減らない（記録だけを減らす）。`build_world` の約束を変える。A-1 なら約束の一覧の外の `world.rs` に触る。
+
+### 案 B: 焼くのを 1 回にする（brief の案 2）
+
+- 採寸が焼いた物（`AtlasTable`・面の表）を資産の組み立てへ運ぶ。`ghost_session.rs`・`placement/mod.rs`・`assets.rs` に触る。
+- 良い点: 重なりそのものが消え、焼く時間も減る。
+- 悪い点: ウェーブ C15 の約束に反する（このウェーブでは取れない）。採寸は動く絵を 1 枚目だけで読む（`FirstFrameDecoder`）ので、そのままでは資産に使えない。scope ごとの `EmoWorld` は複製できない（`bevy_ecs` の `World`）ので、面の表の組み直し（④）は残る＝畳み込みの重なりには別の手当てが要る。規模は 8〜12 の見込み。
+
+### 案 C: 組み合わせ（今は A・後で B と例外 2）
+
+- このウェーブでは案 A。例外 2（`placement/mod.rs` 825 行）と、焼く回数を減らす話は完了の棚卸で起票する（要件 5.2）。
+- 良い点: 要件をこのウェーブの約束の中で満たし、残りに持ち主を付けられる。
+- 悪い点: 後で案 B を取るなら、案 A で足した口の一部が要らなくなる見込み。
+
+### 取らない案（参考）
+
+- **記録の購読者の側で絞る**（採寸の間だけ `tracing` の購読者を差し替え、宛先 `areka_emo_atlas`・`areka_emo_compose` の行を捨てる）: 採寸自身の記録と失敗の `error!` まで巻き込む恐れがあり、要件 3.5 と「記録の無い失敗の道を作らない」に反しやすい。
+- **出した行を覚えて 2 回目を捨てる**（プロセス全体の集合）: 起動ごとに空にする所が `ghost_session.rs` か `assets.rs` になり、約束に反する。状態が増える。
+
+## 5. 規模と危うさ
+
+- **規模: S**（6〜9 タスク）。口 3 つ（焼く段・畳み込み・バルーンの組み立て）・`shell_target.rs` の結線・`measure.rs` の 1 行・数える檻 2〜3・例外 1 の檻の書き直し 1。前例の型を広げるだけで、新しい依存は無い。
+- **危うさ: 小**。中身は変えず記録の出し分けだけを変える。気をつけるのは `build_world` の約束の変更（呼び手の examples とテストの読み直し）と、`shell_target.rs` の行数（917 行）。
+
+## 6. 設計で決める点（要件討議に渡す）
+
+> 2026-10-31 の要件討議で 1・2・5（の範囲）・6・7・10 を決めた（`requirements.md` 末尾の「要件討議の決定」）: 1＝案 A・2＝A-1（`world.rs`）・5 と 6＝全部含める（前提の崩れの `error!` は常に出す）・7＝このまま・10＝後続へ。設計の段に残るのは 3・4・8・9 と 7 節の確かめ。
+
+1. **直し方**: 案 A（記録を出さない口）か案 B（焼くのを 1 回）か。ウェーブ C15 の約束は案 A を前提にしている。案 B を取るならこのウェーブから外す。
+2. **畳み込みの記録を出さない入口の置き場**: A-1（`world.rs` にはっきりした入口・約束の一覧の外に 1 ファイル出る・ほかの 5 本と重ならない）か、A-2（`fold.rs` だけ・スレッドごとの印）か。約束の一覧を広げるなら、ウェーブの約束の書き直しが要る。
+3. **`build_world` の約束の変え方**: 「いつも記録を出さない（記録は読み込みの中の 1 回目の組み方だけが出す）」にするか、`ShellTarget` に読み込みの `records` を持たせて「読み込みが出す入口なら出す・ただし組み直しでは出さない」と書くか。どちらも 2.2 節の数（起動 1 回で 1 行）になる。examples と面の書き出しの行の数は増えない（今の 2〜3 行が 1 行になる所がある）。
+4. **記録の口の形**: クレートごとの `_quiet` の兄弟関数（今の `load_shell_target_quiet` と同じ形）か、`areka-emo-atlas` に公開の型（`Emit`／`Quiet`）を 1 つ置いて上のクレートでも使うか。`LoadRecords` は `areka-emo-present` の `pub(crate)` で、下のクレートからは使えない。
+5. **記録を出さない焼きが黙らせる行の範囲**: 要件 1 の 3 本（0 寸・全透明・着せ替えの「無し」）だけか、抜き色の `debug!`（139 行・今は起動 1 回で 2 行）と動く絵の `warn!` 3 本も含めるか。動く絵の 3 本は採寸の道では通らないので、どちらでも行の数は同じ。前提の崩れの `error!`（`bake.rs`・`pack.rs`）はどちらの案でも常に出す見込み。
+6. **`base_image.rs` 89 行と `fold.rs` の本来起きない警告**: 要件 2.1 の「など」に入れて黙らせるか（`base_image.rs` にも触る）、今のまま組むたびに出すか。どれも面の表の約束が崩れたときだけ出る。
+7. **scope をまたいで同じバルーンの絵を使うとき**: 資産の組み立てが scope ごとに焼くので、同じファイルでも scope の数だけ行が出る。要件 1.4 は「scope と絵ごとに 1 行」なので満たすが、「同じ絵について 1 行」と読む人には多く見える。このままでよいかの確認。
+8. **例外 1 の檻の書き直し方**: ふつうの焼き＋包んだ読み手で「1 行」になる事実（記録を黙らせる理由）を残しつつ採寸の道で「0 行」を足すか、置き換えるか。
+9. **檻の検体**: 0 寸の絵は本物の PNG と WIC では作れない。`measure_with_reader`・`build_shell_assets` はどんな読み手でも受けるので、ファイルの形だけを `target\` の下に置き、読み手はメモリ上の復号器にする形が取れる。止める失敗の記録（要件 6.4）は、今の檻（面 0 が無い）とは別に、壊れたバルーンの面 0 の絵（焼く段の脱落）で記録を出さない道の `error!` を確かめる形が要る。
+10. **2 層マージの口（例外 2）**: 要件どおり後続の起票へ回す（今入れると使われない口になる）。
+
+## 7. 設計で確かめること（小さな研究）
+
+- `ShellTarget` の記録の口を変えたあと、`shell_target_*_tests.rs` で `build_world` の後の記録を数えているテスト（`shell_target_load_tests.rs` 404〜420 行ほか）と、`emo-compose` の `log_firing_tests.rs`（`EmoWorld::build` の中で畳み込みの警告が出ることを主張）が、公開の入口の既定を「出す」のまま保てば通ることを確かめる。
+- 同じウェーブの `test-roots-under-target` が `temp-path-kit` の入口を差し替える。新しい檻は今の `measure_bake_count_tests.rs` と同じ `TempPath::under_target` を使い、着地の順で名前が変わったら合わせる。
+
+## 8. 設計の段の記録（2026-11-01）
+
+> 本ブランチ `50b60c63` でコードを読み直した。発見の型は **軽い発見**（既存の仕組みの拡張・新しい依存なし・外の調べ物なし）。使った手順は `kiro-spec-design` の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。
+
+### 8.1 6 節の残り（3・4・8・9）への答え
+
+`design.md` の「決めごと」が正本。要点だけ写す。
+
+| 点 | 取った案 | 取らなかった案と理由 |
+|---|---|---|
+| 3. `build_world` の約束 | いつも記録を出さない組み方 | `ShellTarget` に `records` を持たせる案: 全部の `ShellTarget` は核から作られ、核が 1 回組んで記録を出すので、欄を足す理由が無い（数はどちらも起動 1 回で 1 行） |
+| 4. 記録の口の形 | 公開は `_quiet` の兄弟の入口だけ・下の 2 クレートは `pub(crate)` の 2 値の型 `Records` | `areka-emo-atlas` に公開の型を置く案: `LoadRecords` と二重になり、公開の型が増える |
+| 8. 例外 1 の檻 | 置き換える（採寸が使う焼きで 0 行・包まない焼きで 0 行）。採寸の道全体の 0 行は起動の準備の檻 | 「包んだ読み手＋ふつうの焼きで 1 行」を主張として残す案: 直した後も通ってしまい、例外 1 を固定しない |
+| 9. 檻の検体 | ファイルの形だけを `target\` の下に置き、絵は `MemoryDecoder`（`insert`・`insert_animated`・`insert_corrupt`）。止める失敗はバルーンの面 0 を読めない絵にする | 本物の PNG と WIC: 0 寸の絵が作れず、COM が要る |
+
+### 8.2 7 節の確かめ（コードを読んだ結果）
+
+- `shell_target_load_tests.rs` 404〜420 行: 主張は「`build_world` の中で宛先 `areka_emo_present::shell_target` の記録が 0 行」と「宛先が `areka_emo_compose` で始まる記録が 1 本以上ある（対照）」。対照の記録は焼けなかった `parts1.png` の装着の `debug!`（`atlas_bind.rs` 44 行）で、本 spec は装着を黙らせないので通る。
+- `shell_target_base_image_tests.rs` の `append_to_an_unknown_surface_warns_and_creates_nothing`: 記録を出す核 `build_shell_target` の中の 1 行を数えている。核の既定は出すので通る（`build_world` は数えの窓の外）。
+- `areka-emo-compose` の `log_firing_tests.rs`: `EmoWorld::build` を通して畳み込みの記録を主張している。`build` の既定は出すので通る。
+- `shell_target_quiet_tests.rs`・`balloon_quiet_tests.rs`: 数えるのは宛先 `areka_emo_present::*` だけで、戻り値の写し（`fingerprint`）も中身が同じなので通る。
+- `measure_bake_count_tests.rs`: 焼く回数（読み手の口の呼ばれた回数）と読み込みの記録を数える。焼く回数は変えないので通る。
+- `test-roots-under-target` の入口の差し替え: 新しい檻は `TempPath::under_target` を使う。着地の順で名前が変わったら合わせる（`design.md` の Revalidation Triggers）。
+
+### 8.3 読み直しで分かったこと
+
+- **`fold.rs` の記録は 10 本**（`warn!` 9 本＝40・51・62・71・179・189・244・300・357 行、`debug!` 1 本＝95 行の id 重複）。要件討議の決定 3（全部を 1 行に）に従い、`debug!` も黙らせる。
+- **`expand_targets` は `boxes.rs` からも呼ばれる**（箱の表）。`boxes.rs` は触ってよいファイルの外で、通る `warn!` は今の型では通らない枝だけなので、`expand_targets` を出す形の包みとして残し、`boxes.rs` は今のまま出す。
+- **動く絵の 3 本の `warn!`（`animated.rs`）は触らずに済む**。採寸の読み手 `FirstFrameDecoder` が `probe_animation` を既定の `None` にするので、採寸の道では動く絵の道に入らない。`animated.rs` は触ってよいファイル（`lib.rs` か新しい兄弟）の外なので触らない。この前提が崩れると重なりが戻る（Revalidation Triggers）。
+- **`fold_shell`・`apply_base_images` の呼び手**: `fold_shell` はテスト（`fold_tests.rs` 976 行・`base_image_tests.rs`）から 20 か所以上呼ばれるので、出す形の包みとして残す。`apply_base_images` の呼び手は `world.rs` だけなので引数を足す。
+- **`measure_first_frame.rs` の説明**（「例外 D4: 『全透明』の `warn!` が 1 行増える」）は直した後に誤りになる。`measure.rs` の中の `mod first_frame` の中身なので、説明だけを書き直す（コードは変えない）。
+- 行数: `lib.rs` 818・`world.rs` 418・`fold.rs` 375・`base_image.rs` 125・`shell_target.rs` 917・`balloon.rs` 754・`measure.rs` 528・`shell_target_load_tests.rs` 517・`shell_target_quiet_tests.rs` 241・`balloon_quiet_tests.rs` 142・`measure_bake_count_tests.rs` 472。上限に近いのは `shell_target.rs` だけ（足すのは 25 行まで）。
+
+### 8.4 まとめ方（synthesis）
+
+- **一般化**: 3 つの口（焼く段・面の表・バルーン）は同じ問題（呼ぶ回数だけ出る記録）の変種なので、前例 `LoadRecords` と同じ 1 つの形（兄弟の入口＋中身 1 本＋`if records.emits()`＋失敗の `error!` は囲まない）にそろえた。
+- **作るか借りるか**: `tracing` の購読者を採寸の間だけ差し替える案（借りる側）は、`error!` まで巻き込むので取らない（4 節の「取らない案」と同じ）。
+- **削ったもの**: 公開の型・`ShellTarget` の新しい欄・`lib.rs` の記録の塊を別のファイルへ移すこと（上限に届かない）・2 層マージの口（使われない）。

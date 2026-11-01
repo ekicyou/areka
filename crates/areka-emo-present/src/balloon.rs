@@ -33,6 +33,7 @@ use std::path::Path;
 
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, ElementDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
+    bake_quiet,
 };
 use areka_emo_compose::{ComposeError, EmoWorld};
 use areka_parsers::balloon::BalloonModel;
@@ -693,6 +694,41 @@ pub fn build_balloon_target_from_faces(
     faces: &[ResolvedFace],
     use_self_alpha: UseSelfAlpha,
 ) -> Result<(EmoWorld, AtlasTable), PresentError> {
+    build_from_faces_core(
+        balloon_dir,
+        decoder,
+        faces,
+        use_self_alpha,
+        LoadRecords::Emit,
+    )
+}
+
+/// [`build_balloon_target_from_faces`] と同じ中身で、焼く段と面の表の記録を出さない入口（採寸の
+/// 面 0・spec: emo-bake-log-overlap 要件 1.4・1.6）。戻り値は [`build_balloon_target_from_faces`]
+/// と等しい。面列が空の失敗と bake の脱落の `error!` は出す（要件 3.5）。
+pub fn build_balloon_target_from_faces_quiet(
+    balloon_dir: &Path,
+    decoder: &impl ElementDecoder,
+    faces: &[ResolvedFace],
+    use_self_alpha: UseSelfAlpha,
+) -> Result<(EmoWorld, AtlasTable), PresentError> {
+    build_from_faces_core(
+        balloon_dir,
+        decoder,
+        faces,
+        use_self_alpha,
+        LoadRecords::Quiet,
+    )
+}
+
+/// 組み立ての中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える。
+fn build_from_faces_core(
+    balloon_dir: &Path,
+    decoder: &impl ElementDecoder,
+    faces: &[ResolvedFace],
+    use_self_alpha: UseSelfAlpha,
+    records: LoadRecords,
+) -> Result<(EmoWorld, AtlasTable), PresentError> {
     if faces.is_empty() {
         tracing::error!(
             balloon_dir = %balloon_dir.display(),
@@ -712,7 +748,8 @@ pub fn build_balloon_target_from_faces(
         base_dir: balloon_dir,
         alpha_params: AlphaParams { use_self_alpha },
     };
-    let baked = bake(&[set], decoder, PackConfig::default());
+    let bake_with = if records.emits() { bake } else { bake_quiet };
+    let baked = bake_with(&[set], decoder, PackConfig::default());
 
     // bake の脱落（decode 失敗）は log-first で真因を出し、構築失敗として畳む。
     // 採用面は解決済みの固定小集合ゆえ全枚デコード成功が前提＝脱落は制作者ミス/配置不備の兆候。
@@ -728,7 +765,11 @@ pub fn build_balloon_target_from_faces(
     }
 
     // シェルと同一の compose 前段: World 構築 → アトラス束縛（SetId(0)・resolve は本呼び出し限り）。
-    let mut world = EmoWorld::build(&shell);
+    let mut world = if records.emits() {
+        EmoWorld::build(&shell)
+    } else {
+        EmoWorld::build_with_images_quiet(&shell, &BTreeMap::new())
+    };
     world.bind_atlas(&baked.table, SetId(0));
 
     Ok((world, baked.table))
