@@ -1,4 +1,4 @@
-//! 写しの相手: crates/wintf/src/test_crash_report.rs（タスク 2.2 で作る）
+//! 写しの相手: crates/wintf/src/test_crash_report.rs（許可の持ち手の表と許可の測りの口を持たない写し）
 //!
 //! テストのプロセスの落ちの報告（areka-test-binary-stability 設計「CrashReport」・要件 1.1・1.10）。
 //!
