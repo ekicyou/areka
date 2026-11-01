@@ -35,7 +35,7 @@
   - 完了の状態: `cargo test -p wintf --lib` のふだんの走行が緑で、報告の行を出さない
   - _Requirements: 1.1, 1.10, 2.1_
 
-- [ ] 2.3 (P) 負荷の再現の道具の口を広げる
+- [x] 2.3 (P) 負荷の再現の道具の口を広げる
   - 絞り込みを複数受け、`wintf` の lib を回す口・子の `cargo` にだけ渡す環境変数・較正のための無視したテストを回す口を足す
   - 回ごとのまとめに落ちの報告の行を全部写し、全回のまとめに報告のあった回の数を足す
   - 置き場・負荷の子を番号で控えて止めること・端末へ ASCII だけ出すことは変えない。冒頭の使い方に件 1・件 3 の走行の書き方を足す
@@ -169,3 +169,4 @@
 
 ## Implementation Notes
 - 2.1: 許可の持ち時間の最長は `AREKA_TEST_PERMIT_HOLD=1` のときだけ `AREKA-PERMIT-HOLD max_ms=<ms> name="<捨てたスレッドの名前>"` を標準エラーへ直に書く（最長が延びるたび・回のログの最後の行が最長）。4.1・4.2・5.1 の走行では `-SetEnv` でこの変数を渡す。許可の数の口 `AREKA_TEST_GPU_SLOTS` は 1〜16（持ち手の表 `HOLDER_ROWS=16`）、それ以外は 4。測りの間だけの口 3 つは 7.1 で外す。
+- 2.3: `load-flake.ps1 -Ignored` は `--exact` を足すので、絞り込みはテストの道の全部（例 `emo2_boot::crash_report_test_support::crash_report_names_the_running_test`）で渡す。`-Filter`・`-SetEnv` は `,` でも分ける（値に `,` は入れられない）。負荷なしは `-Burners 0`。
