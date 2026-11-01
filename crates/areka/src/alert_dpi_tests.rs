@@ -1,0 +1,516 @@
+//! 画面を出す間だけスレッドを v2 に囲む部品のテスト（alert-dialog-per-monitor-dpi）。
+//!
+//! 決定論のテスト D1〜D5（画面は出さない・`TaskDialogIndirect` は呼ばない）: 偽の切り替えで
+//! 囲んで戻す順と替えられなかったときの記録（D1〜D3）、本物の切り替えでの前と後（D4・新しいスレッド）、
+//! はい／いいえの答えの読み方（D5）。記録は `log-capture-kit` で見る。
+//!
+//! 実機の測り（`#[ignore]`・排他テストの机を取ってから走らせる）: タスクダイアログを出し、その窓の
+//! DPI の扱いを areka のコードの中から読む。画面が出ている間に同じスレッドのタイマーの呼び戻しで、
+//! 場合ごとに置いた題名の `#32770` の窓を探し、読んだら `TDM_CLICK_BUTTON` で閉じる。
+//! 場合ごとに ASCII の `ALERT-DPI-PROBE ...` を 1 行出す。
+//!
+//! 測りが直に出すタスクダイアログ・タイマー・窓の読み取り・スレッドの局所の置き場の `unsafe` は
+//! このファイルに閉じ、`alert.rs` には置かない。
+
+use std::cell::{Cell, RefCell};
+
+use log_capture_kit::capture;
+use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, WPARAM};
+use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
+use windows::Win32::System::Threading::{GetCurrentProcess, GetCurrentThreadId};
+use windows::Win32::UI::Controls::{TD_ERROR_ICON, TDCBF_OK_BUTTON, TDM_CLICK_BUTTON, TaskDialog};
+use windows::Win32::UI::HiDpi::{
+    AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,
+    DPI_AWARENESS_CONTEXT_UNAWARE, GetAwarenessFromDpiAwarenessContext,
+    GetDpiAwarenessContextForProcess, GetDpiForMonitor, GetDpiForSystem, GetDpiForWindow,
+    GetThreadDpiAwarenessContext, GetWindowDpiAwarenessContext, MDT_EFFECTIVE_DPI,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumThreadWindows, GWL_EXSTYLE, GetClassNameW, GetForegroundWindow, GetWindowLongPtrW,
+    GetWindowTextW, IDCANCEL, IDNO, IDOK, IDYES, KillTimer, MESSAGEBOX_RESULT, PostMessageW,
+    PostQuitMessage, SetTimer, WS_EX_TOPMOST,
+};
+use windows::core::{BOOL, HSTRING, PCWSTR};
+
+// ---------------------------------------------------------------- 決定論のテスト D1〜D5（画面なし）
+
+/// 偽の切り替えと処理が呼ばれた順の 1 歩。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Switch(DPI_AWARENESS_CONTEXT),
+    Show,
+}
+
+/// 偽の切り替え（前の扱いとして `previous` を返す）で `show` を囲み、戻り値と歩みと記録を返す。
+fn wrap_with_fake<T>(
+    previous: DPI_AWARENESS_CONTEXT,
+    show: impl FnOnce() -> T,
+) -> (T, Vec<Step>, Vec<log_capture_kit::CapturedEvent>) {
+    let steps = RefCell::new(Vec::new());
+    let (out, events) = capture(|| {
+        super::with_thread_per_monitor(
+            "ask",
+            |context| {
+                steps.borrow_mut().push(Step::Switch(context));
+                previous
+            },
+            || {
+                steps.borrow_mut().push(Step::Show);
+                show()
+            },
+        )
+    });
+    (out, steps.into_inner(), events)
+}
+
+/// D1（要件 3.1）: 前の扱いが有効なら「v2」「処理」「前の扱い」の順で、処理の戻り値がそのまま返り、記録は 0 件。
+#[test]
+fn d1_wraps_and_restores_previous_context_in_order() {
+    let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || 42);
+    assert_eq!(out, 42);
+    assert_eq!(
+        steps,
+        [
+            Step::Switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2),
+            Step::Show,
+            Step::Switch(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE),
+        ]
+    );
+    assert!(events.is_empty(), "記録は 0 件: {events:?}");
+}
+
+/// D2（要件 1.5）: 替えられなかったら戻さずに今の扱いのまま 1 回出し、warn を欄 `dialog` 付きで 1 件残す。
+#[test]
+fn d2_unchanged_context_shows_once_without_restore_and_warns() {
+    let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT::default(), || 7);
+    assert_eq!(out, 7);
+    assert_eq!(
+        steps,
+        [
+            Step::Switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2),
+            Step::Show,
+        ]
+    );
+    assert_eq!(events.len(), 1, "記録はちょうど 1 件: {events:?}");
+    let ev = &events[0];
+    assert_eq!(ev.level, tracing::Level::WARN);
+    assert_eq!(ev.field_str("event"), Some("alert_dpi_context_unchanged"));
+    assert_eq!(ev.field_str("dialog"), Some("ask"));
+}
+
+/// D3（要件 3.2）: 処理が失敗を返しても前の扱いへ戻し、失敗をそのまま返す。
+#[test]
+fn d3_restores_context_even_when_show_fails() {
+    let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || {
+        windows::core::Result::<MESSAGEBOX_RESULT>::Err(E_FAIL.into())
+    });
+    assert_eq!(out.map_err(|e| e.code()), Err(E_FAIL));
+    assert_eq!(
+        steps,
+        [
+            Step::Switch(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2),
+            Step::Show,
+            Step::Switch(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE),
+        ]
+    );
+    assert!(events.is_empty(), "記録は 0 件: {events:?}");
+}
+
+/// 呼んだスレッドの今の扱いが `context` と同じか。
+fn thread_is(context: DPI_AWARENESS_CONTEXT) -> bool {
+    // SAFETY: どちらも読むだけの関数。引数は OS が返したスレッドの扱いと OS の定数。
+    unsafe { AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), context) }.as_bool()
+}
+
+/// D4 の本体: 新しいスレッドで扱いを `start` にしてから本物の切り替えで囲み、
+/// 処理の中は v2・戻った後は `start`・記録は 0 件であることを確かめる。
+fn real_switch_wraps_and_restores(start: DPI_AWARENESS_CONTEXT) {
+    // 扱いの値は窓のハンドルと同じくスレッドをまたいで送れないので、整数にして渡す。
+    let start = start.0 as isize;
+    std::thread::spawn(move || {
+        let start = DPI_AWARENESS_CONTEXT(start as *mut _);
+        super::set_thread_dpi_context(start);
+        assert!(thread_is(start), "前提: スレッドを始めの扱いにできた");
+        let (during, events) = capture(|| {
+            super::with_thread_per_monitor("alert", super::set_thread_dpi_context, || {
+                thread_is(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+            })
+        });
+        assert!(during, "処理の中のスレッドの扱いは v2");
+        assert!(thread_is(start), "戻った後は始めの扱い");
+        assert!(events.is_empty(), "替えられたので記録は 0 件: {events:?}");
+    })
+    .join()
+    .expect("D4 のスレッドが panic した");
+}
+
+/// D4（要件 1.3・3.1）: 非対応のスレッドから本物の切り替えで囲む。
+#[test]
+fn d4_real_switch_from_unaware_thread() {
+    real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_UNAWARE);
+}
+
+/// D4（要件 1.3・3.1）: v2 のスレッドから本物の切り替えで囲む。
+#[test]
+fn d4_real_switch_from_v2_thread() {
+    real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+}
+
+/// D5（要件 2.1）: 「はい」と読むのは `IDYES` だけで、閉じたと失敗は「出せなかった」。
+#[test]
+fn d5_yes_no_answer_mapping() {
+    use super::{YesNo, yes_no_answer};
+    assert_eq!(yes_no_answer(&Ok(IDYES)), YesNo::Yes);
+    assert_eq!(yes_no_answer(&Ok(IDNO)), YesNo::No);
+    assert_eq!(yes_no_answer(&Ok(IDCANCEL)), YesNo::Unavailable);
+    assert_eq!(yes_no_answer(&Err(E_FAIL.into())), YesNo::Unavailable);
+}
+
+// ---------------------------------------------------------------- 実機の測り（#[ignore]）
+
+/// 測りの画面の題名（案 B の測りの窓を探す鍵）。
+const PROBE_TITLE: &str = "areka-alert-dpi-probe";
+/// 測りの画面の本文。
+const PROBE_BODY: &str = "areka alert DPI probe (closes by itself)";
+/// 窓を探す間隔（ミリ秒）。
+const TICK_MS: u32 = 300;
+/// 探す回数の上限（およそ 6 秒）。超えたらモーダルを抜けて「見つからない」とする。
+const MAX_TICKS: u32 = 20;
+/// 本番の口の画面を見つけてから閉じるまで残す回数（およそ 8 秒・撮るため）。上限とは別に数える。
+const HOLD_TICKS: u32 = 27;
+
+/// 画面が出ている間に読んだ値。
+#[derive(Debug, Clone, Copy)]
+struct WindowRead {
+    thread_during: i32,
+    window: i32,
+    window_v2: bool,
+    window_dpi: u32,
+    monitor_dpi: u32,
+    system_dpi: u32,
+    /// 拡張の様式に最前面（`WS_EX_TOPMOST`）が立っているか。
+    topmost: bool,
+    /// 前面の窓がその窓か（読むだけで assert しない）。
+    foreground: bool,
+}
+
+/// 1 つの場合の結果。`result` は画面を出した関数の戻り値。
+#[derive(Debug, Clone)]
+struct ProbeRow<R> {
+    line: String,
+    read: Option<WindowRead>,
+    result: R,
+}
+
+thread_local! {
+    /// 呼び戻しが探した回数。場合ごとに新しいスレッドなので戻さない。
+    static TICKS: Cell<u32> = const { Cell::new(0) };
+    /// 見つけた窓から読んだ値。
+    static FOUND: Cell<Option<WindowRead>> = const { Cell::new(None) };
+    /// 窓を探す鍵の題名。場合ごとに [`probe_case`] が置く。
+    static KEY: RefCell<String> = const { RefCell::new(String::new()) };
+    /// 閉じるときに押すボタン。場合ごとに [`probe_case`] が置く。
+    static BUTTON: Cell<MESSAGEBOX_RESULT> = const { Cell::new(IDOK) };
+    /// 見つけてから閉じるまで残す回数。場合ごとに [`probe_case`] が置く。
+    static HOLD: Cell<u32> = const { Cell::new(0) };
+    /// 見つけてから数えた回数。
+    static HELD: Cell<u32> = const { Cell::new(0) };
+}
+
+/// 扱いの値を 0＝非対応・1＝system・2＝モニタごとの数にする（無効なら -1）。
+fn awareness(context: DPI_AWARENESS_CONTEXT) -> i32 {
+    // SAFETY: 値を読むだけの関数。無効な値には DPI_AWARENESS_INVALID（-1）が返る。
+    unsafe { GetAwarenessFromDpiAwarenessContext(context) }.0
+}
+
+/// 呼んだスレッドの今の扱い。
+fn thread_awareness() -> i32 {
+    // SAFETY: 引数なしで呼んだスレッドの値を読むだけ。
+    awareness(unsafe { GetThreadDpiAwarenessContext() })
+}
+
+/// `EnumThreadWindows` の呼び戻し: クラス `#32770`・題名が [`KEY`] の窓を `lparam` の先へ書いて止める。
+unsafe extern "system" fn find_probe(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let (mut class, mut title) = ([0u16; 64], [0u16; 64]);
+    // SAFETY: `hwnd` は OS が列挙で渡した窓、バッファはこの関数の中で生きている。
+    let (class_len, title_len) = unsafe {
+        (
+            GetClassNameW(hwnd, &mut class),
+            GetWindowTextW(hwnd, &mut title),
+        )
+    };
+    let class = String::from_utf16_lossy(&class[..class_len.max(0) as usize]);
+    let title = String::from_utf16_lossy(&title[..title_len.max(0) as usize]);
+    if class == "#32770" && KEY.with_borrow(|key| title == *key) {
+        // SAFETY: `lparam` は `on_tick` の局所の `HWND` を指し、列挙の間ずっと生きている。
+        unsafe { *(lparam.0 as *mut HWND) = hwnd };
+        return BOOL(0);
+    }
+    BOOL(1)
+}
+
+/// タイマーの呼び戻し（モーダルの間も同じスレッドで配られる）。見つけてから [`HOLD`] 回残した後に
+/// 読んで [`BUTTON`] で閉じ、[`MAX_TICKS`] 回で見つからなければモーダルを抜けさせる。
+unsafe extern "system" fn on_tick(_: HWND, _: u32, timer: usize, _: u32) {
+    let mut hwnd = HWND::default();
+    // SAFETY: 呼び戻しは上の `find_probe`、`lparam` は呼び出しの間生きている局所の `hwnd` を指す。
+    // 呼び戻しが列挙を止めると FALSE が返るので戻り値は見ない。
+    let _ = unsafe {
+        EnumThreadWindows(
+            GetCurrentThreadId(),
+            Some(find_probe),
+            LPARAM(&mut hwnd as *mut HWND as isize),
+        )
+    };
+    if !hwnd.is_invalid() {
+        let held = HELD.get();
+        if held < HOLD.get() {
+            HELD.set(held + 1);
+            return;
+        }
+        let mut monitor_dpi = (0u32, 0u32);
+        // SAFETY: `hwnd` は今このスレッドで出ている画面の窓。読むだけの関数と、
+        // この関数の中で生きている出力先だけを渡す。
+        let read = unsafe {
+            let context = GetWindowDpiAwarenessContext(hwnd);
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            let _ = GetDpiForMonitor(
+                monitor,
+                MDT_EFFECTIVE_DPI,
+                &mut monitor_dpi.0,
+                &mut monitor_dpi.1,
+            );
+            WindowRead {
+                thread_during: thread_awareness(),
+                window: awareness(context),
+                window_v2: AreDpiAwarenessContextsEqual(
+                    context,
+                    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+                )
+                .as_bool(),
+                window_dpi: GetDpiForWindow(hwnd),
+                monitor_dpi: monitor_dpi.0,
+                system_dpi: GetDpiForSystem(),
+                topmost: GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOPMOST.0 != 0,
+                foreground: GetForegroundWindow() == hwnd,
+            }
+        };
+        FOUND.set(Some(read));
+        // 閉じる知らせではタスクダイアログは閉じないので、場合ごとのボタンを押す。
+        // SAFETY: 窓は生きている画面の窓、`timer` は OS が渡したこのスレッドのタイマー。
+        unsafe {
+            let button = WPARAM(BUTTON.get().0 as usize);
+            let _ = PostMessageW(Some(hwnd), TDM_CLICK_BUTTON.0 as u32, button, LPARAM(0));
+            let _ = KillTimer(None, timer);
+        }
+        return;
+    }
+    let ticks = TICKS.get() + 1;
+    TICKS.set(ticks);
+    if ticks >= MAX_TICKS {
+        // SAFETY: このスレッドのタイマーを止め、モーダルを抜けさせる。残る WM_QUIT は
+        // 場合ごとの新しいスレッドが終わるときに一緒に消える。
+        unsafe {
+            let _ = KillTimer(None, timer);
+            PostQuitMessage(0);
+        }
+    }
+}
+
+/// 新しいスレッドで題名 `title` を窓を探す鍵に、`button` を閉じるボタンに、`hold` を残す回数に置き、
+/// `setup` の後に `show` で画面を 1 つ出して測り、1 行を出して返す。`show` の戻り値は行の `box=`。
+fn probe_case<R: std::fmt::Debug + Send + 'static>(
+    case: &'static str,
+    title: &str,
+    button: MESSAGEBOX_RESULT,
+    hold: u32,
+    setup: fn(),
+    show: fn() -> R,
+) -> ProbeRow<R> {
+    let title = title.to_owned();
+    let row = std::thread::spawn(move || {
+        KEY.set(title);
+        BUTTON.set(button);
+        HOLD.set(hold);
+        setup();
+        // SAFETY: 呼んだプロセスの疑似ハンドルで扱いを読むだけ。
+        let process =
+            awareness(unsafe { GetDpiAwarenessContextForProcess(GetCurrentProcess()) });
+        let thread_before = thread_awareness();
+        // SAFETY: 窓なしのタイマー。呼び戻しは上の `on_tick`。
+        let timer = unsafe { SetTimer(None, 0, TICK_MS, Some(on_tick)) };
+        assert_ne!(timer, 0, "測りのタイマーを立てられない（case={case}）");
+        let result = show();
+        let read = FOUND.get();
+        let head = format!(
+            "ALERT-DPI-PROBE case={case} process={process} thread_before={thread_before}"
+        );
+        let line = match read {
+            Some(r) => format!(
+                "{head} thread_during={} window={} window_v2={} window_dpi={} monitor_dpi={} system_dpi={} topmost={} foreground={} box={:?}",
+                r.thread_during,
+                r.window,
+                r.window_v2,
+                r.window_dpi,
+                r.monitor_dpi,
+                r.system_dpi,
+                r.topmost,
+                r.foreground,
+                result
+            ),
+            None => format!("{head} found=false box={result:?}"),
+        };
+        ProbeRow { line, read, result }
+    })
+    .join()
+    .expect("測りのスレッドが panic した");
+    println!("{}", row.line);
+    row
+}
+
+/// 呼んだスレッドを非対応にする。
+fn thread_unaware() {
+    super::set_thread_dpi_context(DPI_AWARENESS_CONTEXT_UNAWARE);
+}
+
+/// 呼んだスレッドをモニタごとの v2 にする。
+fn thread_v2() {
+    super::set_thread_dpi_context(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+}
+
+/// タスクダイアログ（OK だけ・エラーの絵）を直に出し、HRESULT を返す（失敗も行に載せる）。
+fn task_dialog() -> i32 {
+    let (title, body) = (HSTRING::from(PROBE_TITLE), HSTRING::from(PROBE_BODY));
+    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、絵は OS の定数、
+    // 主の指示は空、持ち主・インスタンス・押されたボタンの出力先は None。
+    match unsafe {
+        TaskDialog(
+            None,
+            None,
+            &title,
+            PCWSTR::null(),
+            &body,
+            TDCBF_OK_BUTTON,
+            TD_ERROR_ICON,
+            None,
+        )
+    } {
+        Ok(()) => 0,
+        Err(e) => e.code().0,
+    }
+}
+
+/// タスクダイアログを出す間だけスレッドを v2 に囲む（本番の部品）。
+fn task_dialog_wrapped() -> i32 {
+    super::with_thread_per_monitor("alert", super::set_thread_dpi_context, task_dialog)
+}
+
+/// 案 B の測り: タスクダイアログ（comctl32 v6）の窓の扱い。測るだけで v2 は判定しない（進行役が読む）。
+#[test]
+#[ignore = "real dialog: shows a task dialog on the desktop"]
+fn probe_alert_task_dialog_window_dpi() {
+    let rows = [
+        probe_case(
+            "taskdialog_unaware",
+            PROBE_TITLE,
+            IDOK,
+            0,
+            thread_unaware,
+            task_dialog,
+        ),
+        probe_case(
+            "taskdialog_wrapped_from_unaware",
+            PROBE_TITLE,
+            IDOK,
+            0,
+            thread_unaware,
+            task_dialog_wrapped,
+        ),
+        probe_case(
+            "taskdialog_thread_v2",
+            PROBE_TITLE,
+            IDOK,
+            0,
+            thread_v2,
+            task_dialog,
+        ),
+    ];
+    for row in &rows {
+        assert!(row.read.is_some(), "画面の窓が見つからない: {}", row.line);
+    }
+}
+
+/// 本番の測りのエラーの画面の場面（起動窓を開けない）。
+fn startup_window_scene() -> super::AlertScene {
+    super::AlertScene::StartupWindow {
+        reason: "areka alert DPI probe".to_owned(),
+    }
+}
+
+/// 本番の口 `raise` を抑止なしで呼ぶ（エラーの画面・起動窓の場面）。
+fn production_alert() {
+    super::raise(&startup_window_scene(), false);
+}
+
+/// 本番の口 `ask_yes_no` を抑止なしで呼ぶ（測りの題名と本文）。
+fn production_ask() -> super::YesNo {
+    super::ask_yes_no(PROBE_TITLE, PROBE_BODY, false)
+}
+
+/// 本番の口 `warn_ok` を抑止なしで呼ぶ（測りの題名と本文）。
+fn production_warning() {
+    super::warn_ok(PROBE_TITLE, PROBE_BODY, false);
+}
+
+/// 本番の 3 つの口を 1 つずつ、非対応のスレッドから抑止なしで出し、窓が v2 で、最前面が
+/// はい／いいえと警告だけに立ち、はい／いいえの答えが「はい」であることを確かめる（要件 1.4・2.1・4.7）。
+/// 画面ごとにおよそ 8 秒残すので、その間に撮る。前面は行に載せるだけで assert しない。
+///
+/// 走らせる前の注意: `AREKA_APP_SMOKE_EXIT_MS`（`raise` が自分で読んで抑える）や `AREKA_NO_ALERT`
+/// （呼び手が読む抑止）が立っていると画面が出ない。測りは抑止を偽で渡すので前者だけが効くが、
+/// どちらも外してから走らせる。
+#[test]
+#[ignore = "real dialog: shows the three production dialogs on the desktop"]
+fn probe_alert_dialogs_production() {
+    let (alert_title, _) = super::alert_text(&startup_window_scene());
+    let alert = probe_case(
+        "alert",
+        &alert_title,
+        IDOK,
+        HOLD_TICKS,
+        thread_unaware,
+        production_alert,
+    );
+    let ask = probe_case(
+        "ask",
+        PROBE_TITLE,
+        IDYES,
+        HOLD_TICKS,
+        thread_unaware,
+        production_ask,
+    );
+    let warning = probe_case(
+        "install_warning_dialog",
+        PROBE_TITLE,
+        IDOK,
+        HOLD_TICKS,
+        thread_unaware,
+        production_warning,
+    );
+    for (line, read, topmost) in [
+        (&alert.line, alert.read, false),
+        (&ask.line, ask.read, true),
+        (&warning.line, warning.read, true),
+    ] {
+        let read = read.unwrap_or_else(|| panic!("画面の窓が見つからない: {line}"));
+        assert!(read.window_v2, "窓が v2 でない: {line}");
+        assert_eq!(read.topmost, topmost, "最前面の読みが違う: {line}");
+    }
+    assert_eq!(
+        ask.result,
+        super::YesNo::Yes,
+        "はい／いいえの答え: {}",
+        ask.line
+    );
+}
