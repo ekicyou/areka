@@ -21,7 +21,9 @@ use super::super::balloon::test_support::headless_emo2_wiring;
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
-use crate::emo2_boot::frame::test_support::{balloon_is_manual, manual_balloon_runtime};
+use crate::emo2_boot::frame::balloon_runtime_test_support::{
+    balloon_is_manual, manual_balloon_runtime,
+};
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::placement::spawn::BalloonWindowMarker;
 

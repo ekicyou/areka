@@ -24,7 +24,7 @@ use wintf::ecs::{Point, Window};
 use super::super::test_support::{capture_logs, headless_emo2_wiring};
 use super::super::{BalloonWiring, ChoiceSelection};
 use super::on_balloon_pointer_pressed;
-use crate::emo2_boot::frame::test_support::manual_balloon_runtime;
+use crate::emo2_boot::frame::balloon_runtime_test_support::manual_balloon_runtime;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};

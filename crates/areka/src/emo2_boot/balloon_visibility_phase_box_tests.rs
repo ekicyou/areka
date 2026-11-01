@@ -350,7 +350,9 @@ fn clear_hides_only_the_window() {
 /// （時間切れ）でも届かない契機（文字が 0 に落ちた）でも同じ。
 #[test]
 fn hiding_forgets_the_manual_position() {
-    use crate::emo2_boot::frame::test_support::{balloon_is_manual, manual_balloon_runtime};
+    use crate::emo2_boot::frame::balloon_runtime_test_support::{
+        balloon_is_manual, manual_balloon_runtime,
+    };
     for trigger in [VisibilityTrigger::Timeout, VisibilityTrigger::Clear] {
         let (_gpu, runtime) = manual_balloon_runtime("0");
         let mut world = world_at(0.0);

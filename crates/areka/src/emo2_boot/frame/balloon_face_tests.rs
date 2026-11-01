@@ -20,9 +20,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::{FaceCause, after_drain, changed_faces, select_balloon_face};
-use crate::emo2_boot::frame::test_support::{
-    balloon_is_manual, headless_wiring_with, manual_balloon_runtime, zero_clock,
+use crate::emo2_boot::frame::balloon_runtime_test_support::{
+    balloon_is_manual, manual_balloon_runtime,
 };
+use crate::emo2_boot::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::emo2_boot::frame::{Emo2Wiring, balloon_target, shell_target};
 
 /// 書き手が文字の層へ矢印の絵を入れたときに文字の層が残す 1 行（`actor_scroll.rs`）。

@@ -771,3 +771,6 @@ pub(super) fn project_display(command: &PresentCommand) -> DisplayProjection {
 #[cfg(test)]
 #[path = "spine_conformance_support_tests.rs"]
 mod driver_tests;
+#[cfg(test)]
+#[path = "spine_conformance_support_stage_tests.rs"]
+mod stage_tests;
