@@ -318,6 +318,43 @@ for ($n = 1; $n -le 20; $n++) {
 - 件 3（`wintf` の lib の落ち）: 再現した（20 回で 4 回）。ただし落ちの報告が出なかったので、まだ開いている。次の手は、4.2 の Y2 の前に「この絞りで `wintf` の lib の落ちの報告が出ない訳」を調べること。
   - 2026-11-01 追記: 最初の受け手を足した Y1 の 2 回目（上）で、20 回のうち 6 回が落ち、6 回とも報告を出した。落ちたスレッドは毎回 `com::wuc::tests::begin_draw_roundtrip`、落ちた番地はモジュールに当たらない。まだ開いている（Y2 で領域の行を読む）。
 
+**X2 を回さない訳**（2026-11-01・4.2）
+
+- X2（許可の数 1）は件 1 の対照で、件 1 は X1 20 回＋X1b 10 回で落ち 0 として閉じた（上）。絞る元の持ち手の行も生きているテストの一覧も無いので回さない。件 1 の X3 も同じ訳で回さない。
+
+**Y2 の条件**（走らせる前・2026-11-01・4.2）
+
+- 対照の訳: 件 3 の落ちた番地はどの読み込まれたモジュールにも当たらず、積み上げは `KiUserExceptionDispatcher` で止まる（巻き戻しの表が無い）＝「放されたモジュールのコードを呼んだ」見立て。原因の表の候補 B（一時的な MTA の解体の後の解放）か D に当たる。B ならプロセスの寿命の MTA を立てると落ちが消える。
+- 条件: Y1 と同じ（`wintf` の lib・`-Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source`・負荷なし・既定スレッド・1 回の上限 5 分）に `-SetEnv AREKA_TEST_MTA_KEEPER=1` を足す。`crates/wintf/src/test_crash_report.rs` の `install`（読み込みの初め・libtest の main より前）が `CoIncrementMTAUsage` を呼ぶ。
+- 止め方: 落ちたら 1 回目で止める（落ちが残る＝B ではない）。落ちなければ 20 回（落ちが消える）。止め方の作りは X1・Y1 と同じ（`-Rounds 1` を 1 回ずつ呼び、`summary.txt` の `rounds_with_crash_report:` が 1 以上なら止める）。
+- 口が働いた印: `install` は `CoIncrementMTAUsage` が失敗したときだけ `AREKA-MTA-KEEPER failed hr=...` を標準エラーへ書く（成功では何も書かない）。各回の `round-1.log` にこの行が無いことと、`conditions.txt` の `set_env: AREKA_TEST_MTA_KEEPER=1` を印にする。
+- 所要時間の見込み: 1 回約 0.5 分（Y1 の 20 回が 20:06〜20:09・y1b の 20 回が 18 秒だったので実際はもっと短い見込み）× 最大 20 回＝最大約 10 分。
+
+コマンド（どのディレクトリからでも動く形・PowerShell 7・上の Y1 の繰り返しの `-Label` を `y2-r` にし、`-SetEnv AREKA_TEST_MTA_KEEPER=1` を足したもの）:
+
+```powershell
+$wt = 'C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-test-binary-stability-dec94e'
+for ($n = 1; $n -le 20; $n++) {
+    $label = 'y2-r{0:d2}' -f $n
+    pwsh -NoProfile -File "$wt\tools\load-flake.ps1" -Label $label -Rounds 1 -RoundTimeoutMin 5 -Binary wintf-lib -Burners 0 -SetEnv AREKA_TEST_MTA_KEEPER=1 -Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source
+    $d = Get-ChildItem "$wt\target\load-flake" -Directory -Filter "$label-*" | Sort-Object Name | Select-Object -Last 1
+    if ((Get-Content -Encoding utf8 "$($d.FullName)\summary.txt") -match '^rounds_with_crash_report: [1-9]') { break }
+}
+```
+
+- 走らせる前のコードの読み（見立て・まだ決めていない・⑺ の下ごしらえ）:
+  - 落ちるスレッド `com::wuc::tests::begin_draw_roundtrip`（`crates/wintf/src/com/wuc.rs`）は COM を自分で初期化せず、`create_dispatcher_queue_controller(DQTAT_COM_ASTA)`（`DQTYPE_THREAD_CURRENT`）で自分のスレッドを ASTA にし、`Compositor::new`・`GraphicsCore::new`（`crates/wintf/src/ecs/graphics/core.rs`・D3D11／D2D／DWrite）・`ICompositorInterop::create_graphics_device`・`CreateDrawingSurface`・`DrawingSurfaceInteropExt::begin_draw`／`end_draw` を同じスレッドで作って使い、関数の終わりで宣言の逆の順に捨てる（`_dq` の `DispatcherQueueController` が最後）。作るのも捨てるのも同じスレッドなので、テストの中には候補 D の形（別のスレッドで捨てる）は無い。
+  - 並ぶ 2 つの絞りは一時的な MTA を立てて壊す: `alpha_mask_resource`（`crates/wintf/src/ecs/layout/hit_test/tests_ex/alpha_mask_resource.rs` の `with_com_initialized`＝`CoInitializeEx(COINIT_MULTITHREADED)`→閉包→`CoUninitialize`・閉包の中で `com::wic::wic_factory`＝`CoCreateInstance(CLSID_WICImagingFactory)`）と `bitmap_source`（`crates/wintf/src/ecs/widget/bitmap_source/tests.rs` の `with_com_initialized`・同じ形）。
+  - `bitmap_source` の `WicCore::new`（`wic_core.rs`）は `ensure_process_mta`＝`CoIncrementMTAUsage` でプロセスの寿命の MTA を立てる（前例 ② の直し・DD-9）。これより前は、MTA は並ぶテストの一時的なものだけで、最後の `CoUninitialize` のたびに MTA ごと解体されうる。`com::wic::wic_factory` はこの守りを通らない。
+  - よって B の経路の見立ては「`with_com_initialized` の `CoUninitialize` で一時的な MTA が解体され、COM がそこで読み込んだ DLL を放す → `begin_draw_roundtrip` のスレッドがその DLL のコードを呼ぶ（番地がどのモジュールにも当たらない）」。Y2 で落ちが消えれば B、残れば領域の行（`AREKA-CRASH region`）と生きているスレッドで D・C を読む。
+
+**Y2 の結果**（2026-11-01 21:27:14〜21:29:52 ごろ・`target\load-flake\y2-r01-20261101-212714`〜`y2-r20-20261101-212952`・コミット `0b4200ce`（`dirty: yes`＝この記録の書き足しだけ）・`wintf` の lib の 52 本・負荷なし・既定スレッド・上限 5 分・`AREKA_TEST_MTA_KEEPER=1`）
+
+- 伝えた見込み: 約 10 分（2026-11-01 21:26・進行役から開発者へ）。机は 21:26 ごろに握った。実際は約 3 分。
+- 20 回とも、終了コード 0・52 passed／0 failed・テスト 0.10〜0.16 秒・待ちの打ち切り 0・上限越え 0・`rounds_with_crash_report: 0`・`AREKA-CRASH` の行 0（`region` の行も 0）。落ちなかったので、20 回を回し切った。
+- 口が働いた印: 20 回とも `conditions.txt` に `set_env: AREKA_TEST_MTA_KEEPER=1` があり、`round-1.log` に `AREKA-MTA-KEEPER failed` の行は無い。
+- 対照: MTA を立てない Y1 は 4/20、y1b は 6/20 落ちた。立てた Y2 は 0/20（落ちが消えた）。
+
 **X1 のほかの赤**（third scope は ⑽・記録だけ・直しは決めない・後の 6.x・7.2 の材料）
 
 文の頭で分けた。`A が定常に着く` や `assertion ... failed` の後追いの文は、同じテストの先の待ちの打ち切りの続き。
@@ -339,6 +376,28 @@ for ($n = 1; $n -le 20; $n++) {
 - X1b（負荷なし・4 スレッド）の 10 回では、上のどれも赤にならなかった。
 
 ## ⑺ 原因の経路と直し
+
+**件 3（`wintf` の lib の落ち）の原因: 候補 B（一時的な MTA の解体の後の解放）**（2026-11-01・4.2）
+
+- 落ちる組: `com::wuc::tests::begin_draw_roundtrip` と、`with_com_initialized` の中で走るテスト（`alpha_mask_resource` と `bitmap_source` の絞り）が同じプロセスで並んで走る組。`begin_draw_roundtrip` は自分のスレッドを、`create_dispatcher_queue_controller(DQTAT_COM_ASTA)` の `DispatcherQueueController` で ASTA にしている。
+- 落ちた場所: `com::wuc::tests::begin_draw_roundtrip` のスレッド（y1b の 6 回とも）。`0xC0000005` で落ち、番地はどの読み込まれたモジュールにも当たらない（`module=` が空）。番地は `0x7ffefe823878`・`0x7ffefe863028`・`0x7ffefe828cc5`・`0x7ffefe8087f5` で、`0x7ffefe80xxxx`〜`0x7ffefe86xxxx` の中。積み上げは `KiUserExceptionDispatcher` で止まる（巻き戻しの表が無い）。
+- 原因の経路（コードの定義の名前で）:
+  1. `ecs::layout::hit_test::tests_ex::alpha_mask_resource::with_com_initialized` と `ecs::widget::bitmap_source::tests::with_com_initialized` は、`CoInitializeEx(COINIT_MULTITHREADED)` → 閉包 → `CoUninitialize` で一時的な MTA を立てて壊す。`alpha_mask_resource` の側の閉包は `com::wic::wic_factory`（`CoCreateInstance(CLSID_WICImagingFactory)`）を呼び、`ensure_process_mta` を通らない。`ecs::widget::bitmap_source::tests` の側の閉包は `WicCore::new` → `ensure_process_mta`（`CoIncrementMTAUsage`）を通り、そこから先は MTA が立ったまま残る。よって落ちうる窓は、プロセスの初めから最初の `WicCore::new` までの間。
+  2. プロセスの寿命の MTA がまだ立っていない間は、最後の `CoUninitialize` のたびに MTA ごと解体され、COM がその MTA で読み込んだ DLL を放す。
+  3. 同じ時に `com::wuc::tests::begin_draw_roundtrip` のスレッドは、`Compositor::new`・`GraphicsCore::new`・`ICompositorInterop::create_graphics_device`・`CreateDrawingSurface`・`DrawingSurfaceInteropExt::begin_draw`／`end_draw`、関数の終わりの捨てる段を通る。このどこかで放された DLL のコードを呼び、どのモジュールにも当たらない番地で AV になる。
+  - Y の絞り（52 本: `com::wuc::tests` 1・`ecs::layout::hit_test::tests_ex::alpha_mask_resource` 8・`...::tests_ex::alpha_mask` 1・`ecs::widget::bitmap_source::tests` 16・`...::alpha_mask::tests` 15・`...::alpha_mask::regenerate_tests` 10・`...::task_pool::tests` 1・`wintf` の lib の `--list` で数えた）で `Compositor::new`・`GraphicsCore::new` を呼ぶのは `com::wuc::tests::begin_draw_roundtrip` だけ（`ecs/layout/hit_test/tests_ex/` と `ecs/widget/bitmap_source/` に grep で 0 件）。`Compositor` は 1 つしか作られないので、候補 A（別々の MTA のスレッドに `Compositor` を並べる）の形は無い。
+  - 作るのも捨てるのも同じスレッドなので、候補 D（作ったスレッドと別のスレッドで捨てる）の形はテストの中に無い。落ちた番地がドライバのモジュール（`igd*`・`d3d11*`・`dxgi*`）に当たらないので、候補 C の印も無い。
+- 決めた対照: Y1 4/20・y1b 6/20（MTA を立てない）に対し、Y2 0/20（`AREKA_TEST_MTA_KEEPER=1`＝`test_crash_report.rs` の `install` がプロセスの初めに `CoIncrementMTAUsage`）。原因の表の B の印「X3・Y2 で落ちが消える」に当たる。前例 ②（`wic_core.rs` の `ensure_process_mta` の説明・DD-9）と同じ形。
+- 確かめていないこと:
+  - 放された DLL がどれか（Y2 では落ちず、`AREKA-CRASH region` の行が出なかった）。
+  - 経路の 3 の、どの呼び出しで放されたコードに入るか（積み上げが落ちた番地より先へ辿れない）。
+  - `DQTAT_COM_ASTA` の ASTA が MTA の解体に巻き込まれる仕組みの細部。
+  - MTA を立てない側を、Y2 と同じコミット `0b4200ce` では回し直していない。y1b は `7bfc2b22` の作業ツリー（未コミットの直しあり）、Y1 は `c432692b`・`bfa0b364`。間の違いは落ちの報告の側（最初の受け手・1 度の書き込み・region の行）だけ。最初の受け手が無かった Y1 でも 4/20 落ちたので、結論は変わらない。
+- 直し（5.1）: 候補 B の直しとして、テストのプロセスの初めに無条件でプロセスの寿命の MTA を立てる。`wintf` の `test_crash_report.rs` の `install` の口（`AREKA_TEST_MTA_KEEPER`）を外し、無条件に `CoIncrementMTAUsage` を呼ぶ。design のとおり、写しの相手の `areka` の `emo2_boot/crash_report_test_support.rs` にも同じ形を当てる。
+
+**件 1（`areka` の実行ファイルの落ち）**
+
+- 4.1 で再現せずとして閉じた（X1 20 回＋X1b 10 回で 0 件・⑹）。原因の候補は決めていない（分からない）。件 3 の直し（B: テストのプロセスの初めにプロセスの寿命の MTA を立てる）は、design のとおり `areka` の写しにも当てる。
 
 ## ⑻ 許可の待ちの上限の値と決めた訳
 
