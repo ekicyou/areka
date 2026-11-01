@@ -174,10 +174,11 @@ crates/
     │   ├── consumer_ledger_agreement_tests.rs    # 修正: emo2_sink_of に PropertyRead => None
     │   ├── target_map.rs                         # 修正: 逆写像 target_scope（TargetId → scope と窓の種類）
     │   ├── frame.rs                              # 修正: mod scale_notice と相の呼び出し（相の並びの最後）
+    │   ├── frame_scale_notice_integration_tests.rs # 新規: 同じフレームの檻（frame_visibility_integration_tests.rs の子）
     │   └── frame/
     │       ├── wiring.rs                         # 修正: 倍率の表の欄と読み口 scope_scale_table
     │       ├── scale_notice.rs                   # 新規: run_scale_notice_phase・plan_scale_notices・ScaleEventSeam
-    │       └── scale_notice_tests.rs             # 新規: 計画の檻と同じフレームの檻
+    │       └── scale_notice_tests.rs             # 新規: 計画の檻（純粋）
     ├── mcp/check_script_judge_tests.rs           # 修正: \![get,property,…] を受け手の無い命令と報告しない見本
     └── placement/
         ├── descript_window_keys.rs               # 修正: read_balloon_syncscale・BalloonSyncScale
@@ -636,7 +637,7 @@ pub(crate) fn scaling_text(ratio: ScaleRatio) -> String;
 
 ##### Batch / Job Contract
 ```rust
-pub(super) fn run_scale_notice_phase(wiring: &mut Emo2Wiring, world: &mut World);
+pub(super) fn run_scale_notice_phase(wiring: &mut Emo2Wiring, world: &World); // World は読むだけ
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ScaleEvent {
@@ -669,7 +670,7 @@ pub fn target_scope(target: TargetId) -> (u32, TargetWindow);
 
 **Implementation Notes**
 - Integration: `frame.rs` に `mod scale_notice;` と呼び出し 1 行、`frame/wiring.rs` に表の欄（`Emo2Wiring::new` の中で空の表を作る＝引数は変えない）と読み口 `pub(crate) fn scope_scale_table(&self) -> SharedScopeScaleTable`。記録: 書き込みは `debug!(event = "scope_scale_table_updated", scope, window, scaling, dpi)`、送出は `info!(event = "scale_event_raised", id, scope, before, after)`。
-- Validation: `scale_notice_tests.rs` — 計画の檻（純粋）: 初めて決まった記録は書き込みだけ／本体の倍率の変わり／スコープ 1 だけ／バルーンだけ／同じ百分率（DPI だけ違う）は書き込みだけ／同じ target が 1 フレームに 2 回変わったら 1 回に畳む・戻ったら送らない／複数の窓は `TargetId` の順／Reference の 5 つの並びとスコープ番号。同じフレームの檻（x64・多フレーム駆動ハーネス・`ScaleEventSeam`）: 窓の `DPI` を 144 → 192 に替えて `emo2_frame_system` を 1 回回すと、その 1 回の中で表が `200,200` になり `OnShellScaling` の知らせが 1 件届く（要件 7.3）／attach の最初のフレームは知らせ 0 件／シェルの差し替え（作者 DPI が違う）の巡は知らせ 0 件。
+- Validation: `scale_notice_tests.rs` — 計画の檻（純粋）: 初めて決まった記録は書き込みだけ／本体の倍率の変わり／スコープ 1 だけ／バルーンだけ／同じ百分率（DPI だけ違う）は書き込みだけ／同じ target が 1 フレームに 2 回変わったら 1 回に畳む・戻ったら送らない／複数の窓は `TargetId` の順／Reference の 5 つの並びとスコープ番号。同じフレームの檻（`emo2_boot/frame_scale_notice_integration_tests.rs`・`frame_visibility_integration_tests.rs` の子でハーネスを共有・x64・`ScaleEventSeam`）: 窓の `DPI` を 144 → 192 に替えて `emo2_frame_system` を 1 回回すと、その 1 回の中で表が `200,200` になり `OnShellScaling` の知らせが 1 件届く（要件 7.3）／attach の最初のフレームは知らせ 0 件／シェルの差し替え（作者 DPI が違う）の巡は知らせ 0 件。
 - Risks: 相を後ろへ動かすと同じフレームの約束が崩れる＝同じフレームの檻が固定する。
 
 ### areka（descript）
@@ -802,7 +803,7 @@ pub(crate) fn register(world: &mut World); // Update に読み直しの系を 1 
 ### Integration Tests
 
 1. 表示層の記録（`presenter_scale_change_tests.rs`・実 GPU）: 初回・同じ DPI・DPI の替わり・差し替え・失敗した表示（要件 7.2・7.3 の土台）。
-2. 同じフレーム（`scale_notice_tests.rs` の多フレーム駆動ハーネス・x64・実 GPU）: DPI を替えた 1 回の `emo2_frame_system` の中で表と知らせが揃う／attach の巡と差し替えの巡は知らせ 0 件（要件 7.3）。
+2. 同じフレーム（`emo2_boot/frame_scale_notice_integration_tests.rs`・多フレーム駆動ハーネス・x64・実 GPU）: DPI を替えた 1 回の `emo2_frame_system` の中で表と知らせが揃う／attach の巡と差し替えの巡は知らせ 0 件（要件 7.3）。
 3. `check_script` の見本（`check_script_judge_tests.rs`・要件 1.8）。
 4. 受け手の表の数と合意（`consumer_ledger_tests.rs`・`consumer_ledger_agreement_tests.rs`）。
 

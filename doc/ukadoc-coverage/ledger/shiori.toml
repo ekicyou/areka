@@ -1409,7 +1409,7 @@ note = """
 Reference0〜3 は正典どおり横の後・横の前・縦の後・縦の前の百分率（`currentghost.scope(ID).scaling` と同じ数の形）。Reference4 にシェル番号（本体 0・相方 1・2 以降も・`OnMouseClick` の Reference3 と同じ番号）を足した。SSP は利用者の倍率の設定が変わったときだけゴースト全体で 1 回送るが、areka は窓ごとに倍率が違いうるので窓ごとに送る（doc/COMPAT_ARCHITECTURE.md 8 節）。
 新しい倍率が絵にかかったのと同じフレームで、表を書いてから送るので、応答の台本の \\![get,property] で聞いた scaling には変わった後の値が返る。同じフレームに複数の窓が変われば窓ごとに 1 回、スコープの若い順。話している最中の応答の台本は今の台詞を差し替えず、記録に残して捨てる。
 実装: 許可の表と Reference の表は crates/areka-kanade/src/schedule/events.rs（ALLOWED_EVENT_IDS・value_replaces_active_talk）。送るのは crates/areka/src/emo2_boot/frame/scale_notice.rs（plan_scale_notices・run_scale_notice_phase）。証拠は events.rs の `// ukadoc:` の URL。
-テスト: crates/areka/src/emo2_boot/frame/scale_notice_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs・crates/areka-kanade/src/schedule/events_tests.rs。
+テスト: crates/areka/src/emo2_boot/frame/scale_notice_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs・crates/areka-kanade/src/schedule/events_tests.rs・crates/areka-kanade/src/schedule/raise_event_tests.rs。
 無いと失うもの（実装前）: 吹き出しの大きさを変えても、ゴーストがその見え方の変化に応じられない。
 担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
@@ -5944,7 +5944,7 @@ note = """
 Reference0〜3 は正典どおり横の後・横の前・縦の後・縦の前の百分率（`currentghost.scope(ID).scaling` と同じ数の形）。Reference4 にシェル番号（本体 0・相方 1・2 以降も・`OnMouseClick` の Reference3 と同じ番号）を足した。SSP は利用者の倍率の設定が変わったときだけゴースト全体で 1 回送るが、areka は窓ごとに倍率が違いうるので窓ごとに送る（doc/COMPAT_ARCHITECTURE.md 8 節）。
 新しい倍率が絵にかかったのと同じフレームで、表を書いてから送るので、応答の台本の \\![get,property] で聞いた scaling には変わった後の値が返る。同じフレームに複数の窓が変われば窓ごとに 1 回、スコープの若い順。話している最中の応答の台本は今の台詞を差し替えず、記録に残して捨てる。
 実装: 許可の表と Reference の表は crates/areka-kanade/src/schedule/events.rs（ALLOWED_EVENT_IDS・value_replaces_active_talk）。送るのは crates/areka/src/emo2_boot/frame/scale_notice.rs（plan_scale_notices・run_scale_notice_phase）。証拠は events.rs の `// ukadoc:` の URL。
-テスト: crates/areka/src/emo2_boot/frame/scale_notice_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs・crates/areka-kanade/src/schedule/events_tests.rs。
+テスト: crates/areka/src/emo2_boot/frame/scale_notice_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs・crates/areka-kanade/src/schedule/events_tests.rs・crates/areka-kanade/src/schedule/raise_event_tests.rs。
 無いと失うもの（実装前）: 絵の大きさを変えても、ゴーストがその変化に応じられない。
 担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた。
 """
