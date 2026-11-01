@@ -811,7 +811,7 @@ pub(crate) fn register(world: &mut World); // Update に読み直しの系を 1 
 
 - 机を持ってから areka を起こし、終わったらすぐ返す（要件 8.1）。根・一時のフォルダはワークツリーの `target\` の下。ぱすたは取り寄せた書庫の木（`target\pasta-verify\root\ghost\pasta-in-windows`）を使い、外の実物を動かさない。
 - 段: 起動の直後 → 同じ画面の中のドラッグの後 → 拡大率の違う画面（200% と 150%）へ移した後。各段で MCP の `get_property` で 4 つの値を読み、窓の居る画面の拡大率と一致すること、`OnPastaShellScale` が `count = 2` で届くこと、移した後に `OnShellScaling` が `scope = 0` で届くこと、ぱすたが付け直すこと、`＊バルーン倍率のずれ` が出ないこと（ぱすたは `baseware.name` が `areka` なら出さない）を記録で確かめる（要件 8.2・8.3・5.10）。
-- 確かめの記録は `.kiro/specs/shell-scale-linkage/` に置き、SSP の基準（`150,150` のまま・`OnShellScaling` なし）と並べ、数の形が同じこと、値と届き方の違いが DPI 追従の方針によることを書き分ける（要件 8.4）。
+- 確かめの記録は `.kiro/specs/completed/shell-scale-linkage/` に置き、SSP の基準（`150,150` のまま・`OnShellScaling` なし）と並べ、数の形が同じこと、値と届き方の違いが DPI 追従の方針によることを書き分ける（要件 8.4）。
 
 ### Performance
 
