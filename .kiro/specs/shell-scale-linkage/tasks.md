@@ -140,7 +140,7 @@
   - 整形と静的検査を通し、触ったファイルが 1000 行を超えていないことを確かめる
   - 完了の姿: 触った 6 クレートと ukadoc-survey のテストと整形・静的検査が緑
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
-- [ ] 9.2 実機でぱすたを 200% と 150% の画面にまたがせ、値とイベントを確かめて記録を残す
+- [x] 9.2 実機でぱすたを 200% と 150% の画面にまたがせ、値とイベントを確かめて記録を残す
   - 排他テストの机を持ってから areka を起こし、終わったらすぐ返す。根と一時のフォルダはワークツリーの `target\` の下、ぱすたは取り寄せた書庫の木（版 26110101）を使う
   - 判定の分岐の段まで記録の段を開け、起動の直後・同じ画面の中のドラッグの後・拡大率の違う画面へ移した後の各段で MCP の `get_property` で 4 つの値を読む
   - `OnPastaShellScale` が値の数 2 で届くこと、移した後に `OnShellScaling` がスコープ 0 でドラッグの終わりに加えて届くこと、ぱすたが位置と重なりの順を付け直すこと、倍率のずれの台詞が出ないことを記録で確かめる
@@ -154,3 +154,5 @@
 
 - 1.3: 逆写像は前から `crates/areka/src/placement/transition_judge.rs` の `WindowKey::from_target_id` にもある（doc は「正本は前向きしか持たない」と書いたまま）。`target_scope` との二重化は本 spec の範囲外・完了の棚卸で扱う。clippy は偶奇に `is_multiple_of(2)` を求める。
 - 6.2: `run_scale_notice_phase` は設計の `&mut World` でなく `&World` を取る（読むだけ）。同じフレームの檻は設計の `frame/scale_notice_tests.rs` でなく `emo2_boot/frame_scale_notice_integration_tests.rs`（`frame_visibility_integration_tests.rs` の子・ハーネスを共有）。設計の File Structure Plan を完了時に実態へ合わせる。`gpu_frame_world` の注釈の「WARP 可」は古い（実際は HARDWARE）。
+- 9.2: 段 4（本体とバルーンを DPI の違う画面に分ける）は、バルーンが本体の画面の作業領域へ押し戻され（`balloon-limit`・`BalloonFollow`）、`\![set,balloonoffset]`／`\![set,balloonalign]` も未対応のため作れない。開発者の裁定（2026-11-01・案 A）で「起きない形」として閉じ、離して置ける仕組みができたら確かめ直す件を完了の棚卸で `/kiro-discovery` に起票する。
+- 9.2: `doc/pasta-real-run.md` の DPI の測り方と `tools/mouse-input.ps1` は `SetProcessDpiAwarenessContext` を使うため pwsh の中では効かず（既に意識が決まっている）、DPI は 192 のまま・座標は 1 画素ずれる。`SetThreadDpiAwarenessContext` に替えると正しい。完了の棚卸で起票する（その場で直すかは棚卸で決める）。
