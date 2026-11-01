@@ -29,7 +29,7 @@
   - 負荷の再現と、修正の前後の静かな机の全体テストの記録。
 - **Out of scope**:
   - 本番のコードの振る舞いのうち、件 1・件 3 の原因でないもの（`areka-nar` の `rename_patiently` の試し直しの間隔と上限を含む）。`#[cfg(test)]` の部分は範囲に入る。
-  - 許す赤の線そのものと、その理由の書き換え（要件 4.3 の裁定で範囲を広げる場合を除く）。
+  - 許す赤の線そのものと、その理由の書き換え（要件 4.2 の裁定で範囲を広げる場合を除く）。
   - `tools/test-all.ps1` の並列度の変更。
   - `wintf --test graphics` の一度だけの `STATUS_ACCESS_VIOLATION`（2026-10-04・覚え書きのまま。件 3 は別の実行ファイル＝lib なので範囲に入る）。
   - テストの一時フォルダの置き場（`test-roots-under-target` の持ち物・着地済み）。
@@ -62,7 +62,7 @@
 **Objective:** As a 開発者, I want `wintf` の lib のテストが、MTA を張るテストと ASTA の Compositor を作るテストの組で落ちないこと, so that `wintf` に新しいテストを書くとき、落ちを避けるために部屋の種類を選び替えなくてよい
 
 #### Acceptance Criteria
-1. The 本 spec の作業 shall `cargo test -p wintf --lib` の、MTA を張るテスト（`com::alpha_mask_resource` 系・`com::bitmap_source` 系）と `com::wuc::tests::begin_draw_roundtrip` を同時に走らせる組を、要件 1 と同じ切り分けの手順（落ちたテストを名指す仕掛け・回数を決めた走行）で回し、結果を件 1 の対照と並べて記録する。
+1. The 本 spec の作業 shall `cargo test -p wintf --lib` の、MTA を張るテスト（`ecs::layout::hit_test::tests_ex::alpha_mask_resource` 系・`ecs::widget::bitmap_source::tests` 系）と `com::wuc::tests::begin_draw_roundtrip` を同時に走らせる組を、要件 1 と同じ切り分けの手順（落ちたテストを名指す仕掛け・回数を決めた走行）で回し、結果を件 1 の対照と並べて記録する。
 2. If 件 3 の原因が件 1 と同じだと分かったとき, then the 本 spec の作業 shall 件 1 の修正の後に、2.1 の組を、修正の前に落ちを観測したのと同じ条件と回数で回し、落ちが無いことを示す。
 3. If 件 3 の原因が件 1 と別だと分かったとき, then the 本 spec の作業 shall 要件 1.5〜1.7 と同じ扱い（記録・土台の修正・本番の欠陥ならテストを添えた修正）で直す。
 4. If 2.1 の組を定めた回数回しても落ちが 1 度も再現しなかったとき, then the 本 spec の作業 shall 試した条件と結果を記録して件 3 を閉じる。
@@ -146,7 +146,7 @@
 **Objective:** As a 開発者, I want 直しがテストの本質を外さず、共通の見張りを緑のまま保つこと, so that 赤を消したことが本当に直ったことを意味する
 
 #### Acceptance Criteria
-1. The 修正 shall 一定時間の sleep を足すこと・締切の秒数を延ばすことだけ・1 フレーム遅らせること・無視の印を付けること・テストの本数を減らすことのいずれでも赤や落ちを消さない。
+1. The 修正 shall 一定時間の sleep を足すこと・締切の秒数を延ばすことだけ・1 フレーム遅らせること・無視の印を付けること・テストの本数を減らすことのいずれでも赤や落ちを消さない（要件 1.2 の較正のためにわざと落とすテストを、ふだんの走行で回らない形にすることは、赤を消すことに当たらない）。
 2. The 修正 shall GPU のテストを実のハードウェア GPU のまま回し、WARP などのソフトウェアの描画へ替えない。
 3. The 修正 shall 本番のファイルの振る舞いを、件 1・件 3 で本番の欠陥が見つかった場合と `#[cfg(test)]` の部分を除いて変えない。
 4. The 修正 shall 触ったすべてのファイルを 1,000 行以下に保ち、1 ファイル 1,000 行の番人の例外表に行を足さない。上限に近いファイル（`spine_conformance_support_tests.rs`・`frame_test_support.rs`・`spine_conformance_lap_tests.rs`）は、足す前に分け、`main.rs` には足さない。
