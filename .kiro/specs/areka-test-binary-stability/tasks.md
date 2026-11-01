@@ -172,3 +172,4 @@
 - 2.3: `load-flake.ps1 -Ignored` は `--exact` を足すので、絞り込みはテストの道の全部（例 `emo2_boot::crash_report_test_support::crash_report_names_the_running_test`）で渡す。`-Filter`・`-SetEnv` は `,` でも分ける（値に `,` は入れられない）。負荷なしは `-Burners 0`。
 - 3.1: 許可を返す足場を呼ぶ `rig()` も許可を外へ渡す（組なら先頭・構造体なら最後の欄）。`rig()` の中の `_permit` は `rig()` の終わりで捨てられ、装置を持つ World より先に返ってしまう（査読で見つかった）。
 - 4.1: 負荷 44 本の下で X1（989 本）は 1 回 7.5〜10 分・許可の持ち時間は最長 249 秒。1 回の上限は 20 分を使う。件 1 は X1 20 回＋X1b 10 回で落ち 0（閉じた）。件 3 は Y1 で 4/20 落ちたが `AREKA-CRASH` が出ない（報告の据え付けが wintf の GPU の段では生きていない見込み・4.2 の前に直す）。
+- 2.x やり直し（4.2 の前）: wintf の Y1 の AV は最後の受け手まで届かなかったので、AV は最初の受け手（vectored handler・0xC0000005 だけ）で書く形に改めた（design CrashReport も改めた）。行は 1 行ずつ手元の 1024 バイトに溜めて 1 度で書く。モジュールが空なら `AREKA-CRASH region` の行（VirtualQuery）が付く。

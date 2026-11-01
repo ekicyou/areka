@@ -135,6 +135,21 @@ AREKA-CRASH-STACK   12: wintf::test_crash_report::crash_report_names_the_running
 
 **areka・許可の数 1**（`-SetEnv AREKA_TEST_GPU_SLOTS=1`・`target\load-flake\calib-areka-slots1-20261101-162336`）: `conditions.txt` に `set_env: AREKA_TEST_GPU_SLOTS=1`、持ち手の表は 1 行（`AREKA-CRASH-HOLDER tid=37876 name="...crash_report_names_the_running_test"`）。注意: 較正のテストは許可を 1 つしか取らないので、表が 1 行なのは許可の数 4 の走行と同じ。子に値が届くことの直の証は `conditions.txt` と、子の環境だけに置く `load-flake.ps1` の作り（2.3 の査読）で、値そのものの働きは 4.2 の X2 で見る。
 
+**較正の取り直し**（2026-11-01 20:59〜21:00・最初の受け手（`AddVectoredExceptionHandler`）を足した後・作業ツリーの直し（未コミット）・負荷なし・各 1 回・`-Ignored`）
+
+- 訳: Y1 の落ち 4 回が報告を出さなかったので、AV を最初の受け手で書く形にした（design「CrashReport」）。受け手が替わったので較正し直した。
+- **areka**（`target\load-flake\calib2-areka-20261101-205950`・終了コード `0xC0000005`・1.2 秒・`AREKA-CRASH` の行 51・`code=` の行 1）: 落ちたスレッドは名前なし、持ち手の行は `AREKA-CRASH-HOLDER tid=37944 name="emo2_boot::crash_report_test_support::crash_report_names_the_running_test"`、生きているスレッドは 9 本（`main` と較正のテストの名前のスレッドを含む）。積み上げは `4: ...::write_report`・`5: ...::first_chance`・`9: RaiseException`・`10: ...::crash_report_names_the_running_test::closure$0`。
+- **wintf の lib**（`target\load-flake\calib2-wintf-20261101-210013`・終了コード `0xC0000005`・0.5 秒・`AREKA-CRASH` の行 47・`code=` の行 1）: 生きているスレッドは 6 本（`main` と `test_crash_report::crash_report_names_the_running_test` を含む）。積み上げは `4: wintf::test_crash_report::write_report`・`5: wintf::test_crash_report::first_chance`・`8: RtlRaiseException`・`9: RaiseException`・`10: ...::closure$0`。
+- どちらも報告を書いたのは最初の受け手（`first_chance`）で、最後の受け手は AV を書き直さない（`code=` の行が 1 本）。
+
+**最後の形での較正**（2026-11-01 21:18〜21:19・進行役が排他テストの机を握って回した・伝えた見込み: 約 2 分（21:15 頃・進行役から開発者へ）・コミット `7bfc2b22` の上の作業ツリーの直し（`dirty: yes`・行を 1 度の書き込みで出す形・`AREKA-CRASH region` の行・`MEMORY_BASIC_INFORMATION` の大きさの確かめまで入った形）・負荷なし・各 1 回・`-Ignored`）
+
+- 訳: 上の「較正の取り直し」と Y1 の 2 回目は、行を 1 度の書き込みで出す形と region の行を入れる前のコードで回した（積み上げの `write_report` の行の番号が今のソースと合わない）。要件 1.2 の較正を、4.2 の前に最後の形でやり直した。
+- **areka**（`target\load-flake\calib3-areka-20261101-211855`・終了コード `0xC0000005`・0.8 秒）: `AREKA-CRASH` の行 51・`code=` の行 1・持ち手の行 1（`AREKA-CRASH-HOLDER tid=1908 name="emo2_boot::crash_report_test_support::crash_report_names_the_running_test"`）・生きているスレッドの行 9。積み上げは `4: ...::write_report`（`crash_report_test_support.rs:371`＝`Backtrace::force_capture`）・`5: ...::first_chance`（同 `:269`＝`write_report` の呼び出し）・`8: RtlRaiseException`・`9: RaiseException`・`10: ...::crash_report_names_the_running_test::closure$0`。
+- **wintf の lib**（`target\load-flake\calib3-wintf-20261101-211904`・終了コード `0xC0000005`・0.5 秒）: `AREKA-CRASH` の行 47・`code=` の行 1・生きているスレッドの行 6。積み上げは `4: wintf::test_crash_report::write_report`（`test_crash_report.rs:264`＝`Backtrace::force_capture`）・`5: wintf::test_crash_report::first_chance`（同 `:187`）・`8: RtlRaiseException`・`9: RaiseException`・`10: ...::closure$0`。
+- 2 回とも、行の途中に `AREKA-CRASH` が入った行は 0（`AREKA-CRASH` を含む行はどれも行の頭から始まる）、切りの印 ` <cut>` は 0（見込みどおり・どの行も 1024 バイトに届かない）。`AREKA-CRASH region` の行は 0（見込みどおり・較正の落ちは `RaiseException` の中で、`module=` は `C:\WINDOWS\System32\KERNELBASE.dll+0xC569A` と出るので、region の行の条件（モジュールが空）に当たらない）。region の行が初めて出るのは、モジュールに当たらない番地で落ちる Y2 の見込み。
+- 積み上げの行の番号は今のソースの行と合う（`write_report` の `force_capture` の行と、`first_chance` の `write_report` の呼び出しの行）＝較正したのは最後の形のバイナリ。
+
 ## ⑹ X1〜X3・Y1〜Y2
 
 **X1 の範囲**（2026-11-01・コミット `66f91513`）
@@ -288,10 +303,20 @@ for ($n = 1; $n -le 20; $n++) {
 - 落ちた回に終わっていなかったテストは、4 回とも `com::wuc::tests::begin_draw_roundtrip` を含む。ほかに `ecs::widget::bitmap_source::tests::test_bitmap_source_graphics_new` などの bitmap_source の組と `ecs::widget::bitmap_source::task_pool::tests::with_threads_one_builds_a_single_thread_pool`。終わっていたのは r06 23 本・r07 5 本・r12 35 本・r20 35 本（52 本のうち）。
 - ほかの 16 回は緑（52 passed・1 回 0.1 秒前後）。
 
+**Y1 の 2 回目**（2026-11-01 21:00:26〜21:00:44・`target\load-flake\y1b-20261101-210026`・最初の受け手を足した後・作業ツリーの直し（未コミット）・`wintf` の lib の 52 本・負荷なし・既定スレッド・`-Rounds 20 -RoundTimeoutMin 5`）
+
+- 伝えた見込み: 較正 2 回と合わせて約 5 分（2026-11-01 20:58 頃・進行役から開発者へ）。
+- 20 回のうち 6 回（r01・r06・r07・r11・r13・r14）で `0xC0000005` で落ち、6 回とも報告を出した（報告の無い落ちは 0）。ほかの 14 回は緑（52 passed）。
+- 落ちたスレッドは 6 回とも `com::wuc::tests::begin_draw_roundtrip`（`AREKA-CRASH-THREAD` の一覧の名前で読んだ）。生きているスレッドは 6 本で、名前のあるのは `main` とこのテストだけ。
+- `module=` は 6 回とも空（例: `AREKA-CRASH module=+0x7FFEFE823878`）＝落ちた番地はどの読み込まれたモジュールにも当たらない。番地は `0x7ffefe823878`（r01・r14）・`0x7ffefe863028`（r06）・`0x7ffefe828cc5`（r07・r13）・`0x7ffefe8087f5`（r11）で、`0x7ffefe80xxxx`〜`0x7ffefe86xxxx` の中。
+- 積み上げは `write_report`・`first_chance`・`RtlWow64GetCurrentMachine` 2 つ・`KiUserExceptionDispatcher` で止まり、落ちた番地より先へ辿れない（巻き戻しの表の無い番地）。前の Y1 で最後の受け手まで届かなかった訳と合う見立て（確かめてはいない）。
+- 報告の行が libtest の出力と混ざって切れていた（例: `thread="com::wuc::tests::begin_draw_roundtritest ecs::layout::... p"`）。これを受けて、行を 1 度の書き込みで出す形と、モジュールが空のときの `AREKA-CRASH region` の行を足した（design「CrashReport」・Y2 で読む）。
+
 **件 1 と件 3 の扱い**
 
 - 件 1（`areka` の実行ファイルの落ち）: 再現せずとして閉じる（要件 1.9・2.4）。条件と結果: X1（上の 70 の道・負荷 44 本・既定スレッド）20 回で報告つきの落ち 0 件、X1b（同じ範囲・負荷なし・4 スレッド）10 回で 0 件。前の率（5 回に 1 回）なら、30 回で 1 度も落ちない見込みは約 0.1%（0.8^30）。落ちの報告はそのまま残り、以後に落ちれば持ち手と生きているテストを名指す。
 - 件 3（`wintf` の lib の落ち）: 再現した（20 回で 4 回）。ただし落ちの報告が出なかったので、まだ開いている。次の手は、4.2 の Y2 の前に「この絞りで `wintf` の lib の落ちの報告が出ない訳」を調べること。
+  - 2026-11-01 追記: 最初の受け手を足した Y1 の 2 回目（上）で、20 回のうち 6 回が落ち、6 回とも報告を出した。落ちたスレッドは毎回 `com::wuc::tests::begin_draw_roundtrip`、落ちた番地はモジュールに当たらない。まだ開いている（Y2 で領域の行を読む）。
 
 **X1 のほかの赤**（third scope は ⑽・記録だけ・直しは決めない・後の 6.x・7.2 の材料）
 

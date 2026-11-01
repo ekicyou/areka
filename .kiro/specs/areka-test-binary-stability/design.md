@@ -1,6 +1,8 @@
 # 設計: areka-test-binary-stability
 
 > 2026-11-01 `/kiro-spec-design`（`-y`）。枝 `claude/kiro-start-areka-test-binary-stability-dec94e`（main `0cd4577f` の上・`497d1829`）のコードを読んで書いた。テスト・ビルド・負荷の走行は回していない。行の番号はこのコミットのもの。調べた中身と比べた案は `research.md`（ギャップ分析と、末尾の「設計の段」の節）。
+>
+> 2026-11-01 実装の段で CrashReport を改めた。測った事実: Y1 の落ち 4 回が報告の行を出さず、最後の受け手は差し替えられていなかった（番地が同じ）＝AV が最後の受け手まで届かなかった。届かなかった訳の見立て（確かめていない）: 落ちた番地がどのモジュールにも当たらず枠を巻き戻せない（`load-repro.md` ⑹「Y1 の 2 回目」）。そこで AV は最初の受け手（`AddVectoredExceptionHandler`）で書く形にした。
 
 ## Overview
 
@@ -309,15 +311,15 @@ flowchart TD
 
 **Responsibilities & Constraints**
 - 置き場は `crates/areka/src/emo2_boot/crash_report_test_support.rs` と、同じ中身の写し `crates/wintf/src/test_crash_report.rs`（どちらも `#[cfg(test)]`）。新しいクレートを作らない（依存を足さない）ための写しで、2 つのファイルの頭に「写しの相手」を 1 行書く。
-- 据え付けは `#[used] #[unsafe(link_section = ".CRT$XCU")] static` の初期化子から `SetUnhandledExceptionFilter` を 1 度呼ぶ。テストの実行ファイルの根のクレートの中に置くので、リンクで落ちない（較正で確かめる）。`main.rs` は触らない。
-- 受け手は書いた後に `EXCEPTION_CONTINUE_SEARCH` を返す（前の受け手があればそれを呼ぶ）。プロセスはこれまでどおり `0xc0000005` で終わり、`load-flake.ps1` の終了コードの数えは変わらない。
-- 許可の持ち手の表: `GpuSlots` の `take`／許可の `Drop` で、許可を持つスレッドの番号と名前を固定の配列（上限 4 本・割り当て無し）に載せ降ろしする。落ちたスレッドが名前の無いドライバや COM のスレッドでも、どのテストが GPU の装置を持っていたかを `AREKA-CRASH-HOLDER` の行で名指す（要件 1.1）。`wintf` の lib の写しは並ぶテストが少ないので表を持たず、生きているスレッドの一覧で読む。
+- 据え付けは `#[used] #[unsafe(link_section = ".CRT$XCU")] static` の初期化子から `SetUnhandledExceptionFilter`（最後の受け手 `report`）と `AddVectoredExceptionHandler(0, first_chance)`（最初の受け手）を 1 度ずつ呼ぶ。AV（`0xC0000005`）は最初の受け手が書き（書く途中の AV では書き直さない）、最後の受け手はそれ以外のコードだけ書く。テストの実行ファイルの根のクレートの中に置くので、リンクで落ちない（較正で確かめる）。`main.rs` は触らない。
+- 受け手は書いた後に `EXCEPTION_CONTINUE_SEARCH` を返す（最後の受け手は前の受け手があればそれを呼ぶ）。プロセスはこれまでどおり `0xc0000005` で終わり、`load-flake.ps1` の終了コードの数えは変わらない。
+- 許可の持ち手の表: `GpuSlots` の `take`／許可の `Drop` で、許可を持つスレッドの番号と名前を固定の配列（`HOLDER_ROWS`＝16 行・測りの口で許可の数を変えても入る・割り当て無し）に載せ降ろしする。落ちたスレッドが名前の無いドライバや COM のスレッドでも、どのテストが GPU の装置を持っていたかを `AREKA-CRASH-HOLDER` の行で名指す（要件 1.1）。`wintf` の lib の写しは並ぶテストが少ないので表を持たず、生きているスレッドの一覧で読む。
 - 書く順は、割り当ての無い 1 行目（例外のコード・番地・スレッドの番号）→ 落ちたスレッドの名前とモジュール → 許可の持ち手の表 → 生きているスレッドの一覧 → `std::backtrace::Backtrace::force_capture()`。後ろの段で錠やヒープが壊れて止まっても、前の行は残る（止まったときは回の上限の時間で `load-flake.ps1` が木を止める）。
-- 書き先は標準エラーの OS のハンドルへ直に書く（`io::stderr().as_raw_handle()` を `ManuallyDrop<File>` で包む）。libtest の捕まえ（`print!` の横取り）を通らず、`std` の標準エラーの錠も取らない。
+- 書き先は標準エラーの OS のハンドルへ直に書く（`io::stderr().as_raw_handle()` を `ManuallyDrop<File>` で包む）。libtest の捕まえ（`print!` の横取り）を通らず、`std` の標準エラーの錠も取らない。行はどれも手元の 1024 バイトの配列に溜めて 1 度の書き込みで出す（libtest の出力が行の途中に入らない・Y1 の 2 回目で行が切れていた）。越えた分は字の境目で切り、行の終わりに ` <cut>` を付ける。
 - 測りの間だけの口: 初期化子は `AREKA_TEST_MTA_KEEPER` が `1` なら `CoIncrementMTAUsage` を呼ぶ（X3・Y2）。候補 B が原因と決まれば、口を外して無条件に呼ぶ形が直しになる。B でなければ口ごと外す。
 
 **Dependencies**
-- External: kernel32 の関数。今の `windows` の機能に在るもの（`Win32::System::Threading` の `OpenThread`・`GetThreadDescription`、`Win32::System::LibraryLoader` の `GetModuleHandleExW`・`GetModuleFileNameW` など・各クレートで有効かは実装の段で確かめる）はそのまま使い、無いもの（`SetUnhandledExceptionFilter`・`RaiseException`・`CreateToolhelp32Snapshot`・`Thread32First/Next` と `EXCEPTION_POINTERS`・`THREADENTRY32` の構造体）はファイルの中で `#[link(name = "kernel32")] unsafe extern "system"` と `#[repr(C)]` で直に宣言する（P0・議題 2）
+- External: kernel32 の関数。今の `windows` の機能に在るもの（`Win32::System::Threading` の `OpenThread`・`GetThreadDescription`、`Win32::System::LibraryLoader` の `GetModuleHandleExW`・`GetModuleFileNameW` など・各クレートで有効かは実装の段で確かめる）はそのまま使い、無いもの（`SetUnhandledExceptionFilter`・`AddVectoredExceptionHandler`・`VirtualQuery`・`RaiseException`・`CreateToolhelp32Snapshot`・`Thread32First/Next` と `EXCEPTION_POINTERS`・`THREADENTRY32`・`MEMORY_BASIC_INFORMATION` の構造体）はファイルの中で `#[link(name = "kernel32")] unsafe extern "system"` と `#[repr(C)]` で直に宣言する（P0・議題 2）
 - 写しの扱い: areka と wintf に同じ中身を 1 つずつ置き、それぞれの頭に「写しの相手」を 1 行書く（2026-11-01 設計の議題 1）。
 
 **Contracts**: Service [x] / State [x]
@@ -327,7 +329,10 @@ flowchart TD
 /// プロセスの読み込みの初め（libtest の main より前）に 1 度だけ走る。
 extern "C" fn install();
 
-/// 捕まえられなかった例外の最後の受け手。書き終えたら次の受け手へ回す。
+/// 最初の受け手（AV だけ書く）。いつも EXCEPTION_CONTINUE_SEARCH を返す。
+unsafe extern "system" fn first_chance(info: *const EXCEPTION_POINTERS) -> i32;
+
+/// 捕まえられなかった例外の最後の受け手（AV 以外を書く）。次の受け手へ回す。
 unsafe extern "system" fn report(info: *const EXCEPTION_POINTERS) -> i32; // EXCEPTION_CONTINUE_SEARCH
 
 /// 較正（`#[ignore = "..."]`・`--ignored --exact` でだけ回す）。areka では許可を 1 つ取り `GraphicsCore` を
@@ -341,6 +346,7 @@ fn crash_report_names_the_running_test();
 - 出力の行の形（ASCII の頭・`load-flake.ps1` が拾う）:
   - `AREKA-CRASH code=0xC0000005 addr=0x... tid=1234`
   - `AREKA-CRASH module=<落ちた番地のモジュールのパス>+0x<ずれ> thread="<落ちたスレッドの名前・無ければ空>"`
+  - `AREKA-CRASH region base=0x.. alloc_base=0x.. size=0x.. state=0x.. protect=0x.. type=0x..`（モジュールが空のときだけ・落ちた番地の `VirtualQuery`・問い合わせが失敗すれば `AREKA-CRASH region query-failed`）
   - `AREKA-CRASH-HOLDER tid=<番号> name="<許可を持つテストの名前>"`（許可の持ち手ごとに 1 行・areka だけ）
   - `AREKA-CRASH-THREAD tid=<番号> name="<名前>"`（生きているスレッドごとに 1 行）
   - `AREKA-CRASH-STACK <積み上げの行>`
@@ -350,8 +356,8 @@ fn crash_report_names_the_running_test();
 
 **Implementation Notes**
 - Integration: 較正のテストは `#[ignore]` を理由つきで付け、ふだんの走行では回らない（要件 10.1 の除外に当たる）。`areka` と `wintf` の lib で 1 回ずつ回す。
-- Validation: 較正で報告が出なければ、据え付けを足場の入口の `Once`（`GpuPermit::take`・`SwitchRig::new`・`wintf` の `with_com_initialized` 2 つ）へ替える。
-- Risks: libtest が `--test-threads=1` で主のスレッドで回すときは、落ちたスレッドの名前が `main` になる＝生きているスレッドの一覧と積み上げで読む。`__fastfail`（`0xc0000409`）は受け手を通らない＝出たら記録に書く。
+- Validation: 較正は報告を出したが、Y1 の落ち 4 回は出さなかった。最後の受け手は `Compositor`・`GraphicsCore`・`EndDraw` の後も差し替えられていなかった（番地が同じ）ので、足場の入口の `Once` での据え直しは効かないと測れた＝最初の受け手へ替えた。
+- Risks: libtest が `--test-threads=1` で主のスレッドで回すときは、落ちたスレッドの名前が `main` になる＝生きているスレッドの一覧と積み上げで読む。後で誰かが捕まえて続く AV も最初の受け手は書く（ふだんの緑の走行の AV は 0 件と測った: wintf の lib の 1246 本・areka の 4157 本）。OS が利用者の側へ渡せない AV（積み上げの壊れ）と `__fastfail`（`0xc0000409`）は報告を出さない＝出たら記録に書く。
 
 #### LoadFlake（`tools/load-flake.ps1`）
 
