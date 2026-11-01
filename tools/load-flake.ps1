@@ -122,8 +122,25 @@ function Start-Logged([string]$cargoArgs, [string]$logPath) {
 # 自分で起こしたプロセスの木だけを番号で止める
 function Stop-Tree([System.Diagnostics.Process]$p) {
     if ($null -eq $p -or $p.HasExited) { return }
+    # 止める前に子孫を Process で握る（cmd だけ待つと、ログを握る cargo やテストの実行ファイルが後に残る）
+    $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId)
+    $ids = [System.Collections.Generic.List[int]]::new(); $ids.Add($p.Id)
+    for ($i = 0; $i -lt $ids.Count; $i++) {
+        foreach ($c in $all) { if ($c.ParentProcessId -eq $ids[$i] -and -not $ids.Contains([int]$c.ProcessId)) { $ids.Add([int]$c.ProcessId) } }
+    }
+    $tree = @($ids | ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
     & taskkill.exe /T /F /PID $p.Id *> $null
-    $null = $p.WaitForExit(30000)
+    foreach ($t in $tree) { $null = $t.WaitForExit(30000) }
+}
+
+# 止めた木が書き手の握りを放すまで待つ（ほかに書き手が居ない時に開けたら放された）。放されたら $true
+function Wait-LogReleased([string]$path, [int]$timeoutSec = 60) {
+    if (-not (Test-Path $path)) { return $true }
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
+    while ($true) {
+        try { [IO.File]::Open($path, 'Open', 'Read', 'Read').Dispose(); return $true }
+        catch [IO.IOException] { if ((Get-Date) -ge $deadline) { return $false }; Start-Sleep -Milliseconds 500 }
+    }
 }
 
 function Measure-Cpu {
@@ -151,7 +168,11 @@ function Get-Median([double[]]$xs) {
 
 # round-N.log を UTF-8 で読み、まとめに要るものを取り出す
 function Read-Round([string]$logPath) {
-    $lines = if (Test-Path $logPath) { [IO.File]::ReadAllLines($logPath, $UTF8) } else { @() }
+    # 書き手が残っていても読めるように共有で開く（読めずに回の結果を落とさない）
+    $lines = if (Test-Path $logPath) {
+        $fs = [IO.File]::Open($logPath, 'Open', 'Read', 'ReadWrite, Delete')
+        try { $sr = [IO.StreamReader]::new($fs, $UTF8); @($sr.ReadToEnd() -split "`r?`n") } finally { $fs.Dispose() }
+    } else { @() }
     $r = [ordered]@{ ResultLines = @(); Passed = 0; Failed = 0; FailedNames = @(); WaitLines = @(); CleanupLines = @(); OsError5 = 0; CrashLines = @(); PermitHold = '' }
     $inFailList = $false
     $names = [System.Collections.Generic.List[string]]::new()
@@ -262,8 +283,10 @@ try {
         if ($timedOut) { Stop-Tree $current }
         $current.WaitForExit()
         $sw.Stop()
+        $released = Wait-LogReleased $log
         $r = Read-Round $log
         $r.Round = $n
+        $r.LogReleased = $released
         $r.ExitCode = if ($timedOut) { 'killed' } else { $current.ExitCode }
         $r.WallSec = [math]::Round($sw.Elapsed.TotalSeconds, 1)
         $r.TimedOut = $timedOut
@@ -299,6 +322,7 @@ try {
         $s.Add("exit_code: $($r.ExitCode)")
         $s.Add("wall_sec: $($r.WallSec)")
         $s.Add("timed_out: $(if ($r.TimedOut) { "yes (> $RoundTimeoutMin min)" } else { 'no' })")
+        if (-not $r.LogReleased) { $s.Add('log_released: no (a writer still held round log after 60 s; read with shared access, the tail may be missing)') }
         $s.Add("test_result: $(if ($r.ResultLines.Count) { $r.ResultLines -join ' | ' } else { '(no test result line)' })")
         $s.Add("passed: $($r.Passed)  failed: $($r.Failed)")
         $s.Add("failed_tests: $($r.FailedNames.Count)")
