@@ -134,7 +134,7 @@
   - _Depends: 3.1, 6.2, 7.2_
   - _Requirements: 3.11, 8.5_
 
-- [ ] 9. 確かめ
+- [x] 9. 確かめ
 - [x] 9.1 触ったクレートのテストと整形・静的検査を通す
   - areka-talk・areka-kanade・areka-ghost・areka-emo-compose・areka-emo-present・areka と網羅台帳の検査の ukadoc-survey のテストを回し、赤が出たテストだけに絞って回し直す
   - 整形と静的検査を通し、触ったファイルが 1000 行を超えていないことを確かめる
