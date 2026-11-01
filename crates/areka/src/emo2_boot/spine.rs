@@ -9,11 +9,11 @@
 //! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計
 //! [`SPIN_WAIT`] で有界化してある。待機の形は**3 種**（いずれも期限は [`SPIN_WAIT`]）:
 //!
-//! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`spin_wait_until`]。
+//! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`wait_until`]。
 //!   密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
 //!   [`BACKOFF_SLEEP`] へ落としてコア占有をやめる（PR #96 で導入）。
 //! - **ハイブリッド**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→ 各呼出点の
-//!   自前ループ＋`sleep(200µs)` の poll-backoff。[`spin_wait_until`] は純粋ポーリング専用ゆえ
+//!   自前ループ＋`sleep(200µs)` の poll-backoff。[`wait_until`] は純粋ポーリング専用ゆえ
 //!   流用しない。送出ごとに `yield_now` で回すと unbounded channel を洪水させつつ worker を
 //!   CPU 飢餓させる二重の害があり、短い sleep でペーシングするのが根治（areka-kanade 先例）。
 //!   加えて注入時刻が観測を追い越さないこと（R7.8 の頭打ち）が別途必要。
@@ -367,7 +367,7 @@ mod wait;
 use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
 pub(crate) use self::wait::{
     GpuPermit, Progress, WaitFailure, join_thread_bounded, run_bounded, run_bounded_watching,
-    spin_wait_until, wait_recv, wait_until, wait_until_with,
+    wait_recv, wait_until, wait_until_with,
 };
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。

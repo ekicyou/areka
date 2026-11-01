@@ -3,8 +3,8 @@ use std::sync::mpsc;
 
 use super::wait::{
     DENSE_SPIN, GPU_PERMIT_IDLE, GpuSlots, PermitVerdict, WAIT_CAP, join_bounded,
-    join_thread_bounded, judge_permit_wait, parse_gpu_slots, run_bounded_watching, wait_recv,
-    wait_thread_end_with, wait_until_idle_with,
+    join_thread_bounded, judge_permit_wait, run_bounded_watching, wait_recv, wait_thread_end_with,
+    wait_until_idle_with,
 };
 use super::{
     BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
@@ -444,20 +444,6 @@ fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
         SLOTS.try_take().is_none(),
         "返した分だけ空く（2 つ持っている）"
     );
-}
-
-/// 測りの間だけの許可の数の口（`AREKA_TEST_GPU_SLOTS`・areka-test-binary-stability タスク 2.1・要件 6.7）。
-/// 数ならその数、無い・壊れた値（数でない・0・持ち手の表に入らない数）なら今と同じ 4。
-#[test]
-fn gpu_slots_knob_reads_a_count_and_falls_back_to_four() {
-    assert_eq!(parse_gpu_slots(Some("1")), 1);
-    assert_eq!(parse_gpu_slots(Some(" 2 ")), 2);
-    assert_eq!(parse_gpu_slots(None), 4, "無ければ 4");
-    assert_eq!(parse_gpu_slots(Some("")), 4, "空は壊れた値");
-    assert_eq!(parse_gpu_slots(Some("two")), 4, "数でない");
-    assert_eq!(parse_gpu_slots(Some("0")), 4, "0 では誰も取れない");
-    assert_eq!(parse_gpu_slots(Some("-1")), 4);
-    assert_eq!(parse_gpu_slots(Some("1000")), 4, "持ち手の表に入らない数");
 }
 
 // ===========================================================================

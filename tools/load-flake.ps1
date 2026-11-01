@@ -44,7 +44,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   pwsh -NoProfile -File tools/load-flake.ps1 -Label before -NoCapture
   pwsh -NoProfile -File tools/load-flake.ps1 -Label smoke -Rounds 1 -Burners 2 -Filter some::test
   pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet -Burners 0 -Rounds 3
-  pwsh -NoProfile -File tools/load-flake.ps1 -Label case1 -Filter emo2_boot::frame -SetEnv AREKA_TEST_GPU_SLOTS=1,AREKA_TEST_PERMIT_HOLD=1
+  pwsh -NoProfile -File tools/load-flake.ps1 -Label case1 -Filter emo2_boot::frame -SetEnv RUST_LOG=trace
   pwsh -NoProfile -File tools/load-flake.ps1 -Label case3 -Binary wintf-lib -Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source -Burners 0
 
 spec areka-test-binary-stability（design「LoadFlake」）で足した口:
@@ -52,8 +52,7 @@ spec areka-test-binary-stability（design「LoadFlake」）で足した口:
   -Binary areka-bin（既定・-p areka --bin areka）／wintf-lib（-p wintf --lib）。
   -SetEnv NAME=VALUE の並びは子の cargo の環境にだけ置く（このプロセスの環境は変えない）。conditions.txt に書く。
   -Ignored は libtest に --ignored --exact を渡す（較正のため）。
-  summary.txt の回ごとの欄に AREKA-CRASH を含む行を全部写し（行の途中も探す）、
-  AREKA-PERMIT-HOLD の最後の 1 行（＝最長）も写す。全回のまとめに落ちの報告のあった回の数を足す。
+  summary.txt の回ごとの欄に AREKA-CRASH を含む行を全部写す（行の途中も探す）。全回のまとめに落ちの報告のあった回の数を足す。
 ================================================================================
 #>
 
@@ -173,7 +172,7 @@ function Read-Round([string]$logPath) {
         $fs = [IO.File]::Open($logPath, 'Open', 'Read', 'ReadWrite, Delete')
         try { $sr = [IO.StreamReader]::new($fs, $UTF8); @($sr.ReadToEnd() -split "`r?`n") } finally { $fs.Dispose() }
     } else { @() }
-    $r = [ordered]@{ ResultLines = @(); Passed = 0; Failed = 0; FailedNames = @(); WaitLines = @(); CleanupLines = @(); OsError5 = 0; CrashLines = @(); PermitHold = '' }
+    $r = [ordered]@{ ResultLines = @(); Passed = 0; Failed = 0; FailedNames = @(); WaitLines = @(); CleanupLines = @(); OsError5 = 0; CrashLines = @() }
     $inFailList = $false
     $names = [System.Collections.Generic.List[string]]::new()
     foreach ($l in $lines) {
@@ -188,9 +187,8 @@ function Read-Round([string]$logPath) {
             elseif ($l -ne '') { $inFailList = $false }
         }
         if ($l.Contains($WaitCutPrefix)) { $r.WaitLines += $l }
-        # 落ちの報告（行の途中も探す）と、許可の持ち時間の最長（最後の行が最長）
+        # 落ちの報告（行の途中も探す）
         if ($l.Contains('AREKA-CRASH')) { $r.CrashLines += $l }
-        if ($l.Contains('AREKA-PERMIT-HOLD')) { $r.PermitHold = $l }
         # 行の途中も探す（--nocapture では他のテストの出力が行の頭に割り込む）
         if ($l.Contains('sample-ghost-kit:')) {
             $r.CleanupLines += $l
@@ -333,7 +331,6 @@ try {
         $r.CleanupLines | ForEach-Object { $s.Add("  $_") }
         $s.Add("crash_lines (AREKA-CRASH): $($r.CrashLines.Count)")
         $r.CrashLines | ForEach-Object { $s.Add("  $_") }
-        $s.Add("permit_hold_max: $(if ($r.PermitHold) { $r.PermitHold } else { '(none)' })")
     }
     $walls = @($roundResults | ForEach-Object { [double]$_.WallSec })
     $redRounds = @($roundResults | Where-Object { $_.TimedOut -or $_.ExitCode -ne 0 }).Count

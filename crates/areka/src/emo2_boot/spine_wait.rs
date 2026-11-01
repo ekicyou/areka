@@ -1,8 +1,8 @@
-//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`spin_wait_until`・`run_bounded`・スレッドの終わりの待ち）。
+//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち）。
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
-//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名（`spin_wait_until`・
-//! `run_bounded`）は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。スレッドの終わりの
+//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名
+//! `run_bounded` は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。スレッドの終わりの
 //! 待ちは見張りのスレッドをやめ、芯 [`wait_thread_end`] 1 本で std 版とアクター版を待つ（総時間の引数は無い）。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
@@ -10,7 +10,7 @@
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Condvar, LazyLock, Mutex, PoisonError, mpsc};
+use std::sync::{Condvar, Mutex, PoisonError, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -21,7 +21,7 @@ use crate::emo2_boot::crash_report_test_support as crash_report;
 /// **別スレッドの進行を待つ**有界待ちの基準の時間（30 秒）。
 ///
 /// 進みの目印がある待ち（[`Progress::Count`]）では「相手が状態を進めなかった時間」の上限、目印の
-/// 無い待ち（[`Progress::Unknown`]・[`spin_wait_until`]）では待ち始めからの総時間の上限として使う。
+/// 無い待ち（[`Progress::Unknown`]）では待ち始めからの総時間の上限として使う。
 /// 目印がある待ちの総時間の上限は別に [`WAIT_CAP`] で置く。
 ///
 /// # 反復回数で打ち切ってはならない
@@ -36,11 +36,11 @@ use crate::emo2_boot::crash_report_test_support as crash_report;
 ///
 /// 分類の軸は「Tick を注入するか」ではなく **「別スレッドの進行を待っているか」** である。
 ///
-/// - **対象（[`spin_wait_until`] を使う）**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**
+/// - **対象（[`wait_until`] を使う）**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**
 ///   純粋なポーリング（`non_status_calls()` / `drain_received()` を読むだけのループ）。
 /// - **対象（本猶予の期限だけを借りる。ただし期限は十分条件ではない）**: 各反復で
 ///   `inject_dispatcher_tick` により**系を進めつつ**、同じ反復で `drain_received()` 等により
-///   **別スレッドの結果も待つ**ハイブリッドのループ（[`spin_wait_until`] は純粋ポーリング専用ゆえ
+///   **別スレッドの結果も待つ**ハイブリッドのループ（[`wait_until`] は純粋ポーリング専用ゆえ
 ///   流用しない）。ここでは打ち切りを時刻期限にするだけでは足りず、**注入する simulated time が
 ///   待っている観測を追い越さない**ことを構造で保証しなければならない。追い越しうる時刻には必ず
 ///   上限（頭打ち）を置くこと。実測: S2 Phase 1 は毎反復 `now += 5` が 210 反復（実時間 ~0.6 秒）で
@@ -195,7 +195,7 @@ impl fmt::Display for WaitFailure {
 ///   最初の確かめで真なら時計を読まずに返る。
 /// - 目印は条件の確かめの直後に読む。前回より増えていれば進みの無い時間を 0 に戻す。
 ///   増えないまま [`SPIN_WAIT`] に届けば `Stalled`、待ち始めから [`WAIT_CAP`] に届けば `CapReached`。
-/// - 目印なしは待ち始めから [`SPIN_WAIT`] に届けば `TimedOut`（旧 `spin_wait_until` と同じ総時間）。
+/// - 目印なしは待ち始めから [`SPIN_WAIT`] に届けば `TimedOut`。
 /// - 反復の間は、待ち始めから [`DENSE_SPIN`] までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
 ///   で CPU を返す（要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
 pub(crate) fn wait_until_with(
@@ -343,28 +343,6 @@ pub(crate) fn run_bounded_watching<F: FnOnce() + Send + 'static>(
     }
 }
 
-/// `cond` が真になるまで待つ古い呼び名。目印なしで芯 [`wait_until`] を呼ぶ（総時間 [`SPIN_WAIT`]）。
-///
-/// 真になったら `true`。打ち切ったら、呼び出しの場所（ファイルと行）を「何を」にした文言を
-/// 標準エラーへ 1 行出して `false`（黙って `false` にしない・要件 3.1）。
-/// 本ファイルの「sleep 不使用」規律は *系を進める* Tick 注入ループの決定論を守るためのものであり、
-/// 別スレッドの進行を待つだけの本ヘルパには当たらない（待機は観測内容を変えない）。
-#[track_caller]
-pub(crate) fn spin_wait_until(cond: impl FnMut() -> bool) -> bool {
-    let at = std::panic::Location::caller();
-    match wait_until(
-        &format!("{}:{}", at.file(), at.line()),
-        Progress::Unknown,
-        cond,
-    ) {
-        Ok(()) => true,
-        Err(failure) => {
-            eprintln!("{failure}");
-            false
-        }
-    }
-}
-
 /// 渡された総時間 `timeout` の待ちが届かなかった理由（古い呼び名の panic の文の後ろに足す）。
 fn bounded_failure(what: &str, started: Instant, e: mpsc::RecvTimeoutError) -> WaitFailure {
     let (what, waited) = (what.to_owned(), started.elapsed());
@@ -504,24 +482,9 @@ impl fmt::Display for PermitWaitFailure {
 
 /// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
 /// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
-/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。
-///
-/// 測りの間だけ（areka-test-binary-stability タスク 2.1・X2）: `AREKA_TEST_GPU_SLOTS` があればその数、無い・壊れた
-/// 値なら 4（要件 6.7）。5.1 の直しか 7.1 で口を外し、4 の const に戻す。
-static GPU_SLOTS: LazyLock<GpuSlots> = LazyLock::new(|| {
-    GpuSlots::new(parse_gpu_slots(
-        std::env::var("AREKA_TEST_GPU_SLOTS").ok().as_deref(),
-    ))
-});
-
-/// 測りの間だけの許可の数の口の読み取り（純粋な関数）。1 から持ち手の表の行の数までの数ならその数、
-/// それ以外（無い・数でない・0・大きすぎる）は 4。
-pub(super) fn parse_gpu_slots(value: Option<&str>) -> usize {
-    value
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .filter(|n| (1..=crash_report::HOLDER_ROWS).contains(n))
-        .unwrap_or(4)
-}
+/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。areka-test-binary-stability の
+/// 件 1 の直しの後も 4 のまま（5.1）。
+static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 
 impl GpuSlots {
     pub(super) const fn new(cap: usize) -> Self {
@@ -635,7 +598,6 @@ pub(crate) struct GpuPermit {
     slots: &'static GpuSlots,
     /// 落ちの報告の許可の持ち手の表の行（`crash_report_test_support::hold`）。
     row: usize,
-    taken: Instant,
 }
 
 impl GpuPermit {
@@ -644,7 +606,6 @@ impl GpuPermit {
         Self {
             slots,
             row: crash_report::hold(),
-            taken: Instant::now(),
         }
     }
 
@@ -656,7 +617,7 @@ impl GpuPermit {
 
 impl Drop for GpuPermit {
     fn drop(&mut self) {
-        crash_report::release(self.row, self.taken.elapsed());
+        crash_report::release(self.row);
         let mut held = self
             .slots
             .held

@@ -206,7 +206,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     // 形は S3 に当てた直し（task 4.1・`3e7414fc`）と同一である——手本は
     // `crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs:189-203`
     // の有界待ちで、そのさらに手本は「条件が満たされるまで待つ」形で同じ 5 呼出を確認する
-    // `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`（`spin_wait_until`）。
+    // `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`（`wait_until`）。
     // 判定そのもの（Status を除いた列が `expected_boot_prefix` と**等値**）は 1 文字も変えず、
     // 数える前に待ちを置くだけなので被覆を 1 つも失わない——待ちの脱出条件は「5 件以上」だが
     // 直後の等値照合が上限も保つため、6 件来れば依然として赤になる。上限は本ファイルの他の

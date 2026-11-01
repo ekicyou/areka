@@ -586,7 +586,7 @@ impl SwitchRig {
         }))
     }
 
-    /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち・`spin_wait_until` を直に呼んで
+    /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち・目印の無い古い待ちを直に呼んで
     /// いた所の移し先）。打ち切りは進みの目印で決め、届かなければ文言を標準エラーへ 1 行出して `false`。
     #[track_caller]
     pub(crate) fn wait_for(&self, cond: impl FnMut() -> bool) -> bool {

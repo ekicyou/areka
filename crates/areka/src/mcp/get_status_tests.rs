@@ -266,7 +266,7 @@ fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
         let Some(answer) = pending.try_answer().ok().flatten() else {
             return false;
         };
-        // 上限は答えの回数でなく土台の時刻の期限（`spin_wait_until`）で取る。回数で数えると、
+        // 上限は答えの回数でなく土台の時刻の期限（`wait_until`）で取る。回数で数えると、
         // 並べて回すテストの負荷で台詞の時計の進みより答えが速く届き、終わる前に使い切る。
         let done = !body(&answer.outcome).contains("talking");
         seen.push(answer.outcome);

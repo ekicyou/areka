@@ -21,9 +21,8 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::mem::ManuallyDrop;
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{LazyLock, Mutex, OnceLock, TryLockError};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock, TryLockError};
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE};
 use windows::Win32::System::Com::CoIncrementMTAUsage;
@@ -164,8 +163,7 @@ fn raw_stderr() -> ManuallyDrop<File> {
 // GPU の装置の許可の持ち手の表（`GpuPermit` の取る・返す所から載せ降ろしする・割り当て無し）
 // ---------------------------------------------------------------------------
 
-/// 表の行の数。許可の数は測りの口（`AREKA_TEST_GPU_SLOTS`）で変えられるので、その上限もこれで縛る
-/// （プロセスの数えの他に、檻が別の数えで 2 つまで取る）。
+/// 表の行の数。プロセスの数えの許可 4 つの他に、檻が別の数えで 2 つまで取るので、余らせて置く。
 pub(crate) const HOLDER_ROWS: usize = 16;
 const NAME_BYTES: usize = 160;
 
@@ -212,10 +210,8 @@ pub(crate) fn hold() -> usize {
     row
 }
 
-/// 許可を返す所: 表から降ろす。測りの間だけ（`AREKA_TEST_PERMIT_HOLD=1`・5.1 の直しか 7.1 で外す）は、
-/// 許可の持ち時間の最長が延びるたびに `AREKA-PERMIT-HOLD max_ms=<ミリ秒> name="<テストの名前>"` を 1 行書く
-/// （4.1 で round-N.log の最後のその行を読む）。
-pub(crate) fn release(row: usize, held_for: Duration) {
+/// 許可を返す所: 表から降ろす。
+pub(crate) fn release(row: usize) {
     if let Some(slot) = HOLDERS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -223,23 +219,7 @@ pub(crate) fn release(row: usize, held_for: Duration) {
     {
         *slot = Holder::EMPTY;
     }
-    if *PERMIT_HOLD_PROBE {
-        let ms = u64::try_from(held_for.as_millis()).unwrap_or(u64::MAX);
-        if PERMIT_HOLD_MAX_MS.fetch_max(ms, Ordering::Relaxed) < ms {
-            let thread = std::thread::current();
-            let _ = writeln!(
-                raw_stderr(),
-                "AREKA-PERMIT-HOLD max_ms={ms} name=\"{}\"",
-                thread.name().unwrap_or("")
-            );
-        }
-    }
 }
-
-/// 測りの間だけ: 許可の持ち時間の最長を出す口（5.1 の直しか 7.1 で外す）。
-static PERMIT_HOLD_PROBE: LazyLock<bool> =
-    LazyLock::new(|| std::env::var_os("AREKA_TEST_PERMIT_HOLD").is_some_and(|v| v == "1"));
-static PERMIT_HOLD_MAX_MS: AtomicU64 = AtomicU64::new(0);
 
 // ---------------------------------------------------------------------------
 // 受け手

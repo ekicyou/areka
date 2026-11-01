@@ -194,7 +194,7 @@ flowchart TD
 | Y2 | Y1 と同じ | なし | 既定 | 落ちたら止める・落ちなければ 20 | 5 分 |
 | 件 5 | `session_mark`（`areka`） | なし | 既定 | 10 | 10 分 |
 
-- X2 は許可の数を 1 にする（`AREKA_TEST_GPU_SLOTS=1`）。X3・Y2 はテストのプロセスの初めに `CoIncrementMTAUsage` を呼ぶ（`AREKA_TEST_MTA_KEEPER=1`・件 3 が候補 B と決まったのでタスク 5.1 で無条件の呼び出しに替えた）。どちらも測りの間だけの口で、ふだんの走行では読まれない値が無ければ今と同じ（下の GpuSlots・CrashReport の節）。
+- X2 は許可の数を 1 にする（`AREKA_TEST_GPU_SLOTS=1`）。X3・Y2 はテストのプロセスの初めに `CoIncrementMTAUsage` を呼ぶ（`AREKA_TEST_MTA_KEEPER=1`・件 3 が候補 B と決まったのでタスク 5.1 で無条件の呼び出しに替えた）。環境変数の口は測りの間だけのもので、タスク 7.1 で外した（許可の数は 4 の const・MTA を立てる処理は無条件のまま残す・下の GpuSlots・CrashReport の節）。
 - 回数の訳: 前の記録（`load-repro.md` の 4.7〜4.9）では負荷の下でおおむね 5 回に 1 回落ちた。その率なら 20 回で 1 度も落ちない見込みは約 1%、件 3 の 8 回で 2 回の率なら 20 回で 0 件の見込みは 1% 未満。
 - 止め方は左右で分ける（要件 9.3・開発者の決まり「2 回目からは赤のテストに絞って短く」）: 落ちを採る走行（X1・X1b・Y1）と「落ちが残る」側の対照は、報告つきの落ちが 1 回出た時点で決まるので止める。「落ちが消える」側は見逃しの見込みが約 1% になる 20 回を回す。X2・X3 は X1 の報告が名指したテストへ絞る。
 - 所要時間の見込みは、系列ごとに「最大の回数 × 1 回の見込み」を始める前に `load-repro.md` へ書いて開発者へ伝え、X1 の 1 回目を回し終えた所で言い直す（要件 9.2）。全体の負荷 5 回は約 50 分（前の記録）。
@@ -219,7 +219,7 @@ flowchart TD
 | 1.1 | 落ちたスレッドの名前と積み上げを残す | CrashReport | `report`・出力の行の形 | 測りと直しの流れ |
 | 1.2 | 仕掛けを測りの前に較正 | CrashReport（較正のテスト） | `--ignored --exact` | 較正 |
 | 1.3 | 条件を先に書き frame の族に絞る | LoadFlake・MeasureRecord | `-Filter` の複数 | 測りの条件 |
-| 1.4 | 許可 1 つの対照 | GpuSlots・LoadFlake | `AREKA_TEST_GPU_SLOTS`・`-SetEnv` | X2 |
+| 1.4 | 許可 1 つの対照 | GpuSlots・LoadFlake | `AREKA_TEST_GPU_SLOTS`・`-SetEnv`（測りの間だけの口・7.1 で外した） | X2 |
 | 1.5 | 落ちる組・場所・経路を記録 | MeasureRecord | — | Decide |
 | 1.6 | 土台の直し | CauseFix | 原因ごとの直しの表 | Fix |
 | 1.7 | 本番の欠陥はテストを添えて直す | CauseFix | 同上（候補 D） | Fix |
@@ -421,8 +421,8 @@ pub(super) fn wait_until_idle_with(
 /// 許可の待ちの［止まった］は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
 pub(super) const GPU_PERMIT_IDLE: Duration;
 
-/// 測りの間だけ: AREKA_TEST_GPU_SLOTS があればその数、無ければ 4（要件 6.7）。測りが終われば口を外し、4 の const に戻す。
-static GPU_SLOTS: LazyLock<GpuSlots>;
+/// 同時に 4 つ（要件 6.7）。測りの間だけの口 AREKA_TEST_GPU_SLOTS は 7.1 で外した。
+static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 
 pub(super) struct GpuSlots { held: Mutex<usize>, freed: Condvar, cap: usize, returned: AtomicU64 }
 
