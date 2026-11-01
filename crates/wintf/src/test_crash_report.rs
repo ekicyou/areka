@@ -9,6 +9,10 @@
 //! スレッドの一覧（wintf の lib は並ぶテストが少ないので許可の持ち手の表は持たず、一覧で読む）・積み上げを、
 //! 決めた行の形で標準エラーの OS のハンドルへ直に書き（libtest の捕まえも `std` の標準エラーの錠も通らない）、次の受け手へ回す。ふだんの緑の走行では何も書かない。
 //!
+//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`・件 3 の直し）。テストのスレッドが
+//! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ（2026-11-01 の対照の
+//! 走行で候補 B と決めた）。そのため、COM を初期化していないテストのスレッドも暗黙の MTA に居る。
+//!
 //! 書く順は割り当ての無い行から先に。後ろの段（スレッドの名前の取り出し・積み上げ）で錠やヒープが壊れて
 //! 止まっても、前の行は残る。
 
@@ -135,13 +139,11 @@ static WRITING: AtomicBool = AtomicBool::new(false);
 
 /// プロセスの読み込みの初め（libtest の main より前）に 1 度だけ走る。
 extern "C" fn install() {
-    // 測りの間だけ（X3・Y2）: プロセスの寿命の MTA を立てる口。5.1 の直しか 7.1 で外す（候補 B が原因なら
-    // 口を外して無条件に呼ぶ形が直し）。クッキーは返さない（プロセスの終わりまで持つ）。
-    if std::env::var_os("AREKA_TEST_MTA_KEEPER").is_some_and(|v| v == "1") {
-        // SAFETY: 引数の無い COM の呼び出し。
-        if let Err(e) = unsafe { CoIncrementMTAUsage() } {
-            let _ = writeln!(raw_stderr(), "AREKA-MTA-KEEPER failed hr={:?}", e.code());
-        }
+    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ち（件 3）を防ぐ: プロセスの寿命の MTA を立てる
+    // （クッキーは返さない・プロセスの終わりまで持つ）。
+    // SAFETY: 引数の無い COM の呼び出し。
+    if let Err(e) = unsafe { CoIncrementMTAUsage() } {
+        let _ = writeln!(raw_stderr(), "AREKA-MTA-KEEPER failed hr={:?}", e.code());
     }
     // SAFETY: 受け手は `report` と `first_chance` だけで、プロセスの寿命のあいだ生きている。
     let previous = unsafe { SetUnhandledExceptionFilter(Some(report)) };
@@ -425,6 +427,29 @@ fn crash_filter_is_installed_before_the_tests_start() {
     assert!(
         INSTALLED.load(Ordering::Acquire),
         "`.CRT$XCU` の初期化子が走っていない（受け手が据わらない）"
+    );
+}
+
+/// 初期化子はプロセスの寿命の MTA を立てている（件 3 の直し）: COM を初期化していない新しいスレッドも、
+/// 暗黙の MTA に居る。
+#[test]
+fn initializer_keeps_a_process_lifetime_mta() {
+    use windows::Win32::System::Com::{
+        APTTYPE, APTTYPE_MTA, APTTYPEQUALIFIER, APTTYPEQUALIFIER_IMPLICIT_MTA, CoGetApartmentType,
+    };
+    let got = std::thread::spawn(|| {
+        let mut kind = APTTYPE::default();
+        let mut qualifier = APTTYPEQUALIFIER::default();
+        // SAFETY: 出力先は生きている局所変数。
+        let r = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) };
+        (r.map_err(|e| e.code()), kind, qualifier)
+    })
+    .join()
+    .expect("スレッドが落ちた");
+    assert_eq!(
+        got,
+        (Ok(()), APTTYPE_MTA, APTTYPEQUALIFIER_IMPLICIT_MTA),
+        "プロセスの寿命の MTA が立っていない"
     );
 }
 

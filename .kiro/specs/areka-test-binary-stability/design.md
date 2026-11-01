@@ -192,7 +192,7 @@ flowchart TD
 | Y2 | Y1 と同じ | なし | 既定 | 落ちたら止める・落ちなければ 20 | 5 分 |
 | 件 5 | `session_mark`（`areka`） | なし | 既定 | 10 | 10 分 |
 
-- X2 は許可の数を 1 にする（`AREKA_TEST_GPU_SLOTS=1`）。X3・Y2 はテストのプロセスの初めに `CoIncrementMTAUsage` を呼ぶ（`AREKA_TEST_MTA_KEEPER=1`）。どちらも測りの間だけの口で、ふだんの走行では読まれない値が無ければ今と同じ（下の GpuSlots・CrashReport の節）。
+- X2 は許可の数を 1 にする（`AREKA_TEST_GPU_SLOTS=1`）。X3・Y2 はテストのプロセスの初めに `CoIncrementMTAUsage` を呼ぶ（`AREKA_TEST_MTA_KEEPER=1`・件 3 が候補 B と決まったのでタスク 5.1 で無条件の呼び出しに替えた）。どちらも測りの間だけの口で、ふだんの走行では読まれない値が無ければ今と同じ（下の GpuSlots・CrashReport の節）。
 - 回数の訳: 前の記録（`load-repro.md` の 4.7〜4.9）では負荷の下でおおむね 5 回に 1 回落ちた。その率なら 20 回で 1 度も落ちない見込みは約 1%、件 3 の 8 回で 2 回の率なら 20 回で 0 件の見込みは 1% 未満。
 - 止め方は左右で分ける（要件 9.3・開発者の決まり「2 回目からは赤のテストに絞って短く」）: 落ちを採る走行（X1・X1b・Y1）と「落ちが残る」側の対照は、報告つきの落ちが 1 回出た時点で決まるので止める。「落ちが消える」側は見逃しの見込みが約 1% になる 20 回を回す。X2・X3 は X1 の報告が名指したテストへ絞る。
 - 所要時間の見込みは、系列ごとに「最大の回数 × 1 回の見込み」を始める前に `load-repro.md` へ書いて開発者へ伝え、X1 の 1 回目を回し終えた所で言い直す（要件 9.2）。全体の負荷 5 回は約 50 分（前の記録）。
@@ -316,7 +316,7 @@ flowchart TD
 - 許可の持ち手の表: `GpuSlots` の `take`／許可の `Drop` で、許可を持つスレッドの番号と名前を固定の配列（`HOLDER_ROWS`＝16 行・測りの口で許可の数を変えても入る・割り当て無し）に載せ降ろしする。落ちたスレッドが名前の無いドライバや COM のスレッドでも、どのテストが GPU の装置を持っていたかを `AREKA-CRASH-HOLDER` の行で名指す（要件 1.1）。`wintf` の lib の写しは並ぶテストが少ないので表を持たず、生きているスレッドの一覧で読む。
 - 書く順は、割り当ての無い 1 行目（例外のコード・番地・スレッドの番号）→ 落ちたスレッドの名前とモジュール → 許可の持ち手の表 → 生きているスレッドの一覧 → `std::backtrace::Backtrace::force_capture()`。後ろの段で錠やヒープが壊れて止まっても、前の行は残る（止まったときは回の上限の時間で `load-flake.ps1` が木を止める）。
 - 書き先は標準エラーの OS のハンドルへ直に書く（`io::stderr().as_raw_handle()` を `ManuallyDrop<File>` で包む）。libtest の捕まえ（`print!` の横取り）を通らず、`std` の標準エラーの錠も取らない。行はどれも手元の 1024 バイトの配列に溜めて 1 度の書き込みで出す（libtest の出力が行の途中に入らない・Y1 の 2 回目で行が切れていた）。越えた分は字の境目で切り、行の終わりに ` <cut>` を付ける。
-- 測りの間だけの口: 初期化子は `AREKA_TEST_MTA_KEEPER` が `1` なら `CoIncrementMTAUsage` を呼ぶ（X3・Y2）。候補 B が原因と決まれば、口を外して無条件に呼ぶ形が直しになる。B でなければ口ごと外す。
+- プロセスの寿命の MTA: 初期化子は無条件に `CoIncrementMTAUsage` を呼ぶ（件 3 が候補 B と決まったので、測りの間だけの口 `AREKA_TEST_MTA_KEEPER` を外して無条件にした・タスク 5.1）。失敗した時だけ `AREKA-MTA-KEEPER failed hr=...` を 1 行書く。COM を初期化していないテストのスレッドも暗黙の MTA に居る（檻 `initializer_keeps_a_process_lifetime_mta` が確かめる）。
 
 **Dependencies**
 - External: kernel32 の関数。今の `windows` の機能に在るもの（`Win32::System::Threading` の `OpenThread`・`GetThreadDescription`、`Win32::System::LibraryLoader` の `GetModuleHandleExW`・`GetModuleFileNameW` など・各クレートで有効かは実装の段で確かめる）はそのまま使い、無いもの（`SetUnhandledExceptionFilter`・`AddVectoredExceptionHandler`・`VirtualQuery`・`RaiseException`・`CreateToolhelp32Snapshot`・`Thread32First/Next` と `EXCEPTION_POINTERS`・`THREADENTRY32`・`MEMORY_BASIC_INFORMATION` の構造体）はファイルの中で `#[link(name = "kernel32")] unsafe extern "system"` と `#[repr(C)]` で直に宣言する（P0・議題 2）

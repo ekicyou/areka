@@ -393,11 +393,15 @@ for ($n = 1; $n -le 20; $n++) {
   - 経路の 3 の、どの呼び出しで放されたコードに入るか（積み上げが落ちた番地より先へ辿れない）。
   - `DQTAT_COM_ASTA` の ASTA が MTA の解体に巻き込まれる仕組みの細部。
   - MTA を立てない側を、Y2 と同じコミット `0b4200ce` では回し直していない。y1b は `7bfc2b22` の作業ツリー（未コミットの直しあり）、Y1 は `c432692b`・`bfa0b364`。間の違いは落ちの報告の側（最初の受け手・1 度の書き込み・region の行）だけ。最初の受け手が無かった Y1 でも 4/20 落ちたので、結論は変わらない。
-- 直し（5.1）: 候補 B の直しとして、テストのプロセスの初めに無条件でプロセスの寿命の MTA を立てる。`wintf` の `test_crash_report.rs` の `install` の口（`AREKA_TEST_MTA_KEEPER`）を外し、無条件に `CoIncrementMTAUsage` を呼ぶ。design のとおり、写しの相手の `areka` の `emo2_boot/crash_report_test_support.rs` にも同じ形を当てる。
+- 直し（5.1・当てた）: 候補 B の直しとして、テストのプロセスの初めに無条件でプロセスの寿命の MTA を立てる。`wintf` の `test_crash_report.rs` の `install`（`.CRT$XCU` の初期化子）から測りの間だけの口（`AREKA_TEST_MTA_KEEPER`）を外し、無条件に `CoIncrementMTAUsage` を呼ぶ（クッキーは返さない・失敗した時だけ `AREKA-MTA-KEEPER failed hr=...` を 1 行書く）。design のとおり、写しの相手の `areka` の `emo2_boot/crash_report_test_support.rs` の `install` にも同じ直しを当てた。
+  - 檻: 2 つのファイルの `initializer_keeps_a_process_lifetime_mta`（COM を初期化していない新しいスレッドで `CoGetApartmentType` が `APTTYPE_MTA`・`APTTYPEQUALIFIER_IMPLICIT_MTA` を返す）。直す前は単独の走行で `CO_E_NOTINITIALIZED`（0x800401F0）の赤、直した後は緑。
+  - 読み直し（design の Revalidation Triggers）: 振る舞いの変わるテストは無い。`com::wuc::tests::begin_draw_roundtrip` の「そのスレッドは COM 未初期化」の説明だけを「自分で初期化していない・暗黙の MTA に居る」に直した（ASTA の `DispatcherQueueController` はこれまでどおり作れる）。`cargo test -p wintf --lib` 1249 passed・`cargo test -p areka --bin areka` 4160 passed で、`AREKA-` の行は 0。
+- 直しの後の確かめ（2026-11-01 21:44:04〜21:44:24・`target\load-flake\fix-y1-20261101-214404`・Y1 と同じ条件＝`wintf` の lib・`-Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source`・負荷なし・既定スレッド・`-Rounds 20 -RoundTimeoutMin 5`・測りの環境変数は渡さない（`set_env: (none)`））: **20 回のうち落ち 0 件**（`rounds_run: 20 / 20`・`rounds_red: 0`・`rounds_timed_out: 0`・`rounds_with_crash_report: 0`・`passed_total: 1040  failed_total: 0`・回ごとの `crash_lines (AREKA-CRASH): 0`）。直す前の Y1 4/20・y1b 6/20 に対し、Y2（口で MTA を立てた）0/20 と同じく落ちが消えた。
+- 所要時間（要件 9.9・9.11）: 直しはプロセスの初めの呼び出し 1 回だけなので、時間は増えない見込み。上の 20 回の 1 回の壁時計は中央値 0.6 秒・最長 0.9 秒。静かな机の全体テストの所要時間と 1.20 倍の線は 7.2 で測る（⑾）。
 
 **件 1（`areka` の実行ファイルの落ち）**
 
-- 4.1 で再現せずとして閉じた（X1 20 回＋X1b 10 回で 0 件・⑹）。原因の候補は決めていない（分からない）。件 3 の直し（B: テストのプロセスの初めにプロセスの寿命の MTA を立てる）は、design のとおり `areka` の写しにも当てる。
+- 4.1 で再現せずとして閉じた（X1 20 回＋X1b 10 回で 0 件・⑹）。原因の候補は決めていない（分からない）。件 1 だけのための直しは要らない。件 3 の直し（B: テストのプロセスの初めにプロセスの寿命の MTA を立てる）は、design のとおり `areka` の写し（`emo2_boot/crash_report_test_support.rs`）にも当てた（5.1）。
 
 ## ⑻ 許可の待ちの上限の値と決めた訳
 
@@ -442,6 +446,8 @@ X1b（負荷なし・4 スレッド）: 2.7〜8.3 秒。
 | r08 | 8267 | `mcp::dump_balloon::dump_balloon_gpu_tests::scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost` |
 | r09 | 4650 | `...::align_tests::window_and_box_swap_with_the_picture_when_the_script_surface_arrives_first` |
 | r10 | 2974 | `...::ghost_switch_after_a_shell_swap_unloads_the_session` |
+
+**5.1 の確かめの走行の許可の持ち時間の最長**: 無し（`fix-y1` は `wintf` の lib の走行で、`wintf` に許可は無い・回ごとの `permit_hold_max: (none)`）。5.2 の上限の材料は 4.1 の X1・X1b の値（上の表）を使う。
 
 ## ⑼ 件 4 の見立てと根拠
 
