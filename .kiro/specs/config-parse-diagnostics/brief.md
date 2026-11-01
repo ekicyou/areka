@@ -67,14 +67,14 @@
 - 直し方の候補: この spec が作る読み手の記録で知らせるか、`shape_issues` に 1 行足すか。後者は合成のクレート（`crates/areka-emo-compose/`）を触る＝要件の段で決める。規模は 1 タスク増える見込み（9〜13 → 10〜14）。
 - `shell/decode.rs` を触る相手（`seriko-pattern-calls`・`shell-mouse-cursor`・新しく起票した `ghost-alias-file`）とは同じウェーブに置かない。
 
-## 2026-10-31 棚卸㉜の再測定（main d374f901）
-- **前提の変化**: 読み手は `crates/areka-parsers/src/kv/parse.rs` 43・`shell/parse.rs` 28・`shell/lexer.rs` 222 のまま。`shell/decode.rs` は 598→623（✅ `seriko-pattern-calls`）・`balloon/parse.rs` は 252→257（✅ `balloon-scroll-arrows`・✅ `script-small-tags`）・記録を出す候補の `crates/areka-ghost/src/runtime.rs` は 815→822（✅ `readonly-mode`・✅ `mcp-strict-errors`）。追記の件の `decode_sort_key` は 537 行目・`SortOrder::Other` は 544 行目へ動いた（`UnknownAnimationSort` は `crates/areka-emo-compose/src/plan_issues.rs` 49 行目）。✅ `shell-mouse-cursor`・✅ `seriko-pattern-calls`・✅ `descript-window-keys`・✅ `readonly-mode` が着地し、重なりの相手から外れた。
-- **触るファイル**: 読み手 5 つ（`kv/parse.rs`・`shell/{lexer,decode,parse}.rs`・`balloon/parse.rs`）と各兄弟のテスト・記録を出す所 1 つ（`runtime.rs` か `crates/areka-parsers/src/package/` を設計で選ぶ）・追記の件で `shape_issues` を選べば emo-compose の `plan_issues.rs`。
-- **規模**: 10〜14（追記の件を入れた）。上限 20 の内。
-- **先に要るもの**: 働きの上では無い（先頭）。同じウェーブに置けない相手: `shell/decode.rs` を触る `ghost-alias-file`・`animated-image-import`・`collisionex-regions`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`・`shell-tooltip`・`surfaces-basepos`、`balloon/parse.rs` を触る `balloon-markers`・`anchor-style-canon`・`emo-text-canon-residue`・`ukadoc-catalog-refresh`、記録を出す所を `package/` にしたときの `dev-folder-alias`・`popup-menu-shell-look`、見直しの `audit-parsers-sakura`。議題 2 で「引いたキーを覚える入れ物」を選ぶと、キーを引く下流（`placement/config.rs`・`placement/source.rs`・`placement/descript_window_keys.rs`・`areka-ghost` の `config.rs`・`catalog.rs`・`package/resolve_shell.rs` ほか）に手が入り、v0.1.0 の `shell-scale-linkage`（`descript_window_keys.rs`）と重なる。
-- **隙間（割り込み）の席**: 入らない（上限 14 が C15 の見込みの v0.1.0 の下限 10 を超える）。1 本だけの席・静かな机・人の待ち・前後の比べは要らない。
-- **議題**（棚卸㉓から・今も開いている）: ⑴ 値で返すか読み取りの中で記録するか＝推しは値で返す（前例 `SurfaceTable::unreadable`。`catalog.rs` の一覧は呼ばれるたびに数百の descript を `parse_kv` で読み直すので、中で記録すると溢れる）。⑵ 読まなかったキーの数え方（入れ物か、読むキーの一覧 1 つか）。descript とバルーンの descript（`balloon/parse.rs` は自分でキーを引く）は分けて扱う。⑶ 記録の上限と水準（`get_log` で見える水準にする）。⑷ 設定を検査する MCP のツールがまだ要るか（本 spec の後で開発者に聞く・本 spec では作らない）。
-- **優先度の区分**: C のまま（作者の調べものを助ける改良・利用者から見える不具合ではない）。
+## 2026-11-01 棚卸㉝の再測定（main 13b80ab1）
+- **前提の変化**: 読み手 5 つ（`kv/parse.rs` 43・`shell/parse.rs` 28・`shell/lexer.rs` 222・`shell/decode.rs` 623・`balloon/parse.rs` 257）は棚卸㉜から動いていない。記録を出す候補の `crates/areka-ghost/src/runtime.rs` は 822→829（✅ `shell-scale-linkage`）。同 spec の着地で、議題 2 の入れ物の案で `placement/descript_window_keys.rs` が重なる件は解けた。追記の件の行（`decode_sort_key` 537・`SortOrder::Other` 544・`UnknownAnimationSort` は `plan_issues.rs` 49）は変わらない。
+- **触るファイル**: 棚卸㉜のまま（読み手 5 つと各兄弟のテスト・記録を出す所 1 つ〔`runtime.rs` か `crates/areka-parsers/src/package/`〕・追記の件で `shape_issues` を選べば `crates/areka-emo-compose/src/plan_issues.rs`）。
+- **規模**: 10〜14 のまま。
+- **先に要るもの**: 働きの上では無い（先頭）。**v0.1.0 の `balloon-communicatebox` と `crates/areka-parsers/src/balloon/parse.rs` で重なる**（向こうは `communicatebox.*` の鍵をバルーンの読み手に足す）＝同じウェーブに置かない。ほかに置けない相手は棚卸㉜のまま（`shell/decode.rs` の `ghost-alias-file`・`animated-image-import`・`collisionex-regions`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`・`shell-tooltip`・`surfaces-basepos`、`balloon/parse.rs` の `balloon-markers`・`anchor-style-canon`・`emo-text-canon-residue`・`ukadoc-catalog-refresh`、記録を出す所を `package/` にしたときの `dev-folder-alias`・`popup-menu-shell-look`、見直しの `audit-parsers-sakura`）。
+- **隙間（割り込み）の席**: `balloon-communicatebox` のウェーブには入らない（上の重なり）。1 本だけの席・静かな机・人の待ち・前後の比べは要らない。
+- **議題**（棚卸㉓から・今も開いている）: ⑴ 値で返すか読み取りの中で記録するか＝推しは値で返す（前例 `SurfaceTable::unreadable`・`catalog.rs` の一覧は数百の descript を読み直すので中で記録すると溢れる）。⑵ 読まなかったキーの数え方（入れ物か、読むキーの一覧 1 つか）。descript とバルーンの descript は分けて扱う。⑶ 記録の上限と水準（`get_log` で見える水準）。⑷ 設定を検査する MCP のツールがまだ要るか（本 spec の後で開発者に聞く）。
+- **優先度の区分**: C のまま。
 - **要件定義のモデル**: Opus のまま。
 - **分割の案**: 切らない。
 - **見つけた穴・古くなった記述**: 本文の Upstream の「`mcp-reload`（未完了）」と Adjacent の `seriko-trigger-intervals`・`anchor-tag-canon` は古い（着地済み）。`animation*.name` の行は `seriko-script-triggers` が読むまで「読まなかった行」として記録に出る＝記録の期待に入れておく。

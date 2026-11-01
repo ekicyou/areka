@@ -65,48 +65,19 @@
 - 段: その他（バルーンのリンクとは別の窓・急ぐ理由が無い）。規模の見込み M（8〜12）。
 
 
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- 前提の変化: 先に要った `wintf-tooltip`（10-08）が着地した。口は `crates/wintf/src/ecs/tooltip/` の `register`・`update`・`unregister`・`supply_text`・`dismiss` と、窓に付ける知らせ `OnTooltip`。範囲は「窓の全体」か矩形だけ。areka の側でこの口を使うコードはまだ 0（最初の使い手は本 spec か `balloon-link-hover`）。tooltipブレスは今も記録なしに吸収される（読み手の塊の振り分けが知らない見出しを捨てる）。
-- 触るファイル: `crates/areka-parsers/src/shell/` の新しい転記のファイル（`boxes.rs`・`undrawn.rs` と同じ型）と `shell/mod.rs` の数行・キャラクター窓の配線（`crates/areka/src/input_events/` の隣）・SHIORI のリソースを尋ねる道 `crates/areka-kanade/src/schedule/resources.rs`・文字の表を運ぶなら `crates/areka-emo-present/src/shell_target.rs`・台帳 `assets.toml`・`shiori.toml` の行。
-- 規模: 8〜12 タスク（プロパティを外した場合）。プロパティの SET・GET まで持つと 13〜16。
-- 先に要るもの: 働きの上では、プロパティの部分だけ `currentghost-property-tree`（未完了）。ファイルの上では `balloon-link-hover`（同じ wintf の口・`resources.rs`）と同時に走らせない。`collisionex-regions` が先なら、形の当たり判定にも出せる。
-- 優先度の区分: A（開発者 10-05 の決めごと「キャラクター窓のツールチップも起票する」）。段は開発者が「その他」と決めているので急がない。
-- 要件定義のモデル: Opus。
-- 分割の案: 無し。プロパティの 5 行は下のとおり持ち主を 1 つにする。
-- 見つけた穴・古くなった記述:
-  - 台帳 `property.toml` の `currentghost.seriko.tooltip.*` の 5 行は、持ち主が `currentghost-property-tree` になっている（状態は「語の表だけ」）＝本 spec の In と二重。推しは「本 spec が文字の表（スコープ × 当たり判定名）と差し替えの口を作り、プロパティとして見せるのは `currentghost-property-tree`」。
-  - Constraints の「シェルの element の列に掛かる見込み」は、2 つ目の転記にすれば掛からない（`shell/{model,decode}.rs` に触らない）。
-  - 優先の順は正典が「シェル側設定がある場合はそちらが優先される」と書く＝tooltipブレスが SHIORI の `tooltip` より先。プロパティで差し替えた文字との順だけが議題に残る。
-
 ## 2026-10-10 棚卸㉓の申し送り
 
 - **実機の確かめに 1 項目足す: 主画面より上に置いた画面でツールチップを出す**。完了 `wintf-tooltip` は、ツールチップの位置を OS へ渡すときに 2 つの座標を 16 ビットずつに詰める（`crates/wintf/src/ecs/tooltip/os.rs` の `make_lparam`・負の座標は 2 の補数のまま）。OS が符号付きで読むかは実機でしか決まらない。同 spec の `tasks.md` の Implementation Notes は、3.1 で「負の座標の画面で出す確かめを入れる」と書き、6.1 で「y が負の画面が無いので負の y の詰め方は未確認」と残した。
 - areka からこの口を最初に使う spec（本 spec か `balloon-link-hover`）の実機の確かめで、主画面の上に画面を置き、そこでツールチップの位置が合うかを見る。ずれたら wintf の側の不具合として起票する（本 spec の中では直さない）。
 
-## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
-
-- **前提の変化**: `baseware-root-list` が着地した（10-16）。あちらが触ったのは置き場の並び・メニュー・`crates/areka/src/emo2_boot/` のゴーストの切り替えまわりで、キャラクター窓の当たり判定とマウスの道（`crates/areka/src/input_events/`・`emo2_boot/hit_region.rs`）には触っていない＝「窓の結線の場所が `baseware-root-list` と重ならないか」の心配は消えた。そのほかは変わらない:
-  - wintf のツールチップの口（`crates/wintf/src/ecs/tooltip/mod.rs` の `register`・`supply_text`・窓に付ける `OnTooltip`）を areka で使うコードは今も 0。
-  - tooltipブレスは今も記録なしに捨てられる（`crates/areka-parsers/src/shell/decode.rs` の `dispatch_block` が知らない見出しを捨てる）。箱の転記（`shell/boxes.rs`）・描かない element の転記（`shell/undrawn.rs`）と同じく 2 つ目の転記にすれば `decode.rs` に触らない。結果は `crates/areka-emo-present/src/shell_target.rs` の `parse_boxes` を呼ぶ所の隣で拾える。
-  - プロパティの部分の持ち主 `currentghost-property-tree` は未着手のまま＝プロパティの SET・GET は外すしかない。
-- **触るファイル**（プロパティを外した形・行数）: `crates/areka-parsers/src/shell/` の新しい転記のファイルと検査・`shell/mod.rs`（72）／`crates/areka-emo-present/src/shell_target.rs`（757）／キャラクター窓の配線＝`crates/areka/src/input_events/` か `emo2_boot/` の新しいファイルとその `mod.rs`（`emo2_boot/mod.rs` は 913 行で 1,000 行に近い・`input_events/mod.rs` は 571 行）・当たり判定名を引く `emo2_boot/hit_region.rs`（167）／SHIORI の `tooltip` を尋ねる道 `crates/areka-kanade/src/schedule/resources.rs`（359）と、メニューからの照会と同じ口 `crates/areka-kanade/src/actor_resources.rs`／台帳 `assets.toml`・`shiori.toml` の行。
-- **新しいファイルと依存**: 依存の追加は無い。emo-text には触らない＝emo-text の席は使わない。
-- **規模**: 8〜12 タスク（プロパティを外した形）。プロパティまで持つと 13〜16。
-- **人の手・机**: **人の手の実機の確かめが要る**。上の申し送りの「主画面より上に置いた画面でツールチップの位置が合うか」は画面の並べ替えが要り、AI だけでは回せない＝席の空きに挟む候補にはならない（この項目を `balloon-link-hover` へ回しても、マウスを当たり判定に止めて出るかを見る実機の確かめは残る）。静かな机・前後の全体テストの比べは要らない。
-- **先に要るもの**: 働きの上ではプロパティの部分だけ `currentghost-property-tree`。ファイルの上では `balloon-link-hover`（同じ wintf の口・`resources.rs`）と同時に走らせない。v0.0.3 の 2 本とは、窓の配線を `emo2_boot/` に置き、あちらも `emo2_boot/mod.rs` にファイルを足すときだけ重なる（`input_events/` に置けば重ならない）。`emo2_boot/ghost_switch.rs` には触らない見込み（文字の表はシェルの読み込みに乗るので、切り替えで作り直される）。
-- **優先度の区分**: A のまま（開発者 10-05 の決めごと「キャラクター窓のツールチップも起票する」）。段は「その他」。
-- **要件定義のモデル**: Opus のまま（wintf の口は先に作ってあり、SHIORI のリソースを尋ねる道もメニューの文言で先例がある）。
-- **分割の案**: 無し（プロパティは外して `currentghost-property-tree` 側へ）。
-- **見つけた穴・古くなった記述**:
-  - SHIORI の `tooltip` は Reference0〜4（座標・スコープ・当たり判定の名前）を付けて尋ねるが、今の照会の組み立て（`resources.rs` の `resource_get`）は Reference を付けない形だけ＝付ける形を 1 つ足す。
-  - Constraints の「シェルの element の列（`shell/{model,decode}.rs`）に掛かる見込み」は、2 つ目の転記にすれば掛からない（棚卸㉓で指摘済み・本文はまだ古いまま）。
-
-## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
-- 前提の変化: 本文 Out の「マウスカーソルの差し替え」を、別の spec `shell-mouse-cursor`（v0.1.0・新）として起票した（ツールチップとは分ける）。カーソルとツールチップは同じ「窓ごとに、今どの当たり判定の上に居るか」を使う。その追跡は `mouse-click-wheel-events`（v0.1.0・`OnMouseEnter`／`OnMouseLeave` を足した）か `shell-mouse-cursor` が先に作り（案: 新しいファイル `crates/areka/src/input_events/hover_region.rs`）、この spec は使うだけになる。「マウスが止まった」の検出は wintf のツールチップの口のまま。
-- 触るファイル: 棚卸㉖のまま。キャラクター窓の配線は `input_events/` の追跡の隣に置く。
-- 規模: 8〜12 タスク（追跡を使えば下の方）。
-- 先に要るもの: 働きの上では無し（追跡を作る 2 本の後なら軽い）。ファイルの上では `mouse-click-wheel-events`・`shell-mouse-cursor`（`input_events/`・`emo2_boot/hit_region.rs`）・`balloon-link-hover` と同じウェーブに置かない。
-- 版: 版に縛らない列のまま（ぱすたはツールチップを使わない＝v0.1.0 に入れない）。
-- 優先度の区分: A のまま。要件定義のモデル: Opus のまま。分割の案: なし。
-- 古くなった記述: 本文 Out の「マウスカーソルの差し替え（`mousehover*` などのカーソルの項目）」の持ち主は `shell-mouse-cursor`。
+## 2026-11-01 棚卸㉝の再測定（main 13b80ab1）
+- **前提の変化**: 追跡を作る 2 本が着地した（✅ `mouse-click-wheel-events` 10-24・✅ `shell-mouse-cursor` 10-30）。窓ごとの「今どの当たり判定の上に居るか」は `crates/areka/src/input_events/hover_region.rs`（105・`HoverState`・置き場は `MouseWiring.hover`）に在り、説明に「後の `shell-tooltip` は `HoverState` を読む口を足して使う」と書いてある＝この spec は読むだけ。wintf のツールチップの口を areka で使うコードは今も 0。tooltipブレスは今も記録なしに捨てられる。✅ `popup-menu-extra-resources`（11-01）が SHIORI のリソースの許可の表（`crates/areka-kanade/src/schedule/resources.rs` の `ALLOWED_RESOURCE_IDS`・名前を固定したテストつき）を 15 名にした＝`tooltip` を足すと 16 名。照会の組み立て `resource_get`（110 行目）と kanade の `KanadeMsg::ResourceQuery`（`msg.rs` 252 行目・欄は `ids` と返信端だけ）は今も Reference を付けない形だけ＝付ける形を 1 つ足す。
+- **触るファイル**（行数・プロパティを外した形）: `crates/areka-parsers/src/shell/` の新しい転記のファイルと `shell/mod.rs`（80）／`crates/areka-emo-present/src/shell_target.rs`（**951＝上限の近く**・✅ `shell-scale-linkage` が 757 から増やした＝足す前に中のテストか処理を兄弟へ出す）／`crates/areka/src/input_events/` の新しいファイルと `input_events/mod.rs`（612）・`hover_region.rs`（105）・`crates/areka/src/emo2_boot/hit_region.rs`（167）／`crates/areka-kanade/src/schedule/resources.rs`（407）・`actor_resources.rs`（107）・`msg.rs`（586）／台帳 `assets.toml`・`shiori.toml` の行。`emo2_boot/mod.rs`（828）は配線を `input_events/` に置けば触らない。依存の追加・emo-text の新しいファイルは無い。
+- **規模**: 8〜12 タスク（`shell_target.rs` を先に分ける 1 つを含め、追跡を使う分で下の方）。プロパティまで持つと 13〜16。
+- **先に要るもの**: 働きの上では無し（入力の列の最後で、先頭）。プロパティの部分だけ `currentghost-property-tree`（未着手）＝外す。ファイルの上では `balloon-link-hover`（同じ wintf の口・`resources.rs`）・`shell-hover-animation`（`input_events/` の追跡）・`collisionex-regions`（当たり判定）・kanade の `msg.rs` を触る spec と同じウェーブに置かない。
+- **`balloon-communicatebox` との重なり**: 配線を `input_events/` に置けば、あちらの一覧（バルーンの読み手・`consumer_ledger*.rs`・`emo2_boot/{mod,runtime_boot}.rs`・`schedule/events.rs`・`status.rs`・`menu/mod.rs`）と共有のファイルは無い。ただし、あちらが入力欄の文字を「マウスとキーの知らせの今の道」で返す形にすると `input_events/mod.rs` で重なり得る＝並べるなら設計の前に照らす。
+- **人の手・机**: **人の手の実機の確かめが要る**（棚卸㉓の申し送りの「主画面より上に置いた画面での位置」は画面の並べ替えが要る）＝席の空きに挟む候補にならない（棚卸㉖のまま）。マウスを当たり判定に止めて出るかの確かめは排他テストの机で SendInput。静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: A のまま（開発者 10-05「キャラクター窓のツールチップも起票する」）。段は「その他」・版に縛らない（ぱすたはツールチップを使わない）。
+- **要件定義のモデル**: Opus のまま（wintf の口・当たり判定の追跡・リソースの照会のどれも先例がある）。
+- **分割の案**: 無し（プロパティは `currentghost-property-tree` 側へ）。
+- **見つけた穴・古くなった記述**: 正典は「シェル側設定がある場合はそちらが優先される」＝tooltipブレスが SHIORI の `tooltip` より先で、プロパティの差し替えとの順だけが議題に残る（棚卸㉓のまま）。台帳 `property.toml` の `currentghost.seriko.tooltip.*` の 5 行（1007〜1063 行目）の持ち主は `currentghost-property-tree`＝本 spec は文字の表と差し替えの口まで。本文 Constraints の「シェルの element の列（`shell/{model,decode}.rs`）に掛かる見込み」は 2 つ目の転記にすれば掛からない。本文 Out の「マウスカーソルの差し替え」の持ち主は ✅ `shell-mouse-cursor`（着地済み）。

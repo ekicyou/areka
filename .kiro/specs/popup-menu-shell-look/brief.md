@@ -101,17 +101,6 @@
 - 網羅台帳の宛先: 2026-10-23 に 22 行の `owner` をこの spec にした（`verification.md` 10 節の「直したことと残り」）。
 - **着地で変わるはずの所**（手順書の段 6）: メニューの色と絵がシェルの指定どおりになり、着せ替えのメニューが出て、選ぶと着せ替えが替わる。
 
-## 2026-10-31 棚卸㉛の再測定（main 4068422f）
-- **前提の変化**: 生きている決まり 6 を解くか（右クリックメニューを後で WinUI3 へ移すか）の開発者の裁定は今も出ていない＝ウェーブの外のまま。`crates/areka/src/menu/` は 10-24（`9318cdb0`）から動いていない（`menu/mod.rs` 386〔`mouse-click-wheel-events` で 373→386・枠は 12 種のまま・着せ替えの枠は無い〕・`menu/plan.rs` 139・`menu/win32.rs` 137）。steering `tech.md` 161 行目は今も「自前の窓もオーナードローも持たない」。
-- **wintf の窓の手続き**: `shell-mouse-cursor`（10-30）が `crates/wintf/src/ecs/window_proc/mod.rs`（382）に `WM_MOUSEHOVER` の腕を足し、`crates/wintf/src/ecs/cursor/answer.rs` に「窓の手続きの中で使う側の関数（`CursorQuery`）を呼んでその場で答え、World が借りられているときは前に出した形の写し（`plan_unborrowed`・スレッドごとの表）で答える」形を入れた。起こし方の表 `crates/wintf/src/ecs/world/tick_wake.rs`（375）にも `WM_MOUSEHOVER` が入った。`WM_MEASUREITEM`・`WM_DRAWITEM` の腕は今も無い。
-- **触るファイル**: 棚卸㉗の見立てに `tick_wake.rs` の起こし方の表（棚卸㉙で足した）を加えたもの。
-- **規模**: 14〜18 のまま。
-- **先に要るもの**: 開発者の裁定（決まり 6 を解くか・右クリックメニューを後で WinUI3 へ移すか）。同じウェーブに置けない相手: `popup-menu-residue`（`menu/win32.rs`・`trigger.rs`・版に縛らない）・`balloon-communicatebox`（入口をメニューに足すと決めたら `menu/`）・後の版の `menu-thumbnail-preview`（`menu/{mod,win32,plan}.rs`・`window_proc/mod.rs`）。1 本だけの席は取らない。メニューを開いて撮る実機の確かめと、着せ替えのメニューの並びの SSP の測りが要る（ぱすたの申し送りで並びは撮ってある）。
-- **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・申し送りの件 14・15）。
-- **要件定義のモデル**: 分け方は前のまま＝着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）・Win32 のオーナードローまで作るなら Fable（当たる基準＝前例の無い境目の約束: OS のメニューを出している間、World を借りたまま待つ areka の側に代わって、`WM_MEASUREITEM`・`WM_DRAWITEM` にその場で描いて答える口を wintf と areka の間に引く。場所は `window_proc/mod.rs` と `menu/win32.rs`）。ただし上の `CursorQuery`／`plan_unborrowed` は「窓の手続きの中でその場で答え、借りられないときは前もって持った写しで答える」先例に近い（棚卸㉘の「`WM_SETCURSOR` の口は wintf の中で閉じた診断」はもう当たらない）＝設計でこの形に乗ると決まれば、オーナードローの側も Opus で足りうる（要件の段で確かめる）。
-- **分割の案**: 前のまま（オーナードローの見た目／着せ替えのメニュー・共通は `menu/plan.rs`・`menu/mod.rs` だけ・wintf を触るのはオーナードローの側だけ）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残し、オーナードローの側は別の 1 本として後へ回す。
-- **見つけた穴・古くなった記述**: `popup-menu-residue` の件 11（メニューを開いている間の黒い四角）・件 12（メニューが見えずに閉じる）とどちらを先に直すかは未決のまま。本文 Current State の「枠 11 種」は 12 種。
-
 ## 2026-10-31 `popup-menu-residue` からの写し（件 11・12 と見直す条件）
 
 - 出どころ: `popup-menu-residue` の brief の 2026-10-16 追記（件 11）と 2026-10-18 追記（件 12）。C14 の約束（棚卸㉛）により、`popup-menu-residue` は件 11・12 を直さず、この brief へ渡す。引き受けるか・どちらが直すかは、この spec の要件の段で決める（ここでは決めない）。
@@ -127,3 +116,13 @@
   - 記録の穴: 選ばれずに閉じたときの記録 `menu_dismissed`（`crates/areka/src/menu/trigger.rs` 502 行・`debug!`）は `info` の水準では見えない。このため、見えずに閉じたのか、見えないまま開いているのかを `info` の記録では区別できない（`popup-menu-residue` はコードを変えない）。
   - 再現の測り方: `RUST_LOG` に `areka::menu=debug` を足し、メモ帳を開いて閉じた後などに右クリックして、`menu_shown`・`menu_selected`・`menu_dismissed` の並びと画面を見比べる。実機でメニューを開いて撮る仕事なので、件 11 と同じく人の待ちになりうる。
 - **網羅台帳の 3 行の見直す条件**: `sakura.popupmenu.type`・`kero.popupmenu.type`・`char*.popupmenu.type` の 3 行は、`popup-menu-residue` が「省略した形のメニューを作り分けない」と裁定した（正典は値 1 を「省略メニュー」と名前だけ挙げ、中身を定めていない）。この spec がオーナードローのメニューを入れたら（正典はこの値を「オーナードローメニューの変更」と書く）、3 行の裁定を見直す起票をする。
+
+## 2026-11-01 棚卸㉝の再測定（main 13b80ab1）
+- **前提の変化**: 開発者の決め（2026-10-31・`popup-menu-extra-resources` について）「メニュー関係はreactor解放されたら大改造するので、内容によっては後回し」＝議題 1（右クリックメニューを後で WinUI3 へ移すか）に「移す」の向きの答えが出た。生きている決まり 6（オーナードローと着せ替えメニューは予約）を解くかの裁定そのものはまだ。✅ `popup-menu-residue`（10-31）が `menu/win32.rs`（137→151・組み立ての失敗の記録 `menu_build_failed`）・`menu/trigger.rs`（583）に触って着地し、件 11・12 をこの brief へ写した。✅ `popup-menu-extra-resources`（11-01）が `menu/captions.rs` と kanade の `schedule/resources.rs` に触って着地し、⑵（おすすめ・ポータルなどの項目）を windows-reactor 待ちの段へ渡した。その渡り物に「件 15（SSP がメニューを組むときに `sakura.recommendsites` を問う）との分け方（未決）」が載る（`completed/popup-menu-extra-resources/brief.md` の完了の棚卸の節）。✅ `script-small-tags` が seriko の着せ替えの受け口を `crates/areka-seriko/src/actor_bind.rs`（新・109）へ分けた（`actor.rs` 828・`bind.rs` 655）＝議題 3（着衣の写し）の読み先が動いた。`menu/mod.rs` 386（枠は 12 種のまま）・`menu/plan.rs` 139・wintf の `window_proc/mod.rs` 382・`tick_wake.rs` 375・`tech.md` 161 行目（「自前の窓もオーナードローも持たない」）は動いていない。
+- **触るファイル**: 棚卸㉗の見立て＋`tick_wake.rs` に、着衣の読み先 `crates/areka-seriko/src/{actor_bind.rs,bind.rs}` を足したもの。
+- **規模**: 14〜18 のまま（着せ替えのメニューだけなら 6〜8）。
+- **先に要るもの**: 開発者の裁定（決まり 6 を解くか）。10-31 の決めに沿う案＝v0.1.0 には着せ替えのメニュー（件 14・wintf に触らない・6〜8・Opus）だけを残し、オーナードローの見た目（件 15）は windows-reactor 待ちの段へ送る。ただし着せ替えの項目を `menu/` に組む部分も作り直しで捨てる側に入る（作り直しで残るのは seriko の着衣の読みと、選んだときに着せ替えを替える道）＝どこまでを v0.1.0 でやるかを、残る部分と捨てる部分を分けて開発者に示して決める。同じウェーブの縛り: `popup-menu-residue`・`popup-menu-extra-resources` は着地して解けた。残る相手は `balloon-communicatebox`（入口をメニューに足すと決めたときだけ `menu/`）・後の版の `menu-thumbnail-preview`（`menu/{mod,win32,plan}.rs`・`window_proc/mod.rs`）・`tasktray-icon`（`menu/mod.rs`・windows-reactor 待ち）。1 本だけの席は取らない。人の待ち: メニューを開いて撮る実機の確かめ（排他テストの机）。
+- **優先度の区分**: A のまま（開発者の指示＝v0.1.0 のゴール・申し送りの件 14・15）。
+- **要件定義のモデル**: 着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）・オーナードローまでなら Fable（基準＝OS のメニューの中でその場で描いて答える口を wintf と areka の間に新しく引く・場所は `window_proc/mod.rs` と `menu/win32.rs`。✅ `shell-mouse-cursor` の `CursorQuery`／`plan_unborrowed` の形に乗ると設計で決まれば Opus もありうる）。
+- **分割の案**: 前のまま（オーナードローの見た目／着せ替えのメニュー・共通は `menu/plan.rs`・`menu/mod.rs` だけ・wintf を触るのはオーナードローの側だけ）。上の案なら、オーナードローの側は windows-reactor 待ちの段の残りにする。
+- **見つけた穴・古くなった記述**: 件 11（黒い四角）・件 12（見えずに閉じる）とどちらを先に直すかは未決のまま。本文 Current State の「枠 11 種」は 12 種。申し送りの `sakura.recommendsites` の判定（件 15 と一緒に判定する）は、`popup-menu-extra-resources` の ⑵ の渡り物と二重に持たれている＝件 15 を後へ送るなら、一緒に windows-reactor 待ちの段へ寄せる。
