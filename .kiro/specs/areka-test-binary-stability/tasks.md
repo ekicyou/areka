@@ -135,7 +135,7 @@
   - _Boundary: StageProbe_
   - _Requirements: 7.2, 7.3, 7.4, 7.5, 10.6_
 
-- [ ] 6.5 残りの 11 か所の待ちを目印つきへ移す
+- [x] 6.5 残りの 11 か所の待ちを目印つきへ移す
   - spine の起動・閉じ・保持・seriko の輪のテストと、終わりの締切のテストの待ちを、SHIORI の呼び出しの数か受けた指令の数を目印にして移す
   - MCP の答えの待ちに呼び手が目印を渡す形にし、呼び手 8 か所が自分の足場の目印を渡す
   - 作業プールの見張りのテストに、走り始めた数と届いた数を数える口をテストの側に足して目印にする
@@ -176,3 +176,4 @@
 - 5.1: 件 3 の直し＝テストのプロセスの初めに無条件で `CoIncrementMTAUsage`（areka・wintf の落ちの報告の初期化子）。7.1 の steering の足場の決まりに書く。檻 `initializer_keeps_a_process_lifetime_mta` は単独で回した時だけ直しの有無で赤緑が分かれる（並走の MTA が見えるため）。design 195 行の「どちらも測りの間だけの口」は 7.1 で言い直す。
 - 6.3: lap の 25 か所は grep の行数で、定義の 1 行を含む。呼び出しは 24 か所・テスト 11 本。log-capture-kit に捕まえの途中で件数を読む口は無く、取りやめ・定常の知らせは切り替えの予約が下りた回数で数える。
 - 6.4: テストの道はファイル名でなくモジュール名（`emo2_boot::spine::conformance_support::…`）。絞り込みは `conformance_support::`。採った表示の指令の数は spine.rs を触らずに thread_local で数える。
+- 6.5: `wait_answer` の呼び手は 13 か所（design の 8 は古い数）。`ghost_session_restart_tests` の `drain_counting` は wintf `bitmap_source/systems.rs` の `drain_task_pool_commands` の写しで、相手が変わればずれる。`spine_boot_smoke_tests` 131 行の目印にはログの行の数が入るので、最後の走行でここが［進んではいた］の赤になったら、まずこの目印を疑う。

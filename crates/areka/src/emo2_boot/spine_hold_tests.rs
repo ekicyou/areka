@@ -8,7 +8,9 @@ use std::thread;
 use areka_kanade::ShioriBackend;
 use shiori_host32_host::{ExitKind, RequestError, ShutdownError};
 
-use super::super::{RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle, spin_wait_until};
+use super::super::{
+    Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle, wait_until,
+};
 use super::HoldAt;
 
 /// どの呼び出しも台本に成功の応答を持つ偽物に、`at` で固まる台本を足す（固まらなければ成功が返る）。
@@ -36,7 +38,13 @@ fn hold_then_unblock<T: Send + 'static>(
     let worker = thread::spawn(move || call(&mut backend));
 
     assert!(
-        spin_wait_until(|| handle.holding()),
+        wait_until(
+            "固まった呼び出し",
+            Progress::Count(&|| handle.call_count()),
+            || handle.holding(),
+        )
+        .inspect_err(|failure| eprintln!("{failure}"))
+        .is_ok(),
         "{at:?}: the call should be holding until unblocked"
     );
     assert!(

@@ -1,6 +1,6 @@
 use super::{
-    RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase, run_text_phase,
-    spin_wait_until,
+    Progress, RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase,
+    run_text_phase, wait_until,
 };
 
 // ===========================================================================
@@ -30,12 +30,15 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     // 有界スピン待機（sleep なし・yield_now のみ）で 6 呼出の到達を待ってから照合する。task 8.2 の
     // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）と、挨拶の台詞を再生の前に
     // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が加わり boot 系列は 6 呼出。
-    // 打ち切りは反復回数でなく [`spin_wait_until`] の時刻期限（反復は経過時間の代理にならない）。
+    // 打ち切りは反復回数でなく [`wait_until`] の進みの目印（SHIORI の呼び出しの数）で判じる。
     let mut boot_calls = Vec::new();
-    spin_wait_until(|| {
+    let handle = harness.shiori_handle.clone();
+    let calls = || handle.call_count();
+    let _ = wait_until("起動系列 6 呼出", Progress::Count(&calls), || {
         boot_calls = harness.shiori_handle.non_status_calls();
         boot_calls.len() >= 6
-    });
+    })
+    .inspect_err(|failure| eprintln!("{failure}"));
     let projected: Vec<(&str, &str)> = boot_calls
         .iter()
         .map(|c| match c {
@@ -128,20 +131,32 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     let mut now = 1;
     let mut text_seen = false;
     let mut presented_after_text = false;
-    spin_wait_until(|| {
-        logs.extend(capture_logs(|| {
-            harness.inject_dispatcher_tick(now);
-            harness.pump_text();
-            run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
-        }));
-        now += 10;
-        presented_after_text = text_seen;
-        text_seen = logs
-            .iter()
-            .position(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った"))
-            .is_some_and(|i| logs[i..].iter().any(|l| l.contains("Text cue 適用")));
-        presented_after_text
-    });
+    // 目印は SHIORI の呼び出しの数＋捕まえたログの行の数（文字の層が受けて動いた分だけ増える）。
+    let handle = harness.shiori_handle.clone();
+    let seen = std::cell::Cell::new(0u64);
+    let mark = || handle.call_count() + seen.get();
+    let _ = wait_until(
+        "文字の層の先渡しの受け取り",
+        Progress::Count(&mark),
+        || {
+            logs.extend(capture_logs(|| {
+                harness.inject_dispatcher_tick(now);
+                harness.pump_text();
+                run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
+            }));
+            now += 10;
+            seen.set(logs.len() as u64);
+            presented_after_text = text_seen;
+            text_seen = logs
+                .iter()
+                .position(|l| {
+                    l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った")
+                })
+                .is_some_and(|i| logs[i..].iter().any(|l| l.contains("Text cue 適用")));
+            presented_after_text
+        },
+    )
+    .inspect_err(|failure| eprintln!("{failure}"));
     assert!(
         logs.iter()
             .any(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った")),

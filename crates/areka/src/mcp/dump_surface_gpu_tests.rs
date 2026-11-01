@@ -14,7 +14,7 @@ use super::dump_surface_tests::is_picture;
 use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
 use super::{Step, WaitAnswer, finish};
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::spine::RecordedCall;
+use crate::emo2_boot::spine::{Progress, RecordedCall};
 use crate::emo2_boot::target_map::shell_target;
 
 /// 検体（emo2）の `surfaces.txt` に在る、アニメーションも着せ替えも持たない surface（`element0` 1 枚）。
@@ -37,7 +37,9 @@ fn shown_surface_matches_the_composed_pixels_at_native_size() {
             .and_then(|w| w.presenter().last_shown(shell_target(0)))
             .is_some_and(|(id, pic)| id == SHOWN && pic.is_some())
     });
-    let answer = gpu.dump_surface(None, None).wait_answer();
+    let answer = gpu
+        .dump_surface(None, None)
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let expected = gpu.composed_rgba(SHOWN);
     let down = gpu.shutdown();
 
@@ -179,7 +181,9 @@ fn specified_surface_returns_its_pixels_without_changing_the_screen() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
     let before = screen(&gpu.rig.world);
-    let answer = gpu.dump_surface(None, Some(i64::from(OTHER))).wait_answer();
+    let answer = gpu
+        .dump_surface(None, Some(i64::from(OTHER)))
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let right_after = screen(&gpu.rig.world);
     gpu.frames(SETTLE_FRAMES);
     let settled = screen(&gpu.rig.world);
@@ -221,7 +225,9 @@ fn specified_surface_returns_its_pixels_without_changing_the_screen() {
 fn scope_zero_renders_a_surface_meant_for_scope_one() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
-    let answer = gpu.dump_surface(None, Some(i64::from(KERO))).wait_answer();
+    let answer = gpu
+        .dump_surface(None, Some(i64::from(KERO)))
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let expected = gpu.composed_rgba(KERO);
     let down = gpu.shutdown();
 
@@ -263,7 +269,9 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
     let lines: Vec<&str> = surfaces.lines().map(str::trim).collect();
     let in_alias = lines.contains(&"kero.surface.alias") && lines.contains(&"100,[2100]");
     let raw = lines.contains(&"surface100");
-    let answer = gpu.dump_surface(None, Some(ALIAS_ONLY)).wait_answer();
+    let answer = gpu
+        .dump_surface(None, Some(ALIAS_ONLY))
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let down = gpu.shutdown();
 
     assert_eq!(
@@ -297,7 +305,9 @@ fn hidden_character_returns_the_picture_before_hiding() {
                 .target_visible(shell_target(0))
                 == Some(false)
     });
-    let answer = gpu.dump_surface(None, None).wait_answer();
+    let answer = gpu
+        .dump_surface(None, None)
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let expected = gpu.composed_rgba(SHOWN);
     let down = gpu.shutdown();
 
@@ -333,10 +343,12 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
         .presenter()
         .last_shown(shell_target(1))
         .is_none();
-    let omitted = gpu.dump_surface(Some(1), None).wait_answer();
+    let omitted = gpu
+        .dump_surface(Some(1), None)
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let specified = gpu
         .dump_surface(Some(1), Some(i64::from(KERO_FACE)))
-        .wait_answer();
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let expected = gpu.composed_rgba(KERO_FACE);
     let down = gpu.shutdown();
 
@@ -373,10 +385,12 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
 fn scope_two_is_no_such_scope() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
-    let omitted = gpu.dump_surface(Some(2), None).wait_answer();
+    let omitted = gpu
+        .dump_surface(Some(2), None)
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let specified = gpu
         .dump_surface(Some(2), Some(i64::from(SHOWN)))
-        .wait_answer();
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let down = gpu.shutdown();
 
     let no_scope = Some(refusal("No such scope in this ghost"));
@@ -465,7 +479,11 @@ fn calls_do_not_disturb_the_ghost() {
             (Some(2), None),
             (Some(-1), None),
         ]
-        .map(|(scope, surface)| gpu.dump_surface(scope, surface).wait_answer().is_some())
+        .map(|(scope, surface)| {
+            gpu.dump_surface(scope, surface)
+                .wait_answer(Progress::Count(&gpu.rig.progress_probe()))
+                .is_some()
+        })
     });
     let second = gpu.flush_to_shiori();
     let after = gpu.calls();

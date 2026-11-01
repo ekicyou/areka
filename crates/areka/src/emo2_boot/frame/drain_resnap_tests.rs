@@ -5,7 +5,7 @@
 //! あいだ drain が尽きず、1 フレームが終わらずに areka が答えなくなった。その再発を止める。
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -16,6 +16,7 @@ use areka_emo_present::{PresentCommand, PresentOutcome, TargetId};
 
 use super::super::test_support::{capture_logs, count_level};
 use super::{MAX_DRAIN_PER_FRAME, drain_present_commands};
+use crate::emo2_boot::spine::{Progress, wait_recv};
 
 fn show(target: u32, surface_id: u32) -> PresentCommand {
     PresentCommand::ShowSurface {
@@ -99,20 +100,28 @@ fn drain_returns_while_the_sender_keeps_sending() {
         })
     };
     let (done_tx, done_rx) = mpsc::channel::<usize>();
-    thread::spawn(move || {
-        let mut applied = 0usize;
-        // 適用 1 回を送りの間隔より重くする（デバッグ版の合成と D2D の確保に当たる）。
-        drain_present_commands(&rx, |_cmd| {
-            applied += 1;
-            thread::sleep(Duration::from_millis(10));
-        });
-        let _ = done_tx.send(applied);
+    // 進みの目印は drain が適用した数（負荷の下で 3 秒の自前の締切が赤になった・`load-repro.md` の ⑹）。
+    let applied_so_far = Arc::new(AtomicU64::new(0));
+    thread::spawn({
+        let applied_so_far = Arc::clone(&applied_so_far);
+        move || {
+            let mut applied = 0usize;
+            // 適用 1 回を送りの間隔より重くする（デバッグ版の合成と D2D の確保に当たる）。
+            drain_present_commands(&rx, |_cmd| {
+                applied += 1;
+                applied_so_far.fetch_add(1, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(10));
+            });
+            let _ = done_tx.send(applied);
+        }
     });
-    let outcome = done_rx.recv_timeout(Duration::from_secs(3));
+    let mark = || applied_so_far.load(Ordering::SeqCst);
+    let outcome = wait_recv("drain が戻る", Progress::Count(&mark), &done_rx);
     stop.store(true, Ordering::Relaxed);
     sender.join().expect("送り手のスレッドが panic した");
-    let applied =
-        outcome.expect("送り手が送り続けるあいだ drain が戻らない（1 フレームが終わらない）");
+    let applied = outcome.unwrap_or_else(|failure| {
+        panic!("送り手が送り続けるあいだ drain が戻らない（1 フレームが終わらない）: {failure}")
+    });
     assert_eq!(
         applied, 1,
         "同じ target へ続く reply の無い ShowSurface は最後の 1 件だけ適用する"

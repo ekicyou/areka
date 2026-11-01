@@ -40,6 +40,9 @@
 - 目印を書いている実装は `emo2_boot/spine_conformance_lap_tests.rs:270`（`LapSink`）だけ。
 - 6.4 の後: 既定 `None` を消し、4 つの実装の全部が `progress_probe` を書く（`SpineHarness`＝SHIORI の呼び出しの数＋採った表示の指令の数・`FakeStageSink`／`HoldingSink`＝受けた注入の数・`LapSink` は今どおり）。**例外（要件 7.3）**: `spine_conformance_support_tests.rs` の `stage_driver_returns_named_timeout_instead_of_silent_success` だけは `FakeStageSink::silent_unmarked`（`None`）で回す。この檻は打ち切りの文言が `［進みは不明］` で始まることそのものを確かめるので、目印を持つと打ち切りが `［止まった］` になり確かめたい形を踏めない。
 
+- 6.5 の後: ⑴ の残り 11 か所を目印つきの待ち（`wait_until`／`wait_recv`・`Progress::Count`）へ移した。目印は、spine の起動・閉じ・保持＝SHIORI の `call_count()`（起動の字の層の待ちはそれに捕まえたログの行の数を足す）、seriko の輪＝受けた指令の数、終わりの締切＝`call_count()`（354 の予約の発火は `unblock_calls()`）、作業プールの見張り（`ghost_session_restart_tests.rs`）＝テストの側に足した口（`Input` 段の吸い出しを包んだ `drain_counting` が届いた閉包の数を `AtomicU64` で数える・要件 7.3。作業プールのスレッドで走り始めた数は製品の閉包の中なので数えていない）。MCP の答えの待ちは `wait_answer(&self, progress: Progress<'_>)` にし、呼び手 13 か所（design の「8 か所」を行で数え直すと 13）がそれぞれ自分の足場の目印を渡す（`GpuRig`・`SwitchRig`＝`progress_probe()`、`dump_surface_tests.rs` の符号化のスレッドの檻＝仕事が走り始めた数）。grep `spin_wait_until(` は定義の 1 行だけになった。
+- **例外（要件 7.3）**: `mcp/check_script_tests.rs` の `dispatch_and_wait` は `Progress::Unknown` で待つ。空の World には数える足場が無く、答えの仕事は製品の中の閉包で符号化のスレッドへ渡るので、テストの側から走り始めを数える口も足せない（口を足すには製品の `check_script::handle` に継ぎ目が要る）。
+
 **その外の文言の無い待ち（要件 7.6・数えて記録するだけ・本 spec の走行で赤になったものだけ移す）**
 
 自前の `recv_timeout` — コマンド: `git grep -n "recv_timeout(" -- crates/areka/src`（17 件。待ちの芯の中の `emo2_boot/spine_wait.rs:297`（`wait_recv`）・`:373`（`run_bounded`）と、本番の `perf_thread_report.rs:295`・`:384` の 4 件を除く 13 件）
@@ -74,6 +77,8 @@
 | `thread_roles_tests.rs` | 26 |
 
 `run_bounded`（総時間で打ち切る古い呼び名）の呼び手 — コマンド: `git grep -n "run_bounded(" -- crates/areka/src`（定義 `emo2_boot/spine_wait.rs:366` は `run_bounded<F` の形なのでこの grep に当たらない）: `session_end_sync_send_tests.rs:205` と `emo2_boot/spine_wait_tests.rs:310`（`run_bounded` そのものの檻）の 2 件。`run_bounded_watching`（`Progress` を渡す・文言あり）の呼び手は数えない。
+
+- 6.5 で移したもの（要件 7.6・本 spec の走行で赤になったもの）: `emo2_boot/frame/drain_resnap_tests.rs` の 111（3 秒の自前の `recv_timeout`）だけ。X1 の r12 で「drain が戻らない: Timeout」の赤になった（⑹ の「X1 のほかの赤」）。`wait_recv` へ移し、目印は drain が適用した数。⑹ のほかの `［止まった］` の赤は既に目印つきの待ちで、この 3 つの表の行ではない（`ghost_switch_test_support.rs`・`main_session_mark*` に当たるものは 6.6）。残りの行は完了のときの起票の材料のまま。
 
 ## ⑶ 件 5 の赤の文
 

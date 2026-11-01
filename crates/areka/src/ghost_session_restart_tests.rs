@@ -1,6 +1,8 @@
 //! 起こし直しの単位（`ghost_session`）の決定論テスト（areka-P0-ghost-restart-unit）。
 
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
 
 use areka_kanade::CloseReason;
@@ -14,7 +16,7 @@ use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::emo2_boot::frame::KanadeNoticeRx;
 use crate::emo2_boot::sample_test_support::acquire_emo2;
 use crate::emo2_boot::spine::{
-    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, spin_wait_until,
+    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
 };
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
@@ -65,16 +67,48 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
 }
 
 /// 作業プールの閉包を回す `Input` 段を、`done` が真になるまで回す。
-/// 閉包は作業プールの別スレッドから届くので、届くまで待つ。待ちは目印なしの芯（`spin_wait_until`）で、
-/// 総時間は共通の `SPIN_WAIT`・空回しは `DENSE_SPIN` の後に CPU を返す。作業プールの進みを数える口が
-/// テストの側に無いので目印は持てない（areka-P0-ghost-session-test-load-flake 設計「2.1 の例外」）。
-/// 打ち切ったら、呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。
+/// 閉包は作業プールの別スレッドから届くので、届くまで待つ。打ち切りは進みの目印（`Input` 段に届いた
+/// 閉包の数・[`drain_counting`] が数える・areka-test-binary-stability 要件 7.3 でテストの側に足した口）で
+/// 決め、相手が 30 秒進まなければ［止まった］。打ち切ったら、呼び出しの場所を添えた文言を標準エラーへ
+/// 1 行出して `false`。
 #[track_caller]
 fn run_input_until(world: &mut World, done: impl Fn(&mut World) -> bool) -> bool {
-    spin_wait_until(|| {
-        world.run_schedule(Input);
-        done(world)
-    })
+    let at = std::panic::Location::caller();
+    let arrived = Arc::clone(
+        &world
+            .get_resource_or_insert_with(ArrivedCommands::default)
+            .0,
+    );
+    let mark = || arrived.load(Ordering::SeqCst);
+    wait_until(
+        &format!("{}:{}", at.file(), at.line()),
+        Progress::Count(&mark),
+        || {
+            world.run_schedule(Input);
+            done(world)
+        },
+    )
+    .inspect_err(|failure| eprintln!("{failure}"))
+    .is_ok()
+}
+
+/// `Input` 段に届いた作業プールの閉包の数（[`run_input_until`] の進みの目印）。
+#[derive(bevy_ecs::resource::Resource, Default)]
+struct ArrivedCommands(Arc<AtomicU64>);
+
+/// 本番の `drain_task_pool_commands` と同じく届いた閉包を全部当て、その数を [`ArrivedCommands`] に足す。
+fn drain_counting(world: &mut World) {
+    let commands = world
+        .get_resource::<WintfTaskPool>()
+        .map(WintfTaskPool::drain_commands)
+        .unwrap_or_default();
+    world
+        .get_resource_or_insert_with(ArrivedCommands::default)
+        .0
+        .fetch_add(commands.len() as u64, Ordering::SeqCst);
+    for cmd in commands {
+        cmd(world);
+    }
 }
 
 fn ghost_window_count(world: &mut World) -> usize {
@@ -109,10 +143,9 @@ fn prepare_spawns_no_window_until_commit() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(WintfTaskPool::new());
-    world.resource_mut::<Schedules>().add_systems(
-        Input,
-        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
-    );
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, drain_counting);
 
     let prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
     world
@@ -155,10 +188,9 @@ fn close_before_commit_arrives_spawns_no_window() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(WintfTaskPool::new());
-    world.resource_mut::<Schedules>().add_systems(
-        Input,
-        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
-    );
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, drain_counting);
 
     let mut prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
     let spawn = prepared.spawn;
@@ -196,10 +228,9 @@ fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::Cap
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(WintfTaskPool::new());
-    world.resource_mut::<Schedules>().add_systems(
-        Input,
-        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
-    );
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, drain_counting);
     let (spawned, events) = capture_logs(|| {
         let prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
         commit_ghost_windows(&mut world, prepared);
