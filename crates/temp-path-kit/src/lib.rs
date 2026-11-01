@@ -29,6 +29,12 @@
 //!
 //! 本 crate の依存は **0**（標準ライブラリのみ）なので、引いても消費側に何も足さない。
 //!
+//! # 置き場
+//!
+//! どちらの入口（[`TempPath::new`]・[`TempPath::under_target`]）もワークツリーの
+//! `target\test-roots\` の下に作る。テストが落ちて残ったフォルダは `cargo clean` か
+//! ワークツリーの削除で消える。
+//!
 //! # 使い方
 //!
 //! 窓口が配るのは**ディレクトリ 1 つ**である。単一ファイルが要るときも別の型は使わず、
@@ -74,7 +80,7 @@ fn compose_name(label: &str, process_id: u32, serial: u32) -> String {
     format!("areka-{label}-{process_id}-{serial}")
 }
 
-/// [`TempPath::under_target`] の置き場（`<ワークスペース>\target\test-roots`）。
+/// 2 つの入口の置き場（`<ワークスペース>\target\test-roots`）。
 fn target_test_roots() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -90,7 +96,7 @@ pub struct TempPath {
 }
 
 impl TempPath {
-    /// 一時ディレクトリを作って配る。
+    /// ワークスペースの `target\test-roots\` の下に一時ディレクトリを作って配る。
     ///
     /// 名前は `areka-{札}-{プロセス識別子}-{連番}`。`label` は失敗時の見分けが付く
     /// 短い識別子にすること。
@@ -99,14 +105,13 @@ impl TempPath {
     ///
     /// ディレクトリを作れないとき（黙って縮退しない）。
     pub fn new(label: &str) -> Self {
-        Self::in_base(&std::env::temp_dir(), label)
+        Self::in_base(&target_test_roots(), label)
     }
 
     /// ワークスペースの `target\test-roots\` の下に一時ディレクトリを作って配る。
     ///
-    /// [`TempPath::new`] は OS の一時フォルダの下に作るが、検体と一時フォルダを
-    /// ワークツリーの `target\` の下だけに作ると決めたテスト（掃除漏れを OS の一時フォルダへ
-    /// 残さない）はこちらを使う。名前・一意性・破棄での削除は [`TempPath::new`] と同じ。
+    /// 置き場・名前・一意性・破棄とも [`TempPath::new`] と同じ。呼び出しを書き換えずに
+    /// 済ませるために 2 つの入口を残している。どちらを使ってもよい。
     /// 置き場は本 crate の `CARGO_MANIFEST_DIR` の 2 つ上（ワークスペースの根）の `target`。
     ///
     /// # Panics
