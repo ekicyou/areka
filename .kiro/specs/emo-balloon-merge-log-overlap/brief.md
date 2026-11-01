@@ -62,3 +62,14 @@
 - 規模 S（案 1 で 3〜5 タスクの見込み）
 - 着手は `shell-scale-linkage` の着地の後
 - 1 ファイル 1,000 行の上限（`placement/mod.rs` は 970 行ほど。足すのは 1〜2 行に留める）
+
+## 2026-11-01 棚卸㉝の再測定（main 13b80ab1）
+- **前提の変化**: 待つ相手の ✅ `shell-scale-linkage` が 11-01 に着地した。同 spec が `crates/areka/src/placement/mod.rs` に足したのは mod の宣言 1 行（`balloon_syncscale`）だけで、今 971 行。2 層マージ `load_scope_balloon_model` は `crates/areka-emo-present/src/balloon.rs`（795 行）548 行目のままで、基層は 555 行目で `LoadRecords::Emit` に決め打ち。窓の位置の読みの呼び出しは `placement/mod.rs` 826 行目（98 行目の use で既に `resolve_balloon_faces_quiet` と並ぶ）、資産の組み立ては `balloon_definitions.rs`（184）98 行目。
+- **触るファイル**: `crates/areka-emo-present/src/balloon.rs`（795・案 1 で十数行）・`crates/areka/src/placement/mod.rs`（971・use の名前と 826 行目の呼び出しを替えるだけで行は増えない）・両方の道を比べるテストと行の数の檻（`balloon_model_tests.rs` か `placement/measure_bake_log_tests.rs` 300 の隣。新しい兄弟のファイルにすると `placement/mod.rs` に 1 行＝972 で上限の内）。案 2 なら `ghost_session.rs`（943）・`emo2_boot/assets.rs`（540）にも入る。
+- **規模**: 案 1 で 3〜5 のまま。
+- **先に要るもの**: 働きの上では無い（先頭）。v0.1.0 の `balloon-communicatebox` とは重ならない（向こうのバルーンの読み手は `areka-parsers` の `balloon/` で、emo-present の `balloon.rs` も `placement/mod.rs` も触らない）。`balloon-dpi-switch-redraw` が直しを emo-present の `balloon.rs` に置くなら同じファイル。
+- **机・待ち**: 静かな机・前後の全体テストの比べ・長い走行・人や外の待ち・依存の追加・emo-text の新しいファイルは要らない。R6.3 の扱いは要件の討議で決める（推しは案 1）。
+- **優先度の区分**: C のまま。
+- **要件定義のモデル**: Opus（記録を出さない入口の型は ✅ `emo-bake-log-overlap` の前例どおり）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文の `placement/mod.rs`「825 行あたり」は 826 行目。案 1 は記録を出す入口を残すので、記録の宛先を数える emo-text のテスト（`tests/staysee_balloon_fixture/faces.rs` ほか）と `mcp/dump_surface_gpu_test_support.rs` 312 行目の呼び出しは替えなくてよい見込み。

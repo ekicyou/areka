@@ -114,22 +114,17 @@
 - **検体と実機の手順を使い回せる**: `crates/areka-seriko/tests/fixtures/trigger-intervals/`（`surfaces.txt` と README）。面 9100〜9104 は、emo2 が既定の着せ替えで出す立ち絵と同じ絵を element定義で重ねてあり、emo2 の `surfaces.txt` の末尾へ書き足して使う（番号は当たらない）。README の「実機の確かめ」に、写しの作り方・記録の絞り・判定の検索語が在る。`never`・`yen-e` の面を足すなら、9105 から先の番号で同じ立ち絵を使える。
 - **実機で台本を流す道具がまだ無い**: areka の MCP の `sakurascript` は `NG:not implemented yet` を返す（`mcp-kanade-tools` の持ち物）。`seriko-trigger-intervals` は、写しの `boot.lua` が台本 1 本を返す形で流した（走行 1 回につき台本 1 本・途中で送れない）。`\i[ID]` を台詞の途中で何度も送る確かめは、`mcp-kanade-tools` の後の方が楽。
 
-## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
-
-- 前提の変化: 待っていた 2 本がどちらも着地した（`seriko-trigger-intervals`・`anchor-tag-canon`＝ともに 10-10）。働きの上でもファイルの順でも待つものは無く、今すぐ着手できる。
-  - 台本の読み手 `sakura/decode.rs` は 502 行、コンパイルの `compile.rs` は 481 行になった（`\_a` の腕と、閉じ忘れたリンクを走査の終わりで閉じる処理が入った）。`\i` は今も「subset 外の正準タグ」の腕で素通しの `Raw` になり、`\e` の腕は今も走査を打ち切るだけで cue を出さない。
-  - `anchor-tag-canon` はリンクを専用の cue で運び、運び手の名前の表には何も足さなかった。`consumer_ledger.rs` は 943 行のまま、seriko 宛ての名前は `bind` だけ。＝`\i` と「台本の終わり」の 2 つの名前の登録と一致のテストは、今もこの spec の仕事。
-  - シェルの読み手は interval の語が増えただけで、`animation*.name` は今も運ばない（型 `Animation` の欄は 3 つ）。この型を直書きするファイルは 27 に増えた。
-- 触るファイル: 上の測定と申し送りのまま。seriko は `table.rs`（900）・`actor.rs`（776）・`looper.rs`（924）と、引き金の `trigger.rs`・`looper_trigger.rs`・`parts_trigger.rs`。
-- 規模: 8〜10 タスクのまま。
-- 先に要るもの: 無し。順の目安として、`yen-e`・`never` の引き金の後始末は `seriko-trigger-lottery-gaps` の件 1 が揃える決まりに乗るので、そちらが先だと二度手間が無い。
-- 同時に走らせない相手:
-  - seriko のファイル: `seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`・`seriko-interval-combinations`・`balloon-canon-residue`（`actor.rs`）・`animated-image-import`（`table.rs`）。
-  - シェルの読み手: Adjacent の 4 本と `config-parse-diagnostics`。
-  - 台本の読み手・`compile.rs`・運び手の名前の表: Adjacent の文字と台本の列の spec（表に行を足す `sakura-time-directives`・`text-ruby` なども同じ）。
-- 優先度の区分: A のまま。
-- 要件定義のモデル: Fable のまま。
-- 見つけた穴・古くなった記述: `\e` の知らせを出す位置は、閉じ忘れたリンクを閉じる cue（走査の終わりに足される）との前後を設計で決める。
-
 ## 2026-10-30 `seriko-pattern-calls` の要件の議論からの申し送り（議題 2・開発者「承認」）
 - interval の `never` のアニメーションを「呼ばれるだけの相手」として seriko の表に載せる所（抽選はしない）は `seriko-pattern-calls`（要件 11）が持つ。この spec は同じ相手へ `\i[*]` の口を足すだけになる（`yen-e`・`animation*.name` はこの spec のまま）。
+
+## 2026-11-01 棚卸㉝の再測定（main 13b80ab1）
+- **前提の変化**: ✅ `seriko-pattern-calls`（10-31）が `never` を「呼ばれるだけ」の相手（`LoopTrigger::CallOnly`）として seriko の表に載せ、pattern定義の `start` 系で始める道（`calls.rs`・`looper_calls.rs`・`parts_calls.rs`・`table_calls.rs`）を作った＝`\i[ID]` はこの始める道へ口を 1 つ足す形で済む見込み。台帳の `never` の行は `implemented`（持ち主 `seriko-pattern-calls`）になった＝この spec の台帳の行は 3 つ（`yen-e`・`animation*.name`・`\i[ID番号]`）。`\i` は今も `sakura/decode.rs` の素通しの腕、`\e` の腕（`compile.rs` 262 行目）は今も cue を出さない、`animation*.name` は今も読まない（型 `Animation` の欄は `interval_written` が増えて 4 つ）。
+- **受け手の表**: `consumer_ledger.rs` は 560 行・登記 43 行（✅ `shell-scale-linkage` が `(get,property)` を足した）＝本文 Current State・Constraints と棚卸㉓の「943 行・上限の近く」は古い。`\f`・`\j`・`\v` と同じく、`\i` と「台本の終わり」の知らせは表に行を足す（手書きの数 43→45 と見本 `consumer_ledger_agreement_tests.rs`）＝受け手の表に行を足す spec と 1 本ずつ（`balloon-communicatebox` と同じウェーブに置けない）。
+- **触るファイル**（行数）: `crates/areka-parsers/src/sakura/decode.rs`（543）・`crates/areka-sakura/src/compile.rs`（632）・`crates/areka/src/emo2_boot/consumer_ledger.rs`（560）と `consumer_ledger_tests.rs`（627）・`consumer_ledger_agreement_tests.rs`（428）・`crates/areka-parsers/src/shell/{model.rs 303, decode.rs 623}` か新しい転記のファイル・seriko の `table.rs`（929）・`actor.rs`（828）・`looper.rs`（**993＝上限ぎりぎり・足すなら兄弟へ**）・`trigger.rs`（193）・`looper_trigger.rs`（230）・`parts_trigger.rs`（136）・`looper_calls.rs`（215）・`parts_calls.rs`（190）・台帳 `assets.toml` 2 行・`sakura-script.toml` 1 行。emo-text・`Cargo.lock` には触らない。
+- **規模**: 7〜10 タスク（`never` の受け皿ができた分だけ下が 1 つ下がる）。
+- **先に要るもの**: 働きの上では無し（先頭）。ファイルの上では受け手の表を触る spec（`balloon-communicatebox` ほか `\!` の名前を足す列）・seriko の列（`seriko-trigger-lottery-gaps`・`seriko-interval-combinations`・`animated-image-import`）・台本の読み手と `compile.rs`（`range-choice-tag`・`talk-fast-forward` ほか）と同じウェーブに置かない。`seriko-trigger-lottery-gaps` が先だと `yen-e` の後始末が二度手間にならない（棚卸㉔のまま）。
+- **人の手・机**: 実機で `\i` を台詞の途中で送る確かめは MCP の `sakurascript`（✅ `mcp-kanade-tools`）で回せる。人の待ち・静かな机・前後の全体テストの比べは要らない。
+- **優先度の区分**: A のまま（開発者 10-05「口パクの `talk` が動かない」から切り出し元の区分を引き継ぐ）。
+- **要件定義のモデル**: **Opus に改める**。`\e` の知らせと再生を同じフレームで解くのは、今の汎用の運び手と ✅ `seriko-trigger-intervals` の「始めるなら何時に始まったことにするか」の形に乗るだけ＝時刻の新しい約束ではない。議題の 3 つ（`\i` が指せる相手・`\e` を書かずに終わった台本・名前の重なり）は正典の黙っている所の決めで、骨組みの分かれ道ではない。
+- **分割の案**: 無し。
+- **見つけた穴・古くなった記述**: 台帳 `doc/ukadoc-coverage/ledger/assets.toml` 7927 行目の `yen-e` の備考（7935〜7936 行目）は今も「認める語は 3 つ・動く語は 2 つ」と書く（今は 6 つ・8 つ＋`never` は呼ばれる相手）。`\e` の知らせを出す位置と、閉じ忘れたリンクを閉じる cue（`compile.rs` 441 行目・走査の終わりに足す）との前後は設計で決める（棚卸㉔のまま）。

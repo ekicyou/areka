@@ -75,14 +75,13 @@
 
 C（バグでない持ち越し。今の既定〔門は切〕では遅れは出ず、門を入れる前に片づけておくもの）。
 
-## 2026-10-31 棚卸㉜の再測定（main d374f901）
-- **前提の変化**: tick の門 `crates/wintf/src/ecs/world/tick_gate.rs`（222 行・心拍 30 コマは 53 行目）は変わらず、既定は今も切。起床の旗の表 `tick_wake.rs` は 374→375 行（✅ `shell-mouse-cursor` が `WM_MOUSEHOVER` を足し、✅ `stay-on-top-directives` が説明に 1 語）。旗の見張り `crates/areka/src/tick_gate_config_producers_tests.rs` は 279 行・`AREKA_PRODUCERS` は 7→8 行（`stay-on-top-directives` の `emo2_boot/window_state_cue.rs`＝送る側で旗を立てる先例が 1 つ増え、`move_cue.rs`・`talk_lifecycle.rs`・`zorder_cue.rs` と並ぶ）。候補の行数: `emo2_boot/switch_copy.rs` 115→131（✅ `readonly-mode`）・`switch_assets.rs` 253→257（✅ `descript-window-keys`）・`change_cue.rs` 119・`switch_cue.rs` 123・`reload_cue.rs` 106・`crates/areka/src/mcp/mod.rs` 152（64 行目 `drain`）・`crates/areka-mcp/src/server.rs` 207→211（✅ `mcp-strict-errors`）。
-- **インストールの窓口（確かめた）**: ✅ `install-before-boot` の着地で `crates/areka/src/install/desk.rs`（592 行）の重なりは解けた。窓口の `drain`（103 行・Input の段）は背景の 2 つから `try_iter` で拾う＝インストールの係のスレッドの問い（`install/worker.rs` 78 行ほか・`ask` 経由）と、ファイルを選ぶスレッドの `send_pick`（`desk.rs` 239 行）。どちらも旗を立てない＝本文の「ほかの候補」の `install/desk.rs` は対象で、`worker.rs` も触る。
-- **触るファイル**: 一覧で対象と決めた送る側（`emo2_boot/{switch_copy,switch_assets,change_cue,switch_cue,reload_cue}.rs`・`install/{desk,worker}.rs` のうち）・MCP の受け口（`areka-mcp/src/server.rs` か `areka/src/mcp/mod.rs`）・`tick_gate_config_producers_tests.rs`・旗の種類を足すなら `tick_wake.rs`。
-- **規模**: 6〜10 のまま（インストールの窓口は起票の 5〜9 の「ほかの候補」に入っていた）。
-- **先に要るもの**: 働きの上では無い（先頭）。v0.1.0 の `shell-scale-linkage` とは送る側のファイルで重ならないが、向こうが `\![get,property]` の受け手を `window_state_cue.rs` の形で足して旗を立てると `AREKA_PRODUCERS`（`tick_gate_config_producers_tests.rs`）に行を足す＝向こうの触るファイルが決まってから照らす。同じウェーブに置けない相手: `multi-ghost-runtime`（切り替えの結線）・`mcp-shiori-query`・`mcp-user-response`（`mcp/mod.rs`）・`check-script-arg-checks`（`change_cue.rs`・`switch_cue.rs`）・`makoto-reload-directives`（`reload_cue.rs`）・`tick_wake.rs` を触るなら `instant-to-interrupt-ticks`（v0.2.0）と直列。
-- **机・待ち**: 静かな机・前後の全体テストの比べ・長い負荷の走行・人の待ちは要らない（門を入れた形の決定論のテスト）。依存は足さない＝1 本だけの席は取らない。`areka-test-binary-stability` を測っている間は着地させない（同じテストの実行ファイルの足場に触る見込み）。
-- **優先度の区分**: C のまま（バグでない持ち越し・門を入れる前に片づけるもの）。
+## 2026-11-01 棚卸㉝の再測定（main 13b80ab1）
+- **前提の変化**: ✅ `shell-scale-linkage`（11-01 着地）は旗の見張り `crates/areka/src/tick_gate_config_producers_tests.rs`（279 行・`AREKA_PRODUCERS` は 8 行のまま）に行を足さず、`tick_wake::mark` を呼ぶファイルも増やさなかった（d374f901 からの差分で 0）＝棚卸㉜で分からなかった点は「重ならない」で決着した。同 spec が足した `crates/areka-ghost/src/prop_get_sink.rs` と `emo2_boot/frame/scale_notice.rs` は kanade へ送る側で、ECS の刻みで拾う背景の結果ではない＝一覧に入らない。候補の送る側（`emo2_boot/{switch_copy 131,switch_assets 257,change_cue 119,switch_cue 123,reload_cue 106}.rs`・`install/desk.rs` 592・`install/worker.rs` 279・`crates/areka/src/mcp/mod.rs` 152・`crates/areka-mcp/src/server.rs` 211）と `tick_wake.rs` 375・`tick_gate.rs` 222 は動いていない。
+- **触るファイル**: 棚卸㉜のまま（上の送る側のうち一覧で対象と決めたもの・MCP の受け口・`tick_gate_config_producers_tests.rs`・旗の種類を足すなら `tick_wake.rs`）。
+- **規模**: 6〜10 のまま。
+- **先に要るもの**: 働きの上では無い（先頭）。v0.1.0 の `balloon-communicatebox` とは送る側のファイルで重ならない。ただし向こうが入力欄の結果を ECS の刻みで拾って旗を立てる新しいファイルを足すと、`AREKA_PRODUCERS`（長さを `[…; 8]` と書く表）に行を足す＝同じウェーブに置くなら、向こうの触るファイルが決まってから照らす。同じウェーブに置けない相手は棚卸㉜のまま（`multi-ghost-runtime`・`mcp-shiori-query`・`mcp-user-response`・`check-script-arg-checks`・`makoto-reload-directives`・`tick_wake.rs` を触るなら `instant-to-interrupt-ticks`）。
+- **机・待ち**: 静かな机・前後の全体テストの比べ・長い負荷の走行・人の待ち・依存の追加は要らない。`areka-test-binary-stability` を測っている間は着地させない。
+- **優先度の区分**: C のまま。
 - **要件定義のモデル**: Opus のまま（今ある旗と、送る側で旗を立てる先例に乗る）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: 本文の「ほかの候補」に MCP の受け口と読み直しの知らせ（`emo2_boot/reload_cue.rs`・`reload.rs`）が無い（棚卸㉘で見つけた・本文は直していない）。本文の `AREKA_PRODUCERS`「今 7 行」は 8 行。
