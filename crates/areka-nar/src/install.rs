@@ -631,6 +631,14 @@ fn unwind(undo: Vec<Undo>) -> Unwound {
     Unwound { stuck, survivors }
 }
 
+#[cfg(test)]
+thread_local! {
+    // テストだけの継ぎ目。拒み（5・32）を観測して眠る直前に、同じスレッドで呼ぶ。
+    // 短い掴みの檻が、拒まれたのを見てから掴みを放すのに使う（要件 5.1〜5.4）。
+    pub(crate) static ON_RENAME_REFUSED: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// フォルダを `rename` する。外のプロセスの**短い**掴みだけは待ち切る。
 ///
 /// Windows は配下のファイルを誰かが開いているフォルダの `rename` を拒む（os error 5＝
@@ -646,6 +654,12 @@ fn rename_patiently(from: &Path, to: &Path) -> io::Result<()> {
     loop {
         match std::fs::rename(from, to) {
             Err(err) if matches!(err.raw_os_error(), Some(5 | 32)) && Instant::now() < deadline => {
+                #[cfg(test)]
+                ON_RENAME_REFUSED.with(|seam| {
+                    if let Some(on_refused) = seam.borrow_mut().as_mut() {
+                        on_refused();
+                    }
+                });
                 std::thread::sleep(STEP);
             }
             other => return other,
