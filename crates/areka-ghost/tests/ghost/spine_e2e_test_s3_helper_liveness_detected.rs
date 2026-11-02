@@ -186,7 +186,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // 競走になる。待たずに数えると 5 本目がまだ届かず `left: 4` で落ちる瞬間があり、これが
     // 負荷時にだけ現れる間欠的な赤の正体である。手本は同じ boot 系列の確認を「条件が満たされる
     // まで待つ」形で書いている `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`
-    // （`spin_wait_until`）——判定そのもの（Status を除いてちょうど 5 件）は一切変えず、
+    // （`wait_until`）——判定そのもの（Status を除いてちょうど 5 件）は一切変えず、
     // 数える前に待ちを置くだけである。上限は本ファイル既存の有界待ちと同じ `E2E_BOUND`。
     let calls_handle = handle.calls();
     let non_status_len = || {

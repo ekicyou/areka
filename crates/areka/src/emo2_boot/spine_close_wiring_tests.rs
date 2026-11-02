@@ -21,8 +21,8 @@ use bevy_ecs::prelude::With;
 use shiori_host32_host::ExitKind;
 
 use super::{
-    CloseReason, Entity, Instant, LoopDriver, RecordedCall, SPIN_WAIT, ScriptedShioriBackend,
-    SpineHarness, spin_wait_until,
+    CloseReason, Entity, Instant, LoopDriver, Progress, RecordedCall, SPIN_WAIT,
+    ScriptedShioriBackend, SpineHarness, wait_until,
 };
 use crate::emo2_boot::frame::run_ghost_quit_phase;
 use crate::placement::spawn::GhostWindowMarker;
@@ -88,10 +88,13 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
     // ── 起動系列（非 Status 5 呼出）の完了を待つ。終了指示を boot の途中で差し込むと、
     //    再生完了通知が `BootVersion` 滞在中に届いて捨てられる狭い窓を踏み得る。 ──
     let mut boot_calls = Vec::new();
-    spin_wait_until(|| {
+    let handle = harness.shiori_handle.clone();
+    let calls = || handle.call_count();
+    let _ = wait_until("起動系列 5 呼出", Progress::Count(&calls), || {
         boot_calls = harness.shiori_handle.non_status_calls();
         boot_calls.len() >= 5
-    });
+    })
+    .inspect_err(|failure| eprintln!("{failure}"));
     assert!(
         boot_calls.len() >= 5,
         "前提: 起動系列 5 呼出が有界内に発火する: {boot_calls:?}"

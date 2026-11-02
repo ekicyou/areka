@@ -404,22 +404,38 @@ impl judge::ShellFacts for PresenterFacts<'_> {
 /// 答えを上限つきで待つ（成功は別のスレッドから届く・テスト用）。
 #[cfg(test)]
 pub(in crate::mcp) trait WaitAnswer {
-    /// 届いた答え。期限切れ・答えずに手放したら `None`。
-    fn wait_answer(&self) -> Option<areka_mcp::tools::Answer>;
+    /// 届いた答え。打ち切り・答えずに手放したら `None`。打ち切りは呼び手が渡す足場の進みの目印
+    /// `progress` で決め（areka-test-binary-stability 要件 7.2）、打ち切ったら呼び出しの場所を添えた
+    /// 文言を標準エラーへ 1 行出す。
+    #[track_caller]
+    fn wait_answer(
+        &self,
+        progress: crate::emo2_boot::spine::Progress<'_>,
+    ) -> Option<areka_mcp::tools::Answer>;
 }
 
 #[cfg(test)]
 impl WaitAnswer for areka_mcp::tools::Pending {
-    fn wait_answer(&self) -> Option<areka_mcp::tools::Answer> {
+    #[track_caller]
+    fn wait_answer(
+        &self,
+        progress: crate::emo2_boot::spine::Progress<'_>,
+    ) -> Option<areka_mcp::tools::Answer> {
+        let at = std::panic::Location::caller();
         let mut got = None;
-        crate::emo2_boot::spine::spin_wait_until(|| match self.try_answer() {
-            Ok(Some(answer)) => {
-                got = Some(answer);
-                true
-            }
-            Ok(None) => false,
-            Err(_) => true,
-        });
+        let _ = crate::emo2_boot::spine::wait_until(
+            &format!("MCP の答え（{}:{}）", at.file(), at.line()),
+            progress,
+            || match self.try_answer() {
+                Ok(Some(answer)) => {
+                    got = Some(answer);
+                    true
+                }
+                Ok(None) => false,
+                Err(_) => true,
+            },
+        )
+        .inspect_err(|failure| eprintln!("{failure}"));
         got
     }
 }

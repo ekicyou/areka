@@ -54,12 +54,23 @@ fn success_is_finished_on_the_encoding_thread_and_answered_from_there() {
         ghost_name: None,
     };
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(args));
-    let job: Job = Box::new(|_| outcome::ok(std::thread::current().name().unwrap_or("")));
+    // 目印は仕事が符号化のスレッドで走り始めた数（テストの側の口・要件 7.3）。
+    let entered = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let job: Job = Box::new({
+        let entered = std::sync::Arc::clone(&entered);
+        move |_| {
+            entered.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            outcome::ok(std::thread::current().name().unwrap_or(""))
+        }
+    });
 
     reply_elsewhere(TOOL, Step::Encode(0, job), Instant::now(), req.reply);
 
+    let started = || entered.load(std::sync::atomic::Ordering::SeqCst);
     assert_eq!(
-        pending.wait_answer().map(|a| a.outcome),
+        pending
+            .wait_answer(crate::emo2_boot::spine::Progress::Count(&started))
+            .map(|a| a.outcome),
         Some(outcome::ok(ENCODE_THREAD))
     );
 }

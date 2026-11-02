@@ -3,6 +3,8 @@ pub mod com;
 pub mod ecs;
 pub mod numerics;
 mod runtime;
+#[cfg(test)]
+mod test_crash_report;
 mod win_state;
 mod win_style;
 

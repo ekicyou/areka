@@ -99,8 +99,8 @@ impl TalkSeen {
 /// 注入 Tick で会話を運び、`done` が真になるまで面の指令と表示の知らせを集める。
 ///
 /// 受けた面の指令は本番の取り出しと同じく presenter へ適用する（窓の無い scope 2 の対象も含む）。
-/// 注入時刻は `*now` から [`TALK_SPAN_CAP_MS`] で頭打ち。進みの目印は SHIORI の呼び出しの数と
-/// 受けた指令・知らせの数の和で、30 秒進まなければ待ちの芯が `［止まった］` で落とす。
+/// 注入時刻は会話の始まり（`TalkStarted`）を見るまで据え置き、その後は `*now` から
+/// [`TALK_SPAN_CAP_MS`] で頭打ち。進みの目印は SHIORI の呼び出しの数と受けた指令・知らせの数の和で、30 秒進まなければ待ちの芯が `［止まった］` で落とす。
 fn drive_talk(
     harness: &mut SpineHarness,
     now: &mut u64,
@@ -113,7 +113,11 @@ fn drive_talk(
     let shiori = harness.shiori_handle.clone();
     let probe = || shiori.call_count() + received.get();
     let reached = wait_until(what, Progress::Count(&probe), || {
-        *now = (*now + TICK_STEP_MS).min(cap);
+        // 会話が始まるまでは時刻を据え置く。着地より先に頭打ちへ届くと、dispatcher が最初の Tick で
+        // 会話の起点を頭打ちに付け、その後の時刻が動かず再生が凍る（load-repro.md ⑽）。
+        if seen.borrow().first_talk().is_some() {
+            *now = (*now + TICK_STEP_MS).min(cap);
+        }
         harness.inject_dispatcher_tick(*now);
         let mut seen = seen.borrow_mut();
         for cmd in harness.wiring.drain_received() {

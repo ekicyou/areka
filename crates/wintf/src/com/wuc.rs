@@ -300,8 +300,8 @@ mod tests {
     #[test]
     fn begin_draw_roundtrip() {
         // apartment 種別の実測（要件 10.2）:
-        // cargo test の各テストは専用スレッドで走り、そのスレッドは COM 未初期化
-        // （CoInitialize/RoInitialize なし）。design.md §2.1「未初期化なら DQTAT_COM_ASTA」に
+        // cargo test の各テストは専用スレッドで走り、そのスレッドは COM を自分で初期化していない
+        // （CoInitialize/RoInitialize なし・落ちの報告の初期化子がプロセスの寿命の MTA を立てるので暗黙の MTA に居る）。design.md §2.1「未初期化なら DQTAT_COM_ASTA」に
         // 従い ASTA を第一候補とし、万一失敗したら NONE を試す（本開発機での実測により確定）。
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {

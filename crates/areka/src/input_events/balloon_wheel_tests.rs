@@ -21,7 +21,9 @@ use super::super::balloon::test_support::headless_emo2_wiring;
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
-use crate::emo2_boot::frame::test_support::{balloon_is_manual, manual_balloon_runtime};
+use crate::emo2_boot::frame::balloon_runtime_test_support::{
+    balloon_is_manual, manual_balloon_runtime,
+};
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::placement::spawn::BalloonWindowMarker;
 
@@ -53,11 +55,19 @@ fn run(world: &mut World) -> u32 {
 }
 
 /// 結線（Emo2Wiring）つきの World と、手動の位置（自動の 1 行上）にいる文字の層。
-fn rig(vertical: i16, horizontal: i16) -> (World, Rc<RefCell<TextLayerRuntime>>) {
-    let (mut world, runtime) = manual_balloon_runtime("0");
+/// GPU の許可は組の先頭で返す（World の装置より後に捨てる）。
+fn rig(
+    vertical: i16,
+    horizontal: i16,
+) -> (
+    crate::emo2_boot::spine::GpuPermit,
+    World,
+    Rc<RefCell<TextLayerRuntime>>,
+) {
+    let (permit, mut world, runtime) = manual_balloon_runtime("0");
     world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     spawn_rotation(&mut world, vertical, horizontal);
-    (world, runtime)
+    (permit, world, runtime)
 }
 
 /// 新しい側へ 1 行送ったときの変化（自動の 1 行上なら自動へ戻る＝`Stopped`、2 行上なら `Moved`）。
@@ -72,7 +82,7 @@ fn newer_by_one(runtime: &RefCell<TextLayerRuntime>) -> ScrollChange {
 /// 上へ（向こう側・正の回転）回すと古い側へ送る（要件 6.1・6.3）。
 #[test]
 fn wheel_up_scrolls_to_older_lines() {
-    let (mut world, runtime) = rig(120, 0);
+    let (_permit, mut world, runtime) = rig(120, 0);
     assert_eq!(
         run(&mut world),
         1,
@@ -88,7 +98,7 @@ fn wheel_up_scrolls_to_older_lines() {
 /// 下へ（手前・負の回転）回すと新しい側へ送る（要件 6.2）。自動の 1 行上から 1 行で自動へ戻る。
 #[test]
 fn wheel_down_scrolls_to_newer_lines() {
-    let (mut world, runtime) = rig(-120, 0);
+    let (_permit, mut world, runtime) = rig(-120, 0);
     assert_eq!(run(&mut world), 1);
     assert!(
         !balloon_is_manual(&runtime, "0"),
@@ -100,7 +110,7 @@ fn wheel_down_scrolls_to_newer_lines() {
 #[test]
 fn horizontal_or_no_rotation_is_ignored() {
     for (vertical, horizontal) in [(0, 120), (0, 0)] {
-        let (mut world, runtime) = rig(vertical, horizontal);
+        let (_permit, mut world, runtime) = rig(vertical, horizontal);
         assert_eq!(run(&mut world), 0, "OS の行数を読まない");
         assert!(
             matches!(newer_by_one(&runtime), ScrollChange::Stopped(_)),
@@ -112,7 +122,7 @@ fn horizontal_or_no_rotation_is_ignored() {
 /// 120 に満たない回転は持ち越し、合わせて 1 目盛りで送る（要件 6.3）。
 #[test]
 fn partial_rotations_carry_over() {
-    let (mut world, runtime) = rig(60, 0);
+    let (_permit, mut world, runtime) = rig(60, 0);
     run(&mut world);
     run(&mut world);
     assert_eq!(newer_by_one(&runtime), ScrollChange::Moved);
@@ -128,7 +138,7 @@ fn balloon_wheel_does_not_queue_on_mouse_wheel() {
             surface_point: (x, y),
         }
     }
-    let (mut world, runtime) = rig(120, 0);
+    let (_permit, mut world, runtime) = rig(120, 0);
     let (tx, rx) = mpsc::channel();
     world.insert_non_send(MouseWiring::with_clock(
         tx,

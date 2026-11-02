@@ -46,8 +46,8 @@ use crate::boot_resolve::{read_session_mark, write_session_mark};
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::emo2_boot::spine::hold_support::HoldAt;
 use crate::emo2_boot::spine::{
-    RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder, ScriptedShioriHandle,
-    spin_wait_until,
+    Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
+    ScriptedShioriHandle, wait_until,
 };
 use crate::ghost_session::{GhostSession, GhostSlot};
 
@@ -108,12 +108,23 @@ fn boot_a(
     let ready = match hold {
         Some(HoldAt::Get(_)) => {
             let handle = rig.handle("A");
-            spin_wait_until(|| handle.holding())
+            wait_held(&handle)
         }
         _ => rig.wait_steady(),
     };
     assert!(ready, "A が {hold:?} の待ちの形に着かない");
     rig
+}
+
+/// 偽の SHIORI が固まるまで待つ（目印は SHIORI の呼び出しの数）。打ち切ったら文言を出して `false`。
+fn wait_held(handle: &ScriptedShioriHandle) -> bool {
+    wait_until(
+        "偽の SHIORI の固まり",
+        Progress::Count(&|| handle.call_count()),
+        || handle.holding(),
+    )
+    .inspect_err(|failure| eprintln!("{failure}"))
+    .is_ok()
 }
 
 /// `hold` で固まる標準の台本の A。
@@ -136,7 +147,7 @@ fn probe_of(rig: &SwitchRig) -> ShioriProbe {
 /// 固まりを見てから手動の口を呼ぶ補助のスレッド（固まりを見たかを返す）。
 fn cut_when_held(handle: ScriptedShioriHandle, probe: ShioriProbe) -> JoinHandle<bool> {
     thread::spawn(move || {
-        let held = spin_wait_until(|| handle.holding());
+        let held = wait_held(&handle);
         if held {
             probe.cut_now();
         }
@@ -328,7 +339,7 @@ fn unbounded_shutdown_never_cuts() {
     let releaser = {
         let handle = handle.clone();
         thread::spawn(move || {
-            let held = spin_wait_until(|| handle.holding());
+            let held = wait_held(&handle);
             if held {
                 handle.release();
             }
@@ -351,7 +362,14 @@ fn unbounded_shutdown_never_cuts() {
         started: Instant::now(),
         limit: WIDE,
     });
-    let reserved_fired = spin_wait_until(|| handle.unblock_calls() > calls_after_shutdown);
+    let unblocks = || handle.unblock_calls() as u64;
+    let reserved_fired = wait_until(
+        "張り直した予約の発火",
+        Progress::Count(&unblocks),
+        || handle.unblock_calls() > calls_after_shutdown,
+    )
+    .inspect_err(|failure| eprintln!("{failure}"))
+    .is_ok();
     let cut = guard.finish();
 
     assert_eq!(

@@ -8,15 +8,18 @@
 //! 段（`emo2_frame_system`）をそのまま回す。台詞は置き場のゴーストの dispatcher へ合成の Tick を
 //! 注入して進める（止めれば台詞の時計は進まない）。判定は集めてから 1 回・降ろすのは有界に行う。
 
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::panic::Location;
 use std::path::Path;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::MonotonicMs;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::Children;
+use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::SampleRoot;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
@@ -30,6 +33,7 @@ use wintf::ecs::{
 use super::GhostSlot;
 use crate::boot_resolve::read_last_shell;
 use crate::emo2_boot::frame::Emo2Wiring;
+use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::emo2_boot::ghost_switch_test_support::{
     BALLOON, FakeShiori, SwitchRig, standard_script,
 };
@@ -101,6 +105,10 @@ pub(super) struct LapRig {
     pub(super) windows: GhostWindows,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
+    /// UI の側の要約が巡をまたいで変わった回数（[`LapRig::frames_until`] の進みの目印の片方）。
+    ui_moves: Rc<Cell<u64>>,
+    /// 前の巡に見た UI の側の要約。
+    ui_seen: UiSeen,
     /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
     _gpu: GpuPermit,
 }
@@ -132,11 +140,74 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
     rig.world.insert_resource(wuc);
     rig.wire_app_memory();
     rig.boot("A");
+    let mut ui_seen = UiSeen::default();
+    ui_seen.observe(&rig.world, &Cell::new(0));
     LapRig {
         rig,
         windows,
         clock_ms: 0,
+        ui_moves: Rc::default(),
+        ui_seen,
         _gpu: gpu,
+    }
+}
+
+/// UI の側の進みの要約（areka-test-binary-stability 要件 3.1）。どの欄も増えるだけの数にする
+/// （行ったり来たりする見た目の状態を入れると、止まっていても進みに数えてしまう）。
+#[derive(Debug, Default, Clone, PartialEq)]
+struct UiMarks {
+    /// 文字の層の普通のバルーンの場所ごとの（消された回数, 載った項目の数）。台詞の起動は冒頭の
+    /// 全消去で前者を、台詞の表示は後者を増やす（組は辞書順で増えるだけ）。
+    text: Vec<(u64, usize)>,
+    /// 切り替えの予約（シェル・ゴースト）が下りた回数。取りやめの記録と定常の知らせ（迎え入れの
+    /// 終わり）は予約を下ろす。記録の数を捕まえの途中で読む口が無いので、World の予約で数える。
+    released: u64,
+}
+
+/// 前の巡に見た UI の側の要約と、切り替えの予約（シェル・ゴースト）が在ったか。
+#[derive(Default)]
+struct UiSeen {
+    marks: UiMarks,
+    held: [bool; 2],
+}
+
+impl UiSeen {
+    /// 今の巡の観測（文字の層の要約・予約の有無）を畳み、要約が前の巡と違えば `moves` を 1 増やす。
+    fn note(&mut self, text: Vec<(u64, usize)>, held: [bool; 2], moves: &Cell<u64>) {
+        let released = self
+            .held
+            .iter()
+            .zip(&held)
+            .filter(|(was, now)| **was && !**now);
+        let marks = UiMarks {
+            text,
+            released: self.marks.released + released.count() as u64,
+        };
+        self.held = held;
+        if marks != self.marks {
+            self.marks = marks;
+            moves.set(moves.get() + 1);
+        }
+    }
+
+    /// World から今の巡の観測を読んで [`UiSeen::note`] へ渡す。
+    fn observe(&mut self, world: &World, moves: &Cell<u64>) {
+        let text = world
+            .get_non_send::<Emo2Wiring>()
+            .map(|wiring| {
+                let runtime = wiring.runtime().borrow();
+                let state = runtime.state();
+                state
+                    .actors()
+                    .map(|(actor, place)| (state.clear_count(actor), place.items().len()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let held = [
+            world.get_non_send::<SkinSwitchInFlight>().is_some(),
+            world.get_non_send::<SwitchInFlight>().is_some(),
+        ];
+        self.note(text, held, moves);
     }
 }
 
@@ -217,16 +288,28 @@ impl LapRig {
     /// 芯の待ちへ渡す（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。打ち切りは目印で決め、
     /// 打ち切ったら呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。時刻の送り先は
     /// dispatcher の `DispatcherMsg::Tick` だけ（足場の時刻の注入と同じ決まり・要件 2.6）。
+    ///
+    /// 目印は SHIORI の側の数（`SwitchRig::progress_probe`）＋UI の側の要約が変わった回数
+    /// （`ui_moves`・巡を回した後に読む）。台詞の起動・表示・取りやめ・定常の知らせのように SHIORI を
+    /// 呼ばずに進む仕事も進みに数え、負荷で遅いだけでは `［止まった］` で打ち切らない
+    /// （areka-test-binary-stability 要件 3.1）。
     #[track_caller]
     pub(super) fn frames_until(
         &mut self,
         ticks: Ticks,
         mut done: impl FnMut(&SwitchRig) -> bool,
     ) -> bool {
-        let Self { rig, clock_ms, .. } = self;
+        let Self {
+            rig,
+            clock_ms,
+            ui_moves,
+            ui_seen,
+            ..
+        } = self;
         let mut last_tick: Option<Instant> = None;
         let mut sent = 0;
-        let probe = rig.progress_probe();
+        let (shiori, moves) = (rig.progress_probe(), Rc::clone(ui_moves));
+        let probe = move || shiori() + moves.get();
         let caller = Location::caller();
         let waited = wait_until(
             &format!("{}:{}", caller.file(), caller.line()),
@@ -254,6 +337,7 @@ impl LapRig {
                 pump_messages();
                 rig.world.run_schedule(Input);
                 rig.world.run_schedule(Update);
+                ui_seen.observe(&rig.world, ui_moves);
                 done(rig)
             },
         );
@@ -788,5 +872,42 @@ fn menu_switch_to_the_current_shell_rebuilds_and_raises_both_events() {
         ),
         "((定常, 面が出た, 判定, 差し替わった), 呼出列, (OnShellChanging, OnShellChanged の Reference), \
          LastShell, 完了の記録の印の台詞の終わり方, (見え方, 装着の子が互いに素, 下端が保たれた), 子の欠けたフレーム, 降ろせた)"
+    );
+}
+
+// ---------------------------------------------------------------- 進みの目印の檻
+
+/// UI の側の要約の畳み（areka-test-binary-stability 要件 3.1）: 文字の層の要約が前の巡と違えば、
+/// または切り替えの予約が下りれば（取りやめ・定常の知らせ）1 増える。前の巡と同じ・予約が立った
+/// だけ・在り続ける・無いままでは増えない。
+///
+/// # 非空虚性
+/// 畳みが要約を比べずに毎巡足すと、止まっている巡でも増えて赤。予約が下りたことを数えないと、
+/// 取りやめや定常の知らせだけが進んだ巡で増えず赤。
+#[test]
+fn ui_seen_counts_only_ui_side_progress() {
+    let moves = Cell::new(0);
+    let mut seen = UiSeen::default();
+    let mut step = |text: Vec<(u64, usize)>, held: [bool; 2]| {
+        seen.note(text, held, &moves);
+        moves.get()
+    };
+    let got = [
+        step(Vec::new(), [false, false]),
+        step(vec![(1, 0)], [false, false]),
+        step(vec![(1, 3)], [false, false]),
+        step(vec![(1, 3)], [false, false]),
+        step(vec![(1, 3)], [true, false]),
+        step(vec![(1, 3)], [true, false]),
+        step(vec![(1, 3)], [false, false]),
+        step(vec![(1, 3)], [false, true]),
+        step(vec![(1, 3)], [false, false]),
+        step(vec![(2, 0), (1, 0)], [false, false]),
+    ];
+    assert_eq!(
+        got,
+        [0, 1, 2, 2, 2, 2, 3, 3, 4, 5],
+        "(初め, 台詞の起動, 台詞の表示, 止まった, 予約が立った, 在り続ける, 取りやめで下りた, \
+         ゴースト切替の予約が立った, 定常の知らせで下りた, 次の台詞の起動)"
     );
 }

@@ -5,9 +5,8 @@
 use std::fs::{self, File};
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, TryRecvError};
-use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use areka_kanade::online::OnlineCounter;
@@ -19,7 +18,7 @@ use tracing::Level;
 use super::{
     DownloadError, MakeFetch, download, download_dir, fetch_and_send, spawn_download_with,
 };
-use crate::emo2_boot::spine::{Progress, wait_until};
+use crate::emo2_boot::spine::join_thread_bounded;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::{InstallOrigin, RawInstallRequest};
 
@@ -75,21 +74,26 @@ fn set_mtime(path: &Path, at: SystemTime) {
         .expect("更新時刻を据えられる");
 }
 
-/// 見張りのスレッドは生まず、body の終わり（`is_finished`）を目印に待ちの芯で待ってから同じスレッドで
-/// `join` する（負荷の下で見張りのスレッドが始まれず文言の無い赤になった・areka-P0-ghost-session-test-load-flake）。
-fn join_bounded(handle: JoinHandle<()>) {
-    let finished = || u64::from(handle.is_finished());
-    if let Err(failure) = wait_until(
-        "install-fetch の終わり",
-        Progress::Count(&finished),
-        || handle.is_finished(),
-    ) {
-        panic!("{failure}");
+/// 取得口を作る（`MakeFetch`）たびと、偽の取得口の `get` のたびに `moves` を 1 増やす取得口。
+fn make_counted(fake: FakeFetch, moves: &Arc<AtomicU64>) -> MakeFetch {
+    let moves = Arc::clone(moves);
+    Box::new(move || {
+        moves.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(Counted { fake, moves }) as Box<dyn areka_update::Fetch>)
+    })
+}
+
+/// `get` を数える偽の取得口。
+struct Counted {
+    fake: FakeFetch,
+    moves: Arc<AtomicU64>,
+}
+
+impl areka_update::Fetch for Counted {
+    fn get(&self, url: &str) -> Result<Vec<u8>, FetchError> {
+        self.moves.fetch_add(1, Ordering::SeqCst);
+        self.fake.get(url)
     }
-    assert!(
-        handle.join().is_ok(),
-        "install-fetch が終わらないか panic した"
-    );
 }
 
 #[test]
@@ -168,17 +172,22 @@ fn thread_round_sends_one_script_request() {
     let tmp = TempPath::new("fetch-url-thread");
     let dir = tmp.child("download");
     let (tx, rx) = mpsc::channel::<RawInstallRequest>();
+    let inner = Arc::new(AtomicU64::new(0));
 
     let handle = spawn_download_with(
         URL.to_owned(),
         tx,
         dir.clone(),
-        make(FakeFetch::new().serve(URL, BODY)),
+        make_counted(FakeFetch::new().serve(URL, BODY), &inner),
         &UNOBSERVED,
     )
     .expect("install-fetch が起きる");
     let request = rx.recv_timeout(BOUND).expect("依頼が届く");
-    join_bounded(handle);
+    let moves = || inner.load(Ordering::SeqCst);
+    assert!(
+        join_thread_bounded("install-fetch の終わり", Some(&moves), handle).is_ok(),
+        "install-fetch が panic した"
+    );
 
     assert_eq!(request.origin, InstallOrigin::Script);
     assert_eq!(request.path.parent(), Some(dir.as_path()));
@@ -195,16 +204,24 @@ fn thread_round_failure_sends_nothing() {
     let tmp = TempPath::new("fetch-url-thread-fail");
     let dir = tmp.child("download");
     let (tx, rx) = mpsc::channel::<RawInstallRequest>();
+    let inner = Arc::new(AtomicU64::new(0));
 
     let handle = spawn_download_with(
         URL.to_owned(),
         tx,
         dir.clone(),
-        make(FakeFetch::new().fail(URL, FetchError::Status { code: 500 })),
+        make_counted(
+            FakeFetch::new().fail(URL, FetchError::Status { code: 500 }),
+            &inner,
+        ),
         &UNOBSERVED,
     )
     .expect("install-fetch が起きる");
-    join_bounded(handle);
+    let moves = || inner.load(Ordering::SeqCst);
+    assert!(
+        join_thread_bounded("install-fetch の終わり", Some(&moves), handle).is_ok(),
+        "install-fetch が panic した"
+    );
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
     assert_eq!(files_in(&dir), Vec::<String>::new());

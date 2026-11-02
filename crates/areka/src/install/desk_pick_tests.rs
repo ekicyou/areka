@@ -11,8 +11,10 @@
 //! 依頼の送出端を受信端に差し替える）。別のスレッドは `recv_timeout` で待つ（固まらない）。
 
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::Duration;
 
 use bevy_ecs::schedule::Schedules;
@@ -21,7 +23,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::emo2_boot::spine::{Progress, wait_until};
+use crate::emo2_boot::spine::join_thread_bounded;
 use crate::install::judge::{ScriptRequest, script_request};
 use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
@@ -54,24 +56,6 @@ fn item_enabled(world: &World) -> Option<bool> {
         .find_map(|(frame, item)| (frame == Frame::Install).then_some(item.enabled))
 }
 
-/// 選ぶ画面のスレッドの終わりを上限つきで待つ。
-/// 見張りのスレッドは生まず、body の終わり（`is_finished`）を目印に待ちの芯で待ってから同じスレッドで
-/// `join` する（負荷の下で見張りのスレッドが始まれず文言の無い赤になった・areka-P0-ghost-session-test-load-flake）。
-fn join_bounded(handle: JoinHandle<()>) {
-    let finished = || u64::from(handle.is_finished());
-    if let Err(failure) = wait_until(
-        "選ぶ画面のスレッドの終わり",
-        Progress::Count(&finished),
-        || handle.is_finished(),
-    ) {
-        panic!("{failure}");
-    }
-    assert!(
-        handle.join().is_ok(),
-        "選ぶ画面のスレッドが終わらないか panic した"
-    );
-}
-
 fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
@@ -98,9 +82,18 @@ fn menu_order_is_the_script_order_with_only_the_origin_changed() {
     // 待ち行列に残して読む（背景のスレッドの代わりへ渡さない）。
     world.non_send_mut::<InstallDesk>().busy = true;
 
-    let handle = start_pick(&mut world, false, || Ok(Some(PathBuf::from(ABSOLUTE))))
-        .expect("選ぶ画面のスレッドが起きる");
-    join_bounded(handle);
+    let inner = Arc::new(AtomicU64::new(0));
+    let moves = Arc::clone(&inner);
+    let handle = start_pick(&mut world, false, move || {
+        moves.fetch_add(1, Ordering::SeqCst);
+        Ok(Some(PathBuf::from(ABSOLUTE)))
+    })
+    .expect("選ぶ画面のスレッドが起きる");
+    let moves = || inner.load(Ordering::SeqCst);
+    assert!(
+        join_thread_bounded("選ぶ画面のスレッドの終わり", Some(&moves), handle).is_ok(),
+        "選ぶ画面のスレッドが panic した"
+    );
     let Ok(ScriptRequest::Path(script_path)) = script_request(&["path", ABSOLUTE]) else {
         panic!("絶対パスは path の腕で通る");
     };
@@ -150,9 +143,13 @@ fn picking_disables_the_item_until_the_thread_ends() {
     let before = item_enabled(&world);
     let (entered_tx, entered) = mpsc::channel();
     let (release, release_rx) = mpsc::channel::<()>();
+    let inner = Arc::new(AtomicU64::new(0));
+    let moves = Arc::clone(&inner);
     let handle = start_pick(&mut world, false, move || {
+        moves.fetch_add(1, Ordering::SeqCst);
         let _ = entered_tx.send(thread::current().name().map(str::to_owned));
         let _ = release_rx.recv_timeout(BOUND);
+        moves.fetch_add(1, Ordering::SeqCst);
         Ok(None)
     })
     .expect("選ぶ画面のスレッドが起きる");
@@ -170,7 +167,11 @@ fn picking_disables_the_item_until_the_thread_ends() {
     });
 
     release.send(()).expect("選ぶ画面の代わりは待っている");
-    join_bounded(handle);
+    let moves = || inner.load(Ordering::SeqCst);
+    assert!(
+        join_thread_bounded("選ぶ画面のスレッドの終わり", Some(&moves), handle).is_ok(),
+        "選ぶ画面のスレッドが panic した"
+    );
     let after = (item_enabled(&world), can_pick(&world));
 
     assert_eq!(

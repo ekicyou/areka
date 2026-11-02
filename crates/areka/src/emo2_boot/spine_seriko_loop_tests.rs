@@ -1,7 +1,7 @@
 use super::test_support::{bump_char_window_dpi, opaque_count, variant_name};
 use super::{
-    Duration, Instant, LoopRng, PresentCommand, SPIN_WAIT, SpineHarness, capture_logs,
-    run_attach_phase, run_dpi_phase, settle_bounded, shell_target, spin_wait_until,
+    Duration, Instant, LoopRng, PresentCommand, Progress, SPIN_WAIT, SpineHarness, capture_logs,
+    run_attach_phase, run_dpi_phase, settle_bounded, shell_target, wait_until,
 };
 
 // ===========================================================================
@@ -222,18 +222,26 @@ fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: 
 }
 
 /// `now_ms` の seriko tick を 1 発直接注入し、ちょうど 1 件の `PresentCommand` が rx へ届くまで有界
-/// スピンして返す（`spin_wait_until` の密 yield → backoff sleep）。golden の各コマ遷移 tick は変化
+/// スピンして返す（`wait_until` の密 yield → backoff sleep）。golden の各コマ遷移 tick は変化
 /// 1 件を発行する（6.1/6.2）ため、この直列注入→1 件回収で発行列の順序と内容を決定論的に照合できる。
-/// 届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`spin_wait_until`] の
-/// 時刻期限（注入は 1 発のみで各反復は系を進めない純粋なポーリング＝反復は経過時間の代理にならない）。
+/// 届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`wait_until`] の
+/// 進みの目印（注入は 1 発のみで各反復は系を進めない純粋なポーリング＝反復は経過時間の代理にならない）。
 /// 観測 `buf` は累積＝ラッチゆえ R7.8 の追い越しは構造的に無い。
 fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
     harness.inject_seriko_tick(now_ms);
     let mut buf: Vec<PresentCommand> = Vec::new();
-    spin_wait_until(|| {
-        buf.extend(harness.wiring.drain_received());
-        !buf.is_empty()
-    });
+    // 目印は受けた指令の数（届けば即座に満たされるので、打ち切りは 30 秒届かなかったときの［止まった］）。
+    let received = std::cell::Cell::new(0u64);
+    let _ = wait_until(
+        "seriko の 1 tick の指令",
+        Progress::Count(&|| received.get()),
+        || {
+            buf.extend(harness.wiring.drain_received());
+            received.set(buf.len() as u64);
+            !buf.is_empty()
+        },
+    )
+    .inspect_err(|failure| eprintln!("{failure}"));
     assert_eq!(
         buf.len(),
         1,

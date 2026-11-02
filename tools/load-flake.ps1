@@ -44,6 +44,15 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   pwsh -NoProfile -File tools/load-flake.ps1 -Label before -NoCapture
   pwsh -NoProfile -File tools/load-flake.ps1 -Label smoke -Rounds 1 -Burners 2 -Filter some::test
   pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet -Burners 0 -Rounds 3
+  pwsh -NoProfile -File tools/load-flake.ps1 -Label case1 -Filter emo2_boot::frame -SetEnv RUST_LOG=trace
+  pwsh -NoProfile -File tools/load-flake.ps1 -Label case3 -Binary wintf-lib -Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source -Burners 0
+
+spec areka-test-binary-stability（design「LoadFlake」）で足した口:
+  -Filter は複数可（libtest の位置引数として 1 つずつ渡す）。
+  -Binary areka-bin（既定・-p areka --bin areka）／wintf-lib（-p wintf --lib）。
+  -SetEnv NAME=VALUE の並びは子の cargo の環境にだけ置く（このプロセスの環境は変えない）。conditions.txt に書く。
+  -Ignored は libtest に --ignored --exact を渡す（較正のため）。
+  summary.txt の回ごとの欄に AREKA-CRASH を含む行を全部写す（行の途中も探す）。全回のまとめに落ちの報告のあった回の数を足す。
 ================================================================================
 #>
 
@@ -55,7 +64,13 @@ param(
     # 既定は論理 CPU の数 × 2。0 なら負荷なし
     [ValidateRange(0, 4096)][int]$Burners = -1,
     # テストの名前の絞り込み（空なら実行ファイルの全部）
-    [string]$Filter = '',
+    [string[]]$Filter = @(),
+    # 回す実行ファイル（areka-bin＝-p areka --bin areka・wintf-lib＝-p wintf --lib）
+    [ValidateSet('areka-bin', 'wintf-lib')][string]$Binary = 'areka-bin',
+    # 子の cargo にだけ渡す環境変数（NAME=VALUE の並び）
+    [string[]]$SetEnv = @(),
+    # --ignored --exact を渡す（較正のため）
+    [switch]$Ignored,
     # --test-threads にそのまま渡す（0 なら渡さない）
     [ValidateRange(0, 4096)][int]$TestThreads = 0,
     [ValidateRange(1, 1440)][int]$RoundTimeoutMin = 30,
@@ -71,6 +86,11 @@ $WaitCutPrefix = "`u{5F85}`u{3061}`u{306E}`u{6253}`u{3061}`u{5207}`u{308A}"
 $COUNTER_PATH_MACHINE_CPU = '\Processor(_Total)\% Processor Time'
 $CPU_SAMPLE_SEC = 5
 $UTF8 = [System.Text.UTF8Encoding]::new($false)
+
+# pwsh -File では a,b が 1 つの文字列で来るので , でも分ける（値に , を含む環境変数は渡せない）
+$Filter = @($Filter | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$SetEnv = @($SetEnv | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+foreach ($kv in $SetEnv) { if ($kv -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw "-SetEnv expects NAME=VALUE: $kv" } }
 
 $logicalCpus = [Environment]::ProcessorCount
 if ($Burners -lt 0) { $Burners = $logicalCpus * 2 }
@@ -93,14 +113,33 @@ function Start-Logged([string]$cargoArgs, [string]$logPath) {
     $psi.WorkingDirectory = $repoRoot
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
+    # 子の環境にだけ置く（このプロセスの環境は汚さない）
+    foreach ($kv in $SetEnv) { $i = $kv.IndexOf('='); $psi.Environment[$kv.Substring(0, $i)] = $kv.Substring($i + 1) }
     return [System.Diagnostics.Process]::Start($psi)
 }
 
 # 自分で起こしたプロセスの木だけを番号で止める
 function Stop-Tree([System.Diagnostics.Process]$p) {
     if ($null -eq $p -or $p.HasExited) { return }
+    # 止める前に子孫を Process で握る（cmd だけ待つと、ログを握る cargo やテストの実行ファイルが後に残る）
+    $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId)
+    $ids = [System.Collections.Generic.List[int]]::new(); $ids.Add($p.Id)
+    for ($i = 0; $i -lt $ids.Count; $i++) {
+        foreach ($c in $all) { if ($c.ParentProcessId -eq $ids[$i] -and -not $ids.Contains([int]$c.ProcessId)) { $ids.Add([int]$c.ProcessId) } }
+    }
+    $tree = @($ids | ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
     & taskkill.exe /T /F /PID $p.Id *> $null
-    $null = $p.WaitForExit(30000)
+    foreach ($t in $tree) { $null = $t.WaitForExit(30000) }
+}
+
+# 止めた木が書き手の握りを放すまで待つ（ほかに書き手が居ない時に開けたら放された）。放されたら $true
+function Wait-LogReleased([string]$path, [int]$timeoutSec = 60) {
+    if (-not (Test-Path $path)) { return $true }
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
+    while ($true) {
+        try { [IO.File]::Open($path, 'Open', 'Read', 'Read').Dispose(); return $true }
+        catch [IO.IOException] { if ((Get-Date) -ge $deadline) { return $false }; Start-Sleep -Milliseconds 500 }
+    }
 }
 
 function Measure-Cpu {
@@ -128,8 +167,12 @@ function Get-Median([double[]]$xs) {
 
 # round-N.log を UTF-8 で読み、まとめに要るものを取り出す
 function Read-Round([string]$logPath) {
-    $lines = if (Test-Path $logPath) { [IO.File]::ReadAllLines($logPath, $UTF8) } else { @() }
-    $r = [ordered]@{ ResultLines = @(); Passed = 0; Failed = 0; FailedNames = @(); WaitLines = @(); CleanupLines = @(); OsError5 = 0 }
+    # 書き手が残っていても読めるように共有で開く（読めずに回の結果を落とさない）
+    $lines = if (Test-Path $logPath) {
+        $fs = [IO.File]::Open($logPath, 'Open', 'Read', 'ReadWrite, Delete')
+        try { $sr = [IO.StreamReader]::new($fs, $UTF8); @($sr.ReadToEnd() -split "`r?`n") } finally { $fs.Dispose() }
+    } else { @() }
+    $r = [ordered]@{ ResultLines = @(); Passed = 0; Failed = 0; FailedNames = @(); WaitLines = @(); CleanupLines = @(); OsError5 = 0; CrashLines = @() }
     $inFailList = $false
     $names = [System.Collections.Generic.List[string]]::new()
     foreach ($l in $lines) {
@@ -144,6 +187,8 @@ function Read-Round([string]$logPath) {
             elseif ($l -ne '') { $inFailList = $false }
         }
         if ($l.Contains($WaitCutPrefix)) { $r.WaitLines += $l }
+        # 落ちの報告（行の途中も探す）
+        if ($l.Contains('AREKA-CRASH')) { $r.CrashLines += $l }
         # 行の途中も探す（--nocapture では他のテストの出力が行の頭に割り込む）
         if ($l.Contains('sample-ghost-kit:')) {
             $r.CleanupLines += $l
@@ -161,8 +206,10 @@ $roundResults = [System.Collections.Generic.List[object]]::new()
 $current = $null
 $startedAt = Get-Date
 
-$testArgs = '-p areka --bin areka --'
-if ($Filter) { $testArgs += " `"$Filter`"" }
+$target = if ($Binary -eq 'wintf-lib') { '-p wintf --lib' } else { '-p areka --bin areka' }
+$testArgs = "$target --"
+foreach ($f in $Filter) { if ($f) { $testArgs += " `"$f`"" } }
+if ($Ignored) { $testArgs += ' --ignored --exact' }
 if ($TestThreads -gt 0) { $testArgs += " --test-threads $TestThreads" }
 if ($NoCapture) { $testArgs += ' --nocapture' }
 
@@ -173,7 +220,10 @@ Add-Text 'conditions.txt' @(
     "label: $Label"
     "rounds: $Rounds"
     "burners: $Burners"
-    "filter: $(if ($Filter) { $Filter } else { '(none: whole binary)' })"
+    "binary: $Binary"
+    "filter: $(if ($Filter) { $Filter -join ' ' } else { '(none: whole binary)' })"
+    "ignored: $(if ($Ignored) { 'yes (--ignored --exact)' } else { 'no' })"
+    "set_env: $(if ($SetEnv) { $SetEnv -join ' ' } else { '(none)' })"
     "test_threads: $(if ($TestThreads -gt 0) { $TestThreads } else { '(not passed)' })"
     "round_timeout_min: $RoundTimeoutMin"
     "nocapture: $(if ($NoCapture) { 'yes' } else { 'no' })"
@@ -186,8 +236,8 @@ Say "out: $outDir"
 
 try {
     # ⑴ 負荷の前に実行ファイルを作る
-    Say 'build: cargo test -p areka --bin areka --no-run'
-    $b = Start-Logged 'test -p areka --bin areka --no-run' (Join-Path $outDir 'build.log')
+    Say "build: cargo test $target --no-run"
+    $b = Start-Logged "test $target --no-run" (Join-Path $outDir 'build.log')
     $b.WaitForExit()
     if ($b.ExitCode -ne 0) {
         $status = "build failed (exit $($b.ExitCode)); see build.log"
@@ -231,8 +281,10 @@ try {
         if ($timedOut) { Stop-Tree $current }
         $current.WaitForExit()
         $sw.Stop()
+        $released = Wait-LogReleased $log
         $r = Read-Round $log
         $r.Round = $n
+        $r.LogReleased = $released
         $r.ExitCode = if ($timedOut) { 'killed' } else { $current.ExitCode }
         $r.WallSec = [math]::Round($sw.Elapsed.TotalSeconds, 1)
         $r.TimedOut = $timedOut
@@ -268,6 +320,7 @@ try {
         $s.Add("exit_code: $($r.ExitCode)")
         $s.Add("wall_sec: $($r.WallSec)")
         $s.Add("timed_out: $(if ($r.TimedOut) { "yes (> $RoundTimeoutMin min)" } else { 'no' })")
+        if (-not $r.LogReleased) { $s.Add('log_released: no (a writer still held round log after 60 s; read with shared access, the tail may be missing)') }
         $s.Add("test_result: $(if ($r.ResultLines.Count) { $r.ResultLines -join ' | ' } else { '(no test result line)' })")
         $s.Add("passed: $($r.Passed)  failed: $($r.Failed)")
         $s.Add("failed_tests: $($r.FailedNames.Count)")
@@ -276,6 +329,8 @@ try {
         $r.WaitLines | ForEach-Object { $s.Add("  $_") }
         $s.Add("cleanup_lines (sample-ghost-kit:): $($r.CleanupLines.Count)  os_error_5: $($r.OsError5)")
         $r.CleanupLines | ForEach-Object { $s.Add("  $_") }
+        $s.Add("crash_lines (AREKA-CRASH): $($r.CrashLines.Count)")
+        $r.CrashLines | ForEach-Object { $s.Add("  $_") }
     }
     $walls = @($roundResults | ForEach-Object { [double]$_.WallSec })
     $redRounds = @($roundResults | Where-Object { $_.TimedOut -or $_.ExitCode -ne 0 }).Count
@@ -284,6 +339,7 @@ try {
     $s.Add("rounds_run: $($roundResults.Count) / $Rounds")
     $s.Add("rounds_red: $redRounds")
     $s.Add("rounds_timed_out: $(@($roundResults | Where-Object TimedOut).Count)")
+    $s.Add("rounds_with_crash_report: $(@($roundResults | Where-Object { $_.CrashLines.Count -gt 0 }).Count)")
     $s.Add("passed_total: $(Get-Sum ($roundResults | ForEach-Object Passed))  failed_total: $(Get-Sum ($roundResults | ForEach-Object Failed))")
     $s.Add("wait_failure_lines_total: $(Get-Sum ($roundResults | ForEach-Object { $_.WaitLines.Count }))")
     $s.Add("cleanup_lines_total: $(Get-Sum ($roundResults | ForEach-Object { $_.CleanupLines.Count }))  os_error_5_total: $(Get-Sum ($roundResults | ForEach-Object OsError5))")

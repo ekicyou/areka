@@ -389,8 +389,9 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
 ///
 /// 負荷の下で、書いたばかりのファイルをウイルス対策が一瞬開くのと入れ替えが重なった
 /// 再現（spec: `areka-P0-ghost-session-test-load-flake` の負荷の再現 4.6）。⑴と同じ
-/// 掴み方で 1 手目の退避を確かに拒ませ、約 200 ms 後に別のスレッドで放す。ずっと
-/// 掴んだままの⑴は今までどおり失敗する（待つ分だけ約 2 秒遅くなる）。
+/// 掴み方で 1 手目の退避を確かに拒ませ、拒みを観測した継ぎ目（`ON_RENAME_REFUSED`）
+/// の中で放す。眠りも放す側のスレッドも無いので、負荷で放すのが遅れて上限を越すことが
+/// ない。ずっと掴んだままの⑴は今までどおり失敗する（待つ分だけ約 2 秒遅くなる）。
 #[test]
 fn a_destination_held_briefly_by_another_process_still_commits() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -410,9 +411,15 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
     let probe = work.path().join("probe");
     let refused = fs::rename(&destination, &probe).expect_err("掴まれている間は動かせない");
     assert_eq!(refused.raw_os_error(), Some(5), "アクセス拒否で拒まれる");
-    let release = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(200));
-        drop(handle);
+    // 最初に拒まれた時に掴みを放す。呼ばれた回数は、掴みに当たって試し直した証。
+    let refusals = std::rc::Rc::new(std::cell::Cell::new(0u32));
+    let counter = std::rc::Rc::clone(&refusals);
+    let mut handle = Some(handle);
+    crate::install::ON_RENAME_REFUSED.with(|seam| {
+        *seam.borrow_mut() = Some(Box::new(move || {
+            counter.set(counter.get() + 1);
+            drop(handle.take());
+        }));
     });
 
     let outcome = commit_all(
@@ -422,8 +429,9 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
         Vec::new(),
         &states,
     );
-    release.join().expect("放す側は落ちない");
+    crate::install::ON_RENAME_REFUSED.with(|seam| *seam.borrow_mut() = None);
     let outcome = outcome.expect("短い掴みは待ち切って確定できる");
+    assert!(refusals.get() >= 1, "掴みに当たって試し直した");
 
     assert_eq!(
         outcome

@@ -97,6 +97,7 @@ fn snapshot_without_a_scope_does_not_judge_it() {
 
 use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
 
+use crate::emo2_boot::spine::Progress;
 use crate::mcp::dump_surface::WaitAnswer;
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 
@@ -133,7 +134,11 @@ fn dispatch_and_wait(
     let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
     let waited = match &at_once {
         Some(_) => None,
-        None => pending.wait_answer().map(|a| (a.ghost, a.outcome)),
+        // 例外（要件 7.3・`load-repro.md` の ⑵）: 空の World には数える足場が無く、答えの仕事は製品の
+        // 中の閉包で符号化のスレッドに渡るのでテストの側から走り始めを数える口も足せない。目印なしで待つ。
+        None => pending
+            .wait_answer(Progress::Unknown)
+            .map(|a| (a.ghost, a.outcome)),
     };
     (at_once, waited)
 }
@@ -253,7 +258,11 @@ fn real_unit_answers_two_scripts_without_running_them() {
     let first = ask(r"\0こんにちは\![change,ghost,B]\-");
     let second = ask(r"\1もう一度\-\![change,ghost,B]まだ読む\e");
     rig.world.run_schedule(wintf::ecs::Input);
-    let both = [&first, &second].map(|p| p.wait_answer().map(|a| (a.ghost, a.outcome)));
+    let probe = rig.progress_probe();
+    let both = [&first, &second].map(|p| {
+        p.wait_answer(Progress::Count(&probe))
+            .map(|a| (a.ghost, a.outcome))
+    });
     // 答えの後にもう 1 回段を回してから、kanade に先の依頼を片付けさせて見る。
     rig.world.run_schedule(wintf::ecs::Input);
     let still = (

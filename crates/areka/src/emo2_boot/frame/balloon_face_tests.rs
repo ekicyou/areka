@@ -20,9 +20,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::{FaceCause, after_drain, changed_faces, select_balloon_face};
-use crate::emo2_boot::frame::test_support::{
-    balloon_is_manual, headless_wiring_with, manual_balloon_runtime, zero_clock,
+use crate::emo2_boot::frame::balloon_runtime_test_support::{
+    balloon_is_manual, manual_balloon_runtime,
 };
+use crate::emo2_boot::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::emo2_boot::frame::{Emo2Wiring, balloon_target, shell_target};
 
 /// 書き手が文字の層へ矢印の絵を入れたときに文字の層が残す 1 行（`actor_scroll.rs`）。
@@ -62,13 +63,19 @@ fn two_face_definitions() -> ScopeBalloonDefinitions {
 }
 
 /// 手動の位置にいる文字の層と束（scope 0）を持つ結線。World は提示の資源ごと返す。
-fn rig() -> (World, Emo2Wiring, ScopeBalloonDefinitions) {
-    let (world, runtime) = manual_balloon_runtime("0");
+/// GPU の許可は組の先頭で返す（World の装置より後に捨てる）。
+fn rig() -> (
+    crate::emo2_boot::spine::GpuPermit,
+    World,
+    Emo2Wiring,
+    ScopeBalloonDefinitions,
+) {
+    let (permit, world, runtime) = manual_balloon_runtime("0");
     let mut wiring = headless_wiring_with(mpsc::channel().1, zero_clock());
     wiring.runtime = runtime;
     let defs = two_face_definitions();
     wiring.balloon_definitions.insert(0, defs.clone());
-    (world, wiring, defs)
+    (permit, world, wiring, defs)
 }
 
 /// 書き手を 1 回呼び、文字の層が受け取った上向きの矢印の絵の有無を返す。
@@ -89,7 +96,7 @@ fn markers_up(events: &[CapturedEvent]) -> Vec<bool> {
 /// 装着（前の面が無い）は手動を捨てない。
 #[test]
 fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
-    let (mut world, mut wiring, defs) = rig();
+    let (_permit, mut world, mut wiring, defs) = rig();
 
     assert_eq!(
         select(&mut wiring, &mut world, 0, FaceCause::Attach),
@@ -131,7 +138,7 @@ fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
 /// （＝既定の丸・script-small-tags 要件 5.1・5.2）。面 2 → 0 で絵を外す。
 #[test]
 fn face_switch_hands_the_inline_marker_of_the_face() {
-    let (mut world, mut wiring, _) = rig();
+    let (_permit, mut world, mut wiring, _) = rig();
     let inline = |wiring: &mut Emo2Wiring, world: &mut World, face| {
         let ((), events) =
             capture(|| select_balloon_face(wiring, world, 0, face, FaceCause::FaceChange));
@@ -155,7 +162,7 @@ fn face_switch_hands_the_inline_marker_of_the_face() {
 /// 同じ面の番号で書き手を通っても（バルーンの切り替えなど）手動は捨てない。
 #[test]
 fn same_face_keeps_manual() {
-    let (mut world, mut wiring, _) = rig();
+    let (_permit, mut world, mut wiring, _) = rig();
     select(&mut wiring, &mut world, 2, FaceCause::Attach);
     restart_manual(&wiring);
     select(&mut wiring, &mut world, 2, FaceCause::BalloonSwitch);
