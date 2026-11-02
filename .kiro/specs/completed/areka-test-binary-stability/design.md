@@ -31,7 +31,7 @@
 
 ### This Spec Owns
 - 落ちの報告の仕掛け（`areka` と `wintf` のテストのプロセスの中だけで働く、捕まえられなかった例外の最後の受け手）と、それをわざと働かせる較正のテスト。
-- 測りの手順と記録（`.kiro/specs/areka-test-binary-stability/load-repro.md`）: 条件・回数・上限の時間・結果・原因の経路・待ちの数え直し・件 4 の見立て・件 5 の赤の文・所要時間の比べ。
+- 測りの手順と記録（`.kiro/specs/completed/areka-test-binary-stability/load-repro.md`）: 条件・回数・上限の時間・結果・原因の経路・待ちの数え直し・件 4 の見立て・件 5 の赤の文・所要時間の比べ。
 - `tools/load-flake.ps1` の口の広げ（絞り込みを複数・`wintf` の lib を回す口・子へ渡す環境変数・落ちの報告の行のまとめ）。
 - 待ちの部品 `crates/areka/src/emo2_boot/spine_wait.rs` の、打ち切りの長さを渡す内側の形・`join_bounded` の 1 本化・GPU の装置の許可の上限つきの待ち。
 - `crates/areka/src` のテストの足場の目印（`LapRig`・`SpineHarness` とその仲間の `StageSink`・作業プールの見張り・MCP の答えの待ち）と、15 か所の移し。
@@ -121,7 +121,7 @@ crates/areka/src/emo2_boot/
 └── spine_conformance_support_stage_tests.rs  # 新: spine_conformance_support_tests.rs の後ろ半分（696 行・816 行の待ちを含む檻）を移す
 crates/wintf/src/
 └── test_crash_report.rs              # 新: crash_report_test_support.rs と同じ中身の写し。lib.rs から #[cfg(test)] で引く
-.kiro/specs/areka-test-binary-stability/
+.kiro/specs/completed/areka-test-binary-stability/
 └── load-repro.md                     # 新: 測りの記録（条件を先に書き、結果を後から足す）
 ```
 
