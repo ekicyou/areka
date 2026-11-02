@@ -1,4 +1,4 @@
-//! 写しの相手: crates/areka/src/emo2_boot/crash_report_test_support.rs（こちらは許可の持ち手の表と許可の測りの口を持たない）
+//! 写しの相手: crates/areka/src/emo2_boot/crash_report_test_support.rs（こちらは許可の持ち手の表を持たない）
 //!
 //! テストのプロセスの落ちの報告（areka-test-binary-stability 設計「CrashReport」・要件 1.1・1.10）。
 //!

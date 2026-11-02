@@ -42,6 +42,7 @@
 
 - 6.5 の後: ⑴ の残り 11 か所を目印つきの待ち（`wait_until`／`wait_recv`・`Progress::Count`）へ移した。目印は、spine の起動・閉じ・保持＝SHIORI の `call_count()`（起動の字の層の待ちはそれに捕まえたログの行の数を足す）、seriko の輪＝受けた指令の数、終わりの締切＝`call_count()`（354 の予約の発火は `unblock_calls()`）、作業プールの見張り（`ghost_session_restart_tests.rs`）＝テストの側に足した口（`Input` 段の吸い出しを包んだ `drain_counting` が届いた閉包の数を `AtomicU64` で数える・要件 7.3。作業プールのスレッドで走り始めた数は製品の閉包の中なので数えていない）。MCP の答えの待ちは `wait_answer(&self, progress: Progress<'_>)` にし、呼び手 13 か所（design の「8 か所」を行で数え直すと 13）がそれぞれ自分の足場の目印を渡す（`GpuRig`・`SwitchRig`＝`progress_probe()`、`dump_surface_tests.rs` の符号化のスレッドの檻＝仕事が走り始めた数）。grep `spin_wait_until(` は定義の 1 行だけになった。
 - **例外（要件 7.3）**: `mcp/check_script_tests.rs` の `dispatch_and_wait` は `Progress::Unknown` で待つ。空の World には数える足場が無く、答えの仕事は製品の中の閉包で符号化のスレッドへ渡るので、テストの側から走り始めを数える口も足せない（口を足すには製品の `check_script::handle` に継ぎ目が要る）。
+- **7.1 の数え直しで漏れていた `Progress::Unknown` の待ち 3 か所（要件 7.6 の起票の材料として記録・7.3 の例外にはしない）**: `emo2_boot/readme_script_e2e_tests.rs:71`（`wait_until("OnBoot の Leave", Progress::Unknown, ...)`）・`emo2_boot/script_security_e2e_tests.rs:110`（`wait_until("OnBoot の中断の合図", Progress::Unknown, ...)`）・`install/desk_overwrite_tests.rs:244`（`run_bounded_watching("起動の直後の記憶の書き込み", Progress::Unknown, ...)`）。3 か所とも本 spec より前から main にあり、7.1 の数え直しで拾えていなかった。前の 2 つは待ちの中で dispatcher へ Tick を注入して合図の受信端を読む形、後の 1 つは書き手のフェンスを 1 回呼ぶだけの形で、目印を渡せる口があるかは見ていない（見ていないので「目印を持てない」という 7.3 の例外とは書かない）。本 spec の走行（⑹・⑿）でこの 3 つが赤になったことは無い（⑿ は 5 回とも赤 0）ので 7.6 のとおり移さず、完了のときの起票の材料として残す。
 
 **その外の文言の無い待ち（要件 7.6・数えて記録するだけ・本 spec の走行で赤になったものだけ移す）**
 
@@ -507,6 +508,7 @@ X1b（負荷なし・4 スレッド）: 2.7〜8.3 秒。
 ## ⑾ 修正の後の静かな机の全体テストと 1.20 倍の線
 
 - 伝えた見込み: 回す前に所要時間を開発者へ伝えた（会話で・伝えた文言はここに控えていない）。
+- Adjacent の spec の着地（要件 9.5）: 測りの間に着地したものは 0 件。確かめ: `git log --oneline HEAD..main` が空（2026-11-02・main がこのブランチの分岐点から進んでいない）ので、基準 ⑷ の採り直しは要らなかった。
 - 条件: コミット `fb16b102`・未コミット 0・`test,sole` を握る（静かな机）・`pwsh -NoProfile -File tools/test-all.ps1`（引数なし）。記録は `target\t72-test-all.log`。
 - 結果: 全段緑（`all steps green`）。2026-11-02 08:08:28 → 08:18:22。
 
