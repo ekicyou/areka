@@ -506,4 +506,74 @@ X1b（負荷なし・4 スレッド）: 2.7〜8.3 秒。
 
 ## ⑾ 修正の後の静かな机の全体テストと 1.20 倍の線
 
+- 伝えた見込み: 回す前に所要時間を開発者へ伝えた（会話で・伝えた文言はここに控えていない）。
+- 条件: コミット `fb16b102`・未コミット 0・`test,sole` を握る（静かな机）・`pwsh -NoProfile -File tools/test-all.ps1`（引数なし）。記録は `target\t72-test-all.log`。
+- 結果: 全段緑（`all steps green`）。2026-11-02 08:08:28 → 08:18:22。
+
+| 段 | 秒 |
+|---|---|
+| `sample fetch` | 3 |
+| `add i686 target` | 0 |
+| `build i686 artifacts` | 1 |
+| `fmt --check` | 6 |
+| `x64 workspace tests` | 522 |
+| `i686 tests (host-32)` | 41 |
+| `crates.io pre-publish check (package only)` | 2 |
+| `encoding check` | 10 |
+| `release notes check` | 1 |
+| `roadmap overview check` | 2 |
+| `i686 helper sync check` | 4 |
+| `sample fetch check` | 1 |
+| `i686 helper beside areka.exe` | 0 |
+| 合計 | 593 |
+
+**基準（⑷）と並べる**
+
+| 計り | 修正の前（⑷） | 修正の後 | 1.20 倍の線 | 比 |
+|---|---|---|---|---|
+| 全体（段の合計） | 872 秒 | 593 秒 | 1046 秒 | 0.68 倍 |
+| うち `x64 workspace tests` | 734 秒 | 522 秒 | — | 0.71 倍 |
+| `areka` の実行ファイル（`src\main.rs` の unittests・`finished in`） | 93.83 秒（4153 passed・5 ignored） | 91.85 秒（4163 passed・6 ignored） | 112.6 秒 | 0.98 倍 |
+
+- 全体も `areka` の実行ファイルも 1.20 倍の線より下（要件 9.9）。`areka` の実行ファイルのテストは基準より 10 本増え、無視は 1 本増えた（この spec で足した檻の分。内訳はここでは数え分けていない）。
+- 見張り（要件 9.8・10.4・10.5）: `x64 workspace tests` の中で、1 ファイル 1,000 行の番人（`crates\log-capture-kit\tests\file_length_guard_test.rs`）が 6 passed・0 failed、一時パスの迂回の見張り（同じ crate の `temp_path_guard_test.rs`）が 16 passed・0 failed。番人の例外表には行を足していない。
+
 ## ⑿ 最後の負荷 5 回の赤の読み分け
+
+- 伝えた見込み: 「1 回 10〜18 分ほど・合わせて 50〜90 分」（回す前・会話で開発者へ）。実際は 73 分（08:18:38 → 09:31:44）で、見込みの内に収まった。
+- 条件: コミット `fb16b102`（`dirty: no`）・`pwsh -NoProfile -File tools/load-flake.ps1 -Label final -NoCapture`・負荷の子プロセス 44 本（論理 CPU 22・負荷の前の CPU 平均 2.9%・負荷の間の平均 90.2%・最大 96.1%）・`cargo test -p areka --bin areka -- --nocapture`・絞り込みなし・スレッドの数は既定・1 回の上限 30 分。負荷の子プロセスは終わりに全部止まった（`remaining after stop: 0`）。
+- 記録: `target\load-flake\final-20261102-081838\`（`summary.txt`・`conditions.txt`・`round-1.log`〜`round-5.log`）。
+- 結果: 2026-11-02 08:18:38 → 09:31:44。5 回とも終了コード 0・上限越え 0。
+
+| 回 | 秒 | passed | failed | 待ちの打ち切りの行 | 後片付けの行 | `os error 5` | `AREKA-CRASH` |
+|---|---|---|---|---|---|---|---|
+| 1 | 1074.3 | 4163 | 0 | 4 | 0 | 0 | 0 |
+| 2 | 862.3 | 4163 | 0 | 4 | 0 | 0 | 0 |
+| 3 | 795.4 | 4163 | 0 | 4 | 0 | 0 | 0 |
+| 4 | 829.3 | 4163 | 0 | 4 | 0 | 0 | 0 |
+| 5 | 793.0 | 4163 | 0 | 4 | 0 | 0 | 0 |
+
+- 1 回の所要時間: 中央値 829.3 秒・最長 1074.3 秒。
+
+**赤**: 0 件。どの回も `failed` は 0 で、`FAILED` の行も無い。回し直しはしていない。
+
+**待ちの打ち切りの行の読み分け**（赤ではないが、文言をどれも読んだ）
+
+どの回にも同じ 4 行が出た。`--nocapture` で回したので、テストの中でわざと起こして `catch_unwind` で受け止めた panic の文も表に出る。4 行とも、`round-N.log` で直前の `panicked` の行が指すテストと、文字列を grep した源（`crates\areka\src\emo2_boot\spine_wait_tests.rs`・ほかの源には同じ文字列は無い）とが一致した。
+
+| 行（頭） | 出したテスト | 読み |
+|---|---|---|
+| `'std のスレッド' join did not complete (possible hang) — 待ちの打ち切り［止まった］: 「std のスレッド」— 相手が 30.0 秒のあいだ状態を進めなかった（…それまでの進み 0 回…）` | `emo2_boot::spine::wait_tests::a_thread_that_never_ends_reads_the_same_head_for_both_handles` | わざと終わらないスレッドを立て、読むたびに `SPIN_WAIT`（30 秒）進む偽の時計で待ちの芯を回し、打ち切りの文の頭を確かめる檻。30.0 秒は偽の時計の値で、実時間は待っていない。テストは文を受け止めて頭を確かめ、相手を放して本物の待ちで終わりを受け取って緑。許す（わざとの打ち切り） |
+| `'アクター' join did not complete (possible hang) — 待ちの打ち切り［止まった］: 「アクター」— …（同じ形）` | 同じテスト（アクターの側） | 同じ。std のスレッドとアクターで文の頭が同じであること（要件 4.4）を確かめる片方。許す |
+| `待ちの打ち切り［相手が居ない］: 「落ちる処理」— 0.0〜0.4 秒待ったところで、相手が何も送らずに終わった` | `emo2_boot::spine::wait_tests::a_vanished_worker_panics_with_the_partner_gone_text` | 処理の側でわざと panic させ（`わざと落とす`）、`run_bounded_watching` が「相手が居ない」の文で打ち切ることを確かめる檻。許す |
+| `'落ちる処理' did not complete within 30s (possible hang) — 待ちの打ち切り［相手が居ない］: 「落ちる処理」— …` | 同じテスト（古い呼び名 `run_bounded` の側） | 古い呼び名でも古い文が先頭に来て、今の文が続くことを確かめる片方。許す |
+
+- 4 行とも、檻がわざと打ち切りを起こした文で、どこまで追っても意図した試験に行き着いた。意図の分からない行は無い。
+
+**閉じたこと**
+
+- プロセスの落ち: 0 件（5 回とも `AREKA-CRASH` 0・終了コード 0）。
+- 許さない赤: 0 件（赤そのものが 0）。要件 9.6・9.7 を満たす。
+- 件 4（検体のフォルダの握り・`os error 5`）: 負荷の下でも再び出なかった（後片付けの行 0・`os error 5` 0）。⑼ の直しのとおり。
+- 件 5: 赤は出なかった（⑶・⑼ のとおり原因は分かっていないまま、条件と結果を記録して閉じる・要件 8.7）。
+- third scope（⑽）: `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は 5 回とも赤にならなかった（要件 8.5・8.6・⑽ の直しの後）。
