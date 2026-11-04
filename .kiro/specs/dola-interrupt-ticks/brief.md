@@ -79,3 +79,15 @@ dola は「同じ台本を、別々の表示役（別のプロセスでもよい
 - 1 ファイル 1,000 行の番人に触れない（足すときは新しいファイルへ）。
 - 規模の見込み: L（14〜20 タスク。dola の中の付け替え 6〜8・使い手の追従 5〜8・時計の差し替えと文書 3〜4）。20 を超えるなら、要件の段で storyboard の層を後ろへ切る。
 - 要件定義のモデル: Fable（時刻の型の設計・丸めの決まり・公開の形の変更）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: dola の時刻は今も `f64` の秒で、時計は `dola::runtime::clock::now`（`crates/dola/src/runtime/clock.rs`・121 行）の 1 つ。起票から dola の中を変えた着地は 2 本だけで、時刻の形は動いていない。11-01 から着地した `areka-test-binary-stability` は時刻の形に触れていない（テストの待ちの部品を足しただけ）。
+- 古くなった記述: Current State の「今を読む本番の 2 か所」は、実際に `clock::now` を呼ぶのが wintf の `crates/wintf/src/ecs/world/mod.rs`（`FrameTime` を置く所・944 行＝上限の近く）と本体の `crates/areka/src/emo2_boot/mod.rs`（`TalkClock` へつなぐ所・833 行）で、`graphics/core.rs`・`talk_clock.rs` は型の持ち主。Scope の「`tech.md` の dola の依存の行（今 `windows` が書かれていない）」は、今は書かれている（`tech.md` の dola の節）＝機能の名前を足すだけ。
+- 触るファイル: `crates/dola/` の全体（`Cargo.toml` を含む）、wintf の `world/mod.rs`・`graphics/core.rs`・`widget/text/typewriter_draw.rs`・`ecs/dola/mod.rs`・テストと例、使い手のテスト（emo-text 約 38・本体の emo2_boot 約 46・seriko 16・sakura 11・ghost 5・本体の `input_events` 3・`mcp` 2 ほか）。
+- 規模: L（14〜20）のまま。20 を超えるなら storyboard の層を後ろへ切る（起票の案のまま）。
+- 先に要るもの（見直しと crate 分け）: ロードマップの `audit-dola`・`audit-wintf-graphics-world`・`audit-emo2-boot-spine` は今も重なる。使い手の追従で、**新しく** `audit-parsers-sakura`・`audit-seriko`・`audit-emo-text-layout-draw`・`audit-emo-text-state-actor`・`audit-ghost-catalog`・`audit-wintf-layout-widget`・`audit-wintf-runtime`・`audit-emo2-boot-frame`・`audit-emo2-boot-switch`・`audit-areka-input-menu`・`audit-areka-install-update`・`audit-areka-app` とも重なる（kanade は説明の 1 行だけで重ならない）。本体の emo2_boot と直下のファイルを移す本体の crate 分け 6 本も先に要る。
+- 働きの前提: 無し。同じ時に走らせない相手は `dola-yaml-backend`（`Cargo.toml`・直列化の往復のテスト）・`element-animation-easing`（`easing.rs`）・`seriko-talk-clock-fidelity`・`talk-fast-forward`・`sakura-embed-directive`（`talk_clock.rs`）・`tick-gate-adoption`（`world/mod.rs`）。使い手のテストが広いので、ほかの spec が無い時に 1 本で回す（起票のまま）。
+- 優先度の区分: D（開発者「低優先度」・据え置き）。
+- 要件定義のモデル: Fable（前例の無い公開の口＝dola の時刻の型を作り、6 つの crate と直列化の形がそれに乗る）。
+- 分割の案: 起票のまま（20 を超えたら storyboard の層を後ろへ）。

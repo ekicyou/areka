@@ -76,3 +76,16 @@
 - 1 ファイル 1,000 行の番人に触れない。
 - 規模の見込み: M（8〜12 タスク）。
 - 要件定義のモデル: Opus で足りる（付け替えが主・判断は番人の許す所の一覧と議題 2 つ）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: 起票の後の着地で「今」を読む本番のファイルが増えた（起票の一覧に無いもの）＝本体の `emo2_boot/frame/switch.rs`・`ghost_session_runtime.rs`・`input_events/mod.rs`・`install/{overwrite.rs, fetch_url.rs}`・`mcp/check_script.rs`、wintf の `ecs/clickthrough/monitor.rs`・`ecs/window/command.rs`・`ecs/window_proc/window_pos.rs`・`com/wuc.rs` の `drain_dispatcher_queue`、`crates/areka-user-data/src/copy.rs`、`crates/shiori-host32-helper/src/shiori_proxy.rs`（議題 2）。どれも付け替えか、許す所の一覧に載せる相手。11-01 から着地した `areka-test-binary-stability` が足した待ちの部品（`emo2_boot/spine_wait.rs`）はテストだけの部品で、番人の外。
+- 古くなった記述: Adjacent の `popup-menu-residue` は着地済み。Current State の `transition_diag.rs` は wintf の `ecs/window/transition_diag.rs` のこと（本体の `placement/transition_diag.rs` は「今」を読まない）。
+- 触るファイル: 起票の一覧と上の 12 ファイル、`clippy.toml`（新しいファイル）、`tech.md`。上限の近く＝本体の `main.rs` 986 行・wintf の `world/mod.rs` 944 行・`emo2_boot/ghost_switch.rs` 934 行（足すなら新しいファイルへ）。
+- 規模: 10〜14 タスク（起票の 8〜12 から、増えたファイルの分だけ上げる）。切らない。
+- 先に要るもの（見直しと crate 分け）: ロードマップの見直し 12 本（`audit-wintf-graphics-world`・`audit-wintf-runtime`・`audit-wintf-window`・`audit-wintf-input`・`audit-emo2-boot-frame`・`audit-emo2-boot-switch`・`audit-areka-input-menu`・`audit-areka-install-update`・`audit-areka-app`・`audit-emo-present`・`audit-shiori-host32`・`audit-ghost-catalog`）は今も全部重なる。増えたファイルも同じ 12 本の持ち物で、足す見直しは無い。本体の crate 分け 6 本も全部先に要る（emo2_boot・`input_events`・`exit_wait.rs`・`session_end.rs`・`ghost_switch.rs` が動く）。
+- 働きの前提: `dola-interrupt-ticks`（まだ）。`talk-anchor-interrupt-ticks` が先なら番人で `GetTickCount64` も止める（起票のまま）。
+- 同じ時に走らせない相手: `tick-gate-adoption`・`background-result-tick-wake`（`tick_wake.rs`・`world/mod.rs`・`tick_bridge.rs`）、`menu/trigger.rs` の `link-context-copy`・`menu-thumbnail-preview`・`popup-menu-shell-look`・`tasktray-icon`、`exit_wait.rs` の `install-live-target-hazards`、ツールチップの `shell-tooltip`・`mouse-hover-event`、ドラッグの `window-snap`、`input_events/mod.rs` を触る spec。
+- 優先度の区分: D（開発者「低優先度」・据え置き）。
+- 要件定義のモデル: Opus（付け替えが主・前例の時計の型に乗る）。
+- 分割の案: 無し。

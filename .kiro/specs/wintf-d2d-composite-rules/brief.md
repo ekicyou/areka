@@ -119,3 +119,14 @@
 - **この spec の前提が変わる**: Upstream に `wintf-visual-tree` を足す（Dependencies: none → `wintf-visual-tree`）。合成の規則の型は `VisualDrawContent` の側に置く。重ね方（`D2D1_COMPOSITE_MODE`）・補間・変形・元の矩形の切り抜きの描き分けは `wintf-visual-tree` が先に描く。この spec に残るのは、ブレンド（`D2D1_BLEND_MODE`）・不透明度（`VisualFlags` の予約 `OPACITY_GROUP` を使うかは設計で）・自前の合成の入れ物と描画面への写し・1 ピクセルの読み戻し・残りの議題 2〜4。
 - **WARP の足場は `wintf-visual-tree` が作る**（Approach 5 の足場はあちらで作り、ここは使う）。議題 4（WARP の答えのずれ）も、先に着手するあちらの要件で決める。
 - **下流が 1 本増えた**: `wintf-visual-damage-redraw`（変わった範囲だけ描き直す）は、WUC の描画面が部分の `BeginDraw` を断るので、この spec の自前の合成の入れ物を描き先に使う。入れ物の形（大きさ・形式・写し方）は、部分の描き直しに使える形にする。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: 起票の後に変わったのは 11-02 着地の `areka-test-binary-stability` の 2 点だけで、どちらもテストの中＝WUC の口 `crates/wintf/src/com/wuc.rs` のテスト `begin_draw_roundtrip` の注記（テストのスレッドは暗黙の MTA に居る）と、wintf のライブラリのテストの落ちの報告（`crates/wintf/src/test_crash_report.rs`）。本番の描画の道は変わらない＝`render.rs` の `render_surface` と `com/d2d/mod.rs` の補助 `draw_image`（309 行目）は `SOURCE_OVER` 固定のまま。重ね方・補間・変形・切り抜きは先の `wintf-visual-tree` が描く（10-21 の書き足しのとおり）。
+- 触るファイル: `crates/wintf/src/ecs/graphics/systems/{render,surface}.rs`（156・319 行）・`ecs/visual/draw_content.rs`・`com/d2d/{mod,command_sink,command_types}.rs`（313・470・584 行）・`com/wuc.rs`（422 行）・`com/dxgi.rs`・新しい合成の入れ物と読み戻しのファイル。議題 3 で置き換えを選ぶと wintf の当たり判定（`ecs/widget/bitmap_source/alpha_mask.rs` 448 行・`ecs/layout/hit_region/`）と、emo の α マスクの作り手（`crates/areka-emo-present/src/presenter/budget.rs`・`cache.rs`）まで及ぶ。
+- 規模: 12〜16 タスク（台帳の 10〜14 から上げた＝ブレンドの口・不透明度・自前の入れ物と描画面への写し・同期の 1 ピクセルの読み戻し・WARP のテスト・既存のテスト）。議題 3 で置き換えまで入れると 15〜19。20 以下＝分けない。
+- 先に要るもの: `wintf-visual-tree`。見直しは `audit-wintf-graphics-world`・`audit-wintf-runtime`・`audit-wintf-layout-widget`＝台帳のまま。議題 3 で emo の α マスクまで替えるなら `audit-emo-present` も先に要る（足す候補）。同じウェーブに置けない相手＝`wintf-visual-tree`・`wintf-visual-damage-redraw`（`ecs/visual/`・`render.rs`）・`compose-f16-precision`・`hit-id-pass`（`alpha_mask.rs`・`com/wuc.rs`）。
+- 優先度の区分: A（開発者 10-15「D2D合成ルールを個別に指定できるようにして、高度な合成を実現したい」）。
+- 要件定義のモデル: Fable（時刻と順序の約束を新しく作る＝1 ピクセルをその場で同期して読み戻し、前のフレームの値を使わない。合成の入れ物から WUC の描画面へ写す順と読み戻しの順を決める先例が無い）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 無し。

@@ -75,3 +75,14 @@
 - **優先度の区分**: B（上の Constraints の理由）。
 - **要件定義のモデル**: Opus（表をキャラクターごとに分けるのは、今の表の持ち方を広げるだけ）。
 - **議題の候補**: ⑴ 数字の別名と番号のどちらを先に引くか（SSP で測る）。⑵ `alias.txt` と `surfaces.txt` の両方にあるときの勝ち負け（SSP で測る）。⑶ `surfaces**.txt`（同じ「読むファイル」の所・持ち主なし）も入れるか。⑷ 3 人目からの綴り（`char2.surface.alias` など）を読むか（SSP で測る・`extra-character-windows` との分け方）。⑸ 番号を複数書いたときの「先頭」の決めをそのままにするか。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: どっとさくらの台詞を通す ✅ `shiori2-protocol` が 10-24 に着地した＝実機の確かめを待たせるものは無くなった。同じウェーブに置けない相手に挙げた v0.1.0 の 5 本（`seriko-pattern-calls`・`shell-mouse-cursor`・`animated-surface-log-flood`・`dpi-realign-remembered-chain`・`placement-measure-bake-once`）はどれも着地済み。別名の読みは今も相方の綴りだけ（面の設定を読む所 `crates/areka-parsers/src/shell/decode.rs` の 122 行目）で、`alias.txt` を開く所は今も無い。
+- **触るファイル**: 棚卸㉙のまま。行数は増えた＝シェルを読む所 `crates/areka-emo-present/src/shell_target.rs` 951（855 から・`alias.txt` を読む所は必ず新しい兄弟のファイルへ）・`shell/decode.rs` 623・`areka-emo-compose/src/world.rs` 449・`fold.rs` 411・`areka-seriko/src/resolve.rs` 315・`crates/areka/src/emo2_boot/assets.rs` 540。網羅台帳 `assets.toml` の注記は 6011 行目へずれた。
+- **規模**: S〜M（6〜9）のまま。
+- **先に要るもの（見直しと crate 分けを含む）**: 見直しの spec の後＝`audit-parsers-sakura`（`shell/{decode,model}.rs`）・`audit-emo-present`（`shell_target.rs`）・`audit-emo-compose`（`world.rs`・`fold.rs`）・`audit-seriko`（`resolve.rs`）・`audit-emo2-boot-spine`（`emo2_boot/assets.rs`）。crate 分けは `emo2_boot/assets.rs` を動かす `runtime-module-untangle`・`runtime-crate-split` の後（crates/areka に触るので、6 本のどれとも同じウェーブに置かない）。同じウェーブに置けない未完了の spec＝v0.2.0 の `draw-methods-canon`（`shell/decode.rs`・`shell_target.rs`・`fold.rs`）・`collisionex-regions` と `element-clipping-option`（`decode.rs`・`fold.rs`）・`hit-id-pass`（`decode.rs`）、ほかに `config-parse-diagnostics`・`seriko-script-triggers`（`decode.rs`）・`seriko-missing-surface-default`（面の切り替え）。
+- **優先度の区分**: B（正典の別名が黙って落ちる）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 無し。
+- **見つけた穴・古くなった記述**: 冒頭の「版の段は『いつか』」は roadmap の台帳の行（v0.2.0）と食い違う＝v0.2.0 に置くかは棚卸㉝からの開発者の答え待ち。

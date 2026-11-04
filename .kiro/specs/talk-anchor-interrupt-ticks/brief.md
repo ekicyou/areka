@@ -78,3 +78,17 @@
 - 注入した偽の時間が観測を追い越さない（テストの檻の決まり）。
 - 規模の見込み: M〜L（10〜16 タスク）。
 - 要件定義のモデル: Fable（スレッドをまたぐ時刻の扱い・起点の持ち主の判断）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: Current State は今も正しい。ghost の刻みの既定の時計は `GetTickCount64`（`crates/areka-ghost/src/ticker.rs`）、台詞の刻みの中継は `(now - base) / 1000.0` の秒を送り（`dispatcher.rs`）、sakura は最初の刻みを起点に押す（`crates/areka-sakura/src/drive.rs`）、`areka-ghost` の `sink.rs` は `0.0` を押す、seriko の時計は本体の `emo2_boot/mod.rs` が `GetTickCount64` へつなぐ。kanade は今も dola に依存していない。11-01 から着地した `areka-test-binary-stability` は、テストの偽のミリ秒の時計（`emo2_boot/ghost_switch_test_support.rs` の `clock_ms`）の持ち方を少し変えただけで、時計の形は動いていない。
+- 古くなった記述: Adjacent の `mcp-kanade-tools`・`script-security-level` は着地済み（kanade の列で残るのは `mcp-strict-errors` ほか）。
+- 触るファイル: ghost の `ticker.rs`・`dispatcher.rs`・`sink.rs`、sakura の `drive.rs`（655 行）・`contract.rs`、kanade の `msg.rs`・`schedule/steady.rs`（973 行＝上限の近く・足すなら新しいファイルへ）、seriko の `actor.rs`（828 行）・`talk.rs`、本体の `emo2_boot/{mod.rs, talk_clock.rs}` と偽の時計を使うテスト（emo2_boot 約 8・`mcp` の 1・直下の `shell_balloon_switch_session_lap_tests.rs`）、`doc/COMPAT_ARCHITECTURE.md` の dola の節。
+- 規模: M〜L（10〜16）のまま。
+- 先に要るもの（見直しと crate 分け）: ロードマップの `audit-kanade`・`audit-seriko`・`audit-ghost-catalog`・`audit-parsers-sakura`・`audit-emo2-boot-spine` は今も重なる。テストの分で `audit-emo2-boot-switch`・`audit-areka-install-update`・`audit-areka-app` も**新しく**重なる（どれも `dola-interrupt-ticks` を通して先に済む）。本体の emo2_boot を移す本体の crate 分け（`runtime-module-untangle`・`runtime-crate-split` まで）も**新しく**要る。
+- 働きの前提: `dola-interrupt-ticks`・`seriko-talk-clock-fidelity`（どちらもまだ）。
+- 同じ時に走らせない相手: `seriko-talk-clock-fidelity`・`talk-fast-forward`・`sakura-embed-directive`・`resident-ghost-rotation`・`parallel-visual-script`・`talk-thread-count-growth`・`talk-script-metadata`・`clippy-199-lints`（`drive.rs`）、kanade の `steady.rs` と seriko の `actor.rs` を分け合う列の spec。
+- 優先度の区分: D（開発者「低優先度」・据え置き）。
+- 要件定義のモデル: Opus（ロードマップの欄のとおり）。起点を配る時に押す決まりは dola の設計の約束としてすでに在り、この spec はそれを守らせる付け替え。議題は開発者の裁定で、骨組みの分かれ目ではない。本文の「Fable」はこれに読み替える。
+- 分割の案: 無し。
+- 見つけた穴: sakura の `crates/areka-sakura/src/contract.rs` の 29〜30 行目の説明「本番は `dola::runtime::clock::now()` から elapsed を算出して送る」は古い。本番の中継は ghost の `dispatcher.rs` が `GetTickCount64` のミリ秒から出している。

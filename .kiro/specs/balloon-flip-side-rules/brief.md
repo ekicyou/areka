@@ -70,3 +70,15 @@
 - **要件の段の議題**（答えで作業が変わるもの）:
   1. 件 1 の扱い（相方の窓も避ける／押し込みへ倒す／重なってよい）。SSP の測り ⑴ を見て決める。
   2. 件 2 の右の式の符号を変えるか。SSP の測り ⑵ を見て決める。変えるなら今の利用者の見た目が変わる範囲。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: 前の棚卸の後の着地は、配置のファイル（`crates/areka/src/placement/`）を 1 つも動かしていない。
+- **触るファイル**: 並べ替えの判定 `crates/areka/src/placement/balloon_limit.rs`（301 行）・初期配置の右の式 `placement/resolver.rs`（491 行）・書き込みの関門の呼び出し `placement/follow/window_move.rs`（1,231 行＝上限を超えたまま・足す分は `balloon_limit.rs` へ）・兄弟のテスト（`balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`resolver_*_tests.rs`）・`doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾（許す重なり）。
+- **規模**: S（4〜7 タスク）のまま。
+- **先に要るもの（見直しと crate 分け）**: 起票が 10-22 の突き合わせより後なので、今回はじめて突き合わせた。`balloon_limit.rs`・`resolver.rs` は見直し `audit-placement-core`、`follow/window_move.rs` は見直し `audit-placement-follow` の持ち物で、どちらの見直しも `placement-crate-split`（配置を `crates/areka-placement/` へ移す）の後。よってこの spec は `placement-crate-split` と見直し 2 本の着地を待つ。roadmap の行の「`placement-crate-split` と同じウェーブに置かない」は「着地を待つ」へ強め、見直し 2 本を足す。`audit-placement-follow` の行の「v0.2.0 と触るファイルが重ならない」は古い（この spec と `balloon-script-offset-align` に重なる）。
+- **ほかの未完了の spec と分け合うファイル**: `balloon-script-offset-align`（3 ファイルとも・この spec が先）・`balloon-canon-residue`（`resolver.rs`）・`window-snap`（`resolver.rs`・`window_move.rs`）・`clippy-199-lints`（`window_move.rs`）・`real-run-input-guard-observations`（`balloon_limit.rs`）。
+- **優先度の区分**: B（バルーンが相方の窓に重なる見た目の崩れと、確かめていない向きの疑い）。
+- **要件定義のモデル**: Opus（今ある判定に段を 1 つ足すのと、式の符号の決め）。
+- **分割の案**: なし。
+- **古くなった記述**: 書き込みの関門 `apply_balloon_limit_gate` は `window_move.rs` の 993 行目（起票は 989）、その呼び出しは 715 行目（起票の 1083 ではない）。`window_move.rs` の行数は 1,231（起票は 1,227）。

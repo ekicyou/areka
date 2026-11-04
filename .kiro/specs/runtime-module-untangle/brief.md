@@ -136,3 +136,16 @@
 - **ログの出所**: `log_history.rs:127` の決まりが出所 `areka::emo2_boot` を見ている。改名で `areka::runtime` に変わるので、決まりとテストと `doc/ssp-mcp/log-convention.md` を一緒に直す。直さないと、記録の分け方が黙って外れる。
 - **共通の約束**: roadmap の同じ節のとおり（`crates/areka` を触るほかの spec と同じウェーブに置かない・1,000 行の上限など）。
 - **Fable**: Opus で足りる。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: 着地した `areka-test-binary-stability` が `emo2_boot/` に新しいファイル 3 つ（`crash_report_test_support.rs` 588 行＝テストのプロセスの落ちの報告とプロセスの寿命の MTA・`frame_balloon_runtime_test_support.rs`・`spine_conformance_support_stage_tests.rs`）を足し、待ちの部品 `spine_wait.rs`（631 行・GPU の装置の許可 `GpuPermit` を含む）・`mod.rs`（+5 行）・`frame.rs`（+4 行）を直した。どれもテストの時だけのもので、本体の外（`emo2_boot`・`placement` 以外）を引かない＝外へ移す 10 ファイルと背骨の 6 か所の切り離しは変わらない。
+- **落ちの報告の置き場**: `crash_report_test_support.rs` はテストの実行ファイル 1 つに 1 つ要る作り。この spec では `src/runtime/` へ一緒に移すだけでよいが、次の `runtime-crate-split` で実行ファイルが分かれると本体と新しい crate の両方に要る＝その spec へ申し送る（設計か研究の記録に書く）。
+- **改名で一緒に直す所が増えた**: `crates/wintf/src/test_crash_report.rs` 1 行目の「写しの相手」のパス・`tools/load-flake.ps1` 47 行目の使い方の例（`-Filter emo2_boot::frame`）。wintf を触るので `audit-wintf-runtime`（`crates/wintf/` の `src/ecs/` の外）と同じウェーブに置かない。
+- **触るファイル**: `emo2_boot/` の全部（236 ファイル）・名前を照合する所（`log_history.rs` 127 行目の決まりほか）・`ghost_session.rs`（943 行）・`main.rs`（986 行＝上限の近く・足す行は別のファイルへ）・`doc/ssp-mcp/log-convention.md`・`doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`。`*_cue.rs` は 10 本（起票の 9 本に 10-31 の `stay-on-top-directives` の `window_state_cue.rs` が増えた・本体の外を引かない）。
+- **規模**: 15〜18 タスクのまま（落ちの報告は移すだけ）。
+- **先に要るもの**: `placement-crate-split`（前提がそろい、次に着手できる）。
+- **優先度の区分**: A（開発者が 10-28 に crate 分けと名前の改めを頼んだ）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: なし。
+- **古くなった記述**: 行の番号＝`Emo2Wiring` は `frame/wiring.rs` 59 行目（起票は 55）・`Emo2BootOutcome` は `mod.rs` 259（246）・`Emo2BootInputs` 286（273）・`wire_emo2_boot` 427（414）・`register_emo2_frame_system` 711（689）・`emo2_frame_system` は `frame.rs` 302（284）・呼び出しは `ghost_session.rs` 863（855）。

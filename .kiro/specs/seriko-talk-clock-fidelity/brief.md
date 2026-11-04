@@ -84,3 +84,13 @@
 - **2026-10-15 `/kiro-discovery`（時刻の土台）**: 開発者が「関連する時刻情報は、すべて `QueryUnbiasedInterruptTimePrecise`（100ns の `u64`）から取る」行き先を決め、`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`・`instant-to-interrupt-ticks` の 3 本（どれも据え置き・区分 D）を起票した。`talk-anchor-interrupt-ticks` は、台本の起点を配る時に本物の絶対時刻で押し、文字の層と seriko が起点を見積もらずに読む形へ替える＝この spec の「起点」（1・2）の根を後から取り除く。この spec は区分 B で先に着地する見込みなので、次のとおりにする。
   - 起点の直し方で「seriko の時計を文字の層と同じ時計に揃える」を選ぶなら、揃える先は QPC でなく割り込み時刻（`QueryUnbiasedInterruptTimePrecise`）にする（後で 2 度替えないため）。ただし `dola-interrupt-ticks` の型はまだ無いので、型の新設はこの spec でしない。
   - 「起点を 1 か所で見積もって両方へ配る」を選ぶなら、その 1 か所は `talk-anchor-interrupt-ticks` で「押された起点を読む」に置き換わる前提で、置き場を選ぶ。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+- **前提の変化**: 2026-10-15 の聞き取りで、この spec は時刻の土台（`dola-interrupt-ticks` → `talk-anchor-interrupt-ticks`）の後へ回った。起点の件（1・2）は `talk-anchor-interrupt-ticks` が「押された起点を読む」形で引き取る。上の Constraints の「先に要るものは `seriko-trigger-intervals` の着地だけ」と、申し送りの「区分 B で先に着地する見込み」は古い。コードの目印（seriko の文字の時刻の写し `TalkFeed::restart_chain`・数えを揃える `realign_talk` とその `ponytail:` の印・seriko の時計 `crates/areka/src/emo2_boot/mod.rs` の `tick_count_ms`・文字の層の `RevealSchedule::extend_chunk`・時刻源 `TalkClock::observe_cue`）は今もある。
+- **触るファイル**: seriko の `talk.rs`（123 行）・`trigger.rs`（193）・`looper.rs`（993＝上限の近く・テストは兄弟のファイルへ）・`looper_trigger.rs`（230）。式を共有の関数にするなら文字の層の `crates/areka-emo-text/src/state.rs`（772）、比べるテストを本体に置くなら emo2_boot の側（`mod.rs` 833・`talk_clock.rs` 502）。
+- **規模**: 起点を引き取ってもらうので S〜M（5〜8：写しの見張り・中断の直後の数え落とし・6 と 7 のテスト・8 の天井）。
+- **先に要るもの（見直しと crate 分けを含む）**: 見直し `audit-seriko`・`audit-emo-text-state-actor`・`audit-emo2-boot-spine`（台帳と同じ）。本体の emo2_boot は crate 分けの `runtime-module-untangle`（名前を runtime へ）と `runtime-crate-split`（別の crate へ）が動かす＝emo2_boot に触るなら `placement-crate-split` からの 3 本の後。機能の先は `talk-anchor-interrupt-ticks`（その前に `dola-interrupt-ticks`）と、同じ seriko のファイルを触る `seriko-trigger-lottery-gaps`。
+- **優先度の区分**: B（中断の直後に口パクの数えを落とす・写しを見張るテストが無い）。
+- **要件定義のモデル**: Opus に改める（時計と起点の持ち主の判断は `talk-anchor-interrupt-ticks` へ移った。残りは今の刻みの上の数えの直しとテスト）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 上の 2 か所。`talk-anchor-interrupt-ticks` の brief の隣の spec の節の「`seriko-talk-clock-fidelity`（区分 B・先に着地する見込み）」も同じく古い。

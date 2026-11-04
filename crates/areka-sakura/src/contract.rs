@@ -26,8 +26,8 @@ pub enum SakuraMsg {
     Start(StartTalk),
     /// 時刻前進（注入式）。**talk 起点からの経過秒・0 起点・単調非減少・有限**。
     ///
-    /// 本番は外部 ticker（kanade/clock アクター・ghost-setup 結線）が
-    /// `dola::runtime::clock::now()` から elapsed を算出して送る（スコープ外シーム）。
+    /// 本番は areka-ghost の dispatcher（`dispatcher.rs` の `on_tick`）が、ticker の送る
+    /// 単調なミリ秒（既定は `GetTickCount64`）から talk 起点の elapsed を算出して送る（スコープ外シーム）。
     Tick(f64),
     /// kanade からの中断（単一 Close funnel・R7）。areka-actor 停止規約の Close 相当。
     Close,

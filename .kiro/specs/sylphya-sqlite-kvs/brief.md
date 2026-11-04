@@ -104,3 +104,13 @@ areka の値の持ち方が、置き場によってばらばらである。覚�
 - **件 1: 平らな名前を消す口が無い**。sylphya の `PublishStatic`（`crates/areka-sylphya/src/actor.rs`）は上書きだけで、名前を消す効果を持たない。descript の読み直し（`\![reload,descript]`・MCP の `reload`）で `sakura.name`・`sakura.name2`・`kero.name` の行を消すと、前の `selfname`・`selfname2`・`keroname` が残る（書き換え・追加は正しく替わる）。読み直しの道は `areka-ghost/src/sylphya_wiring.rs` の名前の段。
   - 起票の理由: 直すには sylphya に消す口（書き換えの電文に「無い」を表す形）が要り、本 spec が作り直す KVS の口と重なる。読み直しの側は消す口ができれば名前の段から「無い」を渡すだけ。
   - 確かめ方: descript の 3 行を消して読み直し、`get_property` が 3 つとも値なしを返すこと。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+- **前提の変化**: 上流の `readonly-mode`（10-24・書かない継ぎ目は `crates/areka-sylphya/src/persist/withhold.rs` の「書くのを控えた」結末）と `property-name-case-fold`（10-23・名前の英字の大小を区別せずに引く）は着地した＝Current State の「大小文字を区別する」と Out の「大小文字を区別しない読み」は古い。`multi-ghost-runtime` は未着地（着地していれば合わせる、のまま）。
+- **触るファイル**: `crates/areka-sylphya/` 全体・本体の `boot_resolve.rs`（769 行）・`placement/persist.rs`（930＝上限の近く）・`roots/mod.rs`・`roots/edit.rs`・`areka-ghost` の `sylphya_wiring.rs`（423）・`runtime.rs`（829）・根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・`tech.md`（rusqlite を足す＝依存の席を使う）。
+- **規模**: L（18〜24）に、上の追記の件 1（名前を消す口）で 1 つ増える。20 を超えても削らない（本文どおり）。
+- **先に要るもの（見直しと crate 分けを含む）**: 見直しは台帳の `audit-sylphya-actor`・`audit-placement-core`・`audit-areka-app`（`boot_resolve.rs`）・`audit-ghost-catalog` に、**`audit-areka-install-update` を足す**（`roots/` はその受け持ち）。crate 分けは `placement-crate-split` が `placement/persist.rs` を別の crate へ、`session-module-gather` → `session-crate-split` が `boot_resolve.rs` と置き場の並びの芯 `roots/mod.rs` を動かす＝6 本の後。
+- **優先度の区分**: A（開発者「sqliteベースへの移行を検討せよ」）。
+- **要件定義のモデル**: Fable（鍵と層で読み書きする新しい口を本体・`areka-ghost`・MCP が使う＝前例の無い公開の契約。複数のプロセスが同じファイルへ書くときの順と消えない保証を新しく組む）。
+- **分割の案**: なし（`mcp-set-property` を一度切り出した）。
+- **見つけた穴・古くなった記述**: Current State の行番号がずれた（中身は同じ）: 共有の写し `mirror.rs:74`・読み口 `reader.rs:63,93,127`・`SylphyaPublisher` は `actor.rs:467`・`apply` は `:264`・`classify_set` は `:141`・`PersistKey` は `persist/mod.rs:124`・`to_canonical_key` は `:173`・`save_scope` は `:288`・`FakePersistIo` は `persist/io.rs:156`・`boot_resolve.rs:369,445`・`placement/persist.rs:326`。

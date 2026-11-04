@@ -60,3 +60,14 @@
 - 区分 A（開発者が起票）・版は **v0.2.0**（開発者「このspecだけは0.1.0の直後、doraとかの基盤整備に置きます」）。
 - パスを動かすので、ほかの spec の brief や設計とぶつかりやすい。v0.2.0 の中でも、ほかの spec の設計が文書のパスを名指す前の早いウェーブに、1 本だけで走らせる。着手の前に、そのとき動いている spec の触るファイルと突き合わせる。
 - 規模の見立て: S〜M（6〜10 タスク）。Opus。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: `doc/` の直下のファイルは 13（11-01 に v0.1.0 の版の門の確かめの記録 `doc/v0.1.0-gate-real-run.md` が加わった）・フォルダは 7 のまま・`doc/` と `docs/` を合わせて 129 ファイル。ほかに増えたのは `doc/release-notes/v0.1.0.md`。どれも案内の表 `doc/README.md` に載っている。直下で表に名前のとおりには載らないのは日付つきの俯瞰 `doc/roadmap-overview-2026-10-16.html` だけ（表は `{YYYY-MM-DD}` の型で載せる＝突き合わせの試験はこの型を読む）。`docs/click_through.md` を名指すコードは 0（steering の歴史とこの brief だけ）。
+- **触るファイル**: `doc/` の外で `doc/`・`docs/` のパスを書くのは、crates の 91 ファイル（ukadoc-survey 44・areka-mcp 16・crates/areka 12〔うち `src/placement/` 2＝`persist.rs`・`resolver.rs`〕・areka-emo-text 9・areka-impl-watch 5・areka-sakura 2・areka-ghost・areka-sylphya・real-run-kit 各 1）・`tools/release-notes.ps1`・`.github/workflows/` 2・スキル 9・steering 6・未完了の spec 96・根の `README.md` と `CLAUDE.md`。ファイルを実際に開くのは ukadoc-survey（`doc/ukadoc-coverage/`）・areka-mcp と crates/areka の試験（`doc/ssp-mcp/` の 3 ファイル）・リリースの道具と流れ（`doc/release-notes/`）で、ほかはコメントの中のパス。いちばん多く名指されるのは `doc/COMPAT_ARCHITECTURE.md`（crates の 18 ファイル）。
+- **規模**: S〜M（6〜10）のまま。大文字の 3 ファイルを改名すると、`COMPAT_ARCHITECTURE.md` の分だけでコード 18 ファイルと steering・spec の多くを直す。
+- **先に要るもの（見直しと crate 分けを含む）**: 働きの上の前提は無い。重なる見直しの spec は、要件の段で決める改名の範囲で決まる＝`COMPAT_ARCHITECTURE.md` を改名するなら 9 本（`audit-emo-text-layout-draw`・`audit-emo-text-state-actor`・`audit-parsers-sakura`・`audit-sylphya-actor`・`audit-ghost-catalog`・`audit-areka-app`・`audit-areka-install-update`・`audit-placement-core`・`audit-emo2-boot-switch`）、`doc/ssp-mcp/` を動かすなら 5 本（`audit-mcp-update-crates`・`audit-parsers-sakura`・`audit-areka-install-update`・`audit-emo2-boot-spine`・`audit-areka-app`）、`impl-watch.md` なら `audit-impl-watch`、`testing.md` なら `audit-test-kits`、`release-notes/` なら `audit-tools-scripts`、`docs/` だけなら 0 本。本体の crate 分けの 6 本はどれも `doc/COMPAT_ARCHITECTURE.md`・網羅台帳の根拠の場所・`structure.md` を書き換えるので、`placement-crate-split` も含めて同じウェーブに置かない（`placement-crate-split` の brief にも書いてある）。
+- **優先度の区分**: A（開発者の起票・「このspecだけは0.1.0の直後」）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 無し。
+- **見つけた穴・古くなった記述**: Current State の「直下に 12 のファイル」「全部で 120 余り」は、今は 13 と 129。

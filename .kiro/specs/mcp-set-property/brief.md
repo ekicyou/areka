@@ -57,3 +57,13 @@
 - v0.2.0・`sylphya-sqlite-kvs` の着地の後。
 - SSP の道具の定義は逐語で写す決まりがある。areka 独自の道具は SSP の道具と名前が衝突しないこと（SSP が後で `set_property` を出したら、その定義に合わせ直す）。
 - 規模の見立て: XS〜S（4〜7 タスク）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+- **前提の変化**: コードは起票のときのまま。書く口 `SylphyaPublisher` は今 `crates/areka-sylphya/src/actor.rs:467`（本文の 463 はずれ）。
+- **触るファイル**: `crates/areka-mcp/src/tools/` の新しい道具のファイルと `mod.rs` と道具の一覧のテスト（`tools_own_tests.rs` ほか）、本体の `crates/areka/src/mcp/` の新しいファイルと振り分けの `mod.rs`（`get_property.rs` 55 行に倣う）。橋渡しのキャッシュ `crates/areka-mcp-bridge/src/cache.rs` は一覧が変わることの扱いしだい。依存は足さない。
+- **規模**: XS〜S（4〜7）のまま。
+- **先に要るもの（見直しと crate 分けを含む）**: 機能の先は `sylphya-sqlite-kvs`。見直しは台帳どおり `audit-mcp-update-crates`・`audit-areka-install-update`（本体の `mcp/`）。crate 分け: 本体の `mcp/mod.rs`・`get_property.rs` はゴーストの席（`ghost_session`）と emo2_boot を名指しする＝`runtime-module-untangle` から `session-crate-split` までが書き換える。どのみち `sylphya-sqlite-kvs` が 6 本の後。
+- **優先度の区分**: A（開発者「MCP の set で書く」）。
+- **要件定義のモデル**: Opus（areka 独自の道具 `check_script` の前例に乗る）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 上の行番号だけ。
