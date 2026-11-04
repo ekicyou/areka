@@ -113,3 +113,15 @@
 - **上の見立ての読み替え**: 丸めが積もる CPU の整数の合成は、D2D の命令の列へ移る見込み。そうなれば f16 は「スワップチェーンを替える」でなく、**D2D の途中の入れ物の精度の設定**（`ID2D1DeviceContext::SetRenderingControls` の buffer precision を 16 ビットの浮動小数に）と、自前の合成の入れ物の形式で得られる（起票時の見立て）。描画面（B8G8R8A8）とスワップチェーンはそのままでよい。
 - **色空間の見立て**: D2D は sRGB の印の無い形式（`B8G8R8A8_UNORM`）の値を変換せずに混ぜるので、途中を f16 にしてもガンマのまま混ぜる今の混ざり方を保てる見込み（上の議題 2 の答えの候補・着手のとき確かめる）。
 - **前提の追加**: `wintf-d2d-composite-rules`（自前の合成の入れ物）。議題 1（目的の読み替え）は「合成の精度まで含める」に寄った＝D2D の道なら同じ口で済む。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: 8 ビットで固定している所（`crates/wintf/src/com/dxgi.rs` の `create_composition_swap_chain`・描画面の `ecs/graphics/systems/surface.rs`・文字の層の `crates/areka-emo-text/src/surface.rs`・合成の `crates/areka-emo-compose/src/blit.rs` の整数の SourceOver）は今もそのまま。11-01 から `crates/wintf/src/com/wuc.rs` が変わったのはテストの注釈だけ。起票の後に、CPU の合成の絵を読む口が 1 つ増えた＝窓を出さずに面を PNG に書く `crates/areka/src/offline_dump/render.rs`（`--offline-dump`）。CPU の合成の精度を広げる形を選ぶなら、`mcp/dump_surface.rs` と同じく直す相手になる。
+- 古くなった記述: Adjacent の `mcp-receiver-bugs` は着地済み。
+- 触るファイル: wintf の `com/dxgi.rs`・`com/wuc.rs`・`ecs/graphics/systems/{surface.rs, render.rs}`・`tests/graphics/surface_pixel_equivalence_test.rs`・`tests/com/d3d11_test.rs`、文字の層の `surface.rs`（995 行＝上限の近く・足すなら新しいファイルへ）・`draw.rs`（848 行）・読み戻しのテスト群、`crates/areka-emo-present/src/display.rs`・`display_gpu_tests.rs`、（形しだいで）`blit.rs`・`offline_dump/render.rs`・`crates/areka/src/mcp/dump_balloon.rs`・`emo2_boot/balloon_background.rs`・先進坑の `pilot-balloon-asset-swap/capture.rs`。
+- 規模: M〜L のまま（測りと引数化だけなら S〜M）。着手の最初の測りで決める。
+- 先に要るもの（見直しと crate 分け）: 直に重なる見直しは `audit-wintf-runtime`・`audit-wintf-graphics-world`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-emo-present`、合成の精度まで含めるなら `audit-emo-compose`。`audit-areka-install-update`（`dump_balloon.rs`）・`audit-emo2-boot-spine`（`balloon_background.rs`＝本体の crate 分けの `runtime-module-untangle`・`runtime-crate-split` も待つ）・`audit-pilot`（`capture.rs`）は、読み戻しを 8 ビットへ変えて返さない形を選んだときだけ重なる。ロードマップの `audit-emo-atlas`（画像を 16 ビットのまま読むのは範囲外）と `audit-wintf-layout-widget`（当たり判定は 8 ビットのまま）は直には重ならない（後者は `wintf-d2d-composite-rules` を通して先に済む）。
+- 働きの前提: `wintf-d2d-composite-rules`・`draw-methods-canon`（どちらもまだ）。
+- 優先度の区分: D（開発者「低優先度で起票」・据え置き）。
+- 要件定義のモデル: Opus（色空間と精度の決めは `wintf-d2d-composite-rules` の口の上に乗る。新しい口は作らない）。
+- 分割の案: 無し（測りの結果で取り下げもありうる）。

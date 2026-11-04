@@ -82,3 +82,14 @@ ukadoc の基準（逐語・`list_sakura_script.html`）:
 - 規模の見立て: S〜M（6〜10 タスク）。Opus。
 - 付帯情報は台本が始まる時点で決め、トークの途中で書き換えない（途中の切り替えに強い形）。
 - 失敗の経路は記録を残す（相対パスが解けない・置き場が無いときは `warn!` を 1 行・黙って飛ばさない）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: 隣に挙げた `mcp-strict-errors` は 10-30 に着地した＝重なりの相手ではなくなった。台本に付いて回る情報は今も送り手の種類と信用度だけ（`crates/areka-talk/src/lib.rs` の `StartTalk`・`origin.rs` の `ScriptOrigin`）。相対パスを解くのは今も `\![open,file]` だけで、基準は今居るゴーストの表から引く（`crates/areka/src/readme/opener.rs` の 176 行目）。
+- **触るファイル**: 台本の情報の型 `areka-talk/src/{lib.rs 138, origin.rs 191}`・kanade で台本を作る所 `schedule/{mod.rs 680, sstp.rs 149, steady_choice_script.rs 67, talk_origin.rs 49}` と `actor.rs` 852・`msg.rs` 586・受け手へ渡す口 `areka-ghost/src/{dispatcher.rs 510, sink.rs 421}`・本体の受け手 `crates/areka/src/emo2_boot/{talk_lifecycle.rs, user_break_cue.rs}`・台本を解く所 `areka-sakura/src/drive.rs` 655・最初の使い手 `crates/areka/src/readme/opener.rs` 406・MCP の送り込み `crates/areka/src/mcp/sakurascript.rs` 129。`CueSheet` にも持たせると決めたら dola の `src/cue/`。行の位置は少しずれた（kanade の送り 494 行目・dispatcher 344 行目・フォントの探し場所 `shell_box_assets.rs` 111 行目）。
+- **規模**: S〜M（6〜10）のまま。
+- **先に要るもの（見直しと crate 分けを含む）**: 見直しの spec の後＝`audit-sylphya-actor`（`areka-talk`）・`audit-kanade`・`audit-ghost-catalog`（`dispatcher.rs`・`sink.rs`）・`audit-parsers-sakura`（`drive.rs`）・`audit-areka-install-update`（`readme/`・`mcp/`）・`audit-emo2-boot-spine`（`emo2_boot/` の受け手）・`CueSheet` に持たせるなら `audit-dola`。crate 分けは `emo2_boot/` を動かす `runtime-module-untangle`・`runtime-crate-split` と、`readme/` を動かす `session-module-gather`・`session-crate-split` の後。同じウェーブに置けない未完了の spec＝`talk-anchor-interrupt-ticks`（台本の起点を配る同じ継ぎ目）・`shiori4-api` と `sstp-receive`（kanade の `schedule/sstp.rs`・`msg.rs`）・`multi-ghost-runtime`（今居るゴーストの表）。
+- **優先度の区分**: A（開発者の起票・「台本ごとに…特定できる情報があればよい」）。
+- **要件定義のモデル**: Opus（今の送り手の情報の通り道に欄を足すだけ）。
+- **分割の案**: 無し。
+- **見つけた穴・古くなった記述**: Adjacent の `mcp-strict-errors` は着地済み（roadmap の台帳のこの spec の行の「`mcp-strict-errors` と重なる」も古い）。

@@ -106,3 +106,17 @@
 - **ログの出所の名前**: モジュールのパスから付く出所は、移すと `areka_placement::…` に変わる。そのまま変え、名前で読んでいる所を全部直す。直書きの `"areka::placement::diag"` も新しい名前に合わせる（`RUST_LOG=areka_placement=debug` で診断が開くように）。語彙として付けている `"areka::persist::*"` は変えない。
 - **共通の約束**（roadmap の同じ節）: ルートの `Cargo.toml` は触らない（`members = ["crates/*"]`）。新しい外の依存を足さない。`THIRD-PARTY-NOTICES.md` は `cargo about generate` で作り直す。`Cargo.lock` が動くので `/release` の版上げと同じウェーブに置かない。`crates/areka` を触るほかの spec と同じウェーブに置かない。1,000 行の上限は新しい crate でも同じ。
 - **Fable**: Opus で足りる（新しい境目は今のモジュールの境目そのまま）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: 前提の 2 つがそろった＝v0.1.0 を公開した（main `932406f9`・版の印 `v0.1.0`）、`areka-test-binary-stability` が着地した（`.kiro/specs/completed/areka-test-binary-stability/`）。その spec は配置のファイルを 1 つも動かしていない。
+- **新しく決めること**: その spec が、テストのプロセスの落ちの報告とプロセスの寿命の MTA を立てる初期化子を、テストの実行ファイルごとの写しとして置いた（本体は `crates/areka/src/emo2_boot/crash_report_test_support.rs`・wintf は `crates/wintf/src/test_crash_report.rs`・依存を足さないための写し）。配置のテストを新しい crate の実行ファイルへ移すと、そのテストは落ちの報告も MTA の手当て（放された DLL を後から呼んで落ちる件の直し）も持たなくなる。新しい crate に 3 つ目の写しを置くかを要件の段で決める（推奨は置く）。揺れの測りの道具 `tools/load-flake.ps1` の `-Binary` は `areka-bin`・`wintf-lib` の 2 つだけ＝新しい実行ファイルを足すかも同じく決める。
+- **触るファイル（測り直し・起票は `d6054e4d`）**: 配置の本番 37 ファイル 14,828 行（空でない行・ファイルの中のテストを含む）・テスト 120 ファイル 44,037 行。増えたのは 10-30〜11-01 の着地による。上限の近く＝`follow/window_move.rs` 1,231 行（例外の表に載る）・`transition_judge.rs` 999・`follow/drag_follow.rs` 978・`mod.rs` 971。外から配置を指す所は 169 ファイル 553 回（起票は 153・526）。
+- **本体の中の呼び手**: 配置を引く本番のファイルは `emo2_boot/` 27・`input_events/` 12・`menu/` 3・`mcp/` 1・直下 4（`main.rs` 986 行・`ghost_session.rs` 943 行・`ghost_session_scope_rect.rs`・`app_exit.rs`）。テストを含めると `emo2_boot/` 99・`input_events/` 33・`menu/` 8・`mcp/` 3・`install/` 3・直下 22、`examples/` 2 本・`tests/` 2 本（`window_link_real_run.rs`・`emo2_real_run.rs`）。
+- **本体の外で触る所（同じウェーブの見直しが避ける所）**: `crates/log-capture-kit/tests/file_length_guard_test.rs`（配置のパス 3）・`temp_path_guard_test.rs`（2＝`measure_tests.rs` と `placement_monitor_tests.rs`・起票は 1）→ `audit-test-kits`。`crates/wintf/src/ecs/window_proc/window_pos_tests.rs` 14 行目（出所の名前）・`lifecycle.rs` 34 行目（説明の中の名前）→ `audit-wintf-window`。`Cargo.lock`（新しい crate の行）・`THIRD-PARTY-NOTICES.md`（作り直す）・`doc/COMPAT_ARCHITECTURE.md` の中ほどのパス（表の末尾ではない）・網羅台帳の根拠のパス・`tools/perf/fixtures/*/run.log` → `audit-tools-perf-judge`（`tools/perf/judge-perf.py` は 694 行目の説明で出所の名前を挙げるだけで、拾うのは欄の名前の見込み）。
+- **規模**: 12〜15 → 13〜16（落ちの報告の写しで 1 タスク増える見込み）。
+- **先に要るもの**: 前提は満たした。待つ見直しは無い（見直し `audit-placement-core`・`audit-placement-follow` がこの spec を待つ）。
+- **優先度の区分**: A（開発者が 10-28 に crate 分けを頼んだ）。
+- **要件定義のモデル**: Opus（新しい境目は今のモジュールの境目そのまま）。
+- **分割の案**: なし。
+- **古くなった記述**: 「`placement::test_support` を外の 194 ファイルが使う」は今の数え方で確かめられない（`crate::placement::test_support` を引く外のファイルは 37）＝着手のときに数え直す。

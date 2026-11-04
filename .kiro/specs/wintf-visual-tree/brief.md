@@ -103,3 +103,14 @@
 1. **「描画面の中の節」の見分け方**: 描画面の実体の子孫のうち、WUC の Visual を持たない子を木の節とするか、専用の印の部品を置くか。
 2. **名前の衝突の解き方**: `ecs::visual`（この層）を改名するか（例: `ecs::draw_tree`）、今の `ecs::graphics::Visual` の側を改名するか。公開の型の名前が変わる。
 3. **WARP の答えのずれ**: 許容差 ±1 にするか、見本の画像を作り直す手順を持つか（`wintf-d2d-composite-rules` の議題 4 をこちらで先に決める）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: 描画の木（`crates/wintf/src/ecs/visual/`）と数の部品（`crates/wintf/src/numerics/`）は起票の後も変更 0・外からの参照 0 のまま。WARP の装置を作る所も repo にまだ無い。11-02 着地の `areka-test-binary-stability` が、wintf のライブラリのテストの実行ファイルに「落ちの報告」と「プロセスの寿命の MTA を立てる初期化子」を足した（`crates/wintf/src/test_crash_report.rs`・`crates/wintf/src/lib.rs` の `#[cfg(test)] mod test_crash_report`）。そのため `crates/wintf/src/` の中のテストは COM を自分で初期化しなくても暗黙の MTA に居る。`crates/wintf/tests/` の結合テストにはこれが効かない＝WARP の決定論のテストの足場は `src/` の中のテストに置けば、落ちの報告が付き、一時的な MTA の解体で落ちる件も避けられる。本番の描画の道は変わらない（`render.rs` の `BeginDraw` は全面だけ・`render.rs:60-61` のまま）。
+- 触るファイル: `crates/wintf/src/ecs/visual/`（`draw/` を含む・どれも 300 行以下）・`ecs/graphics/systems/render.rs`（156 行）・`ecs/graphics/visual.rs`（名前の衝突の解き方しだい）・`ecs/mod.rs`・`ecs/world/`（スケジュールへの登録）・`numerics/`・描く係を置くなら `com/d2d/`・`examples/` の 1 本・新しい WARP の足場のファイル。1,000 行に近いファイルは無い。
+- 規模: 14〜18 タスク（台帳の 12〜18 の下を上げた＝傷 8 つ・描く係・配線と system・名前・WARP の足場・example・文書）。20 以下＝分けない。
+- 先に要るもの: 見直しの `audit-wintf-graphics-world`（`ecs/` の描画・世界・`visual/`）・`audit-wintf-runtime`（`numerics/`・`com/`・`examples/`）＝台帳のまま。本体（`crates/areka`）の crate 分けには触らない。同じウェーブに置けない相手＝`wintf-d2d-composite-rules`・`wintf-visual-damage-redraw`（`ecs/visual/`・`render.rs`）・`compose-f16-precision`（`com/wuc.rs`）。
+- 優先度の区分: A（開発者 10-21「新しいビジュアル層・描画層として取り込んでほしい」）。
+- 要件定義のモデル: Fable（骨組みを決める分かれ目を先例が決めていない＝描画の木を WUC の描画面の下に置くとき、位置の正本の layout と節の変形をどう掛け合わせるか・どの子孫を木の節と見るか〔議題 1〕。後の 4 本がこの形に乗る）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: Current State の「`crates/wintf/src/ecs/mod.rs:13` の `pub mod visual;`」は今は 14 行目。ほかの 8 つの傷と描画の道の記述は今の main と一致。

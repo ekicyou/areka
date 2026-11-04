@@ -14,7 +14,7 @@
 //! ブレンド種別（`BlendKind`・19 種の Photoshop 相当合成）と `-fast` 変調フラグは
 //! 直交する二軸であり、`Multiply` と `Multiply-fast` を別 variant にすると列挙が 2 倍に
 //! 膨らみ網羅 match が冗長化する。種別軸のみを `#[non_exhaustive] enum BlendKind` として
-//! 全量列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表（design
+//! 列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表（design
 //! 「合成メソッド写像表」）の全ブレンドモードを最小の列挙で忠実に表現する。
 
 use tracing::warn;
@@ -79,7 +79,8 @@ impl BlendMode {
     }
 }
 
-/// Photoshop 相当ブレンド種別の全量列挙（SSP 2.8.35〜2.8.40）。
+/// Photoshop 相当ブレンド種別の列挙（SSP 2.8.35〜2.8.40 のうち 19 種。soft-light〔2.8.39〕と
+/// linear-burn・linear-light・pin-light・subtract・vivid-light〔2.8.40〕はまだ無い＝`draw-methods-blend` が足す）。
 ///
 /// `#[non_exhaustive]` により将来のモード追加に対する後方互換シームを保つ。
 #[non_exhaustive]

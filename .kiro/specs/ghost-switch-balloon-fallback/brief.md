@@ -67,3 +67,15 @@
 - **要件の段の議題**（答えで作業が変わるもの）:
   1. 代わりに使うバルーン（今使っているもの・既定のバルーン・起動の行で渡したもの）。ukadoc を読み、読めなければ SSP で測る。
   2. 起動の鎖も同じにするか。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- **前提の変化**: 前の棚卸の後に着地した `areka-test-binary-stability` と v0.1.0 の公開は、この spec の触るファイルを動かしていない。行の番号は起票の後にずれている（下の「古くなった記述」）。
+- **触るファイル**: 切り替えの段 ③（`crates/areka/src/emo2_boot/ghost_switch.rs` 934 行）・バルーンの解き方の鎖（`crates/areka/src/boot_config.rs` 658 行・`crates/areka/src/boot_resolve.rs` 769 行）とその兄弟のテスト（`ghost_switch_balloon_tests.rs`・`boot_resolve_balloon_tests.rs` ほか）・実機の試験 `crates/areka/tests/startup_install_real_run.rs`。新しいファイルは要らない見込み。どのファイルも配置（`placement`）を引いていない。
+- **規模**: S（3〜6 タスク）のまま。
+- **先に要るもの（見直しと crate 分け）**: 起票が 10-22 の見直しの突き合わせより後なので、今回はじめて突き合わせた。`ghost_switch.rs` は見直し `audit-emo2-boot-switch`、`boot_config.rs`・`boot_resolve.rs`・`tests/` は見直し `audit-areka-app` の持ち物。crate 分けでは `runtime-module-untangle` が `ghost_switch.rs` を、`session-module-gather` が `boot_config.rs`・`boot_resolve.rs` を `src/session/` へ移す。見直しは作り直しの前に済ませる決まりなので、この spec は見直し 2 本の着地を待つ。`audit-areka-app` は crate 分けの最後の `session-crate-split` の後なので、実際には crate 分けの 6 本が全部着地するまで待つ。roadmap の行の「同じウェーブに置かない」は「着地を待つ」へ強める。
+- **ほかの未完了の spec と分け合うファイル**: `shell-companion-balloon`（`boot_config.rs` の `resolve_balloon_for_ghost`）・`sylphya-sqlite-kvs`（`boot_resolve.rs`）・`instant-to-interrupt-ticks`（`ghost_switch.rs`）・`dev-folder-alias`・`multi-ghost-runtime`（両方）。
+- **優先度の区分**: B（切り替えが落ち、既定のゴーストが無いと areka が終わるバグ）。
+- **要件定義のモデル**: Opus（今ある鎖に段を 1 つ足すだけ）。
+- **分割の案**: なし。
+- **古くなった記述**: 行の番号＝`switch_to` は 613 行目（起票は 624）・`resolve_balloon_for_ghost` の呼び出しは 824（828）・`failed("balloon", …)` は 831（835）・`switch_to_default` は 718（723）・`fatal` は 888（892）・`boot_config.rs` の `resolve_balloon_for_ghost` は 448（456）・`boot_resolve.rs` の `NoBalloon` を返す所は 335（319）。

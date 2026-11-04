@@ -75,23 +75,6 @@
 - 描画メソッドを描く側は本 spec の範囲。描けない語が残るとき、`warn!` を状態が変わったときの 1 回にするかは本 spec の要件で決める。
 
 
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- 前提の変化: `animated-image-playback`（10-07）が着地し、`always` のコマの描画メソッドが `overlay` 以外だと描かれない穴と、合成のたびの警告が目に見えるようになった（上の申し送り）。「描ける語か」を見る場所は 7 か所に増えた（`plan.rs` 2・`nesting.rs` 3・`plan_always.rs` 1・`blit.rs` 1）。どれも「`overlay` だけ真」の 1 関数を通る。
-- 触るファイル: `crates/areka-parsers/src/shell/{model.rs, decode.rs, undrawn.rs}`・`crates/areka-emo-compose/src/{method,fold,normalized,plan,plan_always,nesting,blit}.rs` と画素の式の新しいファイル（`blit.rs` は 782 行）・台帳 `assets.toml` の約 65 行（`blend-*` だけで 55 行）・`doc/COMPAT_ARCHITECTURE.md` §8。Direct2D の案なら wintf（今の wintf に合成・ブレンドの効果の口は無い）。`Element` に欄を足すと、値を直書きしているファイルは 6 クレートの約 33（`element-base-method` の実測）。
-- 規模（初めての実測）: CPU の整数の合成のまま広げる案で 20〜24 タスク、Direct2D へ移す案は 30 を超える。上限を超える。
-- 先に要るもの: 働きの上では無し。読み手と `plan.rs` を列の全員と分け合う＝列の順は今のまま（`element-clipping-option` の後）。
-- 優先度の区分: A（開発者 10-05「残りの描画メソッドは起票」「Direct2D が支える全部に対応できるよう wintf も含めて広げる」）。
-- 要件定義のモデル: Fable（CPU か Direct2D か＝エンジンをまたぐ設計の分かれ目）。
-- 分割の案（初めての分割）:
-  - `draw-methods-canon`（名前を残す・13〜16）＝読み手が描画メソッドを運ぶ・合成の 7 か所の門・pattern定義の `base`・重ね方の基本の 5 語（`overlayfast`／`overlay-fast`・`interpolate`・`replace`・`asis`・`reduce`）・警告の洪水を止める。CPU か Direct2D かの裁定もここで受ける。
-  - `draw-methods-blend`（新・9〜12）＝`blend-*` の全部と `-fast`・旧い別名 2 つ。触るのは合成の `method.rs`・`blit.rs` と新しいファイル・台帳の 55 行だけで、読み手に触らない。1 本目の後。
-  - Direct2D を採るときだけ `wintf-d2d-compose`（新・wintf だけ＝列の外で先に走らせられる）。
-- 見つけた穴・古くなった記述:
-  - ブレンドの種類の一覧 `BlendKind`（`crates/areka-emo-compose/src/method.rs`）は「全量・19 種」と書くが、ukadoc と台帳には 28 種ある。無いのは `add-glow`・`color-dodge-glow`・`dither`・`linear-burn`・`linear-light`・`pin-light`・`soft-light`・`subtract`・`vivid-light` の 9 種で、今は未知の語として警告される。
-  - `move`（pattern定義）は重ね方でなく位置の語。範囲に入れるかを議題に足す。`auto` は element定義の `--source` が要るので、`element-clipping-option` の後の別件。
-
-
 ## 2026-10-10 棚卸㉓の分割
 
 - **分けた理由**: 上の再測定（初めての実測）で、CPU の整数の合成のまま広げる道で 20〜24 タスク、合成を Direct2D へ移す道で 30 を超え、どちらも上限の 20 を超えた（この spec の初めての分割）。2 本に分け、この spec は土台の 1 本目として名前を残す。
@@ -133,17 +116,6 @@
   4. 描けない語が残るときの警告を、状態が変わったときの 1 回にするか。
 - **見つけた穴**: `asis` の正典は「element定義で合成したサーフェスを、ほかのサーフェスのアニメーションの部品として `asis` で合成したときの表示は未定義」と書く。areka の決めを §8 に記す。
 
-## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
-
-- 前提の変化: 分割の節の「同じウェーブに置けない相手」に挙げた `seriko-trigger-intervals` は着地した。読み手（`shell/model.rs` 295 行・`decode.rs` 594 行・`undrawn.rs` 62 行）は interval の語が増えただけ。合成の 7 か所の門と語の表 `method.rs` は変更 0。`Element` を直書きするファイルは 39 のまま。
-- 触るファイル: 分割の節のまま。seriko の `table.rs` は 900 行になった（pattern定義の `base` を「描けない」と確かめる期待は、このファイルの中に在るテストに残っている）。
-- 規模: 13〜16 タスクのまま。
-- 先に要るもの: 列の順は今のまま（`element-clipping-option` の後。その前に `extent-element-offset`）。
-- 同じウェーブに置けない相手（足す分）: 読み手の `decode.rs` を触る `config-parse-diagnostics`。seriko の `table.rs` を触る `seriko-trigger-lottery-gaps`・`seriko-interval-combinations`・`seriko-script-triggers`・`animated-image-import`（こちらが触るのはテストの期待 1 か所だけ）。
-- 優先度の区分: A のまま。
-- 要件定義のモデル: Fable のまま。
-- 見つけた穴・古くなった記述: 新しい件は無い。
-
 ## 2026-10-15 `/kiro-discovery` の決め（D2D の道）
 
 - **議題 1 は Direct2D の道に決まった**（開発者 2026-10-15「D2D合成アルゴリズムの改善も入れる予定なのです。wintfではコマンドリストの合成ルールが現在固定ですが、これをD2D合成ルールを個別に指定できるようにして、高度な合成を実現したい」）。上の分割の節の予告どおり、wintf だけの spec `wintf-d2d-composite-rules` を起票した。**この spec はその後に着手する**（前提に足す）。「同じウェーブで触らない約束」の「wintf に触らない」はそのまま効く（wintf の分は向こうが持つ）。
@@ -163,3 +135,16 @@
 - 元は「．さくら」のシェル `master` の `surfaces.txt`: `surface12` の `animation0.pattern0,base,11` と、`surface22` の `animation0.pattern0,base,0`・`pattern3,base,2`。どちらも `interval,runonce` で、`base` の後に `move` が続く（`move` は `seriko-pattern-calls` の件 2）。
 - `surface12.png`・`surface22.png` は全部が透明な絵で、`base` で別の面を土台に描く前提の作り。前回は焼き込みの「全透明」の WARN を作者の誤りとして数から外したが、`base` の土台と読むのが正しい。今のままでは面 12・22 を出すと何も描かれない見込み（この 1 回では面 12・22 は出ていない）。
 - 直した後の確かめ: 「．さくら」で面 12・22 を出し（`\s[12]`・`\s[22]`）、`base` の面が描かれ WARN が 0 になること。`move` が付くので `seriko-pattern-calls` と並べて見る。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化（棚卸㉔の後）: D2D の道に決まり（10-15）、先に `wintf-visual-tree`（10-21）が入った＝この spec は emo の合成を描画の木の節（element ごとに重ね方つき）へ移す側。合成の段は着地が続いて変わった＝`seriko-pattern-calls`（`move` を受けた・`bind_steps.rs`・`pattern_word.rs`）・`areka-P0-offline-surface-dump`（窓を出さずに面を PNG に書く `crates/areka/src/offline_dump/` が CPU の合成 `Composer` を直に使う・`plan_bounds.rs`・`plan_issues.rs`）・`animated-surface-log-flood`（変わった矩形だけ重ね直す `blit_rect.rs`）。D2D へ移すとき、この重ね直しの効きを失わないこと（`wintf-visual-damage-redraw` を先か同じ頃に）。
+- 「描ける語か」の門は 7 か所から 8 か所（7 ファイル）になった＝`plan.rs` 1・`nesting.rs` 2・`plan_always.rs` 1・`blit.rs` 1・`bind_steps.rs` 1・`plan_bounds.rs` 1・`plan_issues.rs` 1（どれも `method.rs` の `is_implemented`／`is_implemented_name`）。`Element` を直書きするファイルは 39 から 44（`areka-emo-compose` 17・`areka-parsers` 11・`areka-emo-atlas` 6・`areka-emo-present` 5・`areka-emo-text` 3・`areka` 2＝`emo2_boot/balloon_background_tests.rs`・`placement/measure_first_frame_tests.rs`）。
+- CPU の画素に頼る読み手は 5 つ＝当たりの α マスク（`crates/areka-emo-present/src/presenter/budget.rs`・`cache.rs`）・MCP の `dump_surface`（`presenter/read.rs`）・バルーンの背景色（`crates/areka/src/emo2_boot/balloon_background.rs`）・窓を出さない書き出し（`crates/areka/src/offline_dump/render.rs`・10-15 の節より後に増えた）。
+- 触るファイル: 分割の節のものに、上の門の 3 ファイル・emo の表示（`crates/areka-emo-present/src/display.rs` 238 行・`mount.rs` 317 行）・上の 5 つの読み手・合成の見本 `crates/areka-emo-compose/src/golden_tests*.rs`（WARP の見本へ移すなら）。`crates/areka-seriko/src/table.rs` は 929 行（期待 1 か所だけ・858〜862 行目）。wintf には触らない約束のまま。
+- 規模: D2D の道で初めて見積もると 20〜25 タスク（読み手の欄・語の対応・合成を節の木へ・表示の付け替え・門 8 か所・pattern定義の `base`・5 つの読み手・見本の移し替え・警告の洪水・台帳・実機）。
+- 先に要るもの: `wintf-d2d-composite-rules`（とその前の `wintf-visual-tree`）。列の中の順は「`element-clipping-option` の後」から「前」へ（D2D の道では `--clipping` を節の切り抜きで描くので、節の木へ移すこの spec が先）。見直しは台帳の `audit-emo-compose`・`audit-seriko`・`audit-parsers-sakura`・`audit-emo-present` に、`audit-emo-atlas`・`audit-emo-text-state-actor`（`Element` の直書き）・`audit-emo2-boot-spine`（`balloon_background*`）・`audit-placement-core`（`measure_first_frame_tests.rs`）・`audit-areka-app`（`offline_dump/`）を足す。本体の crate 分けは `placement-crate-split`（placement を移す）・`runtime-module-untangle`・`runtime-crate-split`（`emo2_boot` を移す）・`session-crate-split`（`offline_dump` の参照を書き換える）の後＝6 本の鎖の終わりの後。同じウェーブに置けない相手＝`collisionex-regions`・`hit-id-pass`・`compose-f16-precision`・`element-clipping-option`・`draw-methods-blend`（v0.2.0 の中）。
+- 優先度の区分: A のまま（開発者 10-05「残りの描画メソッドは起票」「Direct2D が支える全部に対応できるよう wintf も含めて広げる」）。
+- 要件定義のモデル: Fable（骨組みを決める分かれ目を先例が決めていない＝CPU の合成を残して 5 つの読み手の出どころにするか、全部を GPU の読み戻しへ替えるか）。
+- 分割の案: 一度切り出した spec なので、20 を少し越える程度では分けない。要件で 22 を越えたら、5 つの読み手の付け替え（`presenter/{budget,read}.rs`・`cache.rs`・`balloon_background.rs`・`offline_dump/render.rs`）を後の 1 本（名前の例 `emo-pixel-readback`）へ出す。後ろの 1 本が本体（`crates/areka`）の分をほぼ全部持つので、この spec の待ちが軽くなる。
+- 見つけた穴・古くなった記述: `element-clipping-option` も `Element` に欄を足す＝同じ 44 ファイルをもう一度触る。この spec が描画メソッドの欄と一緒にオプションの並びの欄（転記だけ）を足せば、あちらは触り直さずに済む。

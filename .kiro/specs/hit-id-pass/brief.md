@@ -88,3 +88,15 @@
 2. **図形も ID の描き先へ寄せるか**: `collisionex-regions` の 4 つの図形と `collisionN` の矩形も ID の描き先に描いて当たり判定を一本化するか、図形は CPU の判定のまま `region` だけを ID の描き先にするか。
 3. **ID の幅**: 24 ビット（B8G8R8A8 を α なし）で決め打ちにするか。メモリを優先して 8 ビット（`A8`・255 まで）にするか。
 4. **`region` の画像の座標と大きさ**: 画像がサーフェスより小さい・大きいときの扱い（正典に記述が無い）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: 起票（10-15）から、当たり判定 `crates/areka-emo-compose/src/hit.rs`、wintf の色分け画像の当たり判定 `ColorMapData`（`crates/wintf/src/ecs/layout/hit_region/mod.rs`・ID は 8 ビットのまま）、クリックの透過の `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs`（閾値 128）、emo-present の `presenter/budget.rs`・`cache.rs` は変更 0。働きの前提の `collisionex-regions`・`wintf-d2d-composite-rules` はどちらもまだ。
+- 古くなった記述: Current State の「`region` の持ち主はまだ居ない」は、10-15 にこの spec が引き取った（`collisionex-regions` の brief の申し送り）。Scope の In と Boundary Candidates の「読み手の型の `region` の欄」は `collisionex-regions` が運ぶ＝この spec は読み手 `shell/{model,decode}.rs` に触らない。
+- 触るファイル: `crates/areka-emo-compose/src/{hit.rs 756 行, hit_import.rs}`、`crates/areka-emo-present/src/presenter/{hit.rs, budget.rs 567 行}`・`cache.rs`、wintf の `layout/hit_region/mod.rs`（513 行・`ColorMapData` の読み方の流用）・`widget/bitmap_source/alpha_mask.rs`、wintf の ID の描き先（新しいファイル・`wintf-d2d-composite-rules` の自前の入れ物の隣の見込み）、台帳の `region` の行、`doc/COMPAT_ARCHITECTURE.md` §8。本体 `crates/areka` には触らない。
+- 規模: 10〜14 タスク（ロードマップのまま）。切らない。
+- 先に要るもの（見直しと crate 分け）: 見直しは `audit-emo-compose`・`audit-emo-present`・`audit-wintf-layout-widget`（ロードマップのとおり）。ID の描き先を wintf の `ecs/graphics/` に置くなら `audit-wintf-graphics-world` も（`wintf-d2d-composite-rules` を通して先に済む見込み）。ロードマップの `audit-parsers-sakura` は、読み手に触らないので直には要らない（`collisionex-regions` を通して先に済む）。本体の crate 分けは要らない。
+- 同じ時に走らせない相手: `hit.rs` を分け合う `collisionex-regions`・`draw-methods-canon`・`element-clipping-option`・`config-parse-diagnostics`・`shell-balloon-scale-setting`・`wintf-d2d-composite-rules`。
+- 優先度の区分: A（開発者 10-15「ヒットテストIDが欲しい」）。
+- 要件定義のモデル: Fable（議題 1「GPU の ID の描き先か、CPU の色分け画像か」は骨組みを決める分かれ目で、決める前例が無い。wintf に窓ごとの 2 枚目の描き先という新しい口を作る）。
+- 分割の案: 無し。

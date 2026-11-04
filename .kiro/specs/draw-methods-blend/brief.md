@@ -99,3 +99,14 @@
 - **D2D との対応（起票時の見立て）**: `D2D1_BLEND_MODE` は 26 種。ukadoc の 28 種のうち 25 種が当たる（`blend-add`＝Linear Dodge・`blend-subtract`＝Subtract・`blend-divide`＝Division ほか）。**当たらない 3 種**＝`blend-dither`（D2D の Dissolve とは別物の見込み）・`blend-add-glow`・`blend-color-dodge-glow`（CLIP STUDIO PAINT の発光）は自前の効果（画素の式を持つ D2D のカスタムの効果）が要る。`-fast` 付きは「ブレンドの結果をベースの α で切り抜く」効果の組み合わせ。
 - **決定論のテスト**: 語ごとの画素は D2D を WARP で動かして固定する（開発者 2026-10-15「画像合成に関するテストは、CPUに切り替えるべき」）。上の Approach の「CPU の整数の道」の段は使わない。
 - **規模**: D2D の道で測り直す（着手のとき）。自前の効果 3 種の分が増え、画素の式を CPU の整数で書く分が減る。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: D2D の道（10-15）。語の表 `crates/areka-emo-compose/src/method.rs`（415 → 421 行）の `BlendKind` は 19 種のまま。seriko の `crates/areka-seriko/src/table.rs`（929 行）の「`blend-multiply` は描けない」の期待（858〜862 行目）も起票のまま。
+- 触るファイル（D2D の道）: `method.rs`・`draw-methods-canon` が作る「節を組む所」の重ね方の対応の表・seriko の `table.rs` の期待 1 か所・台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 57 行・`doc/COMPAT_ARCHITECTURE.md` §8。`blit.rs`（782 行）は D2D の道では振り分けを足さない見込み。D2D に無い 3 種を自前の効果で描くなら wintf に新しい効果のファイル（D2D の自前の効果は repo にまだ 1 つも無い・画素の式を持つ shader とその作り方も要る）。
+- 規模: 9〜12 タスク（25 種を `D2D1_BLEND_MODE` へ・`-fast`・9 種の追加・WARP の見本・台帳）。3 種を自前の効果で描くなら 14〜17。
+- 先に要るもの: `draw-methods-canon`・`wintf-d2d-composite-rules`。見直しは `audit-emo-compose`・`audit-seriko`。台帳の `audit-parsers-sakura` は外す（この spec は読み手に触らない約束）。自前の効果を wintf に置くなら `audit-wintf-runtime` を足す。どれも `draw-methods-canon` より前に着地するので、並びは変わらない。同じウェーブに置けない相手＝`draw-methods-canon`・`element-clipping-option`（合成の節を組む所・設計で確かめる）。
+- 優先度の区分: A（切り出し元を引き継ぐ）。
+- 要件定義のモデル: Opus（語を D2D の値へ写すのは `wintf-d2d-composite-rules` の口に乗る）。議題で 3 種を自前の効果で描くと決めたら Fable（wintf に先例の無い公開の口＝自前の効果の登録と shader の作り方）。
+- 分割の案: 無し（17 まで）。
+- 見つけた穴・古くなった記述: `method.rs` の 14 行目と 82 行目の注記は「19 種」「全量列挙（SSP 2.8.35〜2.8.40）」と書くが、その版の範囲だけでも `soft-light`（2.8.39）・`linear-burn`・`linear-light`・`pin-light`・`subtract`・`vivid-light`（2.8.40）が抜けている（正典は 28 種）。

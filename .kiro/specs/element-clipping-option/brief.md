@@ -69,45 +69,13 @@
 2. 同じ画像を切り抜き違いで使うときのアトラスの持ち方（鍵に矩形を足すか、1 枚を載せて描く側で切るか）。
 3. 当たり判定（collision）とビューボックスの広がりは、切り抜き後の大きさで決まるか。
 
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
 
-## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
-
-- 規模: S〜M（10〜14 タスク）。起票時の 8〜12 より上振れ（鍵・動く絵の判定・外形の 3 か所に及ぶ）。切らない。
-- 前提の状態: `animated-image-decode`・`surface-element-nesting` とも着地済み。ただし同じ行（`element0,base,face.png,0,0,--clipping,…`）を読む `element-base-method` と、合成の置き方を分け合う `animated-image-playback`・`extent-element-offset` の後＝今すぐは着手しない。
-- 崩れた前提／古くなった位置:
-  - `surface-element-nesting` は `decode_elements`・`Element`・`manifest.rs` を**触らずに**着地した（roadmap の C3 の実績）。Constraints の「読み手と `manifest.rs` は `surface-element-nesting` と共有」は古い。今の相手は `element-base-method`（`Element` の型・`decode_elements`・転記の element を合成の element へ写す `fold.rs` の 1 か所）。
-  - 動く絵として読むかの分かれ目は、焼く入口 `bake_with_limits`（`crates/areka-emo-atlas/src/lib.rs`）が鍵ごとに `animated::load` を呼ぶ所。Approach の「`animated.rs` の `load`」より 1 段手前で、鍵が `--clipping` を知る形（鍵か一覧の欄）が要る。鍵 `AtlasKey`（組の番号, 相対パス）と `manifest.rs` は今も起票時のまま。
-  - 外形の計算 `flatten_extent`（`plan.rs`）は `extent-element-offset` が直す。切り抜いた後の大きさを外形へ数えるなら、あちらの裁定（element定義の X,Y を数えるか）の上に載る。
-- 触るファイル（並走の照合用）:
-  - `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（オプションの転記）
-  - `crates/areka-emo-atlas/src/{manifest.rs, lib.rs}`（鍵を広げるなら `table.rs`）と `emo2_golden.rs` の照合
-  - `crates/areka-emo-compose/src/{fold.rs, normalized.rs, atlas_bind.rs, plan.rs}`（当たり判定の大きさを変えるなら `hit.rs`）
-  - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
-- 議題（答えで作業が変わるものだけ）: 起票時の 3 つのまま。
-- すぐ直せる軽微な修正: この brief の「要件の段で決める議題」の直後に、起票のときの書き損じの 2 行（`</content>`・`</invoke>`）が紛れ込んでいる。消すだけ。
-
-
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- 前提の変化: `element-base-method`（10-05）で読み手が `base` の行も値にし、描けない行の転記 `crates/areka-parsers/src/shell/undrawn.rs` が入った。`animated-image-playback`（10-07）で、動く絵は束縛の直後に `crates/areka-emo-compose/src/film.rs` の `decompose` が子へ分解する。動く絵として扱うかの分かれ目は 2 段になった＝焼く入口 `bake_with_limits`（全コマを読む）と `decompose`（子を作る）。Problem の「再生の側が着地すると動いてしまう」は、今の main で実際に起きる。`self-alpha-declaration` は鍵に触れなかった。
-- 触るファイル: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`・`crates/areka-emo-atlas/src/{manifest.rs, lib.rs}`（鍵を広げるなら `table.rs`）と `emo2_golden.rs`・`crates/areka-emo-compose/src/{fold,normalized,atlas_bind,film,plan,plan_extent}.rs`（描く側で切るなら `blit.rs`、当たり判定の大きさを変えるなら `hit.rs`）・台帳 `assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
-- 規模: 11〜15 タスク（10〜14 から 1 上げ＝分解の段が増えた）。切らない。
-- 先に要るもの: 働きの上では無し。ファイルの重なり＝`extent-element-offset`（`plan_extent.rs`・あちらの裁定の上に載る）・`animated-image-import`（読み手・`manifest.rs`・`plan.rs`・`film.rs`）・`collisionex-regions`・`seriko-trigger-intervals`（読み手）・`draw-methods-canon`（読み手・`fold.rs`・`plan.rs`・`blit.rs`）。列の順は今のまま（`extent-element-offset`・`animated-image-import` の後）。
+- 前提の変化: 2026-10-16 に v0.2.0 へ戻すと決まり（roadmap の「版をまたぐ依存の確かめ」）、`--clipping` は D2D の節の切り抜き（`wintf-visual-tree` の `VisualClip`）で描く形にそろえる。emo の合成を節の木へ移すのは `draw-methods-canon` なので、**順は `draw-methods-canon` → この spec**（`wintf-visual-tree` の brief の Downstream と同じ。シェルの element の列の「この spec → `draw-methods-canon`」は CPU の道のときの順で古い）。Approach の「合成の側で切る」は節の切り抜きと読む。読み手（`decode_elements` は 5 つの欄だけ読みオプションを黙って捨てる）・アトラスの鍵 `AtlasKey`（組の番号, 相対パス）・動く絵の分かれ目 2 段（焼く入口 `bake_with_limits`〔`crates/areka-emo-atlas/src/lib.rs`〕と分解 `decompose`〔`crates/areka-emo-compose/src/film.rs`〕）は今の main でも起票の読みのまま。
+- 触るファイル: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（303・623 行）・`crates/areka-emo-atlas/src/{manifest.rs, lib.rs}`（563・875 行・鍵を広げるなら `table.rs`）と `emo2_golden.rs`・`crates/areka-emo-compose/src/{fold,normalized,atlas_bind,film,plan,plan_extent}.rs`・節の切り抜きを置く emo の表示の側（`crates/areka-emo-present/`・`draw-methods-canon` の設計で決まる）・台帳 `assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。`Element` に欄を自分で足すなら直書きの 44 ファイル（6 クレート）も。
+- 規模: 11〜15 タスクのまま（`draw-methods-canon` がオプションの欄を先に足していれば 10〜14、自分で 44 ファイルを直すなら 12〜16）。
+- 先に要るもの: `wintf-d2d-composite-rules`・`draw-methods-canon`。働きでは `extent-element-offset`（外形に element の X,Y を数えるかの裁定の上に載る）が要るが、今どの版にも入っていない（「v0.1.0 から外した 5 本」）＝v0.2.0 へ入れて前に置くか、この spec が外形の扱いを自分で決めるかを決める。同じ 5 本の `animated-image-import`（読み手・`manifest.rs`・`plan.rs`・`film.rs`）も同じ。見直しは台帳の `audit-emo-compose`・`audit-emo-atlas`・`audit-parsers-sakura` に、表示の側の分で `audit-emo-present` を足す。`Element` の欄を自分で足すなら `audit-emo-text-state-actor`・`audit-emo2-boot-spine`・`audit-placement-core` と本体の crate 分け（`placement-crate-split`・`runtime-module-untangle`・`runtime-crate-split`）も。同じウェーブに置けない相手＝`draw-methods-canon`・`draw-methods-blend`・`collisionex-regions`（読み手）。
 - 優先度の区分: C（正典の拾い残し）。
-- 要件定義のモデル: Fable（正典が黙っている 3 つの議題・鍵の形はアトラスと合成にまたがる）。
+- 要件定義のモデル: Opus（鍵を広げるのも節の切り抜きも今ある口に足す形＝新しい境界ではない）。
 - 分割の案: 無し。
-- 見つけた穴・古くなった記述:
-  - 棚卸㉒の節の「書き損じの 2 行」は棚卸㉒の即時修正で消えた（もう無い）。
-  - 棚卸㉒の節の「外形の計算 `flatten_extent`（`plan.rs`）」は `plan_extent.rs` と読む。
-  - 同じ画像を「切り抜きあり」と「なし」で使うと、片方は動き片方は止まる。動く絵の子の番号は画像 1 つにつき 1 つなので、鍵を分ける形が要る（議題 2 に足す・`animated-image-import` の「別の鍵」と同じ形の問題）。
-
-## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
-
-- 前提の変化: 読み手の 2 ファイルを分け合っていた `seriko-trigger-intervals` が着地した（`shell/model.rs` 295 行・`decode.rs` 594 行。interval の語が増えただけ）。合成（`crates/areka-emo-compose`）と焼く側（`crates/areka-emo-atlas`）は変更 0＝棚卸㉓の節は今の main と一致。
-- 触るファイル: 棚卸㉓のまま。
-- 規模: 11〜15 タスクのまま。
-- 先に要るもの: `extent-element-offset`（まだ着手されていない。あちらの裁定の上に載る）。列の順は今のまま（`extent-element-offset`・`animated-image-import` の後）。
-- ファイルの重なり（棚卸㉓の節の「`seriko-trigger-intervals`」を読み替える）: 読み手は `collisionex-regions`・`animated-image-import`・`draw-methods-canon`・`seriko-script-triggers`・`config-parse-diagnostics`。合成の `plan.rs`・`plan_extent.rs` は `seriko-interval-combinations` とも重なる。10-10 に起票された `balloon-webp-names` は焼く側の絵の読み手のフォルダ（`decode/`）だけを触る見込みで、こちらの `manifest.rs`・`lib.rs` とは重ならない。
-- 優先度の区分: C のまま。
-- 要件定義のモデル: Fable のまま。
-- 見つけた穴・古くなった記述: 新しい件は無い。
+- 見つけた穴・古くなった記述（前の再測定の節から持ち越し）: 同じ画像を「切り抜きあり」と「なし」で使うと片方は動き片方は止まる＝鍵を分ける形が要る（議題 2）。Constraints の「読み手と `manifest.rs` は `surface-element-nesting` と共有」は古い（今の相手は上の spec たち）。外形の計算は `plan.rs` でなく `plan_extent.rs`。

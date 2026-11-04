@@ -73,3 +73,13 @@
 ## 優先度の区分
 
 B（バグ。長く起動したまま喋り続けると、トークの数だけスレッドか名簿の項目と OS のハンドルが積み上がり、報告の数も実際と食い違う）。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+- **前提の変化**: コードは起票のときのまま（スレッド名簿 `crates/wintf/src/ecs/world/thread_registry.rs` の `register_current_thread` と `snapshot`・報告器 `crates/areka/src/perf_thread_report.rs`・トークのスレッドを起こす `spawn_talk`〔`crates/areka-sakura/src/drive.rs`〕・自然に終わったトークを join せずに落とす `on_done`〔`crates/areka-ghost/src/dispatcher.rs`〕）。10-19 の後、どれにも変更は入っていない。
+- **触るファイル**: 名簿（185 行）・報告器（469）・走り始めのフック `crates/areka/src/thread_roles.rs`（82・読むだけの見込み）。トークの側を直すときだけ `drive.rs`（655）・`dispatcher.rs`（510）。名簿の項目の出し方を変えると、報告の行（`threads=` と名簿外の残り）を読む `tools/perf/perf-rank.py` も合わせて直す。
+- **規模**: S〜M（5〜10）のまま。
+- **先に要るもの（見直しと crate 分けを含む）**: 本文の「Upstream: なし」は古い。2026-10-22 の並びで次の見直しの後に置いた: `audit-wintf-graphics-world`（名簿）・`audit-areka-app`（報告器・`thread_roles.rs`）・`audit-parsers-sakura`（`drive.rs`）・`audit-ghost-catalog`（`dispatcher.rs`）。台帳の `audit-tools-scripts`（`tools/perf/` の外を受け持つ）は触るファイルに当たらない（外す候補）。`perf-rank.py` を直すなら代わりに `audit-tools-perf-judge`。crate 分け: 報告器と `thread_roles.rs` は本体に残る（`session-module-gather` の「集めないもの」）が、`audit-areka-app` が `session-crate-split` の後なので 6 本の後になる。
+- **優先度の区分**: B（長く起動したまま喋るとトークの数だけ項目と OS のハンドルが積み上がる）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 上の「Upstream: なし」だけ。

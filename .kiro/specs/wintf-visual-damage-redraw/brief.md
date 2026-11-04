@@ -120,3 +120,14 @@
 ### 議題（本文の議題に足す）
 
 3. **測り（Approach の 1）を v0.2.0 の前に別に取るか**: 内訳が分かれば、描き直しが主因かどうか（＝本 spec で縮むか）が先に決まる。取らなければ、本 spec の着手のときに測る。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+
+- 前提の変化: 描画の木（`crates/wintf/src/ecs/visual/draw/`）・`render.rs`・`numerics/matrix3x2.rs` は変更 0。「WUC の描画面は部分の `BeginDraw` を断る」（`render.rs:60-61`）も今の main のまま。10-31 に件 1（ぱすたの面 1002 の CPU）が足され、測りの印を emo の表示の適用や SERIKO の刻みに足す見込みになった。emo の CPU の合成は `animated-surface-log-flood`（10-31）で「変わった矩形だけ重ね直す」形になった（`crates/areka-emo-compose/src/blit_rect.rs`）＝この spec の差分の描き直しの CPU の側の先例で、`draw-methods-canon` が合成を描画の木へ移すと、この効きはこの spec が引き継ぐ。
+- 触るファイル: `crates/wintf/src/ecs/visual/draw/`（`builder.rs` 298 行・`command.rs`・`README.md`）・`ecs/graphics/systems/render.rs`（156 行）・`numerics/`。LIS の依存を足すなら `crates/wintf/Cargo.toml` と `Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`（1 ウェーブに 1 本だけの席）。件 1 の印は emo の表示の `crates/areka-emo-present/src/presenter/`（`show.rs`・`timing.rs`）と、刻みに足すなら `crates/areka-seriko/`。
+- 規模: 10〜15 タスクのまま（本文 8〜12＋件 1 の測り 2〜3）。
+- 先に要るもの: `wintf-visual-tree`・`wintf-d2d-composite-rules`。見直しは台帳の `audit-wintf-graphics-world`・`audit-wintf-runtime` に、件 1 の印の分で `audit-emo-present`（seriko に印を足すなら `audit-seriko`）を足す（件 1 は 10-22 の突き合わせの後に入った）。`draw-methods-canon` と並べるなら、件 1 の印は emo-present に足さず wintf の側だけにする（あちらが emo-present の表示を触る）。
+- 優先度の区分: A（開発者 10-21 の指示から分けた）。
+- 要件定義のモデル: Opus（比べと範囲の計算は純粋な計算・描き先は `wintf-d2d-composite-rules` の入れ物に乗る）。
+- 分割の案: 無し。件 1 の測りは「測ることが本体」に近い＝議題 3 で先に取るなら、ウェーブに並べない測りの仕事として別に置く。
+- 見つけた穴・古くなった記述: 件 1 の Approach 1 は印を足す先に emo-present の適用を挙げるが、適用の所要を書く所（`crates/areka-emo-present/src/presenter/timing.rs`）は既に在る＝足すのは wintf の描き直しと present・commit の側だけで済むかを着手のときに確かめる。

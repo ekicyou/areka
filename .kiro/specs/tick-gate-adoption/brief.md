@@ -62,39 +62,12 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 
 > **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`tick_gate.rs`:154/:53/:58・`tick_gate_config.rs:25`・`tools/perf/perf-loop.ps1`・agents 4 本・dlp `results/` 全実在）。ウェーブ番号整数化＝本文の W6.9→**W10**・W6.95→**W11**（roadmap 冒頭対応表）。編成＝**M1 完成後・単独**（e2e と並走不可）。⚠ **開発者方針「長時間試行禁止」**（zsp の 4,440 走行の教訓・記憶 areka-p0-scope-zorder-pinning）と本 spec の走行時間要求（夜間/25 分/n≥3）が正面衝突する——要件段階で「始める前に決着可能な A/B 設計」を先に組むこと。分割シーム＝測定側是正 ⇄ 製品側変更（brief 記載どおり）。zsp 残件 B-3（生産者名簿の穴・`tick_gate_tests.rs`／`tick_gate_config_producers_tests.rs`）は `zorder-chain-residue` が持つ（本 spec は名簿を読む側）。
 
-
----
-
-## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
-
-- 保留のまま。門は今も既定で切（`wintf/src/ecs/world/mod.rs`）。基準の数は 08-23 のもので、その後に毎フレーム・表示・World を触るコミットが約 15 件入った＝測り直しが要る。
-- 着手の前に、開発者方針「長い試行はしない」と両立する短い A/B の測り方へ brief を書き直す。`main.rs`・`tools/perf/`・wintf を触り、計測を汚すので他の spec と並べない。
-
-
----
-
-## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
-
-- 保留のままでよい。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`・`AREKA_TICK_GATE` で上書き）。`tick_gate.rs`・`tick_gate_config.rs` を触ったコミットは 10-02 の後 0。
-- 基準の数（08-23）はさらに古くなった: C2 で毎フレームの処理に関わる変更が入った（`shell-balloon` のシェル内の箱の追従と描画・`translate-pipeline` の運行表の出口・`mcp-server-core`／`mcp-tool-entrances` の tokio の専用スレッドと UI への橋）。着手するなら測り直しから。計測を汚すので他の spec と並べない（10-02 のまま）。
-- 議題・穴: なし。
-
-## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
-
-- 規模: M〜L のまま（測り方の作り直しが先）。切るなら本文どおり「測る側の直し」と「門の既定を入れる側」の 2 つ。今は切らない。
-- 前提の状態: 保留のままでよい。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）。`tick_gate.rs`・`tick_gate_config.rs`・`tools/perf/` を触ったコミットは C3 でも 0。開発者方針「長い試行はしない」と本文の「夜間・25 分・n≥3」の衝突は解けていない＝着手の前に短い A/B の測り方を組む手順が先（10-02 のまま）。
-- 崩れた前提／古くなった位置: 基準の数（08-23）はさらに古い。C3 で毎フレームか常時の処理に関わる変更が入った: `surface-element-nesting` の部品ごとの時計（`crates/areka-seriko/src/looper.rs` ほか）・`animated-image-decode` のコマの表・`shell-balloon-frame-align` の画面更新の末尾の相（見えているバルーンの組を毎フレーム作る）・`mcp-log-history` の info 以上の出来事を常に残す層（`RUST_LOG` と独立）。`drag-cancel-borrow-miss` は `wintf/src/ecs/world/mod.rs` の 1 行（ドラッグの累積器の据え付け）を変えただけで門には触れていない。
-- 触るファイル（着手するなら）: `crates/wintf/src/ecs/world/{tick_gate.rs, mod.rs}`・`crates/areka/src/tick_gate_config.rs`・`crates/areka/src/main.rs`・`tools/perf/`。
-- 議題・穴: なし（保留の解除は開発者の判断）。
-
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- **前提の変化**: 保留のまま。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）。C4 で `tick_gate.rs`・`crates/areka/src/tick_gate_config.rs` に入った変更は 0、`tools/perf/` は `check-quiet.ps1` の守り 1 か所だけ。基準の数（08-23）はさらに古くなった＝C4 で毎フレームか実時間に関わる変更が入った（`animated-image-playback` の動く絵の時計と `always`・`wintf-tooltip` のマウスの止まりの検出・`balloon-lifecycle-events` のバルーンの時間切れ）。動く絵が出ている間は門が省ける回が減る見込みなので、測るときの検体も決め直す。
-- **触るファイル**（着手するなら）: 棚卸㉒のまま。`crates/wintf/src/ecs/world/mod.rs` は `wintf-tooltip` の後 944 行、`crates/areka/src/main.rs` は 950 行＝どちらも上限の近く。
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+- **前提の変化**: 保留のまま。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`・`AREKA_TICK_GATE` で上書き）。門の仕組み（`crates/wintf/src/ecs/world/tick_gate.rs`）・設定（`crates/areka/src/tick_gate_config.rs`）・World の `mod.rs` を触ったコミットは 10-10 の後 0。`tools/perf/` には 3 本の spec の変更が入った。基準の数（08-23）はさらに古い＝着手するなら測り直しから。開発者方針「長い試行はしない」と本文の「夜間・25 分・3 回以上」の衝突は解けていない＝着手の前に短い A/B の測り方を組む順は変わらない。
+- **触るファイル**（着手するなら）: `tick_gate.rs`（222 行）・World の `mod.rs`（944＝上限の近く）・`tick_gate_config.rs`（103）・本体の `crates/areka/src/main.rs`（986＝上限の近く）・`tools/perf/` の PowerShell。「1 件の差を悪化と読む」数え方の決まりを直すなら `tools/perf/perf-compare.py` も。
 - **規模**: M〜L のまま。
-- **仕事の芯は測定**（静かな机・実機）。開発者方針「長い試行はしない」「高負荷のテストを何度も回さない」と本文の「夜間・25 分・3 回以上」の衝突は解けていない＝着手の前に短い A/B の測り方を組む順は変わらない。
-- **先に要るもの**: 開発者による保留の解除。同じ `tools/perf/` を使う `present-emit-tail-latency`・`perf-tools-console-encoding` と並べない。
+- **先に要るもの（見直しと crate 分けを含む）**: 開発者による保留の解除。機能の先に `background-result-tick-wake`（背景の結果で起こす旗・あちらの brief が「門を入れる前に」と書く）。見直しは台帳の `audit-areka-app`・`audit-wintf-graphics-world`・`audit-tools-perf-run` に、`perf-compare.py` を直すなら `audit-tools-perf-judge` を足す。台帳にある `audit-seriko`・`audit-emo-present` は触るファイルに当たらない（外す候補）。`main.rs` は crate 分けの `session-module-gather` が項目を外へ出す＝その後（`audit-areka-app` が `session-crate-split` の後なので結果は同じ）。同じ `tools/perf/` を使う `present-emit-tail-latency` と、門の見張りのテストを触る `zorder-chain-residue` とは並べない。
 - **優先度の区分**: D（保留）。
-- **要件定義のモデル**: Fable（測り方の設計と時刻の扱い）。
+- **要件定義のモデル**: Fable（省いた刻みの追いつき方＝時刻の決まりを新しく組む）。
 - **分割の案**: 本文どおり「測る側の直し」と「門の既定を入れる側」の 2 つ。今は切らない。
 - **見つけた穴・古くなった記述**: なし。

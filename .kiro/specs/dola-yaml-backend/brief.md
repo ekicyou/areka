@@ -56,3 +56,13 @@
 
 - 依存の監査の見逃しは、この spec が片づくまでの仮の物。片づいたら `deny.toml` の `ignore` からこの 1 件を消す（理由の文にこの spec の名前を書いてある）。
 - 規模の見立て: XS〜S（3〜6 タスク）。替えるなら新しい依存を足す＝`tech.md` の依存の表も直す。
+
+## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+- **前提の変化**: コードは起票のときのまま（`crates/dola/Cargo.toml` の YAML の依存と機能 `yaml`・`deny.toml` の見逃しの 1 件・YAML の往復のテスト・README の 2 か所・`.kiro/steering/tech.md` の依存の表の `serde_yaml` の行）。v0.1.0 の公開で `dola` の版は 0.1.0 になった（版の数を上げただけ）。機能を外す形を選ぶと 0.1 系の利用者にとって壊れる変更になる＝次の版の見どころに載せる（本文どおり）。
+- **触るファイル**: 本文どおり（`crates/dola/Cargo.toml` 39 行・往復のテスト 80 行・README 29 行・`deny.toml`・根の `Cargo.lock` と `THIRD-PARTY-NOTICES.md`・`tech.md`）。替える形は新しい依存を足し、外す形でも `Cargo.lock` と `THIRD-PARTY-NOTICES.md` が動く＝どちらも依存の席（1 ウェーブに 1 本）を使う。
+- **規模**: XS〜S（3〜6）のまま。
+- **先に要るもの（見直しと crate 分けを含む）**: 本文の「Upstream: なし」は古い。2026-10-22 の並びで、`crates/dola/` 全部を受け持つ見直し `audit-dola` の後に置いた（`audit-dola` 自身は先に要るものが無い）。crate 分けは関わらない。同じ `crates/dola/Cargo.toml` を触る `dola-interrupt-ticks` とは同じウェーブに置かない。
+- **優先度の区分**: C（`release-cycle` の完了の全体テストの赤から起票した dola の手入れ）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 上の「Upstream: なし」だけ。
