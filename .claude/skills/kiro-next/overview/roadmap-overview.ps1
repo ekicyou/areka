@@ -97,8 +97,7 @@ $MARKER_KEYS  = 'secVersions', 'secLedger', 'secThemes', 'secWaves', 'secNextWav
                 'listSep', 'brackets', 'countRegex', 'classRegex', 'themeCut', 'sentenceEnd', 'ellipsis'
 $LABEL_KEYS   = 'title', 'sourceUpdated', 'sourceBlob', 'sourceBlobUnknown', 'bandCount', 'bandCountMismatch',
                 'warningCount', 'wave', 'done', 'notInLedger', 'notInBand', 'otherBands', 'prereqs', 'notInRoadmap',
-                'tier', 'cls', 'size', 'order', 'theme', 'noTheme', 'clearFilter', 'completedHeading',
-                'colWave', 'colDate', 'colUnits', 'colSummary', 'completedExtra', 'what', 'note',
+                'tier', 'cls', 'size', 'order', 'theme', 'noTheme', 'clearFilter', 'what', 'note',
                 'waveCommands', 'copy', 'copied'
 $SECTION_PREFIX = '## '
 $TABLE_RULE     = '^\|\s*:?-'
@@ -536,8 +535,7 @@ function Read-Roadmap([string]$Text, [pscustomobject]$Markers, [pscustomobject]$
     foreach ($r in $themes.Rows) {
         foreach ($n in $r.names) { if (-not $themeBy.ContainsKey($n)) { $themeBy[$n] = $r }; if ($r.done) { [void]$done.Add($n) } }
     }
-    $inSummary = [System.Collections.Generic.HashSet[string]]::new()
-    foreach ($r in $summary.Rows) { foreach ($n in $r.names) { [void]$inSummary.Add($n); [void]$done.Add($n) } }
+    foreach ($r in $summary.Rows) { foreach ($n in $r.names) { [void]$done.Add($n) } }
     $waveNames = [System.Collections.Generic.HashSet[string]]::new([string[]]$wave.Names)
     $noTheme = @($themes.Themes).Count
 
@@ -605,42 +603,27 @@ function Read-Roadmap([string]$Text, [pscustomobject]$Markers, [pscustomobject]$
         })
     }
 
-    # 前提＝台帳の前提 → Specs の前提の順に重なりを外す。居場所は置いた帯の名前と完了か（どちらも無い＝roadmap に無い）
+    # 前提＝台帳の前提 → Specs の前提の順に重なりを外す。完了した前提は出さない（2026-11-04 開発者「終わった項目は不要です」）。
+    # 居場所は置いた帯の名前（無い＝roadmap に無い）
     foreach ($p in $placed.Values) {
         $card = $p.Card
         $names = [System.Collections.Generic.List[string]]::new()
         $lr = $ledgerBy[$card.name]; $tr = $themeBy[$card.name]
         foreach ($n in @(@(if ($null -ne $lr) { $lr.prereqs }) + @(if ($null -ne $tr) { $tr.prereqs }))) {
-            if ($n -and -not $names.Contains($n)) { $names.Add($n) }
+            if ($n -and -not $done.Contains($n) -and -not $names.Contains($n)) { $names.Add($n) }
         }
         $card.prereqs = [object[]]@(foreach ($n in $names) {
-            [pscustomobject][ordered]@{ name = $n; band = $placed.Contains($n) ? $placed[$n].Band : $null; done = $done.Contains($n) }
+            [pscustomobject][ordered]@{ name = $n; band = $placed.Contains($n) ? $placed[$n].Band : $null }
         })
         $card.otherBands = [string[]]@($card.otherBands)
     }
 
-    $extra = [System.Collections.Generic.List[object]]::new()
-    $extraNames = [System.Collections.Generic.HashSet[string]]::new()
-    foreach ($r in $themes.Rows) {
-        if (-not $r.done) { continue }
-        foreach ($n in $r.names) {
-            if ($placed.Contains($n) -or $inSummary.Contains($n) -or -not $extraNames.Add($n)) { continue }
-            $tr = $themeBy[$n]
-            $extra.Add([pscustomobject][ordered]@{ name = $n; oneLiner = Get-OneLiner $tr.source $Markers; theme = $tr.theme })
-        }
-    }
-    $rows = foreach ($r in $summary.Rows) {
-        [pscustomobject][ordered]@{
-            wave = $r.wave; date = $r.date; units = $r.units; summary = $r.summary; oneLiner = Get-OneLiner $r.summary $Markers
-        }
-    }
-
+    # 完了の一覧は出さない（完了サマリは完了の判定にだけ使う）
     $data = [pscustomobject][ordered]@{
         source = [pscustomobject][ordered]@{ updatedAt = $updatedAt; blob = $Source.blob }
         themes = [string[]]@($themes.Themes)
         bands = [object[]]$outBands
         waveCommands = Get-WaveCommands $lines $Markers
-        completed = [pscustomobject][ordered]@{ rows = [object[]]@($rows); extra = [object[]]$extra }
         warningCount = $warnings.Count
     }
     [pscustomobject]@{ Missing = [string[]]@(); Warnings = [object[]]$warnings; Data = $data }

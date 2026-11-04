@@ -55,8 +55,7 @@
               "prereqs": [
                 {
                   "name": "alpha-base",
-                  "band": "v0.0.3",
-                  "done": false
+                  "band": "v0.0.3"
                 }
               ],
               "ledger": {
@@ -80,14 +79,8 @@
               "otherBands": [],
               "prereqs": [
                 {
-                  "name": "eta-old",
-                  "band": null,
-                  "done": true
-                },
-                {
                   "name": "ghost-of-past",
-                  "band": null,
-                  "done": false
+                  "band": null
                 }
               ],
               "ledger": {
@@ -126,13 +119,11 @@
               "prereqs": [
                 {
                   "name": "theta-follow",
-                  "band": "v0.1.0",
-                  "done": false
+                  "band": "v0.1.0"
                 },
                 {
                   "name": "gamma-fix",
-                  "band": "v0.0.3",
-                  "done": false
+                  "band": "v0.0.3"
                 }
               ],
               "ledger": {
@@ -157,13 +148,7 @@
               "prereqs": [
                 {
                   "name": "epsilon-run",
-                  "band": "v0.1.0",
-                  "done": false
-                },
-                {
-                  "name": "omicron-done",
-                  "band": null,
-                  "done": true
+                  "band": "v0.1.0"
                 }
               ],
               "ledger": {
@@ -193,8 +178,7 @@
               "prereqs": [
                 {
                   "name": "iota-solo",
-                  "band": "v0.1.0",
-                  "done": false
+                  "band": "v0.1.0"
                 }
               ],
               "ledger": {
@@ -253,8 +237,7 @@
               "prereqs": [
                 {
                   "name": "ghost-of-past",
-                  "band": null,
-                  "done": false
+                  "band": null
                 }
               ],
               "ledger": {
@@ -269,37 +252,5 @@
     }
   ],
   "waveCommands": "Wave C9 2本\nOpus\n/kiro-start areka-P0-beta-next\n\nWave C10（見込み）1本（v9.9.9 1本）\n【本来の次の版 v9.9.9】\nOpus\n/kiro-start omega-last\n\nWave C11（見込み）リリース（v9.9.9 の spec は 0 本）\n【本来の次の版 v9.9.9】\n/release 9.9.9",
-  "completed": {
-    "rows": [
-      {
-        "wave": "耐力壁",
-        "date": "07-01",
-        "units": "eta-old",
-        "summary": "x64→32bit 駆動 GO",
-        "oneLiner": "x64→32bit 駆動 GO"
-      },
-      {
-        "wave": "W1〜W4",
-        "date": "〜07-29",
-        "units": "idle-talk／sylphya 他",
-        "summary": "増分ウェーブ全完走（括弧の中。は切らない）。後ろの文は一言に入らない",
-        "oneLiner": "増分ウェーブ全完走"
-      },
-      {
-        "wave": "W5",
-        "date": "08-01",
-        "units": "mu-done（PR#97）・nu-done（omicron-done の前・PR#98）",
-        "summary": "M-dialogue 完走",
-        "oneLiner": "M-dialogue 完走"
-      }
-    ],
-    "extra": [
-      {
-        "name": "kappa-gone",
-        "oneLiner": "着地済みで完了サマリに無い",
-        "theme": 0
-      }
-    ]
-  },
   "warningCount": 0
 }
