@@ -143,7 +143,7 @@ impl NestTable {
                     },
                 ));
             }
-            // 同じ番号の animation は畳み込みで 1 つ（後勝ち）。並びだけを番号の昇順へ揃える
+            // 同じ番号の animation は畳み込みで 1 つ（先勝ち）。並びだけを番号の昇順へ揃える
             // （bind_random_ids は visible_parts が二分探索で引く）。
             bind_random_ids.sort_unstable();
             bind_targets.sort_unstable();

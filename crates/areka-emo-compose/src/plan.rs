@@ -556,7 +556,7 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
         }
         return false;
     }
-    // 同 id の animation は fold 段で単一化済み（後勝ち）ゆえ find で足りる。
+    // 同 id の animation は fold 段で単一化済み（先勝ち）ゆえ find で足りる。
     let Some(anim) = level.master.animations.iter().find(|a| a.id == id) else {
         return false;
     };

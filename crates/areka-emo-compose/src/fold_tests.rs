@@ -129,10 +129,10 @@ fn range_creates_inclusive_ids() {
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
 }
 
-/// (c) 重複 id は前の定義へ足し、同じ element番号の行は後勝ち（要件 2.1 を
-/// areka-P0-emily-ghost-verification が上書き・開発者の決め 2026-10-17「足し合わせる」）。
+/// (c) 重複 id は前の定義へ足し、同じ element番号の行は両方を残す（前の行が先・SSP 2.9.29 と同じ・
+/// spec: audit-emo-compose 設計の議題 7 案 A。足し合わせるのは開発者の決め 2026-10-17）。
 #[test]
-fn duplicate_id_same_layer_line_is_last_wins() {
+fn duplicate_id_same_layer_line_keeps_both() {
     let first = surface_def(
         7,
         vec![AppendTarget::Single(7)],
@@ -147,10 +147,11 @@ fn duplicate_id_same_layer_line_is_last_wins() {
     fold_shell(&mut world, &shell_of(vec![first, second]));
 
     let m = master_of(&world, 7).expect("id=7 が常駐する");
-    // 同じ layer 0 は後勝ち: new.png / (5,6) が残る。
-    assert_eq!(m.elements.len(), 1);
-    assert_eq!(m.elements[0].path.as_str(), "new.png");
-    assert_eq!(m.elements[0].transform.offset(), (5, 6));
+    // 同じ layer 0 は両方: old.png (0,0) が先・new.png (5,6) が後。
+    assert_eq!(m.elements.len(), 2);
+    assert_eq!(m.elements[0].path.as_str(), "old.png");
+    assert_eq!(m.elements[1].path.as_str(), "new.png");
+    assert_eq!(m.elements[1].transform.offset(), (5, 6));
     // 足し合わせても entity は 1 件のみ。
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 1);
     let live: Vec<u32> = world
@@ -310,11 +311,11 @@ fn append_merges_element_and_collision_layer_sorted() {
     assert_eq!(m.collisions[1].name.as_str(), "Bust");
 }
 
-/// (3.3-3) animation 後勝ち置換＋新 id 追加（要件 2.4）。
-/// 対象に既存 animation id=N があり append が同 id=N を持つ → append 版に置換（単一）。
+/// (3.3-3) animation 先勝ち＋新 id 追加（SSP 2.9.29 と同じ・spec: audit-emo-compose 設計の議題 7 案 A）。
+/// 対象に既存 animation id=N があり append が同 id=N を持つ → append 版を捨てる（単一）。
 /// 新 id=M は追加される。
 #[test]
-fn append_animation_last_wins_and_new_id_added() {
+fn append_animation_first_wins_and_new_id_added() {
     // 事前 surface: animation id=1（interval=bind, pattern 空）。
     let base = surface_full(
         8,
@@ -347,20 +348,21 @@ fn append_animation_last_wins_and_new_id_added() {
     );
 
     let m = master_of(&world, 8).expect("id=8 が常駐する");
-    // id=1 は 1 本のみ（重複しない）＝後勝ち置換。
+    // id=1 は 1 本のみ（重複しない）＝先勝ち。
     let id1: Vec<&Animation> = m.animations.iter().filter(|a| a.id == 1).collect();
-    assert_eq!(id1.len(), 1, "id=1 は置換されて 1 本");
-    assert_eq!(
+    assert_eq!(id1.len(), 1, "id=1 は 1 本");
+    assert_ne!(
         id1[0].interval,
         Interval::Random { k: 5 },
-        "append 版の interval に置換"
+        "append 版の interval は捨てる"
     );
+    assert_eq!(id1[0].interval, anim(1).interval, "前の interval のまま");
     // id=2 が追加されている。
     assert!(
         m.animations.iter().any(|a| a.id == 2),
         "新 id=2 が追加される"
     );
-    // 合計 2 本（id=1 置換 ＋ id=2 追加）。
+    // 合計 2 本（id=1 は前のまま ＋ id=2 追加）。
     assert_eq!(m.animations.len(), 2);
 }
 
@@ -848,8 +850,8 @@ fn interleaved_redefinition_is_appearance_order_deterministic() {
     );
 
     let (surfaces, _) = assert_fold_twice_byte_equal(&shell);
-    // 登場順の帰結: 最後の plain surface(new) は前へ足す → 同じ layer 0 の old は new に替わり、
-    // 途中 append の mid（layer 1）は残る。
+    // 登場順の帰結: 最後の plain surface(new) は前へ足す → 同じ layer 0 は old・new の両方
+    // （前の行が先）、途中 append の mid（layer 1）も残る。
     assert_eq!(surfaces.len(), 1);
     let (id, m) = &surfaces[0];
     assert_eq!(*id, 5);
@@ -860,8 +862,8 @@ fn interleaved_redefinition_is_appearance_order_deterministic() {
         .collect();
     assert_eq!(
         layers,
-        vec![(0, "new.png"), (1, "mid.png")],
-        "layer 0 は後勝ち・append(mid) は残る（登場順の帰結）"
+        vec![(0, "old.png"), (0, "new.png"), (1, "mid.png")],
+        "layer 0 は両方・append(mid) は残る（登場順の帰結）"
     );
 }
 

@@ -430,9 +430,10 @@ fn empty_composition_error_fires_with_surface_id() {
 // ── 1.4: fold の重なりの記録（fold.rs fold_plain_surface / fold_append）────────────────────
 
 /// 要件 2.1（areka-P0-emily-ghost-verification が上書き）: surface id 重複は前の定義へ足す
-/// 定めた振る舞いなので WARN を出さず、DEBUG（id つき）で残す。
+/// 定めた振る舞いなので DEBUG（id つき）で残す。WARN は同じ element番号が重なった 1 行だけ。
 ///
-/// 同一 id を 2 度 plain 定義すると、同じ layer の行は後勝ち・違う layer の行は足される。
+/// 同一 id を 2 度 plain 定義すると、同じ layer の行は両方（前の行が先・SSP 2.9.29 と同じ）・
+/// 違う layer の行も足される（spec: audit-emo-compose 設計の議題 7 案 A）。
 #[test]
 fn duplicate_surface_id_merge_logs_debug_not_warn() {
     let first = surface(7, vec![elem(0, "old.png", 0, 0), elem(1, "keep.png", 0, 0)]);
@@ -441,19 +442,25 @@ fn duplicate_surface_id_merge_logs_debug_not_warn() {
     let logs = capture_logs(|| {
         // fold は EmoWorld::build 内で走る（populate_from_shell→fold_shell→fold_plain_surface）。
         let world = EmoWorld::build(&shell_of(vec![first, second]));
-        // 副作用: layer 0 は後勝ちで new.png・layer 1 の keep.png は残る（前提の実証）。
+        // 副作用: layer 0 は old.png・new.png の両方・layer 1 の keep.png も残る（前提の実証）。
         let master = world.surface(7).expect("id=7 常駐");
         let paths: Vec<&str> = master.elements.iter().map(|e| e.path.as_str()).collect();
         assert_eq!(
             paths,
-            vec!["new.png", "keep.png"],
-            "前へ足す・同じ layer は後勝ち"
+            vec!["old.png", "new.png", "keep.png"],
+            "前へ足す・同じ layer は両方"
         );
     });
 
+    let warns: Vec<&str> = logs.lines().filter(|l| l.contains("level=WARN")).collect();
+    assert_eq!(
+        warns.len(),
+        1,
+        "WARN は element の二重定義の 1 行だけ: {logs}"
+    );
     assert!(
-        !logs.contains("level=WARN"),
-        "足し合わせは WARN を出さない: {logs}"
+        warns[0].contains("element番号の二重定義") && warns[0].contains("element=0"),
+        "{logs}"
     );
     assert!(logs.contains("level=DEBUG"), "id 重複は DEBUG: {logs}");
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");

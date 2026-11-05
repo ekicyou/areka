@@ -38,10 +38,10 @@ kero.surface.alias
 
 /// この檻のシェルで出る 3 件の文言（`fold.rs`）。
 const DUPLICATE: &str = "surface id 重複";
-const REDEFINE: &str = "append が既存 animation id を再定義";
+const REDEFINE: &str = "animation番号の二重定義";
 const MISSING: &str = "surface.append 対象 id が未存在";
 
-/// 面の表を組む段の記録の文言の全部（`fold.rs` の 10 本・`base_image.rs` の 1 本）。
+/// 面の表を組む段の記録の文言の全部（`fold.rs` の 11 本・`base_image.rs` の 1 本）。
 const ALL_TEXTS: &[&str] = &[
     "DefRef::Surface が surfaces 範囲外を指す",
     "DefRef::Append が appends 範囲外を指す",
@@ -51,6 +51,7 @@ const ALL_TEXTS: &[&str] = &[
     MISSING,
     "SurfaceIndex は指すが SurfaceMaster component が欠落: スキップ",
     REDEFINE,
+    "element番号の二重定義",
     "未知の AppendTarget 記述子",
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 作り直す",
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 面の画像を使わずスキップ",

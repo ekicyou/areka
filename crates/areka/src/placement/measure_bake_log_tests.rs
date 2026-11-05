@@ -28,7 +28,7 @@ const BIND_NONE: &str = "着せ替え（bind）のアニメーションからだ
 const KEY_COLOR: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
 const ANIM_UNREADABLE: &str = "bake: 動く絵として読めなかったので 1 枚だけ読みます";
 const APPEND_NO_TARGET: &str = "surface.append 対象 id が未存在";
-const ANIM_REDEFINED: &str = "append が既存 animation id を再定義";
+const ANIM_REDEFINED: &str = "animation番号の二重定義";
 const NEEDLES: [&str; 7] = [
     ZERO_SIZED,
     ALL_CLEAR,
