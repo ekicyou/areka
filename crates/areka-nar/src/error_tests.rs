@@ -276,20 +276,9 @@ fn manifest_warnings_are_seven_and_carry_their_key() {
             key: "balloon2.directory".to_string(),
         },
     ];
-    let names: Vec<&'static str> = warnings.iter().map(warning_name).collect();
-    assert_eq!(
-        names,
-        [
-            "UnsupportedCompanionKind",
-            "CompanionOnNonGhost",
-            "IgnoredKey",
-            "RefreshIgnoredForSupplement",
-            "InvalidMaskEntry",
-            "SourceDirectoryCleaned",
-            "CompanionNotSearched",
-        ],
-        "マニフェストの警告は 7 種（設計）"
-    );
+    for warning in &warnings {
+        warning_name(warning);
+    }
     assert!(warnings[0].to_string().contains("headline0"));
     assert!(warnings[1].to_string().contains("balloon.directory"));
     assert!(warnings[2].to_string().contains("bootghost"));

@@ -231,6 +231,46 @@ fn peek_finds_the_end_record_behind_a_long_comment() {
     );
 }
 
+/// 書庫コメントが最大でも、終端記録の直前の zip64 の目印（20 バイト）が末尾の窓に収まり、
+/// 判定も `open` も zip64 として断る。窓から目印の 20 バイトを削ると判定が見落として赤。
+#[test]
+fn a_zip64_locator_behind_a_long_comment_is_refused() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let mut bytes = with_manifest_named("install.txt").bytes();
+    let eocd = bytes.len() - 22;
+    let mut locator = b"PK\x06\x07".to_vec();
+    locator.resize(20, 0);
+    bytes.splice(eocd..eocd, locator);
+    let comment_len = bytes.len() - 2;
+    bytes[comment_len..].copy_from_slice(&u16::MAX.to_le_bytes());
+    bytes.extend(std::iter::repeat_n(b'c', u16::MAX as usize));
+    let path = work.path().join("zip64-locator.nar");
+    std::fs::write(&path, &bytes).expect("固定入力を置ける");
+
+    let is_zip64 = |error: &NarError| {
+        matches!(
+            error,
+            NarError::Refused {
+                reason: RefuseReason::UnsupportedEntry {
+                    what: Unsupported::Zip64,
+                    ..
+                },
+                ..
+            }
+        )
+    };
+    let peeked = peek_install_txt(&path);
+    assert!(
+        peeked.as_ref().err().is_some_and(is_zip64),
+        "判定は zip64 で断る: {peeked:?}"
+    );
+    let opened = NarArchive::open(&path).err();
+    assert!(
+        opened.as_ref().is_some_and(is_zip64),
+        "open も zip64 で断る: {opened:?}"
+    );
+}
+
 /// 上限を 1 バイトでも越える書庫は読む前に「大きすぎる」で断り、上限ちょうどは読める。
 /// 先回りを消すと上限を越えても読めて赤。
 #[test]
@@ -256,4 +296,34 @@ fn open_refuses_an_archive_longer_than_the_limit_before_reading() {
     );
     let read = read_archive_bytes_within(&path, len).expect("上限ちょうどは読める");
     assert_eq!(read.len() as u64, len);
+}
+
+/// 上限を 1 バイト越える `install.txt` は解釈の前に「大きすぎる」で断る。
+#[test]
+fn an_install_txt_over_the_cap_is_refused() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let mut text = install_txt(&["type,ghost", "name,テスト", "directory,tester"]);
+    text.resize(MAX_INSTALL_TXT_LEN + 1, b' ');
+    let path = work.path().join("big.nar");
+    NarBuilder::new()
+        .file("install.txt", &text)
+        .deflate()
+        .done()
+        .write_to(&path)
+        .expect("固定入力を置ける");
+    let opened = NarArchive::open(&path).err();
+    assert!(
+        matches!(
+            opened,
+            Some(NarError::Refused {
+                reason: RefuseReason::UnsupportedEntry {
+                    index: 0,
+                    what: Unsupported::TooLarge,
+                    ..
+                },
+                ..
+            })
+        ),
+        "{opened:?}"
+    );
 }

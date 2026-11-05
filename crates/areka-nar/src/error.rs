@@ -77,6 +77,9 @@ refuse_reasons! {
     CaseCollision { a: String, b: String },
 
     /// 最上位に `install.txt` が無い（包みフォルダ 1 段を含む＝要件 3.2）。
+    ///
+    /// `top_level` は名前順の先頭最大 8 件。越えたときだけ末尾に名前ではない要約の
+    /// 1 要素 `…（全 N 件）` が付く。
     #[error("最上位に install.txt が無い（最上位 {top_level:?}）")]
     MissingInstallTxt { top_level: Vec<String> },
 
@@ -126,7 +129,7 @@ pub enum Unsupported {
     /// 複数ディスクに分かれている。
     #[error("複数ディスクに分かれている")]
     MultiDisk,
-    /// 宣言サイズの総和が受け入れ上限を超える。
+    /// 宣言サイズの総和・書庫の長さ・`install.txt` の長さ（`MAX_INSTALL_TXT_LEN`）のいずれかが受け入れ上限を超える。
     #[error("大きすぎる")]
     TooLarge,
 }

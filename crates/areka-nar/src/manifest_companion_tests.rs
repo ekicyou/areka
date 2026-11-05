@@ -150,6 +150,20 @@ fn a_companion_key_without_its_directory_is_recorded_as_an_ignored_key() {
     );
 }
 
+/// 長い知らないキーは、警告に先頭と長さだけを載せる（全体は載せない）。
+#[test]
+fn a_long_ignored_key_is_bounded_in_its_warning() {
+    let key = "x".repeat(300);
+    let manifest = parsed_ghost(&[&format!("{key},1")]);
+    assert_eq!(
+        manifest.warnings,
+        vec![ManifestWarning::IgnoredKey {
+            key: bounded_value(&key)
+        }]
+    );
+    assert!(!manifest.warnings[0].to_string().contains(&key));
+}
+
 // ---- 扱わない同時インストールの種別（要件 3.13） ----
 
 /// `balloon` 以外の同時インストールは警告して読み飛ばし、本体の展開は続ける（要件 3.13）。

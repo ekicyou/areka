@@ -189,7 +189,15 @@ impl NarArchive {
             .map(|entry| inflate_entry(&bytes, entry))
             .collect::<Result<Vec<_>, _>>()
             .map_err(refused)?;
-        let index = manifest::locate_install_txt(&names).map_err(refused)?.index;
+        let install_txt = manifest::locate_install_txt(&names).map_err(refused)?;
+        let index = install_txt.index;
+        if contents[index].len() > MAX_INSTALL_TXT_LEN {
+            return Err(refused(RefuseReason::UnsupportedEntry {
+                index,
+                name: install_txt.path.clone(),
+                what: Unsupported::TooLarge,
+            }));
+        }
         let manifest = manifest::parse_manifest(&contents[index]).map_err(refused)?;
 
         Ok(NarArchive {
@@ -317,6 +325,9 @@ pub fn peek_install_txt(path: &Path) -> Result<bool, NarError> {
     let names = validate_entry_names(&raw).map_err(refused)?;
     Ok(manifest::locate_install_txt(&names).is_ok())
 }
+
+/// 受け入れる `install.txt` の長さの上限（1 MiB）。実物は数百バイトで、警告の数を縛るため。
+const MAX_INSTALL_TXT_LEN: usize = 1024 * 1024;
 
 /// 受け入れる書庫の長さの上限（宣言の総和の上限の 2 倍）。
 ///

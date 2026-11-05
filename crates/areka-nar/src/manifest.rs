@@ -155,7 +155,11 @@ pub(crate) fn locate_install_txt(entries: &[EntryName]) -> Result<&EntryName, Re
         })
 }
 
+/// 拒否の理由に並べる最上位の名前の数。越えた分は総数の 1 要素にまとめる（理由を 1 行に保つ）。
+const MAX_LISTED_TOP_LEVEL: usize = 8;
+
 /// 最上位に見えている名前を名前順に並べる。フォルダは `名前/` の形。
+/// [`MAX_LISTED_TOP_LEVEL`] を越えるときは先頭のその数と、末尾に `…（全 N 件）` を置く。
 ///
 /// フォルダのエントリを 1 つも持たない書庫（実在の配布物 `hello-pasta.nar` が
 /// その形）でも包みフォルダの名前が出るよう、深いエントリからは**先頭の要素**を
@@ -170,7 +174,12 @@ fn top_level_names(entries: &[EntryName]) -> Vec<String> {
             names.insert(format!("{}/", entry.components[0]));
         }
     }
-    names.into_iter().collect()
+    let total = names.len();
+    let mut listed: Vec<String> = names.into_iter().take(MAX_LISTED_TOP_LEVEL).collect();
+    if total > MAX_LISTED_TOP_LEVEL {
+        listed.push(format!("…（全 {total} 件）"));
+    }
+    listed
 }
 
 /// `install.txt` の中身を解釈する（要件 3.3〜3.16）。
@@ -398,23 +407,33 @@ fn collect_companions(
     for key in keys.keys() {
         match classify(key) {
             KeyRole::Known => {}
-            KeyRole::Unknown => warnings.push(ManifestWarning::IgnoredKey { key: key.clone() }),
+            KeyRole::Unknown => warnings.push(ManifestWarning::IgnoredKey {
+                key: bounded_value(key),
+            }),
             KeyRole::Companion { prefix, supported } => {
                 if !handles_companions {
                     // 種別の判定が先に効く。扱わない種別でも、ここでは
                     // 「ゴースト以外に書かれている」として 1 件だけ記録する。
-                    warnings.push(ManifestWarning::CompanionOnNonGhost { key: key.clone() });
+                    warnings.push(ManifestWarning::CompanionOnNonGhost {
+                        key: bounded_value(key),
+                    });
                 } else if !supported {
-                    warnings.push(ManifestWarning::UnsupportedCompanionKind { key: key.clone() });
+                    warnings.push(ManifestWarning::UnsupportedCompanionKind {
+                        key: bounded_value(key),
+                    });
                 } else if found.iter().any(|searched| searched == prefix) {
                     // 探索で見つかった接頭辞の鍵は ⑶ で読む。
                 } else if keys.contains_key(&format!("{prefix}.directory")) {
                     // 宛先は書かれているが、打ち切りの後ろか先頭に 0 を付けた綴り。
-                    warnings.push(ManifestWarning::CompanionNotSearched { key: key.clone() });
+                    warnings.push(ManifestWarning::CompanionNotSearched {
+                        key: bounded_value(key),
+                    });
                 } else {
                     // 宛先の無い断片（`balloon.source.directory` だけ、など）は、
                     // どこへ入れるのか決まらない。
-                    warnings.push(ManifestWarning::IgnoredKey { key: key.clone() });
+                    warnings.push(ManifestWarning::IgnoredKey {
+                        key: bounded_value(key),
+                    });
                 }
             }
         }

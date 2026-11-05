@@ -248,6 +248,21 @@ fn refuses_an_empty_archive_with_an_empty_top_level_list() {
     assert_eq!(missing_top_level(NarBuilder::new()), Vec::<String>::new());
 }
 
+/// 最上位の名前が多いときは先頭の 8 件と総数だけを並べる（ちょうど 8 件なら総数は付けない）。
+#[test]
+fn lists_only_the_first_eight_top_level_names_and_the_total() {
+    let with = |count: usize| {
+        (0..count).fold(NarBuilder::new(), |builder, n| {
+            builder.file(format!("f{n:02}.txt"), b"x").done()
+        })
+    };
+    let eight: Vec<String> = (0..8).map(|n| format!("f{n:02}.txt")).collect();
+    assert_eq!(missing_top_level(with(8)), eight);
+    let mut nine = eight.clone();
+    nine.push("…（全 9 件）".to_owned());
+    assert_eq!(missing_top_level(with(9)), nine);
+}
+
 /// `install.txt` という名前の**フォルダ**は読む対象ではない（要件 3.1）。
 #[test]
 fn does_not_take_a_top_level_folder_named_install_txt() {
@@ -294,7 +309,7 @@ fn falls_back_to_the_ansi_default_when_no_charset_line_is_present() {
 /// 直すには既存層（`areka-parsers::charset`）の先読みを変えることになり、
 /// 本 spec の境界の外なので、ここでは「そうなる」ことだけを固定する。
 #[test]
-fn a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used() {
+fn a_charset_line_after_a_non_ascii_line_is_not_used() {
     let (sjis, _, _) = encoding_rs::SHIFT_JIS.encode("狛犬");
     let mut bytes = b"type,ghost\r\nname,".to_vec();
     bytes.extend_from_slice(&sjis);
