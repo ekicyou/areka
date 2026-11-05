@@ -114,6 +114,7 @@ crates/wintf/src/ecs/
 │   ├── world_schedule_tests.rs # 新: 単一スレッドの一覧のテスト（35 番）
 │   ├── schedule_labels.rs     # 12・34 番
 │   ├── vsync.rs               # 13・33 番
+│   ├── tick_gate_tests.rs     # 6 番（名簿 WINTF_PRODUCERS に graphics/core.rs を足す）
 │   ├── tick_wake.rs           # 21 番
 │   └── tick_wake_tests.rs     # 21 番（両向きのテストの片方を消す）
 ├── dola/mod.rs                # 2 番
@@ -129,7 +130,7 @@ crates/wintf/src/ecs/
 - `crates/wintf/src/ecs/window_proc/window_pos.rs` — 13 番の呼び出し元 1 か所（`audit-wintf-window`・今は走っていない）。
 - `crates/wintf/src/ecs/window/window_handle.rs` — 32 番。`on_window_handle_remove` から窓 1 つ分の控えを消す 1 行（`audit-wintf-window`）。
 - `crates/wintf/src/ecs/widget/shapes/rectangle.rs`・`crates/wintf/src/ecs/widget/bitmap_source/systems.rs` — 6 番。命令の列が無いときにも描き直す条件を `Or` に 1 つ足す（`audit-wintf-layout-widget`・C18 で今は走っていない）。
-- `crates/wintf/tests/` と `crates/wintf/examples/` の次のもの（2026-11-05 の開発者の裁定で書き換えてよい）: `visual/hierarchy_reparent_gap_test.rs`・`graphics/brushes_system_test.rs`・`graphics/window_pos_systems_test.rs`・`graphics/dcomp_integration_test.rs`・`graphics/reinit_unit_test.rs`・`graphics/components_test.rs`・`ecs/world_lifecycle_test.rs`・`ecs/dola_animator_test.rs`・`visual/insert_visual_test.rs`（消す）・`visual.rs`（その `mod` の 2 行）・`window/owner_window_exists_test.rs`・`examples/graphics_reinit_test.rs`。`ecs/lazy_reinit_pattern_test.rs` は wintf の型を使わない写しなので触らない（ギャップ分析の見込みと違った・research.md 9.5）。
+- `crates/wintf/tests/` と `crates/wintf/examples/` の次のもの（2026-11-05 の開発者の裁定で書き換えてよい）: `visual/hierarchy_reparent_gap_test.rs`・`graphics/brushes_system_test.rs`・`graphics/window_pos_systems_test.rs`・`graphics/reinit_unit_test.rs`・`graphics/components_test.rs`・`ecs/world_lifecycle_test.rs`・`ecs/dola_animator_test.rs`・`visual/insert_visual_test.rs`（消す）・`visual.rs`（その `mod` の 2 行）・`window/owner_window_exists_test.rs`・`examples/graphics_reinit_test.rs`。`ecs/lazy_reinit_pattern_test.rs` は wintf の型を使わない写しなので触らない（ギャップ分析の見込みと違った・research.md 9.5）。
 - 裁定の一覧に無い `crates/wintf/tests/` の書き換えと足し（設計の調べで要ると分かった・`audit-wintf-runtime` の持ち物・要件 3.5 に従いタスクの先頭でまとめて申し合わせる・判断 6）: 新しいファイル `graphics/device_lost_recovery_test.rs` と `visual/window_join_test.rs`、それをつなぐ `graphics.rs` の `mod` の 1 行と `visual.rs` の 1 行、`graphics/init_window_graphics_test.rs`（WUC の資源を作るテスト 2 本を、切り出した `init_wuc_resource` を回す形へ）、`graphics/surface_systems_test.rs`（11 番のテストを足す）、`graphics/dcomp_integration_test.rs`（無効化のテストが WUC の無効だけを見ているなら緑のまま・赤になったときだけ直す）。
 - 下流の立ち直りの手当て（6 番・判断 1）: `crates/areka-emo-present/src/presenter/refresh.rs`（同じウェーブの `audit-emo-present` と申し合わせてから）・`crates/areka-emo-text/src/actor_present.rs`（ファイルは足さない）・`crates/areka/src/emo2_boot/frame/attach.rs`。
 - steering の追随: `.kiro/steering/structure.md`（Dola Animator の節の読み方・デバイスロスト対応の書き方）・`.kiro/steering/tech.md`（103 行目の「デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する」は 7 番の後は事実でなくなる）。
@@ -161,6 +162,7 @@ sequenceDiagram
 - **作る係は作れる回にだけ回す**。`init_window_graphics`・`visual_resource_management_system`・`deferred_surface_creation_system` を `run_if` で包み、装置か WUC が使えない回は係そのものを回さない。bevy は回さなかった係の `last_run` を進めないので、無効の間についた変化の印は、使えるようになった回にまとめて見える。係の中の早い戻り（`Option<Res<GraphicsCore>>` と `is_valid()`）は、wintf を使う人が係を自分で登録したときの守りとして残す（1 番）。
 - **WUC の資源を作る所を係に切り出す**（`init_wuc_resource`）。今は `init_window_graphics` の中で作り、作った回は早く戻るので、作り直しの回に `Changed<HasGraphicsResources>` を食べて窓が二度と作り直されない（設計の調べで見つけた）。切り出した係は、資源が在って無効なら同じ場所で入れ替え、無ければ命令で入れる。窓の係はその後に `run_if(wuc_ready)` で回る。
 - **命令の列は作り直しで外す**。命令の列（`ID2D1CommandList`）は古い装置に属する。無効化の係が `GraphicsCommandList` を全部外し、命令の列を作る係は「命令の列が無い」でも描き直す（文字・空トークの背景は今もこの形。四角と画像の係に `Without<GraphicsCommandList>` を足す）。
+- **命令の列を外した回に、作ったばかりの描画面を空にしない**（設計の確かめで見つけた）。無効化で `GraphicsCommandList` を外すと、同じ回の `PreRenderSurface` で `cleanup_surface_on_commandlist_removed`（`surface.rs:280`）がその「外した」を読み、`deferred_surface_creation_system` が作り直したばかりの描画面に `SetBrush(None)` と `clear()` をかけてしまう。その係の問い合わせに `Without<GraphicsCommandList>` を足し、命令の列がまだ無い部品だけを片づける。作り直しの後に命令の列が付き直せば、その部品は対象から外れる。
 - **描画面は見た目の作り直しで作り直す**。`deferred_surface_creation_system` の条件に `Changed<VisualGraphics>` を足す。新しい見た目には絵が付いていないので、大きさが同じでも作り直して `SetBrush` する（無効化で描画面も無効になっているので「同じ大きさなら飛ばす」には当たらない）。
 - **新しい見た目へ位置・不透明度・切り抜きを写す**。`visual_property_sync_system` と `clip_sync_system` の条件に `Changed<VisualGraphics>` を足す。木のつなぎは、無効化で親の控えが消えるので今の検出で直る（3 番の直しの後も同じ）。
 - **下流への合図は `Res<GraphicsCore>` の変化の印**。`init_graphics_core` は作り直しで資源を同じ場所で入れ替え（`*gc = new`）、`render_surface` は失いで `invalidate()` を呼ぶ。どちらも資源の変化の印を立てる。下流は「変わった・無効」なら控えを捨て、「変わった・有効」なら捨てて作り直す。`HasGraphicsResources` の変化を合図にしない（新しい窓が出るたびにも立つので、バルーンの窓が出るたびに全部を作り直してしまう）。
@@ -269,6 +271,7 @@ pub(crate) fn is_device_lost(draw_error: HRESULT, removed_reason: HRESULT) -> bo
 ```
 - `is_device_lost` は `removed_reason` が失敗か、`draw_error` が `DXGI_ERROR_DEVICE_REMOVED`・`DXGI_ERROR_DEVICE_RESET`・`DXGI_ERROR_DEVICE_HUNG`・`D2DERR_RECREATE_TARGET` のどれかなら真。
 - `note_draw_failure` は既に無効なら偽を返す（2 度目の記録を出さない）。真のときは `error!`（HRESULT と removed reason を載せる）を 1 行残し、`tick_wake::GRAPHICS` を立てる。
+- `core.rs` が `GRAPHICS` を立てる本番のファイルに加わるので、`world/tick_gate_tests.rs` の名簿 `WINTF_PRODUCERS`（名簿の完全性の検査が木の中の旗の生産者を全部載せることを求める）に `graphics/core.rs` の行を足す（配列の長さ 9 → 10）。
 - `GraphicsCore` の説明に下流への約束を書く: 「作り直しと失いのとき、この資源の変化の印が立つ。装置に結びつく控えを持つ側は、変化を見たら控えを捨て、`is_valid()` の間だけ作り直す」。
 
 #### 作り直しの順（`systems/window_pos.rs`・`systems/init.rs`・`world/mod.rs`）
@@ -278,6 +281,8 @@ pub(crate) fn is_device_lost(draw_error: HRESULT, removed_reason: HRESULT) -> bo
 - `init_wuc_resource`（新・次）: `run_if(graphics_core_ready)`。窓が 1 つでも在り、WUC の資源が無いか無効なら作る。在れば入れ替え、無ければ命令で入れる。失敗は `error!`。今の `init_window_graphics` の中の塊を移すだけ。
 - `init_window_graphics`（次）: `run_if(wuc_ready)`。引数は `Option<Res<GraphicsCore>>`（1 番）。中の WUC の塊と `unwrap` は消える。
 - 4 本は `.chain()` で並べる（命令の後の反映を bevy が間に挟む）。
+- 無効化の係は、部品ごとに `is_valid()` を読んでから、有効なものだけを可変で触る（可変で触るだけで変化の印が立つため）。
+- `Update` に残る `update_typewriters` の `.after(invalidate_dependent_components)`（`world/mod.rs:248-249`）は、無効化の係が `Update` から抜けるので `.after(update_monitor_layout_system)` へ付け替える（`Update` の中の順は今と同じ）。
 
 ```rust
 pub(crate) fn graphics_core_ready(gc: Option<Res<GraphicsCore>>) -> bool;
@@ -285,7 +290,7 @@ pub(crate) fn wuc_ready(gc: Option<Res<GraphicsCore>>, wuc: Option<Res<WucGraphi
 ```
 
 #### `render_surface`（`systems/render.rs`）
-- 引数の `_graphics_core` を `Option<ResMut<GraphicsCore>>` にし、`_frame_count` を消す（17 番）。装置が無効なら何も描かずに戻る（描画面は作り直しで全部作り直されるので、ここで食べる印は要らない）。
+- 引数の `_graphics_core` を `Option<ResMut<GraphicsCore>>` にし、`_frame_count` を消す（17 番）。可変で触るのは失いのとき（`note_draw_failure` を呼ぶとき）だけにする。ふだんの描画で可変の借りを取ると、資源の変化の印が毎回立ち、下流が毎回の描画で控えを全部捨ててしまう。装置が無効なら何も描かずに戻る（描画面は作り直しで全部作り直されるので、ここで食べる印は要らない）。
 - `begin_draw` の失敗で `note_draw_failure` が真なら、その回の残りを描かずに抜ける。偽なら今のとおり記録して次へ。
 - 名前の文字列は失敗のときだけ作る。コメントアウトの 5 行を消す（17 番）。
 
@@ -326,6 +331,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6];
 | `areka` の `emo2_boot/frame/attach.rs` | 装着の門が `GraphicsCore` の有無だけを見る | `is_valid()` を見る |
 
 - どれも在る関数を呼ぶだけで、新しい型や合図は作らない。emo-present は同じウェーブの `audit-emo-present` の持ち物なので、触る前にそのセッションと申し合わせる（要件 3.5）。emo-text と areka 本体の見直しは今は走っていない。
+- **`audit-emo-present` との申し合わせ（2026-11-05・済み）**: `presenter/refresh.rs` の出し直しの数行はこの spec が引き受ける（あちらは「新しい機能を足さない」の外として引き受けない）。条件は、新しい公開の型を作らず、emo-present のほかのファイルの形を変えないこと。あちらの設計（`d7ed6665`）は `apply_show` の応答の口をやめ、`apply_show(&mut self, world, target_id, surface_id, binds, pattern, reveal) -> PresentOutcome` を返す形に変える（`reply` の引数は消える）。`refresh_scale` も戻り値で成否を読む形に変わる。こちらの出し直しは、その新しい形で書く。着地は「後に着地する方が先の形へ合わせる」（あちらが先になる見込み）。`ComposeCache::invalidate_all` の形はあちらでも変えない。あちらの `apply_visibility` は「同じ値なら書かない」になるので、出し直しで `set_visible` を呼んでも、値が同じなら変化の印は立たない。
 
 ## 指摘ごとの直し方
 
@@ -403,6 +409,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6];
 | 6 | 立ち直り: 隠した実の HWND の窓・その下の四角の部品で `EcsWorld` を回し、全部が有効になってから `GraphicsCore::invalidate()`。3 回以内に回すと、窓・見た目・描画面・命令の列・WUC の合成器が全部作り直され（ポインタが前と違う）、`WindowGraphics::generation()` が 1 | `device_lost_recovery_test.rs` | 古いまま有効・作られない |
 | 6 | 印を食べない: 窓の無い `EcsWorld` に `Visual` と空の `VisualGraphics` を置いて 1 回回し（WUC が無いので作る係は回らない）、WUC の資源を入れてもう 1 回回すと見た目が作られる | `device_lost_recovery_test.rs` | 1 回目に印を食べて作られない |
 | 6 | 無効化: `invalidate_dependent_components` で窓・見た目・描画面・画像・WUC が全部無効になり、命令の列が外れる | `crates/wintf/tests/graphics/window_pos_systems_test.rs`（書き換え） | 見た目と描画面が有効のまま |
+| 6 | 空にしない: 立ち直りの後にさらに 2 回回しても、四角の部品の描画面が有効で、筆が付いたまま | `device_lost_recovery_test.rs` | 作り直した描画面が `cleanup_surface_on_commandlist_removed` で空になる |
 | 7 | 作る関数に「開発用の旗なら `SDK_COMPONENT_MISSING` で失敗」を渡すと、旗を外した 2 度目で作れる。ほかの失敗では作り直さない | `graphics/core_tests.rs` | 1 度目の失敗がそのまま返る |
 | 8 | `device_context()` の工場が `d2d_factory()` と同じ物（COM の同一性） | `graphics/core_tests.rs` | 別の工場 |
 | 9 | 輪の親（閉包で作る）で `ancestors` が上限で止まる・根で止まる。輪の World で `Visual` を足しても、色の受け継ぎと木の同期の係を回しても終わる（別スレッドで回し、30 秒で返らなければ落とす） | `common/ancestors_tests.rs`・`window/owner_window_exists_test.rs` | 止まらない（時間切れで赤） |
