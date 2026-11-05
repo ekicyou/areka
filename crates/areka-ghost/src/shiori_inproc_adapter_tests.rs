@@ -222,24 +222,14 @@ fn adapter_roundtrips_through_real_ishiori() {
 /// `shiori_wiring.rs` の `build_shiori_mount(None)` と同型に、実フィクスチャの `resolve` で得る。
 #[test]
 fn inproc_connect_missing_file_fails_immediately() {
-    use areka_parsers::charset::DefaultEncoding;
-    use areka_parsers::package;
-
-    let temp = temp_path_kit::TempPath::new("inproc-connect-missing-file");
-    let root = temp.path();
-    let master_dir = root.join("ghost").join("master");
-    std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成");
-    std::fs::create_dir_all(root.join("shell").join("master")).expect("fixture shell dir 作成");
     // shiori 行なし＝file: None（resolve が推測しない）。
-    std::fs::write(master_dir.join("descript.txt"), "").expect("空 descript 書き込み");
-
-    let mount = package::resolve(root, DefaultEncoding::Ansi).expect("fixture の resolve");
+    let (_temp, shiori) = crate::test_support::shiori_mount("inproc-connect-missing-file", "");
     assert_eq!(
-        mount.shiori.file, None,
+        shiori.file, None,
         "fixture は shiori 行なし＝file:None のはず"
     );
 
-    let connect = inproc_connect(mount.shiori);
+    let connect = inproc_connect(shiori);
     let result = connect();
     match result {
         Err(err) => assert!(

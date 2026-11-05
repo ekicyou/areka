@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use temp_path_kit::TempPath;
 
 use super::origin_tests::{RecordingShiori, refs_of, write_returning_ghost};
-use crate::test_support::{NoopSink, Requests, shutdown_bounded, wait_for_on_boot};
+use crate::test_support::{Requests, fake_options, shutdown_bounded, wait_for_on_boot};
 
 /// 名前ありで起動すると、マウントのシェルは `shell/B`、`OnBoot` の Ref0 は B の名前になり、
 /// 書き換えの口の後はマウントのシェルが新しいフォルダを指す。
@@ -29,16 +29,10 @@ fn named_shell_boot_mounts_it_and_set_shell_dir_rewrites_it() {
     let requests: Requests = Arc::new(Mutex::new(Vec::new()));
     let backend_requests = Arc::clone(&requests);
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(RecordingShiori(backend_requests)) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root.clone())
     };
 
     let mut runtime = boot_with_origin(options, None, BootOrigin::Plain, Some("B"), None)

@@ -140,9 +140,8 @@ fn translate_reader_matches_playback_without_its_fixed_log() {
 
 // ---- ゴーストの起動の経路（task 4.2） ----
 
-use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
+use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, boot};
 use areka_kanade::ShioriBackend;
-use areka_parsers::charset::DefaultEncoding;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use std::sync::mpsc::{Sender, channel};
 
@@ -198,16 +197,12 @@ fn boot_sends_on_translate_with_the_expanded_script() {
     let (seen_tx, seen_rx) = channel();
     let calls = Arc::new(AtomicUsize::new(0));
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.to_path_buf(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(TranslateProbeBackend { seen: seen_tx }) as Box<dyn ShioriBackend>)
         })),
         sinks: vec![],
         system_vars: SystemVarWiring::Custom(taro_source(calls)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..crate::test_support::fake_options(root.to_path_buf())
     };
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");

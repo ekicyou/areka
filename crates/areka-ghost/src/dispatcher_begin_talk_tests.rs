@@ -1,11 +1,11 @@
 //! task 3.1（要件 2.6・design.md「BootCueSink::begin_talk」）: 配送がトークの起動ごとに、
 //! 複製した受け口へそのトークの番号を渡すことの檻。
 
+use super::choice_tests::close_and_join;
 use super::*;
-use crate::test_support::{run_bounded, test_system_vars};
+use crate::test_support::test_system_vars;
 use areka_sakura::contract::{ScriptOrigin, TalkCue};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 
 /// 受け口の 1 つの出来事（どの受け口か・何が起きたか・その複製が受け持つ番号）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,13 +88,10 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
     let talk_b = TalkId(8);
 
     // A: 長い待ちで自然には終わらない。最初の Tick で冒頭の cue だけ出す。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_a,
-        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_a,
+        r"\s[1]A\_w[2500]A_END\e",
+    )))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
@@ -103,27 +100,17 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
 
     // B で置き換える。B も自然には終わらせず、Close（終了させて join する）で落とす
     // ——自然完了は slot を空けるだけで join しないので、落ちの時点が決まらない。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_b,
-        script: r"\s[2]B\_w[2500]B_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_b,
+        r"\s[2]B\_w[2500]B_END\e",
+    )))
     .expect("send Start(B)");
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(2_000),
     })
     .expect("send Tick(B)");
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle.join().expect("dispatcher terminates normally");
-        },
-    );
+    close_and_join(&tx, handle);
 
     let log = log.lock().expect("log mutex poisoned").clone();
 
@@ -216,22 +203,12 @@ fn each_talk_start_hands_its_origin_to_every_clone() {
 
     for (id, origin) in [(1, ScriptOrigin::MCP_SEND), (2, ScriptOrigin::GHOST)] {
         tx.send(DispatcherMsg::Start(StartTalk {
-            epilogue: Vec::new(),
-            talk_id: TalkId(id),
-            script: r"\s[0]X\_w[2500]\e".to_string(),
             origin,
-            strict: false,
+            ..StartTalk::new(TalkId(id), r"\s[0]X\_w[2500]\e")
         }))
         .expect("send Start");
     }
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle.join().expect("dispatcher terminates normally");
-        },
-    );
+    close_and_join(&tx, handle);
 
     let seen = seen.lock().expect("seen mutex poisoned").clone();
     assert_eq!(

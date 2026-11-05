@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 
 use areka_parsers::charset::DefaultEncoding;
-use areka_parsers::package::{self, ShioriMount};
+use areka_parsers::package::ShioriMount;
 use log_capture_kit::CapturedEvent;
 use shiori_host32_host::{Charset, CharsetPolicy};
 use temp_path_kit::TempPath;
@@ -27,22 +27,11 @@ use crate::test_log_capture::capture_events;
 /// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り・design §Monitoring）。
 const BOOT_TARGET: &str = "ghost-boot";
 
-/// descript の 2 キーを持つ固定物を本番と同じ経路（`package::resolve`）で作る。
-///
-/// `ShioriMount` は `#[non_exhaustive]` ゆえ `areka-parsers` の外から struct リテラルでは
-/// 組めない（本ファイル以外の既存テストと同じ理由・同じ手口）。返り値の [`TempPath`] を
-/// テストの間だけ生かしておくこと（破棄で中身ごと消える）。
+/// descript の 2 キーを持つ固定物を作る（共通の [`crate::test_support::shiori_mount`]）。
 fn build_shiori_mount(
     encoding: Option<&str>,
     force_encoding: Option<&str>,
 ) -> (TempPath, ShioriMount) {
-    let temp = TempPath::new("ghost-shiori-wiring-charset");
-    let root = temp.path().to_path_buf();
-    let master_dir = root.join("ghost").join("master");
-    std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
-    std::fs::create_dir_all(root.join("shell").join("master"))
-        .expect("fixture shell dir 作成に失敗");
-
     let mut descript = String::from("shiori,whatever.dll\n");
     if let Some(label) = encoding {
         descript.push_str(&format!("shiori.encoding,{label}\n"));
@@ -50,12 +39,7 @@ fn build_shiori_mount(
     if let Some(label) = force_encoding {
         descript.push_str(&format!("shiori.forceencoding,{label}\n"));
     }
-    std::fs::write(master_dir.join("descript.txt"), descript)
-        .expect("fixture descript.txt 書き込みに失敗");
-
-    let mount = package::resolve(&root, DefaultEncoding::Ansi)
-        .expect("fixture ghost_root の resolve に失敗");
-    (temp, mount.shiori)
+    crate::test_support::shiori_mount("ghost-shiori-wiring-charset", &descript)
 }
 
 /// 実在しない helper 実行ファイルのパス（`shiori_wiring.rs` の既存テストと同じ手口）。

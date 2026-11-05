@@ -7,7 +7,7 @@ use areka_sylphya::FlatResolution;
 use temp_path_kit::TempPath;
 
 use super::origin_tests::{RecordingShiori, write_returning_ghost};
-use crate::test_support::{NoopSink, Requests, shutdown_bounded};
+use crate::test_support::{Requests, fake_options, shutdown_bounded};
 
 #[test]
 fn set_names_replaces_mount_names_and_republishes_statics() {
@@ -17,16 +17,10 @@ fn set_names_replaces_mount_names_and_republishes_statics() {
 
     let requests: Requests = Default::default();
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(RecordingShiori(requests)) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root.clone())
     };
     let mut runtime = boot_with_origin(options, None, BootOrigin::Plain, None, None)
         .expect("boot should succeed");

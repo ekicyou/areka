@@ -10,13 +10,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_kanade::{MonotonicMs, ShioriBackend};
-use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::contract::{CueCommand, CuePayload, CueSink, SystemVarSnapshot, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 use crate::dispatcher::DispatcherMsg;
-use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use crate::test_support::{shutdown_bounded, write_ghost};
+use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, boot};
+use crate::test_support::{fake_options, shutdown_bounded, write_ghost};
 
 /// 利用者名を「太郎」と答え、挨拶に `greeting` を返し、`OnTranslate` の Reference を `seen` へ
 /// 送って `translated`（`None`＝204）で答える偽の SHIORI（他の照会は 204）。
@@ -106,9 +105,6 @@ fn boot_and_play(
     let (seen_tx, seen_rx) = channel();
     let text = Arc::new(Mutex::new(String::new()));
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.to_path_buf(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(UsernameShiori {
                 greeting,
@@ -118,8 +114,7 @@ fn boot_and_play(
         })),
         sinks: vec![Box::new(TextRecorder(Arc::clone(&text)))],
         system_vars: SystemVarWiring::FromSylphya,
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root.to_path_buf())
     };
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");

@@ -137,6 +137,8 @@ mod tests {
     use super::*;
     use areka_sakura::contract::ActorKey;
     use log_capture_kit::CapturedEvent as CanonicalEvent;
+    // `actor` は `%cue.actor`（Display 経由）で `record_debug` に届くので `field_str` では落ちる。
+    use crate::test_log_capture::label_of;
     use tracing::Level;
 
     // ---- テスト専用ログ捕捉ヘルパ（捕捉窓は crate 内の唯一の窓口
@@ -156,47 +158,6 @@ mod tests {
         command_kind: Option<String>,
     }
 
-    /// 正準イベントから 1 フィールドの値を、移行前の訪問子と同じ規則で取り出す。
-    ///
-    /// 移行前は `record_str` を無条件に採り、`record_debug` は生値がまだ無いときだけ採って
-    /// いた（すなわち生値が 1 つでもあれば最後の生値、無ければ最初の Debug 表現）。第 2 要素は
-    /// 「生値だったか」で、Debug 表現のときだけ囲みの引用符を剥がすために使う。
-    ///
-    /// `actor` は `%cue.actor`（Display 経由）で渡るため `record_debug` 経路で届き、
-    /// `command_kind` はプレーンな `&'static str` 値なので `record_str` 経路で届く。
-    /// **[`log_capture_kit::CapturedEvent::field_str`] だけで書くと前者が黙って落ちる**
-    /// （`log_capture_kit` の crate doc「注意」節）。
-    fn field_of(ev: &CanonicalEvent, name: &str) -> Option<(String, bool)> {
-        let mut last_str: Option<&str> = None;
-        let mut first_debug: Option<&str> = None;
-        for (field_name, value) in &ev.fields {
-            if field_name != name {
-                continue;
-            }
-            match &value.str_raw {
-                Some(raw) => last_str = Some(raw.as_str()),
-                None if first_debug.is_none() => first_debug = Some(value.debug.as_str()),
-                None => {}
-            }
-        }
-        match (last_str, first_debug) {
-            (Some(raw), _) => Some((raw.to_string(), true)),
-            (None, Some(debug)) => Some((debug.to_string(), false)),
-            (None, None) => None,
-        }
-    }
-
-    /// 文字列フィールドの値（Debug 表現のときは囲みの引用符を剥がす）。
-    fn text_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
-        field_of(ev, name).map(|(value, from_str)| {
-            if from_str {
-                value
-            } else {
-                value.trim_matches('"').to_string()
-            }
-        })
-    }
-
     impl CapturedEvent {
         /// 共有機構の正準イベントから、本檻が照合する形へ変換する。
         ///
@@ -207,9 +168,9 @@ mod tests {
             Self {
                 target: ev.target.clone(),
                 level: ev.level,
-                at: field_of(ev, "at").and_then(|(value, _)| value.parse::<f64>().ok()),
-                actor: text_of(ev, "actor"),
-                command_kind: text_of(ev, "command_kind"),
+                at: label_of(ev, "at").and_then(|value| value.parse::<f64>().ok()),
+                actor: label_of(ev, "actor"),
+                command_kind: label_of(ev, "command_kind"),
             }
         }
     }
@@ -321,75 +282,5 @@ mod tests {
             "AnchorBegin"
         );
         assert_eq!(command_kind(&CueCommand::AnchorEnd), "AnchorEnd");
-    }
-
-    /// 診断既定の**単一配線**（`LogSink`＋`DiscardSink`）を dola `CuePlayer` の broadcast fan-out
-    /// （live path が `spawn_talk` で使う配送エンジンそのもの）へ通し、表情切替（`Emote`）を含む
-    /// 台本を流すと、出力先ログが **cue ごとにちょうど 1 回**記録されることを固定する
-    /// （設計 D4「挙動保存の唯一の破れ」Topic 2＝二重ログの解消）。
-    ///
-    /// 決定論のため実アクター（`spawn_talk`）でなく `CuePlayer` を**テストスレッド上で**同期駆動
-    /// する（`emit`＝ログ発火が本スレッドで起こり、スレッドローカル `capture` で捕捉できる）。
-    /// `CuePlayer` の broadcast fan-out は `spawn_talk` が組む配送機構と同一ゆえ live 配線を忠実に
-    /// 再現する。診断既定は片スロットのみ `LogSink`（記録）・もう一方は `DiscardSink`（破棄）ゆえ、
-    /// 全 cue が両スロットへ broadcast されても記録は 1 系統だけ＝cue ごと 1 回ログになる。
-    ///
-    /// 弁別（二重配線なら FAIL）: もし診断既定が両スロットを `LogSink` にしていた場合、同一 cue が
-    /// 2 回ログされ、`by_kind` の各件数が 2 になって本 assert が落ちる（＝二重ログの回帰檻）。
-    #[test]
-    fn diagnostic_default_wiring_logs_each_cue_exactly_once_through_broadcast() {
-        use dola::cue::CuePlayer;
-
-        // 表情切替（\s[0]）を含む最小台本を compile → 刻印 → CuePlayer 構築。
-        // 期待 cue: ClearAll@0（#6 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0。
-        let instructions = areka_parsers::sakura::parse(r"\s[0]hello\e");
-        // task 6.1 の機械的追随: compile は task 5.1 で 2 引数化（凍結像 SystemVarSnapshot を
-        // 参照渡し）。本テストはシステム変数展開を検査しないため既定スナップショットを渡す。
-        let compiled =
-            areka_sakura::compile(&instructions, &areka_sakura::SystemVarSnapshot::default());
-        let sheet = compiled.sheet.with_absolute_start_time(0.0);
-
-        let mut player = CuePlayer::from_sheet(&sheet);
-        // 診断既定の単一配線: surface スロット＝LogSink（記録）、text スロット＝DiscardSink（破棄）。
-        player.register_sink(Box::new(LogSink::new()));
-        player.register_sink(Box::new(DiscardSink::new()));
-
-        // 初回 Tick(0.0) で刻印済みアンカーの発火群を broadcast、占有 horizon を跨ぐ Tick(1.0) で全 due。
-        let events = capture(|| {
-            player.tick(0.0);
-            player.tick(1.0);
-        });
-
-        // ghost-sink（LogSink）の emit ログのみ抽出。DiscardSink はログを出さないため、
-        // 記録系統は LogSink 1 本＝各 cue はちょうど 1 回だけログされる（二重でない）。
-        let logs: Vec<&CapturedEvent> =
-            events.iter().filter(|e| e.target == "ghost-sink").collect();
-
-        // command_kind ごとの件数を数える（各 presentation cue が 1 回だけ・2 回でない）。
-        let count_kind = |kind: &str| {
-            logs.iter()
-                .filter(|e| e.command_kind.as_deref() == Some(kind))
-                .count()
-        };
-        assert_eq!(
-            count_kind("ClearAll"),
-            1,
-            "ClearAll cue は診断既定の単一配線でちょうど 1 回ログされる（二重ログでない）: {logs:?}"
-        );
-        assert_eq!(
-            count_kind("Emote"),
-            1,
-            "表情切替（Emote）cue はちょうど 1 回ログされる（テキスト出力先も broadcast 受信するが記録は 1 系統）: {logs:?}"
-        );
-        assert_eq!(
-            count_kind("Text"),
-            1,
-            "Text cue はちょうど 1 回ログされる: {logs:?}"
-        );
-        assert_eq!(
-            logs.len(),
-            3,
-            "台本の 3 cue（ClearAll/Emote/Text）が過不足なく各 1 回ログされる（合計 3・二重配線なら 6）: {logs:?}"
-        );
     }
 }

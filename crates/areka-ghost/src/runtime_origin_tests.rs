@@ -12,7 +12,9 @@ use areka_sylphya::{PersistScope, ScopeRoots, save_scope};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
-use crate::test_support::{NoopSink, Requests, shutdown_bounded, wait_for_on_boot, write_ghost};
+use crate::test_support::{
+    Requests, fake_options, shutdown_bounded, wait_for_on_boot, write_ghost,
+};
 
 /// GET を `(id, references)` で記録し、すべて 204（`None`）で返す偽の SHIORI。
 pub(super) struct RecordingShiori(pub(super) Requests);
@@ -77,16 +79,10 @@ fn boot_and_collect(tag: &str, origin: BootOrigin) -> Vec<(String, Vec<String>)>
     let requests: Requests = Arc::new(Mutex::new(Vec::new()));
     let backend_requests = Arc::clone(&requests);
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root,
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(RecordingShiori(backend_requests)) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root)
     };
 
     let runtime = boot_with_origin(options, None, origin, None, None).expect("boot should succeed");

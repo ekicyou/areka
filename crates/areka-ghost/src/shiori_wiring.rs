@@ -327,39 +327,15 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 #[cfg(test)]
 mod tests {
     use areka_parsers::charset::DefaultEncoding;
-    use areka_parsers::package;
     use temp_path_kit::TempPath;
 
     use super::*;
 
-    /// `ShioriMount` は `#[non_exhaustive]`（`areka-parsers` 外からの struct リテラル構築は
-    /// 不可）ゆえ、本番と同じ経路（`package::resolve`）で実フィクスチャから取得する。
-    ///
     /// `ghost/master/descript.txt` に `shiori,<name>` 行が有れば `file: Some(name)`、
     /// 無ければ `file: None` になる（`resolve` の実装どおり・推測しない）。
-    ///
-    /// フィクスチャの置き場は共通窓口 `temp-path-kit` から受け取る。名前にプロセス識別子と
-    /// 連番が入るので**プロセス間でも一意**であり、破棄で中身ごと消える（従来の手組みの名前は
-    /// スレッド識別子までしか含まず、しかも後始末が無いため一時ディレクトリが残り続けていた）。
-    /// 返り値の [`TempPath`] を呼び出し側がテストの間だけ生かしておくこと。
     fn build_shiori_mount(shiori_line: Option<&str>) -> (TempPath, ShioriMount) {
-        let temp = TempPath::new("ghost-shiori-wiring");
-        let root = temp.path().to_path_buf();
-        let master_dir = root.join("ghost").join("master");
-        std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
-        std::fs::create_dir_all(root.join("shell").join("master"))
-            .expect("fixture shell dir 作成に失敗");
-
-        let mut descript = String::new();
-        if let Some(name) = shiori_line {
-            descript.push_str(&format!("shiori,{name}\n"));
-        }
-        std::fs::write(master_dir.join("descript.txt"), descript)
-            .expect("fixture descript.txt 書き込みに失敗");
-
-        let mount = package::resolve(&root, DefaultEncoding::Ansi)
-            .expect("fixture ghost_root の resolve に失敗");
-        (temp, mount.shiori)
+        let descript = shiori_line.map_or(String::new(), |name| format!("shiori,{name}\n"));
+        crate::test_support::shiori_mount("ghost-shiori-wiring", &descript)
     }
 
     /// `shiori.file` が `None`（DLL ファイル名未解決）なら、ウィンドウ生成やプロセス起動を

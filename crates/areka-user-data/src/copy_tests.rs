@@ -186,8 +186,11 @@ fn link_in_tree_fails_without_following() {
 fn refuses_to_copy_into_itself() {
     let (_tmp, from, root) = fixture("ud-copy-self");
     let inside = from.join("x");
+    // 大小だけ違う綴りも同じフォルダ（Windows の名前の決まり）。
+    let upper = from.with_file_name("EMO2").join("x");
     for (to, work_root) in [
         (inside.join("to"), root.clone()),
+        (upper.join("to"), root.clone()),
         (root.join("to"), inside.clone()),
     ] {
         let error = copy_tree_atomic(&from, &to, &work_root).expect_err("断るはず");

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use temp_path_kit::TempPath;
 
 use crate::test_support::{
-    NoopSink, RecordingSink, run_bounded, shutdown_bounded, test_system_vars, write_ghost,
+    RecordingSink, fake_options, run_bounded, shutdown_bounded, write_ghost,
 };
 
 #[test]
@@ -45,20 +45,6 @@ use areka_kanade::MonotonicMs;
 /// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
 fn unique_temp_dir(tag: &str) -> TempPath {
     TempPath::new(&format!("ghost-runtime-{tag}"))
-}
-
-/// 解決できる `root` を空の SHIORI・捨てる sink 2 本・刻みなしで起こす設定。
-fn fake_options(root: PathBuf) -> GhostBootOptions {
-    GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root,
-        default_encoding: DefaultEncoding::Utf8,
-        shiori: ShioriWiring::Custom(Box::new(crate::shiori_wiring::empty_connect())),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
-    }
 }
 
 /// シナリオ2（mount 失敗の短絡）: `ghost_root` に `ghost/master/descript.txt` が
@@ -352,7 +338,7 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
     //
     // 反復回数ではなく**壁時計デッドライン**で括る点が S1 と異なる（S1 の scripted backend は
     // 即応するが、本 InProc 経路は最初の SHIORI 呼出が shiori アクタースレッド上で実 DLL の
-    // `LoadLibraryW`＋`CreateInstance` を初めて走らせ、これに数十 ms を要する）。デッドラインは
+    // `LoadLibraryExW`＋`CreateInstance` を初めて走らせ、これに数十 ms を要する）。デッドラインは
     // `run_bounded` の `recv_timeout` と同じく**宙吊り防止の上限**にすぎず、シミュレーション時刻の
     // 前進は依然として注入 Tick のみ（sleep で talk timeline を進めない・要件 7.3）。DLL ロード
     // 完了後は最初の Tick で挨拶が必ず発火するため結果は決定論的。

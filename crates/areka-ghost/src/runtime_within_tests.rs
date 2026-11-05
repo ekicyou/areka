@@ -12,7 +12,7 @@ use areka_kanade::{CloseReason, ShioriBusy, ShioriCut, ShioriUnblock, WaitBudget
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
-use crate::test_support::{NoopSink, run_bounded, shutdown_bounded, write_ghost};
+use crate::test_support::{fake_options, run_bounded, shutdown_bounded, write_ghost};
 
 /// 解く手と固まる往復が共有する置き場（解かれたか・解く手の回数）。
 #[derive(Default)]
@@ -95,9 +95,6 @@ fn boot_holding(tag: &str, hold_on_close: bool) -> Booted {
     let (holding_tx, holding_rx) = mpsc::channel();
     let backend_gate = Arc::clone(&gate);
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: temp.path().to_path_buf(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(HoldingShiori {
                 gate: backend_gate,
@@ -106,10 +103,7 @@ fn boot_holding(tag: &str, hold_on_close: bool) -> Booted {
                 holding: holding_tx,
             }) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(temp.path().to_path_buf())
     };
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
     ready_rx

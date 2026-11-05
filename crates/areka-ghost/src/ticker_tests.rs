@@ -166,9 +166,6 @@ fn shared_clock(
 
 #[test]
 fn spawn_ticker_delivers_kanade_and_dispatcher_ticks_on_injected_clock() {
-    // dispatcher 側メッセージ型は task 2.5 未着手のため KanadeMsg を仮の D として使う
-    // （設計メモのとおり同一型を暫定転用。`KanadeMsg` はここでは `From<Tick>` を実装
-    // した専用のテスト用ラッパ型を介して満たす）。
     struct TestDispatcherMsg {
         now: MonotonicMs,
     }
@@ -369,7 +366,7 @@ fn spawn_loop_ticker_delivers_once_per_grid_firing_on_injected_clock() {
 }
 
 #[test]
-fn spawn_loop_ticker_catch_up_delivers_exactly_once_across_multiple_missed_boundaries() {
+fn spawn_loop_ticker_catch_up_delivers_the_current_clock() {
     let clock_value = Arc::new(Mutex::new(0u64));
     let (started_tx, started_rx) = mpsc::channel::<()>();
 
@@ -390,12 +387,12 @@ fn spawn_loop_ticker_catch_up_delivers_exactly_once_across_multiple_missed_bound
         .expect("loop ticker should read the clock once at startup");
 
     // 0 から 100 まで一気に進める＝16,32,48,64,80,96 の 6 境界を跨ぐ（サスペンド復帰等）。
-    // catch-up 政策により deliver は**ちょうど 1 回**だけ呼ばれる。
+    // 1 回だけは純粋層の `poll_skips_multiple_missed_boundaries_and_fires_only_once` が縛る。
     *clock_value.lock().expect("lock") = 100;
 
     let tick = tick_rx
         .recv_timeout(Duration::from_secs(5))
-        .expect("catch-up must deliver exactly once with the current clock");
+        .expect("catch-up must deliver a tick with the current clock");
     assert_eq!(tick.now, MonotonicMs(100));
 
     stop_tx.send(TickerMsg::Close).expect("send Close");

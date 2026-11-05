@@ -52,7 +52,7 @@ pub(crate) struct CapturedEvent {
     pub event: Option<String>,
 }
 
-/// 語彙フィールド（`event`）の値を、移行前の visitor と同じ規則で取り出す。
+/// 構造化フィールド `name`（語彙の `event` など）の値を、移行前の visitor と同じ規則で取り出す。
 ///
 /// 移行前は `record_str`（文字列リテラルで渡す規約の正路）を無条件に採り、`record_debug` は
 /// 生値がまだ無いときだけ採っていた。すなわち**生値が 1 つでもあれば最後の生値、無ければ
@@ -61,7 +61,7 @@ pub(crate) struct CapturedEvent {
 /// **[`log_capture_kit::CapturedEvent::field_str`] だけで書いてはならない**——`?expr`／`%expr`
 /// で渡されたフィールドは `record_str` を通らないため `None` になり、その経路の値が黙って
 /// 落ちて語彙の判定が空振りになる（`log_capture_kit` の crate doc「注意」節）。
-fn label_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
+pub(crate) fn label_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
     let mut last_str: Option<&str> = None;
     let mut first_debug: Option<&str> = None;
     for (field_name, value) in &ev.fields {

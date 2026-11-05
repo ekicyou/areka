@@ -1,14 +1,19 @@
 //! `src` の単体テストが分け合う道具（有界の実行・システム変数・記録の sink・空の sink・
 //! ゴーストの fixture・有界の終了・OnBoot を待つ輪）。各テストはここから引き、写しを持たない。
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{RecvTimeoutError, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use areka_parsers::charset::DefaultEncoding;
+use areka_parsers::package::{self, ShioriMount};
 use areka_sakura::contract::{CueSink, SystemVarSnapshot, TalkCue};
+use temp_path_kit::TempPath;
 
-use crate::runtime::{GhostRuntime, SystemVarSource};
+use crate::runtime::{
+    GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode,
+};
 
 /// 退役した `default_system_vars()` の代役: `{"username": DEFAULT_USERNAME}` だけの写しを
 /// 毎回新しく作って返す（既存テストは既定の username を前提に直接注入する）。
@@ -18,6 +23,20 @@ pub(crate) fn test_system_vars() -> SystemVarSource {
         snapshot.insert("username", areka_sakura::sysvar::DEFAULT_USERNAME);
         snapshot
     })
+}
+
+/// 解決できる `root` を空の SHIORI・捨てる sink 2 本・刻みなしで起こす設定。
+pub(crate) fn fake_options(root: PathBuf) -> GhostBootOptions {
+    GhostBootOptions {
+        strict_judges: None,
+        ghost_root: root,
+        default_encoding: DefaultEncoding::Utf8,
+        shiori: ShioriWiring::Custom(Box::new(crate::shiori_wiring::empty_connect())),
+        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+        system_vars: SystemVarWiring::Custom(test_system_vars()),
+        app_profile_dir: None,
+        ticker: TickerMode::Disabled,
+    }
 }
 
 /// 別スレッドで `f` を走らせ、期限内に終わらなければテストを失敗させる（宙吊りで
@@ -82,6 +101,24 @@ pub(crate) struct NoopSink;
 
 impl CueSink for NoopSink {
     fn emit(&mut self, _cue: TalkCue) {}
+}
+
+/// `ghost/master/descript.txt` を `descript`（行の並び）で書き、本番と同じ経路
+/// （`package::resolve`・`ShioriMount` は `#[non_exhaustive]`）で `ShioriMount` を得る。
+/// 返り値の [`TempPath`] をテストの間だけ生かしておくこと（破棄で中身ごと消える）。
+pub(crate) fn shiori_mount(tag: &str, descript: &str) -> (TempPath, ShioriMount) {
+    let temp = TempPath::new(tag);
+    let root = temp.path().to_path_buf();
+    let master_dir = root.join("ghost").join("master");
+    std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
+    std::fs::create_dir_all(root.join("shell").join("master"))
+        .expect("fixture shell dir 作成に失敗");
+    std::fs::write(master_dir.join("descript.txt"), descript)
+        .expect("fixture descript.txt 書き込みに失敗");
+
+    let mount = package::resolve(&root, DefaultEncoding::Ansi)
+        .expect("fixture ghost_root の resolve に失敗");
+    (temp, mount.shiori)
 }
 
 /// `root` の下に解決できる最小のゴースト（`ghost/master`＝`TestGhost`・`shell/master`＝

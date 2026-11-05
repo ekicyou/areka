@@ -116,7 +116,7 @@ fn shell_dir_basename(shell_dir: &std::path::Path) -> String {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use temp_path_kit::TempPath;
 
     /// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
@@ -142,12 +142,10 @@ mod tests {
     /// 直接構築できない（design 契約どおり）ため、`areka_parsers::package::resolve`
     /// を通して実物を得る（`resolve_tests.rs` の tempdir fixture 流儀を踏襲）。
     fn resolve_mount_with_shell_descript(
-        root: &PathBuf,
+        root: &Path,
         shell_dir_name: &str,
         shell_descript: Option<&[u8]>,
     ) -> MountModel {
-        let _ = fs::remove_dir_all(root);
-
         let ghost_master = root.join("ghost").join("master");
         fs::create_dir_all(&ghost_master).expect("create ghost/master");
         fs::write(
@@ -169,8 +167,7 @@ mod tests {
 
     /// ゴースト側 descript に `name_line`（例 `"name,えみり"`）を足した最小のツリーを
     /// 組んで解決する（`None` なら name 行を書かない）。shell descript は置かない。
-    fn resolve_mount_with_ghost_name(root: &PathBuf, name_line: Option<&str>) -> MountModel {
-        let _ = fs::remove_dir_all(root);
+    fn resolve_mount_with_ghost_name(root: &Path, name_line: Option<&str>) -> MountModel {
         let ghost_master = root.join("ghost").join("master");
         fs::create_dir_all(&ghost_master).expect("create ghost/master");
         let name_line = name_line.map(|l| format!("{l}\n")).unwrap_or_default();

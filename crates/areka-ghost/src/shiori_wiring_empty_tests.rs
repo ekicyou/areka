@@ -9,15 +9,13 @@ use std::sync::mpsc::{Sender, channel};
 use std::time::{Duration, Instant};
 
 use areka_kanade::{CloseReason, KanadeMsg, MonotonicMs, ShioriBackend};
-use areka_parsers::charset::DefaultEncoding;
-use areka_sakura::contract::SystemVarSnapshot;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
 use super::{EmptyShiori, empty_connect};
 use crate::dispatcher::DispatcherMsg;
-use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use crate::test_support::{NoopSink, shutdown_bounded};
+use crate::runtime::{GhostBootOptions, ShioriWiring, boot};
+use crate::test_support::{fake_options, shutdown_bounded};
 
 /// 4 つの答え（要件 7.2・7.5）: 問い合わせ→中身なし・知らせ→成功・終わり→きれいな終了・
 /// 状態→動いている。問い合わせの名前や Reference に依らない。
@@ -124,9 +122,6 @@ fn ghost_without_shiori_line_boots_and_closes_through_empty_connect() {
     let (seen_tx, seen_rx) = channel();
     let connect = empty_connect();
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.to_path_buf(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             let inner = connect()?;
             Ok(Box::new(Recording {
@@ -134,10 +129,7 @@ fn ghost_without_shiori_line_boots_and_closes_through_empty_connect() {
                 seen: seen_tx,
             }) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root.to_path_buf())
     };
 
     let runtime = boot(options).expect("boot must succeed without a shiori line");

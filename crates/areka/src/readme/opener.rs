@@ -11,6 +11,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use areka_ghost::config::listed_name;
 use areka_ghost::same_folder_name;
 use bevy_ecs::world::World;
 
@@ -212,21 +213,6 @@ fn dropped(ghost: Option<&str>, dest: &Destination, reason: &'static str) {
         reason,
         "[readme] dropped a request to open a destination"
     );
-}
-
-/// 記録の `ghost` の名（`get_active_ghost_list` と同じ決め方: descript の `name`、空・無しなら
-/// ゴーストのフォルダの絶対パス・末尾の区切りなし）。
-///
-/// `mcp/resolve.rs` は非公開のモジュールなので同じ規則をここに置く。
-fn listed_name(name: Option<&str>, ghost_dir: &Path) -> String {
-    match name.filter(|n| !n.is_empty()) {
-        Some(name) => name.to_owned(),
-        None => ghost_dir
-            .display()
-            .to_string()
-            .trim_end_matches(['\\', '/'])
-            .to_owned(),
-    }
 }
 
 /// `mailto:` の前置き（大文字小文字を区別しない）。
