@@ -13,7 +13,7 @@
 
 ## `areka-nar`
 
-- [ ] 1. `plan_tests.rs` を減らし、テストの写しを 1 つにまとめる（T1）
+- [x] 1. `plan_tests.rs` を減らし、テストの写しを 1 つにまとめる（T1）
   - #60 の写しの道具を消し、#61 の install.txt の頭と #12 の `root_with_ghost`・「読む→検証→解く」の道具を親の `plan_tests.rs` に 1 つずつ置く。`lib_tests` の木の読みの道具を共有にし、`install_tests`・`install_commit_tests` の写しを消す
   - #9 の「根へ何も書かない」の比べをバイト列に直し、較正（`b"1"`→`b"2"`）で赤になることを確かめる
   - #14: 直しの後に `plan_tests.rs` が 950 行を下回らなければ、「書き込みをしない」の塊を兄弟の `plan_no_write_tests.rs` へ移す

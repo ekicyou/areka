@@ -395,4 +395,4 @@ fn collect_tree(
 
 #[cfg(test)]
 #[path = "plan_tests.rs"]
-mod tests;
+pub(crate) mod tests;

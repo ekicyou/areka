@@ -375,12 +375,13 @@ fn the_inflate_call_appears_once_outside_its_definition() {
 
 // ---- 確定の失敗を公開の入口で起こす（本仕様 要件 3.1〜3.4） ----
 
-/// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` の再現）。
+/// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` の再現）。`install` の兄弟テストも借りる。
 ///
-/// `install_commit_tests.rs` の同名の助手と同じ形。あちらは `install` の私的な
-/// テストモジュールの中に在り、ここからは届かない。共有を 0 にすると組み上げの段の
-/// 複写が先に落ちて確定まで届かないので、読みだけを共有する（`FILE_SHARE_READ`）。
-fn hold(path: &Path) -> fs::File {
+/// 掴んだ handle を落とすまで、そのファイルも**親フォルダ**も `rename`／`remove_dir_all`
+/// できない（どちらも os error 5）。共有を 0 にすると組み上げの段の複写（既存の宛先を
+/// 作業フォルダへ写す）が os error 32 で先に落ちて確定まで届かない。読み込まれている
+/// DLL は読みを共有するので、読みだけを共有する（`FILE_SHARE_READ`）ほうが再現として正しい。
+pub(super) fn hold(path: &Path) -> fs::File {
     fs::OpenOptions::new()
         .read(true)
         .share_mode(1 /* FILE_SHARE_READ */)

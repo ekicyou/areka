@@ -9,18 +9,6 @@ use super::*;
 
 // ---- 助手 ----
 
-/// ゴースト本体 `test-ghost` の `install.txt` に、同梱の行を足したもの。
-fn ghost_install_txt(companion_lines: &[&str]) -> Vec<u8> {
-    let mut lines = vec![
-        "charset,UTF-8",
-        "type,ghost",
-        "name,emo",
-        "directory,test-ghost",
-    ];
-    lines.extend_from_slice(companion_lines);
-    install_txt(&lines)
-}
-
 /// 取り出し元が `extra\bal1` の同梱 1 件を持つ `install.txt`。
 fn nested_install_txt() -> Vec<u8> {
     ghost_install_txt(&[
@@ -114,7 +102,7 @@ fn overlapping_sources_archive() -> NarBuilder {
 #[test]
 fn a_nested_source_is_stripped_of_every_segment() {
     let root = root_with_ghost("other");
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         nested_source_archive(),
         &InstallRequest {
             roots: &SingleRoot(root.path()),
@@ -152,7 +140,7 @@ fn a_nested_source_is_stripped_of_every_segment() {
 #[test]
 fn a_sibling_of_the_nested_source_stays_with_the_body() {
     let root = root_with_ghost("other");
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         nested_source_archive(),
         &InstallRequest {
             roots: &SingleRoot(root.path()),
@@ -187,8 +175,8 @@ fn a_folder_on_the_way_to_the_source_is_not_made_on_the_body_side() {
         roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
-    let with_entries = plan_of(passing_through_archive(true), &request);
-    let without_entries = plan_of(passing_through_archive(false), &request);
+    let (with_entries, _, _) = accepted(passing_through_archive(true), &request);
+    let (without_entries, _, _) = accepted(passing_through_archive(false), &request);
 
     let body_of = |plan: &[Placement]| {
         (
@@ -219,7 +207,7 @@ fn a_folder_on_the_way_to_the_source_is_not_made_on_the_body_side() {
 #[test]
 fn every_segment_of_the_source_matches_ignoring_case() {
     let root = root_with_ghost("other");
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         case_differs_archive(),
         &InstallRequest {
             roots: &SingleRoot(root.path()),
@@ -248,7 +236,7 @@ fn every_segment_of_the_source_matches_ignoring_case() {
 #[test]
 fn a_segment_with_a_longer_name_is_not_under_the_source() {
     let root = root_with_ghost("other");
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         longer_sibling_archive(),
         &InstallRequest {
             roots: &SingleRoot(root.path()),
@@ -312,7 +300,7 @@ fn skips_a_nested_source_with_nothing_under_it() {
         ),
     ];
     for (label, archive, body_files, body_dirs) in shapes {
-        let (plan, skipped) = plan_and_skipped_of(archive, &request);
+        let (plan, skipped, _) = accepted(archive, &request);
         assert_eq!(plan.len(), 1, "{label} の形で置く配置が本体だけでない");
         assert_eq!(plan[0].kind, ElementKind::Ghost, "{label}");
         assert_eq!(relative_files(&plan[0]), body_files, "{label}");
@@ -336,7 +324,7 @@ fn skips_a_nested_source_with_nothing_under_it() {
 #[test]
 fn overlapping_sources_each_receive_everything_under_them() {
     let root = root_with_ghost("other");
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         overlapping_sources_archive(),
         &InstallRequest {
             roots: &SingleRoot(root.path()),
@@ -373,7 +361,7 @@ fn every_path_of_every_nested_source_plan_stays_under_the_root() {
         roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
-    let accepted = [
+    let archives = [
         ("nested-source", nested_source_archive()),
         (
             "passing-through-with-entries",
@@ -388,8 +376,8 @@ fn every_path_of_every_nested_source_plan_stays_under_the_root() {
         ("overlapping-sources", overlapping_sources_archive()),
     ];
     let mut total = 0;
-    for (label, archive) in accepted {
-        let plan = plan_of(archive, &request);
+    for (label, archive) in archives {
+        let (plan, _, _) = accepted(archive, &request);
         for placement in &plan {
             assert!(
                 !placement.files.is_empty(),

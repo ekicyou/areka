@@ -16,37 +16,16 @@
 //!    失敗して残り物になる。
 //!
 //! どの失敗でも、宛先が**呼ぶ前と 1 バイトも変わっていない**ことを木ごと突き合わせる
-//! （[`tree`] は相対パスとバイト列そのもので写す）。「まだ在る」では何も証明できない。
+//! （`tree` は相対パスとバイト列そのもので写す）。「まだ在る」では何も証明できない。
 
 use super::*;
 use crate::error::{ElementKind, SurvivingTree};
-use std::os::windows::fs::OpenOptionsExt;
 
 /// 入れ子の同梱の確定の兄弟テスト。1,000 行の上限に収めるために分けた。
 #[path = "install_nested_tests.rs"]
 mod nested;
 
 // ---- 助手 ----
-
-/// 読むことだけを共有して開いたまま持つ（起動中のゴーストの `shiori.dll` と同じ状態）。
-///
-/// 掴んだ handle を返す。落とすまで、そのファイルも**親フォルダ**も
-/// `rename`／`remove_dir_all` できない（どちらも os error 5）。
-///
-/// 設計の試験方針も `share_mode(1)`（`FILE_SHARE_READ`）と書いている。共有をゼロに
-/// すると**組み上げ**の段の複写（既存の宛先を作業フォルダへ写す）が os error 32 で
-/// 先に失敗し、確定の段まで到達しないためである。
-/// 実際に読み込まれている DLL は読みを共有する（だから複写は通り、消せない）ので、
-/// 共有を読みだけに絞るほうが再現として正しく、要件 6.6 の「確定ができない」に届く。
-const SHARE_READ: u32 = 1;
-
-fn hold(path: &Path) -> fs::File {
-    fs::OpenOptions::new()
-        .read(true)
-        .share_mode(SHARE_READ)
-        .open(path)
-        .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
-}
 
 /// 全配置を組み上げる（宛先は読むだけ）。
 fn stage_into(area: &WorkArea, prepared: &Prepared) -> Vec<ExistingState> {

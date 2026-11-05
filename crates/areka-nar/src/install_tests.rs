@@ -3,7 +3,7 @@
 //!
 //! 主張の置き方は 3 つ。
 //!
-//! ⑴ 作業フォルダの中身は [`tree`] で**丸ごと**突き合わせる。写し取るのは相対パスと
+//! ⑴ 作業フォルダの中身は `tree`（公開面のテストと共有）で**丸ごと**突き合わせる。写し取るのは相対パスと
 //!    **バイト列そのもの**で、長さや個数では代えない。同じ長さの書き換え（改行の変換は
 //!    まさにこれ）が見えなくなる道を残さないため（要件 5.9）。空フォルダも末尾 `/` の
 //!    鍵として拾うので、要件 4.9 の「空フォルダを作る」が消えても赤になる。
@@ -16,10 +16,11 @@
 //! 登記表の検体とわざと違う綴りにする（検体パスの綴りを見張る常設検査に当たらないため）。
 
 use super::*;
-use crate::container::{inflate_entry, read_central_directory};
-use crate::manifest::{InstallManifest, locate_install_txt, parse_manifest};
-use crate::names::validate_entry_names;
+use crate::container::inflate_entry;
+use crate::manifest::InstallManifest;
+use crate::plan::tests::{read_archive, root_with_ghost};
 use crate::plan::{Placement, build_plan};
+use crate::tests::{hold, tree};
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::collections::BTreeMap;
 use std::fs;
@@ -47,13 +48,7 @@ struct Prepared {
 
 fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
     let bytes = builder.bytes();
-    let raw = read_central_directory(&bytes).expect("書庫そのものは無傷");
-    let names = validate_entry_names(&raw).expect("名前は安全");
-    let index = locate_install_txt(&names)
-        .expect("最上位に install.txt がある")
-        .index;
-    let text = inflate_entry(&bytes, &raw[index]).expect("install.txt を伸長できる");
-    let manifest = parse_manifest(&text).expect("マニフェストは受理される");
+    let (raw, names, manifest) = read_archive(&bytes);
     let contents = raw
         .iter()
         .map(|entry| inflate_entry(&bytes, entry).expect("エントリを伸長できる"))
@@ -64,31 +59,6 @@ fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
         manifest,
         plan,
         contents,
-    }
-}
-
-/// 木の全内容。ファイルは相対パス → バイト列、フォルダは末尾 `/` の相対パス → 空。
-///
-/// フォルダが無ければ空の写像を返す（「宛先がまだ無い」と「宛先が空」を同じ形で扱える）。
-fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
-    let mut out = BTreeMap::new();
-    if root.is_dir() {
-        walk(root, "", &mut out);
-    }
-    out
-}
-
-fn walk(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
-    for child in fs::read_dir(dir).expect("木を辿れる") {
-        let child = child.expect("要素を読める");
-        let name = child.file_name().to_string_lossy().into_owned();
-        let relative = format!("{prefix}{name}");
-        if child.file_type().expect("種別を読める").is_dir() {
-            out.insert(format!("{relative}/"), Vec::new());
-            walk(&child.path(), &format!("{relative}/"), out);
-        } else {
-            out.insert(relative, fs::read(child.path()).expect("中身を読める"));
-        }
     }
 }
 
@@ -138,13 +108,6 @@ fn stage_all(root: &Path, prepared: &Prepared) -> (WorkArea, Vec<ExistingState>)
         );
     }
     (area, states)
-}
-
-/// 宛先ゴースト `name` が実在する空の根を 1 つ借りる（要件 7.10）。
-fn root_with_ghost(name: &str) -> WorkDir {
-    let work = WorkDir::new().expect("作業フォルダを取れる");
-    fs::create_dir_all(work.path().join("ghost").join(name)).expect("宛先ゴーストを作れる");
-    work
 }
 
 // ---- 固定入力 ----
