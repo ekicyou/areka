@@ -329,54 +329,9 @@ use std::sync::Arc;
 /// shutdown」で足りる（重複させない）。
 #[test]
 fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
-    // 実ビルド済み cdylib を deps ディレクトリから locate する（`shiori_inproc.rs` の
-    // happy_path 檻と同一導出・design.md D-1）。不在時は silent skip せず明示 panic。
-    let test_exe = std::env::current_exe().expect("test executable path is available");
-    let deps_dir = test_exe
-        .parent()
-        .expect("test executable resides in a deps directory");
-    let built_dll = deps_dir.join(shiori4_testdll::DLL_FILE_NAME);
-    assert!(
-        built_dll.exists(),
-        "built test DLL が正準位置に不在: {}\n\
-         この cdylib は `cargo test --workspace` が自動ビルドし単一の正準位置（deps）へ出力する。\
-         単独実行時は先に `cargo test --workspace`（または `cargo build -p shiori4-testdll`）を\
-         実行すること（フォールバックは設けない・design.md D-1）。",
-        built_dll.display()
-    );
-
-    let temp = unique_temp_dir("inproc-wiring-boots-drives-and-shuts-down-through-real-test-dll");
+    // `TempPath` の下にテストの DLL を写したゴースト（探しと写しは `shiori_inproc_tests` の 1 つ）。
+    let temp = crate::shiori_inproc::tests::dll_ghost("ghost-runtime-inproc-wiring");
     let root = temp.path().to_path_buf();
-
-    // fixture: ghost/master/descript.txt（`shiori,` 行＝テスト DLL 名）＋ shell/master/descript.txt
-    // （shell dir 存在チェックを通すための最小 descript）。
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        format!(
-            "charset,UTF-8\nname,Shiori4TestGhost\nshiori,{}\nseriko.defaultsurfacedirectoryname,master\n",
-            shiori4_testdll::DLL_FILE_NAME
-        )
-        .as_bytes(),
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,Shiori4TestShell\n",
-    )
-    .expect("write shell descript.txt");
-
-    // 実 cdylib を fixture の ghost/master/ へコピーする（`inproc_connect` が
-    // `mount.shiori.dir.join(file)` でロードする位置・D-1）。
-    std::fs::copy(
-        &built_dll,
-        ghost_master.join(shiori4_testdll::DLL_FILE_NAME),
-    )
-    .expect("copy built test DLL into ghost/master");
 
     let recording = RecordingSink::new();
     let records = recording.records();

@@ -39,7 +39,7 @@ pub mod shiori3;
 mod terminator;
 
 pub use charset::{Charset, CharsetNegotiator, CharsetPolicy, LabelError};
-pub use client::Shiori3Client;
+pub use client::{Shiori3Client, map_get_reply};
 pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
 pub use lifecycle::{
     FailureClass, HelperLifecycle, HelperStatus, LifecycleReport, ShutdownError, classify_failure,

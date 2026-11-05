@@ -271,8 +271,9 @@ fn ghost_label(master_dir: &Path) -> String {
 /// （要件 6.4・`shiori4-api` の決定 6 の helper の道の前倒し）。
 ///
 /// 華和梨などはこれにファイル名をそのままつなげて辞書を開くので、区切りの混在や末尾の
-/// 区切りなし（`…\ghost/master`）では読めない。
-fn helper_load_dir(dir: &Path) -> std::io::Result<PathBuf> {
+/// 区切りなし（`…\ghost/master`）では読めない。同じプロセス内の道（`inproc_connect`）も
+/// これで整える。
+pub(crate) fn helper_load_dir(dir: &Path) -> std::io::Result<PathBuf> {
     // 部品を集め直すと区切りが `\` にそろい、末尾の区切りも落ちる。
     let mut shaped: PathBuf = std::path::absolute(dir)?.components().collect();
     // 空を足すと末尾に区切りが 1 つだけ付く（既にあれば足さない）。

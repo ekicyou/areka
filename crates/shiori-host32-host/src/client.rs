@@ -428,7 +428,10 @@ fn map_get_result(parsed: ParsedResponse) -> Result<Option<String>, RequestError
 }
 
 /// [`map_get_result`] の値に、応答の `SecurityLevel` の生の値を添える（判定の順は変えない・要件 3.5）。
-fn map_get_reply(parsed: ParsedResponse) -> Result<Option<ValueReply>, RequestError> {
+///
+/// 同じプロセス内の SHIORI の道（`areka-ghost` の `shiori_inproc`）も応答の読みにこれを使い、
+/// 2 つの道で答えの扱いを 1 つにする。
+pub fn map_get_reply(parsed: ParsedResponse) -> Result<Option<ValueReply>, RequestError> {
     let security_level = parsed.security_level.clone();
     Ok(map_get_result(parsed)?.map(|value| ValueReply {
         value,

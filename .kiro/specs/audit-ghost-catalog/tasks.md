@@ -110,7 +110,7 @@
   - _Depends: 8, 9_
   - _Requirements: 3.1, 3.2, 4.1, 5.4, 6.1, 6.2, 9.1, 9.10, 9.14_
 
-- [ ] 13. 同じプロセス内の SHIORI の読み込みを直す（T10）
+- [x] 13. 同じプロセス内の SHIORI の読み込みを直す（T10）
   - 着手の前に `main` を取り込み、一時フォルダの番人の例外表の行から件数を数え直す（`audit-emo-present` も行を持つ）
   - #26 のファイル全体の allow とその段落を消し、出た警告の物を確かめて消す。#27 の範囲の外の `shiori-host32-host` の答えの読みを公開して使い、写しを消す
   - #28 の DLL を絶対パスで読み、DLL のフォルダを依存の探し先に入れて作業フォルダと PATH を外す。#29 のフォルダの整えを helper の道と同じ関数でそろえる
@@ -190,3 +190,4 @@
 - 8: `cargo test -p areka` の結合テスト `mcp_get_log_real_run` は 32bit の helper（`target\i686-pc-windows-msvc`）が未ビルドだと panic する。lib/bins は緑。18.3 の全体テストで見る。
 - 11: `dispatcher_choice_tests.rs` は 936→925 行で、見立ての約 790 行に届かない。research #75 の「StartTalk 18 か所・Close＋join 10 か所」は dispatcher のテスト 4 ファイルを合わせた数で、choice の中は 3 か所・2 か所だけ（3 ファイル合わせて −84 行）。`dispatcher_begin_talk_tests.rs` の 3 か所は T14 の表に無く残した。#79 は `audit-parsers-sakura` が未着地なので 18.1 へ回した。
 - 12: #56 は直さない。research の「本番に呼び手が無い」は事実と違い、`crates/areka/src/main.rs:623` が `BasewareRoot::ghost_dir` を本番で呼ぶ。テストの呼び手も約 60 ファイル（範囲の外の表に無い）ある。設計の「消すなら」の条件が成り立たないので、`ghost_dir`・`balloon_dir` は残し、`boot_resolve*_tests.rs` は触らない（進行役の判断・audit 系は推奨案で進めてよいという開発者の方針による）。18.2 のかけ直しでは直さない件として数える。
+- 13: 範囲の外の `crates/shiori-host32-helper/src/shiori_proxy.rs` は今も素の `LoadLibraryW`（作業フォルダと PATH を探す）。設計の範囲に無いので触っていない。完了の棚卸で起票を考える（持ち主は `audit-shiori-host32`）。

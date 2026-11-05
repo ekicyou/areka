@@ -1,4 +1,4 @@
-//! task 2.3: `map_get_outcome` 写像表の全行（純関数・COM 不要）＋実 DLL 越しの `InProcBackend`
+//! task 2.3: `map_get_outcome` 写像表の全行（純関数・COM 不要）＋実 DLL 越しの `inproc_connect`
 //! 往復（get/notify/status/unload）＋`inproc_connect` の `file: None` 即失敗
 //! （design.md §InProcBackend・「`IShiori::Get` 応答の写像表」・要件 3.2/3.3/3.4/3.5/7.1）。
 
@@ -135,51 +135,24 @@ fn map_error_hresult_is_parse_error() {
 
 // --- 実 DLL 越しの InProcBackend 往復（design.md D-1・要件 3.2/3.3/3.4）------
 
-/// deps ディレクトリのビルド済み cdylib を実ロードして [`InProcBackend`] を組む
-/// （D-1・不在は明示 panic・happy_path 檻と同一 locate 導出）。
-fn build_real_backend() -> InProcBackend {
-    let test_exe = std::env::current_exe().expect("test executable path is available");
-    let deps_dir = test_exe
-        .parent()
-        .expect("test executable resides in a deps directory");
-    let dll_path = deps_dir.join(shiori4_testdll::DLL_FILE_NAME);
-    assert!(
-        dll_path.exists(),
-        "built test DLL が正準位置に不在: {}\n\
-         `cargo test --workspace`（または `cargo build -p shiori4-testdll`）を先に実行すること\
-         （フォールバックなし・design.md D-1）。",
-        dll_path.display()
-    );
-
-    let (library, factory) = InProcLibrary::load(&dll_path)
-        .expect("built cdylib は正常ロードされ factory を解決すること");
-    let host: IShioriHost = InProcHost::new().into();
-    let load_dir_h = HSTRING::from(deps_dir.as_os_str());
-    let name_h = HSTRING::from(shiori4_testdll::DLL_FILE_NAME);
-    let mut out: Option<IShiori> = None;
-    // SAFETY: factory は shiori_factory が move-out した有効な IShioriFactory。host は Ref 借用、
-    // out は OutRef 書込先（成功時 move-out）。
-    unsafe {
-        factory
-            .CreateInstance(&load_dir_h, &name_h, (&host).into(), (&mut out).into())
-            .expect("CreateInstance は load 完了済み IShiori を move-out すること");
-    }
-    // factory を FreeLibrary より先に Release（設計・順序不変条件）。
-    drop(factory);
-    let shiori_iface = out.expect("out に IShiori が move-out されていること");
-    InProcBackend {
-        shiori: Some(shiori_iface),
-        host: Some(host),
-        library: Some(library),
-        unloaded: false,
-    }
+/// `TempPath` の下に DLL を写したゴーストを `resolve` し、本番の [`inproc_connect`] で
+/// backend を組む（手で写した接続の道具は持たない・#34）。fixture は backend より長く生かすこと。
+fn build_real_backend() -> (temp_path_kit::TempPath, Box<dyn ShioriBackend>) {
+    let ghost = super::tests::dll_ghost("inproc-adapter");
+    let mount = areka_parsers::package::resolve(
+        ghost.path(),
+        areka_parsers::charset::DefaultEncoding::Utf8,
+    )
+    .expect("fixture の resolve");
+    let backend = inproc_connect(mount.shiori)().expect("テストの DLL へ接続できること");
+    (ghost, backend)
 }
 
 /// 実 `IShiori` 境界を横断して get/notify/status/unload が正しく往復すること
 /// （build_request→Get→parse→map の全経路・要件 3.2/3.3/3.4）。
 #[test]
 fn adapter_roundtrips_through_real_ishiori() {
-    let mut backend = build_real_backend();
+    let (_ghost, mut backend) = build_real_backend();
 
     // GET OnFirstBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload
     // （task 6.2 実採取の起動挨拶さくらスクリプト）。envelope 全文ではなく Value 行 payload のみが
@@ -252,20 +225,15 @@ fn inproc_connect_missing_file_fails_immediately() {
     use areka_parsers::charset::DefaultEncoding;
     use areka_parsers::package;
 
-    let unique = format!(
-        "areka-ghost-inproc-connect-test-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    );
-    let root = std::env::temp_dir().join(unique);
+    let temp = temp_path_kit::TempPath::new("inproc-connect-missing-file");
+    let root = temp.path();
     let master_dir = root.join("ghost").join("master");
     std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成");
     std::fs::create_dir_all(root.join("shell").join("master")).expect("fixture shell dir 作成");
     // shiori 行なし＝file: None（resolve が推測しない）。
     std::fs::write(master_dir.join("descript.txt"), "").expect("空 descript 書き込み");
 
-    let mount = package::resolve(&root, DefaultEncoding::Ansi).expect("fixture の resolve");
-    let _ = std::fs::remove_dir_all(&root);
+    let mount = package::resolve(root, DefaultEncoding::Ansi).expect("fixture の resolve");
     assert_eq!(
         mount.shiori.file, None,
         "fixture は shiori 行なし＝file:None のはず"

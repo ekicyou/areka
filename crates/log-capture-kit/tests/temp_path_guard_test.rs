@@ -158,16 +158,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "プロセス識別子＋単調連番＋Drop の再帰削除を自前で持つ（窓口の移植元と同型）。要件 12.2 の移行対象外",
     ),
     (
-        "crates/areka-ghost/src/shiori_inproc_adapter_tests.rs",
-        Why::ProcessUnique,
-        "プロセス識別子で一意化済み。要件 12.2 の移行対象外",
-    ),
-    (
-        "crates/areka-ghost/src/shiori_inproc_tests.rs",
-        Why::ProcessUnique,
-        "プロセス識別子で一意化済み。要件 12.2 の移行対象外",
-    ),
-    (
         "crates/areka-ghost/tests/ghost/inproc_e2e_test.rs",
         Why::ProcessUnique,
         "プロセス識別子で一意化済み。要件 12.2 の移行対象外",
@@ -280,13 +270,13 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 19;
+const ALLOWED_COUNT: usize = 17;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。3 つに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 16;
+const PROCESS_UNIQUE_COUNT: usize = 14;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 2;
 /// 同上（固定名が仕様）。
