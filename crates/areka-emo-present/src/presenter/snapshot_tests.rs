@@ -126,9 +126,7 @@ fn setup() -> (EmoPresenter, World) {
     for target in [SHOWN, NEVER_SHOWN] {
         let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas) = build_assets();
-        presenter
-            .attach_target(&mut world, target, window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(target, window, emo_world, atlas, 96);
     }
     (presenter, world)
 }

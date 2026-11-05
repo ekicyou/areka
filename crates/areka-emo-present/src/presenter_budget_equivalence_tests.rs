@@ -298,9 +298,7 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
         let window = spawn_window_with_dpi(&mut world, window_dpi);
         let (emo_world, atlas) = build_alpha_varying_faces(NATIVE_W, NATIVE_H);
         let mut presenter = EmoPresenter::new();
-        presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
         // 暖機後の表示バッファ・マスクの番地（使い回しとミス経路の証拠として集める）。
         let mut steady_display_ptrs: Vec<*const u8> = Vec::new();
@@ -442,9 +440,7 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
         assert_expected_is_not_empty(&want, &format!("{at_dpi} 面 {FACE_A}"));
 
         let mut presenter = EmoPresenter::new();
-        presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
         // 巡回適用で暖機してから、同じ面を 2 回続けて適用する（1 回目はミス・2 回目がヒット）。
         for i in 0..WARMUP {

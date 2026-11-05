@@ -33,9 +33,7 @@ fn attached(world: &mut World, dpi: u16, author_dpi: u16) -> (EmoPresenter, Enti
     let window = spawn_window_with_dpi(world, dpi);
     let (emo_world, atlas, _) = build_target_assets(3, 2, 0x51);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, author_dpi)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, author_dpi);
     (presenter, window)
 }
 

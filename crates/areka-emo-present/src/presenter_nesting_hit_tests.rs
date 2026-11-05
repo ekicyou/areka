@@ -25,16 +25,13 @@ fn presenter_showing_parent_b(k: ScaleRatio) -> EmoPresenter {
     // 判定は画素を見ないので atlas は空でよい（画像の読み込みも GPU も要らない）。
     let atlas: AtlasTable = bake(&[], &MemoryDecoder::new(), PackConfig::default()).table;
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(
-            &mut world,
-            TargetId(0),
-            window,
-            EmoWorld::build(&parse(FIXTURE)),
-            atlas,
-            96,
-        )
-        .expect("attach_target 失敗");
+    presenter.attach_target(
+        TargetId(0),
+        window,
+        EmoWorld::build(&parse(FIXTURE)),
+        atlas,
+        96,
+    );
     force_current_surface(&mut presenter, TargetId(0), 1);
     force_applied(&mut presenter, TargetId(0), Some(k));
     presenter

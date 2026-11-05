@@ -26,9 +26,7 @@ fn two_targets(world: &mut World) -> EmoPresenter {
     for (id, salt) in [(0u32, 0x41u8), (1, 0x42)] {
         let window = spawn_window_with_dpi(world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(3, 2, salt);
-        presenter
-            .attach_target(world, TargetId(id), window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(TargetId(id), window, emo_world, atlas, 96);
     }
     presenter
 }
@@ -90,9 +88,7 @@ fn move_shift_leaves_composition_memory_untouched() {
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x43);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let before = (

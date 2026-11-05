@@ -141,9 +141,7 @@ fn bind_change_on_same_surface_updates_display() {
     let (emo_world, atlas, golden_plain, golden_bound) = build_target_assets_with_bind(4, 3, 0x2B);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, binds: BindSet| {
         let (tx, rx) = reply_channel::<PresentOutcome>();
@@ -205,9 +203,7 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
     let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 面 1000 を表示確立（可視・αマスク判定・装着を遅延生成）。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -420,9 +416,7 @@ fn show_surface_pattern_flows_through_to_compose_and_cache() {
         build_target_assets_with_pattern(4, 3, 0x3C);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState| {
         let (tx, rx) = reply_channel::<PresentOutcome>();

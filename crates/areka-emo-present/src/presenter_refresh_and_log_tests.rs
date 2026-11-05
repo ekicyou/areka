@@ -53,9 +53,7 @@ fn display_success_emits_d10_observation_log_at_info() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x88);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let ((), events) = capture(|| {
         show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -148,9 +146,7 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
         "未登録 target は None"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     assert_eq!(
         presenter.applied_scale(TargetId(0)),
         None,
@@ -197,9 +193,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     assert_eq!(scaled_size, (12, 10), "前提: 原寸と物理寸が弁別可能");
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // k=1/1 の表示確立（初回表示が積む k₀ 補正要求は取り出して捨てる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -312,9 +306,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     let scaled_size = k2.scaled_extent(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
@@ -427,9 +419,7 @@ fn refresh_scale_without_last_show_input_does_nothing() {
         "未登録 target は None（panic しない）"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 一度も show していない状態で DPI を変える。
     set_window_dpi(&mut world, window, 192);
 
@@ -469,9 +459,7 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x93);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let _ = presenter.take_pending_resize(TargetId(0));
 
@@ -549,9 +537,7 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
     let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x95);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 192)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 192);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.applied_scale(TargetId(0)),
@@ -607,9 +593,7 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x94);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),

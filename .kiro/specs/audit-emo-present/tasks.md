@@ -12,7 +12,7 @@
   - 既存の拡大の失敗と表示の失敗のテストが、失敗の値を戻り値で受けて緑
   - _Requirements: 2.1, 2.3, 2.5, 4.1, 4.2, 4.3, 6.3, 6.4, 7.2, 9.1_
 
-- [ ] 2. 登録の口から使わない引数と常に成功の結果を外し、範囲の外の呼び手まで直す（指摘 6）
+- [x] 2. 登録の口から使わない引数と常に成功の結果を外し、範囲の外の呼び手まで直す（指摘 6）
   - 登録の口を引数 5 つ・戻り値なしにし、差し替えの「登録し直せなかった」枝を消す
   - クレートの中の 29 ファイルと、design.md の「範囲の外に及ぶ所」の表の 17 ファイル（`crates/areka`・`crates/areka-emo-text` の既存ファイル・`crates/pilot`）の呼び方を直し、使われなくなる手伝いは他に使い手が無ければ消す。`crates/areka-emo-text` にファイルを足さない
   - 先進坑の資産の差し替えの例は、資産が尽きると失敗するので結果を残し、World の引数だけを外す
@@ -122,3 +122,4 @@
 - タスク 1: 境界の外の `presenter/transition_record_tests.rs` を触った。`show.rs` の失敗の枝の字面を固定するテストがあり、`return Err(e);` へ照合の文字列と範囲（9→8 行）を合わせた（主張は同じ）。字面を固定するテストは、`show.rs` を触る後のタスクでも合わせ直しが要る
 - `audit-emo-compose` との申し合わせ（11-05）: `ComposeError::ExtentTooLarge` を表示の側では `EmptyComposition` と同じ「面を隠す」縮退で扱う。後に着地する方が表示の側の `match` に腕を足す。`hit_region` が消えた main を取り込んだら `presenter_read_accessor_tests.rs` の説明 2 行（今の 373・383 行）を直す
 - `audit-parsers-sakura` は `shell_target.rs` に記録の数行を足す（約 975 行の見込み・新しいファイルは足さない）。タスク 6 の可視性の変更とは署名で当たらない
+- タスク 2: `cargo test -p areka` の `smoke_boot_loop_exit`・`mcp_get_log_real_run` は作業場に i686 の検体（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いと赤。`cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で建ててから回す

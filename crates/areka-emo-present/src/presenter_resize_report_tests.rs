@@ -47,9 +47,7 @@ fn dpi_change_reports_new_physical_size_to_caller() {
     let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x85);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // k=1/1 の初回表示（初回報告は Flow 3 手順 5 の領分ゆえ、ここでは取り出して捨てる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -106,9 +104,7 @@ fn unchanged_physical_size_reports_nothing() {
     let (emo_world, atlas, _g1000, _g3000) = build_two_face_assets(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let k2 = ScaleRatio::new(2, 1).unwrap();
     let physical = k2.scaled_extent(6, 5);
@@ -157,9 +153,7 @@ fn first_show_reports_physical_size_for_initial_reconcile() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x86);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 表示前は要求なし（attach しただけで窓を動かさない）。
     assert_eq!(
@@ -196,9 +190,7 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
     let k2 = ScaleRatio::new(2, 1).unwrap();
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // (A) 表示記録の前提資源を一時退避 → 合成の後、表示成立の手前で失敗する。
     let gfx = world

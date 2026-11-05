@@ -92,18 +92,7 @@ impl EmoPresenter {
                 return;
             }
         };
-        if let Err(e) = self.attach_target(
-            world,
-            target_id,
-            carried.window,
-            emo_world,
-            atlas,
-            author_dpi,
-        ) {
-            tracing::error!(?target_id, error = %e, "apply(ReplaceTarget): 登録し直せなかった");
-            Self::reply(reply, Err(e));
-            return;
-        }
+        self.attach_target(target_id, carried.window, emo_world, atlas, author_dpi);
         let target = self.targets.get_mut(&target_id).expect("直上で登録済み");
         target.ownership = carried.ownership;
         // 前回の物理寸を引き継ぐので、⑷ の表示は物理寸が変わったときだけ窓寸の要求を積む。

@@ -122,9 +122,7 @@ fn command_driven_target_after_first_show(salt: u8) -> (World, EmoPresenter, Tar
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, salt);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     (world, presenter, TargetId(0))
@@ -261,9 +259,7 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x43);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), VisibilityOwnership::External)
         .expect("装着済み target への所有権設定は Ok");

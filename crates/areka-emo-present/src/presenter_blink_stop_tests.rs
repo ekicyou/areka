@@ -110,9 +110,7 @@ fn stopped_blink_leaves_no_closed_eye_in_the_picture() {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas) = build_assets();
-    presenter
-        .attach_target(&mut world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     let (emo_world, atlas) = build_assets();
     let (open_eye, _) = native_golden_with(
         &emo_world,
@@ -170,9 +168,7 @@ fn stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_the_rect_path()
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas) = build_assets();
-    presenter
-        .attach_target(&mut world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     let (emo_world, atlas) = build_assets();
     let stopped = frames(&[(MOVER, 1500, 11, 8)]);
     let (golden, _) =

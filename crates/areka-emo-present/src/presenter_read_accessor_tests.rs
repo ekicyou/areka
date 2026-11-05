@@ -25,9 +25,7 @@ fn current_surface_id_is_none_before_first_show() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x10);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
@@ -50,9 +48,7 @@ fn current_surface_id_is_last_shown_after_display() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x11);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
@@ -86,9 +82,7 @@ fn current_surface_id_follows_surface_switch() {
     let (emo_world, atlas, _g1, _g3) = build_two_face_assets(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, id: u32| {
         let (tx, rx) = reply_channel::<PresentOutcome>();
@@ -132,9 +126,7 @@ fn current_surface_id_is_none_after_hide() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x13);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
     presenter.apply(
@@ -192,9 +184,7 @@ fn current_surface_id_unchanged_by_invalidate_cache() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
     presenter.apply(
@@ -256,9 +246,7 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     for cmd in [
         PresentCommand::ShowSurface {
             target: TargetId(0),

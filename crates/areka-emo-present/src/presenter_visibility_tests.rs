@@ -140,9 +140,7 @@ fn external_target_after_first_show(
     let (emo_world, atlas, golden) = build_target_assets(3, 2, salt);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), VisibilityOwnership::External)
         .expect("装着済み target への所有権設定は Ok");
@@ -217,9 +215,7 @@ fn command_driven_target_is_still_visualized_by_show_surface() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x22);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 所有権を設定しない＝既定（CommandDriven）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
@@ -317,9 +313,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
     let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(4, 3);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), VisibilityOwnership::External)
         .expect("所有権設定は Ok");
@@ -684,9 +678,7 @@ fn hide_is_immediate_regardless_of_ownership() {
     let window2 = spawn_window_with_dpi(&mut world2, 96);
     let (emo_world, atlas, _g) = build_target_assets(3, 2, 0x26);
     let mut presenter2 = EmoPresenter::new();
-    presenter2
-        .attach_target(&mut world2, TargetId(1), window2, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter2.attach_target(TargetId(1), window2, emo_world, atlas, 96);
     show_ok(&mut presenter2, &mut world2, TargetId(1), 1000);
     assert_eq!(presenter2.target_visible(TargetId(1)), Some(true));
     assert_entities_visible(&world2, &presenter2, TargetId(1), "既定所有権の Hide 直前");
@@ -783,9 +775,7 @@ fn setting_ownership_does_not_change_current_visibility() {
     let (emo_world, atlas, _g) = build_target_assets(3, 2, 0x28);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(presenter.target_visible(TargetId(0)), Some(true));
 

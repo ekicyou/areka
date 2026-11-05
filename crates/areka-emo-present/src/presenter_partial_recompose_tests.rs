@@ -98,9 +98,7 @@ fn setup() -> (World, EmoPresenter, EmoWorld, AtlasTable) {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas) = build_assets();
-    presenter
-        .attach_target(&mut world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     // 正解の絵を作るための同じ入力（attach は値を取るので作り直す）。
     let (emo_world, atlas) = build_assets();
     (world, presenter, emo_world, atlas)

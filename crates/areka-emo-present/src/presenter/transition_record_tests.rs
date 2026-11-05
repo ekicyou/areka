@@ -485,9 +485,7 @@ fn gpu_world_with_frame() -> World {
 fn attach(presenter: &mut EmoPresenter, world: &mut World, target: TargetId, window_dpi: u16) {
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
 /// `ShowSurface` を 1 回適用する。
@@ -641,9 +639,7 @@ fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter
-        .attach_target(&mut world, TargetId(1), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(1), window, emo_world, atlas, 96);
     assert!(
         show(&mut presenter, &mut world, TargetId(1)).is_ok(),
         "前提: k=1/1 の初回表示は成立する"
@@ -683,9 +679,7 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter
-        .attach_target(&mut world, TargetId(2), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(2), window, emo_world, atlas, 96);
     assert!(
         show(&mut presenter, &mut world, TargetId(2)).is_ok(),
         "前提: 初回表示は成立する"

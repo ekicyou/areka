@@ -33,9 +33,7 @@ fn golden_match_read_back_equals_direct_compose() {
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
@@ -74,9 +72,7 @@ fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5A);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // まず有効 id で表示を確立（表示記録の生成＋表示バイト確定）。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -201,9 +197,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x37);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 有効 id で表示・マスク・hit-test を確立。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -354,9 +348,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     }
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 有効 1000 で mount と表示記録を確立し可視化。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -457,9 +449,7 @@ fn hide_then_reshow_recovers_display_from_cache() {
     let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x4D);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 初回表示（可視・αマスク判定確立）。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -596,9 +586,7 @@ fn text_slot_view_is_none_before_display_established() {
         "未登録 target の text_slot_view は None"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 登録済みでも初回 ShowSurface 前（mount 未生成）は空（design: mount は遅延生成・R9.2）。
     assert!(
         presenter.text_slot_view(TargetId(0)).is_none(),
@@ -618,9 +606,7 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x77);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
@@ -709,9 +695,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x6C);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 有効 id でスロットを埋める（表示成立＝表示バッファとマスクの原子対が入る）。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -838,9 +822,7 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x2A);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 1 回目＝外れ（記録が作られる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);

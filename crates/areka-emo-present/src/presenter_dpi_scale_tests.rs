@@ -52,12 +52,8 @@ fn attach_target_keeps_scale_policy_per_window() {
     let (w1, a1, _g) = build_target_assets(3, 2, 0x92);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), win_96, w0, a0, 96)
-        .expect("attach_target(0) 失敗");
-    presenter
-        .attach_target(&mut world, TargetId(1), win_144, w1, a1, 144)
-        .expect("attach_target(1) 失敗");
+    presenter.attach_target(TargetId(0), win_96, w0, a0, 96);
+    presenter.attach_target(TargetId(1), win_144, w1, a1, 144);
 
     let p0 = presenter.targets.get(&TargetId(0)).unwrap().policy;
     let p1 = presenter.targets.get(&TargetId(1)).unwrap().policy;
@@ -125,9 +121,7 @@ fn show_surface_scales_display_to_scaled_extent_at_k2() {
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
@@ -193,9 +187,7 @@ fn text_slot_view_reports_applied_scale_and_native_surface_size() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x82);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let view = presenter
@@ -256,9 +248,7 @@ fn text_slot_view_physical_size_uses_rounding_authority_not_f32_scale() {
     let (emo_world, atlas, _golden) = build_target_assets(27, 27, 0x5B);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let view = presenter
@@ -335,9 +325,7 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
         "未登録 target の物理寸は None"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 装着済みでも表示成立前（applied/native_size 未確定）は None。
     assert_eq!(
         presenter.target_physical_size(TargetId(0)),
@@ -408,9 +396,7 @@ fn target_physical_size_equals_native_at_identity_scale() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0xA4);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let view = presenter
@@ -437,9 +423,7 @@ fn text_slot_view_physical_size_equals_native_at_identity_scale() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x91);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let view = presenter
@@ -485,9 +469,7 @@ fn show_surface_without_dpi_component_degrades_to_identity() {
 
     let mut presenter = EmoPresenter::new();
     // author_dpi=192（非 96）: 縮退の 1/1 と「96 捏造」の 96/192=1/2 を数値で弁別する（上記 doc）。
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 192)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 192);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let t = presenter.targets.get(&TargetId(0)).unwrap();
@@ -548,9 +530,7 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 1 回目（ミス→合成）。絵は原寸のまま・k は配置の係数として載る。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -778,9 +758,7 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
     let k2 = ScaleRatio::new(2, 1).unwrap();
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 1 回目（ミス）: 面 1000 を確立する。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -848,9 +826,7 @@ fn native_size_tracks_displayed_surface_across_size_changing_switch() {
     let k2 = ScaleRatio::new(2, 1).unwrap();
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 3 回目は 2 回目と同一入力＝キャッシュヒット（ヒット回の照会値を固定する）。
     for (step, (surface_id, native)) in [(1000u32, (6u32, 5u32)), (3000, (4, 3)), (3000, (4, 3))]

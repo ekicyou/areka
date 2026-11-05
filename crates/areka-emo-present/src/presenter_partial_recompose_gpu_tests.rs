@@ -141,9 +141,7 @@ fn partial_recompose_display_matches_from_scratch_on_real_gpu() {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas) = build_assets();
-    presenter
-        .attach_target(&mut world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     let (emo_world, atlas) = build_assets();
 
     // 不透明の側から透明の側へ進み、また戻る（どの回も前の回と違うコマ＝控えに外れる）。

@@ -351,9 +351,7 @@ fn attached_presenter(world: &mut World, dpi: u16) -> (EmoPresenter, Entity) {
     let (emo_world, atlas) = build_two_face_assets_with_hole();
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TARGET, window, emo_world, atlas, AUTHOR_DPI)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, AUTHOR_DPI);
     (presenter, window)
 }
 

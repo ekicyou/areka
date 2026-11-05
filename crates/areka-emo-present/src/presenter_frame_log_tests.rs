@@ -36,9 +36,7 @@ fn attach(
 ) -> Entity {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas, _, _) = build_two_face_assets(W, H);
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), ownership)
         .expect("所有権の設定は Ok");

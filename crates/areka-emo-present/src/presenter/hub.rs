@@ -43,9 +43,6 @@ impl EmoPresenter {
     /// skeleton（`mount=None`/`visible=false`）を組んで登録するのみで World には触れない。既存 id への
     /// 再登録は表示コンテキストごと置換する。
     ///
-    /// `world` は将来の system 化（`&mut World` を要する装着タイミング）へ向けた API 一貫性のために受ける
-    /// が、遅延生成方針ゆえ本メソッドでは参照しない。
-    ///
     /// # `author_dpi`（作者基準 DPI・要件 1.1/1.5）
     ///
     /// k の分母となる作者宣言値（shell `seriko.dpi`／balloon `dpi`・既定 [`DEFAULT_AUTHOR_DPI`]）を
@@ -58,13 +55,12 @@ impl EmoPresenter {
     /// [`DEFAULT_AUTHOR_DPI`]: crate::scale::DEFAULT_AUTHOR_DPI
     pub fn attach_target(
         &mut self,
-        _world: &mut World,
         target: TargetId,
         window: Entity,
         emo_world: EmoWorld,
         atlas: AtlasTable,
         author_dpi: u16,
-    ) -> Result<(), PresentError> {
+    ) {
         self.targets.insert(
             target,
             PresentTarget {
@@ -97,7 +93,6 @@ impl EmoPresenter {
                 failure_note: None,
             },
         );
-        Ok(())
     }
 
     /// 指令を適用する（UI スレッド上で呼ぶ）。reply 同梱時は完了/失敗を高々 1 回返信する。

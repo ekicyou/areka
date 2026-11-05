@@ -34,9 +34,7 @@ fn attached(world: &mut World) -> EmoPresenter {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas, _a, _b) = build_two_face_assets(4, 3);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     presenter
 }
 
@@ -178,9 +176,7 @@ fn the_graphics_core_less_path_is_coalesced_the_same_way() {
 fn attach_valid_and_empty(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas) = super::display_tests::build_assets_with_valid_and_empty(4, 3, 0x5A);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
 /// 合成の失敗（無い面）をはさむと原因を忘れる＝次の同じ装置の失敗は ERROR（装置以外の失敗）。

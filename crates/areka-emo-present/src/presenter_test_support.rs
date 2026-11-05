@@ -391,9 +391,7 @@ fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
 pub(super) fn attach_hit_target(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas) = build_collision_only_assets();
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
 /// 私有状態を直接書いて「表示中サーフェスあり」を作る（GPU なしで R1.6 分岐へ到達する唯一の手段）。

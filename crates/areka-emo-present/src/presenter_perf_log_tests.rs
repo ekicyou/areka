@@ -356,9 +356,7 @@ fn attach(
 ) {
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, salt);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
@@ -591,9 +589,7 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     let window = spawn_window_with_dpi(&mut world, 192);
     let (emo_world, atlas) = build_assets_with_empty_surface(NATIVE_W, NATIVE_H, 0xA4);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let ((ok, not_attached, compose_err, empty), events) = capture(|| {
         // 陽性: 表示が成立する適用 1 本（両 callsite が有効であることの証明）。
@@ -708,9 +704,7 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
     for (i, salt) in [(0u32, 0xB1u8), (1, 0xB2), (2, 0xB3)] {
         let window = spawn_window_with_dpi(&mut world, 192);
         let (emo_world, atlas, _golden) = build_target_assets(4, 3, salt);
-        presenter
-            .attach_target(&mut world, TargetId(i), window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(TargetId(i), window, emo_world, atlas, 96);
     }
 
     let ((ok, no_gfx, record_failed), events) = capture(|| {

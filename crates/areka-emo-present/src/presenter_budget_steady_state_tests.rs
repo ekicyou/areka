@@ -157,9 +157,7 @@ fn binds_at(i: usize) -> BindSet {
 fn attach(presenter: &mut EmoPresenter, world: &mut World, window_dpi: u16, salt: u8) {
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, salt);
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 }
 
 /// `ShowSurface` を 1 回適用する（成立しなければ即座に落とす＝以後の観測を空虚にしない）。

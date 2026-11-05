@@ -67,9 +67,7 @@ fn rig() -> (World, EmoPresenter) {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC1);
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     (world, presenter)
 }
 

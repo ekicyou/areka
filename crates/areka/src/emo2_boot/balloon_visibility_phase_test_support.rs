@@ -24,15 +24,12 @@ pub(super) fn attach_headless(
     scope: u32,
 ) -> Entity {
     let window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            world,
-            balloon_target(scope),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    presenter.attach_target(
+        balloon_target(scope),
+        window,
+        EmoWorld::build(&areka_parsers::shell::parse("")),
+        AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
+        96,
+    );
     window
 }

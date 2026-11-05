@@ -67,16 +67,13 @@ fn world_with_seriko() -> World {
 fn attach_balloon(presenter: &mut EmoPresenter, scope: u32) {
     let mut world = World::new();
     let window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            &mut world,
-            balloon_target(scope),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    presenter.attach_target(
+        balloon_target(scope),
+        window,
+        EmoWorld::build(&areka_parsers::shell::parse("")),
+        AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
+        96,
+    );
 }
 
 // ---------------------------------------------------------------------------

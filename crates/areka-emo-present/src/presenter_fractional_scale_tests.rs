@@ -141,9 +141,7 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
@@ -255,9 +253,7 @@ fn alpha_mask_bits_come_from_native_bytes() {
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // 前提: 表示に渡ったバイトが原寸 golden そのもの（マスクの由来と同一の bytes）。
@@ -346,9 +342,7 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let surface_entity = surface_entity_of(&presenter, TargetId(0));
@@ -620,9 +614,7 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     }
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(

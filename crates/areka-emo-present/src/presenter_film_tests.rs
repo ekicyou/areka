@@ -187,9 +187,7 @@ pub(super) fn attach(
 ) {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas) = build_balloon();
-    presenter
-        .attach_target(world, T, window, emo_world, atlas, 96)
-        .expect("attach_target");
+    presenter.attach_target(T, window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(T, ownership)
         .expect("set_visibility_ownership");
@@ -690,9 +688,7 @@ fn a_still_only_balloon_composes_once_as_before() {
     let (emo_world, atlas, golden_bytes) = build_target_assets(8, 4, 0x33);
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
-    presenter
-        .attach_target(&mut world, T, window, emo_world, atlas, 96)
-        .expect("attach_target");
+    presenter.attach_target(T, window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(T, VisibilityOwnership::External)
         .expect("set_visibility_ownership");
