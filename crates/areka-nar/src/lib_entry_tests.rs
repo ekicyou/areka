@@ -36,7 +36,7 @@ fn ghost() -> NarBuilder {
 /// 書庫を一時の根に置いて開く。根を返すのは、開いた後に原本を潰すテストのため。
 fn open(work: &WorkDir) -> (NarArchive, PathBuf) {
     let path = work.path().join("ghost.nar");
-    fs::write(&path, ghost().bytes()).expect("固定入力を置ける");
+    ghost().write_to(&path).expect("固定入力を置ける");
     (NarArchive::open(&path).expect("無傷の書庫は開ける"), path)
 }
 

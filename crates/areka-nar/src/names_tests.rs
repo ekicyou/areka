@@ -683,60 +683,17 @@ fn the_index_follows_the_central_directory_order() {
 
 // ---- 「1 バイトも書かない」（要件 4.1） ----
 
-/// `names` の本体に決して現れてはならない綴り。
-///
-/// `container` の見張りと同じ形だが、走査語が 1 つ違う。`container` は `Path` を
-/// 禁じていて、こちらは拒否語彙に `UnsafePath` が出てくるのでその語では測れない。
-/// 代わりに `path` の**道の綴り**を見る。`&Path` を書くには `use` でも直書きでも
-/// `path::` が要るので、道具立てとしては同じ強さになる。
-const FORBIDDEN_SPELLINGS: &[&str] = &["fs::", "path::", "process::"];
-
-/// `source` に現れる禁じ手の綴りを拾う。
-fn forbidden_spellings_in(source: &str) -> Vec<&'static str> {
-    FORBIDDEN_SPELLINGS
-        .iter()
-        .copied()
-        .filter(|needle| source.contains(needle))
-        .collect()
-}
-
 /// `names` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
 ///
 /// 「観測しなかった」ではなく「触る手段を持たない」を主張する。入口は `&[RawEntry]`
-/// しか受け取らず宛先を知らないので、書くとすれば `fs::`・道としての `path::`・
-/// `process::` のいずれかが本体に要る。
+/// しか受け取らず宛先を知らないので、書くとすれば入出力の綴りが本体に要る。拒否語彙の
+/// `UnsafePath` では赤にならないことも較正する。
 #[test]
 fn names_source_contains_no_filesystem_mutation() {
-    let found = forbidden_spellings_in(include_str!("names.rs"));
-    assert!(
-        found.is_empty(),
-        "names が禁じ手の綴りを持っている: {found:?}"
-    );
-}
-
-/// 上の走査の較正。走査語が空でないこと、各語を足した写しが必ず赤になること、
-/// 拒否語彙の `UnsafePath` では赤にならないことを、この 1 本で確かめる。
-///
-/// **最初の主張が要る**——走査語が空だと、上のテストは `found.is_empty()` で緑、
-/// 下の繰り返しは 0 周で緑になり、二本とも恒真のまま「見張っている」ように見える。
-#[test]
-fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
-    assert_eq!(
-        FORBIDDEN_SPELLINGS.len(),
-        3,
-        "走査語が空なら二本とも恒真で緑になる"
-    );
-    for needle in FORBIDDEN_SPELLINGS {
-        let synthetic = format!("fn f() {{ let _ = {needle}; }}");
-        assert_eq!(
-            forbidden_spellings_in(&synthetic),
-            vec![*needle],
-            "綴り {needle} を走査が拾えていない"
-        );
-    }
-    assert!(
-        forbidden_spellings_in("RefuseReason::UnsafePath { index, name, why }").is_empty(),
-        "拒否語彙の変種名で赤になるなら、走査は本体を書けなくするだけで何も守らない"
+    crate::tests::assert_source_has_no_io(
+        include_str!("names.rs"),
+        crate::tests::IO_SPELLINGS,
+        "RefuseReason::UnsafePath { index, name, why }",
     );
 }
 

@@ -12,7 +12,6 @@
 use super::*;
 use log_capture_kit::capture;
 use sample_ghost_kit::{Damage, NarBuilder, WorkDir, install_txt};
-use std::fs;
 
 /// 受理されるゴーストの `install.txt` を `name` の名前で最上位に持つ書庫。
 fn with_manifest_named(name: &str) -> NarBuilder {
@@ -44,7 +43,7 @@ fn with_dot_dot() -> NarBuilder {
 /// 書庫をファイルに置いて、そのパスを返す。
 fn put(work: &WorkDir, name: &str, builder: &NarBuilder) -> PathBuf {
     let path = work.path().join(name);
-    fs::write(&path, builder.bytes()).expect("固定入力を置ける");
+    builder.write_to(&path).expect("固定入力を置ける");
     path
 }
 

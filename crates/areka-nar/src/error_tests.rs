@@ -1,76 +1,13 @@
-//! `error` の兄弟テスト。拒否語彙が 13 で閉じていること、短い語が重複しないこと、
-//! 宣言順の一覧と実際の変種が双方向で一致すること、詳細を持つ変種の表示が
+//! `error` の兄弟テスト。拒否語彙が 13 で閉じていること、詳細を持つ変種の表示が
 //! その詳細を落とさないことを判定する（要件 9.2）。
 //!
-//! ここでは固定入力の `.nar` を通さない。実物のアーカイブから 13 変種すべてに
-//! 到達できることの判定はタスク 4.4 が `ALL_KINDS` と突き合わせて行う。
+//! 短い語の重複の無さと `kind()` が変種名であることは、`kind()` と `ALL_KINDS` が
+//! 同じ宣言から展開されるので落ちようがなく、ここでは測らない。実物のアーカイブから
+//! 13 変種すべてに届き、得た語の集合が `ALL_KINDS` と一致することは
+//! `lib_vocabulary_tests.rs` が測る。
 
 use super::*;
-use std::collections::BTreeSet;
 use std::path::PathBuf;
-
-/// 宣言順に 1 つずつ組んだ全変種の見本。
-///
-/// 変種を足すと `ALL_KINDS` は宣言から自動で伸びるので、この一覧を直し忘れると
-/// `all_kinds_matches_every_variant_in_declaration_order` が赤になる。
-fn samples_in_declaration_order() -> Vec<RefuseReason> {
-    vec![
-        RefuseReason::CorruptArchive {
-            detail: "EOCD が見つからない".to_string(),
-        },
-        RefuseReason::IntegrityMismatch {
-            index: 7,
-            name: "ghost/master/shiori.dll".to_string(),
-            what: Integrity::Crc {
-                expected: 0x1234_abcd,
-                actual: 0x0000_0001,
-            },
-        },
-        RefuseReason::UnsupportedEntry {
-            index: 3,
-            name: "readme.txt".to_string(),
-            what: Unsupported::Compression(99),
-        },
-        RefuseReason::NameUndecodable {
-            index: 4,
-            raw_hex: "8140fe".to_string(),
-            encoding: "Shift_JIS",
-        },
-        RefuseReason::PathTooLong {
-            index: 9,
-            length: 201,
-            limit: 200,
-            head: "g/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
-        },
-        RefuseReason::SymlinkEntry {
-            index: 5,
-            name: "link".to_string(),
-        },
-        RefuseReason::UnsafePath {
-            index: 6,
-            name: "CON.txt".to_string(),
-            why: UnsafeWhy::InvalidWindowsName("CON".to_string()),
-        },
-        RefuseReason::CaseCollision {
-            a: "A.txt".to_string(),
-            b: "a.txt".to_string(),
-        },
-        RefuseReason::MissingInstallTxt {
-            top_level: vec!["emo2".to_string()],
-        },
-        RefuseReason::UnsupportedType {
-            found: Some("plugin".to_string()),
-        },
-        RefuseReason::MissingRequiredKey { key: "directory" },
-        RefuseReason::InvalidDirectoryName {
-            key: "directory".to_string(),
-            value: "../外".to_string(),
-        },
-        RefuseReason::TargetGhostMissing {
-            target: Some("emo2".to_string()),
-        },
-    ]
-}
 
 #[test]
 fn all_kinds_has_thirteen_entries() {
@@ -78,61 +15,6 @@ fn all_kinds_has_thirteen_entries() {
         RefuseReason::ALL_KINDS.len(),
         13,
         "拒否語彙は 13 変種で閉じる（要件 9.2・長すぎる名前＝要件 1.4・取り出し元の無い同梱は飛ばす）"
-    );
-}
-
-#[test]
-fn all_kinds_are_unique() {
-    let unique: BTreeSet<&&str> = RefuseReason::ALL_KINDS.iter().collect();
-    assert_eq!(
-        unique.len(),
-        RefuseReason::ALL_KINDS.len(),
-        "短い語が重複している: {:?}",
-        RefuseReason::ALL_KINDS
-    );
-}
-
-#[test]
-fn all_kinds_matches_every_variant_in_declaration_order() {
-    let observed: Vec<&'static str> = samples_in_declaration_order()
-        .iter()
-        .map(RefuseReason::kind)
-        .collect();
-    assert_eq!(
-        observed,
-        RefuseReason::ALL_KINDS,
-        "宣言順の一覧と実際の変種が食い違っている"
-    );
-}
-
-#[test]
-fn all_kinds_and_reachable_kinds_agree_in_both_directions() {
-    let listed: BTreeSet<&str> = RefuseReason::ALL_KINDS.iter().copied().collect();
-    let built: BTreeSet<&str> = samples_in_declaration_order()
-        .iter()
-        .map(RefuseReason::kind)
-        .collect();
-    let listed_only: Vec<&&str> = listed.difference(&built).collect();
-    let built_only: Vec<&&str> = built.difference(&listed).collect();
-    assert!(
-        listed_only.is_empty(),
-        "一覧にあるのに組めない短い語: {listed_only:?}"
-    );
-    assert!(
-        built_only.is_empty(),
-        "組めるのに一覧に無い短い語: {built_only:?}"
-    );
-}
-
-#[test]
-fn kind_is_the_variant_name() {
-    assert_eq!(
-        RefuseReason::MissingRequiredKey { key: "name" }.kind(),
-        "MissingRequiredKey"
-    );
-    assert_eq!(
-        RefuseReason::TargetGhostMissing { target: None }.kind(),
-        "TargetGhostMissing"
     );
 }
 

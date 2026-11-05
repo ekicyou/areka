@@ -310,10 +310,11 @@ fn measures_the_length_of_the_source_directory_after_removal() {
     assert_eq!(refused_source(&over), invalid_source(&over));
 }
 
-/// 同梱の `*.directory` は今どおり 1 階層の名前でなければ断る（要件 4.1・4.2・5.1・5.2）。
+/// 同梱の `*.directory` は今どおり 1 階層の名前でなければ断る。空の名前も 1 階層の名前では
+/// ない（要件 3.9・4.1・4.2・5.1・5.2）。
 #[test]
 fn still_refuses_a_separator_in_the_companion_directory() {
-    for written in ["extra\\bal1", "../escape"] {
+    for written in ["extra\\bal1", "../escape", ""] {
         assert_eq!(
             refused_ghost(&[&format!("balloon.directory,{written}")]),
             RefuseReason::InvalidDirectoryName {

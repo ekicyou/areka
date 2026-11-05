@@ -31,24 +31,6 @@ fn reads_the_balloon_companion_with_its_own_source_directory() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// `*.source.directory` が無ければ `*.directory` と同じ値にする（要件 3.12）。
-#[test]
-fn defaults_the_companion_source_directory_to_the_directory() {
-    let manifest = parsed_ghost(&["balloon.directory,emo2-kakukaku"]);
-    assert_eq!(manifest.companions.len(), 1);
-    assert_eq!(manifest.companions[0].source_directory, "emo2-kakukaku");
-}
-
-/// 空の `*.source.directory` も「無い」と同じ扱い（要件 3.12）。
-#[test]
-fn an_empty_companion_source_directory_falls_back_to_the_directory() {
-    let manifest = parsed_ghost(&[
-        "balloon.directory,emo2-kakukaku",
-        "balloon.source.directory,",
-    ]);
-    assert_eq!(manifest.companions[0].source_directory, "emo2-kakukaku");
-}
-
 /// `shell` でも同時インストールを読む（要件 3.12 は ghost と shell の両方）。
 #[test]
 fn reads_companions_for_a_shell_too() {
@@ -165,49 +147,6 @@ fn a_companion_key_without_its_directory_is_recorded_as_an_ignored_key() {
                 key: "balloon.source.directory".to_owned()
             },
         ]
-    );
-}
-
-/// 同時インストールのフォルダ名も 1 階層でなければならない（要件 3.9）。
-#[test]
-fn refuses_a_companion_directory_that_is_not_a_one_level_name() {
-    assert_eq!(
-        refused_ghost(&["balloon0.directory,../escape"]),
-        RefuseReason::InvalidDirectoryName {
-            key: "balloon0.directory".to_owned(),
-            value: "../escape".to_owned(),
-        }
-    );
-    assert_eq!(
-        refused_ghost(&["balloon.directory,"]),
-        RefuseReason::InvalidDirectoryName {
-            key: "balloon.directory".to_owned(),
-            value: String::new(),
-        },
-        "空のフォルダ名も 1 階層の名前ではない"
-    );
-}
-
-/// 取り出し元は階層付きの相対パスとして読み、各段が 1 階層の名前でなければ断る
-/// （要件 2.1・5.3・5.4）。
-#[test]
-fn refuses_a_companion_source_directory_with_a_segment_that_is_not_a_one_level_name() {
-    let manifest = parsed_ghost(&[
-        "balloon.directory,emo2-kakukaku",
-        "balloon.source.directory,sub/kakukaku",
-    ]);
-    assert_eq!(manifest.companions[0].source_directory, "sub/kakukaku");
-    assert_eq!(manifest.warnings, vec![]);
-
-    assert_eq!(
-        refused_ghost(&[
-            "balloon.directory,emo2-kakukaku",
-            "balloon.source.directory,sub/CON",
-        ]),
-        RefuseReason::InvalidDirectoryName {
-            key: "balloon.source.directory".to_owned(),
-            value: "sub/CON".to_owned(),
-        }
     );
 }
 

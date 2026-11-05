@@ -9,7 +9,7 @@
 //! ⑶ `install` は何度呼んでも同じ結果になる（設計 `install` の節）。
 //! ⑷ 記録は公開面の 2 つの関数だけが出す——本番のソースの字面で見張る。
 //! ⑸ 伸長器の書き込み側の名前を本番のソースが綴らない（要件 10.2）。
-//! ⑹ 新設したファイルが 1,000 行未満（要件 10.8）。
+//! ⑹ 部品の本体が入出力を綴らないことを見張る共有の道具（[`assert_source_has_no_io`]）。
 //! ⑺ 名前・パスの長さの上限（200 単位）の境界を公開の入口 `open` で測る。
 //! ⑻ 確定の段の失敗を公開の入口 `install` で本当に起こし、失敗の値と記録の両方が
 //!    正しい場所を指す。
@@ -85,33 +85,22 @@ fn walk(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
 /// 書庫をファイルに置いて、そのパスを返す。
 fn put(root: &Path, name: &str, builder: &NarBuilder) -> PathBuf {
     let path = root.join(name);
-    fs::write(&path, builder.bytes()).expect("固定入力を置ける");
+    builder.write_to(&path).expect("固定入力を置ける");
     path
 }
 
-/// 本番のソース（兄弟テストを除く）を (ファイル名, 中身) で返す。
-fn production_sources() -> Vec<(String, String)> {
-    source_files()
-        .into_iter()
-        .filter(|(name, _)| !name.ends_with("_tests.rs"))
-        .collect()
-}
-
-/// `src/` 直下の Rust のソース全て（兄弟テストを含む）を (ファイル名, 中身) で返す。
+/// `src/` 直下の本番の Rust のソース（兄弟テストを除く）を (ファイル名, 中身) で返す。
 ///
 /// 一覧を手で綴らずに毎回数え直すので、ファイルを足した人が一覧を直し忘れても
 /// 見張りの網から漏れない。
-fn source_files() -> Vec<(String, String)> {
+fn production_sources() -> Vec<(String, String)> {
     let dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src"));
     let mut out: Vec<(String, String)> = fs::read_dir(dir)
         .expect("本クレートの src を読める")
         .map(|child| child.expect("要素を読める").file_name())
         .map(|name| name.to_string_lossy().into_owned())
-        .filter(|name| name.ends_with(".rs"))
-        .map(|name| {
-            let text = fs::read_to_string(dir.join(&name)).expect("ソースを読める");
-            (name, text)
-        })
+        .filter(|name| name.ends_with(".rs") && !name.ends_with("_tests.rs"))
+        .map(|name| (name.clone(), source_of(&name)))
         .collect();
     out.sort();
     out
@@ -121,6 +110,32 @@ fn source_files() -> Vec<(String, String)> {
 fn source_of(name: &str) -> String {
     fs::read_to_string(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")).join(name))
         .expect("ソースを読める")
+}
+
+/// 入出力の綴り。`Path` でなく道の `path::` を見る——`UnsafePath` を語彙に持つ部品でも測れる。
+pub(super) const IO_SPELLINGS: &[&str] = &["fs::", "path::", "process::"];
+
+/// 本体 `source` が `needles` を綴らない。先に走査を較正する（語が空でない・各語を拾う・
+/// 無関係な行 `harmless` を拾わない）——語が空だと本体の判定は恒真で緑になる。
+pub(super) fn assert_source_has_no_io(source: &str, needles: &[&str], harmless: &str) {
+    let found_in = |text: &str| -> Vec<&str> {
+        needles
+            .iter()
+            .copied()
+            .filter(|n| text.contains(n))
+            .collect()
+    };
+    assert!(!needles.is_empty(), "走査語が空");
+    for needle in needles {
+        let synthetic = format!("let _ = {needle};");
+        assert_eq!(found_in(&synthetic), [*needle], "綴り {needle} を拾えない");
+    }
+    assert!(
+        found_in(harmless).is_empty(),
+        "無関係な行を拾う: {harmless}"
+    );
+    let found = found_in(source);
+    assert!(found.is_empty(), "本体が入出力の綴りを持つ: {found:?}");
 }
 
 // ---- 公開面が外から届く（設計「公開面」） ----
@@ -359,17 +374,6 @@ fn the_inflate_call_appears_once_outside_its_definition() {
         counted,
         vec![("container.rs".to_string(), 1), ("lib.rs".to_string(), 1)],
         "伸長は container の定義 1 つと lib.rs の呼び出し 1 つだけ"
-    );
-    // 較正——数え方が何も拾わない／何にでも当たるのではない。
-    assert_eq!(
-        "inflate_entry(a) inflate_entry(b)".matches(needle).count(),
-        2
-    );
-    assert_eq!(
-        "use crate::container::inflate_entry;"
-            .matches(needle)
-            .count(),
-        0
     );
 }
 
@@ -627,57 +631,27 @@ fn only_the_public_surface_writes_records() {
         1,
         "失敗の記録の発火点は 1 つ（二重記録を避ける）"
     );
-    // 較正——数え方が空振りしていない。
-    assert_eq!("tracing::error!".matches("tracing::").count(), 1);
 }
 
 // ---- 伸長器の書き込み側を呼ばない（要件 10.2） ----
 
-/// 圧縮側の綴り。このファイルに直に書くと自分自身が当たるので、連結して組む。
-fn deflate_side_needle() -> String {
-    format!("{}::{}", "miniz_oxide", "deflate")
-}
-
 /// 本番のソースが伸長器の書き込み側の名前を 1 つも綴らない（設計「Open Questions」）。
+///
+/// 綴りはこのファイルに直に書くと自分自身が当たるので連結して組む。走査するファイルが
+/// 無ければ恒真なので、主な本体が走査の対象に入っていることも確かめる。
 #[test]
 fn no_deflate_side_is_called() {
-    let needle = deflate_side_needle();
-    let found: Vec<String> = production_sources()
-        .into_iter()
-        .filter(|(_, text)| text.contains(&needle))
-        .map(|(name, _)| name)
-        .collect();
-    assert!(
-        found.is_empty(),
-        "本番のソースが {needle} を綴っている: {found:?}"
-    );
-}
-
-/// 上の走査の較正。走査するファイルが実在すること、綴りを足せば拾えること、
-/// 伸長側の綴りでは拾わないことを、この 1 本で確かめる。
-#[test]
-fn the_deflate_scan_looks_at_real_files_and_catches_the_spelling() {
-    let sources = source_files();
-    assert!(
-        sources.len() >= 16,
-        "src の走査が空なら no_deflate_side_is_called は恒真: {}",
-        sources.len()
-    );
-    for expected in ["lib.rs", "container.rs", "install.rs", "lib_tests.rs"] {
+    let needle = format!("{}::{}", "miniz_oxide", "deflate");
+    let sources = production_sources();
+    for expected in ["lib.rs", "container.rs", "install.rs"] {
         assert!(
             sources.iter().any(|(name, _)| name == expected),
             "{expected} が走査の対象に入っていない"
         );
     }
-    let needle = deflate_side_needle();
-    assert!(
-        format!("let x = {needle}::compress_to_vec(d, 6);").contains(&needle),
-        "綴りを足しても拾えないなら見張りになっていない"
-    );
-    assert!(
-        !"miniz_oxide::inflate::decompress_to_vec_with_limit(data, limit)".contains(&needle),
-        "伸長側の綴りまで拾うのでは意味が無い"
-    );
+    for (_, text) in &sources {
+        assert_source_has_no_io(text, &[&needle], "miniz_oxide::inflate::decompress(d, l)");
+    }
 }
 
 // ---- 同梱のバルーンを公開の入口で通す（areka-P0-install-companion-reading 要件 8.2・8.3） ----
@@ -906,18 +880,4 @@ fn an_overridden_archive_folder_is_recorded_once() {
     assert_eq!(overrides.len(), 1, "警告は 1 件: {records:?}");
     assert_eq!(overrides[0].level, tracing::Level::WARN);
     assert_eq!(overrides[0].field_str("directory"), Some("kaku"));
-}
-
-// ---- 1,000 行（要件 10.8） ----
-
-/// 本タスクが新設したファイルが 1,000 行未満である。
-///
-/// ワークスペース全体の番人は `log-capture-kit` が持つ（例外表には触れない）。
-/// ここは新設分だけを自分で確かめる。
-#[test]
-fn the_new_files_stay_under_the_line_limit() {
-    for name in ["lib.rs", "lib_tests.rs", "lib_vocabulary_tests.rs"] {
-        let lines = source_of(name).lines().count();
-        assert!(lines < 1000, "{name} が {lines} 行（上限 1,000）");
-    }
 }

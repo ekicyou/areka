@@ -567,51 +567,16 @@ fn accepts_an_ordinary_one_level_directory_name() {
 
 // ---- 本体が書き込みの手段を持たない（要件 4.1） ----
 
-/// `manifest` の本体に決して現れてはならない綴り。
-///
-/// `names` の見張りと同じ 3 語。入口は `&[EntryName]` と `&[u8]` しか受け取らず
-/// 宛先を知らないので、書くとすれば `fs::`・道としての `path::`・`process::` の
-/// いずれかが本体に要る。
-const FORBIDDEN_SPELLINGS: &[&str] = &["fs::", "path::", "process::"];
-
-/// `source` に現れる禁じ手の綴りを拾う。
-fn forbidden_spellings_in(source: &str) -> Vec<&'static str> {
-    FORBIDDEN_SPELLINGS
-        .iter()
-        .copied()
-        .filter(|needle| source.contains(needle))
-        .collect()
-}
-
 /// `manifest` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
+///
+/// 入口は `&[EntryName]` と `&[u8]` しか受け取らず宛先を知らないので、書くとすれば
+/// 入出力の綴りが本体に要る。拒否語彙の変種名では赤にならないことも較正する。
 #[test]
 fn manifest_source_contains_no_filesystem_mutation() {
-    let found = forbidden_spellings_in(include_str!("manifest.rs"));
-    assert!(
-        found.is_empty(),
-        "manifest が禁じ手の綴りを持っている: {found:?}"
-    );
-}
-
-/// 上の走査の較正。走査語が空だと上のテストは恒真で緑になる。
-#[test]
-fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
-    assert_eq!(
-        FORBIDDEN_SPELLINGS.len(),
-        3,
-        "走査語が空なら上のテストは恒真で緑になる"
-    );
-    for needle in FORBIDDEN_SPELLINGS {
-        let synthetic = format!("fn f() {{ let _ = {needle}; }}");
-        assert_eq!(
-            forbidden_spellings_in(&synthetic),
-            vec![*needle],
-            "綴り {needle} を走査が拾えていない"
-        );
-    }
-    assert!(
-        forbidden_spellings_in("RefuseReason::InvalidDirectoryName { key, value }").is_empty(),
-        "拒否語彙の変種名で赤になるなら、走査は本体を書けなくするだけで何も守らない"
+    crate::tests::assert_source_has_no_io(
+        include_str!("manifest.rs"),
+        crate::tests::IO_SPELLINGS,
+        "RefuseReason::InvalidDirectoryName { key, value }",
     );
 }
 
