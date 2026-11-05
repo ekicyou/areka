@@ -94,6 +94,7 @@ graph TB
         L3
         X1 --> X2
     end
+    C1 --> T2b
     C1 --> D
     C3 --> D
     W1 --> D
@@ -112,7 +113,7 @@ graph TB
     V1 --> V2
 ```
 
-- **選んだ形**: 指摘をファイルのまとまりで組にする（brief の Boundary Candidates の 2 つ目）。矢印でつながる組（同じ鎖）は順に回すので同じファイルを触ってよい（例: `tests/com.rs` は C1 と C3、`tests/graphics.rs` は T2a と T2b、`runtime/mod.rs` は R1・R3・G5）。矢印でつながらない組どうしは同じファイルを触らない（例外は無い）。
+- **選んだ形**: 指摘をファイルのまとまりで組にする（brief の Boundary Candidates の 2 つ目）。矢印でつながる組（同じ鎖）は順に回すので同じファイルを触ってよい（例: `tests/com.rs` は C1 と C3、`tests/graphics.rs` は T2a と T2b、`tests/graphics/surface_systems_test.rs` は C1 と T2b、`runtime/mod.rs` は R1・R3・G5）。矢印でつながらない組どうしは同じファイルを触らない（例外は無い）。
 - **なぜ D が後か**: 依存の行を消すには、それを使うコード（`ambassador` の印＝C1・W1、`Win32_UI_Animation`＝C3）が先に消えている必要がある。
 - **なぜ G5 が R3 の後か**: 72・73 は R3 で直した `runtime/mod.rs`・`message_loop.rs` の上に乗る。
 
@@ -200,7 +201,7 @@ crates/wintf/
 
 | 組 | 触るファイル |
 |---|---|
-| C1 | `src/com/d2d/mod.rs`・`tests/com.rs`・`tests/com/d2d_ext_test.rs`・`tests/graphics/command_list_test.rs`（＋上の消すファイル） |
+| C1 | `src/com/d2d/mod.rs`・`tests/com.rs`・`tests/com/d2d_ext_test.rs`・`tests/graphics/command_list_test.rs`・`tests/graphics/surface_systems_test.rs:266` の 1 行（＋上の消すファイル） |
 | C2 | `src/com/dwrite.rs`・`src/com/d3d11.rs`・`tests/com/dwrite_test.rs`・`tests/com/d3d11_test.rs`（＋新規 1） |
 | C3 | `src/com/wuc.rs`・`src/com/mod.rs`・`tests/com.rs`（C1 の後）（＋消すファイル） |
 | C4 | `src/com/wic.rs`・`src/com/wic_tests.rs`・`build.rs`・`tests/com/wic_test.rs`・`tests/com/common/mod.rs`・`tests/widget.rs`・`tests/widget/bitmap_source_integration_test.rs`・`crates/areka-emo-atlas/src/decode/wic_arm.rs`・`crates/areka-emo-atlas/src/decode/wic_arm_tests.rs` |
@@ -212,7 +213,7 @@ crates/wintf/
 | D | `crates/wintf/Cargo.toml`・根の `Cargo.toml`・`Cargo.lock`・`.kiro/steering/tech.md`・`.kiro/steering/structure.md` |
 | T1 | `tests/ecs/tree_propagation_test.rs`・`tests/drag.rs`・`tests/drag/window_dragging_filter_test.rs`・`tests/win_app.rs` |
 | T2a | `tests/graphics.rs`・`tests/graphics/core_ecs_test.rs`・`core_test.rs`・`surface_optimization_test.rs`・`common/mod.rs`（114 の自己テスト）（＋消すファイル `frame_time_test.rs`） |
-| T2b | `tests/graphics.rs`（T2a の後）・`tests/graphics/clip_sync_system_test.rs`・`surface_systems_test.rs`・`dcomp_integration_test.rs`・`init_window_graphics_test.rs`（＋消すファイル `surface_pixel_equivalence_test.rs`） |
+| T2b | `tests/graphics.rs`（T2a の後）・`surface_systems_test.rs` は C1 の後・`tests/graphics/clip_sync_system_test.rs`・`surface_systems_test.rs`・`dcomp_integration_test.rs`・`init_window_graphics_test.rs`（＋消すファイル `surface_pixel_equivalence_test.rs`） |
 | T3 | `tests/window/monitor_hierarchy_test.rs`・`tests/window/multiwindow_event_test.rs`・`tests/widget/vertical_text_layout_test.rs` |
 | L1 | `src/ecs/layout/dimension.rs`・`box_style.rs`・`metrics.rs`・`tests/layout/dimension_conversion_test.rs`・`metrics_test.rs`・`taffy_layout_integration_test/mod.rs`・`unit_integration.rs`・`taffy_advanced_test/mapping_management.rs` |
 | L2 | `tests/layout/graphics_sync_test.rs`・`feedback_loop_convergence_test.rs`・`taffy_advanced_test/layout_conversion.rs`・`boxstyle_coordinate_separation_test/mod.rs`・`changed_timing.rs`・`tests/drag/dispatch_test.rs` |
@@ -327,7 +328,7 @@ sequenceDiagram
 | D | Cargo・steering | 依存を減らす・見出しと注記 | 14（機能）・19・20（依存）・66（keywords）・85 | C1・C3・W1 | なし |
 | T1 | tests | ecs・drag・win_app の先の分 | 25・26・32・33・91（drag）・92（tree） | — | なし |
 | T2a | tests | graphics の重なりと同語反復 | 34・104・105・106・107・114 | — | なし |
-| T2b | tests | graphics の確かめの無いテスト | 37・38・44・113（先のファイル）・116（dcomp_integration） | T2a | なし |
+| T2b | tests | graphics の確かめの無いテスト | 37・38・44・113（先のファイル）・116（dcomp_integration） | T2a・C1 | なし |
 | T3 | tests | window・widget の先の分 | 43・46・108・116（monitor_hierarchy） | — | なし |
 | L1 | layout（本番ごと） | 百分率・死んだ型 | 5・52・93・94・101・103 | — | なし |
 | L2 | layout | 帰還の輪・同期・座標の分離 | 49・50・55・57・96・97・98・99 | — | なし |
@@ -351,10 +352,10 @@ sequenceDiagram
 | 番号 | 直し | 呼び手・テスト |
 |---|---|---|
 | 1・13 | `command_sink.rs`・`command_types.rs` と `d2d/mod.rs:1-4` を消す（`dup_com` ごと） | 参照は `d2d_ext_test.rs` だけ（`research.md` 11 節） |
-| 24 | research の案。`tests/com.rs` の 2 つの宣言・`d2d_ext_test.rs` の 216-219 行と 325-367 行と、ファイルの頭の注記の `RecCommandSink` の文を消す | 121-215 行は残す |
+| 24 | research の案。`tests/com.rs` の 2 つの宣言・`d2d_ext_test.rs` の 216-219 行と 325-367 行と、ファイルの頭の注記の `RecCommandSink` の文を消す | 121-215 行は残す。ただしこの範囲と L64・L80・L93・L106 は、13・69 で消す口（`create_command_list`・`create_rounded_rectangle_geometry`・`create_bitmap_from_wic_bitmap`・`fill_geometry`・`draw_text`・`draw_image`）を使うので、`windows` の生の呼び出し（`CreateCommandList`・`CreateRoundedRectangleGeometry`・`CreateBitmapFromWicBitmap`・`FillGeometry`・`DrawText`・`DrawImage`）へ置き換えてから消す。確かめる中身は変えない。確かめの相手が消す包みそのものだけのテストは、包みと一緒に消す |
 | 16 | `D2D1CommandListExt::open` を trait と実装から消す。`d2d_ext_test.rs:95` のテストも消す | `close` は残す |
 | 20（印） | `d2d/mod.rs` の `use ambassador::*` と `#[delegatable_trait]` を消す | 依存の行は D |
-| 69（d2d） | `D2D1FactoryExt`（trait ごと）・`D2D1DeviceExt::create_command_list`・`D2D1DeviceContextExt` の `create_bitmap_from_wic_bitmap`・`draw_text`・`fill_geometry`・`draw_image` を消し、それだけのテストを消す | `create_command_list` は `tests/graphics/command_list_test.rs:22`・`:35`・`:45` が使う→装置の文脈を作って `CreateCommandList()` を呼ぶ形に直す（`GraphicsCore` に文脈の口があればそれを使う） |
+| 69（d2d） | `D2D1FactoryExt`（trait ごと）・`D2D1DeviceExt::create_command_list`・`D2D1DeviceContextExt` の `create_bitmap_from_wic_bitmap`・`draw_text`・`fill_geometry`・`draw_image` を消し、それだけのテストを消す | `create_command_list` は `tests/graphics/command_list_test.rs:22`・`:35`・`:45` と `tests/graphics/surface_systems_test.rs:266` が使う→装置の文脈を作って `CreateCommandList()` を呼ぶ形に直す（`GraphicsCore` に文脈の口があればそれを使う）。`surface_systems_test.rs` は T2b も触るので、C1 は T2b より先に回す（C1 → T2b） |
 | 91（d2d_ext） | research の案（`d2d_ext_test.rs:72-81`） | |
 
 #### C2 DirectWrite の失敗を返す・使われない拡張を消す

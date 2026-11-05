@@ -799,7 +799,7 @@
 | 19 | `bevy_app`（本番から開発用へ） | `src/` で 0 | `tests/graphics/surface_optimization_test.rs:24`・`:26`・`:68` だけ。根の宣言は残す |
 | 20 | `ambassador`・`#[delegatable_trait]` | 0 | `#[delegate(` は 0。印は `win_state.rs:8`・`d2d/mod.rs:94` の 2 か所だけ。根の `[workspace.dependencies]` の行も消す（ほかに使う crate が無い） |
 | 69 | `D2D1FactoryExt`（trait ごと）・`create_bitmap_from_wic_bitmap`・`draw_text`・`fill_geometry`・`draw_image`・`D3D11DeviceExt`（trait ごと）・`DWriteTextFormatExt`（trait ごと）・`get_cluster_count`・`hit_test_text_position` | 0 | `draw_image` の 1 件は `ecs/widget/bitmap_source/systems.rs:186` のコメント |
-| 69 | `D2D1DeviceExt::create_command_list` | **3** | `tests/graphics/command_list_test.rs:22`・`:35`・`:45`。ギャップ分析の「`tests/com/` の外で 0」は誤り。そのテストは装置の文脈から `CreateCommandList()` を呼ぶ形へ直す |
+| 69 | `D2D1DeviceExt::create_command_list` | **4** | `tests/graphics/command_list_test.rs:22`・`:35`・`:45`・`tests/graphics/surface_systems_test.rs:266`（設計の検証で見つけた 4 か所目）。ギャップ分析の「`tests/com/` の外で 0」は誤り。そのテストは装置の文脈から `CreateCommandList()` を呼ぶ形へ直す |
 | 71 | `MessageLoopDriver::run`・`default_filter` | 0 | 同じファイルのテスト（`:203-213`）だけ |
 | 73 | `MessageLoopDriver`・`AsyncTickTask` | 0（本番の呼び手は `runtime/` の中だけ） | 名前の言及が `ecs/world/mod.rs:143`・`:784`・`ecs/world/vsync.rs:18`・`:60`・`:74`（`audit-wintf-graphics-world` の持ち物）と `message_loop.rs:166` に在る。あちらの着地の後に言及ごと直す |
 | 72 | `notify_shutdown`（`request_exit` へ畳む） | 0 | 言及が `ecs/app.rs:51`（あちらの持ち物）に在る。同上 |
