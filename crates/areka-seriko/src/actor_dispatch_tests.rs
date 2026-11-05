@@ -28,7 +28,7 @@ fn emit_forwards_cue_to_inbox() {
 }
 
 /// コンパイル時検証: `SerikoSink` は cue 再生ランタイムへ登録可能な**単一の出力契約**
-/// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす（R11.6・task 4.1 の単一トレイト）。
+/// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす（R11.6・単一トレイト）。
 /// トレイトはフルパス束縛で参照する（emo-text 6.1 の `assert_cue_sink_contract` と同型）。
 fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
 
@@ -87,7 +87,7 @@ fn emit_after_receiver_gone_logs_no_panic() {
     );
 }
 
-/// 単発シナリオ（本タスクの主 observable・R1.3/5.3）: 単純な発火 1 件を入力すると、
+/// 単発シナリオ（主 observable・R1.3/5.3）: 単純な発火 1 件を入力すると、
 /// 期待どおりの表示指令 1 件が観測用出力先へちょうど記録される。
 ///
 /// 解決層（2.1）・状態層（2.2）・発行層（2.3）を独立スレッド上で一本の経路で結び、
@@ -138,10 +138,10 @@ fn single_cue_emits_one_display_command() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 4.1: 停止経路・異常系の網羅テスト（1.4/2.1/2.4/6.2/6.3/6.4/7.4）。
+// 停止経路・異常系の網羅テスト（1.4/2.1/2.4/6.2/6.3/6.4/7.4）。
 //
 // 設計要点（cross-thread log の決定論化）:
-// - handler スレッドで発火する log（Unresolved の error!／非 Shell・EntityRef の warn!）は
+// - handler スレッドで発火する log（Unresolved の error!／EntityRef の warn!／非 Shell の debug!）は
 //   `spawn_seriko` の別スレッドで出るため、テストスレッドに張った thread-local
 //   `capture_text` では捕捉できない。よってその種の log 表明は `handle_message` を
 //   **テストスレッド上で同期呼び出し**して `capture_text` 直下で発火させる。
@@ -152,7 +152,7 @@ fn single_cue_emits_one_display_command() {
 
 use areka_emo_compose::{BindSet, PatternState};
 
-/// EntityRef 系の TalkCue（Shell 分類だが M-boot 未対応の防御枝・6.2）を組む。
+/// EntityRef 系の TalkCue（Shell 分類だが今の台本の変換は作らない防御枝・6.2）を組む。
 fn entityref_cue(at: f64, scope: &str, entity: u64) -> TalkCue {
     TalkCue {
         at,
@@ -394,7 +394,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 4.4: バルーン面切替コマンドの消費経路（早期分岐）の網羅テスト（4.1/4.2/4.3/4.5/4.6）。
+// バルーン面切替コマンドの消費経路（早期分岐）の網羅テスト（4.1/4.2/4.3/4.5/4.6）。
 //
 // 早期分岐（key 抽出 match の前段）は解決→適用→発行を arm 内で完結し値を返さないため、
 // 同期 `handle_message`＋`MockSurfaceOutput` の records 照合で発行を、`capture_logs_flow` で
@@ -405,8 +405,8 @@ fn emit_after_actor_stopped_logs_no_panic() {
 /// ケース6（4.1）: 数値 key はバルーン面表示指令を単一発行点から発行する。
 ///
 /// `BalloonSurface{key:"2"}` を同期 `handle_message` へ流すと、`ShowBalloon{scope, surface_id:2}`
-/// がちょうど 1 件記録される（binds なし＝M-boot にバルーン着せ替え無し）。RED では BalloonSurface
-/// が key 抽出 match の catch-all（warn!＋skip）へ落ち発行されないため本 assert が落ちる。
+/// がちょうど 1 件記録される（binds なし＝バルーンに着せ替え無し）。BalloonSurface
+/// が key 抽出 match の catch-all（warn!＋skip）へ落ちると発行されず本 assert が落ちる。
 #[test]
 fn balloon_numeric_key_emits_showballoon() {
     let resolver = tiny_resolver();
@@ -481,7 +481,7 @@ fn balloon_minus_one_emits_hideballoon() {
 /// `\b[バルーン１]` 相当の非数値 key＝`NameForm` の行き先は文字の層（emo-text）が決め、名前形に
 /// ついての警告は文字の層だけが出す。同期 `handle_message`＋`capture_logs_flow` で warn! も
 /// error! も**0 回**・debug! は観測できる（silent 化でなく格下げ）・発行なし・`Continue` を固定する。
-/// RED では旧来の warn! が残るため WARN=0 が落ちる。
+/// warn! を出すと WARN=0 が落ちる。
 #[test]
 fn balloon_name_form_is_debug_only_no_emit() {
     let resolver = tiny_resolver();
@@ -545,7 +545,7 @@ fn balloon_name_form_is_debug_only_no_emit() {
 ///
 /// 負の非 `-1`（`-2`）と `u32` 超過（`4294967296`）は破損入力＝`Invalid`。シェル経路の
 /// `Unresolved`→error! と同水準で、error! が**1 回だけ**・warn! は**0 回**・発行なし・`Continue`。
-/// RED では catch-all の warn!（error! でない）に落ちるため error! カウント assert が落ちる。
+/// catch-all の warn!（error! でない）に落ちると error! カウント assert が落ちる。
 #[test]
 fn balloon_invalid_numeric_errors_once_no_emit() {
     for bad in ["-2", "4294967296"] {
@@ -662,8 +662,8 @@ fn balloon_same_surface_twice_emits_once() {
 ///
 /// `Emote{key:"2100"}`（シェル）と `BalloonSurface{key:"2"}`（バルーン）を同一 scope・同一
 /// states へ順に流すと、`Show{..,binds}`（シェル・binds 同梱）と `ShowBalloon{2}`（バルーン・
-/// binds なし）が互いに干渉せず送信順どおりに記録される（別 map・別発行・4.6）。RED では
-/// バルーン cue が catch-all へ落ち ShowBalloon が欠落するため列照合が落ちる。
+/// binds なし）が互いに干渉せず送信順どおりに記録される（別 map・別発行・4.6）。
+/// バルーン cue が catch-all へ落ちると ShowBalloon が欠落して列照合が落ちる。
 #[test]
 fn shell_and_balloon_recorded_independently() {
     let resolver = tiny_resolver();
@@ -718,22 +718,22 @@ fn shell_and_balloon_recorded_independently() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 6.2: broadcast honor 契約——担当外 cue の受信は正常経路（良性 debug!）（2.2/2.3/5.4/11.6）。
+// broadcast honor 契約——担当外 cue の受信は正常経路（良性 debug!）（2.2/2.3/5.4/11.6）。
 //
 // broadcast（D4）で seriko は全 cue を受け取る。Balloon 系（Text/NewLine/Clear/ClearAll/Choice）は
 // emo-text の担当、Wait はどの演者の担当でもない純粋な待ち。いずれも seriko にとって「異常」でなく
 // 「正常な担当外受信」であり、action を無視しつつ duration を honor（＝新ローカル遅延を生まない・
 // seriko は自前 reveal/timeline を持たないので skip で自明に満たす）。ログは良性 debug! へ格下げ
 // （warn/error を出さない＝実害ない水準）。genuine anomaly（Unresolved=error/Invalid=error/
-// EntityRef=warn）は据え置き——本タスクで格下げしない（NameForm は shell-balloon で debug! へ）。
+// EntityRef=warn）は据え置き——格下げしない（NameForm は shell-balloon で debug! へ）。
 // ─────────────────────────────────────────────────────────────────────
 
 /// ケース12（6.2/2.3・broadcast honor）: 担当外（非 Shell＝Balloon 担当）の cue を broadcast
 /// 受信すると、異常でなく正常経路として skip され、ログは良性 `debug!`（WARN/ERROR を出さない）。
 ///
 /// 同期 `handle_message`＋`capture_logs_flow` で、WARN も ERROR も 0 件・DEBUG は観測可能
-/// （silent 化でなく格下げ）・状態不変・`Continue` を固定する。RED では `Some(other)` 腕が
-/// `warn!` を出すため WARN=0 の assert が落ちる。
+/// （silent 化でなく格下げ）・状態不変・`Continue` を固定する。`Some(other)` 腕が
+/// `warn!` を出すと WARN=0 の assert が落ちる。
 #[test]
 fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
     let resolver = tiny_resolver();
@@ -785,9 +785,9 @@ fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
 /// broadcast 受信すると、action なしで skip され、ログは良性 `debug!`（WARN/ERROR なし）。
 ///
 /// `cue_target_of(Wait)==None` だが「分類不能」ではなく「担当演者なし」——5.2 が Wait cue を
-/// 発行し始めた今、`warn!("分類できない")` は意味的に不正確なノイズ（申し送り）。debug! へ格下げし
+/// 発行し始めた今、`warn!("分類できない")` は意味的に不正確なノイズ。debug! へ格下げし
 /// 文言も是正したことを固定する。seriko は自前 timeline を持たず skip が新ローカル遅延を生まない
-/// （duration honor＝否定的 no-op・R5.4）。RED では `None` 腕が `warn!` を出すため WARN=0 が落ちる。
+/// （duration honor＝否定的 no-op・R5.4）。`None` 腕が `warn!` を出すと WARN=0 が落ちる。
 #[test]
 fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
     let resolver = tiny_resolver();

@@ -56,7 +56,7 @@ fn each_part_path_decides_has_animated_parts() {
     let frame = "surface0\n{\nanimation1.interval,random,2\n\
                  animation1.pattern0,overlay,200,40,0,0\n}\n";
     // 合計 0 の `always`（採らない）の経過 0 の pattern（pattern1）だけが 200 を指す（spec:
-    // areka-P0-animated-image-playback task 3.2・合成が経過 0 として描く先）。
+    // areka-P0-animated-image-playback・合成が経過 0 として描く先）。
     let always_rest = "surface0
 {
 animation1.interval,always

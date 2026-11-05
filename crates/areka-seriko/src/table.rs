@@ -126,7 +126,7 @@ pub struct LoopFrame {
 pub struct LoopAnimation {
     /// animation ID（bind ゲート・合成整列のキー・要件 5.6）。
     pub id: u32,
-    /// 駆動トリガ（`Random`/`BindRandom`/`Always`）。
+    /// 駆動トリガ（[`LoopTrigger`] の 7 種のどれか）。
     pub trigger: LoopTrigger,
     /// pattern index 昇順・非空保証のコマ列（構築時ガード）。
     pub frames: Vec<LoopFrame>,
@@ -630,7 +630,7 @@ mod tests {
     /// かつ `debug!` で記録され、元語彙 `yen-e` を含む（要件 8.1/8.2・討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
     /// `table_interval_words_tests.rs` が留める（要件 11.1/11.2/11.4）。
     #[test]
-    fn only_random_and_bindrandom_are_recorded_others_debug_logged() {
+    fn random_and_bindrandom_draw_bind_is_call_only_others_debug_logged() {
         // kero: surface10・animation0・random,4・疎 index 0/1/3（frames 2106→2110→-1 停止）。
         let kero = surface_with(
             10,

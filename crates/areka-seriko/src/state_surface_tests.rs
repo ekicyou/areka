@@ -240,14 +240,14 @@ fn hide_on_unknown_scope_emits_once_then_holds() {
 // ---- apply_balloon（バルーン面・別 map 同居・apply() の鏡映・要件 4.3/4.6） ----
 
 /// 新規表示（要件 4.1/4.3）: 未知バルーン scope への Show(id) は Shown(id) へ更新し
-/// `ShowBalloon { scope, surface_id }` を発行する（binds を**同梱しない**）。
+/// `ShowBalloon { scope, surface_id, pattern }` を発行する（binds を**持たない**）。
 #[test]
 fn apply_balloon_new_show_emits_showballoon_without_binds() {
     let mut states = empty_states();
     let scope = ActorKey::from("0");
 
     let outcome = states.apply_balloon(&scope, SurfaceTarget::Show(2));
-    // ShowBalloon は scope と surface_id のみ（binds フィールドを持たない）。
+    // ShowBalloon は binds を持たない（binds フィールドが無い）。
     assert_eq!(
         outcome,
         ApplyOutcome::Changed(DisplayCommand::ShowBalloon {

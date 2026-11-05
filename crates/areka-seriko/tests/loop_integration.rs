@@ -1,4 +1,4 @@
-//! SERIKO ループ統合テスト（task 10.1）— アクター全経路の決定論檻（要件 6.2/7.2/7.3/9.4）。
+//! SERIKO ループ統合テスト — アクター全経路の決定論檻（要件 6.2/7.2/7.3/9.4）。
 //!
 //! looper.rs の単体テストは `LoopRuntime::on_tick` を**直接**呼んで純関数コアの分岐を檻に入れる。
 //! 本ファイルはそれと**別の観測面**——seriko アクター**全体**を `SerikoSink::send_tick` と
@@ -11,7 +11,7 @@
 //!
 //! 全ステップ（cue と tick）は seriko の単一 inbox を FIFO 共有する。送り終えたら `close()`→`join()`
 //! の 1 点のみで同期する。`join` 復帰時点で全ステップは単一スレッドで処理済みゆえ、`records()` の
-//! 発行列を決定論的に照合できる（既存 cue_sequence.rs/bind_e2e.rs と同一技法）。
+//! 発行列を決定論的に照合できる（cue_sequence.rs・regression.rs と同じ技法）。
 //!
 //! # 表の構築（looper 単体・table.rs と同一経路）
 //!
@@ -31,7 +31,7 @@
 //!    後続 tick が陳腐コマを蘇生させない。
 //! 8. 残留→再発火の即時クリア（討議 #2）: IdleResidual が再発火した瞬間に残留コマが即消えベース復帰し、
 //!    先頭コマは自身のデッドラインで現れる。
-//! 9. `-2`（他負 surface）warn-once（5.3 の 10.1 繰り延べ）: `-2` コマで自アニメのみ停止（`-1` と同様
+//! 9. `-2`（他負 surface）warn-once: `-2` コマで自アニメのみ停止（`-1` と同様
 //!    ベース復帰）し `warn!` が **1 回だけ**発火（2 度目の走査では dedup で再 warn しない）。かつ `-2` は
 //!    **他アニメを停止させない**（R8.2）——同時再生の別アニメが停止を跨いで生存し続けることを発行列で示す。
 
@@ -567,13 +567,11 @@ fn residual_immediately_cleared_on_refire_full_path() {
 ///
 /// looper.rs/table.rs 単体は呼出スレッド局所の捕捉窓で足りるが、統合テストは warn! が**別スレッド**
 /// （アクター）で発火するため、共有機構の全スレッド窓口 `install_global_capture_all()` を使う。
-/// 据え付けは 1 度きり・冪等で、他所が先に全体設定を置いていれば黙って縮退せず明示的に panic する
-/// （自前の `set_global_default` はもう持たない）。共有 buffer から `-2` warn 行のみを filter する
+/// 据え付けは 1 度きり・冪等で、他所が先に全体設定を置いていれば黙って縮退せず明示的に panic する。共有 buffer から `-2` warn 行のみを filter する
 /// ため、並行実行時の他ログ混入は判別に影響しない（`-2` warn を出すのは本檻のみ）。
 ///
-/// 行文字列は `format_line(_, LineFormat::LevelTargetFields)` で組む——移行前に本ファイルが自前で
-/// 組んでいた `format!("level={} target={}", …)` ＋ 訪問順の ` {name}={value:?}` と 1 バイトも
-/// 違わない形である（`log_capture_kit` の `LineFormat` がその逐語再現を担う）。
+/// 行文字列は `format_line(_, LineFormat::LevelTargetFields)` で組む（`level=… target=…` に続けて
+/// 訪問順の ` {name}={value:?}`）。
 mod warn_capture {
     use log_capture_kit::{CapturedEvent, install_global_capture_all};
     use std::sync::{Arc, Mutex};
@@ -588,7 +586,7 @@ mod warn_capture {
 /// （2 度目の `-2` 走査では dedup で再 warn しない）。かつ `-2` は**他アニメを停止させない**——同時再生の
 /// 別アニメ（id 1）が id 0 の停止・再発火・再停止を跨いで生存し続けることを発行列で示す（要件 8.2/9.4）。
 ///
-/// 5.3 で timeline に繰り延べた `-2` の warn-once 分岐を、本統合檻がアクター全経路で確定させる。
+/// `-2` の warn-once 分岐を、本統合檻がアクター全経路で確かめる。
 #[test]
 fn other_negative_surface_warns_once_and_spares_others_full_path() {
     let buffer = warn_capture::buffer(); // 設置はアクター起動前に済ませる（別スレッド warn! を捕捉）

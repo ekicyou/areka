@@ -878,7 +878,7 @@ impl PartClocks {
     /// `scope` の `slot` の面の回数つきの時計を全部捨てる（終わりなしは残す・要件 2.3）。3 語の時計も
     /// 捨て、引き金の状態は隠す（窓が閉じたのと同じ扱い＝開いた時刻が `periodic` の新しい起点・
     /// `runonce` の 1 回は使い済みのまま・spec: areka-P0-seriko-trigger-intervals 要件 5.5）。呼ぶのは
-    /// 窓の新しい出番（task 5.1）。
+    /// 窓の新しい出番。
     pub(crate) fn drop_finite(&mut self, scope: &ActorKey, slot: Slot, table: &AnimationTable) {
         if let Some(container) = self.clocks.get_mut(scope).and_then(|c| c.get_mut(&slot)) {
             close(container, table, scope, slot);

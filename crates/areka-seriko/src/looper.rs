@@ -151,8 +151,9 @@ pub(crate) struct LoopRuntime {
 
 /// 表の描くコマ 1 枚を合成へ渡すコマにする（一番上と部品で共有）。
 ///
-/// 一番上は描くコマ（[`crate::timeline::visible_frame`] の答え）だけを渡す（働きのコマの `surface_id`
-/// は絵でない・spec: seriko-pattern-calls 1.3）。部品は今のコマを渡す（5.3 で描くコマへ揃える）。
+/// 一番上も部品も描くコマ（[`crate::timeline::visible_frame`] の答え・`always` は
+/// [`crate::timeline::always_visible`] の答え）だけを渡す（働きのコマの `surface_id` は絵でない・
+/// spec: seriko-pattern-calls 1.3）。
 pub(crate) fn pattern_frame(f: &LoopFrame) -> PatternFrame {
     PatternFrame {
         surface_id: f.surface_id as u32,
@@ -502,7 +503,7 @@ impl LoopRuntime {
                             }
                             k
                         }
-                        // `always` は抽選しない（乱数を引く前に飛ばす。再生は進行の側・task 3.4）。
+                        // `always` は抽選しない（乱数を引く前に飛ばす。再生は進行の側）。
                         LoopTrigger::Always { .. } => continue,
                         // `runonce`・`periodic`・`talk` も抽選しない（乱数を引く前に飛ばす。始めるかは進行の
                         // 頭の判定が決める・spec: areka-P0-seriko-trigger-intervals 要件 5.7）。

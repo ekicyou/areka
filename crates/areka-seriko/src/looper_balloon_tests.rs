@@ -2,7 +2,7 @@
 //! 6.6・6.7・tasks.md 3.6）。
 //!
 //! バルーンの表もシェルと同じ `parts_film_tests` の表（0 と 1 は終わりなしの子 `ENDLESS` を置き、
-//! 1 は合計 1 回の子 `ONCE` も置く）。窓の知らせは `note_stage` で直に覚えさせる（運ぶ口は task 5.1）。
+//! 1 は合計 1 回の子 `ONCE` も置く）。窓の知らせは `note_stage` で直に覚えさせる。
 //! 刻みは `on_tick(now_ms)`、乱数は注入列（子の表に抽選は無い。抽選の檻は部品に `random` を置いた表で回す）。
 
 use std::collections::BTreeMap;

@@ -310,8 +310,8 @@ fn acts_through_mark_never_moves_back() {
     assert_eq!(p.playing(0), Some((0, Some(600))));
 }
 
-/// `always` を印のある状態で続けて回す: 周の終わりのコマ（累積の待ち＝周期）は次の周の頭の時刻に来るが、
-/// 境い目の刻みで 1 度だけ当たり、続く刻みでは当て直さない。
+/// 周の境目の回帰のテスト: `always` を印のある状態で続けて回す。周の終わりのコマ（累積の待ち＝周期）は
+/// 次の周の頭の時刻に来るが、境い目の刻みで 1 度だけ当たり、続く刻みでは当て直さない。
 #[test]
 fn always_lap_end_frame_is_hit_exactly_once_across_ticks() {
     let endless = LoopTrigger::Always {

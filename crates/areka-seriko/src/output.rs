@@ -2,8 +2,8 @@
 //!
 //! per-scope surface 状態の確定結果を emo（⑥）への **表示指令** [`DisplayCommand`] へ写し、
 //! 発行先抽象 [`SurfaceOutput`] へ送る層。指令は `Send` 所有データ（要件 5.4）で、他スレッド
-//! ／後続 spec（emo-present）へ安全に受け渡せる。emo-present の表示指令 API が未完成でも、
-//! 本 spec 定義の観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる（要件 5.5）。
+//! ／emo-present へ安全に受け渡せる。本番の発行先は `areka` クレートの `PresentBridge`
+//! （`emo2_boot::adapter`）で、観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる（要件 5.5）。
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
@@ -15,8 +15,8 @@ use std::sync::{Arc, Mutex};
 ///   解決済み `surface_id` と現在の bind 集合 `binds` を伴う。
 /// - [`DisplayCommand::Hide`]: あるスコープの状態が非表示へ遷移した（要件 5.2・DD5）。
 /// - [`DisplayCommand::ShowBalloon`]: あるバルーンスコープの面が表示面へ確定した（要件 4.1）。
-///   シェルの [`DisplayCommand::Show`] と異なり `binds` を持たない（M-boot にバルーン着せ替えは
-///   存在しない＝adapter 側で `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。
+///   シェルの [`DisplayCommand::Show`] と異なり `binds` を持たない（バルーンに着せ替えは
+///   無い＝adapter 側で `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。
 /// - [`DisplayCommand::HideBalloon`]: あるバルーンスコープが非表示へ遷移した（`\b[-1]` 相当・要件 4.2）。
 ///
 /// `ActorKey`（`String` 内包）・`u32`・`BindSet`（`Vec<u32>` 内包）はいずれも `Send` ゆえ、
@@ -37,7 +37,7 @@ pub enum DisplayCommand {
     },
     /// 非表示遷移（要件 5.2）。
     Hide { scope: ActorKey },
-    /// バルーン面表示（要件 4.1）。`binds` なし＝M-boot にバルーン着せ替えは存在しない
+    /// バルーン面表示（要件 4.1）。`binds` なし＝バルーンに着せ替えは無い
     /// （adapter は `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。`pattern` は
     /// シェル面 [`DisplayCommand::Show`] と同様の第一級要素（要件 5.1）。バルーン面 pattern アニメも
     /// surface 非依存に一様適用され得る（統一グラフィック思想）。cue 由来は空 pattern（要件 5.4）。
@@ -91,10 +91,10 @@ pub struct RebasedShow {
     pub binds: BindSet,
 }
 
-/// emo への表示指令の発行先抽象（emo-present 完了を待たない・要件 5.5）。
+/// emo への表示指令の発行先抽象（要件 5.5）。
 ///
-/// 本番の発行先（emo-present の `show_surface`/`hide` 相当への橋渡し）は `ghost-setup` の
-/// 領分。本 spec 内では単体観測用に [`MockSurfaceOutput`] を実装として用いる。`send` は
+/// 本番の発行先は `areka` クレートの `PresentBridge`（`emo2_boot::adapter`・emo-present へ非ブロック
+/// 送出）。seriko の中では単体観測用に [`MockSurfaceOutput`] を実装として用いる。`send` は
 /// infallible（送出失敗のログ観測は本番アダプタの責務）。
 pub trait SurfaceOutput {
     /// 1 表示指令を発行先へ届ける（到着順＝FIFO を保つ）。
@@ -202,7 +202,7 @@ mod tests {
 
     /// 新設のバルーン面指令 `ShowBalloon { scope, surface_id }`／`HideBalloon { scope }` を
     /// 構築し、`PartialEq` で照合できる（要件 4.1/4.2）。`ShowBalloon` は `binds` を持たず
-    /// `scope` と `surface_id` のみ、`HideBalloon` は `scope` のみ（M-boot にバルーン着せ替え無し）。
+    /// （`scope`・`surface_id`・`pattern`）、`HideBalloon` は `scope` のみ（バルーンに着せ替え無し）。
     #[test]
     fn balloon_display_commands_construct_and_match() {
         let show = DisplayCommand::ShowBalloon {

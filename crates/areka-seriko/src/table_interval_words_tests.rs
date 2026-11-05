@@ -96,7 +96,7 @@ fn rewrite_is_debug_logged_with_the_original_vocab() {
 }
 
 /// 検体 `konnoyayame` の `surfaces.txt` から組んだ表で、面 0 のアニメ 0 が採られる
-/// （今日は 0 件＝まばたきが再生されない・要件 11.5・7.10）。
+/// （ちょうど 1 件・要件 11.5・7.10）。
 #[test]
 fn konnoyayame_surface0_animation0_is_recorded() {
     let path = konnoyayame_shell_root().join("surfaces.txt");

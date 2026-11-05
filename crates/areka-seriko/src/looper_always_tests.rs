@@ -273,7 +273,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
 
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(1));
-    // バルーンの面の部品の時計（進行は task 3.6・ここでは入れ物を直に満たす）。
+    // バルーンの面の部品の時計（ここでは入れ物を直に満たす）。
     rt.parts.advance(
         &scope(),
         Slot::Balloon,

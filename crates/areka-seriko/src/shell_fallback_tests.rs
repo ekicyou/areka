@@ -8,7 +8,7 @@ use crate::ScopeStates;
 use crate::resolve::SurfaceTarget;
 use areka_emo_compose::BindSet;
 
-/// 新しいシェルの面の表（0・5）。descript の既定の面 5・組み込みの既定の面 0 を想定する。
+/// 番号の列を集合にする。
 fn ids(list: &[u32]) -> BTreeSet<u32> {
     list.iter().copied().collect()
 }

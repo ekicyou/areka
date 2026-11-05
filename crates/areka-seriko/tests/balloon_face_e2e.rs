@@ -2,7 +2,7 @@
 //!
 //! fixture のさくらスクリプトを **直接入力**し、`parse → compile → cue → seriko → 表示指令発行`
 //! までの貫通経路を、注入した `SakuraMsg::Tick` のみで（sleep/polling を一切用いず）決定論的に
-//! 観測する統合テスト。本体コード（src/）は一切変更せず、既存 API のみで組む（新規 API 追加なし）。
+//! 観測する統合テスト。公開 API のみで組む。
 //!
 //! # 同期チェーン（sleep/polling ゼロ・要件 5.3）
 //!
@@ -46,7 +46,7 @@ use common::*;
 /// `MockSurfaceOutput`・新しい talk/seriko を立て、状態を持ち越さない。
 fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     // ── seriko アクター（表示指令の消費側）──
-    // 空 alias 表でも数値 key は数値枝で解決できる。BindSet は空（M-boot にバルーン着せ替えは
+    // 空 alias 表でも数値 key は数値枝で解決できる。BindSet は空（バルーンに着せ替えは
     // 無く、本 E2E のシェル Show も binds 空で足りる）。records() ハンドルは move 前に取得する。
     let out = MockSurfaceOutput::new();
     let records = out.records();

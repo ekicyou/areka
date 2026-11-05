@@ -89,7 +89,7 @@ impl DefaultBinds {
 pub enum BindNamespace {
     /// 本体側（scope `"0"`・shell の `sakura.bindgroup`）。
     Sakura,
-    /// 相方側（scope `"1"`・shell の `kero.bindgroup`）。M1 では名前表まで持つが機構は scope 非依存。
+    /// 相方側（scope `"1"`・shell の `kero.bindgroup`）。名前表まで持つが機構は scope 非依存。
     Kero,
     /// 3 人目以降（scope `"N"`・N は 2 以上・shell の `char{N}.bindgroup`・要件 14.2）。
     Char(u32),
@@ -241,13 +241,11 @@ impl BindResolver {
 
     /// 空リゾルバ（本体側・相方側とも空表・`bindoption` 宣言も空）。
     ///
-    /// bind 名前表を供給しない既存テスト（task 6.4）・bind cue 不在経路の追随用。空表は
+    /// bind 名前表を供給しない経路（テスト・bind cue 不在経路）用。空表は
     /// R4.3 のシームを「同一機構」で実現する——人工的な無効化コードを書かず、引きが自然に
     /// 解決不能（`None`）へ落ちる（D7）。宣言集合も空ゆえ [`policy`] は全カテゴリで正典の既定
     /// （[`BindChoicePolicy::Default`]）を返すが、名前表が空＝[`resolve`] が常に `None` ゆえ
     /// 適用へ到達せず、挙動への実害はない（bindopt 設計 D3）。
-    ///
-    /// **署名は不変**——並走 spec の無干渉前提として固定する（bindopt 設計 D3）。
     ///
     /// [`policy`]: BindResolver::policy
     /// [`resolve`]: BindResolver::resolve
@@ -343,11 +341,11 @@ pub fn scope_namespace(scope: &ActorKey) -> Option<BindNamespace> {
     }
 }
 
-/// `\![bind,...]` トークン列の M1 類別（D8・純関数・不透明保持）。
+/// `\![bind,...]` トークン列の類別（D8・純関数・不透明保持）。
 ///
-/// [`parse_bind_directive`] が返す区分。本タスクは**類別のみ**を担い、各区分の
-/// severity（実導出／`warn!`＋skip／`error!`＋skip）は付けない——それはアクター
-/// （task 6.1）の責務（D8）。derive した `PartialEq`/`Eq` はテストの区分照合用。
+/// [`parse_bind_directive`] が返す区分。区分を当てるのは `apply_bind_directive`（Toggle は今の
+/// 着脱の反対・カテゴリ単位の形は定義の順に 1 つずつ）で、`Malformed` の `error!`＋skip は
+/// アクター（`actor_bind`）が出す（D8）。derive した `PartialEq`/`Eq` はテストの区分照合用。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BindDirective {
     /// 名前キー＋明示 on/off（`on` 欄が `"1"`/`"0"`）。実導出する（R4.1）。
@@ -380,7 +378,7 @@ pub enum BindDirective {
     Malformed,
 }
 
-/// `\![bind,...]` のトークン列（カテゴリ, パーツ, 値, …）を M1 区分へ類別する純関数。
+/// `\![bind,...]` のトークン列（カテゴリ, パーツ, 値, …）を区分へ類別する純関数。
 ///
 /// 各トークンは trim してから判定し、返る文字列にも trim 済みの値を格納する（parsers D2
 /// の trim 規律に整合）。トークンは「不在」または「trim 後に空」のとき空とみなす。分岐は
@@ -394,7 +392,7 @@ pub enum BindDirective {
 /// 6. 値が非空の非 `"1"`/`"0"` 文字列 → [`BindDirective::Malformed`]（on/off 値破損）。
 ///
 /// 第 4 トークン以降は無視する（正典に第 4 引数なし・不透明）。副作用なし・純粋。
-/// 各区分の severity（実導出／`warn!`／`error!`）は付けない——アクター（task 6.1）が写す（D8）。
+/// 区分を当てるのは `apply_bind_directive`、`Malformed` の `error!` はアクターが出す（D8）。
 pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
     // トークンを trim して取り出す。不在または trim 後空を「空」とみなす（`None` へ畳む）。
     let trimmed =

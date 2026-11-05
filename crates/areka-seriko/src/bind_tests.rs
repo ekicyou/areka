@@ -40,7 +40,7 @@ fn empty_input_yields_empty_bindset() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 3.1: bind 名前解決（BindResolver）とスコープ写像（scope_namespace）の純関数群。
+// bind 名前解決（BindResolver）とスコープ写像（scope_namespace）の純関数群。
 // ─────────────────────────────────────────────────────────────────────
 
 use areka_sakura::ActorKey;
@@ -110,7 +110,7 @@ fn policy_empty_or_absent_is_default() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 5.1: `policy()` 導出マトリクスの檻（bindopt 4.2/4.3・設計 §Testing Strategy
+// `policy()` 導出マトリクスの檻（bindopt 4.2/4.3・設計 §Testing Strategy
 // → Unit Tests（seriko・bind.rs）1-2）。宣言 3 形（mustselect／multiple／非宣言）に
 // 併記・未知カテゴリを加えた全ケースを 2 名前空間で固定し、本体（sakura）／相方（kero）の
 // 名前空間隔離も併せて固定する。`empty()` は全カテゴリ既定かつ名前解決が常に不成立
@@ -399,7 +399,7 @@ fn scope_namespace_maps_two_and_above_to_char() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// spec: areka-P0-offline-surface-dump task 2.3: シェルの読みからの既定と名前の表（要件 14.1〜14.3・5.2・5.9）。
+// spec: areka-P0-offline-surface-dump: シェルの読みからの既定と名前の表（要件 14.1〜14.3・5.2・5.9）。
 
 /// 3 種類のスコープで既定と名前が分かれるシェルの descript.txt。`服` の A（3 番）は B（20 番）より
 /// 前の行に書く（キーの順では `bindgroup20` が先＝行の順で並べないと赤）。B は 21 番でも書き直す。
@@ -524,7 +524,7 @@ fn name_of_undeclared_is_none_and_overlap_takes_first_in_table_order() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 3.2: bind コマンド引数の類別（parse_bind_directive）純関数。
+// bind コマンド引数の類別（parse_bind_directive）純関数。
 // Observable = 正常形（Apply）/トグル形（Toggle）/カテゴリ単位形（CategoryWide）/
 // 破損形（Malformed）それぞれが期待どおり区分される（D8・R4.1/R4.2）。
 // ─────────────────────────────────────────────────────────────────────
@@ -552,7 +552,7 @@ fn parse_apply_explicit_on_off() {
     );
 }
 
-/// トグル形（R4.2）: 数値欄が空欄／省略 → Toggle（M1 縮退・warn+skip は actor 責務）。
+/// トグル形（R4.2）: 数値欄が空欄／省略 → Toggle（当てるときは今の着脱の反対・`apply_bind_directive`）。
 #[test]
 fn parse_toggle_empty_or_absent_value() {
     assert_eq!(
@@ -574,7 +574,7 @@ fn parse_toggle_empty_or_absent_value() {
 }
 
 /// カテゴリ単位形（R4.2）: パーツ名が空欄／省略 → CategoryWide。
-/// on はカテゴリ単位では厳密に action されない M1 縮退ゆえ寛容: "1"→Some(true)・
+/// on は寛容に読む（パーツを定義の順に 1 つずつ当てるときの on/off・None はパーツごとのトグル）: "1"→Some(true)・
 /// "0"→Some(false)・欠落/空/その他→None（Malformed にしない）。
 #[test]
 fn parse_category_wide_part_empty_or_absent() {
@@ -684,7 +684,7 @@ fn parse_trims_tokens_and_stores_trimmed() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 3.3: 着せ替え集合の on/off 積算（accumulate）純関数。
+// 着せ替え集合の on/off 積算（accumulate）純関数。
 // Observable = 冪等（on→on・off→off で結果集合不変）＋順序不感（適用列の順序を
 // 入れ替えても同一 BindSet）。BindSet が昇順 dedup ゆえ集合同値が冪等判定の正準形（D9）。
 // ─────────────────────────────────────────────────────────────────────

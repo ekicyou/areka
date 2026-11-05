@@ -6,7 +6,7 @@ use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 6.1/6.3: bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
+// bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
 //
 // `\![bind]` キャリアの名前自己選別（name=="bind"）→ 引数解釈（parse_bind_directive）→
 // scope 写像（scope_namespace）→ 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）

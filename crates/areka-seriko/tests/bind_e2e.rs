@@ -3,7 +3,7 @@
 //! 名前キー bind の on/off 列を含むさくらスクリプトを **直接入力**し、
 //! `parse → compile → cue → seriko → 表示指令発行` までの貫通経路を、注入した
 //! `SakuraMsg::Tick` のみで（sleep/polling を一切用いず）決定論的に観測する統合テスト。
-//! 本体コード（src/）は一切変更せず、既存 API のみで組む（新規 API 追加なし・test-only）。
+//! 公開 API のみで組む（test-only）。
 //!
 //! # 同期チェーン（sleep/polling ゼロ・要件 5.3）
 //!
@@ -186,7 +186,7 @@ fn run_core(
     recorded.clone()
 }
 
-/// 既存シナリオ（task 6.4 系）の既定注入で貫通駆動する薄いラッパ。
+/// 既存シナリオの既定注入で貫通駆動する薄いラッパ。
 ///
 /// 非空の静的既定集合 `{1100,1207}` と test-local [`test_bind_resolver`]（bindoption 宣言ゼロ＝
 /// 全カテゴリ既定・1 カテゴリ 1 パーツ）を注入する。broadcast の 2 つ目のスロットは呼び手指定の

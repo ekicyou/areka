@@ -5,7 +5,7 @@
 //! （sleep・polling・表示を一切伴わない・要件 7.2/7.4）。`join` 復帰時点で先行 Cue は全て
 //! FIFO 単一スレッドで処理済みゆえ、`MockSurfaceOutput::records()` の全 `DisplayCommand` 列を
 //! 期待列と全値比較（binds 含む）できる。3 ケースはいずれも発行列 observable で判定でき、
-//! cross-thread の log 捕捉を要しない（log 檻は task 4.1 の同期 handler テストの領分）。
+//! cross-thread の log 捕捉を要しない（log 檻は `src/actor_dispatch_tests.rs` の同期 handler テストの領分）。
 
 use areka_emo_compose::PatternState;
 use areka_sakura::{ActorKey, CueSink};
@@ -17,7 +17,7 @@ use areka_seriko::{
 mod common;
 use common::*;
 
-/// emo2 の bindgroup default 既定オン集合（cue_sequence.rs / emo-compose 実測相当）。
+/// emo2 の bindgroup default 既定オン集合（cue_sequence.rs と同じ値）。
 fn emo2_binds() -> areka_emo_compose::BindSet {
     build_static_bindset(&[1100, 1207, 1302, 1500, 1800])
 }
@@ -94,7 +94,7 @@ fn idempotent_repeat_surface_no_reemit() {
 ///
 /// 発行列は `[Show(2100), Show(2200)]` の 2 件のみ。未解決は発行を挟まず、かつ後続の有効発火が
 /// パイプラインを止めずに処理された（解決失敗 skip がループを停滞させない）。error! ログ自体は
-/// task 4.1 の同期 handler テストで檻済み。ここは **観測可能な「継続」** を発行列で主張する。
+/// `src/actor_dispatch_tests.rs` の同期 handler テストで檻済み。ここは **観測可能な「継続」** を発行列で主張する。
 /// 同期は `close()`→`join()` の 1 点のみ。sleep/polling/表示なし（要件 7.2）。
 #[test]
 fn unresolved_mixed_still_processes_following() {

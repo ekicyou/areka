@@ -11,18 +11,18 @@
 //! [`areka_actor::run_inbox`] ループを回す（1.3）。各発火は到着順（FIFO・単一スレッド）に
 //! `cue_target_of` で分類され、Shell 系 `Emote{key}` のみが「解決（[`SurfaceResolver`]）→
 //! 状態確定（[`ScopeStates::apply`]）→発行（[`emit_display`]）」の一本経路を通る。状態確定から
-//! 表示指令発行までは単一関数 [`emit_display`] に集約され、後続の時間駆動ループ（`seriko-loop`）が
-//! 同じ発行点を再利用できる（5.3）。broadcast（D4）で seriko は全 cue を受け取るため、担当外
+//! 表示指令発行までは単一関数 [`emit_display`] に集約され、時間駆動ループ（`seriko-loop`）の刻みも
+//! 同じ発行点を使う（5.3）。broadcast（D4）で seriko は全 cue を受け取るため、担当外
 //! （非 Shell）・純粋 Wait の受信は「正常な担当外受信」＝良性 `debug!`＋skip（action を無視し
 //! duration を honor・R2.2/2.3/5.4）、名前形バルーン key（NameForm）は文字の層が読むので `debug!`＋skip、
 //! 破損入力（Unresolved/Invalid=`error!`／EntityRef=`warn!`）のみが真の異常。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
 //!
 //! # 結線契約（受け口＝単一の出力契約）
 //!
-//! 演者非依存の**単一の出力契約** [`dola::cue::CueSink`]（task 4.1）を実装する [`SerikoSink`] が
+//! 演者非依存の**単一の出力契約** [`dola::cue::CueSink`] を実装する [`SerikoSink`] が
 //! 差し込み口となる。`emit` は届いた [`TalkCue`] を [`SerikoMsg::Cue`] として専用 inbox（std mpsc）
-//! へ橋渡しする。ghost live-path も `CueSink` 注入で結線する（task 8.1 で旧 `SurfaceSink` 経路を
-//! 撤去し `CueSink` 一本へ集約・broadcast＋演者側 relevance ゆえ役割別トレイトは不要）。
+//! へ橋渡しする。ghost live-path も `CueSink` 注入で結線する（旧 `SurfaceSink` 経路は
+//! 撤去して `CueSink` 一本へ集約・broadcast＋演者側 relevance ゆえ役割別トレイトは不要）。
 //!
 //! # 停止経路の形
 //!
@@ -154,9 +154,8 @@ impl SerikoSink {
 
     /// アクターへ [`SerikoMsg::Close`] を送り、正常停止を要求する（R1.4）。
     ///
-    /// kanade による停止駆動（単一 Close funnel）の受け口。`spawn_seriko` が返した
-    /// `SerikoSink` から停止を送れるようにする最小 API で、終了同期テスト（本タスク・後続 4.1）
-    /// が `ActorHandle::join` と対にして使う。受信端消失時は `send` が `Err` を返すが、
+    /// 明示の停止の口（今はテストが使い、`ActorHandle::join` と対にする）。本番は送り手を全部 drop
+    /// して止める。受信端消失時は `send` が `Err` を返すが、
     /// アクターは既に停止済み（＝目的達成）ゆえ `error!` は不要——`Ok`/`Err` を呼び手へ返す。
     pub fn close(&self) -> Result<(), std::sync::mpsc::SendError<SerikoMsg>> {
         self.tx.send(SerikoMsg::Close)
@@ -229,13 +228,13 @@ impl SerikoSink {
     }
 }
 
-/// **単一の出力契約**（R11.6・task 4.1）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+/// **単一の出力契約**（R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を **broadcast** し、seriko は担当（Shell）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
 /// （担当外 cue も本 sink 経由で inbox へ届き、[`handle_message`] が良性に読み飛ばす・R2.2/R2.3）。
 /// 配送先スロットの 2 分割（旧 `SurfaceSink`/`TextSink`）は broadcast＋演者側 relevance ゆえ廃した
-/// （task 8.1 で暫定並存の `SurfaceSink` 実装を撤去し `CueSink` 一本へ集約）。
+/// （暫定並存の `SurfaceSink` 実装は撤去して `CueSink` 一本へ集約）。
 impl dola::cue::CueSink for SerikoSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(cue);
@@ -265,8 +264,8 @@ fn judge(facts: &SkinFacts, cue: &TalkCue) -> Option<DetectionPoint> {
 
 /// 単一発行点（5.3）— 状態確定結果 [`DisplayCommand`] を発行先へ渡す**唯一**の関数。
 ///
-/// `SurfaceOutput::send` を呼ぶのはこの関数だけであり、cue 適用駆動（本タスク）でも後続の
-/// 時間駆動ループ（`seriko-loop`）でも、状態確定→表示指令発行はこの一点を通す。分岐ごとに
+/// `SurfaceOutput::send` を呼ぶのはこの関数だけであり、cue 適用駆動でも
+/// 時間駆動ループ（`seriko-loop`）の刻みでも、状態確定→表示指令発行はこの一点を通す。分岐ごとに
 /// `out.send` を散らさないことで、発行の観測点・不変条件を一箇所に集約する。
 fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
     out.send(command);
@@ -282,7 +281,7 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// [`handle_message`] へ `&` 手渡し）・`out` を単独所有し、[`areka_actor::run_inbox`] で発火を
 /// 到着順（FIFO）に処理する。
 ///
-/// `bind_resolver` は additive 追加（D4）。bind 名前表を供給しない既存経路は
+/// bind 名前表を供給しない経路は
 /// [`BindResolver::empty`] を渡せば従来と byte 同値。その根拠は宣言集合が空であることではなく、
 /// **名前表が空＝[`BindResolver::resolve`] が常に `None`** であること——空リゾルバは
 /// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`]＝着衣は排他置換）になるが、そもそも
@@ -348,7 +347,7 @@ where
         let mut resolver = resolver;
         let mut bind_resolver = bind_resolver;
         // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要・単一所有者）。
-        // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める（発見 C の値渡し解消）。
+        // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める。
         let mut loop_runtime = LoopRuntime::new(loop_config).with_clock(clock);
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
             // 差し替えの依頼は定義を所有するこの殻が先に捌く（handle_message の署名は不変）。
@@ -623,7 +622,7 @@ fn dispatch_message<O: SurfaceOutput>(
                 // 非キャリア（純粋 Wait・非正準 params の Custom・その他）。
                 None => {
                     if matches!(cue.command, CueCommand::Wait) {
-                        // Wait は「分類不能」でなく「どの演者の担当でもない」ゆえ文言を分ける（申し送り是正）。
+                        // Wait は「分類不能」でなく「どの演者の担当でもない」ゆえ文言を分ける。
                         tracing::debug!(
                             command = ?cue.command,
                             "seriko: 純粋 Wait cue を broadcast 受信; どの演者の担当でもない待ち＝action なし・duration は焼き込み絶対時刻が担うため読み飛ばす（正常経路・R5.4）"
@@ -645,7 +644,8 @@ fn dispatch_message<O: SurfaceOutput>(
                             );
                         }
                     } else {
-                        // 上記以外の非キャリア（M-boot compile は非生成）。broadcast 下では一律良性ゆえ debug!。
+                        // dola に variant が増えたときの防御（今 `cue_target_of` が None を返すのは Wait と
+                        // Custom だけで、どちらも上で捌く）。broadcast 下では一律良性ゆえ debug!。
                         tracing::debug!(
                             command = ?cue.command,
                             "seriko: 担当の演者がいない cue を broadcast 受信; 読み飛ばす（正常経路）"
@@ -738,7 +738,7 @@ fn dispatch_message<O: SurfaceOutput>(
     let key = match &cue.command {
         CueCommand::Emote { key } => key,
         CueCommand::EntityRef(entity) => {
-            // M-boot では非到来。将来 dola 変更時の catch-all 回避のため明示 skip。
+            // 今の台本の変換は EntityRef を作らない。将来 dola 変更時の catch-all 回避のため明示 skip。
             tracing::warn!(
                 entity = entity,
                 scope = %cue.actor,

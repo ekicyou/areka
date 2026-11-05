@@ -1,6 +1,6 @@
 //! 統合テスト（アクター・発行列観測）— fixture 系列の決定論シナリオ（要件 7.1/7.2/7.3/7.4）。
 //!
-//! クレートの **公開 API のみ** を用いて（task 3.2 の re-export が外部から使えることも同時に検証）、
+//! クレートの **公開 API のみ** を用いて（再輸出が外部から使えることも同時に検証）、
 //! 実 emo2 fixture の alias 実データで解決テーブルを構築し、数値・alias・非表示・別スコープを
 //! 混在させた `TalkCue` 列を単一の出力契約 `CueSink::emit` で直入力する。停止同期は `close()`→`join()` のみ
 //! （sleep・polling・表示を一切伴わない・要件 7.2）。`join` 復帰時点で先行 Cue は全て FIFO
@@ -32,7 +32,7 @@ use common::*;
 #[test]
 fn cue_sequence_emits_expected() {
     let resolver = emo2_resolver();
-    // emo2 の bindgroup default 既定オン集合（build.rs / emo-compose 実測相当）。
+    // emo2 の bindgroup default 既定オン集合。
     let binds = build_static_bindset(&[1100, 1207, 1302, 1500, 1800]);
 
     // 観測用出力先。records() ハンドルを move 前に取得しておく。

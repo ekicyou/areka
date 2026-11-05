@@ -108,7 +108,7 @@ fn bind_noncanonical_addressee_severity_split() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 6.1: Tick 経路（SerikoMsg::Tick・send_tick・handle_message Tick 腕・on_surface_changed
+// Tick 経路（SerikoMsg::Tick・send_tick・handle_message Tick 腕・on_surface_changed
 // 連動）の網羅檻（R1.1/6.1/6.3/7.1/7.5/8.3）。
 //
 // 檻の要点:

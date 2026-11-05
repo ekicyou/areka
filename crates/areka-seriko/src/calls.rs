@@ -48,7 +48,8 @@ type Due = (u64, u32, usize, u64);
 
 /// 前の刻みから `now_ms` までに来た働きのコマを予定の時刻の順に当てる。
 ///
-/// 事前条件: `plays` の各再生の開始の時刻は `now_ms` 以下。事後条件: 予定の時刻が `now_ms` 以下の
+/// `now_ms` より後に始まった再生（合図の時刻で始めた再生は刻みより僅かに後になりうる）は、何も当てず
+/// 次の刻みを待つ。事後条件: 予定の時刻が `now_ms` 以下の
 /// 働きのコマはすべて当て終え、再生中の全部の当て終えた印が `max(前の印, now_ms)` になる（合図の時刻が
 /// 前の刻みより前でも印を戻さない＝同じコマを 2 度当てない）。選びは `pick` だけを引く。
 pub(crate) fn run_calls<'a>(
@@ -172,8 +173,8 @@ fn push_due(
     };
     let period = period_ms.get();
     let lo = through.unwrap_or(start).saturating_sub(start);
-    // 累積の待ちは周の長さ以下なので、1 つ前の周の終わりのコマも窓に入りうる。
-    let first = (lo / period).saturating_sub(1);
+    // 累積の待ちは周の長さ以下なので、印より後のコマは印の周から始まる。
+    let first = lo / period;
     let mut last = now.saturating_sub(start) / period;
     if let Some(n) = laps {
         last = last.min(u64::from(n.get()) - 1);
