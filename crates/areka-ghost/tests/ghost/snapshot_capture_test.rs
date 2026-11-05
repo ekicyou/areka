@@ -8,7 +8,7 @@
 //! 静かにスキップする（既存 env-gate 流儀・`real_pasta_test.rs` を踏襲）。
 //!
 //! # 採取フロー（design.md 「Batch / Job Contract」）
-//! 実 pasta fixture を組立（`real_pasta_test.rs::write_real_pasta_ghost_fixture` 流儀）→
+//! 検体 `emo2` の使い捨ての複製に実 pasta DLL を持ち込み（`real_pasta_test.rs` と同じ形）→
 //! `ShioriWiring::Custom(Recorder(real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi)))`
 //! で boot→talk→close
 //! を一周（実時間可・本ハーネスは決定論を要求されない）→ 記録から **GET 交信の ID ごと初出**
@@ -84,226 +84,25 @@ fn collect_first_get_snapshots(records: &[ExchangeRecord]) -> Vec<(String, Strin
 
 // ===========================================================================
 // env-gate 実採取（`HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` 両設定時のみ動作）。
-// 以下の項目（capture_env / resolve_helper_exe / unique_temp_dir /
-// write_real_pasta_ghost_fixture / BoxedBackend / run_bounded_shutdown）は
-// `capture_real_pasta_snapshots` の実採取パスから参照される。env 未設定でも
-// コードパスはコンパイルインされる（実行時のみ silent skip）。
+// 実採取の道（`capture_real_pasta_snapshots`）は env 未設定でもコンパイルインされる（実行時のみ
+// silent skip）。
 // ===========================================================================
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use areka_ghost::shiori_wiring::real_connect;
 use areka_ghost::ticker::TickerConfig;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use areka_kanade::{CloseReason, ShioriBackend};
+use areka_kanade::ShioriBackend;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
+use sample_ghost_kit::SampleRoot;
 
-use shiori_host32_host::{
-    ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
-};
-use temp_path_kit::TempPath;
-
-use crate::recorder::{Recorder, RecorderHandle};
+use crate::common::{resolve_helper_exe, run_bounded_shutdown};
+use crate::real_pasta_test::{OBSERVE_TIMEOUT, SHUTDOWN_BOUND, wait_for_a_cue};
+use crate::recorder::{BoxedBackend, Recorder, RecorderHandle};
 use crate::spine_e2e_test::RecordingSink;
-
-/// OnBoot 一周で sink に発火が観測されるまでの有界待機上限（実プロセス・実ブレイン往復ゆえ
-/// 秒単位の余裕・`real_pasta_test.rs::OBSERVE_TIMEOUT` と同旨）。本ハーネスは決定論を要求
-/// されないため実時計待機で足りる。
-const OBSERVE_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// 有界待機の再試行間隔（`real_pasta_test.rs::POLL_INTERVAL` と同旨・`TickerMode::Real` が
-/// 背後で実 wall-clock 駆動するため本ハーネス限定で実 sleep ポーリングを許容する）。
-const POLL_INTERVAL: Duration = Duration::from_millis(200);
-
-/// `shutdown()` 呼出を有界に観測する上限（`real_pasta_test.rs::SHUTDOWN_BOUND` と同旨）。
-const SHUTDOWN_BOUND: Duration = Duration::from_secs(30);
-
-/// `inproc_e2e_test.rs::BoxedBackend` と同型の薄い委譲アダプタ（`Box<dyn ShioriBackend>` は
-/// `ShioriBackend` を実装せず孤児則で blanket impl も足せないため newtype で橋渡しする）。
-/// 全呼出を内側の実 backend へ素通しし、記録は外側の `Recorder` が担う。
-struct BoxedBackend(Box<dyn ShioriBackend>);
-
-impl ShioriBackend for BoxedBackend {
-    fn get(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<Option<String>, RequestError> {
-        self.0.get(id, references, status)
-    }
-
-    fn notify(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<(), RequestError> {
-        self.0.notify(id, references, status)
-    }
-
-    // 新しい 2 メソッドも中身へそのまま渡す（既定のままだとヘッダと応答のレベルが黙って落ちる）。
-    fn get_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<Option<ValueReply>, RequestError> {
-        self.0.get_with_headers(id, references, status, headers)
-    }
-
-    fn notify_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<(), RequestError> {
-        self.0.notify_with_headers(id, references, status, headers)
-    }
-
-    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
-        self.0.unload()
-    }
-
-    fn status(&mut self) -> HelperStatus {
-        self.0.status()
-    }
-}
-
-/// i686 helper 実行ファイルのパスを解決する（`real_pasta_test.rs::resolve_helper_exe` を
-/// 逐語的に踏襲——env `HOST32_HELPER_EXE` 最優先 → ワークスペース
-/// `target/i686-pc-windows-msvc/{debug,release}/shiori-host32-helper.exe`）。
-fn resolve_helper_exe() -> Result<PathBuf, String> {
-    if let Ok(explicit) = std::env::var("HOST32_HELPER_EXE") {
-        let p = PathBuf::from(&explicit);
-        if p.is_file() {
-            return Ok(p);
-        }
-        return Err(format!(
-            "HOST32_HELPER_EXE={explicit:?} が指すファイルが存在しません（i686 helper を先にビルド）"
-        ));
-    }
-
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-    let target_base = workspace_root.join("target").join("i686-pc-windows-msvc");
-
-    for profile in ["debug", "release"] {
-        let candidate = target_base.join(profile).join("shiori-host32-helper.exe");
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(format!(
-        "i686 helper exe が見つかりません（探索先: {}\\{{debug,release}}\\shiori-host32-helper.exe）。\
-         PowerShell で先に i686 helper をビルドしてください: \
-         cargo build -p shiori-host32-helper --target i686-pc-windows-msvc",
-        target_base.display()
-    ))
-}
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-snapshot-capture-{tag}"))
-}
-
-/// `root` 直下に、実 pasta DLL を物理的に持ち込んだ `ghost/master/` を含む解決可能な
-/// ゴーストツリーを構築する（`real_pasta_test.rs::write_real_pasta_ghost_fixture` を踏襲——
-/// `ShioriMount.dir` は常に `ghost_root/ghost/master` に固定されるため実 DLL をフィクスチャ側へ
-/// コピーして持ち込む）。
-/// `src` 直下の全エントリ（ファイル・サブディレクトリ）を `dst` へ再帰コピーする
-/// （pasta の支援資産一式を fixture の load_dir へ持ち込むため・task 6.2）。
-fn copy_dir_contents_recursive(src: &Path, dst: &Path) {
-    std::fs::create_dir_all(dst).expect("create dst dir");
-    let entries = match std::fs::read_dir(src) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        let target = dst.join(&name);
-        if path.is_dir() {
-            copy_dir_contents_recursive(&path, &target);
-        } else if path.is_file() {
-            let _ = std::fs::copy(&path, &target);
-        }
-    }
-}
-
-fn write_real_pasta_ghost_fixture(root: &Path, dll_path: &Path) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-
-    let dll_file_name = dll_path
-        .file_name()
-        .expect("HOST32_PASTA_DLL にファイル名がない")
-        .to_string_lossy()
-        .into_owned();
-    // 実 pasta は応答（トーク）に自身の支援資産（`dic/`・`scripts/`・`pasta.toml` 等）を
-    // load_dir（=ghost/master）から読む。DLL 単体では OnBoot にスクリプトを返せないため、
-    // DLL の親ディレクトリ（＝実 emo2 の `ghost/master/`）の中身を丸ごと再帰コピーして
-    // pasta へフル環境を与える（task 6.2・実採取が talk を得るために必須）。
-    if let Some(src_dir) = dll_path.parent() {
-        copy_dir_contents_recursive(src_dir, &ghost_master);
-    }
-    // DLL は上のコピーに含まれるが、親不明時の保険として単体コピーも冪等に行う。
-    let dll_dst = ghost_master.join(&dll_file_name);
-    if !dll_dst.is_file() {
-        std::fs::copy(dll_path, &dll_dst)
-            .expect("実 pasta DLL を ghost/master へコピーできませんでした");
-    }
-
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        format!(
-            "charset,UTF-8\nname,SnapshotCaptureGhost\nshiori,{dll_file_name}\n\
-             seriko.defaultsurfacedirectoryname,master\n"
-        ),
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,SnapshotCaptureShell\n",
-    )
-    .expect("write shell descript.txt");
-}
-
-/// `shutdown` を別スレッドへ逃がして有界に完走させる（宙吊り防止・`real_pasta_test.rs` の
-/// shutdown 観測と同旨）。
-fn run_bounded_shutdown(runtime: areka_ghost::GhostRuntime) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(0);
-    std::thread::spawn(move || {
-        let result = runtime
-            .shutdown(CloseReason::System)
-            .map_err(|err| format!("{err:?}"));
-        let _ = done_tx.send(result);
-    });
-    match done_rx.recv_timeout(SHUTDOWN_BOUND) {
-        Ok(result) => assert!(
-            result.is_ok(),
-            "実 pasta 越しの shutdown は Ok(()) を返すはず（採取一周の正規終了）: {result:?}"
-        ),
-        Err(_) => panic!("shutdown が {SHUTDOWN_BOUND:?} 以内に完了しなかった（宙吊りの疑い）"),
-    }
-}
 
 /// env-gate 実採取（design.md「snapshot 採取ハーネス（env-gate）」・要件 2.6/6.1）。
 ///
@@ -344,10 +143,14 @@ fn capture_real_pasta_snapshots() {
     std::fs::create_dir_all(&out_path)
         .expect("AREKA_SNAPSHOT_OUT ディレクトリを作成できませんでした");
 
-    // --- 実 pasta fixture を組立（DLL をフィクスチャ ghost/master へ持ち込む）---
-    let temp = unique_temp_dir("capture-real-pasta-snapshots");
-    let root = temp.path().to_path_buf();
-    write_real_pasta_ghost_fixture(&root, &dll_path);
+    // --- 起動記録の無い新品の emo2（辞書込み・`profile` を持たない）に指定の DLL を持ち込む ---
+    let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let root = sample.folder().to_path_buf();
+    std::fs::copy(
+        &dll_path,
+        root.join("ghost").join("master").join("pasta.dll"),
+    )
+    .expect("HOST32_PASTA_DLL を emo2 の ghost/master へ写せませんでした");
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を real_connect へ渡す。
     let mount = package::resolve(&root, DefaultEncoding::Utf8)
@@ -389,24 +192,14 @@ fn capture_real_pasta_snapshots() {
         boot(options).expect("real pasta 越しの boot は DLL/helper 実在確認済みなら成功するはず");
 
     // --- OnBoot 一周で sink に何らかの発火が観測されるまで有界待機（実時計ポーリング可）---
-    let deadline = Instant::now() + OBSERVE_TIMEOUT;
-    while Instant::now() < deadline {
-        let surface_non_empty = !surface_records
-            .lock()
-            .expect("surface records mutex poisoned")
-            .is_empty();
-        let text_non_empty = !text_records
-            .lock()
-            .expect("text records mutex poisoned")
-            .is_empty();
-        if surface_non_empty || text_non_empty {
-            break;
-        }
-        std::thread::sleep(POLL_INTERVAL);
-    }
+    // 何も見えないまま 204 の写しを書いて緑にしない。
+    assert!(
+        wait_for_a_cue(&surface_records, &text_records),
+        "実 pasta 越しの OnBoot 一周が {OBSERVE_TIMEOUT:?} 以内に RecordingSink へ何も記録しなかった"
+    );
 
     // --- 正規終了（close 系列で OnClose NOTIFY→Unload まで記録を確定させる）---
-    run_bounded_shutdown(runtime);
+    run_bounded_shutdown("snapshot capture shutdown", SHUTDOWN_BOUND, runtime);
 
     // --- 記録から GET 初出を正準 envelope へ再構成しファイル出力（上書き・冪等）---
     let records = handle_slot

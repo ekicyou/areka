@@ -223,6 +223,59 @@ impl<B: ShioriBackend> ShioriBackend for Recorder<B> {
     }
 }
 
+/// `Box<dyn ShioriBackend>` を [`Recorder`] に包むための委譲（`Box<dyn ShioriBackend>` は
+/// `ShioriBackend` を実装せず、孤児則で包括の実装も足せないので newtype で橋渡しする）。
+/// 口を全部中身へ渡す（既定の本体のままだと頭と応答のレベルが黙って落ちる）。
+pub struct BoxedBackend(pub Box<dyn ShioriBackend>);
+
+impl ShioriBackend for BoxedBackend {
+    fn get(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
+        self.0.get(id, references, status)
+    }
+
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<(), RequestError> {
+        self.0.notify(id, references, status)
+    }
+
+    fn get_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<Option<ValueReply>, RequestError> {
+        self.0.get_with_headers(id, references, status, headers)
+    }
+
+    fn notify_with_headers(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+        headers: &RequestHeaders<'_>,
+    ) -> Result<(), RequestError> {
+        self.0.notify_with_headers(id, references, status, headers)
+    }
+
+    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
+        self.0.unload()
+    }
+
+    fn status(&mut self) -> HelperStatus {
+        self.0.status()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

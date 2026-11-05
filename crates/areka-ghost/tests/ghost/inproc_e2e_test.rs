@@ -12,9 +12,7 @@
 //!
 //! さらに凍結応答が差し替えられた際の検出漏れを塞ぐため、期待列（ハードコードした
 //! `expected_greeting_sequence` の `(actor, command)` 全順序）が独立の **ドリフト検出ピン**となる
-//! （要件 5.2）——凍結 Value が変われば DLL→compile が別列を産み、この期待列に一致しなくなる。加えて
-//! 凍結スナップショット（`shiori4_testdll::snapshot_for("OnFirstBoot")`）が 200＋Value＋非空である
-//! ことも固定する。
+//! （要件 5.2）——凍結 Value が変われば DLL→compile が別列を産み、この期待列に一致しなくなる。
 //! 正常終了の握手は `shutdown(CloseReason::System)==Ok(())` で観測する（要件 5.3）。観測は演出配送の
 //! **受領レベル**（`RecordingSink`）に留め、実描画（サーフェス合成・画素読戻し）は要求しない（要件 5.5）。
 //!
@@ -35,7 +33,7 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
     GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot, inproc_connect,
 };
-use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
+use areka_kanade::{MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 use areka_parsers::package::ShioriMount;
@@ -43,68 +41,12 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 use temp_path_kit::TempPath;
 
-use shiori_host32_host::{
-    ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
-};
-
+use crate::common::run_bounded_shutdown;
 use crate::inproc_fixture::shared_test_ghost;
-use crate::recorder::{ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle};
+use crate::recorder::{
+    BoxedBackend, ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle,
+};
 use crate::spine_e2e_test::RecordingSink;
-
-/// `inproc_connect` が返す `Box<dyn ShioriBackend>` を、具体型境界 `Recorder<B: ShioriBackend>` へ
-/// 渡せるようにする薄い委譲アダプタ（`Box<dyn ShioriBackend>` は `ShioriBackend` を実装せず、孤児則で
-/// blanket impl も足せないため newtype で橋渡しする）。全呼出を内側の実 InProc backend へ素通しする
-/// ——記録は外側の `Recorder` が担い、本アダプタは駆動対象非依存の中継に徹する（D-3「同一手口」）。
-struct BoxedBackend(Box<dyn ShioriBackend>);
-
-impl ShioriBackend for BoxedBackend {
-    fn get(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<Option<String>, RequestError> {
-        self.0.get(id, references, status)
-    }
-
-    fn notify(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<(), RequestError> {
-        self.0.notify(id, references, status)
-    }
-
-    // 新しい 2 メソッドも中身へそのまま渡す（既定のままだとヘッダと応答のレベルが黙って落ちる）。
-    fn get_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<Option<ValueReply>, RequestError> {
-        self.0.get_with_headers(id, references, status, headers)
-    }
-
-    fn notify_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<(), RequestError> {
-        self.0.notify_with_headers(id, references, status, headers)
-    }
-
-    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
-        self.0.unload()
-    }
-
-    fn status(&mut self) -> HelperStatus {
-        self.0.status()
-    }
-}
 
 /// 凍結 OnFirstBoot スナップショットの Value 行 payload（起動挨拶さくらスクリプト・task 6.2 実採取）を
 /// 抽出する。giant literal を持たず凍結スナップショットから導出して実採取差し替えへ自動追随させる
@@ -660,17 +602,48 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
     ]
 }
 
-/// 有界待機ヘルパ（spine S1／runtime.rs の `run_bounded` と同旨のローカルコピー）。`shutdown` を
-/// 別スレッドへ逃がし `recv_timeout` で宙吊りを防ぐ（`ActorHandle::join` 由来のブロックを括る）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
+/// I1・I2 の駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
+/// **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
+/// `LoadLibraryW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
+/// すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
+/// 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
+/// 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
+/// schedule に無害）であり、届いた列の**内容**の正しさは後段の `assert_greeting_broadcast` が担う——
+/// golden が凍結 Value の実 compile と食い違えば必ず fail する fail-visible 設計（決定論）。
+///
+/// poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
+/// 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
+/// だけで偽陽性を生まない。
+fn drive_until_greeting_settles(
+    runtime: &areka_ghost::GhostRuntime,
+    surface_records: &Arc<Mutex<Vec<TalkCue>>>,
+    text_records: &Arc<Mutex<Vec<TalkCue>>>,
+    who: &str,
+) {
+    let expected_len = expected_greeting_sequence().len();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut now: u64 = 500;
+    while Instant::now() < deadline {
+        runtime
+            .dispatcher()
+            .send(DispatcherMsg::Tick {
+                now: MonotonicMs(now),
+            })
+            .expect("dispatcher actor should still be alive while probing for the boot talk");
+        now += 500;
+        let s = surface_records
+            .lock()
+            .expect("records mutex poisoned")
+            .len();
+        let t = text_records.lock().expect("records mutex poisoned").len();
+        if s >= expected_len && t >= expected_len {
+            return;
+        }
+        // hang-guard の poll 周期（talk pacing ではない）。sim 時刻は注入 Tick の `now` のみが進める。
+        std::thread::yield_now();
+    }
+    panic!(
+        "{who}: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 InProc DLL 境界を横断した一周が成立していない（hang guard）"
     );
 }
 
@@ -678,23 +651,6 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F
 /// 全順序で一致することを照合する（＋ドリフト検出＋正常終了握手・要件 5.1/5.2/5.3/5.4/5.5/1.1/1.3）。
 #[test]
 fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
-    // ---- ドリフト検出（要件 5.2）: 独立の錨は下段のハードコード期待列
-    //      （expected_greeting_sequence）——凍結 Value が差し替えられれば DLL→compile が別列を
-    //      産み、cue 列 assert が確実に fail する。ここでは加えて凍結スナップショットが 200＋Value
-    //      ＋非空であることを固定する（採取形の退行防止）。 ----
-    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot").expect(
-        "OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）",
-    );
-    assert!(
-        snapshot.contains("200"),
-        "ドリフト検出: 凍結 OnFirstBoot は 200 応答であること: {snapshot:?}"
-    );
-    let value = expected_onfirstboot_value();
-    assert!(
-        !value.is_empty(),
-        "ドリフト検出: 凍結 OnFirstBoot の Value 行 payload は非空であること: {snapshot:?}"
-    );
-
     // ---- 実 InProc 一周の駆動 ----
     // 自前 assemble せず共有 fixture を再利用（tasks.md「[4.2 重大]」・spine starvation 回避）。
     // 錠は終了の確かめまで持つ（I2 の記録の消去と競らない）。
@@ -722,51 +678,7 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     let runtime =
         boot(options).expect("boot should succeed through ShioriWiring::InProc（実テスト DLL）");
 
-    // 期待 broadcast 列（実 emo2 OnFirstBoot 挨拶）。二人掛け合い自己紹介が
-    // ClearAll → Emote/Text/Wait/NewLine/Custom(bang) の全順序へコンパイルされる（構造導出＋実 compile
-    // 観測で照合済み・tasks.md 6.2）。ここでは列長を駆動ループの整定判定に使う（内容照合は後段 assert）。
-    let expected = expected_greeting_sequence();
-
-    // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
-    // **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
-    // `LoadLibraryW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
-    // すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
-    // 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
-    // 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
-    // schedule に無害）であり、届いた列の**内容**の正しさは後段の `assert_greeting_broadcast` が担う——
-    // golden が凍結 Value の実 compile と食い違えば必ず fail する fail-visible 設計（決定論）。
-    //
-    // poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
-    // 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
-    // だけで偽陽性を生まない。sim 時刻は依然として注入 Tick の `now` のみが進める。
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let mut now: u64 = 500;
-    let mut captured = false;
-    while Instant::now() < deadline {
-        runtime
-            .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 500;
-        let s = surface_records
-            .lock()
-            .expect("records mutex poisoned")
-            .len();
-        let t = text_records.lock().expect("records mutex poisoned").len();
-        if s >= expected.len() && t >= expected.len() {
-            captured = true;
-            break;
-        }
-        // hang-guard の poll 周期（talk pacing ではない）。sim 時刻は注入 Tick の `now` のみが進める。
-        std::thread::yield_now();
-    }
-    assert!(
-        captured,
-        "I1: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 \
-         InProc DLL 境界を横断した一周が成立していない（hang guard）"
-    );
+    drive_until_greeting_settles(&runtime, &surface_records, &text_records, "I1");
 
     // ---- 演出列の全順序照合（要件 5.1・broadcast・(actor, command) 全順序・at 非減少）----
     let surface = surface_records
@@ -781,16 +693,10 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     // ---- 正常終了の握手（要件 5.3）----
     // shutdown（ForceQuit→OnClose NOTIFY→Unload）が clean に完走し `Ok(())` を返すこと。有界待機で
     // 宙吊りを防ぐ（`shutdown` 内部の全 actor join を括る）。
-    run_bounded(
+    run_bounded_shutdown(
         "shutdown after I1 boot talk completion",
         Duration::from_secs(15),
-        move || {
-            let result = runtime.shutdown(CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "正常終了の握手: shutdown は I1 一周後に Ok(()) を返すこと（clean close）, got {result:?}"
-            );
-        },
+        runtime,
     );
 
     drop(shared);
@@ -887,55 +793,14 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     let runtime =
         boot(options).expect("boot should succeed through Custom(Recorder(inproc_connect))");
 
-    // 期待演出列長（I1 と同一のハードコード golden）。列長は待機の十分条件（内容照合は後段 assert）。
-    let expected_cue_len = expected_greeting_sequence().len();
-
-    // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで**壁時計デッドライン**で
-    // 括って待つ（I1・task 2.4 方式・sleep 不使用・`yield_now` poll）。sim 時刻は注入 Tick の `now`
-    // のみが進める。挨拶は複数秒の台本ゆえ `now` を大股（+500ms/Tick）で前進させ、単一 Tick が at 昇順で
-    // due cue を一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の十分条件・内容の正しさは
-    // 後段 assert が担う（I1 と同律・fail-visible・決定論）。
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let mut now: u64 = 500;
-    let mut captured = false;
-    while Instant::now() < deadline {
-        runtime
-            .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 500;
-        let s = surface_records
-            .lock()
-            .expect("records mutex poisoned")
-            .len();
-        let t = text_records.lock().expect("records mutex poisoned").len();
-        if s >= expected_cue_len && t >= expected_cue_len {
-            captured = true;
-            break;
-        }
-        // hang-guard の poll 周期（talk pacing ではない）。sim 時刻は注入 Tick の `now` のみが進める。
-        std::thread::yield_now();
-    }
-    assert!(
-        captured,
-        "I2: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 \
-         InProc DLL 境界を横断した一周が成立していない（hang guard）"
-    );
+    drive_until_greeting_settles(&runtime, &surface_records, &text_records, "I2");
 
     // ---- 正常終了の握手（要件 5.3）: shutdown（ForceQuit→OnClose NOTIFY→Unload）を完走させる。----
     // 交信列の close 系列（OnClose/Unload）は shutdown が起こすため、記録は shutdown 完了後に読む。
-    run_bounded(
+    run_bounded_shutdown(
         "shutdown after I2 boot talk completion",
         Duration::from_secs(15),
-        move || {
-            let result = runtime.shutdown(CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "正常終了の握手: shutdown は I2 一周後に Ok(()) を返すこと（clean close）, got {result:?}"
-            );
-        },
+        runtime,
     );
 
     // ================= 記録装置 (1): 交信列（Recorder） =================

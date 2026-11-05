@@ -139,7 +139,7 @@
   - _Depends: 13_
   - _Requirements: 3.1, 3.2, 4.1, 4.2, 4.3, 6.2, 9.1, 9.3_
 
-- [ ] 16. 結合テストの入れ物と道具を 1 か所にまとめる（T16）
+- [x] 16. 結合テストの入れ物と道具を 1 か所にまとめる（T16）
   - #42 の `BoxedBackend` を `recorder.rs` の 1 つにし、3 つのテストの写しと要らなくなった `use` を消す
   - #43 の helper の exe の探し、#44 の有界の実行と終了を `common.rs` の 1 つにして写しと待ちの輪を使い替える。#89 の有界の実行が panic と止まりを分けて報告する
   - #46・#47 の実物の pasta のテストを `SampleRoot` の形にそろえ、捨てている失敗を `expect` に、待ちの後に見たことを確かめる。#85 の駆動の輪を 1 つにし、#86 のずれの assert と #88 の理由の切れた allow を消す
@@ -193,3 +193,4 @@
 - 13: 範囲の外の `crates/shiori-host32-helper/src/shiori_proxy.rs` は今も素の `LoadLibraryW`（作業フォルダと PATH を探す）。設計の範囲に無いので触っていない。完了の棚卸で起票を考える（持ち主は `audit-shiori-host32`）。
 - 14: #53 の欄の改名（`target`→`lane`）は `tools/perf/judge-perf.py` が欄の名で追いつきの系統を分けていたので、範囲を `tools/perf` へ広げた（`lane` を読み、無ければ `target`・生成器と生成した fixture 3 つを更新・記録済みの実ログは触らない）。設計の「範囲の外で触るファイル」に無かった触り。
 - 15: `inproc_e2e_test.rs` は 1,160→1,148 行（まだ 1,000 行の番人の例外表に要る）。一時フォルダの番人の表は 15 行（一意化 13・読むだけ 2）。
+- 16: `inproc_e2e_test.rs` は 1,148→1,013 行で、まだ 1,000 行を越えるので 1,000 行の番人の表は触っていない（並走 spec への知らせも不要）。環境変数で開く実物の pasta の 3 本は、排他テストの机で `HOST32_PASTA_DLL`＝sample-ghost-kit の emo2 の `pasta.dll`、`AREKA_SNAPSHOT_OUT`＝`target\` の下、`--test-threads=1` で回し、緑（ghost 2 本 8.9 秒・real_pasta_online 1 本 86 秒）。
