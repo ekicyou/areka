@@ -557,7 +557,7 @@ pub fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
 /// horizon 到達 tick（`TalkDone` 送出前）に発火する。
 ///
 /// `epilogue` が空なら**恒等**（`sheet` をそのまま返す）＝既存経路は完全に不変。
-pub fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> CueSheet {
+pub(crate) fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> CueSheet {
     // 空 epilogue は恒等（アンカー刻印状態も含め sheet を一切変えない・既存経路完全不変）。
     if epilogue.is_empty() {
         return sheet;
@@ -590,7 +590,8 @@ pub fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> CueShee
 /// [`compile`] の結果。`sheet` は wintf cue パイプラインがそのまま消費できる serde 可能形
 /// （ghost-setup handoff 成果物）。
 pub struct CompiledTalk {
-    /// 0 起点相対秒の発火列（`CuePayload::Command` のみ）。
+    /// 0 起点相対秒の発火列（`CuePayload::Command`。選択肢を持つ台本では、その後ろに選択待ちの
+    /// 区切り `CuePayload::Barrier`（`WaitForChoice`）が高々 1 つ並ぶ）。
     pub sheet: CueSheet,
     /// コンパイル時点で確定した終端理由。
     pub end: TalkEndReason,

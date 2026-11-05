@@ -39,7 +39,6 @@ use crate::contract::{
     ChoiceWaiting, CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason,
     TalkHandle, TalkId,
 };
-use crate::error::SakuraError;
 use crate::strict::StrictHooks;
 use crate::strict_tap::{StrictLedger, StrictTap};
 use areka_actor::{run_inbox, spawn_actor};
@@ -290,7 +289,7 @@ where
     /// # ガード（R11.1/11.2/11.3・受信ループは殺さない）
     ///
     /// - **非有限**（`NaN`/`±inf`）: dola の NaN 全量配信ハザードを遮断し、かつ NaN による
-    ///   アンカー刻印を防ぐため、[`SakuraError::NonFiniteTick`] を `tracing::error!` で記録し
+    ///   アンカー刻印を防ぐため、値（`tick`）を `tracing::error!` で記録し
     ///   `schedule` を一切進めず `Continue`（phase 不変・talk は終端させない）。
     /// - **逆行/同値**（`Driving` の `last_tick` に対し `t <= last_tick`）: `tracing::debug!` の
     ///   no-op で `Continue`。初回 `Tick`（`Armed`）は比較対象が無く必ず通過する（先頭 `at=0`
@@ -301,8 +300,7 @@ where
         // 非有限ガード（R11.1/11.2）: schedule を進めず記録＋error ログ、ループは継続。
         // NaN/±inf アンカー刻印もここで塞ぐ（刻印前の初回 Tick も本ガードを通す）。
         if !t.is_finite() {
-            let err = SakuraError::NonFiniteTick(t);
-            tracing::error!(error = %err, "non-finite Tick ignored; schedule not advanced");
+            tracing::error!(tick = t, "non-finite Tick ignored; schedule not advanced");
             return ControlFlow::Continue(());
         }
 

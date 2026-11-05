@@ -103,7 +103,7 @@
   - `shortcut:` の注釈（1 ms 未満の待ちを足すときに見直す）を置く
   - `start_times_sit_on_the_millisecond_grid` が緑で、期待値が変わるのは design の挙げる 2 本だけ
   - _Requirements: 2.1, 3.1, 3.3, 7.1, 7.10_
-- [ ] 5.2 `SakuraError` と `thiserror` を外し、再輸出と公開を締める（T15）
+- [x] 5.2 `SakuraError` と `thiserror` を外し、再輸出と公開を締める（T15）
   - `error.rs` を消し、非有限の Tick を `error!(tick = t, ..)` で記録して捨てる。`areka-sakura` の `thiserror` を外し、`Cargo.lock` で変わるのが 1 行だけであることを確かめる（41）
   - 契約の 8 つの再輸出を消す（42）・選択待ちの区切りの doc を書く（92）・後始末の付け足しを `pub(crate)` に（93）
   - `non_finite_tick_is_ignored_and_playback_survives` が ERROR 2 件の `tick` を捕まえて緑
@@ -208,3 +208,4 @@
 - 4.3 への申し送り（4.1 のレビュー）: `shell/decode_tests_skeleton_tests.rs:91` の「lexer は TopLevel/Raw に落とし」の `Raw` が古い。
 - 4.2: 上限は `shell::model::RANGE_WIDTH_CAP: u64 = 8193`（シェル全体の範囲の幅の合計・`Range` だけ・番号の値と `!a-b` にはかけない）。`ShellIssue` は `model.rs` へ移った（公開の道は同じ）。箱の側も同じ上限で読み、崩れは画像の側の 1 回だけ返す。記述子が残らないブレスと `surface.alias` は箱にも並べない。
 - 5.4 への申し送り（5.1 のレビュー）: `areka-sakura/src/compile.rs` の 7・186・309 行あたりの注釈「`offset += D`」が古い（今は `offset_ms` に整数 ms で積む）。言い回しを合わせる。1 ms 未満の待ちを作る所は今は無い（`\wN` と `\_w[ms]` だけ）。
+- 5.4 への申し送り（5.2 のレビュー）: `areka-sakura/src/contract.rs:56-59` の `cue_target_of` の注釈が `pub use dola::cue` から離れて sysvar の行の上にある（rustfmt の並べ替え）。注釈を `pub use dola::cue` の直前へ戻し、間に空行を入れる。

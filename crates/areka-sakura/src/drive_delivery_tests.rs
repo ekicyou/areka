@@ -479,6 +479,8 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
 
 /// 非有限 `Tick`（`NaN`/`inf`）は無視され再生が破綻しない（R11.1/11.2）。刻印前（`Armed`）でも
 /// 非有限 Tick でアンカーを刻印せず（NaN アンカー防止）、その後の正常 Tick で通常どおり終端する。
+/// 捨てた Tick は 1 件ごとに `error!` で値（`tick`）を名指して残る（ログの無い失敗の道を作らない）。
+/// 同期の driver で回し、記録の捕捉にスレッドの競りを持ち込まない。
 #[test]
 fn non_finite_tick_is_ignored_and_playback_survives() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -491,27 +493,37 @@ fn non_finite_tick_is_ignored_and_playback_survives() {
     };
     let sink = RecordingSink::new();
     let records = sink.records();
-
-    let handle = spawn_talk(
-        start,
-        done_tx,
+    let mut driver = TalkDriver::new(
         two_sinks(sink, NoopSink),
         SystemVarSnapshot::default(),
+        done_tx,
         None,
     );
 
-    // 刻印前に非有限 Tick を送る: 無視され（error ログ＋SakuraError 記録）刻印もされない。
-    handle.inbox.send(SakuraMsg::Tick(f64::NAN)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(f64::INFINITY)).unwrap();
+    let ((), events) = log_capture_kit::capture(|| {
+        assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
+        // 刻印前に非有限 Tick を送る: 無視され（error ログ）刻印もされない。
+        assert!(driver.handle(SakuraMsg::Tick(f64::NAN)).is_continue());
+        assert!(driver.handle(SakuraMsg::Tick(f64::INFINITY)).is_continue());
+        // 正常 Tick 列で通常どおり駆動・終端する（ガードがループを殺していないことの証）。
+        assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
+        assert!(driver.handle(SakuraMsg::Tick(1.0)).is_break());
+    });
 
-    // 正常 Tick 列で通常どおり駆動・終端する（ガードがループを殺していないことの証）。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    let errors: Vec<Option<&str>> = events
+        .iter()
+        .filter(|ev| ev.level == tracing::Level::ERROR)
+        .map(|ev| ev.field("tick"))
+        .collect();
+    assert_eq!(
+        errors,
+        [Some("NaN"), Some("inf")],
+        "捨てた非有限 Tick 2 件が値つきの ERROR で残る"
+    );
 
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("非有限 Tick 後も正常 Tick で終端するべき");
     assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
-    handle.actor.join().expect("body は正常終了する");
 
     // 非有限 Tick で早期全量配信されず、正常 Tick 分だけ届く（5 件）。
     assert_eq!(
