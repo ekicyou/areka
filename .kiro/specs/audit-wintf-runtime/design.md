@@ -87,13 +87,14 @@ graph TB
         R1 --> R2 --> R3
         W1 --> W2
         T1
-        T2a --> T2b
         T3
         L1
         L2
         L3
         X1 --> X2
     end
+    GW --> T2a
+    T2a --> T2b
     C1 --> T2b
     C1 --> D
     C3 --> D
@@ -113,7 +114,7 @@ graph TB
     V1 --> V2
 ```
 
-- **選んだ形**: 指摘をファイルのまとまりで組にする（brief の Boundary Candidates の 2 つ目）。矢印でつながる組（同じ鎖）は順に回すので同じファイルを触ってよい（例: `tests/com.rs` は C1 と C3、`tests/graphics.rs` は T2a と T2b、`tests/graphics/surface_systems_test.rs` は C1 と T2b、`runtime/mod.rs` は R1・R3・G5）。矢印でつながらない組どうしは同じファイルを触らない（例外は無い）。
+- **選んだ形**: 指摘をファイルのまとまりで組にする（brief の Boundary Candidates の 2 つ目）。矢印でつながる組（同じ鎖）は順に回すので同じファイルを触ってよい（例: `tests/com.rs` は C1 と C3、`tests/graphics.rs` は T2a と T2b、`src/com/d2d/` は C1 と T2b、`runtime/mod.rs` は R1・R3・G5）。矢印でつながらない組どうしは同じファイルを触らない（例外は無い）。
 - **なぜ D が後か**: 依存の行を消すには、それを使うコード（`ambassador` の印＝C1・W1、`Win32_UI_Animation`＝C3）が先に消えている必要がある。
 - **なぜ G5 が R3 の後か**: 72・73 は R3 で直した `runtime/mod.rs`・`message_loop.rs` の上に乗る。
 
@@ -201,7 +202,7 @@ crates/wintf/
 
 | 組 | 触るファイル |
 |---|---|
-| C1 | `src/com/d2d/mod.rs`・`tests/com.rs`・`tests/com/d2d_ext_test.rs`・`tests/graphics/command_list_test.rs`・`tests/graphics/surface_systems_test.rs:266` の 1 行（＋上の消すファイル） |
+| C1 | `src/com/d2d/mod.rs`・`tests/com.rs`・`tests/com/d2d_ext_test.rs`・（＋上の消すファイル） |
 | C2 | `src/com/dwrite.rs`・`src/com/d3d11.rs`・`tests/com/dwrite_test.rs`・`tests/com/d3d11_test.rs`（＋新規 1） |
 | C3 | `src/com/wuc.rs`・`src/com/mod.rs`・`tests/com.rs`（C1 の後）（＋消すファイル） |
 | C4 | `src/com/wic.rs`・`src/com/wic_tests.rs`・`build.rs`・`tests/com/wic_test.rs`・`tests/com/common/mod.rs`・`tests/widget.rs`・`tests/widget/bitmap_source_integration_test.rs`・`crates/areka-emo-atlas/src/decode/wic_arm.rs`・`crates/areka-emo-atlas/src/decode/wic_arm_tests.rs` |
@@ -212,8 +213,8 @@ crates/wintf/
 | W2 | `src/api.rs`（W1 の後・87 の doc）・`src/api_owner_chain_probe_tests.rs`（W1 の後）・`src/api_owner_chain_nudge_probe_tests.rs`・`src/numerics/aabb.rs` |
 | D | `crates/wintf/Cargo.toml`・根の `Cargo.toml`・`Cargo.lock`・`.kiro/steering/tech.md`・`.kiro/steering/structure.md` |
 | T1 | `tests/ecs/tree_propagation_test.rs`・`tests/drag.rs`・`tests/drag/window_dragging_filter_test.rs`・`tests/win_app.rs` |
-| T2a | `tests/graphics.rs`・`tests/graphics/core_ecs_test.rs`・`core_test.rs`・`surface_optimization_test.rs`・`common/mod.rs`（114 の自己テスト）（＋消すファイル `frame_time_test.rs`） |
-| T2b | `tests/graphics.rs`（T2a の後）・`surface_systems_test.rs` は C1 の後・`tests/graphics/clip_sync_system_test.rs`・`surface_systems_test.rs`・`dcomp_integration_test.rs`・`init_window_graphics_test.rs`（＋消すファイル `surface_pixel_equivalence_test.rs`） |
+| T2a | （あちらの着地の後）`tests/graphics.rs`・`tests/graphics/core_ecs_test.rs`・`core_test.rs`・`surface_optimization_test.rs`・`common/mod.rs`（114 の自己テスト）（＋消すファイル `frame_time_test.rs`） |
+| T2b | （あちらの着地の後・C1 の後）`src/com/d2d/` の `create_command_list`・`tests/graphics/command_list_test.rs`・`tests/graphics.rs`（T2a の後）・`tests/graphics/clip_sync_system_test.rs`・`surface_systems_test.rs`・`dcomp_integration_test.rs`・`init_window_graphics_test.rs`（＋消すファイル `surface_pixel_equivalence_test.rs`） |
 | T3 | `tests/window/monitor_hierarchy_test.rs`・`tests/window/multiwindow_event_test.rs`・`tests/widget/vertical_text_layout_test.rs` |
 | L1 | `src/ecs/layout/dimension.rs`・`box_style.rs`・`metrics.rs`・`tests/layout/dimension_conversion_test.rs`・`metrics_test.rs`・`taffy_layout_integration_test/mod.rs`・`unit_integration.rs`・`taffy_advanced_test/mapping_management.rs` |
 | L2 | `tests/layout/graphics_sync_test.rs`・`feedback_loop_convergence_test.rs`・`taffy_advanced_test/layout_conversion.rs`・`boxstyle_coordinate_separation_test/mod.rs`・`changed_timing.rs`・`tests/drag/dispatch_test.rs` |
@@ -257,11 +258,11 @@ sequenceDiagram
     participant RT as audit-wintf-runtime
     participant GW as audit-wintf-graphics-world
     participant Main as main
-    RT->>RT: 先の組 C R W D T L X を直す
+    RT->>RT: 先の組 C R W D T1 T3 L X を直す
     GW->>Main: 本番の直しと 12 本のテストを着地
     RT->>Main: main を取り込む
     RT->>RT: 12 本と名前の言及を測り直す
-    RT->>RT: G1 から G5 を直す
+    RT->>RT: T2a T2b と G1 から G5 を直す
     RT->>RT: V1 記録と V2 かけ直し
 ```
 
@@ -316,7 +317,7 @@ sequenceDiagram
 
 | 組 | 層 | 狙い | 番号 | 先に要るもの | 新しい口 |
 |---|---|---|---|---|---|
-| C1 | com | Direct2D の使えない口を消す | 1・13・16・20（印）・24・69（d2d）・91（d2d_ext） | — | なし |
+| C1 | com | Direct2D の使えない口を消す | 1・13・16・20（印）・24・69（d2d・`create_command_list` を除く）・91（d2d_ext） | — | なし |
 | C2 | com | DirectWrite の失敗を返す・使われない拡張を消す | 4・69（dwrite・d3d11）・91（d3d11）・92（dwrite） | C1 | `sizing_outcome` |
 | C3 | com | 使われない WUC の後始末とアニメの包みを消す | 12・14・70・91（animation） | C2 | なし |
 | C4 | com | WIC の α の判定を WIC に聞く・テストを確かめる形へ | 15・28・29・90・91（wic）・116（bitmap_source） | C3 | `pixel_format_has_alpha(factory, format)` |
@@ -327,8 +328,8 @@ sequenceDiagram
 | W2 | api・numerics | 調べのテストの注記と補助・小さな直し | 82・83・86・87 | W1 | なし |
 | D | Cargo・steering | 依存を減らす・見出しと注記 | 14（機能）・19・20（依存）・66（keywords）・85 | C1・C3・W1 | なし |
 | T1 | tests | ecs・drag・win_app の先の分 | 25・26・32・33・91（drag）・92（tree） | — | なし |
-| T2a | tests | graphics の重なりと同語反復 | 34・104・105・106・107・114 | — | なし |
-| T2b | tests | graphics の確かめの無いテスト | 37・38・44・113（先のファイル）・116（dcomp_integration） | T2a・C1 | なし |
+| T2a | tests | graphics の重なりと同語反復 | 34・104・105・106・107・114 | あちらの着地 | なし |
+| T2b | tests | graphics の確かめの無いテスト | 37・38・44・69（`create_command_list`）・113（先のファイル）・116（dcomp_integration） | あちらの着地・T2a・C1 | なし |
 | T3 | tests | window・widget の先の分 | 43・46・108・116（monitor_hierarchy） | — | なし |
 | L1 | layout（本番ごと） | 百分率・死んだ型 | 5・52・93・94・101・103 | — | なし |
 | L2 | layout | 帰還の輪・同期・座標の分離 | 49・50・55・57・96・97・98・99 | — | なし |
@@ -355,7 +356,7 @@ sequenceDiagram
 | 24 | research の案。`tests/com.rs` の 2 つの宣言・`d2d_ext_test.rs` の 216-219 行と 325-367 行と、ファイルの頭の注記の `RecCommandSink` の文を消す | 121-215 行は残す。ただしこの範囲と L64・L80・L93・L106 は、13・69 で消す口（`create_command_list`・`create_rounded_rectangle_geometry`・`create_bitmap_from_wic_bitmap`・`fill_geometry`・`draw_text`・`draw_image`）を使うので、`windows` の生の呼び出し（`CreateCommandList`・`CreateRoundedRectangleGeometry`・`CreateBitmapFromWicBitmap`・`FillGeometry`・`DrawText`・`DrawImage`）へ置き換えてから消す。確かめる中身は変えない。確かめの相手が消す包みそのものだけのテストは、包みと一緒に消す |
 | 16 | `D2D1CommandListExt::open` を trait と実装から消す。`d2d_ext_test.rs:95` のテストも消す | `close` は残す |
 | 20（印） | `d2d/mod.rs` の `use ambassador::*` と `#[delegatable_trait]` を消す | 依存の行は D |
-| 69（d2d） | `D2D1FactoryExt`（trait ごと）・`D2D1DeviceExt::create_command_list`・`D2D1DeviceContextExt` の `create_bitmap_from_wic_bitmap`・`draw_text`・`fill_geometry`・`draw_image` を消し、それだけのテストを消す | `create_command_list` は `tests/graphics/command_list_test.rs:22`・`:35`・`:45` と `tests/graphics/surface_systems_test.rs:266` が使う→装置の文脈を作って `CreateCommandList()` を呼ぶ形に直す（`GraphicsCore` に文脈の口があればそれを使う）。`surface_systems_test.rs` は T2b も触るので、C1 は T2b より先に回す（C1 → T2b） |
+| 69（d2d） | `D2D1FactoryExt`（trait ごと）・`D2D1DeviceExt::create_command_list`・`D2D1DeviceContextExt` の `create_bitmap_from_wic_bitmap`・`draw_text`・`fill_geometry`・`draw_image` を消し、それだけのテストを消す | `create_command_list` だけは C1 で消さず、T2b で消す。呼び手の `tests/graphics/command_list_test.rs:22`・`:35`・`:45` と `tests/graphics/surface_systems_test.rs:266` を、装置の文脈を作って `CreateCommandList()` を呼ぶ形に直してから消す（`GraphicsCore` に文脈の口があればそれを使う）。`surface_systems_test.rs` は `audit-wintf-graphics-world` も触るので、その着地の後に回す（2026-11-05 あちらの申し合わせ） |
 | 91（d2d_ext） | research の案（`d2d_ext_test.rs:72-81`） | |
 
 #### C2 DirectWrite の失敗を返す・使われない拡張を消す
@@ -569,6 +570,10 @@ pub(crate) fn with_test_window<R>(
 ### 後回しの組（G1〜G5）
 
 始める前に、`audit-wintf-graphics-world` の着地した main を取り込み、対象のファイルが在るか・中身が変わったかを読み直す。消えていれば「消えて解けた」と記録する。
+
+- 2026-11-05 のあちらの申し合わせ（設計の段で分かった分）で、あちらは `tests/graphics.rs`・`tests/visual.rs` の mod の行・`tests/graphics/init_window_graphics_test.rs`・`surface_systems_test.rs`・`dcomp_integration_test.rs` にも触り、新しいファイル `tests/graphics/device_lost_recovery_test.rs`・`tests/visual/window_join_test.rs` を足す。そのため T2a・T2b もこの後回しの組に入れる（直しの中身は「テスト（T1〜T3・L1〜L3）」の表のまま）。
+- 同じ申し合わせで、あちらは `tests/ecs/lazy_reinit_pattern_test.rs` には触らない。27 番は G1 のままでよい（早めてもよいが、`tests/ecs.rs` を G1 がまとめて触るので順は変えない）。
+- あちらの 8 番で、`GraphicsCore` が `com/d2d` の `d2d_create_device` を呼ばなくなる（wintf の中の呼び出し元が 0）。V2 のかけ直しで新しい指摘として扱う（要件 8.2）。
 
 | 番号 | 組 | 直し |
 |---|---|---|
