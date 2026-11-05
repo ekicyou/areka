@@ -166,6 +166,7 @@
   - 先方の `resolve` の撤去と行がぶつかっていれば、取り込みの中で合わせる
   - 乗り換えの差: parsers の小文字の表は、同じ鍵が大小の綴りで 2 回出たとき後の行が勝つ（今の自前の版は表の順で決まる）。この差で期待が変わるテストがあれば、後の行が勝つ形へ直す
   - `manifest_tests.rs` の charset のテスト（2026-11-06 の知らせ・先方の枝のコミット `f10c1306`）: 先方は名を `a_charset_line_after_a_non_ascii_line_is_used` へ改め、1 行目を UTF-8 の「狛犬」、後ろに `charset,UTF-8` を置いて `name == "狛犬"` と `charset_declared == Some("UTF-8")` を期待する。こちらは `charset_declared` の assert と `treats_an_empty_charset_line_as_no_declaration` を消した。後から着地する側が両方を合わせる（先方の名・中身・名前の期待を採り、こちらで消した欄の assert は消したまま）
+  - 番人の表（2026-11-06 の知らせ・`audit-emo-present` が PR #426 `c2106635` で先に着地）: 先方は `file_length_guard_test.rs` から `cache_tests.rs` の行を消し、`temp_path_guard_test.rs` の数も減らした。こちらも `inproc_e2e_test.rs` の行を消し、一時フォルダの行も減らしている。取り込みでぶつかったら、両方の消しを採ったうえで、`OVER_LIMIT_ALLOWED_COUNT`・`ALLOWED_COUNT`・`PROCESS_UNIQUE_COUNT` を表の行から数え直す（手で書いた数を足し引きしない）
   - 完了の状態: `catalog.rs` に自前の小文字の表が無く、`shell_name_key_is_read_case_insensitively` が乗り換えの後も緑で、`dispatcher_choice_timeout_tests.rs` に移した警告のテストが無い
   - _Depends: 11, 12_
   - _Requirements: 6.1, 9.10, 9.14_
