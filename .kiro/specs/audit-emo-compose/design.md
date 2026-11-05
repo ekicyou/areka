@@ -126,6 +126,8 @@ graph TB
 crates/areka-emo-compose/src/
 ├── budget.rs                    # 新: 広がりの予算（Budget）。6 か所の走査が共有する（指摘 3）
 ├── plan_frame_merge_tests.rs    # 新: plan_ops_tests.rs の 857 行目から後（コマの合流の門）を移す（指摘 13）
+├── fold_range_tests.rs          # 新: 1⑴⑵ の壊れたら落ちるテスト（面と箱の追記の範囲・除外）。fold_tests.rs が 976 行のため（fold.rs で宣言）
+├── walk_limits_tests.rs         # 新: 3 の深い鎖・菱形・insert の連鎖のテスト。5 つの走査へ同じ検体を通すので 1 つにまとめる（lib.rs で宣言）
 └── （ほかは既存ファイルの変更だけ）
 ```
 
@@ -159,6 +161,7 @@ crates/areka-emo-compose/src/
 - 写しを持つテスト（`composer_tests.rs`・`log_firing_tests.rs`・`atlas_bind.rs` のテスト・`film_tests.rs`・`fold_tests.rs`・`base_image_tests.rs`・`nesting_kind_tests.rs`・`nesting_visible_tests.rs`・`pattern_cell_tests.rs`・`plan_always_tests.rs`・`nesting_film_tests.rs`・`pattern.rs` のテスト・`plan_bind_tests.rs`・`plan_nesting_tests.rs`・`plan_nesting_extent_tests.rs`・`pattern_parts_tests.rs`・`hit_in_tests.rs`・`hit_import_tests.rs`・`blit.rs` のテスト・`plan_extent_film_tests.rs`・`golden_tests_frame_extent_tests.rs`・`nesting_fixture_tests.rs`・`plan_extent_tests.rs`・`plan_bounds_tests.rs`・`plan_bind_random_tests.rs`）— 写しを消して `plan_test_support` から引く（12）。
 - 失敗しえないテスト・名前と違うテスト・2 度確かめるテスト・古い説明（10・11・14・15）は `research.md` 3 節の行のまま直す。
 - `tests/fixtures/animated-playback/README.md` — 27 行目の説明（`charset,UTF-8`）を事実に（15）。
+- 1,000 行の番人の見通し（要件 6.1・着手のときの行数）: テストを足す先のうち上限に近いのは `fold_tests.rs`（976）・`composer_tests.rs`（897）・`nesting_visible_tests.rs`（837）・`boxes_tests.rs`（792）・`blit.rs`（782）。1⑴⑵ のテストは `fold_range_tests.rs`、3 のテストは `walk_limits_tests.rs`、19 のテストは `blit_rect_tests.rs`（536）に置き、この 5 つには指摘 4・11 の数行の直しだけを入れる。指摘 16 の `fold_shell` の書き換え（23 か所）は行を増やさない。各タスクは直した後の行数を確かめ、越えるなら兄弟のファイルへ分ける。
 
 範囲の外:
 - `crates/log-capture-kit/tests/file_length_guard_test.rs` — 63 行目（`plan_ops_tests.rs` の例外）を消す（13）。
@@ -242,7 +245,7 @@ flowchart TD
 | 5.2 | 走っている spec と申し合わせ | 「並走の兄弟との申し合わせ」 |
 | 5.3 | 消す前に使われていないか | 指摘 6・16・12 の確かめ（grep 済み・実装でもう一度） |
 | 5.4 | 要らない所を直さない | 範囲の外は 3 ファイルの決めた行だけ |
-| 6.1 | 1,000 行の番人 | 指摘 13 の分割・例外表の行を消す。`plan.rs` は明示のスタックにしても 1,000 行の下（古い説明を消して減る） |
+| 6.1 | 1,000 行の番人 | 指摘 13 の分割・例外表の行を消す。`plan.rs` は明示のスタックにしても 1,000 行の下（古い説明を消して減る）。上限に近いテストのファイルへは足さず `fold_range_tests.rs`・`walk_limits_tests.rs` へ（File Structure Plan の見通し） |
 | 6.2 | 記録の無い失敗を作らない | 予算切れ・外形の上限・uv のはみ出しはどれも記録を出す（Error Handling） |
 | 6.3 | 終了の道は正規 | 終了の道に触らない |
 | 6.4 | 実機の根は `target` の下 | 実機の根を使わない（SSP の試しのシェルは SSP の側に置く・開発者の許可） |
@@ -322,7 +325,7 @@ flowchart TD
 | 要件 | 2.1, 4.4, 6.2 |
 
 **決め**
-- 上限 `MAX_EXTENT: u32 = 16_384`（`plan_extent.rs`・`pub(crate) const`）。根拠は Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大（`D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION`）。areka の GPU の機器は `wintf/src/ecs/graphics/core.rs` の `create_device_3d` が機能水準を指定せず（既定の並び＝11_1 から）ハードウェアで作る。合成の絵は `areka-emo-present` の `display.rs` が `ID2D1DeviceContext::CreateBitmap` で原寸のまま GPU へ上げるので、この寸を越える絵は表示できない。このクレートは `windows` に依存しないので、値は定数として写し、根拠を 1 行の説明に書く。ツリーの中に同じ値の定数は無かった（grep 済み）。
+- 上限 `MAX_EXTENT: u32 = 16_384`（`plan_extent.rs`・`pub(crate) const`）。根拠は Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大（`D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION`）。areka の GPU の機器は `wintf/src/ecs/graphics/core.rs` の `create_device_3d` が機能水準を指定せず（既定の並び＝11_0 から）ハードウェアで作る。合成の絵は `areka-emo-present` の `display.rs` が `ID2D1DeviceContext::CreateBitmap` で原寸のまま GPU へ上げるので、この寸を越える絵は表示できない。このクレートは `windows` に依存しないので、値は定数として写し、根拠を 1 行の説明に書く。ツリーの中に同じ値の定数は無かった（grep 済み）。
 - `compute_extent` は `i64` の最大を `u32::try_from(..).unwrap_or(u32::MAX)` で飽和させる（`as u32` の切り詰めをやめる）。位置の足し算は `saturating_add`。
 - `build_plan` は外形を引いた直後（`EmptyComposition` の判定の隣）で、幅か高さが `MAX_EXTENT` を越えたら `error!`（面の番号・幅・高さ・上限）を出して `Err(ComposeError::ExtentTooLarge { surface, w, h })` を返す。命令は積まず、絵の確保もしない（`blit::execute` まで行かない）。
 - `ComposedSurface` は `stride` 欄を消す。`stride()` は `self.width * 4`（幅は合成で `MAX_EXTENT` 以下に抑えるので `u32` で足りる）。`new`・`resize_and_clear`・`resize_from` の長さは `width as usize * 4 * height as usize`。
@@ -522,17 +525,17 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 
 | 指摘 | テスト（置き場） | 直す前の結果 |
 |---|---|---|
-| 1⑴ | 面 0・1・5 が在るシェルに `surface.append0-4294967295` の追記。3 つに行が届き、ほかは新設されず、結果が単一の番号で書いたときと同じ（`fold_tests.rs`） | 約 16 GB の確保で落ちる |
-| 1⑴ 箱 | 箱の `surface.append0-4294967295`（`boxes_tests.rs`） | 同上 |
-| 1⑵ | `!0-4294967295` を含む plain の `surface0,!0-4294967295` が何も新設しない・追記の除外も同じ（`fold_tests.rs`） | `BTreeSet` に 40 億を入れて固まる・落ちる |
+| 1⑴ | 面 0・1・5 が在るシェルに `surface.append0-4294967295` の追記。3 つに行が届き、ほかは新設されず、結果が単一の番号で書いたときと同じ（`fold_range_tests.rs`） | 約 16 GB の確保で落ちる |
+| 1⑴ 箱 | 箱の `surface.append0-4294967295`（`fold_range_tests.rs`） | 同上 |
+| 1⑵ | `!0-4294967295` を含む plain の `surface0,!0-4294967295` が何も新設しない・追記の除外も同じ（`fold_range_tests.rs`） | `BTreeSet` に 40 億を入れて固まる・落ちる |
 | 2 | pattern を (100000, 100000) に置く純 `bind` の面が `Err(ExtentTooLarge)` を返し、`out.bytes_capacity()` が 0 のまま・`error!` が 1 行（`plan_extent_tests.rs`） | 約 40 GB の確保で落ちる |
 | 2 | element定義の子を `u32::MAX + 10` の位置に置く面が、小さな外形に化けず `Err(ExtentTooLarge)`（同） | `as u32` で小さな外形に化けて通る |
-| 3 深さ | 面 0 → 1 → … → 10000 の element定義の鎖を、スタックを 256 KiB にしたスレッドの中で、合成・外形・シェルの外形・当たり判定の持ち込み・見える部品の 5 つに通して終わる（`plan_nesting_tests.rs`・`plan_nesting_extent_tests.rs`・`nesting_visible_tests.rs`・`hit_import_tests.rs`）。確かめるのは「落ちずに終わる」ことだけで、予算の記録が出るかは見ない（予算の値に依らないため） | 小さいスタックがあふれて落ちる |
+| 3 深さ | 面 0 → 1 → … → 10000 の element定義の鎖を、スタックを 256 KiB にしたスレッドの中で、合成・外形・シェルの外形・当たり判定の持ち込み・見える部品の 5 つに通して終わる（`walk_limits_tests.rs`）。確かめるのは「落ちずに終わる」ことだけで、予算の記録が出るかは見ない（予算の値に依らないため） | 小さいスタックがあふれて落ちる |
 | 3 広がり | 30 段の菱形（各段が次の段を 2 か所に置く）を同じ 5 つ（見える部品は除き、`reaches` を通す `NestReport` を足す）に通し、`error!` が範囲ごとに 1 行・2 回の合成の命令列が同じ（同） | 2^30 の命令で固まる |
 | 3 予算の境 | `Budget::new(3)` を渡した走査が 3 つ目の子まで入り 4 つ目で切れる（`budget.rs` のテスト） | — |
-| 3 insert の連鎖 | 1 つの面に 5000 本の有効な純 `bind` が `insert` で連なるシェルを、スタックを 256 KiB にしたスレッドの中で合成して終わる（`plan_bind_tests.rs`） | 小さいスタックがあふれて落ちる |
+| 3 insert の連鎖 | 1 つの面に 5000 本の有効な純 `bind` が `insert` で連なるシェルを、スタックを 256 KiB にしたスレッドの中で合成して終わる（`walk_limits_tests.rs`） | 小さいスタックがあふれて落ちる |
 | 4 | 一致のテスト（`nesting_visible_tests.rs:694-728`）の入力に「pattern0 を持つ有効な `bind+random`・コマ無し」を足し、`visible_parts` と合成の命令の先が一致する。`nesting_visible_tests.rs:331,334,335` の期待を「数えない」に直す | 一致のテストが落ちる |
-| 19 | `AtlasTable::new` で uv が頁の右へ 1 画素はみ出す表を作り、`compose_into` と `compose_into_reusing` の両方がパニックせず、その命令だけ飛ばして `warn!` を出す（`blit.rs` のテスト・`blit_rect_tests.rs`） | 添字が外れて panic |
+| 19 | `AtlasTable::new` で uv が頁の右へ 1 画素はみ出す表を作り、`compose_into` と `compose_into_reusing` の両方がパニックせず、その命令だけ飛ばして `warn!` を出す（`blit_rect_tests.rs`） | 添字が外れて panic |
 
 ### 振る舞いが変わらないことの確かめ
 
