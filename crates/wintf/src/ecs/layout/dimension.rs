@@ -158,7 +158,7 @@ impl From<LengthPercentageAuto> for taffy::LengthPercentageAuto {
         match val {
             LengthPercentageAuto::Auto => taffy::LengthPercentageAuto::auto(),
             LengthPercentageAuto::Px(v) => taffy::LengthPercentageAuto::length(v),
-            LengthPercentageAuto::Percent(v) => taffy::LengthPercentageAuto::percent(v),
+            LengthPercentageAuto::Percent(v) => taffy::LengthPercentageAuto::percent(v / 100.0),
         }
     }
 }
@@ -204,7 +204,7 @@ impl From<LengthPercentage> for taffy::LengthPercentage {
     fn from(val: LengthPercentage) -> Self {
         match val {
             LengthPercentage::Px(v) => taffy::LengthPercentage::length(v),
-            LengthPercentage::Percent(v) => taffy::LengthPercentage::percent(v),
+            LengthPercentage::Percent(v) => taffy::LengthPercentage::percent(v / 100.0),
         }
     }
 }

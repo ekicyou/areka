@@ -96,7 +96,7 @@
   - 完了の姿: 直したテストが緑で、確かめを直したものは較正で赤を見てから戻す
   - _Boundary: T3_
   - _Requirements: 4.1, 7.1, 7.2_
-- [ ] 4.3 (P) 百分率の換算と死んだレイアウトの型を本番ごと直す（L1）
+- [x] 4.3 (P) 百分率の換算と死んだレイアウトの型を本番ごと直す（L1）
   - 5: 百分率の taffy への 2 つの変換に 100 で割るのを足し、テストの期待を `percent(0.5)`・`percent(0.25)` に裏返し、実在しない記号を引く注記を消す
   - 94・101: 使われないフレックスの型と不透明度の型を、その型だけを試すテストと allow の注記ごと消す
   - layout の本番のファイルに触る前に、持ち主の `audit-wintf-layout-widget` が走っていればそのセッションと申し合わせる
@@ -212,3 +212,4 @@
 - 消した名前の grep は `.kiro/specs/` だけを外して引く（`.kiro/steering/` も数に入る）。2.3 で `structure.md:113` の取りこぼしが審査で見つかった。
 - 3.1: `ambassador` は `Cargo.toml` 2 か所・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md:35` に残る（タスク 6 で直す。THIRD-PARTY-NOTICES は生成物なら生成器で）。
 - 4.1: 消したテスト名を名指す注記が `src/ecs/drag/state/tests.rs:11` に残っていたので括弧書きを消した（`audit-wintf-input` は未着手）。`Arrangement` の on_add フックは生成の束の `GlobalArrangement` を既定値で上書きする（本番に使い方は無く欠陥ではない・`audit-wintf-layout-widget` への申し送り候補）。
+- 4.3: `Opacity` を消したので、G4 の持ち物の `tests/visual/component_test.rs` の 1 本を `value.clamp(0.0, 1.0)` との比べへ追従させた（`audit-wintf-graphics-world` が同じファイルを書き換えるなら rebase で合わせる）。

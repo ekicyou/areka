@@ -159,23 +159,17 @@ fn test_visual_set_visible_false() {
 }
 
 #[test]
-fn test_visual_clamped_opacity_matches_opacity_clamped() {
-    // Visual.clamped_opacity() が Opacity::clamped() と同等の動作をすることを検証
-    #[allow(deprecated)]
-    use wintf::ecs::layout::Opacity;
-
+fn test_visual_clamped_opacity_clamps_to_unit_range() {
     let test_values = [0.0, 0.25, 0.5, 0.75, 1.0, -0.1, 1.5, -100.0, 100.0];
 
     for &value in &test_values {
-        #[allow(deprecated)]
-        let opacity = Opacity(value);
         let visual = Visual {
             opacity: value,
             ..Default::default()
         };
         assert_eq!(
-            opacity.clamped(),
             visual.clamped_opacity(),
+            value.clamp(0.0, 1.0),
             "Mismatch for value {}",
             value
         );
