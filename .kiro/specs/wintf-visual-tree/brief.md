@@ -114,3 +114,11 @@
 - 要件定義のモデル: Fable（骨組みを決める分かれ目を先例が決めていない＝描画の木を WUC の描画面の下に置くとき、位置の正本の layout と節の変形をどう掛け合わせるか・どの子孫を木の節と見るか〔議題 1〕。後の 4 本がこの形に乗る）。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: Current State の「`crates/wintf/src/ecs/mod.rs:13` の `pub mod visual;`」は今は 14 行目。ほかの 8 つの傷と描画の道の記述は今の main と一致。
+
+## 2026-11-05 `audit-wintf-graphics-world` からの申し送り
+
+`audit-wintf-graphics-world` の要件の討議（2026-11-05・開発者「承認」）で、`crates/wintf/src/ecs/visual/` の指摘は直さずにこの spec へ渡すと決めた。全文はあちらの `research.md` の 22〜30 番と `requirements.md` の「指摘の扱い」。
+
+- **「直すべき傷」1〜8 と一対一**: あちらの 22＝傷 1・23＝傷 2・24＝傷 3・25＝傷 4・26＝傷 5・27＝傷 6・28＝傷 7・29＝傷 8。あちらはどれも直していない。ギャップ分析で数え直すときは、あちらの記述を確かめ直しに使い、二重に数えない。
+- **新しく見つけた 1 件（あちらの 30 番）**: `visual/draw/README.md` が `visual/draw/command.rs` の型を写して載せていて、片方だけ古くなる。この件はこちらで引き受ける。`builder.rs:57` の `#[allow(dead_code)]` と `command.rs:1` の `#![allow(dead_code)]` には、なぜ残すかの説明があちらで付く。
+- **傷 7 の手本について（あちらの 8 番）**: 傷 7 が手本にする `crates/wintf/src/ecs/graphics/command_list.rs` の `Send`/`Sync` の注記は、「同じ工場の系列だから安全」という前提が違っていた。`D2D1CreateDevice` は呼ぶたびに自分の工場を作るため、`GraphicsCore` の工場と装置の工場は別物になる。あちらが工場を 1 つに直し、注記も事実に合わせる。傷 7 の根拠は、あちらの着地の後の注記を手本にする。
