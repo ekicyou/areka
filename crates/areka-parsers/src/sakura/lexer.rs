@@ -73,6 +73,17 @@ pub(crate) enum Token {
 /// `\pN` の単一桁制約（`\p10` = scope 1 ＋ リテラル `"0"`）はこの 1 桁消費で満たされる。
 const SHORTHAND_WORDS: &[char] = &['w', 'b', 'p'];
 
+/// 引数を取らないタグの綴り（ukadoc の台帳で字の形だけが載るもの・指摘 27）。
+///
+/// この綴りの後の `[` は角括弧の道に入らず字のまま（SSP で `\1[小声で]`・`\e[注]` を
+/// 測った結果＝research.md 11 節）。`+` と `v` は完了した spec の決め（`\+[x]` は Raw・
+/// `\v[1]` は raise でない）を保つため入れない（設計の討議の議題 2）。`c` は
+/// `\c[char,…]`、`w` は `\w[n]` があるので入れない。
+const NO_ARG_TAGS: &[&str] = &[
+    "*", "-", "0", "1", "4", "5", "6", "7", "C", "_!", "_+", "_?", "_V", "__c", "__t", "_n", "_q",
+    "a", "e", "h", "t", "u", "z",
+];
+
 /// さくらスクリプト文字列を構文トークン列へ分割する（mod 内非公開）。
 ///
 /// - 入力は UTF-8 前提（要件 12.1）。`char_indices` で 1 パス線形走査する。
@@ -171,8 +182,15 @@ fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
                 }
                 flush_text!();
                 let (tok, next) = scan_tag(&chars, i);
+                let title_end = legacy_q_title_end(&tok, &chars, next);
                 emit(tok, b..byte_at(next));
                 i = next;
+                // 旧形の題 `[…]` は中の `%`・`\` を読まず 1 つの Text で出す（指摘 25）。
+                if let Some(end) = title_end {
+                    let title = chars[i..end].iter().map(|&(_, c)| c).collect();
+                    emit(Token::Text(title), byte_at(i)..byte_at(end));
+                    i = end;
+                }
             }
             '%' => {
                 flush_text!();
@@ -187,6 +205,23 @@ fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
         }
     }
     flush_text!();
+}
+
+/// 旧形の選択肢 `\q…[ID]` の直後に閉じた題 `[…]` があれば、題の終わり（最初の `]` の
+/// 次の添字）を返す（ukadoc「\q[ID][タイトル]または\q*[ID][タイトル]」[旧仕様]・指摘 25）。
+///
+/// 題の後ろが地の文でも題だけを切り出せるので、decode の `is_legacy_q_head` が畳める。
+fn legacy_q_title_end(tok: &Token, chars: &[(usize, char)], next: usize) -> Option<usize> {
+    let Token::Tag { word, args } = tok else {
+        return None;
+    };
+    if !word.starts_with('q') || args.len() != 1 || chars.get(next)?.1 != '[' {
+        return None;
+    }
+    chars[next..]
+        .iter()
+        .position(|&(_, c)| c == ']')
+        .map(|k| next + k + 1)
 }
 
 /// `\` で始まるタグを走査する。`i` は `\` の位置。次に読むべき添字を返す。
@@ -252,8 +287,10 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
         j = word_start + len;
     }
 
-    // 角括弧があれば引数を走査、無ければ bare タグ。
-    if let Some(&(_, '[')) = chars.get(j) {
+    // 角括弧があれば引数を走査、無ければ bare タグ。引数を取らないタグの後の `[` は字。
+    if let Some(&(_, '[')) = chars.get(j)
+        && !NO_ARG_TAGS.contains(&word.as_str())
+    {
         match scan_bracket_args(chars, j) {
             BracketScan::Closed { args, next } => (Token::Tag { word, args }, next),
             // 未閉じ `[` / `"`（要件 10.3/13.8）: 区切れないため `\` から入力末尾までを

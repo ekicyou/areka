@@ -146,8 +146,7 @@ fn value_newline_ratio_boundary_values() {
 
 /// 旧 2 連 `\q[ID][タイトル]` は現行 Choice にせず単一 `Raw` に吸収され、
 /// 前後の正常命令（隣接タグ）を破壊しない（要件 5.3/10.3）。
-/// 隣接は制御タグで挟む（旧形検出は「浮く 2 個目 `[...]`」＝`[`始まり`]`終わりの
-/// Text を要するため、直後にプレーンテキストを続けると `[タイトル]` に巻かれる）。
+/// 直後に地の文が続く形は `legacy_q_title_followed_by_text_folds`。
 #[test]
 fn choice_legacy_double_bracket_does_not_break_neighbors() {
     let got = parse(r"\e\q[ID][タイトル]\c");
@@ -161,6 +160,23 @@ fn choice_legacy_double_bracket_does_not_break_neighbors() {
     );
     // Choice へ化けていないことを明示（旧形は現行 Choice にしない・要件 5.3）。
     assert!(!got.iter().any(|i| matches!(i, Instruction::Choice(_))));
+}
+
+/// 旧形の題の直後に地の文が続いても、閉じた題 `[…]` だけが畳まれ、地の文は字のまま
+/// （指摘 25・要件 5.3）。題の中の `%` も題の字のまま（環境変数として切らない）。
+#[test]
+fn legacy_q_title_followed_by_text_folds() {
+    let raw = |s: &str| Instruction::Raw(s.to_string());
+    let text = |s: &str| Instruction::Text(s.to_string());
+    assert_eq!(
+        parse(r"\q[OnA][はい]です\e"),
+        vec![raw(r"\q[OnA][はい]"), text("です"), Instruction::End],
+    );
+    assert_eq!(parse(r"\q[ID][100%]"), vec![raw(r"\q[ID][100%]")]);
+    assert_eq!(
+        parse(r"\q0[ID][題]後"),
+        vec![raw(r"\q0[ID][題]"), text("後")]
+    );
 }
 
 /// 旧専用綴り `\q*[ID][タイトル]` も同様に単一 `Raw` 吸収・隣接を壊さない（要件 5.3）。

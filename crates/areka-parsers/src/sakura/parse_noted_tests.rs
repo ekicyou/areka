@@ -106,8 +106,9 @@ fn percent_star_span_is_two_chars() {
 #[test]
 fn folded_legacy_q_span_covers_both_brackets() {
     for (s, folded) in [
-        // 浮く `[...]` が次のタグの手前で切れるときだけ畳まれる（既存の規則）。
+        // 閉じた題 `[...]` は、後ろが次のタグでも地の文でも畳まれる（指摘 25）。
         (r"\q[ID][題]\e", r"\q[ID][題]"),
+        (r"\q[ID][題]です", r"\q[ID][題]"),
         (r"前\q*[ID][題]", r"\q*[ID][題]"),
     ] {
         let reads = parse_noted(s);
