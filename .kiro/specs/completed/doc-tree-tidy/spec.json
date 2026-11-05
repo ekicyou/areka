@@ -1,9 +1,9 @@
 {
   "feature_name": "doc-tree-tidy",
   "created_at": "2026-11-05T09:24:24Z",
-  "updated_at": "2026-11-05T12:00:00Z",
+  "updated_at": "2026-11-05T11:53:58Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-05T11:53:58Z"
     }
   },
   "ready_for_implementation": false
