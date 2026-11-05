@@ -637,3 +637,27 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
     assert_eq!(extent, Extent { w: 24, h: 4 });
     assert!(!logs.contains("level=ERROR"), "{logs}");
 }
+
+/// 指摘 32: pattern の面の番号が u32 を越える（4294967297）なら、外形は先が無いと数え、
+/// 切り詰めた番号（1）の面を数えない（ほかの走査と同じ `u32::try_from`）。
+#[test]
+fn extent_does_not_truncate_pattern_surface_beyond_u32() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas_sized(
+        base,
+        &[
+            ("tiny.png", (4, 4), Some((64, 64, 64))),
+            ("huge.png", (500, 400), Some((64, 64, 64))),
+        ],
+    );
+    let host = surface_with_anims(
+        2000,
+        vec![elem(0, "tiny.png", 0, 0)],
+        vec![bind_anim(9, 4_294_967_297, 0, 0)],
+    );
+    let one = surface(1, vec![elem(0, "huge.png", 0, 0)]);
+    let mut world = EmoWorld::build(&shell_of(vec![host, one]));
+    world.bind_atlas(&atlas, SetId(0));
+    let extent = compute_extent(&world, &atlas, 2000);
+    assert_eq!(extent, Extent { w: 4, h: 4 }, "面 1 を数えない");
+}

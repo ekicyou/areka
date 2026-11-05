@@ -280,14 +280,17 @@ pub(crate) fn compute_extent_limited(
                     // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。欄 2 が animation の
                     // 番号になる 7 語（`start` 等）の先は面ではなく、`move` はサーフェスの番号を無視する
                     // （ukadoc）ので数えない。
-                    if pattern.surface_id < 0
-                        || targets_animation_id(pattern.method.as_str())
+                    // u32 に収まらない番号は先が無い（ほかの走査と同じ）。
+                    let Ok(child) = u32::try_from(pattern.surface_id) else {
+                        continue;
+                    };
+                    if targets_animation_id(pattern.method.as_str())
                         || crate::method::is_move_name(pattern.method.as_str())
                     {
                         continue;
                     }
                     stack.push(Step::Enter {
-                        surface: pattern.surface_id as u32,
+                        surface: child,
                         x: pattern.x,
                         y: pattern.y,
                         element: false,

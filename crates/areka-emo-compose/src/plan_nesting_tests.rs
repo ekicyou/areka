@@ -411,3 +411,27 @@ fn spent_budget_drops_children_not_yet_entered() {
     let (ops, _) = run(0);
     assert_eq!(ops, vec![("body.png", 0, 0)], "根の面の自分の層は必ず描く");
 }
+
+/// 指摘 31: 子の段の位置が i64::MAX でも、子の中の X=1 の足し算は飽和して panic しない
+/// （element の位置と、子の着せ替えの段へ入る位置の両方）。
+#[test]
+fn child_position_at_i64_max_saturates() {
+    let (ops, _) = compose(
+        "surface0\n{\nelement0,overlay,body.png,0,0\n\
+         element1,overlay,10,9223372036854775807,0\n}\n\
+         surface10\n{\nelement0,overlay,eye.png,1,0\n\
+         animation100.interval,bind\nanimation100.pattern0,overlay,11,0,1,0\n}\n\
+         surface11\n{\nelement0,overlay,part.png,0,0\n}\n",
+        &[],
+        0,
+        &BindSet::from_ids([100]),
+    );
+    assert_eq!(
+        ops,
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", i64::MAX, 0),
+            ("part.png", i64::MAX, 0)
+        ]
+    );
+}

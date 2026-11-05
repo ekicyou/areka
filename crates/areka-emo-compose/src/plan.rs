@@ -221,7 +221,10 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
     debug_assert!(master.elements.is_sorted_by_key(|e| e.layer));
     for (i, element) in master.elements.iter().enumerate() {
         let (ex, ey) = element.transform.offset();
-        let (x, y) = (level.offset_x + ex, level.offset_y + ey);
+        let (x, y) = (
+            level.offset_x.saturating_add(ex),
+            level.offset_y.saturating_add(ey),
+        );
         let skip_reason = match element.kind {
             ElementKind::Image => None,
             ElementKind::SurfaceOutOfRange => Some("番号として扱える範囲を超える数"),
@@ -550,8 +553,8 @@ impl Level<'_> {
     pub(crate) fn enter(&self, surface: u32, x: i64, y: i64) -> Step {
         Step::Enter {
             surface,
-            x: self.offset_x + x,
-            y: self.offset_y + y,
+            x: self.offset_x.saturating_add(x),
+            y: self.offset_y.saturating_add(y),
         }
     }
 }

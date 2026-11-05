@@ -636,3 +636,20 @@ fn uv_past_page_edge_is_skipped_with_warn_on_both_paths() {
     expect_warn(&logs, "矩形");
     assert_eq!(out.bytes(), without_b.bytes(), "矩形: b だけ飛ばす");
 }
+
+/// 指摘 31: i64 の端の位置でも置き場と転写先の足し算は飽和し、panic せず絵の外として切られる。
+#[test]
+fn extreme_position_saturates_without_panic() {
+    let a = sample_atlas();
+    let prev = [op(0, 0, 0), op(3, 0, 0)];
+    let cur = [op(0, 0, 0), op(3, i64::MAX, i64::MAX)];
+    assert_eq!(
+        reuse_once(EXT, &prev, &cur, &a),
+        Recompose::Partial {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 12
+        }
+    );
+}

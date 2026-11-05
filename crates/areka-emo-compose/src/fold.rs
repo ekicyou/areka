@@ -327,7 +327,7 @@ fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
 ///
 /// 二相構成: (1) 包含記述子（[`AppendTarget::Single`]／[`AppendTarget::Range`]・両端含む）を
 /// **記述順**に列挙し、(2) 除外記述子（[`AppendTarget::Exclude`]／[`AppendTarget::ExcludeRange`]・
-/// 両端含む）を集合として集め、包含列から除外集合に属する id を取り除く。除外は記述子の登場位置に
+/// 両端含む）を番号へ広げず範囲の組として集め、包含列からどれかの範囲に入る id を取り除く。除外は記述子の登場位置に
 /// 依らず展開結果全体へ効く（ukadoc: `!` は集合から除去）。生存 id の記述順・重複は保つ（design
 /// 「展開結果の適用順は記述順」）。
 ///
@@ -340,12 +340,11 @@ pub(crate) fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
 
 /// [`expand_targets`] と同じ展開で、知らない記述子の記録を出すかどうかを `records` で切り替える。
 fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
-    use std::collections::BTreeSet;
-
     // (1) 包含 id を記述順に列挙（重複はそのまま保つ）。
     let mut included: Vec<u32> = Vec::new();
-    // (2) 除外 id を集合へ集める（記述位置に依らず全体へ効かせるため先に全走査）。
-    let mut excluded: BTreeSet<u32> = BTreeSet::new();
+    // (2) 除外は両端含みの範囲 (lo, hi) のまま集める（記述位置に依らず全体へ効かせるため先に全走査）。
+    // 番号へ広げない: 読む側の範囲の上限は包含だけにかかり、`!0-4294967295` は約 43 億件になる。
+    let mut excluded: Vec<(u32, u32)> = Vec::new();
 
     for target in targets {
         match *target {
@@ -360,7 +359,7 @@ fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
                 included.extend(lo..=hi);
             }
             AppendTarget::Exclude(id) => {
-                excluded.insert(id);
+                excluded.push((id, id));
             }
             AppendTarget::ExcludeRange { start, end } => {
                 // 除外範囲も両端含み（記述子の向き不問）。
@@ -369,7 +368,7 @@ fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
                 } else {
                     (end, start)
                 };
-                excluded.extend(lo..=hi);
+                excluded.push((lo, hi));
             }
             // `AppendTarget` は `#[non_exhaustive]`。未知の記述子はパニックせず観測可能化する（要件 1.4）。
             ref other => {
@@ -384,8 +383,20 @@ fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
         }
     }
 
-    // 減算: 除外集合に属さない id のみを記述順・重複保持で残す。
-    included.retain(|id| !excluded.contains(id));
+    // 除外の組を並べ、重なり・隣接を 1 つにまとめる（単独の除外を大量に並べても 2 乗にしない）。
+    excluded.sort_unstable();
+    let mut merged: Vec<(u32, u32)> = Vec::with_capacity(excluded.len());
+    for (lo, hi) in excluded {
+        match merged.last_mut() {
+            Some(last) if lo <= last.1.saturating_add(1) => last.1 = last.1.max(hi),
+            _ => merged.push((lo, hi)),
+        }
+    }
+    // 減算: どの除外範囲にも入らない id のみを記述順・重複保持で残す（`lo <= id` の最後の組を二分探索）。
+    included.retain(|&id| {
+        let i = merged.partition_point(|&(lo, _)| lo <= id);
+        i == 0 || id > merged[i - 1].1
+    });
     included
 }
 

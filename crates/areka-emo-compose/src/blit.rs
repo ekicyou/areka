@@ -87,13 +87,14 @@ pub(crate) fn op_area(op: &BlitOp, atlas: &AtlasTable) -> Area {
         return Area::EMPTY;
     };
     let (ox, oy) = op.transform.offset();
-    let x0 = ox + p.trim_offset.x as i64;
-    let y0 = oy + p.trim_offset.y as i64;
+    // 位置は i64 の端まで取りうるので飽和で足す（外形・シェルの外形と同じ）。
+    let x0 = ox.saturating_add(p.trim_offset.x as i64);
+    let y0 = oy.saturating_add(p.trim_offset.y as i64);
     Area {
         x0,
         y0,
-        x1: x0 + p.uv_rect.w as i64,
-        y1: y0 + p.uv_rect.h as i64,
+        x1: x0.saturating_add(p.uv_rect.w as i64),
+        y1: y0.saturating_add(p.uv_rect.h as i64),
     }
 }
 

@@ -24,6 +24,7 @@ impl ComposedSurface {
     /// `bytes.len() = width * 4 * height` を満たす 0 埋めバッファを割り当てる。
     /// 下流 `blit` 実行器がこのバッファへ画素を転写する。
     pub fn new(width: u32, height: u32) -> Self {
+        debug_assert_within_extent(width, height);
         ComposedSurface {
             width,
             height,
@@ -89,6 +90,7 @@ impl ComposedSurface {
     ///
     /// [`bytes_mut`]: ComposedSurface::bytes_mut
     pub fn resize_and_clear(&mut self, width: u32, height: u32) {
+        debug_assert_within_extent(width, height);
         let len = byte_len(width, height);
         self.width = width;
         self.height = height;
@@ -118,6 +120,15 @@ impl ComposedSurface {
     pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
         &mut self.bytes
     }
+}
+
+/// 幅と高さが外形の上限（[`crate::plan::MAX_EXTENT`]）以下か。合成は `build_plan` で越える外形を
+/// `ExtentTooLarge` として断るので、越えるのは呼び手の誤り（`stride()` を u32 であふれさせない）。
+fn debug_assert_within_extent(width: u32, height: u32) {
+    debug_assert!(
+        width <= crate::plan::MAX_EXTENT && height <= crate::plan::MAX_EXTENT,
+        "外形の上限を越える大きさ: {width}x{height}"
+    );
 }
 
 /// `width×height` の BGRA の長さ（バイト）。掛け算は `usize` で行い、`u32` であふれさせない。
@@ -154,5 +165,13 @@ mod tests {
         let s = ComposedSurface::new(2, 2);
         let bytes = s.into_bytes();
         assert_eq!(bytes.len(), 2 * 4 * 2);
+    }
+
+    /// 指摘 33: 外形の上限を越える幅は入口で止める（`stride()` を u32 であふれさせない）。
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "外形の上限")]
+    fn resize_beyond_max_extent_is_rejected() {
+        ComposedSurface::new(0, 0).resize_and_clear(crate::plan::MAX_EXTENT + 1, 0);
     }
 }

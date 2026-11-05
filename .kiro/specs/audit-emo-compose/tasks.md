@@ -163,7 +163,7 @@
   - `visible_parts` の印・`bind_steps` の作業場・`add_lines`・層 (ii) の animation の引き・`always` の確保・部品の段のイテレータ。結果の並びと記録は今と同じ
   - 壊れたら落ちるテスト: 深さ 10,000 の鎖と幅の広い面の `visible_parts`・有効な着せ替えの多いシェルの合成・同じ番号への追記の多いシェルの読み込み・animation の多い面の合成が短く終わる
   - _Requirements: 2.1, 4.4, 4.5_
-- [ ] 6.3 小さな正しさ（指摘 31〜33・75）
+- [x] 6.3 小さな正しさ（指摘 31〜33・75）
   - 位置の足し算を飽和に・外形の面の番号を `try_from` に・`ComposedSurface` の入口で幅を確かめる。各 1 本の壊れたら落ちるテスト
   - 除外の範囲 `!a-b` を番号に広げず `(lo, hi)` の組で引く（指摘 75・必ず直す）。`surface0,!0-4294967295` が短く終わり結果が今と同じテスト
   - _Requirements: 2.1, 4.4, 4.5_
@@ -198,3 +198,4 @@
 - 6.1: 予算の単位を「入る面＋積み荷（命令列の段の命令と子へ入る印・持ち込みで渡す領域）」に（外形とシェルの外形は入る面だけ）。24 は tasks の文（読み込みのとき 1 度だけ）と違い「合成器 1 つにつき根ごとに 1 度だけ記録」（`PlanScratch.reported`）＝外形の表は積み荷を数えず命令列の方が先に切れることがあるので、合成を全部黙らせると記録の無い失敗が残るため（要件 6.2）。アプリの `PresentTarget` は合成器を使い回すのであふれは止まる。`VISIT_BUDGET` は単位の変更で測り直しの候補（見積もり 2^17）。`MAX_AREA = 1 << 25`
 - 11-06 audit-emo-present: `composed.rs:91` の説明が名指す `presenter/budget_tests.rs` の `fill_extent` は向こうのタスク 17 で消えた（今は `resize_and_clear` を直に呼ぶ）＝6.4 で名指しを直す
 - 6.2: `linear_lookup_tests.rs` の 5 本は大きな検体で答えと記録を確かめる回帰で、2 乗へ戻しても遅くなるだけで赤にはならない（research 15 節の「遅い所」・要件 4.5 のため時間の上限を置かない）。`visible_parts` は 64 個まで線形・越えたら呼び出しの中で 1 度だけ集合。areka-parsers の `animation_slot`（decode.rs:395）が 1 ブレスの animation の数の 2 乗＝audit-parsers-sakura へ伝え済み
+- 6.3: 除外の範囲は `(lo, hi)` の組を並べてまとめ二分探索で引く（単独の除外の大量でも 2 乗にしない）。`ComposedSurface` の入口は `debug_assert`（本番は `build_plan` の `ExtentTooLarge` が先に断る）

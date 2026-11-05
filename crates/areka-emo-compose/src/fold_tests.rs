@@ -885,3 +885,42 @@ fn forward_reference_append_does_not_apply_and_is_stable() {
         "後定義 id を狙う前方参照 append は遡及しない"
     );
 }
+
+/// 指摘 75: 除外の範囲は番号へ広げずに引く。`surface0,!0-4294967295` は短く終わり、0 は除外される。
+#[test]
+fn expand_targets_full_u32_exclude_range_is_not_expanded() {
+    let ids = expand_targets(&[
+        AppendTarget::Single(0),
+        AppendTarget::ExcludeRange {
+            start: 0,
+            end: u32::MAX,
+        },
+    ]);
+    assert!(ids.is_empty(), "0 は除外される");
+    let ids = expand_targets(&[
+        AppendTarget::Range { start: 1, end: 9 },
+        AppendTarget::Single(3),
+        AppendTarget::ExcludeRange { start: 7, end: 5 },
+        AppendTarget::Exclude(2),
+        AppendTarget::ExcludeRange { start: 9, end: 9 },
+    ]);
+    assert_eq!(
+        ids,
+        vec![1, 3, 4, 8, 3],
+        "小さな範囲は前と同じ（並び・重複を保つ）"
+    );
+}
+
+/// 指摘 75（重ね）: 単独の除外を 10 万個並べても、組をまとめて二分探索で引くので短く終わり、結果は正しい。
+#[test]
+fn expand_targets_many_single_excludes_stay_linearithmic() {
+    let mut targets = vec![AppendTarget::Range {
+        start: 0,
+        end: 8000,
+    }];
+    // 偶数 0〜199998 の単独の除外を 10 万個（逆順に並べ、まとめの並べ直しも突く）。
+    targets.extend((0..100_000u32).rev().map(|n| AppendTarget::Exclude(n * 2)));
+    let ids = expand_targets(&targets);
+    let expected: Vec<u32> = (0..=8000).filter(|n| n % 2 == 1).collect();
+    assert_eq!(ids, expected, "偶数だけが除外され、並びは記述の順");
+}
