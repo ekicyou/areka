@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
-use wintf::ecs::{Arrangement, GraphicsCommandList};
+use wintf::ecs::{Arrangement, GraphicsCommandList, GraphicsCore};
 
 use super::test_support::{
     CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
@@ -853,4 +853,45 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         "未表示 scope・未登録 target で warn を足してはならない（述語を applied.is_none() 単独へ\
          潰すとマウス移動ごとのログ洪水になる。防御呼出 2 回分の 2 件から増えない）: {events:?}"
     );
+}
+
+/// 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` を入れ替えた後の
+/// `refresh_after_device_change` は控えを捨てて出し直し、面の命令の列が新しい物になる。印が
+/// 立たない回は何もしない（列はそのまま）。
+#[test]
+fn device_recreation_rerecords_display_list() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5a);
+    let mut presenter = EmoPresenter::new();
+    presenter
+        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+        .expect("attach_target 失敗");
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
+    let list_of = |world: &World| {
+        world
+            .get::<GraphicsCommandList>(surface_entity)
+            .cloned()
+            .expect("表示確立後は surface entity に表示記録がある")
+    };
+    let before = list_of(&world);
+
+    // 初回は印を控えるだけ・2 回目は印が立っていないので何もしない。
+    presenter.refresh_after_device_change(&mut world);
+    presenter.refresh_after_device_change(&mut world);
+    assert_eq!(
+        list_of(&world),
+        before,
+        "装置が変わっていないのに出し直した"
+    );
+
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+    presenter.refresh_after_device_change(&mut world);
+    assert_ne!(
+        list_of(&world),
+        before,
+        "装置を作り直した後も古い装置の命令の列のまま（控えを捨てて出し直していない）"
+    );
+    assert_eq!(presenter.target_visible(TargetId(0)), Some(true));
 }

@@ -333,6 +333,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6];
 | `areka-emo-present` の `presenter/refresh.rs` | 控え（閉じた命令の列）が古い装置のまま残り、同じ列なら入れ直さない | `GraphicsCore` の変化を見たら全部の対象の控えを捨て（在る `invalidate_all`）、有効なら見えている対象の `last_show` を出し直す（在る `refresh_scale` の出し直しの道を倍率の門なしで使う） |
 | `areka-emo-text` の `actor_present.rs` | `ActorRender`（swap chain・文脈）を「無ければ作る」だけで、資源の有無しか見ない | `GraphicsCore` の変化を見たら全部の `ActorRender` と印の面を捨てる（在る `TextSurface::release`）。作る門を `is_valid()` にする |
 | `areka` の `emo2_boot/frame/attach.rs` | 装着の門が `GraphicsCore` の有無だけを見る | `is_valid()` を見る |
+| `areka` の `emo2_boot/frame`（毎フレームの流れ） | emo-present の出し直しを毎フレーム呼ぶ口が無い（`apply` は指令のとき・`refresh_scale` は `Changed<DPI>` のときだけ） | 5.1 で足した `EmoPresenter::refresh_after_device_change(world)` を UI スレッドで毎フレーム 1 回呼ぶ 1 行を足す（2026-11-06 実装の段で判明・5.2 で入れる） |
 
 - どれも在る関数を呼ぶだけで、新しい型や合図は作らない。emo-present は同じウェーブの `audit-emo-present` の持ち物なので、触る前にそのセッションと申し合わせる（要件 3.5）。emo-text と areka 本体の見直しは今は走っていない。
 - **`audit-emo-present` との申し合わせ（2026-11-05・済み）**: `presenter/refresh.rs` の出し直しの数行はこの spec が引き受ける（あちらは「新しい機能を足さない」の外として引き受けない）。条件は、新しい公開の型を作らず、emo-present のほかのファイルの形を変えないこと。あちらの設計（`d7ed6665`）は `apply_show` の応答の口をやめ、`apply_show(&mut self, world, target_id, surface_id, binds, pattern, reveal) -> PresentOutcome` を返す形に変える（`reply` の引数は消える）。`refresh_scale` も戻り値で成否を読む形に変わる。こちらの出し直しは、その新しい形で書く。着地は「後に着地する方が先の形へ合わせる」（あちらが先になる見込み）。`ComposeCache::invalidate_all` の形はあちらでも変えない。あちらの `apply_visibility` は「同じ値なら書かない」になるので、出し直しで `set_visible` を呼んでも、値が同じなら変化の印は立たない。

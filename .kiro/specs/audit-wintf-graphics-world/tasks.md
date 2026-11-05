@@ -131,7 +131,7 @@
   - _Requirements: 3.1, 3.2, 3.4, 5.2, 5.5, 5.6_
 
 - [ ] 5. 下流の立ち直り
-- [ ] 5.1 emo-present が装置の作り直しで控えを捨てて出し直す
+- [x] 5.1 emo-present が装置の作り直しで控えを捨てて出し直す
   - 装置の資源の変化を見たら全部の対象の控えを捨て、有効なら見えている対象の最後の表示を出し直す（在る関数だけを使い、あちらの新しい応答の形 `PresentOutcome` に合わせる。後に着地する方が先の形へ合わせる）
   - 新しい公開の型を作らず、emo-present のほかのファイルの形を変えない
   - 在る足場で、装置を作り直した後に面の命令の列が新しい物になることを確かめるテストを置く
@@ -208,3 +208,4 @@
 - 4.5: `GraphicsCore` の変化の印は本当の装置の失いのときだけ立つ（`bypass_change_detection().note_draw_failure()` が真なら `set_changed()`）。下流（5.x）は印＝作り直しか失いの合図と読んでよい。
 - 4.6: 切り抜きの鍵（`VisualGraphics.clip_key`）の側のテストは、申し合わせの一覧に無い `tests/graphics/clip_sync_system_test.rs` に置いた（足場がそこに在る・頭の InsetClip の説明も直した）。11-06 に `audit-wintf-runtime` へ伝えた。
 - 4.7: PreRenderSurface の見た目と描画面を作る係は `run_if(wuc_ready)`（装置だけ在って WUC が無い回に印を食べない）。立ち直りのテストの窓の的は世代の番号 1＋有効で見る（1 つの HWND は DesktopWindowTarget を 1 つしか持てず、古い物を生かして比べられない）。
+- 5.1: `EmoPresenter::refresh_after_device_change(world)` は毎フレーム呼ぶ前提で、本番の呼び出し 1 行は 5.2 で `crates/areka/src/emo2_boot/frame`（`run_dpi_phase` の近く）に足す（design の下流の手当ての表に追記）。`apply_show(.., None, false)` は今の main の形＝ audit-emo-present が `PresentOutcome` を着地させるときは `None` を外す。
