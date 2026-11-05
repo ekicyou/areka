@@ -25,61 +25,6 @@ fn make_world() -> World {
 // window_pos_sync_system: ドラッグ中はサイズのみ更新テスト
 // =============================================================================
 
-/// WindowDragging 付きエンティティは window_pos_sync_system で位置はスキップ、サイズは更新される
-#[test]
-fn window_pos_sync_updates_size_only_for_dragging_entity() {
-    let mut world = make_world();
-
-    // Window entity（ドラッグ中）: GlobalArrangement が変更されたら
-    // サイズは更新されるが、位置は元のまま
-    let entity = world
-        .spawn((
-            Window::default(),
-            WindowPos {
-                position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI {
-                    width: 800,
-                    height: 600,
-                }),
-                ..Default::default()
-            },
-            DPI::default(),
-            Arrangement::default(),
-            GlobalArrangement {
-                bounds: wintf::ecs::layout::D2DRect {
-                    left: 500.0,
-                    top: 600.0,
-                    right: 1300.0,
-                    bottom: 1200.0,
-                },
-                ..Default::default()
-            },
-            WindowDragging, // ← ドラッグ中マーカー
-        ))
-        .id();
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(window_pos_sync_system);
-    schedule.run(&mut world);
-
-    // 位置は元の値のまま変更されていないこと
-    let wp = world.get::<WindowPos>(entity).unwrap();
-    assert_eq!(
-        wp.position,
-        Some(Point { x: 100, y: 200 }),
-        "ドラッグ中の entity は位置をスキップすべき"
-    );
-    // サイズは GlobalArrangement から更新されること（DPI変更対応）
-    assert_eq!(
-        wp.size,
-        Some(SizeI {
-            width: 800,
-            height: 600
-        }),
-        "ドラッグ中の entity はサイズを更新すべき"
-    );
-}
-
 /// WindowDragging なしエンティティは window_pos_sync_system で通常更新される
 #[test]
 fn window_pos_sync_processes_non_dragging_entity() {
@@ -147,29 +92,32 @@ fn window_pos_sync_resumes_after_dragging_removed() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
+                // 最初の大きさは GlobalArrangement と違う値にし、ドラッグ中もサイズが更新されることを見分ける
                 size: Some(SizeI {
-                    width: 800,
-                    height: 600,
+                    width: 640,
+                    height: 480,
                 }),
                 ..Default::default()
             },
             DPI::default(),
             Arrangement::default(),
-            GlobalArrangement {
-                bounds: wintf::ecs::layout::D2DRect {
-                    left: 500.0,
-                    top: 600.0,
-                    right: 1300.0,
-                    bottom: 1200.0,
-                },
-                ..Default::default()
-            },
+            GlobalArrangement::default(),
             WindowDragging,
         ))
         .id();
 
     let mut schedule = Schedule::default();
     schedule.add_systems(window_pos_sync_system);
+
+    // 0回目: Added → Changed として検知されるが bounds がゼロなのでスキップ
+    // （生成時の GlobalArrangement は Arrangement の on_add フックが既定値で上書きする）
+    schedule.run(&mut world);
+    world.get_mut::<GlobalArrangement>(entity).unwrap().bounds = wintf::ecs::layout::D2DRect {
+        left: 500.0,
+        top: 600.0,
+        right: 1300.0,
+        bottom: 1200.0,
+    };
 
     // 1回目: WindowDragging あり → 位置スキップ、サイズは更新
     schedule.run(&mut world);
@@ -292,91 +240,6 @@ fn window_pos_sync_propagates_size_change_during_drag() {
 // =============================================================================
 // sync_window_arrangement_from_window_pos: Without<WindowDragging> テスト
 // =============================================================================
-
-/// WindowDragging 付きエンティティは sync_window_arrangement_from_window_pos でスキップ
-#[test]
-fn sync_arrangement_skips_dragging_entity() {
-    let mut world = make_world();
-
-    let entity = world
-        .spawn((
-            Window::default(),
-            WindowPos {
-                position: Some(Point { x: 500, y: 600 }),
-                size: Some(SizeI {
-                    width: 800,
-                    height: 600,
-                }),
-                ..Default::default()
-            },
-            DPI::default(),
-            Arrangement {
-                offset: Offset { x: 100.0, y: 200.0 },
-                scale: LayoutScale { x: 1.0, y: 1.0 },
-                size: Size {
-                    width: 800.0,
-                    height: 600.0,
-                },
-            },
-            GlobalArrangement::default(),
-            WindowDragging, // ドラッグ中
-        ))
-        .id();
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(sync_window_arrangement_from_window_pos);
-    schedule.run(&mut world);
-
-    // Arrangement.offset は元の値のまま
-    let arr = world.get::<Arrangement>(entity).unwrap();
-    assert_eq!(
-        arr.offset,
-        Offset { x: 100.0, y: 200.0 },
-        "ドラッグ中の entity は sync_window_arrangement でスキップされるべき"
-    );
-}
-
-/// WindowDragging なしエンティティは sync_window_arrangement_from_window_pos で更新される
-#[test]
-fn sync_arrangement_processes_non_dragging_entity() {
-    let mut world = make_world();
-
-    let entity = world
-        .spawn((
-            Window::default(),
-            WindowPos {
-                position: Some(Point { x: 500, y: 600 }),
-                size: Some(SizeI {
-                    width: 800,
-                    height: 600,
-                }),
-                ..Default::default()
-            },
-            DPI::default(),
-            Arrangement {
-                offset: Offset { x: 100.0, y: 200.0 },
-                scale: LayoutScale { x: 1.0, y: 1.0 },
-                size: Size {
-                    width: 800.0,
-                    height: 600.0,
-                },
-            },
-            GlobalArrangement::default(),
-        ))
-        .id();
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(sync_window_arrangement_from_window_pos);
-    schedule.run(&mut world);
-
-    // Arrangement.offset が WindowPos.position に同期されること
-    let arr = world.get::<Arrangement>(entity).unwrap();
-    assert_eq!(
-        arr.offset,
-        Offset { x: 500.0, y: 600.0 },
-        "非ドラッグ entity の Arrangement.offset は WindowPos.position に同期されるべき"
-    );
-}
 
 /// 複数エンティティ: ドラッグ中はスキップ、非ドラッグは更新
 #[test]

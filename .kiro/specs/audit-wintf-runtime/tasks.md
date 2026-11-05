@@ -83,7 +83,7 @@
   - _Requirements: 3.4, 4.1_
 
 - [ ] 4. テストの先の分を直す（T1・T3・L1〜L3）
-- [ ] 4.1 (P) ecs・drag・win_app のテストを直す（T1）
+- [x] 4.1 (P) ecs・drag・win_app のテストを直す（T1）
   - 25: 回す前の変更の刻みを控え、根の木の変化の印の刻みが新しいことを確かめる形にし、確かめの system と印を消す
   - 33: スレッドの部屋が MTA かつ暗黙の MTA でないこと、DPI の文脈が等しいことを確かめる形にする
   - 26: panic の安全を写しで試すテストのファイルを消し、drag の入口の mod の行も消す
@@ -211,3 +211,4 @@
 - 1.5: `crates/wintf/build.rs` の `areka_palette_samples` の cfg は見本のフォルダ（wintf の包みの外）に `rerun-if-changed` を付けていない。見本を後で消すとパレットの 6 本は「無視」でなく赤になる（黙らない）。在らぬフォルダに付けると毎回 build.rs が回るので付けない判断（審査で承認）。
 - 消した名前の grep は `.kiro/specs/` だけを外して引く（`.kiro/steering/` も数に入る）。2.3 で `structure.md:113` の取りこぼしが審査で見つかった。
 - 3.1: `ambassador` は `Cargo.toml` 2 か所・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md:35` に残る（タスク 6 で直す。THIRD-PARTY-NOTICES は生成物なら生成器で）。
+- 4.1: 消したテスト名を名指す注記が `src/ecs/drag/state/tests.rs:11` に残っていたので括弧書きを消した（`audit-wintf-input` は未着手）。`Arrangement` の on_add フックは生成の束の `GlobalArrangement` を既定値で上書きする（本番に使い方は無く欠陥ではない・`audit-wintf-layout-widget` への申し送り候補）。

@@ -8,7 +8,7 @@ use bevy_ecs::world::World;
 // NOTE: `DRAG_STATE` is a thread_local。テストワーカースレッドは再利用され得るため、
 // 各テストは Idle へ強制リセットしてから開始する（前のテストが残した状態への依存を排除）。
 // SetCapture/ReleaseCapture は HWND::default()（null）に対し UI スレッド外では実質 no-op の
-// ため、状態機械そのものはデバイス非依存に検証できる（capture_guard_panic_safety_test と同じ前提）。
+// ため、状態機械そのものはデバイス非依存に検証できる。
 
 /// thread_local を Idle へ強制的に戻す（CaptureGuard が残っていれば borrow 解放後にドロップ）。
 fn force_idle() {
