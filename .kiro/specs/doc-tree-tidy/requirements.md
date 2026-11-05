@@ -43,6 +43,7 @@
   - `doc/` の直下のファイルをフォルダへまとめ直すこと（要件 3.5）。
   - フォルダの中のファイル 1 つずつを `doc/README.md` の表に載せること（フォルダの中は、表のフォルダの行の役目と、あればそのフォルダの `README.md` が受け持つ）。
   - 歴史の場所（`.kiro/specs/completed/` の下・`doc/archive/` の下・`.kiro/steering/roadmap-history.md`）の中の古いパスの書き換え（要件 5.3）。
+  - 古いパスと古いファイル名が戻らないかを毎回の試験で見張ること（確かめるのは完了のときの 1 回だけ・要件 5.4。ファイルはもう無いので、戻っても照合テストが別の形で赤にする）。
 - **Adjacent expectations**:
   - 同じウェーブの見直し 7 本（`audit-parsers-sakura`・`audit-emo-present`・`audit-wintf-graphics-world`・`audit-ghost-catalog`・`audit-wintf-runtime`・`audit-emo-compose`・`audit-seriko`）は、受け持つファイルで `doc/`・`docs/` を名指す行を足さず、変えない（roadmap のウェーブ C17 の約束）。本 spec はそれを当てにし、見直しの受け持つファイルに触らない。
   - 後から文書を足す spec と道具（俯瞰の頁を `doc/roadmap-overview-{YYYY-MM-DD}.html` へ書く `/kiro-next` の道具、`doc/release-notes/` へ書くリリースの手順、`doc/ideas/` へ書く `/kiro-discovery`、`doc/ukadoc-coverage/` を書き換える `ukadoc-catalog-refresh`・`coverage-roadmap-refresh`）は、要件 2 の名前の決まりと要件 3.1 の置き方の決まりに従う。今の名前の付け方はどれも決まりに合う。
@@ -107,6 +108,7 @@
 3. The 本 spec の作業 shall 次の場所の古いパスを直さずに残す: 歴史の場所（`.kiro/specs/completed/` の下・`doc/archive/` の下・`.kiro/steering/roadmap-history.md`）と、古い名前を本 spec の仕事として述べる所（`.kiro/specs/doc-tree-tidy/` の文書・roadmap で本 spec の仕事を述べる行〔台帳・版の段・ウェーブの編成・棚卸の記録・チェックの行〕・案内の古いパスと新しいパスの対応の表）。
 4. When 本 spec の作業を終えるとき, the 本 spec の作業 shall 5.3 の場所の外で古いパスと古いファイル名を探して 0 件であることを確かめ、その前に、同じ探し方で歴史の場所の中の古いパスが見つかることを確かめて、探し方が空振りしていないことを示す。
 5. The 本 spec の作業 shall 文書を実際に開くコードとテスト（`doc/ukadoc-coverage/`・`doc/ssp-mcp/`・`doc/release-notes/` を読むもの）の振る舞いを変えず、全体テストが緑であることを確かめる。
+6. When 本 spec を完了するとき, the 本 spec の作業 shall `doc/PASTA_PROFILE.md` を名指すほかのリポジトリを持つ「ぱすた開発」のセッションへ、新しいパス `doc/pasta-profile.md` と案内の対応の表の場所を知らせる（外のリポジトリの直しは向こうの仕事）。
 
 ### Requirement 6: 同じウェーブで並んで走る spec との約束
 **Objective:** As a 同じウェーブで並んで走る見直しの spec, I want 本 spec が自分たちの受け持つファイルと文書の名指しに触らないこと, so that 互いの変更がぶつからず、それぞれ単独で着地できる
