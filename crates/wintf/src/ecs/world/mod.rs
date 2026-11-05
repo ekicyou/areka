@@ -341,9 +341,11 @@ impl EcsWorld {
                     ),
                     crate::ecs::graphics::visual_manager::visual_resource_management_system
                         .run_if(crate::ecs::graphics::graphics_core_ready),
-                    crate::ecs::graphics::deferred_surface_creation_system.after(
-                        crate::ecs::graphics::visual_manager::visual_resource_management_system,
-                    ),
+                    crate::ecs::graphics::deferred_surface_creation_system
+                        .run_if(crate::ecs::graphics::graphics_core_ready)
+                        .after(
+                            crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                        ),
                     crate::ecs::graphics::mark_dirty_surfaces
                         .after(crate::ecs::graphics::deferred_surface_creation_system),
                     crate::ecs::graphics::cleanup_surface_on_commandlist_removed

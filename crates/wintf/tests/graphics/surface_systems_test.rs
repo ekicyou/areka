@@ -24,7 +24,8 @@ use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
     GraphicsCommandList, GraphicsCore, Rect, SurfaceCreationStats, SurfaceGraphics,
     SurfaceGraphicsDirty, VisualGraphics, WucGraphicsResource,
-    cleanup_surface_on_commandlist_removed, deferred_surface_creation_system, render_surface,
+    cleanup_surface_on_commandlist_removed, deferred_surface_creation_system, mark_dirty_surfaces,
+    render_surface,
 };
 
 fn setup_world() -> World {
@@ -251,6 +252,138 @@ fn cleanup_skips_already_invalid_surface() {
             "既に invalid な Surface は削除統計に計上されない"
         );
     });
+}
+
+/// 命令の列を外して付け直した回（立ち直りで無効化の後に描き直した回）に、
+/// 作り直したばかりの描画面を片づけの係が空にしない
+#[test]
+fn cleanup_keeps_surface_recreated_after_commandlist_reinserted() {
+    crate::common::on_gpu_owner_thread(move || {
+        let mut world = setup_world();
+        let entity = spawn_surface_target(&mut world, 100.0, 50.0);
+        world.entity_mut(entity).remove::<GraphicsCommandList>();
+        world
+            .entity_mut(entity)
+            .insert(GraphicsCommandList::empty());
+
+        let mut schedule = Schedule::default();
+        schedule.set_executor(SingleThreadedExecutor::new());
+        schedule.add_systems(
+            (
+                deferred_surface_creation_system,
+                cleanup_surface_on_commandlist_removed,
+            )
+                .chain(),
+        );
+        schedule.run(&mut world);
+
+        assert!(
+            world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
+            "surface recreated in the same run must not be cleared"
+        );
+        assert_eq!(stats(&world).deleted_count, 0);
+    });
+}
+
+/// 見た目を作り直した部品は、大きさが変わらなくても描画面も作り直す
+#[test]
+fn deferred_creation_recreates_surface_for_recreated_visual() {
+    crate::common::on_gpu_owner_thread(move || {
+        let mut world = setup_world();
+        let entity = spawn_surface_target(&mut world, 100.0, 50.0);
+        let mut schedule = single_system_schedule(deferred_surface_creation_system);
+        schedule.run(&mut world);
+        assert_eq!(stats(&world).created_count, 1);
+
+        // 立ち直り相当: 描画面は空になり、見た目は新しい物に入れ替わる
+        world.get_mut::<SurfaceGraphics>(entity).unwrap().clear();
+        let visual: Visual = {
+            let compositor = world
+                .resource::<WucGraphicsResource>()
+                .compositor()
+                .expect("compositor")
+                .clone();
+            compositor
+                .CreateSpriteVisual()
+                .expect("CreateSpriteVisual")
+                .cast()
+                .expect("cast to Visual")
+        };
+        *world.get_mut::<VisualGraphics>(entity).unwrap() = VisualGraphics::new(visual);
+        schedule.run(&mut world);
+
+        assert!(
+            world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
+            "surface must be recreated for the recreated visual"
+        );
+        assert_eq!(stats(&world).created_count, 2);
+    });
+}
+
+// ==========================================================================
+// mark_dirty_surfaces（11 番）
+// ==========================================================================
+
+fn set_transform(world: &mut World, entity: Entity, scale: f32, offset: f32) {
+    world
+        .get_mut::<GlobalArrangement>(entity)
+        .unwrap()
+        .transform = Matrix3x2 {
+        M11: scale,
+        M12: 0.0,
+        M21: 0.0,
+        M22: scale,
+        M31: offset,
+        M32: offset,
+    };
+}
+
+/// 位置だけ変えても描き直しの印は立たず、拡大率を変えると立つ（GPU 不要）
+#[test]
+fn mark_dirty_ignores_move_only_and_marks_on_scale_change() {
+    let mut world = World::new();
+    world.insert_resource(FrameCount(1));
+    let entity = world
+        .spawn((
+            SurfaceGraphics::default(),
+            SurfaceGraphicsDirty::default(),
+            GraphicsCommandList::empty(),
+            make_global_arrangement(100.0, 50.0),
+        ))
+        .id();
+    let mut schedule = single_system_schedule(mark_dirty_surfaces);
+    schedule.run(&mut world);
+    assert_eq!(
+        world
+            .get::<SurfaceGraphicsDirty>(entity)
+            .unwrap()
+            .requested_frame,
+        1
+    );
+
+    world.resource_mut::<FrameCount>().0 = 5;
+    set_transform(&mut world, entity, 1.0, 30.0);
+    schedule.run(&mut world);
+    assert_eq!(
+        world
+            .get::<SurfaceGraphicsDirty>(entity)
+            .unwrap()
+            .requested_frame,
+        1,
+        "moving only must not request a redraw"
+    );
+
+    world.resource_mut::<FrameCount>().0 = 7;
+    set_transform(&mut world, entity, 2.0, 30.0);
+    schedule.run(&mut world);
+    assert_eq!(
+        world
+            .get::<SurfaceGraphicsDirty>(entity)
+            .unwrap()
+            .requested_frame,
+        7,
+        "changing the scale must request a redraw"
+    );
 }
 
 // ==========================================================================

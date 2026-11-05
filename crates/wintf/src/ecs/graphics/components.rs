@@ -186,12 +186,6 @@ impl SurfaceGraphics {
         }
     }
 
-    pub fn invalidate(&mut self) {
-        self.inner = None;
-        self.brush = None;
-        self.size = (0, 0);
-    }
-
     pub fn is_valid(&self) -> bool {
         self.inner.is_some()
     }
@@ -210,7 +204,7 @@ impl SurfaceGraphics {
     ///
     /// commands.insert()の代わりにこのメソッドを使用することで、
     /// 同一フレーム内で変更が即座に反映される。
-    /// サイズが異なる場合のみ更新し、Changedフラグを適切に管理。
+    /// 呼ぶたびに無条件で入れ替える（同じ大きさなら呼ばないのは呼ぶ側の判断）。
     pub fn set_surface(
         &mut self,
         surface: CompositionDrawingSurface,
@@ -222,7 +216,7 @@ impl SurfaceGraphics {
         self.size = size;
     }
 
-    /// Surface と brush をクリア（invalidateと同じだが意図を明確に）
+    /// Surface と brush をクリア（装置の失いでの無効化もこの口を使う）
     ///
     /// commands.remove()の代わりにこのメソッドを使用することで、
     /// コンポーネント自体は残したまま内容だけをクリアする。
@@ -247,6 +241,8 @@ impl SurfaceGraphics {
 pub struct SurfaceGraphicsDirty {
     /// 最後に描画をリクエストしたフレーム番号
     pub requested_frame: u64,
+    /// 最後に描き直しを求めたときの拡大率 (scale_x, scale_y)。位置だけの変化で描き直さないための控え
+    pub drawn_scale: (f32, f32),
 }
 
 // ========== Surface Creation Statistics ==========
@@ -268,7 +264,7 @@ pub struct SurfaceGraphicsDirty {
 pub struct SurfaceCreationStats {
     /// 作成されたSurfaceの累計数
     pub created_count: u64,
-    /// スキップされたSurface作成の累計数（CommandList不在等）
+    /// スキップされたSurface作成の累計数（GlobalArrangement の大きさが 0 以下）
     pub skipped_count: u64,
     /// 削除されたSurfaceの累計数
     pub deleted_count: u64,

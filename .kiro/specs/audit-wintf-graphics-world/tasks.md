@@ -98,7 +98,7 @@
   - 完了の状態: 装置を入れない World で見た目の係を直に回しても落ちず、wintf のテストが緑
   - _Requirements: 3.1, 3.2, 3.3, 5.3_
 
-- [ ] 4.4 描画面の係: 見た目の作り直しで描画面も作り直し、動くだけでは描き直さない
+- [x] 4.4 描画面の係: 見た目の作り直しで描画面も作り直し、動くだけでは描き直さない
   - 描画面を作る係を装置が使える回だけ回し、見た目が作り直された部品でも描画面を作り直す
   - 命令の列が外れた部品を片づける係を、命令の列がまだ無い部品だけに絞り、作り直したばかりの描画面を空にしない
   - 描き直しの印に最後に描いた拡大率を持たせ、位置だけが変わった部品には印を立てない
@@ -204,3 +204,4 @@
 - 3.2: 失いの知らせは `DeviceLostWatch`（`GraphicsCoreInner._lost_watch`）。`invalidate()` で inner ごと落ちて後始末が走る。`check_device_removed` は `GraphicsSetup` の先頭に `(check_device_removed, init_window_graphics).chain()` で仮に置いた＝4.1 で並べ直す。`world/mod.rs` は 956 行で 1,000 に近い＝4.1 以降で足すときは 6.1 の削りを先に見込む。
 - 4.1: WUC を作る・捨てるテストのスケジュールは必ず `set_executor(SingleThreadedExecutor::new())`（`Schedule::default()` は多スレッドで GPU の持ち主のスレッドを外れうる）。`tests/graphics/dcomp_integration_test.rs:108` の無効化も `Schedule::default()` のまま（前から）＝ 4.7 で同じファイルの群を触るときに直す。描画面の無効化は `SurfaceGraphics::clear()` に寄せたので 4.4 で `invalidate` を消せる。
 - 4.3: `tests/graphics/device_lost_recovery_test.rs` を新しく置いた（見た目の係 1 本）。描画面を作る係の「装置なしで落ちない」は 4.4、残りの立ち直りは 4.7 が同じファイルに足す。外すときの `debug!`（`graphics/components.rs:78-86` の `let _ = ... Remove`）は 6.4 の持ち分。
+- 4.4: `SurfaceGraphicsDirty.drawn_scale` は `mark_dirty_surfaces` が印を立てるときに書く。装置の失いでない `BeginDraw` の一時的な失敗の後、拡大率が同じ回では描き直さない（前からの性質）＝ 4.5 で `render.rs` の失敗の道を触るとき、描いた時点で書くか見る。

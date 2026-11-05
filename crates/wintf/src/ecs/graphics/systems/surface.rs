@@ -15,6 +15,41 @@ use windows::core::Interface;
 
 // ========== Layout-to-Graphics Synchronization Systems ==========
 
+/// 描き直しの印の係が読む部品
+type MarkDirtyData = (
+    &'static mut SurfaceGraphicsDirty,
+    Ref<'static, SurfaceGraphics>,
+    Option<Ref<'static, GraphicsCommandList>>,
+    Option<&'static GlobalArrangement>,
+);
+
+/// 描き直しの印の係が見る変化（中身・描画面・配置）
+type MarkDirtyFilter = Or<(
+    Changed<GraphicsCommandList>,
+    Changed<SurfaceGraphics>,
+    Changed<GlobalArrangement>,
+)>;
+
+/// 描画面を作る係が読む部品
+type SurfaceCreationData = (
+    Entity,
+    &'static VisualGraphics,
+    &'static GlobalArrangement,
+    &'static mut SurfaceGraphics,
+    &'static mut SurfaceGraphicsDirty,
+    Option<&'static Name>,
+);
+
+/// 描画面を作る係が見る変化（配置・中身・見た目の作り直し）
+type SurfaceCreationFilter = (
+    With<GraphicsCommandList>,
+    Or<(
+        Changed<GlobalArrangement>,
+        Changed<GraphicsCommandList>,
+        Changed<VisualGraphics>,
+    )>,
+);
+
 /// 変更検知システム：描画内容に変更があった場合、SurfaceGraphicsDirtyを更新する
 ///
 /// Phase 4以降の自己描画方式では、各EntityがSurfaceを持ち、自分自身のみを描画するため、
@@ -23,36 +58,25 @@ use windows::core::Interface;
 /// 検知対象:
 /// - GraphicsCommandList: 描画コマンドの変更
 /// - SurfaceGraphics: Surfaceの再作成（Added含む）
-/// - GlobalArrangement: スケール成分の変更（DPIスケール対応）
+/// - GlobalArrangement: スケール成分の変更（DPIスケール対応）。位置だけの変化では描き直さない
+///   （描く中身は拡大率にしか依らない。大きさの変化は描画面の作り直しが `Changed<SurfaceGraphics>` で拾う）
 ///
 /// Changed<SurfaceGraphicsDirty>を検出することで、render_surfaceが描画を実行する。
-/// SurfaceUpdateRequestedマーカーは廃止され、フレーム番号更新方式に置き換えられた。
+/// 印を立てない部品は `SurfaceGraphicsDirty` を書き換えない（変化の印を立てない）。
 pub fn mark_dirty_surfaces(
-    mut changed_query: Query<
-        (Entity, &mut SurfaceGraphicsDirty, Option<&Name>),
-        (
-            Or<(
-                Changed<GraphicsCommandList>,
-                Changed<SurfaceGraphics>,
-                Added<SurfaceGraphics>,
-                Changed<GlobalArrangement>,
-            )>,
-            With<SurfaceGraphics>,
-        ),
-    >,
+    mut changed_query: Query<MarkDirtyData, MarkDirtyFilter>,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    let mut count = 0;
-    for (entity, mut dirty, name) in changed_query.iter_mut() {
+    for (mut dirty, surface, cmd_list, arrangement) in changed_query.iter_mut() {
+        let content_changed = surface.is_changed() || cmd_list.is_some_and(|c| c.is_changed());
+        let scale = arrangement.map(GlobalArrangement::scale);
+        if !content_changed && scale.is_none_or(|s| s == dirty.drawn_scale) {
+            continue;
+        }
         dirty.requested_frame = frame_count.0 as u64;
-        count += 1;
-        // 正常パスのログは抑制（毎フレーム出力されるため）
-        let _entity_name = format_entity_name(entity, name);
-        // eprintln!("[Frame {}] [mark_dirty_surfaces] Entity={} marked dirty", frame_count.0, _entity_name);
-    }
-    if count > 0 {
-        // 正常パスのログは抑制（毎フレーム出力されるため）
-        // eprintln!("[Frame {}] [mark_dirty_surfaces] Total {} entities marked dirty", frame_count.0, count);
+        if let Some(scale) = scale {
+            dirty.drawn_scale = scale;
+        }
     }
 }
 
@@ -78,26 +102,20 @@ pub fn mark_dirty_surfaces(
 ///
 /// Note: SurfaceGraphicsは visual_resource_management_system で事前に空で配置されているため、
 /// ここでは直接更新（set_surface）する。commands.insert() は使用しない。
+///
+/// 見た目が作り直された部品（`Changed<VisualGraphics>`）も対象にする。立ち直りでは描画面も
+/// 空になっているので、大きさが同じでも作り直して新しい見た目に筆を付ける。
+///
+/// 本番では装置が使える回だけ回す（`graphics_core_ready`）。装置が無いか無効なら戻るのは、
+/// 使う人が係を直に登録したときの守り。
 pub fn deferred_surface_creation_system(
-    graphics: Res<GraphicsCore>,
+    graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<Res<WucGraphicsResource>>,
-    // 統合クエリ: SurfaceGraphicsを持ち、GlobalArrangementまたはGraphicsCommandListが変更されたEntity
     // SurfaceGraphicsは事前配置されている前提
-    mut query: Query<
-        (
-            Entity,
-            &VisualGraphics,
-            &GraphicsCommandList,
-            &GlobalArrangement,
-            &mut SurfaceGraphics,
-            &mut SurfaceGraphicsDirty,
-            Option<&Name>,
-        ),
-        Or<(Changed<GlobalArrangement>, Changed<GraphicsCommandList>)>,
-    >,
+    mut query: Query<SurfaceCreationData, SurfaceCreationFilter>,
     mut stats: ResMut<SurfaceCreationStats>,
 ) {
-    if !graphics.is_valid() {
+    if !graphics.is_some_and(|g| g.is_valid()) {
         return;
     }
 
@@ -109,15 +127,8 @@ pub fn deferred_surface_creation_system(
         None => return,
     };
 
-    for (
-        entity,
-        visual_graphics,
-        _cmd_list,
-        global_arrangement,
-        mut surface_graphics,
-        mut dirty,
-        name,
-    ) in query.iter_mut()
+    for (entity, visual_graphics, global_arrangement, mut surface_graphics, mut dirty, name) in
+        query.iter_mut()
     {
         let entity_name = format_entity_name(entity, name);
 
@@ -269,17 +280,23 @@ pub fn deferred_surface_creation_system(
 ///
 /// GraphicsCommandListが削除されたEntityからSurfaceGraphicsをクリアする。
 /// VisualGraphicsはVisual階層を維持するため削除しない。
-/// SurfaceGraphicsコンポーネント自体は残し、内容をinvalidate()する。
+/// SurfaceGraphicsコンポーネント自体は残し、内容をclear()する。
+///
+/// 命令の列がまだ無い部品だけを片づける（`Without<GraphicsCommandList>`）。立ち直りで外した
+/// 命令の列が同じ回に付き直り、作り直したばかりの描画面を空にしないため。
 ///
 /// # Requirements
 /// - Req 1.3: CommandList削除時にSurface解放
 /// - Req 1.4: 専用クリーンアップシステム
 ///
-/// Note: commands.remove()ではなくinvalidate()を使用し、
+/// Note: commands.remove()ではなくclear()を使用し、
 /// コンポーネントの存在自体は維持する（事前配置パターン）。
 pub fn cleanup_surface_on_commandlist_removed(
     mut removed: RemovedComponents<GraphicsCommandList>,
-    mut query: Query<(Entity, &VisualGraphics, &mut SurfaceGraphics, Option<&Name>)>,
+    mut query: Query<
+        (Entity, &VisualGraphics, &mut SurfaceGraphics, Option<&Name>),
+        Without<GraphicsCommandList>,
+    >,
     mut stats: ResMut<SurfaceCreationStats>,
 ) {
     for entity in removed.read() {
@@ -298,11 +315,16 @@ pub fn cleanup_surface_on_commandlist_removed(
             );
 
             // Visual の Brush をクリア（Req 1.3）。DComp の SetContent(None) に対応。
-            if let Some(visual) = visual_graphics.visual() {
-                if let Ok(sprite) = visual.cast::<SpriteVisual>() {
-                    // None を設定して Brush を解除
-                    let _ = sprite.SetBrush(None::<&CompositionBrush>);
-                }
+            // 係には Err を返す先が無いので、失敗は記録だけ。
+            if let Some(visual) = visual_graphics.visual()
+                && let Ok(sprite) = visual.cast::<SpriteVisual>()
+                && let Err(e) = sprite.SetBrush(None::<&CompositionBrush>)
+            {
+                error!(
+                    entity = %entity_name,
+                    error = ?e,
+                    "[cleanup_surface_on_commandlist_removed] SetBrush(None) FAILED"
+                );
             }
 
             // SurfaceGraphics（surface + brush）をクリア（コンポーネント自体は残す）
