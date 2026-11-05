@@ -287,15 +287,3 @@ fn raw_iff_unknown_tag_or_unclosed() {
         }
     }
 }
-
-/// 字句は `w`／`b`／`p` の短縮形しか作らないので、想定外の短縮形の腕は台本からは届かない。
-/// トークンを直接組んで本体へ渡し、この腕でも `Raw` と知らないタグの印が揃うことを固定する。
-#[test]
-fn unexpected_shorthand_arm_is_raw_with_unknown_tag() {
-    use crate::sakura::{decode::decode_noted, lexer::Token};
-    let reads = decode_noted(vec![(Token::Shorthand { word: 'x', n: 5 }, 0..3)]);
-    assert_eq!(reads.len(), 1);
-    assert_eq!(reads[0].instruction, Instruction::Raw(r"\x5".to_string()));
-    assert_eq!(reads[0].span, 0..3);
-    assert_eq!(reads[0].notes, vec![UnknownTag]);
-}

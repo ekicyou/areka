@@ -35,7 +35,7 @@
 // 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
 
 use super::char_code::{CharCodeRead, read_char_code};
-use super::lexer::Token;
+use super::lexer::{ShorthandWord, Token};
 use super::model::{
     Anchor, CharCodeDrop, Choice, Instruction, MARKER_COMMAND, NewLineRatio, Read, ReadNote,
     SurfaceArg,
@@ -224,26 +224,31 @@ fn decode_token(token: Token, notes: &mut Vec<ReadNote>) -> Instruction {
         Token::SysVar(keyword) => Instruction::SystemVar(keyword),
         // 短縮形 `\<word>N` の意味写像は語で分岐する。待ち `\wN` = n × 50ms（既存等価）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
-        Token::Shorthand { word: 'w', n } => Instruction::Wait(wait_units(n as u64)),
+        Token::Shorthand {
+            word: ShorthandWord::Wait,
+            n,
+        } => Instruction::Wait(wait_units(n as u64)),
         // バルーン面短縮 `\bN`（要件 1.2/1.3）: 1 桁の面数字を不透明文字列で保持し
         // `BalloonSurface` へ。`\b[N]` ブラケット形の第 1 引数と対称（数値化しない）。
-        Token::Shorthand { word: 'b', n } => {
-            Instruction::BalloonSurface(SurfaceArg::new(n.to_string()))
-        }
+        Token::Shorthand {
+            word: ShorthandWord::Balloon,
+            n,
+        } => Instruction::BalloonSurface(SurfaceArg::new(n.to_string())),
         // 話者スコープ括弧なし短縮 `\pN`（ukadoc `\pID`＝任意番号・0〜9 のみ・R1.5/R4.4）:
         // 単一桁を scope 番号として `SpeakerScope{n}` へ。`\p[n]` ブラケット形（`decode_tag`
         // の `"p"` アーム）と等価。lexer が 1 桁のみ消費するため `\p10` = scope 1 ＋ Text("0")。
-        Token::Shorthand { word: 'p', n } => Instruction::SpeakerScope { n: n as u32 },
-        // 対象外の短縮語（`SHORTHAND_WORDS` の想定外拡張時）への防御。lexer は現状
-        // `'w'`/`'b'`/`'p'` のみ産むため到達不能だが、panic せず生情報を失わない `Raw` に留める。
-        Token::Shorthand { word, n } => {
-            notes.push(ReadNote::UnknownTag);
-            Instruction::Raw(format!("\\{word}{n}"))
-        }
+        Token::Shorthand {
+            word: ShorthandWord::Scope,
+            n,
+        } => Instruction::SpeakerScope { n: n as u32 },
         Token::Bare(word) => decode_bare(&word, notes),
         Token::Tag { word, args } => decode_tag(word, args, notes),
-        // タスク 4.2 のシーム: 構文上区切れたが正準でない／不正な生保持。
-        Token::Raw(s) => decode_passthrough_raw(s, notes),
+        // 字句が区切れず `Raw` に吸収した不正断片（未閉じ `[`/`"`・要件 10.1/13.8）は
+        // 意味を詐称せずそのまま保持し、「閉じていない」の印を付ける。
+        Token::Raw(s) => {
+            notes.push(ReadNote::Unclosed);
+            Instruction::Raw(s)
+        }
     }
 }
 
@@ -472,10 +477,11 @@ fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
 // シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_legacy_q）。
 // ───────────────────────────────────────────────────────────────────
 
-/// 【タスク 4.2】subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
+/// subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
 /// 保持（要件 11.2/13.8）。生情報を復元して失わない。
 /// なお `\b2[x]`（数字直後が `[` の非短縮ブラケット word `b2`）もここへ落ちる。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
+/// 呼び手は 1 つだが、網羅台帳と `doc/COMPAT_ARCHITECTURE.md` が名指しているので残す。
 fn decode_passthrough_tag(
     word: String,
     args: Vec<String>,
@@ -499,22 +505,15 @@ fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
     Instruction::GenericCommand { name, raw_args }
 }
 
-/// 【タスク 4.2】subset 外の bare タグ（`\i` `\j`・`\_n` `\__q` 等・**スコープタグを除く**）
+/// subset 外の bare タグ（`\i` `\j`・`\_n` `\__q` 等・**スコープタグを除く**）
 /// → 綴りを `\` 付きで復元した `Raw` として保持し、生情報を失わない（要件 11.2）。
 /// 正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
 /// `SpeakerScope` へ写像されるため、ここへは到達しない（R1.5/R4.4）。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
+/// 呼び手は 1 つだが、網羅台帳と `doc/COMPAT_ARCHITECTURE.md` が名指しているので残す。
 fn decode_passthrough_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
     notes.push(ReadNote::UnknownTag);
     Instruction::Raw(format!("\\{word}"))
-}
-
-/// 【タスク 4.2】lexer が区切れず `Raw` 吸収した不正断片（未閉じ `[`/`"`）→ そのまま
-/// `Raw` で保持（要件 10.1/13.8）。decode 側で意味を詐称しない。
-/// 「閉じていない」の印を付ける。
-fn decode_passthrough_raw(s: String, notes: &mut Vec<ReadNote>) -> Instruction {
-    notes.push(ReadNote::Unclosed);
-    Instruction::Raw(s)
 }
 
 /// `Raw` プレースホルダ用に `\word[args]` を概形再構成する（情報を失わないため）。

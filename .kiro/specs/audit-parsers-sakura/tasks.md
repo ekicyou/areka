@@ -64,7 +64,7 @@
   - compile が知らないタグの Raw を `warn!(event = "raw_ignored", head, bytes)` で捨てる（29）
   - `move_bang_is_generic_command`・`raw_is_dropped_with_one_warning` が緑で、`areka` を含むワークスペースがコンパイルを通る
   - _Requirements: 2.1, 2.7, 3.1, 4.1, 7.1, 7.3_
-- [ ] 3.4 振り分けの包みと短縮語の形を整える（T9）
+- [x] 3.4 振り分けの包みと短縮語の形を整える（T9）
   - 3 つの包みのうち素通しの Raw の包みだけを畳み、`doc/` が名指す 2 つは残して見出しの理由を「名指されているので残す」に（65・設計の討議の議題 6）
   - 短縮語を 3 つの腕の型にし、守りの腕とそのテストを消す（66）・テストの見出しを直す（67）
   - sakura のテストが緑で、`doc/` の中身は変わらない
@@ -203,3 +203,4 @@
 - 7.2 への申し送り（2026-11-05 audit-seriko の知らせ）: 相手は `areka-seriko` の `bind.rs` から `BindResolver::new`（テスト用）と `BindOptionDecls` を消し、`lib.rs` の再輸出・doc からも外す。`areka` の `emo2_boot/shell_carry_tests.rs` の `BindResolver::new` の呼び出しも descript の文字列から組む形に替える。指摘 15 が触る `from_groups` の 3 枝と `ScopeNames::read` には相手は触らない。行がぶつかったら後から着地した側が合わせる。
 - 2.2: 要件 7.6 の字面「47 は振る舞いを変えず記録を足す」と、design の一覧 47（`decimal_u32` で `bindgroup0010`・`+10`・`char02.` を読まずに飛ばして `warn!`）が食い違って見える。実装は design に従った。完了の前に要件の字を design に合わせるか開発者に確かめる。`char02.` のスコープの番号は黙って飛ぶ（前からある黙った失敗の 1 例）。
 - 7.4 への申し送り（2026-11-05 audit-emo-present の知らせ）: 相手は `shell_target.rs` の `build_shell_target`・`build_shell_target_with_boxes` を `pub(crate)` にし、`#[cfg(test)]` を 1 行ずつ足した（署名は変えていない・本番は `build_core` を直に呼ぶ）。行数は 951→953。後で doc のリンクの括弧を外す（行数は動かない）。7.4 の頭の行数の測り直しではこの 953 行を起点にする。
+- 4.3 への申し送り（3.4 のレビュー）: 指摘 74 の doc の直しで、`sakura/lexer.rs:55-57` の `Token::Shorthand` の doc（`word='w'`／`'b'`／`'p'` の字の形）を `ShorthandWord` の型に合わせ、`decode.rs:8-37` の古い言い回しも直す。

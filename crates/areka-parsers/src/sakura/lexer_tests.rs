@@ -8,10 +8,10 @@
 //! - タグ間テキスト
 //! - 角括弧内のカンマ区切り複数引数
 //!
-//! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）はタスク 3.2 の領分ゆえ
-//! ここでは検証しない。
+//! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）はタスク 3.2 の節で、裸形 `\bN` の
+//! 短縮はタスク 1.1 の節で確かめる。
 
-use super::lexer::{Token, lex};
+use super::lexer::{ShorthandWord, Token, lex};
 
 /// タスク 3.1 の観測基準（tasks.md L23）:
 /// `\s[1000]` `\p[0]` `%username` `\w2` `\![a,b,c]` `こんにちは` が
@@ -32,7 +32,10 @@ fn task_3_1_observable_done_example() {
                 args: vec!["0".to_string()],
             },
             Token::SysVar("username".to_string()),
-            Token::Shorthand { word: 'w', n: 2 },
+            Token::Shorthand {
+                word: ShorthandWord::Wait,
+                n: 2
+            },
             Token::Tag {
                 word: "!".to_string(),
                 args: vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -113,8 +116,20 @@ fn newline_tag_with_percent_bracket() {
 
 #[test]
 fn wait_shorthand_single_digit() {
-    assert_eq!(lex(r"\w2"), vec![Token::Shorthand { word: 'w', n: 2 }]);
-    assert_eq!(lex(r"\w9"), vec![Token::Shorthand { word: 'w', n: 9 }]);
+    assert_eq!(
+        lex(r"\w2"),
+        vec![Token::Shorthand {
+            word: ShorthandWord::Wait,
+            n: 2
+        }]
+    );
+    assert_eq!(
+        lex(r"\w9"),
+        vec![Token::Shorthand {
+            word: ShorthandWord::Wait,
+            n: 9
+        }]
+    );
 }
 
 #[test]
@@ -392,7 +407,13 @@ fn balloon_bare_single_digit_not_leaked_as_text() {
 /// `\w1` と同型（`word` のみ `'b'`）＝語に依らず共通規律。
 #[test]
 fn balloon_bare_shorthand_single_digit() {
-    assert_eq!(lex(r"\b1"), vec![Token::Shorthand { word: 'b', n: 1 }]);
+    assert_eq!(
+        lex(r"\b1"),
+        vec![Token::Shorthand {
+            word: ShorthandWord::Balloon,
+            n: 1
+        }]
+    );
 }
 
 /// 要件 1.3: `\b12` は先頭 1 桁のみ面数字として取り込み、続く `2` は正当な
@@ -402,7 +423,10 @@ fn balloon_bare_shorthand_consumes_one_digit_rest_is_text() {
     assert_eq!(
         lex(r"\b12"),
         vec![
-            Token::Shorthand { word: 'b', n: 1 },
+            Token::Shorthand {
+                word: ShorthandWord::Balloon,
+                n: 1
+            },
             Token::Text("2".to_string()),
         ],
     );
@@ -456,7 +480,10 @@ fn balloon_bare_shorthand_preserves_neighbors() {
         lex(r"あ\b3\eい"),
         vec![
             Token::Text("あ".to_string()),
-            Token::Shorthand { word: 'b', n: 3 },
+            Token::Shorthand {
+                word: ShorthandWord::Balloon,
+                n: 3
+            },
             Token::Bare("e".to_string()),
             Token::Text("い".to_string()),
         ],

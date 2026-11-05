@@ -55,8 +55,8 @@ pub(crate) enum Token {
     /// 待ち短縮 `\wN`（`word='w'`）・バルーン面短縮 `\bN`（`word='b'`）・話者スコープ
     /// 括弧なし形 `\pN`（`word='p'`・ukadoc `\pID`＝任意番号 0〜9）を語に依らず同一規律で
     /// 表す一般化トークン。意味写像（`'w'`→待ち／`'b'`→バルーン面／`'p'`→話者スコープ）は
-    /// `decode` の責務（→ 対象語は `SHORTHAND_WORDS`）。
-    Shorthand { word: char, n: u8 },
+    /// `decode` の責務（→ 対象語は `ShorthandWord` の 3 つだけ）。
+    Shorthand { word: ShorthandWord, n: u8 },
     /// `%keyword`（システム変数・`%` を除いたキーワードを保持）。
     SysVar(String),
     /// タグ間プレーンテキスト。
@@ -71,7 +71,26 @@ pub(crate) enum Token {
 /// `\pN`（ukadoc: `\p[ID]`/`\pID`＝任意番号・`0〜9` のみ）も同一の shorthand 規律で
 /// 扱う。判定規則（**1 桁**数字・直後 `[` なら正準タグ優先）は語に依らず共通で、
 /// `\pN` の単一桁制約（`\p10` = scope 1 ＋ リテラル `"0"`）はこの 1 桁消費で満たされる。
-const SHORTHAND_WORDS: &[char] = &['w', 'b', 'p'];
+/// 3 つの腕の型なので、decode に想定外の語への守りの腕は要らない（指摘 66）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ShorthandWord {
+    /// `\wN`（待ち）。
+    Wait,
+    /// `\bN`（バルーン面）。
+    Balloon,
+    /// `\pN`（話者スコープ）。
+    Scope,
+}
+
+/// タグ名の 1 文字目が短縮対象語なら、その語を返す。
+fn shorthand_word(c: char) -> Option<ShorthandWord> {
+    match c {
+        'w' => Some(ShorthandWord::Wait),
+        'b' => Some(ShorthandWord::Balloon),
+        'p' => Some(ShorthandWord::Scope),
+        _ => None,
+    }
+}
 
 /// 引数を取らないタグの綴り（ukadoc の台帳で字の形だけが載るもの・指摘 27）。
 ///
@@ -248,13 +267,13 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
 
     // 短縮形判定（語に依らず共通・要件 1.2）: word が 1 文字（短縮対象語）で、
     // 続く文字が 1 桁数字、かつその数字の次が `[` でない（`\w[2]`/`\b2[x]` は正準タグ）。
-    if SHORTHAND_WORDS.contains(&first)
+    if let Some(word) = shorthand_word(first)
         && let Some(&(_, d)) = chars.get(j)
         && d.is_ascii_digit()
         && chars.get(j + 1).map(|&(_, c)| c) != Some('[')
     {
         let n = (d as u8) - b'0';
-        return (Token::Shorthand { word: first, n }, j + 1);
+        return (Token::Shorthand { word, n }, j + 1);
     }
 
     // それ以外: ワードを `[`／`\`／`%` の手前まで、ただし 3 文字で頭打ちにして読み進める
@@ -270,7 +289,7 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
 
     // `[` を見る前にタグ名の長さを確定する。例外は短縮対象語＋1 桁（短縮形判定を
     // 抜けた以上、次は必ず `[`）で、読み取り結果をそのまま使う。
-    let shorthand_digit = SHORTHAND_WORDS.contains(&first)
+    let shorthand_digit = shorthand_word(first).is_some()
         && chars
             .get(word_start + 1)
             .is_some_and(|&(_, d)| d.is_ascii_digit());

@@ -9,7 +9,7 @@
 //! エスケープ・クォート・未閉じの寛容吸収・引数分割）も同じファイルで固定する
 //! （要件 4.1〜4.6／5.7）。すべて決定論（`#[test]`・時計／GPU／実機に依存しない・要件 5.8）。
 
-use super::{Token, lex};
+use super::{ShorthandWord, Token, lex};
 
 // ───────────────────────────────────────────────────────────────────
 // 期待値の組み立て補助（本ファイル内のみで使う）。
@@ -197,7 +197,13 @@ fn known_one_char_tags_do_not_swallow_following_body_text() {
 /// 角括弧付きタグを優先する。
 #[test]
 fn shorthand_rules_are_unchanged() {
-    assert_eq!(lex(r"\w2"), vec![Token::Shorthand { word: 'w', n: 2 }]);
+    assert_eq!(
+        lex(r"\w2"),
+        vec![Token::Shorthand {
+            word: ShorthandWord::Wait,
+            n: 2
+        }]
+    );
     assert_eq!(lex(r"\w[2]"), vec![tag("w", &["2"])]);
 }
 

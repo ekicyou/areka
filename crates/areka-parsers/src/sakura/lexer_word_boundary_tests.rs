@@ -10,7 +10,7 @@
 //! `lexer_tests.rs` が既に固定しているため、ここでは重複させない。
 //! すべて決定論（`#[test]`・時計／GPU／実機に依存しない・要件 5.10）。
 
-use super::{Token, lex};
+use super::{ShorthandWord, Token, lex};
 
 // ───────────────────────────────────────────────────────────────────
 // 期待値の組み立て補助（本ファイル内のみで使う）。
@@ -39,7 +39,7 @@ fn tag(word: &str, args: &[&str]) -> Token {
     }
 }
 
-fn shorthand(word: char, n: u8) -> Token {
+fn shorthand(word: ShorthandWord, n: u8) -> Token {
     Token::Shorthand { word, n }
 }
 
@@ -218,8 +218,11 @@ fn shorthand_digit_rule_and_legacy_q_star_are_unchanged() {
     assert_eq!(lex(r"\w2[x]"), vec![tag("w2", &["x"])]);
     assert_eq!(lex(r"\b2[x]"), vec![tag("b2", &["x"])]);
     assert_eq!(lex(r"\p2[x]"), vec![tag("p2", &["x"])]);
-    assert_eq!(lex(r"\w2"), vec![shorthand('w', 2)]);
-    assert_eq!(lex(r"\b12"), vec![shorthand('b', 1), text("2")]);
+    assert_eq!(lex(r"\w2"), vec![shorthand(ShorthandWord::Wait, 2)]);
+    assert_eq!(
+        lex(r"\b12"),
+        vec![shorthand(ShorthandWord::Balloon, 1), text("2")]
+    );
 
     assert_eq!(
         lex(r"\q*[ID][タイトル]"),
@@ -248,7 +251,7 @@ fn forms_unaffected_by_word_boundary_rule() {
     );
     assert_eq!(
         lex(r"\w9テキスト[注]です"),
-        vec![shorthand('w', 9), text("テキスト[注]です")]
+        vec![shorthand(ShorthandWord::Wait, 9), text("テキスト[注]です")]
     );
     assert_eq!(
         lex(r"\eテキスト［注］です"),
