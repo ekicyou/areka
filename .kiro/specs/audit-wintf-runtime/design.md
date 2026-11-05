@@ -207,7 +207,7 @@ crates/wintf/
 | C3 | `src/com/wuc.rs`・`src/com/mod.rs`・`tests/com.rs`（C1 の後）（＋消すファイル） |
 | C4 | `src/com/wic.rs`・`src/com/wic_tests.rs`・`build.rs`・`tests/com/wic_test.rs`・`tests/com/common/mod.rs`・`tests/widget.rs`・`tests/widget/bitmap_source_integration_test.rs`・`crates/areka-emo-atlas/src/decode/wic_arm.rs`・`crates/areka-emo-atlas/src/decode/wic_arm_tests.rs` |
 | R1 | `src/runtime/tick_bridge.rs`・`src/runtime/mod.rs`（`run` の中継の呼び出しと 337・365 行の注記）（＋新規 1） |
-| R2 | `src/runtime/window_factory.rs`・`src/runtime/window_registry.rs`・`src/ecs/window/window_system.rs`（＋新規 1） |
+| R2 | `src/runtime/window_factory.rs`・`src/runtime/window_registry.rs`・`src/runtime/mod.rs`（R1 の後・`WindowCreationFailed` の再公開の 1 行だけ）・`src/ecs/window/window_system.rs`（＋新規 1） |
 | R3 | `src/runtime/mod.rs`・`src/runtime/message_loop.rs`（＋新規 1・`examples/dcomp_demo.rs` を消す） |
 | W1 | `src/lib.rs`・`src/api.rs`・`src/win_style.rs`・`src/win_style_accept_files_tests.rs`・`src/api_owner_chain_probe_tests.rs`（`create_probe_window` だけ） |
 | W2 | `src/api.rs`（W1 の後・87 の doc）・`src/api_owner_chain_probe_tests.rs`（W1 の後）・`src/api_owner_chain_nudge_probe_tests.rs`・`src/numerics/aabb.rs` |
