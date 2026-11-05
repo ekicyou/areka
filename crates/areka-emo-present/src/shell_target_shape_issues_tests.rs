@@ -8,7 +8,8 @@ use areka_emo_atlas::MemoryDecoder;
 use areka_emo_compose::{BindSet, Composer, PatternState};
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events, write_descript};
+use super::test_support::{decoder_with, describe, write_descript};
+use log_capture_kit::capture;
 
 /// 知らない `animation-sort`・描かないメソッドの pattern（面 0 の animation0）・循環（面 10）・
 /// 両方に当たる pattern（面 0 の animation1 が自分を `replace` で指す）を 1 つずつ持つ。
@@ -32,22 +33,8 @@ fn fixture() -> (TempPath, MemoryDecoder) {
     let dir = TempPath::new("shell-target-shape-issues");
     std::fs::write(dir.child("surfaces.txt"), TEXT).expect("記述ファイル作成");
     write_descript(dir.path());
-    let mut dec = MemoryDecoder::new();
-    for name in ["base.png", "part.png"] {
-        dec.insert(dir.child(name), 1, 1, 4, vec![10u8, 20, 30, 255], true);
-    }
+    let dec = decoder_with(dir.path(), &["base.png", "part.png"]);
     (dir, dec)
-}
-
-/// `warn!` 1 行を「本文|欄=値…」にする（`message` 以外の欄は名前の昇順）。
-fn describe(e: &CapturedEvent) -> String {
-    let mut line = e.message().to_string();
-    for (name, value) in e.fields_map() {
-        if name != "message" {
-            line.push_str(&format!("|{name}={value}"));
-        }
-    }
-    line
 }
 
 /// 1 度目（読み込みで組んだ面の表）と 2 度目（組み直し）は同じ面の集まりを返す。
@@ -84,7 +71,7 @@ fn take_world_first_and_second_return_same_surfaces() {
 fn load_warns_each_shape_issue_once() {
     let (dir, dec) = fixture();
     let (_target, events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+        capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
     let mut got: Vec<String> = events
         .iter()

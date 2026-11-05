@@ -11,12 +11,14 @@
 
 use super::*;
 
-use std::path::PathBuf;
-
 use areka_emo_atlas::{ElementId, MemoryDecoder};
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events, write_descript};
+use super::test_support::{
+    BOXES_FIXTURE_IMAGES, CapturedEvent, NESTING_FIXTURE_IMAGES, boxes_fixture_dir, decoder_with,
+    nesting_fixture_dir, write_descript,
+};
+use log_capture_kit::capture;
 
 /// 読み込みの記録の宛先（シェルの権威と、透過の宣言の記録）。
 const LOAD_TARGETS: [&str; 2] = [
@@ -30,15 +32,6 @@ fn load_records(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .iter()
         .filter(|e| LOAD_TARGETS.contains(&e.target.as_str()))
         .collect()
-}
-
-/// 不透明 1×1 PBGRA の絵を `names` の名前で入れた復号器。
-fn decoder_with(dir: &Path, names: &[&str]) -> MemoryDecoder {
-    let mut dec = MemoryDecoder::new();
-    for name in names {
-        dec.insert(dir.join(name), 1, 1, 4, vec![10u8, 20, 30, 255], true);
-    }
-    dec
 }
 
 /// 戻り値の比べられる写し（索引表は `HashMap` を持ち `Debug` の順が定まらないので鍵の並びで写す）。
@@ -67,10 +60,9 @@ fn fingerprint(target: &ShellTarget) -> String {
 /// 両入口で 1 回ずつ読み、戻り値が等しいこと・出す入口に `needles` のどの文言の記録も在ること・
 /// 出さない入口の読み込みの記録が 0 行であることを確かめる。
 fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needles: &[&str]) {
-    let (emit, emit_events) =
-        capture_events(|| load_shell_target(dir, dec).expect("出す入口で読める"));
+    let (emit, emit_events) = capture(|| load_shell_target(dir, dec).expect("出す入口で読める"));
     let (quiet, quiet_events) =
-        capture_events(|| load_shell_target_quiet(dir, dec).expect("出さない入口で読める"));
+        capture(|| load_shell_target_quiet(dir, dec).expect("出さない入口で読める"));
 
     let emitted = load_records(&emit_events);
     for needle in needles {
@@ -126,38 +118,16 @@ fn records_fixture_is_silent_and_equal() {
 /// 入れ子の検体（無い番号・循環・descript.txt が無い）。
 #[test]
 fn nesting_fixture_is_silent_and_equal() {
-    let dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("areka-emo-compose")
-        .join("tests")
-        .join("fixtures")
-        .join("surface-nesting");
-    let dec = decoder_with(
-        &dir,
-        &[
-            "body.png",
-            "eye.png",
-            "eye_closed.png",
-            "mouth.png",
-            "mouth_open.png",
-            "part.png",
-            "surface11.png",
-            "surface2.png",
-        ],
-    );
+    let dir = nesting_fixture_dir();
+    let dec = decoder_with(&dir, &NESTING_FIXTURE_IMAGES);
     assert_quiet_matches_emit(&dir, &dec, &["element定義が指したサーフェスが無い"]);
 }
 
 /// 箱の検体（箱の数の `info!`）と、誤りのある箱（各件の `warn!`）。
 #[test]
 fn box_fixtures_are_silent_and_equal() {
-    let dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("areka-emo-text")
-        .join("tests")
-        .join("fixtures")
-        .join("shell-balloon");
-    let dec = decoder_with(&dir, &["body0.png", "body1.png", "body2.png", "body3.png"]);
+    let dir = boxes_fixture_dir();
+    let dec = decoder_with(&dir, &BOXES_FIXTURE_IMAGES);
     assert_quiet_matches_emit(&dir, &dec, &["箱を読んだ"]);
 
     let bad = TempPath::new("shell-quiet-bad-box");
@@ -203,7 +173,7 @@ fn image_only_and_no_descript_are_silent_and_equal() {
 /// あることを確かめる（要件 3.6）。
 fn assert_quiet_failure(dir: &Path, needle: &str) -> ShellLoadError {
     let dec = MemoryDecoder::new();
-    let (result, events) = capture_events(|| load_shell_target_quiet(dir, &dec));
+    let (result, events) = capture(|| load_shell_target_quiet(dir, &dec));
     let records = load_records(&events);
     assert_eq!(records.len(), 1, "失敗の記録だけが 1 行: {records:?}");
     assert_eq!(records[0].level, tracing::Level::ERROR, "{records:?}");
@@ -270,9 +240,9 @@ fn quiet_load_silences_bake_and_fold_records() {
     dec.insert(dir.child("zero.png"), 0, 0, 0, Vec::new(), true);
 
     let (emit, emit_events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("出す入口で読める"));
+        capture(|| load_shell_target(dir.path(), &dec).expect("出す入口で読める"));
     let (quiet, quiet_events) =
-        capture_events(|| load_shell_target_quiet(dir.path(), &dec).expect("出さない入口で読める"));
+        capture(|| load_shell_target_quiet(dir.path(), &dec).expect("出さない入口で読める"));
 
     assert_eq!(
         count_message(&emit_events, ZERO_SIZED),

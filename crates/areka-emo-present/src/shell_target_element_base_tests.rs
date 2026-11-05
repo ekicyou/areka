@@ -24,7 +24,7 @@
 
 use super::*;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_emo_atlas::{MemoryDecoder, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
@@ -32,8 +32,9 @@ use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    CapturedEvent, capture_events, claudia_shell_dir, with_com_initialized, write_descript,
+    CapturedEvent, claudia_shell_dir, describe, insert_solid, with_com_initialized, write_descript,
 };
+use log_capture_kit::capture;
 
 /// 画像 1 枚の登録内容（ファイル名・実寸・全画素の色＝premultiplied BGRA 不透明）。
 type Image = (&'static str, (u32, u32), [u8; 4]);
@@ -59,23 +60,12 @@ fn shell_dir() -> PathBuf {
     PathBuf::from(r"C:\areka-test\shell-target-element-base")
 }
 
-/// 全画素が同じ色の不透明な絵を復号器へ登録する。
-fn insert_solid(dec: &mut MemoryDecoder, dir: &Path, (name, (w, h), color): Image) {
-    let bgra: Vec<u8> = color
-        .iter()
-        .copied()
-        .cycle()
-        .take((w * h * 4) as usize)
-        .collect();
-    dec.insert(dir.join(name), w, h, w * 4, bgra, true);
-}
-
 /// 文面を読み、`files` をフォルダ直下に在るファイル名・`images` を復号器の中身として焼く。
 fn bake(text: &str, files: &[&str], images: &[Image]) -> ShellTarget {
     let dir = shell_dir();
     let mut dec = MemoryDecoder::new();
-    for &image in images {
-        insert_solid(&mut dec, &dir, image);
+    for &(name, size, color) in images {
+        insert_solid(&mut dec, &dir, name, size, color);
     }
     build_shell_target(
         parse(text),
@@ -341,9 +331,9 @@ fn load_events(text: &str, times: usize) -> Vec<CapturedEvent> {
     std::fs::write(dir.child("surfaces.txt"), text).expect("記述ファイル作成");
     write_descript(dir.path());
     let mut dec = MemoryDecoder::new();
-    insert_solid(&mut dec, dir.path(), ("body.png", BODY, COLOR_BODY));
-    insert_solid(&mut dec, dir.path(), ("face.png", FACE, COLOR_FACE));
-    let ((), events) = capture_events(|| {
+    insert_solid(&mut dec, dir.path(), "body.png", BODY, COLOR_BODY);
+    insert_solid(&mut dec, dir.path(), "face.png", FACE, COLOR_FACE);
+    let ((), events) = capture(|| {
         for _ in 0..times {
             load_shell_target(dir.path(), &dec).expect("シェルは読める");
         }
@@ -356,15 +346,7 @@ fn warn_or_worse(events: &[CapturedEvent]) -> Vec<String> {
     events
         .iter()
         .filter(|e| e.level <= tracing::Level::WARN)
-        .map(|e| {
-            let mut line = e.message().to_string();
-            for (name, value) in e.fields_map() {
-                if name != "message" {
-                    line.push_str(&format!("|{name}={value}"));
-                }
-            }
-            line
-        })
+        .map(describe)
         .collect()
 }
 
@@ -420,7 +402,7 @@ const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 fn claudia_base_surfaces_are_full_size_without_warnings() {
     with_com_initialized(|| {
         let dec = WicDecoderArm::new().expect("COM 初期化下で WIC ファクトリが作れる");
-        let (target, events) = capture_events(|| {
+        let (target, events) = capture(|| {
             load_shell_target(&claudia_shell_dir(), &dec).expect("claudia のシェルは読める")
         });
         // 3 面の外形を並べて比べる（赤のとき、どの面がどの大きさに縮んだかが一度に見える）。

@@ -247,7 +247,7 @@ fn build_target_assets_with_pattern(
         &atlas,
         1000,
         &BindSet::default(),
-        &pattern_overlay(2000, 5000),
+        &pattern_overlay_at(2000, 5000, 0, 0),
     )
     .0;
     assert_ne!(
@@ -256,12 +256,6 @@ fn build_target_assets_with_pattern(
     );
 
     (world, atlas, golden_plain, golden_pattern)
-}
-
-/// animation `anim_id` に surface `surf` の `Overlay` 現在コマ 1 枚を持つ非空 `PatternState`。
-/// `PatternState::default()`（空）と等価でないことを保証する pattern 差分の実体。
-fn pattern_overlay(anim_id: u32, surf: u32) -> PatternState {
-    pattern_overlay_at(anim_id, surf, 0, 0)
 }
 
 /// Task 8.2 完了檻（pattern が presenter → compose ＋ cache を実際に貫く・R5.1/5.2/5.4）: 同一
@@ -310,7 +304,11 @@ fn show_surface_pattern_flows_through_to_compose_and_cache() {
     );
 
     // (2) 同一 id・binds・非空 pattern → 再合成されて golden_pattern（pattern が compose＋cache を貫く証跡）。
-    show(&mut presenter, &mut world, pattern_overlay(2000, 5000));
+    show(
+        &mut presenter,
+        &mut world,
+        pattern_overlay_at(2000, 5000, 0, 0),
+    );
     let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
     assert_eq!(
         rb, golden_pattern,

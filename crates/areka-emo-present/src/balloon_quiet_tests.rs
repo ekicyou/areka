@@ -12,7 +12,8 @@
 
 use super::*;
 
-use super::test_support::{CapturedEvent, TempDir, capture_events};
+use super::test_support::{CapturedEvent, TempDir};
+use log_capture_kit::capture;
 
 /// 読み込みの記録の宛先（バルーンの権威と、透過の宣言の記録）。
 const LOAD_TARGETS: [&str; 2] = [
@@ -46,8 +47,8 @@ fn assert_silenced(emit_events: &[CapturedEvent], quiet_events: &[CapturedEvent]
 
 /// 系列の解決を両入口で行い、戻り値が等しく、出さない入口の記録が 0 行であることを確かめる。
 fn assert_resolve_quiet_matches_emit(dir: &Path, scope: u32, needle: &str) {
-    let (emit, emit_events) = capture_events(|| resolve_balloon_faces(dir, scope));
-    let (quiet, quiet_events) = capture_events(|| resolve_balloon_faces_quiet(dir, scope));
+    let (emit, emit_events) = capture(|| resolve_balloon_faces(dir, scope));
+    let (quiet, quiet_events) = capture(|| resolve_balloon_faces_quiet(dir, scope));
     assert_silenced(&emit_events, &quiet_events, needle);
     assert_eq!(
         quiet.expect("出さない入口で解決できる"),
@@ -58,8 +59,8 @@ fn assert_resolve_quiet_matches_emit(dir: &Path, scope: u32, needle: &str) {
 
 /// 透過の宣言の読みを両入口で行い、戻り値が等しく、出さない入口の記録が 0 行であることを確かめる。
 fn assert_alpha_quiet_matches_emit(dir: &Path, needle: &str) {
-    let (emit, emit_events) = capture_events(|| load_balloon_use_self_alpha(dir));
-    let (quiet, quiet_events) = capture_events(|| load_balloon_use_self_alpha_quiet(dir));
+    let (emit, emit_events) = capture(|| load_balloon_use_self_alpha(dir));
+    let (quiet, quiet_events) = capture(|| load_balloon_use_self_alpha_quiet(dir));
     assert_silenced(&emit_events, &quiet_events, needle);
     assert_eq!(quiet, emit, "戻り値が両入口で違う");
 }
@@ -108,7 +109,7 @@ fn assert_single_error(events: &[CapturedEvent], needle: &str) {
 fn quiet_missing_face_zero_still_records_the_error() {
     let dir = TempDir::new();
     dir.touch("balloons1.png");
-    let (result, events) = capture_events(|| resolve_balloon_faces_quiet(dir.path(), 0));
+    let (result, events) = capture(|| resolve_balloon_faces_quiet(dir.path(), 0));
     assert_single_error(&events, "面 ID 0 が連鎖のどの接頭辞でも解決できない");
     assert!(
         matches!(result, Err(BalloonLoadError::NoFace0 { scope: 0, .. })),
@@ -123,14 +124,14 @@ fn quiet_missing_folder_still_records_the_error() {
     let dir = TempDir::new();
     let missing = dir.path().join("no-such-balloon-dir");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces_quiet(&missing, 0));
+    let (result, events) = capture(|| resolve_balloon_faces_quiet(&missing, 0));
     assert_single_error(&events, "走査に失敗");
     assert!(
         matches!(result, Err(BalloonLoadError::List { .. })),
         "{result:?}"
     );
 
-    let (alpha, events) = capture_events(|| load_balloon_use_self_alpha_quiet(&missing));
+    let (alpha, events) = capture(|| load_balloon_use_self_alpha_quiet(&missing));
     assert_single_error(&events, "走査に失敗");
     assert_eq!(alpha, UseSelfAlpha::Undeclared);
 }
@@ -178,11 +179,11 @@ fn quiet_faces_build_silences_key_color_and_is_equal() {
         false,
     );
 
-    let (emit, emit_events) = capture_events(|| {
+    let (emit, emit_events) = capture(|| {
         build_balloon_target_from_faces(dir.path(), &dec, &faces, UseSelfAlpha::Off)
             .expect("出す入口で組める")
     });
-    let (quiet, quiet_events) = capture_events(|| {
+    let (quiet, quiet_events) = capture(|| {
         build_balloon_target_from_faces_quiet(dir.path(), &dec, &faces, UseSelfAlpha::Off)
             .expect("出さない入口で組める")
     });
@@ -210,7 +211,7 @@ fn quiet_faces_build_still_records_the_bake_failure() {
     // 絵を登録しない＝読めない面 0。
     let dec = areka_emo_atlas::MemoryDecoder::new();
 
-    let (result, events) = capture_events(|| {
+    let (result, events) = capture(|| {
         build_balloon_target_from_faces_quiet(dir.path(), &dec, &faces, UseSelfAlpha::Off)
     });
     let failures: Vec<&CapturedEvent> = events

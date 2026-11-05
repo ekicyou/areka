@@ -13,8 +13,9 @@ use std::num::NonZeroU32;
 
 use areka_emo_atlas::{LoopCount, UseSelfAlpha, WicDecoderArm};
 
-use super::test_support::{capture_events, with_com_initialized};
+use super::test_support::with_com_initialized;
 use crate::balloon::{build_balloon_target_from_faces, resolve_balloon_faces};
+use log_capture_kit::capture;
 
 fn fixture_dir(sub: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -43,7 +44,7 @@ fn the_shell_loads_with_every_film_and_no_warnings() {
         let dir = fixture_dir("shell");
         let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
         let (target, events) =
-            capture_events(|| load_shell_target(&dir, &arm).expect("検体のシェルは読める"));
+            capture(|| load_shell_target(&dir, &arm).expect("検体のシェルは読める"));
 
         let warns: Vec<_> = events
             .iter()

@@ -401,7 +401,7 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
     (world, atlas, golden_1000, golden_3000)
 }
 
-/// [`pattern_overlay`] の一般形（現在コマの重ね位置 `(x, y)` を指定する）。
+/// animation `anim_id` に surface `surf` の `Overlay` 現在コマ 1 枚を重ね位置 `(x, y)` で持つ非空 `PatternState`。
 ///
 /// 非ゼロ `(x, y)` は SERIKO アニメの実 pattern（`surfaces.txt` の `animationN.patternM` が持つ
 /// 座標）と同型であり、k 追従の相対配置檻が要求する**非対称な重ね位置**を作る。

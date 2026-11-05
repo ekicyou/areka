@@ -31,13 +31,14 @@
 
 use super::*;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_emo_atlas::MemoryDecoder;
 use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, PatternState};
 use areka_parsers::shell::parse;
 
-use super::test_support::{CapturedEvent, capture_events};
+use super::test_support::{CapturedEvent, insert_solid, layer0_path, pixel};
+use log_capture_kit::capture;
 
 /// 面 1（ア）の画像の実寸。
 const SOLO: (u32, u32) = (7, 5);
@@ -102,18 +103,6 @@ fn shell_dir() -> PathBuf {
     PathBuf::from(r"C:\areka-test\shell-target-base-image")
 }
 
-/// 全画素が同じ色の不透明な絵を復号器へ登録する。
-fn insert_solid(dec: &mut MemoryDecoder, dir: &Path, name: &str, size: (u32, u32), color: [u8; 4]) {
-    let (w, h) = size;
-    let bgra: Vec<u8> = color
-        .iter()
-        .copied()
-        .cycle()
-        .take((w * h * 4) as usize)
-        .collect();
-    dec.insert(dir.join(name), w, h, w * 4, bgra, true);
-}
-
 /// 表ア〜エの入力を焼いた [`ShellTarget`] を作る（絵 6 枚はすべて実寸つきで登録済み）。
 fn build_table_target() -> ShellTarget {
     let dir = shell_dir();
@@ -153,24 +142,6 @@ fn compose(
         &BindSet::default(),
         &PatternState::default(),
     )
-}
-
-/// 合成結果の 1 画素（premultiplied BGRA）を引く。
-fn pixel(surface: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    let at = (y * surface.stride() + x * 4) as usize;
-    surface.bytes()[at..at + 4]
-        .try_into()
-        .expect("4 バイトの画素")
-}
-
-/// 面の表の層 0 の画像パスを引く（層 0 が無ければ `None`）。
-fn layer0_path(world: &EmoWorld, id: u32) -> Option<String> {
-    world
-        .surface(id)?
-        .elements
-        .iter()
-        .find(|e| e.layer == 0)
-        .map(|e| e.path.as_str().to_string())
 }
 
 /// 表ア（要件 2.2・3.9）: 宣言の無い番号は画像 1 枚で存在し、外形は**画像の実寸**になる。
@@ -363,7 +334,7 @@ fn append_reaches_a_surface_that_exists_only_as_an_image() {
 /// 要件 3.8: 宣言も画像も無い番号への `surface.append` は、既存の `warn!` を出して面を作らない。
 #[test]
 fn append_to_an_unknown_surface_warns_and_creates_nothing() {
-    let (target, events) = capture_events(build_table_target);
+    let (target, events) = capture(build_table_target);
     let world = target.build_world();
 
     assert!(

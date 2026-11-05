@@ -57,27 +57,8 @@ pub(crate) fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
 // 実ログを観測しなければ固定できない（両述語を同時に反転しても tier 檻は全緑のまま通る）。
 // ここでは共有機構の捕捉窓でイベントを捕らえ、発火条件を直に押さえる。
 //
-// # 硬化機構は 1 箇所にしかない（「スレッドローカルゆえ安全」は誤り）
-//
-// 捕捉窓そのものは共有 crate `log-capture-kit` へ委譲する（spec:
-// areka-P0-test-cage-determinism・要件 1.5／2.2）。以前ここに在った常駐 probe と最小
-// subscriber は同 crate `scale.rs` の同型を本ファイル境界内へ写し取ったもので、写し損ねた
-// 側だけが静かに嘘をつく形だったため撤去した。
-//
-// 「`with_default` はスレッドローカルだから並行実行でも干渉しない」は**誤り**である。
-// 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
-// callsite の interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点をプロセス内で
-// 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
-// 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
-// 差していても以後そのイベントは早期 return で捨てられる——つまり混入ではなく**取りこぼし**が
-// 起きる。結果、不在の主張は捕捉 0 件のまま静かに緑になり（偽陰性）、存在の主張は捕捉 0 件で
-// 確率的に赤になる（偽陽性）。
-//
-// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 窓の内側で発火する
-// 対照イベント（番兵）による空振り検出、の 3 点でこれを塞ぐ。番兵は返却前に取り除かれるので
-// 呼出側の件数・主張は変わらない。捕捉されるのは呼出スレッドで同期的に発火したイベントだけで
-// ある点は移行前と同じ。機序の逐条解説（`tracing-core` の実コード引用つき）は
-// `log_capture_kit` の crate doc と同 crate の `src/probe.rs` にある。
+// 捕捉は共有 crate の [`log_capture_kit::capture`] を各檻がそのまま呼ぶ（硬化の機序は同 crate の
+// crate doc にあり、ここには写さない）。
 
 pub(crate) use log_capture_kit::CapturedEvent;
 
@@ -99,14 +80,6 @@ impl FieldUnquoted for CapturedEvent {
     fn field_unquoted(&self, name: &str) -> Option<&str> {
         self.field(name).map(|v| v.trim_matches('"'))
     }
-}
-
-/// `f` の実行中に出たイベントを捕捉して `(戻り値, イベント列)` を返す。
-///
-/// 捕捉と硬化は硬化機構の唯一の定義元 [`log_capture_kit::capture`] が行う。捕捉が働いて
-/// いなければ空の結果を静かに返さず panic する。
-pub(super) fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>) {
-    log_capture_kit::capture(f)
 }
 
 // ── 檻 8: scope 別バルーン定義の 2 層マージ（`load_scope_balloon_model`・R2.1/2.2/2.3/2.4/2.5・

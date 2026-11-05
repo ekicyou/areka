@@ -1,8 +1,7 @@
 use super::*;
 
-use super::test_support::{
-    CapturedEvent, FieldUnquoted, TempDir, capture_events, emo2_balloon_root,
-};
+use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, emo2_balloon_root};
+use log_capture_kit::capture;
 
 /// `dir` の当該 scope の面 0 を解決するテストヘルパ（本体は権威経路そのもの）。
 fn face0_of(dir: &Path, scope: u32) -> ResolvedFace {
@@ -161,7 +160,7 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
     dir.touch("balloons0.png"); // 面 0 は在るが balloons0s.txt は置かない。
 
     let face0 = face0_of(dir.path(), 0);
-    let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
+    let (model, events) = capture(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
     // R2.4: 既定設定のみで正常な定義が返る（欠落は失敗でない）。
     assert_eq!(
@@ -221,7 +220,7 @@ fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
     std::fs::create_dir(dir.path().join("balloons0s.txt")).expect("同名ディレクトリ作成");
 
     let face0 = face0_of(dir.path(), 0);
-    let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
+    let (model, events) = capture(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
     // 既定設定のみで継続する（失敗として畳まない）。
     assert_eq!(model.validrect().top(), Some(7), "既定設定のみで継続する");
@@ -253,7 +252,7 @@ fn load_scope_balloon_model_warns_on_missing_descript() {
     dir.touch("balloons0.png"); // descript.txt も balloons0s.txt も置かない。
 
     let face0 = face0_of(dir.path(), 0);
-    let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
+    let (model, events) = capture(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
     assert_eq!(
         model.validrect().top(),
@@ -291,7 +290,7 @@ fn load_scope_balloon_model_warns_on_missing_descript() {
 fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
     let dir = emo2_balloon_root();
     let face0 = emo2_face0(1);
-    let (model, events) = capture_events(|| load_scope_balloon_model(&dir, 1, &face0));
+    let (model, events) = capture(|| load_scope_balloon_model(&dir, 1, &face0));
 
     let infos: Vec<&CapturedEvent> = events
         .iter()

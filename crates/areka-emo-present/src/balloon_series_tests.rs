@@ -1,6 +1,7 @@
 use super::*;
 
-use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, capture_events};
+use super::test_support::{CapturedEvent, FieldUnquoted, TempDir};
+use log_capture_kit::capture;
 
 // ── 檻 1: scope→接頭辞優先連鎖の導出（R1.1/1.6/1.8/1.9/1.10・R7.1）─────────────
 
@@ -532,7 +533,7 @@ fn resolve_warns_only_for_default_tier_face_at_scope1() {
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 1));
+    let (result, events) = capture(|| resolve_balloon_faces(dir.path(), 1));
     let faces = result.expect("面 0 は balloonk0 で解決する");
     assert_eq!(
         faces
@@ -580,7 +581,7 @@ fn resolve_emits_no_fallback_warn_at_scope0() {
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 0));
+    let (result, events) = capture(|| resolve_balloon_faces(dir.path(), 0));
     let faces = result.expect("面 0 が在るゆえ Ok");
     assert!(
         faces.iter().all(|f| f.tier == ChainTier::Own),
@@ -602,7 +603,7 @@ fn resolve_does_not_warn_for_kero_named_tier_at_scope2() {
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 2));
+    let (result, events) = capture(|| resolve_balloon_faces(dir.path(), 2));
     let faces = result.expect("面 0 は名指し相方系列 balloonk0 で解決する");
     assert_eq!(
         faces

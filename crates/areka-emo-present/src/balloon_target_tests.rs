@@ -4,11 +4,6 @@ use super::test_support::{TempDir, emo2_balloon_root};
 use areka_emo_atlas::{AnimationInfo, DecodedImage, ElementId, MemoryDecoder};
 use areka_parsers::shell::parse;
 
-/// 不透明 1×1 PBGRA スペック（bake が placement を必ず産む＝非退化）。
-fn opaque_1x1() -> (u32, u32, u32, Vec<u8>, bool) {
-    (1, 1, 4, vec![10u8, 20, 30, 255], true)
-}
-
 /// R5.1/R5.3 転記一致（観測完了基準）: synthetic surfaces.txt → `shell::parse` の往復で、
 /// 各面の surface id（`{ID}`）と element path（採用面の**実ファイル名**）が転記一致する。
 ///
@@ -70,7 +65,7 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
 
     // 両面をデコーダへ登録（MemoryDecoder 経路・実 PNG 不要）。
     let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque_1x1();
+    let (w, h, stride, bytes, has_alpha) = opaque(1, 1);
     dec.insert(
         dir.path().join("balloons0.png"),
         w,
@@ -131,7 +126,7 @@ fn build_balloon_target_composes_scope_series_on_emo2_fixture() {
 
     // 実 fixture の面画像 2 枚をデコーダへ登録する（列挙が採った面だけがアトラスへ載る）。
     let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque_1x1();
+    let (w, h, stride, bytes, has_alpha) = opaque(1, 1);
     for name in ["balloons0.png", "balloonk0.png"] {
         dec.insert(dir.join(name), w, h, stride, bytes.clone(), has_alpha);
     }
@@ -198,7 +193,7 @@ fn empty_faces_return_empty_with_one_error() {
     let dir = TempDir::new();
     let dec = MemoryDecoder::new();
 
-    let (result, events) = super::test_support::capture_events(|| {
+    let (result, events) = log_capture_kit::capture(|| {
         build_balloon_target_from_faces(dir.path(), &dec, &[], UseSelfAlpha::Off).map(|_| ())
     });
     let errors: Vec<_> = events

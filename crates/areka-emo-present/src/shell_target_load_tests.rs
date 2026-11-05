@@ -25,23 +25,10 @@ use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    CapturedEvent, capture_events, emo2_shell_dir, with_com_initialized, write_descript,
+    CapturedEvent, SHELL_TARGET, decoder_with, emo2_shell_dir, layer0_path, with_com_initialized,
+    write_descript,
 };
-
-/// 不透明 1×1 PBGRA スペック（bake が placement を必ず産む＝非退化）。
-fn opaque_1x1() -> (u32, u32, u32, Vec<u8>, bool) {
-    (1, 1, 4, vec![10u8, 20, 30, 255], true)
-}
-
-/// 面の表の層 0 の画像パスを引く（層 0 が無ければ `None`）。
-fn layer0_path(world: &EmoWorld, id: u32) -> Option<String> {
-    world
-        .surface(id)?
-        .elements
-        .iter()
-        .find(|e| e.layer == 0)
-        .map(|e| e.path.as_str().to_string())
-}
+use log_capture_kit::capture;
 
 /// 核の結線（表イ）: 層 0 の空いた面へ足した画像が、**同じ綴りで**索引表にも載る。
 ///
@@ -60,11 +47,7 @@ fn used_image_is_baked_under_the_same_spelling_as_layer_zero() {
     );
 
     let shell_dir = PathBuf::from(r"C:\areka-test\shell-target-core");
-    let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque_1x1();
-    for name in ["surface0000.png", "parts.png"] {
-        dec.insert(shell_dir.join(name), w, h, stride, bytes.clone(), has_alpha);
-    }
+    let dec = decoder_with(&shell_dir, &["surface0000.png", "parts.png"]);
 
     let target = build_shell_target(shell, selection, &shell_dir, &dec, UseSelfAlpha::On);
 
@@ -129,11 +112,7 @@ fn directories_are_not_taken_as_surface_images() {
     std::fs::File::create(dir.child("surface5.png").join("surface0010.png"))
         .expect("プレースホルダ作成");
 
-    let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque_1x1();
-    for name in ["surface0000.png", "parts.png"] {
-        dec.insert(dir.child(name), w, h, stride, bytes.clone(), has_alpha);
-    }
+    let dec = decoder_with(dir.path(), &["surface0000.png", "parts.png"]);
 
     let target = load_shell_target(dir.path(), &dec).expect("面 1 個のシェルは読める");
     let world = target.build_world();
@@ -151,9 +130,6 @@ fn directories_are_not_taken_as_surface_images() {
 }
 
 // ── 記録（要件 1.5・1.6・3.5・6.1・6.2・6.4・6.5）──────────────────────────────
-
-/// 本モジュールが出す記録の宛先（既定の target＝モジュールパス・design「Monitoring」）。
-const SHELL_TARGET: &str = "areka_emo_present::shell_target";
 
 /// 宛先が権威のものである記録だけを数える。
 fn count_from_shell_target(events: &[CapturedEvent], level: tracing::Level) -> usize {
@@ -234,14 +210,9 @@ fn every_record_is_emitted_once_per_load() {
     }
 
     // 焼けるのは 2 枚だけ——`parts1.png` を入れないので、その 1 枚が焼く段で落ちる。
-    let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque_1x1();
-    for name in ["base0.png", "surface1.png"] {
-        dec.insert(dir.child(name), w, h, stride, bytes.clone(), has_alpha);
-    }
+    let dec = decoder_with(dir.path(), &["base0.png", "surface1.png"]);
 
-    let (target, events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+    let (target, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
     // 6.1: 一覧の結果は 1 行だけ。
     let summary = only_from_shell_target(&events, tracing::Level::INFO, "一覧");
@@ -320,7 +291,7 @@ fn every_record_is_emitted_once_per_load() {
     );
 
     // `build_world` は新しい記録を 0 本出す（design「Monitoring」）。
-    let (world, again) = capture_events(|| target.build_world());
+    let (world, again) = capture(|| target.build_world());
     assert_eq!(
         count_from_shell_target(&again, tracing::Level::WARN)
             + count_from_shell_target(&again, tracing::Level::INFO)
@@ -347,7 +318,7 @@ fn list_failure_is_recorded_before_the_error() {
     let dir = root.child("missing");
     let dec = MemoryDecoder::new();
 
-    let (result, events) = capture_events(|| load_shell_target(&dir, &dec));
+    let (result, events) = capture(|| load_shell_target(&dir, &dec));
 
     assert!(matches!(result, Err(ShellLoadError::List { ref path, .. }) if *path == dir));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "一覧");
@@ -367,7 +338,7 @@ fn read_failure_is_recorded_before_the_error() {
     std::fs::create_dir(dir.child("surfaces.txt")).expect("フォルダ作成");
     let dec = MemoryDecoder::new();
 
-    let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
+    let (result, events) = capture(|| load_shell_target(dir.path(), &dec));
 
     assert!(matches!(result, Err(ShellLoadError::Read { .. })));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "読み取り");
@@ -381,7 +352,7 @@ fn empty_failure_is_recorded_before_the_error() {
     std::fs::write(dir.child("surfaces.txt"), "charset,UTF-8\n").expect("記述ファイル作成");
     let dec = MemoryDecoder::new();
 
-    let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
+    let (result, events) = capture(|| load_shell_target(dir.path(), &dec));
 
     assert!(matches!(result, Err(ShellLoadError::Empty { .. })));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "面が 1 つも無い");
@@ -401,7 +372,7 @@ fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
         let shell_dir = emo2_shell_dir();
 
         let (target, events) =
-            capture_events(|| load_shell_target(&shell_dir, &dec).expect("emo2 のシェルは読める"));
+            capture(|| load_shell_target(&shell_dir, &dec).expect("emo2 のシェルは読める"));
         assert!(target.bake_errors().is_empty(), "前提: 脱落は 0 件");
 
         let summary = only_from_shell_target(&events, tracing::Level::INFO, "一覧");
@@ -450,11 +421,9 @@ fn build_world_does_not_repeat_fold_records() {
     )
     .expect("記述ファイル作成");
     write_descript(dir.path());
-    let mut dec = MemoryDecoder::new();
-    let (w, h, s, px, a) = opaque_1x1();
-    dec.insert(dir.child("base.png"), w, h, s, px, a);
+    let dec = decoder_with(dir.path(), &["base.png"]);
 
-    let (target, loaded) = capture_events(|| load_shell_target(dir.path(), &dec).expect("読める"));
+    let (target, loaded) = capture(|| load_shell_target(dir.path(), &dec).expect("読める"));
     let fold = |events: &[CapturedEvent]| {
         events
             .iter()
@@ -466,7 +435,7 @@ fn build_world_does_not_repeat_fold_records() {
     };
     assert_eq!(fold(&loaded), 1, "対照: 読み込みは 1 行出す: {loaded:?}");
 
-    let (_, again) = capture_events(|| {
+    let (_, again) = capture(|| {
         let _ = target.build_world();
         let _ = target.build_world();
     });

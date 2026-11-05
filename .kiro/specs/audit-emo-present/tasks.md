@@ -91,7 +91,7 @@
   - 支えのファイルが 1,000 行未満のまま、範囲のテストが緑で、写しが残っていない
   - _Requirements: 2.3, 6.1, 9.1_
 
-- [ ] 14. シェルとバルーンのテストの手伝いを支えへ寄せ、渡すだけの手伝いを消す（指摘 30・33）
+- [x] 14. シェルとバルーンのテストの手伝いを支えへ寄せ、渡すだけの手伝いを消す（指摘 30・33）
   - シェルの読み込みのテストの手伝い・検体のパスと絵の名前の一覧をシェルの支えへ寄せ、古い数と一覧の doc を消す
   - 渡すだけの手伝い 8 つを消して呼び元へ直に書く
   - 範囲のテストが緑で、写しと渡すだけの手伝いが残っていない
@@ -136,3 +136,4 @@
 - タスク 11 の申し送り: ⑺ を移した先で「ヒットのときだけ `set` へ戻す」変異は当て直していない（doc の「較正で確かめた」は元のテストの較正を引き継いだもの）。タスク 17 のかけ直しのときに 1 度当てて確かめる
 - タスク 12 → 13 の申し送り: 支えの `presenter_test_support.rs` に `show_with`・`show_ok`・`hide_ok`・`invalidate_ok`・`show_with_armed_fault` を置いた。research.md 29 番の 4 つの組に名が無いので残した写しが 3 つある（`presenter_perf_log_tests.rs:327` の `fn show`、`presenter_fractional_scale_tests.rs` 600 行付近の手組みの ShowSurface、`presenter_perf_log_tests.rs` 736 行付近の `Disarm`＋`arm_display_fault`＋`show`）。どれもタスク 13 の範囲のファイルなので、タスク 13 で支えの口へ寄せる。`presenter_film_tests.rs:444` の `Disarm`（show_target を包む）と film の `try_recv`（応答がちょうど 1 本）は意味が違うので残す
 - タスク 13: 境界の欄に無い `presenter_frame_log_tests.rs`・`presenter_film_tests.rs` から、支えの `INFO_LINE_MESSAGE` と同じ文言の定数の写しを 1 つずつ消した（research.md 29 番の範囲の中・「写しが残っていない」のため）。`surface_entity_of` は支えに足さず、research の「＝`mount_entities(..).0`」どおり既存の口を使った。`build_assets_with_valid_and_empty` は `display_tests` に残り、`perf_log` と `failure_note` が借りる（`failure_note` が範囲の外のため）
+- タスク 14: research.md 33 番の渡すだけの手伝い 8 つは全部消えた（`transparent_surface` はタスク 7、残り 7 つはここ）。境界の外の `balloon_alpha/model/quiet/series_tests.rs` は `capture_events`→`capture` の取り込みと呼び名だけ、`presenter_test_support.rs` は消した `pattern_overlay` を指す doc の 1 文だけを直した（やむを得ない追随）

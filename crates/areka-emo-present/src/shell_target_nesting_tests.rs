@@ -13,27 +13,13 @@
 
 use super::*;
 
-use std::path::PathBuf;
-
-use areka_emo_atlas::MemoryDecoder;
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events, write_descript};
-
-/// 本モジュールが出す記録の宛先（既定の target＝モジュールパス）。
-const SHELL_TARGET: &str = "areka_emo_present::shell_target";
-
-/// 検体のフォルダに在る画像（`surfaces.txt` 以外の全部）。
-const FIXTURE_IMAGES: [&str; 8] = [
-    "body.png",
-    "eye.png",
-    "eye_closed.png",
-    "mouth.png",
-    "mouth_open.png",
-    "part.png",
-    "surface11.png",
-    "surface2.png",
-];
+use super::test_support::{
+    CapturedEvent, NESTING_FIXTURE_IMAGES, SHELL_TARGET, decoder_with, describe,
+    nesting_fixture_dir, write_descript,
+};
+use log_capture_kit::capture;
 
 /// 検体の element定義に書かれた数字だけの欄（`surface.append1` の 30 を含む・重複なし）。
 const DIGIT_FIELDS: [&str; 11] = [
@@ -50,36 +36,6 @@ const DIGIT_FIELDS: [&str; 11] = [
     "70",
 ];
 
-/// 入れ子の検体のフォルダ（`areka-emo-compose` の検体を書き換えずに読む・タスク 1.2）。
-fn fixture_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("areka-emo-compose")
-        .join("tests")
-        .join("fixtures")
-        .join("surface-nesting")
-}
-
-/// 不透明 1×1 PBGRA の絵を `names` の名前で入れた復号器。
-fn decoder_with(dir: &Path, names: &[&str]) -> MemoryDecoder {
-    let mut dec = MemoryDecoder::new();
-    for name in names {
-        dec.insert(dir.join(name), 1, 1, 4, vec![10u8, 20, 30, 255], true);
-    }
-    dec
-}
-
-/// `warn!` 1 行を「本文|欄=値…」の 1 本の文字列にする（`message` 以外の欄は名前の昇順）。
-fn describe(e: &CapturedEvent) -> String {
-    let mut line = e.message().to_string();
-    for (name, value) in e.fields_map() {
-        if name != "message" {
-            line.push_str(&format!("|{name}={value}"));
-        }
-    }
-    line
-}
-
 /// 水準が `warn` 以上（`warn!`／`error!`）の記録。宛先は問わない。
 fn warn_or_worse(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
@@ -91,8 +47,8 @@ fn warn_or_worse(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 /// ⑴ 数字だけの欄は、その名前の絵が在っても焼かない（要件 1.5・3.5）。
 #[test]
 fn digit_only_fields_are_not_baked_even_when_such_images_exist() {
-    let dir = fixture_dir();
-    let names: Vec<&str> = FIXTURE_IMAGES
+    let dir = nesting_fixture_dir();
+    let names: Vec<&str> = NESTING_FIXTURE_IMAGES
         .iter()
         .chain(&DIGIT_FIELDS)
         .copied()
@@ -128,11 +84,10 @@ fn digit_only_fields_are_not_baked_even_when_such_images_exist() {
 /// `warn!` が出て数が合わなくなる。
 #[test]
 fn fixture_load_warns_once_per_planted_issue_and_nothing_else() {
-    let dir = fixture_dir();
-    let dec = decoder_with(&dir, &FIXTURE_IMAGES);
+    let dir = nesting_fixture_dir();
+    let dec = decoder_with(&dir, &NESTING_FIXTURE_IMAGES);
 
-    let (target, events) =
-        capture_events(|| load_shell_target(&dir, &dec).expect("検体のシェルは読める"));
+    let (target, events) = capture(|| load_shell_target(&dir, &dec).expect("検体のシェルは読める"));
 
     let mut got: Vec<String> = warn_or_worse(&events)
         .into_iter()
@@ -181,8 +136,7 @@ fn balloon_element_with_digit_only_field_is_a_box_name() {
     write_descript(dir.path());
     let dec = decoder_with(dir.path(), &["base.png", "8888"]);
 
-    let (target, events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+    let (target, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
     assert!(
         target.nest_report.issues.is_empty(),

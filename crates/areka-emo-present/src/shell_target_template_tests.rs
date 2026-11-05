@@ -39,7 +39,7 @@ use areka_emo_compose::{
 };
 
 use super::test_support::{
-    konnoyayame_shell_dir, r_post_and_komainu_shell_dir, with_com_initialized,
+    konnoyayame_shell_dir, pixel, r_post_and_komainu_shell_dir, with_com_initialized,
 };
 
 /// `R_POST_and_KOMAINU` の面 0 の外形（要件 3.1・7.4・`surface0000.png` の実寸）。
@@ -71,14 +71,6 @@ fn compose(
     Composer::new()
         .compose(world, target.atlas(), id, &BindSet::default(), patterns)
         .unwrap_or_else(|e| panic!("面 {id} は合成できる: {e}"))
-}
-
-/// 合成結果の 1 画素（premultiplied BGRA）を引く。
-fn pixel(surface: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    let at = (y * surface.stride() + x * 4) as usize;
-    surface.bytes()[at..at + 4]
-        .try_into()
-        .expect("4 バイトの画素")
 }
 
 /// `surfaces.txt` が面 `id` の波括弧を持つか（宣言の有無）。
