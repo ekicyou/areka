@@ -137,3 +137,51 @@ fn still_decode_and_probe_pna_unchanged_on_animated_file() {
         assert!(!arm.probe_pna(&path));
     });
 }
+
+/// 15 番（audit-wintf-runtime）: 番号つきでない形式の α の有無は WIC の形式の情報で決まり、
+/// wintf の `pixel_format_has_alpha` と同じ答えを返す（emo-atlas-palette-alpha 要件 3.5）。
+#[test]
+fn pixel_format_has_alpha_asks_wic() {
+    use super::pixel_format_has_alpha;
+    use windows::Win32::Graphics::Imaging::*;
+    use windows::core::GUID;
+    with_arm(|arm| {
+        let with_alpha = [
+            ("32bppBGRA", GUID_WICPixelFormat32bppBGRA),
+            ("32bppPBGRA", GUID_WICPixelFormat32bppPBGRA),
+            ("32bppRGBA", GUID_WICPixelFormat32bppRGBA),
+            ("32bppPRGBA", GUID_WICPixelFormat32bppPRGBA),
+            ("64bppRGBA", GUID_WICPixelFormat64bppRGBA),
+            ("64bppPRGBA", GUID_WICPixelFormat64bppPRGBA),
+            ("64bppBGRA", GUID_WICPixelFormat64bppBGRA),
+            ("64bppPBGRA", GUID_WICPixelFormat64bppPBGRA),
+            ("32bppRGBA1010102", GUID_WICPixelFormat32bppRGBA1010102),
+            ("32bppRGBA1010102XR", GUID_WICPixelFormat32bppRGBA1010102XR),
+            ("128bppRGBAFloat", GUID_WICPixelFormat128bppRGBAFloat),
+            ("128bppPRGBAFloat", GUID_WICPixelFormat128bppPRGBAFloat),
+            ("16bppBGRA5551", GUID_WICPixelFormat16bppBGRA5551),
+            ("64bppRGBAHalf", GUID_WICPixelFormat64bppRGBAHalf),
+            ("40bppCMYKAlpha", GUID_WICPixelFormat40bppCMYKAlpha),
+        ];
+        let without_alpha = [
+            ("24bppBGR", GUID_WICPixelFormat24bppBGR),
+            ("32bppBGR", GUID_WICPixelFormat32bppBGR),
+            ("8bppGray", GUID_WICPixelFormat8bppGray),
+            ("48bppRGB", GUID_WICPixelFormat48bppRGB),
+        ];
+        for (name, format) in with_alpha {
+            assert!(
+                pixel_format_has_alpha(&arm.factory, &format).unwrap(),
+                "{name}"
+            );
+        }
+        for (name, format) in without_alpha {
+            assert!(
+                !pixel_format_has_alpha(&arm.factory, &format).unwrap(),
+                "{name}"
+            );
+        }
+        // 形式の情報が取れない GUID は推測で答えず WIC のエラーを返す。
+        assert!(pixel_format_has_alpha(&arm.factory, &GUID::zeroed()).is_err());
+    });
+}

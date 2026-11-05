@@ -25,8 +25,8 @@ pub fn wic_factory() -> Result<IWICImagingFactory2> {
 ///
 /// # Returns
 /// `(PBGRA32 に変換した IWICBitmapSource, 変換前フレームの α 有無)`。
-/// α 有無は番号つきの形式ならパレットの透明度から、それ以外は形式の GUID から取る。
-/// パレットを読めないときは WIC のエラーを返す。
+/// α 有無は番号つきの形式ならパレットの透明度から、それ以外は WIC の形式の情報から取る。
+/// パレットや形式の情報を読めないときは WIC のエラーを返す。
 pub fn load_bitmap_source(
     factory: &IWICImagingFactory2,
     path: &Path,
@@ -54,7 +54,7 @@ pub fn load_bitmap_source(
     let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
         palette_has_alpha(factory, &frame.cast()?)?
     } else {
-        pixel_format_has_alpha(&pre_format)
+        pixel_format_has_alpha(factory, &pre_format)?
     };
 
     // PBGRA32 に変換（α チャネルがなくても 100% 不透明として変換）
@@ -90,29 +90,13 @@ fn palette_has_alpha(factory: &IWICImagingFactory2, source: &IWICBitmapSource) -
     }
 }
 
-/// WIC ピクセルフォーマット GUID が α チャンネルを持つかを判定する。
-///
-/// design Critical Issue 1 の指示どおり、α 付きフォーマット集合との
-/// 一致で判定する（既知の非 α フォーマットは default で `false`）。
-fn pixel_format_has_alpha(format: &GUID) -> bool {
-    // windows-rs の GUID 定数は非 UPPER_CASE のため `match`/`matches!` の
-    // パターンに置くと `non_upper_case_globals` future-incompat 警告が出る。
-    // 等値比較 (`==`) なら定数を値として扱うため警告を回避できる。
-    const ALPHA_FORMATS: &[GUID] = &[
-        GUID_WICPixelFormat32bppBGRA,
-        GUID_WICPixelFormat32bppPBGRA,
-        GUID_WICPixelFormat32bppRGBA,
-        GUID_WICPixelFormat32bppPRGBA,
-        GUID_WICPixelFormat64bppRGBA,
-        GUID_WICPixelFormat64bppPRGBA,
-        GUID_WICPixelFormat64bppBGRA,
-        GUID_WICPixelFormat64bppPBGRA,
-        GUID_WICPixelFormat32bppRGBA1010102,
-        GUID_WICPixelFormat32bppRGBA1010102XR,
-        GUID_WICPixelFormat128bppRGBAFloat,
-        GUID_WICPixelFormat128bppPRGBAFloat,
-    ];
-    ALPHA_FORMATS.contains(format)
+/// 番号つきでない形式が α を持つかを、WIC の形式の情報（`IWICPixelFormatInfo2::SupportsTransparency`）に聞く。
+/// 形式の情報が取れないときは WIC のエラーを返す。番号つきの形式は TRUE を返さないので `palette_has_alpha` で決める。
+fn pixel_format_has_alpha(factory: &IWICImagingFactory2, format: &GUID) -> Result<bool> {
+    unsafe {
+        let info: IWICPixelFormatInfo2 = factory.CreateComponentInfo(format)?.cast()?;
+        Ok(info.SupportsTransparency()?.as_bool())
+    }
 }
 
 pub trait WICImagingFactoryExt {

@@ -7,7 +7,7 @@
 //! GUID_WICPixelFormat32bppPBGRA へ変換 → CopyPixels`）で PBGRA raw バッファを
 //! 抽出する（wintf の `load_bitmap_source` 相当・本層は wintf 本体へ依存せず
 //! `windows` を直接利用）。COM 依存は本モジュールに隔離し、MTA/COM 規律に従う。
-//! 変換前フレームのピクセルフォーマット由来とパレット由来の α 有無を `DecodedImage` へ確定する。
+//! 変換前フレームのピクセルフォーマット（WIC の形式の情報）由来とパレット由来の α 有無を `DecodedImage` へ確定する。
 
 use std::fs::File;
 use std::io::BufReader;
@@ -18,13 +18,9 @@ use windows::Win32::Foundation::GENERIC_READ;
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
 use windows::Win32::Graphics::Imaging::{
     CLSID_WICImagingFactory, GUID_WICPixelFormat1bppIndexed, GUID_WICPixelFormat2bppIndexed,
-    GUID_WICPixelFormat4bppIndexed, GUID_WICPixelFormat8bppIndexed, GUID_WICPixelFormat32bppBGRA,
-    GUID_WICPixelFormat32bppPBGRA, GUID_WICPixelFormat32bppPRGBA, GUID_WICPixelFormat32bppRGBA,
-    GUID_WICPixelFormat32bppRGBA1010102, GUID_WICPixelFormat32bppRGBA1010102XR,
-    GUID_WICPixelFormat64bppBGRA, GUID_WICPixelFormat64bppPBGRA, GUID_WICPixelFormat64bppPRGBA,
-    GUID_WICPixelFormat64bppRGBA, GUID_WICPixelFormat128bppPRGBAFloat,
-    GUID_WICPixelFormat128bppRGBAFloat, IWICBitmapSource, WICBitmapDitherTypeNone,
-    WICBitmapPaletteTypeMedianCut, WICDecodeMetadataCacheOnDemand,
+    GUID_WICPixelFormat4bppIndexed, GUID_WICPixelFormat8bppIndexed, GUID_WICPixelFormat32bppPBGRA,
+    IWICBitmapSource, IWICPixelFormatInfo2, WICBitmapDitherTypeNone, WICBitmapPaletteTypeMedianCut,
+    WICDecodeMetadataCacheOnDemand,
 };
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::core::{GUID, HSTRING, Interface};
@@ -82,7 +78,7 @@ impl WicDecoderArm {
         let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
             palette_has_alpha(&self.factory, &frame)?
         } else {
-            pixel_format_has_alpha(&pre_format)
+            pixel_format_has_alpha(&self.factory, &pre_format)?
         };
 
         // PBGRA32 へ変換（α 無し画像も 100% 不透明として埋める）
@@ -189,28 +185,17 @@ fn palette_has_alpha(
     }
 }
 
-/// WIC ピクセルフォーマット GUID が α チャンネルを持つかを判定する。
-///
-/// wintf `com/wic.rs` の `has_alpha`（task 1.2）を再現する。emo-atlas は境界制約
-/// （wintf は bevy_ecs 等を引き込む）ゆえ wintf を import せず同一集合をここに持つ。
-/// windows-rs の GUID 定数は非 UPPER_CASE ゆえ `match`/`matches!` のパターンに置くと
-/// `non_upper_case_globals` future-incompat 警告が出る。集合 `.contains()`（値比較）で回避する。
-fn pixel_format_has_alpha(format: &GUID) -> bool {
-    const ALPHA_FORMATS: &[GUID] = &[
-        GUID_WICPixelFormat32bppBGRA,
-        GUID_WICPixelFormat32bppPBGRA,
-        GUID_WICPixelFormat32bppRGBA,
-        GUID_WICPixelFormat32bppPRGBA,
-        GUID_WICPixelFormat64bppRGBA,
-        GUID_WICPixelFormat64bppPRGBA,
-        GUID_WICPixelFormat64bppBGRA,
-        GUID_WICPixelFormat64bppPBGRA,
-        GUID_WICPixelFormat32bppRGBA1010102,
-        GUID_WICPixelFormat32bppRGBA1010102XR,
-        GUID_WICPixelFormat128bppRGBAFloat,
-        GUID_WICPixelFormat128bppPRGBAFloat,
-    ];
-    ALPHA_FORMATS.contains(format)
+/// 番号つきでない形式が α を持つかを、WIC の形式の情報（`IWICPixelFormatInfo2::SupportsTransparency`）に聞く。
+/// wintf `com/wic.rs` の `pixel_format_has_alpha` と同じ判定（emo-atlas は境界制約で wintf を import しない）。
+/// 形式の情報が取れないときは WIC のエラーを返す。番号つきの形式は TRUE を返さないので `palette_has_alpha` で決める。
+fn pixel_format_has_alpha(
+    factory: &IWICImagingFactory2,
+    format: &GUID,
+) -> windows::core::Result<bool> {
+    unsafe {
+        let info: IWICPixelFormatInfo2 = factory.CreateComponentInfo(format)?.cast()?;
+        Ok(info.SupportsTransparency()?.as_bool())
+    }
 }
 
 #[cfg(test)]
