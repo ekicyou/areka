@@ -1,10 +1,10 @@
 use super::test_support::*;
 use super::*;
-use crate::bind::BindOptionDecls;
+use crate::bind::tests::groups_of;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 // ─────────────────────────────────────────────────────────────────────
 // Task 6.1/6.3: bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
@@ -62,9 +62,9 @@ fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
 /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
 /// `bindoption` 宣言なし）。
 fn arm_bind_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
-    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\nsakura.bindgroup1302.name,腕,伸び\r\n",
+    ))
 }
 
 /// 複数可（Multiple）宣言カテゴリ「髪飾り」を持つ sakura 解決層（bindopt 3.3・actor 経路の
@@ -73,42 +73,35 @@ fn arm_bind_resolver() -> BindResolver {
 /// 明示 `multiple` 宣言のカテゴリは既定（Default）と異なり、同一カテゴリ 2 パーツの共存を許す
 /// ——これが Default×着衣（排他置換）との差を観測できる唯一の点（bindopt 3.3）。
 fn hair_multiple_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("髪飾り".to_string(), "花".to_string()), 1600);
-    sakura.insert(("髪飾り".to_string(), "リボン".to_string()), 1601);
-    let mut sakura_mul: BTreeSet<String> = BTreeSet::new();
-    sakura_mul.insert("髪飾り".to_string());
-    let options = BindOptionDecls {
-        sakura_multiple: sakura_mul,
-        ..Default::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1600.name,髪飾り,花\r\n\
+         sakura.bindgroup1601.name,髪飾り,リボン\r\n\
+         sakura.bindoption0.group,髪飾り,multiple\r\n",
+    ))
 }
 
 /// 既定（Default＝非宣言・高々 1 個・解除可）カテゴリ「まばたき」を持つ sakura 解決層
 /// （bindopt 2.1/2.2・actor 経路の排他置換／除去検証用）。emo2 のまばたきカテゴリを模した
 /// (まばたき,通常)→1400 / (まばたき,ジトー)→1402。static={1100,1207} と交わらない新 id。
 fn blink_default_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("まばたき".to_string(), "通常".to_string()), 1400);
-    sakura.insert(("まばたき".to_string(), "ジトー".to_string()), 1402);
-    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1400.name,まばたき,通常\r\n\
+         sakura.bindgroup1402.name,まばたき,ジトー\r\n",
+    ))
 }
 
 /// mustselect カテゴリ「目」を持つ sakura 解決層（bindopt 3.1・actor 経路の排他検証用）。
 /// (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304。static={1100,1207} と交わらない新 id。
 fn eye_mustselect_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("目".to_string(), "笑".to_string()), 1301);
-    sakura.insert(("目".to_string(), "普".to_string()), 1303);
-    sakura.insert(("目".to_string(), "閉".to_string()), 1304);
-    let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
-    sakura_ms.insert("目".to_string());
-    let options = BindOptionDecls {
-        sakura_mustselect: sakura_ms,
-        ..Default::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,笑\r\n\
+         sakura.bindgroup1303.name,目,普\r\n\
+         sakura.bindgroup1304.name,目,閉\r\n\
+         sakura.bindoption0.group,目,mustselect\r\n",
+    ))
 }
 
 /// ケース15（6.3/3.5/7.1・D5・D8 正常経路）: 表示中 scope で解決可能な Apply は現 surface を
@@ -233,10 +226,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
 fn bind_default_category_second_on_replaces_prior_part() {
     let resolver = tiny_resolver();
     // (まばたき,通常)→1400 / (まばたき,ジトー)→1402 の非宣言（既定）カテゴリ。
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("まばたき".to_string(), "通常".to_string()), 1400);
-    sakura.insert(("まばたき".to_string(), "ジトー".to_string()), 1402);
-    let bind_resolver = BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default());
+    let bind_resolver = blink_default_resolver();
     let mut states = fresh_states(); // static = {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
@@ -596,10 +586,11 @@ fn bind_default_same_part_re_on_is_unchanged_no_emit() {
 fn bind_cross_category_accumulates_via_actor() {
     // (腕,伸び)→1302 と (肩,上げ)→1500 を持つ 2 カテゴリ表（いずれも bindoption 非宣言＝既定）。
     let resolver = tiny_resolver();
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
-    sakura.insert(("肩".to_string(), "上げ".to_string()), 1500);
-    let bind_resolver = BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default());
+    let bind_resolver = BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1302.name,腕,伸び\r\n\
+         sakura.bindgroup1500.name,肩,上げ\r\n",
+    ));
     let mut states = fresh_states(); // static = {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
@@ -722,7 +713,7 @@ fn bind_toggle_form_flips_current_part() {
 #[test]
 fn bind_category_wide_off_removes_all_parts() {
     let resolver = tiny_resolver();
-    let groups = crate::bind::tests::groups_of(
+    let groups = groups_of(
         "charset,UTF-8\r\nsakura.bindgroup1302.name,腕,伸び\r\nsakura.bindgroup1303.name,腕,曲げ\r\n",
     );
     let bind_resolver = BindResolver::from_groups(&groups);

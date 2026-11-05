@@ -42,7 +42,7 @@ fn manual_clock(start: u64) -> (SerikoClock, Arc<AtomicU64>) {
 
 /// この檻の足場（本体は兄弟の足場 `ClockRig`・着せ替えの名前は (目, 閉) → 5）。
 fn rig(config: SerikoLoopConfig) -> ClockRig {
-    ClockRig::configured(config, eye_names(), BindSet::from_ids([]))
+    ClockRig::configured(config, eye_resolver(), BindSet::from_ids([]))
 }
 
 /// ただ 1 件の指令の欄。

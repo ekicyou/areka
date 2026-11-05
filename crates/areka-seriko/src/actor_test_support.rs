@@ -42,8 +42,10 @@ pub(super) fn inert_runtime() -> LoopRuntime {
 }
 
 /// 着せ替えの名前の表（sakura の (目, 閉) → 5・既定のポリシー＝着衣は排他置換・脱衣は除去）。
-pub(super) fn eye_names() -> BTreeMap<(String, String), u32> {
-    BTreeMap::from([(("目".to_string(), "閉".to_string()), 5)])
+pub(super) fn eye_resolver() -> BindResolver {
+    BindResolver::from_groups(&crate::bind::tests::groups_of(
+        "charset,UTF-8\r\nsakura.bindgroup5.name,目,閉\r\n",
+    ))
 }
 
 /// 同期 `handle_message` に cue と刻みを流す足場（統括器に手で進める偽の時計を注入する）。どの
@@ -61,13 +63,13 @@ pub(super) struct ClockRig {
 impl ClockRig {
     /// 別名の表なし・着せ替えなしで、統括器を `config` から組む。
     pub(super) fn with_config(config: SerikoLoopConfig) -> Self {
-        Self::configured(config, BTreeMap::new(), BindSet::from_ids([]))
+        Self::configured(config, BindResolver::empty(), BindSet::from_ids([]))
     }
 
-    /// 統括器の設定・sakura の着せ替えの名前の表・静的な着せ替えから組む（面の別名の表は空）。
+    /// 統括器の設定・着せ替えの名前の表・静的な着せ替えから組む（面の別名の表は空）。
     pub(super) fn configured(
         config: SerikoLoopConfig,
-        names: BTreeMap<(String, String), u32>,
+        bind_resolver: BindResolver,
         static_binds: BindSet,
     ) -> Self {
         let clock = Arc::new(AtomicU64::new(0));
@@ -76,11 +78,7 @@ impl ClockRig {
         let records = out.records();
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
-            bind_resolver: BindResolver::new(
-                names,
-                BTreeMap::new(),
-                crate::bind::BindOptionDecls::default(),
-            ),
+            bind_resolver,
             states: ScopeStates::new(crate::DefaultBinds::uniform(static_binds)),
             rt: LoopRuntime::new(config)
                 .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),

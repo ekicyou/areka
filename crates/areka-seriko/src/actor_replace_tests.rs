@@ -6,7 +6,7 @@
 
 use super::test_support::*;
 use super::*;
-use crate::bind::BindOptionDecls;
+use crate::bind::tests::groups_of;
 use crate::looper::tests::{always_fire, cfg, pattern_of, table_single};
 use crate::output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow};
 use crate::table::AnimationTable;
@@ -23,8 +23,9 @@ fn resolver_of(key: &str, id: u32) -> SurfaceResolver {
 
 /// (腕, 伸び) → 1300 の sakura 解決層（既定のポリシー＝排他置換）。
 fn arm_resolver() -> BindResolver {
-    let sakura = BTreeMap::from([(("腕".to_string(), "伸び".to_string()), 1300)]);
-    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\nsakura.bindgroup1300.name,腕,伸び\r\n",
+    ))
 }
 
 /// 差し替えの事実（この檻は判定を見ない）。

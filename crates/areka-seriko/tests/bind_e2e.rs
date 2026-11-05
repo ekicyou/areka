@@ -40,10 +40,10 @@ use areka_sakura::{
     TalkEndReason, TalkId, spawn_talk,
 };
 use areka_seriko::{
-    BindOptionDecls, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig,
-    SurfaceResolver, spawn_seriko,
+    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    spawn_seriko,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -87,13 +87,14 @@ impl CueSink for RecordingTextSink {
 /// （emo2 に kero bindgroup 無し）。`腕,伸び`（→1100）は静的既定集合 `{1100,1207}` に含まれるため、
 /// その on/off が確定的に集合へ出入りする。宣言に無い `(未知,パーツ)` は `resolve==None`（R5.2）。
 fn test_bind_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("腕".into(), "伸び".into()), 1100);
-    sakura.insert(("頬".into(), "赤面".into()), 1200);
     // 宣言ゼロ＝全カテゴリが正典の既定（Default＝高々 1 個・解除可・bindopt 2.1/2.2）。本 fixture は
     // 腕・頬とも 1 カテゴリ 1 パーツゆえ、排他置換と加算は結果集合が同値になり期待値は不変である
     // （bindopt 設計 §テスト影響監査）。mustselect／複数可の専用 e2e は下記シナリオ 6〜9。
-    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1100.name,腕,伸び\r\n\
+         sakura.bindgroup1200.name,頬,赤面\r\n",
+    ))
 }
 
 /// 既定 scope "0"・指定 bind 集合を載せたシェル面 `Show` 指令を組む（期待値ヘルパ）。
@@ -213,23 +214,19 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
 ///
 /// 実 emo2 の目カテゴリ（笑顔→ジトー→静観 …）を模す。本体側（sakura）に mustselect カテゴリ
 /// `目`（3 パーツ：笑顔→1303／ジトー→1301／静観→1304）と、対比用の既定（Default）カテゴリ
-/// `紅`（差し→1600）を持つ。`sakura_mustselect={目}`（紅は非宣言＝既定＝高々 1 個・解除可）。
+/// `紅`（差し→1600）を持つ。`sakura.bindoption0.group,目,mustselect`（紅は非宣言＝既定＝高々 1 個・解除可）。
 /// 相方側（kero）は空。これにより、同一 mustselect カテゴリへの連続着衣が高々 1 パーツへ
 /// 「置換」される一方、既定カテゴリのパーツが明示 on で載り明示 off で外れる（解除可）ことを
 /// 対比観測できる。紅は 1 カテゴリ 1 パーツゆえ、既定の排他置換でも結果集合は加算と同値である。
 fn mustselect_bind_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("目".into(), "笑顔".into()), 1303);
-    sakura.insert(("目".into(), "ジトー".into()), 1301);
-    sakura.insert(("目".into(), "静観".into()), 1304);
-    sakura.insert(("紅".into(), "差し".into()), 1600);
-    let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
-    sakura_ms.insert("目".into());
-    let options = BindOptionDecls {
-        sakura_mustselect: sakura_ms,
-        ..Default::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1303.name,目,笑顔\r\n\
+         sakura.bindgroup1301.name,目,ジトー\r\n\
+         sakura.bindgroup1304.name,目,静観\r\n\
+         sakura.bindgroup1600.name,紅,差し\r\n\
+         sakura.bindoption0.group,目,mustselect\r\n",
+    ))
 }
 
 /// mustselect 対比観測用の貫通駆動ラッパ。
@@ -250,19 +247,15 @@ fn run_mustselect_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
 /// 複数可（Multiple）宣言カテゴリを持つ test-local 名前解決表（bindopt 3.3・貫通観測用）。
 ///
 /// 本体側（sakura）に `multiple` 宣言カテゴリ `髪飾り`（2 パーツ：花→1700／リボン→1701）を持つ。
-/// `sakura_multiple={髪飾り}`。相方側（kero）は空。カテゴリ名は名前表と `BindOptionDecls` で
+/// `sakura.bindoption0.group,髪飾り,multiple`。相方側（kero）は空。カテゴリ名は名前の行と宣言の行で
 /// **厳密に一致**していなければならない（不一致だと policy が既定へ落ち、複数可の観測にならない）。
 fn multiple_bind_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("髪飾り".into(), "花".into()), 1700);
-    sakura.insert(("髪飾り".into(), "リボン".into()), 1701);
-    let mut sakura_mul: BTreeSet<String> = BTreeSet::new();
-    sakura_mul.insert("髪飾り".into());
-    let options = BindOptionDecls {
-        sakura_multiple: sakura_mul,
-        ..Default::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1700.name,髪飾り,花\r\n\
+         sakura.bindgroup1701.name,髪飾り,リボン\r\n\
+         sakura.bindoption0.group,髪飾り,multiple\r\n",
+    ))
 }
 
 /// 複数可カテゴリ観測用の貫通駆動ラッパ（bindopt 3.3）。

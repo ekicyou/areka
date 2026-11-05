@@ -82,3 +82,23 @@ impl CueSink for NullTextSink {
         // 破棄のみ。
     }
 }
+
+/// シェルの descript.txt `shell` を持つゴーストを作業フォルダ（`target\\` の下）に組み、着せ替えの読みを返す
+/// （クレートの中の `bind::tests::groups_of` と同じ組み方。統合テストからはそちらが見えない）。
+pub fn groups_of(shell: &str) -> areka_parsers::package::BindGroupDefaults {
+    let work = sample_ghost_kit::WorkDir::new().expect("作業フォルダを取れる");
+    let master = work.path().join("ghost").join("master");
+    std::fs::create_dir_all(&master).expect("ghost/master を作る");
+    std::fs::write(master.join("descript.txt"), "charset,UTF-8\r\nname,t\r\n")
+        .expect("ゴーストの descript.txt を書く");
+    let shell_dir = work.path().join("shell").join("master");
+    std::fs::create_dir_all(&shell_dir).expect("shell/master を作る");
+    std::fs::write(shell_dir.join("descript.txt"), shell).expect("シェルの descript.txt を書く");
+    areka_parsers::package::resolve_with_shell(
+        work.path(),
+        areka_parsers::charset::DefaultEncoding::Utf8,
+        None,
+    )
+    .expect("検体のシェルは解決できる")
+    .bindgroups
+}

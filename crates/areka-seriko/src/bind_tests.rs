@@ -44,34 +44,29 @@ fn empty_input_yields_empty_bindset() {
 // ─────────────────────────────────────────────────────────────────────
 
 use areka_sakura::ActorKey;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む（`bindoption` 宣言なし）。
 /// sakura: (腕, 上げ)→1100 / kero: (脚, 組む)→2100。
 fn tiny_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("腕".into(), "上げ".into()), 1100);
-    let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
-    kero.insert(("脚".into(), "組む".into()), 2100);
-    BindResolver::new(sakura, kero, BindOptionDecls::default())
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1100.name,腕,上げ\r\n\
+         kero.bindgroup2100.name,脚,組む\r\n",
+    ))
 }
 
 /// `mustselect` 宣言を持つ名前解決表を組む（bindopt 設計 D2）。
 /// sakura: (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304 / (紅,あり)→1207。
 /// mustselect カテゴリ = {目}（紅は非宣言＝正典の既定）。
 fn mustselect_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("目".into(), "笑".into()), 1301);
-    sakura.insert(("目".into(), "普".into()), 1303);
-    sakura.insert(("目".into(), "閉".into()), 1304);
-    sakura.insert(("紅".into(), "あり".into()), 1207);
-    let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
-    sakura_ms.insert("目".into());
-    let options = BindOptionDecls {
-        sakura_mustselect: sakura_ms,
-        ..Default::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,笑\r\n\
+         sakura.bindgroup1303.name,目,普\r\n\
+         sakura.bindgroup1304.name,目,閉\r\n\
+         sakura.bindgroup1207.name,紅,あり\r\n\
+         sakura.bindoption0.group,目,mustselect\r\n",
+    ))
 }
 
 /// ポリシー導出は名前空間ごと・`mustselect` 宣言カテゴリのみ MustSelect（bindopt 設計 D2）。
@@ -129,25 +124,23 @@ fn policy_empty_or_absent_is_default() {
 /// 「紅」は両スコープとも名前表にのみ在って宣言なし＝正典の既定（[`BindChoicePolicy::Default`]）。
 /// 本体と相方でカテゴリ名を一切重ねないため、名前空間を取り違えると必ず導出が崩れる。
 fn policy_matrix_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("目".into(), "笑".into()), 1301);
-    sakura.insert(("髪".into(), "長".into()), 1250);
-    sakura.insert(("腕".into(), "上げ".into()), 1100);
-    sakura.insert(("紅".into(), "あり".into()), 1207);
-    let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
-    kero.insert(("脚".into(), "組む".into()), 2100);
-    kero.insert(("尾".into(), "振り".into()), 2200);
-    kero.insert(("羽".into(), "開き".into()), 2300);
-    kero.insert(("紅".into(), "あり".into()), 2207);
-    let names =
-        |names: &[&str]| -> BTreeSet<String> { names.iter().map(|s| (*s).to_string()).collect() };
-    let options = BindOptionDecls {
-        sakura_mustselect: names(&["目", "腕"]),
-        kero_mustselect: names(&["脚", "羽"]),
-        sakura_multiple: names(&["髪", "腕"]),
-        kero_multiple: names(&["尾", "羽"]),
-    };
-    BindResolver::new(sakura, kero, options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,笑\r\n\
+         sakura.bindgroup1250.name,髪,長\r\n\
+         sakura.bindgroup1100.name,腕,上げ\r\n\
+         sakura.bindgroup1207.name,紅,あり\r\n\
+         kero.bindgroup2100.name,脚,組む\r\n\
+         kero.bindgroup2200.name,尾,振り\r\n\
+         kero.bindgroup2300.name,羽,開き\r\n\
+         kero.bindgroup2207.name,紅,あり\r\n\
+         sakura.bindoption0.group,目,mustselect\r\n\
+         sakura.bindoption1.group,髪,multiple\r\n\
+         sakura.bindoption2.group,腕,mustselect+multiple\r\n\
+         kero.bindoption0.group,脚,mustselect\r\n\
+         kero.bindoption1.group,尾,multiple\r\n\
+         kero.bindoption2.group,羽,mustselect+multiple\r\n",
+    ))
 }
 
 /// 本体側（sakura）の導出マトリクス全ケース（bindopt 4.2/4.3）。

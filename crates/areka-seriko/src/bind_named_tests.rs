@@ -1,21 +1,20 @@
 //! [`apply_named_bind`] の 4 つの結果の試験（spec: areka-P0-offline-surface-dump 要件 5.1・5.3・5.4・14.2）。
 
+use super::tests::groups_of;
 use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::state::{BindApplyOutcome, ScopeStates};
 
 /// 本体側に「目」（既定・1301/1303）と「服」（mustselect・1500/1501）を持つ表。
 fn resolver() -> BindResolver {
-    let mut sakura = BTreeMap::new();
-    sakura.insert(("目".to_string(), "開き".to_string()), 1301);
-    sakura.insert(("目".to_string(), "閉じ".to_string()), 1303);
-    sakura.insert(("服".to_string(), "制服".to_string()), 1500);
-    sakura.insert(("服".to_string(), "私服".to_string()), 1501);
-    let options = BindOptionDecls {
-        sakura_mustselect: BTreeSet::from(["服".to_string()]),
-        ..BindOptionDecls::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,開き\r\n\
+         sakura.bindgroup1303.name,目,閉じ\r\n\
+         sakura.bindgroup1500.name,服,制服\r\n\
+         sakura.bindgroup1501.name,服,私服\r\n\
+         sakura.bindoption0.group,服,mustselect\r\n",
+    ))
 }
 
 fn shown_states(ids: &[u32]) -> (ScopeStates, ActorKey) {

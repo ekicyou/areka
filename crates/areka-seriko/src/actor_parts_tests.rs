@@ -53,7 +53,7 @@ impl Rig {
     fn from_text(text: &str, static_binds: BindSet) -> Self {
         let table = table_of(text);
         assert!(table.has_animated_parts(), "前提: 動く部品の在る表");
-        Self::configured(cfg(table, always_fire()), eye_names(), static_binds)
+        Self::configured(cfg(table, always_fire()), eye_resolver(), static_binds)
     }
 
     /// 時計が `ms` のときに `\0\s[key]`。

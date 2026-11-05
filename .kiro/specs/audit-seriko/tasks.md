@@ -35,7 +35,7 @@
   - _Requirements: 7.3, 7.4, 7.6_
 
 - [ ] 2. 名前の表を本番と同じ道で組む（指摘 3）
-- [ ] 2.1 クレートの中のテストの名前の表を descript の文字列から組む形へ移す
+- [x] 2.1 クレートの中のテストの名前の表を descript の文字列から組む形へ移す
   - 名前の表が要るテスト（`bind_tests`・`bind_named_tests`・`actor_bind_loop_tests`・`actor_clock_tests`・`actor_parts_tests`・`actor_replace_tests`・`tests/bind_e2e`）を、descript の文字列 → 着せ替えの読み → 本番の表の組み方で組む形にする。統合テスト用の着せ替えの読みは 1.3 の受け口に置く
   - 期待値が変わるテストが出たら、テスト用の口が本番と違っていた証拠として本番の答えへ直し、その件を記録に残す
   - 完了: 移したテストが全部緑で、クレートの中にテスト用の口の呼び出しが残っていない
@@ -144,3 +144,4 @@
 - 1.2: Rig 4 本は `ClockRig::configured(config, names, static_binds)`（`with_config` はこれを呼ぶ）にまとめ、parts・stage・talk は `type Rig = ClockRig;` と檻ごとの impl。`send(ms, msg)` に時刻の引数が増えた。時計を持たない stage と parts の Rig も時計に揃えて寄せたが期待値は不変（parts の 4 本は最初の `\s` で時計が刻み 0 でなく合図の時刻 0 で生まれる。開始は同じ 0 で、時計の無い道は looper の `refresh(.., None, ..)` のテストが見張る）。`balloon_cue` は `cue(.., CueCommand::BalloonSurface{..}, ..)` へ。範囲の外の同名の `looper_talk_tests.rs` の `fn cue`・`parts_trigger_tests.rs` の `struct Rig` は写しでないので残した。`BindResolver::new` の呼び出しが `actor_test_support.rs` に入った（2.1 で消す相手）。
 - 1.3: `tests/common/mod.rs`（先頭に `#![allow(dead_code)]`）へ `emote_cue`・`emo2_surfaces_txt`・`emo2_resolver`・`TalkNotice`＋From 2 つ・`NullTextSink` を移した。写しが 1 本しか無い `emo2_binds`・`RecordingTextSink`・`test_bind_resolver`・`run_scenario` は元の場所のまま。
 - 1.4: 持ち主 `audit-test-kits` は走っていない（2026-11-05 の origin/main に spec.json が無く、作業場も枝も無い）。`event.rs:145`・`event_tests.rs:15`・`:102` の出所を `lib_test_support.rs` へ向けた（3 行だけ）。範囲の外の申し送り: `event_tests.rs:15` の括弧書き `（Capture::on_event）` は着手前から古い書き方（持ち主 `audit-test-kits` の受け持ち・完了の棚卸で渡す）。
+- 2.1: 名前の表は descript の文字列 → `groups_of`（`bind_tests.rs`・統合テスト用の写しは `tests/common/mod.rs`）→ `BindResolver::from_groups` で組む。期待値の変わったテストは 0 件（手組みの表と本番の表は移したどのテストでも同じ答え）。`ClockRig::configured` の 2 つ目の引数は `BindResolver` そのもの、`eye_names()` は `eye_resolver()` へ。`groups_of` は呼ぶたびに `target\` の下に作業フォルダを作るので lib のテストは約 0.6 s → 1.4 s（ファイルを書かない読みの `read_bindgroup_defaults` は parsers の `pub(super)` で境界の外）。残る `BindResolver::new`／`BindOptionDecls` は定義・再輸出・doc と範囲の外の `shell_carry_tests.rs` だけ。
