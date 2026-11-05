@@ -38,7 +38,7 @@
   - 申し合わせた範囲で、部品の時計のテストの期待の値と説明だけを直す
   - 終わった姿: 一致のテストが緑で、直しを戻すと落ちる。このクレートと `areka-seriko` のテストが緑
   - _Requirements: 2.1, 2.3, 4.4, 4.5, 5.1, 5.2, 5.4_
-- [ ] 2.3 広がりの予算の部品を作る（指摘 3 の土台）
+- [x] 2.3 広がりの予算の部品を作る（指摘 3 の土台）
   - 1 回の走査の範囲でたどってよい面の数を数え、尽きたら範囲で初めてのときだけ `error!`（走査の名前・根の面・予算）を出して入るのを断る部品を作る。値の定数は仮の値で置き、2.4〜2.5 の後に 3.2 で測って決める
   - 記録を黙らせる組み方（`Records::Quiet`）のときは `error!` も出さない形を走査の側が選べるようにする
   - 小さな予算を渡せる内側の口を用意する
@@ -154,3 +154,4 @@
 - 1.3: 番人の例外を消すと件数の宣言 `OVER_LIMIT_ALLOWED_COUNT` も 1 減らす（番人自身が 2 か所の編集を求める）。コマの合流の門のテストは `plan_frame_merge_tests.rs`
 - 2.1: `MAX_EXTENT`（plan_extent.rs）の判定は build_plan の EmptyComposition の後。`areka-emo-present` の match に `ExtentTooLarge` の腕はまだ無い（後から着いた側が足す申し合わせ）
 - 2.2: `areka-seriko/src/parts_tests.rs` のテストを `part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock` に改名（期待と説明も）＝audit-seriko へ伝え済み。見えない部品の抽選の時計が残り後で一度に進むのは seriko の今の振る舞い（範囲外）
+- 2.3: `budget.rs` は `Budget::new`／`with_records(limit, Records)`／`enter(walk, root)`。頭の `#![allow(dead_code)]` とその説明は 2.4 で走査に繋いだら消す。`VISIT_BUDGET` は仮の `1 << 20`（3.2 で測る）

@@ -32,6 +32,7 @@ pub mod method;
 pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 mod bind_steps;
+mod budget;
 pub mod composed;
 pub mod film;
 pub use film::{FilmSheet, FilmSheets, FilmSkip, FilmSkipReason};
