@@ -1,12 +1,10 @@
-//! W3a-T: init_window_graphics（systems/init.rs）のヘッドレステスト
+//! W3a-T: init_wuc_resource・init_window_graphics（systems/init.rs）のヘッドレステスト
 //!
 //! WindowGraphics 本体の作成は DesktopWindowTarget（実 HWND 必須）のため
 //! ヘッドレスでは検証不能だが、前段の分岐はデバイス非依存に検証できる:
-//! - ウィンドウ存在時の WucGraphicsResource 遅延初期化
+//! - ウィンドウ存在時の WucGraphicsResource 遅延初期化（窓の係から切り出した init_wuc_resource）
 //! - ウィンドウ不在時の早期リターン（リソース未作成）
 //! - 無効 HWND での CreateDesktopWindowTarget 失敗時のエラー経路（パニックなし）
-//!
-//! WUC 移行: init_window_graphics は WucGraphicsResource を遅延初期化する（init.rs）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
@@ -16,10 +14,11 @@ use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
     GraphicsCore, HasGraphicsResources, WindowGraphics, WucGraphicsResource, init_window_graphics,
+    init_wuc_resource,
 };
 
 fn setup() -> (World, Schedule) {
-    // init_window_graphics は内部で WucGraphicsResource::new（DQTAT_COM_NONE）を呼ぶため
+    // init_wuc_resource は内部で WucGraphicsResource::new（DQTAT_COM_NONE）を呼ぶため
     // COM を MTA 初期化しておく。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -29,9 +28,10 @@ fn setup() -> (World, Schedule) {
     world.insert_resource(core);
     world.insert_resource(FrameCount(1));
 
+    // 本番の GraphicsSetup と同じ順（WUC の資源 → 窓）
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(init_window_graphics);
+    schedule.add_systems((init_wuc_resource, init_window_graphics).chain());
     (world, schedule)
 }
 
@@ -86,9 +86,9 @@ fn invalid_hwnd_fails_gracefully_without_window_graphics() {
         let (mut world, mut schedule) = setup();
         let entity = spawn_window(&mut world);
 
-        // 1回目: WucGraphicsResource 遅延初期化（このフレームは return）
+        // 1回目: WucGraphicsResource を命令で入れ、同じ回の窓の係が CreateDesktopWindowTarget
+        // (null HWND) に失敗 → error ログ + 継続。2回目も同じ（パニックなし）
         schedule.run(&mut world);
-        // 2回目: CreateDesktopWindowTarget(null HWND) が失敗 → error ログ + 継続
         schedule.run(&mut world);
 
         assert!(

@@ -241,20 +241,12 @@ impl EcsWorld {
                     // Monitorレイアウト更新（detect_display_change_systemの後）
                     crate::ecs::layout::update_monitor_layout_system
                         .after(crate::ecs::layout::detect_display_change_system),
-                    // 依存コンポーネント無効化
-                    crate::ecs::graphics::invalidate_dependent_components
-                        .after(crate::ecs::layout::update_monitor_layout_system),
                     // Typewriter更新（アニメーション進行）
                     crate::ecs::widget::text::update_typewriters
-                        .after(crate::ecs::graphics::invalidate_dependent_components),
+                        .after(crate::ecs::layout::update_monitor_layout_system),
                 )
                     .chain(),
             );
-
-            // PreLayoutスケジュール: GraphicsCore初期化
-            // Phase 2: DCompシステム（visual_resource_management_system, visual_hierarchy_sync_system）を除去
-            // init_graphics_coreのみ残存（単独登録、chain不要）
-            schedules.add_systems(PreLayout, crate::ecs::graphics::init_graphics_core);
 
             // Layoutスケジュールにtaffyレイアウトシステムを登録
             schedules.add_systems(
@@ -291,16 +283,22 @@ impl EcsWorld {
             );
 
             // GraphicsSetupスケジュール: WUC（Windows.UI.Composition）合成スタック初期化
-            // check_device_removed: 先頭で装置の失いを確かめる（OS の知らせで起こされた回にも気づく）
-            // init_window_graphics: Window に WindowGraphics を作成
-            schedules.add_systems(
-                GraphicsSetup,
-                (
-                    crate::ecs::graphics::check_device_removed,
-                    crate::ecs::graphics::init_window_graphics,
-                )
-                    .chain(),
-            );
+            // 失いの確かめ → 無効化 → 装置 → WUC の資源 → 窓の順（無効化を作り直しより先に置かないと、
+            // 作り直された装置を見て何も倒さなくなる）。作る係は作れる回だけ回し、変化の印を食べない。
+            {
+                use crate::ecs::graphics::*;
+                schedules.add_systems(
+                    GraphicsSetup,
+                    (
+                        check_device_removed,
+                        invalidate_dependent_components,
+                        init_graphics_core,
+                        init_wuc_resource.run_if(graphics_core_ready),
+                        init_window_graphics.run_if(wuc_ready),
+                    )
+                        .chain(),
+                );
+            }
 
             // Drawスケジュール: ウィジェット描画システム
             // Phase 2: DCompシステム（deferred_surface_creation_system, cleanup_surface_on_commandlist_removed）を除去

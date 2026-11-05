@@ -98,104 +98,116 @@ fn create_window_graphics_for_hwnd(
 
 // ========== 新しい再初期化システム ==========
 
+/// 装置が在って有効か（装置を要る係の実行の条件）。
+pub(crate) fn graphics_core_ready(gc: Option<Res<GraphicsCore>>) -> bool {
+    gc.is_some_and(|gc| gc.is_valid())
+}
+
+/// 装置と WUC の資源がどちらも在って有効か（窓の係の実行の条件）。
+pub(crate) fn wuc_ready(
+    gc: Option<Res<GraphicsCore>>,
+    wuc: Option<Res<WucGraphicsResource>>,
+) -> bool {
+    graphics_core_ready(gc) && wuc.is_some_and(|w| w.is_valid())
+}
+
 /// GraphicsCore初期化・再初期化・一括マーキング
 ///
-/// GraphicsCoreが無効な場合に再作成し、HasGraphicsResourcesを持つ全エンティティに
-/// Changed<HasGraphicsResources>をトリガーして再初期化を促す。
+/// GraphicsCoreが無いか無効な場合に作り、在れば同じ場所で入れ替え、無ければ命令で入れる。
+/// 作れたら HasGraphicsResources を持つ全エンティティに Changed を立てて作り直しを促す。
 pub fn init_graphics_core(
     graphics: Option<ResMut<GraphicsCore>>,
     mut query: Query<&mut HasGraphicsResources>,
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    // 描画基盤が無効・未挿入の間は、次の画面更新でも必ず回して再試行する
-    // （設計 C16 の `GRAPHICS`）。初期化はコマンドキュー越しなので、成功した巡でも
-    // 実際に使えるようになるのは次の巡であり、その 1 回を省略に持っていかれない。
-    if !graphics.as_ref().is_some_and(|gc| gc.is_valid()) {
-        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
+    if graphics.as_ref().is_some_and(|gc| gc.is_valid()) {
+        return;
     }
+    // 描画基盤が無効・未挿入の間は、次の画面更新でも必ず回して再試行する
+    // （設計 C16 の `GRAPHICS`）。命令で入れた巡は使えるのが次の巡なので、その 1 回も省かせない。
+    crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
 
-    match graphics {
-        Some(mut gc) => {
-            if gc.is_valid() {
-                return;
+    info!(
+        frame = frame_count.0,
+        "[init_graphics_core] GraphicsCore initialization started"
+    );
+    match GraphicsCore::new() {
+        Ok(new_gc) => {
+            match graphics {
+                Some(mut gc) => *gc = new_gc,
+                None => commands.insert_resource(new_gc),
             }
-
+            let count = query.iter().count();
             info!(
                 frame = frame_count.0,
-                "[init_graphics_core] GraphicsCore re-initialization started"
+                count = count,
+                "[init_graphics_core] GraphicsCore initialization completed; marking entities"
             );
-            match GraphicsCore::new() {
-                Ok(new_gc) => {
-                    *gc = new_gc;
-                    info!(
-                        frame = frame_count.0,
-                        "[init_graphics_core] GraphicsCore re-initialization completed"
-                    );
-
-                    let count = query.iter().count();
-                    debug!(
-                        frame = frame_count.0,
-                        count = count,
-                        "[init_graphics_core] Triggering set_changed() on entities (re-init)"
-                    );
-                    for mut res in query.iter_mut() {
-                        res.set_changed();
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        frame = frame_count.0,
-                        error = ?e,
-                        "[init_graphics_core] GraphicsCore re-initialization failed"
-                    );
-                }
+            for mut res in query.iter_mut() {
+                res.set_changed();
             }
         }
-        None => {
-            info!(
+        Err(e) => {
+            error!(
                 frame = frame_count.0,
-                "[init_graphics_core] GraphicsCore initialization started"
+                error = ?e,
+                "[init_graphics_core] GraphicsCore initialization failed"
             );
-            match GraphicsCore::new() {
-                Ok(gc) => {
-                    info!(
-                        frame = frame_count.0,
-                        "[init_graphics_core] GraphicsCore initialization completed"
-                    );
-                    commands.insert_resource(gc);
-
-                    let count = query.iter().count();
-                    debug!(
-                        frame = frame_count.0,
-                        count = count,
-                        "[init_graphics_core] Triggering set_changed() on entities (init)"
-                    );
-                    for mut res in query.iter_mut() {
-                        res.set_changed();
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        frame = frame_count.0,
-                        error = ?e,
-                        "[init_graphics_core] GraphicsCore initialization failed"
-                    );
-                }
-            }
         }
     }
 }
 
-/// WindowGraphics初期化・再初期化
+/// WucGraphicsResource 初期化・再初期化
 ///
+/// 窓が 1 つでも在り、WUC の資源が無いか無効なら作る。在れば同じ場所で入れ替え（同じ回の
+/// 窓の係から使える）、無ければ命令で入れる。窓の係から切り出したのは、作った回に窓の係が
+/// 早く戻って `Changed<HasGraphicsResources>` を食べ、窓が作り直されなくなるのを防ぐため。
+pub fn init_wuc_resource(
+    graphics: Option<Res<GraphicsCore>>,
+    wuc_resource: Option<ResMut<WucGraphicsResource>>,
+    windows: Query<(), With<crate::ecs::window::Window>>,
+    mut commands: Commands,
+    frame_count: Res<crate::ecs::world::FrameCount>,
+) {
+    let Some(d2d) = graphics
+        .as_ref()
+        .filter(|gc| gc.is_valid())
+        .and_then(|gc| gc.d2d_device())
+    else {
+        return;
+    };
+    if wuc_resource.as_ref().is_some_and(|r| r.is_valid()) || windows.is_empty() {
+        return;
+    }
+    match WucGraphicsResource::new(d2d) {
+        Ok(new_resource) => {
+            info!(
+                frame = frame_count.0,
+                "[init_wuc_resource] WucGraphicsResource initialized"
+            );
+            match wuc_resource {
+                Some(mut r) => *r = new_resource,
+                None => commands.insert_resource(new_resource),
+            }
+        }
+        Err(e) => {
+            error!(
+                frame = frame_count.0,
+                error = ?e,
+                "[init_wuc_resource] WucGraphicsResource initialization failed"
+            );
+        }
+    }
+}
+
 /// WindowGraphics初期化・再初期化（Window エンティティに対し WUC バックエンドで作成）
 ///
-/// Window エンティティに WindowGraphics を作成する（全 Window が WUC 合成）。
-/// WucGraphicsResource が未初期化の場合はここで遅延初期化する。
+/// 本番では装置と WUC の資源が使える回だけ回す（`wuc_ready`）。中の早い戻りは、
+/// 係を自分で登録したときの守り。
 pub fn init_window_graphics(
-    graphics: Res<GraphicsCore>,
-    wuc_resource: Option<ResMut<WucGraphicsResource>>,
+    graphics: Option<Res<GraphicsCore>>,
+    wuc_resource: Option<Res<WucGraphicsResource>>,
     mut query: Query<
         (
             Entity,
@@ -210,48 +222,13 @@ pub fn init_window_graphics(
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    if !graphics.is_valid() {
+    let (Some(graphics), Some(wuc_res)) = (graphics, wuc_resource) else {
+        return;
+    };
+    if !graphics.is_valid() || !wuc_res.is_valid() {
         return;
     }
 
-    // Window が存在するか確認（全 Window が WUC 合成）
-    if query.iter().next().is_none() {
-        return;
-    }
-
-    // WucGraphicsResource の遅延初期化
-    let wuc_valid = wuc_resource.as_ref().map_or(false, |r| r.is_valid());
-    if !wuc_valid {
-        if let Some(d2d) = graphics.d2d_device() {
-            match WucGraphicsResource::new(d2d) {
-                Ok(new_resource) => {
-                    info!(
-                        frame = frame_count.0,
-                        "[init_window_graphics] WucGraphicsResource lazily initialized"
-                    );
-                    commands.insert_resource(new_resource);
-                    // insert_resource はコマンドキューなのでこのフレームでは使えない
-                    // 次フレームで WucGraphicsResource が利用可能になる
-                    return;
-                }
-                Err(e) => {
-                    error!(
-                        frame = frame_count.0,
-                        error = ?e,
-                        "[init_window_graphics] WucGraphicsResource initialization failed"
-                    );
-                    return;
-                }
-            }
-        } else {
-            return;
-        }
-    }
-
-    // NOTE(W3a-V): この時点で wuc_valid == true であり、その判定は wuc_resource が
-    // Some かつ is_valid() の場合にのみ true になる（!wuc_valid 分岐は全経路 return 済み）。
-    // よってこの unwrap は到達可能な全経路で発火しない。
-    let wuc_res = wuc_resource.unwrap();
     for (entity, _window, handle, _res, window_graphics, name) in query.iter_mut() {
         let entity_name = format_entity_name(entity, name);
         match window_graphics {

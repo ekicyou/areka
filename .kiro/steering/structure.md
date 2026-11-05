@@ -193,7 +193,8 @@ COMオブジェクトをラップするECSコンポーネントは、以下の�
 
 #### GPUリソース (`XxxGraphics`)
 - **特性**: Direct3D/Direct2D/WUC（Windows.UI.Composition）デバイスに依存
-- **デバイスロスト対応**: `invalidate()`メソッドと`generation`フィールドを実装
+- **デバイスロスト対応**: `invalidate()`（または中身を空にする口）と`is_valid()`を実装する。装置が無効になった回、`GraphicsSetup` の先頭の `invalidate_dependent_components` が有効な `WindowGraphics`・`VisualGraphics`・`SurfaceGraphics`・`BitmapSourceGraphics` を倒し、`GraphicsCommandList` を全部外し、最後に `WucGraphicsResource` を倒す。続く `init_graphics_core` → `init_wuc_resource` → `init_window_graphics`（同じ単一スレッドのスケジュール）と後段の作る係が `!is_valid()` を見て作り直す。新しい `XxxGraphics` を足すときは、この無効化の係に倒す行を足す。窓の部品は作り直しの回数を `generation` で数える
+- **下流の控え**: 装置に結びつく控えを wintf の部品の外に持つ側は、`Res<GraphicsCore>` の変化の印（作り直しと失いのとき立つ）を合図に控えを捨て、`is_valid()` の間だけ作り直す。`HasGraphicsResources` の変化は窓が出るたびにも立つので合図にしない
 - **命名**: `XxxGraphics`サフィックス
 - **例**:
   - `WindowGraphics` - ウィンドウレベルGPU資源

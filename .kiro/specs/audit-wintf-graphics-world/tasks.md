@@ -74,7 +74,7 @@
   - _Requirements: 3.1, 3.2, 3.4_
 
 - [ ] 4. 装置の作り直しの道
-- [ ] 4.1 無効化を全部に届け、作り直しの順を単一スレッドに並べる
+- [x] 4.1 無効化を全部に届け、作り直しの順を単一スレッドに並べる
   - 無効化の係を描画の準備のスケジュールの先頭に移し、窓・見た目・描画面・画像を倒し、命令の列を全部外し、最後に WUC を倒す。有効なものだけを可変で触る。「古いまま有効」の注記を消す
   - 装置を作る係の 2 つの枝を 1 本にして同じスケジュールへ移し、作れたら全部の窓に作り直しの印を立てる
   - WUC の資源を作る係を窓の係から切り出し、装置が使える回だけ回す。窓の係は WUC が使える回だけ回し、装置を `Option` で受ける
@@ -202,3 +202,4 @@
 - 2.3: 見た目の木の同期は「控えの親 ≠ 居るべき親」で未同期を見分ける（`VisualGraphics::new` は `parent_visual: None`）。見た目を作り直した部品は自動で同期し直される。`clip_sync_system` の作り直しへの対応は 4.6 の持ち分。visual_sync.rs の `type_complexity` 2 件は完了の棚卸で別名にまとめるか決める。
 - 3.1: `is_device_lost` と `GraphicsCore::note_draw_failure` は `#[cfg_attr(not(test), expect(dead_code, ...))]` 付き。4.5 で `render.rs` から呼ぶときに両方の属性を消す（消さないと満たされない expect の警告）。工場は `ID2D1Factory1`・装置は `d2d_factory.CreateDevice(&dxgi)`。`graphics/components.rs:100` の `let _ = parent…` が誤りを捨てている（前から・審査の指摘）＝ 4.4 か 6.4 で触るなら見る。
 - 3.2: 失いの知らせは `DeviceLostWatch`（`GraphicsCoreInner._lost_watch`）。`invalidate()` で inner ごと落ちて後始末が走る。`check_device_removed` は `GraphicsSetup` の先頭に `(check_device_removed, init_window_graphics).chain()` で仮に置いた＝4.1 で並べ直す。`world/mod.rs` は 956 行で 1,000 に近い＝4.1 以降で足すときは 6.1 の削りを先に見込む。
+- 4.1: WUC を作る・捨てるテストのスケジュールは必ず `set_executor(SingleThreadedExecutor::new())`（`Schedule::default()` は多スレッドで GPU の持ち主のスレッドを外れうる）。`tests/graphics/dcomp_integration_test.rs:108` の無効化も `Schedule::default()` のまま（前から）＝ 4.7 で同じファイルの群を触るときに直す。描画面の無効化は `SurfaceGraphics::clear()` に寄せたので 4.4 で `invalidate` を消せる。
