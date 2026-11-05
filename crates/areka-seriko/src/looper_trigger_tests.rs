@@ -669,3 +669,25 @@ fn entering_and_starts_are_logged_and_discards_are_silent() {
     );
     assert_eq!(count(&logs, "level=WARN"), 0, "{logs:?}");
 }
+
+/// 窓が列に無い序数を尋ねても（決まりの破れ）、どのビルドでも止まらず刻みの時刻で代え、序数と時刻の
+/// 欄を持つ `warn!` を 1 行残す（audit-seriko 指摘 9・要件 4.1・6.2）。
+#[test]
+fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
+    let mut epoch = TalkEpoch::default();
+    epoch.observe(0.0, 1000);
+    let mut feed = TalkFeed::default();
+    feed.push_chunk(0.0, 0.1, 1);
+    let mut at = None;
+    let logs = capture_logs(|| at = Some(glyph_wall_ms(&epoch, Some(&feed), 5, 1234)));
+
+    assert_eq!(at, Some(1234));
+    let warned = crate::test_support::warns(&logs);
+    assert_eq!(warned.len(), 1, "{logs:?}");
+    assert!(
+        warned[0].contains("seriko: trigger talk の区切りの文字が文字の列に無い")
+            && warned[0].contains("glyph=5")
+            && warned[0].contains("now_ms=1234"),
+        "{logs:?}"
+    );
+}

@@ -141,7 +141,8 @@ pub(super) fn revealed_at(
 /// 序数 `glyph` の文字が現れた壁時刻（ms）。文字の窓の「序数 → 壁時刻」の写しの中身。
 ///
 /// 窓が尋ねる序数は必ず列に在る（モジュールの doc の決まり）。万一無ければ決まりの破れなので、
-/// `warn!` を残して刻みの時刻 `now_ms` で代える（落とさない・黙って時刻を作らない）。
+/// `warn!` を残して刻みの時刻 `now_ms` で代える（落とさない・黙って時刻を作らない）。開発の
+/// ビルドでも同じ道を通る（止めない）。
 pub(super) fn glyph_wall_ms(
     epoch: &TalkEpoch,
     feed: Option<&TalkFeed>,
@@ -151,7 +152,6 @@ pub(super) fn glyph_wall_ms(
     let at_ms = feed
         .and_then(|feed| feed.time_of(glyph))
         .and_then(|r_s| epoch.wall_ms(r_s));
-    debug_assert!(at_ms.is_some(), "区切りの文字 {glyph} が文字の列に無い");
     at_ms.unwrap_or_else(|| {
         tracing::warn!(
             glyph,

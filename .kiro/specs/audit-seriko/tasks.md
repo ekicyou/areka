@@ -72,7 +72,7 @@
   - 完了: 新しいテストが緑で、`max` を外すと赤になることを確かめた記録がある。既存の呼び出しのテストが緑
   - _Boundary: calls.rs・looper_calls.rs・parts_calls.rs・calls_tests.rs_
   - _Requirements: 4.1, 4.2, 7.1, 7.2, 8.1_
-- [ ] 4.3 文字の時刻の問い合わせで開発のビルドだけ止まる道を消す（指摘 9）
+- [x] 4.3 文字の時刻の問い合わせで開発のビルドだけ止まる道を消す（指摘 9）
   - `debug_assert!` を消し、列に無い序数では刻みの時刻を返して `warn!` を残す今の道をどのビルドでも通す
   - 新しいテスト: 列に無い序数で呼ぶと刻みの時刻を返し、序数と時刻の欄を持つ `warn!` が 1 行出る
   - 完了: 新しいテストが緑で、`debug_assert!` を戻すと `panic` で赤になることを確かめた記録がある
@@ -150,3 +150,4 @@
 - 3（着手 HEAD `5865671e`）: 持ち主 `audit-test-kits` は走っていない（2026-11-05 の fetch 後も spec.json・作業場・枝が無い）。刻みの道の 4 本を移しても元は 1,001 行だったので、その前の組（`bind_noncanonical_addressee_severity_split` と専用の `noncanonical_custom_cue`）も `actor_tick_tests.rs` へ移した。行数は `actor_bind_loop_tests.rs` 1,366 → 906・`actor_tick_tests.rs` 380。写しの道具 7 つは `crate::looper::tests` の定義へ（`looper_tests.rs` の `pat`・`surface_with`・`shell_table`・`shown_shell_with_binds` を `pub(crate)` に上げた）。例外表は HEAD と origin/main で同じ 9 行だったので、1 行消して件数を 8 にした。名の一覧は 5 本のモジュールの道だけが `actor::tick_tests::` に変わった。申し送り: 移したテストは着せ替えの組を見ていない（`[1100]` に変えても緑）。移す前からの性質なので、6.1 の audit で見る。
 - 4.1（着手 HEAD `58cb8736`）: 消す前の rg は `is_trigger_word` 3 件（すべて `looper.rs`）・`is_trigger` 5 件（`parts.rs` 2・`parts_trigger.rs` 3）・`Armed::arm` 7 件（呼び手 6＝`looper_trigger.rs` 1・`parts_trigger.rs` 1・`trigger_tests.rs` 4、doc 1）。消した後は `is_trigger_word`・`is_trigger`・`Armed::is_visible` が 0 件。記録の行は段・文言・欄の並び（`scope slot [part] animation_id started_at_ms`）が前と同じであることを、元のマクロの写しと捕まえて突き合わせて確かめた（`part` が None なら欄は出ない）。変わったのは target だけで、`areka_seriko::looper::top_trigger`／`areka_seriko::parts::part_trigger` が `areka_seriko::trigger` にまとまった（design の約束は段・欄・文言で、target を拾う所はリポジトリに無い。`RUST_LOG` を `areka_seriko::looper` で絞って引き金の行を見る人には見え方が変わる）。
 - 4.2（着手 HEAD `6c912a27`）: 形を変える前の `CallPlays::stop` に関わる所は 5 か所（定義・`run_calls` の呼び出し・`looper_calls.rs`・`parts_calls.rs`・`calls_tests.rs` の偽の表）。`CallPlays` は 11 件で、すべて areka-seriko の中にある。直した後は全部 `stop(animation, always)` になった。新しいテスト `acts_through_mark_never_moves_back` を足して 551 件。`max` を `now_ms` に替えると新しいテストが赤になった（前半「印は 300 へ戻らない」、前半を外すと後半「400 の move が 2 度当たらない」も単独で赤）。`always` の判定に `&& false` を足すと、役者・一番上・部品の呼び出しのテスト 3 本が赤になった。
+- 4.3（着手 HEAD `f1f966a6`）: `glyph_wall_ms` の `debug_assert!` を消した。新しいテスト `glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn` を足して 552 件になった。`debug_assert!` を戻すと、このテストは `looper_trigger.rs:155` の panic で赤になる。`warn!` の文言と欄（`glyph`・`now_ms`）は変えていない。
