@@ -12,14 +12,10 @@
 
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-
 use wintf::ecs::{Arrangement, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    attach_hit_target, build_target_assets, build_two_face_assets, make_world_with_gpu,
+    attach_hit_target, build_target_assets, build_two_face_assets, hide_ok, make_world_with_gpu,
     mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
@@ -111,22 +107,6 @@ fn assert_entities_visible(world: &World, presenter: &EmoPresenter, target: Targ
         world.get::<HitTest>(slot).expect("slot に HitTest").mode,
         HitTestMode::Bounds,
         "{ctx}: 文字層スロットが矩形判定へ復帰していない"
-    );
-}
-
-/// `Hide` を適用し、reply が `Ok(())` であることを確認する。
-fn hide_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
     );
 }
 

@@ -1,9 +1,7 @@
 use super::*;
 
 use std::path::Path;
-use std::time::Duration;
 
-use areka_actor::reply_channel;
 use areka_emo_atlas::{
     AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
@@ -13,8 +11,8 @@ use areka_parsers::shell::{Animation, AppendTarget, DrawMethod, Interval, Patter
 use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    build_two_face_assets, elem, make_world_with_gpu, pattern_overlay_at, shell_of,
-    spawn_window_with_dpi, surface,
+    build_two_face_assets, elem, make_world_with_gpu, pattern_overlay_at, shell_of, show_ok,
+    show_with, spawn_window_with_dpi, surface,
 };
 
 /// surface 1000（`w×h` 全不透明 element ＋ bind animation 2000 が surface 5000 を (0,0) に重ねる）
@@ -144,19 +142,18 @@ fn bind_change_on_same_surface_updates_display() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, binds: BindSet| {
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
-            world,
-            PresentCommand::ShowSurface {
-                target: TargetId(0),
-                surface_id: 1000,
-                binds,
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
-        );
         assert!(
-            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            matches!(
+                show_with(
+                    presenter,
+                    world,
+                    TargetId(0),
+                    1000,
+                    binds,
+                    PatternState::default()
+                ),
+                Ok(())
+            ),
             "ShowSurface が Ok でない"
         );
     };
@@ -206,21 +203,7 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 面 1000 を表示確立（可視・αマスク判定・装着を遅延生成）。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "面 1000 の初回 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     // 前提: 初回表示は面 1000 の golden（切替前の基準）。
     assert_eq!(
         presenter
@@ -243,22 +226,8 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         .expect("表示確立後の text_slot_view は Some");
 
     // 同寸・異 id 再 Show（面 3000）。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 3000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
-    );
     // (a) reply Ok。
-    assert!(
-        matches!(rx1.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "同寸・異 id（面 3000）の再 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 3000);
 
     // (b) 可視維持。
     assert!(
@@ -419,19 +388,18 @@ fn show_surface_pattern_flows_through_to_compose_and_cache() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState| {
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
-            world,
-            PresentCommand::ShowSurface {
-                target: TargetId(0),
-                surface_id: 1000,
-                binds: BindSet::default(),
-                pattern,
-                reply: Some(tx),
-            },
-        );
         assert!(
-            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            matches!(
+                show_with(
+                    presenter,
+                    world,
+                    TargetId(0),
+                    1000,
+                    BindSet::default(),
+                    pattern
+                ),
+                Ok(())
+            ),
             "ShowSurface が Ok でない"
         );
     };

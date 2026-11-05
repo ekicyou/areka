@@ -13,7 +13,6 @@
 use super::*;
 
 use std::path::Path;
-use std::time::Duration;
 
 use areka_emo_atlas::{
     AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
@@ -25,7 +24,7 @@ use crate::display::gpu_tests::replay_and_read_back;
 
 use super::test_support::{
     capture, elem, make_world_with_gpu, mount_entities, native_golden_with, pattern_overlay_at,
-    shell_of, spawn_window_with_dpi, surface,
+    shell_of, show_with, spawn_window_with_dpi, surface,
 };
 
 const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
@@ -107,19 +106,18 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
 }
 
 fn show(presenter: &mut EmoPresenter, world: &mut World, x: i64) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id: BASE_ID,
-            binds: BindSet::default(),
-            pattern: pattern_overlay_at(2000, CELL_ID, x, CELL_Y),
-            reply: Some(tx),
-        },
-    );
     assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        matches!(
+            show_with(
+                presenter,
+                world,
+                TARGET,
+                BASE_ID,
+                BindSet::default(),
+                pattern_overlay_at(2000, CELL_ID, x, CELL_Y)
+            ),
+            Ok(())
+        ),
         "コマ x={x} の ShowSurface が Ok でない"
     );
 }

@@ -14,7 +14,6 @@
 use super::*;
 
 use std::path::Path;
-use std::time::Duration;
 
 use areka_emo_atlas::{
     AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
@@ -22,7 +21,8 @@ use areka_emo_atlas::{
 use areka_emo_compose::{ComposeMethod, PatternFrame};
 
 use super::test_support::{
-    capture, make_world_with_gpu, native_golden_with, pattern_overlay_at, spawn_window_with_dpi,
+    capture, make_world_with_gpu, native_golden_with, pattern_overlay_at, show_with,
+    spawn_window_with_dpi,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -85,20 +85,9 @@ fn binds() -> BindSet {
 }
 
 fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id: BASE_ID,
-            binds: binds(),
-            pattern,
-            reply: Some(tx),
-        },
-    );
     assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
+        show_with(presenter, world, TARGET, BASE_ID, binds(), pattern),
+        Ok(())
     ));
 }
 

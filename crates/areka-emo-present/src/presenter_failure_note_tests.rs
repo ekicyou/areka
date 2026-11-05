@@ -9,15 +9,13 @@
 
 use super::*;
 
-use std::time::Duration;
-
 use tracing::Level as L;
 
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, build_two_face_assets, capture, make_world_with_gpu, show_ok,
-    spawn_window_with_dpi,
+    CapturedEvent, build_two_face_assets, capture, make_world_with_gpu, show_ok, show_with,
+    show_with_armed_fault, spawn_window_with_dpi,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -40,32 +38,27 @@ fn attached(world: &mut World) -> EmoPresenter {
 
 /// `ShowSurface` を 1 本流し、reply を返す。
 fn show(presenter: &mut EmoPresenter, world: &mut World, surface_id: u32) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with(
+        presenter,
         world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("reply を受信できない")
+        TARGET,
+        surface_id,
+        BindSet::default(),
+        PatternState::default(),
+    )
 }
 
-/// `CreateBitmap` へ失敗を注入して 1 本流す（武装の解除は `Drop` で必ず行う）。
+/// `CreateBitmap` へ失敗を注入して 1 本流す。
 fn show_with_fault(presenter: &mut EmoPresenter, world: &mut World, surface_id: u32) {
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-    let _disarm = Disarm;
-    arm_display_fault(DisplayFault::CreateBitmap);
-    let outcome = show(presenter, world, surface_id);
+    let outcome = show_with_armed_fault(
+        presenter,
+        world,
+        TARGET,
+        surface_id,
+        BindSet::default(),
+        PatternState::default(),
+        DisplayFault::CreateBitmap,
+    );
     assert!(
         matches!(
             outcome,
@@ -227,26 +220,15 @@ fn each_target_logs_its_own_first_error() {
     attach_valid_and_empty(&mut presenter, &mut world, TARGET);
     attach_valid_and_empty(&mut presenter, &mut world, other);
     let fault_on = |presenter: &mut EmoPresenter, world: &mut World, target: TargetId| {
-        struct Disarm;
-        impl Drop for Disarm {
-            fn drop(&mut self) {
-                clear_display_fault();
-            }
-        }
-        let _disarm = Disarm;
-        arm_display_fault(DisplayFault::CreateBitmap);
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
+        let outcome = show_with_armed_fault(
+            presenter,
             world,
-            PresentCommand::ShowSurface {
-                target,
-                surface_id: FACE_A,
-                binds: BindSet::default(),
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
+            target,
+            FACE_A,
+            BindSet::default(),
+            PatternState::default(),
+            DisplayFault::CreateBitmap,
         );
-        let outcome = rx.recv_timeout(Duration::from_secs(10)).expect("reply");
         assert!(
             matches!(outcome, Err(PresentError::Device { .. })),
             "{outcome:?}"

@@ -1,14 +1,11 @@
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
 use wintf::ecs::{Arrangement, GraphicsCommandList};
 
 use super::test_support::{
     CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
-    force_current_surface, make_world_with_gpu, mount_entities, set_window_dpi, show_ok,
+    force_current_surface, hide_ok, make_world_with_gpu, mount_entities, set_window_dpi, show_ok,
     spawn_window_with_dpi,
 };
 
@@ -464,18 +461,7 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     let _ = presenter.take_pending_resize(TargetId(0));
 
     // `\s[-1]` 相当で非表示にする（キャッシュ・装着・last_show は保持される）。
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::Hide {
-            target: TargetId(0),
-            reply: Some(tx),
-        },
-    );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
+    hide_ok(&mut presenter, &mut world, TargetId(0));
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         None,

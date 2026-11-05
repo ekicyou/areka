@@ -15,7 +15,8 @@ use super::*;
 use std::time::Duration;
 
 use super::test_support::{
-    build_target_assets, make_world_with_gpu, set_window_dpi, show_ok, spawn_window_with_dpi,
+    build_target_assets, make_world_with_gpu, set_window_dpi, show_ok, show_with,
+    spawn_window_with_dpi,
 };
 
 /// 資産の面の番号（`build_target_assets` が作る唯一の面）。
@@ -128,21 +129,17 @@ fn failed_show_records_nothing() {
     presenter.take_scale_changes();
     // k の変わる DPI で、無い面を出す＝表示成立点より前で失敗する。
     set_window_dpi(&mut world, window, 192);
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 4242,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
+    assert!(
+        show_with(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            4242,
+            BindSet::default(),
+            PatternState::default()
+        )
+        .is_err()
     );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Err(_))
-    ));
     assert!(
         presenter.take_scale_changes().is_empty(),
         "絵にかからなかった k は記録に出ない"

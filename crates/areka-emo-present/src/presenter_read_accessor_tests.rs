@@ -1,13 +1,9 @@
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-use areka_emo_compose::BindSet;
-
 use super::test_support::{
     attach_hit_target, build_target_assets, build_two_face_assets, force_applied,
-    force_current_surface, make_world_with_gpu, spawn_window_with_dpi,
+    force_current_surface, hide_ok, invalidate_ok, make_world_with_gpu, show_ok,
+    spawn_window_with_dpi,
 };
 
 // ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・R3.1-3.4）───────────
@@ -50,32 +46,14 @@ fn current_surface_id_follows_surface_switch() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let show = |presenter: &mut EmoPresenter, world: &mut World, id: u32| {
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
-            world,
-            PresentCommand::ShowSurface {
-                target: TargetId(0),
-                surface_id: id,
-                binds: BindSet::default(),
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
-        );
-        assert!(
-            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-            "ShowSurface が Ok でない"
-        );
-    };
-
-    show(&mut presenter, &mut world, 1000);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(1000),
         "初回表示成立後は Some(1000)"
     );
 
-    show(&mut presenter, &mut world, 3000);
+    show_ok(&mut presenter, &mut world, TargetId(0), 3000);
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(3000),
@@ -94,39 +72,14 @@ fn current_surface_id_is_none_after_hide() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(1000),
         "Hide 前は Some(1000)（前提）"
     );
 
-    let (txh, rxh) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::Hide {
-            target: TargetId(0),
-            reply: Some(txh),
-        },
-    );
-    assert!(
-        matches!(rxh.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
+    hide_ok(&mut presenter, &mut world, TargetId(0));
 
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
@@ -152,34 +105,9 @@ fn current_surface_id_unchanged_by_invalidate_cache() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
-    let (txi, rxi) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::InvalidateCache {
-            target: TargetId(0),
-            reply: Some(txi),
-        },
-    );
-    assert!(
-        matches!(rxi.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "InvalidateCache が Ok でない"
-    );
+    invalidate_ok(&mut presenter, &mut world, TargetId(0));
 
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
@@ -213,21 +141,8 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
 
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    for cmd in [
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: None,
-        },
-        PresentCommand::InvalidateCache {
-            target: TargetId(0),
-            reply: None,
-        },
-    ] {
-        presenter.apply(&mut world, cmd);
-    }
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    invalidate_ok(&mut presenter, &mut world, TargetId(0));
     assert_eq!(presenter.current_surface_id(TargetId(0)), Some(1000));
 
     let result = presenter.read_back(TargetId(0));

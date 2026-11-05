@@ -1,15 +1,12 @@
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
 
 use wintf::ecs::Arrangement;
 
 use super::test_support::{
     build_target_assets, build_two_face_assets, make_world_with_gpu, mount_entities,
-    set_window_dpi, show_ok, spawn_window_with_dpi,
+    set_window_dpi, show_ok, show_with, spawn_window_with_dpi,
 };
 
 /// surface entity の `Arrangement`（**論理寸＝原寸・係数＝拡大率 k**）を `(寸, 係数)` で読む。
@@ -196,21 +193,17 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
     let gfx = world
         .remove_resource::<GraphicsCore>()
         .expect("前提: make_world_with_gpu が GraphicsCore を載せている");
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
     assert!(
         matches!(
-            rx.recv_timeout(Duration::from_secs(10)),
-            Ok(Err(PresentError::Device { .. }))
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                BindSet::default(),
+                PatternState::default()
+            ),
+            Err(PresentError::Device { .. })
         ),
         "前提: 表示記録に失敗する"
     );
@@ -237,23 +230,17 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
     // (C) 窓 DPI を 192→96（k=2/1→1/1・物理寸なら 8×6→4×3 相当）へ変えたうえで**合成に失敗**させる。
     //     表示は成立しないため、k も表示も前値のまま＝報告も無い。
     set_window_dpi(&mut world, window, 96);
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 9999,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
     assert!(
         matches!(
-            rx.recv_timeout(Duration::from_secs(10)),
-            Ok(Err(PresentError::Compose(ComposeError::SurfaceNotFound(
-                9999
-            ))))
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                9999,
+                BindSet::default(),
+                PatternState::default()
+            ),
+            Err(PresentError::Compose(ComposeError::SurfaceNotFound(9999)))
         ),
         "前提: 解決不能 id は Err(SurfaceNotFound)"
     );

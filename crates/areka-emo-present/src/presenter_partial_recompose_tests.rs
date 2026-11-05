@@ -8,18 +8,18 @@
 use super::*;
 
 use std::path::Path;
-use std::time::Duration;
 
 use areka_emo_atlas::{
     AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
 use wintf::ecs::GraphicsCommandList;
 
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, capture, elem, make_world_with_gpu, mount_entities, native_golden_with,
-    pattern_overlay_at, shell_of, spawn_window_with_dpi, surface,
+    CapturedEvent, capture, elem, invalidate_ok, make_world_with_gpu, mount_entities,
+    native_golden_with, pattern_overlay_at, shell_of, show_ok, show_with, show_with_armed_fault,
+    spawn_window_with_dpi, surface,
 };
 use super::timing::PERF_LINE_MESSAGE;
 
@@ -125,19 +125,14 @@ fn send_on(
     surface_id: u32,
     pattern: PatternState,
 ) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with(
+        presenter,
         world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id,
-            binds: BindSet::default(),
-            pattern,
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("reply を受信できない")
+        TARGET,
+        surface_id,
+        BindSet::default(),
+        pattern,
+    )
 }
 
 fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) {
@@ -145,21 +140,6 @@ fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) 
         matches!(send(presenter, world, pattern), Ok(())),
         "ShowSurface が Ok でない"
     );
-}
-
-fn invalidate(presenter: &mut EmoPresenter, world: &mut World) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::InvalidateCache {
-            target: TARGET,
-            reply: Some(tx),
-        },
-    );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
 }
 
 /// 表示中の絵が、同じ入力を新しい合成器でいちから合成した絵と同じこと（要件 3.3・4.1）。
@@ -319,7 +299,7 @@ fn static_surface_always_recomposes_from_scratch() {
     let ((), events) = capture(|| {
         // 面 1000 → 面 3000 → 面 1000（当たり）→ 面 3000（当たり）。
         for id in [BASE_ID, CELL_ID, BASE_ID, CELL_ID] {
-            show_ok_static(&mut presenter, &mut world, id);
+            show_ok(&mut presenter, &mut world, TARGET, id);
         }
     });
     let misses: Vec<&CapturedEvent> = events
@@ -337,24 +317,6 @@ fn static_surface_always_recomposes_from_scratch() {
     assert_eq!(hits, 2, "控えに当たる回が 2 回");
     // 動きの無い面の合成は下敷きの印を立てない。
     assert!(!presenter.targets[&TARGET].partial_base);
-}
-
-fn show_ok_static(presenter: &mut EmoPresenter, world: &mut World, id: u32) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id: id,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
 }
 
 /// 要件 3.1・3.5: 控えに当たった次の外れはいちから（当たりの回は下敷きの印を立てない）。
@@ -389,7 +351,7 @@ fn miss_after_invalidate_recomposes_from_scratch() {
         show(&mut presenter, &mut world, frame(0));
         show(&mut presenter, &mut world, frame(2));
         assert!(presenter.targets[&TARGET].partial_base);
-        invalidate(&mut presenter, &mut world);
+        invalidate_ok(&mut presenter, &mut world, TARGET);
         assert!(
             !presenter.targets[&TARGET].partial_base,
             "控えを捨てる指令で下敷きの印は偽"
@@ -410,13 +372,6 @@ fn miss_after_invalidate_recomposes_from_scratch() {
 /// 次の適用は前のコマの絵を、失敗したコマの命令列との違いで重ね直し、絵が崩れる。
 #[test]
 fn miss_after_display_record_failure_recomposes_from_scratch() {
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-
     let (mut world, mut presenter, emo_world, atlas) = setup();
     let ((), events) = capture(|| {
         show(&mut presenter, &mut world, frame(0));
@@ -430,15 +385,19 @@ fn miss_after_display_record_failure_recomposes_from_scratch() {
             presenter.targets[&TARGET].last_show.clone(),
         );
 
-        {
-            let _disarm = Disarm;
-            arm_display_fault(DisplayFault::CreateBitmap);
-            let outcome = send(&mut presenter, &mut world, frame(12));
-            assert!(
-                matches!(outcome, Err(PresentError::Device { .. })),
-                "注入した失敗が返らない: {outcome:?}"
-            );
-        }
+        let outcome = show_with_armed_fault(
+            &mut presenter,
+            &mut world,
+            TARGET,
+            BASE_ID,
+            BindSet::default(),
+            frame(12),
+            DisplayFault::CreateBitmap,
+        );
+        assert!(
+            matches!(outcome, Err(PresentError::Device { .. })),
+            "注入した失敗が返らない: {outcome:?}"
+        );
         assert!(
             !presenter.targets[&TARGET].partial_base,
             "失敗した適用のあと下敷きの印は偽"

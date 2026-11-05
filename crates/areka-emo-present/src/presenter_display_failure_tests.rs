@@ -41,7 +41,6 @@
 use super::*;
 
 use std::path::Path;
-use std::time::Duration;
 
 use areka_emo_atlas::{
     AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
@@ -50,11 +49,11 @@ use areka_emo_atlas::{
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, Arrangement, GraphicsCommandList, Offset, Visual};
 
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, capture, elem, make_world_with_gpu, mount_entities, set_window_dpi, shell_of,
-    show_ok, spawn_window_with_dpi, surface,
+    CapturedEvent, capture, elem, hide_ok, make_world_with_gpu, mount_entities, set_window_dpi,
+    shell_of, show_ok, show_with_armed_fault, spawn_window_with_dpi, surface,
 };
 
 /// 検査対象の target（全テストで 1 つ）。
@@ -263,52 +262,33 @@ fn plant_sentinel_offset(presenter: &EmoPresenter, world: &mut World, target: Ta
 
 // ── 注入（武装と解除を 1 つの不可分な操作に閉じる）──────────────────────
 
-/// 注入 → `ShowSurface` → 武装解除 を **1 つの不可分な操作**として閉じる唯一の入口。
-///
-/// `display.rs` の `fault_point` は**一致した点でしか武装を解かない**ので、届かなかった注入は旗が
-/// 立ったまま残り、同一スレッドの後続の記録で発火する。解除を `Drop` に持たせ `arm_display_fault` の
-/// 呼出を本関数の内側 1 箇所だけに限ることで、「解除の書き忘れ」も「assert の panic で解除を飛び越す
-/// こと」も**構造的に起こり得ない**（`display_fault_tests.rs` の `record_with_armed_fault` と同じ規律）。
-fn show_with_armed_fault(
+/// 失敗点 `at` を注入した `ShowSurface`（注入と解除は支えの `show_with_armed_fault` が閉じる）を
+/// 記録を捕捉しながら流し、返った失敗と記録を返す。注入が届かず `Ok` が返ったら落とす。
+fn failed_show(
     presenter: &mut EmoPresenter,
     world: &mut World,
     target: TargetId,
     surface_id: u32,
     at: DisplayFault,
 ) -> (PresentError, Vec<CapturedEvent>) {
-    /// 生存期間の終わり（正常終了・panic による巻き戻しの双方）で必ず武装を降ろす番人。
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-
-    let _disarm = Disarm;
-    arm_display_fault(at);
-
     let (outcome, events) = capture(|| {
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
+        show_with_armed_fault(
+            presenter,
             world,
-            PresentCommand::ShowSurface {
-                target,
-                surface_id,
-                binds: BindSet::default(),
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
-        );
-        rx.recv_timeout(Duration::from_secs(10))
+            target,
+            surface_id,
+            BindSet::default(),
+            PatternState::default(),
+            at,
+        )
     });
 
     let err = match outcome {
         // 要件 7.1／7.2: 呼出元へ失敗が返る（`display.rs` が `device_err` 経由で error! 済み）。
-        Ok(Err(e)) => e,
-        Ok(Ok(())) => panic!(
+        Err(e) => e,
+        Ok(()) => panic!(
             "注入した失敗点 {at:?} で ShowSurface が Ok を返した（注入が届いていない＝前状態維持を判定できない）"
         ),
-        Err(e) => panic!("reply（ShowSurface）を受信できない: {e}"),
     };
     (err, events)
 }
@@ -407,22 +387,6 @@ fn assert_established_baseline(before: &PresenterState, visible: bool, current: 
     assert!(before.mask.is_some(), "前提: 確立でαマスクが供給済み");
 }
 
-/// `Hide` を適用し、reply が `Ok(())` であることを確認する。
-fn hide_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
-}
-
 // ── 場面 ⑴ 初回（装着・メモが無から生じる場面）──────────────────────────
 
 /// 要件 7.1／7.2: **初回の適用**が 4 注入点のどこで失敗しても、装着も配置もマスクもメモも生じない。
@@ -453,8 +417,7 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
     );
 
     for at in ALL_DISPLAY_FAULTS {
-        let (err, events) =
-            show_with_armed_fault(&mut presenter, &mut world, TARGET, ESTABLISHED_ID, at);
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ESTABLISHED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
             snapshot(&presenter, &world, TARGET),
@@ -504,8 +467,7 @@ fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
     assert_established_baseline(&before, true, Some(ESTABLISHED_ID));
 
     for at in ALL_DISPLAY_FAULTS {
-        let (err, events) =
-            show_with_armed_fault(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
             snapshot(&presenter, &world, TARGET),
@@ -584,8 +546,7 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
 
     let (surface_entity, slot) = mount_entities(&presenter, TARGET);
     for at in ALL_DISPLAY_FAULTS {
-        let (err, events) =
-            show_with_armed_fault(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
             snapshot(&presenter, &world, TARGET),

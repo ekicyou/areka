@@ -94,28 +94,107 @@ pub(super) fn native_golden_with(
     (native.bytes().to_vec(), (native.width(), native.height()))
 }
 
-/// 有効 `ShowSurface` を適用し、reply が `Ok(())` であることを確認する（テスト補助）。
-pub(super) fn show_ok(
+/// `ShowSurface` を適用し、reply をそのまま返す（受信できなければ panic）。
+pub(super) fn show_with(
     presenter: &mut EmoPresenter,
     world: &mut World,
     target: TargetId,
     surface_id: u32,
-) {
+    binds: BindSet,
+    pattern: PatternState,
+) -> PresentOutcome {
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
         world,
         PresentCommand::ShowSurface {
             target,
             surface_id,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
+            binds,
+            pattern,
+            reply: Some(tx),
+        },
+    );
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("reply（ShowSurface）を受信できない")
+}
+
+/// 有効 `ShowSurface`（bind・コマ無し）を適用し、reply が `Ok(())` であることを確認する。
+pub(super) fn show_ok(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    surface_id: u32,
+) {
+    let outcome = show_with(
+        presenter,
+        world,
+        target,
+        surface_id,
+        BindSet::default(),
+        PatternState::default(),
+    );
+    assert!(
+        matches!(outcome, Ok(())),
+        "ShowSurface（surface {surface_id}）が Ok でない: {outcome:?}"
+    );
+}
+
+/// `Hide` を適用し、reply が `Ok(())` であることを確認する。
+pub(super) fn hide_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
+    let (tx, rx) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        world,
+        PresentCommand::Hide {
+            target,
             reply: Some(tx),
         },
     );
     assert!(
         matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "ShowSurface（surface {surface_id}）が Ok でない"
+        "Hide が Ok でない"
     );
+}
+
+/// `InvalidateCache`（控えを捨てる）を適用し、reply が `Ok(())` であることを確認する。
+pub(super) fn invalidate_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
+    let (tx, rx) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        world,
+        PresentCommand::InvalidateCache {
+            target,
+            reply: Some(tx),
+        },
+    );
+    assert!(
+        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        "InvalidateCache が Ok でない"
+    );
+}
+
+/// 表示の記録の失敗点 `at` を注入したまま [`show_with`] を適用し、reply を返す。
+///
+/// 注入はこの呼び出しの中だけで、抜けるとき（正常終了・panic による巻き戻しの双方）に必ず降ろす。
+/// `display.rs` の `fault_point` は一致した点でしか武装を解かないので、届かなかった注入が後続の
+/// 記録で発火しないよう、解除を `Drop` に持たせる。
+pub(super) fn show_with_armed_fault(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    surface_id: u32,
+    binds: BindSet,
+    pattern: PatternState,
+    at: crate::display::DisplayFault,
+) -> PresentOutcome {
+    struct Disarm;
+    impl Drop for Disarm {
+        fn drop(&mut self) {
+            crate::display::clear_display_fault();
+        }
+    }
+
+    let _disarm = Disarm;
+    crate::display::arm_display_fault(at);
+    show_with(presenter, world, target, surface_id, binds, pattern)
 }
 
 /// 装着済み target の (枠の面 entity, 文字層スロット entity)。

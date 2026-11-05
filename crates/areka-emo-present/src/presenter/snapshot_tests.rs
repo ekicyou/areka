@@ -12,9 +12,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
-use areka_actor::reply_channel;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
@@ -29,9 +27,10 @@ use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::super::test_support::{
-    capture, elem, native_golden, native_golden_with, pattern_overlay_at, spawn_window_with_dpi,
+    capture, elem, hide_ok, invalidate_ok, native_golden, native_golden_with, pattern_overlay_at,
+    show_with, spawn_window_with_dpi,
 };
-use super::super::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
+use super::super::{EmoPresenter, TargetId};
 
 const SHOWN: TargetId = TargetId(0);
 const NEVER_SHOWN: TargetId = TargetId(1);
@@ -159,35 +158,12 @@ fn show(
         GraphicsCommandList::empty(),
     );
 
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id,
-            binds,
-            pattern,
-            reply: Some(tx),
-        },
-    );
     assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        matches!(
+            show_with(presenter, world, target, surface_id, binds, pattern),
+            Ok(())
+        ),
         "ShowSurface（surface {surface_id}）が Ok でない"
-    );
-}
-
-fn hide(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
     );
 }
 
@@ -262,7 +238,7 @@ fn last_shown_returns_id_and_picture_and_keeps_them_after_hide() {
     let before = bytes_of(picture.expect("表示の後はメモに絵が在る"));
     assert_eq!(before, (dressed, 4, 3), "最後に表示した入力の絵が返る");
 
-    hide(&mut presenter, &mut world, SHOWN);
+    hide_ok(&mut presenter, &mut world, SHOWN);
     assert_eq!(
         presenter.current_surface_id(SHOWN),
         None,
@@ -298,18 +274,7 @@ fn last_shown_after_invalidate_cache_keeps_id_without_picture() {
         bound(),
         PatternState::default(),
     );
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::InvalidateCache {
-            target: SHOWN,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "InvalidateCache が Ok でない"
-    );
+    invalidate_ok(&mut presenter, &mut world, SHOWN);
 
     let shown = presenter.last_shown(SHOWN);
     assert!(

@@ -29,17 +29,16 @@
 
 use super::*;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use areka_actor::reply_channel;
 use areka_emo_compose::{BindSet, PatternState};
 
 use super::super::EmoPresenter;
 use super::super::test_support::{
-    CapturedEvent, build_target_assets, capture, make_world_with_gpu, set_window_dpi,
-    spawn_window_with_dpi,
+    CapturedEvent, build_target_assets, capture, hide_ok, make_world_with_gpu, set_window_dpi,
+    show_with, spawn_window_with_dpi,
 };
-use crate::command::{PresentCommand, PresentOutcome};
+use crate::command::PresentOutcome;
 
 // ── 語彙の読み口 ───────────────────────────────────────────────────────────────────────
 
@@ -490,34 +489,14 @@ fn attach(presenter: &mut EmoPresenter, world: &mut World, target: TargetId, win
 
 /// `ShowSurface` を 1 回適用する。
 fn show(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with(
+        presenter,
         world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("ShowSurface の reply を受信できない")
-}
-
-/// `Hide` を 1 回適用する。
-fn hide(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("Hide の reply を受信できない")
-        .expect("Hide は成功する");
+        target,
+        1000,
+        BindSet::default(),
+        PatternState::default(),
+    )
 }
 
 /// 捕捉列から `kind=surface` の行だけを発火順に取り出す。
@@ -702,7 +681,7 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     assert_eq!(field_value(&lines[0], SURFACE_FIELD_TARGET_ID), "2");
 
     // ⑵ 不可視（k は変えたうえで隠す＝先のゲートを抜けて不可視ゲートへ届かせる）。
-    hide(&mut presenter, &mut world, TargetId(2));
+    hide_ok(&mut presenter, &mut world, TargetId(2));
     set_window_dpi(&mut world, window, 192);
     let (invisible, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(2)));
     assert_eq!(invisible, None, "前提: 不可視では再表示しない");

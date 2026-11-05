@@ -41,9 +41,7 @@
 
 use super::*;
 
-use std::time::Duration;
-
-use super::test_support::{build_target_assets, spawn_window_with_dpi};
+use super::test_support::{build_target_assets, show_with, spawn_window_with_dpi};
 
 use crate::cache::CAPACITY as CACHE_CAPACITY;
 
@@ -72,19 +70,18 @@ fn rig() -> (World, EmoPresenter) {
 
 /// `ShowSurface` を 1 回適用する（成立しなければ即座に落とす＝以後の観測を空虚にしない）。
 fn show(presenter: &mut EmoPresenter, world: &mut World, n: u32) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: SURFACE,
-            binds: key(n),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
     assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        matches!(
+            show_with(
+                presenter,
+                world,
+                TargetId(0),
+                SURFACE,
+                key(n),
+                PatternState::default()
+            ),
+            Ok(())
+        ),
         "前提: ShowSurface が成立すること（成立しない適用の観測は意味を持たない）"
     );
 }

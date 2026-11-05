@@ -104,11 +104,10 @@
 use super::*;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
-use super::test_support::{build_target_assets, spawn_window_with_dpi};
+use super::test_support::{build_target_assets, show_with, spawn_window_with_dpi};
 
 // ── fixture ────────────────────────────────────────────────────────────────────────────
 
@@ -158,19 +157,18 @@ fn attach(presenter: &mut EmoPresenter, world: &mut World, window_dpi: u16, salt
 
 /// `ShowSurface` を 1 回適用する（成立しなければ即座に落とす＝以後の観測を空虚にしない）。
 fn show(presenter: &mut EmoPresenter, world: &mut World, binds: BindSet) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds,
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
     assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        matches!(
+            show_with(
+                presenter,
+                world,
+                TargetId(0),
+                1000,
+                binds,
+                PatternState::default()
+            ),
+            Ok(())
+        ),
         "前提: ShowSurface が成立すること（成立しない適用の観測は意味を持たない）"
     );
 }

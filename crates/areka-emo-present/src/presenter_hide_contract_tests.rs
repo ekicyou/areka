@@ -20,9 +20,7 @@
 use super::*;
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
-use areka_actor::reply_channel;
 use bevy_ecs::prelude::{DetectChanges, Insert, On, Query};
 
 use windows::UI::Composition::Visual as WucVisual;
@@ -31,7 +29,8 @@ use windows::core::Interface;
 use wintf::ecs::{HitTest, HitTestMode, Visual, VisualGraphics};
 
 use super::test_support::{
-    build_target_assets, make_world_with_gpu, mount_entities, show_ok, spawn_window_with_dpi,
+    build_target_assets, hide_ok, make_world_with_gpu, mount_entities, show_ok,
+    spawn_window_with_dpi,
 };
 
 // ── 檻の補助 ────────────────────────────────────────────────────────────────────────────
@@ -96,22 +95,6 @@ fn assert_layers(
     );
 }
 
-/// 明示的な非表示指令を指令の入口（[`EmoPresenter::apply`]）へ流し、応答が `Ok(())` であることを見る。
-fn hide_via_command(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "明示的な非表示指令の応答が Ok でない"
-    );
-}
-
 /// 既定の可視性所有（＝従来の指令駆動）の target を 1 つ組み、初回の表示指令まで済ませて返す。
 ///
 /// 所有権を設定しないことが要点である——本ファイルが対象とするのは本仕様が新設した経路ではなく、
@@ -169,7 +152,7 @@ fn explicit_hide_command_transitions_both_layers_from_visible_to_hidden() {
         "明示的な非表示指令の直前",
     );
 
-    hide_via_command(&mut presenter, &mut world, target);
+    hide_ok(&mut presenter, &mut world, target);
 
     assert_layers(
         &world,
@@ -211,7 +194,7 @@ fn explicit_hide_command_covers_a_text_layer_that_holds_drawn_content() {
         "文字層へ内容を装着した直後",
     );
 
-    hide_via_command(&mut presenter, &mut world, target);
+    hide_ok(&mut presenter, &mut world, target);
 
     assert_layers(
         &world,
