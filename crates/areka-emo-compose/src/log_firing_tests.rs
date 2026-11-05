@@ -48,7 +48,6 @@ fn surface(id: u32, elements: Vec<Element>) -> Surface {
 
 fn surface_with_anims(id: u32, elements: Vec<Element>, animations: Vec<Animation>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements,
         collisions: Vec::new(),

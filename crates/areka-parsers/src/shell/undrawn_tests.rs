@@ -234,7 +234,6 @@ element1,replace,open2.png,0,0
             .map(|a| a.elements.len())
             .sum::<usize>();
     let boxes: usize = parse_boxes(text)
-        .definitions
         .iter()
         .map(|d| match d {
             BoxDefinition::Surface(s) | BoxDefinition::Append(s) => s.elements.len(),

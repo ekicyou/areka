@@ -53,7 +53,9 @@ impl ManifestDeriver {
             // surface id → surface 索引（重複 id は先出優先・Precondition）。
             let mut by_id: HashMap<i64, &areka_parsers::shell::Surface> = HashMap::new();
             for surface in set.surfaces {
-                by_id.entry(surface.id as i64).or_insert(surface);
+                for id in surface_ids(surface) {
+                    by_id.entry(id).or_insert(surface);
+                }
             }
 
             for surface in set.surfaces {
@@ -61,8 +63,7 @@ impl ManifestDeriver {
                 Self::collect_elements(surface, set_id, &mut keys);
 
                 // 間接 bind 参照の解決（1.3/D6）。当該 surface を起点に visited で循環打ち切り。
-                let mut visited: BTreeSet<i64> = BTreeSet::new();
-                visited.insert(surface.id as i64);
+                let mut visited: BTreeSet<i64> = surface_ids(surface).into_iter().collect();
                 Self::resolve_indirect(surface, set_id, &by_id, &mut visited, &mut keys);
             }
         }
@@ -117,7 +118,7 @@ impl ManifestDeriver {
                 let Some(referenced) = by_id.get(&ref_id) else {
                     continue;
                 };
-                visited.insert(ref_id);
+                visited.extend(surface_ids(referenced));
                 // 参照先 surface の直接 element を列挙。
                 Self::collect_elements(referenced, set_id, keys);
                 // 推移的 bind も辿る（visited で停止保証）。
@@ -142,7 +143,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
     let mut out = BTreeSet::new();
     for (set_index, set) in sets.iter().enumerate() {
         let set_id = set_index as u32;
-        let ids: BTreeSet<i64> = set.surfaces.iter().map(|s| s.id as i64).collect();
+        let ids: BTreeSet<i64> = set.surfaces.iter().flat_map(surface_ids).collect();
         // 面の番号 → bind だけから参照されているか（false＝bind でない参照が 1 つでもある）。
         let mut referenced: HashMap<i64, bool> = HashMap::new();
         for animation in set.surfaces.iter().flat_map(|s| &s.animations) {
@@ -180,10 +181,12 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
         // 絵 → 持ち主がどれも bind だけから参照されているか。
         let mut paths: BTreeMap<&str, bool> = BTreeMap::new();
         for surface in set.surfaces {
-            let owner_ok = referenced
-                .get(&(surface.id as i64))
-                .copied()
-                .unwrap_or(false);
+            // 多 id のブレスは全部の番号が bind だけから参照されるときだけ（指摘 38・番号の無いブレスは入れない）。
+            let owner_ids = surface_ids(surface);
+            let owner_ok = !owner_ids.is_empty()
+                && owner_ids
+                    .iter()
+                    .all(|id| referenced.get(id).copied().unwrap_or(false));
             for element in &surface.elements {
                 *paths.entry(element.path.as_str()).or_insert(true) &= owner_ok;
             }
@@ -196,6 +199,28 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
         );
     }
     out
+}
+
+/// ブレスの見出しの記述子が指す全部の番号（範囲を広げ、`!N`・`!a-b` を引く）。
+///
+/// 記述子が除外だけのブレスは番号を持たない。包含の範囲の幅は parsers が上限をかける・除外の範囲は広げない。
+fn surface_ids(surface: &areka_parsers::shell::Surface) -> Vec<i64> {
+    use areka_parsers::shell::AppendTarget;
+    let span = |a: u32, b: u32| a.min(b) as i64..=a.max(b) as i64;
+    let mut excluded = Vec::new();
+    let mut ids = Vec::new();
+    for target in &surface.targets {
+        match *target {
+            AppendTarget::Single(n) => ids.push(n as i64),
+            AppendTarget::Range { start, end } => ids.extend(span(start, end)),
+            AppendTarget::Exclude(n) => excluded.push(span(n, n)),
+            AppendTarget::ExcludeRange { start, end } => excluded.push(span(start, end)),
+            // `#[non_exhaustive]` の知らない記述子は番号を持たない。
+            _ => {}
+        }
+    }
+    ids.retain(|id| !excluded.iter().any(|range| range.contains(id)));
+    ids
 }
 
 #[cfg(test)]
@@ -220,7 +245,6 @@ mod tests {
     /// element のみを持つ最小 surface（collision/animation 空）。
     fn surface(id: u32, elements: Vec<Element>) -> Surface {
         Surface {
-            id,
             targets: vec![areka_parsers::shell::AppendTarget::Single(id)],
             elements,
             collisions: Vec::new(),
@@ -559,5 +583,41 @@ mod tests {
             );
             assert!(got.is_empty(), "{method}: {got:?}");
         }
+    }
+
+    /// T8 ⑼: 多 id のブレス（`surface1-3`）の絵は、ブレスの全部の番号が `bind` だけから参照されるときだけ入る
+    /// （先頭の番号 1 だけが参照されても 2・3 は参照されないので入らない・指摘 38）。
+    #[test]
+    fn bind_only_paths_requires_every_id_of_range_brace() {
+        let mut eye = surface(1, vec![elem(0, "eye.png")]);
+        eye.targets = vec![areka_parsers::shell::AppendTarget::Range { start: 1, end: 3 }];
+        let got = bind_only_of(vec![bind_anim(0, 1)], vec![eye.clone()]);
+        assert!(got.is_empty(), "{got:?}");
+        let got = bind_only_of(
+            vec![bind_anim(0, 1), bind_anim(1, 2), bind_anim(2, 3)],
+            vec![eye],
+        );
+        assert_eq!(got, BTreeSet::from([(0, "eye.png".to_string())]));
+    }
+
+    /// 除外は番号から引く（`surface1-3,!2` は 1 と 3）。除外の範囲は広げないので、
+    /// `!0-4294967295` でも大きな集めを作らずに返る（上限は包含の範囲にだけかかる）。
+    #[test]
+    fn surface_ids_subtracts_exclusions_without_expanding_them() {
+        use areka_parsers::shell::AppendTarget;
+        let mut s = surface(1, Vec::new());
+        s.targets = vec![
+            AppendTarget::Range { start: 1, end: 3 },
+            AppendTarget::Exclude(2),
+        ];
+        assert_eq!(surface_ids(&s), vec![1, 3]);
+        s.targets = vec![
+            AppendTarget::Single(0),
+            AppendTarget::ExcludeRange {
+                start: 0,
+                end: u32::MAX,
+            },
+        ];
+        assert_eq!(surface_ids(&s), Vec::<i64>::new());
     }
 }

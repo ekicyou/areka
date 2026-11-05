@@ -206,7 +206,6 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
         ..Default::default()
     };
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements: vec![Element {
             layer: 0,

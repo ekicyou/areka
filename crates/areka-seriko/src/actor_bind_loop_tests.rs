@@ -1050,7 +1050,6 @@ mod tick_loop_tests {
 
     fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
         Surface {
-            id,
             targets: vec![AppendTarget::Single(id)],
             elements: Vec::new(),
             collisions: Vec::new(),

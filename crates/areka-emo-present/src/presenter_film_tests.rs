@@ -85,7 +85,6 @@ fn film(dec: &mut MemoryDecoder, rel: &str, frames: Vec<DecodedImage>, laps: Opt
 pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
     let surfaces = vec![
         Surface {
-            id: 0,
             targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
             elements: vec![
                 element(0, "frame.png", 0),
@@ -103,7 +102,6 @@ pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
             animations: Vec::new(),
         },
         Surface {
-            id: 1,
             targets: vec![areka_parsers::shell::AppendTarget::Single(1)],
             elements: vec![element(0, "s1.png", 0)],
             collisions: Vec::new(),

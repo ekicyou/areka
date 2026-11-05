@@ -86,7 +86,6 @@ fn shell_of(surfaces: Vec<Surface>) -> Shell {
 fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: vec![elem("p.png", 0, 0)],
         collisions: Vec::new(),

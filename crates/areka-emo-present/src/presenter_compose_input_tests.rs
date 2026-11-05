@@ -29,14 +29,12 @@ fn build_target_assets_with_bind(
 ) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
     let base = Path::new("shell/master");
     let bind_part = Surface {
-        id: 5000,
         targets: vec![AppendTarget::Single(5000)],
         elements: vec![elem("q.png", 0, 0)],
         collisions: Vec::new(),
         animations: Vec::new(),
     };
     let base_surface = Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: vec![elem("p.png", 0, 0)],
         collisions: Vec::new(),

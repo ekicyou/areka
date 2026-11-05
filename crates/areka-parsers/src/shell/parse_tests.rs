@@ -76,7 +76,6 @@ smile,[0,1,2]
 
     let expected = Shell {
         surfaces: vec![Surface {
-            id: 0,
             targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
@@ -148,7 +147,7 @@ this_is_a_garbage_line_without_meaning
 ";
     let shell = parse(input);
     assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 0);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(0)]);
     assert_eq!(shell.surfaces[0].elements.len(), 1);
     assert_eq!(shell.surfaces[0].elements[0].path.as_str(), "body.png");
 }

@@ -84,7 +84,7 @@ version,1
 fn transcribes_brace_and_surface_lines_in_order() {
     let boxes = parse_boxes(WITH_BOXES);
     assert_eq!(
-        boxes.definitions,
+        boxes,
         vec![
             BoxDefinition::Brace(BoxBrace {
                 name: "吹き出し".to_string(),
@@ -125,7 +125,7 @@ elementX,balloon,b,-1,abc
 }
 ";
     assert_eq!(
-        parse_boxes(text).definitions,
+        parse_boxes(text),
         vec![BoxDefinition::Surface(BoxSurfaceLines {
             targets: vec![AppendTarget::Single(7)],
             elements: vec![
@@ -141,14 +141,9 @@ elementX,balloon,b,-1,abc
 #[test]
 fn text_without_boxes_has_no_brace() {
     let boxes = parse_boxes(WITHOUT_BOXES);
-    assert!(
-        boxes
-            .definitions
-            .iter()
-            .all(|d| !matches!(d, BoxDefinition::Brace(_)))
-    );
+    assert!(boxes.iter().all(|d| !matches!(d, BoxDefinition::Brace(_))));
     assert_eq!(
-        boxes.definitions,
+        boxes,
         vec![
             BoxDefinition::Surface(BoxSurfaceLines {
                 targets: vec![AppendTarget::Single(0)],
@@ -167,7 +162,7 @@ fn text_without_boxes_has_no_brace() {
             }),
         ]
     );
-    assert_eq!(parse_boxes("").definitions, vec![]);
+    assert_eq!(parse_boxes(""), vec![]);
 }
 
 /// 同じ文面からは同じ結果。

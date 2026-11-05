@@ -56,8 +56,8 @@ use areka_emo_compose::{
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
-    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, ShellBoxes, Surface,
-    parse_boxes, parse_undrawn_elements,
+    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, Surface, parse_boxes,
+    parse_undrawn_elements,
 };
 
 use crate::balloon::face_digits_of;
@@ -485,7 +485,6 @@ fn load_shell_target_with(
         if !target.boxes.is_empty() {
             tracing::info!(
                 braces = boxes
-                    .definitions
                     .iter()
                     .filter(|d| matches!(d, BoxDefinition::Brace(_)))
                     .count(),
@@ -528,14 +527,7 @@ pub fn build_shell_target(
     decoder: &impl ElementDecoder,
     use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
-    build_shell_target_with_boxes(
-        shell,
-        &ShellBoxes::default(),
-        selection,
-        shell_dir,
-        decoder,
-        use_self_alpha,
-    )
+    build_shell_target_with_boxes(shell, &[], selection, shell_dir, decoder, use_self_alpha)
 }
 
 /// [`build_shell_target`] に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
@@ -546,7 +538,7 @@ pub fn build_shell_target(
 /// 複製から画像でない element（数字だけの欄）を外したもので、その名前の絵を読みに行かない。
 pub fn build_shell_target_with_boxes(
     shell: Shell,
-    boxes: &ShellBoxes,
+    boxes: &[BoxDefinition],
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -566,7 +558,7 @@ pub fn build_shell_target_with_boxes(
 /// 核の中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える（要件 2.1）。
 fn build_core(
     shell: Shell,
-    boxes: &ShellBoxes,
+    boxes: &[BoxDefinition],
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -885,7 +877,6 @@ fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>
 /// `AtlasTable::resolve` は文字列の完全一致で引くので、ここがずれると絵は記録も無く描かれない。
 fn base_image_surface(id: u32, file: &str) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: vec![Element {
             layer: 0,

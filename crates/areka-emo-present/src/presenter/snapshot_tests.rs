@@ -54,7 +54,6 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let surfaces = vec![
         Surface {
-            id: BASE,
             targets: vec![AppendTarget::Single(BASE)],
             elements: vec![elem("p.png", 0, 0)],
             collisions: Vec::new(),
@@ -74,7 +73,6 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
             }],
         },
         Surface {
-            id: PART,
             targets: vec![AppendTarget::Single(PART)],
             elements: vec![elem("q.png", 0, 0)],
             collisions: Vec::new(),

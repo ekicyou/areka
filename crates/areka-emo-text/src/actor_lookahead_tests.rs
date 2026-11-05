@@ -143,7 +143,14 @@ impl Rig {
             .sheet
             .cues()
             .iter()
-            .flat_map(|c| [c.start_time, c.start_time + c.duration])
+            // 終わりも ms の格子で出す。秒の足し算は格子から外れ、次の合図の開始と食い違う（指摘 8）。
+            .flat_map(|c| {
+                let ms = |s: f64| (s * 1000.0).round() as u64;
+                [
+                    c.start_time,
+                    (ms(c.start_time) + ms(c.duration)) as f64 / 1000.0,
+                ]
+            })
             .collect();
         times.sort_by(f64::total_cmp);
         times.dedup();

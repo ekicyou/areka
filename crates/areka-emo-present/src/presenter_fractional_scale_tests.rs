@@ -451,7 +451,6 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let (pw, ph) = LAYERED_PART_SIZE;
     let base_surface = Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: vec![elem("p.png", 0, 0)],
         collisions: Vec::new(),

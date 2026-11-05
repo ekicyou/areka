@@ -156,8 +156,6 @@ fn dispatch_block(
             // 記述子が 1 つも残らないブレスは積まない（指摘 6・36）。
             return;
         }
-        // 代表 id は先頭ターゲットの値（`surface1-3`→1・`surface0,5`→0・design Postcondition）。
-        let id = representative_id(&targets);
         // 定義ストリームへ登場順に push（index は push 前の len＝これから積む位置・要件 12.5(d)）。
         shell
             .definitions
@@ -165,7 +163,6 @@ fn dispatch_block(
         // element・collision・animation は surface・append で同じ表現ゆえ共有ヘルパで読む（要件 12.5(c)/7.3）。
         // overlay・base 以外の element メソッド・collisionex 等は値にしない（要件 4.5/9.2）。
         shell.surfaces.push(Surface {
-            id,
             targets,
             elements: decode_elements(body, reading),
             collisions: decode_collisions(body, reading),
@@ -580,19 +577,6 @@ fn parse_target_element(field: &str, reading: &mut Reading) -> Option<AppendTarg
         reading.range_width += width;
     }
     Some(target)
-}
-
-/// ターゲット記述子リストの **代表 id** を返す（`Surface.id` 用・design Postcondition）。
-///
-/// 先頭ターゲットの値を採る: `Single(n)`/`Exclude(n)`→n・`Range{start,..}`/`ExcludeRange{start,..}`→start。
-/// 空リスト（崩れヘッダ）は既定 0（要件 3.3・パニックしない）。
-fn representative_id(targets: &[AppendTarget]) -> u32 {
-    match targets.first() {
-        Some(AppendTarget::Single(n)) | Some(AppendTarget::Exclude(n)) => *n,
-        Some(AppendTarget::Range { start, .. })
-        | Some(AppendTarget::ExcludeRange { start, .. }) => *start,
-        _ => 0,
-    }
 }
 
 /// トップレベル行が `animation-sort`／`collision-sort` なら値を `shell` へ充填する（要件 12.5(a)/1.6）。

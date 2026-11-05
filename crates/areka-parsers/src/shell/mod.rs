@@ -64,9 +64,7 @@ mod surfacetable_tests;
 // 公開面一点集約（要件 11.1）: 下流は本モジュールからの import のみで
 // モデル型と公開 facade を消費でき、内部の model/lexer/decode/parse 分割へ
 // 直接依存しない。依存方向 `model ← lexer ← decode ← parse` は不変。
-pub use boxes::{
-    BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, ShellBoxes, parse_boxes,
-};
+pub use boxes::{BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, parse_boxes};
 pub use cursor::{CursorBrace, parse_cursor_braces};
 pub use model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,

@@ -2,7 +2,7 @@ use super::*;
 
 use super::test_support::{TempDir, emo2_balloon_root};
 use areka_emo_atlas::{AnimationInfo, DecodedImage, ElementId, MemoryDecoder};
-use areka_parsers::shell::parse;
+use areka_parsers::shell::{AppendTarget, parse};
 
 /// 不透明 1×1 PBGRA スペック（bake が placement を必ず産む＝非退化）。
 fn opaque_1x1() -> (u32, u32, u32, Vec<u8>, bool) {
@@ -39,7 +39,7 @@ fn synthetic_text_transcribes_face_id_and_path() {
         let surface = shell
             .surfaces
             .iter()
-            .find(|s| s.id == face.surface_id)
+            .find(|s| s.targets == [AppendTarget::Single(face.surface_id)])
             .unwrap_or_else(|| panic!("surface id {} が転記されていない", face.surface_id));
         assert_eq!(
             surface.elements.len(),

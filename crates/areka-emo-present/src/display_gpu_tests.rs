@@ -60,7 +60,6 @@ fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
 fn composed_with_alpha_edges(w: u32, h: u32) -> ComposedSurface {
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: vec![Element {
             layer: 0,

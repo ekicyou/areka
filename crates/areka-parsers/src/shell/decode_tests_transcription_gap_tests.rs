@@ -15,8 +15,8 @@ use super::{AppendTarget, DefRef, Element, ElementPath, SortOrder, decode, lex};
 // 期待値はリテラル直書き（sakura 規律）。
 
 /// (b) 多 id ヘッダ（列挙 `surface0,5` ＋範囲 `surface1-3`）の忠実転記（要件 12.5(b)）。
-/// 列挙は各 id を Single 記述子として保持し、代表 id は先頭ターゲット値。
-/// 範囲は展開せず Range 記述子で保持し、代表 id は範囲始点（旧 `unwrap_or(0)` 破損の修正を固定）。
+/// 列挙は各 id を Single 記述子として保持し、範囲は展開せず Range 記述子で保持する
+/// （旧 `unwrap_or(0)` 破損の修正を固定）。
 #[test]
 fn multi_id_surface_header_enumeration_and_range_are_transcribed() {
     let input = "\
@@ -32,15 +32,13 @@ element0,overlay,b.png,0,0
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 2);
 
-    // 列挙 `surface0,5` → targets == [Single(0), Single(5)]・代表 id == 0。
-    assert_eq!(shell.surfaces[0].id, 0);
+    // 列挙 `surface0,5` → targets == [Single(0), Single(5)]。
     assert_eq!(
         shell.surfaces[0].targets,
         vec![AppendTarget::Single(0), AppendTarget::Single(5)]
     );
 
-    // 範囲 `surface1-3` → targets == [Range{1,3}]・代表 id == 1（範囲始点・unwrap_or(0) 破損でない）。
-    assert_eq!(shell.surfaces[1].id, 1);
+    // 範囲 `surface1-3` → targets == [Range{1,3}]（unwrap_or(0) 破損でない）。
     assert_eq!(
         shell.surfaces[1].targets,
         vec![AppendTarget::Range { start: 1, end: 3 }]

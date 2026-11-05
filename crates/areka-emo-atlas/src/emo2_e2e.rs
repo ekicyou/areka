@@ -61,7 +61,6 @@ fn on_params() -> AlphaParams {
 /// balloon→surface 適応は本層の責務外（design D1）ゆえ、テストが surface 表現を手構築する。
 fn hand_surface(id: u32, rel: &str) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: vec![Element {
             layer: 0,
@@ -325,7 +324,6 @@ fn emo2_nonexistent_path_isolated_others_continue() {
 
     // 実在 + bogus を 1 surface に混在（両者とも shell/master 基準）。
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements: vec![
             Element {

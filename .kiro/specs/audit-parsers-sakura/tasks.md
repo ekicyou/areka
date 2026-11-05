@@ -137,7 +137,7 @@
 
 - [ ] 7. 範囲の外の呼び出し元と、申し合わせた行を直す（最後の段・要件 7.10）
   - 各サブタスクの頭で、相手（`audit-emo-present`・`audit-emo-compose`・`audit-seriko`・`audit-ghost-catalog`）が main に着地したかを見る。着地していれば main を取り込んでその上で直し、走っていれば伝言で順を決める。同じ行がぶつかったら後から着地する側が合わせる。相手のファイルの指摘は直さない
-- [ ] 7.1 `Surface.id` と `ShellBoxes` を消し、呼び手を全部直す（T20）
+- [x] 7.1 `Surface.id` と `ShellBoxes` を消し、呼び手を全部直す（T20）
   - surface の代表の番号を消し、atlas はブレスの全部の番号を使う（38）
   - 1 欄の包みを消し、箱の読みは箱の定義の列を直に返す（76）
   - emo-compose・emo-present・seriko・emo-text・emo-atlas（`animated_tests.rs`・`samples_e2e_tests.rs`・`emo2_e2e.rs` ほか）・areka のテストと `crates/areka/examples/` の字面と読みを直す（確かめの中身は変えない・parsers の `Surface` でない同名の型は触らない）
@@ -214,3 +214,4 @@
 - 7.5 への申し送り（2026-11-06 audit-ghost-catalog の知らせ）: 相手は `manifest_tests.rs` の `a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used` を `a_charset_line_after_a_non_ascii_line_is_not_used` へ改名する（中身・期待は同じ）。7.5 では新しい名前で探し、「宣言が使われる」形へ名前ごと直す。
 - 6.2 への申し送り（6.1 のレビュー）: `drive_choice_tests.rs` に足した `sync_driver`・`dones` は `drive_strict_tests.rs` の `driver(sinks, None)`・`dones` と同じ写し。85 で `recv_until_choice`・`MENU3_SCRIPT`・`one_sink`・地平と一緒に `drive_test_support.rs` へ寄せる。
 - 8.1 への申し送り（6.1 のレビュー・範囲の外）: 78 の後、`dola` の `CuePlayer::stop`（`crates/dola/src/cue/runtime.rs:361`）を呼ぶ本番のコードが 0（dola のテストだけ）。起票か dola の audit の候補。
+- 7.1: 5.1 の ms の格子で、`areka-emo-text` の `actor_lookahead_tests.rs` の `Rig::play`（終わりを f64 の和で出していた）が 3 本目の赤になった（research §12.2 R2 の「2 本だけ」は外れ）。道具の終わりも ms の格子で出す形に直した。atlas の `surface_ids` は除外の範囲を広げない（`RangeInclusive` の列で引く・上限は包含の範囲だけにかかるため）。`areka-emo-compose/src/fold.rs` の `expand_targets_with` にも除外を広げる同じ形があり、相手（audit-emo-compose）へ 11-06 に知らせた（8.2 で残っていれば拾う）。`interval_written` は相手が未着地なので残した（8.2 で拾う）。

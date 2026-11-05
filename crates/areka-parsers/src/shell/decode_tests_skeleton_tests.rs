@@ -50,7 +50,6 @@ fn surface_zero_block_extracts_id_zero() {
     assert_eq!(
         shell.surfaces[0],
         Surface {
-            id: 0,
             targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
@@ -73,7 +72,7 @@ fn surface_large_id_is_extracted() {
     let input = "surface1000\n{\ncollision0,93,62,271,130,Head\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 1000);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(1000)]);
 }
 
 /// 非数値 ID（`surface` の後ろに数字がない崩れヘッダ）→ 0 にせず記述子を飛ばし、記述子が
@@ -144,5 +143,5 @@ kero.surface.alias
     let shell = decode(lex(input));
     // surfaces に入るのは実 surface2100 のみ（alias/append を surface と誤読しない）。
     assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 2100);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(2100)]);
 }

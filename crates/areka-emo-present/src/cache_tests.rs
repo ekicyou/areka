@@ -74,7 +74,6 @@ fn elem(path: &str, x: i64, y: i64) -> Element {
 
 fn surface(id: u32, elements: Vec<Element>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements,
         collisions: Vec::new(),

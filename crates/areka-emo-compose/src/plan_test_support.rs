@@ -32,7 +32,6 @@ pub(super) fn surface_with_anims(
     animations: Vec<Animation>,
 ) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements,
         collisions: Vec::new(),

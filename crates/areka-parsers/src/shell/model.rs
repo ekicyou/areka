@@ -62,8 +62,6 @@ pub enum DefRef {
 /// 1 個の surfaceNNN 定義（要件 4.1）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Surface {
-    /// surface ID（記述子先頭の代表 id・単一形は従来どおり・多 id 形は先頭ターゲットの値）。
-    pub id: u32,
     /// ヘッダ記述子の忠実転記（単一形は `[Single(id)]`・多 id 形は列挙/範囲を保持・要件 12.5(b)）。
     /// 範囲展開・実 surface ツリーへの転記は下流の責務。
     pub targets: Vec<AppendTarget>,

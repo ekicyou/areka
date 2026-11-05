@@ -300,7 +300,6 @@ mod tests {
         use areka_parsers::shell::{AppendTarget, DefRef, Shell, Surface, SurfaceAppend};
 
         let base = Surface {
-            id: 1000,
             targets: vec![AppendTarget::Single(1000)],
             elements: Vec::new(),
             collisions: vec![coll(0, 0, 0, 100, 100, "Base")],

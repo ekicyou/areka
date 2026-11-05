@@ -16,14 +16,7 @@ use super::decode::{Reading, field_string, is_box_element_method, parse_targets}
 use super::model::AppendTarget;
 use super::parse::parse_all;
 
-/// surfaces.txt の箱に関わるブレスの転記（ブレスの登場順）。
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ShellBoxes {
-    /// `balloon.*`・`surface*`・`surface.append*` の各ブレス（登場順）。
-    pub definitions: Vec<BoxDefinition>,
-}
-
-/// 箱に関わるブレス 1 つ。
+/// 箱に関わるブレス 1 つ（`balloon.*`・`surface*`・`surface.append*` のどれか）。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum BoxDefinition {
@@ -66,14 +59,12 @@ pub struct BoxElementLine {
     pub y: String,
 }
 
-/// surfaces.txt の文面から箱に関わるブレスを登場順に転記する（純粋・失敗しない）。
+/// surfaces.txt の文面から箱に関わるブレスを登場順に並べて返す（純粋・失敗しない）。
 ///
 /// `parse_all` の射影。閉じたブレスだけを見る。見出しの判定順は画像の読み手と同じく
 /// `surface.append*` を `surface*` より先にする（`kero.surface.alias` は `surface` で始まらないので当たらない）。
-pub fn parse_boxes(text: &str) -> ShellBoxes {
-    ShellBoxes {
-        definitions: parse_all(text).boxes,
-    }
+pub fn parse_boxes(text: &str) -> Vec<BoxDefinition> {
+    parse_all(text).boxes
 }
 
 /// 閉じたブレス 1 つを、箱に関わるものなら転記する（他のブレスは `None`・`parse_all` が呼ぶ）。

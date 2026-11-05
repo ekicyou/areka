@@ -83,7 +83,11 @@ fn pixel(surface: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
 
 /// `surfaces.txt` が面 `id` の波括弧を持つか（宣言の有無）。
 fn is_declared(target: &ShellTarget, id: u32) -> bool {
-    target.shell.surfaces.iter().any(|s| s.id == id)
+    target
+        .shell
+        .surfaces
+        .iter()
+        .any(|s| s.targets == [AppendTarget::Single(id)])
 }
 
 /// 検体のシェルを実物の絵ごと読む（COM 初期化済みの中でだけ呼べる）。

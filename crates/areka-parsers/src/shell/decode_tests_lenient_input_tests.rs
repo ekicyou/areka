@@ -4,8 +4,8 @@
 //! 切り出したものであり、テスト本文は分割前と同一である。
 
 use super::{
-    Animation, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval, Pattern,
-    decode, lex,
+    Animation, AppendTarget, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval,
+    Pattern, decode, lex,
 };
 
 // --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
@@ -168,7 +168,7 @@ animation0.pattern0,overlay,2206,0,0,0
     assert_eq!(shell.surfaces.len(), 2);
 
     // 前方ブロック: surface2100 の overlay element が完全に残る。
-    assert_eq!(shell.surfaces[0].id, 2100);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(2100)]);
     assert_eq!(
         shell.surfaces[0].elements,
         vec![Element {
@@ -180,7 +180,7 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 
     // 後方ブロック: surface2200 の collision と animation が完全に残る。
-    assert_eq!(shell.surfaces[1].id, 2200);
+    assert_eq!(shell.surfaces[1].targets, [AppendTarget::Single(2200)]);
     assert_eq!(
         shell.surfaces[1].collisions,
         vec![Collision {

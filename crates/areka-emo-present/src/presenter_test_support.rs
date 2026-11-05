@@ -149,7 +149,6 @@ pub(super) fn elem(path: &str, x: i64, y: i64) -> Element {
 
 pub(super) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements,
         collisions: Vec::new(),
@@ -358,7 +357,6 @@ fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str
 fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: Vec::new(),
         collisions: vec![

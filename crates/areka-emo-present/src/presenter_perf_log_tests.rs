@@ -284,7 +284,6 @@ fn build_assets_with_empty_surface(w: u32, h: u32, salt: u8) -> (EmoWorld, Atlas
     let surfaces = vec![
         surface(1000, vec![elem("p.png", 0, 0)]),
         Surface {
-            id: 7000,
             targets: vec![areka_parsers::shell::AppendTarget::Single(7000)],
             elements: Vec::new(),
             collisions: Vec::new(),
