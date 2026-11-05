@@ -469,8 +469,10 @@ async fn relay_vblank(
 ```rust
 // crates/wintf/src/runtime/window_factory.rs（クレートの中だけ）
 /// 窓の生成に失敗した実体の印。create_windows の問い合わせから外す。
+/// 立ち直らせたい側がこの印を外すと、次の刻みでまた作る。
 #[derive(Component)]
-pub(crate) struct WindowCreationFailed;
+pub struct WindowCreationFailed;
+// runtime/mod.rs で `pub use window_factory::WindowCreationFailed;` ＝ `wintf::WindowCreationFailed`
 
 /// 生成直後の SetWindowPos の旗。位置も大きさも既定（CW_USEDEFAULT）なら None（呼ばない）。
 fn initial_pos_flags(x: i32, width: i32) -> Option<SET_WINDOW_POS_FLAGS>;
@@ -624,6 +626,7 @@ pub(crate) fn with_test_window<R>(
 | 94 | `wintf::ecs::layout::{FlexContainer, FlexItem}` | 消える |
 | 101 | `wintf::ecs::layout::Opacity` | 消える |
 | 66 | crates.io の keywords | `directcomposition` が外れる |
+| 6 | `wintf::WindowCreationFailed` | 増える（窓の生成に失敗した実体の印。外すと次の刻みでまた作る・設計の討議の議題 4） |
 
 ## 失敗の扱い
 
@@ -655,7 +658,7 @@ pub(crate) fn with_test_window<R>(
 | 8 | panic するスレッドを `join_vsync` に渡し、`error` が 1 | `error!` を `trace!` へ戻す |
 | 11 | `relay_vblank` に `running = false` で起こしを配ると、`wake` を起こさずに終わる（`run_async_tick` のテストの写し） | L402 の判定を消す |
 | 3 | `initial_pos_flags` の 4 通り（両方既定 → `None`・位置だけ → `NOSIZE` 入り・大きさだけ → `NOMOVE` 入り・両方 → どちらも無し）。位置だけの実の窓を作り、隠してから `GetWindowRect` の左上が与えた位置 | 片方だけのとき呼ばない形へ戻す |
-| 6 | 失敗の枝の小さな関数が印を入れ `error` を 1 残す。印の付いた実体に `create_windows` が窓を作らない | 印を入れない・除外を外す |
+| 6 | 失敗の枝の小さな関数が印を入れ `error` を 1 残す。印の付いた実体に `create_windows` が窓を作らない。印を外すと次の刻みで作る | 印を入れない・除外を外す |
 | 9 | 壊した窓の HWND を親に渡して `create_window` を回し、`error` が 1 以上で窓は作られる | `let _ =` へ戻す |
 | 10 | 登録簿の無い World で `create_window` を回し、`error` が 1 | `debug!` へ戻す |
 | 7 | STA で初期化したスレッドで `init_ui_com` → `Ok` かつ `warn` が 1。初期化していないスレッドでは `warn` が 0 | `warn!` を消す |
@@ -678,13 +681,13 @@ pub(crate) fn with_test_window<R>(
 - 高負荷のテストは何度も回さない。直しの確かめは組のテストの実行ファイルに絞り、2 回目からは赤のテストだけ。見た目の実行ファイルは 45 の判定の規則の 2 回だけ。
 - 全体テストは V2 の 1 回（赤が範囲の外の crate だけなら、決めごとどおり赤の crate だけ 1 回回し直す）。
 
-## 設計の討議で確かめること
+## 設計の討議の裁定（2026-11-05・開発者「承認」＝全議題を推奨案で確定）
 
-この設計が決めた所のうち、開発者に見てもらうもの。audit の spec の議題は推奨案で承認してよい（2026-11-04 開発者）ので、どれも推奨の形で書いた。
+下の 1〜6 は推奨案のとおりに確定した。議題 4 は設計の検証の指摘 3 を受けて推奨案を「印を `pub` にする」へ改めたうえで確定した。
 
-1. **15 番（WIC の α）**: `has_alpha` は消さず（完了した `emo-atlas-palette-alpha` の要件 3 を守る）、手書きの一覧を WIC の `SupportsTransparency` に置き換える。emo-atlas の写し（範囲の外・`audit-emo-atlas` は今走っていない）も同じに替える。同じ spec の要件 3.3（パレットでない形式の答えを今と変えない）は、その spec の巻き添えを禁じた約束と読んだ。
+1. **15 番（WIC の α）**: `has_alpha` は消さず（完了した `emo-atlas-palette-alpha` の要件 3 を守る）、手書きの一覧を WIC の `SupportsTransparency` に置き換える。emo-atlas の写し（範囲の外・`audit-emo-atlas` は今走っていない）も同じに替える。完了した spec の要件 2.3・3.3（パレットでない形式の α の答えを今と変えない）は、「α を持つ形式は α を持つ絵」という同じ要件の本旨に沿った狭い改めとして、開発者の裁定で改める（一覧から漏れていた `16bppBGRA5551`・`64bppRGBAHalf`・`40bppCMYKAlpha` が「有り」になる）。完了した spec の文書は触らず、この spec の記録に残す（設計の検証の指摘 2）。
 2. **29 番（見本の場所）**: 見本を写さず（2026-10-31 の設計の討議の議題 1 を守る）、`build.rs` で見本の在る無しを見て、無いときだけ 6 本を「無視」にする。代わりの案は ⑴ として直さずに残すこと。
 3. **3 番**: 片方だけ与えた窓の座標の換算（枠の厚み）は、今の素通しの決まり（`window_pos/tests.rs` が固定）を変えない。生成の側が与えられた側だけを反映する。
-4. **6 番**: 生成に失敗した窓は、印が外されるまで作り直さない（毎刻みの作り直しとログのあふれを止める代わりに、一時的な失敗からの自動の立ち直りは無くなる）。
-5. **84 番**: 試験の窓の補助は `src/api.rs` の `#[cfg(test)]`。調べの窓の位置を (10,10) から (0,0) にそろえる。
+4. **6 番**: 生成に失敗した窓は、印が外されるまで作り直さない（毎刻みの作り直しとログのあふれを止める代わりに、一時的な失敗からの自動の立ち直りは無くなる）。印 `WindowCreationFailed` は `pub` にして `wintf::WindowCreationFailed` として出し、「公開の口の変化」に「増える」で載せる。立ち直らせたい側は印を外す（設計の検証の指摘 3）。
+5. **84 番**: 試験の窓の補助は `src/api.rs` の `#[cfg(test)]`。調べの窓の位置を (10,10) から (0,0) にそろえる。`audit-wintf-graphics-world` へ「`ecs/test_support.rs` には置かない」と知らせた（2026-11-05）。
 6. **要件 7.1 の読み方**: 消して解いた指摘と example の直しは、専用のテストの代わりに、コンパイル・かけ直し・example の 1 度の実行で確かめる。
