@@ -263,6 +263,7 @@ fn on_window_handle_remove(
     // このタイミングではまだWindowHandleにアクセスできる
     if let Some(handle) = world.get::<WindowHandle>(entity) {
         let hwnd = handle.hwnd;
+        crate::ecs::cursor::answer::forget_last_shown(hwnd);
         debug!(
             entity = ?entity,
             hwnd = ?hwnd,
