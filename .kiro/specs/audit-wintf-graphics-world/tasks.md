@@ -180,14 +180,14 @@
   - _Boundary: cursor/, types.rs, ecs/mod.rs, visual/draw/, graphics/tests.rs, graphics/clip.rs, graphics/components.rs, window/window_handle.rs_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.4, 4.5_
 
-- [ ] 7. 直し終わりの確かめ
+- [x] 7. 直し終わりの確かめ
 - [x] 7.1 同じ範囲へ 2 度目の audit をかけ、新しい指摘 0 件を記録する
   - 範囲を今の main と枝で測り直し、後から足されたファイルも入れて、全部読む
   - 上限を外して `/ponytail:ponytail-audit` をかけ、新しい指摘は直すか、残す 3 種類に当たるなら議題へ回して、もう一度かける
   - 完了の状態: research.md に範囲の数と「新しい指摘 0 件」が明記されている
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 4.2, 4.3, 6.1, 6.2, 6.3_
 
-- [ ] 7.2 全体テストを緑にする
+- [x] 7.2 全体テストを緑にする
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（整形・ライセンスを含む）。画素のテスト（emo-present・emo-text）が緑のままであることを見る
   - 回の数を決め打ちするテストが初めの起動の回の早まりで赤なら、そのテストを合わせる
   - 文字化けが出てもコンソールの文字コードで逃げない
@@ -213,3 +213,4 @@
 - 6.1: `try_tick_world()` は常に true を返す（戻りを読む所が他の持ち主のテストに 5 か所あるため型は変えない）。`world/mod.rs` は 759 行。単一スレッドの一覧は `world::single_threaded_schedules()` の 6 本。
 - 6.3: `graphics/visual_manager.rs:13` に PreLayout を指す古い説明が残る（6.3 の審査）＝ 6.4 で直す。
 - 7.1: 2 度目の audit で 36〜39 番を直した（39 番＝窓の的の作り直しが一度失敗すると次の装置の失いまで試し直さなかった＝ `init_window_graphics` は印で絞らず全部の窓を見て、失敗の回は `GRAPHICS` を立てる）。作れない窓は毎回の画面更新で `error!` を出し続ける（vblank に縛られ空回りはしない）。
+- 7.2: 2026-11-06 `tools/test-all.ps1` を 1 回（commit `1e698f0a`・始めの未コミット 0）＝ 13 段すべて緑（x64 workspace tests 1522 s）。回の数を決め打ちするテストの合わせは要らなかった。
