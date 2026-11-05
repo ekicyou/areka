@@ -46,6 +46,9 @@ pub(crate) const INSTALL_TXT: &str = "install.txt";
 /// 同時インストールとして読む接頭辞。この後ろは数字列だけを許す。
 const BALLOON_PREFIX: &str = "balloon";
 
+/// 探す同梱のバルーンの上限。鍵を何万も並べた install.txt で取り出しの比べが膨らまないように。
+pub(crate) const MAX_COMPANIONS: usize = 64;
+
 /// 正典にはあるが areka が扱わない同時インストールの接頭辞（要件 3.13）。
 ///
 /// それぞれ後ろに数字列が付いた形（`headline0` など）も同じ扱い。
@@ -383,7 +386,12 @@ fn search_balloons(keys: &BTreeMap<String, String>) -> Vec<String> {
     let numbered = (0_usize..)
         .map(|n| format!("{BALLOON_PREFIX}{n}"))
         .take_while(found);
-    plain.into_iter().chain(numbered).collect()
+    // 上限の後ろの接頭辞は探さない。その鍵は呼び手が CompanionNotSearched として記録する。
+    plain
+        .into_iter()
+        .chain(numbered)
+        .take(MAX_COMPANIONS)
+        .collect()
 }
 
 /// 同時インストールのバルーンを組み、読み飛ばした指定を記録する（要件 1.1〜1.10・6.3〜6.5）。
@@ -426,7 +434,7 @@ fn collect_companions(
                 } else if searched.contains(prefix) {
                     // 探索で見つかった接頭辞の鍵は ⑶ で読む。
                 } else if keys.contains_key(&format!("{prefix}.directory")) {
-                    // 宛先は書かれているが、打ち切りの後ろか先頭に 0 を付けた綴り。
+                    // 宛先は書かれているが、打ち切りや上限の後ろか、先頭に 0 を付けた綴り。
                     warnings.push(ManifestWarning::CompanionNotSearched {
                         key: bounded_value(key),
                     });

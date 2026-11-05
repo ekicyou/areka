@@ -526,3 +526,41 @@ fn two_companions_naming_the_same_folder_refuse_the_archive() {
         }
     );
 }
+
+// ---- 探す同梱の数の上限（要件 9.15 ⑶） ----
+
+/// `balloon0` から `balloon{count-1}` までの宛先の行を作る。
+fn numbered_balloons(count: usize) -> Vec<String> {
+    (0..count)
+        .map(|n| format!("balloon{n}.directory,b{n}"))
+        .collect()
+}
+
+/// ちょうど上限の数の同梱は全部探し、上限による読み飛ばしは出ない。
+#[test]
+fn searches_every_companion_up_to_the_cap() {
+    let lines = numbered_balloons(MAX_COMPANIONS);
+    let borrowed: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let manifest = parsed_ghost(&borrowed);
+    assert_eq!(manifest.companions.len(), 64);
+    assert_eq!(manifest.warnings, vec![]);
+}
+
+/// 上限を 1 つ超えた同梱は探さず、その鍵を「探索で読まなかった」と記録する。
+#[test]
+fn records_the_companion_beyond_the_cap_as_not_searched() {
+    let lines = numbered_balloons(MAX_COMPANIONS + 1);
+    let borrowed: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let manifest = parsed_ghost(&borrowed);
+    assert_eq!(manifest.companions.len(), 64);
+    assert_eq!(
+        manifest.companions.last().map(|c| c.key.as_str()),
+        Some("balloon63")
+    );
+    assert_eq!(
+        manifest.warnings,
+        vec![ManifestWarning::CompanionNotSearched {
+            key: "balloon64.directory".to_owned(),
+        }]
+    );
+}
