@@ -20,7 +20,7 @@
   - _Requirements: 3.1, 3.2, 5.2, 5.3_
 
 - [ ] 2. 見た目の木と色の受け継ぎ
-- [ ] 2.1 窓へ後からつないだ部品に、見た目の部品を入れる
+- [x] 2.1 窓へ後からつないだ部品に、見た目の部品を入れる
   - 親が変わった部品から祖先に窓が在るかを 1.2 の判定で見て、その部品と子孫のうち見た目の部品をまだ持たないものに、フックと同じ 3 つの部品を入れる（フックと判定を共用する）
   - 窓に属さない部品と、自前で見た目の部品を入れている部品には入れない
   - 描画面の前のスケジュールの先頭に登録する
@@ -198,3 +198,4 @@
 
 - 1.2: `cargo clippy -p wintf --all-targets -- -D warnings` は前からある `dola` クレートのエラー（引数が多すぎる・if をまとめられる等）で wintf まで届かない。wintf の警告は `cargo clippy -p wintf --lib --tests --no-deps` で見る。dola の clippy の赤は範囲の外＝完了の棚卸で扱う。
 - 1.2: 祖先の走査は `crate::ecs::common::ancestors(start, |e| world.get::<ChildOf>(e).map(|c| c.parent()))` のイテレータ（`pub(crate)`）。上限の判定は親が在ると分かった後なので、ちょうど 1,024 段の鎖では `error!` を出さない。
+- 2.1: 窓に属するかの判定は `graphics::visual::has_window_ancestor`（フックと後からつなぐ係で共用）。3 つの部品を入れる口は `insert_graphics_parts`（`insert_if_new`）。`PreRenderSurface` を直に回すテストは本物の `GraphicsCore::new()` を入れないと `Resource does not exist` で落ちる。

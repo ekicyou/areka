@@ -329,6 +329,10 @@ impl EcsWorld {
             schedules.add_systems(
                 PreRenderSurface,
                 (
+                    // 後から窓へつないだ部品に見た目の部品を入れる（4 番）。同じ回に作られるよう先頭。
+                    crate::ecs::graphics::insert_graphics_parts_on_window_join.before(
+                        crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                    ),
                     crate::ecs::graphics::visual_manager::visual_resource_management_system,
                     crate::ecs::graphics::deferred_surface_creation_system.after(
                         crate::ecs::graphics::visual_manager::visual_resource_management_system,

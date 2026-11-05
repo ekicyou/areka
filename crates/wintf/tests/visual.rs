@@ -23,3 +23,5 @@ mod remove_visual_api_test;
 mod resource_management_gap_test;
 #[path = "visual/widget_visual_auto_insert_test.rs"]
 mod widget_visual_auto_insert_test;
+#[path = "visual/window_join_test.rs"]
+mod window_join_test;
