@@ -248,3 +248,4 @@
     - `empty_frames_keep_the_existing_empty_warn` → `empty_frames_fall_to_the_empty_warn`
     - `talk_elsewhere_in_the_table_arms_without_top_judgement` → `talk_elsewhere_in_the_table_arms_and_plays_nothing`
   - テストは 574 → 573 件。
+- 6.1 かけ直し 5 回目（HEAD `bd312b93`）: 新しい指摘は 17 件（必ず直す 0・直したほうがよい 7・できれば 10）。本番の振る舞いに関わるものは 0 件で、テスト 7 件・説明 10 件。詳しくは `reaudit-5.md`。3 種類に当たるものは無い。全部を組 F5 で直す。
