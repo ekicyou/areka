@@ -333,6 +333,7 @@ pub fn attach_target(&mut self, target: TargetId, window: Entity,
 - **`crates/areka-emo-text/`**: 既存の 5 ファイルを直すだけ（7.4）。
 - **例外表（要件 7.5・7.7）**: 持ち主の `audit-test-kits` は C17 に居ないので、項目の削除と件数・自己検査の 1 件だけを触り、触った行を各タスクの記録に残す。自己検査の 1 件は `crates/areka/src/emo2_boot/frame_transition_branch_tests.rs`（1,271 行・持ち主の `audit-emo2-boot-frame` は C17 に居ない）にする。上限との余裕が大きく、少しの編集で表から外れない。`plan_ops_tests.rs`・`actor_bind_loop_tests.rs`・`inproc_e2e_test.rs` は C17 の兄弟の範囲で表から外れる見込みがあり、`pilot-clickthrough-alpha-toggle/main.rs`（1,006 行）は余裕が 6 行しかないので選ばない。兄弟が同じ件数の行を先に変えて着地していたら、手で書いた数を信じず、着地の前に表の項目を数え直して合わせる（両方が同じ誤った数を書くと git は黙って通す）。番人は件数と表の長さの一致を確かめるので、食い違えば赤になる。
 - **兄弟との申し合わせ（7.2）**: `build_shell_target_with_boxes` は可視性だけ変える。`audit-parsers-sakura` が先に署名を変えて着地していたら、その形のまま `pub(crate)` にする。こちらが先なら、あちらが合わせる（9.7）。
+- **兄弟との申し合わせ（2026-11-05・`audit-wintf-graphics-world`）**: あちらがデバイスロストからの立ち直り（あちらの指摘 6）のために、`presenter/refresh.rs` へ数行を足す（`invalidate_all` で控えを捨てて見えている面を出し直す・新しい公開の型は作らない）。この直しはあちらの持ち物で、こちらは引き受けない（新しい振る舞い・要件 7.6）。こちらは T1 で `apply_show` の形（戻り値 `PresentOutcome`・`reply` 引数なし）と `refresh_scale` を、T5 で `mount.rs` を変える。後に着地する方が先の形へ合わせる。
 
 ## Requirements Traceability
 
