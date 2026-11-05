@@ -334,7 +334,7 @@ impl WinApp {
     /// 1. 新経路を結線（[`wire_new_path`](Self::wire_new_path)・self-ref 注入 + reconcile 登録）。
     /// 2. `VsyncEventBridge` をローカルに生成（`run` の間 `WinApp` 相当で所有・Drop で
     ///    VSync スレッド stop→join）。
-    /// 3. `AsyncTickTask::spawn` で 60Hz tick ループを UI スレッドへ投入（JoinHandle は
+    /// 3. `AsyncTickTask::spawn` で vblank 駆動の tick ループを UI スレッドへ投入（JoinHandle は
     ///    `run` の間ローカル保持・World は `Weak`）。
     /// 4. `MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()))`
     ///    で、終了の指示（利用側の [`AppExit::request_exit`]、または registry 空遷移 hook）まで
@@ -362,7 +362,7 @@ impl WinApp {
         // 2. VSync ブリッジを run の間ローカル所有（Drop で stop→join）。
         let bridge = VsyncEventBridge::new();
 
-        // 3. 60Hz tick ループを UI スレッドへ投入（World は Weak・`run()` 復帰で旗が下りた後の最初の起床か、shutdown の upgrade None で終了）。
+        // 3. vblank 駆動の tick ループを UI スレッドへ投入（周期は画面の更新周期・World は Weak）。
         //    `running` は block_on から戻った直後（4.1）に下ろす旗。
         let running = Rc::new(std::cell::Cell::new(true));
         let _tick = AsyncTickTask::spawn(
@@ -376,40 +376,14 @@ impl WinApp {
         //      （ワーカ stop/join・判定ループは `running` が下りた後の起床で終了）。
         let (_click_through, click_wake) = self.wire_click_through(Rc::clone(&running));
 
-        // 3.6. VSync tick → クリック透過 wake の relay タスク（既存 tick cadence を変えない）。
-        //      vblank 毎に click_wake を notify し、静止カーソル時も post-tick 再評価を起こす
-        //      （R2.4 表示更新追随／R5.2 JustEnded 再収束）。listen-before-work 規律で notify を
-        //      取りこぼさず、`self.world` の Weak が upgrade 不能（shutdown）になればループ終了。
-        //      wake_event を VSync event とは **別 Arc** に保つことで、カーソル移動 notify が
-        //      `AsyncTickTask` を余計に起こさない（入力と描画 cadence の非結合）。
-        {
-            let vblank = bridge.event().clone();
-            let world_weak = Rc::downgrade(&self.world);
-            let wake = std::sync::Arc::clone(&click_wake);
-            let running = Rc::clone(&running);
-            let _relay = crate::executor::spawn_local(async move {
-                loop {
-                    // 先に listen() を arm（処理中に届く vblank を落とさない）。
-                    let listener = vblank.listen();
-                    // strong 所有者が生存しているか（shutdown で None → 終了）。
-                    if world_weak.upgrade().is_none() {
-                        debug!("ClickThrough VSync relay stopping (world dropped — shutdown)");
-                        return;
-                    }
-                    // 次 vblank まで待機し、クリック透過ループを起床（post-tick 再評価）。
-                    listener.await;
-                    // ループが戻った後の起床は中継しない（tick タスクと同じ守り）。
-                    if !running.get() {
-                        debug!("ClickThrough VSync relay stopping (message loop has returned)");
-                        return;
-                    }
-                    wake.notify(usize::MAX);
-                }
-            });
-            // `_relay` はこのスコープ末で JoinHandle が drop されるが、spawn 済みタスクは
-            // executor 上で走り続け、旗が下りた後の最初の起床か world Weak upgrade None（shutdown）で自ら終了する
-            // （`AsyncTickTask` と同じ「JoinHandle を保持せず self-terminate」規律）。
-        }
+        // 3.6. vblank 毎に click_wake を notify する中継（静止カーソル時も post-tick 再評価を
+        //      起こす・R2.4／R5.2）。JoinHandle は捨てても executor 上で走り続ける。
+        let _relay = crate::executor::spawn_local(crate::runtime::tick_bridge::relay_vblank(
+            bridge.event().clone(),
+            Rc::downgrade(&self.world),
+            std::sync::Arc::clone(&click_wake),
+            Rc::clone(&running),
+        ));
 
         // 4. shutdown future が完了するまでメッセージループを駆動（先行 quit せず復帰）。
         MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()));
