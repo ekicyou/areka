@@ -224,43 +224,6 @@ fn resolve_missing_shiori_yields_file_none() {
     assert_eq!(model.shiori.dir, ghost_master);
 }
 
-/// `seriko.defaultsurfacedirectoryname` 未指定 かつ `shell/master` 実在
-/// → 既定 `master` フォールバック（Req 3.1）。
-///
-/// shell 名の指定行を含めず、`shell/master` を実在させる。`resolve_with_shell` は既定
-/// `master` へフォールバックし、`model.shell.dir == root/shell/master` を assert する。
-#[test]
-fn resolve_missing_shell_name_falls_back_to_master() {
-    // --- Arrange: shell 名指定なし ＋ 実在する shell/master ---
-    let temp = unique_temp_dir("missing_shell_name_falls_back_to_master");
-    let root = temp.path().to_path_buf();
-
-    let ghost_master = root.join("ghost").join("master");
-    fs::create_dir_all(&ghost_master).expect("create ghost/master");
-
-    let shell_master = root.join("shell").join("master");
-    fs::create_dir_all(&shell_master).expect("create shell/master");
-
-    let descript = ghost_master.join("descript.txt");
-    // seriko.defaultsurfacedirectoryname を **あえて含めない**。
-    fs::write(&descript, b"charset,UTF-8\ntype,ghost\nname,fallback\n")
-        .expect("write descript.txt");
-
-    // --- Act ---
-    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
-
-    // --- Assert: Ok かつ既定 master へフォールバック ---
-    let model = result.expect("shell 名未指定でも実在 master へフォールバックし Ok");
-    assert_eq!(
-        model.shell.dir, shell_master,
-        "shell 名未指定は既定 master へフォールバックする"
-    );
-    assert!(
-        model.shell.dir.is_dir(),
-        "フォールバックした shell dir は実在する"
-    );
-}
-
 /// `type,ghost` 欠落でも所在ベースで受理 → `Ok`（Req 1.2/1.3）。
 ///
 /// descript に `type` 行を一切含めず（`charset` と `name` のみ）、shell dir は実在

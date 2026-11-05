@@ -92,6 +92,19 @@ fn lowercased_folds_keys_and_drops_empty() {
     assert_eq!(later.get("name").map(String::as_str), Some("b"));
 }
 
+/// 後の行の空の値は、綴りの大小にかかわらず前の値を消す（大小をそろえてから空の値を落とす）。
+#[test]
+fn lowercased_later_empty_value_wins_whatever_the_spelling() {
+    assert_eq!(
+        parse_kv_lowercased("shiori,a.dll\nshiori,\n").get("shiori"),
+        None
+    );
+    assert_eq!(
+        parse_kv_lowercased("shiori,a.dll\nSHIORI,\n").get("shiori"),
+        None
+    );
+}
+
 /// 値とキーの前後の空白を取り、1 始まりの行の番号を添える。
 #[test]
 fn line_read_trims_key_and_value() {

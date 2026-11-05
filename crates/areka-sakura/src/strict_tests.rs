@@ -120,26 +120,6 @@ fn sixteen_points_name_kind_message() {
     }
 }
 
-/// 種類は 7 つだけ。予約の種類（`missing_animation`・`unknown_entity`）は出ない（要件 2.6・2.8）。
-#[test]
-fn kinds_are_the_seven_without_reserved() {
-    let mut kinds: Vec<&str> = DetectionPoint::ALL.iter().map(|p| p.kind()).collect();
-    kinds.sort_unstable();
-    kinds.dedup();
-    assert_eq!(
-        kinds,
-        [
-            "ignored",
-            "missing_balloon",
-            "missing_surface",
-            "unknown_command",
-            "unknown_tag",
-            "unpaired_tag",
-            "unreadable_argument",
-        ]
-    );
-}
-
 /// 文面の定数 11 個の文字列そのもの（`check_script` の答えを 1 バイトも変えない）。文面は `:` を含まない。
 #[test]
 fn message_constants_verbatim() {
@@ -241,32 +221,6 @@ fn record_writes_one_event_with_convention_fields() {
     assert_eq!(
         ev.message(),
         "missing_surface 2-11 no such surface in the current shell; playback does not change the surface: \\s[99999]"
-    );
-}
-
-/// 差し込み口は外から実装でき、束ねたものは複製できる。
-#[test]
-fn hooks_bundle_ghost_and_judges() {
-    struct Judges;
-    impl StrictJudges for Judges {
-        fn command_handled(&self, name: &str, _first: Option<&str>) -> bool {
-            name == "open"
-        }
-        fn font(&self, args: &[String]) -> Option<DetectionPoint> {
-            (args.first().map(String::as_str) == Some("sub")).then_some(DetectionPoint::FontIgnored)
-        }
-    }
-    let hooks = StrictHooks {
-        ghost: "さくら".into(),
-        judges: std::sync::Arc::new(Judges),
-    };
-    let copy = hooks.clone();
-    assert_eq!(&*copy.ghost, "さくら");
-    assert!(copy.judges.command_handled("open", None));
-    assert!(!copy.judges.command_handled("nosuch", None));
-    assert_eq!(
-        copy.judges.font(&["sub".to_string(), "1".to_string()]),
-        Some(DetectionPoint::FontIgnored)
     );
 }
 

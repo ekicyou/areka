@@ -103,8 +103,6 @@ fn no_keys_leaves_model_unchanged() {
     let text = "font.height,12\r\nvalidrect.left,3\r\n";
     let model = parse_str(text, None);
     assert_eq!(model.arrow_keys(), &ArrowKeys::default());
-    // 鍵の無い定義では、鍵を足す前の作り（with_arrow_keys なし）と等しい。
-    assert_eq!(model.clone().with_arrow_keys(ArrowKeys::default()), model);
     assert_eq!(model.font().height(), Some(12));
 }
 

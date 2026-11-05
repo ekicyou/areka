@@ -63,6 +63,7 @@ pub fn parse_all(input: &str) -> ShellText {
                     line: *line,
                 })
             }
+            Token::Stray { line } => reading.issues.push(ShellIssue::StrayBrace { line: *line }),
         }
     }
     ShellText {

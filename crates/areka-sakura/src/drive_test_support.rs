@@ -135,7 +135,7 @@ pub(super) const MENU3_SCRIPT: &str = concat!(
 /// `\s[10]hello\_w[100]\q[..]` の区切りの時刻（hello の D ＋ `\_w[100]`＝0.35）。
 /// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
 pub(super) fn menu_horizon() -> f64 {
-    text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
+    text_playback_duration("hello") + crate::duration::ms_to_secs(100)
 }
 
 /// Choice の合図が届くまで受け取る（区切りの到達を決定的に待つ）。

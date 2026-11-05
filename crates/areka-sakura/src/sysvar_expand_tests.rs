@@ -161,7 +161,7 @@ fn playback_is_identical_before_and_after_expansion() {
 #[test]
 fn fallback_warning_names_vars_not_script() {
     let vars = snapshot(&[("username", "3太郎")]);
-    let script = format!(r"\w%username{}", "長い台詞".repeat(1000));
+    let script = format!(r"\w%username%username{}", "長い台詞".repeat(1000));
     let (out, events) = log_capture_kit::capture(|| expand_system_vars(&script, &vars));
     assert_eq!(out, script, "読みが変わるので元の台詞のまま");
     let warn = events

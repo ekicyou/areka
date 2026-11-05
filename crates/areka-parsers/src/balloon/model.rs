@@ -15,8 +15,9 @@
 //! - 全公開 struct に `#[non_exhaustive]` を付し、将来のキー追加を後方互換にする（要件 2.8）。
 //! - 派生は最小: 整数のみの型は `Clone, Copy, Debug, PartialEq, Eq`。
 //!   `Font` は `Option<String>` を含むため `Copy` 不可（`Clone, Debug, PartialEq, Eq` のみ）。
-//! - モデル化 subset は emo2 が使う幾何＋フォントに限定する。choice/link/scroll 系キーは
-//!   モデル化しない（要件 2.7・過剰実装抑止 要件 5.5）。
+//! - モデル化 subset は emo2 が使う幾何＋フォントから始め、後から選択肢の `cursor.*`・
+//!   スクロールの `arrow*`・`marker*` を足した。ほかの choice/link 系キーはモデル化しない
+//!   （要件 2.7・過剰実装抑止 要件 5.5）。
 //! - 例外として `writing_mode`／`budoux_newline`（areka 拡張キー）を additive な生文字列転記
 //!   フィールドとして持つ（値の解釈は下流 emo テキスト層・emo-text-layer 要件 5.6／
 //!   budoux-newline 要件 1.1）。

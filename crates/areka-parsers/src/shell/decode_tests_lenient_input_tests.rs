@@ -381,3 +381,96 @@ surface.alias
         ]
     );
 }
+
+/// 崩れの見出しは頭の 64 字で切る。番号を並べた長い見出しの下に崩れが何件あっても、
+/// 1 件ごとに見出しの全文を写さない（かけ直しの指摘・崩れの数×見出しの長さで記録が膨らまない）。
+#[test]
+fn issue_heading_is_clipped_to_64_chars() {
+    use crate::shell::{ShellIssue, parse_all};
+    let numbers: Vec<String> = (0..200).map(|n| n.to_string()).collect();
+    let heading = format!("surface{}", numbers.join(","));
+    let input = format!(
+        "{heading}\n{{\nelementx,overlay,a.png,0,0\nelementy,overlay,a.png,0,0\n}}\n{heading}\n{{\n"
+    );
+    let text = parse_all(&input);
+    let clipped: String = heading.chars().take(64).chain(['…']).collect();
+    assert_eq!(
+        text.issues,
+        vec![
+            ShellIssue::UnreadableNumber {
+                heading: clipped.clone(),
+                text: "elementx".into()
+            },
+            ShellIssue::UnreadableNumber {
+                heading: clipped.clone(),
+                text: "elementy".into()
+            },
+            ShellIssue::UnclosedAtEnd {
+                heading: clipped,
+                line: 6
+            },
+        ]
+    );
+}
+
+/// 角括弧の無い別名の行（`6,2106,2206`）は 2 つ目より後の欄を読まない。黙って捨てず、
+/// 読まなかった欄を崩れとして積む。
+#[test]
+fn alias_fields_after_the_value_are_recorded() {
+    use crate::shell::{ShellIssue, parse_all};
+    let text = parse_all("kero.surface.alias\n{\n6,2106,2206\n}\n");
+    assert_eq!(text.shell.aliases[0].ids, vec![2106]);
+    assert_eq!(
+        text.issues,
+        vec![ShellIssue::UnreadableNumber {
+            heading: "kero.surface.alias".into(),
+            text: "2206".into()
+        }]
+    );
+}
+
+/// `}` の抜けを次の `{` で区切り直したら、`parse_all` が `ClosedByNextBrace` を返す（指摘 33）。
+#[test]
+fn missing_close_brace_is_returned_as_issue() {
+    use crate::shell::{ShellIssue, parse_all};
+    let input = "\
+surface0
+{
+element0,overlay,a.png,0,0
+surface1
+{
+element0,overlay,b.png,0,0
+}
+";
+    assert_eq!(
+        parse_all(input).issues,
+        vec![ShellIssue::ClosedByNextBrace {
+            heading: "surface0".into(),
+            line: 1
+        }]
+    );
+}
+
+/// ブレスの外の `}` だけの行と、見出しの無い `{` だけの行は、読み飛ばして行の番号を崩れに積む
+/// （後ろの行が見出しの無い本体として読まれずに捨てられるのを黙らせない）。
+#[test]
+fn stray_brace_lines_are_returned_as_issues() {
+    use crate::shell::{ShellIssue, parse_all};
+    let input = "\
+{
+element0,overlay,a.png,0,0
+}
+surface0
+{
+}
+}
+";
+    assert_eq!(
+        parse_all(input).issues,
+        vec![
+            ShellIssue::StrayBrace { line: 1 },
+            ShellIssue::StrayBrace { line: 3 },
+            ShellIssue::StrayBrace { line: 7 },
+        ]
+    );
+}

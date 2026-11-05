@@ -49,12 +49,12 @@ pub fn decode(bytes: &[u8], default: DefaultEncoding) -> String {
 
     // 4. 選定エンコードでバイト列全体をデコードする。`decode` は BOM を sniff して
     //    吸収し（R5.2）、不正並びを U+FFFD 等で置換する（Result/panic なし）。
-    let (cow, _actual, had_errors) = enc.decode(bytes);
+    let (cow, actual, had_errors) = enc.decode(bytes);
 
     // 不正並びは破棄せず（既に代替文字で吸収済み）、`warn!` を出して String を返す（R2.6）。
     if had_errors {
         tracing::warn!(
-            encoding = enc.name(),
+            encoding = actual.name(),
             "デコード中に不正なバイト並びを検出: 代替文字で吸収して継続"
         );
     }

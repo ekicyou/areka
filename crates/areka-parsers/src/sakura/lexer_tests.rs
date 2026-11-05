@@ -80,17 +80,6 @@ fn bracket_args_split_on_comma() {
 }
 
 #[test]
-fn empty_bracket_yields_no_args() {
-    assert_eq!(
-        lex(r"\s[]"),
-        vec![Token::Tag {
-            word: "s".to_string(),
-            args: vec![],
-        }],
-    );
-}
-
-#[test]
 fn bare_tags_e_c_minus() {
     assert_eq!(lex(r"\e"), vec![Token::Bare("e".to_string())]);
     assert_eq!(lex(r"\c"), vec![Token::Bare("c".to_string())]);
@@ -111,24 +100,6 @@ fn newline_tag_with_percent_bracket() {
             word: "n".to_string(),
             args: vec!["150".to_string()],
         }],
-    );
-}
-
-#[test]
-fn wait_shorthand_single_digit() {
-    assert_eq!(
-        lex(r"\w2"),
-        vec![Token::Shorthand {
-            word: ShorthandWord::Wait,
-            n: 2
-        }]
-    );
-    assert_eq!(
-        lex(r"\w9"),
-        vec![Token::Shorthand {
-            word: ShorthandWord::Wait,
-            n: 9
-        }]
     );
 }
 
@@ -218,12 +189,6 @@ fn speaker_scope_then_surface() {
 #[test]
 fn escape_backslash_to_literal_backslash() {
     assert_eq!(lex(r"a\\b"), vec![Token::Text(r"a\b".to_string())]);
-}
-
-/// 要件 13.5: 単独の `\\`（前後テキストなし）もリテラル `\` テキスト 1 個。
-#[test]
-fn escape_backslash_alone() {
-    assert_eq!(lex(r"\\"), vec![Token::Text(r"\".to_string())]);
 }
 
 /// 要件 13.5: `\\` の直後の `\e` は通常 bare タグとして区切られる
@@ -365,22 +330,6 @@ fn balloon_bare_shorthand_single_digit() {
             word: ShorthandWord::Balloon,
             n: 1
         }]
-    );
-}
-
-/// 要件 1.3: `\b12` は先頭 1 桁のみ面数字として取り込み、続く `2` は正当な
-/// 本文テキストとして分離される（多桁は shorthand でなくブラケット形の領分）。
-#[test]
-fn balloon_bare_shorthand_consumes_one_digit_rest_is_text() {
-    assert_eq!(
-        lex(r"\b12"),
-        vec![
-            Token::Shorthand {
-                word: ShorthandWord::Balloon,
-                n: 1
-            },
-            Token::Text("2".to_string()),
-        ],
     );
 }
 

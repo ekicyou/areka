@@ -85,7 +85,7 @@ fn no_declaration_uses_ansi_default_as_shift_jis() {
 /// R2.6: 宣言エンコードとして不正な並びを代替文字で吸収し、破棄も panic もしない。
 ///
 /// 宣言 UTF-8 のあとに単独の不正 UTF-8 バイト（`0xFF`）を含める。プリスキャンは
-/// 読めない行を飛ばし、宣言 `charset,UTF-8` を検出するため、最終
+/// 読めない字を代替文字にして宣言 `charset,UTF-8` を検出するため、最終
 /// デコードは UTF-8 として全体を走査し、不正部を U+FFFD で置換して String を返す。
 #[test]
 fn malformed_bytes_absorbed_without_panic() {
@@ -117,13 +117,20 @@ fn bom_is_tolerated_and_not_leaked() {
     assert!(out.contains("charset,UTF-8"), "宣言行が復元される: {out:?}");
 }
 
-/// R3.2: 同一（バイト列, 既定）に対し決定的（複数回で同一 String）。
+/// BOM が宣言に勝って読んだときは、壊れた並びの記録に実際に読んだ文字コードの名を書く。
 #[test]
-fn decode_is_deterministic() {
-    let bytes = b"charset,UTF-8\nname,determinism\n";
-    let a = decode(bytes, DefaultEncoding::Utf8);
-    let b = decode(bytes, DefaultEncoding::Utf8);
-    assert_eq!(a, b, "同一入力は決定的に同一結果");
+fn malformed_bytes_warn_names_the_encoding_actually_used() {
+    let (_, events) = log_capture_kit::capture(|| {
+        decode(
+            b"\xEF\xBB\xBFcharset,Shift_JIS\nname,\xff\n",
+            DefaultEncoding::Ansi,
+        )
+    });
+    let warn = events
+        .iter()
+        .find(|e| e.level == tracing::Level::WARN)
+        .expect("warn");
+    assert_eq!(warn.field_str("encoding"), Some("UTF-8"), "{events:?}");
 }
 
 /// R6.1/R5.3 相当: 空入力でも panic せず空文字列相当を返す。

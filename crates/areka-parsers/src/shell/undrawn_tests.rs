@@ -246,3 +246,12 @@ element1,replace,open2.png,0,0
     assert_eq!((images, boxes, undrawn), (4, 2, 8));
     assert_eq!(images + boxes + undrawn, ELEMENT_LINES);
 }
+
+/// 見出しがちょうど `surface.alias` のブレスは画像の読み手も箱の転記も読まないので、描けない行にも数えない。
+#[test]
+fn surface_alias_brace_gives_no_undrawn_line() {
+    assert_eq!(
+        parse_undrawn_elements("surface.alias\n{\nelement0,add,x.png,0,0\n}\n"),
+        Vec::<UndrawnElementLine>::new()
+    );
+}

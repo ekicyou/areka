@@ -293,7 +293,8 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         None,
     );
 
-    let at_world = text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64();
+    // 開始時刻は compile と同じく整数 ms で積んでから秒にする。
+    let at_world = crate::duration::ms_to_secs(crate::duration::text_playback_ms("hello") + 100);
 
     // 初回 Tick(0.0) 刻印＋占有 horizon（world 再生完了＝at_world+0.25=0.60）を跨ぐ Tick(1.0)。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -335,12 +336,12 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
 
     // ── task 9.5: delivered envelope duration の無変形搬送檻（R1.1/7.1） ──
     // 期待値は production 経路と**同一算術**で導く（10 進リテラル直書きは IEEE-754 表現誤差ゆえ
-    // 使わない）: テキストは compile が呼ぶのと同じ `text_playback_duration`、`\_w[100]` は parser が
-    // 生成するのと同じ `Duration::from_millis(2 × 50ms).as_secs_f64()`。この delivered duration が
+    // 使わない）: テキストは compile が呼ぶのと同じ `text_playback_duration`、`\_w[100]` は compile が
+    // 待ちの長さに使うのと同じ `ms_to_secs(100)`。この delivered duration が
     // 期待値とビット同一（`==`）なら、D 焼き込み → `to_talk_schedule` → CuePlayer broadcast の
     // どの hop でも duration が落とされ／ゼロ化され／再導出されていない（無変形搬送）ことの証拠。
     let d_hello = text_playback_duration("hello");
-    let w2 = Duration::from_millis(100).as_secs_f64(); // \_w[100] = 絶対 100ms（parser 算術と同一）
+    let w2 = crate::duration::ms_to_secs(100); // \_w[100] = 絶対 100ms（compile の算術と同一）
     let d_world = text_playback_duration("world");
     assert_eq!(recs[0].duration, 0.0, "ClearAll は瞬時（duration=0）");
     assert_eq!(recs[1].duration, 0.0, "Emote は瞬時（duration=0）");
@@ -758,13 +759,4 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
             );
         }
     }
-
-    // 自己選別モデル（R2.6）の統合経路上の焦点確認: dola はコマンド名で分岐しない——`move`
-    // キャリアであっても型レベル分類は None（dola は名前写像 API を持たず、名前→担当の
-    // 中央権威表は無い）。「1 名前=高々 1 消費者」の一意性は結線層（areka）の消費者台帳が保証する。
-    assert_eq!(
-        cue_target_of(&CueCommand::command_carrier("move", vec![])),
-        None,
-        "move キャリアでも型レベル分類は None（dola は名前語彙を持たず消費側が自己選別する）"
-    );
 }

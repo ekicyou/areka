@@ -108,7 +108,10 @@ pub fn expand_system_vars(script: &str, vars: &SystemVarSnapshot) -> String {
     let want = join_texts(parse(script).into_iter().map(|ins| match ins {
         Instruction::SystemVar(name) => match text_of(&name) {
             Some(value) => {
-                replaced.push(name);
+                // 名は 1 回ずつ（同じ変数を何度書いても記録が台本の大きさに比例しない）。
+                if !replaced.contains(&name) {
+                    replaced.push(name);
+                }
                 Instruction::Text(value)
             }
             None => Instruction::SystemVar(name),

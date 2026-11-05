@@ -49,8 +49,8 @@ const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 ///
 /// **転記のみ・展開しない**（範囲展開・surface 解決はしない・parsers 転写層原則）。
 /// スコープは `sakura.`（0）・`kero.`（1）・`char{N}.`（N は 2 以上）の 3 種類。
-/// 走査は `parse_kv_with_line` の `BTreeMap` 反復順（キー昇順）で決定的。名前は転記順（キー昇順）に
-/// push され、重複 (カテゴリ, パーツ) は下流 seriko が後勝ちで引く（D2）。shell descript が不在・読取不能なら空を返す（致命でない・不在のほかは `warn!`）。
+/// 走査は `parse_kv_with_line` の `BTreeMap` 反復順（キー昇順）で決定的。名前は書いた行の順に
+/// 並べ直し、重複 (カテゴリ, パーツ) は下流 seriko が後勝ち＝後の行で引く（D2 を R19 で改めた）。shell descript が不在・読取不能なら空を返す（致命でない・不在のほかは `warn!`）。
 pub(super) fn read_bindgroup_defaults(
     shell_dir: &Path,
     default_encoding: DefaultEncoding,
@@ -79,6 +79,15 @@ pub(super) fn read_bindgroup_defaults(
     let mut defaults = BindGroupDefaults::default();
     for (key, (value, line)) in &map {
         let Some((scope, rest)) = split_scope(key) else {
+            if key.starts_with(CHAR_SCOPE_PREFIX)
+                && (key.contains(".bindgroup") || key.contains(".bindoption"))
+            {
+                tracing::warn!(
+                    key = %key,
+                    line = *line,
+                    "着せ替えの鍵の char の番号が 2 以上の数でないため読まない"
+                );
+            }
             continue;
         };
         // --- .default 経路（値 "1" のみ on・"0" は off・ほかは off のまま記録する＝指摘 14）---
@@ -143,6 +152,10 @@ pub(super) fn read_bindgroup_defaults(
                 binds.multiple.push(decl.category);
             }
         }
+    }
+    // 走査は鍵の字の順なので、名前は書いた行の順へ並べ直す（重複は後の行が勝つ＝R19）。
+    for binds in defaults.values_mut() {
+        binds.names.sort_by_key(|name| name.line);
     }
     defaults
 }

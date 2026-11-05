@@ -43,14 +43,17 @@ pub fn parse_kv(text: &str) -> BTreeMap<String, String> {
 /// 鍵を ASCII で小文字にそろえ、空の値の鍵を落とした表（ゴーストの descript の読み）。
 ///
 /// 大文字と小文字の綴りが混ざって同じ鍵が 2 回出たら、後の行が勝つ（鍵の表の順でなく行の順で畳む）。
+/// 空の値は畳んだ後に落とす（後の行の空の値は、綴りにかかわらず前の値を消す）。
 pub fn parse_kv_lowercased(text: &str) -> BTreeMap<String, String> {
     let mut rows: Vec<(usize, String, String)> = parse_kv_with_line(text)
         .into_iter()
-        .filter(|(_, (value, _))| !value.is_empty())
         .map(|(key, (value, line))| (line, key.to_ascii_lowercase(), value))
         .collect();
     rows.sort_unstable_by_key(|(line, _, _)| *line);
-    rows.into_iter()
+    let mut map: BTreeMap<String, String> = rows
+        .into_iter()
         .map(|(_, key, value)| (key, value))
-        .collect()
+        .collect();
+    map.retain(|_, value| !value.is_empty());
+    map
 }

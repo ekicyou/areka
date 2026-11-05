@@ -317,6 +317,8 @@ pub enum ShellIssue {
     RangeTooWide { heading: String, text: String },
     /// ウェイトの `最小-最大` の最小を待ちにした（ランダムに選ぶのは未対応・指摘 5）。
     WaitRange { heading: String, text: String },
+    /// ブレスの外の `}` だけの行・見出しの無い `{` だけの行を読み飛ばした。1 始まりの行の番号。
+    StrayBrace { line: usize },
 }
 
 impl ShellIssue {
@@ -327,7 +329,8 @@ impl ShellIssue {
             ShellIssue::UnclosedAtEnd { .. }
             | ShellIssue::ClosedByNextBrace { .. }
             | ShellIssue::UnreadableNumber { .. }
-            | ShellIssue::WaitRange { .. } => tracing::Level::WARN,
+            | ShellIssue::WaitRange { .. }
+            | ShellIssue::StrayBrace { .. } => tracing::Level::WARN,
         }
     }
 
@@ -348,6 +351,9 @@ impl ShellIssue {
             ),
             ShellIssue::WaitRange { heading, text } => format!(
                 "shell: surfaces.txt のブレス `{heading}` のウェイト `{text}` から選ぶのは未対応なので最小を待ちにした"
+            ),
+            ShellIssue::StrayBrace { line } => format!(
+                "shell: surfaces.txt の {line} 行目の括弧はブレスの見出しに続かないので読み飛ばした"
             ),
         }
     }

@@ -514,3 +514,65 @@ SSP（`C:\wintools\ssp\ssp.exe`・ゴースト「えも2DEBUG」）を起こし�
 - 決め: 27 の `\+[x]`・`\v[1]` の扱いが完了 spec の決めを覆す・65 は `decode_passthrough_raw` だけ畳む（ほか 2 つの名は台帳の 33 行と `doc/COMPAT_ARCHITECTURE.md:187` が名指す）・7 は dola の 1 行・7.11(b) は宣言の位置を問わない・50 の残りは D7 どおり残す。
 - 危うさ: 8 の後もトークの終わり（dola の `start + duration`）は ms の格子から外れうる（150＋800 ms → 0.9500000000000001）＝完了までに起票・`shell_target.rs` が約 975 行になる・29 と 17 の新しい `warn!` が範囲の外の「警告 0 件」のテストに当たりうる。
 - 開発者に仰いで決めた（2026-11-05「推奨案で承認」）: 指摘 6 の幅の上限＝8193（12.3）・`areka-parsers` の dev-dependency に `log-capture-kit` を足す（9・14・17・49 のログのテスト・要件 4.4 と同じウェーブの約束 ⑶ の承認された例外・`Cargo.lock` は `areka-parsers` の塊の 1 行だけ・`tech.md` に登記する）。
+
+## 13. 検証の記録: かけ直しの audit（2026-11-06・タスク 8.2・要件 6.1〜6.3・7.2）
+
+### 13.1 作法（要件 1 と同じ）
+
+- 物差しは ponytail 5.3.2 の `/ponytail:ponytail-audit`。範囲は `crates/areka-parsers/`・`crates/areka-sakura/` だけ（HEAD `f10c1306` の上）。
+- 「最大 20 件」の上限は外して全件を出した。「読まなかった所」は残していない＝範囲を 6 つ（parsers の balloon・charset・kv／package／sakura／shell、sakura の compile ほか／drive・strict・sysvar）に分け、読むだけの下請け 6 本に全行を読ませた（4,040＋2,519＋5,176＋5,957＋3,333＋4,686＝25,711 行・`git ls-files` の全ファイル。合計の差は `compile_strict_tests.rs` を 2 本目と 6 本目のどちらが読んだかの数え方だけ）。
+- 1 周目の後に直した分（下の 13.2）は、直しの差分を読み直す 2 周目をかけた（直しの外の行は 1 周目から変わっていない）。
+
+### 13.2 1 周目に出た新しい指摘と扱い（範囲の中は全部直した）
+
+番号はかけ直しの通し番号（R1〜）。組は audit のもの。
+
+| 番号 | 組 | 指摘 | 扱い |
+|---|---|---|---|
+| R1 | Must | 崩れ（`ShellIssue`）が 1 件ごとに見出しの全文を写す。番号を並べた 590 KB の見出しの下に崩れ 5 万件で約 29 GB | 直した: 見出しを頭の 64 字で切る（`shell/lexer.rs` の `heading_text`・decode／undrawn／字句の崩れが共用）。テスト `issue_heading_is_clipped_to_64_chars` |
+| R3 | Should | pattern の欄 2（面の番号）が読めないと 0 番の面になる（指摘 36 の残り） | 直さない（範囲の外へ渡す）: 欄 2 は呼ぶ語（`start`・`insert` ほか）では呼び先で、parsers はそれを `target` に原文のまま写し、`areka-seriko` の `table_calls` が読めない呼び先を記録して動かさない（`start,abc`→Inert＋`warn!` を相手のテストが固める）。parsers で飛ばすと相手の 5 本が赤になった。描く語（`overlay` ほか）の読めない面の番号の記録は、語を解く下流（`areka-emo-compose`）の持ち物＝13.4 |
+| R4 | Should | 角括弧の無い別名 `6,2106,2206` の 2 つ目より後が黙って落ちる | 直した: 読まない欄を `UnreadableNumber` に積む。テスト `alias_fields_after_the_value_are_recorded` |
+| R5 | Should | `ClosedByNextBrace` を `parse_all` で確かめるテストが無い | 直した: テスト `missing_close_brace_is_returned_as_issue` |
+| R6 | Should | 着せ替えの鍵の `char02.`・`char1.`・`char0.` が記録なしで落ちる（指摘 47 の残り） | 直した: `warn!`（鍵と行）。`bindgroup_number_rejects_plus_and_leading_zero` の期待に `char02` を足した |
+| R7 | Should | 待ちの cue の長さが `as_secs_f64`（1128 ms などで 1 ulp 大きい）で、待ちで終わるトークが 1 Tick 遅れる（指摘 8 の残り） | 直した: `compile.rs` で `ms_to_secs(ms)`。テスト `wait_duration_is_on_the_ms_grid`。`compile_sheet_tests`・drive のテストの期待も同じ式へ（drive の開始時刻の期待は整数 ms で積んでから秒にする形へ） |
+| R8 | Should | sysvar の戻しの警告の `vars` が変数を書いた回数だけ伸びる（指摘 82 の残り） | 直した: 名は 1 回ずつ。`fallback_warning_names_vars_not_script` に 2 回目の `%username` を足した |
+| R9 | Nice | ブレスの外の `}` だけの行・見出しの無い `{` だけの行が黙って捨てられ、後ろの本体の行が読まれないまま消える（タスク 4.1 の申し送り） | 直した: 字句に `Stray`、`ShellIssue::StrayBrace { line }`（warn）を足した＝design の Revalidation Trigger「`ShellIssue` の腕の増減」に当たる。記録の出し手 `areka-emo-present/src/shell_target.rs` は `severity()`／`message()` で全部の崩れを出すので変更は要らない（953 行のまま）。テスト `stray_brace_lines_are_returned_as_issues` |
+| R10 | Nice | `undrawn` が `surface.alias` のブレスも読む（画像の読み手・箱は読まない） | 直した。テスト `surface_alias_brace_gives_no_undrawn_line` |
+| R11 | Nice | surfacetable.txt の `scope` の行ごとに group の全部の行を書き直す（行×scope の 2 乗） | 直した: group を閉じるとき（`}`・次の `group`・終わり）に 1 回だけ当てる。振る舞いは同じ（既存の 26 本が緑） |
+| R12 | Nice | `parse_kv_lowercased` が空の値を大小をそろえる前に落とし、`shiori,a\nSHIORI,` だけ前の値が残る | 直した: 畳んでから空を落とす。テスト `lowercased_later_empty_value_wins_whatever_the_spelling` |
+| R13 | Nice | charset の先読みが UTF-8 で読めない字を含む宣言の行を黙って飛ばす | 直した: 行を `from_utf8_lossy` で読む（読めない値は decode が解けないラベルとして `warn!`）。テスト `declaration_line_with_non_utf8_bytes_is_still_found` |
+| R14 | Nice | 壊れた並びの `warn!` が、BOM が宣言に勝ったときに宣言の名を書く | 直した: 実際に読んだ文字コードの名。テスト `malformed_bytes_warn_names_the_encoding_actually_used` |
+| R15 | Nice | 落ちないテスト（`marker_tests` の自明な比較・`decode_is_deterministic`・`hooks_bundle_ghost_and_judges`・`kinds_are_the_seven_without_reserved`・drive の dola 自身の契約の確かめ）と重複（lexer の 4 本・package の `resolve_missing_shell_name_falls_back_to_master`） | 直した: 消した（残す側は `resolve_shell_tests::none_without_default_name_falls_back_to_master`・`lexer_bare_tag_tests`・`lexer_word_boundary_tests`・`sixteen_points_name_kind_message`） |
+| R16 | Nice | 古い説明（sakura の `validation_tests.rs` の空の見出し 3 つと頭の説明・`parse_tests.rs` の決定性の行・`decode.rs` の頭・balloon `model.rs` の「choice/scroll はモデル化しない」・charset のテストの説明・drive のテストの「parser の算術」） | 直した |
+| R19 | Should | 同じ（カテゴリ,パーツ）の `.name` が 2 行あると、行の順でなく鍵の字の順（`bindgroup10` < `bindgroup9`）で勝ちが決まる | 直した（audit 系の推奨案の承認・2026-11-06）: `names` を行の番号で並べ直し、後の行が勝つ。完了 spec `areka-P0-mayuna-compose` の design D2「転記順（キー昇順）で後勝ち＝`parse_kv` の後勝ち規約と整合」を改めた。D2 の理由は事実と違う（`parse_kv` は鍵の順でなく後の**行**が勝つ）。テスト `duplicate_category_part_follows_line_order`（9 の行の後の 10 の行が勝つ）。seriko の後勝ちのテストは緑のまま |
+
+落とした読み（指摘にしない）:
+- 「drive のテストの期待（`text_playback_duration + 待ち`）が本番の式と違う」: 占有の終わり（horizon）は dola が `start + duration` を秒で足すので、テストの和は本番と同じ。開始時刻の期待 2 か所だけ整数 ms の式へ直した（R7）。
+- charset の `validation_tests.rs` の emo2 の検体のテストに非 ASCII を足す案: 検体の原文をそのまま固めるテストなので変えない。
+
+### 13.3 範囲の中で開発者の裁定が要るもの（要件 2.3・まだ直していない）
+
+| 番号 | 組 | 指摘 | 当たる種類・正典・推奨 |
+|---|---|---|---|
+| R2 | Must | `shiori`・`readme` の値が `..` や絶対パスでゴーストのフォルダの外を指せる（指摘 1 はシェル名だけ） | ③（SSP 互換・正典の振る舞い。SSP は測っていない）。正典: https://ukatech.shillest.net/ukadoc-spec/descript/ghost/#readme「readme,ファイル名」「インストール時やオーナードローメニューから開かれるゴーストの説明テキストファイル名。」「既定値: readme.txt」／https://ukatech.shillest.net/ukadoc-spec/descript/ghost/#shiori「shiori,ファイル名」「そのゴーストが使用するSHIORIのファイル名。」「既定値: shiori.dll」。一度直したが戻した（今は前と同じ振る舞い）。推奨＝**readme は直す**: 外を指す値は既定の名と同じに扱う（値が無ければ `crates/areka/src/readme.rs` の `resolve_path` が `readme.txt` へ落ちる）。本当の危うさは、OS の関連付けがゴーストの外のファイルを開くこと。**shiori は記録だけ**: `warn!` を残して値はそのまま使う（ゴーストはもともと好きな DLL を持ち込めるので、断っても守りはほとんど増えず、`shiori,..\shared\x.dll` のゴーストが起動しなくなる＝`shiori_wiring.rs:146`・`shiori_inproc.rs:575` は値が無いと Err） |
+| R18 | Should | `\w9[小声で]`・`\b2[注]`・`\p1[注]`・`\w[x]` が Raw になり待ち・切り替えと字が消える（指摘 27 と同じ類） | ①（完了 spec `sakura-tag-word-boundary` 要件 4.3・`sakura-parse` 要件 18.1 が今の振る舞いを固める）＋③（SSP の測りが要る）。推奨＝SSP の MCP で `\w9[x]`・`\b2[x]` を測ってから、指摘 27 と同じく「タグ＋字」に寄せる |
+
+### 13.4 範囲の外へ渡すもの（本 spec では直さない）
+
+- 占有の終わり `start + duration` を dola が秒で足すので、両方 ms の格子に乗っていても終わりが格子から外れる（`\_w[50]あい` で 0.15000000000000002）。根は `crates/dola/src/cue/sheet.rs` の `absolute_end_time`・`to_talk_schedule`（範囲の外・design 12.7 の「危うさ」の起票と同じ件）。
+- ゴーストの descript の 2 つの読み手の大小の違う同じ鍵の食い違い（`areka-ghost/src/catalog.rs` の自前の `lowercased`）: 要件 7.10 で乗り換えは `audit-ghost-catalog` の持ち物。相手は main に未着地（2026-11-06・main `8eb8758c`）。
+- `areka_parsers::shell::parse` の 2 乗の伸び（2026-11-06 audit-emo-compose の知らせ）: 測り直すと線形（debug・1 面に animation 15,000／30,000／60,000 本で 108／220／445 ms）。4.3 の番号→位置の表で解けていた。残る 2 乗は `areka-emo-compose/src/fold.rs` の重ねの `find`／`retain`+`any`（相手の持ち物・相手の指摘 75）。
+- `Animation::interval_written`: 最後の読み手（`areka-emo-compose` の fold の `merge_brace`）が残っている＝相手が main に未着地なので、欄は残した（タスク 7.1 の書きどおり・着地の後に消す）。
+- `\n[3e38]` のような大きな有限の値で、改行を重ねると配置が inf／NaN になる件（R17・指摘 3 の残り）: parsers で上限を決める「元からある頭打ち」が無い（要件 7.6 の作法）。推奨＝配置の側（`areka-emo-text/src/layout_scan.rs`）で非有限の位置を守る起票（進行役が今ある brief か roadmap へ足す）。
+- 描く語（`overlay` ほか）の pattern で欄 2 の面の番号が読めないと 0 番の面を描く件（R3）: parsers は `target` に原文を写しているので、語を解く `areka-emo-compose`（`audit-emo-compose`）で記録できる。
+- clippy の `drain_collect`（`areka-sakura/src/drive.rs:325`）は前からある警告で、audit は指していない（要件 4.7＝機械的には直さない）。
+
+### 13.5 残した 2 件（要件 2.2 の ①・要件 7.2）
+
+- **59**（`CursorColor` と `FontColor` の写し）と **60**（`windowposition.x` を数と生の字で 2 回持つ）は直さずに残した。どちらも意味論で分けた決め（完了 spec の要件 5.1）で、型を 1 つにすると、選択肢の色と字の色・数として読めた位置と読めない生の字が下流で区別できなくなる。2026-11-05 の要件の討議で開発者が残すと裁定した（要件 2.2 の ①）。かけ直しでもこの 2 件は同じ形で残っている。
+
+### 13.6 結果
+
+- 2 周目（直しの差分の読み直しと、呼び手のクレートのテスト）で出た新しい指摘: **0 件**。見出しの無い `{` の枝の余分な括弧を 1 つ畳み、R3 の直しは `areka-seriko` のテストを赤にしたので戻して範囲の外へ渡した。R2 の直しは③に当たるので戻して裁定待ちへ移し、R19 は推奨案の承認で直した（その差分も読み直して指摘 0 件）。
+- ただし 13.3 の 2 件（R2・R18）は開発者の裁定待ちで、範囲の中の新しい指摘として**まだ残っている**。要件 6.3 の「新しい指摘 0 件（要件 2.2 で残すと裁定した指摘を除く）」は、この 2 件の裁定と、それに沿った直しの後に満たす。R17 は範囲の外へ渡した（13.4）。R19 は直した（13.2）。
+- 残した指摘: 59・60 の 2 件（13.5）。

@@ -143,10 +143,10 @@ mod bindgroup_name_transcription_tests {
         assert!(scope(&defaults, 0).names.is_empty());
     }
 
-    /// 重複 (カテゴリ, パーツ) はキー昇順走査の後勝ち（D2）＝最後の ID を採る。
+    /// 重複 (カテゴリ, パーツ) は後の行が勝つ＝最後の ID を採る。
     #[test]
     fn duplicate_category_part_last_wins() {
-        // 1100 と 1400 が同じ (腕, 伸び) を宣言。キー昇順で 1100→1400 の順に転記され、
+        // 1100 と 1400 が同じ (腕, 伸び) を宣言。行の順で 1100→1400 の順に転記され、
         // seriko の引き（`BindResolver::from_groups`）は後勝ちで 1400 を採る。
         let temp = shell_with_descript(
             "duplicate",
@@ -158,6 +158,21 @@ mod bindgroup_name_transcription_tests {
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(ids_of(&defaults, 0, "腕", "伸び"), vec![1100, 1400]);
+    }
+
+    /// 重複 (カテゴリ, パーツ) は書いた行の順で並ぶ（後の行が勝つ）。鍵の字の順（`bindgroup10` <
+    /// `bindgroup9`）では並べない（かけ直しの R19・完了 spec の D2「キー昇順で後勝ち」を改めた）。
+    #[test]
+    fn duplicate_category_part_follows_line_order() {
+        let temp = shell_with_descript(
+            "duplicate_line_order",
+            "charset,UTF-8\n\
+             sakura.bindgroup9.name,服,制服\n\
+             sakura.bindgroup10.name,服,制服\n",
+        );
+        let defaults = read_bindgroup_defaults(temp.path(), DefaultEncoding::Utf8);
+
+        assert_eq!(ids_of(&defaults, 0, "服", "制服"), vec![9, 10]);
     }
 
     /// R1.6: `.default` 経路は `.name` 増設後も無改変（value=="1" のみ・番号集合）。
@@ -773,6 +788,7 @@ mod bindgroup_warning_tests {
         assert_eq!(
             keys,
             vec![
+                "char02.bindgroup13.default",
                 "sakura.bindgroup+11.default",
                 "sakura.bindgroup0010.default",
                 "sakura.bindgroup012.name",

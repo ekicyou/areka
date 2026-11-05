@@ -1,6 +1,6 @@
 use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 use super::*;
-use crate::duration::text_playback_duration;
+use crate::duration::{ms_to_secs, text_playback_duration};
 use areka_parsers::sakura::SurfaceArg;
 use std::time::Duration;
 
@@ -15,8 +15,8 @@ fn leading_wait_is_preserved_not_collapsed() {
     ]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 2, "内容は先頭 Wait と Text の 2 件");
-    // 期待値は同一の as_secs_f64() で計算（10 進リテラル直書きの表現誤差を排除）。
-    let w = Duration::from_millis(450).as_secs_f64();
+    // 期待値は本番と同じ ms の格子の式で計算（10 進リテラル直書きの表現誤差を排除）。
+    let w = ms_to_secs(450);
     // 先頭 Wait cue は 0.0 で保存され（潰れず）、待ち時間を duration に持つ。
     assert_eq!(
         command_of(&cues[0]),
@@ -36,7 +36,7 @@ fn leading_wait_is_preserved_not_collapsed() {
 
 /// 暗黙 per-char D と明示ウェイトの累積で発火時刻が単調に進む（R2.2/2.4/4.4）。
 /// テキスト D 焼き込み・Wait 第一級化の後も、明示ウェイト累積が退行しない（4.4 非退行）。
-/// duration の期待値は SAME `text_playback_duration`/`as_secs_f64()`、開始時刻は ms の格子で計算する。
+/// duration の期待値は SAME `text_playback_duration`/`ms_to_secs`、開始時刻は ms の格子で計算する。
 #[test]
 fn wait_accumulation_is_monotonic() {
     let compiled = compile(&[
@@ -51,9 +51,9 @@ fn wait_accumulation_is_monotonic() {
     assert_eq!(cues.len(), 5);
 
     let d_a = text_playback_duration("a");
-    let w50 = Duration::from_millis(50).as_secs_f64();
+    let w50 = ms_to_secs(50);
     let d_b = text_playback_duration("b");
-    let w100 = Duration::from_millis(100).as_secs_f64();
+    let w100 = ms_to_secs(100);
 
     // 開始時刻は整数 ms で積んでから秒にした値（秒の足し算ではない・指摘 8）。
     let t_text_a = 0.0_f64;
@@ -282,7 +282,7 @@ fn explicit_wait_between_texts_is_first_class_and_delays_following_text() {
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 3, "内容は Text / Wait / Text の 3 件");
     let d1 = text_playback_duration("aa"); // 0.1s
-    let w = Duration::from_millis(500).as_secs_f64(); // 0.5s
+    let w = ms_to_secs(500); // 0.5s
     // [1] 中間に第一級 Wait cue（吸収されず台本に残る）。
     assert_eq!(
         command_of(&cues[1]),
@@ -320,7 +320,7 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 2, "内容は Text と末尾 Wait の 2 件");
     let d = text_playback_duration("abc"); // 0.15s
-    let w = Duration::from_millis(800).as_secs_f64(); // 0.8s
+    let w = ms_to_secs(800); // 0.8s
     // 末尾 Wait cue が吸収されず台本に残る（R5.3）。
     assert_eq!(
         command_of(&cues[1]),
@@ -558,4 +558,13 @@ fn append_epilogue_maps_each_command_to_one_carrier_cue() {
         );
         assert_eq!(cue.duration, 0.0);
     }
+}
+
+/// 待ちの cue の長さも ms の格子の式（`ms_to_secs`）で持つ。`as_secs_f64` だと 1128 ms で 1 ulp 大きく、
+/// 待ちで終わるトークの終わりが Tick の時刻（`1128 / 1000`）を 1 回越える。
+#[test]
+fn wait_duration_is_on_the_ms_grid() {
+    let compiled = compile(&[Instruction::Wait(Duration::from_millis(1128))]);
+    let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+    assert_eq!(cues[0].duration, 1128_f64 / 1000.0);
 }

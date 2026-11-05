@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 
-use super::lexer::Token;
+use super::lexer::{Token, heading_text};
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
     ElementPath, Interval, Pattern, RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface,
@@ -42,7 +42,7 @@ pub(crate) struct Reading {
 impl Reading {
     /// ブレスの見出しを崩れの名指しに使う原文として控える。
     pub(crate) fn begin(&mut self, header: &[String]) {
-        self.heading = header.join(",");
+        self.heading = heading_text(header);
     }
 
     fn unreadable(&mut self, text: &str) {
@@ -104,7 +104,7 @@ pub(crate) fn decode_token(shell: &mut Shell, token: &Token, reading: &mut Readi
         // それ以外（charset 行の非保持・要件 3.1 等）は寛容に読み飛ばす（要件 3.3/9.2）。
         Token::TopLevel(fields) => decode_sort_key(shell, fields),
         // 崩れの知らせは `parse_all` が `ShellIssue` へ写す（ここでは読まない）。
-        Token::Unclosed { .. } | Token::Reopened { .. } => {}
+        Token::Unclosed { .. } | Token::Reopened { .. } | Token::Stray { .. } => {}
     }
 }
 
@@ -631,6 +631,10 @@ fn decode_alias_block(shell: &mut Shell, body: &[Vec<String>], reading: &mut Rea
             // 値 `[id,...]` を順序付き u32 リストへ（角括弧剥がし＋カンマ分割・要件 8.3）。
             ids: parse_alias_ids(fields.get(1).map(String::as_str).unwrap_or(""), reading),
         });
+        // 値は欄 1 の `[id,...]` だけ。角括弧の無い `6,2106,2206` の 2 つ目より後は読まないので崩れに積む。
+        for extra in fields.iter().skip(2) {
+            reading.unreadable(extra);
+        }
     }
 }
 

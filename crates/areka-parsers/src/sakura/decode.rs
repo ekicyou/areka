@@ -1,6 +1,6 @@
 //! 意味層（Decode）— 構文トークン → 値正規化済み `Instruction`（emo2 subset 限定）。
 //!
-//! Lexer（`lexer::lex`）が産んだ構文トークン列 `Vec<Token>` を消費し、
+//! Lexer（`lexer::lex`・位置つきは `lexer::lex_spanned`）が産んだ構文トークン列を消費し、
 //! emo2 subset タグの値正規化を施した `Instruction` 列を産む（依存方向
 //! `model ← lexer ← decode`）。下流が再パース不要なのは、この層が値を
 //! decode しきるため（要件 1.2）。

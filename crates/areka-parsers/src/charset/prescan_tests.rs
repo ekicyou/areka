@@ -79,6 +79,17 @@ fn colon_variant_is_rejected() {
     assert_eq!(prescan_charset(bytes), None);
 }
 
+/// UTF-8 で読めない字を含む宣言の行も、鍵が `charset` なら宣言として返す（値は読めた分の字・
+/// 解けないラベルとして decode が記録する）。
+#[test]
+fn declaration_line_with_non_utf8_bytes_is_still_found() {
+    let bytes = b"charset,Shift_JIS\x81\x40\nname,x\n";
+    assert_eq!(
+        prescan_charset(bytes),
+        Some("Shift_JIS\u{FFFD}@".to_string())
+    );
+}
+
 /// 空入力は panic せず `None`。
 #[test]
 fn empty_input_returns_none() {

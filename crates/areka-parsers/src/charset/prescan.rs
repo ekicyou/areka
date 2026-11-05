@@ -12,7 +12,8 @@
 /// 1. 先頭の UTF-8 BOM（`EF BB BF`）を走査開始前に読み飛ばす（BOM note・R5.2）。
 ///    BOM を宣言の行の一部と読んで取り逃さないための一意方針。
 /// 2. BOM 除去後のファイル全体を、位置を問わず走査対象とする（7.11(b)）。
-///    非 ASCII の行は UTF-8 で読めなければ飛ばし、その後ろの行も見る。
+///    行は UTF-8 で読めない字を代替文字にして読む（鍵が ASCII の `charset` なら宣言で、
+///    読めない値は decode が解けないラベルとして記録する）。
 /// 3. 走査対象を CRLF/LF 寛容に行分割し、各行を **最初のカンマのみ** で
 ///    `key` / `value` に分ける。`key` を trim・大小無視で `charset` と比較し、
 ///    一致すれば `value` を trim した文字列を返す（D2）。カンマ `,` が唯一の
@@ -28,10 +29,8 @@ pub(super) fn prescan_charset(bytes: &[u8]) -> Option<String> {
     // 2・3. ファイル全体を行単位（CRLF/LF 寛容）に走査する（位置を問わない・7.11(b)）。
     //    `\r` は行内容の trim で吸収されるため、`\n` 分割のみで CRLF に対応する。
     for line in after_bom.split(|&b| b == b'\n') {
-        // UTF-8 で読めない行（Shift_JIS の本文など）は宣言の行でないので飛ばす。
-        let Ok(text) = core::str::from_utf8(line) else {
-            continue;
-        };
+        // Shift_JIS の本文などの読めない字は代替文字にする（宣言の行の値に混ざっても黙って飛ばさない）。
+        let text = String::from_utf8_lossy(line);
         // 最初のカンマのみで分割（カンマが唯一の区切り・D2）。
         let Some((key, value)) = text.split_once(',') else {
             continue; // カンマ無し行（`charset:` 異体を含む）はスキップ。

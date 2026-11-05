@@ -171,10 +171,11 @@ fn scan<'a>(
             // として当該 offset へ発行し、直後 offset を進める（末尾・単独でも台本に残る・R5.1/4.4・D3）。
             // 時間は envelope duration が担い、コマンドは action の種別のみを表す。
             Instruction::Wait(duration) => {
-                let d = duration.as_secs_f64();
-                cues.push(emit(scope, offset, d, CueCommand::Wait));
                 // shortcut: 待ちは整数 ms（parser が from_millis で作る）、1 ms 未満の Duration は切り捨て、そういう待ちを足すときに見直す
                 let ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
+                // 長さも開始時刻と同じ ms の格子の式で秒にする（`as_secs_f64` は 1128 ms などで 1 ulp ずれる）。
+                let d = crate::duration::ms_to_secs(ms);
+                cues.push(emit(scope, offset, d, CueCommand::Wait));
                 offset_ms = offset_ms.saturating_add(ms);
             }
             // scope 状態更新（cue を生成しない・R5.1）。転写のみ。

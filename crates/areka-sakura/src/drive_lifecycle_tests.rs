@@ -474,7 +474,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
 
     // 期待値は本番と同一の算術で導出（10 進直書きの表現誤差を排除・注入時刻決定論）。
     let d_hello = text_playback_duration("hello"); // 0.25
-    let w = Duration::from_millis(800).as_secs_f64(); // 0.8（\_w[800]）
+    let w = crate::duration::ms_to_secs(800); // 0.8（\_w[800]）
     let t_wait = d_hello; // Wait cue の相対発火時刻
     let horizon = d_hello + w; // 占有 horizon＝末尾 Wait の再生完了時刻（1.05）
     let near_horizon = d_hello + w * 0.5; // horizon 手前（entry 枯渇後・horizon 未満）
@@ -538,9 +538,9 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
     );
 
     let d_hello = text_playback_duration("hello"); // 0.25
-    let w = Duration::from_millis(500).as_secs_f64(); // 0.5（\_w[500]）
     let d_world = text_playback_duration("world"); // 0.25
-    let t_world = d_hello + w; // 末尾テキスト world の配送時刻（0.75）
+    // 開始時刻は compile と同じく整数 ms で積んでから秒にする。
+    let t_world = crate::duration::ms_to_secs(crate::duration::text_playback_ms("hello") + 500); // 末尾テキスト world の配送時刻（0.75）
     let horizon = t_world + d_world; // world の再生完了時刻＝占有 horizon（1.0）
 
     // 初回 Tick(0.0) 刻印 → Tick(D_h) で Wait 配送 → Tick(t_world) で末尾 world を配送し entry 枯渇。
@@ -599,7 +599,7 @@ fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
     );
 
     let d_ab = text_playback_duration("ab"); // 0.1
-    let w = Duration::from_millis(600).as_secs_f64(); // 0.6
+    let w = crate::duration::ms_to_secs(600); // 0.6
     let horizon = d_ab + w; // 0.7
 
     // 初回 Tick(0.0) 刻印 → Tick(D) で Wait 配送＝entry 枯渇。ここで tick を **止める**。

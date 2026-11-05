@@ -14,7 +14,8 @@
 //!   見出しと `{` の間の行は ukadoc「ブレス名、{}、各設定として認識されない行はすべてコメント行」
 //!   に従いコメントとして捨てる（指摘 71）。開いた本体の中の `{` は `}` の抜けとみなし、前のブレスを
 //!   中身ごと閉じて区切り直す（`Reopened`・指摘 33）。終わりで閉じていないブレスは中身を落とす
-//!   （`Unclosed`・指摘 34）。ブレスの外の `{`・`}` だけの行は読み飛ばす。
+//!   （`Unclosed`・指摘 34）。ブレスの外の `}` だけの行と見出しの無い `{` だけの行は読み飛ばし、
+//!   行の番号を `Stray` で出す。
 //! - 見出し行・本体行の CSV（カンマ）分割。ただし `[...]` 配列内カンマは
 //!   保護して分割しない（要件 8.1 の `[id,...]`）。
 //! - ドット付きキー（`animationN.interval`）は**分割せず** CSV 1 フィールドとして
@@ -49,6 +50,8 @@ pub(crate) enum Token {
     /// `}` が抜け、次の `{` で区切り直したブレス（中身は直前の `Brace` に残した・指摘 33）。
     /// 見出しの原文と、見出し行の 1 始まりの番号。直前の `Brace` の後に出す。
     Reopened { heading: String, line: usize },
+    /// ブレスの外の `}` だけの行・見出しの無い `{` だけの行（読み飛ばした）。1 始まりの行の番号。
+    Stray { line: usize },
 }
 
 /// 開いているブレス（見出しの欄・見出し行の番号・本体の行）。
@@ -78,7 +81,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 match pick_heading(&brace.body) {
                     Some(at) => {
                         let (line, header) = brace.body.split_off(at).swap_remove(0);
-                        let heading = brace.header.join(",");
+                        let heading = heading_text(&brace.header);
                         let reopened = Token::Reopened {
                             heading,
                             line: brace.line,
@@ -99,21 +102,23 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 brace.body.push((number, split_csv(line)));
                 open = Some(brace);
             }
-            // 見出しの無い孤立 `{` は読み飛ばす（要件 9.2）。
+            // 見出しの無い孤立 `{` は読み飛ばし、行の番号を出す（要件 9.2）。
             ("{", None) => {
-                if let Some(at) = pick_heading(&pending) {
-                    // 見出しより前の行はトップレベル、見出しと `{` の間の行はコメント（指摘 71）。
-                    let (line, header) = pending.split_off(at).swap_remove(0);
-                    tokens.extend(pending.drain(..).map(|(_, fields)| Token::TopLevel(fields)));
-                    open = Some(Open {
-                        header,
-                        line,
-                        body: Vec::new(),
-                    });
-                }
+                let Some(at) = pick_heading(&pending) else {
+                    tokens.push(Token::Stray { line: number });
+                    continue;
+                };
+                // 見出しより前の行はトップレベル、見出しと `{` の間の行はコメント（指摘 71）。
+                let (line, header) = pending.split_off(at).swap_remove(0);
+                tokens.extend(pending.drain(..).map(|(_, fields)| Token::TopLevel(fields)));
+                open = Some(Open {
+                    header,
+                    line,
+                    body: Vec::new(),
+                });
             }
-            // ブレスの外の孤立 `}` は読み飛ばす（要件 9.2）。
-            ("}", None) => {}
+            // ブレスの外の孤立 `}` は読み飛ばし、行の番号を出す（要件 9.2）。
+            ("}", None) => tokens.push(Token::Stray { line: number }),
             (_, None) => pending.push((number, split_csv(line))),
         }
     }
@@ -125,11 +130,22 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
     );
     if let Some(brace) = open {
         tokens.push(Token::Unclosed {
-            heading: brace.header.join(","),
+            heading: heading_text(&brace.header),
             line: brace.line,
         });
     }
     tokens
+}
+
+/// 崩れの名指しに使う見出しの原文。頭の 64 字で切る（崩れは 1 件ごとに見出しを持つので、
+/// 番号を並べた長い見出しの下の崩れの数だけ全文を写すと記録が膨らむ）。
+pub(crate) fn heading_text(header: &[String]) -> String {
+    const CAP: usize = 64;
+    let joined = header.join(",");
+    match joined.char_indices().nth(CAP) {
+        Some((at, _)) => format!("{}…", &joined[..at]),
+        None => joined,
+    }
 }
 
 /// 開いているブレスを閉じた `Brace` にする。
