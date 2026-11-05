@@ -39,7 +39,7 @@
 - `vendors/` の下（要件 6.3）。
 - `doc/`・`docs/` を名指す行。`crates/areka-ghost/src/sylphya_wiring.rs` の `doc/COMPAT_ARCHITECTURE.md` を名指す行（38 行目あたり）は変えない（要件 5.7）。#30 の直しは同じファイルの 164〜172 行目だけを触る。
 - `areka-parsers` の中の変更（大小を無視する鍵の読みの関数・`resolve` の撤去は `audit-parsers-sakura`）。
-- `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表（触らない。`inproc_e2e_test.rs` は 1,000 行を越えたまま残す）。
+- `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表（触らない。ただし `inproc_e2e_test.rs` が 1,000 行以下になったときだけ、その 1 行を消して件数を 9→8 にする＝「1,000 行の番人」の節）。
 
 ### 使ってよい依存
 
