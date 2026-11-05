@@ -2,9 +2,7 @@
 //!
 //! 数は SSP の測り（research.md §10.6・`g_anim` の 18×14・`g_size` の 12×14）と同じ形の検体で固める。
 
-use std::path::Path;
-
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use super::{ShellBounds, shell_bounds};
@@ -12,7 +10,7 @@ use crate::Composer;
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{AtlasSpec, bake_atlas_sized};
+use crate::plan_test_support::{bake_gray, bound_world};
 use crate::world::EmoWorld;
 
 /// 画像の名前と原寸（全面不透明）。
@@ -25,14 +23,8 @@ const SIZES: &[(&str, (u32, u32))] = &[
 
 /// 文面を面の表にし、アトラスを当てて返す。
 fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
-    let specs: Vec<AtlasSpec> = SIZES
-        .iter()
-        .map(|&(rel, size)| (rel, size, Some((64, 64, 64))))
-        .collect();
-    let atlas = bake_atlas_sized(Path::new("shell/master"), &specs);
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
-    (world, atlas)
+    let atlas = bake_gray(SIZES);
+    (bound_world(&parse(text), &[], &atlas), atlas)
 }
 
 /// どの面の合成の絵の大きさも外形の右下を超えない（design ShellCanvasBounds の Invariants）。

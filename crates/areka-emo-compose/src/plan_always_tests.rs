@@ -3,7 +3,6 @@
 //! 欄が「載っていない」なら経過 0 の絵、「消えている」なら何も、コマならそのコマ。動く絵の子は
 //! 下に何も敷かず、コマの絵 1 枚だけを置いた element の描画メソッドで命令にする。
 
-use std::num::NonZeroU32;
 use std::path::Path;
 
 use areka_emo_atlas::{
@@ -17,7 +16,7 @@ use crate::nesting::{ElementKind, FilmId};
 use crate::normalized::SurfaceMaster;
 use crate::pattern::PatternState;
 use crate::plan::BlitOp;
-use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, solid};
+use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, insert_film_2x2, solid};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -83,18 +82,7 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
         LoopCount::Infinite,
     );
     for (rel, delays, laps) in FIXTURE_FILMS {
-        let frames = delays
-            .iter()
-            .enumerate()
-            .map(|(i, &delay_ms)| AnimationFrame {
-                image: solid(2, 2, 10 + i as u8),
-                delay_ms,
-            })
-            .collect();
-        let loop_count = laps.map_or(LoopCount::Infinite, |n| {
-            LoopCount::Finite(NonZeroU32::new(n).unwrap())
-        });
-        insert_film(&mut dec, Path::new(BASE).join(rel), frames, loop_count);
+        insert_film_2x2(&mut dec, Path::new(BASE).join(rel), delays, laps);
     }
     let rels = STILLS
         .iter()

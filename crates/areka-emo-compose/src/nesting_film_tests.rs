@@ -7,10 +7,9 @@
 //! `walk` の経過 0 の辺（欄が「載っていない」ときだけ・「消えている」では進まない）、`visible_films`。
 
 use std::collections::BTreeMap;
-use std::num::NonZeroU32;
 use std::path::Path;
 
-use areka_emo_atlas::{AnimationFrame, AtlasTable, LoopCount, MemoryDecoder, SetId};
+use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
 use areka_parsers::shell::{ElementPath, Interval, parse};
 
 use super::{
@@ -20,7 +19,7 @@ use super::{
 use crate::bind::BindSet;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, ops, solid};
+use crate::plan_test_support::{bake_films_and_bind, frame, insert_film_2x2, ops, solid};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 fn other(s: &str) -> Interval {
@@ -137,18 +136,7 @@ fn fixture_world_with(extra: &str) -> (EmoWorld, AtlasTable) {
         ("surface1.png", &[333, 0, 70, 1], Some(2)),
     ];
     for (rel, delays, laps) in films {
-        let frames = delays
-            .iter()
-            .enumerate()
-            .map(|(i, &delay_ms)| AnimationFrame {
-                image: solid(2, 2, 10 + i as u8),
-                delay_ms,
-            })
-            .collect();
-        let loop_count = laps.map_or(LoopCount::Infinite, |n| {
-            LoopCount::Finite(NonZeroU32::new(n).unwrap())
-        });
-        insert_film(&mut dec, Path::new(BASE).join(rel), frames, loop_count);
+        insert_film_2x2(&mut dec, Path::new(BASE).join(rel), delays, laps);
     }
     let rels = stills.into_iter().chain(films.iter().map(|f| f.0));
     bake_films_and_bind(

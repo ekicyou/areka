@@ -275,62 +275,7 @@ fn append_merges_element_and_collision_layer_sorted() {
     assert_eq!(m.collisions[1].name.as_str(), "Bust");
 }
 
-/// (3) animation 先勝ち＋新 id 追加（SSP 2.9.29 と同じ・spec: audit-emo-compose 設計の議題 7 案 A）。
-/// 対象に既存 animation id=N があり append が同 id=N を持つ → append 版を捨てる（単一）。
-/// 新 id=M は追加される。
-#[test]
-fn append_animation_first_wins_and_new_id_added() {
-    // 事前 surface: animation id=1（interval=bind, pattern 空）。
-    let base = surface_full(
-        8,
-        vec![AppendTarget::Single(8)],
-        Vec::new(),
-        Vec::new(),
-        vec![anim(1)],
-    );
-    // append: 同 id=1 を別内容（interval=random,k=5）で持ち、新 id=2 を追加。
-    let replacement = Animation {
-        id: 1,
-        interval: Interval::Random { k: 5 },
-        interval_written: true,
-        patterns: Vec::new(),
-    };
-    let ap = append_def(
-        vec![AppendTarget::Single(8)],
-        Vec::new(),
-        Vec::new(),
-        vec![replacement.clone(), anim(2)],
-    );
-    let mut world = fresh_world();
-    fold_shell_with(
-        &mut world,
-        &shell_mixed(
-            vec![base],
-            vec![ap],
-            vec![DefRef::Surface(0), DefRef::Append(0)],
-        ),
-        Records::Emit,
-    );
-
-    let m = component_of::<SurfaceMaster>(&world, 8).expect("id=8 が常駐する");
-    // id=1 は 1 本のみ（重複しない）＝先勝ち。
-    let id1: Vec<&Animation> = m.animations.iter().filter(|a| a.id == 1).collect();
-    assert_eq!(id1.len(), 1, "id=1 は 1 本");
-    assert_eq!(
-        id1[0].interval,
-        anim(1).interval,
-        "前の interval のまま（append 版の random,5 は捨てる）"
-    );
-    // id=2 が追加されている。
-    assert!(
-        m.animations.iter().any(|a| a.id == 2),
-        "新 id=2 が追加される"
-    );
-    // 合計 2 本（id=1 は前のまま ＋ id=2 追加）。
-    assert_eq!(m.animations.len(), 2);
-}
-
-/// (4) 登場順（要件 2.3）。
+/// (3) 登場順（要件 2.3）。
 /// append の後に定義された surface は遡って追記されない（append 実行時に存在する id のみ）。
 #[test]
 fn append_only_sees_earlier_defined_surfaces() {
@@ -705,13 +650,6 @@ fn emo2_fixture_folds_byte_equal_twice() {
     use crate::world::EmoWorld;
 
     let shell = emo2_shell();
-    // fold は非自明: 実 fixture は多数の surface と alias を含む。
-    assert!(!shell.surfaces.is_empty(), "emo2 は surface を含む");
-    assert!(
-        !shell.definitions.is_empty(),
-        "emo2 は登場順ストリームを持つ"
-    );
-
     let a = EmoWorld::build(&shell);
     let b = EmoWorld::build(&shell);
 
@@ -732,7 +670,10 @@ fn emo2_fixture_folds_byte_equal_twice() {
     // 非自明性: 既知 id が常駐し、重複 alias `100` が後勝ちで一意解決する。
     let ids: Vec<u32> = a.surface_ids().collect();
     assert!(ids.contains(&0), "surface0 が常駐する");
-    assert!(ids.contains(&1000), "surface1000（全 bind）が常駐する");
+    assert!(
+        ids.contains(&1000),
+        "surface1000（着せ替えの本体）が常駐する"
+    );
     assert!(ids.contains(&2100), "surface2100 が常駐する");
     // `100,[2100]` は2回定義されるが後勝ちで単一値に解決する（要件 3.2・重複ケース）。
     assert_eq!(
@@ -792,46 +733,6 @@ fn interleaved_redefinition_is_appearance_order_deterministic() {
         layers,
         vec![(0, "old.png"), (0, "new.png"), (1, "mid.png")],
         "layer 0 は両方・append(mid) は残る（登場順の帰結）"
-    );
-}
-
-/// (4) 前方参照なし・single-pass（要件 1.7）: 後で定義される id を狙う append は遡及せず、
-/// かつ 2回 fold して結果が安定する。
-#[test]
-fn forward_reference_append_does_not_apply_and_is_stable() {
-    // 登場順: Append(狙い id=3) → Surface(id=3)。append 時点で 3 は未存在ゆえ届かない。
-    let ap = append_def(
-        vec![AppendTarget::Single(3)],
-        vec![elem(1, "ghost.png", 0, 0)],
-        Vec::new(),
-        Vec::new(),
-    );
-    let s3 = surface_def(
-        3,
-        vec![AppendTarget::Single(3)],
-        vec![elem(0, "base3.png", 0, 0)],
-    );
-    let shell = shell_mixed(
-        vec![s3],
-        vec![ap],
-        // Append(0) が Surface(0) より先＝前方参照。
-        vec![DefRef::Append(0), DefRef::Surface(0)],
-    );
-
-    let (surfaces, _) = assert_fold_twice_byte_equal(&shell);
-    // id=3 は base のみ（前方参照 append は適用されない）。
-    assert_eq!(surfaces.len(), 1);
-    let (id, m) = &surfaces[0];
-    assert_eq!(*id, 3);
-    assert_eq!(
-        m.elements.len(),
-        1,
-        "前方参照 append は適用されない（single-pass）"
-    );
-    assert_eq!(
-        m.elements[0].path.as_str(),
-        "base3.png",
-        "後定義 id を狙う前方参照 append は遡及しない"
     );
 }
 

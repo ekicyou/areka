@@ -1,7 +1,8 @@
 //! 要件 5.4: 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
-use super::{AtlasTable, EmoWorld, MemoryDecoder, Path, SetId, Shell};
+use super::{AtlasTable, EmoWorld, MemoryDecoder, Path, Shell};
+use crate::plan_test_support::bound_world;
 
 // ============================================================================
 // 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
@@ -155,8 +156,7 @@ fn kero_blink_frames_fit_within_base_extent() {
     let base = shell_master_dir();
     let atlas = build_atlas_real_sizes(&shell, &base);
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let (base_extent, measured) = assert_frames_fit_base(&world, &atlas, 2100, 0);
 
@@ -198,8 +198,7 @@ fn sakura_blink_frames_fit_within_base_extent() {
     let base = shell_master_dir();
     let atlas = build_atlas_real_sizes(&shell, &base);
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let (base_extent, measured) = assert_frames_fit_base(&world, &atlas, 1000, 1400);
 

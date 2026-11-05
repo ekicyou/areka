@@ -1,10 +1,9 @@
 //! 要件 9.1・9.5・11.2: emo2 まばたき bind+random の静的不活性テーマ。
 
-use crate::plan::{PlanScratch, build_plan};
-
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
-use super::{AtlasTable, BindSet, EmoWorld, MemoryDecoder, Path, PatternState, SetId, Shell};
-use crate::plan_test_support::opaque_wxh;
+use super::{AtlasTable, BindSet, MemoryDecoder, Path, PatternState, SetId, Shell};
+use crate::plan_test_support::bound_world;
+use crate::plan_test_support::{opaque_wxh, plan_of};
 
 // ============================================================================
 // emo2 まばたき bind+random（1400・pattern0 なし）の静的不活性回帰檻（要件 **9.1**・**9.5**・11.2）。
@@ -56,50 +55,37 @@ fn emo2_blink_binds_are_statically_inactive() {
     let base = shell_master_dir();
     let atlas = build_atlas_for_blink_cage(&shell, &base);
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // [1302] のみ（目/通常・pattern0 あり）。
-    let mut ops_base = Vec::new();
-    let mut scratch_base = PlanScratch::default();
-    build_plan(
-        &mut ops_base,
-        &mut scratch_base,
+    let (ops_base, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1302]),
         &PatternState::default(),
-    )
-    .expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
+    );
+    result.expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
-    let mut ops_blink = Vec::new();
-    let mut scratch_blink = PlanScratch::default();
-    build_plan(
-        &mut ops_blink,
-        &mut scratch_blink,
+    let (ops_blink, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1302, 1400, 1403]),
         &PatternState::default(),
-    )
-    .expect("まばたき込みでも Ok");
+    );
+    result.expect("まばたき込みでも Ok");
 
     // [1302,1403]（純 `bind` の 1403 だけを足す）。
-    let mut ops_pure = Vec::new();
-    let mut scratch_pure = PlanScratch::default();
-    build_plan(
-        &mut ops_pure,
-        &mut scratch_pure,
+    let (ops_pure, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1302, 1403]),
         &PatternState::default(),
-    )
-    .expect("純 bind 込みでも Ok");
+    );
+    result.expect("純 bind 込みでも Ok");
 
     // `bind+random` のまばたき 1400（pattern0 なし）は静的合成へ寄与しない＝BlitOp 列が完全一致。
     assert_eq!(
@@ -122,7 +108,8 @@ fn emo2_blink_binds_are_statically_inactive() {
     );
 }
 
-/// まばたき檻の非空虚性の実データ確認: 1400/1403 が pattern0（index==0）を持たず、閉じ目パーツ
+/// まばたき檻の非空虚性の実データ確認: まばたきの 1400 は `bind+random`・1403 は純 `bind` で、どちらも
+/// pattern0（index==0）を持たず、番号の最も小さい pattern の先（1400 は閉じ目の 1412・1403 は null の 1414）の
 /// 画像が atlas に解決されることを固定する。
 ///
 /// これにより上檻 [`emo2_blink_binds_are_statically_inactive`] の assert_eq が「まばたきが元々
@@ -142,34 +129,32 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
         .find(|s| s.id == 1000)
         .expect("emo2 surfaces.txt に surface1000 が存在する");
 
-    // 1400（bind+random）と 1403（bind）は pattern0（index==0）を持たない再生アニメである。
-    for (aid, closed_frame_surface) in [(1400u32, 1412i64), (1403, 1414)] {
+    for (aid, interval, first_frame_surface) in [
+        (1400u32, Interval::BindRandom { k: 4 }, 1412i64),
+        (1403, Interval::Bind, 1414),
+    ] {
         let anim = s1000
             .animations
             .iter()
             .find(|a| a.id == aid)
             .unwrap_or_else(|| panic!("surface1000 に animation{aid} が存在する"));
-        assert!(
-            matches!(anim.interval, Interval::Bind | Interval::BindRandom { .. }),
-            "animation{aid} は bind 種 interval（BindSet に載る）",
-        );
+        assert_eq!(anim.interval, interval, "animation{aid} の interval");
         assert!(
             !anim.patterns.iter().any(|p| p.index == 0),
-            "animation{aid} は pattern0（index==0）を持たない（まばたき再生アニメ）",
+            "animation{aid} は pattern0（index==0）を持たない",
         );
-        // 番号の最も小さい pattern の参照先（閉じ目 surface）が存在する。
         let min_pat = anim
             .patterns
             .iter()
             .min_by_key(|p| p.index)
             .expect("pattern を 1 本以上持つ");
         assert_eq!(
-            min_pat.surface_id, closed_frame_surface,
-            "animation{aid} の最小 index pattern は閉じ目 surface{closed_frame_surface} を参照（静的に描けばこれを合成）",
+            min_pat.surface_id, first_frame_surface,
+            "animation{aid} の最小 index pattern は surface{first_frame_surface} を参照（静的に描けばこれを合成）",
         );
     }
 
-    // 閉じ目パーツ surface（1412=eyebase+toji）の element 画像が atlas に解決される（placement Some）。
+    // 閉じ目（1412=eyebase+toji）と null（1414）の element 画像が atlas に解決される（placement Some）。
     // ＝静的に描く実装なら実際に積まれ得た＝上檻の assert_eq は非空虚。
     for rel in [
         "purple/a/eyebase.png",
@@ -178,7 +163,7 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
     ] {
         let id = atlas
             .resolve(SetId(0), rel)
-            .unwrap_or_else(|| panic!("閉じ目パーツ {rel} が atlas に解決される"));
+            .unwrap_or_else(|| panic!("{rel} が atlas に解決される"));
         assert!(
             atlas.entry(id).placement.is_some(),
             "{rel} は不透明コアあり＝placement Some（静的に描けば積まれ得た）",

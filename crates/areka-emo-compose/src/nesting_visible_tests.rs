@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use super::{NestIssue, NestTable, SurfaceParts};
@@ -55,7 +55,6 @@ fn shell_without_nesting_or_binds_gives_empty_table() {
          surface1\n{\nelement0,overlay,eye.png,0,0\n}\n",
     );
     assert!(table.is_empty());
-    assert_eq!(table, NestTable::default());
     // 一番上のコマ（random）の先は部品に数える（③）が、表は空のまま。
     let mut pattern = PatternState::default();
     pattern.set(0, frame(1, 0, 0));
@@ -391,11 +390,8 @@ impl Case {
         from_defs: usize,
     ) -> Case {
         let text = format!("{text}\nsurface{MARKER}\n{{\nelement0,overlay,marker.png,0,0\n}}\n");
-        let images: BTreeMap<u32, String> =
-            images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-        let mut world = EmoWorld::build_with_images(&parse(&text), &images);
         let atlas = bake_atlas(Path::new("shell/master"), RELS);
-        world.bind_atlas(&atlas, SetId(0));
+        let world = crate::plan_test_support::bound_world(&parse(&text), images, &atlas);
         let table = world.nest_table();
         let binds = binds
             .iter()

@@ -287,13 +287,17 @@ fn fallbacks_report_full() {
     let cur = [op(0, 0, 0), op(3, 9, 5)];
     let want = fresh(EXT, &cur, &a);
 
-    let small = fresh(Extent { w: 63, h: 64 }, &prev, &a);
-    let mut out = ComposedSurface::new(0, 0);
-    assert_eq!(
-        execute_reusing(&mut out, EXT, &cur, Some((&small, &prev)), &a),
-        Recompose::Full
-    );
-    assert_eq!(out.bytes(), want.bytes());
+    // 下敷きの幅だけ・高さだけが違う。
+    for size in [Extent { w: 63, h: 64 }, Extent { w: 64, h: 63 }] {
+        let small = fresh(size, &prev, &a);
+        let mut out = ComposedSurface::new(0, 0);
+        assert_eq!(
+            execute_reusing(&mut out, EXT, &cur, Some((&small, &prev)), &a),
+            Recompose::Full,
+            "下敷き {size:?}"
+        );
+        assert_eq!(out.bytes(), want.bytes());
+    }
 
     let mut odd = prev.clone();
     odd[0].method = ComposeMethod::OverlayFast;
@@ -393,7 +397,7 @@ fn unchanged_layer_between_movers_240_frames() {
 
 /// 面 1 枚（不透明の背景 8×6 と半透明の小物 3×2）を fold・bind 済みの world と atlas。
 fn composer_world() -> (crate::EmoWorld, AtlasTable) {
-    use areka_emo_atlas::{AlphaParams, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake};
+    use areka_emo_atlas::MemoryDecoder;
 
     let surfaces = vec![surface(
         0,
@@ -417,17 +421,9 @@ fn composer_world() -> (crate::EmoWorld, AtlasTable) {
         [40, 30, 20, 128].repeat(6),
         true,
     );
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
+    let baked = crate::plan_test_support::bake_surfaces(&surfaces, base, &dec);
     assert!(baked.errors.is_empty(), "bake は失敗しない");
-    let mut world = crate::EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
+    let world = crate::plan_test_support::bound_world(&shell_of(surfaces), &[], &baked.table);
     (world, baked.table)
 }
 
@@ -547,8 +543,7 @@ fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
         surface(0, vec![elem(0, "a.png", 0, 0)]),
         surface(1, vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 2, 1)]),
     ]);
-    let mut world = crate::EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = crate::plan_test_support::bound_world(&shell, &[], &atlas);
     (world, atlas)
 }
 

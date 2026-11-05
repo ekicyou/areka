@@ -64,6 +64,7 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan_test_support::bound_world;
     use crate::plan_test_support::{bake_atlas, elem, shell_of, surface};
     use crate::world::{AtlasBinding, EmoWorld};
     use std::path::Path;
@@ -87,9 +88,7 @@ mod tests {
             1000,
             vec![elem(0, "known.png", 0, 0), elem(1, "bogus.png", 0, 0)],
         )]);
-        let mut world = EmoWorld::build(&shell);
-
-        world.bind_atlas(&atlas, SetId(0));
+        let world = bound_world(&shell, &[], &atlas);
 
         let master = world.surface(1000).expect("surface1000 常駐");
         let binding = surface_binding(&world, 1000);
@@ -120,8 +119,7 @@ mod tests {
             surface(0, vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 0, 0)]),
             surface(1, vec![elem(0, "c.png", 0, 0)]),
         ]);
-        let mut world = EmoWorld::build(&shell);
-        world.bind_atlas(&atlas, SetId(0));
+        let world = bound_world(&shell, &[], &atlas);
 
         for id in world.surface_ids().collect::<Vec<_>>() {
             let master = world.surface(id).expect("常駐 surface");
@@ -178,8 +176,7 @@ mod tests {
     fn empty_world_bind_is_noop() {
         let base = Path::new("shell/master");
         let atlas = bake_atlas(base, &["only.png"]);
-        let mut world = EmoWorld::build(&shell_of(Vec::new()));
-        world.bind_atlas(&atlas, SetId(0));
+        let world = bound_world(&shell_of(Vec::new()), &[], &atlas);
         assert_eq!(world.surface_ids().count(), 0);
     }
 

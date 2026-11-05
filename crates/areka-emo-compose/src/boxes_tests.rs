@@ -85,12 +85,6 @@ fn hand_built_layout_answers_lookups() {
     assert!(layout.placements(u32::MAX).is_empty());
 }
 
-#[test]
-fn box_name_reads_back_as_str_and_font_follow_defaults_to_scope() {
-    assert_eq!(name("main").as_str(), "main");
-    assert_eq!(FontFollow::default(), FontFollow::Scope);
-}
-
 // ---- `balloon.*`ブレスを定義として読む（fold_boxes の定義の側・要件 1.1〜1.5・1.8・1.9・
 // 3.14・3.17・3.18・10.1・10.2）。文面はテストの中に持つ（検体は読まない）。
 
@@ -239,7 +233,18 @@ fn size_follow_and_inapplicable_keys_never_reach_the_descript_table() {
     );
     assert_eq!(size, (10, 20));
     assert_eq!(follow, FontFollow::Balloon);
-    assert_eq!(issues.len(), 3);
+    let ignored = |key: &str| BoxIssue::BraceKeyIgnored {
+        name: "t".into(),
+        key: key.into(),
+    };
+    assert_eq!(
+        issues,
+        vec![
+            ignored("use_input_alpha"),
+            ignored("use_self_alpha"),
+            ignored("windowposition.x"),
+        ]
+    );
 }
 
 #[test]

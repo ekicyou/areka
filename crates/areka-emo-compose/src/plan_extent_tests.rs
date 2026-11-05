@@ -47,8 +47,7 @@ fn extent_is_independent_of_bindset() {
     let part2 = surface(1200, vec![elem(0, "part2.png", 0, 0)]);
     let part3 = surface(1300, vec![elem(0, "part3.png", 0, 0)]);
     let shell = shell_of(vec![host, part1, part2, part3]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // 全 element＋全 bind の描くコマ の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
     let expected = Extent { w: 200, h: 150 };
@@ -92,8 +91,7 @@ fn extent_unions_inactive_bind_contribution() {
     );
     let huge = surface(2900, vec![elem(0, "huge.png", 0, 0)]);
     let shell = shell_of(vec![host, huge]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // 有効 bind 非依存ゆえ、activate されない id=9 の huge も外形へ寄与＝500×400 が支配。
     let extent = compute_extent(&world, &atlas, 2000);
@@ -142,8 +140,7 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
         vec![elem(0, "solid.png", 0, 0), elem(1, "ghost.png", 0, 0)],
     );
     let shell = shell_of(vec![surf]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // 命令: ghost はスキップされ solid の 1 本のみ（要件 6.3）。
     let binds = BindSet::default();
@@ -188,8 +185,7 @@ fn negative_offset_is_clipped_and_origin_stays_fixed() {
     );
     let small = surface(4100, vec![elem(0, "small.png", 0, 0)]);
     let shell = shell_of(vec![host, small]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // small は (-100+10, -100+10)=(-90,-90) ゆえ max(0,·)=0 で寄与せず、base の 50×40 が残る。
     let extent = compute_extent(&world, &atlas, 4000);
@@ -209,8 +205,7 @@ fn extent_equals_base_original_when_no_larger_layers() {
 
     let surf = surface(5000, vec![elem(0, "only.png", 0, 0)]);
     let shell = shell_of(vec![surf]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let extent = compute_extent(&world, &atlas, 5000);
     assert_eq!(
@@ -238,8 +233,7 @@ fn extent_reaches_the_bind_part_at_its_offset() {
     );
     let part = surface(6100, vec![elem(0, "part.png", 0, 0)]);
     let shell = shell_of(vec![host, part]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
     assert_eq!(
@@ -255,7 +249,8 @@ fn extent_reaches_the_bind_part_at_its_offset() {
 // 厳密に区別する（外形の上限越えの `ExtentTooLarge` は別の節）:
 //   - 対象 surface 不在        → Err(SurfaceNotFound)（error ログ・要件 10.5）。
 //   - surface 存在・命令ゼロでも → Ok(非ゼロ Extent)＋空 ops（正常全透明・要件 6.6・議題2裁定）。
-//   - 定義層皆無で外形 0×0      → Err(EmptyComposition)（error ログ・要件 10.5・唯一の真の失敗退化）。
+//   - 外形の幅か高さが 0        → Err(EmptyComposition)（error ログ・要件 10.5・定義層皆無の 0×0 はここ・
+//                                 幅だけ 0 は `work_limits_tests`）。
 // 非パニック（要件 1.4）。out_ops はエントリで clear する再利用スクラッチ（要件 10.3）。
 
 use crate::error::ComposeError;
@@ -298,8 +293,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
         vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)],
     );
     let shell = shell_of(vec![surf]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::default();
     let (ops, result) = plan_of(&world, &atlas, 3000, &binds, &PatternState::default());
@@ -342,8 +336,7 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
     let part2 = surface(1200, vec![elem(0, "part2.png", 0, 0)]);
     let shell = shell_of(vec![host, part1, part2]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // 空 BindSet → 有効 bind ゼロ＝描画可能命令ゼロ。
     let binds = BindSet::default();
@@ -364,17 +357,16 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
 
 /// 要件 10.5・議題2裁定: 定義層皆無で外形 0×0 → `Err(EmptyComposition)`。
 ///
-/// surface=7000 は EXISTS するが element ゼロ・bind ゼロ（外形へ寄与する層が皆無）。
-/// compute_extent が {0,0} を返す唯一の真の失敗退化ケース。
+/// surface=7000 は EXISTS するが element ゼロ・bind ゼロ（外形へ寄与する層が皆無）で、compute_extent が
+/// {0,0} を返す（幅か高さが 0 の外形は `EmptyComposition`・幅だけ 0 の例は `work_limits_tests`）。
 #[test]
 fn build_plan_no_layers_degenerate_is_empty_composition() {
     // element ゼロ・animation ゼロの surface（存在はするが定義層が皆無）。
     let surf = surface(7000, Vec::new());
     let shell = shell_of(vec![surf]);
-    let mut world = EmoWorld::build(&shell);
     // atlas は引かれない（element がない）が bind_atlas は呼ぶ（binding 挿入）。
     let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // 前提の実証: 外形が 0×0（定義層皆無）。
     assert_eq!(
@@ -389,7 +381,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
     assert_eq!(
         result,
         Err(ComposeError::EmptyComposition(7000)),
-        "定義層皆無で 0×0 の退化のみ EmptyComposition（要件 10.5・議題2裁定）"
+        "定義層皆無の 0×0 は EmptyComposition（要件 10.5・議題2裁定）"
     );
     assert!(ops.is_empty());
 }
@@ -406,8 +398,7 @@ fn build_plan_clears_scratch() {
 
     let surf = surface(5000, vec![elem(0, "visible.png", 0, 0)]);
     let shell = shell_of(vec![surf]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::default();
 
@@ -438,7 +429,8 @@ fn build_plan_clears_scratch() {
     assert_eq!(e1, Extent { w: 80, h: 60 }, "外形＝element 原寸");
 }
 
-// ── audit-emo-compose 指摘 2: 外形が GPU の面の最大寸（一辺 16,384）を越えたら確保せずに失敗する ──
+// ── audit-emo-compose 指摘 2・23: 外形が GPU の面の最大寸（一辺 16,384）か面積の上限（2^25 画素）を越えたら
+// 確保せずに失敗する ──
 
 /// `top` の計画を建て、結果と捕まえた記録の ERROR の行数を返す。
 fn plan_with_errors(
@@ -480,8 +472,7 @@ fn far_bind_pattern_fails_without_allocating() {
         vec![bind_anim(1, 1100, 100_000, 100_000)],
     );
     let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    let mut world = EmoWorld::build(&shell_of(vec![host, part]));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell_of(vec![host, part]), &[], &atlas);
     let too_large = || ComposeError::ExtentTooLarge {
         surface: 1000,
         w: 100_004,
@@ -522,9 +513,7 @@ fn child_beyond_u32_does_not_wrap_to_small_extent() {
             ("part.png", (4, 4), Some((64, 64, 64))),
         ],
     );
-    let mut world =
-        EmoWorld::build_with_images(&areka_parsers::shell::parse(&text), &Default::default());
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&areka_parsers::shell::parse(&text), &[], &atlas);
 
     let (planned, errors) = plan_with_errors(&world, &atlas, 0);
     assert_eq!(
@@ -549,8 +538,7 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
         Path::new("shell/master"),
         &[("eye.png", (4, 4), Some((64, 64, 64)))],
     );
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&areka_parsers::shell::parse(text), &[], &atlas);
     let run = |limit| {
         let mut extent = None;
         let logs = crate::log_capture::capture_logs(|| {
@@ -595,8 +583,7 @@ fn extent_does_not_truncate_pattern_surface_beyond_u32() {
         vec![bind_anim(9, 4_294_967_297, 0, 0)],
     );
     let one = surface(1, vec![elem(0, "huge.png", 0, 0)]);
-    let mut world = EmoWorld::build(&shell_of(vec![host, one]));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell_of(vec![host, one]), &[], &atlas);
     let extent = compute_extent(&world, &atlas, 2000);
     assert_eq!(extent, Extent { w: 4, h: 4 }, "面 1 を数えない");
 }

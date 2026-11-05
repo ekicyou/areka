@@ -4,7 +4,6 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
@@ -16,6 +15,7 @@ use crate::pattern::PatternState;
 use crate::plan::{Extent, PlanScratch, compute_extent_limited, derive_ops};
 use crate::plan_bounds::shell_bounds_limited;
 use crate::plan_test_support::bake_atlas;
+use crate::plan_test_support::bound_world;
 use crate::world::EmoWorld;
 
 /// `needle` を含む `error!` の行の数。
@@ -32,8 +32,7 @@ fn child_with_rows(x: i64, extra: &str) -> (EmoWorld, areka_emo_atlas::AtlasTabl
          surface1\n{{\nelement0,overlay,s.png,0,0\n{extra}}}\n"
     );
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(&text), &[], &atlas);
     (world, atlas)
 }
 
@@ -211,13 +210,13 @@ fn overlap_warns_once_per_descriptor_with_the_count() {
     );
 }
 
-/// 指摘 132: 同じ子を指す element定義が多くても、（子, 親）の組ごとに 1 度だけたどる。面 0 が面 1 を 20,000 行で
-/// 置き、面 1 … 200 が鎖になる（循環は無い）。報告は空（行ごとにたどり直すと 20,000×200 で遅くなるだけで赤には
-/// ならない回帰・要件 4.5 のため時間の上限は置かない。鎖そのものの深さの 2 乗は design の「未解決」）。
+/// 指摘 132: 同じ子を指す element定義が多くても、（子, 親）の組ごとに 1 度だけたどる。面 0 が面 1 を 1,000 行で
+/// 置き、面 1 … 200 が鎖になる（循環は無い）。報告は空で、`reaches` を呼ぶのは組の数の 200 回（行ごとに
+/// たどり直すと 1,199 回）。鎖そのものの深さの 2 乗は design の「未解決」。
 #[test]
 fn nest_report_walks_each_child_parent_pair_once() {
     let mut text = String::from("charset,UTF-8\nsurface0\n{\n");
-    text.push_str(&rows(20_000, "element", ",overlay,1,0,0"));
+    text.push_str(&rows(1_000, "element", ",overlay,1,0,0"));
     text.push_str("}\n");
     for i in 1..200 {
         text.push_str(&format!(
@@ -227,5 +226,7 @@ fn nest_report_walks_each_child_parent_pair_once() {
     }
     text.push_str("surface200\n{\ncollision0,0,0,1,1,A\n}\n");
     let world = EmoWorld::build(&parse(&text));
+    crate::nesting::REACHES_CALLS.with(|n| n.set(0));
     assert!(world.nest_report().issues.is_empty());
+    assert_eq!(crate::nesting::REACHES_CALLS.with(|n| n.get()), 200);
 }

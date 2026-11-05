@@ -5,13 +5,14 @@
 //! 畳み込みだけを通した素の World を 1 か所に置く。
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use areka_emo_atlas::{
     AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry,
-    AtlasKey, AtlasPage, AtlasTable, DecodedImage, ElementId, LoopCount, MemoryDecoder, PackConfig,
-    Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
+    AtlasKey, AtlasPage, AtlasTable, BakeResult, DecodedImage, ElementId, LoopCount, MemoryDecoder,
+    PackConfig, Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
@@ -455,28 +456,52 @@ pub(crate) fn bake_atlas_sized(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
     bake_decoded(&dec, base, specs.iter().map(|(r, _, _)| *r))
 }
 
-/// `rels` を element に持つ面 0 で `dec` の絵（静止画と動く絵）を焼く（焼きの口・SetId(0)）。
-fn bake_decoded<'a>(
+/// `rels` を element に持つ面 0 で `dec` の絵（静止画と動く絵）を焼く（焼きの口・SetId(0)・焼けない絵は無い）。
+pub(crate) fn bake_decoded<'a>(
     dec: &MemoryDecoder,
     base: &Path,
     rels: impl Iterator<Item = &'a str>,
 ) -> AtlasTable {
     let surfaces = vec![surface(0, rels.map(|rel| elem(0, rel, 0, 0)).collect())];
+    let baked = bake_surfaces(&surfaces, base, dec);
+    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    baked.table
+}
+
+/// 面の列 `surfaces` を `dec` の絵で焼く（SetId(0)・`use_self_alpha` は On・動く絵の上限は既定値）。
+/// 焼けない絵は `errors` に残る。
+pub(crate) fn bake_surfaces(surfaces: &[Surface], base: &Path, dec: &MemoryDecoder) -> BakeResult {
     let set = SurfaceSet {
-        surfaces: &surfaces,
+        surfaces,
         base_dir: base,
         alpha_params: AlphaParams {
             use_self_alpha: UseSelfAlpha::On,
         },
     };
-    let baked = bake_with_limits(
+    bake_with_limits(
         &[set],
         dec,
         PackConfig::default(),
         AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    baked.table
+    )
+}
+
+/// `(相対パス, (w,h))` の絵をどれも灰色の不透明で焼く（`shell/master` の下・大きさ指定の焼き）。
+pub(crate) fn bake_gray(sizes: &[(&str, (u32, u32))]) -> AtlasTable {
+    let specs: Vec<AtlasSpec> = sizes
+        .iter()
+        .map(|&(rel, size)| (rel, size, Some((64, 64, 64))))
+        .collect();
+    bake_atlas_sized(Path::new("shell/master"), &specs)
+}
+
+/// `shell` を面の表にし（`images` は `surface<数字>.png` として置いた絵（番号, 名前））、`atlas` を
+/// 束縛した World を返す（束縛済みの World の口）。
+pub(crate) fn bound_world(shell: &Shell, images: &[(u32, &str)], atlas: &AtlasTable) -> EmoWorld {
+    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
+    let mut world = EmoWorld::build_with_images(shell, &images);
+    world.bind_atlas(atlas, SetId(0));
+    world
 }
 
 /// 動く絵を `MemoryDecoder` へ登録する（大きさは 1 枚目のコマの絵から）。
@@ -499,6 +524,27 @@ pub(crate) fn insert_film(
     );
 }
 
+/// 2×2 の動く絵を登録する（コマ i は色 10＋i・待ちは `delays`・`laps` 周で止まり `None` は終わりなし）。
+pub(crate) fn insert_film_2x2(
+    dec: &mut MemoryDecoder,
+    path: PathBuf,
+    delays: &[u32],
+    laps: Option<u32>,
+) {
+    let frames = delays
+        .iter()
+        .enumerate()
+        .map(|(i, &delay_ms)| AnimationFrame {
+            image: solid(2, 2, 10 + i as u8),
+            delay_ms,
+        })
+        .collect();
+    let loop_count = laps.map_or(LoopCount::Infinite, |n| {
+        LoopCount::Finite(NonZeroU32::new(n).expect("周の数は 1 以上"))
+    });
+    insert_film(dec, path, frames, loop_count);
+}
+
 /// `rels` を element に持つ面 0 で `dec` の絵（静止画と動く絵）を焼き、`text` を面の表にして束縛する
 /// （動く絵の焼き）。`images` は `surface<数字>.png` として置いた絵（番号, 名前）。
 pub(crate) fn bake_films_and_bind<'a>(
@@ -509,9 +555,7 @@ pub(crate) fn bake_films_and_bind<'a>(
     images: &[(u32, &str)],
 ) -> (EmoWorld, AtlasTable) {
     let table = bake_decoded(dec, base, rels);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&table, SetId(0));
+    let world = bound_world(&parse(text), images, &table);
     assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
     (world, table)
 }

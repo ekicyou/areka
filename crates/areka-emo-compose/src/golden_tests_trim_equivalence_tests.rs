@@ -1,9 +1,8 @@
 //! トリム等価の pixel テーマ（要件 11.3・6.2）。
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
-use super::{
-    AtlasTable, BindSet, Composer, EmoWorld, MemoryDecoder, Path, PatternState, SetId, Shell,
-};
+use super::{AtlasTable, BindSet, Composer, MemoryDecoder, Path, PatternState, SetId, Shell};
+use crate::plan_test_support::bound_world;
 
 // ============================================================================
 // トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
@@ -148,8 +147,7 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     );
 
     // fold → bind → compose（surface0・空 BindSet）。
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
     let out = Composer::new()
         .compose(
             &world,

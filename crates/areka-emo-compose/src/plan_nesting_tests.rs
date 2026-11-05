@@ -4,18 +4,17 @@
 //! 同じ順の位置で子の段へ入る（位置は親の位置＋ element定義の X,Y）。先祖へ戻る・面の表に無い・範囲を
 //! 超える数の element定義だけを飛ばし、`debug!` を 1 行出す。
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan_test_support::{bake_atlas, frame, id_to_path, named_ops, ops, skipped};
-use crate::world::EmoWorld;
+use crate::plan_test_support::{
+    bake_atlas, bound_world, frame, id_to_path, named_ops, ops, skipped,
+};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -52,12 +51,9 @@ fn compose_with(
     binds: &BindSet,
     pattern: &PatternState,
 ) -> (Vec<(&'static str, i64, i64)>, String) {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, RELS);
+    let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let world = bound_world(&parse(text), images, &atlas);
     let map = id_to_path(&atlas, RELS);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&atlas, SetId(0));
     let mut out = Vec::new();
     let logs = capture_logs(|| out = ops(&world, &atlas, top, binds, pattern));
     (named_ops(&out, &map), logs)
@@ -383,11 +379,9 @@ fn spent_budget_drops_children_not_yet_entered() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,1,1\n\
                 element2,overlay,10,2,2\nelement3,overlay,10,3,3\n}\n\
                 surface10\n{\nelement0,overlay,eye.png,0,0\n}\n";
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, RELS);
+    let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let world = bound_world(&parse(text), &[], &atlas);
     let map = id_to_path(&atlas, RELS);
-    let mut world = EmoWorld::build_with_images(&parse(text), &BTreeMap::new());
-    world.bind_atlas(&atlas, SetId(0));
     let run = |limit| {
         let mut out = Vec::new();
         let logs = capture_logs(|| {

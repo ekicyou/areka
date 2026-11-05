@@ -4,13 +4,14 @@
 //! (b) 捕捉テキストに **level（DEBUG/WARN/ERROR）＋ target（`areka_emo_compose`）＋ discriminating
 //! field**（surface_id/method/key/path/id）が現れることを assert し、(c) 観測可能な副作用
 //! （None/skip/Err/非パニック）も併せて固定する。組むたびに出る知らせ（循環・未実装メソッド・
-//! pattern0 の無い着せ替え）は DEBUG、読み込みと防御の知らせは WARN/ERROR。
+//! コマの無い `bind+random`）は DEBUG、読み込みと防御の知らせは WARN/ERROR。
 //!
 //! # 非空虚性
 //!
 //! 各ログ assert は level と discriminating field を同時に突くため、当該ログ行を削れば必ず失敗する。
 
 use super::*;
+use crate::plan_test_support::bound_world;
 
 use areka_emo_atlas::{
     AtlasEntry, AtlasKey, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
@@ -23,10 +24,10 @@ use std::path::Path;
 use crate::log_capture::capture_logs;
 use crate::method::{BlendKind, BlendMode, ComposeMethod};
 use crate::normalized::Transform;
-use crate::plan::{BlitOp, PlanScratch, build_plan};
+use crate::plan::BlitOp;
 use crate::plan_test_support::{
-    bake_atlas, bind_anim, elem, page_1px, shell_mixed, shell_of, single_entry_table, surface,
-    surface_with_anims,
+    bake_atlas, bind_anim, elem, page_1px, plan_of, shell_mixed, shell_of, single_entry_table,
+    surface, surface_with_anims,
 };
 
 // ── 7.3: 循環検出 debug（ops 経路・flatten_surface）───────────────────────────────────
@@ -46,28 +47,16 @@ fn cycle_detection_debug_fires_with_surface_id() {
         vec![elem(0, "self.png", 0, 0)],
         vec![bind_anim(1, 1000, 0, 0)], // 自己参照＝循環。
     );
-    let mut world = EmoWorld::build(&shell_of(vec![host]));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell_of(vec![host]), &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
-    let mut ops = Vec::new();
-    let mut scratch = PlanScratch::default();
     let logs = capture_logs(|| {
         // build_plan は外形を表から引き（extent 経路は束縛のときだけ）、derive_ops（ops 経路）を走らせる。
         // ops 経路（flatten_surface）の循環 DEBUG を狙って結果自体も固定する。
-        let extent = build_plan(
-            &mut ops,
-            &mut scratch,
-            &world,
-            &atlas,
-            1000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("自己参照でも部分結果で Ok（非パニック・要件 7.1）");
+        let (ops, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+        result.expect("自己参照でも部分結果で Ok（非パニック・要件 7.1）");
         // 部分結果: 静的 self.png 1 本が積まれ、自己参照枝は打ち切られる。
         assert_eq!(ops.len(), 1, "静的層のみ（自己参照枝は打ち切り）");
-        assert_ne!(extent.w, 0, "外形は非ゼロ");
     });
 
     // ops 経路（flatten_surface）の循環 DEBUG を **行単位で判別**して突く。extent 経路の循環の知らせ
@@ -110,19 +99,10 @@ fn extent_cycle_debug_fires_with_surface_id() {
     let logs = capture_logs(|| world.bind_atlas(&atlas, SetId(0)));
 
     let binds = BindSet::default();
-    let mut ops = Vec::new();
-    let mut scratch = PlanScratch::default();
     let compose_logs = capture_logs(|| {
-        build_plan(
-            &mut ops,
-            &mut scratch,
-            &world,
-            &atlas,
-            2000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("自己参照でも Ok（外形は非ゼロ）");
+        plan_of(&world, &atlas, 2000, &binds, &PatternState::default())
+            .1
+            .expect("自己参照でも Ok（外形は非ゼロ）");
     });
 
     // extent 経路特有の循環 DEBUG を **行単位で判別**する（「外形算出」を含む循環行）。ops 経路の
@@ -144,21 +124,22 @@ fn extent_cycle_debug_fires_with_surface_id() {
     );
 }
 
-// ── pattern0（index==0）なし bind+random の良性 skip DEBUG（命令列の経路・push_direct）──────
+// ── コマの無い有効な bind+random の良性 skip DEBUG（命令列の経路・push_direct）──────
 
 /// 要件 9.1/9.3: コマの無い有効な `bind+random` は **DEBUG**（surface_id＋animation_id つき）を
 /// 出して skip する（非パニック・WARN/ERROR は出さない）。まばたき等 `interval,bind+random` 再生
 /// アニメの静的不活性。
 ///
-/// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当）。build_plan（→derive_ops
-/// →push_direct）は `bind+random` の手順が空ゆえ命令を積まず DEBUG を出す。外形は束縛のとき
-/// （`bind_atlas`）に表へ求め済みで、捕まえる `build_plan` の中では走査しない＝DEBUG は 1 本だけ。
+/// bind id=1400 は index=1 の pattern だけ（surface 1412＝閉じ目相当）を持つ。飛ばす理由は pattern0 の
+/// 有無でなく、`bind+random` はコマがあるときだけ描くこと（読み込みのときの手順が空）。build_plan（→derive_ops
+/// →push_direct）は命令を積まず DEBUG を出す。外形は束縛のとき（`bind_atlas`）に表へ求め済みで、捕まえる
+/// `build_plan` の中では走査しない＝DEBUG は 1 本だけ。
 #[test]
-fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
+fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["closed.png"]);
 
-    // pattern0 なし・index=1 のみが surface 1412 を参照する再生アニメ（まばたき相当）。
+    // index=1 のみが surface 1412 を参照する再生アニメ（まばたき相当）。
     let blink = Animation {
         id: 1400,
         interval: Interval::BindRandom { k: 4 },
@@ -175,29 +156,20 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     };
     let host = surface_with_anims(1000, Vec::new(), vec![blink]);
     let part = surface(1412, vec![elem(0, "closed.png", 0, 0)]);
-    let mut world = EmoWorld::build(&shell_of(vec![host, part]));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell_of(vec![host, part]), &[], &atlas);
 
     let binds = BindSet::from_ids([1400]);
     let mut ops = Vec::new();
-    let mut scratch = PlanScratch::default();
     let logs = capture_logs(|| {
-        build_plan(
-            &mut ops,
-            &mut scratch,
-            &world,
-            &atlas,
-            1000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("pattern0 なし bind でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
+        let (planned, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+        result.expect("コマの無い bind+random でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
+        ops = planned;
     });
 
-    // 副作用: pattern0 なし bind は静的合成へ寄与しない＝描画命令ゼロ（要件 9.1）。
+    // 副作用: コマの無い bind+random は静的合成へ寄与しない＝描画命令ゼロ（要件 9.1）。
     assert!(
         ops.is_empty(),
-        "pattern0（index==0）なし bind は描画命令に現れない（要件 9.1）"
+        "コマの無い bind+random は描画命令に現れない（要件 9.1）"
     );
 
     // DEBUG skip ログを level＋target＋discriminating field（surface_id/animation_id）で突く
@@ -210,13 +182,13 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     });
     assert!(
         skip_line.is_some(),
-        "pattern0 なし skip の DEBUG（surface_id＋animation_id つき）が発火する: {logs}",
+        "コマの無い bind+random の skip の DEBUG（surface_id＋animation_id つき）が発火する: {logs}",
     );
     // DEBUG は厳密に 1 本（命令列の経路の skip のみ・外形は表から引くだけ）。
     let debug_count = logs.lines().filter(|l| l.contains("level=DEBUG")).count();
     assert_eq!(
         debug_count, 1,
-        "pattern0 なし skip の DEBUG は 1 本のみ: {logs}"
+        "コマの無い bind+random の skip の DEBUG は 1 本のみ: {logs}"
     );
     // 良性 skip ゆえ WARN/ERROR は出さない（要件 9.3）。
     assert!(
@@ -395,9 +367,8 @@ fn surface_not_found_error_fires_with_surface_id() {
 #[test]
 fn empty_composition_error_fires_with_surface_id() {
     // element ゼロ・animation ゼロの surface（存在するが定義層皆無）。
-    let mut world = EmoWorld::build(&shell_of(vec![surface(7000, Vec::new())]));
     let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell_of(vec![surface(7000, Vec::new())]), &[], &atlas);
 
     let binds = BindSet::default();
     let mut composer = Composer::new();

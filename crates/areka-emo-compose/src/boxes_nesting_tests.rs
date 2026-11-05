@@ -5,15 +5,15 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement};
 use crate::Composer;
 use crate::bind::BindSet;
 use crate::pattern::PatternState;
+use crate::plan_test_support::bound_world;
 use crate::plan_test_support::{AtlasSpec, bake_atlas_sized};
-use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -156,8 +156,7 @@ fn atlas() -> AtlasTable {
 
 fn compose(text: &str, top: u32) -> (u32, u32, Vec<u8>) {
     let atlas = atlas();
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(text), &[], &atlas);
     let out = Composer::new()
         .compose(
             &world,

@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use areka_emo_atlas::SetId;
 use areka_parsers::shell::{parse, parse_boxes};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
@@ -16,6 +15,7 @@ use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
 use crate::plan::{PlanScratch, derive_ops};
 use crate::plan_test_support::bake_atlas;
+use crate::plan_test_support::bound_world;
 use crate::world::{EmoWorld, Records};
 use crate::{ComposeError, Composer, fold_boxes};
 
@@ -28,7 +28,7 @@ fn errors(logs: &str, needle: &str) -> usize {
 
 /// 指摘 76: 面 0 が置く面 1 は絵 1 枚と、命令にならない（絵の解決できない）element 1,000 行を持つ。入る 1 と
 /// 積み荷 1 は予算 100 の内でも、なめる行（1,001）が越えるので面 1 は開かず、`error!` は合成器 1 つで 1 行。
-/// 入る 1＋なめる 1,001＋積み荷 1＝1,003 なら切れない。
+/// 入る 1＋なめる 1,001＋積み荷 1＝1,003 なら切れず、1 つ少ない 1,002 では切れる（内訳の 3 つとも数える）。
 #[test]
 fn plan_counts_the_scanned_rows_of_an_entered_surface() {
     let mut text = String::from(
@@ -40,8 +40,7 @@ fn plan_counts_the_scanned_rows_of_an_entered_surface() {
     }
     text.push_str("}\n");
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(&text), &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     let run = |limit: usize| {
         let mut scratch = PlanScratch::with_limit(limit);
@@ -55,6 +54,7 @@ fn plan_counts_the_scanned_rows_of_an_entered_surface() {
         (ops.len(), errors(&logs, "walk=\"plan\""))
     };
     assert_eq!(run(100), (0, 1), "なめる行で切れ、記録は 1 行");
+    assert_eq!(run(1_002), (0, 1), "1 単位足りなければ切れる");
     assert_eq!(run(1_003), (1, 0), "予算の内なら絵を描き、記録は無い");
 }
 
@@ -68,8 +68,7 @@ fn compose_stops_at_the_pixel_limit_once_per_composer() {
     }
     text.push_str("}\n");
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(&text), &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     let mut composer = Composer::new();
     let (mut out, mut base) = (ComposedSurface::new(0, 0), ComposedSurface::new(0, 0));
@@ -188,8 +187,7 @@ fn zero_width_extent_is_empty_composition() {
     let text = "charset,UTF-8\nsurface0\n{\nelement0,overlay,1,-2,0\n}\n\
                 surface1\n{\nelement0,overlay,s.png,0,0\n}\n";
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(text), &[], &atlas);
     assert_eq!((world.extent(0).w, world.extent(0).h), (0, 2), "検体の外形");
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     let result = Composer::new().compose(&world, &atlas, 0, &binds, &pattern);

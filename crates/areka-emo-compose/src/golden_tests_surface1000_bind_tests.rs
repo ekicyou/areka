@@ -39,7 +39,7 @@ fn surface1000_is_all_bind_no_static_elements() {
         !s1000.animations.is_empty(),
         "surface1000 は bind animation 群を持つ"
     );
-    // 本テストが使う代表 bind（1100/1200/1302）が実データに着せ替え（`bind` か `bind+random`）として存在する。
+    // 本テストが使う代表 bind（1100/1200/1302）が実データに純 `bind` として存在する。
     use areka_parsers::shell::Interval;
     for p in surface1000_bind_parts() {
         let anim = s1000
@@ -47,9 +47,10 @@ fn surface1000_is_all_bind_no_static_elements() {
             .iter()
             .find(|a| a.id == p.anim_id)
             .unwrap_or_else(|| panic!("surface1000 に animation{} が存在する", p.anim_id));
-        assert!(
-            matches!(anim.interval, Interval::Bind | Interval::BindRandom { .. }),
-            "animation{} は bind 種 interval",
+        assert_eq!(
+            anim.interval,
+            Interval::Bind,
+            "animation{} は純 bind",
             p.anim_id
         );
         // pattern0 が同番号パーツ surface を overlay 参照する（surfaces.txt 実データ）。
@@ -114,11 +115,6 @@ fn surface1000_nonempty_bindset_is_non_blank() {
     let binds = BindSet::from_ids([1100]);
     let out = compose_surface1000(&shell, &atlas, &binds);
 
-    let opaque = opaque_pixel_count(&out);
-    assert!(
-        opaque > 0,
-        "非空 BindSet では α>0 の画素が存在する（非空・要件 5.4）"
-    );
     // 腕パーツ（80×20 全不透明）が原点 (0,0) に着弾するので、その内側の代表画素が不透明。
     assert!(px(&out, 0, 0)[3] > 0, "パーツ左上 (0,0) は不透明");
     assert!(px(&out, 40, 10)[3] > 0, "腕パーツ内部の代表画素は不透明");

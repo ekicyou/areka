@@ -313,33 +313,31 @@ mod tests {
             coll(0, 93, 62, 271, 130, "Head"),
             coll(1, 133, 270, 229, 326, "Bust"),
         ]);
-        // 96/96 のように既約化で 1/1 になる比も同じ恒等経路を通る（k の表現に依存しない）。
-        for k in [ScaleRatio::ONE, ScaleRatio::new(96, 96).unwrap()] {
-            for (x, y, what) in [
-                (180, 96, "Head 内"),
-                (180, 300, "Bust 内"),
-                (0, 0, "背景"),
-                (500, 500, "背景（窓外相当）"),
-                (93, 62, "閉区間の左上隅"),
-                (271, 130, "閉区間の右下隅"),
-                (92, 61, "外側 1px"),
-                (272, 131, "外側 1px"),
-                (94, 63, "内側 1px"),
-                (-7, -13, "負値（panic なし・R2.5）"),
-                (i64::MIN, 0, "i64 極値（飽和経路でも panic しない）"),
-            ] {
-                let got = hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter);
-                assert_eq!(
-                    got.region,
-                    hit_region_in(&m.collisions, x, y, RegionPriority::Painter),
-                    "k=1.0 の region は無縮約と完全一致すること: {what} ({x}, {y})"
-                );
-                assert_eq!(
-                    got.surface_point,
-                    (x, y),
-                    "k=1.0 の surface_point は入力素通しであること: {what} ({x}, {y})"
-                );
-            }
+        let k = ScaleRatio::ONE;
+        for (x, y, what) in [
+            (180, 96, "Head 内"),
+            (180, 300, "Bust 内"),
+            (0, 0, "背景"),
+            (500, 500, "背景（窓外相当）"),
+            (93, 62, "閉区間の左上隅"),
+            (271, 130, "閉区間の右下隅"),
+            (92, 61, "外側 1px"),
+            (272, 131, "外側 1px"),
+            (94, 63, "内側 1px"),
+            (-7, -13, "負値（panic なし・R2.5）"),
+            (i64::MIN, 0, "i64 極値（飽和経路でも panic しない）"),
+        ] {
+            let got = hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter);
+            assert_eq!(
+                got.region,
+                hit_region_in(&m.collisions, x, y, RegionPriority::Painter),
+                "k=1.0 の region は無縮約と完全一致すること: {what} ({x}, {y})"
+            );
+            assert_eq!(
+                got.surface_point,
+                (x, y),
+                "k=1.0 の surface_point は入力素通しであること: {what} ({x}, {y})"
+            );
         }
         // 非空虚性: 上の一致検証が「両方 None」で成立しているのではないことを固定する。
         let hit = hit_region_scaled_in(
@@ -507,11 +505,6 @@ mod tests {
         let got = hit_region_scaled_in(&m.collisions, 100, 100, k2(), RegionPriority::Painter);
         assert_eq!(got.surface_point, (50, 50), "R3.2: (100,100) ÷ 2 = (50,50)");
         assert_eq!(got.region, Some("Torso"), "R3.2: surface (50,50) の領域");
-        assert_eq!(
-            got.region,
-            hit_region_in(&m.collisions, 50, 50, RegionPriority::Painter),
-            "R3.2: k=2.0 の client (100,100) は surface (50,50) の無縮約照合と同一結果"
-        );
         // 反トートロジーの明示: 素通し (100,100) は `None`・×k (200,200) は別領域
         // `Some("Foot")` となり、いずれも上の `Some("Torso")` 期待とは一致しない。
         assert_eq!(

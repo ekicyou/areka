@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use super::{ShapeIssue, shape_issues};
@@ -12,7 +12,7 @@ use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan_test_support::{bake_atlas_sized, frame};
+use crate::plan_test_support::{bake_atlas_sized, bound_world, frame};
 use crate::world::EmoWorld;
 
 /// 循環（面 10 の bind が自分を指す）・描かないメソッド（面 0 の `replace` が面 20 を指す）を 1 つずつ
@@ -97,9 +97,7 @@ fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
         Path::new("shell/master"),
         &[("base.png", (2, 2), white), ("part.png", (2, 2), white)],
     );
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
-    (world, atlas)
+    (bound_world(&parse(text), &[], &atlas), atlas)
 }
 
 /// 同じ面を何度組んでも、形の誤り（入れ子の循環・描かないメソッドの pattern0 とコマ）の知らせは

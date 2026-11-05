@@ -4,9 +4,7 @@
 //! element定義（無い番号・範囲を超える数・先祖へ戻る参照）は外形にも数えず、記録は命令の経路の
 //! `debug!` だけ（外形の経路は黙って飛ばし、合成 1 回につき同じ飛ばしを 2 度記録しない）。
 
-use std::path::Path;
-
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use super::{BlitOp, Extent};
@@ -14,8 +12,7 @@ use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{AtlasSpec, bake_atlas_sized, frame, plan_of};
-use crate::world::EmoWorld;
+use crate::plan_test_support::{bake_gray, bound_world, frame, plan_of};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -33,11 +30,7 @@ const SIZES: &[(&str, (u32, u32))] = &[
 ];
 
 fn atlas() -> AtlasTable {
-    let specs: Vec<AtlasSpec> = SIZES
-        .iter()
-        .map(|&(rel, size)| (rel, size, Some((64, 64, 64))))
-        .collect();
-    bake_atlas_sized(Path::new("shell/master"), &specs)
+    bake_gray(SIZES)
 }
 
 /// 文面を面の表にして `top` の計画を建てる。命令列と記録（外形をたどる束縛から計画まで）も返す。
@@ -49,8 +42,7 @@ fn plan(
     let atlas = atlas();
     let mut planned = None;
     let logs = capture_logs(|| {
-        let mut world = EmoWorld::build_with_images(&parse(text), &Default::default());
-        world.bind_atlas(&atlas, SetId(0));
+        let world = bound_world(&parse(text), &[], &atlas);
         planned = Some(plan_of(&world, &atlas, top, &BindSet::default(), pattern));
     });
     let (ops, result) = planned.unwrap();

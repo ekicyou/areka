@@ -6,8 +6,8 @@
 //! 単一テーマからしか参照されないヘルパは各テーマファイル側へ残してある。
 
 use super::{
-    AlphaParams, AtlasTable, BindSet, ComposedSurface, Composer, EmoWorld, MemoryDecoder,
-    PackConfig, Path, PathBuf, PatternState, SetId, Shell, SurfaceSet, UseSelfAlpha, bake,
+    AlphaParams, AtlasTable, BindSet, ComposedSurface, Composer, MemoryDecoder, PackConfig, Path,
+    PathBuf, PatternState, Shell, SurfaceSet, UseSelfAlpha, bake,
 };
 
 /// emo2 検体の実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
@@ -130,8 +130,7 @@ pub(super) fn compose_surface1000(
     atlas: &AtlasTable,
     binds: &BindSet,
 ) -> ComposedSurface {
-    let mut world = EmoWorld::build(shell);
-    world.bind_atlas(atlas, SetId(0));
+    let world = crate::plan_test_support::bound_world(shell, &[], atlas);
     Composer::new()
         .compose(&world, atlas, 1000, binds, &PatternState::default())
         .expect("surface1000 の合成は Ok（surface 存在＋静的外形非ゼロ・要件 6.6）")

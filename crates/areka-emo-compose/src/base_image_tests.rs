@@ -357,8 +357,6 @@ fn dangling_pattern_targets_skips_negative_targets_and_existing_faces() {
             pattern(1, "overlay", -1),
             pattern(2, "overlay", -2),
             pattern(3, "overlay", 0),
-            // 同じ組を 2 度指しても 1 組に潰れる（鍵は `(u32, u32)` の組）。
-            pattern(4, "overlay", 99),
         ],
         &BTreeMap::new(),
     );

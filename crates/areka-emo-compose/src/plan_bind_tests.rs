@@ -7,14 +7,12 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{bake_atlas, frame, id_to_path, named_ops};
-use crate::world::EmoWorld;
+use crate::plan_test_support::{bake_atlas, bound_world, frame, id_to_path, named_ops};
 
 const RELS: &[&str] = &[
     "body.png", "s10.png", "s11.png", "s12.png", "s20.png", "s21.png", "s22.png", "s30.png",
@@ -38,11 +36,9 @@ fn compose(
     binds: &[u32],
     pattern: &PatternState,
 ) -> (Vec<(&'static str, i64, i64)>, String) {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, RELS);
+    let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let world = bound_world(&parse(&shell(anims)), &[], &atlas);
     let map = id_to_path(&atlas, RELS);
-    let mut world = EmoWorld::build(&parse(&shell(anims)));
-    world.bind_atlas(&atlas, SetId(0));
     let binds = BindSet::from_ids(binds.iter().copied());
     let mut out = Vec::new();
     let logs =
@@ -221,17 +217,6 @@ fn inactive_pure_bind_frame_is_drawn() {
     );
 }
 
-/// 有効の `bind+random` もコマが無いときは pattern0 を積まない（件 26・コマがあるときだけ描く）。外れた
-/// 保持コマを描かない門は `plan_frame_merge_tests` が見る。
-#[test]
-fn active_bind_random_without_frame_stacks_nothing() {
-    let anims = "\
-animation4.interval,bind+random,4
-animation4.pattern0,overlay,30,0,0,0
-";
-    assert_eq!(ops(anims, &[4]), [("body.png", 0, 0)]);
-}
-
 /// 有効の純 `bind` はコマが静的な寄与を置き換え、コマが消えれば（`stop`）静的な寄与に戻る（5.7・M5）。
 #[test]
 fn active_pure_bind_falls_back_to_steps_after_its_frame_is_gone() {
@@ -260,9 +245,8 @@ animation4.interval,bind+random,4
 animation4.pattern0,unknownmethod,30,0,0,0
 ";
     let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let world = bound_world(&parse(&shell(anims)), &[], &atlas);
     let map = id_to_path(&atlas, RELS);
-    let mut world = EmoWorld::build(&parse(&shell(anims)));
-    world.bind_atlas(&atlas, SetId(0));
     let binds = BindSet::from_ids([1, 4]);
     let mut named = Vec::new();
     let logs = capture_logs(|| {

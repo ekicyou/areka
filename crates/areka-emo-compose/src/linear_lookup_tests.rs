@@ -6,21 +6,22 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{bake_atlas, frame};
+use crate::plan_test_support::{bake_atlas, bound_world, frame};
 use crate::world::EmoWorld;
 
 /// シェルの本文 `body` を絵 `s.png` 1 枚の頁で組んで束縛する。
 fn world_of(body: &str) -> (EmoWorld, AtlasTable) {
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&format!("charset,UTF-8\n{body}")));
-    world.bind_atlas(&atlas, SetId(0));
-    (world, atlas)
+    (
+        bound_world(&parse(&format!("charset,UTF-8\n{body}")), &[], &atlas),
+        atlas,
+    )
 }
 
 /// 面 0 を `binds` と `pattern` で命令列にし、命令の数を返す。予算と重ねる画素の上限は外す（ここが見るのは
@@ -143,7 +144,7 @@ fn folding_many_appends_to_one_surface_finishes_short_and_sorted() {
 }
 
 /// `always` の animation 10000 本（どれも経過 0 で面 1 を描く）と、animation の無い番号のコマ 20000 枚
-/// （広がりの予算の内側）を 3 回合成する。コマの番号ごとに重ねる列と animation の列を順に引けば 2 乗
+/// を予算を外して 3 回合成する。コマの番号ごとに重ねる列と animation の列を順に引けば 2 乗
 /// （指摘 28・29）。animation の数は抑えた（読む側の `parse` が animation の数の 2 乗に伸びる）。
 #[test]
 fn composing_many_animations_finishes_short() {

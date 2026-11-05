@@ -5,6 +5,7 @@ use super::test_support::{
     shell_master_dir, surface1000_bind_parts,
 };
 use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
+use crate::plan_test_support::bound_world;
 
 // ============================================================================
 // 決定性（要件 **10.1**）と再合成予算（要件 **10.3**）の fixture 検証テスト。
@@ -15,9 +16,8 @@ use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
 //   1. **再合成予算（10.3）**: 同一 surface1000＋同一 BindSet を 1 つの Composer・1 つの out で反復
 //      compose_into し、out バッファの先頭ポインタ・長さと命令列・作業場の列の容量が初回から変わらない
 //      ことを **容量不変 assert** で固定する（同じ Composer の繰り返しが同じバイトを出すことも併せて）。
-//   2. **命令数 O(elements)（10.3）**: surface1000＋**全有効 bind 集合**で build_plan を直接
-//      呼び、`ops.len()` が **描画層数（＝解決した有効 bind 数）**に等しく、surface 数・画素数に
-//      比例しないこと（線形＝非二次）を assert する。
+//   2. **命令数（10.3）**: surface1000＋有効 bind 集合（3 本・1 本・0 本）で計画を建て、`ops.len()` が
+//      **描画層数（＝解決した有効 bind 数）**に等しいことを assert する（1 つの検体の等値で、線形の証明ではない）。
 //   3. **決定性（10.1）**: 独立した 2 つの合成器の compose がバイト等価（bytes＋width＋height＋stride）で
 //      あることを固定する。surface1000（複数 bind の入れ子 flatten を含む最も内容の濃い経路）を主対象とする。
 //
@@ -25,7 +25,7 @@ use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
 // 土台（surface1000_bind_parts / build_atlas_for_surface1000 / on_params 等）を使う。
 // ============================================================================
 
-use crate::plan::{PlanScratch, build_plan};
+use crate::plan_test_support::plan_of;
 
 /// surface1000＋実 bind パーツ 3 種（1100/1200/1302）が「全て解決し描画命令を生む」有効 bind 集合。
 ///
@@ -89,8 +89,7 @@ fn surface1000_recompose_steady_state_zero_allocation() {
     let atlas = build_atlas_for_surface1000(&shell, &base);
     let binds = surface1000_full_bindset();
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let mut composer = Composer::new();
     let mut out = ComposedSurface::new(0, 0);
@@ -180,27 +179,15 @@ fn extent_comes_from_the_table_made_by_bind_atlas() {
     let atlas = build_atlas_for_surface1000(&shell, &shell_master_dir());
     let binds = surface1000_full_bindset();
     let mut world = EmoWorld::build(&shell);
-    let (mut ops, mut scratch) = (Vec::new(), PlanScratch::default());
-    let plan = |world: &EmoWorld, ops: &mut Vec<_>, scratch: &mut PlanScratch| {
-        build_plan(
-            ops,
-            scratch,
-            world,
-            &atlas,
-            1000,
-            &binds,
-            &PatternState::default(),
-        )
-    };
+    let plan = |world: &EmoWorld| plan_of(world, &atlas, 1000, &binds, &PatternState::default()).1;
     assert_eq!(
-        plan(&world, &mut ops, &mut scratch),
+        plan(&world),
         Err(ComposeError::EmptyComposition(1000)),
         "束縛の前は外形 0×0"
     );
     world.bind_atlas(&atlas, SetId(0));
-    let extent = plan(&world, &mut ops, &mut scratch).expect("束縛の後は合成できる");
+    let extent = plan(&world).expect("束縛の後は合成できる");
     assert_eq!(extent, compute_extent(&world, &atlas, 1000));
-    assert!(extent.w > 0 && extent.h > 0);
 }
 
 /// 命令数 O(elements)（要件 10.3）: surface1000＋全有効 bind → 命令数 == 描画層数（線形）。
@@ -220,23 +207,12 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     let atlas = build_atlas_for_surface1000(&shell, &base);
     let binds = surface1000_full_bindset();
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
-    let mut ops = Vec::new();
-    let mut scratch = PlanScratch::default();
-    build_plan(
-        &mut ops,
-        &mut scratch,
-        &world,
-        &atlas,
-        1000,
-        &binds,
-        &PatternState::default(),
-    )
-    .expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
+    let (ops, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+    result.expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
 
-    // 命令数 == 描画層数（有効 bind 数）。線形＝非二次・非画素比例（O(elements)・要件 10.3）。
+    // 命令数 == 描画層数（有効 bind 数・要件 10.3）。
     assert_eq!(
         ops.len(),
         3,
@@ -252,34 +228,20 @@ fn surface1000_instruction_count_is_linear_in_layers() {
         );
     }
 
-    // 有効 bind を 1 本に絞ると命令も 1 本（層数に厳密比例＝線形係数 1 の追加確証）。
+    // 有効 bind を 1 本に絞ると命令も 1 本。
     let one = BindSet::from_ids([surface1000_bind_parts()[0].anim_id]);
-    let mut ops1 = Vec::new();
-    let mut scratch1 = PlanScratch::default();
-    build_plan(
-        &mut ops1,
-        &mut scratch1,
-        &world,
-        &atlas,
-        1000,
-        &one,
-        &PatternState::default(),
-    )
-    .expect("単一 bind でも Ok");
+    let (ops1, result) = plan_of(&world, &atlas, 1000, &one, &PatternState::default());
+    result.expect("単一 bind でも Ok");
     assert_eq!(ops1.len(), 1, "有効 bind 1 本 → 命令 1 本（層数に線形）");
 
     // 空 bind 集合 → 命令ゼロ（静的 element ゼロゆえ描画層皆無・外形は非ゼロで Ok）。
-    let mut ops0 = Vec::new();
-    let mut scratch0 = PlanScratch::default();
-    build_plan(
-        &mut ops0,
-        &mut scratch0,
+    let (ops0, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::default(),
         &PatternState::default(),
-    )
-    .expect("空 bind でも surface 存在＋外形非ゼロで Ok");
+    );
+    result.expect("空 bind でも surface 存在＋外形非ゼロで Ok");
     assert_eq!(ops0.len(), 0, "空 bind 集合 → 描画命令ゼロ（層数 0）");
 }

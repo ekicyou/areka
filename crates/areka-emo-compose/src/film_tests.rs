@@ -1,20 +1,17 @@
 //! 動く絵を子へ分解する（`film.rs`・spec: areka-P0-animated-image-playback）。
 //!
-//! 絵は `MemoryDecoder` へ登録して本物の `bake_with_limits` で焼く（上限は既定値を渡し、環境変数に
-//! 依らない）。焼く経路が作れない形（コマの並びが約束と違う）だけは `AtlasTable::with_frames` で組む。
+//! 絵は `MemoryDecoder` へ登録して本物の `bake_with_limits` で焼く（`plan_test_support::bake_decoded`・上限は
+//! 既定値を渡し、環境変数に依らない）。焼く経路が作れない形（コマの並びが約束と違う）だけは `AtlasTable::with_frames` で組む。
 
-use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry, AtlasKey,
-    MemoryDecoder, PackConfig, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
-};
-use areka_parsers::shell::Shell;
+use areka_emo_atlas::{AnimationInfo, AtlasEntry, AtlasKey, MemoryDecoder, SetId, Size};
 
 use super::*;
-use crate::plan_test_support::{component_of, elem, insert_film, shell_of, solid, surface};
+use crate::plan_test_support::{
+    bake_decoded, bound_world, component_of, elem, insert_film_2x2, shell_of, solid, surface,
+};
 use crate::world::EmoWorld;
 
 const BASE: &str = "shell";
@@ -40,19 +37,7 @@ impl Pics {
 
     /// 2×2 の動く絵（コマごとに色が違う）。
     fn film(mut self, rel: &str, delays: &[u32], laps: Option<u32>) -> Self {
-        let frames: Vec<AnimationFrame> = delays
-            .iter()
-            .enumerate()
-            .map(|(i, &delay_ms)| AnimationFrame {
-                image: solid(2, 2, 10 + i as u8),
-                delay_ms,
-            })
-            .collect();
-        let loop_count = match laps {
-            None => LoopCount::Infinite,
-            Some(n) => LoopCount::Finite(NonZeroU32::new(n).unwrap()),
-        };
-        insert_film(&mut self.dec, Self::path(rel), frames, loop_count);
+        insert_film_2x2(&mut self.dec, Self::path(rel), delays, laps);
         self.rels.push(rel.to_string());
         self
     }
@@ -74,30 +59,12 @@ impl Pics {
     }
 
     fn bake(&self) -> AtlasTable {
-        let elements = self.rels.iter().map(|r| elem(0, r, 0, 0)).collect();
-        let surfaces = vec![surface(0, elements)];
-        let set = SurfaceSet {
-            surfaces: &surfaces,
-            base_dir: Path::new(BASE),
-            alpha_params: AlphaParams {
-                use_self_alpha: UseSelfAlpha::On,
-            },
-        };
-        let result = bake_with_limits(
-            &[set],
+        bake_decoded(
             &self.dec,
-            PackConfig::default(),
-            AnimationLimits::default(),
-        );
-        assert!(result.errors.is_empty(), "{:?}", result.errors);
-        result.table
+            Path::new(BASE),
+            self.rels.iter().map(String::as_str),
+        )
     }
-}
-
-fn bound(shell: &Shell, images: &BTreeMap<u32, String>, atlas: &AtlasTable) -> EmoWorld {
-    let mut world = EmoWorld::build_with_images(shell, images);
-    world.bind_atlas(atlas, SetId(0));
-    world
 }
 
 fn binding(world: &EmoWorld, id: u32) -> Vec<Option<ElementId>> {
@@ -151,7 +118,7 @@ fn film_element_keeps_layer_xy_and_method() {
             .film("anim.png", &[100, 0, 70], Some(3));
     let atlas = pics.bake();
     let parent = id_of(&atlas, "anim.png");
-    let world = bound(&shell, &BTreeMap::new(), &atlas);
+    let world = bound_world(&shell, &[], &atlas);
 
     // 対照: 同じ名前を静止画で焼いた面の表。
     let still_atlas = Pics::default()
@@ -159,7 +126,7 @@ fn film_element_keeps_layer_xy_and_method() {
         .still("top.png")
         .still("anim.png")
         .bake();
-    let still = bound(&shell, &BTreeMap::new(), &still_atlas);
+    let still = bound_world(&shell, &[], &still_atlas);
 
     let film = FilmId(parent.0);
     assert_eq!(
@@ -225,8 +192,7 @@ fn animated_base_image_is_decomposed() {
         .still("body.png")
         .film("surface1.png", &[333, 0, 70, 1], Some(2))
         .bake();
-    let images = BTreeMap::from([(1, "surface1.png".to_string())]);
-    let world = bound(&shell, &images, &atlas);
+    let world = bound_world(&shell, &[(1, "surface1.png")], &atlas);
 
     let film = FilmId(id_of(&atlas, "surface1.png").0);
     assert_eq!(kinds(&world, 1), vec![ElementKind::Film(film)]);
@@ -245,8 +211,7 @@ fn animated_base_image_under_element0_is_not_decomposed() {
         .still("body.png")
         .film("surface2.png", &[100, 100], None)
         .bake();
-    let images = BTreeMap::from([(2, "surface2.png".to_string())]);
-    let world = bound(&shell, &images, &atlas);
+    let world = bound_world(&shell, &[(2, "surface2.png")], &atlas);
 
     assert_eq!(
         world
@@ -304,10 +269,11 @@ fn crafted_atlas() -> AtlasTable {
     )
 }
 
-/// 要件 2.5・8.2: 検査で落ちる 4 通り（①0 番が親でない ②コマと待ち時間の数が違う ③原寸が揃わない
-/// ④待ち時間の合計が 0）。②は焼く経路も `with_frames` も作れないので、並びを手で渡す。
+/// 要件 2.5・8.2: 検査で落ちる 6 通り（①0 番が親でない ②コマと待ち時間の数が違う ③原寸が揃わない
+/// ④待ち時間の合計が 0 ⑤コマが 2 枚未満 ⑥コマの番号が表の外）。②⑤⑥は焼く経路も `with_frames` も作れない
+/// ので、並びを手で渡す（⑥は表を引く前に断らないと `AtlasTable::entry` が panic する）。
 #[test]
-fn check_rejects_four_ways() {
+fn check_rejects_six_ways() {
     let atlas = crafted_atlas();
     let a = ElementId(0);
     let good = atlas.animation(a).unwrap().clone();
@@ -327,6 +293,23 @@ fn check_rejects_four_ways() {
         check(a, &counts, &atlas),
         Err(FilmSkipReason::BrokenFrames),
         "② コマと待ち時間の数が違う"
+    );
+
+    let mut single = good.clone();
+    single.frames.truncate(1);
+    single.delays_ms.truncate(1);
+    assert_eq!(
+        check(a, &single, &atlas),
+        Err(FilmSkipReason::BrokenFrames),
+        "⑤ コマが 2 枚未満"
+    );
+
+    let mut outside = good.clone();
+    outside.frames[1] = ElementId(atlas.len() as u32);
+    assert_eq!(
+        check(a, &outside, &atlas),
+        Err(FilmSkipReason::BrokenFrames),
+        "⑥ コマの番号が表の外"
     );
 
     let b = ElementId(2);
@@ -357,7 +340,7 @@ fn rejected_pictures_stay_images_and_are_listed() {
             elem(2, "a.png", 0, 0),
         ],
     )]);
-    let world = bound(&shell, &BTreeMap::new(), &atlas);
+    let world = bound_world(&shell, &[], &atlas);
 
     assert_eq!(
         kinds(&world, 0),
@@ -401,7 +384,7 @@ fn shrunk_picture_is_not_decomposed() {
         atlas.animation(id_of(&atlas, "shrunk.png")).is_none(),
         "前提"
     );
-    let world = bound(&shell, &BTreeMap::new(), &atlas);
+    let world = bound_world(&shell, &[], &atlas);
 
     assert_eq!(kinds(&world, 0), vec![ElementKind::Image]);
     assert!(binding(&world, 0).iter().all(Option::is_some));
@@ -419,7 +402,7 @@ fn same_picture_is_the_same_child() {
         surface(3, vec![elem(1, "anim.png", 4, 4)]),
     ]);
     let atlas = Pics::default().film("anim.png", &[100, 100], None).bake();
-    let world = bound(&shell, &BTreeMap::new(), &atlas);
+    let world = bound_world(&shell, &[], &atlas);
 
     let film = ElementKind::Film(FilmId(id_of(&atlas, "anim.png").0));
     assert_eq!(kinds(&world, 0), vec![film, film]);
@@ -436,7 +419,7 @@ fn no_films_stores_nothing() {
         vec![elem(0, "body.png", 0, 0), elem(1, "top.png", 2, 2)],
     )]);
     let atlas = Pics::default().still("body.png").still("top.png").bake();
-    let world = bound(&shell, &BTreeMap::new(), &atlas);
+    let world = bound_world(&shell, &[], &atlas);
 
     assert!(world.world().get_resource::<FilmSheets>().is_none());
     assert!(world.film_skips().is_empty());
@@ -469,7 +452,7 @@ fn rest_frame_skips_zero_first_delays() {
         .film("c.png", &[0, 0, 70], None)
         .film("d.png", &[0, 0], None)
         .bake();
-    let world = bound(&shell, &BTreeMap::new(), &atlas);
+    let world = bound_world(&shell, &[], &atlas);
     let rest = |rel| world.film_sheet(FilmId(id_of(&atlas, rel).0)).unwrap().rest;
     assert_eq!((rest("a.png"), rest("b.png"), rest("c.png")), (0, 1, 2));
     assert_eq!(
@@ -488,6 +471,6 @@ fn rest_frame_skips_zero_first_delays() {
 fn binding_twice_is_caught() {
     let shell = shell_of(vec![surface(0, vec![elem(0, "anim.png", 0, 0)])]);
     let atlas = Pics::default().film("anim.png", &[100, 100], None).bake();
-    let mut world = bound(&shell, &BTreeMap::new(), &atlas);
+    let mut world = bound_world(&shell, &[], &atlas);
     world.bind_atlas(&atlas, SetId(0));
 }

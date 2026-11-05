@@ -9,14 +9,12 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
+use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
 use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
-use crate::plan_test_support::{elem, opaque_wxh, png_size, px, surface};
+use crate::plan_test_support::{bake_surfaces, elem, opaque_wxh, png_size, px, surface};
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -111,14 +109,7 @@ fn load(text: &str) -> Loaded {
         let (w, h, stride, bgra, has_alpha) = opaque_wxh(w, h, b, g, r);
         dec.insert(dir.join(name), w, h, stride, bgra, has_alpha);
     }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: &dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
+    let baked = bake_surfaces(&surfaces, &dir, &dec);
     world.bind_atlas(&baked.table, SetId(0));
 
     let count = |f: fn(&NestIssue) -> bool| nest.issues.iter().filter(|i| f(i)).count();

@@ -439,6 +439,8 @@ pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
 /// 合成の祖先の確かめが循環を止める）。
 // ponytail: 呼び手は（子, 親）の組ごとに 1 度呼び、1 回は予算いっぱいまでなめる（組の数 × 予算）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
 pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32, limit: usize) -> bool {
+    #[cfg(test)]
+    REACHES_CALLS.with(|n| n.set(n.get() + 1));
     let mut budget = Budget::new(limit);
     let mut seen = BTreeSet::from([from]);
     let mut stack = vec![from];
@@ -457,6 +459,12 @@ pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32, limit
         }
     }
     false
+}
+
+#[cfg(test)]
+thread_local! {
+    /// テストの数え口: この糸で [`reaches`] を呼んだ回数（覚えを外すと増えるのを見る・振る舞いは変えない）。
+    pub(crate) static REACHES_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]

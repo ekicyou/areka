@@ -1,7 +1,7 @@
 use super::*;
 use crate::plan_test_support::*;
 use crate::world::EmoWorld;
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::{DrawMethod, Interval};
 use std::path::Path;
 
@@ -35,8 +35,7 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
     let koma_surface = surface(1500, vec![elem(0, "koma.png", 0, 0)]);
     let shell = shell_of(vec![host, part1, koma_surface]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let mut pattern = PatternState::default();
@@ -93,8 +92,7 @@ fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     );
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
     let shell = shell_of(vec![host, part1]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let mut out = Vec::new();
@@ -133,8 +131,7 @@ fn overlay_koma_is_drawn_and_replaces_same_id_pattern0() {
     let open = surface(1100, vec![elem(0, "open_eye.png", 0, 0)]);
     let closed = surface(1200, vec![elem(0, "closed_eye.png", 0, 0)]);
     let shell = shell_of(vec![host, open, closed]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let mut pattern = PatternState::default();
@@ -171,8 +168,7 @@ fn merged_ids_preserve_id_ascending_painter_order() {
     let part_b = surface(1200, vec![elem(0, "partB.png", 0, 0)]);
     let part_c = surface(1300, vec![elem(0, "partC.png", 0, 0)]);
     let shell = shell_of(vec![host, part_a, part_b, part_c]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // bind は 1,3 のみ有効。コマ id=2 は BindSet 非依存で合流される。
     let binds = BindSet::from_ids([1, 3]);
@@ -206,8 +202,7 @@ fn koma_only_id_without_bind_pattern0_is_drawn() {
     let host = surface_with_anims(1000, Vec::new(), Vec::new());
     let blink = surface(1412, vec![elem(0, "blink.png", 0, 0)]);
     let shell = shell_of(vec![host, blink]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // BindSet は空。コマだけが surface 1412 を Overlay で駆動する。
     let binds = BindSet::default();
@@ -262,8 +257,7 @@ fn build_last_stand_world() -> (EmoWorld, AtlasTable, Vec<(ElementId, &'static s
     let jito = surface(1413, vec![elem(0, "jito.png", 0, 0)]);
     let sparkle = surface(1501, vec![elem(0, "sparkle.png", 0, 0)]);
     let shell = shell_of(vec![host, eyebase, jito, sparkle]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
     (world, atlas, map)
 }
 
@@ -300,7 +294,8 @@ fn bind_random_frame_outside_bindset_is_not_merged() {
 /// bindopt 7.4: **bind に属さない**アニメ（純 `random` の `interval`）のコマは、
 /// bind 集合が空でも従来どおり無条件で合流する。
 ///
-/// 補強したゲートが `bind+random` を超えて効いていないことの錨。①の陽性対照を単独条件（空 BindSet）で
+/// 補強したゲートが `bind+random` を超えて効いていないことの錨。[`bind_random_frame_outside_bindset_is_not_merged`]
+/// の陽性対照を単独条件（空 BindSet）で
 /// もう一度固定し、「binds が空なら全部落ちる」という過剰な締めすぎを直接反証する。
 #[test]
 fn non_bind_koma_merges_regardless_of_bindset() {
@@ -323,8 +318,8 @@ fn non_bind_koma_merges_regardless_of_bindset() {
 /// 回帰の錨・bindopt 7.4／要件 4.6: bind 集合に**属している** `bind+random` アニメの
 /// コマは従来どおり合流し、pattern0 を持たない再生アニメ（まばたき相当）も描画される。
 ///
-/// ①の裏返し。ゲートが「`bind+random` なら常に落とす」へ振れていないことを固定し、合流の可否が
-/// **bind 所属**という 1 点のみで分かれることを（①と対で）決定づける。
+/// [`bind_random_frame_outside_bindset_is_not_merged`] の裏返し。ゲートが「`bind+random` なら常に落とす」へ
+/// 振れていないことを固定し、合流の可否が **bind 所属**という 1 点のみで分かれることを（それと対で）決定づける。
 #[test]
 fn bind_random_frame_inside_bindset_still_merges() {
     let (world, atlas, map) = build_last_stand_world();

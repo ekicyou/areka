@@ -25,8 +25,7 @@ fn ops_ordered_by_layer_ascending() {
             elem(1, "c.png", 0, 0),
         ],
     )]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let ops = ops(
         &world,
@@ -53,8 +52,7 @@ fn same_layer_keeps_appearance_order() {
         1,
         vec![elem(5, "first.png", 0, 0), elem(5, "second.png", 0, 0)],
     )]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let ops = ops(
         &world,
@@ -79,8 +77,7 @@ fn unresolved_binding_is_skipped() {
         1000,
         vec![elem(0, "known.png", 0, 0), elem(1, "bogus.png", 0, 0)],
     )]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let ops = ops(
         &world,
@@ -102,8 +99,7 @@ fn transform_propagates_as_translation() {
     let atlas = bake_atlas(base, &["p.png"]);
 
     let shell = shell_of(vec![surface(7, vec![elem(0, "p.png", 12, -8)])]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let ops = ops(
         &world,
@@ -128,8 +124,7 @@ fn appends_without_clearing() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["p.png"]);
     let shell = shell_of(vec![surface(1, vec![elem(0, "p.png", 0, 0)])]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let sentinel = BlitOp {
         element: ElementId(u32::MAX),
@@ -208,8 +203,7 @@ fn build_bind_world(
     surfaces.extend(parts);
 
     let shell = shell_of_with_sort(surfaces, animation_sort);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
     (world, atlas)
 }
 
@@ -360,8 +354,7 @@ fn sentinel_pattern0_is_skipped() {
     );
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
     let shell = shell_of(vec![host, part1]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1, 2]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
@@ -381,8 +374,7 @@ fn nested_pattern0_offset_is_applied_to_element_transform() {
     let host = surface_with_anims(1000, Vec::new(), vec![bind_anim(1, 1100, 30, -20)]);
     let part = surface(1100, vec![elem(0, "part.png", 5, 6)]);
     let shell = shell_of(vec![host, part]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
@@ -414,8 +406,7 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
         vec![bind_anim(1, 1000, 0, 0)], // 自己参照。
     );
     let shell = shell_of(vec![host]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     // 循環を打ち切らなければ本テストは完走できない。
@@ -454,8 +445,7 @@ fn mutual_reference_cycle_is_pruned_without_overflow() {
         vec![bind_anim(1, 1000, 0, 0)],
     );
     let shell = shell_of(vec![a, b]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
@@ -487,8 +477,7 @@ fn offset_accumulates_across_multilevel_nesting() {
     // C=1200: 静的 element c.png at (2,3)。
     let c = surface(1200, vec![elem(0, "c.png", 2, 3)]);
     let shell = shell_of(vec![a, b, c]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
@@ -526,8 +515,7 @@ fn noncyclic_shared_child_expands_on_each_path() {
     // S=1300: 共有子 element s.png at (0,0)。
     let s = surface(1300, vec![elem(0, "s.png", 0, 0)]);
     let shell = shell_of(vec![a, b, s]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1, 2]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
@@ -570,8 +558,7 @@ fn pattern0_less_pure_bind_draws_its_patterns() {
     let host = surface_with_anims(1000, Vec::new(), vec![blink]);
     let part = surface(1412, vec![elem(0, "closed_eye.png", 0, 0)]);
     let shell = shell_of(vec![host, part]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1400]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
@@ -604,8 +591,7 @@ fn coexisting_patterns_bind_random_draws_none_pure_bind_draws_all() {
         let open = surface(1100, vec![elem(0, "open_eye.png", 0, 0)]);
         let closed = surface(1200, vec![elem(0, "closed_eye.png", 0, 0)]);
         let shell = shell_of(vec![host, open, closed]);
-        let mut world = EmoWorld::build(&shell);
-        world.bind_atlas(&atlas, SetId(0));
+        let world = bound_world(&shell, &[], &atlas);
 
         let binds = BindSet::from_ids([1]);
         let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());

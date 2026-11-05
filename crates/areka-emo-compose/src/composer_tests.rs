@@ -1,27 +1,21 @@
-//! `Composer` ファサード結線の in-source テスト（要件 5.1/5.5/6.6/9.1/9.3/9.4/10.3/10.4/10.5）。
+//! `Composer` ファサード結線の in-source テスト（要件 5.1/5.5/6.6/9.1/9.3/9.4/10.3/10.4）。
 //!
 //! fold（[`EmoWorld::build`]）→ bind（[`EmoWorld::bind_atlas`]）→ plan（[`crate::plan::build_plan`]）
 //! → execute（[`crate::blit::execute`]）の全結線を、`MemoryDecoder`+`bake` の COM/WIC 非依存経路で
 //! headless に検証する。Composer が合成結果を保持しないこと（要件 9.4）・同じ入力の繰り返しで `out` の
-//! 先頭と命令列の容量が変わらないこと（要件 10.3）・失敗経路が `Err` で伝播すること（要件 10.5）・
-//! compose と compose_into が等価かつ決定的であること（要件 10.1）を固定する。
+//! 先頭と命令列の容量が変わらず絵が同じであること（要件 10.3・10.1）を固定する（失敗経路の `Err` と記録は
+//! `log_firing_tests`）。
 
 use super::*;
-use areka_emo_atlas::{AtlasTable, SetId};
-use areka_parsers::shell::{Shell, SortOrder};
+use crate::plan_test_support::bound_world;
+use areka_emo_atlas::AtlasTable;
+use areka_parsers::shell::SortOrder;
 use std::path::Path;
 
 use crate::plan_test_support::{
     bake_atlas_sized, bind_anim, elem, frame, px, shell_of, shell_of_with_sort, surface,
     surface_with_anims,
 };
-
-/// fold → bind 済み world と atlas を返す共通土台。
-fn build_bound(shell: Shell, atlas: &AtlasTable) -> EmoWorld {
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(atlas, SetId(0));
-    world
-}
 
 /// 40×30 の base（不透明青）を (0,0) に置き、有効 bind 1 が 200×10 の part（不透明赤）を (0,0) に置く面 1000。
 fn blue_base_red_part() -> (EmoWorld, AtlasTable) {
@@ -38,7 +32,7 @@ fn blue_base_red_part() -> (EmoWorld, AtlasTable) {
         vec![bind_anim(1, 1100, 0, 0)],
     );
     let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    (build_bound(shell_of(vec![host, part]), &atlas), atlas)
+    (bound_world(&shell_of(vec![host, part]), &[], &atlas), atlas)
 }
 
 /// 静的 element の無い面 1000 に bind 1（面 1100・青 4×4）と bind 2（面 1200・緑 2×2）。面 1300（赤 4×4）は
@@ -61,7 +55,7 @@ fn two_binds_and_a_frame() -> (EmoWorld, AtlasTable) {
     let s1200 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
     let s1300 = surface(1300, vec![elem(0, "p3.png", 0, 0)]);
     (
-        build_bound(shell_of(vec![host, s1100, s1200, s1300]), &atlas),
+        bound_world(&shell_of(vec![host, s1100, s1200, s1300]), &[], &atlas),
         atlas,
     )
 }
@@ -105,8 +99,9 @@ fn compose_returns_ok_composed_surface_for_valid_input() {
 
 // ── テスト2（要件 9.4）: Composer は合成結果を保持しない（構造的＋挙動的） ──
 
-/// Composer の内部フィールドが走査スクラッチのみ（ComposedSurface を持たない）ことを、異なる
-/// surface を連続 compose して各々が自 surface を反映する（stale キャッシュがない）ことで示す。
+/// Composer の内部フィールドが走査の作業場と命令列（いちからの `ops` と重ね直しの前の `base_ops`）だけで
+/// ComposedSurface を持たないことを、異なる surface を連続 compose して各々が自 surface を反映する
+/// （stale キャッシュがない）ことで示す。
 ///
 /// surface A(青 10×10)・B(緑 20×20) を交互に compose し、B の結果が A でなく B を反映する。
 #[test]
@@ -121,7 +116,7 @@ fn composer_holds_no_result_no_stale_cache() {
     );
     let sa = surface(100, vec![elem(0, "a.png", 0, 0)]);
     let sb = surface(200, vec![elem(0, "b.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![sa, sb]), &atlas);
+    let world = bound_world(&shell_of(vec![sa, sb]), &[], &atlas);
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
@@ -167,7 +162,7 @@ fn compose_into_reuses_buffer_across_calls() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(base, &[("p.png", (30, 20), Some((100, 110, 120)))]);
     let surf = surface(5000, vec![elem(0, "p.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![surf]), &atlas);
+    let world = bound_world(&shell_of(vec![surf]), &[], &atlas);
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
@@ -311,7 +306,7 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
         3000,
         vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)],
     );
-    let world = build_bound(shell_of(vec![surf]), &atlas);
+    let world = bound_world(&shell_of(vec![surf]), &[], &atlas);
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
@@ -360,55 +355,6 @@ fn compose_error_display_strings_are_exact() {
     );
 }
 
-// ── テスト5（等価性）: compose == compose_into into a fresh buffer ──
-
-/// `compose` の結果は、同一入力を新規バッファへ `compose_into` した結果とバイト等価。
-#[test]
-fn compose_equals_compose_into_fresh_buffer() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (40, 30), Some((10, 20, 30))),
-            ("part.png", (25, 25), Some((90, 80, 70))),
-        ],
-    );
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 5, 3)],
-    );
-    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, part]), &atlas);
-
-    let binds = BindSet::from_ids([1]);
-    let mut composer = Composer::new();
-
-    let via_compose = composer
-        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
-        .expect("compose Ok");
-
-    let mut fresh = ComposedSurface::new(0, 0);
-    composer
-        .compose_into(
-            &mut fresh,
-            &world,
-            &atlas,
-            1000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("compose_into Ok");
-
-    assert_eq!(via_compose.width(), fresh.width());
-    assert_eq!(via_compose.height(), fresh.height());
-    assert_eq!(
-        via_compose.bytes(),
-        fresh.bytes(),
-        "compose と compose_into は等価"
-    );
-}
-
 // ── テスト6（要件 4.3・hot path resolve-free）: multi-layer 実データの end-to-end 結線 ──
 
 /// animation-sort=ascend の多層 + 複数 bind を実データ構造で end-to-end（fold→bind→plan→blit）合成し、
@@ -440,11 +386,11 @@ fn end_to_end_multilayer_ascend_wiring() {
     let p1 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
     let p2 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
     let p3 = surface(1300, vec![elem(0, "p3.png", 0, 0)]);
-    let mut world = EmoWorld::build(&shell_of_with_sort(
-        vec![host, p1, p2, p3],
-        Some(SortOrder::Ascend),
-    ));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(
+        &shell_of_with_sort(vec![host, p1, p2, p3], Some(SortOrder::Ascend)),
+        &[],
+        &atlas,
+    );
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut composer = Composer::new();
@@ -462,15 +408,16 @@ fn end_to_end_multilayer_ascend_wiring() {
     );
 }
 
-/// hot path（compose/compose_into 経路）のソースに `atlas.resolve(` が現れないことを静的に確認する。
+/// hot path（compose/compose_into 経路）と外形の表を作る道のソースに `atlas.resolve(` が現れないことを
+/// 静的に確認する。
 ///
-/// plan.rs／plan_extent.rs／plan_always.rs／blit.rs／blit_rect.rs／lib.rs（Composer）の非テストコードは
-/// `atlas.entry`（O(1)）のみを引き、
-/// `resolve` は事前の bind_atlas（atlas_bind.rs）に限られる（要件 4.3・design 主要決定）。
+/// 毎フレームの道の plan.rs／plan_always.rs／blit.rs／blit_rect.rs／lib.rs（Composer）と、束縛のときに
+/// 外形の表を作る plan_extent.rs（合成からは呼ばない）の非テストコードは `atlas.entry`（O(1)）のみを引き、
+/// `resolve` は bind_atlas（atlas_bind.rs）の名前引きに限られる（要件 4.3・design 主要決定）。
 /// 本テストは各ソースの非テスト領域文字列を検査し、hot path に `resolve` 呼び出しが無いことを固定する。
 #[test]
 fn hot_path_sources_do_not_call_atlas_resolve() {
-    // 毎フレームの道のファイルの、中に書いたテストの mod より前に `.resolve(` が無いこと（plan.rs と
+    // 見るファイルの、中に書いたテストの mod より前に `.resolve(` が無いこと（plan.rs と
     // plan_extent.rs は頭に `#[cfg(test)]` の口を持つので、そこで切ると頭の数十行しか見ない）。
     // 各ファイルの的の関数（切った領域に在ることを先に確かめ、空の領域で黙って通らないようにする）。
     for (src, file, target) in [
@@ -554,7 +501,7 @@ fn empty_pattern_state_compose_is_byte_identical_to_the_rebuilt_golden() {
         vec![bind_anim(1, 1100, 1, 1)], // pattern0 → surface1100（赤 part）を (1,1) へ。
     );
     let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, part]), &atlas);
+    let world = bound_world(&shell_of(vec![host, part]), &[], &atlas);
 
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();

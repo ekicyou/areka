@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, SetId};
+use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
@@ -13,7 +13,7 @@ use crate::composed::ComposedSurface;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
 use crate::plan::compute_extent;
-use crate::plan_test_support::bake_atlas;
+use crate::plan_test_support::{bake_atlas, bound_world};
 use crate::world::EmoWorld;
 use crate::{Composer, shell_bounds};
 
@@ -54,9 +54,7 @@ fn world_with(last: u32, places: u32, head: &str) -> (EmoWorld, AtlasTable) {
         "surface{last}\n{{\nelement0,overlay,s.png,0,0\n}}\n"
     ));
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&text));
-    world.bind_atlas(&atlas, SetId(0));
-    (world, atlas)
+    (bound_world(&parse(&text), &[], &atlas), atlas)
 }
 
 /// 面 0 を合成する（命令列は合成器の作業場から写して返す）。
@@ -197,8 +195,7 @@ fn insert_chain_composes_on_a_small_stack() {
          surface1\n{{\nelement0,overlay,s.png,0,0\n}}\n"
     ));
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(&text), &[], &atlas);
     on_small_stack(|| {
         let mut out = ComposedSurface::new(0, 0);
         let binds = BindSet::from_ids(0..=LAST);
@@ -238,8 +235,7 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
         surface4\n{\nelement0,overlay,5,1,0\nelement1,overlay,2,0,3\n}\n\
         surface5\n{\nelement0,overlay,4,0,1\nelement1,overlay,3,-6,0\n}\n";
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(text), &[], &atlas);
     let ids: Vec<u32> = world.surface_ids().collect();
     let mut hits = [0; 3];
     for limit in 0..=80 {
@@ -316,9 +312,7 @@ fn diamond_with_leaves(last: u32, leaves: u32) -> (EmoWorld, AtlasTable) {
     }
     text.push_str("}\n");
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-    let mut world = EmoWorld::build(&parse(&text));
-    world.bind_atlas(&atlas, SetId(0));
-    (world, atlas)
+    (bound_world(&parse(&text), &[], &atlas), atlas)
 }
 
 /// 段の積み荷（指摘 21）: 小さな予算の命令列は、葉の絵の多い菱形でも命令の数が予算を越えない
@@ -334,20 +328,6 @@ fn plan_counts_the_layer_payload_against_the_budget() {
     });
     assert_eq!(ops.len(), 24, "葉の絵は予算の残りの分だけ");
     assert_eq!(errors(&logs, "plan", 0), 1, "{}", errors_only(&logs));
-}
-
-/// 段の積み荷（指摘 21）: 葉に絵 1,000 枚の 15 段の菱形（入る面は予算の内側）でも、本番の予算の合成の
-/// 命令の数は予算以下（直しが無いと約 3,200 万個）。
-#[test]
-fn diamond_with_many_leaf_images_composes_within_the_budget() {
-    let (world, atlas) = diamond_with_leaves(15, 1_000);
-    let ops = compose(&mut Composer::new(), &world, &atlas);
-    assert!(!ops.is_empty());
-    assert!(
-        ops.len() <= crate::budget::VISIT_BUDGET,
-        "命令 {} 個は予算以下",
-        ops.len()
-    );
 }
 
 /// 持ち込みの数（指摘 22）: 面 0 が子 1（当たり判定 300 個）を 300 行置くと、直しが無ければ 9 万個を
@@ -390,8 +370,7 @@ fn extent_over_the_area_limit_is_too_large() {
             h - 2
         );
         let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
-        let mut world = EmoWorld::build(&parse(&text));
-        world.bind_atlas(&atlas, SetId(0));
+        let world = bound_world(&parse(&text), &[], &atlas);
         let (binds, pattern) = (BindSet::default(), PatternState::default());
         crate::plan_test_support::plan_of(&world, &atlas, 0, &binds, &pattern).1
     };

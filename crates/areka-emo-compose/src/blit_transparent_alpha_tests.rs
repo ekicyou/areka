@@ -11,12 +11,10 @@
 use super::*;
 use crate::method::ComposeMethod;
 use crate::normalized::Transform;
-use areka_emo_atlas::{
-    AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
-};
+use areka_emo_atlas::{AtlasPage, ElementId, Point, Rect};
 use std::sync::Arc;
 
-use crate::plan_test_support::single_entry_table;
+use crate::plan_test_support::{px, single_entry_table};
 
 #[test]
 fn copied_alpha_is_kept_on_a_cleared_output() {
@@ -34,21 +32,7 @@ fn copied_alpha_is_kept_on_a_cleared_output() {
         w: 3,
         h: 1,
     };
-    let atlas = AtlasTable::new(
-        vec![AtlasKey {
-            set: SetId(0),
-            rel_path: "e.png".into(),
-        }],
-        vec![AtlasEntry {
-            original: Size { w: 3, h: 1 },
-            placement: Some(Placement {
-                page: 0,
-                uv_rect: uv,
-                trim_offset: Point { x: 0, y: 0 },
-            }),
-        }],
-        vec![page],
-    );
+    let atlas = single_entry_table(page, uv, Point { x: 0, y: 0 });
     let ops = [BlitOp {
         element: ElementId(0),
         transform: Transform::translate(0, 0),
@@ -58,11 +42,7 @@ fn copied_alpha_is_kept_on_a_cleared_output() {
     let mut out = ComposedSurface::new(0, 0);
     execute(&mut out, Extent { w: 3, h: 1 }, &ops, &atlas);
 
-    let got: Vec<[u8; 4]> = out
-        .bytes()
-        .chunks_exact(4)
-        .map(|p| [p[0], p[1], p[2], p[3]])
-        .collect();
+    let got: Vec<[u8; 4]> = (0..3).map(|x| px(&out, x, 0)).collect();
     assert_eq!(
         got,
         src.to_vec(),
@@ -113,10 +93,8 @@ fn blit_reads_source_at_nonzero_uv_offset() {
     crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
 
     // 頁原点(赤)でなく uv.x=2 の青が着弾する（源矩形オフセット読み取りの直接証拠）。
-    let i = 0usize;
-    let b = out.bytes();
     assert_eq!(
-        [b[i], b[i + 1], b[i + 2], b[i + 3]],
+        px(&out, 0, 0),
         [255, 0, 0, 255],
         "uv.x=2 の青が転写される（頁原点の赤でない）",
     );
@@ -157,9 +135,8 @@ fn blit_reads_source_at_nonzero_uv_y_offset() {
     let mut out = ComposedSurface::new(0, 0);
     crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
 
-    let b = out.bytes();
     assert_eq!(
-        [b[0], b[1], b[2], b[3]],
+        px(&out, 0, 0),
         [255, 0, 0, 255],
         "uv.y=2 の青が転写される（頁原点の赤でない）",
     );

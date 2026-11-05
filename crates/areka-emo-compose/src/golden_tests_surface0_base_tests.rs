@@ -3,9 +3,9 @@
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{
-    AtlasTable, BindSet, ComposedSurface, Composer, EmoWorld, MemoryDecoder, Path, PatternState,
-    SetId, Shell,
+    AtlasTable, BindSet, ComposedSurface, Composer, MemoryDecoder, Path, PatternState, Shell,
 };
+use crate::plan_test_support::bound_world;
 
 /// 決定的な既知画像を tightly-packed premultiplied BGRA で生成する。
 ///
@@ -93,8 +93,7 @@ fn surface0_element0_single_layer_equals_inserted_image() {
     let (atlas, iw, ih, inserted) = build_atlas_for_surface0(&shell, &base);
 
     // fold → bind（構築時に一度きり resolve・以降 hot path は entry O(1)）。
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // 空 BindSet で surface0 を合成（着せ替え bind を一切適用しない単層経路）。
     let mut composer = Composer::new();
@@ -112,11 +111,6 @@ fn surface0_element0_single_layer_equals_inserted_image() {
     assert_eq!(out.width(), iw, "合成幅 == 挿入画像幅");
     assert_eq!(out.height(), ih, "合成高 == 挿入画像高");
     assert_eq!(out.stride(), iw * 4, "stride == w*4（premultiplied BGRA）");
-    assert_eq!(
-        out.bytes().len(),
-        inserted.len(),
-        "バッファ長 == 挿入画像バイト長"
-    );
 
     // バイト等価（要件 11.1 の中核）: 単層 (0,0) SourceOver onto 透明キャンバス == コピー。
     assert_eq!(

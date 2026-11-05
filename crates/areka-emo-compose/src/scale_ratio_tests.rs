@@ -99,8 +99,8 @@ fn mul_composes_and_reduces() {
 fn mul_uses_wide_intermediate_without_wrapping() {
     use crate::log_capture::capture_logs;
 
-    // 分子・分母の積がどちらも u32 を越え（約 77 億と約 39 億）、約分で 2/1 へ戻る（中間が u32 なら
-    // 分子だけラップして破綻する）。
+    // 分子の積は u32 を越え（約 77 億・分母の積の約 39 億は u32 に収まる）、約分で 2/1 へ戻る（中間が
+    // u32 なら分子がラップして破綻する）。
     let a = ScaleRatio::new(100_000, 77_777).unwrap();
     let b = ScaleRatio::new(77_777, 50_000).unwrap();
     // 縮退の境目のすぐ内（65535² は u32 に収まる）も、そのままの値を返す。
