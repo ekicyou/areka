@@ -148,6 +148,7 @@ pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
 /// 後発の破棄が無効 HWND を撃つ。破棄に先立って本関数で切り離すことで独立破棄の
 /// semantics へ戻し、要件 5.9（破棄が重複しても異常終了しない）を構造的に満たす。
 /// 失敗は握り潰さず `Err` で返す。
+/// owner を持たない窓では OS が偽の失敗を返す。呼ぶ前に owner の有無を読むこと。
 #[inline(always)]
 pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, 0).map(|_| ())
