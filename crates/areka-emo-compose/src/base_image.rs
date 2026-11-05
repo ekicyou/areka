@@ -3,7 +3,7 @@
 //! シェルのフォルダ直下に `surface0.png` のように置かれた絵は、`surfaces.txt` に 1 行も
 //! 書かれていなくても面の土台になる（ukadoc の慣習・要件 2.1 の表ア〜エ）。「番号 → ファイル名」
 //! の対応を決めるのは上流（`areka-emo-present` の `shell_target`）で、本モジュールは決まった
-//! 対応を受け取り、**畳み込み（[`crate::fold::fold_shell`]）が終わった後の面の表**に対して
+//! 対応を受け取り、**畳み込み（[`crate::fold::fold_shell_with`]）が終わった後の面の表**に対して
 //! 番号ごとに次の判定を下す。
 //!
 //! | 面が面の表に在る | 層 0 の element が在る | すること | 要件 2.1 の表 |
@@ -31,7 +31,7 @@ use bevy_ecs::world::World;
 use crate::method::ComposeMethod;
 use crate::nesting::ElementKind;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
-use crate::world::{Records, SurfaceId, SurfaceIndex};
+use crate::world::{Records, SurfaceIndex};
 
 /// 面の番号 → 面の画像のファイル名（元の綴りのまま）。
 ///
@@ -78,8 +78,7 @@ pub(crate) fn apply_base_images(
                 collisions: Vec::new(),
                 animations: Vec::new(),
             };
-            let entity = world.spawn((SurfaceId(id), master)).id();
-            world.resource_mut::<SurfaceIndex>().0.insert(id, entity);
+            crate::fold::upsert_surface(world, id, master, records);
             report.used.insert(id, file.clone());
             continue;
         };

@@ -4,12 +4,12 @@ use areka_parsers::shell::{
 };
 use bevy_ecs::world::World;
 
-use crate::fold::{expand_targets, fold_shell};
+use crate::fold::{expand_targets, fold_shell_with};
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{coll, elem, shell_mixed, shell_of, surface_def};
 use crate::sample_test_support::emo2_shell;
-use crate::world::{AliasMap, SurfaceIndex};
+use crate::world::{AliasMap, Records, SurfaceIndex};
 
 /// 畳み込みが必ず読むリソース（`SurfaceIndex`・`AliasMap`）だけを備えた空 World を用意する
 /// （`SurfaceImages` は無ければ画像だけの面が無いものとして読む）。
@@ -91,7 +91,7 @@ fn enumeration_creates_all_ids_with_shared_body() {
         body,
     );
     let mut world = fresh_world();
-    fold_shell(&mut world, &shell_of(vec![surf]));
+    fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     let m0 = master_of(&world, 0).expect("id=0 が常駐する");
     let m5 = master_of(&world, 5).expect("id=5 が常駐する");
@@ -118,7 +118,7 @@ fn range_creates_inclusive_ids() {
         vec![elem(0, "r.png", 0, 0)],
     );
     let mut world = fresh_world();
-    fold_shell(&mut world, &shell_of(vec![surf]));
+    fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     for id in [1u32, 2, 3] {
         let m = master_of(&world, id).unwrap_or_else(|| panic!("id={id} が常駐する"));
@@ -139,7 +139,7 @@ fn single_form_creates_one_surface() {
         vec![elem(0, "s0.png", 1, 2)],
     );
     let mut world = fresh_world();
-    fold_shell(&mut world, &shell_of(vec![surf]));
+    fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     let m = master_of(&world, 0).expect("id=0 が常駐する");
     assert_eq!(m.id, 0);
@@ -157,7 +157,7 @@ fn enumeration_expands_in_description_order() {
     );
     assert_eq!(expand_targets(&surf.targets), vec![2, 1], "記述の順");
     let mut world = fresh_world();
-    fold_shell(&mut world, &shell_of(vec![surf]));
+    fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     assert!(master_of(&world, 2).is_some());
     assert!(master_of(&world, 1).is_some());
@@ -205,7 +205,7 @@ fn append_reaches_existing_ids_only_not_creating_absent() {
     );
     let mut world = fresh_world();
     // 登場順: Surface(10), Surface(2100), Surface(2101), Append(ap)。
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_mixed(
             vec![s10, s2100, s2101],
@@ -217,6 +217,7 @@ fn append_reaches_existing_ids_only_not_creating_absent() {
                 DefRef::Append(0),
             ],
         ),
+        Records::Emit,
     );
 
     // 既存 id には追記 element が届く（base + added の 2 本）。
@@ -257,13 +258,14 @@ fn append_merges_element_and_collision_layer_sorted() {
         Vec::new(),
     );
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_mixed(
             vec![base],
             vec![ap],
             vec![DefRef::Surface(0), DefRef::Append(0)],
         ),
+        Records::Emit,
     );
 
     let m = master_of(&world, 5).expect("id=5 が常駐する");
@@ -307,13 +309,14 @@ fn append_animation_first_wins_and_new_id_added() {
         vec![replacement.clone(), anim(2)],
     );
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_mixed(
             vec![base],
             vec![ap],
             vec![DefRef::Surface(0), DefRef::Append(0)],
         ),
+        Records::Emit,
     );
 
     let m = master_of(&world, 8).expect("id=8 が常駐する");
@@ -357,7 +360,7 @@ fn append_only_sees_earlier_defined_surfaces() {
         Vec::new(),
     );
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_mixed(
             vec![sa, sb],
@@ -365,6 +368,7 @@ fn append_only_sees_earlier_defined_surfaces() {
             // Surface(0)=id1, Append(0)=x, Surface(1)=id2。
             vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Surface(1)],
         ),
+        Records::Emit,
     );
 
     // id=1 は append 実行時に存在 → x.png が届く（base + added の 2 本）。
@@ -434,7 +438,7 @@ fn fold_plain_surface_honors_exclusion_through_build() {
         vec![elem(0, "s.png", 0, 0)],
     );
     let mut world = fresh_world();
-    fold_shell(&mut world, &shell_of(vec![surf]));
+    fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     for id in [1u32, 2, 4] {
         assert!(master_of(&world, id).is_some(), "id={id} は新設される");
@@ -472,13 +476,14 @@ fn duplicate_alias_key_is_last_wins() {
         alias_def("100", vec![2100, 9999]),
     ];
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_with_aliases(
             Vec::new(),
             aliases,
             vec![DefRef::Alias(0), DefRef::Alias(1)],
         ),
+        Records::Emit,
     );
 
     // 後の定義が勝つ（両者連結でなく一意な値）。
@@ -492,13 +497,14 @@ fn duplicate_alias_key_is_last_wins() {
 fn duplicate_alias_identical_value_collapses_to_one() {
     let aliases = vec![alias_def("100", vec![2100]), alias_def("100", vec![2100])];
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_with_aliases(
             Vec::new(),
             aliases,
             vec![DefRef::Alias(0), DefRef::Alias(1)],
         ),
+        Records::Emit,
     );
 
     assert_eq!(resolve_alias(&world, "100"), Some(&[2100][..]));
@@ -510,9 +516,10 @@ fn duplicate_alias_identical_value_collapses_to_one() {
 fn alias_id_list_order_is_preserved() {
     let aliases = vec![alias_def("k", vec![30, 10, 20])];
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_with_aliases(Vec::new(), aliases, vec![DefRef::Alias(0)]),
+        Records::Emit,
     );
 
     assert_eq!(resolve_alias(&world, "k"), Some(&[30, 10, 20][..]));
@@ -524,9 +531,10 @@ fn alias_id_list_order_is_preserved() {
 fn absent_alias_key_returns_none_non_panic() {
     let aliases = vec![alias_def("present", vec![1, 2])];
     let mut world = fresh_world();
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_with_aliases(Vec::new(), aliases, vec![DefRef::Alias(0)]),
+        Records::Emit,
     );
 
     assert_eq!(resolve_alias(&world, "present"), Some(&[1, 2][..]));
@@ -551,7 +559,7 @@ fn aliases_collected_when_interleaved_with_surfaces() {
     let a1 = alias_def("beta", vec![200]);
     let mut world = fresh_world();
     // 登場順: Surface, Alias, Surface, Alias。
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_with_aliases(
             vec![s0, s1],
@@ -563,6 +571,7 @@ fn aliases_collected_when_interleaved_with_surfaces() {
                 DefRef::Alias(1),
             ],
         ),
+        Records::Emit,
     );
 
     // 両 alias が収集されている。
@@ -579,9 +588,10 @@ fn aliases_collected_when_interleaved_with_surfaces() {
 fn alias_out_of_range_index_is_skipped() {
     let mut world = fresh_world();
     // aliases 空だが DefRef::Alias(0) を指す（範囲外）。
-    fold_shell(
+    fold_shell_with(
         &mut world,
         &shell_with_aliases(Vec::new(), Vec::new(), vec![DefRef::Alias(0)]),
+        Records::Emit,
     );
 
     // パニックせず AliasMap は空のまま。
@@ -602,7 +612,7 @@ type FoldSnapshot = (
     std::collections::BTreeMap<String, Vec<u32>>,
 );
 
-/// 素の `World`（`fold_shell` 直呼び）から決定性比較用スナップショットを抽出する。
+/// 素の `World`（`fold_shell_with` 直呼び）から決定性比較用スナップショットを抽出する。
 fn snapshot_world(world: &World) -> FoldSnapshot {
     // surface id を昇順に整列（`SurfaceIndex` の HashMap 反復順に依らず決定的）。
     let mut ids: Vec<u32> = world.resource::<SurfaceIndex>().0.keys().copied().collect();
@@ -619,9 +629,9 @@ fn snapshot_world(world: &World) -> FoldSnapshot {
 /// 同一 `Shell` を素の `World` へ2回 fold し、スナップショットが一致することを確かめるヘルパ。
 fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
     let mut w1 = fresh_world();
-    fold_shell(&mut w1, shell);
+    fold_shell_with(&mut w1, shell, Records::Emit);
     let mut w2 = fresh_world();
-    fold_shell(&mut w2, shell);
+    fold_shell_with(&mut w2, shell, Records::Emit);
     let s1 = snapshot_world(&w1);
     let s2 = snapshot_world(&w2);
     assert_eq!(

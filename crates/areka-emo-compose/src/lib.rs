@@ -124,11 +124,7 @@ pub struct Composer {
 impl Composer {
     /// 空スクラッチの `Composer` を構築する（合成結果は保持しない・要件 9.4）。
     pub fn new() -> Self {
-        Composer {
-            ops: Vec::new(),
-            scratch: crate::plan::PlanScratch::default(),
-            base_ops: Vec::new(),
-        }
+        Self::default()
     }
 
     /// 合成先バッファ再利用形（毎フレーム経路・要件 10.3）。

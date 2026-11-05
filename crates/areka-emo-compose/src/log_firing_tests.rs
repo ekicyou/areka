@@ -437,7 +437,7 @@ fn duplicate_surface_id_merge_logs_debug_not_warn() {
     let second = surface(7, vec![elem(0, "new.png", 5, 6)]); // 同 id 再定義＝前へ足す。
 
     let logs = capture_logs(|| {
-        // fold は EmoWorld::build 内で走る（populate_from_shell→fold_shell→fold_plain_surface）。
+        // fold は EmoWorld::build 内で走る（populate_from_shell→fold_shell_with→fold_plain_surface）。
         let world = EmoWorld::build(&shell_of(vec![first, second]));
         // 副作用: layer 0 は old.png・new.png の両方・layer 1 の keep.png も残る（前提の実証）。
         let master = world.surface(7).expect("id=7 常駐");

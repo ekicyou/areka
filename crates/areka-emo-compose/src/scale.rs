@@ -288,9 +288,5 @@ impl ScaleRatio {
 }
 
 #[cfg(test)]
-#[path = "scale_test_support.rs"]
-mod test_support;
-
-#[cfg(test)]
 #[path = "scale_ratio_tests.rs"]
 mod ratio_tests;

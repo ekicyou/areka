@@ -426,7 +426,6 @@ fn bind_derivation_is_deterministic() {
         ],
         None,
     );
-    let _ = &atlas; // atlas は bind_atlas 済み（以降の resolve は不要）。
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let ops1 = ops(&world, &atlas, 1000, &binds, &PatternState::default());

@@ -7,7 +7,7 @@
 //! compose と compose_into が等価かつ決定的であること（要件 10.1）を固定する。
 
 use super::*;
-use areka_emo_atlas::{AtlasTable, ElementId, SetId, Size};
+use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::{Shell, SortOrder};
 use std::path::Path;
 
@@ -544,10 +544,6 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
         "lib.rs の Composer hot path は atlas.resolve を呼ばない（要件 4.3）"
     );
 }
-
-/// 型健全性の据え置き（未使用 import 警告を出さないためのアンカ・実害なし）。
-#[allow(dead_code)]
-fn _type_anchor(_: ElementId, _: Size) {}
 
 // ============================================================================
 // task 7.3: PatternState 拡張の合成 golden 檻（空 PatternState 等価・transient コマ合流）。

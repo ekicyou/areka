@@ -31,17 +31,7 @@ use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 ///
 /// 欠落・不整合はパニックせず `warn` で観測可能化する（要件 1.4）。
 ///
-/// 中身は [`fold_shell_with`] の「出す」の包み。本番の呼び手は [`fold_shell_with`] を使い、
-/// 本関数を呼ぶのはテスト（`fold_tests.rs`・`base_image_tests.rs`）だけ。
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "テストの呼び手と説明の参照先として残す")
-)]
-pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
-    fold_shell_with(world, shell, Records::Emit);
-}
-
-/// [`fold_shell`] と同じ畳み込みで、記録の行を出すかどうかを `records` で切り替える
+/// 記録の行を出すかどうかは `records` で切り替える
 /// （枝の選び方と面の表への書き込みは変えない・spec: emo-bake-log-overlap 要件 2.3）。
 pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records) {
     for def in &shell.definitions {
@@ -188,7 +178,7 @@ fn add_lines(master: &mut SurfaceMaster, later: SurfaceMaster, source: Source, r
 /// in-place に足す（despawn/respawn しない）。波括弧が 1 行も無くても [`SurfaceImages`] に画像が在る番号は
 /// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う（要件 3.7・C6）。
 /// どちらにも無い id は新設せず `warn` でスキップする（要件 1.4/2.2/3.8）。
-/// 登場順の走査（[`fold_shell`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
+/// 登場順の走査（[`fold_shell_with`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
 fn fold_append(world: &mut World, append: &SurfaceAppend, records: Records) {
     // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
     let append_elements: Vec<NormalizedElement> =
@@ -251,7 +241,7 @@ fn fold_append(world: &mut World, append: &SurfaceAppend, records: Records) {
 /// 番号 `id` が、ファイル名だけで置かれた絵を持つか（要件 3.7）。
 ///
 /// [`SurfaceImages`] は面の表を組む入口（[`crate::EmoWorld::build_with_images`]）が畳み込みの前に
-/// 置く。[`fold_shell`] を直に呼ぶテストは置かないことがあるので、欠けていれば「画像 0 件」と
+/// 置く。[`fold_shell_with`] を直に呼ぶテストは置かないことがあるので、欠けていれば「画像 0 件」と
 /// 読む（畳み込みだけを通した素の結果＝本仕様の適用前と同じ振る舞い）。
 fn has_base_image(world: &World, id: u32) -> bool {
     world
@@ -262,7 +252,7 @@ fn has_base_image(world: &World, id: u32) -> bool {
 /// `kero.surface.alias` の 1 エントリを `AliasMap` へ収集する（要件 3.1/3.2）。
 ///
 /// alias キー → 順序付き数値 id リストを `BTreeMap` へ挿入する。`BTreeMap::insert` は同一キーで
-/// 上書きするため、登場順 single-pass 走査（[`fold_shell`]）と併せて重複キーは後勝ちで決定的に
+/// 上書きするため、登場順 single-pass 走査（[`fold_shell_with`]）と併せて重複キーは後勝ちで決定的に
 /// なる（要件 3.2）。id リストはソート・重複除去せず記述順のまま複製する（alias の順序付き
 /// ターゲット列＝要件 3.1・BindSet の正規化とは別物）。
 fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
@@ -377,8 +367,14 @@ fn normalize_element(element: &Element) -> NormalizedElement {
 
 /// id を新設して id→entity を登録し、その entity を返す。既にある id の定義へは波括弧も追記も
 /// [`add_lines`] で足すので、ここへ来るのは無い id だけ（索引は在るが
-/// component が欠けた不整合のときだけ、古い entity を除いて作り直す）。
-fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster, records: Records) -> Entity {
+/// component が欠けた不整合のときだけ、古い entity を除いて作り直す）。画像だけで在る面の新設
+/// （[`crate::base_image::apply_base_images`]）も同じ口を通る。
+pub(crate) fn upsert_surface(
+    world: &mut World,
+    id: u32,
+    master: SurfaceMaster,
+    records: Records,
+) -> Entity {
     if let Some(stale) = world.resource::<SurfaceIndex>().0.get(&id).copied() {
         // 本来生じない不整合（索引は指すが SurfaceMaster が無い）。黙らずに残して作り直す。
         if records.emits() {

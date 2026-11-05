@@ -7,11 +7,11 @@ use areka_parsers::shell::{
 use bevy_ecs::world::World;
 
 use crate::base_image::BaseImageReport;
-use crate::fold::fold_shell;
+use crate::fold::fold_shell_with;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{elem, shell_mixed, shell_of, surface_def};
-use crate::world::{AliasMap, EmoWorld, ShellSettings, SurfaceIndex};
+use crate::world::{AliasMap, EmoWorld, Records, ShellSettings, SurfaceIndex};
 
 /// 番号 → ファイル名の対応を組み立てる。
 fn images(entries: &[(u32, &str)]) -> BTreeMap<u32, String> {
@@ -27,7 +27,7 @@ fn folded_masters(shell: &Shell) -> Vec<SurfaceMaster> {
     world.insert_resource(SurfaceIndex::default());
     world.insert_resource(AliasMap::default());
     world.insert_resource(ShellSettings::default());
-    fold_shell(&mut world, shell);
+    fold_shell_with(&mut world, shell, Records::Emit);
 
     let index = world.resource::<SurfaceIndex>();
     let mut ids: Vec<u32> = index.0.keys().copied().collect();

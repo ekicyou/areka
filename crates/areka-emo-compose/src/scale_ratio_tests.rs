@@ -1,6 +1,8 @@
-use super::test_support::*;
 use super::*;
 use std::collections::HashSet;
+
+/// 作者基準 DPI（ukadoc 正典既定）。DPI 対照表の分母。
+const AUTHOR_DPI: u32 = 96;
 
 /// 要件 1.1: 構築は gcd で既約正準化する（120/96 → 5/4）。
 #[test]
