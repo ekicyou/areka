@@ -179,14 +179,6 @@ fn gate(anim: &LoopAnimation, binds: &BindSet) -> Gate {
     }
 }
 
-/// `runonce`・`periodic`・`talk` の引き金か。
-fn is_trigger(anim: &LoopAnimation) -> bool {
-    matches!(
-        anim.trigger,
-        LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. }
-    )
-}
-
 /// 入れ物 1 つの「見えなくなったら捨てる時計」（回数つきの `always` と 3 語）のうち、`drop(部品)` が
 /// 真のものを捨てる（捨てたら `debug!`）。抽選の時計と終わりなしの `always` の時計は残す。
 fn drop_transient_where(
@@ -211,7 +203,7 @@ fn drop_transient_where(
                 animation_id = id,
                 "seriko: part 回数つきの時計を捨てた"
             );
-        } else if is_trigger(anim) {
+        } else if anim.trigger.is_word() {
             tracing::debug!(
                 scope = scope.as_str(),
                 slot = ?slot,

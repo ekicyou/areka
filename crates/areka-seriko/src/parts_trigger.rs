@@ -10,10 +10,10 @@ use std::collections::btree_map::Entry;
 use areka_emo_compose::PartKey;
 use areka_sakura::ActorKey;
 
-use super::{ClockKey, Label, Look, PartAnim, is_trigger, look, sort_by_id};
+use super::{ClockKey, Label, Look, PartAnim, look, sort_by_id};
 use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
-use crate::trigger::{Armed, TalkWindow};
+use crate::trigger::{Armed, TalkWindow, log_fired};
 
 /// 2 段目（見えると決まった部品 1 つ）: `runonce`・`periodic`・`talk` を持つ部品なら引き金の状態を
 /// 持たせ（無ければ `at_ms` を見え始めの時刻として構える・在れば窓の開け閉めを写す）、3 語の
@@ -52,17 +52,13 @@ pub(super) fn fire_part_triggers<'a>(
     runonce_only: bool,
 ) -> Vec<&'a LoopAnimation> {
     let mut started = Vec::new();
-    if !anims.iter().any(is_trigger) {
+    if !anims.iter().any(|a| a.trigger.is_word()) {
         return started;
     }
     let state = match armed.entry(part) {
         Entry::Occupied(entry) => {
             let state = entry.into_mut();
-            match (open, state.is_visible()) {
-                (true, false) => state.show(at_ms, None),
-                (false, true) => state.hide(),
-                _ => {}
-            }
+            state.follow(open, at_ms, None);
             state
         }
         Entry::Vacant(entry) => {
@@ -73,13 +69,13 @@ pub(super) fn fire_part_triggers<'a>(
                 at_ms,
                 "seriko: part trigger 部品が見えた（引き金を構えた）"
             );
-            entry.insert(Armed::arm(Some(at_ms), open, None))
+            entry.insert(Armed::arm(at_ms, open, None))
         }
     };
     sort_by_id(anims, order);
     for &i in order.iter() {
         let anim = &anims[i];
-        if !is_trigger(anim) || (runonce_only && anim.trigger != LoopTrigger::Runonce) {
+        if !anim.trigger.is_word() || (runonce_only && anim.trigger != LoopTrigger::Runonce) {
             continue;
         }
         let key = (part, anim.id);
@@ -103,33 +99,7 @@ pub(super) fn fire_part_triggers<'a>(
                 acts_through: None,
             },
         );
-        match anim.trigger {
-            LoopTrigger::Runonce => tracing::info!(
-                scope = scope.as_str(),
-                slot = ?slot,
-                part = %Label(part),
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: part trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）"
-            ),
-            LoopTrigger::Periodic { .. } => tracing::info!(
-                scope = scope.as_str(),
-                slot = ?slot,
-                part = %Label(part),
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: part trigger periodic を鳴らした（再生開始・先頭コマから・要件 3.1）"
-            ),
-            LoopTrigger::Talk { .. } => tracing::debug!(
-                scope = scope.as_str(),
-                slot = ?slot,
-                part = %Label(part),
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: part trigger talk を鳴らした（再生開始・先頭コマから・要件 4.1）"
-            ),
-            _ => {}
-        }
+        log_fired(anim, started_at_ms, scope, slot, Some(&Label(part)));
         started.push(anim);
     }
     started

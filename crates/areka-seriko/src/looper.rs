@@ -215,14 +215,6 @@ fn slot_binds<'a>(states: &'a ScopeStates, scope: &ActorKey, slot: Slot) -> &'a 
     }
 }
 
-/// `runonce`・`periodic`・`talk` の引き金か（spec: areka-P0-seriko-trigger-intervals）。
-fn is_trigger_word(anim: &&LoopAnimation) -> bool {
-    matches!(
-        anim.trigger,
-        LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. }
-    )
-}
-
 /// 一番上 `surface_id` が（`always` を持つか, `runonce`・`periodic`・`talk` を持つか）。1 回の走査で
 /// 両方を求める（`is_continuous()` が偽の表では走査せず両方偽・要件 7.2・spec:
 /// areka-P0-seriko-trigger-intervals 要件 8.1）。
@@ -233,7 +225,7 @@ fn top_kinds(table: &AnimationTable, surface_id: u32) -> (bool, bool) {
     let (mut always, mut trigger) = (false, false);
     for anim in table.animations(surface_id) {
         always |= matches!(anim.trigger, LoopTrigger::Always { .. });
-        trigger |= is_trigger_word(&anim);
+        trigger |= anim.trigger.is_word();
     }
     (always, trigger)
 }
@@ -607,7 +599,10 @@ impl LoopRuntime {
             // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
             // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める（要件 6.2）。
             if let Some(state) = state.filter(|_| has_trigger) {
-                let anims = table.animations(*sid).iter().filter(is_trigger_word);
+                let anims = table
+                    .animations(*sid)
+                    .iter()
+                    .filter(|a| a.trigger.is_word());
                 fire_top_triggers(
                     state,
                     playback,

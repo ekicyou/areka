@@ -22,6 +22,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use areka_sakura::ActorKey;
+
+use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
 use crate::timeline::lap_of;
 
@@ -62,9 +65,9 @@ impl Armed {
     ///
     /// `revealed` は今現れている文字の序数で、`talk` はここから 0 と数える（`None` なら数えを
     /// 持たない＝表に `talk` が無い面・窓が閉じている面・部品）。
-    pub(crate) fn arm(at_ms: Option<u64>, open: bool, revealed: Option<u64>) -> Armed {
+    pub(crate) fn arm(at_ms: u64, open: bool, revealed: Option<u64>) -> Armed {
         Armed {
-            visible_since: at_ms.filter(|_| open),
+            visible_since: open.then_some(at_ms),
             fired: BTreeSet::new(),
             last_lap: BTreeMap::new(),
             talk: revealed.map(TalkCursor::starting_at),
@@ -87,10 +90,14 @@ impl Armed {
         self.talk = revealed.map(TalkCursor::starting_at);
     }
 
-    /// 見えているか（隠れている＝バルーンの窓が閉じている間は偽）。窓の知らせを写す側が、隠す・現すを
-    /// 1 回ずつ呼ぶために読む。
-    pub(crate) fn is_visible(&self) -> bool {
-        self.visible_since.is_some()
+    /// 在る状態へ窓の開け閉めを写す: 閉じたら隠し、開いたら `at_ms` を新しい起点にして現す（同じなら
+    /// 何もしない＝隠す・現すは 1 回ずつ）。`revealed` は [`Armed::arm`] と同じ。
+    pub(crate) fn follow(&mut self, open: bool, at_ms: u64, revealed: Option<u64>) {
+        match (open, self.visible_since.is_some()) {
+            (true, false) => self.show(at_ms, revealed),
+            (false, true) => self.hide(),
+            _ => {}
+        }
     }
 
     /// 今の判定で `anim` を始めるなら、開始の時刻を返す。
@@ -175,6 +182,57 @@ impl Armed {
     /// 文字の窓を組むための（数え始めの序数, 数え済みの序数）。数えを持たなければ `None`。
     pub(crate) fn talk_window_bounds(&self) -> Option<(u64, u64)> {
         self.talk.as_ref().map(|cursor| (cursor.base, cursor.seen))
+    }
+}
+
+impl LoopTrigger {
+    /// `runonce`・`periodic`・`talk` の 3 語か。
+    pub(crate) fn is_word(&self) -> bool {
+        matches!(
+            self,
+            LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. }
+        )
+    }
+}
+
+/// 鳴らした記録（`runonce`・`periodic` は `info!`・`talk` は `debug!`）。`part` が `Some` なら欄 `part` と
+/// 文言の「part 」を足す（一番上と部品で同じ行の形）。3 語でない引き金は記録しない。
+pub(crate) fn log_fired(
+    anim: &LoopAnimation,
+    started_at_ms: u64,
+    scope: &ActorKey,
+    slot: Slot,
+    part: Option<&dyn std::fmt::Display>,
+) {
+    let who = if part.is_some() { "part " } else { "" };
+    // None の欄は記録されない（一番上の行は今までどおり part の欄を持たない）。
+    let part = part.map(tracing::field::display);
+    match anim.trigger {
+        LoopTrigger::Runonce => tracing::info!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            part,
+            animation_id = anim.id,
+            started_at_ms,
+            "seriko: {who}trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）"
+        ),
+        LoopTrigger::Periodic { .. } => tracing::info!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            part,
+            animation_id = anim.id,
+            started_at_ms,
+            "seriko: {who}trigger periodic を鳴らした（再生開始・先頭コマから・要件 3.1）"
+        ),
+        LoopTrigger::Talk { .. } => tracing::debug!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            part,
+            animation_id = anim.id,
+            started_at_ms,
+            "seriko: {who}trigger talk を鳴らした（再生開始・先頭コマから・要件 4.1）"
+        ),
+        _ => {}
     }
 }
 

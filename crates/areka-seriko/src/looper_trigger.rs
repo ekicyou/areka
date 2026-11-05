@@ -28,10 +28,10 @@ use areka_sakura::ActorKey;
 
 use super::{Playback, SlotPlayback, put_top_play};
 use crate::state::Slot;
-use crate::table::{LoopAnimation, LoopTrigger};
+use crate::table::LoopAnimation;
 use crate::talk::{TalkEpoch, TalkFeed};
 use crate::timeline::{FrameStatus, frame_at};
-use crate::trigger::{Armed, TalkWindow};
+use crate::trigger::{Armed, TalkWindow, log_fired};
 
 /// `key` の面の引き金の状態を返す。無ければ `at_ms` を見え始めの時刻として構え（面に入った）、在れば
 /// 窓の開け閉めだけを写す: 閉じたら隠し、開いたら `at_ms` を新しい起点にして現す（`runonce` の印は
@@ -53,11 +53,7 @@ pub(super) fn arm_slot<'a>(
     match armed.entry(key.clone()) {
         Entry::Occupied(entry) => {
             let state = entry.into_mut();
-            match (open, state.is_visible()) {
-                (true, false) => state.show(at_ms, revealed),
-                (false, true) => state.hide(),
-                _ => {}
-            }
+            state.follow(open, at_ms, revealed);
             state
         }
         Entry::Vacant(entry) => {
@@ -68,7 +64,7 @@ pub(super) fn arm_slot<'a>(
                 at_ms,
                 "seriko: trigger 面に入った（引き金を構えた）"
             );
-            entry.insert(Armed::arm(Some(at_ms), open, revealed))
+            entry.insert(Armed::arm(at_ms, open, revealed))
         }
     }
 }
@@ -121,30 +117,7 @@ pub(super) fn fire_top_triggers<'a>(
                 acts_through: None,
             },
         );
-        match anim.trigger {
-            LoopTrigger::Runonce => tracing::info!(
-                scope = key.0.as_str(),
-                slot = ?key.1,
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）"
-            ),
-            LoopTrigger::Periodic { .. } => tracing::info!(
-                scope = key.0.as_str(),
-                slot = ?key.1,
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: trigger periodic を鳴らした（再生開始・先頭コマから・要件 3.1）"
-            ),
-            LoopTrigger::Talk { .. } => tracing::debug!(
-                scope = key.0.as_str(),
-                slot = ?key.1,
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: trigger talk を鳴らした（再生開始・先頭コマから・要件 4.1）"
-            ),
-            _ => {}
-        }
+        log_fired(anim, started_at_ms, &key.0, key.1, None);
         fired.push((anim, started_at_ms));
     }
     fired

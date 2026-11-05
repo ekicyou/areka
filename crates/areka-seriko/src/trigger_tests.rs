@@ -38,12 +38,12 @@ fn talk(id: u32, every: u32) -> LoopAnimation {
 
 /// 開いた窓で `at_ms` に見え始めた状態。
 fn armed_at(at_ms: u64) -> Armed {
-    Armed::arm(Some(at_ms), true, None)
+    Armed::arm(at_ms, true, None)
 }
 
 /// 開いた窓で見え始め、その時点で `revealed` 文字が現れていた状態（`talk` の数えを持つ）。
 fn armed_with_text(revealed: u64) -> Armed {
-    Armed::arm(Some(0), true, Some(revealed))
+    Armed::arm(0, true, Some(revealed))
 }
 
 /// `talk` の判定に渡す刻みの時刻。文字が現れる時刻のどれよりも後に置き、開始の時刻が
@@ -231,7 +231,7 @@ fn hide_silences_and_show_rebases_periodic_but_keeps_the_runonce_mark() {
 /// 閉じた窓で構えたら、現れるまで何も鳴らない。まだ鳴らしていない `runonce` は現れた時刻で鳴る。
 #[test]
 fn armed_closed_stays_silent_until_shown() {
-    let mut armed = Armed::arm(Some(100), false, None);
+    let mut armed = Armed::arm(100, false, None);
     let (r, p) = (runonce(1), periodic(3, 1000));
     assert_eq!(armed.poll(&r, 100, |_| false, None), None);
     assert_eq!(armed.poll(&p, 4000, |_| false, None), None);
@@ -430,7 +430,7 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
     let mut open = armed_with_text(0);
     assert_eq!(open.poll(&t, TICK_MS, |_| false, None), None, "窓が無い");
 
-    let mut closed = Armed::arm(Some(0), false, Some(0));
+    let mut closed = Armed::arm(0, false, Some(0));
     assert_eq!(
         closed.poll(&t, TICK_MS, |_| false, Some(&crossed)),
         None,
