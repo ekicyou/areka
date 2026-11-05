@@ -279,7 +279,7 @@ element0,overlay,eye.png,0,0
 }
 
 /// seriko-pattern-calls 6.8・M6: 入れ子の辺は着せ替えの手順の「描く」コマから作る。純 `bind` は全部の
-/// コマ（呼び出しの語は除く）、`bind+random` は pattern0 だけ。
+/// コマ（呼び出しの語は除く）。`bind+random` は手順を持たないので、有効でもコマが無ければ数えない（件 26）。
 #[test]
 fn bind_targets_come_from_bind_steps_draws() {
     let text = "\
@@ -318,11 +318,11 @@ element0,overlay,eye.png,0,0
     let table = table_of(text);
     assert_eq!(
         table.parts(0).map(|p| p.bind_targets.clone()),
-        Some(vec![(1, 3), (1, 4), (2, 6)])
+        Some(vec![(1, 3), (1, 4)])
     );
     let empty = PatternState::default();
-    assert_eq!(visible(&table, 0, &[1, 2], &empty), vec![3, 4, 6]);
-    assert_eq!(visible(&table, 0, &[2], &empty), vec![6]);
+    assert_eq!(visible(&table, 0, &[1, 2], &empty), vec![3, 4]);
+    assert_eq!(visible(&table, 0, &[2], &empty), Vec::<u32>::new());
 }
 
 /// 先祖へ戻る辺は進まない（自分自身・相互・コマが一番上へ戻る）。有限で終わる。
@@ -506,6 +506,7 @@ fn fixture_case() -> Case {
 }
 
 /// 子の中の着せ替え・bind+random・random・pattern定義の先の中の子が混ざる文面（循環なし）。
+/// 5 の `bind+random` 7 は pattern0（先 8）を持つ: 有効でコマが無いとき、合成は描かず部品にも数えない。
 fn layered_case() -> Case {
     let text = "\
 surface0
@@ -522,6 +523,7 @@ surface5
 element0,overlay,part.png,0,0
 element1,overlay,7,1,1
 animation7.interval,bind+random,2
+animation7.pattern0,overlay,8,0,0,0
 animation7.pattern1,overlay,6,50,0,0
 animation8.interval,random,2
 animation8.pattern1,overlay,8,50,0,0

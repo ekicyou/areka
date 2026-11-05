@@ -397,14 +397,15 @@ fn same_child_in_several_places_has_one_clock_and_one_field() {
     assert_eq!(parts_in_field(&p), vec![100], "欄は部品 100 の 1 つだけ");
 }
 
-/// 刻みの途中で見えなくなった部品（親の着せ替えのコマが pattern0 を置き換えた先）のコマは、
-/// 欄に残さない（部品の欄の番号は `visible_parts` の答えに含まれる・design.md「Data Models」）。
+/// 親の着せ替えのコマが刻みの間に 40 から 41 へ移ると、40 のコマは欄に残らない（部品の欄の番号は
+/// `visible_parts` の答えに含まれる・design.md「Data Models」）。見えない間の 40 は評価も抽選もされず、
+/// 抽選の時計は残る。同じ刻みで隠れる場合は
+/// `parts_always_tests::blank_survives_when_a_part_hidden_in_the_same_tick_is_dropped` が受け持つ。
 ///
-/// 既知の振る舞い（設計どおり・決定論）: 親の着せ替えのコマが pattern0 を置き換えている間も、
-/// その pattern0 の先（ここでは 40）は刻みの 1 回目の `visible_parts` で見える扱いになり、
-/// 毎刻み評価され、毎境界で抽選される。乱数の呼び出し回数をここで固定する。欄には載らない。
+/// コマの無い `bind+random` は手順を持たないので（audit-emo-compose 指摘 4）、pattern0 の先（ここでは 40）は
+/// 親のコマが 40 を指す間だけ見える。乱数の呼び出し回数をここで固定する。
 #[test]
-fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
+fn part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock() {
     let table = table_of(
         "surface0\n{\nelement0,overlay,100,0,0\n}\n\
          surface100\n{\nanimation5.interval,bind+random,2\n\
@@ -420,7 +421,7 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     let on = BindSet::from_ids([5]);
     let top = PatternState::default();
 
-    // 境界: 40（着せ替えの pattern0 の先）と 100 が当たる。100 のコマは 40。
+    // 境界: 100 が当たってコマが 40 になり、見えた 40 も同じ刻みで当たる。
     let p = tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
     assert_eq!(calls(&probe), 2);
     assert_eq!(part_frames(&p, 100), vec![(5, 40)]);
@@ -436,34 +437,32 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     );
     assert_eq!(calls(&probe), 2);
 
-    // 境界 2000: 40 は再生中（Playing{1000}）なので抽選されず、経過 1000 の `-1` で止まって時計が消える。
+    // 境界 2000: 40 は絵に出ていないので評価されず、時計は Playing{1000} のまま残る。
     // 100 は末尾を保っている（Residual）ので抽選の対象（3 回目・外れ）。
     let p = tick(&mut clocks, &table, 0, &on, 2000, true, &mut rng, &top);
     assert_eq!(calls(&probe), 3);
-    assert_eq!(clocks.clock(&scope(), 40, 0), None);
-    assert_eq!(part_frames(&p, 100), vec![(5, 41)]);
-    assert_eq!(parts_in_field(&p), vec![100]);
-
-    // 境界 3000: 40 は絵に出ていないのに抽選される（設計どおりの既知の振る舞い）。欄を空にしてから回すので、
-    // 1 回目の `visible_parts` では 100 のコマがまだ無く、着せ替えの pattern0 の先 40 が見える扱いになる。
-    // 100 の着せ替えのコマが pattern0 を置き換えている間は、毎刻み 40 を評価し、毎境界で 40 を抽選する
-    // （決定論。消費順は 40 → 100）。それでも 40 のコマは欄に載らない。
-    let p = tick(&mut clocks, &table, 0, &on, 3000, true, &mut rng, &top);
-    assert_eq!(
-        calls(&probe),
-        5,
-        "40（4 回目・当たり）→ 100（5 回目・外れ）"
-    );
     assert_eq!(
         clocks.clock(&scope(), 40, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 3000,
+            started_at_ms: 1000,
             acts_through: None,
         }),
-        "絵に出ていない 40 の時計が動き出す"
+        "絵に出ていない 40 は評価されない"
     );
     assert_eq!(part_frames(&p, 100), vec![(5, 41)]);
-    assert_eq!(parts_in_field(&p), vec![100], "40 のコマは欄に載らない");
+    assert_eq!(parts_in_field(&p), vec![100]);
+
+    // 境界 3000: 100 が当たり（4 回目）コマが 40 に戻る。見えた 40 は残っていた時計で評価され、
+    // 経過 2000 で `-1` を過ぎて止まり時計が消える（この刻みでは抽選しない）。止まった 40 のコマは欄に載らない。
+    let p = tick(&mut clocks, &table, 0, &on, 3000, true, &mut rng, &top);
+    assert_eq!(calls(&probe), 4, "100（4 回目・当たり）だけ");
+    assert_eq!(clocks.clock(&scope(), 40, 0), None);
+    assert_eq!(part_frames(&p, 100), vec![(5, 40)]);
+    assert_eq!(
+        parts_in_field(&p),
+        vec![100],
+        "止まった 40 のコマは欄に載らない"
+    );
 }
 
 // ── 7.3: 時計を書き換えない口・時計を捨てる口・記録 ─────────────────────────────

@@ -95,7 +95,7 @@ pub struct SurfaceParts {
     /// element定義で置いた子（面の表に在る番号だけ・element定義の番号の昇順）。
     pub children: Vec<u32>,
     /// 着せ替えの animation の手順の「描く」コマが指すサーフェス（animation の番号, 番号）。
-    /// 純 `bind` は全部のコマ・`bind+random` は pattern0 だけ（seriko-pattern-calls 6.8）。昇順・重複なし。
+    /// 純 `bind` の全部のコマ（`bind+random` は手順を持たず、コマがあるときだけ③で数える）。昇順・重複なし。
     pub bind_targets: Vec<(u32, u32)>,
     /// `bind+random` の animation の番号（昇順・重複なし）。③ の合流の門が引く（無効ならコマを数えない）。
     /// 純 `bind` のコマは呼ばれて始まったものだけなので門を通さない（seriko-pattern-calls 5.6・M5）。
@@ -134,7 +134,7 @@ impl NestTable {
                 if matches!(anim.interval, Interval::BindRandom { .. }) {
                     bind_random_ids.push(anim.id);
                 }
-                // 合成と同じ辺: 着せ替えの手順の「描く」コマ（純 `bind` は全部・`bind+random` は pattern0）。
+                // 合成と同じ辺: 着せ替えの手順の「描く」コマ（純 `bind` の全部・`bind+random` は手順が空）。
                 bind_targets.extend(world.bind_steps(id, anim.id).iter().filter_map(
                     |s| match *s {
                         BindStep::Draw { surface, .. } => Some((anim.id, surface)),

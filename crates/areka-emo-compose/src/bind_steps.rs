@@ -1,10 +1,10 @@
 //! 着せ替え（interval が `bind` 種の animation）の描く手順を、読み込みのときに 1 度だけ作る
 //! （seriko-pattern-calls 要件 5.5・6.5・6.7・6.8）。
 //!
-//! 純 `bind` は全部の pattern を番号の昇順に、`bind+random` は pattern0 だけをたどる
-//! （2 コマ目以降は seriko が再生するコマで、静的に描くと閉じ目が目を覆う）。描く語で番号が 0 以上の
-//! コマは [`BindStep::Draw`]、純 `bind` の `insert` で相手が同じ面の純 `bind` なら [`BindStep::Insert`]、
-//! それ以外は手順に入れない。記録は出さない（描かない語は `shape_issues`、8 語は seriko が 1 度出す）。
+//! 純 `bind` だけが手順を持ち、全部の pattern を番号の昇順にたどる。`bind+random` は手順を持たない
+//! （コマがあるときだけ描く・animated-surface-log-flood 件 26。手順を作ると入れ子の表が描かない先を
+//! 見える部品に数える）。描く語で番号が 0 以上のコマは [`BindStep::Draw`]、`insert` で相手が同じ面の
+//! 純 `bind` なら [`BindStep::Insert`]、それ以外は手順に入れない。記録は出さない（描かない語は `shape_issues`、8 語は seriko が 1 度出す）。
 //!
 //! 合成はコマの無い有効な着せ替えの寄与としてこの手順を積み、`insert,B` の位置に B の寄与を
 //! B 自身の座標で積む（[`push_bind_contribution`]・要件 5.7・6.1〜6.4・SSP の測り M6）。
@@ -41,16 +41,10 @@ impl BindSteps {
                 continue;
             };
             for anim in &master.animations {
-                let pure = match anim.interval {
-                    Interval::Bind => true,
-                    Interval::BindRandom { .. } => false,
-                    _ => continue,
-                };
-                let mut patterns: Vec<_> = anim
-                    .patterns
-                    .iter()
-                    .filter(|p| pure || p.index == 0)
-                    .collect();
+                if !matches!(anim.interval, Interval::Bind) {
+                    continue;
+                }
+                let mut patterns: Vec<_> = anim.patterns.iter().collect();
                 patterns.sort_by_key(|p| p.index);
                 let list = patterns
                     .into_iter()
@@ -65,7 +59,7 @@ impl BindSteps {
                                     y: p.y,
                                 })
                             }
-                            PatternWord::Insert if pure => {
+                            PatternWord::Insert => {
                                 let target =
                                     *call_targets(PatternWord::Insert, &p.target).ok()?.first()?;
                                 is_pure_bind(&master.animations, target)
@@ -81,7 +75,7 @@ impl BindSteps {
         BindSteps(steps)
     }
 
-    /// 面 `surface` の animation `animation` の手順（`bind` 種でなければ空）。
+    /// 面 `surface` の animation `animation` の手順（純 `bind` でなければ空）。
     pub(crate) fn get(&self, surface: u32, animation: u32) -> &[BindStep] {
         self.0.get(&(surface, animation)).map_or(&[], |s| s)
     }
@@ -145,23 +139,13 @@ pub(crate) fn push_bind_contribution(
 ) {
     let steps = level.world.bind_steps(level.surface_id, a);
     if steps.is_empty() {
-        // まばたき等の `bind+random` で pattern0 が無い・描くコマが無い: 静的な寄与は無い（再生は seriko の領分）。
+        // `bind+random`（コマが無いあいだは描かない・件 26）か、描くコマが無い: 静的な寄与は無い（再生は seriko の領分）。
         tracing::debug!(
             target: "areka_emo_compose",
             surface_id = level.surface_id,
             animation_id = a,
             "有効な着せ替えに描く手順が無い: 静的合成へ寄与なし"
         );
-        return;
-    }
-    // `bind+random` はコマがあるときだけ描く（再生していないあいだ pattern0 を静的に積まない・
-    // animated-surface-log-flood 件 26 の決めに合わせる）。手順は `insert` の行き先の数えに残す。
-    let bind_random = level
-        .master
-        .animations
-        .iter()
-        .any(|anim| anim.id == a && matches!(anim.interval, Interval::BindRandom { .. }));
-    if bind_random {
         return;
     }
     for step in steps {

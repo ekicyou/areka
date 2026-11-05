@@ -30,7 +30,7 @@
   - 壊れたら落ちるテストを 2 本置く: pattern を (100000, 100000) に置く純 `bind` の面が失敗を返し、絵の容量が 0 のまま・`error!` が 1 行。element定義の子を `u32::MAX + 10` の位置に置く面が、小さな外形に化けず失敗を返す
   - 終わった姿: その 2 本のテストが緑で、直しを戻すと落ちる（確保で落ちる・小さな外形で通る）。ツリー全体の `ComposeError` の呼び手がビルドできる
   - _Requirements: 2.1, 2.3, 4.4, 4.5, 5.1, 5.2, 6.2_
-- [ ] 2.2 コマの無い `bind+random` の先を、着せ替えの手順にも見える部品にも数えない（指摘 4）
+- [x] 2.2 コマの無い `bind+random` の先を、着せ替えの手順にも見える部品にも数えない（指摘 4）
   - 着手の前に `audit-seriko` と、部品の時計のテスト（`bind+random` を持つテスト）の期待をどちらが直すか・どちらが先に着くかを申し合わせる
   - 着せ替えの手順を純 `bind` だけに作り、合成の側の `bind+random` の早い戻りを消す（手順が空なので今の「描く手順が無い」の `debug!` を通る）。挿入の行き先の数えに手順を残すという説明を消す
   - 入れ子の表のコードは変えず、説明を「純 `bind` の全部のコマ（`bind+random` はコマがあるときだけ数える）」に直す。外形の「`bind+random` は番号の最も小さい 1 つを大きさに数える」は変えない
@@ -153,3 +153,4 @@
 - 1.2: `plan_nesting_extent_tests` は `build_plan` を直に呼ぶ（2.4 で形が変わるときに直す）。`opaque_wxh` は α=255 の単色（前は全バイト 64）。`append_def` は fold_tests（4 引数）と base_image_tests（2 引数）で別物として残る
 - 1.3: 番人の例外を消すと件数の宣言 `OVER_LIMIT_ALLOWED_COUNT` も 1 減らす（番人自身が 2 か所の編集を求める）。コマの合流の門のテストは `plan_frame_merge_tests.rs`
 - 2.1: `MAX_EXTENT`（plan_extent.rs）の判定は build_plan の EmptyComposition の後。`areka-emo-present` の match に `ExtentTooLarge` の腕はまだ無い（後から着いた側が足す申し合わせ）
+- 2.2: `areka-seriko/src/parts_tests.rs` のテストを `part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock` に改名（期待と説明も）＝audit-seriko へ伝え済み。見えない部品の抽選の時計が残り後で一度に進むのは seriko の今の振る舞い（範囲外）

@@ -75,17 +75,10 @@ fn pure_bind_walks_all_patterns_in_index_order() {
     );
 }
 
-/// `bind+random` は pattern0 だけ（insert も 2 コマ目以降も入らない）。
+/// `bind+random` は手順を持たない（コマがあるときだけ描く・件 26。pattern0 も insert も入らない）。
 #[test]
-fn bind_random_uses_pattern0_only() {
-    assert_eq!(
-        world().bind_steps(0, 3),
-        [Draw {
-            surface: 30,
-            x: 0,
-            y: 0
-        }]
-    );
+fn bind_random_has_no_steps() {
+    assert!(world().bind_steps(0, 3).is_empty());
 }
 
 /// 相手が無い・`bind` でない・読めない `insert`、負の番号、8 語、描かない語は手順に入らない（6.5）。
