@@ -90,7 +90,6 @@ struct TopPlays<'a> {
     pattern: &'a mut PatternState,
     stopped: &'a mut StoppedAlways,
     key: &'a (ActorKey, Slot),
-    anims: &'a [LoopAnimation],
     started: Vec<u32>,
 }
 
@@ -104,8 +103,7 @@ impl CallPlays for TopPlays<'_> {
 
     fn set_acts_through(&mut self, animation: u32, through_ms: u64) {
         if let Some(p) = self.plays.get_mut(&animation) {
-            // 合図の時刻が前の刻みより前でも印を戻さない（同じコマを 2 度当てない）。
-            p.acts_through = Some(p.acts_through.map_or(through_ms, |t| t.max(through_ms)));
+            p.acts_through = Some(through_ms);
         }
     }
 
@@ -129,13 +127,9 @@ impl CallPlays for TopPlays<'_> {
         );
     }
 
-    fn stop(&mut self, animation: u32) {
+    fn stop(&mut self, animation: u32, always: bool) {
         self.plays.remove(&animation);
         self.pattern.remove(animation);
-        let always = self
-            .anims
-            .iter()
-            .any(|a| a.id == animation && matches!(a.trigger, LoopTrigger::Always { .. }));
         if always {
             self.stopped
                 .insert((self.key.0.clone(), self.key.1, animation));
@@ -173,7 +167,6 @@ pub(super) fn run_top_calls(
         pattern,
         stopped,
         key,
-        anims,
         started: Vec::new(),
     };
     let outcome = run_calls(

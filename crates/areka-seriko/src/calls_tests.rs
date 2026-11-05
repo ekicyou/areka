@@ -24,7 +24,7 @@ impl CallPlays for FakePlays {
     fn start(&mut self, animation: u32, at_ms: u64) {
         self.0.insert(animation, (at_ms, None));
     }
-    fn stop(&mut self, animation: u32) {
+    fn stop(&mut self, animation: u32, _always: bool) {
         self.0.remove(&animation);
     }
     fn playing_ids(&self) -> Vec<u32> {
@@ -292,4 +292,20 @@ fn targets_not_in_the_table_do_nothing() {
     let mut p = plays(&[(0, 0)]);
     run(&table, &mut p, 10);
     assert_eq!(p.playing_ids(), vec![0]);
+}
+
+/// 当て終えた印は戻さない: 印が 500 の再生を 300 で回しても 500 のまま、続く 600 で 400 の `move` を
+/// 2 度当てない（印を戻さない決まりは `run_calls` が受け持つ）。
+#[test]
+fn acts_through_mark_never_moves_back() {
+    let table = [anim(0, RANDOM, vec![draw(10, 400), mv(0, 5, 6)])];
+    let mut p = FakePlays([(0, (0, Some(500)))].into());
+    assert_eq!(run(&table, &mut p, 300).shift, None);
+    assert_eq!(p.playing(0), Some((0, Some(500))), "印は 300 へ戻らない");
+    assert_eq!(
+        run(&table, &mut p, 600).shift,
+        None,
+        "400 の move は当て済み"
+    );
+    assert_eq!(p.playing(0), Some((0, Some(600))));
 }

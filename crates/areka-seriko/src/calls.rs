@@ -14,13 +14,12 @@ use std::collections::{BTreeSet, HashSet};
 pub(crate) trait CallPlays {
     /// 再生中なら (開始の時刻, 働きのコマを当て終えた時刻)。終わって最後のコマを残したものは数えない。
     fn playing(&self, animation: u32) -> Option<(u64, Option<u64>)>;
-    /// 働きのコマをこの時刻まで当て終えた印を付ける。
+    /// 当て終えた印をこの値にする（戻さない決まりは [`run_calls`] が受け持つ）。
     fn set_acts_through(&mut self, animation: u32, through_ms: u64);
     /// 開始の時刻 `at_ms` で頭から始める（今の再生は置き換え、当て終えた印は無しに戻す）。
     fn start(&mut self, animation: u32, at_ms: u64);
-    /// 再生と欄を外す（`-1` と同じ）。
-    /// 止めた `always` の印を付けるのは実装する側の役目（タスク 5.2）。
-    fn stop(&mut self, animation: u32);
+    /// 再生と欄を外す（`-1` と同じ）。`always` が真なら止めた `always` の印を付ける。
+    fn stop(&mut self, animation: u32, always: bool);
     /// 再生中の animation の番号。
     fn playing_ids(&self) -> Vec<u32>;
 }
@@ -50,7 +49,8 @@ type Due = (u64, u32, usize, u64);
 /// 前の刻みから `now_ms` までに来た働きのコマを予定の時刻の順に当てる。
 ///
 /// 事前条件: `plays` の各再生の開始の時刻は `now_ms` 以下。事後条件: 予定の時刻が `now_ms` 以下の
-/// 働きのコマはすべて当て終え、再生中の全部の当て終えた印が `now_ms` になる。選びは `pick` だけを引く。
+/// 働きのコマはすべて当て終え、再生中の全部の当て終えた印が `max(前の印, now_ms)` になる（合図の時刻が
+/// 前の刻みより前でも印を戻さない＝同じコマを 2 度当てない）。選びは `pick` だけを引く。
 pub(crate) fn run_calls<'a>(
     plays: &mut impl CallPlays,
     animation_of: impl Fn(u32) -> Option<&'a LoopAnimation>,
@@ -104,7 +104,9 @@ pub(crate) fn run_calls<'a>(
                 for target in chosen(targets, *pick_one, pick) {
                     // 再生していない相手は何もしない（4.4・M2）。
                     if plays.playing(target).is_some() {
-                        plays.stop(target);
+                        let always = animation_of(target)
+                            .is_some_and(|a| matches!(a.trigger, LoopTrigger::Always { .. }));
+                        plays.stop(target, always);
                     }
                 }
             }
@@ -114,7 +116,11 @@ pub(crate) fn run_calls<'a>(
         }
     }
     for id in plays.playing_ids() {
-        plays.set_acts_through(id, now_ms);
+        let through = plays
+            .playing(id)
+            .and_then(|(_, t)| t)
+            .map_or(now_ms, |t| t.max(now_ms));
+        plays.set_acts_through(id, through);
     }
     outcome
 }
