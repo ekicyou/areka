@@ -45,13 +45,13 @@
 9. **利用統計**: areka には `areka-usage-stats` の brief だけ。U1〜U3 は `usage-stats.md` で外のリポジトリへ渡す。
 10. **原文の置き場**: この `doc/ideas/` の 2 文書。開発者は `doc` と `docs` の散らかりを指摘し、片付けの spec `doc-tree-tidy` を v0.2.0 に起票した（開発者「このspecだけは0.1.0の直後、doraとかの基盤整備に置きます」）。
 11. **P2**: 検査だけが残る（descript のキーは `pasta_check release` が何もしなくても .nar に載る）。`ghost-material-metadata` がウェーブに載ったら、areka のセッションから pasta のセッションへ相談して決める（開発者「spec が次のウェーブに載ったタイミングで、areka セッションから pasta セッションを呼び出す形で相談して決めることにしましょう」）。
-12. **`doc/PASTA_PROFILE.md`**: 作例の `\w[N]` 6 か所を `\_w[N]` に直し、「pasta が出す `\w[N]` は上流の欠陥」の注記を正しい出どころに書き直した（2026-10-28・pasta の取り決めの brief「依頼に添える訂正」に当たる）。
+12. **`doc/pasta-profile.md`**: 作例の `\w[N]` 6 か所を `\_w[N]` に直し、「pasta が出す `\w[N]` は上流の欠陥」の注記を正しい出どころに書き直した（2026-10-28・pasta の取り決めの brief「依頼に添える訂正」に当たる）。
 
 ## 依頼書が届いたときの申し送り
 
 - `ALLOWED_EVENT_IDS`（`crates/areka-kanade/src/schedule/events.rs`）は「ukadoc の固定名だけ・各行に ukadoc の URL」の決まり。ノベル用の独自イベントを足すには、表の決まりを広げる必要がある。
 - 演劇の種別（`type,ghost`＋印か、`/play/` の置き場か）は、依頼書の「起動の形」で決める。新しい種別なら `shiori4-api` に「演劇から SHIORI を選ぶ書き方」を足しに戻る。
-- `doc/PASTA_PROFILE.md` の訂正は済み、と返す。
+- `doc/pasta-profile.md` の訂正は済み、と返す。
 
 ## 原文（2026-10-28 開発者）
 

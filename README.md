@@ -19,7 +19,7 @@
 - 描画は Windows.UI.Composition（WUC）＋ Direct2D ＋ DirectWrite で、透過窓と、透明な所のクリックを下のアプリへ通す動きを GPU 合成のまま実現しています。
 - 32 ビットの SHIORI（`shiori.dll` など）は、32 ビットの補助 exe（`shiori-host32-helper.exe`）の中で動かします。本体は 64 ビット（x64・arm64）です。
 - 同梱のゴーストは **えも？？**（`emo2`・SHIORI は pasta の 32 ビット版）です。
-- 将来は、areka ならではの表現（縦書きのタイプライター・シェルの中のバルーンなど）を使う旗艦ゴースト **ぱすたさん** も入れる予定です（まだ作れていません。構想は [doc/PASTA_PROFILE.md](doc/PASTA_PROFILE.md)）。
+- 将来は、areka ならではの表現（縦書きのタイプライター・シェルの中のバルーンなど）を使う旗艦ゴースト **ぱすたさん** も入れる予定です（まだ作れていません。構想は [doc/pasta-profile.md](doc/pasta-profile.md)）。
 
 ---
 
@@ -123,7 +123,7 @@ pwsh -NoProfile -File tools/package.ps1 -Check     # 組んだ zip を展開し�
 - [.kiro/steering/](.kiro/steering/) — プロジェクト全体の決めごと（`product.md`・`tech.md`・`structure.md`）
 - [.kiro/steering/roadmap.md](.kiro/steering/roadmap.md) — ロードマップと次に着手する仕様（正本）
 - [.kiro/specs/](.kiro/specs/) — 個々の仕様（完了したものは `completed/`）
-- [doc/CONSTITUTION.md](doc/CONSTITUTION.md) — 設計理念と責務の分け方
+- [doc/constitution.md](doc/constitution.md) — 設計理念と責務の分け方
 
 ---
 
