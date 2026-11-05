@@ -1,14 +1,14 @@
 //! 命令モデル型（`model`）の単体テスト。
 //!
 //! 本モジュールは `model` とは別モジュールであり、公開パス
-//! `crate::sakura::{Instruction, SurfaceArg, NewLineRatio, Choice, MoveArgs}`
+//! `crate::sakura::{Instruction, SurfaceArg, NewLineRatio, Choice}`
 //! 経由で型へアクセスする。これにより「別クレートの下流 engine が
 //! 公開面のみで各 variant を構築・比較し、不透明値をアクセサで読める」
 //! という I/O 契約（done 基準）を、別モジュール視点で固定する。
 
 #![cfg(test)]
 
-use crate::sakura::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
+use crate::sakura::{Choice, Instruction, NewLineRatio, SurfaceArg};
 use std::time::Duration;
 
 #[test]
@@ -96,15 +96,6 @@ fn construct_control_variants() {
     assert_eq!(Instruction::Clear, Instruction::Clear);
     assert_eq!(Instruction::Quit, Instruction::Quit);
     assert_ne!(Instruction::End, Instruction::Clear);
-}
-
-#[test]
-fn construct_move_variant() {
-    let m = MoveArgs {
-        args: vec!["10".to_string(), "20".to_string()],
-    };
-    let i = Instruction::Move(m.clone());
-    assert_eq!(i, Instruction::Move(m));
 }
 
 #[test]

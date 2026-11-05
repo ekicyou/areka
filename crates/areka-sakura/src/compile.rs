@@ -109,14 +109,12 @@ impl Tracer<'_> {
                 ReadNote::UnknownTag => DetectionPoint::ReadUnknownTag,
                 ReadNote::Unclosed => DetectionPoint::ReadUnclosed,
                 ReadNote::ArgumentDefaulted => DetectionPoint::ReadDefaulted,
-                // 読む段が後から足す印は、その意味が決まるまで控えない（check_script と同じ）。
-                _ => continue,
             };
             self.find(point);
         }
     }
 
-    /// `\!` の腕（`Move` は名前 `move`）: 誰も拾わない組と、読めない `choicetimeout`。
+    /// `\!` の腕: 誰も拾わない組と、読めない `choicetimeout`。
     fn command(&mut self, name: &str, raw_args: &[String]) {
         let first = raw_args.first().map(String::as_str);
         if !self.judges.command_handled(name, first) {
@@ -268,22 +266,7 @@ fn scan<'a>(
                 end = TalkEndReason::Quit;
                 break;
             }
-            // キャラ移動 `\![move,...]`（→汎用キャリア・R4.1/4.2）。`\!` 名前空間全体を単一の
-            // 不透明汎用 cue へ写像し typed variant を新設しない（name は暗黙 "move"＝parser が
-            // 種別で分離済みの転記を戻すだけ）。引数（空トークン＝省略スロット含む）を欠落なく
-            // 記述順のまま保持する。意味割当（座標・基準点）は消費側 ghost の責務。瞬時（duration 0）。
-            Instruction::Move(move_args) => {
-                cues.push(emit(
-                    scope,
-                    offset,
-                    0.0,
-                    CueCommand::command_carrier("move", move_args.args.clone()),
-                ));
-                if let Some(t) = tracer.as_deref_mut() {
-                    t.command("move", &move_args.args);
-                }
-            }
-            // 汎用 `\!` コマンド（move 以外・→汎用キャリア・R4.1/4.2/8.2）。name＋raw_args を
+            // 汎用 `\!` コマンド（`move` も含む・→汎用キャリア・R4.1/4.2/8.2）。name＋raw_args を
             // 解釈せず同一キャリアへ載せる（`\![*]` 単独形＝raw_args 空も第一級で台本に載る＝
             // R8.2 卒業）。空トークン・`--key=value` 形も素通し。消費はコマンド名レベル選別（R4.5）。瞬時。
             //
@@ -334,7 +317,6 @@ fn scan<'a>(
             // （空トークン含む）は記述順のまま無変形で運び、意味付けは消費側（文字レンダリング層）
             // がキーで自己選別して行う。**再生時間 0**（`\f` の有無で台本の時刻列を変えない）で、
             // 前後の文字との並び順は書き出し位置 `offset` の転写だけで保たれる（offset は進めない）。
-            // 本腕は catch-all の**前**に置く（後ろに置くと「M-boot 外タグ」として捨てられる）。
             Instruction::Font { args } => {
                 cues.push(emit(
                     scope,
@@ -417,14 +399,16 @@ fn scan<'a>(
                     t.find(DetectionPoint::CharCodeDropped);
                 }
             }
-            // 残る除外（`Raw` および `#[non_exhaustive]` の未知 variant）は無視ログを記録し cue を
-            // 生成せず継続する（寛容・非 panic・型シーム・R8.2/8.3/R11.2）。Choice/Cursor は task 4.1、
-            // Move/GenericCommand/SystemVar は task 4.2、Font と Anchor/AnchorEnd もその後に専用アームへ
-            // 卒業したため、catch-all が無視する除外集合は Raw＋未知 variant のみ（`Instruction` は別 crate の
-            // `#[non_exhaustive]` ゆえ本 catch-all は構造上必須・未知 variant は防御経路）。Raw-only
-            // 化の明文檻は `catch_all_ignored_set_is_raw_only`（task 4.3・R8.3）。
-            other => {
-                tracing::debug!(instruction = ?other, "M-boot 外タグを無視");
+            // 知らないタグ・閉じの無い `[` の残り（`Raw`）は合図を作らず、警告を 1 行残して続ける
+            // （寛容・非 panic・R8.2/8.3/R11.2・指摘 29）。綴りは長いことがあるので先頭 64 字とバイト数だけ。
+            Instruction::Raw(raw) => {
+                let head: String = raw.chars().take(64).collect();
+                tracing::warn!(
+                    event = "raw_ignored",
+                    head = %head,
+                    bytes = raw.len(),
+                    "[compile] 知らないタグを捨てる"
+                );
             }
         }
         // この命令から作った合図（重なりで足す閉じを含む）は、この命令の範囲を持つ。

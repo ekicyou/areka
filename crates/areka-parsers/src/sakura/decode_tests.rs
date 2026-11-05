@@ -4,7 +4,7 @@
 //! - 待ち時間（`\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
 //! - 改行比率（素の `\n` = 1.0、`\n[percent]` = percent/100、`\n[half]` = 0.5、負値）。
 //! - 選択肢 `\q[disp,target,refs...]` の disp/target 分離 ＋ references 順序保持。
-//! - `\![move,...]` の Move 化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
+//! - `\![move,...]` の汎用コマンド化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
 //!
 //! `move` 以外の `\!`・subset 外タグ・`\q` 旧 2 連形・`\![*]`（タスク 4.2）はここでは検証しない。
 //!
@@ -13,7 +13,7 @@
 
 use super::decode::decode;
 use super::lexer::lex;
-use super::model::{Choice, Instruction, MARKER_COMMAND, MoveArgs, NewLineRatio, SurfaceArg};
+use super::model::{Choice, Instruction, MARKER_COMMAND, NewLineRatio, SurfaceArg};
 use std::time::Duration;
 
 /// 文字列をレックスしてデコードするヘルパ（テスト題材は実スクリプト断片）。
@@ -260,16 +260,17 @@ fn control_tags_end_clear_quit() {
     assert_eq!(dec(r"\-"), vec![Instruction::Quit]);
 }
 
-// ── キャラ移動（要件 7.1 — move のみ・タスク 4.1）─────────────
+// ── キャラ移動（要件 7.1 — 汎用の道・指摘 28）─────────────
 
-/// `\![move,dx,dy]` → Move（move を除いた生引数列を保持・要件 7.1）。
+/// `\![move,dx,dy]` → 名前 `move` の GenericCommand（move を除いた生引数列を保持・要件 7.1）。
 #[test]
 fn move_command_decoded_with_args() {
     assert_eq!(
         dec(r"\![move,10,20]"),
-        vec![Instruction::Move(MoveArgs {
-            args: vec!["10".to_string(), "20".to_string()],
-        })],
+        vec![Instruction::GenericCommand {
+            name: "move".to_string(),
+            raw_args: vec!["10".to_string(), "20".to_string()],
+        }],
     );
 }
 

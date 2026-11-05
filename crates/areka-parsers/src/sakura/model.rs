@@ -1,7 +1,7 @@
 //! 命令モデル（下流共有 I/O 契約）。
 //!
 //! さくらスクリプトの 1 命令を表すフラットな単一 enum `Instruction` と、
-//! 付随する値型（`SurfaceArg` / `NewLineRatio` / `Choice` / `Anchor` / `MoveArgs`）を定義する。
+//! 付随する値型（`SurfaceArg` / `NewLineRatio` / `Choice` / `Anchor`）を定義する。
 //! これがクロスエンジン I/O 契約の片側であり、本パーサが生成者、
 //! 下流 `areka-P0-sakura-engine` が消費者となる（型の正本は本クレートが所有）。
 //!
@@ -9,7 +9,6 @@
 //! - フラット表現（意味の入れ子／木は持たない）。
 //! - 派生は `Clone` / `Debug` / `PartialEq` のみ（`f32`/`Duration` を含むため
 //!   `Eq`/`Hash` は付さない・`serde` も付さない）。
-//! - `#[non_exhaustive]` により variant 追加は後方互換（要件 11.1）。
 //! - 不透明 NewType（`SurfaceArg` / `NewLineRatio`）はフィールドを非公開とし、
 //!   read-only アクセサ（`as_str` / `ratio`）で中身を公開する（dola `ActorKey` 流儀）。
 
@@ -20,7 +19,6 @@ use std::time::Duration;
 /// 下流 `areka-P0-sakura-engine` と共有する I/O 契約の片側。各 variant は
 /// 値正規化済み（待ち時間 = `Duration`、改行 = 比率、Choice = disp/target 分離）であり、
 /// 下流は再パース不要（要件 1.2）。
-#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
     /// タグ間プレーンテキスト（要件 9）。
@@ -50,11 +48,9 @@ pub enum Instruction {
     Clear,
     /// 終了 `\-`（要件 6.4）。
     Quit,
-    /// キャラ移動 `\![move,...]`（引数 decode 済み。要件 7.1）。
-    Move(MoveArgs),
     /// システム変数 `%username`（展開なしトークン。要件 8）。
     SystemVar(String),
-    /// 汎用 `\!` コマンド（move 以外・種別＋生引数。要件 7.2/7.3/10）。
+    /// 汎用 `\!` コマンド（`move` も含む・種別＋生引数。要件 7.2/7.3/10）。
     GenericCommand { name: String, raw_args: Vec<String> },
     /// 文字装飾 `\f[key,args...]`（転記のみ・text-decoration-canon 要件 2.1/2.2）。
     ///
@@ -82,7 +78,6 @@ pub enum Instruction {
 }
 
 /// 文字の番号を捨てた理由（script-small-tags 要件 2.1〜2.4・2.6）。
-#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CharCodeDrop {
     /// 番号 0。
@@ -167,20 +162,9 @@ pub struct Anchor {
     pub references: Vec<String>,
 }
 
-/// `\![move,...]` の decode 済み引数。要件 7.1。
-///
-/// 「decode」= 構文区切り＋引数分割であり、dx/dy/base の意味割当は
-/// window-placement の責務（design「Out of Boundary」）。生引数列を保持する。
-#[derive(Clone, Debug, PartialEq)]
-pub struct MoveArgs {
-    /// move コマンドの生引数列（意味割当は下流 window-placement の責務）。
-    pub args: Vec<String>,
-}
-
 /// 台本を読む段が、命令 1 つについて自分で下した扱いの印。
 ///
 /// 印は「読む段が自分でしたこと」だけを言う（意味づけ・シェルの事実・`\!` の行き先は知らない）。
-#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReadNote {
     /// 腕の無い綴りなので `Raw` にした（知らないタグ）。

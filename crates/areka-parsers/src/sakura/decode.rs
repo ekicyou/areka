@@ -12,7 +12,7 @@
 //! - 改行 `\n` / `\n[percent]` / `\n[half]` → `NewLine(NewLineRatio)`
 //!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持。要件 4）。
 //! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離・要件 5.1/5.2）。
-//! - キャラ移動 `\![move,...]` → `Move(MoveArgs)`（引数区切りのみ・要件 7.1）。
+//! - `\![name,...]` → `GenericCommand`（`move` も含め、どの名前も同じ汎用の道・要件 7.1〜7.3）。
 //! - 話者スコープ → `SpeakerScope`: 角括弧付き `\p[n]`、括弧なし `\pN`（0〜9・shorthand）、
 //!   および正典 bare 形 `\0`/`\h`（本体側=0）・`\1`/`\u`（相方側=1）を写像（ukadoc・R1.5/R4.4）。
 //!   サーフェス `\s[...]` → `Surface`（無加工保持）、
@@ -23,7 +23,7 @@
 //! - システム変数 `%keyword` → `SystemVar`（展開なし・要件 8）、テキスト → `Text`（要件 9）。
 //!
 //! **スコープ境界（タスク 4.1 / 4.2 シーム）**: 本ファイルは emo2 subset の
-//! 値正規化のみを行う。subset 外タグ・`move` 以外の `\!`・`\q` 旧 2 連形・
+//! 値正規化のみを行う。subset 外タグ・`\!`・`\q` 旧 2 連形・
 //! 不正トークンの吸収（`GenericCommand` / `Raw`）は
 //! **タスク 4.2 の領分**であり、ここでは `decode_passthrough_*` という明示的な
 //! シーム関数へ委ねる（`\q` 旧 2 連形はシーケンス依存ゆえ `fold_legacy_q` が捕捉する）。
@@ -31,14 +31,14 @@
 
 // 本体 `decode_noted` は `parse_noted`（→ `parse`）から非テスト経路で結線済み
 // （範囲なしの `decode` はその上に載せた、テストだけの入口）。タスク 4.2 の
-// シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag` / `decode_bang`
+// シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag`
 // 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
 
 use super::char_code::{CharCodeRead, read_char_code};
 use super::lexer::Token;
 use super::model::{
-    Anchor, CharCodeDrop, Choice, Instruction, MARKER_COMMAND, MoveArgs, NewLineRatio, Read,
-    ReadNote, SurfaceArg,
+    Anchor, CharCodeDrop, Choice, Instruction, MARKER_COMMAND, NewLineRatio, Read, ReadNote,
+    SurfaceArg,
 };
 use std::iter::Peekable;
 use std::ops::Range;
@@ -337,9 +337,8 @@ fn decode_tag(word: String, args: Vec<String>, notes: &mut Vec<ReadNote>) -> Ins
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1
         "q" => decode_choice(args, notes),
-        // `\!` コマンド（要件 7.1）: 第 1 引数が `move` のみ本タスクで Move へ decode。
-        // move 以外（要件 7.2/7.3）はタスク 4.2 の GenericCommand 領分。
-        "!" => decode_bang(args),
+        // `\!` コマンド（要件 7.1〜7.3）: `move` も含め、どの名前も汎用の道（指摘 28）。
+        "!" => decode_passthrough_bang(args),
         // 文字装飾 `\f[key,args...]`（text-decoration-canon 要件 2.1/2.2/2.7）: 引数列を
         // 意味を読まずに記述順のまま転記する（空のトークンも潰さない）。キーの意味付けは
         // 消費側（文字レンダリング層）が自己選別で行う。
@@ -416,19 +415,6 @@ fn decode_anchor(args: Vec<String>) -> Instruction {
     let id = it.next().unwrap_or_default();
     let references: Vec<String> = it.collect();
     Instruction::Anchor(Anchor { id, references })
-}
-
-/// `\![...]` の第 1 引数で分岐する。`move` のみ本タスクで `Move` へ decode（要件 7.1）。
-///
-/// `move` 以外（および空）はタスク 4.2 のシーム（`GenericCommand`）へ委ねる。
-fn decode_bang(args: Vec<String>) -> Instruction {
-    match args.first().map(String::as_str) {
-        Some("move") => Instruction::Move(MoveArgs {
-            args: args.into_iter().skip(1).collect(),
-        }),
-        // move 以外の `\!`（要件 7.2/7.3）はタスク 4.2 領分。
-        _ => decode_passthrough_bang(args),
-    }
 }
 
 /// n ウェイト単位を `Duration` へ（`\wN` = n × 50ms・要件 3.2）。

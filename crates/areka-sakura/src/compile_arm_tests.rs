@@ -136,9 +136,14 @@ fn newline_and_clear_map_to_commands() {
 /// 足してある。閉じは単独だと「開いていないのに閉じ」で合図を出さないが、これは catch-all では
 /// なく専用の腕の決め（警告付き）で、対になった閉じは合図を出す——細目は
 /// `compile_anchor_tests.rs` が担う。除外集合が Raw-only であるという主張は変わらない。
+///
+/// **2026-11-05 追記**（audit-parsers-sakura 指摘 28〜30）——`Move` は消え、`\![move,…]` は
+/// 名前 `move` の `GenericCommand` になった（下の一覧の move はその形）。`#[non_exhaustive]` も
+/// 外れたので catch-all は無く、`Raw` は自分の腕で `raw_ignored` の警告を 1 行残して捨てる
+/// （`raw_is_dropped_with_one_warning`）。合図を作らないという本檻の主張は変わらない。
 #[test]
 fn catch_all_ignored_set_is_raw_only() {
-    use areka_parsers::sakura::{Anchor, Choice, MoveArgs};
+    use areka_parsers::sakura::{Anchor, Choice};
 
     // (1) Raw は除外集合ゆえ 0 cue。中途に Raw を挟んでも内容は後続 Text のみ（ClearAll 前置）。
     let compiled = compile(&[
@@ -179,9 +184,10 @@ fn catch_all_ignored_set_is_raw_only() {
             x: "5em".into(),
             y: "2lh".into(),
         },
-        Instruction::Move(MoveArgs {
-            args: vec!["100".into()],
-        }),
+        Instruction::GenericCommand {
+            name: "move".into(),
+            raw_args: vec!["100".into()],
+        },
         Instruction::GenericCommand {
             name: "raise".into(),
             raw_args: vec!["OnBoot".into()],
@@ -202,12 +208,11 @@ fn catch_all_ignored_set_is_raw_only() {
 /// 各アームの詳細写像は個別の behavioral 檻（`move_maps_to_command_carrier_*` 他）が担う。
 #[test]
 fn graduated_arms_emit_while_raw_remains_ignored() {
-    use areka_parsers::sakura::MoveArgs;
-
     let compiled = compile(&[
-        Instruction::Move(MoveArgs {
-            args: vec!["100".into(), "200".into()],
-        }),
+        Instruction::GenericCommand {
+            name: "move".into(),
+            raw_args: vec!["100".into(), "200".into()],
+        },
         Instruction::SystemVar("username".into()),
         Instruction::GenericCommand {
             name: "raise".into(),
@@ -227,7 +232,7 @@ fn graduated_arms_emit_while_raw_remains_ignored() {
     assert_eq!(
         command_of(&cues[0]).as_command_carrier(),
         Some(("move", vec!["100", "200"])),
-        "Move はキャリア cue へ卒業（R4.1）"
+        "move はキャリア cue へ卒業（R4.1）"
     );
     match command_of(&cues[1]) {
         CueCommand::Text(s) => assert_eq!(
@@ -372,17 +377,16 @@ fn cursor_double_empty_still_emits() {
     assert_eq!(cues[0].duration, 0.0, "Cursor は瞬時（duration 0）");
 }
 
-// ── task 4.2: Move/GenericCommand/SystemVar アーム＋barrier 発行の behavioral 檻 ──
+// ── task 4.2: move/GenericCommand/SystemVar アーム＋barrier 発行の behavioral 檻 ──
 
-/// `Move(MoveArgs)` は `command_carrier("move", args)` へ写像される（`\!` 全体が第一級で
+/// 名前 `move` の `GenericCommand` は `command_carrier("move", args)` へ写像される（`\!` 全体が第一級で
 /// 台本に載る・R4.1/4.2）。空トークン（省略スロット）も欠落なく保持される。瞬時（duration 0）。
 #[test]
 fn move_maps_to_command_carrier_preserving_empty_tokens() {
-    use areka_parsers::sakura::MoveArgs;
-
     // fixture の `\![move,-353,,,0,base,base]` 相当（空トークン 2 個を保つ 6 トークン）。
-    let compiled = compile(&[Instruction::Move(MoveArgs {
-        args: vec![
+    let compiled = compile(&[Instruction::GenericCommand {
+        name: "move".into(),
+        raw_args: vec![
             "-353".into(),
             "".into(),
             "".into(),
@@ -390,13 +394,13 @@ fn move_maps_to_command_carrier_preserving_empty_tokens() {
             "base".into(),
             "base".into(),
         ],
-    })]);
+    }]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 1, "move は単一の汎用キャリア cue を生成する");
     assert_eq!(
         command_of(&cues[0]).as_command_carrier(),
         Some(("move", vec!["-353", "", "", "0", "base", "base"])),
-        "Move → command_carrier(\"move\", args)（空トークン保持・R4.1/4.2）"
+        "move → command_carrier(\"move\", args)（空トークン保持・R4.1/4.2）"
     );
     assert_eq!(cues[0].duration, 0.0, "汎用キャリアは瞬時（duration 0）");
 }
@@ -794,12 +798,11 @@ fn no_choice_menu_script_emits_no_barrier() {
 /// のに対し、本檻は `\1` プレフィックスの scope 帰属を明示する（fixture 忠実な end-to-end）。
 #[test]
 fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
-    use areka_parsers::sakura::MoveArgs;
-
     let compiled = compile(&[
         Instruction::SpeakerScope { n: 1 },
-        Instruction::Move(MoveArgs {
-            args: vec![
+        Instruction::GenericCommand {
+            name: "move".into(),
+            raw_args: vec![
                 "-353".into(),
                 "".into(),
                 "".into(),
@@ -807,7 +810,7 @@ fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
                 "base".into(),
                 "base".into(),
             ],
-        }),
+        },
     ]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(
@@ -925,4 +928,33 @@ fn sysvar_expansion_from_snapshot_is_deterministic() {
         &CueCommand::Text("%foo".into()),
         "未対応名は元の `%名前` を素通し出力（R7.5）"
     );
+}
+
+/// 知らないタグの `Raw` は合図を作らず、`raw_ignored` の警告を 1 行だけ残して捨てる
+/// （指摘 29）。欄は綴りの先頭 64 字（`head`）とバイト数（`bytes`）。後ろの台本は今までどおり。
+#[test]
+fn raw_is_dropped_with_one_warning() {
+    // 閉じの無い `[` で残りが 1 つの Raw になった形（65 字・非 ASCII を含む）。
+    let raw: String = format!("\\s[10{}", "あ".repeat(61));
+    let (compiled, events) = log_capture_kit::capture(|| {
+        compile(&[
+            Instruction::Raw(raw.clone()),
+            Instruction::Text("hi".into()),
+        ])
+    });
+    let warned: Vec<_> = events
+        .iter()
+        .filter(|ev| ev.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warned.len(), 1, "{events:?}");
+    assert_eq!(warned[0].field_str("event"), Some("raw_ignored"));
+    let head: String = raw.chars().take(64).collect();
+    assert_eq!(warned[0].field("head"), Some(head.as_str()));
+    assert_eq!(
+        warned[0].field("bytes"),
+        Some(raw.len().to_string().as_str())
+    );
+    let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+    assert_eq!(cues.len(), 1, "Raw は合図を作らない");
+    assert_eq!(command_of(&cues[0]), &CueCommand::Text("hi".into()));
 }

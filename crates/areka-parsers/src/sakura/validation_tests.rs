@@ -15,7 +15,7 @@
 //! - `\s[""]`（唯一の空クォート引数）の strict 挙動（要件 13.4・タスク 3.2 追随）。
 
 use super::lexer::{Token, lex};
-use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
+use super::model::{Choice, Instruction, NewLineRatio, SurfaceArg};
 use super::parse::parse;
 use std::time::Duration;
 
@@ -327,20 +327,21 @@ fn handwritten_choice_keeps_extra_references_in_order() {
     );
 }
 
-/// `\![move,10,20,base,base]` → 引数 decode 済み `Move`（要件 7.1）。
-/// move 以降の生引数列を保持（意味割当は下流の責務）。
+/// `\![move,10,20,base,base]` はほかの `\!` と同じ汎用の道（名前 `move`＋生引数列・指摘 28）。
+/// 型つきの写しは持たない（意味割当は下流の責務）。
 #[test]
-fn handwritten_move_decodes_args() {
+fn move_bang_is_generic_command() {
     assert_eq!(
         parse(r"\![move,10,20,base,base]"),
-        vec![Instruction::Move(MoveArgs {
-            args: vec![
+        vec![Instruction::GenericCommand {
+            name: "move".to_string(),
+            raw_args: vec![
                 "10".to_string(),
                 "20".to_string(),
                 "base".to_string(),
                 "base".to_string(),
             ],
-        })],
+        }],
     );
 }
 

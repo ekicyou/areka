@@ -58,8 +58,6 @@ pub(crate) fn diagnose(
                 ReadNote::UnknownTag => (Kind::UnknownTag, MSG_UNKNOWN_TAG),
                 ReadNote::Unclosed => (Kind::UnreadableArgument, MSG_UNCLOSED),
                 ReadNote::ArgumentDefaulted => (Kind::UnreadableArgument, MSG_DEFAULTED),
-                // 読む段が後から足す印は、その意味が決まるまで診ない（誤って知らせる枝を作らない）。
-                _ => continue,
             };
             out.push(kind, &span, message);
         }
@@ -84,12 +82,6 @@ pub(crate) fn diagnose(
                         Some("balloon") => balloon_switched = true,
                         _ => {}
                     }
-                }
-            }
-            Instruction::Move(args) => {
-                let first = args.args.first().map(String::as_str);
-                if ledger.consumer_of("move", first).is_none() {
-                    out.push(Kind::UnknownCommand, &span, MSG_UNKNOWN_COMMAND);
                 }
             }
             Instruction::Font { args } => {
@@ -126,7 +118,20 @@ pub(crate) fn diagnose(
                     out.push(Kind::UnpairedTag, &span, message);
                 }
             }
-            _ => {}
+            // 診るものの無い命令（字・待ち・改行・選択肢・位置・終わり・消去・変数・知らないタグ
+            // （印で診た）と、切替の後の絵・バルーン）。命令が増えたらここでコンパイルが止まる。
+            Instruction::Text(_)
+            | Instruction::Surface(_)
+            | Instruction::BalloonSurface(_)
+            | Instruction::Wait(_)
+            | Instruction::NewLine(_)
+            | Instruction::Choice(_)
+            | Instruction::Cursor { .. }
+            | Instruction::End
+            | Instruction::Clear
+            | Instruction::Quit
+            | Instruction::SystemVar(_)
+            | Instruction::Raw(_) => {}
         }
     }
     out.list

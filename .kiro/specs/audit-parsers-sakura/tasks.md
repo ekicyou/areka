@@ -58,7 +58,7 @@
   - 前提が変わる 6 本のテストを新しい振る舞いへ書き直し、確かめの本数を減らさない
   - `legacy_q_title_followed_by_text_folds`・`bracket_after_no_arg_tag_is_text` が緑で、`\+[x]` と `\v[1]` の扱いは今どおり
   - _Requirements: 2.1, 3.1, 3.3, 7.1, 7.3, 7.6, 7.8_
-- [ ] 3.3 `Move` の腕と `#[non_exhaustive]` を消し、知らないタグの捨てを記録する（T8・範囲の外の呼び手まで）
+- [x] 3.3 `Move` の腕と `#[non_exhaustive]` を消し、知らないタグの捨てを記録する（T8・範囲の外の呼び手まで）
   - `\!` の move を汎用キャリアへ流し、`Move`・その引数の型・専用の振り分けと compile の腕を消す（28）
   - 命令の列の 3 つの型から `#[non_exhaustive]` と文を消し、compile と `crates/areka/src/mcp/check_script_judge.rs` の `_` を全部の腕に（30）
   - compile が知らないタグの Raw を `warn!(event = "raw_ignored", head, bytes)` で捨てる（29）
@@ -202,3 +202,4 @@
 - 7.1 への申し送り（2026-11-05 audit-emo-compose の知らせ）: compose のテストの部品は `plan_test_support`（クレート直下の `#[cfg(test)]`）へ移る。指摘 9 の直しで `Animation::interval_written` の読み手が compose から無くなる。`boxes.rs` の箱の追記と波括弧も相手が直す予定で、触った行は相手が知らせる。後から着地した側が rebase で合わせる。
 - 7.2 への申し送り（2026-11-05 audit-seriko の知らせ）: 相手は `areka-seriko` の `bind.rs` から `BindResolver::new`（テスト用）と `BindOptionDecls` を消し、`lib.rs` の再輸出・doc からも外す。`areka` の `emo2_boot/shell_carry_tests.rs` の `BindResolver::new` の呼び出しも descript の文字列から組む形に替える。指摘 15 が触る `from_groups` の 3 枝と `ScopeNames::read` には相手は触らない。行がぶつかったら後から着地した側が合わせる。
 - 2.2: 要件 7.6 の字面「47 は振る舞いを変えず記録を足す」と、design の一覧 47（`decimal_u32` で `bindgroup0010`・`+10`・`char02.` を読まずに飛ばして `warn!`）が食い違って見える。実装は design に従った。完了の前に要件の字を design に合わせるか開発者に確かめる。`char02.` のスコープの番号は黙って飛ぶ（前からある黙った失敗の 1 例）。
+- 7.4 への申し送り（2026-11-05 audit-emo-present の知らせ）: 相手は `shell_target.rs` の `build_shell_target`・`build_shell_target_with_boxes` を `pub(crate)` にし、`#[cfg(test)]` を 1 行ずつ足した（署名は変えていない・本番は `build_core` を直に呼ぶ）。行数は 951→953。後で doc のリンクの括弧を外す（行数は動かない）。7.4 の頭の行数の測り直しではこの 953 行を起点にする。
