@@ -254,3 +254,68 @@ fn always_clock_birth_is_debug_logged_once() {
     assert_eq!(born.len(), 1, "{lines:#?}");
     assert!(born[0].contains("part=100"), "{born:?}");
 }
+
+/// 一番上 0 が子 40 を置き、2 は何も置かない。40 の animation0 は random,2 で 42（すぐ）→ 1000ms で `-1`。
+const HIDDEN_END: &str = "surface0\n{\nelement0,overlay,40,0,0\n}\n\
+    surface2\n{\n}\n\
+    surface40\n{\nanimation0.interval,random,2\n\
+    animation0.pattern0,overlay,42,0,0,0\n\
+    animation0.pattern1,overlay,-1,1000,0,0\n}\n\
+    surface42\n{\n}\n";
+
+/// 見えない間に実は終わっていた再生は、見え直した境目の刻みで抽選に戻る（1 回分遅れない・
+/// 時刻は正確に扱う・re-audit R12）。
+#[test]
+fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
+    let table = table_of(HIDDEN_END);
+    let (mut rng, probe) = counting_rng(&[0, 0]);
+    let mut clocks = PartClocks::default();
+
+    tick(&mut clocks, &table, 0, 1000, true, &mut rng);
+    assert_eq!(clocks.clock(&scope(), 40, 0), playing(1000));
+    tick(&mut clocks, &table, 2, 1100, false, &mut rng); // 40 が見えなくなる。
+    tick(&mut clocks, &table, 2, 2000, true, &mut rng); // 実際の時間ではここで終わる。
+    assert_eq!(
+        clocks.clock(&scope(), 40, 0),
+        playing(1000),
+        "見えない間は残る"
+    );
+
+    let p = tick(&mut clocks, &table, 0, 3000, true, &mut rng);
+    assert_eq!(probe.lock().unwrap().calls, 2, "見え直した刻みで抽選する");
+    assert_eq!(clocks.clock(&scope(), 40, 0), playing(3000));
+    assert_eq!(cell_of(&p, 40), Some(Some(42)), "新しい再生の頭のコマ");
+}
+
+/// 部品でも、`-1` と `-2` のすぐ後に待ち 0 の働きのコマがあるとき、warn の番号は止めた描くコマの番号:
+/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する（要件 4.1・re-audit R1）。
+#[test]
+fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
+    let table = table_of(
+        "surface0\n{\nelement0,overlay,40,0,0\n}\n\
+         surface40\n{\nanimation0.interval,random,2\n\
+         animation0.pattern0,overlay,42,0,0,0\n\
+         animation0.pattern1,overlay,-1,50,0,0\n\
+         animation0.pattern2,insert,0,0,0,0\n\
+         animation1.interval,random,2\n\
+         animation1.pattern0,overlay,42,0,0,0\n\
+         animation1.pattern1,overlay,-2,50,0,0\n\
+         animation1.pattern2,insert,0,0,0,0\n}\n\
+         surface42\n{\n}\n",
+    );
+    let (mut rng, _probe) = counting_rng(&[0, 0]);
+    let mut clocks = PartClocks::default();
+    let lines = crate::test_support::capture_logs(|| {
+        tick(&mut clocks, &table, 0, 1000, true, &mut rng);
+        tick(&mut clocks, &table, 0, 1050, false, &mut rng);
+    });
+    assert_eq!(clocks.clock(&scope(), 40, 0), None, "-1 で止まる");
+    assert_eq!(clocks.clock(&scope(), 40, 1), None, "-2 で止まる");
+    let warned: Vec<_> = lines
+        .iter()
+        .filter(|l| l.contains("以外の負 surface"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{warned:?}");
+    assert!(warned[0].contains("animation_id=1"), "{warned:?}");
+    assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+}

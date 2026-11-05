@@ -144,6 +144,7 @@ fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now_ms: u64) -> Look {
                 FrameStatus::FinishedResidual(i) => Look::Finished(i),
                 FrameStatus::Stopped => Look::Stopped {
                     surface_id: current_frame_index(&anim.frames, elapsed)
+                        .and_then(|i| visible_frame(&anim.frames, i))
                         .map_or(-1, |i| anim.frames[i].surface_id),
                 },
             }
@@ -650,8 +651,11 @@ impl PartClocks {
                     }
                 };
                 // 境界を跨いだ刻みで再生中でなければ抽選（保っているコマは当たれば捨てる）。
-                // 窓が閉じている間は時計を作らないので抽選もしない。
-                let playing = matches!(clocks.get(&key), Some(PartAnim::Playing { .. }));
+                // 窓が閉じている間は時計を作らないので抽選もしない。見えない間に終わっていた再生は
+                // 再生中と見なさない（見え直した刻みで抽選に戻る）。
+                let clock = clocks.get(&key).copied();
+                let playing = matches!(clock, Some(PartAnim::Playing { .. }))
+                    && matches!(look(anim, clock, now_ms), Look::Nothing | Look::Frame(_));
                 if crossed && open && !playing && should_fire(k, rng) {
                     clocks.insert(
                         key,

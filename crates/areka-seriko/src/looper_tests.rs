@@ -224,8 +224,8 @@ fn hidden_slot_consumes_no_rng() {
 /// 再生中アニメは再抽選対象外＝次の境界跨ぎで乱数を消費しない（要件 2.3）。
 #[test]
 fn playing_anim_is_not_relotteried() {
-    // 長い残留アニメ（末尾非負・150ms 継続）。
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);
+    // 次の境界を越えて続く残留アニメ（末尾非負・1500ms 継続）。
+    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 1500)]);
     let (rng, probe) = counting_rng(&[0]); // 最初の跨ぎで 1 回だけ発火
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, _scope) = shown_shell(10);

@@ -400,7 +400,7 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
          animation0.pattern1,overlay,-1,1000,0,0\n}\n\
          surface41\n{\n}\nsurface42\n{\n}\n",
     );
-    let (mut rng, probe) = counting_rng(&[0, 0, 1, 0, 1]);
+    let (mut rng, probe) = counting_rng(&[0, 0, 1, 1, 0, 1]);
     let mut clocks = PartClocks::default();
     let on = BindSet::from_ids([5]);
     let top = PatternState::default();
@@ -421,10 +421,10 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     );
     assert_eq!(calls(&probe), 2);
 
-    // 境界 2000: 40 は再生中（Playing{1000}）なので抽選されず、経過 1000 の `-1` で止まって時計が消える。
-    // 100 は末尾を保っている（Residual）ので抽選の対象（3 回目・外れ）。
+    // 境界 2000: 40 は経過 1000 の `-1` に着いて再生を終えているので抽選の対象（3 回目・外れ）。外れたので
+    // `-1` で止まって時計が消える。100 は末尾を保っている（Residual）ので抽選の対象（4 回目・外れ）。
     let p = tick(&mut clocks, &table, 0, &on, 2000, true, &mut rng, &top);
-    assert_eq!(calls(&probe), 3);
+    assert_eq!(calls(&probe), 4);
     assert_eq!(clocks.clock(&scope(), 40, 0), None);
     assert_eq!(part_frames(&p, 100), vec![(5, 41)]);
     assert_eq!(parts_in_field(&p), vec![100]);
@@ -436,8 +436,8 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     let p = tick(&mut clocks, &table, 0, &on, 3000, true, &mut rng, &top);
     assert_eq!(
         calls(&probe),
-        5,
-        "40（4 回目・当たり）→ 100（5 回目・外れ）"
+        6,
+        "40（5 回目・当たり）→ 100（6 回目・外れ）"
     );
     assert_eq!(
         clocks.clock(&scope(), 40, 0),

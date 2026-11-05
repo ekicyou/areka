@@ -300,7 +300,7 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
     // 比べる相手: 同じ境界を跨ぐが、跨ぐ刻み（2080）ではまばたきが終わっていて 2110 が見えない。
     const CONTROL: &[u64] = &[0, 1960, 2080, 3000, 3040];
 
-    let (control, control_calls) = run_kero(CONTROL, scripted_rng(&[0, 0]));
+    let (control, control_calls) = run_kero(CONTROL, scripted_rng(&[0, 1, 0]));
     assert_eq!(
         control,
         [
@@ -311,7 +311,11 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
         ],
         "部品が境界で見えないなら部品のコマは載らない"
     );
-    assert_eq!(control_calls, 2, "一番上の抽選 2 回（1960・3000）だけ");
+    // 2080 はまばたきが `-1` に着いた刻みなので、一番上が抽選される（外れ・部品の抽選ではない）。
+    assert_eq!(
+        control_calls, 3,
+        "一番上の抽選 3 回（1960・2080・3000）だけ"
+    );
 
     // 当たり: 2000 の部品の抽選が 0 を引く。
     let (hit, hit_calls) = run_kero(EDGE, scripted_rng(&[0, 0, 0]));
@@ -329,7 +333,8 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
         ],
         "当たれば 2106 が 2000〜2080 の 80ms だけ重なる"
     );
-    assert_eq!(hit_calls, control_calls + 1, "部品の抽選の 1 回だけ多い");
+    // 端の 2080 は境界を跨がないので一番上の抽選は無い。一番上の 2 回（1960・3000）に部品の 1 回（2000）。
+    assert_eq!(hit_calls, 3, "一番上の 2 回に部品の抽選の 1 回だけ多い");
 
     // 外れ: 2000 の部品の抽選が 1 を引く。乱数の 1 回の上乗せは同じで、絵は前と同じ。
     let (miss, miss_calls) = run_kero(EDGE, scripted_rng(&[0, 1, 0]));
@@ -345,8 +350,7 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
         "外れなら部品のコマは載らない"
     );
     assert_eq!(
-        miss_calls,
-        control_calls + 1,
-        "外れでも部品の抽選の 1 回だけ多い"
+        miss_calls, 3,
+        "外れでも一番上の 2 回に部品の抽選の 1 回だけ多い"
     );
 }

@@ -416,3 +416,53 @@ fn settled_surface_carries_no_shift() {
     assert_eq!(moved, settle(&zeroed));
     assert_eq!(moved.get(0), None, "`-1` で止まった後");
 }
+
+/// `-1` のコマのすぐ後に待ち 0 の働きのコマがあっても、経過 50 で止まり欄が外れる（面 4294967295 を
+/// 欄に置かない・ukadoc pattern の項・re-audit R1）。
+#[test]
+fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
+    let text = "surface0\n{\n\
+        animation0.interval,random,2\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,-1,50,0,0\n\
+        animation0.pattern2,insert,0,0,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (picker, _) = pick_rng(0);
+    let (mut rt, mut states) = shell_shown(text, lottery, picker);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 0), Some(100));
+    rt.on_tick(1050, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 0), None, "-1 で欄が外れる");
+    assert_eq!(started(&rt, Slot::Shell, 0), None, "再生は止まる");
+}
+
+/// `-1` と `-2` のすぐ後に待ち 0 の働きのコマがあっても、warn の番号は止めた描くコマの番号:
+/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する（要件 4.1・re-audit R1）。
+#[test]
+fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
+    let text = "surface0\n{\n\
+        animation0.interval,random,2\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,-1,50,0,0\n\
+        animation0.pattern2,insert,0,0,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,101,0,0,0\n\
+        animation1.pattern1,overlay,-2,50,0,0\n\
+        animation1.pattern2,insert,0,0,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0, 0]);
+    let (picker, _) = pick_rng(0);
+    let (mut rt, mut states) = shell_shown(text, lottery, picker);
+    let lines = crate::test_support::capture_logs(|| {
+        rt.on_tick(0, &mut states);
+        rt.on_tick(1000, &mut states);
+        rt.on_tick(1050, &mut states);
+    });
+    let warned: Vec<_> = lines
+        .iter()
+        .filter(|l| l.contains("以外の負 surface"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{warned:?}");
+    assert!(warned[0].contains("animation_id=1"), "{warned:?}");
+    assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+}

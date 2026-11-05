@@ -88,7 +88,7 @@ pub enum FrameStatus {
     Pending,
     /// `frames[i]` が現在コマ（4.2 現在コマ 1 枚）。
     Active(usize),
-    /// 現在コマの surface_id が負（`-1` 等）→ 停止・ベース復帰（4.3）。
+    /// `i` 以下で最後の描くコマの surface_id が負（`-1` 等）→ 停止・ベース復帰（4.3）。
     Stopped,
     /// `-1` なし末尾到達 → `frames[i]`（最終コマ）残留・終了状態（4.4/9.4）。
     FinishedResidual(usize),
@@ -98,7 +98,8 @@ pub enum FrameStatus {
 ///
 /// コマ k のデッドライン `t_k = Σ_{j<=k} wait_ms[j]`（`wait_k` は前コマからコマ k へ切り替わる遅延）。
 /// 現在 index は `t_k <= elapsed_ms` を満たす最大の k。誰も満たさない（`elapsed < t_0`）なら
-/// [`FrameStatus::Pending`]。現在コマの `surface_id < 0` なら [`FrameStatus::Stopped`]（method/x/y 無視・
+/// [`FrameStatus::Pending`]。i 以下で最後の描くコマ（[`visible_frame`]）の `surface_id < 0` なら
+/// [`FrameStatus::Stopped`]（`-1` の後に待ち 0 の働きのコマが続いても止まる・method/x/y 無視・
 /// 4.3。`-1` と他負値の区別＋warn! は LoopRuntime 責務）。末尾かつ非負なら [`FrameStatus::FinishedResidual`]
 /// （末尾残留・恒久・4.4/9.4）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
 /// 走査を打ち切れる（`wait == 0` 連鎖は同一デッドラインを共有し末尾 index が現在コマになる）。
@@ -106,7 +107,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
     match current_frame_index(frames, elapsed_ms) {
         None => FrameStatus::Pending,
         Some(i) => {
-            if frames[i].surface_id < 0 && frames[i].act == FrameAct::Draw {
+            if visible_frame(frames, i).is_some_and(|d| frames[d].surface_id < 0) {
                 FrameStatus::Stopped
             } else if i == frames.len() - 1 {
                 FrameStatus::FinishedResidual(i)
