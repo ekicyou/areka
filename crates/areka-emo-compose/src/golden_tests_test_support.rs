@@ -39,10 +39,10 @@ pub(super) fn parse_emo2_shell() -> Shell {
 
 /// surface1000 の bind パーツ surface（1100 系）の element0 相対パスを解決するための対応表。
 ///
-/// surfaces.txt の実データ（`golden_tests_surface1000_bind_tests.rs` の先頭の説明）に基づく
-/// (animation_id, part_element_rel)。
+/// 出どころは emo2 検体の `shell/master/surfaces.txt`（surface1000 の animation1100・1200・1302 と、
+/// surface1100・surface1200・surface1302 の element0）に基づく (animation_id, part_element_rel)。
 /// 各 bind animation `animationN.pattern0,overlay,N,0,0,0` は同番号のパーツ surface N を参照し、
-/// その surface の element0 が下記 png を (0,0) 配置する（実 fixture より）。
+/// その surface の element0 が下記 png を (0,0) 配置する（例: `element0,overlay,purple/0/base1.png,0,0`）。
 /// テストでは判別のため、この rel パスへ**自作の単色画像**を MemoryDecoder へ挿入する。
 pub(super) struct BindPart {
     /// surface1000 の bind animation id（= 参照先パーツ surface id と同番号）。

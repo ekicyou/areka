@@ -33,6 +33,12 @@ struct Level<R> {
 /// 答え（その面の原点からの相対）。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
 pub(crate) type Memo<R> = HashMap<u32, (usize, Option<R>)>;
 
+/// 走査の答え（その面の原点からの相対）の型。段の答えを親の原点へずらして重ねるやり方を持つ。
+pub(crate) trait Outline: Copy {
+    /// `r` を `(x, y)` ずらして `acc` に重ねる（`r` が `None` なら何もしない）。
+    fn merge(acc: &mut Option<Self>, r: Option<Self>, x: i64, y: i64);
+}
+
 /// 走査の作業場（経路にある面の集合・積み荷の列・段の列）。どれも走査が終わると空に戻る。
 pub(crate) struct Scratch<R> {
     on_path: HashSet<u32>,
@@ -54,21 +60,19 @@ impl<R> Default for Scratch<R> {
 ///
 /// `own(surface, children)` は面の自分の寄与（その面の原点からの相対）を返し、子を `children` へ
 /// 取り出したい順に積む（逆にして上から取り出す＝深さ優先）。面の表に無ければ何も積まず `None` を返す。
-/// `merge(acc, r, x, y)` は `r` を `(x, y)` ずらして `acc` に重ねる。根の面は予算に数えない。根でない面は
+/// 段の答えは [`Outline::merge`] で親に重ねる。根の面は予算に数えない。根でない面は
 /// 入るときに「入る 1 ＋面の行の全部（[`surface_rows`]）」を引き、足りなければ入らない（指摘 130）。
 ///
 /// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る分＋下で数えた
 /// 数」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと
 /// 同じ）。予算が尽きたら `name`（走査の名前）と根の面で `error!` を 1 行出す。
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn walk<R: Copy>(
+pub(crate) fn walk<R: Outline>(
     s: &mut Scratch<R>,
     world: &EmoWorld,
     mut memo: Option<&mut Memo<R>>,
     root: u32,
     limit: usize,
     name: &'static str,
-    merge: fn(&mut Option<R>, Option<R>, i64, i64),
     mut own: impl FnMut(u32, &mut Vec<Step>) -> Option<R>,
 ) -> Option<R> {
     s.on_path.clear();
@@ -106,7 +110,7 @@ pub(crate) fn walk<R: Copy>(
                 Some(up) => {
                     up.spent = up.spent.saturating_add(done.spent);
                     up.clean &= done.clean;
-                    merge(&mut up.acc, done.acc, done.x, done.y);
+                    R::merge(&mut up.acc, done.acc, done.x, done.y);
                 }
                 None => answer = done.acc,
             }
@@ -135,7 +139,7 @@ pub(crate) fn walk<R: Copy>(
                 && budget.take(n)
             {
                 up.spent = up.spent.saturating_add(n);
-                merge(&mut up.acc, r, x, y);
+                R::merge(&mut up.acc, r, x, y);
                 continue;
             }
             if !budget.enter(rows, name, root) {

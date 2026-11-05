@@ -5,7 +5,7 @@ use areka_parsers::shell::{Animation, Interval};
 
 use super::{Extent, is_bind_interval, surface_and_binding};
 use crate::nesting::{ElementKind, is_always_interval};
-use crate::outline_walk::{Memo, Scratch, Step, walk};
+use crate::outline_walk::{Memo, Outline, Scratch, Step, walk};
 use crate::pattern_word::{PatternWord, pattern_word};
 use crate::world::{EmoWorld, SurfaceExtents};
 
@@ -31,8 +31,8 @@ pub(crate) const MAX_AREA: u64 = 1 << 25;
 ///
 /// これにより **bind のオン/オフでサイズが変わらない**（同一 surface へ異なる `BindSet` を渡しても
 /// [`Extent`] が不変・emo-present のバッファ再利用/窓サイズ安定に必須）。入れ子 surface 参照は
-/// [`flatten_surface`] と同一の pattern の (x,y) オフセット累積＋visited 祖先スタックによる循環検出で
-/// 走査する（ops 経路との違いは「有効かどうかに関係なく全部の bind を母集合とし、コマを見ない」点）。
+/// シェルの外形と共有する [`crate::outline_walk::walk`]（(x,y) オフセット累積＋経路にある面の集合による
+/// 循環検出）で走査する（命令列の経路との違いは「有効かどうかに関係なく全部の bind を母集合とし、コマを見ない」点）。
 ///
 /// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
 /// を返す（0×0 退化の Err 分類は [`build_plan`] の責務・本関数は分類しない）。
@@ -72,26 +72,29 @@ pub(crate) fn build_extents(world: &EmoWorld, atlas: &AtlasTable) -> SurfaceExte
 /// きれいに終わった面の、下で予算に数えた数と右下（その面の原点からの相対・[`crate::outline_walk::Memo`]）。
 pub(crate) type ExtentMemo = Memo<(i64, i64)>;
 
-/// 右下 `max` に、`(x, y)` ずらした右下 `r` を重ねる。
-fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
-    let Some((rx, ry)) = r else {
-        return;
-    };
-    let (rx, ry) = (rx.saturating_add(x), ry.saturating_add(y));
-    *max = Some(max.map_or((rx, ry), |(mx, my)| (mx.max(rx), my.max(ry))));
+/// 右下（その面の原点からの相対）。
+impl Outline for (i64, i64) {
+    /// 右下 `max` に、`(x, y)` ずらした右下 `r` を重ねる。
+    fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
+        let Some((rx, ry)) = r else {
+            return;
+        };
+        let (rx, ry) = (rx.saturating_add(x), ry.saturating_add(y));
+        *max = Some(max.map_or((rx, ry), |(mx, my)| (mx.max(rx), my.max(ry))));
+    }
 }
 
 /// [`compute_extent`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
 /// 小さな数）。`s` は走査の作業場（呼び手のものを借りて使い回す・入口で空へ戻し、出口でも空）。たどり方は
 /// シェルの外形と共有する [`crate::outline_walk::walk`] で、ここは面ごとの寄与だけを渡す（指摘 84）。
 ///
-/// `memo` が在れば（シェルの外形が全部の面を根に回すとき・合成からは渡さない）、きれいに終わった面の
+/// `memo` が在れば（[`build_extents`] が全部の面を根に回すとき・外形を直に確かめるテストの口は渡さない）、きれいに終わった面の
 /// 右下を覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた数」以上ならそれだけ一度に引いて
 /// 覚えた右下を使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと同じ）。段ごとの右下を
 /// その面の原点からの相対で持ち、段が終わったら親の原点へずらして重ねるので、覚えた右下も同じ形で重なる。
 ///
-/// 当 surface の全定義層を走査し `max_x`/`max_y` を更新する。[`flatten_surface`]（ops 経路）と同一の
-/// 入れ子 flatten 構造（オフセット累積＋visited 祖先スタックによる循環検出）を明示のスタックで回すが、
+/// 当 surface の全定義層を走査し `max_x`/`max_y` を更新する。命令列の経路（`plan.rs` の `flatten_surface`）と
+/// 同じくオフセットを累積して明示のスタックで入れ子へ入るが（たどり方は別に書いてある）、
 /// **bind の母集合が異なる**: ops は有効 bind（`binds` ∩ bind animation）のみ、本関数は**全 bind・
 /// `always` animation の描くコマ**（`binds` 非依存・有効/非有効を問わない）を辿る。これが「外形は有効 bind
 /// 集合に依存しない静的量」（要件 6.5）の実装核心である。
@@ -121,7 +124,6 @@ pub(crate) fn compute_extent_limited(
         surface_id,
         limit,
         "extent",
-        merge,
         |surface, stack| {
             let (master, binding) = surface_and_binding(world, surface)?;
             let mut max = None;
@@ -156,7 +158,7 @@ pub(crate) fn compute_extent_limited(
                 };
                 // 段の原点＋原寸を数える（今までどおり element の X,Y は足さない）。負オフセットは根で原点に
                 // クリップする（外形は (0,0) を左上に固定・負方向はみ出しは転写時クリップ）。
-                merge(&mut max, Some((w as i64, h as i64)), 0, 0);
+                Outline::merge(&mut max, Some((w as i64, h as i64)), 0, 0);
             }
 
             // **全** bind animation を母集合として辿る（有効/非有効を問わない・6.5 の核心）。

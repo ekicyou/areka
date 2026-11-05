@@ -1,6 +1,6 @@
 //! シェル全体の外形（[`ShellBounds`]）の算出（areka-P0-offline-surface-dump 要件 4.3）。
 //!
-//! 面ごとの外形（`plan_extent.rs` の `compute_extent_limited`）と同じ辿り方（入れ子・祖先スタックで循環を
+//! 面ごとの外形（`plan_extent.rs` の `compute_extent_limited`）と同じ辿り方（入れ子・経路にある面の集合で循環を
 //! 避ける・明示のスタック・`outline_walk.rs` の 1 本）を使い、座標を符号つきで持つ。違いは、⑴ すべての面を数える、⑵ 負の座標を原点で
 //! 切らない、⑶ すべての animation（interval を問わない・`never`・`runonce` を含む）のすべての
 //! pattern を数える、の 3 点。記録は出さない（読み込みと合成が既に出している・広がりの予算が尽きたときの `error!` だけ出す）。
@@ -11,7 +11,7 @@ use areka_emo_atlas::AtlasTable;
 use crate::budget::VISIT_BUDGET;
 use crate::method::is_implemented_name;
 use crate::nesting::ElementKind;
-use crate::outline_walk::{Memo, Scratch, Step};
+use crate::outline_walk::{Memo, Outline, Scratch, Step};
 use crate::plan::surface_and_binding;
 use crate::world::EmoWorld;
 
@@ -84,25 +84,28 @@ pub(crate) type BoundsMemo = Memo<[i64; 4]>;
 /// シェルの外形の走査の作業場（走査が終わると空に戻る）。
 pub(crate) type BoundsScratch = Scratch<[i64; 4]>;
 
-/// 外形 `acc` に、`(x, y)` ずらした外形 `r` を飽和で重ねる。
-fn merge(acc: &mut Rect, r: Rect, x: i64, y: i64) {
-    let Some(r) = r else {
-        return;
-    };
-    let r = [
-        r[0].saturating_add(x),
-        r[1].saturating_add(y),
-        r[2].saturating_add(x),
-        r[3].saturating_add(y),
-    ];
-    *acc = Some(acc.map_or(r, |a| {
-        [
-            a[0].min(r[0]),
-            a[1].min(r[1]),
-            a[2].max(r[2]),
-            a[3].max(r[3]),
-        ]
-    }));
+/// 外形（[left, top, right, bottom]・その面の原点からの相対）。
+impl Outline for [i64; 4] {
+    /// 外形 `acc` に、`(x, y)` ずらした外形 `r` を飽和で重ねる。
+    fn merge(acc: &mut Rect, r: Rect, x: i64, y: i64) {
+        let Some(r) = r else {
+            return;
+        };
+        let r = [
+            r[0].saturating_add(x),
+            r[1].saturating_add(y),
+            r[2].saturating_add(x),
+            r[3].saturating_add(y),
+        ];
+        *acc = Some(acc.map_or(r, |a| {
+            [
+                a[0].min(r[0]),
+                a[1].min(r[1]),
+                a[2].max(r[2]),
+                a[3].max(r[3]),
+            ]
+        }));
+    }
 }
 
 /// 根の面 `root` からたどり、根の原点からの外形を返す（面の表に無ければ `None`）。たどり方（明示のスタック・
@@ -116,60 +119,51 @@ pub(crate) fn walk(
     root: u32,
     limit: usize,
 ) -> Rect {
-    crate::outline_walk::walk(
-        s,
-        world,
-        memo,
-        root,
-        limit,
-        "bounds",
-        merge,
-        |surface, stack| {
-            let (master, binding) = surface_and_binding(world, surface)?;
-            let mut rect = None;
-            for (i, element) in master.elements.iter().enumerate() {
-                let (ex, ey) = element.transform.offset();
-                let original = match element.kind {
-                    ElementKind::Surface(child) => {
-                        stack.push(Step::Enter {
-                            surface: child,
-                            x: ex,
-                            y: ey,
-                            quiet: true,
-                        });
-                        continue;
-                    }
-                    ElementKind::Film(film) => world.film_sheet(film).map(|sheet| sheet.original),
-                    _ => binding.0.get(i).copied().flatten().map(|element_id| {
-                        let original = atlas.entry(element_id).original;
-                        (original.w, original.h)
-                    }),
-                };
-                let Some((w, h)) = original else {
-                    continue;
-                };
-                merge(&mut rect, Some([0, 0, w as i64, h as i64]), ex, ey);
-            }
-
-            for pattern in master.animations.iter().flat_map(|a| &a.patterns) {
-                // 負の番号（描かない）・u32 に収まらない番号・描かないメソッド（`start` 等・`move` を含む）は数えない。
-                let Ok(child) = u32::try_from(pattern.surface_id) else {
-                    continue;
-                };
-                if !is_implemented_name(pattern.method.as_str()) {
+    crate::outline_walk::walk(s, world, memo, root, limit, "bounds", |surface, stack| {
+        let (master, binding) = surface_and_binding(world, surface)?;
+        let mut rect = None;
+        for (i, element) in master.elements.iter().enumerate() {
+            let (ex, ey) = element.transform.offset();
+            let original = match element.kind {
+                ElementKind::Surface(child) => {
+                    stack.push(Step::Enter {
+                        surface: child,
+                        x: ex,
+                        y: ey,
+                        quiet: true,
+                    });
                     continue;
                 }
-                // 循環は黙って打ち切る（warn は読み込みが出す）。
-                stack.push(Step::Enter {
-                    surface: child,
-                    x: pattern.x,
-                    y: pattern.y,
-                    quiet: true,
-                });
+                ElementKind::Film(film) => world.film_sheet(film).map(|sheet| sheet.original),
+                _ => binding.0.get(i).copied().flatten().map(|element_id| {
+                    let original = atlas.entry(element_id).original;
+                    (original.w, original.h)
+                }),
+            };
+            let Some((w, h)) = original else {
+                continue;
+            };
+            Outline::merge(&mut rect, Some([0, 0, w as i64, h as i64]), ex, ey);
+        }
+
+        for pattern in master.animations.iter().flat_map(|a| &a.patterns) {
+            // 負の番号（描かない）・u32 に収まらない番号・描かないメソッド（`start` 等・`move` を含む）は数えない。
+            let Ok(child) = u32::try_from(pattern.surface_id) else {
+                continue;
+            };
+            if !is_implemented_name(pattern.method.as_str()) {
+                continue;
             }
-            rect
-        },
-    )
+            // 循環は黙って打ち切る（warn は読み込みが出す）。
+            stack.push(Step::Enter {
+                surface: child,
+                x: pattern.x,
+                y: pattern.y,
+                quiet: true,
+            });
+        }
+        rect
+    })
 }
 
 #[cfg(test)]

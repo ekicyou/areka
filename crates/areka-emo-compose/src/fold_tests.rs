@@ -8,7 +8,7 @@ use crate::fold::{expand_targets, fold_shell_with};
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{
-    FoldSnapshot, coll, elem, fresh_world, master_of, shell_mixed, shell_of, snapshot_world,
+    FoldSnapshot, coll, component_of, elem, fresh_world, shell_mixed, shell_of, snapshot_world,
     surface_def,
 };
 use crate::sample_test_support::emo2_shell;
@@ -81,8 +81,8 @@ fn enumeration_creates_all_ids_with_shared_body() {
     let mut world = fresh_world();
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
-    let m0 = master_of(&world, 0).expect("id=0 が常駐する");
-    let m5 = master_of(&world, 5).expect("id=5 が常駐する");
+    let m0 = component_of::<SurfaceMaster>(&world, 0).expect("id=0 が常駐する");
+    let m5 = component_of::<SurfaceMaster>(&world, 5).expect("id=5 が常駐する");
     // それぞれの component の id フィールドは自 id を持つ。
     assert_eq!(m0.id, 0);
     assert_eq!(m5.id, 5);
@@ -109,12 +109,13 @@ fn range_creates_inclusive_ids() {
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     for id in [1u32, 2, 3] {
-        let m = master_of(&world, id).unwrap_or_else(|| panic!("id={id} が常駐する"));
+        let m = component_of::<SurfaceMaster>(&world, id)
+            .unwrap_or_else(|| panic!("id={id} が常駐する"));
         assert_eq!(m.id, id);
         assert_eq!(m.elements.len(), 1);
     }
-    assert!(master_of(&world, 0).is_none());
-    assert!(master_of(&world, 4).is_none());
+    assert!(component_of::<SurfaceMaster>(&world, 0).is_none());
+    assert!(component_of::<SurfaceMaster>(&world, 4).is_none());
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
 }
 
@@ -129,7 +130,7 @@ fn single_form_creates_one_surface() {
     let mut world = fresh_world();
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
-    let m = master_of(&world, 0).expect("id=0 が常駐する");
+    let m = component_of::<SurfaceMaster>(&world, 0).expect("id=0 が常駐する");
     assert_eq!(m.id, 0);
     assert_eq!(m.elements[0].path.as_str(), "s0.png");
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 1);
@@ -147,8 +148,8 @@ fn enumeration_expands_in_description_order() {
     let mut world = fresh_world();
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
-    assert!(master_of(&world, 2).is_some());
-    assert!(master_of(&world, 1).is_some());
+    assert!(component_of::<SurfaceMaster>(&world, 2).is_some());
+    assert!(component_of::<SurfaceMaster>(&world, 1).is_some());
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 2);
 }
 
@@ -210,7 +211,8 @@ fn append_reaches_existing_ids_only_not_creating_absent() {
 
     // 既存 id には追記 element が届く（base + added の 2 本）。
     for id in [10u32, 2100, 2101] {
-        let m = master_of(&world, id).unwrap_or_else(|| panic!("id={id} が常駐する"));
+        let m = component_of::<SurfaceMaster>(&world, id)
+            .unwrap_or_else(|| panic!("id={id} が常駐する"));
         assert_eq!(m.elements.len(), 2, "id={id} に追記 element が届く");
         // 追記 element が含まれる。
         assert!(
@@ -220,7 +222,10 @@ fn append_reaches_existing_ids_only_not_creating_absent() {
     }
     // 範囲内でも未存在だった id は新設されない。
     for id in [2102u32, 2110, 2200, 2205, 2210] {
-        assert!(master_of(&world, id).is_none(), "id={id} は新設されない");
+        assert!(
+            component_of::<SurfaceMaster>(&world, id).is_none(),
+            "id={id} は新設されない"
+        );
     }
     // entity 数は事前 3 件のまま（append は新設しない）。
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
@@ -256,7 +261,7 @@ fn append_merges_element_and_collision_layer_sorted() {
         Records::Emit,
     );
 
-    let m = master_of(&world, 5).expect("id=5 が常駐する");
+    let m = component_of::<SurfaceMaster>(&world, 5).expect("id=5 が常駐する");
     // element は 2 本＝マージされている。
     assert_eq!(m.elements.len(), 2);
     // layer 昇順（追記後も不変条件を保つ）: lo(layer=0) → hi(layer=2)。
@@ -307,7 +312,7 @@ fn append_animation_first_wins_and_new_id_added() {
         Records::Emit,
     );
 
-    let m = master_of(&world, 8).expect("id=8 が常駐する");
+    let m = component_of::<SurfaceMaster>(&world, 8).expect("id=8 が常駐する");
     // id=1 は 1 本のみ（重複しない）＝先勝ち。
     let id1: Vec<&Animation> = m.animations.iter().filter(|a| a.id == 1).collect();
     assert_eq!(id1.len(), 1, "id=1 は 1 本");
@@ -359,11 +364,11 @@ fn append_only_sees_earlier_defined_surfaces() {
     );
 
     // id=1 は append 実行時に存在 → x.png が届く（base + added の 2 本）。
-    let m1 = master_of(&world, 1).expect("id=1 が常駐する");
+    let m1 = component_of::<SurfaceMaster>(&world, 1).expect("id=1 が常駐する");
     assert_eq!(m1.elements.len(), 2);
     assert!(m1.elements.iter().any(|e| e.path.as_str() == "x.png"));
     // id=2 は append の後に定義 → 遡及されない（base のみ 1 本）。
-    let m2 = master_of(&world, 2).expect("id=2 が常駐する");
+    let m2 = component_of::<SurfaceMaster>(&world, 2).expect("id=2 が常駐する");
     assert_eq!(m2.elements.len(), 1);
     assert_eq!(m2.elements[0].path.as_str(), "b.png");
 }
@@ -425,10 +430,16 @@ fn fold_plain_surface_honors_exclusion_through_build() {
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
     for id in [1u32, 2, 4] {
-        assert!(master_of(&world, id).is_some(), "id={id} は新設される");
+        assert!(
+            component_of::<SurfaceMaster>(&world, id).is_some(),
+            "id={id} は新設される"
+        );
     }
     // 除外 id は entity 化されない。
-    assert!(master_of(&world, 3).is_none(), "除外 id=3 は新設されない");
+    assert!(
+        component_of::<SurfaceMaster>(&world, 3).is_none(),
+        "除外 id=3 は新設されない"
+    );
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
 }
 
@@ -558,8 +569,8 @@ fn aliases_collected_when_interleaved_with_surfaces() {
     assert_eq!(resolve_alias(&world, "alpha"), Some(&[100, 101][..]));
     assert_eq!(resolve_alias(&world, "beta"), Some(&[200][..]));
     // surface も並行して常駐する（alias 収集が surface fold を壊さない）。
-    assert!(master_of(&world, 0).is_some());
-    assert!(master_of(&world, 1).is_some());
+    assert!(component_of::<SurfaceMaster>(&world, 0).is_some());
+    assert!(component_of::<SurfaceMaster>(&world, 1).is_some());
     assert_eq!(world.resource::<AliasMap>().0.len(), 2);
 }
 

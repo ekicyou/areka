@@ -10,8 +10,8 @@
 //!
 //! たどるのは element定義の辺だけで、合成（`plan.rs`）が飛ばす辺——面の表に無い番号・範囲を超える数・
 //! 先祖へ戻る辺——からは持ち込まない（要件 4.6）。pattern定義の先からも持ち込まない（要件 4.7）。
-//! 記録は出さない（無い番号と循環は [`crate::nesting::NestReport`] が報告する・広がりの予算が尽きたときの
-//! `error!` だけ出す）。
+//! 記録は出さない（無い番号と循環は [`crate::nesting::NestReport`] が報告する・広がりの予算が尽きたときと、
+//! 根をまたいで持ち込む領域の数が [`IMPORT_BUDGET`] を越えたときの `error!` だけ出す）。
 
 use std::collections::{HashMap, HashSet};
 

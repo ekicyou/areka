@@ -11,7 +11,7 @@ use std::sync::Arc;
 use areka_emo_atlas::{
     AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry,
     AtlasKey, AtlasPage, AtlasTable, DecodedImage, ElementId, LoopCount, MemoryDecoder, PackConfig,
-    Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake, bake_with_limits,
+    Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
@@ -169,43 +169,15 @@ pub(crate) fn shell_mixed(
     }
 }
 
-/// tightly-packed 2×2 の premultiplied BGRA・不透明（α=255）画像スペック。
-pub(crate) fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-    let (w, h) = (2u32, 2u32);
-    let stride = w * 4;
-    let bgra = vec![
-        10, 20, 30, 255, //
-        40, 50, 60, 255, //
-        70, 80, 90, 255, //
-        100, 110, 120, 255,
-    ];
-    (w, h, stride, bgra, true)
-}
-
-/// `MemoryDecoder` へ base.join(rel) の実パスで不透明画像を登録する。
-pub(crate) fn register(dec: &mut MemoryDecoder, base: &Path, rel: &str) {
-    let (w, h, stride, bgra, has_alpha) = opaque_2x2();
-    dec.insert(base.join(rel), w, h, stride, bgra, has_alpha);
-}
-
-/// 指定 rel_path 群を含む単一 SurfaceSet を bake し `AtlasTable` を得る（COM/WIC 非依存・SetId(0)）。
+/// 指定 rel_path 群を含む単一 SurfaceSet を bake し `AtlasTable` を得る（COM/WIC 非依存・SetId(0)・どれも 2×2 の不透明）。
 pub(crate) fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
-    let elements: Vec<Element> = rels.iter().map(|r| elem(0, r, 0, 0)).collect();
-    let surfaces = vec![surface(0, elements)];
-    let mut dec = MemoryDecoder::new();
-    for r in rels {
-        register(&mut dec, base, r);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    result.table
+    bake_atlas_sized(
+        base,
+        &rels
+            .iter()
+            .map(|r| (*r, (2, 2), Some((10, 20, 30))))
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// element を、その `path` の ElementId から逆引きするための対応表を作る（テスト補助）。
@@ -225,13 +197,9 @@ pub(crate) fn id_to_path<'a>(atlas: &AtlasTable, rels: &[&'a str]) -> Vec<(Eleme
 
 /// 命令列を element の名前の列へ逆写像する（ElementId→path が一意な bake 前提）。
 pub(crate) fn ops_to_paths(ops: &[BlitOp], map: &[(ElementId, &str)]) -> Vec<String> {
-    ops.iter()
-        .map(|op| {
-            map.iter()
-                .find(|(id, _)| *id == op.element)
-                .map(|(_, p)| p.to_string())
-                .expect("op の ElementId は既知")
-        })
+    named_ops(ops, map)
+        .into_iter()
+        .map(|(p, _, _)| p.to_string())
         .collect()
 }
 
@@ -395,6 +363,29 @@ pub(crate) fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> Atla
     AtlasTable::new(keys, entries, vec![page])
 }
 
+/// 2 エントリ（`ElementId(0)` は頁 0 の `dst_page`・`ElementId(1)` は頁 1 の `src_page`・どちらも 1×1 を (0,0)）の
+/// AtlasTable を組む（下層 dst・上層 src の重ね合わせ）。
+pub(crate) fn two_entry_table(dst_page: AtlasPage, src_page: AtlasPage) -> AtlasTable {
+    let one = |page| AtlasEntry {
+        original: Size { w: 1, h: 1 },
+        placement: Some(Placement {
+            page,
+            uv_rect: Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
+            trim_offset: Point { x: 0, y: 0 },
+        }),
+    };
+    let keys = ["dst.png", "src.png"].map(|rel| AtlasKey {
+        set: SetId(0),
+        rel_path: rel.into(),
+    });
+    AtlasTable::new(keys.into(), vec![one(0), one(1)], vec![dst_page, src_page])
+}
+
 /// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提・外形の外は読まない）。
 pub(crate) fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
     assert!(x < out.width() && y < out.height(), "({x},{y}) は外形の外");
@@ -453,8 +444,6 @@ pub(crate) type AtlasSpec<'a> = (&'a str, (u32, u32), Option<(u8, u8, u8)>);
 ///
 /// `color` が `Some((b,g,r))` なら不透明単色、`None` なら全透明（placement None）。
 pub(crate) fn bake_atlas_sized(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
-    let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
-    let surfaces = vec![surface(0, elements)];
     let mut dec = MemoryDecoder::new();
     for (rel, (w, h), color) in specs {
         let (iw, ih, stride, bgra, has_alpha) = match color {
@@ -463,6 +452,16 @@ pub(crate) fn bake_atlas_sized(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
         };
         dec.insert(base.join(rel), iw, ih, stride, bgra, has_alpha);
     }
+    bake_decoded(&dec, base, specs.iter().map(|(r, _, _)| *r))
+}
+
+/// `rels` を element に持つ面 0 で `dec` の絵（静止画と動く絵）を焼く（焼きの口・SetId(0)）。
+fn bake_decoded<'a>(
+    dec: &MemoryDecoder,
+    base: &Path,
+    rels: impl Iterator<Item = &'a str>,
+) -> AtlasTable {
+    let surfaces = vec![surface(0, rels.map(|rel| elem(0, rel, 0, 0)).collect())];
     let set = SurfaceSet {
         surfaces: &surfaces,
         base_dir: base,
@@ -470,9 +469,14 @@ pub(crate) fn bake_atlas_sized(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
             use_self_alpha: UseSelfAlpha::On,
         },
     };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    result.table
+    let baked = bake_with_limits(
+        &[set],
+        dec,
+        PackConfig::default(),
+        AnimationLimits::default(),
+    );
+    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    baked.table
 }
 
 /// 動く絵を `MemoryDecoder` へ登録する（大きさは 1 枚目のコマの絵から）。
@@ -504,26 +508,12 @@ pub(crate) fn bake_films_and_bind<'a>(
     text: &str,
     images: &[(u32, &str)],
 ) -> (EmoWorld, AtlasTable) {
-    let surfaces = vec![surface(0, rels.map(|rel| elem(0, rel, 0, 0)).collect())];
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
-        dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    let table = bake_decoded(dec, base, rels);
     let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
     let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&baked.table, SetId(0));
+    world.bind_atlas(&table, SetId(0));
     assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
-    (world, baked.table)
+    (world, table)
 }
 
 /// 飛ばした element定義の `debug!` の行から (親, element, 指した欄) を取り出す（記録の読み取り）。
@@ -560,11 +550,6 @@ pub(crate) fn fresh_world() -> World {
     world
 }
 
-/// 指定 id をキーに登録済み entity の `SurfaceMaster` を引く。
-pub(crate) fn master_of(world: &World, id: u32) -> Option<&SurfaceMaster> {
-    component_of(world, id)
-}
-
 /// 面 `id` の entity に付いた部品 `T` を引く（面が無いか部品が付いていなければ `None`）。
 pub(crate) fn component_of<T: Component>(world: &World, id: u32) -> Option<&T> {
     let entity = *world.resource::<SurfaceIndex>().0.get(&id)?;
@@ -590,7 +575,14 @@ pub(crate) fn snapshot_world(world: &World) -> FoldSnapshot {
     ids.sort_unstable();
     let surfaces: Vec<(u32, SurfaceMaster)> = ids
         .into_iter()
-        .map(|id| (id, master_of(world, id).expect("id が常駐する").clone()))
+        .map(|id| {
+            (
+                id,
+                component_of::<SurfaceMaster>(world, id)
+                    .expect("id が常駐する")
+                    .clone(),
+            )
+        })
         .collect();
     // alias は BTreeMap ゆえ複製すればキー順まで決定的。
     let aliases = world.resource::<AliasMap>().0.clone();
