@@ -152,6 +152,27 @@
   - 終わった姿: 全体テストが緑（整形・ライセンス込み）で、上の確かめがどれも差分 0
   - _Requirements: 4.3, 6.3, 6.5, 6.6, 6.7, 6.8, 6.10_
 
+- [ ] 6. かけ直しの指摘の直し（5.1 の 1 回目・research.md 15 節の 21〜74・audit 系は推奨案で承認）
+- [ ] 6.1 合成と読み込みの仕事の上限（指摘 21〜24）
+  - 命令列の走査が段で積む積み荷（element の命令と層 (ii)）の数も同じ予算から引き、尽きたら積まない（21）。当たり判定の持ち込みで取り込む領域の数も予算から引く（22）
+  - 外形の面積の上限を `build_plan` の判定に足す（値は推奨案 2^25 画素・越えたら `ExtentTooLarge`）（23）
+  - 合成の走査では予算の記録を黙らせ、尽きたことは読み込みのとき 1 度だけ記録する（24）
+  - 壊れたら落ちるテスト: 画像 1,000 個の葉を持つ菱形が短く終わり命令の数が予算以下・子の参照×collision の多いシェルで持ち込みの列が予算で止まる・面積の上限・合成を繰り返しても予算の `error!` が増えない
+  - _Requirements: 2.1, 4.4, 4.5, 6.2_
+- [ ] 6.2 線形の探索を表引きにする（指摘 25〜30）
+  - `visible_parts` の印・`bind_steps` の作業場・`add_lines`・層 (ii) の animation の引き・`always` の確保・部品の段のイテレータ。結果の並びと記録は今と同じ
+  - 壊れたら落ちるテスト: 深さ 10,000 の鎖と幅の広い面の `visible_parts`・有効な着せ替えの多いシェルの合成・同じ番号への追記の多いシェルの読み込み・animation の多い面の合成が短く終わる
+  - _Requirements: 2.1, 4.4, 4.5_
+- [ ] 6.3 小さな正しさ（指摘 31〜33）
+  - 位置の足し算を飽和に・外形の面の番号を `try_from` に・`ComposedSurface` の入口で幅を確かめる。各 1 本の壊れたら落ちるテスト
+  - _Requirements: 2.1, 4.4, 4.5_
+- [ ] 6.4 説明の直し（指摘 34〜44）
+  - `doc/`・`docs/` のパスを名指す行は足さず変えない
+  - _Requirements: 2.1, 5.3, 6.9_
+- [ ] 6.5 テストの直し（指摘 45〜74）
+  - 足すテストは守る分岐を戻すと落ちることを確かめる。消すテストの固有の確かめは残る側へ移す。写しは `plan_test_support` から引く
+  - _Requirements: 2.1, 4.4, 4.5, 5.3_
+
 ## Implementation Notes
 
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）

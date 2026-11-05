@@ -363,3 +363,74 @@
 - 予算: 16.667 ms に収まる面の数は約 73,000。2 のべき乗に切り下げて `VISIT_BUDGET = 1 << 16` で確定した。切れたときの合成（diamond30_cut）も 1 フレームに収まる。値が変わらないので、置いた後の取り直しはしていない。
 - 外形の表（3.1）: 菱形と鎖では合成が約 2 倍速くなった。emo2 では揺れの幅の中で、効き目は見えない。直しは戻さない（毎フレームの余分な仕事を消すこと自体が指摘 8 の直し）。
 - `visible_parts`（`out.contains` の線形の探索）: 深さ 10,000 の鎖で 1 回約 17 ms かかり、1 フレームを越える。2.5 から残る問題で、5.1 の audit のかけ直しで直す。
+
+## 15. audit のかけ直し 1 回目（2026-11-06・タスク 5.1）
+
+- 測った時点: 枝 `claude/kiro-start-audit-emo-compose-cb01ad` の `6eebbb71`（タスク 1.1〜4.2 の後）。物差しと作法は 1 節と同じ（上限なし・範囲の 100 ファイルを全部読む）。読み手は下請け 5 人（ソース 2・テスト 3）。指摘 5・20・1⑶（読む側の上限）と design の「未解決（残る限界）」は数から外した。
+- 新しい指摘: **54 件**（番号は前回からの通し番号 21〜74。2 人が同じ件を挙げた 2 組は 1 件に数えた）。直しは触る場所で 5 つのタスク（tasks.md 6.1〜6.5）にまとめた＝audit 系は推奨案で承認（開発者 11-04）。
+- 読む側の上限（`areka_parsers::shell::model::RANGE_WIDTH_CAP = 8193`）は `audit-parsers-sakura` の枝 `c3eea14e` にあり、まだ `main` に着いていない（11-06 に `origin/main` を grep して 0 件）。
+
+### 6.1 合成と読み込みの仕事の上限（必ず直す）
+- 21. `plan.rs:387`・`plan.rs:210-283`・`budget.rs` — 予算は入った面の数だけを数え、段ごとに積む element の命令の数は数えない。予算の内側の菱形の葉に画像 1,000 個で、合成のたびに約 3,200 万個の命令（約 2 GB）。直し: `open` が積む積み荷の数も同じ予算から引く。
+- 22. `hit_import.rs:117-129,160-168,175-191` — 持ち込む領域の写しの数を予算が数えず、覚えた子の列を毎回まるごと写す。子の参照 65,536 行×collision 1,000 で 6,500 万個の写し。直し: 取り込む領域の数も予算から引く。
+- 23. `plan.rs:645`・`plan_extent.rs:18`・`composed.rs:91-99` — 上限は一辺だけで面積を抑えない。(16000,16000) の着せ替えで合成のたびに約 1 GiB を 0 で埋めて転写。直し: 面積の上限を `build_plan` の判定に 1 行（値は推奨案 2^25 画素＝128 MiB・8K の画面より大きい・越えたら `ExtentTooLarge`）。
+- 24. `budget.rs:41-49`・`plan.rs:351,387` — 予算を合成 1 回ごとに作り直すので、尽きた `error!` がコマ替えのたびに出てログがあふれる。直し: 合成の走査は記録を黙らせ、尽きたことは読み込みのとき 1 度だけ記録する。
+
+### 6.2 線形の探索を表引きに（必ず直す・直したほうがよい）
+- 25. `nesting.rs:287-292` — `visible_parts` の `out.contains` で O(n²)・予算なし・seriko が毎フレーム呼ぶ（3.2 で深さ 10,000 の鎖 1 回約 17 ms）。直し: 印の集合を別に持つ。
+- 26. `bind_steps.rs:113-114,124,152` — `claim_from`・`open_claim`・`push_bind_contribution` が作業場の `Vec` を線形に引き、有効な着せ替え A で O(A²)。直し: 集合と表引きにする。
+- 27. `fold.rs:136-172` — `add_lines` が呼ばれるたびに全 element を走査・並べ直し・collision と animation を全走査し、同じ番号への追記 k 回で O(k²)。直し: 並べ直しは最後に 1 度、重なりと先勝ちは番号の集合で引く。
+- 28. `plan.rs:441-442,448→689-694,485,549`・`plan_extent.rs:263-264` — 層 (ii) の id ごとに animation の列を最初から探し、1 つの面の仕事が animation の数の 2 乗。直し: 段の頭で id→添字の表を作業場に作って引く。
+- 29. `method.rs:134-136`・`nesting.rs:63-67`（呼び手 `plan_always.rs:72,77`）— `always` の合成のたびに `Vec` と `String` 2 つを確保。直し: 確保しない比べにするか、束縛のときの答えを引く。
+- 30. `plan.rs:437-438` — 部品の段でも一番上の欄のコマを全部なめてから捨てる。直し: 段の種類で回すイテレータを分ける。
+
+### 6.3 小さな正しさ（直したほうがよい・できれば）
+- 31. `plan.rs:217,520-521`・`blit.rs:90-96` — 位置の i64 の足し算が飽和していない（外形とシェルの外形は飽和）。i64::MAX のコマで debug は panic。直し: `saturating_add`。
+- 32. `plan_extent.rs:288` — 外形だけが i64 の面の番号を `as u32` で切り詰める（ほかは `u32::try_from`）。直し: `try_from` にそろえる。
+- 33. `composed.rs:45-48` — 公開の `new`・`resize_and_clear` が幅を抑えず `stride()` が u32 であふれうる。直し: 入口で幅を `MAX_EXTENT` 以下と確かめる。
+
+### 6.4 説明の直し（できれば）
+- 34. `lib.rs:106-111,136-137`（失敗の一覧に `ExtentTooLarge` が無い）・`plan.rs:681`（合流の条件の場所）・`examples/compose_timing.rs:127`（命令の数を返すと書くが返さない）。
+- 35. `hit.rs:9-10,45`（古い行番号・256 の言い方の食い違い）。
+- 36. `normalized.rs:4-5,79`（無い順序キーの欄・古い行番号・波括弧の collision の規則）。
+- 37. `bind.rs:3-4`（集合の順の言い方）。
+- 38. `golden_tests.rs:3-21`（作業の経緯・中身と違う・`emo2_golden.rs` の場所）。
+- 39. `golden_tests_frame_extent_tests.rs:12-14`（外形は transient を数えないと書くが bind+random の最小の番号を数える）。
+- 40. `log_firing_tests.rs:154-157,217`（外形の走査の DEBUG の話が 3.1 の後は古い）。
+- 41. `nesting_visible_tests.rs:3-5,9` とテスト名 `inactive_bind_frames_…`（門に通るのは bind+random だけ）。
+- 42. `golden_tests_test_support.rs:40-55`・`golden_tests_surface1000_bind_tests.rs:1-3`（説明の枠の置き場と作業の経緯）。
+- 43. `blit_rect_tests.rs:1-2,390`・`composer_tests.rs:31-32,548-570,623,674,679`・`fold_tests.rs:133,167,385,451,601`・`bind_steps_tests.rs:1`・`film_tests.rs:1`・`plan_test_support.rs:28`（作業の経緯・昔のタスク番号・外形の古い言い方・飛び番）。
+- 44. `plan_extent_tests.rs:263-270`・`plan_bounds_tests.rs:134-135,192-193`（`build_plan`・`shell_bounds` が外形をたどると書くが表から引く）。
+
+### 6.5 テストの直し（直したほうがよい・できれば）
+- 45. `bind_steps_tests.rs:29-37,84-95` — insert の相手が `bind+random` の場合が無い（`is_pure_bind` を広げても緑）。
+- 46. `walk_limits_tests.rs:219-261` — 覚えが使われたかを当たり判定の覚えでしか見ない。
+- 47. `plan_issues_tests.rs:112-115` — もう無い文言が無いことを確かめている。
+- 48. `plan_bounds_tests.rs:205-208` — WARN が無いことしか見ない（記録が空であることを見る）。
+- 49. `golden_tests_determinism_budget_tests.rs:113-121,156-170` — 作業場の容量を 3 欄しか見ず `visited_cap0 > 0` も見ない。
+- 50. `pattern_word_tests.rs:76-88,115-129` — u32 を越える番号を断る分岐のテストが無い。
+- 51. `golden_tests_surface1000_bind_tests.rs:172-188` — `>=` を `>` に・36 行の説明。
+- 52. `log_firing_tests.rs:571-580` — Display のテストに `ExtentTooLarge` が無い。
+- 53. `atlas_bind.rs:134-142` — 説明は Some まで言うが一致しか見ない。
+- 54. `hit_in_tests.rs` — hit.rs のテストと同じ入力で同じことを確かめるだけ。
+- 55. `hit.rs:304-315,715-740` — 純関数を繰り返し呼ぶだけのテスト 2 本。
+- 56. `normalized.rs:130-152` — 組んで読み返すだけのテスト。
+- 57. `golden_tests_determinism_budget_tests.rs:211,253,259` — 外れることのない比べ。
+- 58. `golden_tests_trim_equivalence_tests.rs:189-203`・`golden_tests_surface0_base_tests.rs:41` — 全バイトの一致の後の二重の確かめ・外れない確かめ。
+- 59. `scale_ratio_tests.rs:342-364,392,404,471-475,482-483,534-535,589-593,619,655-658,727-731,735-739` — 指摘 10 の直し残り。:351 は残す。
+- 60. `plan_ops_tests.rs:70-105,350-353,415-437,491,618-646`・`plan_extent_tests.rs:256-258,487-500` — 決定性の 2 回目と、厳密な比べの前の空でない確かめ。
+- 61. `fold_merge_tests.rs:174-200`（SSP の形 6 と重なる）・`:357-360`（もう無い文言）。
+- 62. `composer_tests.rs:406-444` — 決定性のテストが 3 か所に重なる。
+- 63. `nesting_visible_tests.rs:738-756` — `cut_element_edges` は `skipped` の写し。
+- 64. `nesting_fixture_tests.rs:98-109,113-124,168-172`・`golden_tests_surface1000_bind_tests.rs:12-15` — plan_test_support の写し。
+- 65. `blit_rect_tests.rs:397-409,437-445,564-587` — `elem`・`surface`・`shell_of` の写しが 2 組。
+- 66. `base_image_tests.rs:378-391` — `surface_with_anims` の写し。
+- 67. `film_tests.rs:42-67` — `insert_film` の写し。
+- 68. `fold_tests.rs:454-467` — `shell_mixed` の写し。
+- 69. `composer_tests.rs:34-50/213-228`・`636-653/705-722` — 同じ組み立てを 2 度ずつ。
+- 70. `boxes_tests.rs:115-123/425-433`・`boxes_nesting_tests.rs:23-27` — 同じ関数の写し。
+- 71. `plan_extent_film_tests.rs:161-169`・`plan_issues_tests.rs:85-93`・`plan_frame_merge_tests.rs:19-26`（`koma`）— コマ 1 つを手で組む写し。
+- 72. `plan_bind_random_tests.rs:16-26`・`plan_frame_merge_tests.rs:29-44`・`plan_ops_tests.rs:693-717` — pattern 1 本を組む 9 行の写し。
+- 73. `plan_extent_tests.rs`（8 か所）・`plan_extent_film_tests.rs`（2）・`plan_nesting_extent_tests.rs:242-250` — `build_plan` の 9 行の塊が 11 回（`ops()` と並べて 1 つの口に）。
+- 74. `plan_extent_film_tests.rs:57-59` — `compute_extent` をそのまま呼ぶだけの包み。
+- 範囲の外: なし（5 人とも）。
