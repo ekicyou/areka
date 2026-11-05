@@ -7,23 +7,25 @@
 //!
 //! # このクレートの構成（design.md「File Structure Plan」）
 //!
-//! - [`runtime`] — boot 手順・`GhostRuntime`・終了統括・起動失敗の器（`GhostBootError`）。
-//!   `boot`／`GhostRuntime`（`kanade()`／`dispatcher()`）は task 3.1 が実装済み。
-//!   `shutdown`／`into_parts`（`GhostParts`・`GhostHandles`・`GhostShutdownError` を含む
-//!   終了統括一式）は task 3.2 が実装済み。
+//! - [`runtime`] — boot 手順・`GhostRuntime`・終了統括（`shutdown`／`into_parts`）・起動失敗の器
+//!   （`GhostBootError`）。
 //! - [`catalog`] — ベースウェアの根の目録（ゴースト・シェル・バルーンの列挙と素性・同梱バルーン）。
 //! - [`catalog_roots`] — 根の並び（上ほど先に探す）と、フォルダ名・根の比べ方。
-//! - [`config`] — 運行設定の値源解決（`KanadeConfig` 値源・shell descript 読解）。task 2.3。
-//! - [`dispatcher`] — 永続的な要求元と一時的な再生アクターの非対称吸収。task 2.5。
-//! - [`ticker`] — 差し替え可能な時刻供給コンポーネント。task 2.2。
-//! - [`relay`] — 相互依存の循環を解く汎用転送コンポーネント。task 2.1。
-//! - [`shiori_wiring`] — 本番の SHIORI 接続手続き。task 2.6。
-//! - [`sink`] — 本番既定の記録先コンポーネント（`LogSink`）。task 2.4。
+//! - [`config`] — 運行設定の値源解決（`KanadeConfig` 値源・shell descript 読解）。
+//! - [`dispatcher`] — 永続的な要求元と一時的な再生アクターの非対称吸収。
+//! - [`prop_get_sink`] — `\![get,property,…]` の受け口（値を引いて kanade へ返す）。
+//! - [`prop_sink`] — 汎用プロパティ SET キュー（`areka.prop.set`）の受け口。
+//! - [`relay`] — 相互依存の循環を解く汎用転送コンポーネント。
+//! - [`shiori_inproc`] — x64 SHIORI DLL を同じプロセスに読む接続。
+//! - [`shiori_wiring`] — 本番の SHIORI 接続手続き（i686 helper 経由）。
+//! - [`sink`] — 本番既定の記録先コンポーネント（`LogSink`）。
+//! - [`sylphya_wiring`] — 統一プロパティシステム sylphya の起動と結線。
+//! - [`ticker`] — 差し替え可能な時刻供給コンポーネント。
+//! - `translate_wiring`（crate 内） — 翻訳（`OnTranslate`）のための写しの源の結線。
 //!
-//! 公開 facade（design.md「File Structure Plan」の `src/lib.rs` 記載どおり）:
-//! `boot`／`GhostRuntime`／`GhostBootOptions`／`ShioriWiring`／`TickerMode`／
-//! `GhostBootError`／`GhostParts`／`GhostHandles`／`GhostShutdownError`／
-//! `SystemVarSource`／`SystemVarWiring` を re-export する。
+//! 公開 facade: `boot`／`boot_with_kanade_stop`／`boot_with_origin`／`GhostRuntime`／
+//! `GhostBootOptions`／`ShioriWiring`／`TickerMode`／`GhostBootError`／`GhostParts`／
+//! `GhostHandles`／`GhostShutdownError`／`SystemVarSource`／`SystemVarWiring` を re-export する。
 
 pub mod catalog;
 pub mod catalog_roots;

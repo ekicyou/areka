@@ -1,5 +1,6 @@
-//! `src` の単体テストが分け合う道具（有界の実行・システム変数・記録の sink・空の sink・
-//! ゴーストの fixture・有界の終了・OnBoot を待つ輪）。各テストはここから引き、写しを持たない。
+//! `src` の単体テストが分け合う道具（有界の実行・システム変数・起動の設定（`fake_options`）・
+//! 記録の sink・空の sink・SHIORI の置き場（`shiori_mount`）・ゴーストの fixture・有界の終了・
+//! OnBoot を待つ輪）。各テストはここから引き、写しを持たない。
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{RecvTimeoutError, sync_channel};
 use std::sync::{Arc, Mutex};

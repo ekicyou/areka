@@ -83,6 +83,7 @@ fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> 
         Ok(bytes) => bytes,
         Err(err) => {
             tracing::warn!(
+                event = "shell_descript_unreadable",
                 path = %descript_path.display(),
                 error = %err,
                 "shell descript が読取不能——shell ディレクトリ名へフォールバックする"
@@ -96,6 +97,7 @@ fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> 
         Some(name) => name,
         None => {
             tracing::warn!(
+                event = "shell_name_missing",
                 path = %descript_path.display(),
                 "shell descript に name キーが無い——shell ディレクトリ名へフォールバックする"
             );

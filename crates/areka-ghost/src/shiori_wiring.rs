@@ -386,7 +386,10 @@ mod tests {
         let result = connect();
 
         match result {
-            Err(_) => {}
+            Err(e) => assert!(
+                e.contains("i686 helper の spawn に失敗"),
+                "spawn の段で落ちるはず: {e}"
+            ),
             Ok(_) => panic!("存在しない helper_exe への spawn は失敗するはず"),
         }
     }

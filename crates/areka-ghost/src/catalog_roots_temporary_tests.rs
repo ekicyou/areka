@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use temp_path_kit::TempPath;
 
 use super::{BasewareRoots, StoreKind, find_ghost, install_root, list_balloons, survey};
-use crate::catalog::test_support::put_ghost_in;
+use crate::catalog::test_support::{put_balloon, put_ghost_in};
 use crate::catalog::{BasewareRoot, RootMark, scan_balloons};
 
 /// 一時の置き場 `t`（ゴーストを直に並べる）を先頭に、普通の根 `a` を後ろに置いた並び。
@@ -57,9 +57,7 @@ fn head_temporary_ghost_wins_over_same_folder_name() {
 #[test]
 fn temporary_root_does_not_look_for_balloons() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-balloon");
-    let bal = t.join(r"balloon\b");
-    std::fs::create_dir_all(&bal).unwrap();
-    std::fs::write(bal.join("descript.txt"), "name,B\r\n").unwrap();
+    put_balloon(&t, "b", "B");
 
     assert!(scan_balloons(&roots.roots()[0]).is_empty());
     assert!(list_balloons(&roots).is_empty());

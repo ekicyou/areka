@@ -201,6 +201,16 @@ fn refuses_to_copy_into_itself() {
         );
         assert!(!to.exists());
     }
+    // 語末の ς も σ も Σ と同じ名前（NTFS は 1 字ずつ大文字で比べる・to_lowercase では分かれる）。
+    let greek = from.with_file_name("ΟΔΟΣ");
+    fs::create_dir_all(&greek).unwrap();
+    let to = from.with_file_name("οδοσ").join("to");
+    let error = copy_tree_atomic(&greek, &to, &root).expect_err("断るはず");
+    assert!(
+        matches!(&error, CopyError::Io { error, .. } if error.kind() == std::io::ErrorKind::InvalidInput),
+        "{error}"
+    );
+    assert!(!to.exists());
     cleanup(&from);
 }
 

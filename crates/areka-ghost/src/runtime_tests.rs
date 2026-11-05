@@ -241,7 +241,9 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
                 .barrier()
                 .expect("sylphya actor should process the persist_put and reflect it");
             // アクター後片付け（宙吊りスレッド回避のため clean shutdown）。
-            let _ = runtime.shutdown(areka_kanade::CloseReason::System);
+            runtime
+                .shutdown(areka_kanade::CloseReason::System)
+                .expect("clean shutdown");
         },
     );
 }

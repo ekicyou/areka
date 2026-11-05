@@ -78,10 +78,8 @@ fn missing_roots_drop_out_of_present_and_come_back() {
 fn single_root_and_entries_carry_their_root() {
     let tmp = TempPath::under_target("catalog-roots-entry");
     let dir = tmp.path().to_path_buf();
-    std::fs::create_dir_all(dir.join(r"ghost\g\ghost\master")).unwrap();
-    std::fs::write(dir.join(r"ghost\g\ghost\master\descript.txt"), "name,G\r\n").unwrap();
-    std::fs::create_dir_all(dir.join(r"balloon\b")).unwrap();
-    std::fs::write(dir.join(r"balloon\b\descript.txt"), "name,B\r\n").unwrap();
+    put_ghost_in(&dir.join("ghost"), "g", "name,G\r\n");
+    put_balloon(&dir, "b", "B");
 
     let roots = BasewareRoots::single(dir.clone());
     assert_eq!(roots.roots(), [BasewareRoot::new(dir.clone())]);

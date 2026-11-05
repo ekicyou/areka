@@ -560,7 +560,7 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
 /// 引数は [`boot`] と同一で、末尾に `kanade_stop` が 1 つ増えるだけの派生である（[`boot`] は
 /// `None` を渡す薄い包み＝**既存の構築点は 1 つも変わらない**）。設計は当初これを
 /// `GhostBootOptions` の新フィールドとして書いていたが、[`GhostBootOptions`] は struct
-/// リテラルで組まれる型であり（本 crate と `areka` の合計 25 箇所）、フィールドを増やすと
+/// リテラルで組まれる型であり（本 crate と `areka` の多くの箇所）、フィールドを増やすと
 /// 全構築点の書き換えを強いる——設計自身が置いた「既存の構築点は不変」という条件と両立しない。
 /// そこで [`areka_kanade::spawn_kanade_with_stop_sink`] と**同じ形の派生関数**を採る。
 ///

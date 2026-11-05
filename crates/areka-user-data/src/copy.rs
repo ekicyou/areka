@@ -121,8 +121,21 @@ fn refuse_inside(from: &Path, path: &Path) -> Result<(), CopyError> {
 }
 
 /// `outer` が `inner` の前置きか（部品ごとに大文字小文字を区別せずに比べる・Windows の名前の決まり）。
+/// 1 字を 1 字の大文字へ畳む（NTFS と同じ・`areka-ghost` の `catalog_roots::fold_key` と同じ規則）。
+/// `to_lowercase` は語末の Σ を ς にし σ と分けてしまう。
 fn is_within(inner: &Path, outer: &Path) -> bool {
-    let fold = |c: std::path::Component<'_>| c.as_os_str().to_string_lossy().to_lowercase();
+    let fold = |c: std::path::Component<'_>| -> String {
+        let name = c.as_os_str().to_string_lossy();
+        name.chars()
+            .map(|c| {
+                let mut up = c.to_uppercase();
+                match (up.next(), up.next()) {
+                    (Some(u), None) => u,
+                    _ => c,
+                }
+            })
+            .collect()
+    };
     let (mut inner, outer) = (inner.components(), outer.components());
     outer
         .into_iter()

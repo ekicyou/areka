@@ -1,4 +1,4 @@
-//! `LogSink`／`DiscardSink` — 診断既定の記録先コンポーネント（単一出力契約 [`dola::cue::CueSink`]）。
+//! `LogSink`／`DiscardSink` — 診断既定の記録先コンポーネント（単一出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`））。
 //!
 //! `LogSink` は発火内容を `tracing` へ構造化出力するだけの、複製可能（`Clone`）な診断既定実装。
 //! M-boot 統合はこの位置に seriko／emo-text-layer の実 sink を挿す（design.md「ghost::sink」）。
@@ -57,7 +57,7 @@ where
 /// `at`（発火時刻）・`actor`（話者スコープ）・`command_kind`（コマンド種別）を
 /// 構造化出力するだけで、状態を一切蓄積しない（無限に稼働し続けても安全）。
 ///
-/// 演者非依存の**単一の出力契約** [`dola::cue::CueSink`] を実装する（`boot` の broadcast 登録先が
+/// 演者非依存の**単一の出力契約** [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`）を実装する（`boot` の broadcast 登録先が
 /// 要求する形・R11.3/R11.6）。旧 `SurfaceSink`/`TextSink` の 2 分割は broadcast＋演者側 relevance
 /// ゆえ廃した。broadcast された全 cue を構造化ログへ落とすだけの診断既定 sink。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -83,7 +83,7 @@ impl CueSink for LogSink {
     }
 }
 
-/// 破棄専用の診断 sink（演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する）。
+/// 破棄専用の診断 sink（演者非依存の単一出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`）を実装する）。
 ///
 /// `boot` の可変長 sink 列（`Vec<Box<dyn BootCueSink>>`・S-3）のうち、診断既定の非記録スロットを
 /// 埋めるための no-op sink。broadcast された cue を受け取っても何もしない（記録も出力もしない・

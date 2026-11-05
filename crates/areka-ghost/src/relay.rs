@@ -88,9 +88,15 @@ mod tests {
 
         // 後始末: 上流を手放して自然終了させる。
         drop(a_tx);
-        handle
-            .join()
-            .expect("relay terminates normally after upstream drop");
+        run_bounded(
+            "relay join after upstream drop",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("relay terminates normally after upstream drop");
+            },
+        );
     }
 
     // ケース2: 上流全 Sender drop → 自然終了（join が Ok(()) を有界時間内に返す）。

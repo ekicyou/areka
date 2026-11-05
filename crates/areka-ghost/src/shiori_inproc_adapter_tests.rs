@@ -219,7 +219,7 @@ fn adapter_roundtrips_through_real_ishiori() {
 // --- inproc_connect の file:None 即失敗（決定論・DLL 不要・要件 3.5）---------
 
 /// `shiori.file` が `None`（DLL 名未解決）なら DLL ロードを試みず即座に `Err`（推測しない・要件 3.5）。
-/// `shiori_wiring.rs` の `build_shiori_mount(None)` と同型に、実フィクスチャの `resolve` で得る。
+/// 共通の `test_support::shiori_mount` で得る。
 #[test]
 fn inproc_connect_missing_file_fails_immediately() {
     // shiori 行なし＝file: None（resolve が推測しない）。

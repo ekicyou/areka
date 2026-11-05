@@ -361,6 +361,7 @@ fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
         Err(err) => {
             tracing::warn!(
+                event = "catalog_store_unreadable",
                 path = %store.display(),
                 error = %err,
                 "格納フォルダが読めない——0 件として扱う"
@@ -373,6 +374,7 @@ fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
             Ok(entry) => Some(entry.path()),
             Err(err) => {
                 tracing::warn!(
+                    event = "catalog_store_entry_unreadable",
                     path = %store.display(),
                     error = %err,
                     "格納フォルダの項目が読めない——その項目を除く"
