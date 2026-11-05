@@ -25,11 +25,11 @@
 - 指摘 18・20 を残した記録（検証の記録・要件 5.3）。
 
 ### Out of Boundary
-- 範囲の外のファイルは次の 2 つだけを、決めた行だけ触る（要件 7.4）。
+- 範囲の外のファイルは次のものだけを、決めた行だけ触る（要件 7.4）。
   - `crates/log-capture-kit/tests/file_length_guard_test.rs`: `OVER_LIMIT_ALLOWED` の `actor_bind_loop_tests.rs` の行（75〜78 行）と `OVER_LIMIT_ALLOWED_COUNT`（101 行）。
   - `crates/areka/src/emo2_boot/shell_carry_tests.rs`: `BindResolver::new`・`BindOptionDecls` の呼び出し元（19・38〜43 行の `names`）。
 - `BindResolver::from_groups` の中身と、parsers の着せ替えの読みの型（`audit-parsers-sakura`）。
-- `crates/log-capture-kit/src/event.rs:145`・`src/event_tests.rs:15・102` の「出所は `table.rs` の `capture_logs`」という文（呼び出し元でないので触らない）。
+  - `crates/log-capture-kit/src/event.rs:145`・`src/event_tests.rs:15・102`: 「出所は `table.rs` の `capture_logs`」という文の出所の書き方だけ（指摘 6 で `capture_logs` を `lib_test_support.rs` へ移すと事実と違ってしまうため・要件 7.4・2026-11-05 設計の討議で確定）。持ち主は `audit-test-kits` で、触る前に走っていないかを確かめる（要件 7.6 と同じ）。
 - `vendors/`、`doc/`・`docs/` を名指す行（足さない・変えない・要件 6.7）。
 
 ### Allowed Dependencies
@@ -125,6 +125,7 @@ crates/areka-seriko/
 
 ### 範囲の外（決めた行だけ）
 - `crates/log-capture-kit/tests/file_length_guard_test.rs` — 例外表の 1 行と件数（2）。
+- `crates/log-capture-kit/src/event.rs`・`src/event_tests.rs` — 「出所」の文 3 行の書き方だけ（6）。
 - `crates/areka/src/emo2_boot/shell_carry_tests.rs` — `names(multiple)` を descript の文字列で組む形にし、今ある `char2_names` の中身（作業フォルダに書いて読む）を 1 つの道具にして両方から呼ぶ（3）。
 
 ### 1,000 行の見積もり（要件 6.1）
@@ -253,7 +254,7 @@ flowchart LR
 | 6.7 | `doc/`・`docs/` を名指す行を足さない（Out of Boundary） |
 | 7.1・7.2 | 「消す前の確かめ」 |
 | 7.3 | `audit-parsers-sakura` との申し合わせ（Revalidation Triggers）。範囲の外の 2 ファイルの持ち主の確かめ（System Flows） |
-| 7.4 | Out of Boundary の 2 ファイルと決めた行だけ。`log-capture-kit` の「出所」の文は触らない |
+| 7.4 | Out of Boundary のファイルと決めた行だけ（`log-capture-kit` の「出所」の文 3 行を含む） |
 | 7.5 | clippy だけの指摘は直さない（audit が同じ所を指したものは無い・research.md 4 節） |
 | 7.6 | System Flows の持ち主の確かめ |
 | 8.1 | 「指摘ごとの直し」の 18 行 |

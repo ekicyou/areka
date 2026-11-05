@@ -230,3 +230,9 @@
 - **指摘 6 のまとめ先:** 層をまたぐ道具はクレートに 1 つの `src/lib_test_support.rs`（`lib.rs` が `#[cfg(test)] #[path] mod test_support;` で繋ぐ・`structure.md` の `<stem>_test_support.rs` の形）、役者の道具は今の `actor_test_support.rs`、`tests/` は `tests/common/mod.rs`。
 - **範囲の外の古びる説明（直さない）:** `crates/log-capture-kit/src/event_tests.rs:15・102` と `src/event.rs:145` は「`areka-seriko/src/table.rs` の `capture_logs` が出所」と書いている。指摘 6 でその写しは `lib_test_support.rs` へ移るが、文は「出所」の記録で、呼び出し元でも 1,000 行の例外表でもないので、要件 7.4 に従って触らない。
 - **1,000 行の見積もり:** `actor_bind_loop_tests.rs` は `mod tick_loop_tests`（1012〜1375 行）を移すと 1,010 行で、まだ越える。指摘 3 で名前の表の組み方（4 つの関数と 2 か所の中書き）を descript の文字列にすると約 20 行減り、1,000 行の下に入る。だから指摘 3 を指摘 2 より先に行う。
+
+## 10. 設計の討議の決め（2026-11-05・開発者が 3 議題とも推奨案を承認）
+
+1. 指摘 19 の上限は `SETTLE_MAX_TICKS = 37_500`（16ms × 37,500 ＝ 10 分）のまま。人の書く `runonce` の待ちは長くても数十秒なので、誤記だけを止めて正しい台本には当たらない。
+2. 指摘 3 のテストの着せ替えの表は、descript の文字列 → `groups_of` → `from_groups` で組む。`audit-parsers-sakura` の「外から組める型」の約束には頼らない（どちらが先に着地しても動く）。向こうの約束は害が無いので、取り消しの連絡はしない。
+3. 指摘 6 で `capture_logs` を移すと事実と違ってしまう、`crates/log-capture-kit` の説明 3 行（`event.rs:145`・`event_tests.rs:15・102`）の出所の書き方を直す。要件 7.4 に「直しの結果として事実と違ってしまう説明の文の直し」を書き足した。
