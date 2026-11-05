@@ -6,7 +6,7 @@ use crate::world::Records;
 
 /// 1 回の走査の範囲でたどってよい面の数。
 /// 仮の値: 3.2 で「1 フレーム（16.667 ms）で回りきれる面の数」を測って置き直す。
-pub(crate) const VISIT_BUDGET: usize = 1 << 20;
+pub(crate) const VISIT_BUDGET: usize = 1 << 16;
 
 /// 走査 1 回の範囲の残りの数と、報告済みの印。
 #[derive(Debug)]
@@ -49,6 +49,16 @@ impl Budget {
             );
         }
         false
+    }
+
+    /// 覚えた子の分 `n`（子に入る 1 と子の下で数えた数）をまとめて引く。足りなければ何も引かず、
+    /// 記録も出さずに false（呼び手は今どおり 1 つずつ入り、尽きた所で [`Budget::enter`] が記録を出す）。
+    pub(crate) fn take(&mut self, n: usize) -> bool {
+        if self.left < n {
+            return false;
+        }
+        self.left -= n;
+        true
     }
 }
 

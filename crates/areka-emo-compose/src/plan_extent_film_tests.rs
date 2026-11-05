@@ -55,7 +55,7 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
 }
 
 fn extent(world: &EmoWorld, atlas: &AtlasTable, id: u32) -> Extent {
-    compute_extent(&mut Vec::new(), world, atlas, id)
+    compute_extent(world, atlas, id)
 }
 
 /// 要件 1.7・6.2: 動く絵を置いたサーフェスの外形は、同じ寸法の静止画を置いたときと同じ。

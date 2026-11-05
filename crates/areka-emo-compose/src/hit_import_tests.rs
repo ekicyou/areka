@@ -275,7 +275,7 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
     );
     let master = w.surface(0).expect("面 0");
     let mut list = Vec::new();
-    let logs = capture_logs(|| list = super::regions_of(&w, master, &mut Budget::new(2)));
+    let logs = capture_logs(|| list = super::regions_of(&w, master, &mut Budget::new(2), None));
     assert_eq!(
         list,
         [coll(0, 0, 0, 5, 5, "One"), coll(0, 0, 0, 5, 5, "Two")]
@@ -286,7 +286,12 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
         "{logs}"
     );
     let logs = capture_logs(|| {
-        list = super::regions_of(&w, master, &mut Budget::with_records(2, Records::Quiet))
+        list = super::regions_of(
+            &w,
+            master,
+            &mut Budget::with_records(2, Records::Quiet),
+            None,
+        )
     });
     assert_eq!(list.len(), 2);
     assert!(logs.is_empty(), "{logs}");

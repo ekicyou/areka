@@ -6,12 +6,14 @@
 //! pattern を数える、の 3 点。記録は出さない（読み込みと合成が既に出している・広がりの予算が尽きたときの `error!` だけ出す）。
 //! 右下は面ごとの `compute_extent`（合成の絵の大きさ）も重ねて、どの面の絵も外形に収める。
 
+use std::collections::{HashMap, HashSet};
+
 use areka_emo_atlas::AtlasTable;
 
 use crate::budget::{Budget, VISIT_BUDGET};
 use crate::method::is_implemented_name;
 use crate::nesting::ElementKind;
-use crate::plan::{compute_extent, surface_and_binding};
+use crate::plan::{ExtentMemo, compute_extent_limited, surface_and_binding};
 use crate::world::EmoWorld;
 
 /// 土台の原点を (0,0) とする外形。(0,0) を必ず含む（`left, top <= 0`・`right, bottom >= 0`）。
@@ -37,7 +39,7 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds {
 }
 
 /// [`shell_bounds`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
-/// 小さな数）。
+/// 小さな数）。きれいに終わった面の覚えは、シェルの外形と根ごとの外形でそれぞれ根の間で 1 つを共有する。
 pub(crate) fn shell_bounds_limited(
     world: &EmoWorld,
     atlas: &AtlasTable,
@@ -45,14 +47,29 @@ pub(crate) fn shell_bounds_limited(
 ) -> ShellBounds {
     // [left, top, right, bottom]。(0,0) を必ず含むよう 0 から始める。
     let mut acc = [0i64; 4];
-    let mut visited = Vec::new();
-    let mut stack = Vec::new();
+    let mut scratch = BoundsScratch::default();
+    let mut memo = BoundsMemo::new();
+    let mut extent_memo = ExtentMemo::new();
     for id in world.surface_ids() {
-        walk(&mut acc, &mut visited, &mut stack, world, atlas, id, limit);
+        if let Some(r) = walk(&mut scratch, Some(&mut memo), world, atlas, id, limit) {
+            acc = [
+                acc[0].min(r[0]),
+                acc[1].min(r[1]),
+                acc[2].max(r[2]),
+                acc[3].max(r[3]),
+            ];
+        }
         // 合成の絵の大きさ（`compute_extent`）は描画メソッドを問わず bind の pattern0・`always` の
         // pattern を数えるので、右下はそれも収める（Invariants）。bind・`always` の循環の知らせは
         // `compute_extent` の debug だけ。
-        let extent = compute_extent(&mut visited, world, atlas, id);
+        let extent = compute_extent_limited(
+            &mut scratch.on_path,
+            world,
+            atlas,
+            id,
+            VISIT_BUDGET,
+            Some(&mut extent_memo),
+        );
         acc[2] = acc[2].max(extent.w as i64);
         acc[3] = acc[3].max(extent.h as i64);
     }
@@ -65,63 +82,142 @@ pub(crate) fn shell_bounds_limited(
     }
 }
 
-/// シェルの外形の走査の積み荷: 面 `surface` を `(x, y)` へずらして入るか、面から出る。
+/// シェルの外形の走査の積み荷: 面 `surface` へ親の原点から `(x, y)` ずらして入るか、面から出る。
 enum Step {
     Enter { surface: u32, x: i64, y: i64 },
     Exit,
 }
 
-/// 根の面 `root` から明示のスタックでたどり、面を `acc` に重ねる。`visited` は祖先の列、`stack` は
-/// 積み荷の列（どちらも戻ると空に戻る）。子は今までの再帰と同じ順（element → pattern）に積み、逆にして
-/// 上から取り出す。
-fn walk(
-    acc: &mut [i64; 4],
-    visited: &mut Vec<u32>,
-    stack: &mut Vec<Step>,
+/// 段の外形（その面の原点からの相対・[left, top, right, bottom]）。何も数えていなければ `None`。
+type Rect = Option<[i64; 4]>;
+
+/// シェルの外形の走査の段: 面と、親の原点からの位置と、段の下で数えた外形と、きれいに終わるかと、
+/// 段の下で予算に数えた数。
+struct Level {
+    surface: u32,
+    x: i64,
+    y: i64,
+    rect: Rect,
+    clean: bool,
+    spent: usize,
+}
+
+/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、下で予算に数えた数と
+/// 外形（その面の原点からの相対）。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
+pub(crate) type BoundsMemo = HashMap<u32, (usize, Rect)>;
+
+/// シェルの外形の走査の作業場（経路にある面の集合・積み荷の列・段の列）。どれも走査が終わると空に戻る。
+#[derive(Default)]
+pub(crate) struct BoundsScratch {
+    on_path: HashSet<u32>,
+    stack: Vec<Step>,
+    levels: Vec<Level>,
+}
+
+/// 外形 `acc` に、`(x, y)` ずらした外形 `r` を飽和で重ねる。
+fn merge(acc: &mut Rect, r: Rect, x: i64, y: i64) {
+    let Some(r) = r else {
+        return;
+    };
+    let r = [
+        r[0].saturating_add(x),
+        r[1].saturating_add(y),
+        r[2].saturating_add(x),
+        r[3].saturating_add(y),
+    ];
+    *acc = Some(acc.map_or(r, |a| {
+        [
+            a[0].min(r[0]),
+            a[1].min(r[1]),
+            a[2].max(r[2]),
+            a[3].max(r[3]),
+        ]
+    }));
+}
+
+/// 根の面 `root` から明示のスタックでたどり、根の原点からの外形を返す（面の表に無ければ `None`）。
+/// 子は今までの再帰と同じ順（element → pattern）に積み、逆にして上から取り出す。段ごとの外形はその面の
+/// 原点からの相対で持ち、段が終わったら親の原点へずらして重ねる。
+///
+/// `memo` が在れば、きれいに終わった面の外形を覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた
+/// 数」以上ならそれだけ一度に引いて覚えた外形を使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと同じ）。
+pub(crate) fn walk(
+    s: &mut BoundsScratch,
+    mut memo: Option<&mut BoundsMemo>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     root: u32,
     limit: usize,
-) {
+) -> Rect {
     let mut budget = Budget::new(limit);
-    stack.push(Step::Enter {
+    let mut answer = None;
+    s.stack.push(Step::Enter {
         surface: root,
         x: 0,
         y: 0,
     });
-    while let Some(step) = stack.pop() {
-        let Step::Enter {
-            surface,
-            x: ox,
-            y: oy,
-        } = step
-        else {
-            visited.pop();
+    while let Some(step) = s.stack.pop() {
+        let Step::Enter { surface, x, y } = step else {
+            // 段が尽きた: 経路から外し、きれいなら覚え、外形を親の原点へずらして重ねる（根なら答え）。
+            let Some(done) = s.levels.pop() else {
+                break;
+            };
+            s.on_path.remove(&done.surface);
+            if done.clean
+                && let Some(m) = memo.as_deref_mut()
+            {
+                m.insert(done.surface, (done.spent, done.rect));
+            }
+            match s.levels.last_mut() {
+                Some(up) => {
+                    up.spent += done.spent + 1;
+                    up.clean &= done.clean;
+                    merge(&mut up.rect, done.rect, done.x, done.y);
+                }
+                None => answer = done.rect,
+            }
             continue;
         };
         // 循環は黙って打ち切る（warn は読み込みが出す）。
-        if visited.contains(&surface) {
+        if s.on_path.contains(&surface) {
+            if let Some(up) = s.levels.last_mut() {
+                up.clean = false;
+            }
             continue;
         }
-        // 根の面（祖先の列が空）は予算に数えない。
-        if !visited.is_empty() && !budget.enter("bounds", root) {
-            continue;
+        // 根の面（段が無い）は予算に数えない。
+        if let Some(up) = s.levels.last_mut() {
+            if let Some(&(n, rect)) = memo.as_deref().and_then(|m| m.get(&surface))
+                && budget.take(n + 1)
+            {
+                up.spent += n + 1;
+                merge(&mut up.rect, rect, x, y);
+                continue;
+            }
+            if !budget.enter("bounds", root) {
+                up.clean = false;
+                continue;
+            }
         }
         let Some((master, binding)) = surface_and_binding(world, surface) else {
+            if let Some(up) = s.levels.last_mut() {
+                up.spent += 1;
+            }
             continue;
         };
-        visited.push(surface);
-        stack.push(Step::Exit);
-        let children = stack.len();
+        s.on_path.insert(surface);
+        s.stack.push(Step::Exit);
+        let children = s.stack.len();
+        let mut rect = None;
 
         for (i, element) in master.elements.iter().enumerate() {
             let (ex, ey) = element.transform.offset();
             let original = match element.kind {
                 ElementKind::Surface(child) => {
-                    stack.push(Step::Enter {
+                    s.stack.push(Step::Enter {
                         surface: child,
-                        x: ox + ex,
-                        y: oy + ey,
+                        x: ex,
+                        y: ey,
                     });
                     continue;
                 }
@@ -134,11 +230,7 @@ fn walk(
             let Some((w, h)) = original else {
                 continue;
             };
-            let (x, y) = (ox + ex, oy + ey);
-            acc[0] = acc[0].min(x);
-            acc[1] = acc[1].min(y);
-            acc[2] = acc[2].max(x + w as i64);
-            acc[3] = acc[3].max(y + h as i64);
+            merge(&mut rect, Some([0, 0, w as i64, h as i64]), ex, ey);
         }
 
         for pattern in master.animations.iter().flat_map(|a| &a.patterns) {
@@ -149,14 +241,23 @@ fn walk(
             if !is_implemented_name(pattern.method.as_str()) {
                 continue;
             }
-            stack.push(Step::Enter {
+            s.stack.push(Step::Enter {
                 surface: child,
-                x: ox + pattern.x,
-                y: oy + pattern.y,
+                x: pattern.x,
+                y: pattern.y,
             });
         }
-        stack[children..].reverse();
+        s.levels.push(Level {
+            surface,
+            x,
+            y,
+            rect,
+            clean: true,
+            spent: 0,
+        });
+        s.stack[children..].reverse();
     }
+    answer
 }
 
 #[cfg(test)]

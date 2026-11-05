@@ -13,6 +13,8 @@
 //! 記録は出さない（無い番号と循環は [`crate::nesting::NestReport`] が報告する・広がりの予算が尽きたときの
 //! `error!` だけ出す）。
 
+use std::collections::{HashMap, HashSet};
+
 use areka_parsers::shell::Collision;
 use bevy_ecs::prelude::Component;
 
@@ -29,9 +31,11 @@ pub struct HitRegions(pub Vec<Collision>);
 
 /// 面の表の全サーフェスを根に 1 回ずつ列を求め、持ち込みが在るサーフェスにだけ [`HitRegions`] を付ける
 /// （[`EmoWorld::build_with_images`] の最後で呼ぶ）。持ち込みが 1 つも無いサーフェスには何も付けない。
-/// 広がりの予算は根の面 1 つにつき 1 つ（`records` が `Quiet` なら尽きても記録を出さない）。
+/// 広がりの予算は根の面 1 つにつき 1 つ（`records` が `Quiet` なら尽きても記録を出さない）。きれいに
+/// 終わった面の覚え（[`HitMemo`]）は根の間で 1 つを共有する。
 pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
     let mut found = Vec::new();
+    let mut memo = HitMemo::new();
     for id in emo.surface_ids() {
         let Some(master) = emo.surface(id) else {
             continue;
@@ -40,6 +44,7 @@ pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
             emo,
             master,
             &mut Budget::with_records(VISIT_BUDGET, records),
+            Some(&mut memo),
         );
         // 列は［持ち込み］→［直接］なので、長さが違えば持ち込みが在る。
         if list.len() != master.collisions.len() {
@@ -55,27 +60,43 @@ pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
     }
 }
 
-/// 持ち込みの走査の段: 面と、element の読み位置と、その段で集めた列と、親の element定義の X,Y。
+/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、下で予算に数えた数と
+/// 持ち込み済みの列。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
+pub(crate) type HitMemo = HashMap<u32, (usize, Vec<Collision>)>;
+
+/// 持ち込みの走査の段: 面と、element の読み位置と、その段で集めた列と、親の element定義の X,Y と、
+/// きれいに終わるかと、段の下で予算に数えた数。
 struct Level<'a> {
     master: &'a SurfaceMaster,
     next: usize,
     out: Vec<Collision>,
     dx: i64,
     dy: i64,
+    clean: bool,
+    spent: usize,
 }
 
-/// `master` を根にした持ち込み済みの列。段のスタック（先祖の列を兼ねる）で回し、子の段が終わったら
+/// `master` を根にした持ち込み済みの列。段のスタックで回し（先祖の確かめは経路の集合）、子の段が終わったら
 /// 親に直接書かれた領域と同じ名前を除き、element定義の X,Y を飽和で足して親の列へ足す。
-// ponytail: 根ごとに子をたどり直す（同じ子を何度も求める）。読み込み 1 回だけなので、菱形が深く
-// 重なって遅ければ「先祖に左右されない子」の列を覚えておく。
-fn regions_of(world: &EmoWorld, master: &SurfaceMaster, budget: &mut Budget) -> Vec<Collision> {
+///
+/// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた
+/// 数」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと同じ）。
+pub(crate) fn regions_of(
+    world: &EmoWorld,
+    master: &SurfaceMaster,
+    budget: &mut Budget,
+    mut memo: Option<&mut HitMemo>,
+) -> Vec<Collision> {
     let root = master.id;
+    let mut on_path = HashSet::from([root]);
     let mut levels = vec![Level {
         master,
         next: 0,
         out: Vec::new(),
         dx: 0,
         dy: 0,
+        clean: true,
+        spent: 0,
     }];
     while let Some(level) = levels.last_mut() {
         let parent = level.master;
@@ -85,22 +106,40 @@ fn regions_of(world: &EmoWorld, master: &SurfaceMaster, budget: &mut Budget) -> 
             let ElementKind::Surface(c) = element.kind else {
                 continue;
             };
-            if levels.iter().any(|l| l.master.id == c) {
+            if on_path.contains(&c) {
+                level.clean = false;
                 continue;
             }
             let Some(child) = world.surface(c) else {
                 continue;
             };
-            if !budget.enter("hit_import", root) {
+            let (dx, dy) = element.transform.offset();
+            if let Some((n, list)) = memo.as_deref().and_then(|m| m.get(&c))
+                && budget.take(n + 1)
+            {
+                level.spent += n + 1;
+                import(
+                    &mut level.out,
+                    &parent.collisions,
+                    list.iter().cloned(),
+                    dx,
+                    dy,
+                );
                 continue;
             }
-            let (dx, dy) = element.transform.offset();
+            if !budget.enter("hit_import", root) {
+                level.clean = false;
+                continue;
+            }
+            on_path.insert(c);
             levels.push(Level {
                 master: child,
                 next: 0,
                 out: Vec::new(),
                 dx,
                 dy,
+                clean: true,
+                spent: 0,
             });
             continue;
         }
@@ -108,26 +147,48 @@ fn regions_of(world: &EmoWorld, master: &SurfaceMaster, budget: &mut Budget) -> 
         let Some(mut done) = levels.pop() else {
             break;
         };
+        on_path.remove(&done.master.id);
         done.out.extend(done.master.collisions.iter().cloned());
+        if done.clean
+            && let Some(m) = memo.as_deref_mut()
+        {
+            m.insert(done.master.id, (done.spent, done.out.clone()));
+        }
         let Some(up) = levels.last_mut() else {
             return done.out;
         };
-        let own = &up.master.collisions;
-        let (dx, dy) = (done.dx, done.dy);
-        up.out.extend(
-            done.out
-                .into_iter()
-                .filter(|r| own.iter().all(|p| p.name != r.name))
-                .map(|r| Collision {
-                    left: r.left.saturating_add(dx),
-                    top: r.top.saturating_add(dy),
-                    right: r.right.saturating_add(dx),
-                    bottom: r.bottom.saturating_add(dy),
-                    ..r
-                }),
+        up.spent += done.spent + 1;
+        up.clean &= done.clean;
+        import(
+            &mut up.out,
+            &up.master.collisions,
+            done.out.into_iter(),
+            done.dx,
+            done.dy,
         );
     }
     Vec::new()
+}
+
+/// 子の列 `list` のうち親に直接書かれた領域（`own`）と同じ名前でないものを、element定義の X,Y を飽和で
+/// 足して親の列 `out` へ足す。
+fn import(
+    out: &mut Vec<Collision>,
+    own: &[Collision],
+    list: impl Iterator<Item = Collision>,
+    dx: i64,
+    dy: i64,
+) {
+    out.extend(
+        list.filter(|r| own.iter().all(|p| p.name != r.name))
+            .map(|r| Collision {
+                left: r.left.saturating_add(dx),
+                top: r.top.saturating_add(dy),
+                right: r.right.saturating_add(dx),
+                bottom: r.bottom.saturating_add(dy),
+                ..r
+            }),
+    );
 }
 
 #[cfg(test)]

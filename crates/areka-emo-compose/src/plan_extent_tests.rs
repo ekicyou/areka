@@ -51,14 +51,14 @@ fn extent_is_independent_of_bindset() {
     // 全 element＋全 bind pattern0 の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
     let expected = Extent { w: 200, h: 150 };
 
-    let empty = compute_extent(&mut Vec::new(), &world, &atlas, 1000);
+    let empty = compute_extent(&world, &atlas, 1000);
     let partial = {
         let _b = BindSet::from_ids([2]);
-        compute_extent(&mut Vec::new(), &world, &atlas, 1000)
+        compute_extent(&world, &atlas, 1000)
     };
     let full = {
         let _b = BindSet::from_ids([1, 2, 3]);
-        compute_extent(&mut Vec::new(), &world, &atlas, 1000)
+        compute_extent(&world, &atlas, 1000)
     };
 
     // compute_extent は BindSet を引数に取らない（＝構造的に有効 bind 非依存）。三者一致＋期待値一致。
@@ -100,7 +100,7 @@ fn extent_unions_inactive_bind_contribution() {
     world.bind_atlas(&atlas, SetId(0));
 
     // 有効 bind 非依存ゆえ、activate されない id=9 の huge も外形へ寄与＝500×400 が支配。
-    let extent = compute_extent(&mut Vec::new(), &world, &atlas, 2000);
+    let extent = compute_extent(&world, &atlas, 2000);
     assert_eq!(
         extent,
         Extent { w: 500, h: 400 },
@@ -160,7 +160,7 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
     assert_eq!(ops[0].element, solid_id, "残る命令は不透明 solid のみ");
 
     // 外形: ghost の原寸 300×300 を数える（要件 6.5・全透明でも寄与）。
-    let extent = compute_extent(&mut Vec::new(), &world, &atlas, 3000);
+    let extent = compute_extent(&world, &atlas, 3000);
     assert_eq!(
         extent,
         Extent { w: 300, h: 300 },
@@ -196,7 +196,7 @@ fn negative_offset_is_clipped_and_origin_stays_fixed() {
     world.bind_atlas(&atlas, SetId(0));
 
     // small は (-100+10, -100+10)=(-90,-90) ゆえ max(0,·)=0 で寄与せず、base の 50×40 が残る。
-    let extent = compute_extent(&mut Vec::new(), &world, &atlas, 4000);
+    let extent = compute_extent(&world, &atlas, 4000);
     assert_eq!(
         extent,
         Extent { w: 50, h: 40 },
@@ -216,7 +216,7 @@ fn extent_equals_base_original_when_no_larger_layers() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
 
-    let extent = compute_extent(&mut Vec::new(), &world, &atlas, 5000);
+    let extent = compute_extent(&world, &atlas, 5000);
     assert_eq!(
         extent,
         Extent { w: 123, h: 45 },
@@ -245,8 +245,8 @@ fn extent_is_deterministic() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
 
-    let e1 = compute_extent(&mut Vec::new(), &world, &atlas, 6000);
-    let e2 = compute_extent(&mut Vec::new(), &world, &atlas, 6000);
+    let e1 = compute_extent(&world, &atlas, 6000);
+    let e2 = compute_extent(&world, &atlas, 6000);
     assert_eq!(e1, e2, "同一入力→同一 Extent（決定的）");
     // 参考: part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
     assert_eq!(e1, Extent { w: 205, h: 157 });
@@ -410,7 +410,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
 
     // 前提の実証: 外形が 0×0（定義層皆無）。
     assert_eq!(
-        compute_extent(&mut Vec::new(), &world, &atlas, 7000),
+        compute_extent(&world, &atlas, 7000),
         Extent { w: 0, h: 0 },
         "定義層皆無 → 外形 0×0（前提）"
     );
@@ -640,11 +640,12 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
         let mut extent = None;
         let logs = crate::log_capture::capture_logs(|| {
             extent = Some(compute_extent_limited(
-                &mut Vec::new(),
+                &mut Default::default(),
                 &world,
                 &atlas,
                 0,
                 limit,
+                None,
             ));
         });
         (extent.expect("外形"), logs)

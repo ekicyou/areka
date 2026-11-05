@@ -1,10 +1,12 @@
 //! キャンバス外形（[`Extent`]）の算出（`plan.rs` から中身を変えずに移した・animated-image-playback）。
 
+use std::collections::{HashMap, HashSet};
+
 use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::Interval;
 
 use super::{Extent, is_bind_interval, surface_and_binding};
-use crate::budget::{Budget, VISIT_BUDGET};
+use crate::budget::Budget;
 use crate::nesting::{ElementKind, is_always_interval};
 use crate::world::{EmoWorld, targets_animation_id};
 
@@ -32,17 +34,22 @@ pub(crate) const MAX_EXTENT: u32 = 16_384;
 /// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
 /// を返す（0×0 退化の Err 分類は [`build_plan`] の責務・本関数は分類しない）。
 ///
-/// 広がりの予算は根の面 1 つにつき [`VISIT_BUDGET`]。命令列と同じ予算を渡す口は [`compute_extent_limited`]。
-pub(crate) fn compute_extent(
-    visited: &mut Vec<u32>,
-    world: &EmoWorld,
-    atlas: &AtlasTable,
-    surface_id: u32,
-) -> Extent {
-    compute_extent_limited(visited, world, atlas, surface_id, VISIT_BUDGET)
+/// 広がりの予算は根の面 1 つにつき [`VISIT_BUDGET`]。命令列と同じ予算・作業場や覚えを渡す口は
+/// [`compute_extent_limited`]（本番の口はそちらだけ・これはテストの口）。
+#[cfg(test)]
+pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u32) -> Extent {
+    compute_extent_limited(
+        &mut HashSet::new(),
+        world,
+        atlas,
+        surface_id,
+        crate::budget::VISIT_BUDGET,
+        None,
+    )
 }
 
-/// 外形の走査の積み荷: 面へ入る（`element` は element定義の子＝循環を黙って飛ばす）か、面から出る。
+/// 外形の走査の積み荷: 面へ親の原点から (x, y) ずらして入る（`element` は element定義の子＝循環を黙って
+/// 飛ばす）か、面から出る。
 enum Step {
     Enter {
         surface: u32,
@@ -50,11 +57,40 @@ enum Step {
         y: i64,
         element: bool,
     },
-    Exit(u32),
+    Exit,
+}
+
+/// 外形の走査の段: 面と、親の原点からの位置と、段の下で数えた右下（その面の原点からの相対・何も数えて
+/// いなければ `None`）と、きれいに終わるかと、段の下で予算に数えた数。
+struct Level {
+    surface: u32,
+    x: i64,
+    y: i64,
+    max: Option<(i64, i64)>,
+    clean: bool,
+    spent: usize,
+}
+
+/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、下で予算に数えた数と
+/// 右下（その面の原点からの相対）。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
+pub(crate) type ExtentMemo = HashMap<u32, (usize, Option<(i64, i64)>)>;
+
+/// 右下 `max` に、`(x, y)` ずらした右下 `r` を重ねる。
+fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
+    let Some((rx, ry)) = r else {
+        return;
+    };
+    let (rx, ry) = (rx.saturating_add(x), ry.saturating_add(y));
+    *max = Some(max.map_or((rx, ry), |(mx, my)| (mx.max(rx), my.max(ry))));
 }
 
 /// [`compute_extent`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
-/// 小さな数）。
+/// 小さな数）。`on_path` は経路にある面の集合（呼び手の作業場を借りて使い回す・入口で空へ戻し、出口でも空）。
+///
+/// `memo` が在れば（シェルの外形が全部の面を根に回すとき・合成からは渡さない）、きれいに終わった面の
+/// 右下を覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた数」以上ならそれだけ一度に引いて
+/// 覚えた右下を使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと同じ）。段ごとの右下を
+/// その面の原点からの相対で持ち、段が終わったら親の原点へずらして重ねるので、覚えた右下も同じ形で重なる。
 ///
 /// 当 surface の全定義層を走査し `max_x`/`max_y` を更新する。[`flatten_surface`]（ops 経路）と同一の
 /// 入れ子 flatten 構造（オフセット累積＋visited 祖先スタックによる循環検出）を明示のスタックで回すが、
@@ -73,18 +109,18 @@ enum Step {
 /// 子は今までの再帰と同じ順（element → bind の id 昇順の pattern）に積み、逆にして上から取り出す。
 /// 取り出す時点の祖先の列は再帰の入口と同じ（先に取り出した兄弟の段は出る印で外れている）。
 pub(crate) fn compute_extent_limited(
-    visited: &mut Vec<u32>,
+    on_path: &mut HashSet<u32>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
     limit: usize,
+    mut memo: Option<&mut ExtentMemo>,
 ) -> Extent {
-    let mut max_x: i64 = 0;
-    let mut max_y: i64 = 0;
-    // ops 経路と同じ祖先スタック規律で循環検出する（別走査・別集約器だが構造は共有）。visited は
-    // 呼び手のスクラッチを借用して再利用する（要件 10.3）。走査開始前に空へ戻す。
-    visited.clear();
+    // ops 経路と同じ祖先の規律で循環検出する（別走査・別集約器だが構造は共有）。走査開始前に空へ戻す。
+    on_path.clear();
     let mut budget = Budget::new(limit);
+    let mut levels: Vec<Level> = Vec::new();
+    let mut answer = None;
     let mut stack = vec![Step::Enter {
         surface: surface_id,
         x: 0,
@@ -92,15 +128,28 @@ pub(crate) fn compute_extent_limited(
         element: false,
     }];
     while let Some(step) = stack.pop() {
-        let (surface, offset_x, offset_y, element) = match step {
-            // 枝離脱: 祖先スタックから pop（非循環の重複参照は別経路で再走査可能・要件 7.1）。
-            Step::Exit(surface) => {
-                let popped = visited.pop();
-                debug_assert_eq!(
-                    popped,
-                    Some(surface),
-                    "外形算出: visited は祖先スタック（LIFO）"
-                );
+        let (surface, x, y, element) = match step {
+            // 枝離脱: 経路から外す（非循環の重複参照は別経路で再走査可能・要件 7.1）。段の右下を親の
+            // 原点へずらして重ねる（根なら答え）。
+            Step::Exit => {
+                let Some(done) = levels.pop() else {
+                    break;
+                };
+                let removed = on_path.remove(&done.surface);
+                debug_assert!(removed, "外形算出: 経路の集合は段と揃う");
+                if done.clean
+                    && let Some(m) = memo.as_deref_mut()
+                {
+                    m.insert(done.surface, (done.spent, done.max));
+                }
+                match levels.last_mut() {
+                    Some(up) => {
+                        up.spent += done.spent + 1;
+                        up.clean &= done.clean;
+                        merge(&mut up.max, done.max, done.x, done.y);
+                    }
+                    None => answer = done.max,
+                }
                 continue;
             }
             Step::Enter {
@@ -113,7 +162,7 @@ pub(crate) fn compute_extent_limited(
         // 循環検出（ops 経路と同一規律・要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り。element定義の
         // 子は黙って飛ばし（記録は命令の経路の debug! が合成 1 回につき 1 度出す）、pattern の先の
         // 知らせは ops 経路と同じく debug。
-        if visited.contains(&surface) {
+        if on_path.contains(&surface) {
             if !element {
                 tracing::debug!(
                     target: "areka_emo_compose",
@@ -121,16 +170,30 @@ pub(crate) fn compute_extent_limited(
                     "外形算出: 入れ子参照の循環を検出・枝を打ち切り"
                 );
             }
+            if let Some(up) = levels.last_mut() {
+                up.clean = false;
+            }
             continue;
         }
-        // 根の面（祖先の列が空）は予算に数えない。
-        if !visited.is_empty() && !budget.enter("extent", surface_id) {
-            continue;
+        // 根の面（段が無い）は予算に数えない。
+        if let Some(up) = levels.last_mut() {
+            if let Some(&(n, max)) = memo.as_deref().and_then(|m| m.get(&surface))
+                && budget.take(n + 1)
+            {
+                up.spent += n + 1;
+                merge(&mut up.max, max, x, y);
+                continue;
+            }
+            if !budget.enter("extent", surface_id) {
+                up.clean = false;
+                continue;
+            }
         }
-        visited.push(surface);
-        stack.push(Step::Exit(surface));
+        on_path.insert(surface);
+        stack.push(Step::Exit);
         // 子の積み荷はここから先へ今までの順に積み、最後に逆にする（先に取り出すものを上へ）。
         let children = stack.len();
+        let mut max = None;
 
         if let Some((master, binding)) = surface_and_binding(world, surface) {
             // 当 surface の静的 element を外形へ寄与させる（束縛済み・placement 有無を問わず原寸で数える）。
@@ -141,8 +204,8 @@ pub(crate) fn compute_extent_limited(
                     let (ex, ey) = element.transform.offset();
                     stack.push(Step::Enter {
                         surface: child,
-                        x: offset_x.saturating_add(ex),
-                        y: offset_y.saturating_add(ey),
+                        x: ex,
+                        y: ey,
                         element: true,
                     });
                     continue;
@@ -161,9 +224,9 @@ pub(crate) fn compute_extent_limited(
                 let Some((w, h)) = original else {
                     continue;
                 };
-                // 負オフセットは原点でクリップ（外形は (0,0) を左上に固定・負方向はみ出しは転写時クリップ）。
-                max_x = max_x.max(offset_x.saturating_add(w as i64).max(0));
-                max_y = max_y.max(offset_y.saturating_add(h as i64).max(0));
+                // 段の原点＋原寸を数える（今までどおり element の X,Y は足さない）。負オフセットは根で原点に
+                // クリップする（外形は (0,0) を左上に固定・負方向はみ出しは転写時クリップ）。
+                merge(&mut max, Some((w as i64, h as i64)), 0, 0);
             }
 
             // **全** bind animation を母集合として辿る（有効/非有効を問わない・6.5 の核心）。
@@ -206,17 +269,26 @@ pub(crate) fn compute_extent_limited(
                     }
                     stack.push(Step::Enter {
                         surface: pattern.surface_id as u32,
-                        x: offset_x.saturating_add(pattern.x),
-                        y: offset_y.saturating_add(pattern.y),
+                        x: pattern.x,
+                        y: pattern.y,
                         element: false,
                     });
                 }
             }
         }
+        levels.push(Level {
+            surface,
+            x,
+            y,
+            max,
+            clean: true,
+            spent: 0,
+        });
         stack[children..].reverse();
     }
-    // max_x/max_y は原点クリップ済みゆえ常に >= 0。u32 へは飽和で写す（大きすぎる外形を小さな値に
+    // 右下は根で原点にクリップして常に >= 0。u32 へは飽和で写す（大きすぎる外形を小さな値に
     // 化けさせず、上限の判定へ渡す）。
+    let (max_x, max_y) = answer.unwrap_or((0, 0));
     let to_u32 = |v: i64| u32::try_from(v.max(0)).unwrap_or(u32::MAX);
     Extent {
         w: to_u32(max_x),

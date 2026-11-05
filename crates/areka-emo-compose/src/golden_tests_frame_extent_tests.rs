@@ -105,8 +105,7 @@ fn assert_frames_fit_base(
     base_id: u32,
     anim_id: u32,
 ) -> (Extent, Vec<(u32, i64, i64, Extent)>) {
-    let mut visited = Vec::new();
-    let base_extent = compute_extent(&mut visited, world, atlas, base_id);
+    let base_extent = compute_extent(world, atlas, base_id);
     assert!(
         base_extent.w > 0 && base_extent.h > 0,
         "ベース surface{base_id} の外形は非ゼロ（実 PNG 原寸由来）"
@@ -115,8 +114,7 @@ fn assert_frames_fit_base(
     let frames = recorded_frames(world, base_id, anim_id);
     let mut measured = Vec::new();
     for (fid, x, y) in frames {
-        let mut fvisited = Vec::new();
-        let fextent = compute_extent(&mut fvisited, world, atlas, fid);
+        let fextent = compute_extent(world, atlas, fid);
         assert!(
             fextent.w > 0 && fextent.h > 0,
             "コマ surface{fid} の原寸外形は非ゼロ（実 PNG 由来）"

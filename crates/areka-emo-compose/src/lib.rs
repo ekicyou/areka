@@ -255,6 +255,10 @@ mod composer_tests;
 #[cfg(test)]
 mod log_firing_tests;
 
+// 深い鎖・菱形・insert の連鎖を、入れ子をたどる走査へ同じ検体で通す（指摘 3）。
+#[cfg(test)]
+mod walk_limits_tests;
+
 #[cfg(test)]
 mod contract_tests {
     use super::{BindSet, ComposedSurface};

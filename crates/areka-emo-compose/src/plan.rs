@@ -35,6 +35,8 @@
 //!   呼び手＝Composer の作業場を借用・各走査入口で空へ戻す）。これにより毎フレーム経路（`compose_into`）
 //!   で再割り当てが起きず、O(elements) の定常状態アロケーションなしを満たす（要件 10.3）。
 
+use std::collections::HashSet;
+
 use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
 use bevy_ecs::entity::Entity;
@@ -51,7 +53,9 @@ use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
 mod extent;
-pub(crate) use extent::{MAX_EXTENT, compute_extent, compute_extent_limited};
+#[cfg(test)]
+pub(crate) use extent::compute_extent;
+pub(crate) use extent::{ExtentMemo, MAX_EXTENT, compute_extent_limited};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
 ///
@@ -92,8 +96,10 @@ pub struct Extent {
 /// 入るため（段を作る途中で別の段を作らない）。
 #[derive(Debug)]
 pub(crate) struct PlanScratch {
-    /// 祖先の列（今たどっている面の経路・循環の確かめ）。
+    /// 祖先の列（今たどっている面の経路・段を出るときに外す順）。
     pub(crate) visited: Vec<u32>,
+    /// 経路にある面の集合（循環の確かめを O(1) にする・`visited` と同じ面を持つ）。外形の走査も借りる。
+    pub(crate) on_path: HashSet<u32>,
     /// 段の積み荷を足していく 1 本の列。
     pub(crate) steps: Vec<Step>,
     /// 段ごとの印（積み荷の始まりと読み位置）。
@@ -117,6 +123,7 @@ impl Default for PlanScratch {
     fn default() -> Self {
         Self {
             visited: Vec::new(),
+            on_path: HashSet::new(),
             steps: Vec::new(),
             frames: Vec::new(),
             merged_ids: Vec::new(),
@@ -142,6 +149,7 @@ impl PlanScratch {
     /// 面の段を開く: 祖先に積み、段の積み荷（層 (i) → 層 (ii)）を作る。
     fn open(&mut self, level: &Level<'_>) {
         self.visited.push(level.surface_id);
+        self.on_path.insert(level.surface_id);
         let start = self.steps.len();
         self.frames.push(FrameMark { start, read: start });
         push_static_element_ops(self, level);
@@ -229,7 +237,7 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
             ElementKind::Surface(child) if level.world.surface(child).is_none() => {
                 Some("面の表に無い番号")
             }
-            ElementKind::Surface(child) if s.visited.contains(&child) => {
+            ElementKind::Surface(child) if s.on_path.contains(&child) => {
                 Some("先祖へ戻る参照（循環）")
             }
             ElementKind::Surface(child) => {
@@ -344,6 +352,7 @@ pub(crate) fn derive_ops(
 /// 外れている）ので、命令の並びも再帰と同じになる。
 fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_>, root: u32) {
     s.visited.clear();
+    s.on_path.clear();
     s.steps.clear();
     s.frames.clear();
     let mut budget = Budget::new(s.limit);
@@ -359,6 +368,9 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
                 s.frames.pop();
                 let popped = s.visited.pop();
                 debug_assert!(popped.is_some(), "visited は祖先スタック（LIFO）");
+                if let Some(surface) = popped {
+                    s.on_path.remove(&surface);
+                }
                 continue;
             }
             Some(Step::Op(op)) => {
@@ -371,7 +383,7 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
         frame.read += 1;
         // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（非パニック）。定義だけで決まる
         // 誤りなので、組むたびの知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
-        if s.visited.contains(&surface) {
+        if s.on_path.contains(&surface) {
             tracing::debug!(
                 target: "areka_emo_compose",
                 surface_id = surface,
@@ -596,7 +608,7 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
 /// # 作業場（要件 10.3・buffer 再利用形）
 ///
 /// `scratch` は呼び手（Composer ファサード）が保持する走査の作業場（[`PlanScratch`]）を借用する。
-/// 外形走査（[`compute_extent`]）は祖先の列を、命令走査（[`derive_ops`]）は作業場の全部を、
+/// 外形走査（[`compute_extent`]）は経路の集合を、命令走査（[`derive_ops`]）は作業場の全部を、
 /// それぞれ入口で空へ戻して使う。これにより定常状態（毎フレーム経路）で再割り当てが起きない。
 pub(crate) fn build_plan(
     out_ops: &mut Vec<BlitOp>,
@@ -623,11 +635,12 @@ pub(crate) fn build_plan(
     // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。祖先の列は
     // compute_extent 入口で clear される（要件 10.3・共有スクラッチ）。予算は命令列と同じ範囲・同じ値。
     let extent = compute_extent_limited(
-        &mut scratch.visited,
+        &mut scratch.on_path,
         world,
         atlas,
         surface_id,
         scratch.limit,
+        None,
     );
 
     // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
