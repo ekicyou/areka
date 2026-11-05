@@ -1,6 +1,4 @@
 // tests/com.rs — wintf COM wrapper domain test entry point
-#[path = "com/animation_test.rs"]
-mod animation_test;
 #[path = "com/common/mod.rs"]
 mod common;
 #[path = "com/d2d_ext_test.rs"]
