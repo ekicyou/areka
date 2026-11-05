@@ -37,7 +37,6 @@ fn mount_variant_is_a_std_error() {
 // ---- boot 統合テスト（task 3.1） ----
 
 use areka_kanade::MonotonicMs;
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 /// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
 /// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
@@ -48,85 +47,18 @@ fn unique_temp_dir(tag: &str) -> TempPath {
     TempPath::new(&format!("ghost-runtime-{tag}"))
 }
 
-/// テスト専用の最小 `ShioriBackend` fake（`get`/`notify` は無害な既定応答・`unload`
-/// は Clean・`status` は Running を返すのみ・task 4.1 の `ScriptedShioriBackend` の
-/// ような台本化はしない——boot 組み上げの結線成立だけを確認すれば足りる）。
-struct FakeShioriBackend;
-
-impl ShioriBackend for FakeShioriBackend {
-    fn get(
-        &mut self,
-        _id: &str,
-        _references: &[String],
-        _status: Option<&str>,
-    ) -> Result<Option<String>, RequestError> {
-        Ok(None)
-    }
-
-    fn notify(
-        &mut self,
-        _id: &str,
-        _references: &[String],
-        _status: Option<&str>,
-    ) -> Result<(), RequestError> {
-        Ok(())
-    }
-
-    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
-        Ok(ExitKind::Clean)
-    }
-
-    fn status(&mut self) -> HelperStatus {
-        HelperStatus::Running
-    }
-}
-
-/// シナリオ1（happy path）: 解決可能な `ghost_root`・`ShioriWiring::Custom`（fake
-/// backend）・`TickerMode::Disabled` で `boot` すると `Ok(GhostRuntime)` が返り、
-/// `kanade()`／`dispatcher()` の両方の投函端が生きている（＝実際にアクタースレッドが
-/// 起動し受信ループへ入っている）ことを send の成功で確認する（要件 2.1/2.2/2.4）。
-///
-/// 本テストは boot 単体の結線成立のみを見るため、意図的に `shutdown()` を呼ばず
-/// `runtime` を drop する——`ActorHandle` は非 RAII（detached）であり、テストプロセス
-/// 終了時にスレッドがブロックしたまま回収されるのは想定どおり（design.md「保持物」
-/// 節）。boot→shutdown の一連の流れは下記の
-/// `boot_then_shutdown_joins_everything_and_returns_ok`（task 3.2）で確認する。
-#[test]
-fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
-    let temp = unique_temp_dir("boot-happy-path-wires-all-components-and-kicks-off-boot-sequence");
-    let root = temp.path().to_path_buf();
-    write_ghost(&root);
-
-    let options = GhostBootOptions {
+/// 解決できる `root` を空の SHIORI・捨てる sink 2 本・刻みなしで起こす設定。
+fn fake_options(root: PathBuf) -> GhostBootOptions {
+    GhostBootOptions {
         strict_judges: None,
-        ghost_root: root.clone(),
+        ghost_root: root,
         default_encoding: DefaultEncoding::Utf8,
-        shiori: ShioriWiring::Custom(Box::new(|| {
-            Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
-        })),
+        shiori: ShioriWiring::Custom(Box::new(crate::shiori_wiring::empty_connect())),
         sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
         system_vars: SystemVarWiring::Custom(test_system_vars()),
         app_profile_dir: None,
         ticker: TickerMode::Disabled,
-    };
-
-    let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
-
-    // kanade actor が生存し受信ループに入っていることの直接証跡（send 成功）。
-    runtime
-        .kanade()
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1),
-        })
-        .expect("kanade actor thread should be alive and receiving after boot");
-
-    // dispatcher actor が生存し受信ループに入っていることの直接証跡（send 成功）。
-    runtime
-        .dispatcher()
-        .send(DispatcherMsg::Tick {
-            now: MonotonicMs(1),
-        })
-        .expect("dispatcher actor thread should be alive and receiving after boot");
+    }
 }
 
 /// シナリオ2（mount 失敗の短絡）: `ghost_root` に `ghost/master/descript.txt` が
@@ -140,24 +72,15 @@ fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
     let temp = unique_temp_dir(
         "boot-returns-mount-error-and-short-circuits-before-touching-shiori-wiring",
     );
-    let root = temp.path().to_path_buf();
-    // 起点不在を保証する（ディレクトリごと未作成・ghost/master/descript.txt 無し）。
-    let _ = std::fs::remove_dir_all(&root);
-
+    // 空のフォルダ＝ghost/master/descript.txt が無い。
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Ansi,
         shiori: ShioriWiring::Custom(Box::new(|| -> Result<Box<dyn ShioriBackend>, String> {
             panic!(
                 "connect must never be invoked when mount resolution fails \
                  (boot must short-circuit before spawning anything)"
             );
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(temp.path().to_path_buf())
     };
 
     match boot(options) {
@@ -184,20 +107,8 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
-    let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
-        shiori: ShioriWiring::Custom(Box::new(|| {
-            Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
-        })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
-    };
-
-    let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+    let runtime =
+        boot(fake_options(root)).expect("boot should succeed for a resolvable ghost_root");
 
     shutdown_bounded(runtime);
 }
@@ -216,20 +127,8 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
-    let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
-        shiori: ShioriWiring::Custom(Box::new(|| {
-            Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
-        })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
-    };
-
-    let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+    let runtime =
+        boot(fake_options(root)).expect("boot should succeed for a resolvable ghost_root");
     let parts = runtime.into_parts();
 
     // ticker は TickerMode::Disabled に対応して None（送出端・handle 両方）。
@@ -335,20 +234,8 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
-    let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
-        shiori: ShioriWiring::Custom(Box::new(|| {
-            Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
-        })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
-    };
-
-    let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+    let runtime =
+        boot(fake_options(root)).expect("boot should succeed for a resolvable ghost_root");
 
     // アクセサ経由で取得した供給端で persist_put が呼び出せる（requirements.md 6.2）。
     let publisher: &areka_sylphya::SylphyaPublisher = runtime.sylphya_publisher();
@@ -395,20 +282,8 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
-    let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
-        shiori: ShioriWiring::Custom(Box::new(|| {
-            Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
-        })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
-    };
-
-    let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+    let runtime =
+        boot(fake_options(root)).expect("boot should succeed for a resolvable ghost_root");
 
     run_bounded(
         "shutdown with barrier flush confirmation",
@@ -507,14 +382,9 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
     let records = recording.records();
 
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::InProc,
         sinks: vec![Box::new(recording.clone()), Box::new(recording.clone())],
-        system_vars: SystemVarWiring::Custom(test_system_vars()),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root)
     };
 
     let runtime = boot(options).expect("boot should succeed through ShioriWiring::InProc");
@@ -567,25 +437,10 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
 
 // ---- apply_boot_record_gate 単体（task 7.1・position-persist・design「C5 GhostRuntime 増分」step 1-3） ----
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, save_scope, spawn_sylphya,
 };
-
-/// 同一 [`FakePersistIo`] を `Arc` 共有する委譲 IO（prop_sink.rs 先例の再実装）。
-///
-/// `FakePersistIo` は内部 `Mutex` で Clone 不可ゆえ、seed（`save_scope`）と spawn（`build_initial_image`
-/// のロード）が**同一 store** を観測できるよう Arc 共有ハンドルで委譲する。
-#[derive(Clone)]
-struct SharedGateIo(Arc<FakePersistIo>);
-impl PersistIo for SharedGateIo {
-    fn read(&self, path: &std::path::Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &std::path::Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
 
 /// Ghost スコープへ `seed` を事前保存した実 sylphya を起動し、`(parts, ghost_asker)` を返す。
 ///
@@ -593,7 +448,7 @@ impl PersistIo for SharedGateIo {
 /// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる（本番 boot と同型の
 /// 「起動時に永続をロード」経路）。seed が空なら不在ケース（記録なし）を表す。
 fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerId) {
-    let shared = SharedGateIo(Arc::new(FakePersistIo::new()));
+    let shared = Arc::new(FakePersistIo::new());
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/gate-ghost")),
         ..ScopeRoots::default()
@@ -758,18 +613,12 @@ use areka_sylphya::{Axis, load_scope};
 /// （中間値 1234/841 は上書き消滅）ことを確認する——ファイルの最終値が観測できるのは、終了系列が
 /// enqueue 済み put を処理したからに他ならない（barrier なしの clone put が確かにフラッシュされた証跡）。
 ///
-/// `barrier`/`join` の宙吊りに備え `run_bounded` で有界化し、temp dir は成功パスで掃除する
-/// （`FsPersistIo.commit` は親ディレクトリを作らない＝`File::create` のみ・のため ghost scope root を
-/// 事前作成する。本番では `profile/areka/` が既存の前提）。
+/// `barrier`/`join` の宙吊りに備え `run_bounded` で有界化する。
 #[test]
 fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     let temp =
         unique_temp_dir("exit-flush-reflects-barrierless-clone-puts-after-shutdown-sequence");
     let root = temp.path().to_path_buf();
-    // FsPersistIo.commit は親ディレクトリを作らない（`File::create` のみ）ため、ghost scope root を
-    // 事前作成する（本番では profile/areka/ が既存の前提）。未作成だと commit が Degraded になり
-    // ファイルが書かれず、この檻が意味を失う。
-    std::fs::create_dir_all(&root).expect("create ghost scope root dir");
 
     let roots = ScopeRoots {
         ghost: Some(root.clone()),

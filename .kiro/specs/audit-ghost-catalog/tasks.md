@@ -83,7 +83,7 @@
   - _Boundary: areka-ghost src test support_
   - _Requirements: 3.1, 5.3, 9.1_
 
-- [ ] 10. `runtime_tests.rs` を減らし、記憶の口の写しを包括の実装へ替える（T13）
+- [x] 10. `runtime_tests.rs` を減らし、記憶の口の写しを包括の実装へ替える（T13）
   - #37 の偽の起動の設定を 1 つの道具にし、#38 の偽の SHIORI を空の配線へ、#39 の終了を呼ばないテストを消し、#80 の空振りの 2 行と誤った注を消す
   - #40 の範囲の外の `crates/areka-sylphya/src/persist/io.rs` に `Arc<T>` への包括の実装（3 つの口を中身へ渡す）とそのテストを足し、範囲の中の 2 つの写しを消して直に渡す。範囲の外の写しは残す
   - 完了の状態: `runtime_tests.rs` が約 780 行に減り、`an_arc_forwards_all_three_methods` が緑で、`cargo test -p areka-sylphya` と `-p areka-ghost` が緑
