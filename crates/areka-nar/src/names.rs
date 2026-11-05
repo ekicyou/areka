@@ -36,10 +36,37 @@ const WINDOWS_FORBIDDEN_CHARS: &[char] = &['<', '>', ':', '"', '|', '?', '*'];
 /// 拡張子を除いた語がこれらのいずれかなら、Windows の予約名（ASCII 大小無視）。
 ///
 /// `COM0`／`LPT0` は入らない。`CONSOLE` のように語が長いものも予約ではないので、
-/// 前方一致ではなく**完全一致**で見る。
+/// 前方一致ではなく**完全一致**で見る。上付き数字の `COM¹`〜`LPT³` も Windows の予約
+/// （上付きの字は大小を持たないので、比べ方は ASCII の大小無視のままでよい）。
 const RESERVED_STEMS: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "COM\u{b9}",
+    "COM\u{b2}",
+    "COM\u{b3}",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
+    "LPT\u{b9}",
+    "LPT\u{b2}",
+    "LPT\u{b3}",
 ];
 
 /// Unix の外部属性のうち、種別を取り出す覆い。
@@ -59,6 +86,20 @@ pub(crate) struct EntryName {
     pub components: Vec<String>,
     /// フォルダのエントリ（生の名前が `/` で終わっていた）。
     pub is_dir: bool,
+}
+
+/// 書庫や宛先の名前を大小の比べのために畳む（Unicode の小文字化）。
+///
+/// 名前どうしの大小を無視した比べは、検証・計画・展開・中身の取り出しのどこでも
+/// これと [`same_name`] だけを使う（比べ方が場所ごとに違うと、検証が通した名前を
+/// 計画が別物と見る）。
+pub(crate) fn fold(name: &str) -> String {
+    name.to_lowercase()
+}
+
+/// 2 つの名前が大小を無視して同じか（[`fold`] どうしの一致）。
+pub(crate) fn same_name(a: &str, b: &str) -> bool {
+    fold(a) == fold(b)
 }
 
 /// `UnsafePath` の拒否を組む。
@@ -208,17 +249,45 @@ fn validate_one(entry: &RawEntry) -> Result<EntryName, RefuseReason> {
 /// 同じパスの重複も同じ変種で拒否する（Windows では後勝ちで一方が消えるので、
 /// 大小違いと区別する意味が無い）。フォルダのエントリとファイルのエントリは
 /// 末尾の `/` を落とした後で比べるので、`a/` と `a` も衝突として撥ねる。
+///
+/// ファイルのエントリと、別のエントリが先祖として暗に作るフォルダ（`x` と `x/y.txt`）も
+/// 同じ場所を取り合うので、どちらの順でも衝突にする。明示のフォルダのエントリ（`x/`）と
+/// その子は同じフォルダを指すだけなので衝突ではない。
 pub(crate) fn validate_entry_names(entries: &[RawEntry]) -> Result<Vec<EntryName>, RefuseReason> {
     let mut names = Vec::with_capacity(entries.len());
-    let mut seen: BTreeMap<String, String> = BTreeMap::new();
+    // 畳んだ全体のパス → 綴りとフォルダか。
+    let mut seen: BTreeMap<String, (String, bool)> = BTreeMap::new();
+    // 畳んだ先祖の前置き → それを最初に生んだエントリの綴り。
+    let mut implied: BTreeMap<String, String> = BTreeMap::new();
     for entry in entries {
         let name = validate_one(entry)?;
-        if let Some(first) = seen.insert(name.path.to_lowercase(), name.path.clone()) {
-            return Err(RefuseReason::CaseCollision {
-                a: first,
-                b: name.path,
-            });
+        let collision = |first: &str| RefuseReason::CaseCollision {
+            a: first.to_owned(),
+            b: name.path.clone(),
+        };
+        let folded = fold(&name.path);
+        if let Some((first, _)) = seen.get(&folded) {
+            return Err(collision(first));
         }
+        if !name.is_dir
+            && let Some(maker) = implied.get(&folded)
+        {
+            return Err(collision(maker));
+        }
+        let mut prefix = String::new();
+        for component in &name.components[..name.components.len() - 1] {
+            if !prefix.is_empty() {
+                prefix.push('/');
+            }
+            prefix.push_str(&fold(component));
+            if let Some((file, false)) = seen.get(&prefix) {
+                return Err(collision(file));
+            }
+            implied
+                .entry(prefix.clone())
+                .or_insert_with(|| name.path.clone());
+        }
+        seen.insert(folded, (name.path.clone(), name.is_dir));
         names.push(name);
     }
     Ok(names)

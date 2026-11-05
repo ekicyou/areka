@@ -23,6 +23,7 @@
 
 use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning, SurvivingTree};
 use crate::manifest::{ExistingPolicy, InstallManifest};
+use crate::names::same_name;
 use crate::plan::Placement;
 use std::ffi::OsStr;
 use std::io;
@@ -361,7 +362,7 @@ pub(crate) fn stage_placement(
 /// 1 つも含まないフォルダは作らない——「全消去してから mask の名前だけ戻す」と同じ形。
 ///
 /// `carve` に挙がったフォルダ（絶対パス）の下は、空フォルダも含めて写さない。突き合わせは
-/// 残す名前と同じく ASCII の大小を無視する。
+/// 残す名前と同じく大小を無視する（[`same_name`]）。
 fn copy_existing(
     from: &Path,
     to: &Path,
@@ -376,7 +377,7 @@ fn copy_existing(
             let spelled = source.to_string_lossy();
             if carve
                 .iter()
-                .any(|folder| folder.to_string_lossy().eq_ignore_ascii_case(&spelled))
+                .any(|folder| same_name(&folder.to_string_lossy(), &spelled))
             {
                 continue;
             }
@@ -407,15 +408,14 @@ fn copy_existing(
 /// このファイル名を下敷きに残すか。
 ///
 /// 除外マスクは**ファイル名**の一覧で、階層を問わず同名に当たる（要件 6.2・正典
-/// `descript_install#refreshundeletemask`）。突き合わせは ASCII の大小を無視する
-/// （Windows では同じファイルを指す綴り）。
+/// `descript_install#refreshundeletemask`）。突き合わせは大小を無視する（[`same_name`]・
+/// Windows では同じファイルを指す綴り）。
 fn kept(keep: Option<&[String]>, name: &OsStr) -> bool {
     match keep {
         None => true,
         Some(keep) => {
             let name = name.to_string_lossy();
-            keep.iter()
-                .any(|allowed| allowed.eq_ignore_ascii_case(&name))
+            keep.iter().any(|allowed| same_name(allowed, &name))
         }
     }
 }

@@ -31,7 +31,7 @@
 use crate::error::{ElementKind, RefuseReason};
 use crate::install::{InstallRequest, SkippedCompanion};
 use crate::manifest::{Companion, ExistingPolicy, INSTALL_TXT, InstallKind, InstallManifest};
-use crate::names::{EntryName, is_valid_one_level_name};
+use crate::names::{EntryName, is_valid_one_level_name, same_name};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -140,14 +140,12 @@ pub(crate) fn build_plan(
     Ok((placements, skipped, overridden))
 }
 
-/// `/` 区切りの相対パスが `folder` そのもの、またはその配下か（ASCII の大小は無視）。
+/// `/` 区切りの相対パスが `folder` そのもの、またはその配下か（大小は [`same_name`] で無視）。
 fn path_in_folder(relative: &str, folder: &str) -> bool {
     let mut parts = relative.split('/');
-    folder.split('/').all(|segment| {
-        parts
-            .next()
-            .is_some_and(|part| part.eq_ignore_ascii_case(segment))
-    })
+    folder
+        .split('/')
+        .all(|segment| parts.next().is_some_and(|part| same_name(part, segment)))
 }
 
 /// 飛ばした同梱 1 件の値を組む（要件 1.4）。`*.source.directory` が書かれていれば
@@ -332,14 +330,14 @@ fn segment_count(folder: &str) -> usize {
 
 /// エントリと `folder` の段を先頭から突き合わせ、短いほうが尽きるまで全て合うか。
 ///
-/// 突き合わせは ASCII の大小を無視する。`install.txt` に書かれた綴りと書庫の中の
+/// 突き合わせは大小を無視する（[`same_name`]）。`install.txt` に書かれた綴りと書庫の中の
 /// 綴りが大小だけ違う配布物は普通にあり、Windows では同じフォルダを指す。
 fn leading_segments_match(entry: &EntryName, folder: &str) -> bool {
     entry
         .components
         .iter()
         .zip(folder.split('/'))
-        .all(|(component, segment)| component.eq_ignore_ascii_case(segment))
+        .all(|(component, segment)| same_name(component, segment))
 }
 
 /// 最上位の `install.txt`（マニフェストそのもの）か。

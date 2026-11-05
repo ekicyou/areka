@@ -314,6 +314,35 @@ fn refresh_one_keeps_only_the_undelete_mask_names_at_every_level() {
     );
 }
 
+/// 除外マスクの名前は全角の大小も無視して当たる（#64）。
+#[test]
+fn refresh_keep_matches_non_ascii_names_case_insensitively() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(
+        &destination,
+        &[("ＫＥＥＰ.dat", b"kept"), ("gone.txt", b"gone")],
+    );
+    let extra = ["refresh,1", "refreshundeletemask,ｋｅｅｐ.dat"];
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&extra), &request);
+    let (area, _states) = stage_all(work.path(), &prepared);
+
+    assert_eq!(
+        tree(&area.stage(0)),
+        expect_tree(&[
+            ("ＫＥＥＰ.dat", b"kept"),
+            ("balloon/", b""),
+            ("balloon/s0.png", b"s0"),
+            ("descript.txt", b"new descript"),
+            ("install.txt", &balloon_manifest(&extra)),
+        ])
+    );
+}
+
 /// 同梱バルーン側の宛先には `*.refresh`・`*.refreshundeletemask` が当たる（要件 6.3）。
 ///
 /// 本体（ゴースト）は `refresh` を書いていないので重ね置きのまま。1 本の書庫の中で

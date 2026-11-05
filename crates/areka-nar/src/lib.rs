@@ -43,7 +43,7 @@ use crate::container::{
     locate_central_directory, read_central_directory, read_central_headers,
 };
 use crate::install::{WorkArea, area_for, commit_all, stage_placement};
-use crate::names::{EntryName, validate_entry_names};
+use crate::names::{EntryName, same_name, validate_entry_names};
 use crate::plan::build_plan;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -96,14 +96,14 @@ impl NarArchive {
     }
 
     /// 書庫の中のファイル 1 つの伸長済みの中身。`path` は書庫の中の `/` 区切りのパスで、
-    /// ASCII の大文字小文字を区別しない。フォルダと、無いパスは `None`。
+    /// 大文字小文字を区別しない（ASCII に限らない）。フォルダと、無いパスは `None`。
     ///
     /// 保持している中身を引くだけで、原本の読み直しも伸長のやり直しもしない。
     /// 何も書かず、記録も出さない。
     pub fn entry_bytes(&self, path: &str) -> Option<&[u8]> {
         self.names
             .iter()
-            .find(|entry| !entry.is_dir && entry.path.eq_ignore_ascii_case(path))
+            .find(|entry| !entry.is_dir && same_name(&entry.path, path))
             .map(|entry| self.contents[entry.index].as_slice())
     }
 

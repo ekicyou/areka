@@ -579,6 +579,48 @@ fn the_case_fold_is_unicode_not_ascii_only() {
     );
 }
 
+/// ファイルと、別のエントリが暗に作るフォルダは同じ宛先を取り合うので衝突する。
+/// 順を逆にしても、大小だけ違っても同じ（#6）。
+#[test]
+fn a_file_collides_with_a_folder_another_entry_implies() {
+    let cases = [
+        (["x", "x/y.txt"], ("x", "x/y.txt")),
+        (["x/y.txt", "x"], ("x/y.txt", "x")),
+        (["X", "x/y.txt"], ("X", "x/y.txt")),
+        (["a/x/y.txt", "A/X"], ("a/x/y.txt", "A/X")),
+    ];
+    for (paths, (a, b)) in cases {
+        let mut builder = NarBuilder::new();
+        for path in paths {
+            builder = builder.file(path, b"x").done();
+        }
+        assert_eq!(
+            refusal(builder),
+            RefuseReason::CaseCollision {
+                a: a.to_owned(),
+                b: b.to_owned(),
+            },
+            "{paths:?}"
+        );
+    }
+}
+
+/// 明示のフォルダのエントリとその子は、どちらの順でも衝突しない（#6）。
+#[test]
+fn an_explicit_folder_entry_and_its_children_do_not_collide() {
+    let names = accepted(
+        NarBuilder::new()
+            .dir("x")
+            .file("x/y.txt", b"x")
+            .done()
+            .file("z/w.txt", b"x")
+            .done()
+            .dir("Z"),
+    );
+
+    assert_eq!(names.len(), 4);
+}
+
 /// 違う場所にある同じ名前は衝突しない（畳み込むのは完全なパス）。
 #[test]
 fn the_same_leaf_in_different_folders_does_not_collide() {
@@ -615,6 +657,31 @@ fn only_the_listed_reserved_words_are_refused() {
 
     let refused_names = ["ghost/PRN", "ghost/aux.txt", "ghost/Com9.dat", "ghost/LPT1"];
     for name in refused_names {
+        let reason = refusal_of(name.as_bytes().to_vec());
+        assert!(
+            matches!(
+                reason,
+                RefuseReason::UnsafePath {
+                    why: UnsafeWhy::InvalidWindowsName(_),
+                    ..
+                }
+            ),
+            "予約名なのに通った: {name}（{reason:?}）"
+        );
+    }
+}
+
+/// 上付き数字の `COM¹`〜`LPT³` も Windows の予約名（#3）。
+#[test]
+fn superscript_com_and_lpt_names_are_reserved() {
+    for name in [
+        "ghost/COM\u{b9}.txt",
+        "ghost/com\u{b2}",
+        "ghost/COM\u{b3}.dat",
+        "ghost/LPT\u{b9}",
+        "ghost/lpt\u{b2}.txt",
+        "ghost/LPT\u{b3}",
+    ] {
         let reason = refusal_of(name.as_bytes().to_vec());
         assert!(
             matches!(

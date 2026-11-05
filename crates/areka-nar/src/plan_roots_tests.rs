@@ -274,6 +274,34 @@ fn a_companion_taken_from_its_own_home_folder_is_not_warned() {
     );
 }
 
+/// 全角の大小だけ違う綴りでも、取り出し元は同梱として見つかり、`balloon/<dir>/` は
+/// 本体から除かれる（#64）。
+#[test]
+fn a_full_width_companion_folder_is_carved_out_case_insensitively() {
+    let root = root_with_ghost("other");
+    let (plan, skipped, overridden) = accepted(
+        ghost_with(
+            &[
+                "balloon.directory,ＫＡＫＵ",
+                "balloon.source.directory,ＢＡＬ",
+            ],
+            &["ｂａｌ/descript.txt", "balloon/ｋａｋｕ/old.txt"],
+        ),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
+
+    assert!(skipped.is_empty(), "取り出し元が見つからない: {skipped:?}");
+    assert_eq!(
+        relative_files(&plan[0]),
+        vec!["install.txt", "ghost/master/descript.txt"]
+    );
+    assert_eq!(overridden, vec!["ＫＡＫＵ"]);
+    assert_eq!(relative_files(&plan[1]), vec!["descript.txt"]);
+}
+
 /// 飛ばした同梱の名前の `balloon/<dir>/` は本体に残り、外す場所にも警告にも入らない。
 #[test]
 fn a_skipped_companion_leaves_the_archive_folder_in_the_body() {

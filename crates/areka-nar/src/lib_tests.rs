@@ -473,18 +473,17 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
 /// 作業フォルダは本体の根 1 つだけで、根の置き場（`<根>\balloon`）へは何も入らず、失敗の
 /// 記録が 1 件残る。
 ///
-/// 失敗は公開の入口から本当に起こす。古いゴーストの中に `balloon\Ω` を置き、同梱の宛先を
-/// `ω` にする。外す場所の比べ方は ASCII の大小だけを無視するので `Ω` は本体の下敷きへ
-/// 写り、ファイルシステムは大小を区別しないので、同梱の `rename` が宛先の在ることで落ちる
-/// （設計「実装の注意」の道）。
+/// 失敗は公開の入口から本当に起こす。古いゴーストの中の同梱の格納先 `balloon` を
+/// **ファイル**にしておく。外す場所が除くのはフォルダだけなので、そのファイルは本体の
+/// 下敷きへ写り、同梱の確定が宛先の親 `balloon` を作れずに落ちる。
 #[test]
 fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
     let work = WorkDir::new().expect("根を借りられる");
     let root = work.path();
     let ghost = root.join("ghost").join("tester");
-    fs::create_dir_all(ghost.join("balloon").join("Ω")).expect("古いゴーストを置ける");
+    fs::create_dir_all(&ghost).expect("古いゴーストを置ける");
     fs::write(ghost.join("descript.txt"), b"old descript").expect("置ける");
-    fs::write(ghost.join("balloon").join("Ω").join("old.txt"), b"old").expect("置ける");
+    fs::write(ghost.join("balloon"), b"old").expect("置ける");
     let before = tree(&root.join("ghost"));
     let shelf = WorkDir::new().expect("書庫の置き場を借りられる");
     let nar = NarBuilder::new()
@@ -512,7 +511,7 @@ fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
             target_ghost: None,
         })
     });
-    let error = result.expect_err("同梱の宛先が在るので確定できない");
+    let error = result.expect_err("同梱の宛先の親がファイルなので確定できない");
 
     let NarError::Io {
         phase,
@@ -526,8 +525,8 @@ fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
     assert_eq!(*phase, IoPhase::Commit, "確定の段で失敗した");
     assert_eq!(
         failed,
-        &ghost.join("balloon").join("ω"),
-        "対象はゴーストの中の同梱の宛先"
+        &ghost.join("balloon"),
+        "対象はゴーストの中の同梱の宛先の親"
     );
     assert!(*rolled_back, "巻き戻し済み");
     assert_eq!(
