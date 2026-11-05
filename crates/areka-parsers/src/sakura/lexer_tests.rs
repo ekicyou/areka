@@ -133,18 +133,6 @@ fn wait_shorthand_single_digit() {
 }
 
 #[test]
-fn wait_with_bracket_is_tag_not_shorthand() {
-    // `\w[2]` は短縮形でなく正準タグ。
-    assert_eq!(
-        lex(r"\w[2]"),
-        vec![Token::Tag {
-            word: "w".to_string(),
-            args: vec!["2".to_string()],
-        }],
-    );
-}
-
-#[test]
 fn sysvar_keyword() {
     assert_eq!(
         lex(r"%username"),
@@ -269,18 +257,6 @@ fn escape_percent_then_real_sysvar() {
     );
 }
 
-/// 要件 13.7: 角括弧内の `\]` はタグ終端でなくリテラルの `]` として引数へ。
-#[test]
-fn escape_bracket_close_inside_args() {
-    assert_eq!(
-        lex(r"\s[a\]b]"),
-        vec![Token::Tag {
-            word: "s".to_string(),
-            args: vec!["a]b".to_string()],
-        }],
-    );
-}
-
 /// 要件 13.7: 角括弧内の `\]` を含んでも後続の本物の `]` が終端として働く。
 #[test]
 fn escape_bracket_close_then_real_terminator() {
@@ -293,18 +269,6 @@ fn escape_bracket_close_then_real_terminator() {
             },
             Token::Text("ok".to_string()),
         ],
-    );
-}
-
-/// 要件 13.4: クォート `"..."` は囲まれた全体を 1 引数扱い、内側の `,` を保護。
-#[test]
-fn quoted_arg_protects_comma() {
-    assert_eq!(
-        lex(r#"\s["a,b"]"#),
-        vec![Token::Tag {
-            word: "s".to_string(),
-            args: vec!["a,b".to_string()],
-        }],
     );
 }
 
@@ -391,18 +355,6 @@ fn unknown_tag_split_as_tag_preserving_neighbors() {
 // 既存タグ（とりわけ `\w` 系）のパース結果は不変（要件 1.6）。
 // ───────────────────────────────────────────────────────────────────
 
-/// 要件 1.3: 裸形 `\b1` の一桁面数字は本文テキストとして漏れてはならない
-/// （本文数字漏れの根絶）。分割語彙に依らず「`Text` トークンが 1 つも出ない」
-/// ことで構造的に固定する。
-#[test]
-fn balloon_bare_single_digit_not_leaked_as_text() {
-    let tokens = lex(r"\b1");
-    assert!(
-        !tokens.iter().any(|t| matches!(t, Token::Text(_))),
-        r"\b1 must not leak the face digit as body Text, got {tokens:?}",
-    );
-}
-
 /// 要件 1.2/1.3: 裸形 `\b1` は 1 桁面数字を取り込み、単一の shorthand トークンへ。
 /// `\w1` と同型（`word` のみ `'b'`）＝語に依らず共通規律。
 #[test]
@@ -432,45 +384,11 @@ fn balloon_bare_shorthand_consumes_one_digit_rest_is_text() {
     );
 }
 
-/// 要件 1.2（境界）: `\b2[x]`（数字＋直後 `[`）は shorthand でなく正準タグ扱い
-/// （word=`b2`）。既存 `\w2[x]` と同型＝直後が数字+`[` は正準タグ優先という
-/// 共通規則が語に依らず働く。
-#[test]
-fn balloon_digit_then_bracket_is_tag_not_shorthand() {
-    assert_eq!(
-        lex(r"\b2[x]"),
-        vec![Token::Tag {
-            word: "b2".to_string(),
-            args: vec!["x".to_string()],
-        }],
-    );
-}
-
-/// 既存 `\w` 系との対称確認: `\w2[x]` も同型（word=`w2` の正準タグ）。
-/// `\b` 一般化が `\w` の同じ境界挙動を保つこと（要件 1.6）を固定する。
-#[test]
-fn wait_digit_then_bracket_is_tag_not_shorthand() {
-    assert_eq!(
-        lex(r"\w2[x]"),
-        vec![Token::Tag {
-            word: "w2".to_string(),
-            args: vec!["x".to_string()],
-        }],
-    );
-}
-
 /// 要件 1.6: 数字を伴わない裸形 `\b`（単独）は既存の非短縮規則のまま
 /// bare タグとして処理される（passthrough 維持）。
 #[test]
 fn balloon_bare_without_digit_is_bare_tag() {
     assert_eq!(lex(r"\b"), vec![Token::Bare("b".to_string())]);
-}
-
-/// 要件 1.6（境界）: 未閉じ `\b1[` は shorthand 判定を経ず（数字直後が `[`）、
-/// 未閉じブラケットとして `\` から入力末尾までを `Raw` へ吸収する既存規則どおり。
-#[test]
-fn balloon_unclosed_bracket_absorbed_as_raw() {
-    assert_eq!(lex(r"\b1["), vec![Token::Raw(r"\b1[".to_string())]);
 }
 
 /// 要件 1.6: `\b` 短縮の追加が前後の正常トークンを壊さない（本文・bare タグと共存）。

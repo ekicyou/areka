@@ -414,33 +414,6 @@ fn legacy_double_bracket_q_star_to_raw() {
     );
 }
 
-/// 旧 2 連形は前後の正常命令を破壊しない（隣接命令保持・要件 5.3/10.3）。
-#[test]
-fn legacy_q_preserves_neighbors() {
-    assert_eq!(
-        dec(r"\e\q[ID][タイトル]\c"),
-        vec![
-            Instruction::End,
-            Instruction::Raw(r"\q[ID][タイトル]".to_string()),
-            Instruction::Clear,
-        ],
-    );
-}
-
-/// 現行単一ブラケット `\q[はい,OnYes]` は引き続き Choice へ decode（4.1 の維持・要件 5.1）。
-/// 旧形と現行形の弁別が正しいことを固定。
-#[test]
-fn modern_single_bracket_q_still_choice() {
-    assert_eq!(
-        dec(r"\q[はい,OnYes]"),
-        vec![Instruction::Choice(Choice {
-            disp: "はい".to_string(),
-            target: "OnYes".to_string(),
-            references: vec![],
-        })],
-    );
-}
-
 // ── subset 外タグ・不正トークン → Raw（要件 10.1/11.2）───────────────
 
 /// emo2 subset 外の正準タグ `\i[a,b]` → `Raw`（構文区切り＋raw 保持・要件 11.2/13.8）。

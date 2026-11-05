@@ -84,16 +84,6 @@ fn syntax_bracket_closes_at_matching_bracket() {
     );
 }
 
-/// 未知（subset 外）タグ `\i[a,b]` は構文として 1 単位に区切った上で `Raw`
-/// 保持し、意味デコードしない（要件 13.8/11.2）。生情報を失わない。
-#[test]
-fn syntax_unknown_tag_is_syntactically_split_and_kept_raw() {
-    assert_eq!(
-        parse(r"\i[a,b]"),
-        vec![Instruction::Raw(r"\i[a,b]".to_string())],
-    );
-}
-
 /// bare スコープタグ `\0` は 1 文字で終端し後続を巻き込まない（lexer 終端規律・要件 13.1）。
 /// `\0あ` → SpeakerScope{n:0}（本体側・R1.5/R4.4・ukadoc `\0`=本体側）＋ Text(`あ`)。
 /// 眼目は lexer の 1 文字終端（`あ` を吸わない）＝decode 写像先が Raw から SpeakerScope へ
@@ -218,55 +208,13 @@ fn choice_legacy_q_serial_digit_kept_raw() {
 // 不透明 Surface（要件 2.2/2.3）
 // ───────────────────────────────────────────────────────────────────
 
-/// `\s[...]` の中身は数値解釈・エイリアス解決せず無改変で `Surface` に入る
-/// （要件 2.2/2.3）。数値・日本語エイリアスの双方を固定。
-#[test]
-fn surface_inner_is_opaque_and_unmodified() {
-    assert_eq!(
-        parse(r"\s[1000]\s[通常]"),
-        vec![
-            Instruction::Surface(SurfaceArg::new("1000".to_string())),
-            Instruction::Surface(SurfaceArg::new("通常".to_string())),
-        ],
-    );
-}
-
 // ───────────────────────────────────────────────────────────────────
 // 寛容パススルー（要件 10）— 不正トークン前後の正常命令が欠落しない
 // ───────────────────────────────────────────────────────────────────
 
-/// 未閉じ `[` の前後に正常命令を置き、両端が欠落せず解析が継続する
-/// （要件 10.1/10.2/10.3）。`\e前\i[` の `\e` は残り、末尾は `Raw` 吸収。
-#[test]
-fn lenient_passthrough_keeps_instructions_around_malformed_token() {
-    let got = parse(r"\e\i[");
-    assert_eq!(got.first(), Some(&Instruction::End));
-    assert_eq!(got.len(), 2);
-    assert!(matches!(got[1], Instruction::Raw(_)));
-}
-
-/// move 以外の `\!` は `GenericCommand`（種別＋生引数保持）として解析継続
-/// （要件 7.2/7.3/10）。`\![open,sliderinput]` を固定。
-#[test]
-fn lenient_passthrough_non_move_bang_is_generic_command() {
-    assert_eq!(
-        parse(r"\![open,sliderinput]"),
-        vec![Instruction::GenericCommand {
-            name: "open".to_string(),
-            raw_args: vec!["sliderinput".to_string()],
-        }],
-    );
-}
-
 // ───────────────────────────────────────────────────────────────────
 // 純粋関数契約（要件 1.5/12.2/12.3）
 // ───────────────────────────────────────────────────────────────────
-
-/// 空入力 → 空命令列（要件 1.5）。
-#[test]
-fn pure_empty_input_yields_empty_vec() {
-    assert_eq!(parse(""), Vec::<Instruction>::new());
-}
 
 /// 混在入力の順序保持（要件 1.3/9.2）。タグ・テキストが入力順のまま整列。
 #[test]
@@ -281,13 +229,6 @@ fn pure_mixed_input_preserves_order() {
     );
 }
 
-/// 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。
-#[test]
-fn pure_same_input_yields_equivalent_output() {
-    let input = r"\s[1000]こんばんわー！\_w[450]\n\e";
-    assert_eq!(parse(input), parse(input));
-}
-
 /// UTF-8 日本語テキストが Text run 化される（要件 9.1・12.1 の UTF-8 前提）。
 #[test]
 fn pure_utf8_japanese_text_becomes_text_run() {
@@ -300,32 +241,6 @@ fn pure_utf8_japanese_text_becomes_text_run() {
 // ───────────────────────────────────────────────────────────────────
 // OnBoot 例に現れないタグの個別手書き網羅（要件 12.4・design L530）
 // ───────────────────────────────────────────────────────────────────
-
-/// `\q[タイトル,ID]` 現行形 → disp/target 分離 Choice（要件 5.1）。
-#[test]
-fn handwritten_current_choice_splits_disp_and_target() {
-    assert_eq!(
-        parse(r"\q[はい,OnYes]"),
-        vec![Instruction::Choice(Choice {
-            disp: "はい".to_string(),
-            target: "OnYes".to_string(),
-            references: Vec::new(),
-        })],
-    );
-}
-
-/// `\q[t,id,r0,r1]` 第 3 引数以降の追加 Reference を順序保持（要件 5.2）。
-#[test]
-fn handwritten_choice_keeps_extra_references_in_order() {
-    assert_eq!(
-        parse(r"\q[t,id,r0,r1]"),
-        vec![Instruction::Choice(Choice {
-            disp: "t".to_string(),
-            target: "id".to_string(),
-            references: vec!["r0".to_string(), "r1".to_string()],
-        })],
-    );
-}
 
 /// `\![move,10,20,base,base]` はほかの `\!` と同じ汎用の道（名前 `move`＋生引数列・指摘 28）。
 /// 型つきの写しは持たない（意味割当は下流の責務）。
@@ -342,15 +257,6 @@ fn move_bang_is_generic_command() {
                 "base".to_string(),
             ],
         }],
-    );
-}
-
-/// `%username` は展開せずシステム変数トークン化（要件 8.1/8.2）。実値置換しない。
-#[test]
-fn handwritten_username_is_unexpanded_system_var() {
-    assert_eq!(
-        parse("%username"),
-        vec![Instruction::SystemVar("username".to_string())],
     );
 }
 

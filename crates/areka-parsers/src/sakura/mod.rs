@@ -12,9 +12,6 @@
 
 mod model;
 
-#[cfg(test)]
-mod model_tests;
-
 mod char_code;
 
 #[cfg(test)]

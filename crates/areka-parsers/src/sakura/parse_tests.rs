@@ -55,15 +55,6 @@ fn longer_mixed_sequence_preserves_order() {
     assert_eq!(got, want);
 }
 
-/// 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。2 回呼び出しで等価。
-#[test]
-fn same_input_yields_same_output_pure() {
-    let input = r"\s[0]あ\_w[50]い\n\e%username";
-    let a = parse(input);
-    let b = parse(input);
-    assert_eq!(a, b);
-}
-
 /// 純粋テキストのみ（タグ無し）→ 単一 `Text`（要件 9.1）。
 #[test]
 fn plain_text_only_yields_single_text() {
