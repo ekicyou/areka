@@ -5,15 +5,15 @@
 //! re-export に集約する（唯一の公開面・idiomatic な re-export パターン）。
 //!
 //! - 解決層 [`SurfaceResolver`]／[`SurfaceTarget`]: `Emote{key}` を解決結果へ写す純粋層。
-//! - 状態層 [`ScopeStates`]／[`ScopeState`]／[`ApplyOutcome`]／[`BindApplyOutcome`]: per-scope
+//! - 状態層 [`ScopeStates`]／[`ApplyOutcome`]／[`BindApplyOutcome`]: per-scope
 //!   surface 状態・冪等ガードと、動的 bind 適用結果に応じた表示発行の判定。
 //! - 発行層 [`DisplayCommand`]／[`SurfaceOutput`]／[`MockSurfaceOutput`]: emo への表示指令と発行先抽象。
 //! - アクター層 [`SerikoMsg`]／[`SerikoReplace`]／[`SerikoSink`]／[`spawn_seriko`]／[`spawn_seriko_clocked`]／[`SerikoClock`]: 独立スレッド稼働・単一発行点・定義の差し替え。
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
 //! - アニメ定義表 [`AnimationTable`]／[`LoopAnimation`]／[`LoopTrigger`]／[`LoopFrame`]: `EmoWorld`
 //!   からの boot 時不変スナップショット（`Random`/`BindRandom` のみ採録・method 構築時 1 回解決）。
-//! - タイムライン純関数コア [`frame_at`]／[`FrameStatus`]／[`should_fire`]／[`seeded_rng`]／[`LoopRng`]／
-//!   [`LotteryBoundary`]: 経過時刻→現在コマ・1/N 抽選・1000ms 絶対グリッド跨ぎ検出の決定論純関数群。
+//! - タイムライン純関数コア [`frame_at`]／[`FrameStatus`]／[`should_fire`]／[`seeded_rng`]／[`LoopRng`]:
+//!   経過時刻→現在コマ・1/N 抽選・1000ms 絶対グリッド跨ぎ検出の決定論純関数群。
 //! - ループ統括層 [`SerikoLoopConfig`]／`LoopRuntime`（crate 内）: 二層時間（毎秒抽選×サブ秒進行）の
 //!   統括・per-(scope, slot) 再生状態・`on_tick`（抽選→進行→PatternState 差分）・`on_surface_changed`。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
@@ -61,19 +61,16 @@ pub use actor::{
 };
 pub use bind::{
     BindChoicePolicy, BindDirective, BindNamespace, BindResolver, DefaultBinds, NamedBindResult,
-    accumulate, apply_named_bind, build_static_bindset, parse_bind_directive, scope_namespace,
+    apply_named_bind, build_static_bindset, parse_bind_directive, scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
 pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
-pub use settle::{SETTLE_TICK_MS, settle_surface, settle_time};
+pub use settle::{settle_surface, settle_time};
 pub use shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceKeep};
 pub use skin_facts::{SkinFacts, SkinLookup, balloon_missing, surface_missing};
 pub use state::{
-    ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
+    ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeStates, Slot, StageNote,
 };
 pub use table::{AnimationTable, FrameAct, LoopAnimation, LoopFrame, LoopTrigger};
-pub use timeline::{
-    AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, frame_at, lap_of, seeded_rng,
-    should_fire,
-};
+pub use timeline::{FrameStatus, LoopRng, frame_at, seeded_rng, should_fire};

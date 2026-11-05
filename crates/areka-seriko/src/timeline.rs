@@ -45,7 +45,7 @@ pub fn should_fire(k: u32, rng: &mut LoopRng) -> bool {
 }
 
 /// 1000ms 絶対グリッド境界（毎秒抽選の写像・catch-up 1 回）。
-pub struct LotteryBoundary {
+pub(crate) struct LotteryBoundary {
     next_boundary_ms: u64,
 }
 
@@ -118,7 +118,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
 }
 
 /// 経過を周期で割った「何周目か（0 始まり）」と「その周の頭からの経過」（丸めない）。
-pub fn lap_of(elapsed_ms: u64, period_ms: NonZeroU64) -> (u64, u64) {
+pub(crate) fn lap_of(elapsed_ms: u64, period_ms: NonZeroU64) -> (u64, u64) {
     (elapsed_ms / period_ms.get(), elapsed_ms % period_ms.get())
 }
 
@@ -151,7 +151,7 @@ pub(crate) fn visible_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
 
 /// `always` の今のコマ（[`always_at`] の答え）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AlwaysView {
+pub(crate) enum AlwaysView {
     /// 何も出さない（1 周目の最初の待ちの前・負の番号のコマに居る間）。
     Nothing,
     /// このコマを出す。
@@ -167,7 +167,7 @@ pub enum AlwaysView {
 /// - そうでなければ周の頭からの経過で [`frame_at`] と同じ累積の待ちを引く（待ち 0 のコマは同じ時刻を
 ///   共有し後ろが勝つ）。最初の待ちの前は、1 周目なら何も出さず、2 周目以降は前の周の最後のコマ。
 /// - 負の番号の描くコマ（絵を指すコマは除く）に居る間は何も出さない（働きのコマの `-1` は止めない）。
-pub fn always_at(
+pub(crate) fn always_at(
     frames: &[LoopFrame],
     period_ms: NonZeroU64,
     laps: Option<NonZeroU32>,

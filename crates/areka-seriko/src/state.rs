@@ -24,7 +24,7 @@ use crate::shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceK
 
 /// あるスコープの現 surface 状態（要件 3.1/3.3/3.4）。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ScopeState {
+pub(crate) enum ScopeState {
     /// 表示中の surface id（要件 3.1/3.5）。
     Shown(u32),
     /// 非表示（`\s[-1]` 相当・要件 3.3/3.4）。

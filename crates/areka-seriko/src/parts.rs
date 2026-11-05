@@ -549,11 +549,10 @@ impl PartClocks {
             evaluated,
             order,
         } = self;
-        if !clocks.contains_key(scope) {
-            clocks.insert(scope.clone(), HashMap::new());
-        }
-        let Some(clocks) = clocks.get_mut(scope) else {
-            return CallOutcome::default();
+        // 名前を写すのは初めて見たスコープのときだけ（毎刻みの写しを避ける・型の doc を見よ）。
+        let clocks = match clocks.get_mut(scope) {
+            Some(clocks) => clocks,
+            None => clocks.entry(scope.clone()).or_default(),
         };
         let container = clocks.entry(slot).or_default();
         if !open {

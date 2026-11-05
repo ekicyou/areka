@@ -84,7 +84,7 @@
   - 完了: 乱数を焼き込んだ抽選の順のテストが期待値を変えずに緑。新しいテストが緑で、スコープを回し終えてからバルーンを回す形に一時的に変えると赤になることを確かめた記録がある
   - _Boundary: state.rs・looper.rs・state_stage_tests.rs_
   - _Requirements: 4.1, 4.2, 7.1, 8.1_
-- [ ] 4.5 公開の口を 7 つ狭め、届かない枝を消す（指摘 15・17）
+- [x] 4.5 公開の口を 7 つ狭め、届かない枝を消す（指摘 15・17）
   - 7 つの口を再輸出から外して `pub(crate)` にし、`lib.rs` の doc の列から外す。消す前のツリー全体の確かめを記録する
   - 部品のスコープの名前の入れ方を、無いときだけ写して入れる 1 つの分岐にし、届かない枝を消す（毎刻みの写しを避ける理由の説明は保つ）
   - 完了: `cargo build --workspace --all-targets` が通り、部品のテストが緑
@@ -152,3 +152,4 @@
 - 4.2（着手 HEAD `6c912a27`）: 形を変える前の `CallPlays::stop` に関わる所は 5 か所（定義・`run_calls` の呼び出し・`looper_calls.rs`・`parts_calls.rs`・`calls_tests.rs` の偽の表）。`CallPlays` は 11 件で、すべて areka-seriko の中にある。直した後は全部 `stop(animation, always)` になった。新しいテスト `acts_through_mark_never_moves_back` を足して 551 件。`max` を `now_ms` に替えると新しいテストが赤になった（前半「印は 300 へ戻らない」、前半を外すと後半「400 の move が 2 度当たらない」も単独で赤）。`always` の判定に `&& false` を足すと、役者・一番上・部品の呼び出しのテスト 3 本が赤になった。
 - 4.3（着手 HEAD `f1f966a6`）: `glyph_wall_ms` の `debug_assert!` を消した。新しいテスト `glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn` を足して 552 件になった。`debug_assert!` を戻すと、このテストは `looper_trigger.rs:155` の panic で赤になる。`warn!` の文言と欄（`glyph`・`now_ms`）は変えていない。
 - 4.4（着手 HEAD `8a7d79c9`）: 消す前の `rg -n 'slot_rank'` は 2 件（どちらも `looper.rs` で、定義と使う所）、消した後は 0 件。`scopes`・`balloon` を `BTreeMap` にした。古い並べ替えは「スコープ → シェル／バルーン」だけを鍵にした安定な並べ替えで、スコープごとに 1 件なので、新しい組み方とどの場合も同じ順になる。新しいテストを足して 553 件。シェルを全部回してからバルーンを回す形に変えると、新しいテストだけが赤になる。`looper.rs` は 976 行。
+- 4.5（着手 HEAD `a1e49f73`）: 消す前のツリー全体の rg は、全体／areka-seriko の中の順に accumulate 18／18・SETTLE_TICK_MS 6／6・lap_of 14／14・always_at 63／61・AlwaysView 24／24・LotteryBoundary 16／16・ScopeState 74／71。外れの分は、always_at が `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` の文中の名前、ScopeState が `crates/areka/src/placement/spawn_cleanup_tests.rs` の同じ名の別の型で、使い手ではない。7 つを `pub(crate)` にし（`bind.rs` は `accumulate` の可視性だけ）、`cargo build --workspace --all-targets` は通った。`PartClocks::advance` は get_mut が None のときだけ写して入れる match 1 つにした。

@@ -576,7 +576,7 @@ pub fn apply_bind_directive(
 /// 正準形ゆえ、順序違い・重複適用でも集合同値に至る（D9 冪等ガードの単位＝結果 BindSet の同値）。
 ///
 /// [`BindSet`]: areka_emo_compose::BindSet
-pub fn accumulate(
+pub(crate) fn accumulate(
     current: &areka_emo_compose::BindSet,
     id: u32,
     on: bool,

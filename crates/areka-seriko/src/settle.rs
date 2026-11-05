@@ -23,7 +23,7 @@ use crate::state::{ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopTrigger};
 
 /// 本番の刻みと同じ間隔（ms・`areka-ghost` の ticker と同じ）。
-pub const SETTLE_TICK_MS: u64 = 16;
+pub(crate) const SETTLE_TICK_MS: u64 = 16;
 
 /// その面の `runonce` の待ちの合計の最大（無ければ 0・部品の `runonce` は数えない）。
 pub fn settle_time(table: &AnimationTable, surface_id: u32) -> u64 {
