@@ -1,8 +1,8 @@
 //! 正規化 Surface 定義の公開形: `SurfaceMaster` / `NormalizedElement` / `Transform`。
 //!
 //! 下流（seriko・collision-geometry）が再パース・再展開なしに消費できる正規化定義を提供する。
-//! element（レイヤ・画像パス・座標）に加え collisions・animations・`animation-sort`／
-//! `collision-sort` の順序キーを保持する。element 配置は変換行列（`Transform`）で表現し、
+//! element（レイヤ・画像パス・座標）に加え collisions・animations を保持する（`animation-sort` は
+//! シェル全体の値として [`crate::EmoWorld::animation_sort`] が持つ）。element 配置は変換行列（`Transform`）で表現し、
 //! X,Y のみの平行移動を単位行列の特例として扱う（回転・拡縮は行列表現に予約）。
 
 use crate::method::ComposeMethod;
@@ -76,7 +76,8 @@ pub struct SurfaceMaster {
     pub elements: Vec<NormalizedElement>,
     /// 当たり判定領域（転記のまま）。
     ///
-    /// 順序不変条件: **登場順**。`surface.append` 由来は末尾へ連結される（`fold.rs:121-122`）。
+    /// 順序不変条件: **登場順**。追記と 2 つ目の波括弧の行は末尾へ足す（波括弧だけは同じ collision番号の
+    /// 前の行を除いてから・畳み込みの `add_lines`）。
     /// 画家則（後定義が手前）はこの順序に意味論を載せる（HitCore [`hit_region_in`] が逆順走査で
     /// 最前面を決める・collision-geometry 要件 2.1）ため、この順序は挙動上の意味を持つ。
     ///

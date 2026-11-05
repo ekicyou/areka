@@ -1,4 +1,4 @@
-//! task 8.1（要件 11.1・11.4）: emo2 surface0 の単層 base surface 合成が、`MemoryDecoder` へ
+//! 要件 11.1・11.4: emo2 surface0 の単層 base surface 合成が、`MemoryDecoder` へ
 //! 挿入した既知画像とバイト等価であることを固定する golden テーマ。
 
 use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};

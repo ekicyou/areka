@@ -1,4 +1,4 @@
-//! task 7.3（要件 5.4）: 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
+//! 要件 5.4: 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
 
 use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
@@ -6,10 +6,11 @@ use super::{
 };
 
 // ============================================================================
-// task 7.3: 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
+// 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
 // `compute_extent` 外形前提）。
 //
-// design 決定（design.md「合成合流」）: 外形（束縛のときの表・`EmoWorld::extent`）は transient コマを寄与させず、
+// design 決定（design.md「合成合流」）: 外形（束縛のときの表・`EmoWorld::extent`）は `random` の transient コマを
+// 寄与させず（`bind+random` は番号の最も小さい 1 つの pattern だけを数える）、
 // 「まばたきコマ（1410-1412/2106-2110）はベース外形内に収まる前提」を維持する。コマがベース外形を
 // 越えると越えた分がクリップされる（許容劣化）。**この前提を宣言に留めず emo2 fixture の実測で裏取り
 // する**（design「Testing Strategy / Integration Tests item 3: emo-compose golden」）。

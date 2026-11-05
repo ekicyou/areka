@@ -29,7 +29,7 @@ fn build_bound(shell: Shell, atlas: &AtlasTable) -> EmoWorld {
 ///
 /// premultiplied BGRA・width/height が外形一致（stride == w*4）・実合成が起きた画素を確認する。
 /// 40×30 の base（不透明青）を (0,0)、200×10 の bind part（不透明赤）を (0,0) に重ねる。外形は
-/// 全 element＋全 bind pattern0 の和集合＝w=max(40,200)=200・h=max(30,10)=30。
+/// 全 element＋全部の bind の描くコマの和集合＝w=max(40,200)=200・h=max(30,10)=30。
 #[test]
 fn compose_returns_ok_composed_surface_for_valid_input() {
     let base = Path::new("shell/master");
@@ -546,28 +546,26 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
 }
 
 // ============================================================================
-// task 7.3: PatternState 拡張の合成 golden 檻（空 PatternState 等価・transient コマ合流）。
+// PatternState の合成 golden 檻（空 PatternState 等価・transient コマ合流）。
 //
 // design「合成合流と method ゲート」の Postconditions（`pattern.is_empty()` なら出力命令列・外形
-// とも拡張前と完全一致・要件 5.4）と、transient コマの ID 整列合流（同 ID 置換・ID 整列不変・
+// ともコマの無い合成と完全一致・要件 5.4）と、transient コマの ID 整列合流（同 ID 置換・ID 整列不変・
 // 要件 5.3/4.2）を、composer_tests の headless bake 経路（`bake_atlas_sized` の全不透明単色画像）で
 // **byte / pixel 単位**に固定する。全不透明画像ゆえ premultiplied SourceOver は「上層優先」に帰着し、
 // 期待バッファを入力ジオメトリから**独立に再構成**できる（golden は tautology でない）。
 //
-// これらは production コード（plan.rs/lib.rs）を一切変更しない純追加の檻である。空 PatternState の
-// 合成が既知バイトへ完全一致することで「PatternState 配線の増設が空 pattern 出力を摂動しない」退行を、
-// 非空 PatternState の合成が「コマが同 ID の pattern0 を置換しつつ animation-sort 整列を保つ」ことで
-// transient 合流の中核挙動（要件 5.3）を、それぞれ回帰ガードする。
+// 空 PatternState の合成が既知バイトへ完全一致することで「PatternState の配線が空 pattern の出力を
+// 摂動しない」ことを、非空 PatternState の合成が「コマが同 ID の pattern0 を置換しつつ animation-sort
+// 整列を保つ」ことで transient 合流の中核挙動（要件 5.3）を、それぞれ回帰ガードする。
 // ============================================================================
 
-/// task 7.3 ①（要件 5.4・design Postconditions）: 空 PatternState の合成が「pattern 拡張前」の
-/// 既知バイトと **byte 完全一致**する golden。
+/// 要件 5.4・design Postconditions: 空 PatternState の合成が、入力ジオメトリから組んだ既知バイトと
+/// **byte 完全一致**する golden。
 ///
 /// bind pattern0 を持つ代表 surface（base 青 4×4 全不透明＋有効 bind pattern0 で赤 2×2 を (1,1) へ
 /// overlay）を `PatternState::default()` で合成し、合成バイトが入力ジオメトリから独立再構成した
-/// 期待バッファと byte-for-byte 一致することを固定する。空 PatternState は no-op（task 7.2 が同一
-/// ops を実証済み）ゆえ、この一致は「合成入力 PatternState 第一級化の配線が空 pattern の出力を
-/// 一切摂動しない」ことの回帰檻になる。
+/// 期待バッファと byte-for-byte 一致することを固定する。空 PatternState は no-op ゆえ、この一致は
+/// 「PatternState の配線が空 pattern の出力を一切摂動しない」ことの回帰檻になる。
 #[test]
 fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
     let base = Path::new("shell/master");
@@ -616,11 +614,11 @@ fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
     assert_eq!(
         out.bytes(),
         expected.as_slice(),
-        "空 PatternState の合成は拡張前の既知バイトと byte 完全一致（要件 5.4・空 pattern は no-op）"
+        "空 PatternState の合成は既知バイトと byte 完全一致（要件 5.4・空 pattern は no-op）"
     );
 }
 
-/// task 7.3 ②（要件 5.3・4.2）: transient コマが同 ID の pattern0 を置換し、animation-sort の
+/// 要件 5.3・4.2: transient コマが同 ID の pattern0 を置換し、animation-sort の
 /// ID 昇順描画（画家のアルゴリズム）が保たれる golden。
 ///
 /// host(1000) に有効 bind 2 本（id=1→surface1100 青 4×4／id=2→surface1200 緑 2×2）を置き、
@@ -671,11 +669,11 @@ fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
         .compose(&world, &atlas, 1000, &binds, &pattern)
         .expect("transient コマ込みの合成は Ok（要件 5.3）");
 
-    // 外形 4×4（compute_extent は全 bind pattern0＝1100(4×4)∪1200(2×2) の和集合・コマ 1300 は外形不寄与）。
+    // 外形 4×4（外形の表は全部の bind の描くコマ＝1100(4×4)∪1200(2×2) の和集合・コマ 1300 は外形不寄与）。
     assert_eq!(
         (out.width(), out.height()),
         (4, 4),
-        "外形は bind pattern0 母集合どおり 4×4"
+        "外形は bind の描くコマの母集合どおり 4×4"
     );
 
     // (a) コマが pattern0 を置換: id=1 の層は 1100(青) でなく 1300(赤)。緑(2×2)の外側 (2,2) は赤。

@@ -37,29 +37,13 @@ pub(super) fn parse_emo2_shell() -> Shell {
     shell
 }
 
-// ============================================================================
-// task 8.2: surface1000（全パーツ MAYUNA bind の本体 surface）＋ 有効 bind 集合の
-// golden 統合テスト（要件 **11.2**・**5.4**・**11.4**）。
-//
-// emo2 の surface1000 は静的 element を一切持たず、可視パーツが全て `interval,bind` の
-// animation（各 pattern0 が 1100 系パーツ surface を overlay 参照）で構成される「着せ替え
-// base surface」である。これは要件 5.4 の中核ケース＝静的 element ゼロでも有効 bind 集合が
-// あれば非空ビットマップになる surface。ここでは:
-//   ① 空 BindSet → 描画命令ゼロ → 全画素 α==0（全透明）だが、外形は bind 非依存の静的量
-//      （全部の bind の描くコマの原寸の和集合）ゆえ非ゼロ。
-//   ② 非空 BindSet → 参照パーツ画像が合成され α>0 の画素が生まれる（非空）。
-//   ③ bind 数に応じた重なりを要点サンプリング（要件 11.2）: パーツごとに判別可能な色・サイズを
-//      与え、特定パーツだけが覆う画素が「その bind が有効なときだけ不透明」になることで、合成が
-//      固定画像でなく bind 集合を反映していることを証明する。
-// すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
-// ============================================================================
-
 /// surface1000 の bind パーツ surface（1100 系）の element0 相対パスを解決するための対応表。
 ///
-/// surfaces.txt の実データ（本テスト先頭コメント参照）に基づく (animation_id, part_element_rel)。
+/// surfaces.txt の実データ（`golden_tests_surface1000_bind_tests.rs` の先頭の説明）に基づく
+/// (animation_id, part_element_rel)。
 /// 各 bind animation `animationN.pattern0,overlay,N,0,0,0` は同番号のパーツ surface N を参照し、
 /// その surface の element0 が下記 png を (0,0) 配置する（実 fixture より）。
-/// 8.2 では判別のため、この rel パスへ**自作の単色画像**を MemoryDecoder へ挿入する。
+/// テストでは判別のため、この rel パスへ**自作の単色画像**を MemoryDecoder へ挿入する。
 pub(super) struct BindPart {
     /// surface1000 の bind animation id（= 参照先パーツ surface id と同番号）。
     pub(super) anim_id: u32,

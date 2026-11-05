@@ -145,16 +145,15 @@ fn extent_cycle_debug_fires_with_surface_id() {
     );
 }
 
-// ── pattern0（index==0）なし bind+random の良性 skip DEBUG（ops 経路・flatten_surface）──────
+// ── pattern0（index==0）なし bind+random の良性 skip DEBUG（命令列の経路・push_direct）──────
 
 /// 要件 9.1/9.3: コマの無い有効な `bind+random` は **DEBUG**（surface_id＋animation_id つき）を
 /// 出して skip する（非パニック・WARN/ERROR は出さない）。まばたき等 `interval,bind+random` 再生
 /// アニメの静的不活性。
 ///
 /// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当）。build_plan（→derive_ops
-/// →flatten_surface）は `bind+random` の手順が空ゆえ命令を積まず DEBUG を出す。extent 経路
-/// （`plan_extent.rs`・束縛のとき）はサイズ不変契約のため番号の最も小さい pattern（min_by_key）を辿るが
-/// DEBUG は出さない＝DEBUG は 1 本だけ。
+/// →push_direct）は `bind+random` の手順が空ゆえ命令を積まず DEBUG を出す。外形は束縛のとき
+/// （`bind_atlas`）に表へ求め済みで、捕まえる `build_plan` の中では走査しない＝DEBUG は 1 本だけ。
 #[test]
 fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let base = Path::new("shell/master");
@@ -214,7 +213,7 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
         skip_line.is_some(),
         "pattern0 なし skip の DEBUG（surface_id＋animation_id つき）が発火する: {logs}",
     );
-    // DEBUG は厳密に 1 本（ops 経路の skip のみ・extent 経路は DEBUG を出さない）。
+    // DEBUG は厳密に 1 本（命令列の経路の skip のみ・外形は表から引くだけ）。
     let debug_count = logs.lines().filter(|l| l.contains("level=DEBUG")).count();
     assert_eq!(
         debug_count, 1,

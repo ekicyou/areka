@@ -22,7 +22,8 @@ impl ComposedSurface {
     /// 指定サイズの全透明（全 0）premultiplied BGRA サーフェスを確保する。
     ///
     /// `bytes.len() = width * 4 * height` を満たす 0 埋めバッファを割り当てる。
-    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。
+    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。幅と高さは外形の一辺の上限（16,384）以下で
+    /// あること（`stride()` を u32 であふれさせない・debug で確かめる）。
     pub fn new(width: u32, height: u32) -> Self {
         debug_assert_within_extent(width, height);
         ComposedSurface {
@@ -84,9 +85,12 @@ impl ComposedSurface {
     ///
     /// # 公開している理由（消費者）
     ///
-    /// `areka-emo-present` の予算檻（`presenter/budget_tests.rs` の `fill_extent`）が席を
-    /// `w×h` へ合わせるために呼ぶ。本番の合成先（`compose_into` → [`crate::blit`]）が通るのは
-    /// **まさにこのメソッド**である。
+    /// `areka-emo-present` の予算のテストが席を `w×h` へ合わせるために直に呼ぶ。本番の合成先
+    /// （`compose_into` → [`crate::blit`]）が通るのは**まさにこのメソッド**である。
+    ///
+    /// 幅と高さは外形の一辺の上限（16,384）以下であること（[`new`] と同じく debug で確かめる）。
+    ///
+    /// [`new`]: ComposedSurface::new
     ///
     /// [`bytes_mut`]: ComposedSurface::bytes_mut
     pub fn resize_and_clear(&mut self, width: u32, height: u32) {

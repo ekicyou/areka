@@ -124,7 +124,7 @@ fn report(case: &str, extra: &str, (median, min, reps): (f64, f64, usize)) {
     );
 }
 
-/// 面 0 を合成する場合を測る。命令の数も返す。
+/// 面 0 を合成する場合を測り、時間の中央値（ナノ秒）を返す。
 fn compose_case(case: &str, world: &EmoWorld, atlas: &AtlasTable) -> f64 {
     let mut composer = Composer::new();
     let mut out = ComposedSurface::new(0, 0);

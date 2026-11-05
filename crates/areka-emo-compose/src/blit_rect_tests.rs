@@ -1,5 +1,6 @@
 //! `blit_rect.rs` の兄弟のテスト: 矩形の重ね直しが `blit::execute`（いちから）とバイト単位で
-//! 同じこと、矩形の求め方、いちからへ倒れる 3 条件、長い連なり、hot path の静的検査。
+//! 同じこと、矩形の求め方、いちからへ倒れる 3 条件、長い連なり、合成器の口、uv が頁をはみ出す表、
+//! 端の位置の飽和（hot path の静的検査は `composer_tests.rs`）。
 //!
 //! 見本の絵は半透明を含む決定的な模様（premultiplied・`c <= a`）で、SourceOver の丸めまで突く。
 
@@ -387,7 +388,7 @@ fn unchanged_layer_between_movers_240_frames() {
     });
 }
 
-// ── 合成器の口 `Composer::compose_into_reusing`（タスク 2.2・要件 3.1・3.6） ──
+// ── 合成器の口 `Composer::compose_into_reusing`（要件 3.1・3.6） ──
 
 /// 面 1 枚（不透明の背景 8×6 と半透明の小物 3×2）を fold・bind 済みの world と atlas。
 fn composer_world() -> (crate::EmoWorld, AtlasTable) {

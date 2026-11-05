@@ -2,11 +2,11 @@
 //!
 //! 規則（`flatten_surface` と同じ辺）: 一番上から ① element定義の子 ② 有効な純 `bind` の手順の描くコマの先
 //! （同じ animation の番号にコマが在ればコマが置き換える・`bind+random` は手順を持たない）③ そのサーフェスのコマ（一番上は今までの欄・
-//! 部品は部品の欄）のうち描画メソッドが動くもので、着せ替えの種類なら有効なものの先、をたどる。
+//! 部品は部品の欄）のうち描画メソッドが動くもので、`bind+random` なら有効なものの先、をたどる。
 //! 先祖へ戻る辺は進まない。
 //!
 //! 後半は合成との一致の檻（要件 3.2・5.12）: 「部品 X のコマを足すと命令列が変わる」⇔
-//! 「X が部品の列に在る」・外れた着せ替えのコマは両方を変えない・合成が切る循環の辺は報告に在る。
+//! 「X が部品の列に在る」・外れた `bind+random` のコマは両方を変えない・合成が切る循環の辺は報告に在る。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -695,7 +695,7 @@ fn equivalence_cage_reaches_pattern_targets_and_inner_part_frames() {
 /// 着せ替えの集合から外れた `bind+random` のコマ（一番上の欄・部品の欄）を足しても、命令列も
 /// 部品の列も変わらない（要件 5.12・純 `bind` は M5 で外した）。
 #[test]
-fn inactive_bind_frames_change_neither_ops_nor_parts() {
+fn inactive_bind_random_frames_change_neither_ops_nor_parts() {
     let mut rows = 0;
     for case in cases() {
         let ids = case.ids();

@@ -1,6 +1,17 @@
-//! task 8.2（要件 11.2・5.4・11.4）: surface1000（全パーツ MAYUNA bind の本体 surface）＋
-//! 有効 bind 集合の golden テーマ。区画バナーは `test_support` 側に在る
-//! （本文一致の項目境界に従った結果）。
+//! 要件 11.2・5.4・11.4: surface1000（全パーツ MAYUNA bind の本体 surface）＋有効 bind 集合の
+//! golden テーマ。
+//!
+//! emo2 の surface1000 は静的 element を一切持たず、可視パーツが全て `interval,bind` の
+//! animation（各 pattern0 が 1100 系パーツ surface を overlay 参照）で構成される「着せ替え
+//! base surface」である。これは要件 5.4 の中核ケース＝静的 element ゼロでも有効 bind 集合が
+//! あれば非空ビットマップになる surface。ここでは:
+//!   ① 空 BindSet → 描画命令ゼロ → 全画素 α==0（全透明）だが、外形は bind 非依存の静的量
+//!      （全部の bind の描くコマの原寸の和集合）ゆえ非ゼロ。
+//!   ② 非空 BindSet → 参照パーツ画像が合成され α>0 の画素が生まれる（非空）。
+//!   ③ bind 数に応じた重なりを要点サンプリング（要件 11.2）: パーツごとに判別可能な色・サイズを
+//!      与え、特定パーツだけが覆う画素が「その bind が有効なときだけ不透明」になることで、合成が
+//!      固定画像でなく bind 集合を反映していることを証明する。
+//! すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
 
 use super::test_support::{
     build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,

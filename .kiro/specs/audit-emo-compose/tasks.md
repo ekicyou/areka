@@ -167,7 +167,7 @@
   - 位置の足し算を飽和に・外形の面の番号を `try_from` に・`ComposedSurface` の入口で幅を確かめる。各 1 本の壊れたら落ちるテスト
   - 除外の範囲 `!a-b` を番号に広げず `(lo, hi)` の組で引く（指摘 75・必ず直す）。`surface0,!0-4294967295` が短く終わり結果が今と同じテスト
   - _Requirements: 2.1, 4.4, 4.5_
-- [ ] 6.4 説明の直し（指摘 34〜44）
+- [x] 6.4 説明の直し（指摘 34〜44）
   - `doc/`・`docs/` のパスを名指す行は足さず変えない
   - _Requirements: 2.1, 5.3, 6.9_
 - [ ] 6.5 テストの直し（指摘 45〜74）
@@ -199,3 +199,4 @@
 - 11-06 audit-emo-present: `composed.rs:91` の説明が名指す `presenter/budget_tests.rs` の `fill_extent` は向こうのタスク 17 で消えた（今は `resize_and_clear` を直に呼ぶ）＝6.4 で名指しを直す
 - 6.2: `linear_lookup_tests.rs` の 5 本は大きな検体で答えと記録を確かめる回帰で、2 乗へ戻しても遅くなるだけで赤にはならない（research 15 節の「遅い所」・要件 4.5 のため時間の上限を置かない）。`visible_parts` は 64 個まで線形・越えたら呼び出しの中で 1 度だけ集合。areka-parsers の `animation_slot`（decode.rs:395）が 1 ブレスの animation の数の 2 乗＝audit-parsers-sakura へ伝え済み
 - 6.3: 除外の範囲は `(lo, hi)` の組を並べてまとめ二分探索で引く（単独の除外の大量でも 2 乗にしない）。`ComposedSurface` の入口は `debug_assert`（本番は `build_plan` の `ExtentTooLarge` が先に断る）
+- 6.4: 残った昔のタスク番号（`golden_tests_frame_extent_tests.rs:152,192`・`golden_tests_surface0_base_tests.rs:63`・`golden_tests_surface1000_bind_tests.rs:74,107,132`・`golden_tests_trim_equivalence_tests.rs`・`nesting_visible_tests.rs:356`）と `plan_bounds_tests.rs:165` の「bind の pattern0」は 6.5 で拾う

@@ -59,8 +59,9 @@ pub(crate) fn shell_bounds_limited(
                 acc[3].max(r[3]),
             ];
         }
-        // 合成の絵の大きさ（外形の表）は描画メソッドを問わず bind の pattern0・`always` の
-        // pattern を数えるので、右下はそれも収める（Invariants）。bind・`always` の循環の知らせは
+        // 合成の絵の大きさ（外形の表）は描画メソッドを問わず着せ替えの描くコマ（純 bind は全部・
+        // `bind+random` は番号の最も小さい 1 つ）と `always` の pattern を数えるので、右下はそれも
+        // 収める（Invariants）。bind・`always` の循環の知らせは
         // 表を作るときの debug だけ。
         let extent = world.extent(id);
         acc[2] = acc[2].max(extent.w as i64);

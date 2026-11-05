@@ -25,7 +25,7 @@ use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{BlitOp, PlanScratch, derive_ops};
 use crate::world::EmoWorld;
 
-// ---- 合成モデルビルダ（task 4 テストと同一パターン・実 fixture パースは統合 task 8 送り）----
+// ---- 合成モデルビルダ（正規化モデルを直に組む・実 fixture のパースは golden_tests）----
 
 /// element 1 本（layer/path/x/y 指定）。
 pub(crate) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {

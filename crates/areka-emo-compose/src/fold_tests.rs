@@ -130,7 +130,7 @@ fn range_creates_inclusive_ids() {
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
 }
 
-/// (d) 単一形 `surface0`: 従来どおり 1 件だけ新設される。
+/// (c) 単一形 `surface0`: 従来どおり 1 件だけ新設される。
 #[test]
 fn single_form_creates_one_surface() {
     let surf = surface_def(
@@ -164,9 +164,9 @@ fn enumeration_expands_in_description_order() {
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 2);
 }
 
-// ── task 3.3: surface.append の展開＝既存 id 限定の追記 ──────────────────
+// ── surface.append の展開＝既存 id 限定の追記 ──────────────────
 
-/// (3.3-1) 受入基準: `surface.append10,2100-2110,2200-2210` 相当。
+/// (1) 受入基準: `surface.append10,2100-2110,2200-2210` 相当。
 /// 事前に存在する id のみへ追記し、範囲内でも未存在 id は新設しない（要件 2.2）。
 #[test]
 fn append_reaches_existing_ids_only_not_creating_absent() {
@@ -238,7 +238,7 @@ fn append_reaches_existing_ids_only_not_creating_absent() {
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
 }
 
-/// (3.3-2) element/collision マージ（要件 2.4）。
+/// (2) element/collision マージ（要件 2.4）。
 /// append 追記後、element は layer 昇順を保ち、collision は末尾連結される。
 #[test]
 fn append_merges_element_and_collision_layer_sorted() {
@@ -282,7 +282,7 @@ fn append_merges_element_and_collision_layer_sorted() {
     assert_eq!(m.collisions[1].name.as_str(), "Bust");
 }
 
-/// (3.3-3) animation 先勝ち＋新 id 追加（SSP 2.9.29 と同じ・spec: audit-emo-compose 設計の議題 7 案 A）。
+/// (3) animation 先勝ち＋新 id 追加（SSP 2.9.29 と同じ・spec: audit-emo-compose 設計の議題 7 案 A）。
 /// 対象に既存 animation id=N があり append が同 id=N を持つ → append 版を捨てる（単一）。
 /// 新 id=M は追加される。
 #[test]
@@ -338,7 +338,7 @@ fn append_animation_first_wins_and_new_id_added() {
     assert_eq!(m.animations.len(), 2);
 }
 
-/// (3.3-4) 登場順（要件 2.3）。
+/// (4) 登場順（要件 2.3）。
 /// append の後に定義された surface は遡って追記されない（append 実行時に存在する id のみ）。
 #[test]
 fn append_only_sees_earlier_defined_surfaces() {
@@ -382,9 +382,9 @@ fn append_only_sees_earlier_defined_surfaces() {
     assert_eq!(m2.elements[0].path.as_str(), "b.png");
 }
 
-// ── task 3.4: 除外指定（`!N`/`!a-b`）の展開時減算 ─────────────────────────
+// ── 除外指定（`!N`/`!a-b`）の展開時減算 ─────────────────────────
 
-/// (3.4-1) 単一除外: `Single(0),Single(5),Exclude(5)` は 0 を残し 5 を減算する（要件 2.5）。
+/// (1) 単一除外: `Single(0),Single(5),Exclude(5)` は 0 を残し 5 を減算する（要件 2.5）。
 #[test]
 fn expand_targets_subtracts_single_exclude() {
     let ids = expand_targets(&[
@@ -397,7 +397,7 @@ fn expand_targets_subtracts_single_exclude() {
     assert_eq!(ids, vec![0]);
 }
 
-/// (3.4-2) 範囲除外: `Range{1,5}, ExcludeRange{2,4}` は両端含みで 2,3,4 を減算し {1,5}（要件 2.5）。
+/// (2) 範囲除外: `Range{1,5}, ExcludeRange{2,4}` は両端含みで 2,3,4 を減算し {1,5}（要件 2.5）。
 #[test]
 fn expand_targets_subtracts_exclude_range_inclusive() {
     let ids = expand_targets(&[
@@ -407,14 +407,14 @@ fn expand_targets_subtracts_exclude_range_inclusive() {
     assert_eq!(ids, vec![1, 5], "2,3,4 が両端含みで減算される");
 }
 
-/// (3.4-3) 除外なし回帰: `Range{1,3}` は減算ロジック導入後も {1,2,3} のまま変わらない。
+/// (3) 除外なし回帰: `Range{1,3}` は減算ロジック導入後も {1,2,3} のまま変わらない。
 #[test]
 fn expand_targets_without_exclude_is_unchanged() {
     let ids = expand_targets(&[AppendTarget::Range { start: 1, end: 3 }]);
     assert_eq!(ids, vec![1, 2, 3]);
 }
 
-/// (3.4-4) 除外は記述位置に依らず集合全体へ効く（`!` 記述子が範囲の前でも減算される・design）。
+/// (4) 除外は記述位置に依らず集合全体へ効く（`!` 記述子が範囲の前でも減算される・design）。
 #[test]
 fn expand_targets_exclude_applies_regardless_of_position() {
     let ids = expand_targets(&[
@@ -424,7 +424,7 @@ fn expand_targets_exclude_applies_regardless_of_position() {
     assert_eq!(ids, vec![1, 3], "前置の除外でも展開結果から減算される");
 }
 
-/// (3.4-5) fold 経由の統合: 除外を含む plain surface を fold すると除外 id が entity 化されない。
+/// (5) fold 経由の統合: 除外を含む plain surface を fold すると除外 id が entity 化されない。
 /// `expand_targets` とその fold 呼び手の双方が除外を honor することを EmoWorld/SurfaceIndex で検証。
 #[test]
 fn fold_plain_surface_honors_exclusion_through_build() {
@@ -448,7 +448,7 @@ fn fold_plain_surface_honors_exclusion_through_build() {
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
 }
 
-// ── task 3.5: kero.surface.alias の解決（AliasMap 収集・後勝ち・非パニック） ──
+// ── kero.surface.alias の解決（AliasMap 収集・後勝ち・非パニック） ──
 
 /// `Shell` を surface/alias 混在の登場順 `definitions` で組む（呼び手が DefRef を直接並べる）。
 fn shell_with_aliases(
@@ -466,7 +466,7 @@ fn shell_with_aliases(
     }
 }
 
-/// (3.5-1) 受入基準: 同一 alias キーが重複定義される（emo2 の `100,[2100]` が 2 回）とき、
+/// (1) 受入基準: 同一 alias キーが重複定義される（emo2 の `100,[2100]` が 2 回）とき、
 /// fold 結果は後勝ちの一意な値を返す（要件 3.2）。
 #[test]
 fn duplicate_alias_key_is_last_wins() {
@@ -492,7 +492,7 @@ fn duplicate_alias_key_is_last_wins() {
     assert_eq!(world.resource::<AliasMap>().0.len(), 1);
 }
 
-/// (3.5-1b) emo2 実相当: `100,[2100]` が 2 回同一値で定義されても後勝ちで一意（要件 3.2）。
+/// (1b) emo2 実相当: `100,[2100]` が 2 回同一値で定義されても後勝ちで一意（要件 3.2）。
 #[test]
 fn duplicate_alias_identical_value_collapses_to_one() {
     let aliases = vec![alias_def("100", vec![2100]), alias_def("100", vec![2100])];
@@ -511,7 +511,7 @@ fn duplicate_alias_identical_value_collapses_to_one() {
     assert_eq!(world.resource::<AliasMap>().0.len(), 1);
 }
 
-/// (3.5-2) 順序付き id リスト保持（要件 3.1）: `[30,10,20]` はソートも重複除去もせず順序のまま。
+/// (2) 順序付き id リスト保持（要件 3.1）: `[30,10,20]` はソートも重複除去もせず順序のまま。
 #[test]
 fn alias_id_list_order_is_preserved() {
     let aliases = vec![alias_def("k", vec![30, 10, 20])];
@@ -525,7 +525,7 @@ fn alias_id_list_order_is_preserved() {
     assert_eq!(resolve_alias(&world, "k"), Some(&[30, 10, 20][..]));
 }
 
-/// (3.5-3) 未解決キーは None（パニックしない・要件 3.3）。
+/// (3) 未解決キーは None（パニックしない・要件 3.3）。
 /// AliasMap が他キーで populate 済みでも、不在キーは None を返す。
 #[test]
 fn absent_alias_key_returns_none_non_panic() {
@@ -542,7 +542,7 @@ fn absent_alias_key_returns_none_non_panic() {
     assert_eq!(resolve_alias(&world, "nope"), None);
 }
 
-/// (3.5-4) single-pass 登場順収集: surface と alias が交互に並んでも両 alias が収集される（要件 1.7）。
+/// (4) single-pass 登場順収集: surface と alias が交互に並んでも両 alias が収集される（要件 1.7）。
 #[test]
 fn aliases_collected_when_interleaved_with_surfaces() {
     let s0 = surface_def(
@@ -583,7 +583,7 @@ fn aliases_collected_when_interleaved_with_surfaces() {
     assert_eq!(world.resource::<AliasMap>().0.len(), 2);
 }
 
-/// (3.5-5) 範囲外 index は非パニックでスキップ（要件 1.4・Surface/Append と同じ寛容パターン）。
+/// (5) 範囲外 index は非パニックでスキップ（要件 1.4・Surface/Append と同じ寛容パターン）。
 #[test]
 fn alias_out_of_range_index_is_skipped() {
     let mut world = fresh_world();
@@ -598,7 +598,7 @@ fn alias_out_of_range_index_is_skipped() {
     assert_eq!(world.resource::<AliasMap>().0.len(), 0);
 }
 
-// ── task 3.7: 決定性（バイト等価）・登場順 single-pass の固定（要件 1.5/1.7/2.3/10.1）──
+// ── 決定性（バイト等価）・登場順 single-pass の固定（要件 1.5/1.7/2.3/10.1）──
 
 /// fold 結果の観測可能内容スナップショット（`EmoWorld` は derive Eq を持たないため手組み）。
 ///
@@ -641,7 +641,7 @@ fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
     s1
 }
 
-/// (3.7-1) 受入基準（要件 1.5/10.1）: 複数定義が重なる**手組み** Shell を2回 fold すると
+/// (1) 受入基準（要件 1.5/10.1）: 複数定義が重なる**手組み** Shell を2回 fold すると
 /// 得られる EmoWorld 内容がバイト等価。emo2 の重なり構造（plain 群→多 id append→重複 alias）を
 /// ミラーした入力で決定性を固定する（実 fixture とは別に、パーサ非依存で保証）。
 #[test]
@@ -730,7 +730,7 @@ fn hand_built_overlap_shell_folds_byte_equal_twice() {
     );
 }
 
-/// (3.7-2) 実 emo2 fixture の fold 決定性（要件 1.7/2.3/10.1）。
+/// (2) 実 emo2 fixture の fold 決定性（要件 1.7/2.3/10.1）。
 ///
 /// 実 `surfaces.txt` を parse → `EmoWorld::build` を2回。公開クエリ越しのスナップショット
 /// （surface 群・alias 群・両 sort 順）がバイト等価であることを固定する。これは実登場順ストリーム
@@ -800,7 +800,7 @@ fn emo2_fixture_folds_byte_equal_twice() {
     );
 }
 
-/// (3.7-3) 登場順の決定的適用（要件 2.3）: 同一 surface id を surface→append→surface の順で
+/// (3) 登場順の決定的適用（要件 2.3）: 同一 surface id を surface→append→surface の順で
 /// 交互に定義したとき、fold は登場順どおりに畳み込まれ、2回 fold して同一結果になる。
 #[test]
 fn interleaved_redefinition_is_appearance_order_deterministic() {
@@ -846,7 +846,7 @@ fn interleaved_redefinition_is_appearance_order_deterministic() {
     );
 }
 
-/// (3.7-4) 前方参照なし・single-pass（要件 1.7）: 後で定義される id を狙う append は遡及せず、
+/// (4) 前方参照なし・single-pass（要件 1.7）: 後で定義される id を狙う append は遡及せず、
 /// かつ 2回 fold して結果が安定する。
 #[test]
 fn forward_reference_append_does_not_apply_and_is_stable() {

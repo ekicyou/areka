@@ -260,10 +260,11 @@ fn extent_is_deterministic() {
     assert_eq!(e1, Extent { w: 205, h: 157 });
 }
 
-// ── task 5.5: 命令ゼロ時の 3 分類（正常空合成／対象不在／退化データ）─────────────────
+// ── 命令ゼロ時の 3 分類（正常空合成／対象不在／退化データ）─────────────────
 //
-// build_plan は derive_ops（有効 bind 依存の命令列）＋ compute_extent（有効 bind 非依存の
-// 静的外形）を wrap し、design「Error Handling」表の 3 状態を厳密に区別する:
+// build_plan は derive_ops（有効 bind 依存の命令列）＋外形の表（`EmoWorld::extent`・束縛のときに
+// compute_extent が求めた有効 bind 非依存の静的外形）を wrap し、design「Error Handling」表の 3 状態を
+// 厳密に区別する（外形の上限越えの `ExtentTooLarge` は別の節）:
 //   - 対象 surface 不在        → Err(SurfaceNotFound)（error ログ・要件 10.5）。
 //   - surface 存在・命令ゼロでも → Ok(非ゼロ Extent)＋空 ops（正常全透明・要件 6.6・議題2裁定）。
 //   - 定義層皆無で外形 0×0      → Err(EmptyComposition)（error ログ・要件 10.5・唯一の真の失敗退化）。

@@ -615,10 +615,10 @@ pub(crate) fn push_direct(
     true
 }
 
-/// plan 段の公開ファサード: 命令列を導出し、命令ゼロ時の 3 分類を確定して外形を返す（要件 1.4/6.6/10.5）。
+/// plan 段の公開ファサード: 命令列を導出し、失敗の分類を確定して外形を返す（要件 1.4/6.6/10.5）。
 ///
 /// [`derive_ops`]（有効 bind 依存の命令列）と外形の表（[`EmoWorld::extent`]・有効 bind 非依存の静的外形）を
-/// wrap し、design「Error Handling」表・議題2裁定の**3 状態**を厳密に区別する:
+/// wrap し、design「Error Handling」表・議題2裁定の 3 状態と外形の上限越えを厳密に区別する:
 ///
 /// 1. **対象 surface 不在**（[`EmoWorld::surface`] が `None`）→ `error` ログ＋
 ///    [`ComposeError::SurfaceNotFound`]（要件 10.5）。命令/外形の算出**前**に返す。
@@ -628,10 +628,12 @@ pub(crate) fn push_direct(
 /// 3. **定義層が皆無で外形 0×0**（surface は存在するが表の外形が `Extent{0,0}`・束縛の前も同じ）→
 ///    `error` ログ＋[`ComposeError::EmptyComposition`]（要件 10.5・議題2裁定: これが唯一の真の
 ///    失敗となる退化ケース）。
+/// 4. **外形が一辺の上限 [`MAX_EXTENT`] か面積の上限 [`MAX_AREA`] を越える** → `error` ログ＋
+///    [`ComposeError::ExtentTooLarge`]。命令を積まず、絵も確保させない。
 ///
 /// `out_ops` は呼び手のスクラッチ Vec を再利用する意図（要件 10.3）ゆえ、**エントリで `clear`**
-/// してから命令を積む（前回内容のゴミが混ざらない）。不在/退化の `Err` 時も `out_ops` は空である
-/// （不在は算出前 return・退化は derive 済みでも 0×0 定義層皆無ゆえ命令は元々ゼロ）。
+/// してから命令を積む（前回内容のゴミが混ざらない）。どの `Err` 時も `out_ops` は空である
+/// （どの失敗も命令を積む前に返す）。
 ///
 /// # 決定性（要件 10.1）
 ///
@@ -725,7 +727,7 @@ pub(crate) fn is_bind_interval(interval: &Interval) -> bool {
 /// 指定 animation id が当 surface の **`bind+random`** アニメか（bindopt D9-3・bindopt 7.1/7.4・
 /// seriko-pattern-calls 5.6 で純 `bind` を外した）。
 ///
-/// [`flatten_surface`] の層(ii) 合流条件が「`bind+random` のコマは bind 集合に属することを要求する」
+/// [`push_bind_layer`] の層(ii) 合流条件が「`bind+random` のコマは bind 集合に属することを要求する」
 /// ための判定。当 surface の `animations` から id を番号 → 添字の表 `anims` で引き、interval が
 /// `bind+random` なら真。**当 surface に定義の無い id・純 `bind`・bind 種でない id（純 `random` の `interval` 等）は
 /// 偽**で、追加ゲートを受けず無条件に合流する（bindopt 7.4）。

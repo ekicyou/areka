@@ -1,7 +1,7 @@
 //! `BindSet`: 呼び手が渡す有効 bind 集合（`Send` 所有・整列済み）。
 //!
 //! bindgroup 切替・blink 発火・着せ替えなどの動的状態管理は行わず、渡された静的集合のみを
-//! 合成対象とする。集合内の順序は `animation-sort` → animation ID の2段規則に沿って整列される。
+//! 合成対象とする。集合は animation ID の昇順に整列される（`animation-sort` の 2 段規則は合成の側で当てる）。
 
 /// 有効 bind 集合（animation ID の整列済み集合・`Send` 所有・重複なし）。
 ///

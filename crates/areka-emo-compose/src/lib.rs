@@ -106,7 +106,8 @@ use areka_emo_atlas::AtlasTable;
 /// # 失敗経路（要件 10.5）
 ///
 /// 合成対象 surface 不在 → [`ComposeError::SurfaceNotFound`]、定義層皆無で外形 0×0 の退化 →
-/// [`ComposeError::EmptyComposition`]。いずれも `error` ログ＋`Err`（[`crate::plan::build_plan`]
+/// [`ComposeError::EmptyComposition`]、外形が一辺か面積の上限を越える → [`ComposeError::ExtentTooLarge`]。
+/// いずれも `error` ログ＋`Err`（[`crate::plan::build_plan`]
 /// が分類・ログ済み）で、パニックしない（要件 1.4）。描画可能命令ゼロでも定義層があれば正常系
 /// （外形どおりの全透明 [`ComposedSurface`] を `Ok` で返す・要件 6.6）。
 #[derive(Debug, Default)]
@@ -133,7 +134,7 @@ impl Composer {
     /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`scratch`）
     /// を再利用する（同じ入力の反復で容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる）。
     ///
-    /// `build_plan` が `Err`（surface 不在・定義層皆無退化）を返せば、そのまま伝播する（既に `error`
+    /// `build_plan` が `Err`（surface 不在・定義層皆無退化・外形の上限越え）を返せば、そのまま伝播する（既に `error`
     /// ログ済み・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
     /// してから転写し、`Ok(())` を返す。描画可能命令ゼロ（全透明・空 bind 集合）でも正常系として
     /// 外形どおりの全透明バッファを書く（要件 6.6）。

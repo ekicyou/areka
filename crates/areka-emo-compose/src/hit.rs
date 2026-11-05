@@ -6,8 +6,8 @@
 //!
 //! - 含端規則は**閉区間**（4辺すべて含端・C2・要件 1.4）。
 //! - 重なりは**画家のアルゴリズム**（後に定義された矩形が手前・C3・要件 2.1）で、
-//!   `collisions` を**逆順**に走査し最初に当たった領域を返す（`blit.rs:83` の下層→上層
-//!   合成と一貫）。上限 256 矩形（C6）ゆえ索引構造を持たない線形走査で足りる。
+//!   `collisions` を**逆順**に走査し最初に当たった領域を返す（`blit` の下層→上層の合成と一貫）。
+//!   索引構造を持たない線形走査（矩形の数は下の「どちらも」の段落）。
 //!
 //! # DPI 非参照の宣言（維持・`collision-dpi-hittest` 要件 5.3/6.1）
 //!
@@ -42,7 +42,7 @@ use areka_parsers::shell::Collision;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RegionPriority {
-    /// 画家のアルゴリズム: 後に定義された矩形が手前（emo 合成規約 `blit.rs:83` と一貫）。
+    /// 画家のアルゴリズム: 後に定義された矩形が手前（`blit` の下層→上層の合成と一貫）。
     #[default]
     Painter,
 }
