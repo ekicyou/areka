@@ -27,7 +27,7 @@
   - 完了: 4 本の統合テストが同じ期待値で緑。写しの定義が `tests/` の各ファイルから消えている
   - _Boundary: areka-seriko の tests/_
   - _Requirements: 2.3, 8.1_
-- [ ] 1.4 範囲の外の「出所」の説明 3 行を直す（統合・指摘 6 の結果）
+- [x] 1.4 範囲の外の「出所」の説明 3 行を直す（統合・指摘 6 の結果）
   - 触る前に持ち主 `audit-test-kits` が走っていないかを `.kiro/specs/` と作業場の枝で確かめて記録する。走っていれば要件 7.3 に従って申し合わせてから触る
   - `log-capture-kit` の「出所は `table.rs` の `capture_logs`」の文 3 行（`event.rs`・`event_tests.rs`）の出所の書き方だけを、1.1 で移した先に合わせて直す。ほかの行は触らない
   - 完了: 3 行が移した先を指し、`git diff` の `log-capture-kit` の変更がその 3 行だけ
@@ -143,3 +143,4 @@
 - clippy: toolchain が固定されておらず、今の clippy（0.1.99）では着手の時点から areka-seriko に 4 件の警告がある（`actor.rs:91` large_enum_variant・`looper.rs:433`・`looper_talk_tests.rs:597`・`looper_trigger_tests.rs:504` の collapsible_if）。依存の dola にも出る。各タスクは `cargo clippy -p areka-seriko --all-targets --no-deps` で警告が増えないことを見る。この 4 件は完了の棚卸で扱う。
 - 1.2: Rig 4 本は `ClockRig::configured(config, names, static_binds)`（`with_config` はこれを呼ぶ）にまとめ、parts・stage・talk は `type Rig = ClockRig;` と檻ごとの impl。`send(ms, msg)` に時刻の引数が増えた。時計を持たない stage と parts の Rig も時計に揃えて寄せたが期待値は不変（parts の 4 本は最初の `\s` で時計が刻み 0 でなく合図の時刻 0 で生まれる。開始は同じ 0 で、時計の無い道は looper の `refresh(.., None, ..)` のテストが見張る）。`balloon_cue` は `cue(.., CueCommand::BalloonSurface{..}, ..)` へ。範囲の外の同名の `looper_talk_tests.rs` の `fn cue`・`parts_trigger_tests.rs` の `struct Rig` は写しでないので残した。`BindResolver::new` の呼び出しが `actor_test_support.rs` に入った（2.1 で消す相手）。
 - 1.3: `tests/common/mod.rs`（先頭に `#![allow(dead_code)]`）へ `emote_cue`・`emo2_surfaces_txt`・`emo2_resolver`・`TalkNotice`＋From 2 つ・`NullTextSink` を移した。写しが 1 本しか無い `emo2_binds`・`RecordingTextSink`・`test_bind_resolver`・`run_scenario` は元の場所のまま。
+- 1.4: 持ち主 `audit-test-kits` は走っていない（2026-11-05 の origin/main に spec.json が無く、作業場も枝も無い）。`event.rs:145`・`event_tests.rs:15`・`:102` の出所を `lib_test_support.rs` へ向けた（3 行だけ）。範囲の外の申し送り: `event_tests.rs:15` の括弧書き `（Capture::on_event）` は着手前から古い書き方（持ち主 `audit-test-kits` の受け持ち・完了の棚卸で渡す）。
