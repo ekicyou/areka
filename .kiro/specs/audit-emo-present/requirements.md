@@ -102,6 +102,7 @@
 4. The 見直しの作業 shall `crates/areka-emo-text/` に新しいファイルを足さない（ウェーブ C17 の約束 ⑶）。
 5. If 直しが `src/cache_tests.rs` を分けるなど、範囲の外の番人の例外表の変更を要するなら, the 見直しの作業 shall その表の持ち主の範囲として扱い、要件 7.2 と同じく申し合わせてから触る。
 6. The 見直しの作業 shall 新しい機能を足さず、範囲の外の見直し・`vendors/`・clippy の指摘の機械的な直しに手を出さない。
+7. If 要件 7.5 の表の持ち主の見直しの spec を走らせているセッションが無いなら, the 見直しの作業 shall この spec の直しで古びた表の項目を消すことと、それに伴う最小の差し替え（件数・自己検査が使う 1 件）だけに限って触り、触った行を spec の記録に残す（2026-11-05 要件の討議 議題 2・`crates/log-capture-kit/tests/temp_path_guard_test.rs`・`file_length_guard_test.rs`・持ち主は `audit-test-kits`）。
 
 ### Requirement 8: タスクの大きさ
 **Objective:** As a 開発者, I want 1 本の spec が 20 タスクを越えないこと, so that 実装と確かめが 1 本の中で回し切れる
@@ -111,3 +112,25 @@
 2. If 確定した指摘を直すタスクが 20 を越えそうなら, the 見直しの作業 shall 要件の討議で、指摘の組ごとに同じ範囲の 2 本目の spec として切り出すことを議題にする。
 3. The 見直しの作業 shall タスクを、指摘の組（必ず直す・直したほうがよい・できれば）ごと、またはファイルのまとまりごとに切る。
 4. The 見直しの作業 shall 最後のタスクを、要件 5 のかけ直しと要件 4.5 の全体テストを行う検証のタスクにする。
+5. If タスクを組む段で 20 を越えるなら, the 見直しの作業 shall 「できれば」の 11 件（33〜43 番）とテストの手伝いの寄せ（29〜31 番）を、同じ範囲の 2 本目の spec へ切り出す（2026-11-05 要件の討議 議題 5＝越えない限り 1 本のまま進める）。
+
+### Requirement 9: 直す対象の確定（2026-11-05 要件の討議）
+**Objective:** As a 開発者, I want 直す指摘と残す指摘が番号で決まっていること, so that 設計と実装が対象を取り違えず、かけ直しの 0 件を判定できる
+
+指摘の一覧の正本は `research.md` の 3 章（audit の番号のまま・全 43 件）。
+
+| 組 | 番号 | 件数 |
+|---|---|---|
+| 必ず直す | 1〜3 | 3 |
+| 直したほうがよい | 4〜32 | 29 |
+| できれば | 33〜43 | 11 |
+
+#### Acceptance Criteria
+1. The 見直しの作業 shall 43 件のうち、下の 9.2〜9.6 に書いたもののほかを、`research.md` の直しの案の向きで直す。
+2. The 見直しの作業 shall 例外の札の付いた 5 件を次のとおり扱う（議題 1）。1 番は直す（一時フォルダを `target` の下へ）。3 番は直す（読み込みの失敗の型を分け、呼び手が今と同じく穏当に縮退できる形は保つ）。8 番は直す（`#[allow(dead_code)]` を `#[cfg(test)]` へ）。42 番は直す（欄を私有にして作者 DPI の正規化を `ScalePolicy::new` の 1 か所にする）。43 番は `SURFACE_REASON_ALL` を直し、`CLICKWAIT_FAMILY` は要件 3.1 ⑵（配線ゼロの語彙の口）として残す。
+3. The 見直しの作業 shall 6 番の `attach_target` から、使わない引数と常に `Ok` の `Result` を外し、範囲の外の呼び手（`crates/areka`・`crates/areka-emo-text` の既存ファイル・`crates/pilot`）まで直し切る（議題 4 の案 (a)）。
+4. The 見直しの作業 shall 10 番で `src/cache_tests.rs` のテストを消して 1,000 行未満にし、要件 7.7 に従って番人の例外表から外す（議題 2 の案 (a)）。
+5. The 見直しの作業 shall 7 番が名指す `crates/areka-emo-compose/src/nesting_fixture_tests.rs:4` のコメントを触らない（公開の範囲を狭めても嘘にならない・議題 3）。
+6. The 見直しの作業 shall 40 番のうち、バルーンのフォルダの一覧と `descript.txt` の本文を 1 回だけ取る直しをこの spec で行い、`surfaces.txt` の解析の回数は `audit-parsers-sakura` が直すものとして触らない（議題 3・2026-11-05 `audit-parsers-sakura` と申し合わせ済み＝あちらの要件 7.10）。
+7. When `build_shell_target_with_boxes` を直すとき, the 見直しの作業 shall 可視性（7 番）だけをこの spec で変え、署名（`ShellBoxes` → `Vec<BoxDefinition>`）は `audit-parsers-sakura` に任せ、後に着地する方が先の形へ合わせる。
+8. The 見直しの作業 shall 残すと裁定した `CLICKWAIT_FAMILY`（43 番の一部）を、要件 5.3 の「かけ直しの結果に残してよいもの」として扱う。

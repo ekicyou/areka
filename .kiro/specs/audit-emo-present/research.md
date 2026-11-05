@@ -362,6 +362,8 @@ emo の提示段（三段直列の 3 段目）。上流が合成した原寸の�
 4. 7 番の `crates/areka-emo-compose/src/nesting_fixture_tests.rs:4` のコメント 1 行と、40 番の `areka-parsers` の解析の回数を、並走する `audit-emo-compose`・`audit-parsers-sakura` と申し合わせるか、この spec では触らないか。
 5. タスクの切り方（5 章の案 A／B／C）と、20 を越えたときの 2 本目の切り口（6 章）。
 
+**2026-11-05 要件の討議で全議題を推奨案で確定**（開発者「承認」）＝上の 1〜5 の決めは requirements.md の要件 9（直す対象）・7.7（例外表）・8.5（2 本目の切り口）が正本。
+
 ### 調べが要る点（Research Needed）
 - 3 番: 読み込みの失敗を `EmptyComposition` に畳む形が、完了した spec の裁定（「設計ディスカッション #1」）の範囲に入るか（その spec の requirements／design を引く）。
 - 24 番: `crates/areka/src/offline_dump/offline_dump_tests.rs` が 1 回目の `take_world` のアトラスの装着を画素で捕まえているか。
