@@ -572,36 +572,12 @@ mod char_scope_and_line_tests {
     use crate::package::model::BindScope;
 
     use super::read_bindgroup_defaults;
-    use crate::package::resolve_bind::parse_kv_with_line;
 
     fn shell_with_descript(tag: &str, descript_body: &str) -> TempPath {
         let dir = TempPath::new(&format!("parsers-bind-char-{}", tag.replace('_', "-")));
         fs::write(dir.path().join("descript.txt"), descript_body.as_bytes())
             .expect("write descript.txt");
         dir
-    }
-
-    /// 値とキーの前後の空白を取り、1 始まりの行の番号を添える。
-    #[test]
-    fn line_read_trims_key_and_value() {
-        let map = parse_kv_with_line("charset,UTF-8\n  a  ,  x y  \n");
-        assert_eq!(map.get("a"), Some(&("x y".to_string(), 2)));
-    }
-
-    /// 同じキーが 2 行あれば後の行の値と行の番号になる。カンマの無い行・キーが空の行も数える。
-    #[test]
-    fn line_read_same_key_takes_later_line() {
-        let map = parse_kv_with_line("a,1\nno comma\n,empty key\na,3\n");
-        assert_eq!(map.get("a"), Some(&("3".to_string(), 4)));
-        assert_eq!(map.len(), 1);
-    }
-
-    /// CRLF でも行の番号がずれず、値に CR が残らない。
-    #[test]
-    fn line_read_crlf_keeps_line_numbers() {
-        let map = parse_kv_with_line("a,1\r\n\r\nb,2\r\n");
-        assert_eq!(map.get("a"), Some(&("1".to_string(), 1)));
-        assert_eq!(map.get("b"), Some(&("2".to_string(), 3)));
     }
 
     /// 名前には決めた行の番号（同じキーは後の行・CRLF でもずれない）が付く。

@@ -3,12 +3,13 @@
 //! `resolve.rs` から移した（振る舞いは変えない）。`read_bindgroup_defaults` は
 //! シェル名つきの解決 `resolve_shell::resolve_with_shell` から呼ばれる。
 //! charset 判定は foundation へ委譲する（Req 1.5）。KV 分割は行の番号を添えるため
-//! `parse_kv` と同じ切り方の `parse_kv_with_line` をここだけで持つ。
+//! `kv` の `parse_kv_with_line` を使う。
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::charset::{DefaultEncoding, decode};
+use crate::kv::parse_kv_with_line;
 
 use super::model::{BindGroupDefaults, BindGroupName, BindScope};
 
@@ -164,27 +165,6 @@ fn scope_vec<'a, T>(
         BindScope::Kero => kero,
         BindScope::Char(n) => chars.entry(n).or_default(),
     }
-}
-
-/// 行の番号つきの key-value の読み（着せ替えの読みの中だけで使う）。
-///
-/// 切り方は `parse_kv` と同じ（`lines()`・最初の `,` で分ける・キーと値の前後の空白を
-/// 取る・キーが空の行とカンマの無い行を飛ばす）で、値に 1 始まりの行の番号を添える。
-/// 同じキーは後勝ちで、行の番号も後の行になる。`parse_kv` はほかの読み手すべてに効く
-/// ので変えない。
-pub(super) fn parse_kv_with_line(text: &str) -> BTreeMap<String, (String, usize)> {
-    let mut map = BTreeMap::new();
-    for (index, line) in text.lines().enumerate() {
-        let Some((raw_key, raw_value)) = line.split_once(',') else {
-            continue;
-        };
-        let key = raw_key.trim();
-        if key.is_empty() {
-            continue;
-        }
-        map.insert(key.to_owned(), (raw_value.trim().to_owned(), index + 1));
-    }
-    map
 }
 
 /// `bindoption*.group` の値 1 行を分解した宣言（カテゴリ名と、認識できたオプション語の所属）。
