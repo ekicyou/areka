@@ -440,5 +440,5 @@ wintf の描画の芯である。ECS の World と 13 本のスケジュール�
 ## 11. 実装の着手時の申し合わせ（2026-11-05・タスク 1.1）
 
 - `audit-wintf-runtime`: 11-05 にあちらから「異論なし・graphics のテストのファイルと新しい 2 ファイル（`graphics/device_lost_recovery_test.rs`・`visual/window_join_test.rs`）を受けた・あちらの T2a・T2b と `create_command_list` の削除はこちらの着地の後へ回した・84 番の試験の補助は `src/api.rs` に置き `ecs/test_support.rs` には触らない」と返事が来ている。`com/d2d` の `d2d_create_device` が 8 番の直しで wintf の中の呼び出しを失う件も伝え済み（9.5 節）。済み。
-- `audit-emo-present`: `presenter/refresh.rs` の取り決め（10 節の 2）が今も生きているかと着地の見込みを 11-05 に伝言で尋ねた。あちらは main に未着地。答え待ちのまま進める（触るのはタスク 5.1 で、その前に答えを確かめる。後に着地する方が先の形へ合わせる）。
+- `audit-emo-present`: `presenter/refresh.rs` の取り決め（10 節の 2）が今も生きているかと着地の見込みを 11-05 に伝言で尋ねた。あちらは main に未着地。11-05 にあちらから「取り決めはそのまま生きている（あちらの design.md・tasks.md のタスク 1・5 に記録）。`apply_show` が `PresentOutcome` を返し `reply` 引数を外す変更と `refresh_scale` を戻り値で読む変更はあちらのタスク 1 で入る。実装は未着手で着地は 17 タスクの後＝こちらが先に着地する見込みが高く、その場合はあちらがこちらの形に合わせる」と返事が来た。済み。
 - `wintf-visual-tree`（未着手・セッション無し）: 8 番（手本の注記を直す）は 11-05 の申し送りで brief に記録済み。9 番（祖先の上限 1,024）の重なりを、あちらの brief の申し送りの節に 1 行足して伝えた。
