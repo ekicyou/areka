@@ -43,7 +43,7 @@
 1. When ギャップ分析を行うとき, the 本 spec の見直し shall 受け持つ範囲（`crates/areka-parsers/`・`crates/areka-sakura/`）だけを対象に `/ponytail:ponytail-audit` をかける。
 2. The 本 spec の見直し shall 受け持つ範囲のファイルを全部読み、audit の「読まなかった所（Not checked）」を残さない。
 3. The 本 spec の見直し shall audit の「最大 20 件」の上限を外し、出た指摘を全件、省かずに一覧にする。
-4. The 本 spec の見直し shall 指摘の一覧をギャップ分析の報告に残し、各指摘に audit の番号と組（必ず直す・直したほうがよい・できれば）をそのまま付ける。
+4. The 本 spec の見直し shall 指摘の一覧をギャップ分析の報告に残し、各指摘に audit の番号と組（必ず直す＝Must fix・直したほうがよい＝Should fix・できれば＝Nice to have）をそのまま付ける。
 5. When 要件の討議を行うとき, the 本 spec の見直し shall 指摘の一覧を要件に落とし、直す対象を audit の番号で確定する。
 6. If 直す対象が 1 spec 20 タスクを越える見込みのとき, then the 本 spec の見直し shall 要件の討議で、指摘の組ごとに同じ範囲の 2 本目の spec として切り出すことを議題にする。
 
