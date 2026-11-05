@@ -656,3 +656,172 @@ mod char_scope_and_line_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod bindgroup_warning_tests {
+    //! 読みの崩れの記録（指摘 9・14・49）と数の形・空のカテゴリ（指摘 47・48）。
+    //!
+    //! 記録は `log_capture_kit::capture` で確かめ、一時の根は `temp-path-kit`。
+
+    use std::fs;
+
+    use log_capture_kit::CapturedEvent;
+    use temp_path_kit::TempPath;
+
+    use crate::charset::DefaultEncoding;
+    use crate::package::model::{BindGroupDefaults, BindScope};
+
+    use super::read_bindgroup_defaults;
+
+    fn shell_with_descript(tag: &str, descript_body: &str) -> TempPath {
+        let dir = TempPath::new(&format!("parsers-bind-warn-{}", tag.replace('_', "-")));
+        fs::write(dir.path().join("descript.txt"), descript_body.as_bytes())
+            .expect("write descript.txt");
+        dir
+    }
+
+    /// 読みを記録つきで回し、表と `warn!` の件を返す。
+    fn read_capturing(shell: &TempPath) -> (BindGroupDefaults, Vec<CapturedEvent>) {
+        let (d, events) = log_capture_kit::capture(|| {
+            read_bindgroup_defaults(shell.path(), DefaultEncoding::Utf8)
+        });
+        let warns = events
+            .into_iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .collect();
+        (d, warns)
+    }
+
+    /// NotFound 以外で読めない descript はパスと誤りを `warn!` して空。無いだけなら黙って空。
+    #[test]
+    fn unreadable_shell_descript_warns_and_reads_no_binds() {
+        let shell = TempPath::new("parsers-bind-warn-unreadable");
+        let descript = shell.path().join("descript.txt");
+        fs::create_dir_all(&descript).expect("descript.txt as a folder");
+
+        let (d, warns) = read_capturing(&shell);
+
+        assert_eq!(d, BindGroupDefaults::default());
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(
+            warns[0].field("path"),
+            Some(descript.display().to_string().as_str()),
+            "{warns:?}"
+        );
+        assert!(warns[0].field("error").is_some(), "{warns:?}");
+
+        let missing = TempPath::new("parsers-bind-warn-missing");
+        fs::create_dir_all(missing.path()).expect("shell dir");
+        let (d, warns) = read_capturing(&missing);
+        assert_eq!(d, BindGroupDefaults::default());
+        assert!(warns.is_empty(), "{warns:?}");
+    }
+
+    /// 綴り違いの bindoption は鍵・行・値つきで `warn!`（結果は寛容のまま＝入らない）。
+    #[test]
+    fn misspelled_bindoption_warns() {
+        let temp = shell_with_descript(
+            "misspelled_option",
+            "charset,UTF-8\nsakura.bindoption0.group,腕,mustselct\n",
+        );
+        let (d, warns) = read_capturing(&temp);
+
+        assert!(!d.is_mustselect(BindScope::Sakura, "腕"));
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(warns[0].field("key"), Some("sakura.bindoption0.group"));
+        assert_eq!(warns[0].field("line"), Some("2"));
+        assert_eq!(warns[0].field("value"), Some("腕,mustselct"));
+    }
+
+    /// 0/1 でない `.default` は鍵・行・値つきで `warn!`（off のまま）。
+    #[test]
+    fn non_binary_default_warns() {
+        let temp = shell_with_descript(
+            "non_binary_default",
+            "charset,UTF-8\nsakura.bindgroup10.default,yes\n",
+        );
+        let (d, warns) = read_capturing(&temp);
+
+        assert!(d.default_on(BindScope::Sakura).is_empty());
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(warns[0].field("key"), Some("sakura.bindgroup10.default"));
+        assert_eq!(warns[0].field("line"), Some("2"));
+        assert_eq!(warns[0].field("value"), Some("yes"));
+    }
+
+    /// `.default,0` は正しい宣言なので記録しない。
+    #[test]
+    fn default_zero_does_not_warn() {
+        let temp = shell_with_descript(
+            "default_zero",
+            "charset,UTF-8\nsakura.bindgroup10.default,0\nsakura.bindgroup11.default,1\n",
+        );
+        let (d, warns) = read_capturing(&temp);
+
+        assert_eq!(d.default_on(BindScope::Sakura), &[11]);
+        assert!(warns.is_empty(), "{warns:?}");
+    }
+
+    /// 番号は数字だけ・先頭の 0 は `0` のときだけ。外れた鍵は読まずに `warn!`。
+    #[test]
+    fn bindgroup_number_rejects_plus_and_leading_zero() {
+        let temp = shell_with_descript(
+            "number_shape",
+            "charset,UTF-8\n\
+             sakura.bindgroup0010.default,1\n\
+             sakura.bindgroup+11.default,1\n\
+             sakura.bindgroup0.default,1\n\
+             sakura.bindgroup012.name,腕,伸び\n\
+             sakura.bindoption+1.group,腕,mustselect\n\
+             char02.bindgroup13.default,1\n",
+        );
+        let (d, warns) = read_capturing(&temp);
+
+        assert_eq!(d.default_on(BindScope::Sakura), &[0]);
+        assert!(d.sakura_names.is_empty());
+        assert!(!d.is_mustselect(BindScope::Sakura, "腕"));
+        assert!(d.char_default_on.is_empty());
+        let keys: Vec<&str> = warns.iter().filter_map(|w| w.field("key")).collect();
+        assert_eq!(
+            keys,
+            vec![
+                "sakura.bindgroup+11.default",
+                "sakura.bindgroup0010.default",
+                "sakura.bindgroup012.name",
+                "sakura.bindoption+1.group",
+            ],
+            "{warns:?}"
+        );
+    }
+
+    /// 空のカテゴリの `.name` は転記しない（bindoption と同じく断る）。
+    #[test]
+    fn name_with_empty_category_is_rejected() {
+        let temp = shell_with_descript(
+            "empty_category",
+            "charset,UTF-8\nsakura.bindgroup10.name,,伸び\n",
+        );
+        let (d, warns) = read_capturing(&temp);
+
+        assert!(d.sakura_names.is_empty());
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(warns[0].field("key"), Some("sakura.bindgroup10.name"));
+    }
+
+    /// パーツ名の無い `.name` の記録は鍵と行でスコープを見分けられる。
+    #[test]
+    fn nameless_part_warnings_carry_key_and_line() {
+        let temp = shell_with_descript(
+            "nameless_part",
+            "charset,UTF-8\nsakura.bindgroup10.name,x\nkero.bindgroup10.name,y\n",
+        );
+        let (_, warns) = read_capturing(&temp);
+
+        assert_eq!(warns.len(), 2, "{warns:?}");
+        // 走査は鍵の昇順（kero が先）。
+        assert_eq!(warns[0].field("key"), Some("kero.bindgroup10.name"));
+        assert_eq!(warns[0].field("line"), Some("3"));
+        assert_eq!(warns[1].field("key"), Some("sakura.bindgroup10.name"));
+        assert_eq!(warns[1].field("line"), Some("2"));
+    }
+}

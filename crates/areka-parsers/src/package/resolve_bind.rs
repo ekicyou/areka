@@ -42,24 +42,37 @@ const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 ///
 /// 同一走査で 2 種のサフィックスを転記する（task 1.2）:
 /// - `<prefix>NNNN.default`: **値が `1`**（= 起動時オン）のものについて `NNNN` を u32
-///   としてスコープ別に収集する（従来挙動・無改変・R1.6）。
+///   としてスコープ別に収集する（R1.6）。`0`／`1` でない値は off のまま鍵・行・値つきで `warn!`（指摘 14）。
 /// - `<prefix>NNNN.name`: 値 `カテゴリ名,パーツ名,サムネイル名` を `splitn(3, ',')` で
 ///   再分割・各フィールド trim し、`BindGroupName`（決めた行の番号つき）としてスコープ別に転記する。
-///   パーツ名（第 2 フィールド）欠落/空の行は `warn!` の上転記対象外（正典上不完全・R1.5）。
+///   カテゴリ名かパーツ名の欠落/空の行は `warn!` の上転記対象外（正典上不完全・R1.5）。
+/// - 番号 `NNNN` は数字だけ・先頭の 0 は `0` のときだけ。外れた鍵は `warn!` して読まない（指摘 47）。
 ///
 /// **転記のみ・展開しない**（範囲展開・surface 解決はしない・parsers 転写層原則）。
 /// スコープは `sakura.`（0）・`kero.`（1）・`char{N}.`（N は 2 以上）の 3 種類。
 /// 走査は `parse_kv_with_line` の `BTreeMap` 反復順（キー昇順）で決定的。名前は転記順（キー昇順）に
 /// push され、重複 (カテゴリ, パーツ) はアクセサ側の後勝ち（`resolve_name` の逆順走査・D2）
-/// と整合する。shell descript が不在・読取不能なら空を返す（致命でない）。
+/// と整合する。shell descript が不在・読取不能なら空を返す（致命でない・不在のほかは `warn!`）。
 pub(super) fn read_bindgroup_defaults(
     shell_dir: &Path,
     default_encoding: DefaultEncoding,
 ) -> BindGroupDefaults {
     let descript = shell_dir.join(SHELL_DESCRIPT_FILE);
     // shell descript は存在確定していない。読めなければ空（bindgroup 定義なしと同義）。
-    let Ok(bytes) = std::fs::read(&descript) else {
-        return BindGroupDefaults::default();
+    // 無いだけなら黙って空・それ以外の失敗（共有違反・権限など）は記録して空（指摘 9）。
+    let bytes = match std::fs::read(&descript) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return BindGroupDefaults::default();
+        }
+        Err(e) => {
+            tracing::warn!(
+                path = %descript.display(),
+                error = %e,
+                "シェルの descript.txt が読めないため着せ替えの定義を読まない"
+            );
+            return BindGroupDefaults::default();
+        }
     };
 
     let text = decode(&bytes, default_encoding);
@@ -70,25 +83,37 @@ pub(super) fn read_bindgroup_defaults(
         let Some((scope, rest)) = split_scope(key) else {
             continue;
         };
-        // --- .default 経路（従来挙動・値 "1" のみ・無改変・R1.6）---
+        // --- .default 経路（値 "1" のみ on・"0" は off・ほかは off のまま記録する＝指摘 14）---
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.default_2c_6570_5024:1
-        if value == "1"
-            && let Some(id) = parse_bindgroup_id(rest, BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
-        {
-            scope_vec(
-                scope,
-                &mut defaults.sakura_default_on,
-                &mut defaults.kero_default_on,
-                &mut defaults.char_default_on,
-            )
-            .push(id);
+        if let Some(id) = parse_bindgroup_id(rest, BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX) {
+            let Some(id) = checked_id(id, key, *line) else {
+                continue;
+            };
+            match value.as_str() {
+                "1" => scope_vec(
+                    scope,
+                    &mut defaults.sakura_default_on,
+                    &mut defaults.kero_default_on,
+                    &mut defaults.char_default_on,
+                )
+                .push(id),
+                "0" => {}
+                _ => tracing::warn!(
+                    key = %key,
+                    line = *line,
+                    value = %value,
+                    "bindgroup .default の値が 0/1 でないため off として読む"
+                ),
+            }
             continue;
         }
         // --- .name 経路（task 1.2・値はカテゴリ,パーツ[,サムネ] 文字列）---
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
         if let Some(id) = parse_bindgroup_id(rest, BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX) {
-            if let Some(name) = parse_bindgroup_name(id, value, *line) {
+            if let Some(id) = checked_id(id, key, *line)
+                && let Some(name) = parse_bindgroup_name(id, key, value, *line)
+            {
                 scope_vec(
                     scope,
                     &mut defaults.sakura_names,
@@ -106,13 +131,24 @@ pub(super) fn read_bindgroup_defaults(
         // （優先則は下流 seriko の解釈・bindopt D4）。どちらの集合にも入らないカテゴリが
         // 正典の既定（高々 1 個・解除可）を表す——ここで既定を捏造しない（bindopt 1.1）。
         // 「排他か」の判定語彙は parsers に持ち込まない（転写層原則）。オプション
-        // インデックス `N`（`parse_bindgroup_id` が検証する）は M1 不使用＝キー形の妥当性
+        // インデックス `N`（`checked_id` が検証する）は M1 不使用＝キー形の妥当性
         // 検査にのみ用いる（転記のみ・展開しない）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1
-        if parse_bindgroup_id(rest, BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
-            && let Some(decl) = parse_bindoption_options(value)
-        {
+        if let Some(index) = parse_bindgroup_id(rest, BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX) {
+            if checked_id(index, key, *line).is_none() {
+                continue;
+            }
+            // 崩れた宣言（カテゴリ空・認識語ゼロ）は寛容に読み流すが記録は残す（指摘 14）。
+            let Some(decl) = parse_bindoption_options(value) else {
+                tracing::warn!(
+                    key = %key,
+                    line = *line,
+                    value = %value,
+                    "bindoption .group の宣言が読めないため読み流す"
+                );
+                continue;
+            };
             if decl.mustselect {
                 scope_vec(
                     scope,
@@ -146,10 +182,7 @@ fn split_scope(key: &str) -> Option<(BindScope, &str)> {
         return Some((BindScope::Kero, rest));
     }
     let (number, rest) = key.strip_prefix(CHAR_SCOPE_PREFIX)?.split_once('.')?;
-    if number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    let n = number.parse::<u32>().ok().filter(|n| *n >= 2)?;
+    let n = decimal_u32(number).filter(|n| *n >= 2)?;
     Some((BindScope::Char(n), rest))
 }
 
@@ -221,32 +254,54 @@ fn parse_bindoption_options(value: &str) -> Option<BindOptionDecl> {
     }
 }
 
-/// `<prefix>NNNN<suffix>` 形のキーから bindgroup 番号 `NNNN`（u32）を取り出す。
-/// 形が一致しない／番号が u32 でパースできないキーは `None`（転記対象外）。
-fn parse_bindgroup_id(key: &str, prefix: &str, suffix: &str) -> Option<u32> {
-    let rest = key.strip_prefix(prefix)?;
-    let number = rest.strip_suffix(suffix)?;
-    number.parse::<u32>().ok()
+/// `<prefix>NNNN<suffix>` 形のキーから番号の欄 `NNNN`（数の形は確かめない）を取り出す。
+/// 形が一致しないキーは `None`（転記対象外）。
+fn parse_bindgroup_id<'a>(key: &'a str, prefix: &str, suffix: &str) -> Option<&'a str> {
+    key.strip_prefix(prefix)?.strip_suffix(suffix)
+}
+
+/// 番号の欄を [`decimal_u32`] で読み、外れたら鍵と行つきで `warn!` して `None`（指摘 47）。
+fn checked_id(number: &str, key: &str, line: usize) -> Option<u32> {
+    let id = decimal_u32(number);
+    if id.is_none() {
+        tracing::warn!(
+            key = %key,
+            line,
+            "bindgroup・bindoption の番号が数字だけの形でないため読まない"
+        );
+    }
+    id
+}
+
+/// 数字だけで、先頭の 0 は `0` そのもののときだけの u32（`+10`・`010`・空は `None`）。
+fn decimal_u32(number: &str) -> Option<u32> {
+    let digits_only = !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit());
+    if !digits_only || (number.len() > 1 && number.starts_with('0')) {
+        return None;
+    }
+    number.parse().ok()
 }
 
 /// `.name` の値 `カテゴリ名,パーツ名,サムネイル名` を `BindGroupName` へ忠実転記する。
 ///
 /// `splitn(3, ',')` で最大 3 分割し各フィールドを trim する（第 3 フィールドは残余全部＝
-/// サムネイル名として不透明保持）。第 2 フィールド（パーツ名）が欠落／trim 後に空なら
-/// **転記対象外**（`warn!` を残し `None` を返す・捏造しない・R1.5）。第 3 フィールドが
+/// サムネイル名として不透明保持）。第 1 フィールド（カテゴリ名）か第 2 フィールド（パーツ名）が
+/// 欠落／trim 後に空なら **転記対象外**（鍵と行つきの `warn!` を残し `None` を返す・
+/// 捏造しない・R1.5・指摘 48・49）。第 3 フィールドが
 /// 欠落／空なら `thumbnail == None`。展開・alias 解決はしない（転写層原則）。
-fn parse_bindgroup_name(id: u32, value: &str, line: usize) -> Option<BindGroupName> {
+fn parse_bindgroup_name(id: u32, key: &str, value: &str, line: usize) -> Option<BindGroupName> {
     let mut fields = value.splitn(3, ',');
     let category = fields.next().unwrap_or("").trim();
     let part = fields.next().map(str::trim).unwrap_or("");
     let thumbnail_raw = fields.next().map(str::trim).unwrap_or("");
 
-    // パーツ名なしの宣言は正典上不完全＝転記しない（着せ替え ID を捏造しない・R1.5）。
-    if part.is_empty() {
+    // カテゴリ名かパーツ名の無い宣言は正典上不完全＝転記しない（着せ替え ID を捏造しない・R1.5）。
+    if category.is_empty() || part.is_empty() {
         tracing::warn!(
-            bindgroup_id = id,
+            key = %key,
+            line,
             value = %value,
-            "bindgroup .name 宣言にパーツ名が無い（正典上不完全）ため転記対象外"
+            "bindgroup .name 宣言にカテゴリ名かパーツ名が無い（正典上不完全）ため転記対象外"
         );
         return None;
     }
