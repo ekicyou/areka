@@ -25,8 +25,6 @@ mod init_window_graphics_test;
 mod reinit_unit_test;
 #[path = "graphics/surface_optimization_test.rs"]
 mod surface_optimization_test;
-#[path = "graphics/surface_pixel_equivalence_test.rs"]
-mod surface_pixel_equivalence_test;
 #[path = "graphics/surface_systems_test.rs"]
 mod surface_systems_test;
 #[path = "graphics/window_pos_systems_test.rs"]

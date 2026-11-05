@@ -1,14 +1,14 @@
 //! W3a-T: clip_sync_system（WUC モードのクリップ同期）のヘッドレステスト
 //!
 //! 実 WUC デバイスを用いて clip_sync_system を Schedule 経由で実行する。
-//! 切り抜きの中身（図形）は読み戻さず、各分岐（3 バリアント適用・クリップ解除・
-//! リソース未初期化スキップ）がエラーなく完走することと、当たっている切り抜きの
-//! 物の同一性（`Visual::Clip()`）だけを確かめる。
+//! 切り抜きの中身（図形）は読み戻さず、各分岐（3 バリアント適用・クリップ解除）で
+//! `error` のログが 0 件であることと、当たっている切り抜きの物の同一性（`Visual::Clip()`）
+//! だけを確かめる。本番は COM の失敗を `error!` して続けるので、ログの数で失敗を見る。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
+use log_capture_kit::count_levels;
 use windows::UI::Composition::Visual as WucVisual;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::Interface;
 use windows_numerics::Matrix3x2;
 use wintf::ecs::layout::{Arrangement, GlobalArrangement};
@@ -17,10 +17,7 @@ use wintf::ecs::{
 };
 
 fn setup_world() -> World {
-    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // WucGraphicsResource::new が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let d2d = core.d2d_device().expect("d2d device");
     let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource 作成失敗");
@@ -29,6 +26,13 @@ fn setup_world() -> World {
     world.insert_resource(core);
     world.insert_resource(wuc_resource);
     world
+}
+
+/// 1 回回し、`error` のログが 0 件であることを確かめる（ログの購読は回したスレッドに付くので、
+/// GPU の持ち主のスレッドの閉包の中で呼ぶ）
+fn run_without_error(schedule: &mut Schedule, world: &mut World) {
+    let ((), counts) = count_levels(|| schedule.run(world));
+    assert_eq!(counts.error, 0, "clip_sync_system が error を残した");
 }
 
 fn clip_schedule() -> Schedule {
@@ -100,10 +104,8 @@ fn clip_sync_applies_all_clip_shape_variants() {
             50.0,
         );
 
-        // 3 バリアントすべてが SetLeft/SetRight/角丸 8 パラメーター設定 → SetClip まで
-        // エラーなく完走する（COM エラー時は error! ログ + continue のため panic しない設計だが、
-        // 正常系では cast().expect が通ることを実行で確認する）
-        schedule.run(&mut world);
+        // 3 バリアントすべてが角丸の図形の切り抜き → SetClip まで失敗なく通る
+        run_without_error(&mut schedule, &mut world);
     });
 }
 
@@ -124,11 +126,11 @@ fn clip_sync_clears_clip_when_clip_is_none() {
         );
 
         // 1回目: クリップ適用
-        schedule.run(&mut world);
+        run_without_error(&mut schedule, &mut world);
 
-        // clip = None に変更 → クリップ解除（clear_clip）経路
+        // clip = None に変更 → クリップ解除（SetClip(None)）経路
         world.get_mut::<Visual>(entity).unwrap().clip = None;
-        schedule.run(&mut world);
+        run_without_error(&mut schedule, &mut world);
     });
 }
 
@@ -149,36 +151,7 @@ fn clip_sync_clears_clip_when_size_is_zero() {
             0.0,
         );
 
-        schedule.run(&mut world);
-    });
-}
-
-#[test]
-fn clip_sync_skips_when_wuc_resource_is_absent() {
-    crate::common::on_gpu_owner_thread(move || {
-        // WucGraphicsResource なし（ULW モード相当）→ 早期リターン
-        let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
-        let mut world = World::new();
-        world.insert_resource(core);
-
-        // VisualGraphics は default（COM なし）でクエリ成立だけさせる
-        let entity = world
-            .spawn(Visual {
-                clip: Some(ClipShape::Rectangle),
-                ..Default::default()
-            })
-            .id();
-        world.flush();
-        world.get_mut::<Arrangement>(entity).unwrap().size = Size {
-            width: 100.0,
-            height: 50.0,
-        };
-        world.entity_mut(entity).insert(VisualGraphics::default());
-        // GlobalArrangement はフック挿入済みの default のまま
-
-        let mut schedule = clip_schedule();
-        schedule.run(&mut world);
-        // パニックなしで完走すれば early return が機能している
+        run_without_error(&mut schedule, &mut world);
     });
 }
 

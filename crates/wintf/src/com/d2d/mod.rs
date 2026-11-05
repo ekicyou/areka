@@ -16,8 +16,6 @@ pub trait D2D1DeviceExt {
         &self,
         options: D2D1_DEVICE_CONTEXT_OPTIONS,
     ) -> Result<ID2D1DeviceContext>;
-    /// CreateCommandList
-    fn create_command_list(&self) -> Result<ID2D1CommandList>;
 }
 
 impl D2D1DeviceExt for ID2D1Device {
@@ -27,14 +25,6 @@ impl D2D1DeviceExt for ID2D1Device {
         options: D2D1_DEVICE_CONTEXT_OPTIONS,
     ) -> Result<ID2D1DeviceContext> {
         unsafe { self.CreateDeviceContext(options) }
-    }
-
-    #[inline(always)]
-    fn create_command_list(&self) -> Result<ID2D1CommandList> {
-        unsafe {
-            let dc = self.create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
-            dc.CreateCommandList()
-        }
     }
 }
 

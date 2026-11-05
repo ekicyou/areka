@@ -10,12 +10,12 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
+use log_capture_kit::count_levels;
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::UI::Composition::Visual;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::Interface;
 use windows_numerics::Matrix3x2;
 use wintf::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt, D2D1DeviceExt};
@@ -29,10 +29,7 @@ use wintf::ecs::{
 };
 
 fn setup_world() -> World {
-    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // WucGraphicsResource::new が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let d2d = core.d2d_device().expect("d2d device");
     let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource 作成失敗");
@@ -396,7 +393,7 @@ fn make_filled_command_list(core: &GraphicsCore, w: f32, h: f32) -> GraphicsComm
     let dc = device
         .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
         .expect("recording dc");
-    let cl = device.create_command_list().expect("command list");
+    let cl = unsafe { dc.CreateCommandList() }.expect("command list");
     unsafe {
         dc.SetTarget(&cl);
         dc.BeginDraw();
@@ -458,25 +455,19 @@ fn render_surface_draws_dirty_surface_without_error() {
             let core = world.resource::<GraphicsCore>();
             make_filled_command_list(core, 64.0, 64.0)
         };
-        let entity = world
-            .spawn((
-                surface,
-                make_global_arrangement(64.0, 64.0),
-                SurfaceGraphicsDirty::default(),
-                cmd,
-            ))
-            .id();
+        world.spawn((
+            surface,
+            make_global_arrangement(64.0, 64.0),
+            SurfaceGraphicsDirty::default(),
+            cmd,
+        ));
 
         // スポーン直後は Changed<SurfaceGraphicsDirty> が立っている → 描画対象
         let mut schedule = single_system_schedule(render_surface);
-        schedule.run(&mut world);
-
-        // begin_draw → SetTransform → clear → DrawImage → end_draw が完走
-        // （BeginDraw/EndDraw 失敗時は error! ログだが、不整合があれば後続 COM 呼び出しで panic する）
-        assert!(
-            world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
-            "描画後も Surface は有効なまま"
-        );
+        // begin_draw → SetTransform → clear → DrawImage → end_draw が失敗なく通る。
+        // 本番は失敗を error! して続けるので、ログの数で見る（購読はこのスレッドに付く）
+        let ((), counts) = count_levels(|| schedule.run(&mut world));
+        assert_eq!(counts.error, 0, "render_surface が error を残した");
     });
 }
 

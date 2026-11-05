@@ -9,7 +9,6 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
@@ -18,11 +17,7 @@ use wintf::ecs::{
 };
 
 fn setup() -> (World, Schedule) {
-    // init_wuc_resource は内部で WucGraphicsResource::new（DQTAT_COM_NONE）を呼ぶため
-    // COM を MTA 初期化しておく。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // init_wuc_resource が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let mut world = World::new();
     world.insert_resource(core);

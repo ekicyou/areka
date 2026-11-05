@@ -6,7 +6,6 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
     GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty, Visual, VisualGraphics, Window,
@@ -15,10 +14,7 @@ use wintf::ecs::{
 
 /// テスト用ワールドをセットアップ
 fn setup_world() -> World {
-    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // WucGraphicsResource::new が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource作成失敗");
@@ -32,58 +28,54 @@ fn setup_world() -> World {
 }
 
 // ========================================================================
-// 12.1: コンポーネント自動挿入テスト
+// 12.1: コンポーネント自動挿入テスト（ECS のフックだけを試すので素の World・装置なし）
 // ========================================================================
 
 #[test]
 fn test_dcomp_window_visual_gets_dcomp_components() {
-    crate::common::on_gpu_owner_thread(move || {
-        let mut world = setup_world();
+    let mut world = World::new();
 
-        // Window を生成
-        let window_entity = world.spawn(Window::default()).id();
+    // Window を生成
+    let window_entity = world.spawn(Window::default()).id();
 
-        // Window 配下に Visual を生成
-        let visual_entity = world
-            .spawn((Visual::default(), ChildOf(window_entity)))
-            .id();
+    // Window 配下に Visual を生成
+    let visual_entity = world
+        .spawn((Visual::default(), ChildOf(window_entity)))
+        .id();
 
-        // Commands をフラッシュ
-        world.flush();
+    // Commands をフラッシュ
+    world.flush();
 
-        // DComp モードの Visual は VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty が挿入される
-        assert!(
-            world.get::<VisualGraphics>(visual_entity).is_some(),
-            "DComp Visual should have VisualGraphics"
-        );
-        assert!(
-            world.get::<SurfaceGraphics>(visual_entity).is_some(),
-            "DComp Visual should have SurfaceGraphics"
-        );
-        assert!(
-            world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
-            "DComp Visual should have SurfaceGraphicsDirty"
-        );
-    });
+    // 窓の下の Visual は VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty が挿入される
+    assert!(
+        world.get::<VisualGraphics>(visual_entity).is_some(),
+        "DComp Visual should have VisualGraphics"
+    );
+    assert!(
+        world.get::<SurfaceGraphics>(visual_entity).is_some(),
+        "DComp Visual should have SurfaceGraphics"
+    );
+    assert!(
+        world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
+        "DComp Visual should have SurfaceGraphicsDirty"
+    );
 }
 
 #[test]
 fn test_orphan_visual_does_not_get_dcomp_components() {
-    crate::common::on_gpu_owner_thread(move || {
-        let mut world = setup_world();
+    let mut world = World::new();
 
-        // orphan Visual（Window 祖先なし）
-        let visual_entity = world.spawn(Visual::default()).id();
+    // orphan Visual（Window 祖先なし）
+    let visual_entity = world.spawn(Visual::default()).id();
 
-        // Commands をフラッシュ
-        world.flush();
+    // Commands をフラッシュ
+    world.flush();
 
-        // orphan Visual は DComp コンポーネントが挿入されない
-        assert!(
-            world.get::<VisualGraphics>(visual_entity).is_none(),
-            "Orphan Visual should NOT have VisualGraphics"
-        );
-    });
+    // orphan Visual は DComp コンポーネントが挿入されない
+    assert!(
+        world.get::<VisualGraphics>(visual_entity).is_none(),
+        "Orphan Visual should NOT have VisualGraphics"
+    );
 }
 
 // ========================================================================

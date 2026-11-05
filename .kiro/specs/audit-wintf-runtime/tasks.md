@@ -149,7 +149,7 @@
   - 114 の自己テストは GPU の共通の補助のファイルに置くので、7.6 で見た目の実行ファイルにも引かれる。両方の実行ファイルで警告なくビルドでき、回っても答えが同じ形にする
   - 完了の姿: graphics の実行ファイルが実 GPU で緑で、34 は較正で赤を見てから戻す
   - _Requirements: 4.1, 5.5, 7.1, 7.2_
-- [ ] 7.3 graphics の確かめの無いテストを直し、`create_command_list` を消す（T2b）
+- [x] 7.3 graphics の確かめの無いテストを直し、`create_command_list` を消す（T2b）
   - 69（`create_command_list`）: 4 つの呼び手を装置の文脈から生の `CreateCommandList()` を呼ぶ形に直してから、包みを消す
   - 37・38: ログの数は GPU の持ち主のスレッドの閉包の中で数える
   - 44・113（先のファイル）・116（dcomp_integration）: research の案

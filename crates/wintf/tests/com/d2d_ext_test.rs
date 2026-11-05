@@ -46,8 +46,8 @@ fn unit_rect() -> D2D_RECT_F {
 #[test]
 fn command_list_close_succeeds_once_then_fails() {
     let core = make_core();
-    let device = core.d2d_device().expect("device");
-    let cl = device.create_command_list().expect("command list");
+    let dc = core.device_context().expect("device context");
+    let cl = unsafe { dc.CreateCommandList() }.expect("command list");
 
     cl.close().expect("first close");
     assert!(
@@ -70,7 +70,7 @@ fn device_context_wrappers_record_into_command_list() {
         let dc = device
             .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
             .expect("dc");
-        let cl = device.create_command_list().expect("command list");
+        let cl = unsafe { dc.CreateCommandList() }.expect("command list");
         unsafe { dc.SetTarget(&cl) };
 
         // DC と同一ファクトリからジオメトリを生成（factory 不一致を回避）
@@ -150,7 +150,7 @@ fn device_context_wrappers_record_into_command_list() {
         );
 
         // DrawImage: 閉じた空のコマンドリストは有効な ID2D1Image
-        let empty_cl = device.create_command_list().expect("empty cl");
+        let empty_cl = unsafe { dc.CreateCommandList() }.expect("empty cl");
         empty_cl.close().expect("close empty cl");
         unsafe {
             dc.DrawImage(
