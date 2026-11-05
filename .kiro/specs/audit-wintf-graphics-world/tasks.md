@@ -19,7 +19,7 @@
   - 完了の状態: 輪の親を持つ部品に `Visual` を足しても World が返り、窓の下の部品にだけ見た目の部品が入ることを、本物を通すテストが緑で示す
   - _Requirements: 3.1, 3.2, 5.2, 5.3_
 
-- [ ] 2. 見た目の木と色の受け継ぎ
+- [x] 2. 見た目の木と色の受け継ぎ
 - [x] 2.1 窓へ後からつないだ部品に、見た目の部品を入れる
   - 親が変わった部品から祖先に窓が在るかを 1.2 の判定で見て、その部品と子孫のうち見た目の部品をまだ持たないものに、フックと同じ 3 つの部品を入れる（フックと判定を共用する）
   - 窓に属さない部品と、自前で見た目の部品を入れている部品には入れない
@@ -37,7 +37,7 @@
   - _Depends: 1.2_
   - _Requirements: 3.1, 3.2, 3.4_
 
-- [ ] 2.3 (P) 見た目の木の付け替えと、新しい見た目への位置と不透明度
+- [x] 2.3 (P) 見た目の木の付け替えと、新しい見た目への位置と不透明度
   - 未同期の見分けを「控えの親が、いま居るべき親と違う」にし、付け替えでは古い親から外してから新しい親へつなぐ（外す失敗は `debug!`）。子の全部を外す失敗は `error!`
   - 深さの数えを 1.2 の走査に置き換える
   - 位置と不透明度を写す係が、見た目が作り直された部品にも写す
@@ -199,3 +199,4 @@
 - 1.2: `cargo clippy -p wintf --all-targets -- -D warnings` は前からある `dola` クレートのエラー（引数が多すぎる・if をまとめられる等）で wintf まで届かない。wintf の警告は `cargo clippy -p wintf --lib --tests --no-deps` で見る。dola の clippy の赤は範囲の外＝完了の棚卸で扱う。
 - 1.2: 祖先の走査は `crate::ecs::common::ancestors(start, |e| world.get::<ChildOf>(e).map(|c| c.parent()))` のイテレータ（`pub(crate)`）。上限の判定は親が在ると分かった後なので、ちょうど 1,024 段の鎖では `error!` を出さない。
 - 2.1: 窓に属するかの判定は `graphics::visual::has_window_ancestor`（フックと後からつなぐ係で共用）。3 つの部品を入れる口は `insert_graphics_parts`（`insert_if_new`）。`PreRenderSurface` を直に回すテストは本物の `GraphicsCore::new()` を入れないと `Resource does not exist` で落ちる。
+- 2.3: 見た目の木の同期は「控えの親 ≠ 居るべき親」で未同期を見分ける（`VisualGraphics::new` は `parent_visual: None`）。見た目を作り直した部品は自動で同期し直される。`clip_sync_system` の作り直しへの対応は 4.6 の持ち分。visual_sync.rs の `type_complexity` 2 件は完了の棚卸で別名にまとめるか決める。
