@@ -376,8 +376,8 @@ fn inner_multi_level_part_frames_are_used() {
     );
 }
 
-/// 合成 1 回の広がりの予算が尽きたら、まだ入っていない子を捨てる。予算は入る面と、子の段の積み荷
-/// （ここでは絵 1 枚）を数える（子 1 つで 2）。根の面の自分の層は必ず描き、`error!` は 1 行だけ（指摘 3・21）。
+/// 合成 1 回の広がりの予算が尽きたら、まだ入っていない子を捨てる。予算は入る面と、子の段でなめる行
+/// （element 1 行）と、子の段の積み荷（ここでは絵 1 枚）を数える（子 1 つで 3）。根の面の自分の層は必ず描き、`error!` は 1 行だけ（指摘 3・21）。
 #[test]
 fn spent_budget_drops_children_not_yet_entered() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,1,1\n\
@@ -397,7 +397,7 @@ fn spent_budget_drops_children_not_yet_entered() {
         });
         (named_ops(&out, &map), logs)
     };
-    let (ops, logs) = run(4);
+    let (ops, logs) = run(6);
     assert_eq!(
         ops,
         vec![("body.png", 0, 0), ("eye.png", 1, 1), ("eye.png", 2, 2)]
@@ -407,7 +407,7 @@ fn spent_budget_drops_children_not_yet_entered() {
         logs.contains("walk=\"plan\"") && logs.contains("root=0"),
         "{logs}"
     );
-    assert!(logs.contains("budget=4"), "{logs}");
+    assert!(logs.contains("budget=6"), "{logs}");
     let (ops, _) = run(0);
     assert_eq!(ops, vec![("body.png", 0, 0)], "根の面の自分の層は必ず描く");
 }

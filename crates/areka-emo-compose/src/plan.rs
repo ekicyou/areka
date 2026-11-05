@@ -18,7 +18,7 @@
 //!   広がりを予算で打ち切る（指摘 3）。
 //! - **外形**: 束縛のときに 1 度だけ求めた表（[`build_extents`]・[`EmoWorld::extent`]）から引く。有効 bind に
 //!   依存しない静的量（要件 6.5・議題2裁定 (A)）で、合成のたびにはたどらない（指摘 8）。
-//! - **分類**（[`build_plan`]）: 対象 surface 不在→[`ComposeError::SurfaceNotFound`]・外形 0×0→
+//! - **分類**（[`build_plan`]）: 対象 surface 不在→[`ComposeError::SurfaceNotFound`]・外形の幅か高さが 0→
 //!   [`ComposeError::EmptyComposition`]・外形が上限（一辺か面積）越え→[`ComposeError::ExtentTooLarge`]・それ以外は
 //!   描ける命令がゼロでも `Ok(Extent)`（要件 6.6/10.5）。非パニック・`error` ログ＋`Err`。
 //!
@@ -114,6 +114,8 @@ pub(crate) struct PlanScratch {
     /// 予算が尽きたことを記録済みの根の面（指摘 24）。同じ根の合成はコマ替えのたびに同じ所で切れるので、
     /// 合成器 1 つにつき根ごとに 1 度だけ記録する。
     reported: HashSet<u32>,
+    /// 重ねる画素の上限を越えたことを記録済みの根の面（指摘 77・`reported` と同じ形）。
+    pixels_reported: HashSet<u32>,
 }
 
 impl Default for PlanScratch {
@@ -131,6 +133,7 @@ impl Default for PlanScratch {
             chain: Vec::new(),
             limit: VISIT_BUDGET,
             reported: HashSet::new(),
+            pixels_reported: HashSet::new(),
         }
     }
 }
@@ -147,7 +150,7 @@ impl PlanScratch {
 
     /// 作業場の全部の列と集合の容量（テスト用・繰り返しの合成で増えないことを見る）。
     #[cfg(test)]
-    pub(crate) fn capacities(&self) -> [(&'static str, usize); 11] {
+    pub(crate) fn capacities(&self) -> [(&'static str, usize); 12] {
         [
             ("visited", self.visited.capacity()),
             ("on_path", self.on_path.capacity()),
@@ -160,6 +163,7 @@ impl PlanScratch {
             ("expanded", self.expanded.capacity()),
             ("chain", self.chain.capacity()),
             ("reported", self.reported.capacity()),
+            ("pixels_reported", self.pixels_reported.capacity()),
         ]
     }
 
@@ -338,9 +342,10 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
 /// 入れ子は明示のスタック（[`PlanScratch`]）で回す（[`flatten_surface`]）。既に**現在の祖先経路**に
 /// 存在する surface へ入ろうとすると（自己参照・相互参照の循環）、`debug!` の上その枝のみを打ち切って
 /// 部分結果を残す。祖先は段を出るときに外すので、非循環の重複参照（DAG の共有子）は各経路で正しく
-/// 展開される。合成 1 回に予算 1 つを渡し、入る面と子の段の積み荷を数えて、尽きたらまだ積んでいない
-/// 積み荷とまだ入っていない枝を捨てる（根の面の自分の層は必ず描く・`error!` は合成器 1 つにつき根ごとに
-/// 1 度だけ・指摘 21・24）。
+/// 展開される。合成 1 回に予算 1 つを渡し、入る面と、子の段でなめる element と animation の数と、子の段の
+/// 積み荷を数えて、尽きたらまだ積んでいない積み荷とまだ入っていない枝を捨てる（根の面の自分の層は予算に
+/// 切られず必ず描く・ただし重ねる画素の上限（[`build_plan`]・指摘 77）は根の層も切る・`error!` は合成器 1 つにつき
+/// 根ごとに 1 度だけ・指摘 21・24・76）。
 ///
 /// # 決定性（要件 4.5/10.1）
 ///
@@ -383,7 +388,7 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
         Records::Emit
     };
     let mut budget = Budget::with_records(s.limit, records);
-    // 根の面は予算に数えない（自分の層は必ず描く）。一番上は今までの欄のコマを層 (ii) へ合流させる。
+    // 根の面は予算に数えない（自分の層は必ず描く。ただし重ねる画素の上限は `build_plan` が根の層も含めて切る）。一番上は今までの欄のコマを層 (ii) へ合流させる。
     if let Some(level) = walk.level(root, 0, 0, true) {
         s.open(&level);
     }
@@ -421,8 +426,13 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
         if !budget.enter("plan", root) {
             continue;
         }
-        // 部品の段（element定義の子・pattern定義の先）は部品の欄を読む。
+        // 部品の段（element定義の子・pattern定義の先）は部品の欄を読む。段を開くとなめる element と
+        // animation の数も先に予算から引き、足りなければ開かない（積み荷を作らない行も仕事・指摘 76）。
         if let Some(level) = walk.level(surface, x, y, false) {
+            let rows = level.master.elements.len() + level.master.animations.len();
+            if budget.take_up_to(rows, "plan", root) < rows {
+                continue;
+            }
             let start = s.steps.len();
             s.open(&level);
             // 段の積み荷（命令と子へ入る印）も予算から引き、足りない分は積まない（指摘 21）。
@@ -643,7 +653,7 @@ pub(crate) fn push_direct(
 /// 2. **surface 存在 & 外形非ゼロ**（描画可能命令ゼロでも可）→ `Ok(extent)`。全 element 全透明・
 ///    空の有効 bind 集合などで `out_ops` が空でも、これは**正常系**であり `Err` にしない
 ///    （要件 6.6・議題2裁定）。非ゼロの静的外形と（空かもしれない）命令列を返す。
-/// 3. **定義層が皆無で外形 0×0**（surface は存在するが表の外形が `Extent{0,0}`・束縛の前も同じ）→
+/// 3. **外形の幅か高さが 0**（surface は存在するが表の外形が `Extent{0,0}`＝定義層皆無か束縛の前、または片方の辺だけ 0）→
 ///    `error` ログ＋[`ComposeError::EmptyComposition`]（要件 10.5・議題2裁定: これが唯一の真の
 ///    失敗となる退化ケース）。
 /// 4. **外形が一辺の上限 [`MAX_EXTENT`] か面積の上限 [`MAX_AREA`] を越える** → `error` ログ＋
@@ -688,17 +698,19 @@ pub(crate) fn build_plan(
         return Err(ComposeError::SurfaceNotFound(surface_id));
     }
 
-    // 静的外形（有効 bind 非依存）は束縛のときに求めた表から引く（指摘 8）。0×0 なら定義層皆無の退化
-    // データか束縛の前。
+    // 静的外形（有効 bind 非依存）は束縛のときに求めた表から引く（指摘 8）。幅か高さが 0 なら定義層皆無か
+    // 束縛の前か、描ける画素の無い退化データ。
     let extent = world.extent(surface_id);
 
-    // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
-    // 命令列は元々ゼロ（外形へ寄与する層＝命令の母集合が皆無）ゆえ out_ops は空のまま返す。
-    if extent.w == 0 && extent.h == 0 {
+    // 分類3: 外形の幅か高さが 0（定義層皆無か、どの層も原点の左か上にしか無い）の退化データのみ真の失敗
+    // （議題2裁定・要件 10.5・指摘 82）。描ける画素が無いので out_ops は空のまま返す。
+    if extent.w == 0 || extent.h == 0 {
         tracing::error!(
             target: "areka_emo_compose",
             surface_id,
-            "定義層が皆無で外形 0×0 の退化データ: EmptyComposition"
+            w = extent.w,
+            h = extent.h,
+            "外形の幅か高さが 0 の退化データ: EmptyComposition"
         );
         return Err(ComposeError::EmptyComposition(surface_id));
     }
@@ -728,6 +740,18 @@ pub(crate) fn build_plan(
     // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。作業場は derive_ops
     // 入口で空へ戻る（要件 10.3）。外形は pattern 非依存の静的量。
     derive_ops(out_ops, scratch, world, atlas, surface_id, binds, pattern);
+    // 重ねる画素の数も抑える（命令の数は予算の内でも、大きな絵を何枚も重ねられる・指摘 77）。記録は合成器
+    // 1 つにつき根ごとに 1 度（予算と同じ形）。
+    let dropped = crate::blit::cap_pixels(out_ops, extent, atlas);
+    if dropped > 0 && scratch.pixels_reported.insert(surface_id) {
+        tracing::error!(
+            target: "areka_emo_compose",
+            surface_id,
+            dropped,
+            factor = crate::blit::PIXEL_FACTOR,
+            "重ねる画素の数が外形の面積の上限を越えた: 残りの命令を捨てる"
+        );
+    }
 
     // 分類2: surface 存在＋外形非ゼロ → 正常系。out_ops が空でも（全透明・空 bind 集合）Err に
     // しない（要件 6.6・議題2裁定: 静的外形どおりの空命令列＝全透明返却）。

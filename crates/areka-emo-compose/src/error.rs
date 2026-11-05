@@ -12,7 +12,7 @@
 //! - **対象 surface 不在** → [`ComposeError::SurfaceNotFound`]（`error` ログ＋`Err`・要件 10.5）。
 //! - **surface 存在＋描画可能命令ゼロ**（全 element 全透明・空の有効 bind 集合など）→ **正常系**。
 //!   空の命令列と**非ゼロの外形**を `Ok` で返す（`Err` にしない・要件 6.6・議題2裁定）。
-//! - **定義層が皆無で外形 0×0** の退化データのみ → [`ComposeError::EmptyComposition`]（`error`
+//! - **外形の幅か高さが 0**（定義層皆無を含む）の退化データのみ → [`ComposeError::EmptyComposition`]（`error`
 //!   ログ＋`Err`・要件 10.5・議題2裁定: これが唯一の真の失敗となる退化ケース）。
 //!
 //! これとは別に、外形を引いた後（`EmptyComposition` の判定の後・命令を積む前）に外形が上限を越えれば
@@ -29,9 +29,9 @@ pub enum ComposeError {
     /// 合成対象 surface が World に存在しない（要件 10.5）。命令/外形の算出前に返す。
     #[error("surface {0} not found")]
     SurfaceNotFound(u32),
-    /// 定義層が皆無で外形 0×0 の退化データのみ（議題2裁定）。
+    /// 外形の幅か高さが 0（定義層皆無を含む）の退化データのみ（議題2裁定・指摘 82）。
     /// 「描画可能命令ゼロだが定義層あり」は正常系＝全透明返却であり本 variant を使わない。
-    #[error("surface {0} has no layers at all (extent 0x0)")]
+    #[error("surface {0} has an empty extent (width or height 0)")]
     EmptyComposition(u32),
     /// 外形が GPU の面の最大寸（一辺 16,384）か面積の上限（2^25 画素）を越える。命令は積まず、絵も確保しない。
     #[error("surface {surface} extent {w}x{h} exceeds the GPU surface limit")]

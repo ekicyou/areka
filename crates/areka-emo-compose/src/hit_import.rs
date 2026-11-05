@@ -32,8 +32,21 @@ pub struct HitRegions(pub Vec<Collision>);
 /// 面の表の全サーフェスを根に 1 回ずつ列を求め、持ち込みが在るサーフェスにだけ [`HitRegions`] を付ける
 /// （[`EmoWorld::build_with_images`] の最後で呼ぶ）。持ち込みが 1 つも無いサーフェスには何も付けない。
 /// 広がりの予算は根の面 1 つにつき 1 つ（`records` が `Quiet` なら尽きても記録を出さない）。きれいに
-/// 終わった面の覚え（[`HitMemo`]）は根の間で 1 つを共有する。
+/// 終わった面の覚え（[`HitMemo`]）は根の間で 1 つを共有する。根をまたいで持ち込む領域の数は
+/// [`IMPORT_BUDGET`] 1 つで数える（[`attach_hit_regions_limited`]）。
 pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
+    attach_hit_regions_limited(emo, records, IMPORT_BUDGET)
+}
+
+/// シェル全体で面に持ち込んで持ち続ける領域の数の上限（指摘 79）。根ごとの広がりの予算は 1 つの根の
+/// 仕事を抑えるだけで、面の数だけ同じ長さの列を持ち続ける。仮の値で、測り直しの候補。
+pub(crate) const IMPORT_BUDGET: usize = 1 << 20;
+
+/// [`attach_hit_regions`] の中身。`limit` は根をまたいで持ち込む領域の数の予算（本番は [`IMPORT_BUDGET`]・
+/// テストは小さな数）。尽きたら `error!` を 1 行出し（`records` が `Quiet` なら出さない）、その面から先には
+/// 持ち込みを付けない。
+pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, limit: usize) {
+    let mut left = limit;
     let mut found = Vec::new();
     let mut memo = HitMemo::new();
     for id in emo.surface_ids() {
@@ -46,8 +59,22 @@ pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
             &mut Budget::with_records(VISIT_BUDGET, records),
             Some(&mut memo),
         );
-        // 列は［持ち込み］→［直接］なので、長さが違えば持ち込みが在る。
-        if list.len() != master.collisions.len() {
+        // 列は［持ち込み］→［直接］なので、長さが違えば持ち込みが在る（根は領域を切り詰めない）。
+        let imported = list.len() - master.collisions.len();
+        if imported > left {
+            if records.emits() {
+                tracing::error!(
+                    target: "areka_emo_compose",
+                    surface_id = id,
+                    imported,
+                    budget = limit,
+                    "持ち込む領域の数がシェル全体の予算を越えた: この面から先へ持ち込みを付けない"
+                );
+            }
+            break;
+        }
+        left -= imported;
+        if imported > 0 {
             found.push((id, list));
         }
     }
@@ -68,6 +95,8 @@ pub(crate) type HitMemo = HashMap<u32, (usize, Vec<Collision>)>;
 /// きれいに終わるかと、段の下で予算に数えた数。
 struct Level<'a> {
     master: &'a SurfaceMaster,
+    /// `master` に直接書かれた領域の名前（段ごとに 1 度だけ作り、持ち込む 1 本ごとに引く・指摘 80）。
+    names: HashSet<&'a str>,
     next: usize,
     out: Vec<Collision>,
     dx: i64,
@@ -93,6 +122,7 @@ pub(crate) fn regions_of(
     let mut on_path = HashSet::from([root]);
     let mut levels = vec![Level {
         master,
+        names: names_of(master),
         next: 0,
         out: Vec::new(),
         dx: 0,
@@ -120,13 +150,7 @@ pub(crate) fn regions_of(
                 && budget.take(n + 1 + list.len())
             {
                 level.spent += n + 1 + list.len();
-                import(
-                    &mut level.out,
-                    &parent.collisions,
-                    list.iter().cloned(),
-                    dx,
-                    dy,
-                );
+                import(&mut level.out, &level.names, list.iter().cloned(), dx, dy);
                 continue;
             }
             if !budget.enter("hit_import", root) {
@@ -136,6 +160,7 @@ pub(crate) fn regions_of(
             on_path.insert(c);
             levels.push(Level {
                 master: child,
+                names: names_of(child),
                 next: 0,
                 out: Vec::new(),
                 dx,
@@ -174,7 +199,7 @@ pub(crate) fn regions_of(
         up.clean &= done.clean;
         import(
             &mut up.out,
-            &up.master.collisions,
+            &up.names,
             done.out.into_iter(),
             done.dx,
             done.dy,
@@ -183,17 +208,22 @@ pub(crate) fn regions_of(
     Vec::new()
 }
 
-/// 子の列 `list` のうち親に直接書かれた領域（`own`）と同じ名前でないものを、element定義の X,Y を飽和で
-/// 足して親の列 `out` へ足す。
+/// 面に直接書かれた領域の名前の集合。
+fn names_of(master: &SurfaceMaster) -> HashSet<&str> {
+    master.collisions.iter().map(|c| c.name.as_str()).collect()
+}
+
+/// 子の列 `list` のうち親に直接書かれた領域の名前（`own`）と同じ名前でないものを、element定義の X,Y を
+/// 飽和で足して親の列 `out` へ足す。
 fn import(
     out: &mut Vec<Collision>,
-    own: &[Collision],
+    own: &HashSet<&str>,
     list: impl Iterator<Item = Collision>,
     dx: i64,
     dy: i64,
 ) {
     out.extend(
-        list.filter(|r| own.iter().all(|p| p.name != r.name))
+        list.filter(|r| !own.contains(r.name.as_str()))
             .map(|r| Collision {
                 left: r.left.saturating_add(dx),
                 top: r.top.saturating_add(dy),

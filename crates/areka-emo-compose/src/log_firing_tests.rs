@@ -574,7 +574,7 @@ fn compose_error_display_strings_are_exact() {
     );
     assert_eq!(
         ComposeError::EmptyComposition(7).to_string(),
-        "surface 7 has no layers at all (extent 0x0)",
+        "surface 7 has an empty extent (width or height 0)",
     );
     assert_eq!(
         ComposeError::ExtentTooLarge {

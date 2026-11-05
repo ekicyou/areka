@@ -175,7 +175,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
 - [ ] 7. かけ直し 2 回目の指摘の直し（research.md 16 節の 76〜128・audit 系は推奨案で承認）
-- [ ] 7.1 予算が数えない仕事の量（指摘 76〜84）
+- [x] 7.1 予算が数えない仕事の量（指摘 76〜84）
   - 面に入るたびになめる element と animation の数・重ねる画素の数（上限を越えたら残りを捨てて合成器ごとに 1 度 `error!`）・範囲の見出しで写す行の数の合計（越えた記述子は `error!` で捨てる）・根をまたいで持ち込む領域の数（1 つの予算）を数える。持ち込みの名前の比べは集合で引く
   - 測りの道具の単位・幅か高さが 0 の外形・語の見分けの 2 度目・外形とシェルの外形のたどり方の写し
   - 壊れたら落ちるテスト: 各上限の小さな版で、仕事が上限で止まり記録が 1 度だけ出る
@@ -213,3 +213,4 @@
 - 6.3: 除外の範囲は `(lo, hi)` の組を並べてまとめ二分探索で引く（単独の除外の大量でも 2 乗にしない）。`ComposedSurface` の入口は `debug_assert`（本番は `build_plan` の `ExtentTooLarge` が先に断る）
 - 6.4: 残った昔のタスク番号（`golden_tests_frame_extent_tests.rs:152,192`・`golden_tests_surface0_base_tests.rs:63`・`golden_tests_surface1000_bind_tests.rs:74,107,132`・`golden_tests_trim_equivalence_tests.rs`・`nesting_visible_tests.rs:356`）と `plan_bounds_tests.rs:165` の「bind の pattern0」は 6.5 で拾う
 - 6.5: テスト 443→434（消したのは重なるだけ・外れない 9 本）。部品に `plan_of`（`build_plan` の口）・`pattern` を足し、`px` は外形の外を assert。昔のタスク番号の名指しは 0 件。範囲の外（要件 6.9 で触らない）: `doc/COMPAT_ARCHITECTURE.md:276` と `doc/ukadoc-coverage/ledger/assets.toml:6137` がもう無いテスト名 `later_brace_without_interval_line_keeps_the_earlier_interval` を名指す（3.5 の前から）＝完了の棚卸で起票
+- 7.1: 予算の単位はさらに「入る 1＋なめる行（element＋animation）＋積み荷」（根は外・1 面あたり約 5 単位＝`VISIT_BUDGET` は測り直しの候補・道具は `diamond13`／`per_unit_ns`）。重ねる画素の上限 `blit::PIXEL_FACTOR`（外形の面積×64・`build_plan` で命令列の頭を残す・根の層も切る）・写す行の上限 `fold::MAX_COPIED_LINES = 2^20`（`body_lines` は pattern の行も数える）・根をまたぐ持ち込み `hit_import::IMPORT_BUDGET = 2^20`。どれも仮の値。外形とシェルの外形のたどり方は `outline_walk.rs` の 1 本。幅か高さが 0 は `EmptyComposition`（Display の文も変えた・他クレートのテストは緑）

@@ -59,6 +59,7 @@ pub use boxes::{
     BoxDef, BoxIssue, BoxLayout, BoxName, BoxPlacement, BoxReport, FontFollow, fold_boxes,
 };
 pub mod fold;
+mod outline_walk;
 pub mod plan;
 mod plan_always;
 mod plan_bounds;
@@ -105,7 +106,7 @@ use areka_emo_atlas::AtlasTable;
 ///
 /// # 失敗経路（要件 10.5）
 ///
-/// 合成対象 surface 不在 → [`ComposeError::SurfaceNotFound`]、定義層皆無で外形 0×0 の退化 →
+/// 合成対象 surface 不在 → [`ComposeError::SurfaceNotFound`]、外形の幅か高さが 0 の退化 →
 /// [`ComposeError::EmptyComposition`]、外形が一辺か面積の上限を越える → [`ComposeError::ExtentTooLarge`]。
 /// いずれも `error` ログ＋`Err`（[`crate::plan::build_plan`]
 /// が分類・ログ済み）で、パニックしない（要件 1.4）。描画可能命令ゼロでも定義層があれば正常系
@@ -260,6 +261,10 @@ mod walk_limits_tests;
 // 線形の探索で 2 乗に伸びていた所を、大きな検体で通す（指摘 25〜30）。
 #[cfg(test)]
 mod linear_lookup_tests;
+
+// 予算が数えなかった仕事の量（なめる行・重ねる画素・範囲の写し・根をまたぐ持ち込み・指摘 76〜79）。
+#[cfg(test)]
+mod work_limits_tests;
 
 #[cfg(test)]
 mod contract_tests {

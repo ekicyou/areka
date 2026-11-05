@@ -98,6 +98,36 @@ pub(crate) fn op_area(op: &BlitOp, atlas: &AtlasTable) -> Area {
     }
 }
 
+/// 合成 1 回で重ねてよい画素の数の、外形の面積に対する倍率（指摘 77・`MAX_AREA` の外形で 2^31 画素）。
+/// 仮の値（重ね塗り 64 枚分）で、測り直しの候補。
+pub(crate) const PIXEL_FACTOR: u64 = 64;
+
+/// 命令列 `ops` を、外形 `extent` の中で重ねる画素の合計が面積×[`PIXEL_FACTOR`] に収まる頭の部分だけに
+/// 切り詰める（いちからの合成も矩形の重ね直しも、この命令列より多くは重ねない）。捨てた命令の数を返す。
+pub(crate) fn cap_pixels(ops: &mut Vec<BlitOp>, extent: Extent, atlas: &AtlasTable) -> usize {
+    let canvas = Area {
+        x0: 0,
+        y0: 0,
+        x1: extent.w as i64,
+        y1: extent.h as i64,
+    };
+    let limit = u64::from(extent.w) * u64::from(extent.h) * PIXEL_FACTOR;
+    let mut spent = 0u64;
+    let kept = ops
+        .iter()
+        .take_while(|op| {
+            let a = op_area(op, atlas).intersect(canvas);
+            if !a.is_empty() {
+                spent += (a.x1 - a.x0) as u64 * (a.y1 - a.y0) as u64;
+            }
+            spent <= limit
+        })
+        .count();
+    let dropped = ops.len() - kept;
+    ops.truncate(kept);
+    dropped
+}
+
 /// `uv` が頁 `page` に収まり、頁の行の幅とバイト列の長さも足りるか（掛け算と足し算は `u64`）。
 /// 表（`AtlasTable::new`）は uv と頁を照らさないので、転写の手前で信じずに確かめる。
 fn uv_fits(uv: &Rect, page: &AtlasPage) -> bool {

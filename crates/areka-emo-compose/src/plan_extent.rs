@@ -1,14 +1,13 @@
 //! キャンバス外形（[`Extent`]）の表の算出（束縛のときに 1 度だけ・`plan.rs` の下の module）。
 
-use std::collections::{HashMap, HashSet};
-
 use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::{Animation, Interval};
 
 use super::{Extent, is_bind_interval, surface_and_binding};
-use crate::budget::Budget;
 use crate::nesting::{ElementKind, is_always_interval};
-use crate::world::{EmoWorld, SurfaceExtents, targets_animation_id};
+use crate::outline_walk::{Memo, Scratch, Step, walk};
+use crate::pattern_word::{PatternWord, pattern_word};
+use crate::world::{EmoWorld, SurfaceExtents};
 
 #[cfg(test)]
 use super::*;
@@ -43,7 +42,7 @@ pub(crate) const MAX_AREA: u64 = 1 << 25;
 #[cfg(test)]
 pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u32) -> Extent {
     compute_extent_limited(
-        &mut HashSet::new(),
+        &mut Scratch::default(),
         world,
         atlas,
         surface_id,
@@ -57,45 +56,21 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
 /// この表より先に切れることがある）。きれいに終わった面の覚えは根の間で共有する
 /// （覚えの有る無しで答えと記録は変わらない）。
 pub(crate) fn build_extents(world: &EmoWorld, atlas: &AtlasTable) -> SurfaceExtents {
-    let (mut on_path, mut memo) = (HashSet::new(), ExtentMemo::new());
+    let (mut scratch, mut memo) = (Scratch::default(), ExtentMemo::new());
     let budget = crate::budget::VISIT_BUDGET;
     let extents = world
         .surface_ids()
         .map(|id| {
             let extent =
-                compute_extent_limited(&mut on_path, world, atlas, id, budget, Some(&mut memo));
+                compute_extent_limited(&mut scratch, world, atlas, id, budget, Some(&mut memo));
             (id, extent)
         })
         .collect();
     SurfaceExtents(extents)
 }
 
-/// 外形の走査の積み荷: 面へ親の原点から (x, y) ずらして入る（`element` は element定義の子＝循環を黙って
-/// 飛ばす）か、面から出る。
-enum Step {
-    Enter {
-        surface: u32,
-        x: i64,
-        y: i64,
-        element: bool,
-    },
-    Exit,
-}
-
-/// 外形の走査の段: 面と、親の原点からの位置と、段の下で数えた右下（その面の原点からの相対・何も数えて
-/// いなければ `None`）と、きれいに終わるかと、段の下で予算に数えた数。
-struct Level {
-    surface: u32,
-    x: i64,
-    y: i64,
-    max: Option<(i64, i64)>,
-    clean: bool,
-    spent: usize,
-}
-
-/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、下で予算に数えた数と
-/// 右下（その面の原点からの相対）。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
-pub(crate) type ExtentMemo = HashMap<u32, (usize, Option<(i64, i64)>)>;
+/// きれいに終わった面の、下で予算に数えた数と右下（その面の原点からの相対・[`crate::outline_walk::Memo`]）。
+pub(crate) type ExtentMemo = Memo<(i64, i64)>;
 
 /// 右下 `max` に、`(x, y)` ずらした右下 `r` を重ねる。
 fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
@@ -107,7 +82,8 @@ fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
 }
 
 /// [`compute_extent`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
-/// 小さな数）。`on_path` は経路にある面の集合（呼び手の作業場を借りて使い回す・入口で空へ戻し、出口でも空）。
+/// 小さな数）。`s` は走査の作業場（呼び手のものを借りて使い回す・入口で空へ戻し、出口でも空）。たどり方は
+/// シェルの外形と共有する [`crate::outline_walk::walk`] で、ここは面ごとの寄与だけを渡す（指摘 84）。
 ///
 /// `memo` が在れば（シェルの外形が全部の面を根に回すとき・合成からは渡さない）、きれいに終わった面の
 /// 右下を覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた数」以上ならそれだけ一度に引いて
@@ -131,104 +107,35 @@ fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
 /// 子は element → bind の id 昇順の pattern の順に積み、逆にして上から取り出す（深さ優先）。
 /// 取り出す時点の祖先の列は今の段までの経路そのもの（先に取り出した兄弟の段は出る印で外れている）。
 pub(crate) fn compute_extent_limited(
-    on_path: &mut HashSet<u32>,
+    s: &mut Scratch<(i64, i64)>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
     limit: usize,
-    mut memo: Option<&mut ExtentMemo>,
+    memo: Option<&mut ExtentMemo>,
 ) -> Extent {
-    // ops 経路と同じ祖先の規律で循環検出する（別走査・別集約器だが構造は共有）。走査開始前に空へ戻す。
-    on_path.clear();
-    let mut budget = Budget::new(limit);
-    let mut levels: Vec<Level> = Vec::new();
-    let mut answer = None;
-    let mut stack = vec![Step::Enter {
-        surface: surface_id,
-        x: 0,
-        y: 0,
-        element: false,
-    }];
-    while let Some(step) = stack.pop() {
-        let (surface, x, y, element) = match step {
-            // 枝離脱: 経路から外す（非循環の重複参照は別経路で再走査可能・要件 7.1）。段の右下を親の
-            // 原点へずらして重ねる（根なら答え）。
-            Step::Exit => {
-                let Some(done) = levels.pop() else {
-                    break;
-                };
-                let removed = on_path.remove(&done.surface);
-                debug_assert!(removed, "外形算出: 経路の集合は段と揃う");
-                if done.clean
-                    && let Some(m) = memo.as_deref_mut()
-                {
-                    m.insert(done.surface, (done.spent, done.max));
-                }
-                match levels.last_mut() {
-                    Some(up) => {
-                        up.spent += done.spent + 1;
-                        up.clean &= done.clean;
-                        merge(&mut up.max, done.max, done.x, done.y);
-                    }
-                    None => answer = done.max,
-                }
-                continue;
-            }
-            Step::Enter {
-                surface,
-                x,
-                y,
-                element,
-            } => (surface, x, y, element),
-        };
-        // 循環検出（ops 経路と同一規律・要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り。element定義の
-        // 子は黙って飛ばし（記録は命令の経路の debug! が合成 1 回につき 1 度出す）、pattern の先の
-        // 知らせは ops 経路と同じく debug。
-        if on_path.contains(&surface) {
-            if !element {
-                tracing::debug!(
-                    target: "areka_emo_compose",
-                    surface_id = surface,
-                    "外形算出: 入れ子参照の循環を検出・枝を打ち切り"
-                );
-            }
-            if let Some(up) = levels.last_mut() {
-                up.clean = false;
-            }
-            continue;
-        }
-        // 根の面（段が無い）は予算に数えない。
-        if let Some(up) = levels.last_mut() {
-            if let Some(&(n, max)) = memo.as_deref().and_then(|m| m.get(&surface))
-                && budget.take(n + 1)
-            {
-                up.spent += n + 1;
-                merge(&mut up.max, max, x, y);
-                continue;
-            }
-            if !budget.enter("extent", surface_id) {
-                up.clean = false;
-                continue;
-            }
-        }
-        on_path.insert(surface);
-        stack.push(Step::Exit);
-        // 子の積み荷はここから先へ今までの順に積み、最後に逆にする（先に取り出すものを上へ）。
-        let children = stack.len();
-        let mut max = None;
-
-        if let Some((master, binding)) = surface_and_binding(world, surface) {
+    let answer = walk(
+        s,
+        memo,
+        surface_id,
+        limit,
+        "extent",
+        merge,
+        |surface, stack| {
+            let (master, binding) = surface_and_binding(world, surface)?;
+            let mut max = None;
             // 当 surface の静的 element を外形へ寄与させる（束縛済み・placement 有無を問わず原寸で数える）。
             for (i, element) in master.elements.iter().enumerate() {
                 // element定義の子（surface-element-nesting 要件 2.5）: 位置を足して子へ入る。範囲を
-                // 超える数・先祖は黙って飛ばし、面の表に無い子は入った先で何も足さない。
+                // 超える数・先祖は黙って飛ばし（記録は命令の経路の debug! が合成 1 回につき 1 度出す）、
+                // 面の表に無い子は入った先で何も足さない。
                 if let ElementKind::Surface(child) = element.kind {
                     let (ex, ey) = element.transform.offset();
                     stack.push(Step::Enter {
                         surface: child,
                         x: ex,
                         y: ey,
-                        element: true,
+                        quiet: true,
                     });
                     continue;
                 }
@@ -279,35 +186,25 @@ pub(crate) fn compute_extent_limited(
                 for pattern in patterns {
                     // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。欄 2 が animation の
                     // 番号になる 7 語（`start` 等）の先は面ではなく、`move` はサーフェスの番号を無視する
-                    // （ukadoc）ので数えない。
+                    // （ukadoc）ので数えない（8 語のどれでもない語だけが面を描く・指摘 83）。
                     // u32 に収まらない番号は先が無い（ほかの走査と同じ）。
                     let Ok(child) = u32::try_from(pattern.surface_id) else {
                         continue;
                     };
-                    if targets_animation_id(pattern.method.as_str())
-                        || crate::method::is_move_name(pattern.method.as_str())
-                    {
+                    if pattern_word(pattern.method.as_str()) != PatternWord::Draw {
                         continue;
                     }
                     stack.push(Step::Enter {
                         surface: child,
                         x: pattern.x,
                         y: pattern.y,
-                        element: false,
+                        quiet: false,
                     });
                 }
             }
-        }
-        levels.push(Level {
-            surface,
-            x,
-            y,
-            max,
-            clean: true,
-            spent: 0,
-        });
-        stack[children..].reverse();
-    }
+            max
+        },
+    );
     // 右下は根で原点にクリップして常に >= 0。u32 へは飽和で写す（大きすぎる外形を小さな値に
     // 化けさせず、上限の判定へ渡す）。
     let (max_x, max_y) = answer.unwrap_or((0, 0));

@@ -1,9 +1,11 @@
 //! 合成の時間を測る（audit-emo-compose の指摘 3・8）。決定論のテストではない。
 //!
 //! 測るもの（どれも公開の口だけを使うので、直す前のコミットにこのファイルを写しても同じに測れる）:
-//! - `diamond15`: 15 段の菱形（面 0 … 14 がそれぞれ次の面を 2 か所に置く）を面 0 から合成する。
-//!   たどる面は 2^16 - 1 = 65535（予算 2^16 以上なら切れない）。ここから命令列の走査の 1 面あたりの
-//!   時間を出し、16.667 ms に収まる面の数を 2 のべき乗に切り下げて示す。
+//! - `diamond13`: 13 段の菱形（面 0 … 12 がそれぞれ次の面を 2 か所に置く）を面 0 から合成する。
+//!   予算の単位（入る面＋なめる element と animation の行＋段の積み荷・根の面は数えない）で 65,526 で、
+//!   予算 2^16 の内に収まる。ここから命令列の走査の 1 単位あたりの時間を出し、16.667 ms に収まる単位の数を
+//!   2 のべき乗に切り下げて示す（予算 `VISIT_BUDGET` の値の測り直しに使う）。重ねる画素の上限（外形の面積×64）で
+//!   重ねるのは頭の命令だけなので、時間のほとんどは命令列の走査。
 //! - `diamond30`: 30 段の菱形（2^30 の道）を合成する＝今の予算で切れたときの 1 回の時間。
 //! - `chain10000`: 10000 段の鎖を合成する。
 //! - `emo2`: 検体 emo2 の全部の面を 1 つずつ合成した合計（外形の表の効き目を比べる）。
@@ -153,19 +155,20 @@ fn visible_case(case: &str, world: &EmoWorld) {
 }
 
 fn main() {
-    // 菱形 15 段: たどる面は 2^16 - 1。
-    const DIAMOND_LEVELS: u32 = 15;
-    let visits = (1u64 << (DIAMOND_LEVELS + 1)) - 1;
+    // 菱形 13 段: 根の下の中の面（段 1〜12・各 2^d 回）は入る 1＋行 2＋子へ入る印 2＝5、葉（段 13・2^13 回）は
+    // 入る 1＋行 1＋命令 1＝3（予算の単位・`budget.rs`）。
+    const DIAMOND_LEVELS: u32 = 13;
+    let units = 5 * ((1u64 << DIAMOND_LEVELS) - 2) + 3 * (1u64 << DIAMOND_LEVELS);
     let (world, atlas) = nested_world(DIAMOND_LEVELS, 2);
-    let median = compose_case("diamond15", &world, &atlas);
-    let per_surface = median / visits as f64;
-    let fit = FRAME_NS / per_surface;
+    let median = compose_case("diamond13", &world, &atlas);
+    let per_unit = median / units as f64;
+    let fit = FRAME_NS / per_unit;
     let pow = fit.log2().floor() as u32;
     println!(
-        "per_surface_ns={per_surface:.2} visits={visits} fit_in_frame={fit:.0} budget_pow2=2^{pow}={}",
+        "per_unit_ns={per_unit:.2} units={units} fit_in_frame={fit:.0} budget_pow2=2^{pow}={}",
         1u64 << pow
     );
-    visible_case("visible_diamond15", &world);
+    visible_case("visible_diamond13", &world);
 
     let (world, atlas) = nested_world(30, 2);
     compose_case("diamond30_cut", &world, &atlas);

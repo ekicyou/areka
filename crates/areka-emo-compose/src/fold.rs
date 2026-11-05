@@ -9,7 +9,8 @@
 //! 反映しつつ alias を収集する。参照 id が存在しない場合はパニックせず `warn` 以上で観測可能に扱う。
 
 use areka_parsers::shell::{
-    AppendTarget, DefRef, Element, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AppendTarget, Collision, DefRef, Element, Shell, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -37,10 +38,13 @@ use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 /// （枝の選び方と面の表への書き込みは変えない・spec: emo-bake-log-overlap 要件 2.3）。
 pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records) {
     let mut added = HashMap::new();
+    let mut copied = 0;
     for def in &shell.definitions {
         match *def {
             DefRef::Surface(index) => match shell.surfaces.get(index) {
-                Some(surface) => fold_plain_surface(world, surface, records, &mut added),
+                Some(surface) => {
+                    fold_plain_surface(world, surface, records, &mut added, &mut copied)
+                }
                 None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
@@ -52,7 +56,7 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
                 None => {}
             },
             DefRef::Append(index) => match shell.appends.get(index) {
-                Some(append) => fold_append(world, append, records, &mut added),
+                Some(append) => fold_append(world, append, records, &mut added, &mut copied),
                 None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
@@ -96,6 +100,43 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
     }
 }
 
+/// 畳み込み 1 回で、見出しの番号ごとに本体の行を写す数の合計の上限（指摘 78・面と箱で 1 つずつ）。
+/// 読む側の上限は番号の数だけを抑えるので、本体の行数との積をここで抑える。仮の値で、測り直しの候補。
+pub(crate) const MAX_COPIED_LINES: usize = 1 << 20;
+
+/// 記述子 1 つの本体（`lines` 行）を `ids` の番号ごとに写してよいか（指摘 78）。写す数を `copied` に足し、
+/// 合計が [`MAX_COPIED_LINES`] を越えるなら足さずに `error!`（番号の範囲・行の数・上限）を出して false
+/// （呼び手はその記述子を捨てる）。
+pub(crate) fn may_copy(copied: &mut usize, ids: &[u32], lines: usize, records: Records) -> bool {
+    let n = ids.len().saturating_mul(lines);
+    if n <= MAX_COPIED_LINES - *copied {
+        *copied += n;
+        return true;
+    }
+    if records.emits() {
+        tracing::error!(
+            target: "areka_emo_compose",
+            first = ids.first().copied().unwrap_or_default(),
+            last = ids.last().copied().unwrap_or_default(),
+            ids = ids.len(),
+            lines,
+            limit = MAX_COPIED_LINES,
+            "範囲の見出しで写す行の数が畳み込みの上限を越えた: この記述子を捨てる"
+        );
+    }
+    false
+}
+
+/// 記述子の本体の行の数（element・collision と、animation ごとに interval の 1 行＋pattern の行）。番号ごとに
+/// 写すのは pattern の列も全部なので、pattern の行も数える。
+fn body_lines(elements: &[Element], collisions: &[Collision], animations: &[Animation]) -> usize {
+    animations
+        .iter()
+        .fold(elements.len().saturating_add(collisions.len()), |n, a| {
+            n.saturating_add(1).saturating_add(a.patterns.len())
+        })
+}
+
 /// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く・指摘 27）。
 #[derive(Default)]
 struct Numbers {
@@ -125,8 +166,14 @@ fn fold_plain_surface(
     surface: &Surface,
     records: Records,
     added: &mut HashMap<u32, Numbers>,
+    copied: &mut usize,
 ) {
-    for id in expand_targets_with(&surface.targets, records) {
+    let ids = expand_targets_with(&surface.targets, records);
+    let lines = body_lines(&surface.elements, &surface.collisions, &surface.animations);
+    if !may_copy(copied, &ids, lines, records) {
+        return;
+    }
+    for id in ids {
         let later = normalize_surface(id, surface);
         let existing = world.resource::<SurfaceIndex>().0.get(&id).copied();
         let merged = existing.and_then(|entity| world.get_mut::<SurfaceMaster>(entity));
@@ -239,12 +286,18 @@ fn fold_append(
     append: &SurfaceAppend,
     records: Records,
     added: &mut HashMap<u32, Numbers>,
+    copied: &mut usize,
 ) {
+    let ids = expand_targets_with(&append.targets, records);
+    let lines = body_lines(&append.elements, &append.collisions, &append.animations);
+    if !may_copy(copied, &ids, lines, records) {
+        return;
+    }
     // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
     let append_elements: Vec<NormalizedElement> =
         append.elements.iter().map(normalize_element).collect();
 
-    for id in expand_targets_with(&append.targets, records) {
+    for id in ids {
         // 存在条件: その時点でツリーに在る id と、ファイル名だけで置かれた絵を持つ id が対象
         // （どちらにも無ければ新設しない・要件 2.2/3.7/3.8）。
         let entity = match world.resource::<SurfaceIndex>().0.get(&id).copied() {

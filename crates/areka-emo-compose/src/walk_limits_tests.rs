@@ -202,8 +202,6 @@ fn insert_chain_composes_on_a_small_stack() {
 /// 足りず覚えを使えない場合と、循環（面 4 ⇄ 5）の下で覚えない場合を含める。
 #[test]
 fn memo_gives_the_same_answers_and_records_as_walking_again() {
-    use std::collections::HashSet;
-
     use crate::budget::Budget;
     use crate::hit_import::regions_of;
     use crate::plan::{Extent, compute_extent_limited};
@@ -229,8 +227,14 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
         for &id in &ids {
             let mut again = (Extent { w: 0, h: 0 }, None, Vec::new());
             let again_logs = capture_logs(|| {
-                again.0 =
-                    compute_extent_limited(&mut HashSet::new(), &world, &atlas, id, limit, None);
+                again.0 = compute_extent_limited(
+                    &mut Default::default(),
+                    &world,
+                    &atlas,
+                    id,
+                    limit,
+                    None,
+                );
                 let fresh = &mut BoundsScratch::default();
                 again.1 = walk(fresh, None, &world, &atlas, id, limit);
                 let master = world.surface(id).expect("面");
@@ -239,7 +243,7 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
             let mut memo = (Extent { w: 0, h: 0 }, None, Vec::new());
             let memo_logs = capture_logs(|| {
                 memo.0 = compute_extent_limited(
-                    &mut HashSet::new(),
+                    &mut Default::default(),
                     &world,
                     &atlas,
                     id,
@@ -297,18 +301,17 @@ fn diamond_with_leaves(last: u32, leaves: u32) -> (EmoWorld, AtlasTable) {
 }
 
 /// 段の積み荷（指摘 21）: 小さな予算の命令列は、葉の絵の多い菱形でも命令の数が予算を越えない
-/// （根の面 0 は子へ入る積み荷だけ）。`error!` は 1 行。
+/// （根の面 0 は子へ入る積み荷だけ）。最初の葉は入る面となめる行（76）の後の残り 24 枚まで積む。`error!` は 1 行。
 #[test]
 fn plan_counts_the_layer_payload_against_the_budget() {
     let (world, atlas) = diamond_with_leaves(6, 50);
     let mut ops = Vec::new();
     let logs = capture_logs(|| {
-        let mut scratch = crate::plan::PlanScratch::with_limit(64);
+        let mut scratch = crate::plan::PlanScratch::with_limit(100);
         let (binds, pattern) = (BindSet::default(), PatternState::default());
         crate::plan::derive_ops(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern);
     });
-    assert!(!ops.is_empty());
-    assert!(ops.len() <= 64, "命令 {} 個は予算 64 以下", ops.len());
+    assert_eq!(ops.len(), 24, "葉の絵は予算の残りの分だけ");
     assert_eq!(errors(&logs, "plan", 0), 1, "{}", errors_only(&logs));
 }
 

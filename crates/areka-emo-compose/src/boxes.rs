@@ -11,8 +11,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::balloon::{self, BalloonModel};
 use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine, ShellBoxes};
 
-use crate::fold::expand_targets;
-use crate::world::EmoWorld;
+use crate::fold::{expand_targets, may_copy};
+use crate::world::{EmoWorld, Records};
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -152,8 +152,8 @@ pub enum BoxIssue {
 /// 転記から箱の定義の表と置き場所の表を作り、読み捨てた事実を報告に載せる（純粋・失敗しない）。
 ///
 /// `images`（面の画像だけで在る番号）は `surface.append*`ブレスの存在の条件に、`world`（画像の
-/// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs にも記録にも触れない
-/// （記録の水準は入口が決める）。
+/// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs に触れず、記録は
+/// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` だけはここで出す・指摘 78）。
 pub fn fold_boxes(
     boxes: &ShellBoxes,
     images: &BTreeMap<u32, String>,
@@ -221,16 +221,26 @@ fn distribute<'a>(
 ) -> BTreeMap<u32, Vec<&'a BoxElementLine>> {
     let mut existing: BTreeSet<u32> = images.keys().copied().collect();
     let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
+    // 番号ごとに写す行の合計は面の畳み込みと同じ上限（指摘 78）。越えた記述子は記録して捨てる。
+    let mut copied = 0;
     for definition in &boxes.definitions {
         match definition {
             BoxDefinition::Surface(surface) => {
-                for id in expand_targets(&surface.targets) {
+                let ids = expand_targets(&surface.targets);
+                if !may_copy(&mut copied, &ids, surface.elements.len(), Records::Emit) {
+                    continue;
+                }
+                for id in ids {
                     existing.insert(id);
                     lines.entry(id).or_default().extend(&surface.elements);
                 }
             }
             BoxDefinition::Append(append) => {
-                for id in expand_targets(&append.targets) {
+                let ids = expand_targets(&append.targets);
+                if !may_copy(&mut copied, &ids, append.elements.len(), Records::Emit) {
+                    continue;
+                }
+                for id in ids {
                     if existing.contains(&id) {
                         lines.entry(id).or_default().extend(&append.elements);
                     } else {

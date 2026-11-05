@@ -9,9 +9,7 @@ use std::path::Path;
 use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::parse;
 
-use crate::Composer;
 use crate::bind::BindSet;
-use crate::composed::ComposedSurface;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
 use crate::plan_test_support::{bake_atlas, frame};
@@ -25,19 +23,18 @@ fn world_of(body: &str) -> (EmoWorld, AtlasTable) {
     (world, atlas)
 }
 
-/// 面 0 を `binds` と `pattern` で合成し、命令の数を返す。
+/// 面 0 を `binds` と `pattern` で命令列にし、命令の数を返す。予算と重ねる画素の上限は外す（ここが見るのは
+/// 探索の速さだけ・上限は `walk_limits_tests`・`work_limits_tests` が見る）。
 fn compose_ops(
     world: &EmoWorld,
     atlas: &AtlasTable,
     binds: &BindSet,
     pattern: &PatternState,
 ) -> usize {
-    let mut composer = Composer::new();
-    let mut out = ComposedSurface::new(0, 0);
-    composer
-        .compose_into(&mut out, world, atlas, 0, binds, pattern)
-        .expect("合成できる");
-    composer.ops.len()
+    let mut scratch = crate::plan::PlanScratch::with_limit(usize::MAX);
+    let mut ops = Vec::new();
+    crate::plan::derive_ops(&mut ops, &mut scratch, world, atlas, 0, binds, pattern);
+    ops.len()
 }
 
 /// 面 0 の見える部品を、seriko のように 1 度作った表から `frames` 回求め（作業の列は使い回す）、最後の答えを返す。
