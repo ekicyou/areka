@@ -50,6 +50,7 @@ const LOG_TARGET: &str = "ghost-boot";
 /// （`"selfname"`／`"selfname2"`／`"keroname"`）。返す `Vec` は決定論的な安定順
 /// （selfname → selfname2 → keroname）で、これらは task 8.2 で ghost が `PublishStatic` する。
 pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
+    // 名前を足したら FLAT_STATIC_NAMES にも足す（読み直しで消す範囲）。
     let mut out: Vec<(String, String)> = Vec::new();
 
     // %selfname＝sakura.name（R4.3）。未定義→積まない（素通し縮退）。
@@ -74,6 +75,21 @@ pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
     }
 
     out
+}
+
+/// [`derive_flat_statics`] が積みうるフラットな静的名の全部。
+pub const FLAT_STATIC_NAMES: [&str; 3] = ["selfname", "selfname2", "keroname"];
+
+/// `names` で起動したなら積まれない静的名（[`FLAT_STATIC_NAMES`] のうち
+/// [`derive_flat_statics`] に無いもの）。読み直しはこれを鏡像から消し、起動時と同じ状態にする
+/// （ukadoc は名前が無いときの値を定めない・要件 9.15 ⑵）。
+pub fn absent_flat_statics(names: &GhostNames) -> Vec<String> {
+    let flat = derive_flat_statics(names);
+    FLAT_STATIC_NAMES
+        .iter()
+        .filter(|name| !flat.iter().any(|(f, _)| f == *name))
+        .map(|name| name.to_string())
+        .collect()
 }
 
 // ============================================================================

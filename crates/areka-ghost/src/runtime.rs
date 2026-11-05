@@ -275,6 +275,7 @@ impl GhostRuntime {
 
     /// 動作中のゴーストの名前（`mount().names`）を替え、静的プロパティ（`selfname` ほか・
     /// `baseware.*`）を新しい名前で出し直す（mcp-reload 要件 7.3・descript の読み直し）。
+    /// 新しい名前が定義しない静的な名前は先に鏡像から消す（新しい descript で起動したのと同じ状態）。
     pub fn set_names(&mut self, names: GhostNames) {
         tracing::info!(
             target: "ghost-runtime",
@@ -283,9 +284,15 @@ impl GhostRuntime {
             "ghost names replaced"
         );
         self.mount.names = names;
+        let asker = crate::sylphya_wiring::ghost_asker_id(&self.mount.shiori.dir);
+        // 新しい名前に無い静的名は消す（起動時に積まないのと同じ＝素通し縮退・要件 9.15 ⑵）。
+        self.sylphya_publisher.remove_flat(
+            asker.clone(),
+            crate::sylphya_wiring::absent_flat_statics(&self.mount.names),
+        );
         crate::sylphya_wiring::publish_ghost_statics(
             &self.sylphya_publisher,
-            crate::sylphya_wiring::ghost_asker_id(&self.mount.shiori.dir),
+            asker,
             &self.mount.names,
             env!("CARGO_PKG_VERSION"),
         );

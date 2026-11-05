@@ -167,6 +167,28 @@ fn apply_publish_shiori_none_records_absent_no_default() {
 }
 
 #[test]
+fn apply_remove_flat_emits_one_removal_per_named_flat_only() {
+    let msg = SylphyaMsg::RemoveFlat {
+        asker: asker(),
+        names: vec!["selfname2".into(), "keroname".into()],
+    };
+    // 名指しの名前だけを消す（`username` など名指しでない名前の効果は出ない・書込も無い）。
+    assert_eq!(
+        core().apply(&msg),
+        vec![
+            Effect::RemoveFlatPerAsker {
+                asker: asker(),
+                name: "selfname2".into(),
+            },
+            Effect::RemoveFlatPerAsker {
+                asker: asker(),
+                name: "keroname".into(),
+            },
+        ]
+    );
+}
+
+#[test]
 fn apply_publish_static_flat_per_asker_and_dotted_global() {
     let msg = SylphyaMsg::PublishStatic {
         asker: asker(),
@@ -311,6 +333,10 @@ fn apply_is_deterministic_across_variants() {
             asker: asker(),
             flat: vec![("selfname".into(), "x".into())],
             dotted: vec![("baseware.name".into(), "areka".into())],
+        },
+        SylphyaMsg::RemoveFlat {
+            asker: asker(),
+            names: vec!["selfname2".into()],
         },
         SylphyaMsg::PublishShiori {
             asker: asker(),

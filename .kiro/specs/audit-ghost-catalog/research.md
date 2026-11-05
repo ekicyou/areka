@@ -345,4 +345,5 @@
 2. **⑵ 読み直しで descript から名前を消しても `%selfname2` などに古い名前が残る**（`runtime.rs` `set_names`・`areka-sylphya` の `PublishStatic` が上書きだけ。2 回目 g4 の 1）。推奨: **直す。読み直しのときはそのゴーストの静的な名前を一度消してから載せ直す**（sylphya に「その asker のフラットな静的値を置き換える」口を足す・範囲の外の `areka-sylphya` に及ぶ）。ukadoc で消えた名前の扱いを確かめてから。
 3. **⑶ 同梱の数に上限が無い**（約 3 万件の `balloonN.directory` と 6.5 万エントリの書庫で、インストールの裏のスレッドが数十億回比べる。2 回目 g1 の 1。文字列を作る手間は除いた）。推奨: **上限を置く**（例: 探す同梱を 64 件で打ち切り、越えた分は既存の `CompanionNotSearched` の警告）。値は決めが要る。
 
+- 決めの後の直し（タスク 18.4）: ⑶ は同梱を探す数を `MAX_COMPANIONS`＝64 件で打ち切り、越えた分は `CompanionNotSearched`（`ee0b6262`）。⑵ は sylphya に `RemoveFlat` の口を足し、読み直しで新しい名前が定義しない `selfname`／`selfname2`／`keroname` を消してから出し直す（新しい descript で起動したのと同じ状態。ukadoc の `%selfname2` は「本体側の名前その2。」とだけで、無いときの定めは無い）。⑴ は直さない。
 - 3 回目のかけ直しは、議題の答えと 18.1（`audit-parsers-sakura` の着地の取り込み）の後にかける。新しい指摘が 0 件になった回をここに足して 18.2 を閉じる。
