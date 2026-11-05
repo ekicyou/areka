@@ -64,11 +64,12 @@
   - _Requirements: 4.11, 5.5, 6.1, 6.2, 6.3, 6.4_
 
 - [ ] 5. 完了の手当て（最後の検索・後続の起票・知らせ）
-- [ ] 5.1 `doc/COMPAT_ARCHITECTURE.md` の改名を受け持つ後続の spec を起票し、例外の行の行方に名前を書く
+- [x] 5.1 `doc/COMPAT_ARCHITECTURE.md` の改名を受け持つ後続の spec を起票し、例外の行の行方に名前を書く
   - `/kiro-discovery` で起票する。brief に、`doc/COMPAT_ARCHITECTURE.md` を名指すファイルを受け持つ見直しの spec と本体のクレート分けの spec とは同じウェーブに置かないことを書く
   - 例外の表の `doc/COMPAT_ARCHITECTURE.md` の行の行方が「後で改名する（`<spec 名>`）」になり、照合テストが単独で回して緑のまま
   - _Depends: 4_
   - _Requirements: 6.5_
+  - 記録（2026-11-05）: `/kiro-discovery` で `doc-compat-architecture-rename` を起票（`.kiro/specs/doc-compat-architecture-rename/brief.md`・roadmap の台帳の行と「`doc/COMPAT_ARCHITECTURE.md` の改名」の節・区分 C・版に縛らない）。brief の Constraints に、名指すファイルを受け持つ見直しの spec と本体のクレート分けの 6 本とは同じウェーブに置かないことを書いた。例外の表の行方は「後で改名する（`doc-compat-architecture-rename`）」。照合テストは単独で 8 本とも緑
 - [ ] 5.2 「ぱすた開発」のセッションへ新しいパスと対応の表の場所を知らせる
   - 進行役のセッションが伝言を送る。中身は `doc/PASTA_PROFILE.md` → `doc/pasta-profile.md`・対応の表は `doc/README.md` の「動かした名前の対応」・外のリポジトリの直しは向こうの仕事
   - 伝言を送った事実（送れないときは、その旨と伝える文を完了の報告に載せたこと）がタスクの記録に残る

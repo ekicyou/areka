@@ -49,7 +49,7 @@
 
 | 名前 | 理由 | 行方 |
 |---|---|---|
-| `doc/COMPAT_ARCHITECTURE.md` | 同じウェーブ（C17）で並んで走る見直しとの約束で、`doc-tree-tidy` では名前を変えない | 後で改名する（後続の spec は `doc-tree-tidy` の完了のときに起票し、ここにその名前を書く） |
+| `doc/COMPAT_ARCHITECTURE.md` | 同じウェーブ（C17）で並んで走る見直しとの約束で、`doc-tree-tidy` では名前を変えない | 後で改名する（`doc-compat-architecture-rename`） |
 | `doc/shiori/fragments/` | 名前と結合の順を目録 `_manifest.toml` が決める、道具が読むデータの目録であるため | 改名しない |
 
 ## 動かした名前の対応
