@@ -129,3 +129,29 @@
 2. When もう一度かけた audit が指摘を出したとき, the 本 spec の直し shall 直しが生んだ指摘も含めて直し、新しい指摘が 0 件になるまで繰り返す（要件 2 で直さずに残すと裁定された指摘は数えない）
 3. The 検証 shall 新しい指摘が 0 件であることを、かけ直した audit の結果として記録に残す
 4. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`） shall 緑で終わる
+
+### Requirement 9: 要件の討議で確定した直す対象と残す指摘（2026-11-05・開発者「承認」＝14 議題とも推奨案）
+
+**Objective:** As a 開発者, I want 討議で決めた直す対象と、残すと裁定した指摘と、議題ごとの直し方の決めを 1 か所で引きたい, so that 設計とタスクが決めから外れない
+
+指摘の番号は `research.md` §3 の通し番号（#1〜#91）。
+
+#### Acceptance Criteria
+
+1. The 本 spec shall `research.md` §3 の 91 件のうち、9.2 の 3 件を除く 88 件を直す対象とし、3 つの組（Must fix 5・Should fix 47・Nice to have 39 のうち該当分）とも直す
+2. The 本 spec shall 次の 3 件だけを直さずに残す（要件 2.5 の記録）
+   - #17（記憶の移しが 1 回失敗すると二度と移らない）: ⑴ 開発者の裁定＝完了 `areka-P0-user-data-root` 要件 5.5「写せなくても書ける根の `profile\areka\` を置き場として続ける」を守る
+   - #41（OnGhostChanged の Reference7 がシェルのフォルダ名）: ⑴ 開発者の裁定＝完了 `areka-P0-ghost-shell-balloon-switch` 要件 4.1「Ref7＝切替先で使うシェルのフォルダ名（例 master）」を守る。ukadoc は Reference7 を「切り替わったゴーストのシェル名。[SSPのみ]」、OnBoot の Reference0 を「起動時のシェル名。」とだけ書き、どちらとも決まらない（`ukadoc:list/shiori-event/boot-close-change/OnGhostChanged`・`.../OnBoot`）。SSP での測りはしない
+   - #57（`Identity` の素性 7 項目）: ⑴ 開発者の裁定＝完了 `areka-P0-baseware-root-layout` 要件 2.4 の素性 7 項目を守る
+3. When #4・#5（テストの一時フォルダが `%TEMP%`）を直すとき, the 本 spec の直し shall 5 つとも `target\` の下（`TempPath` か、このワークツリーの `target\test-roots\` の下の固定の名前）へ移し、`crates/log-capture-kit/tests/temp_path_guard_test.rs` の例外表から該当の 5 行を消して、件数（`ALLOWED_COUNT` と種別ごとの数）と較正で外す 1 件（`CALIBRATION_DROPPED_ENTRY`）を残る項目に合わせて直す
+4. When #18 を直すとき, the areka shall `AREKA_PROFILE_DIR` が空か相対のとき、`error!` を記録してその値を使わない（`AREKA_USER_ROOT` と同じ決まり）。値が絶対パスのときは今どおりその値を使う
+5. The 本 spec の直し shall #30（`warn!` を `error!` に・続行は変えない）・#39（`shutdown` を呼ばないテストを消す）・#68（自前の 1,000 行の検査を消す）・#79（警告のテストを `areka-sakura` へ移す）を直す（完了した spec の細かい決めに触れるが、決めの趣旨は変えない）
+6. When #8 を直すとき, the `.nar` のインストール shall 既に在る宛先の中にジャンクション・シンボリックリンクがあれば、たどらずに失敗とし、そのパスを添えて `error!` を記録して戻り値で返す（`areka-user-data` の写しと同じ決まり）
+7. When #63 を直すとき, the 本 spec のテスト shall 書き換えの拒みを待つ約 2 秒を、テストのときだけ 0 に差し替える
+8. When #71 を直すとき, the 本 spec の直し shall 本番に読み手の無い `charset_declared` の欄を消し、それを縛るテスト（`crates/areka/src/install/judge_tests.rs` の 1 か所を含む）を直す。`charset` の行より前に非 ASCII の行があると宣言に届かない件は `areka-parsers` の持ち物として `audit-parsers-sakura` が受け持つ（同 spec の要件 7.11）。ukadoc の `charset` は「表示する文字コード。」で、行の位置の定めは無い（`ukadoc:descript/install/install-txt/charset`）
+9. If 1 つの書庫の 2 つの同梱（`*.directory`）が大小を無視して同じ宛先を指すとき（#7）, then the `.nar` のインストール shall 書庫ごと拒んで `OnInstallFailure` へ渡す。ukadoc の「同時インストール」に宛先が重なるときの定めは無い（`ukadoc:descript/install/install-txt/introduction_install_multi`）＝作者の誤りとして止める
+10. When #22 を直すとき, the ゴーストの読み込み shall OnBoot に送るシェル名を、一覧と同じ読み方（`descript.txt` の鍵の大小を無視し、空の値は無いものとする）で決める。大小を無視する読み方の関数は `audit-parsers-sakura` が `areka-parsers` に置き（同 spec の要件 7.10）、本 spec は `catalog.rs` の自前の版を消してそれへ乗り換え、`config.rs` もそれを使う。`areka-parsers` 側の読みのずれ（ゴーストの `Name,Upper`）は `audit-parsers-sakura` が直す
+11. The 本 spec の直し shall `shiori_inproc.rs` の指摘（#26〜#29・#33・#34）を、v0.2.0 の `shiori4-api` の作り直しを待たずに今直す
+12. When #40 を直すとき, the 本 spec の直し shall `crates/areka-sylphya/src/persist/io.rs` に `Arc<T>` への包括の実装を 1 つ足し、受け持つ範囲の写しだけを消す。範囲の外（`crates/areka/src/` のテストなど）の写しは、その範囲の見直しの spec の持ち物として残す（要件 6.2）
+13. The 本 spec shall 1 本の spec のまま進め、タスクは指摘の組ごとでなくファイルのまとまりごとに束ねる。If タスクの段で 20 を越えるとき, then the 本 spec shall 残る Nice to have を同じ範囲の 2 本目の spec へ回す
+14. The 本 spec の直し shall `audit-parsers-sakura` との申し合わせ（2026-11-05）を守る: 同 spec が `areka-parsers` の `resolve` を消して本範囲の呼び手を `resolve_with_shell(.., None)` へ差し替えるのは同 spec の最後の段で行い、行がぶつかれば後から着地する側が合わせる。#79 は同 spec が `areka-sakura` に 1 本足し、本 spec は自分の側の写しを消す
