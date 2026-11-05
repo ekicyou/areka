@@ -116,7 +116,7 @@
   - _Requirements: 4.1, 5.4, 7.1, 7.2_
 
 - [ ] 5. example を直す（X1・X2・この順に回す）
-- [ ] 5.1 (P) 使われない example と資産を消す（X1）
+- [x] 5.1 (P) 使われない example と資産を消す（X1）
   - 60・61・62・65・89・119: example 4 本と資産 8 つを消し、research の案どおり残る example を直す
   - 65: logging の steering の手順を残る example（`tooltip_demo`）に向け直す。濾しの語はそのまま
   - 完了の姿: `cargo build -p wintf --examples` が通り、消したファイルの名の grep がツリー全体で 0 件
@@ -214,3 +214,4 @@
 - 4.1: 消したテスト名を名指す注記が `src/ecs/drag/state/tests.rs:11` に残っていたので括弧書きを消した（`audit-wintf-input` は未着手）。`Arrangement` の on_add フックは生成の束の `GlobalArrangement` を既定値で上書きする（本番に使い方は無く欠陥ではない・`audit-wintf-layout-widget` への申し送り候補）。
 - 4.3: `Opacity` を消したので、G4 の持ち物の `tests/visual/component_test.rs` の 1 本を `value.clamp(0.0, 1.0)` との比べへ追従させた（`audit-wintf-graphics-world` が同じファイルを書き換えるなら rebase で合わせる）。
 - 4.4: research の案が「L80-L148 だけ消す」と行で絞っているファイルは丸ごと消さない（4.4 で守りのテストを巻き添えにし差し戻し）。生成の直後に最初に走る system は生成と同じ刻みで書くので、等値を刻みで見るテストは回す前に `increment_change_tick()` を入れる。
+- 5.1・2.3: 消した example の名（`dcomp_demo`・`wuc_spike`）が `src/ecs/world/mod.rs:151-152` の注記に残る。7.8 の「古くなった名前の言及を 0 件」で直す。
