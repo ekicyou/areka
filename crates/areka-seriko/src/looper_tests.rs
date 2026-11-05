@@ -588,23 +588,36 @@ fn on_surface_changed_removes_playback() {
     );
 }
 
-/// 非単調 tick（now < 前回）は無視され、状態を変えず空を返す（rng も消費しない・防御・要件 1.2）。
+/// 非単調 tick（now < 前回）は無視され、状態を変えず空を返す（防御・要件 1.2）。
+/// コマが替わった後に時刻が戻っても、前のコマへ巻き戻る指令を出さず、番人の時刻も戻さない。
 #[test]
 fn non_monotonic_tick_is_ignored() {
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
-    let (rng, probe) = counting_rng(&[0]);
+    // 2000 で発火し、コマ 2 枚目（2110）は 2100 から。2150 と 2050 の間にコマの替わり目がある。
+    // 3 枚目は 2150 で再生がまだ終わっていないために置く（2 枚だと 2150 で再生が消え、2050 で
+    // 何も出せず番人を外しても緑のまま）。
+    let table = table_single(
+        10,
+        0,
+        Interval::Random { k: 4 },
+        &[(2106, 0), (2110, 100), (2120, 1000)],
+    );
+    let (rng, _probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, _scope) = shown_shell(10);
 
     rt.on_tick(1000, &mut states); // 初回（遅延初期化・境界 next=2000）
-    // 過去へ戻る tick は無視。
-    let cmds = rt.on_tick(500, &mut states);
-    assert!(cmds.is_empty(), "非単調 tick は無発行");
-    // 抽選も走らない＝rng 非消費（初回 1000 は境界跨ぎしない＝next は 2000）。
+    assert!(!rt.on_tick(2000, &mut states).is_empty(), "2000 で発火する");
+    assert!(
+        !rt.on_tick(2150, &mut states).is_empty(),
+        "2150 でコマ 2 枚目へ替わる"
+    );
+    // 過去へ戻る tick は無視（前のコマ 2106 へ巻き戻る Show を出さない）。
+    let cmds = rt.on_tick(2050, &mut states);
+    assert!(cmds.is_empty(), "非単調 tick は無発行: {cmds:?}");
     assert_eq!(
-        probe.lock().unwrap().calls,
-        0,
-        "非単調 tick は rng を消費しない"
+        rt.last_seen,
+        Some(2150),
+        "非単調 tick は番人の時刻を戻さない"
     );
 }
 

@@ -4,7 +4,9 @@
 //! 検体の `surfaces.txt` を解析を経る実経路で読み、再生表と合成の形の記録（`shape_issues`）を作る。
 //! 検体は共有の受け口 `sample_test_support` 経由でだけ受ける。
 
-use areka_emo_compose::{EmoWorld, PatternWord, ShapeIssue, pattern_word, shape_issues};
+use areka_emo_compose::{
+    ComposeMethod, EmoWorld, PatternWord, ShapeIssue, pattern_word, shape_issues,
+};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use log_capture_kit::{LineFormat, capture_lines};
 
@@ -112,7 +114,7 @@ fn dot_sakura_surface0_animation2_starts_one_of_0_and_1() {
     );
 }
 
-/// 目印の較正: 同じ見分けが 6 種の 1 つ（読めない相手）を拾う。
+/// 目印の較正: 同じ見分けが 6 種の 1 つ（読めない相手）と、8 語を語にした「未知の合成メソッド名」を拾う。
 #[test]
 fn word_warn_filter_catches_an_unreadable_target() {
     let (_, _, _, lines) = build(
@@ -120,5 +122,10 @@ fn word_warn_filter_catches_an_unreadable_target() {
          animation0.pattern0,overlay,100,50,0,0\n\
          animation0.pattern1,start,abc\n}\n",
     );
+    assert_eq!(word_warns(&lines).len(), 1, "{lines:#?}");
+    // 2 つ目の枝: 合成が出す記録そのものの欄の形で数える。
+    let (_, lines) = capture_lines(LineFormat::LevelTargetFields, || {
+        ComposeMethod::from_name("start")
+    });
     assert_eq!(word_warns(&lines).len(), 1, "{lines:#?}");
 }

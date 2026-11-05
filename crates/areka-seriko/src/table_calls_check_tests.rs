@@ -10,6 +10,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 
 use super::FrameAct;
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
+use crate::output::DisplayCommand;
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
 use crate::test_support::{KINDS, table_and_logs};
@@ -96,7 +97,7 @@ fn sound_calls_log_nothing() {
 fn ticks_add_no_warn() {
     let (table, logs) = table_and_logs(SIX_KINDS);
     assert_eq!(count(&logs, "WARN"), 6);
-    let (_, ticking) = capture_lines(LineFormat::LevelTargetFields, || {
+    let (shows, ticking) = capture_lines(LineFormat::LevelTargetFields, || {
         let mut rt = LoopRuntime::new(SerikoLoopConfig {
             shell_table: table,
             balloon_tables: BTreeMap::new(),
@@ -108,10 +109,13 @@ fn ticks_add_no_warn() {
         states.apply(&scope, SurfaceTarget::Show(10));
         rt.on_surface_changed(&scope, Slot::Shell);
         rt.refresh(&scope, Slot::Shell, Some(0), &mut states);
-        for now in (0..10_000).step_by(100) {
-            rt.on_tick(now, &mut states);
-        }
+        (0..10_000)
+            .step_by(100)
+            .flat_map(|now| rt.on_tick(now, &mut states))
+            .filter(|c| matches!(c, DisplayCommand::Show { .. }))
+            .count()
     });
+    assert!(shows >= 1, "刻みの道を通って Show が出る");
     for kind in KINDS {
         assert_eq!(count(&ticking, kind), 0, "{kind}: {ticking:#?}");
     }

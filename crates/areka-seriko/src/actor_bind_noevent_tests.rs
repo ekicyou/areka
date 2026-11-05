@@ -246,11 +246,20 @@ fn prefix_alike_name_is_not_bind() {
     let outcome = run("0", &[], "bind-noeventx", &["ボール", "妹", "1"]);
     assert_eq!(outcome.binds, vec![20]);
     assert!(outcome.shown.is_empty());
+    assert!(!outcome.logs.is_empty(), "担当外の名前も記録に残る");
     assert!(
         outcome.logs.iter().all(|l| l.contains("level=DEBUG")),
         "{:?}",
         outcome.logs
     );
+    let skipped = outcome
+        .logs
+        .iter()
+        .filter(|l| {
+            l.contains("担当外コマンド名のキャリア cue を読み飛ばす") && l.contains("bind-noeventx")
+        })
+        .count();
+    assert_eq!(skipped, 1, "{:?}", outcome.logs);
 }
 
 /// 宛名 `bind-noevent` の壊れた運び物は `bind` と同じ warn（自分宛の壊れ物・D8④）。

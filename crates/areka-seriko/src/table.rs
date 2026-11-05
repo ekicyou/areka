@@ -724,8 +724,12 @@ mod tests {
             "純 Bind は CallOnly・Other は非採録"
         );
 
-        // 全体で採録アニメは 2 本のみ（kero+sakura）。
-        assert!(!table.is_empty());
+        // 全体で採録アニメは 3 本（kero・sakura・surface30 の CallOnly）。
+        let recorded: usize = table.animations.values().map(Vec::len).sum();
+        assert_eq!(
+            recorded, 3,
+            "採録は kero・sakura・surface30 の CallOnly の 3 本"
+        );
 
         // debug! ログ: Other が非採録として記録され、元語彙 yen-e を含む。
         assert!(
