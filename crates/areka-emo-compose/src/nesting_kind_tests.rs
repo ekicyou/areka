@@ -3,13 +3,12 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
+use areka_emo_atlas::SetId;
+use areka_parsers::shell::ElementPath;
 
 use super::{ElementKind, element_kind};
 use crate::log_capture::capture_logs;
+use crate::plan_test_support::bake_atlas;
 use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 fn kind_of(s: &str) -> ElementKind {
@@ -133,40 +132,6 @@ fn number_elements_are_not_bound_and_emit_no_warning() {
         }
     }
     assert!(binding.0[0].is_some(), "body.png は焼かれていて引ける");
-}
-
-/// 指定の rel_path 群を焼いた単一セットのアトラス（COM/WIC 非依存）。
-fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
-    let elements: Vec<Element> = rels
-        .iter()
-        .map(|r| Element {
-            layer: 0,
-            path: ElementPath::new(r.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for r in rels {
-        dec.insert(base.join(r), 1, 1, 4, vec![1, 2, 3, 255], true);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "焼くのは失敗しない");
-    result.table
 }
 
 fn binding_of(world: &EmoWorld, id: u32) -> AtlasBinding {

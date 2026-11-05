@@ -7,7 +7,7 @@
 //! （ファイルごとに色を変え、合成の画素で「どの絵か」を見分ける）。
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
@@ -17,6 +17,7 @@ use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse, p
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
 use crate::hit::{RegionPriority, hit_region_in};
+use crate::plan_test_support::png_size;
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -35,19 +36,6 @@ const FILES: &[(&str, u32, u32, [u8; 3])] = &[
 
 fn fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/surface-nesting")
-}
-
-/// PNG の見出しから原寸を読む（署名と IHDR が無ければ赤）。
-fn png_size(path: &Path) -> (u32, u32) {
-    let bytes =
-        std::fs::read(path).unwrap_or_else(|e| panic!("{} が読めない: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") && &bytes[12..16] == b"IHDR",
-        "{} は PNG の見出しを持たない",
-        path.display()
-    );
-    let be = |at: usize| u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap());
-    (be(16), be(20))
 }
 
 fn file(name: &str) -> &'static (&'static str, u32, u32, [u8; 3]) {

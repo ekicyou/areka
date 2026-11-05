@@ -412,23 +412,12 @@ mod tests {
         assert_eq!(world.resolve_alias("nope"), None);
     }
 
-    /// emo2 fixture（実上流シェル）の `surfaces.txt` を UTF-8 で読み parse して `Shell` を得る。
-    ///
-    /// `fold.rs` の `emo2_shell()` と同一の読込経路（`read_to_string`＋`areka_parsers::shell::parse`）。
-    /// COM／WIC／atlas bake は経由しない純粋な parse ゆえ headless で走る。
-    fn emo2_shell() -> Shell {
-        let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
-        let content = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-        areka_parsers::shell::parse(&content)
-    }
-
     /// `alias_snapshot()` が返す所有 `BTreeMap` は、同一 `EmoWorld` の全キーに対し
     /// 借用ベース `resolve_alias(key)` と完全一致する（スナップショットが `AliasMap` から
     /// 静かにドリフトしないための檻・要件 2.2/2.3/7.3）。
     #[test]
     fn alias_snapshot_matches_resolve_alias() {
-        let world = EmoWorld::build(&emo2_shell());
+        let world = EmoWorld::build(&crate::sample_test_support::emo2_shell());
         let snap = world.alias_snapshot();
 
         // 非自明性: emo2 は alias を含む（空マップの vacuous pass を防ぐ）。

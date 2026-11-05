@@ -15,9 +15,9 @@ use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::nesting::{ElementKind, FilmId};
 use crate::normalized::SurfaceMaster;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{BlitOp, derive_ops};
-use crate::plan_test_support::{bake_films_and_bind, insert_film};
+use crate::pattern::PatternState;
+use crate::plan::BlitOp;
+use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, solid};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -50,16 +50,12 @@ fn image(bgra: Vec<u8>) -> DecodedImage {
     }
 }
 
-fn solid(c: u8) -> DecodedImage {
-    image([c, c, c, 255].repeat(4))
-}
-
 /// 動く絵のコマ: 0 は全面不透明・1 は左上の 1 画素だけ不透明・2 は全透明。待ちは 0・100・100 なので
 /// 経過 0 はコマ 1（1 枚目の待ちが 0 なら次のコマ）。
 fn film_frames() -> Vec<AnimationFrame> {
     let mut one = vec![0u8; 16];
     one[..4].copy_from_slice(&[20, 20, 20, 255]);
-    [solid(10), image(one), image(vec![0; 16])]
+    [solid(2, 2, 10), image(one), image(vec![0; 16])]
         .into_iter()
         .zip([0, 100, 100])
         .map(|(image, delay_ms)| AnimationFrame { image, delay_ms })
@@ -71,7 +67,14 @@ fn film_frames() -> Vec<AnimationFrame> {
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     let mut dec = MemoryDecoder::default();
     for rel in STILLS {
-        dec.insert(Path::new(BASE).join(rel), 2, 2, 8, solid(9).bgra, true);
+        dec.insert(
+            Path::new(BASE).join(rel),
+            2,
+            2,
+            8,
+            solid(2, 2, 9).bgra,
+            true,
+        );
     }
     insert_film(
         &mut dec,
@@ -84,7 +87,7 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
             .iter()
             .enumerate()
             .map(|(i, &delay_ms)| AnimationFrame {
-                image: solid(10 + i as u8),
+                image: solid(2, 2, 10 + i as u8),
                 delay_ms,
             })
             .collect();
@@ -134,17 +137,8 @@ fn compose(
     pattern: &PatternState,
 ) -> (Vec<(String, i64, i64)>, Vec<BlitOp>, String) {
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
     let logs = capture_logs(|| {
-        derive_ops(
-            &mut ops,
-            &mut visited,
-            world,
-            atlas,
-            top,
-            &BindSet::default(),
-            pattern,
-        )
+        ops = crate::plan_test_support::ops(world, atlas, top, &BindSet::default(), pattern)
     });
     let named = ops
         .iter()
@@ -163,15 +157,6 @@ fn ops_of(text: &str, top: u32, pattern: &PatternState) -> Vec<(String, i64, i64
 
 fn op(name: &str, x: i64, y: i64) -> (String, i64, i64) {
     (name.to_string(), x, y)
-}
-
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
 }
 
 /// a.png の 5・b.png の 6（手書きの `always` のコマが指す先）。
@@ -199,7 +184,7 @@ fn top_always_draws_rest_pattern_when_cell_is_empty() {
     assert_eq!(ops(&blank), vec![op("body.png", 0, 0)], "消えている");
 
     let mut cell = PatternState::default();
-    cell.set(0, frame(6));
+    cell.set(0, frame(6, 0, 0));
     assert_eq!(
         ops(&cell),
         vec![op("body.png", 0, 0), op("b.png", 0, 0)],

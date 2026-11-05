@@ -4,14 +4,15 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, bake};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::{AtlasTable, SetId};
+use areka_parsers::shell::parse;
 
 use super::{ShellBounds, shell_bounds};
 use crate::Composer;
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
+use crate::plan_test_support::{AtlasSpec, bake_atlas_sized};
 use crate::world::EmoWorld;
 
 /// 画像の名前と原寸（全面不透明）。
@@ -24,43 +25,11 @@ const SIZES: &[(&str, (u32, u32))] = &[
 
 /// 文面を面の表にし、アトラスを当てて返す。
 fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![AppendTarget::Single(0)],
-        elements: SIZES
-            .iter()
-            .map(|(r, _)| Element {
-                layer: 0,
-                path: ElementPath::new(r.to_string()),
-                x: 0,
-                y: 0,
-            })
-            .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for (rel, (w, h)) in SIZES {
-        dec.insert(
-            base.join(rel),
-            *w,
-            *h,
-            w * 4,
-            vec![64u8; (w * 4 * h) as usize],
-            true,
-        );
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: areka_emo_atlas::AlphaParams {
-            use_self_alpha: areka_emo_atlas::UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    let atlas = result.table;
+    let specs: Vec<AtlasSpec> = SIZES
+        .iter()
+        .map(|&(rel, size)| (rel, size, Some((64, 64, 64))))
+        .collect();
+    let atlas = bake_atlas_sized(Path::new("shell/master"), &specs);
     let mut world = EmoWorld::build(&parse(text));
     world.bind_atlas(&atlas, SetId(0));
     (world, atlas)

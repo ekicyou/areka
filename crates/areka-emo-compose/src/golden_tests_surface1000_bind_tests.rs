@@ -1,6 +1,6 @@
 //! task 8.2（要件 11.2・5.4・11.4）: surface1000（全パーツ MAYUNA bind の本体 surface）＋
-//! 有効 bind 集合の golden テーマ。区画バナーは共有ヘルパ `solid_opaque` に付随するため
-//! `test_support` 側に在る（本文一致の項目境界に従った結果）。
+//! 有効 bind 集合の golden テーマ。区画バナーは `test_support` 側に在る
+//! （本文一致の項目境界に従った結果）。
 
 use super::test_support::{
     build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,

@@ -24,10 +24,10 @@ fn extent_is_independent_of_bindset() {
     let atlas = bake_atlas_sized(
         base,
         &[
-            ("base.png", (40, 30), true),
-            ("part1.png", (200, 10), true),
-            ("part2.png", (10, 150), true),
-            ("part3.png", (60, 60), true),
+            ("base.png", (40, 30), Some((64, 64, 64))),
+            ("part1.png", (200, 10), Some((64, 64, 64))),
+            ("part2.png", (10, 150), Some((64, 64, 64))),
+            ("part3.png", (60, 60), Some((64, 64, 64))),
         ],
     );
 
@@ -83,7 +83,10 @@ fn extent_unions_inactive_bind_contribution() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(
         base,
-        &[("tiny.png", (4, 4), true), ("huge.png", (500, 400), true)],
+        &[
+            ("tiny.png", (4, 4), Some((64, 64, 64))),
+            ("huge.png", (500, 400), Some((64, 64, 64))),
+        ],
     );
 
     let host = surface_with_anims(
@@ -117,8 +120,8 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
     let atlas = bake_atlas_sized(
         base,
         &[
-            ("solid.png", (20, 20), true),
-            ("ghost.png", (300, 300), false), // 全透明→ placement None・original は 300×300。
+            ("solid.png", (20, 20), Some((64, 64, 64))),
+            ("ghost.png", (300, 300), None), // 全透明→ placement None・original は 300×300。
         ],
     );
     let solid_id = atlas.resolve(SetId(0), "solid.png").expect("solid 解決");
@@ -148,16 +151,7 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
 
     // 命令: ghost はスキップされ solid の 1 本のみ（要件 6.3）。
     let binds = BindSet::default();
-    let mut ops = Vec::new();
-    derive_ops(
-        &mut ops,
-        &mut Vec::new(),
-        &world,
-        &atlas,
-        3000,
-        &binds,
-        &PatternState::default(),
-    );
+    let ops = ops(&world, &atlas, 3000, &binds, &PatternState::default());
     assert_eq!(
         ops.len(),
         1,
@@ -185,7 +179,10 @@ fn negative_offset_is_clipped_and_origin_stays_fixed() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(
         base,
-        &[("base.png", (50, 40), true), ("small.png", (10, 10), true)],
+        &[
+            ("base.png", (50, 40), Some((64, 64, 64))),
+            ("small.png", (10, 10), Some((64, 64, 64))),
+        ],
     );
 
     let host = surface_with_anims(
@@ -212,7 +209,7 @@ fn negative_offset_is_clipped_and_origin_stays_fixed() {
 #[test]
 fn extent_equals_base_original_when_no_larger_layers() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("only.png", (123, 45), true)]);
+    let atlas = bake_atlas_sized(base, &[("only.png", (123, 45), Some((64, 64, 64)))]);
 
     let surf = surface(5000, vec![elem(0, "only.png", 0, 0)]);
     let shell = shell_of(vec![surf]);
@@ -233,7 +230,10 @@ fn extent_is_deterministic() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(
         base,
-        &[("base.png", (40, 30), true), ("part.png", (200, 150), true)],
+        &[
+            ("base.png", (40, 30), Some((64, 64, 64))),
+            ("part.png", (200, 150), Some((64, 64, 64))),
+        ],
     );
     let host = surface_with_anims(
         6000,
@@ -300,8 +300,8 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
     let atlas = bake_atlas_sized(
         base,
         &[
-            ("ghost1.png", (300, 300), false), // 全透明→ placement None。
-            ("ghost2.png", (20, 20), false),   // 全透明→ placement None。
+            ("ghost1.png", (300, 300), None), // 全透明→ placement None。
+            ("ghost2.png", (20, 20), None),   // 全透明→ placement None。
         ],
     );
 
@@ -351,8 +351,8 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let atlas = bake_atlas_sized(
         base,
         &[
-            ("part1.png", (200, 10), true),
-            ("part2.png", (10, 150), true),
+            ("part1.png", (200, 10), Some((64, 64, 64))),
+            ("part2.png", (10, 150), Some((64, 64, 64))),
         ],
     );
 
@@ -439,7 +439,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
 #[test]
 fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), true)]);
+    let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), Some((64, 64, 64)))]);
     let visible_id = atlas
         .resolve(SetId(0), "visible.png")
         .expect("visible 解決");
@@ -471,7 +471,7 @@ fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
 #[test]
 fn build_plan_clears_scratch_and_is_deterministic() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), true)]);
+    let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), Some((64, 64, 64)))]);
     let visible_id = atlas
         .resolve(SetId(0), "visible.png")
         .expect("visible 解決");

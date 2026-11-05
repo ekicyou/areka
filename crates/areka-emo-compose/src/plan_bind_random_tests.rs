@@ -6,7 +6,6 @@
 //! bind が入っていれば pattern0 を静的に積む（陽性対照を同じ導出に置く）。
 
 use super::*;
-use crate::pattern::PatternFrame;
 use crate::plan_test_support::*;
 use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern};
@@ -49,34 +48,21 @@ fn build() -> (EmoWorld, AtlasTable, Vec<(ElementId, &'static str)>) {
     (world, atlas, map)
 }
 
-fn paths(pattern: &PatternState) -> Vec<&'static str> {
+fn paths(pattern: &PatternState) -> Vec<String> {
     let (world, atlas, map) = build();
-    let mut ops = Vec::new();
-    derive_ops(
-        &mut ops,
-        &mut Vec::new(),
+    let ops = ops(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1300, 1400]),
         pattern,
     );
-    ops.iter()
-        .map(|op| map.iter().find(|(id, _)| *id == op.element).unwrap().1)
-        .collect()
+    ops_to_paths(&ops, &map)
 }
 
 fn frame_at(surface_id: u32) -> PatternState {
     let mut p = PatternState::default();
-    p.set(
-        1400,
-        PatternFrame {
-            surface_id,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
+    p.set(1400, frame(surface_id, 0, 0));
     p
 }
 

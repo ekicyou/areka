@@ -196,28 +196,8 @@ mod hit_in_tests;
 mod tests {
     use super::{RegionPriority, hit_region, hit_region_scaled};
     use crate::normalized::SurfaceMaster;
+    use crate::plan_test_support::{coll, master_with};
     use crate::scale::ScaleRatio;
-    use areka_parsers::shell::{Collision, CollisionName};
-
-    fn coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str) -> Collision {
-        Collision {
-            index,
-            left,
-            top,
-            right,
-            bottom,
-            name: CollisionName::new(name.to_string()),
-        }
-    }
-
-    fn master_with(collisions: Vec<Collision>) -> SurfaceMaster {
-        SurfaceMaster {
-            id: 1000,
-            elements: Vec::new(),
-            collisions,
-            animations: Vec::new(),
-        }
-    }
 
     #[test]
     fn point_inside_returns_region_name() {

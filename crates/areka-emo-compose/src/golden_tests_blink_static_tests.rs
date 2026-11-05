@@ -2,11 +2,12 @@
 
 use crate::plan::build_plan;
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir, solid_opaque};
+use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
     AtlasTable, BindSet, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId, Shell,
     SurfaceSet, bake,
 };
+use crate::plan_test_support::opaque_wxh;
 
 // ============================================================================
 // task 11.2: emo2 まばたき bind（1400/1403・pattern0 なし）の静的不活性回帰檻
@@ -36,7 +37,7 @@ use super::{
 fn build_atlas_for_blink_cage(shell: &Shell, base: &Path) -> AtlasTable {
     let mut dec = MemoryDecoder::new();
     // 目/通常（1302 = surface1302 → purple/4/normal.png・pattern0 あり）。
-    let (w, h, s, b, a) = solid_opaque(20, 90, 0, 0, 255);
+    let (w, h, s, b, a) = opaque_wxh(20, 90, 0, 0, 255);
     dec.insert(base.join("purple/4/normal.png"), w, h, s, b, a);
     // 閉じ目パーツ（1400→surface1412=eyebase+toji、1403→surface1414=null）を解決可能にする。
     // これらが解決できることで、旧 min_by_key 実装なら閉じ目が composed され命令列が伸びる（非空虚）。
@@ -45,7 +46,7 @@ fn build_atlas_for_blink_cage(shell: &Shell, base: &Path) -> AtlasTable {
         "purple/4/toji.png",
         "purple/a/null.png",
     ] {
-        let (w, h, s, b, a) = solid_opaque(20, 90, 128, 128, 128);
+        let (w, h, s, b, a) = opaque_wxh(20, 90, 128, 128, 128);
         dec.insert(base.join(rel), w, h, s, b, a);
     }
     let set = SurfaceSet {

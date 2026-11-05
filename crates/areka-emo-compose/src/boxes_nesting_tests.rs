@@ -5,15 +5,14 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse, parse_boxes};
+use areka_emo_atlas::{AtlasTable, SetId};
+use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement, fold_boxes};
 use crate::Composer;
 use crate::bind::BindSet;
 use crate::pattern::PatternState;
+use crate::plan_test_support::{AtlasSpec, bake_atlas_sized};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -151,36 +150,11 @@ fn parent_boxes_do_not_depend_on_placing_children() {
 const IMAGES: &[(&str, u8)] = &[("p.png", 40), ("q.png", 120), ("r.png", 200)];
 
 fn atlas() -> AtlasTable {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![AppendTarget::Single(0)],
-        elements: IMAGES
-            .iter()
-            .map(|(rel, _)| Element {
-                layer: 0,
-                path: ElementPath::new(rel.to_string()),
-                x: 0,
-                y: 0,
-            })
-            .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for (rel, value) in IMAGES {
-        dec.insert(base.join(rel), 4, 4, 16, vec![*value; 64], true);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake の仕込みは失敗しない");
-    result.table
+    let specs: Vec<AtlasSpec> = IMAGES
+        .iter()
+        .map(|&(rel, v)| (rel, (4, 4), Some((v, v, v))))
+        .collect();
+    bake_atlas_sized(Path::new("shell/master"), &specs)
 }
 
 fn compose(text: &str, top: u32) -> (u32, u32, Vec<u8>) {

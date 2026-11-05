@@ -29,9 +29,7 @@ pub(super) fn on_params() -> AlphaParams {
 
 /// emo2 の surfaces.txt をパースして `Shell` を得る（`emo2_golden.rs` の loader 経路と同一）。
 pub(super) fn parse_emo2_shell() -> Shell {
-    let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
-        .expect("emo2 surfaces.txt must be readable (UTF-8)");
-    let shell = areka_parsers::shell::parse(&content);
+    let shell = crate::sample_test_support::emo2_shell();
     assert!(
         !shell.surfaces.is_empty(),
         "parse produced surfaces from surfaces.txt"
@@ -55,21 +53,6 @@ pub(super) fn parse_emo2_shell() -> Shell {
 //      固定画像でなく bind 集合を反映していることを証明する。
 // すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
 // ============================================================================
-
-/// 単色・全不透明（α=255）の premultiplied BGRA 画像スペックを生成する（tightly-packed）。
-///
-/// 全画素同色ゆえパーツを覆う任意画素が同一色になり、サンプリングで「どのパーツか」を色で
-/// 判別できる。α=255 なので premultiplied 済み（色 ≤ α）。判別可能な distinct 色をパーツ毎に
-/// 割り当てる（`distinctive_opaque` は座標傾斜で位置ズレ検出用だが、8.2 は色で層を識別したいので
-/// 単色を用いる）。
-pub(super) fn solid_opaque(w: u32, h: u32, b: u8, g: u8, r: u8) -> (u32, u32, u32, Vec<u8>, bool) {
-    let stride = w * 4;
-    let mut bgra = Vec::with_capacity((stride * h) as usize);
-    for _ in 0..(w * h) {
-        bgra.extend_from_slice(&[b, g, r, 255]);
-    }
-    (w, h, stride, bgra, true)
-}
 
 /// surface1000 の bind パーツ surface（1100 系）の element0 相対パスを解決するための対応表。
 ///
@@ -139,7 +122,8 @@ pub(super) fn surface1000_bind_parts() -> [BindPart; 3] {
 pub(super) fn build_atlas_for_surface1000(shell: &Shell, base: &Path) -> AtlasTable {
     let mut dec = MemoryDecoder::new();
     for p in surface1000_bind_parts() {
-        let (w, h, stride, bgra, has_alpha) = solid_opaque(p.w, p.h, p.b, p.g, p.r);
+        let (w, h, stride, bgra, has_alpha) =
+            crate::plan_test_support::opaque_wxh(p.w, p.h, p.b, p.g, p.r);
         dec.insert(base.join(p.rel), w, h, stride, bgra, has_alpha);
     }
     let set = SurfaceSet {

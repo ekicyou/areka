@@ -231,16 +231,7 @@ mod cell_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// テスト用の代表コマ（`Overlay`・任意オフセット）。
-    fn frame(surface_id: u32) -> PatternFrame {
-        PatternFrame {
-            surface_id,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        }
-    }
+    use crate::plan_test_support::frame;
 
     /// 既定値は空＝「pattern 寄与なし」（完了状態の明示契約）。
     #[test]
@@ -268,8 +259,8 @@ mod tests {
     #[test]
     fn set_twice_same_id_replaces() {
         let mut state = PatternState::default();
-        state.set(3, frame(100));
-        state.set(3, frame(200));
+        state.set(3, frame(100, 0, 0));
+        state.set(3, frame(200, 0, 0));
         assert_eq!(state.get(3).map(|f| f.surface_id), Some(200));
         // 単一エントリのまま（コマは 1 枚）。
         assert_eq!(state.iter().count(), 1);
@@ -279,7 +270,7 @@ mod tests {
     #[test]
     fn remove_clears_frame() {
         let mut state = PatternState::default();
-        state.set(5, frame(42));
+        state.set(5, frame(42, 0, 0));
         state.remove(5);
         assert_eq!(state.get(5), None);
         assert!(state.is_empty());
@@ -289,9 +280,9 @@ mod tests {
     #[test]
     fn iter_yields_ascending_id_order() {
         let mut state = PatternState::default();
-        state.set(9, frame(1));
-        state.set(2, frame(2));
-        state.set(5, frame(3));
+        state.set(9, frame(1, 0, 0));
+        state.set(2, frame(2, 0, 0));
+        state.set(5, frame(3, 0, 0));
         let ids: Vec<u32> = state.iter().map(|(id, _)| id).collect();
         assert_eq!(ids, vec![2, 5, 9]);
     }
@@ -303,14 +294,14 @@ mod tests {
     #[test]
     fn eq_is_insertion_order_stable() {
         let mut a = PatternState::default();
-        a.set(1, frame(10));
-        a.set(2, frame(20));
-        a.set(3, frame(30));
+        a.set(1, frame(10, 0, 0));
+        a.set(2, frame(20, 0, 0));
+        a.set(3, frame(30, 0, 0));
 
         let mut b = PatternState::default();
-        b.set(3, frame(30));
-        b.set(1, frame(10));
-        b.set(2, frame(20));
+        b.set(3, frame(30, 0, 0));
+        b.set(1, frame(10, 0, 0));
+        b.set(2, frame(20, 0, 0));
 
         assert_eq!(a, b);
     }

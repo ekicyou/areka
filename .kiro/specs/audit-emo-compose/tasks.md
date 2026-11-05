@@ -10,7 +10,7 @@
   - `audit-parsers-sakura` へ、テストの部品の置き場がクレートの直下の部品へ動くことを伝える
   - 終わった姿: 命令列の部品のテストが 1 つの口から命令列を引き、クレートのテストが全部緑
   - _Requirements: 2.1, 2.3, 4.5, 5.3_
-- [ ] 1.2 写しを持つ残りのテストを、集めた部品から引く形へ直す（指摘 12 の後半）
+- [x] 1.2 写しを持つ残りのテストを、集めた部品から引く形へ直す（指摘 12 の後半）
   - 設計の File Structure Plan に挙げた写しを持つテスト（合成器・記録・束縛・コマ・畳み込み・ベースの絵・入れ子・pattern・always・当たり判定・転写・外形・シェルの外形・`bind+random` ほか）の写しを消し、1.1 の部品から引く
   - 写しごとに違った所（例: 無い面 999999 を持つ pattern5）は、使うテストを確かめてから 1 つに揃える
   - 終わった姿: 写しの部品の定義がクレートの中に 1 つずつしか無く（grep で確かめる）、クレートのテストが全部緑
@@ -150,3 +150,4 @@
 
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）
 - 申し合わせ（11-05）: audit-emo-present＝`ExtentTooLarge` は表示の側で `EmptyComposition` と同じく隠す・match の腕は後から着いた側が足す。audit-seriko＝`parts_tests.rs` の bind+random の期待はこちらで直す（向こうは先頭の use だけ触る・後着が rebase）
+- 1.2: `plan_nesting_extent_tests` は `build_plan` を直に呼ぶ（2.4 で形が変わるときに直す）。`opaque_wxh` は α=255 の単色（前は全バイト 64）。`append_def` は fold_tests（4 引数）と base_image_tests（2 引数）で別物として残る

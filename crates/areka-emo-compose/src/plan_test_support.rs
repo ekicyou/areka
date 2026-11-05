@@ -14,12 +14,13 @@ use areka_emo_atlas::{
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, parse,
+    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAppend, parse,
 };
 
 use crate::bind::BindSet;
 use crate::composed::ComposedSurface;
 use crate::method::ComposeMethod;
+use crate::normalized::SurfaceMaster;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{BlitOp, derive_ops};
 use crate::world::EmoWorld;
@@ -39,6 +40,17 @@ pub(crate) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
 /// element のみを持つ最小 surface（collision/animation 空・単一ターゲット）。
 pub(crate) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     surface_with_anims(id, elements, Vec::new())
+}
+
+/// ターゲット記述子とボディ element 群から plain surface 定義を組み立てる。
+pub(crate) fn surface_def(id: u32, targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
+    Surface {
+        id,
+        targets,
+        elements,
+        collisions: Vec::new(),
+        animations: Vec::new(),
+    }
 }
 
 /// element＋animation を持つ surface（collision 空・単一ターゲット）。
@@ -107,6 +119,25 @@ pub(crate) fn shell_of_with_sort(
         animation_sort,
         collision_sort: None,
         definitions,
+    }
+}
+
+/// `Shell` を surface/append を混在させた登場順 `definitions` で組む。
+///
+/// `defs` は登場順に `DefRef` を並べたもの（呼び手が `DefRef::Surface(i)`／`DefRef::Append(i)`
+/// を直接指定する）。surfaces/appends の各 Vec には index が既に対応している前提。
+pub(crate) fn shell_mixed(
+    surfaces: Vec<Surface>,
+    appends: Vec<SurfaceAppend>,
+    defs: Vec<DefRef>,
+) -> Shell {
+    Shell {
+        surfaces,
+        appends,
+        aliases: Vec::new(),
+        animation_sort: None,
+        collision_sort: None,
+        definitions: defs,
     }
 }
 
@@ -246,6 +277,16 @@ pub(crate) fn coll(
     }
 }
 
+/// 当たり判定の領域の列だけを持つ面 1000。
+pub(crate) fn master_with(collisions: Vec<Collision>) -> SurfaceMaster {
+    SurfaceMaster {
+        id: 1000,
+        elements: Vec::new(),
+        collisions,
+        animations: Vec::new(),
+    }
+}
+
 /// premultiplied BGRA 1 画素頁を組む（stride = width*4・tightly packed）。
 pub(crate) fn page_1px(b: u8, g: u8, r: u8, a: u8) -> AtlasPage {
     AtlasPage {
@@ -309,10 +350,10 @@ pub(crate) fn png_size(path: &Path) -> (u32, u32) {
     (w, h)
 }
 
-/// tightly-packed w×h の premultiplied BGRA・不透明（α=255）画像スペックを組む。
-pub(crate) fn opaque_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
+/// tightly-packed w×h の premultiplied BGRA・不透明（α=255・単色 (b,g,r)）画像スペックを組む。
+pub(crate) fn opaque_wxh(w: u32, h: u32, b: u8, g: u8, r: u8) -> (u32, u32, u32, Vec<u8>, bool) {
     let stride = w * 4;
-    (w, h, stride, vec![64u8; (stride * h) as usize], true)
+    (w, h, stride, [b, g, r, 255].repeat((w * h) as usize), true)
 }
 
 /// tightly-packed w×h の premultiplied BGRA・**全透明**（α=0）画像スペックを組む。
@@ -323,16 +364,20 @@ pub(crate) fn transparent_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) 
     (w, h, stride, vec![0u8; (stride * h) as usize], true)
 }
 
-/// (rel_path, (w,h), opaque?) 群から `AtlasTable` を bake する（大きさ指定の焼き）。
-pub(crate) fn bake_atlas_sized(base: &Path, specs: &[(&str, (u32, u32), bool)]) -> AtlasTable {
+/// 大きさ指定の焼きの 1 件: (相対パス, (w,h), 単色 (b,g,r) か全透明 None)。
+pub(crate) type AtlasSpec<'a> = (&'a str, (u32, u32), Option<(u8, u8, u8)>);
+
+/// [`AtlasSpec`] 群から `AtlasTable` を bake する（大きさ指定の焼き）。
+///
+/// `color` が `Some((b,g,r))` なら不透明単色、`None` なら全透明（placement None）。
+pub(crate) fn bake_atlas_sized(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
     let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
     let surfaces = vec![surface(0, elements)];
     let mut dec = MemoryDecoder::new();
-    for (rel, (w, h), opaque) in specs {
-        let (iw, ih, stride, bgra, has_alpha) = if *opaque {
-            opaque_wxh(*w, *h)
-        } else {
-            transparent_wxh(*w, *h)
+    for (rel, (w, h), color) in specs {
+        let (iw, ih, stride, bgra, has_alpha) = match color {
+            Some((b, g, r)) => opaque_wxh(*w, *h, *b, *g, *r),
+            None => transparent_wxh(*w, *h),
         };
         dec.insert(base.join(rel), iw, ih, stride, bgra, has_alpha);
     }

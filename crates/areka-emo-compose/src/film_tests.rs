@@ -11,44 +11,13 @@ use areka_emo_atlas::{
     AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry,
     AtlasKey, MemoryDecoder, PackConfig, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
 };
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+use areka_parsers::shell::Shell;
 
 use super::*;
-use crate::plan_test_support::solid;
+use crate::plan_test_support::{elem, shell_of, solid, surface};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
-
-fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-fn surface(id: u32, elements: Vec<Element>) -> Surface {
-    Surface {
-        id,
-        targets: vec![AppendTarget::Single(id)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }
-}
-
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
 
 /// 焼く絵の登録（相対パスの一覧と読み手）。
 #[derive(Default)]

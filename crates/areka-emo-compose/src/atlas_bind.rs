@@ -64,89 +64,9 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan_test_support::{bake_atlas, elem, shell_of, surface};
     use crate::world::{AtlasBinding, EmoWorld};
-    use areka_emo_atlas::{AlphaParams, UseSelfAlpha};
-    use areka_emo_atlas::{MemoryDecoder, PackConfig, SurfaceSet, bake};
-    use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
     use std::path::Path;
-
-    // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 8 送り）----
-
-    /// element 1 本（layer/path・x,y は 0 固定）。
-    fn elem(layer: u32, path: &str) -> Element {
-        Element {
-            layer,
-            path: ElementPath::new(path.to_string()),
-            x: 0,
-            y: 0,
-        }
-    }
-
-    /// element のみを持つ最小 surface（collision/animation 空・単一ターゲット）。
-    fn surface(id: u32, elements: Vec<Element>) -> Surface {
-        Surface {
-            id,
-            targets: vec![AppendTarget::Single(id)],
-            elements,
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        }
-    }
-
-    /// 与えた surface 群を登場順 definitions（plain のみ）で包む `Shell`。
-    fn shell_of(surfaces: Vec<Surface>) -> Shell {
-        let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-        Shell {
-            surfaces,
-            appends: Vec::new(),
-            aliases: Vec::new(),
-            animation_sort: None,
-            collision_sort: None,
-            definitions,
-        }
-    }
-
-    /// tightly-packed 2×2 の premultiplied BGRA・不透明（α=255）画像スペックを返す。
-    fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-        let (w, h) = (2u32, 2u32);
-        let stride = w * 4;
-        let bgra = vec![
-            10, 20, 30, 255, //
-            40, 50, 60, 255, //
-            70, 80, 90, 255, //
-            100, 110, 120, 255,
-        ];
-        (w, h, stride, bgra, true)
-    }
-
-    /// `MemoryDecoder` へ base_dir.join(rel_path) の実パスで不透明画像を登録する。
-    fn register(dec: &mut MemoryDecoder, base: &Path, rel: &str) {
-        let (w, h, stride, bgra, has_alpha) = opaque_2x2();
-        dec.insert(base.join(rel), w, h, stride, bgra, has_alpha);
-    }
-
-    /// 指定 rel_path 群を含む単一 SurfaceSet を bake し `AtlasTable` を得る（COM/WIC 非依存）。
-    ///
-    /// bake は emo-atlas と同一の headless 経路（`MemoryDecoder`＋`bake`）を辿る。set は常に
-    /// `SetId(0)`（単一セット）。
-    fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
-        let elements: Vec<Element> = rels.iter().map(|r| elem(0, r)).collect();
-        let surfaces = vec![surface(0, elements)];
-        let mut dec = MemoryDecoder::new();
-        for r in rels {
-            register(&mut dec, base, r);
-        }
-        let set = SurfaceSet {
-            surfaces: &surfaces,
-            base_dir: base,
-            alpha_params: AlphaParams {
-                use_self_alpha: UseSelfAlpha::On,
-            },
-        };
-        let result = bake(&[set], &dec, PackConfig::default());
-        assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-        result.table
-    }
 
     /// テスト①（受入基準）: 既知パスは `Some(ElementId)`・未知パスは `None`（debug 済み）に束縛される。
     ///
@@ -165,7 +85,7 @@ mod tests {
         // surface の element は [known.png(layer0), bogus.png(layer1)]（layer 昇順で保たれる）。
         let shell = shell_of(vec![surface(
             1000,
-            vec![elem(0, "known.png"), elem(1, "bogus.png")],
+            vec![elem(0, "known.png", 0, 0), elem(1, "bogus.png", 0, 0)],
         )]);
         let mut world = EmoWorld::build(&shell);
 
@@ -197,8 +117,8 @@ mod tests {
 
         // 2 surface（要素数の異なる）を fold し、各 surface で長さ一致を確かめる。
         let shell = shell_of(vec![
-            surface(0, vec![elem(0, "a.png"), elem(1, "b.png")]),
-            surface(1, vec![elem(0, "c.png")]),
+            surface(0, vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 0, 0)]),
+            surface(1, vec![elem(0, "c.png", 0, 0)]),
         ]);
         let mut world = EmoWorld::build(&shell);
         world.bind_atlas(&atlas, SetId(0));
@@ -232,7 +152,11 @@ mod tests {
 
         let shell = shell_of(vec![surface(
             1,
-            vec![elem(0, "x.png"), elem(1, "y.png"), elem(2, "z.png")],
+            vec![
+                elem(0, "x.png", 0, 0),
+                elem(1, "y.png", 0, 0),
+                elem(2, "z.png", 0, 0),
+            ],
         )]);
         let mut world = EmoWorld::build(&shell);
         // パニックしないこと（呼び出しが返ること自体が保証）。
@@ -261,7 +185,7 @@ mod tests {
     fn wrong_set_id_resolves_none() {
         let base = Path::new("shell/master");
         let atlas = bake_atlas(base, &["known.png"]);
-        let shell = shell_of(vec![surface(0, vec![elem(0, "known.png")])]);
+        let shell = shell_of(vec![surface(0, vec![elem(0, "known.png", 0, 0)])]);
         let mut world = EmoWorld::build(&shell);
 
         world.bind_atlas(&atlas, SetId(1)); // 焼いたのは SetId(0)。

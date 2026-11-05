@@ -16,12 +16,10 @@
 use super::*;
 
 use areka_emo_atlas::{
-    AlphaParams, AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, MemoryDecoder, PackConfig,
-    Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake,
+    AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
 };
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
-    Surface, SurfaceAppend,
+    Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, SurfaceAppend,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -30,106 +28,10 @@ use crate::log_capture::capture_logs;
 use crate::method::{BlendKind, BlendMode, ComposeMethod};
 use crate::normalized::Transform;
 use crate::plan::{BlitOp, build_plan};
-
-// ── 合成モデルビルダ（plan.rs/composer_tests と同一パターン・headless bake 経路）──────────
-
-fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-fn surface(id: u32, elements: Vec<Element>) -> Surface {
-    surface_with_anims(id, elements, Vec::new())
-}
-
-fn surface_with_anims(id: u32, elements: Vec<Element>, animations: Vec<Animation>) -> Surface {
-    Surface {
-        id,
-        targets: vec![AppendTarget::Single(id)],
-        elements,
-        collisions: Vec::new(),
-        animations,
-    }
-}
-
-/// bind animation 1 本（interval=`Interval::Bind`・pattern0 が入れ子 surface_id を x,y で参照）。
-fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
-    Animation {
-        id,
-        interval: Interval::Bind,
-        interval_written: true,
-        patterns: vec![Pattern {
-            index: 0,
-            method: DrawMethod::new("overlay".to_string()),
-            surface_id: ref_surface_id,
-            target: ref_surface_id.to_string(),
-            wait: 0,
-            x,
-            y,
-        }],
-    }
-}
-
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
-
-/// surface/append 混在の登場順 definitions で `Shell` を組む（呼び手が DefRef を直接並べる）。
-fn shell_mixed(surfaces: Vec<Surface>, appends: Vec<SurfaceAppend>, defs: Vec<DefRef>) -> Shell {
-    Shell {
-        surfaces,
-        appends,
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions: defs,
-    }
-}
-
-/// tightly-packed 2×2 の premultiplied BGRA・不透明画像スペック。
-fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-    let (w, h) = (2u32, 2u32);
-    let stride = w * 4;
-    let bgra = vec![64u8; (stride * h) as usize];
-    (w, h, stride, bgra, true)
-}
-
-fn register(dec: &mut MemoryDecoder, base: &Path, rel: &str) {
-    let (w, h, stride, bgra, has_alpha) = opaque_2x2();
-    dec.insert(base.join(rel), w, h, stride, bgra, has_alpha);
-}
-
-/// 指定 rel_path 群を含む単一 SurfaceSet を bake し `AtlasTable` を得る（COM/WIC 非依存・SetId(0)）。
-fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
-    let elements: Vec<Element> = rels.iter().map(|r| elem(0, r, 0, 0)).collect();
-    let surfaces = vec![surface(0, elements)];
-    let mut dec = MemoryDecoder::new();
-    for r in rels {
-        register(&mut dec, base, r);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    result.table
-}
+use crate::plan_test_support::{
+    bake_atlas, bind_anim, elem, page_1px, shell_mixed, shell_of, single_entry_table, surface,
+    surface_with_anims,
+};
 
 // ── 7.3: 循環検出 warn（ops 経路・flatten_surface）────────────────────────────────────
 
@@ -328,33 +230,6 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
 }
 
 // ── 8.4: 未実装メソッド warn（blit.rs execute）────────────────────────────────────────
-
-/// premultiplied BGRA 1 画素頁を組む。
-fn page_1px(b: u8, g: u8, r: u8, a: u8) -> AtlasPage {
-    AtlasPage {
-        width: 1,
-        height: 1,
-        stride: 4,
-        bytes: Arc::from(vec![b, g, r, a]),
-    }
-}
-
-/// 単一エントリ（`ElementId(0)`）＋単一頁の AtlasTable を組む（uv/trim 指定）。
-fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> AtlasTable {
-    let keys = vec![AtlasKey {
-        set: SetId(0),
-        rel_path: "e.png".into(),
-    }];
-    let entries = vec![AtlasEntry {
-        original: Size { w: uv.w, h: uv.h },
-        placement: Some(Placement {
-            page: 0,
-            uv_rect: uv,
-            trim_offset: trim,
-        }),
-    }];
-    AtlasTable::new(keys, entries, vec![page])
-}
 
 /// 要件 8.4: 未実装メソッド命令（Replace/Base/Blend）は DEBUG（method＋element つき）を出して skip する。
 ///

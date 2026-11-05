@@ -3,10 +3,11 @@
 //! 持ち込み済みの列を [`EmoWorld::hit_regions`] で引き、`hit_region_in`（画家則＝後ろが手前）で
 //! 当てて確かめる。並びは［子から持ち込む分（element定義の番号の昇順）］→［親に直接書いた領域］。
 
-use areka_parsers::shell::{Collision, CollisionName, parse};
+use areka_parsers::shell::parse;
 
 use super::HitRegions;
 use crate::hit::{RegionPriority, hit_region_in};
+use crate::plan_test_support::coll;
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -24,17 +25,6 @@ fn hit(world: &EmoWorld, id: u32, x: i64, y: i64) -> Option<String> {
 fn has_regions(world: &EmoWorld, id: u32) -> bool {
     let entity = world.world().resource::<SurfaceIndex>().0[&id];
     world.world().get::<HitRegions>(entity).is_some()
-}
-
-fn coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str) -> Collision {
-    Collision {
-        index,
-        left,
-        top,
-        right,
-        bottom,
-        name: CollisionName::new(name.to_string()),
-    }
 }
 
 /// 子の領域が element定義の X,Y だけずれた位置で当たり、元の位置では当たらない（要件 4.1・4.2）。

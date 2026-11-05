@@ -7,126 +7,14 @@
 //! compose と compose_into が等価かつ決定的であること（要件 10.1）を固定する。
 
 use super::*;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, ElementId, MemoryDecoder, PackConfig, SetId, Size, SurfaceSet,
-    UseSelfAlpha, bake,
-};
-use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
-    SortOrder, Surface,
-};
+use areka_emo_atlas::{AtlasTable, ElementId, SetId, Size};
+use areka_parsers::shell::{Shell, SortOrder};
 use std::path::Path;
 
-// ── 合成モデルビルダ（plan.rs テストと同一パターン・実 fixture パース非依存の headless 経路）──
-
-fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-fn surface(id: u32, elements: Vec<Element>) -> Surface {
-    surface_with_anims(id, elements, Vec::new())
-}
-
-fn surface_with_anims(id: u32, elements: Vec<Element>, animations: Vec<Animation>) -> Surface {
-    Surface {
-        id,
-        targets: vec![AppendTarget::Single(id)],
-        elements,
-        collisions: Vec::new(),
-        animations,
-    }
-}
-
-/// bind animation 1 本（interval=`Interval::Bind`・pattern0 が入れ子 surface_id を x,y で参照）。
-fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
-    Animation {
-        id,
-        interval: Interval::Bind,
-        interval_written: true,
-        patterns: vec![Pattern {
-            index: 0,
-            method: DrawMethod::new("overlay".to_string()),
-            surface_id: ref_surface_id,
-            target: ref_surface_id.to_string(),
-            wait: 0,
-            x,
-            y,
-        }],
-    }
-}
-
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    shell_of_with_sort(surfaces, None)
-}
-
-fn shell_of_with_sort(surfaces: Vec<Surface>, animation_sort: Option<SortOrder>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort,
-        collision_sort: None,
-        definitions,
-    }
-}
-
-/// tightly-packed w×h の premultiplied BGRA・不透明（α=255・単色 (b,g,r)）画像スペック。
-fn opaque_wxh(w: u32, h: u32, b: u8, g: u8, r: u8) -> (u32, u32, u32, Vec<u8>, bool) {
-    let stride = w * 4;
-    let mut bgra = Vec::with_capacity((stride * h) as usize);
-    for _ in 0..(w * h) {
-        bgra.extend_from_slice(&[b, g, r, 255]);
-    }
-    (w, h, stride, bgra, true)
-}
-
-/// tightly-packed w×h の premultiplied BGRA・全透明（α=0）画像スペック。
-fn transparent_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
-    let stride = w * 4;
-    (w, h, stride, vec![0u8; (stride * h) as usize], true)
-}
-
-/// bake 仕様の1エントリ: (相対パス, (w,h), 単色 (b,g,r) or 全透明 None)。
-type AtlasSpec<'a> = (&'a str, (u32, u32), Option<(u8, u8, u8)>);
-
-/// [`AtlasSpec`] 群から `AtlasTable` を bake する。
-///
-/// `color` が `Some((b,g,r))` なら不透明単色、`None` なら全透明（placement None）。
-fn bake_atlas_spec(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
-    let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
-    let surfaces = vec![surface(0, elements)];
-    let mut dec = MemoryDecoder::new();
-    for (rel, (w, h), color) in specs {
-        let (iw, ih, stride, bgra, has_alpha) = match color {
-            Some((b, g, r)) => opaque_wxh(*w, *h, *b, *g, *r),
-            None => transparent_wxh(*w, *h),
-        };
-        dec.insert(base.join(rel), iw, ih, stride, bgra, has_alpha);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    result.table
-}
-
-/// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提）。
-fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    let i = (y * out.stride() + x * 4) as usize;
-    let b = out.bytes();
-    [b[i], b[i + 1], b[i + 2], b[i + 3]]
-}
+use crate::plan_test_support::{
+    bake_atlas_sized, bind_anim, elem, px, shell_of, shell_of_with_sort, surface,
+    surface_with_anims,
+};
 
 /// fold → bind 済み world と atlas を返す共通土台。
 fn build_bound(shell: Shell, atlas: &AtlasTable) -> EmoWorld {
@@ -145,7 +33,7 @@ fn build_bound(shell: Shell, atlas: &AtlasTable) -> EmoWorld {
 #[test]
 fn compose_returns_ok_composed_surface_for_valid_input() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (40, 30), Some((200, 0, 0))),  // 不透明青。
@@ -196,7 +84,7 @@ fn compose_returns_ok_composed_surface_for_valid_input() {
 #[test]
 fn composer_holds_no_result_no_stale_cache() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("a.png", (10, 10), Some((200, 0, 0))), // 青。
@@ -249,7 +137,7 @@ fn composer_holds_no_result_no_stale_cache() {
 #[test]
 fn compose_into_reuses_buffer_across_calls() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(base, &[("p.png", (30, 20), Some((100, 110, 120)))]);
+    let atlas = bake_atlas_sized(base, &[("p.png", (30, 20), Some((100, 110, 120)))]);
     let surf = surface(5000, vec![elem(0, "p.png", 0, 0)]);
     let world = build_bound(shell_of(vec![surf]), &atlas);
 
@@ -324,7 +212,7 @@ fn compose_into_reuses_buffer_across_calls() {
 #[test]
 fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (40, 30), Some((200, 0, 0))),  // 不透明青。
@@ -398,7 +286,7 @@ fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
 #[test]
 fn absent_surface_propagates_surface_not_found() {
     let world = EmoWorld::build(&shell_of(Vec::new()));
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         Path::new("shell/master"),
         &[("dummy.png", (2, 2), Some((1, 2, 3)))],
     );
@@ -417,7 +305,7 @@ fn absent_surface_propagates_surface_not_found() {
 #[test]
 fn no_layers_degenerate_propagates_empty_composition() {
     let surf = surface(7000, Vec::new()); // element ゼロ・animation ゼロ。
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         Path::new("shell/master"),
         &[("dummy.png", (2, 2), Some((1, 2, 3)))],
     );
@@ -437,7 +325,7 @@ fn no_layers_degenerate_propagates_empty_composition() {
 #[test]
 fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("ghost1.png", (300, 300), None), // 全透明→ placement None。
@@ -472,7 +360,7 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
 #[test]
 fn compose_equals_compose_into_fresh_buffer() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (40, 30), Some((10, 20, 30))),
@@ -520,7 +408,7 @@ fn compose_equals_compose_into_fresh_buffer() {
 #[test]
 fn compose_is_deterministic() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (40, 30), Some((10, 20, 30))),
@@ -566,7 +454,7 @@ fn compose_is_deterministic() {
 fn end_to_end_multilayer_ascend_wiring() {
     let base = Path::new("shell/master");
     // 同一 (0,0)・同一 4×4 サイズの 3 パーツを重ねる。ascend ゆえ ID 降順描画（小 ID が上）。
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("p1.png", (4, 4), Some((11, 0, 0))),
@@ -654,7 +542,7 @@ fn _type_anchor(_: ElementId, _: Size) {}
 //
 // design「合成合流と method ゲート」の Postconditions（`pattern.is_empty()` なら出力命令列・外形
 // とも拡張前と完全一致・要件 5.4）と、transient コマの ID 整列合流（同 ID 置換・ID 整列不変・
-// 要件 5.3/4.2）を、composer_tests の headless bake 経路（`bake_atlas_spec` の全不透明単色画像）で
+// 要件 5.3/4.2）を、composer_tests の headless bake 経路（`bake_atlas_sized` の全不透明単色画像）で
 // **byte / pixel 単位**に固定する。全不透明画像ゆえ premultiplied SourceOver は「上層優先」に帰着し、
 // 期待バッファを入力ジオメトリから**独立に再構成**できる（golden は tautology でない）。
 //
@@ -677,7 +565,7 @@ fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
     let base = Path::new("shell/master");
     // base(青 4×4 全不透明) を (0,0)、有効 bind pattern0（赤 2×2）を (1,1) へ overlay。全不透明ゆえ
     // SourceOver は上層優先＝期待バッファを独立再構成できる（tautology でない golden）。
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (4, 4), Some((200, 0, 0))), // 青。
@@ -729,7 +617,7 @@ fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
 #[test]
 fn empty_pattern_golden_is_non_vacuous() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (4, 4), Some((200, 0, 0))),
@@ -787,7 +675,7 @@ fn empty_pattern_golden_is_non_vacuous() {
 #[test]
 fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("p1.png", (4, 4), Some((200, 0, 0))), // 青＝id=1 pattern0（surface1100）。
@@ -856,7 +744,7 @@ fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
 #[test]
 fn transient_merge_is_pattern_driven_not_static() {
     let base = Path::new("shell/master");
-    let atlas = bake_atlas_spec(
+    let atlas = bake_atlas_sized(
         base,
         &[
             ("p1.png", (4, 4), Some((200, 0, 0))),

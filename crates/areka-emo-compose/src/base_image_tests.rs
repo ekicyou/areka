@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
-    Surface, SurfaceAppend,
+    Animation, AppendTarget, DefRef, DrawMethod, Element, Interval, Pattern, Shell, Surface,
+    SurfaceAppend,
 };
 use bevy_ecs::world::World;
 
@@ -10,41 +10,8 @@ use crate::base_image::BaseImageReport;
 use crate::fold::fold_shell;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
+use crate::plan_test_support::{elem, shell_mixed, shell_of, surface_def};
 use crate::world::{AliasMap, EmoWorld, ShellSettings, SurfaceIndex};
-
-/// element 1 本（layer/x/y 指定）。
-fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-/// ターゲット記述子とボディ element 群から plain surface 定義を組み立てる。
-fn surface_def(id: u32, targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
-    Surface {
-        id,
-        targets,
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }
-}
-
-/// surfaces と definitions を 1 対 1（登場順）で組んだ `Shell`。
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
 
 /// 番号 → ファイル名の対応を組み立てる。
 fn images(entries: &[(u32, &str)]) -> BTreeMap<u32, String> {
@@ -226,22 +193,6 @@ fn used_and_shadowed_partition_the_images() {
     assert_eq!(face5.elements[0].path.as_str(), "surface5.png");
     assert!(face5.collisions.is_empty());
     assert!(face5.animations.is_empty());
-}
-
-/// surfaces と appends を、渡した定義順（`definitions`）どおりに並べた `Shell`。
-fn shell_mixed(
-    surfaces: Vec<Surface>,
-    appends: Vec<SurfaceAppend>,
-    definitions: Vec<DefRef>,
-) -> Shell {
-    Shell {
-        surfaces,
-        appends,
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
 }
 
 /// `surface.append` の対象群（ターゲット記述子と追記 element）。

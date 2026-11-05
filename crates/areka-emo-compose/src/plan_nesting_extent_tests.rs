@@ -6,16 +6,15 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, bake};
+use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::parse;
 
 use super::{BlitOp, Extent, build_plan};
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::log_capture::capture_logs;
-use crate::method::ComposeMethod;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::plan_test_support::{elem, surface};
+use crate::pattern::PatternState;
+use crate::plan_test_support::{AtlasSpec, bake_atlas_sized, frame};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -34,32 +33,11 @@ const SIZES: &[(&str, (u32, u32))] = &[
 ];
 
 fn atlas() -> AtlasTable {
-    let base = Path::new("shell/master");
-    let surfaces = vec![surface(
-        0,
-        SIZES.iter().map(|(r, _)| elem(0, r, 0, 0)).collect(),
-    )];
-    let mut dec = MemoryDecoder::new();
-    for (rel, (w, h)) in SIZES {
-        dec.insert(
-            base.join(rel),
-            *w,
-            *h,
-            w * 4,
-            vec![64u8; (w * 4 * h) as usize],
-            true,
-        );
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: areka_emo_atlas::AlphaParams {
-            use_self_alpha: areka_emo_atlas::UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    result.table
+    let specs: Vec<AtlasSpec> = SIZES
+        .iter()
+        .map(|&(rel, size)| (rel, size, Some((64, 64, 64))))
+        .collect();
+    bake_atlas_sized(Path::new("shell/master"), &specs)
 }
 
 /// 文面を面の表にして `top` の計画を建てる。命令列と記録も返す。
@@ -130,15 +108,6 @@ fn parent_with_only_children_builds_a_plan() {
     let (result, ops, _) = plan(text, 0, &PatternState::default());
     assert_eq!(result, Ok(Extent { w: 13, h: 14 }));
     assert_eq!(ops.len(), 1, "子の画像 1 枚が命令になる");
-}
-
-fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x,
-        y,
-    }
 }
 
 /// 部品のコマが進んでも外形は動かない（コマに依らない静的な量・要件 2.6）。

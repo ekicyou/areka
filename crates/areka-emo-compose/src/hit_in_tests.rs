@@ -9,19 +9,9 @@
 use super::{
     RegionPriority, ScaledHit, hit_region, hit_region_in, hit_region_scaled, hit_region_scaled_in,
 };
-use crate::normalized::SurfaceMaster;
-use crate::plan_test_support::coll;
+use crate::plan_test_support::{coll, master_with};
 use crate::scale::ScaleRatio;
 use areka_parsers::shell::Collision;
-
-fn master_with(collisions: Vec<Collision>) -> SurfaceMaster {
-    SurfaceMaster {
-        id: 1000,
-        elements: Vec::new(),
-        collisions,
-        animations: Vec::new(),
-    }
-}
 
 /// 列の候補: 空・単独・重なり（画家則）・同じ名前の重なり・反転矩形・離れた 2 つ。
 fn lists() -> Vec<Vec<Collision>> {

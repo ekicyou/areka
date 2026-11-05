@@ -1,12 +1,14 @@
 use areka_parsers::shell::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, DefRef, Element, Interval, Shell, Surface,
+    SurfaceAlias, SurfaceAppend,
 };
 use bevy_ecs::world::World;
 
 use crate::fold::{expand_targets, fold_shell};
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
+use crate::plan_test_support::{coll, elem, shell_mixed, shell_of, surface_def};
+use crate::sample_test_support::emo2_shell;
 use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
 
 /// 既定リソースを備えた空 World を用意する（`EmoWorld::build` と同じ初期化）。
@@ -34,52 +36,6 @@ fn alias_def(key: &str, ids: Vec<u32>) -> SurfaceAlias {
 fn master_of(world: &World, id: u32) -> Option<&SurfaceMaster> {
     let entity = *world.resource::<SurfaceIndex>().0.get(&id)?;
     world.get::<SurfaceMaster>(entity)
-}
-
-/// ターゲット記述子とボディ element 群から plain surface 定義を組み立てる。
-fn surface_def(id: u32, targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
-    Surface {
-        id,
-        targets,
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }
-}
-
-/// element 1 本（layer/x/y 指定・パスは id 由来のダミー）。
-fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-/// surfaces と definitions を 1 対 1（登場順）で組んだ `Shell`。
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
-
-/// collision 1 本（矩形＋領域名）。
-fn coll(index: u32, name: &str) -> Collision {
-    Collision {
-        index,
-        left: 0,
-        top: 0,
-        right: 10,
-        bottom: 10,
-        name: CollisionName::new(name.to_string()),
-    }
 }
 
 /// animation 1 本（interval=bind・pattern 群空・id と識別のみに用いる）。
@@ -121,21 +77,6 @@ fn surface_full(
         elements,
         collisions,
         animations,
-    }
-}
-
-/// `Shell` を surface/append を混在させた登場順 `definitions` で組む。
-///
-/// `defs` は登場順に `DefRef` を並べたもの（呼び手が `DefRef::Surface(i)`／`DefRef::Append(i)`
-/// を直接指定する）。surfaces/appends の各 Vec には index が既に対応している前提。
-fn shell_mixed(surfaces: Vec<Surface>, appends: Vec<SurfaceAppend>, defs: Vec<DefRef>) -> Shell {
-    Shell {
-        surfaces,
-        appends,
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions: defs,
     }
 }
 
@@ -335,14 +276,14 @@ fn append_merges_element_and_collision_layer_sorted() {
         5,
         vec![AppendTarget::Single(5)],
         vec![elem(2, "hi.png", 0, 0)],
-        vec![coll(0, "Head")],
+        vec![coll(0, 0, 0, 10, 10, "Head")],
         Vec::new(),
     );
     // append: layer=0 の element（base より低い layer）＋ collision 1 本。
     let ap = append_def(
         vec![AppendTarget::Single(5)],
         vec![elem(0, "lo.png", 1, 1)],
-        vec![coll(1, "Bust")],
+        vec![coll(1, 0, 0, 10, 10, "Bust")],
         Vec::new(),
     );
     let mut world = fresh_world();
@@ -719,17 +660,6 @@ fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
     s1
 }
 
-/// emo2 fixture（実上流シェル）の `surfaces.txt` を UTF-8 で読み parse して `Shell` を得る。
-///
-/// `emo2_e2e.rs`（emo-atlas）の読込経路と同一（`read_to_string`＋`areka_parsers::shell::parse`）を
-/// 本 crate から辿る。COM／WIC／atlas bake は経由しない純粋な parse+fold ゆえ headless で走る。
-fn emo2_shell() -> Shell {
-    let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
-    let content = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-    areka_parsers::shell::parse(&content)
-}
-
 /// (3.7-1) 受入基準（要件 1.5/10.1）: 複数定義が重なる**手組み** Shell を2回 fold すると
 /// 得られる EmoWorld 内容がバイト等価。emo2 の重なり構造（plain 群→多 id append→重複 alias）を
 /// ミラーした入力で決定性を固定する（実 fixture とは別に、パーサ非依存で保証）。
@@ -745,7 +675,7 @@ fn hand_built_overlap_shell_folds_byte_equal_twice() {
         2100,
         vec![AppendTarget::Single(2100)],
         vec![elem(0, "b2100.png", 0, 0)],
-        vec![coll(0, "Head")],
+        vec![coll(0, 0, 0, 10, 10, "Head")],
         vec![anim(1)],
     );
     let s2101 = surface_def(
@@ -767,7 +697,7 @@ fn hand_built_overlap_shell_folds_byte_equal_twice() {
             },
         ],
         vec![elem(1, "added.png", 3, 4)],
-        vec![coll(1, "Bust")],
+        vec![coll(1, 0, 0, 10, 10, "Bust")],
         vec![anim(2)],
     );
     // 重複 alias（emo2 の `100,[2100]` が2回）＝後勝ちで一意。

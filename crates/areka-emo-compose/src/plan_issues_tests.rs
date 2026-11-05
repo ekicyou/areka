@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, bake};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::{AtlasTable, SetId};
+use areka_parsers::shell::parse;
 
 use super::{ShapeIssue, shape_issues};
 use crate::Composer;
@@ -12,6 +12,7 @@ use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
+use crate::plan_test_support::bake_atlas_sized;
 use crate::world::EmoWorld;
 
 /// 循環（面 10 の bind が自分を指す）・描かないメソッド（面 0 の `replace` が面 20 を指す）を 1 つずつ
@@ -64,39 +65,14 @@ fn clean_shell_has_no_issues() {
 
 /// 文面を面の表にし、アトラスを当てて返す。
 fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let rels = ["base.png", "part.png"];
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![AppendTarget::Single(0)],
-        elements: rels
-            .iter()
-            .map(|r| Element {
-                layer: 0,
-                path: ElementPath::new(r.to_string()),
-                x: 0,
-                y: 0,
-            })
-            .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for rel in rels {
-        dec.insert(base.join(rel), 2, 2, 8, vec![255u8; 16], true);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: areka_emo_atlas::AlphaParams {
-            use_self_alpha: areka_emo_atlas::UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
+    let white = Some((255, 255, 255));
+    let atlas = bake_atlas_sized(
+        Path::new("shell/master"),
+        &[("base.png", (2, 2), white), ("part.png", (2, 2), white)],
+    );
     let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&result.table, SetId(0));
-    (world, result.table)
+    world.bind_atlas(&atlas, SetId(0));
+    (world, atlas)
 }
 
 /// 同じ面を何度組んでも、形の誤り（入れ子の循環・描かないメソッドの pattern0 とコマ）の知らせは
