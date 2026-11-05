@@ -38,10 +38,14 @@
 //! ——出すと、ログを読む人には 1 回の失敗が 2 回に見える。記録の無い失敗経路も持たない
 //! （要件 9.1）。
 
-use crate::container::{inflate_entry, read_central_directory};
+use crate::container::{
+    MAX_TOTAL_DECLARED_SIZE, TAIL_WINDOW, archive_too_large, inflate_entry,
+    locate_central_directory, read_central_directory, read_central_headers,
+};
 use crate::install::{WorkArea, area_for, commit_all, stage_placement};
 use crate::names::{EntryName, validate_entry_names};
 use crate::plan::build_plan;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 mod container;
@@ -279,6 +283,12 @@ impl NarArchive {
 /// 手続きも `install.txt` を探す前に同じ理由で断るので、「`install.txt` を持つ物」と
 /// 扱われたことが無い。生の名前で探す道は、探し方が 2 つになるので取らない。
 ///
+/// **読むのは書庫の末尾（終端記録の窓）と目次だけ**で、各エントリのローカルヘッダは
+/// 見ない。そのため**ローカルヘッダだけが壊れた書庫**は、判定が `Ok(true)`（在る）と
+/// 答え、`open` が [`RefuseReason::CorruptArchive`] で断る（インストール対象として扱い、
+/// 入らなければインストールの失敗になる）。目次と名前で決まる答えは `open` と一致する。
+/// 書庫が受け入れる大きさの上限を越えるときは、`open` と同じく読む前に断る。
+///
 /// **記録を出さないのは意図**。「記録はここだけが出す」は `open`／`install` の契約で、
 /// これは問い合わせ——読めなかったことの記録は呼び手が 1 回出す。
 ///
@@ -291,15 +301,60 @@ pub fn peek_install_txt(path: &Path) -> Result<bool, NarError> {
         archive: path.to_path_buf(),
         reason,
     };
-    let bytes = read_archive_bytes(path)?;
-    let raw = read_central_directory(&bytes).map_err(refused)?;
+    let failed = read_failed(path);
+    let (mut file, len) = open_within(path, MAX_ARCHIVE_LEN)?;
+    let tail_len = len.min(TAIL_WINDOW as u64);
+    let mut tail = vec![0; tail_len as usize];
+    file.seek(SeekFrom::End(-(tail_len as i64)))
+        .and_then(|_| file.read_exact(&mut tail))
+        .map_err(&failed)?;
+    let span = locate_central_directory(&tail, len).map_err(refused)?;
+    let mut cd = vec![0; span.size];
+    file.seek(SeekFrom::Start(span.offset))
+        .and_then(|_| file.read_exact(&mut cd))
+        .map_err(&failed)?;
+    let raw = read_central_headers(&cd, &span, None).map_err(refused)?;
     let names = validate_entry_names(&raw).map_err(refused)?;
     Ok(manifest::locate_install_txt(&names).is_ok())
 }
 
+/// 受け入れる書庫の長さの上限（宣言の総和の上限の 2 倍）。
+///
+/// 受け入れる中身は宣言の総和で [`MAX_TOTAL_DECLARED_SIZE`] まで。格納の中身はその大きさ
+/// のまま、圧縮の中身は縮まない時でもほぼ同じ大きさで、頭の分を入れても 2 倍は越えない。
+/// 越える書庫は全部読んでも必ず断ることになるので、読む前に断る。
+const MAX_ARCHIVE_LEN: u64 = 2 * MAX_TOTAL_DECLARED_SIZE;
+
 /// 書庫を丸ごと読む。失敗は `phase: Read` の [`NarError::Io`]（確定 0 件）。記録は出さない。
 fn read_archive_bytes(path: &Path) -> Result<Vec<u8>, NarError> {
-    std::fs::read(path).map_err(|source| NarError::Io {
+    read_archive_bytes_within(path, MAX_ARCHIVE_LEN)
+}
+
+/// 長さが `limit` を越える書庫は読まずに「大きすぎる」で断り、越えなければ丸ごと読む。
+fn read_archive_bytes_within(path: &Path, limit: u64) -> Result<Vec<u8>, NarError> {
+    let (mut file, len) = open_within(path, limit)?;
+    let mut bytes = Vec::with_capacity(len as usize);
+    file.read_to_end(&mut bytes).map_err(read_failed(path))?;
+    Ok(bytes)
+}
+
+/// 書庫を開いて長さを測る。長さが `limit` を越えれば読む前に断る。
+fn open_within(path: &Path, limit: u64) -> Result<(std::fs::File, u64), NarError> {
+    let failed = read_failed(path);
+    let file = std::fs::File::open(path).map_err(&failed)?;
+    let len = file.metadata().map_err(&failed)?.len();
+    if len > limit {
+        return Err(NarError::Refused {
+            archive: path.to_path_buf(),
+            reason: archive_too_large(),
+        });
+    }
+    Ok((file, len))
+}
+
+/// 書庫の読み取りの失敗を `phase: Read` の [`NarError::Io`]（確定 0 件）にする。
+fn read_failed(path: &Path) -> impl Fn(std::io::Error) -> NarError + '_ {
+    move |source| NarError::Io {
         archive: path.to_path_buf(),
         phase: IoPhase::Read,
         path: path.to_path_buf(),
@@ -307,7 +362,7 @@ fn read_archive_bytes(path: &Path) -> Result<Vec<u8>, NarError> {
         committed: Vec::new(),
         rolled_back: true,
         survivors: Box::default(),
-    })
+    }
 }
 
 /// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す（要件 9.1・6.4）。

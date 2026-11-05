@@ -165,3 +165,95 @@ fn the_answer_agrees_with_how_the_procedure_opens_the_same_archive() {
         "問い合わせは記録しない: {peek_records:?}"
     );
 }
+
+fn is_corrupt(answer: &Result<NarArchive, NarError>) -> bool {
+    matches!(
+        answer,
+        Err(NarError::Refused {
+            reason: RefuseReason::CorruptArchive { .. },
+            ..
+        })
+    )
+}
+
+/// 判定は末尾と目次だけを読む: 最初の件のローカルの頭の署名だけを壊すと、判定は「在る」と
+/// 答え、`open` は構造の拒否で断る。判定が丸ごと読む形へ戻ると判定も断って赤。
+#[test]
+fn peek_reads_only_the_table_of_contents() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let mut bytes = with_manifest_named("install.txt").bytes();
+    assert_eq!(
+        &bytes[..4],
+        b"PK\x03\x04",
+        "最初の件のローカルの頭が先頭に在る"
+    );
+    bytes[3] ^= 0xFF;
+    let path = work.path().join("local-broken.nar");
+    std::fs::write(&path, &bytes).expect("固定入力を置ける");
+
+    let peeked = peek_install_txt(&path);
+    assert!(
+        matches!(peeked, Ok(true)),
+        "目次だけで在ると答える: {peeked:?}"
+    );
+    let opened = NarArchive::open(&path);
+    assert!(
+        is_corrupt(&opened),
+        "open はローカルの頭で断る: {:?}",
+        opened.err()
+    );
+}
+
+/// 書庫コメントが最大（65535 バイト）でも、末尾の窓の中に終端記録が見つかる。
+/// 窓の端を確かめるため、書庫は窓より長くする。
+#[test]
+fn peek_finds_the_end_record_behind_a_long_comment() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let mut bytes = with_manifest_named("install.txt")
+        .file(
+            "ghost/master/filler.bin",
+            &vec![0u8; container::TAIL_WINDOW],
+        )
+        .done()
+        .bytes();
+    let comment_len = bytes.len() - 2;
+    bytes[comment_len..].copy_from_slice(&u16::MAX.to_le_bytes());
+    bytes.extend(std::iter::repeat_n(b'c', u16::MAX as usize));
+    assert!(bytes.len() > container::TAIL_WINDOW, "窓より長い書庫");
+    let path = work.path().join("long-comment.nar");
+    std::fs::write(&path, &bytes).expect("固定入力を置ける");
+
+    let peeked = peek_install_txt(&path);
+    assert!(matches!(peeked, Ok(true)), "{peeked:?}");
+    assert!(
+        NarArchive::open(&path).is_ok(),
+        "対照: open も同じ書庫を受け入れる"
+    );
+}
+
+/// 上限を 1 バイトでも越える書庫は読む前に「大きすぎる」で断り、上限ちょうどは読める。
+/// 先回りを消すと上限を越えても読めて赤。
+#[test]
+fn open_refuses_an_archive_longer_than_the_limit_before_reading() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let path = put(&work, "present.nar", &with_manifest_named("install.txt"));
+    let len = std::fs::metadata(&path).expect("大きさが分かる").len();
+
+    let refused = read_archive_bytes_within(&path, len - 1);
+    assert!(
+        matches!(
+            refused,
+            Err(NarError::Refused {
+                reason: RefuseReason::UnsupportedEntry {
+                    index: 0,
+                    what: Unsupported::TooLarge,
+                    ..
+                },
+                ..
+            })
+        ),
+        "上限を越えたら読まずに断る: {refused:?}"
+    );
+    let read = read_archive_bytes_within(&path, len).expect("上限ちょうどは読める");
+    assert_eq!(read.len() as u64, len);
+}
