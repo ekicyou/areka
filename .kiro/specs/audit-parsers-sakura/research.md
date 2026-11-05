@@ -452,3 +452,65 @@ SSP（`C:\wintools\ssp\ssp.exe`・ゴースト「えも2DEBUG」）を起こし�
 |---|---|---|---|
 | 26 | `\0\b[2]\![set,choicetimeout,20000]A\q0[OnMeasureYes][はい]B\q1[OnMeasureNo][いいえ]C` | `\q0[…][はい]`・`\q1[…][いいえ]` は **選択肢**として出る（タイトル「はい」「いいえ」だけが見え、`0[OnMeasureYes]` の字は出ない）。選択待ちになり、時間切れでゴーストの時間切れのトークが出た | 通し番号の 1 桁の数を `legacy_q_star` で受け、旧形の選択肢として扱う（見える字に `0[ID]` を出さない） |
 | 27 | `\0\b[2]ア\1\b[2][小声で]そうなの？\0イ\e[注]です` | `\1` は **話し手を切り替え**、`[小声で]そうなの？` は**地の文として字のまま**出る。`\e` は**トークを終え**、後ろの `[注]です` は出ない | 角括弧の道に入るのを引数を取りうるタグだけにする直し（3 節 27 の直しの方向）が SSP と一致する。`lexer_word_boundary_tests.rs:165` の「角括弧形として読まれる」は SSP と違う＝テストを直す |
+
+## 12. 設計の段の調べ（2026-11-05・HEAD `d99ddfad`）
+
+- **Discovery の型**: light（今のクレートの直し・新しい外部の依存なし）。範囲を 6 つ（package／balloon・charset・kv／sakura（parsers）／shell／compile ほか／drive・strict・sysvar）に分け、読むだけの下請け 6 本に、指摘ごとの今の行・最小の直し・ツリー全体の呼び手・落ちるテスト・行数を確かめさせた。
+- **使ったスキルと道具**: `kiro-spec-design` の rules（design-principles・discovery-light・synthesis・review-gate）・ukadoc の MCP（`search_docs`）。SSP は動かしていない（11 節の測りだけを使った）。
+
+### 12.1 行の確かめ（93 件とも出た）と読みの直し
+
+- 93 件とも今のコードで出た（出なかった件は 0）。行の番号はほぼ 3 節のまま。違いは次のとおり。
+  - 27: 3 節の「引数を取らないタグ」に `c` を入れたのは誤り（ukadoc `\c[char,数値]`・`\c[line,数値]` がある）。一覧は `* + - 0 1 4 5 6 7 C _! _+ _? _V __c __t _n _q a e h t u v z`（ukadoc の台帳から字の形だけのタグを拾った）。`w` は `\w[n]` を Raw に固めた今の決め（`decode_tests.rs:46`・`lexer_tests.rs:121`）のまま一覧に入れない。
+  - 38: 3 節の失敗の例（`surface1-3` と bind の `overlay,2` で「bind だけの絵でない」と誤る）は逆。今は代表の id 1 だけで確かめるので、1 だけが bind から引かれると `eye.png` を誤って「bind だけ」と数える。直しは同じ（`Surface.id` を消し、ブレスの全部の番号で確かめる）。
+  - 50: 「9 の直しで 1 つ減る」は誤り。9 は D7 で `warn!` だけになったので読み直しは減らない。減るのは 46 の `persist.rs` の 1 回。
+  - 60: 読み手は今 `crates/areka/src/placement/mod.rs:757-765`・`:827`。
+  - 43: `check_script_judge.rs` の 2 つの塊は 2 行下がって `:58-66`・`:70-78`。
+  - 71: 今の規則（`{` の直前の有意な行が見出し）も ukadoc の一つの読み。設計で「areka の読むブレスの名の行を見出しに選び、間の行はコメント」の読みに決めた（33 と同じ規則）。
+  - 10: 綴りが変わると `AskerId` の字が変わる（`crates/areka-ghost/src/sylphya_wiring.rs:97-99`）。手で `root.join("ghost/master")` と組むテストが範囲の外に 2 つある（`crates/areka-ghost/tests/ghost/sylphya_integration_test.rs:286`・`:419`）。`AskerId` は永続の鍵ではない（`crates/areka-sylphya/src/` の永続の書式に出ない）。
+- 確かめていないこと: ビルドとテストは回していない。`.id` の読みの一覧と 36 で範囲の外の期待値が変わるかは grep の結果で、コンパイラと 1 回の全体テストで確定する。
+
+### 12.2 調べ物 R1〜R4 の答え
+
+- **R1**（SSP で測る）: 26・27 は 11 節。33・34・36・47・71・6・18 は測っていない（要件 7.8 は `sakurascript`・`dump_balloon` だけを許し、試しのシェルを入れる測りは許していない）。33・71 は ukadoc「ブレス名、{}、各設定として認識されない行はすべてコメント行として扱われる」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#introduction_surfaces.txt）で決めた。34・36・47・18 は振る舞いを変えないか、0 に倒さず飛ばすだけ（要件 7.6）。
+- **R2**（8 で期待値が変わるテスト）: `compile_sheet_tests.rs:74-78`（`t_wait2` が 0.15000000000000002 → 0.15）と `drive_delivery_tests.rs:204-208`（`at_b` が 0.7499999999999999 → 0.75）の 2 本だけ。範囲の外の時刻のテスト（`crates/areka/src/emo2_boot/talk_lifecycle_tests.rs`・`crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs` ほか）は compile の `absolute_end_time()` から期待値を作るか、整数の ms の倍で比べるので変わらない。**新しく分かったこと**: `Duration::from_millis(ms).as_secs_f64()` は Tick の式 `ms as f64 / 1000.0` と、最初の 2,000 万 ms のうち 788 個で食い違う（最初は 1118 ms・下請けが rustc で測った）。秒へ直す式は `ms as f64 / 1000.0` にする。
+- **R3**（30 で範囲の外の `match`）: 直すのは `crates/areka-sakura/src/compile.rs:113`（`_ => continue` を消す）・`:426`（`Instruction::Raw` の腕へ）と、範囲の外の `crates/areka/src/mcp/check_script_judge.rs:62`（`_` を消す）・`:129`（全部の腕を書いた 1 つの or の形）の 4 か所だけ。`anchor_pair.rs:57`・`sysvar.rs:112`・`crates/areka/src/readme/destination.rs:230` は選り分けの `_` で、そのままでよい。`spine_conformance_script.rs`・`readme_cue_tests.rs:325`（`if let`）・`script_restriction_tests.rs:125`（`matches!`）は変わらない。`#[non_exhaustive]` が効くのはほかのクレートだけなので、parsers の中のテストは変わらない。
+- **R4**（7 で dola の冪等の守り）: 守り（`crates/dola/src/cue/schedule.rs:195-198`）は `if current_time <= self.current_time && !self.ready_buffer.is_empty() { return; }`。区切りの Tick（時刻 Tb）で集めた Choice の合図が `ready_buffer` に残る。drive が解決の後に `player.tick(last_tick)` を呼ぶと、`last_tick > Tb`（選ぶまでに Tick が来る本番の流れ）なら守りを通り、後始末が集まって `Completed` になる。`last_tick == Tb`（解決が次の Tick より先に来る・今のテストの道具 `drive_menu_to_barrier` がこの形）は守りが止める。`CuePlayer` に集めを空にする口は無く、時刻をずらす手は規則に反するので、areka-sakura の中だけでは直らない。dola の `notify_barrier_resolved`（`schedule.rs:284-290`）で `self.ready_buffer.clear();` の 1 行が要る。古い集めは区切りの Tick で配り済みで、`CuePlayer` の `remaining`（`runtime.rs:234`）が二重の配りを止める。dola のテストで解決と次の `tick` の間に `ready()` を読むものは 0（`crates/dola/tests/cue/schedule_test.rs:175`・`240`・`311`・`321`・`345`・`423`・`461`・`586`）。案 (b)（dola の `resolve_choice` が出す）は dola が drive の `last_tick` を知らないので、Tb と `last_tick` の間の項目が次の Tick まで遅れる＝採らない。
+
+### 12.3 指摘 6 の上限に使える「元からある頭打ち」を探した結果（使えるものは無い）
+
+| 候補 | 出どころ | 使えない理由 |
+|---|---|---|
+| 番号の型 `u32`（bevy の実体の番号・`shell_target.rs:84` の名の数も同じ） | コード | 上限を置かないのと同じで、食い尽くしを止めない |
+| MATERIA の 0〜8192 | ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） | MATERIA だけの決め。範囲の書き方は SSP だけのもので、SSP の上限は ukadoc にも SSP のヘルプにも無い |
+| GPU の面の最大寸 | `audit-emo-compose` の指摘 2 | 画素の数で、番号の数ではない |
+| `AnimationLimits`（`crates/areka-emo-atlas/src/limits.rs`） | コード | 画像の画素の予算で、環境変数で変わる |
+
+- `audit-emo-compose` の要件（「上限の決め方」）も同じ値を本 spec に任せている（そちらの指摘 1⑶）。値は要件 7.6 の決め方では入力から決まらなかった。2026-11-05 に開発者に仰ぎ、「推奨案で承認」＝**幅の上限 8193**（MATERIA の 0〜8192 の番号の数・正典にある唯一の頭打ち）に決まった。上限は 1 つの範囲の幅だけにかけ、番号の値にはかけない（`surface10000` は読む）。越えた記述子は `error!` で名指して飛ばし、シェルは全体として読む。
+
+### 12.4 7.11(b) の正典（要件 2.4）
+
+- ghost・shell・balloon・install・headline・plugin の descript の `charset` の項には位置の決めが無い（例: 「表示する文字コード。旧い環境との互換性を考慮する場合はShift_JIS、それ以外はUTF-8を推奨。」https://ukatech.shillest.net/ukadoc-spec/descript/ghost/#charset）。
+- 位置を決めるのは 2 つだけ: `surfaces.txt`「設定は、書くとすれば必ず一行目に書く必要があるcharsetの他は…」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#introduction_surfaces.txt）・`surfacetable.txt`「記載は必ずファイルの一行目に。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfacetable/#charset）。
+- 範囲の外の 2 つの読み手（`crates/shiori-host32-host/src/shiori3.rs:213-228` の `scan_charset_header`・`crates/areka-update/src/manifest.rs:147-161`）はファイル全体を行で見て、非 ASCII の行で止まらない。設計はこれにそろえ、4,096 バイトの窓も外した。
+
+### 12.5 テストを消すときに残す側（要件 3.3）
+
+- **31（sakura parsers）**: `validation_tests.rs:203`→`parse_tests.rs:79`・`:229`→`parse_tests.rs:19`・`:248` と `parse_tests.rs:60`→不要（純粋な関数を自分と比べる）・`:268` と `decode_tests.rs:432`→`decode_tests.rs:186`・`:281`→`decode_tests.rs:199`・`:90`→`decode_tests.rs:447`・`:213`→`decode_tests.rs:327`・`:311`→`decode_tests.rs:280`・`:186`→`decode_tests.rs:170`・`decode_tests.rs:418`→`validation_tests.rs:152`・`lexer_tests.rs:121`→`lexer_bare_tag_tests.rs:199`／`lexer_word_boundary_tests.rs:167`・`:259`→`lexer_bare_tag_tests.rs:207`・`:286`→`lexer_bare_tag_tests.rs:216`・`:415` と `:428`→`lexer_word_boundary_tests.rs:195`・`:448`→`lexer_word_boundary_tests.rs:188`・`:383`→`lexer_tests.rs:394`。
+- **32**: 残す確かめは `decode_tests.rs:291`・`:125`・`:170`・`:641`・`:28`・`:92`・`:114`・`:186`・`:245`・`:257`・`:280`・`:327`・`:447`。
+- **44（compile）**: `compile_arm_tests.rs:9-21`→`:65`・`:254-353`→`:640`・`:377-403`→`:796`・`:404-435`→`:845`・`:436-501`→`:887`（「アヒル」の長さの確かめ 2 つを移す）・`:581-595`→`:771`・`compile_sheet_tests.rs:107-117` と `:165-173`→`:403` へ確かめを移す・`:366-398`→`assert_clear_all_prefix_and_rest`。
+- **53**: `charset/decode_tests.rs:25-37`→`charset/validation_tests.rs:57-69`・`charset/validation_tests.rs:84-98`→`decode_tests.rs:51-70`・`kv/validation_tests.rs`→`kv/parse_tests.rs:66-70`。
+- **73（shell）**: メソッドの表は `decode_tests_method_matrix_tests.rs:71` を残す・`sometimes`→Other は `decode_tests_pattern_method_tests.rs:48` を残す・空の入力は `decode_tests_skeleton_tests.rs:10` を残す・`replace` の転記は `decode_tests_method_matrix_tests.rs:77` を残す。
+- **27 で前提の変わるテスト**: `lexer_word_boundary_tests.rs:165`（doc）・`:183`（入力を `\c[char,1]です` へ・`c` が角括弧を取ることを固める）・`:189` と `parse_word_boundary_tests.rs:124`（入力を `\s[注です` へ）・`decode_tests.rs:523` `bracketed_plus_stays_raw`（`\+` と字の `[x]` へ・改名）・`decode_raise_tests.rs:36` `bracketed_raise_has_no_arm`（`\v` の raise と字の `[1]` へ・改名）。
+
+### 12.6 合成（Synthesis）
+
+- **まとめ（Generalization）**: 「読めない所を黙って捨てる」指摘（5・6・18・33・34・36）は同じ形＝読み取りの層が飛ばしたものをデータで返し、読み込む側が記録する。`balloon` の `KeyIssue`（今ある形）を広げ、`shell` は `ShellIssue` で同じ形にした。理由は静かな読み込み（`crates/areka/src/placement/measure.rs:399`）が同じ文を何度も読むこと。
+- **作るか借りるか（Build vs Adopt）**: ログの捕捉は `log-capture-kit`（自前の捕捉は番人 `with_default_guard_test.rs` が赤にする）。charset の先読みは `shiori-host32-host` の `scan_charset_header` の読みを写す。UTF-16 などのラベルの判定は `shiori-host32-host/src/charset.rs:52-60` の `output_encoding() == enc`。dola の `CueSheet::absolute_end_time` を呼ぶ（88）。
+- **減らす（Simplification）**: 新しいファイルは 0。`decode(lex(..))` と 4 つの公開の関数は射影として残し、テストの呼び手 約 110 を変えない。`BindGroupDefaults` の名を表の別名として残し、`default()` の呼び手を変えない。
+
+### 12.7 設計の決め（裁定に触れるもの）と危うさ
+
+- 決め: 27 の `\+[x]`・`\v[1]` の扱いが完了 spec の決めを覆す・65 は `decode_passthrough_raw` だけ畳む（ほか 2 つの名は台帳の 33 行と `doc/COMPAT_ARCHITECTURE.md:187` が名指す）・7 は dola の 1 行・7.11(b) は宣言の位置を問わない・50 の残りは D7 どおり残す。
+- 危うさ: 8 の後もトークの終わり（dola の `start + duration`）は ms の格子から外れうる（150＋800 ms → 0.9500000000000001）＝完了までに起票・`shell_target.rs` が約 975 行になる・29 と 17 の新しい `warn!` が範囲の外の「警告 0 件」のテストに当たりうる。
+- 開発者に仰いで決めた（2026-11-05「推奨案で承認」）: 指摘 6 の幅の上限＝8193（12.3）・`areka-parsers` の dev-dependency に `log-capture-kit` を足す（9・14・17・49 のログのテスト・要件 4.4 と同じウェーブの約束 ⑶ の承認された例外・`Cargo.lock` は `areka-parsers` の塊の 1 行だけ・`tech.md` に登記する）。
