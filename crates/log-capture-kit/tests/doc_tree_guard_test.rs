@@ -24,6 +24,9 @@
 // 読む見出しと置き字
 // ---------------------------------------------------------------------------
 
+use std::collections::BTreeSet;
+use std::fmt;
+
 /// 直下の表の見出し（完全一致）。1 列目は `doc/` の直下の名前（`doc/` を付けない）。
 const DIRECT_HEADING: &str = "## 直下のファイルとフォルダ";
 
@@ -38,7 +41,6 @@ const DATE_PLACEHOLDER: &str = "{YYYY-MM-DD}";
 // ---------------------------------------------------------------------------
 
 /// 食い違い 1 件。
-#[allow(dead_code)] // 表の書き方の破れ以外は、実物との突き合わせの判定が組み立てる
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Finding {
     /// 直下の実物が表のどの行にも当たらない（4.2）。「表に行を足すか、置き場を直す」
@@ -141,6 +143,123 @@ fn is_date_shape(s: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// 純粋な側: 名前の決まりと突き合わせ
+// ---------------------------------------------------------------------------
+
+/// 0 件を名指すときの読み取りの名前（[`Finding::EmptyReading`]）。
+const DIRECT_ENTRIES: &str = "doc/ の直下の実物";
+const DIRECT_TABLE: &str = "直下の表";
+const EXCEPTION_TABLE: &str = "例外の表";
+
+/// 実物はディスクで数えるので、手元にだけあるファイルで赤になりうる。そのとき表に要らない行を足させない一句。
+const UNTRACKED_HINT: &str = "追跡していないファイルなら取り除く（`git status` で確かめられる）";
+
+/// `doc/` の実物（ディスクの実際の字のまま）。集めるのはファイルシステムに触る側（タスク 3）。
+struct DocTree {
+    /// `doc/` の直下の名前（`doc/` を付けない。フォルダは `name/`）。
+    direct: BTreeSet<String>,
+    /// `doc/` の下の全部（`doc/archive/` の下を除く）。根からのパス（`doc/...`）。
+    all: BTreeSet<String>,
+}
+
+impl fmt::Display for Finding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unlisted(n) => write!(
+                f,
+                "doc/{n}: 直下の表に無い。表に行を足すか、置き場を直す。{UNTRACKED_HINT}"
+            ),
+            Self::MissingRow(n) => {
+                write!(f, "直下の表の行 `{n}`: 名指すものが無い。行を消すか直す")
+            }
+            Self::DocsDirExists => write!(f, "根の docs フォルダ: ある。中身を doc へまとめて消す"),
+            Self::BadName(n) => write!(
+                f,
+                "{n}: 名前の決まりに合わず、例外の表にも無い。名前を直すか、例外の表に理由と行方つきで足す。{UNTRACKED_HINT}"
+            ),
+            Self::StaleException(n) => {
+                write!(f, "例外の表の行 `{n}`: 覆う破れが 1 つも無い。行を消す")
+            }
+            Self::MalformedRow { heading, line } => write!(
+                f,
+                "doc/README.md の {line} 行目（{heading}）: 1 列目がバッククォートの名前 1 つでない。表の書き方に合わせる"
+            ),
+            Self::EmptyReading(what) => write!(
+                f,
+                "{what}: 1 件も拾わない。見出しの文字が変わったか、読み方が壊れた"
+            ),
+        }
+    }
+}
+
+/// 名前（パスの最後の 1 区切り。フォルダは末尾の `/` を除く）が決まりに合うか。
+/// 字の種類（`a-z`・`0-9`・`-`・`.`）だけを見て、続き方は見ない。`README.md` ちょうどは決まりの外。
+fn is_conforming(path: &str) -> bool {
+    let name = path.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    name == "README.md"
+        || (!name.is_empty()
+            && name
+                .bytes()
+                .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.')))
+}
+
+/// 直下の実物と直下の表を突き合わせる。置き字の行は当たりが 0 でも何も出さない（4.4）。
+fn check_direct(direct: &BTreeSet<String>, rows: &[String]) -> Vec<Finding> {
+    let unlisted = direct
+        .iter()
+        .filter(|n| !rows.iter().any(|r| row_matches(r, n)))
+        .map(|n| Finding::Unlisted(n.clone()));
+    let missing = rows
+        .iter()
+        .filter(|r| !r.contains(DATE_PLACEHOLDER) && !direct.contains(*r))
+        .map(|r| Finding::MissingRow(r.clone()));
+    unlisted.chain(missing).collect()
+}
+
+/// 決まりの破れを例外の表と突き合わせる。フォルダの行（末尾 `/`）は下の全部を覆う。
+fn check_names(all: &BTreeSet<String>, exceptions: &[String]) -> Vec<Finding> {
+    let covers = |r: &str, v: &str| v == r || (r.ends_with('/') && v.starts_with(r));
+    let violations: Vec<&String> = all.iter().filter(|p| !is_conforming(p)).collect();
+    let bad = violations
+        .iter()
+        .filter(|v| !exceptions.iter().any(|r| covers(r, v)))
+        .map(|v| Finding::BadName(v.to_string()));
+    // 名指すものが無い・もう決まりに合う・フォルダの下に破れが無い、のどれも「覆う破れが無い」に入る。
+    let stale = exceptions
+        .iter()
+        .filter(|r| !violations.iter().any(|v| covers(r, v)))
+        .map(|r| Finding::StaleException(r.clone()));
+    bad.chain(stale).collect()
+}
+
+/// 食い違いを全部集める。読み取りが 0 件の突き合わせは、見当違いの行を並べないよう
+/// [`Finding::EmptyReading`] だけにする（4.8）。
+fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding> {
+    let (rows, mut found) = table_first_cells(guide, DIRECT_HEADING);
+    let (exceptions, malformed) = table_first_cells(guide, EXCEPTION_HEADING);
+    found.extend(malformed);
+    for (what, empty) in [
+        (DIRECT_ENTRIES, tree.direct.is_empty()),
+        (DIRECT_TABLE, rows.is_empty()),
+        (EXCEPTION_TABLE, exceptions.is_empty()),
+    ] {
+        if empty {
+            found.push(Finding::EmptyReading(what));
+        }
+    }
+    if !tree.direct.is_empty() && !rows.is_empty() {
+        found.extend(check_direct(&tree.direct, &rows));
+    }
+    if !exceptions.is_empty() {
+        found.extend(check_names(&tree.all, &exceptions));
+    }
+    if docs_exists {
+        found.push(Finding::DocsDirExists);
+    }
+    found.into_iter().collect()
+}
+
+// ---------------------------------------------------------------------------
 // 見本の試験
 // ---------------------------------------------------------------------------
 
@@ -173,8 +292,8 @@ const SAMPLE_GUIDE: &str = "\
 
 | 古いパス | 新しいパス |
 |---|---|
-| `docs/click_through.md` | `doc/click-through.md` |
-| `doc/CONSTITUTION.md` | `doc/constitution.md` |
+| `old/old_name.md` | `doc/new-name.md` |
+| `doc/OLD_RULES.md` | `doc/old-rules.md` |
 
 ## 俯瞰の HTML
 
@@ -217,11 +336,8 @@ fn date_placeholder_reads_only_the_date_shape() {
         rows.iter().any(|r| r == row),
         "置き字の行が読めていない: {rows:?}"
     );
-    let direct_without_dated = ["README.md", "archive/"];
-    assert!(
-        !direct_without_dated.iter().any(|n| row_matches(row, n)),
-        "置き字の行が日付の無い名前に当たった"
-    );
+    let direct_without_dated = BTreeSet::from(["README.md", "archive/"].map(String::from));
+    assert_eq!(check_direct(&direct_without_dated, &rows), vec![]);
 }
 
 #[test]
@@ -235,7 +351,7 @@ fn tables_are_told_apart_by_heading() {
     let crlf = SAMPLE_GUIDE.replace('\n', "\r\n");
 
     for guide in [SAMPLE_GUIDE, crlf.as_str()] {
-        // 対応の表の 1 列目（`docs/click_through.md` など）は、直下の表にも例外の表にも混ざらない。
+        // 対応の表の 1 列目（`old/old_name.md` など）は、直下の表にも例外の表にも混ざらない。
         assert_eq!(
             table_first_cells(guide, DIRECT_HEADING),
             (direct.map(String::from).to_vec(), vec![])
@@ -288,5 +404,126 @@ fn tables_are_told_apart_by_heading() {
                 })
                 .to_vec(),
         )
+    );
+}
+
+#[test]
+fn an_exception_row_with_nothing_to_cover_turns_red() {
+    let all = BTreeSet::from(
+        [
+            "doc/Kept_Name.md",
+            "doc/Uncovered_Name.md",
+            "doc/clean.md",
+            "doc/data/",
+            "doc/data/X_Y.toml",
+            "doc/tidy/",
+            "doc/tidy/ok.md",
+        ]
+        .map(String::from),
+    );
+    let exceptions = [
+        "doc/Kept_Name.md", // 覆う破れがある
+        "doc/data/",        // フォルダの下に破れがある
+        "doc/Gone_Name.md", // 名指すものが無い
+        "doc/clean.md",     // もう決まりに合う
+        "doc/tidy/",        // フォルダの下に破れが無い
+    ]
+    .map(String::from);
+
+    let mut found = check_names(&all, &exceptions);
+    found.sort();
+    assert_eq!(
+        found,
+        vec![
+            Finding::BadName("doc/Uncovered_Name.md".into()),
+            Finding::StaleException("doc/Gone_Name.md".into()),
+            Finding::StaleException("doc/clean.md".into()),
+            Finding::StaleException("doc/tidy/".into()),
+        ]
+    );
+
+    // 名前の決まりは字の種類だけを見る。`README.md` ちょうどは決まりの外。
+    for ok in ["doc/a-b.c.md", "doc/v1.2/", "doc/x/README.md", "doc/--..md"] {
+        assert!(is_conforming(ok), "合うはずの名前: {ok}");
+    }
+    for bad in [
+        "doc/Readme.md",
+        "doc/readme.MD",
+        "doc/a_b.md",
+        "doc/a b.md",
+        "doc/あ.md",
+        "doc/Up/",
+    ] {
+        assert!(!is_conforming(bad), "合わないはずの名前: {bad}");
+    }
+
+    // 決まりの破れの直し方には、追跡していないファイルの取り除き方を添える。
+    let line = Finding::BadName("doc/Uncovered_Name.md".into()).to_string();
+    assert!(
+        line.contains("doc/Uncovered_Name.md") && line.contains(UNTRACKED_HINT),
+        "{line}"
+    );
+}
+
+#[test]
+fn a_docs_dir_turns_the_guard_red() {
+    let tree = DocTree {
+        direct: BTreeSet::from(["README.md", "archive/"].map(String::from)),
+        all: BTreeSet::from(
+            [
+                "doc/README.md",
+                "doc/COMPAT_ARCHITECTURE.md",
+                "doc/shiori/",
+                "doc/shiori/fragments/",
+                "doc/shiori/fragments/A_B.md",
+            ]
+            .map(String::from),
+        ),
+    };
+
+    assert_eq!(check_all(&tree, SAMPLE_GUIDE, false), BTreeSet::new());
+    assert_eq!(
+        check_all(&tree, SAMPLE_GUIDE, true),
+        BTreeSet::from([Finding::DocsDirExists])
+    );
+
+    // 根の docs の文は最後の検索の語に当たらない形で書く。
+    let line = Finding::DocsDirExists.to_string();
+    assert!(
+        line.contains("根の docs フォルダ") && !line.contains(concat!("docs", "/")), // 語を分けて、この行も検索に当てない
+        "{line}"
+    );
+
+    // 3 つの読み取りのどれかが 0 件なら、どれかを名指して赤にする。
+    let empty = DocTree {
+        direct: BTreeSet::new(),
+        all: tree.all.clone(),
+    };
+    assert_eq!(
+        check_all(&empty, "", false),
+        BTreeSet::from([DIRECT_ENTRIES, DIRECT_TABLE, EXCEPTION_TABLE].map(Finding::EmptyReading))
+    );
+
+    // 表に無い直下の実物と、名指すものの無い行（置き字の行を除く）。
+    let direct = BTreeSet::from(
+        ["README.md", "extra.md", "roadmap-overview-2026-10-16.html"].map(String::from),
+    );
+    let rows = [
+        "README.md",
+        "archive/",
+        "roadmap-overview-{YYYY-MM-DD}.html",
+    ]
+    .map(String::from);
+    assert_eq!(
+        check_direct(&direct, &rows),
+        vec![
+            Finding::Unlisted("extra.md".into()),
+            Finding::MissingRow("archive/".into())
+        ]
+    );
+    assert!(
+        Finding::Unlisted("extra.md".into())
+            .to_string()
+            .contains(UNTRACKED_HINT)
     );
 }
