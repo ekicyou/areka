@@ -18,8 +18,9 @@
 //! 時計を全部捨てる。終わりなしの時計は捨てない。
 //!
 //! `runonce`・`periodic`・`talk`（spec: areka-P0-seriko-trigger-intervals 要件 5.4・5.6・5.7・5.9・8.1）も
-//! 抽選せず乱数も引かない。評価は 2 段: 1 段目（今までの評価）は在る時計を進めるだけで、2 段目が
-//! 「見えると決まった部品」にだけ引き金の状態（[`Armed`]）を構えて判定する（[`fire_part_triggers`]）。
+//! 抽選せず乱数も引かない。評価は 2 段: 2 段目が「見えると決まった部品」に引き金の状態（[`Armed`]）を
+//! 構えて判定し、構えてあった（前の評価の終わりに見えていた）部品は 1 段目が、働きのコマと開始の時刻の
+//! 順に揃えて判定する（[`fire_part_triggers`]・遅れた刻みでも止めや周を落とさない・一番上と同じ形）。
 //! 鳴った再生のコマが別の部品を見せたら 1 段目へ戻り、同じ刻みのうちに子のコマまで出す。見えなく
 //! なった部品の 3 語の時計と引き金の状態は捨てる（再び見えた刻みが新しい起点で、途中のコマから
 //! 始まらない）。窓が閉じたら 3 語の時計を捨てて引き金の状態を隠す。表に 3 語が無ければ 2 段目は
@@ -52,7 +53,7 @@ use crate::trigger::{Armed, TalkWindow};
 // 部品の引き金の配線（2 段目: 構える・判定して時計を作る）。
 #[path = "parts_trigger.rs"]
 mod part_trigger;
-use part_trigger::fire_part_triggers;
+use part_trigger::{fire_part_triggers, judge_part};
 
 // 部品の働きのコマの配線（spec: seriko-pattern-calls 要件 3.8）。
 #[path = "parts_calls.rs"]
@@ -159,8 +160,8 @@ enum Gate {
     /// `always`（抽選しない・乱数を引かない）。
     Always { laps: Option<NonZeroU32> },
     /// `runonce`・`periodic`・`talk`（抽選しない・乱数を引かない・着せ替えに依らない・spec:
-    /// areka-P0-seriko-trigger-intervals 要件 5.7）。1 段目は在る時計を進めるだけで、始めるかは
-    /// 2 段目の判定が決める。呼ばれるだけ（`CallOnly`）もここ: 2 段目は選ばないので自分では
+    /// areka-P0-seriko-trigger-intervals 要件 5.7）。始めるかは引き金の判定（構えてあれば 1 段目・
+    /// 新しく見えたなら 2 段目）が決める。呼ばれるだけ（`CallOnly`）もここ: 判定は選ばないので自分では
     /// 始めず、呼ばれて在る時計だけを着せ替えに依らず進める（spec: seriko-pattern-calls 要件 11.1）。
     Trigger,
     /// 対象外（`bind+random` で `binds` に無い・要件 5.12）。
@@ -316,10 +317,11 @@ fn sort_by_id(anims: &[LoopAnimation], order: &mut Vec<usize>) {
 /// [`rebuild`] が部品 1 つに頼む評価の段。
 #[derive(Clone, Copy)]
 enum Phase {
-    /// 1 段目: 抽選・`always`・在る時計の進行（見える扱いになった部品と動く絵の子に 1 回ずつ）。
+    /// 1 段目: 抽選・`always`・構えてあった部品の引き金・在る時計の進行（見える扱いになった部品と
+    /// 動く絵の子に 1 回ずつ）。
     Evaluate,
-    /// 2 段目: 見えると決まった部品の `runonce`・`periodic`・`talk` を判定する（spec:
-    /// areka-P0-seriko-trigger-intervals 要件 5.6・5.9）。再生が始まったら真を返す。
+    /// 2 段目: 見えると決まった部品を構え、`runonce`・`periodic`・`talk` を判定する（`advance` では
+    /// 新しく見えた部品だけ・spec: areka-P0-seriko-trigger-intervals 要件 5.6・5.9）。再生が始まったら真。
     Trigger,
 }
 
@@ -564,9 +566,6 @@ impl PartClocks {
             armed,
             stopped,
         } = &mut *container;
-        // この評価の 1 段目が進める前に再生中だった 3 語の時計の（鍵, 開始の時刻）。2 段目が「開始の
-        // 時刻に再生中だったか」を測るのに読む（1 段目が片付けた再生も、ここには残る）。
-        let mut was_playing: Vec<(ClockKey, u64)> = Vec::new();
         // 見える部品の働きのコマの結果（時刻が後の move が勝つ・一番上と合わせるのは呼び手）。
         let mut shift = CallOutcome::default();
 
@@ -575,29 +574,28 @@ impl PartClocks {
         let step = |phase: Phase, part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
             if let Phase::Trigger = phase {
-                let started = fire_part_triggers(
-                    clocks,
-                    armed,
-                    order,
-                    anims,
-                    scope,
-                    slot,
-                    part,
-                    now_ms,
-                    open,
-                    &was_playing,
-                    talk,
-                    false,
-                );
-                if started.is_empty() {
+                // 構えてあった部品は 1 段目が時刻の順に判定済み。ここは新しく見えた部品だけを構える。
+                if armed.contains_key(&part) {
                     return false;
                 }
-                let (outcome, called) = run_part_calls(
-                    clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
-                );
+                let who = (scope, slot, part);
+                let Some((heads, outcome)) = judge_part(
+                    armed,
+                    clocks,
+                    stopped,
+                    warned_negative,
+                    pattern,
+                    anims,
+                    who,
+                    (now_ms, open),
+                    talk,
+                    false,
+                    pick,
+                ) else {
+                    return false;
+                };
                 shift = shift.then(outcome);
-                let called = anims.iter().filter(|a| called.contains(&a.id));
-                for anim in started.iter().copied().chain(called) {
+                for anim in heads {
                     // 始まった再生を、開始の時刻からこの刻みまでの経過の分だけ進める。1 段目が書いた
                     // 前の再生のコマは外す＝鳴り直した後は新しい再生の経過だけで決まる。
                     unwrite(pattern, part, anim.id);
@@ -642,13 +640,8 @@ impl PartClocks {
                         }
                         continue;
                     }
-                    // 3 語と呼ばれるだけ: 抽選せず乱数も引かない。在る時計を進めるだけ（始めるかは 2 段目）。
-                    Gate::Trigger => {
-                        if let Some(&PartAnim::Playing { started_at_ms, .. }) = clocks.get(&key) {
-                            was_playing.push((key, started_at_ms));
-                        }
-                        continue;
-                    }
+                    // 3 語と呼ばれるだけ: 抽選せず乱数も引かない（始めるかは下の判定か 2 段目）。
+                    Gate::Trigger => continue,
                 };
                 // 境界を跨いだ刻みで再生中でなければ抽選（保っているコマは当たれば捨てる）。
                 // 窓が閉じている間は時計を作らないので抽選もしない。見えない間に終わっていた再生は
@@ -680,6 +673,25 @@ impl PartClocks {
                         "seriko: part 抽選発火（再生開始・先頭コマから・要件 5.1）"
                     );
                 }
+            }
+            // 構えてあった部品の 3 語は、ここで開始の時刻の順に働きのコマと揃えて判定する（呼び出しが
+            // 止めた・始めた再生を見て決める・一番上と同じ順・spec: seriko-pattern-calls 要件 3.1）。
+            if let Some(state) = armed.get_mut(&part) {
+                state.follow(open, now_ms, None);
+                let (_, early, _) = fire_part_triggers(
+                    state,
+                    clocks,
+                    stopped,
+                    warned_negative,
+                    pattern,
+                    anims,
+                    (scope, slot, part),
+                    now_ms,
+                    talk,
+                    false,
+                    pick,
+                );
+                shift = shift.then(early);
             }
             let (outcome, _) = run_part_calls(
                 clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
@@ -713,12 +725,12 @@ impl PartClocks {
 
     /// 面の切り替え・着せ替えの変化の直後（出来事の時刻 `at_ms`）に、抽選せずに `pattern` の部品の欄を
     /// 作り直す（要件 5.6・spec: areka-P0-animated-image-playback 要件 3.1・4.1）。見える部品の求め方は
-    /// `advance` と同じ。見えている `always` の時計が無ければ `at_ms` で作り、回数つきの見えなくなった
-    /// 時計を捨てる。抽選の animation の時計は書き換えない（末尾に着いたコマ・負の番号のコマも、時計を
+    /// `advance` と同じ。見えている `always` の時計が無ければ `at_ms` で作り、見えなくなった部品の回数
+    /// つきの時計と 3 語の時計（と引き金の状態）を捨て、新しく見えた部品の `runonce` を `at_ms` で鳴らす。抽選の animation の時計は書き換えない（末尾に着いたコマ・負の番号のコマも、時計を
     /// 移さず・消さずに、出す・出さないだけを決める）。`bind+random` で `binds` に無い animation の
     /// コマは書かない（時計を消すのは次の `advance`・要件 5.12）。`at_ms` が無い（刻みが 1 度も来て
     /// いない）ときは時計を作らず、経過 0 の時刻で読む。`open` が偽なら `advance` と同じく時計を
-    /// 作らず、回数つきの時計を全部捨てる。
+    /// 作らず、回数つきの時計と 3 語の時計を全部捨てて、引き金の状態を隠す。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn refresh(
         &mut self,
@@ -734,11 +746,11 @@ impl PartClocks {
     ) -> CallOutcome {
         let PartClocks {
             clocks,
+            warned_negative,
             visible,
             films,
             evaluated,
             order,
-            ..
         } = self;
         let container = clocks
             .entry(scope.clone())
@@ -790,28 +802,24 @@ impl PartClocks {
                 // 出来事の直後に鳴るのは `runonce` だけ（文字の窓は渡さない）。鳴るのは構えた評価か、
                 // 閉じた窓で構えて最初に開いた評価なので、前の再生は無い（閉じている間の 3 語の時計は
                 // 捨ててある）。
-                let started = fire_part_triggers(
-                    clocks,
+                let who = (scope, slot, part);
+                let Some((heads, outcome)) = judge_part(
                     armed,
-                    order,
+                    clocks,
+                    stopped,
+                    warned_negative,
+                    pattern,
                     anims,
-                    scope,
-                    slot,
-                    part,
-                    at,
-                    open,
-                    &[],
+                    who,
+                    (at, open),
                     None,
                     true,
-                );
-                if started.is_empty() {
+                    pick,
+                ) else {
                     return false;
-                }
-                let (outcome, called) =
-                    run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+                };
                 shift = shift.then(outcome);
-                let called = anims.iter().filter(|a| called.contains(&a.id));
-                for anim in started.iter().copied().chain(called) {
+                for anim in heads {
                     // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
                     unwrite(pattern, part, anim.id);
                     put(clocks, pattern, part, anim, at);

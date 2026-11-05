@@ -266,3 +266,95 @@ fn last_action_frame_in_a_part_on_the_periodic_restart_tick_is_not_lost() {
     assert_eq!(part_cell(&states, 1), Some(110), "前の回の start,1");
     assert_eq!(part_cell(&states, 0), Some(101), "回を飛ばさず頭から");
 }
+
+/// 遅れた刻みでも、部品の引き金の開始と働きのコマは時刻の順に当たる: 2000 に始まる 1 は 2470 の
+/// `stop,1` で止まり、0 は 3000 に始まる（一番上と同じ・areka-P0-seriko-trigger-intervals 要件 3.1・
+/// seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
+    const LATE: &str = "animation0.interval,periodic,3\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,5000,0,0\n\
+        animation1.interval,periodic,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,101,2470,0,0\n\
+        animation2.pattern1,stop,1\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(LATE, lottery, 0);
+    rt.on_tick(0, &mut states); // 部品 100 が見え、2 が 0 に鳴る。
+    rt.on_tick(3100, &mut states); // 1 は 2000・stop,1 は 2470・0 は 3000。
+    assert_eq!(part_cell(&states, 1), None, "2470 に止まる");
+    assert_eq!(part_cell(&states, 0), Some(120), "0 は 3000 に始まる");
+}
+
+/// 部品の引き金の「再生中か」も、開始の時刻までの働きのコマを当てた後で測る（1970 に止められた 0 は
+/// 2000 に再生中でないので鳴る・areka-P0-seriko-trigger-intervals 要件 3.1・3.3）。
+#[test]
+fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
+    const STOPPED: &str = "animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,1500,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,101,1970,0,0\n\
+        animation2.pattern1,stop,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(STOPPED, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1100, &mut states); // 0 は 1000 に鳴る（2500 まで続く見込み）。
+    assert_eq!(part_cell(&states, 0), Some(120));
+    rt.on_tick(2100, &mut states); // stop,0 は 1970・次の周は 2000。
+    assert_eq!(part_cell(&states, 0), Some(120), "2000 に頭から");
+}
+
+/// 遅れた刻みで鳴った部品の再生の働きのコマも、ほかの再生の後の時刻のコマより先に当たる: 1000 に
+/// 鳴った 0 の `start,1`（1100）の後に 2 の `stop,1`（1300）が当たり、1 は止まっている
+/// （seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn part_trigger_play_acts_before_later_calls_of_other_plays() {
+    const ORDER: &str = "animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,100,0,0\n\
+        animation0.pattern1,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,101,1300,0,0\n\
+        animation2.pattern1,stop,1\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(ORDER, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1500, &mut states); // 0 は 1000・start,1 は 1100・stop,1 は 1300。
+    assert_eq!(part_cell(&states, 1), None, "1300 に止まる");
+    assert_eq!(part_cell(&states, 0), Some(120), "0 は 1000 から続く");
+}
+
+/// 呼び出しが部品の `runonce` を、ちょうど構えた時刻に始めたら、鳴らした扱いで入れ替えない。終わった
+/// 後に見え始めの時刻でもう 1 回鳴ることも無い（一番上と同じ・seriko-pattern-calls 要件 5.2・
+/// areka-P0-seriko-trigger-intervals 要件 2.1）。
+#[test]
+fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
+    const AT_ARM: &str = "animation0.interval,runonce\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,-1,300,0,0\n\
+        animation2.interval,always\n\
+        animation2.pattern0,start,0\n\
+        animation2.pattern1,overlay,120,5000,0,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(AT_ARM, lottery, 0);
+    let lines = crate::test_support::capture_logs(|| {
+        for t in [0, 500, 1000] {
+            rt.on_tick(t, &mut states);
+        }
+    });
+    let fired = ["runonce を鳴らした", "part=100", "animation_id=0"];
+    assert_eq!(super::tests::count(&lines, &fired), 1, "{lines:#?}");
+    let ended = ["seriko: part 停止", "part=100", "animation_id=0"];
+    assert_eq!(
+        super::tests::count(&lines, &ended),
+        1,
+        "再生は 1 回だけ: {lines:#?}"
+    );
+    assert_eq!(part_cell(&states, 0), None, "300 に終わったまま");
+}

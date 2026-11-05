@@ -100,29 +100,16 @@ impl Armed {
         }
     }
 
-    /// 今の判定で `anim` を始めるなら、開始の時刻を返す。
+    /// 今の判定で `anim` を始めるなら、何時に始まったことにするかを返す（再生中かは見ず、状態も変えない）。
     ///
-    /// 隠れている間と、同じ animation が再生中の間は始めない。「再生中か」は判定の時刻 `now_ms` でなく、
-    /// 返すことになる開始の時刻で `playing_at` に尋ねる（`runonce` は見え始め・`periodic` は周の境目・
-    /// `talk` は区切りの文字が現れた時刻）。その時刻ちょうどに終わった再生は再生中でないので、長さが
-    /// 周期ちょうどの animation も毎周鳴り、遅れた刻みが見た境目も、その時刻に再生中だったなら飛ばす
-    /// （要件 3.1・3.3・3.5・4.7）。`periodic` は再生中に来た周も数えだけ進めるので、飛ばした周が後から
-    /// 鳴ることは無い。`talk` は `talk`（文字の窓）が無ければ始めず、数えはここでは進めない（窓 1 つを
-    /// 一番上と部品の何本もの animation が読むので、進めるのは全部の判定の後の
-    /// [`Armed::advance_talk`]）。抽選の引き金と `always` はここへ来ない前提で、来ても何も返さない。
-    pub(crate) fn poll(
-        &mut self,
-        anim: &LoopAnimation,
-        now_ms: u64,
-        playing_at: impl Fn(u64) -> bool,
-        talk: Option<&TalkWindow<'_>>,
-    ) -> Option<u64> {
-        let at = self.next_start(anim, now_ms, talk)?;
-        self.commit(anim, at, playing_at(at)).then_some(at)
-    }
-
-    /// [`Armed::poll`] の前半: 始めるなら何時に始まったことにするか（再生中かは見ず、状態も変えない）。
-    /// 呼び手は開始の時刻の順に並べ、その時刻までの働きのコマを当ててから [`Armed::commit`] で決める。
+    /// 隠れている間は始めない。返すのは判定の時刻 `now_ms` でなく開始の時刻（`runonce` は見え始め・
+    /// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻）。呼び手は開始の時刻の順に並べ、その時刻
+    /// までの働きのコマを当ててから、その時刻に再生中かを測って [`Armed::commit`] で決める。その時刻
+    /// ちょうどに終わった再生は再生中でないので、長さが周期ちょうどの animation も毎周鳴り、遅れた刻みが
+    /// 見た境目も、その時刻に再生中だったなら飛ばす（要件 3.1・3.3・3.5・4.7）。`talk` は `talk`（文字の
+    /// 窓）が無ければ始めず、数えはここでは進めない（窓 1 つを一番上と部品の何本もの animation が読むので、
+    /// 進めるのは全部の判定の後の [`Armed::advance_talk`]）。抽選の引き金と `always` はここへ来ない前提で、
+    /// 来ても何も返さない。
     pub(crate) fn next_start(
         &self,
         anim: &LoopAnimation,
@@ -158,7 +145,7 @@ impl Armed {
         }
     }
 
-    /// [`Armed::poll`] の後半: [`Armed::next_start`] が返した `at` で決める。`periodic` は再生中でも周の
+    /// [`Armed::next_start`] が返した `at` で決める（`playing` はその時刻に同じ animation が再生中か）。`periodic` は再生中でも周の
     /// 数えを進め（飛ばした周が後から鳴らない）、再生中でなければ `runonce` に印を付けて真を返す。
     pub(crate) fn commit(&mut self, anim: &LoopAnimation, at: u64, playing: bool) -> bool {
         if let (LoopTrigger::Periodic { period_ms }, Some(since)) =
