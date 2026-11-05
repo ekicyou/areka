@@ -352,7 +352,9 @@ fn check_names(all: &BTreeSet<String>, exceptions: &[String]) -> Vec<Finding>;
 fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding>;
 ```
 
-- `table_first_cells`: 行を前後の空白を落として `heading` と完全に一致する行を探し、その後で最初に始まる `|` の行の塊を表とする。塊が切れるか次の見出し（`#` で始まる行）が来たら終わる。1 行目（列の名前）と 2 行目（`-` と `:` だけの区切り）を飛ばし、残りの各行の 1 列目を取る。1 列目が「バッククォート 1 組で囲んだ空でない名前 1 つ」でない行は `MalformedRow` にする（行番号は案内の 1 始まり）。見出しが無いときは空の一覧を返す（`check_all` が `EmptyReading` にする）。
+- `table_first_cells`: 改行は `
+` も `
+` も受ける（作業場の `doc/README.md` は CRLF）。行を前後の空白を落として `heading` と完全に一致する行を探し、探す範囲をその行から次の見出し（`#` で始まる行）の手前までに限る。範囲の中で最初に始まる `|` の行の塊を表とし、塊が切れたら終わる。範囲の中に表が無ければ空の一覧を返す（次の節の表を拾わない＝見出しの下の表が消えたときは `EmptyReading` で赤になり、見当違いの `Unlisted` や `StaleException` を並べない）。1 行目（列の名前）と 2 行目（`-` と `:` だけの区切り）を飛ばし、残りの各行の 1 列目を取る。1 列目が「バッククォート 1 組で囲んだ空でない名前 1 つ」でない行は `MalformedRow` にする（行番号は案内の 1 始まり）。見出しが無いときは空の一覧を返す（`check_all` が `EmptyReading` にする）。
 - `row_matches`: `row` に `DATE_PLACEHOLDER` が無ければ `row == name`。あれば置き字の前と後ろが `name` の頭と尻に一致し、間がちょうど `DDDD-DD-DD`（`D` は ASCII の数字）であること。フォルダの行（末尾 `/`）はフォルダにだけ、ファイルの行はファイルにだけ当たる（`direct` のフォルダは末尾 `/` を持つので文字の比較で分かれる）。
 - `is_conforming`: 名前（パスの最後の 1 区切り。フォルダは末尾の `/` を除く）が空でなく、字が `a-z`・`0-9`・`-`・`.` だけ。名前が `README.md` ちょうどなら合う（決まりの外）。字の種類だけを見て、ハイフンや点の続き方は見ない。
 - `check_direct`: `direct` の各名前について当たる行が無ければ `Unlisted`。置き字の無い各行について当たる名前が無ければ `MissingRow`。置き字の行は当たりが 0 でも何も出さない（4.4）。
@@ -373,7 +375,7 @@ fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding
 | `dropping_a_known_row_turns_the_guard_red` | 実データの直下の表から `README.md` の行を外すと、基準との差がちょうど `Unlisted("README.md")` の 1 件 | 4.9 |
 | `adding_a_bad_name_turns_the_guard_red` | 実データの `all` に `doc/Bad_Name.md` を足すと、基準との差がちょうど `BadName("doc/Bad_Name.md")` の 1 件 | 4.9 |
 | `date_placeholder_reads_only_the_date_shape` | 見本で、`roadmap-overview-2026-10-16.html` に当たり、`roadmap-overview-2026-1-16.html`・`roadmap-overview-latest.html` に当たらず、当たりが 0 でも赤にしない | 4.4 |
-| `tables_are_told_apart_by_heading` | 見本の案内で、対応の表の 1 列目が直下の表の行に混ざらない・見出しが無いと 0 件 | 4.1・4.8 |
+| `tables_are_told_apart_by_heading` | 見本の案内で、対応の表の 1 列目が直下の表の行に混ざらない・見出しが無いと 0 件・見出しはあるが下に表が無いと 0 件（次の節の表を拾わない）・CRLF の見本でも同じに読む | 4.1・4.8 |
 | `an_exception_row_with_nothing_to_cover_turns_red` | 見本で、ファイルの行の名指すものが無い・フォルダの行の下に破れが無い・行が覆う破れがある、の 3 通り | 4.7 |
 | `a_docs_dir_turns_the_guard_red` | `check_all` に `docs_exists = true` を渡すと `DocsDirExists` が出る | 4.5 |
 
@@ -410,7 +412,7 @@ fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding
   `click_through` だけで探さない（Rust の識別子 `register_ghost_windows_click_through` などに当たる）。大文字と小文字を区別しない検索をしない（新しい名前 `constitution.md` に当たる）。
 
 - 手順:
-  1. 空振りしていないことを先に示す: 5 つの語のそれぞれを、歴史の場所（`.kiro/specs/completed/`・`doc/archive/`・`.kiro/steering/roadmap-history.md`）だけに絞って探し、どの語も 1 件以上当たることを確かめる（2026-11-05 の実測: `click_through.md` は completed 13 ファイル、`CONSTITUTION.md` は completed 15 ファイル・`doc/archive/` 1・roadmap-history 3 行、`PASTA_PROFILE` は completed 13 ファイル・roadmap-history 1 行、`equivalence_evidence` は completed 3 ファイル）。
+  1. 空振りしていないことを先に示す: 5 つの語のそれぞれを、歴史の場所（`.kiro/specs/completed/`・`doc/archive/`・`.kiro/steering/roadmap-history.md`）だけに絞って探し、どの語も 1 件以上当たることを確かめる（2026-11-05 の実測: `click_through.md` は completed 13 ファイル、`docs/` は completed 19 ファイル、`CONSTITUTION.md` は completed 15 ファイル・`doc/archive/` 1・roadmap-history 3 行、`PASTA_PROFILE` は completed 13 ファイル・roadmap-history 1 行、`equivalence_evidence` は completed 3 ファイル）。
   2. 同じ語を、除く場所 `:(exclude).kiro/specs/completed/`・`:(exclude)doc/archive/`・`:(exclude).kiro/steering/roadmap-history.md`・`:(exclude).kiro/specs/doc-tree-tidy/` を付けて全域で探す。
   3. 残ってよいのは、`.kiro/steering/roadmap.md` の `doc-tree-tidy` を含む行と、`doc/README.md` の「動かした名前の対応」の表の行だけ（5.3）。それ以外が 1 件でもあれば直してから 2 へ戻る。0 件を確かめた結果（語ごとの件数）をタスクの記録に残す。
 
@@ -440,6 +442,7 @@ fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding
 ## Error Handling
 
 - 食い違いは試験の失敗として出す。失敗の文は日本語で、1 件 1 行に名前と直し方を書き、件数を頭に出す（`file_length_guard_test.rs` と同じ形）。
+- `Unlisted` と `BadName` の直し方には「追跡していないファイル（エディタの控え・`desktop.ini`・`Thumbs.db` など）なら取り除く（`git status` で確かめられる）」を 1 句添える。実物はディスクで数えるので、手元にだけあるファイルでその人の手元だけが赤になりうる。そのとき案内に要らない行を足させないため。
 - `doc/` や `doc/README.md` が読めないときは、原因のパスとエラーを添えて panic する（試験の外の壊れ。黙って 0 件にしない）。
 - 読み取りが 0 件のときは `EmptyReading` で赤（4.8）。見出しの文字が変わったときもここに入る。
 
