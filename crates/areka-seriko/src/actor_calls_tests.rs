@@ -77,13 +77,8 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
         DisplayCommand::Show { surface_id: 0, .. }
     ));
     assert_eq!(cmds[1], shift(2, 4));
-    let later = rig.tick(200); // 2 枚目の絵（120）だけ
-    assert!(
-        later
-            .iter()
-            .all(|c| matches!(c, DisplayCommand::Show { .. })),
-        "同じ値は繰り返さない: {later:?}"
-    );
+    // 2 枚目の絵（120）だけ・同じ値のずれは繰り返さない。
+    assert_eq!(frames(&rig.tick(200), 0), vec![("0", Some(120))]);
     assert_eq!(rig.hear(300, emote_cue(0.3, "0", "0")), vec![shift(0, 0)]);
 }
 

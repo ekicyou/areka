@@ -408,13 +408,20 @@ fn settled_surface_carries_no_shift() {
         ));
         crate::settle_surface(&table, 0, &BindSet::default(), 0)
     };
-    let zeroed = MOVES
+    // 最後の `-1` を外し、最後に描くコマ（101）が欄に残る形で比べる（re-audit R8）。
+    let kept = MOVES.replace("animation0.pattern6,overlay,-1,100,0,0\n", "");
+    assert_ne!(kept, MOVES, "`-1` のコマを外せた");
+    let zeroed = kept
         .replace(",3,5", ",0,0")
         .replace(",7,5", ",0,0")
         .replace(",0,9999", ",0,0");
-    let moved = settle(MOVES);
+    let moved = settle(&kept);
     assert_eq!(moved, settle(&zeroed));
-    assert_eq!(moved.get(0), None, "`-1` で止まった後");
+    assert_eq!(
+        moved.get(0).map(|f| (f.surface_id, f.x, f.y)),
+        Some((101, 0, 0)),
+        "最後に描くコマが、ずれの入らない位置で欄に残る"
+    );
 }
 
 /// `-1` のコマのすぐ後に待ち 0 の働きのコマがあっても、経過 50 で止まり欄が外れる（面 4294967295 を

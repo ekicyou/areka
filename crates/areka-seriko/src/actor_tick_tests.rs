@@ -215,10 +215,15 @@ fn tick_boundary_cross_emits_show_carrying_pattern() {
             scope: s,
             surface_id,
             pattern,
-            ..
+            binds,
         } => {
             assert_eq!(s, &scope, "表示中 scope の Show");
             assert_eq!(*surface_id, 10, "表示中 surface は 10");
+            assert_eq!(
+                binds,
+                &BindSet::from_ids([1100, 1207]),
+                "刻みの Show は今の着せ替えを載せる"
+            );
             let f = pattern.get(0).expect("anim0 の現在コマが pattern に載る");
             assert_eq!(
                 f.surface_id, 2106,

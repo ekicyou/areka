@@ -638,6 +638,11 @@ fn bind_apply_on_hidden_scope_state_only_no_emit() {
         records.lock().expect("records mutex poisoned").is_empty(),
         "非表示 scope の bind 適用は発行しない（StateOnly・D5）"
     );
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1302]),
+        "非表示 scope でも状態は直す（StateOnly）"
+    );
 }
 
 /// ケース17（script-small-tags 3.9）: トグル形（数値欄省略）は今の着脱の反対を当てる。脱いでいる
