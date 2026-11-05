@@ -1,8 +1,6 @@
 //! 8 語の見分けと相手の欄の読みの檻（seriko-pattern-calls 要件 1.2・2.1〜2.3・9.2）。
 
 use super::{PatternWord, UnreadableTarget, call_targets, pattern_word};
-use crate::method::is_move_name;
-use crate::world::targets_animation_id;
 
 const LISTS: [PatternWord; 4] = [
     PatternWord::AlternativeStart,
@@ -41,27 +39,6 @@ fn other_words_are_draw() {
     ] {
         assert_eq!(pattern_word(method), PatternWord::Draw, "{method:?}");
     }
-}
-
-/// 今の 2 つの判定は照会への薄い呼び出しで、答えは 7 語と move に揃う。
-#[test]
-fn legacy_checks_follow_the_query() {
-    for method in [
-        "start",
-        "Stop",
-        "alternative-start",
-        "alternativestop",
-        "parallel_start",
-        "parallelstop",
-        "INSERT",
-    ] {
-        assert!(targets_animation_id(method), "{method}");
-        assert!(!is_move_name(method), "{method}");
-    }
-    assert!(!targets_animation_id(" Move "));
-    assert!(is_move_name(" Move "));
-    assert!(!targets_animation_id("overlay"));
-    assert!(!is_move_name("overlay"));
 }
 
 /// start・stop・insert は番号 1 つを読む（要件 2.1）。

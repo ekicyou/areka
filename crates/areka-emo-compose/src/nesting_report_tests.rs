@@ -181,15 +181,16 @@ fn fixture_yields_exactly_the_planted_issues() {
 }
 
 /// 広がりの予算（指摘 3）: 呼び出し 1 回の予算が尽きたら着かないと答え、`error!` を 1 行だけ出す。
-/// 0 → 1 → 2 → 3 の鎖は、予算 3 なら 3 へ着き、予算 2 なら着かない。
+/// 取り出す面は「1 ＋出る辺の数」を数える（指摘 130）ので、0 → 1 → 2 → 3 の鎖は 2＋2＋1＝5 で 3 へ着き、
+/// 予算 4 なら着かない。
 #[test]
 fn spent_budget_answers_not_reached() {
     let edges = BTreeMap::from([(0, vec![1]), (1, vec![2]), (2, vec![3])]);
     let mut reached = None;
-    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 3)));
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 5)));
     assert_eq!(reached, Some(true));
     assert!(logs.is_empty(), "{logs}");
-    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 2)));
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 4)));
     assert_eq!(reached, Some(false));
     assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
     assert!(

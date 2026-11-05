@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use areka_parsers::shell::Collision;
 use bevy_ecs::prelude::Component;
 
-use crate::budget::{Budget, VISIT_BUDGET};
+use crate::budget::{Budget, VISIT_BUDGET, surface_rows};
 use crate::nesting::ElementKind;
 use crate::normalized::SurfaceMaster;
 use crate::world::{EmoWorld, Records, SurfaceIndex};
@@ -87,12 +87,12 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
     }
 }
 
-/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、下で予算に数えた数と
+/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、入る分と下で予算に数えた数と
 /// 持ち込み済みの列。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
 pub(crate) type HitMemo = HashMap<u32, (usize, Vec<Collision>)>;
 
 /// 持ち込みの走査の段: 面と、element の読み位置と、その段で集めた列と、親の element定義の X,Y と、
-/// きれいに終わるかと、段の下で予算に数えた数。
+/// きれいに終わるかと、この面に入る分（入る 1 ＋面の行）と段の下で予算に数えた数。
 struct Level<'a> {
     master: &'a SurfaceMaster,
     /// `master` に直接書かれた領域の名前（段ごとに 1 度だけ作り、持ち込む 1 本ごとに引く・指摘 80）。
@@ -107,9 +107,11 @@ struct Level<'a> {
 
 /// `master` を根にした持ち込み済みの列。段のスタックで回し（先祖の確かめは経路の集合）、子の段が終わったら
 /// 親に直接書かれた領域と同じ名前を除き、element定義の X,Y を飽和で足して親の列へ足す。予算は入る面 1 つに
-/// 1 つと、子の段から親へ渡す列の長さ（名前で除く前）を数える。
+/// 「入る 1 ＋面の行の全部（[`surface_rows`]）」（足りなければ入らない・指摘 130）と、子の段から親へ渡す列の
+/// 長さ（名前で除く前）を数える。渡す列を予算で切るときは奥（列の前＝持ち込みの奥）から落とし、直接の領域
+/// （いちばん手前）を残す（指摘 137）。
 ///
-/// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた
+/// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る分＋下で数えた
 /// 数＋覚えた列の長さ」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は
 /// 覚えが無いときと同じ）。
 pub(crate) fn regions_of(
@@ -128,7 +130,7 @@ pub(crate) fn regions_of(
         dx: 0,
         dy: 0,
         clean: true,
-        spent: 0,
+        spent: surface_rows(master).saturating_add(1),
     }];
     while let Some(level) = levels.last_mut() {
         let parent = level.master;
@@ -147,13 +149,14 @@ pub(crate) fn regions_of(
             };
             let (dx, dy) = element.transform.offset();
             if let Some((n, list)) = memo.as_deref().and_then(|m| m.get(&c))
-                && budget.take(n + 1 + list.len())
+                && budget.take(n + list.len())
             {
-                level.spent += n + 1 + list.len();
+                level.spent = level.spent.saturating_add(n + list.len());
                 import(&mut level.out, &level.names, list.iter().cloned(), dx, dy);
                 continue;
             }
-            if !budget.enter("hit_import", root) {
+            let rows = surface_rows(child);
+            if !budget.enter(rows, "hit_import", root) {
                 level.clean = false;
                 continue;
             }
@@ -166,7 +169,7 @@ pub(crate) fn regions_of(
                 dx,
                 dy,
                 clean: true,
-                spent: 0,
+                spent: rows + 1,
             });
             continue;
         }
@@ -184,9 +187,9 @@ pub(crate) fn regions_of(
             budget.take_up_to(total, "hit_import", root)
         };
         done.clean &= carried == total;
-        done.out.truncate(carried);
-        let rest = carried - done.out.len();
-        done.out.extend(own.iter().take(rest).cloned());
+        // 列は［持ち込み（奥）］→［直接（手前）］。切るときは奥から落とす（指摘 137）。
+        done.out.extend(own.iter().cloned());
+        done.out.drain(..total - carried);
         if done.clean
             && let Some(m) = memo.as_deref_mut()
         {
@@ -195,7 +198,7 @@ pub(crate) fn regions_of(
         let Some(up) = levels.last_mut() else {
             return done.out;
         };
-        up.spent += done.spent + 1 + carried;
+        up.spent = up.spent.saturating_add(done.spent).saturating_add(carried);
         up.clean &= done.clean;
         import(
             &mut up.out,

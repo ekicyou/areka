@@ -116,51 +116,60 @@ pub(crate) fn walk(
     root: u32,
     limit: usize,
 ) -> Rect {
-    crate::outline_walk::walk(s, memo, root, limit, "bounds", merge, |surface, stack| {
-        let (master, binding) = surface_and_binding(world, surface)?;
-        let mut rect = None;
-        for (i, element) in master.elements.iter().enumerate() {
-            let (ex, ey) = element.transform.offset();
-            let original = match element.kind {
-                ElementKind::Surface(child) => {
-                    stack.push(Step::Enter {
-                        surface: child,
-                        x: ex,
-                        y: ey,
-                        quiet: true,
-                    });
+    crate::outline_walk::walk(
+        s,
+        world,
+        memo,
+        root,
+        limit,
+        "bounds",
+        merge,
+        |surface, stack| {
+            let (master, binding) = surface_and_binding(world, surface)?;
+            let mut rect = None;
+            for (i, element) in master.elements.iter().enumerate() {
+                let (ex, ey) = element.transform.offset();
+                let original = match element.kind {
+                    ElementKind::Surface(child) => {
+                        stack.push(Step::Enter {
+                            surface: child,
+                            x: ex,
+                            y: ey,
+                            quiet: true,
+                        });
+                        continue;
+                    }
+                    ElementKind::Film(film) => world.film_sheet(film).map(|sheet| sheet.original),
+                    _ => binding.0.get(i).copied().flatten().map(|element_id| {
+                        let original = atlas.entry(element_id).original;
+                        (original.w, original.h)
+                    }),
+                };
+                let Some((w, h)) = original else {
+                    continue;
+                };
+                merge(&mut rect, Some([0, 0, w as i64, h as i64]), ex, ey);
+            }
+
+            for pattern in master.animations.iter().flat_map(|a| &a.patterns) {
+                // 負の番号（描かない）・u32 に収まらない番号・描かないメソッド（`start` 等・`move` を含む）は数えない。
+                let Ok(child) = u32::try_from(pattern.surface_id) else {
+                    continue;
+                };
+                if !is_implemented_name(pattern.method.as_str()) {
                     continue;
                 }
-                ElementKind::Film(film) => world.film_sheet(film).map(|sheet| sheet.original),
-                _ => binding.0.get(i).copied().flatten().map(|element_id| {
-                    let original = atlas.entry(element_id).original;
-                    (original.w, original.h)
-                }),
-            };
-            let Some((w, h)) = original else {
-                continue;
-            };
-            merge(&mut rect, Some([0, 0, w as i64, h as i64]), ex, ey);
-        }
-
-        for pattern in master.animations.iter().flat_map(|a| &a.patterns) {
-            // 負の番号（描かない）・u32 に収まらない番号・描かないメソッド（`start` 等・`move` を含む）は数えない。
-            let Ok(child) = u32::try_from(pattern.surface_id) else {
-                continue;
-            };
-            if !is_implemented_name(pattern.method.as_str()) {
-                continue;
+                // 循環は黙って打ち切る（warn は読み込みが出す）。
+                stack.push(Step::Enter {
+                    surface: child,
+                    x: pattern.x,
+                    y: pattern.y,
+                    quiet: true,
+                });
             }
-            // 循環は黙って打ち切る（warn は読み込みが出す）。
-            stack.push(Step::Enter {
-                surface: child,
-                x: pattern.x,
-                y: pattern.y,
-                quiet: true,
-            });
-        }
-        rect
-    })
+            rect
+        },
+    )
 }
 
 #[cfg(test)]

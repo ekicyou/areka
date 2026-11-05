@@ -52,7 +52,7 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
 }
 
 /// 全部の面の外形の表を作る（指摘 8・[`EmoWorld::bind_atlas`] の最後に 1 度だけ）。予算は根の面 1 つにつき
-/// [`VISIT_BUDGET`]（範囲は合成 1 回と同じ。この表は入る面だけを数え、命令列は段の積み荷も数えるので、命令列は
+/// [`VISIT_BUDGET`]（範囲は合成 1 回と同じ。この表は入る面とその行を数え、命令列はさらに段の積み荷も数えるので、命令列は
 /// この表より先に切れることがある）。きれいに終わった面の覚えは根の間で共有する
 /// （覚えの有る無しで答えと記録は変わらない）。
 pub(crate) fn build_extents(world: &EmoWorld, atlas: &AtlasTable) -> SurfaceExtents {
@@ -116,6 +116,7 @@ pub(crate) fn compute_extent_limited(
 ) -> Extent {
     let answer = walk(
         s,
+        world,
         memo,
         surface_id,
         limit,

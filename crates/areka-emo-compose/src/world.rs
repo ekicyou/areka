@@ -14,6 +14,7 @@ use bevy_ecs::world::World;
 
 use crate::base_image::{BaseImageReport, SurfaceImages};
 use crate::normalized::SurfaceMaster;
+use crate::pattern_word::{PatternWord, pattern_word};
 
 /// surface 番号（entity のドメインキー・疎 id の明示・要件 1.1）。
 ///
@@ -172,8 +173,9 @@ impl EmoWorld {
     /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」の集合（要件 3.5）。
     ///
     /// 母集合は全部の面の全部の `animation` の全部の `pattern` のうち、`surface_id` が 0 以上で、
-    /// かつ描画メソッドが `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・
-    /// `parallelstop`・`insert` の 7 語（欄 2 がアニメーションの番号になる）のどれでもない。停止を表す
+    /// かつ描画メソッドが 8 語（欄 2 がアニメーションの番号になる `start`・`stop`・`alternativestart`・
+    /// `alternativestop`・`parallelstart`・`parallelstop`・`insert` の 7 語と、サーフェスの番号を無視する
+    /// `move`）のどれでもない（見分けは [`pattern_word`] の 1 本・外形と入れ子の辺と同じ）。停止を表す
     /// 負の番号（`-1`・`-2`）は相手に数えない。画像だけで存在する面は、構築のときに面の表へ
     /// 載っているので「在る」に数える（[`EmoWorld::build_with_images`]）。
     ///
@@ -189,7 +191,7 @@ impl EmoWorld {
             };
             for animation in &master.animations {
                 for pattern in &animation.patterns {
-                    if targets_animation_id(pattern.method.as_str()) {
+                    if pattern_word(pattern.method.as_str()) != PatternWord::Draw {
                         continue;
                     }
                     let Ok(target) = u32::try_from(pattern.surface_id) else {
@@ -325,13 +327,15 @@ impl EmoWorld {
         }
     }
 
-    /// 実効 animation ソート順（未指定は ukadoc 既定 `Descend`・要件 1.6/5.6）。
-    pub fn animation_sort(&self) -> SortOrder {
+    /// 実効 animation ソート順（未指定は ukadoc 既定 `Descend`・要件 1.6/5.6）。合成のたびに読むので
+    /// 写さずに借りる（知らない値でも確保しない・指摘 135）。
+    pub fn animation_sort(&self) -> &SortOrder {
+        static DESCEND: SortOrder = SortOrder::Descend;
         self.world
             .resource::<ShellSettings>()
             .animation_sort
-            .clone()
-            .unwrap_or(SortOrder::Descend)
+            .as_ref()
+            .unwrap_or(&DESCEND)
     }
 
     /// 実効 collision ソート順（未指定は `None`＝記述順・要件 1.6/5.6）。
@@ -351,26 +355,6 @@ impl EmoWorld {
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
-}
-
-/// コマの欄 2 が面の番号ではなくアニメーションの番号になる描画メソッドか（要件 3.5）。
-///
-/// ukadoc `descript_shell_surfaces` が「サーフェスID…は無視される」と書く `start`・`stop`・
-/// `alternativestart`・`alternativestop`・`parallelstart`・`parallelstop` の 6 語と、着せ替え
-/// グループを挿す `insert` の計 7 語。転記層（`decode_animations`）はメソッドに関係なく欄 2 を
-/// `surface_id` へ入れるので、除かないと正しく書かれたシェルが相手の無いコマとして数えられる。
-///
-/// 綴りの比べ方は [`ComposeMethod::from_name`] と同じ（前後の空白を落とし・小文字にし・`-` と
-/// `_` を除く）。`from_name` は未知の語で `warn!` を出すので、この判定からは呼ばない
-/// （[`EmoWorld::dangling_pattern_targets`] は記録を出さない）。
-///
-/// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
-pub(crate) fn targets_animation_id(method: &str) -> bool {
-    // 語の見分けは `pattern_word` 1 か所に置く（記録を出さない・綴りの比べ方は
-    // `ComposeMethod::from_name` と同じ）。上流の emo-atlas `manifest.rs` の `bind_only_paths` が
-    // 8 語と正規化を写して持つ（emo-atlas は emo-compose を参照できない）。ここを変えたらそちらも直す。
-    use crate::pattern_word::{PatternWord, pattern_word};
-    !matches!(pattern_word(method), PatternWord::Draw | PatternWord::Move)
 }
 
 // 記録を出さない組み方の入口の檻（spec: emo-bake-log-overlap 要件 2.1・2.3・3.2・3.4）。
@@ -407,7 +391,7 @@ mod tests {
     #[test]
     fn default_sort_orders() {
         let world = EmoWorld::build(&empty_shell());
-        assert_eq!(world.animation_sort(), SortOrder::Descend);
+        assert_eq!(world.animation_sort(), &SortOrder::Descend);
         assert_eq!(world.collision_sort(), None);
     }
 
@@ -418,7 +402,7 @@ mod tests {
         shell.animation_sort = Some(SortOrder::Ascend);
         shell.collision_sort = Some(SortOrder::Descend);
         let world = EmoWorld::build(&shell);
-        assert_eq!(world.animation_sort(), SortOrder::Ascend);
+        assert_eq!(world.animation_sort(), &SortOrder::Ascend);
         assert_eq!(world.collision_sort(), Some(SortOrder::Descend));
     }
 

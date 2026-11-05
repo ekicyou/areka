@@ -34,7 +34,7 @@ use areka_parsers::shell::{Interval, SortOrder};
 use bevy_ecs::entity::Entity;
 
 use crate::bind::BindSet;
-use crate::budget::{Budget, VISIT_BUDGET};
+use crate::budget::{Budget, VISIT_BUDGET, surface_rows};
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
 use crate::nesting::{ElementKind, PartKey, is_always_interval};
@@ -342,10 +342,10 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
 /// 入れ子は明示のスタック（[`PlanScratch`]）で回す（[`flatten_surface`]）。既に**現在の祖先経路**に
 /// 存在する surface へ入ろうとすると（自己参照・相互参照の循環）、`debug!` の上その枝のみを打ち切って
 /// 部分結果を残す。祖先は段を出るときに外すので、非循環の重複参照（DAG の共有子）は各経路で正しく
-/// 展開される。合成 1 回に予算 1 つを渡し、入る面と、子の段でなめる element と animation の数と、子の段の
+/// 展開される。合成 1 回に予算 1 つを渡し、入る面と、子の段の面の行の全部（[`surface_rows`]）と、子の段の
 /// 積み荷を数えて、尽きたらまだ積んでいない積み荷とまだ入っていない枝を捨てる（根の面の自分の層は予算に
 /// 切られず必ず描く・ただし重ねる画素の上限（[`build_plan`]・指摘 77）は根の層も切る・`error!` は合成器 1 つにつき
-/// 根ごとに 1 度だけ・指摘 21・24・76）。
+/// 根ごとに 1 度だけ・指摘 21・24・76・129）。
 ///
 /// # 決定性（要件 4.5/10.1）
 ///
@@ -361,13 +361,12 @@ pub(crate) fn derive_ops(
     binds: &BindSet,
     pattern: &PatternState,
 ) {
-    let sort = world.animation_sort();
     let walk = Walk {
         world,
         atlas,
         binds,
         pattern,
-        sort: &sort,
+        sort: world.animation_sort(),
     };
     flatten_surface(out_ops, scratch, walk, surface_id);
 }
@@ -423,16 +422,14 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
             );
             continue;
         }
-        if !budget.enter("plan", root) {
+        // 部品の段（element定義の子・pattern定義の先）は部品の欄を読む。段を開くとなめる面の行の全部も
+        // 入る 1 と一緒に先に予算から引き、足りなければ開かない（積み荷を作らない行も仕事・指摘 76・129）。
+        let level = walk.level(surface, x, y, false);
+        let rows = level.as_ref().map_or(0, |l| surface_rows(l.master));
+        if !budget.enter(rows, "plan", root) {
             continue;
         }
-        // 部品の段（element定義の子・pattern定義の先）は部品の欄を読む。段を開くとなめる element と
-        // animation の数も先に予算から引き、足りなければ開かない（積み荷を作らない行も仕事・指摘 76）。
-        if let Some(level) = walk.level(surface, x, y, false) {
-            let rows = level.master.elements.len() + level.master.animations.len();
-            if budget.take_up_to(rows, "plan", root) < rows {
-                continue;
-            }
+        if let Some(level) = level {
             let start = s.steps.len();
             s.open(&level);
             // 段の積み荷（命令と子へ入る印）も予算から引き、足りない分は積まない（指摘 21）。

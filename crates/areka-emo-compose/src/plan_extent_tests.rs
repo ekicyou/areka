@@ -538,8 +538,8 @@ fn child_beyond_u32_does_not_wrap_to_small_extent() {
     assert_eq!(errors, 1, "error! は 1 行");
 }
 
-/// 広がりの予算（指摘 3）: 予算 2 の外形は element定義の子 3 つのうち 2 つ目まで入って 3 つ目を数えず、
-/// `error!` を 1 行だけ出す。予算 3 なら 3 つとも数える。
+/// 広がりの予算（指摘 3）: 子の面は入る 1 ＋行 1 つ（element 1 行）で 2 を数える（指摘 130）。予算 4 の外形は
+/// element定義の子 3 つのうち 2 つ目まで入って 3 つ目を数えず、`error!` を 1 行だけ出す。予算 6 なら 3 つとも数える。
 #[test]
 fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
     let text = "surface0\n{\nelement0,overlay,10,0,0\nelement1,overlay,10,10,0\n\
@@ -565,14 +565,14 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
         });
         (extent.expect("外形"), logs)
     };
-    let (extent, logs) = run(2);
+    let (extent, logs) = run(4);
     assert_eq!(extent, Extent { w: 14, h: 4 });
     assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
     assert!(
         logs.contains("walk=\"extent\"") && logs.contains("root=0"),
         "{logs}"
     );
-    let (extent, logs) = run(3);
+    let (extent, logs) = run(6);
     assert_eq!(extent, Extent { w: 24, h: 4 });
     assert!(!logs.contains("level=ERROR"), "{logs}");
 }

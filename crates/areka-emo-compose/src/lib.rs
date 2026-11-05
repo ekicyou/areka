@@ -266,6 +266,10 @@ mod linear_lookup_tests;
 #[cfg(test)]
 mod work_limits_tests;
 
+// 予算を面の行の全部で数える（どの走査も入るときに引く）・重なりの記録・持ち込みの切り方（指摘 129〜137）。
+#[cfg(test)]
+mod row_budget_tests;
+
 #[cfg(test)]
 mod contract_tests {
     use super::{BindSet, ComposedSurface};

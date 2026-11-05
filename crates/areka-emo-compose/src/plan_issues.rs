@@ -10,6 +10,8 @@
 //! `animation-sort` の知らない値は転記層が原文のまま [`SortOrder::Other`] で運ぶので、その 1 つを
 //! シェル全体の誤りとして集める（合成は既定 `descend` として組む）。
 
+use std::collections::HashMap;
+
 use areka_parsers::shell::SortOrder;
 
 use crate::budget::VISIT_BUDGET;
@@ -45,10 +47,12 @@ pub enum ShapeIssue {
 /// 1 つの pattern が両方に当たれば `Cycle` が先。
 pub fn shape_issues(world: &EmoWorld) -> Vec<ShapeIssue> {
     let edges = nest_edges(world);
+    // 同じ（先, 面）の組は答えが同じなので 1 度だけたどる（指摘 132 と同じ型）。
+    let mut cycles: HashMap<(u32, u32), bool> = HashMap::new();
     let mut issues = Vec::new();
     if let SortOrder::Other(value) = world.animation_sort() {
         issues.push(ShapeIssue::UnknownAnimationSort {
-            value: value.into(),
+            value: value.to_string(),
         });
     }
     for surface in world.surface_ids() {
@@ -61,7 +65,10 @@ pub fn shape_issues(world: &EmoWorld) -> Vec<ShapeIssue> {
                 let Some(target) = pattern_edge(p) else {
                     continue;
                 };
-                if reaches(&edges, target, surface, VISIT_BUDGET) {
+                let cycle = *cycles
+                    .entry((target, surface))
+                    .or_insert_with(|| reaches(&edges, target, surface, VISIT_BUDGET));
+                if cycle {
                     issues.push(ShapeIssue::Cycle {
                         surface,
                         animation: anim.id,

@@ -370,7 +370,8 @@ fn dangling_pattern_targets_skips_negative_targets_and_existing_faces() {
     );
 }
 
-/// 欄 2 がアニメーションの番号になる 7 語のコマは、面の相手として数えない（要件 3.5）。
+/// 欄 2 がアニメーションの番号になる 7 語と、サーフェスの番号を無視する `move` のコマは、面の相手として
+/// 数えない（要件 3.5・指摘 133）。
 ///
 /// 綴りの比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_`
 /// を除く）。`from_name` は未知の語で `warn!` を出すので、この照会からは呼ばない。
@@ -384,6 +385,7 @@ fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
         "PARALLELSTART",
         "parallel_stop",
         "insert",
+        " Move ",
     ];
     let patterns: Vec<Pattern> = methods
         .iter()
@@ -406,7 +408,7 @@ fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
         "`start,5` などは面 5 が無くても 0 組: {targets:?}",
     );
 
-    // 非空の対照: 同じ番号を描画メソッドで指せば 1 組になる（7 語の除外が効いていることの裏取り）。
+    // 非空の対照: 同じ番号を描画メソッドで指せば 1 組になる（8 語の除外が効いていることの裏取り）。
     let drawn = world_with_patterns(vec![pattern(0, "overlay", 5)], &BTreeMap::new());
     assert_eq!(
         drawn.dangling_pattern_targets(),

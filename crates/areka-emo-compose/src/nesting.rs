@@ -8,17 +8,18 @@
 //! 記録は出さない（広がりの予算が尽きたときの `error!` だけは出す）。事実を値で返し、記録は
 //! fs を触る入口が読み込み 1 回につき 1 度だけ出す。
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
 use crate::bind_steps::BindStep;
 use crate::budget::{Budget, VISIT_BUDGET};
-use crate::method::{is_implemented_name, is_move_name};
+use crate::method::is_implemented_name;
 use crate::pattern::{Cell, PatternState};
+use crate::pattern_word::{PatternWord, pattern_word};
 use crate::plan::is_bind_interval;
-use crate::world::{EmoWorld, targets_animation_id};
+use crate::world::EmoWorld;
 
 /// element定義が置くもの。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -360,6 +361,8 @@ impl NestReport {
     /// 描画メソッドが動くかには依らない（どの一番上から見ても切られうる辺を全部挙げる）。
     pub(crate) fn from_world(world: &EmoWorld) -> NestReport {
         let edges = nest_edges(world);
+        // 同じ（子, 親）の組は答えが同じなので 1 度だけたどる（同じ子を指す element定義の数だけたどり直さない・指摘 132）。
+        let mut cycles: HashMap<(u32, u32), bool> = HashMap::new();
 
         let mut issues = Vec::new();
         for &id in edges.keys() {
@@ -381,7 +384,10 @@ impl NestReport {
                         continue;
                     }
                 };
-                if reaches(&edges, child, id, VISIT_BUDGET) {
+                let cycle = *cycles
+                    .entry((child, id))
+                    .or_insert_with(|| reaches(&edges, child, id, VISIT_BUDGET));
+                if cycle {
                     issues.push(NestIssue::Cycle {
                         surface: id,
                         element: e.layer,
@@ -421,29 +427,30 @@ pub(crate) fn nest_edges(world: &EmoWorld) -> BTreeMap<u32, Vec<u32>> {
 /// pattern定義の辺の先（番号が 0 以上で u32 に収まり、欄 2 が animation の番号になる 7 語でも、
 /// サーフェスの番号を無視する `move`（ukadoc）でもないもの）。
 pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
-    let method = p.method.as_str();
-    if targets_animation_id(method) || is_move_name(method) {
+    if pattern_word(p.method.as_str()) != PatternWord::Draw {
         return None;
     }
     u32::try_from(p.surface_id).ok()
 }
 
 /// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。`limit` は呼び出し 1 回の
-/// 広がりの予算（本番は [`VISIT_BUDGET`]）。取り出した面を `from` の他は 1 つずつ数え、尽きたら
-/// 着かないと答える（残りの辺は循環として報告しない・合成の祖先の確かめが循環を止める）。
-// ponytail: 辺 1 本ごとに全体をなめる（辺 × 面）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
+/// 広がりの予算（本番は [`VISIT_BUDGET`]）。取り出した面を `from` の他は「1 ＋その面から出る辺の数」ずつ
+/// 数え（なめる辺も仕事・指摘 130 と同じ型）、尽きたら着かないと答える（残りの辺は循環として報告しない・
+/// 合成の祖先の確かめが循環を止める）。
+// ponytail: 呼び手は（子, 親）の組ごとに 1 度呼び、1 回は予算いっぱいまでなめる（組の数 × 予算）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
 pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32, limit: usize) -> bool {
     let mut budget = Budget::new(limit);
     let mut seen = BTreeSet::from([from]);
     let mut stack = vec![from];
     while let Some(s) = stack.pop() {
-        if s != from && !budget.enter("reaches", from) {
+        let out = edges.get(&s).map_or(&[][..], Vec::as_slice);
+        if s != from && !budget.enter(out.len(), "reaches", from) {
             return false;
         }
         if s == to {
             return true;
         }
-        for &next in edges.get(&s).into_iter().flatten() {
+        for &next in out {
             if seen.insert(next) {
                 stack.push(next);
             }

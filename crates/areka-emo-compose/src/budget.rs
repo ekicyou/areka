@@ -1,16 +1,30 @@
-//! 広がりの予算（指摘 3・21・22）: 入れ子をたどる走査が 1 回の範囲でたどってよい仕事の量を数え、
+//! 広がりの予算（指摘 3・21・22・129・130）: 入れ子をたどる走査が 1 回の範囲でたどってよい仕事の量を数え、
 //! 尽きたら入るのを断る。菱形の参照（1 つの面が同じ面を何度も insert する）で広がりが
-//! 指数になっても、走査が固まらないようにする。深さではなく「入る面と積み荷の数」を数える
-//! （積み荷＝命令列の段の命令と子へ入る印と、段を開くとなめる element と animation の行・当たり判定の持ち込みで
-//! 親へ渡す領域。外形とシェルの外形は入る面だけ）。
+//! 指数になっても、走査が固まらないようにする。深さではなく「入る面となめる行と積み荷の数」を数える。
+//! どの走査も面に入るときに「入る 1 ＋その面の行の全部（[`surface_rows`]）」を引き、足りなければ入らない
+//! （面 1 つに入ってする仕事はその面の行の数に比例するので、走査全体の仕事は予算×定数で抑えられる）。
+//! 積み荷（命令列の段の命令と子へ入る印・当たり判定の持ち込みで親へ渡す領域）もこれとは別に数える。
 
+use crate::normalized::SurfaceMaster;
 use crate::world::Records;
 
 /// 1 回の走査の範囲で数えてよい「入る面と積み荷」の数。
 /// 根拠（3.2・2026-11-06）: 面の数だけを数えていたときの測り。release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
-/// 6.1 で積み荷も、7.1 でなめる行も数える単位に変えた（同じ菱形で 1 面あたり約 5 つ）ので、測り直しの候補
+/// 6.1 で積み荷も、7.1 でなめる行も、8.1 で面の行の全部（[`surface_rows`]）も数える単位に変えたので、測り直しの候補
 /// （`examples/compose_timing.rs` の `diamond13` が 1 単位あたりの時間を出す）。
 pub(crate) const VISIT_BUDGET: usize = 1 << 16;
+
+/// 面 1 つの行の全部の数（element・collision と、animation ごとに interval の 1 行＋pattern の数・飽和）。
+/// 面に入った走査がなめうる行の上限なので、どの走査も入るときにこれで予算から引く（指摘 129・130）。
+pub(crate) fn surface_rows(master: &SurfaceMaster) -> usize {
+    let lines = master
+        .elements
+        .len()
+        .saturating_add(master.collisions.len());
+    master.animations.iter().fold(lines, |n, a| {
+        n.saturating_add(1).saturating_add(a.patterns.len())
+    })
+}
 
 /// 走査 1 回の範囲の残りの数と、報告済みの印。
 #[derive(Debug)]
@@ -35,10 +49,12 @@ impl Budget {
         }
     }
 
-    /// 面に 1 つ入る前に呼ぶ。残りがあれば減らして true。尽きていれば、範囲で初めての
-    /// ときだけ `error!`（`walk`＝走査の名前・`root`＝根の面・予算）を出して false。
-    pub(crate) fn enter(&mut self, walk: &'static str, root: u32) -> bool {
-        self.take_up_to(1, walk, root) == 1
+    /// 面に 1 つ入る前に呼ぶ。入る 1 とその面の行の数 `rows`（[`surface_rows`]）をまとめて引けたら true。
+    /// 足りなければ残りを使い切り、範囲で初めてのときだけ `error!`（`walk`＝走査の名前・`root`＝根の面・
+    /// 予算）を出して false（呼び手は入らない）。
+    pub(crate) fn enter(&mut self, rows: usize, walk: &'static str, root: u32) -> bool {
+        let n = rows.saturating_add(1);
+        self.take_up_to(n, walk, root) == n
     }
 
     /// 積み荷 `n` 個を積む前に呼ぶ（指摘 21・22）。残りの内の数（`n` 以下）を引いて返し、足りなければ
@@ -64,7 +80,7 @@ impl Budget {
         self.reported
     }
 
-    /// 覚えた子の分 `n`（子に入る 1 と子の下で数えた数）をまとめて引く。足りなければ何も引かず、
+    /// 覚えた子の分 `n`（子に入る 1 と子の行と子の下で数えた数）をまとめて引く。足りなければ何も引かず、
     /// 記録も出さずに false（呼び手は今どおり 1 つずつ入り、尽きた所で [`Budget::enter`] が記録を出す）。
     pub(crate) fn take(&mut self, n: usize) -> bool {
         if self.left < n {
@@ -88,7 +104,7 @@ mod tests {
         let out = capture_logs(|| {
             let mut budget = Budget::new(3);
             for _ in 0..5 {
-                entered.push(budget.enter("plan", 7));
+                entered.push(budget.enter(0, "plan", 7));
             }
         });
         assert_eq!(entered, [true, true, true, false, false]);
@@ -109,8 +125,8 @@ mod tests {
         let mut entered = Vec::new();
         let out = capture_logs(|| {
             let mut budget = Budget::with_records(1, Records::Quiet);
-            entered.push(budget.enter("hit_import", 0));
-            entered.push(budget.enter("hit_import", 0));
+            entered.push(budget.enter(0, "hit_import", 0));
+            entered.push(budget.enter(0, "hit_import", 0));
         });
         assert_eq!(entered, [true, false]);
         assert!(out.is_empty(), "記録は出さない: {out:?}");

@@ -103,7 +103,8 @@ pub(crate) fn op_area(op: &BlitOp, atlas: &AtlasTable) -> Area {
 pub(crate) const PIXEL_FACTOR: u64 = 64;
 
 /// 命令列 `ops` を、外形 `extent` の中で重ねる画素の合計が面積×[`PIXEL_FACTOR`] に収まる頭の部分だけに
-/// 切り詰める（いちからの合成も矩形の重ね直しも、この命令列より多くは重ねない）。捨てた命令の数を返す。
+/// 切り詰める（いちからの合成も矩形の重ね直しも、この命令列より多くは重ねない）。描かない描画メソッドの命令は
+/// 重ねないので 0 画素に数える（指摘 134）。捨てた命令の数を返す。
 pub(crate) fn cap_pixels(ops: &mut Vec<BlitOp>, extent: Extent, atlas: &AtlasTable) -> usize {
     let canvas = Area {
         x0: 0,
@@ -117,7 +118,7 @@ pub(crate) fn cap_pixels(ops: &mut Vec<BlitOp>, extent: Extent, atlas: &AtlasTab
         .iter()
         .take_while(|op| {
             let a = op_area(op, atlas).intersect(canvas);
-            if !a.is_empty() {
+            if op.method.is_implemented() && !a.is_empty() {
                 spent += (a.x1 - a.x0) as u64 * (a.y1 - a.y0) as u64;
             }
             spent <= limit

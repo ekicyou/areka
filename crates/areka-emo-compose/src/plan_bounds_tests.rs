@@ -207,8 +207,8 @@ fn bind_cycle_emits_no_warn() {
     assert_every_surface_fits(&world, &atlas, b.expect("外形"));
 }
 
-/// 広がりの予算（指摘 3）: 予算 2 のシェルの外形は、負の位置に置いた element定義の子 3 つのうち 2 つ目
-/// まで入って 3 つ目を数えず、`error!` を 1 行だけ出す。予算 3 なら 3 つとも数える。
+/// 広がりの予算（指摘 3）: 子の面は入る 1 ＋行 1 つで 2 を数える（指摘 130）。予算 4 のシェルの外形は、負の位置に
+/// 置いた element定義の子 3 つのうち 2 つ目まで入って 3 つ目を数えず、`error!` を 1 行だけ出す。予算 6 なら 3 つとも数える。
 #[test]
 fn spent_budget_leaves_children_not_yet_entered_out_of_the_bounds() {
     let (world, atlas) = world_of(
@@ -221,14 +221,14 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_bounds() {
         let logs = capture_logs(|| b = Some(super::shell_bounds_limited(&world, &atlas, limit)));
         (b.expect("外形"), logs)
     };
-    let (b, logs) = run(2);
+    let (b, logs) = run(4);
     assert_eq!(b.left, -20, "{b:?}");
     assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
     assert!(
         logs.contains("walk=\"bounds\"") && logs.contains("root=0"),
         "{logs}"
     );
-    let (b, logs) = run(3);
+    let (b, logs) = run(6);
     assert_eq!(b.left, -30, "{b:?}");
     assert!(!logs.contains("level=ERROR"), "{logs}");
 }

@@ -91,11 +91,18 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
         }
     }
     // 行を足した面の element を layer 昇順へ 1 度だけ安定ソートする（同じ番号の中は前の行が先・
-    // 足すたびに並べ直さない・指摘 27）。
-    for id in added.into_keys() {
+    // 足すたびに並べ直さない・指摘 27）。波括弧が置き換えた collision の前の行もここで 1 度だけ除く（指摘 131）。
+    for (id, numbers) in added {
         let entity = world.resource::<SurfaceIndex>().0.get(&id).copied();
         if let Some(mut master) = entity.and_then(|e| world.get_mut::<SurfaceMaster>(e)) {
             master.elements.sort_by_key(|e| e.layer);
+            if !numbers.cuts.is_empty() {
+                let mut at = 0;
+                master.collisions.retain(|c| {
+                    at += 1;
+                    numbers.cuts.get(&c.index).is_none_or(|&cut| at > cut)
+                });
+            }
         }
     }
 }
@@ -137,12 +144,15 @@ fn body_lines(elements: &[Element], collisions: &[Collision], animations: &[Anim
         })
 }
 
-/// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く・指摘 27）。
+/// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く・指摘 27）と、
+/// 波括弧が置き換えた collision番号 → その波括弧の行の始まりの位置（この位置より前の同じ番号の行は
+/// 畳み込みの最後に 1 度だけ除く・指摘 131）。
 #[derive(Default)]
 struct Numbers {
     elements: HashSet<u32>,
     collisions: HashSet<u32>,
     animations: HashSet<u32>,
+    cuts: HashMap<u32, usize>,
 }
 
 impl Numbers {
@@ -151,6 +161,7 @@ impl Numbers {
             elements: master.elements.iter().map(|e| e.layer).collect(),
             collisions: master.collisions.iter().map(|c| c.index).collect(),
             animations: master.animations.iter().map(|a| a.id).collect(),
+            cuts: HashMap::new(),
         }
     }
 }
@@ -216,9 +227,10 @@ enum Source {
 ///   無い番号は末尾へ足す。
 /// - collision: SSP で測れなかった（画素に出ず MCP で読めない）ので今のまま。波括弧は同じ
 ///   collision番号の前の行を除いて末尾へ（後に書かれた行＝画家のアルゴリズムで手前）、追記は
-///   重ねて末尾へ足す。
+///   重ねて末尾へ足す。除くのは畳み込みの最後に 1 度（ここは番号ごとの切れ目を `numbers.cuts` に置くだけ）。
 ///
-/// 重なりと先勝ちは `numbers`（その面のすでにある番号）で引き、足した番号を書き足す。
+/// 重なりと先勝ちは `numbers`（その面のすでにある番号）で引き、足した番号を書き足す。`warn!` は種類ごとに
+/// 足す記述子 1 つにつき 1 行（最初の番号と重なった数・指摘 136）。
 fn add_lines(
     master: &mut SurfaceMaster,
     later: SurfaceMaster,
@@ -227,49 +239,59 @@ fn add_lines(
     numbers: &mut Numbers,
 ) {
     let surface_id = master.id;
-    for add in &later.elements {
-        if records.emits() && numbers.elements.contains(&add.layer) {
-            tracing::warn!(
-                target: "areka_emo_compose",
-                surface_id,
-                element = add.layer,
-                "element番号の二重定義: 前の行も残して両方を足す（SSP と同じ）"
-            );
-        }
+    let mut twice = later
+        .elements
+        .iter()
+        .filter(|e| numbers.elements.contains(&e.layer));
+    if records.emits()
+        && let Some(first) = twice.next()
+    {
+        tracing::warn!(
+            target: "areka_emo_compose",
+            surface_id,
+            element = first.layer,
+            count = 1 + twice.count(),
+            "element番号の二重定義: 前の行も残して両方を足す（SSP と同じ）"
+        );
     }
     numbers
         .elements
         .extend(later.elements.iter().map(|e| e.layer));
     master.elements.extend(later.elements);
 
-    // 波括弧が前の行と同じ collision番号を持つときだけ、前の行を除く（無ければ列をなめない）。
-    if source == Source::Brace
-        && later
-            .collisions
-            .iter()
-            .any(|l| numbers.collisions.contains(&l.index))
-    {
-        let replaced: HashSet<u32> = later.collisions.iter().map(|l| l.index).collect();
-        master.collisions.retain(|c| !replaced.contains(&c.index));
+    // 波括弧が前の行と同じ collision番号を持つときだけ、その番号の前の行を除く印を置く（除くのは最後に 1 度）。
+    if source == Source::Brace {
+        let at = master.collisions.len();
+        for l in &later.collisions {
+            if numbers.collisions.contains(&l.index) {
+                numbers.cuts.insert(l.index, at);
+            }
+        }
     }
     numbers
         .collisions
         .extend(later.collisions.iter().map(|c| c.index));
     master.collisions.extend(later.collisions);
 
+    let (mut first, mut dropped) = (None, 0usize);
     for add in later.animations {
-        if !numbers.animations.insert(add.id) {
-            if records.emits() {
-                tracing::warn!(
-                    target: "areka_emo_compose",
-                    surface_id,
-                    animation_id = add.id,
-                    "animation番号の二重定義: 後の行を捨てる（先勝ち・SSP と同じ）"
-                );
-            }
-        } else {
+        if numbers.animations.insert(add.id) {
             master.animations.push(add);
+        } else {
+            first.get_or_insert(add.id);
+            dropped += 1;
         }
+    }
+    if records.emits()
+        && let Some(first) = first
+    {
+        tracing::warn!(
+            target: "areka_emo_compose",
+            surface_id,
+            animation_id = first,
+            count = dropped,
+            "animation番号の二重定義: 後の行を捨てる（先勝ち・SSP と同じ）"
+        );
     }
 }
 

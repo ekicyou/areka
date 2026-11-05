@@ -219,7 +219,8 @@ fn insert_chain_composes_on_a_small_stack() {
 
 /// 覚え（きれいに終わった面の答え）: 全部の面を根に回す 3 つの走査で、根の間で覚えを共有した答えと記録が、
 /// 覚えを使わない答えと記録に一致する。予算を 0 から全部入れる数の先まで 1 つずつ変え、残りが覚えた分に
-/// 足りず覚えを使えない場合と、循環（面 4 ⇄ 5）の下で覚えない場合を含める。
+/// 足りず覚えを使えない場合と、循環（面 4 ⇄ 5）の下で覚えない場合を含める（予算の単位が面の行の全部に
+/// 広がったので、持ち込みが面 1 を覚える数まで届くよう 80 まで回す・指摘 130）。
 #[test]
 fn memo_gives_the_same_answers_and_records_as_walking_again() {
     use crate::budget::Budget;
@@ -241,7 +242,7 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
     world.bind_atlas(&atlas, SetId(0));
     let ids: Vec<u32> = world.surface_ids().collect();
     let mut hits = [0; 3];
-    for limit in 0..=40 {
+    for limit in 0..=80 {
         let (mut extent_memo, mut bounds_memo, mut hit_memo) = Default::default();
         let mut scratch = BoundsScratch::default();
         for &id in &ids {

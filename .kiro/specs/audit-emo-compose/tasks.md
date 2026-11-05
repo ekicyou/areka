@@ -187,7 +187,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
 - [ ] 8. かけ直し 3 回目の指摘の直し（research.md 17 節の 129〜175・audit 系は推奨案で承認）
-- [ ] 8.1 予算と仕事の量を型ごと閉じる（指摘 129〜138・174・175）
+- [x] 8.1 予算と仕事の量を型ごと閉じる（指摘 129〜138・174・175）
   - 面の行の全部（element・collision・animation ごとの 1＋pattern の数）を数える関数を 1 つ置き、命令列・外形・シェルの外形・当たり判定の持ち込みの全部の走査が、面に入るときにそれで予算から引く（足りなければ入らない）
   - 波括弧の collision の除きを最後に 1 度・`NestReport` の `reaches` の答えを組ごとに覚える・語の見分けを 1 本に・描かない命令は画素 0・`SortOrder` を借りる・重なりの `warn!` を記述子ごとに 1 行・切るときは奥から落とす・`ScaleRatio::mul` の扱い
   - 壊れたら落ちるテスト: 各上限の小さな版で仕事が上限で止まる・`move` の欄を面の番号と数えない
@@ -226,3 +226,4 @@
 - 6.5: テスト 443→434（消したのは重なるだけ・外れない 9 本）。部品に `plan_of`（`build_plan` の口）・`pattern` を足し、`px` は外形の外を assert。昔のタスク番号の名指しは 0 件。範囲の外（要件 6.9 で触らない）: `doc/COMPAT_ARCHITECTURE.md:276` と `doc/ukadoc-coverage/ledger/assets.toml:6137` がもう無いテスト名 `later_brace_without_interval_line_keeps_the_earlier_interval` を名指す（3.5 の前から）＝完了の棚卸で起票
 - 7.1: 予算の単位はさらに「入る 1＋なめる行（element＋animation）＋積み荷」（根は外・1 面あたり約 5 単位＝`VISIT_BUDGET` は測り直しの候補・道具は `diamond13`／`per_unit_ns`）。重ねる画素の上限 `blit::PIXEL_FACTOR`（外形の面積×64・`build_plan` で命令列の頭を残す・根の層も切る）・写す行の上限 `fold::MAX_COPIED_LINES = 2^20`（`body_lines` は pattern の行も数える）・根をまたぐ持ち込み `hit_import::IMPORT_BUDGET = 2^20`。どれも仮の値。外形とシェルの外形のたどり方は `outline_walk.rs` の 1 本。幅か高さが 0 は `EmptyComposition`（Display の文も変えた・他クレートのテストは緑）
 - 7.3: テスト 441→437。深い鎖の `nest_report` は 1000 段（`NestReport::from_world` が element定義ごとに `reaches` で深さの 2 乗＝design の「未解決（reaches も同じ型）」の内・10000 段で debug 約 65 秒）＝完了の棚卸で「強連結成分で 1 度に引く」直しの起票を検討。部品に `bake_emo2`・`component_of`・`visible_parts_of`・`MARKER`/`MARK_ANIM`・`fresh_world`/`master_of`/`snapshot_world`
+- 8.1: 予算の単位を全部の走査で「入る 1＋`budget::surface_rows`（element＋collision＋Σ(1＋pattern)）」にそろえた（`Budget::enter(rows, ..)`・reaches は 1＋出る辺の数）＝型を閉じた（レビューが 5 つの走査と中の関数を読んで確かめた。`film_op` のコマは焼く側の `max_frames` 1,024・`PatternState` の欄はその面の animation の数で抑えられる）。行の数が `VISIT_BUDGET`−1 を超える面は部品として入れない（根なら描く）。`EmoWorld::animation_sort()` は `&SortOrder` を返す（公開の口・外の呼び手 0）。138 は誤り（`ScaleRatio::mul` は `areka-emo-present/src/scale.rs:149` に本番の呼び手）。`outline_walk::walk` に `too_many_arguments` の許し（`own` が行の数を返す形にすれば外せる＝8.2 で拾う）。132 のテストは覚えを外しても遅くなるだけ＝8.3 で `reaches` の呼び出しの数を見る形に

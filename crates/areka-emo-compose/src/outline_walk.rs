@@ -1,10 +1,11 @@
 //! 外形の 2 つの走査（面ごとの外形 `plan_extent.rs`・シェルの外形 `plan_bounds.rs`）が共有するたどり方
-//! （指摘 84）。明示のスタックで深さ優先に回し、経路の集合で循環を避け、入る面を予算で数え、きれいに
+//! （指摘 84）。明示のスタックで深さ優先に回し、経路の集合で循環を避け、入る面とその行を予算で数え、きれいに
 //! 終わった面の答えを覚える。面ごとの寄与（自分の層の外形と、子へ入る積み荷）は呼び手が渡す。
 
 use std::collections::{HashMap, HashSet};
 
-use crate::budget::Budget;
+use crate::budget::{Budget, surface_rows};
+use crate::world::EmoWorld;
 
 /// 走査の積み荷: 面へ親の原点から `(x, y)` ずらして入る（`quiet` なら循環を黙って飛ばす）か、面から出る。
 pub(crate) enum Step {
@@ -18,7 +19,7 @@ pub(crate) enum Step {
 }
 
 /// 走査の段: 面と、親の原点からの位置と、段の下で重ねた答え（その面の原点からの相対・何も数えて
-/// いなければ `None`）と、きれいに終わるかと、段の下で予算に数えた数。
+/// いなければ `None`）と、きれいに終わるかと、この面に入る分（入る 1 ＋面の行）と段の下で予算に数えた数。
 struct Level<R> {
     surface: u32,
     x: i64,
@@ -28,7 +29,7 @@ struct Level<R> {
     spent: usize,
 }
 
-/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、下で予算に数えた数と
+/// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、入る分と下で予算に数えた数と
 /// 答え（その面の原点からの相対）。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
 pub(crate) type Memo<R> = HashMap<u32, (usize, Option<R>)>;
 
@@ -53,13 +54,16 @@ impl<R> Default for Scratch<R> {
 ///
 /// `own(surface, children)` は面の自分の寄与（その面の原点からの相対）を返し、子を `children` へ
 /// 取り出したい順に積む（逆にして上から取り出す＝深さ優先）。面の表に無ければ何も積まず `None` を返す。
-/// `merge(acc, r, x, y)` は `r` を `(x, y)` ずらして `acc` に重ねる。根の面は予算に数えない。
+/// `merge(acc, r, x, y)` は `r` を `(x, y)` ずらして `acc` に重ねる。根の面は予算に数えない。根でない面は
+/// 入るときに「入る 1 ＋面の行の全部（[`surface_rows`]）」を引き、足りなければ入らない（指摘 130）。
 ///
-/// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた
+/// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る分＋下で数えた
 /// 数」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと
 /// 同じ）。予算が尽きたら `name`（走査の名前）と根の面で `error!` を 1 行出す。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn walk<R: Copy>(
     s: &mut Scratch<R>,
+    world: &EmoWorld,
     mut memo: Option<&mut Memo<R>>,
     root: u32,
     limit: usize,
@@ -100,7 +104,7 @@ pub(crate) fn walk<R: Copy>(
             }
             match s.levels.last_mut() {
                 Some(up) => {
-                    up.spent += done.spent + 1;
+                    up.spent = up.spent.saturating_add(done.spent);
                     up.clean &= done.clean;
                     merge(&mut up.acc, done.acc, done.x, done.y);
                 }
@@ -123,16 +127,18 @@ pub(crate) fn walk<R: Copy>(
             }
             continue;
         }
-        // 根の面（段が無い）は予算に数えない。
+        // 根の面（段が無い）は予算に数えない。根も入る分は数えておく（覚えた答えを別の根の子として使うとき
+        // 覚えの無いときと同じだけ引くため）。
+        let rows = world.surface(surface).map_or(0, surface_rows);
         if let Some(up) = s.levels.last_mut() {
             if let Some(&(n, r)) = memo.as_deref().and_then(|m| m.get(&surface))
-                && budget.take(n + 1)
+                && budget.take(n)
             {
-                up.spent += n + 1;
+                up.spent = up.spent.saturating_add(n);
                 merge(&mut up.acc, r, x, y);
                 continue;
             }
-            if !budget.enter(name, root) {
+            if !budget.enter(rows, name, root) {
                 up.clean = false;
                 continue;
             }
@@ -148,7 +154,7 @@ pub(crate) fn walk<R: Copy>(
             y,
             acc,
             clean: true,
-            spent: 0,
+            spent: rows.saturating_add(1),
         });
         s.stack[children..].reverse();
     }
