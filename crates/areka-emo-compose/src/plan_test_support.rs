@@ -1,17 +1,33 @@
-use super::*;
+//! 命令列ほかのテストが引く部品（クレートの直下・`#[cfg(test)]` 限定）。
+//!
+//! 面の組み立て・コマ・当たり判定の領域・頁と表・塗りの絵・画素の読み・PNG の原寸・焼き・記録の
+//! 読み取り・命令の名前引き・命令列を引く口（[`ops`]）を 1 か所に置く。
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
+    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry,
+    AtlasKey, AtlasPage, AtlasTable, DecodedImage, ElementId, LoopCount, MemoryDecoder, PackConfig,
+    Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake, bake_with_limits,
 };
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
-    SortOrder, Surface,
+    Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
+    Interval, Pattern, Shell, SortOrder, Surface, parse,
 };
-use std::path::Path;
+
+use crate::bind::BindSet;
+use crate::composed::ComposedSurface;
+use crate::method::ComposeMethod;
+use crate::pattern::{PatternFrame, PatternState};
+use crate::plan::{BlitOp, derive_ops};
+use crate::world::EmoWorld;
 
 // ---- 合成モデルビルダ（task 4 テストと同一パターン・実 fixture パースは統合 task 8 送り）----
 
 /// element 1 本（layer/path/x/y 指定）。
-pub(super) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
+pub(crate) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
     Element {
         layer,
         path: ElementPath::new(path.to_string()),
@@ -21,12 +37,12 @@ pub(super) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
 }
 
 /// element のみを持つ最小 surface（collision/animation 空・単一ターゲット）。
-pub(super) fn surface(id: u32, elements: Vec<Element>) -> Surface {
+pub(crate) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     surface_with_anims(id, elements, Vec::new())
 }
 
 /// element＋animation を持つ surface（collision 空・単一ターゲット）。
-pub(super) fn surface_with_anims(
+pub(crate) fn surface_with_anims(
     id: u32,
     elements: Vec<Element>,
     animations: Vec<Animation>,
@@ -44,7 +60,7 @@ pub(super) fn surface_with_anims(
 ///
 /// pattern index は 0 を pattern0（先頭）とし、識別用に index=5 の余分な pattern も加えて
 /// 「pattern0＝最小 index の pattern」を選ぶ実装を突く（疎 index 許容・model 契約）。
-pub(super) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
+pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
@@ -74,12 +90,12 @@ pub(super) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animati
 }
 
 /// 与えた surface 群を登場順 definitions（plain のみ）で包む `Shell`（animation-sort 未指定＝既定 descend）。
-pub(super) fn shell_of(surfaces: Vec<Surface>) -> Shell {
+pub(crate) fn shell_of(surfaces: Vec<Surface>) -> Shell {
     shell_of_with_sort(surfaces, None)
 }
 
 /// 与えた surface 群を `animation-sort` 指定つきで包む `Shell`。
-pub(super) fn shell_of_with_sort(
+pub(crate) fn shell_of_with_sort(
     surfaces: Vec<Surface>,
     animation_sort: Option<SortOrder>,
 ) -> Shell {
@@ -95,7 +111,7 @@ pub(super) fn shell_of_with_sort(
 }
 
 /// tightly-packed 2×2 の premultiplied BGRA・不透明（α=255）画像スペック。
-pub(super) fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
+pub(crate) fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
     let (w, h) = (2u32, 2u32);
     let stride = w * 4;
     let bgra = vec![
@@ -108,13 +124,13 @@ pub(super) fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
 }
 
 /// `MemoryDecoder` へ base.join(rel) の実パスで不透明画像を登録する。
-pub(super) fn register(dec: &mut MemoryDecoder, base: &Path, rel: &str) {
+pub(crate) fn register(dec: &mut MemoryDecoder, base: &Path, rel: &str) {
     let (w, h, stride, bgra, has_alpha) = opaque_2x2();
     dec.insert(base.join(rel), w, h, stride, bgra, has_alpha);
 }
 
 /// 指定 rel_path 群を含む単一 SurfaceSet を bake し `AtlasTable` を得る（COM/WIC 非依存・SetId(0)）。
-pub(super) fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
+pub(crate) fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
     let elements: Vec<Element> = rels.iter().map(|r| elem(0, r, 0, 0)).collect();
     let surfaces = vec![surface(0, elements)];
     let mut dec = MemoryDecoder::new();
@@ -137,13 +153,271 @@ pub(super) fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
 ///
 /// BlitOp は ElementId のみを保持するため、命令列の順序を element の識別子（ここでは path）
 /// へ写像して検証する。bake 済み atlas は path→ElementId が一意ゆえ、ElementId→path も一意。
-pub(super) fn id_to_path<'a>(atlas: &AtlasTable, rels: &[&'a str]) -> Vec<(ElementId, &'a str)> {
+pub(crate) fn id_to_path<'a>(atlas: &AtlasTable, rels: &[&'a str]) -> Vec<(ElementId, &'a str)> {
     rels.iter()
         .map(|r| {
             let id = atlas
                 .resolve(SetId(0), r)
                 .unwrap_or_else(|| panic!("{r} は bake 済みで resolve できる"));
             (id, *r)
+        })
+        .collect()
+}
+
+/// 命令列を element の名前の列へ逆写像する（ElementId→path が一意な bake 前提）。
+pub(crate) fn ops_to_paths(ops: &[BlitOp], map: &[(ElementId, &str)]) -> Vec<String> {
+    ops.iter()
+        .map(|op| {
+            map.iter()
+                .find(|(id, _)| *id == op.element)
+                .map(|(_, p)| p.to_string())
+                .expect("op の ElementId は既知")
+        })
+        .collect()
+}
+
+/// 命令列を (画像の名前, X, Y) の列で返す（命令の名前引き）。
+pub(crate) fn named_ops<'a>(
+    ops: &[BlitOp],
+    map: &[(ElementId, &'a str)],
+) -> Vec<(&'a str, i64, i64)> {
+    ops.iter()
+        .map(|op| {
+            let name = map
+                .iter()
+                .find(|(id, _)| *id == op.element)
+                .map(|(_, p)| *p)
+                .expect("命令の ElementId は既知");
+            let (x, y) = op.transform.offset();
+            (name, x, y)
+        })
+        .collect()
+}
+
+/// 命令列を引く口: `surface_id` を合成した命令列を新しい `Vec` で返す。
+pub(crate) fn ops(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
+) -> Vec<BlitOp> {
+    let mut out = Vec::new();
+    let mut visited = Vec::new();
+    derive_ops(
+        &mut out,
+        &mut visited,
+        world,
+        atlas,
+        surface_id,
+        binds,
+        pattern,
+    );
+    assert!(visited.is_empty(), "先祖の積み上げは走査後に空へ戻る");
+    out
+}
+
+/// `surface_id` を (x,y) に置く Overlay のコマ。
+pub(crate) fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
+    PatternFrame {
+        surface_id,
+        method: ComposeMethod::Overlay,
+        x,
+        y,
+    }
+}
+
+/// 当たり判定の領域 1 つ。
+pub(crate) fn coll(
+    index: u32,
+    left: i64,
+    top: i64,
+    right: i64,
+    bottom: i64,
+    name: &str,
+) -> Collision {
+    Collision {
+        index,
+        left,
+        top,
+        right,
+        bottom,
+        name: CollisionName::new(name.to_string()),
+    }
+}
+
+/// premultiplied BGRA 1 画素頁を組む（stride = width*4・tightly packed）。
+pub(crate) fn page_1px(b: u8, g: u8, r: u8, a: u8) -> AtlasPage {
+    AtlasPage {
+        width: 1,
+        height: 1,
+        stride: 4,
+        bytes: Arc::from(vec![b, g, r, a]),
+    }
+}
+
+/// 単一エントリ（`ElementId(0)`）＋単一頁の AtlasTable を組む（original は uv.w×uv.h）。
+pub(crate) fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> AtlasTable {
+    let keys = vec![AtlasKey {
+        set: SetId(0),
+        rel_path: "e.png".into(),
+    }];
+    let entries = vec![AtlasEntry {
+        original: Size { w: uv.w, h: uv.h },
+        placement: Some(Placement {
+            page: 0,
+            uv_rect: uv,
+            trim_offset: trim,
+        }),
+    }];
+    AtlasTable::new(keys, entries, vec![page])
+}
+
+/// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提）。
+pub(crate) fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
+    let i = (y * out.stride() + x * 4) as usize;
+    let b = out.bytes();
+    [b[i], b[i + 1], b[i + 2], b[i + 3]]
+}
+
+/// 全面が 1 色・不透明の `w`×`h`（色 `c` でコマを見分ける）。
+pub(crate) fn solid(w: u32, h: u32, c: u8) -> DecodedImage {
+    DecodedImage {
+        width: w,
+        height: h,
+        stride: w * 4,
+        bgra: [c, c, c, 255].repeat((w * h) as usize),
+        has_alpha: true,
+    }
+}
+
+/// PNG ファイルの IHDR から `(width, height)` を読む（COM/WIC 非依存の実原寸取得）。
+///
+/// PNG は先頭 8 バイトが署名、続く IHDR チャンク（length[4]+"IHDR"[4]）の直後に width[4]・
+/// height[4]（ビッグエンディアン u32）が並ぶ。ゆえに width はオフセット 16、height は 20 から読める。
+pub(crate) fn png_size(path: &Path) -> (u32, u32) {
+    let bytes = std::fs::read(path)
+        .unwrap_or_else(|e| panic!("実 PNG を読めない: {}: {e}", path.display()));
+    assert!(
+        bytes.len() >= 24 && &bytes[0..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
+        "PNG 署名／IHDR が期待どおり: {}",
+        path.display()
+    );
+    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    assert!(w > 0 && h > 0, "実 PNG 原寸は非ゼロ: {}", path.display());
+    (w, h)
+}
+
+/// tightly-packed w×h の premultiplied BGRA・不透明（α=255）画像スペックを組む。
+pub(crate) fn opaque_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
+    let stride = w * 4;
+    (w, h, stride, vec![64u8; (stride * h) as usize], true)
+}
+
+/// tightly-packed w×h の premultiplied BGRA・**全透明**（α=0）画像スペックを組む。
+///
+/// trim は bbox を得られず `placement: None` になるが、`original` は (w,h) を記録する。
+pub(crate) fn transparent_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
+    let stride = w * 4;
+    (w, h, stride, vec![0u8; (stride * h) as usize], true)
+}
+
+/// (rel_path, (w,h), opaque?) 群から `AtlasTable` を bake する（大きさ指定の焼き）。
+pub(crate) fn bake_atlas_sized(base: &Path, specs: &[(&str, (u32, u32), bool)]) -> AtlasTable {
+    let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
+    let surfaces = vec![surface(0, elements)];
+    let mut dec = MemoryDecoder::new();
+    for (rel, (w, h), opaque) in specs {
+        let (iw, ih, stride, bgra, has_alpha) = if *opaque {
+            opaque_wxh(*w, *h)
+        } else {
+            transparent_wxh(*w, *h)
+        };
+        dec.insert(base.join(rel), iw, ih, stride, bgra, has_alpha);
+    }
+    let set = SurfaceSet {
+        surfaces: &surfaces,
+        base_dir: base,
+        alpha_params: AlphaParams {
+            use_self_alpha: UseSelfAlpha::On,
+        },
+    };
+    let result = bake(&[set], &dec, PackConfig::default());
+    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
+    result.table
+}
+
+/// 動く絵を `MemoryDecoder` へ登録する（大きさは 1 枚目のコマの絵から）。
+pub(crate) fn insert_film(
+    dec: &mut MemoryDecoder,
+    path: PathBuf,
+    frames: Vec<AnimationFrame>,
+    loop_count: LoopCount,
+) {
+    let first = frames[0].image.clone();
+    dec.insert_animated(
+        path,
+        AnimationInfo {
+            width: first.width,
+            height: first.height,
+            frame_count: frames.len() as u32,
+        },
+        Ok(first),
+        Ok(AnimatedImage { frames, loop_count }),
+    );
+}
+
+/// `rels` を element に持つ面 0 で `dec` の絵（静止画と動く絵）を焼き、`text` を面の表にして束縛する
+/// （動く絵の焼き）。`images` は `surface<数字>.png` として置いた絵（番号, 名前）。
+pub(crate) fn bake_films_and_bind<'a>(
+    dec: &MemoryDecoder,
+    base: &Path,
+    rels: impl Iterator<Item = &'a str>,
+    text: &str,
+    images: &[(u32, &str)],
+) -> (EmoWorld, AtlasTable) {
+    let surfaces = vec![surface(0, rels.map(|rel| elem(0, rel, 0, 0)).collect())];
+    let set = SurfaceSet {
+        surfaces: &surfaces,
+        base_dir: base,
+        alpha_params: AlphaParams {
+            use_self_alpha: UseSelfAlpha::On,
+        },
+    };
+    let baked = bake_with_limits(
+        &[set],
+        dec,
+        PackConfig::default(),
+        AnimationLimits::default(),
+    );
+    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
+    let mut world = EmoWorld::build_with_images(&parse(text), &images);
+    world.bind_atlas(&baked.table, SetId(0));
+    assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
+    (world, baked.table)
+}
+
+/// 飛ばした element定義の `debug!` の行から (親, element, 指した欄) を取り出す（記録の読み取り）。
+pub(crate) fn skipped(logs: &str) -> Vec<(u32, u32, String)> {
+    logs.lines()
+        .filter(|l| l.contains("level=DEBUG") && l.contains("子のサーフェスを置かない"))
+        .map(|l| {
+            let field = |name: &str| -> String {
+                let start = l.find(&format!(" {name}=")).expect(name) + name.len() + 2;
+                l[start..]
+                    .split(' ')
+                    .next()
+                    .unwrap()
+                    .trim_matches('"')
+                    .to_string()
+            };
+            (
+                field("surface_id").parse().unwrap(),
+                field("element").parse().unwrap(),
+                field("child"),
+            )
         })
         .collect()
 }

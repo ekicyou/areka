@@ -9,13 +9,13 @@ use std::path::Path;
 use areka_emo_atlas::{AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, bake};
 use areka_parsers::shell::parse;
 
-use super::test_support::{elem, surface};
 use super::{BlitOp, Extent, build_plan};
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
+use crate::plan_test_support::{elem, surface};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");

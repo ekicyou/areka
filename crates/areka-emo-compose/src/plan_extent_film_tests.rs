@@ -3,15 +3,9 @@
 //! 動く絵の子は画像の element と同じ 1 行で原寸を数え、`always` は全部の pattern の先を着せ替えの
 //! pattern0 と同じやり方で数える。外形はコマ（[`PatternState`]）に依らない静的な量のまま。
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasTable,
-    DecodedImage, LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    bake_with_limits,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::{AnimationFrame, AtlasTable, LoopCount, MemoryDecoder};
 
 use super::compute_extent;
 use crate::bind::BindSet;
@@ -19,6 +13,7 @@ use crate::method::ComposeMethod;
 use crate::nesting::FilmId;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{Extent, build_plan};
+use crate::plan_test_support::{bake_films_and_bind, insert_film, solid};
 use crate::world::EmoWorld;
 
 const BASE: &str = "shell";
@@ -32,16 +27,6 @@ const STILLS: &[(&str, u32, u32)] = &[
 ];
 /// 動く絵（名前, 幅, 高さ）。どちらも 2 コマ・待ち 100 ずつ・終わりなし。
 const FILMS: &[(&str, u32, u32)] = &[("film.apng", 30, 20), ("surface1.png", 30, 20)];
-
-fn solid(w: u32, h: u32, c: u8) -> DecodedImage {
-    DecodedImage {
-        width: w,
-        height: h,
-        stride: w * 4,
-        bgra: [c, c, c, 255].repeat((w * h) as usize),
-        has_alpha: true,
-    }
-}
 
 /// 文面を面の表にして焼き、束縛する。`images` は `surface<数字>.png` として置いた絵。
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
@@ -58,56 +43,15 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
                 delay_ms: 100,
             })
             .collect();
-        dec.insert_animated(
+        insert_film(
+            &mut dec,
             Path::new(BASE).join(rel),
-            AnimationInfo {
-                width: w,
-                height: h,
-                frame_count: frames.len() as u32,
-            },
-            Ok(frames[0].image.clone()),
-            Ok(AnimatedImage {
-                frames,
-                loop_count: LoopCount::Infinite,
-            }),
+            frames,
+            LoopCount::Infinite,
         );
     }
-    let elements = STILLS
-        .iter()
-        .chain(FILMS)
-        .map(|(rel, _, _)| Element {
-            layer: 0,
-            path: ElementPath::new(rel.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
-        &dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&baked.table, SetId(0));
-    assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
-    (world, baked.table)
+    let rels = STILLS.iter().chain(FILMS).map(|(rel, _, _)| *rel);
+    bake_films_and_bind(&dec, Path::new(BASE), rels, text, images)
 }
 
 fn extent(world: &EmoWorld, atlas: &AtlasTable, id: u32) -> Extent {

@@ -3,7 +3,7 @@
 各件の場所（ファイルと行）は `research.md` 3 節、直し方の決めは `design.md` の「Components and Interfaces」が正本。指摘の番号は `research.md` 3 節の番号。
 
 - [ ] 1. 準備: テストの部品を 1 か所にまとめ、大きすぎるテストのファイルを分ける
-- [ ] 1.1 テストの部品の置き場をクレートの直下へ上げ、命令列を引く口を 1 つにする（指摘 12 の前半）
+- [x] 1.1 テストの部品の置き場をクレートの直下へ上げ、命令列を引く口を 1 つにする（指摘 12 の前半）
   - 命令列のテストの部品を、命令列の中の非公開の部品から、クレートの直下でテストだけが引ける部品に上げる（ファイル名は変えない＝新しいファイルを作らない）
   - 写しのもとになる部品（面の組み立て・コマ・当たり判定・1 画素の頁・単一の表・塗りの頁・画素の読み・PNG の大きさ・大きさ指定の焼き・動く絵の焼き・記録の読み取り・命令の名前引き）をここへ集める
   - 命令列を作る 9 行・11 行の呼び出しの塊を、命令列を返す 1 つの口へまとめ、命令列の部品のテストの呼び出しをその口へ寄せる。何もしない写しの部品（`bind_anim` を呼ぶだけのもの）を消す
@@ -145,3 +145,8 @@
   - `Cargo.lock` が変わっていないこと・新しい依存が無いこと・`crates/areka-emo-text/` に新しいファイルが無いこと・終了の道と GPU のテストに触っていないことを差分で確かめる
   - 終わった姿: 全体テストが緑（整形・ライセンス込み）で、上の確かめがどれも差分 0
   - _Requirements: 4.3, 6.3, 6.5, 6.6, 6.7, 6.8, 6.10_
+
+## Implementation Notes
+
+- 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）
+- 申し合わせ（11-05）: audit-emo-present＝`ExtentTooLarge` は表示の側で `EmptyComposition` と同じく隠す・match の腕は後から着いた側が足す。audit-seriko＝`parts_tests.rs` の bind+random の期待はこちらで直す（向こうは先頭の use だけ触る・後着が rebase）

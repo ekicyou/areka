@@ -686,10 +686,6 @@ pub(crate) fn surface_and_binding(
 }
 
 #[cfg(test)]
-#[path = "plan_test_support.rs"]
-mod test_support;
-
-#[cfg(test)]
 #[path = "plan_ops_tests.rs"]
 mod ops_tests;
 

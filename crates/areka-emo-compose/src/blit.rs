@@ -167,39 +167,11 @@ mod tests {
     use super::*;
     use crate::method::{BlendKind, BlendMode, ComposeMethod};
     use crate::normalized::Transform;
+    use crate::plan_test_support::{page_1px, px, single_entry_table};
     use areka_emo_atlas::{
         AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
     };
     use std::sync::Arc;
-
-    /// premultiplied BGRA 1 画素頁を組む（stride = width*4・tightly packed）。
-    fn page_1px(b: u8, g: u8, r: u8, a: u8) -> AtlasPage {
-        AtlasPage {
-            width: 1,
-            height: 1,
-            stride: 4,
-            bytes: Arc::from(vec![b, g, r, a]),
-        }
-    }
-
-    /// 単一エントリ（`ElementId(0)`）＋単一頁の AtlasTable を組む。
-    ///
-    /// エントリ original は uv.w×uv.h に合わせる（外形算出は本 task では不使用）。
-    fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> AtlasTable {
-        let keys = vec![AtlasKey {
-            set: SetId(0),
-            rel_path: "e.png".into(),
-        }];
-        let entries = vec![AtlasEntry {
-            original: Size { w: uv.w, h: uv.h },
-            placement: Some(Placement {
-                page: 0,
-                uv_rect: uv,
-                trim_offset: trim,
-            }),
-        }];
-        AtlasTable::new(keys, entries, vec![page])
-    }
 
     /// `ElementId(0)` を (x,y) へ overlay 転写する命令 1 本。
     fn op_at(x: i64, y: i64) -> BlitOp {
@@ -208,13 +180,6 @@ mod tests {
             transform: Transform::translate(x, y),
             method: ComposeMethod::Overlay,
         }
-    }
-
-    /// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提）。
-    fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-        let i = (y * out.stride() + x * 4) as usize;
-        let b = out.bytes();
-        [b[i], b[i + 1], b[i + 2], b[i + 3]]
     }
 
     /// div255 の丸めが四捨五入であること（決定6）。

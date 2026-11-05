@@ -9,12 +9,12 @@ use std::path::Path;
 
 use areka_emo_atlas::{
     AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry,
-    AtlasKey, DecodedImage, MemoryDecoder, PackConfig, SetId, Size, SurfaceSet, UseSelfAlpha,
-    bake_with_limits,
+    AtlasKey, MemoryDecoder, PackConfig, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
 };
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 
 use super::*;
+use crate::plan_test_support::solid;
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -47,17 +47,6 @@ fn shell_of(surfaces: Vec<Surface>) -> Shell {
         animation_sort: None,
         collision_sort: None,
         definitions,
-    }
-}
-
-/// 全面が 1 色・不透明の `w`×`h`（色 `c` でコマを見分ける）。
-fn solid(w: u32, h: u32, c: u8) -> DecodedImage {
-    DecodedImage {
-        width: w,
-        height: h,
-        stride: w * 4,
-        bgra: [c, c, c, 255].repeat((w * h) as usize),
-        has_alpha: true,
     }
 }
 

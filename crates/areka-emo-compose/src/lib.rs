@@ -241,6 +241,10 @@ mod log_capture;
 #[cfg(test)]
 mod sample_test_support;
 
+// 命令列ほかのテストが引く部品（面の組み立て・コマ・頁・焼き・記録の読み取り・命令列を引く口）。
+#[cfg(test)]
+pub(crate) mod plan_test_support;
+
 #[cfg(test)]
 mod golden_tests;
 

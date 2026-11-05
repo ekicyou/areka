@@ -32,25 +32,7 @@ use super::{
 // ============================================================================
 
 use crate::plan::{Extent, compute_extent};
-
-/// PNG ファイルの IHDR から `(width, height)` を読む（COM/WIC 非依存の実原寸取得）。
-///
-/// PNG は先頭 8 バイトが署名（`\x89PNG\r\n\x1a\n`）、続く IHDR チャンク（length[4]+"IHDR"[4]）の
-/// 直後に width[4]・height[4]（いずれもビッグエンディアン u32）が並ぶ。ゆえに width はバイト
-/// オフセット 16、height は 20 から読める（RFC 2083 / PNG 仕様）。
-fn png_size(path: &Path) -> (u32, u32) {
-    let bytes = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("実 PNG を読めない: {}: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && &bytes[0..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
-        "PNG 署名／IHDR が期待どおり: {}",
-        path.display()
-    );
-    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    assert!(w > 0 && h > 0, "実 PNG 原寸は非ゼロ: {}", path.display());
-    (w, h)
-}
+use crate::plan_test_support::png_size;
 
 /// 実 shell の全 element を**実 PNG 原寸の全不透明バッファ**で `MemoryDecoder` へ挿入し bake する。
 ///

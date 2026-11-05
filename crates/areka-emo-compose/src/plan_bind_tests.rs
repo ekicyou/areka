@@ -10,12 +10,10 @@ use std::path::Path;
 use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
-use super::derive_ops;
-use super::test_support::{bake_atlas, id_to_path};
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
-use crate::method::ComposeMethod;
-use crate::pattern::{PatternFrame, PatternState};
+use crate::pattern::PatternState;
+use crate::plan_test_support::{bake_atlas, frame, id_to_path, named_ops};
 use crate::world::EmoWorld;
 
 const RELS: &[&str] = &[
@@ -46,36 +44,14 @@ fn compose(
     let mut world = EmoWorld::build(&parse(&shell(anims)));
     world.bind_atlas(&atlas, SetId(0));
     let binds = BindSet::from_ids(binds.iter().copied());
-    let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut out = Vec::new();
     let logs =
-        capture_logs(|| derive_ops(&mut ops, &mut visited, &world, &atlas, 0, &binds, pattern));
-    let named = ops
-        .iter()
-        .map(|op| {
-            let name = map
-                .iter()
-                .find(|(id, _)| *id == op.element)
-                .map(|(_, p)| *p)
-                .expect("命令の ElementId は既知");
-            let (x, y) = op.transform.offset();
-            (name, x, y)
-        })
-        .collect();
-    (named, logs)
+        capture_logs(|| out = crate::plan_test_support::ops(&world, &atlas, 0, &binds, pattern));
+    (named_ops(&out, &map), logs)
 }
 
 fn ops(anims: &str, binds: &[u32]) -> Vec<(&'static str, i64, i64)> {
     compose(anims, binds, &PatternState::default()).0
-}
-
-fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x,
-        y,
-    }
 }
 
 /// A（1）＝後ろ・`insert,2`・前、B（2）＝1 コマ。

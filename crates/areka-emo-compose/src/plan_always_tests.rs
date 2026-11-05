@@ -3,16 +3,12 @@
 //! 欄が「載っていない」なら経過 0 の絵、「消えている」なら何も、コマならそのコマ。動く絵の子は
 //! 下に何も敷かず、コマの絵 1 枚だけを置いた element の描画メソッドで命令にする。
 
-use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::path::Path;
 
 use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasTable,
-    DecodedImage, ElementId, LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    bake_with_limits,
+    AnimationFrame, AtlasTable, DecodedImage, ElementId, LoopCount, MemoryDecoder, SetId,
 };
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
 
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
@@ -21,6 +17,7 @@ use crate::nesting::{ElementKind, FilmId};
 use crate::normalized::SurfaceMaster;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{BlitOp, derive_ops};
+use crate::plan_test_support::{bake_films_and_bind, insert_film};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -69,22 +66,6 @@ fn film_frames() -> Vec<AnimationFrame> {
         .collect()
 }
 
-fn insert_film(dec: &mut MemoryDecoder, rel: &str, frames: Vec<AnimationFrame>, laps: Option<u32>) {
-    let loop_count = laps.map_or(LoopCount::Infinite, |n| {
-        LoopCount::Finite(NonZeroU32::new(n).unwrap())
-    });
-    dec.insert_animated(
-        Path::new(BASE).join(rel),
-        AnimationInfo {
-            width: 2,
-            height: 2,
-            frame_count: frames.len() as u32,
-        },
-        Ok(frames[0].image.clone()),
-        Ok(AnimatedImage { frames, loop_count }),
-    );
-}
-
 /// 文面を面の表にし、静止画と動く絵（どれも 2×2）で焼いて束縛する。`images` は
 /// `surface<数字>.png` として置いた絵（番号, 名前）。
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
@@ -92,7 +73,12 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     for rel in STILLS {
         dec.insert(Path::new(BASE).join(rel), 2, 2, 8, solid(9).bgra, true);
     }
-    insert_film(&mut dec, FILM, film_frames(), None);
+    insert_film(
+        &mut dec,
+        Path::new(BASE).join(FILM),
+        film_frames(),
+        LoopCount::Infinite,
+    );
     for (rel, delays, laps) in FIXTURE_FILMS {
         let frames = delays
             .iter()
@@ -102,47 +88,17 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
                 delay_ms,
             })
             .collect();
-        insert_film(&mut dec, rel, frames, laps);
+        let loop_count = laps.map_or(LoopCount::Infinite, |n| {
+            LoopCount::Finite(NonZeroU32::new(n).unwrap())
+        });
+        insert_film(&mut dec, Path::new(BASE).join(rel), frames, loop_count);
     }
     let rels = STILLS
         .iter()
         .copied()
         .chain([FILM])
         .chain(FIXTURE_FILMS.iter().map(|f| f.0));
-    let elements = rels
-        .map(|rel| Element {
-            layer: 0,
-            path: ElementPath::new(rel.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
-        &dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&baked.table, SetId(0));
-    assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
-    (world, baked.table)
+    bake_films_and_bind(&dec, Path::new(BASE), rels, text, images)
 }
 
 fn build(text: &str) -> (EmoWorld, AtlasTable) {

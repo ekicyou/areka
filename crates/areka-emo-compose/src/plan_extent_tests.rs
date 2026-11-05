@@ -1,10 +1,7 @@
-use super::test_support::*;
 use super::*;
+use crate::plan_test_support::*;
 use crate::world::EmoWorld;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::Element;
+use areka_emo_atlas::SetId;
 use std::path::Path;
 
 // ── task 5.4: placement None スキップ＋静的キャンバス外形算出（有効 bind 非依存） ─────────
@@ -13,56 +10,6 @@ use std::path::Path;
 // 非依存）の「配置オフセット＋原寸」の和集合として算出する（要件 6.5・原点 (0,0) 固定・負方向
 // クリップ）。`original` は bake が「登録画像の原寸」をそのまま記録する（trim.rs）ため、各 element
 // の寄与サイズは register 時の (w,h) で制御できる。以下の土台ヘルパはサイズ可変・全透明を扱う。
-
-/// tightly-packed w×h の premultiplied BGRA・不透明（α=255）画像スペックを組む。
-///
-/// bake は原寸（w,h）を `AtlasEntry.original` にそのまま記録するため、外形寄与サイズを
-/// 登録側で制御できる（trim は α>0 の bbox＝ここでは全面ゆえ placement は Some）。
-fn opaque_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
-    let stride = w * 4;
-    // 全画素不透明（BGR は識別不要ゆえ定数・α=255）。
-    let bgra = vec![64u8; (stride * h) as usize];
-    (w, h, stride, bgra, true)
-}
-
-/// tightly-packed w×h の premultiplied BGRA・**全透明**（α=0）画像スペックを組む。
-///
-/// 全 α==0 ゆえ trim は bbox を得られず `placement: None`（空エントリ）にするが、`original`
-/// は (w,h) を記録する（trim.rs「原寸は全透明でも記録」）。命令からはスキップされ（要件 6.3）、
-/// 外形へは (w,h) で寄与する（要件 6.5）ことを突く。
-fn transparent_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
-    let stride = w * 4;
-    // premultiplied ゆえ α=0 なら BGR も 0（完全透明）。
-    let bgra = vec![0u8; (stride * h) as usize];
-    (w, h, stride, bgra, true)
-}
-
-/// (rel_path, (w,h), opaque?) 群から `AtlasTable` を bake する（サイズ・透過を個別指定）。
-///
-/// `bake_atlas` は全 element 2×2・不透明固定だが、本ヘルパは外形テスト用に原寸と透過を制御する。
-fn bake_atlas_sized(base: &Path, specs: &[(&str, (u32, u32), bool)]) -> AtlasTable {
-    let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
-    let surfaces = vec![surface(0, elements)];
-    let mut dec = MemoryDecoder::new();
-    for (rel, (w, h), opaque) in specs {
-        let (iw, ih, stride, bgra, has_alpha) = if *opaque {
-            opaque_wxh(*w, *h)
-        } else {
-            transparent_wxh(*w, *h)
-        };
-        dec.insert(base.join(rel), iw, ih, stride, bgra, has_alpha);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    result.table
-}
 
 /// テスト5.4-①（**受入基準**・要件 6.5）: 同一 surface へ空／部分／全 BindSet を渡しても
 /// `compute_extent` が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。

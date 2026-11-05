@@ -10,13 +10,12 @@ use std::path::Path;
 use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
-use super::derive_ops;
-use super::test_support::{bake_atlas, id_to_path};
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::nesting::NestIssue;
 use crate::pattern::{PatternFrame, PatternState};
+use crate::plan_test_support::{bake_atlas, frame, id_to_path, named_ops, ops, skipped};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -60,51 +59,13 @@ fn compose_with(
     let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
     let mut world = EmoWorld::build_with_images(&parse(text), &images);
     world.bind_atlas(&atlas, SetId(0));
-    let mut ops = Vec::new();
-    let mut visited = Vec::new();
-    let logs =
-        capture_logs(|| derive_ops(&mut ops, &mut visited, &world, &atlas, top, binds, pattern));
-    assert!(visited.is_empty(), "先祖の積み上げは走査後に空へ戻る");
-    let named = ops
-        .iter()
-        .map(|op| {
-            let name = map
-                .iter()
-                .find(|(id, _)| *id == op.element)
-                .map(|(_, p)| *p)
-                .expect("命令の ElementId は既知");
-            let (x, y) = op.transform.offset();
-            (name, x, y)
-        })
-        .collect();
-    (named, logs)
+    let mut out = Vec::new();
+    let logs = capture_logs(|| out = ops(&world, &atlas, top, binds, pattern));
+    (named_ops(&out, &map), logs)
 }
 
 fn ops_of(text: &str, top: u32) -> Vec<(&'static str, i64, i64)> {
     compose(text, &[], top, &BindSet::default()).0
-}
-
-/// 飛ばした element定義の `debug!` の行から (親, element, 指した欄) を取り出す。
-fn skipped(logs: &str) -> Vec<(u32, u32, String)> {
-    logs.lines()
-        .filter(|l| l.contains("level=DEBUG") && l.contains("子のサーフェスを置かない"))
-        .map(|l| {
-            let field = |name: &str| -> String {
-                let start = l.find(&format!(" {name}=")).expect(name) + name.len() + 2;
-                l[start..]
-                    .split(' ')
-                    .next()
-                    .unwrap()
-                    .trim_matches('"')
-                    .to_string()
-            };
-            (
-                field("surface_id").parse().unwrap(),
-                field("element").parse().unwrap(),
-                field("child"),
-            )
-        })
-        .collect()
 }
 
 /// 子の画像の左上が、親の element定義の X,Y と子の中の X,Y の和に来る（要件 2.1）。
@@ -280,16 +241,6 @@ fn only_the_missing_element_is_dropped() {
 }
 
 // ── 部品の段のコマの合流（task 4.2・要件 5.1・5.2・5.10・5.12・5.13） ──
-
-/// `surface_id` を (x,y) に置く Overlay のコマ。
-fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x,
-        y,
-    }
-}
 
 /// 子 10 を (20,30) に置く親 0。子と親は同じ番号の animation0 を持つ。
 const PART_TEXT: &str = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n\

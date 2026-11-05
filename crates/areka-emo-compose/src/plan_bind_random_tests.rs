@@ -5,9 +5,9 @@
 //! 外した後も pattern0 が静的に積まれ、閉じた目が残っていた。純 `bind`（着せ替え）は今までどおり
 //! bind が入っていれば pattern0 を静的に積む（陽性対照を同じ導出に置く）。
 
-use super::test_support::*;
 use super::*;
 use crate::pattern::PatternFrame;
+use crate::plan_test_support::*;
 use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern};
 use std::path::Path;
