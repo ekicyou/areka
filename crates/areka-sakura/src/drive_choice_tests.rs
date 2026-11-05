@@ -682,3 +682,99 @@ fn script_without_choices_never_notifies_choice_waiting() {
         "通知は通算 1 通のみ（選択待ちに入らない talk は ChoiceWaiting を送出しない）"
     );
 }
+
+// ── audit-parsers-sakura 指摘 7・39: 解決の後に来ている項目を出し、合わない解決を記録する ──
+
+/// 同期の駆動（`spawn_talk` の本体と同じ `handle`）をテストのスレッドの上に作る。
+fn sync_driver(
+    sinks: Vec<Box<dyn CueSink + Send>>,
+) -> (TalkDriver<TalkNotice>, mpsc::Receiver<TalkNotice>) {
+    let (tx, rx) = mpsc::channel();
+    (
+        TalkDriver::new(sinks, SystemVarSnapshot::default(), tx, None),
+        rx,
+    )
+}
+
+fn dones(rx: &mpsc::Receiver<TalkNotice>) -> Vec<TalkDone> {
+    rx.try_iter()
+        .filter_map(|notice| match notice {
+            TalkNotice::Done(done) => Some(done),
+            TalkNotice::ChoiceWaiting(_) => None,
+        })
+        .collect()
+}
+
+/// **指摘 7（形 A）**: 初回起動の後始末（epilogue）は区切りと同じ時刻の後ろに並ぶ。区切りの Tick の後に
+/// Tick を 1 つ挟んでから解決すると、解決の処理の中で後始末が出て `TalkDone{Ended}` が 1 回だけ出る。
+/// kanade が同じ束で続けて送る Close（次のトークの Start が古いトークを閉じる）はもう終わったトークに届く。
+#[test]
+fn resolved_choice_flushes_due_epilogue_before_following_close() {
+    let sink = RecordingSink::new();
+    let records = sink.records();
+    let (mut driver, rx) = sync_driver(vec![Box::new(sink), Box::new(NoopSink)]);
+    let start = StartTalk {
+        epilogue: vec![areka_talk::EpilogueCommand {
+            name: "areka.prop.set".into(),
+            tokens: vec!["areka.boot.count".into(), "1".into()],
+        }],
+        ..StartTalk::new(TalkId(830), MENU_SCRIPT)
+    };
+
+    assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
+    assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
+    // 区切り（0.35）に着いて選択待ち。
+    assert!(driver.handle(SakuraMsg::Tick(0.5)).is_continue());
+    // 選ぶまでに来る Tick（本番の流れ）。
+    assert!(driver.handle(SakuraMsg::Tick(0.6)).is_continue());
+    assert!(
+        driver
+            .handle(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .is_break(),
+        "解決の処理の中で後始末が出て完了する（次の Tick を待たない）"
+    );
+    // 続けて届く Close は終わったトークへ届き、2 度目の知らせを出さない。
+    assert!(driver.handle(SakuraMsg::Close).is_break());
+
+    let last = commands(&records).pop().expect("合図が届いている");
+    assert_eq!(
+        last.as_command_carrier(),
+        Some(("areka.prop.set", vec!["areka.boot.count", "1"])),
+        "最後の合図は後始末のキャリア"
+    );
+    assert_eq!(
+        dones(&rx),
+        [TalkDone {
+            talk_id: TalkId(830),
+            reason: TalkEndReason::Ended,
+            quit_reserved: false,
+        }],
+        "TalkDone{{Ended}} が 1 回だけ出る"
+    );
+}
+
+/// **指摘 39**: 合わない `ResolveChoice` はほかの状態の誤投函と同じく `warn!` で残す（区切りは解けない）。
+#[test]
+fn mismatched_resolve_choice_is_warned() {
+    let (mut driver, rx) = sync_driver(vec![Box::new(NoopSink)]);
+    let _ = driver.handle(SakuraMsg::Start(StartTalk::new(TalkId(831), MENU_SCRIPT)));
+    let _ = driver.handle(SakuraMsg::Tick(0.0));
+    let _ = driver.handle(SakuraMsg::Tick(0.5));
+
+    let (flow, events) = log_capture_kit::capture(|| {
+        driver.handle(SakuraMsg::ResolveChoice {
+            id: "nosuch".to_string(),
+        })
+    });
+
+    assert!(flow.is_continue(), "合わない解決では区切りは解けない");
+    assert!(
+        events
+            .iter()
+            .any(|ev| ev.level == tracing::Level::WARN && ev.field("choice_id") == Some("nosuch")),
+        "合わない解決を warn! で残す: {events:?}"
+    );
+    assert!(dones(&rx).is_empty());
+}

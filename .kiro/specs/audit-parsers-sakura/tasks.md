@@ -123,7 +123,7 @@
   - _Requirements: 2.1, 2.7, 3.3, 7.1_
 
 - [ ] 6. 再生（areka-sakura drive・strict の受け・sysvar）を直す
-- [ ] 6.1 選択の解決の後に来ている項目を出して完了を見る（T18）
+- [x] 6.1 選択の解決の後に来ている項目を出して完了を見る（T18）
   - 解決が通ったら同じ処理の中で最後に受けた時刻のまま 1 回 tick して完了を見る（7 の drive 側）
   - 合わない解決を `warn!`（39）・完了の送り口を 1 つに（77）・落とす直前の止めと `mut` を消す（78）・選択の通知を戻す継ぎ目を消す（79）
   - 区切りの Tick の後に Tick を 1 つ挟む形（A）の `resolved_choice_flushes_due_epilogue_before_following_close` と `mismatched_resolve_choice_is_warned` が緑で、`TalkDone{Ended}` が 1 回だけ出る（挟まない形 B は dola の 1 行と一緒に 7.5 で足す）
@@ -211,3 +211,6 @@
 - 5.4 への申し送り（5.2 のレビュー）: `areka-sakura/src/contract.rs:56-59` の `cue_target_of` の注釈が `pub use dola::cue` から離れて sysvar の行の上にある（rustfmt の並べ替え）。注釈を `pub use dola::cue` の直前へ戻し、間に空行を入れる。
 - 7.1 への申し送り（2026-11-06 audit-emo-compose の知らせ）: 相手は枝 `claude/kiro-start-audit-emo-compose-cb01ad` で `areka-emo-compose/src/boxes.rs` の `distribute`（211〜250 行あたり）を直した（`retain` を消し `lines.entry(id).or_default().extend(&surface.elements)`・引数の型は同じ）。指摘 76 の `ShellBoxes` → `Vec<BoxDefinition>` は相手の後に着地するなら rebase でこちらが合わせる。fold は `fold.rs` の `add_lines` 1 つになり、compose から `Animation::interval_written` の読み手は 0（欄を消すのはこちら）。`RANGE_WIDTH_CAP` の知らせは相手に届いた。
 - 5.4: `append_epilogue` は `sheet.absolute_end_time()` を使う。drive.rs が起点を刻む前（`with_absolute_start_time` の前）に呼ぶので答えは前と同じ。この順を固めるテストは無く、drive.rs の注釈だけが守る。テストの記録の受け手は `drive::test_support::RecordingSink`（cfg(test)・pub(crate)）、比べの道具は `compile_test_support::assert_cues_eq`。
+- 7.5 への申し送り（2026-11-06 audit-ghost-catalog の知らせ）: 相手は `manifest_tests.rs` の `a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used` を `a_charset_line_after_a_non_ascii_line_is_not_used` へ改名する（中身・期待は同じ）。7.5 では新しい名前で探し、「宣言が使われる」形へ名前ごと直す。
+- 6.2 への申し送り（6.1 のレビュー）: `drive_choice_tests.rs` に足した `sync_driver`・`dones` は `drive_strict_tests.rs` の `driver(sinks, None)`・`dones` と同じ写し。85 で `recv_until_choice`・`MENU3_SCRIPT`・`one_sink`・地平と一緒に `drive_test_support.rs` へ寄せる。
+- 8.1 への申し送り（6.1 のレビュー・範囲の外）: 78 の後、`dola` の `CuePlayer::stop`（`crates/dola/src/cue/runtime.rs:361`）を呼ぶ本番のコードが 0（dola のテストだけ）。起票か dola の audit の候補。

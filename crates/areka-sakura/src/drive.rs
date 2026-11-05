@@ -173,9 +173,7 @@ struct TalkDriver<D> {
     ///
     /// `WaitingForChoice` へ遷移した tick で `true` にし、以降の tick では再送しない
     /// （`CuePlayer` は待機中 tick を早期 return するため状態は待機のまま維持される）。
-    /// [`on_resolve_choice`](Self::on_resolve_choice) の解決成功で `false` へ戻す——M1 の
-    /// compile は talk あたり高々 1 個の選択待ちバリアしか発行しないため実際には再成立しないが、
-    /// 1 トークに複数バリアを持つ将来拡張のシームとしてリセットを残す。
+    /// 解決の後も戻さない——compile は talk あたり高々 1 個の選択待ちバリアしか発行しない。
     choice_notified: bool,
     /// ゴースト名と判定の束（strict の台本でなければ使わない・mcp-strict-errors）。
     strict_hooks: Option<StrictHooks>,
@@ -263,7 +261,7 @@ where
         if sheet.is_empty() {
             // 合図の無い strict の台本: 控えは全部「最後の合図より後ろ」なので終わりの前に記録する。
             self.finish_strict();
-            self.send_done(talk_id, compiled.end);
+            self.send_done(talk_id, compiled.end, false);
             return ControlFlow::Break(());
         }
 
@@ -390,12 +388,11 @@ where
             // strict の残りの控え（最後の合図より後ろの命令の誤り）も終わりの前に記録する（mcp-strict-errors 3.7）。
             self.finish_strict();
             drop(player);
-            self.send_done(talk_id, end);
+            self.send_done(talk_id, end, false);
             ControlFlow::Break(())
         } else {
             // 選択待ち成立の一度きり検出＋通知（tick 経路。`on_resolve_choice` からの合流でも
-            // 呼ばれるが、`resolve_choice` 成功直後の状態は `Playing`/`Completed` であって
-            // `WaitingForChoice` にはなり得ないため構造的に no-op である）。
+            // 呼ばれるが、解決と tick の後も、区切りは talk あたり高々 1 つなので選択待ちには戻らない）。
             self.notify_choice_waiting_if_newly_waiting(talk_id, &mut player);
             self.phase = TalkPhase::Driving {
                 talk_id,
@@ -417,8 +414,7 @@ where
     ///   [`CuePlayer::resolve_choice`] の id 照合は二重防御として温存する）。
     /// - **表示完了時刻**: [`CuePlayer::occupancy_horizon`]（アンカー込みの絶対値＝duration 権威）。
     ///   注入 Tick の現在時刻ではない——タイムアウト計測の起点に再生層以外の時間基準を持ち込まない
-    ///   （R7.2）。**捕捉は送出時点**で行う: [`CuePlayer::stop`] 後は schedule が clear されて
-    ///   horizon がアンカーへ落ちるため、停止前のこの時点で読むことが値の正しさを担保する。
+    ///   （R7.2）。
     /// - **タイムアウト指令**: [`BarrierKind::WaitForChoice`] の `timeout` をそのまま搬送する
     ///   （写像も既定値の適用も本層では行わない・DD-8）。
     ///
@@ -452,7 +448,6 @@ where
                 None
             }
         };
-        // 停止（`stop`）前のこの時点で占有 horizon を捕捉する（送出時点での捕捉）。
         let display_end_elapsed_secs = player.occupancy_horizon();
 
         let waiting = ChoiceWaiting {
@@ -477,8 +472,8 @@ where
 
     /// `Close` 受領: 進行中の再生を即時停止し、中断 ACK を返す（R7.1/7.2/7.3/7.4）。
     ///
-    /// `Driving` なら [`CuePlayer::stop`] で残 entry を破棄してから（未発火 cue は sink へ届かない・
-    /// R7.2）、`Armed`（初回 Tick 前）なら停止対象が無いので直接、`TalkDone{Interrupted}` を送出し
+    /// `Driving` なら [`CuePlayer`] を落として残 entry を捨ててから（未発火 cue は sink へ届かない・
+    /// R7.2）、`Armed`（初回 Tick 前）なら直接、`TalkDone{Interrupted}` を送出し
     /// `Break` する。phase は取り出しで Idle へ差し替わるため二度目の ACK は不能（通算高々 1 回・
     /// R6.4/R7.5）。`Idle`（`Start` 前の防御枝・自然終端後は既にスレッド消滅で Close 未達）は
     /// 二度目の TalkDone を送らずログのみ。
@@ -491,20 +486,27 @@ where
         match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
             TalkPhase::Driving {
                 talk_id,
-                mut player,
+                player,
                 end,
                 ..
             } => {
-                // 残 entry を破棄（以降配送しない・R7.2）。interrupt-vs-natural の区別は本層が持つ。
-                player.stop();
-                // 受け口は中断の知らせの**前**に落とす（最後の合図を知らせより前に並べる・自然終端と同じ理由）。
+                // 落として残 entry を捨てる（以降配送しない・R7.2）。受け口は中断の知らせの**前**に
+                // 落とす（最後の合図を知らせより前に並べる・自然終端と同じ理由）。
                 drop(player);
-                self.send_interrupted(talk_id, end == TalkEndReason::Quit);
+                self.send_done(
+                    talk_id,
+                    TalkEndReason::Interrupted,
+                    end == TalkEndReason::Quit,
+                );
                 ControlFlow::Break(())
             }
             TalkPhase::Armed { talk_id, end, .. } => {
-                // 初回 Tick 前の中断: CuePlayer 未構築ゆえ stop 対象なし。ACK のみ返す。
-                self.send_interrupted(talk_id, end == TalkEndReason::Quit);
+                // 初回 Tick 前の中断: CuePlayer 未構築。ACK のみ返す。
+                self.send_done(
+                    talk_id,
+                    TalkEndReason::Interrupted,
+                    end == TalkEndReason::Quit,
+                );
                 ControlFlow::Break(())
             }
             TalkPhase::Idle => {
@@ -522,11 +524,11 @@ where
     ///
     /// - **`Driving`**（駆動中＝唯一 `resolve_choice` を呼ぶ状態）: `player.resolve_choice(&id)` へ
     ///   委譲する（id 照合＋一致時の先積みクリアは [`CuePlayer`] の責務）。
-    ///   - `Some`: 選択が解決され `Playing` へ戻った。**その場で** [`CuePlayer::is_completed`] を
-    ///     確認し、解決後に既に占有 horizon 到達（menu ケース＝barrier が最終 horizon 要素）なら
-    ///     `TalkDone{end}` を送出して `Break`——[`settle_after_tick`] と同型の後始末を共用し、次 Tick
-    ///     を待たない（R-5 の一 tick 遅延を残さない・R2.4/9.8）。未完了なら `Driving` を書き戻して継続。
-    ///   - `None`（id 不一致・非待機）: 状態を変えず記録して継続する（barrier は解けない・R2.3 継続）。
+    ///   - `Some`: 選択が解決され `Playing` へ戻った。**その場で**最後に受けた時刻 `last_tick` のまま
+    ///     `player.tick` を 1 回呼び、区切りの後ろに既に来ている項目（初回起動の後始末など）を配ってから
+    ///     [`settle_after_tick`] で完了を見る。時刻はずらさず、次 Tick を待たない（R-5 の一 tick 遅延を
+    ///     残さない・R2.4/9.8）。未完了なら `Driving` を書き戻して継続。
+    ///   - `None`（id 不一致・非待機）: 状態を変えず `warn!` で記録して継続する（barrier は解けない・R2.3 継続）。
     /// - **`Armed`/`Idle`**（初回 Tick 前・Start 前 or 終端後＝CuePlayer 未構築 or talk 不在）:
     ///   投函経路上は非到達の**誤投函**（W5 の mis-post）。`warn!` して継続する（防御枝・talk を
     ///   終端させない）。
@@ -539,18 +541,14 @@ where
                 last_tick,
             } => match player.resolve_choice(&id) {
                 Some(_) => {
-                    // 選択待ち成立の検出フラグを戻す（DD-6 のシーム）。M1 の compile は talk あたり
-                    // 高々 1 個のバリアしか発行しないため同一 talk で再成立しないが、1 トークに複数
-                    // バリアを持つ将来拡張ではこのリセットが次バリアの通知を可能にする。
-                    self.choice_notified = false;
-                    // 選択解決成功。解決後に既に占有 horizon 到達なら即時 settle（次 Tick を待たない）。
-                    // settle_after_tick と同型（同一 TalkDone{end} 構築・同一 reason・同一片付け）を
-                    // 共用し、tick 完了経路と分岐させない。last_tick は未完了時の書き戻し用に温存する。
+                    // 区切りの後ろで既に時刻の来た項目を、最後に受けた時刻のまま配る（時刻はずらさない）。
+                    player.tick(last_tick);
+                    // tick 完了経路と同じ後始末で完了を見る（次 Tick を待たない）。
                     self.settle_after_tick(talk_id, player, end, last_tick)
                 }
                 None => {
                     // id 不一致・非待機: 状態不変で記録して継続（barrier は解けない・R2.3 継続）。
-                    tracing::debug!(
+                    tracing::warn!(
                         choice_id = %id,
                         "ResolveChoice: no matching pending choice (id mismatch or not waiting); continuing"
                     );
@@ -599,32 +597,21 @@ where
         }
     }
 
-    /// 自然終端の `TalkDone{reason}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
-    fn send_done(&self, talk_id: TalkId, reason: TalkEndReason) {
+    /// `TalkDone{reason, quit_reserved}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
+    ///
+    /// `quit_reserved` は中断のとき、止めた時点で台本が終了を予約していたか（呼び出し側が phase の
+    /// 終わり方から判定する・要件 3.8）。自然終端では `false`。
+    fn send_done(&self, talk_id: TalkId, reason: TalkEndReason, quit_reserved: bool) {
         let done = TalkDone {
             talk_id,
             reason,
-            quit_reserved: false,
-        };
-        if self.done.send(D::from(done)).is_err() {
-            tracing::error!(talk_id = talk_id.0, "TalkDone done receiver dropped");
-        }
-    }
-
-    /// 中断の `TalkDone{Interrupted}` を送出する（受信端 drop は error ログ・R11.1/11.4）。
-    ///
-    /// `quit_reserved` は止めた時点で台本が終了を予約していたか（呼び出し側が phase の
-    /// 終わり方から判定する・要件 3.8）。
-    fn send_interrupted(&self, talk_id: TalkId, quit_reserved: bool) {
-        let done = TalkDone {
-            talk_id,
-            reason: TalkEndReason::Interrupted,
             quit_reserved,
         };
         if self.done.send(D::from(done)).is_err() {
             tracing::error!(
                 talk_id = talk_id.0,
-                "TalkDone done receiver dropped on Close"
+                ?reason,
+                "TalkDone done receiver dropped"
             );
         }
     }
