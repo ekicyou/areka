@@ -107,7 +107,7 @@ pub fn check_device_removed(gc: Option<ResMut<GraphicsCore>>) {
     let Some(mut gc) = gc else {
         return;
     };
-    let Some(Err(e)) = gc.d3d().map(|d3d| d3d.get_device_removed_reason()) else {
+    let Some(Err(e)) = gc.d3d().map(|d3d| unsafe { d3d.GetDeviceRemovedReason() }) else {
         return;
     };
     error!(
@@ -196,7 +196,7 @@ impl GraphicsCore {
         let Some(inner) = self.inner.as_ref() else {
             return false;
         };
-        let removed_reason = match inner.d3d.get_device_removed_reason() {
+        let removed_reason = match unsafe { inner.d3d.GetDeviceRemovedReason() } {
             Ok(()) => S_OK,
             Err(e) => e.code(),
         };

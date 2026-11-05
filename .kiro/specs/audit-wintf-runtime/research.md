@@ -913,3 +913,100 @@
 - 開発者「承認」で 6 議題を推奨案で確定した（正本は `design.md` の「設計の討議の裁定」）。
 - 設計の検証の指摘 1 は自明な直し（`create_command_list` の 4 か所目と組の順）、指摘 2 は議題 1（完了した spec の要件 2.3・3.3 の狭い改め）、指摘 3 は議題 4（印を `pub` にして `wintf::WindowCreationFailed` として出す）で片づけた。
 - `audit-wintf-graphics-world` の追加の申し合わせで、T2a・T2b と `create_command_list` の削除をあちらの着地の後へ回した。
+
+## 13. main 取り込み後の測り直し（7.1・2026-11-06）
+
+- 着地: `audit-wintf-graphics-world` は PR #425 で main に squash 着地（`45b01bb0`）。この枝へ main を取り込んだ（取り込みの印 `1c6f01ba`）。
+- 取り込みで壊れた所は 1 か所だけ: あちらの新しい `src/ecs/graphics/core.rs` が、こちらが 1.1 で消した `D3D11DeviceExt::get_device_removed_reason` を 2 か所で呼んでいた。どちらも `unsafe { d3d.GetDeviceRemovedReason() }` を直に呼ぶ形にした（7.1 のコミットに入れる）。
+- 取り込みの後、`cargo build`（ワークスペース）と `cargo test -p wintf --lib`（1226 本）は緑。`cargo build -p wintf --all-targets`・`cargo clippy -p wintf --all-targets`（`core.rs` に警告なし）・`cargo fmt --all -- --check` も通る。
+- 比べた基点: 測った基点 `88eb0a43` → 取り込みの後の `HEAD`。あちらが範囲の中で触ったのは `Cargo.toml`（`Win32_Security` を足した）とテストの 16 ファイル（足した 2・消した 1・変えた 13）。
+
+### 範囲のファイルの数え直し（要件 1.3）
+
+範囲は 1 節と同じ（`git ls-files crates/wintf` のうち `crates/wintf/src/ecs/` の下を除いたもの）。
+
+| 時点 | 数 |
+|---|---:|
+| 測った基点 `88eb0a43` | 160 |
+| 取り込みの前のこの枝（`bf32e3cc`・1.1〜6 の削除と追加の後） | 139 |
+| 取り込みの後（`HEAD`） | **140** |
+
+取り込みで変わった分（＋2・−1）:
+
+| 増減 | ファイル | 扱い |
+|---|---|---|
+| 足された | `crates/wintf/tests/graphics/device_lost_recovery_test.rs`（281 行） | 8.3 のかけ直しの対象に入れる |
+| 足された | `crates/wintf/tests/visual/window_join_test.rs`（63 行） | 8.3 のかけ直しの対象に入れる |
+| 消された | `crates/wintf/tests/visual/insert_visual_test.rs` | 116 の 1 か所が消えて解けた（下の表） |
+
+### 対象ごとの判定（7.2〜7.8）
+
+行の番号は取り込みの後の `HEAD` のもの。「同じ」はそのファイルが基点から変わっていないこと。
+
+| 番号 | タスク | 判定 | 今の姿 |
+|---|---|---|---|
+| 34 | 7.2 | 残っている | `core_ecs_test.rs` は同じ（L44-L75） |
+| 104 | 7.2 | 残っている | `core_ecs_test.rs` は同じ |
+| 105 | 7.2 | 残っている | `core_test.rs` は同じ |
+| 106 | 7.2 | 残っている | `frame_time_test.rs` は同じ（`tests/graphics.rs` の宣言も在る） |
+| 107 | 7.2 | 残っている | `surface_optimization_test.rs` は同じ |
+| 114 | 7.2 | 残っている | `graphics/common/mod.rs`・`wuc_restart_regression_test.rs` は同じ |
+| 69（`create_command_list`） | 7.3 | 残っている・呼び手が多い | 包みは `src/com/d2d/mod.rs:20`・`:33`。呼び手は 7 か所: `tests/graphics/command_list_test.rs:22`・`:35`・`:45`、`tests/graphics/surface_systems_test.rs:399`（基点の 266 から動いた）、`tests/com/d2d_ext_test.rs:50`・`:73`・`:153`。設計の「4 か所」は `d2d_ext_test.rs` の 3 か所を数えていない（基点の前から在り、1.1 で 6 か所から 3 か所に減った残り） |
+| 37 | 7.3 | 残っている | `clip_sync_system_test.rs` L65-L183 の 4 本は今も何も確かめない。ファイルの頭の注記（L1-L6）はあちらが書き直した。あちらが足した L188 の切り抜きの鍵のテストは確かめを持つので残す |
+| 38 | 7.3 | 残っている・行が動いた | `surface_systems_test.rs:L452-L481`（基点 L319-L348）。`render_surface` は `Commands` と `ResMut<GraphicsCore>` を取る形に変わったが、描画面は読むだけで失敗は `error!`＋`continue` のまま。あちらが足した L484 以降の本は別の確かめ |
+| 44 | 7.3 | 残っている | `surface_pixel_equivalence_test.rs` は同じ |
+| 113（先のファイル） | 7.3 | 残っている | `CoInitializeEx` は `clip_sync_system_test.rs:22`・`dcomp_integration_test.rs:20`・`init_window_graphics_test.rs:24`（基点 25）・`surface_systems_test.rs:34`（基点 33）・`surface_pixel_equivalence_test.rs:59` に今も在る |
+| 116（dcomp_integration） | 7.3 | 残っている | `dcomp_integration_test.rs:L38-L91` は同じ（あちらは L106 に 2 行足しただけ） |
+| 27 | 7.4 | 残っている | 3 ファイルと `tests/ecs.rs` の宣言（L2-L7）は同じ |
+| 30 | 7.4 | 残っている・行が動いた | `world_lifecycle_test.rs:L85-L94`（基点 L90-L99）。あちらは上の `message_window` の 2 本と注記を消したが、このテストは同じ形 |
+| 31 | 7.4 | 残っている・行が動いた | `dola_animator_test.rs:L89-L136`（`SystemState` で手で回すまま・`tick_dola_animators` を呼ばない）と `L154-L158`（型だけの確かめ）。あちらは `last_result` を可変の借りへ直しただけ |
+| 36 | 7.4 | **消えて解けた** | あちらが `owner_window_exists_test.rs` を書き直した。写しの関数は消え、`Visual` を足して本物のフック（`on_visual_add` → `owner_window_exists`）を走らせ、`VisualGraphics` が入るかを見る形になった（親の輪のテストも足された） |
+| 39 | 7.5 | 残っている・行が動いた | `window_pos_systems_test.rs` の注記 L5-L6 と `apply_window_pos_changes` の 3 本 L254-L326（基点 L192-L269）。今も確かめが無く、`drain_window_pos_commands()`（`src/ecs/window/command.rs:830`）を使っていない |
+| 48 | 7.5 | 残っている | `reinit_unit_test.rs:L141-L163`。あちらは `invalidate()` を `clear()` に替えただけで行の番号は同じ |
+| 64 | 7.5 | 残っている | `examples/graphics_reinit_test.rs` は同じ |
+| 111（graphics） | 7.5 | 残っている | `reinit_unit_test.rs:L10-L16` の `init_com_mta`、`components_test.rs:L42-L57` の写した `add_child`／`remove_child` は同じ（`surface_pixel_equivalence_test.rs:L57-L61` の `init_com_mta` も同じで、7.3 の 44 でファイルごと消える） |
+| 113（後のファイル） | 7.5 | 残っている・形が変わった | `components_test.rs:25`・`reinit_unit_test.rs:13`・`window_pos_systems_test.rs:113`（基点 102・WUC を作るテストの中）。包みの要らない本は `components_test.rs:L89-L97`・`reinit_unit_test.rs:L18-L51`・`L141-L163`・`window_pos_systems_test.rs:L58-L81`・`L226-L248`・`L254-L326`（L98 の本は WUC を作るので包みが要る） |
+| 118 | 7.5 | 残っている | `examples/graphics_reinit_test.rs` は同じ |
+| 45 | 7.6 | 残っている | `visual/common/mod.rs`（L17-L21 の `init_com_mta`・L41-L45 の工場）・`graphics_auto_creation_test.rs`・`graphics/common/mod.rs` は同じ。`tests/visual.rs` に `gpu` の宣言はまだ無い |
+| 109 | 7.6 | 残っている | `parent_visual_test.rs` は同じ |
+| 110 | 7.6 | 残っている | `remove_visual_api_test.rs` は同じ |
+| 111（visual） | 7.6 | 残っている・行が動いた（L20-L26→L19-L25） | `hierarchy_reparent_gap_test.rs` の写した `add_child`（基点 L20-L26）は、あちらの書き直しの後も L19-L25 に在る。`parent_visual_test.rs:L14-L29`・`remove_visual_api_test.rs:L14-L29` は写した `add_child`／`remove_child`（同じ・109・110 でファイルごと消える）。`visual/common/mod.rs:L17-L21` は `init_com_mta`（同じ） |
+| 115 | 7.6 | 残っている | `visual/common/mod.rs:L41-L45`（`WucVisualFactory::new` は今も引数を捨てる） |
+| 35 | 7.7 | 残っている | `hierarchy_sync_test.rs` は同じ（L57-L117） |
+| 40 | 7.7 | 残っている | `property_sync_test.rs` は同じ |
+| 41 | 7.7 | 残っている | `child_order_test.rs`・`hierarchy_sync_test.rs` は同じ |
+| 42 | 7.7 | 残っている | `graphics_auto_creation_test.rs`・`component_test.rs:L39-L80` は同じ |
+| 47 | 7.7 | 残っている | `widget_visual_auto_insert_test.rs` は同じ |
+| 116（visual） | 7.7 | 一部が消えて解けた | `insert_visual_test.rs:L83-L89` はファイルごと消えた。`component_test.rs:L8-L37` は残っている |
+| 72 | 7.8 | 残っている・行が動いた | `run` の最後の起こしは `runtime/mod.rs:L425-L426`。`ShutdownPolicy::notify_shutdown` は `message_loop.rs:L155-L157`、その注記は `L124-L126`・`L150-L154` |
+| 73 | 7.8 | 残っている・行が動いた | `MessageLoopDriver` は `message_loop.rs:L34` 以下、`AsyncTickTask` は `tick_bridge.rs:L200` 以下 |
+| 申し合わせ | 7.8 | 残っている | あちらの 13 番で `try_tick_on_vsync` は消えた（`world/vsync.rs` には `flush_window_pos_commands_guarded` が残る）。それを引く説明の行が `tick_bridge.rs:195`・`:243` に「レガシー `try_tick_on_vsync`」として残る |
+
+### 名前の言及の読み直し（ツリー全体・`.kiro/specs/` と `vendors/` と `target/` を除く）
+
+| 名前 | 在る所（取り込みの後） | 扱い |
+|---|---|---|
+| `try_tick_on_vsync` | `crates/wintf/src/runtime/tick_bridge.rs:195`・`:243`（どちらも注記。関数はもう無い） | 7.8 で直す |
+| `AsyncTickTask` | `runtime/tick_bridge.rs:5`・`:84`・`:200`・`:202`・`:322`・`:331`・`:335`・`:490`・`:650`、`runtime/message_loop.rs:136`、`runtime/mod.rs:26`・`:305`・`:349`・`:380`、`ecs/world/mod.rs:31`、`.kiro/steering/structure.md:115` | 7.8 で 0 件にする（基点の `world/mod.rs:143`・`:152`・`:784`・`world/vsync.rs:18`・`:60`・`:74` はあちらの書き直しで消えた） |
+| `MessageLoopDriver` | `runtime/message_loop.rs:5`・`:31`・`:34`・`:36`・`:138`・`:169`・`:251`・`:272`・`:286`、`runtime/mod.rs:24`・`:43`・`:351`・`:401`、`.kiro/steering/structure.md:114` | 7.8 で 0 件にする |
+| `notify_shutdown` | `runtime/message_loop.rs:92`・`:126`・`:156`、`runtime/mod.rs:426`、`ecs/app.rs:51` | 7.8 で 0 件にする |
+| `Opacity` | 22 件（下の別の表） | 7.8 で `visual.rs:177` を直す。ほかを残すか語を替えるかは 7.8 で決める（tasks.md の完了の姿は「grep が 0 件」） |
+
+`Opacity` の当て方: 大文字と小文字を分けた部分一致 `Opacity`（`git grep -n Opacity -- . ':!.kiro/specs' ':!vendors'`・`.kiro/specs/` と `vendors/` だけを除く）。22 件。
+
+| 所 | 何を指すか |
+|---|---|
+| `crates/wintf/src/ecs/graphics/visual.rs:177`（「`Opacity::clamped()` の移行先」） | **消した型** `wintf::ecs::layout::Opacity` |
+| `crates/wintf/src/ecs/graphics/systems/visual_sync.rs:264`・`:266`・`:310` | 語（注記。`:266` は `SetOpacity` も含む） |
+| `crates/wintf/src/ecs/graphics/systems/visual_sync.rs:316`・`:320` | WUC の口 `SetOpacity`（呼び出しとログの文） |
+| `crates/wintf/src/ecs/graphics/systems/visual_sync_tests.rs:35`・`:43` | WUC の口 `Opacity()` |
+| `crates/wintf/src/ecs/graphics/visual.rs:170` | 語（ログの文） |
+| `crates/wintf/src/ecs/layout/hit_test/mod.rs:309`・`:412` | 語（合成の α の注記） |
+| `crates/wintf/src/ecs/layout/hit_test/tests_ex/opacity.rs:7`・`:152`・`:163` | 語（合成の α の注記） |
+| `crates/wintf/examples/taffy_flex_demo/setup.rs:521`・`:564` | 語（注記と画面の文） |
+| `crates/wintf/tests/visual/property_sync_test.rs:3`・`:109` | DComp／WUC の口 `SetOpacity`（注記） |
+| `doc/archive/WinVisual.md:942`・`:1083` | DComp の口 `SetOpacity`／`SetOpacity_2`（昔の設計のコード） |
+| `doc/archive/WinVisual.md:1055`・`:1074` | 昔の設計の列挙 `AnimationProperty::Opacity`（消した型とは別） |
+| `wuc_spike` | `ecs/world/mod.rs:40`（注記。基点の `ecs/graphics/visual.rs:140` からは消えた） | 7.8 で直す |
+| `dcomp_demo` | `ecs/world/mod.rs:39`（注記。5.1 で example を消した名残） | 7.8 で直す |
+| `create_command_list` | `src/com/d2d/mod.rs:20`・`:33`、呼び手 7 か所（上の 69 の行）。ほかに `crates/areka-emo-present/src/display_fault_tests.rs:185`・`:236` はテストの名（`areka-emo-present` 自身の失敗の道の名で、wintf の口ではない） | 7.3 で包みと 7 か所を直す。`areka-emo-present` のテストの名は wintf の口を指さないが、7.3 の「grep 0 件」の文字どおりには当たる（7.3 で扱いを決める） |

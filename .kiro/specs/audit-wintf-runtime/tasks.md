@@ -137,7 +137,7 @@
   - _Requirements: 4.1, 4.3, 5.7_
 
 - [ ] 7. `audit-wintf-graphics-world` の着地の後の分を直す（T2a・T2b・G1〜G5）
-- [ ] 7.1 着地を確かめ、main を取り込んで対象を測り直す
+- [x] 7.1 着地を確かめ、main を取り込んで対象を測り直す
   - `audit-wintf-graphics-world` の PR が main に着地したことを確かめる。着地していなければ、ここで止めて開発者に報告する
   - main をこの枝へ取り込み、7.2〜7.9 の対象のファイルが在るか・中身が変わったかと、`try_tick_on_vsync`・`AsyncTickTask`・`notify_shutdown`・`Opacity`・`wuc_spike` の言及を読み直す
   - 範囲のファイルの増減を数え直し、増えたファイルを 8.3 のかけ直しの対象に入れる
@@ -217,3 +217,4 @@
 - 5.1・2.3: 消した example の名（`dcomp_demo`・`wuc_spike`）が `src/ecs/world/mod.rs:151-152` の注記に残る。7.8 の「古くなった名前の言及を 0 件」で直す。
 - 5.2: taffy_flex_demo で Window 1 を副モニターの原点 (-2304,355) へ送ると、DPI 192→144 の伸び縮みで中心を保ち (-2104,530) に着く（大きさの差の半分）。実行時の窓と DPI の規則（`src/` の持ち物）で、正しいかは `audit-wintf-window` の受け持ち。example は着地点を主張しない。
 - 6: `nonmax` は `bevy_ecs` 0.19.1 が推移で引くので `Cargo.lock` に残る。完了の姿の「`Cargo.lock` から消える」は「直接の依存が 0」で満たしたと読む（審査で承認）。同じ「消費 10 crate」の注記が `crates/log-capture-kit/src/lib.rs:28` に残る（範囲の外）。
+- 7.1: main の取り込みで、消した `D3D11DeviceExt::get_device_removed_reason` を `ecs/graphics/core.rs` の 2 か所が使っていた（字面のぶつかりは無し）。生の `GetDeviceRemovedReason()` に直した。`create_command_list` の呼び手は 7 か所（`tests/com/d2d_ext_test.rs:50・73・153` も 7.3 で直す）。`Opacity` の grep 0 件は字面どおりには無理（WUC の口の名に当たる）。7.8 は消した型を名指す `ecs/graphics/visual.rs:177` を 0 にする読みでよいか、7.8 の審査で確かめる。
