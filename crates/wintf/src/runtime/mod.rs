@@ -9,7 +9,6 @@
 //! 依存しない。
 
 use std::cell::RefCell;
-use std::future::Future;
 use std::rc::Rc;
 
 use tracing::{debug, info, warn};
@@ -60,9 +59,9 @@ mod wndproc_bridge;
 /// 登録する（runtime→World）ため、クレート内から参照可能にする。
 pub(crate) mod window_registry;
 
-/// ECS ウィンドウ生成ファクトリ層。宣言的ウィンドウ生成をライブラリの再入安全な
-/// `util::Window::new_checked_ex` 経由へ置換し、生成後に style/pos/title を反映して
-/// `WindowRegistry` へ格納する `EcsWindowFactory` を提供する（live cutover は 4.3）。
+/// ECS ウィンドウ生成ファクトリ層。宣言的ウィンドウをライブラリの `util::Window::new_ex` で
+/// World を借りたまま作り（生成時のメッセージはウィンドウ手続きの借用中の道で読み飛ばす）、
+/// 生成後に style/pos/title を反映して `WindowRegistry` へ格納する `EcsWindowFactory` を提供する。
 ///
 /// `pub(crate)`: `create_windows`（ECS 層）が `EcsWindowFactory::create_window` を呼ぶ
 /// 設計公認の単一上向きエッジ（ecs→runtime）のため、クレート内から参照可能にする。
@@ -113,11 +112,32 @@ pub fn ensure_process_dpi_awareness() {
     });
 }
 
+/// UI スレッドの COM を MTA で初期化する。
+///
+/// 同じ部屋で初期化済み（`S_FALSE`）は黙って `Ok`。別の部屋で初期化済み
+/// （`RPC_E_CHANGED_MODE`）なら `warn!` を 1 行残して `Ok`（WUC と D2D の物はその部屋の上で
+/// 作られる）。ほかの失敗は `Err`。
+fn init_ui_com() -> Result<()> {
+    // SAFETY: Win32 境界。CoInitializeEx は呼び出しスレッドの COM を初期化するのみで、
+    // 引数 None・COINIT_MULTITHREADED は定数。
+    let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    if hr == RPC_E_CHANGED_MODE {
+        warn!(
+            "[WinApp::new] UI スレッドは別の COM の部屋で初期化済み（MTA にできない・その部屋のまま続ける）"
+        );
+        return Ok(());
+    }
+    hr.ok()
+}
+
+#[cfg(test)]
+#[path = "ui_com_init_tests.rs"]
+mod ui_com_init_tests;
+
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
 ///
 /// COM 初期化・DPI awareness 設定・`EcsWorld` 生成を統括し、共有 World ハンドルの
-/// 唯一の strong 所有者となる。VSync スレッド・message_window・メッセージループ駆動の
-/// 結線は後続タスクで追加する。
+/// 唯一の strong 所有者となる。VSync スレッド・メッセージループの駆動は [`WinApp::run`] が持つ。
 pub struct WinApp {
     /// 共有 ECS world。`WinApp` が唯一の strong 所有者（`world()` は strong clone を返す）。
     world: Rc<RefCell<EcsWorld>>,
@@ -144,23 +164,14 @@ impl WinApp {
     ///
     /// 選択は構築時に消費し、以後は参照しない（実行中に変える口は無い）。
     ///
-    /// COM は `COINIT_MULTITHREADED` で初期化する。既に別モデルで初期化済みの場合
-    /// （`S_FALSE` / `RPC_E_CHANGED_MODE`）はレガシー（`WinThreadMgrInner::new`）同様に
-    /// 成功扱いとする。DPI awareness は per-monitor v2 を設定する。
+    /// COM は `COINIT_MULTITHREADED` で初期化する。初期化済みの場合は成功扱いで、別の部屋
+    /// （`RPC_E_CHANGED_MODE`）なら `warn!` を 1 行残す（`init_ui_com`）。DPI awareness は
+    /// per-monitor v2 を設定する。
     ///
     /// NOTE(W1-V): CoInitializeEx の成功に対し Drop で CoUninitialize を呼ばない現行方針
     /// （P30）を維持する。プロセス常駐の単一インスタンス運用では実害なし。
     pub fn with_exit_policy(policy: ExitPolicy) -> Result<Self> {
-        // SAFETY: Win32 境界。CoInitializeEx はプロセス/スレッドの COM ランタイムを
-        // 初期化するのみで、引数 None・COINIT_MULTITHREADED は定数。S_FALSE
-        // （同一スレッドで初期化済み）・RPC_E_CHANGED_MODE（別アパートメントモデルで
-        // 初期化済み）は成功とみなす（レガシー踏襲）。
-        unsafe {
-            let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
-            if hr.is_err() && hr != RPC_E_CHANGED_MODE {
-                return Err(hr.into());
-            }
-        }
+        init_ui_com()?;
 
         ensure_process_dpi_awareness();
 
@@ -230,9 +241,9 @@ impl WinApp {
         Rc::clone(&self.world)
     }
 
-    /// 新経路の結線（self-ref 注入 + reconcile 登録）を World へ施す（冪等・task 4.3）。
+    /// 新経路の結線（self-ref 注入 + reconcile 登録）を World へ施す（task 4.3）。
     ///
-    /// `run()` 開始時に呼ぶ。複数回呼んでも安全:
+    /// `run()` 開始時に 1 度呼ぶ（冪等ではない・下の「重複登録について」）:
     /// - `EcsWorldSelfRef`（外側 `Weak<RefCell<EcsWorld>>`）を NonSend リソースとして
     ///   insert する（`create_windows` がこれを読んで新経路/旧経路を分岐）。既存なら上書き
     ///   （同一 World への Weak ゆえ等価）。
@@ -357,7 +368,7 @@ impl WinApp {
     /// # 戻り値
     /// 正常終了時 `Ok(())`。COM/DPI は `new()` で初期化済み。
     pub fn run(&self) -> Result<()> {
-        // 1. 新経路結線（self-ref 注入 + reconcile 登録・冪等）。
+        // 1. 新経路結線（self-ref 注入 + reconcile 登録）。
         self.wire_new_path();
 
         // 2. VSync ブリッジを run の間ローカル所有（Drop で stop→join）。
@@ -417,23 +428,21 @@ impl WinApp {
         // bridge / _tick はここで drop（VSync stop→join・tick JoinHandle 破棄）。
         Ok(())
     }
-
-    /// UI スレッド単一の async タスクを投入する（旧 `spawn_normal` 相当・`!Send` 可）。
-    ///
-    /// ライブラリの `spawn_local` へ委譲する。実行にはメッセージループ（`run`/`block_on`）が
-    /// 必要だが、投入自体はループ非実行下でも可能。
-    pub fn spawn_ui_local<T: 'static>(
-        &self,
-        fut: impl Future<Output = T> + 'static,
-    ) -> crate::executor::JoinHandle<T> {
-        crate::executor::spawn_local(fut)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use event_listener::Listener;
+
+    /// 作った窓を確かめる前に隠す（`create_window` は `SW_SHOW` で出し、前面を奪いうる）。
+    fn hide_created_window(w: &bevy_ecs::world::World, entity: bevy_ecs::entity::Entity) {
+        use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, ShowWindow};
+        if let Some(handle) = w.get::<crate::ecs::window::WindowHandle>(entity) {
+            // SAFETY: 作ったばかりの生きた HWND を隠すだけ（戻り値は前の可視の状態）。
+            let _ = unsafe { ShowWindow(handle.hwnd, SW_HIDE) };
+        }
+    }
 
     /// `WinApp::new()` は呼び出しスレッド（＝UI スレッド）を役割名 `ui` で名簿へ登録する
     /// （要件 2.3）。
@@ -545,8 +554,8 @@ mod tests {
     /// future 完了で正常復帰する経路の核（最後の窓 close → Event notify）を結線実証する。
     /// full `run()` の block_on 復帰（メッセージループ実駆動＋OS close イベント）は E2E 5.3。
     ///
-    /// headless 制約: DComp で不可視のまま実 HWND を生成（GDI 非表示）、メッセージループは
-    /// 回さず reconcile を直接 schedule 実行する。
+    /// 実 HWND の生成は窓を出す（`create_window` は `ShowWindow(SW_SHOW)` を呼ぶ）ので、
+    /// 作った直後に `SW_HIDE` で隠す。メッセージループは回さず reconcile を直接 schedule 実行する。
     #[test]
     fn close_to_reconcile_to_shutdown_chain_wakes_listener() {
         use crate::ecs::window::{Window, WindowHandle, WindowStyle};
@@ -565,7 +574,7 @@ mod tests {
 
         let weak = Rc::downgrade(&app.world);
 
-        // 実 Window<WndState>（実 HWND）を 1 枚生成し registry へ格納（DComp で不可視）。
+        // 実 Window<WndState>（実 HWND）を 1 枚生成し registry へ格納し、すぐ隠す。
         let entity = {
             let world = app.world();
             let mut ecs = world.borrow_mut();
@@ -588,6 +597,7 @@ mod tests {
                 ))
                 .id();
             EcsWindowFactory::create_window(w, entity, weak.clone());
+            hide_created_window(w, entity);
             // 生成済み・registry 非空・ハンドル付与を確認（最後の窓が在る状態）。
             assert!(
                 w.get::<WindowHandle>(entity).is_some(),
@@ -682,6 +692,7 @@ mod tests {
                 ))
                 .id();
             EcsWindowFactory::create_window(w, entity, weak.clone());
+            hide_created_window(w, entity);
             assert!(
                 w.get::<WindowHandle>(entity).is_some(),
                 "factory 生成後に WindowHandle が付与されるべき"
