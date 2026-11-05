@@ -371,3 +371,40 @@ emo の提示段（三段直列の 3 段目）。上流が合成した原寸の�
 - 39 番: 本番の `EcsWorld::new` が `FrameCount` と `TickStart` を必ず両方入れるか。
 - 43 番: 判定側（`crates/areka/src/placement/transition_judge*`）が `SURFACE_REASON_*` の語をどう名指しているか。
 - 37 番: dev 依存の 1 行を消したとき `Cargo.lock` が 1 バイトも変わらないか（実装の段で確かめる）。
+
+## 9. 設計の段の調べと決め（2026-11-05・`/kiro-spec-design -y`）
+
+- **発見の型**: light（既存のクレートの直し・新しい依存なし・外の資料は不要）。下請けは使わず、担当が範囲の外のファイルを読むだけで調べた（`areka-emo-compose`・`wintf`・`crates/areka`・`log-capture-kit` は読むだけ）。
+- **使った作法**: ponytail の「いちばん小さな完全な変更」（消せるものは消す・呼び手まで直し切る・到達しない枝は `expect` か削除）。kiro-spec-design の rules（design-principles・discovery-light・synthesis・review-gate）。
+
+### 9.1 調べが要る点（8 章）の答え
+- **3 番**: 完了した `areka-P0-emo-present` の design.md 420・641 行の設計の討議 #1 は、`apply_show` が合成の全透明を Hide へ縮退して `Ok` を返す扱いだけを決めている。バルーンの読み込みの失敗は `attach_target` より前に呼び手へ返り、`apply_show` に届かない。読み込みの失敗を `EmptyComposition` に畳めという裁定は無い。範囲の外の呼び手（`crates/areka`・`crates/areka-emo-text`・`crates/pilot` の約 20 か所）は失敗を `?` で包む・`{e}` で記録する・`Ok` で受けるだけで、変位を見ない（grep）。→ 新しい型にしても縮退の仕方は変わらない。
+- **24 番**: `crates/areka/src/offline_dump/offline_dump_tests.rs:66`・`render_tests.rs:44` は `build_world` を使い `take_world` を通らない。`take_world` の本番の呼び手は `offline_dump/mod.rs:193` だけ。→ このクレートの中に確かめを置く。
+- **25 番**: `crates/areka-emo-compose/src/blit_rect.rs` の `dirty_area` は前後の命令列の違う所の矩形の和を絵の範囲で切って重ね直す。外形が違う・`Overlay` でない命令・下敷きなしはいちから。→ 着せ替え・面の替わりは emo-compose の契約で覆われる。提示の側の新テストは漏斗を通して絵で確かめる。
+- **37 番**: 実装の段で `cargo build -p areka-emo-present --tests` の後に `git diff --exit-code -- Cargo.lock` で差分 0 を確かめる。
+- **39 番**: `crates/wintf/src/ecs/world/mod.rs` の `EcsWorld::new` は `FrameCount`（76 行）と `TickStart`（102 行）を必ず入れる。本番では食い違わない。→ `frame_of` を消して出どころを 1 つに。
+- **43 番**: 判定側 `crates/areka/src/placement/transition_judge.rs:58, 664` は `SURFACE_REASON_INVISIBLE` を名前で取り込み、`SURFACE_REASON_ALL` は読まない（外の使い手 0）。→ `#[cfg(test)]`。
+
+### 9.2 設計で確かめた事実（直しの根拠）
+- `attach_target` の呼び手: クレートの中 29 ファイル・約 80 か所、範囲の外 17 ファイル（`crates/areka` 11・`crates/areka-emo-text` 5・`crates/pilot` 1）。`frame/attach.rs` の 2 か所と実行例の `match`／`if let Err` は、`Result` が消えると届かない枝になるので消す。`pilot-balloon-asset-swap/swap.rs` の `attach` は資産の尽きで失敗し得るので `Result` は残す。
+- `PresentError::TargetNotAttached` を範囲の外で作るのは `crates/areka/src/emo2_boot/frame/switch_finish_tests.rs:335` だけ（意味は「未装着」のまま）。`BootWiringError::Balloon` を作るのは `assets.rs:483` だけ。
+- 5 番: wintf の `Visual` は `pub is_visible` を持ち、`HitTest` は `PartialEq`。`mount_tests.rs:413` に `clear_trackers`＋`is_changed` の書き方が既にある。15 番は 5 番の直しの後なら「2 回目からは書き換え無し」を変更の印で確かめられる（1 回目は装着の生成と同じ呼び出しの中なので印では見分けられない）。
+- 例外表: `file_length_guard_test.rs` は件数と表の長さの一致を確かめる（101・157・185 行）。`temp_path_guard_test.rs` は `ALLOWED_COUNT`・`PROCESS_UNIQUE_COUNT` を持つ（283・289 行）。C17 の兄弟（`audit-emo-compose`・`audit-seriko`・`audit-ghost-catalog` など）が同じ件数の行を変え得るので、後に着地する方が表を数え直して合わせる。
+- 1,000 行: `shell_target.rs` 951 行は可視性とコメントだけ。`cache_tests.rs` は 9・10 番の削除と写しの削除で約 930〜980 行の見込み。
+- `crates/pilot/examples/pilot-balloon-asset-swap/README.md:283` の「引数の World は使われていない」は当時の記録で、署名の参照ではないので触らない。
+
+### 9.3 合成（synthesis）
+- **一般化**: 2・3 番はどちらも「原因の違う失敗を 1 つの変位に畳んでいる」問題。どちらも「原因どおりの変位で返す」へ揃える（`PresentError` は指令の適用の失敗・読み込みの失敗は `BalloonLoadError`＝`ShellLoadError` と同じ線引き）。4 番と 2 番は同じ漏斗の「成否の読み方が 2 通り」の問題で、戻り値 1 本に揃える。
+- **作るか採るか**: 新しい依存は採らない。一時フォルダは `temp_path_kit`、変更の印は bevy の `set_if_neq`、ログの捕捉は `log_capture_kit`（どれも既存）。
+- **削る**: テストの支えは新しいファイルを作らず、既存の 3 つの支えのモジュールの可視性を `pub(crate)` に広げるだけで兄弟の子から届かせる（research.md 29 番の「新しいファイルになる」は不要と分かった）。1 番は `TempDir` の型名と口を残し中身だけ `TempPath` にして、呼び手 5 ファイルを触らない。到達しない枝（2 番の 2 つ・4 番の 2 つ・6 番の 3 つ）は消すか `expect`。
+
+### 9.4 設計の討議の議題の候補（別の決め方もあり得る所）
+1. 3 番を新しい `BalloonLoadError`（4 変位）で取る（`PresentError` に読み込みの変位を足す案は取らない）。
+2. 2 番の変位は `NotShown`・`EntryEvicted` の 2 つ。`show_target` の届かない 2 枝は `expect`。
+3. 35 番で記録の文言 `D3D/DXGI 呼び出しが失敗` を `D2D 呼び出しが失敗` へ変える（照合する 4 テストも）。コメントだけ直す案もある。
+4. 40 番の「1 回だけ」を 1 つの入口の中の繰り返しを消すことと読む。入口をまたぐ共有は公開の口の形を変えるので取らない。
+5. 10 番の自己検査の 1 件を `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs` に替える。
+6. 42 番は欄を私有にし `pub(crate) fn author_dpi()` を置く。
+7. 43 番の `SURFACE_REASON_ALL` は消さずに `#[cfg(test)]`（8 番と同じ扱い）。
+8. 39 番は `frame_of` を消すだけで守るテストを置かない（出どころが 1 つになる）。
+9. タスクは直列の 17 本（並べない）。
