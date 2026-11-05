@@ -69,7 +69,13 @@ pub struct VisualGraphics {
     /// 親Visual参照（子削除用にキャッシュ）
     /// 階層同期時に子挿入と同時に設定される
     parent_visual: Option<Visual>,
+    /// 最後に当てた切り抜きの鍵（物理の幅・高さ・拡大率・形）。同じなら作り直さない。
+    /// 見た目を作り直すと空に戻り、新しい見た目へ当て直す（11 番・6 番）
+    clip_key: Option<ClipKey>,
 }
+
+/// 切り抜きの鍵: (物理の幅, 物理の高さ, 拡大率, 形)。解除は形 `None`
+pub(crate) type ClipKey = (f32, f32, f32, Option<crate::ecs::graphics::clip::ClipShape>);
 
 // on_remove フック: 親Visualから自分を削除
 fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {
@@ -109,6 +115,7 @@ impl Default for VisualGraphics {
         Self {
             inner: None,
             parent_visual: None,
+            clip_key: None,
         }
     }
 }
@@ -118,6 +125,7 @@ impl VisualGraphics {
         Self {
             inner: Some(visual),
             parent_visual: None,
+            clip_key: None,
         }
     }
 
@@ -126,12 +134,14 @@ impl VisualGraphics {
         Self {
             inner: Some(visual),
             parent_visual,
+            clip_key: None,
         }
     }
 
     pub fn invalidate(&mut self) {
         self.inner = None;
         self.parent_visual = None;
+        self.clip_key = None;
     }
 
     pub fn is_valid(&self) -> bool {
@@ -151,6 +161,14 @@ impl VisualGraphics {
     /// 親Visualを設定/更新する
     pub fn set_parent_visual(&mut self, parent: Option<Visual>) {
         self.parent_visual = parent;
+    }
+
+    pub(crate) fn clip_key(&self) -> Option<&ClipKey> {
+        self.clip_key.as_ref()
+    }
+
+    pub(crate) fn set_clip_key(&mut self, key: ClipKey) {
+        self.clip_key = Some(key);
     }
 }
 

@@ -115,7 +115,7 @@
   - _Depends: 3.1_
   - _Requirements: 3.1, 3.2, 5.3_
 
-- [ ] 4.6 切り抜きを同じ形なら作り直さず、新しい見た目には当て直す
+- [x] 4.6 切り抜きを同じ形なら作り直さず、新しい見た目には当て直す
   - 見た目の部品に最後に当てた切り抜きの鍵を持たせ、同じなら作り直さない。鍵の書き込みは変化の印を立てない。見た目を作り直すと鍵は空に戻る
   - 切り抜きの係が、見た目が作り直された部品にも当てる
   - 切り抜きの係の説明を中身（角丸 0 の図形）に合わせる
@@ -206,3 +206,4 @@
 - 4.3: `tests/graphics/device_lost_recovery_test.rs` を新しく置いた（見た目の係 1 本）。描画面を作る係の「装置なしで落ちない」は 4.4、残りの立ち直りは 4.7 が同じファイルに足す。外すときの `debug!`（`graphics/components.rs:78-86` の `let _ = ... Remove`）は 6.4 の持ち分。
 - 4.4: `SurfaceGraphicsDirty.drawn_scale` は `mark_dirty_surfaces` が印を立てるときに書く。装置の失いでない `BeginDraw` の一時的な失敗の後、拡大率が同じ回では描き直さない（前からの性質）＝ 4.5 で `render.rs` の失敗の道を触るとき、描いた時点で書くか見る。
 - 4.5: `GraphicsCore` の変化の印は本当の装置の失いのときだけ立つ（`bypass_change_detection().note_draw_failure()` が真なら `set_changed()`）。下流（5.x）は印＝作り直しか失いの合図と読んでよい。
+- 4.6: 切り抜きの鍵（`VisualGraphics.clip_key`）の側のテストは、申し合わせの一覧に無い `tests/graphics/clip_sync_system_test.rs` に置いた（足場がそこに在る・頭の InsetClip の説明も直した）。11-06 に `audit-wintf-runtime` へ伝えた。
