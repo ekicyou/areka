@@ -196,3 +196,37 @@ fn settling_twice_gives_the_same_state() {
         assert_eq!(settle(&t, surface), settle(&t, surface), "面 {surface}");
     }
 }
+
+/// 10: runonce の待ちの合計が上限ちょうど（1＋599,999＝600,000ms）。
+/// 11: 上限の 1ms 後に次のコマへ替わる（600,000＋1）。
+const LONG: &str = "surface10\n{\nanimation0.interval,runonce\n\
+    animation0.pattern0,overlay,100,1,0,0\n\
+    animation0.pattern1,overlay,101,599999,0,0\n}\n\
+    surface11\n{\nanimation0.interval,runonce\n\
+    animation0.pattern0,overlay,100,600000,0,0\n\
+    animation0.pattern1,overlay,101,1,0,0\n}\n\
+    surface100\n{\n}\nsurface101\n{\n}\n";
+
+/// 待ちが上限ちょうどの面は `warn!` 0 行で、最後のコマが残る（今と同じ）。
+#[test]
+fn wait_at_the_cap_settles_as_before() {
+    let t = crate::test_support::table_of(LONG);
+    let mut p = None;
+    let logs = crate::test_support::capture_logs(|| p = Some(settle(&t, 10)));
+    assert!(crate::test_support::warns(&logs).is_empty(), "{logs:?}");
+    assert_eq!(top(&p.unwrap(), 0), Some(101));
+}
+
+/// 上限を越える面は `warn!` 1 行（面・上限・作者の待ち）を残し、上限の時点のコマ（替わる前）を返す。
+#[test]
+fn wait_over_the_cap_stops_at_the_cap() {
+    let t = crate::test_support::table_of(LONG);
+    let mut p = None;
+    let logs = crate::test_support::capture_logs(|| p = Some(settle(&t, 11)));
+    let warns = crate::test_support::warns(&logs);
+    assert_eq!(warns.len(), 1, "{logs:?}");
+    for field in ["surface_id=11", "max_ticks=37500", "wait_ms=600001"] {
+        assert!(warns[0].contains(field), "{field}: {}", warns[0]);
+    }
+    assert_eq!(top(&p.unwrap(), 0), Some(100));
+}

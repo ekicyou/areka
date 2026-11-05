@@ -90,7 +90,7 @@
   - 完了: `cargo build --workspace --all-targets` が通り、部品のテストが緑
   - _Boundary: lib.rs・bind.rs・settle.rs・timeline.rs・state.rs・parts.rs_
   - _Requirements: 2.3, 7.1, 7.2, 8.1_
-- [ ] 4.6 書き出しの面の待ちに 10 分の上限を置く（指摘 19）
+- [x] 4.6 書き出しの面の待ちに 10 分の上限を置く（指摘 19）
   - 進める刻みの数に上限（16ms × 37,500）を置き、越えたら面の番号・上限・作者の書いた待ちの合計を欄に持つ `warn!` を 1 行残して、上限の時刻まで進めた面を返す。上限の内は今と同じ 16ms ごとの道
   - 新しいテスト: 待ちが上限ちょうどの面は `warn!` 0 行で今と同じ面。上限の 1ms 後にコマが替わる面は `warn!` 1 行で替わる前のコマ
   - 完了: 2 本のテストが緑で、上限を外すと 2 本目が赤になることを確かめた記録がある
@@ -153,3 +153,4 @@
 - 4.3（着手 HEAD `f1f966a6`）: `glyph_wall_ms` の `debug_assert!` を消した。新しいテスト `glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn` を足して 552 件になった。`debug_assert!` を戻すと、このテストは `looper_trigger.rs:155` の panic で赤になる。`warn!` の文言と欄（`glyph`・`now_ms`）は変えていない。
 - 4.4（着手 HEAD `8a7d79c9`）: 消す前の `rg -n 'slot_rank'` は 2 件（どちらも `looper.rs` で、定義と使う所）、消した後は 0 件。`scopes`・`balloon` を `BTreeMap` にした。古い並べ替えは「スコープ → シェル／バルーン」だけを鍵にした安定な並べ替えで、スコープごとに 1 件なので、新しい組み方とどの場合も同じ順になる。新しいテストを足して 553 件。シェルを全部回してからバルーンを回す形に変えると、新しいテストだけが赤になる。`looper.rs` は 976 行。
 - 4.5（着手 HEAD `a1e49f73`）: 消す前のツリー全体の rg は、全体／areka-seriko の中の順に accumulate 18／18・SETTLE_TICK_MS 6／6・lap_of 14／14・always_at 63／61・AlwaysView 24／24・LotteryBoundary 16／16・ScopeState 74／71。外れの分は、always_at が `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` の文中の名前、ScopeState が `crates/areka/src/placement/spawn_cleanup_tests.rs` の同じ名の別の型で、使い手ではない。7 つを `pub(crate)` にし（`bind.rs` は `accumulate` の可視性だけ）、`cargo build --workspace --all-targets` は通った。`PartClocks::advance` は get_mut が None のときだけ写して入れる match 1 つにした。
+- 4.6（着手 HEAD `9dae36f6`）: `SETTLE_MAX_TICKS = 37_500` を置き、終わりの時刻を `wait_ms.min(上限)` にした（上限の内は丸めない）。越えたら `warn!`（欄は `surface_id`・`max_ticks`・`wait_ms`）を 1 行出す。テストを 2 本足して 555 件。上限ちょうどの面は warn 0 行で 101、上限を 1ms 越える面は warn 1 行で 100。`until = wait_ms` に戻すと warn が 0 行で赤、`min` だけ外すと `Some(101)` で赤になった。
