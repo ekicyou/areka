@@ -4,10 +4,7 @@
 //! デバイス非依存な観測可能挙動（フレームカウンタ初期値・進行、スケジュール
 //! ラベル登録、Default 等価性）を固定する。
 //!
-//! 注: vsync 駆動経路（`try_tick_on_vsync` の VSYNC_TICK_COUNT/LAST_VSYNC_TICK
-//! 比較）は `ecs::world::vsync` の `pub(crate)` プロセスグローバル atomic に依存し、
-//! 実 vsync スレッドが駆動するため統合テストからは決定的に検証不能
-//! （W7b-T2 断片の所見参照）。本ファイルは device 非依存の `try_tick_world`
+//! 注: 本ファイルは device 非依存の `try_tick_world`
 //! 経路のみを対象とする（既存 taffy_flex_layout_pure_test 同様、Window/
 //! WindowHandle を持たない World では graphics 系システムが no-op となる）。
 

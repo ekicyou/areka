@@ -1,7 +1,7 @@
 //! ECSワールド管理
 //!
 //! - schedule_labels: フレームカウンタとスケジュールラベル定義
-//! - vsync: VSYNC優先レンダリングと再入防止ガード
+//! - vsync: tick+flush の再入防止ガードと錠つきの窓の書き込みの流し
 
 mod vsync;
 
@@ -668,47 +668,6 @@ impl EcsWorld {
         }
 
         true
-    }
-
-    /// VSYNCカウンターの変化を検知し、必要に応じてworld tickを実行
-    ///
-    /// この関数は`run()`のWM_VSYNC処理と`WndProc`のWM_WINDOWPOSCHANGED処理の
-    /// 両方から呼び出され、重複実行を防ぐ。
-    ///
-    /// # Returns
-    /// - `true`: tickが実行された
-    /// - `false`: tickがスキップされた（カウンター変化なし）
-    ///
-    /// # 拡張ポイント
-    /// 他のモーダルループ関連メッセージ（WM_ENTERSIZEMOVEなど）で同様の問題が
-    /// 発見された場合、該当メッセージ処理でこの関数を呼び出すだけで対応可能。
-    pub fn try_tick_on_vsync(&mut self) -> bool {
-        use self::vsync::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
-        use std::sync::atomic::Ordering;
-
-        // Ordering::Relaxed の妥当性（W7b-V 点検）:
-        // - VSYNC_TICK_COUNT は単一生産者（VSync スレッドの fetch_add）・単一消費者
-        //   （メインスレッドの本 load のみ）のモノトニックカウンタで、tick 要否は
-        //   「値が前回と異なるか」だけに依存する。カウンタ越しに共有データを渡さない
-        //   （実 tick 処理は同一スレッドの Rc<RefCell> で逐次化され、VSync スレッドとの
-        //   同期は別途 PostMessageW のメッセージキューが担う）ため、acquire/release は不要。
-        // - LAST_VSYNC_TICK はメインスレッドのみが load/store する（他スレッドからの
-        //   アクセスは存在しない）ため、より強い順序付けは観測挙動に影響しない。
-        // u64 カウンタの周回はおよそ 9.7×10^9 年規模（~60Hz）で実機到達不能。
-        let current_tick = VSYNC_TICK_COUNT.load(Ordering::Relaxed);
-        let last_tick = LAST_VSYNC_TICK.load(Ordering::Relaxed);
-
-        // カウンターが変化していなければスキップ
-        if current_tick == last_tick {
-            return false;
-        }
-
-        // 前回処理値を更新（try_tick_world()呼び出し前に更新することで、
-        // 再入時の重複tickを防止）
-        LAST_VSYNC_TICK.store(current_tick, Ordering::Relaxed);
-
-        // world tickを実行
-        self.try_tick_world()
     }
 }
 
