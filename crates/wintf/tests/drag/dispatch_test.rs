@@ -85,6 +85,12 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
     assert_eq!((ds.drag_start_pos.x, ds.drag_start_pos.y), (110, 210));
     // WindowHandle なしフォールバックでは initial_inset = WindowPos.position
     assert_eq!(ds.initial_inset, (100.0, 200.0));
+    // wndproc スレッドへ渡すコンテキストにも同じ位置が書かれる
+    let ctx = world
+        .resource::<WindowDragContextResource>()
+        .get()
+        .expect("context が読めるべき");
+    assert_eq!(ctx.initial_window_pos, Some(Point { x: 100, y: 200 }));
 
     // WindowDragging マーカーが Window エンティティに付与されている
     assert!(

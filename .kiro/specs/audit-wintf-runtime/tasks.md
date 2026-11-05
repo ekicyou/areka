@@ -104,7 +104,7 @@
   - 完了の姿: layout のテストが緑で、100 で割るのを消すと 5 のテストが赤になる
   - _Boundary: L1_
   - _Requirements: 4.1, 4.4, 6.1, 6.2, 7.1, 7.2_
-- [ ] 4.4 (P) 帰還の輪・同期・座標の分離のテストを直す（L2）
+- [x] 4.4 (P) 帰還の輪・同期・座標の分離のテストを直す（L2）
   - 49・50・55・57・96・97・98・99: research の案。55 の生成の位置の確かめは drag の振り分けのテストへ移す
   - 完了の姿: 直したテストが緑で、49・50 は較正で赤を見てから戻す。赤なら隠さず新しい指摘として報告する
   - _Boundary: L2_
@@ -213,3 +213,4 @@
 - 3.1: `ambassador` は `Cargo.toml` 2 か所・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md:35` に残る（タスク 6 で直す。THIRD-PARTY-NOTICES は生成物なら生成器で）。
 - 4.1: 消したテスト名を名指す注記が `src/ecs/drag/state/tests.rs:11` に残っていたので括弧書きを消した（`audit-wintf-input` は未着手）。`Arrangement` の on_add フックは生成の束の `GlobalArrangement` を既定値で上書きする（本番に使い方は無く欠陥ではない・`audit-wintf-layout-widget` への申し送り候補）。
 - 4.3: `Opacity` を消したので、G4 の持ち物の `tests/visual/component_test.rs` の 1 本を `value.clamp(0.0, 1.0)` との比べへ追従させた（`audit-wintf-graphics-world` が同じファイルを書き換えるなら rebase で合わせる）。
+- 4.4: research の案が「L80-L148 だけ消す」と行で絞っているファイルは丸ごと消さない（4.4 で守りのテストを巻き添えにし差し戻し）。生成の直後に最初に走る system は生成と同じ刻みで書くので、等値を刻みで見るテストは回す前に `increment_change_tick()` を入れる。
