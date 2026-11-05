@@ -3,6 +3,7 @@
 //! 根は `target\` の下の偽の `LOCALAPPDATA` の `areka`、入力は winget の控え在りの形。
 //! どの場面も、呼ぶ前と後で木（フォルダとファイルの中身）が同じことを確かめる。
 
+use crate::test_support::{logged, profile, tree};
 use crate::{
     AppProfile, Decision, Layout, Signals, Writability, app_profile_dir, decide, locate_app_profile,
 };
@@ -35,30 +36,6 @@ fn winget_signals(lad: Option<&Path>) -> Signals {
     }
 }
 
-fn profile(dir: &Path) -> PathBuf {
-    dir.join("profile").join("areka")
-}
-
-/// 木の写し（相対パスと、ファイルなら中身）。並びは名前順。
-fn tree(dir: &Path) -> Vec<(PathBuf, Option<Vec<u8>>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(next) = stack.pop() {
-        for entry in fs::read_dir(&next).unwrap().flatten() {
-            let path = entry.path();
-            let rel = path.strip_prefix(dir).unwrap().to_path_buf();
-            if path.is_dir() {
-                stack.push(path);
-                out.push((rel, None));
-            } else {
-                out.push((rel, Some(fs::read(&path).unwrap())));
-            }
-        }
-    }
-    out.sort();
-    out
-}
-
 /// ログを捕まえながら 1 回呼び、呼ぶ前と後で木が同じことを確かめる。
 fn run(
     tmp: &TempPath,
@@ -87,14 +64,6 @@ fn current(signals: &Signals, exe: &Path, profile_env: Option<&OsStr>) -> Option
     app_profile_dir(profile_env, &layout, Some(exe))
 }
 
-/// `event` が `name` の記録。
-fn logged<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 #[test]
 fn absent_root_is_root_missing_and_not_created() {
     let (tmp, exe, lad, root) = fixture("ud-loc-absent");
@@ -110,6 +79,38 @@ fn present_root_without_memory_is_migration_pending_and_not_copied() {
     let (answer, _) = run(&tmp, &winget_signals(Some(&lad)), &exe, None);
     assert_eq!(answer, AppProfile::MigrationPending { root: root.clone() });
     assert!(!profile(&root).exists(), "根の profile\\areka は作らない");
+}
+
+#[test]
+fn locate_answers_migration_pending_when_the_profile_env_is_empty() {
+    let (tmp, exe, lad, root) = fixture("ud-loc-pending-env-empty");
+    fs::create_dir_all(&root).unwrap();
+    let (answer, events) = run(
+        &tmp,
+        &winget_signals(Some(&lad)),
+        &exe,
+        Some(OsStr::new("")),
+    );
+    assert_eq!(answer, AppProfile::MigrationPending { root });
+    let errors = logged(&events, "profile_dir_env_unusable");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].level, tracing::Level::ERROR);
+}
+
+#[test]
+fn an_unreadable_listing_entry_is_logged() {
+    let tmp = TempPath::under_target("ud-loc-unreadable-entry");
+    let exe = tmp.child("exe");
+    fs::create_dir_all(&exe).unwrap();
+    let entries = [Err::<fs::DirEntry, _>(std::io::Error::other(
+        "entry unreadable",
+    ))];
+    let (found, events) = capture(|| super::marker_in(&exe, entries));
+    assert_eq!(found, None);
+    let warns = logged(&events, "user_data_marker_unreadable");
+    assert_eq!(warns.len(), 1);
+    assert_eq!(warns[0].level, tracing::Level::WARN);
+    assert_eq!(warns[0].field("error"), Some("entry unreadable"));
 }
 
 #[test]

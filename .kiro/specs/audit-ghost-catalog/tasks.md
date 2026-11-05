@@ -67,7 +67,7 @@
   - _Boundary: areka-user-data copy_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 5.2, 9.1_
 
-- [ ] 8. 置き場の決めで使えない環境変数を捨て、失敗の道を記録で確かめる（T8）
+- [x] 8. 置き場の決めで使えない環境変数を捨て、失敗の道を記録で確かめる（T8）
   - #73 のテストの道具を新しい `test_support.rs` に 1 つずつ置き、写しを消す
   - #18 の空・相対の `AREKA_PROFILE_DIR` を、値を見る 4 か所すべてで入口の 1 回の検査の結果に揃え、入口で `error!` を 1 回出して書ける根の `profile\areka` へ進む。範囲の外の `crates/areka`・`crates/areka-mcp-bridge` のテストが空・相対の値の結果を見ていれば期待を直す
   - #19 の一覧の読み失敗を既存の警告で記録し、#21 の失敗の道のテストを記録の捕まえで包む。#72 の使わない引数を消し、範囲の外の `crates/areka/src/readonly_run_tests.rs` を直す
@@ -186,3 +186,5 @@
 - 4（8f34d3fc）: 判定の末尾の窓のうち zip64 の位置記録ぶんの 20 バイトはテストで縛っていない（窓を 20 バイト以内で縮めても緑）。18.2 のかけ直しで指摘が出れば直す。
 - 6: `cargo clippy -p areka --all-targets -- -D warnings` は範囲の外の `dola`・`areka-kanade` の clippy の誤り（新しい clippy の lint と見られる）で赤。本 spec の変更とは無関係。完了の棚卸で確かめる。
 - 7: `deep_trees_copy_on_a_small_stack` は設計の 2,000 段でなく 300 段（2,000 段は fixture の作りに約 115 秒）。256 KiB のスタックで debug ビルドなら再帰は 100 段で溢れるので縛れている。`finish_rename` は `CopyStats` を返すため引数が 4 つ。
+- 8: 範囲の外の `crates/areka-mcp-bridge/src/config.rs:105` は中継の置き場（`mcp-bridge` の cache）を生の `AREKA_PROFILE_DIR` から作る＝空の値で作業フォルダからの相対になる。設計の「範囲の外で触るファイル」に無いので触っていない。完了の棚卸で起票する（持ち主は `audit-mcp-update-crates`）。
+- 8: `cargo test -p areka` の結合テスト `mcp_get_log_real_run` は 32bit の helper（`target\i686-pc-windows-msvc`）が未ビルドだと panic する。lib/bins は緑。18.3 の全体テストで見る。

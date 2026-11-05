@@ -4,7 +4,8 @@
 
 use crate::{
     AppProfile, CopyDone, Decision, Layout, Reason, Signals, USER_ROOT_ENV, Unlocatable, UserRoot,
-    UserRootOrigin, WINGET_MARKER_PREFIX, Writability, copy_tree_atomic, decide,
+    UserRootOrigin, WINGET_MARKER_PREFIX, Writability, copy_tree_atomic, decide, profile_env_dir,
+    usable_profile_env,
 };
 use std::ffi::OsStr;
 use std::os::windows::fs::OpenOptionsExt;
@@ -52,8 +53,26 @@ pub(crate) fn find_winget_marker(exe_dir: &Path) -> Option<String> {
             return None;
         }
     };
+    marker_in(exe_dir, entries)
+}
+
+/// [`find_winget_marker`] の内側（一覧の項目を差し込める）。
+fn marker_in(
+    exe_dir: &Path,
+    entries: impl IntoIterator<Item = std::io::Result<std::fs::DirEntry>>,
+) -> Option<String> {
     let prefix = WINGET_MARKER_PREFIX.to_ascii_lowercase();
-    entries.flatten().find_map(|entry| {
+    entries.into_iter().find_map(|entry| {
+        let entry = entry
+            .inspect_err(|error| {
+                tracing::warn!(
+                    event = "user_data_marker_unreadable",
+                    exe_dir = %exe_dir.display(),
+                    error = %error,
+                    "an exe folder entry could not be read for the winget marker; skipped"
+                );
+            })
+            .ok()?;
         let name = entry.file_name().into_string().ok()?;
         let lower = name.to_ascii_lowercase();
         let is_file = entry.file_type().is_ok_and(|kind| kind.is_file());
@@ -84,7 +103,7 @@ pub fn probe(exe_dir: Option<&Path>) -> Signals {
 }
 
 /// プロセスのはじめに 1 回: probe → decide → 書ける根を作る → 記憶の引き継ぎ → 記録。
-/// `profile_env` は [`crate::PROFILE_DIR_ENV`] の値（在れば引き継がない＝記憶はそちら）。
+/// `profile_env` は [`crate::PROFILE_DIR_ENV`] の値（使える値が在れば引き継がない＝記憶はそちら）。
 pub fn establish(exe_dir: Option<&Path>, profile_env: Option<&OsStr>) -> Layout {
     establish_from(&probe(exe_dir), exe_dir, profile_env)
 }
@@ -95,6 +114,7 @@ pub(crate) fn establish_from(
     exe_dir: Option<&Path>,
     profile_env: Option<&OsStr>,
 ) -> Layout {
+    let profile_env = usable_profile_env(profile_env);
     let (root, reason) = decide_logged(signals, exe_dir);
     let user_root = root.and_then(|root| create(root, &reason));
     if let (Some(root), None, Some(exe_dir)) = (&user_root, profile_env, exe_dir) {
@@ -107,17 +127,14 @@ pub(crate) fn establish_from(
 
 /// 読み取りだけの走りの準備（spec: readonly-mode 要件 4.1・4.2・4.5）: probe → decide → 記録。
 /// 書ける根は作らず（無ければ隣の形）、記憶も写さない。
+/// `profile_env` は形を変えない（空・相対の値の記録だけ・記憶の置き場は [`readonly_app_profile_dir`]）。
 pub fn establish_readonly(exe_dir: Option<&Path>, profile_env: Option<&OsStr>) -> Layout {
-    establish_readonly_from(&probe(exe_dir), exe_dir, profile_env)
+    usable_profile_env(profile_env);
+    establish_readonly_from(&probe(exe_dir), exe_dir)
 }
 
 /// [`establish_readonly`] の内側（本物の環境を読まない）。判断と記録は [`establish_from`] と分け合う。
-/// `profile_env` は形を変えない（記憶の置き場は [`readonly_app_profile_dir`] が決める）。
-pub fn establish_readonly_from(
-    signals: &Signals,
-    exe_dir: Option<&Path>,
-    _profile_env: Option<&OsStr>,
-) -> Layout {
+pub fn establish_readonly_from(signals: &Signals, exe_dir: Option<&Path>) -> Layout {
     let (root, reason) = decide_logged(signals, exe_dir);
     let user_root = root.filter(|root| {
         let present = root.dir.is_dir();
@@ -136,14 +153,14 @@ pub fn establish_readonly_from(
 }
 
 /// 読み取りだけの走りの記憶の置き場（spec: readonly-mode 要件 4.3・11.2）。
-/// `profile_env` が在ればそれ。写すはずの場面（[`migrate_source`]）なら写す元をそのまま返す。
+/// 使える `profile_env` が在ればそれ（空・相対は捨てる）。写すはずの場面（[`migrate_source`]）なら写す元をそのまま返す。
 /// ほかは [`app_profile_dir`](crate::app_profile_dir) と同じ値。
 pub fn readonly_app_profile_dir(
     profile_env: Option<&OsStr>,
     layout: &Layout,
     exe_dir: Option<&Path>,
 ) -> Option<PathBuf> {
-    if profile_env.is_none()
+    if profile_env_dir(profile_env).is_none()
         && let (Some(root), Some(exe_dir)) = (&layout.user_root, exe_dir)
         && let Some((from, to)) = migrate_source(&root.dir, exe_dir)
     {
@@ -165,6 +182,7 @@ pub fn locate_app_profile(
     exe_dir: &Path,
     profile_env: Option<&OsStr>,
 ) -> AppProfile {
+    let profile_env = usable_profile_env(profile_env);
     let (root, reason) = decide_logged(signals, Some(exe_dir));
     // 決めた根をそのまま入れる（作っていないことは呼び手の記録が言う）。
     let layout = Layout {
@@ -192,8 +210,12 @@ pub fn locate_app_profile(
         }
     }
     // `exe_dir` を渡すので `None` にはならない。
-    crate::app_profile_dir(profile_env, &layout, Some(exe_dir))
-        .map_or(AppProfile::Unlocatable, AppProfile::Ready)
+    crate::app_profile_dir(
+        profile_env.as_deref().map(Path::as_os_str),
+        &layout,
+        Some(exe_dir),
+    )
+    .map_or(AppProfile::Unlocatable, AppProfile::Ready)
 }
 
 /// 判断と、隣に居る・決められないときの記録（ふつうの道と読み取りだけの道が分け合う）。

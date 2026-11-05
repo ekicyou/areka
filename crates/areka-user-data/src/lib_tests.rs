@@ -197,6 +197,33 @@ fn beside_layout() -> Layout {
 }
 
 #[test]
+fn an_empty_or_relative_profile_env_is_ignored_with_an_error() {
+    for value in ["", r"rel\prof"] {
+        let env = OsString::from(value);
+        let ((usable, dir), events) = log_capture_kit::capture(|| {
+            (
+                usable_profile_env(Some(&env)),
+                app_profile_dir(Some(&env), &user_root_layout(), Some(Path::new(r"C:\app"))),
+            )
+        });
+        assert_eq!(usable, None, "{value:?}");
+        assert_eq!(
+            dir,
+            Some(Path::new(LAD).join("areka").join("profile").join("areka")),
+            "{value:?}"
+        );
+        let errors = crate::test_support::logged(&events, "profile_dir_env_unusable");
+        assert_eq!(errors.len(), 1, "{value:?}");
+        assert_eq!(errors[0].level, tracing::Level::ERROR, "{value:?}");
+        assert_eq!(errors[0].field("value"), Some(value), "{value:?}");
+    }
+    let env = OsString::from(r"C:\work\target\prof");
+    let (usable, events) = log_capture_kit::capture(|| usable_profile_env(Some(&env)));
+    assert_eq!(usable, Some(PathBuf::from(&env)));
+    assert!(events.is_empty(), "絶対パスは今どおり使う");
+}
+
+#[test]
 fn profile_env_wins_even_with_user_root() {
     let env = OsString::from(r"C:\work\target\prof");
     let got = app_profile_dir(Some(&env), &user_root_layout(), Some(Path::new(r"C:\app")));

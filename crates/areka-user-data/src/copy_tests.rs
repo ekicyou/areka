@@ -45,6 +45,28 @@ fn cleanup(from: &Path) {
     writable(&from.join("z.txt"));
 }
 
+#[test]
+fn a_work_folder_that_cannot_be_removed_is_logged() {
+    let tmp = TempPath::under_target("ud-copy-work-left");
+    let work = tmp.child("work");
+    fs::create_dir_all(&work).unwrap();
+    fs::write(work.join("held.txt"), "x").unwrap();
+    // 中のファイルを共有なしで掴み、消せなくする。
+    let held = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(work.join("held.txt"))
+        .unwrap();
+
+    let ((), events) = log_capture_kit::capture(|| discard(&work));
+    drop(held);
+
+    let warns = crate::test_support::logged(&events, "user_data_copy_work_left");
+    assert_eq!(warns.len(), 1);
+    assert_eq!(warns[0].level, tracing::Level::WARN);
+    assert!(work.exists());
+}
+
 fn junction(link: &Path, target: &Path) {
     let out = std::process::Command::new("cmd")
         .args(["/c", "mklink", "/J"])
