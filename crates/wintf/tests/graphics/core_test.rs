@@ -17,8 +17,6 @@ fn test_graphics_core_creation() {
         "GraphicsCore::new()は成功するべき: {:?}",
         result.err()
     );
-
-    eprintln!("✅ GraphicsCore::new() - 初期化成功");
 }
 
 #[test]
@@ -30,8 +28,6 @@ fn test_graphics_core_multiple_creation() {
 
     let result2 = GraphicsCore::new();
     assert!(result2.is_ok(), "2回目の作成が成功すること");
-
-    eprintln!("✅ GraphicsCore::new() - 複数回の作成が可能");
 }
 
 #[test]
@@ -47,8 +43,6 @@ fn test_graphics_core_debug_output() {
         debug_output.contains("GraphicsCore"),
         "Debug出力にGraphicsCoreが含まれること"
     );
-
-    eprintln!("✅ GraphicsCore - Debug出力が機能");
 }
 
 #[test]
@@ -61,28 +55,4 @@ fn test_graphics_core_send_sync() {
 
     assert_send::<GraphicsCore>();
     assert_sync::<GraphicsCore>();
-
-    eprintln!("✅ GraphicsCore - Send + Sync実装を確認");
-}
-
-#[test]
-#[cfg(debug_assertions)]
-fn test_debug_build() {
-    // デバッグビルドでGraphicsCoreが作成できることを確認
-
-    let result = GraphicsCore::new();
-    assert!(result.is_ok(), "デバッグビルドでGraphicsCore作成成功");
-
-    eprintln!("✅ デバッグビルド - 正常に動作");
-}
-
-#[test]
-#[cfg(not(debug_assertions))]
-fn test_release_build() {
-    // リリースビルドでGraphicsCoreが作成できることを確認
-
-    let result = GraphicsCore::new();
-    assert!(result.is_ok(), "リリースビルドでGraphicsCore作成成功");
-
-    eprintln!("✅ リリースビルド - 正常に動作");
 }

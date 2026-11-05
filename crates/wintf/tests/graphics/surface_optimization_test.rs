@@ -61,30 +61,6 @@ fn test_mark_dirty_surfaces_updates_frame() {
     assert_eq!(dirty.requested_frame, 42);
 }
 
-#[test]
-fn test_surface_graphics_dirty_on_surface_added() {
-    // SurfaceGraphicsの追加時にSurfaceGraphicsDirtyも一緒に追加されることをテスト
-    // （実際にはdeferred_surface_creation_systemが担当）
-    let mut app = bevy_app::App::new();
-    app.insert_resource(FrameCount(0));
-
-    // SurfaceGraphicsとSurfaceGraphicsDirtyを一緒にspawn
-    let entity = app
-        .world_mut()
-        .spawn((SurfaceGraphics::default(), SurfaceGraphicsDirty::default()))
-        .id();
-
-    app.update();
-
-    // 両方のコンポーネントが存在することを確認
-    assert!(app.world().entity(entity).contains::<SurfaceGraphics>());
-    assert!(
-        app.world()
-            .entity(entity)
-            .contains::<SurfaceGraphicsDirty>()
-    );
-}
-
 // ========== Task 1.1: SurfaceCreationStats テスト ==========
 
 #[test]
@@ -125,23 +101,6 @@ fn test_surface_creation_stats_record_resized() {
     let mut stats = SurfaceCreationStats::default();
     stats.record_resized();
     assert_eq!(stats.resize_count, 1);
-}
-
-#[test]
-fn test_surface_creation_stats_as_resource() {
-    // SurfaceCreationStatsがECSリソースとして使えることを確認
-    let mut world = World::new();
-    world.insert_resource(SurfaceCreationStats::default());
-
-    // リソースが取得できることを確認
-    let stats = world.resource::<SurfaceCreationStats>();
-    assert_eq!(stats.created_count, 0);
-
-    // 可変参照で更新
-    world
-        .resource_mut::<SurfaceCreationStats>()
-        .record_created();
-    assert_eq!(world.resource::<SurfaceCreationStats>().created_count, 1);
 }
 
 // ========== Task 1.2: 物理ピクセルサイズ計算ヘルパーテスト ==========

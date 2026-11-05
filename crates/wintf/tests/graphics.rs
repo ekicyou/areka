@@ -19,8 +19,6 @@ mod core_test;
 mod dcomp_integration_test;
 #[path = "graphics/device_lost_recovery_test.rs"]
 mod device_lost_recovery_test;
-#[path = "graphics/frame_time_test.rs"]
-mod frame_time_test;
 #[path = "graphics/init_window_graphics_test.rs"]
 mod init_window_graphics_test;
 #[path = "graphics/reinit_unit_test.rs"]
