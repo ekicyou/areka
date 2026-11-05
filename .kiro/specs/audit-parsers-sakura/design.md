@@ -311,7 +311,7 @@ pub enum ShellIssue {
 ```
 - 字句の段の `Token`（`pub(crate)`）は `Brace { header, body, line }`・`TopLevel(fields)`・`Unclosed { heading, line }`・`Reopened { heading, line }` の 4 つにする。`BlockStart`・`Line`・`BlockEnd`・`Raw` と `raw_lines_from` を消す（68）。decode の決して走らない 3 枝（`decode.rs:70-74`・`:79-81`・`:99-103`）は形の上で無くなる。
 - 見出しの決め（33・71 を 1 つの規則で）: `{` だけの行が来たら、前のブレスの区切りから後で、最初の欄が areka の読むブレスの名（`descript`・`surface` で始まる・`.surface.alias` で終わる・`balloon.` で始まる・`.cursor` で終わる）である最も近い行を見出しにする。そういう行が無ければ今どおり `{` の直前の有意な行。見出しと `{` の間の行は ukadoc の「ブレス名、{}、各設定として認識されない行はすべてコメント行」に従いコメントとして捨てる。開いた本体の中で `{` が来たら、同じ選び方で本体の行から見出しを選び、その前の行で前のブレスを閉じて（中身は残す）`Reopened` を出す。
-- 範囲の幅の上限（6）: `parse_target_element` で `Range{start,end}` の `end - start + 1` が上限を越えたら、その記述子だけを飛ばして `RangeTooWide` を積む。見出しのほかの記述子とシェルのほかの部分は読む。記述子が 1 つも残らないブレスは積まない（36 と同じ）。除外の範囲（`!a-b`）は広げないので上限をかけない。`boxes.rs` も同じ `parse_targets` を通るので同じ上限がかかる（記録は画像の側で 1 回だけ）。**上限は幅 8193**（`const RANGE_WIDTH_CAP: u64 = 8193`）＝正典にある唯一の頭打ち、ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） の番号の数（0〜8192）。上限は幅だけにかけ、番号の値にはかけない（`surface10000` も `surface10000-18192` も読む）。越えた記述子は `error!` で記述子の字を名指して飛ばし（記録は `shell_target.rs`）、シェルは全体として読む。幅は `u64` で数える（`0-4294967295` の幅 2^32 が `u32` に入らないため）。
+- 範囲の幅の上限（6）: `parse_target_element` で `Range{start,end}` の `end - start + 1` が上限を越えたら、その記述子だけを飛ばして `RangeTooWide` を積む。見出しのほかの記述子とシェルのほかの部分は読む。記述子が 1 つも残らないブレスは積まない（36 と同じ）。除外の範囲（`!a-b`）は広げないので上限をかけない。`boxes.rs` も同じ `parse_targets` を通るので同じ上限がかかる（記録は画像の側で 1 回だけ）。**上限は幅 8193**（`const RANGE_WIDTH_CAP: u64 = 8193`）＝ukadoc が MATERIA だけの制限として載せる数を借りた（一般の決まりは「割り振りは基本的に自由」で、SSP 向けの実在のシェルは 8193 以上の番号も使う＝番号の値は縛らない）。ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） の番号の数（0〜8192）。上限は幅だけにかけ、番号の値にはかけない（`surface10000` も `surface10000-18192` も読む）。越えた記述子は `error!` で記述子の字を名指して飛ばし（記録は `shell_target.rs`）、シェルは全体として読む。幅は `u64` で数える（`0-4294967295` の幅 2^32 が `u32` に入らないため）。
 - 読めない数（36）: 要素の層・当たりの番号・アニメの番号・パターンの番号・対象の記述子・別名の項目は、読めなければ 0 にせず飛ばして `UnreadableNumber` を積む。範囲の両端は trim する。座標（`field_i64`）とウェイトは今どおり 0。見出しがちょうど `surface.alias` のブレスは、`sakura.surface.alias` と同じく読まない（今は空の surface 0 を作っている）。
 - ウェイト（5）: 欄を trim し、`-` を含めば最初の `-` で分けて両側を trim、両方が `u32` なら小さい方を待ちにして `WaitRange` を積む。それ以外は今どおり `parse::<u32>().unwrap_or(0)`。
 
@@ -361,7 +361,7 @@ pub fn text_playback_duration(text: &str) -> f64;   // 形も値も変えない�
 
 ## 開発者に仰いで決めた 2 件（2026-11-05 開発者「推奨案で承認」）
 
-1. **指摘 6 の範囲の幅の上限＝8193**。要件 7.6 の「元からある頭打ちだけから決める」に当てて、正典にある唯一の頭打ち ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） を使う（調べたほかの候補＝番号の型 `u32`・GPU の面の最大寸・`AnimationLimits` が使えない理由は research.md 12.3）。上限は 1 つの範囲の幅（`end - start + 1`）だけにかけ、番号の値にはかけない。越えた記述子は飛ばして `RangeTooWide` を積み、`shell_target.rs` が記述子を名指して `error!` を出す。シェルは全体として読む。`audit-emo-compose` が本 spec に任せた値（そちらの指摘 1⑶）もこれで決まる＝伝言で伝える。
+1. **指摘 6 の範囲の幅の上限＝8193**。要件 7.6 の「元からある頭打ちだけから決める」に当てて、ukadoc が MATERIA だけの制限として載せる数（一般の決まりは「割り振りは基本的に自由」・番号の値は縛らない）を借りる。ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） を使う（調べたほかの候補＝番号の型 `u32`・GPU の面の最大寸・`AnimationLimits` が使えない理由は research.md 12.3）。上限は 1 つの範囲の幅（`end - start + 1`）だけにかけ、番号の値にはかけない。越えた記述子は飛ばして `RangeTooWide` を積み、`shell_target.rs` が記述子を名指して `error!` を出す。シェルは全体として読む。`audit-emo-compose` が本 spec に任せた値（そちらの指摘 1⑶）もこれで決まる＝伝言で伝える。
 2. **`areka-parsers` の dev-dependency に `log-capture-kit` を足す**（ワークスペースのクレート・テスト専用・要件 4.4 と同じウェーブの約束 ⑶ の承認された例外＝例外の記録は要件の側で進行役が書く）。`Cargo.lock` で変わるのは `areka-parsers` の塊の 1 行。最初に要るタスク（T2）で足し、`tech.md` に登記する。9・14・17・49 の落ちるテストは `areka-parsers` の中で `log_capture_kit::capture` を使う。
 
 ## 裁定に触れる決め（設計の討議へ）
@@ -489,6 +489,6 @@ pub fn text_playback_duration(text: &str) -> f64;   // 形も値も変えない�
 - **段 4 shell（足すだけ・公開の形を壊さない）**: T11（35・68・33・34・71）／T12（4・5・6・36）／T13（37・69・70・72〜75）
 - **段 5 compile**: T14（8）／T15（41・42・92・93）／T16（43・7.11(a)）／T17（44・45・87〜91）
 - **段 6 drive・strict・sysvar**: T18（7 の drive・39・77〜79）／T19（40・80〜85）
-- **段 7 範囲の外（要件 7.10・相手が先に着地していれば main の上で、走っていれば伝言で順を決める）**: T20（38・76）／T21（12・15・16・51）／T22（46・10・50・52）／T23（`shell_target.rs` の乗り換えと `ShellIssue` の記録・`balloon_definitions.rs` の `key_issues`）／T24（7.11(b)・58・7 の dola・4 の台帳・86）
+- **段 7 範囲の外（要件 7.10・相手が先に着地していれば main の上で、走っていれば伝言で順を決める）**: T20（38・76）／T21（12・15・16・51・36 で seriko の `resolve.rs` の別名の引きの期待値が変わらないことの確かめ＝要件 7.10）／T22（46・10・50・52）／T23（`shell_target.rs` の乗り換えと `ShellIssue` の記録・`balloon_definitions.rs` の `key_issues`）／T24（7.11(b)・58・7 の dola・4 の台帳・86）
 - **段 8 確かめ**: T25（7.7 の起票と「残る危うさ」の 1 件の起票）／T26（かけ直し・0 件・59・60 の理由）／T27（全体テスト）
 - 順の決め: T8 は T10 と T17 より先（同じテストのファイルに触る）。T11 は T12 より先。T16 は T8 の後（`read_note_point` が全部の腕になる）。段 7 は形を変えるので、各タスクの中で範囲の外の呼び出し元まで直してワークスペースを緑に戻す。
