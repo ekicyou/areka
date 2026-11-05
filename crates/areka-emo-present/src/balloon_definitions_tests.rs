@@ -313,3 +313,30 @@ fn inline_marker_none_records_info_once() {
         "面 2 の書いた名前 other が無い"
     );
 }
+
+/// 指摘 40: `descript.txt` の無いバルーンで上書きを持つ面が 2 つあっても、descript は読み込み 1 回に
+/// つき 1 回だけ読むので、読めない `warn!` も 1 件だけ（面ごとに読み直さない）。
+#[test]
+fn missing_descript_warns_once_across_overriding_faces() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+    for face in 0..=2 {
+        dir.write(&format!("balloons{face}.png"), "");
+    }
+    dir.write("balloons1s.txt", "validrect.top,1\r\n");
+    dir.write("balloons2s.txt", "validrect.top,2\r\n");
+
+    let (defs, events) = load(&dir, &dec);
+
+    assert_eq!(
+        count(
+            &events,
+            Level::WARN,
+            "balloon: バルーン既定設定（descript.txt）の読取に失敗"
+        ),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(defs.for_face(1).model.validrect().top(), Some(1));
+    assert_eq!(defs.for_face(2).model.validrect().top(), Some(2));
+}

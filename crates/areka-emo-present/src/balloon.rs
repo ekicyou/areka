@@ -80,7 +80,7 @@ pub enum BalloonLoadError {
 }
 
 /// バルーン既定設定ファイル名（2 層マージの**基層**・シェル側 descript と同名別物）。
-const DESCRIPT_TXT: &str = "descript.txt";
+pub(crate) const DESCRIPT_TXT: &str = "descript.txt";
 
 /// 系列族の定義（**表データ**・候補追加が構造改変を伴わない形・R1.9）。
 ///
@@ -512,7 +512,7 @@ fn read_decoded(path: &Path) -> Result<String, std::io::Error> {
 ///
 /// 基層の欠落はバルーン既定設定が丸ごと得られない事態であり、正常縮退ではない（相方側で
 /// 毎起動鳴る類の事象でもない）。ゆえに現行の `warn!` を維持し `debug!` へ降格しない。
-fn read_descript_layer(path: &Path, records: LoadRecords) -> Option<String> {
+pub(crate) fn read_descript_layer(path: &Path, records: LoadRecords) -> Option<String> {
     match read_decoded(path) {
         Ok(text) => Some(text),
         Err(err) => {
@@ -596,14 +596,23 @@ pub fn load_scope_balloon_model(
     // 基層: バルーン既定設定（読取失敗は warn!＋空層）。
     let descript =
         read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), LoadRecords::Emit).unwrap_or_default();
+    scope_balloon_model_with(balloon_dir, scope, face0, &descript)
+}
 
+/// [`load_scope_balloon_model`] の核。基層の本文は呼び手が 1 回読んで渡す（面ごとに読み直さない・指摘 40）。
+pub(crate) fn scope_balloon_model_with(
+    balloon_dir: &Path,
+    scope: u32,
+    face0: &ResolvedFace,
+    descript: &str,
+) -> BalloonModel {
     // 上書き層: 採用面に対応する 1 つのみ（不在は debug! の正常縮退・D8）。
     let override_name = face0.override_file_name();
     let face_override =
         read_face_override_layer(&balloon_dir.join(&override_name), scope, &override_name);
 
     // マージ規則そのものは既存パーサの契約（後勝ち・未指定は基層継承＝R2.5）に委ねる。
-    let model = areka_parsers::balloon::parse_str(&descript, face_override.as_deref());
+    let model = areka_parsers::balloon::parse_str(descript, face_override.as_deref());
 
     // R6.3: 確定した表示位置指定と文字範囲の実値を scope とともに記録する。
     let wp = model.windowposition();

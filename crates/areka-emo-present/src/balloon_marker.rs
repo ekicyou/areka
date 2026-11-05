@@ -148,10 +148,23 @@ pub fn resolve_marker_pair(
     decoder: &impl ElementDecoder,
     alpha: AlphaParams,
 ) -> MarkerPair {
+    let listed = list_dirs(dirs);
+    resolve_marker_pair_listed(&listed, family, scope, explicit, decoder, alpha)
+}
+
+/// [`resolve_marker_pair`] の核。フォルダの一覧は呼び手が 1 回取って渡す（指摘 40）。
+pub(crate) fn resolve_marker_pair_listed(
+    listed: &[(&Path, Vec<String>)],
+    family: &SeriesFamily,
+    scope: u32,
+    explicit: Option<&str>,
+    decoder: &impl ElementDecoder,
+    alpha: AlphaParams,
+) -> MarkerPair {
     let chain = marker_chain(family, scope, explicit);
-    let per_dir: Vec<(&Path, MarkerNames)> = dirs
+    let per_dir: Vec<(&Path, MarkerNames)> = listed
         .iter()
-        .map(|dir| (*dir, select_marker_names(&list_file_names(dir), &chain)))
+        .map(|(dir, names)| (*dir, select_marker_names(names, &chain)))
         .collect();
     let find = |pick: fn(&MarkerNames) -> &Option<MarkerName>| {
         per_dir
@@ -286,6 +299,8 @@ pub(crate) struct SingleMarker {
 ///
 /// 列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（矢印と同じ）。読みは矢印と同じ
 /// 手順で、読めない絵は `warn!` して次の候補へは進まず「絵なし」とする。
+// 本番は定義の読み込みが核を直に呼ぶ（一覧を 1 回取る）ので、包みはテストの口だけ。
+#[cfg(test)]
 pub(crate) fn resolve_single_marker(
     dirs: &[&Path],
     family: &SeriesFamily,
@@ -294,9 +309,22 @@ pub(crate) fn resolve_single_marker(
     decoder: &impl ElementDecoder,
     alpha: AlphaParams,
 ) -> SingleMarker {
+    let listed = list_dirs(dirs);
+    resolve_single_marker_listed(&listed, family, scope, explicit, decoder, alpha)
+}
+
+/// [`resolve_single_marker`] の核。フォルダの一覧は呼び手が 1 回取って渡す（指摘 40）。
+pub(crate) fn resolve_single_marker_listed(
+    listed: &[(&Path, Vec<String>)],
+    family: &SeriesFamily,
+    scope: u32,
+    explicit: Option<&str>,
+    decoder: &impl ElementDecoder,
+    alpha: AlphaParams,
+) -> SingleMarker {
     let chain = marker_chain(family, scope, explicit);
-    let found = dirs.iter().find_map(|dir| {
-        select_single_marker_name(&list_file_names(dir), &chain).map(|name| dir.join(name))
+    let found = listed.iter().find_map(|(dir, names)| {
+        select_single_marker_name(names, &chain).map(|name| dir.join(name))
     });
     let explicit_missing = chain.explicit.as_deref().is_some_and(|e| {
         let want = format!("{}.png", e.to_ascii_lowercase());
@@ -310,6 +338,13 @@ pub(crate) fn resolve_single_marker(
         image: found.and_then(|path| load_marker_image(&path, decoder, alpha)),
         explicit_missing,
     }
+}
+
+/// フォルダの列をそれぞれ一覧にする（核へ渡す形）。
+pub(crate) fn list_dirs<'a>(dirs: &[&'a Path]) -> Vec<(&'a Path, Vec<String>)> {
+    dirs.iter()
+        .map(|dir| (*dir, list_file_names(dir)))
+        .collect()
 }
 
 /// フォルダ直下のファイル名を集める（読めないフォルダは `warn!` して空・印は無くても失敗にしない）。
