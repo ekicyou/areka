@@ -4,14 +4,18 @@ use super::test_support::{
     CapturedEvent, FieldUnquoted, TempDir, capture_events, emo2_balloon_root,
 };
 
-/// 実 fixture の当該 scope の面 0 を解決するテストヘルパ（本体は権威経路そのもの）。
-fn emo2_face0(scope: u32) -> ResolvedFace {
-    let faces =
-        resolve_balloon_faces(&emo2_balloon_root(), scope).expect("emo2-kakukaku は面 0 を持つ");
+/// `dir` の当該 scope の面 0 を解決するテストヘルパ（本体は権威経路そのもの）。
+fn face0_of(dir: &Path, scope: u32) -> ResolvedFace {
+    let faces = resolve_balloon_faces(dir, scope).expect("面 0 は在る");
     faces
         .into_iter()
         .find(|f| f.surface_id == 0)
         .expect("面 0 必在契約")
+}
+
+/// 実 fixture の当該 scope の面 0 を解決する。
+fn emo2_face0(scope: u32) -> ResolvedFace {
+    face0_of(&emo2_balloon_root(), scope)
 }
 
 /// 檻 8-a（R2.1/R2.2/R2.5）per-scope マージ実値: 実 fixture `emo2-kakukaku` で、
@@ -156,10 +160,7 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
     );
     dir.touch("balloons0.png"); // 面 0 は在るが balloons0s.txt は置かない。
 
-    let face0 = {
-        let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
-        faces.into_iter().find(|f| f.surface_id == 0).unwrap()
-    };
+    let face0 = face0_of(dir.path(), 0);
     let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
     // R2.4: 既定設定のみで正常な定義が返る（欠落は失敗でない）。
@@ -219,10 +220,7 @@ fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
     // 上書きファイルの位置にディレクトリを置く＝不在ではない読取失敗。
     std::fs::create_dir(dir.path().join("balloons0s.txt")).expect("同名ディレクトリ作成");
 
-    let face0 = {
-        let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
-        faces.into_iter().find(|f| f.surface_id == 0).unwrap()
-    };
+    let face0 = face0_of(dir.path(), 0);
     let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
     // 既定設定のみで継続する（失敗として畳まない）。
@@ -254,10 +252,7 @@ fn load_scope_balloon_model_warns_on_missing_descript() {
     let dir = TempDir::new();
     dir.touch("balloons0.png"); // descript.txt も balloons0s.txt も置かない。
 
-    let face0 = {
-        let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
-        faces.into_iter().find(|f| f.surface_id == 0).unwrap()
-    };
+    let face0 = face0_of(dir.path(), 0);
     let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
     assert_eq!(

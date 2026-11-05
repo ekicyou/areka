@@ -5,61 +5,18 @@
 
 use super::*;
 
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
-use areka_emo_atlas::{MemoryDecoder, UseSelfAlpha};
+use areka_emo_atlas::MemoryDecoder;
 use areka_parsers::balloon::MarkerCoord;
-use log_capture_kit::CapturedEvent;
 use tracing::Level;
 
 use crate::balloon::resolve_balloon_faces;
-use crate::balloon_marker::MarkerImage;
-
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new() -> Self {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/test-tmp")
-            .join(format!("balloon-definitions-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&path).expect("一時フォルダ");
-        TempDir(path)
-    }
-
-    fn write(&self, name: &str, text: &str) {
-        std::fs::write(self.0.join(name), text).expect("ファイル");
-    }
-
-    /// 名前だけのファイルを置き、偽の読み手に `w`×`h` の絵を登録する。
-    fn image(&self, dec: &mut MemoryDecoder, name: &str, w: u32, h: u32) {
-        self.write(name, "");
-        let bgra = vec![0x80; (w * h * 4) as usize];
-        dec.insert(self.0.join(name), w, h, w * 4, bgra, true);
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-const ALPHA: AlphaParams = AlphaParams {
-    use_self_alpha: UseSelfAlpha::On,
-};
+use crate::balloon::test_support::{ALPHA, CapturedEvent, FieldUnquoted, TempDir, size};
 
 fn load(dir: &TempDir, dec: &MemoryDecoder) -> (ScopeBalloonDefinitions, Vec<CapturedEvent>) {
-    let faces = resolve_balloon_faces(&dir.0, 0).expect("面 0 は在る");
-    log_capture_kit::capture(|| load_scope_balloon_definitions(&dir.0, 0, &faces, dec, ALPHA))
-}
-
-fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
-    img.as_ref().map(|i| (i.width, i.height))
+    let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
+    log_capture_kit::capture(|| load_scope_balloon_definitions(dir.path(), 0, &faces, dec, ALPHA))
 }
 
 /// 指摘 20: 空の面列を渡すと、面 0 の定義が無い `error!` を 1 行出して空の定義を返す
@@ -69,8 +26,9 @@ fn empty_faces_record_one_error_and_give_empty_definition() {
     let dir = TempDir::new();
     let dec = MemoryDecoder::new();
 
-    let (defs, events) =
-        log_capture_kit::capture(|| load_scope_balloon_definitions(&dir.0, 0, &[], &dec, ALPHA));
+    let (defs, events) = log_capture_kit::capture(|| {
+        load_scope_balloon_definitions(dir.path(), 0, &[], &dec, ALPHA)
+    });
     let errors: Vec<&CapturedEvent> = events.iter().filter(|e| e.level == Level::ERROR).collect();
     assert_eq!(errors.len(), 1, "{events:?}");
     assert!(
@@ -176,19 +134,13 @@ fn arrow_images_resolved_once_per_name_and_shared() {
 
     let (defs, events) = load(&dir, &dec);
 
-    let count = |level: Level, prefix: &str| {
-        events
-            .iter()
-            .filter(|e| e.level == level && e.message().starts_with(prefix))
-            .count()
-    };
     assert_eq!(
-        count(Level::DEBUG, "balloon_marker: 印の絵を解いた"),
+        count(&events, Level::DEBUG, "balloon_marker: 印の絵を解いた"),
         2,
         "名前ごとに 1 回"
     );
     assert_eq!(
-        count(Level::WARN, "balloon_marker: 印の絵が片方しか無い"),
+        count(&events, Level::WARN, "balloon_marker: 印の絵が片方しか無い"),
         1,
         "warn は重複しない"
     );
@@ -223,7 +175,7 @@ fn unreadable_coordinate_warns_once_per_key_and_value() {
         .iter()
         .filter(|e| e.level == Level::WARN && e.message().starts_with("balloon_definitions:"))
         .map(|e| {
-            let f = |n: &str| e.field(n).expect(n).trim_matches('"').to_string();
+            let f = |n: &str| e.field_unquoted(n).expect(n).to_string();
             (f("key"), f("value"))
         })
         .collect();
@@ -328,10 +280,7 @@ fn inline_marker_missing_explicit_warns_and_falls_back() {
         .collect();
     assert_eq!(warns.len(), 1);
     let w = warns[0];
-    assert_eq!(
-        w.field("name").map(|v| v.trim_matches('"')),
-        Some("nothere")
-    );
+    assert_eq!(w.field_unquoted("name"), Some("nothere"));
     assert_eq!(w.field("scope"), Some("0"));
     assert!(w.field("balloon_dir").is_some());
 }

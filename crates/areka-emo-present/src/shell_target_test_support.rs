@@ -70,7 +70,7 @@ pub(super) fn write_descript(dir: &std::path::Path) {
 // `vendors/sample_ghost/<検体名>/` の直パスは 1 か所も綴らない。
 
 /// `emo2` 検体（`areka` の実ゴースト・既存の期待値の出どころ）。
-static EMO2: LazyLock<SampleRoot> =
+pub(crate) static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
 /// 里々の標準テンプレート `R_POST_and_KOMAINU` 検体。

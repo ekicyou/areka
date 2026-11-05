@@ -192,7 +192,8 @@ fn directories_are_not_taken_as_surface_images() {
 /// 要件 1.7: シェルのフォルダの一覧が取れなければ「画像 0 件」として先へ進まず失敗を返す。
 #[test]
 fn missing_shell_dir_yields_list_error() {
-    let dir = PathBuf::from(r"C:\areka-test\shell-target-does-not-exist");
+    let root = TempPath::new("shell-target-does-not-exist");
+    let dir = root.child("missing");
     let dec = MemoryDecoder::new();
 
     match load_shell_target(&dir, &dec) {
@@ -425,7 +426,8 @@ fn every_record_is_emitted_once_per_load() {
 /// 要件 6.4・1.7: 一覧が取れない失敗は `error!` を伴う（記録の無い失敗経路を持たない）。
 #[test]
 fn list_failure_is_recorded_before_the_error() {
-    let dir = PathBuf::from(r"C:\areka-test\shell-target-records-no-dir");
+    let root = TempPath::new("shell-target-records-no-dir");
+    let dir = root.child("missing");
     let dec = MemoryDecoder::new();
 
     let (result, events) = capture_events(|| load_shell_target(&dir, &dec));

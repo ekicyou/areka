@@ -217,7 +217,8 @@ fn assert_quiet_failure(dir: &Path, needle: &str) -> ShellLoadError {
 /// フォルダの一覧に失敗しても、出さない入口は `error!` を 1 行出して `List` を返す。
 #[test]
 fn quiet_list_failure_still_records_the_error() {
-    let dir = PathBuf::from(r"C:\areka-test\shell-quiet-no-dir");
+    let root = TempPath::new("shell-quiet-no-dir");
+    let dir = root.child("missing");
     let error = assert_quiet_failure(&dir, "一覧に失敗");
     assert!(matches!(error, ShellLoadError::List { .. }), "{error:?}");
 }

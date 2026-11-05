@@ -5,64 +5,10 @@
 
 use super::*;
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use areka_emo_atlas::{MemoryDecoder, UseSelfAlpha};
-use log_capture_kit::CapturedEvent;
+use areka_emo_atlas::MemoryDecoder;
 use tracing::Level;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-/// ワークツリーの `target\` の下の一時フォルダ（Drop で消す）。
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new() -> Self {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/test-tmp")
-            .join(format!("balloon-marker-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&path).expect("一時フォルダ");
-        TempDir(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-
-    /// 名前だけのファイルを置く（中身は偽の読み手が返すので空）。
-    fn touch(&self, name: &str) {
-        std::fs::File::create(self.0.join(name)).expect("ファイル");
-    }
-
-    /// 名前だけのファイルを置き、偽の読み手に `w`×`h` の絵を登録する。
-    fn image(&self, dec: &mut MemoryDecoder, name: &str, w: u32, h: u32) {
-        self.touch(name);
-        dec.insert(
-            self.0.join(name),
-            w,
-            h,
-            w * 4,
-            vec![0x80; (w * h * 4) as usize],
-            true,
-        );
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-const ALPHA: AlphaParams = AlphaParams {
-    use_self_alpha: UseSelfAlpha::On,
-};
-
-fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
-    img.as_ref().map(|i| (i.width, i.height))
-}
+use crate::balloon::test_support::{ALPHA, CapturedEvent, FieldUnquoted, TempDir, size};
 
 fn marker_events(events: &[CapturedEvent], level: Level) -> Vec<&CapturedEvent> {
     events
@@ -72,7 +18,7 @@ fn marker_events(events: &[CapturedEvent], level: Level) -> Vec<&CapturedEvent> 
 }
 
 fn field<'a>(e: &'a CapturedEvent, name: &str) -> &'a str {
-    e.field(name).expect(name).trim_matches('"')
+    e.field_unquoted(name).expect(name)
 }
 
 fn resolve(

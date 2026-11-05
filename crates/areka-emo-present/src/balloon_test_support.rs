@@ -1,53 +1,54 @@
 use super::*;
 
 use std::path::PathBuf;
-use std::sync::LazyLock;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
-use sample_ghost_kit::SampleRoot;
+use areka_emo_atlas::MemoryDecoder;
+use temp_path_kit::TempPath;
 
-// ── テスト用一時ディレクトリ（新規 dev-dep を避け std のみで構成）─────────────
-// `std::env::temp_dir()` 配下へプロセス id ＋単調カウンタで一意なサブディレクトリを作り、
-// Drop で後始末する（tempfile 相当の最小実装）。
+use crate::balloon_marker::MarkerImage;
 
-static TEMP_COUNTER: AtomicU32 = AtomicU32::new(0);
+// ── テスト用一時ディレクトリ（`balloon`・`balloon_marker`・`balloon_definitions` のテストで 1 つ）──
+// 置き場・一意化・後始末は共有の窓口 [`TempPath`]（ワークツリーの `target\test-roots` の下）に任せる。
 
-/// Drop 時に自身を再帰削除する一時ディレクトリ。
-pub(super) struct TempDir {
-    pub(super) path: PathBuf,
-}
+/// 破棄時に自身を再帰削除する一時ディレクトリ。
+pub(crate) struct TempDir(TempPath);
 
 impl TempDir {
-    pub(super) fn new() -> Self {
-        let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "areka-emo-present-balloon-{}-{}",
-            std::process::id(),
-            n
-        ));
-        std::fs::create_dir_all(&path).expect("一時ディレクトリ作成");
-        TempDir { path }
+    pub(crate) fn new() -> Self {
+        TempDir(TempPath::new("emo-present-balloon"))
     }
 
-    pub(super) fn path(&self) -> &Path {
-        &self.path
+    pub(crate) fn path(&self) -> &Path {
+        self.0.path()
     }
 
     /// 空のプレースホルダファイルを作る（MemoryDecoder 経路ゆえ中身は不問・列挙対象のため名前のみ要）。
-    pub(super) fn touch(&self, name: &str) {
-        std::fs::File::create(self.path.join(name)).expect("プレースホルダ作成");
+    pub(crate) fn touch(&self, name: &str) {
+        std::fs::File::create(self.0.child(name)).expect("プレースホルダ作成");
     }
 
     /// テキストファイルを UTF-8 で書く（記述ファイル 2 層の合成 fixture 用）。
-    pub(super) fn write(&self, name: &str, content: &str) {
-        std::fs::write(self.path.join(name), content).expect("記述ファイル作成");
+    pub(crate) fn write(&self, name: &str, content: &str) {
+        std::fs::write(self.0.child(name), content).expect("記述ファイル作成");
+    }
+
+    /// 名前だけのファイルを置き、偽の読み手に `w`×`h` の絵を登録する。
+    pub(crate) fn image(&self, dec: &mut MemoryDecoder, name: &str, w: u32, h: u32) {
+        self.touch(name);
+        let bgra = vec![0x80; (w * h * 4) as usize];
+        dec.insert(self.0.child(name), w, h, w * 4, bgra, true);
     }
 }
 
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
+/// 自前の α を使う読みの設定（印と定義のテストで共通）。
+pub(crate) const ALPHA: AlphaParams = AlphaParams {
+    use_self_alpha: UseSelfAlpha::On,
+};
+
+/// 印の絵の寸法（無ければ `None`）。
+pub(crate) fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
+    img.as_ref().map(|i| (i.width, i.height))
 }
 
 // ── 檻 7: R6.2 warn の**発火条件**（`scope >= 1` ∧ `tier == Default`・R6.2/R7.1）───────
@@ -78,7 +79,7 @@ impl Drop for TempDir {
 // ある点は移行前と同じ。機序の逐条解説（`tracing-core` の実コード引用つき）は
 // `log_capture_kit` の crate doc と同 crate の `src/probe.rs` にある。
 
-pub(super) use log_capture_kit::CapturedEvent;
+pub(crate) use log_capture_kit::CapturedEvent;
 
 /// フィールド値を**引用符抜き**で引く拡張（移行前の `CapturedEvent::field` と同一規則）。
 ///
@@ -89,7 +90,7 @@ pub(super) use log_capture_kit::CapturedEvent;
 ///
 /// メソッド名を `field` にしないのは、[`CapturedEvent`] の固有メソッド `field`（引用符付きの
 /// Debug 表現）が拡張トレイトより優先され、規則が黙って入れ替わるためである。
-pub(super) trait FieldUnquoted {
+pub(crate) trait FieldUnquoted {
     /// フィールド値を引用符抜きで引く（欠落は `None`）。
     fn field_unquoted(&self, name: &str) -> Option<&str>;
 }
@@ -111,17 +112,14 @@ pub(super) fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>
 // ── 檻 8: scope 別バルーン定義の 2 層マージ（`load_scope_balloon_model`・R2.1/2.2/2.3/2.4/2.5・
 //          R6.3/6.4・D8）─────────────────────────────────────────────────────────────
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
 /// emo2 が同時にインストールするバルーンのフォルダを窓口から得る（自分でパスを継ぎ足さない）。
 ///
 /// 本 fixture は実資産である——`descript.txt`（基層）・`balloons0s.txt`（本体側の面別上書き層）・
 /// `balloonk0s.txt`（相方側の面別上書き層）に加え、面画像 `balloons0.png` / `balloonk0.png` を
 /// 併せ持つため、scope 0 / 1 が**別の面を採用し別の上書き層へ辿り着く**ことを実データで固定できる。
 pub(super) fn emo2_balloon_root() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
+    crate::shell_target::test_support::EMO2
+        .balloon("emo2-kakukaku")
         .expect("emo2 の同梱バルーン")
         .to_path_buf()
 }

@@ -836,4 +836,4 @@ mod series_tests;
 mod target_tests;
 #[cfg(test)]
 #[path = "balloon_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;

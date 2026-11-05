@@ -27,7 +27,7 @@
   - 起動の配線の呼び手の縮退（バルーン未配線・告知・採寸の見送り）が今と同じで、`areka` のテストが緑
   - _Requirements: 2.5, 4.1, 4.2, 6.3, 7.1, 9.1, 9.2_
 
-- [ ] 4. バルーンとシェルのテストの一時フォルダを `target` の下へ寄せ、検体の写しを 1 つにする（指摘 1・26・31・32）
+- [x] 4. バルーンとシェルのテストの一時フォルダを `target` の下へ寄せ、検体の写しを 1 つにする（指摘 1・26・31・32）
   - バルーンのテストの一時フォルダの中身を共通の一時パスの道具に替え、型名と口は残す。印と定義のテストの自前の一時フォルダと小物の写しを消して共通の支えを使う
   - シェルの読み込みのテストの「無いフォルダ」を `target` の下の無いパスにする（fs を触らない鍵は残す）
   - バルーンの支えの検体のパスをシェルの支えの 1 つに寄せる
@@ -123,3 +123,5 @@
 - `audit-emo-compose` との申し合わせ（11-05）: `ComposeError::ExtentTooLarge` を表示の側では `EmptyComposition` と同じ「面を隠す」縮退で扱う。後に着地する方が表示の側の `match` に腕を足す。`hit_region` が消えた main を取り込んだら `presenter_read_accessor_tests.rs` の説明 2 行（今の 373・383 行）を直す
 - `audit-parsers-sakura` は `shell_target.rs` に記録の数行を足す（約 975 行の見込み・新しいファイルは足さない）。タスク 6 の可視性の変更とは署名で当たらない
 - タスク 2: `cargo test -p areka` の `smoke_boot_loop_exit`・`mcp_get_log_real_run` は作業場に i686 の検体（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いと赤。`cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で建ててから回す
+- タスク 4（`audit-ghost-catalog` と同じ表）: `crates/log-capture-kit/tests/temp_path_guard_test.rs` で触った行は次の 3 つ。例外表から `crates/areka-emo-present/src/balloon_test_support.rs` の `Why::ProcessUnique` の項目 5 行（元の 155〜159 行）を消した。`ALLOWED_COUNT` を 19→18（今の 278 行）、`PROCESS_UNIQUE_COUNT` を 16→15（今の 284 行）にした。どちらも表の行から数え直した値（ProcessUnique 15・ReadOnly 2・IntentionallyFixed 1）。節 ⒜ の見出しの「13 件」は前から実数と合わないが、要件 7.7 に従って触っていない。後に着地する方は、表の行からもう一度数え直す
+- タスク 4: `C:\areka-test` の綴りが 3 つ残る（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・`shell_target_element_base_tests.rs`）。どれも `MemoryDecoder` の鍵で fs を触らない（指摘 26 で残すと決めた分）
