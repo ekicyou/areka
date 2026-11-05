@@ -149,20 +149,6 @@ mod tests {
     }
 
     #[test]
-    fn clip_shape_clone() {
-        let original = ClipShape::rounded_rectangle(8.0);
-        let cloned = original.clone();
-        assert_eq!(original, cloned);
-    }
-
-    #[test]
-    fn clip_shape_debug() {
-        let clip = ClipShape::Rectangle;
-        let debug_str = format!("{:?}", clip);
-        assert!(debug_str.contains("Rectangle"));
-    }
-
-    #[test]
     fn clip_shape_partial_eq_different_variants() {
         assert_ne!(ClipShape::Rectangle, ClipShape::rounded_rectangle(0.0));
         assert_ne!(

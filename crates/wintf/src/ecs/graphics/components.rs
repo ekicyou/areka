@@ -79,17 +79,19 @@ pub(crate) type ClipKey = (f32, f32, f32, Option<crate::ecs::graphics::clip::Cli
 
 // on_remove フック: 親Visualから自分を削除
 fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {
-    // 親Visualから自分を削除
-    // エラーは無視（親が先に削除されている場合など）
     // DComp の `parent.remove_visual(visual)` は WUC では `parent.Children()?.Remove(visual)` に対応。
     // 基底 Visual は Children を持たないため ContainerVisual へ cast してから Children を得る。
-    if let Some(vg) = world.get::<VisualGraphics>(hook.entity) {
-        if let (Some(parent), Some(visual)) = (&vg.parent_visual, &vg.inner) {
-            use windows::core::Interface;
-            let _ = parent
-                .cast::<windows::UI::Composition::ContainerVisual>()
-                .and_then(|cv| cv.Children())
-                .and_then(|c| c.Remove(visual)); // エラー無視
+    if let Some(vg) = world.get::<VisualGraphics>(hook.entity)
+        && let (Some(parent), Some(visual)) = (&vg.parent_visual, &vg.inner)
+    {
+        use windows::core::Interface;
+        // フックには Err を返す先が無いので記録だけ。親が先に消えた場合があるので debug!（10 番）
+        if let Err(e) = parent
+            .cast::<windows::UI::Composition::ContainerVisual>()
+            .and_then(|cv| cv.Children())
+            .and_then(|c| c.Remove(visual))
+        {
+            tracing::debug!(entity = ?hook.entity, error = ?e, "[on_visual_graphics_remove] Remove from parent failed");
         }
     }
 }

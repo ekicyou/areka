@@ -10,8 +10,8 @@ use super::wuc_resource::WucGraphicsResource;
 
 /// Visualリソースのみを作成する（Surfaceは作成しない）
 ///
-/// Phase 6リファクタリング: Visual作成をPreLayoutに移動し、
-/// Surface作成はDrawスケジュールでCommandList存在時に遅延実行する。
+/// Visual作成は `PreRenderSurface` で行い、
+/// Surface作成は同じ `PreRenderSurface` の `deferred_surface_creation_system` が CommandList 存在時に遅延実行する。
 ///
 /// Note: SurfaceGraphicsとSurfaceGraphicsDirtyはVisual.on_addで事前配置されている
 fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, compositor: &Compositor) {

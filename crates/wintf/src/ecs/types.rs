@@ -5,7 +5,6 @@
 //! ゼロコスト `From`/`Into` 変換を提供する。
 
 use bevy_ecs::prelude::*;
-use tracing::warn;
 use windows::Win32::Foundation::{POINT, SIZE};
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D_SIZE_F};
 use windows_numerics::Vector2;
@@ -87,21 +86,6 @@ impl PointF {
 pub struct Size {
     pub width: f32,
     pub height: f32,
-}
-
-impl Size {
-    /// サイズのバリデーション（負の値チェック）
-    ///
-    /// 負の値が検出された場合は警告ログを出力します。
-    /// これはmayレベルの推奨事項であり、実行時エラーとはしません。
-    pub fn validate(&self) {
-        if self.width < 0.0 {
-            warn!(width = self.width, "Size.width is negative");
-        }
-        if self.height < 0.0 {
-            warn!(height = self.height, "Size.height is negative");
-        }
-    }
 }
 
 // ============================================================================
