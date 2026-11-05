@@ -1,8 +1,8 @@
 //! サーフェス状態モジュール（状態層・per-scope の現 surface 状態と静的 bind 集合の所有者）。
 //!
 //! 話者スコープ（`ActorKey`）ごとに独立した現在の表示状態（表示中 surface / 非表示）を
-//! `HashMap` で保持し（`ActorKey` は `Hash+Eq` を持つが `Ord` を持たないため HashMap・design
-//! 状態層）、shell descript 由来の静的 bind 集合を per-scope マップと**同居**して保持する
+//! スコープの昇順に並ぶ `BTreeMap` で保持し（抽選で乱数を引く順をここで決める・design 状態層）、
+//! shell descript 由来の静的 bind 集合を per-scope マップと**同居**して保持する
 //! （要件 4.4）。加えて per-scope の動的着せ替え集合 `dynamic_binds` を保持し、Show 発行の
 //! bind 供給源はこの動的集合を優先し、未束縛 scope は静的既定集合へフォールバックする
 //! （要件 3.1・`mayuna-compose` が予約シームを消費）。
@@ -12,7 +12,7 @@
 //! 不変なら [`ApplyOutcome::Unchanged`] を返して再発行を抑止する（冪等ガード・要件 3.4・DD8）。
 //! 実際の発行（単一発行点）は後続タスク（アクター層 `emit_display`）の責務。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
@@ -129,12 +129,12 @@ pub enum PatternApplyOutcome {
 /// が `dynamic_binds` 優先・不在時 `static_binds` フォールバックで決める）。動的 bind は
 /// `apply_bind` が書き込み、`dynamic_binds` は空のまま起動する。
 pub struct ScopeStates {
-    /// 話者スコープごとの現 surface 状態（`ActorKey` は `Ord` 非対応ゆえ HashMap・design）。
-    scopes: HashMap<ActorKey, ScopeState>,
+    /// 話者スコープごとの現 surface 状態（スコープの昇順に並ぶ・[`ScopeStates::shown_slots`] の順）。
+    scopes: BTreeMap<ActorKey, ScopeState>,
     /// バルーン面のスコープごとの現 surface 状態（シェル面 `scopes` とは**別 map** で同居・
     /// 要件 4.3/4.6）。同型 [`ScopeState`] だが独立し、`apply_balloon` のみが変更する。
     /// シェル面と相互に不変（`apply()` は触らない・`static_binds` はバルーンでは使わない）。
-    balloon: HashMap<ActorKey, ScopeState>,
+    balloon: BTreeMap<ActorKey, ScopeState>,
     /// 静的 bind 集合（起動時に解決・シェルの差し替え [`ScopeStates::rebase_shell`] でだけ替わる・
     /// 要件 4.2/4.3/4.4）。
     ///
@@ -169,8 +169,8 @@ impl ScopeStates {
     /// 本構造体はそれを保持する（替わるのはシェルの差し替え [`ScopeStates::rebase_shell`] だけ）。
     pub fn new(static_binds: DefaultBinds) -> Self {
         Self {
-            scopes: HashMap::new(),
-            balloon: HashMap::new(),
+            scopes: BTreeMap::new(),
+            balloon: BTreeMap::new(),
             static_binds,
             // 空で起動。動的 bind の書き込みは後続タスク（apply_bind）の責務。既定 on/off の
             // 「初期値」はここを pre-populate するのではなく current_binds のフォールバックで実現。
@@ -327,7 +327,7 @@ impl ScopeStates {
         if fallback.surface_ids.is_empty() {
             return Vec::new();
         }
-        let mut shown: Vec<(ActorKey, u32)> = self
+        let shown: Vec<(ActorKey, u32)> = self
             .scopes
             .iter()
             .filter_map(|(scope, st)| match st {
@@ -335,7 +335,6 @@ impl ScopeStates {
                 ScopeState::Hidden => None,
             })
             .collect();
-        shown.sort();
         let mut outcomes = Vec::new();
         for (scope, missing) in shown {
             let candidates = fallback
@@ -668,20 +667,18 @@ impl ScopeStates {
     ///
     /// シェル面 `scopes`・バルーン面 `balloon` の両 map を走査し、`Shown(sid)` のエントリのみを
     /// `(scope, slot, surface_id)` で返す（`Hidden`／未知は除外）。[`LoopRuntime`] は表示中 slot に
-    /// のみ抽選・進行を走らせる（表示中ゲート）ため、この列挙が評価対象を与える。列挙順は `HashMap`
-    /// 由来で非決定ゆえ、消費側（[`LoopRuntime`]）が固定順（scope 昇順→Shell→Balloon）へ整列する
-    /// （D-7）。状態は一切変更しない純粋な読み取りで、`LoopRuntime` は bind／表示状態機械へ書き込まない。
+    /// のみ抽選・進行を走らせる（表示中ゲート）ため、この列挙が評価対象を与える。並びは乱数を引く
+    /// 固定順（scope 昇順→Shell→Balloon・D-7）で、[`ScopeStates::stage_slots`] と同じ。状態は一切変更しない純粋な読み取りで、`LoopRuntime` は bind／表示状態機械へ書き込まない。
     ///
     /// [`LoopRuntime`]: crate::looper::LoopRuntime
     pub fn shown_slots(&self) -> Vec<(ActorKey, Slot, u32)> {
+        let scopes: BTreeSet<&ActorKey> = self.scopes.keys().chain(self.balloon.keys()).collect();
         let mut out = Vec::new();
-        for (scope, st) in &self.scopes {
-            if let ScopeState::Shown(sid) = st {
+        for scope in scopes {
+            if let Some(ScopeState::Shown(sid)) = self.scopes.get(scope) {
                 out.push((scope.clone(), Slot::Shell, *sid));
             }
-        }
-        for (scope, st) in &self.balloon {
-            if let ScopeState::Shown(sid) = st {
+            if let Some(ScopeState::Shown(sid)) = self.balloon.get(scope) {
                 out.push((scope.clone(), Slot::Balloon, *sid));
             }
         }
@@ -731,7 +728,7 @@ impl ScopeStates {
     /// スコープの全部で、見えているかは知らせの窓（知らせが 1 度も無ければ、今までどおり `\b` で
     /// 表示中の面を開いた窓とみなす）。並びはスコープの昇順 → シェル → バルーン。
     pub fn stage_slots(&self) -> Vec<(ActorKey, Slot, u32, bool)> {
-        let scopes: std::collections::BTreeSet<&ActorKey> = self
+        let scopes: BTreeSet<&ActorKey> = self
             .scopes
             .keys()
             .chain(self.balloon.keys())

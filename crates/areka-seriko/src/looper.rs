@@ -148,14 +148,6 @@ pub(crate) struct LoopRuntime {
     shifts: Shifts,
 }
 
-/// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
-fn slot_rank(slot: Slot) -> u8 {
-    match slot {
-        Slot::Shell => 0,
-        Slot::Balloon => 1,
-    }
-}
-
 /// 表の描くコマ 1 枚を合成へ渡すコマにする（一番上と部品で共有）。
 ///
 /// 一番上は描くコマ（[`crate::timeline::visible_frame`] の答え）だけを渡す（働きのコマの `surface_id`
@@ -465,12 +457,8 @@ impl LoopRuntime {
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性・
         // 要件 5.6）。`BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
         let empty_balloon_table = AnimationTable::empty();
-        // 表示中 slot を列挙し、固定消費順（scope 昇順→Shell→Balloon）へ整列する（D-7）。
-        let mut shown = states.shown_slots();
-        shown.sort_by(|a, b| {
-            a.0.cmp(&b.0)
-                .then_with(|| slot_rank(a.1).cmp(&slot_rank(b.1)))
-        });
+        // 表示中 slot は固定消費順（scope 昇順→Shell→Balloon・D-7）で返る。
+        let shown = states.shown_slots();
 
         // (2) 抽選（境界跨ぎ時のみ）: 表示中×非再生中×bind ゲート通過のアニメへ固定消費順で should_fire。
         if crossed {

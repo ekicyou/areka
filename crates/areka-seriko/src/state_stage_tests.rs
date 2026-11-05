@@ -115,3 +115,25 @@ fn without_notes_stage_slots_match_shown_slots() {
         ]
     );
 }
+
+/// 出ている面の列（`shown_slots`）もスコープの昇順 → シェル → バルーン（抽選で乱数を引く順・
+/// 指摘 11）。スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
+#[test]
+fn shown_slots_go_scope_ascending_then_shell_then_balloon() {
+    let mut states = empty_states();
+    let (s0, s1) = (ActorKey::from("0"), ActorKey::from("1"));
+    states.apply(&s1, SurfaceTarget::Show(10));
+    states.apply_balloon(&s1, SurfaceTarget::Show(0));
+    states.apply(&s0, SurfaceTarget::Show(0));
+    states.apply_balloon(&s0, SurfaceTarget::Show(2));
+
+    assert_eq!(
+        states.shown_slots(),
+        vec![
+            (s0.clone(), Slot::Shell, 0),
+            (s0, Slot::Balloon, 2),
+            (s1.clone(), Slot::Shell, 10),
+            (s1, Slot::Balloon, 0),
+        ]
+    );
+}

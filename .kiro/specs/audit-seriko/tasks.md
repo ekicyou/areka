@@ -78,7 +78,7 @@
   - 完了: 新しいテストが緑で、`debug_assert!` を戻すと `panic` で赤になることを確かめた記録がある
   - _Boundary: looper_trigger.rs・looper_trigger_tests.rs_
   - _Requirements: 4.1, 4.2, 6.2, 8.1_
-- [ ] 4.4 スコープの状態を順のある表にし、並べ替えを消す（指摘 11）
+- [x] 4.4 スコープの状態を順のある表にし、並べ替えを消す（指摘 11）
   - スコープとバルーンの状態を順のある表にし、出ている面の列を「スコープの昇順 → シェル → バルーン」で組む。一番上の並べ替えと順位の関数 `slot_rank`、状態の中の並べ替えを消し、誤った説明 3 か所を直す。`slot_rank` を消す前の確かめを記録する
   - 新しいテスト（`state_stage_tests.rs`）: スコープ 0 と 1 の両方にシェルとバルーンを出し、列が「0 シェル → 0 バルーン → 1 シェル → 1 バルーン」になる
   - 完了: 乱数を焼き込んだ抽選の順のテストが期待値を変えずに緑。新しいテストが緑で、スコープを回し終えてからバルーンを回す形に一時的に変えると赤になることを確かめた記録がある
@@ -151,3 +151,4 @@
 - 4.1（着手 HEAD `58cb8736`）: 消す前の rg は `is_trigger_word` 3 件（すべて `looper.rs`）・`is_trigger` 5 件（`parts.rs` 2・`parts_trigger.rs` 3）・`Armed::arm` 7 件（呼び手 6＝`looper_trigger.rs` 1・`parts_trigger.rs` 1・`trigger_tests.rs` 4、doc 1）。消した後は `is_trigger_word`・`is_trigger`・`Armed::is_visible` が 0 件。記録の行は段・文言・欄の並び（`scope slot [part] animation_id started_at_ms`）が前と同じであることを、元のマクロの写しと捕まえて突き合わせて確かめた（`part` が None なら欄は出ない）。変わったのは target だけで、`areka_seriko::looper::top_trigger`／`areka_seriko::parts::part_trigger` が `areka_seriko::trigger` にまとまった（design の約束は段・欄・文言で、target を拾う所はリポジトリに無い。`RUST_LOG` を `areka_seriko::looper` で絞って引き金の行を見る人には見え方が変わる）。
 - 4.2（着手 HEAD `6c912a27`）: 形を変える前の `CallPlays::stop` に関わる所は 5 か所（定義・`run_calls` の呼び出し・`looper_calls.rs`・`parts_calls.rs`・`calls_tests.rs` の偽の表）。`CallPlays` は 11 件で、すべて areka-seriko の中にある。直した後は全部 `stop(animation, always)` になった。新しいテスト `acts_through_mark_never_moves_back` を足して 551 件。`max` を `now_ms` に替えると新しいテストが赤になった（前半「印は 300 へ戻らない」、前半を外すと後半「400 の move が 2 度当たらない」も単独で赤）。`always` の判定に `&& false` を足すと、役者・一番上・部品の呼び出しのテスト 3 本が赤になった。
 - 4.3（着手 HEAD `f1f966a6`）: `glyph_wall_ms` の `debug_assert!` を消した。新しいテスト `glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn` を足して 552 件になった。`debug_assert!` を戻すと、このテストは `looper_trigger.rs:155` の panic で赤になる。`warn!` の文言と欄（`glyph`・`now_ms`）は変えていない。
+- 4.4（着手 HEAD `8a7d79c9`）: 消す前の `rg -n 'slot_rank'` は 2 件（どちらも `looper.rs` で、定義と使う所）、消した後は 0 件。`scopes`・`balloon` を `BTreeMap` にした。古い並べ替えは「スコープ → シェル／バルーン」だけを鍵にした安定な並べ替えで、スコープごとに 1 件なので、新しい組み方とどの場合も同じ順になる。新しいテストを足して 553 件。シェルを全部回してからバルーンを回す形に変えると、新しいテストだけが赤になる。`looper.rs` は 976 行。
