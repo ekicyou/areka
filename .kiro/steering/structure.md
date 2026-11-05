@@ -34,7 +34,6 @@ updated_at: 2026-10-23
 - `dwrite.rs` - DirectWrite API（縦書き対応）
 - `dxgi.rs` - DXGIインターフェイス
 - `wic.rs` - Windows Imaging Component
-- `animation.rs` - Windows Animation API
 - `d2d/` - Direct2D関連
 
 > **合成層の現況（2026-07-05 更新）**: 合成バックエンドは **Windows.UI.Composition（WUC）へ移行完了**（`com/wuc.rs` interop＋`ecs/graphics/wuc_resource.rs`・旧 `com/dcomp.rs`／`dcomp_resource.rs` は撤去済み・`wintf-dcomp-to-wuc-migration` 完了）。WUC はスレッド親和ゆえ WUC を触る graphics schedule は UI スレッド固定。**ULW は `wintf-ulw-removal`（2026-07-05 完了）で撤去済み**: `com/ulw.rs`・`ecs/graphics/compositor.rs`（`WindowD3D11Compositor`）・`compositor_systems/` を削除、`CompositionMode` enum も collapse して **GPU 合成（WUC）単独**へ。別プロセス透過は `WS_EX_TRANSPARENT` 動的トグル方式（`wintf-clickthrough-alpha-toggle` 完了）に一本化。完了 specs: `completed/wintf-ulw-removal`／`completed/wintf-clickthrough-alpha-toggle`。正本は `roadmap.md`／`doc/COMPAT_ARCHITECTURE.md`。
@@ -118,7 +117,6 @@ updated_at: 2026-10-23
 - `runtime/window_factory.rs` - `EcsWindowFactory`（`util::Window::new_ex` 生成・style/pos/title 反映）
 
 **ルート補助モジュール**:
-- `win_state.rs` - ウィンドウ状態管理
 - `win_style.rs` - ウィンドウスタイル定義
 - `api.rs` - Windows API safeラッパー
 - `numerics/` - 2D の数値の型（`point2.rs`・`aabb.rs`・`matrix3x2.rs`・`transform2d.rs`・`calc_hash.rs`・2026-08-19 追加）

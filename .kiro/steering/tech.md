@@ -20,7 +20,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 ## Key Libraries
 
 - **bevy_ecs** (0.19): ECSアーキテクチャの実装基盤。**2026-08-19 に 0.18→0.19 へ更新（spec 外直接コミット `bf2d7950`）**——`ExecutorKind` API が撤去され実行器が改稿された（檻の追随は `dpi-transition-atomicity` マージ時に実施済み・**更新前の性能実測は傾向も持ち越せない**＝roadmap 追記(80)）
-- **bevy_app** (0.19): ECSスケジュールとアプリライフサイクル統合
+- **bevy_app** (0.19): ECSスケジュールとアプリライフサイクル統合（wintf は開発用の依存だけ＝`tests/graphics/surface_optimization_test.rs` が使う）
 - **thiserror** (2): エラー型定義（全クレート共通）
 - **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API
@@ -32,8 +32,6 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **tracing / tracing-subscriber**: 構造化ロギング
 - **toml** (1): sylphya の永続化の書式（`areka-sylphya` の `persist/format.rs`・2026-07-24 `areka-P0-sylphya` で追加・2026-08-19 の bevy 0.19 更新と同時に 0.8→1 へ）。`dola` の `toml` 機能は別に 0.8 のまま（下の dola クレート依存）
 - **windows-numerics** (0.3.1): Windows数値型サポート
-- **ambassador** (0.5.0): トレイト委譲（delegation）マクロ。COM/状態ラッパーのボイラープレート削減に使用
-- **nonmax** (0.5.5): ニッチ最適化された非最大整数型
 - **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
 - **miniz_oxide** (0.9): `.nar`（zip コンテナ）の deflate **伸長**（`areka-nar` の `container` module・意図的依存追加＝2026-09-18 承認済）と、MCP の `dump_surface`／`dump_balloon` が返す PNG の `IDAT` の zlib **圧縮**（`crates/areka` の `mcp/dump_surface_image.rs` だけ・`areka-P0-mcp-dump-images` の設計の議題 1 で 2026-10-04 承認済・`Cargo.lock` に新しいクレートは増えない）。どちらも既定機能を切り `with-alloc` だけを明示する（テスト専用の `sample-ghost-kit` も同じ形で持ち、検体の `.nar` を組む `nar_writer.rs` で deflate **圧縮**を使う）。`areka-nar` は伸長だけで、`areka-nar` の本番コードが `miniz_oxide::deflate` を綴らないことを常設検査 `crates/areka-nar/src/lib_tests.rs` が見張る。zip コンテナの読み手は `areka-nar` が std だけで持つ（`zip`・`flate2` は入れない）。推移的依存は `adler2` 1 本。この「`flate2` は入れない」は `areka-nar` の話で、`flate2` 1.1 は 2026-10-04 から `image` → `png` 経由で本番の木に入っている（下の `image` の項）
 - **unicode-segmentation** (1.13.3): 台詞の文字の単位＝拡張書記素クラスタ（UAX #29）の切り方（`areka-sakura` の `cluster` module だけが使う・`Cargo.lock` に推移依存として既に在った版を直接の依存にした・2026-09-29 `balloon-color-emoji` の設計承認で決定）。版を上げると Unicode の版が変わり、絵文字の切り方が動きうる

@@ -127,7 +127,7 @@
   - 完了の姿: example がビルドでき、振る舞いを変えた 67・68 を 1 度ずつ走らせて期待のログが出る
   - _Requirements: 4.1, 7.1_
 
-- [ ] 6. 依存と見出しを減らす（D）
+- [x] 6. 依存と見出しを減らす（D）
   - 19・20: wintf の `nonmax`・`ambassador`・開発用の `rand` を外し、`bevy_app` を開発用へ移す。根の宣言の `nonmax`・`ambassador` を消す
   - 14（機能）: 根の `windows` の機能 `Win32_UI_Animation` を外す
   - 66（keywords）・85: crates.io の語から `directcomposition` を外し、消費の crate の数の注記を外す
@@ -216,3 +216,4 @@
 - 4.4: research の案が「L80-L148 だけ消す」と行で絞っているファイルは丸ごと消さない（4.4 で守りのテストを巻き添えにし差し戻し）。生成の直後に最初に走る system は生成と同じ刻みで書くので、等値を刻みで見るテストは回す前に `increment_change_tick()` を入れる。
 - 5.1・2.3: 消した example の名（`dcomp_demo`・`wuc_spike`）が `src/ecs/world/mod.rs:151-152` の注記に残る。7.8 の「古くなった名前の言及を 0 件」で直す。
 - 5.2: taffy_flex_demo で Window 1 を副モニターの原点 (-2304,355) へ送ると、DPI 192→144 の伸び縮みで中心を保ち (-2104,530) に着く（大きさの差の半分）。実行時の窓と DPI の規則（`src/` の持ち物）で、正しいかは `audit-wintf-window` の受け持ち。example は着地点を主張しない。
+- 6: `nonmax` は `bevy_ecs` 0.19.1 が推移で引くので `Cargo.lock` に残る。完了の姿の「`Cargo.lock` から消える」は「直接の依存が 0」で満たしたと読む（審査で承認）。同じ「消費 10 crate」の注記が `crates/log-capture-kit/src/lib.rs:28` に残る（範囲の外）。
