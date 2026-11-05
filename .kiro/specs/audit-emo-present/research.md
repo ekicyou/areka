@@ -274,6 +274,7 @@ emo の提示段（三段直列の 3 段目）。上流が合成した原寸の�
 - 場面: 起動と切り替えのときだけなので体感の遅さは小さい。面の多いバルーンで「面ごとの 2 層の重ねが確定」の `info!` と、`descript.txt` が読めないときの `warn!` が面の数だけ並ぶ。
 - 直しの案: 一覧と `descript.txt` の本文を 1 回取って渡す。シェルの 4 回の解析は parsers 側の口の形に縛られるので、このクレートだけでは減らせない（parsers は `audit-parsers-sakura` の範囲）。
 - 範囲の外: 一覧と本文の使い回しは及ばない。解析の回数を減らすなら `crates/areka-parsers/`（C17 で並んで走る `audit-parsers-sakura` の範囲・申し合わせが要る）。
+- **申し合わせ（2026-11-05・`audit-parsers-sakura` と確定）**: 解析の回数は `audit-parsers-sakura` が直す（あちらの指摘 35＝1 回の字句分けから Shell・boxes・undrawn・cursor の 4 つを返す口を parsers に置き、`shell_target.rs:390-392`・`:440` の呼び出しをそれへ替える・あちらの実装の最後の段・あちらの要件 7.10 に記録）。この spec が直すのはバルーンの一覧と `descript.txt` の使い回しだけ。あわせて `build_shell_target_with_boxes` は、署名（`ShellBoxes` → `Vec<BoxDefinition>`・あちらの指摘 76）があちら、可視性（指摘 7）がこちら。後に着地する方が合わせる。
 
 **41. 使われない戻り値と使われない `&mut self`**（`cache.rs:247-278`・`presenter/budget.rs:461-476`）
 - 問題: `ComposeCache::insert` は挿入したエントリの参照を返すが、本番の呼び手（`presenter/show.rs:261-268`）は捨てる。`FrameBudget::display_buffer` は doc が「状態を持たない」と書くのに `&mut self` を取る。
