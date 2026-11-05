@@ -37,7 +37,7 @@ pub struct WindowGraphics {
 
 // SAFETY 条件: 保持する COM/WinRT ポインタの跨スレッド移動（Send）・参照共有（Sync）は
 // 「同一オブジェクトへの呼び出しが同時に実行されない」ことを前提とする。
-// device_context（D2D）は MULTI_THREADED ファクトリ系列のため内部同期されるが、
+// device_context（D2D）は GraphicsCore の MULTI_THREADED の工場から作った装置に属するため内部同期されるが、
 // target（WUC DesktopWindowTarget）は UI スレッドアフィニティを持ち、ECS スケジュール構成
 // （&mut 排他または同一コンポーネントへ並行アクセスしないシステム配置）が安全性条件を担う。
 unsafe impl Send for WindowGraphics {}
