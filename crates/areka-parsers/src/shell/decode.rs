@@ -13,7 +13,7 @@
 //! - `surfaceNNN` ブロックからヘッダ記述子（多 id 形 `N,M`／`N-M` 含む）を append と共通の
 //!   ターゲットパーサで捕捉し、代表 id ＋構成要素枠を持つ `Surface` を積む（要件 4.1/12.5(b)）。
 //!   記述子化失敗は `unwrap_or(0)` で既定 0 に倒す（要件 3.3）。
-//! - 空入力・ヘッダのみ・ヘッダ欠落・未知ブロック・未知行・`Raw` を寛容吸収し
+//! - 空入力・ヘッダのみ・ヘッダ欠落・未知ブロック・未知行を寛容吸収し
 //!   走査を中断しない（要件 3.3/9.2）。
 //!
 //! **ディスパッチ優先順位（重要）**: `kero.surface.alias` と `surface.append10` は
@@ -59,58 +59,26 @@ pub(crate) fn decode(tokens: Vec<Token>) -> Shell {
         definitions: Vec::new(),
     };
 
-    // ブロックの本体行（BlockStart..BlockEnd の間の Line 群）を蓄えるカーソル。
-    // BlockStart でヘッダを開き、以降の Line を積み、BlockEnd でヘッダ＋本体を
-    // ディスパッチする。ブロック外の Line は崩れ入力ゆえ寛容に読み飛ばす（要件 3.3/9.2）。
-    let mut open: Option<(Vec<String>, Vec<Vec<String>>)> = None;
-
     for token in tokens {
         match token {
-            Token::BlockStart(header) => {
-                // 直前の BlockStart が BlockEnd を見ずに再び開いた崩れ入力でも走査を
-                // 止めない。開いていた分をここで確定させてから新ブロックを開く。
-                if let Some((prev_header, prev_body)) = open.take() {
-                    dispatch_block(&mut shell, &prev_header, &prev_body);
-                }
-                open = Some((header, Vec::new()));
-            }
-            Token::Line(fields) => {
-                // ブロック本体行はカーソルに蓄える。ブロック外の Line は吸収する。
-                if let Some((_, body)) = open.as_mut() {
-                    body.push(fields);
-                }
-            }
-            Token::BlockEnd => {
-                // ブロック終端でヘッダ＋本体をディスパッチする。
-                if let Some((header, body)) = open.take() {
-                    dispatch_block(&mut shell, &header, &body);
-                }
-            }
+            Token::Brace { header, body } => dispatch_block(&mut shell, &header, &body),
             // トップレベル行の `animation-sort`/`collision-sort` を値化する（要件 12.5(a)/1.6）。
             // それ以外（charset 行の非保持・要件 3.1 等）は寛容に読み飛ばす（要件 3.3/9.2）。
-            Token::TopLevel(fields) => {
-                decode_sort_key(&mut shell, &fields);
-            }
-            // 不正断片は寛容に読み飛ばす（要件 3.3/9.2）。
-            Token::Raw(_) => {}
+            Token::TopLevel(fields) => decode_sort_key(&mut shell, &fields),
+            // 崩れの知らせは `parse_all` が `ShellIssue` へ写す（ここでは読まない）。
+            Token::Unclosed { .. } | Token::Reopened { .. } => {}
         }
-    }
-
-    // BlockEnd を見ずに EOF に達した崩れ入力（未閉じブロック）でも、開いていた分を
-    // 取りこぼさずディスパッチする（走査を中断しない・要件 9.2）。
-    if let Some((header, body)) = open.take() {
-        dispatch_block(&mut shell, &header, &body);
     }
 
     shell
 }
 
-/// ブロックヘッダ（`BlockStart` の CSV フィールド列）でブロック種別を判定し振り分ける。
+/// ブレスの見出し（CSV フィールド列）でブロック種別を判定し振り分ける。
 ///
 /// 優先順位は `descript` → `kero.surface.alias` → `surface.append*` → `surfaceNNN` → 未知。
 /// alias/append は "surface" を含むため plain `surfaceNNN` より先に判定する（誤分類回避）。
 ///
-/// `body` は BlockStart..BlockEnd 間の本体行（CSV フィールド列）。surface ブロックの
+/// `body` は閉じたブレスの本体行（CSV フィールド列）。surface ブロックの
 /// element/collision decode に用いる。
 fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
     let head = header.first().map(String::as_str).unwrap_or("");

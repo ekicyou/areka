@@ -13,8 +13,8 @@
 //!   欠けた欄は空文字列にする。
 
 use super::decode::parse_targets;
-use super::lexer::{Token, lex};
 use super::model::AppendTarget;
+use super::parse::parse_all;
 
 /// surfaces.txt の箱に関わるブレスの転記（ブレスの登場順）。
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -68,48 +68,32 @@ pub struct BoxElementLine {
 
 /// surfaces.txt の文面から箱に関わるブレスを登場順に転記する（純粋・失敗しない）。
 ///
-/// 字句解析は画像の読み手と同じ `lexer::lex`。閉じたブレス（`BlockStart`..`BlockEnd`）だけを
-/// 見る。見出しの判定順は画像の読み手と同じく `surface.append*` を `surface*` より先にする
-/// （`kero.surface.alias` は `surface` で始まらないので当たらない）。
+/// `parse_all` の射影。閉じたブレスだけを見る。見出しの判定順は画像の読み手と同じく
+/// `surface.append*` を `surface*` より先にする（`kero.surface.alias` は `surface` で始まらないので当たらない）。
 pub fn parse_boxes(text: &str) -> ShellBoxes {
-    let mut definitions = Vec::new();
-    let mut open: Option<(Vec<String>, Vec<Vec<String>>)> = None;
-
-    for token in lex(text) {
-        match token {
-            Token::BlockStart(header) => open = Some((header, Vec::new())),
-            Token::Line(fields) => {
-                if let Some((_, body)) = open.as_mut() {
-                    body.push(fields);
-                }
-            }
-            Token::BlockEnd => {
-                if let Some((header, body)) = open.take() {
-                    definitions.extend(transcribe_block(&header, body));
-                }
-            }
-            Token::TopLevel(_) | Token::Raw(_) => {}
-        }
+    ShellBoxes {
+        definitions: parse_all(text).boxes,
     }
-
-    ShellBoxes { definitions }
 }
 
-/// ブレス 1 つを、箱に関わるものなら転記する（他のブレスは `None`）。
-fn transcribe_block(header: &[String], body: Vec<Vec<String>>) -> Option<BoxDefinition> {
+/// 閉じたブレス 1 つを、箱に関わるものなら転記する（他のブレスは `None`・`parse_all` が呼ぶ）。
+pub(crate) fn transcribe_block(header: &[String], body: &[Vec<String>]) -> Option<BoxDefinition> {
     let head = header.first().map(String::as_str).unwrap_or("");
     let rest = header.get(1..).unwrap_or(&[]);
 
     if head.starts_with("balloon.") {
         // 見出しに `,` があっても原文のまま名前へ残す（名前の検証は畳み込み）。
         let name = header.join(",")["balloon.".len()..].to_string();
-        return Some(BoxDefinition::Brace(BoxBrace { name, lines: body }));
+        return Some(BoxDefinition::Brace(BoxBrace {
+            name,
+            lines: body.to_vec(),
+        }));
     }
     if let Some(number) = head.strip_prefix("surface.append") {
-        return Some(BoxDefinition::Append(surface_lines(number, rest, &body)));
+        return Some(BoxDefinition::Append(surface_lines(number, rest, body)));
     }
     if let Some(number) = head.strip_prefix("surface") {
-        return Some(BoxDefinition::Surface(surface_lines(number, rest, &body)));
+        return Some(BoxDefinition::Surface(surface_lines(number, rest, body)));
     }
     None
 }

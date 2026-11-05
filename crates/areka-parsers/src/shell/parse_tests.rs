@@ -11,7 +11,7 @@ use super::model::{
     Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
     Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
-use super::parse;
+use super::{ShellIssue, parse, parse_all};
 
 /// 空入力は空 `Shell`（surfaces/appends/aliases すべて空）を返す（要件 2.2）。
 #[test]
@@ -229,4 +229,32 @@ animation1.pattern0,overlay,20,0,0,0
         shell.surfaces[0].animations[1].interval,
         Interval::Random { k: 4 }
     );
+}
+
+/// 終わりで閉じていないブレスは中身を今どおり落とし（Shell・箱・描けない行のどれにも入らない）、
+/// `parse_all` が見出しと行の番号を `UnclosedAtEnd` として返す。前のブレスは読む（指摘 34）。
+#[test]
+fn parse_all_reports_unclosed_final_brace() {
+    let input = "\
+surface0
+{
+element0,overlay,a.png,0,0
+}
+surface9
+{
+element0,overlay,x.png,0,0
+element1,replace,y.png,0,0
+";
+    let text = parse_all(input);
+    assert_eq!(text.shell.surfaces.len(), 1);
+    assert_eq!(text.boxes.len(), 1);
+    assert!(text.undrawn.is_empty());
+    assert_eq!(
+        text.issues,
+        vec![ShellIssue::UnclosedAtEnd {
+            heading: "surface9".to_string(),
+            line: 5,
+        }]
+    );
+    assert_eq!(text.shell, parse(input));
 }
