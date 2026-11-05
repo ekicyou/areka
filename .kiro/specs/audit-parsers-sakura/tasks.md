@@ -1,0 +1,191 @@
+# 実装計画: audit-parsers-sakura
+
+> 指摘の番号は `research.md` 3 節の audit の通し番号。各指摘の直し・触る所・落ちるテストの名は `design.md` の「指摘ごとの直し（一覧）」が正本で、タスクはそれを指摘の番号で引く。設計の「タスクのまとまり」の T1〜T27 は、下のサブタスクに 1 対 1 で対応する（括弧の中に T の番号）。
+> 要件 1（洗い出し）と 7.8（SSP の測り）はギャップ分析と設計の段で済んでいる。タスクでは、その結果を使う所と、要件 1 と同じ作法でかけ直す所（8.2）に載せる。
+> どのタスクも、消す前にツリー全体（テスト・fixture・設定・文字列）で使われていないことを確かめ（要件 2.7）、終わったら触ったクレートのテストが緑であることを確かめる。振る舞いが変わる直し（17・25・27・29・36 ほか）では、直接の呼び手（`areka-emo-compose`・`areka-seriko`・`areka-emo-present`・`areka` の check_script と警告を数えるテスト）のテストも回し、赤を最後の全体テストまで持ち越さない。`strict.rs` の 5・15 行目と `sysvar.rs` の 44 行目の `doc/` の名指しは変えない（要件 4.5）。
+
+- [ ] 1. parsers の基礎（kv・charset・balloon）を直す
+- [ ] 1.1 (P) kv の行つきの分割を 1 つにし、鍵の大文字小文字をそろえる表を足す（T1）
+  - 行の番号つきの分割を package から kv へ移し、今の分割をその射影にする。移すテスト 3 本も kv へ移す（13）
+  - 空の値を落とし鍵を小文字にそろえる表を kv に足す。大文字と小文字の綴りが混ざって 2 回出たら後の行が勝つ（11 の口）
+  - 鍵の空の行を飛ばすテストを足す（19）・kv の写しのテストと見出しを消す（53 の kv）
+  - kv のテストに `lowercased_folds_keys_and_drops_empty`・`empty_key_lines_are_skipped` があって緑で、package の読みの振る舞いは変わらない
+  - _Boundary: parsers kv_
+  - _Requirements: 2.1, 2.6, 2.7, 3.1, 7.1, 7.10_
+- [ ] 1.2 (P) charset の記録と判定を直し、parsers にログ捕捉の dev-dependency を足す（T2）
+  - `areka-parsers` の dev-dependency にワークスペースの `log-capture-kit` を足し、理由の注釈をほかの行と同じ形で付け、`tech.md` に登記する。`Cargo.lock` で変わるのが `areka-parsers` の塊の 1 行だけであることを確かめる
+  - 解けないラベルと壊れた並びの記録を `warn!` に上げる（17）・ASCII と互換でないラベルを既定へ倒す（55）
+  - SJIS の字を `Ansi` で読む形にテストを書き直す（20）・古い 3 行と「タスク 2.3」の文を消す（22）・charset の写しのテストを消す（23・53 の charset）・`lib.rs` と charset の見出しの doc を今の姿へ（63 の charset と `lib.rs`）
+  - `unresolved_label_and_malformed_bytes_warn` が WARN を捕まえ、`non_ascii_compatible_labels_fall_back` が緑
+  - _Boundary: parsers charset, areka-parsers Cargo.toml_
+  - _Requirements: 2.1, 2.7, 3.1, 4.4, 5.6, 7.1, 7.3, 7.4, 7.6_
+- [ ] 1.3 (P) balloon の数の鍵の崩れをデータで返し、写しと公開を減らす（T3）
+  - 鍵が在って読めない数の値（空を含む）を 1 件ずつ集め、バルーンのモデルから読めるようにする。`windowposition.x` の語は積まない（18 の parsers 側）
+  - 矢印のファイル名の空を「無し」にする（21）・写しのテストを消す（23 の balloon）・テストを `Ansi` で非 ASCII を確かめる形へ（54）
+  - 写しの読みを減らし生の値の読みを 1 つの口に寄せる（56・57）・内部だけの組み立ての口を `pub(crate)` に（61）・テストの道具の写しを消す（62）・balloon の doc を今の姿へ（63 の balloon）
+  - `numeric_keys_report_unreadable_values`・`arrow_filename_empty_is_absent` が緑で、読み込む側（emo-present）は今のままコンパイルが通る
+  - _Boundary: parsers balloon_
+  - _Requirements: 2.1, 2.7, 3.1, 7.1, 7.3, 7.6_
+
+- [ ] 2. package（シェルと bindgroup の読み）を直す
+- [ ] 2.1 シェル名の確かめと、ゴーストの descript の鍵の扱いを直す（T4）
+  - 既定のシェル名を「成分がちょうど 1 つの普通の名」のときだけ使い、通らない空でない値は値とゴーストの根を `warn!` して `master` へ（1）。空の値と `.` も `master`（2）
+  - ゴーストの descript を 1.1 の小文字の表で読む（11）
+  - 1 の `warn!` は 1.2 で足した `log_capture_kit::capture` で確かめる。一時の根は `temp-path-kit`（ワークツリーの `target` の下）
+  - `resolve_shell_tests.rs` の親へ逃げる・絶対パス・空と `.`・鍵の大文字小文字・空の値の 5 本が緑
+  - _Depends: 1.1, 1.2_
+  - _Requirements: 2.1, 3.1, 5.4, 7.1, 7.6, 7.10_
+- [ ] 2.2 (P) bindgroup の読みの崩れを記録し、数の形を締める（T5）
+  - シェルの descript が NotFound 以外で読めないときにパスと誤りを `warn!`（9）・崩れた bindoption と 0/1 でない `.default` を鍵・行・値つきで `warn!`（14）
+  - bindgroup の番号を「数字だけ・先頭の 0 は `0` のときだけ」で読む（47）・空のカテゴリを断る（48）・パーツ名の無い `.name` の記録に鍵と行を載せる（49）
+  - 記録は 1.2 で足した `log_capture_kit::capture` で確かめ、一時の根は `temp-path-kit`
+  - `unreadable_shell_descript_warns_and_reads_no_binds` ほか design の一覧の 9・14・47・48・49 のテストが緑
+  - _Boundary: parsers package resolve_bind_
+  - _Depends: 1.1, 1.2_
+  - _Requirements: 2.1, 3.1, 3.2, 5.2, 5.4, 7.1, 7.6_
+
+- [ ] 3. さくらスクリプトの字句と振り分けを直す（parsers sakura）
+- [ ] 3.1 字句と振り分けの細かな崩れを直す（T6）
+  - 非有限の `\n` の割合を既定 1.0 へ倒して記録の印を残す（3）
+  - 引数の途中の引用符を字として扱う（24）
+  - 旧形の選択肢の印に 1 桁の数を受け、`\q0[ID][タイトル]` の字が吹き出しに漏れないようにする（26・設計の討議の議題 3＝選択肢として出すのは 8.1 で起票）
+  - 末尾の `\` を空の素のタグにし、組み直しの doc を「おおよそ」に（64）
+  - design の一覧の 3・24・26・64 のテストが緑で、`\q10[a][b]` は今どおり
+  - _Requirements: 2.1, 3.1, 7.1, 7.6, 7.8_
+- [ ] 3.2 旧形の題と、引数を取らないタグの後の `[` を正典どおりに読む（T7）
+  - `\q…[ID]` の直後の閉じた `[…]` を 1 つの字として出す（25）
+  - 引数を取らないタグの一覧（`+` と `v` は入れない＝設計の討議の議題 2）の後の `[` を字のまま出す（27・SSP で測った結果＝research.md 11 節）
+  - 前提が変わる 6 本のテストを新しい振る舞いへ書き直し、確かめの本数を減らさない
+  - `legacy_q_title_followed_by_text_folds`・`bracket_after_no_arg_tag_is_text` が緑で、`\+[x]` と `\v[1]` の扱いは今どおり
+  - _Requirements: 2.1, 3.1, 3.3, 7.1, 7.3, 7.6, 7.8_
+- [ ] 3.3 `Move` の腕と `#[non_exhaustive]` を消し、知らないタグの捨てを記録する（T8・範囲の外の呼び手まで）
+  - `\!` の move を汎用キャリアへ流し、`Move`・その引数の型・専用の振り分けと compile の腕を消す（28）
+  - 命令の列の 3 つの型から `#[non_exhaustive]` と文を消し、compile と `crates/areka/src/mcp/check_script_judge.rs` の `_` を全部の腕に（30）
+  - compile が知らないタグの Raw を `warn!(event = "raw_ignored", head, bytes)` で捨てる（29）
+  - `move_bang_is_generic_command`・`raw_is_dropped_with_one_warning` が緑で、`areka` を含むワークスペースがコンパイルを通る
+  - _Requirements: 2.1, 2.7, 3.1, 4.1, 7.1, 7.3_
+- [ ] 3.4 振り分けの包みと短縮語の形を整える（T9）
+  - 3 つの包みのうち素通しの Raw の包みだけを畳み、`doc/` が名指す 2 つは残して見出しの理由を「名指されているので残す」に（65・設計の討議の議題 6）
+  - 短縮語を 3 つの腕の型にし、守りの腕とそのテストを消す（66）・テストの見出しを直す（67）
+  - sakura のテストが緑で、`doc/` の中身は変わらない
+  - _Requirements: 2.1, 4.5, 4.6, 7.1_
+- [ ] 3.5 sakura の写しのテストを消す（T10）
+  - 写しのテストを research.md 12 節の「残す側」の表どおりに消す（31）・`sakura/model_tests.rs` とその宣言を消す（32）
+  - 消した後も `areka-parsers` のテストが緑で、残す側のテストが同じ振る舞いを確かめている
+  - _Depends: 3.3_
+  - _Requirements: 2.1, 2.7, 3.3, 7.1_
+
+- [ ] 4. シェル（surfaces）の読みを 1 回にし、崩れをデータで返す（parsers shell・公開の形を壊さない）
+- [ ] 4.1 シェルを 1 回の字句分けで読み、崩れを返す口を置く（T11）
+  - 字句の段の結果を「閉じたブレスの列・トップレベル・終わりで閉じていない・次の `{` で区切り直した」の 4 つにし、決して走らない枝と生の行の口を消す（35・68）。終わりで閉じていないブレスは中身を今どおり落として崩れを積み、`lexer_tests.rs:207` を書き直す（34）
+  - 見出しの決め（33・71）: `{` だけの行の見出しは areka の読むブレスの名の行を選び、間の行はコメントとして捨てる。開いた本体の中の `{` で前のブレスを閉じて崩れを積む
+  - 1 回の読みで 4 つの結果と崩れを返す口を置き、今の 4 つの公開の関数はその射影として残す。崩れの型は記録の重さと文言を返す口を持つ（記録そのものは出さない・設計の討議の議題 7）
+  - `brace_line_inside_body_starts_new_brace`・`non_brace_line_between_header_and_brace_is_comment`・`parse_all_reports_unclosed_final_brace` が緑で、今の boxes・cursor・undrawn・parse のテストが変更なしで緑
+  - _Requirements: 2.1, 2.6, 3.1, 7.1, 7.6, 7.10_
+- [ ] 4.2 descript の並びの鍵・ウェイトの範囲・範囲の幅の上限・読めない数を直す（T12）
+  - `descript` ブレスの中の並びの鍵を読む（4・ukadoc で確かめた正典＝research.md 4 節）
+  - ウェイトの `最小-最大` は小さい方を待ちにして崩れを積む（5）
+  - シェル全体の範囲の幅の合計が 8193 を越える記述子を飛ばして崩れを積む。番号の値にはかけず、幅は `u64` で数え、除外の範囲にはかけない（6・設計の討議の議題 1）。`audit-emo-compose` は fold の範囲の展開をこの上限だけに任せた（2026-11-05 の知らせ）ので、上限を緩めたり外したりするときは先に相手へ伝える
+  - 読めない数は 0 にせず飛ばして崩れを積み、範囲の端を trim し、見出しがちょうど `surface.alias` のブレスは読まない（36）
+  - design の一覧の 4・5・6・36 のテスト（上限の境と全体の合計を含む）が緑
+  - _Depends: 4.1_
+  - _Requirements: 2.1, 2.4, 2.8, 3.1, 3.3, 7.1, 7.3, 7.6_
+- [ ] 4.3 shell の写しと doc を整える（T13）
+  - `shell/model_tests.rs` とその宣言を消す（37）・surface の本体の包みを畳む（69）・欄の読みと描画メソッドの判定を 1 つに寄せる（70）
+  - アニメの番号から位置を引く表を置き注釈を消す（72）・写しのテストを 1 本ずつに（73）・doc を今の姿へ（74）・テストのファイル名を改める（75）
+  - `areka-parsers` のテストが緑で、アニメの順を守るテストが変更なしで緑
+  - _Depends: 4.2_
+  - _Requirements: 2.1, 2.7, 3.3, 7.1_
+
+- [ ] 5. 台本の組み立て（areka-sakura compile）を直す
+- [ ] 5.1 合図の開始時刻を整数 ms で積む（T14）
+  - 開始時刻を整数 ms で `saturating_add` して積み、各命令の頭で 1 回だけ秒にする。字の再生の長さの公開の関数は形も値も変えない（8）
+  - `shortcut:` の注釈（1 ms 未満の待ちを足すときに見直す）を置く
+  - `start_times_sit_on_the_millisecond_grid` が緑で、期待値が変わるのは design の挙げる 2 本だけ
+  - _Requirements: 2.1, 3.1, 3.3, 7.1, 7.10_
+- [ ] 5.2 `SakuraError` と `thiserror` を外し、再輸出と公開を締める（T15）
+  - `error.rs` を消し、非有限の Tick を `error!(tick = t, ..)` で記録して捨てる。`areka-sakura` の `thiserror` を外し、`Cargo.lock` で変わるのが 1 行だけであることを確かめる（41）
+  - 契約の 8 つの再輸出を消す（42）・選択待ちの区切りの doc を書く（92）・後始末の付け足しを `pub(crate)` に（93）
+  - `non_finite_tick_is_ignored_and_playback_survives` が ERROR 2 件の `tick` を捕まえて緑
+  - _Requirements: 2.1, 2.7, 3.1, 4.4, 5.2, 7.1, 7.4, 7.5_
+- [ ] 5.3 strict の判定を 1 か所にし、choicetimeout の警告のテストを足す（T16・範囲の外の呼び手まで）
+  - `choicetimeout` を 1 回だけ読む関数と、読みの印と命令から検出の位置を決める 2 つの関数を置き、compile の 2 か所と `check_script_judge.rs` から使う（43）
+  - 読めない `choicetimeout` が WARN を 1 回出して値が無いことを確かめるテストを足す（7.11(a)）
+  - `strict.rs` の 5・15 行目の名指しは変えない
+  - `strict_tests.rs` の表のテスト（読みの印の全部・6 通り）と `unreadable_choice_timeout_warns_once_readable_none` が緑
+  - _Depends: 3.3_
+  - _Requirements: 2.1, 2.6, 3.1, 4.1, 4.5, 7.1, 7.11_
+- [ ] 5.4 compile の写しとテストの道具を整える（T17）
+  - 写しのテストを消し、2 つの確かめを sysvar の決定論のテストへ移す（44）・使われないテストと道具を消す（45）
+  - 合図の出し口を 1 つにする（87）・後始末の終わりの時刻を表から読む（88）・比べの道具と記録の受け手を共有の道具へ（89・90）・選択の腕で選択ありの印を立てる（91）
+  - `areka-sakura` のテストが緑で、確かめの本数は消した写しの分のほかは減らない
+  - _Depends: 3.3_
+  - _Requirements: 2.1, 2.7, 3.3, 7.1_
+
+- [ ] 6. 再生（areka-sakura drive・strict の受け・sysvar）を直す
+- [ ] 6.1 選択の解決の後に来ている項目を出して完了を見る（T18）
+  - 解決が通ったら同じ処理の中で最後に受けた時刻のまま 1 回 tick して完了を見る（7 の drive 側）
+  - 合わない解決を `warn!`（39）・完了の送り口を 1 つに（77）・落とす直前の止めと `mut` を消す（78）・選択の通知を戻す継ぎ目を消す（79）
+  - 区切りの Tick の後に Tick を 1 つ挟む形（A）の `resolved_choice_flushes_due_epilogue_before_following_close` と `mismatched_resolve_choice_is_warned` が緑で、`TalkDone{Ended}` が 1 回だけ出る（挟まない形 B は dola の 1 行と一緒に 7.5 で足す）
+  - _Requirements: 2.1, 3.1, 3.2, 5.3, 7.1, 7.4_
+- [ ] 6.2 再生のテストの待ちを決定論にし、strict の受けと sysvar の記録を整える（T19）
+  - 再生のテストの否定の確かめを時限つきの受け取りに直す（40・84）・道具を共有の支えへ寄せ、`StartTalk` の字面を組み立ての関数に（85）
+  - 組と strict の受けからゴースト名を外す（80）・strict の受けの公開を締める（81）・sysvar のフォールバックの記録に台本を書かず名と長さを書く（82）・写しのテストを消す（83）
+  - `sysvar.rs` の 44 行目の名指しは変えない
+  - `fallback_warning_names_vars_not_script` が緑で、書き直した否定の確かめが固定の待ちでなく時限つきの受け取りで決まる
+  - _Requirements: 2.1, 3.1, 3.2, 3.3, 4.5, 7.1_
+
+- [ ] 7. 範囲の外の呼び出し元と、申し合わせた行を直す（最後の段・要件 7.10）
+  - 各サブタスクの頭で、相手（`audit-emo-present`・`audit-emo-compose`・`audit-seriko`・`audit-ghost-catalog`）が main に着地したかを見る。着地していれば main を取り込んでその上で直し、走っていれば伝言で順を決める。同じ行がぶつかったら後から着地する側が合わせる。相手のファイルの指摘は直さない
+- [ ] 7.1 `Surface.id` と `ShellBoxes` を消し、呼び手を全部直す（T20）
+  - surface の代表の番号を消し、atlas はブレスの全部の番号を使う（38）
+  - 1 欄の包みを消し、箱の読みは箱の定義の列を直に返す（76）
+  - emo-compose・emo-present・seriko・emo-text・emo-atlas（`animated_tests.rs`・`samples_e2e_tests.rs`・`emo2_e2e.rs` ほか）・areka のテストと `crates/areka/examples/` の字面と読みを直す（確かめの中身は変えない・parsers の `Surface` でない同名の型は触らない）
+  - 36 で変わる emo-compose の fold とテストの期待値を直す（要件 7.10）
+  - `audit-emo-compose` が main に着地して fold の `merge_brace` が無くなっていたら、読み手が 0 になったアニメの `interval_written` の欄を消し、ワークスペースの全部の字面と書き手（parsers の decode・emo-atlas・seriko・compose のテストの部品ほか）から外す（2026-11-05 の相手の知らせ・要件 6.2 の「直しが生んだ指摘」と同じ扱い）。着地前なら 8.2 のかけ直しで拾う
+  - `bind_only_paths_requires_every_id_of_range_brace` が緑で、examples を含むワークスペース全体（`cargo build --workspace --all-targets`）がコンパイルを通る
+  - _Depends: 4.3_
+  - _Requirements: 2.1, 2.7, 3.3, 4.1, 4.2, 4.3, 7.1, 7.3, 7.10_
+- [ ] 7.2 bindgroup をスコープ番号の表にし、死んだ引き口を消す（T21）
+  - 3 重の欄をスコープ番号を鍵にした 1 つの表にし、`#[non_exhaustive]` を付けない（15）。seriko の 3 枝を表から引く 1 本へ畳む（seriko の中身には触らない）
+  - 死んだ引き口と、そのテスト・`package/model_tests.rs`・写しのテストを消す（12・16・51）
+  - 36 で seriko の別名の引きの期待値が変わらないことを確かめる
+  - `resolve_bind_tests.rs` と seriko の `bind_tests.rs` の表のテストが緑で、`areka-ghost` と `areka` の offline_dump がコンパイルを通る
+  - _Depends: 2.2, 4.2_
+  - _Requirements: 2.1, 2.7, 3.3, 4.1, 4.2, 4.3, 7.1, 7.3, 7.4, 7.10_
+- [ ] 7.3 素通しの `resolve` を消し、SHIORI の置き場の綴りを 1 つにする（T22）
+  - `resolve` を消し、呼び手を `resolve_with_shell(.., None)` へ。`crates/areka/src/placement/persist.rs` はゴースト名の読みと SHIORI の置き場の関数へ（46・50）
+  - SHIORI の置き場の関数を公開し、ネイティブの区切りで組む。`AskerId` を組むテストを直す（10）
+  - package の doc を今の姿へ（52）
+  - `shiori_dir_uses_native_separators`・`load_restored_state_survives_missing_default_shell` が緑で、`areka-ghost` のテストが緑
+  - _Depends: 2.1_
+  - _Requirements: 2.1, 2.7, 3.1, 4.1, 4.2, 4.3, 7.1, 7.6, 7.10_
+- [ ] 7.4 emo-present の読み込みを 1 回読みへ替え、崩れを記録する（T23）
+  - 頭で `shell_target.rs` の行数を測り直す。1,000 行を越える見込みなら新しいファイルを足さずに収まる形を進行役と決める（設計の討議の議題 7）
+  - `shell_target.rs` の 4 回の読みを 1 回読みの口へ替え、崩れを記録の重さどおりに出す（範囲の上限は `error!`・ほかは `warn!`・記録を出すときだけ）（35・33・34・36・5・6・相手の 40）
+  - `balloon_definitions.rs` の今の矢印の `warn!` の輪へ数の鍵の崩れを足す（18・文の頭と欄は変えない）
+  - `balloon_definitions_tests.rs` が緑で、範囲の上限を越えるシェルで ERROR が 1 件・閉じていないブレスで WARN が 1 件出るテストが緑。`shell_target.rs` は 1,000 行以下
+  - _Depends: 1.3, 4.1, 4.2, 7.1_
+  - _Requirements: 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 7.1, 7.6, 7.10_
+- [ ] 7.5 charset の宣言を全体から探し、dola の 1 行・台帳の 2 行・古い行の番号を直す（T24）
+  - charset の先読みを窓でなくファイル全体の行で見て、位置を問わず宣言を見つける（7.11(b)・58・設計の討議の議題 5）。`areka-nar` の `manifest_tests.rs` を「宣言が使われる」へ直し、`audit-ghost-catalog` に伝える
+  - dola の `notify_barrier_resolved` で集めを空にする 1 行を入れ、解決が次の Tick より先に来る形（B）のテストを足す（7・設計の討議の議題 4）
+  - 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 2 行を 4 の直しの事実に合わせる・`spine_conformance_script.rs` の古い行の番号を名で指す（86）
+  - `non_ascii_before_declaration_is_still_found`・4,096 バイトを越える宣言のテスト・drive の B のテスト・dola のテストが緑で、`doc/` の差分は台帳の 2 行だけ
+  - _Depends: 1.2, 4.2, 6.1_
+  - _Requirements: 2.1, 2.4, 3.1, 4.2, 5.6, 7.1, 7.6, 7.9, 7.10, 7.11_
+
+- [ ] 8. 仕上げの確かめ
+- [ ] 8.1 新しい機能と残る危うさを起票する（T25）
+  - `/kiro-discovery` で 3 件を起票する: ウェイトの `最小-最大` からランダムに選ぶ振る舞い（7.7）・トークの終わりの時刻が ms の格子から 1 ulp 外れうる件（design の「残る危うさ」）・旧形の `\q` を選択肢として出す振る舞い（設計の討議の議題 3）
+  - 3 件が roadmap に載り、brief が在る
+  - _Requirements: 7.7_
+- [ ] 8.2 範囲へ audit をかけ直し、新しい指摘 0 件を記録する（T26）
+  - 要件 1 と同じ作法（範囲だけ・全部読む・上限を外して全件）で `/ponytail:ponytail-audit` をかけ直す。新しい指摘が出たら要件 2 と同じ扱いで直してかけ直す
+  - 59・60 を残した理由（要件 2.2 の ①・完了 spec の要件 5.1）を検証の記録に書く
+  - 検証の記録に、新しい指摘の件数「0」と残した 2 件が明示されている
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.2, 2.3, 2.5, 4.7, 6.1, 6.2, 6.3, 7.2_
+- [ ] 8.3 全体テストを回して緑を確かめる（T27）
+  - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（GPU のテストは実 GPU のまま・足していない）。範囲の外の「警告 0 件」を数えるテストが 17・29 の新しい `warn!` で赤になれば、検体を見て直す
+  - 全体テストが緑で、本 spec が触ったファイルがどれも 1,000 行以下
+  - _Requirements: 2.8, 5.1, 5.5, 6.4_
