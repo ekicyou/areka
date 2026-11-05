@@ -67,10 +67,10 @@
 use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow,
-    GetWindow, HWND_BOTTOM, HWND_TOP, IsIconic, IsWindow, IsWindowVisible, SW_HIDE, SW_MINIMIZE,
-    SW_RESTORE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-    ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
+    DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, HWND_BOTTOM,
+    HWND_TOP, IsIconic, IsWindow, IsWindowVisible, SW_HIDE, SW_MINIMIZE, SW_RESTORE,
+    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, w};
 
@@ -81,29 +81,17 @@ use super::{clear_window_owner, set_window_owner};
 // ---------------------------------------------------------------------------
 
 pub(super) fn create_probe_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を生成し、活性化を奪わずに
-    // 表示状態へ移す。
+    let hwnd = crate::api::create_test_window(
+        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
+        WINDOW_STYLE(WS_POPUP.0),
+        None,
+        title,
+    );
+    // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を、活性化を奪わずに表示状態へ移す。
     unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        let hwnd = CreateWindowExW(
-            WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            10,
-            10,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a probe window");
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        hwnd
     }
+    hwnd
 }
 
 thread_local! {

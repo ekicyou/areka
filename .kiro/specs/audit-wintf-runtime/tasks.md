@@ -68,7 +68,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.2, 7.1, 7.2_
 
 - [ ] 3. 窓の型と Win32 の口を直す（W1・W2・この順に回す）
-- [ ] 3.1 (P) 古い窓の型を消し、試験の窓の補助を置く（W1）
+- [x] 3.1 (P) 古い窓の型を消し、試験の窓の補助を置く（W1）
   - 17・18: 使われない窓の状態の型と窓の型の組み立てを、そのテストと allow ごと消す。クリック透過と重ねの相棒の適用とそのテストは残す
   - 84: `api.rs` の `#[cfg(test)]` に、見えない 0×0 の試験の窓を作る補助と、panic でも必ず壊してから投げ直す補助を置き、範囲の中の 5 か所で使う。調べの窓は補助で作ってから見せ、位置を (0,0) にそろえる
   - 置き場所（`api.rs` の `#[cfg(test)]`・`ecs/test_support.rs` には置かない）を `audit-wintf-graphics-world` へ知らせたことを確かめ、未着なら知らせ直す
@@ -210,3 +210,4 @@
 
 - 1.5: `crates/wintf/build.rs` の `areka_palette_samples` の cfg は見本のフォルダ（wintf の包みの外）に `rerun-if-changed` を付けていない。見本を後で消すとパレットの 6 本は「無視」でなく赤になる（黙らない）。在らぬフォルダに付けると毎回 build.rs が回るので付けない判断（審査で承認）。
 - 消した名前の grep は `.kiro/specs/` だけを外して引く（`.kiro/steering/` も数に入る）。2.3 で `structure.md:113` の取りこぼしが審査で見つかった。
+- 3.1: `ambassador` は `Cargo.toml` 2 か所・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md:35` に残る（タスク 6 で直す。THIRD-PARTY-NOTICES は生成物なら生成器で）。
