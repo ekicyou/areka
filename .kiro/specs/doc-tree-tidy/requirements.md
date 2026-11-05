@@ -18,7 +18,7 @@
 | `doc/PASTA_PROFILE.md` | `doc/pasta-profile.md` | 名前の決まりに合わせる |
 | `doc/shiori/equivalence_evidence.toml` | `doc/shiori/equivalence-evidence.toml` | 名前の決まりに合わせる |
 
-再測定では、この 4 つを名指すコードは 0 で、名指すのは steering・根の `README.md`・`doc/` の中の文書・完了済みの spec だけである。名指しの最も多い `doc/COMPAT_ARCHITECTURE.md`（クレートの 18 ファイル・未完了の spec 63 本・steering 6 ファイル）は、同じウェーブ（C17）で並んで走る見直しの spec との約束により、本 spec では名前を変えず、例外として案内に載せ、改名を後続の spec へ渡す。
+再測定では、この 4 つを名指すコードは 0 で、名指すのは steering・根の `README.md`・`doc/` の中の文書・完了済みの spec だけである。名指しの最も多い `doc/COMPAT_ARCHITECTURE.md`（クレートの 18 ファイル・未完了の spec 64 本・steering 6 ファイル）は、同じウェーブ（C17）で並んで走る見直しの spec との約束により、本 spec では名前を変えず、例外として案内に載せ、改名を後続の spec へ渡す。
 
 案内の表と実物を突き合わせる試験（以下「照合テスト」）を 1 本足し、いつもの全体テストで回す。これで、表に無いファイル・表にあるのに無いファイル・名前の決まりの破れが、足した人の枝で赤になり、散らかりが戻らない。
 
@@ -66,7 +66,7 @@
 1. The 文書の案内 shall 名前の決まりを 1 つ書く: 名前は小文字の英字・数字・ハイフン・点だけで書き、語はハイフンでつなぐ（拡張子・版の番号・日付・並びの番号の点とハイフンは含めてよい）。各フォルダの案内の `README.md` だけは決まりの外とする。
 2. The 名前の決まり shall `doc/` の下のファイルとフォルダのうち、`doc/archive/` の下を除く全部に効く（`doc/archive/` の下は歴史として名前も残す）。
 3. The 本 spec の作業 shall 決まりに合わない次の 3 つの名前を変える: `doc/CONSTITUTION.md` → `doc/constitution.md`、`doc/PASTA_PROFILE.md` → `doc/pasta-profile.md`、`doc/shiori/equivalence_evidence.toml` → `doc/shiori/equivalence-evidence.toml`（`docs/click_through.md` は要件 1.1 で決まりに合う名前になる）。
-4. When 名前を変えるとき, the 本 spec の作業 shall 中身を変えない（変えてよいのは、改名で食い違う自分の名前とパスの書き方だけ）。
+4. When 名前を変えるとき, the 本 spec の作業 shall 中身を変えない（変えてよいのは、改名で食い違う自分の名前とパスの書き方だけ。`doc/CONSTITUTION.md` の見出しの語「CONSTITUTION」はファイル名ではなく中身の語なので変えない）。
 5. The 文書の案内 shall 決まりに合わないまま残す名前を例外の表に 1 行ずつ載せ、各行に理由と行方（後で改名する／改名しない）を書く。
 6. The 例外の表 shall 次の 2 行で始まる: `doc/COMPAT_ARCHITECTURE.md`（理由＝同じウェーブの約束で本 spec では変えない・行方＝後で改名する・要件 6.5）と、`doc/shiori/fragments/` の下の全部（理由＝名前と結合の順を目録 `_manifest.toml` が決める、道具が読むデータの目録であるため・行方＝改名しない）。
 7. The 例外の表 shall フォルダ単位の行を、中の名前を読む側のデータや道具が決めるフォルダにだけ使い、ほかはファイル 1 つずつの行で載せる。
@@ -80,7 +80,7 @@
 3. The 文書の案内 shall `doc/` の直下のファイルとフォルダの 1 つずつに表の 1 行を持ち、各行に役目と「今も効く／歴史」を書く。日付つきの俯瞰の頁は、今のとおり `roadmap-overview-{YYYY-MM-DD}.html` の型の 1 行で載せる。
 4. The 文書の案内 shall 本 spec が動かした 4 つについて、古いパスと新しいパスの対応を表にして残す（歴史の記録に残る古いパスから今のファイルを辿れるように）。
 5. The 本 spec の作業 shall `doc/` の直下とフォルダを棚卸し、表の各行の役目の書き方が実物と食い違っていれば直す。置き場や名前を変えるのは要件 1 と要件 2 の 4 つだけとし、直下のファイルをフォルダへまとめ直すことはしない。
-6. The steering の構成の文書（`.kiro/steering/structure.md`） shall 文書の置き場と名前の決まりの正本として `doc/README.md` を名指す。
+6. The steering の構成の文書（`.kiro/steering/structure.md`） shall 文書の置き場と名前の決まりの正本として `doc/README.md` を名指し、最上位の並びから `docs/`（単発の技術メモ）の項を消す。
 
 ### Requirement 4: 案内の表と実物を照合する試験
 **Objective:** As a 開発者, I want 案内の表と実物の食い違いと名前の決まりの破れを、いつもの全体テストが見つけること, so that 散らかりが戻らない
@@ -92,7 +92,7 @@
 4. When 表の `{YYYY-MM-DD}` の型の行を読むとき, the 照合テスト shall `{YYYY-MM-DD}` を 4 桁・2 桁・2 桁の数字をハイフンでつないだ日付の形として読み、その形に当たる直下のファイルを表に載っているものとして数え、当たるファイルが 0 でも赤にしない（俯瞰の頁を置くかは任意のため）。
 5. If リポジトリの根に `docs/` があるとき, then the 照合テスト shall 赤になり、`doc/` へまとめることを出す。
 6. If `doc/` の下（`doc/archive/` の下と、例外の表のフォルダの行の下を除く）に、名前の決まりに合わず例外の表にも無いファイルかフォルダがあるとき, then the 照合テスト shall 赤になり、その名前を出す。
-7. If 例外の表の行が名指すものが無いか、もう名前の決まりに合っているとき, then the 照合テスト shall 赤になり、その行を消すよう出す（例外は今そこにある事情だけを表し、減る向きにだけ動く）。
+7. If 例外の表の行が名指すものが無いか、もう名前の決まりに合っているとき（フォルダ単位の行では、その下に名前の決まりに合わない名前が 1 つも無くなったとき）, then the 照合テスト shall 赤になり、その行を消すよう出す（例外は今そこにある事情だけを表し、減る向きにだけ動く）。
 8. If 実物の数え上げ・直下の表の読み取り・例外の表の読み取りのどれかが 1 件も拾わないとき, then the 照合テスト shall 赤になる（壊れて何も見ていないのに緑になることを防ぐ）。
 9. The 照合テスト shall 表から既知の 1 行を外すとその 1 件で赤になることと、決まりに合わない名前を 1 つ加えるとその 1 件で赤になることを、実物のデータで確かめる自己検査を持つ。
 10. The 照合テスト shall リポジトリの中のファイルだけを読み、ネット・時刻・走る順に左右されず、何度回しても同じ結果を出す。
@@ -104,7 +104,7 @@
 #### Acceptance Criteria
 1. The 本 spec の作業 shall 要件 1 と要件 2 で動かした 4 つの古いパスと古いファイル名を、リポジトリ全域で探す（相対のリンクと、パスを付けないファイル名だけの書き方を含む）。
 2. The 本 spec の作業 shall 見つかった名指しのうち、5.3 の場所の外にあるものを全部、新しいパスへ直す（コード・テスト・道具・`.github/workflows/`・スキル・steering・未着手と着手中の spec・`doc/` の中の文書・根の `README.md` と `CLAUDE.md`）。
-3. The 本 spec の作業 shall 次の場所の古いパスを直さずに残す: 歴史の場所（`.kiro/specs/completed/` の下・`doc/archive/` の下・`.kiro/steering/roadmap-history.md`）と、古い名前を本 spec の仕事として述べる所（`.kiro/specs/doc-tree-tidy/` の文書・roadmap の本 spec の台帳の行・案内の古いパスと新しいパスの対応の表）。
+3. The 本 spec の作業 shall 次の場所の古いパスを直さずに残す: 歴史の場所（`.kiro/specs/completed/` の下・`doc/archive/` の下・`.kiro/steering/roadmap-history.md`）と、古い名前を本 spec の仕事として述べる所（`.kiro/specs/doc-tree-tidy/` の文書・roadmap で本 spec の仕事を述べる行〔台帳・版の段・ウェーブの編成・棚卸の記録・チェックの行〕・案内の古いパスと新しいパスの対応の表）。
 4. When 本 spec の作業を終えるとき, the 本 spec の作業 shall 5.3 の場所の外で古いパスと古いファイル名を探して 0 件であることを確かめ、その前に、同じ探し方で歴史の場所の中の古いパスが見つかることを確かめて、探し方が空振りしていないことを示す。
 5. The 本 spec の作業 shall 文書を実際に開くコードとテスト（`doc/ukadoc-coverage/`・`doc/ssp-mcp/`・`doc/release-notes/` を読むもの）の振る舞いを変えず、全体テストが緑であることを確かめる。
 
