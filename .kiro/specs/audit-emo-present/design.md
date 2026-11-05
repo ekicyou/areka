@@ -97,7 +97,7 @@ graph TD
 - `src/command.rs` — `PresentError` に `NotShown`・`EntryEvicted` を足す（2）。落ちようがないテスト 3 本を消す（12）。古いコメントと記録の文言を直す（35）。
 - `src/presenter/show.rs` — `apply_show` が `PresentOutcome` を返す（4）。`author_dpi()` を読む（42）。`display_buffer` の呼び方（41）。`stamp_of(world).frame` を載せる（39）。
 - `src/presenter/hub.rs` — `attach_target` の署名（6）。`show_or_hold` が戻り値を応答へ渡す（4）。
-- `src/presenter/visibility.rs` — `show_target` が戻り値を読み、`NotShown` を返し、届かない 2 枝を `expect` にする（2・4）。
+- `src/presenter/visibility.rs` — `show_target` が戻り値を読み、`NotShown` を返し、起こるはずのない 2 枝は `error!`＋`Err(TargetNotAttached)` のまま残す（2・4・設計の討議 議題 1）。
 - `src/presenter/refresh.rs` — `refresh_scale` が戻り値で成否を読む（4）。
 - `src/presenter/replace.rs` — 届かない枝を消す（6）。`DetachedState`・`detach_target` を `pub(super)` に（7）。
 - `src/presenter/read.rs` — `read_back` が `NotShown`・`EntryEvicted` を返す（2）。
@@ -148,7 +148,7 @@ graph TD
 | # | 直し | 触るファイル | 守るテスト | 消すもの | T |
 |---|---|---|---|---|---|
 | 1 | `TempDir` の中身を `temp_path_kit::TempPath::new("emo-present-balloon")` にする。型名と `new`・`path`・`touch`・`write` は残す（呼び手 5 ファイルは触らない・欄 `.path` の直読みがあれば `.path()` へ）。例外表の項目と件数を直す | `balloon_test_support.rs`・`balloon.rs`（mod 宣言）・`log-capture-kit/tests/temp_path_guard_test.rs` | 番人 `temp_path_guard_test.rs`（`std::env::temp_dir` がこのファイルへ戻れば、表に無い入口として赤） | 自前の連番 `TEMP_COUNTER`・自前の `Drop` | T4 |
-| 2 | `PresentError` に `NotShown(TargetId)` と `EntryEvicted { target, surface_id }` を足す。`show_target`・`read_back` の「一度も表示していない」は `NotShown`、`read_back` の「メモから追い出された」は `EntryEvicted`。`show_target` の「再通過後に消えた」「確立済みなのに装着が無い」は届かない（`apply_show` は登録を消さない・装着を作ってから `current_surface_id` を立てる）ので `expect` にする。「応答が失われた」2 枝は 4 番で消える | `command.rs`・`presenter/visibility.rs`・`presenter/read.rs`・`presenter_visibility_tests.rs`・`presenter_read_accessor_tests.rs` | `show_target_before_any_established_display_is_err` の期待を `NotShown` へ。`read_back` に 2 本（未表示 → `NotShown`・`InvalidateCache` の後 → `EntryEvicted`） | 届かない `error!`＋`Err` の 2 枝 | T1 |
+| 2 | `PresentError` に `NotShown(TargetId)` と `EntryEvicted { target, surface_id }` を足す。`show_target`・`read_back` の「一度も表示していない」は `NotShown`、`read_back` の「メモから追い出された」は `EntryEvicted`。`show_target` の「再通過後に消えた」「確立済みなのに装着が無い」は決まりどおりなら通らない（`apply_show` は登録を消さない・装着を作ってから `current_surface_id` を立てる）が、`expect` にはせず今どおり `error!`＋`Err(TargetNotAttached)` で返す（どちらも「装着が無い」なので名前は原因どおり・設計の討議 議題 1）。「応答が失われた」2 枝は 4 番で消える | `command.rs`・`presenter/visibility.rs`・`presenter/read.rs`・`presenter_visibility_tests.rs`・`presenter_read_accessor_tests.rs` | `show_target_before_any_established_display_is_err` の期待を `NotShown` へ。`read_back` に 2 本（未表示 → `NotShown`・`InvalidateCache` の後 → `EntryEvicted`） | 届かない `error!`＋`Err` の 2 枝 | T1 |
 | 3 | `balloon.rs` に `BalloonLoadError`（`List{path, source}`・`NoFace0{path, scope}`・`Empty{path}`・`Bake{path}`）を置き、`enumerate_file_names`・`resolve_balloon_faces(_quiet)`・`build_balloon_target`・`build_balloon_target_from_faces(_quiet)` が返す。`lib.rs` で再輸出。冒頭 doc（24〜27 行）と 367〜371・616・690 行の「`EmptyComposition` へ畳む」の説明を書き直す | `balloon.rs`・`lib.rs`・`balloon_quiet_tests.rs`・`balloon_series_tests.rs`・`balloon_target_tests.rs`・`areka/src/emo2_boot/{mod.rs, assets.rs}` | 4 つの変位に 1 本ずつ（既存の `matches!` 6 か所を新しい変位へ書き換え、`Empty`・`Bake` のうち無い方を足す） | `balloon.rs` の `PresentError`・`ComposeError` の取り込み（他に使わなければ） | T3 |
 
 ### 直したほうがよい
@@ -196,7 +196,7 @@ graph TD
 | 37 | dev 依存の `windows` の 1 行と誤ったコメント 3 行を消す。実装の段で `cargo build -p areka-emo-present --tests` の後に `git diff --exit-code -- Cargo.lock` で差分 0 を確かめる（6.5） | `Cargo.toml` | — | dev 依存の 1 行 | T16 |
 | 38 | `compose_key_hash` で `ComposeMethod::Unknown(name)` のとき `name.hash(..)` も混ぜる | `presenter/timing.rs`・`presenter/timing_tests.rs` | 新 1 本: 名前の違う `Unknown` は違う `key_hash`・同じ名前は同じ | — | T16 |
 | 39 | `frame_of` を消し、perf の行の `frame` は `stamp_of(world).frame` を載せる（出どころが 1 つになる）。`frame_of` の単体テスト（`transition_record_tests.rs:730-735`）を消し、`timing.rs:104` の doc を直す | `presenter/transition_record.rs`・`presenter/show.rs`・`presenter/timing.rs`・`presenter/transition_record_tests.rs` | —（出どころが 1 つなので食い違いようがない。本番の `EcsWorld::new` は両方の資源を入れる） | `frame_of` | T16 |
-| 40 | バルーンの側だけ: `load_scope_balloon_model` を「descript の本文を受ける `pub(crate)` の核」と今の公開の包みに分け、`load_scope_balloon_definitions` は面のループの前に descript を 1 回読む（`read_descript_layer` を `pub(crate)`）。`resolve_marker_pair`・`resolve_single_marker` を「フォルダの一覧を受ける `pub(crate)` の核」と今の公開の包みに分け、definitions はフォルダの一覧を 1 回取って核へ渡す（`crates/areka/src/emo2_boot/shell_box_assets.rs` の呼び手は包みを使うので触らない）。シェルの解析の回数は触らない（9.6）。「1 回だけ」は 1 つの入口の中（面ごと・印の名前ごと）の繰り返しを消すことと読む。入口をまたぐ共有（`load_balloon_use_self_alpha`・`resolve_balloon_faces`・`load_scope_balloon_definitions` の間）は公開の口の形を変え、範囲の外の呼び手（起動・採寸・emo-text の fixture の 10 か所以上）に及ぶので取らない | `balloon.rs`・`balloon_definitions.rs`・`balloon_marker.rs`・`balloon_definitions_tests.rs` | 新 1 本: `descript.txt` の無いバルーンで上書きを持つ面が 2 つ → descript が読めない `warn!` が 1 件 | 面ごとの descript の読み直し・印の名前ごとの一覧の取り直し | T15 |
+| 40 | バルーンの側だけ（「1 回だけ」は 1 つの入口の中で繰り返し取らないと読む・設計の討議 議題 2・要件 9.6）: `load_scope_balloon_model` を「descript の本文を受ける `pub(crate)` の核」と今の公開の包みに分け、`load_scope_balloon_definitions` は面のループの前に descript を 1 回読む（`read_descript_layer` を `pub(crate)`）。`resolve_marker_pair`・`resolve_single_marker` を「フォルダの一覧を受ける `pub(crate)` の核」と今の公開の包みに分け、definitions はフォルダの一覧を 1 回取って核へ渡す（`crates/areka/src/emo2_boot/shell_box_assets.rs` の呼び手は包みを使うので触らない）。シェルの解析の回数は触らない（9.6）。「1 回だけ」は 1 つの入口の中（面ごと・印の名前ごと）の繰り返しを消すことと読む。入口をまたぐ共有（`load_balloon_use_self_alpha`・`resolve_balloon_faces`・`load_scope_balloon_definitions` の間）は公開の口の形を変え、範囲の外の呼び手（起動・採寸・emo-text の fixture の 10 か所以上）に及ぶので取らない | `balloon.rs`・`balloon_definitions.rs`・`balloon_marker.rs`・`balloon_definitions_tests.rs` | 新 1 本: `descript.txt` の無いバルーンで上書きを持つ面が 2 つ → descript が読めない `warn!` が 1 件 | 面ごとの descript の読み直し・印の名前ごとの一覧の取り直し | T15 |
 | 41 | `ComposeCache::insert` の戻り値を `()` にする（末尾の `expect` も消える）。`FrameBudget::display_buffer` を `self` を取らない関連関数に。テストで戻り値を読む所は `get` で読み直す | `cache.rs`・`presenter/budget.rs`・`presenter/show.rs`・`cache_tests.rs`・`presenter/budget_tests.rs` | — | 戻り値・`&mut self` | T7 |
 | 42 | `ScalePolicy` の欄を私有にし、`pub(crate) fn author_dpi(&self) -> u16` を置く。`classify` の `author_dpi_normalized` と `derive_scale` の `warn!` を消す（分母は `new` と `Default` が必ず 0 でなくする）。構造体の字面で迂回する檻は消すか `new` へ | `scale.rs`・`scale_tests.rs`・`presenter/show.rs`・`presenter_dpi_scale_tests.rs` | 既存の `ScalePolicy::new(0, ..)` の正規化のテストが守る | 2 つ目の正規化と `warn!`・迂回の檻 | T6 |
 | 43 | `SURFACE_REASON_ALL` を `#[cfg(test)] pub(super)` にし、`presenter.rs` の再輸出から外す（判定側は `SURFACE_REASON_INVISIBLE` を直に名指しており、この定数を読まない）。`CLICKWAIT_FAMILY` は残す（9.2・9.8） | `presenter/transition_record.rs`・`presenter.rs` | —（読み手のテストが残る） | 再輸出 1 名 | T6 |
@@ -244,7 +244,7 @@ pub enum BalloonLoadError {
 
 - **3 番で新しい型を採る理由**: `PresentError` は「指令を適用して観測し得る失敗」の型で、読み込みの失敗はそこに入らない（シェルは既に `ShellLoadError` で分けている）。要件 9.2 の「読み込みの失敗の型を分け」にもそのまま合う。
 - **穏当な縮退は保たれる**: 範囲の外の呼び手はどれも、失敗を `?` で包み直すか（起動は `BootWiringError::Balloon`）、`{e}` で記録するか、`Ok` の型で受けるだけで、変位を見ない（`crates/` 全体を grep・下の調べ 3）。だから呼び手の縮退の仕方（バルーン未配線・起動窓を開けない告知・採寸の見送り）は今と同じである。真の原因の `error!` は今どおり権威の側が出す。
-- **2 番の `expect` 2 つ**: 到達しない枝である（`apply_show` は `targets` を消さない。表示成立点は装着を作った後に `current_surface_id` を立て、`Hide`・全透明の縮退は装着を消さない）。`replace.rs` の `expect("直上で登録済み")` と同じ書き方にする。
+- **2 番の起こるはずのない 2 枝**（設計の討議 議題 1・2026-11-05 確定）: 決まりどおりなら通らない（`apply_show` は `targets` を消さない。表示成立点は装着を作った後に `current_surface_id` を立て、`Hide`・全透明の縮退は装着を消さない）。それでも `expect` にはせず、`error!`＋`Err(TargetNotAttached)` で返す。panic は致命の時だけという決まりと、ゴースト 1 体の不具合をアプリの落ちにしない裁定に従う。`replace.rs` の `expect("直上で登録済み")` は同じ関数の中で直前に登録した事実に頼るもので、ほかの関数の決まりに頼るこの 2 つとは違う。
 
 ### `apply_show` と呼び手
 
@@ -284,7 +284,7 @@ pub fn attach_target(&mut self, target: TargetId, window: Entity,
 ## 失敗の扱い
 
 - 失敗の道はどれも今と同じく `error!`（または今の `warn!`・`debug!`）を残してから `Err` を返す（6.3）。新しい型は、今 `EmptyComposition(0)` や `TargetNotAttached` で返していた所を、原因どおりの変位で返すだけで、記録の行は減らさない。
-- 到達しない枝は `expect` にする（2 番の 2 つ）か消す（4 番・6 番）。届く失敗の道を `expect` にしない。
+- 型の上で届かない枝は消す（4 番・6 番）。ほかの関数の決まりに頼って届かない枝（2 番の 2 つ）は `error!`＋`Err` で残し、`expect` にしない。届く失敗の道も `expect` にしない。
 - 終了の道は触らない（6.4）。
 - 記録の文言を変えるのは 35 番の 1 つ（`D2D 呼び出しが失敗`）だけ。欄（`hresult`・`context`）と水準は変えない。
 

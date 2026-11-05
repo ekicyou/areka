@@ -131,6 +131,6 @@
 3. The 見直しの作業 shall 6 番の `attach_target` から、使わない引数と常に `Ok` の `Result` を外し、範囲の外の呼び手（`crates/areka`・`crates/areka-emo-text` の既存ファイル・`crates/pilot`）まで直し切る（議題 4 の案 (a)）。
 4. The 見直しの作業 shall 10 番で `src/cache_tests.rs` のテストを消して 1,000 行未満にし、要件 7.7 に従って番人の例外表から外す（議題 2 の案 (a)）。
 5. The 見直しの作業 shall 7 番が名指す `crates/areka-emo-compose/src/nesting_fixture_tests.rs:4` のコメントを触らない（公開の範囲を狭めても嘘にならない・議題 3）。
-6. The 見直しの作業 shall 40 番のうち、バルーンのフォルダの一覧と `descript.txt` の本文を 1 回だけ取る直しをこの spec で行い、`surfaces.txt` の解析の回数は `audit-parsers-sakura` が直すものとして触らない（議題 3・2026-11-05 `audit-parsers-sakura` と申し合わせ済み＝あちらの要件 7.10）。
+6. The 見直しの作業 shall 40 番のうち、バルーンのフォルダの一覧と `descript.txt` の本文を 1 つの読み込みの入口の中で繰り返し取らない（面ごと・印の名前ごとに取り直さない）直しをこの spec で行い（入口をまたぐ共有は公開の口の形を変えるので取らない・2026-11-05 設計の討議 議題 2）、`surfaces.txt` の解析の回数は `audit-parsers-sakura` が直すものとして触らない（議題 3・2026-11-05 `audit-parsers-sakura` と申し合わせ済み＝あちらの要件 7.10）。
 7. When `build_shell_target_with_boxes` を直すとき, the 見直しの作業 shall 可視性（7 番）だけをこの spec で変え、署名（`ShellBoxes` → `Vec<BoxDefinition>`）は `audit-parsers-sakura` に任せ、後に着地する方が先の形へ合わせる。
 8. The 見直しの作業 shall 残すと裁定した `CLICKWAIT_FAMILY`（43 番の一部）を、要件 5.3 の「かけ直しの結果に残してよいもの」として扱う。
