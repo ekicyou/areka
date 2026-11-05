@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 // ── テスト用の表構築（from_world 経由＝実構築パスを通す） ──────────────────
 
 /// コマ 1 本（overlay 固定・x/y=0）。
-fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
+pub(crate) fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
     Pattern {
         index,
         method: DrawMethod::new("overlay".to_string()),
@@ -23,7 +23,7 @@ fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
 }
 
 /// animation 1 本を持つ surface 1 件。
-fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
+pub(crate) fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
     Surface {
         id,
         targets: vec![AppendTarget::Single(id)],
@@ -47,7 +47,7 @@ fn world_of(surfaces: Vec<Surface>) -> EmoWorld {
 }
 
 /// surfaces から shell 表を build する。
-fn shell_table(surfaces: Vec<Surface>) -> AnimationTable {
+pub(crate) fn shell_table(surfaces: Vec<Surface>) -> AnimationTable {
     AnimationTable::from_world(&world_of(surfaces))
 }
 
@@ -107,7 +107,7 @@ fn shown_shell(sid: u32) -> (ScopeStates, ActorKey) {
     shown_shell_with_binds(sid, BindSet::from_ids([]))
 }
 
-fn shown_shell_with_binds(sid: u32, binds: BindSet) -> (ScopeStates, ActorKey) {
+pub(crate) fn shown_shell_with_binds(sid: u32, binds: BindSet) -> (ScopeStates, ActorKey) {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(binds));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(sid));

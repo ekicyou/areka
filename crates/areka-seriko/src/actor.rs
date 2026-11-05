@@ -824,5 +824,8 @@ mod talk_tests;
 #[path = "actor_test_support.rs"]
 mod test_support;
 #[cfg(test)]
+#[path = "actor_tick_tests.rs"]
+mod tick_tests;
+#[cfg(test)]
 #[path = "actor_trigger_fixture_tests.rs"]
 mod trigger_fixture_tests;
