@@ -122,7 +122,7 @@
   - 完了の姿: `cargo build -p wintf --examples` が通り、消したファイルの名の grep がツリー全体で 0 件
   - _Boundary: X1_
   - _Requirements: 4.1, 4.3, 6.3_
-- [ ] 5.2 example の文言と振る舞いを直す（X2）
+- [x] 5.2 example の文言と振る舞いを直す（X2）
   - 63・66（clip_demo）・67・68・117: research の案。67 は受け手の変化を `info!` する system を 1 本足す。66 は文言と名前を WUC に直し、効かない旗の行を消す
   - 完了の姿: example がビルドでき、振る舞いを変えた 67・68 を 1 度ずつ走らせて期待のログが出る
   - _Requirements: 4.1, 7.1_
@@ -215,3 +215,4 @@
 - 4.3: `Opacity` を消したので、G4 の持ち物の `tests/visual/component_test.rs` の 1 本を `value.clamp(0.0, 1.0)` との比べへ追従させた（`audit-wintf-graphics-world` が同じファイルを書き換えるなら rebase で合わせる）。
 - 4.4: research の案が「L80-L148 だけ消す」と行で絞っているファイルは丸ごと消さない（4.4 で守りのテストを巻き添えにし差し戻し）。生成の直後に最初に走る system は生成と同じ刻みで書くので、等値を刻みで見るテストは回す前に `increment_change_tick()` を入れる。
 - 5.1・2.3: 消した example の名（`dcomp_demo`・`wuc_spike`）が `src/ecs/world/mod.rs:151-152` の注記に残る。7.8 の「古くなった名前の言及を 0 件」で直す。
+- 5.2: taffy_flex_demo で Window 1 を副モニターの原点 (-2304,355) へ送ると、DPI 192→144 の伸び縮みで中心を保ち (-2104,530) に着く（大きさの差の半分）。実行時の窓と DPI の規則（`src/` の持ち物）で、正しいかは `audit-wintf-window` の受け持ち。example は着地点を主張しない。

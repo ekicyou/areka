@@ -118,7 +118,7 @@ fn create_test_window(world: &mut World) {
         ))
         .id();
 
-    // クリック対象: 赤い矩形（100x100、offset (20,20)）
+    // クリック対象: 赤い矩形（100x100、窓の左上 (0,0)）
     world.spawn((
         Name::new("ClickTarget-Red"),
         ClickTarget,

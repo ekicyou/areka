@@ -330,7 +330,7 @@ pub(crate) fn on_green_box_moved(
     let wlabel = window_label(world, entity);
     let state = ev.value();
 
-    // 10フレームに1回程度ログ出力（頻繁すぎないように）
+    // 30回に1回ログ出力（頻繁すぎないように）
     static MOVE_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let count = MOVE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if count % 30 == 0 {

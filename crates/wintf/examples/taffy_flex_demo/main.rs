@@ -30,12 +30,12 @@
 //!    - ログ: `[Drag] DragStart/Drag/DragEnd` が出力される
 //!
 //! 2. **GreenBoxChild（黄色矩形）を左クリック**
-//!    - 期待: `[Tunnel] GreenBox: Captured event` のみ出力
+//!    - 期待: `[Tunnel] FlexContainer: Passing through` → `[Tunnel] GreenBox: Button pressed` → `[Tunnel] GreenBox: Captured event`
 //!    - GreenBoxChildのログは出ない（親がTunnelでキャプチャ）
 //!
 //! 3. **GreenBoxChild（黄色矩形）を右クリック**
-//!    - 期待: `[Tunnel] GreenBox` → `[Tunnel] GreenBoxChild` → `[Bubble] GreenBoxChild`
-//!    - 両エンティティがログ出力（親がキャプチャしない）
+//!    - 期待: `[Tunnel] FlexContainer` → `[Tunnel] GreenBox` → `[Tunnel] GreenBoxChild` → `[Bubble] GreenBoxChild`
+//!    - 親はキャプチャしない。子が Bubble で止めるので `[Bubble] GreenBox` は出ない
 //!
 //! 4. **Ctrl+左クリックでRedBox**
 //!    - 期待: `[Tunnel] FlexContainer: Event stopped` のみ出力
@@ -85,7 +85,7 @@ pub(crate) use wintf::ecs::drag::{
 pub(crate) use wintf::ecs::layout::hit_region::HitRegionMap;
 pub(crate) use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
 pub(crate) use wintf::ecs::layout::{
-    GlobalArrangement, HitTest, PhysicalPoint, hit_test, hit_test_in_window_ex,
+    GlobalArrangement, HitTest, PhysicalPoint, hit_test_in_window_ex,
 };
 pub(crate) use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed, Phase, PointerState};
 pub(crate) use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
@@ -112,62 +112,6 @@ pub(crate) fn window_label(world: &World, entity: Entity) -> String {
     }
 }
 
-/// Flexコンテナを識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct FlexDemoContainer;
-
-/// 赤い矩形（固定サイズ）を識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RedBox;
-
-/// 緑の矩形（grow=1）を識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct GreenBox;
-
-/// 青い矩形（grow=2）を識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct BlueBox;
-
-/// GreenBoxの子矩形を識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct GreenBoxChild;
-
-/// リージョンテストコンテナを識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RegionTestContainer;
-
-/// 矩形リージョンテスト用ボックス
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RegionRectBox;
-
-/// 多角形リージョンテスト用ボックス
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RegionPolygonBox;
-
-/// 混在（矩形+多角形）リージョンテスト用ボックス
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RegionMixedBox;
-
-/// カラーマップリージョンテスト用ボックス
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RegionColorMapBox;
-
-/// フォールバックテスト用ボックス（HitRegionMap なし）
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct RegionFallbackBox;
-
-/// クリックスルーテストコンテナを識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct ClickThroughTestContainer;
-
-/// クリックスルー領域（HitTest::none）を識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct ClickThroughBox;
-
-/// 通常領域（HitTest::bounds）を識別するマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub(crate) struct NormalHitBox;
-
 fn main() -> Result<()> {
     human_panic::setup_panic!();
 
@@ -191,14 +135,14 @@ fn main() -> Result<()> {
     println!("\nTaffy Flexboxレイアウトのデモ:");
     println!("  [上段] イベントシステムデモ（既存）");
     println!("    - 赤い矩形 (固定200x100) / 緑の矩形 (grow=1) / 青い矩形 (grow=2)");
-    println!("  [下段] 名前付きヒット領域テスト（新規）");
-    println!("    - 矩形リージョン (head/body/feet)");
-    println!("    - 多角形リージョン (triangle/pentagon)");
-    println!("    - 混在＋重複 (banner/overlap_zone/arrow)");
-    println!("    - カラーマップ (head/body/feet/hand)");
+    println!("  [下段] 名前付きヒット領域テスト");
+    println!("    - 矩形リージョン (top-left/top-right/bottom-left/bottom-right)");
+    println!("    - 多角形リージョン (同じ 4 つの角を四角形の多角形で)");
+    println!("    - 混在 (矩形と多角形で 4 つの角)");
+    println!("    - カラーマップ (4 色→4 つの角)");
     println!("    - フォールバック (NamedRegions without HitRegionMap)");
-    println!("\n2秒後にレイアウトパラメーターを変更し、ウィンドウを別モニターへ移動します。");
-    println!("4秒後に自動的にWindowを閉じてアプリ終了します。");
+    println!("\n2秒後、プライマリ以外のモニターがあれば Window 1 をそこへ移動します。");
+    println!("約64秒後に自動的にWindowを閉じてアプリ終了します。");
 
     // メッセージループを開始
     mgr.run()?;
@@ -262,7 +206,7 @@ fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT
 
 /// 非同期デモ実行
 ///
-/// タイムライン: 0s→create → 1s→dump① → 2s→change_layout → 3s→dump② → 4s→close
+/// タイムライン: 0s→create → 1s→dump① → 2s→change_layout → 3s→dump② → 64s→close
 async fn run_demo(tx: CommandSender) {
     // === 0秒: ウィンドウ作成（2つ） ===
     info!("[Async] 0s: Creating Flexbox demo windows (multi-window)");
@@ -305,28 +249,34 @@ async fn run_demo(tx: CommandSender) {
     // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 4秒: 終了 ===
-    info!("[Async] 4s: Closing windows");
+    // === 64秒: 終了（手で操作する時間を残す） ===
     async_io::Timer::after(Duration::from_secs(60)).await;
+    info!("[Async] 64s: Closing windows");
     let _ = tx.send(Box::new(close_window));
 }
 
 /// レイアウトパラメーターを変更
-#[allow(dead_code)]
 fn change_layout_parameters(world: &mut World) {
     // WindowPos.position を変更してウィンドウを別モニターへ移動（サイズ・内部レイアウトは維持）
     // NOTE: BoxStyle.size および子要素のレイアウトパラメーターは一切変更しない。
     // ウィンドウの論理サイズと内部レイアウトを保持したままモニター間移動することで、
     // DPIスケーリング動作を正しく検証できる。
-    let mut wp_query = world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
-    if let Some(mut wp) = wp_query.iter_mut(world).next() {
-        wp.position = Some(Point { x: -1600, y: 400 });
-        println!("[Test] Window position changed to (-1600, 400) via WindowPos");
+    let Some(target) = find_non_primary_monitor_origin().map(Point::from) else {
+        info!("[Test] No non-primary monitor; Window 1 stays where it is");
+        return;
+    };
+    // 2 枚とも FlexDemoWindow を持つので、題で Window 1 を選ぶ
+    let mut wp_query = world.query_filtered::<(&Window, &mut WindowPos), With<FlexDemoWindow>>();
+    if let Some((_, mut wp)) = wp_query
+        .iter_mut(world)
+        .find(|(w, _)| w.title.ends_with("(Window 1)"))
+    {
+        wp.position = Some(target);
+        info!(
+            "[Test] Window 1 moved to non-primary monitor ({}, {}) via WindowPos",
+            target.x, target.y
+        );
     }
-
-    println!("[Test] Layout parameters changed:");
-    println!("  Window: position moved to (-1600, 400)");
-    println!("  All other layout parameters unchanged (DPI scaling test)");
 }
 
 /// ウィンドウを閉じる
