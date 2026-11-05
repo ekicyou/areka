@@ -232,4 +232,9 @@ fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
     );
     show(&mut presenter, &mut world, 99);
     assert!(holds(&presenter, 99), "表示したキーは保持される");
+    assert_ne!(
+        mask_of(&presenter, 99),
+        before,
+        "外れた表示でもマスクの実体が動かない＝上の一致は外れでも成り立つ（檻が恒真）"
+    );
 }

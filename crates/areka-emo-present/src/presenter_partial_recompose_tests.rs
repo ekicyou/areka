@@ -29,6 +29,8 @@ const SHOW_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新
 const TARGET: TargetId = TargetId(0);
 /// 下の面（動かない・16×12）。
 const BASE_ID: u32 = 1000;
+/// 同じ寸の 2 つ目の下の面（同じコマのまま面を替える回に使う・別のバイト）。
+const OTHER_BASE_ID: u32 = 1001;
 /// 動く絵のコマの面（4×3）。
 const CELL_ID: u32 = 3000;
 const BASE_SIZE: (u32, u32) = (16, 12);
@@ -36,12 +38,13 @@ const CELL_SIZE: (u32, u32) = (4, 3);
 /// 動く絵の行（コマは `(x, CELL_Y)` に重なる）。
 const CELL_Y: i64 = 2;
 
-/// 下の面とコマの面の `(EmoWorld, AtlasTable)`（どちらも全不透明・別のバイト）。
+/// 下の面 2 つとコマの面の `(EmoWorld, AtlasTable)`（どれも全不透明・別のバイト）。
 fn build_assets() -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let surfaces = vec![
         surface(BASE_ID, vec![elem("p.png", 0, 0)]),
         surface(CELL_ID, vec![elem("q.png", 0, 0)]),
+        surface(OTHER_BASE_ID, vec![elem("r.png", 0, 0)]),
     ];
     let gradient = |(w, h): (u32, u32), salt: u8| -> Vec<u8> {
         let mut img = Vec::with_capacity((w * h * 4) as usize);
@@ -72,6 +75,14 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
         ch,
         cw * 4,
         gradient(CELL_SIZE, 0x80),
+        true,
+    );
+    dec.insert(
+        base.join("r.png"),
+        bw,
+        bh,
+        bw * 4,
+        gradient(BASE_SIZE, 0x45),
         true,
     );
     let set = SurfaceSet {
@@ -105,12 +116,21 @@ fn setup() -> (World, EmoPresenter, EmoWorld, AtlasTable) {
 }
 
 fn send(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) -> PresentOutcome {
+    send_on(presenter, world, BASE_ID, pattern)
+}
+
+fn send_on(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    surface_id: u32,
+    pattern: PatternState,
+) -> PresentOutcome {
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
         world,
         PresentCommand::ShowSurface {
             target: TARGET,
-            surface_id: BASE_ID,
+            surface_id,
             binds: BindSet::default(),
             pattern,
             reply: Some(tx),
@@ -248,6 +268,47 @@ fn animated_frame_changes_recompose_partially_after_the_first() {
             "{i} 回目の矩形が前と今のコマの位置の和でない: {r:?}"
         );
     }
+}
+
+/// 要件 3.3・4.1: 下敷きの印が真のまま、同じコマで下の面を替えた回の絵も、新しい合成器でいちから
+/// 合成した絵と同じ（矩形がコマの帯の外の下の面の画素を覆い損ねると前の面の画素が残る）。
+#[test]
+fn switching_the_surface_on_the_same_frame_matches_a_from_scratch_compose() {
+    let (mut world, mut presenter, emo_world, atlas) = setup();
+    let ((), events) = capture(|| {
+        show(&mut presenter, &mut world, frame(0));
+        show(&mut presenter, &mut world, frame(2));
+        assert!(
+            presenter.targets[&TARGET].partial_base,
+            "前提: 下敷きの印が真"
+        );
+        assert!(
+            matches!(
+                send_on(&mut presenter, &mut world, OTHER_BASE_ID, frame(2)),
+                Ok(())
+            ),
+            "面を替えた ShowSurface が Ok でない"
+        );
+    });
+    let (golden, _) = native_golden_with(
+        &emo_world,
+        &atlas,
+        OTHER_BASE_ID,
+        &BindSet::default(),
+        &frame(2),
+    );
+    assert_eq!(
+        presenter.read_back(TARGET).expect("read_back"),
+        golden,
+        "同じコマで面を替えた絵がいちから合成と違う"
+    );
+    let got = ranges(&events);
+    assert_eq!(got.len(), 3, "外れは 3 回: {got:?}");
+    // 空の道で緑にしない: 面を替えた回も下敷き形（`partial`）の道を通っている。
+    assert!(
+        matches!(got[2], Range::Partial { .. }),
+        "面を替えた回が下敷き形の道を通らない: {got:?}"
+    );
 }
 
 /// 要件 3.4: 動きの無い面（`pattern` が空）は毎回いちからで、合成の回数（外れの回数）は前と同じ

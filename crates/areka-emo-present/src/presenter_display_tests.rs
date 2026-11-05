@@ -12,8 +12,8 @@ use areka_emo_compose::BindSet;
 use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    build_target_assets, elem, make_world_with_gpu, shell_of, show_ok, spawn_window_with_dpi,
-    surface,
+    build_target_assets, capture, elem, make_world_with_gpu, mount_entities, shell_of, show_ok,
+    spawn_window_with_dpi, surface,
 };
 
 /// R2.4/R3.2/R8.2 観測完了（golden 一致）: `attach_target` → `apply(ShowSurface 有効 id)` で reply が
@@ -854,5 +854,40 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
     assert_eq!(
         entry.display, recorded,
         "ヒットの回に表示記録が作り直されている（記録経路が外れ経路の外に居る）"
+    );
+}
+
+/// 面の entity から当たりのマスクの資源が外れていると、同じ面の再表示は黙らず `warn!` を 1 件だけ
+/// 残す（当たり判定が矩形か前の状態のまま＝記録の無い失敗の道にしない・`audit-emo-present` 指摘 18）。
+#[test]
+fn reshow_without_alpha_mask_resource_leaves_one_warn() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x18);
+    let mut presenter = EmoPresenter::new();
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
+    assert!(
+        world
+            .entity_mut(surface_entity)
+            .take::<AlphaMaskResource>()
+            .is_some(),
+        "前提: 1 回目の表示の後は面の entity にマスクの資源が在る"
+    );
+
+    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
+    let warns = events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN
+                && e.message()
+                    .contains("surface entity に AlphaMaskResource が無い")
+        })
+        .count();
+    assert_eq!(
+        warns, 1,
+        "マスクの資源が無い再表示の warn! の件数: {events:?}"
     );
 }

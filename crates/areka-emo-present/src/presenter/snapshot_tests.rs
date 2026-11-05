@@ -277,6 +277,46 @@ fn last_shown_returns_id_and_picture_and_keeps_them_after_hide() {
     let (id, picture) = presenter.last_shown(SHOWN).expect("隠した後も Some");
     assert_eq!(id, BASE);
     assert_eq!(bytes_of(picture.expect("隠した後も絵が在る")), before);
+    assert_eq!(
+        presenter.last_binds(SHOWN),
+        Some(&bound()),
+        "隠した後も最後の着せ替えが返る"
+    );
+    assert_eq!(presenter.last_binds(NEVER_SHOWN), None, "未表示は無し");
+    assert_eq!(presenter.last_binds(UNREGISTERED), None, "未登録は無し");
+}
+
+/// ⑵' 合成メモを捨てた後も、最後に表示した ID は返り、絵だけが無い（`Some((id, None))`）。
+#[test]
+fn last_shown_after_invalidate_cache_keeps_id_without_picture() {
+    let (mut presenter, mut world) = setup();
+    show(
+        &mut presenter,
+        &mut world,
+        SHOWN,
+        BASE,
+        bound(),
+        PatternState::default(),
+    );
+    let (tx, rx) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        &mut world,
+        PresentCommand::InvalidateCache {
+            target: SHOWN,
+            reply: Some(tx),
+        },
+    );
+    assert!(
+        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        "InvalidateCache が Ok でない"
+    );
+
+    let shown = presenter.last_shown(SHOWN);
+    assert!(
+        matches!(shown, Some((BASE, None))),
+        "メモを捨てた後は ID だけが返る: {:?}",
+        shown.map(|(id, c)| (id, c.is_some()))
+    );
 }
 
 /// ⑶ 「surface の有無」は生の ID にだけ真で、別名の表にだけ在る番号と無い番号は偽、未登録は無し。

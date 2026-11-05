@@ -120,7 +120,6 @@ fn stopped_blink_leaves_no_closed_eye_in_the_picture() {
         &PatternState::default(),
     );
 
-    show(&mut presenter, &mut world, PatternState::default());
     for lap in 0..2 {
         show(
             &mut presenter,
