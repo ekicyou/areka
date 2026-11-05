@@ -388,3 +388,41 @@ wintf の描画の芯である。ECS の World と 13 本のスケジュール�
 - **35 番を足した（直したほうがよい・`audit-wintf-runtime` の 30 番から申し送り）**: `world/mod.rs:134-177` は 6 本のスケジュールを単一スレッドで回す。けれども、それを確かめるテストは無い（`crates/wintf/tests/ecs/world_lifecycle_test.rs:90-99` はスケジュールが在ることしか見ない）。bevy 0.19.1 には実行器を読む公開の口が無いので、`set_executor(SingleThreadedExecutor)` の 1 行を消してもテストは緑のまま。WUC に触る係が複数スレッドに出ると、何も合成されなくなる（12 番と同じ失敗の形）。直し方の案: 単一スレッドで回すスケジュールの一覧を `world/mod.rs` の定数に置き、`set_executor` をその一覧から回し、一覧の中身をテストで固定する。中身の無いテストはあちらが消す。
 - **3 番は `audit-wintf-runtime` の 35 番（P47）と同じ物**: 本番の持ち主はこの spec。
 - **議題の確定**: D-1〜D-9 は全部推奨案で確定した。ただし D-1 は推奨を ㋒ から ㋐（この spec で直す）へ改めた。分けた先は 5〜6 タスクで 20 を越えない。この spec の側の超過（18〜23）は分ける理由にならない（09-28 開発者「もう分割すべきでない。」の決め）。正本は `requirements.md` の「指摘の扱い」。
+
+---
+
+## 9. 設計の段の調べ（2026-11-05・`/kiro-spec-design -y`）
+
+### 9.1 調べの種類と使った手引き
+- 調べの種類: 在る作りへの手直し（light）。新しい依存は無い。外の調べは Microsoft の説明書 1 つと bevy_ecs 0.19.1 の手元のソースだけ。
+- 使った手引き: `kiro-spec-design` の `rules/`（design-principles・design-discovery-light・design-synthesis・design-review-gate）と、ponytail の「いちばん小さな完全な変更」。下流の調べ（emo-present・emo-text・areka）と、範囲の外のテストの調べは、読むだけの下請けに分けて出し、結論だけを受け取った。
+
+### 9.2 装置の失いをどこで見つけるか（5 節の 1 つ目の問い）
+- 出典: Microsoft Learn「Composition native interoperation」（https://learn.microsoft.com/en-us/windows/apps/develop/composition/composition-native-interop）。`BeginDraw` は装置が失われると失敗を返し（例は `DXGI_ERROR_DEVICE_REMOVED`）、そのときは描くのを飛ばせばよい。例のコードの注記は `EndDraw` について「装置の失いを返さない」と書く。`RenderingDeviceReplaced` は、アプリが新しい装置を `SetRenderingDevice` で渡した後に来る「描き直せ」の知らせで、失いを見つける役ではない。失いを非同期に知る口（`RegisterDeviceRemovedEvent`）はスレッドプールから呼ばれる。
+- 決め: `BeginDraw` の失敗で D3D の装置の `GetDeviceRemovedReason()` を問い、失いなら `GraphicsCore::invalidate()`。判定は純関数に分けて決定論のテストで固定する。スレッドプールの口は UI スレッドの外の道を増やすので採らない。
+- 採らなかった道: 合成器と見た目を残し、`SetRenderingDevice` で装置だけ差し替える（説明書の推す形）。WUC の部品を作り直さずに済むが、討議の決め（議題 1「無効化を窓と見た目と描画面の部品まで届ける」）と違い、在る作り（WUC の資源ごと作り直す `invalidate_dependent_components`）からも離れる。emo-text の swap chain は、どちらの道でも作り直しが要る。
+
+### 9.3 bevy の実行の条件と変化の印
+- `bevy_ecs-0.19.1/src/schedule/executor/single_threaded.rs` の `run` は、条件を先に評価し、偽なら係を回さずに次へ進む。係の `last_run` は回したときにしか進まない（`system/function_system.rs`）。よって `run_if` が偽の回は変化の印を食べない。引数の検査（`Res` が無いと失敗）も回したときにしか起きない。
+- 決め: 作る係 3 つ（窓・見た目・描画面）を `run_if` で包み、WUC の資源を作る所を係に切り出す（`init_window_graphics` の中で作ると、作った回に早く戻って `Changed<HasGraphicsResources>` を食べ、作り直しの回に窓が二度と作り直されない＝設計の調べで見つけた穴）。
+
+### 9.4 下流（emo-present・emo-text・areka）の調べの結論
+- `areka-emo-present`: 面の entity は `Visual` だけで生まれ、wintf の既定の見た目の部品を使う（`mount.rs` の自前の `VisualGraphics` は過去の形で、今は無い）。控え（閉じた D2D の命令の列・古い装置の `ID2D1Bitmap1`）を持ち続け、同じ列なら入れ直さないので、装置を作り直しても絵が戻らない。在る `invalidate_all` と `refresh_scale` の出し直しの道で手当てできる。
+- `areka-emo-text`: 文字の欄・箱・印の面に自前の `VisualGraphics` を入れ、`ActorRender`（swap chain・D3D のテクスチャ・D2D の文脈）を「無ければ作る」だけ。作り直しの合図を見ていない。在る `TextSurface::release` で捨てれば、次の描画で作り直される。作る門は資源の有無しか見ないので `is_valid()` にする。
+- `areka` 本体: `emo2_boot/frame/attach.rs` の装着の門が `GraphicsCore` の有無だけを見る。ほか（`app_exit.rs` は説明だけ・`spine.rs` はテストだけ）は手当て不要。`areka-emo-atlas` は wintf の描画を使わない。
+- 合図の選び: `HasGraphicsResources` の変化は、新しい窓が出るたびにも立つ（バルーンの窓が出るたびに全部を作り直してしまう）ので使わない。`Res<GraphicsCore>` の変化の印（作り直しで同じ場所に入れ替える・失いで `invalidate()` を呼ぶ）を合図にする。新しい型は作らない。
+- wintf の部品: `HasGraphicsResources` は窓にしか付かない。四角と画像の係は「命令の列が無い」を描き直しの条件に持たないので、1 つ足す。文字と空トークの背景は持っている。タイプライターは毎回描くので手当て不要。
+
+### 9.5 消すもの・形が変わるものの確かめ（要件 3.3・3.4）
+- ツリー全体を探した結果は design.md の「消すものの確かめ」と各行の「呼び出し元」に写した。ギャップ分析の見込みと違った点: `crates/wintf/tests/ecs/lazy_reinit_pattern_test.rs` は wintf の型を使わない写し（自前の `WindowGraphics`）で、16 番の直しの影響を受けない。`crates/wintf/tests/graphics/init_window_graphics_test.rs` は WUC の資源を作るテスト 2 本を持ち、6 番の切り出しで書き換えが要る（裁定の一覧に無い・`audit-wintf-runtime` と申し合わせる）。`dcomp_integration_test.rs` の無効化のテストは WUC の無効だけを見るので緑のままの見込み。
+- `ANIM` の旗は `DolaAnimator` を消さない（議題 2）ので、旗も生産者もそのまま。
+
+### 9.6 直さずに残すもの（要件 4.5）
+- 22〜29 番と 30 番の README の写し: `wintf-visual-tree` へ申し送り済み（要件の討議 議題 7・⑵ として裁定済み）。
+- `window_proc/window_pos.rs` の ③ の流し（13 番の直しの後、② の錠つきの流しの直後に錠なしでもう一度流す）: `audit-wintf-window` の範囲で、この spec の指摘ではない。あちらへ申し送る。
+- `com/d2d` の `d2d_create_device` は、8 番の直しで wintf の中の呼び出しを失う。公開の関数で警告は出ない。`audit-wintf-runtime` へ伝える。
+
+### 9.7 まとめ（synthesis）
+- 一般化: 親をたどる 3 か所（9 番）と 4 番の判定は、上限つきの祖先の走査 1 つにまとめた。作る係の「作れない回に印を食べる」は 1 つの規則（`run_if` で回さない）で塞いだ。下流への合図は在る資源の変化の印 1 つにした。
+- 作るか借りるか: 祖先の走査は bevy の `iter_ancestors` が在るが、輪で止まらず `DeferredWorld` から使えないので、小さく自前で持つ。`compile_fail` の型のテストは rustdoc の在る仕組み（前例 `sample-ghost-kit`）を使い、依存を足さない。
+- 削り: 新しい合図の型・新しい世代の番号・監視のスレッドは作らない。トレイト `VsyncTick` は中身が無くなるので関数に替える。切り抜きの控えは新しい部品を作らず `VisualGraphics` に置く。
