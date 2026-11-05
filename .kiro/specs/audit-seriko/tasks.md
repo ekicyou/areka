@@ -252,3 +252,11 @@
 - 6.1 組 F5（V1〜V17）: 5 回目の 17 件を直した（`d7450270`）。開発者の裁定（2026-11-06「5 回目で区切る」）に従い、かけ直しはここで打ち切った。照合の表・残す 18・20 の記録・打ち切りの記録は `verification.md`。テストは 573 件。
 - 6.2（commit `64dec042`）: `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回し、全部の段が緑だった（x64 のワークスペースのテストは 1032 s、i686・fmt・エンコーディング・リリースノート・ロードマップの段も緑）。`git diff origin/main -- Cargo.lock` は空。`doc/`・`docs/` を名指す行は足していない。1,000 行を越えるファイルは areka-seriko に無い（残りは例外表の 8 行の分だけ）。GPU に触る直しは無い。
 - 検証（kiro-validate-impl）の 1 回目は NO-GO だった。並走の audit-emo-present（main `c2106635`）も例外表の別の行を消していたので、取り込むと表は 7 行なのに件数は 8 のままになる。main を取り込み、件数を表の行から数え直して 7 にした。設計のずれ（ファイルの増減・振る舞いの変わる所・打ち切り）は、design.md の末尾に「実装後の追記」として書き足した。
+- 検証の 2 回目は GO（commit `fa40666c`・main `c2106635` を取り込んだ後）。`tools/test-all.ps1` は全部の段が緑で、x64 のワークスペースのテストは 622 s。網羅は要件 42/42（5.2・5.3 は 2026-11-06 の裁定で満たす）。範囲の外の変更は、決めた 4 ファイルの決めた行だけ。新しい依存も新しい公開の口も無い。
+- 完了の棚卸へ渡すもの:
+  - `log-capture-kit/src/event_tests.rs:15`・`:18` の古い名（持ち主は audit-test-kits）。
+  - 完了した `areka-P0-seriko-trigger-intervals` の design.md:513・:620・:669 が古い（runonce の前提と、引き金の記録の target）。
+  - `parts_tests.rs` の重なり（audit-emo-compose）。
+  - 例外表の件数は、着地の順に表の行から数え直す（audit-ghost-catalog）。
+  - 読みだけで残した 3 つの狭い穴。
+  - 引き金の target の変更と、pick_rng を引く順の変更は、v0.2.0 の seriko の spec への注記に入れる。
