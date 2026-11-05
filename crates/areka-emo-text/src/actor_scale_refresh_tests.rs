@@ -589,3 +589,65 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
         "拡大率の変わる再追従（解き直し）で 1 件"
     );
 }
+
+/// 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` の変化の印を見た
+/// `present_frame` は描き手を全部捨てて差し込み口から外し、装置が有効なら同じ回に作り直す。
+/// 無効な装置では作らず、作り直した装置の回に作る。印が立たない回は作り直さない。
+#[test]
+fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
+    use wintf::ecs::{GraphicsCore, VisualGraphics, WucGraphicsResource};
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    rt.register_actor_binding(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
+        &geo_model(),
+    );
+    let slot_visual = |world: &World| {
+        world
+            .get::<VisualGraphics>(slot)
+            .and_then(|v| v.visual().cloned())
+    };
+    present_frame(&mut rt, &mut world, 10.0).expect("初回提示（装着）");
+    let first = slot_visual(&world).expect("初回提示で差し込み口に見た目が付く");
+    present_frame(&mut rt, &mut world, 10.0).expect("印の立たない回");
+    assert_eq!(
+        slot_visual(&world).as_ref(),
+        Some(&first),
+        "装置が変わっていないのに作り直した"
+    );
+
+    // 有効なまま作り直した装置（印が立つ）: 同じ回に新しい描き手を作る。
+    let recreate = |world: &mut World| {
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
+            .expect("WucGraphicsResource::new 失敗");
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+    };
+    recreate(&mut world);
+    present_frame(&mut rt, &mut world, 10.0).expect("作り直した装置の回");
+    let second = slot_visual(&world).expect("作り直した装置で差し込み口に見た目が付く");
+    assert_ne!(second, first, "古い装置の描き手を使い続けた");
+
+    // 失った装置（無効にすると印が立つ）: 捨てて外し、無効な装置では作らない。
+    world.resource_mut::<GraphicsCore>().invalidate();
+    assert!(
+        present_frame(&mut rt, &mut world, 10.0).is_err(),
+        "無効な装置で描けたことにした"
+    );
+    assert!(!rt.is_attached(&actor), "無効な装置で描き手を残すか作った");
+    assert!(slot_visual(&world).is_none(), "差し込み口から外していない");
+
+    recreate(&mut world);
+    present_frame(&mut rt, &mut world, 10.0).expect("立ち直りの回");
+    assert!(rt.is_attached(&actor), "作り直した装置の回に作り直さない");
+    let bytes = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
+    assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
+}

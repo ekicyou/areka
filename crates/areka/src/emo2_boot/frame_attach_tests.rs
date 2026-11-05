@@ -217,6 +217,32 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
     assert!(wiring.assets.is_some(), "再試行でも assets を保持");
 }
 
+/// 装着の門は装置の有無でなく有効性を見る（audit-wintf-graphics-world 6 番・要件 3.1）: 窓と
+/// WUC が揃っていても、失った（無効な）`GraphicsCore` では装着せず資産も消費しない。
+#[test]
+fn run_attach_phase_with_an_invalid_core_does_not_attach() {
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    world.resource_mut::<GraphicsCore>().invalidate();
+    let mut wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        synth_assets(&[(0, 0), (1, 10)]),
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    assert_eq!(
+        (wiring.attached, wiring.assets.is_some()),
+        (false, true),
+        "(装着した, 資産を残した)"
+    );
+}
+
 // ── task 3.3: attach が scope 別バルーン定義を文字層へ供給する（R2.6/4.1/4.2） ──────
 //
 // 実 emo2 fixture（`emo2-kakukaku`）では scope0 が `balloons0.png`／scope1 が `balloonk0.png`

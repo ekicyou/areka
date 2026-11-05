@@ -130,7 +130,7 @@
   - _Depends: 2.3, 3.2, 4.1, 4.3, 4.4, 4.5, 4.6_
   - _Requirements: 3.1, 3.2, 3.4, 5.2, 5.5, 5.6_
 
-- [ ] 5. 下流の立ち直り
+- [x] 5. 下流の立ち直り
 - [x] 5.1 emo-present が装置の作り直しで控えを捨てて出し直す
   - 装置の資源の変化を見たら全部の対象の控えを捨て、有効なら見えている対象の最後の表示を出し直す（在る関数だけを使い、あちらの新しい応答の形 `PresentOutcome` に合わせる。後に着地する方が先の形へ合わせる）
   - 新しい公開の型を作らず、emo-present のほかのファイルの形を変えない
@@ -140,7 +140,7 @@
   - _Boundary: areka-emo-present_
   - _Requirements: 3.1, 3.2, 3.4, 3.5_
 
-- [ ] 5.2 (P) emo-text と areka 本体が、装置の作り直しで控えを捨てて作る門を有効性で見る
+- [x] 5.2 (P) emo-text と areka 本体が、装置の作り直しで控えを捨てて作る門を有効性で見る
   - emo-text は装置の資源の変化を見たら全部の描き手と印の面を捨て、作る門を有効性で見る（ファイルは足さない）
   - areka 本体の装着の門を、装置の有無でなく有効性で見る
   - 在る足場で、合図の後に描き手が空になり次の描画で作り直されること、有効でないときに装着しないことを確かめる
@@ -209,3 +209,4 @@
 - 4.6: 切り抜きの鍵（`VisualGraphics.clip_key`）の側のテストは、申し合わせの一覧に無い `tests/graphics/clip_sync_system_test.rs` に置いた（足場がそこに在る・頭の InsetClip の説明も直した）。11-06 に `audit-wintf-runtime` へ伝えた。
 - 4.7: PreRenderSurface の見た目と描画面を作る係は `run_if(wuc_ready)`（装置だけ在って WUC が無い回に印を食べない）。立ち直りのテストの窓の的は世代の番号 1＋有効で見る（1 つの HWND は DesktopWindowTarget を 1 つしか持てず、古い物を生かして比べられない）。
 - 5.1: `EmoPresenter::refresh_after_device_change(world)` は毎フレーム呼ぶ前提で、本番の呼び出し 1 行は 5.2 で `crates/areka/src/emo2_boot/frame`（`run_dpi_phase` の近く）に足す（design の下流の手当ての表に追記）。`apply_show(.., None, false)` は今の main の形＝ audit-emo-present が `PresentOutcome` を着地させるときは `None` を外す。
+- 5.2: bevy 0.19 の `World::resource_scope` は戻すときに資源の変化の印を立てる。`GraphicsCore` に使うと装置の変化と読まれ、5.1・5.2 の見張りが毎フレーム作り直す輪になる＝ emo-text は `with_graphics_core`（印の時刻を戻す）を通す。`GraphicsCore` に `resource_scope` を新しく使わない。emo2 の毎フレームの出し直しは `frame.rs` の attach と dpi の間。

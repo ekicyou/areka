@@ -325,6 +325,10 @@ pub fn emo2_frame_system(world: &mut World) {
     let work_area_change = work_area_sync::sync_monitor_snapshot(world);
     // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、全フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
+    // 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` の変化の印を見たら
+    // presenter が控えを捨てて見えている target を出し直す。装着の**後**（target が在る）・拡大率と
+    // drain の**前**に置く——この回の再スケールと表示の指令が、新しい装置の上で重ねて描く。
+    wiring.presenter.refresh_after_device_change(world);
     // DPI 追従（attach → dpi → drain …の順・design「run_dpi_phase（frame.rs）」）: attach の**後**に
     // 置く——装着前は再スケール対象の target が無く、attach と同一フレームで窓が生えた直後の
     // `Changed<DPI>`（生成時 GetDpiForWindow 実値補正）を同フレームで拾えるようにするため。drain の
