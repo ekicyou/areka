@@ -6,6 +6,8 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
+use std::sync::mpsc;
+use std::time::Duration;
 use wintf::ecs::resolve_inherited_brushes;
 use wintf::ecs::widget::{Brush, BrushInherit, Brushes, DEFAULT_BACKGROUND, DEFAULT_FOREGROUND};
 
@@ -144,9 +146,9 @@ fn inherit_fields_fall_back_to_defaults_without_parent() {
     assert_eq!(brushes.background, DEFAULT_BACKGROUND);
 }
 
-/// 部分解決の親（片フィールド Inherit）はスキップされ、完全解決の祖父から継承される
+/// 片方だけ決まった親からは決まった方（前景）を取り、決まっていない背景は祖父母から取る
 #[test]
-fn partially_resolved_parent_is_skipped_for_grandparent() {
+fn partially_resolved_parent_gives_its_decided_field() {
     let mut world = World::new();
     let grandparent = world
         .spawn(Brushes {
@@ -154,7 +156,7 @@ fn partially_resolved_parent_is_skipped_for_grandparent() {
             background: Brush::BLUE,
         })
         .id();
-    // 親は前景のみ Solid（背景 Inherit）= 未解決扱い
+    // 親は前景だけ決まっている（背景は Inherit）
     let parent = world
         .spawn((
             Brushes {
@@ -171,18 +173,15 @@ fn partially_resolved_parent_is_skipped_for_grandparent() {
     let brushes = world.get::<Brushes>(child).unwrap();
     assert_eq!(
         brushes.foreground,
-        Brush::WHITE,
-        "partially resolved parent must be skipped; inherit from grandparent"
+        Brush::RED,
+        "fg from the nearest decided ancestor (parent)"
     );
-    assert_eq!(brushes.background, Brush::BLUE);
+    assert_eq!(brushes.background, Brush::BLUE, "bg from grandparent");
 }
 
-/// 部分解決の親しかいない（完全解決の祖先なし）→ 親の Solid 値ではなくデフォルトになる
-///
-/// find_parent_brushes は「両フィールド解決済み」の祖先のみを返すため、
-/// 親の解決済みフィールド（ここでは前景 RED）は子に伝播しない。現行仕様の固定化。
+/// 片方だけ決まった親しかいない → 決まった前景は親から取り、背景は既定
 #[test]
-fn partially_resolved_parent_without_resolved_ancestor_yields_defaults() {
+fn partially_resolved_parent_without_other_ancestor_gives_fg_and_default_bg() {
     let mut world = World::new();
     let parent = world
         .spawn(Brushes {
@@ -196,10 +195,69 @@ fn partially_resolved_parent_without_resolved_ancestor_yields_defaults() {
 
     let brushes = world.get::<Brushes>(child).unwrap();
     assert_eq!(
-        brushes.foreground, DEFAULT_FOREGROUND,
-        "parent's resolved fg must NOT leak through a partially resolved parent"
+        brushes.foreground,
+        Brush::RED,
+        "parent's decided fg is inherited"
     );
     assert_eq!(brushes.background, DEFAULT_BACKGROUND);
+}
+
+/// 同じ回に作った親（背景だけ青・前景は未指定）と子（未指定）→ 子の背景は青、前景は既定。
+/// 子を先に作って並びを親より前にしても同じ答えになる。
+#[test]
+fn parent_and_child_created_in_same_run_inherit_in_depth_order() {
+    let mut world = World::new();
+    let grandparent = world.spawn_empty().id();
+    // 子を先に作るため、親の Entity を先に確保しておく
+    let parent = world.spawn_empty().id();
+    let child = world.spawn((BrushInherit, ChildOf(parent))).id();
+    world.entity_mut(parent).insert((
+        BrushInherit,
+        Brushes {
+            foreground: Brush::Inherit,
+            background: Brush::BLUE,
+        },
+        ChildOf(grandparent),
+    ));
+
+    run_resolve(&mut world);
+
+    let c = world.get::<Brushes>(child).unwrap();
+    assert_eq!(
+        c.background,
+        Brush::BLUE,
+        "child bg from parent resolved in the same run"
+    );
+    assert_eq!(c.foreground, DEFAULT_FOREGROUND);
+    let p = world.get::<Brushes>(parent).unwrap();
+    assert_eq!(p.background, Brush::BLUE);
+    assert_eq!(p.foreground, DEFAULT_FOREGROUND);
+}
+
+/// 親の輪（A→B→A）の World で受け継ぎの係を回しても返る。
+/// 止まらない作りを見分けるため別スレッドで回し、30 秒で返らなければ落とす。
+#[test]
+fn parent_cycle_terminates() {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut world = World::new();
+        let a = world.spawn(BrushInherit).id();
+        let b = world.spawn((BrushInherit, ChildOf(a))).id();
+        world.entity_mut(a).insert(ChildOf(b));
+        run_resolve(&mut world);
+        let _ = tx.send((
+            world.get::<Brushes>(a).cloned(),
+            world.get::<Brushes>(b).cloned(),
+        ));
+    });
+    let (a, b) = rx
+        .recv_timeout(Duration::from_secs(30))
+        .expect("親の輪の World で受け継ぎの係が 30 秒で返らない");
+    for brushes in [a, b] {
+        let brushes = brushes.expect("Brushes inserted");
+        assert_eq!(brushes.foreground, DEFAULT_FOREGROUND);
+        assert_eq!(brushes.background, DEFAULT_BACKGROUND);
+    }
 }
 
 /// マーカーを持たないエンティティは解決対象外（Inherit のまま維持される）

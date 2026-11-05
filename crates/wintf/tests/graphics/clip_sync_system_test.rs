@@ -1,17 +1,17 @@
 //! W3a-T: clip_sync_system（WUC モードのクリップ同期）のヘッドレステスト
 //!
 //! 実 WUC デバイスを用いて clip_sync_system を Schedule 経由で実行する。
-//! WUC の InsetClip は write-only 相当で適用結果を読み戻せないため、
-//! 各分岐（3 バリアント適用・クリップ解除・リソース未初期化スキップ）が
-//! エラーなく完走することの characterization に留める
-//! （詳細は W3a-T 断片の R2.8 所見を参照）。
+//! 切り抜きの中身（図形）は読み戻さず、各分岐（3 バリアント適用・クリップ解除・
+//! リソース未初期化スキップ）がエラーなく完走することと、当たっている切り抜きの
+//! 物の同一性（`Visual::Clip()`）だけを確かめる。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
 use windows::UI::Composition::Visual as WucVisual;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::Interface;
-use wintf::ecs::layout::Arrangement;
+use windows_numerics::Matrix3x2;
+use wintf::ecs::layout::{Arrangement, GlobalArrangement};
 use wintf::ecs::{
     ClipShape, GraphicsCore, Size, Visual, VisualGraphics, WucGraphicsResource, clip_sync_system,
 };
@@ -179,5 +179,91 @@ fn clip_sync_skips_when_wuc_resource_is_absent() {
         let mut schedule = clip_schedule();
         schedule.run(&mut world);
         // パニックなしで完走すれば early return が機能している
+    });
+}
+
+/// 位置だけ変えても切り抜きは同じ物のまま・大きさを変えると作り直す・
+/// 見た目を作り直した部品には新しい見た目へ当て直す（11 番・6 番）
+#[test]
+fn clip_sync_keeps_clip_on_move_and_reapplies_to_recreated_visual() {
+    crate::common::on_gpu_owner_thread(move || {
+        let mut world = setup_world();
+        let mut schedule = clip_schedule();
+        let entity = spawn_clip_entity(
+            &mut world,
+            Visual {
+                clip: Some(ClipShape::Rectangle),
+                ..Default::default()
+            },
+            100.0,
+            50.0,
+        );
+        let visual = |world: &World| {
+            world
+                .get::<VisualGraphics>(entity)
+                .unwrap()
+                .visual()
+                .unwrap()
+                .clone()
+        };
+        let vg_changed = |world: &World| {
+            world
+                .entity(entity)
+                .get_change_ticks::<VisualGraphics>()
+                .unwrap()
+                .changed
+        };
+        schedule.run(&mut world);
+        let first = visual(&world).Clip().expect("切り抜きが当たっていない");
+
+        // 位置だけ変える
+        world
+            .get_mut::<GlobalArrangement>(entity)
+            .unwrap()
+            .transform = Matrix3x2 {
+            M11: 1.0,
+            M12: 0.0,
+            M21: 0.0,
+            M22: 1.0,
+            M31: 30.0,
+            M32: 30.0,
+        };
+        schedule.run(&mut world);
+        assert_eq!(
+            visual(&world).Clip().unwrap(),
+            first,
+            "位置だけで切り抜きを作り直した"
+        );
+
+        // 大きさを変えると作り直す。作り直して鍵を書いても部品の変化の印は動かない
+        let vg_tick = vg_changed(&world);
+        world.get_mut::<Arrangement>(entity).unwrap().size = Size {
+            width: 200.0,
+            height: 50.0,
+        };
+        schedule.run(&mut world);
+        assert_ne!(
+            visual(&world).Clip().unwrap(),
+            first,
+            "大きさが変わったのに切り抜きが古いまま"
+        );
+        assert_eq!(
+            vg_changed(&world),
+            vg_tick,
+            "鍵の書き込みが見た目の部品の変化の印を立てた"
+        );
+
+        // 見た目を作り直す（本番の visual_manager と同じく中身を差し替える）
+        let second: WucVisual = {
+            let resource = world.resource::<WucGraphicsResource>();
+            let compositor = resource.compositor().expect("compositor");
+            compositor.CreateSpriteVisual().unwrap().cast().unwrap()
+        };
+        *world.get_mut::<VisualGraphics>(entity).unwrap() = VisualGraphics::new(second.clone());
+        schedule.run(&mut world);
+        assert!(
+            second.Clip().is_ok(),
+            "作り直した見た目に切り抜きが当たっていない"
+        );
     });
 }

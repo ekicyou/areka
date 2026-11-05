@@ -134,12 +134,26 @@ pub fn draw_rectangles(
             Option<&GraphicsCommandList>,
             Option<&Name>,
         ),
-        Or<(Changed<Rectangle>, Changed<Arrangement>, Changed<Brushes>)>,
+        // 命令の列が無い（立ち直りで外された）ときも描き直す
+        Or<(
+            Changed<Rectangle>,
+            Changed<Arrangement>,
+            Changed<Brushes>,
+            Without<GraphicsCommandList>,
+        )>,
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
     let Some(graphics_core) = graphics_core else {
         warn!("GraphicsCore not available, skipping draw_rectangles");
+        return;
+    };
+    if query.is_empty() {
+        return;
+    }
+    // グローバル共有DeviceContextを取得（無ければ部品ごとでなく 1 回だけ記録）
+    let Some(dc) = graphics_core.device_context() else {
+        warn!("DeviceContext not available, skipping draw_rectangles");
         return;
     };
 
@@ -158,19 +172,7 @@ pub fn draw_rectangles(
             .as_color()
             .unwrap_or_else(|| DEFAULT_FOREGROUND.as_color().unwrap());
 
-        // DeviceContextとCommandList生成
-        // グローバル共有DeviceContextを取得
-        let dc = match graphics_core.device_context() {
-            Some(dc) => dc,
-            None => {
-                warn!(
-                    entity = %entity_name,
-                    "DeviceContext not available"
-                );
-                continue;
-            }
-        };
-
+        // CommandList生成
         let command_list = match unsafe { dc.CreateCommandList() } {
             Ok(cl) => cl,
             Err(err) => {

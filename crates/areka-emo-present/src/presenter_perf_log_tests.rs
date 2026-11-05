@@ -9,11 +9,11 @@
 //! 固定する契約は 4 つである。
 //!
 //! 1. **perf サマリ行のスキーマ**（Requirement 1.1/1.3/1.4・design.md §Data Models）:
-//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（段 4・確保 2 ＋
-//!    同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
+//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（時間 5（段 4＋合計）・
+//!    確保 2 ＋ 同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
 //!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
 //! 2. **既存の表示成立点の行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
-//!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・12 フィールド
+//!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・全フィールド
 //!    **ちょうど**。本ファイルはこの契約の防波堤であり、表示成立点の行を 1 文字でも触ると RED になる
 //! 3. **mark の設置位置**（Requirement 1.4）: 段が実行される入力では非 0、実行されない入力では
 //!    **厳密に 0**。どの段が 0 になるかは mark をどの分岐へ置いたかの構造的帰結であり、
@@ -64,24 +64,14 @@
 
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::Surface;
-
 use super::test_support::{
-    CapturedEvent, build_target_assets, capture, elem, shell_of, spawn_window_with_dpi, surface,
+    CapturedEvent, INFO_LINE_MESSAGE, build_target_assets, capture, field, show_ok, show_with,
+    show_with_armed_fault, show_with_ok, spawn_window_with_dpi,
 };
 use super::timing::{PERF_LINE_MESSAGE, compose_key_hash};
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
-// ── 契約面の正本（この 3 つの定数がコード側と乖離したら RED）───────────────────────────
-
-/// 既存の表示成立点の行の固定文言（show.rs の `info!`・実機サインオフ契約）。
-const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
+// ── 契約面の正本（この 2 つの定数と支えの `INFO_LINE_MESSAGE` がコード側と乖離したら RED）──
 
 /// 表示成立点の行のフィールド集合（show.rs の `info!` から逐語で写した**全項目**）。
 ///
@@ -151,13 +141,6 @@ fn info_line_indices(events: &[CapturedEvent]) -> Vec<usize> {
         .filter(|(_, e)| e.message() == INFO_LINE_MESSAGE)
         .map(|(i, _)| i)
         .collect()
-}
-
-/// フィールドを引く（無ければ全フィールドを添えて落とす＝欠落が判る形）。
-fn field(ev: &CapturedEvent, name: &str) -> String {
-    ev.field(name)
-        .unwrap_or_else(|| panic!("行にフィールド `{name}` が無い: {:?}", ev.fields))
-        .to_string()
 }
 
 /// µs フィールドを数値で引く（0／非 0 の構造判定に使う。値の**大きさ**は一切見ない）。
@@ -243,7 +226,7 @@ const NATIVE_H: u32 = 180;
 
 /// キャッシュ照会段の非 0 を入力の大きさで担保するための bind 集合の要素数。
 ///
-/// `ComposeCache::get` はヒット時に `key.binds == *binds` を逐語比較する（`Vec<u32>` ＝
+/// `ComposeCache::touch` はヒット時に `key.binds == *binds` を逐語比較する（`Vec<u32>` ＝
 /// 400KB）。surface 1000 は `animations` を 1 件も持たないため、この集合は**合成の内容にも
 /// 所要にも影響しない**（`build_plan` は surface の animation 側から `binds.contains` を引く
 /// だけ）——純粋に「照会段が舐める入力量」だけを増やす仕掛けである。
@@ -273,79 +256,6 @@ fn heavy_binds() -> BindSet {
     BindSet::from_ids(1..=BIND_COUNT)
 }
 
-/// 有効 surface 1000（`w×h` 全不透明）＋ 定義層皆無で外形 0×0 に退化する surface 7000 を
-/// 同一 target へ載せる `(EmoWorld, AtlasTable)`。
-///
-/// surface 7000 は `Composer::compose` が `Err(ComposeError::EmptyComposition(7000))` を返す
-/// （presenter_display_tests.rs の同型 fixture と同じ構成）。show.rs の早期復帰 8 経路のうち
-/// EmptyComposition 縮退（warn! ＋ Hide 縮退）へ到達する唯一の手段である。
-fn build_assets_with_empty_surface(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        Surface {
-            id: 7000,
-            targets: vec![areka_parsers::shell::AppendTarget::Single(7000)],
-            elements: Vec::new(),
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        },
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.extend_from_slice(&[b, g, r, 0xFF]);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// `ShowSurface` を 1 回適用し、reply の結果を返す（成功・失敗のどちらも呼び手が判定する）。
-fn show(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    target: TargetId,
-    surface_id: u32,
-    binds: BindSet,
-) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id,
-            binds,
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("ShowSurface の reply を受信できない")
-}
-
 /// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作る（`author_dpi` は 96 固定）。
 fn attach(
     presenter: &mut EmoPresenter,
@@ -356,47 +266,36 @@ fn attach(
 ) {
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, salt);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
 /// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ミス経路**）: 実際の `apply_show` が
 /// 表示成立点の行と perf 行を**隣接する対**として各 1 本出し、perf 行が固定文言・
-/// debug 水準・13 フィールドちょうどを備え、4 段すべてに mark が効いていて、`alloc_*` が
+/// debug 水準・13 フィールドちょうどを備え、照会段を除く 3 段と合計に mark が効いていて、`alloc_*` が
 /// 実 `FrameBudget` の値（発生点 2）で埋まる。
 ///
 /// 引き当てミスの初回適用は **4 段すべてが実行される唯一の入力**である（k の値では段が
 /// 増減しない——拡大は wintf の変換行列が掛けるため経路が分岐しない）。ゆえに
-/// どれか 1 つの `timing.mark(..)` を削ると、その段が 0 になって RED になる。同様に
+/// 合成・マスク・表示の記録の段の `timing.mark(..)` を 1 つ削ると、その段が 0 になって RED になる
+/// （照会段の mark は [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が固定する）。同様に
 /// `note_alloc` を 1 つ削ると該当 `alloc_*` が 0 になって RED になる。
 ///
 /// # 殺す誤実装
 ///
-/// - `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
-/// - `target.budget.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
+/// - 合成・マスク・表示の記録の段の `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
+/// - `presenter/budget.rs` の `self.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
 /// - `timing.emit` を成立点から引き剥がす → 隣接判定で RED
 /// - 表示成立点の行の文言・水準・フィールドの変更 → [`assert_info_line_contract`] で RED
 #[test]
-fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired() {
+fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
     let mut world = super::test_support::make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     attach(&mut presenter, &mut world, TargetId(0), 192, 0xA1);
 
     let ((), events) = capture(|| {
-        assert!(
-            show(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                BindSet::default()
-            )
-            .is_ok(),
-            "前提: k=2/1 の初回表示は成立する"
-        );
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     });
 
     let (info, perf) = expect_single_adjacent_pair(&events);
@@ -484,8 +383,22 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 
     let ((), events) = capture(|| {
         // 1 回目＝ミス（スロットを埋める）、2 回目＝完全一致ヒット。
-        assert!(show(&mut presenter, &mut world, TargetId(0), 1000, heavy_binds()).is_ok());
-        assert!(show(&mut presenter, &mut world, TargetId(0), 1000, heavy_binds()).is_ok());
+        show_with_ok(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            1000,
+            heavy_binds(),
+            PatternState::default(),
+        );
+        show_with_ok(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            1000,
+            heavy_binds(),
+            PatternState::default(),
+        );
     });
 
     let infos = info_line_indices(&events);
@@ -580,7 +493,7 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 /// 陽性として観測することで示す——これが無いと「そもそも経路へ到達していないから行が
 /// 増えなかった」だけの空虚な緑になる。
 ///
-/// # カバーする早期復帰（show.rs の 8 経路のうち 3 つ）
+/// # カバーする早期復帰（show.rs の早期復帰のうち 3 つ）
 ///
 /// - 未装着 target（`TargetNotAttached`）
 /// - 合成失敗（`SurfaceNotFound`）
@@ -589,44 +502,47 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     let mut world = super::test_support::make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas) = build_assets_with_empty_surface(NATIVE_W, NATIVE_H, 0xA4);
+    let (emo_world, atlas) =
+        super::test_support::build_assets_with_valid_and_empty(NATIVE_W, NATIVE_H, 0xA4);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let ((ok, not_attached, compose_err, empty), events) = capture(|| {
         // 陽性: 表示が成立する適用 1 本（両 callsite が有効であることの証明）。
-        let ok = show(
+        let ok = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
         // 陰性 1: 未装着 target（show.rs 冒頭の早期復帰）。
-        let a = show(
+        let a = show_with(
             &mut presenter,
             &mut world,
             TargetId(9),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
         // 陰性 2: 解決不能 id（合成失敗の早期復帰）。
-        let b = show(
+        let b = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             9999,
             BindSet::default(),
+            PatternState::default(),
         );
         // 陰性 3: 定義層皆無で外形 0×0（全透明退化 → Hide 縮退の早期復帰）。
-        let c = show(
+        let c = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             7000,
             BindSet::default(),
+            PatternState::default(),
         );
         (ok, a, b, c)
     });
@@ -708,51 +624,43 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
     for (i, salt) in [(0u32, 0xB1u8), (1, 0xB2), (2, 0xB3)] {
         let window = spawn_window_with_dpi(&mut world, 192);
         let (emo_world, atlas, _golden) = build_target_assets(4, 3, salt);
-        presenter
-            .attach_target(&mut world, TargetId(i), window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(TargetId(i), window, emo_world, atlas, 96);
     }
 
     let ((ok, no_gfx, record_failed), events) = capture(|| {
         // 陽性: 資源が揃った target の成立適用（両 callsite の有効性の証明）。
-        let ok = show(
+        let ok = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
 
         // 陰性 1: GraphicsCore 不在（＝DeviceContext を借りられず記録に入れない）。
         let gfx = world
             .remove_resource::<GraphicsCore>()
             .expect("前提: GraphicsCore が載っている");
-        let a = show(
+        let a = show_with(
             &mut presenter,
             &mut world,
             TargetId(1),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
         world.insert_resource(gfx);
 
         // 陰性 2: 記録の失敗（`record_display` の 1 点目＝`CreateBitmap` へ注入）。
-        // 解除は `Drop` に持たせる——assert の panic で飛び越すと旗が同一スレッドの
-        // 後続テストを巻き添えにする（`display_fault_tests.rs` と同じ流儀）。
-        struct Disarm;
-        impl Drop for Disarm {
-            fn drop(&mut self) {
-                clear_display_fault();
-            }
-        }
-        let _disarm = Disarm;
-        arm_display_fault(DisplayFault::CreateBitmap);
-        let b = show(
+        let b = show_with_armed_fault(
             &mut presenter,
             &mut world,
             TargetId(2),
             1000,
             BindSet::default(),
+            PatternState::default(),
+            DisplayFault::CreateBitmap,
         );
 
         (ok, a, b)
@@ -806,7 +714,7 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
     );
     assert!(
         events.iter().any(|e| e.level == tracing::Level::ERROR
-            && e.message() == "D3D/DXGI 呼び出しが失敗"
+            && e.message() == "D2D 呼び出しが失敗"
             && e.field_str("context") == Some("<injected:CreateBitmap>")),
         "記録の失敗経路を通っていない（陰性が空虚）: {events:?}"
     );
@@ -829,28 +737,10 @@ fn display_result_is_independent_of_log_configuration() {
 
     // (a) 捕捉 subscriber あり。
     let ((), events) = capture(|| {
-        assert!(
-            show(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                BindSet::default()
-            )
-            .is_ok()
-        );
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     });
     // (b) subscriber なし（既定の NoSubscriber ＝ perf 行も表示成立点の行も一切出ない）。
-    assert!(
-        show(
-            &mut presenter,
-            &mut world,
-            TargetId(1),
-            1000,
-            BindSet::default()
-        )
-        .is_ok()
-    );
+    show_ok(&mut presenter, &mut world, TargetId(1), 1000);
 
     // 前提: (a) では行が出ている（(b) との差がログ設定だけであることの担保）。
     assert_eq!(

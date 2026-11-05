@@ -10,15 +10,13 @@ use super::*;
 use areka_emo_atlas::MemoryDecoder;
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events};
-
-/// 本モジュールが出す記録の宛先（既定の target＝モジュールパス）。
-const SHELL_TARGET: &str = "areka_emo_present::shell_target";
+use super::test_support::{CapturedEvent, SHELL_TARGET, from_shell_target};
+use log_capture_kit::capture;
 
 /// 面 0 の土台に `base.png` を置くだけの `surfaces.txt`。
 const SURFACES: &str = "charset,UTF-8\nsurface0\n{\nelement0,overlay,base.png,0,0\n}\n";
 
-/// 同じ色の不透明な 2 画素（左上の色を抜けば全部透明になる）。
+/// 不透明な 1 画素の色（これだけを並べた絵は、左上の色を抜けば全部透明になる）。
 const PX: [u8; 4] = [10, 20, 30, 255];
 
 /// `descript` を descript.txt に書いた一時フォルダのシェル（`base.png` の絵は復号器が持つ）。
@@ -160,12 +158,9 @@ fn unreadable_descript_warns_and_is_undeclared() {
     std::fs::write(dir.child("surfaces.txt"), SURFACES).expect("記述ファイル作成");
     let dec = decoder(&dir, &[PX, PX], true);
 
-    let (pixels, events) = capture_events(|| baked_pixels(&dir, &dec));
+    let (pixels, events) = capture(|| baked_pixels(&dir, &dec));
     assert_eq!(pixels, None, "宣言なしの決まりで抜かれる");
-    let warns: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.target == SHELL_TARGET && e.level == tracing::Level::WARN)
-        .collect();
+    let warns = from_shell_target(&events, tracing::Level::WARN);
     assert_eq!(warns.len(), 1, "{events:?}");
     assert!(warns[0].message().contains("descript.txt"), "{warns:?}");
 }
@@ -177,13 +172,9 @@ fn ignored_pna_is_recorded_once_with_the_count() {
     let mut dec = decoder(&dir, &[PX, PX], true);
     dec.insert_pna(dir.child("base.png"));
 
-    let (target, events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+    let (target, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
     assert_eq!(target.ignored_pna, 1);
-    let warns: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.target == SHELL_TARGET && e.level == tracing::Level::WARN)
-        .collect();
+    let warns = from_shell_target(&events, tracing::Level::WARN);
     assert_eq!(warns.len(), 1, "{events:?}");
     assert_eq!(warns[0].field("ignored_pna"), Some("1"), "{warns:?}");
 }
@@ -226,7 +217,7 @@ fn image_only_infos(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 /// ことを確かめる。
 fn assert_image_only(dir: &TempPath, dec: &MemoryDecoder, surfaces_txt: &str, count: &str) {
     let (target, events) =
-        capture_events(|| load_shell_target(dir.path(), dec).expect("画像だけで組める"));
+        capture(|| load_shell_target(dir.path(), dec).expect("画像だけで組める"));
     let ids: Vec<u32> = target.build_world().surface_ids().collect();
     assert!(ids.contains(&0), "面 0 が在る: {ids:?}");
     let infos = image_only_infos(&events);
@@ -276,15 +267,12 @@ fn no_surface_and_no_image_yields_empty_at_the_shell_dir() {
         ("shell-image-only-none-empty", Some("charset,UTF-8\n")),
     ] {
         let (dir, dec) = image_only_shell(label, surfaces, &[]);
-        let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
+        let (result, events) = capture(|| load_shell_target(dir.path(), &dec));
         match result {
             Err(ShellLoadError::Empty { path }) => assert_eq!(path, dir.path()),
             other => panic!("{label}: 面が無い失敗は Empty でなければならない: {other:?}"),
         }
-        let errors = events
-            .iter()
-            .filter(|e| e.target == SHELL_TARGET && e.level == tracing::Level::ERROR)
-            .count();
+        let errors = from_shell_target(&events, tracing::Level::ERROR).len();
         assert_eq!(errors, 1, "{label}: {events:?}");
     }
 }
@@ -305,7 +293,6 @@ fn unreadable_surfaces_txt_yields_read_even_with_images() {
 fn defined_surfaces_do_not_record_image_only() {
     let dir = shell_with("shell-image-only-control", b"seriko.use_self_alpha,1\n");
     let dec = decoder(&dir, &[PX, PX], true);
-    let (_, events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+    let (_, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
     assert!(image_only_infos(&events).is_empty(), "{events:?}");
 }

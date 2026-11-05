@@ -36,9 +36,7 @@ fn attached_target(
 ) -> Entity {
     let window = spawn_window_with_dpi(world, dpi);
     let (emo_world, atlas, _) = build_target_assets(FACE_SIZE.0, FACE_SIZE.1, 0);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
     window
 }
 

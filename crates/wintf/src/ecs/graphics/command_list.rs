@@ -28,8 +28,8 @@ impl GraphicsCommandList {
 
 // SAFETY 条件: windows-rs の COM スマートポインタは自動では Send/Sync にならない
 // （だからこそこの unsafe impl が必要）。健全性は対象 API の同期特性に依拠する:
-// ID2D1CommandList は D2D1_FACTORY_TYPE_MULTI_THREADED ファクトリ系列
-// （GraphicsCore::new → create_d2d_factory）のオブジェクトであり、同一ファクトリ
-// 系列への COM 呼び出しは D2D が内部で直列化するため、跨スレッド移動・参照共有とも安全。
+// ID2D1CommandList は GraphicsCore の装置から作られ、その装置は D2D1_FACTORY_TYPE_MULTI_THREADED
+// の工場（GraphicsCore::new → create_d2d_factory）の CreateDevice で作られる。同じ工場に属する
+// オブジェクトへの COM 呼び出しは D2D が内部で直列化するため、跨スレッド移動・参照共有とも安全。
 unsafe impl Send for GraphicsCommandList {}
 unsafe impl Sync for GraphicsCommandList {}

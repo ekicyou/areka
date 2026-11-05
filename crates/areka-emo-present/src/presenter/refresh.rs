@@ -1,13 +1,22 @@
 //! 窓 DPI 変化に伴う再スケール（`EmoPresenter::refresh_scale`）と、表示成立点が積んだ窓寸 reconcile
 //! 要求の取り出し（`EmoPresenter::take_pending_resize`）。
 
+use bevy_ecs::change_detection::Tick;
+use bevy_ecs::resource::Resource;
+use wintf::ecs::GraphicsCore;
 use wintf::ecs::window::transition_diag;
 
 use super::transition_record::{
     SURFACE_REASON_INVISIBLE, SURFACE_REASON_K_UNCHANGED, SurfaceRecord, SurfaceStage, stamp_of,
     surface_line,
 };
-use super::{DPI, EmoPresenter, TargetId, World, derive_scale};
+use super::{DPI, EmoPresenter, PresentCommand, TargetId, World, derive_scale};
+
+/// presenter が最後に見た `GraphicsCore` の変化の印（[`EmoPresenter::refresh_after_device_change`] の控え）。
+///
+/// World ごとに 1 つなので、1 つの World に presenter は 1 つの前提（本番は `emo2_boot/mod.rs` の 1 つだけ）。
+#[derive(Resource)]
+struct SeenGraphicsCore(Tick);
 
 impl EmoPresenter {
     /// 窓 DPI 変化に伴う再スケール（要件 4.1-4.4・design Flow 2）。
@@ -30,8 +39,8 @@ impl EmoPresenter {
     ///
     /// ここでの [`derive_scale`] 呼出は**ゲート判定の述語**であり、実際に適用される k は `apply_show` が
     /// 自前で導出したものである（漏斗を二重化しない・design Flow 1「k 導出は show 適用ごと」）。両者は
-    /// 同一の純関数へ同一入力を与える（同一 UI スレッド内・間に World 変更なし）ため必ず一致し、その一致は
-    /// 再表示後の `applied` 照合で**実際に検査される**（食い違えば失敗として扱われ黙って通らない）。
+    /// 同一の純関数へ同一入力を与える（同一 UI スレッド内・間に World 変更なし）ため必ず一致する。再表示の
+    /// 成否は `apply_show` の戻り値で読み、状態（`applied`）の後追いでは推し量らない。
     ///
     /// # [`Self::take_pending_resize`] との関係（二重 resize も取りこぼしもしない）
     ///
@@ -116,34 +125,87 @@ impl EmoPresenter {
             return None;
         };
 
-        // 表示更新は既存の単一漏斗をそのまま通す（`reply` なし＝内部再実行・design Flow 2）。成立点の記録・
+        // 表示更新は既存の単一漏斗をそのまま通し、成否は戻り値で読む（design Flow 2）。成立点の記録・
         // 失敗時の early return・D10 ログ・状態照合報告はすべて `apply_show` 側の不変条件がそのまま効く。
-        self.apply_show(world, target_id, surface_id, binds, pattern, None, false);
-
-        let t = self.targets.get(&target_id)?;
-        if t.applied != Some(scale) {
+        if let Err(e) = self.apply_show(world, target_id, surface_id, binds, pattern, false) {
             // 表示成立に至らなかった。前 k・前表示は `apply_show` の early return が保っている（要件 4.4）。
-            if t.visible {
-                tracing::error!(
-                    ?target_id,
-                    k_ratio_from = ?previous,
-                    k_ratio_to = ?scale,
-                    window_dpi = ?window_dpi,
-                    "refresh_scale: 再表示が成立せず（直前の k による表示を維持）"
-                );
-            } else {
-                // 全透明退化（`EmptyComposition` → Hide 縮退）。`apply_show` が warn! 済みゆえ重ねない。
-                tracing::debug!(
-                    ?target_id,
-                    "refresh_scale: 再表示が全透明退化（Hide 縮退・warn は apply_show 側）"
-                );
-            }
+            tracing::error!(
+                ?target_id,
+                k_ratio_from = ?previous,
+                k_ratio_to = ?scale,
+                window_dpi = ?window_dpi,
+                error = %e,
+                "refresh_scale: 再表示が成立せず（直前の k による表示を維持）"
+            );
+            return None;
+        }
+        if self.targets.get(&target_id)?.current_surface_id.is_none() {
+            // 全透明退化（`EmptyComposition` → Hide 縮退）。`apply_show` が warn! 済みゆえ重ねない。
+            tracing::debug!(
+                ?target_id,
+                "refresh_scale: 再表示が全透明退化（Hide 縮退・warn は apply_show 側）"
+            );
             return None;
         }
 
         // 成立: 状態照合が積んだ要求をここで消費して返す（drain フェーズと二重に出さない）。物理寸が
         // 変わらなければ `None`＝窓寸 reconcile 不要（k だけ変わって丸め後の寸が同じ場合が実在する）。
         self.take_pending_resize(target_id)
+    }
+
+    /// 装置の作り直し・失いへの追従（audit-wintf-graphics-world 6 番・判断 1）。毎フレーム呼ぶ。
+    ///
+    /// `Res<GraphicsCore>` の変化の印は作り直しと本当の失いのときだけ立つ。印を見たら全部の
+    /// target の控え（古い装置で閉じた命令の列）を捨て、装置が有効なら見えている target の最後の
+    /// 表示を出し直す（`refresh_scale` の出し直しの道を倍率の門なしで通す）。無効な間は捨てるだけで、
+    /// 作り直しの回にもう一度印が立って出し直す。初めて呼んだ回は印を控えるだけ。
+    pub fn refresh_after_device_change(&mut self, world: &mut World) {
+        let Some(changed) = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .map(|t| t.changed)
+        else {
+            return;
+        };
+        let now = world.read_change_tick();
+        let seen = world.get_resource::<SeenGraphicsCore>().map(|s| s.0);
+        if seen.is_some_and(|seen| !changed.is_newer_than(seen, now)) {
+            return;
+        }
+        // 時刻を進めて控える: 同じ時刻のうちに後から立った印も、次の回に新しいと分かる。
+        let mark = world.increment_change_tick();
+        world.insert_resource(SeenGraphicsCore(mark));
+        if seen.is_none() {
+            return;
+        }
+
+        let valid = world.resource::<GraphicsCore>().is_valid();
+        tracing::debug!(
+            valid,
+            "refresh_after_device_change: 装置の変化を見た（控えを捨てる）"
+        );
+        let ids: Vec<TargetId> = self.targets.keys().copied().collect();
+        for target in ids {
+            self.apply(
+                world,
+                PresentCommand::InvalidateCache {
+                    target,
+                    reply: None,
+                },
+            );
+            if !valid {
+                continue;
+            }
+            let Some((surface_id, binds, pattern)) = self
+                .targets
+                .get(&target)
+                .filter(|t| t.visible)
+                .and_then(|t| t.last_show.clone())
+            else {
+                continue;
+            };
+            // 失敗は `apply_show` が記録する（前の表示は保たれる）。
+            let _ = self.apply_show(world, target, surface_id, binds, pattern, false);
+        }
     }
 
     /// 表示成立点の状態照合が積んだ**窓寸 reconcile 要求**を取り出す（取り出しで消える・drain 契約）。
@@ -154,10 +216,10 @@ impl EmoPresenter {
     /// client を新物理寸へ合わせる（design Flow 2／Flow 3 手順 5・議題 #2 裁定）。未登録 target・
     /// 要求なしは `None`。
     ///
-    /// # なぜ `reply`（[`PresentOutcome`]）ではなくここに置くのか
+    /// # なぜ `reply`（`PresentOutcome`）ではなくここに置くのか
     ///
     /// 本番の drain 経路（`run_drain_phase`）は指令へ `reply` を**同梱しない**（撃ちっぱなし）ため、
-    /// [`PresentOutcome`] を太らせても報告は呼び手へ届かない。加えて報告は「表示が成立したという
+    /// `PresentOutcome` を太らせても報告は呼び手へ届かない。加えて報告は「表示が成立したという
     /// **状態**」であり、エッジ（`Changed<DPI>`）の消費順序に依存してはならない（議題 #2 裁定）。
     /// ゆえに target ごとの**取り出し可能な状態**として置く。
     ///

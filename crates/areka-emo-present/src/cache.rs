@@ -128,10 +128,10 @@ struct ComposeKey {
 /// 保持するエントリ数の上限（**開発者裁定 2026-08-15**・要件 7.1）。
 ///
 /// 実測の根拠は本モジュール冒頭 §容量は 1 → 3 と `remeasure-2026-08-15.md` §4。命中率の膝が
-/// ここにあり、4 以上へ広げても伸びは 1 ポイント未満である（3→64 でも 12 ポイント）。
+/// ここにあり、4 へ広げても伸びは 0.3 ポイント（8 でも 1.4・64 でも 12 ポイント）である。
 ///
 /// **この定数の変更は要件 7.1 の裁定ゲートを通す。** 自律ループが単独で動かしてよい値ではない。
-const CAPACITY: usize = 3;
+pub(crate) const CAPACITY: usize = 3;
 
 /// 合成入力 → [`CacheEntry`] の**容量 [`CAPACITY`]・LRU 置換**メモ化表。
 ///
@@ -162,12 +162,6 @@ const CAPACITY: usize = 3;
 pub struct ComposeCache {
     /// キー（合成入力）と結果の対を**最近使用の昇順**で持つ（先頭＝次の追い出し）。
     entries: Vec<(ComposeKey, CacheEntry)>,
-}
-
-impl Default for ComposeCache {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl ComposeCache {
@@ -242,8 +236,6 @@ impl ComposeCache {
     /// `display` は呼び手が原寸バイトから記録した**閉じた**コマンドリスト（[`CacheEntry::display`]）
     /// で、本層はそれを保持するだけである（生成しない・GPU を知らない）。GPU の無い檻では
     /// [`GraphicsCommandList::empty`] を渡す。
-    ///
-    /// 挿入したエントリへの共有参照を返す（提示段がそのまま表示・マスク同期へ用いる）。
     pub fn insert(
         &mut self,
         surface_id: u32,
@@ -252,7 +244,7 @@ impl ComposeCache {
         composed: ComposedSurface,
         mask: Arc<AlphaMask>,
         display: GraphicsCommandList,
-    ) -> &CacheEntry {
+    ) {
         // 同一キーの再挿入は重複を作らずその席を外す（以下の push で末尾＝最近使用へ戻る）。
         if let Some(at) = self.position(surface_id, &binds, &pattern) {
             self.entries.remove(at);
@@ -273,8 +265,6 @@ impl ComposeCache {
                 display,
             },
         ));
-        // 直前に押し込んだ末尾は必ず存在する。
-        &self.entries.last().expect("entry was just inserted").1
     }
 
     /// 合成入力で引き当て、**ヒットしたらそのエントリを最近使用の末尾へ引き上げる**。
