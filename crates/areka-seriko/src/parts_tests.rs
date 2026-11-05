@@ -442,7 +442,7 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     assert_eq!(parts_in_field(&p), vec![100], "40 のコマは欄に載らない");
 }
 
-// ── areka-P0-surface-element-nesting tasks.md 7.3: 時計を書き換えない口・時計を捨てる口・記録 ──
+// ── areka-P0-surface-element-nesting tasks.md 7.3: 出来事の直後の作り直し・時計を捨てる口・記録 ──
 
 /// 子 100 は 50ms で 101 → さらに 50ms で 102（`-1` の無い末尾＝保つ）。
 const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
@@ -450,8 +450,8 @@ const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
     animation0.pattern0,overlay,101,50,0,0\n\
     animation0.pattern1,overlay,102,50,0,0\n}\n";
 
-/// 時計を書き換えない口（出来事の直後の `refresh`・抽選の時計は書き換えない）で部品の欄を作り直した
-/// 結果を返す。
+/// 出来事の直後の作り直し（`refresh`）で部品の欄を作り直した結果を返す。抽選の animation の時計は
+/// 書き換えない（働きのコマが始めた・止めた時計を除く）。
 pub(super) fn refresh_at(
     clocks: &mut PartClocks,
     table: &AnimationTable,
@@ -476,8 +476,9 @@ pub(super) fn refresh_at(
     pattern
 }
 
-/// 時計を書き換えない口は乱数を呼ばず、時計を変えない。末尾に着いた時刻を見ても `Residual` へ
-/// 移さない（移すのは次の刻み）。何度呼んでも、次の刻みの結果は呼ばなかったときと同じ（要件 5.6）。
+/// 出来事の直後の作り直しは抽選の乱数を呼ばず、抽選の animation の時計を変えない。末尾に着いた時刻を
+/// 見ても `Residual` へ移さない（移すのは次の刻み）。何度呼んでも、次の刻みの結果は呼ばなかったときと
+/// 同じ（要件 5.6）。
 #[test]
 fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     let table = table_of(HOLD);
@@ -539,7 +540,11 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
         assert!(refresh_at(&mut clocks, &table, 1, &b, Some(1100), &stale).is_empty());
         assert_eq!(clocks.clock(&scope(), 100, 0), playing);
     }
-    assert_eq!(calls(&probe), 1, "時計を書き換えない口は乱数を呼ばない");
+    assert_eq!(
+        calls(&probe),
+        1,
+        "出来事の直後の作り直しは抽選の乱数を呼ばない"
+    );
 
     // 次の刻みの結果は、呼ばなかった側と同じ。
     assert_eq!(
@@ -567,7 +572,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     assert_eq!(calls(&probe), calls(&probe0));
 }
 
-/// 時計を書き換えない口でも、有効でない `bind+random` のコマは欄に書かない。時計は消さない
+/// 出来事の直後の作り直しでも、有効でない `bind+random` のコマは欄に書かない。時計は消さない
 /// （消すのは次の刻み・要件 5.12）。
 #[test]
 fn peek_does_not_write_inactive_bind_random_frames() {
@@ -746,7 +751,8 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
 }
 
 /// 部品の発火・末尾での保持・停止・着せ替えから外れた停止は `info!` で部品の番号の欄つきで残る。
-/// 時計を書き換えない口は何も記録しない（同じ捕捉の中で刻みの行が出ることを陽性対照にする）。
+/// 出来事の直後の作り直しは、抽選の発火・末尾での保持・停止の記録を出さない（出すのは `advance` だけ・
+/// 同じ捕捉の中で刻みの行が出ることを陽性対照にする）。
 #[test]
 fn part_fire_hold_and_stop_lines_carry_the_part_number() {
     let table = table_of(
@@ -804,7 +810,7 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
             ]
         ),
         1,
-        "末尾での保持は移った刻みの 1 回だけ（時計を書き換えない口は記録しない）: {part_lines:#?}"
+        "末尾での保持は移った刻みの 1 回だけ（出来事の直後の作り直しは保持の記録を出さない）: {part_lines:#?}"
     );
     assert_eq!(
         count(

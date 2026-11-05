@@ -1,5 +1,5 @@
 //! ループの表の差し替え（`replace_shell_table`／`replace_balloon_tables`）の決定論テスト
-//! （要件 2.8・3.5）。
+//! （spec: areka-P0-shell-balloon-switch 要件 2.8・3.5）。
 
 use super::tests::{always_fire, cfg, pattern_of, table_single};
 use super::*;

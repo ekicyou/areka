@@ -35,7 +35,3 @@ static DOT_SAKURA: LazyLock<SampleRoot> =
 pub(crate) fn dot_sakura_shell_root() -> PathBuf {
     DOT_SAKURA.folder().join("shell/master")
 }
-
-#[cfg(test)]
-#[path = "sample_test_support_tests.rs"]
-mod tests;

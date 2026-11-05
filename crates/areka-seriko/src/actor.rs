@@ -15,7 +15,8 @@
 //! 同じ発行点を使う。broadcast（D4）で seriko は全 cue を受け取るため、担当外
 //! （非 Shell）・純粋 Wait の受信は「正常な担当外受信」＝良性 `debug!`＋skip（action を無視し
 //! duration を honor・R2.2/2.3/5.4）、名前形バルーン key（NameForm）は文字の層が読むので `debug!`＋skip、
-//! 破損入力（Unresolved/Invalid=`error!`／EntityRef=`warn!`）のみが真の異常。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
+//! 破損入力（Unresolved/Invalid=`error!`／EntityRef=`warn!`）などが真の異常（着せ替えの腕の記録は
+//! `actor_bind.rs`）。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
 //!
 //! # 結線契約（受け口＝単一の出力契約）
 //!
@@ -244,7 +245,7 @@ impl dola::cue::CueSink for SerikoSink {
         self.deliver(cue);
     }
 
-    /// 読みの鍵の中で、事実が在れば `\s`・数の `\b` を判定して知らせてから今の送り出しをする
+    /// 読みの鍵の中で、事実が在れば `\s`・数の `\b` を判定して知らせてから `deliver` で送る
     /// （spec: mcp-strict-errors 要件 2.7・4.1・4.2）。
     fn emit_with(&mut self, cue: TalkCue, probe: &dola::cue::CueProbe) {
         let cell = Arc::clone(&self.facts);
@@ -299,7 +300,7 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// # 失敗経路・担当外受信（6.1/6.2/6.3/6.4）
 ///
 /// 真の異常——解決不能（[`SurfaceTarget::Unresolved`]）・破損バルーン数値（`Invalid`）は
-/// `error!`＋skip、防御枝 `EntityRef` は `warn!`＋skip。名前形バルーン key（`NameForm`）は文字の層が
+/// `error!`＋skip、防御枝 `EntityRef` は `warn!`＋skip など（着せ替えの腕の記録は `actor_bind.rs`）。名前形バルーン key（`NameForm`）は文字の層が
 /// 読むので `debug!`＋skip。
 /// 対して broadcast の担当外受信——非 Shell（Balloon 系）・純粋 Wait は「正常経路」ゆえ良性
 /// `debug!`＋skip（action 無視・duration honor・新ローカル遅延なし・R2.2/2.3/5.4）。いずれも

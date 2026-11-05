@@ -179,7 +179,10 @@ fn alternative_stop_choosing_a_not_playing_target_does_nothing() {
         anim(2, RANDOM, vec![draw(20, 1000)]),
     ];
     let mut p = plays(&[(0, 0), (1, 0)]);
-    let mut pick = fixed_pick(1);
+    let mut pick: LoopRng = Box::new(|b| {
+        assert_eq!(b, 2, "再生中で絞らず並びの全部から選ぶ");
+        1
+    });
     run_calls(&mut p, |id| table.iter().find(|a| a.id == id), 0, &mut pick);
     assert_eq!(p.playing_ids(), vec![0, 1], "2 を選んだので 1 は止まらない");
     let mut pick = fixed_pick(0);

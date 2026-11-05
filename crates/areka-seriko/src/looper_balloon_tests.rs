@@ -7,10 +7,10 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{FilmId, PartKey};
+use areka_emo_compose::FilmId;
 
 use super::test_support::{film_clock as clock, note_balloon as note, started};
-use super::tests::counting_rng;
+use super::tests::{counting_rng, part_clock};
 use super::*;
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::resolve::SurfaceTarget;
@@ -257,10 +257,6 @@ fn closed_window_draws_no_part_lottery() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = runtime_of(BALLOON_PART_RANDOM, rng);
     let mut states = empty_states();
-    let part_clock = |rt: &LoopRuntime| {
-        rt.parts
-            .clock_at(&scope(), Slot::Balloon, PartKey::Surface(100), 0)
-    };
 
     note(&mut states, false, 0);
     rt.on_tick(0, &mut states);
@@ -271,10 +267,14 @@ fn closed_window_draws_no_part_lottery() {
         0,
         "閉じている間は乱数を引かない"
     );
-    assert_eq!(part_clock(&rt), None, "閉じている間は時計が生まれない");
+    assert_eq!(
+        part_clock(&rt, Slot::Balloon, 100, 0),
+        None,
+        "閉じている間は時計が生まれない"
+    );
 
     note(&mut states, true, 0);
     rt.on_tick(3000, &mut states);
     assert_eq!(probe.lock().unwrap().calls, 1, "開いた後の境で引く");
-    assert_eq!(part_clock(&rt), playing(3000));
+    assert_eq!(part_clock(&rt, Slot::Balloon, 100, 0), playing(3000));
 }

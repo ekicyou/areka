@@ -215,7 +215,7 @@ fn bind_noevent_outputs_only_one_display_command() {
     }
 }
 
-/// 数でないスコープは 2 つの名前とも同じ warn（D7）。
+/// 数でないスコープは 2 つの名前とも同じ warn（areka-P0-mayuna-compose D7）。
 #[test]
 fn bind_noevent_unmapped_scope_warns_like_bind() {
     let [bind, noevent] = NAMES.map(|name| run("x", &[], name, &["ボール", "妹", "1"]));

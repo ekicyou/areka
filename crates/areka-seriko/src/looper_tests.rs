@@ -1,3 +1,8 @@
+//! ループ統括器（`LoopRuntime`）の抽選・進行・発行の決定論テスト。
+//!
+//! 番号の出どころ: 無印の要件と D-7 は areka-P0-seriko-loop（バルーンの表の要件 5.6 は
+//! areka-P0-kero-balloon）、「bindopt」と D9-2 は areka-P0-bindoption-exclusivity。
+
 use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::test_support::capture_text;
@@ -124,9 +129,19 @@ pub(crate) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig
     }
 }
 
-/// スコープ `"0"` のシェルの面の (部品, animation の番号) の時計（部品のテストが見る）。
-pub(crate) fn part_clock(rt: &LoopRuntime, part: u32, id: u32) -> Option<crate::parts::PartAnim> {
-    rt.parts.clock(&ActorKey::from("0"), part, id)
+/// スコープ `"0"` の `slot` の面の (部品, animation の番号) の時計（部品のテストが見る）。
+pub(crate) fn part_clock(
+    rt: &LoopRuntime,
+    slot: Slot,
+    part: u32,
+    id: u32,
+) -> Option<crate::parts::PartAnim> {
+    rt.parts.clock_at(
+        &ActorKey::from("0"),
+        slot,
+        areka_emo_compose::PartKey::Surface(part),
+        id,
+    )
 }
 
 // ── 抽選ゲート: 表示中×非再生中×bind ゲート ───────────────────────────────
@@ -643,7 +658,7 @@ fn on_tick_never_writes_binds() {
     );
 }
 
-/// `SerikoLoopConfig::disabled()` は空表＋ダミー乱数でループ完全不活性（非退行・常に無発行）。
+/// `SerikoLoopConfig::disabled()` は空表＋ダミー乱数でループ完全不活性（常に無発行）。
 #[test]
 fn disabled_config_is_inert() {
     let mut rt = LoopRuntime::new(SerikoLoopConfig::disabled());

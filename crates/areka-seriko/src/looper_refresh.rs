@@ -160,7 +160,7 @@ impl LoopRuntime {
                         FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) => {
                             put_visible(&mut pattern, anim, i);
                         }
-                        _ => {
+                        FrameStatus::Pending | FrameStatus::Stopped => {
                             pattern.remove(anim.id);
                         }
                     }

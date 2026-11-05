@@ -11,7 +11,7 @@ use areka_emo_compose::{EmoWorld, FilmId, FilmSheet, FilmSkip, FilmSkipReason, P
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
-use crate::test_support::{film_world, warns};
+use crate::test_support::{film_sheet, film_world, warns};
 
 use crate::test_support::ANIMATED_PLAYBACK_SHELL as FIXTURE;
 
@@ -20,24 +20,12 @@ const RGB_APNG: u32 = 3;
 const ALPHA_WEBP: u32 = 5;
 const RGB_WEBP: u32 = 8;
 
-fn sheet(id: u32, path: &str, delays_ms: &[u32], laps: Option<u32>) -> FilmSheet {
-    FilmSheet {
-        id: FilmId(id),
-        path: path.to_string(),
-        frames: (0..delays_ms.len() as u32).map(|i| id + i).collect(),
-        delays_ms: delays_ms.to_vec(),
-        laps: laps.and_then(NonZeroU32::new),
-        original: (2, 2),
-        rest: 0,
-    }
-}
-
 /// 検体の README の値で組んだ子の定義（番号の昇順）。
 fn fixture_sheets() -> Vec<FilmSheet> {
     vec![
-        sheet(RGB_APNG, "rgb.apng", &[100, 100], None),
-        sheet(ALPHA_WEBP, "alpha.webp", &[100, 0, 70], Some(3)),
-        sheet(RGB_WEBP, "rgb.webp", &[100, 100], None),
+        film_sheet(FilmId(RGB_APNG), "rgb.apng", &[100, 100], None),
+        film_sheet(FilmId(ALPHA_WEBP), "alpha.webp", &[100, 0, 70], Some(3)),
+        film_sheet(FilmId(RGB_WEBP), "rgb.webp", &[100, 100], None),
     ]
 }
 
@@ -112,7 +100,7 @@ fn film_rows_carry_period_laps_and_picture_frames() {
 #[test]
 fn film_rows_do_not_collide_with_surface_numbers() {
     let world = fixture_world();
-    let sheets = vec![sheet(0, "rgb.apng", &[100, 100], None)];
+    let sheets = vec![film_sheet(FilmId(0), "rgb.apng", &[100, 100], None)];
     let (table, _) = build(&world, &sheets, &[]);
     let surface0 = table.part_animations(PartKey::Surface(0));
     let film0 = table.part_animations(PartKey::Film(FilmId(0)));
@@ -157,7 +145,7 @@ fn film_only_table_is_continuous() {
     );
     let (table, logs) = build(
         &world,
-        &[sheet(RGB_APNG, "rgb.apng", &[100, 100], None)],
+        &[film_sheet(FilmId(RGB_APNG), "rgb.apng", &[100, 100], None)],
         &[],
     );
     assert!(table.is_empty(), "作者のサーフェスの行は無い");

@@ -1,9 +1,9 @@
 //! 一番上の `always`・出来事の直後の評価・表の差し替えの檻（spec: areka-P0-animated-image-playback
 //! 要件 3.6・4.1・4.3・4.7・7.2・tasks.md 3.4）。
 //!
-//! 面の切り替えはアクターと同じ順（`apply` → `on_surface_changed` → `refresh`）で踏む。刻みは
-//! `on_tick(now_ms)`、乱数は注入列で、どちらも決定論。出来事の時刻は時計の無い起動と同じく
-//! 直前の刻みの時刻（`refresh` の `at_ms` に `None`）。
+//! 面の切り替えはアクターと同じ順（`apply` → `on_surface_shown` → `on_surface_changed` →
+//! `refresh`）で踏む。刻みは `on_tick(now_ms)`、乱数は注入列で、どちらも決定論。出来事の時刻は
+//! 時計の無い起動と同じく直前の刻みの時刻（`refresh` の `at_ms` に `None`）。
 
 use std::collections::BTreeMap;
 

@@ -17,7 +17,8 @@
 //! - ループ統括層 [`SerikoLoopConfig`]／`LoopRuntime`（crate 内）: 二層時間（毎秒抽選×サブ秒進行）の
 //!   統括・per-(scope, slot) 再生状態・`on_tick`（引き金と働きのコマを今の時刻まで当てる→抽選→進行→PatternState 差分）・`on_surface_changed`。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
-//!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
+//!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（descript の読み `BindGroupDefaults`
+//!   から組む）。
 //! - bind ポリシー層 [`BindChoicePolicy`]／[`BindResolver::policy`]:
 //!   `bindoption` 宣言からカテゴリの 3 値ポリシー（mustselect／既定／複数可）を導く純関数群。
 

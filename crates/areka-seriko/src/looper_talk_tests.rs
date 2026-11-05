@@ -11,12 +11,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use areka_emo_compose::PartKey;
-
 use super::test_support::{cell, note_balloon, started, switch};
-use super::tests::{cfg, counting_rng};
+use super::tests::{cfg, counting_rng, part_clock};
 use super::*;
-use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::test_support::{
     capture_logs, clear_all, count, cue, empty_states, part_frames, part_playing, scope, table_of,
@@ -584,13 +581,6 @@ fn mouth_as_long_as_the_boundary_gap_moves_at_every_boundary() {
 
 // ── 部品の `talk`（tasks.md 5.2）: 部品は文字の数えを持たず、面の文字の窓を借りる ──────────────
 
-/// `\0` の `slot` の面の部品 100 の animation `id` の時計。
-fn part_clock(st: &Stage, slot: Slot, id: u32) -> Option<PartAnim> {
-    st.rt
-        .parts
-        .clock_at(&scope(), slot, PartKey::Surface(100), id)
-}
-
 /// `\0` のシェルの面の部品 100 の欄（animation の番号, 絵）。
 fn part_cells(st: &Stage) -> Vec<(u32, u32)> {
     part_frames(st.states.current_pattern(&scope(), Slot::Shell), 100)
@@ -613,11 +603,11 @@ fn part_mouth_moves_on_a_surface_whose_top_has_none_of_the_three_words() {
     hear_nine_from_1000(&mut st);
 
     assert!(st.tick(1090).is_empty(), "2 文字（1000・1050）ではまだ");
-    assert_eq!(part_clock(&st, Slot::Shell, 0), None);
+    assert_eq!(part_clock(&st.rt, Slot::Shell, 100, 0), None);
 
     let cmds = st.tick(1120);
     assert_eq!(
-        part_clock(&st, Slot::Shell, 0),
+        part_clock(&st.rt, Slot::Shell, 100, 0),
         part_playing(1100),
         "開始は 3 文字目が現れた 1100（刻みの 1120 ではない）"
     );
@@ -625,14 +615,18 @@ fn part_mouth_moves_on_a_surface_whose_top_has_none_of_the_three_words() {
     assert_eq!(part_cells(&st), [(0, 601)]);
 
     assert_eq!(st.tick(1145).len(), 1, "`-1` で口を消す（経過 45）");
-    assert_eq!(part_clock(&st, Slot::Shell, 0), None);
+    assert_eq!(part_clock(&st.rt, Slot::Shell, 100, 0), None);
     assert!(part_cells(&st).is_empty());
 
     st.tick(1240);
-    assert_eq!(part_clock(&st, Slot::Shell, 0), None, "5 文字ではまだ");
+    assert_eq!(
+        part_clock(&st.rt, Slot::Shell, 100, 0),
+        None,
+        "5 文字ではまだ"
+    );
     st.tick(1270);
     assert_eq!(
-        part_clock(&st, Slot::Shell, 0),
+        part_clock(&st.rt, Slot::Shell, 100, 0),
         part_playing(1250),
         "6 文字目"
     );
@@ -664,7 +658,7 @@ fn top_mouth_and_part_mouth_on_one_surface_move_at_the_same_glyph() {
 
     st.tick(1090);
     assert_eq!(
-        (st.started(), part_clock(&st, Slot::Shell, 0)),
+        (st.started(), part_clock(&st.rt, Slot::Shell, 100, 0)),
         (None, None),
         "2 文字（1000・1050）ではまだ"
     );
@@ -672,7 +666,7 @@ fn top_mouth_and_part_mouth_on_one_surface_move_at_the_same_glyph() {
     st.tick(1120);
     assert_eq!(st.started(), Some(1100), "一番上: 3 文字目が現れた 1100");
     assert_eq!(
-        part_clock(&st, Slot::Shell, 0),
+        part_clock(&st.rt, Slot::Shell, 100, 0),
         part_playing(1100),
         "部品: 一番上と同じ刻みに、同じ 1100 から"
     );
@@ -681,7 +675,7 @@ fn top_mouth_and_part_mouth_on_one_surface_move_at_the_same_glyph() {
     st.tick(1190);
     st.tick(1240);
     assert_eq!(
-        (st.started(), part_clock(&st, Slot::Shell, 0)),
+        (st.started(), part_clock(&st.rt, Slot::Shell, 100, 0)),
         (None, None),
         "5 文字ではまだ（どちらの口も `-1` で終えている）"
     );
@@ -689,7 +683,7 @@ fn top_mouth_and_part_mouth_on_one_surface_move_at_the_same_glyph() {
     st.tick(1270);
     assert_eq!(st.started(), Some(1250), "一番上: 6 文字目");
     assert_eq!(
-        part_clock(&st, Slot::Shell, 0),
+        part_clock(&st.rt, Slot::Shell, 100, 0),
         part_playing(1250),
         "部品: 6 文字目"
     );
@@ -719,14 +713,14 @@ fn part_mouth_follows_the_recount_when_the_surface_changes() {
     for now in [1110, 1160] {
         st.tick(now);
         assert_eq!(
-            part_clock(&st, Slot::Shell, 0),
+            part_clock(&st.rt, Slot::Shell, 100, 0),
             None,
             "{now}: 古い面の数えなら 3 文字目（1100）で鳴っていた"
         );
     }
     st.tick(1210);
     assert_eq!(
-        part_clock(&st, Slot::Shell, 0),
+        part_clock(&st.rt, Slot::Shell, 100, 0),
         part_playing(1200),
         "切り替えてから 3 文字目（通算 5 文字目）"
     );
@@ -751,12 +745,12 @@ fn part_mouth_on_a_hidden_surface_stays_silent_and_counts_from_its_return() {
     st.show(0, 1260);
     st.tick(1310);
     assert_eq!(
-        part_clock(&st, Slot::Shell, 0),
+        part_clock(&st.rt, Slot::Shell, 100, 0),
         None,
         "戻る前の文字は数えない"
     );
     st.tick(1410);
-    assert_eq!(part_clock(&st, Slot::Shell, 0), part_playing(1400));
+    assert_eq!(part_clock(&st.rt, Slot::Shell, 100, 0), part_playing(1400));
 }
 
 /// バルーンの面の部品の `talk`: 窓が閉じている間は文字の窓が無く、部品の口は動かない。開いたら
@@ -777,7 +771,7 @@ fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
     for now in [1060, 1120, 1160] {
         st.tick(now);
         assert_eq!(
-            part_clock(&st, Slot::Balloon, 0),
+            part_clock(&st.rt, Slot::Balloon, 100, 0),
             None,
             "{now}: 閉じている間は動かない"
         );
@@ -786,14 +780,17 @@ fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
     // 1160 に開く: 4 文字（1000〜1150）が現れている。そこから 3 文字目は 7 文字目（1300）。
     note(&mut st, true, 1160);
     st.tick(1260);
-    assert_eq!(part_clock(&st, Slot::Balloon, 0), None);
+    assert_eq!(part_clock(&st.rt, Slot::Balloon, 100, 0), None);
     st.tick(1310);
-    assert_eq!(part_clock(&st, Slot::Balloon, 0), part_playing(1300));
+    assert_eq!(
+        part_clock(&st.rt, Slot::Balloon, 100, 0),
+        part_playing(1300)
+    );
 
     note(&mut st, false, 1320);
     st.tick(1330);
     assert_eq!(
-        part_clock(&st, Slot::Balloon, 0),
+        part_clock(&st.rt, Slot::Balloon, 100, 0),
         None,
         "閉じたら再生中の口の時計を捨てる"
     );

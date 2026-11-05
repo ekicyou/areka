@@ -15,12 +15,11 @@ use dola::cue::CueSink;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-/// 一番上 0 の `always`: 101（待ち 0＝経過 0）→ 100ms で 102 → 100ms で 103（周期 200）。1 は何も持たない。
+/// 一番上 0 の `always`: 101（待ち 0＝経過 0）→ 100ms で 102 → 100ms で 103（周期 200）。
 const TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
     animation0.pattern0,overlay,101,0,0,0\n\
     animation0.pattern1,overlay,102,100,0,0\n\
     animation0.pattern2,overlay,103,100,0,0\n}\n\
-    surface1\n{\n}\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
 
 /// 一番上 0 は着せ替え 5 で子 100 を出す。100 は [`TOP_ALWAYS`] と同じ `always` を持つ。
@@ -162,8 +161,8 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
     );
 }
 
-/// 実のアクターへ `\s[0]` → 刻み 1100 を流し、記録を返す（刻み 0 で始める・時計つきの回で時計が
-/// 刻みを追い越さないよう、刻み 1100 の後に合図を流さない）。
+/// 実のアクターへ `\s[0]` → 刻み 1100 を流し、記録を返す（刻み 0 で始める）。時計つきの回は時計が
+/// 1030 で止まっているので、刻み 1100 の後に合図を流すと時刻が戻る。だから流さない。
 fn run_actor(
     spawn: impl FnOnce(MockSurfaceOutput) -> (SerikoSink, areka_actor::ActorHandle),
 ) -> Vec<DisplayCommand> {

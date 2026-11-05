@@ -1,3 +1,8 @@
+//! 着せ替えの適用・一番上の欄の保持・残留コマの掃除の決定論テスト。
+//!
+//! 番号の出どころ: R・D と `apply_bind` の節の要件 3.x は areka-P0-mayuna-compose、ほかの無印の要件
+//! （5.1・6.1・6.2・2.1）は areka-P0-seriko-loop、「bindopt」は areka-P0-bindoption-exclusivity の要件。
+
 use super::test_support::*;
 use super::*;
 
@@ -138,7 +143,7 @@ fn apply_bind_idempotent_on_on_shown() {
     );
 }
 
-/// 非退行（R3.8）: 一連の apply_bind はシェル面・バルーン面の状態機械を変更しない。
+/// 表示の状態には触れない（R3.8）: 一連の apply_bind はシェル面・バルーン面の状態機械を変更しない。
 #[test]
 fn apply_bind_does_not_touch_shell_or_balloon_state() {
     let mut states = fresh_states();
@@ -299,7 +304,7 @@ fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
     );
 }
 
-/// 非退行（R3.8）: 排他置換はシェル面・バルーン面の状態機械を一切変更しない。
+/// 表示の状態には触れない（R3.8）: 排他置換はシェル面・バルーン面の状態機械を一切変更しない。
 #[test]
 fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
@@ -671,7 +676,7 @@ fn commit_bind_state_only_still_drops_residual_frames() {
     );
 }
 
-/// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8 の非退行）。
+/// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8）。
 #[test]
 fn commit_bind_does_not_touch_balloon_pattern() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));

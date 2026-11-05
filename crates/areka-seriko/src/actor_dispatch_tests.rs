@@ -1,7 +1,7 @@
 //! 受け口（`SerikoSink`）と受信の役者（`handle_message`）の結合テスト。
 //!
-//! 番号の出どころ: 無印と R の番号は areka-P0-seriko-engine の要件。R11.6・D4 と、duration を守る
-//! 2.3・R5.4 は areka-P0-cue-playback-duration、バルーンの面のケース 6〜11 の 4.x は
+//! 番号の出どころ: 無印と R の番号は areka-P0-seriko-engine の要件。2.2・2.3・5.4・11.6（R つきを
+//! 含む）と D4 は areka-P0-cue-playback-duration、バルーンの面のケース 6〜11 の 4.x は
 //! areka-P0-balloon-face-cue の要件。「ケース N」は spec の番号ではなく、このファイル（1〜14）と
 //! `actor_bind_loop_tests.rs`（15〜21）の通し番号。
 
@@ -46,8 +46,8 @@ fn seriko_sink_satisfies_cue_sink_contract() {
 /// 単発シナリオ（主 observable・R1.3/5.3）: 単純な発火 1 件を入力すると、
 /// 期待どおりの表示指令 1 件が観測用出力先へちょうど記録される。
 ///
-/// 解決層（2.1）・状態層（2.2）・発行層（2.3）を独立スレッド上で一本の経路で結び、
-/// `emit_display` 単一発行点から発行されることを end-to-end で固定する。同期は
+/// 解決層・状態層・発行層（areka-P0-seriko-engine tasks.md 2.1〜2.3）を独立スレッド上で一本の
+/// 経路で結び、`emit_display` 単一発行点から発行されることを end-to-end で固定する。同期は
 /// `Close`→`ActorHandle::join`（Break 後のスレッド終了待ち）で決定論的に行い、sleep を
 /// 一切用いない（先に送った Cue は FIFO 単一スレッドゆえ join 復帰時に処理済み）。
 #[test]
@@ -155,13 +155,13 @@ fn disconnect_stops_normally() {
 /// ケース3（6.2/6.3/7.4）: 分類不能／防御枝の入力が記録を残して読み飛ばされ、処理が継続する。
 ///
 /// (a) 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で EntityRef 防御枝が
-///     `warn!` を残し・状態不変・`Continue`（skip して継続）を決定論的に固定する。
+///     `warn!` を残し・発行せず・`Continue`（skip して継続）を決定論的に固定する。
 /// (b) spawn 経由の observable: EntityRef cue を先に、有効 cue を後に emit→close→join し、
 ///     mock 記録が有効 Show 1 件のみ＝bad cue は skip され、その後もアクターが処理継続したこと
 ///     を発行列で示す（cross-thread log には依存しない observable 檻）。
 #[test]
 fn unclassifiable_input_is_logged_and_skipped_then_continues() {
-    // (a) 同期 handler: warn! 発火＋状態不変＋Continue をテストスレッドで捕捉。
+    // (a) 同期 handler: warn! 発火＋発行 0 件＋Continue をテストスレッドで捕捉。
     let resolver = tiny_resolver();
     let mut states = fresh_states();
     let mut out = MockSurfaceOutput::new();
@@ -196,7 +196,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
     );
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
-        "分類不能入力では発行しない（状態不変・skip）"
+        "分類不能入力では発行しない（skip）"
     );
 
     // (b) spawn 経由 observable: 悪 cue→有効 cue→close→join、記録は有効 Show のみ。
@@ -231,7 +231,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
 ///
 /// 非表示指定以外の負値（`"-2"`）と許容範囲超（`"4294967296"`＝`u32::MAX+1`）を
 /// 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で流し、`Unresolved` の
-/// `error!` が残り・状態不変・発行なし・`Continue` を決定論的に固定する。解決層単体は
+/// `error!` が残り・発行なし・`Continue` を決定論的に固定する。解決層単体は
 /// resolve.rs の 2.1 で檻済み。ここは **アクター handler 経路の解決失敗ログ**（7.4）を実行檻化。
 #[test]
 fn numeric_boundary_is_unresolved() {
@@ -270,7 +270,7 @@ fn numeric_boundary_is_unresolved() {
         );
         assert!(
             records.lock().expect("records mutex poisoned").is_empty(),
-            "境界値 {bad:?} では発行しない（状態不変）"
+            "境界値 {bad:?} では発行しない"
         );
     }
 }
@@ -651,7 +651,7 @@ fn shell_and_balloon_recorded_independently() {
 /// 受信すると、異常でなく正常経路として skip され、ログは良性 `debug!`（WARN/ERROR を出さない）。
 ///
 /// 同期 `handle_message`＋`capture_logs_flow` で、WARN も ERROR も 0 件・DEBUG は観測可能
-/// （silent 化でなく格下げ）・状態不変・`Continue` を固定する。`Some(other)` 腕が
+/// （silent 化でなく格下げ）・発行なし・`Continue` を固定する。`Some(other)` 腕が
 /// `warn!` を出すと WARN=0 の assert が落ちる。
 #[test]
 fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
@@ -701,7 +701,7 @@ fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
     );
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
-        "担当外 cue では発行しない（action 無視・状態不変・skip）"
+        "担当外 cue では発行しない（action 無視・skip）"
     );
 }
 
@@ -755,7 +755,7 @@ fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
     );
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
-        "Wait では発行しない（action なし・状態不変）"
+        "Wait では発行しない（action なし）"
     );
 }
 

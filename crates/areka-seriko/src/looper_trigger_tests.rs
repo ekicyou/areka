@@ -1,9 +1,9 @@
 //! 一番上の面の `runonce`・`periodic` の檻（spec: areka-P0-seriko-trigger-intervals 要件 2・3・5.1〜5.3・
 //! 5.5・5.7・5.8・6.1・6.2・7.5・8.1・8.2・9.2・9.3・9.6・tasks.md 4.1）。
 //!
-//! 面の切り替えはアクターと同じ順（`apply` → `on_surface_changed` → `refresh`）で踏む。刻みは
-//! `on_tick(now_ms)`、出来事の時刻は `refresh` の `at_ms`、乱数は注入列で、どれも決定論。時刻は
-//! 観測の後にだけ進める。
+//! 面の切り替えはアクターと同じ順（`apply` → `on_surface_shown` → `on_surface_changed` →
+//! `refresh`）で踏む。刻みは `on_tick(now_ms)`、出来事の時刻は `refresh` の `at_ms`、乱数は注入列で、
+//! どれも決定論。時刻は観測の後にだけ進める。
 
 use std::collections::BTreeMap;
 
@@ -796,4 +796,29 @@ fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
         None,
         "先頭の待ちの前は欄が空"
     );
+}
+
+/// 合図の更新（200）で、呼び出しが始め直した頭がもう止まっている（60 に `start,1` で始め直され、経過
+/// 140 で `-1` を過ぎた）なら、前の再生が残したコマを刻みと同じく外す（`start` は欄に触らない・
+/// areka-P0-seriko-loop 要件 4.3・seriko-pattern-calls 要件 3.5・3.9）。
+#[test]
+fn refresh_clears_the_leftover_frame_when_the_called_head_is_stopped() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,start,1\n\
+        animation0.pattern1,overlay,100,50,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,111,0,0,0\n\
+        animation1.pattern1,overlay,-1,100,0,0\n}\n\
+        surface100\n{\n}\nsurface111\n{\n}\n";
+    let (mut rt, mut states) = shell_runtime(TEXT);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
+    rt.on_tick(30, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 1), Some(111), "前の再生の残り");
+
+    rt.refresh(&scope(), Slot::Shell, Some(200), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(60), "60 に始め直す");
+    assert_eq!(cell(&states, Slot::Shell, 1), None, "止まった頭は欄が空");
 }

@@ -220,7 +220,7 @@ impl ScopeStates {
                 ApplyOutcome::Changed(DisplayCommand::Show {
                     scope: scope.clone(),
                     surface_id: id,
-                    // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds＝非退行・R3.8）。
+                    // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds・R3.8）。
                     binds: self.current_binds(scope).clone(),
                     // pattern 進行状態は cue 由来 Show では空（ループ非活性なら pattern を何も足さない・R5.4）。
                     // 直上で格納 pattern をクリア済み＝空 pattern と一貫（実 pattern は commit_pattern 経由）。
@@ -432,7 +432,7 @@ impl ScopeStates {
     ///      非表示 scope へ Show を強制すると `\s[-1]` 意味論を破るため・D5。新集合は次の Show 発行時に
     ///      [`current_binds`] 経由で載る）。
     ///
-    /// **非退行（要件 3.8）**: 本メソッドは `dynamic_binds` のみを書き込み、シェル面 `scopes`・
+    /// **表示の状態には触れない（要件 3.8）**: 本メソッドは `dynamic_binds` のみを書き込み、シェル面 `scopes`・
     /// バルーン面 `balloon` の状態機械には一切干渉しない（[`apply`]／[`apply_balloon`] の遷移は不変）。
     ///
     /// [`current_binds`]: ScopeStates::current_binds

@@ -28,7 +28,7 @@ pub fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
 
 /// emo2 検体の `shell/master/surfaces.txt`（検体の窓口から得る）。
 ///
-/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。段 ③ で `Drop` が
+/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。`SampleRoot` の `Drop` が
 /// 展開した複製を消すため、関数内の一時値にすると借用の元がその場で消える。
 fn emo2_surfaces_txt() -> std::path::PathBuf {
     use std::sync::LazyLock;
@@ -174,8 +174,9 @@ pub fn run_core(
 }
 
 /// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
-/// test-local な合流 enum。両通知は同一ポートを流れる（DD-6）が、本 E2E の fixture に選択肢
-/// （`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの受け皿である。
+/// test-local な合流 enum。両通知は同一ポートを流れる（areka-P0-choice-select-events DD-6）が、
+/// 本 E2E の fixture に選択肢（`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの
+/// 受け皿である。
 pub enum TalkNotice {
     Done(TalkDone),
     /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界

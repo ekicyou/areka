@@ -5,9 +5,7 @@
 //! 面の表の element の種類も分解と同じに `ElementKind::Film` へ替えて
 //! [`AnimationTable::from_world_and_films`] へ渡す（`table_film_tests.rs` と同じ組み方）。
 
-use std::num::NonZeroU32;
-
-use areka_emo_compose::{BindSet, FilmId, FilmSheet, PartKey, PatternState};
+use areka_emo_compose::{BindSet, FilmId, PartKey, PatternState};
 use areka_sakura::ActorKey;
 
 use super::tests::count;
@@ -15,7 +13,9 @@ use super::{PartAnim, PartClocks};
 use crate::looper::tests::counting_rng;
 use crate::state::Slot;
 use crate::table::AnimationTable;
-use crate::test_support::{capture_logs, film_picture, film_world, part_playing as playing, scope};
+use crate::test_support::{
+    capture_logs, film_picture, film_sheet, film_world, part_playing as playing, scope,
+};
 use crate::timeline::LoopRng;
 
 /// 終わりなしの子（コマ 10・11・12、各 100ms・周期 300）。
@@ -32,23 +32,11 @@ const SHELL: &str = "surface0\n{\nelement0,overlay,a.png,0,0\n}\n\
     surface4\n{\nelement0,overlay,100,0,0\n}\n\
     surface100\n{\nelement0,overlay,a.png,0,0\n}\n";
 
-fn sheet(id: FilmId, delays_ms: &[u32], laps: Option<u32>) -> FilmSheet {
-    FilmSheet {
-        id,
-        path: format!("{}.png", id.0),
-        frames: (0..delays_ms.len() as u32).map(|i| id.0 + i).collect(),
-        delays_ms: delays_ms.to_vec(),
-        laps: laps.and_then(NonZeroU32::new),
-        original: (2, 2),
-        rest: 0,
-    }
-}
-
 pub(crate) fn table() -> AnimationTable {
     let world = film_world(SHELL, &[("a.png", ENDLESS), ("b.png", ONCE)]);
     let sheets = [
-        sheet(ENDLESS, &[100, 100, 100], None),
-        sheet(ONCE, &[100, 100], Some(1)),
+        film_sheet(ENDLESS, "10.png", &[100, 100, 100], None),
+        film_sheet(ONCE, "20.png", &[100, 100], Some(1)),
     ];
     AnimationTable::from_world_and_films(&world, sheets.iter(), &[])
 }

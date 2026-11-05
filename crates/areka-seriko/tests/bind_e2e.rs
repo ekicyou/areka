@@ -1,4 +1,5 @@
-//! bind（着せ替え）決定論エンドツーエンド観測（要件 2.3/5.1/5.2/5.3/5.4/5.5）。
+//! bind（着せ替え）決定論エンドツーエンド観測（spec: areka-P0-mayuna-compose
+//! 要件 2.3/5.1/5.2/5.3/5.4/5.5・「bindopt」は areka-P0-bindoption-exclusivity）。
 //!
 //! 名前キー bind の on/off 列を含むさくらスクリプトを **直接入力**し、
 //! `parse → compile → cue → seriko → 表示指令発行` までの貫通経路を、注入した
@@ -71,8 +72,8 @@ impl CueSink for RecordingTextSink {
 /// その on/off が確定的に集合へ出入りする。宣言に無い `(未知,パーツ)` は `resolve==None`（R5.2）。
 fn test_bind_resolver() -> BindResolver {
     // 宣言ゼロ＝全カテゴリが正典の既定（Default＝高々 1 個・解除可・bindopt 2.1/2.2）。本 fixture は
-    // 腕・頬とも 1 カテゴリ 1 パーツゆえ、排他置換と加算は結果集合が同値になり期待値は不変である
-    // （bindopt 設計 §テスト影響監査）。mustselect／複数可の専用 e2e は下記シナリオ 6〜9。
+    // 腕・頬とも 1 カテゴリ 1 パーツなので、排他置換と加算の結果は同じ集合になる。mustselect／複数可の
+    // 専用 e2e は下記シナリオ 6〜9。
     BindResolver::from_groups(&groups_of(
         "charset,UTF-8\r\n\
          sakura.bindgroup1100.name,腕,伸び\r\n\
@@ -298,8 +299,8 @@ fn bind_and_text_streams_do_not_cross_contaminate_end_to_end() {
 /// - 目=静観（1304）着衣 → 同じく 1301 が外れ `{1207,1304}`。
 ///
 /// 最終集合は 目 パーツを**ちょうど 1 個**（1304）だけ含み、旧 目 パーツ（1303・1301）は残らない
-/// ——これが反・積算（anti-accumulation）の証明。pre-fix の積算バグなら最終が `{1207,1301,1303,1304}`
-/// になるため、full-Vec 等値照合がこの判別を捕捉する（bindopt 3.1）。
+/// ——これが反・積算（anti-accumulation）の証明。積算する実装なら最終が `{1207,1301,1303,1304}` に
+/// なるので、full-Vec 等値照合がこの違いを捕まえる（bindopt 3.1）。
 #[test]
 fn mustselect_sequence_replaces_prior_part_end_to_end() {
     let records = run_mustselect_scenario(
@@ -326,8 +327,7 @@ fn mustselect_sequence_replaces_prior_part_end_to_end() {
 /// - 紅=差し（1600）on → 当該カテゴリに他パーツが無いので排他置換の結果は `{1207,1600}`、
 /// - 紅=差し（1600）off → 既定は解除可ゆえ除去され `{1207}` へ戻る。
 ///
-/// 紅は 1 カテゴリ 1 パーツゆえ、既定の排他置換でも結果集合は加算と同値であり期待値は
-/// bindopt 是正の前後で不変である（bindopt 設計 §テスト影響監査）。off が集合を変えることが
+/// 紅は 1 カテゴリ 1 パーツなので、排他置換と加算の結果は同じ集合になる。off が集合を変えることが
 /// mustselect（bindopt 3.2＝脱衣無視）との唯一の差である。
 #[test]
 fn default_category_explicit_on_then_off_removes_part_end_to_end() {

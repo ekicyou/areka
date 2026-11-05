@@ -14,9 +14,9 @@ use areka_sakura::ActorKey;
 // ─────────────────────────────────────────────────────────────────────
 // bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
 //
-// `\![bind]` キャリアの名前自己選別（`name` が `bind` か `bind-noevent`）→ 引数解釈（parse_bind_directive）→
-// scope 写像（scope_namespace）→ 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）
-// → 適用（apply_bind_exclusive／apply_bind／mustselect 脱衣は無視・bindopt 2.1/3.1/3.2）→ 単一発行点
+// `\![bind]` キャリアの名前自己選別（`name` が `bind` か `bind-noevent`・担当外の名前は
+// `actor_bind_noevent_tests.rs`）→ 引数解釈（parse_bind_directive）→ scope 写像（scope_namespace）→
+// 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）→ 適用（apply_bind_exclusive／apply_bind／mustselect 脱衣は無視・bindopt 2.1/3.1/3.2）→ 単一発行点
 // （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide は当てる（script-small-tags 3.8・3.9）／
 // ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug（④ は `actor_bind_noevent_tests.rs`）／
 // ⑤scope 写像なし（数でない scope）=warn）を
@@ -61,7 +61,7 @@ fn eye_mustselect_resolver() -> BindResolver {
     ))
 }
 
-/// ケース15（6.3/3.5/7.1・D5・D8 正常経路）: 表示中 scope で解決可能な Apply は現 surface を
+/// ケース15（3.5/7.1・D5・D8 正常経路）: 表示中 scope で解決可能な Apply は現 surface を
 /// 新集合で再発行し、実機 grep マーカー `info!("seriko: bind 適用")` を発火する。
 #[test]
 fn bind_apply_on_shown_emits_show_and_info_marker() {
@@ -87,7 +87,7 @@ fn bind_apply_on_shown_emits_show_and_info_marker() {
         )
     });
 
-    assert_eq!(flow.1, ControlFlow::Continue(()), "適用後も処理継続（6.3）");
+    assert_eq!(flow.1, ControlFlow::Continue(()), "適用後も処理継続");
     // 単一発行点から現 surface(2100) を新集合 {1100,1207,1302} で再発行（D5・R3.5）。
     let recorded = records.lock().expect("records mutex poisoned");
     assert_eq!(
@@ -817,6 +817,11 @@ fn bind_unresolvable_errors_no_emit() {
     let mut out = MockSurfaceOutput::new();
     let mut loop_runtime = inert_runtime();
     let records = out.records();
+    let key = ActorKey::from("0");
+    let before = (
+        states.current_binds(&key).clone(),
+        states.current_pattern(&key, Slot::Shell).clone(),
+    );
 
     let flow = capture_logs_flow(|| {
         handle_message(
@@ -838,6 +843,14 @@ fn bind_unresolvable_errors_no_emit() {
     );
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
-        "解決不能では発行しない（状態不変・R3.7）"
+        "解決不能では発行しない（R3.7）"
+    );
+    assert_eq!(
+        (
+            states.current_binds(&key).clone(),
+            states.current_pattern(&key, Slot::Shell).clone(),
+        ),
+        before,
+        "解決不能では着せ替えも一番上の欄も変えない（R3.7）"
     );
 }

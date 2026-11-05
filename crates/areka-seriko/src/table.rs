@@ -185,9 +185,10 @@ impl AnimationTable {
     ///
     /// 全 surface を昇順に走査し、各 surface の SERIKO animation 群から [`LoopTrigger`] の 7 種を採る
     /// （`random,2`／`random,4` へ読み替える `Other("sometimes")`／`Other("rarely")` を含む・要件
-    /// 11.1/11.2）。純 `Bind` と `Other("never")` は呼ばれるだけ（`CallOnly`）として載せ、
-    /// それ以外の `Other`・将来 variant は `debug!` で記録して非採録（`Other` は元語彙込み）。
-    /// `k == 0`・コマ列空は `warn!` で記録して非採録。method は [`ComposeMethod::from_name`] で構築時
+    /// 11.1/11.2）。純 `Bind` と `Other("never")` は呼ばれるだけ（`CallOnly`）として載せる。先頭の語が
+    /// `talk`・`periodic` の `Other` は `warn!`、それ以外の `Other`・将来 variant は `debug!` で記録して
+    /// 非採録（`Other` は元語彙込み）。`k == 0`・数値が 0 の `periodic`・`talk`・コマ列空・待ちの合計が
+    /// 0 の `always` は `warn!` で記録して非採録。method は [`ComposeMethod::from_name`] で構築時
     /// 1 回解決し、コマ列は pattern index 昇順へ整列する。面種非依存（シェル/バルーン双方に同型適用）。
     pub fn from_world(world: &EmoWorld) -> AnimationTable {
         AnimationTable::from_world_and_films(world, world.film_sheets(), world.film_skips())
@@ -209,7 +210,8 @@ impl AnimationTable {
 
             for anim in &master.animations {
                 // 採録は LoopTrigger の 7 種（読み替える Other("sometimes")／Other("rarely") を含む）。
-                // 純 Bind と never は呼ばれるだけ。それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
+                // 純 Bind と never は呼ばれるだけ。先頭の語が talk・periodic の Other と数値が 0 の periodic・
+                // talk は warn!、それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
                 // match は Bind/Other 明示腕＋catch-all で将来 additive シームを保つ）。
                 // `always` の単独は周期が要るので、コマを並べた後で引き金を作る（下・`None`）。
                 let trigger = match &anim.interval {
@@ -937,15 +939,7 @@ mod tests {
             "surface0\n{\nelement0,overlay,still.apng,0,0\n}\n",
             &[("still.apng", FilmId(3))],
         );
-        let sheet = FilmSheet {
-            id: FilmId(3),
-            path: "still.apng".to_string(),
-            frames: vec![3, 4],
-            delays_ms: vec![0, 0],
-            laps: None,
-            original: (2, 2),
-            rest: 0,
-        };
+        let sheet = crate::test_support::film_sheet(FilmId(3), "still.apng", &[0, 0], None);
         let mut table = None;
         let logs = capture_text(|| {
             table = Some(AnimationTable::from_world_and_films(

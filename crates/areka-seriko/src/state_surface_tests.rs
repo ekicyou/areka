@@ -1,3 +1,8 @@
+//! 面の状態（`apply`・`apply_balloon`）の決定論テスト。
+//!
+//! 番号の出どころ: 無印の要件と DD8 は areka-P0-seriko-engine、`apply_balloon` の節の要件 4.x と R4.6 は
+//! areka-P0-balloon-face-cue の要件。
+
 use super::test_support::*;
 use super::*;
 
@@ -171,7 +176,7 @@ fn binds_accessor_returns_static_set() {
     );
 }
 
-/// current_binds 既定フォールバック（要件 3.1）: 動的 bind 未適用の scope は静的既定集合を返す。
+/// current_binds 既定フォールバック（areka-P0-mayuna-compose 要件 3.1）: 動的 bind 未適用の scope は静的既定集合を返す。
 #[test]
 fn current_binds_unbound_scope_returns_static_default() {
     let states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([

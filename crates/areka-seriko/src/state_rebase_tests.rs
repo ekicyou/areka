@@ -1,4 +1,5 @@
-//! 定義の差し替え（`rebase_shell`／`rebase_balloon`）の決定論テスト（要件 2.6・3.5）。
+//! 定義の差し替え（`rebase_shell`／`rebase_balloon`）の決定論テスト（spec: areka-P0-shell-balloon-switch
+//! 要件 2.6・3.5）。
 
 use super::test_support::*;
 use super::*;

@@ -289,7 +289,7 @@ fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
     assert_eq!(part_cell(&states, 1), None, "2470 に止まる");
     assert_eq!(part_cell(&states, 0), Some(120), "0 は 3000 に始まる");
     assert_eq!(
-        part_clock(&rt, 100, 0),
+        part_clock(&rt, Slot::Shell, 100, 0),
         Some(PartAnim::Playing {
             started_at_ms: 3000,
             acts_through: Some(3100)
@@ -316,7 +316,7 @@ fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary(
     rt.on_tick(2100, &mut states); // stop,0 は 1970・次の周は 2000。
     assert_eq!(part_cell(&states, 0), Some(120), "2000 に頭から");
     assert_eq!(
-        part_clock(&rt, 100, 0),
+        part_clock(&rt, Slot::Shell, 100, 0),
         Some(PartAnim::Playing {
             started_at_ms: 2000,
             acts_through: Some(2100)

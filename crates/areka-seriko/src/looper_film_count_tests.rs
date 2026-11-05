@@ -6,14 +6,13 @@
 //! 無い表（`emo2` を含む）の列は `looper_parts_emo2_tests.rs` と `areka` の
 //! `spine_seriko_loop_tests.rs` が書き換えずに固定している。
 
-use std::num::NonZeroU32;
+use areka_emo_compose::FilmId;
 
-use areka_emo_compose::{FilmId, FilmSheet};
-
+use super::test_support::switch_at;
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::test_support::{empty_states, film_world};
+use crate::test_support::{empty_states, film_sheet, film_world};
 
 const FILM: FilmId = FilmId(10);
 /// 1 コマの待ち時間。
@@ -27,15 +26,7 @@ fn one_film_table() -> AnimationTable {
         "surface0\n{\nelement0,overlay,a.png,0,0\n}\n",
         &[("a.png", FILM)],
     );
-    let sheet = FilmSheet {
-        id: FILM,
-        path: "a.png".into(),
-        frames: vec![10, 11, 12],
-        delays_ms: vec![DELAY_MS as u32; 3],
-        laps: None::<NonZeroU32>,
-        original: (2, 2),
-        rest: 0,
-    };
+    let sheet = film_sheet(FILM, "a.png", &[DELAY_MS as u32; 3], None);
     AnimationTable::from_world_and_films(&world, [sheet].iter(), &[])
 }
 
@@ -44,14 +35,8 @@ fn shown() -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(one_film_table(), rng));
     let mut states = empty_states();
-    let scope = ActorKey::from("0");
     assert!(rt.on_tick(0, &mut states).is_empty());
-    let crate::state::ApplyOutcome::Changed(_) = states.apply(&scope, SurfaceTarget::Show(0))
-    else {
-        panic!("面 0 の表示の指令が出ない");
-    };
-    rt.on_surface_changed(&scope, Slot::Shell);
-    rt.refresh(&scope, Slot::Shell, None, &mut states);
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None).expect("面 0 の表示の指令");
     (rt, states)
 }
 

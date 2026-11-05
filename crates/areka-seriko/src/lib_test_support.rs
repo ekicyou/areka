@@ -10,7 +10,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use crate::parts::PartAnim;
 use crate::table::{AnimationTable, FrameAct, LoopFrame};
 
-/// `check_calls` の 6 種の記録の目印（要件の番号）。
+/// `check_calls` の 6 種の記録の目印（seriko-pattern-calls の要件の番号）。
 pub(crate) const KINDS: [&str; 6] = [
     "要件 2.5",
     "要件 5.1",
@@ -43,6 +43,24 @@ pub(crate) fn film_world(text: &str, films: &[(&str, FilmId)]) -> EmoWorld {
         }
     }
     world
+}
+
+/// 動く絵の子の定義（分解が作る値と同じ形）。コマの絵の番号は `id` から 1 ずつ、元の大きさは 2×2。
+pub(crate) fn film_sheet(
+    id: FilmId,
+    path: &str,
+    delays_ms: &[u32],
+    laps: Option<u32>,
+) -> areka_emo_compose::FilmSheet {
+    areka_emo_compose::FilmSheet {
+        id,
+        path: path.to_string(),
+        frames: (0..delays_ms.len() as u32).map(|i| id.0 + i).collect(),
+        delays_ms: delays_ms.to_vec(),
+        laps: laps.and_then(std::num::NonZeroU32::new),
+        original: (2, 2),
+        rest: 0,
+    }
 }
 
 /// 着せ替えの無い空のスコープ状態。

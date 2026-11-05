@@ -3,13 +3,11 @@
 //! 表は research.md §10.1・§10.2 の SSP 2.9.23 の測りを写す。100・101・102 はコマの面、200 は
 //! `always` のコマの頭。刻みの位相は書き出しの決め方（合図と同じ時刻 0 から 16ms ごと）。
 
-use std::num::NonZeroU32;
-
-use areka_emo_compose::{BindSet, Cell, FilmId, FilmSheet, PartKey, PatternState};
+use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};
 
 use super::{settle_surface, settle_time};
 use crate::table::AnimationTable;
-use crate::test_support::film_world;
+use crate::test_support::{film_sheet, film_world};
 
 /// 0: runonce 赤→緑→青（各 100）。1: 0 の最後に `-1`。2: always だけ（8 コマ×50）。
 /// 3: runonce 3 コマ×1000＋`random,1`（T までに 1 秒の境を 3 度越える）。
@@ -71,15 +69,7 @@ const FILM: FilmId = FilmId(10);
 /// [`SHELL`] の表。`a.png` は分解と同じに子を置く element へ替える。
 fn table() -> AnimationTable {
     let world = film_world(SHELL, &[("a.png", FILM)]);
-    let sheet = FilmSheet {
-        id: FILM,
-        path: "a.png".to_string(),
-        frames: vec![10, 11, 12],
-        delays_ms: vec![100, 100, 100],
-        laps: None::<NonZeroU32>,
-        original: (2, 2),
-        rest: 0,
-    };
+    let sheet = film_sheet(FILM, "a.png", &[100, 100, 100], None);
     AnimationTable::from_world_and_films(&world, [sheet].iter(), &[])
 }
 

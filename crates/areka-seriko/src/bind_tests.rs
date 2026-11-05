@@ -1,4 +1,7 @@
 //! `bind.rs` のテスト（bind.rs の中にあったものを純移動・areka-P0-mcp-reload 8.3 で 1,000 行を超えないように）。
+//!
+//! 番号の出どころ: R・D は areka-P0-mayuna-compose、「bindopt」は areka-P0-bindoption-exclusivity、
+//! 決定3 は areka-P0-seriko-engine の design、要件 14.x は areka-P0-offline-surface-dump（後ろの節）。
 
 use super::*;
 
