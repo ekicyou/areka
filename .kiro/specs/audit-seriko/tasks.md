@@ -21,7 +21,7 @@
   - 完了: 役者のテストが記録した期待値で緑。Rig と合図の定義が受け口の 1 か所だけにある
   - _Boundary: actor_test_support.rs と actor_*_tests.rs_
   - _Requirements: 2.3, 8.1_
-- [ ] 1.3 統合テストの共有の道具を `tests/common/mod.rs` にまとめる
+- [x] 1.3 統合テストの共有の道具を `tests/common/mod.rs` にまとめる
   - 合図の組み・emo2 の面の文字列と名前の解決・話の知らせ・何もしない文字の受け手を、写しの 2 組（`cue_sequence`＝`regression`、`balloon_face_e2e`＝`bind_e2e`）から 1 か所へ移し、各テストが `mod common;` で使う
   - 使わない道具が出るテストのために受け口の先頭で未使用の警告を許す
   - 完了: 4 本の統合テストが同じ期待値で緑。写しの定義が `tests/` の各ファイルから消えている
@@ -142,3 +142,4 @@
 - 1.1 で記録した、後で移す・消すテストの名: タスク 3（移すだけ）＝`tick_with_no_shown_slot_is_complete_no_op`・`tick_boundary_cross_emits_show_carrying_pattern`・`send_tick_after_actor_stopped_logs_debug_no_panic`・`emote_surface_change_resets_loop_playback`。5.3（消す）＝`r_post_and_komainu_shell_root_holds_surfaces_txt`。5.4 指摘 13（消す）＝`resolve_is_deterministic_same_input_same_output`・`balloon_resolve_is_deterministic`・`same_input_same_answer`・`settling_twice_gives_the_same_state`、（中の確かめだけ消す）＝`balloon_display_commands_construct_and_match`・`frame_at_sakura_real_sequence_finishes_residual_permanently`。5.4 指摘 14（消す）＝`empty_resolver_resolves_all_none`・`accumulate_on_off_round_trip`・`accumulate_off_absent_is_noop`・`show_command_carries_static_binds`・`show_carries_static_default_when_no_dynamic_bind_applied`。消し終えた見込みは 540 件。
 - clippy: toolchain が固定されておらず、今の clippy（0.1.99）では着手の時点から areka-seriko に 4 件の警告がある（`actor.rs:91` large_enum_variant・`looper.rs:433`・`looper_talk_tests.rs:597`・`looper_trigger_tests.rs:504` の collapsible_if）。依存の dola にも出る。各タスクは `cargo clippy -p areka-seriko --all-targets --no-deps` で警告が増えないことを見る。この 4 件は完了の棚卸で扱う。
 - 1.2: Rig 4 本は `ClockRig::configured(config, names, static_binds)`（`with_config` はこれを呼ぶ）にまとめ、parts・stage・talk は `type Rig = ClockRig;` と檻ごとの impl。`send(ms, msg)` に時刻の引数が増えた。時計を持たない stage と parts の Rig も時計に揃えて寄せたが期待値は不変（parts の 4 本は最初の `\s` で時計が刻み 0 でなく合図の時刻 0 で生まれる。開始は同じ 0 で、時計の無い道は looper の `refresh(.., None, ..)` のテストが見張る）。`balloon_cue` は `cue(.., CueCommand::BalloonSurface{..}, ..)` へ。範囲の外の同名の `looper_talk_tests.rs` の `fn cue`・`parts_trigger_tests.rs` の `struct Rig` は写しでないので残した。`BindResolver::new` の呼び出しが `actor_test_support.rs` に入った（2.1 で消す相手）。
+- 1.3: `tests/common/mod.rs`（先頭に `#![allow(dead_code)]`）へ `emote_cue`・`emo2_surfaces_txt`・`emo2_resolver`・`TalkNotice`＋From 2 つ・`NullTextSink` を移した。写しが 1 本しか無い `emo2_binds`・`RecordingTextSink`・`test_bind_resolver`・`run_scenario` は元の場所のまま。

@@ -7,57 +7,15 @@
 //! 単一スレッドで処理済みゆえ、`MockSurfaceOutput::records()` の全 `DisplayCommand` 列を
 //! 期待列と全値比較（binds 含む）できる。
 
-use areka_emo_compose::{EmoWorld, PatternState};
-use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_emo_compose::PatternState;
+use areka_sakura::{ActorKey, CueSink};
 use areka_seriko::{
-    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
-    build_static_bindset, spawn_seriko,
+    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, build_static_bindset,
+    spawn_seriko,
 };
 
-/// テスト用の Shell 系 `TalkCue`（`Emote{key}`・at/actor 込み）を組む。
-fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Emote { key: key.into() },
-        duration: 0.0, // 表情切替は瞬時（明示的 0）。
-    }
-}
-
-/// emo2 検体の `shell/master/surfaces.txt`（検体の窓口から得る）。
-///
-/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。段 ③ で `Drop` が
-/// 展開した複製を消すため、関数内の一時値にすると借用の元がその場で消える。
-fn emo2_surfaces_txt() -> std::path::PathBuf {
-    use std::sync::LazyLock;
-
-    use sample_ghost_kit::SampleRoot;
-
-    static EMO2: LazyLock<SampleRoot> =
-        LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-    EMO2.folder()
-        .join("shell")
-        .join("master")
-        .join("surfaces.txt")
-}
-
-/// 実 emo2 shell fixture の surfaces.txt を parse し、alias スナップショットから解決層を組む。
-///
-/// 検体の在処は窓口から得るので、テストの CWD に依存しない（絶対パス）。
-/// emo-compose の world.rs テストと同一 fixture・同一経路（parse→`EmoWorld::build`→
-/// `alias_snapshot`）で、要件 7.3 の「alias 実データ追験」を満たす。
-fn emo2_resolver() -> SurfaceResolver {
-    let path = emo2_surfaces_txt();
-    let content = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-    let shell = areka_parsers::shell::parse(&content);
-    let world = EmoWorld::build(&shell);
-    let snapshot = world.alias_snapshot();
-    // 非自明性: emo2 は alias を含む（空マップの vacuous pass を防ぐ）。
-    assert!(!snapshot.is_empty(), "emo2 fixture は alias を含む");
-    SurfaceResolver::new(snapshot)
-}
+mod common;
+use common::*;
 
 /// 主 observable（要件 7.1/7.2/7.3）: 数値・alias（複数 id→先頭固定）・非表示・別スコープを
 /// 混在させた fixture 系列を入力し、mock 発行列が期待列に **順序込みで完全一致** する。

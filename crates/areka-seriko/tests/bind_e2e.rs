@@ -36,8 +36,8 @@
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{
-    ActorKey, ChoiceWaiting, CueCommand, CueSink, SakuraMsg, ScriptOrigin, StartTalk,
-    SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId, spawn_talk,
+    ActorKey, CueCommand, CueSink, SakuraMsg, ScriptOrigin, StartTalk, SystemVarSnapshot, TalkCue,
+    TalkEndReason, TalkId, spawn_talk,
 };
 use areka_seriko::{
     BindOptionDecls, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig,
@@ -47,38 +47,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
-/// test-local な合流 enum。両通知は同一ポートを流れる（DD-6）が、本 E2E の fixture に選択肢
-/// （`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの受け皿である。
-enum TalkNotice {
-    Done(TalkDone),
-    /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界
-    /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
-    #[allow(dead_code)]
-    ChoiceWaiting(ChoiceWaiting),
-}
-impl From<TalkDone> for TalkNotice {
-    fn from(done: TalkDone) -> Self {
-        TalkNotice::Done(done)
-    }
-}
-impl From<ChoiceWaiting> for TalkNotice {
-    fn from(waiting: ChoiceWaiting) -> Self {
-        TalkNotice::ChoiceWaiting(waiting)
-    }
-}
-
-/// text 系（→emo text-layer⑥）に相当する broadcast の 2 つ目のスロットを破棄する test-local sink。
-///
-/// bind のみを観測するシナリオでは、text 側へ届く全 cue（`ClearAll`/`Text`/`Custom` 等）を握って
-/// 捨てる（記録しない）。本 E2E の観測対象は seriko の表示指令だけ。
-struct NullTextSink;
-
-impl CueSink for NullTextSink {
-    fn emit(&mut self, _cue: TalkCue) {
-        // 破棄のみ。
-    }
-}
+mod common;
+use common::*;
 
 /// text 系スロットを埋めつつ、届いた cue を共有蓄積へ FIFO 記録する sink（emo-text 非汚染の観測用）。
 ///
