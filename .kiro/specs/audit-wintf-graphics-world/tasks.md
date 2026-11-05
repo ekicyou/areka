@@ -150,7 +150,7 @@
   - _Requirements: 3.1, 3.2, 3.4_
 
 - [ ] 6. EcsWorld の整理と小物
-- [ ] 6.1 EcsWorld から使われない欄と測りを消し、単一スレッドの一覧を 1 つにする
+- [x] 6.1 EcsWorld から使われない欄と測りを消し、単一スレッドの一覧を 1 つにする
   - 使われない欄・口・測り・呼び出し 0 の口と、使わなくなる `use` を消す。順のテストを消す（残る順のテストが 2 周まで見ていることを確かめる）
   - 単一スレッドで回すスケジュールの一覧を返す関数を置き、実行の仕方の設定をその一覧から回す。一覧の中身と本文が一覧から回していることを固定するテストを置く
   - 合成の言葉の注記 4 か所を直す。使い手が消えるテスト 2 本と 1 行を消し、説明を直す
@@ -210,3 +210,4 @@
 - 4.7: PreRenderSurface の見た目と描画面を作る係は `run_if(wuc_ready)`（装置だけ在って WUC が無い回に印を食べない）。立ち直りのテストの窓の的は世代の番号 1＋有効で見る（1 つの HWND は DesktopWindowTarget を 1 つしか持てず、古い物を生かして比べられない）。
 - 5.1: `EmoPresenter::refresh_after_device_change(world)` は毎フレーム呼ぶ前提で、本番の呼び出し 1 行は 5.2 で `crates/areka/src/emo2_boot/frame`（`run_dpi_phase` の近く）に足す（design の下流の手当ての表に追記）。`apply_show(.., None, false)` は今の main の形＝ audit-emo-present が `PresentOutcome` を着地させるときは `None` を外す。
 - 5.2: bevy 0.19 の `World::resource_scope` は戻すときに資源の変化の印を立てる。`GraphicsCore` に使うと装置の変化と読まれ、5.1・5.2 の見張りが毎フレーム作り直す輪になる＝ emo-text は `with_graphics_core`（印の時刻を戻す）を通す。`GraphicsCore` に `resource_scope` を新しく使わない。emo2 の毎フレームの出し直しは `frame.rs` の attach と dpi の間。
+- 6.1: `try_tick_world()` は常に true を返す（戻りを読む所が他の持ち主のテストに 5 か所あるため型は変えない）。`world/mod.rs` は 759 行。単一スレッドの一覧は `world::single_threaded_schedules()` の 6 本。
