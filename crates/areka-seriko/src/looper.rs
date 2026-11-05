@@ -86,7 +86,7 @@ pub struct SerikoLoopConfig {
 impl SerikoLoopConfig {
     /// 空表＋ダミー乱数（ループ完全不活性）。既存テスト・非 emo2 経路の非退行用。
     ///
-    /// シェル表が空・バルーン表の写像も空ゆえ抽選対象アニメが常にゼロ＝[`should_fire`] は決して
+    /// シェル表が空・バルーン表の写像も空ゆえ抽選対象アニメが常にゼロ＝`should_fire` は決して
     /// 呼ばれず乱数は消費されない（ダミー種は観測に現れない）。`on_tick` は常に空を返す（非退行）。
     pub fn disabled() -> Self {
         Self {
@@ -418,15 +418,15 @@ impl LoopRuntime {
     /// 窓を読み終えた刻みの最後（[`settle_talk`]）。
     pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
-        if let Some(last) = self.last_seen {
-            if now_ms < last {
-                tracing::debug!(
-                    now_ms,
-                    last_seen = last,
-                    "seriko: loop 非単調 tick を無視（防御・実クロックでは非発生・要件 1.2）"
-                );
-                return Vec::new();
-            }
+        if let Some(last) = self.last_seen
+            && now_ms < last
+        {
+            tracing::debug!(
+                now_ms,
+                last_seen = last,
+                "seriko: loop 非単調 tick を無視（防御・実クロックでは非発生・要件 1.2）"
+            );
+            return Vec::new();
         }
         self.last_seen = Some(now_ms);
 

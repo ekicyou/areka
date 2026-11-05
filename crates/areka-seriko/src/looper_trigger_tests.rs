@@ -501,10 +501,10 @@ fn trigger_words_beside_random_do_not_interfere() {
             if random.last().map(|(_, c)| *c) != Some(seen) {
                 random.push((now, seen));
             }
-            if let Some(at) = started(&rt, Slot::Shell, 2) {
-                if periodic.last() != Some(&at) {
-                    periodic.push(at);
-                }
+            if let Some(at) = started(&rt, Slot::Shell, 2)
+                && periodic.last() != Some(&at)
+            {
+                periodic.push(at);
             }
             now += 50;
         }

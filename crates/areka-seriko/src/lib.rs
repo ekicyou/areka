@@ -12,8 +12,8 @@
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
 //! - アニメ定義表 [`AnimationTable`]／[`LoopAnimation`]／[`LoopTrigger`]／[`LoopFrame`]: `EmoWorld`
 //!   からの boot 時不変スナップショット（`Random`/`BindRandom` のみ採録・method 構築時 1 回解決）。
-//! - タイムライン純関数コア [`frame_at`]／[`FrameStatus`]／[`should_fire`]／[`seeded_rng`]／[`LoopRng`]:
-//!   経過時刻→現在コマ・1/N 抽選・1000ms 絶対グリッド跨ぎ検出の決定論純関数群。
+//! - タイムラインの乱数 [`seeded_rng`]／[`LoopRng`]: 1/N 抽選に使う決定論の純粋 PRNG
+//!   （現在コマの判定と抽選そのものは crate 内）。
 //! - ループ統括層 [`SerikoLoopConfig`]／`LoopRuntime`（crate 内）: 二層時間（毎秒抽選×サブ秒進行）の
 //!   統括・per-(scope, slot) 再生状態・`on_tick`（抽選→進行→PatternState 差分）・`on_surface_changed`。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
@@ -67,10 +67,10 @@ pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
 pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 pub use settle::{settle_surface, settle_time};
-pub use shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceKeep};
+pub use shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback};
 pub use skin_facts::{SkinFacts, SkinLookup, balloon_missing, surface_missing};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeStates, Slot, StageNote,
 };
 pub use table::{AnimationTable, FrameAct, LoopAnimation, LoopFrame, LoopTrigger};
-pub use timeline::{FrameStatus, LoopRng, frame_at, seeded_rng, should_fire};
+pub use timeline::{LoopRng, seeded_rng};

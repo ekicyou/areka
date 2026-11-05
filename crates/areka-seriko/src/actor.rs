@@ -88,6 +88,10 @@ pub enum SerikoMsg {
 /// 定義の差し替えの依頼の中身（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
 ///
 /// `epoch` は UI の差し替えの世代で、出力の合図 [`DisplayCommand::Rebased`] にそのまま載る。
+#[expect(
+    clippy::large_enum_variant,
+    reason = "シェルの差し替えのときだけ 1 回送る依頼で、大きくても困らない"
+)]
 pub enum SerikoReplace {
     /// シェルの定義（別名表・静的な着せ替え・着せ替えの名前表・シェルのアニメ表）。
     Shell {

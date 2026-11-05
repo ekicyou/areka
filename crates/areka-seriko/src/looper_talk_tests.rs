@@ -595,10 +595,10 @@ fn mouth_as_long_as_the_boundary_gap_moves_at_every_boundary() {
     let mut now = 1016;
     while now <= 1700 {
         st.tick(now);
-        if let Some(at) = st.started() {
-            if starts.last() != Some(&at) {
-                starts.push(at);
-            }
+        if let Some(at) = st.started()
+            && starts.last() != Some(&at)
+        {
+            starts.push(at);
         }
         now += 16;
     }
