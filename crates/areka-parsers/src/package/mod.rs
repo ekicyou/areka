@@ -17,8 +17,6 @@
 //! モデル型群を公開面へ `pub use` で集約する。
 
 mod model;
-#[cfg(test)]
-mod model_tests;
 
 mod resolve;
 #[cfg(test)]
@@ -35,6 +33,9 @@ mod resolve_shell_tests;
 #[cfg(test)]
 mod validation_tests;
 
-pub use model::{BindGroupDefaults, GhostNames, MountError, MountModel, ShellMount, ShioriMount};
+pub use model::{
+    BindGroupDefaults, BindGroupName, GhostNames, MountError, MountModel, ScopeBinds, ShellMount,
+    ShioriMount,
+};
 pub use resolve::resolve;
 pub use resolve_shell::{read_ghost_names, resolve_with_shell};

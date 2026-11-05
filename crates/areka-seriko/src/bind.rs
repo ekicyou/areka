@@ -21,7 +21,7 @@ pub fn build_static_bindset(default_on: &[u32]) -> areka_emo_compose::BindSet {
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_parsers::package::BindGroupDefaults;
+use areka_parsers::package::{BindGroupDefaults, ScopeBinds};
 use areka_sakura::ActorKey;
 
 /// スコープの番号ごとの既定の着せ替えの組（spec: areka-P0-offline-surface-dump 要件 14.3）。
@@ -57,15 +57,11 @@ impl DefaultBinds {
     /// シェルの着せ替えの読みから、スコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*` の
     /// `default,1` を当てる。書かれていないスコープは空の組（要件 14.1）。
     pub fn from_groups(groups: &BindGroupDefaults) -> Self {
-        let mut by_scope = BTreeMap::from([
-            (0, build_static_bindset(&groups.sakura_default_on)),
-            (1, build_static_bindset(&groups.kero_default_on)),
-        ]);
-        for (n, ids) in &groups.char_default_on {
-            by_scope.insert(*n, build_static_bindset(ids));
-        }
         Self {
-            by_scope,
+            by_scope: groups
+                .iter()
+                .map(|(n, binds)| (*n, build_static_bindset(&binds.default_on)))
+                .collect(),
             fallback: areka_emo_compose::BindSet::default(),
         }
     }
@@ -173,22 +169,18 @@ static NO_NAMES: ScopeNames = ScopeNames {
 };
 
 impl ScopeNames {
-    /// 1 つのスコープの名前宣言 `(ID, カテゴリ, パーツ, 行の番号)`（転記順）と `mustselect`／`multiple`
-    /// の転記から組む。転記順に入れるので同じ `(カテゴリ, パーツ)` は後の宣言が勝つ（parsers と同じ）。
-    fn read<'a>(
-        names: impl IntoIterator<Item = (u32, &'a str, &'a str, usize)>,
-        mustselect: Option<&Vec<String>>,
-        multiple: Option<&Vec<String>>,
-    ) -> Self {
+    /// 1 つのスコープの名前宣言（転記順）と `mustselect`／`multiple` の転記から組む。
+    /// 転記順に入れるので同じ `(カテゴリ, パーツ)` は後の宣言が勝つ。
+    fn read(binds: &ScopeBinds) -> Self {
         let mut out = Self {
-            mustselect: mustselect.into_iter().flatten().cloned().collect(),
-            multiple: multiple.into_iter().flatten().cloned().collect(),
+            mustselect: binds.mustselect.iter().cloned().collect(),
+            multiple: binds.multiple.iter().cloned().collect(),
             ..Self::default()
         };
-        for (id, category, part, line) in names {
-            out.table.insert((category.to_owned(), part.to_owned()), id);
+        for n in &binds.names {
+            out.table.insert((n.category.clone(), n.part.clone()), n.id);
             out.written
-                .push((line, category.to_owned(), part.to_owned()));
+                .push((n.line, n.category.clone(), n.part.clone()));
         }
         out.written.sort_by_key(|(line, _, _)| *line);
         out
@@ -229,43 +221,18 @@ impl BindResolver {
     /// シェルの着せ替えの読み（`sakura.*`・`kero.*`・`char{N}.*`）から 3 種類のスコープの名前表と
     /// `mustselect`／`multiple` を組む（要件 14.2・14.3）。
     pub fn from_groups(groups: &BindGroupDefaults) -> Self {
-        // 名前宣言の型は parsers の外から名指せないので、欄をその場で組に開く。
-        macro_rules! decls {
-            ($names:expr) => {
-                $names
-                    .into_iter()
-                    .flatten()
-                    .map(|n| (n.id, n.category.as_str(), n.part.as_str(), n.line))
-            };
+        let mut out = Self::default();
+        for (n, binds) in groups {
+            let names = ScopeNames::read(binds);
+            match n {
+                0 => out.sakura = names,
+                1 => out.kero = names,
+                _ => {
+                    out.chars.insert(*n, names);
+                }
+            }
         }
-        let mut chars = BTreeMap::new();
-        for n in groups
-            .char_names
-            .keys()
-            .chain(groups.char_mustselect.keys())
-            .chain(groups.char_multiple.keys())
-        {
-            chars.entry(*n).or_insert_with(|| {
-                ScopeNames::read(
-                    decls!(groups.char_names.get(n)),
-                    groups.char_mustselect.get(n),
-                    groups.char_multiple.get(n),
-                )
-            });
-        }
-        Self {
-            sakura: ScopeNames::read(
-                decls!(Some(&groups.sakura_names)),
-                Some(&groups.sakura_mustselect),
-                Some(&groups.sakura_multiple),
-            ),
-            kero: ScopeNames::read(
-                decls!(Some(&groups.kero_names)),
-                Some(&groups.kero_mustselect),
-                Some(&groups.kero_multiple),
-            ),
-            chars,
-        }
+        out
     }
 
     /// 名前空間 `ns` の表（`char{N}` の表が無ければ空）。

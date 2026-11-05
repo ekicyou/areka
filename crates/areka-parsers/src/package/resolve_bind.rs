@@ -5,13 +5,12 @@
 //! charset 判定は foundation へ委譲する（Req 1.5）。KV 分割は行の番号を添えるため
 //! `kv` の `parse_kv_with_line` を使う。
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv_with_line;
 
-use super::model::{BindGroupDefaults, BindGroupName, BindScope};
+use super::model::{BindGroupDefaults, BindGroupName};
 
 /// スコープを決めるキーの頭（`char` は後ろに 2 以上の数と `.` が続く）。
 const SAKURA_SCOPE_PREFIX: &str = "sakura.";
@@ -51,8 +50,7 @@ const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 /// **転記のみ・展開しない**（範囲展開・surface 解決はしない・parsers 転写層原則）。
 /// スコープは `sakura.`（0）・`kero.`（1）・`char{N}.`（N は 2 以上）の 3 種類。
 /// 走査は `parse_kv_with_line` の `BTreeMap` 反復順（キー昇順）で決定的。名前は転記順（キー昇順）に
-/// push され、重複 (カテゴリ, パーツ) はアクセサ側の後勝ち（`resolve_name` の逆順走査・D2）
-/// と整合する。shell descript が不在・読取不能なら空を返す（致命でない・不在のほかは `warn!`）。
+/// push され、重複 (カテゴリ, パーツ) は下流 seriko が後勝ちで引く（D2）。shell descript が不在・読取不能なら空を返す（致命でない・不在のほかは `warn!`）。
 pub(super) fn read_bindgroup_defaults(
     shell_dir: &Path,
     default_encoding: DefaultEncoding,
@@ -90,13 +88,7 @@ pub(super) fn read_bindgroup_defaults(
                 continue;
             };
             match value.as_str() {
-                "1" => scope_vec(
-                    scope,
-                    &mut defaults.sakura_default_on,
-                    &mut defaults.kero_default_on,
-                    &mut defaults.char_default_on,
-                )
-                .push(id),
+                "1" => defaults.entry(scope).or_default().default_on.push(id),
                 "0" => {}
                 _ => tracing::warn!(
                     key = %key,
@@ -114,13 +106,7 @@ pub(super) fn read_bindgroup_defaults(
             if let Some(id) = checked_id(id, key, *line)
                 && let Some(name) = parse_bindgroup_name(id, key, value, *line)
             {
-                scope_vec(
-                    scope,
-                    &mut defaults.sakura_names,
-                    &mut defaults.kero_names,
-                    &mut defaults.char_names,
-                )
-                .push(name);
+                defaults.entry(scope).or_default().names.push(name);
             }
             continue;
         }
@@ -149,55 +135,30 @@ pub(super) fn read_bindgroup_defaults(
                 );
                 continue;
             };
+            let binds = defaults.entry(scope).or_default();
             if decl.mustselect {
-                scope_vec(
-                    scope,
-                    &mut defaults.sakura_mustselect,
-                    &mut defaults.kero_mustselect,
-                    &mut defaults.char_mustselect,
-                )
-                .push(decl.category.clone());
+                binds.mustselect.push(decl.category.clone());
             }
             if decl.multiple {
-                scope_vec(
-                    scope,
-                    &mut defaults.sakura_multiple,
-                    &mut defaults.kero_multiple,
-                    &mut defaults.char_multiple,
-                )
-                .push(decl.category);
+                binds.multiple.push(decl.category);
             }
         }
     }
     defaults
 }
 
-/// キーの頭（`sakura.`・`kero.`・`char{N}.`＝N は 2 以上の数字だけ）からスコープを決め、残りを返す。
-/// どれでもないキー（`char0.`・`char1.` を含む）は `None`（読まない）。
-fn split_scope(key: &str) -> Option<(BindScope, &str)> {
+/// キーの頭（`sakura.`＝0・`kero.`＝1・`char{N}.`＝N は 2 以上の数字だけ）からスコープ番号を決め、
+/// 残りを返す。どれでもないキー（`char0.`・`char1.` を含む）は `None`（読まない）。
+fn split_scope(key: &str) -> Option<(u32, &str)> {
     if let Some(rest) = key.strip_prefix(SAKURA_SCOPE_PREFIX) {
-        return Some((BindScope::Sakura, rest));
+        return Some((0, rest));
     }
     if let Some(rest) = key.strip_prefix(KERO_SCOPE_PREFIX) {
-        return Some((BindScope::Kero, rest));
+        return Some((1, rest));
     }
     let (number, rest) = key.strip_prefix(CHAR_SCOPE_PREFIX)?.split_once('.')?;
     let n = decimal_u32(number).filter(|n| *n >= 2)?;
-    Some((BindScope::Char(n), rest))
-}
-
-/// スコープの欄（`char*` は N ごとの表に作る）を書き込み用に引く。
-fn scope_vec<'a, T>(
-    scope: BindScope,
-    sakura: &'a mut Vec<T>,
-    kero: &'a mut Vec<T>,
-    chars: &'a mut BTreeMap<u32, Vec<T>>,
-) -> &'a mut Vec<T> {
-    match scope {
-        BindScope::Sakura => sakura,
-        BindScope::Kero => kero,
-        BindScope::Char(n) => chars.entry(n).or_default(),
-    }
+    Some((n, rest))
 }
 
 /// `bindoption*.group` の値 1 行を分解した宣言（カテゴリ名と、認識できたオプション語の所属）。

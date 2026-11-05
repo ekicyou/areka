@@ -61,7 +61,7 @@ fn none_matches_todays_resolve() {
 
     assert_eq!(with_none, today);
     assert_eq!(with_none.shell.dir, root.join("shell").join("A"));
-    assert_eq!(with_none.bindgroups.sakura_default_on, vec![1100]);
+    assert_eq!(with_none.bindgroups[&0].default_on, vec![1100]);
 }
 
 /// 名前なしで `defaultsurfacedirectoryname` が無ければ `master` を選ぶ（今日の規則）。
@@ -92,7 +92,7 @@ fn named_shell_mounts_its_dir_and_bindgroups() {
     let model = resolve_with_shell(root, DefaultEncoding::Utf8, Some("B")).expect("resolve ok");
 
     assert_eq!(model.shell.dir, root.join("shell").join("B"));
-    assert_eq!(model.bindgroups.sakura_default_on, vec![2200]);
+    assert_eq!(model.bindgroups[&0].default_on, vec![2200]);
     // シェル以外（名前・SHIORI）は既定のシェルのときと同じ。
     let today = resolve(root, DefaultEncoding::Utf8).expect("resolve ok");
     assert_eq!(model.names, today.names);

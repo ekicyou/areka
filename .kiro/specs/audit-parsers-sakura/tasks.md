@@ -146,7 +146,7 @@
   - `bind_only_paths_requires_every_id_of_range_brace` が緑で、examples を含むワークスペース全体（`cargo build --workspace --all-targets`）がコンパイルを通る
   - _Depends: 4.3_
   - _Requirements: 2.1, 2.7, 3.3, 4.1, 4.2, 4.3, 7.1, 7.3, 7.10_
-- [ ] 7.2 bindgroup をスコープ番号の表にし、死んだ引き口を消す（T21）
+- [x] 7.2 bindgroup をスコープ番号の表にし、死んだ引き口を消す（T21）
   - 3 重の欄をスコープ番号を鍵にした 1 つの表にし、`#[non_exhaustive]` を付けない（15）。seriko の 3 枝を表から引く 1 本へ畳む（seriko の中身には触らない）
   - 死んだ引き口と、そのテスト・`package/model_tests.rs`・写しのテストを消す（12・16・51）
   - 36 で seriko の別名の引きの期待値が変わらないことを確かめる
@@ -215,3 +215,5 @@
 - 6.2 への申し送り（6.1 のレビュー）: `drive_choice_tests.rs` に足した `sync_driver`・`dones` は `drive_strict_tests.rs` の `driver(sinks, None)`・`dones` と同じ写し。85 で `recv_until_choice`・`MENU3_SCRIPT`・`one_sink`・地平と一緒に `drive_test_support.rs` へ寄せる。
 - 8.1 への申し送り（6.1 のレビュー・範囲の外）: 78 の後、`dola` の `CuePlayer::stop`（`crates/dola/src/cue/runtime.rs:361`）を呼ぶ本番のコードが 0（dola のテストだけ）。起票か dola の audit の候補。
 - 7.1: 5.1 の ms の格子で、`areka-emo-text` の `actor_lookahead_tests.rs` の `Rig::play`（終わりを f64 の和で出していた）が 3 本目の赤になった（research §12.2 R2 の「2 本だけ」は外れ）。道具の終わりも ms の格子で出す形に直した。atlas の `surface_ids` は除外の範囲を広げない（`RangeInclusive` の列で引く・上限は包含の範囲だけにかかるため）。`areka-emo-compose/src/fold.rs` の `expand_targets_with` にも除外を広げる同じ形があり、相手（audit-emo-compose）へ 11-06 に知らせた（8.2 で残っていれば拾う）。`interval_written` は相手が未着地なので残した（8.2 で拾う）。
+- 8.2 への申し送り（2026-11-06 audit-emo-compose の知らせ）: `areka_parsers::shell::parse` が 1 つの面の animation の数の 2 乗に伸びる（debug で 15,000 本 1.37 s・30,000 本 6.6 s）。4.3 の 72（番号→位置の表）の後でも残っているかを測り、残っていれば範囲の中の指摘として直す。相手は fold の除外の範囲を `(lo, hi)` で引く形に直す（相手の指摘 75・タスク 6.3）。
+- 7.5 への申し送り（7.2 のレビュー）: `doc/ukadoc-coverage/ledger/assets.toml:4754` の note が、7.2 で消えた `BindGroupDefaults::kero_default_on` の綴りを書いたまま（守るテストは無い）。7.5 で台帳を直すときに今の形（`BindGroupDefaults` の表の 1＝kero の `default_on`）へ書き換える。`doc/` の差分はこれで台帳の 3 行になる。
