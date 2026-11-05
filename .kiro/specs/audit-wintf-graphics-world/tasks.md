@@ -164,7 +164,7 @@
   - 完了の状態: wintf がビルドでき、`tick_bridge` と World のテストが緑
   - _Requirements: 3.1, 3.3, 3.4_
 
-- [ ] 6.3 (P) スケジュールの説明と、メッセージの旗の表を 1 つにする
+- [x] 6.3 (P) スケジュールの説明と、メッセージの旗の表を 1 つにする
   - 13 本のスケジュールの説明を今の実行の仕方へ書き直し、derive を試すだけのテスト 5 本を消す
   - メッセージから旗を引く所を既知の表の引き当てにし、`match` を消す。表に無ければ今のまま。両向きのテストの片方を消す
   - 完了の状態: 旗のテストとスケジュールのテストが緑で、表の引き当てで全部の既知のメッセージが今と同じ旗になる
@@ -211,3 +211,4 @@
 - 5.1: `EmoPresenter::refresh_after_device_change(world)` は毎フレーム呼ぶ前提で、本番の呼び出し 1 行は 5.2 で `crates/areka/src/emo2_boot/frame`（`run_dpi_phase` の近く）に足す（design の下流の手当ての表に追記）。`apply_show(.., None, false)` は今の main の形＝ audit-emo-present が `PresentOutcome` を着地させるときは `None` を外す。
 - 5.2: bevy 0.19 の `World::resource_scope` は戻すときに資源の変化の印を立てる。`GraphicsCore` に使うと装置の変化と読まれ、5.1・5.2 の見張りが毎フレーム作り直す輪になる＝ emo-text は `with_graphics_core`（印の時刻を戻す）を通す。`GraphicsCore` に `resource_scope` を新しく使わない。emo2 の毎フレームの出し直しは `frame.rs` の attach と dpi の間。
 - 6.1: `try_tick_world()` は常に true を返す（戻りを読む所が他の持ち主のテストに 5 か所あるため型は変えない）。`world/mod.rs` は 759 行。単一スレッドの一覧は `world::single_threaded_schedules()` の 6 本。
+- 6.3: `graphics/visual_manager.rs:13` に PreLayout を指す古い説明が残る（6.3 の審査）＝ 6.4 で直す。

@@ -7,115 +7,101 @@ use bevy_ecs::schedule::*;
 #[derive(Resource, Default, Debug)]
 pub struct FrameCount(pub u32);
 
-// 各プライオリティ用のScheduleLabelマーカー構造体
-// 実行順序（EcsWorld::try_tick_world の try_run_schedule 呼び出し順と一致する不変条件。
-// この順序が登録順 EcsWorld::new と一致することは W7b-V で実コード照合済み）:
+// 各段の ScheduleLabel。`EcsWorld::try_tick_world` は毎回この順で 13 本を回す:
 //   Input → Update → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup
 //   → Draw → PreRenderSurface → RenderSurface → Composition → CommitComposition → FrameFinalize
+// 単一スレッド（UI スレッド）で回すのは `world::single_threaded_schedules()` の 6 本
+// （UISetup・GraphicsSetup・PreRenderSurface・RenderSurface・Composition・CommitComposition）。
+// WUC（Windows.UI.Composition）はスレッド親和なので、WUC に触る係はこの 6 本にだけ置く。
+// 残りの 7 本は多スレッドで回りうる。
 
-/// 入力処理スケジュール
+/// 入力の段（多スレッド）。
 ///
-/// キーボード・マウス・タッチ等の入力イベントを処理する。
-/// マルチスレッド実行可能。
+/// 非同期の仕事の結果を取り込み、ポインタとドラッグの出来事を配る。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Input;
 
-/// 通常のロジック更新スケジュール
+/// 状態の更新の段（多スレッド）。
 ///
-/// アプリケーションロジック、状態更新、アニメーション計算等を行う。
-/// マルチスレッド実行可能。
+/// 表示構成の変化の検知・モニターの配置の更新・タイプライターの進行を行う。
+/// 使い手のクレートも自分のロジックをここへ足す。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Update;
 
-/// レイアウト計算前スケジュール
+/// レイアウトの前の段（多スレッド）。
 ///
-/// レイアウト計算の準備処理（サイズ制約の設定等）を行う。
-/// マルチスレッド実行可能。
+/// wintf 自身の係は置いていない。使い手がレイアウトの前に済ませたい処理を足す口。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PreLayout;
 
-/// レイアウト計算スケジュール
+/// レイアウトの段（多スレッド）。
 ///
-/// ウィンドウ/ウィジェットのサイズと位置を計算する。
-/// マルチスレッド実行可能。
+/// taffy の型と木を作り、大きさと位置を計算して配置（Arrangement）へ写す。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Layout;
 
-/// レイアウト計算後スケジュール
+/// レイアウトの後の段（多スレッド）。
 ///
-/// レイアウト結果を使った処理（グラフィックスリソース作成等）を行う。
-/// マルチスレッド実行可能。
+/// 配置を木へ伝え、窓の位置（WindowPos）へ写す。WUC には触らない。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PostLayout;
 
-/// UIセットアップスケジュール（メインスレッド固定）
+/// 窓の段（単一スレッド・UI スレッド）。
 ///
-/// Win32 APIを使用したウィンドウ作成・破棄等のUIスレッド専用処理を行う。
-/// CreateWindowEx, DestroyWindow, PostQuitMessage等のメッセージループに影響する処理を含む。
-/// SingleThreadedエグゼキュータで実行される。
-///
-/// **重要**: UIスレッド固定が必要な処理のみをここに配置すること。
-/// DirectComposition/Direct2D等のグラフィックスAPI呼び出しは通常マルチスレッド対応なので、
-/// PostLayoutやDrawで実行すべき。
+/// 窓の作成（CreateWindowEx）と、窓の位置の反映（SetWindowPos）を行う。
+/// Win32 の窓はそれを作ったスレッドに縛られるので、UI スレッドで回す。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UISetup;
 
-/// グラフィックスセットアップスケジュール
+/// 描画の装置と WUC の資源の段（単一スレッド・UI スレッド）。
+///
+/// 装置の失いの確かめ → 装置に頼る部品の無効化 → 描画の装置（GraphicsCore）の作成
+/// → WUC の資源の作成 → 窓ごとの WUC の的の作成、の順に回す。作る係は作れる回だけ回る。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GraphicsSetup;
 
-/// 描画コマンド生成スケジュール
+/// 描画の命令の段（多スレッド）。
 ///
-/// ID2D1CommandListを使用した描画コマンドリストを作成する。
-/// 実際の描画は行わず、描画命令をバッファに記録するだけ。
-/// マルチスレッド実行可能（各ウィンドウのCommandListを並列作成可能）。
+/// 部品ごとに D2D の命令の列（ID2D1CommandList）を作るだけで、描画面にも WUC にも触らない。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Draw;
 
-/// サーフェス更新前スケジュール
+/// 描画面の用意の段（単一スレッド・UI スレッド）。
 ///
-/// IDCompositionSurfaceへの更新前に行う。
+/// 後から窓へつないだ部品に見た目の部品を入れ、WUC の見た目（Visual）と描画面（Surface）を
+/// 作り（WUC が在る回だけ）、描き直す描画面に印を付け、窓の見た目をつなぐ。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PreRenderSurface;
 
-/// サーフェス更新スケジュール
+/// 描画面への描画の段（単一スレッド・UI スレッド）。
 ///
-/// IDCompositionSurfaceへの描画を実行する。
-/// BeginDraw/EndDrawでSurfaceを取得し、ID2D1DeviceContextで描画を行う。
-/// CommandListがある場合はDrawImage()で再生する。
-/// マルチスレッド実行可能（各Surfaceは独立）。
+/// 印の付いた WUC の描画面に BeginDraw/EndDraw で D2D の文脈を取り、命令の列を描く。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderSurface;
 
-/// 最終合成スケジュール
+/// 合成の段（単一スレッド・UI スレッド）。
 ///
-/// IDCompositionVisualの操作（Transform, Opacity, Effect設定等）を行う。
-/// ビジュアルツリーの構築・更新、アニメーション設定等。
-/// マルチスレッド実行可能。
+/// WUC の見た目の木の親子・性質（位置・不透明度など）・切り抜きを ECS に合わせる。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Composition;
 
-/// DirectCompositionコミットスケジュール
+/// 合成の確定の段（単一スレッド・UI スレッド）。
 ///
-/// IDCompositionDevice3::Commit()を呼び出し、すべてのビジュアル変更を確定する。
-/// このスケジュールは常にワールドスケジュールの最後に実行される。
-/// マルチスレッド実行可能（Commit()はスレッドセーフ）。
+/// wintf 自身の係は置いていない。WUC の変更は暗黙に反映されるので、明示の commit は要らない。
+/// 13 本の順を変えないために段だけ残している。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CommitComposition;
 
-/// フレーム終了時クリーンアップスケジュール
+/// 回の終わりの片付けの段（多スレッド）。
 ///
-/// CommitComposition の後に実行される。
-/// - 一時的なマーカーコンポーネント（MouseLeave等）の除去
-/// - 1フレームのみ有効な状態（DoubleClick, Wheel等）のリセット
+/// 1 回だけ有効なポインタの状態（MouseLeave・DoubleClick・Wheel など）を消し、
+/// ドラッグ中は次の回を予約し、ドラッグの出来事の列（Messages）を進め、ツールチップを判定する。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FrameFinalize;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
 
     /// `FrameCount` の Default は 0（フレーム未経過の初期値）。
     #[test]
@@ -128,78 +114,5 @@ mod tests {
     fn test_frame_count_stores_inner_value() {
         assert_eq!(FrameCount(42).0, 42);
         assert_eq!(FrameCount(u32::MAX).0, u32::MAX);
-    }
-
-    /// ハッシュ値を計算するヘルパ。
-    fn hash_of<T: Hash>(value: &T) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        value.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    /// 各スケジュールラベルは PartialEq/Eq で同一バリアントどうしが等価。
-    /// `Schedules`（HashMap キー）での同定に依存する契約。
-    #[test]
-    fn test_schedule_labels_equal_themselves() {
-        assert_eq!(Input, Input);
-        assert_eq!(Update, Update);
-        assert_eq!(PreLayout, PreLayout);
-        assert_eq!(Layout, Layout);
-        assert_eq!(PostLayout, PostLayout);
-        assert_eq!(UISetup, UISetup);
-        assert_eq!(GraphicsSetup, GraphicsSetup);
-        assert_eq!(Draw, Draw);
-        assert_eq!(PreRenderSurface, PreRenderSurface);
-        assert_eq!(RenderSurface, RenderSurface);
-        assert_eq!(Composition, Composition);
-        assert_eq!(CommitComposition, CommitComposition);
-        assert_eq!(FrameFinalize, FrameFinalize);
-    }
-
-    /// `Clone`（ScheduleLabel 経由の dyn ラベル複製でも使われる）が元と等価な値を返す。
-    #[test]
-    fn test_schedule_labels_clone_preserves_equality() {
-        assert_eq!(Input.clone(), Input);
-        assert_eq!(Layout.clone(), Layout);
-        assert_eq!(FrameFinalize.clone(), FrameFinalize);
-    }
-
-    /// 同一バリアントの Hash は一致する（Eq と Hash の整合 = HashMap キー要件）。
-    #[test]
-    fn test_schedule_labels_hash_is_consistent_with_eq() {
-        assert_eq!(hash_of(&Input), hash_of(&Input));
-        assert_eq!(hash_of(&Update), hash_of(&Update));
-        assert_eq!(hash_of(&FrameFinalize), hash_of(&FrameFinalize));
-    }
-
-    /// `Debug` 整形が各ラベルの型名を含む（ユニット構造体の標準整形）。
-    #[test]
-    fn test_schedule_labels_debug_contains_type_name() {
-        assert_eq!(format!("{:?}", Input), "Input");
-        assert_eq!(format!("{:?}", Update), "Update");
-        assert_eq!(format!("{:?}", PreLayout), "PreLayout");
-        assert_eq!(format!("{:?}", Layout), "Layout");
-        assert_eq!(format!("{:?}", PostLayout), "PostLayout");
-        assert_eq!(format!("{:?}", UISetup), "UISetup");
-        assert_eq!(format!("{:?}", GraphicsSetup), "GraphicsSetup");
-        assert_eq!(format!("{:?}", Draw), "Draw");
-        assert_eq!(format!("{:?}", PreRenderSurface), "PreRenderSurface");
-        assert_eq!(format!("{:?}", RenderSurface), "RenderSurface");
-        assert_eq!(format!("{:?}", Composition), "Composition");
-        assert_eq!(format!("{:?}", CommitComposition), "CommitComposition");
-        assert_eq!(format!("{:?}", FrameFinalize), "FrameFinalize");
-    }
-
-    /// 異なるラベル型を `dyn ScheduleLabel` として比較すると非等価（型混同しない）。
-    /// `Box<dyn ScheduleLabel>` の intern_label 経由で `Schedules` が型を区別する根拠。
-    #[test]
-    fn test_distinct_schedule_labels_are_not_equal_as_dyn() {
-        let input: Box<dyn ScheduleLabel> = Box::new(Input);
-        let update: Box<dyn ScheduleLabel> = Box::new(Update);
-        let input2: Box<dyn ScheduleLabel> = Box::new(Input);
-
-        // Box<dyn ScheduleLabel> は Copy でないため参照経由で比較する。
-        assert!(input != update, "Input と Update は別ラベル");
-        assert!(input == input2, "同一バリアントの dyn ラベルは等価");
     }
 }

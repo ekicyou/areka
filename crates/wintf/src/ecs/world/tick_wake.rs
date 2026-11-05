@@ -280,8 +280,9 @@ pub fn take(now: Instant) -> WakeSnapshot {
 
 /// 既知のウィンドウメッセージと立てる旗の対応表。
 ///
-/// [`wake_bits_for_message`] の `match` と**同じ中身**であり、片方だけ直してはならない。
-/// 食い違いは兄弟の決定論テストが両方向から捕まえる（表→純関数と、番号の総なめ）。
+/// [`wake_bits_for_message`] はこの表を引くだけなので、旗を足す・変えるのはここ 1 か所。
+/// 幾何・DPI・表示構成・活性化・表示／破棄は窓の形と見え方が変わりうるので `WM_GEOMETRY`、
+/// ポインタはポインタが動いた／押されたときにだけ届くので `POINTER`。
 pub const KNOWN_MESSAGE_TABLE: &[(u32, WakeBits)] = &[
     // 幾何・DPI・表示構成・活性化・表示／破棄
     (WM_WINDOWPOSCHANGING, WM_GEOMETRY),
@@ -343,31 +344,16 @@ pub const KNOWN_MESSAGE_TABLE: &[(u32, WakeBits)] = &[
 
 /// ウィンドウメッセージを起床の旗へ写す純関数。
 ///
-/// 表に無いメッセージは [`FORCE`]（全走）へ落とす——**疑わしいときは回す**。旗を立て
-/// 忘れて反応しなくなる方が、余分に 1 回回るより高くつくからである。
+/// [`KNOWN_MESSAGE_TABLE`] を引き、表に無いメッセージは [`FORCE`]（全走）へ落とす——
+/// **疑わしいときは回す**。旗を立て忘れて反応しなくなる方が、余分に 1 回回るより
+/// 高くつくからである。
 ///
 /// 副作用は無い。旗を立てるのは呼び出し側（メッセージの配送点）の仕事である。
 pub fn wake_bits_for_message(msg: u32) -> WakeBits {
-    match msg {
-        // 幾何・DPI・表示構成・活性化・表示／破棄——窓の形と見え方が変わりうる。
-        WM_WINDOWPOSCHANGING | WM_WINDOWPOSCHANGED | WM_SIZE | WM_MOVE | WM_DPICHANGED
-        | WM_DISPLAYCHANGE | WM_SETTINGCHANGE | WM_ACTIVATE | WM_ACTIVATEAPP | WM_NCACTIVATE
-        | WM_SHOWWINDOW | WM_DESTROY | WM_NCDESTROY | WM_CLOSE | WM_STYLECHANGED
-        | WM_ENTERSIZEMOVE | WM_EXITSIZEMOVE => WM_GEOMETRY,
-
-        // ポインタ——いずれもポインタが動いた／押されたときにだけ届く。
-        WM_MOUSEMOVE | WM_MOUSELEAVE | WM_MOUSEHOVER | WM_SETCURSOR | WM_NCHITTEST
-        | WM_MOUSEACTIVATE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN
-        | WM_RBUTTONUP | WM_RBUTTONDBLCLK | WM_MBUTTONDOWN | WM_MBUTTONUP | WM_MBUTTONDBLCLK
-        | WM_XBUTTONDOWN | WM_XBUTTONUP | WM_XBUTTONDBLCLK | WM_MOUSEWHEEL | WM_MOUSEHWHEEL
-        | WM_CAPTURECHANGED | WM_CANCELMODE | WM_NCMOUSEMOVE | WM_NCMOUSELEAVE
-        | WM_NCLBUTTONDOWN | WM_NCLBUTTONUP | WM_NCLBUTTONDBLCLK | WM_NCRBUTTONDOWN
-        | WM_NCRBUTTONUP | WM_NCRBUTTONDBLCLK | WM_NCMBUTTONDOWN | WM_NCMBUTTONUP
-        | WM_NCMBUTTONDBLCLK | WM_NCXBUTTONDOWN | WM_NCXBUTTONUP | WM_NCXBUTTONDBLCLK => POINTER,
-
-        // 表に無いものは全走（疑わしいときは回す）。
-        _ => FORCE,
-    }
+    KNOWN_MESSAGE_TABLE
+        .iter()
+        .find(|(known, _)| *known == msg)
+        .map_or(FORCE, |(_, bits)| *bits)
 }
 
 #[cfg(test)]
