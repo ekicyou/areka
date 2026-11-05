@@ -534,3 +534,122 @@ fn composer_failure_keeps_previous_ops() {
     );
     assert_eq!(again.bytes(), first.bytes());
 }
+
+// ── uv が頁をはみ出す表（指摘 19・要件 4.4・6.2） ──
+
+/// 面 0（背景 a）と面 1（背景 a＋小物 b）を束縛した world と、b の uv が頁の右へ 1 画素はみ出す表。
+fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
+    use areka_parsers::shell::{DefRef, Element, ElementPath, Shell, Surface};
+
+    let key = |p: &str| AtlasKey {
+        set: SetId(0),
+        rel_path: p.into(),
+    };
+    let placed = |page, uv: Rect| AtlasEntry {
+        original: Size { w: uv.w, h: uv.h },
+        placement: Some(Placement {
+            page,
+            uv_rect: uv,
+            trim_offset: Point { x: 0, y: 0 },
+        }),
+    };
+    let atlas = AtlasTable::new(
+        vec![key("a.png"), key("b.png")],
+        vec![
+            placed(
+                0,
+                Rect {
+                    x: 0,
+                    y: 0,
+                    w: 8,
+                    h: 6,
+                },
+            ),
+            // 頁の幅 3 に対して x + w = 4（右へ 1 画素はみ出す）。
+            placed(
+                1,
+                Rect {
+                    x: 1,
+                    y: 0,
+                    w: 3,
+                    h: 2,
+                },
+            ),
+        ],
+        vec![pattern_page(8, 6, 1), pattern_page(3, 2, 2)],
+    );
+    let el = |layer, path: &str, x, y| Element {
+        layer,
+        path: ElementPath::new(path.to_string()),
+        x,
+        y,
+    };
+    let surface = |id: u32, elements| Surface {
+        id,
+        targets: vec![areka_parsers::shell::AppendTarget::Single(id)],
+        elements,
+        collisions: Vec::new(),
+        animations: Vec::new(),
+    };
+    let shell = Shell {
+        surfaces: vec![
+            surface(0, vec![el(0, "a.png", 0, 0)]),
+            surface(1, vec![el(0, "a.png", 0, 0), el(1, "b.png", 2, 1)]),
+        ],
+        appends: Vec::new(),
+        aliases: Vec::new(),
+        animation_sort: None,
+        collision_sort: None,
+        definitions: vec![DefRef::Surface(0), DefRef::Surface(1)],
+    };
+    let mut world = crate::EmoWorld::build(&shell);
+    world.bind_atlas(&atlas, SetId(0));
+    (world, atlas)
+}
+
+/// uv が頁の右へ 1 画素はみ出す命令は、いちからの合成でも矩形の重ね直しでもパニックせず、
+/// その命令だけ飛ばして `warn!`（element・頁・uv）を出す（絵は b の無い面 0 と同じ）。
+#[test]
+fn uv_past_page_edge_is_skipped_with_warn_on_both_paths() {
+    let (world, atlas) = uv_overflow_world();
+    let (binds, pat) = (crate::BindSet::default(), crate::PatternState::default());
+    let mut c = crate::Composer::new();
+    let without_b = c.compose(&world, &atlas, 0, &binds, &pat).expect("Ok");
+    let expect_warn = |logs: &str, path: &str| {
+        assert!(
+            logs.contains("level=WARN")
+                && logs.contains("element=1")
+                && logs.contains("page=1")
+                && logs.contains("uv=Rect { x: 1, y: 0, w: 3, h: 2 }")
+                && logs.contains("頁に収まらない"),
+            "{path}: はみ出しの warn: {logs}"
+        );
+    };
+
+    // いちからの合成。
+    let mut full = ComposedSurface::new(0, 0);
+    let logs = crate::log_capture::capture_logs(|| {
+        c.compose_into(&mut full, &world, &atlas, 1, &binds, &pat)
+            .expect("Ok");
+    });
+    expect_warn(&logs, "いちから");
+    assert_eq!(full.bytes(), without_b.bytes(), "いちから: b だけ飛ばす");
+
+    // 矩形の重ね直し（下敷き＝面 0 の絵・命令列の違いは b だけ）。
+    let mut base = ComposedSurface::new(0, 0);
+    c.compose_into_reusing(&mut base, None, &world, &atlas, 0, &binds, &pat)
+        .expect("Ok");
+    let mut out = ComposedSurface::new(0, 0);
+    let mut r = Recompose::Full;
+    let logs = crate::log_capture::capture_logs(|| {
+        r = c
+            .compose_into_reusing(&mut out, Some(&base), &world, &atlas, 1, &binds, &pat)
+            .expect("Ok");
+    });
+    assert!(
+        matches!(r, Recompose::Partial { w: 3, h: 2, .. }),
+        "矩形の道を通る: {r:?}"
+    );
+    expect_warn(&logs, "矩形");
+    assert_eq!(out.bytes(), without_b.bytes(), "矩形: b だけ飛ばす");
+}
