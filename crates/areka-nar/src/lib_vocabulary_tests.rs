@@ -320,6 +320,7 @@ fn skipped_manifest_keys_are_warned_one_by_one() {
         .file(
             "install.txt",
             &install_txt(&[
+                "charset,UTF-8",
                 "type,ghost",
                 "name,テスト",
                 "directory,tester",

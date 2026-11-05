@@ -7,43 +7,56 @@
 use super::decode;
 use super::model::DefaultEncoding;
 
-/// R2.1: 宣言 UTF-8 で全体をデコードする（宣言どおり・全内容が復元される）。
+/// R2.5: 未対応（解釈不能）ラベルは呼び出し側指定の既定へ寛容フォールバックする。
+///
+/// 中身を SJIS にして既定 `Ansi` で読む。落ち先が UTF-8 などに変わると「かくかく」が化けて赤になる。
 #[test]
-fn declared_utf8_decodes_whole_content() {
-    let bytes = b"charset,UTF-8\ntype,balloon\n";
-    let out = decode(bytes, DefaultEncoding::Utf8);
+fn unsupported_label_falls_back_to_default() {
+    let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode("charset,NOSUCH\r\nname,かくかく\r\n");
+    let out = decode(&bytes, DefaultEncoding::Ansi);
     assert!(
-        out.contains("type,balloon"),
-        "全内容がデコードされる: {out:?}"
-    );
-    assert!(
-        out.contains("charset,UTF-8"),
-        "宣言行も内容として復元される: {out:?}"
+        out.contains("name,かくかく"),
+        "未対応ラベルは既定 Ansi（CP932）でデコード継続: {out:?}"
     );
 }
 
-/// R2.2（生き証人）: 宣言 Shift_JIS が既定 Utf8 に勝ち、文字化けしない。
-///
-/// SJIS でエンコードしたバイト列を Utf8 既定で decode しても、宣言 SJIS が優先され
-/// 「かくかく」が正しく復元される（宣言が既定に勝つ・SJIS を UTF-8 と誤読しない）。
+/// 解けないラベルと壊れた並びは、既定の記録の段で見える `warn!` を 1 件ずつ残す。
 #[test]
-fn declared_shift_jis_beats_utf8_default() {
-    let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode("charset,Shift_JIS\r\nname,かくかく\r\n");
+fn unresolved_label_and_malformed_bytes_warn() {
+    let (_, events) = log_capture_kit::capture(|| {
+        decode(b"charset,NOSUCH\nname,hi\n", DefaultEncoding::Utf8);
+        decode(b"charset,UTF-8\nname,\xff\n", DefaultEncoding::Utf8);
+    });
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warns.len(), 2, "{events:?}");
+    assert_eq!(warns[0].field("label"), Some("NOSUCH"), "{events:?}");
+    assert_eq!(warns[1].field_str("encoding"), Some("UTF-8"), "{events:?}");
+}
+
+/// ASCII と互換でない宣言（UTF-16 の 2 種・replacement に当たるラベル）は解けないラベルと
+/// 同じに既定へ倒し、`warn!` を残す。ISO-2022-JP は宣言どおり読む。
+#[test]
+fn non_ascii_compatible_labels_fall_back() {
+    for label in ["UTF-16", "UTF-16BE", "ISO-2022-KR"] {
+        let text = format!("charset,{label}\r\nname,かくかく\r\n");
+        let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(&text);
+        let (out, events) = log_capture_kit::capture(|| decode(&bytes, DefaultEncoding::Ansi));
+        assert!(out.contains("name,かくかく"), "{label}: {out:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| e.level == tracing::Level::WARN && e.field("label") == Some(label)),
+            "{label}: {events:?}"
+        );
+    }
+    let (bytes, _, _) = encoding_rs::ISO_2022_JP.encode("charset,ISO-2022-JP\r\nname,かくかく\r\n");
     let out = decode(&bytes, DefaultEncoding::Utf8);
     assert!(
         out.contains("name,かくかく"),
-        "宣言 SJIS が既定 Utf8 に勝ち文字化けしない: {out:?}"
-    );
-}
-
-/// R2.5: 未対応（解釈不能）ラベルは呼び出し側指定の既定へ寛容フォールバックする。
-#[test]
-fn unsupported_label_falls_back_to_default() {
-    let bytes = b"charset,NOSUCH-ENC\nname,hi\n";
-    let out = decode(bytes, DefaultEncoding::Utf8);
-    assert!(
-        out.contains("name,hi"),
-        "未対応ラベルは既定 Utf8 でデコード継続: {out:?}"
+        "ISO-2022-JP は宣言どおり: {out:?}"
     );
 }
 

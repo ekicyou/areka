@@ -12,7 +12,7 @@
   - kv のテストに `lowercased_folds_keys_and_drops_empty`・`empty_key_lines_are_skipped` があって緑で、package の読みの振る舞いは変わらない
   - _Boundary: parsers kv_
   - _Requirements: 2.1, 2.6, 2.7, 3.1, 7.1, 7.10_
-- [ ] 1.2 (P) charset の記録と判定を直し、parsers にログ捕捉の dev-dependency を足す（T2）
+- [x] 1.2 (P) charset の記録と判定を直し、parsers にログ捕捉の dev-dependency を足す（T2）
   - `areka-parsers` の dev-dependency にワークスペースの `log-capture-kit` を足し、理由の注釈をほかの行と同じ形で付け、`tech.md` に登記する。`Cargo.lock` で変わるのが `areka-parsers` の塊の 1 行だけであることを確かめる
   - 解けないラベルと壊れた並びの記録を `warn!` に上げる（17）・ASCII と互換でないラベルを既定へ倒す（55）
   - SJIS の字を `Ansi` で読む形にテストを書き直す（20）・古い 3 行と「タスク 2.3」の文を消す（22）・charset の写しのテストを消す（23・53 の charset）・`lib.rs` と charset の見出しの doc を今の姿へ（63 の charset と `lib.rs`）
@@ -196,3 +196,5 @@
 `・`
 ` を本物の改行へ化かした。逆斜線を含む文字列は python でバイトとして書き、`cat -A` などでバイトを確かめる。
 - 1.1: `kv::parse_kv_lowercased` は行の順で畳む（綴りの違う同じ鍵は後の行が勝つ）。`catalog.rs` の今の `lowercased`（鍵の表の順）とは混ざった綴りのときだけ違う。乗り換えは `audit-ghost-catalog` の持ち分。
+- 1.2: charset の新しい `warn!`（壊れた並び）で、宣言の無い UTF-8 の検体が赤になる（`areka-nar` の `lib_vocabulary_tests.rs` は `charset,UTF-8` を足して直した）。WARN を数えるテストの検体は宣言を中身に合わせる。
+- 1.2: `areka --test smoke_boot_loop_exit` は i686 の部品が未ビルドだと赤（環境）。`areka-ghost` の `inproc_e2e_test::i2_*` は高負荷で 1 回揺れた。

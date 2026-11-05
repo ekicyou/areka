@@ -322,6 +322,7 @@ name = "areka-parsers"
 version = "0.1.0"
 dependencies = [
  "encoding_rs",
+ "log-capture-kit",
  "sample-ghost-kit",
  "temp-path-kit",
  "tracing",

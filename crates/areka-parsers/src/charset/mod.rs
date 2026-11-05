@@ -1,9 +1,10 @@
 //! charset — バイト列の文字コード検出・全体デコード。
 //!
 //! 公開面の集約。中身は次のとおり:
-//! - `model`   : 既定エンコード指定型 `DefaultEncoding`（契約の片側・本 spec 所有）
+//! - `model`   : 既定エンコード指定型 `DefaultEncoding`（下流と共有する契約の片側）
 //! - `prescan` : 内部・冒頭 ASCII プリスキャンで charset 名を抽出（D1/D2）
-//! - `decode`  : 内部・prescan 結果＋encoding_rs で全体デコード（公開 facade `decode`）
+//! - `decode`  : 内部・prescan 結果＋encoding_rs で全体デコード（公開 facade `decode`）。
+//!   解けない・ASCII と互換でないラベルと壊れた並びは `warn!` を残して読み続ける
 //!
 //! 依存方向は `model ← prescan ← decode`。本 `mod.rs` は
 //! `decode` / `DefaultEncoding` を公開面へ `pub use` で集約する。
