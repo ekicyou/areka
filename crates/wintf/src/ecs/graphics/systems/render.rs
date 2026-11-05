@@ -13,48 +13,44 @@ use windows::core::Interface;
 
 // ========== 描画システム ==========
 
+/// 描画の係が読む部品
+type RenderSurfaceData = (
+    Entity,
+    &'static SurfaceGraphics,
+    &'static GlobalArrangement,
+    Option<&'static GraphicsCommandList>,
+    Option<&'static Name>,
+);
+
 /// Surfaceへの自己描画（Phase 4: 自己描画方式）
 ///
 /// 各Entityが自分のSurfaceに自分のGraphicsCommandListのみを描画する。
-/// draw_recursive方式を廃止し、DirectCompositionのVisual階層で合成を行う。
+/// 子の描画は各子が自分のSurfaceで行い、WUC の見た目（Visual）の木で合成する。
 ///
-/// - Changed<SurfaceGraphicsDirty>を持つEntityが対象（マーカー方式から移行）
-/// - 自分のGraphicsCommandListのみを描画（子は描画しない）
-/// - 子の描画は各子が自分のSurfaceで行う
+/// - Changed<SurfaceGraphicsDirty>を持つEntityが対象
 /// - GlobalArrangementのスケール成分を適用（DPIスケール対応）
+/// - 装置が無い・無効なら何も描かずに戻る（描画面は作り直しで全部作り直される）
+/// - `GraphicsCore` を可変で触るのは装置の失いのときだけ（ふだんの描画で変化の印を立てない）
+/// - 失いでない BeginDraw の失敗は、その面の描き直しの印を命令で立て直し、次の回で描き直す
 pub fn render_surface(
-    surfaces: Query<
-        (
-            Entity,
-            &SurfaceGraphics,
-            &GlobalArrangement,
-            Option<&GraphicsCommandList>,
-            Option<&Name>,
-        ),
-        Changed<SurfaceGraphicsDirty>,
-    >,
-    _graphics_core: Option<Res<GraphicsCore>>,
-    _frame_count: Res<crate::ecs::world::FrameCount>,
+    surfaces: Query<RenderSurfaceData, Changed<SurfaceGraphicsDirty>>,
+    graphics_core: Option<ResMut<GraphicsCore>>,
+    mut commands: Commands,
 ) {
     use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
     use windows::Win32::Graphics::Direct2D::Common::D2D1_COMPOSITE_MODE_SOURCE_OVER;
     use windows::Win32::Graphics::Direct2D::D2D1_INTERPOLATION_MODE_LINEAR;
 
+    let Some(mut graphics_core) = graphics_core else {
+        return;
+    };
+    if !graphics_core.is_valid() {
+        return;
+    }
+
     for (entity, surface, global_arrangement, cmd_list_opt, name) in surfaces.iter() {
-        let entity_name = format_entity_name(entity, name);
-        // 正常パスのログは抑制（毎フレーム出力されるため）
-        // eprintln!("[Frame {}] [render_surface] === Self-rendering Entity={} ===", _frame_count.0, entity_name);
-
-        if !surface.is_valid() {
-            // Surface未初期化時のみログ出力
-            // eprintln!("[render_surface] Surface invalid for Entity={}, skipping", entity_name);
+        let Some(surface_ref) = surface.surface() else {
             continue;
-        }
-
-        // Surface描画開始
-        let surface_ref = match surface.surface() {
-            Some(s) => s,
-            None => continue,
         };
 
         // WUC: CompositionDrawingSurface を ICompositionDrawingSurfaceInterop へ cast して
@@ -63,7 +59,7 @@ pub fn render_surface(
             Ok(si) => si,
             Err(err) => {
                 error!(
-                    entity = %entity_name,
+                    entity = %format_entity_name(entity, name),
                     error = ?err,
                     "cast to ICompositionDrawingSurfaceInterop failed"
                 );
@@ -72,46 +68,49 @@ pub fn render_surface(
         };
 
         let (dc, offset) = match surface_interop.begin_draw(None) {
-            Ok(result) => {
-                // 正常パスのログは抑制
-                // eprintln!("[render_surface] BeginDraw succeeded for Entity={}, offset=({}, {})", entity_name, result.1.x, result.1.y);
-                result
-            }
+            Ok(result) => result,
             Err(err) => {
+                // 失いの記録と無効化は note_draw_failure が残す。残りの描画面も同じ装置なので描かない。
+                // 変化の印は失いのときだけ立てる（失いでない失敗で下流に控えを捨てさせない）。
+                if graphics_core
+                    .bypass_change_detection()
+                    .note_draw_failure(&err)
+                {
+                    graphics_core.set_changed();
+                    return;
+                }
                 error!(
-                    entity = %entity_name,
+                    entity = %format_entity_name(entity, name),
                     error = ?err,
                     hresult = format_args!("0x{:08X}", err.code().0),
                     "BeginDraw failed"
                 );
+                // 次の回で描き直す（41 番）。係が自分で立てた変化の印は次の回の自分に見えないので
+                // 命令で立てる。部品ごと消えていれば描き直しも要らない。
+                commands
+                    .entity(entity)
+                    .queue_silenced(|mut e: EntityWorldMut| {
+                        if let Some(mut dirty) = e.get_mut::<SurfaceGraphicsDirty>() {
+                            dirty.set_changed();
+                        }
+                    });
+                crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
                 continue;
             }
         };
 
-        // BeginDrawのoffsetとGlobalArrangementのスケールを適用
-        // - offset: Surface内の描画開始位置（物理ピクセル単位）- DirectCompositionがSurface Atlasを使用している場合に非ゼロ
-        // - scale: GlobalArrangementから抽出したスケール成分（DPIスケール含む）
-        // - Visual.SetOffsetX/Yで位置は設定済みなので、ここでは描画開始位置とスケールのみ
+        // 変換順序: まずスケール（GlobalArrangement のスケール成分・DPI 含む）、次に BeginDraw の
+        // offset（Surface Atlas 内の描画開始位置・物理ピクセル）。位置は Visual のオフセットで設定済み。
+        let transform = windows_numerics::Matrix3x2 {
+            M11: global_arrangement.scale_x(),
+            M12: 0.0,
+            M21: 0.0,
+            M22: global_arrangement.scale_y(),
+            M31: offset.x as f32,
+            M32: offset.y as f32,
+        };
         unsafe {
-            // GlobalArrangementからスケール成分のみを抽出
-            let scale_x = global_arrangement.scale_x();
-            let scale_y = global_arrangement.scale_y();
-
-            // 変換順序: まずスケール、次にoffset平行移動
-            // これによりスケール後の座標系でoffset位置に描画される
-            let transform = windows_numerics::Matrix3x2 {
-                M11: scale_x,
-                M12: 0.0,
-                M21: 0.0,
-                M22: scale_y,
-                M31: offset.x as f32,
-                M32: offset.y as f32,
-            };
-
             dc.SetTransform(&transform);
-
-            // 正常パスのログは抑制
-            // eprintln!("[render_surface] Transform for Entity={}: scale=({}, {}), offset=({}, {})", entity_name, scale_x, scale_y, offset.x, offset.y);
         }
 
         // 透明色クリア
@@ -123,30 +122,21 @@ pub fn render_surface(
         }));
 
         // 自己描画: 自分のGraphicsCommandListのみを描画
-        // 子の描画は行わない（各子が自分のSurfaceで行う）
-        if let Some(cmd_list) = cmd_list_opt {
-            if let Some(command_list) = cmd_list.command_list() {
-                // 正常パスのログは抑制
-                // eprintln!("[render_surface] Drawing own CommandList for Entity={}", entity_name);
-                unsafe {
-                    dc.DrawImage(
-                        command_list,
-                        None,
-                        None,
-                        D2D1_INTERPOLATION_MODE_LINEAR,
-                        D2D1_COMPOSITE_MODE_SOURCE_OVER,
-                    );
-                }
+        if let Some(command_list) = cmd_list_opt.and_then(|c| c.command_list()) {
+            unsafe {
+                dc.DrawImage(
+                    command_list,
+                    None,
+                    None,
+                    D2D1_INTERPOLATION_MODE_LINEAR,
+                    D2D1_COMPOSITE_MODE_SOURCE_OVER,
+                );
             }
         }
 
-        // EndDraw
         if let Err(e) = surface_interop.end_draw() {
-            error!(error = ?e, "EndDraw failed");
+            error!(entity = %format_entity_name(entity, name), error = ?e, "EndDraw failed");
         }
-
-        // Note: Changed<SurfaceGraphicsDirty> は自動リセットされるため、
-        // マーカー削除は不要（旧SurfaceUpdateRequestedパターンから移行済み）
     }
 }
 

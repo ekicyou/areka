@@ -28,8 +28,6 @@ pub use drag::{
     OnDragEnd, OnDragStart, WindowDragContext, WindowDragContextResource, WindowDragging,
     cleanup_drag_state, dispatch_drag_events,
 };
-pub use graphics::FrameTime;
-pub use graphics::calculate_surface_size_from_global_arrangement;
 pub use graphics::*;
 pub use layout::*;
 pub use pointer::{

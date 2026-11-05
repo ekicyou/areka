@@ -1,4 +1,4 @@
-# equivalence_evidence.toml — areka-P0-shiori-protocol-split
+# equivalence-evidence.toml — areka-P0-shiori-protocol-split
 # Semantic-equivalence gate verdict (design DD-2, task 3.3). MINIMAL,
 # DETERMINISTIC evidence (no wall-clock): verdict + 8-element results +
 # residual-zero + reference-normalization counts + [mapping] exception +

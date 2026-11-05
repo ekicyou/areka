@@ -144,7 +144,7 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
 
 /// attach フェーズ（高々 1 回・design「フェーズ①（attach）」）をテスト駆動口として実装する。
 ///
-/// ゲート（`GhostWindows` Resource ＋ `GraphicsCore` ＋ `WucGraphicsResource::is_valid()`）成立
+/// ゲート（`GhostWindows` Resource ＋ `GraphicsCore::is_valid()` ＋ `WucGraphicsResource::is_valid()`）成立
 /// フレームで純関数 [`plan_attachments`]（DD-12）を確定し、計画項目ごとに shell／balloon target を
 /// 装着する。**バルーンのみ**面 0 の `ShowSurface` を駆動して文字層スロットを取得するが、その手前で
 /// 可視性を外部所有へ移すため画面には出ない——「不可視のままの確立」であり、可視化はバルーン可視性
@@ -167,10 +167,12 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         return;
     }
 
-    // ゲート: GhostWindows Resource ＋ GPU 資源（GraphicsCore ＋ WucGraphicsResource::is_valid）。
-    // いずれか欠ける間は資産を消費せず attached も立てず、次フレーム再試行へ委ねる（hang しない）。
+    // ゲート: GhostWindows Resource ＋ GPU 資源（GraphicsCore と WucGraphicsResource の is_valid）。
+    // いずれか欠けるか無効な間は資産を消費せず attached も立てず、次フレーム再試行へ委ねる（hang しない）。
     let gate_ready = world.get_resource::<GhostWindows>().is_some()
-        && world.get_resource::<GraphicsCore>().is_some()
+        && world
+            .get_resource::<GraphicsCore>()
+            .is_some_and(GraphicsCore::is_valid)
         && world
             .get_resource::<WucGraphicsResource>()
             .map(|r| r.is_valid())

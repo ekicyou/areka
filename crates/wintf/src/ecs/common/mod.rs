@@ -54,7 +54,8 @@
 //! ```rust,ignore
 //! use wintf::ecs::common::DepthFirstReversePostOrder;
 //!
-//! for entity in DepthFirstReversePostOrder::new(root, &children_query) {
+//! let mut traversal = DepthFirstReversePostOrder::new(root);
+//! while let Some(entity) = traversal.next(world) {
 //!     if hit_test_entity(world, entity, point) {
 //!         return Some(entity);
 //!     }
@@ -78,8 +79,10 @@
 //!
 //! `Mul<L, Output = G>`により、親のグローバル変換と子のローカル変換を積算できます。
 
+pub(crate) mod ancestors;
 pub mod tree_iter;
 pub mod tree_system;
 
+pub(crate) use ancestors::*;
 pub use tree_iter::*;
 pub use tree_system::*;

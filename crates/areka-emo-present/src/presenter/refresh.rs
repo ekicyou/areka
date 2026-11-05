@@ -1,13 +1,22 @@
 //! 窓 DPI 変化に伴う再スケール（`EmoPresenter::refresh_scale`）と、表示成立点が積んだ窓寸 reconcile
 //! 要求の取り出し（`EmoPresenter::take_pending_resize`）。
 
+use bevy_ecs::change_detection::Tick;
+use bevy_ecs::resource::Resource;
+use wintf::ecs::GraphicsCore;
 use wintf::ecs::window::transition_diag;
 
 use super::transition_record::{
     SURFACE_REASON_INVISIBLE, SURFACE_REASON_K_UNCHANGED, SurfaceRecord, SurfaceStage, stamp_of,
     surface_line,
 };
-use super::{DPI, EmoPresenter, TargetId, World, derive_scale};
+use super::{DPI, EmoPresenter, PresentCommand, TargetId, World, derive_scale};
+
+/// presenter が最後に見た `GraphicsCore` の変化の印（[`EmoPresenter::refresh_after_device_change`] の控え）。
+///
+/// World ごとに 1 つなので、1 つの World に presenter は 1 つの前提（本番は `emo2_boot/mod.rs` の 1 つだけ）。
+#[derive(Resource)]
+struct SeenGraphicsCore(Tick);
 
 impl EmoPresenter {
     /// 窓 DPI 変化に伴う再スケール（要件 4.1-4.4・design Flow 2）。
@@ -142,6 +151,61 @@ impl EmoPresenter {
         // 成立: 状態照合が積んだ要求をここで消費して返す（drain フェーズと二重に出さない）。物理寸が
         // 変わらなければ `None`＝窓寸 reconcile 不要（k だけ変わって丸め後の寸が同じ場合が実在する）。
         self.take_pending_resize(target_id)
+    }
+
+    /// 装置の作り直し・失いへの追従（audit-wintf-graphics-world 6 番・判断 1）。毎フレーム呼ぶ。
+    ///
+    /// `Res<GraphicsCore>` の変化の印は作り直しと本当の失いのときだけ立つ。印を見たら全部の
+    /// target の控え（古い装置で閉じた命令の列）を捨て、装置が有効なら見えている target の最後の
+    /// 表示を出し直す（`refresh_scale` の出し直しの道を倍率の門なしで通す）。無効な間は捨てるだけで、
+    /// 作り直しの回にもう一度印が立って出し直す。初めて呼んだ回は印を控えるだけ。
+    pub fn refresh_after_device_change(&mut self, world: &mut World) {
+        let Some(changed) = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .map(|t| t.changed)
+        else {
+            return;
+        };
+        let now = world.read_change_tick();
+        let seen = world.get_resource::<SeenGraphicsCore>().map(|s| s.0);
+        if seen.is_some_and(|seen| !changed.is_newer_than(seen, now)) {
+            return;
+        }
+        // 時刻を進めて控える: 同じ時刻のうちに後から立った印も、次の回に新しいと分かる。
+        let mark = world.increment_change_tick();
+        world.insert_resource(SeenGraphicsCore(mark));
+        if seen.is_none() {
+            return;
+        }
+
+        let valid = world.resource::<GraphicsCore>().is_valid();
+        tracing::debug!(
+            valid,
+            "refresh_after_device_change: 装置の変化を見た（控えを捨てる）"
+        );
+        let ids: Vec<TargetId> = self.targets.keys().copied().collect();
+        for target in ids {
+            self.apply(
+                world,
+                PresentCommand::InvalidateCache {
+                    target,
+                    reply: None,
+                },
+            );
+            if !valid {
+                continue;
+            }
+            let Some((surface_id, binds, pattern)) = self
+                .targets
+                .get(&target)
+                .filter(|t| t.visible)
+                .and_then(|t| t.last_show.clone())
+            else {
+                continue;
+            };
+            // 失敗は `apply_show` が記録する（前の表示は保たれる）。
+            let _ = self.apply_show(world, target, surface_id, binds, pattern, false);
+        }
     }
 
     /// 表示成立点の状態照合が積んだ**窓寸 reconcile 要求**を取り出す（取り出しで消える・drain 契約）。

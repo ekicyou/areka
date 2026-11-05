@@ -106,6 +106,8 @@ fn test_invalidate_dependent_components_invalidates_wuc_resource() {
 
         // invalidate_dependent_components を実行
         let mut schedule = Schedule::default();
+        // WUC を捨てる係は GPU の持ち主のスレッドを外れないよう単一スレッドで回す
+        schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
         schedule.add_systems(wintf::ecs::invalidate_dependent_components);
         schedule.run(&mut world);
 

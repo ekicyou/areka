@@ -1,8 +1,10 @@
 //! actor の子: 1 コマの描画の流れ（未解決の見送り・描画範囲の潰れた場所の見送り・初回の装着・配置→装飾→描画→提示）。
 //! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers。
 
+use bevy_ecs::change_detection::{DetectChangesMut, Tick};
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::World;
+use bevy_ecs::resource::Resource;
 use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
@@ -58,6 +60,7 @@ pub fn present_frame(
     for markers in std::mem::take(&mut runtime.retired_markers) {
         markers.despawn(world);
     }
+    drop_renders_after_device_change(runtime, world);
     // 状態を持つ actor だけが提示対象（binding 登録済みでも cue が無ければ描くものがない）。
     //
     // 「状態を持つ」の判定は **中身か既に作った供給面のどちらかがある**こと（task 7.2）。
@@ -122,6 +125,75 @@ pub fn present_frame(
         Some(e) => Err(e),
         None => Ok(()),
     }
+}
+
+/// 文字の層が最後に見た `GraphicsCore` の変化の印（[`drop_renders_after_device_change`] の控え）。
+///
+/// World ごとに 1 つなので、1 つの World に文字の層は 1 つの前提（本番はゴーストの World ごとに 1 つ）。
+#[derive(Resource)]
+struct SeenGraphicsCore(Tick);
+
+/// `GraphicsCore` の変化の印（作り直しと本当の失いのときだけ立つ）を見たら、全部の描き手と印の面を
+/// 差し込み口・窓の子から外して捨てる（audit-wintf-graphics-world 6 番・要件 3.1）。古い装置の
+/// swap chain・文脈を使い続けない。作り直しは同じ回の作る門が、装置が有効なときだけ行う。
+/// 初めて呼んだ回は印を控えるだけ（描き手はまだ無い）。
+fn drop_renders_after_device_change(runtime: &mut TextLayerRuntime, world: &mut World) {
+    let Some(changed) = world
+        .get_resource_change_ticks::<GraphicsCore>()
+        .map(|t| t.changed)
+    else {
+        return;
+    };
+    let now = world.read_change_tick();
+    let seen = world.get_resource::<SeenGraphicsCore>().map(|s| s.0);
+    if seen.is_some_and(|seen| !changed.is_newer_than(seen, now)) {
+        return;
+    }
+    // 時刻を進めて控える: 同じ時刻のうちに後から立った印も、次の回に新しいと分かる。
+    let mark = world.increment_change_tick();
+    world.insert_resource(SeenGraphicsCore(mark));
+    if seen.is_none() {
+        return;
+    }
+    let places: Vec<PlaceKey> = runtime.surfaces.keys().cloned().collect();
+    debug!(
+        dropped = places.len(),
+        "present_frame: 装置の変化を見た（描き手と印の面を捨てる）"
+    );
+    for place in places {
+        let Some(render) = runtime.surfaces.remove(&place) else {
+            continue;
+        };
+        if let Some(markers) = render.markers {
+            markers.despawn(world);
+        }
+        match runtime.routing.get(&place) {
+            Some(binding) => render.surface.release(world, binding.slot),
+            // 結線の無い場所は差し込み口が分からない: 窓の子（箱の面）だけは外して残さない。
+            None => {
+                debug!(actor = %place.actor, "装置の変化: 結線の無い場所の描き手を捨てた");
+                render.surface.despawn_window_child(world);
+            }
+        }
+    }
+}
+
+/// `GraphicsCore` を一時取り外して `f` へ貸す。`resource_scope` は戻すときに資源の変化の印を
+/// 立てる（bevy 0.19）ので、印を前の値へ戻す——描き手を作るだけで装置の作り直しの合図に
+/// 見せない（立てたままだと、ここと emo-present が毎回捨てて作り直す輪になる）。
+pub(super) fn with_graphics_core<T>(
+    world: &mut World,
+    f: impl FnOnce(&mut World, &GraphicsCore) -> T,
+) -> T {
+    let before = world
+        .get_resource_change_ticks::<GraphicsCore>()
+        .map(|t| t.changed);
+    let out =
+        world.resource_scope(|world, core: bevy_ecs::world::Mut<GraphicsCore>| f(world, &core));
+    if let (Some(before), Some(mut core)) = (before, world.get_resource_mut::<GraphicsCore>()) {
+        core.set_last_changed(before);
+    }
+    out
 }
 
 /// 1 場所分のフレーム提示（[`present_frame`] の内訳・log-first）。
@@ -211,29 +283,30 @@ fn present_actor(
                 context: "WucGraphicsResource::compositor",
             });
         };
-        if !world.contains_resource::<GraphicsCore>() {
+        if !world
+            .get_resource::<GraphicsCore>()
+            .is_some_and(GraphicsCore::is_valid)
+        {
             error!(
                 actor = %actor,
-                "present_frame: GraphicsCore 不在（供給面を生成できない）"
+                "present_frame: GraphicsCore 不在か無効（供給面を生成できない）"
             );
             return Err(TextLayerError::Device {
                 hresult: 0,
                 context: "GraphicsCore resource",
             });
         }
-        // GraphicsCore は resource_scope で一時取り外し——attach の &mut World と
-        // 資源借用の衝突を構造回避する。
+        // GraphicsCore は一時取り外し——attach の &mut World と資源借用の衝突を構造回避する。
         let config = runtime.config;
-        let render = world.resource_scope(
-            |world,
-             core: bevy_ecs::world::Mut<GraphicsCore>|
-             -> Result<ActorRender, TextLayerError> {
+        let render = with_graphics_core(
+            world,
+            |world, core| -> Result<ActorRender, TextLayerError> {
                 let surface = match child_index {
                     None => TextSurface::attach(
                         world,
                         &binding,
                         &compositor,
-                        &core,
+                        core,
                         physical_size,
                         physical_offset,
                     )?,
@@ -242,13 +315,13 @@ fn present_actor(
                         binding.window,
                         index,
                         &compositor,
-                        &core,
+                        core,
                         physical_size,
                         physical_offset,
                     )?,
                 };
                 decoration::build_actor_render(
-                    &core,
+                    core,
                     surface,
                     &resolved.font,
                     resolved.mode,
@@ -470,13 +543,13 @@ fn present_markers(
             contract.to_physical(ImagePx(origin.0)).0,
             contract.to_physical(ImagePx(origin.1)).0,
         );
-        let markers = world.resource_scope(|world, core: bevy_ecs::world::Mut<GraphicsCore>| {
+        let markers = with_graphics_core(world, |world, core| {
             MarkerSurface::attach(
                 world,
                 binding.window,
                 index,
                 &compositor,
-                &core,
+                core,
                 physical_size,
                 physical_offset,
             )

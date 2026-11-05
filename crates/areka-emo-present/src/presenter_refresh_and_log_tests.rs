@@ -1,7 +1,7 @@
 use super::*;
 
 use areka_emo_compose::BindSet;
-use wintf::ecs::GraphicsCommandList;
+use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 
 use super::test_support::{
     CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_hit_target,
@@ -661,4 +661,43 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         unregistered.region, None,
         "未登録 target は正常縮退（region なし）"
     );
+}
+
+/// 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` を入れ替えた後の
+/// `refresh_after_device_change` は控えを捨てて出し直し、面の命令の列が新しい物になる。印が
+/// 立たない回は何もしない（列はそのまま）。
+#[test]
+fn device_recreation_rerecords_display_list() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5a);
+    let mut presenter = EmoPresenter::new();
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
+    let list_of = |world: &World| {
+        world
+            .get::<GraphicsCommandList>(surface_entity)
+            .cloned()
+            .expect("表示確立後は surface entity に表示記録がある")
+    };
+    let before = list_of(&world);
+
+    // 初回は印を控えるだけ・2 回目は印が立っていないので何もしない。
+    presenter.refresh_after_device_change(&mut world);
+    presenter.refresh_after_device_change(&mut world);
+    assert_eq!(
+        list_of(&world),
+        before,
+        "装置が変わっていないのに出し直した"
+    );
+
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+    presenter.refresh_after_device_change(&mut world);
+    assert_ne!(
+        list_of(&world),
+        before,
+        "装置を作り直した後も古い装置の命令の列のまま（控えを捨てて出し直していない）"
+    );
+    assert_eq!(presenter.target_visible(TargetId(0)), Some(true));
 }
