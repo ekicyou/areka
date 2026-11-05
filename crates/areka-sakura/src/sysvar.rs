@@ -104,9 +104,13 @@ pub fn expand_system_vars(script: &str, vars: &SystemVarSnapshot) -> String {
         return expanded;
     }
     // 同値の照合: 置き換えた環境変数を文字にした元の命令の列と、展開した台詞の命令の列。
+    let mut replaced: Vec<String> = Vec::new();
     let want = join_texts(parse(script).into_iter().map(|ins| match ins {
         Instruction::SystemVar(name) => match text_of(&name) {
-            Some(value) => Instruction::Text(value),
+            Some(value) => {
+                replaced.push(name);
+                Instruction::Text(value)
+            }
             None => Instruction::SystemVar(name),
         },
         other => other,
@@ -114,10 +118,11 @@ pub fn expand_system_vars(script: &str, vars: &SystemVarSnapshot) -> String {
     if join_texts(parse(&expanded)) == want {
         return expanded;
     }
+    // 台本は書かない（MB 級の台本で記録が台本の大きさに比例しないように）。名と長さだけ。
     tracing::warn!(
         event = "sysvar_expand_fallback",
-        script = %script,
-        expanded = %expanded,
+        vars = ?replaced,
+        script_bytes = script.len(),
         "[sysvar] 展開すると台本の読みが変わるので、翻訳の前には展開せず元の台詞のまま渡す"
     );
     script.to_owned()
@@ -204,17 +209,5 @@ mod tests {
             resolve_system_var("selfname", &vars2),
             ResolvedVar::Text("さくら".to_owned())
         );
-    }
-
-    /// 決定論: 同一 (name, snapshot) は常に同一出力（R7.6・no I/O・外部環境非読取）。
-    #[test]
-    fn resolution_is_deterministic() {
-        let mut vars = SystemVarSnapshot::default();
-        vars.insert("username", "アヒル");
-        for name in ["username", "selfname", "keroname"] {
-            let first = resolve_system_var(name, &vars);
-            let second = resolve_system_var(name, &vars);
-            assert_eq!(first, second, "{name} の展開が再計算で異なる");
-        }
     }
 }

@@ -61,7 +61,7 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
 /// 控えの順は `check_script` の診断と同じ（命令の順に、読みの印 → 命令の腕 → アンカー）。
 /// 合図の順番は sink へ配られる合図だけを数え、先頭の全消しを順番 0 に含め、末尾の選択待ちの
 /// 区切りは数えない。`\e`・`\-` で走査が止まるので、その後ろは控えない。
-pub fn compile_strict(
+pub(crate) fn compile_strict(
     reads: &[Read],
     vars: &SystemVarSnapshot,
     judges: &dyn StrictJudges,

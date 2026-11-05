@@ -1,7 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::{CueCommand, ScriptOrigin, TalkCue, TalkId};
-use crate::duration::text_playback_duration;
+use crate::contract::{TalkCue, TalkId};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
@@ -24,14 +23,7 @@ fn drive_menu_to_barrier(handle: &TalkHandle, rx: &mpsc::Receiver<TalkCue>) {
     // Tick(0.5): Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
     handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
     // Choice cue 着弾を barrier に、barrier 到達（WaitingForChoice 遷移）を決定的に待つ。
-    loop {
-        let cue = rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("Choice cue（barrier 手前）が届くべき");
-        if matches!(cue.command, CueCommand::Choice { .. }) {
-            break;
-        }
-    }
+    recv_until_choice(rx);
 }
 
 /// **R2.3（barrier-stop）**: 選択待ち barrier で止まった talk は、horizon 越えまで `Tick` を注入
@@ -40,17 +32,11 @@ fn drive_menu_to_barrier(handle: &TalkHandle, rx: &mpsc::Receiver<TalkCue>) {
 fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: MENU_SCRIPT.to_string(),
-        talk_id: TalkId(801),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(801), MENU_SCRIPT.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -86,17 +72,11 @@ fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let talk_id = TalkId(802);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: MENU_SCRIPT.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, MENU_SCRIPT.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -132,17 +112,11 @@ fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let talk_id = TalkId(803);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: MENU_SCRIPT.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, MENU_SCRIPT.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -201,27 +175,15 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
     // `spawn_talk` へ**生 script として**渡し、parse→compile は actor 内部の実経路を通す
     // （5.2 の単一 `\q` MENU_SCRIPT でも、生 CuePlayer 檻@compile_broadcast_stream_* でもなく、
     //  実 3 択 menu が actor 境界を貫く経路をここで初めて覆う）。
-    let script = concat!(
-        r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
-        r"\n",
-        r"\q[エモの位置調整,Onエモの位置調整メニュー]",
-        r"\_l[5em,2lh]",
-        r"\q[閉じる,Onメニュー閉じる]",
-    );
+    let script = MENU3_SCRIPT;
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let talk_id = TalkId(810);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: script.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, script.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -282,19 +244,13 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
 fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(804);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]hello\_w[100]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -334,14 +290,6 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
 //  - **解決後に再通知しない**: 同一バリアが再成立しない限り 2 通目は出ない（R5.2 の完了へ進む）。
 //  - **送出失敗で運行継続**: done 受信端 drop でも `error!` 記録のみで talk は死なない。
 
-/// 通知の**捕捉時点**を弁別するための算術（MENU_SCRIPT の相対占有 horizon）。
-///
-/// `\s[10]hello\_w[100]\q[選択A,targetA]\e`: hello の D(0.25) ＋ `\_w[100]`(0.1) ＝ 0.35。
-/// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
-fn menu_relative_horizon() -> f64 {
-    text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
-}
-
 /// **一度きり検出＋通知内容（R7.1/7.2・DD-6/DD-7/DD-8）**: 選択肢を含む台本を注入 Tick で
 /// 駆動すると、選択待ちバリア成立の tick で `ChoiceWaiting` が**ちょうど 1 回**届き、
 /// 候補 id 列・占有 horizon・タイムアウト指令を同梱する。以降 Tick を打ち続けても再通知されない。
@@ -353,17 +301,11 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let talk_id = TalkId(820);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: MENU_SCRIPT.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, MENU_SCRIPT.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -384,7 +326,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
     let expected_horizon = compiled.sheet.absolute_end_time();
     assert_eq!(
         expected_horizon,
-        menu_relative_horizon(),
+        menu_horizon(),
         "台本由来 horizon は hello の D ＋ \\_w[100]（本番と同一算術で導いた 0.35）"
     );
 
@@ -437,27 +379,15 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
 /// （horizon 0.35 vs tick 0.5）が担う。
 #[test]
 fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon() {
-    let script = concat!(
-        r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
-        r"\n",
-        r"\q[エモの位置調整,Onエモの位置調整メニュー]",
-        r"\_l[5em,2lh]",
-        r"\q[閉じる,Onメニュー閉じる]",
-    );
+    let script = MENU3_SCRIPT;
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let talk_id = TalkId(821);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: script.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, script.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -466,14 +396,7 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
     const ANCHOR: f64 = 7.0;
     handle.inbox.send(SakuraMsg::Tick(ANCHOR)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(ANCHOR + 0.5)).unwrap();
-    loop {
-        let cue = rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("Choice cue（barrier 手前）が届くべき");
-        if matches!(cue.command, CueCommand::Choice { .. }) {
-            break;
-        }
-    }
+    recv_until_choice(&rx);
 
     // 弁別の前提: この台本の相対占有 horizon は 0.0（全内容が at=0・duration 0）。
     let compiled = compile(
@@ -521,17 +444,11 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let talk_id = TalkId(822);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: MENU_SCRIPT.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, MENU_SCRIPT.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -547,7 +464,7 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
         TalkNotice::ChoiceWaiting(ChoiceWaiting {
             talk_id,
             choice_ids: vec!["targetA".to_string()],
-            display_end_elapsed_secs: menu_relative_horizon(),
+            display_end_elapsed_secs: menu_horizon(),
             timeout_directive_secs: None,
         }),
         "1 通目は選択待ち成立通知（因果順の先）"
@@ -591,17 +508,11 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
 fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: MENU_SCRIPT.to_string(),
-        talk_id: TalkId(823),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(823), MENU_SCRIPT.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -640,18 +551,12 @@ fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
 fn script_without_choices_never_notifies_choice_waiting() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(824);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        // `\q` 無し（＝compile は選択待ち barrier を発行しない・R2.5）。
-        script: r"\s[10]hello\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    // `\q` 無し（＝compile は選択待ち barrier を発行しない・R2.5）。
+    let start = StartTalk::new(talk_id, r"\s[10]hello\e".to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(NoopSink, NoopSink),
+        one_sink(NoopSink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -685,26 +590,6 @@ fn script_without_choices_never_notifies_choice_waiting() {
 
 // ── audit-parsers-sakura 指摘 7・39: 解決の後に来ている項目を出し、合わない解決を記録する ──
 
-/// 同期の駆動（`spawn_talk` の本体と同じ `handle`）をテストのスレッドの上に作る。
-fn sync_driver(
-    sinks: Vec<Box<dyn CueSink + Send>>,
-) -> (TalkDriver<TalkNotice>, mpsc::Receiver<TalkNotice>) {
-    let (tx, rx) = mpsc::channel();
-    (
-        TalkDriver::new(sinks, SystemVarSnapshot::default(), tx, None),
-        rx,
-    )
-}
-
-fn dones(rx: &mpsc::Receiver<TalkNotice>) -> Vec<TalkDone> {
-    rx.try_iter()
-        .filter_map(|notice| match notice {
-            TalkNotice::Done(done) => Some(done),
-            TalkNotice::ChoiceWaiting(_) => None,
-        })
-        .collect()
-}
-
 /// **指摘 7（形 A）**: 初回起動の後始末（epilogue）は区切りと同じ時刻の後ろに並ぶ。区切りの Tick の後に
 /// Tick を 1 つ挟んでから解決すると、解決の処理の中で後始末が出て `TalkDone{Ended}` が 1 回だけ出る。
 /// kanade が同じ束で続けて送る Close（次のトークの Start が古いトークを閉じる）はもう終わったトークに届く。
@@ -712,7 +597,7 @@ fn dones(rx: &mpsc::Receiver<TalkNotice>) -> Vec<TalkDone> {
 fn resolved_choice_flushes_due_epilogue_before_following_close() {
     let sink = RecordingSink::new();
     let records = sink.records();
-    let (mut driver, rx) = sync_driver(vec![Box::new(sink), Box::new(NoopSink)]);
+    let (mut driver, rx) = driver(one_sink(sink), None);
     let start = StartTalk {
         epilogue: vec![areka_talk::EpilogueCommand {
             name: "areka.prop.set".into(),
@@ -758,7 +643,7 @@ fn resolved_choice_flushes_due_epilogue_before_following_close() {
 /// **指摘 39**: 合わない `ResolveChoice` はほかの状態の誤投函と同じく `warn!` で残す（区切りは解けない）。
 #[test]
 fn mismatched_resolve_choice_is_warned() {
-    let (mut driver, rx) = sync_driver(vec![Box::new(NoopSink)]);
+    let (mut driver, rx) = driver(one_sink(NoopSink), None);
     let _ = driver.handle(SakuraMsg::Start(StartTalk::new(TalkId(831), MENU_SCRIPT)));
     let _ = driver.handle(SakuraMsg::Tick(0.0));
     let _ = driver.handle(SakuraMsg::Tick(0.5));

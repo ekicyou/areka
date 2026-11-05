@@ -1,8 +1,8 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::{CueCommand, ScriptOrigin, TalkCue, TalkId};
+use crate::contract::{CueCommand, TalkCue, TalkId};
 use crate::duration::text_playback_duration;
-use std::sync::mpsc::{self, TryRecvError};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -12,13 +12,7 @@ use std::time::Duration;
 #[test]
 fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id: TalkId(200),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(200), r"\s[10]hello\_w[100]world\e".to_string());
     let surface = RecordingSink::new();
     let text = RecordingSink::new();
     let surface_records = surface.records();
@@ -69,107 +63,67 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
 /// 超え、初回 Tick で "bye" が即発火してしまう＝下の「初回 Tick 直後は bye 未着」assert が FAIL する。
 #[test]
 fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times() {
-    // 1 回の再生を anchor で駆動し、(初回Tick直後にbye未着か, A+0.5でbye未着か, A+0.6でbye着弾か) を返す。
-    fn run_with_anchor(anchor: f64) -> (bool, bool, bool) {
+    // 1 回の再生を anchor で駆動し、初回 Tick(A) と A+0.5 では何も届かず、A+0.6 の Tick の直後に
+    // bye が届くことを確かめる（来ないことは時限つきの受け取りの時間切れで決める）。
+    fn run_with_anchor(anchor: f64) {
         let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-        let start = StartTalk {
-            epilogue: Vec::new(),
-            script: r"\s[0]hi\_w[500]bye\e".to_string(),
-            talk_id: TalkId(1),
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        };
+        let start = StartTalk::new(TalkId(1), r"\s[0]hi\_w[500]bye\e".to_string());
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let handle = spawn_talk(
             start,
             done_tx,
-            two_sinks(ChannelSink { tx }, NoopSink),
+            one_sink(ChannelSink { tx }),
             SystemVarSnapshot::default(),
             None,
         );
-
-        // barrier 技法: 記録 sink を挟まず、bye の着弾のみをチャンネルで観測する。
-        let bye_seen = |rx: &mpsc::Receiver<TalkCue>| -> bool {
-            let mut seen = false;
-            while let Ok(cue) = rx.try_recv() {
-                if cue.command == CueCommand::Text("bye".into()) {
-                    seen = true;
-                }
+        // 指定の合図が届くまで受ける（間の合図は読み飛ばす）。
+        let recv_until = |want: &CueCommand, what: &str| loop {
+            match rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(cue) if cue.command == *want => break,
+                Ok(_) => {}
+                Err(_) => panic!("anchor {anchor}: {what} が届かない"),
             }
-            seen
         };
-        // 「この Tick 送出＋ドレインまでに bye が届いたか」を決定的に観測するため、Tick 投函後に
-        // done も含めた barrier で drain を同期する。ここでは十分に決定的な probe cue で代替する:
-        // 各 Tick 後に "hi"（初回群）や world を受けるので、それを recv barrier に使う。
 
-        // 初回 Tick(A): offset 0 → ClearAll/Emote/hi が due。bye(0.6) は保留のはず。
+        // 初回 Tick(A): offset 0 → ClearAll/Emote/hi が due。Wait(0.1) と bye(0.6) は保留。
         handle.inbox.send(SakuraMsg::Tick(anchor)).unwrap();
-        // hi 着弾を barrier に、初回群の drain 完了を待つ（bye は同 tick で来ない）。
-        let mut hi_seen = false;
-        while !hi_seen {
-            match rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(cue) if cue.command == CueCommand::Text("hi".into()) => hi_seen = true,
-                Ok(_) => {}
-                Err(_) => panic!("初回群の hi が届かない"),
-            }
-        }
-        let bye_after_first = bye_seen(&rx);
+        recv_until(&CueCommand::Text("hi".into()), "初回群の hi");
+        // アンカー未刻印（0.0 のまま）なら offset=A>0.6 で残りが即着し、この受け取りが成功して落ちる。
+        assert_eq!(
+            rx.recv_timeout(NEG_WINDOW).unwrap_err(),
+            RecvTimeoutError::Timeout,
+            "anchor {anchor}: 初回 Tick の直後は何も届かない（アンカー刻印の弁別）"
+        );
 
-        // Tick(A+0.5): offset 0.5 → Wait(0.25? いや at=0.1) は due だが bye(0.6) は保留。
+        // Tick(A+0.5): Wait(at=0.1) が due。bye(0.6) は保留。
         handle.inbox.send(SakuraMsg::Tick(anchor + 0.5)).unwrap();
-        // Wait cue の着弾を barrier に使う（at=0.1 <= 0.5 ゆえこの Tick までに届く）。
-        // 空回しの回数で打ち切ると負荷の下で取りこぼすので、hi と同じく時間切れつきで受ける。
-        loop {
-            match rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(cue) if cue.command == CueCommand::Wait => break,
-                Ok(_) => {}
-                Err(_) => panic!("Wait(at=0.1) は A+0.5 までに届くはず（barrier）"),
-            }
-        }
-        let bye_after_half = bye_seen(&rx);
+        recv_until(&CueCommand::Wait, "Wait(at=0.1)");
+        assert_eq!(
+            rx.recv_timeout(NEG_WINDOW).unwrap_err(),
+            RecvTimeoutError::Timeout,
+            "anchor {anchor}: offset 0.5 では bye(0.6) 保留"
+        );
 
-        // Tick(A+0.6): offset 0.6 → bye が due。着弾を待つ。
+        // Tick(A+0.6): 次の Tick を送る前に bye が届く（＝絶対発火時刻 anchor+0.6）。
         handle.inbox.send(SakuraMsg::Tick(anchor + 0.6)).unwrap();
-        let mut bye_after_full = false;
-        // 自然終端まで進めてから observe すると drain が確定する。horizon=0.75 を跨ぐ A+1.0。
+        let cue = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("A+0.6 の Tick で bye が届くはず");
+        assert_eq!(
+            cue.command,
+            CueCommand::Text("bye".into()),
+            "anchor {anchor}: offset 0.6（絶対 anchor+0.6）で bye 着弾"
+        );
+
+        // horizon=0.75 を跨ぐ A+1.0 で自然終端。
         handle.inbox.send(SakuraMsg::Tick(anchor + 1.0)).unwrap();
         recv_done(&done_rx, Duration::from_secs(5)).expect("horizon 到達で TalkDone");
         handle.actor.join().expect("body 正常終了");
-        while let Ok(cue) = rx.try_recv() {
-            if cue.command == CueCommand::Text("bye".into()) {
-                bye_after_full = true;
-            }
-        }
-
-        (bye_after_first, bye_after_half, bye_after_full)
     }
 
-    // Run A（anchor 10.0）と Run B（anchor 20.0）。
-    let (a_first, a_half, a_full) = run_with_anchor(10.0);
-    let (b_first, b_half, b_full) = run_with_anchor(20.0);
-
-    // 弁別の核心: 初回 Tick(A) 直後は bye 未着（アンカー刻印されているから offset=0）。
-    // アンカー未刻印（0.0 固定）なら初回 Tick で offset=A>0.6 ゆえ bye が即着＝この assert が FAIL する。
-    assert!(
-        !a_first,
-        "Run A: 初回 Tick(10.0) 直後は bye 未着（アンカー刻印の弁別）"
-    );
-    assert!(
-        !b_first,
-        "Run B: 初回 Tick(20.0) 直後は bye 未着（アンカー刻印の弁別）"
-    );
-    // A+0.5（=offset 0.5）でもまだ bye は保留（0.6 未達）。
-    assert!(!a_half, "Run A: offset 0.5 では bye(0.6) 保留");
-    assert!(!b_half, "Run B: offset 0.5 では bye(0.6) 保留");
-    // A+0.6（=offset 0.6）で初めて bye が着弾する（＝絶対発火時刻 anchor+0.6）。
-    assert!(a_full, "Run A: offset 0.6（絶対 10.6）で bye 着弾");
-    assert!(b_full, "Run B: offset 0.6（絶対 20.6）で bye 着弾");
-    // 同一 cue が 2 回の再生で異なる絶対発火時刻（10.6 vs 20.6）で配送された（構成的に相異）。
-    assert_ne!(
-        10.0 + 0.6,
-        20.0 + 0.6,
-        "同一台本を異なる時刻に再生開始すると bye の絶対発火時刻が異なる（10.6 != 20.6）"
-    );
+    // Run A（anchor 10.0）と Run B（anchor 20.0）: 同じ台本の bye が 10.6 と 20.6 で配られる。
+    run_with_anchor(10.0);
+    run_with_anchor(20.0);
 }
 
 /// 未 due の発火は Tick を受けても**保留**され、`at` 到達（境界含む・`at <= offset`）の Tick で
@@ -178,24 +132,21 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
 ///
 /// script `\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e` の発火予定（D 焼き込み後・アンカー 0）:
 ///   ClearAll@0・Emote{10}@0・hello@0 / Wait@0.25 / probeA@0.35 / Wait@0.65 / probeB@0.75 /
-///   Wait@1.05 / world@1.15。probe 受信を barrier に、未 due cue が保留されることを try_recv Empty で固定する。
+///   Wait@1.05 / world@1.15。probe 受信を barrier に、未 due cue が保留されることを時限つきの受け取り（`NEG_WINDOW` の時間切れ）で固定する。
 #[test]
 fn undue_cues_are_withheld_until_their_at_is_reached() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(314);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e".to_string(),
+    let start = StartTalk::new(
         talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+        r"\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e".to_string(),
+    );
 
     let (tx, rx) = mpsc::channel::<TalkCue>();
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
+        one_sink(ChannelSink { tx }),
         SystemVarSnapshot::default(),
         None,
     );
@@ -225,8 +176,8 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     assert_eq!(hello.at, 0.0, "hello の発火時刻は 0.0");
     // 初回群 drain 後、probeA(0.35) は未着（保留の決定的証明）。
     assert_eq!(
-        rx.try_recv().unwrap_err(),
-        TryRecvError::Empty,
+        rx.recv_timeout(NEG_WINDOW).unwrap_err(),
+        RecvTimeoutError::Timeout,
         "初回 Tick(0.0) では未 due の probeA(0.35) が保留されること"
     );
 
@@ -235,8 +186,8 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     let probe_a = recv_text(&rx, "probeA");
     assert_eq!(probe_a.at, at_a, "probeA の発火時刻は 0.35");
     assert_eq!(
-        rx.try_recv().unwrap_err(),
-        TryRecvError::Empty,
+        rx.recv_timeout(NEG_WINDOW).unwrap_err(),
+        RecvTimeoutError::Timeout,
         "at=0.35 の Tick では未 due の probeB(0.75)/world(1.15) が保留されること"
     );
 
@@ -245,8 +196,8 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     let probe_b = recv_text(&rx, "probeB");
     assert_eq!(probe_b.at, at_b, "probeB の発火時刻は 0.75");
     assert_eq!(
-        rx.try_recv().unwrap_err(),
-        TryRecvError::Empty,
+        rx.recv_timeout(NEG_WINDOW).unwrap_err(),
+        RecvTimeoutError::Timeout,
         "at=0.75 の Tick でも未 due の world(1.15) が保留されること"
     );
 
@@ -271,20 +222,14 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
 #[test]
 fn same_at_cues_preserve_script_order_fifo() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\nworld\e".to_string(),
-        talk_id: TalkId(41),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(41), r"\s[10]hello\nworld\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
 
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -336,20 +281,14 @@ fn same_at_cues_preserve_script_order_fifo() {
 fn fixture_script_drives_broadcast_and_returns_ended() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(42);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]hello\_w[100]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
 
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -433,20 +372,14 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
 #[test]
 fn duplicate_and_backward_tick_do_not_double_fire() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[500]world\e".to_string(),
-        talk_id: TalkId(1),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(1), r"\s[10]hello\_w[500]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
 
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -484,21 +417,10 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
 #[test]
 fn non_finite_tick_is_ignored_and_playback_survives() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id: TalkId(9),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(9), r"\s[10]hello\_w[100]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
-    let mut driver = TalkDriver::new(
-        two_sinks(sink, NoopSink),
-        SystemVarSnapshot::default(),
-        done_tx,
-        None,
-    );
+    let mut driver = TalkDriver::new(one_sink(sink), SystemVarSnapshot::default(), done_tx, None);
 
     let ((), events) = log_capture_kit::capture(|| {
         assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
@@ -555,20 +477,14 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
 
     fn run_once() -> (Vec<CueKey>, TalkEndReason) {
         let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-        let start = StartTalk {
-            epilogue: Vec::new(),
-            script: r"\s[10]hello\_w[100]world\e".to_string(),
-            talk_id: TalkId(7),
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        };
+        let start = StartTalk::new(TalkId(7), r"\s[10]hello\_w[100]world\e".to_string());
         let sink = RecordingSink::new();
         let records = sink.records();
 
         let handle = spawn_talk(
             start,
             done_tx,
-            two_sinks(sink, NoopSink),
+            one_sink(sink),
             SystemVarSnapshot::default(),
             None,
         );
@@ -618,13 +534,7 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
 
     // menu.pasta:15 の raw さくらスクリプト断片（`\q \n \q \_l[5em,2lh] \q`・task 4.4 cage と同一）。
     // 実 parse → 実 compile を通す（手組み Instruction でなく、パーサ〜コンパイラの実経路を出発点にする）。
-    let script = concat!(
-        r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
-        r"\n",
-        r"\q[エモの位置調整,Onエモの位置調整メニュー]",
-        r"\_l[5em,2lh]",
-        r"\q[閉じる,Onメニュー閉じる]",
-    );
+    let script = MENU3_SCRIPT;
     let instructions = areka_parsers::sakura::parse(script);
     let compiled = compile(&instructions, &SystemVarSnapshot::default());
 
@@ -767,13 +677,10 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
     // 未知名 2 種（引数付き `raise` と単独形 `vanish`）＋テキストを挟み `\e` で終端。
     // parse: `\![raise,OnBoot]`→GenericCommand{"raise",["OnBoot"]}／`\![vanish]`→GenericCommand{"vanish",[]}。
     // compile: いずれも command_carrier(name, args)（Custom キャリア）へ卒業・無音落ちしない（R8.2）。
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
+    let start = StartTalk::new(
         talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+        r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
+    );
     // broadcast の第一級性を立証するため**複数**記録 sink を登録（両者が同一配送列を受ける）。
     let sink_a = RecordingSink::new();
     let sink_b = RecordingSink::new();

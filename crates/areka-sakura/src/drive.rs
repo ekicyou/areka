@@ -31,7 +31,6 @@
 use std::cell::RefCell;
 use std::ops::{ControlFlow, Range};
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use crate::compile::{compile, compile_strict};
@@ -177,8 +176,8 @@ struct TalkDriver<D> {
     choice_notified: bool,
     /// ゴースト名と判定の束（strict の台本でなければ使わない・mcp-strict-errors）。
     strict_hooks: Option<StrictHooks>,
-    /// strict の talk の `Start` 受領から初回 `Tick` まで: 合図ごとの位置・台本・ゴースト名（覆いを作る材料）。
-    strict_arm: Option<(Vec<Option<Range<usize>>>, String, Arc<str>)>,
+    /// strict の talk の `Start` 受領から初回 `Tick` まで: 合図ごとの位置と台本（覆いを作る材料・ゴースト名は控えの台帳が持つ）。
+    strict_arm: Option<(Vec<Option<Range<usize>>>, String)>,
     /// strict の talk の残りの控え（覆いと分け持つ）。自然な終わりで記録し、打ち切りでは捨てる。
     strict_ledger: Option<Rc<RefCell<StrictLedger>>>,
 }
@@ -244,7 +243,7 @@ where
                     compile_strict(&reads, &self.system_vars, hooks.judges.as_ref());
                 let ledger = StrictLedger::new(hooks.ghost.clone(), &script, trace.pending);
                 self.strict_ledger = Some(Rc::new(RefCell::new(ledger)));
-                self.strict_arm = Some((trace.cue_spans, script, hooks.ghost.clone()));
+                self.strict_arm = Some((trace.cue_spans, script));
                 compiled
             }
             // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
@@ -321,12 +320,11 @@ where
                 // 演者 sink を broadcast 登録（register 順: surface, text・4.3）。strict の talk は
                 // 実の sink を全部覆いへ入れ、覆い 1 つを登録する（覆いが登録順のまま配る）。
                 match (self.strict_arm.take(), &self.strict_ledger) {
-                    (Some((cue_spans, script, ghost)), Some(ledger)) => {
+                    (Some((cue_spans, script)), Some(ledger)) => {
                         player.register_sink(Box::new(StrictTap::new(
                             self.sinks.drain(..).collect(),
                             cue_spans,
                             &script,
-                            ghost,
                             Rc::clone(ledger),
                         )));
                     }

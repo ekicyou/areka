@@ -37,13 +37,11 @@ pub mod contract;
 pub mod drive;
 pub mod duration;
 pub mod strict;
-pub mod strict_tap;
+pub(crate) mod strict_tap;
 pub mod sysvar;
 
 pub use anchor_pair::{AnchorFinding, AnchorIssue, pair_anchors};
-pub use compile::{
-    ChoiceTimeoutDirective, CompiledTalk, compile, compile_strict, parse_choice_timeout,
-};
+pub use compile::{ChoiceTimeoutDirective, CompiledTalk, compile, parse_choice_timeout};
 pub use drive::{spawn_talk, talk_handler};
 pub use sysvar::expand_system_vars;
 

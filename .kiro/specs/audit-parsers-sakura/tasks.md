@@ -128,7 +128,7 @@
   - 合わない解決を `warn!`（39）・完了の送り口を 1 つに（77）・落とす直前の止めと `mut` を消す（78）・選択の通知を戻す継ぎ目を消す（79）
   - 区切りの Tick の後に Tick を 1 つ挟む形（A）の `resolved_choice_flushes_due_epilogue_before_following_close` と `mismatched_resolve_choice_is_warned` が緑で、`TalkDone{Ended}` が 1 回だけ出る（挟まない形 B は dola の 1 行と一緒に 7.5 で足す）
   - _Requirements: 2.1, 3.1, 3.2, 5.3, 7.1, 7.4_
-- [ ] 6.2 再生のテストの待ちを決定論にし、strict の受けと sysvar の記録を整える（T19）
+- [x] 6.2 再生のテストの待ちを決定論にし、strict の受けと sysvar の記録を整える（T19）
   - 再生のテストの否定の確かめを時限つきの受け取りに直す（40・84）・道具を共有の支えへ寄せ、`StartTalk` の字面を組み立ての関数に（85）
   - 組と strict の受けからゴースト名を外す（80）・strict の受けの公開を締める（81）・sysvar のフォールバックの記録に台本を書かず名と長さを書く（82）・写しのテストを消す（83）
   - `sysvar.rs` の 44 行目の名指しは変えない

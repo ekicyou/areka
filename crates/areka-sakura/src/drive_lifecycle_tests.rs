@@ -1,6 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::{CueCommand, ScriptOrigin, TalkId};
+use crate::contract::{CueCommand, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -12,13 +12,8 @@ use std::time::Duration;
 fn empty_script_talk_returns_talkdone_immediately_without_tick() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(7);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: String::new(), // 空 script → 空 Instruction 列 → 空 sheet。
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    // 空 script → 空 Instruction 列 → 空 sheet。
+    let start = StartTalk::new(talk_id, String::new());
 
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -27,7 +22,7 @@ fn empty_script_talk_returns_talkdone_immediately_without_tick() {
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -52,32 +47,20 @@ fn empty_script_talk_returns_talkdone_immediately_without_tick() {
 fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
     let (done_a_tx, done_a_rx) = mpsc::channel::<TalkNotice>();
     let id_a = TalkId(11);
-    let start_a = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id: id_a,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start_a = StartTalk::new(id_a, r"\s[10]hello\_w[100]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
     let handle = spawn_talk(
         start_a,
         done_a_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
 
     // 2 本目 Start(B)（別 script）を inbox へ。自己投函の Start(A) の後に処理され、無視される。
     let id_b = TalkId(99);
-    let start_b = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[77]DIFFERENT\e".to_string(),
-        talk_id: id_b,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start_b = StartTalk::new(id_b, r"\s[77]DIFFERENT\e".to_string());
     handle
         .inbox
         .send(SakuraMsg::Start(start_b))
@@ -114,19 +97,13 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
 #[test]
 fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id: TalkId(4),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(4), r"\s[10]hello\_w[100]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -159,20 +136,14 @@ fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
     // R1.5/R4.4）、compile は `SpeakerScope{n}` を「scope 状態更新のみ・cue 非発行」で扱う
     // （`compile.rs` の SpeakerScope アーム）。ゆえに内容 cue は皆無で empty-sheet 即時 TalkDone
     // 経路を保つ（`\0` の写像先が Raw から SpeakerScope へ変わっても本檻の観測は不変）。
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\0".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\0".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
 
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -202,20 +173,14 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
     // parser は `\0` を `SpeakerScope{n:0}` へ写像し（task 12.1・R1.5/R4.4）、compile はそれを
     // scope 状態更新のみ（cue 非発行）で扱う。先行内容 cue のない `\-` の empty-sheet＋Quit 経路を
     // 保つ（SpeakerScope は cue を生まず `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\0\-".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\0\-".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
 
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -247,20 +212,14 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
 fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(101);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[500]world\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]hello\_w[500]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
 
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -307,17 +266,11 @@ fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
     // 空の注入時刻列は初回 Tick 前（`Armed`）の中断になる。
     let close_after = |script: &str, talk_id: TalkId, ticks: &[f64]| -> TalkDone {
         let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-        let start = StartTalk {
-            epilogue: Vec::new(),
-            script: script.to_string(),
-            talk_id,
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        };
+        let start = StartTalk::new(talk_id, script.to_string());
         let handle = spawn_talk(
             start,
             done_tx,
-            two_sinks(NoopSink, NoopSink),
+            one_sink(NoopSink),
             SystemVarSnapshot::default(),
             None,
         );
@@ -372,17 +325,11 @@ fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
 fn close_after_natural_end_produces_no_extra_talkdone() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(102);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]hello\_w[100]world\e".to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(NoopSink, NoopSink),
+        one_sink(NoopSink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -421,40 +368,28 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
     // talk A: TalkId(7)・Ended 経路。
     let (done_a_tx, done_a_rx) = mpsc::channel::<TalkNotice>();
     let id_a = TalkId(7);
-    let start_a = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[100]world\e".to_string(),
-        talk_id: id_a,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start_a = StartTalk::new(id_a, r"\s[10]hello\_w[100]world\e".to_string());
     let sink_a = RecordingSink::new();
     let records_a = sink_a.records();
 
     // talk B: TalkId(42)・Quit 経路（末尾 `\-`）。
     let (done_b_tx, done_b_rx) = mpsc::channel::<TalkNotice>();
     let id_b = TalkId(42);
-    let start_b = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[20]bye\_w[100]done\-".to_string(),
-        talk_id: id_b,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start_b = StartTalk::new(id_b, r"\s[20]bye\_w[100]done\-".to_string());
     let sink_b = RecordingSink::new();
     let records_b = sink_b.records();
 
     let handle_a = spawn_talk(
         start_a,
         done_a_tx,
-        two_sinks(sink_a, NoopSink),
+        one_sink(sink_a),
         SystemVarSnapshot::default(),
         None,
     );
     let handle_b = spawn_talk(
         start_b,
         done_b_tx,
-        two_sinks(sink_b, NoopSink),
+        one_sink(sink_b),
         SystemVarSnapshot::default(),
         None,
     );
@@ -526,19 +461,13 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
 fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(720);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[800]\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]hello\_w[800]\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -597,19 +526,13 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
 fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(721);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]hello\_w[500]world\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]hello\_w[500]world\e".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(sink, NoopSink),
+        one_sink(sink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -666,17 +589,11 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
 fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(722);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: r"\s[10]ab\_w[600]\e".to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, r"\s[10]ab\_w[600]\e".to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(NoopSink, NoopSink),
+        one_sink(NoopSink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -738,17 +655,11 @@ fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
 
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(723);
-    let start = StartTalk {
-        epilogue: Vec::new(),
-        script: script.to_string(),
-        talk_id,
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(talk_id, script.to_string());
     let handle = spawn_talk(
         start,
         done_tx,
-        two_sinks(NoopSink, NoopSink),
+        one_sink(NoopSink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -811,13 +722,7 @@ fn spawn_with_drop_marker(
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (marker_tx, marker_rx) = mpsc::channel::<()>();
     let handle = spawn_talk(
-        StartTalk {
-            epilogue: Vec::new(),
-            script: r"\s[10]hello\_w[100]world\e".to_string(),
-            talk_id,
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        },
+        StartTalk::new(talk_id, r"\s[10]hello\_w[100]world\e".to_string()),
         done_tx,
         vec![Box::new(DropMarkerSink { tx: marker_tx })],
         SystemVarSnapshot::default(),

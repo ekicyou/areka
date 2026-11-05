@@ -1,6 +1,6 @@
 use super::test_support::NEG_WINDOW;
 use super::*;
-use crate::contract::{CueCommand, ScriptOrigin, TalkCue, TalkId};
+use crate::contract::{CueCommand, TalkCue, TalkId};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
@@ -59,13 +59,7 @@ fn drain(rx: &mpsc::Receiver<Event>, window: Duration) -> Vec<Event> {
 fn spawn(script: &str, talk_id: u64) -> (TalkHandle, mpsc::Receiver<Event>) {
     let (tx, rx) = mpsc::channel::<Event>();
     let handle = spawn_talk(
-        StartTalk {
-            epilogue: Vec::new(),
-            script: script.to_string(),
-            talk_id: TalkId(talk_id),
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        },
+        StartTalk::new(TalkId(talk_id), script.to_string()),
         tx.clone(),
         vec![Box::new(EventSink { tx })],
         SystemVarSnapshot::default(),

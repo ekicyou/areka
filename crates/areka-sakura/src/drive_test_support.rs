@@ -1,5 +1,6 @@
 use super::*;
 use crate::contract::{CueCommand, TalkCue};
+use crate::duration::text_playback_duration;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -92,6 +93,61 @@ pub(super) fn two_sinks(
     second: impl CueSink + Send + 'static,
 ) -> Vec<Box<dyn CueSink + Send>> {
     vec![Box::new(first), Box::new(second)]
+}
+
+/// テスト用: 演者 sink 1 つだけの `Vec<Box<dyn CueSink + Send>>`（観測 sink を 1 つ持つテストの形）。
+pub(super) fn one_sink(sink: impl CueSink + Send + 'static) -> Vec<Box<dyn CueSink + Send>> {
+    vec![Box::new(sink)]
+}
+
+/// 同期の駆動（`spawn_talk` の本体と同じ `handle`）をテストのスレッドの上に作る。
+/// strict の檻は判定の束を渡し、ほかは `None`。
+pub(super) fn driver(
+    sinks: Vec<Box<dyn CueSink + Send>>,
+    hooks: Option<StrictHooks>,
+) -> (TalkDriver<TalkNotice>, mpsc::Receiver<TalkNotice>) {
+    let (tx, rx) = mpsc::channel();
+    (
+        TalkDriver::new(sinks, SystemVarSnapshot::default(), tx, hooks),
+        rx,
+    )
+}
+
+/// 今までに届いた `TalkDone` だけを順に取り出す（`ChoiceWaiting` は読み飛ばす）。
+pub(super) fn dones(rx: &mpsc::Receiver<TalkNotice>) -> Vec<TalkDone> {
+    rx.try_iter()
+        .filter_map(|notice| match notice {
+            TalkNotice::Done(done) => Some(done),
+            TalkNotice::ChoiceWaiting(_) => None,
+        })
+        .collect()
+}
+
+/// 3 択のメニューの台本（実の menu と同じ形・全内容が at=0・duration 0）。
+pub(super) const MENU3_SCRIPT: &str = concat!(
+    r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
+    r"\n",
+    r"\q[エモの位置調整,Onエモの位置調整メニュー]",
+    r"\_l[5em,2lh]",
+    r"\q[閉じる,Onメニュー閉じる]",
+);
+
+/// `\s[10]hello\_w[100]\q[..]` の区切りの時刻（hello の D ＋ `\_w[100]`＝0.35）。
+/// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
+pub(super) fn menu_horizon() -> f64 {
+    text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
+}
+
+/// Choice の合図が届くまで受け取る（区切りの到達を決定的に待つ）。
+pub(super) fn recv_until_choice(rx: &mpsc::Receiver<TalkCue>) {
+    loop {
+        let cue = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Choice cue（barrier 手前）が届くべき");
+        if matches!(cue.command, CueCommand::Choice { .. }) {
+            break;
+        }
+    }
 }
 
 /// 発火の到着を barrier として同期受信するチャンネル sink（保留の決定的証明に使う）。
