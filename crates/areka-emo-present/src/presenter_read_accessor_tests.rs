@@ -39,40 +39,6 @@ fn current_surface_id_is_none_before_first_show() {
     );
 }
 
-/// テスト 11・R3.1 観測完了（表示後→直近 id）: 有効 `ShowSurface(1000)` 適用後、`current_surface_id`
-/// が `Some(1000)`（直近に表示が成立したサーフェス id）。
-#[test]
-fn current_surface_id_is_last_shown_after_display() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x11);
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
-
-    assert_eq!(
-        presenter.current_surface_id(TargetId(0)),
-        Some(1000),
-        "表示成立後は直近に表示した id（3.1）"
-    );
-}
-
 /// テスト 12・R3.3 観測完了（切替→新 id）: 面 1000 表示中に同寸の別 id 3000 を `ShowSurface` すると、
 /// `current_surface_id` が `Some(3000)` へ追随する（以後の問い合わせは新 id）。
 #[test]

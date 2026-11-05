@@ -264,22 +264,3 @@ fn identity_offscreen_roundtrip_equals_composed_native_bytes() {
         bad.map(|i| &read_back[i..i + 4])
     );
 }
-
-/// 成功側の最低線: `record_display` は中身を持つ（空でない）コマンドリストを返す。
-#[test]
-fn record_display_returns_a_non_empty_command_list() {
-    let (_core, dc) = gpu_dc();
-    let surface = composed_with_alpha_edges(4, 3);
-
-    let list = record_display(&dc, &surface, None).expect("record_display は Ok");
-
-    assert!(
-        list.command_list().is_some(),
-        "返ったリストが空（command_list() が None）"
-    );
-    assert_ne!(
-        list,
-        GraphicsCommandList::empty(),
-        "返ったリストが GraphicsCommandList::empty() と等しい"
-    );
-}

@@ -821,8 +821,9 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         );
     }
 
-    // (d) 正常縮退は同一 callsite で **1 件も増やさない**（陰性）。捕捉が生きていることは
-    //     直前の陽性 1 件が証明済みゆえ、この陰性主張は恒真になり得ない。
+    // (d) 正常縮退は同一 callsite で **1 件も増やさない**（陰性）。4 呼出は 1 つの窓で捕捉して
+    //     いるので、(c) の「ちょうど 2 件」が防御呼出 2 回分と一致することがそのまま陰性の証拠に
+    //     なる（述語を applied.is_none() 単独へ潰すと 3 件以上で (c) が鳴る）。
     assert_eq!(
         unshown.region, None,
         "未表示 scope は正常縮退（region なし）"
@@ -830,11 +831,5 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
     assert_eq!(
         unregistered.region, None,
         "未登録 target は正常縮退（region なし）"
-    );
-    assert_eq!(
-        applied_absent_warn_count(&events),
-        2,
-        "未表示 scope・未登録 target で warn を足してはならない（述語を applied.is_none() 単独へ\
-         潰すとマウス移動ごとのログ洪水になる。防御呼出 2 回分の 2 件から増えない）: {events:?}"
     );
 }

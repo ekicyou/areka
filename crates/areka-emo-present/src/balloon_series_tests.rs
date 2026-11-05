@@ -2,51 +2,6 @@ use super::*;
 
 use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, capture_events};
 
-/// R1.5/R7.2 系列を明示した面判定: 面であるか否かは **どの系列（scope）で見るか**に依存する。
-///
-/// 単一接頭辞固定時代の「`balloonk0.png` は枠でない」という無条件の判定を、系列を明示した
-/// 判定へ**意味を変えて**更新したもの（design.md「Implementation Notes / Integration」）——
-/// scope 0 の連鎖では `balloonk0.png` を採用せず、scope 1 の連鎖では面 0 として採用する。
-/// 一方、正典でバルーン面系列と定義されていないファイル（`balloonc*`/`arrow*`/`marker*`/
-/// `online*`・非数字・非 png）はどの系列から見ても面でない。
-#[test]
-fn face_judgment_is_series_explicit_not_fixed_prefix() {
-    // 相方側の面: scope 1 の連鎖では面 0 になる（scope 0 の連鎖に balloonk が無いことは檻 1 の
-    // 連鎖の導出が値の一致で確かめる）。
-    assert_eq!(
-        selected(&["balloonk0.png"], 1),
-        vec![(
-            0,
-            "balloonk".to_string(),
-            ChainTier::Own,
-            "balloonk0.png".to_string()
-        )],
-        "scope 1 の連鎖では balloonk0.png が面 0 として採用される"
-    );
-    // 本体側の面と大小無視（系列を明示しても判定 3 段そのものは不変）。
-    assert_eq!(face_id_of("balloons", "balloons0.png"), Some(0));
-    assert_eq!(face_id_of("balloons", "balloons12.png"), Some(12));
-    assert_eq!(face_id_of("balloons", "BALLOONS3.PNG"), Some(3), "大小無視");
-    // 非バルーン面（どの系列から見ても面でない・R5.3）。
-    for prefix in ["balloons", "balloonk", "balloonp0def", "balloonp1def"] {
-        for name in [
-            "balloonc0.png", // 入力ボックス
-            "arrow0.png",    // スクロール矢印
-            "marker.png",    // マーカー
-            "online0.png",   // 受信アニメ
-            "balloons.png",  // 数字が無い
-            "balloonsX.png", // 非数字
-            "balloons0.txt", // 非 png
-        ] {
-            assert_eq!(
-                face_id_of(prefix, name),
-                None,
-                "系列 {prefix} が非バルーン面 {name} を採用した"
-            );
-        }
-    }
-}
-
 // ── 檻 1: scope→接頭辞優先連鎖の導出（R1.1/1.6/1.8/1.9/1.10・R7.1）─────────────
 
 /// `(接頭辞, tier)` の組で連鎖を突き合わせるための簡約形（表明の可読性のため）。

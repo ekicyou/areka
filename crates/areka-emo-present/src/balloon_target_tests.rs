@@ -55,76 +55,9 @@ fn synthetic_text_transcribes_face_id_and_path() {
     }
 }
 
-/// R5.1/R5.2/R5.3 full build: `build_balloon_target` が当該 scope の連鎖に属する面のみを
-/// 列挙し、シェルと同一の parse→bake→World 経路で `(EmoWorld, AtlasTable)` を返す。
-/// 非面ファイルは列挙されずアトラスにも World にも現れない。
-/// MemoryDecoder ゆえ実 PNG 不要で決定論。
-#[test]
-fn build_balloon_target_end_to_end_frames_only() {
-    let dir = TempDir::new();
-    // 1 色・全画素不透明の絵が宣言なしの決まりで抜かれないよう、今までの扱い（`1`）を宣言する。
-    dir.write(DESCRIPT_TXT, "use_self_alpha,1\n");
-    // 面 2 枚 ＋ 非面 3 種を同ディレクトリへ配置。
-    dir.touch("balloons0.png");
-    dir.touch("balloons1.png");
-    dir.touch("balloonc0.png"); // 入力ボックス（非面）
-    dir.touch("arrow0.png"); // スクロール矢印（非面）
-    dir.touch("marker.png"); // マーカー（非面）
-
-    // 枠のみデコーダへ登録（非枠は登録しない＝もし列挙されれば decode 失敗で露見する）。
-    let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque_1x1();
-    dec.insert(
-        dir.path().join("balloons0.png"),
-        w,
-        h,
-        stride,
-        bytes.clone(),
-        has_alpha,
-    );
-    dec.insert(
-        dir.path().join("balloons1.png"),
-        w,
-        h,
-        stride,
-        bytes,
-        has_alpha,
-    );
-
-    let (world, table) = build_balloon_target(dir.path(), &dec, 0).expect("枠 2 枚から Ok が返る");
-
-    // アトラスに枠 2 枚のエントリがあり placement を持つ（PNG α 尊重で焼かれる・R5.2）。
-    for rel in ["balloons0.png", "balloons1.png"] {
-        let id = table
-            .resolve(SetId(0), rel)
-            .unwrap_or_else(|| panic!("{rel} がアトラスに解決されない"));
-        assert!(
-            table.entry(id).placement.is_some(),
-            "{rel} は不透明ゆえ placement を持つ"
-        );
-    }
-    // 非枠は列挙対象外ゆえアトラスに存在しない（R5.3）。
-    assert_eq!(table.resolve(SetId(0), "balloonc0.png"), None);
-    assert_eq!(table.resolve(SetId(0), "arrow0.png"), None);
-    assert_eq!(table.resolve(SetId(0), "marker.png"), None);
-    assert_eq!(table.len(), 2, "生存エントリは枠 2 枚のみ");
-
-    // World は surface id = N（balloons{N} の N）を常駐させる。
-    assert!(
-        world.surface(0).is_some(),
-        "surface id 0（balloons0）が World にある"
-    );
-    assert!(
-        world.surface(1).is_some(),
-        "surface id 1（balloons1）が World にある"
-    );
-    assert!(world.surface(2).is_none(), "存在しない id は None");
-}
-
 /// R5.5 多面バルーン fixture（偶数 id・正典準拠）: TempDir へ `balloons0.png`＋`balloons2.png`
 /// の 2 枚（偶数 id 0/2）を置き、`build_balloon_target` が **surface 0 と surface 2 の両面**を
-/// 列挙・構築した world を返すことを固定する。既存 `..._frames_only`（id 0/1）と対をなし、
-/// 面 id が飛び番（1 を欠く 0/2）でも各面が id=N でそのまま常駐することを実演する。
+/// 列挙・構築した world を返すことを固定する。面 id が飛び番（1 を欠く 0/2）でも各面が id=N でそのまま常駐することを実演する。
 /// MemoryDecoder ゆえ実 PNG 不要で決定論（既存流儀踏襲）。
 #[test]
 fn build_balloon_target_enumerates_multiple_even_id_faces() {

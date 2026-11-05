@@ -62,70 +62,6 @@ fn golden_match_read_back_equals_direct_compose() {
     );
 }
 
-/// R3.4 観測完了（表示不変）: 有効 id で表示を確立後、**解決不能 id** の `ShowSurface` は reply が
-/// `Err(Compose(SurfaceNotFound))` で、`read_back` バイトは**適用前と不変**（表示を乱さない）。
-#[test]
-fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-
-    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5A);
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-
-    // まず有効 id で表示を確立（表示記録の生成＋表示バイト確定）。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
-    let before = presenter
-        .read_back(TargetId(0))
-        .expect("read_back（前）失敗");
-
-    // 解決不能 id: error! ＋ 表示不変 ＋ reply Err（R3.4）。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 9999,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
-    );
-    let outcome = rx1
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（無効 id）を受信できない");
-    assert!(
-        matches!(
-            outcome,
-            Err(PresentError::Compose(ComposeError::SurfaceNotFound(9999)))
-        ),
-        "無効 id は Err(Compose(SurfaceNotFound(9999))) を返す: {outcome:?}"
-    );
-
-    let after = presenter
-        .read_back(TargetId(0))
-        .expect("read_back（後）失敗");
-    assert_eq!(
-        before, after,
-        "無効 id の適用で表示中バイトが変化した（表示不変の不変条件を破っている）"
-    );
-}
-
 /// 有効 surface 1000（`w×h` 全不透明 element）＋ 定義層皆無で外形 0×0 に退化する surface 7000
 /// （element/animation ゼロ）を**同一 target**へ載せる `(EmoWorld, AtlasTable)` を返す。
 ///
@@ -187,8 +123,7 @@ pub(super) fn build_assets_with_valid_and_empty(
 /// (b) surface entity の `HitTest`（`AlphaMask`）、(c) `AlphaMaskResource`（設定済みマスク）の
 /// いずれも**適用前と不変**（表示＋マスクを一切乱さない）。
 ///
-/// 4.1 の `invalid_surface_id_replies_err_and_leaves_display_unchanged` はバイト不変のみを見るが、
-/// 本テストは「skip＝表示器（visual/mask/hit-test）を触らない」を独立・自己完結に固定する。
+/// 「skip＝表示器（visual/mask/hit-test）を触らない」を独立・自己完結に固定する。
 #[test]
 fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let mut world = make_world_with_gpu();

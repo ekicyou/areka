@@ -254,41 +254,16 @@ fn assert_expected_is_not_empty(e: &Expected, at: &str) {
 /// 2. キャッシュスロットのマスクが、表示バイトから独立に組んだマスクと一致（毎適用）
 /// 3. 当たり判定へ供給されたマスク（`AlphaMaskResource`）も同じ内容（下流まで同一）
 /// 4. `read_back` も同じバイト（表示に載っているメモの中身・各水準で 1 度）
-/// 5. 非空虚性: 不透明画素が在る・マスクに hit と非 hit の両方が在る
-/// 6. 残留の実在: 巡回する面の期待バイトとマスクが互いに異なり、暖機後の表示バッファの番地が
+/// 5. 非空虚性: 不透明画素が在る（期待値の側の hit と非 hit の同居は fixture の檻が持つ）
+/// 6. 残留の実在: 暖機後の表示バッファの番地が
 ///    交代する 4 本の中で回り続けている（＝使い回しが成立している）
 /// 7. **ミス経路であることの陽性対照**: 定常の各適用でマスクの実体が動く（ヒットなら動かない）
 #[test]
 fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_path() {
     // 便宜経路は presenter が握るのと別の実体で辿る（内部値の追認にしない）。**窓 DPI に依らず
     // 1 組で足りる**ことが裁定 D の観測形そのものである。
+    // fixture 前提（各面が別の絵・別のマスク）は `the_rotating_face_fixture_differs_in_bytes` が持つ。
     let want = expected_faces();
-
-    // fixture 前提: 各面が別の絵・別のマスクであること（同じなら残留を弁別できない）。
-    // 期待値が窓 DPI に依らない 1 組なので、この前提も 1 度だけ確かめれば足りる。
-    for (i, id) in FACES.iter().enumerate() {
-        assert_eq!(
-            want[i].extent, want[0].extent,
-            "面の外形が揃っていない（表示バッファの回収経路を踏めない）"
-        );
-        assert_expected_is_not_empty(&want[i], &format!("面 {id}"));
-        for j in 0..i {
-            assert_ne!(
-                want[i].bytes, want[j].bytes,
-                "面 {id} と {} の表示バイトが同一＝残留が混ざっても気付けない",
-                FACES[j]
-            );
-        }
-    }
-    let distinct_masks = {
-        let mut m: Vec<&AlphaMask> = want.iter().map(|w| &w.mask).collect();
-        m.dedup_by(|a, b| a == b);
-        m.len()
-    };
-    assert!(
-        distinct_masks > 1,
-        "巡回する面のマスクが全て同一＝マスクへの残留が混ざっても気付けない"
-    );
 
     for window_dpi in WINDOW_DPIS {
         let at_dpi = format!("窓 DPI {window_dpi}");

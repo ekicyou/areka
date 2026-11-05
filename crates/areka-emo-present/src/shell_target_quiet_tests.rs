@@ -64,20 +64,21 @@ fn fingerprint(target: &ShellTarget) -> String {
     )
 }
 
-/// 両入口で読み、戻り値が等しいこと・出す入口に `needle` の記録が在ること・出さない入口の
-/// 読み込みの記録が 0 行であることを確かめる。
-fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needle: &str) {
+/// 両入口で 1 回ずつ読み、戻り値が等しいこと・出す入口に `needles` のどの文言の記録も在ること・
+/// 出さない入口の読み込みの記録が 0 行であることを確かめる。
+fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needles: &[&str]) {
     let (emit, emit_events) =
         capture_events(|| load_shell_target(dir, dec).expect("出す入口で読める"));
     let (quiet, quiet_events) =
         capture_events(|| load_shell_target_quiet(dir, dec).expect("出さない入口で読める"));
 
-    assert!(
-        load_records(&emit_events)
-            .iter()
-            .any(|e| e.message().contains(needle)),
-        "出す入口に `{needle}` の記録が無い（検体が事象を起こしていない）: {emit_events:?}"
-    );
+    let emitted = load_records(&emit_events);
+    for needle in needles {
+        assert!(
+            emitted.iter().any(|e| e.message().contains(needle)),
+            "出す入口に `{needle}` の記録が無い（検体が事象を起こしていない）: {emit_events:?}"
+        );
+    }
     let quiet_records = load_records(&quiet_events);
     assert!(
         quiet_records.is_empty(),
@@ -119,9 +120,7 @@ fn records_fixture_is_silent_and_equal() {
     // `parts1.png` を入れないので、その 1 枚が焼く段で落ちる（`error!` も黙らせる側）。
     let dec = decoder_with(dir.path(), &["base0.png", "surface1.png"]);
 
-    assert_quiet_matches_emit(dir.path(), &dec, "同じ番号");
-    assert_quiet_matches_emit(dir.path(), &dec, "コマの相手");
-    assert_quiet_matches_emit(dir.path(), &dec, "脱落");
+    assert_quiet_matches_emit(dir.path(), &dec, &["同じ番号", "コマの相手", "脱落"]);
 }
 
 /// 入れ子の検体（無い番号・循環・descript.txt が無い）。
@@ -146,7 +145,7 @@ fn nesting_fixture_is_silent_and_equal() {
             "surface2.png",
         ],
     );
-    assert_quiet_matches_emit(&dir, &dec, "element定義が指したサーフェスが無い");
+    assert_quiet_matches_emit(&dir, &dec, &["element定義が指したサーフェスが無い"]);
 }
 
 /// 箱の検体（箱の数の `info!`）と、誤りのある箱（各件の `warn!`）。
@@ -159,7 +158,7 @@ fn box_fixtures_are_silent_and_equal() {
         .join("fixtures")
         .join("shell-balloon");
     let dec = decoder_with(&dir, &["body0.png", "body1.png", "body2.png", "body3.png"]);
-    assert_quiet_matches_emit(&dir, &dec, "箱を読んだ");
+    assert_quiet_matches_emit(&dir, &dec, &["箱を読んだ"]);
 
     let bad = TempPath::new("shell-quiet-bad-box");
     std::fs::write(
@@ -173,7 +172,7 @@ fn box_fixtures_are_silent_and_equal() {
     .expect("記述ファイル作成");
     write_descript(bad.path());
     let dec = decoder_with(bad.path(), &["base.png"]);
-    assert_quiet_matches_emit(bad.path(), &dec, "size の無い");
+    assert_quiet_matches_emit(bad.path(), &dec, &["size の無い"]);
 }
 
 /// `.pna` が添えてある絵（数つきの `warn!`）と、透過の宣言の `info!`（宛先 `self_alpha`）。
@@ -188,8 +187,7 @@ fn pna_fixture_is_silent_and_equal() {
     write_descript(dir.path());
     let mut dec = decoder_with(dir.path(), &["base.png"]);
     dec.insert_pna(dir.child("base.png"));
-    assert_quiet_matches_emit(dir.path(), &dec, ".pna");
-    assert_quiet_matches_emit(dir.path(), &dec, "透過");
+    assert_quiet_matches_emit(dir.path(), &dec, &[".pna", "透過"]);
 }
 
 /// `surfaces.txt` が無く画像だけで組むシェル、と descript.txt が読めないシェル。
@@ -198,8 +196,7 @@ fn image_only_and_no_descript_are_silent_and_equal() {
     let dir = TempPath::new("shell-quiet-image-only");
     std::fs::File::create(dir.child("surface0.png")).expect("プレースホルダ作成");
     let dec = decoder_with(dir.path(), &["surface0.png"]);
-    assert_quiet_matches_emit(dir.path(), &dec, "画像だけで");
-    assert_quiet_matches_emit(dir.path(), &dec, "descript.txt が読めない");
+    assert_quiet_matches_emit(dir.path(), &dec, &["画像だけで", "descript.txt が読めない"]);
 }
 
 /// 出さない入口で読み、`Err` が返ることと、読み込みの記録が `needle` を含む `error!` 1 行だけで

@@ -29,7 +29,7 @@
 //! 6. **引き当てヒット経路も踏む**（Requirement 3.1 の裁定文「毎コマ経路（ヒットを含む）」）:
 //!    上の 1〜4 を主張する 2 つの檻は**設計上すべての適用がミスする**。ミスしか踏まない檻だけでは
 //!    `show.rs` 手順 (3)（表示記録の反映＋マスク供給＋可視化＝合成の有無に依らず走る区間）の
-//!    ヒット側が 1 度も動かない。[`the_hit_test_mask_is_supplied_by_sharing_not_by_copying`] が
+//!    ヒット側が 1 度も動かない。2 つの檻の本体の末尾が
 //!    同じキーの再適用を 1 回入れてその穴を塞ぐ
 //!
 //! 5 は本ファイル以前にリポジトリのどこにも檻が無かった。`show.rs` の `set_shared` を `set`
@@ -325,6 +325,8 @@ fn assert_not_empty(seen: &Seen, at: &str) {
 /// - `swap_native_scratch` を複写へ戻す → 交代関係「前回の合成先席が表示バッファへ回っていない」
 ///   で RED
 /// - 下流供給を `set`（実体の複製）へ戻す → [`assert_mask_is_shared_not_copied`] の番地の側で RED
+/// - 下流供給を**ヒット経路のときだけ** `set` へ戻す → 末尾のヒット 1 適用の
+///   [`assert_mask_is_shared_not_copied`] の番地の側で RED（ミスの適用は緑のまま）
 fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     let level = format!("窓 DPI {window_dpi}");
     let mut world = super::test_support::make_world_with_gpu();
@@ -409,6 +411,7 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     );
 
     let mut prev_native = base[base.len() - 1].native;
+    let mut prev_mask = base[base.len() - 1].mask;
     for i in 0..STEADY {
         let seen = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + i);
         let at = format!("{level} の定常 {i} 回目");
@@ -444,7 +447,26 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
         assert_not_empty(&seen, &at);
 
         prev_native = seen.native;
+        prev_mask = seen.mask;
     }
+
+    // ヒット経路: 直前の適用と**同じ**キーをもう一度渡す。下流供給の 1 文は合成の有無に依らず
+    // 走るので、ミスしか踏まないとこの経路を 1 度も動かさない。ヒットの成立はマスクの実体が
+    // 動かないことで示す（ミスなら輪番が 1 つ進んで同時に生きている別の実体へ移る）。確保増分 0
+    // は単独ではヒットの証拠にならない（定常状態ではミスも 0 件）。次の番号のキーを渡して
+    // ミスにすると「マスクの実体が動いた」で赤になることを較正で確かめた。
+    let hit = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + STEADY - 1);
+    let at = format!("{level} のヒット経路");
+    assert_eq!(
+        hit.mask, prev_mask,
+        "{at}: マスクの実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない＝以後の主張が空虚）"
+    );
+    assert_eq!(
+        hit.cumulative, cumulative,
+        "{at}: 確保が起きた（ヒットなら合成もマスク再生成も走らない）"
+    );
+    assert_mask_is_shared_not_copied(&hit, &at);
+    assert_not_empty(&hit, &at);
 }
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
@@ -469,79 +491,4 @@ fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
 #[test]
 fn a_steady_identity_run_rotates_through_exactly_four_buffers_and_allocates_nothing() {
     assert_steady_run_rotates_and_allocates_nothing(96, 0xD2);
-}
-
-/// Requirement 3.1 観測完了（**下流供給の複製ゼロ**）: 当たり判定へ渡すマスクは
-/// `Arc` の共有であって実体の複製ではない。
-///
-/// # なぜ専用の檻が要るのか（この穴が生き残った理由）
-///
-/// 継ぎ目の**両端**は覆われていた——wintf の `hit_test_shared_mask_tests.rs` は `set_shared` が
-/// 確保を共有することを直接呼出で証明し、`budget_tests.rs` の手組み Flow 2 は輪番が回ることを
-/// 証明する。しかし `show.rs` が `set` と `set_shared` の**どちらを呼ぶか**を言う檻が 1 本も
-/// 無かった。`set` へ戻しても既存 184 件は全て緑のままである: `set` は値を新しい `Arc` で包むので
-/// キャッシュ側の `Arc` は単独所有のままであり、`Arc::get_mut` は成功し続け、確保計数もマスクの
-/// 実体集合も 1 つも動かない。複製は `Vec` のクローンとして、計数される席の**外**で起きる。
-///
-/// 本檻は実 `apply_show` を通した後に、下流が握る実体とスロットの `Arc` を突き合わせる。
-/// 窓 DPI 2 水準のどちらでも同じことを主張する（供給の 1 文は k で分岐しないため、
-/// 両方を踏むことで「片方だけ直っている」形も残さない）。
-///
-/// # 引き当てヒット経路の陽性対照（Requirement 3.1 の裁定文「毎コマ経路（ヒットを含む）」）
-///
-/// 上 2 つの檻は**設計上すべての適用がミスする**（キーを毎回変える）。ところが `show.rs` の
-/// 手順 (3)——表示記録の反映＋マスク供給＋可視化——は合成の有無に依らず走るため、`set_shared`
-/// を含む下流供給の 1 文は**ヒット経路にも乗っている**。ミスしか踏まない檻の集合は、この経路を
-/// 1 度も動かさないまま「毎コマ経路は全て覆った」と言えてしまう。
-///
-/// 本 spec は同じ穴の形で一度失敗している（task 2.3 の偽合格は、判定素材のどれ 1 つもプール経路を
-/// 踏んでいなかったために 3 回のレビューを生き延びた）。ゆえにここで**同じ bind 集合をもう一度**
-/// 適用してヒットを起こし、その 1 適用でも供給が共有のままであることを見る。
-///
-/// ヒットが実際に成立したことは**マスクの実体が動かないこと**で示す——ミスなら輪番が 1 つ進んで
-/// もう 1 本の実体（同時に生きている別の `Arc`）へ移るため、番地の偶然一致が入り込む余地が無い。
-/// 確保増分 0 の側は単独ではヒットの証拠にならない（定常状態ではミスも 0 件だからである）。
-/// この判別が効いていることは較正で確かめた: 最後の適用のキーを 1 ビット変えて**ミスにすると
-/// 「マスクの実体が動いた」で赤**になり、そのとき確保増分の主張は最後まで鳴らない。
-///
-/// # このヒット 1 適用が塞いだ穴（実測）
-///
-/// `show.rs` 手順 (3) の供給を**ヒット経路のときだけ** `set`（複製）へ戻す変異を当てると、
-/// クレート全体のうち**赤になるのは本檻のヒット 1 適用だけ**である（鳴るのは
-/// [`assert_mask_is_shared_not_copied`] の番地の側）。上 2 つの檻は設計上ミスしか踏まないため
-/// 緑のままだった。
-#[test]
-fn the_hit_test_mask_is_supplied_by_sharing_not_by_copying() {
-    for (window_dpi, salt) in [(192_u16, 0xD3_u8), (96, 0xD4)] {
-        let mut world = super::test_support::make_world_with_gpu();
-        let mut presenter = EmoPresenter::new();
-        attach(&mut presenter, &mut world, window_dpi, salt);
-
-        // 初回・輪番立ち上がり・定常のそれぞれで同じことが成り立つ（毎回ミスする）。
-        let mut missed = None;
-        for i in 0..WARMUP + STEADY {
-            let seen = apply_and_observe(&mut presenter, &mut world, i);
-            let at = format!("窓 DPI {window_dpi} の {i} 回目");
-            assert_not_empty(&seen, &at);
-            assert_mask_is_shared_not_copied(&seen, &at);
-            missed = Some(seen);
-        }
-        let missed = missed.expect("反復は 1 回以上ある");
-
-        // ヒット経路: 直前の適用と**同じ**キーをもう一度渡す。
-        let last = WARMUP + STEADY - 1;
-        let hit = apply_and_observe(&mut presenter, &mut world, last);
-        let at = format!("窓 DPI {window_dpi} のヒット経路");
-        assert_eq!(
-            hit.mask, missed.mask,
-            "{at}: マスクの実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない\
-             ＝以後の主張が空虚）"
-        );
-        assert_eq!(
-            hit.cumulative, missed.cumulative,
-            "{at}: 確保が起きた（ヒットなら合成もマスク再生成も走らない）"
-        );
-        assert_mask_is_shared_not_copied(&hit, &at);
-        assert_not_empty(&hit, &at);
-    }
 }

@@ -7,7 +7,7 @@
 //! | T-N4 | 当たり判定で点が **1 回だけ** 縮約されること（二重縮約なし） |
 //! | T-N5 | 同値の書き込みでは変更検知が立たないこと |
 //!
-//! z 順・非表示切替の檻は本ファイルと `mount_visibility_tests.rs` に分かれて残る。
+//! z 順の檻は本ファイル、非表示切替の檻は `mount_visibility_tests.rs` に残る。
 
 use super::*;
 
@@ -72,57 +72,6 @@ fn text_slot_is_higher_z_sibling_with_name() {
             .get::<GraphicsCommandList>(mount.text_slot())
             .is_none(),
         "予約スロットは表示記録を持たない seam であること"
-    );
-}
-
-/// R3.3: 非表示切替で surface entity の `HitTest` が `None`（当たり判定停止）＋ `Visual` 不可視へ、
-/// 再表示で `AlphaMask`（α判定）＋可視へ戻ること。表示記録/キャッシュは呼び手保持ゆえ触れない。
-#[test]
-fn hide_toggle_switches_hittest_and_visibility() {
-    let (mut world, _window, mount) = attach_fixture(4, 4);
-
-    // 初期状態: 可視 ＋ αマスクヒットテスト。
-    assert!(
-        world
-            .get::<Visual>(mount.surface_entity())
-            .unwrap()
-            .is_visible,
-        "装着直後は可視"
-    );
-    assert_eq!(
-        world.get::<HitTest>(mount.surface_entity()).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "装着直後は αマスクヒットテスト"
-    );
-
-    // 非表示へ。
-    mount.set_visible(&mut world, false);
-    assert!(
-        !world
-            .get::<Visual>(mount.surface_entity())
-            .unwrap()
-            .is_visible,
-        "非表示後は Visual 不可視"
-    );
-    assert_eq!(
-        world.get::<HitTest>(mount.surface_entity()).unwrap().mode,
-        HitTestMode::None,
-        "非表示後は当たり判定停止（HitTest::none）"
-    );
-
-    // 再表示へ。
-    mount.set_visible(&mut world, true);
-    assert!(
-        world
-            .get::<Visual>(mount.surface_entity())
-            .unwrap()
-            .is_visible,
-        "再表示後は可視へ復帰"
-    );
-    assert_eq!(
-        world.get::<HitTest>(mount.surface_entity()).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "再表示後は αマスクヒットテストへ復帰"
     );
 }
 

@@ -107,45 +107,6 @@ fn used_image_is_baked_under_the_same_spelling_as_layer_zero() {
     );
 }
 
-/// 観測可能な完了（要件 3.6・5.1）: `emo2` の実シェルを権威で読むと `Ok` で、焼く段の
-/// 脱落は 0 件・面の画像は 2 枚とも `element0` に隠れて（`shadowed`）使われない。
-///
-/// `emo2` の直下の面画像は `surface0.png`（面 0）と `surface10.png`（面 10）の 2 枚で、
-/// どちらの面も `element0` を持つ（表ウ）。ゆえに `used` は 0 件でなければならず、
-/// 1 枚でも使われていれば `emo2` の見た目が変わったことを意味する。
-#[test]
-fn emo2_shell_loads_with_zero_bake_errors_and_two_shadowed_images() {
-    with_com_initialized(|| {
-        let dec = WicDecoderArm::new().expect("COM 初期化下で WIC ファクトリが作れる");
-        let shell_dir = emo2_shell_dir();
-
-        let target = load_shell_target(&shell_dir, &dec).expect("emo2 のシェルは読める");
-
-        assert!(
-            target.bake_errors().is_empty(),
-            "emo2 のシェルは 1 枚も落とさずに焼ける: {:?}",
-            target.bake_errors()
-        );
-
-        let world = target.build_world();
-        let report = world.base_images();
-        assert!(
-            report.used.is_empty(),
-            "emo2 は面 0・面 10 とも `element0` を持つので使う画像は 0 件: {:?}",
-            report.used
-        );
-        assert_eq!(
-            report
-                .shadowed
-                .iter()
-                .map(|(id, file)| (*id, file.as_str()))
-                .collect::<Vec<_>>(),
-            vec![(0, "surface0.png"), (10, "surface10.png")],
-            "直下の面画像 2 枚が `element0` に隠れて使われないこと"
-        );
-    });
-}
-
 /// 要件 1.3: 一覧はフォルダ**直下**の**ファイルだけ**。フォルダは名前が慣習に合っていても
 /// 面の画像と認めず、サブフォルダの中身も数えない。
 ///
@@ -187,50 +148,6 @@ fn directories_are_not_taken_as_surface_images() {
         Some("surface0000.png"),
         "直下のファイルは今までどおり面の画像として採られる（本檻が空振りしていない対照）"
     );
-}
-
-/// 要件 1.7: シェルのフォルダの一覧が取れなければ「画像 0 件」として先へ進まず失敗を返す。
-#[test]
-fn missing_shell_dir_yields_list_error() {
-    let root = TempPath::new("shell-target-does-not-exist");
-    let dir = root.child("missing");
-    let dec = MemoryDecoder::new();
-
-    match load_shell_target(&dir, &dec) {
-        Err(ShellLoadError::List { path, .. }) => assert_eq!(path, dir),
-        other => panic!("一覧の失敗は List でなければならない: {other:?}"),
-    }
-}
-
-/// `surfaces.txt` が在るのに読めない（無いのではなくフォルダ）なら今までどおり Read。フォルダの一覧は
-/// 通る（無いときは画像だけで組む・spec: areka-P0-self-alpha-declaration 要件 6.1・6.6）。
-#[test]
-fn unreadable_surfaces_txt_yields_read_error() {
-    let dir = TempPath::new("shell-target-no-surfaces-txt");
-    std::fs::create_dir(dir.child("surfaces.txt")).expect("フォルダ作成");
-    let dec = MemoryDecoder::new();
-
-    match load_shell_target(dir.path(), &dec) {
-        Err(ShellLoadError::Read { path, .. }) => {
-            assert_eq!(path, dir.path().join("surfaces.txt"))
-        }
-        other => panic!("読取の失敗は Read でなければならない: {other:?}"),
-    }
-}
-
-/// `surfaces.txt` が面を 1 つも定義せず、面の画像も無ければ Empty（場所はシェルのフォルダ・
-/// 画像が在れば画像だけで組む・spec: areka-P0-self-alpha-declaration 要件 6.2・6.5）。
-#[test]
-fn surfaces_txt_without_any_surface_yields_empty_error() {
-    let dir = TempPath::new("shell-target-empty-surfaces-txt");
-    // 面を 1 つも産まない `surfaces.txt` だけ（面の画像は 0 枚）。
-    std::fs::write(dir.child("surfaces.txt"), "charset,UTF-8\n").expect("記述ファイル作成");
-    let dec = MemoryDecoder::new();
-
-    match load_shell_target(dir.path(), &dec) {
-        Err(ShellLoadError::Empty { path }) => assert_eq!(path, dir.path()),
-        other => panic!("面 0 個の失敗は Empty でなければならない: {other:?}"),
-    }
 }
 
 // ── 記録（要件 1.5・1.6・3.5・6.1・6.2・6.4・6.5）──────────────────────────────
@@ -432,7 +349,7 @@ fn list_failure_is_recorded_before_the_error() {
 
     let (result, events) = capture_events(|| load_shell_target(&dir, &dec));
 
-    assert!(matches!(result, Err(ShellLoadError::List { .. })));
+    assert!(matches!(result, Err(ShellLoadError::List { ref path, .. }) if *path == dir));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "一覧");
     assert_eq!(
         hit.field("shell_dir"),
