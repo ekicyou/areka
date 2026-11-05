@@ -114,7 +114,7 @@
   - 範囲の中の無い番号を新設しないテストがそのまま緑であること
   - 終わった姿: 新しいテストが緑で、規則を戻すと落ちる。このクレートと `crates/areka` の配置のテストが緑
   - _Requirements: 2.1, 2.3, 3.1, 3.2, 4.4, 4.5, 5.1, 5.2, 5.4, 6.1_
-- [ ] 3.6 箱の追記と波括弧を、面と同じ足し方にする（指摘 9 の箱）
+- [x] 3.6 箱の追記と波括弧を、面と同じ足し方にする（指摘 9 の箱）
   - `audit-parsers-sakura` の箱の直し（そちらの指摘 76）が `main` に着いているかを確かめる。着いていれば `main` を取り込んでから触る。着いていなければ待たずに先に直し、触った行（箱の追記と波括弧の足し方）を向こうへ伝えて、後から着く側に rebase を任せる
   - 箱の追記と波括弧を 3.5 と同じ規則（element は両方・animation は先勝ち・collision は今のまま）にし、箱のテストの同じ形の期待を直す
   - 終わった姿: 箱のテストが新しい規則で緑で、面と箱で同じ入力から同じ勝ち負けになる
@@ -170,3 +170,4 @@
 - 11-06 audit-seriko: 向こうの枝 18b1be40（main 未着地）で `parts.rs` の抽選の判定を直し、同じテスト（こちらは改名済み・向こうは旧名で期待を [0,0,1,1,0,1]・回数 4・6 に）を変えた＝後から着いた側が両方の直しに合わせて書き直す
 - 3.3: 重ね方は `blit::overlay_op` の 1 本（`uv_fits` は u64）。audit-emo-atlas は走っていなかった＝表を作る側の確かめは向こうの持ち物のまま
 - 3.5: 足し方は `fold.rs` の `add_lines(master, later, Source::{Brace,Append}, records)`。`boxes.rs:213・229` の説明（後勝ち・merge_brace と同じ規則）は 3.6 で直す。`areka` は lib を持たない＝配置のテストは `cargo test -p areka --bins placement`。`interval_written` の読み手は compose から 0＝audit-parsers-sakura へ伝え済み
+- 3.6: audit-parsers-sakura の指摘 76 は main 未着＝先に直し、`boxes.rs` の `distribute`（211〜250 行あたり・`retain` を消して `extend` だけ）を向こうへ伝えた（後から着いた側が rebase）。箱の行だけの同じ element番号の重なり（名前が違うもの）は記録が無い（面の `warn!` は箱の行では出ない・`BoxIssue` に種類を足すのは公開の enum と emo-present の `log_box_issue` に及ぶ＝範囲の外）＝5.1 の棚卸で扱う

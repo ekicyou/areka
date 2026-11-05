@@ -210,9 +210,10 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
 
 /// 箱の element定義の行を、画像の element と同じ規則でサーフェス番号へ配る（要件 2.1・2.2）。
 ///
-/// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し（同じ element番号は後勝ち）、
-/// `surface.append*`ブレスは「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。
-/// 無い番号への追記は箱の行ごとに報告へ載せる。
+/// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し、`surface.append*`ブレスは
+/// 「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。どちらも同じ element番号の
+/// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose
+/// 設計の議題 7 案 A）。無い番号への追記は箱の行ごとに報告へ載せる。
 fn distribute<'a>(
     boxes: &'a ShellBoxes,
     images: &BTreeMap<u32, String>,
@@ -225,11 +226,7 @@ fn distribute<'a>(
             BoxDefinition::Surface(surface) => {
                 for id in expand_targets(&surface.targets) {
                     existing.insert(id);
-                    // 同じ番号の前の行へ足す。同じ element番号の行は後の行が勝つ（`fold.rs` の
-                    // `merge_brace` と同じ規則・開発者の決め 2026-10-17「足し合わせる」）。
-                    let kept = lines.entry(id).or_default();
-                    kept.retain(|l| !surface.elements.iter().any(|n| n.element == l.element));
-                    kept.extend(&surface.elements);
+                    lines.entry(id).or_default().extend(&surface.elements);
                 }
             }
             BoxDefinition::Append(append) => {

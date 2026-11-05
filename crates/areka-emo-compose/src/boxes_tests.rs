@@ -499,8 +499,9 @@ fn shared_header_gives_every_id_the_same_boxes() {
 
 #[test]
 fn later_surface_brace_adds_to_the_placements() {
-    // 同じ番号の `surface*`ブレスは前の置き場所へ足し、同じ element番号は後勝ち（画像の畳み込みと
-    // 同じ規則・areka-P0-emily-ghost-verification 開発者の決め 2026-10-17「足し合わせる」）。
+    // 同じ番号の `surface*`ブレスは前の置き場所へ足し、同じ element番号でも前の行を残して両方を
+    // 足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose 設計の議題 7 案 A）。
+    // 同じ名前 `a` が同じ element番号に 2 つ並ぶので、名前の重複の整理（要件 2.7）が先の行を採る。
     let text = [
         two_braces(),
         block("surface0", &["element1,balloon,a,0,0"]),
@@ -511,13 +512,61 @@ fn later_surface_brace_adds_to_the_placements() {
     ]
     .concat();
     let (layout, report, _) = fold_images(&text, &[]);
-    assert_eq!(report.issues, vec![]);
+    assert_eq!(
+        report.issues,
+        vec![BoxIssue::ElementDuplicateName {
+            surface: 0,
+            element: 1,
+            name: "a".to_string(),
+            kept: 1,
+        }]
+    );
     assert_eq!(
         layout.placements(0),
-        &[place(1, "a", 9, 9), place(3, "b", 0, 0)]
+        &[place(1, "a", 0, 0), place(3, "b", 0, 0)]
     );
     assert_eq!(layout.placements(1), &[place(1, "a", 0, 0)]);
     assert!(!layout.is_empty());
+}
+
+#[test]
+fn faces_and_boxes_fold_the_same_description_to_the_same_lines() {
+    // 同じ element番号の行を波括弧・追記・2 つ目の波括弧で足すと、面も箱も 3 行とも残り、
+    // 書いた順に並ぶ（面と箱で同じ勝ち負け・spec: audit-emo-compose 指摘 9）。
+    use crate::normalized::Transform;
+    let text = [
+        two_braces(),
+        brace("c", &["size,60,30"]),
+        block(
+            "surface0",
+            &["element1,overlay,x.png,1,1", "element1,balloon,a,1,1"],
+        ),
+        block(
+            "surface.append0",
+            &["element1,overlay,y.png,2,2", "element1,balloon,b,2,2"],
+        ),
+        block(
+            "surface0",
+            &["element1,overlay,z.png,3,3", "element1,balloon,c,3,3"],
+        ),
+    ]
+    .concat();
+    let (layout, report, world) = fold_images(&text, &[]);
+    assert_eq!(report.issues, vec![]);
+    let faces: Vec<(u32, Transform)> = world
+        .surface(0)
+        .expect("面 0")
+        .elements
+        .iter()
+        .map(|e| (e.layer, e.transform))
+        .collect();
+    let boxes: Vec<(u32, Transform)> = layout
+        .placements(0)
+        .iter()
+        .map(|p| (p.element, Transform::translate(p.x, p.y)))
+        .collect();
+    assert_eq!(faces.len(), 3);
+    assert_eq!(faces, boxes);
 }
 
 #[test]
