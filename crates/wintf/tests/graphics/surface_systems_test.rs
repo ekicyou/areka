@@ -480,6 +480,97 @@ fn render_surface_draws_dirty_surface_without_error() {
     });
 }
 
+/// ふだんの描画の回に装置の資源の変化の印を立てない（下流が毎回の描画で控えを捨てないため）
+#[test]
+fn render_surface_ordinary_draw_does_not_mark_graphics_core_changed() {
+    crate::common::on_gpu_owner_thread(move || {
+        let mut world = setup_world();
+        let surface = create_real_surface(&world, 64, 64);
+        let cmd = make_filled_command_list(world.resource::<GraphicsCore>(), 64.0, 64.0);
+        world.spawn((
+            surface,
+            make_global_arrangement(64.0, 64.0),
+            SurfaceGraphicsDirty::default(),
+            cmd,
+        ));
+        let before = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .unwrap()
+            .changed;
+        world.increment_change_tick();
+
+        single_system_schedule(render_surface).run(&mut world);
+
+        let after = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .unwrap()
+            .changed;
+        assert_eq!(
+            before, after,
+            "ふだんの描画で GraphicsCore の変化の印が立った"
+        );
+        assert!(world.resource::<GraphicsCore>().is_valid());
+    });
+}
+
+/// 失いでない BeginDraw の失敗（大きさ 0 の面）では変化の印を立てず、装置も有効のまま
+#[test]
+fn render_surface_non_loss_begin_draw_failure_does_not_mark_graphics_core_changed() {
+    crate::common::on_gpu_owner_thread(move || {
+        let mut world = setup_world();
+        let surface = create_real_surface(&world, 0, 0);
+        world.spawn((
+            surface,
+            make_global_arrangement(0.0, 0.0),
+            SurfaceGraphicsDirty::default(),
+        ));
+        let before = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .unwrap()
+            .changed;
+        world.increment_change_tick();
+
+        single_system_schedule(render_surface).run(&mut world);
+
+        let after = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .unwrap()
+            .changed;
+        assert!(world.resource::<GraphicsCore>().is_valid());
+        assert_eq!(before, after, "失いでない描画の失敗で変化の印が立った");
+    });
+}
+
+/// 装置が無効なら何も描かずに戻り、資源にも触らない
+#[test]
+fn render_surface_with_invalid_core_returns_without_touching_core() {
+    crate::common::on_gpu_owner_thread(move || {
+        let mut world = setup_world();
+        let surface = create_real_surface(&world, 64, 64);
+        let cmd = make_filled_command_list(world.resource::<GraphicsCore>(), 64.0, 64.0);
+        world.spawn((
+            surface,
+            make_global_arrangement(64.0, 64.0),
+            SurfaceGraphicsDirty::default(),
+            cmd,
+        ));
+        world.resource_mut::<GraphicsCore>().invalidate();
+        let before = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .unwrap()
+            .changed;
+        world.increment_change_tick();
+
+        single_system_schedule(render_surface).run(&mut world);
+
+        let after = world
+            .get_resource_change_ticks::<GraphicsCore>()
+            .unwrap()
+            .changed;
+        assert_eq!(before, after, "無効な装置の回に GraphicsCore へ触った");
+    });
+}
+
 #[test]
 fn render_surface_skips_invalid_surface_without_error() {
     crate::common::on_gpu_owner_thread(move || {

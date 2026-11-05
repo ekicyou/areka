@@ -192,13 +192,6 @@ impl GraphicsCore {
     /// 描画の失敗を受け、装置が失われていれば自分を無効にして true を返す。
     ///
     /// 既に無効なら false（2 度目の記録を出さない）。失いでない失敗の記録は呼び出し元が残す。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "描く係（タスク 4.5）が呼ぶまで本番の呼び出し元が無い"
-        )
-    )]
     pub(crate) fn note_draw_failure(&mut self, error: &windows::core::Error) -> bool {
         let Some(inner) = self.inner.as_ref() else {
             return false;
@@ -251,13 +244,6 @@ impl GraphicsCore {
 }
 
 /// 描画の失敗が装置の失いかを判じる（`removed_reason` は `GetDeviceRemovedReason()` の値）。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "描く係（タスク 4.5）が呼ぶまで本番の呼び出し元が無い"
-    )
-)]
 pub(crate) fn is_device_lost(draw_error: HRESULT, removed_reason: HRESULT) -> bool {
     removed_reason.is_err()
         || [
