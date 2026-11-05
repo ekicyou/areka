@@ -84,7 +84,7 @@
   - 「確保なし」の説明を、直した後の容量の確かめで言える範囲に合わせる
   - 終わった姿: golden の外形のテストが表から引く形で同じ値、容量の確かめのテストが緑、クレートのテストが緑
   - _Requirements: 2.1, 2.3, 3.3_
-- [ ] 3.2 広がりの予算の値を 1 フレームで回りきれる面の数から決め、外形の表の効き目を測る（指摘 3・8）
+- [x] 3.2 広がりの予算の値を 1 フレームで回りきれる面の数から決め、外形の表の効き目を測る（指摘 3・8）
   - `tools/perf/` の道具で、深い菱形のシェルを使い、命令列の走査の 1 面あたりの時間を測る。一時の検体はワークツリーの `target` の下に置く
   - 16.667 ms に収まる面の数を 2 のべき乗に切り下げ、予算の定数に置く。値の根拠（測った値・機械）を定数の説明に 1 行で書く
   - 同じ機会に、外形の表（3.1）の後の合成の時間を測り、3.1 で残した直す前の値と比べて記録に残す（効かなくても直しは戻さない）
@@ -166,3 +166,5 @@
 - 2.6: 最初は BLOCKED（10000 段の鎖で読み込みの走査が根ごとのたどり直し×線形の祖先の確かめで N³）。debug の推奨案 甲＋O(1) の祖先（`on_path` の `HashSet`）で直した。覚えは `HitMemo`・`BoundsMemo`・`ExtentMemo`（合成は `None`）と `Budget::take(n)`。`compute_extent_limited` は引数 6 本、`compute_extent` は `#[cfg(test)]` の口。`shell_bounds_limited` の中の根ごとの外形は `VISIT_BUDGET` のまま。仮の `VISIT_BUDGET` は `1 << 16`。残る限界（予算より遠くまで届く根は 面の数 × 予算・`reaches` も同じ型）は design に未解決と記録
 - 11-05 audit-parsers-sakura: 範囲の上限 `areka_parsers::shell::model::RANGE_WIDTH_CAP = 8193`（シェル全体の Range の幅の合計）が向こうの枝 c3eea14e に入った（5.1 で main への着地を確かめる）
 - 3.1: 直す前の合成の時間は測らず、3.2 の比べのもとは「直す前のコミット 9599aadd」（3.2 で同じ機会に両方を測る）。表は `SurfaceExtents`・`EmoWorld::extent(id)`・`plan::build_extents`（bind_atlas の最後）。外形の記録（循環の debug・予算の error!）は合成でなく bind_atlas で出る。`PlanScratch::with_limit` は命令列にだけ効く
+- 3.2: `VISIT_BUDGET = 1 << 16` を測りで確定（research.md 14 節）。測りの道具は `examples/compose_timing.rs`（回すのは負荷テストの机）。`visible_parts` は深さ 10000 の鎖で 1 回約 17 ms＝5.1 で直す
+- 11-06 audit-seriko: 向こうの枝 18b1be40（main 未着地）で `parts.rs` の抽選の判定を直し、同じテスト（こちらは改名済み・向こうは旧名で期待を [0,0,1,1,0,1]・回数 4・6 に）を変えた＝後から着いた側が両方の直しに合わせて書き直す
