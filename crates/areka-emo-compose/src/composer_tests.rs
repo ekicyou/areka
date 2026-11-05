@@ -498,17 +498,22 @@ fn end_to_end_multilayer_ascend_wiring() {
 
 /// hot path（compose/compose_into 経路）のソースに `atlas.resolve(` が現れないことを静的に確認する。
 ///
-/// plan.rs／blit.rs／lib.rs（Composer）の非テストコードは `atlas.entry`（O(1)）のみを引き、
+/// plan.rs／plan_extent.rs／plan_always.rs／blit.rs／blit_rect.rs／lib.rs（Composer）の非テストコードは
+/// `atlas.entry`（O(1)）のみを引き、
 /// `resolve` は事前の bind_atlas（atlas_bind.rs）に限られる（要件 4.3・design 主要決定）。
 /// 本テストは各ソースの非テスト領域文字列を検査し、hot path に `resolve` 呼び出しが無いことを固定する。
 #[test]
 fn hot_path_sources_do_not_call_atlas_resolve() {
-    // plan.rs / blit.rs のテスト以外の領域（#[cfg(test)] より前）に `.resolve(` が無いこと。
+    // 毎フレームの道のファイルの、中に書いたテストの mod より前に `.resolve(` が無いこと（plan.rs と
+    // plan_extent.rs は頭に `#[cfg(test)]` の口を持つので、そこで切ると頭の数十行しか見ない）。
     for (src, file) in [
         (include_str!("plan.rs"), "plan.rs"),
+        (include_str!("plan_extent.rs"), "plan_extent.rs"),
+        (include_str!("plan_always.rs"), "plan_always.rs"),
         (include_str!("blit.rs"), "blit.rs"),
+        (include_str!("blit_rect.rs"), "blit_rect.rs"),
     ] {
-        let non_test = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let non_test = src.split("mod tests {").next().unwrap_or(src);
         assert!(
             !non_test.contains(".resolve("),
             "{file} の hot path（非テスト領域）は atlas.resolve を呼ばない（要件 4.3）"
@@ -521,16 +526,6 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
         !composer_area.contains(".resolve("),
         "lib.rs の Composer hot path は atlas.resolve を呼ばない（要件 4.3）"
     );
-}
-
-/// `Composer::default()` は `new()` と同値（空スクラッチ）。
-#[test]
-fn default_equals_new() {
-    let d = Composer::default();
-    let n = Composer::new();
-    assert_eq!(d.ops.len(), n.ops.len());
-    assert_eq!(d.scratch.visited.len(), n.scratch.visited.len());
-    assert!(d.ops.is_empty() && d.scratch.visited.is_empty());
 }
 
 /// 型健全性の据え置き（未使用 import 警告を出さないためのアンカ・実害なし）。
@@ -609,55 +604,6 @@ fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
         out.bytes(),
         expected.as_slice(),
         "空 PatternState の合成は拡張前の既知バイトと byte 完全一致（要件 5.4・空 pattern は no-op）"
-    );
-}
-
-/// 非空虚性ガード: 「間違った期待バッファ」なら上の byte-equality が壊れることを示す（golden が
-/// tautology でないこと）。赤 part を 1px ずらした誤期待は実合成と不一致になる。
-#[test]
-fn empty_pattern_golden_is_non_vacuous() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (4, 4), Some((200, 0, 0))),
-            ("part.png", (2, 2), Some((0, 0, 200))),
-        ],
-    );
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 1, 1)],
-    );
-    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, part]), &atlas);
-
-    let out = Composer::new()
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::from_ids([1]),
-            &PatternState::default(),
-        )
-        .expect("Ok");
-
-    // 赤 part を (0,0) 起点に誤配置した期待（実合成は (1,1) 起点ゆえ不一致になるべき）。
-    let mut wrong: Vec<u8> = Vec::with_capacity(4 * 4 * 4);
-    for y in 0..4u32 {
-        for x in 0..4u32 {
-            let red_covered = x < 2 && y < 2;
-            if red_covered {
-                wrong.extend_from_slice(&[0, 0, 200, 255]);
-            } else {
-                wrong.extend_from_slice(&[200, 0, 0, 255]);
-            }
-        }
-    }
-    assert_ne!(
-        out.bytes(),
-        wrong.as_slice(),
-        "誤配置の期待バッファは合成結果と不一致＝byte-equality は非空虚（part は (1,1) へ着弾）"
     );
 }
 

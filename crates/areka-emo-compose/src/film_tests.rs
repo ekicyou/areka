@@ -399,24 +399,19 @@ fn rejected_pictures_stay_images_and_are_listed() {
     assert_every_film_resolves(&world);
 }
 
-/// 要件 1.11: 動く GIF（読み手は 1 枚の絵として読む）と、1 枚へ縮んだ動く絵は分解されない。
-/// どちらも `animation` が `None` なので対象にならず、面の表に何も載らない。
+/// 要件 1.11: 1 枚へ縮んだ動く絵は分解されない。`animation` が `None` なので対象にならず、面の表に
+/// 何も載らない（動く GIF を 1 枚の絵として読むのは読み手の側・`areka-emo-atlas` の試験が見る）。
 #[test]
-fn gif_and_shrunk_pictures_are_not_decomposed() {
-    let shell = shell_of(vec![surface(
-        0,
-        vec![elem(0, "anim.gif", 0, 0), elem(1, "shrunk.png", 0, 0)],
-    )]);
-    let atlas = Pics::default()
-        .still("anim.gif")
-        .shrunk("shrunk.png")
-        .bake();
-    for rel in ["anim.gif", "shrunk.png"] {
-        assert!(atlas.animation(id_of(&atlas, rel)).is_none(), "前提: {rel}");
-    }
+fn shrunk_picture_is_not_decomposed() {
+    let shell = shell_of(vec![surface(0, vec![elem(1, "shrunk.png", 0, 0)])]);
+    let atlas = Pics::default().shrunk("shrunk.png").bake();
+    assert!(
+        atlas.animation(id_of(&atlas, "shrunk.png")).is_none(),
+        "前提"
+    );
     let world = bound(&shell, &BTreeMap::new(), &atlas);
 
-    assert_eq!(kinds(&world, 0), vec![ElementKind::Image; 2]);
+    assert_eq!(kinds(&world, 0), vec![ElementKind::Image]);
     assert!(binding(&world, 0).iter().all(Option::is_some));
     assert!(world.world().get_resource::<FilmSheets>().is_none());
 }

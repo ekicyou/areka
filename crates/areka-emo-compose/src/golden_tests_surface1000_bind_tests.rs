@@ -50,7 +50,7 @@ fn surface1000_is_all_bind_no_static_elements() {
         let pat0 = anim
             .patterns
             .iter()
-            .min_by_key(|pt| pt.index)
+            .find(|pt| pt.index == 0)
             .expect("bind animation に pattern0 が存在する");
         assert_eq!(
             pat0.surface_id, p.anim_id as i64,

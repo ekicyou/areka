@@ -260,13 +260,23 @@ animation1.pattern1,overlay,12,0,0,0
 animation4.interval,bind+random,4
 animation4.pattern0,unknownmethod,30,0,0,0
 ";
-    for _ in 0..3 {
-        let (named, logs) = compose(anims, &[1, 4], &PatternState::default());
-        assert_eq!(named, [("body.png", 0, 0), ("s12.png", 0, 0)]);
-        assert_eq!(
-            logs.matches("未知の合成メソッド名").count(),
-            0,
-            "合成のたびの記録: {logs}"
-        );
-    }
+    let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let map = id_to_path(&atlas, RELS);
+    let mut world = EmoWorld::build(&parse(&shell(anims)));
+    world.bind_atlas(&atlas, SetId(0));
+    let binds = BindSet::from_ids([1, 4]);
+    let mut named = Vec::new();
+    let logs = capture_logs(|| {
+        for _ in 0..3 {
+            let out =
+                crate::plan_test_support::ops(&world, &atlas, 0, &binds, &PatternState::default());
+            named.push(named_ops(&out, &map));
+        }
+    });
+    assert_eq!(named, vec![vec![("body.png", 0, 0), ("s12.png", 0, 0)]; 3]);
+    assert_eq!(
+        logs.matches("未知の合成メソッド名").count(),
+        0,
+        "合成のたびの記録: {logs}"
+    );
 }

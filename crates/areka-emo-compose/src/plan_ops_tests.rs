@@ -655,20 +655,18 @@ fn cyclic_derivation_is_deterministic() {
 // pattern0（index==0）を持たない bind animation は seriko-loop（M-life）が再生する再生専用
 // フレームで、静的土台には寄与しない。修正＝index==0 厳密選択・不在は良性 skip（DEBUG）。
 
-/// テスト11.2-①（**RED 核**・受入基準・要件 9.1/9.2）: pattern0（index==0）を持たない有効 bind は
-/// 静的合成へ**一切寄与しない**（生成描画命令に現れない）。
-///
-/// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当を参照）。旧実装
-/// （`min_by_key(index)`）は index=1 を pattern0 として採り surface 1412 を合成する→この assert が
-/// 破れる（RED）。修正後（`find(index==0)`）は index==0 不在ゆえ skip され、命令ゼロになる（GREEN）。
+/// テスト11.2-①（要件 9.1/9.2）: pattern0（index==0）を持たない有効な純 `bind` も、持っているコマを
+/// 静的に積む（純 `bind` は全部のコマを番号の順に重ねる・seriko-pattern-calls 6.8・SSP の測り M6 で
+/// 期待を直した）。pattern0 で絞ると閉じ目（surface 1412）が消える。`bind+random` がコマの無いあいだ
+/// 何も積まないことは次のテストが見る。
 #[test]
-fn pattern0_less_bind_contributes_no_ops() {
+fn pattern0_less_pure_bind_draws_its_patterns() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["closed_eye.png"]);
     let map = id_to_path(&atlas, &["closed_eye.png"]);
 
-    // pattern0 なし・index=1 のみが surface 1412（閉じ目相当）を参照する再生アニメ。
-    let blink = single_pattern_anim(1400, Interval::BindRandom { k: 4 }, 1, 1412);
+    // pattern0 なし・index=1 のみが surface 1412（閉じ目相当）を参照する純 `bind`。
+    let blink = single_pattern_anim(1400, Interval::Bind, 1, 1412);
     let host = surface_with_anims(1000, Vec::new(), vec![blink]);
     let part = surface(1412, vec![elem(0, "closed_eye.png", 0, 0)]);
     let shell = shell_of(vec![host, part]);
@@ -678,19 +676,18 @@ fn pattern0_less_bind_contributes_no_ops() {
     let binds = BindSet::from_ids([1400]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
 
-    // pattern0 を持たない有効 bind は静的合成へ寄与しない＝closed_eye.png 命令が現れない。
-    assert!(
-        ops_to_paths(&ops, &map).is_empty(),
-        "pattern0（index==0）なし bind は描画命令に現れない（旧 min_by_key は pattern1 を合成し RED）"
+    assert_eq!(
+        ops_to_paths(&ops, &map),
+        vec!["closed_eye.png"],
+        "pattern0 なしの純 bind も pattern1 を積む（M6）"
     );
-    assert!(ops.is_empty(), "静的 element も無いので命令ゼロ");
 }
 
 /// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
 /// 静的に積まない（animated-surface-log-flood 件 26 の決めで期待を直した）。純 `bind` は全部のコマを
 /// 番号の順に重ねる（seriko-pattern-calls 6.8・SSP の測り M6 で期待を直した）。
 #[test]
-fn coexisting_pattern0_and_pattern1_composes_only_index0() {
+fn coexisting_patterns_bind_random_draws_none_pure_bind_draws_all() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, &["open_eye.png", "closed_eye.png"]);
     let map = id_to_path(&atlas, &["open_eye.png", "closed_eye.png"]);

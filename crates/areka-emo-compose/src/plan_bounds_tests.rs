@@ -39,15 +39,15 @@ fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
 fn assert_every_surface_fits(world: &EmoWorld, atlas: &AtlasTable, b: ShellBounds) {
     let mut composer = Composer::new();
     for id in world.surface_ids() {
-        let Ok(out) = composer.compose(
-            world,
-            atlas,
-            id,
-            &BindSet::default(),
-            &PatternState::default(),
-        ) else {
-            continue;
-        };
+        let out = composer
+            .compose(
+                world,
+                atlas,
+                id,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+            .unwrap_or_else(|e| panic!("surface{id} が合成できない: {e:?}"));
         assert!(
             out.width() as i64 <= b.right as i64 && out.height() as i64 <= b.bottom as i64,
             "surface{id} の絵 {}x{} が外形 {b:?} の右下を超える",

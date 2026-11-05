@@ -121,14 +121,12 @@ fn mul_degrades_proportionally_when_product_exceeds_u32() {
         (4_294_967_295, 1),
         "誤差 0.0031%（真値 4_295_098_369）"
     );
-    assert_eq!(sq, big.mul(big), "縮退も決定論的");
     assert_eq!(sq.scale_len(1), 4_294_967_295);
 
     // 分母側が超過する対称ケース（den を u32::MAX へ張り付け・num は最小 1）。
     let tiny = ScaleRatio::new(1, 65_537).unwrap();
     let sq_inv = tiny.mul(tiny);
     assert_eq!((sq_inv.num, sq_inv.den), (1, 4_294_967_295));
-    assert_eq!(sq_inv, tiny.mul(tiny), "縮退も決定論的");
 
     // 縮退後も分子・分母は常に非ゼロ（as_f32 が 0 / NaN / inf にならない）。
     assert!(sq.as_f32() > 0.0 && sq.as_f32().is_finite());
@@ -197,8 +195,6 @@ fn dpi_table_scaled_extent_is_deterministic() {
         let k = ScaleRatio::new(dpi, AUTHOR_DPI).unwrap();
         for (i, &len) in NATIVE.iter().enumerate() {
             assert_eq!(k.scale_len(len), expect[i], "dpi={dpi} len={len}");
-            // 同一入力の反復が同一出力（決定論）。
-            assert_eq!(k.scale_len(len), k.scale_len(len));
             // 外形は各軸への scale_len 適用と厳密一致。
             assert_eq!(
                 k.scaled_extent(len, len),
@@ -424,7 +420,7 @@ fn mul_is_commutative_and_associative() {
 ///
 /// 下の 3 変異はいずれも既存 `mul_degrades_proportionally_when_product_exceeds_u32`
 /// （と、ログを見る `mul_degradation_emits_warn_log`）と共倒れになる。本テストの役割は
-/// 縮退の契約——「大きい側は `u32::MAX` ちょうど・小さい側は最小 1・決定論」——を
+/// 縮退の契約——「大きい側は `u32::MAX` ちょうど・小さい側は最小 1」——を
 /// 複数の base 族で明文化することである。
 ///
 /// - 縮退を「素朴な半減（`div_ceil(2)`）」へ差し替える実装（設計レビューで REJECT
@@ -454,10 +450,6 @@ fn mul_saturating_degradation_pins_largest_to_u32_max() {
         let sq_inv = down.mul(down);
         assert_eq!((sq_inv.num, sq_inv.den), (1, u32::MAX), "base={base}");
         assert_eq!(sq_inv.num.max(sq_inv.den), u32::MAX, "base={base}");
-
-        // 決定論（同一入力は同一縮退）。
-        assert_eq!(sq, up.mul(up), "base={base}");
-        assert_eq!(sq_inv, down.mul(down), "base={base}");
     }
 
     // 真値が u32 域の直上にある族では、縮退後の比が真値へ十分近いこと。
@@ -590,9 +582,6 @@ fn scale_len_u128_intermediate_beats_u64_overflow() {
     // 飽和値ではないこと（「無条件 u32::MAX」変異の直接の檻）。
     assert_ne!(k.scale_len(u32::MAX), u32::MAX);
     assert_ne!(k.scale_len(4_000_000_000), u32::MAX);
-
-    // 決定論（同一入力は同一出力）。
-    assert_eq!(k.scale_len(u32::MAX), k.scale_len(u32::MAX));
 }
 
 // ------------------------------------------------------------------
@@ -633,12 +622,6 @@ fn unscale_coord_is_exact_identity_for_k_one() {
     for v in [-7i64, 0, 7, i64::MAX, i64::MIN] {
         assert_eq!(k.unscale_coord(v), v, "96/96 の恒等: v={v}");
     }
-
-    // 決定論（同一入力は同一出力）。
-    assert_eq!(
-        ScaleRatio::ONE.unscale_coord(-42),
-        ScaleRatio::ONE.unscale_coord(-42)
-    );
 }
 
 /// 檻 2（要件 3.5 の期待値・DD-1 代表値）: k=2 表——100→50・101→50 と負値の床方向規約。

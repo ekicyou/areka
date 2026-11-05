@@ -187,6 +187,7 @@ fn enumeration_expands_in_description_order() {
         vec![AppendTarget::Single(2), AppendTarget::Single(1)],
         vec![elem(0, "d.png", 0, 0)],
     );
+    assert_eq!(expand_targets(&surf.targets), vec![2, 1], "記述の順");
     let mut world = fresh_world();
     fold_shell(&mut world, &shell_of(vec![surf]));
 

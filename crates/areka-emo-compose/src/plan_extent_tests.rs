@@ -12,7 +12,7 @@ use std::path::Path;
 // の寄与サイズは register 時の (w,h) で制御できる。以下の土台ヘルパはサイズ可変・全透明を扱う。
 
 /// テスト5.4-①（**受入基準**・要件 6.5）: 同一 surface へ空／部分／全 BindSet を渡しても
-/// `compute_extent` が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。
+/// [`build_plan`] が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。
 ///
 /// host=1000 は静的 element base(40×30) を持ち、bind id=1→part1(200×10)、id=2→part2(10×150)、
 /// id=3→part3(60×60) を各 pattern0 で参照。外形は全 element＋**全 bind pattern0**の和集合ゆえ
@@ -51,25 +51,33 @@ fn extent_is_independent_of_bindset() {
     // 全 element＋全 bind pattern0 の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
     let expected = Extent { w: 200, h: 150 };
 
-    let empty = compute_extent(&world, &atlas, 1000);
-    let partial = {
-        let _b = BindSet::from_ids([2]);
-        compute_extent(&world, &atlas, 1000)
+    let extent_with = |binds: BindSet| {
+        build_plan(
+            &mut Vec::new(),
+            &mut Default::default(),
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
+        .expect("合成できる")
     };
-    let full = {
-        let _b = BindSet::from_ids([1, 2, 3]);
-        compute_extent(&world, &atlas, 1000)
-    };
-
-    // compute_extent は BindSet を引数に取らない（＝構造的に有効 bind 非依存）。三者一致＋期待値一致。
     assert_eq!(
-        empty, expected,
-        "空 BindSet 相当でも全 bind pattern0 を母集合に外形算出"
+        extent_with(BindSet::default()),
+        expected,
+        "空 BindSet でも全 bind pattern0 を母集合に外形算出"
     );
-    assert_eq!(partial, expected, "部分 BindSet でも外形不変");
-    assert_eq!(full, expected, "全 BindSet でも外形不変");
-    assert_eq!(empty, partial);
-    assert_eq!(partial, full);
+    assert_eq!(
+        extent_with(BindSet::from_ids([2])),
+        expected,
+        "部分 BindSet でも外形不変"
+    );
+    assert_eq!(
+        extent_with(BindSet::from_ids([1, 2, 3])),
+        expected,
+        "全 BindSet でも外形不変"
+    );
 }
 
 /// テスト5.4-②（要件 6.5・全 bind 母集合）: 非活性 bind（どの BindSet にも入れない）の
@@ -337,8 +345,6 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
         Extent { w: 300, h: 300 },
         "非ゼロの静的外形を返す（要件 6.6）"
     );
-    assert_ne!(extent.w, 0);
-    assert_ne!(extent.h, 0);
 }
 
 /// テスト5.5-③（要件 6.6）: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。

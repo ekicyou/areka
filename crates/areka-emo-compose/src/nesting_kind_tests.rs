@@ -116,6 +116,10 @@ fn number_elements_are_not_bound_and_emit_no_warning() {
 
     let logs = capture_logs(|| world.bind_atlas(&atlas, SetId(0)));
     assert!(!logs.contains("level=WARN"), "警告は 0 件: {logs}");
+    assert!(
+        !logs.contains("atlas 未束縛 element"),
+        "番号の element は引きに行かない: {logs}"
+    );
 
     let master = world.surface(1).expect("面 1");
     let binding = binding_of(&world, 1);

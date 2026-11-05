@@ -120,7 +120,7 @@
   - 終わった姿: 箱のテストが新しい規則で緑で、面と箱で同じ入力から同じ勝ち負けになる
   - _Depends: 3.5_
   - _Requirements: 2.1, 2.3, 5.2_
-- [ ] 3.7 失敗しえないテストを消し、名前と違うテストを名前どおりに直す（指摘 10・11）
+- [x] 3.7 失敗しえないテストを消し、名前と違うテストを名前どおりに直す（指摘 10・11）
   - 指摘 10 の 7 か所を消す。外形のテストの 1 か所だけは、別々の着せ替えの組を命令列に渡して外形が同じことを確かめる形に直す
   - 指摘 11 の各テストの入力か比べ方を 1〜数行直す。コマの合流の門のテストは純 `bind` に、合成器の走査の表には外形・always・矩形の重ね直しを足す
   - 終わった姿: 直した各テストが、守るつもりの分岐を戻すと落ちる（1 件ずつ一時的に戻して確かめる）。クレートのテストが緑
@@ -171,3 +171,4 @@
 - 3.3: 重ね方は `blit::overlay_op` の 1 本（`uv_fits` は u64）。audit-emo-atlas は走っていなかった＝表を作る側の確かめは向こうの持ち物のまま
 - 3.5: 足し方は `fold.rs` の `add_lines(master, later, Source::{Brace,Append}, records)`。`boxes.rs:213・229` の説明（後勝ち・merge_brace と同じ規則）は 3.6 で直す。`areka` は lib を持たない＝配置のテストは `cargo test -p areka --bins placement`。`interval_written` の読み手は compose から 0＝audit-parsers-sakura へ伝え済み
 - 3.6: audit-parsers-sakura の指摘 76 は main 未着＝先に直し、`boxes.rs` の `distribute`（211〜250 行あたり・`retain` を消して `extend` だけ）を向こうへ伝えた（後から着いた側が rebase）。箱の行だけの同じ element番号の重なり（名前が違うもの）は記録が無い（面の `warn!` は箱の行では出ない・`BoxIssue` に種類を足すのは公開の enum と emo-present の `log_box_issue` に及ぶ＝範囲の外）＝5.1 の棚卸で扱う
+- 3.7: コマの合流の門のテストは純 bind の今の決め（M6・全部のコマを積む）で `pattern0_less_pure_bind_draws_its_patterns`（期待は描く向き）。`plan_ops_tests.rs:652` 付近の節の頭の古い説明（index==0 厳密選択）は 4.1 で直す。走査の表のテストは `mod tests {` の前で切る
