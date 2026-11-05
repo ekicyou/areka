@@ -1,9 +1,9 @@
 {
   "feature_name": "audit-emo-present",
   "created_at": "2026-11-05T09:23:24Z",
-  "updated_at": "2026-11-05T10:43:12Z",
+  "updated_at": "2026-11-05T10:59:59Z",
   "language": "ja",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -11,12 +11,12 @@
     },
     "design": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true
 }
