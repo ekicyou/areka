@@ -14,7 +14,7 @@ use super::part_calls::run_part_calls;
 use super::{ClockKey, Label, PartAnim, progress, unwrite};
 use crate::calls::CallOutcome;
 use crate::state::Slot;
-use crate::table::{LoopAnimation, LoopTrigger};
+use crate::table::LoopAnimation;
 use crate::timeline::{FrameStatus, LoopRng, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
@@ -66,8 +66,8 @@ pub(super) fn arm_part<'s>(
 /// （終わりの記録は 1 件）入れ替える。
 ///
 /// `talk` はこの面の文字の窓（部品は文字の数えを持たず、面の数えを借りる・要件 4.1・4.5・5.6）。
-/// `runonce_only` は出来事の直後の評価（`periodic`・`talk` は刻みが鳴らす）。乱数は引かない。始めない
-/// 経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。
+/// 刻みと出来事の直後の評価で同じに判定する。乱数は引かない。始めない経路（隠れている・再生中・
+/// 境目の前）は記録しない（要件 5.7・7.5）。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn fire_part_triggers<'a>(
     state: &mut Armed,
@@ -79,12 +79,11 @@ pub(super) fn fire_part_triggers<'a>(
     (scope, slot, part): (&ActorKey, Slot, PartKey),
     at_ms: u64,
     talk: Option<&TalkWindow<'_>>,
-    runonce_only: bool,
     pick: &mut LoopRng,
 ) -> (Vec<&'a LoopAnimation>, CallOutcome, Vec<u32>) {
     let mut due: Vec<(u64, &LoopAnimation)> = anims
         .iter()
-        .filter(|a| a.trigger.is_word() && (!runonce_only || a.trigger == LoopTrigger::Runonce))
+        .filter(|a| a.trigger.is_word())
         .filter_map(|a| state.next_start(a, at_ms, talk).map(|at| (at, a)))
         .collect();
     due.sort_by_key(|&(at, a)| (at, a.id));
@@ -161,7 +160,6 @@ pub(super) fn judge_part<'a>(
     (scope, slot, part): (&ActorKey, Slot, PartKey),
     (at_ms, open): (u64, bool),
     talk: Option<&TalkWindow<'_>>,
-    runonce_only: bool,
     pick: &mut LoopRng,
 ) -> Option<(Vec<&'a LoopAnimation>, CallOutcome)> {
     let state = arm_part(armed, anims, scope, slot, part, at_ms, open)?;
@@ -176,7 +174,6 @@ pub(super) fn judge_part<'a>(
         who,
         at_ms,
         talk,
-        runonce_only,
         pick,
     );
     if heads.is_empty() {

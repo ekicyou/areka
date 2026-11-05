@@ -207,3 +207,17 @@
   - B3＝T5・T6・T8〜T12（テストの確かめと説明）
   - C3＝T13〜T15（テストの整理）
 - 6.1 組 A5（T1・T4・T7）: T1 は `Armed::commit` が runonce に印を付けてから再生中かを見るようにした。見送った回は後から鳴らさない。完了 spec `areka-P0-seriko-trigger-intervals` の要件 2.1・5.3 と ukadoc の「サーフェスに切り替わった瞬間に1回のみ再生。」に合う。同じ spec の design.md:513 の「`playing_at(since)` が真なら入れずに None（構えた直後は再生中でありえない）」は、前提が崩れていて古い。完了した spec の文書なので直していない。T4 は talk の開始を `wall_ms(glyph).max(since)` にした。T7 は一番上のテストに「鳴らした」の記録が 2 件であることの確かめを足した。部品の側は、もとからあるテストが守っている。期待を変えたテストは `runonce_polled_while_playing_keeps_its_one_shot` → `runonce_polled_while_playing_is_skipped_for_good`（Some(100)→None）の 1 本だけ。talk のテスト 1 本は、偽の時計の矛盾を直すために入力だけ変えた。テストは 567 件。
+- 6.1 組 A6（T2・T3）
+  - 一番上の刻み（`on_tick`）を 3 つの輪に分けた。
+    - 1 つ目の輪は、引き金と now までの呼び出し。
+    - 2 つ目の輪は抽選で、乱数の順はそのまま。
+    - 3 つ目の輪は、`always` と now に始まった再生の頭のコマ、進行、部品。
+  - 部品の刻みも同じ順に並べ替えた。
+  - 合図の作り直し（refresh）でも 3 語を全部判定し、`advance_talk` で数えを進める。
+  - 今より前の呼び出しは、今に始まった再生に当たらない。`has_due_acts` はいつも偽になったので消した。
+  - refresh は `looper_refresh.rs`・`parts_refresh.rs` へ移した。`looper.rs` は 993 → 896 行。
+  - 期待を変えたテストは 2 本。
+    - `last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery`: 終わった再生が同じ刻みで抽選に戻るので、抽選の数が 2 になった。
+    - `refresh_arms_at_the_event_time_and_fires_only_runonce` → `refresh_arms_at_the_event_time_and_judges_up_to_it`（T3 そのもの）。
+  - 選びの乱数（pick_rng）を引く順が、同じ刻みで面をまたぐときだけ変わる。この順に頼る決めやテストは無い。
+  - テストは 575 件。

@@ -469,6 +469,7 @@ pub(super) fn refresh_at(
         table,
         at_ms,
         true,
+        None,
         &mut crate::seeded_rng(0),
         &mut pattern,
     );

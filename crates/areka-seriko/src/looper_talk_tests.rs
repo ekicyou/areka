@@ -879,3 +879,20 @@ fn part_talk_records_are_debug_and_bounded_by_boundaries() {
         "どれも debug!: {ours:?}"
     );
 }
+
+/// 合図の更新（着せ替えなど・1120）も `talk` を判定する: 3 文字目（1100）の区切りでその場で口が動き、
+/// 数えを進めるので次の刻みは同じ区切りで鳴り直さない（要件 4.1・4.5・4.7・6.1）。
+#[test]
+fn refresh_judges_talk_and_advances_the_count() {
+    let mut st = nine_glyphs_from_1000();
+    st.tick(1090);
+    let logs = capture_logs(|| {
+        st.clock.store(1120, Ordering::SeqCst);
+        st.rt
+            .refresh(&scope(), Slot::Shell, Some(1120), &mut st.states);
+        assert_eq!(st.started(), Some(1100), "合図の時刻で 1100 に始まる");
+        st.tick(1130);
+    });
+    assert_eq!(st.started(), Some(1100));
+    assert_eq!(count(&logs, "trigger talk を鳴らした"), 1, "{logs:?}");
+}

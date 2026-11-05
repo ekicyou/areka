@@ -149,17 +149,6 @@ fn chosen(targets: &[u32], pick_one: bool, pick: &mut LoopRng) -> Vec<u32> {
         .collect()
 }
 
-/// 1 つの再生に、予定の時刻が (`through`, `now`] に入る当て残しの働きのコマが在るか（抽選の「再生中」が
-/// 見る。在るうちは古い再生のコマを先に当てる・3.1）。
-pub(crate) fn has_due_acts(
-    anim: &LoopAnimation,
-    start: u64,
-    through: Option<u64>,
-    now: u64,
-) -> bool {
-    next_due(anim, start, through, None, now).is_some()
-}
-
 /// 再生中の `id` の、(時刻, 位置) が `after` より後で一番先の当て残しを待ち行列へ入れる。
 fn push_next<'a>(
     queue: &mut BTreeSet<Due>,

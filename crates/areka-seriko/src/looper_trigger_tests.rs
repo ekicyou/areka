@@ -744,3 +744,32 @@ fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
         "{logs:?}"
     );
 }
+
+/// 合図の更新（着せ替えなど・2010）も、その時刻までの `periodic` を判定してから呼び出しを当てる:
+/// 境目 2000 に始まった 1 は、別の再生の 2005 の `stop,1` で止まる（areka-P0-seriko-trigger-intervals
+/// 要件 3.1・6.1・seriko-pattern-calls 要件 3.1・4.1）。
+#[test]
+fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,overlay,301,1005,0,0\n\
+        animation0.pattern1,stop,1\n\
+        animation1.interval,periodic,1\n\
+        animation1.pattern0,overlay,401,0,0,0\n\
+        animation1.pattern1,overlay,402,500,0,0\n}\n\
+        surface301\n{\n}\nsurface401\n{\n}\nsurface402\n{\n}\n";
+    let (mut rt, mut states) = shell_runtime(TEXT);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
+    rt.on_tick(1500, &mut states);
+    let logs = capture_logs(|| {
+        rt.refresh(&scope(), Slot::Shell, Some(2010), &mut states);
+        rt.on_tick(2100, &mut states);
+    });
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        None,
+        "2000 に始まり 2005 に止まる"
+    );
+    assert_eq!(count(&logs, "trigger periodic を鳴らした"), 1, "{logs:?}");
+}

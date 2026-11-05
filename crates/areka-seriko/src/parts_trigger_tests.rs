@@ -609,11 +609,11 @@ const EVENT: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     animation1.pattern1,overlay,-1,100,0,0\n}\n";
 
 /// 外側の面の切り替えで最初から見えた部品は、出来事の時刻（刻みの境目に丸めない）が起点: その評価が
-/// `runonce` を鳴らして頭のコマを載せ、次の刻みは出来事の時刻からの経過で進む。出来事の直後の評価は
-/// `runonce` だけを鳴らし（`periodic` は刻みが鳴らす）、構えた後の評価（着せ替えの変化）は鳴らさない。
-/// 時刻が分からない評価は構えない（要件 5.9・6.1・6.2・2.4）。
+/// `runonce` を鳴らして頭のコマを載せ、次の刻みは出来事の時刻からの経過で進む。構えた後の評価
+/// （着せ替えの変化）は `runonce` を鳴らさず、出来事の時刻までに来た `periodic` の境目は刻みと同じく
+/// 境目の時刻で鳴らす。時刻が分からない評価は構えない（要件 3.1・5.9・6.1・6.2・2.4）。
 #[test]
-fn refresh_arms_at_the_event_time_and_fires_only_runonce() {
+fn refresh_arms_at_the_event_time_and_judges_up_to_it() {
     let mut rig = Rig::new(EVENT, &[]);
 
     assert!(rig.refresh(0, None).is_empty());
@@ -644,8 +644,8 @@ fn refresh_arms_at_the_event_time_and_fires_only_runonce() {
     rig.refresh(0, Some(2300));
     assert_eq!(
         rig.clock(100, 1),
-        None,
-        "出来事の直後の評価は periodic を鳴らさない"
+        playing(2234),
+        "出来事の直後の評価も境目 2234 の periodic を鳴らす"
     );
     rig.tick(0, 2310);
     assert_eq!(

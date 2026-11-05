@@ -358,3 +358,72 @@ fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
     );
     assert_eq!(part_cell(&states, 0), None, "300 に終わったまま");
 }
+
+/// 部品の抽選も、境目の刻みより前の時刻に `start,1` が始めた 1 を再生中と見て乱数を引かない
+/// （部品の `runonce` 0 が 0 に鳴り、`start,1` は 980・刻みは 1050・seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn part_lottery_sees_a_play_started_by_an_earlier_call() {
+    const ANIMS: &str = "animation0.interval,runonce\n\
+        animation0.pattern0,overlay,101,980,0,0\n\
+        animation0.pattern1,start,1\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n";
+    let (lottery, probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shown(ANIMS, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1050, &mut states);
+    assert_eq!(part_cell(&states, 1), Some(110));
+    assert_eq!(probe.lock().unwrap().calls, 0, "1 は 980 から再生中");
+}
+
+/// 面を出し直して始め直した部品の `always` にも、合図の時刻より前の呼び出しは当たらない（抽選の 1 が
+/// 1000 に始まり、`stop,0` は 1050 と 1150。1170 の出し直しで始め直した 0 は 1300 に 2 枚目・
+/// seriko-pattern-calls 要件 3.1・3.8・4.5）。
+#[test]
+fn earlier_stop_does_not_hit_a_part_always_restarted_by_reshow() {
+    const ANIMS: &str = "animation0.interval,always\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,102,100,0,0\n\
+        animation0.pattern2,overlay,111,5000,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,50,0,0\n\
+        animation1.pattern1,stop,0\n\
+        animation1.pattern2,overlay,111,100,0,0\n\
+        animation1.pattern3,stop,0\n\
+        animation1.pattern4,overlay,120,5000,0,0\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shown(ANIMS, lottery, 0);
+    for t in [0, 1000, 1100] {
+        rt.on_tick(t, &mut states);
+    }
+    assert_eq!(part_cell(&states, 0), None, "前提: 1050 に止まる");
+    assert!(rt.on_surface_shown(&scope(), Slot::Shell));
+    rt.refresh(&scope(), Slot::Shell, Some(1170), &mut states);
+    rt.on_tick(1300, &mut states);
+    assert_eq!(
+        part_cell(&states, 0),
+        Some(102),
+        "1150 の stop,0 は当たらない"
+    );
+}
+
+/// 部品の合図の更新（1010）も、その時刻までの `periodic` を判定してから呼び出しを当てる: 境目 1000 に
+/// 始まった 1 は、`runonce` 0 の 1005 の `stop,1` で止まる（areka-P0-seriko-trigger-intervals 要件 3.1・
+/// 5.4・6.1）。
+#[test]
+fn part_refresh_judges_periodic_before_applying_calls() {
+    const ANIMS: &str = "animation0.interval,runonce\n\
+        animation0.pattern0,overlay,101,1005,0,0\n\
+        animation0.pattern1,stop,1\n\
+        animation1.interval,periodic,1\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(ANIMS, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(500, &mut states);
+    rt.refresh(&scope(), Slot::Shell, Some(1010), &mut states);
+    rt.on_tick(1100, &mut states);
+    assert_eq!(part_cell(&states, 1), None, "1000 に始まり 1005 に止まる");
+}

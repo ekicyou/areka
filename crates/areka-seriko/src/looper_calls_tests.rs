@@ -475,7 +475,8 @@ fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
 }
 
 /// 再生が末尾に着く刻みに抽選が当たっても、その刻みまでの古い再生の働きのコマを先に当てる:
-/// 当て残しがあるうちは再生中なので、抽選は次の境目まで待つ（seriko-pattern-calls 要件 3.1）。
+/// 抽選はその後に引くので、末尾に着いた 0 は同じ刻みで抽選に戻り、当たれば同じ時刻に始め直す
+/// （`periodic` と同じ順・seriko-pattern-calls 要件 3.1）。
 #[test]
 fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
     let text = "surface0\n{\n\
@@ -495,8 +496,13 @@ fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
     assert_eq!(started(&rt, Slot::Shell, 1), Some(2000));
     assert_eq!(
         probe.lock().unwrap().calls,
-        1,
-        "2000 は再生中ゆえ抽選しない"
+        2,
+        "2000 は末尾に着いた後に引く"
+    );
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(2000),
+        "同じ時刻に始め直す"
     );
 }
 
@@ -609,4 +615,110 @@ fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
     assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
     rt.on_tick(2100, &mut states); // stop,0 は 2000・次の周は 2030。
     assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+}
+
+/// 窓が開いた刻みに生まれた一番上の `always` に、それより前の時刻の呼び出しは当たらない（閉じている
+/// 間に抽選の 1 が 1000 に始まり、`stop,0` は 1030・窓は 1050 に開く。0 は 1050 に生まれて動き続け、
+/// 止めた印も付かない・seriko-pattern-calls 要件 3.1・4.1）。
+#[test]
+fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,always\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,101,100,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,30,0,0\n\
+        animation1.pattern1,stop,0\n\
+        animation1.pattern2,overlay,111,5000,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(SerikoLoopConfig {
+        shell_table: AnimationTable::empty(),
+        balloon_tables: BTreeMap::from([(scope(), table_of(&format!("{TEXT}{SURFACES}")))]),
+        rng: lottery,
+        pick_rng: seeded_rng(0),
+    });
+    let mut states = empty_states();
+    states.apply_balloon(&scope(), SurfaceTarget::Show(0));
+    let note = |states: &mut ScopeStates, open: bool| {
+        states.note_stage(&crate::state::StageNote::Balloon {
+            scope: scope(),
+            open,
+            face: 0,
+            generation: 0,
+        });
+    };
+    note(&mut states, false);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    assert_eq!(started(&rt, Slot::Balloon, 1), Some(1000), "前提");
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        None,
+        "前提: 閉じている間は生まれない"
+    );
+    note(&mut states, true);
+    rt.on_tick(1050, &mut states);
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        Some(1050),
+        "1030 の stop,0 は当たらない"
+    );
+    rt.on_tick(1100, &mut states);
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        Some(1050),
+        "止めた印も付かない"
+    );
+}
+
+/// 抽選の境目の刻みより前の時刻に別の再生の `start,1` が抽選の 1 を始めていたら、抽選は 1 を再生中と
+/// 見て乱数を引かない（`runonce` の 0 が 30 に鳴り、`start,1` は 1010・刻みは 1050・
+/// seriko-pattern-calls 要件 3.1・要件 2.3）。
+#[test]
+fn lottery_sees_a_play_started_by_an_earlier_call_in_the_same_tick() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,overlay,100,980,0,0\n\
+        animation0.pattern1,start,1\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n}\n";
+    let (lottery, probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(config(TEXT, lottery, seeded_rng(0)));
+    let mut states = empty_states();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1050, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(1010));
+    assert_eq!(probe.lock().unwrap().calls, 0, "1 は 1010 から再生中");
+}
+
+/// 面を出し直して始め直した一番上の `always` にも、合図の時刻より前の呼び出しは当たらない（抽選の 1 が
+/// 1000 に始まり、`stop,0` は 1050 と 1150。1100 の刻みで止まった 0 を 1170 の出し直しが始め直す・
+/// seriko-pattern-calls 要件 3.1・3.5・4.1）。
+#[test]
+fn earlier_stop_does_not_hit_an_always_restarted_by_reshow() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,always\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,101,100,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,50,0,0\n\
+        animation1.pattern1,stop,0\n\
+        animation1.pattern2,overlay,111,100,0,0\n\
+        animation1.pattern3,stop,0\n\
+        animation1.pattern4,overlay,120,5000,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shell_shown(TEXT, lottery, seeded_rng(0));
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    rt.on_tick(1100, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 0), None, "前提: 1050 に止まる");
+    assert!(rt.on_surface_shown(&scope(), Slot::Shell));
+    rt.refresh(&scope(), Slot::Shell, Some(1170), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(1170),
+        "1150 の stop,0 は当たらない"
+    );
 }
