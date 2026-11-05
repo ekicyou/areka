@@ -155,3 +155,7 @@
 12. When #40 を直すとき, the 本 spec の直し shall `crates/areka-sylphya/src/persist/io.rs` に `Arc<T>` への包括の実装を 1 つ足し、受け持つ範囲の写しだけを消す。範囲の外（`crates/areka/src/` のテストなど）の写しは、その範囲の見直しの spec の持ち物として残す（要件 6.2）
 13. The 本 spec shall 1 本の spec のまま進め、タスクは指摘の組ごとでなくファイルのまとまりごとに束ねる。If タスクの段で 20 を越えるとき, then the 本 spec shall 残る Nice to have を同じ範囲の 2 本目の spec へ回す
 14. The 本 spec の直し shall `audit-parsers-sakura` との申し合わせ（2026-11-05）を守る: 同 spec が `areka-parsers` の `resolve` を消して本範囲の呼び手を `resolve_with_shell(.., None)` へ差し替えるのは同 spec の最後の段で行い、行がぶつかれば後から着地する側が合わせる。#79 は同 spec が `areka-sakura` に 1 本足し、本 spec は自分の側の写しを消す
+15. The 本 spec shall かけ直し（タスク 18.2）で出た議題 3 件を、開発者の決め（2026-11-06「推奨案で承認」）のとおりに扱う（`research.md` §12）
+   - ⑴ `descript.txt`／同梱の `install.txt` を大きさを見ずに読む件: 直さない（ゴーストのファイルを大きさの上限で断らない方針）
+   - ⑵ 読み直しで descript から消えた名前（`%selfname2` など）が古い値のまま残る件: 直す。読み直しのとき、そのゴーストの静的な名前を出し直す前に、新しい名前に無いものを消す。ukadoc での消えた名前の扱いを確かめてから直し、範囲の外の `crates/areka-sylphya/` に口を足してよい
+   - ⑶ 同梱の数に上限が無い件: 直す。探す同梱を 64 件で打ち切り、越えた分は既存の `CompanionNotSearched` の警告で知らせる
