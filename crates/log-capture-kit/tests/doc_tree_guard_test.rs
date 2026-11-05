@@ -24,8 +24,17 @@
 // 読む見出しと置き字
 // ---------------------------------------------------------------------------
 
+mod workspace_scan;
+
 use std::collections::BTreeSet;
 use std::fmt;
+use std::fs;
+use std::path::Path;
+
+use workspace_scan::workspace_root;
+
+/// 案内（根からのパス）。
+const GUIDE: &str = "doc/README.md";
 
 /// 直下の表の見出し（完全一致）。1 列目は `doc/` の直下の名前（`doc/` を付けない）。
 const DIRECT_HEADING: &str = "## 直下のファイルとフォルダ";
@@ -154,7 +163,7 @@ const EXCEPTION_TABLE: &str = "例外の表";
 /// 実物はディスクで数えるので、手元にだけあるファイルで赤になりうる。そのとき表に要らない行を足させない一句。
 const UNTRACKED_HINT: &str = "追跡していないファイルなら取り除く（`git status` で確かめられる）";
 
-/// `doc/` の実物（ディスクの実際の字のまま）。集めるのはファイルシステムに触る側（タスク 3）。
+/// `doc/` の実物（ディスクの実際の字のまま）。集めるのはファイルシステムに触る側の [`walk_doc`]。
 struct DocTree {
     /// `doc/` の直下の名前（`doc/` を付けない。フォルダは `name/`）。
     direct: BTreeSet<String>,
@@ -257,6 +266,51 @@ fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding
         found.push(Finding::DocsDirExists);
     }
     found.into_iter().collect()
+}
+
+// ---------------------------------------------------------------------------
+// ファイルシステムに触る側（読むだけ。読めないときは原因のパスを添えて panic・黙って 0 件にしない）
+// ---------------------------------------------------------------------------
+
+/// `doc/` を下へ辿って実物を集める。`doc/archive/` は直下の名前に入れるが下へは降りない。
+fn walk_doc(root: &Path) -> DocTree {
+    let mut tree = DocTree {
+        direct: BTreeSet::new(),
+        all: BTreeSet::new(),
+    };
+    let mut pending = vec![(root.join("doc"), String::from("doc/"))];
+    while let Some((dir, rel)) = pending.pop() {
+        let fail = |e: std::io::Error| -> ! { panic!("{} を読めない: {e}", dir.display()) };
+        for entry in fs::read_dir(&dir).unwrap_or_else(|e| fail(e)) {
+            let entry = entry.unwrap_or_else(|e| fail(e));
+            let is_dir = entry.file_type().unwrap_or_else(|e| fail(e)).is_dir();
+            let slash = if is_dir { "/" } else { "" };
+            let name = format!("{}{slash}", entry.file_name().to_string_lossy());
+            let path = format!("{rel}{name}");
+            if rel == "doc/" {
+                tree.direct.insert(name);
+            }
+            if path == "doc/archive/" {
+                continue;
+            }
+            if is_dir {
+                pending.push((entry.path(), path.clone()));
+            }
+            tree.all.insert(path);
+        }
+    }
+    tree
+}
+
+/// 案内 `doc/README.md` を読む。
+fn read_guide(root: &Path) -> String {
+    let path = root.join(GUIDE);
+    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読めない: {e}", path.display()))
+}
+
+/// 根に docs フォルダがあるか。
+fn docs_dir_exists(root: &Path) -> bool {
+    root.join("docs").is_dir()
 }
 
 // ---------------------------------------------------------------------------
@@ -526,4 +580,85 @@ fn a_docs_dir_turns_the_guard_red() {
             .to_string()
             .contains(UNTRACKED_HINT)
     );
+}
+
+// ---------------------------------------------------------------------------
+// 実データの試験
+// ---------------------------------------------------------------------------
+
+/// 実データの 3 つの読み取り（`doc/` の実物・案内・根の docs の有無）。
+fn real_data() -> (DocTree, String, bool) {
+    let root = workspace_root();
+    (walk_doc(&root), read_guide(&root), docs_dir_exists(&root))
+}
+
+/// 食い違いを件数を頭に 1 件 1 行で並べる（`file_length_guard_test.rs` と同じ形）。
+fn render(found: &BTreeSet<Finding>) -> String {
+    let mut out = format!("食い違いが {} 件ある:", found.len());
+    for f in found {
+        out.push_str(&format!("\n  {f}"));
+    }
+    out
+}
+
+#[test]
+fn doc_tree_matches_the_guide() {
+    let (tree, guide, docs_exists) = real_data();
+    let found = check_all(&tree, &guide, docs_exists);
+    assert!(found.is_empty(), "{}", render(&found));
+}
+
+#[test]
+fn every_reading_finds_something() {
+    let (tree, guide, _) = real_data();
+    assert!(!tree.direct.is_empty(), "{DIRECT_ENTRIES} が 0 件");
+    assert!(!tree.all.is_empty(), "doc/ の下の全部が 0 件");
+    assert!(
+        !table_first_cells(&guide, DIRECT_HEADING).0.is_empty(),
+        "{DIRECT_TABLE} が 0 件"
+    );
+    assert!(
+        !table_first_cells(&guide, EXCEPTION_HEADING).0.is_empty(),
+        "{EXCEPTION_TABLE} が 0 件"
+    );
+}
+
+#[test]
+fn dropping_a_known_row_turns_the_guard_red() {
+    let (tree, guide, docs_exists) = real_data();
+    let baseline = check_all(&tree, &guide, docs_exists);
+
+    let dropped: Vec<&str> = guide
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("| `README.md` |"))
+        .collect();
+    assert_eq!(
+        dropped.len() + 1,
+        guide.lines().count(),
+        "案内に `README.md` の行がちょうど 1 つあるはず"
+    );
+    let changed = check_all(&tree, &dropped.join("\n"), docs_exists);
+
+    let diff: BTreeSet<Finding> = changed.difference(&baseline).cloned().collect();
+    assert_eq!(
+        diff,
+        BTreeSet::from([Finding::Unlisted("README.md".into())])
+    );
+    assert!(baseline.is_subset(&changed));
+}
+
+#[test]
+fn adding_a_bad_name_turns_the_guard_red() {
+    let (mut tree, guide, docs_exists) = real_data();
+    let baseline = check_all(&tree, &guide, docs_exists);
+
+    assert!(tree.all.insert("doc/Bad_Name.md".into()), "既にある");
+    let changed = check_all(&tree, &guide, docs_exists);
+
+    let diff: BTreeSet<Finding> = changed.difference(&baseline).cloned().collect();
+    assert_eq!(
+        diff,
+        BTreeSet::from([Finding::BadName("doc/Bad_Name.md".into())])
+    );
+    assert!(baseline.is_subset(&changed));
 }
