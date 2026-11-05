@@ -10,6 +10,10 @@ use crate::world::{EmoWorld, targets_animation_id};
 #[cfg(test)]
 use super::*;
 
+/// 外形の一辺の上限（画素）。合成の絵は表示の側が原寸のまま GPU の面へ上げるので、Direct3D 11 の
+/// 機能水準 11 の 2D テクスチャの一辺の最大（`D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION`）を写す。
+pub(crate) const MAX_EXTENT: u32 = 16_384;
+
 /// キャンバス外形（[`Extent`]）を**有効 bind 集合に依存せず静的に**算出する（要件 6.5・議題2裁定 (A)）。
 ///
 /// 母集合は **surface の全定義層**＝全 element ＋**全 bind animation の描くコマ**（純 `bind` は全部の
@@ -40,10 +44,12 @@ pub(crate) fn compute_extent(
     flatten_extent(
         &mut max_x, &mut max_y, visited, world, atlas, surface_id, 0, 0,
     );
+    // max_x/max_y は原点クリップ済みゆえ常に >= 0。u32 へは飽和で写す（大きすぎる外形を小さな値に
+    // 化けさせず、上限の判定へ渡す）。
+    let to_u32 = |v: i64| u32::try_from(v.max(0)).unwrap_or(u32::MAX);
     Extent {
-        // max_x/max_y は原点クリップ済みゆえ常に >= 0。u32 化は飽和で安全側（負にはならない）。
-        w: max_x.max(0) as u32,
-        h: max_y.max(0) as u32,
+        w: to_u32(max_x),
+        h: to_u32(max_y),
     }
 }
 
@@ -103,8 +109,8 @@ fn flatten_extent(
                         world,
                         atlas,
                         child,
-                        offset_x + ex,
-                        offset_y + ey,
+                        offset_x.saturating_add(ex),
+                        offset_y.saturating_add(ey),
                     );
                 }
                 continue;
@@ -124,8 +130,8 @@ fn flatten_extent(
                 continue;
             };
             // 負オフセットは原点でクリップ（外形は (0,0) を左上に固定・負方向はみ出しは転写時クリップ）。
-            *max_x = (*max_x).max((offset_x + w as i64).max(0));
-            *max_y = (*max_y).max((offset_y + h as i64).max(0));
+            *max_x = (*max_x).max(offset_x.saturating_add(w as i64).max(0));
+            *max_y = (*max_y).max(offset_y.saturating_add(h as i64).max(0));
         }
 
         // **全** bind animation を母集合として辿る（有効/非有効を問わない・6.5 の核心）。
@@ -173,8 +179,8 @@ fn flatten_extent(
                     world,
                     atlas,
                     nested_id,
-                    offset_x + pattern.x,
-                    offset_y + pattern.y,
+                    offset_x.saturating_add(pattern.x),
+                    offset_y.saturating_add(pattern.y),
                 );
             }
         }

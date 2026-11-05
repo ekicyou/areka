@@ -523,3 +523,102 @@ fn build_plan_clears_scratch_and_is_deterministic() {
     assert_eq!(ops, ops2, "同一入力→同一 ops（バイト等価）");
     assert_eq!(e1, e2, "同一入力→同一 Extent");
 }
+
+// ── audit-emo-compose 指摘 2: 外形が GPU の面の最大寸（一辺 16,384）を越えたら確保せずに失敗する ──
+
+/// `top` の計画を建て、結果と捕まえた記録の ERROR の行数を返す。
+fn plan_with_errors(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    top: u32,
+) -> (Result<Extent, ComposeError>, usize) {
+    let mut result = None;
+    let logs = crate::log_capture::capture_logs(|| {
+        result = Some(build_plan(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            world,
+            atlas,
+            top,
+            &BindSet::default(),
+            &PatternState::default(),
+        ));
+    });
+    (result.unwrap(), logs.matches("level=ERROR").count())
+}
+
+/// pattern を (100000, 100000) に置く純 `bind` の面は、外形が約 100000×100000（約 40 GB）になる。
+/// 合成は確保の前に `ExtentTooLarge` を返し、出力先の絵の容量は 0 のまま・`error!` は 1 行。
+#[test]
+fn far_bind_pattern_fails_without_allocating() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas_sized(
+        base,
+        &[
+            ("base.png", (4, 4), Some((64, 64, 64))),
+            ("part.png", (4, 4), Some((64, 64, 64))),
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        vec![elem(0, "base.png", 0, 0)],
+        vec![bind_anim(1, 1100, 100_000, 100_000)],
+    );
+    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
+    let mut world = EmoWorld::build(&shell_of(vec![host, part]));
+    world.bind_atlas(&atlas, SetId(0));
+    let too_large = || ComposeError::ExtentTooLarge {
+        surface: 1000,
+        w: 100_004,
+        h: 100_004,
+    };
+
+    // 計画の段で止まることを先に見る（直しが無いと下の合成が約 40 GB を確保しにいく）。
+    let (planned, errors) = plan_with_errors(&world, &atlas, 1000);
+    assert_eq!(planned, Err(too_large()));
+    assert_eq!(errors, 1, "error! は 1 行");
+
+    let mut out = crate::ComposedSurface::new(0, 0);
+    let composed = crate::Composer::new().compose_into(
+        &mut out,
+        &world,
+        &atlas,
+        1000,
+        &BindSet::from_ids([1]),
+        &PatternState::default(),
+    );
+    assert_eq!(composed, Err(too_large()));
+    assert_eq!(out.bytes_capacity(), 0, "絵は確保しない");
+}
+
+/// element定義の子を `u32::MAX + 10` の位置に置く面は、`u32` への切り詰めで小さな外形に化けず
+/// `ExtentTooLarge` を返す（飽和の外形は u32::MAX）。
+#[test]
+fn child_beyond_u32_does_not_wrap_to_small_extent() {
+    let far = u32::MAX as u64 + 10;
+    let text = format!(
+        "surface0\n{{\nelement0,overlay,base.png,0,0\nelement1,overlay,10,{far},0\n}}\n\
+         surface10\n{{\nelement0,overlay,part.png,0,0\n}}\n"
+    );
+    let atlas = bake_atlas_sized(
+        Path::new("shell/master"),
+        &[
+            ("base.png", (4, 4), Some((64, 64, 64))),
+            ("part.png", (4, 4), Some((64, 64, 64))),
+        ],
+    );
+    let mut world =
+        EmoWorld::build_with_images(&areka_parsers::shell::parse(&text), &Default::default());
+    world.bind_atlas(&atlas, SetId(0));
+
+    let (planned, errors) = plan_with_errors(&world, &atlas, 0);
+    assert_eq!(
+        planned,
+        Err(ComposeError::ExtentTooLarge {
+            surface: 0,
+            w: u32::MAX,
+            h: 4,
+        })
+    );
+    assert_eq!(errors, 1, "error! は 1 行");
+}

@@ -22,7 +22,7 @@
   - _Requirements: 2.1, 5.4, 6.1_
 
 - [ ] 2. 必ず直す: 外形の上限・見える部品の食い違い・入れ子の走査
-- [ ] 2.1 外形が GPU の面の最大寸を越えたら、確保せずに記録つきの失敗を返す（指摘 2・18）
+- [x] 2.1 外形が GPU の面の最大寸を越えたら、確保せずに記録つきの失敗を返す（指摘 2・18）
   - 着手の前に `audit-emo-present` へ、新しい失敗の種類を表示の側で `EmptyComposition` と同じく隠すこと（設計の議題 3）と、指摘 6 で古くなる説明 2 行を伝える
   - 合成の失敗の種類に「外形が大きすぎる」（面・幅・高さ）を足し、上限（一辺 16,384）を越えた外形は `error!` を出してその失敗を返し、命令を積まず絵も確保しない
   - 外形の計算を `u32` への飽和にし、位置の足し算を飽和にする（小さな外形に化けない）
@@ -152,3 +152,4 @@
 - 申し合わせ（11-05）: audit-emo-present＝`ExtentTooLarge` は表示の側で `EmptyComposition` と同じく隠す・match の腕は後から着いた側が足す。audit-seriko＝`parts_tests.rs` の bind+random の期待はこちらで直す（向こうは先頭の use だけ触る・後着が rebase）
 - 1.2: `plan_nesting_extent_tests` は `build_plan` を直に呼ぶ（2.4 で形が変わるときに直す）。`opaque_wxh` は α=255 の単色（前は全バイト 64）。`append_def` は fold_tests（4 引数）と base_image_tests（2 引数）で別物として残る
 - 1.3: 番人の例外を消すと件数の宣言 `OVER_LIMIT_ALLOWED_COUNT` も 1 減らす（番人自身が 2 か所の編集を求める）。コマの合流の門のテストは `plan_frame_merge_tests.rs`
+- 2.1: `MAX_EXTENT`（plan_extent.rs）の判定は build_plan の EmptyComposition の後。`areka-emo-present` の match に `ExtentTooLarge` の腕はまだ無い（後から着いた側が足す申し合わせ）

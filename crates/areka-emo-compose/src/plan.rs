@@ -50,7 +50,7 @@ use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
 mod extent;
-pub(crate) use extent::compute_extent;
+pub(crate) use extent::{MAX_EXTENT, compute_extent};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
 ///
@@ -629,6 +629,24 @@ pub(crate) fn build_plan(
             "定義層が皆無で外形 0×0 の退化データ: EmptyComposition"
         );
         return Err(ComposeError::EmptyComposition(surface_id));
+    }
+
+    // 外形が GPU の面の最大寸を越える → 命令を積まず、絵も確保させずに失敗を返す（壊れたシェルで
+    // 巨大な確保を試みて落ちない）。
+    if extent.w > MAX_EXTENT || extent.h > MAX_EXTENT {
+        tracing::error!(
+            target: "areka_emo_compose",
+            surface_id,
+            w = extent.w,
+            h = extent.h,
+            max = MAX_EXTENT,
+            "外形が GPU の面の最大寸を越える: ExtentTooLarge"
+        );
+        return Err(ComposeError::ExtentTooLarge {
+            surface: surface_id,
+            w: extent.w,
+            h: extent.h,
+        });
     }
 
     // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。visited は derive_ops
