@@ -105,7 +105,7 @@ pub struct SeriesFamily {
 }
 
 /// 吹き出し族（本仕様で唯一実装する族）。
-pub const BALLOON_FAMILY: SeriesFamily = SeriesFamily {
+pub(crate) const BALLOON_FAMILY: SeriesFamily = SeriesFamily {
     base: "balloon",
     scope0_legacy: &["balloons"],
     scope1_legacy: &["balloonk"],
@@ -311,7 +311,10 @@ fn face_id_of(prefix: &str, name: &str) -> Option<u32> {
 /// おり、入力（ディレクトリ走査順）に依存しない。走査順は非決定ゆえ、同一 (ID, 接頭辞) に大小
 /// 違いの複数ファイルが併存する病的入力では**ファイル名の辞書順最小**を採り、ここでも走査順に
 /// 結果を左右させない。
-pub fn select_faces<S: AsRef<str>>(names: &[S], chain: &[SeriesPrefix]) -> Vec<ResolvedFace> {
+pub(crate) fn select_faces<S: AsRef<str>>(
+    names: &[S],
+    chain: &[SeriesPrefix],
+) -> Vec<ResolvedFace> {
     // (面 ID, 連鎖位置) → 実ファイル名。BTreeMap のキー順が「ID 昇順・連鎖先頭優先」と
     // 一致するため、和の構築と ID 単位走査を 1 本の走査で両立できる。
     let mut hits: BTreeMap<(u32, usize), String> = BTreeMap::new();

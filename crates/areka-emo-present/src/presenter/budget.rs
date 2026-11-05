@@ -147,7 +147,7 @@ impl AllocSite {
     /// （`presenter_budget_steady_state_tests.rs`）は [`BudgetCounters`] の名前つき 2 フィールドを
     /// 直接読む。列挙を増減させると perf サマリ行のフィールド集合が変わるため、「2 つある」ことを
     /// 固定する走査は本モジュール内に置く。
-    #[allow(dead_code)]
+    #[cfg(test)]
     const ALL: [AllocSite; 2] = [AllocSite::ComposeDst, AllocSite::Mask];
 }
 
@@ -169,7 +169,7 @@ impl BudgetDelta {
     ///
     /// 現時点の読み手はテストのみ（[`AllocSite::ALL`] を回す檻）。製品コードの
     /// perf サマリ行は名前つきフィールドを直接使う。
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn count(&self, site: AllocSite) -> u32 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
@@ -203,7 +203,7 @@ impl BudgetCounters {
     /// 発生点で引く（全発生点の走査用）。
     ///
     /// 読み手は本モジュールのテストのみ（presenter 経由の檻は名前つきフィールドを直接読む）。
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn count(&self, site: AllocSite) -> u64 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
@@ -531,7 +531,7 @@ impl FrameBudget {
     ///
     /// 読み手はテストのみ（`budget_tests.rs` が席の単体で、
     /// `presenter_budget_steady_state_tests.rs` が実 `apply_show` を通した定常状態で読む）。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(super) fn cumulative(&self) -> &BudgetCounters {
         &self.total
     }

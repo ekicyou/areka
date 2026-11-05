@@ -8,7 +8,7 @@ fn policy_96() -> ScalePolicy {
 /// 縮退フラグが 1 つも立っていない（＝正常経路を通った）ことを主張する。
 fn assert_no_degradation(d: ScaleDecision) {
     assert!(
-        !d.dpi_missing && !d.window_dpi_invalid && !d.anisotropic && !d.author_dpi_normalized,
+        !d.dpi_missing && !d.window_dpi_invalid && !d.anisotropic,
         "正常経路では縮退分岐が立たない: {d:?}"
     );
 }
@@ -89,7 +89,7 @@ fn derive_scale_without_dpi_degrades_to_app_scale() {
 
     let d = classify(policy_96(), None);
     assert!(d.dpi_missing, "DPI 不在分岐が選択される: {d:?}");
-    assert!(!d.window_dpi_invalid && !d.anisotropic && !d.author_dpi_normalized);
+    assert!(!d.window_dpi_invalid && !d.anisotropic);
     // 正常経路では立たない（分岐の非空虚性）。
     assert!(!classify(policy_96(), Some((96, 96))).dpi_missing);
 }
@@ -124,38 +124,21 @@ fn derive_scale_adopts_dpi_x_when_axes_differ() {
     );
 }
 
-/// 要件 1.1/1.4: `author_dpi == 0` は 96 へ正規化される（分母ゼロで表示を失わない）。
-///
-/// 構造体リテラル直書き（[`ScalePolicy::new`] 迂回）でも [`derive_scale`] 側の最終防衛が
-/// 効くことを固定する。
+/// 要件 1.1/1.4: `author_dpi == 0` は正規の入口 [`ScalePolicy::new`] の 1 か所で 96 へ正規化される
+/// （分母ゼロで表示を失わない）。欄は私有ゆえ、正規化を迂回した政策は作れない。
 #[test]
 fn derive_scale_normalizes_zero_author_dpi() {
-    let bare = ScalePolicy {
-        author_dpi: 0,
-        app_scale: ScaleRatio::ONE,
-    };
+    let zero = ScalePolicy::new(0, ScaleRatio::ONE);
+    assert_eq!(zero.author_dpi(), DEFAULT_AUTHOR_DPI);
+    assert_eq!(ScalePolicy::new(120, ScaleRatio::ONE).author_dpi(), 120);
+    assert_eq!(ScalePolicy::default(), policy_96());
     for dpi in [96u16, 120, 192] {
         assert_eq!(
-            derive_scale(bare, Some((dpi, dpi))),
+            derive_scale(zero, Some((dpi, dpi))),
             derive_scale(policy_96(), Some((dpi, dpi))),
             "author_dpi=0 は author_dpi=96 と同一の k を与える（dpi={dpi}）"
         );
     }
-    let d = classify(bare, Some((192, 192)));
-    assert!(d.author_dpi_normalized, "正規化分岐が選択される: {d:?}");
-    assert!(!d.dpi_missing && !d.window_dpi_invalid);
-    assert!(
-        !classify(policy_96(), Some((192, 192))).author_dpi_normalized,
-        "非ゼロでは立たない（非空虚性）"
-    );
-
-    // 構築時（正規の入口）にも正規化される。
-    assert_eq!(
-        ScalePolicy::new(0, ScaleRatio::ONE).author_dpi,
-        DEFAULT_AUTHOR_DPI
-    );
-    assert_eq!(ScalePolicy::new(120, ScaleRatio::ONE).author_dpi, 120);
-    assert_eq!(ScalePolicy::default(), policy_96());
 }
 
 /// 要件 1.4: 窓 DPI が 0（不正値）でも比を構築せず `app_scale × 1/1` へ縮退する。
@@ -241,10 +224,7 @@ fn derive_scale_never_panics_and_always_yields_usable_scale() {
             Some((1, u16::MAX)),
             Some((u16::MAX, u16::MAX)),
         ] {
-            let policy = ScalePolicy {
-                author_dpi: author,
-                app_scale: ScaleRatio::ONE,
-            };
+            let policy = ScalePolicy::new(author, ScaleRatio::ONE);
             let k = derive_scale(policy, dpi);
             assert!(
                 k.as_f32() > 0.0 && k.as_f32().is_finite(),
@@ -421,37 +401,13 @@ fn derive_scale_anisotropic_dpi_emits_warn_log() {
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
-/// 要件 1.1/1.4: `author_dpi == 0` の最終防衛（[`derive_scale`] 側）は **`warn!`**＋
-/// 生の宣言値と正規化後の値を並べて残す。
-///
-/// [`ScalePolicy::new`] 迂回（構造体リテラル直書き）で入っても無言では通らない。
-#[test]
-fn derive_scale_zero_author_dpi_emits_warn_log() {
-    let bare = ScalePolicy {
-        author_dpi: 0,
-        app_scale: ScaleRatio::ONE,
-    };
-    let (k, events) = capture(|| derive_scale(bare, Some((192, 192))));
-    assert_eq!(k, ScaleRatio::new(2, 1).expect("192/96 = 2/1"));
-
-    let ev = expect_one(&events, "derive_scale: author_dpi=0");
-    assert_eq!(ev.level, tracing::Level::WARN, "{ev:?}");
-    assert_eq!(
-        ev.expect_field("author_dpi"),
-        "0",
-        "生の宣言値（正規化前）を載せる"
-    );
-    assert_eq!(ev.expect_field("normalized"), "96");
-    assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
-}
-
 /// 要件 1.1/1.4: 正規の入口 [`ScalePolicy::new`] の 0 正規化も **`warn!`**（無言正規化の禁止）。
 ///
-/// [`derive_scale`] 側の最終防衛とは**別メッセージ**（どちらの層で正規化されたか判別できる）。
+/// 正規化はこの 1 か所だけ（[`derive_scale`] は分母を正規化し直さない）。
 #[test]
 fn scale_policy_new_zero_author_dpi_emits_warn_log() {
     let (p, events) = capture(|| ScalePolicy::new(0, ScaleRatio::ONE));
-    assert_eq!(p.author_dpi, DEFAULT_AUTHOR_DPI);
+    assert_eq!(p.author_dpi(), DEFAULT_AUTHOR_DPI);
 
     let ev = expect_one(&events, "ScalePolicy: author_dpi=0");
     assert_eq!(ev.level, tracing::Level::WARN, "{ev:?}");
@@ -461,13 +417,13 @@ fn scale_policy_new_zero_author_dpi_emits_warn_log() {
 
     // 非ゼロ構築は無言（「常に warn」変異の非空虚性）。
     let (p2, events2) = capture(|| ScalePolicy::new(120, ScaleRatio::ONE));
-    assert_eq!(p2.author_dpi, 120);
+    assert_eq!(p2.author_dpi(), 120);
     assert!(events2.is_empty(), "正常構築は無言: {events2:?}");
 }
 
 /// 正常経路は**完全に無言**（`debug!` すら出さない）。
 ///
-/// 上の 5 本が主張する「レベル・フィールド」の非空虚性はここで担保される——
+/// 上の 4 本が主張する「レベル・フィールド」の非空虚性はここで担保される——
 /// 「常にログを出す」実装なら、DPI 対照表の全水準でこのテストが落ちる。
 #[test]
 fn derive_scale_normal_path_is_silent() {
@@ -485,22 +441,6 @@ fn derive_scale_normal_path_is_silent() {
 /// 縮退フラグは独立に立ち、**各々が自分のログを出す**（1 本にまとめて握り潰さない）。
 #[test]
 fn derive_scale_emits_each_degradation_log_independently() {
-    // author_dpi=0 かつ DPI 不在 → warn（正規化）＋ error（DPI 不在）の 2 本。
-    let bare = ScalePolicy {
-        author_dpi: 0,
-        app_scale: ScaleRatio::ONE,
-    };
-    let (k, events) = capture(|| derive_scale(bare, None));
-    assert_eq!(k, ScaleRatio::ONE);
-    assert_eq!(count_msg(&events, "derive_scale: author_dpi=0"), 1);
-    assert_eq!(count_msg(&events, "窓 DPI を取得できない"), 1);
-    assert_eq!(
-        count_msg(&events, "異軸 DPI"),
-        0,
-        "DPI 不在時に存在しない dpi_x/dpi_y を騙らない: {events:?}"
-    );
-    assert_eq!(events.len(), 2, "{events:?}");
-
     // dpi_x=0 かつ dpi_y=96 → error（窓 DPI 不正）＋ warn（異軸）の 2 本。
     let (k, events) = capture(|| derive_scale(policy_96(), Some((0, 96))));
     assert_eq!(k, ScaleRatio::ONE);

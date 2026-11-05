@@ -30,7 +30,7 @@ pub const CLICKWAIT_FAMILY: SeriesFamily = SeriesFamily {
 
 /// 印の名前の連鎖（書かれた名前を先頭に、族の連鎖を後に辿る）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MarkerChain {
+pub(crate) struct MarkerChain {
     /// 名前の鍵で書かれた名前（無ければ `None`・全スコープ共通・要件 2.2）。
     pub explicit: Option<String>,
     /// 族の連鎖（[`prefix_chain`] の答え）。
@@ -38,7 +38,11 @@ pub struct MarkerChain {
 }
 
 /// スコープの印の名前の連鎖を作る（純関数）。空の名前は書かれていないものとして扱う。
-pub fn marker_chain(family: &SeriesFamily, scope: u32, explicit: Option<&str>) -> MarkerChain {
+pub(crate) fn marker_chain(
+    family: &SeriesFamily,
+    scope: u32,
+    explicit: Option<&str>,
+) -> MarkerChain {
     MarkerChain {
         explicit: explicit.filter(|s| !s.is_empty()).map(str::to_string),
         chain: prefix_chain(family, scope),
@@ -47,7 +51,7 @@ pub fn marker_chain(family: &SeriesFamily, scope: u32, explicit: Option<&str>) -
 
 /// 番号 1 つの採用（実ファイル名は原形のまま）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MarkerName {
+pub(crate) struct MarkerName {
     /// 実ファイル名（大小は資産のまま）。
     pub file_name: String,
     /// 採った名前（書かれた名前か、連鎖の接頭辞）。
@@ -58,7 +62,7 @@ pub struct MarkerName {
 
 /// 番号 0（上）と 1（下）の採用。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MarkerNames {
+pub(crate) struct MarkerNames {
     pub up: Option<MarkerName>,
     pub down: Option<MarkerName>,
 }
@@ -68,7 +72,7 @@ pub struct MarkerNames {
 /// 番号ごとに、書かれた名前 → 連鎖の先頭から順に照らし、最初に絵がある名前を採る。番号 0・1 以外は
 /// 見ない。同じ名前・番号に大小違いのファイルが並ぶときは辞書順最小を採る（走査順に依らない・
 /// [`crate::balloon::select_faces`] と同じ決め方）。
-pub fn select_marker_names<S: AsRef<str>>(names: &[S], chain: &MarkerChain) -> MarkerNames {
+pub(crate) fn select_marker_names<S: AsRef<str>>(names: &[S], chain: &MarkerChain) -> MarkerNames {
     let candidates: Vec<(&str, bool)> = chain
         .explicit
         .as_deref()
@@ -249,7 +253,7 @@ pub const MARKER_FAMILY: SeriesFamily = SeriesFamily {
 
 /// 番号の無い `<候補>.png`（大小無視）を、書かれた名前 → 連鎖の順で探し、最初に在った実ファイル名を返す
 /// 純核（fs 非依存）。大小違いが並ぶときは辞書順最小を採る（[`select_marker_names`] と同じ決め方）。
-pub fn select_single_marker_name<S: AsRef<str>>(
+pub(crate) fn select_single_marker_name<S: AsRef<str>>(
     names: &[S],
     chain: &MarkerChain,
 ) -> Option<String> {
@@ -271,7 +275,7 @@ pub fn select_single_marker_name<S: AsRef<str>>(
 
 /// 行の中の印の絵 1 枚の選びの答え。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SingleMarker {
+pub(crate) struct SingleMarker {
     /// 読んだ絵（1 枚も無いか読めなければ `None`）。
     pub image: Option<Arc<MarkerImage>>,
     /// 書いた名前があり、その絵がフォルダに無かった（記録は呼び手が出す・要件 5.3）。
@@ -282,7 +286,7 @@ pub struct SingleMarker {
 ///
 /// 列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（矢印と同じ）。読みは矢印と同じ
 /// 手順で、読めない絵は `warn!` して次の候補へは進まず「絵なし」とする。
-pub fn resolve_single_marker(
+pub(crate) fn resolve_single_marker(
     dirs: &[&Path],
     family: &SeriesFamily,
     scope: u32,

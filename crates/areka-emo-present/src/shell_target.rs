@@ -76,7 +76,7 @@ const SURFACE_PREFIX: &str = "surface";
 ///
 /// 3 つの欄はどれも**入力の順に依存しない**（R1.8）。番号は数値の昇順、名前は辞書順である。
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct SurfaceImageSelection {
+pub(crate) struct SurfaceImageSelection {
     /// 番号 → 採ったファイル名（**元の綴りのまま**——焼く側が実パスを開くため）。
     pub images: BTreeMap<u32, String>,
     /// 同じ番号に複数あったもの: `(番号, 採った名前, 捨てた名前の一覧)`。番号の昇順（R1.5）。
@@ -103,7 +103,7 @@ pub struct SurfaceImageSelection {
 ///
 /// 入力はファイル名だけ——フォルダそのものやサブフォルダの中身を除くのは一覧を採る側の
 /// 責務であり（R1.3）、本関数は渡された名前の列だけを見る。
-pub fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageSelection {
+pub(crate) fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageSelection {
     // 番号 → 候補名の集合。集合を辞書順に保つことで、採用（最小）と不採用の並びが
     // 入力の順に依存しなくなる（R1.8）。
     let mut candidates: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
@@ -521,7 +521,8 @@ fn load_shell_target_with(
 /// 使わなかった画像は焼かない（索引表に載らない）。
 ///
 /// 透過の扱いは引数 `use_self_alpha`（入口がシェルの descript.txt から読んだ宣言）で決まる。
-pub fn build_shell_target(
+#[cfg(test)] // 呼び手はテストだけ（本番の入口は `build_core` を直に呼ぶ）。
+pub(crate) fn build_shell_target(
     shell: Shell,
     selection: SurfaceImageSelection,
     shell_dir: &Path,
@@ -544,7 +545,8 @@ pub fn build_shell_target(
 /// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。入れ子の
 /// 報告（[`EmoWorld::nest_report`]）も同じく載せるだけである。焼く一覧は `shell.surfaces` の
 /// 複製から画像でない element（数字だけの欄）を外したもので、その名前の絵を読みに行かない。
-pub fn build_shell_target_with_boxes(
+#[cfg(test)] // 呼び手はテストだけ（本番の入口は `build_core` を直に呼ぶ）。
+pub(crate) fn build_shell_target_with_boxes(
     shell: Shell,
     boxes: &ShellBoxes,
     selection: SurfaceImageSelection,

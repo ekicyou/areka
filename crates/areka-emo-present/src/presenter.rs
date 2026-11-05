@@ -92,7 +92,6 @@ use crate::scale::{ScalePolicy, derive_scale};
 pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
-pub use self::replace::DetachedState;
 pub use self::scale_change::{AppliedScale, ScaleChange};
 use self::target::PresentTarget;
 pub use self::target::VisibilityOwnership;
@@ -101,9 +100,9 @@ pub use self::target::VisibilityOwnership;
 // 発行点の内部事情ゆえ再輸出しない（語だけを公開面へ出す）。
 pub use self::transition_record::{
     KIND_SURFACE, SURFACE_FIELD_H, SURFACE_FIELD_REASON, SURFACE_FIELD_RESIZED,
-    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W, SURFACE_FIELDS, SURFACE_REASON_ALL,
-    SURFACE_REASON_INVISIBLE, SURFACE_REASON_K_UNCHANGED, SURFACE_STAGE_ALL, SURFACE_STAGE_SKIPPED,
-    SURFACE_STAGE_UPLOAD, SURFACE_STAGE_VISUALIZE,
+    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W, SURFACE_FIELDS, SURFACE_REASON_INVISIBLE,
+    SURFACE_REASON_K_UNCHANGED, SURFACE_STAGE_ALL, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_UPLOAD,
+    SURFACE_STAGE_VISUALIZE,
 };
 
 #[cfg(test)]

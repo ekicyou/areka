@@ -41,7 +41,7 @@
   - 見えている装着へもう一度見せても面と文字層の両方に変更の印が立たないテスト、隠す契約のテストの 2 回目からの書き換え無しの確かめ、entity を先に消した装着への 5 つの操作がそれぞれ記録を残すテストが緑
   - _Requirements: 2.5, 4.1, 4.2, 7.2, 9.1_
 
-- [ ] 6. 外で使われていない公開の口を狭め、テストだけの語彙を `#[cfg(test)]` に、拡大の政策の正規化を 1 か所にする（指摘 7・8・42・43）
+- [x] 6. 外で使われていない公開の口を狭め、テストだけの語彙を `#[cfg(test)]` に、拡大の政策の正規化を 1 か所にする（指摘 7・8・42・43）
   - design.md 7 番の名前をクレートの中へ狭め、再輸出を消す。`build_shell_target_with_boxes` は可視性だけを変える（署名は `audit-parsers-sakura`・後に着地する方が合わせる）。`nesting_fixture_tests.rs:4` のコメントは触らない
   - `#[allow(dead_code)]` の 5 つをテストの時だけの定義にする
   - 拡大の政策の欄を私有にし、作者 DPI の正規化を作る口の 1 か所にして、2 つ目の正規化と迂回の檻を消す
@@ -125,3 +125,6 @@
 - タスク 2: `cargo test -p areka` の `smoke_boot_loop_exit`・`mcp_get_log_real_run` は作業場に i686 の検体（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いと赤。`cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で建ててから回す
 - タスク 4（`audit-ghost-catalog` と同じ表）: `crates/log-capture-kit/tests/temp_path_guard_test.rs` で触った行は次の 3 つ。例外表から `crates/areka-emo-present/src/balloon_test_support.rs` の `Why::ProcessUnique` の項目 5 行（元の 155〜159 行）を消した。`ALLOWED_COUNT` を 19→18（今の 278 行）、`PROCESS_UNIQUE_COUNT` を 16→15（今の 284 行）にした。どちらも表の行から数え直した値（ProcessUnique 15・ReadOnly 2・IntentionallyFixed 1）。節 ⒜ の見出しの「13 件」は前から実数と合わないが、要件 7.7 に従って触っていない。後に着地する方は、表の行からもう一度数え直す
 - タスク 4: `C:\areka-test` の綴りが 3 つ残る（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・`shell_target_element_base_tests.rs`）。どれも `MemoryDecoder` の鍵で fs を触らない（指摘 26 で残すと決めた分）
+- タスク 6（設計との違い）: `shell_target.rs` の `build_shell_target`・`build_shell_target_with_boxes` は `pub(crate)` に狭めると本番の呼び手が無くなる（本番は `build_core` を直に呼ぶ）ので、可視性に加えて `#[cfg(test)]` を 1 行ずつ足した（951→953 行・署名は不変）。`#[allow(dead_code)]` は完了条件が許さず、テストの呼び先を `build_core` へ移すと `audit-parsers-sakura` の署名の直しと当たるため
+- タスク 6: 消したテストの主張の行き先。`derive_scale_zero_author_dpi_emits_warn_log` → `scale_policy_new_zero_author_dpi_emits_warn_log`（warn は `new` へ移った）と `derive_scale_normalizes_zero_author_dpi`（k の同値）。`derive_scale_emits_each_degradation_log_independently` の前半 → `derive_scale_missing_dpi_emits_error_log`（error 1 本・k=ONE）と同じテストの後半（縮退ごとに独立）。`classify(..).author_dpi_normalized` の確かめ → 欄ごと消え、`author_dpi()` の確かめが持つ
+- タスク 6 の申し送り（タスク 16 で直す）: 狭めた名前を指す doc のリンクの rustdoc 警告が 7 本ほど出る（`lib.rs:28` の `cache`、`balloon.rs:357・400` の `select_faces`、`shell_target.rs` の 5・8・20・22・202・354・542 行、`presenter.rs:3` の `ComposeCache`）。括弧を外してただの `` `名前` `` にする

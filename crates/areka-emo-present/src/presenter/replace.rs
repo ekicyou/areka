@@ -15,7 +15,7 @@ use super::{
 /// 合成の入力（`EmoWorld`・アトラス・キャッシュ）と拡大政策は引き継がない——新しいシェル・
 /// バルーンの資産と作者 DPI から作り直すものだからである。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DetachedState {
+pub(super) struct DetachedState {
     /// 装着先の窓（差し替えの前後で同じ窓を使う）。
     pub window: Entity,
     /// 可視性の持ち主（バルーン窓は `External` のまま引き継ぐ）。
@@ -37,7 +37,7 @@ impl EmoPresenter {
     ///
     /// 未登録なら `error!` を残して `Err(TargetNotAttached)` を返し、表は変えない。一度も表示して
     /// いない target（装着の子が無い）も外せる。
-    pub fn detach_target(
+    pub(super) fn detach_target(
         &mut self,
         world: &mut World,
         target: TargetId,

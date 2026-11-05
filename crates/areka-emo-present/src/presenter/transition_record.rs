@@ -85,8 +85,11 @@ pub const SURFACE_REASON_INVISIBLE: &str = "invisible";
 /// 仕様 `areka-P0-dpi-transition-atomicity` の requirements.md 4.6 直下の注記〔2026-08-20〕。
 /// 除外の選り分けの実装は `areka` の `placement::transition_judge::summarize`）。
 ///
-/// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。
-pub const SURFACE_REASON_ALL: &[&str] = &[SURFACE_REASON_K_UNCHANGED, SURFACE_REASON_INVISIBLE];
+/// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。読み手は語彙の檻（テスト）だけ
+/// （判定側は [`SURFACE_REASON_INVISIBLE`] を直に名指す）。
+#[cfg(test)]
+pub(super) const SURFACE_REASON_ALL: &[&str] =
+    &[SURFACE_REASON_K_UNCHANGED, SURFACE_REASON_INVISIBLE];
 
 // ---------------------------------------------------------------------------
 // フィールド名

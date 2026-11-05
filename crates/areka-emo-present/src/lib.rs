@@ -39,7 +39,7 @@ pub mod balloon;
 pub mod balloon_definitions;
 /// 印の族（スクロールの矢印・クリック待ち）の表と名前の連鎖、番号ごとの絵の選び（`balloon_marker`）。
 pub mod balloon_marker;
-pub mod cache;
+pub(crate) mod cache;
 pub mod command;
 /// 表示の記録（`record_display`）。原寸の合成結果を D2D bitmap にし、論理 px の宛先矩形で描く命令を
 /// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
@@ -72,12 +72,7 @@ pub mod shell_target;
 /// できるようにする（再輸出であって別型の新設ではない——`areka_emo_compose::ScaleRatio` と同一型）。
 pub use areka_emo_compose::ScaleRatio;
 pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
-pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{AppliedScale, ClientHit, EmoPresenter, ScaleChange, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
-pub use shell_target::{
-    ShellLoadError, ShellTarget, SurfaceImageSelection, build_shell_target,
-    build_shell_target_with_boxes, load_shell_target, load_shell_target_quiet,
-    select_surface_images,
-};
+pub use shell_target::{ShellLoadError, ShellTarget, load_shell_target, load_shell_target_quiet};

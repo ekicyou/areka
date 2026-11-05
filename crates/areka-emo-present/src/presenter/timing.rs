@@ -52,7 +52,7 @@ use crate::command::TargetId;
 /// 読み手は檻だけである（`timing_tests.rs`・task 1.4 の計時ログ較正檻）——製品コードは
 /// リテラルを直接持つため参照しない。契約面を名前で 1 箇所に据えることが本定数の目的であり、
 /// 死蔵ではない。
-#[allow(dead_code)]
+#[cfg(test)]
 pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 
 /// 計時対象の段（Requirement 1.1 の列挙と 1:1）。

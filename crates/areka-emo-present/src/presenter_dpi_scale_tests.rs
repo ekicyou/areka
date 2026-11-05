@@ -57,14 +57,17 @@ fn attach_target_keeps_scale_policy_per_window() {
 
     let p0 = presenter.targets.get(&TargetId(0)).unwrap().policy;
     let p1 = presenter.targets.get(&TargetId(1)).unwrap().policy;
-    assert_eq!(p0.author_dpi, 96, "target 0 は自分の author_dpi を保つ");
-    assert_eq!(p1.author_dpi, 144, "target 1 は自分の author_dpi を保つ");
+    // 欄は私有ゆえ、政策の全体を「正規の入口で作った値」と比べる（アプリ管理拡大率は ONE 固定シーム・要件 1.6）。
     assert_eq!(
-        p0.app_scale,
-        ScaleRatio::ONE,
-        "アプリ管理拡大率は ONE 固定シーム（要件 1.6）"
+        p0,
+        ScalePolicy::new(96, ScaleRatio::ONE),
+        "target 0 は自分の author_dpi を保つ"
     );
-    assert_eq!(p1.app_scale, ScaleRatio::ONE);
+    assert_eq!(
+        p1,
+        ScalePolicy::new(144, ScaleRatio::ONE),
+        "target 1 は自分の author_dpi を保つ"
+    );
     assert_eq!(
         presenter.targets.get(&TargetId(0)).unwrap().window,
         win_96,

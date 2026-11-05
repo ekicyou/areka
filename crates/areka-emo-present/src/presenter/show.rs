@@ -475,7 +475,7 @@ impl EmoPresenter {
                     // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
                     k_ratio = ?scale,
                     k = scale.as_f32(),
-                    author_dpi = target.policy.author_dpi,
+                    author_dpi = target.policy.author_dpi(),
                     // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
                     window_dpi = ?window_dpi,
                     native_w = native.0,
