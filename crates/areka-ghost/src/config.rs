@@ -5,10 +5,10 @@
 //! （design.md「ghost::config」）。
 
 use areka_kanade::KanadeConfig;
-use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::kv::parse_kv;
+use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountModel;
 use areka_sakura::strict::{StrictHooks, StrictJudges};
+use std::path::Path;
 use std::sync::Arc;
 
 /// shell descript のファイル名（`{shell.dir}/descript.txt`）。
@@ -20,8 +20,8 @@ const SHELL_NAME_KEY: &str = "name";
 /// `MountModel` と shell descript から `KanadeConfig` を解決する（純関数・I/O は
 /// shell descript 読取のみ）。
 ///
-/// shell 名は `MountModel.shell.dir` 直下の `descript.txt` を読み、`decode` →
-/// `parse_kv` の上で `name` キーの値を採る。読取不能・`name` 欠落時は `warn!` の
+/// shell 名は `MountModel.shell.dir` 直下の `descript.txt` を一覧と同じ表（鍵の大小を
+/// 無視・空の値は無し）で読み、`name` の値を採る。読取不能・`name` 欠落時は `warn!` の
 /// 上で shell ディレクトリ名（通常 `"master"`）へフォールバックする——shell
 /// descript は補助情報であり、boot を落とさない（design.md「ghost::config」）。
 ///
@@ -39,21 +39,25 @@ pub fn resolve_kanade_config(
     }
 }
 
-/// script 種別のログに出すゴーストの名前。descript の `name` が空でなければそれ、
-/// 無い・空なら根（`ghost/master` の 2 つ上）の絶対パスから末尾の区切りを除いた字
-/// （MCP の `resolve::listed_value` と同じ作り・要件 4.1）。
-fn listed_ghost_name(mount: &MountModel) -> String {
-    if let Some(name) = mount.names.name.as_deref().filter(|n| !n.is_empty()) {
+/// 一覧に出すゴーストの名（script の記録・MCP の `ghost_name` の両方がこれを使う）。`name` が
+/// 空でなければそれ、無い・空なら根の絶対パスから末尾の区切りを除いた字。
+pub fn listed_name(name: Option<&str>, ghost_root: &Path) -> String {
+    if let Some(name) = name.filter(|n| !n.is_empty()) {
         return name.to_string();
     }
-    let master = &mount.shiori.dir;
-    let root = master.ancestors().nth(2).unwrap_or(master);
-    std::path::absolute(root)
-        .unwrap_or_else(|_| root.to_path_buf())
+    std::path::absolute(ghost_root)
+        .unwrap_or_else(|_| ghost_root.to_path_buf())
         .display()
         .to_string()
         .trim_end_matches(['\\', '/'])
         .to_string()
+}
+
+/// script 種別のログに出すゴーストの名前（根は `ghost/master` の 2 つ上・要件 4.1）。
+fn listed_ghost_name(mount: &MountModel) -> String {
+    let master = &mount.shiori.dir;
+    let root = master.ancestors().nth(2).unwrap_or(master);
+    listed_name(mount.names.name.as_deref(), root)
 }
 
 /// strict の記録の束ね（spec mcp-strict-errors 要件 2.2）。名は `script` の記録と同じ
@@ -87,10 +91,9 @@ fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> 
         }
     };
 
-    let text = decode(&bytes, default_encoding);
-    let map = parse_kv(&text);
-    match map.get(SHELL_NAME_KEY) {
-        Some(name) => name.clone(),
+    // 一覧（`catalog`）と同じ読み方: 鍵の大小を無視し、空の値は無い。
+    match crate::catalog::lowercased(&bytes, default_encoding).remove(SHELL_NAME_KEY) {
+        Some(name) => name,
         None => {
             tracing::warn!(
                 path = %descript_path.display(),
@@ -113,7 +116,7 @@ fn shell_dir_basename(shell_dir: &std::path::Path) -> String {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use temp_path_kit::TempPath;
 
     /// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
@@ -181,16 +184,6 @@ mod tests {
             .expect("fixture tree resolves to a MountModel")
     }
 
-    /// 根の絶対パス（末尾の区切りなし）＝ MCP の `listed_value` と同じ作りの期待値。
-    fn expected_root_value(root: &PathBuf) -> String {
-        std::path::absolute(root)
-            .expect("absolute root")
-            .display()
-            .to_string()
-            .trim_end_matches(['\\', '/'])
-            .to_string()
-    }
-
     #[test]
     fn resolve_kanade_config_sets_ghost_name_from_descript_name() {
         let temp = unique_temp_dir("ghost-name-from-descript");
@@ -210,7 +203,7 @@ mod tests {
 
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
-        assert_eq!(config.ghost_name, expected_root_value(&root));
+        assert_eq!(config.ghost_name, listed_name(None, &root));
         assert!(std::path::Path::new(&config.ghost_name).is_absolute());
         assert!(!config.ghost_name.ends_with(['\\', '/']));
     }
@@ -242,7 +235,7 @@ mod tests {
             assert_eq!(&*hooks.ghost, listed);
             let want = match name_line {
                 Some(_) => "えみり".to_string(),
-                None => expected_root_value(&root),
+                None => listed_name(None, &root),
             };
             assert_eq!(&*hooks.ghost, want);
         }
@@ -265,7 +258,7 @@ mod tests {
 
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
-        assert_eq!(config.ghost_name, expected_root_value(&root));
+        assert_eq!(config.ghost_name, listed_name(None, &root));
         assert!(!config.ghost_name.ends_with(['\\', '/']));
     }
 
@@ -288,6 +281,45 @@ mod tests {
         assert_eq!(config.baseware_name, "areka");
         assert_eq!(config.baseware_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(config.close_talk_deadline_ms, 30_000);
+    }
+
+    /// シェルの descript の鍵は一覧と同じく大小を無視して読む（#22・要件 9.10）。
+    #[test]
+    fn shell_name_key_is_read_case_insensitively() {
+        let temp = unique_temp_dir("shell-name-key-case");
+        let root = temp.path().to_path_buf();
+        let mount =
+            resolve_mount_with_shell_descript(&root, "master", Some(b"charset,UTF-8\nName,Foo\n"));
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.shell_name, "Foo");
+    }
+
+    /// 空の `name,` は一覧と同じく「無い」なので、フォルダ名へ倒す（#22・要件 9.10）。
+    #[test]
+    fn an_empty_shell_name_falls_back_to_the_folder_name() {
+        let temp = unique_temp_dir("shell-name-empty");
+        let root = temp.path().to_path_buf();
+        let mount =
+            resolve_mount_with_shell_descript(&root, "custom", Some(b"charset,UTF-8\nname,\n"));
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.shell_name, "custom");
+    }
+
+    /// 名が空でなければそれ、無い・空なら根の絶対パスから末尾の区切りを除いた字（#25）。
+    #[test]
+    fn listed_name_falls_back_to_the_absolute_root_without_a_trailing_separator() {
+        assert_eq!(listed_name(Some("Emily"), Path::new(r"C:\x\")), "Emily");
+        assert_eq!(listed_name(None, Path::new(r"C:\a\b\")), r"C:\a\b");
+        assert_eq!(listed_name(Some(""), Path::new(r"C:\a\b/")), r"C:\a\b");
+        let cwd = std::env::current_dir().expect("cwd");
+        assert_eq!(
+            listed_name(None, Path::new(r"rel\dir\")),
+            cwd.join(r"rel\dir").display().to_string()
+        );
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! descript の 2 鍵の読み手（`standard_balloon_keys`）の場面もここに置く。
 //! 一時フォルダは `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
 
-use super::test_support::{hold_exclusive, put, put_ghost};
+use super::test_support::{hold_exclusive, put, put_ghost_in};
 use super::*;
 use crate::test_log_capture::capture;
 use temp_path_kit::TempPath;
@@ -88,7 +88,7 @@ fn empty_balloon0_stops_before_balloon1() {
 fn keys_of(label: &str, descript: &str) -> StandardBalloonKeys {
     let tmp = TempPath::under_target(label);
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let ghost = put_ghost(&root, "g", descript);
+    let ghost = put_ghost_in(&root.ghost_store(), "g", descript);
     let mut keys = None;
     let events = capture(|| keys = Some(standard_balloon_keys(&ghost)));
     assert!(events.is_empty(), "記録は 0 件: {events:?}");
@@ -156,8 +156,8 @@ fn standard_keys_treat_empty_values_as_absent() {
 fn standard_keys_unreadable_warns_exactly_once() {
     let tmp = TempPath::under_target("catalog-standard-unreadable");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let ghost = put_ghost(
-        &root,
+    let ghost = put_ghost_in(
+        &root.ghost_store(),
         "locked",
         "charset,UTF-8\ndefault.balloon.path,claudia\nballoon,claudia\n",
     );

@@ -4,14 +4,14 @@
 //! `catalog_test_support::temp_root`）、検体の根（`SampleRoot::acquire("emo2")`）を借りる。
 //! 足すテストは列挙の採否と素性の判断分岐に限る（要件 8.4）。
 
-use super::test_support::{TempRoot, hold_exclusive, put, put_ghost, temp_root};
+use super::test_support::{
+    TARGET, TempRoot, catalog_warns, hold_exclusive, put, put_ghost_in, sjis_descript, temp_root,
+};
 use super::*;
-use crate::test_log_capture::{CapturedEvent, assert_logged_event, capture};
+use crate::test_log_capture::{assert_logged_event, capture};
 use std::fs;
 use temp_path_kit::TempPath;
 use tracing::Level;
-
-const TARGET: &str = "areka_ghost::catalog";
 
 #[test]
 fn basewareroot_composes_store_paths_without_touching_fs() {
@@ -48,10 +48,10 @@ fn missing_stores_list_zero() {
 fn ghosts_are_folders_with_master_descript_in_byte_order() {
     let tmp = TempPath::new("catalog-ghosts");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    put_ghost(&root, "b", "charset,UTF-8\nname,Bee\n");
+    put_ghost_in(&root.ghost_store(), "b", "charset,UTF-8\nname,Bee\n");
     // Windows の fs は大小を区別しないので、大文字は別の綴り（`Z`）で置く。
-    put_ghost(&root, "Z", "charset,UTF-8\nName,Upper\n");
-    put_ghost(&root, "a", "charset,UTF-8\n");
+    put_ghost_in(&root.ghost_store(), "Z", "charset,UTF-8\nName,Upper\n");
+    put_ghost_in(&root.ghost_store(), "a", "charset,UTF-8\n");
     // descript の無いフォルダとフォルダ以外の項目は返さない（要件 2.1）。
     fs::create_dir_all(root.ghost_dir("no-descript").join("ghost").join("master")).unwrap();
     put(&root.ghost_store().join("stray.txt"), b"x");
@@ -69,12 +69,8 @@ fn ghosts_are_folders_with_master_descript_in_byte_order() {
 fn identity_reads_seven_items_and_decodes_shift_jis() {
     let tmp = TempPath::new("catalog-identity");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    // Shift_JIS の生バイト: 「吹き出し」＝90 81 82 AB 8F 6F 82 B5・「作者」＝8D EC 8E D2（要件 2.8）。
-    let mut sjis = b"charset,Shift_JIS\nname,".to_vec();
-    sjis.extend_from_slice(&[0x90, 0x81, 0x82, 0xAB, 0x8F, 0x6F, 0x82, 0xB5]);
-    sjis.extend_from_slice(b"\ncraftman,maker\ncraftmanw,");
-    sjis.extend_from_slice(&[0x8D, 0xEC, 0x8E, 0xD2]);
-    sjis.extend_from_slice(b"\nid,IdX\nreadme,manual.txt\n");
+    let mut sjis = sjis_descript();
+    sjis.extend_from_slice(b"readme,manual.txt\n");
     let dir = root.balloon_dir("sjis");
     put(&dir.join("descript.txt"), &sjis);
     put(&dir.join("manual.txt"), b"m");
@@ -87,9 +83,9 @@ fn identity_reads_seven_items_and_decodes_shift_jis() {
         Identity {
             folder: "sjis".into(),
             name: Some("吹き出し".into()),
-            craftman: Some("maker".into()),
+            craftman: Some("stayse".into()),
             craftmanw: Some("作者".into()),
-            id: Some("IdX".into()),
+            id: Some("StayseeBalloon".into()),
             readme: Some(dir.join("manual.txt")),
             has_thumbnail: true,
         }
@@ -100,10 +96,14 @@ fn identity_reads_seven_items_and_decodes_shift_jis() {
 fn readme_falls_back_to_readme_txt_only_when_present() {
     let tmp = TempPath::new("catalog-readme");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let with = put_ghost(&root, "with", "charset,UTF-8\n");
+    let with = put_ghost_in(&root.ghost_store(), "with", "charset,UTF-8\n");
     put(&with.join("readme.txt"), b"r");
     // readme 鍵が実在しないファイルを指す → 無し（readme.txt へは倒さない）。
-    let dangling = put_ghost(&root, "dangling", "charset,UTF-8\nreadme,gone.txt\n");
+    let dangling = put_ghost_in(
+        &root.ghost_store(),
+        "dangling",
+        "charset,UTF-8\nreadme,gone.txt\n",
+    );
     put(&dangling.join("readme.txt"), b"r");
 
     let listed = scan_ghosts(&root);
@@ -111,27 +111,6 @@ fn readme_falls_back_to_readme_txt_only_when_present() {
     assert_eq!(listed[0].identity.readme, None);
     assert_eq!(listed[1].identity.readme, Some(with.join("readme.txt")));
     assert!(!listed[1].identity.has_thumbnail);
-}
-
-#[test]
-fn shells_exclude_menu_hidden_and_folders_without_descript() {
-    let tmp = TempPath::new("catalog-shells");
-    let ghost = tmp.path().join("g");
-    let shell = ghost.join("shell");
-    put(
-        &shell.join("master").join("descript.txt"),
-        b"charset,UTF-8\nname,Master\n",
-    );
-    put(
-        &shell.join("secret").join("descript.txt"),
-        b"charset,UTF-8\nMENU, Hidden \n",
-    );
-    fs::create_dir_all(shell.join("empty")).unwrap();
-
-    let listed = list_shells(&ghost);
-    let folders: Vec<&str> = listed.iter().map(|s| s.identity.folder.as_str()).collect();
-    assert_eq!(folders, ["master"]);
-    assert_eq!(listed[0].dir, shell.join("master"));
 }
 
 #[test]
@@ -177,8 +156,8 @@ fn companion_balloon_reads_one_key() {
 fn empty_values_count_as_absent() {
     let tmp = TempPath::new("catalog-empty");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let ghost = put_ghost(
-        &root,
+    let ghost = put_ghost_in(
+        &root.ghost_store(),
         "g",
         "charset,UTF-8\nname,\ncraftman, \ncraftmanw,\nid,\nreadme,\n",
     );
@@ -218,19 +197,10 @@ fn empty_values_count_as_absent() {
 fn is_ghost_dir_checks_master_descript_only() {
     let tmp = TempPath::new("catalog-isghost");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let yes = put_ghost(&root, "yes", "");
+    let yes = put_ghost_in(&root.ghost_store(), "yes", "");
     assert!(is_ghost_dir(&yes));
     assert!(!is_ghost_dir(&root.ghost_store()));
     assert!(!is_ghost_dir(&tmp.path().join("nothing")));
-}
-
-/// 捕捉列のうち本モジュールの `warn!` の `event` を並びのまま返す。
-fn catalog_warns(events: &[CapturedEvent]) -> Vec<&str> {
-    events
-        .iter()
-        .filter(|e| e.target == TARGET && e.level == Level::WARN)
-        .map(|e| e.event.as_deref().unwrap_or("<event 無し>"))
-        .collect()
 }
 
 /// 要件 8.1 の一時の根: 件数・採否・7 項目・バイト順・Shift_JIS の復号を全部突き合わせる。
@@ -409,8 +379,8 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
 fn unreadable_descript_warns_once_and_is_excluded() {
     let tmp = TempPath::new("catalog-unreadable");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    put_ghost(&root, "ok", "charset,UTF-8\n");
-    let locked = put_ghost(&root, "locked", "charset,UTF-8\n");
+    put_ghost_in(&root.ghost_store(), "ok", "charset,UTF-8\n");
+    let locked = put_ghost_in(&root.ghost_store(), "locked", "charset,UTF-8\n");
     let _held = hold_exclusive(&locked.join("ghost").join("master").join("descript.txt"));
 
     let mut listed = Vec::new();
@@ -442,7 +412,7 @@ fn non_utf8_folder_name_warns_and_is_excluded() {
 
     let tmp = TempPath::new("catalog-non-utf8");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    put_ghost(&root, "ok", "charset,UTF-8\n");
+    put_ghost_in(&root.ghost_store(), "ok", "charset,UTF-8\n");
     let bad = root
         .ghost_store()
         .join(OsString::from_wide(&[0xD800, u16::from(b'x')]));
@@ -467,12 +437,16 @@ fn non_utf8_folder_name_warns_and_is_excluded() {
 fn sakura_name_reads_one_key_from_master_descript() {
     let tmp = TempPath::new("catalog-sakura-name");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let with = put_ghost(
-        &root,
+    let with = put_ghost_in(
+        &root.ghost_store(),
         "with",
         "charset,UTF-8\nSakura.Name,さくら\nname,With\n",
     );
-    let without = put_ghost(&root, "without", "charset,UTF-8\nname,Without\n");
+    let without = put_ghost_in(
+        &root.ghost_store(),
+        "without",
+        "charset,UTF-8\nname,Without\n",
+    );
 
     let mut got = (None, None, None);
     let events = capture(|| {
@@ -491,7 +465,11 @@ fn sakura_name_reads_one_key_from_master_descript() {
 fn sakura_name_unreadable_warns_and_yields_none() {
     let tmp = TempPath::new("catalog-sakura-name-unreadable");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let ghost = put_ghost(&root, "locked", "charset,UTF-8\nsakura.name,さくら\n");
+    let ghost = put_ghost_in(
+        &root.ghost_store(),
+        "locked",
+        "charset,UTF-8\nsakura.name,さくら\n",
+    );
     let _held = hold_exclusive(&ghost.join("ghost").join("master").join("descript.txt"));
 
     let mut got = Some(String::new());
@@ -506,13 +484,21 @@ fn sakura_name_unreadable_warns_and_yields_none() {
 fn install_accept_splits_trims_and_drops_empty_names() {
     let tmp = TempPath::new("catalog-install-accept");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let with = put_ghost(
-        &root,
+    let with = put_ghost_in(
+        &root.ghost_store(),
         "with",
         "charset,UTF-8\nInstall.Accept, さくら ,,Emily ,  ,\t毒子\nsakura.name,本体\n",
     );
-    let one = put_ghost(&root, "one", "charset,UTF-8\ninstall.accept,ひとり\n");
-    let without = put_ghost(&root, "without", "charset,UTF-8\nsakura.name,本体\n");
+    let one = put_ghost_in(
+        &root.ghost_store(),
+        "one",
+        "charset,UTF-8\ninstall.accept,ひとり\n",
+    );
+    let without = put_ghost_in(
+        &root.ghost_store(),
+        "without",
+        "charset,UTF-8\nsakura.name,本体\n",
+    );
 
     let mut got = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let events = capture(|| {
@@ -534,7 +520,11 @@ fn install_accept_splits_trims_and_drops_empty_names() {
 fn install_accept_unreadable_warns_and_yields_empty() {
     let tmp = TempPath::new("catalog-install-accept-unreadable");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let ghost = put_ghost(&root, "locked", "charset,UTF-8\ninstall.accept,さくら\n");
+    let ghost = put_ghost_in(
+        &root.ghost_store(),
+        "locked",
+        "charset,UTF-8\ninstall.accept,さくら\n",
+    );
     let _held = hold_exclusive(&ghost.join("ghost").join("master").join("descript.txt"));
 
     let mut got = vec![String::new()];
@@ -637,6 +627,41 @@ fn homeurl_and_descript_name_unreadable_warn_and_yield_none() {
     let mut got = (Some(String::new()), Some(String::new()));
     let events = capture(|| got = (homeurl(dir), descript_name(dir)));
     assert_eq!(got, (None, None));
+    assert_eq!(
+        catalog_warns(&events),
+        ["catalog_descript_unreadable", "catalog_descript_unreadable"]
+    );
+}
+
+/// readme がフォルダの外・下のフォルダを指す → 無し（最上位のファイルだけを受ける・#24）。
+#[test]
+fn readme_outside_the_top_folder_is_absent() {
+    let tmp = TempPath::new("catalog-readme-outside");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    put_ghost_in(&root.ghost_store(), "up", r"readme,..\outside.txt");
+    put(&root.ghost_store().join("outside.txt"), b"o");
+    let sub = put_ghost_in(&root.ghost_store(), "sub", r"readme,sub\x.txt");
+    put(&sub.join("sub").join("x.txt"), b"x");
+
+    let listed = scan_ghosts(&root);
+    assert_eq!(listed.len(), 2);
+    assert!(
+        listed.iter().all(|g| g.identity.readme.is_none()),
+        "{listed:?}"
+    );
+}
+
+/// descript.txt がフォルダ → 一覧の読み手も単独の鍵の読み手も warn! 1 件ずつ（#23）。
+#[test]
+fn a_descript_that_is_a_folder_warns_in_both_readers() {
+    let tmp = TempPath::new("catalog-descript-folder");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let ghost = root.ghost_store().join("g");
+    fs::create_dir_all(ghost.join("ghost").join("master").join("descript.txt")).unwrap();
+
+    let mut got = (Vec::new(), Some(String::new()));
+    let events = capture(|| got = (scan_ghosts(&root), sakura_name(&ghost)));
+    assert_eq!(got, (Vec::new(), None));
     assert_eq!(
         catalog_warns(&events),
         ["catalog_descript_unreadable", "catalog_descript_unreadable"]

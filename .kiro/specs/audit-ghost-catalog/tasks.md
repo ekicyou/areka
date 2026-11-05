@@ -99,7 +99,7 @@
   - _Depends: 9_
   - _Requirements: 3.1, 4.5, 5.1, 9.1, 9.5, 9.14_
 
-- [ ] 12. (P) 一覧と設定の読みを直す（T9）
+- [x] 12. (P) 一覧と設定の読みを直す（T9）
   - #22 の OnBoot のシェル名を一覧と同じ読み方（鍵の大小を無視・空の値は無い）で決める。parsers の小文字の表が `main` に在ればそれへ乗り換えて自前の版を消し、無ければ自前の版を文字コードを引数に取る crate 内の関数にして使う（乗り換えは 18.1）
   - #23 の descript の読みを NotFound の形にし、#25 の一覧の名を決める公開の関数を置いて範囲の外の `crates/areka/src/mcp/resolve.rs` もそれを使う。#55 の同梱のバルーンを 1 回だけ復号する
   - #56 の 2 つの関数を消し、範囲の外の `crates/areka/src/boot_resolve*_tests.rs` の 4 つを直す。#78 の 4 行と注を消す
@@ -189,3 +189,4 @@
 - 8: 範囲の外の `crates/areka-mcp-bridge/src/config.rs:105` は中継の置き場（`mcp-bridge` の cache）を生の `AREKA_PROFILE_DIR` から作る＝空の値で作業フォルダからの相対になる。設計の「範囲の外で触るファイル」に無いので触っていない。完了の棚卸で起票する（持ち主は `audit-mcp-update-crates`）。
 - 8: `cargo test -p areka` の結合テスト `mcp_get_log_real_run` は 32bit の helper（`target\i686-pc-windows-msvc`）が未ビルドだと panic する。lib/bins は緑。18.3 の全体テストで見る。
 - 11: `dispatcher_choice_tests.rs` は 936→925 行で、見立ての約 790 行に届かない。research #75 の「StartTalk 18 か所・Close＋join 10 か所」は dispatcher のテスト 4 ファイルを合わせた数で、choice の中は 3 か所・2 か所だけ（3 ファイル合わせて −84 行）。`dispatcher_begin_talk_tests.rs` の 3 か所は T14 の表に無く残した。#79 は `audit-parsers-sakura` が未着地なので 18.1 へ回した。
+- 12: #56 は直さない。research の「本番に呼び手が無い」は事実と違い、`crates/areka/src/main.rs:623` が `BasewareRoot::ghost_dir` を本番で呼ぶ。テストの呼び手も約 60 ファイル（範囲の外の表に無い）ある。設計の「消すなら」の条件が成り立たないので、`ghost_dir`・`balloon_dir` は残し、`boot_resolve*_tests.rs` は触らない（進行役の判断・audit 系は推奨案で進めてよいという開発者の方針による）。18.2 のかけ直しでは直さない件として数える。

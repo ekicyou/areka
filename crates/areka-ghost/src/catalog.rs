@@ -269,15 +269,13 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
             return None;
         }
     };
-    // 行の有無は空の値を落とさずに見る（`lowercased` は空の値の鍵を落とすので使えない）。
-    let lines: BTreeSet<String> = parse_kv(&decode(&bytes, DefaultEncoding::Ansi))
-        .into_keys()
-        .map(|key| key.to_ascii_lowercase())
-        .collect();
+    let kv = parse_kv(&decode(&bytes, DefaultEncoding::Ansi));
+    // 行の有無は空の値を落とさずに見る（`fold_keys` は空の値の鍵を落とすので使えない）。
+    let lines: BTreeSet<String> = kv.keys().map(|key| key.to_ascii_lowercase()).collect();
     let first = ["balloon.directory", "balloon0.directory"]
         .into_iter()
         .find(|key| lines.contains(*key))?;
-    lowercased(&bytes).remove(first)
+    fold_keys(kv).remove(first)
 }
 
 /// ゴーストの descript.txt に書かれた標準のバルーンの指定。書かれていない鍵・空の値は `None`。
@@ -346,22 +344,8 @@ pub fn is_ghost_dir(dir: &Path) -> bool {
 }
 
 /// ゴーストの descript（`ghost/master/descript.txt`）を鍵を小文字化した表で読む（単独の鍵の読み手用）。
-/// 無い → None・読めない → `warn!`＋None。
 fn master_descript_keys(ghost_dir: &Path) -> Option<BTreeMap<String, String>> {
-    let path = master_descript(ghost_dir);
-    match std::fs::read(&path) {
-        Ok(bytes) => Some(lowercased(&bytes)),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
-        Err(err) => {
-            tracing::warn!(
-                event = "catalog_descript_unreadable",
-                path = %path.display(),
-                error = %err,
-                "descript.txt が読めない——その鍵は無しとして扱う"
-            );
-            None
-        }
-    }
+    read_descript(&master_descript(ghost_dir))
 }
 
 /// `<ゴースト>/ghost/master/descript.txt`
@@ -418,11 +402,9 @@ fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
 /// descript を読み、鍵を ASCII 小文字化した表を返す。無ければ黙って None（その項目ではない）、
 /// 読めなければ `warn!`＋None（要件 2.7）。
 fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
-    if !path.is_file() {
-        return None;
-    }
     match std::fs::read(path) {
-        Ok(bytes) => Some(lowercased(&bytes)),
+        Ok(bytes) => Some(lowercased(&bytes, DefaultEncoding::Ansi)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => {
             tracing::warn!(
                 event = "catalog_descript_unreadable",
@@ -435,12 +417,16 @@ fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
     }
 }
 
-/// 既存の charset 復号（要件 2.8）＋`parse_kv` の上で鍵を ASCII 小文字化する（R5）。
-/// 空の値（`name,`・`type,` 等）は鍵ごと落とす＝どの鍵でも「無し」と同じに扱う
-/// （仕様は空の値を定めない・task 2.2 の裁定）。
-fn lowercased(bytes: &[u8]) -> BTreeMap<String, String> {
-    parse_kv(&decode(bytes, DefaultEncoding::Ansi))
-        .into_iter()
+/// 既存の charset 復号（要件 2.8・宣言が無いときは `encoding`）＋`parse_kv` の上で鍵を ASCII
+/// 小文字化する（R5）。一覧とシェル名（`config`）の読みはこの 1 つ。
+pub(crate) fn lowercased(bytes: &[u8], encoding: DefaultEncoding) -> BTreeMap<String, String> {
+    fold_keys(parse_kv(&decode(bytes, encoding)))
+}
+
+/// 鍵を ASCII 小文字化し、空の値（`name,`・`type,` 等）は鍵ごと落とす＝どの鍵でも「無し」と
+/// 同じに扱う（仕様は空の値を定めない・task 2.2 の裁定）。
+fn fold_keys(kv: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    kv.into_iter()
         .filter(|(_, v)| !v.is_empty())
         .map(|(k, v)| (k.to_ascii_lowercase(), v))
         .collect()
@@ -481,7 +467,7 @@ mod all_shells_tests;
 mod standard_balloon_tests;
 #[cfg(test)]
 #[path = "catalog_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "catalog_tests.rs"]
 mod tests;

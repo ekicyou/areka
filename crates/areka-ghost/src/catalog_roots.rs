@@ -289,10 +289,6 @@ fn root_key(p: &Path) -> String {
     });
     let s = abs.to_string_lossy();
     let trimmed = s.trim_end_matches(['\\', '/']);
-    // `C:\` のような根だけのパスは区切りを落とすと意味が変わるので残す。
-    if trimmed.ends_with(':') {
-        return fold_key(&format!("{trimmed}\\"));
-    }
     fold_key(trimmed)
 }
 
