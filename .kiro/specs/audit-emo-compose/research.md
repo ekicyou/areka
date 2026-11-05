@@ -305,3 +305,27 @@
 
 ---
 読まなかった所は無い（範囲の 97 ファイルを全部読んだ）。テストもビルドも走らせていない（「今のテストは緑」は読みからの前提）。
+
+## 12. 指摘 9 の SSP の測り（2026-11-05・設計の討議の中で）
+
+開発者「都度計るのは困る。計りはまとめるか、今行え」を受けて、設計の段でまとめて測った。
+
+- 測った SSP: `SSP/2.9.29 (20261103-7)`（`C:\wintools\ssp\ssp.exe --ghost emo`）。ゴースト `emo` に試しのシェル `areka_append_probe` を一時に置き、`\![change,shell,…]` で切り替え、`dump_surface`（面を 1 枚だけ初めの状態で描く）の画素で読んだ。終わったら元のシェルへ戻し、試しのシェルを消し、SSP を降ろした。
+- 試しのシェル: 土台 `gray.png`（40×40 の灰）・`red.png`（20×20）・`green.png`（20×20）・`blue.png`（10×10）。descript に `seriko.use_self_alpha,1`（無いと左上の色が抜き色になり全部透明になった）と `sakura.bindgroup1.default,1`。
+
+| # | 書いたもの | SSP の結果（画素） | SSP の記録 | 今の areka |
+|---|---|---|---|---|
+| 0 | `surface0{element0 灰, element1 赤 0,0}` ＋ `surface.append0{element1 青 20,20}` | 赤と青の**両方**を描く | Warning「Surface=0/Element=1 二重定義されています」 | 両方を描く（同じ） |
+| 2 | `surface2{element0 灰, element1 赤}` ＋ 2 つ目の `surface2{element1 青 20,20}` | 赤と青の**両方**を描く | Warning「Surface=2/Element=1 二重定義されています」 | 後の行だけ（前の element1 を除く）＝**違う** |
+| 1 | `surface1{animation1 bind・pattern0 赤・pattern1 緑}` ＋ `surface.append1{animation1.pattern2 青}` | 赤・緑だけ。追記の pattern2 は**描かない** | 記録なし | animation1 を丸ごと置き換える（pattern2 だけ）＋`warn!`＝**違う** |
+| 3 | `surface3{animation1 bind・pattern0 赤}` ＋ `surface.append3{animation1.interval,bind・pattern1 緑}` | 赤だけ。追記の animation1 は**丸ごと捨てる** | **Error**「Surface=3/Animation=1 二重定義されています」 | 丸ごと置き換える（緑だけ）＝**違う** |
+| 5 | `surface5{animation1 bind・pattern0 赤}` ＋ `surface.append5{animation1.pattern0 青}`（同じ pattern番号） | 赤だけ（追記を捨てる） | 記録なし | 丸ごと置き換える（青だけ）＝**違う** |
+| 6 | `surface6{animation1 bind・pattern0 赤・pattern1 緑}` ＋ 2 つ目の `surface6{animation1.pattern2 青}` | 赤・緑だけ（後のブレスの行を捨てる） | 記録なし | pattern番号ごとに足す（赤・緑・青）＝**違う** |
+| 8 | `surface8{element0 灰}` ＋ 2 つ目の `surface8{animation1 bind・pattern0 青}`（新しい番号） | 青を描く（足す） | 記録なし | 足す（同じ） |
+| 9 | `surface9{element0 灰}` ＋ `surface.append9{animation1 bind・pattern0 青}`（新しい番号） | 青を描く（足す） | 記録なし | 足す（同じ） |
+| 4・7 | `animation2` ＋ `sakura.bindgroup2.default,1` | 1 つのブレスでも描かない（7）＝bindgroup 2 の既定が効かない形だった | — | 測りに使わない（4 は 9 で測り直した） |
+
+- **読み**: SSP 2.9.29 は、追記と 2 つ目の波括弧を同じ規則で扱う。⑴ element は同じ番号でも両方を足す（描く順は書いた順・警告）。⑵ animation は、すでにある番号の行（interval でも pattern でも）を後から書いても捨てる（**先勝ち**）。interval を書き直したときだけ Error を出す。⑶ 無い番号の animation は足す。
+- **測れなかったもの**: collision（当たり判定）。画素に出ず、画面のクリック無しで読む口が MCP に無い。要件の討議の決めにより、collision は今のまま規則を説明に書き残す。
+- **実在のシェルでの当たり**（`C:\wintools\ssp\ghost\` の 6 体を数えた・使い捨ての数え上げ）: 波括弧の同じ番号の element・animation の書き直しは `emily4`・`emo`・`claudia`・`R_POST_and_KOMAINU`・`dot_sakura`・`pasta-in-windows` のどれも 0 件。追記の同じ番号の animation は `emo` に 1 件（今 areka は丸ごと置き換え、SSP は捨てる＝見た目が違う）。
+- **完了した spec との関わり**: 波括弧の「同じ名前の行は後勝ち」は `areka-P0-emily-ghost-verification`（2026-10-17・開発者の決め「足し合わせる」を受けた設計とタスク 6.1・`fold_merge_tests.rs` の `same_named_line_in_a_later_brace_wins`）で入った。「足し合わせる」は SSP と同じだが、「後勝ち」は SSP と違う＝SSP に合わせるなら、完了した spec の規則（種類 1）を変える。設計の討議の議題にする。
