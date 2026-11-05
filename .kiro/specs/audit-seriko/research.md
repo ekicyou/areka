@@ -210,4 +210,8 @@
 
 1. 指摘 3 の ⒜: `areka-parsers` に、descript の文字列だけから `BindGroupDefaults` を作る口があるか（無ければ、テストの側は今の `bind_tests.rs:443-459` の `groups_of` のような WorkDir 経由になる）。
 2. 指摘 20: 「数え始めが 0 で止まる」が今の実機（emo2 と検体）でどれだけ起きるか。
-3. 指摘 11: `ScopeStates` を `BTreeMap` にしたとき、抽選の順のテスト（`looper_tests.rs`・`looper_always_tests.rs`・`looper_trigger_tests.rs` の乱数の列を焼き込んだもの）がそのまま緑か。
+3. **兄弟との申し合わせ（2026-11-05・`audit-parsers-sakura` から）**:
+   - 向こうの指摘 15 で、bindgroup の欄が「スコープ番号を鍵にした 1 つの表」に変わる。`bind.rs` の `from_groups`（229-269 行）の 3 枝は、向こうが呼び出し元の直しとして畳む。こちらは `from_groups` の中身に触らない。
+   - 向こうの指摘 36 で `resolve.rs` の別名の引きを、38 で `Surface.id` の字面を触る。どちらも向こうの実装の最後の段で行う。行がぶつかったら、後から着地するほうが main を取り込んで揃える。
+   - 新しい表の型を parsers の外から組めるかは、向こうに頼んだ。組めれば、指摘 3 の ⒜ のテストはその型で組む（調べ 1 が解ける）。組めなければ descript の文字列を読む口で組む。
+4. 指摘 11: `ScopeStates` を `BTreeMap` にしたとき、抽選の順のテスト（`looper_tests.rs`・`looper_always_tests.rs`・`looper_trigger_tests.rs` の乱数の列を焼き込んだもの）がそのまま緑か。
