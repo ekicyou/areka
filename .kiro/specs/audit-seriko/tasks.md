@@ -41,7 +41,7 @@
   - 完了: 移したテストが全部緑で、クレートの中にテスト用の口の呼び出しが残っていない
   - _Boundary: areka-seriko の名前の表を使うテスト_
   - _Requirements: 2.3, 4.1, 7.2, 8.1_
-- [ ] 2.2 テスト用の口と宣言の型を消し、範囲の外の呼び出し元を直す（統合）
+- [x] 2.2 テスト用の口と宣言の型を消し、範囲の外の呼び出し元を直す（統合）
   - 触る前に、`shell_carry_tests.rs` の持ち主 `audit-emo2-boot-spine` が走っていないか、同じ `bind.rs` に触る `audit-parsers-sakura` が着地したか走っているかを確かめて記録する。着地していれば main を取り込んでから消す
   - `shell_carry_tests.rs` の名前の表を descript の文字列で組む形にし、今ある `char2_names` の中身を 1 つの道具にして両方から呼ぶ（作業フォルダはワークツリーの `target\` の下の `WorkDir` のまま）
   - `BindResolver::new` と `BindOptionDecls` を消し、再輸出と `lib.rs` の doc の列、`bind.rs` の「`new` で組んだ表は…」の説明を消す。消す前のツリー全体の確かめを記録する
@@ -145,3 +145,5 @@
 - 1.3: `tests/common/mod.rs`（先頭に `#![allow(dead_code)]`）へ `emote_cue`・`emo2_surfaces_txt`・`emo2_resolver`・`TalkNotice`＋From 2 つ・`NullTextSink` を移した。写しが 1 本しか無い `emo2_binds`・`RecordingTextSink`・`test_bind_resolver`・`run_scenario` は元の場所のまま。
 - 1.4: 持ち主 `audit-test-kits` は走っていない（2026-11-05 の origin/main に spec.json が無く、作業場も枝も無い）。`event.rs:145`・`event_tests.rs:15`・`:102` の出所を `lib_test_support.rs` へ向けた（3 行だけ）。範囲の外の申し送り: `event_tests.rs:15` の括弧書き `（Capture::on_event）` は着手前から古い書き方（持ち主 `audit-test-kits` の受け持ち・完了の棚卸で渡す）。
 - 2.1: 名前の表は descript の文字列 → `groups_of`（`bind_tests.rs`・統合テスト用の写しは `tests/common/mod.rs`）→ `BindResolver::from_groups` で組む。期待値の変わったテストは 0 件（手組みの表と本番の表は移したどのテストでも同じ答え）。`ClockRig::configured` の 2 つ目の引数は `BindResolver` そのもの、`eye_names()` は `eye_resolver()` へ。`groups_of` は呼ぶたびに `target\` の下に作業フォルダを作るので lib のテストは約 0.6 s → 1.4 s（ファイルを書かない読みの `read_bindgroup_defaults` は parsers の `pub(super)` で境界の外）。残る `BindResolver::new`／`BindOptionDecls` は定義・再輸出・doc と範囲の外の `shell_carry_tests.rs` だけ。
+- 2.2（着手 HEAD `f0b3c80d`）: 消す前のツリー全体の `rg -n 'BindResolver::new'` は 2 件（`bind.rs` の doc・`shell_carry_tests.rs`）、`rg -n 'BindOptionDecls'` は 8 件（`bind.rs` 3・`lib.rs` 2・`shell_carry_tests.rs` 3）。消した後は両方 0 件。`cargo build --workspace --all-targets` は警告 0。持ち主の確かめ: `audit-emo2-boot-spine` は brief.md だけ（走っていない）。`audit-parsers-sakura` は走っている（main に未着地・その枝は areka-seriko に未着手）。`bind.rs` の `from_groups`・`ScopeNames::read` を触る予定なので、こちらは消すところだけにし、伝言で知らせた（ぶつかったら後から着いた側が合わせる）。`shell_carry_tests.rs` は `names_of(shell)`（`WorkDir` → `resolve_with_shell` → `from_groups`）を `names`・`char2_names` の両方から呼ぶ。`BindResolver` の構造体の doc の「app 層が素データで組む・parsers に依存せず」も、事実と合わなくなったので消した。
+- 並走からの知らせ（2026-11-05・`audit-emo-compose`、枝 `claude/kiro-start-audit-emo-compose-cb01ad` の `a7bad45c`）: `parts_tests.rs` のテスト 1 本の名が `part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field` から `part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock` に変わり、期待も変わる（見える部品がコマの無い bind+random の先を数えなくなったため）。6.1 で main を取り込んだ後は、名の一覧をこの 1 本の分だけ読み替えて比べる。同じ知らせの気づき（直していない）: 見えない間の部品の抽選の時計が古いまま残り、見え直したときに経過した分を一度に進める。6.1 の audit のかけ直しで見る。

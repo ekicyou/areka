@@ -109,32 +109,12 @@ pub enum BindChoicePolicy {
     Multiple,
 }
 
-/// `bindoption` 宣言のスコープ別カテゴリ名集合（名前付き搬送・bindopt 設計 D2/D3）。
-///
-/// 同型の `BTreeSet<String>` が 4 本並ぶため、位置引数で直列に並べず名前付きフィールドで運ぶ
-/// （取り違えをコンパイラに検出させる）。[`Default`] 実装＝全集合空＝全カテゴリが正典の既定
-/// （[`BindChoicePolicy::Default`]）。
-///
-/// [`Default`]: std::default::Default
-#[derive(Clone, Debug, Default)]
-pub struct BindOptionDecls {
-    /// 本体側（sakura）で `mustselect` と宣言されたカテゴリ名（bindopt 1.2）。
-    pub sakura_mustselect: BTreeSet<String>,
-    /// 相方側（kero）で `mustselect` と宣言されたカテゴリ名（bindopt 1.2）。
-    pub kero_mustselect: BTreeSet<String>,
-    /// 本体側（sakura）で `multiple` と宣言されたカテゴリ名（bindopt 1.1）。
-    pub sakura_multiple: BTreeSet<String>,
-    /// 相方側（kero）で `multiple` と宣言されたカテゴリ名（bindopt 1.1）。
-    pub kero_multiple: BTreeSet<String>,
-}
-
 /// bind 名前解決スナップショット（所有・純関数・[`SurfaceResolver`] 同型）。
 ///
 /// 本体側（sakura）・相方側（kero）を別々の所有スナップショット
 /// （`BTreeMap<(カテゴリ, パーツ), 着せ替え ID>`）として保持し、`(カテゴリ名, パーツ名)` から
-/// 着せ替え ID を引く。実行時 `EmoWorld` や parsers に依存せず、構築時に app 層（task 7.1）が
-/// `MountModel` の名前転記から素データで組む（design「Allowed Dependencies」・seriko → parsers
-/// 依存を追加しない）。状態を持たず同一入力に常に同一出力（純粋）。`Send`
+/// 着せ替え ID を引く。実行時 `EmoWorld` に依存しない。
+/// 状態を持たず同一入力に常に同一出力（純粋）。`Send`
 /// （`BTreeMap<(String,String),u32>` は `Send`）。
 ///
 /// [`SurfaceResolver`]: crate::SurfaceResolver
@@ -196,36 +176,6 @@ impl ScopeNames {
 }
 
 impl BindResolver {
-    /// 本体側・相方側の名前表（所有）と `bindoption` 宣言集合から構築する。
-    ///
-    /// app 層（起動時資産構築）が `MountModel.bindgroups` の名前転記から素データで組む。
-    /// 二重定義せず、渡された表をそのまま所有スナップショットとして保持する。
-    ///
-    /// `options` は `sakura/kero.bindoption*.group,カテゴリ,オプション` 由来のスコープ別
-    /// カテゴリ名集合（bindopt 設計 D2/D3）。[`BindOptionDecls::default`]（全集合空）を渡せば
-    /// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`]）になる。
-    pub fn new(
-        sakura: BTreeMap<(String, String), u32>,
-        kero: BTreeMap<(String, String), u32>,
-        options: BindOptionDecls,
-    ) -> Self {
-        Self {
-            sakura: ScopeNames {
-                table: sakura,
-                mustselect: options.sakura_mustselect,
-                multiple: options.sakura_multiple,
-                ..ScopeNames::default()
-            },
-            kero: ScopeNames {
-                table: kero,
-                mustselect: options.kero_mustselect,
-                multiple: options.kero_multiple,
-                ..ScopeNames::default()
-            },
-            chars: BTreeMap::new(),
-        }
-    }
-
     /// シェルの着せ替えの読み（`sakura.*`・`kero.*`・`char{N}.*`）から 3 種類のスコープの名前表と
     /// `mustselect`／`multiple` を組む（要件 14.2・14.3）。
     pub fn from_groups(groups: &BindGroupDefaults) -> Self {
@@ -278,7 +228,7 @@ impl BindResolver {
     }
 
     /// カテゴリのパーツ名を、シェルの descript.txt に書かれた順（行の順・同じパーツ名は 1 度）で返す。
-    /// 無いカテゴリは空（要件 5.2・5.9）。[`BindResolver::new`] で組んだ表は行を持たないので空。
+    /// 無いカテゴリは空（要件 5.2・5.9）。
     pub fn category_parts_in_order(&self, ns: BindNamespace, category: &str) -> Vec<String> {
         let mut parts: Vec<String> = Vec::new();
         for (_line, cat, part) in &self.scope(ns).written {

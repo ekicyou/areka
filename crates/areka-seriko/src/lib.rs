@@ -18,7 +18,7 @@
 //!   統括・per-(scope, slot) 再生状態・`on_tick`（抽選→進行→PatternState 差分）・`on_surface_changed`。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
 //!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
-//! - bind ポリシー層 [`BindChoicePolicy`]／[`BindOptionDecls`]／[`BindResolver::policy`]:
+//! - bind ポリシー層 [`BindChoicePolicy`]／[`BindResolver::policy`]:
 //!   `bindoption` 宣言からカテゴリの 3 値ポリシー（mustselect／既定／複数可）を導く純関数群。
 //! - bind 類別層 [`BindDirective`]／[`parse_bind_directive`]: `\![bind,...]` トークン列を
 //!   Apply／Toggle／CategoryWide／Malformed へ類別する純関数（severity 付与は actor 責務）。
@@ -60,9 +60,8 @@ pub use actor::{
     SerikoClock, SerikoMsg, SerikoReplace, SerikoSink, spawn_seriko, spawn_seriko_clocked,
 };
 pub use bind::{
-    BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, DefaultBinds,
-    NamedBindResult, accumulate, apply_named_bind, build_static_bindset, parse_bind_directive,
-    scope_namespace,
+    BindChoicePolicy, BindDirective, BindNamespace, BindResolver, DefaultBinds, NamedBindResult,
+    accumulate, apply_named_bind, build_static_bindset, parse_bind_directive, scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
