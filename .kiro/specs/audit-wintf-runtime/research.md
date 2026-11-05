@@ -808,6 +808,8 @@
 | 94 | `FlexContainer`・`FlexItem` | 0 | 型としての利用は 0（ほかの一致は example の文字列と `Name`） |
 | 101 | `Opacity`（`ecs/layout/metrics.rs`） | 0 | 型としての利用は 0。`ecs/graphics/visual.rs:140` の注記が名前を引く（あちらの持ち物）。あちらの着地の後に注記を直す |
 
+**消す直前の確かめ（タスク 1.1・C1・2026-11-05）**: `git grep -n -w -e RecCommandSink -e command_sink -e command_types -e dup_com -e D2D1FactoryExt -e create_path_geometry -e create_rounded_rectangle_geometry -e create_bitmap_from_wic_bitmap -e draw_text -e fill_geometry -e draw_image -e delegatable_trait -- . ':!vendors' ':!.kiro'` を消す前に引き、定義のファイルと `tests/com/` の外の参照は 0 件（表の 1・13・24・16・69 のとおり）。消した後に同じ grep を引き直した残りは、範囲の外の 3 種だけ: `src/ecs/widget/bitmap_source/systems.rs:186` の注記（`draw_image` を一般の語として引く）・`src/win_state.rs:8` の `#[delegatable_trait]`（17・20 で W1 が消す）・`doc/archive/spec/` の古い擬似コードの `draw_text`／`draw_image`（wintf の口ではない）。`D2D1CommandListExt::open` の呼び手も 0 件（`.open()` の grep で `crates/wintf` に 0）。`create_command_list` は 7.3（T2b）まで残す。
+
 #### 繰り延べた調べの答え
 
 - **15 番（WIC の α）**: `windows` 0.62.2 は `IWICImagingFactory::CreateComponentInfo`（`Imaging/mod.rs:3486`）と `IWICPixelFormatInfo2::SupportsTransparency`（`:5614`）を持ち、機能 `Win32_Graphics_Imaging_D2D`（根の `Cargo.toml:74`）が既に入っている＝依存も機能も足さない。WIC の文書は「番号つきの形式は透明度を持ちえても TRUE を返さない」と言うので、パレットの道（`palette_has_alpha`）は残る。手書きの 12 の一覧には `16bppBGRA5551`・`64bppRGBAHalf`・`40bppCMYKAlpha` などの α つきの形式が入っていない（TIFF・JPEG XR の読み手が返しうる）。
