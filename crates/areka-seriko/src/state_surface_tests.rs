@@ -169,7 +169,7 @@ fn show_command_carries_static_binds() {
     }
 }
 
-/// binds() アクセサ（要件 4.3/4.4）: 静的集合を返し、切替 API を持たない（不変）。
+/// binds() アクセサ（要件 4.3/4.4）: 静的集合を返す（差し替えは `rebase_shell` だけ）。
 #[test]
 fn binds_accessor_returns_static_set() {
     let states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([

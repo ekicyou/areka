@@ -27,8 +27,8 @@
 //! # 停止経路の形
 //!
 //! inbox は std mpsc チャネル。停止は 2 経路——(1) [`SerikoMsg::Close`] 受領、(2) 全 [`SerikoSink`]
-//! （＝全 `Sender`）drop による受信端の `RecvError`——で、後続 3.2 が結ぶ `run_inbox` ループを
-//! 正常終了させる。本タスクは列挙とチャネル形のみ用意し、ループ自体は結線しない。
+//! （＝全 `Sender`）drop による受信端の `RecvError`——で、`run_inbox` ループを
+//! 正常終了させる。
 //!
 //! # 失敗経路のログ規律（infallible・silent failure 禁止）
 //!
@@ -142,8 +142,8 @@ pub struct SerikoSink {
 impl SerikoSink {
     /// inbox の `Sender` からブリッジを組む。
     ///
-    /// 後続 3.2 の `spawn_seriko` がアクター inbox の送信端から構築する。std mpsc の
-    /// `Sender` は `Clone`（複製すれば複数 sink 口へ配れる）だが、本タスクでは単一送出端で足りる。
+    /// `spawn_seriko` がアクター inbox の送信端から構築する。複製した sink はどれも同じ inbox へ届く
+    /// （型の doc の `Clone` の節）。
     pub(crate) fn new(tx: std::sync::mpsc::Sender<SerikoMsg>) -> Self {
         Self {
             tx,

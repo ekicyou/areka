@@ -81,8 +81,8 @@ pub enum BalloonResolve {
     Show(u32),
     /// 非表示センチネル `-1`（→ 後段 [`SurfaceTarget::Hide`] で `apply_balloon`・要件 4.2）。
     Hide,
-    /// 非数値（名前形 `\b[バルーン１]`）＝M-boot 未対応の正当構文。
-    /// alias 表は引かず（数値解決のみ・要件 4.4）、呼び手（actor）が warn!＋skip する（要件 4.5）。
+    /// 非数値（名前形 `\b[バルーン１]`）＝文字の層（emo-text）が箱の名前で読む正当構文。
+    /// alias 表は引かず（数値解決のみ・要件 4.4）、呼び手（actor）は `debug!`＋skip する。
     NameForm,
     /// 数値だが不正（`-2`・負の非 `-1`・`u32` 超過）＝破損入力。
     /// 呼び手（actor）が error!＋skip する（シェル経路と同水準・要件 4.5）。

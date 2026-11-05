@@ -110,7 +110,7 @@
   - 完了: 6 本が緑で、試す分岐を外すと赤になることを 1 本ずつ確かめた記録がある
   - _Boundary: table.rs・bind_tests.rs・bind_named_tests.rs・calls_tests.rs・actor_replace_tests.rs_
   - _Requirements: 4.1, 4.2, 6.1, 6.3, 8.1_
-- [ ] 5.3 使われない見本の根を消し、古い説明を直す（指摘 10・12）
+- [x] 5.3 使われない見本の根を消し、古い説明を直す（指摘 10・12）
   - `R_POST_AND_KOMAINU`・`r_post_and_komainu_shell_root`・その自己テストを、消す前のツリー全体の確かめを記録してから消す
   - 古い説明（`actor.rs` の 2 か所・`resolve.rs`・`state_surface_tests.rs`・`looper_parts_emo2_tests.rs` の手書きの数と一覧）を、行番号でなく中身で探して直すか消す（emo2 のテストは理由の 2 行だけ残す）
   - 完了: クレートのテストが緑で、`rg` で消した名がツリーに 0 件
@@ -156,3 +156,4 @@
 - 4.6（着手 HEAD `9dae36f6`）: `SETTLE_MAX_TICKS = 37_500` を置き、終わりの時刻を `wait_ms.min(上限)` にした（上限の内は丸めない）。越えたら `warn!`（欄は `surface_id`・`max_ticks`・`wait_ms`）を 1 行出す。テストを 2 本足して 555 件。上限ちょうどの面は warn 0 行で 101、上限を 1ms 越える面は warn 1 行で 100。`until = wait_ms` に戻すと warn が 0 行で赤、`min` だけ外すと `Some(101)` で赤になった。
 - 5.1（着手 HEAD `d29e7b41`）: 5 本を直して 555 件のまま。赤の確かめは次のとおり。① `non_monotonic_tick_is_ignored` のコマは 3 枚（`(2106,0),(2110,100),(2120,1000)`）にした。design の指摘 1 の行は「コマ 2 枚」だが、2 枚だと 2150 で再生が終わって消え、番人が無くても 2050 で何も出ないので、指令 0 件の確かめが何も見ていないことになる。番人を外すと 2050 で 2106 へ巻き戻る `Show` が出て赤。② `debug!` を消すと赤。③ surface50 に Random を 1 本足すと 4≠3 で赤。④ 刻みの範囲を空にすると赤。⑤ は新しいテストを足さず、もとからある較正のテスト `word_warn_filter_catches_an_unreadable_target` に入れた。`method.rs` の `%name` を `?name` にすると赤。摂動で触った範囲の外のファイル（`areka-emo-compose/src/method.rs` など）は HEAD のバイトに戻した。
 - 5.2（着手 HEAD `3f3febb3`）: テストを 6 本足して 561 件。本番のコードは HEAD のバイトのまま。⑴⑵ は読み手から届かない分岐なので、design のとおり型で組んだ。⑶ の重なりは、同じキーの 2 行目が前の行を上書きするため、`bindgroup08` と `bindgroup8` の綴りの違いで作った。⑷ には、本体側の同じ名前（`sakura` の 1303）を引かないことの確かめも足した。どれも、試す分岐を外すと赤になることを確かめた。申し送り（6.1 の audit で見る）: `calls.rs` の `(lo / period).saturating_sub(1)` の `-1` は外しても緑のまま。累積の待ちは周期以下なので、前の周のコマは窓に入りえない。上のコメント「1 つ前の周の終わりのコマも窓に入りうる」も事実と合わない。
+- 5.3（着手 HEAD `a5cdb4a5`）: 消す前のツリー全体の rg で見ると、`R_POST_AND_KOMAINU`・`r_post_and_komainu_shell_root` の seriko の外の件数は、`crates/areka/src/placement/placement_shared_test_support.rs` ほかと `crates/areka-emo-present/src/shell_target_test_support.rs` が自分で持つ同じ名前の別物だけで、seriko の口の使い手は 0 件。消した後は areka-seriko の中で 0 件、テストは 560 件。検体 `R_POST_and_KOMAINU` は他のクレートが使うので残した。申し送り（6.1 で見る）: design の 12 行目に挙がっていない古い説明が残っている（`actor.rs` の「後続の時間駆動ループ」「本タスク・後続 4.1」「cue 適用駆動（本タスク）」「M-boot」と、`resolve.rs` の「M-boot … 名前解決は将来 additive」）。

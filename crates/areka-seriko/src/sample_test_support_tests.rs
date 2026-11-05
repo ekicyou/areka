@@ -5,7 +5,7 @@
 //! ここで確かめるのは「返ったフォルダに `surfaces.txt` が実在する」ことだけでよい。
 //! 綴り違い・展開先の取り違え・登記漏れは、どれもこの 1 本で赤になる。
 
-use super::{konnoyayame_shell_root, r_post_and_komainu_shell_root};
+use super::konnoyayame_shell_root;
 
 #[test]
 fn konnoyayame_shell_root_holds_surfaces_txt() {
@@ -13,16 +13,6 @@ fn konnoyayame_shell_root_holds_surfaces_txt() {
     assert!(
         shell.join("surfaces.txt").is_file(),
         "konnoyayame のシェルに surfaces.txt が無い: {}",
-        shell.display()
-    );
-}
-
-#[test]
-fn r_post_and_komainu_shell_root_holds_surfaces_txt() {
-    let shell = r_post_and_komainu_shell_root();
-    assert!(
-        shell.join("surfaces.txt").is_file(),
-        "R_POST_and_KOMAINU のシェルに surfaces.txt が無い: {}",
         shell.display()
     );
 }

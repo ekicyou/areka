@@ -14,62 +14,11 @@
 //! 刻みが境界から 880ms 以上遅れたときしか重ならない（design.md「emo2 についての事実」）。
 //! 本テストの刻みの間隔は 33〜67ms なので、その端（要件 7.5）には触れない。
 //!
-//! # 着手前の確認（tasks.md 1.1）: 既存テストの刻みの飛び
+//! # 刻みを回すほかのテストが端（要件 7.5）に当たらない理由
 //!
-//! 刻みを回す既存テストで、隣り合う刻みの差が 880ms 以上の所は次のとおり（HEAD `eb1a7e77` で
-//! ワークスペース全体の `send_tick`／`SerikoMsg::Tick`／`on_tick`／`inject_seriko_tick` を拾った）。
-//! 実物の emo2 の表で seriko の刻みを回す既存テストは、**seriko クレートの中には 0 本**。
-//! クレートの外では `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs` の 5 本が、実物の emo2 の
-//! シェルの表（`SpineHarness::boot_live`）に常に発火する乱数を注入して刻みを回す。
-//! seriko クレートの `tests/regression.rs`・`tests/cue_sequence.rs`・`tests/bind_e2e.rs`・
-//! `tests/balloon_face_e2e.rs` は emo2 の alias 表を使うが、ループは `SerikoLoopConfig::disabled()`
-//! （空の表）で、seriko の刻みを 1 つも送らない。seriko クレートの中で刻みを回すテストはどれも
-//! 手組みの表（emo2 の形を模した合成）を使う。本番の `emo2_boot/mod.rs` の刻みは実時刻でテストではなく、
-//! `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` の刻みは dispatcher 宛で seriko には届かない。
-//!
-//! - `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs`（**実物の emo2 の表**・常に発火）:
-//!   `spine_blink_smoke_send_tick_drives_loop_pattern_command`（40ms 刻み・飛びなし）・
-//!   `spine_e2e_kero_blink_one_cycle_golden`（0→1000。その後 1040・1120）・
-//!   `spine_e2e_sakura_blink_after_bind_one_cycle_golden`（0→1000。その後 1150・1172）・
-//!   `spine_e2e_sakura_blink_default_off_emits_nothing`（0→1000→2000→…→5000・各 1000）・
-//!   `spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing`（0→1000。その後 1040・1120）
-//! - `tests/loop_integration.rs`: `kero_negative_tail_restores_base_full_path`（0→1000）・
-//!   `sakura_residual_tail_keeps_frame_full_path`（0→1000）・
-//!   `playing_anim_not_relotteried_across_boundary_full_path`（0→1000・1000→2000）・
-//!   `bindrandom_off_consumes_no_rng_full_path`（0→1000・1000→2000）・
-//!   `bindrandom_on_fires_full_path`（0→1000）・`unchanged_tick_emits_nothing_full_path`（0→1000）・
-//!   `surface_switch_clears_playback_and_frame_full_path`（0→1000・1000→2000）・
-//!   `residual_immediately_cleared_on_refire_full_path`（0→1000・1100→2000）・
-//!   `other_negative_surface_warns_once_and_spares_others_full_path`（0→1000・1040→2000）
-//! - `src/looper_tests.rs`: 0→1000 が 21 本、ほかに `playing_anim_is_not_relotteried`（1000→2000）・
-//!   `kero_negative_tail_restores_base_and_is_relotteriable`（1120→2000）・
-//!   `residual_is_immediately_cleared_on_refire`（1100→2000）・
-//!   `absent_scope_balloon_table_is_inert`（1000→2000）・`on_surface_changed_removes_playback`（1000→2000）・
-//!   `disabled_config_is_inert`（1000→5000）・
-//!   `playing_bind_anim_removed_from_binds_stops_and_does_not_revive`（1100→2000）
-//! - `src/looper_replace_tests.rs`: 2 本とも 0→1000
-//! - `src/actor_replace_tests.rs`: 2 本とも 0→1000
-//! - `src/actor_bind_loop_tests.rs`（`SerikoMsg::Tick` の直投函）:
-//!   `tick_with_no_shown_slot_is_complete_no_op`（0→1000・1000→5000・表示中のサーフェスが無いので
-//!   抽選も発火も無い）・`tick_boundary_cross_emits_show_carrying_pattern`（0→1000）・
-//!   `emote_surface_change_resets_loop_playback`（0→1000）。どれも手組みの表で、コマが指す
-//!   サーフェス（2106・500 など）は自分のアニメーションを持たず、飛びの前に発火も無い
-//!   （`send_tick_after_actor_stopped_logs_debug_no_panic` は停止後の 1 刻みだけ）
-//! - `src/actor_dispatch_tests.rs`: 刻みなし（`tests/bind_e2e.rs`・`tests/balloon_face_e2e.rs` の
-//!   `SakuraMsg::Tick` は台本の時計で、seriko の刻みではない）
-//!
-//! **端（要件 7.5）に当たるものは 0 件**。理由は次の 2 つ:
-//!
-//! 1. seriko クレートの中の手組みの表はどれも、pattern定義が指すサーフェス（2106・2110・500・3000 など）に
-//!    自分のアニメーションを持たせていない。部品として抽選されるものが表に 1 つも無い。
-//!    （実物の emo2 の表では 2110／2210 がアニメーションを持つので、`spine_seriko_loop_tests.rs` の 5 本には
-//!    この理由は使えない。あの 5 本は下の 2 だけで端を外れる。）
-//! 2. 飛びの直後の刻み（境界を跨ぐ刻み）で 2110／2210 が絵に出ているものが無い。0→1000 は最初の
-//!    刻みが境界を遅延初期化するだけで、その前に発火は無い。それ以外の飛びの直前は、どれも
-//!    コマ無し・停止（`-1`・`-2`）・末尾の残留（701・1410 など）・再生中の 2106 で、2110 は出ていない。
-//!    `spine_seriko_loop_tests.rs` で 2110 が出るのは 1040（40ms 刻みの回では 1040・1080 など）だけで、
-//!    その刻みは境界を跨がない。`spine_e2e_sakura_blink_default_off_emits_nothing` は着せ替えが OFF で
-//!    発火そのものが無い。
+//! 1. seriko クレートの中の手組みの表はどれも、pattern定義が指すサーフェスに自分のアニメーションを
+//!    持たせていない。部品として抽選されるものが表に 1 つも無い。
+//! 2. 飛びの直後の刻み（境界を跨ぐ刻み）で 2110／2210 が絵に出ているものが無い。
 
 use super::tests::{cfg, pattern_of};
 use super::*;
