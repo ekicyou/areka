@@ -62,6 +62,28 @@ fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
     img.as_ref().map(|i| (i.width, i.height))
 }
 
+/// 指摘 20: 空の面列を渡すと、面 0 の定義が無い `error!` を 1 行出して空の定義を返す
+/// （panic しない・面 0 必在の契約を破った呼び手でも続ける）。
+#[test]
+fn empty_faces_record_one_error_and_give_empty_definition() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+
+    let (defs, events) =
+        log_capture_kit::capture(|| load_scope_balloon_definitions(&dir.0, 0, &[], &dec, ALPHA));
+    let errors: Vec<&CapturedEvent> = events.iter().filter(|e| e.level == Level::ERROR).collect();
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert!(
+        errors[0].message().contains("面 0 の定義が無い"),
+        "{errors:?}"
+    );
+    let empty = FaceDefinition {
+        model: areka_parsers::balloon::parse_str("", None),
+        arrows: MarkerPair::default(),
+    };
+    assert_eq!(defs, ScopeBalloonDefinitions::single(0, empty));
+}
+
 /// 面 2 の設定ファイルの `validrect`・書体・矢印の鍵は面 2 の定義にだけ入る（要件 1.3・1.7）。
 #[test]
 fn face_override_lands_only_in_its_face() {

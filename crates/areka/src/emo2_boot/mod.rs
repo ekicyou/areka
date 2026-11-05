@@ -205,9 +205,9 @@ pub enum BootWiringError {
 
     /// バルーン表示対象（`areka_emo_present::build_balloon_target`）の構築失敗。
     ///
-    /// `PresentError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[from]` で畳む。
+    /// `BalloonLoadError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[from]` で畳む。
     #[error("バルーン表示対象の構築に失敗")]
-    Balloon(#[from] areka_emo_present::PresentError),
+    Balloon(#[from] areka_emo_present::BalloonLoadError),
 
     /// バルーン文字層 UI アクター（`areka_emo_text::actor::spawn_emo_text`）の spawn 失敗。
     ///

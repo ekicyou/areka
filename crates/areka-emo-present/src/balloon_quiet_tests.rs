@@ -111,10 +111,7 @@ fn quiet_missing_face_zero_still_records_the_error() {
     let (result, events) = capture_events(|| resolve_balloon_faces_quiet(dir.path(), 0));
     assert_single_error(&events, "面 ID 0 が連鎖のどの接頭辞でも解決できない");
     assert!(
-        matches!(
-            result,
-            Err(PresentError::Compose(ComposeError::EmptyComposition(0)))
-        ),
+        matches!(result, Err(BalloonLoadError::NoFace0 { scope: 0, .. })),
         "{result:?}"
     );
 }
@@ -129,10 +126,7 @@ fn quiet_missing_folder_still_records_the_error() {
     let (result, events) = capture_events(|| resolve_balloon_faces_quiet(&missing, 0));
     assert_single_error(&events, "走査に失敗");
     assert!(
-        matches!(
-            result,
-            Err(PresentError::Compose(ComposeError::EmptyComposition(0)))
-        ),
+        matches!(result, Err(BalloonLoadError::List { .. })),
         "{result:?}"
     );
 
@@ -226,10 +220,7 @@ fn quiet_faces_build_still_records_the_bake_failure() {
     assert_eq!(failures.len(), 1, "{events:?}");
     assert_eq!(failures[0].level, tracing::Level::ERROR, "{failures:?}");
     assert!(
-        matches!(
-            result,
-            Err(PresentError::Compose(ComposeError::EmptyComposition(0)))
-        ),
+        matches!(result, Err(BalloonLoadError::Bake { .. })),
         "{:?}",
         result.err()
     );

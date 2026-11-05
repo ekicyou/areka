@@ -240,10 +240,10 @@ fn build_balloon_target_composes_scope_series_on_emo2_fixture() {
     );
 }
 
-/// 面が 1 枚も解決できなければ log-first で `EmptyComposition`（Hide 縮退許容）を返す
+/// 面が 1 枚も解決できなければ log-first で `NoFace0` を返す
 /// （施行点は [`resolve_balloon_faces`] の面 0 必在契約＝R1.7）。
 #[test]
-fn no_frames_returns_empty_composition() {
+fn no_frames_returns_no_face0() {
     let dir = TempDir::new();
     dir.touch("balloonc0.png"); // 非バルーン面のみ配置。
     let dec = MemoryDecoder::new();
@@ -252,13 +252,32 @@ fn no_frames_returns_empty_composition() {
     match build_balloon_target(dir.path(), &dec, 0) {
         Ok(_) => panic!("枠 0 枚なら Err のはず"),
         Err(err) => assert!(
-            matches!(
-                err,
-                PresentError::Compose(ComposeError::EmptyComposition(0))
-            ),
-            "枠不在は EmptyComposition(0) へ畳む: {err:?}"
+            matches!(err, BalloonLoadError::NoFace0 { scope: 0, .. }),
+            "枠不在は NoFace0: {err:?}"
         ),
     }
+}
+
+/// 指摘 20: 空の採用面列を渡すと `error!` を 1 行出して `Empty` を返す（面 0 必在の契約を
+/// 破った呼び手でも panic せず、空のバルーンを組まない）。
+#[test]
+fn empty_faces_return_empty_with_one_error() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+
+    let (result, events) = super::test_support::capture_events(|| {
+        build_balloon_target_from_faces(dir.path(), &dec, &[], UseSelfAlpha::Off).map(|_| ())
+    });
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert!(errors[0].message().contains("採用面列が空"), "{errors:?}");
+    assert!(
+        matches!(result, Err(BalloonLoadError::Empty { ref path }) if path == dir.path()),
+        "{result:?}"
+    );
 }
 
 /// 要件 5.4・5.5・6.6（animated-image-decode tasks 5.2）: 面の絵が「全コマを読むと失敗する

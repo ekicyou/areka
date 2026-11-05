@@ -21,30 +21,64 @@
 //!   `.pna` は表示に使わず、フォルダ直下の数を記録するだけである。
 //! - **surface id = ID**（`{接頭辞}{ID}` の ID をそのまま採用）。`balloon.defaultsurface` 既定 0 と整合。
 //!
-//! 失敗経路は log-first（`tracing::error!`＋`Err`・silent failure 禁止）。面 0 が解決できない／bake が
-//! エラーを産んだ場合は、真因をログへ出したうえで [`PresentError::Compose`]
-//! （[`ComposeError::EmptyComposition`]）へ畳む。EmptyComposition は下流で Hide 縮退として許容される
-//! ため（設計ディスカッション #1）、バルーン構築失敗はゴーストごと殺さず穏当に縮退する。
-//!
-//! [`ComposeError::EmptyComposition`]: areka_emo_compose::ComposeError::EmptyComposition
+//! 失敗経路は log-first（`tracing::error!`＋`Err`・silent failure 禁止）。一覧の失敗・面 0 が
+//! 解決できない・採用面列が空・bake の脱落は、真因をログへ出したうえで原因ごとの
+//! [`BalloonLoadError`] を返す。読み込みの失敗は提示（`apply_show`）より前に呼び手へ返るので、
+//! 合成の全透明（Hide 縮退）とは別物である。呼び手は自分の縮退（バルーン未配線・告知・採寸の
+//! 見送り）へ伝えるだけで、ゴーストごと殺さない。
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, ElementDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     bake_quiet,
 };
-use areka_emo_compose::{ComposeError, EmoWorld};
+use areka_emo_compose::EmoWorld;
 use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 
-use crate::command::PresentError;
 use crate::load_records::LoadRecords;
 
 /// 面画像の拡張子（小文字比較）。接頭辞は scope 番号から連鎖として導出するため定数を持たない。
 /// シェル側の面画像（`surface{ID}.png`）も同じ拡張子で、判定 [`face_digits_of`] ごと共有する。
 const FRAME_SUFFIX: &str = ".png";
+/// バルーンの読み込みの失敗（原因ごと・[`crate::shell_target::ShellLoadError`] と同じ形）。
+///
+/// どの変位も、返す前に権威の側が真因を `error!` で記録している。
+#[derive(Debug, thiserror::Error)]
+pub enum BalloonLoadError {
+    /// バルーンのフォルダの一覧が取れなかった（R6.4）。
+    #[error("balloon フォルダの一覧に失敗: {path}")]
+    List {
+        /// 一覧しようとしたバルーンのフォルダ。
+        path: PathBuf,
+        /// OS が返した理由。
+        #[source]
+        source: std::io::Error,
+    },
+    /// 面 ID 0 が連鎖のどの接頭辞でも見つからない（R1.7）。
+    #[error("balloon の面 0 がどの接頭辞でも見つからない: {path} scope {scope}")]
+    NoFace0 {
+        /// バルーンのフォルダ。
+        path: PathBuf,
+        /// 解決しようとしたスコープ。
+        scope: u32,
+    },
+    /// 組み立てに渡された採用面列が空。
+    #[error("balloon の採用面列が空: {path}")]
+    Empty {
+        /// バルーンのフォルダ。
+        path: PathBuf,
+    },
+    /// 面画像の bake が 1 枚以上脱落した。
+    #[error("balloon の面画像を焼けなかった: {path}")]
+    Bake {
+        /// バルーンのフォルダ。
+        path: PathBuf,
+    },
+}
+
 /// バルーン既定設定ファイル名（2 層マージの**基層**・シェル側 descript と同名別物）。
 const DESCRIPT_TXT: &str = "descript.txt";
 
@@ -320,19 +354,22 @@ pub fn select_faces<S: AsRef<str>>(names: &[S], chain: &[SeriesPrefix]) -> Vec<R
 /// （列挙 1 回・選択は純核 [`select_faces`] が担う）。非 UTF-8 名は面のファイル名規約
 /// （ASCII の接頭辞＋数字＋拡張子）を満たし得ないためこの段で落とす。
 ///
-/// ディレクトリ走査に失敗した場合は log-first で [`PresentError`] を返す（R6.4）。
+/// ディレクトリ走査に失敗した場合は log-first で [`BalloonLoadError::List`] を返す（R6.4）。
 /// 1 件を飛ばす `warn!` は `records` が出すときだけ出し、走査の失敗の `error!` は常に出す。
 fn enumerate_file_names(
     balloon_dir: &Path,
     records: LoadRecords,
-) -> Result<Vec<String>, PresentError> {
+) -> Result<Vec<String>, BalloonLoadError> {
     let read_dir = std::fs::read_dir(balloon_dir).map_err(|e| {
         tracing::error!(
             balloon_dir = %balloon_dir.display(),
             error = %e,
             "balloon: バルーンディレクトリの走査に失敗"
         );
-        PresentError::Compose(ComposeError::EmptyComposition(0))
+        BalloonLoadError::List {
+            path: balloon_dir.to_path_buf(),
+            source: e,
+        }
     })?;
 
     let mut names: Vec<String> = Vec::new();
@@ -364,11 +401,11 @@ fn enumerate_file_names(
 /// # 面 0 必在契約（R1.7）
 ///
 /// 面 ID 0 が連鎖のどの接頭辞でも解決できない場合、理由を `error!` で記録したうえで
-/// [`PresentError`] を返す。この契約を**権威側の 1 箇所**で施行することで、消費者
+/// [`BalloonLoadError::NoFace0`] を返す。この契約を**権威側の 1 箇所**で施行することで、消費者
 /// （placement / boot）それぞれが独自に面 0 の有無を判定する必要をなくし、無言で空の
-/// バルーンを表示するログ無し経路を構造的に作らない。返した [`PresentError::Compose`]
-/// （[`ComposeError::EmptyComposition`]）は消費者側の既存の縮退経路（バルーン未配線・
-/// 起動窓を開けない告知と終了）へそのまま伝播する——プロセス終了ポリシー自体は本関数で変更しない。
+/// バルーンを表示するログ無し経路を構造的に作らない。返した失敗は消費者側の既存の縮退経路
+/// （バルーン未配線・起動窓を開けない告知と終了）へそのまま伝播する——プロセス終了ポリシー自体は
+/// 本関数で変更しない。
 ///
 /// # 観測（R6.1/R6.2）
 ///
@@ -379,7 +416,7 @@ fn enumerate_file_names(
 pub fn resolve_balloon_faces(
     balloon_dir: &Path,
     scope: u32,
-) -> Result<Vec<ResolvedFace>, PresentError> {
+) -> Result<Vec<ResolvedFace>, BalloonLoadError> {
     resolve_balloon_faces_with(balloon_dir, scope, LoadRecords::Emit)
 }
 
@@ -393,7 +430,7 @@ pub fn resolve_balloon_faces(
 pub fn resolve_balloon_faces_quiet(
     balloon_dir: &Path,
     scope: u32,
-) -> Result<Vec<ResolvedFace>, PresentError> {
+) -> Result<Vec<ResolvedFace>, BalloonLoadError> {
     resolve_balloon_faces_with(balloon_dir, scope, LoadRecords::Quiet)
 }
 
@@ -402,7 +439,7 @@ fn resolve_balloon_faces_with(
     balloon_dir: &Path,
     scope: u32,
     records: LoadRecords,
-) -> Result<Vec<ResolvedFace>, PresentError> {
+) -> Result<Vec<ResolvedFace>, BalloonLoadError> {
     let chain = prefix_chain(&BALLOON_FAMILY, scope);
     // 列挙は 1 回のみ（接頭辞ごとに走査を繰り返さない）。
     let names = enumerate_file_names(balloon_dir, records)?;
@@ -420,7 +457,10 @@ fn resolve_balloon_faces_with(
             resolved_faces = faces.len(),
             "balloon: 面 ID 0 が連鎖のどの接頭辞でも解決できない"
         );
-        return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
+        return Err(BalloonLoadError::NoFace0 {
+            path: balloon_dir.to_path_buf(),
+            scope,
+        });
     }
     if !records.emits() {
         return Ok(faces);
@@ -613,12 +653,12 @@ fn synthetic_surfaces_txt(faces: &[ResolvedFace]) -> String {
 /// [`build_balloon_target_from_faces`] を直接呼べる。
 ///
 /// 失敗（面 0 不在・ディレクトリ走査失敗・bake 脱落）は log-first で真因をログしたうえで
-/// [`PresentError::Compose`]（[`ComposeError::EmptyComposition`]・Hide 縮退許容）を返す。
+/// 原因ごとの [`BalloonLoadError`] を返す。
 pub fn build_balloon_target(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
     scope: u32,
-) -> Result<(EmoWorld, AtlasTable), PresentError> {
+) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
     let faces = resolve_balloon_faces(balloon_dir, scope)?;
     let use_self_alpha = load_balloon_use_self_alpha(balloon_dir);
     build_balloon_target_from_faces(balloon_dir, decoder, &faces, use_self_alpha)
@@ -687,13 +727,13 @@ fn load_balloon_use_self_alpha_with(balloon_dir: &Path, records: LoadRecords) ->
 /// 透過の宣言も同じく呼び出し側が [`load_balloon_use_self_alpha`] でスコープのループの外で
 /// 1 回読んで渡す（スコープごとに読むと記録がスコープの数だけ出るため）。
 /// 面列が空／bake がエラーを産んだ場合は log-first で真因をログし
-/// [`PresentError::Compose`]（[`ComposeError::EmptyComposition`]）を返す。
+/// [`BalloonLoadError::Empty`]／[`BalloonLoadError::Bake`] を返す。
 pub fn build_balloon_target_from_faces(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
     faces: &[ResolvedFace],
     use_self_alpha: UseSelfAlpha,
-) -> Result<(EmoWorld, AtlasTable), PresentError> {
+) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
     build_from_faces_core(
         balloon_dir,
         decoder,
@@ -711,7 +751,7 @@ pub fn build_balloon_target_from_faces_quiet(
     decoder: &impl ElementDecoder,
     faces: &[ResolvedFace],
     use_self_alpha: UseSelfAlpha,
-) -> Result<(EmoWorld, AtlasTable), PresentError> {
+) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
     build_from_faces_core(
         balloon_dir,
         decoder,
@@ -728,13 +768,15 @@ fn build_from_faces_core(
     faces: &[ResolvedFace],
     use_self_alpha: UseSelfAlpha,
     records: LoadRecords,
-) -> Result<(EmoWorld, AtlasTable), PresentError> {
+) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
     if faces.is_empty() {
         tracing::error!(
             balloon_dir = %balloon_dir.display(),
             "balloon: 採用面列が空（構築する面が 1 枚も無い）"
         );
-        return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
+        return Err(BalloonLoadError::Empty {
+            path: balloon_dir.to_path_buf(),
+        });
     }
 
     // synthetic surfaces.txt をシェルと同一の parser で解釈する（転記層・R5.1）。
@@ -761,7 +803,9 @@ fn build_from_faces_core(
                 "balloon: 面画像の bake に失敗"
             );
         }
-        return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
+        return Err(BalloonLoadError::Bake {
+            path: balloon_dir.to_path_buf(),
+        });
     }
 
     // シェルと同一の compose 前段: World 構築 → アトラス束縛（SetId(0)・resolve は本呼び出し限り）。

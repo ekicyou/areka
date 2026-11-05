@@ -479,11 +479,8 @@ fn resolve_balloon_faces_requires_face_zero() {
 
     let err = resolve_balloon_faces(dir.path(), 0).expect_err("面 0 不在なら Err のはず");
     assert!(
-        matches!(
-            err,
-            PresentError::Compose(ComposeError::EmptyComposition(0))
-        ),
-        "面 0 不在は既存縮退経路（EmptyComposition(0)）へ畳む: {err:?}"
+        matches!(err, BalloonLoadError::NoFace0 { scope: 0, .. }),
+        "面 0 不在は NoFace0: {err:?}"
     );
 }
 
@@ -495,11 +492,8 @@ fn resolve_balloon_faces_errors_on_unreadable_directory() {
 
     let err = resolve_balloon_faces(&missing, 0).expect_err("走査失敗なら Err のはず");
     assert!(
-        matches!(
-            err,
-            PresentError::Compose(ComposeError::EmptyComposition(0))
-        ),
-        "走査失敗も既存縮退経路へ畳む: {err:?}"
+        matches!(err, BalloonLoadError::List { .. }),
+        "走査失敗は List: {err:?}"
     );
 }
 

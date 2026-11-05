@@ -12,8 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use areka_emo_atlas::{AlphaParams, AtlasTable, ElementDecoder, WicDecoderArm};
-use areka_emo_compose::{ComposeError, EmoWorld};
-use areka_emo_present::PresentError;
+use areka_emo_compose::EmoWorld;
+use areka_emo_present::BalloonLoadError;
 use areka_emo_present::balloon::{
     build_balloon_target_from_faces, load_balloon_use_self_alpha, resolve_balloon_faces,
 };
@@ -211,7 +211,7 @@ pub struct BootAssets {
 /// - シェルに面が 1 つも無い（`surfaces.txt` が無いか面を定義せず、面の画像も無い）
 ///   → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
-///   → [`BootWiringError::Balloon`]（`#[from] PresentError`・真因ログは権威側が既に出す）。
+///   → [`BootWiringError::Balloon`]（`#[from] BalloonLoadError`・真因ログは権威側が既に出す）。
 #[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
 pub fn build_boot_assets(
     ghost_root: &Path,
@@ -480,9 +480,10 @@ pub fn build_balloon_assets(
                 scope,
                 "assets: 解決済みバルーン面列が空（resolve_balloon_faces の面 0 必在契約違反）"
             );
-            return Err(BootWiringError::Balloon(PresentError::Compose(
-                ComposeError::EmptyComposition(0),
-            )));
+            return Err(BootWiringError::Balloon(BalloonLoadError::NoFace0 {
+                path: balloon_root.to_path_buf(),
+                scope,
+            }));
         };
         // 面ごとの定義と矢印の絵の束（読むのはここだけ・警告はスコープにつき 1 回）。
         let definitions = load_scope_balloon_definitions(

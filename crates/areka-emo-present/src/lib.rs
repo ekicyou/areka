@@ -71,7 +71,7 @@ pub mod shell_target;
 /// いるため、消費側（結線・実機 probe の期待ゲート）が上流 crate を直接依存に加えずとも型を名指し
 /// できるようにする（再輸出であって別型の新設ではない——`areka_emo_compose::ScaleRatio` と同一型）。
 pub use areka_emo_compose::ScaleRatio;
-pub use balloon::{build_balloon_target, build_balloon_target_from_faces};
+pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{AppliedScale, ClientHit, EmoPresenter, ScaleChange, TextSlotView};
