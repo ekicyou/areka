@@ -31,9 +31,14 @@ pub fn create_windows(world: &mut World) {
     let ecs_world: std::rc::Weak<std::cell::RefCell<crate::ecs::world::EcsWorld>> =
         self_ref.0.clone();
 
-    // 宣言的クエリで未生成 Window Entity を収集（borrow を即解放）。
-    let mut system_state: SystemState<Query<Entity, (With<Window>, Without<WindowHandle>)>> =
-        SystemState::new(world);
+    // 宣言的クエリで未生成 Window Entity を収集（borrow を即解放）。生成に失敗した印の
+    // 付いた実体は、印が外されるまで作り直さない。
+    type Pending = (
+        With<Window>,
+        Without<WindowHandle>,
+        Without<crate::runtime::window_factory::WindowCreationFailed>,
+    );
+    let mut system_state: SystemState<Query<Entity, Pending>> = SystemState::new(world);
     let entities_to_create: Vec<Entity> = system_state
         .get(world)
         .expect("window query validation should succeed")

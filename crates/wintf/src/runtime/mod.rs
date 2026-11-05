@@ -28,6 +28,7 @@ use crate::runtime::tick_bridge::{AsyncTickTask, VsyncEventBridge};
 use crate::runtime::window_registry::{WindowRegistry, reconcile_window_registry};
 use crate::runtime::wndproc_bridge::WndState;
 pub use message_loop::AppExit;
+pub use window_factory::WindowCreationFailed;
 
 /// `WinApp` が World へ確保する本番 `WindowRegistry` の具体型。
 ///
