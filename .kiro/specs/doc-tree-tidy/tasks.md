@@ -63,23 +63,31 @@
   - 記録（2026-11-05）: `tools/test-all.ps1` を commit 2ccb865a で 1 回回し、13 段すべて緑（x64 workspace tests 1921 秒・`doc_tree_guard_test` の 8 本もこの中で緑）。`git diff --name-only main...HEAD` に `Cargo.lock`・`Cargo.toml`・`crates/*/Cargo.toml`・`crates/areka-emo-text/`・見直し 7 本の受け持つクレート・`doc/COMPAT_ARCHITECTURE.md`・`doc/ssp-mcp/` は 0 件（`crates/` の下で変わったのは `crates/log-capture-kit/tests/doc_tree_guard_test.rs` だけ）
   - _Requirements: 4.11, 5.5, 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 5. 完了の手当て（最後の検索・後続の起票・知らせ）
+- [x] 5. 完了の手当て（最後の検索・後続の起票・知らせ）
 - [x] 5.1 `doc/COMPAT_ARCHITECTURE.md` の改名を受け持つ後続の spec を起票し、例外の行の行方に名前を書く
   - `/kiro-discovery` で起票する。brief に、`doc/COMPAT_ARCHITECTURE.md` を名指すファイルを受け持つ見直しの spec と本体のクレート分けの spec とは同じウェーブに置かないことを書く
   - 例外の表の `doc/COMPAT_ARCHITECTURE.md` の行の行方が「後で改名する（`<spec 名>`）」になり、照合テストが単独で回して緑のまま
   - _Depends: 4_
   - _Requirements: 6.5_
   - 記録（2026-11-05）: `/kiro-discovery` で `doc-compat-architecture-rename` を起票（`.kiro/specs/doc-compat-architecture-rename/brief.md`・roadmap の台帳の行と「`doc/COMPAT_ARCHITECTURE.md` の改名」の節・区分 C・版に縛らない）。brief の Constraints に、名指すファイルを受け持つ見直しの spec と本体のクレート分けの 6 本とは同じウェーブに置かないことを書いた。例外の表の行方は「後で改名する（`doc-compat-architecture-rename`）」。照合テストは単独で 8 本とも緑
-- [ ] 5.2 「ぱすた開発」のセッションへ新しいパスと対応の表の場所を知らせる
+- [x] 5.2 「ぱすた開発」のセッションへ新しいパスと対応の表の場所を知らせる
   - 進行役のセッションが伝言を送る。中身は `doc/PASTA_PROFILE.md` → `doc/pasta-profile.md`・対応の表は `doc/README.md` の「動かした名前の対応」・外のリポジトリの直しは向こうの仕事
   - 伝言を送った事実（送れないときは、その旨と伝える文を完了の報告に載せたこと）がタスクの記録に残る
+  - 記録（2026-11-05）: 進行役のセッションから「ぱすた開発」のセッション（ローカルの Claude Desktop のセッション）へ伝言を送った（届いた・返事は求めていない）。中身は `doc/PASTA_PROFILE.md` → `doc/pasta-profile.md`・対応の表は `doc/README.md` の「動かした名前の対応」・外のリポジトリの名指しの直しはそちらの仕事・PR が main に入った時点で効く
   - _Depends: 4_
   - _Requirements: 5.6_
 
-- [ ] 5.3 古いパスの最後の検索で空振りしないことと 0 件を確かめる
+- [x] 5.3 古いパスの最後の検索で空振りしないことと 0 件を確かめる
   - 設計の C6 の 5 つの語（大文字と小文字を区別・`docs/` は URL を除く書き方）を、先に歴史の場所だけで探し、どの語も 1 件以上当たることを確かめる
   - 同じ語を除く場所つきで全域を探し、残るのが `roadmap.md` の `doc-tree-tidy` を含む行と対応の表の行だけであることを確かめる。ほかに当たれば直して探し直す
   - 語ごとの件数（歴史の場所の当たりと、除いた後の当たり）が本 spec のタスクの記録に残る
   - 5.1 の起票で増えた brief と roadmap の行も検索の範囲に入った後で確かめる
+  - 記録（2026-11-05・commit 23aa156b の上・5.1 の起票の後）: `git grep`（大文字と小文字を区別）の語ごとの件数
+    - `click_through.md`（-F）: 歴史の場所 33 行・14 ファイル／除いた後 2 行＝`roadmap.md` 564 行目（`doc-tree-tidy` を含む）と対応の表 61 行目
+    - `docs/`（-P `(?<![\w./:-])docs/`）: 歴史の場所 53 行・20 ファイル／除いた後 6 行＝`roadmap.md` 39・218・564・635・1737 行目（どれも `doc-tree-tidy` を含む）と対応の表 61 行目
+    - `CONSTITUTION.md`（-F）: 歴史の場所 32 行・17 ファイル／除いた後 1 行＝対応の表 62 行目
+    - `PASTA_PROFILE`（-F）: 歴史の場所 33 行・14 ファイル／除いた後 1 行＝対応の表 63 行目
+    - `equivalence_evidence`（-F）: 歴史の場所 6 行・4 ファイル／除いた後 1 行＝対応の表 64 行目
+    - どの語も歴史の場所で 1 件以上当たり（空振りでない）、除いた後に残るのは 5.3 の許す 2 種類だけ。`doc-compat-architecture-rename` の brief と roadmap の新しい行には当たり 0
   - _Depends: 4, 5.1_
   - _Requirements: 5.1, 5.3, 5.4_
