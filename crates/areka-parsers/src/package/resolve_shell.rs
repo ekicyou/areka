@@ -1,20 +1,20 @@
-//! resolve_shell — シェル名つきの解決（`resolve` の本体）。
+//! resolve_shell — 展開済みゴーストパッケージの 2 点マウントの解決。
 //!
-//! 展開済みゴーストパッケージのルートから `ghost/master/descript.txt` を起点に
-//! SHIORI / shell の 2 点マウントを解決する。制御フローは design.md「System Flows」
-//! の mermaid に忠実（パス合成 → 存在 → 読取 → decode → kv → names → shiori →
-//! shelldir → shell 存在確認 → 構築）。charset 判定・KV 分割は foundation へ委譲し
-//! 再実装しない（Req 1.5）。参照キーは name / sakura.name / kero.name / shiori /
-//! seriko.defaultsurfacedirectoryname のみ（install.txt / balloon 系 / NAR には触れない）。
+//! ゴーストのルートから `ghost/master/descript.txt` を起点に SHIORI / shell の
+//! 2 点マウントを解決する（パス合成 → 読取 → decode → kv → names → shiori →
+//! シェル名 → shell 存在確認 → bindgroup → 構築）。charset 判定・KV 分割は foundation へ
+//! 委ね再実装しない（Req 1.5）。ゴーストの descript で読む鍵は名前（`name`・
+//! `sakura.name`・`sakura.name2`・`kero.name`）・`shiori`・`shiori.encoding`・
+//! `shiori.forceencoding`・`readme`・`seriko.defaultsurfacedirectoryname`。
 //!
-//! シェル名を受ける形に広げてある。名前なしは今日の規則
-//! （`seriko.defaultsurfacedirectoryname`、無ければ `master`）、名前ありは
-//! `shell/<名>/` を選ぶ。既存の `resolve` は名前なしでここへ委ねる。
+//! シェル名は呼び手が `Some(名)` で選ぶか、`None` で今日の規則
+//! （`seriko.defaultsurfacedirectoryname`、無ければ `master`）に任せる。
+//! SHIORI の置き場の綴りは [`shiori_dir`] の 1 か所だけが持つ。
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv_lowercased;
@@ -22,14 +22,18 @@ use crate::kv::parse_kv_lowercased;
 use super::model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
 use super::resolve_bind::read_bindgroup_defaults;
 
-/// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。
-const GHOST_MASTER: &str = "ghost/master";
 /// 起点定義ファイル名（Req 1.1）。
 const DESCRIPT_FILE: &str = "descript.txt";
 /// shell ルート（Req 3.1/3.2）。
 const SHELL_ROOT: &str = "shell";
 /// shell 既定ディレクトリ名（ukadoc 正典・Req 3.1）。
 const DEFAULT_SHELL_DIR: &str = "master";
+
+/// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。`ghost` と `master` を
+/// ネイティブの区切りで継ぐ（`"ghost/master"` の 1 成分にしない・指摘 10）。
+pub fn shiori_dir(ghost_root: &Path) -> PathBuf {
+    ghost_root.join("ghost").join("master")
+}
 
 /// ゴーストの `ghost/master/descript.txt` だけを読み、名前情報を返す（シェルは見ない）。
 ///
@@ -39,7 +43,7 @@ pub fn read_ghost_names(
     ghost_root: &Path,
     default_encoding: DefaultEncoding,
 ) -> Result<GhostNames, MountError> {
-    let map = read_ghost_descript(&ghost_root.join(GHOST_MASTER), default_encoding)?;
+    let map = read_ghost_descript(&shiori_dir(ghost_root), default_encoding)?;
     Ok(names_from(&map))
 }
 
@@ -131,7 +135,7 @@ pub fn resolve_with_shell(
     shell: Option<&str>,
 ) -> Result<MountModel, MountError> {
     // ghost/master（SHIORI マウント先）と起点 descript.txt を読む（名前だけの読みと同じ部品）。
-    let shiori_dir = ghost_root.join(GHOST_MASTER);
+    let shiori_dir = shiori_dir(ghost_root);
     let map = read_ghost_descript(&shiori_dir, default_encoding)?;
     let names = names_from(&map);
 

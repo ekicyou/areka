@@ -1,6 +1,6 @@
 //! resolve_bind_tests — `resolve_bind::read_bindgroup_defaults` の兄弟テスト。
 //!
-//! `resolve.rs` の中の試験 2 つ（`.name` の転記・bindoption の分解）を中身を変えずに移した。
+//! もと `resolve.rs`（今は無い）の中の試験 2 つ（`.name` の転記・bindoption の分解）を中身を変えずに移した。
 
 use super::model::{BindGroupDefaults, ScopeBinds};
 use super::resolve_bind::read_bindgroup_defaults;

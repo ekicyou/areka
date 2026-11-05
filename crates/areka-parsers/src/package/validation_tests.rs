@@ -1,7 +1,7 @@
 //! 横断バリデーション単体テスト（タスク 4.2）。
 //!
 //! 本ファイルは spec の**統合／バリデーション層**として、公開エントリ
-//! `super::resolve`（`pub fn resolve(&Path, DefaultEncoding) -> Result<MountModel, MountError>`）
+//! `super::resolve_with_shell`（`pub fn resolve_with_shell(&Path, DefaultEncoding, Option<&str>) -> Result<MountModel, MountError>`・ここでは `None`）
 //! を、**実フィクスチャ emo2** を入力に end-to-end で解決させ、観測可能挙動を固定する。
 //!
 //! resolve_tests.rs は合成 tempdir によるユニット網羅（存在確認・フォールバック・
@@ -16,7 +16,7 @@
 
 use crate::charset::DefaultEncoding;
 
-use super::{MountModel, resolve};
+use super::{MountModel, resolve_with_shell};
 use std::path::PathBuf;
 
 /// emo2 実フィクスチャのルート（検体の窓口から得る）。
@@ -32,7 +32,7 @@ fn emo2_root() -> PathBuf {
 /// 意図を明示するためで、`Ansi` を渡しても同一結果になる（宣言優先・メモ参照）。
 fn resolve_emo2() -> MountModel {
     let root = emo2_root();
-    match resolve(&root, DefaultEncoding::Utf8) {
+    match resolve_with_shell(&root, DefaultEncoding::Utf8, None) {
         Ok(model) => model,
         Err(e) => panic!("emo2 の解決に失敗: {e:?}（root={root:?}）"),
     }
@@ -142,9 +142,9 @@ fn emo2_unused_fields_and_files_do_not_leak() {
 fn emo2_result_invariant_to_default_encoding() {
     let root = emo2_root();
 
-    let via_utf8 = resolve(&root, DefaultEncoding::Utf8)
+    let via_utf8 = resolve_with_shell(&root, DefaultEncoding::Utf8, None)
         .unwrap_or_else(|e| panic!("Utf8 既定で解決失敗: {e:?}"));
-    let via_ansi = resolve(&root, DefaultEncoding::Ansi)
+    let via_ansi = resolve_with_shell(&root, DefaultEncoding::Ansi, None)
         .unwrap_or_else(|e| panic!("Ansi 既定で解決失敗: {e:?}"));
 
     // charset 宣言が既定を上書きするため、両者は完全一致する。

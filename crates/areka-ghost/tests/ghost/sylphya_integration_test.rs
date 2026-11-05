@@ -19,10 +19,9 @@
 //!
 //! ## ゴーストの AskerContext の入手（CONCERNS）
 //! reader 照会は問い合わせ元 [`AskerContext`] を第一級で要する（R2.6）。本番 boot は
-//! `ghost_asker_id(&mount.shiori.dir)` で構築し、`mount.shiori.dir` は `resolve` が
-//! `ghost_root.join("ghost/master")` として合成する（正準化しない・`resolve.rs`）。ゆえに
-//! テストは同じ導出——`areka_ghost::sylphya_wiring::ghost_asker_id(&root.join("ghost/master"))`
-//! ——で production と**同一** asker を本番同型に再構築できる（GhostParts は asker を露出しない）。
+//! `ghost_asker_id(&mount.shiori.dir)` で構築し、`mount.shiori.dir` は
+//! `areka_parsers::package::shiori_dir` が合成する（正準化しない）。ゆえにテストは同じ導出
+//! ——`ghost_asker_id(&shiori_dir(&root))`——で production と**同一** asker を本番同型に再構築できる（GhostParts は asker を露出しない）。
 //!
 //! ## mock shiori の username=Value 台本化（CONCERNS）
 //! username prefetch は kanade boot 系列が resource id `"username"`（`resource_username`・
@@ -40,6 +39,7 @@ use areka_ghost::{
 };
 use areka_kanade::{MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
+use areka_parsers::package::shiori_dir;
 use areka_sylphya::{AskerContext, DottedResolution, FlatResolution};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
@@ -283,7 +283,7 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
 
     // production と同一の asker（mount.shiori.dir = ghost_root/ghost/master・正準化なし）。
     let ctx = AskerContext {
-        asker: ghost_asker_id(&root.join("ghost/master")),
+        asker: ghost_asker_id(&shiori_dir(&root)),
     };
 
     // --- selfname 系（フラット per-asker・実値） ---
@@ -416,7 +416,7 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
 
     // production と同一 asker で talk_snapshot を取る（provider が刻印する像と同一経路）。
     let ctx = AskerContext {
-        asker: ghost_asker_id(&root.join("ghost/master")),
+        asker: ghost_asker_id(&shiori_dir(&root)),
     };
     let snapshot = parts.sylphya_reader.talk_snapshot(&ctx);
 
@@ -467,7 +467,7 @@ fn username_no_content_is_absent_from_boot_talk_snapshot() {
     drive_until_first_cue(&parts.dispatcher, &records);
 
     let ctx = AskerContext {
-        asker: ghost_asker_id(&root.join("ghost/master")),
+        asker: ghost_asker_id(&shiori_dir(&root)),
     };
     let snapshot = parts.sylphya_reader.talk_snapshot(&ctx);
 

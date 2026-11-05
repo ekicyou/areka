@@ -400,7 +400,7 @@ mod tests {
     // 読み取り専用の観測 assert（要件 4.1・4.2・4.3）は**単一のテスト**へ畳み込み、**共有 fixture**
     // （[`super::shared_test_ghost`]）に対して全て実行する。これは 2 段の FS 飽和対策である:
     //   (1) 共有 fixture＝`OnceLock` により組立は**1 回**（各 assert が再組立しない）。
-    //   (2) 単一テストへ畳む＝read 経路の並行スレッドを 1 本に抑える（`package::resolve` による
+    //   (2) 単一テストへ畳む＝read 経路の並行スレッドを 1 本に抑える（`package::resolve_with_shell` による
     //       shell dir 走査を別テスト群と同時多発させない）。
     // これにより read 経路の同時 FS 負荷が、単一の破棄あり組立（Drop 檻）と同程度まで下がり、
     // 壁時計を持たない兄弟 spine 協調ループを starve させない（レビュー reject の回帰根因）。
@@ -412,7 +412,7 @@ mod tests {
     /// 共有テストゴースト（[`super::shared_test_ghost`]）が要件 4.1・4.2・4.3 の観測可能な完了条件を
     /// すべて満たすこと。read 経路の並行スレッドを 1 本へ抑えるため 4 観点を単一テストへ畳み込む
     /// （FS 飽和による spine starvation 回避——モジュール冒頭コメント参照）:
-    /// - **4.2 実マウント解決**: `package::resolve` が Ok を返し、`shiori,` 行がテスト DLL 名
+    /// - **4.2 実マウント解決**: `package::resolve_with_shell` が Ok を返し、`shiori,` 行がテスト DLL 名
     ///   （== [`shiori4_testdll::DLL_FILE_NAME`]）を指す（boot が内部で通すのと同一契約）。
     /// - **4.3 DLL 物理配置**: 特定済みビルド済み DLL が `ghost/master/shiori4_testdll.dll` に在る。
     /// - **4.2 balloon 非同梱**: `balloon` ディレクトリを同梱しない。
@@ -423,7 +423,7 @@ mod tests {
         let root = super::shared_test_ghost();
 
         // 4.2 実マウント解決（boot が内部で通すのと同一契約）が Ok＝完全な解決可能ゴースト。
-        let mount = package::resolve(root, DefaultEncoding::Utf8)
+        let mount = package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
             .expect("組み立てた共有ゴーストは実マウント解決を成功裏に通過すべき（shell dir 込み）");
         // `shiori,` 行がテスト DLL 名（== 契約定数）を指す（要件 4.2）。
         assert_eq!(

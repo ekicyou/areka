@@ -7,7 +7,7 @@
 //! 読取）を行い、`Result` を返す。それ以外の module（`charset` / `kv` /
 //! `sakura` 等）は従来どおり純粋関数群であり I/O を持たない。`package` の
 //! I/O 許容は「マウントは物理不在という現実の失敗を持つ」ための意図的逸脱で、
-//! `resolve` サブモジュール内に局所化されている（詳細は `package` module doc）。
+//! `resolve_shell`／`resolve_bind` サブモジュール内に局所化されている（詳細は `package` module doc）。
 
 pub mod balloon;
 pub mod charset;

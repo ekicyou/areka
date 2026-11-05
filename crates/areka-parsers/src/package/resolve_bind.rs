@@ -1,7 +1,7 @@
 //! resolve_bind — shell descript.txt からの着せ替えの読み（bindgroup の転記）。
 //!
-//! `resolve.rs` から移した（振る舞いは変えない）。`read_bindgroup_defaults` は
-//! シェル名つきの解決 `resolve_shell::resolve_with_shell` から呼ばれる。
+//! `read_bindgroup_defaults` は 2 点マウントの解決 `resolve_shell::resolve_with_shell`
+//! から、選んだシェルのディレクトリを渡されて呼ばれる。
 //! charset 判定は foundation へ委譲する（Req 1.5）。KV 分割は行の番号を添えるため
 //! `kv` の `parse_kv_with_line` を使う。
 

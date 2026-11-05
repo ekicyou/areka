@@ -332,7 +332,7 @@ mod tests {
     use super::*;
 
     /// `ShioriMount` は `#[non_exhaustive]`（`areka-parsers` 外からの struct リテラル構築は
-    /// 不可）ゆえ、本番と同じ経路（`package::resolve`）で実フィクスチャから取得する。
+    /// 不可）ゆえ、本番と同じ経路（`package::resolve_with_shell`）で実フィクスチャから取得する。
     ///
     /// `ghost/master/descript.txt` に `shiori,<name>` 行が有れば `file: Some(name)`、
     /// 無ければ `file: None` になる（`resolve` の実装どおり・推測しない）。
@@ -356,7 +356,7 @@ mod tests {
         std::fs::write(master_dir.join("descript.txt"), descript)
             .expect("fixture descript.txt 書き込みに失敗");
 
-        let mount = package::resolve(&root, DefaultEncoding::Ansi)
+        let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
             .expect("fixture ghost_root の resolve に失敗");
         (temp, mount.shiori)
     }

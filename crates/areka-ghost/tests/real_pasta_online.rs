@@ -221,7 +221,7 @@ fn emo2_does_not_start_chatting_while_online() {
     )
     .expect("HOST32_PASTA_DLL を emo2 の ghost/master へ写せませんでした");
 
-    let mount = package::resolve(&ghost_root, DefaultEncoding::Ansi)
+    let mount = package::resolve_with_shell(&ghost_root, DefaultEncoding::Ansi, None)
         .expect("emo2 の複製はマウント解決を通るはず");
     let slot: Arc<Mutex<Option<RecorderHandle>>> = Arc::new(Mutex::new(None));
     let slot2 = Arc::clone(&slot);

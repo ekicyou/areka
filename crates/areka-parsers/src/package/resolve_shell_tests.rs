@@ -14,7 +14,7 @@ use temp_path_kit::TempPath;
 
 use crate::charset::DefaultEncoding;
 
-use super::{GhostNames, MountError, read_ghost_names, resolve, resolve_with_shell};
+use super::{GhostNames, MountError, read_ghost_names, resolve_with_shell, shiori_dir};
 
 /// ghost/master の descript.txt と、`shell/A`（bindgroup 1100 が既定オン）・
 /// `shell/B`（bindgroup 2200 が既定オン）の 2 つのシェルを持つ一時ツリーを作る。
@@ -50,16 +50,13 @@ fn write_shell(root: &Path, name: &str, descript_body: &str) {
     fs::write(dir.join("descript.txt"), descript_body.as_bytes()).expect("write shell descript");
 }
 
-/// 名前なしは今日の `resolve` と同じマウント（既定のシェル A と A の bindgroup）を返す。
+/// 名前なしは既定のシェル（`seriko.defaultsurfacedirectoryname` の A）と A の bindgroup を返す。
 #[test]
-fn none_matches_todays_resolve() {
+fn none_uses_default_named_shell() {
     let temp = ghost_with_two_shells("none_matches_today");
     let root = temp.path();
 
     let with_none = resolve_with_shell(root, DefaultEncoding::Utf8, None).expect("resolve ok");
-    let today = resolve(root, DefaultEncoding::Utf8).expect("resolve ok");
-
-    assert_eq!(with_none, today);
     assert_eq!(with_none.shell.dir, root.join("shell").join("A"));
     assert_eq!(with_none.bindgroups[&0].default_on, vec![1100]);
 }
@@ -94,7 +91,7 @@ fn named_shell_mounts_its_dir_and_bindgroups() {
     assert_eq!(model.shell.dir, root.join("shell").join("B"));
     assert_eq!(model.bindgroups[&0].default_on, vec![2200]);
     // シェル以外（名前・SHIORI）は既定のシェルのときと同じ。
-    let today = resolve(root, DefaultEncoding::Utf8).expect("resolve ok");
+    let today = resolve_with_shell(root, DefaultEncoding::Utf8, None).expect("resolve ok");
     assert_eq!(model.names, today.names);
     assert_eq!(model.shiori, today.shiori);
 }
@@ -321,4 +318,23 @@ readme,
     assert_eq!(model.shiori.file, None);
     assert_eq!(model.shiori.encoding, None);
     assert_eq!(model.readme, None);
+}
+
+/// SHIORI の置き場は `ghost` と `master` をネイティブの区切りで組む（`ghost/master` の
+/// 1 成分で継がない）。バイト列で比べる（`Path` の `==` は区切りの違いを見逃す・指摘 10）。
+#[test]
+fn shiori_dir_uses_native_separators() {
+    let root = Path::new("root");
+    assert_eq!(
+        shiori_dir(root).as_os_str(),
+        root.join("ghost").join("master").as_os_str()
+    );
+
+    let temp = ghost_only("native-separators", "charset,UTF-8\nname,テスト\n");
+    write_shell(temp.path(), "master", "charset,UTF-8\n");
+    let model = resolve_with_shell(temp.path(), DefaultEncoding::Utf8, None).expect("resolve ok");
+    assert_eq!(
+        model.shiori.dir.as_os_str(),
+        temp.path().join("ghost").join("master").as_os_str()
+    );
 }

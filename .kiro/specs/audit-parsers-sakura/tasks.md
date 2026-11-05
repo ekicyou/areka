@@ -153,7 +153,7 @@
   - `resolve_bind_tests.rs` と seriko の `bind_tests.rs` の表のテストが緑で、`areka-ghost` と `areka` の offline_dump がコンパイルを通る
   - _Depends: 2.2, 4.2_
   - _Requirements: 2.1, 2.7, 3.3, 4.1, 4.2, 4.3, 7.1, 7.3, 7.4, 7.10_
-- [ ] 7.3 素通しの `resolve` を消し、SHIORI の置き場の綴りを 1 つにする（T22）
+- [x] 7.3 素通しの `resolve` を消し、SHIORI の置き場の綴りを 1 つにする（T22）
   - `resolve` を消し、呼び手を `resolve_with_shell(.., None)` へ。`crates/areka/src/placement/persist.rs` はゴースト名の読みと SHIORI の置き場の関数へ（46・50）
   - SHIORI の置き場の関数を公開し、ネイティブの区切りで組む。`AskerId` を組むテストを直す（10）
   - package の doc を今の姿へ（52）
@@ -217,3 +217,4 @@
 - 7.1: 5.1 の ms の格子で、`areka-emo-text` の `actor_lookahead_tests.rs` の `Rig::play`（終わりを f64 の和で出していた）が 3 本目の赤になった（research §12.2 R2 の「2 本だけ」は外れ）。道具の終わりも ms の格子で出す形に直した。atlas の `surface_ids` は除外の範囲を広げない（`RangeInclusive` の列で引く・上限は包含の範囲だけにかかるため）。`areka-emo-compose/src/fold.rs` の `expand_targets_with` にも除外を広げる同じ形があり、相手（audit-emo-compose）へ 11-06 に知らせた（8.2 で残っていれば拾う）。`interval_written` は相手が未着地なので残した（8.2 で拾う）。
 - 8.2 への申し送り（2026-11-06 audit-emo-compose の知らせ）: `areka_parsers::shell::parse` が 1 つの面の animation の数の 2 乗に伸びる（debug で 15,000 本 1.37 s・30,000 本 6.6 s）。4.3 の 72（番号→位置の表）の後でも残っているかを測り、残っていれば範囲の中の指摘として直す。相手は fold の除外の範囲を `(lo, hi)` で引く形に直す（相手の指摘 75・タスク 6.3）。
 - 7.5 への申し送り（7.2 のレビュー）: `doc/ukadoc-coverage/ledger/assets.toml:4754` の note が、7.2 で消えた `BindGroupDefaults::kero_default_on` の綴りを書いたまま（守るテストは無い）。7.5 で台帳を直すときに今の形（`BindGroupDefaults` の表の 1＝kero の `default_on`）へ書き換える。`doc/` の差分はこれで台帳の 3 行になる。
+- 完了の棚卸への申し送り（7.3 のレビュー・範囲の外の doc）: `doc/ukadoc-coverage/briefing-assets.md` の 255・367・369・432・448・533 行が、消えた `package::resolve` を今の姿として書いている。design は `doc/` の変更を台帳に限るので 7.3 では直していない。ほかの本番の `join("ghost").join("master")` 8 か所はネイティブの区切りで組んでおり欠陥は無い（`shiori_dir` へ寄せるなら別の起票）。

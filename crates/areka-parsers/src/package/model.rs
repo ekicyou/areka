@@ -6,7 +6,7 @@
 //! I/O 契約の片側であり、本 spec が生成者・正本を所有する。
 //!
 //! 設計規律（design.md「型定義（model）」）:
-//! - 純粋な型定義に留める（I/O・`Result` は `resolve` サブモジュールが持つ）。
+//! - 純粋な型定義に留める（I/O・`Result` は `resolve_shell` サブモジュールが持つ）。
 //! - 派生は `Clone` / `Debug` / `PartialEq` / `Eq`（文字列/パスのみで
 //!   `f32`/`Duration` を含まないため `Eq` 付与可・`sakura::Instruction` との差異）。
 //!   `serde` は付さない（他兄弟型と整合・不要）。
@@ -15,7 +15,7 @@
 //!   パス表現は `PathBuf`。
 //!
 //! 不変条件（design.md「Preconditions/Postconditions/Invariants」）:
-//! - `MountModel` は `resolve` 成功時のみ構築される。
+//! - `MountModel` は `resolve_with_shell` 成功時のみ構築される。
 //! - `shiori.dir` は起点 descript.txt の親（物理存在確定）、`shell.dir` は
 //!   物理存在確認済み。
 //! - `shiori.file` / `names.*` は `Option` で欠落を保持し、既定値は推測しない

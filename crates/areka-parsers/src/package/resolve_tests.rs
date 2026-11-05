@@ -1,4 +1,4 @@
-//! resolve_tests — `package::resolve` 正常系（happy path）＋失敗系マトリクスの証明テスト。
+//! resolve_tests — `package::resolve_with_shell`（名前なし）の正常系（happy path）＋失敗系マトリクスの証明テスト。
 //!
 //! 正常系（3.1）に加え、失敗系（3.2）の 3 経路
 //! （`StartPointMissing` / `StartPointUnreadable` / `ShellDirMissing`）を検証する。
@@ -16,7 +16,7 @@ use temp_path_kit::TempPath;
 
 use crate::charset::DefaultEncoding;
 
-use super::{MountError, MountModel, resolve};
+use super::{MountError, MountModel, resolve_with_shell};
 
 /// このテスト専用の一時ディレクトリを返す（共通窓口 `temp-path-kit` 経由）。
 ///
@@ -55,7 +55,7 @@ fn resolve_happy_path_builds_mount_model() {
     fs::write(&descript, contents.as_bytes()).expect("write descript.txt");
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert ---
     let model = result.expect("正常ツリーは Ok(MountModel) を返す");
@@ -77,7 +77,7 @@ fn resolve_happy_path_builds_mount_model() {
 // ---------------------------------------------------------------------------
 // 失敗系マトリクス（3.2）— 3 経路が区別できることを証明する。
 //
-// `sakura` は `Result` を持たず寛容パースだが、`resolve` は物理不在という
+// `sakura` は `Result` を持たず寛容パースだが、`resolve_with_shell` は物理不在という
 // 現実の致命失敗を観測可能な `Err` として早期 return する（意図的な非対称・
 // Req 1.6/3.3/5.1、根拠は `mod.rs` 冒頭のモジュールコメント）。各テストは
 // 該当する **固有の** variant を assert し、3 経路の識別可能性を担保する。
@@ -95,7 +95,7 @@ fn resolve_missing_descript_yields_start_point_missing() {
     fs::create_dir_all(&root).expect("create root");
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert: 固有 variant（StartPointMissing）を返す ---
     match result {
@@ -125,7 +125,7 @@ fn resolve_unreadable_descript_yields_start_point_unreadable() {
     fs::create_dir_all(&descript_as_dir).expect("create descript.txt as a directory");
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert: 固有 variant（StartPointUnreadable）を返す ---
     match result {
@@ -161,7 +161,7 @@ fn resolve_missing_shell_dir_yields_shell_dir_missing() {
     // shell/nope はあえて作らない。
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert: 固有 variant（ShellDirMissing）を返す ---
     match result {
@@ -184,7 +184,7 @@ fn resolve_missing_shell_dir_yields_shell_dir_missing() {
 
 /// `shiori` 未指定 → `shiori.file == None`（既定 `"shiori.dll"` へ推測しない・Req 2.3）。
 ///
-/// descript に `shiori,` 行を含めず、shell dir は実在させる。`resolve` は `Ok` を
+/// descript に `shiori,` 行を含めず、shell dir は実在させる。`resolve_with_shell` は `Ok` を
 /// 返し、SHIORI ファイル名は **推測されず** `None` であることを assert する。
 #[test]
 fn resolve_missing_shiori_yields_file_none() {
@@ -211,7 +211,7 @@ fn resolve_missing_shiori_yields_file_none() {
     .expect("write descript.txt");
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert: Ok かつ shiori.file は推測されず None ---
     let model = result.expect("shiori 未指定でも Ok（マウント点は所在で決まる）");
@@ -227,7 +227,7 @@ fn resolve_missing_shiori_yields_file_none() {
 /// `seriko.defaultsurfacedirectoryname` 未指定 かつ `shell/master` 実在
 /// → 既定 `master` フォールバック（Req 3.1）。
 ///
-/// shell 名の指定行を含めず、`shell/master` を実在させる。`resolve` は既定
+/// shell 名の指定行を含めず、`shell/master` を実在させる。`resolve_with_shell` は既定
 /// `master` へフォールバックし、`model.shell.dir == root/shell/master` を assert する。
 #[test]
 fn resolve_missing_shell_name_falls_back_to_master() {
@@ -247,7 +247,7 @@ fn resolve_missing_shell_name_falls_back_to_master() {
         .expect("write descript.txt");
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert: Ok かつ既定 master へフォールバック ---
     let model = result.expect("shell 名未指定でも実在 master へフォールバックし Ok");
@@ -264,7 +264,7 @@ fn resolve_missing_shell_name_falls_back_to_master() {
 /// `type,ghost` 欠落でも所在ベースで受理 → `Ok`（Req 1.2/1.3）。
 ///
 /// descript に `type` 行を一切含めず（`charset` と `name` のみ）、shell dir は実在
-/// させる。`type` 欠落は失敗ではなく、マウントは物理所在で識別されるため `resolve`
+/// させる。`type` 欠落は失敗ではなく、マウントは物理所在で識別されるため `resolve_with_shell`
 /// は `Ok` を返すことを assert する。
 #[test]
 fn resolve_missing_type_is_accepted() {
@@ -290,7 +290,7 @@ fn resolve_missing_type_is_accepted() {
     .expect("write descript.txt");
 
     // --- Act ---
-    let result = resolve(&root, DefaultEncoding::Utf8);
+    let result = resolve_with_shell(&root, DefaultEncoding::Utf8, None);
 
     // --- Assert: type 欠落は失敗ではない（所在ベース識別）→ Ok ---
     let model = result.expect("type 欠落でも所在ベースで受理し Ok を返す");
@@ -308,10 +308,10 @@ fn resolve_missing_type_is_accepted() {
 // 綴りの正規化（大小文字・別名）や値の切り詰めが起きないことを固定する。
 // ---------------------------------------------------------------------------
 
-/// 2 キーを持つ最小のゴーストツリーを組み、`resolve` の結果を返す。
+/// 2 キーを持つ最小のゴーストツリーを組み、`resolve_with_shell`（名前なし）の結果を返す。
 ///
 /// 2 キーの転記だけを見るテスト群の共通の組み立て。転記そのものを検査するので、
-/// `ShioriMount` を struct リテラルで組まず必ず `resolve` を通す。
+/// `ShioriMount` を struct リテラルで組まず必ず `resolve_with_shell` を通す。
 fn resolve_with_descript(tag: &str, descript_body: &str) -> (TempPath, MountModel) {
     let temp = unique_temp_dir(tag);
     let root = temp.path().to_path_buf();
@@ -323,7 +323,8 @@ fn resolve_with_descript(tag: &str, descript_body: &str) -> (TempPath, MountMode
     fs::write(ghost_master.join("descript.txt"), descript_body.as_bytes())
         .expect("write descript.txt");
 
-    let model = resolve(&root, DefaultEncoding::Utf8).expect("正常ツリーは Ok(MountModel)");
+    let model = resolve_with_shell(&root, DefaultEncoding::Utf8, None)
+        .expect("正常ツリーは Ok(MountModel)");
     (temp, model)
 }
 
@@ -431,7 +432,8 @@ fn descript_charset_key_does_not_feed_shiori_encoding() {
     let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(body);
     fs::write(ghost_master.join("descript.txt"), &bytes[..]).expect("write descript.txt");
 
-    let model = resolve(&root, DefaultEncoding::Utf8).expect("正常ツリーは Ok(MountModel)");
+    let model = resolve_with_shell(&root, DefaultEncoding::Utf8, None)
+        .expect("正常ツリーは Ok(MountModel)");
 
     // ファイル自身の文字コード宣言は読めている（デコードが効いている裏づけ）。
     assert_eq!(model.names.name.as_deref(), Some("テスト"));
@@ -474,4 +476,36 @@ fn readme_key_absent_is_none() {
     );
 
     assert_eq!(model.readme, None);
+}
+
+// ---------------------------------------------------------------------------
+// `GhostNames` の `sakura.name2` の転記（task 7・R4.4）
+//
+// 縮退・フォールバックは行わない（それは ghost 層 task 8.1 の責務）。
+// ---------------------------------------------------------------------------
+
+/// `sakura.name2` 宣言あり → `GhostNames.sakura_name2 == Some(値)`（忠実転記・R4.4）。
+#[test]
+fn sakura_name2_declared_is_some() {
+    let (_temp, model) = resolve_with_descript(
+        "name2_declared",
+        "charset,UTF-8\nname,テスト\nsakura.name,本体\nsakura.name2,別名\nkero.name,相方\n",
+    );
+
+    assert_eq!(model.names.sakura_name2, Some("別名".to_string()));
+    // 既存フィールドは無改変。
+    assert_eq!(model.names.sakura_name, Some("本体".to_string()));
+}
+
+/// `sakura.name2` 宣言なし → `GhostNames.sakura_name2 == None`（推測しない・R4.4）。
+#[test]
+fn sakura_name2_absent_is_none() {
+    let (_temp, model) = resolve_with_descript(
+        "name2_absent",
+        "charset,UTF-8\nname,テスト\nsakura.name,本体\nkero.name,相方\n",
+    );
+
+    assert_eq!(model.names.sakura_name2, None);
+    // 兄弟フィールドは通常どおり転記される（None は欠落を意味する）。
+    assert_eq!(model.names.sakura_name, Some("本体".to_string()));
 }
