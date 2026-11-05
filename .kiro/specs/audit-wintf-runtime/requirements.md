@@ -15,6 +15,7 @@
 - **In scope**:
   - 受け持つファイル＝`crates/wintf/` のうち `src/ecs/` の外のもの全部（`src/runtime/`・`src/com/`・`src/numerics/`・`win_style*`・`win_state*`・`api*`・`lib.rs`・`test_crash_report.rs`・`tests/`・`examples/`・`examples.manifest`・`build.rs`・`README.md`・`Cargo.toml`）。
   - 受け持つファイルの指摘の直し、そのためのテストの追加と直し、直しのために要る範囲の外の呼び出し元の直し（要件 6 の約束に従う）。
+  - 討議で広げた範囲（2026-11-05 開発者承認）: `wintf-dwmflush-wait-compensation` の直す中身（2・8 番）と、`audit-wintf-layout-widget` の受け持つ本番のうち 5・94・101 番の直し（`src/ecs/layout/dimension.rs` ほか）。下の「指摘の扱い」を正本とする。
 - **Out of scope**:
   - 範囲の外の見直し（ほかの 32 本の見直しの持ち物。`crates/wintf/src/ecs/` は `audit-wintf-graphics-world` ほか wintf の見直しの持ち物）。
   - 新しい機能。
@@ -23,7 +24,9 @@
   - 開発者の裁定（roadmap の「生きている決まり」・記憶の決めごと・完了した spec の要件）を覆す直し（直さずに議題にする）。
 - **Adjacent expectations**:
   - `wintf-visual-tree`（v0.2.0）: `crates/wintf/src/ecs/visual/` と、そこからだけ使われる `src/numerics/` の働き（`Transform2D`・`Aabb`・`Matrix3x2Ext` ほか）を本番の描画層へ上げる。この spec はそれらを「使われていない」ことを理由に消さない。
-  - `wintf-dwmflush-wait-compensation`（版に縛らない・未着手）: `src/runtime/tick_bridge.rs` の vblank のスレッドの空回りと、`Err` の回に起こさない穴を直す。同じファイルを触るので同じウェーブに並べない。
+  - `wintf-dwmflush-wait-compensation`（版に縛らない・未着手）: `src/runtime/tick_bridge.rs` の vblank のスレッドの空回りと、`Err` の回に起こさない穴を直す予定だった。2026-11-05 の討議でこの spec に吸収した（直し方はあちらの brief の形をそのまま使う）。あちらの spec はこの spec の完了のときに台帳から閉じる。
+  - `audit-wintf-graphics-world`（同じウェーブで並走）: 30・35 番の本番の直し（`src/ecs/world/mod.rs` の単一スレッドの名札・`src/ecs/graphics/systems/visual_sync.rs` の付け替えの穴 P47）はあちらで直す。あちらの本番の直しに付くテスト（この spec の持ち物の `tests/visual/hierarchy_reparent_gap_test.rs`・`tests/graphics/brushes_system_test.rs`・`window_pos_systems_test.rs`・`reinit_unit_test.rs`・`components_test.rs`・`tests/ecs/lazy_reinit_pattern_test.rs`・`world_lifecycle_test.rs`・`dola_animator_test.rs`・`tests/visual/insert_visual_test.rs`・`tests/visual.rs`・`tests/window/owner_window_exists_test.rs`・`examples/graphics_reinit_test.rs`・`src/runtime/tick_bridge.rs` の説明）は、あちらの直しと一緒にあちらで書き換えてよい。この spec の同じファイルの指摘は、あちらの着地の後に直す（要件 6.2 の申し合わせ）。
+  - `audit-wintf-layout-widget`（次のウェーブ・まだ走っていない）: 5・94・101 番はこの spec で本番ごと直す。あちらのギャップ分析が二重に数えないよう、記録に残す。
   - `audit-wintf-graphics-world` ほか同じウェーブ C17 の見直し 6 本と `doc-tree-tidy`: 受け持つファイルは重ならない。ウェーブの約束（`doc/`・`docs/` を名指す行を足さず変えない・誰も依存を足さない・emo-text にファイルを足さない）を守る。
   - `clippy-199-lints`: 同じクレートに触る。見直しの段のあいだは並べない。
 
@@ -122,3 +125,33 @@
 1. When 指摘を全部直し終えたとき, the 見直し shall 要件 1 で確定した範囲（その後の増減を含む）へ、要件 2 と同じ作法（全件・全部読む）で `/ponytail:ponytail-audit` をかけ直す
 2. If かけ直しで新しい指摘（直しが生んだ指摘を含む）が出たとき, the 見直し shall それも要件 3〜7 と同じ扱いで直し、要件 3 で「直さずに残す」と裁定された指摘を除いて 0 件になるまでかけ直す
 3. The 見直し shall かけ直しの記録に、読んだファイルの数が範囲のファイルの数と一致することと、3 つの組それぞれの件数（0 件も数字で）と、要件 3 で「直さずに残す」と裁定された指摘の番号を書く
+
+## 指摘の扱い（要件 3 の確定・2026-11-05 要件の討議）
+
+ギャップ分析（`research.md` 3 節）の 119 件（必ず直す 5・直したほうがよい 63・できれば 51）の扱い。番号は audit の番号。各指摘の中身・場所・直し方の案は `research.md` を正本とする。
+
+| 扱い | 番号 | 件数 |
+|---|---|---:|
+| この spec で直す | 1〜20・24〜87・89〜119（21・22・23・88 を除く全部） | 115 |
+| 直さずに残す（⑵ わざと置いた先送りの印）・`wintf-visual-tree` へ申し送り | 21・22・23・88 | 4 |
+| 計 | | 119 |
+
+- 「この spec で直す」のうち、本番の直しが範囲の外へ及ぶもの:
+  - 2・8 番: `wintf-dwmflush-wait-compensation` を吸収してこの spec で直す。`runtime/mod.rs:L337`・`L365` の注記もいっしょに直す。
+  - 5・94・101 番: `audit-wintf-layout-widget` の受け持つ本番（`src/ecs/layout/dimension.rs` ほか）もこの spec で直す。5 番は ⑴ に当たらない（テストが引く「P49」は実在せず、型の文書は 0.0〜100.0 と書く）。
+  - 30・35 番: この spec はテストの側（消す・書き直す）だけを直す。本番（単一スレッドの名札の定数・付け替えの穴 P47）は `audit-wintf-graphics-world` が直す。P47 の持ち主は `audit-wintf-graphics-world`。
+  - 119 番: 61 番でファイルを消して解く。
+- 直さずに残す 4 件: 21 番＝傷 3・22 番＝傷 4 と重なる。88 番（`Matrix3x2Ext::moved` の単位の誤り）もあちらで直す。
+- 知っている穴を固定するテスト（`research.md` 7 節の「指摘にしなかった判断」＝P40・+inf の飽和ほか）は、理由と限界を書いた判断として残す（指摘に数えない）。
+
+### 討議の裁定
+
+1. **DwmFlush の重なり（2・8 番）**: この spec に畳み込む。`wintf-dwmflush-wait-compensation` は完了のときに台帳から閉じる。
+2. **描画の木の部品（21・22・23・88 番）**: 消さずに `wintf-visual-tree` へ申し送る。
+3. **公開の口（`research.md` 6 節の 15 件）**: 0.x の壊す変更として次の版でまとめて消す・変える。`#[deprecated]` は挟まない。変わった口の一覧を要件 4.4 の記録に残す。
+4. **範囲の外の本番**: 5・94・101 番はこの spec で直す。30・35 番の本番は `audit-wintf-graphics-world` が直す。
+5. **`audit-wintf-graphics-world` が書き換えるテスト**: Boundary Context に挙げたファイルは、あちらの本番の直しと一緒にあちらで書き換えてよい。この spec の同じファイルの指摘は、あちらの着地の後に直す。
+6. **20 タスクを越える件（要件 3.7）**: 2 本目に切らず、1 本のまま直す（開発者「1 本のまま」）。
+7. **依存を減らす（19・20 番）**: 進める。`nonmax`・`ambassador`・開発用の `rand` を外し、`bevy_app` を開発用へ移す。根の `Cargo.toml`（`nonmax` の宣言・`Win32_UI_Animation` の機能）と `.kiro/steering/tech.md` の行も直す。
+8. **使われない example と資産（60〜63・65・89・112 ほか）**: 消す。`.kiro/steering/logging.md:118` の手順を、残る example へ向け直す。
+9. **テストが本物の窓を画面に出す件（54・81 番）**: 見えない窓にする（確かめる前に隠す）。

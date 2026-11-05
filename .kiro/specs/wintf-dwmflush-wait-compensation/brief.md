@@ -1,6 +1,8 @@
 # Brief: wintf-dwmflush-wait-compensation
 
 > 起票: 2026-11-04（`/kiro-discovery`・開発者の依頼「DwmFlush を待機する tick ループに『待てなかった分だけ別手段で補う』処理を入れる」）。決めごとは同じ日の discovery で開発者と詰めた。
+>
+> **2026-11-05 `audit-wintf-runtime` に吸収**（要件の討議・開発者承認）: この brief の直す中身は `audit-wintf-runtime` が audit の 2・8 番として、ここに書いた形のまま直す。この spec は単独では着手しない。台帳からは `audit-wintf-runtime` の完了のときに閉じる。
 
 ## Problem
 
