@@ -222,6 +222,7 @@
     - 困ること: 本番がどう変わっても赤にならない。いくつか（`*_changed_detection`・`test_resource_removal_detection_summary` ほか）は `eprintln!` だけで何も確かめない。
     - 直し方: 3 ファイルと 6 行の宣言を消す。
     - 直さないと: 失敗しえないテストが実行の時間を食う。
+    - 直し（7.4・2026-11-06）: 3 ファイルと `tests/ecs.rs` の宣言 6 行を消した。消す前の参照の確かめは 11 節の 7.4 の段。確かめを直す指摘ではないので較正は無い。
 
 28. **画素の写しのテストが、何も写さない包みでも通る**（`crates/wintf/tests/com/wic_test.rs:L302-L326`・`L328-L357`）
     - 困ること: 入れ物は全部 0 で始まり、テストは `Ok` だけを見る。`copy_pixels` を何もせず `Ok` を返すように壊しても緑。
@@ -237,11 +238,14 @@
     - 困ること: 確かめるのは `get(UISetup).is_some()` だけで、L61-L88 と重なる。注記は UISetup だけと言うが、実際は 6 本（`src/ecs/world/mod.rs:134-177`）。どれかの `set_executor(SingleThreadedExecutor)` を消しても緑。bevy 0.19.1 には実行器を読む公開の口が無い。
     - 直し方: このテストを消す。単一スレッドのスケジュールを固定するには、本番に「単一スレッドの名札の一覧」の定数を置く小さな変更が要る（範囲の外 `ecs/world/mod.rs`＝`audit-wintf-graphics-world` の受け持ち）。
     - 直さないと: 名前が約束する保証を誰も確かめていない。
+    - 直し（7.4・2026-11-06）: `world_lifecycle_test.rs` の `uisetup_schedule_uses_single_threaded_executor`（取り込みの後の L85-L94）を消した。本番の名札の口（`src/ecs/world/mod.rs`）には触っていない。消すだけなので較正は無い。
 
 31. **`tick_dola_animators` のテストが `tick_dola_animators` を呼ばない**（`crates/wintf/tests/ecs/dola_animator_test.rs:L93-L136`・`L158-L162`）
     - 困ること: system の中のループをテストの中に写して回すだけ。L158-L162 は関数のポインタへの型変換だけ。本番の system のループを抜いても緑。
     - 直し方: `Schedule` に本物の `tick_dola_animators` を足して回し、L154-L162 を消す。
     - 直さないと: すべてのアニメを動かす system に結合のテストが無い。
+    - 直し（7.4・2026-11-06）: `tick_dola_animators_system_updates_all_entities` を `SystemState` で手で回す形から、`Schedule::default()` に本物の `tick_dola_animators` を足して `run` する形にした。型だけの確かめ `tick_dola_animators_is_valid_system`（取り込みの後の L150-L158）と `SystemState` の import を消した。
+    - 較正（7.4・2026-11-06）: 本番 `src/ecs/dola/mod.rs` の `tick_dola_animators` のループから `animator.tick(frame_time.0);` を抜くと `dola_animator_test::tick_dola_animators_system_updates_all_entities` が赤（「Entity 1 should have changes」）になるのを見てから戻した（戻した後は `git hash-object` が `HEAD` の blob と同じ）。
 
 32. **ドラッグ中の大きさのテストが、大きさを更新してもしなくても通る**（`crates/wintf/tests/drag/window_dragging_filter_test.rs:L28-L81`・`L174-L189`）
     - 困ること: 期待の大きさが最初の大きさと同じ 800x600。ドラッグ中の実体を丸ごと飛ばすように壊しても緑（L221-L290 だけが捕まえる）。
@@ -271,6 +275,8 @@
     - 困ること: 本番の `wintf::ecs::owner_window_exists`（`src/ecs/graphics/visual.rs:38`）を一度も呼ばない。本番を壊しても 5 本とも緑。
     - 直し方: 写しを消し、`owner_window_exists(&DeferredWorld::from(&mut world), e)` で本物を呼ぶ（`From<&mut World>` は bevy 0.19.1 にある）。
     - 直さないと: GPU の部品を付けるかを決める判定に本当のテストが無い。
+    - 7.4（2026-11-06）: 13 節のとおり「消えて解けた」を今のファイルで確かめた（写しの関数は無く、`Visual` を足して本物の `on_visual_add` → `owner_window_exists` を通す）。テストは変えていない。
+    - 較正（7.4・2026-11-06）: 本番 `src/ecs/graphics/visual.rs` の `owner_window_exists` を `true || has_window_ancestor(..)`（いつも「窓が在る」）に壊すと `owner_window_exists_test::test_orphan_entity_returns_false`・`test_child_without_window_ancestor_returns_false`・`test_parent_cycle_returns_without_window` の 3 本が赤になるのを見てから戻した（戻した後は `git hash-object` が `HEAD` の blob と同じ）。
 
 37. **切り抜きの同期のテストは何も確かめず、前提も古い**（`crates/wintf/tests/graphics/clip_sync_system_test.rs:L1-L7`・`L64-L183`）
     - 困ること: 4 本とも何も確かめない。本番は COM の失敗を全部 `error!` して続けるので、`build_clip` がいつも失敗しても緑。注記は「InsetClip は書くだけ」「SetLeft/SetRight」と言うが、本番は角丸の図形の切り抜き。最後の 1 本は部品が空なので別の理由で通る。
@@ -848,6 +854,8 @@
 **34・104・105・106・107・114 の直しと較正（タスク 7.2・T2a・2026-11-06）**: 消す前に `git grep -n -e frame_time_test -e test_debug_build -e test_release_build -e owner_thread_single_full_cycle -e owner_thread_two_full_cycles_no_crash -e make_and_drop_full_stack -e test_surface_graphics_dirty_on_surface_added -e test_surface_creation_stats_as_resource -e test_graphics_core_as_resource -e test_graphics_core_accessible_from_system -e test_multiple_systems_can_access_graphics_core -e test_graphics_core_with_schedule -e test_graphics_core_resource_trait -e test_graphics_core_lifecycle -- . ':!vendors' ':!.kiro/specs'` を引き、定義のファイル自身と `tests/graphics.rs` の `frame_time_test` の宣言の外は 0 件。消した後に同じ grep を引き直して 0 件。34 は `core_ecs_test.rs` の冪等のテストに `FrameCount::default()` を入れ、`run` を `expect` にし、前後の `d2d_device()` が同じ装置であることを確かめる形にした（作るテストの `let _ = system.run(..)` も `expect` にした）。104 は同じファイルのリソースの入れ・読みだけの 6 本と `eprintln!` を消した。105 は `core_test.rs` の `test_debug_build`／`test_release_build` と `eprintln!` を消した。106 は `frame_time_test.rs` と `tests/graphics.rs` の宣言を消した。107 は `surface_optimization_test.rs` の `test_surface_graphics_dirty_on_surface_added`・`test_surface_creation_stats_as_resource` を消した（`test_mark_dirty_surfaces_updates_frame` の `bevy_app::App` の利用はそのまま）。114 は `graphics/common/mod.rs` の自己テストのうち檻（`wuc_restart_regression_test.rs` の 3 本）と重なる 2 本と補助 `make_and_drop_full_stack` を消し、`owner_thread_returns_value` だけを残した（使わなくなった `GraphicsCore`・`WucGraphicsResource` の import も落とした）。見た目の実行ファイルへ一時に `#[path = "graphics/common/mod.rs"] mod gpu;` を足して `cargo test -p wintf --test visual gpu::fixture_self_tests` を回し、警告なしで `owner_thread_returns_value` 1 本が緑になることを確かめてから外した（取り込みは 7.6 の持ち物）。34 の較正は 34 の項に書いた。
 
 **37・38・44・69（`create_command_list`）・113（先のファイル）・116（dcomp_integration）の直しと較正（タスク 7.3・T2b・2026-11-06）**: 消す前に `git grep -n -e create_command_list -e surface_pixel_equivalence -e clip_sync_skips_when_wuc_resource_is_absent -- . ':!vendors' ':!.kiro/specs'` を引いた。`create_command_list` は定義（`src/com/d2d/mod.rs:20`・`:33`）と 13 節の 7 か所の呼び手、`surface_pixel_equivalence` は `tests/graphics.rs` の宣言と定義のファイル自身、`clip_sync_skips_when_wuc_resource_is_absent` は定義だけ。ほかに `areka-emo-present` に 2 つの名が当たる（下）。69 は 7 か所を、装置の文脈から生の `CreateCommandList()` を呼ぶ形にした（`command_list_test.rs` の 3 か所と `d2d_ext_test.rs:50` は `GraphicsCore::device_context()`、`d2d_ext_test.rs` の残りの 2 か所と `surface_systems_test.rs` は同じテストの中で既に作っている記録の文脈）。そのあと `D2D1DeviceExt::create_command_list` の宣言と実装を消し、`command_list_test.rs` の要らなくなった `use wintf::com::d2d::D2D1DeviceExt;` を落とした。37 は `clip_sync_system_test.rs` の 3 本の `schedule.run` を `count_levels` で包む補助 `run_without_error`（GPU の持ち主のスレッドの閉包の中で呼ぶ）にし、`error` が 0 件を確かめる形にした。部品が空で別の理由で通る `clip_sync_skips_when_wuc_resource_is_absent` は消した。module doc と、注記の「SetLeft/SetRight」の古い前提を直した。あちらが足した切り抜きの鍵のテスト（`clip_sync_keeps_clip_on_move_and_reapplies_to_recreated_visual`）はそのまま残した。38 は `render_surface_draws_dirty_surface_without_error` の `schedule.run` を `count_levels` で包み `error` が 0 件を確かめる形にし、`render_surface` が変えられない `is_valid()` の確かめと、誤った「panic する」の注記を消した。44 は `surface_pixel_equivalence_test.rs` と `tests/graphics.rs` の宣言を消した（`begin_draw`／`end_draw` の往復は直した 38 が通す）。113 は `clip_sync_system_test.rs`・`dcomp_integration_test.rs`・`init_window_graphics_test.rs`・`surface_systems_test.rs` の準備の `CoInitializeEx` と import を消し、「MTA の初期化は GPU の持ち主のスレッドが済ませている」の 1 行の注記にした（どの準備も持ち主のスレッドの中でだけ呼ばれる）。116（dcomp_integration）は ECS のフックだけを試す 2 本（`test_dcomp_window_visual_gets_dcomp_components`・`test_orphan_visual_does_not_get_dcomp_components`）を、WUC を組まない素の `World` で持ち主のスレッドを使わずに回す形にした。消した後に同じ grep を引き直すと、残りは `areka-emo-present` の次の 3 か所だけ: `src/display_fault_tests.rs:185`・`:236` の `create_command_list_failure_logs_once_and_leaves_no_side_effect`（あちらの crate のテストの名と、その名を引く文字列。wintf の口ではない）と、`src/display_gpu_tests.rs:15` の「読み戻しの型は wintf `tests/graphics/surface_pixel_equivalence_test.rs` と同じ」の注記（消したファイルを引く）。`create_command_list` の「grep 0 件」は「wintf の口の定義と呼び手が 0 件」と読み、残る 2 件（`display_fault_tests.rs:185`・`:236`）はあちらの crate のテストの名なので変えない（進行役の裁定・2026-11-06）。`display_gpu_tests.rs:15-16` の注記は、この削除で行き先を失うので、消したファイルの名を引かずに読み戻しの型だけを書く 1 行に直した（進行役の裁定・その crate のほかは触らない）。直した後、graphics の実行ファイルは実 GPU で 96 本とも緑（7.2 の後の 98 本から、消した 2 本を引いた数）、com の実行ファイルは 23 本とも緑。37・38 の較正はそれぞれの項に書いた。
+
+**27・30・31・36 の直しと較正（タスク 7.4・G1・2026-11-06）**: 消す前に `git grep -n -e component_state_pattern -e lazy_reinit_pattern -e resource_removal_detection -e uisetup_schedule_uses_single -e tick_dola_animators_is_valid_system -- . ':!.kiro/specs' ':!vendors'`（`.kiro/steering/` も含む）を引き、消すファイルとテストの定義の外は `tests/ecs.rs:2-7` の宣言 6 行だけ（いっしょに消した）。ほかの参照は 0 件（`test_resource_removal_detection_summary` は消すファイルの中）。31・36 の較正は各指摘の段のとおり。戻した後は `cargo test -p wintf --test ecs --test window` が 23・20 本とも緑。
 
 #### 繰り延べた調べの答え
 
