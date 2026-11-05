@@ -89,3 +89,68 @@ fn note_draw_failure_keeps_healthy_device_on_invalid_arg() {
     assert!(!core.note_draw_failure(&Error::from(E_INVALIDARG)));
     assert!(core.is_valid());
 }
+
+static LOST_SIGNALS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+fn count_lost_signal() {
+    LOST_SIGNALS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// OS の知らせ: 預けたイベントを手で鳴らすと係が呼ばれ、装置を捨てた後に鳴らしても呼ばれない。
+#[test]
+fn device_lost_notice_fires_until_core_dropped() {
+    use std::sync::atomic::Ordering::SeqCst;
+    use std::time::{Duration, Instant};
+    use windows::Win32::System::Threading::{GetCurrentProcess, SetEvent, WaitForSingleObject};
+
+    let core = GraphicsCore::create(count_lost_signal).expect("GraphicsCore");
+    let event = core
+        .inner
+        .as_ref()
+        .and_then(|i| i._lost_watch.as_ref())
+        .expect("知らせが登録されている")
+        .event;
+    // 捨てた後にも鳴らせるよう、イベントの handle を複製しておく。
+    let mut dup = HANDLE::default();
+    unsafe {
+        DuplicateHandle(
+            GetCurrentProcess(),
+            event,
+            GetCurrentProcess(),
+            &mut dup,
+            0,
+            false,
+            DUPLICATE_SAME_ACCESS,
+        )
+    }
+    .expect("DuplicateHandle");
+
+    unsafe { SetEvent(dup) }.expect("SetEvent");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while LOST_SIGNALS.load(SeqCst) == 0 {
+        assert!(Instant::now() < deadline, "30 秒たっても係が呼ばれない");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(LOST_SIGNALS.load(SeqCst), 1, "1 回鳴らして 1 回");
+
+    drop(core);
+    unsafe { SetEvent(dup) }.expect("SetEvent");
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(LOST_SIGNALS.load(SeqCst), 1, "捨てた後は呼ばれない");
+    // 自動で戻るイベントが鳴ったまま＝待つ者がもう居ない。
+    assert_eq!(unsafe { WaitForSingleObject(dup, 0) }, WAIT_OBJECT_0);
+    unsafe { CloseHandle(dup) }.expect("CloseHandle");
+}
+
+/// 確かめの係は健全な装置を無効にせず、資源に変化の印を立てない。
+#[test]
+fn check_device_removed_leaves_healthy_device_untouched() {
+    use bevy_ecs::system::RunSystemOnce;
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let before = world.resource_ref::<GraphicsCore>().last_changed();
+    world.run_system_once(check_device_removed).unwrap();
+    let gc = world.resource_ref::<GraphicsCore>();
+    assert!(gc.is_valid());
+    assert_eq!(gc.last_changed(), before);
+}

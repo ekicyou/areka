@@ -57,7 +57,7 @@
   - 完了の状態: 装置のテスト（旗を外した作り直し・工場の同一性・判定の真偽表・健全な装置で `E_INVALIDARG` なら有効のまま）と名簿の完全性のテストが緑
   - _Requirements: 3.1, 3.2, 3.7, 5.2, 5.3, 5.6, 5.9_
 
-- [ ] 3.2 OS の知らせで装置の失いに気づき、待ちを正しく後始末する
+- [x] 3.2 OS の知らせで装置の失いに気づき、待ちを正しく後始末する
   - 装置を作るときに失いの知らせのイベントを預け、スレッドプールで待つ。鳴ったら `GRAPHICS` を 1 回立てるだけにし、WUC にも D3D にも触らない
   - 描画の準備のスケジュールの先頭の確かめで失いの理由を問い、失いなら無効にする
   - 作り直しと捨てるときに、待ちを「終わるまで待つ」で外し、知らせの登録を外し、最後にイベントを閉じる。登録の失敗は `error!` を残し、描画の失敗で気づく道だけで動き続ける
@@ -201,3 +201,4 @@
 - 2.1: 窓に属するかの判定は `graphics::visual::has_window_ancestor`（フックと後からつなぐ係で共用）。3 つの部品を入れる口は `insert_graphics_parts`（`insert_if_new`）。`PreRenderSurface` を直に回すテストは本物の `GraphicsCore::new()` を入れないと `Resource does not exist` で落ちる。
 - 2.3: 見た目の木の同期は「控えの親 ≠ 居るべき親」で未同期を見分ける（`VisualGraphics::new` は `parent_visual: None`）。見た目を作り直した部品は自動で同期し直される。`clip_sync_system` の作り直しへの対応は 4.6 の持ち分。visual_sync.rs の `type_complexity` 2 件は完了の棚卸で別名にまとめるか決める。
 - 3.1: `is_device_lost` と `GraphicsCore::note_draw_failure` は `#[cfg_attr(not(test), expect(dead_code, ...))]` 付き。4.5 で `render.rs` から呼ぶときに両方の属性を消す（消さないと満たされない expect の警告）。工場は `ID2D1Factory1`・装置は `d2d_factory.CreateDevice(&dxgi)`。`graphics/components.rs:100` の `let _ = parent…` が誤りを捨てている（前から・審査の指摘）＝ 4.4 か 6.4 で触るなら見る。
+- 3.2: 失いの知らせは `DeviceLostWatch`（`GraphicsCoreInner._lost_watch`）。`invalidate()` で inner ごと落ちて後始末が走る。`check_device_removed` は `GraphicsSetup` の先頭に `(check_device_removed, init_window_graphics).chain()` で仮に置いた＝4.1 で並べ直す。`world/mod.rs` は 956 行で 1,000 に近い＝4.1 以降で足すときは 6.1 の削りを先に見込む。

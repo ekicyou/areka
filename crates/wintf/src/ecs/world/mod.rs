@@ -291,8 +291,16 @@ impl EcsWorld {
             );
 
             // GraphicsSetupスケジュール: WUC（Windows.UI.Composition）合成スタック初期化
-            // init_window_graphics: Window に WindowGraphics を作成（単独登録、chain不要）
-            schedules.add_systems(GraphicsSetup, crate::ecs::graphics::init_window_graphics);
+            // check_device_removed: 先頭で装置の失いを確かめる（OS の知らせで起こされた回にも気づく）
+            // init_window_graphics: Window に WindowGraphics を作成
+            schedules.add_systems(
+                GraphicsSetup,
+                (
+                    crate::ecs::graphics::check_device_removed,
+                    crate::ecs::graphics::init_window_graphics,
+                )
+                    .chain(),
+            );
 
             // Drawスケジュール: ウィジェット描画システム
             // Phase 2: DCompシステム（deferred_surface_creation_system, cleanup_surface_on_commandlist_removed）を除去

@@ -9,6 +9,9 @@ use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::DirectWrite::*;
 use windows::Win32::Graphics::Dxgi::*;
+use windows::Win32::System::Threading::{
+    CreateEventW, INFINITE, RegisterWaitForSingleObject, UnregisterWaitEx, WT_EXECUTEDEFAULT,
+};
 use windows::core::{HRESULT, Interface, Result};
 
 #[derive(Debug)]
@@ -19,6 +22,100 @@ struct GraphicsCoreInner {
     pub d2d: ID2D1Device,
     pub d2d_device_context: ID2D1DeviceContext, // グローバル共有DeviceContext
     pub dwrite_factory: IDWriteFactory2,
+    /// 装置の失いの OS の知らせ（持つだけで捨てるときに後始末する・登録に失敗したら None・描画の失敗で気づく道だけで動く）。
+    _lost_watch: Option<DeviceLostWatch>,
+}
+
+/// 装置の失いの OS の知らせ: 預けたイベント・スレッドプールの待ち・知らせの登録の札。
+///
+/// 捨てるとき（作り直しと `invalidate()`）に、待ちを終わるまで待って外し、知らせの登録を外し、
+/// 最後にイベントを閉じる。
+#[derive(Debug)]
+struct DeviceLostWatch {
+    device: ID3D11Device4,
+    cookie: u32,
+    event: HANDLE,
+    wait: HANDLE,
+}
+
+impl DeviceLostWatch {
+    fn register(d3d: &ID3D11Device, on_lost: fn()) -> Result<Self> {
+        let device: ID3D11Device4 = d3d.cast()?;
+        // 自動で戻るイベント: 1 回鳴るごとに待ちの係が 1 回だけ呼ばれる。
+        let event = unsafe { CreateEventW(None, false, false, None)? };
+        let cookie = match unsafe { device.RegisterDeviceRemovedEvent(event) } {
+            Ok(cookie) => cookie,
+            Err(e) => {
+                if let Err(close) = unsafe { CloseHandle(event) } {
+                    error!(error = ?close, "[GraphicsCore] CloseHandle of device-removed event failed");
+                }
+                return Err(e);
+            }
+        };
+        // 待ちの登録に失敗したら、ここで捨てて Drop に札とイベントを片づけさせる。
+        let mut watch = Self {
+            device,
+            cookie,
+            event,
+            wait: HANDLE::default(),
+        };
+        unsafe {
+            RegisterWaitForSingleObject(
+                &mut watch.wait,
+                event,
+                Some(on_device_lost_signal),
+                Some(on_lost as *const core::ffi::c_void),
+                INFINITE,
+                WT_EXECUTEDEFAULT,
+            )?
+        };
+        Ok(watch)
+    }
+}
+
+impl Drop for DeviceLostWatch {
+    fn drop(&mut self) {
+        if !self.wait.is_invalid() {
+            // INVALID_HANDLE_VALUE＝走っている係が終わるまで待ってから外す。
+            if let Err(e) = unsafe { UnregisterWaitEx(self.wait, Some(INVALID_HANDLE_VALUE)) } {
+                error!(error = ?e, "[GraphicsCore] UnregisterWaitEx of device-removed wait failed");
+            }
+        }
+        unsafe { self.device.UnregisterDeviceRemoved(self.cookie) };
+        if let Err(e) = unsafe { CloseHandle(self.event) } {
+            error!(error = ?e, "[GraphicsCore] CloseHandle of device-removed event failed");
+        }
+    }
+}
+
+/// スレッドプールの待ちの係。旗を立てる関数を呼ぶだけで、WUC にも D3D にも触らない。
+unsafe extern "system" fn on_device_lost_signal(context: *mut core::ffi::c_void, _timed_out: bool) {
+    // SAFETY: context は `DeviceLostWatch::register` が渡した `fn()` のポインタ。
+    let on_lost: fn() = unsafe { std::mem::transmute(context) };
+    on_lost();
+}
+
+/// 本番の知らせの係: 描画基盤の旗を立てて UI スレッドを起こす（どのスレッドからでも安全）。
+fn mark_graphics_wake() {
+    crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
+}
+
+/// 描画の準備の先頭の確かめ: 装置が有効なら失いの理由を問い、失いなら無効にして旗を立てる。
+///
+/// 可変で触るのは失いのときだけ（ふだん可変で触ると変化の印が毎回立ち、下流が控えを捨てる）。
+pub fn check_device_removed(gc: Option<ResMut<GraphicsCore>>) {
+    let Some(mut gc) = gc else {
+        return;
+    };
+    let Some(Err(e)) = gc.d3d().map(|d3d| d3d.get_device_removed_reason()) else {
+        return;
+    };
+    error!(
+        removed_reason = ?e.code(),
+        "[GraphicsCore] Device removed; invalidating"
+    );
+    gc.invalidate();
+    mark_graphics_wake();
 }
 
 /// 描画の装置（D3D11・D2D・DirectWrite）をまとめた資源。
@@ -37,6 +134,7 @@ pub struct GraphicsCore {
 // d3d は D3D11_CREATE_DEVICE_SINGLETHREADED を指定せず生成されるため
 // ID3D11Device はスレッドセーフ（dxgi は同一オブジェクトへの別インターフェース）。
 // dwrite_factory（DWRITE_FACTORY_TYPE_SHARED）もスレッドセーフ。
+// _lost_watch のイベントと待ちの handle は Drop でしか触らず、待ちの係は `fn()` を呼ぶだけ。
 // よって全フィールドが内部同期を持ち、外部同期前提の DComp 系（dcomp_resource.rs）とは
 // 異なり ECS スケジュール構成への追加前提を要しない。
 unsafe impl Send for GraphicsCore {}
@@ -44,6 +142,11 @@ unsafe impl Sync for GraphicsCore {}
 
 impl GraphicsCore {
     pub fn new() -> Result<Self> {
+        Self::create(mark_graphics_wake)
+    }
+
+    /// `on_lost` は装置の失いの OS の知らせが鳴ったとき、スレッドプールから呼ばれる。
+    fn create(on_lost: fn()) -> Result<Self> {
         info!("[GraphicsCore] Initialization started");
 
         let d3d = create_device_3d()?;
@@ -58,6 +161,15 @@ impl GraphicsCore {
 
         let dwrite_factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)?;
 
+        let _lost_watch = DeviceLostWatch::register(&d3d, on_lost)
+            .inspect_err(|e| {
+                error!(
+                    error = ?e,
+                    "[GraphicsCore] Device-removed notice unavailable; relying on draw failures"
+                )
+            })
+            .ok();
+
         info!("[GraphicsCore] Initialization completed");
 
         Ok(Self {
@@ -68,6 +180,7 @@ impl GraphicsCore {
                 d2d,
                 d2d_device_context,
                 dwrite_factory,
+                _lost_watch,
             }),
         })
     }
@@ -103,7 +216,7 @@ impl GraphicsCore {
             "[GraphicsCore] Device lost; invalidating"
         );
         self.invalidate();
-        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
+        mark_graphics_wake();
         true
     }
 
