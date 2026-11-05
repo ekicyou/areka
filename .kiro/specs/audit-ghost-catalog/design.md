@@ -64,7 +64,7 @@ C17 で並走しているのは `audit-parsers-sakura` だけ。ほかの持ち�
 
 | ファイル | 指摘 | 持ち主 | 変える中身 |
 |---|---|---|---|
-| `crates/log-capture-kit/tests/temp_path_guard_test.rs` | #4・#5 | `audit-test-kits` | 例外表の 5 行を消す・`ALLOWED_COUNT` 19→14・`PROCESS_UNIQUE_COUNT` 16→12・`IntentionallyFixed` の種別と `INTENTIONALLY_FIXED_COUNT` を消す（使う項目が 0 になり、組まれない種別が警告になるため）・`CALIBRATION_DROPPED_ENTRY` を `crates/areka/src/install/fetch_url.rs` へ替える・それに合う doc の文言。行は消すタスクごとに消し、件数もそのタスクで合わせる（T10 で 2 行＝17・14、T15 で 2 行＝15・13 と種別の削除と較正の替え、T17 で 1 行＝14・12。読み出しのみの 2 は変わらない） |
+| `crates/log-capture-kit/tests/temp_path_guard_test.rs` | #4・#5 | `audit-test-kits` | 例外表の 5 行を消す・`ALLOWED_COUNT` 19→14・`PROCESS_UNIQUE_COUNT` 16→12・`IntentionallyFixed` の種別と `INTENTIONALLY_FIXED_COUNT` を消す（使う項目が 0 になり、組まれない種別が警告になるため）・`CALIBRATION_DROPPED_ENTRY` を `crates/areka/src/install/fetch_url.rs` へ替える・それに合う doc の文言。C17 で並走する `audit-emo-present` も同じ表に行を持つ（`crates/areka-emo-present/src/balloon_test_support.rs`）ので、件数はここに書いた数を写さず、各タスク（T10・T15・T17）の前に `main` を取り込んで表の行から数え直す。この 5 行は未着手の `temp-path-exceptions-to-target`（この表の行を `target\test-roots` へ移す spec）の受け持ちを先に取るので、完了のときに roadmap の同 spec の行へ残りの行数と、本 spec が 5 行を取ったことを書く。行は消すタスクごとに消し、件数もそのタスクで合わせる（T10 で 2 行＝17・14、T15 で 2 行＝15・13 と種別の削除と較正の替え、T17 で 1 行＝14・12。読み出しのみの 2 は変わらない） |
 | `crates/areka-sylphya/src/persist/io.rs` | #40 | `audit-sylphya-actor` | `impl<T: PersistIo + Sync + ?Sized> PersistIo for Arc<T>`（3 つの口をすべて中身へ渡す）とそのテスト 1 本（同じファイルの `mod tests`） |
 | `crates/shiori-host32-host/src/client.rs`・`lib.rs` | #27 | `audit-shiori-host32` | `map_get_reply` を `pub` にして `lib.rs` から出す |
 | `crates/areka/src/mcp/resolve.rs` | #25 | `audit-areka-app` | `listed_value` の中身を `areka_ghost::config::listed_name` の呼び出しへ |
@@ -198,7 +198,7 @@ flowchart TD
 
 **形**
 - `const SHELF_LOCK: &str = ".lock";`（棚の直下）。
-- `WorkArea` に欄 `_lock: std::fs::File` を足す。`WorkArea::create_at` は、根の確かめの後に `create_dir_all(棚)` → `.lock` を `read(true).write(true).create(true).share_mode(0).custom_flags(FILE_FLAG_DELETE_ON_CLOSE)` で開く → 今までどおり番地を取って片付ける。開けなければ `StageError { path: <棚>\.lock, source }` を返す（呼び手の `place` が `IoPhase::Stage` の `NarError::Io` にし、`log_failure` が `error!` を 1 回出す。新しい記録の名前は作らない）。
+- `WorkArea` に欄 `_lock: std::fs::File` を足す。`WorkArea::create_at` は、根の確かめの後に `create_dir_all(棚)` → `.lock` を `read(true).write(true).create(true).share_mode(0).custom_flags(FILE_FLAG_DELETE_ON_CLOSE)` で開く → 今までどおり番地を取って片付ける。（`areka-nar` は `windows` に依存しないので、`FILE_FLAG_DELETE_ON_CLOSE` は名前つきの定数 `0x0400_0000` で書く）開けなければ `StageError { path: <棚>\.lock, source }` を返す（呼び手の `place` が `IoPhase::Stage` の `NarError::Io` にし、`log_failure` が `error!` を 1 回出す。新しい記録の名前は作らない）。
 - `prepare_shelf` は名前が `.lock`（ASCII の大小を無視）の項目を飛ばす（残り物にも数えない）。
 - 棚がファイルのときの失敗（`fails_when_the_shelf_is_not_a_folder`）は、`create_dir_all(棚)` の失敗として今と同じ `path == 棚` で返る。
 
@@ -246,7 +246,7 @@ pub(crate) fn read_central_directory(bytes: &[u8]) -> Result<Vec<RawEntry>, Refu
 
 **`lib.rs` の形**
 - `peek_install_txt(path)`: `File::open` → `metadata().len()` → 末尾 `min(len, TAIL_WINDOW)` を `Seek::End` で読む → `locate_central_directory` → 目次の範囲を `Seek::Start` で読む → `read_central_headers(.., None)` → `validate_entry_names` → `locate_install_txt`。読みの失敗は今と同じ `NarError::Io { phase: Read }`、構造と名前の拒みは `Refused`。記録は出さない（今と同じ）。
-- `read_archive_bytes(path)` は `read_archive_bytes_within(path, MAX_ARCHIVE_LEN)` を呼ぶ。`MAX_ARCHIVE_LEN = 2 * MAX_TOTAL_DECLARED_SIZE`（2 GiB）。理由: 受け入れる中身は宣言の総和で 1 GiB まで。格納の中身はその大きさのまま、圧縮の中身は縮めない時でもほぼ同じ大きさで、頭の分を入れても 2 倍は越えない。越える書庫は中身を全部読んでも必ず断ることになる。越えたら読まずに `Refused { reason: UnsupportedEntry { index: 0, name: 書庫全体, what: TooLarge } }`（zip64 の拒みと同じ組み方。`container.rs` の `unsupported(b"", 0, Unsupported::TooLarge)` を `pub(crate) fn archive_too_large() -> RefuseReason` で包んで `lib.rs` から使う）。`open` の出口が `error!` を 1 回出す（今と同じ道）。
+- `read_archive_bytes(path)` は `read_archive_bytes_within(path, MAX_ARCHIVE_LEN)` を呼ぶ。`MAX_ARCHIVE_LEN = 2 * MAX_TOTAL_DECLARED_SIZE`（2 GiB）。理由: 受け入れる中身は宣言の総和で 1 GiB まで。格納の中身はその大きさのまま、圧縮の中身は縮めない時でもほぼ同じ大きさで、頭の分を入れても 2 倍は越えない。越える書庫は中身を全部読んでも必ず断ることになる。越えたら読まずに `Refused { reason: UnsupportedEntry { index: 0, name: 書庫全体, what: TooLarge } }`（zip64 の拒みと同じ組み方。`container.rs` の `unsupported(b"", 0, Unsupported::TooLarge)` を `pub(crate) fn archive_too_large() -> RefuseReason` で包んで `lib.rs` から使う）。`open` の出口が `error!` を 1 回出す（今と同じ道）。`peek_install_txt` も読む前に同じ上限を見て、越えれば読まずに同じ断りを返す（UI スレッドが読む量を抑え、`open` と答えを揃える）。目次だけを切り出して読むときも、断りの知らせに載せる位置は目次の位置を足して、ファイルの頭からの位置に戻す（今の知らせの値を変えない）。
 - 判定と `open` の答えの関係: 目次と名前で決まる答え（在る・無い・名前の拒み・構造の拒み）は今までどおり一致する。ローカルの頭だけが壊れた書庫は、判定が「在る」と答え、`open` が `CorruptArchive` で断る（＝インストール対象として扱い、入らなければ `OnInstallFailure`）。`peek_install_txt` の doc にこの 1 点を書く。
 
 **縛るテスト**
@@ -347,7 +347,7 @@ pub(crate) fn read_central_directory(bytes: &[u8]) -> Result<Vec<RawEntry>, Refu
 | 14 | #60・#12・#61・#9 で `plan_tests.rs` を減らす。950 行を下回らなければ「書き込みをしない」の塊（876〜971 行目あたり）を兄弟の `plan_no_write_tests.rs` へ移す（`plan.rs` に `#[cfg(test)] #[path]` を 1 つ足す） | — | — | T1 |
 | 15 | 自己包含の拒み（上の節） | — | `refuses_to_copy_into_itself` | T7 |
 | 16 | 番地の取り直し・古い作業フォルダの片付け（上の節） | — | `a_taken_work_address_is_skipped`・`stale_work_folders_are_swept_and_fresh_ones_kept` | T7 |
-| 18 | `lib.rs` に `fn usable_profile_env(profile_env: Option<&OsStr>) -> Option<PathBuf>` を置く。今の `absolute` で読み、空・相対なら `error!`（`event = "profile_dir_env_unusable"`・値つき）を出して `None`。`app_profile_dir` と `readonly_app_profile_dir`（`profile_env.is_none()` の判定）の両方がこれを通す。絶対パスは今どおり使う（要件 9.4） | 呼び手の署名は変わらない。範囲の外のテストが空・相対の値の結果を見ていれば直す | `lib_tests.rs` `an_empty_or_relative_profile_env_is_ignored_with_an_error`（空と相対で書ける根の `profile\areka`・ERROR が 1 件ずつ）・`establish_readonly_tests.rs` `readonly_reads_beside_when_the_profile_env_is_relative` | T8 |
+| 18 | `lib.rs` に `fn usable_profile_env(profile_env: Option<&OsStr>) -> Option<PathBuf>` を置く。今の `absolute` で読み、空・相対なら `error!`（`event = "profile_dir_env_unusable"`・値つき）を出して `None`。`profile_env` を見る 4 か所＝`app_profile_dir`・`readonly_app_profile_dir`・`establish_from`（記憶の移しを飛ばす判定・`establish.rs` 100 行目）・`locate_app_profile`（中継への答え・同 175 行目）が、入口で 1 回だけ検査した結果を使う（生の `profile_env.is_none()` を残さない）。`error!` は入口（`establish_from`・`locate_app_profile`・`establish_readonly` の入口）で 1 回だけ出し、起動の中で何度も呼ばれる `app_profile_dir` の中では出さない。絶対パスは今どおり使う（要件 9.4） | 呼び手の署名は変わらない。範囲の外のテストが空・相対の値の結果を見ていれば直す | `lib_tests.rs` `an_empty_or_relative_profile_env_is_ignored_with_an_error`（空と相対で書ける根の `profile\areka`・ERROR が 1 件ずつ）・`establish_readonly_tests.rs` `readonly_reads_beside_when_the_profile_env_is_relative`・`establish_tests.rs` `establish_still_migrates_when_the_profile_env_is_empty`（空の値でも隣の記憶を写す）・`establish_locate_tests.rs` `locate_answers_migration_pending_when_the_profile_env_is_empty`（空の値で `MigrationPending`。生の判定へ戻すと `Ready` で赤） | T8 |
 | 19 | `flatten()` をやめ、各 `Err` を既存の `warn!` `user_data_marker_unreadable` で記録して次へ | — | `establish_locate_tests.rs` `an_unreadable_listing_entry_is_logged`（読めない項目を差し込める内側の関数で、WARN が 1 件） | T8 |
 | 20 | 先を越された枝を `finish_rename` に出してテスト（上の節） | — | `a_raced_destination_returns_raced_and_drops_the_work` | T7 |
 | 21 | 失敗の道のテストを `log_capture_kit::capture` で包み、`app_memory_migrate_failed`・`user_root_unavailable`（`create_failed`）の ERROR が 1 件出ることを見る。`user_data_copy_work_left` の WARN を見るテストを 1 本（`copy.rs` の `discard` を、中のファイルを `share_mode(0)` で掴んだフォルダに対して直に呼ぶ） | — | —（テストそのもの） | T8 |
@@ -527,7 +527,7 @@ pub(crate) fn read_central_directory(bytes: &[u8]) -> Result<Vec<RawEntry>, Refu
 ## 失敗の扱い
 
 - `areka-nar`: 新しい失敗（#1 の錠・#8 のリンク・#2 の大きさ・#6・#7 の拒み）はどれも今の値（`StageError`→`NarError::Io{Stage}`、`RefuseReason`→`NarError::Refused`）で返り、公開面の出口の `log_failure` が `error!` を 1 回出す。内側では記録しない（二重の記録を作らない）。判定の `peek_install_txt` は今どおり記録せず、呼び手（`file_drop.rs`）が `warn!` を出す。
-- `areka-user-data`: #15 は `CopyError::Io`（`InvalidInput`）で返り、呼び手が `error!`（`app_memory_migrate_failed`・`user_data_copy_failed`）。#18 は値を捨てたことを `error!` `profile_dir_env_unusable` で 1 回出し、次の決め（書ける根の `profile\areka`）へ進む。#16 の片付けで消せない物は `warn!` `user_data_copy_work_left`（写しの成否には関わらない）。#19 は `warn!` `user_data_marker_unreadable`。
+- `areka-user-data`: #15 は `CopyError::Io`（`InvalidInput`）で返り、呼び手が `error!`（`app_memory_migrate_failed`・`user_data_copy_failed`）。#18 は値を捨てたことを入口で `error!` `profile_dir_env_unusable` として 1 回出し、次の決め（書ける根の `profile\areka`）へ進む。#16 の片付けで消せない物は `warn!` `user_data_copy_work_left`（写しの成否には関わらない）。#19 は `warn!` `user_data_marker_unreadable`。
 - `areka-ghost`: #30 は `error!`（続行）。#29 の整えの失敗は `error!`＋`Err(String)`（`inproc_connect` の今の形）。#22 の読めない・鍵が無いは今どおり `warn!`＋フォルダ名。
 - テストの道具: 失敗を捨てない（#4 の S7・#45 の消去・#47 の写しは `expect`／panic）。
 
