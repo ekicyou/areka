@@ -356,8 +356,8 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     let record_at = at(".native_scratch(|scratch| record_display(dc, scratch, repeat))");
     // 失敗の原因を覚える 3 行（`failure_note`・要件 4.3）をはさんで早期復帰する。
     assert_eq!(
-        lines[record_at + 1..record_at + 9].join(" "),
-        "{ Ok(list) => list, Err(e) => { if let PresentError::Device { hresult, context } = &e { target.failure_note = Some((*context, *hresult)); } Self::reply(reply, Err(e)); return;",
+        lines[record_at + 1..record_at + 8].join(" "),
+        "{ Ok(list) => list, Err(e) => { if let PresentError::Device { hresult, context } = &e { target.failure_note = Some((*context, *hresult)); } return Err(e);",
         "記録の失敗分岐の字面が動いている（早期復帰でなくなると前状態維持が崩れる）"
     );
     assert!(

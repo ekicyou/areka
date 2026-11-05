@@ -765,8 +765,8 @@ fn show_target_before_any_established_display_is_err() {
 
     let result = presenter.show_target(&mut world, TargetId(0));
     assert!(
-        matches!(result, Err(PresentError::TargetNotAttached(TargetId(0)))),
-        "未確立 target の可視化が Err でない: {result:?}"
+        matches!(result, Err(PresentError::NotShown(TargetId(0)))),
+        "未確立 target の可視化が NotShown でない: {result:?}"
     );
     assert_eq!(
         presenter.target_visible(TargetId(0)),

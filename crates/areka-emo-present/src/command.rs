@@ -122,6 +122,8 @@ pub enum PresentCommand {
 /// - [`Compose`](PresentError::Compose): 上流合成の失敗を [`areka_emo_compose::ComposeError`] から
 ///   透過（`#[from]`）する。
 /// - [`TargetNotAttached`](PresentError::TargetNotAttached): 指定 [`TargetId`] が未装着。
+/// - [`NotShown`](PresentError::NotShown): 装着済みだが表示が一度も成立していない。
+/// - [`EntryEvicted`](PresentError::EntryEvicted): 表示中の絵が合成メモから追い出された。
 /// - [`Device`](PresentError::Device): グラフィックスデバイス層の失敗（`HRESULT` ＋文脈）。
 ///
 /// `#[non_exhaustive]` ゆえ将来 variant を追加しても下流の `match` は網羅性エラーにならない。
@@ -134,6 +136,19 @@ pub enum PresentError {
     /// 指定ターゲットが未装着（表示面・キャッシュが結線されていない）。
     #[error("target {0:?} is not attached")]
     TargetNotAttached(TargetId),
+    /// 装着済みだが表示が一度も成立していない（出す・読む内容が無い）。
+    #[error("target {0:?} has never been shown")]
+    NotShown(TargetId),
+    /// 表示中の絵が合成メモから追い出された（LRU 追い出し・`InvalidateCache` の後）。
+    #[error(
+        "target {target:?} surface {surface_id}: shown entry was evicted from the compose cache"
+    )]
+    EntryEvicted {
+        /// 読もうとした target。
+        target: TargetId,
+        /// 表示中だった面の番号。
+        surface_id: u32,
+    },
     /// グラフィックスデバイス層の失敗（`HRESULT` ＋発生文脈の静的説明）。
     #[error("graphics device error: {hresult:#x} {context}")]
     Device {

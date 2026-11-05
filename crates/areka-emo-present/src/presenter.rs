@@ -69,7 +69,10 @@ use std::marker::PhantomData;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
-use areka_actor::{ReplySender, reply_channel};
+use areka_actor::ReplySender;
+// 本番の漏斗は戻り値で結果を返す。応答の口を作るのはテストだけ（`use super::*;` で拾う）。
+#[cfg(test)]
+use areka_actor::reply_channel;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose,

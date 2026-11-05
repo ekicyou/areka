@@ -30,8 +30,8 @@ impl EmoPresenter {
     ///
     /// ここでの [`derive_scale`] 呼出は**ゲート判定の述語**であり、実際に適用される k は `apply_show` が
     /// 自前で導出したものである（漏斗を二重化しない・design Flow 1「k 導出は show 適用ごと」）。両者は
-    /// 同一の純関数へ同一入力を与える（同一 UI スレッド内・間に World 変更なし）ため必ず一致し、その一致は
-    /// 再表示後の `applied` 照合で**実際に検査される**（食い違えば失敗として扱われ黙って通らない）。
+    /// 同一の純関数へ同一入力を与える（同一 UI スレッド内・間に World 変更なし）ため必ず一致する。再表示の
+    /// 成否は `apply_show` の戻り値で読み、状態（`applied`）の後追いでは推し量らない。
     ///
     /// # [`Self::take_pending_resize`] との関係（二重 resize も取りこぼしもしない）
     ///
@@ -116,28 +116,26 @@ impl EmoPresenter {
             return None;
         };
 
-        // 表示更新は既存の単一漏斗をそのまま通す（`reply` なし＝内部再実行・design Flow 2）。成立点の記録・
+        // 表示更新は既存の単一漏斗をそのまま通し、成否は戻り値で読む（design Flow 2）。成立点の記録・
         // 失敗時の early return・D10 ログ・状態照合報告はすべて `apply_show` 側の不変条件がそのまま効く。
-        self.apply_show(world, target_id, surface_id, binds, pattern, None, false);
-
-        let t = self.targets.get(&target_id)?;
-        if t.applied != Some(scale) {
+        if let Err(e) = self.apply_show(world, target_id, surface_id, binds, pattern, false) {
             // 表示成立に至らなかった。前 k・前表示は `apply_show` の early return が保っている（要件 4.4）。
-            if t.visible {
-                tracing::error!(
-                    ?target_id,
-                    k_ratio_from = ?previous,
-                    k_ratio_to = ?scale,
-                    window_dpi = ?window_dpi,
-                    "refresh_scale: 再表示が成立せず（直前の k による表示を維持）"
-                );
-            } else {
-                // 全透明退化（`EmptyComposition` → Hide 縮退）。`apply_show` が warn! 済みゆえ重ねない。
-                tracing::debug!(
-                    ?target_id,
-                    "refresh_scale: 再表示が全透明退化（Hide 縮退・warn は apply_show 側）"
-                );
-            }
+            tracing::error!(
+                ?target_id,
+                k_ratio_from = ?previous,
+                k_ratio_to = ?scale,
+                window_dpi = ?window_dpi,
+                error = %e,
+                "refresh_scale: 再表示が成立せず（直前の k による表示を維持）"
+            );
+            return None;
+        }
+        if self.targets.get(&target_id)?.current_surface_id.is_none() {
+            // 全透明退化（`EmptyComposition` → Hide 縮退）。`apply_show` が warn! 済みゆえ重ねない。
+            tracing::debug!(
+                ?target_id,
+                "refresh_scale: 再表示が全透明退化（Hide 縮退・warn は apply_show 側）"
+            );
             return None;
         }
 

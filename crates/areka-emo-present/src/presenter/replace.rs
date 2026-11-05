@@ -120,14 +120,13 @@ impl EmoPresenter {
             "apply(ReplaceTarget): 古い装着を片付けて登録し直した"
         );
         if let Some((surface_id, binds)) = show {
-            // 返信は置き換え自身が返す。表示の失敗は `apply_show` の中で `error!` 済み。
-            self.apply_show(
+            // 返信は置き換え自身が返す。表示の失敗は `apply_show` の中で `error!` 済みなので結果は捨てる。
+            let _ = self.apply_show(
                 world,
                 target_id,
                 surface_id,
                 binds,
                 PatternState::default(),
-                None,
                 false,
             );
         }

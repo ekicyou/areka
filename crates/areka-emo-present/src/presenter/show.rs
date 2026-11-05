@@ -10,12 +10,14 @@ use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
-    PresentError, PresentOutcome, Recompose, ReplySender, TargetId, VisibilityOwnership,
-    VisualMount, World, derive_scale,
+    PresentError, PresentOutcome, Recompose, TargetId, VisibilityOwnership, VisualMount, World,
+    derive_scale,
 };
 
 impl EmoPresenter {
     /// `ShowSurface` の適用（キャッシュ引き当て or 合成＋表示記録 → 表示記録・配置の書き込み → マスク同期 → 可視化）。
+    ///
+    /// 結果は戻り値で返す。応答の口へ送るのは指令の入口（`apply`）だけで、ここは送らない。
     ///
     /// 手順（design §System Flows・Flow 1・裁定 D）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。
     /// (0) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
@@ -58,9 +60,8 @@ impl EmoPresenter {
         surface_id: u32,
         binds: BindSet,
         pattern: PatternState,
-        reply: Option<ReplySender<PresentOutcome>>,
         reveal: bool,
-    ) {
+    ) -> PresentOutcome {
         // (−1) 段階計時の起点（Requirement 1.1・design D5）。**無条件**に開始する——ログ設定を
         // 一切参照しないため、計時ログの有効・無効で表示経路が分岐しない（Requirement 1.5）ことが
         // 檻ではなく構造で成立する。`emit` は `self` を消費するため、以降の early return は
@@ -73,8 +74,7 @@ impl EmoPresenter {
                 surface_id,
                 "apply(ShowSurface): 未装着ターゲット"
             );
-            Self::reply(reply, Err(PresentError::TargetNotAttached(target_id)));
-            return;
+            return Err(PresentError::TargetNotAttached(target_id));
         };
 
         // (0) k 導出（show 適用ごと・design Flow 1）。窓 DPI は wintf の `DPI` component から読む
@@ -198,14 +198,10 @@ impl EmoPresenter {
                                 );
                             }
                             target.failure_note = Some(NO_GFX);
-                            Self::reply(
-                                reply,
-                                Err(PresentError::Device {
-                                    hresult: 0,
-                                    context: "GraphicsCore resource",
-                                }),
-                            );
-                            return;
+                            return Err(PresentError::Device {
+                                hresult: 0,
+                                context: "GraphicsCore resource",
+                            });
                         };
                         // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
                         // 起きないため確保の計数も動かない。
@@ -220,8 +216,7 @@ impl EmoPresenter {
                                 if let PresentError::Device { hresult, context } = &e {
                                     target.failure_note = Some((*context, *hresult));
                                 }
-                                Self::reply(reply, Err(e));
-                                return;
+                                return Err(e);
                             }
                         }
                     };
@@ -286,8 +281,7 @@ impl EmoPresenter {
                     // EmptyComposition 縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
                     target.current_surface_id = None;
                     target.failure_note = None;
-                    Self::reply(reply, Ok(()));
-                    return;
+                    return Ok(());
                 }
                 Err(e) => {
                     // 解決不能 id（SurfaceNotFound 等）: error! ＋ 表示不変 ＋ reply Err（R3.4）。
@@ -298,8 +292,7 @@ impl EmoPresenter {
                         "apply(ShowSurface): 合成失敗 → 表示は適用前のまま（reply Err）"
                     );
                     target.failure_note = None;
-                    Self::reply(reply, Err(PresentError::Compose(e)));
-                    return;
+                    return Err(PresentError::Compose(e));
                 }
             }
         }
@@ -538,6 +531,6 @@ impl EmoPresenter {
             },
             allocs,
         );
-        Self::reply(reply, Ok(()));
+        Ok(())
     }
 }

@@ -10,7 +10,7 @@ use super::visibility::strip_finite_films;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, HashMap, PatternState,
     PhantomData, PresentCommand, PresentError, PresentOutcome, PresentTarget, ReplySender,
-    ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World, reply_channel,
+    ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World,
 };
 
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
@@ -218,26 +218,7 @@ impl EmoPresenter {
             return;
         }
 
-        // 成否は応答で読む（状態の後追いで推測しない・`show_target` と同じ）。
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        self.apply_show(
-            world,
-            target_id,
-            surface_id,
-            binds,
-            pattern,
-            Some(tx),
-            false,
-        );
-        let outcome = rx.recv().unwrap_or_else(|e| {
-            tracing::error!(
-                ?target_id,
-                surface_id,
-                error = %e,
-                "apply(ShowSurface): 適用結果の応答が失われた"
-            );
-            Err(PresentError::TargetNotAttached(target_id))
-        });
+        let outcome = self.apply_show(world, target_id, surface_id, binds, pattern, false);
         if outcome.is_ok()
             && let Some(t) = self.targets.get_mut(&target_id)
         {

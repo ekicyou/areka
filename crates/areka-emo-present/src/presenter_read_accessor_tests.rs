@@ -232,6 +232,63 @@ fn current_surface_id_unchanged_by_invalidate_cache() {
     );
 }
 
+/// 一度も表示していない target の読み戻しは、装着済みなので「未装着」でなく「一度も表示していない」を
+/// 返す（`audit-emo-present` 指摘 2）。
+#[test]
+fn read_back_before_first_show_is_not_shown() {
+    let mut world = World::new();
+    let mut presenter = EmoPresenter::new();
+    attach_hit_target(&mut presenter, &mut world, TargetId(0));
+
+    let result = presenter.read_back(TargetId(0));
+    assert!(
+        matches!(result, Err(PresentError::NotShown(TargetId(0)))),
+        "未表示の読み戻しが NotShown でない: {result:?}"
+    );
+}
+
+/// 表示した後に合成メモを捨てると、表示中の絵がメモから追い出されたことを面の番号つきで返す
+/// （`audit-emo-present` 指摘 2）。
+#[test]
+fn read_back_after_invalidate_cache_is_entry_evicted() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
+
+    let mut presenter = EmoPresenter::new();
+    presenter
+        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+        .expect("attach_target 失敗");
+    for cmd in [
+        PresentCommand::ShowSurface {
+            target: TargetId(0),
+            surface_id: 1000,
+            binds: BindSet::default(),
+            pattern: PatternState::default(),
+            reply: None,
+        },
+        PresentCommand::InvalidateCache {
+            target: TargetId(0),
+            reply: None,
+        },
+    ] {
+        presenter.apply(&mut world, cmd);
+    }
+    assert_eq!(presenter.current_surface_id(TargetId(0)), Some(1000));
+
+    let result = presenter.read_back(TargetId(0));
+    assert!(
+        matches!(
+            result,
+            Err(PresentError::EntryEvicted {
+                target: TargetId(0),
+                surface_id: 1000
+            })
+        ),
+        "メモを捨てた後の読み戻しが EntryEvicted でない: {result:?}"
+    );
+}
+
 /// テスト 15・R3.2 観測完了（未登録 target→None）: 一度も `attach_target` していない target に対し
 /// `current_surface_id`／`hit_region` の両アクセサが `None`（未登録＝現サーフェス無し）。
 ///
