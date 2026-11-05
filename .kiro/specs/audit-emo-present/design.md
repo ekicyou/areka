@@ -126,12 +126,13 @@ graph TD
 | 指摘 | ファイル | 変えること |
 |---|---|---|
 | 1 | `crates/log-capture-kit/tests/temp_path_guard_test.rs` | `balloon_test_support.rs` の項目を消す・`ALLOWED_COUNT` 19→18・`PROCESS_UNIQUE_COUNT` 16→15 |
-| 10 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | `cache_tests.rs` の項目を消す・`OVER_LIMIT_ALLOWED_COUNT` 9→8・`CALIBRATION_DROPPED_ENTRY` を `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs` へ |
+| 10 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | `cache_tests.rs` の項目を消す・`OVER_LIMIT_ALLOWED_COUNT` 9→8・`CALIBRATION_DROPPED_ENTRY` を `crates/areka/src/emo2_boot/frame_transition_branch_tests.rs` へ |
 | 3 | `crates/areka/src/emo2_boot/mod.rs` | `BootWiringError::Balloon(#[from] areka_emo_present::BalloonLoadError)`（doc の 1 行も） |
 | 3 | `crates/areka/src/emo2_boot/assets.rs` | 483〜485 行を `BalloonLoadError::NoFace0` に。使われなくなる `PresentError`・`ComposeError` の取り込みを消す。214 行の doc |
 | 6 | `crates/areka/src/emo2_boot/frame/attach.rs` | 呼び 2 か所の `if let Err … continue` を外して素の呼び出しに。182・389 行のコメントの言い回し |
 | 6 | `crates/areka/src/emo2_boot/` の 7 ファイル（`balloon_visibility_lifecycle_e2e_tests.rs`・`balloon_visibility_phase_tests.rs`・`balloon_visibility_phase_test_support.rs`・`film_playback_e2e_tests.rs`・`frame/status_report_stage_tests.rs`・`frame_move_hold_tests.rs`・`skin_facts_copy_tests.rs`） | 第 1 引数の World と `.expect(..)` を外す |
 | 6 | `crates/areka/examples/window-placement.rs`・`emo-present/systems.rs`（2 か所）・`collision-probe/probe.rs` | 第 1 引数と `match`／`if let Err` を外す。それで使われなくなる手伝いは、ツリー全体で他に使われていなければ消す |
+| 6 | `crates/areka/examples/emo-present.rs:111-115`・`emo-present/systems.rs:40` | doc の「`attach_target`／`apply` は `&mut World` で呼ぶ（要する）」から `attach_target` を外す（`&mut World` を要するのは `apply` だけになる） |
 | 6 | `crates/areka-emo-text/tests/attach_wiring_test.rs`（3 か所）・`box_attach_test.rs`・`draw_readback_test.rs` | 第 1 引数と `.expect(..)` を外す（ファイルは足さない・7.4） |
 | 6 | `crates/areka-emo-text/examples/emo-text-typewriter-demo.rs`・`emo-text-layer/drive.rs` | 第 1 引数と `if let Err` を外す。`fail_attach`・`setup_abort` の呼びが他に無くなれば消す |
 | 6 | `crates/pilot/examples/pilot-balloon-asset-swap/swap.rs` | `attach` は作り置きの資産が尽きると失敗するので `Result` は残し、`world` 引数だけを外す（呼び 6 か所も） |
@@ -303,7 +304,7 @@ pub fn attach_target(&mut self, target: TargetId, window: Entity,
 | T | 指摘 | 境界（触るファイル） |
 |---|---|---|
 | T1 | 2・4 | `command.rs`・`presenter.rs`・`presenter/{show, hub, visibility, refresh, replace, read}.rs`・`presenter_visibility_tests.rs`・`presenter_read_accessor_tests.rs` |
-| T2 | 6 | `presenter/{hub, replace}.rs`・`attach_target` を呼ぶクレートの中の 29 ファイル・範囲の外の 17 ファイル（上の表） |
+| T2 | 6 | `presenter/{hub, replace}.rs`・`attach_target` を呼ぶクレートの中の 29 ファイル・範囲の外の 17 ファイル（上の表）・`crates/areka/examples/emo-present.rs`（doc だけ） |
 | T3 | 3・20 | `balloon.rs`・`lib.rs`・`balloon_{quiet, series, target, definitions}_tests.rs`・`crates/areka/src/emo2_boot/{mod.rs, assets.rs}` |
 | T4 | 1・26・31・32 | `balloon.rs`（mod 宣言）・`balloon_test_support.rs`・`balloon_{marker_load, definitions, model}_tests.rs`・`shell_target_test_support.rs`・`shell_target_{load, quiet}_tests.rs`・`crates/log-capture-kit/tests/temp_path_guard_test.rs` |
 | T5 | 5・15・19 | `mount.rs`・`mount_visibility_tests.rs`・`mount_tests.rs`・`presenter_hide_contract_tests.rs` |
@@ -330,7 +331,7 @@ pub fn attach_target(&mut self, target: TargetId, window: Entity,
 - **依存と `Cargo.lock`**: 足さない・変えない（6.5）。37 番は消すだけ。
 - **`doc/`・`docs/`**: 名指す行を足さず変えない（7.3）。直す行にそれを名指す行は無い。
 - **`crates/areka-emo-text/`**: 既存の 5 ファイルを直すだけ（7.4）。
-- **例外表（要件 7.5・7.7）**: 持ち主の `audit-test-kits` は C17 に居ないので、項目の削除と件数・自己検査の 1 件だけを触り、触った行を各タスクの記録に残す。自己検査の 1 件は C17 の兄弟のどれも触らない見込みの `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs` にする（`plan_ops_tests.rs` などは兄弟の見直しが表から外す見込みがある）。兄弟が同じ件数の行を先に変えて着地していたら、手で書いた数を信じず、着地の前に表の項目を数え直して合わせる（両方が同じ誤った数を書くと git は黙って通す）。番人は件数と表の長さの一致を確かめるので、食い違えば赤になる。
+- **例外表（要件 7.5・7.7）**: 持ち主の `audit-test-kits` は C17 に居ないので、項目の削除と件数・自己検査の 1 件だけを触り、触った行を各タスクの記録に残す。自己検査の 1 件は `crates/areka/src/emo2_boot/frame_transition_branch_tests.rs`（1,271 行・持ち主の `audit-emo2-boot-frame` は C17 に居ない）にする。上限との余裕が大きく、少しの編集で表から外れない。`plan_ops_tests.rs`・`actor_bind_loop_tests.rs`・`inproc_e2e_test.rs` は C17 の兄弟の範囲で表から外れる見込みがあり、`pilot-clickthrough-alpha-toggle/main.rs`（1,006 行）は余裕が 6 行しかないので選ばない。兄弟が同じ件数の行を先に変えて着地していたら、手で書いた数を信じず、着地の前に表の項目を数え直して合わせる（両方が同じ誤った数を書くと git は黙って通す）。番人は件数と表の長さの一致を確かめるので、食い違えば赤になる。
 - **兄弟との申し合わせ（7.2）**: `build_shell_target_with_boxes` は可視性だけ変える。`audit-parsers-sakura` が先に署名を変えて着地していたら、その形のまま `pub(crate)` にする。こちらが先なら、あちらが合わせる（9.7）。
 
 ## Requirements Traceability
