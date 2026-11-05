@@ -186,6 +186,17 @@
   - 足す・強める確かめは守る分岐を戻すと落ちる。消すテストの固有の確かめは残る側へ移す。写しは `plan_test_support` から引く
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
+- [ ] 8. かけ直し 3 回目の指摘の直し（research.md 17 節の 129〜175・audit 系は推奨案で承認）
+- [ ] 8.1 予算と仕事の量を型ごと閉じる（指摘 129〜138・174・175）
+  - 面の行の全部（element・collision・animation ごとの 1＋pattern の数）を数える関数を 1 つ置き、命令列・外形・シェルの外形・当たり判定の持ち込みの全部の走査が、面に入るときにそれで予算から引く（足りなければ入らない）
+  - 波括弧の collision の除きを最後に 1 度・`NestReport` の `reaches` の答えを組ごとに覚える・語の見分けを 1 本に・描かない命令は画素 0・`SortOrder` を借りる・重なりの `warn!` を記述子ごとに 1 行・切るときは奥から落とす・`ScaleRatio::mul` の扱い
+  - 壊れたら落ちるテスト: 各上限の小さな版で仕事が上限で止まる・`move` の欄を面の番号と数えない
+  - _Requirements: 2.1, 4.4, 4.5, 6.2_
+- [ ] 8.2 説明と写し（指摘 139〜143）
+  - _Requirements: 2.1, 5.3_
+- [ ] 8.3 テストの直し（指摘 144〜173）
+  - _Requirements: 2.1, 4.4, 4.5, 5.3_
+
 ## Implementation Notes
 
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）

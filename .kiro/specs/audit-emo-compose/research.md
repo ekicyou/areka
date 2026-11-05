@@ -500,3 +500,62 @@
 - 126. `plan_ops_tests.rs` の「テスト①②④⑤」の重なりと③の抜け。
 - 127. `plan_extent_tests.rs:12-13` — 部品はもう `plan_test_support` にある。
 - 128. `plan_ops_tests.rs:116-123`・`plan_frame_merge_tests.rs:303-307` の 2 度目の確かめと `tests/surface_nesting_fixture_test.rs:6-7` の作業の経緯。
+
+## 17. audit のかけ直し 3 回目（2026-11-06・タスク 5.1）
+
+- 測った時点: 枝の `93d0cd45`（タスク 7.1〜7.3 の後）。物差し・作法・読み手は 15 節と同じ。1・2 回目の指摘は、下の直し残り（27・73・96）を除いて直っていた。
+- 新しい指摘: **47 件**（番号 129〜175）。必ず直すのは「予算が数えない仕事」の型の続き（3 回続けて場所を変えて出た）＝今回は型ごと閉じる: どの走査も、面に入るときにその面の行の全部を 1 つの関数で数えて予算から引く。直しは 3 つのタスク（tasks.md 8.1〜8.3）＝audit 系は推奨案で承認（開発者 11-04）。
+- 範囲の外: なし。
+
+### 8.1 予算と仕事の量（必ず直す・直したほうがよい）
+- 129.（必ず直す）`plan.rs:431-435`・`bind_steps.rs:107-126,146-167`・`nesting.rs:70-82` — 段を開くときに引くのは `elements + animations` だけで、着せ替えの手順と `always` の pattern の行をなめる手間を数えない。自分を指す insert 10 万行の面を菱形で踏むと合成 1 回に約 2〜4×10^9。直し: 面の行の全部（element・collision・animation ごとの 1＋pattern の数）を数える関数 1 つで引く。
+- 130.（必ず直す）`outline_walk.rs:126-144`（`plan_extent.rs:128-204`・`plan_bounds.rs:214-253`）と `hit_import.rs:133-171` — 外形・シェルの外形・当たり判定の持ち込みは入るたびに 1 しか引かず、入った面の行を全部なめる。下に循環があると覚えが効かず、葉の大きな面に何度も入る（読み込みで約 2×10^9）。直し: 同じ関数で引き、足りなければ入らない（きれいでない扱い）。
+- 131.（直したほうがよい）`fold.rs:245-254` — 波括弧の collision の「前の行を除く」が重なる波括弧のたびに全部を `retain` でなめ直す（27 の直し残り）。直し: 除く仕事を畳み込みの最後に 1 度。
+- 132.（直したほうがよい）`nesting.rs:365-391,435-453` — `NestReport::from_world` が element定義の辺ごとに `reaches` を呼び、同じ（子, 親）の組を毎回たどり直す（辺×辺）。直し: 答えを組ごとに覚える。434 行の `ponytail:` の限界の書き方も直す。
+- 133.（直したほうがよい）`world.rs:183-205,368-374` — `dangling_pattern_targets` は `move` の欄を面の番号として数える（外形・形の誤り・入れ子は数えない）。直し: `pattern_word(method) != Draw` の 1 本にそろえ、3 か所から呼ぶ（`nesting.rs:425` も）。
+- 134. `blit.rs:107-125` — `cap_pixels` が描かない描画メソッドの命令の画素まで数える（`is_implemented` でない命令は 0）。
+- 135. `world.rs:329-335`（`plan.rs:364`）— `animation_sort()` が `SortOrder` を clone して返し、知らない値なら毎フレーム確保（借りる形に）。
+- 136. `fold.rs:230-239,260-269` — 重なりの `warn!` が足した行 1 本ごとに出る（（面, 記述子）ごとに 1 行にまとめる）。
+- 137. `hit_import.rs:186-189` — 予算で列を切るとき、直接の領域（いちばん手前）から先に落ちる（持ち込みの奥から落とす）。
+- 138. `scale.rs:95-143` — `ScaleRatio::mul` は本番の呼び手 0（「残す口」の決めが無ければ消す）。
+
+### 8.2 説明と写し（できれば）
+- 139. `plan_extent.rs:34,88` の古い説明（合成から呼ばない・`flatten_surface` と同一の…）。
+- 140. `hit_import.rs:13-14` — `IMPORT_BUDGET` の `error!` も出すことを書く。
+- 141. `golden_tests_test_support.rs:41-45` — 出どころの指す先がずれた（emo2 の surfaces.txt を直に書く）。
+- 142. `plan_test_support.rs:192-209,227-254,455-476,564-566` — `ops_to_paths`／`named_ops`、`bake_atlas`／`bake_atlas_sized`／`bake_films_and_bind`、`master_of`（`component_of` の包み）の写し。
+- 143. `blit.rs:307-507,788` — 2 エントリの表を組む 40 行の 3 回の写し・`pure_overlay_ops_still_composite` の重なりと昔のタスク番号。
+
+### 8.3 テストの直し（直したほうがよい・できれば）
+- 144.（直したほうがよい）`film_tests.rs:307-345` — `check` の「コマが 2 枚未満」「コマの番号が表の外」の分岐を通るテストが無い（表の外は `table.rs:219` で panic しうる）。
+- 145.（直したほうがよい）`golden_tests_blink_static_tests.rs:63-102`・`golden_tests_determinism_budget_tests.rs` の 4 か所・`log_firing_tests.rs` の 3 か所 — `plan_of` の写し 10 回（73 の直し残り）。
+- 146.（直したほうがよい）`walk_limits_tests.rs:338-350` — `diamond_with_many_leaf_images…` は 21 の直しを外しても緑（画素と行の上限で切れる）＝消す。
+- 147.（直したほうがよい）`world_quiet_tests.rs:44-58` — `ALL_TEXTS` に 7.1 の写す行の上限の文言が無く、黙らせる組み方でそれを出さない分岐を通るテストが無い。
+- 148. `blit_transparent_alpha_tests.rs:37-51,116-121,160-164` — `single_entry_table`・`px` の写し。
+- 149. `composer_tests.rs:1,5-7` — 10.5 の Err のテストはもう無い。
+- 150. `composer_tests.rs:108-111` — `Composer` は `base_ops` も持つ。
+- 151. `composer_tests.rs:363-410` — `compose` が委譲であることの 2 度目。
+- 152. `composer_tests.rs:466-474` — `plan_extent.rs` を毎フレームの道と呼ぶ。
+- 153. `blit_rect_tests.rs:280-319` — 高さだけ違う下敷きの例が無い。
+- 154. `fold_tests.rs:276-326` — fold_merge の形 3・9 と同じ。
+- 155. `fold_tests.rs:787-825` — 330-369 と同じ分岐。
+- 156. `fold_tests.rs:697-702,724` — 2 度目の確かめと古い「全 bind」。
+- 157. `boxes_tests.rs:88-92` — 組んだ値を読み返すだけ。
+- 158. `boxes_tests.rs:242` — 報告を数だけで見る。
+- 159. `base_image_tests.rs:360-361` — `BTreeSet` で型の上で成り立つ。
+- 160. `work_limits_tests.rs:29-58` — 単位の内訳を確かめていない（`run(1_002)` を足す）。
+- 161. `golden_tests_determinism_budget_tests.rs:203`・`log_firing_tests.rs:70` — 幅 0 は `EmptyComposition` なので外れない assert。
+- 162. `log_firing_tests.rs:147-157,194,200` とテスト名 `pattern0_less_bind_skip…`（飛ばす理由はコマの無い bind+random）。
+- 163. `golden_tests_blink_static_tests.rs:146-169`・`golden_tests_surface1000_bind_tests.rs:50-54` — 前提の確かめが緩い・1403 の文言。
+- 164. `golden_tests_determinism_budget_tests.rs:18-20` — 見出しの言い過ぎ。
+- 165. `golden_tests_surface1000_bind_tests.rs:117-121`・`golden_tests_surface0_base_tests.rs:115-119`・`nesting_visible_tests.rs:57-58` — 2 度の確かめ。
+- 166. `nesting_fixture_tests.rs:114-121` — 焼きの写し（96 の直し残り）。
+- 167. `plan_bind_tests.rs:224-233` — plan_ops と同じ（消す）。
+- 168. `plan_extent_tests.rs:251-258,365-368,392,441` — 「0×0 だけ」「一辺だけ」の古い説明。
+- 169. `scale_ratio_tests.rs:102-103` — 分母の積は u32 を越えない（説明の誤り）。
+- 170. `linear_lookup_tests.rs:145-147` — 「広がりの予算の内側」が古い。
+- 171. `plan_frame_merge_tests.rs:303,326-327` — 指す先の無い ①。
+- 172. 束縛済みの World と表を返す同じ 3〜5 行の写し 12 か所（plan_bind・plan_nesting・plan_bounds・plan_issues・plan_nesting_extent・walk_limits・linear_lookup）と SIZES・動く絵の焼きの写し。
+- 173. `hit.rs:316-317,510-514` — 約分で同じ値になる 2 周目と導ける比べ。
+- 174. （8.1 の 133 のテスト）`base_image_tests` に `move` の 1 行。
+- 175. （8.1 の 129・130・131・132 のテスト）各上限の小さな版が短く終わる回帰。
