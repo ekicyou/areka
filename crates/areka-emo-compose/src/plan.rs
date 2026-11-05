@@ -19,12 +19,12 @@
 //!   スタックで回し、合成 1 回の広がりを予算で打ち切る（audit-emo-compose 指摘 3）。
 //! - **task 5.4（本 task）**: **placement None スキップ**（[`derive_ops`] へ `AtlasTable` を注入し
 //!   `AtlasEntry.placement` が None の element は命令化せずスキップ・要件 6.3）＋**静的キャンバス外形
-//!   算出**（[`compute_extent`]・[`Extent`]）。外形は**有効 bind 集合に依存せず**、全定義層（全 element
+//!   算出**（[`build_extents`]・[`Extent`]）。外形は**有効 bind 集合に依存せず**、全定義層（全 element
 //!   ＋全 bind animation の pattern0＝有効 bind 非依存）の「配置オフセット＋原寸」の和集合を、原点 (0,0)
 //!   固定・負オフセット分は原点でクリップして算出する（要件 6.5・議題2裁定 (A)）。
 //!
 //! - **task 5.5（本 task）**: **命令ゼロ時の 3 分類**（[`build_plan`]）。[`derive_ops`]（有効 bind
-//!   依存の命令列）＋[`compute_extent`]（有効 bind 非依存の静的外形）を wrap し、対象 surface 不在→
+//!   依存の命令列）＋束縛のときに求めた外形の表（[`EmoWorld::extent`]・有効 bind 非依存の静的外形）を wrap し、対象 surface 不在→
 //!   [`ComposeError::SurfaceNotFound`]・定義層皆無で外形 0×0→[`ComposeError::EmptyComposition`]・
 //!   surface 存在＋外形非ゼロ（描画可能命令ゼロでも可）→`Ok(Extent)` の 3 状態を厳密に区別する
 //!   （要件 6.6/10.5・議題2裁定）。非パニック・`error` ログ＋`Err`。
@@ -32,8 +32,10 @@
 //! 本 module は stub で偽装せず、生成する命令列はすべて実挙動・決定的・テスト済みである。
 //!
 //! - **task 7（本 task）**: 走査の作業場（[`PlanScratch`]）を引数化する（[`build_plan`]/[`derive_ops`] が
-//!   呼び手＝Composer の作業場を借用・各走査入口で空へ戻す）。これにより毎フレーム経路（`compose_into`）
-//!   で再割り当てが起きず、O(elements) の定常状態アロケーションなしを満たす（要件 10.3）。
+//!   呼び手＝Composer の作業場を借用・各走査入口で空へ戻す）。外形は束縛のときの表から引き、合成のたびに
+//!   たどらない（指摘 8）。同じ入力の合成を繰り返すとき、命令列と作業場の列（祖先・積み荷・層 (ii) の id）
+//!   の容量が初回から伸びないことを `golden_tests_determinism_budget_tests.rs` が確かめている（要件 10.3）。
+//!   それより先（入力が変わるとき・`HashSet` の中身）は確かめていない。
 
 use std::collections::HashSet;
 
@@ -53,9 +55,9 @@ use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
 mod extent;
+pub(crate) use extent::{MAX_EXTENT, build_extents};
 #[cfg(test)]
-pub(crate) use extent::compute_extent;
-pub(crate) use extent::{ExtentMemo, MAX_EXTENT, compute_extent_limited};
+pub(crate) use extent::{compute_extent, compute_extent_limited};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
 ///
@@ -76,7 +78,7 @@ pub struct BlitOp {
 /// キャンバス外形（合成先1枚物ビットマップの寸法・原点 (0,0) 固定）。
 ///
 /// 全定義層（全 element ＋全 bind animation の pattern0）の「配置オフセット＋原寸」の和集合
-/// として [`compute_extent`] が算出する。**有効 bind 集合に依存しない静的量**（要件 6.5・議題2
+/// として束縛のときに 1 度だけ求め、面の表（[`EmoWorld::extent`]）に置く。**有効 bind 集合に依存しない静的量**（要件 6.5・議題2
 /// 裁定 (A)）ゆえ、bind のオン/オフでサイズが変わらず、下流 emo-present のバッファ再利用・
 /// キャッシュ・窓サイズ安定に用いる。負オフセット層は原点でクリップされ、外形は常に (0,0) を
 /// 左上とする。`build_plan`（task 5.5）が `Result<Extent, ComposeError>` として wrap して返す。
@@ -89,7 +91,7 @@ pub struct Extent {
 }
 
 /// 命令列の走査の作業場（指摘 3・8⑷）。合成器が 1 つ持ち、走査のたびに中身を空へ戻して使い回す
-/// （定常状態で確保しない・要件 10.3）。
+/// （同じ入力の繰り返しで容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる・要件 10.3）。
 ///
 /// 段（1 つの面を 1 つの位置に置く単位）の積み荷は `steps` の 1 本の列に足し、段が尽きたら切り詰める。
 /// 層 (ii) の id・挿入の数えの列が 1 本ずつで足りるのは、1 つの段の積み荷を全部作り終えてから子の段へ
@@ -98,7 +100,7 @@ pub struct Extent {
 pub(crate) struct PlanScratch {
     /// 祖先の列（今たどっている面の経路・段を出るときに外す順）。
     pub(crate) visited: Vec<u32>,
-    /// 経路にある面の集合（循環の確かめを O(1) にする・`visited` と同じ面を持つ）。外形の走査も借りる。
+    /// 経路にある面の集合（循環の確かめを O(1) にする・`visited` と同じ面を持つ）。
     pub(crate) on_path: HashSet<u32>,
     /// 段の積み荷を足していく 1 本の列。
     pub(crate) steps: Vec<Step>,
@@ -180,6 +182,8 @@ struct Walk<'a> {
     atlas: &'a AtlasTable,
     binds: &'a BindSet,
     pattern: &'a PatternState,
+    /// 走査の頭で 1 度だけ読んだ animation-sort。
+    sort: &'a SortOrder,
 }
 
 impl<'a> Walk<'a> {
@@ -194,6 +198,7 @@ impl<'a> Walk<'a> {
             surface_id,
             binds: self.binds,
             pattern: self.pattern,
+            sort: self.sort,
             offset_x: x,
             offset_y: y,
             is_top_level,
@@ -214,13 +219,10 @@ impl<'a> Walk<'a> {
 /// ときに出ている）。動く絵の子は今のコマ 1 枚の命令を置く。
 fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
     let (master, surface_id) = (level.master, level.surface_id);
-    // layer 昇順・同 layer は登場順（安定ソート）。fold 段で既に整列済み（不変条件）だが、
-    // plan は自 module で決定性を保証するため添字と layer を安定ソートし直す。
-    let mut order: Vec<usize> = (0..master.elements.len()).collect();
-    order.sort_by_key(|&i| master.elements[i].layer);
-
-    for i in order {
-        let element = &master.elements[i];
+    // layer 昇順・同 layer は登場順。畳み込み（`fold.rs`）が element番号の昇順に安定ソート済み
+    // （不変条件）なので、並べ直さずに記述の順で読む。
+    debug_assert!(master.elements.is_sorted_by_key(|e| e.layer));
+    for (i, element) in master.elements.iter().enumerate() {
         let (ex, ey) = element.transform.offset();
         let (x, y) = (level.offset_x + ex, level.offset_y + ey);
         let skip_reason = match element.kind {
@@ -272,7 +274,7 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
             continue;
         };
         // placement None（全透明＝空エントリ）の element は命令化せずスキップ（要件 6.3）。原寸は
-        // 既知ゆえ外形（compute_extent）へは寄与するが、転写命令には現れない（通常系・warn しない）。
+        // 既知ゆえ外形（外形の表）へは寄与するが、転写命令には現れない（通常系・warn しない）。
         if level.atlas.entry(element_id).placement.is_none() {
             tracing::trace!(
                 target: "areka_emo_compose",
@@ -336,11 +338,13 @@ pub(crate) fn derive_ops(
     binds: &BindSet,
     pattern: &PatternState,
 ) {
+    let sort = world.animation_sort();
     let walk = Walk {
         world,
         atlas,
         binds,
         pattern,
+        sort: &sort,
     };
     flatten_surface(out_ops, scratch, walk, surface_id);
 }
@@ -467,7 +471,7 @@ fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
     // 段1/段2: animation-sort の2段規則を**変更せず**合流後 id 集合へ適用する（design 決定5・
     //   画家のアルゴリズム写像・R5.3）。Descend（既定）→ id 昇順に描画（大 id が上）。
     //   Ascend → id 降順に描画（小 id が上）。
-    match level.world.animation_sort() {
+    match level.sort {
         SortOrder::Descend => s.merged_ids.sort_unstable(),
         SortOrder::Ascend => s.merged_ids.sort_unstable_by(|a, b| b.cmp(a)),
         // 知らない値（`Other`・`#[non_exhaustive]` の先）は既定 Descend（id 昇順描画）へ倒す。
@@ -504,6 +508,7 @@ pub(crate) struct Level<'a> {
     pub(crate) surface_id: u32,
     pub(crate) binds: &'a BindSet,
     pub(crate) pattern: &'a PatternState,
+    pub(crate) sort: &'a SortOrder,
     pub(crate) offset_x: i64,
     pub(crate) offset_y: i64,
     pub(crate) is_top_level: bool,
@@ -580,7 +585,7 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
 
 /// plan 段の公開ファサード: 命令列を導出し、命令ゼロ時の 3 分類を確定して外形を返す（要件 1.4/6.6/10.5）。
 ///
-/// [`derive_ops`]（有効 bind 依存の命令列）と [`compute_extent`]（有効 bind 非依存の静的外形）を
+/// [`derive_ops`]（有効 bind 依存の命令列）と外形の表（[`EmoWorld::extent`]・有効 bind 非依存の静的外形）を
 /// wrap し、design「Error Handling」表・議題2裁定の**3 状態**を厳密に区別する:
 ///
 /// 1. **対象 surface 不在**（[`EmoWorld::surface`] が `None`）→ `error` ログ＋
@@ -588,7 +593,7 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
 /// 2. **surface 存在 & 外形非ゼロ**（描画可能命令ゼロでも可）→ `Ok(extent)`。全 element 全透明・
 ///    空の有効 bind 集合などで `out_ops` が空でも、これは**正常系**であり `Err` にしない
 ///    （要件 6.6・議題2裁定）。非ゼロの静的外形と（空かもしれない）命令列を返す。
-/// 3. **定義層が皆無で外形 0×0**（surface は存在するが `compute_extent` が `Extent{0,0}`）→
+/// 3. **定義層が皆無で外形 0×0**（surface は存在するが表の外形が `Extent{0,0}`・束縛の前も同じ）→
 ///    `error` ログ＋[`ComposeError::EmptyComposition`]（要件 10.5・議題2裁定: これが唯一の真の
 ///    失敗となる退化ケース）。
 ///
@@ -598,7 +603,7 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
 ///
 /// # 決定性（要件 10.1）
 ///
-/// [`derive_ops`]/[`compute_extent`] がともに決定的ゆえ、同一入力（World／atlas／surface_id／
+/// [`derive_ops`] と外形の表がともに決定的ゆえ、同一入力（World／atlas／surface_id／
 /// binds）に対し毎回同一の `(out_ops, Extent)` または同一 `Err` を返す。
 ///
 /// # 非パニック（要件 1.4）
@@ -608,8 +613,7 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
 /// # 作業場（要件 10.3・buffer 再利用形）
 ///
 /// `scratch` は呼び手（Composer ファサード）が保持する走査の作業場（[`PlanScratch`]）を借用する。
-/// 外形走査（[`compute_extent`]）は経路の集合を、命令走査（[`derive_ops`]）は作業場の全部を、
-/// それぞれ入口で空へ戻して使う。これにより定常状態（毎フレーム経路）で再割り当てが起きない。
+/// 命令走査（[`derive_ops`]）は作業場の全部を入口で空へ戻して使う。外形は表から引くだけで走査しない。
 pub(crate) fn build_plan(
     out_ops: &mut Vec<BlitOp>,
     scratch: &mut PlanScratch,
@@ -632,16 +636,9 @@ pub(crate) fn build_plan(
         return Err(ComposeError::SurfaceNotFound(surface_id));
     }
 
-    // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。祖先の列は
-    // compute_extent 入口で clear される（要件 10.3・共有スクラッチ）。予算は命令列と同じ範囲・同じ値。
-    let extent = compute_extent_limited(
-        &mut scratch.on_path,
-        world,
-        atlas,
-        surface_id,
-        scratch.limit,
-        None,
-    );
+    // 静的外形（有効 bind 非依存）は束縛のときに求めた表から引く（指摘 8）。0×0 なら定義層皆無の退化
+    // データか束縛の前。
+    let extent = world.extent(surface_id);
 
     // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
     // 命令列は元々ゼロ（外形へ寄与する層＝命令の母集合が皆無）ゆえ out_ops は空のまま返す。
@@ -673,7 +670,7 @@ pub(crate) fn build_plan(
     }
 
     // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。作業場は derive_ops
-    // 入口で空へ戻る（要件 10.3）。外形 compute_extent は pattern 非依存の静的量。
+    // 入口で空へ戻る（要件 10.3）。外形は pattern 非依存の静的量。
     derive_ops(out_ops, scratch, world, atlas, surface_id, binds, pattern);
 
     // 分類2: surface 存在＋外形非ゼロ → 正常系。out_ops が空でも（全透明・空 bind 集合）Err に

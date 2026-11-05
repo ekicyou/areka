@@ -92,12 +92,18 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
     let build = capture_logs(|| world = Some(world_of(LAST, 2)));
     let (world, atlas) = world.expect("組める");
     assert_once_per_scope(&build, "hit_import");
+    // 外形は束縛のとき（`bind_atlas`）に根ごとに 1 度だけたどる（指摘 8）。
+    assert_once_per_scope(&build, "extent");
 
     let mut composer = Composer::new();
     let mut first = Vec::new();
     let logs = capture_logs(|| first = compose(&mut composer, &world, &atlas));
     assert_eq!(errors(&logs, "plan", 0), 1, "{}", errors_only(&logs));
-    assert_eq!(errors(&logs, "extent", 0), 1, "{}", errors_only(&logs));
+    assert_eq!(
+        errors(&logs, "extent", 0),
+        0,
+        "合成は外形をたどらない: {logs}"
+    );
     let mut second = Vec::new();
     capture_logs(|| second = compose(&mut composer, &world, &atlas));
     assert!(!first.is_empty());
@@ -112,7 +118,11 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
         shell_bounds(&world, &atlas);
     });
     assert_once_per_scope(&logs, "bounds");
-    assert_once_per_scope(&logs, "extent");
+    assert_eq!(
+        errors(&logs, "extent", 0),
+        0,
+        "シェルの外形は表を引く: {logs}"
+    );
 
     // 到達の確かめは各面を 1 度しか見ないので菱形でも切れず、循環も無い。
     let logs = capture_logs(|| assert!(world.nest_report().issues.is_empty()));

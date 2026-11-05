@@ -8,7 +8,7 @@ use areka_parsers::shell::Interval;
 use super::{Extent, is_bind_interval, surface_and_binding};
 use crate::budget::Budget;
 use crate::nesting::{ElementKind, is_always_interval};
-use crate::world::{EmoWorld, targets_animation_id};
+use crate::world::{EmoWorld, SurfaceExtents, targets_animation_id};
 
 #[cfg(test)]
 use super::*;
@@ -34,8 +34,8 @@ pub(crate) const MAX_EXTENT: u32 = 16_384;
 /// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
 /// を返す（0×0 退化の Err 分類は [`build_plan`] の責務・本関数は分類しない）。
 ///
-/// 広がりの予算は根の面 1 つにつき [`VISIT_BUDGET`]。命令列と同じ予算・作業場や覚えを渡す口は
-/// [`compute_extent_limited`]（本番の口はそちらだけ・これはテストの口）。
+/// 広がりの予算は根の面 1 つにつき [`VISIT_BUDGET`]。作業場や覚えを渡す口は [`compute_extent_limited`]
+/// （本番で呼ぶのは [`build_extents`] だけ・これは外形を直に確かめるテストの口）。
 #[cfg(test)]
 pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u32) -> Extent {
     compute_extent_limited(
@@ -46,6 +46,23 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
         crate::budget::VISIT_BUDGET,
         None,
     )
+}
+
+/// 全部の面の外形の表を作る（指摘 8・[`EmoWorld::bind_atlas`] の最後に 1 度だけ）。予算は根の面 1 つにつき
+/// [`VISIT_BUDGET`]（合成 1 回と同じ範囲・同じ打ち切り位置）。きれいに終わった面の覚えは根の間で共有する
+/// （覚えの有る無しで答えと記録は変わらない）。
+pub(crate) fn build_extents(world: &EmoWorld, atlas: &AtlasTable) -> SurfaceExtents {
+    let (mut on_path, mut memo) = (HashSet::new(), ExtentMemo::new());
+    let budget = crate::budget::VISIT_BUDGET;
+    let extents = world
+        .surface_ids()
+        .map(|id| {
+            let extent =
+                compute_extent_limited(&mut on_path, world, atlas, id, budget, Some(&mut memo));
+            (id, extent)
+        })
+        .collect();
+    SurfaceExtents(extents)
 }
 
 /// 外形の走査の積み荷: 面へ親の原点から (x, y) ずらして入る（`element` は element定義の子＝循環を黙って

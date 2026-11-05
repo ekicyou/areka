@@ -76,7 +76,7 @@
   - _Requirements: 4.4, 4.5, 6.1_
 
 - [ ] 3. 直したほうがよい: 外形の表・予算の値・重ね方・使われない口・追記の規則・テストの直し
-- [ ] 3.1 外形を束縛のときに 1 度だけ求める表にする（指摘 8）
+- [x] 3.1 外形を束縛のときに 1 度だけ求める表にする（指摘 8）
   - 束縛の最後（動く絵の分解の後）で全部の面の外形を求めて面の表のリソースに置き、命令列とシェルの外形は表から引く。表に無い（束縛の前）なら外形 0×0 で、今と同じく空の合成になる
   - 直す前に、3.2 の比べのもとにする合成の時間を `tools/perf/` で 1 度測って記録に残す（または 3.2 で直す前のコミットと比べられるよう、そのコミットを記録に書く）
   - 外形の上限の確かめ（2.1）は表から引いた値で行い、2.1 のテストがそのまま守る
@@ -165,3 +165,4 @@
 - 2.5: 小さな予算の口は `compute_extent_limited`・`shell_bounds_limited`・`reaches(.., limit)`・`regions_of(.., &mut Budget)`。`Records::Quiet` が予算へ通るのは `attach_hit_regions` だけ（`NestReport`・`shape_issues` は `Records` を持たない別の入口）。外形の走査は呼び出しごとに積み荷の `Vec` を確保（3.1 で表になれば合成のたびには呼ばれない）。3.2 で測るとき `moving_visible`（`visible_parts` の `contains`）も見るとよい
 - 2.6: 最初は BLOCKED（10000 段の鎖で読み込みの走査が根ごとのたどり直し×線形の祖先の確かめで N³）。debug の推奨案 甲＋O(1) の祖先（`on_path` の `HashSet`）で直した。覚えは `HitMemo`・`BoundsMemo`・`ExtentMemo`（合成は `None`）と `Budget::take(n)`。`compute_extent_limited` は引数 6 本、`compute_extent` は `#[cfg(test)]` の口。`shell_bounds_limited` の中の根ごとの外形は `VISIT_BUDGET` のまま。仮の `VISIT_BUDGET` は `1 << 16`。残る限界（予算より遠くまで届く根は 面の数 × 予算・`reaches` も同じ型）は design に未解決と記録
 - 11-05 audit-parsers-sakura: 範囲の上限 `areka_parsers::shell::model::RANGE_WIDTH_CAP = 8193`（シェル全体の Range の幅の合計）が向こうの枝 c3eea14e に入った（5.1 で main への着地を確かめる）
+- 3.1: 直す前の合成の時間は測らず、3.2 の比べのもとは「直す前のコミット 9599aadd」（3.2 で同じ機会に両方を測る）。表は `SurfaceExtents`・`EmoWorld::extent(id)`・`plan::build_extents`（bind_atlas の最後）。外形の記録（循環の debug・予算の error!）は合成でなく bind_atlas で出る。`PlanScratch::with_limit` は命令列にだけ効く

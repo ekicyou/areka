@@ -57,7 +57,7 @@ fn cycle_detection_debug_fires_with_surface_id() {
     let mut ops = Vec::new();
     let mut visited = PlanScratch::default();
     let logs = capture_logs(|| {
-        // build_plan は compute_extent（extent 経路）→ derive_ops（ops 経路）の両方を走らせる。
+        // build_plan は外形を表から引き（extent 経路は束縛のときだけ）、derive_ops（ops 経路）を走らせる。
         // ops 経路（flatten_surface）の循環 WARN を狙って結果自体も固定する。
         let extent = build_plan(
             &mut ops,
@@ -74,9 +74,9 @@ fn cycle_detection_debug_fires_with_surface_id() {
         assert_ne!(extent.w, 0, "外形は非ゼロ");
     });
 
-    // ops 経路（flatten_surface）の循環 WARN を **行単位で判別**して突く。build_plan は
-    // compute_extent（extent 経路の循環 WARN・「外形算出:」接頭）も走らせるため、単純な
-    // contains では extent 経路の WARN に masking されうる。ops 経路の WARN は「外形算出」を
+    // ops 経路（flatten_surface）の循環 WARN を **行単位で判別**して突く。extent 経路の循環の知らせ
+    // （「外形算出:」接頭）と取り違えないよう（今は束縛のときにしか出ないが、合成へ戻れば masking
+    // されうる）、ops 経路の WARN は「外形算出」を
     // **含まない** 循環行として一意に判別する（この行を消せば必ず落ちる・非空虚性）。
     let ops_cycle_line = logs.lines().find(|l| {
         l.contains("level=DEBUG")
@@ -98,8 +98,8 @@ fn cycle_detection_debug_fires_with_surface_id() {
 
 /// 要件 7.3: 外形算出経路（flatten_extent）の循環の知らせ（DEBUG）も surface_id つきで発火する。
 ///
-/// build_plan は compute_extent を先に走らせるため、flatten_extent の循環 WARN（メッセージに
-/// 「外形算出」を含む）が別途発火する。extent 経路の循環ログを個別に固定する。
+/// 外形は束縛のとき（`bind_atlas` の最後・指摘 8）に表へ求めるので、外形の走査の循環の知らせ（メッセージに
+/// 「外形算出」を含む）はそこで出て、合成（build_plan）では出ない。extent 経路の循環ログを個別に固定する。
 #[test]
 fn extent_cycle_debug_fires_with_surface_id() {
     let base = Path::new("shell/master");
@@ -111,12 +111,13 @@ fn extent_cycle_debug_fires_with_surface_id() {
         vec![bind_anim(1, 2000, 0, 0)], // 自己参照。
     );
     let mut world = EmoWorld::build(&shell_of(vec![host]));
-    world.bind_atlas(&atlas, SetId(0));
+    // extent は有効 bind 非依存ゆえ束縛のときに全 pattern0 を辿る。
+    let logs = capture_logs(|| world.bind_atlas(&atlas, SetId(0)));
 
-    let binds = BindSet::default(); // extent は有効 bind 非依存ゆえ空 bind でも全 pattern0 を辿る。
+    let binds = BindSet::default();
     let mut ops = Vec::new();
     let mut visited = PlanScratch::default();
-    let logs = capture_logs(|| {
+    let compose_logs = capture_logs(|| {
         build_plan(
             &mut ops,
             &mut visited,
@@ -141,6 +142,10 @@ fn extent_cycle_debug_fires_with_surface_id() {
     assert!(
         extent_cycle_line.is_some(),
         "extent 経路（flatten_extent）の循環 DEBUG（外形算出を含む）が発火する: {logs}",
+    );
+    assert!(
+        !compose_logs.contains("外形算出"),
+        "合成は外形をたどらない: {compose_logs}"
     );
 }
 

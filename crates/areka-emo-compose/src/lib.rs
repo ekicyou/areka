@@ -90,9 +90,10 @@ use areka_emo_atlas::AtlasTable;
 ///   のみで、[`ComposedSurface`] を一切キャッシュしない。前回の合成結果は次回呼び出しへ持ち越さず、
 ///   surface→結果のキャッシュ・無効化は下流 `emo-present` の責務である。絵は持たないが、下敷き形
 ///   （[`compose_into_reusing`]）が最後に成功させた合成の命令列 1 本（`base_ops`）だけは持つ。
-/// - **buffer 再利用でゼロアロケーション定常状態**（要件 10.3）: [`compose_into`] は呼び手の `out`
-///   と自身のスクラッチ（`ops`／`scratch`）を再利用するため、外形が変わらない毎フレーム経路で
-///   途中アロケーションを発生させず O(elements) で合成する。
+/// - **buffer 再利用**（要件 10.3）: [`compose_into`] は呼び手の `out` と自身のスクラッチ（`ops`／
+///   `scratch`）を再利用し、外形は束縛のときの表から引く（合成のたびにたどらない）。同じ入力を繰り返す
+///   合成で `out` の先頭と命令列・作業場の列の容量が初回から変わらないことはテストで確かめている
+///   （`golden_tests_determinism_budget_tests.rs`）。入力が変わるときの確保の有無は確かめていない。
 /// - **アトラス解決は構築時一度きり**（要件 4.3・design 主要決定）: hot path（[`compose_into`]/
 ///   [`compose`]）は [`AtlasTable::resolve`] を一切呼ばず、束縛済み `ElementId` の
 ///   [`AtlasTable::entry`] O(1) 引きのみを行う（束縛は事前の [`EmoWorld::bind_atlas`] で完了済み）。
@@ -130,11 +131,11 @@ impl Composer {
         }
     }
 
-    /// 合成先バッファ再利用形（毎フレーム経路・定常状態アロケーションなし・要件 10.3）。
+    /// 合成先バッファ再利用形（毎フレーム経路・要件 10.3）。
     ///
     /// `world`／`atlas`／`surface_id`／`active_binds` から plan を導出（[`crate::plan::build_plan`]）し、
     /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`scratch`）
-    /// を再利用するため、外形が変わらない反復呼び出しで再割り当てを起こさない。
+    /// を再利用する（同じ入力の反復で容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる）。
     ///
     /// `build_plan` が `Err`（surface 不在・定義層皆無退化）を返せば、そのまま伝播する（既に `error`
     /// ログ済み・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`

@@ -96,8 +96,8 @@ fn recorded_frames(world: &EmoWorld, base_id: u32, anim_id: u32) -> Vec<(u32, i6
 /// 採録まばたきアニメの**全コマ**が原寸＋(x,y) でベース surface の Extent 内に収まることをアサートし、
 /// 実測値（ベース外形・各コマ外形＋オフセット）を返す（EVIDENCE 用）。
 ///
-/// 各コマ surface の原寸はそれ自身の `compute_extent`（当該 surface の element 群の (0,0) 起点原寸和集合）
-/// で得る。コマ surface（1410/2106 等）は animation を持たない葉 surface ゆえ、その Extent は原寸和集合＝
+/// 各コマ surface の原寸はそれ自身の外形（当該 surface の element 群の (0,0) 起点原寸和集合）を、合成と同じく
+/// 束縛のときの表（`EmoWorld::extent`）から引き、直にたどった `compute_extent` と同じ値であることも確かめる。コマ surface（1410/2106 等）は animation を持たない葉 surface ゆえ、その Extent は原寸和集合＝
 /// 「コマの原寸」に一致する。
 fn assert_frames_fit_base(
     world: &EmoWorld,
@@ -105,7 +105,16 @@ fn assert_frames_fit_base(
     base_id: u32,
     anim_id: u32,
 ) -> (Extent, Vec<(u32, i64, i64, Extent)>) {
-    let base_extent = compute_extent(world, atlas, base_id);
+    let table = |id| {
+        let extent = world.extent(id);
+        assert_eq!(
+            extent,
+            compute_extent(world, atlas, id),
+            "表の外形 surface{id}"
+        );
+        extent
+    };
+    let base_extent = table(base_id);
     assert!(
         base_extent.w > 0 && base_extent.h > 0,
         "ベース surface{base_id} の外形は非ゼロ（実 PNG 原寸由来）"
@@ -114,7 +123,7 @@ fn assert_frames_fit_base(
     let frames = recorded_frames(world, base_id, anim_id);
     let mut measured = Vec::new();
     for (fid, x, y) in frames {
-        let fextent = compute_extent(world, atlas, fid);
+        let fextent = table(fid);
         assert!(
             fextent.w > 0 && fextent.h > 0,
             "コマ surface{fid} の原寸外形は非ゼロ（実 PNG 由来）"

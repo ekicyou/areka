@@ -1,10 +1,10 @@
 //! シェル全体の外形（[`ShellBounds`]）の算出（areka-P0-offline-surface-dump 要件 4.3）。
 //!
-//! 面ごとの外形（`plan_extent.rs` の `compute_extent`）の辿り方（入れ子・祖先スタックで循環を
+//! 面ごとの外形（`plan_extent.rs` の `compute_extent_limited`）の辿り方（入れ子・祖先スタックで循環を
 //! 避ける・明示のスタック）を写し、座標を符号つきで持つ。違いは、⑴ すべての面を数える、⑵ 負の座標を原点で
 //! 切らない、⑶ すべての animation（interval を問わない・`never`・`runonce` を含む）のすべての
 //! pattern を数える、の 3 点。記録は出さない（読み込みと合成が既に出している・広がりの予算が尽きたときの `error!` だけ出す）。
-//! 右下は面ごとの `compute_extent`（合成の絵の大きさ）も重ねて、どの面の絵も外形に収める。
+//! 右下は面ごとの外形（合成の絵の大きさ・束縛のときに求めた表）も重ねて、どの面の絵も外形に収める。
 
 use std::collections::{HashMap, HashSet};
 
@@ -13,7 +13,7 @@ use areka_emo_atlas::AtlasTable;
 use crate::budget::{Budget, VISIT_BUDGET};
 use crate::method::is_implemented_name;
 use crate::nesting::ElementKind;
-use crate::plan::{ExtentMemo, compute_extent_limited, surface_and_binding};
+use crate::plan::surface_and_binding;
 use crate::world::EmoWorld;
 
 /// 土台の原点を (0,0) とする外形。(0,0) を必ず含む（`left, top <= 0`・`right, bottom >= 0`）。
@@ -39,7 +39,8 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds {
 }
 
 /// [`shell_bounds`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
-/// 小さな数）。きれいに終わった面の覚えは、シェルの外形と根ごとの外形でそれぞれ根の間で 1 つを共有する。
+/// 小さな数）。きれいに終わった面の覚えは根の間で 1 つを共有する。根ごとの外形は表から引く（予算は表を
+/// 作ったときの [`VISIT_BUDGET`]）。
 pub(crate) fn shell_bounds_limited(
     world: &EmoWorld,
     atlas: &AtlasTable,
@@ -49,7 +50,6 @@ pub(crate) fn shell_bounds_limited(
     let mut acc = [0i64; 4];
     let mut scratch = BoundsScratch::default();
     let mut memo = BoundsMemo::new();
-    let mut extent_memo = ExtentMemo::new();
     for id in world.surface_ids() {
         if let Some(r) = walk(&mut scratch, Some(&mut memo), world, atlas, id, limit) {
             acc = [
@@ -59,17 +59,10 @@ pub(crate) fn shell_bounds_limited(
                 acc[3].max(r[3]),
             ];
         }
-        // 合成の絵の大きさ（`compute_extent`）は描画メソッドを問わず bind の pattern0・`always` の
+        // 合成の絵の大きさ（外形の表）は描画メソッドを問わず bind の pattern0・`always` の
         // pattern を数えるので、右下はそれも収める（Invariants）。bind・`always` の循環の知らせは
-        // `compute_extent` の debug だけ。
-        let extent = compute_extent_limited(
-            &mut scratch.on_path,
-            world,
-            atlas,
-            id,
-            VISIT_BUDGET,
-            Some(&mut extent_memo),
-        );
+        // 表を作るときの debug だけ。
+        let extent = world.extent(id);
         acc[2] = acc[2].max(extent.w as i64);
         acc[3] = acc[3].max(extent.h as i64);
     }

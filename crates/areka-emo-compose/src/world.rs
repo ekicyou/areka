@@ -54,6 +54,11 @@ pub struct ShellSettings {
     pub collision_sort: Option<SortOrder>,
 }
 
+/// 面の番号 → 外形（[`crate::plan::Extent`]）の表（指摘 8）。[`EmoWorld::bind_atlas`] の最後に 1 度だけ
+/// 作り、以後は読むだけ（束縛の後で外形は変わらないので、合成のたびにたどり直さない）。
+#[derive(Debug, Default, Resource)]
+pub(crate) struct SurfaceExtents(pub(crate) BTreeMap<u32, crate::plan::Extent>);
+
 /// emo 専用 per-ghost `bevy_ecs` World（wintf 本体 World とは分離・要件 1.8/10.4）。
 ///
 /// surface 1件＝entity 1件で正規化 Surface 定義を常駐させ、公開クエリを提供する受動データ
@@ -232,6 +237,8 @@ impl EmoWorld {
     /// 束縛の次に動く絵を子へ分解する（[`crate::film`]・要件 1.1〜1.4）。**同じ面の表に呼ぶのは
     /// 1 度だけ**（2 度目は画像でなくなった element を束縛し直さず、子の定義が古いアトラスのまま
     /// 残る）。
+    ///
+    /// 最後に全部の面の外形を求めて表（[`SurfaceExtents`]）に置く（指摘 8・合成とシェルの外形はそこから引く）。
     pub fn bind_atlas(&mut self, atlas: &areka_emo_atlas::AtlasTable, set: areka_emo_atlas::SetId) {
         debug_assert!(
             self.world
@@ -243,6 +250,17 @@ impl EmoWorld {
         );
         crate::atlas_bind::bind_atlas(&mut self.world, atlas, set);
         crate::film::decompose(&mut self.world, atlas);
+        let extents = crate::plan::build_extents(self, atlas);
+        self.world.insert_resource(extents);
+    }
+
+    /// 面 `id` の外形（束縛のときに求めた表から引く）。表に無い（[`EmoWorld::bind_atlas`] の前・面が無い）
+    /// なら 0×0。
+    pub(crate) fn extent(&self, id: u32) -> crate::plan::Extent {
+        self.world
+            .get_resource::<SurfaceExtents>()
+            .and_then(|t| t.0.get(&id).copied())
+            .unwrap_or(crate::plan::Extent { w: 0, h: 0 })
     }
 
     /// 動く絵の子の定義（無ければ `None`）。`ElementKind::Film(id)` の element が在れば必ず `Some`。

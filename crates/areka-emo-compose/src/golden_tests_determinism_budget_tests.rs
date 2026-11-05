@@ -141,8 +141,10 @@ fn surface1000_compose_into_two_fresh_buffers_are_byte_equal() {
 ///   ② out.bytes() の**長さが不変**（外形一定ゆえ resize が伸長を起こさない。バッファは
 ///      `bytes()` がスライスを返すため容量は観測できないが、①のポインタ不変が realloc 不在を担保する）、
 ///   ③ Composer 内部 `ops` スクラッチの**容量が単調・非成長**（毎フレーム clear+push で再利用）、
-///   ④ Composer 内部 `visited` スクラッチの**容量が非成長**（入れ子 flatten の祖先スタック再利用）、
-/// を反復ループ全域で固定することで示す。realloc する実装ならポインタ／容量が動いて破れる。
+///   ④ Composer 内部 `visited`・`steps`・`merged_ids` スクラッチの**容量が非成長**（入れ子 flatten の
+///      祖先スタック・段の積み荷・層 (ii) の id の再利用）、
+/// を反復ループ全域で固定することで示す。外形は束縛のときの表から引くので、合成の中で外形の走査の
+/// 確保は起きない（指摘 8）。realloc する実装ならポインタ／容量が動いて破れる。
 #[test]
 fn surface1000_recompose_steady_state_zero_allocation() {
     let shell = parse_emo2_shell();
@@ -172,6 +174,12 @@ fn surface1000_recompose_steady_state_zero_allocation() {
     let len0 = out.bytes().len();
     let ops_cap0 = composer.ops.capacity();
     let visited_cap0 = composer.scratch.visited.capacity();
+    let steps_cap0 = composer.scratch.steps.capacity();
+    let merged_cap0 = composer.scratch.merged_ids.capacity();
+    assert!(
+        steps_cap0 > 0 && merged_cap0 > 0,
+        "作業場を使っている（空虚でない）"
+    );
 
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {
@@ -205,6 +213,16 @@ fn surface1000_recompose_steady_state_zero_allocation() {
             composer.scratch.visited.capacity(),
             visited_cap0,
             "反復 {iter}: visited スクラッチ容量が非成長（祖先スタック再利用・要件 10.3）"
+        );
+        assert_eq!(
+            composer.scratch.steps.capacity(),
+            steps_cap0,
+            "反復 {iter}: 段の積み荷の容量が非成長（要件 10.3）"
+        );
+        assert_eq!(
+            composer.scratch.merged_ids.capacity(),
+            merged_cap0,
+            "反復 {iter}: 層 (ii) の id の容量が非成長（要件 10.3）"
         );
     }
 
@@ -246,6 +264,7 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
     .expect("初回 build_plan は Ok（surface1000 存在＋外形非ゼロ）");
     let ops_cap0 = ops.capacity();
     let visited_cap0 = visited.visited.capacity();
+    let (steps_cap0, merged_cap0) = (visited.steps.capacity(), visited.merged_ids.capacity());
     let ops_len0 = ops.len();
 
     for iter in 0..8 {
@@ -274,7 +293,48 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
             visited_cap0,
             "反復 {iter}: visited スクラッチ容量が非成長（再利用・要件 10.3）"
         );
+        assert_eq!(visited.steps.capacity(), steps_cap0, "反復 {iter}: steps");
+        assert_eq!(
+            visited.merged_ids.capacity(),
+            merged_cap0,
+            "反復 {iter}: merged_ids"
+        );
     }
+}
+
+/// 外形の表（指摘 8）: 束縛の前は表が無く外形 0×0＝`EmptyComposition`（今までの前提どおり）。束縛すると
+/// 表から引いた外形で合成でき、その値は直にたどった外形と同じ。
+#[test]
+fn extent_comes_from_the_table_made_by_bind_atlas() {
+    use crate::error::ComposeError;
+    use crate::plan::compute_extent;
+
+    let shell = parse_emo2_shell();
+    let atlas = build_atlas_for_surface1000(&shell, &shell_master_dir());
+    let binds = surface1000_full_bindset();
+    let mut world = EmoWorld::build(&shell);
+    let (mut ops, mut scratch) = (Vec::new(), PlanScratch::default());
+    let plan = |world: &EmoWorld, ops: &mut Vec<_>, scratch: &mut PlanScratch| {
+        build_plan(
+            ops,
+            scratch,
+            world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
+    };
+    assert_eq!(
+        plan(&world, &mut ops, &mut scratch),
+        Err(ComposeError::EmptyComposition(1000)),
+        "束縛の前は外形 0×0"
+    );
+    world.bind_atlas(&atlas, SetId(0));
+    let extent = plan(&world, &mut ops, &mut scratch).expect("束縛の後は合成できる");
+    assert_eq!(extent, compute_extent(&world, &atlas, 1000));
+    assert_eq!(extent, world.extent(1000));
+    assert!(extent.w > 0 && extent.h > 0);
 }
 
 /// task 8.4 命令数 O(elements)（要件 10.3）: surface1000＋全有効 bind → 命令数 == 描画層数（線形）。
