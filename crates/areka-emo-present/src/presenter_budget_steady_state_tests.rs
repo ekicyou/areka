@@ -124,11 +124,7 @@ const NATIVE_H: u32 = 180;
 /// **毎適用がミスかつ毎適用で追い出しが 1 件成立する**（本番の「毎コマ引き当て外れ」と同じ形）。
 const ROTATING_KEYS: usize = 4;
 
-/// 合成キャッシュの容量（`cache.rs` の `CAPACITY`・要件 7.1 の裁定値）。
-///
-/// `cache.rs` 側は私有定数ゆえここから参照できない。値が食い違えば回る実体の本数の主張が
-/// 赤になる（＝黙ってずれない）。
-const CACHE_CAPACITY: usize = 3;
+use crate::cache::CAPACITY as CACHE_CAPACITY;
 
 /// 暖機の適用回数＝回る実体の本数。
 ///

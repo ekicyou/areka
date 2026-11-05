@@ -344,7 +344,7 @@ impl Flow2 {
         let recycled = self.cache.take_recycled();
 
         // (3) 表示バッファ席と、輪番へ返すマスク。
-        let (mut display, retired) = self.budget.display_buffer(recycled);
+        let (mut display, retired) = FrameBudget::display_buffer(recycled);
 
         // (4) 交代（複写も確保も起きない）。**拡大率に依らず常にこの経路**（要件 1.3／7.3）。
         self.budget.swap_native_scratch(&mut display);
@@ -724,7 +724,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     ));
     let mask_ptr = Arc::as_ptr(&mask);
 
-    let (display, retired) = budget.display_buffer(Some(CacheEntry {
+    let (display, retired) = FrameBudget::display_buffer(Some(CacheEntry {
         composed,
         mask,
         display: wintf::ecs::GraphicsCommandList::empty(),
@@ -753,7 +753,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     );
 
     // 回収不成立は新品（0×0）から始まり、マスクも渡されない。
-    let (fresh, none) = budget.display_buffer(None);
+    let (fresh, none) = FrameBudget::display_buffer(None);
     assert_eq!(fresh.width(), 0, "回収不成立の表示バッファは空から始まる");
     assert_eq!(
         fresh.bytes().len(),

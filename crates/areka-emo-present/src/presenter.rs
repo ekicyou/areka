@@ -161,7 +161,7 @@ mod resize_report_tests;
 mod scale_change_tests;
 #[cfg(test)]
 #[path = "presenter_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "presenter_visibility_tests.rs"]
 mod visibility_tests;

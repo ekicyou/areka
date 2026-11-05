@@ -450,7 +450,7 @@ impl FrameBudget {
     /// （[`swap_native_scratch`] 経由の [`native_scratch`]）側が実体の容量差として拾う。ここで
     /// 先回りして数えると 1 適用で二重に数えることになる。
     ///
-    /// 本メソッドが状態を持たない（`&mut self` を使わない）のは、確保の観測が**実体の容量**から
+    /// 本メソッドが状態を持たない（`self` を取らない関連関数である）のは、確保の観測が**実体の容量**から
     /// 読めるようになったためである。以前は「新しい実体で回り直す」ことを器のフィールドへ
     /// 記録していたが、回るバッファが 4 本になった今それは取り違えの元でしかない。
     ///
@@ -459,7 +459,6 @@ impl FrameBudget {
     /// [`native_scratch`]: FrameBudget::native_scratch
     /// [`swap_native_scratch`]: FrameBudget::swap_native_scratch
     pub(super) fn display_buffer(
-        &mut self,
         recycled: Option<CacheEntry>,
     ) -> (ComposedSurface, Option<Arc<AlphaMask>>) {
         match recycled {

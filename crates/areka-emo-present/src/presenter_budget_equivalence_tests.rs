@@ -68,8 +68,7 @@ use super::test_support::{
 const NATIVE_W: u32 = 14;
 const NATIVE_H: u32 = 10;
 
-/// 合成キャッシュの容量（`cache.rs` の `CAPACITY`・要件 7.1 の裁定値）。
-const CACHE_CAPACITY: usize = 3;
+use crate::cache::CAPACITY as CACHE_CAPACITY;
 
 /// 巡回する面の本数。**キャッシュ容量より大きい**こと自体が本檻の前提である。
 ///
@@ -516,21 +515,14 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
 }
 
 /// fixture 自身の健全性: 巡回する 4 面が **同じ原寸外形・互いに別のバイト**であり、マスクが
-/// 一様でなく、**面の本数がキャッシュ容量より多い**こと。
+/// 一様でないこと（面の本数は `ROTATING_FACES` が容量から決めるので、ここでは確かめない）。
 ///
 /// 檻の前提が壊れていれば等価主張は全て空虚になる。本 spec は fixture 側の破綻で 3 度
-/// 偽の緑を踏んでいるため、生成器そのものを 1 本の檻で押さえる。本数の主張を含めてあるのは、
-/// 容量が変わったときに「巡回長が容量以下へ落ちてミス経路の檻がヒット経路の檻へ化ける」
-/// 事故をここで止めるためである。
+/// 偽の緑を踏んでいるため、生成器そのものを 1 本の檻で押さえる。
 ///
 /// 拡大率で場合分けしないのは、期待値が原寸だけで決まるからである（k は fixture に現れない）。
 #[test]
-fn the_rotating_face_fixture_differs_in_bytes_and_outnumbers_the_cache() {
-    assert!(
-        ROTATING_FACES > CACHE_CAPACITY,
-        "巡回する面の本数がキャッシュ容量以下＝毎適用ミスが成立しない（檻がヒット経路へ化ける）"
-    );
-
+fn the_rotating_face_fixture_differs_in_bytes() {
     let want = expected_faces();
     for (i, id) in FACES.iter().enumerate() {
         assert_eq!(

@@ -45,8 +45,7 @@ use std::time::Duration;
 
 use super::test_support::{build_target_assets, spawn_window_with_dpi};
 
-/// 合成キャッシュの容量（`cache.rs` の `CAPACITY`・要件 7.1 の裁定値）。
-const CACHE_CAPACITY: usize = 3;
+use crate::cache::CAPACITY as CACHE_CAPACITY;
 
 /// native 外形（本ファイルは絵の中身を見ないので小さくてよい）。
 const NATIVE_W: u32 = 8;

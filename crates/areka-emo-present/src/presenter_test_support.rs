@@ -138,7 +138,7 @@ pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Ent
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
 // 上流公開 API（atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。
 
-pub(super) fn elem(path: &str, x: i64, y: i64) -> Element {
+pub(crate) fn elem(path: &str, x: i64, y: i64) -> Element {
     Element {
         layer: 0,
         path: ElementPath::new(path.to_string()),
@@ -147,7 +147,7 @@ pub(super) fn elem(path: &str, x: i64, y: i64) -> Element {
     }
 }
 
-pub(super) fn surface(id: u32, elements: Vec<Element>) -> Surface {
+pub(crate) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     Surface {
         id,
         targets: vec![AppendTarget::Single(id)],
@@ -157,7 +157,7 @@ pub(super) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     }
 }
 
-pub(super) fn shell_of(surfaces: Vec<Surface>) -> Shell {
+pub(crate) fn shell_of(surfaces: Vec<Surface>) -> Shell {
     let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
     Shell {
         surfaces,

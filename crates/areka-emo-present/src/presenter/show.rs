@@ -231,7 +231,8 @@ impl EmoPresenter {
                     // 追い出しエントリの表示バッファ容量を受け取り、束ねられていたマスクは輪番の
                     // 空きスロットとして下の `regenerate_mask` へ回す（設計 D2⑵/D3）。回収が
                     // 成立しなければ空バッファから始まり、以後の伸長がそのまま計数される。
-                    let (mut display, retired_mask) = target.budget.display_buffer(recycled);
+                    let (mut display, retired_mask) =
+                        super::budget::FrameBudget::display_buffer(recycled);
                     // 合成先席と表示バッファを**交代**させる（複写も確保も起きない・設計 D2⑴）。
                     // **k の値に依らず常にこの経路**（要件 1.3・7.3）——表示へ載せるのは原寸そのもの
                     // であり、k 適用の段は存在しない。交代後は回収した容量が合成先席に入り、次の適用は
