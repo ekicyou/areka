@@ -31,7 +31,7 @@
 use crate::error::{ElementKind, RefuseReason};
 use crate::install::{InstallRequest, SkippedCompanion};
 use crate::manifest::{Companion, ExistingPolicy, INSTALL_TXT, InstallKind, InstallManifest};
-use crate::names::{EntryName, is_valid_one_level_name, same_name};
+use crate::names::{EntryName, fold, is_valid_one_level_name};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -99,7 +99,17 @@ pub(crate) fn build_plan(
     names: &[EntryName],
     request: &InstallRequest<'_>,
 ) -> Result<Planned, RefuseReason> {
-    let mut body = body_placement(manifest, names, request)?;
+    // 大小の畳みはエントリごと・取り出し元ごとに 1 回だけ（内側の突き合わせで繰り返さない）。
+    let folded: Vec<Vec<String>> = names
+        .iter()
+        .map(|entry| entry.components.iter().map(|c| fold(c)).collect())
+        .collect();
+    let sources: Vec<Vec<String>> = manifest
+        .companions
+        .iter()
+        .map(|companion| companion.source_directory.split('/').map(fold).collect())
+        .collect();
+    let mut body = body_placement(manifest, names, &folded, &sources, request)?;
     // 同梱の入るゴースト: ゴーストの書庫は本体の宛先、シェルの書庫は確かめた宛先のゴースト。
     let ghost_dir = match &body.target_ghost {
         Some(target) => body.root.join(GHOST_STORE).join(target),
@@ -110,22 +120,39 @@ pub(crate) fn build_plan(
     let mut companions = Vec::with_capacity(manifest.companions.len());
     let mut skipped = Vec::new();
     let mut overridden = Vec::new();
-    for companion in &manifest.companions {
-        let Some(mut placement) = companion_placement(companion, names, &body, &ghost_dir) else {
+    // 本体のファイルとフォルダも 1 回だけ畳み、同梱ごとの除外は畳んだ段の前方一致で測る。
+    let segments = |relative: &str| -> Vec<String> { relative.split('/').map(fold).collect() };
+    let mut body_files: Vec<_> = std::mem::take(&mut body.files)
+        .into_iter()
+        .map(|file| {
+            let key = segments(&file.1);
+            (file, key)
+        })
+        .collect();
+    let mut body_dirs: Vec<_> = std::mem::take(&mut body.dirs)
+        .into_iter()
+        .map(|dir| {
+            let key = segments(&dir);
+            (dir, key)
+        })
+        .collect();
+    for (companion, source) in manifest.companions.iter().zip(&sources) {
+        let Some(mut placement) =
+            companion_placement(companion, source, names, &folded, &body, &ghost_dir)
+        else {
             skipped.push(skipped_companion(companion));
             continue;
         };
         if nested {
             // 名指しされた同梱が書庫の同じ名前のフォルダより先（同じ宛先を取り合わない＝要件 7.5）。
             // ここで除くのは取り出し元の外の項目だけ（取り出し元の中は本体が既に除いている）。
-            let home = format!("{BALLOON_STORE}/{}", companion.directory);
-            let files_before = body.files.len();
-            let dirs_before = body.dirs.len();
-            body.files
-                .retain(|(_, relative)| !path_in_folder(relative, &home));
-            body.dirs
-                .retain(|relative| !path_in_folder(relative, &home));
-            if body.files.len() != files_before || body.dirs.len() != dirs_before {
+            // `balloon/<directory>` そのもの、またはその配下（大小は [`fold`] で無視）。
+            let home = [fold(BALLOON_STORE), fold(&companion.directory)];
+            let files_before = body_files.len();
+            let dirs_before = body_dirs.len();
+            body_files.retain(|(_, key)| !key.starts_with(&home));
+            body_dirs.retain(|(_, key)| !key.starts_with(&home));
+            if body_files.len() != files_before || body_dirs.len() != dirs_before {
                 overridden.push(companion.directory.clone());
             }
             body.carve_out
@@ -134,18 +161,12 @@ pub(crate) fn build_plan(
         }
         companions.push(placement);
     }
+    body.files = body_files.into_iter().map(|(file, _)| file).collect();
+    body.dirs = body_dirs.into_iter().map(|(dir, _)| dir).collect();
     let mut placements = Vec::with_capacity(1 + companions.len());
     placements.push(body);
     placements.extend(companions);
     Ok((placements, skipped, overridden))
-}
-
-/// `/` 区切りの相対パスが `folder` そのもの、またはその配下か（大小は [`same_name`] で無視）。
-fn path_in_folder(relative: &str, folder: &str) -> bool {
-    let mut parts = relative.split('/');
-    folder
-        .split('/')
-        .all(|segment| parts.next().is_some_and(|part| same_name(part, segment)))
 }
 
 /// 飛ばした同梱 1 件の値を組む（要件 1.4）。`*.source.directory` が書かれていれば
@@ -172,6 +193,8 @@ fn skipped_companion(companion: &Companion) -> SkippedCompanion {
 fn body_placement(
     manifest: &InstallManifest,
     names: &[EntryName],
+    folded: &[Vec<String>],
+    sources: &[Vec<String>],
     request: &InstallRequest<'_>,
 ) -> Result<Placement, RefuseReason> {
     // 宛先の根は配置ごとに 1 回だけ尋ねる（要件 5.5）。
@@ -210,14 +233,13 @@ fn body_placement(
     // ゴーストだけでなくシェルにも同じ規則を当てる。同梱を持てるのはこの 2 種で、
     // どちらも「取り出し元は本体の置き場ではない」ことに違いが無い。
     let skip_install_txt = manifest.kind == InstallKind::Supplement;
-    let accept = |entry: &EntryName| {
-        !manifest.companions.iter().any(|companion| {
-            in_folder(entry, &companion.source_directory)
-                || leads_to_folder(entry, &companion.source_directory)
+    let accept = |entry: &EntryName, components: &[String]| {
+        !sources.iter().any(|source| {
+            in_folder(components, source) || leads_to_folder(entry.is_dir, components, source)
         }) && !(skip_install_txt && is_top_level_install_txt(entry))
     };
 
-    let (files, dirs) = collect_tree(names, accept, 0);
+    let (files, dirs) = collect_tree(names, folded, accept, 0);
     Ok(Placement {
         kind,
         name: manifest.name.clone(),
@@ -245,15 +267,18 @@ fn body_placement(
 /// 「同梱される側には install.txt 不要。あっても無視される」）。
 fn companion_placement(
     companion: &Companion,
+    source: &[String],
     names: &[EntryName],
+    folded: &[Vec<String>],
     body: &Placement,
     ghost_dir: &Path,
 ) -> Option<Placement> {
     // `in_folder` が通したエントリは取り出し元の段数以上を持つので、剥がしは範囲を外れない。
     let (files, dirs) = collect_tree(
         names,
-        |entry| in_folder(entry, &companion.source_directory),
-        segment_count(&companion.source_directory),
+        folded,
+        |_, components| in_folder(components, source),
+        source.len(),
     );
     // フォルダのエントリだけがあって配下が空の書庫も「取り出せない」に含める（要件 1.2）。
     // 空のバルーンを作っても利用者には何も届かないので、置かずに飛ばす。根も尋ねない。
@@ -306,9 +331,9 @@ fn existing_target_ghost(request: &InstallRequest<'_>) -> Result<(String, PathBu
 ///
 /// `folder` の全ての段を、エントリの先頭の段と比べる。綴りの前方一致では測らない
 /// （`extra/bal10/x` は `extra/bal1` の配下ではない）。1 段の `folder` では先頭の
-/// 1 段だけを比べることになる。
-fn in_folder(entry: &EntryName, folder: &str) -> bool {
-    entry.components.len() >= segment_count(folder) && leading_segments_match(entry, folder)
+/// 1 段だけを比べることになる。どちらも [`fold`] で畳んだ段を受け取る。
+fn in_folder(components: &[String], folder: &[String]) -> bool {
+    components.len() >= folder.len() && leading_segments_match(components, folder)
 }
 
 /// エントリが、`folder` へ降りる途中のフォルダのエントリか（取り出し元が `extra/bal1`
@@ -317,27 +342,17 @@ fn in_folder(entry: &EntryName, folder: &str) -> bool {
 /// 本体の側はこれをエントリとしては置かない。途中のフォルダの配下に本体のものが
 /// 在れば、[`collect_tree`] が親として同じフォルダを作る。無ければ作られない。
 /// 書庫がフォルダのエントリを持つかどうかで結果が変わらない（要件 2.4）。
-fn leads_to_folder(entry: &EntryName, folder: &str) -> bool {
-    entry.is_dir
-        && entry.components.len() < segment_count(folder)
-        && leading_segments_match(entry, folder)
-}
-
-/// 取り出し元の段数。
-fn segment_count(folder: &str) -> usize {
-    folder.split('/').count()
+fn leads_to_folder(is_dir: bool, components: &[String], folder: &[String]) -> bool {
+    is_dir && components.len() < folder.len() && leading_segments_match(components, folder)
 }
 
 /// エントリと `folder` の段を先頭から突き合わせ、短いほうが尽きるまで全て合うか。
 ///
-/// 突き合わせは大小を無視する（[`same_name`]）。`install.txt` に書かれた綴りと書庫の中の
-/// 綴りが大小だけ違う配布物は普通にあり、Windows では同じフォルダを指す。
-fn leading_segments_match(entry: &EntryName, folder: &str) -> bool {
-    entry
-        .components
-        .iter()
-        .zip(folder.split('/'))
-        .all(|(component, segment)| same_name(component, segment))
+/// 突き合わせは大小を無視する（両方とも [`fold`] で畳んだ段＝[`crate::names::same_name`] と同じ規則）。
+/// `install.txt` に書かれた綴りと書庫の中の綴りが大小だけ違う配布物は普通にあり、
+/// Windows では同じフォルダを指す。
+fn leading_segments_match(components: &[String], folder: &[String]) -> bool {
+    components.iter().zip(folder).all(|(a, b)| a == b)
 }
 
 /// 最上位の `install.txt`（マニフェストそのもの）か。
@@ -361,14 +376,21 @@ fn is_top_level_install_txt(entry: &EntryName) -> bool {
 /// フォルダの一覧には⑴フォルダのエントリそのものと⑵全てのファイルの親を全段入れる。
 /// これで「フォルダのエントリを空フォルダとして作る」と「フォルダのエントリが無い
 /// 書庫でもファイルの親を作る」（要件 4.9）が、組み上げ側から見て 1 つの手順になる。
+///
+/// `folded` は `names` と同じ順の、[`fold`] で畳んだ段（`accept` に添えて渡す）。
 fn collect_tree(
     names: &[EntryName],
-    accept: impl Fn(&EntryName) -> bool,
+    folded: &[Vec<String>],
+    accept: impl Fn(&EntryName, &[String]) -> bool,
     strip: usize,
 ) -> (Vec<(usize, String)>, Vec<String>) {
     let mut files = Vec::new();
     let mut dirs: BTreeSet<String> = BTreeSet::new();
-    for entry in names.iter().filter(|entry| accept(entry)) {
+    for (entry, _) in names
+        .iter()
+        .zip(folded)
+        .filter(|(entry, components)| accept(entry, components))
+    {
         let tail = &entry.components[strip..];
         // 取り出し元のフォルダのエントリそのもの。剥がすと何も残らない。`split_last`
         // で受けるので、最後の要素（＝ファイル名かフォルダ名）が必ず在ることと、

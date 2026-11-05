@@ -7,6 +7,9 @@
 //! ⑵ 探し方が手続き（[`NarArchive::open`]）と同じ——**この検体に限って** 3 組を並べる。
 //! ⑶ 問い合わせは記録を 1 件も出さない（同じ検体で `open` が `error!` を出す対照つき）。
 //!
+//! 開く口の大きさの上限 2 つ（書庫の長さ・`install.txt` の長さ）も、ちょうどと 1 バイト
+//! 越えの両側をここで測る。
+//!
 //! 根は OS の一時フォルダではなく [`WorkDir`] が配る。
 
 use super::*;
@@ -298,20 +301,34 @@ fn open_refuses_an_archive_longer_than_the_limit_before_reading() {
     assert_eq!(read.len() as u64, len);
 }
 
-/// 上限を 1 バイト越える `install.txt` は解釈の前に「大きすぎる」で断る。
-#[test]
-fn an_install_txt_over_the_cap_is_refused() {
+/// `install.txt` を空白で `len` バイトに延ばした書庫を開く。
+fn open_with_install_txt_of(len: usize) -> Result<NarArchive, NarError> {
     let work = WorkDir::new().expect("根を借りられる");
     let mut text = install_txt(&["type,ghost", "name,テスト", "directory,tester"]);
-    text.resize(MAX_INSTALL_TXT_LEN + 1, b' ');
+    text.resize(len, b' ');
     let path = work.path().join("big.nar");
     NarBuilder::new()
         .file("install.txt", &text)
         .deflate()
         .done()
+        .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
+        .done()
         .write_to(&path)
         .expect("固定入力を置ける");
-    let opened = NarArchive::open(&path).err();
+    NarArchive::open(&path)
+}
+
+/// 上限ちょうどの `install.txt` は読める（上限の比べが `>=` へずれると赤）。
+#[test]
+fn an_install_txt_of_exactly_the_cap_opens() {
+    let opened = open_with_install_txt_of(MAX_INSTALL_TXT_LEN);
+    assert!(opened.is_ok(), "{:?}", opened.err());
+}
+
+/// 上限を 1 バイト越える `install.txt` は解釈の前に「大きすぎる」で断る。
+#[test]
+fn an_install_txt_over_the_cap_is_refused() {
+    let opened = open_with_install_txt_of(MAX_INSTALL_TXT_LEN + 1).err();
     assert!(
         matches!(
             opened,

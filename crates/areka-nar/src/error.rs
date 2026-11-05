@@ -210,7 +210,7 @@ pub struct InstalledElement {
 pub struct SurvivingTree {
     /// 元へ戻せなかった宛先（利用者から見えるインストール済みフォルダ）。
     pub destination: PathBuf,
-    /// その宛先の確定前の中身がそのまま残っているフォルダ（どれかの作業フォルダの直下 old-<k>）。
+    /// その宛先の確定前の中身がそのまま残っているフォルダ（本体の根の作業フォルダ（1 つ）の直下 old-<k>）。
     pub path: PathBuf,
 }
 
@@ -239,7 +239,7 @@ pub enum NarError {
         /// `committed` を元に戻せたか。
         rolled_back: bool,
         /// 元へ戻せなかった宛先ごとの生き残り。巻き戻せた・掘る前・新規の宛先を消す手だけが
-        /// 躓いた場合は空。全て失敗の記録の work に挙げたどれかの作業フォルダの配下に在る。`Vec` でなく `Box<[_]>` なのは、
+        /// 躓いた場合は空。全て失敗の記録の work に挙げた本体の根の作業フォルダ（1 つ）の配下に在る。`Vec` でなく `Box<[_]>` なのは、
         /// `NarError` を包む呼び手の失敗の型を clippy の `result_large_err` の閾値の下に保つため。
         survivors: Box<[SurvivingTree]>,
     },

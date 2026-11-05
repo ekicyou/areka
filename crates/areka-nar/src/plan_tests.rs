@@ -150,7 +150,7 @@ fn balloon_archive() -> NarBuilder {
 }
 
 /// 単独のシェル。
-fn shell_archive() -> NarBuilder {
+pub(crate) fn shell_archive() -> NarBuilder {
     NarBuilder::new()
         .file(
             "install.txt",

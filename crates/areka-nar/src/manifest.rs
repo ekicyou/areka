@@ -403,6 +403,8 @@ fn collect_companions(
         Vec::new()
     };
 
+    // 鍵は読むときに小文字へ揃えてあるので、接頭辞はそのまま引ける（鍵ごとに列を舐めない）。
+    let searched: BTreeSet<&str> = found.iter().map(String::as_str).collect();
     // 読み飛ばしの記録。キーの名前順に 1 件のキーへ 1 件だけ出す。
     for key in keys.keys() {
         match classify(key) {
@@ -421,7 +423,7 @@ fn collect_companions(
                     warnings.push(ManifestWarning::UnsupportedCompanionKind {
                         key: bounded_value(key),
                     });
-                } else if found.iter().any(|searched| searched == prefix) {
+                } else if searched.contains(prefix) {
                     // 探索で見つかった接頭辞の鍵は ⑶ で読む。
                 } else if keys.contains_key(&format!("{prefix}.directory")) {
                     // 宛先は書かれているが、打ち切りの後ろか先頭に 0 を付けた綴り。

@@ -298,14 +298,19 @@ pub(crate) fn stage_placement(
 ) -> Result<ExistingState, StageError> {
     at(stage, std::fs::create_dir_all(stage))?;
 
-    // 宛先そのものがリンクでもたどらない。たどると、リンクの先を写した木で入れ替える。
-    let meta = std::fs::symlink_metadata(&placement.destination);
-    if meta
-        .as_ref()
-        .is_ok_and(|meta| meta.file_type().is_symlink())
+    // 宛先そのものも、根から宛先へ降りる途中の段（`ghost\<T>\shell` など）もリンクなら
+    // たどらない。たどると、リンクの先を写した木で入れ替える。
+    if let Some(link) = placement
+        .destination
+        .ancestors()
+        .take_while(|segment| *segment != placement.root)
+        .find(|segment| {
+            std::fs::symlink_metadata(segment).is_ok_and(|meta| meta.file_type().is_symlink())
+        })
     {
-        return Err(link_refused(placement.destination.clone()));
+        return Err(link_refused(link.to_path_buf()));
     }
+    let meta = std::fs::symlink_metadata(&placement.destination);
     let existing = if meta.is_ok_and(|meta| meta.is_dir()) {
         // 入れ子の同梱の場所は同梱自身が組み上げるので、本体の下敷きには写さない。
         let carve: Vec<PathBuf> = placement

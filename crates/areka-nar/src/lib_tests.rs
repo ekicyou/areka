@@ -543,12 +543,7 @@ fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
         .filter(|event| event.level == tracing::Level::ERROR)
         .collect();
     assert_eq!(errors.len(), 1, "失敗 1 回につき記録 1 件: {records:?}");
-    let recorded = errors[0].field("work").expect("work の欄がある");
-    assert!(
-        !recorded.contains("; "),
-        "作業フォルダは根 1 つに 1 つ: {recorded}"
-    );
-    let recorded = Path::new(recorded);
+    let recorded = Path::new(errors[0].field("work").expect("work の欄がある"));
     assert!(
         recorded.is_dir(),
         "work が実在しない: {}",
