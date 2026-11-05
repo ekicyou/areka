@@ -7,7 +7,7 @@
 //!
 //! 記録は出さない。事実を値で返し、記録は fs を触る入口が読み込み 1 回につき 1 度だけ出す。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
@@ -37,6 +37,10 @@ pub enum ElementKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FilmId(pub u32);
 
+/// 見える部品の印を `out` を順に引いて確かめる上限（越えたら集合へ移す）。毎フレーム呼ばれるので、
+/// ふつうの大きさでは集合を確保しない。
+const LINEAR_SEEN_MAX: usize = 64;
+
 /// 部品を指す鍵。作者のサーフェスと動く絵の子は種類が違うので、番号が当たることが無い（要件 1.12）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PartKey {
@@ -58,12 +62,22 @@ pub fn rest_index(waits_ms: impl Iterator<Item = u32>) -> Option<usize> {
     waits_ms.take_while(|&w| w == 0).count().checked_sub(1)
 }
 
-/// animation の経過 0 の pattern（pattern の番号の昇順に並べ、待ちに [`rest_index`] を当てる）。
-/// 先頭から待つなら `None`。番号が負・描画メソッドが動かないかは呼び手が見る。
+/// animation の経過 0 の pattern（pattern の番号の昇順・同じ番号は書いた順に並べ、待ちに
+/// [`rest_index`] を当てたのと同じ答え）。先頭から待つなら `None`。番号が負・描画メソッドが動くかは
+/// 呼び手が見る。合成のたびに呼ばれるので並べた写しは作らず、「最初に待つ pattern より前で最後の
+/// pattern」を 2 度なめて引く（指摘 29）。
 pub(crate) fn rest_pattern(anim: &Animation) -> Option<&Pattern> {
-    let mut patterns: Vec<&Pattern> = anim.patterns.iter().collect();
-    patterns.sort_by_key(|p| p.index);
-    rest_index(patterns.iter().map(|p| p.wait)).map(|i| patterns[i])
+    // 並べる鍵（番号, 書いた位置）。
+    let key = |&(i, p): &(usize, &Pattern)| (p.index, i);
+    let patterns = || anim.patterns.iter().enumerate();
+    let first_wait = patterns()
+        .filter(|(_, p)| p.wait != 0)
+        .map(|e| key(&e))
+        .min();
+    patterns()
+        .filter(|e| first_wait.is_none_or(|k| key(e) < k))
+        .max_by_key(key)
+        .map(|(_, p)| p)
 }
 
 /// 欄が空でなく、全部が半角の数字（0〜9）なら番号として読む。`0100` は 100。
@@ -204,8 +218,9 @@ impl NestTable {
     /// 辺は「一番上か部品か」と番号だけで決まるので、たどれる番号の集合は「一番上から届く番号」と
     /// 同じになる。そこで `out` 自身を「これから見る面」の列と訪れた印に使い（見つけた順に足し、
     /// 前から順に見る）、一番上と既に入った番号へは進まない。先祖は必ずそのどちらかなので、先祖へ戻る
-    /// 辺も進まない。各面を 1 度しか見ないので広がりの予算は要らない。最後に昇順へ並べる。確保は
-    /// `out` の伸びだけ。
+    /// 辺も進まない。各面を 1 度しか見ないので広がりの予算は要らない。最後に昇順へ並べる。訪れた印は
+    /// 小さいうちは `out` を順に引き、[`LINEAR_SEEN_MAX`] 個を越えたら集合で引く（指摘 25）。確保は
+    /// `out` の伸びと、越えたときの集合だけ（ふつうのシェルは越えない）。
     pub fn visible_parts(
         &self,
         top: u32,
@@ -214,11 +229,12 @@ impl NestTable {
         out: &mut Vec<u32>,
     ) {
         out.clear();
-        self.walk(top, top, binds, pattern, out);
+        let mut seen = HashSet::new();
+        self.walk(top, top, binds, pattern, out, &mut seen);
         let mut next = 0;
         while let Some(&surface) = out.get(next) {
             next += 1;
-            self.walk(surface, top, binds, pattern, out);
+            self.walk(surface, top, binds, pattern, out, &mut seen);
         }
         out.sort_unstable();
     }
@@ -231,6 +247,7 @@ impl NestTable {
         binds: &BindSet,
         pattern: &PatternState,
         out: &mut Vec<u32>,
+        seen: &mut HashSet<u32>,
     ) {
         let is_top = surface == top;
         let parts = self.parts(surface);
@@ -244,29 +261,33 @@ impl NestTable {
         if let Some(p) = parts {
             // ① element定義の子。
             for &child in &p.children {
-                Self::enter(child, top, out);
+                Self::enter(child, top, out, seen);
             }
             // ② 有効な着せ替えの描くコマ（コマが在ればコマが置き換える＝③で数える）。
             for &(id, target) in &p.bind_targets {
                 if binds.contains(id) && frame_of(id).is_none() {
-                    Self::enter(target, top, out);
+                    Self::enter(target, top, out, seen);
                 }
             }
             // ②' `always` の経過 0（欄が「載っていない」ときだけ）。
             let key = (!is_top).then_some(PartKey::Surface(surface));
             for &(id, target) in &p.always_rest {
                 if pattern.cell(key, id) == Cell::Rest {
-                    Self::enter(target, top, out);
+                    Self::enter(target, top, out, seen);
                 }
             }
         }
         // ③ コマ。`bind+random` なら有効なものだけ（純 `bind` のコマは無効でも数える・M5）。
         let is_bind = |id: u32| parts.is_some_and(|p| p.bind_random_ids.binary_search(&id).is_ok());
-        let top_frames = pattern.iter().filter(|_| is_top);
-        let part_frames = pattern.part(surface).filter(|_| !is_top);
+        // 段の種類で読む欄だけを回す（使わない欄を全部なめない・指摘 30）。
+        let top_frames = is_top.then(|| pattern.iter()).into_iter().flatten();
+        let part_frames = (!is_top)
+            .then(|| pattern.part(surface))
+            .into_iter()
+            .flatten();
         for (id, frame) in top_frames.chain(part_frames) {
             if frame.method.is_implemented() && (!is_bind(id) || binds.contains(id)) {
-                Self::enter(frame.surface_id, top, out);
+                Self::enter(frame.surface_id, top, out, seen);
             }
         }
     }
@@ -285,8 +306,20 @@ impl NestTable {
     }
 
     /// `target` を部品に数え、これから見る面の列へ足す（一番上・既に数えた番号は足さない）。
-    fn enter(target: u32, top: u32, out: &mut Vec<u32>) {
-        if target != top && !out.contains(&target) {
+    /// `out` が [`LINEAR_SEEN_MAX`] 個に届いたら、印を `seen` へ写して以後は集合で引く。
+    fn enter(target: u32, top: u32, out: &mut Vec<u32>, seen: &mut HashSet<u32>) {
+        if target == top {
+            return;
+        }
+        let fresh = if out.len() < LINEAR_SEEN_MAX {
+            !out.contains(&target)
+        } else {
+            if seen.is_empty() {
+                seen.extend(out.iter().copied());
+            }
+            seen.insert(target)
+        };
+        if fresh {
             out.push(target);
         }
     }

@@ -27,7 +27,7 @@
 //! `golden_tests_determinism_budget_tests.rs` が確かめている（要件 10.3）。それより先（入力が変わるとき・
 //! `HashSet` の中身）は確かめていない。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
@@ -98,12 +98,14 @@ pub(crate) struct PlanScratch {
     frames: Vec<FrameMark>,
     /// 層 (ii) の描く順の id。
     pub(crate) merged_ids: Vec<u32>,
-    /// 段の中の差し込みの決め（(B, A)＝B を A が差し込む）。
-    pub(crate) claims: Vec<(u32, u32)>,
+    /// 段の面の animation の番号 → `SurfaceMaster.animations` の添字（段の頭で作る・指摘 28）。
+    pub(crate) anims: HashMap<u32, usize>,
+    /// 段の中の差し込みの決め（B → A＝B を A が差し込む）。
+    pub(crate) claims: HashMap<u32, u32>,
     /// 段の中で差し込み済みの B。
-    pub(crate) done: Vec<u32>,
+    pub(crate) done: HashSet<u32>,
     /// 差し込みの数えで手順をたどり済みの着せ替え。
-    pub(crate) expanded: Vec<u32>,
+    pub(crate) expanded: HashSet<u32>,
     /// 段の中の着せ替えの手順をたどる小さなスタック（(着せ替え, 手順の読み位置)）。差し込みの数えと
     /// 寄与の積みが順に使う（どちらも終わると空に戻る）。
     pub(crate) chain: Vec<(u32, usize)>,
@@ -122,9 +124,10 @@ impl Default for PlanScratch {
             steps: Vec::new(),
             frames: Vec::new(),
             merged_ids: Vec::new(),
-            claims: Vec::new(),
-            done: Vec::new(),
-            expanded: Vec::new(),
+            anims: HashMap::new(),
+            claims: HashMap::new(),
+            done: HashSet::new(),
+            expanded: HashSet::new(),
             chain: Vec::new(),
             limit: VISIT_BUDGET,
             reported: HashSet::new(),
@@ -438,6 +441,11 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 /// 定義され `binds` に含まれる」もののみが有効（emo2 の bind パーツ surface は bind を持たない）。
 fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
     let (master, surface_id) = (level.master, level.surface_id);
+    // 番号 → 添字の表（同じ番号の animation は畳み込みで 1 つ・先勝ち＝最初の 1 つを指す）。
+    s.anims.clear();
+    for (i, a) in master.animations.iter().enumerate() {
+        s.anims.entry(a.id).or_insert(i);
+    }
     // `always` は欄が無くても経過 0 を描くので、いつも重ねる対象に入れる（順は同じ規則）。
     s.merged_ids.clear();
     s.merged_ids.extend(
@@ -451,18 +459,25 @@ fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
             .map(|a| a.id),
     );
     let pattern = level.pattern;
-    let frames = (pattern.iter().filter(|_| level.is_top_level))
-        .chain(pattern.part(surface_id).filter(|_| !level.is_top_level));
-    // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
-    // 二重列挙しない（整列後も 1 回だけ処理される）。
+    // 段の種類で読む欄だけを回す（使わない欄を全部なめない・指摘 30）。
+    let frames = (level
+        .is_top_level
+        .then(|| pattern.iter())
+        .into_iter()
+        .flatten())
+    .chain(
+        (!level.is_top_level)
+            .then(|| pattern.part(surface_id))
+            .into_iter()
+            .flatten(),
+    );
+    // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。上で入れた id と重なったものは
+    // 整列の後に 1 つへ畳む（上で入れた id は有効な着せ替えか `always` なので、下の門は通る）。
     for (id, _frame) in frames {
-        if s.merged_ids.contains(&id) {
-            continue;
-        }
         // bindopt D9-3（最後の砦・bindopt 7.1）: `bind+random` のコマは bind 集合に属するときだけ
         // 合流する。純 `bind` のコマは呼ばれて始まったものだけなので、無効でも合流する
         // （seriko-pattern-calls 5.6・M5）。bind に属さないアニメは無条件で合流する（bindopt 7.4）。
-        if is_bind_random_animation(master, id) && !level.binds.contains(id) {
+        if is_bind_random_animation(master, &s.anims, id) && !level.binds.contains(id) {
             tracing::debug!(
                 target: "areka_emo_compose",
                 surface_id,
@@ -492,6 +507,7 @@ fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
             s.merged_ids.sort_unstable();
         }
     }
+    s.merged_ids.dedup();
 
     // 描画順に各 id の寄与（コマ優先・無ければ `always` の経過 0 か着せ替えの手順）を静的層の
     // 後（＝上）へ積む。`insert` で差し込まれる着せ替えは本来の位置では積まない（6.1）。
@@ -499,7 +515,7 @@ fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
     s.done.clear();
     for k in 0..s.merged_ids.len() {
         let id = s.merged_ids[k];
-        if !s.claims.iter().any(|&(b, _)| b == id) && push_direct(&mut s.steps, level, id) {
+        if !s.claims.contains_key(&id) && push_direct(&mut s.steps, &s.anims, level, id) {
             crate::bind_steps::push_bind_contribution(s, level, id);
         }
     }
@@ -543,7 +559,14 @@ impl Level<'_> {
 /// 層 (ii) の animation `id` の寄与のうち、手順の展開の要らないもの（今のコマ・`always` の経過 0）を
 /// 積む。今のコマは静的な寄与を置き換える（4.2）。コマの無い有効な着せ替えで描く手順があるなら、
 /// 積まずに `true` を返す（呼び手が [`crate::bind_steps::push_bind_contribution`] で手順をたどる）。
-pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> bool {
+///
+/// `anims` は段の面の animation の番号 → 添字の表（[`PlanScratch`] の `anims`）。
+pub(crate) fn push_direct(
+    steps: &mut Vec<Step>,
+    anims: &HashMap<u32, usize>,
+    level: &Level<'_>,
+    id: u32,
+) -> bool {
     let surface_id = level.surface_id;
     if let Some(frame) = level.frame(id) {
         if frame.method.is_implemented() {
@@ -562,8 +585,8 @@ pub(crate) fn push_direct(steps: &mut Vec<Step>, level: &Level<'_>, id: u32) -> 
         }
         return false;
     }
-    // 同 id の animation は fold 段で単一化済み（先勝ち）ゆえ find で足りる。
-    let Some(anim) = level.master.animations.iter().find(|a| a.id == id) else {
+    // 同 id の animation は fold 段で単一化済み（先勝ち）ゆえ表の 1 つで足りる。
+    let Some(anim) = anims.get(&id).map(|&i| &level.master.animations[i]) else {
         return false;
     };
     // `always`: 欄が「載っていない」なら経過 0 の pattern を今のコマと同じやり方で描き、
@@ -700,18 +723,21 @@ pub(crate) fn is_bind_interval(interval: &Interval) -> bool {
 /// seriko-pattern-calls 5.6 で純 `bind` を外した）。
 ///
 /// [`flatten_surface`] の層(ii) 合流条件が「`bind+random` のコマは bind 集合に属することを要求する」
-/// ための判定。当 surface の `animations` から id を引き、interval が `bind+random` のものが 1 本でも
-/// あれば真。**当 surface に定義の無い id・純 `bind`・bind 種でない id（純 `random` の `interval` 等）は
+/// ための判定。当 surface の `animations` から id を番号 → 添字の表 `anims` で引き、interval が
+/// `bind+random` なら真。**当 surface に定義の無い id・純 `bind`・bind 種でない id（純 `random` の `interval` 等）は
 /// 偽**で、追加ゲートを受けず無条件に合流する（bindopt 7.4）。
 ///
 /// 判定は `emo-compose` が既に持つ [`Interval`]（転記層由来）だけで閉じており、bind 種の語彙を
 /// 求めて seriko へ依存を逆流させない（design Allowed Dependencies「parsers → areka → seriko →
-/// emo-compose・逆流禁止」）。同 id の animation は fold 段で単一化済みゆえ `any` で足りる。
-fn is_bind_random_animation(master: &SurfaceMaster, animation_id: u32) -> bool {
-    master
-        .animations
-        .iter()
-        .any(|a| a.id == animation_id && matches!(a.interval, Interval::BindRandom { .. }))
+/// emo-compose・逆流禁止」）。同 id の animation は fold 段で単一化済みゆえ表の 1 つで足りる。
+fn is_bind_random_animation(
+    master: &SurfaceMaster,
+    anims: &HashMap<u32, usize>,
+    animation_id: u32,
+) -> bool {
+    anims
+        .get(&animation_id)
+        .is_some_and(|&i| matches!(master.animations[i].interval, Interval::BindRandom { .. }))
 }
 
 /// 指定 surface id の [`SurfaceMaster`] と [`AtlasBinding`] を同時に読む（本 module 内補助）。

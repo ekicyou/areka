@@ -256,6 +256,10 @@ mod log_firing_tests;
 #[cfg(test)]
 mod walk_limits_tests;
 
+// 線形の探索で 2 乗に伸びていた所を、大きな検体で通す（指摘 25〜30）。
+#[cfg(test)]
+mod linear_lookup_tests;
+
 #[cfg(test)]
 mod contract_tests {
     use super::{BindSet, ComposedSurface};

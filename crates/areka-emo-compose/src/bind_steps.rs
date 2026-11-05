@@ -9,9 +9,9 @@
 //! 合成はコマの無い有効な着せ替えの寄与としてこの手順を積み、`insert,B` の位置に B の寄与を
 //! B 自身の座標で積む（[`push_bind_contribution`]・要件 5.7・6.1〜6.4・SSP の測り M6）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
-use areka_parsers::shell::{Animation, Interval};
+use areka_parsers::shell::Interval;
 use bevy_ecs::prelude::Resource;
 
 use crate::method::is_implemented_name;
@@ -40,6 +40,13 @@ impl BindSteps {
             let Some(master) = world.surface(surface) else {
                 continue;
             };
+            // 同じ面の純 `bind` の番号（`insert` の相手を 1 度で引く）。
+            let pure: HashSet<u32> = master
+                .animations
+                .iter()
+                .filter(|a| matches!(a.interval, Interval::Bind))
+                .map(|a| a.id)
+                .collect();
             for anim in &master.animations {
                 if !matches!(anim.interval, Interval::Bind) {
                     continue;
@@ -62,7 +69,7 @@ impl BindSteps {
                             PatternWord::Insert => {
                                 let target =
                                     *call_targets(PatternWord::Insert, &p.target).ok()?.first()?;
-                                is_pure_bind(&master.animations, target)
+                                pure.contains(&target)
                                     .then_some(BindStep::Insert { target })
                             }
                             _ => None,
@@ -81,7 +88,7 @@ impl BindSteps {
     }
 }
 
-/// 1 つの段で、どの着せ替え B をどの着せ替え A が差し込むかを決め、`s.claims` に (B, A) で置く（B は 1 度だけ）。
+/// 1 つの段で、どの着せ替え B をどの着せ替え A が差し込むかを決め、`s.claims` に B → A で置く（B は 1 度だけ）。
 ///
 /// 描く順（`s.merged_ids`）に有効でコマの無い着せ替えの手順をたどり、`insert,B` の B が有効で、まだ誰にも
 /// 差し込まれておらず、展開中の祖先でもなければ A のものにする（巡回は打ち切る・2 つの差し込み手は
@@ -97,8 +104,8 @@ pub(crate) fn claim_inserts(s: &mut PlanScratch, level: &Level<'_>) {
 }
 
 /// `a` から差し込みの連鎖を、作業場の小さなスタック（`s.chain`＝展開中の祖先と手順の読み位置）でたどる。
-fn claim_from(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
-    open_claim(s, level, a);
+fn claim_from(s: &mut PlanScratch, level: &Level<'_>, root: u32) {
+    open_claim(s, level, root);
     while let Some(top) = s.chain.last_mut() {
         let (a, i) = *top;
         let Some(&step) = level.world.bind_steps(level.surface_id, a).get(i) else {
@@ -109,11 +116,10 @@ fn claim_from(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
         let BindStep::Insert { target: b } = step else {
             continue;
         };
-        if level.binds.contains(b)
-            && !s.chain.iter().any(|&(c, _)| c == b)
-            && !s.claims.iter().any(|&(c, _)| c == b)
-        {
-            s.claims.push((b, a));
+        // 展開中の祖先（`s.chain`）は根 `root` のほかは差し込み済み（`s.claims` に在る）なので、
+        // 祖先の確かめは根と比べて表を引くだけで足りる（列を順に引かない・指摘 26）。
+        if level.binds.contains(b) && b != root && !s.claims.contains_key(&b) {
+            s.claims.insert(b, a);
             open_claim(s, level, b);
         }
     }
@@ -122,7 +128,7 @@ fn claim_from(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
 /// 着せ替え `a` の手順をまだたどっておらず、展開するなら、たどり済みにしてスタックへ積む。
 fn open_claim(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
     if !s.expanded.contains(&a) && expands(level, a) {
-        s.expanded.push(a);
+        s.expanded.insert(a);
         s.chain.push((a, 0));
     }
 }
@@ -149,22 +155,15 @@ pub(crate) fn push_bind_contribution(s: &mut PlanScratch, level: &Level<'_>, a: 
         match step {
             BindStep::Draw { surface, x, y } => s.steps.push(level.enter(surface, x, y)),
             BindStep::Insert { target: b } => {
-                if s.claims.contains(&(b, a)) && !s.done.contains(&b) {
-                    s.done.push(b);
-                    if push_direct(&mut s.steps, level, b) {
-                        s.chain.push((b, 0));
-                    }
+                if s.claims.get(&b) == Some(&a)
+                    && s.done.insert(b)
+                    && push_direct(&mut s.steps, &s.anims, level, b)
+                {
+                    s.chain.push((b, 0));
                 }
             }
         }
     }
-}
-
-/// 同じ面に、番号 `id` の純 `bind` の animation が在るか。
-fn is_pure_bind(animations: &[Animation], id: u32) -> bool {
-    animations
-        .iter()
-        .any(|a| a.id == id && matches!(a.interval, Interval::Bind))
 }
 
 #[cfg(test)]

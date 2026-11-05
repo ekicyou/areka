@@ -17,6 +17,8 @@
 //! 列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表（design
 //! 「合成メソッド写像表」）の全ブレンドモードを最小の列挙で忠実に表現する。
 
+use std::borrow::Cow;
+
 use tracing::warn;
 
 /// ukadoc 由来の合成（描画）メソッド全量列挙。
@@ -131,8 +133,18 @@ pub enum BlendKind {
 /// [`ComposeMethod::from_name`] と [`crate::world::EmoWorld::dangling_pattern_targets`] が
 /// **同じ規則**で語を比べるための唯一の定義である。`from_name` は未知の語で `warn!` を出すので
 /// 照会の側からは呼べない（要件 3.5）が、正規化だけはここを共有する。
-pub(crate) fn canonical_method_name(name: &str) -> String {
-    name.trim().to_ascii_lowercase().replace(['-', '_'], "")
+///
+/// 合成のたびに引かれるので、もう正規化済みの語（ふつうの `overlay` など）は写さずに借りて返す（指摘 29）。
+pub(crate) fn canonical_method_name(name: &str) -> Cow<'_, str> {
+    let name = name.trim();
+    if name
+        .bytes()
+        .any(|b| b.is_ascii_uppercase() || b == b'-' || b == b'_')
+    {
+        Cow::Owned(name.to_ascii_lowercase().replace(['-', '_'], ""))
+    } else {
+        Cow::Borrowed(name)
+    }
 }
 
 impl ComposeMethod {

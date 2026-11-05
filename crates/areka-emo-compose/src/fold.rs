@@ -11,6 +11,8 @@
 use areka_parsers::shell::{
     AppendTarget, DefRef, Element, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
+use std::collections::{HashMap, HashSet};
+
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
@@ -34,10 +36,11 @@ use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 /// 記録の行を出すかどうかは `records` で切り替える
 /// （枝の選び方と面の表への書き込みは変えない・spec: emo-bake-log-overlap 要件 2.3）。
 pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records) {
+    let mut added = HashMap::new();
     for def in &shell.definitions {
         match *def {
             DefRef::Surface(index) => match shell.surfaces.get(index) {
-                Some(surface) => fold_plain_surface(world, surface, records),
+                Some(surface) => fold_plain_surface(world, surface, records, &mut added),
                 None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
@@ -49,7 +52,7 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
                 None => {}
             },
             DefRef::Append(index) => match shell.appends.get(index) {
-                Some(append) => fold_append(world, append, records),
+                Some(append) => fold_append(world, append, records, &mut added),
                 None if records.emits() => {
                     // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
                     tracing::warn!(
@@ -83,6 +86,32 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
             _ => {}
         }
     }
+    // 行を足した面の element を layer 昇順へ 1 度だけ安定ソートする（同じ番号の中は前の行が先・
+    // 足すたびに並べ直さない・指摘 27）。
+    for id in added.into_keys() {
+        let entity = world.resource::<SurfaceIndex>().0.get(&id).copied();
+        if let Some(mut master) = entity.and_then(|e| world.get_mut::<SurfaceMaster>(e)) {
+            master.elements.sort_by_key(|e| e.layer);
+        }
+    }
+}
+
+/// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く・指摘 27）。
+#[derive(Default)]
+struct Numbers {
+    elements: HashSet<u32>,
+    collisions: HashSet<u32>,
+    animations: HashSet<u32>,
+}
+
+impl Numbers {
+    fn of(master: &SurfaceMaster) -> Numbers {
+        Numbers {
+            elements: master.elements.iter().map(|e| e.layer).collect(),
+            collisions: master.collisions.iter().map(|c| c.index).collect(),
+            animations: master.animations.iter().map(|a| a.id).collect(),
+        }
+    }
 }
 
 /// plain `surface` 定義 1 件を展開し、各 id を surface として常駐させる（要件 1.1/2.1）。
@@ -91,7 +120,12 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
 /// から正規化 [`SurfaceMaster`] を id ごとに生成する。無い id は新設し、既にある id（前の波括弧・
 /// 追記で定義された番号）は前の定義へ後のブレスの行を足す（[`add_lines`]・
 /// spec: areka-P0-emily-ghost-verification 開発者の決め 2026-10-17「足し合わせる」）。
-fn fold_plain_surface(world: &mut World, surface: &Surface, records: Records) {
+fn fold_plain_surface(
+    world: &mut World,
+    surface: &Surface,
+    records: Records,
+    added: &mut HashMap<u32, Numbers>,
+) {
     for id in expand_targets_with(&surface.targets, records) {
         let later = normalize_surface(id, surface);
         let existing = world.resource::<SurfaceIndex>().0.get(&id).copied();
@@ -106,9 +140,11 @@ fn fold_plain_surface(world: &mut World, surface: &Surface, records: Records) {
                         "surface id 重複: 前の定義へ後のブレスの行を足す"
                     );
                 }
-                add_lines(&mut master, later, Source::Brace, records);
+                let numbers = added.entry(id).or_insert_with(|| Numbers::of(&master));
+                add_lines(&mut master, later, Source::Brace, records, numbers);
             }
             None => {
+                added.remove(&id);
                 upsert_surface(world, id, later, records);
             }
         }
@@ -126,17 +162,26 @@ enum Source {
 
 /// 追記と 2 つ目の波括弧の 1 つの足し方（SSP 2.9.29 の測り・spec: audit-emo-compose 設計の議題 7 案 A）。
 ///
-/// - element: 同じ element番号でも前の行を残して両方を足し、layer 昇順へ安定ソート（同じ番号の
-///   中は前の行が先）。同じ番号が重なったときだけ `warn!`（SSP も「二重定義」の Warning を出す）。
+/// - element: 同じ element番号でも前の行を残して両方を足す。layer 昇順への安定ソート（同じ番号の
+///   中は前の行が先）は畳み込みの最後に 1 度（[`fold_shell_with`]）。同じ番号が重なったときだけ
+///   `warn!`（SSP も「二重定義」の Warning を出す）。
 /// - animation: すでにある animation番号の後の行は interval も pattern も捨てる（先勝ち・`warn!`）。
 ///   無い番号は末尾へ足す。
 /// - collision: SSP で測れなかった（画素に出ず MCP で読めない）ので今のまま。波括弧は同じ
 ///   collision番号の前の行を除いて末尾へ（後に書かれた行＝画家のアルゴリズムで手前）、追記は
 ///   重ねて末尾へ足す。
-fn add_lines(master: &mut SurfaceMaster, later: SurfaceMaster, source: Source, records: Records) {
+///
+/// 重なりと先勝ちは `numbers`（その面のすでにある番号）で引き、足した番号を書き足す。
+fn add_lines(
+    master: &mut SurfaceMaster,
+    later: SurfaceMaster,
+    source: Source,
+    records: Records,
+    numbers: &mut Numbers,
+) {
     let surface_id = master.id;
     for add in &later.elements {
-        if records.emits() && master.elements.iter().any(|e| e.layer == add.layer) {
+        if records.emits() && numbers.elements.contains(&add.layer) {
             tracing::warn!(
                 target: "areka_emo_compose",
                 surface_id,
@@ -145,18 +190,28 @@ fn add_lines(master: &mut SurfaceMaster, later: SurfaceMaster, source: Source, r
             );
         }
     }
+    numbers
+        .elements
+        .extend(later.elements.iter().map(|e| e.layer));
     master.elements.extend(later.elements);
-    master.elements.sort_by_key(|e| e.layer);
 
-    if source == Source::Brace {
-        master
+    // 波括弧が前の行と同じ collision番号を持つときだけ、前の行を除く（無ければ列をなめない）。
+    if source == Source::Brace
+        && later
             .collisions
-            .retain(|c| !later.collisions.iter().any(|l| l.index == c.index));
+            .iter()
+            .any(|l| numbers.collisions.contains(&l.index))
+    {
+        let replaced: HashSet<u32> = later.collisions.iter().map(|l| l.index).collect();
+        master.collisions.retain(|c| !replaced.contains(&c.index));
     }
+    numbers
+        .collisions
+        .extend(later.collisions.iter().map(|c| c.index));
     master.collisions.extend(later.collisions);
 
     for add in later.animations {
-        if master.animations.iter().any(|a| a.id == add.id) {
+        if !numbers.animations.insert(add.id) {
             if records.emits() {
                 tracing::warn!(
                     target: "areka_emo_compose",
@@ -179,7 +234,12 @@ fn add_lines(master: &mut SurfaceMaster, later: SurfaceMaster, source: Source, r
 /// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う（要件 3.7・C6）。
 /// どちらにも無い id は新設せず `warn` でスキップする（要件 1.4/2.2/3.8）。
 /// 登場順の走査（[`fold_shell_with`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
-fn fold_append(world: &mut World, append: &SurfaceAppend, records: Records) {
+fn fold_append(
+    world: &mut World,
+    append: &SurfaceAppend,
+    records: Records,
+    added: &mut HashMap<u32, Numbers>,
+) {
     // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
     let append_elements: Vec<NormalizedElement> =
         append.elements.iter().map(normalize_element).collect();
@@ -234,7 +294,8 @@ fn fold_append(world: &mut World, append: &SurfaceAppend, records: Records) {
             collisions: append.collisions.clone(),
             animations: append.animations.clone(),
         };
-        add_lines(&mut master, later, Source::Append, records);
+        let numbers = added.entry(id).or_insert_with(|| Numbers::of(&master));
+        add_lines(&mut master, later, Source::Append, records, numbers);
     }
 }
 

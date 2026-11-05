@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use areka_emo_atlas::AtlasTable;
-use areka_parsers::shell::Interval;
+use areka_parsers::shell::{Animation, Interval};
 
 use super::{Extent, is_bind_interval, surface_and_binding};
 use crate::budget::Budget;
@@ -256,19 +256,16 @@ pub(crate) fn compute_extent_limited(
             // **全部**の pattern を同じやり方で辿る（animated-image-playback design b-2・seriko-pattern-calls
             // M6・外形はコマに依らない静的な量のまま）。
             // 描画順は外形に無関係（max の和集合ゆえ順序不変）だが、決定性のため id 昇順で走査する。
-            let mut bind_ids: Vec<u32> = master
+            // 番号ごとに書いた順で最初の 1 つ（安定ソートの後の dedup・番号で探し直さない・指摘 28）。
+            let mut anims: Vec<&Animation> = master
                 .animations
                 .iter()
                 .filter(|a| is_bind_interval(&a.interval) || is_always_interval(&a.interval))
-                .map(|a| a.id)
                 .collect();
-            bind_ids.sort_unstable();
-            bind_ids.dedup();
+            anims.sort_by_key(|a| a.id);
+            anims.dedup_by_key(|a| a.id);
 
-            for id in bind_ids {
-                let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
-                    continue;
-                };
+            for anim in anims {
                 // `always` と純 `bind` は全部の pattern（着せ替えの手順と同じ・seriko-pattern-calls 6.8・M6）。
                 // `bind+random` は今のまま番号の最も小さい 1 つ（pattern0 の無い再生のコマも大きさに数える）。
                 let all =
