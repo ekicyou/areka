@@ -192,3 +192,133 @@ fn read_ghost_names_missing_folder_is_start_point_missing() {
         }
     );
 }
+
+/// `seriko.defaultsurfacedirectoryname` を `value` にした ghost/master と、`shell/master`
+/// を持つ一時ツリーを作る。
+fn ghost_with_default_dir_name(tag: &str, value: &str) -> TempPath {
+    let root = TempPath::new(&format!("parsers-resolve-shell-dirname-{tag}"));
+    let master = root.path().join("ghost").join("master");
+    fs::create_dir_all(&master).expect("create ghost/master");
+    fs::write(
+        master.join("descript.txt"),
+        format!("charset,UTF-8\nname,テスト\nseriko.defaultsurfacedirectoryname,{value}\n")
+            .as_bytes(),
+    )
+    .expect("write ghost descript.txt");
+    write_shell(root.path(), "master", "charset,UTF-8\n");
+    root
+}
+
+/// 名前なしの解決を記録つきで回し、選んだシェルの dir と `warn!` の件を返す。
+fn resolve_default_capturing(
+    root: &Path,
+) -> (std::path::PathBuf, Vec<log_capture_kit::CapturedEvent>) {
+    let (model, events) =
+        log_capture_kit::capture(|| resolve_with_shell(root, DefaultEncoding::Utf8, None));
+    let warns = events
+        .into_iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    (model.expect("resolve ok").shell.dir, warns)
+}
+
+/// 既定のシェル名が親へ逃げる値なら、逃げた先が在っても使わず `warn!` を残して `master`。
+#[test]
+fn default_dir_name_parent_escape_falls_back_to_master() {
+    let temp = ghost_with_default_dir_name("parent", "../x");
+    let root = temp.path();
+    fs::create_dir_all(root.join("x")).expect("create escape target");
+
+    let (dir, warns) = resolve_default_capturing(root);
+
+    assert_eq!(dir, root.join("shell").join("master"));
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert_eq!(warns[0].field("value"), Some("../x"), "{warns:?}");
+    assert_eq!(
+        warns[0].field("ghost_root"),
+        Some(root.display().to_string().as_str()),
+        "{warns:?}"
+    );
+}
+
+/// 既定のシェル名が絶対パスなら、その先が在っても使わず `warn!` を残して `master`。
+#[test]
+fn default_dir_name_absolute_falls_back_to_master() {
+    let probe = TempPath::new("parsers-resolve-shell-dirname-absolute-target");
+    fs::create_dir_all(probe.path()).expect("create absolute target");
+    let absolute = probe.path().display().to_string();
+    let temp = ghost_with_default_dir_name("absolute", &absolute);
+    let root = temp.path();
+
+    let (dir, warns) = resolve_default_capturing(root);
+
+    assert_eq!(dir, root.join("shell").join("master"));
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert_eq!(
+        warns[0].field("value"),
+        Some(absolute.as_str()),
+        "{warns:?}"
+    );
+}
+
+/// 空の値は「無し」と同じに黙って `master`、`.` は確かめに通らず `warn!` を残して `master`。
+#[test]
+fn default_dir_name_empty_or_dot_falls_back_to_master() {
+    let empty = ghost_with_default_dir_name("empty", "");
+    let (dir, warns) = resolve_default_capturing(empty.path());
+    assert_eq!(dir, empty.path().join("shell").join("master"));
+    assert!(warns.is_empty(), "{warns:?}");
+
+    let dot = ghost_with_default_dir_name("dot", ".");
+    let (dir, warns) = resolve_default_capturing(dot.path());
+    assert_eq!(dir, dot.path().join("shell").join("master"));
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert_eq!(warns[0].field("value"), Some("."), "{warns:?}");
+}
+
+/// ゴーストの descript の鍵は大文字と小文字を区別しない（名前・SHIORI・既定のシェル名）。
+#[test]
+fn ghost_descript_keys_ignore_case() {
+    let temp = ghost_only(
+        "case",
+        "charset,UTF-8
+Name,テスト
+Sakura.Name,さくら
+KERO.NAME,うにゅう
+Shiori,x.dll
+SERIKO.DefaultSurfaceDirectoryName,B
+",
+    );
+    write_shell(temp.path(), "B", "charset,UTF-8\n");
+
+    let model = resolve_with_shell(temp.path(), DefaultEncoding::Utf8, None).expect("resolve ok");
+
+    assert_eq!(model.names.name.as_deref(), Some("テスト"));
+    assert_eq!(model.names.sakura_name.as_deref(), Some("さくら"));
+    assert_eq!(model.names.kero_name.as_deref(), Some("うにゅう"));
+    assert_eq!(model.shiori.file.as_deref(), Some("x.dll"));
+    assert_eq!(model.shell.dir, temp.path().join("shell").join("B"));
+}
+
+/// ゴーストの descript の空の値は「無し」と同じ（`Some("")` を返さない）。
+#[test]
+fn ghost_descript_empty_values_are_absent() {
+    let temp = ghost_only(
+        "empty-values",
+        "charset,UTF-8
+name,
+sakura.name,
+shiori,
+shiori.encoding,
+readme,
+",
+    );
+    write_shell(temp.path(), "master", "charset,UTF-8\n");
+
+    let model = resolve_with_shell(temp.path(), DefaultEncoding::Utf8, None).expect("resolve ok");
+
+    assert_eq!(model.names, GhostNames::default());
+    assert_eq!(model.shiori.file, None);
+    assert_eq!(model.shiori.encoding, None);
+    assert_eq!(model.readme, None);
+}

@@ -28,7 +28,7 @@
   - _Requirements: 2.1, 2.7, 3.1, 7.1, 7.3, 7.6_
 
 - [ ] 2. package（シェルと bindgroup の読み）を直す
-- [ ] 2.1 シェル名の確かめと、ゴーストの descript の鍵の扱いを直す（T4）
+- [x] 2.1 シェル名の確かめと、ゴーストの descript の鍵の扱いを直す（T4）
   - 既定のシェル名を「成分がちょうど 1 つの普通の名」のときだけ使い、通らない空でない値は値とゴーストの根を `warn!` して `master` へ（1）。空の値と `.` も `master`（2）
   - ゴーストの descript を 1.1 の小文字の表で読む（11）
   - 1 の `warn!` は 1.2 で足した `log_capture_kit::capture` で確かめる。一時の根は `temp-path-kit`（ワークツリーの `target` の下）
@@ -198,3 +198,6 @@
 - 1.1: `kv::parse_kv_lowercased` は行の順で畳む（綴りの違う同じ鍵は後の行が勝つ）。`catalog.rs` の今の `lowercased`（鍵の表の順）とは混ざった綴りのときだけ違う。乗り換えは `audit-ghost-catalog` の持ち分。
 - 1.2: charset の新しい `warn!`（壊れた並び）で、宣言の無い UTF-8 の検体が赤になる（`areka-nar` の `lib_vocabulary_tests.rs` は `charset,UTF-8` を足して直した）。WARN を数えるテストの検体は宣言を中身に合わせる。
 - 1.2: `areka --test smoke_boot_loop_exit` は i686 の部品が未ビルドだと赤（環境）。`areka-ghost` の `inproc_e2e_test::i2_*` は高負荷で 1 回揺れた。
+- 7.5 への申し送り（2026-11-05 audit-ghost-catalog の知らせ）: 相手は `areka-nar` の `manifest_tests.rs` から `charset_declared` の assert を外し、`treats_an_empty_charset_line_as_no_declaration` を消す（枝 `claude/kiro-start-audit-ghost-catalog-c0351e`）。`a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used` の名の「recorded」は 7.5 で期待を直すときに一緒に直す。同じテストの doc は相手が「本文は ANSI 既定で読まれ、書かれた宣言は使われない」へ書き換えるので（訂正の知らせ）、7.5 ではその doc も「宣言が使われる」へ合わせる。
+- 7.1 への申し送り（2026-11-05 audit-emo-compose の知らせ）: compose のテストの部品は `plan_test_support`（クレート直下の `#[cfg(test)]`）へ移る。指摘 9 の直しで `Animation::interval_written` の読み手が compose から無くなる。`boxes.rs` の箱の追記と波括弧も相手が直す予定で、触った行は相手が知らせる。後から着地した側が rebase で合わせる。
+- 7.2 への申し送り（2026-11-05 audit-seriko の知らせ）: 相手は `areka-seriko` の `bind.rs` から `BindResolver::new`（テスト用）と `BindOptionDecls` を消し、`lib.rs` の再輸出・doc からも外す。`areka` の `emo2_boot/shell_carry_tests.rs` の `BindResolver::new` の呼び出しも descript の文字列から組む形に替える。指摘 15 が触る `from_groups` の 3 枝と `ScopeNames::read` には相手は触らない。行がぶつかったら後から着地した側が合わせる。

@@ -12,11 +12,12 @@
 //! `shell/<名>/` を選ぶ。既存の `resolve` は名前なしでここへ委ねる。
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use crate::charset::{DefaultEncoding, decode};
-use crate::kv::parse_kv;
+use crate::kv::parse_kv_lowercased;
 
 use super::model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
 use super::resolve_bind::read_bindgroup_defaults;
@@ -64,8 +65,37 @@ fn read_ghost_descript(
         }
     };
 
-    // charset 判定 + デコード + KV 分割は foundation へ委譲（Req 1.5）。
-    Ok(parse_kv(&decode(&bytes, default_encoding)))
+    // charset 判定 + デコード + KV 分割は foundation へ委譲（Req 1.5）。鍵は大文字と小文字を
+    // 区別せず、空の値は「無し」と同じに扱う（指摘 11）。
+    Ok(parse_kv_lowercased(&decode(&bytes, default_encoding)))
+}
+
+/// 成分がちょうど 1 つの普通のフォルダ名のときだけ返す（`..`・絶対パス・`.`・`a/b` は断る）。
+fn folder_name(value: &str) -> Option<&OsStr> {
+    let mut components = Path::new(value).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(name)), None) => Some(name),
+        _ => None,
+    }
+}
+
+/// `seriko.defaultsurfacedirectoryname` の値を確かめて既定のシェル名にする。
+///
+/// 無いか空なら黙って `master`。空でなく 1 つのフォルダ名でない値は、`shell/` の外を
+/// 指しうるので使わず、値とゴーストの根を `warn!` に残して `master`（指摘 1・2）。
+fn default_shell_name<'a>(map: &'a BTreeMap<String, String>, ghost_root: &Path) -> &'a OsStr {
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
+    let Some(value) = map.get("seriko.defaultsurfacedirectoryname") else {
+        return OsStr::new(DEFAULT_SHELL_DIR);
+    };
+    folder_name(value).unwrap_or_else(|| {
+        tracing::warn!(
+            value = %value,
+            ghost_root = %ghost_root.display(),
+            "既定のシェル名が 1 つのフォルダ名でない: master を使う"
+        );
+        OsStr::new(DEFAULT_SHELL_DIR)
+    })
 }
 
 /// KV から名前情報を取る（欠落は None・推測しない・Req 1.4）。
@@ -117,13 +147,10 @@ pub fn resolve_with_shell(
     };
 
     // shell マウント: 呼び手の名 → 指定名 → 既定 master（Req 3.1/3.2）→ 物理存在確認（Req 3.3）。
-    let shell_name = shell.unwrap_or_else(|| {
-        map
-            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
-            .get("seriko.defaultsurfacedirectoryname")
-            .map(String::as_str)
-            .unwrap_or(DEFAULT_SHELL_DIR)
-    });
+    let shell_name = match shell {
+        Some(name) => OsStr::new(name),
+        None => default_shell_name(&map, ghost_root),
+    };
     let shell_dir = ghost_root.join(SHELL_ROOT).join(shell_name);
     if !shell_dir.is_dir() {
         return Err(MountError::ShellDirMissing {
