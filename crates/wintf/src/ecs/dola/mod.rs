@@ -6,12 +6,10 @@
 //! # 安全性
 //!
 //! `DolaRuntime` 内部に `Rc` を含むため `Send + Sync` を手動実装する。
-//! 健全性は `Query<&mut DolaAnimator>` の排他（`&mut`）アクセスにより、ある
-//! `DolaAnimator` を同時に触れるのが常に高々1スレッドであることに依拠する。
-//! なお wintf は単一 UI スレッドだが ECS スケジュールは既定でマルチスレッド実行であり
-//! （`multi_threaded` feature 有効・`UISetup` のみ `SingleThreaded` 固定）、本型は現状
-//! どのプロダクションスケジュールにも未配線（到達不能）である。実スケジュール構成の
-//! 裏取り結果と `Sync` 側の潜在ハザードの詳細は `unsafe impl` 直前の SAFETY 注記を参照。
+//! 中身に触る口（`tick`・`last_result`・`runtime`）はすべて `&mut self` で、`&self`
+//! からは中身に触れない。よって `Sync`（`&DolaAnimator` の共有）は中身の共有にならず、
+//! `&mut` は bevy の排他で常に高々 1 スレッドになる。限界: 返す値の中の `Rc` を複製して
+//! 外へ持ち出してはならない（詳細は `unsafe impl` 直前の SAFETY 注記）。
 //!
 //! # balloon06 との関係
 //!
@@ -32,13 +30,44 @@ use super::graphics::FrameTime;
 ///
 /// # 消費者パターン
 ///
-/// ```rust,ignore
-/// fn my_consumer(query: Query<&DolaAnimator>) {
-///     for animator in query.iter() {
+/// 結果は可変の問い合わせ（`Query<&mut DolaAnimator>`）で読む。
+///
+/// ```rust,no_run
+/// use bevy_ecs::system::Query;
+/// use wintf::ecs::dola::DolaAnimator;
+///
+/// fn my_consumer(mut query: Query<&mut DolaAnimator>) {
+///     for mut animator in query.iter_mut() {
 ///         let result = animator.last_result();
 ///         for change in &result.changes {
 ///             // 変化した変数に応じて ECS Component を更新
+///             let _ = change;
 ///         }
+///     }
+/// }
+/// ```
+///
+/// 共有の借り（`Query<&DolaAnimator>`）からは結果も実行時も読めない（組み立たない）。
+/// 並列に走る読み取りの係どうしが中の `Rc` を同時に触るのを型で防ぐため。
+///
+/// ```rust,compile_fail,E0596
+/// use bevy_ecs::system::Query;
+/// use wintf::ecs::dola::DolaAnimator;
+///
+/// fn shared_reader(query: Query<&DolaAnimator>) {
+///     for animator in query.iter() {
+///         let _ = animator.last_result();
+///     }
+/// }
+/// ```
+///
+/// ```rust,compile_fail,E0596
+/// use bevy_ecs::system::Query;
+/// use wintf::ecs::dola::DolaAnimator;
+///
+/// fn shared_runtime_reader(query: Query<&DolaAnimator>) {
+///     for animator in query.iter() {
+///         let _ = animator.runtime();
 ///     }
 /// }
 /// ```
@@ -50,39 +79,29 @@ pub struct DolaAnimator {
 // SAFETY 条件: DolaRuntime は内部に Rc を含む（timeline_manager の ObjectInternPool
 // = HashMap<DynamicValue, Rc<DynamicValue>>（dola runtime/interpolator/mod.rs:19-20）
 // および UpdateResult.changes 経由の EvaluatedValue::Object(Rc<DynamicValue>)
-// （dola runtime/types.rs:24・144-146）。Rc が !Send + !Sync であることにより
-// DolaRuntime も自動では Send/Sync を導出できない。一方 bevy_ecs の Component は
-// Send + Sync を要求するため、この手動 unsafe impl は冗長ではなく必須（load-bearing）である。
+// （dola runtime/types.rs:24・144-146）。Rc が !Send + !Sync なので DolaRuntime は
+// 自動では Send/Sync にならない。bevy_ecs の Component は Send + Sync を要求するため、
+// この手動 unsafe impl は必須である。
 //
-// 健全性の根拠（W8-V が実コードで裏取りした実スケジュール構成）:
-//   1. tick_dola_animators / DolaAnimator は現状プロダクションのいずれのスケジュールにも
-//      登録・spawn されていない（ワークスペース全域 grep: 出現は本ファイルと ecs/mod.rs の
-//      再エクスポート・tests/ecs/dola_animator_test.rs のみ。ecs/world/mod.rs の
-//      schedules.add_systems 群に tick_dola_animators は不在）。よって本 unsafe impl は
-//      現状到達不能（reachable な跨スレッド共有経路が存在しない）。
-//   2. ただし wintf は単一 UI スレッドではあるが、ECS スケジュールは単一スレッド実行ではない:
-//      ワークスペースは bevy_ecs の "multi_threaded" feature を有効化しており
-//      （ルート Cargo.toml [workspace.dependencies.bevy_ecs] features）、Schedule の
-//      既定 ExecutorKind は MultiThreaded（bevy_ecs schedule/executor/mod.rs:65-66）。
-//      ecs/world/mod.rs では UISetup のみ set_executor(SingleThreadedExecutor) で固定し、
-//      Input/Update 等の他スケジュールは既定 = マルチスレッドエグゼキュータで走る。
-//      Send である本型を読むシステム（Query<&mut DolaAnimator>）は is_send==true と
-//      判定され（function_system.rs:84 / multi_threaded.rs:545）メインスレッドに固定されず
-//      ワーカースレッド上で実行され得る。
-//   3. それでも健全である理由: Query<&mut DolaAnimator> は排他（&mut）アクセスであり、
-//      bevy のアクセス競合スケジューリングにより、ある DolaAnimator を同時に触れるのは
-//      常に高々1スレッド（内部 Rc の参照カウント操作・clone もその単一システム内で完結）。
-//      tick_dola_animators の iter_mut() は逐次（par_iter_mut ではない）であり、複数
-//      DolaAnimator 間にもデータ共有はない。
+// 健全性の根拠:
+//   1. Sync: `&self` から中身（runtime）に触る口が無い（tick・last_result・runtime は
+//      `&mut self`、Debug は定数だけを書く）。よって複数スレッドが `&DolaAnimator` を
+//      同時に持っても、中の Rc の参照の数には誰も触れない。`Query<&DolaAnimator>` で
+//      結果を読む係は組み立たない（型の説明の compile_fail の例で固定）。
+//   2. Send: 中身に触るには `&mut DolaAnimator`（`Query<&mut DolaAnimator>` か
+//      `World::get_mut`）が要り、bevy のアクセス競合の排他で、ある DolaAnimator を
+//      同時に触れるのは常に高々 1 スレッド。ECS のスケジュールは既定でマルチスレッド
+//      （ワークスペースは bevy_ecs の "multi_threaded" を有効化）なので、係が回る
+//      スレッドは回ごとに変わり得るが、Rc の参照の数の操作は 1 つの係の中で完結する。
+//      複数の DolaAnimator の間で Rc は共有しない（runtime ごとに別のプール）。
 //
-// 留意（Sync 側の潜在ハザード・W8-V 警告）: Sync は「複数の読み取り専用システムが
-// 跨スレドで &DolaAnimator を同時共有する」ことを許す。last_result() が返す
-// UpdateResult は EvaluatedValue::Object(Rc<DynamicValue>) を含み得るため、もし将来
-// 消費者システム（Query<&DolaAnimator>）が並列に走り内部 Rc を clone すると、非アトミックな
-// 参照カウントにデータ競合が生じ得る。現状は消費者システム・spawn が皆無で到達不能だが、
-// 本型をプロダクションのマルチスレッドスケジュールへ配線する際は (a) tick も消費も
-// SingleThreaded スケジュールへ載せる／(b) DolaRuntime の Rc を Arc 化する 等の対策が要る
-// （挙動変更を伴うため本ループ非適用＝proposals P68 記録）。
+// 限界: last_result() が返す UpdateResult は EvaluatedValue::Object(Rc<DynamicValue>)
+// を含み得る。この Rc を複製して借りの外へ持ち出してはならない（NonSend の置き場などへ
+// 移すと、別のスレッドで回る次の tick と非アトミックな参照の数を同時に触り得る）。
+// 型ではこれを防げないので、消費者は値を読んで写すだけにする。
+// 同じく with_runtime に渡す DolaRuntime は、包む前に中の Rc を外と共有していては
+// ならない（例: 渡す前に rt.last_result().clone() を手元に残す）。包んだ後に外の複製と
+// 中の Rc が別のスレッドから同時に参照の数を触り得るため。
 unsafe impl Send for DolaAnimator {}
 unsafe impl Sync for DolaAnimator {}
 
@@ -95,6 +114,9 @@ impl DolaAnimator {
     }
 
     /// 既存の DolaRuntime で DolaAnimator を生成する。
+    ///
+    /// 渡す `rt` の中の `Rc` を外と共有していてはならない（包む前に
+    /// `rt.last_result().clone()` などを手元に残さない・SAFETY 注記の限界）。
     pub fn with_runtime(runtime: DolaRuntime) -> Self {
         Self { runtime }
     }
@@ -107,17 +129,20 @@ impl DolaAnimator {
         self.runtime.tick(current_time);
     }
 
-    /// 直前の `tick()` 結果を読み取り専用で返す。
+    /// 直前の `tick()` 結果を返す。
     ///
-    /// 次の `tick()` まで何度でも参照可能（冪等）。
-    pub fn last_result(&self) -> &UpdateResult {
+    /// 次の `tick()` まで何度でも参照可能（冪等）。`&mut self` なのは中の `Rc` を
+    /// 1 スレッドの排他の下でだけ触らせるため（SAFETY 注記）。返す値の中の `Rc` を
+    /// 複製して外へ持ち出さないこと。
+    pub fn last_result(&mut self) -> &UpdateResult {
         self.runtime.last_result()
     }
 
-    /// 内部 DolaRuntime への読み取り参照。
+    /// 内部 DolaRuntime への参照。
     ///
-    /// ドキュメントロード状態やサブスクリプション確認に使用する。
-    pub fn runtime(&self) -> &DolaRuntime {
+    /// ドキュメントロード状態やサブスクリプション確認に使用する。`&mut self` なのは
+    /// `last_result` と同じ理由（SAFETY 注記）。
+    pub fn runtime(&mut self) -> &DolaRuntime {
         &self.runtime
     }
 }
@@ -244,7 +269,7 @@ mod tests {
     fn new_animator_has_empty_last_result() {
         // tick 未実行の新規 animator は changes/triggered ともに空
         // （DolaRuntime::new の last_update_result 初期値が委譲される）。
-        let animator = DolaAnimator::new();
+        let mut animator = DolaAnimator::new();
         let result = animator.last_result();
         assert!(
             result.changes.is_empty(),
@@ -259,7 +284,7 @@ mod tests {
     #[test]
     fn default_animator_matches_new_empty_result() {
         // Default::default は new() に委譲されるため last_result も同様に空。
-        let animator = DolaAnimator::default();
+        let mut animator = DolaAnimator::default();
         let result = animator.last_result();
         assert!(
             result.changes.is_empty() && result.triggered.is_empty(),
@@ -373,11 +398,11 @@ mod tests {
     fn runtime_accessor_returns_inner_runtime_reference() {
         // runtime() は内部 DolaRuntime への読み取り参照を返す。
         // 同一インスタンスを指す（last_result の同一性で確認）。
-        let animator = started_animator();
-        let inner = animator.runtime();
+        let mut animator = started_animator();
+        let inner: *const UpdateResult = animator.runtime().last_result();
         // runtime().last_result と animator.last_result は同じ初期状態（空）を指す。
         assert!(
-            std::ptr::eq(inner.last_result(), animator.last_result()),
+            std::ptr::eq(inner, animator.last_result()),
             "runtime() must expose the same inner runtime backing last_result()"
         );
     }
@@ -440,7 +465,7 @@ mod tests {
         schedule.run(&mut world);
 
         for (label, e) in [("e1", e1), ("e2", e2)] {
-            let animator = world.get::<DolaAnimator>(e).unwrap();
+            let mut animator = world.get_mut::<DolaAnimator>(e).unwrap();
             assert!(
                 !animator.last_result().changes.is_empty(),
                 "{label} must be ticked by the system at FrameTime(0.5)"
@@ -462,7 +487,8 @@ mod tests {
         let mut schedule = tick_schedule();
         schedule.run(&mut world);
 
-        let changes = &world.get::<DolaAnimator>(e).unwrap().last_result().changes;
+        let mut animator = world.get_mut::<DolaAnimator>(e).unwrap();
+        let changes = &animator.last_result().changes;
         assert_eq!(changes.len(), 1, "one opacity change expected at t=0.5");
         let (var_id, value) = &changes[0];
         assert_eq!(*var_id, 0, "subscribed opacity has variable_id 0");

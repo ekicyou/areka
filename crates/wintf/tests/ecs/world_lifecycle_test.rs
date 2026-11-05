@@ -2,18 +2,13 @@
 //!
 //! W7b-T2（ECS基盤・World × テスト網羅性）で追加。`EcsWorld::new()` の
 //! デバイス非依存な観測可能挙動（フレームカウンタ初期値・進行、スケジュール
-//! ラベル登録、message_window 設定、Default 等価性）を固定する。
+//! ラベル登録、Default 等価性）を固定する。
 //!
-//! 注: vsync 駆動経路（`try_tick_on_vsync` の VSYNC_TICK_COUNT/LAST_VSYNC_TICK
-//! 比較）は `ecs::world::vsync` の `pub(crate)` プロセスグローバル atomic に依存し、
-//! 実 vsync スレッドが駆動するため統合テストからは決定的に検証不能
-//! （W7b-T2 断片の所見参照）。本ファイルは device 非依存の `try_tick_world`
+//! 注: 本ファイルは device 非依存の `try_tick_world`
 //! 経路のみを対象とする（既存 taffy_flex_layout_pure_test 同様、Window/
 //! WindowHandle を持たない World では graphics 系システムが no-op となる）。
 
 use bevy_ecs::schedule::Schedules;
-use windows::Win32::Foundation::HWND;
-use wintf::ecs::App;
 use wintf::ecs::world::EcsWorld;
 use wintf::ecs::world::{
     CommitComposition, Composition, Draw, FrameCount, FrameFinalize, GraphicsSetup, Input, Layout,
@@ -40,7 +35,7 @@ fn try_tick_world_increments_frame_count_each_call() {
     assert_eq!(ecs_world.world().get_resource::<FrameCount>().unwrap().0, 0);
 
     let ran = ecs_world.try_tick_world();
-    assert!(ran, "has_systems=true のため tick は実行される");
+    assert!(ran, "try_tick_world はいつも回す");
     assert_eq!(
         ecs_world.world().get_resource::<FrameCount>().unwrap().0,
         1,
@@ -98,39 +93,8 @@ fn uisetup_schedule_uses_single_threaded_executor() {
     assert!(schedules.get(Update).is_some(), "Update schedule exists");
 }
 
-/// 新規 `EcsWorld` の `message_window()` は None（未設定）。
-#[test]
-fn new_ecs_world_has_no_message_window() {
-    let ecs_world = EcsWorld::new();
-    assert!(
-        ecs_world.message_window().is_none(),
-        "初期状態で message_window は None"
-    );
-}
-
-/// `set_message_window` が EcsWorld へ HWND を格納する（格納のみ・Win32 API 非呼出）。
-/// 旧経路の App リソースへの伝播は撤去済み（task 4.5）。App リソースの存在は別途確認する。
-#[test]
-fn set_message_window_stores_hwnd_in_world() {
-    let mut ecs_world = EcsWorld::new();
-    let fake_hwnd = HWND(0x1234 as *mut _);
-
-    ecs_world.set_message_window(fake_hwnd);
-
-    assert_eq!(
-        ecs_world.message_window(),
-        Some(fake_hwnd),
-        "EcsWorld 側に message_window が保持される"
-    );
-    // App リソースは EcsWorld::new で挿入される（message_window への伝播はもう行わない）。
-    assert!(
-        ecs_world.world().get_resource::<App>().is_some(),
-        "App リソースが存在する"
-    );
-}
-
 /// `EcsWorld::default()` は `new()` と同じ初期状態を生成する
-/// （FrameCount=0・全スケジュール登録・message_window None）。
+/// （FrameCount=0・全スケジュール登録）。
 #[test]
 fn default_matches_new_initial_state() {
     let from_default = EcsWorld::default();
@@ -139,7 +103,6 @@ fn default_matches_new_initial_state() {
         from_default.world().get_resource::<FrameCount>().unwrap().0,
         0
     );
-    assert!(from_default.message_window().is_none());
 
     let schedules = from_default.world().get_resource::<Schedules>().unwrap();
     assert!(schedules.contains(Input));

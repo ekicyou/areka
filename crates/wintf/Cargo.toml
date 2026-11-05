@@ -26,7 +26,8 @@ serde = { version = "1", optional = true, features = ["derive"] }
 taffy = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-windows = { workspace = true }
+# 装置の失いの知らせに使う CreateEventW は引数に SECURITY_ATTRIBUTES を持つため Win32_Security が要る。
+windows = { workspace = true, features = ["Win32_Security"] }
 windows-core = { workspace = true }
 windows-numerics = { workspace = true }
 

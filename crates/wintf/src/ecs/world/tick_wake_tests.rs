@@ -308,37 +308,21 @@ fn the_known_message_table_has_no_duplicate_messages_and_no_empty_bits() {
             WakeBits::NONE,
             "既知メッセージが「旗なし」に落ちてはいけない: msg={msg:#x}"
         );
-    }
-}
-
-#[test]
-fn every_known_message_maps_to_the_bits_listed_in_the_table() {
-    for (msg, expected) in KNOWN_MESSAGE_TABLE {
-        assert_eq!(
-            wake_bits_for_message(*msg),
-            *expected,
-            "写像表と純関数が食い違っている: msg={msg:#x}"
-        );
         assert_ne!(
-            wake_bits_for_message(*msg),
-            FORCE,
+            *expected, FORCE,
             "既知メッセージが未知扱い（FORCE）に落ちてはいけない: msg={msg:#x}"
         );
     }
 }
 
-/// 表に載っていないメッセージが純関数側にだけ生えていないことを確かめる。
-///
-/// 純関数は `match`、[`KNOWN_MESSAGE_TABLE`] は並びで書かれており、片方だけ直すと食い違う。
-/// 前のテストが「表 → 純関数」を見るのに対し、こちらは低位のメッセージ番号を総なめして
-/// 「純関数 → 表」を見る（扱うメッセージは最大でも `WM_DPICHANGED`=0x02E0 なので、
+/// 純関数は表を引くだけ: 低位のメッセージ番号を総なめし、表に在れば表の旗、無ければ
+/// `FORCE` になることを確かめる（扱うメッセージは最大でも `WM_DPICHANGED`=0x02E0 なので、
 /// 0x0000..=0x03FF で全件に届く）。
 #[test]
-fn no_message_outside_the_table_gets_a_flag_of_its_own() {
-    let known: BTreeSet<u32> = KNOWN_MESSAGE_TABLE.iter().map(|(msg, _)| *msg).collect();
-
+fn every_message_gets_its_table_bits_or_force() {
     for msg in 0u32..=0x03FF {
-        if known.contains(&msg) {
+        if let Some((_, expected)) = KNOWN_MESSAGE_TABLE.iter().find(|(m, _)| *m == msg) {
+            assert_eq!(wake_bits_for_message(msg), *expected, "msg={msg:#x}");
             continue;
         }
         assert_eq!(

@@ -3,10 +3,6 @@
 //! GraphicsCore とは独立した ECS Resource として WUC デバイス群
 //! （`Compositor` / `CompositionGraphicsDevice` / `DispatcherQueueController`）を
 //! 管理する。WUC モードのウィンドウが初めて必要になった時点で初期化（遅延初期化）。
-//!
-//! `dcomp_resource.rs` の `DCompGraphicsResource` を構造の 1:1 テンプレートとし、
-//! `Option<Inner>` パターン・`unsafe impl Send/Sync`・手動 `Debug`・`#[derive(Resource)]`
-//! を写像する。DComp と並存する新規リソースであり、ライブ登録の切替は後続タスクの領分。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, info};
@@ -54,7 +50,7 @@ pub struct WucGraphicsResource {
 // 「同一オブジェクトへの呼び出しが同時に実行されない」ことを前提とする。
 // WUC の Compositor / CompositionGraphicsDevice / DispatcherQueueController は
 // UI スレッドアフィニティを持ち、ワーカーからは channel marshal（schedule 上で
-// 並行アクセスを排除）する構成が安全性条件を担う（DComp 系 dcomp_resource.rs と同一方針）。
+// 並行アクセスを排除）する構成が安全性条件を担う。
 unsafe impl Send for WucGraphicsResource {}
 unsafe impl Sync for WucGraphicsResource {}
 

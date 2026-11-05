@@ -82,9 +82,7 @@ mod tests {
         Entity::from_raw_u32(idx).expect("valid entity index")
     }
 
-    /// `App::default` / `App::new` の初期状態を固定する。
-    /// window_count=0・display フラグ false（message_window は private のため
-    /// 外部観測可能な display_configuration_changed / window_count で検証）。
+    /// `App::default` / `App::new` の初期状態を固定する（window_count=0・display フラグ false）。
     #[test]
     fn test_default_and_new_start_with_zero_windows_and_no_display_change() {
         let from_default = App::default();
