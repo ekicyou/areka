@@ -272,3 +272,11 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 
 ## 2026-10-29 `real-run-log-noise` の要件討議からの申し送り
 - 範囲 6 で `emo-text-canon-residue` を片付けても、同梱バルーン `emo2-kakukaku` が起動のたびに出す `WARN`「折返し基準が描画範囲の外に解決された」（`wrap_threshold=254.0`・`inline_limit=240.0`）は消えない。これは装着 1 回につき 1 件の、同梱バルーンの粗さを知らせる**正しい警告**として残すと決めた（開発者 2026-10-29 一括承認・`real-run-log-noise` の討議 5）。片付けのときに「持ち主の居ない警告」と読み違えて消さないこと。
+
+## audit-parsers-sakura の申し送り（2026-11-06 同 spec のタスク 8.1 の `/kiro-discovery` で追記）
+
+台帳の事実違いと古い名指しを、新しい spec にせず、網羅台帳の数と記述が黙って偽になるのを止める本 spec へ 1 件で足した（区分 B 相当・文書だけ・コードは触らない）。出どころは `audit-parsers-sakura` の tasks.md の Implementation Notes「8.1 への申し送り（7.5 のレビュー）」と「完了の棚卸への申し送り（7.3 のレビュー）」。
+
+- **追記の件: bindgroup の既定の欄の状態が事実と違う**。`doc/ukadoc-coverage/ledger/assets.toml` の kero の行（4754 行目あたり）は `vocabulary-only`・「壊れ方: 黙って壊れる」「この欄を読む本番の経路が無い」と書く。けれど本番は `crates/areka/src/emo2_boot/assets.rs` 414 行目の `DefaultBinds::from_groups`（`crates/areka-seriko/src/bind.rs` 59 行目）で、スコープ 1（kero）の `default_on` を当てている。sakura・`char*` の行も同じ形かを確かめ、状態を `implemented` などへ直す。状態を変えると `briefing-assets.md` と survey の数えも動く（本 spec の「検査の外の手書きの数」の実例）。
+- **古い名指し**: 消えた関数 `emo2_boot::assets::default_bind_ids` を名指す行が台帳に 54 か所（2026-11-06 grep・4284 行目の `char*`・5598 行目の `sakura`・4417〜5995 行目の決まり文句・8050 行目）と `doc/ukadoc-coverage/briefing-assets.md` 344 行目にある＝`DefaultBinds::from_groups` へ。briefing の `prescan.rs:57`（今は 43 行目）は行の番号でなく名で指す形へ。`briefing-assets.md` の 255・367・369・432・448・533 行目は、`audit-parsers-sakura` のタスク 7.3 で消えた `package::resolve` を今の姿として書いている＝今の読み口へ書き直す。
+- **規模**: +1〜2 タスク（M 14〜18 → 15〜20）。台帳の行の状態を変えるので、本文どおり台帳の行の状態や持ち主を変える spec とは同じウェーブに置かない。

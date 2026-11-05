@@ -1904,3 +1904,14 @@ pasta（SHIORI のエンジン・`C:\home\maz\git\pasta`）の `novel-areka-cont
 #### Specs
 
 - [ ] doc-compat-architecture-rename -- `doc/COMPAT_ARCHITECTURE.md` を名前の決まりに合う名前へ改名し、案内の 3 つの表と名指しを同じ変更で直す（区分 C・版に縛らない）。Dependencies: doc-tree-tidy
+
+### audit-parsers-sakura の申し送り（2026-11-06 同 spec のタスク 8.1 の `/kiro-discovery` で起票）
+
+> 出どころは `audit-parsers-sakura` の要件 7.7（ウェイトの `最小-最大` からランダムに選ぶ）・design.md の「残る危うさ」（トークの終わりの 1 ulp）・「設計の討議で確定した 7 件」の 3（旧形の `\q` を選択肢として出す＝research.md 11 節の SSP の測り）と、tasks.md の Implementation Notes の「8.1 への申し送り」2 件（台帳の bindgroup の欄・`CuePlayer::stop`）。新しい spec は 0 本、既存の brief への追記が 4 件（小さい件は 1 件 1 spec にせず、触る場所が同じ brief へ足した・audit 系は推奨案で承認してよい＝2026-11-04 開発者）。spec 台帳の数（162）は変わらない。着手の席と版は変えない＝次の棚卸で組む。
+
+#### Existing Spec Updates
+
+- [ ] audit-dola -- 件 1: トークの終わり（dola の `absolute_end_time` と占有の終わりの f64 の和）が ms の格子から 1 ulp 外れ、`TalkDone` が 1 刻み遅れうる。件 2: `CuePlayer::stop`（`dola/src/cue/runtime.rs:361`）を呼ぶ本番のコードが 0（区分 B 相当）。Dependencies: なし
+- [ ] range-choice-tag -- 追記の件: 旧形の `\q0[ID][タイトル]` を SSP と同じく選択肢として出す（今は見えない Raw・SSP は選択肢として出すと MCP で測った・区分 C・+2〜3 タスク）。Dependencies: なし
+- [ ] seriko-legacy-pattern-format -- 追記の件: パターンのウェイト `最小-最大` から再生のたびにランダムに選ぶ（今は最小値＋`warn!`・再生の側 `areka-seriko` にも触れる・区分 C・+2〜3 タスク）。Dependencies: なし
+- [ ] coverage-roadmap-refresh -- 追記の件: 台帳 `assets.toml` の bindgroup の既定の欄（kero ほか）が「黙って壊れる」と書くが本番は `DefaultBinds::from_groups` で当てている・消えた `default_bind_ids` の名指し 54 か所と `briefing-assets.md` の消えた `package::resolve` の記述を直す（区分 B 相当・文書だけ・+1〜2 タスク）。Dependencies: なし

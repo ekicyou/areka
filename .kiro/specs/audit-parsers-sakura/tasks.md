@@ -176,7 +176,7 @@
   - _Requirements: 2.1, 2.4, 3.1, 4.2, 5.6, 7.1, 7.6, 7.9, 7.10, 7.11_
 
 - [ ] 8. 仕上げの確かめ
-- [ ] 8.1 新しい機能と残る危うさを起票する（T25）
+- [x] 8.1 新しい機能と残る危うさを起票する（T25）
   - `/kiro-discovery` で 3 件を起票する: ウェイトの `最小-最大` からランダムに選ぶ振る舞い（7.7）・トークの終わりの時刻が ms の格子から 1 ulp 外れうる件（design の「残る危うさ」）・旧形の `\q` を選択肢として出す振る舞い（設計の討議の議題 3）
   - 3 件が roadmap に載り、brief が在る
   - _Requirements: 7.7_
@@ -221,3 +221,4 @@
 - 7.4: `shell_target.rs` は 953 行（相手の +2 で約 955）。544 行あたりの doc のリンク `[parse_boxes](areka_parsers::shell::parse_boxes)` は相手（audit-emo-present）の括弧を外す直しと同じ行（後から着地する側が合わせる）。balloon の数の鍵の崩れの文は「数の鍵の値が数として読めない」に改めた（頭と欄は同じ）。
 - 8.1 への申し送り（7.5 のレビュー・4 件目の起票）: 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の bindgroup の既定の欄が事実と違う。kero（4754 行）は `vocabulary-only`・「黙って壊れる」と書くが、本番は `areka/src/emo2_boot/assets.rs:414` の `DefaultBinds::from_groups`（`areka-seriko/src/bind.rs:59`）でスコープ 1 の `default_on` を当てている。消えた関数 `emo2_boot::assets::default_bind_ids` を名指す行が台帳に約 55 か所（4284 の `char*`・5598 の `sakura`・4417〜5995 の決まり文句・8050）と `doc/ukadoc-coverage/briefing-assets.md:344` にある。状態を `implemented` にすると briefing と survey の数えも動く。briefing の `prescan.rs:57`（今は :43）も名で指す形へ。1 本にまとめて起票する。
 - 7.5: areka-nar の `manifest_tests.rs` のテストをこの木で `a_charset_line_after_a_non_ascii_line_is_used` へ改名し、UTF-8 の「狛犬」を `charset,UTF-8` の前に書いて `name == "狛犬"`・`charset_declared == Some("UTF-8")` を見る形にした（相手の消す assert と `treats_an_empty_charset_line_as_no_declaration` は残した＝後から着地する側が相手の削除とこちらの期待を合わせる）。audit-ghost-catalog へ知らせた。
+- 8.1: 起票の 4 件はどれも既存の brief へ追記した（`audit-dola`＝1 ulp と `CuePlayer::stop`・`range-choice-tag`＝旧形の `\q`・`seriko-legacy-pattern-format`＝ウェイトの範囲のランダム・`coverage-roadmap-refresh`＝台帳の bindgroup の欄と古い名指し）。roadmap の末尾の節「audit-parsers-sakura の申し送り」に 4 行。spec の数と版の席は次の棚卸で組む。
