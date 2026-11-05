@@ -504,3 +504,106 @@ fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
         "2000 は再生中ゆえ抽選しない"
     );
 }
+
+/// `periodic` の次の回の時刻と、前の回の終わりの働きのコマが重なっても、前の回のコマを先に当ててから
+/// 同じ時刻に始め直す（回を飛ばさない・部品と同じ順・seriko-pattern-calls 要件 3.1・
+/// areka-P0-seriko-trigger-intervals 要件 3.1）。
+#[test]
+fn last_action_frame_on_the_periodic_restart_tick_is_not_lost() {
+    const PERIODIC: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
+    let mut states = no_binds();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1100, &mut states); // periodic は 1030 に鳴る。start,1 は 2030。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
+    rt.on_tick(2030, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(2030), "前の回の start,1");
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030), "回を飛ばさない");
+}
+
+/// 先に当てる段の呼び出しが、引き金の始める animation をちょうど開始の時刻に始めたときは、その再生を
+/// 入れ替えず、頭の働きのコマを 1 度だけ当てる（選びの乱数も 1 度だけ・seriko-pattern-calls 要件 3.1・5.2）。
+#[test]
+fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
+    const SELF_CALL: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,alternativestart,(5,6)\n\
+        animation0.pattern1,overlay,120,1000,0,0\n\
+        animation0.pattern2,start,0\n\
+        animation5.interval,never\n\
+        animation5.pattern0,overlay,110,0,0,0\n\
+        animation6.interval,never\n\
+        animation6.pattern0,overlay,111,0,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (picker, bounds) = pick_rng(0);
+    let mut rt = LoopRuntime::new(config(SELF_CALL, lottery, picker));
+    let mut states = no_binds();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1100, &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
+    assert_eq!(bounds.lock().unwrap().len(), 1);
+    rt.on_tick(2030, &mut states); // 前の回の start,0 と次の回が 2030 で重なる。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+    assert_eq!(
+        bounds.lock().unwrap().len(),
+        2,
+        "2030 の頭の選びは 1 度だけ"
+    );
+}
+
+/// 遅れた刻みで 2 つの `periodic` の開始の時刻が番号と逆の順に並び、その間に別の再生の `stop,1` が
+/// 来るときも、時刻の順に当てる（1 は 2030 に始まり 2500 に止まる・0 は 3030 に始まる・
+/// seriko-pattern-calls 要件 3.1・4.1・areka-P0-seriko-trigger-intervals 要件 3.1）。
+#[test]
+fn trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
+    const LATE: &str = "surface0\n{\n\
+        animation0.interval,periodic,3\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,5000,0,0\n\
+        animation1.interval,periodic,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,100,2470,0,0\n\
+        animation2.pattern1,stop,1\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(LATE, lottery, seeded_rng(0)));
+    let mut states = no_binds();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    assert_eq!(started(&rt, Slot::Shell, 2), Some(30));
+    rt.on_tick(3100, &mut states); // 1 は 2030・stop,1 は 2500・0 は 3030。
+    assert_eq!(started(&rt, Slot::Shell, 1), None, "2500 に止まる");
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(3030));
+}
+
+/// 引き金の「再生中か」は、開始の時刻までの働きのコマを当てた後で測る（2000 に止められた 0 は
+/// 2030 に再生中でないので鳴る・areka-P0-seriko-trigger-intervals 要件 3.1・3.3）。
+#[test]
+fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
+    const STOPPED: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,1500,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,100,1970,0,0\n\
+        animation2.pattern1,stop,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(STOPPED, lottery, seeded_rng(0)));
+    let mut states = no_binds();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1100, &mut states); // 0 は 1030 に鳴る（2530 まで続く見込み）。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
+    rt.on_tick(2100, &mut states); // stop,0 は 2000・次の周は 2030。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+}

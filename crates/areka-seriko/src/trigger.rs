@@ -117,19 +117,26 @@ impl Armed {
         playing_at: impl Fn(u64) -> bool,
         talk: Option<&TalkWindow<'_>>,
     ) -> Option<u64> {
+        let at = self.next_start(anim, now_ms, talk)?;
+        self.commit(anim, at, playing_at(at)).then_some(at)
+    }
+
+    /// [`Armed::poll`] の前半: 始めるなら何時に始まったことにするか（再生中かは見ず、状態も変えない）。
+    /// 呼び手は開始の時刻の順に並べ、その時刻までの働きのコマを当ててから [`Armed::commit`] で決める。
+    pub(crate) fn next_start(
+        &self,
+        anim: &LoopAnimation,
+        now_ms: u64,
+        talk: Option<&TalkWindow<'_>>,
+    ) -> Option<u64> {
         let since = self.visible_since?;
         match anim.trigger {
-            LoopTrigger::Runonce => {
-                (!playing_at(since) && self.fired.insert(anim.id)).then_some(since)
-            }
+            LoopTrigger::Runonce => (!self.fired.contains(&anim.id)).then_some(since),
             LoopTrigger::Periodic { period_ms } => {
                 let (lap, _) = lap_of(now_ms.saturating_sub(since), period_ms);
-                if lap <= self.last_lap.get(&anim.id).copied().unwrap_or(0) {
-                    return None;
-                }
-                self.last_lap.insert(anim.id, lap);
                 // 周の数は経過を周期で割った商なので、掛け戻しは今の時刻を超えない。
-                Some(since + lap * period_ms.get()).filter(|&at| !playing_at(at))
+                (lap > self.last_lap.get(&anim.id).copied().unwrap_or(0))
+                    .then(|| since + lap * period_ms.get())
             }
             LoopTrigger::Talk { every } => {
                 let window = talk?;
@@ -142,15 +149,31 @@ impl Armed {
                 // 越えた区切りのうち最新の文字の序数（今見えている数を超えない）。前の判定までに
                 // 数え済みなら鳴らし済みか見送り済み。今見えている数が減った刻みも、ここで外れる。
                 let glyph = window.base + crossed * every - 1;
-                (glyph >= window.prev_seen)
-                    .then(|| (window.wall_ms)(glyph))
-                    .filter(|&at| !playing_at(at))
+                (glyph >= window.prev_seen).then(|| (window.wall_ms)(glyph))
             }
             LoopTrigger::Random { .. }
             | LoopTrigger::BindRandom { .. }
             | LoopTrigger::Always { .. }
             | LoopTrigger::CallOnly => None,
         }
+    }
+
+    /// [`Armed::poll`] の後半: [`Armed::next_start`] が返した `at` で決める。`periodic` は再生中でも周の
+    /// 数えを進め（飛ばした周が後から鳴らない）、再生中でなければ `runonce` に印を付けて真を返す。
+    pub(crate) fn commit(&mut self, anim: &LoopAnimation, at: u64, playing: bool) -> bool {
+        if let (LoopTrigger::Periodic { period_ms }, Some(since)) =
+            (anim.trigger, self.visible_since)
+        {
+            self.last_lap
+                .insert(anim.id, at.saturating_sub(since) / period_ms.get());
+        }
+        if playing {
+            return false;
+        }
+        if anim.trigger == LoopTrigger::Runonce {
+            self.fired.insert(anim.id);
+        }
+        true
     }
 
     /// `talk` の判定の後に、数えた序数を進める（面の窓 1 つにつき刻み 1 回）。

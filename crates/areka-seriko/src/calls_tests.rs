@@ -5,15 +5,17 @@ use super::*;
 use crate::table::{LoopFrame, LoopTrigger};
 use crate::test_support::draw_frame as draw;
 use areka_emo_compose::ComposeMethod;
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroU64};
 
-/// 偽の再生の表（番号 → (開始, 当て終えた時刻)）。
+/// 偽の再生の表（番号 → (開始, 当て終えた時刻)）と、表を引いた回数（仕事の量の目安）。
 #[derive(Default)]
-struct FakePlays(BTreeMap<u32, (u64, Option<u64>)>);
+struct FakePlays(BTreeMap<u32, (u64, Option<u64>)>, Cell<usize>);
 
 impl CallPlays for FakePlays {
     fn playing(&self, animation: u32) -> Option<(u64, Option<u64>)> {
+        self.1.set(self.1.get() + 1);
         self.0.get(&animation).copied()
     }
     fn set_acts_through(&mut self, animation: u32, through_ms: u64) {
@@ -33,7 +35,10 @@ impl CallPlays for FakePlays {
 }
 
 fn plays(list: &[(u32, u64)]) -> FakePlays {
-    FakePlays(list.iter().map(|&(id, s)| (id, (s, None))).collect())
+    FakePlays(
+        list.iter().map(|&(id, s)| (id, (s, None))).collect(),
+        Cell::default(),
+    )
 }
 
 fn frame(act: FrameAct, wait_ms: u32, x: i64, y: i64) -> LoopFrame {
@@ -299,7 +304,7 @@ fn targets_not_in_the_table_do_nothing() {
 #[test]
 fn acts_through_mark_never_moves_back() {
     let table = [anim(0, RANDOM, vec![draw(10, 400), mv(0, 5, 6)])];
-    let mut p = FakePlays([(0, (0, Some(500)))].into());
+    let mut p = FakePlays([(0, (0, Some(500)))].into(), Cell::default());
     assert_eq!(run(&table, &mut p, 300).shift, None);
     assert_eq!(p.playing(0), Some((0, Some(500))), "印は 300 へ戻らない");
     assert_eq!(
@@ -325,4 +330,60 @@ fn always_lap_end_frame_is_hit_exactly_once_across_ticks() {
         .map(|now| run(&table, &mut p, now).shift.map(|s| s.0))
         .collect();
     assert_eq!(shifts, vec![Some(100), None, Some(200), None, Some(300)]);
+}
+
+/// 周の境目の同じ時刻では、次の周の頭のコマ（位置が前）が前の周の終わりのコマより先に当たる
+/// （時刻・animation・pattern の昇順）。後に当たった終わりの move が勝つ。
+#[test]
+fn always_lap_boundary_tie_keeps_pattern_order() {
+    let endless = LoopTrigger::Always {
+        period_ms: NonZeroU64::new(100).unwrap(),
+        laps: None,
+    };
+    let table = [anim(
+        0,
+        endless,
+        vec![mv(0, 1, 1), draw(10, 100), mv(0, 2, 2)],
+    )];
+    let mut p = plays(&[(0, 0)]);
+    assert_eq!(run(&table, &mut p, 150).shift, Some((100, 2, 2)));
+}
+
+/// 長く空いた刻みでも、`always` が別の `always` をやり直し続ける仕事は当てる数に比例する（周を全部
+/// 前もって入れない・re-audit S3）。時刻は丸めず、最後の開始と move は予定の時刻のまま。
+#[test]
+fn long_gap_always_restarting_always_does_work_in_proportion_to_hits() {
+    let period = NonZeroU64::new(10).unwrap();
+    let endless = LoopTrigger::Always {
+        period_ms: period,
+        laps: None,
+    };
+    let table = [
+        anim(0, endless, vec![draw(10, 5), start(&[1], false)]),
+        anim(1, endless, vec![draw(20, 3), mv(0, 4, 4), draw(21, 7)]),
+    ];
+    let mut p = plays(&[(0, 0), (1, 0)]);
+    let out = run(&table, &mut p, 10_000);
+    assert_eq!(p.playing(1), Some((9995, Some(10_000))));
+    assert_eq!(out.shift, Some((9998, 4, 4)));
+    // 当てるのは 1000 回の開始と 1001 回の move。前もって全部の周を入れると約 50 万回引く。
+    let looks = p.1.get();
+    assert!(looks < 20_000, "表を引いた回数 {looks}");
+}
+
+/// ずれを合わせるとき、先の時刻の `next` は負け、同じ時刻なら `next` が勝ち、`next` が無ければ元のまま
+/// （一番上と部品が同じ刻みで両方 move したとき・7.2・7.3・re-audit S5）。
+#[test]
+fn then_prefers_the_later_shift_and_next_on_a_tie() {
+    let at = |t, x| CallOutcome {
+        shift: Some((t, x, x)),
+    };
+    assert_eq!(
+        at(200, 1).then(at(100, 2)),
+        at(200, 1),
+        "先の時刻の next は負ける"
+    );
+    assert_eq!(at(100, 1).then(at(200, 2)), at(200, 2));
+    assert_eq!(at(100, 1).then(at(100, 2)), at(100, 2), "同じ時刻は next");
+    assert_eq!(at(100, 1).then(CallOutcome::default()), at(100, 1));
 }

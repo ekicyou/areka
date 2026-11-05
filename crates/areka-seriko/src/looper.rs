@@ -480,22 +480,7 @@ impl LoopRuntime {
 
                 for anim in anims {
                     let key = (scope.clone(), *slot);
-                    // (a) 非再生中のみ対象（再生中は再抽選しない・乱数も消費しない・要件 2.3）。
-                    //     この刻みで `-1` か末尾に着いた再生は、当て残しの働きのコマが無ければ再生中と
-                    //     見なさない（部品と同じ見方）。
-                    let is_playing = playback
-                        .get(&key)
-                        .and_then(|pb| pb.get(&anim.id))
-                        .is_some_and(|p| {
-                            matches!(
-                                frame_at(&anim.frames, now_ms.saturating_sub(p.started_at_ms)),
-                                FrameStatus::Pending | FrameStatus::Active(_)
-                            ) || has_due_acts(anim, p.started_at_ms, p.acts_through, now_ms)
-                        });
-                    if is_playing {
-                        continue;
-                    }
-                    // (b) bind ゲート: BindRandom はその bindgroup が ON のときのみ判定。OFF なら
+                    // (a) bind ゲート: BindRandom はその bindgroup が ON のときのみ判定。OFF なら
                     //     should_fire を呼ばず乱数を消費しない（要件 3.1・CRITICAL）。Random は無条件（3.2）。
                     let k = match anim.trigger {
                         LoopTrigger::Random { k } => k,
@@ -516,6 +501,21 @@ impl LoopRuntime {
                         // seriko-pattern-calls 要件 11.1・11.3）。
                         LoopTrigger::CallOnly => continue,
                     };
+                    // (b) 非再生中のみ対象（再生中は再抽選しない・乱数も消費しない・要件 2.3）。
+                    //     この刻みで `-1` か末尾に着いた再生は、当て残しの働きのコマが無ければ再生中と
+                    //     見なさない（部品と同じ見方）。
+                    let is_playing = playback
+                        .get(&key)
+                        .and_then(|pb| pb.get(&anim.id))
+                        .is_some_and(|p| {
+                            matches!(
+                                frame_at(&anim.frames, now_ms.saturating_sub(p.started_at_ms)),
+                                FrameStatus::Pending | FrameStatus::Active(_)
+                            ) || has_due_acts(anim, p.started_at_ms, p.acts_through, now_ms)
+                        });
+                    if is_playing {
+                        continue;
+                    }
                     // (c) 1/N 抽選（ここで初めて乱数を消費）。
                     if should_fire(k, rng) {
                         playback.entry(key).or_default().insert(
@@ -599,12 +599,11 @@ impl LoopRuntime {
 
             // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
             // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める（要件 6.2）。
+            let mut early = Default::default();
             if let Some(state) = state.filter(|_| has_trigger) {
-                let anims = table
-                    .animations(*sid)
-                    .iter()
-                    .filter(|a| a.trigger.is_word());
-                fire_top_triggers(
+                let all = table.animations(*sid);
+                let anims = all.iter().filter(|a| a.trigger.is_word());
+                (_, early, _) = fire_top_triggers(
                     state,
                     playback,
                     &mut new_pattern,
@@ -613,6 +612,7 @@ impl LoopRuntime {
                     anims,
                     now_ms,
                     window.as_ref(),
+                    (stopped_always, all, pick_rng),
                 );
             }
 
@@ -627,6 +627,7 @@ impl LoopRuntime {
                 now_ms,
                 pick_rng,
             );
+            shift = early.then(shift);
 
             // 再生中 animation id を昇順で処理（決定論の warn! 順・D-7 と同一方針）。
             let mut playing_ids: Vec<u32> = playback
@@ -854,7 +855,7 @@ impl LoopRuntime {
                     .animations(sid)
                     .iter()
                     .filter(|a| a.trigger == LoopTrigger::Runonce);
-                let fired = fire_top_triggers(
+                let (fired, early, called) = fire_top_triggers(
                     state,
                     playback,
                     &mut pattern,
@@ -863,8 +864,10 @@ impl LoopRuntime {
                     runonce,
                     at,
                     None,
+                    (stopped_always, table.animations(sid), pick_rng),
                 );
-                heads.extend(fired.iter().map(|(anim, _)| anim.id));
+                heads.extend(fired.iter().map(|(anim, _)| anim.id).chain(called));
+                shift = early;
             }
             // 働きのコマを合図の時刻で当てる（頭のコマを置く前・spec: seriko-pattern-calls 3.1）。
             let (top, called) = run_top_calls(
@@ -876,7 +879,7 @@ impl LoopRuntime {
                 at,
                 pick_rng,
             );
-            shift = top;
+            shift = shift.then(top);
             heads.extend(called);
             for anim in table.animations(sid) {
                 let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) else {

@@ -250,3 +250,25 @@ fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
         "2000 に animation1 が始まる"
     );
 }
+
+/// 部品の `periodic` の次の回の時刻と、前の回の終わりの働きのコマが重なっても、前の回のコマを先に
+/// 当ててから同じ時刻に始め直す（回を飛ばさない・一番上と同じ順・seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn last_action_frame_in_a_part_on_the_periodic_restart_tick_is_not_lost() {
+    const PERIODIC: &str = "animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,102,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(PERIODIC, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states); // periodic は 1000 に鳴る。start,1 は 2000。
+    assert_eq!(part_cell(&states, 0), Some(101));
+    assert_eq!(part_cell(&states, 1), None);
+    rt.on_tick(2000, &mut states);
+    assert_eq!(part_cell(&states, 1), Some(110), "前の回の start,1");
+    assert_eq!(part_cell(&states, 0), Some(101), "回を飛ばさず頭から");
+}

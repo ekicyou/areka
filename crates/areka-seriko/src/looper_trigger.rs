@@ -26,11 +26,13 @@ use std::collections::{HashMap, HashSet};
 use areka_emo_compose::PatternState;
 use areka_sakura::ActorKey;
 
+use super::top_calls::{StoppedAlways, run_top_calls};
 use super::{Playback, SlotPlayback, put_top_play};
+use crate::calls::CallOutcome;
 use crate::state::Slot;
 use crate::table::LoopAnimation;
 use crate::talk::{TalkEpoch, TalkFeed};
-use crate::timeline::{FrameStatus, frame_at};
+use crate::timeline::{FrameStatus, LoopRng, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
 /// `key` の面の引き金の状態を返す。無ければ `at_ms` を見え始めの時刻として構え（面に入った）、在れば
@@ -69,15 +71,17 @@ pub(super) fn arm_slot<'a>(
     }
 }
 
-/// 一番上の 3 語の animation `anims` を番号の昇順に判定し、始まるものを `playback` に入れる（開始の
-/// 時刻は判定が返した時刻＝`runonce` は見え始め・`periodic` は周の境目・`talk` は区切りの文字が
-/// 現れた時刻で、`now_ms` ではない・spec: areka-P0-seriko-trigger-intervals 要件 2.1・3.1・3.5・4.5・
-/// 6.1）。始まった（animation, 開始の時刻）を返す。`talk` は文字の窓 `talk` が在るときだけ判定され、
+/// 一番上の 3 語の animation `anims` を開始の時刻の順（同じ時刻は番号の順）に、その時刻までの働きの
+/// コマを当ててから判定し、始まるものを `playback` に入れる（開始の時刻は判定が返した時刻＝`runonce`
+/// は見え始め・`periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、`now_ms` ではない・spec:
+/// areka-P0-seriko-trigger-intervals 要件 2.1・3.1・3.5・4.5・6.1）。始まった（animation, 開始の時刻）を返す。`talk` は文字の窓 `talk` が在るときだけ判定され、
 /// 文字の数えはここでは進めない（進めるのは刻みの最後の [`settle_talk`]）。
 ///
 /// 「再生中か」は刻みの時刻でなく開始の時刻で測る: `playback` に在って、その時刻のコマがまだ終わり
 /// （負の番号で停止・末尾）でないこと（要件 3.3・3.5・5.3）。開始の時刻には終えていて、まだ片付けて
 /// いない再生は、その時刻まで進めて片付けてから（終わりの記録は刻みの進行と同じ 1 件）入れ替える。
+/// 始める前に、面の段の働きのコマを開始の時刻まで当てる（前の再生の終わりのコマを落とさない・部品と
+/// 同じ順・seriko-pattern-calls 要件 3.1）。その結果と、呼び出しで始まった animation の番号も返す。
 ///
 /// 乱数は引かない。始めない経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。
 /// 始まった後の進み方は抽選の再生と同じ（`playback` に入るだけ・要件 5.1〜5.3）。`talk` の開始は
@@ -92,35 +96,50 @@ pub(super) fn fire_top_triggers<'a>(
     anims: impl Iterator<Item = &'a LoopAnimation>,
     now_ms: u64,
     talk: Option<&TalkWindow<'_>>,
-) -> Vec<(&'a LoopAnimation, u64)> {
-    let mut anims: Vec<&LoopAnimation> = anims.collect();
-    anims.sort_by_key(|a| a.id);
+    (stopped, all, pick): (&mut StoppedAlways, &[LoopAnimation], &mut LoopRng),
+) -> (Vec<(&'a LoopAnimation, u64)>, CallOutcome, Vec<u32>) {
+    // 開始の時刻の順（同じ時刻は番号の順）に、その時刻までの働きのコマを当ててから決める（呼び出しが
+    // 止めた・始めた再生を見て決める・時刻の順を崩さない）。
+    let mut due: Vec<(u64, &LoopAnimation)> = anims
+        .filter_map(|anim| state.next_start(anim, now_ms, talk).map(|at| (at, anim)))
+        .collect();
+    due.sort_by_key(|&(at, anim)| (at, anim.id));
     let mut fired = Vec::new();
-    for anim in anims {
-        // まだ片付けていない前の再生の、時刻 `at` での経過（前の再生が無ければ `None`）。
+    let (mut outcome, mut called) = (CallOutcome::default(), Vec::new());
+    for (started_at_ms, anim) in due {
+        let (early, started) =
+            run_top_calls(playback, pattern, stopped, key, all, started_at_ms, pick);
+        outcome = outcome.then(early);
+        called.extend(started);
         let prev = playback.get(key).and_then(|pb| pb.get(&anim.id)).copied();
-        let since_prev = |at: u64| prev.map(|p| at.saturating_sub(p.started_at_ms));
-        let playing_at = |at| {
-            let status = since_prev(at).map(|elapsed| frame_at(&anim.frames, elapsed));
-            matches!(status, Some(FrameStatus::Pending | FrameStatus::Active(_)))
-        };
-        let Some(started_at_ms) = state.poll(anim, now_ms, playing_at, talk) else {
+        // 呼び出しがちょうど開始の時刻に始めた再生は、鳴らした扱いで入れ替えない（頭のコマを当て済み・5.2）。
+        let playing = prev.is_some_and(|p| {
+            p.started_at_ms != started_at_ms
+                && matches!(
+                    frame_at(&anim.frames, started_at_ms.saturating_sub(p.started_at_ms)),
+                    FrameStatus::Pending | FrameStatus::Active(_)
+                )
+        });
+        if !state.commit(anim, started_at_ms, playing) {
             continue;
-        };
-        if let Some(elapsed) = since_prev(started_at_ms) {
-            put_top_play(pattern, playback, warned_negative, key, anim, elapsed);
         }
-        playback.entry(key.clone()).or_default().insert(
-            anim.id,
-            Playback {
-                started_at_ms,
-                acts_through: None,
-            },
-        );
+        if prev.is_none_or(|p| p.started_at_ms != started_at_ms) {
+            if let Some(p) = prev {
+                let elapsed = started_at_ms.saturating_sub(p.started_at_ms);
+                put_top_play(pattern, playback, warned_negative, key, anim, elapsed);
+            }
+            playback.entry(key.clone()).or_default().insert(
+                anim.id,
+                Playback {
+                    started_at_ms,
+                    acts_through: None,
+                },
+            );
+        }
         log_fired(anim, started_at_ms, &key.0, key.1, None);
         fired.push((anim, started_at_ms));
     }
-    fired
+    (fired, outcome, called)
 }
 
 /// スコープ `scope` で時刻 `at_ms` までに現れた文字の数（序数で数える）。文字がまだ 1 つも届いて

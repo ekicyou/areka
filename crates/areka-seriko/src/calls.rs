@@ -58,11 +58,10 @@ pub(crate) fn run_calls<'a>(
     now_ms: u64,
     pick: &mut LoopRng,
 ) -> CallOutcome {
+    // 再生ごとに次の 1 件だけを入れ、取り出したらその次を入れる（入れる数は当てる数と同じ・S3）。
     let mut queue = BTreeSet::new();
     for id in plays.playing_ids() {
-        if let (Some((start, through)), Some(anim)) = (plays.playing(id), animation_of(id)) {
-            push_due(&mut queue, anim, start, through, now_ms);
-        }
+        push_next(&mut queue, &*plays, &animation_of, id, None, now_ms);
     }
     let mut outcome = CallOutcome::default();
     // 1 つの時刻の中で呼び出しが始めた animation（巡回の止め・5.2）。
@@ -84,9 +83,9 @@ pub(crate) fn run_calls<'a>(
             FrameAct::Start { targets, pick_one } => {
                 for target in chosen(targets, *pick_one, pick) {
                     // 表に無い相手は何もしない（記録は読み込みのときに 1 度出し済み・5.1）。
-                    let Some(anim) = animation_of(target) else {
+                    if animation_of(target).is_none() {
                         continue;
-                    };
+                    }
                     // 抽選・always・きっかけでこの時刻に始まった再生も 2 度目に数える。
                     let already = plays.playing(target).map(|(s, _)| s) == Some(at);
                     if already || !started.insert(target) {
@@ -98,7 +97,7 @@ pub(crate) fn run_calls<'a>(
                         continue;
                     }
                     plays.start(target, at);
-                    push_due(&mut queue, anim, at, None, now_ms);
+                    push_next(&mut queue, &*plays, &animation_of, target, None, now_ms);
                 }
             }
             FrameAct::Stop { targets, pick_one } => {
@@ -114,6 +113,17 @@ pub(crate) fn run_calls<'a>(
             // ずれは元の表示位置からの絶対値で、後の時刻が勝つ（7.2・7.3）。
             FrameAct::Move => outcome.shift = Some((at, frame.x, frame.y)),
             FrameAct::Draw | FrameAct::Inert => {}
+        }
+        // 止めた・やり直した再生の続きは入れない（やり直しは自分の頭を入れ済み）。
+        if plays.playing(id).map(|(s, _)| s) == Some(start) {
+            push_next(
+                &mut queue,
+                &*plays,
+                &animation_of,
+                id,
+                Some((at, k)),
+                now_ms,
+            );
         }
     }
     for id in plays.playing_ids() {
@@ -147,61 +157,70 @@ pub(crate) fn has_due_acts(
     through: Option<u64>,
     now: u64,
 ) -> bool {
-    let mut queue = BTreeSet::new();
-    push_due(&mut queue, anim, start, through, now);
-    !queue.is_empty()
+    next_due(anim, start, through, None, now).is_some()
 }
 
-/// 1 つの再生の、予定の時刻が (`through`, `now`] に入る働きのコマを待ち行列へ入れる
-/// （`through` が無ければ開始の時刻を含む）。`always` は周ごとに繰り返し、ほかは描くコマの負の番号
-/// （`-1` で止まる）の後ろを入れない。
-fn push_due(
+/// 再生中の `id` の、(時刻, 位置) が `after` より後で一番先の当て残しを待ち行列へ入れる。
+fn push_next<'a>(
     queue: &mut BTreeSet<Due>,
+    plays: &impl CallPlays,
+    animation_of: &impl Fn(u32) -> Option<&'a LoopAnimation>,
+    id: u32,
+    after: Option<(u64, usize)>,
+    now: u64,
+) {
+    if let (Some((start, through)), Some(anim)) = (plays.playing(id), animation_of(id))
+        && let Some((at, k)) = next_due(anim, start, through, after, now)
+    {
+        queue.insert((at, id, k, start));
+    }
+}
+
+/// 1 つの再生の、予定の時刻が (`through`, `now`] に入る働きのコマのうち、(時刻, 位置) が `after` より後で
+/// 一番先のもの（`through` が無ければ開始の時刻を含む）。`always` は周ごとに繰り返し、ほかは描くコマの
+/// 負の番号（`-1` で止まる）の後ろを数えない。周は数え上げず、コマごとに条件を満たす最初の周を割り算で
+/// 出す（長く空いても仕事はコマの数だけ・時刻は丸めない）。
+fn next_due(
     anim: &LoopAnimation,
     start: u64,
     through: Option<u64>,
+    after: Option<(u64, usize)>,
     now: u64,
-) {
-    let due = |at: u64| at <= now && through.is_none_or(|t| at > t);
-    // 働きのコマ（何もしない Inert を除く）の位置と、開始からの累積の待ち。
-    let mut acts = Vec::new();
+) -> Option<(u64, usize)> {
+    let (period, last_lap, repeats) = match anim.trigger {
+        LoopTrigger::Always { period_ms, laps } => (
+            period_ms.get(),
+            laps.map_or(u64::MAX, |n| u64::from(n.get()) - 1),
+            true,
+        ),
+        _ => (1, 0, false),
+    };
+    let mut best: Option<(u64, usize)> = None;
     let mut cum: u64 = 0;
-    let repeats = matches!(anim.trigger, LoopTrigger::Always { .. });
     for (k, f) in anim.frames.iter().enumerate() {
         cum = cum.saturating_add(u64::from(f.wait_ms));
         match f.act {
             FrameAct::Draw if f.surface_id < 0 && !repeats => break,
-            FrameAct::Draw | FrameAct::Inert => {}
-            _ => acts.push((k, cum)),
+            FrameAct::Draw | FrameAct::Inert => continue,
+            _ => {}
+        }
+        // このコマが取れる一番早い時刻（印より後・`after` より後）。
+        let mut min_at = through.map_or(start, |t| t.saturating_add(1));
+        if let Some((a, k0)) = after {
+            min_at = min_at.max(if k > k0 { a } else { a.saturating_add(1) });
+        }
+        let first = start.saturating_add(cum);
+        let lap = min_at.saturating_sub(first).div_ceil(period);
+        if lap > last_lap {
+            continue;
+        }
+        let at = first.saturating_add(lap.saturating_mul(period));
+        let due = at <= now && through.is_none_or(|t| at > t) && after.is_none_or(|a| (at, k) > a);
+        if due && best.is_none_or(|b| (at, k) < b) {
+            best = Some((at, k));
         }
     }
-    let LoopTrigger::Always { period_ms, laps } = anim.trigger else {
-        for (k, cum) in acts {
-            let at = start.saturating_add(cum);
-            if due(at) {
-                queue.insert((at, anim.id, k, start));
-            }
-        }
-        return;
-    };
-    let period = period_ms.get();
-    let lo = through.unwrap_or(start).saturating_sub(start);
-    // 累積の待ちは周の長さ以下なので、印より後のコマは印の周から始まる。
-    let first = lo / period;
-    let mut last = now.saturating_sub(start) / period;
-    if let Some(n) = laps {
-        last = last.min(u64::from(n.get()) - 1);
-    }
-    for lap in first..=last {
-        for &(k, cum) in &acts {
-            let at = start
-                .saturating_add(lap.saturating_mul(period))
-                .saturating_add(cum);
-            if due(at) {
-                queue.insert((at, anim.id, k, start));
-            }
-        }
-    }
+    best
 }
 
 #[cfg(test)]
