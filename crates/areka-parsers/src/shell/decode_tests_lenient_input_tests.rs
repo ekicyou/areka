@@ -372,3 +372,89 @@ animation0.pattern1,overlay,901,4,0,0
         }]
     );
 }
+
+/// 読めない数は 0 にせず飛ばして `UnreadableNumber` を積む（指摘 36）。範囲の両端は trim し、
+/// 見出しがちょうど `surface.alias` のブレスは読まない（崩れも積まない）。
+#[test]
+fn unreadable_numbers_are_skipped_not_zero() {
+    use crate::shell::{AppendTarget, ShellIssue, parse_all};
+    let input = "\
+surface0,x, 3 - 5
+{
+elementx,overlay,a.png,0,0
+element1,overlay,b.png,0,0
+collision,1,2,3,4,Bad
+collision99999999999,1,2,3,4,Big
+collision2,1,2,3,4,Head
+animationx.interval,bind
+animation1.interval,bind
+animation1.patternq,overlay,10,5,0,0
+animation1.pattern0,overlay,11,5,0,0
+}
+kero.surface.alias
+{
+6,[1,a,3]
+}
+surface.alias
+{
+0,[1]
+}
+";
+    let text = parse_all(input);
+    let shell = &text.shell;
+    assert_eq!(shell.surfaces.len(), 1);
+    let surface = &shell.surfaces[0];
+    assert_eq!(
+        surface.targets,
+        vec![
+            AppendTarget::Single(0),
+            AppendTarget::Range { start: 3, end: 5 }
+        ]
+    );
+    assert_eq!(
+        surface.elements,
+        vec![Element {
+            layer: 1,
+            path: ElementPath::new("b.png".to_string()),
+            x: 0,
+            y: 0,
+        }]
+    );
+    assert_eq!(
+        surface
+            .collisions
+            .iter()
+            .map(|c| c.index)
+            .collect::<Vec<_>>(),
+        vec![2]
+    );
+    assert_eq!(surface.animations.len(), 1);
+    assert_eq!(surface.animations[0].id, 1);
+    assert_eq!(
+        surface.animations[0]
+            .patterns
+            .iter()
+            .map(|p| p.index)
+            .collect::<Vec<_>>(),
+        vec![0]
+    );
+    assert_eq!(shell.aliases.len(), 1);
+    assert_eq!(shell.aliases[0].ids, vec![1, 3]);
+    let unreadable = |heading: &str, text: &str| ShellIssue::UnreadableNumber {
+        heading: heading.into(),
+        text: text.into(),
+    };
+    let head = "surface0,x,3 - 5";
+    assert_eq!(
+        text.issues,
+        vec![
+            unreadable(head, "x"),
+            unreadable(head, "elementx"),
+            unreadable(head, "collision"),
+            unreadable(head, "collision99999999999"),
+            unreadable(head, "animationx.interval"),
+            unreadable(head, "animation1.patternq"),
+            unreadable("kero.surface.alias", "a"),
+        ]
+    );
+}

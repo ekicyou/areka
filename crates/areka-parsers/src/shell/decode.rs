@@ -12,7 +12,8 @@
 //!   いずれもモデルに保持しない（`Shell` に charset/descript フィールドは存在しない）。
 //! - `surfaceNNN` ブロックからヘッダ記述子（多 id 形 `N,M`／`N-M` 含む）を append と共通の
 //!   ターゲットパーサで捕捉し、代表 id ＋構成要素枠を持つ `Surface` を積む（要件 4.1/12.5(b)）。
-//!   記述子化失敗は `unwrap_or(0)` で既定 0 に倒す（要件 3.3）。
+//!   読めない記述子・番号は 0 にせず飛ばして崩れ（`ShellIssue`）を積む（指摘 36）。範囲の幅は
+//!   シェル全体の合計で上限 `RANGE_WIDTH_CAP` をかける（指摘 6）。
 //! - 空入力・ヘッダのみ・ヘッダ欠落・未知ブロック・未知行を寛容吸収し
 //!   走査を中断しない（要件 3.3/9.2）。
 //!
@@ -39,38 +40,85 @@
 use super::lexer::Token;
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
-    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    ElementPath, Interval, Pattern, RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface,
+    SurfaceAlias, SurfaceAppend,
 };
 
-/// 構文トークン列を値正規化済みの `Shell` へ写像する（mod 内・`parse` が結線する）。
-///
-/// - 入力 `tokens` は lexer 出力（構文区切り済み）。
-/// - トップレベルを走査し、ブロックヘッダでディスパッチする。charset/descript は
-///   読み飛ばし保持しない（要件 3.1/3.2）。`surfaceNNN` は枠を積む（要件 4.1）。
-/// - 失敗しない（`Vec`/`Shell` を返す・`Result` でない・要件 2.x）。空入力で空 `Shell`。
-/// - 同一入力で同一出力（決定的）。
-pub(crate) fn decode(tokens: Vec<Token>) -> Shell {
-    let mut shell = Shell {
+/// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計（指摘 6）・今のブレスの見出し・積んだ崩れ。
+#[derive(Default)]
+pub(crate) struct Reading {
+    range_width: u64,
+    heading: String,
+    pub(crate) issues: Vec<ShellIssue>,
+}
+
+impl Reading {
+    /// ブレスの見出しを崩れの名指しに使う原文として控える。
+    pub(crate) fn begin(&mut self, header: &[String]) {
+        self.heading = header.join(",");
+    }
+
+    fn unreadable(&mut self, text: &str) {
+        let heading = self.heading.clone();
+        let text = text.to_string();
+        self.issues
+            .push(ShellIssue::UnreadableNumber { heading, text });
+    }
+
+    fn too_wide(&mut self, text: &str) {
+        let heading = self.heading.clone();
+        let text = text.to_string();
+        self.issues.push(ShellIssue::RangeTooWide { heading, text });
+    }
+
+    fn wait_range(&mut self, text: &str) {
+        let heading = self.heading.clone();
+        let text = text.to_string();
+        self.issues.push(ShellIssue::WaitRange { heading, text });
+    }
+}
+
+/// 空の `Shell`（読み始め）。
+pub(crate) fn empty_shell() -> Shell {
+    Shell {
         surfaces: Vec::new(),
         appends: Vec::new(),
         aliases: Vec::new(),
         animation_sort: None,
         collision_sort: None,
         definitions: Vec::new(),
-    };
-
-    for token in tokens {
-        match token {
-            Token::Brace { header, body } => dispatch_block(&mut shell, &header, &body),
-            // トップレベル行の `animation-sort`/`collision-sort` を値化する（要件 12.5(a)/1.6）。
-            // それ以外（charset 行の非保持・要件 3.1 等）は寛容に読み飛ばす（要件 3.3/9.2）。
-            Token::TopLevel(fields) => decode_sort_key(&mut shell, &fields),
-            // 崩れの知らせは `parse_all` が `ShellIssue` へ写す（ここでは読まない）。
-            Token::Unclosed { .. } | Token::Reopened { .. } => {}
-        }
     }
+}
 
+/// 構文トークン列を値正規化済みの `Shell` へ写像する（テストの口・崩れは捨てる）。
+#[cfg(test)]
+pub(crate) fn decode(tokens: Vec<Token>) -> Shell {
+    let mut shell = empty_shell();
+    let mut reading = Reading::default();
+    for token in &tokens {
+        decode_token(&mut shell, token, &mut reading);
+    }
     shell
+}
+
+/// 構文トークン 1 つを `shell` へ写す（`parse_all` が登場順に呼ぶ）。
+///
+/// - トップレベルを走査し、ブロックヘッダでディスパッチする。charset は読み飛ばし保持しない
+///   （要件 3.1）。`surfaceNNN` は枠を積む（要件 4.1）。
+/// - 失敗しない（`Result` でない・要件 2.x）。飛ばしたものは `reading` に崩れを積む。
+/// - 同一入力で同一出力（決定的）。
+pub(crate) fn decode_token(shell: &mut Shell, token: &Token, reading: &mut Reading) {
+    match token {
+        Token::Brace { header, body } => {
+            reading.begin(header);
+            dispatch_block(shell, header, body, reading);
+        }
+        // トップレベル行の `animation-sort`/`collision-sort` を値化する（要件 12.5(a)/1.6）。
+        // それ以外（charset 行の非保持・要件 3.1 等）は寛容に読み飛ばす（要件 3.3/9.2）。
+        Token::TopLevel(fields) => decode_sort_key(shell, fields),
+        // 崩れの知らせは `parse_all` が `ShellIssue` へ写す（ここでは読まない）。
+        Token::Unclosed { .. } | Token::Reopened { .. } => {}
+    }
 }
 
 /// ブレスの見出し（CSV フィールド列）でブロック種別を判定し振り分ける。
@@ -80,21 +128,34 @@ pub(crate) fn decode(tokens: Vec<Token>) -> Shell {
 ///
 /// `body` は閉じたブレスの本体行（CSV フィールド列）。surface ブロックの
 /// element/collision decode に用いる。
-fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
+fn dispatch_block(
+    shell: &mut Shell,
+    header: &[String],
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) {
     let head = header.first().map(String::as_str).unwrap_or("");
 
     if head == "descript" {
-        // descript ブロックは寛容スキップ・非保持（要件 3.2）。本体も破棄する。
+        // descriptブレスの中の並びの鍵を読む（指摘 4・ukadoc の descriptブレス記述例）。後の行が勝つ。
+        // ほかの行（version 等）は保持しない（要件 3.2）。
+        for fields in body {
+            decode_sort_key(shell, fields);
+        }
         return;
     }
     if head == "kero.surface.alias" {
         // alias 写像（要件 8）。本体各行の `KEY,[id,...]` を opaque キー＋順序付き ID へ写す。
-        decode_alias_block(shell, body);
+        decode_alias_block(shell, body, reading);
+        return;
+    }
+    if head == "surface.alias" {
+        // `sakura.surface.alias` と同じく読まない（`surface` の番号の無い surface を作らない・指摘 36）。
         return;
     }
     if head.starts_with("surface.append") {
         // append 追記定義（要件 7）。ヘッダのターゲット指定と本体 collision/animation を decode する。
-        decode_append_block(shell, header, body);
+        decode_append_block(shell, header, body, reading);
         return;
     }
     if let Some(header_number) = head.strip_prefix("surface") {
@@ -103,10 +164,14 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
         // 単一 `parse::<u32>().unwrap_or(0)` は多 id 形を破損させていた（design Postcondition）。
         // ヘッダ以降のフィールド（列挙・範囲）を rest として渡す。
         let rest = header.get(1..).unwrap_or(&[]);
-        let targets = parse_targets(header_number, rest);
+        let targets = parse_targets(header_number, rest, reading);
+        if targets.is_empty() {
+            // 記述子が 1 つも残らないブレスは積まない（指摘 6・36）。
+            return;
+        }
         // 代表 id は先頭ターゲットの値（`surface1-3`→1・`surface0,5`→0・design Postcondition）。
         let id = representative_id(&targets);
-        let (elements, collisions, animations) = decode_surface_body(body);
+        let (elements, collisions, animations) = decode_surface_body(body, reading);
         // 定義ストリームへ登場順に push（index は push 前の len＝これから積む位置・要件 12.5(d)）。
         shell
             .definitions
@@ -136,13 +201,16 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
 /// が animation ID で集約する（タスク 4.3）。overlay・base 以外の element メソッド・
 /// collisionex 等は値化せず読み飛ばして passthrough 吸収する（タスク 4.6 が確認・
 /// パニックしない・要件 4.5/9.2）。
-fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, Vec<Animation>) {
+fn decode_surface_body(
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) -> (Vec<Element>, Vec<Collision>, Vec<Animation>) {
     // element overlay・base は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 12.5(c)）。
-    let elements: Vec<Element> = decode_elements(body);
+    let elements: Vec<Element> = decode_elements(body, reading);
     // collision は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 6.1/6.2/7.3）。
-    let collisions: Vec<Collision> = decode_collisions(body);
+    let collisions: Vec<Collision> = decode_collisions(body, reading);
     // animation は本体行全体を走査する `decode_animations` で集約する（要件 5.6）。
-    let animations: Vec<Animation> = decode_animations(body);
+    let animations: Vec<Animation> = decode_animations(body, reading);
 
     (elements, collisions, animations)
 }
@@ -158,7 +226,7 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
 ///   （要件 4.5/10.4）。
 /// - 画像パス（field[2]）は無加工保持（区切り正規化なし・要件 4.3）。
 /// - element はレイヤインデックス昇順・安定ソート（同レイヤは出現順維持・要件 4.4）。
-fn decode_elements(body: &[Vec<String>]) -> Vec<Element> {
+fn decode_elements(body: &[Vec<String>], reading: &mut Reading) -> Vec<Element> {
     let mut elements: Vec<Element> = Vec::new();
 
     for fields in body {
@@ -167,9 +235,13 @@ fn decode_elements(body: &[Vec<String>]) -> Vec<Element> {
         if let Some(rest) = key.strip_prefix("element")
             && is_image_element_method(fields.get(1).map(String::as_str).unwrap_or(""))
         {
+            // element の N をレイヤインデックスに用いる。読めなければ飛ばす（指摘 36）。
+            let Ok(layer) = rest.parse::<u32>() else {
+                reading.unreadable(key);
+                continue;
+            };
             elements.push(Element {
-                // element の N をレイヤインデックスに用いる。非数値は既定 0（要件 3.3）。
-                layer: rest.parse::<u32>().unwrap_or(0),
+                layer,
                 // 画像パス（field[2]）は無加工保持（区切り正規化なし・要件 4.3）。
                 path: ElementPath::new(field_string(fields, 2)),
                 x: field_i64(fields, 3),
@@ -205,7 +277,7 @@ pub(super) fn is_image_element_method(word: &str) -> bool {
 /// - `collisionex`（円/楕円/多角形・要件 6.3）は値化せず passthrough 吸収する（タスク 4.6
 ///   が確認）。純 `collisionN`（N が数字のみ）だけを materialize する。
 /// - collision は出現順で保持する（要件 6.1）。欠落・非数値は既定 0（要件 3.3・パニックしない）。
-fn decode_collisions(body: &[Vec<String>]) -> Vec<Collision> {
+fn decode_collisions(body: &[Vec<String>], reading: &mut Reading) -> Vec<Collision> {
     let mut collisions: Vec<Collision> = Vec::new();
 
     for fields in body {
@@ -213,8 +285,13 @@ fn decode_collisions(body: &[Vec<String>]) -> Vec<Collision> {
         if let Some(rest) = key.strip_prefix("collision") {
             // `collisionex` 等は扱わない。N が数字のみの純 collisionN だけ。
             if rest.chars().all(|c| c.is_ascii_digit()) {
+                // 番号の無い・桁あふれの番号は飛ばす（指摘 36）。
+                let Ok(index) = rest.parse::<u32>() else {
+                    reading.unreadable(key);
+                    continue;
+                };
                 collisions.push(Collision {
-                    index: rest.parse::<u32>().unwrap_or(0),
+                    index,
                     left: field_i64(fields, 1),
                     top: field_i64(fields, 2),
                     right: field_i64(fields, 3),
@@ -240,6 +317,19 @@ fn field_i64(fields: &[String], idx: usize) -> i64 {
         .get(idx)
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0)
+}
+
+/// pattern定義のウェイトの欄を読む（指摘 5）。`最小-最大` で両側が数なら小さい方を待ちにして
+/// `WaitRange` を積む（ランダムに選ぶのは未対応）。それ以外は数でなければ 0（要件 3.3）。
+fn pattern_wait(fields: &[String], idx: usize, reading: &mut Reading) -> u32 {
+    let text = fields.get(idx).map_or("", |s| s.trim());
+    if let Some((low, high)) = text.split_once('-')
+        && let (Ok(low), Ok(high)) = (low.trim().parse::<u32>(), high.trim().parse::<u32>())
+    {
+        reading.wait_range(text);
+        return low.min(high);
+    }
+    text.parse::<u32>().unwrap_or(0)
 }
 
 /// 本体行の `idx` フィールドを `u32` として取り出す（欠落・非数値は既定 0・要件 3.3）。
@@ -278,7 +368,7 @@ fn field_u32(fields: &[String], idx: usize) -> u32 {
 ///   （`-1`/`-2`）をセンチネルとして失わない（要件 5.5・意味付けは下流）。出現順で保持する。
 ///
 /// 失敗しない（`Vec` を返す・パニックしない・空/崩れ入力に寛容・要件 2.x/9.2）。
-fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
+fn decode_animations(body: &[Vec<String>], reading: &mut Reading) -> Vec<Animation> {
     // ID の初出順を保つため Vec で管理し、線形探索で既存 animation を引く
     // （emo2 subset の animation 数は小さく、決定性と初出順保持を優先する）。
     let mut animations: Vec<Animation> = Vec::new();
@@ -297,8 +387,11 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
             Some(pair) => pair,
             None => continue,
         };
-        // 非数値 ID は既定 0（要件 3.3・パニックしない）。
-        let id = id_text.parse::<u32>().unwrap_or(0);
+        // 読めない ID は 0 にせず行を飛ばす（指摘 36・パニックしない）。
+        let Ok(id) = id_text.parse::<u32>() else {
+            reading.unreadable(key);
+            continue;
+        };
 
         if suffix == "interval" {
             // interval 行を忠実転記する（要件 8.2・討議 #1 裁定）。3 種（bind/random/
@@ -317,17 +410,21 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
             // 非 overlay（replace/base/制御系 等）も落とさず method を運ぶ。意味解釈
             // （合成方法・実装可否）は下流の責務（parser は原文を無加工で運ぶ）。
             // 欄 2 が `(` の並びなら `)` まで継ぎ直し、待ち・X・Y はその次から読む（要件 2.2）。
+            // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。読めなければ飛ばす（指摘 36）。
+            let Ok(index) = index_text.parse::<u32>() else {
+                reading.unreadable(key);
+                continue;
+            };
             let (target, tail) = pattern_target(fields);
             let pattern = Pattern {
-                // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。
-                index: index_text.parse::<u32>().unwrap_or(0),
+                index,
                 // field[1] を描画メソッドとして verbatim 転記（欠落は空文字＝下流 `Unknown`
                 // 吸収）。位置・型は不変で surface_id 以降を破壊しない（要件 4.6/8.4）。
                 method: DrawMethod::new(field_string(fields, 1)),
                 // surface_id は i64・負センチネル（-1/-2）を失わない（要件 5.5）。
                 surface_id: field_i64(fields, 2),
                 target,
-                wait: field_u32(fields, tail),
+                wait: pattern_wait(fields, tail, reading),
                 x: field_i64(fields, tail + 1),
                 y: field_i64(fields, tail + 2),
             };
@@ -419,22 +516,32 @@ fn normalize_interval(fields: &[String]) -> Interval {
 ///   再利用する（同一集約規則ゆえ共用・要件 7.3）。
 /// - append は出現順で `shell.appends` に保持する（要件 7.1）。
 /// - 失敗しない（`Result` でない・パニックしない・要件 2.x）。
-fn decode_append_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
+fn decode_append_block(
+    shell: &mut Shell,
+    header: &[String],
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) {
     // ヘッダ先頭 `surface.appendNNN` から接頭辞を剥がしヘッダ数値 NNN を得る。
-    // 剥がせない崩れヘッダでも `parse_target_element` が既定 0 に倒す（パニックしない）。
+    // 読めない数は `parse_target_element` が飛ばす（パニックしない・指摘 36）。
     let head = header.first().map(String::as_str).unwrap_or("");
     let header_number = head.strip_prefix("surface.append").unwrap_or("");
     // ヘッダ以降のフィールド（列挙・範囲）を rest として渡す。
     let rest = header.get(1..).unwrap_or(&[]);
+    let targets = parse_targets(header_number, rest, reading);
+    if targets.is_empty() {
+        // 記述子が 1 つも残らないブレスは積まない（指摘 6・36）。
+        return;
+    }
 
     // 定義ストリームへ登場順に push（index は push 前の len＝これから積む位置・要件 12.5(d)）。
     shell.definitions.push(DefRef::Append(shell.appends.len()));
     shell.appends.push(SurfaceAppend {
-        targets: parse_targets(header_number, rest),
+        targets,
         // append 内 element も転記する（従来黙殺・要件 12.5(c)/2.4）。
-        elements: decode_elements(body),
-        collisions: decode_collisions(body),
-        animations: decode_animations(body),
+        elements: decode_elements(body, reading),
+        collisions: decode_collisions(body, reading),
+        animations: decode_animations(body, reading),
     });
 }
 
@@ -448,40 +555,60 @@ fn decode_append_block(shell: &mut Shell, header: &[String], body: &[Vec<String>
 /// 入力例: `header="10"`, `rest=["2100-2110", "2200-2210"]`
 ///   → `[Single(10), Range{2100,2110}, Range{2200,2210}]`。
 /// 入力例: `header="2200"`, `rest=[]` → `[Single(2200)]`。
-pub(super) fn parse_targets(header: &str, rest: &[String]) -> Vec<AppendTarget> {
-    let mut targets: Vec<AppendTarget> = Vec::with_capacity(1 + rest.len());
+///
+/// 読めない記述子と、範囲の幅の合計が上限を越える記述子は飛ばし、`reading` に崩れを積む
+/// （指摘 36・6）。箱の転記も同じ関数を通るので同じ上限がかかる。
+pub(super) fn parse_targets(
+    header: &str,
+    rest: &[String],
+    reading: &mut Reading,
+) -> Vec<AppendTarget> {
     // ヘッダ数値は列挙要素と同一コードパスで第1要素として積む（一様扱い）。
-    targets.push(parse_target_element(header));
-    for field in rest {
-        targets.push(parse_target_element(field));
-    }
-    targets
+    std::iter::once(header)
+        .chain(rest.iter().map(String::as_str))
+        .filter_map(|field| parse_target_element(field, reading))
+        .collect()
 }
 
 /// 単一ターゲットフィールドを `AppendTarget` へ写像する（ヘッダ数値・列挙要素で共用・要件 7.2/2.5）。
 ///
 /// - 先頭 `!` は除外指定（`!N`→`Exclude`・`!a-b`→`ExcludeRange`）。記述子のまま保持し減算しない（要件 2.5）。
 /// - `-` を含むフィールドは `a-b` 範囲とみなし `Range{start,end}` を返す（展開しない）。それ以外は `Single`。
-/// - 数値化失敗は `unwrap_or(0)` で既定 0 に倒す（要件 3.3・パニックしない）。
-fn parse_target_element(field: &str) -> AppendTarget {
+///   範囲の両端は trim する。
+/// - 読めない数は 0 にせず `None`（`UnreadableNumber`・指摘 36）。
+/// - `Range` の幅（`end - start + 1`・`u64`）をシェル全体で足し、合計が `RANGE_WIDTH_CAP` を越えるなら
+///   `None`（`RangeTooWide`・指摘 6）。番号の値と除外の範囲（広げない）にはかけない。
+fn parse_target_element(field: &str, reading: &mut Reading) -> Option<AppendTarget> {
+    let number = |text: &str| text.trim().parse::<u32>().ok();
+    let pair = |text: &str| {
+        let (start, end) = text.split_once('-')?;
+        Some((number(start)?, number(end)?))
+    };
     // 除外指定 `!`（satori 実例・ukadoc）。`!` を剥がして範囲/単一を判定する（要件 2.5）。
-    if let Some(excluded) = field.strip_prefix('!') {
-        if let Some((start, end)) = excluded.split_once('-') {
-            return AppendTarget::ExcludeRange {
-                start: start.parse::<u32>().unwrap_or(0),
-                end: end.parse::<u32>().unwrap_or(0),
-            };
+    let target = match field.strip_prefix('!') {
+        Some(excluded) if excluded.contains('-') => {
+            pair(excluded).map(|(start, end)| AppendTarget::ExcludeRange { start, end })
         }
-        return AppendTarget::Exclude(excluded.parse::<u32>().unwrap_or(0));
-    }
-    if let Some((start, end)) = field.split_once('-') {
-        AppendTarget::Range {
-            start: start.parse::<u32>().unwrap_or(0),
-            end: end.parse::<u32>().unwrap_or(0),
+        Some(excluded) => number(excluded).map(AppendTarget::Exclude),
+        None if field.contains('-') => {
+            pair(field).map(|(start, end)| AppendTarget::Range { start, end })
         }
-    } else {
-        AppendTarget::Single(field.parse::<u32>().unwrap_or(0))
+        None => number(field).map(AppendTarget::Single),
+    };
+    let Some(target) = target else {
+        reading.unreadable(field);
+        return None;
+    };
+    if let AppendTarget::Range { start, end } = target {
+        // 逆向きの範囲も同じ幅で数える（少なく見積もらない）。
+        let width = u64::from(start.abs_diff(end)) + 1;
+        if reading.range_width + width > RANGE_WIDTH_CAP {
+            reading.too_wide(field);
+            return None;
+        }
+        reading.range_width += width;
     }
+    Some(target)
 }
 
 /// ターゲット記述子リストの **代表 id** を返す（`Surface.id` 用・design Postcondition）。
@@ -528,13 +655,13 @@ fn decode_sort_key(shell: &mut Shell, fields: &[String]) {
 /// - **キーは不透明**（field[0]）: 数値（`6`）・日本語（`静観`）いずれも意味解釈せず
 ///   verbatim に `AliasKey` へ包む（数値 parse しない・要件 8.2）。
 /// - **値は順序付き数値 ID**: field[1] の角括弧を剥がし、内側をカンマ分割して u32 へ
-///   写す（出現順保持・要件 8.3）。非数値・空要素は既定 0 に倒す（要件 3.3・パニックしない）。
+///   写す（出現順保持・要件 8.3）。読めない項目は 0 にせず飛ばして崩れを積む（指摘 36）。
 /// - **重複キーは潰さない**: `shell.aliases` は `Vec` ゆえ各行を単純 push し、同一キーの
 ///   複数出現を全保持する（衝突解決は下流・要件 8.4）。出現順を保つ。
 /// - キー欠落（空行相当）は寛容に読み飛ばす。値欠落・空 `[]` は空 ids で保持する（要件 9.2）。
 ///
 /// 失敗しない（`Result` でない・パニックしない・要件 2.x）。
-fn decode_alias_block(shell: &mut Shell, body: &[Vec<String>]) {
+fn decode_alias_block(shell: &mut Shell, body: &[Vec<String>], reading: &mut Reading) {
     for fields in body {
         // キーは field[0]。欠落した崩れ行（空フィールド列）は読み飛ばす（要件 9.2）。
         let key = match fields.first() {
@@ -547,7 +674,7 @@ fn decode_alias_block(shell: &mut Shell, body: &[Vec<String>]) {
             // キーは不透明・無加工（数値 parse しない・要件 8.2）。
             key: AliasKey::new(key.clone()),
             // 値 `[id,...]` を順序付き u32 リストへ（角括弧剥がし＋カンマ分割・要件 8.3）。
-            ids: parse_alias_ids(fields.get(1).map(String::as_str).unwrap_or("")),
+            ids: parse_alias_ids(fields.get(1).map(String::as_str).unwrap_or(""), reading),
         });
     }
 }
@@ -555,9 +682,9 @@ fn decode_alias_block(shell: &mut Shell, body: &[Vec<String>]) {
 /// alias 値フィールド `[id,id,...]` を順序付き `Vec<u32>` へ写す（要件 8.3）。
 ///
 /// - 前後の `[` `]` を剥がす（無ければ全体をそのまま扱う寛容措置・要件 9.2）。
-/// - 内側をカンマ分割し各要素を u32 化する。空要素・非数値は既定 0（要件 3.3・パニックしない）。
+/// - 内側をカンマ分割し各要素を u32 化する。空要素・非数値は飛ばして崩れを積む（指摘 36）。
 /// - 空（`[]` または空文字列）は空 `Vec` を返す（要件 9.2）。
-fn parse_alias_ids(value: &str) -> Vec<u32> {
+fn parse_alias_ids(value: &str, reading: &mut Reading) -> Vec<u32> {
     // 角括弧を防御的に剥がす（`[2106,2206]` → `2106,2206`）。無ければそのまま。
     let inner = value
         .strip_prefix('[')
@@ -569,7 +696,13 @@ fn parse_alias_ids(value: &str) -> Vec<u32> {
     }
     inner
         .split(',')
-        .map(|s| s.trim().parse::<u32>().unwrap_or(0))
+        .filter_map(|s| {
+            let id = s.trim().parse::<u32>().ok();
+            if id.is_none() {
+                reading.unreadable(s.trim());
+            }
+            id
+        })
         .collect()
 }
 

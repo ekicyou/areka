@@ -73,8 +73,9 @@ pub use boxes::{
 pub use cursor::{CursorBrace, parse_cursor_braces};
 pub use model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
-    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    ElementPath, Interval, Pattern, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
-pub use parse::{ShellIssue, ShellText, parse, parse_all};
+pub use parse::{ShellText, parse, parse_all};
 pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
 pub use undrawn::{UndrawnElementLine, parse_undrawn_elements};

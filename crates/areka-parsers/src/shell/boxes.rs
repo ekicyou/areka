@@ -12,7 +12,7 @@
 //! - 箱の element定義 `elementN,balloon,名前,X,Y` は番号・名前・X・Y を文字列のまま持ち、
 //!   欠けた欄は空文字列にする。
 
-use super::decode::parse_targets;
+use super::decode::{Reading, parse_targets};
 use super::model::AppendTarget;
 use super::parse::parse_all;
 
@@ -77,7 +77,14 @@ pub fn parse_boxes(text: &str) -> ShellBoxes {
 }
 
 /// 閉じたブレス 1 つを、箱に関わるものなら転記する（他のブレスは `None`・`parse_all` が呼ぶ）。
-pub(crate) fn transcribe_block(header: &[String], body: &[Vec<String>]) -> Option<BoxDefinition> {
+///
+/// `reading` は画像の読み手と同じ上限で見出しを読むための箱の側の状態（崩れは `parse_all` が捨てる＝
+/// 記録は画像の側の 1 回だけ）。記述子が 1 つも残らない `surface*` 系のブレスは画像の読み手と同じく並べない。
+pub(crate) fn transcribe_block(
+    header: &[String],
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) -> Option<BoxDefinition> {
     let head = header.first().map(String::as_str).unwrap_or("");
     let rest = header.get(1..).unwrap_or(&[]);
 
@@ -89,17 +96,29 @@ pub(crate) fn transcribe_block(header: &[String], body: &[Vec<String>]) -> Optio
             lines: body.to_vec(),
         }));
     }
+    if head == "surface.alias" {
+        return None;
+    }
     if let Some(number) = head.strip_prefix("surface.append") {
-        return Some(BoxDefinition::Append(surface_lines(number, rest, body)));
+        return surface_lines(number, rest, body, reading).map(BoxDefinition::Append);
     }
     if let Some(number) = head.strip_prefix("surface") {
-        return Some(BoxDefinition::Surface(surface_lines(number, rest, body)));
+        return surface_lines(number, rest, body, reading).map(BoxDefinition::Surface);
     }
     None
 }
 
 /// `surface*`・`surface.append*`ブレスの見出しと箱の element定義を転記する。
-fn surface_lines(number: &str, rest: &[String], body: &[Vec<String>]) -> BoxSurfaceLines {
+fn surface_lines(
+    number: &str,
+    rest: &[String],
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) -> Option<BoxSurfaceLines> {
+    let targets = parse_targets(number, rest, reading);
+    if targets.is_empty() {
+        return None;
+    }
     let field = |fields: &[String], i: usize| fields.get(i).cloned().unwrap_or_default();
     let elements = body
         .iter()
@@ -114,8 +133,5 @@ fn surface_lines(number: &str, rest: &[String], body: &[Vec<String>]) -> BoxSurf
             })
         })
         .collect();
-    BoxSurfaceLines {
-        targets: parse_targets(number, rest),
-        elements,
-    }
+    Some(BoxSurfaceLines { targets, elements })
 }

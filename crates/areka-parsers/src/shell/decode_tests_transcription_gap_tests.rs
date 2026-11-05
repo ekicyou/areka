@@ -146,3 +146,28 @@ kero.surface.alias
         vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Alias(0),]
     );
 }
+
+/// descriptブレスの中の並びの鍵を読む（指摘 4・ukadoc の descriptブレス記述例
+/// 「descript { version,1 / collision-sort,ascend / animation-sort,ascend }」）。
+/// 後の行が勝ち、トップレベルの行の道も残る。
+#[test]
+fn sort_keys_inside_descript_brace_are_transcribed() {
+    let input = "\
+descript
+{
+version,1
+collision-sort,ascend
+animation-sort,descend
+animation-sort,ascend
+}
+";
+    let shell = decode(lex(input));
+    assert_eq!(shell.animation_sort, Some(SortOrder::Ascend));
+    assert_eq!(shell.collision_sort, Some(SortOrder::Ascend));
+
+    // ブレスの後のトップレベルの行が勝つ（登場順で後の行が勝つ）。
+    let shell = decode(lex(
+        "descript\n{\ncollision-sort,ascend\n}\ncollision-sort,descend\n",
+    ));
+    assert_eq!(shell.collision_sort, Some(SortOrder::Descend));
+}

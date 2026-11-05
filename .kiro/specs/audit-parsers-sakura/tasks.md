@@ -82,7 +82,7 @@
   - 1 回の読みで 4 つの結果と崩れを返す口を置き、今の 4 つの公開の関数はその射影として残す。崩れの型は記録の重さと文言を返す口を持つ（記録そのものは出さない・設計の討議の議題 7）
   - `brace_line_inside_body_starts_new_brace`・`non_brace_line_between_header_and_brace_is_comment`・`parse_all_reports_unclosed_final_brace` が緑で、今の boxes・cursor・undrawn・parse のテストが変更なしで緑
   - _Requirements: 2.1, 2.6, 3.1, 7.1, 7.6, 7.10_
-- [ ] 4.2 descript の並びの鍵・ウェイトの範囲・範囲の幅の上限・読めない数を直す（T12）
+- [x] 4.2 descript の並びの鍵・ウェイトの範囲・範囲の幅の上限・読めない数を直す（T12）
   - `descript` ブレスの中の並びの鍵を読む（4・ukadoc で確かめた正典＝research.md 4 節）
   - ウェイトの `最小-最大` は小さい方を待ちにして崩れを積む（5）
   - シェル全体の範囲の幅の合計が 8193 を越える記述子を飛ばして崩れを積む。番号の値にはかけず、幅は `u64` で数え、除外の範囲にはかけない（6・設計の討議の議題 1）。`audit-emo-compose` は fold の範囲の展開をこの上限だけに任せた（2026-11-05 の知らせ）ので、上限を緩めたり外したりするときは先に相手へ伝える
@@ -206,3 +206,4 @@
 - 4.3 への申し送り（3.4 のレビュー）: 指摘 74 の doc の直しで、`sakura/lexer.rs:55-57` の `Token::Shorthand` の doc（`word='w'`／`'b'`／`'p'` の字の形）を `ShorthandWord` の型に合わせ、`decode.rs:8-37` の古い言い回しも直す。
 - 4.1: `Token::Brace` に design の `line` は置かなかった（読む人がいない）。崩れの行は当のブレスの見出しの行。ブレスの外の迷子の `}` と見出しの無い `{` は前と同じく黙って捨てる（前は誰も読まない Raw）。8.2 のかけ直しで指摘になれば、`ShellIssue` に腕を足す（Revalidation Trigger）。4 つの公開の関数はそれぞれ `parse_all` を回す（7.4 で 1 回読みへ）。
 - 4.3 への申し送り（4.1 のレビュー）: `shell/decode_tests_skeleton_tests.rs:91` の「lexer は TopLevel/Raw に落とし」の `Raw` が古い。
+- 4.2: 上限は `shell::model::RANGE_WIDTH_CAP: u64 = 8193`（シェル全体の範囲の幅の合計・`Range` だけ・番号の値と `!a-b` にはかけない）。`ShellIssue` は `model.rs` へ移った（公開の道は同じ）。箱の側も同じ上限で読み、崩れは画像の側の 1 回だけ返す。記述子が残らないブレスと `surface.alias` は箱にも並べない。

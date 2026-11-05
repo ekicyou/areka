@@ -76,13 +76,20 @@ fn surface_large_id_is_extracted() {
     assert_eq!(shell.surfaces[0].id, 1000);
 }
 
-/// 非数値 ID（`surface` の後ろに数字がない崩れヘッダ）→ パニックせず既定 0 に倒す（要件 3.3）。
+/// 非数値 ID（`surface` の後ろに数字がない崩れヘッダ）→ 0 にせず記述子を飛ばし、記述子が
+/// 残らないブレスは積まない（パニックしない・指摘 36）。
 #[test]
-fn malformed_surface_id_defaults_to_zero() {
+fn malformed_surface_id_is_skipped_not_zero() {
     let input = "surface\n{\nelement0,overlay,x.png,0,0\n}\n";
-    let shell = decode(lex(input));
-    assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 0);
+    let text = crate::shell::parse_all(input);
+    assert!(text.shell.surfaces.is_empty());
+    assert_eq!(
+        text.issues,
+        vec![crate::shell::ShellIssue::UnreadableNumber {
+            heading: "surface".into(),
+            text: String::new(),
+        }]
+    );
 }
 
 /// ヘッダ欠落（surface 定義がいきなり本体行のみ・崩れ入力）→ 失敗せず継続（要件 3.3）。

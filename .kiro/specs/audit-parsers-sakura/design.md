@@ -361,7 +361,7 @@ pub fn text_playback_duration(text: &str) -> f64;   // 形も値も変えない�
 
 ## 開発者に仰いで決めた 2 件（2026-11-05 開発者「推奨案で承認」）
 
-1. **指摘 6 の範囲の幅の上限＝8193**。要件 7.6 の「元からある頭打ちだけから決める」に当てて、ukadoc が MATERIA だけの制限として載せる数（一般の決まりは「割り振りは基本的に自由」・番号の値は縛らない）を借りる。ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） を使う（調べたほかの候補＝番号の型 `u32`・GPU の面の最大寸・`AnimationLimits` が使えない理由は research.md 12.3）。上限は 1 つの範囲の幅（`end - start + 1`）だけにかけ、番号の値にはかけない。越えた記述子は飛ばして `RangeTooWide` を積み、`shell_target.rs` が記述子を名指して `error!` を出す。シェルは全体として読む。`audit-emo-compose` が本 spec に任せた値（そちらの指摘 1⑶）もこれで決まる＝伝言で伝える。
+1. **指摘 6 の範囲の幅の上限＝8193**。要件 7.6 の「元からある頭打ちだけから決める」に当てて、ukadoc が MATERIA だけの制限として載せる数（一般の決まりは「割り振りは基本的に自由」・番号の値は縛らない）を借りる。ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） を使う（調べたほかの候補＝番号の型 `u32`・GPU の面の最大寸・`AnimationLimits` が使えない理由は research.md 12.3）。上限は範囲の幅（`end - start + 1`）だけにかけ、番号の値にはかけない（数える単位は「設計の討議で確定した 7 件」の 1 で改め＝シェル全体の範囲の幅の合計）。越えた記述子は飛ばして `RangeTooWide` を積み、`shell_target.rs` が記述子を名指して `error!` を出す。シェルは全体として読む。`audit-emo-compose` が本 spec に任せた値（そちらの指摘 1⑶）もこれで決まる＝伝言で伝える。
 2. **`areka-parsers` の dev-dependency に `log-capture-kit` を足す**（ワークスペースのクレート・テスト専用・要件 4.4 と同じウェーブの約束 ⑶ の承認された例外＝例外の記録は要件の側で進行役が書く）。`Cargo.lock` で変わるのは `areka-parsers` の塊の 1 行。最初に要るタスク（T2）で足し、`tech.md` に登記する。9・14・17・49 の落ちるテストは `areka-parsers` の中で `log_capture_kit::capture` を使う。
 
 ## 裁定に触れる決め（設計の討議へ）

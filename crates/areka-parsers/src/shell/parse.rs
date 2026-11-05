@@ -1,8 +1,9 @@
 //! 公開 facade（parse・parse_all）— 1 回の字句分けから 4 つの結果と崩れを返す純粋関数。
 //!
 //! デコード済みの surfaces.txt 文字列を 1 回だけ字句に分け（`lexer::lex`）、閉じたブレスの列を
-//! 画像の読み手（`decode::decode` → `Shell`）・箱・描けない行・cursorブレスの転記へ 1 本の輪で渡し、
-//! 字句の段の崩れを `ShellIssue` へ写す（指摘 35）。状態も I/O も持たず、記録も出さない
+//! 画像の読み手（`decode::decode_token` → `Shell`）・箱・描けない行・cursorブレスの転記へ 1 本の輪で渡し、
+//! 字句の段の崩れと読みで飛ばした記述子（`decode::Reading`）を登場順の `ShellIssue` へ集める
+//! （指摘 35・36・5・6）。状態も I/O も持たず、記録も出さない
 //! （記録は読み込む側・依存方向 `model ← lexer ← decode ← parse`）。
 //!
 //! 契約（design「Facade Layer — parse」）:
@@ -13,9 +14,9 @@
 
 use super::boxes::{BoxDefinition, transcribe_block};
 use super::cursor::{CursorBrace, cursor_brace};
-use super::decode::decode;
+use super::decode::{Reading, decode_token, empty_shell};
 use super::lexer::{Token, lex};
-use super::model::Shell;
+use super::model::{Shell, ShellIssue};
 use super::undrawn::{UndrawnElementLine, undrawn_lines};
 
 /// 1 回の読みの結果（`parse_all`）。4 つの公開の読み手はこの射影。
@@ -33,69 +34,43 @@ pub struct ShellText {
     pub issues: Vec<ShellIssue>,
 }
 
-/// 読みの崩れ 1 件。見出しは原文、行の番号は見出し行の 1 始まりの番号。
-#[derive(Clone, Debug, PartialEq)] // #[non_exhaustive] を付けない（指摘 30 と同じ理由）
-pub enum ShellIssue {
-    /// 終わりで閉じていないブレス（中身は落とした・指摘 34）。
-    UnclosedAtEnd { heading: String, line: usize },
-    /// `}` が抜け、次の `{` で区切り直したブレス（中身は残した・指摘 33）。
-    ClosedByNextBrace { heading: String, line: usize },
-}
-
-impl ShellIssue {
-    /// 記録の重さ。
-    pub fn severity(&self) -> tracing::Level {
-        match self {
-            ShellIssue::UnclosedAtEnd { .. } | ShellIssue::ClosedByNextBrace { .. } => {
-                tracing::Level::WARN
-            }
-        }
-    }
-
-    /// 記録の文言（見出しと行の番号を名指す）。
-    pub fn message(&self) -> String {
-        match self {
-            ShellIssue::UnclosedAtEnd { heading, line } => format!(
-                "shell: surfaces.txt の {line} 行目のブレス `{heading}` が終わりまで閉じていないので中身を読まない"
-            ),
-            ShellIssue::ClosedByNextBrace { heading, line } => format!(
-                "shell: surfaces.txt の {line} 行目のブレス `{heading}` の `}}` が抜けているので、次の `{{` の手前で閉じた"
-            ),
-        }
-    }
-}
-
 /// デコード済み surfaces.txt 文字列を 1 回だけ字句に分け、4 つの結果と崩れを返す純粋関数（失敗しない）。
 pub fn parse_all(input: &str) -> ShellText {
     let tokens = lex(input);
+    let mut shell = empty_shell();
+    // 画像の側の読み（崩れは返す）と、同じ上限で見出しを読む箱の側の読み（崩れは捨てる＝記録は 1 回）。
+    let mut reading = Reading::default();
+    let mut box_reading = Reading::default();
     let mut boxes = Vec::new();
     let mut undrawn = Vec::new();
     let mut cursor_braces = Vec::new();
-    let mut issues = Vec::new();
     for token in &tokens {
+        decode_token(&mut shell, token, &mut reading);
         match token {
             Token::Brace { header, body } => {
-                boxes.extend(transcribe_block(header, body));
+                boxes.extend(transcribe_block(header, body, &mut box_reading));
                 undrawn_lines(header, body, &mut undrawn);
                 cursor_braces.extend(cursor_brace(header, body));
             }
             Token::TopLevel(_) => {}
-            Token::Unclosed { heading, line } => issues.push(ShellIssue::UnclosedAtEnd {
+            Token::Unclosed { heading, line } => reading.issues.push(ShellIssue::UnclosedAtEnd {
                 heading: heading.clone(),
                 line: *line,
             }),
-            Token::Reopened { heading, line } => issues.push(ShellIssue::ClosedByNextBrace {
-                heading: heading.clone(),
-                line: *line,
-            }),
+            Token::Reopened { heading, line } => {
+                reading.issues.push(ShellIssue::ClosedByNextBrace {
+                    heading: heading.clone(),
+                    line: *line,
+                })
+            }
         }
     }
     ShellText {
-        shell: decode(tokens),
+        shell,
         boxes,
         undrawn,
         cursor_braces,
-        issues,
+        issues: reading.issues,
     }
 }
 

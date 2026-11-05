@@ -13,7 +13,7 @@
 //!   `new()` コンストラクタ＋read-only accessor（`as_str`）のみ公開（dola `ActorKey` 流儀）。
 //! - descript ヘッダ・charset はモデルに保持しない（要件 3.4・2 例目の実需まで追加しない要件 10.5）。
 //!
-//! 依存方向 `model ← lexer ← decode ← parse` の最上流ゆえ他層に依存しない（std のみ）。
+//! 依存方向 `model ← lexer ← decode ← parse` の最上流ゆえ他層に依存しない（std と、崩れの記録の重さ `tracing::Level` だけ）。
 
 /// surfaces.txt 全体のルート集約（下流共有 I/O 契約）。
 /// descript ヘッダ・charset は寛容スキップし保持しない（要件 3）。
@@ -299,5 +299,58 @@ impl AliasKey {
     /// alias キーの opaque 中身を読み取る（改変不可・要件 8.2）。
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+/// 範囲の幅の合計の上限（シェル全体・指摘 6）。ukadoc が MATERIA の制限として載せる番号の数（0〜8192）を借りた。
+/// 番号の値にはかけない。`audit-emo-compose` の fold の範囲の展開はこの上限だけに頼るので、緩めるときは先に伝える。
+pub const RANGE_WIDTH_CAP: u64 = 8193;
+
+/// 読みの崩れ 1 件。見出しは原文、行の番号は見出し行の 1 始まりの番号。
+#[derive(Clone, Debug, PartialEq)] // #[non_exhaustive] を付けない（指摘 30 と同じ理由）
+pub enum ShellIssue {
+    /// 終わりで閉じていないブレス（中身は落とした・指摘 34）。
+    UnclosedAtEnd { heading: String, line: usize },
+    /// `}` が抜け、次の `{` で区切り直したブレス（中身は残した・指摘 33）。
+    ClosedByNextBrace { heading: String, line: usize },
+    /// 読めない数の記述子・項目を飛ばした（0 にしない・指摘 36）。`text` は飛ばした欄の原文。
+    UnreadableNumber { heading: String, text: String },
+    /// シェル全体の範囲の幅の合計が上限を越える範囲の記述子を飛ばした（指摘 6）。
+    RangeTooWide { heading: String, text: String },
+    /// ウェイトの `最小-最大` の最小を待ちにした（ランダムに選ぶのは未対応・指摘 5）。
+    WaitRange { heading: String, text: String },
+}
+
+impl ShellIssue {
+    /// 記録の重さ（`RangeTooWide` は error、ほかは warn）。
+    pub fn severity(&self) -> tracing::Level {
+        match self {
+            ShellIssue::RangeTooWide { .. } => tracing::Level::ERROR,
+            ShellIssue::UnclosedAtEnd { .. }
+            | ShellIssue::ClosedByNextBrace { .. }
+            | ShellIssue::UnreadableNumber { .. }
+            | ShellIssue::WaitRange { .. } => tracing::Level::WARN,
+        }
+    }
+
+    /// 記録の文言（見出しと、行の番号または欄の原文を名指す）。
+    pub fn message(&self) -> String {
+        match self {
+            ShellIssue::UnclosedAtEnd { heading, line } => format!(
+                "shell: surfaces.txt の {line} 行目のブレス `{heading}` が終わりまで閉じていないので中身を読まない"
+            ),
+            ShellIssue::ClosedByNextBrace { heading, line } => format!(
+                "shell: surfaces.txt の {line} 行目のブレス `{heading}` の `}}` が抜けているので、次の `{{` の手前で閉じた"
+            ),
+            ShellIssue::UnreadableNumber { heading, text } => format!(
+                "shell: surfaces.txt のブレス `{heading}` の `{text}` は番号が読めないので飛ばした"
+            ),
+            ShellIssue::RangeTooWide { heading, text } => format!(
+                "shell: surfaces.txt のブレス `{heading}` の範囲 `{text}` を足すとシェル全体の範囲の幅の合計が上限 {RANGE_WIDTH_CAP} を越えるので飛ばした"
+            ),
+            ShellIssue::WaitRange { heading, text } => format!(
+                "shell: surfaces.txt のブレス `{heading}` のウェイト `{text}` から選ぶのは未対応なので最小を待ちにした"
+            ),
+        }
     }
 }

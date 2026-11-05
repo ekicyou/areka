@@ -207,3 +207,33 @@ animation2.interval,bind\n\
         (2, &Interval::Bind, true)
     );
 }
+
+/// ウェイトの `最小-最大` は小さい方を待ちにして `WaitRange` を積む（指摘 5・ランダムは未対応）。
+/// 両側が数でないものは今どおり 0（崩れは積まない）。
+#[test]
+fn pattern_wait_range_takes_minimum_and_is_reported() {
+    let input = "\
+surface0
+{
+animation1.interval,bind
+animation1.pattern0,overlay,10, 50 - 20 ,0,0
+animation1.pattern1,overlay,11,abc-5,0,0
+animation1.pattern2,overlay,12,30,0,0
+}
+";
+    let text = crate::shell::parse_all(input);
+    let waits: Vec<u32> = text.shell.surfaces[0].animations[0]
+        .patterns
+        .iter()
+        .map(|p| p.wait)
+        .collect();
+    assert_eq!(waits, vec![20, 0, 30]);
+    assert_eq!(
+        text.issues,
+        vec![crate::shell::ShellIssue::WaitRange {
+            heading: "surface0".into(),
+            text: "50 - 20".into(),
+        }]
+    );
+    assert_eq!(text.issues[0].severity(), tracing::Level::WARN);
+}
