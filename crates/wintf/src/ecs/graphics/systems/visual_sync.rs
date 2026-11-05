@@ -10,6 +10,42 @@ use tracing::{debug, error};
 use windows::UI::Composition::{ContainerVisual, Visual as WucVisual};
 use windows::core::Interface;
 
+/// 木の同期の係が子として書き換える部品（ChildOf + VisualGraphics を持つ全 Entity）
+type SyncChildData = (
+    Entity,
+    &'static ChildOf,
+    &'static mut VisualGraphics,
+    Option<&'static Name>,
+);
+
+/// 木の同期の係が読むだけの部品（VisualGraphics を持つ全 Entity）
+type SyncReadData = (
+    Entity,
+    &'static VisualGraphics,
+    Option<&'static ChildOf>,
+    Option<&'static Name>,
+);
+
+/// 性質の同期の係が読む部品
+type PropertySyncData = (
+    Entity,
+    &'static Arrangement,
+    &'static GlobalArrangement,
+    &'static Visual,
+    &'static VisualGraphics,
+    Option<&'static Name>,
+    Has<Window>,
+);
+
+/// 性質の同期の係が見る変化（配置・見た目の部品・見た目の作り直し）
+type PropertySyncFilter = Or<(
+    Changed<Arrangement>,
+    Changed<GlobalArrangement>,
+    Changed<Visual>,
+    // 見た目が作り直された部品にも写す
+    Changed<VisualGraphics>,
+)>;
+
 /// 同じ WUC の見た目か（控えは `VisualGraphics::visual()` の複製なので同じポインタになる）。
 fn same_visual(a: Option<&WucVisual>, b: &WucVisual) -> bool {
     a.is_some_and(|a| a.as_raw() == b.as_raw())
@@ -31,12 +67,7 @@ fn same_visual(a: Option<&WucVisual>, b: &WucVisual) -> bool {
 /// 係には `Err` を返す先が無いので、失敗は記録だけにする（外す失敗は親が先に消えた場合が
 /// あるので `debug!`、子の全部を外す失敗は `error!`）。
 pub fn visual_hierarchy_sync_system(
-    mut vg_queries: ParamSet<(
-        // ChildOf + VisualGraphics を持つ全Entity
-        Query<(Entity, &ChildOf, &mut VisualGraphics, Option<&Name>)>,
-        // VisualGraphics を持つ全Entity（読むだけ）
-        Query<(Entity, &VisualGraphics, Option<&ChildOf>, Option<&Name>)>,
-    )>,
+    mut vg_queries: ParamSet<(Query<SyncChildData>, Query<SyncReadData>)>,
     child_of_query: Query<&ChildOf>,
     // Children コンポーネント（兄弟順序の権威的ソース）
     children_query: Query<&Children>,
@@ -234,30 +265,11 @@ pub fn visual_hierarchy_sync_system(
 /// - Arrangement.offset → Visual.SetOffsetX/SetOffsetY
 /// - Opacity → Visual.SetOpacity
 ///
-/// DirectCompositionのVisual Offsetは物理ピクセル単位で指定する必要がある。
+/// WUC の Visual の Offset は物理ピクセル単位で指定する必要がある。
 /// Arrangement.offset（論理座標）にGlobalArrangement.transform（累積DPIスケール）を適用して物理座標に変換。
 ///
 /// Compositionスケジュールで実行。
-pub fn visual_property_sync_system(
-    changed_entities: Query<
-        (
-            Entity,
-            &Arrangement,
-            &GlobalArrangement,
-            &Visual,
-            &VisualGraphics,
-            Option<&Name>,
-            Has<Window>,
-        ),
-        Or<(
-            Changed<Arrangement>,
-            Changed<GlobalArrangement>,
-            Changed<Visual>,
-            // 見た目が作り直された部品にも写す
-            Changed<VisualGraphics>,
-        )>,
-    >,
-) {
+pub fn visual_property_sync_system(changed_entities: Query<PropertySyncData, PropertySyncFilter>) {
     for (entity, arrangement, global_arrangement, visual_component, vg, name, is_window) in
         changed_entities.iter()
     {
@@ -265,7 +277,8 @@ pub fn visual_property_sync_system(
             continue;
         };
 
-        let entity_name = format_entity_name(entity, name);
+        // 名前は失敗の記録のときだけ作る（位置が動くたびに全部の見た目が通る道）
+        let entity_name = || format_entity_name(entity, name);
 
         // Offset同期: Arrangementのoffset（論理座標）にGlobalArrangementのscale（累積DPIスケール）を適用
         // ただし、WindowエンティティはWin32がCompositionTargetを通じて位置を管理するため、
@@ -287,7 +300,7 @@ pub fn visual_property_sync_system(
             };
             if let Err(e) = visual_com.SetOffset(offset) {
                 error!(
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     error = ?e,
                     "[visual_property_sync] SetOffset failed"
                 );
@@ -302,7 +315,7 @@ pub fn visual_property_sync_system(
         };
         if let Err(e) = visual_com.SetOpacity(opacity_value) {
             error!(
-                entity = %entity_name,
+                entity = %entity_name(),
                 error = ?e,
                 "[visual_property_sync] SetOpacity failed"
             );

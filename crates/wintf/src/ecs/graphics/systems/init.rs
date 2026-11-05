@@ -189,6 +189,8 @@ pub fn init_wuc_resource(
                 error = ?e,
                 "[init_wuc_resource] WucGraphicsResource initialization failed"
             );
+            // 次の画面更新でも必ず回して試し直す（39 番）
+            crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
         }
     }
 }
@@ -197,6 +199,10 @@ pub fn init_wuc_resource(
 ///
 /// 本番では装置と WUC の資源が使える回だけ回す（`wuc_ready`）。中の早い戻りは、
 /// 係を自分で登録したときの守り。
+///
+/// 毎回すべての窓を見て、的が無いか無効な窓だけを作る（有効な窓は可変で触らない）。
+/// 変化の印で絞らないのは、作り直しに一度失敗した窓を次の回で試し直すため（39 番）。
+/// 失敗したら `GRAPHICS` の旗を立て、次の画面更新を必ず回す。
 pub fn init_window_graphics(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<Res<WucGraphicsResource>>,
@@ -205,11 +211,10 @@ pub fn init_window_graphics(
             Entity,
             &crate::ecs::window::Window,
             &crate::ecs::window::WindowHandle,
-            &HasGraphicsResources,
             Option<&mut WindowGraphics>,
             Option<&Name>,
         ),
-        Or<(Without<WindowGraphics>, Changed<HasGraphicsResources>)>,
+        With<HasGraphicsResources>,
     >,
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
@@ -221,7 +226,10 @@ pub fn init_window_graphics(
         return;
     }
 
-    for (entity, _window, handle, _res, window_graphics, name) in query.iter_mut() {
+    for (entity, _window, handle, window_graphics, name) in query.iter_mut() {
+        if window_graphics.as_ref().is_some_and(|wg| wg.is_valid()) {
+            continue;
+        }
         let entity_name = format_entity_name(entity, name);
         match window_graphics {
             None => {
@@ -246,42 +254,42 @@ pub fn init_window_graphics(
                             error = ?e,
                             "[init_window_graphics] Error creating WindowGraphics"
                         );
+                        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
                     }
                 }
             }
             Some(mut wg) => {
-                // Changed<HasGraphicsResources>でトリガーされ、!is_valid()の場合に再初期化
-                if !wg.is_valid() {
-                    debug!(
-                        frame = frame_count.0,
-                        entity = %entity_name,
-                        "[init_window_graphics] WindowGraphics re-initializing"
-                    );
-                    let old_generation = wg.generation();
-                    match create_window_graphics_for_hwnd(
-                        &graphics,
-                        &wuc_res,
-                        handle.hwnd,
-                        old_generation.wrapping_add(1),
-                    ) {
-                        Ok(new_wg) => {
-                            *wg = new_wg;
-                            debug!(
-                                frame = frame_count.0,
-                                entity = %entity_name,
-                                old_generation = old_generation,
-                                new_generation = wg.generation(),
-                                "[init_window_graphics] WindowGraphics re-initialized"
-                            );
-                        }
-                        Err(e) => {
-                            error!(
-                                frame = frame_count.0,
-                                entity = %entity_name,
-                                error = ?e,
-                                "[init_window_graphics] Re-initialization error"
-                            );
-                        }
+                // ここに来るのは無効な的だけ（有効な窓は上で飛ばした）
+                debug!(
+                    frame = frame_count.0,
+                    entity = %entity_name,
+                    "[init_window_graphics] WindowGraphics re-initializing"
+                );
+                let old_generation = wg.generation();
+                match create_window_graphics_for_hwnd(
+                    &graphics,
+                    &wuc_res,
+                    handle.hwnd,
+                    old_generation.wrapping_add(1),
+                ) {
+                    Ok(new_wg) => {
+                        *wg = new_wg;
+                        debug!(
+                            frame = frame_count.0,
+                            entity = %entity_name,
+                            old_generation = old_generation,
+                            new_generation = wg.generation(),
+                            "[init_window_graphics] WindowGraphics re-initialized"
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            frame = frame_count.0,
+                            entity = %entity_name,
+                            error = ?e,
+                            "[init_window_graphics] Re-initialization error"
+                        );
+                        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
                     }
                 }
             }

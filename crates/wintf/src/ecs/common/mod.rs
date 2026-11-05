@@ -54,7 +54,8 @@
 //! ```rust,ignore
 //! use wintf::ecs::common::DepthFirstReversePostOrder;
 //!
-//! for entity in DepthFirstReversePostOrder::new(root, &children_query) {
+//! let mut traversal = DepthFirstReversePostOrder::new(root);
+//! while let Some(entity) = traversal.next(world) {
 //!     if hit_test_entity(world, entity, point) {
 //!         return Some(entity);
 //!     }

@@ -100,7 +100,7 @@ pub fn mark_dirty_surfaces(
 /// - Req 5.1: スキップ理由ログ
 /// - Req 5.2: 作成ログ（物理サイズ）
 ///
-/// Note: SurfaceGraphicsは visual_resource_management_system で事前に空で配置されているため、
+/// Note: SurfaceGraphicsは Visual の on_add（と後から窓へつなぐ係）で事前に空で配置されているため、
 /// ここでは直接更新（set_surface）する。commands.insert() は使用しない。
 ///
 /// 見た目が作り直された部品（`Changed<VisualGraphics>`）も対象にする。立ち直りでは描画面も
@@ -130,15 +130,13 @@ pub fn deferred_surface_creation_system(
     for (entity, visual_graphics, global_arrangement, mut surface_graphics, mut dirty, name) in
         query.iter_mut()
     {
-        let entity_name = format_entity_name(entity, name);
-
         // GlobalArrangementからサイズを計算
         let Some((width, height)) =
             calculate_surface_size_from_global_arrangement(global_arrangement)
         else {
             // Req 5.1: スキップ理由ログ
             trace!(
-                entity = %entity_name,
+                entity = %format_entity_name(entity, name),
                 bounds = ?global_arrangement.bounds,
                 "[deferred_surface_creation] Entity skipped: invalid size from GlobalArrangement"
             );
@@ -150,6 +148,8 @@ pub fn deferred_surface_creation_system(
         if surface_graphics.is_valid() && surface_graphics.size == (width, height) {
             continue;
         }
+        // 名前は作る・作り直す部品の分だけ作る（位置が動くたびに全部の部品が通る道）
+        let entity_name = format_entity_name(entity, name);
 
         // 新規作成かリサイズかを判定
         let is_new = !surface_graphics.is_valid();

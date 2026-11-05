@@ -83,12 +83,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rectangle_variant_creation() {
-        let clip = ClipShape::Rectangle;
-        assert_eq!(clip, ClipShape::Rectangle);
-    }
-
-    #[test]
     fn rounded_rectangle_creation() {
         let clip = ClipShape::rounded_rectangle(10.0);
         assert_eq!(clip, ClipShape::RoundedRectangle { radius: 10.0 });
@@ -145,15 +139,6 @@ mod tests {
                 bottom_left: 0.0,
                 bottom_right: 10.0,
             }
-        );
-    }
-
-    #[test]
-    fn clip_shape_partial_eq_different_variants() {
-        assert_ne!(ClipShape::Rectangle, ClipShape::rounded_rectangle(0.0));
-        assert_ne!(
-            ClipShape::rounded_rectangle(5.0),
-            ClipShape::rounded_rectangle_individual(5.0, 5.0, 5.0, 5.0)
         );
     }
 

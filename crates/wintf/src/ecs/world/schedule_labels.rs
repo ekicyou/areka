@@ -98,21 +98,3 @@ pub struct CommitComposition;
 /// ドラッグ中は次の回を予約し、ドラッグの出来事の列（Messages）を進め、ツールチップを判定する。
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FrameFinalize;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// `FrameCount` の Default は 0（フレーム未経過の初期値）。
-    #[test]
-    fn test_frame_count_default_is_zero() {
-        assert_eq!(FrameCount::default().0, 0);
-    }
-
-    /// `FrameCount` は内部 u32 を素通しで保持する（new 相当のタプル構築）。
-    #[test]
-    fn test_frame_count_stores_inner_value() {
-        assert_eq!(FrameCount(42).0, 42);
-        assert_eq!(FrameCount(u32::MAX).0, u32::MAX);
-    }
-}

@@ -443,3 +443,57 @@ wintf の描画の芯である。ECS の World と 13 本のスケジュール�
 - `audit-emo-present`: `presenter/refresh.rs` の取り決め（10 節の 2）が今も生きているかと着地の見込みを 11-05 に伝言で尋ねた。あちらは main に未着地。11-05 にあちらから「取り決めはそのまま生きている（あちらの design.md・tasks.md のタスク 1・5 に記録）。`apply_show` が `PresentOutcome` を返し `reply` 引数を外す変更と `refresh_scale` を戻り値で読む変更はあちらのタスク 1 で入る。実装は未着手で着地は 17 タスクの後＝こちらが先に着地する見込みが高く、その場合はあちらがこちらの形に合わせる」と返事が来た。済み。
 - `wintf-visual-tree`（未着手・セッション無し）: 8 番（手本の注記を直す）は 11-05 の申し送りで brief に記録済み。9 番（祖先の上限 1,024）の重なりを、あちらの brief の申し送りの節に 1 行足して伝えた。
 - 3.2 の実装で判明（11-05）: `CreateEventW` は windows 0.62.2 で `#[cfg(feature = "Win32_Security")]` 付きで、wintf の本体ではこの機能が無い（`cargo tree -p wintf -e features,normal -i windows` で 0 件）。案は ㋐ `crates/wintf/Cargo.toml` の `windows` に crate ごとの機能として足す（`shiori-host32-host` と同じ形・根の `Cargo.toml` は `audit-wintf-runtime` が直すので触らない）㋑ `link!` で自前に宣言 ㋒ OS の知らせをやめる（設計の討議の決め 1 を覆す）。㋐で確定し design.md の 6 番の一文を直した。`audit-wintf-runtime` へ伝えた。
+
+## 12. 直し終わりの 2 度目の audit（2026-11-06・タスク 7.1）
+
+- 測った時点: main `8eb8758c`（枝の元 `88eb0a43` からの 1 コミット＝`doc-tree-tidy` は範囲のファイルに触れていない）と、作業枝 `d720ed66` にこの節の直しを足したもの。
+- 物差し: ponytail 5.3.2 の `/ponytail:ponytail-audit`。数の上限を外し、受け持つ範囲だけにかけた。`wintf-visual-tree` へ申し送った 22〜30 番（`visual/`）、design.md の「直さずに残すもの」と 9.6 節、design.md の「Out of Boundary」に挙げた物は数えない。
+
+### 12.1 範囲（要件 1）
+
+1 節と同じ決まり（`crates/wintf/src/ecs/` のうち `drag*`・`pointer*`・`clickthrough*`・`tooltip*`・`layout*`・`widget*`・`window*` でないもの全部）で測り直した。
+
+| 区分 | ファイル数 | 行数 |
+|---|---|---|
+| コード | 45 | 8,194 |
+| テスト（`_tests.rs`・`tests.rs`・`test_support.rs`） | 14 | 2,778 |
+| 合計 | 59 | 10,972 |
+
+- 着手のとき（54 ファイル）より後に足されたファイルは 5 つで、どれもこの spec の直しで置いたもの: `common/ancestors.rs`・`common/ancestors_tests.rs`・`graphics/core_tests.rs`・`graphics/systems/visual_sync_tests.rs`・`world/world_schedule_tests.rs`。ほかの持ち主の名前に当たらないので範囲に入れた（要件 1.2）。消えたファイルは無い。
+- ほかに `.rs` でないファイルが 1 つある（`visual/draw/README.md`・48 行）。
+- 59 ファイルと README を全部、頭から終わりまで読んだ。読まなかったファイルは無い。行数は 12.2 の直しの後の数。
+
+### 12.2 1 巡目の新しい指摘（4 件）と直し
+
+| 番号 | 組 | 指摘 | 場所 | 直し |
+|---|---|---|---|---|
+| 36 | 直したほうがよい | 位置が動くたびに、失敗の記録にしか使わない名前の文字列を部品ごとに作る（17 番の `render.rs` と同じ形の取り残し）。11 番の場面（バルーンがシェルに付いて動く間）では、毎回、見た目の部品の数だけ文字列を作って捨てる | `graphics/systems/visual_sync.rs`（`visual_property_sync_system`）・`graphics/systems/surface.rs`（`deferred_surface_creation_system`・大きさが同じで何もしない部品の分も作っていた）・`graphics/systems/window_pos.rs`（`apply_window_pos_changes`） | 名前は記録を出すときだけ作る（記録の欄に閉包を渡す）。描画面の係は、作る・作り直す部品の分だけ作る。振る舞いは変わらない |
+| 37 | できれば | 説明が今の中身と違う | `graphics/core.rs`・`graphics/wuc_resource.rs`（在らない `dcomp_resource.rs` を手本・同じ方針として指す。「DComp と並存」「切り替えは後続のタスク」も古い）・`graphics/systems/render.rs`・`graphics/systems/visual_sync.rs`（「DirectComposition の Visual」）・`graphics/systems/surface.rs`（描画面の部品を置くのは見た目を作る係だと書く。実際は `Visual` のフックと後から窓へつなぐ係）・`world/mod.rs`（`FrameCount` を読むのは `graphics/tests.rs` だけと書く。34 番でそのテストは消えた）・`app.rs`（在らない `message_window` の欄を挙げる）・`common/mod.rs`・`common/tree_iter.rs`（使い方の例が在らない関数 `new(root, &query)`・`iter(world)` を呼ぶ） | 説明を中身に合わせた |
+| 38 | できれば | derive の動きを試すだけのテストが残っている（34 番と同じ種類で、1 度目の audit が数え落とした） | `types.rs`（既定値 6 本・等しさ 2 本）・`graphics/clip.rs`（`rectangle_variant_creation`・`clip_shape_partial_eq_different_variants`）・`world/schedule_labels.rs`（`FrameCount` の既定値と中身の 2 本） | 消した（議題 8 の裁定「網羅は判断の分かれ目の網羅で、derive の動きは対象にしない」のとおり）。往復のテストと配置のテストは残り、`EcsWorld::new` の `FrameCount` が 0 なのは `tests/ecs/world_lifecycle_test.rs` が見ている |
+| 39 | 必ず直す | 窓の的（`WindowGraphics`）の作り直しに一度失敗すると、次の装置の失いまで試し直さない。窓の係は「的が無い」か「`HasGraphicsResources` が変わった」窓しか見ないので、作り直しの回に `E_OUTOFMEMORY` や WUC の一度きりの失敗が起きると変化の印だけを食べ、その窓はずっと空のまま（`error!` が 1 行残るだけ）。初めて作るときは「的が無い」で毎回試し直すので、作り直しだけが漏れる。6 番の立ち直りの目的に反する（審査で指摘・初めの 12.4 では指摘にしなかった） | `graphics/systems/init.rs`（`init_window_graphics`・`init_wuc_resource` の失敗の道） | 窓の係は変化の印で絞らず、毎回すべての窓を見て、的が無いか無効な窓だけを作る（有効な窓は可変で触らない・窓は数枚なので費用は小さい）。作れなかったら `GRAPHICS` の旗を立て、次の画面更新を必ず回す（`init_graphics_core` と同じ形）。`init_wuc_resource` も、作れなかった回に旗を立てる（門が回さなければ試し直されない穴が同じく在った）。テスト `tests/graphics/init_window_graphics_test.rs` の `failed_recreation_is_retried_without_a_new_mark`（壊れた HWND で作り直しを失敗させ、印を立てずに本物の HWND へ戻して回すと、世代の番号 1 で有効になる）。直す前は「一度失敗した作り直しが試し直されていない」で赤 |
+
+- 直さずに残してよい 3 種類に当たる件は 0 件。開発者の裁定が要る議題も 0 件。
+- 36〜38 番は振る舞いを変えない直しなので、元に戻ると落ちるテスト（要件 3.2）は要らない。39 番はバグなのでテストを置いた。
+- ついでに、この spec の直し（2.3・4.5）で係の引数が広がり clippy の `type_complexity` に掛かっていた 3 か所（`visual_sync.rs` の 2 つの係・`render.rs` の `render_surface`）に、`surface.rs` と同じ形の型の別名を置いた（Implementation Notes 2.3 の残り）。
+- 限界: 的をどうしても作れない窓（HWND が壊れたまま等）では、毎回の画面更新で作ろうとして `error!` を 1 行ずつ残す。`init_graphics_core` が装置を作れない間と同じ扱いで、黙って止まるよりよい。
+- `wintf-visual-tree` の傷 1〜8 との重なり: なし（要件 3.7）。
+
+### 12.3 2 巡目（直した後）
+
+12.2 で直した 15 ファイル（39 番の `init.rs` とテストを含む）を読み直し、同じ物差しでもう一度見た。**新しい指摘 0 件**。
+
+### 12.4 2 度目の audit で確かめて、指摘にしなかった所
+
+- `visual_property_sync_system` は位置だけが動いた回にも、同じ値の位置と不透明度を見た目へ書く。WUC の性質の書き込みは軽く、名前の文字列を作らなくなった後は部品 1 つにつき 2 回の呼び出しだけになる（測ってはいない）。
+- `world/vsync.rs` のファイル名は中身（再入の錠と、錠つきの窓の書き込みの流し）と合わない。ただしモジュールは非公開で、`world/mod.rs` の頭の説明が中身を書いている。名前を変えると、範囲の外の 3 つ（`window/command.rs`・`window/transition_diag.rs`・`runtime/tick_bridge.rs`）の説明が古くなる。
+- `dola/mod.rs` の `Debug` のテストは手書きの `Debug` の中身を見るので、derive のテストではない。`types.rs` の `new` のテストも derive ではない。
+- `world/tick_wake_tests.rs` の `every_message_gets_its_table_bits_or_force` は、21 番で関数を表の引き当てにした後も、関数が表から離れたら（`match` へ戻すなど）捕まえる見張りとして意味がある。
+
+### 12.5 確かめ
+
+- `cargo test -p wintf`（全部のテストのバイナリ・`--ignored` なし）: 緑。
+- `cargo fmt --all -- --check`: 緑。
+- `cargo clippy -p wintf --lib --tests --no-deps`: 直したファイルに警告なし（ほかのファイルの前からある警告は `clippy-199-lints` の持ち物）。
+- `cargo build --workspace`: 緑。
+
+**最後の audit（12.3）の新しい指摘は 0 件。**

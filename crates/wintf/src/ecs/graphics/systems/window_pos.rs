@@ -34,7 +34,8 @@ pub fn apply_window_pos_changes(
     >,
 ) {
     for (entity, window_handle, window_pos, name, is_dragging) in query.iter() {
-        let entity_name = format_entity_name(entity, name);
+        // 名前はその記録が点いているときだけ作る（窓が動くたびに通る道）
+        let entity_name = || format_entity_name(entity, name);
 
         let position = window_pos.position.unwrap_or_default();
         let size = window_pos.size.unwrap_or_default();
@@ -45,7 +46,7 @@ pub fn apply_window_pos_changes(
             || size.width == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
         {
             trace!(
-                entity = %entity_name,
+                entity = %entity_name(),
                 x = position.x,
                 y = position.y,
                 width = size.width,
@@ -61,7 +62,7 @@ pub fn apply_window_pos_changes(
             Err(e) => {
                 // 変換失敗時はフォールバック：元の座標を使用
                 warn!(
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     error = %e,
                     "[apply_window_pos_changes] Failed to transform window coordinates. Using original values."
                 );
@@ -80,7 +81,7 @@ pub fn apply_window_pos_changes(
         }
 
         debug!(
-            entity = %entity_name,
+            entity = %entity_name(),
             client_xy = format_args!("({},{})", position.x, position.y),
             client_size = format_args!("{}x{}", size.width, size.height),
             win_xy = format_args!("({},{})", x, y),
@@ -108,7 +109,7 @@ pub fn apply_window_pos_changes(
         SetWindowPosCommand::enqueue(cmd);
 
         debug!(
-            entity = %entity_name,
+            entity = %entity_name(),
             x = position.x,
             y = position.y,
             width = size.width,

@@ -13,26 +13,26 @@ use windows::core::Interface;
 
 // ========== 描画システム ==========
 
+/// 描画の係が読む部品
+type RenderSurfaceData = (
+    Entity,
+    &'static SurfaceGraphics,
+    &'static GlobalArrangement,
+    Option<&'static GraphicsCommandList>,
+    Option<&'static Name>,
+);
+
 /// Surfaceへの自己描画（Phase 4: 自己描画方式）
 ///
 /// 各Entityが自分のSurfaceに自分のGraphicsCommandListのみを描画する。
-/// 子の描画は各子が自分のSurfaceで行い、DirectCompositionのVisual階層で合成する。
+/// 子の描画は各子が自分のSurfaceで行い、WUC の見た目（Visual）の木で合成する。
 ///
 /// - Changed<SurfaceGraphicsDirty>を持つEntityが対象
 /// - GlobalArrangementのスケール成分を適用（DPIスケール対応）
 /// - 装置が無い・無効なら何も描かずに戻る（描画面は作り直しで全部作り直される）
 /// - `GraphicsCore` を可変で触るのは装置の失いのときだけ（ふだんの描画で変化の印を立てない）
 pub fn render_surface(
-    surfaces: Query<
-        (
-            Entity,
-            &SurfaceGraphics,
-            &GlobalArrangement,
-            Option<&GraphicsCommandList>,
-            Option<&Name>,
-        ),
-        Changed<SurfaceGraphicsDirty>,
-    >,
+    surfaces: Query<RenderSurfaceData, Changed<SurfaceGraphicsDirty>>,
     graphics_core: Option<ResMut<GraphicsCore>>,
 ) {
     use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;

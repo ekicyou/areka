@@ -569,10 +569,9 @@ impl EcsWorld {
         // panic、release はラップする。FrameCount.0 の消費は (1) 多数の tracing ログの
         // `frame=` フィールドと (2) graphics/systems/surface.rs::mark_dirty_surfaces での
         // `dirty.requested_frame = frame_count.0 as u64`（Changed<SurfaceGraphicsDirty>
-        // 検出をトリガーするための「変化ノンス」用途で、値自体は本番では読まれない。本番読み取りは
-        // 皆無で grep 上 graphics/tests.rs のみ）のみ。後者はラップ MAX→0 でも「前回値と異なる」
-        // 性質を満たすため Changed 検出は継続し、いずれの消費も算術上の大小比較・配列添字には
-        // 用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
+        // 検出をトリガーするための「変化ノンス」用途で、値自体は読まれない）のみ。
+        // 後者はラップ MAX→0 でも「前回値と異なる」性質を満たすため Changed 検出は継続し、
+        // いずれの消費も算術上の大小比較・配列添字には用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
         // debug panic 化を避ける堅牢化（saturating/wrapping_add）は debug 挙動を変えるため
         // P66 として記録。
         //

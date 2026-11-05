@@ -135,7 +135,7 @@ pub struct GraphicsCore {
 // ID3D11Device はスレッドセーフ（dxgi は同一オブジェクトへの別インターフェース）。
 // dwrite_factory（DWRITE_FACTORY_TYPE_SHARED）もスレッドセーフ。
 // _lost_watch のイベントと待ちの handle は Drop でしか触らず、待ちの係は `fn()` を呼ぶだけ。
-// よって全フィールドが内部同期を持ち、外部同期前提の DComp 系（dcomp_resource.rs）とは
+// よって全フィールドが内部同期を持ち、外部同期前提の WUC 系（wuc_resource.rs）とは
 // 異なり ECS スケジュール構成への追加前提を要しない。
 unsafe impl Send for GraphicsCore {}
 unsafe impl Sync for GraphicsCore {}
