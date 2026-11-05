@@ -691,3 +691,16 @@ fn existing_tags_unchanged_with_balloon_interleaved() {
         ],
     );
 }
+
+/// 指摘 3（要件 7.1）: 非有限の割合（`NaN`・`inf`・桁あふれで inf になる `1e40`）は
+/// 既定 1.0 へ倒す（レイアウトに非有限の位置を渡さない）。
+#[test]
+fn newline_non_finite_percent_falls_back_to_default() {
+    for s in [r"\n[NaN]", r"\n[inf]", r"\n[1e40]"] {
+        assert_eq!(
+            dec(s),
+            vec![Instruction::NewLine(NewLineRatio::new(1.0))],
+            "script: {s:?}"
+        );
+    }
+}

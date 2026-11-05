@@ -42,13 +42,13 @@ pub(crate) enum Token {
     /// 正準形 `\word[args]`（`word` は確定済みのタグ名で直後が `[`、args は `]` までをカンマ分割）。
     ///
     /// `word` は本文を含まない 1〜3 文字（`\_X`／`\__X` 形を含む）。例外で 2 文字になる
-    /// のは短縮対象語＋1 桁（`w2` 等）と旧仕様の選択肢 `q*` の 2 形。
+    /// のは短縮対象語＋1 桁（`w2` 等）と旧仕様の選択肢 `q*`／`q0`〜`q9` の 2 形。
     Tag { word: String, args: Vec<String> },
     /// 角括弧を伴わないタグの綴り（先頭の `\` を除く）。
     ///
     /// 既知 1 文字タグ `e` `c` `-` `n` `0` `1` `h` `u` のほか、未知の 1 文字語や
     /// `\_` 始まりの 2〜3 文字形（`_a` `_q` `__c` `__q` 等）も同じ載荷に載る。
-    /// 入力末尾の裸 `\` は綴り `"\\"` として載せる。
+    /// 入力末尾の裸 `\` は空の綴り `""` として載せる（decode が `Raw("\\")` に組み直す）。
     Bare(String),
     /// 短縮形 `\<word>N`（`word` は短縮対象語・`N` は 1 桁）。
     ///
@@ -198,7 +198,7 @@ fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
 fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     // `\` の次の文字が無ければ（入力末尾の裸 `\`）bare 扱いで継続。
     let Some(&(_, first)) = chars.get(i + 1) else {
-        return (Token::Bare("\\".to_string()), i + 1);
+        return (Token::Bare(String::new()), i + 1);
     };
 
     // ワード（コマンド語）を読む: 最大 3 文字で頭打ちにし（`[`／`\`／`%` でも止まる）、
@@ -239,9 +239,12 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
         && chars
             .get(word_start + 1)
             .is_some_and(|&(_, d)| d.is_ascii_digit());
-    // 例外その二: 旧仕様の選択肢 `\q*[ID][タイトル]`（`*` の直後が `[` のときだけ）。
+    // 例外その二: 旧仕様の選択肢 `\q*[ID][タイトル]`（`*` は通し番号・`*` か 1 桁の数の
+    // 直後が `[` のときだけ。`\q10[…]` のような 2 桁は当たらない）。
     let legacy_q_star = first == 'q'
-        && chars.get(word_start + 1).map(|&(_, c)| c) == Some('*')
+        && chars
+            .get(word_start + 1)
+            .is_some_and(|&(_, c)| c == '*' || c.is_ascii_digit())
         && chars.get(word_start + 2).map(|&(_, c)| c) == Some('[');
     if !(shorthand_digit || legacy_q_star) {
         let len = bare_tag_len(&word);
@@ -361,7 +364,8 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
                 cur.push(']');
                 k += 2;
             }
-            '"' => {
+            // 引数の途中の `"` はただの字（下の `other` の腕）。
+            '"' if cur.is_empty() && !quote_consumed => {
                 // クォート開始（要件 13.4）。閉じ `"` まで読み、内側 `,` は保護。
                 // 二重化 `""` はリテラル `"` として取り込む。
                 // この引数はクォートを消費した（sole `[""]` を空 1 引数へ確定するため）。

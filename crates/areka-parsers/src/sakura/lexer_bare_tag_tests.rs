@@ -233,8 +233,10 @@ fn bracket_arg_splitting_is_unchanged() {
     assert_eq!(lex(r"\s[]"), vec![tag("s", &[])]);
 }
 
-/// T15（要件 4.1）: 入力末尾の裸 `\` は綴り `"\\"` の `Bare` として載る（挙動不変）。
+/// T15（要件 4.1・指摘 64）: 入力末尾の裸 `\` は空の綴りの `Bare` として載る
+/// （ほかの `Bare` と同じく先頭の `\` を綴りに含めない）。
 #[test]
-fn trailing_lone_backslash_is_bare_spelling() {
-    assert_eq!(lex(r"\"), vec![bare(r"\")]);
+fn trailing_lone_backslash_is_empty_bare() {
+    assert_eq!(lex(r"\"), vec![bare("")]);
+    assert_eq!(lex(r"あ\"), vec![text("あ"), bare("")]);
 }

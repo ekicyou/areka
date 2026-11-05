@@ -495,3 +495,31 @@ fn percent_star_is_sysvar_named_star() {
     );
     assert_eq!(lex(r"\%*"), vec![Token::Text("%*".to_string())]);
 }
+
+/// 指摘 24: クォートの始まりは引数の先頭の `"` だけ。引数の途中の `"` はただの字として
+/// 残り、閉じの無いクォートとして後ろの台本を飲み込まない。
+#[test]
+fn mid_argument_quote_is_literal() {
+    assert_eq!(
+        lex(r#"\![raise,OnX,a"b"c]"#),
+        vec![Token::Tag {
+            word: "!".to_string(),
+            args: vec![
+                "raise".to_string(),
+                "OnX".to_string(),
+                r#"a"b"c"#.to_string()
+            ],
+        }],
+    );
+    assert_eq!(
+        lex(r#"\q[27" モニタ,OnA]\e次"#),
+        vec![
+            Token::Tag {
+                word: "q".to_string(),
+                args: vec![r#"27" モニタ"#.to_string(), "OnA".to_string()],
+            },
+            Token::Bare("e".to_string()),
+            Token::Text("次".to_string()),
+        ],
+    );
+}

@@ -218,6 +218,10 @@ fn argument_defaulted_is_noted_where_reading_falls_back() {
         // 改行の比: 引数が在って `half` でも数でもない。
         r"\n[abc]",
         r#"\n[""]"#,
+        // 改行の比: 数として読めても有限でない（指摘 3）。
+        r"\n[NaN]",
+        r"\n[inf]",
+        r"\n[1e40]",
         // 話者のスコープ: 引数なし・非数。
         r"\p[x]",
         r"\p[]",

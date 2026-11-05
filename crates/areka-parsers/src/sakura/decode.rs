@@ -174,14 +174,15 @@ fn decode_char_code(
 /// lexer は `\q[ID][タイトル]` を `Tag{q,[ID]}` ＋ `Text("[タイトル]")` に分割し、
 /// `\q*[ID][タイトル]` を `Tag{q*,[ID]}` ＋ `Text("[タイトル]")` に分割する（実トークン形）。
 /// 旧形の弁別条件:
-/// - word が `q`（現行形と同綴）または `q*`（旧専用綴り）。
+/// - word が `q`（現行形と同綴）または `q*`／`q0`〜`q9`（旧専用綴り・`*` は通し番号）。
 /// - 直後トークンが `Text` で、`[` 始まり `]` 終わり（宙に浮く 2 個目の `[...]`）。
 ///
 /// `q*` は word 自体が現行 `q` と異なるため、後続 Text が無くとも現行 Choice には
 /// ならない（`decode_tag` の subset 外 → Raw 経路へ）。本判定が拾うのは「現行 `q` の
 /// 綴りだが直後に浮く `[...]` がある」旧形と、「`q*` ＋ 浮く `[...]`」旧形の双方。
 fn is_legacy_q_head(word: &str, args: &[String], next: Option<&(Token, Range<usize>)>) -> bool {
-    (word == "q" || word == "q*")
+    // lexer が `q` で始まる語にするのは `q`・旧形の `q*`・`q0`〜`q9` だけ。
+    word.starts_with('q')
         && args.len() == 1
         && matches!(next, Some((Token::Text(t), _)) if t.starts_with('[') && t.ends_with(']'))
 }
@@ -449,14 +450,15 @@ fn wait_absolute_ms(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> Duration
 ///
 /// - `half` → 0.5。
 /// - 数値 percent → percent / 100（`150` → 1.5・負値は符号付き保持）。
-/// - 引数欠落・非数 → 既定 1.0（素の `\n` と同等）。非数だけ「既定へ落とした」印を付ける
+/// - 引数欠落・非数・有限でない数（`NaN`・`inf`・桁あふれの `1e40`）→ 既定 1.0（素の `\n` と
+///   同等）。引数欠落のほかは「既定へ落とした」印を付ける
 ///   （引数欠落の `\n[]` は素の `\n` と同じ値なので印を付けない）。
 fn newline_ratio_from_arg(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> NewLineRatio {
     match arg.map(String::as_str) {
         Some("half") => NewLineRatio::new(0.5),
         Some(s) => match s.parse::<f32>() {
-            Ok(percent) => NewLineRatio::new(percent / 100.0),
-            Err(_) => {
+            Ok(percent) if percent.is_finite() => NewLineRatio::new(percent / 100.0),
+            _ => {
                 notes.push(ReadNote::ArgumentDefaulted);
                 NewLineRatio::new(1.0)
             }

@@ -176,6 +176,28 @@ fn choice_legacy_q_star_double_bracket_kept_raw() {
     );
 }
 
+/// 指摘 26: 通し番号つきの旧形 `\q0[ID][タイトル]` も単一 `Raw` に畳み、
+/// `0[ID][タイトル]` の字を吹き出しに漏らさない（要件 5.3・設計の討議の議題 3）。
+/// 2 桁の `\q10[a][b]` は旧形の印に当たらず、今どおり（`\q` の Raw と字）。
+#[test]
+fn choice_legacy_q_serial_digit_kept_raw() {
+    assert_eq!(
+        parse(r"\e\q0[OnYes][はい]\c"),
+        vec![
+            Instruction::End,
+            Instruction::Raw(r"\q0[OnYes][はい]".to_string()),
+            Instruction::Clear,
+        ],
+    );
+    assert_eq!(
+        parse(r"\q10[a][b]"),
+        vec![
+            Instruction::Raw(r"\q".to_string()),
+            Instruction::Text("10[a][b]".to_string()),
+        ],
+    );
+}
+
 // ───────────────────────────────────────────────────────────────────
 // 不透明 Surface（要件 2.2/2.3）
 // ───────────────────────────────────────────────────────────────────
