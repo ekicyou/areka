@@ -82,9 +82,13 @@ pub(crate) fn wait_for_a_cue(
 fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
     // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ silent skip（既存 host32 E2E／
     //     kanade 自身の real_helper_test.rs と同じ語法）---
-    let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
+    // 空・空白だけの値は未設定と同じに skip する（snapshot_capture_test と同じ扱い）。
+    let Some(pasta_dll) = std::env::var("HOST32_PASTA_DLL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    else {
         eprintln!(
-            "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・要件 8.1/8.4）。\
+            "HOST32_PASTA_DLL 未設定（または空）のため実 pasta 追験を skip（任意 gate・要件 8.1/8.4）。\
              実ブレイン越しの起動一周を追験するには env に pasta DLL のフルパスを設定してください。"
         );
         return;

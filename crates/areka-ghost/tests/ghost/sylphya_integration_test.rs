@@ -44,38 +44,26 @@ use areka_sylphya::{AskerContext, DottedResolution, FlatResolution};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
-use crate::spine_e2e_test::{BOUND, RecordingSink, dispatcher_tick, spin_pumping_ticks};
+use crate::spine_e2e_test::{
+    BOUND, RecordingSink, dispatcher_tick, spin_pumping_ticks, write_ghost_fixture_with,
+};
 
-/// `root` 直下に解決可能なゴーストツリーを構築する。ghost/master/descript.txt の
+/// 解決できるゴーストを書いて返す（親の [`write_ghost_fixture_with`]）。ghost の descript.txt の
 /// `sakura.name`／`sakura.name2`／`kero.name` を引数の既知値で書く（selfname 系実値解決の入力・
-/// R4.3/4.4/4.5）。shell/master/descript.txt は shell dir 存在確認を通すための最小 descript。
+/// R4.3/4.4/4.5）。
 fn write_named_ghost_fixture(
-    root: &std::path::Path,
     sakura_name: &str,
     sakura_name2: Option<&str>,
     kero_name: Option<&str>,
-) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    let mut descript = String::from("charset,UTF-8\nname,SylphyaIntegGhost\n");
-    descript.push_str(&format!("sakura.name,{sakura_name}\n"));
+) -> TempPath {
+    let mut names = format!("sakura.name,{sakura_name}\n");
     if let Some(n2) = sakura_name2 {
-        descript.push_str(&format!("sakura.name2,{n2}\n"));
+        names.push_str(&format!("sakura.name2,{n2}\n"));
     }
     if let Some(k) = kero_name {
-        descript.push_str(&format!("kero.name,{k}\n"));
+        names.push_str(&format!("kero.name,{k}\n"));
     }
-    descript.push_str("shiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n");
-    std::fs::write(ghost_master.join("descript.txt"), descript.as_bytes())
-        .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,SylphyaIntegShell\n",
-    )
-    .expect("write shell descript.txt");
+    write_ghost_fixture_with("SylphyaIntegGhost", "SylphyaIntegShell", &names)
 }
 
 /// 寛容 mock SHIORI backend（id ごとの GET 応答を map で持ち、未登録 id は `Ok(None)` を返す）。
@@ -213,11 +201,8 @@ fn drive_until_first_cue(
 /// 鏡像へ反映済みである（sleep／retry 不要）。
 #[test]
 fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
-    let temp = TempPath::new(
-        "ghost-sylphya-boot-reader-resolves-selfname-family-and-baseware-real-values",
-    );
+    let temp = write_named_ghost_fixture("むらさき", Some("紫"), Some("エモ"));
     let root = temp.path().to_path_buf();
-    write_named_ghost_fixture(&root, "むらさき", Some("紫"), Some("エモ"));
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -296,10 +281,8 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
 /// ことは `Ok(())` に含意される（失敗があれば `GhostShutdownError.failures` に段名つきで現れる）。
 #[test]
 fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
-    let temp =
-        TempPath::new("ghost-sylphya-boot-then-shutdown-all-stages-including-sylphya-succeed");
+    let temp = write_named_ghost_fixture("むらさき", None, None);
     let root = temp.path().to_path_buf();
-    write_named_ghost_fixture(&root, "むらさき", None, None);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -335,10 +318,8 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
 /// snapshot を**一度だけ** assert する（snapshot 自体の retry／sleep は一切なし＝レース非依存）。
 #[test]
 fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
-    let temp =
-        TempPath::new("ghost-sylphya-username-value-is-in-boot-talk-snapshot-via-barrier-fence");
+    let temp = write_named_ghost_fixture("むらさき", None, None);
     let root = temp.path().to_path_buf();
-    write_named_ghost_fixture(&root, "むらさき", None, None);
 
     // 初回 talk 発火の観測点（driving 用）。OnBoot に非待ちの挨拶を積み、必ず 1 件以上 broadcast させる。
     let probe = RecordingSink::new();
@@ -393,9 +374,8 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
 /// 静的層由来で依然実在することも併せて固定する（不在記録が他フラット値を巻き添えにしない）。
 #[test]
 fn username_no_content_is_absent_from_boot_talk_snapshot() {
-    let temp = TempPath::new("ghost-sylphya-username-no-content-is-absent-from-boot-talk-snapshot");
+    let temp = write_named_ghost_fixture("むらさき", None, None);
     let root = temp.path().to_path_buf();
-    write_named_ghost_fixture(&root, "むらさき", None, None);
 
     let probe = RecordingSink::new();
     let records = probe.records();

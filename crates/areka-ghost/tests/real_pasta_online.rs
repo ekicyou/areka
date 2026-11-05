@@ -113,9 +113,13 @@ fn wait_records(
 
 #[test]
 fn emo2_does_not_start_chatting_while_online() {
-    let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
+    // 空・空白だけの値は未設定と同じに skip する（snapshot_capture_test と同じ扱い）。
+    let Some(pasta_dll) = std::env::var("HOST32_PASTA_DLL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    else {
         eprintln!(
-            "HOST32_PASTA_DLL 未設定のため実 pasta の online 追験を skip（任意 gate・要件 8.4）。"
+            "HOST32_PASTA_DLL 未設定（または空）のため実 pasta の online 追験を skip（任意 gate・要件 8.4）。"
         );
         return;
     };

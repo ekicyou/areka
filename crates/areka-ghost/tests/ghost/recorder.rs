@@ -11,13 +11,12 @@
 //! - `RequestError` は非 Clone/非 PartialEq のため、結果は要約列挙 [`ExchangeOutcome`]（文字列化）
 //!   で保持し assert 可能性（PartialEq）を確保する（design「Data Models → ExchangeRecord」）。
 //!
-//! 本モジュールは task 3 の成果物で、消費者は後続タスク（5.1/5.2/6.1）。それらが結線されるまで
-//! 一部の pub 項目はこの test binary 内で未使用になり得るため、dead-code 警告を抑止する。
+//! 使う pub 項目は子モジュールごとに違い、この test binary で未使用のものもあるため dead-code 警告を抑止する。
 #![allow(dead_code)]
 
 use std::sync::{Arc, Mutex};
 
-use areka_kanade::ShioriBackend;
+use areka_kanade::{ShioriBackend, ShioriUnblock};
 use shiori_host32_host::{
     ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
 };
@@ -221,6 +220,15 @@ impl<B: ShioriBackend> ShioriBackend for Recorder<B> {
         // 素通し: sticky 死活検査ノイズを記録に混ぜない（append-only を呼出順で保つ）。
         self.inner.status()
     }
+
+    // 保守の機会と解く手も素通し（既定の本体のままだと host32 の窓の汲み出しと外からの解除が落ちる）。
+    fn on_idle(&mut self) {
+        self.inner.on_idle();
+    }
+
+    fn unblock_handle(&self) -> Option<ShioriUnblock> {
+        self.inner.unblock_handle()
+    }
 }
 
 /// `Box<dyn ShioriBackend>` を [`Recorder`] に包むための委譲（`Box<dyn ShioriBackend>` は
@@ -274,6 +282,14 @@ impl ShioriBackend for BoxedBackend {
     fn status(&mut self) -> HelperStatus {
         self.0.status()
     }
+
+    fn on_idle(&mut self) {
+        self.0.on_idle();
+    }
+
+    fn unblock_handle(&self) -> Option<ShioriUnblock> {
+        self.0.unblock_handle()
+    }
 }
 
 #[cfg(test)]
@@ -281,6 +297,7 @@ mod tests {
     use super::*;
 
     use std::collections::VecDeque;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use areka_kanade::ShioriBackend;
     use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
@@ -291,6 +308,7 @@ mod tests {
         notify_responses: VecDeque<Result<(), RequestError>>,
         unload_response: Option<Result<ExitKind, ShutdownError>>,
         status_value: HelperStatus,
+        idles: Arc<AtomicUsize>,
     }
 
     impl FakeBackend {
@@ -300,6 +318,7 @@ mod tests {
                 notify_responses: VecDeque::new(),
                 unload_response: None,
                 status_value: HelperStatus::Running,
+                idles: Arc::new(AtomicUsize::new(0)),
             }
         }
         fn with_get(mut self, response: Result<Option<String>, RequestError>) -> Self {
@@ -345,6 +364,45 @@ mod tests {
         fn status(&mut self) -> HelperStatus {
             self.status_value
         }
+        fn on_idle(&mut self) {
+            self.idles.fetch_add(1, Ordering::Relaxed);
+        }
+        fn unblock_handle(&self) -> Option<ShioriUnblock> {
+            Some(std::sync::Arc::new(|| Ok(())))
+        }
+    }
+
+    #[test]
+    fn on_idle_and_unblock_handle_reach_the_inner_backend_through_both_wrappers() {
+        let (mut recorder, handle) = Recorder::new(FakeBackend::new());
+        recorder.on_idle();
+        assert_eq!(
+            recorder.inner.idles.load(Ordering::Relaxed),
+            1,
+            "Recorder は on_idle を中身へ渡す"
+        );
+        assert!(
+            recorder.unblock_handle().is_some(),
+            "Recorder は解く手を中身から取る"
+        );
+        assert!(
+            handle.records().is_empty(),
+            "保守の機会は交信として記録しない"
+        );
+
+        let fake = FakeBackend::new();
+        let idles = Arc::clone(&fake.idles);
+        let mut boxed = BoxedBackend(Box::new(fake));
+        assert!(
+            boxed.unblock_handle().is_some(),
+            "BoxedBackend は解く手を中身から取る"
+        );
+        boxed.on_idle();
+        assert_eq!(
+            idles.load(Ordering::Relaxed),
+            1,
+            "BoxedBackend は on_idle を中身へ渡す"
+        );
     }
 
     #[test]

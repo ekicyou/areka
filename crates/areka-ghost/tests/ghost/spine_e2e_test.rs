@@ -1,13 +1,13 @@
 //! 決定論 spine e2e（design.md「spine e2e（決定論・純 x64）」）。
 //!
-//! 本ファイルは 2 つのテスト専用型を提供する（task 4.1 の成果物）:
+//! 本ファイルは spine の子モジュールと兄弟の統合テストが共有するテスト専用の型と道具を置く:
 //! - [`ScriptedShioriBackend`] — `areka_kanade::ShioriBackend` を実装する台本 fake。
 //! - [`RecordingSink`] — 演者非依存の単一出力契約 `areka_sakura::contract::CueSink` を実装する、
 //!   `Clone` 可能な記録 sink（broadcast で全 cue を受ける）。
+//! - fixture（`write_ghost_fixture`）・有界の合流（`join_bounded`）・期待の組み立て（`boot_script` 等）・
+//!   待ちの輪（`spin_pumping_ticks`／`wait_until`）。
 //!
-//! 後続タスク（4.2〜4.7・8.6）はこのファイルの子モジュールに boot〜close の各シナリオ（S1〜S7）の
-//! `#[test]` を追加していく。本タスク（4.1）はその土台となる 2 型自体の構築・検証
-//! （台本通りの応答・終了結果・死活遷移を任意に再現できること）のみを担う。
+//! boot〜close の各シナリオ（S1〜S7）の `#[test]` は子モジュール `spine_e2e_test_s*.rs` に置く。
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -101,13 +101,23 @@ pub(crate) fn join_bounded(
 /// 一時フォルダ（`TempPath`）の下に解決できる最小のゴースト（`ghost/master` と `shell/master` の
 /// descript.txt）を書いて返す。shell の `name` は `OnBoot` の Ref0（`KanadeConfig::shell_name`）になる。
 pub(crate) fn write_ghost_fixture(ghost_name: &str, shell_name: &str) -> temp_path_kit::TempPath {
+    write_ghost_fixture_with(ghost_name, shell_name, "")
+}
+
+/// [`write_ghost_fixture`] に、ghost の descript.txt へ足す行（`extra_descript`・各行 `\n` 終わり）を
+/// `name` 行の直後へ差し込める形。
+pub(crate) fn write_ghost_fixture_with(
+    ghost_name: &str,
+    shell_name: &str,
+    extra_descript: &str,
+) -> temp_path_kit::TempPath {
     let temp = temp_path_kit::TempPath::new(&format!("ghost-spine-{ghost_name}"));
     let ghost_master = temp.path().join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
     std::fs::write(
         ghost_master.join("descript.txt"),
         format!(
-            "charset,UTF-8\nname,{ghost_name}\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n"
+            "charset,UTF-8\nname,{ghost_name}\n{extra_descript}shiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n"
         ),
     )
     .expect("write ghost descript.txt");
@@ -455,10 +465,6 @@ impl CueSink for RecordingSink {
 #[cfg(test)]
 #[path = "spine_e2e_test_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "spine_e2e_test_broadcast_relevance_partition.rs"]
-mod broadcast_relevance_partition;
 
 #[cfg(test)]
 #[path = "spine_e2e_test_s1_boot_success.rs"]

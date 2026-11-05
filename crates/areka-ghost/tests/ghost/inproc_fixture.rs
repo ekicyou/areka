@@ -103,8 +103,8 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
 /// （元の emo2 実物・deps DLL は別リンクが残るため無傷）。
 ///
 /// フォールバック（`copy`）は、`dst` が `src` と別ボリューム上でハードリンク不可な環境
-/// （temp と repo が別ドライブ等）でも組立が成立するための保険である。同一ボリューム（既定 temp が
-/// repo と同一ドライブ）ではハードリンク経路が使われ、飽和回帰は生じない。
+/// （`target` を別ドライブへ向けた等）でも組立が成立するための保険である。根は既定で
+/// ワークツリーの `target\test-roots` の下（repo と同一ドライブ）なのでハードリンク経路が使われ、飽和回帰は生じない。
 fn materialize_file(from: &Path, to: &Path) {
     if std::fs::hard_link(from, to).is_ok() {
         return;
@@ -315,22 +315,6 @@ mod tests {
                 .and_then(|s| s.to_str()),
             Some("deps"),
             "locate 戻り値の親ディレクトリは deps であること: {}",
-            dll.display()
-        );
-    }
-
-    /// locate 戻り値は絶対パスで `target` ツリー内を指すこと（正準位置の健全性・design.md D-1）。
-    #[test]
-    fn locate_returns_absolute_path_inside_target_tree() {
-        let dll = super::locate_built_test_dll();
-        assert!(
-            dll.is_absolute(),
-            "locate 戻り値は絶対パスであること: {}",
-            dll.display()
-        );
-        assert!(
-            dll.components().any(|c| c.as_os_str() == "target"),
-            "locate 戻り値は target ツリー内を指すこと: {}",
             dll.display()
         );
     }

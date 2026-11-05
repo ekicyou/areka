@@ -604,7 +604,7 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
 
 /// I1・I2 の駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
 /// **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
-/// `LoadLibraryW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
+/// `LoadLibraryExW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
 /// すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
 /// 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
 /// 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
@@ -966,7 +966,7 @@ fn i3_load_failure_missing_reference_returns_err() {
 }
 
 /// I3-② **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
-/// `inproc_connect` は `LoadLibraryW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
+/// `inproc_connect` は `LoadLibraryExW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
 /// 要件 3.5）。
 #[test]
 fn i3_load_failure_missing_dll_returns_err() {
@@ -976,7 +976,7 @@ fn i3_load_failure_missing_dll_returns_err() {
         Some("someMissing.dll".to_string()),
         "fixture は shiori 行あり＝file:Some のはず"
     );
-    // DLL 実体は書いていない＝ロード元に不在（LoadLibraryW が失敗する前提）。
+    // DLL 実体は書いていない＝ロード元に不在（LoadLibraryExW が失敗する前提）。
     assert!(
         !shiori.dir.join("someMissing.dll").exists(),
         "態様前提: DLL は存在しないこと"
@@ -986,18 +986,21 @@ fn i3_load_failure_missing_dll_returns_err() {
     let result = connect();
 
     match result {
-        Err(_) => {}
+        Err(err) => assert!(
+            err.contains("LoadLibraryExW"),
+            "DLL 欠落は DLL の読み込みの失敗として顕在化すること（別理由の失敗でない）: {err}"
+        ),
         Ok(_) => panic!("DLL 欠落はロード失敗になるはず（inproc_connect は panic せず Err）"),
     }
 }
 
 /// I3-③ **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
-/// `LoadLibraryW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
+/// `LoadLibraryExW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
 /// （panic せず・要件 3.5）。
 #[test]
 fn i3_load_failure_invalid_image_returns_err() {
     let (shiori, _root) = build_i3_mount(Some("bogus.dll"), Some(b"this is not a valid PE image"));
-    // 不正イメージ実体がロード元に存在すること（LoadLibraryW がイメージ検証で拒否する前提）。
+    // 不正イメージ実体がロード元に存在すること（LoadLibraryExW がイメージ検証で拒否する前提）。
     assert!(
         shiori.dir.join("bogus.dll").exists(),
         "態様前提: 非 PE テキストの bogus.dll が存在すること"
@@ -1007,7 +1010,10 @@ fn i3_load_failure_invalid_image_returns_err() {
     let result = connect();
 
     match result {
-        Err(_) => {}
+        Err(err) => assert!(
+            err.contains("LoadLibraryExW"),
+            "不正イメージは DLL の読み込みの失敗として顕在化すること（別理由の失敗でない）: {err}"
+        ),
         Ok(_) => panic!("不正イメージはロード失敗になるはず（inproc_connect は panic せず Err）"),
     }
 }
