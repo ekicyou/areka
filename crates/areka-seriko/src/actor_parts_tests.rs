@@ -9,7 +9,6 @@ use crate::looper::tests::{always_fire, cfg};
 use crate::output::DisplayCommand;
 use crate::test_support::table_of;
 use areka_emo_compose::BindSet;
-use areka_sakura::CueCommand;
 
 /// 一番上 0・2 は子 100 を置き、自分の animation9（200 → 201 → `-1`）を持つ。1 は何も置かない。
 /// 100 の animation0 は 101（開き目・すぐ）→ 102（閉じ目・500ms 後）→ `-1`（さらに 500ms 後）。
@@ -63,11 +62,7 @@ impl Rig {
 
     /// 時計が `ms` のときに `\0\![bind,目,閉,on]`。
     fn bind_eye(&mut self, ms: u64, on: &str) -> Vec<DisplayCommand> {
-        let command = CueCommand::command_carrier(
-            "bind",
-            vec!["目".to_string(), "閉".to_string(), on.to_string()],
-        );
-        self.hear(ms, cue(0.0, "0", command, 0.0))
+        self.hear(ms, carrier_cue("0", "bind", &["目", "閉", on]))
     }
 }
 

@@ -8,7 +8,7 @@ use super::test_support::*;
 use super::*;
 use crate::bind::tests::groups_of;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::ActorKey;
 
 /// カテゴリ「ボール」は定義の順におじさん・男の子・ギャル・妹（排他・既定なし）。「目」は `mustselect`。
 const SHELL: &str = "charset,UTF-8\r\n\
@@ -42,17 +42,7 @@ fn run(scope: &str, before: &[&[&str]], name: &str, tokens: &[&str]) -> Outcome 
     let mut loop_runtime = inert_runtime();
     let mut out = MockSurfaceOutput::new();
     let records = out.records();
-    let carrier = |name: &str, tokens: &[&str]| {
-        SerikoMsg::Cue(TalkCue {
-            at: 0.0,
-            actor: key.clone(),
-            command: CueCommand::command_carrier(
-                name,
-                tokens.iter().map(|t| t.to_string()).collect(),
-            ),
-            duration: 0.0,
-        })
-    };
+    let carrier = |name: &str, tokens: &[&str]| SerikoMsg::Cue(carrier_cue(scope, name, tokens));
     for b in before {
         let msg = carrier(BIND_COMMAND, b);
         let _ = handle_message(
@@ -276,15 +266,7 @@ fn noncanonical_bind_noevent_warns_like_bind() {
                 &mut states,
                 &mut loop_runtime,
                 &mut out,
-                SerikoMsg::Cue(TalkCue {
-                    at: 0.0,
-                    actor: ActorKey::from("0"),
-                    command: CueCommand::Custom {
-                        command: name.to_owned(),
-                        params: dola::DynamicValue::Null,
-                    },
-                    duration: 0.0,
-                }),
+                SerikoMsg::Cue(noncanonical_custom_cue("0", name)),
             )
         });
         assert_eq!(logs.matches("level=WARN").count(), 1, "{name}: {logs}");

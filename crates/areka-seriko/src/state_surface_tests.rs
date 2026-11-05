@@ -4,7 +4,7 @@ use super::*;
 /// スコープ分離（要件 3.1/3.2）: あるスコープへの適用が他スコープへ波及しない。
 #[test]
 fn scope_isolation_does_not_touch_other_scope() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope0 = ActorKey::from("0");
     let scope1 = ActorKey::from("1");
 
@@ -44,7 +44,7 @@ fn scope_isolation_does_not_touch_other_scope() {
 /// 非表示遷移（要件 3.3）: 表示中から Hide で Hidden へ遷移し Hide 指令を発行する。
 #[test]
 fn hide_transition_from_shown() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // まず表示中にする。
@@ -67,7 +67,7 @@ fn hide_transition_from_shown() {
 /// 非表示保持・冪等（要件 3.4/DD8）: 既に Hidden な状態への Hide は Unchanged（再発行しない）。
 #[test]
 fn hide_when_already_hidden_is_unchanged() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // Show→Hide で Hidden にしておく。
@@ -86,7 +86,7 @@ fn hide_when_already_hidden_is_unchanged() {
 /// 冪等 Show（要件 3.4/DD8）: 同一 surface の再指定は 2 回目 Unchanged。
 #[test]
 fn show_same_surface_twice_second_is_unchanged() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // 1 回目: Changed。
@@ -110,7 +110,7 @@ fn show_same_surface_twice_second_is_unchanged() {
 /// 別 surface への切替は Changed（冪等ガードは同一 id 限定であることの反証）。
 #[test]
 fn show_different_surface_is_changed() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     states.apply(&scope, SurfaceTarget::Show(2100));
@@ -130,7 +130,7 @@ fn show_different_surface_is_changed() {
 /// 非表示→表示の復帰（要件 3.5）: Hidden から Show(id) で Shown(id) へ遷移し Show 指令。
 #[test]
 fn recovery_from_hidden_to_shown() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // Show→Hide で Hidden にする。
@@ -195,7 +195,7 @@ fn current_binds_unbound_scope_returns_static_default() {
 /// Unresolved は no-op（要件 6.1）: 状態不変・発行なし・panic なし。
 #[test]
 fn unresolved_is_noop() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // 未設定スコープへの Unresolved → Unchanged・未設定のまま。
@@ -217,7 +217,7 @@ fn unresolved_is_noop() {
 /// 未知 scope への Hide は「変化」とみなし Hide を 1 度発行、以後は保持（要件 3.3/3.4）。
 #[test]
 fn hide_on_unknown_scope_emits_once_then_holds() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("2");
 
     // 未知 scope への Hide は先行 Hidden を持たないため Changed。
@@ -243,7 +243,7 @@ fn hide_on_unknown_scope_emits_once_then_holds() {
 /// `ShowBalloon { scope, surface_id, pattern }` を発行する（binds を**持たない**）。
 #[test]
 fn apply_balloon_new_show_emits_showballoon_without_binds() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     let outcome = states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -262,7 +262,7 @@ fn apply_balloon_new_show_emits_showballoon_without_binds() {
 /// 冪等な再表示（要件 4.3/DD8）: 同一面 id の 2 回目は Unchanged（再発行しない）。
 #[test]
 fn apply_balloon_show_same_surface_twice_second_is_unchanged() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // 1 回目: Changed。
@@ -285,7 +285,7 @@ fn apply_balloon_show_same_surface_twice_second_is_unchanged() {
 /// 別面への切替は Changed（冪等ガードが同一 id 限定であることの反証）。
 #[test]
 fn apply_balloon_show_different_surface_is_changed() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -304,7 +304,7 @@ fn apply_balloon_show_different_surface_is_changed() {
 /// 非表示（要件 4.2）: 表示中から Hide で Hidden へ遷移し `HideBalloon` を発行する。
 #[test]
 fn apply_balloon_hide_transition_from_shown() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     assert!(matches!(
@@ -325,7 +325,7 @@ fn apply_balloon_hide_transition_from_shown() {
 /// 冪等な再非表示（要件 4.3/DD8）: 既に Hidden な状態への Hide は Unchanged（再発行しない）。
 #[test]
 fn apply_balloon_hide_when_already_hidden_is_unchanged() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -345,7 +345,7 @@ fn apply_balloon_hide_when_already_hidden_is_unchanged() {
 /// 非表示→表示の復帰（要件 4.1/4.3）: Hidden から Show(id) で Shown(id) へ遷移し ShowBalloon。
 #[test]
 fn apply_balloon_recovery_from_hidden_to_shown() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -367,7 +367,7 @@ fn apply_balloon_recovery_from_hidden_to_shown() {
 /// 未知 scope への Hide は「変化」とみなし HideBalloon を 1 度発行、以後は保持（要件 4.2/4.3）。
 #[test]
 fn apply_balloon_hide_on_unknown_scope_emits_once_then_holds() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("3");
 
     let first = states.apply_balloon(&scope, SurfaceTarget::Hide);
@@ -389,7 +389,7 @@ fn apply_balloon_hide_on_unknown_scope_emits_once_then_holds() {
 /// Unresolved は no-op（防御・正規経路は actor が手前で skip）: 状態不変・発行なし。
 #[test]
 fn apply_balloon_unresolved_is_noop() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     let outcome = states.apply_balloon(&scope, SurfaceTarget::Unresolved);
@@ -410,7 +410,7 @@ fn apply_balloon_unresolved_is_noop() {
 /// 相互独立（要件 4.6）: `apply_balloon` はシェル map（`scopes`）を一切触らない。
 #[test]
 fn apply_balloon_does_not_touch_shell_scopes() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // 同一 scope へシェル面 Show を確定させておく。
@@ -438,7 +438,7 @@ fn apply_balloon_does_not_touch_shell_scopes() {
 /// 相互独立（要件 4.6）: `apply()`（シェル面）はバルーン map（`balloon`）を一切触らない。
 #[test]
 fn apply_shell_does_not_touch_balloon() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // 同一 scope へバルーン面 Show を確定させておく。

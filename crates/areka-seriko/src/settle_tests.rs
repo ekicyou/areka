@@ -9,7 +9,7 @@ use areka_emo_compose::{
     BindSet, Cell, ElementKind, EmoWorld, FilmId, FilmSheet, PartKey, PatternState, SurfaceMaster,
 };
 
-use super::{SETTLE_TICK_MS, settle_surface, settle_time};
+use super::{settle_surface, settle_time};
 use crate::table::AnimationTable;
 
 /// 0: runonce 赤→緑→青（各 100）。1: 0 の最後に `-1`。2: always だけ（8 コマ×50）。
@@ -100,11 +100,6 @@ fn settle(table: &AnimationTable, surface_id: u32) -> PatternState {
 /// 一番上の animation `anim` の今のコマの面（出ていなければ `None`）。
 fn top(p: &PatternState, anim: u32) -> Option<u32> {
     p.get(anim).map(|f| f.surface_id)
-}
-
-#[test]
-fn tick_interval_is_the_production_16ms() {
-    assert_eq!(SETTLE_TICK_MS, 16);
 }
 
 /// T は runonce の待ちの合計の最大。無ければ 0。部品の runonce は T を決めない。

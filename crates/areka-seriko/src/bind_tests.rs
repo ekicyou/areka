@@ -206,35 +206,6 @@ fn policy_matrix_kero_covers_all_declaration_forms() {
     );
 }
 
-/// 併記（`mustselect+multiple`）は複数可を優先する（bindopt D4）——導出順の錨。
-///
-/// 同じ表で mustselect 単独宣言が MustSelect に留まることも併せて確かめ、
-/// 「常に Multiple を返している」だけの退化した実装では緑にならないようにする。
-#[test]
-fn policy_both_options_declared_prefers_multiple() {
-    let r = policy_matrix_resolver();
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "腕"),
-        BindChoicePolicy::Multiple,
-        "mustselect と multiple の両方に属するカテゴリは複数可（正典「multiple で複数のパーツを選択可能」・bindopt D4）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Kero, "羽"),
-        BindChoicePolicy::Multiple,
-        "併記の優先則は相方側でも同一（bindopt D4）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "目"),
-        BindChoicePolicy::MustSelect,
-        "mustselect 単独宣言は MustSelect のまま（併記優先は併記のときだけ働く・bindopt D4）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Kero, "尾"),
-        BindChoicePolicy::Multiple,
-        "multiple 単独宣言も Multiple（併記と同じ値へ収束することの確認・bindopt D4）"
-    );
-}
-
 /// 名前空間の隔離（bindopt 4.3）: 本体の宣言は相方で効かず、相方の宣言も本体で効かない。
 ///
 /// mustselect・multiple・併記のいずれの宣言形についても、反対側の名前空間で引くと

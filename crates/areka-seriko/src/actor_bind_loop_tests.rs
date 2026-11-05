@@ -3,7 +3,7 @@ use super::*;
 use crate::bind::tests::groups_of;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_emo_compose::{BindSet, PatternState};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::ActorKey;
 
 // ─────────────────────────────────────────────────────────────────────
 // bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
@@ -16,28 +16,6 @@ use areka_sakura::{ActorKey, CueCommand, TalkCue};
 // 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で決定論的に檻化する。
 // 全 severity 枝は正カウント assert（優しい縮退の非空虚化・deterministic-test-coverage mandate）。
 // ─────────────────────────────────────────────────────────────────────
-
-/// `\![bind,tokens...]` 正準キャリア cue（`Custom` の String Array）を組む。
-fn bind_carrier_cue(scope: &str, tokens: &[&str]) -> TalkCue {
-    let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::command_carrier("bind", toks),
-        duration: 0.0,
-    }
-}
-
-/// 任意コマンド名の正準キャリア cue（名前ゲートの担当外検証用）。
-fn named_carrier_cue(scope: &str, name: &str, tokens: &[&str]) -> TalkCue {
-    let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::command_carrier(name, toks),
-        duration: 0.0,
-    }
-}
 
 /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
 /// `bindoption` 宣言なし）。
@@ -106,7 +84,7 @@ fn bind_apply_on_shown_emits_show_and_info_marker() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "伸び", "1"])),
         )
     });
 
@@ -158,7 +136,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["目", "笑", "1"])),
     );
     // 2 度目: 目=閉（1304）を着衣 → 排他置換で 1301 が外れ {1100,1207,1304}。
     let _ = handle_message(
@@ -167,7 +145,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["目", "閉", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["目", "閉", "1"])),
     );
 
     let recorded = records.lock().expect("records mutex poisoned");
@@ -221,7 +199,7 @@ fn bind_default_category_second_on_replaces_prior_part() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &tokens)),
         );
     }
 
@@ -252,7 +230,7 @@ fn bind_mustselect_off_is_ignored_with_warn() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["目", "笑", "1"])),
     );
 
     // 本題: 同じパーツへ脱衣指示 → 集合不変・warn! 1 回。
@@ -263,7 +241,7 @@ fn bind_mustselect_off_is_ignored_with_warn() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "0"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["目", "笑", "0"])),
         )
     });
 
@@ -327,7 +305,7 @@ fn bind_multiple_category_two_parts_coexist_via_actor() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &tokens)),
         );
     }
 
@@ -364,7 +342,7 @@ fn bind_multiple_category_off_removes_only_that_part() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &tokens)),
         );
     }
     // 本題: 花（1600）だけ脱衣 → リボン（1601）は残る。
@@ -374,7 +352,7 @@ fn bind_multiple_category_off_removes_only_that_part() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["髪飾り", "花", "0"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["髪飾り", "花", "0"])),
     );
 
     assert_eq!(
@@ -404,7 +382,7 @@ fn bind_default_category_off_removes_part() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["まばたき", "通常", "1"])),
     );
     assert_eq!(
         states.current_binds(&scope),
@@ -419,7 +397,7 @@ fn bind_default_category_off_removes_part() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "0"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["まばたき", "通常", "0"])),
     );
 
     assert_eq!(
@@ -454,7 +432,7 @@ fn bind_default_exclusive_replace_emits_show_and_info_marker() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["まばたき", "通常", "1"])),
     );
 
     // 本題: まばたき=ジトー（1402）を着衣＝排他置換（1400 を外し 1402 を載せる）。
@@ -465,7 +443,7 @@ fn bind_default_exclusive_replace_emits_show_and_info_marker() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "ジトー", "1"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["まばたき", "ジトー", "1"])),
         )
     });
 
@@ -519,7 +497,7 @@ fn bind_default_same_part_re_on_is_unchanged_no_emit() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["まばたき", "通常", "1"])),
     );
     assert_eq!(
         records.lock().expect("records mutex poisoned").len(),
@@ -535,7 +513,7 @@ fn bind_default_same_part_re_on_is_unchanged_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["まばたき", "通常", "1"])),
         )
     });
 
@@ -585,7 +563,7 @@ fn bind_cross_category_accumulates_via_actor() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "伸び", "1"])),
     );
     let _ = handle_message(
         &resolver,
@@ -593,7 +571,7 @@ fn bind_cross_category_accumulates_via_actor() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["肩", "上げ", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["肩", "上げ", "1"])),
     );
 
     // 異なるカテゴリ同士は干渉しない（1302 も 1500 も残る）。
@@ -630,7 +608,7 @@ fn bind_apply_on_hidden_scope_state_only_no_emit() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "伸び", "1"])),
     );
 
     assert_eq!(flow, ControlFlow::Continue(()), "StateOnly でも処理継続");
@@ -665,7 +643,7 @@ fn bind_toggle_form_flips_current_part() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "伸び"])),
         )
     });
 
@@ -714,7 +692,7 @@ fn bind_category_wide_off_removes_all_parts() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+        SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "伸び", "1"])),
     );
     records.lock().expect("records mutex poisoned").clear();
 
@@ -725,7 +703,7 @@ fn bind_category_wide_off_removes_all_parts() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "", "0"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "", "0"])),
         )
     });
 
@@ -770,7 +748,7 @@ fn bind_malformed_errors_no_emit() {
                 &mut states,
                 &mut loop_runtime,
                 &mut out,
-                SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+                SerikoMsg::Cue(carrier_cue("0", "bind", &tokens)),
             )
         });
 
@@ -812,7 +790,7 @@ fn bind_scope_unmapped_warns_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("x", &["腕", "伸び", "1"])),
+            SerikoMsg::Cue(carrier_cue("x", "bind", &["腕", "伸び", "1"])),
         )
     });
 
@@ -847,7 +825,7 @@ fn bind_unresolvable_errors_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+            SerikoMsg::Cue(carrier_cue("0", "bind", &["腕", "伸び", "1"])),
         )
     });
 
@@ -882,7 +860,7 @@ fn bind_name_gate_other_name_is_benign_debug_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(named_carrier_cue("0", "move", &["-353", "", "", "0"])),
+            SerikoMsg::Cue(carrier_cue("0", "move", &["-353", "", "", "0"])),
         )
     });
 

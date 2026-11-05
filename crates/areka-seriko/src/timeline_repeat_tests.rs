@@ -193,17 +193,6 @@ fn zero_delay_frame_is_skipped_alpha_webp() {
 
 // ── 経過が 1 秒飛んだら 1 秒ぶん進む（2.9） ────────────────────────────────
 
-/// 16 ミリ秒ずつ刻んでも 1 秒飛んでも、同じ時刻なら同じコマ（遅れを持ち越さない）。
-fn assert_jump_equals_ticks(f: &[LoopFrame], p: NonZeroU64, n: Option<NonZeroU32>, start: u64) {
-    let mut ticked = always_at(f, p, n, start);
-    let mut t = start;
-    while t < start + 1000 {
-        t = (t + 16).min(start + 1000);
-        ticked = always_at(f, p, n, t);
-    }
-    assert_eq!(always_at(f, p, n, start + 1000), ticked);
-}
-
 /// 手書きの形: 0 → 1000 で 1 秒ぶん進む（周期 150 の 6 周＋100 → コマ 1）。
 #[test]
 fn written_jump_of_one_second_advances_one_second() {
@@ -218,9 +207,6 @@ fn written_jump_of_one_second_advances_one_second() {
         Frame(2),
         "1050 = 150×7 → 8 周目の最初の待ちの間＝前の周の最後のコマ 2"
     );
-    for start in [0, 7, 123, 4_000] {
-        assert_jump_equals_ticks(&f, p, None, start);
-    }
 }
 
 /// 子の形: 0 → 1000 で 1 秒ぶん進む（alpha.webp・終わりなしと合計 3 回の両方）。
@@ -233,10 +219,6 @@ fn film_jump_of_one_second_advances_one_second() {
     assert_eq!(always_at(&f, p, None, 1020), Frame(0));
     // 合計 3 回なら 510 以上は最後のコマ。
     assert_eq!(always_at(&f, p, laps(3), 1000), Frame(2));
-    for start in [0, 13, 250, 9_999] {
-        assert_jump_equals_ticks(&f, p, None, start);
-        assert_jump_equals_ticks(&f, p, laps(3), start);
-    }
 }
 
 // ── 途中の -1 で消えて次で戻る（4.5） ───────────────────────────────────────

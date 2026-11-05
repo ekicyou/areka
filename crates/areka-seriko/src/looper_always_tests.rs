@@ -9,36 +9,13 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::{BindSet, Cell, PartKey, PatternState};
 
+use super::test_support::{cell, switch_at};
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::parts::PartAnim;
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::resolve::SurfaceTarget;
 use crate::test_support::{scope, table_of};
-
-/// アクターの面の切り替えと同じ順で踏み、出す指令（無ければ `None`）を返す。
-fn switch(
-    rt: &mut LoopRuntime,
-    states: &mut ScopeStates,
-    target: SurfaceTarget,
-) -> Option<DisplayCommand> {
-    let crate::state::ApplyOutcome::Changed(cmd) = states.apply(&scope(), target) else {
-        return None;
-    };
-    rt.on_surface_changed(&scope(), Slot::Shell);
-    Some(
-        rt.refresh(&scope(), Slot::Shell, None, states)
-            .unwrap_or(cmd),
-    )
-}
-
-/// 一番上の animation 0 の欄の読み（`None`＝載っていない＝経過 0）。
-fn top_cell(states: &ScopeStates) -> Option<u32> {
-    states
-        .current_pattern(&scope(), Slot::Shell)
-        .get(0)
-        .map(|f| f.surface_id)
-}
 
 /// 子 `film` の欄の絵（`None`＝載っていない＝経過 0）。
 fn film_cell(pattern: &PatternState, film: areka_emo_compose::FilmId) -> Option<u32> {
@@ -66,7 +43,8 @@ fn top_always_starts_without_lottery_and_restarts_from_head_on_switch() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     assert!(rt.on_tick(0, &mut states).is_empty());
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0)).expect("切り替えの Show");
+    let cmd =
+        switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None).expect("切り替えの Show");
     assert!(
         tests::pattern_of(&cmd).is_empty(),
         "最初の指令は経過 0（欄に載らない）"
@@ -85,16 +63,20 @@ fn top_always_starts_without_lottery_and_restarts_from_head_on_switch() {
     );
 
     // 刻みの間に 1 → 0 と戻る: 戻った出来事の時刻（直前の刻み 150）から頭で始め直す。
-    switch(&mut rt, &mut states, SurfaceTarget::Show(1)).expect("1 へ");
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0)).expect("0 へ");
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(1), None).expect("1 へ");
+    let cmd = switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None).expect("0 へ");
     assert!(tests::pattern_of(&cmd).is_empty());
     assert!(
         rt.on_tick(200, &mut states).is_empty(),
         "経過 50＝経過 0 のコマ"
     );
-    assert_eq!(top_cell(&states), None);
+    assert_eq!(cell(&states, Slot::Shell, 0), None);
     assert_eq!(rt.on_tick(250, &mut states).len(), 1);
-    assert_eq!(top_cell(&states), Some(102), "経過 100 で 2 枚目＝頭から");
+    assert_eq!(
+        cell(&states, Slot::Shell, 0),
+        Some(102),
+        "経過 100 で 2 枚目＝頭から"
+    );
 
     // 境界を何度跨いでも乱数を引かない。
     let mut now = 300;
@@ -153,7 +135,7 @@ fn adding_always_keeps_random_fire_times() {
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
         let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
         rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0));
+        switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None);
         let mut seen = Vec::new();
         let mut now = 0;
         while now <= 9000 {
@@ -190,7 +172,7 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(3));
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(3), None);
     let once = |rt: &LoopRuntime| {
         rt.parts
             .clock_at(&scope(), Slot::Shell, PartKey::Film(ONCE), 0)
@@ -209,9 +191,9 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
         Some(21)
     );
 
-    switch(&mut rt, &mut states, SurfaceTarget::Show(2));
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(2), None);
     assert_eq!(once(&rt), None, "見えなくなった回数つきの時計は捨てる");
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(3)).expect("3 へ");
+    let cmd = switch_at(&mut rt, &mut states, SurfaceTarget::Show(3), None).expect("3 へ");
     assert_eq!(film_cell(tests::pattern_of(&cmd), ONCE), None, "経過 0");
     assert_eq!(
         once(&rt),
@@ -237,7 +219,7 @@ fn hiding_top_drops_finite_shell_clocks_only() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(1));
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(1), None);
     rt.on_tick(50, &mut states);
     let clock = |rt: &LoopRuntime, film| {
         rt.parts
@@ -245,7 +227,7 @@ fn hiding_top_drops_finite_shell_clocks_only() {
     };
     assert!(clock(&rt, ONCE).is_some() && clock(&rt, ENDLESS).is_some());
 
-    switch(&mut rt, &mut states, SurfaceTarget::Hide).expect("Hide");
+    switch_at(&mut rt, &mut states, SurfaceTarget::Hide, None).expect("Hide");
     assert_eq!(clock(&rt, ONCE), None, "回数つきは捨てる");
     assert_eq!(
         clock(&rt, ENDLESS),
@@ -272,7 +254,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(1));
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(1), None);
     // バルーンの面の部品の時計（ここでは入れ物を直に満たす）。
     rt.parts.advance(
         &scope(),
@@ -320,9 +302,13 @@ fn event_time_is_not_fed_into_tick_guard() {
 
     assert!(rt.on_tick(480, &mut states).is_empty());
     assert_eq!(rt.last_seen, Some(480), "刻み 480 は捨てられない");
-    assert_eq!(top_cell(&states), None, "経過は 0 で止まる");
+    assert_eq!(cell(&states, Slot::Shell, 0), None, "経過は 0 で止まる");
     assert_eq!(rt.on_tick(600, &mut states).len(), 1);
-    assert_eq!(top_cell(&states), Some(102), "出来事の時刻 500 から 100ms");
+    assert_eq!(
+        cell(&states, Slot::Shell, 0),
+        Some(102),
+        "出来事の時刻 500 から 100ms"
+    );
 }
 
 /// 一番上の `always` の再生は、出来事の時刻が分からない（刻みの前に表示した・表を差し替えた）ときは
@@ -334,21 +320,29 @@ fn top_always_is_born_on_the_tick_when_no_event_time_is_known() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
 
     // 刻みの前に表示: 出来事の時刻が無いので再生は生まれない。
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0));
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None);
     assert!(rt.playback.is_empty(), "刻みの前は再生が無い");
     rt.on_tick(1000, &mut states);
-    assert_eq!(top_cell(&states), None, "刻み 1000 で生まれる（経過 0）");
+    assert_eq!(
+        cell(&states, Slot::Shell, 0),
+        None,
+        "刻み 1000 で生まれる（経過 0）"
+    );
     rt.on_tick(1100, &mut states);
-    assert_eq!(top_cell(&states), Some(102), "1000 から 100ms");
+    assert_eq!(cell(&states, Slot::Shell, 0), Some(102), "1000 から 100ms");
 
     // 表の差し替え: 再生を捨て、次の刻み 1150 で生まれ直す。
     states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
     rt.replace_shell_table(table_of(TOP_ALWAYS));
     assert!(rt.playback.is_empty(), "差し替えで再生を捨てる");
     rt.on_tick(1150, &mut states);
-    assert_eq!(top_cell(&states), None, "刻み 1150 で生まれる（経過 0）");
+    assert_eq!(
+        cell(&states, Slot::Shell, 0),
+        None,
+        "刻み 1150 で生まれる（経過 0）"
+    );
     rt.on_tick(1250, &mut states);
-    assert_eq!(top_cell(&states), Some(102), "1150 から 100ms");
+    assert_eq!(cell(&states, Slot::Shell, 0), Some(102), "1150 から 100ms");
 }
 
 /// 境界の抽選の時点で `always` の再生がまだ無くても（境界を跨ぐ刻みの直前に表を差し替えた）、
@@ -362,7 +356,7 @@ fn always_draws_no_rng_even_when_unborn_at_the_boundary() {
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
         let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
         rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0));
+        switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None);
         let mut seen = Vec::new();
         let mut now = 50;
         while now <= 9000 {
@@ -433,7 +427,7 @@ surface103
     };
 
     rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0));
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None);
     for (now, expect) in [
         (50, "rest"),
         (100, "blank"),

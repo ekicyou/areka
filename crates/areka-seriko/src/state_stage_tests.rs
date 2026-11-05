@@ -29,7 +29,7 @@ fn balloon_slots(states: &ScopeStates) -> Vec<(ActorKey, u32, bool)> {
 /// `\b` を受けていないスコープは知らせの面を使う（進行の対象にも、`ShowBalloon` の面にも）。
 #[test]
 fn scope_without_balloon_cue_uses_the_noted_face() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     assert!(
         balloon_slots(&states).is_empty(),
@@ -56,7 +56,7 @@ fn scope_without_balloon_cue_uses_the_noted_face() {
 /// 知らせに従う。
 #[test]
 fn balloon_cue_wins_over_the_noted_face() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.note_stage(&note(&scope, true, 3));
     states.apply_balloon(&scope, SurfaceTarget::Show(5));
@@ -82,7 +82,7 @@ fn balloon_cue_wins_over_the_noted_face() {
 /// `\b[-1]` を受けたら面なし（知らせが在っても進行の対象にならず、指令も出さない）。
 #[test]
 fn balloon_hide_cue_leaves_no_face() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.note_stage(&note(&scope, true, 3));
     states.apply_balloon(&scope, SurfaceTarget::Hide);
@@ -97,7 +97,7 @@ fn balloon_hide_cue_leaves_no_face() {
 /// `shown_slots` と同じ（見えている＝真）。並びはスコープの昇順 → シェル → バルーン。
 #[test]
 fn without_notes_stage_slots_match_shown_slots() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let (s0, s1) = (ActorKey::from("0"), ActorKey::from("1"));
     states.apply(&s1, SurfaceTarget::Show(10));
     states.apply_balloon(&s1, SurfaceTarget::Show(0));
@@ -120,7 +120,7 @@ fn without_notes_stage_slots_match_shown_slots() {
 /// 指摘 11）。スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
 #[test]
 fn shown_slots_go_scope_ascending_then_shell_then_balloon() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let (s0, s1) = (ActorKey::from("0"), ActorKey::from("1"));
     states.apply(&s1, SurfaceTarget::Show(10));
     states.apply_balloon(&s1, SurfaceTarget::Show(0));

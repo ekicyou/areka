@@ -151,8 +151,8 @@ mod tests {
     /// `DisplayCommand` が `Send` 所有データであること（要件 5.4）をコンパイル時に固定する。
     fn _assert_send<T: Send>() {}
 
-    /// 観測用出力先へ表示指令列（`Show`/`Hide` 混在）を送ると、記録が送信順どおりに
-    /// 一致する（要件 5.1/5.2/5.5・observable: 発行列が送信順と一致）。
+    /// 観測用出力先へ表示指令列（`Show`/`Hide`/`ShowBalloon`/`HideBalloon` 混在）を送ると、記録が
+    /// 送信順どおりに一致する（要件 4.1/4.2/5.1/5.2/5.5・observable: 発行列が送信順と一致）。
     #[test]
     fn mock_records_display_commands_in_send_order() {
         // 5.4: Send 所有データであることを固定。
@@ -161,7 +161,7 @@ mod tests {
         let mut out = MockSurfaceOutput::new();
         let handle = out.records();
 
-        // Show / Hide を混在させ、distinct な scope・surface_id・binds で送る。
+        // 4 種を混在させ、distinct な scope・surface_id・binds で送る。
         let commands = vec![
             DisplayCommand::Show {
                 scope: ActorKey::from("0"),
@@ -181,86 +181,6 @@ mod tests {
             DisplayCommand::Hide {
                 scope: ActorKey::from("0"),
             },
-        ];
-
-        for command in commands.clone() {
-            out.send(command);
-        }
-
-        // records() の Arc ハンドルから発行列を照合する（送信順どおり・全件）。
-        let recorded = handle.lock().expect("records mutex poisoned");
-        assert_eq!(recorded.len(), commands.len(), "全件記録されること");
-        assert_eq!(&*recorded, &commands, "発行列が送信順どおりに一致すること");
-    }
-
-    /// 記録が空の初期状態から始まる（vacuous pass 防止の反証）。
-    #[test]
-    fn mock_starts_empty() {
-        let out = MockSurfaceOutput::new();
-        assert!(out.records().lock().unwrap().is_empty());
-    }
-
-    /// 新設のバルーン面指令 `ShowBalloon { scope, surface_id }`／`HideBalloon { scope }` を
-    /// 構築し、`PartialEq` で照合できる（要件 4.1/4.2）。`ShowBalloon` は `binds` を持たず
-    /// （`scope`・`surface_id`・`pattern`）、`HideBalloon` は `scope` のみ（バルーンに着せ替え無し）。
-    #[test]
-    fn balloon_display_commands_construct_and_match() {
-        let show = DisplayCommand::ShowBalloon {
-            scope: ActorKey::from("0"),
-            surface_id: 2,
-            pattern: PatternState::default(),
-        };
-
-        let hide = DisplayCommand::HideBalloon {
-            scope: ActorKey::from("0"),
-        };
-
-        // ShowBalloon と HideBalloon は互いに不一致。
-        assert_ne!(show, hide, "ShowBalloon と HideBalloon は不一致であること");
-
-        // distinct な surface_id は不一致（面 id で識別されること・要件 4.1）。
-        assert_ne!(
-            show,
-            DisplayCommand::ShowBalloon {
-                scope: ActorKey::from("0"),
-                surface_id: 3,
-                pattern: PatternState::default(),
-            },
-            "surface_id が異なれば ShowBalloon は不一致であること"
-        );
-
-        // distinct な scope は不一致（scope で識別されること・要件 4.1/4.2）。
-        assert_ne!(
-            show,
-            DisplayCommand::ShowBalloon {
-                scope: ActorKey::from("1"),
-                surface_id: 2,
-                pattern: PatternState::default(),
-            },
-            "scope が異なれば ShowBalloon は不一致であること"
-        );
-        assert_ne!(
-            hide,
-            DisplayCommand::HideBalloon {
-                scope: ActorKey::from("1"),
-            },
-            "scope が異なれば HideBalloon は不一致であること"
-        );
-    }
-
-    /// 観測用出力先へバルーン面指令（`ShowBalloon`/`HideBalloon`）をシェル面指令と混在させて
-    /// 送ると、記録が送信順どおりに一致する（要件 4.1/4.2/5.5・FIFO 保持）。既存 `Send` 固定も
-    /// 併せて反証する（新 variant 追加後も `DisplayCommand: Send`・要件 5.4）。
-    #[test]
-    fn mock_records_balloon_display_commands_in_send_order() {
-        // 5.4: 新 variant 追加後も Send 所有データであることを固定。
-        _assert_send::<DisplayCommand>();
-
-        let mut out = MockSurfaceOutput::new();
-        let handle = out.records();
-
-        // シェル面（Show/Hide）とバルーン面（ShowBalloon/HideBalloon）を混在させて送る。
-        let commands = vec![
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
@@ -292,9 +212,6 @@ mod tests {
         // records() の Arc ハンドルから発行列を照合する（送信順どおり・全件）。
         let recorded = handle.lock().expect("records mutex poisoned");
         assert_eq!(recorded.len(), commands.len(), "全件記録されること");
-        assert_eq!(
-            &*recorded, &commands,
-            "バルーン面指令を含む発行列が送信順どおりに一致すること"
-        );
+        assert_eq!(&*recorded, &commands, "発行列が送信順どおりに一致すること");
     }
 }

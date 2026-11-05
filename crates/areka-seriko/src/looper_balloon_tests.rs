@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey};
 
+use super::test_support::started;
 use super::tests::counting_rng;
 use super::*;
 use crate::parts::PartAnim;
@@ -223,14 +224,6 @@ const BALLOON_TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
     animation0.pattern2,overlay,103,100,0,0\n}\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
 
-/// バルーンの面 0 の一番上の `always` の再生の開始の時刻（無ければ `None`）。
-fn top_started(rt: &LoopRuntime) -> Option<u64> {
-    rt.playback
-        .get(&(scope(), Slot::Balloon))
-        .and_then(|pb| pb.get(&0))
-        .map(|p| p.started_at_ms)
-}
-
 /// 窓が閉じている間は、刻みでも出来事の直後の評価でも一番上の `always` の再生が生まれない。
 /// 開いた後は、評価の時刻（刻みの時刻・出来事の時刻）で生まれる（要件 6.1）。
 #[test]
@@ -241,14 +234,22 @@ fn closed_window_births_no_top_always_playback() {
 
     note(&mut states, false, 0);
     rt.on_tick(1000, &mut states);
-    assert_eq!(top_started(&rt), None, "閉じている間の刻みでは生まれない");
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        None,
+        "閉じている間の刻みでは生まれない"
+    );
     rt.refresh(&scope(), Slot::Balloon, Some(1100), &mut states);
-    assert_eq!(top_started(&rt), None, "閉じている間の評価では生まれない");
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        None,
+        "閉じている間の評価では生まれない"
+    );
 
     note(&mut states, true, 0);
     rt.refresh(&scope(), Slot::Balloon, Some(1200), &mut states);
     assert_eq!(
-        top_started(&rt),
+        started(&rt, Slot::Balloon, 0),
         Some(1200),
         "開いた後の評価の時刻で生まれる"
     );
@@ -259,7 +260,7 @@ fn closed_window_births_no_top_always_playback() {
     note(&mut states, true, 0);
     rt.on_tick(1000, &mut states);
     assert_eq!(
-        top_started(&rt),
+        started(&rt, Slot::Balloon, 0),
         Some(1000),
         "開いている面の刻みの時刻で生まれる"
     );

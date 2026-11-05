@@ -8,7 +8,7 @@ use crate::test_support::one_frame_pattern as pattern_of;
 /// シェル面・バルーン面を表示し、動的な着せ替えと両 slot のパターンの進行を積んだ状態。
 /// scope 0 は Shown(5)／バルーン Shown(2)、scope 1 は Hidden。
 fn loaded_states() -> ScopeStates {
-    let mut states = empty_states(); // static = {1100, 1207}
+    let mut states = fresh_states(); // static = {1100, 1207}
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply(&s0, SurfaceTarget::Show(5));

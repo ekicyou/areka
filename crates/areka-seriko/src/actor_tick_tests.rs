@@ -8,29 +8,9 @@ use crate::output::{DisplayCommand, MockSurfaceOutput};
 use crate::timeline::LoopRng;
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, Interval};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
 
 // 刻みの道の役者テスト（spec: audit-seriko 指摘 2・actor_bind_loop_tests.rs から 1,000 行を越えないよう移した）。
 // 前半は bind 消費分岐の網羅檻の最後の組（宛名規律）、後半は Tick 経路の網羅檻。
-
-/// 非正準 params の `Custom` cue（`params` が非 Array＝`as_command_carrier()==None`・宛名規律検証用）。
-fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Custom {
-            command: command.to_string(),
-            params: dola::DynamicValue::Null,
-        },
-        duration: 0.0,
-    };
-    // 前提: この構成は必ずキャリア開封に失敗する（宛名規律 D8④ の入口条件）。
-    assert!(
-        cue.command.as_command_carrier().is_none(),
-        "非 Array params の Custom は as_command_carrier() が None（宛名規律の入口）"
-    );
-    cue
-}
 
 /// ケース23（D8④・宛名規律）: 非正準 params の Custom で宛名が自分（"bind"）＝warn! ；
 /// 宛名が他人（"noexist"）＝warn! を出さず debug! 素通し。いずれも発行なし。

@@ -14,7 +14,6 @@ use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 一番上 0 の `always`: 101（待ち 0＝経過 0）→ 100ms で 102 → 100ms で 103（周期 200）。1 は何も持たない。
 const TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
@@ -32,13 +31,6 @@ const BIND_ALWAYS: &str = "surface0\n{\nanimation5.interval,bind\n\
     animation0.pattern1,overlay,102,100,0,0\n\
     animation0.pattern2,overlay,103,100,0,0\n}\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
-
-/// テストが値を書き替えられる時計。
-fn manual_clock(start: u64) -> (SerikoClock, Arc<AtomicU64>) {
-    let now = Arc::new(AtomicU64::new(start));
-    let read = Arc::clone(&now);
-    (Arc::new(move || read.load(Ordering::SeqCst)), now)
-}
 
 /// この檻の足場（本体は兄弟の足場 `ClockRig`・着せ替えの名前は (目, 閉) → 5）。
 fn rig(config: SerikoLoopConfig) -> ClockRig {
@@ -145,11 +137,7 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
         cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
     );
     rig.tick(0);
-    let bind = CueCommand::command_carrier(
-        "bind",
-        vec!["目".to_string(), "閉".to_string(), "1".to_string()],
-    );
-    let cmds = rig.hear(1030, cue(0.0, "0", bind, 0.0));
+    let cmds = rig.hear(1030, carrier_cue("0", "bind", &["目", "閉", "1"]));
     let part = |p: &PatternState| {
         p.part(100)
             .map(|(id, f)| (id, f.surface_id))
@@ -243,7 +231,7 @@ fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_ti
         "None は spawn_seriko と同じ列"
     );
 
-    let (clock, _now) = manual_clock(1030);
+    let clock: SerikoClock = Arc::new(|| 1030);
     assert_eq!(
         show_surfaces(&run_actor(spawn(Some(clock)))),
         vec![(0, None), (1, None)],

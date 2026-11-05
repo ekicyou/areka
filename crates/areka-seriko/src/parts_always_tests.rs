@@ -41,6 +41,28 @@ fn tick(
     p
 }
 
+/// 一番上 `top` のシェルの面で出来事の直後の `refresh` を時刻 `at_ms` で回し、部品の欄を作り直した絵を返す。
+fn refresh(
+    clocks: &mut PartClocks,
+    table: &AnimationTable,
+    top: u32,
+    at_ms: Option<u64>,
+) -> PatternState {
+    let mut p = PatternState::default();
+    clocks.refresh(
+        &scope(),
+        Slot::Shell,
+        top,
+        &areka_emo_compose::BindSet::default(),
+        table,
+        at_ms,
+        true,
+        &mut crate::seeded_rng(0),
+        &mut p,
+    );
+    p
+}
+
 /// 部品 `part` の animation 0 の欄の読み（サーフェスを指すコマは番号）。
 fn cell_of(p: &PatternState, part: u32) -> Option<Option<u32>> {
     match p.cell(Some(PartKey::Surface(part)), 0) {
@@ -134,20 +156,7 @@ fn refresh_creates_always_clock_at_event_time() {
     let table = table_of(ALWAYS);
     let (mut rng, probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
-    let b = areka_emo_compose::BindSet::default();
-
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        0,
-        &b,
-        &table,
-        None,
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = refresh(&mut clocks, &table, 0, None);
     assert!(p.is_empty());
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
@@ -155,33 +164,11 @@ fn refresh_creates_always_clock_at_event_time() {
         "時刻が分からなければ作らない"
     );
 
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        0,
-        &b,
-        &table,
-        Some(1000),
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = refresh(&mut clocks, &table, 0, Some(1000));
     assert!(p.is_empty(), "経過 0 のコマは欄に載らない");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
 
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        1,
-        &b,
-        &table,
-        Some(1200),
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = refresh(&mut clocks, &table, 1, Some(1200));
     assert_eq!(cell_of(&p, 100), Some(Some(102)), "在る時計は続き");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
     tick(&mut clocks, &table, 0, 1250, true, &mut rng);

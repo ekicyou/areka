@@ -56,9 +56,35 @@ fn tick(
     rng: &mut LoopRng,
     top_pattern: &PatternState,
 ) -> PatternState {
+    tick_at(
+        clocks,
+        table,
+        &scope(),
+        top,
+        binds,
+        now_ms,
+        crossed,
+        rng,
+        top_pattern,
+    )
+}
+
+/// [`tick`] をスコープ `scope` のシェルの面で回す。
+#[allow(clippy::too_many_arguments)]
+fn tick_at(
+    clocks: &mut PartClocks,
+    table: &AnimationTable,
+    scope: &ActorKey,
+    top: u32,
+    binds: &BindSet,
+    now_ms: u64,
+    crossed: bool,
+    rng: &mut LoopRng,
+    top_pattern: &PatternState,
+) -> PatternState {
     let mut pattern = top_pattern.clone();
     clocks.advance(
-        &scope(),
+        scope,
         Slot::Shell,
         top,
         binds,
@@ -609,35 +635,26 @@ fn clear_drops_clocks_of_every_scope() {
     let b = no_binds();
     let other = ActorKey::from("1");
 
-    let mut p = PatternState::default();
-    clocks.advance(
-        &scope(),
-        Slot::Shell,
+    tick(
+        &mut clocks,
+        &table,
         0,
         &b,
-        &table,
         1000,
         true,
-        true,
-        None,
         &mut rng,
-        &mut crate::seeded_rng(0),
-        &mut p,
+        &PatternState::default(),
     );
-    let mut p = PatternState::default();
-    clocks.advance(
+    tick_at(
+        &mut clocks,
+        &table,
         &other,
-        Slot::Shell,
         0,
         &b,
-        &table,
         1000,
         true,
-        true,
-        None,
         &mut rng,
-        &mut crate::seeded_rng(0),
-        &mut p,
+        &PatternState::default(),
     );
     assert!(clocks.clock(&scope(), 100, 0).is_some());
     assert!(clocks.clock(&other, 100, 0).is_some());
@@ -683,35 +700,27 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
         }
         // 別のスコープは別に数える。
         for base in [1000u64, 2000] {
-            let mut p = PatternState::default();
-            clocks.advance(
+            tick_at(
+                &mut clocks,
+                &table,
                 &other,
-                Slot::Shell,
                 0,
                 &b,
-                &table,
                 base,
                 true,
-                true,
-                None,
                 &mut rng,
-                &mut crate::seeded_rng(0),
-                &mut p,
+                &PatternState::default(),
             );
-            let mut p = PatternState::default();
-            clocks.advance(
+            tick_at(
+                &mut clocks,
+                &table,
                 &other,
-                Slot::Shell,
                 0,
                 &b,
-                &table,
                 base + 50,
                 false,
-                true,
-                None,
                 &mut rng,
-                &mut crate::seeded_rng(0),
-                &mut p,
+                &PatternState::default(),
             );
         }
     });
@@ -881,18 +890,7 @@ fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself()
     );
 
     // 抽選も作り直しも同じ時計を読む（`refresh` も欄を書く）。
-    let mut p = top.clone();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        0,
-        &b,
-        &table,
-        Some(1110),
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = peek_at(&mut clocks, &table, 0, &b, 1110, &top);
     assert_eq!(part_frames(&p, 100), vec![(0, 102)]);
     assert_eq!(
         calls(&probe),

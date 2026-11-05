@@ -23,6 +23,13 @@ pub(crate) fn table_of(text: &str) -> AnimationTable {
     AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
 }
 
+/// 静的な着せ替え {1100, 1207} を持つ空のスコープ状態（役者と状態のテストが使う）。
+pub(crate) fn fresh_states() -> crate::state::ScopeStates {
+    crate::state::ScopeStates::new(crate::DefaultBinds::uniform(
+        areka_emo_compose::BindSet::from_ids([1100, 1207]),
+    ))
+}
+
 /// 既定のスコープ `\0`。
 pub(crate) fn scope() -> ActorKey {
     ActorKey::from("0")

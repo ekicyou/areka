@@ -8,11 +8,8 @@
 //! 期待列と全値比較（binds 含む）できる。
 
 use areka_emo_compose::PatternState;
-use areka_sakura::{ActorKey, CueSink};
-use areka_seriko::{
-    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, build_static_bindset,
-    spawn_seriko,
-};
+use areka_sakura::ActorKey;
+use areka_seriko::DisplayCommand;
 
 mod common;
 use common::*;
@@ -31,28 +28,17 @@ use common::*;
 /// 同期は `close()`→`join()` の 1 点のみ。sleep/polling/表示なし（要件 7.2）。
 #[test]
 fn cue_sequence_emits_expected() {
-    let resolver = emo2_resolver();
-    // emo2 の bindgroup default 既定オン集合。
-    let binds = build_static_bindset(&[1100, 1207, 1302, 1500, 1800]);
-
-    // 観測用出力先。records() ハンドルを move 前に取得しておく。
-    let mock = MockSurfaceOutput::new();
-    let records = mock.records();
-
-    // アクター起動→fixture 系列を emit→Close→join で終了同期（唯一の同期点・sleep なし）。
-    let (mut sink, handle) = spawn_seriko(
-        resolver,
-        areka_seriko::DefaultBinds::uniform(binds.clone()),
-        BindResolver::empty(),
-        SerikoLoopConfig::disabled(),
-        mock,
+    let binds = emo2_binds();
+    let records = run_cues(
+        emo2_resolver(),
+        binds.clone(),
+        [
+            emote_cue(0.0, "0", "2100"), // 数値
+            emote_cue(1.0, "0", "静観"), // alias（複数 id→先頭）
+            emote_cue(2.0, "0", "-1"),   // 非表示
+            emote_cue(3.0, "1", "10"),   // 別スコープ・数値
+        ],
     );
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 数値
-    CueSink::emit(&mut sink, emote_cue(1.0, "0", "静観")); // alias（複数 id→先頭）
-    CueSink::emit(&mut sink, emote_cue(2.0, "0", "-1")); // 非表示
-    CueSink::emit(&mut sink, emote_cue(3.0, "1", "10")); // 別スコープ・数値
-    sink.close().expect("Close を送れること");
-    handle.join().expect("Close で正常終了する");
 
     // join 復帰時点で全 Cue は FIFO 単一スレッドで処理済み。発行列を全値比較（binds 含む）。
     let expected = vec![
@@ -79,9 +65,8 @@ fn cue_sequence_emits_expected() {
         },
     ];
 
-    let recorded = records.lock().expect("records mutex poisoned");
     assert_eq!(
-        &*recorded, &expected,
+        records, expected,
         "数値・alias・非表示・別スコープ混在の発行列が期待列と順序込みで完全一致すること"
     );
 }

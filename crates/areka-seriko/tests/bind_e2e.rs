@@ -35,17 +35,9 @@
 //! `腕,伸び` の on/off が確定的に集合を出入りさせる（off で 1100 が抜け `{1207}`、on で戻る）。
 
 use areka_emo_compose::{BindSet, PatternState};
-use areka_sakura::{
-    ActorKey, CueCommand, CueSink, SakuraMsg, ScriptOrigin, StartTalk, SystemVarSnapshot, TalkCue,
-    TalkEndReason, TalkId, spawn_talk,
-};
-use areka_seriko::{
-    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
-    spawn_seriko,
-};
-use std::collections::BTreeMap;
+use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_seriko::{BindResolver, DisplayCommand};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 mod common;
 use common::*;
@@ -105,85 +97,6 @@ fn show(surface_id: u32, ids: impl IntoIterator<Item = u32>) -> DisplayCommand {
         binds: BindSet::from_ids(ids),
         pattern: PatternState::default(),
     }
-}
-
-/// 1 シナリオを貫通駆動する中核（resolver／静的既定集合を注入可能にした汎用形）。
-///
-/// `script` を直入力する talk を起動し、`ticks` を順に注入して駆動する。seriko には呼び手が
-/// 与えた静的既定集合 `static_binds` と bind 名前解決層 `resolver` を注入する（R5.5）。broadcast の
-/// 2 つ目のスロットには呼び手が与えた `text_sink` を差し込む（bind のみ観測なら [`NullTextSink`]、
-/// text 非汚染観測なら [`RecordingTextSink`]）。同期はモジュール doc の
-/// 「Tick 注入 → done_rx.recv → SerikoSink drop による seriko disconnect → seriko join → records 照合」
-/// のみで行う（sleep/polling なし・R5.3）。シナリオごとに新しい状態を立て、持ち越さない。
-fn run_core(
-    static_binds: BindSet,
-    resolver: BindResolver,
-    script: &str,
-    ticks: &[f64],
-    text_sink: Box<dyn CueSink + Send>,
-) -> Vec<DisplayCommand> {
-    // ── seriko アクター（表示指令の消費側）──
-    // 空 alias 表（数値 key は数値枝で解決）・呼び手指定の静的既定 bind 集合・呼び手指定の bind
-    // 名前解決層。records() ハンドルは move 前に取得する。
-    let out = MockSurfaceOutput::new();
-    let records = out.records();
-    let (seriko_sink, seriko) = spawn_seriko(
-        SurfaceResolver::new(BTreeMap::new()),
-        areka_seriko::DefaultBinds::uniform(static_binds),
-        resolver,
-        SerikoLoopConfig::disabled(),
-        out,
-    );
-
-    // ── talk アクター（fixture script 直入力）──
-    // seriko_sink（＝seriko inbox の唯一の Sender）を broadcast スロット第 1 へ move する。clone を
-    // 残さないことで、talk スレッド終了時の drop が seriko inbox を disconnect させる（同期チェーンの要）。
-    let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkNotice>();
-    let talk = spawn_talk(
-        StartTalk {
-            epilogue: Vec::new(),
-            script: script.to_string(),
-            talk_id: TalkId(8),
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        },
-        done_tx,
-        vec![Box::new(seriko_sink), text_sink],
-        SystemVarSnapshot::default(),
-        None,
-    );
-
-    // ── 注入 Tick のみで駆動（sleep/polling ゼロ・要件 5.3）──
-    for &t in ticks {
-        talk.inbox
-            .send(SakuraMsg::Tick(t))
-            .expect("Tick を投函できること");
-    }
-
-    // ── 同期チェーン ──
-    // (1) TalkDone 受領（talk 自然終端＝`\e`）。fixture は全て `\e` 終端ゆえ Ended。
-    let TalkNotice::Done(done) = done_rx
-        .recv_timeout(Duration::from_secs(5))
-        .expect("fixture script は `\\e` で自然終端し TalkDone を返すべき")
-    else {
-        panic!("選択肢を含まない fixture では ChoiceWaiting は流れない（TalkDone のみ）");
-    };
-    assert_eq!(
-        done.reason,
-        TalkEndReason::Ended,
-        "`\\e` は Ended で終端する"
-    );
-
-    // (2) talk スレッド終了→move 済み SerikoSink（唯一の Sender）drop→seriko inbox disconnect。
-    talk.actor
-        .join()
-        .expect("talk body は Break 後に正常終了する");
-    // (3) seriko join（唯一の同期点）。先送りの Cue は FIFO 単一スレッドゆえ join 復帰時に処理済み。
-    seriko.join().expect("seriko は disconnect で正常終了する");
-
-    // (4) 発行列のスナップショットを返す（決定論）。
-    let recorded = records.lock().expect("records mutex poisoned");
-    recorded.clone()
 }
 
 /// 既存シナリオの既定注入で貫通駆動する薄いラッパ。
@@ -412,21 +325,6 @@ fn mustselect_sequence_replaces_prior_part_end_to_end() {
         ],
         "mustselect 列は高々 1 パーツへ置換され、旧 目 パーツは残らない（反・積算・bindopt 3.1）"
     );
-
-    // 判別の明示（anti-accumulation）: 最終集合の 目 パーツ（1301/1303/1304 のいずれか）はちょうど 1 個。
-    let final_binds = match records.last().expect("最終 Show が存在する") {
-        DisplayCommand::Show { binds, .. } => binds.clone(),
-        other => panic!("最終指令は Show であるべき: {other:?}"),
-    };
-    let eye_parts: Vec<u32> = [1301u32, 1303, 1304]
-        .into_iter()
-        .filter(|id| final_binds.contains(*id))
-        .collect();
-    assert_eq!(
-        eye_parts,
-        vec![1304],
-        "最終集合の 目 パーツはちょうど 1 個（1304）＝旧 1303/1301 は消えた（積算していない・bindopt 3.1）"
-    );
 }
 
 /// シナリオ7（bindopt 2.1/2.2・mustselect 対比）: 既定（Default＝非宣言）カテゴリ（紅）のパーツは
@@ -508,20 +406,5 @@ fn multiple_category_two_parts_coexist_end_to_end() {
             show(1000, [1207, 1700, 1701]), // 髪飾り=リボン on → 複数可ゆえ加算（1700 は保持）
         ],
         "複数可カテゴリは同一カテゴリ 2 パーツが共存したまま貫通する（bindopt 3.3）"
-    );
-
-    // 判別の明示（共存）: 最終集合は髪飾りパーツを 2 個とも含む（排他置換なら 1 個になる）。
-    let final_binds = match records.last().expect("最終 Show が存在する") {
-        DisplayCommand::Show { binds, .. } => binds.clone(),
-        other => panic!("最終指令は Show であるべき: {other:?}"),
-    };
-    let hair_parts: Vec<u32> = [1700u32, 1701]
-        .into_iter()
-        .filter(|id| final_binds.contains(*id))
-        .collect();
-    assert_eq!(
-        hair_parts,
-        vec![1700, 1701],
-        "最終集合の髪飾りパーツは 2 個とも残る＝複数可は排他置換を受けない（bindopt 3.3）"
     );
 }

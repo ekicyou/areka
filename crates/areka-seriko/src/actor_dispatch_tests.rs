@@ -96,14 +96,10 @@ fn emit_after_receiver_gone_logs_no_panic() {
 /// 一切用いない（先に送った Cue は FIFO 単一スレッドゆえ join 復帰時に処理済み）。
 #[test]
 fn single_cue_emits_one_display_command() {
-    use crate::resolve::SurfaceResolver;
     use areka_emo_compose::BindSet;
-    use std::collections::BTreeMap;
 
     // 解決表（"通常"→2100 の 1 件だけ持つ小さな alias 表）と静的 bind 集合。
-    let mut aliases: BTreeMap<String, Vec<u32>> = BTreeMap::new();
-    aliases.insert("通常".to_string(), vec![2100]);
-    let resolver = SurfaceResolver::new(aliases);
+    let resolver = tiny_resolver();
     let binds = BindSet::from_ids([1100, 1207]);
 
     // 観測用出力先。records() ハンドルを move 前に取得しておく。

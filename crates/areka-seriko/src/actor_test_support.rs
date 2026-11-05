@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 // 捕捉の道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
-pub(super) use crate::test_support::capture_text;
+pub(super) use crate::test_support::{capture_text, fresh_states};
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
 pub(super) fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
@@ -25,13 +25,6 @@ pub(super) fn tiny_resolver() -> SurfaceResolver {
     let mut aliases: BTreeMap<String, Vec<u32>> = BTreeMap::new();
     aliases.insert("通常".to_string(), vec![2100]);
     SurfaceResolver::new(aliases)
-}
-
-/// 非空の静的 bind 集合を持つ空スコープ状態。
-pub(super) fn fresh_states() -> ScopeStates {
-    ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
-        1100, 1207,
-    ])))
 }
 
 /// 不活性なループ統括器（空表＋ダミー乱数）。cue/bind/balloon の同期 `handle_message` 檻で
@@ -117,6 +110,31 @@ impl ClockRig {
     pub(super) fn all(&self) -> Vec<DisplayCommand> {
         self.records.lock().unwrap().clone()
     }
+}
+
+/// `\![name,tokens...]` の正準キャリアの合図（`Custom` の String Array・at 0・長さ 0）。
+pub(super) fn carrier_cue(scope: &str, name: &str, tokens: &[&str]) -> TalkCue {
+    let toks = tokens.iter().map(|t| t.to_string()).collect();
+    cue(0.0, scope, CueCommand::command_carrier(name, toks), 0.0)
+}
+
+/// 非正準 params の `Custom` cue（`params` が非 Array＝`as_command_carrier()==None`・宛名規律検証用）。
+pub(super) fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
+    let cue = TalkCue {
+        at: 0.0,
+        actor: ActorKey::from(scope),
+        command: CueCommand::Custom {
+            command: command.to_string(),
+            params: dola::DynamicValue::Null,
+        },
+        duration: 0.0,
+    };
+    // 前提: この構成は必ずキャリア開封に失敗する（宛名規律 D8④ の入口条件）。
+    assert!(
+        cue.command.as_command_carrier().is_none(),
+        "非 Array params の Custom は as_command_carrier() が None（宛名規律の入口）"
+    );
+    cue
 }
 
 pub(super) fn cue(at: f64, scope: &str, command: CueCommand, duration: f64) -> TalkCue {

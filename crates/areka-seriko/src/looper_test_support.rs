@@ -25,12 +25,22 @@ pub(super) fn switch(
     target: SurfaceTarget,
     at_ms: u64,
 ) -> Option<DisplayCommand> {
+    switch_at(rt, states, target, Some(at_ms))
+}
+
+/// [`switch`] の出来事の時刻を `Option` で渡す形（`None`＝時計の無い起動と同じく直前の刻みの時刻）。
+pub(super) fn switch_at(
+    rt: &mut LoopRuntime,
+    states: &mut ScopeStates,
+    target: SurfaceTarget,
+    at_ms: Option<u64>,
+) -> Option<DisplayCommand> {
     let ApplyOutcome::Changed(cmd) = states.apply(&scope(), target) else {
         return None;
     };
     rt.on_surface_changed(&scope(), Slot::Shell);
     Some(
-        rt.refresh(&scope(), Slot::Shell, Some(at_ms), states)
+        rt.refresh(&scope(), Slot::Shell, at_ms, states)
             .unwrap_or(cmd),
     )
 }

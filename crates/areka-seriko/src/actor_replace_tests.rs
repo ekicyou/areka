@@ -35,15 +35,7 @@ fn no_facts() -> crate::SkinFacts {
 
 /// `\![bind,腕,伸び,1]` の cue。
 fn arm_on_cue(scope: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::command_carrier(
-            "bind",
-            vec!["腕".to_string(), "伸び".to_string(), "1".to_string()],
-        ),
-        duration: 0.0,
-    }
+    carrier_cue(scope, "bind", &["腕", "伸び", "1"])
 }
 
 /// 記録の中の `Rebased` の位置をすべて返す。

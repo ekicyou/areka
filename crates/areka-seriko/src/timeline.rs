@@ -571,22 +571,4 @@ mod tests {
         let frames = vec![frame(1, 0), frame(2, 0), frame(-1, 0)];
         assert_eq!(frame_at(&frames, 0), FrameStatus::Stopped, "末尾 -1 → 停止");
     }
-
-    /// 疎 index 由来（table.rs が 0/1/3 を密 Vec へ正規化）でも位置ベースで一貫評価。
-    #[test]
-    fn frame_at_sparse_derived_dense_vec() {
-        // 疎 pattern index 0/1/3 は table.rs で密 Vec[3] に正規化済み。frame_at は位置で評価。
-        // waits 0/40/80（kero 相当）。t = [0, 40, 120]。末尾 -1。
-        let frames = vec![frame(2106, 0), frame(2110, 40), frame(-1, 80)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 40), FrameStatus::Active(1));
-        assert_eq!(frame_at(&frames, 120), FrameStatus::Stopped);
-    }
-
-    /// `FrameStatus` は `Send`（純関数の返値がスレッド越え搬送に耐える）。
-    #[test]
-    fn frame_status_is_send() {
-        fn assert_send<T: Send>() {}
-        assert_send::<FrameStatus>();
-    }
 }

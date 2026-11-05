@@ -8,19 +8,11 @@
 //! cross-thread の log 捕捉を要しない（log 檻は `src/actor_dispatch_tests.rs` の同期 handler テストの領分）。
 
 use areka_emo_compose::PatternState;
-use areka_sakura::{ActorKey, CueSink};
-use areka_seriko::{
-    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, build_static_bindset,
-    spawn_seriko,
-};
+use areka_sakura::ActorKey;
+use areka_seriko::DisplayCommand;
 
 mod common;
 use common::*;
-
-/// emo2 の bindgroup default 既定オン集合（cue_sequence.rs と同じ値）。
-fn emo2_binds() -> areka_emo_compose::BindSet {
-    build_static_bindset(&[1100, 1207, 1302, 1500, 1800])
-}
 
 /// ケース1（要件 3.4/5.3/7.4）: 冪等ガード。同一表示状態を指す発火が連続しても再発行が起きない。
 ///
@@ -37,27 +29,19 @@ fn emo2_binds() -> areka_emo_compose::BindSet {
 /// 同期は `close()`→`join()` の 1 点のみ。sleep/polling/表示なし（要件 7.2）。
 #[test]
 fn idempotent_repeat_surface_no_reemit() {
-    let resolver = emo2_resolver();
     let binds = emo2_binds();
-
-    let mock = MockSurfaceOutput::new();
-    let records = mock.records();
-
-    let (mut sink, handle) = spawn_seriko(
-        resolver,
-        areka_seriko::DefaultBinds::uniform(binds.clone()),
-        BindResolver::empty(),
-        SerikoLoopConfig::disabled(),
-        mock,
+    let records = run_cues(
+        emo2_resolver(),
+        binds.clone(),
+        [
+            emote_cue(0.0, "0", "2100"), // 初回 Show(2100)
+            emote_cue(1.0, "0", "通常"), // 通常→[2100]＝同一状態・再発行なし
+            emote_cue(2.0, "0", "2100"), // 同一 id 再指定・再発行なし
+            emote_cue(3.0, "0", "-1"),   // Hide（Changed）
+            emote_cue(4.0, "0", "-1"),   // 既に Hidden・再発行なし
+            emote_cue(5.0, "0", "2200"), // 別 surface（Changed）
+        ],
     );
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 初回 Show(2100)
-    CueSink::emit(&mut sink, emote_cue(1.0, "0", "通常")); // 通常→[2100]＝同一状態・再発行なし
-    CueSink::emit(&mut sink, emote_cue(2.0, "0", "2100")); // 同一 id 再指定・再発行なし
-    CueSink::emit(&mut sink, emote_cue(3.0, "0", "-1")); // Hide（Changed）
-    CueSink::emit(&mut sink, emote_cue(4.0, "0", "-1")); // 既に Hidden・再発行なし
-    CueSink::emit(&mut sink, emote_cue(5.0, "0", "2200")); // 別 surface（Changed）
-    sink.close().expect("Close を送れること");
-    handle.join().expect("Close で正常終了する");
 
     // 連続重複（通常/2100 再指定/-1 再指定）は Unchanged で発行されず、変化点のみ 3 件記録される。
     let expected = vec![
@@ -78,9 +62,8 @@ fn idempotent_repeat_surface_no_reemit() {
         },
     ];
 
-    let recorded = records.lock().expect("records mutex poisoned");
     assert_eq!(
-        &*recorded, &expected,
+        records, expected,
         "同一表示状態を指す連続発火は再発行されず、変化点のみが発行列に現れること（冪等・要件 3.4/DD8）"
     );
 }
@@ -98,24 +81,16 @@ fn idempotent_repeat_surface_no_reemit() {
 /// 同期は `close()`→`join()` の 1 点のみ。sleep/polling/表示なし（要件 7.2）。
 #[test]
 fn unresolved_mixed_still_processes_following() {
-    let resolver = emo2_resolver();
     let binds = emo2_binds();
-
-    let mock = MockSurfaceOutput::new();
-    let records = mock.records();
-
-    let (mut sink, handle) = spawn_seriko(
-        resolver,
-        areka_seriko::DefaultBinds::uniform(binds.clone()),
-        BindResolver::empty(),
-        SerikoLoopConfig::disabled(),
-        mock,
+    let records = run_cues(
+        emo2_resolver(),
+        binds.clone(),
+        [
+            emote_cue(0.0, "0", "2100"),           // 有効
+            emote_cue(1.0, "0", "存在しない別名"), // 未解決＝skip
+            emote_cue(2.0, "0", "2200"),           // 有効（継続の証跡）
+        ],
     );
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 有効
-    CueSink::emit(&mut sink, emote_cue(1.0, "0", "存在しない別名")); // 未解決＝skip
-    CueSink::emit(&mut sink, emote_cue(2.0, "0", "2200")); // 有効（継続の証跡）
-    sink.close().expect("Close を送れること");
-    handle.join().expect("Close で正常終了する");
 
     let expected = vec![
         DisplayCommand::Show {
@@ -132,9 +107,8 @@ fn unresolved_mixed_still_processes_following() {
         },
     ];
 
-    let recorded = records.lock().expect("records mutex poisoned");
     assert_eq!(
-        &*recorded, &expected,
+        records, expected,
         "未解決発火は skip（無発行）され、後続の有効発火は処理され続けること（継続の observable・要件 6.1）"
     );
 }
@@ -153,23 +127,15 @@ fn unresolved_mixed_still_processes_following() {
 /// 同期は `close()`→`join()` の 1 点のみ。sleep/polling/表示なし（要件 7.2）。
 #[test]
 fn emo2_alias_single_and_multi_classification() {
-    let resolver = emo2_resolver();
     let binds = emo2_binds();
-
-    let mock = MockSurfaceOutput::new();
-    let records = mock.records();
-
-    let (mut sink, handle) = spawn_seriko(
-        resolver,
-        areka_seriko::DefaultBinds::uniform(binds.clone()),
-        BindResolver::empty(),
-        SerikoLoopConfig::disabled(),
-        mock,
+    let records = run_cues(
+        emo2_resolver(),
+        binds.clone(),
+        [
+            emote_cue(0.0, "0", "通常"), // 単一候補 [2100]→2100
+            emote_cue(1.0, "1", "静観"), // 複数候補 [2106,2206]→先頭 2106
+        ],
     );
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // 単一候補 [2100]→2100
-    CueSink::emit(&mut sink, emote_cue(1.0, "1", "静観")); // 複数候補 [2106,2206]→先頭 2106
-    sink.close().expect("Close を送れること");
-    handle.join().expect("Close で正常終了する");
 
     let expected = vec![
         DisplayCommand::Show {
@@ -186,9 +152,8 @@ fn emo2_alias_single_and_multi_classification() {
         },
     ];
 
-    let recorded = records.lock().expect("records mutex poisoned");
     assert_eq!(
-        &*recorded, &expected,
+        records, expected,
         "単一候補 alias は唯一 id・複数候補 alias は先頭 id（決定論）を発行経路で分類すること（要件 7.3/DD6）"
     );
 }

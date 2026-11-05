@@ -259,6 +259,19 @@ fn hidden_scope_keeps_no_state_and_counts_from_its_return() {
     assert_eq!(st.started(), Some(1400));
 }
 
+/// 時計が `ms` のときに、バルーンの窓が開いた（`open`）か閉じたことを知らせ、その場で評価する。
+fn note(st: &mut Stage, open: bool, ms: u64) {
+    st.clock.store(ms, Ordering::SeqCst);
+    st.states.note_stage(&StageNote::Balloon {
+        scope: scope(),
+        open,
+        face: 0,
+        generation: 0,
+    });
+    st.rt
+        .refresh(&scope(), Slot::Balloon, Some(ms), &mut st.states);
+}
+
 /// バルーンの面の `talk`: 窓が閉じている間は数えも再生も持たず、文字の列も溜めない。開いたら
 /// その時点で現れていた文字の次から数える（要件 4.9・5.5）。
 #[test]
@@ -270,18 +283,6 @@ fn closed_balloon_window_counts_nothing_and_recounts_on_open() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let note = |st: &mut Stage, open: bool, ms: u64| {
-        st.clock.store(ms, Ordering::SeqCst);
-        st.states.note_stage(&StageNote::Balloon {
-            scope: scope(),
-            open,
-            face: 0,
-            generation: 0,
-        });
-        st.rt
-            .refresh(&scope(), Slot::Balloon, Some(ms), &mut st.states);
-    };
-
     note(&mut st, false, 1000);
     st.tick(1000);
     st.hear(1000, clear_all());
@@ -797,18 +798,6 @@ fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let note = |st: &mut Stage, open: bool, ms: u64| {
-        st.clock.store(ms, Ordering::SeqCst);
-        st.states.note_stage(&StageNote::Balloon {
-            scope: scope(),
-            open,
-            face: 0,
-            generation: 0,
-        });
-        st.rt
-            .refresh(&scope(), Slot::Balloon, Some(ms), &mut st.states);
-    };
-
     note(&mut st, false, 1000);
     st.tick(1000);
     hear_nine_from_1000(&mut st);

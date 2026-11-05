@@ -42,12 +42,12 @@ use areka_emo_compose::{BindSet, ComposeMethod, EmoWorld, PatternFrame, PatternS
 use areka_parsers::shell::{
     Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
 };
-use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
-use areka_seriko::{
-    AnimationTable, BindResolver, DisplayCommand, LoopRng, MockSurfaceOutput, SerikoLoopConfig,
-    SurfaceResolver, spawn_seriko,
-};
-use log_capture_kit::{LineFormat, format_line};
+use areka_sakura::{ActorKey, CueSink, TalkCue};
+use areka_seriko::{AnimationTable, DisplayCommand, LoopRng, SerikoLoopConfig, SurfaceResolver};
+use log_capture_kit::{LineFormat, format_line, install_global_capture_all};
+
+mod common;
+use common::*;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 駆動ハーネス（cue と tick を FIFO 順に注入・Close→join 同期・sleep なし）
@@ -61,15 +61,10 @@ enum Step {
 
 /// 表示中 surface を確定する Shell 系 Emote cue（数値 key は数値枝で直接解決＝空 alias 表で足りる）。
 fn emote(scope: &str, key: &str) -> Step {
-    Step::Cue(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Emote { key: key.into() },
-        duration: 0.0,
-    })
+    Step::Cue(emote_cue(0.0, scope, key))
 }
 
-/// アクターを起動し `steps` を FIFO 順に注入、`Close`→`join` で同期して全発行列を返す（sleep なし）。
+/// アクターを起動し `steps` を FIFO 順に注入、`Close`→`join` で同期して全発行列を返す（[`run_actor`]・sleep なし）。
 ///
 /// `static_binds` は各 scope の既定 bind 集合（BindRandom ゲート源＝Show 同梱 binds）。`loop_config`
 /// は実表＋注入乱数を運ぶ。resolver は空 alias 表（数値 key のみ使用）・bind resolver は空（`\![bind]`
@@ -79,25 +74,19 @@ fn run(
     loop_config: SerikoLoopConfig,
     steps: Vec<Step>,
 ) -> Vec<DisplayCommand> {
-    let out = MockSurfaceOutput::new();
-    let records = out.records();
-    let (mut sink, handle) = spawn_seriko(
+    run_actor(
         SurfaceResolver::new(BTreeMap::new()),
-        areka_seriko::DefaultBinds::uniform(static_binds),
-        BindResolver::empty(),
+        static_binds,
         loop_config,
-        out,
-    );
-    for step in steps {
-        match step {
-            Step::Cue(cue) => CueSink::emit(&mut sink, cue),
-            Step::Tick(now) => sink.send_tick(now),
-        }
-    }
-    sink.close().expect("Close を送れること");
-    handle.join().expect("Close で正常終了する");
-    let recorded = records.lock().expect("records mutex poisoned");
-    recorded.clone()
+        |sink| {
+            for step in steps {
+                match step {
+                    Step::Cue(cue) => CueSink::emit(sink, cue),
+                    Step::Tick(now) => sink.send_tick(now),
+                }
+            }
+        },
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -563,25 +552,6 @@ fn residual_immediately_cleared_on_refire_full_path() {
 // 檻 9: `-2`（他負 surface）warn-once ＋ 他アニメ非停止（R8.2）
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// 全スレッド横断のログ捕捉（アクタースレッドで発火する warn! を捕捉するためのプロセス広域捕捉先）。
-///
-/// looper.rs/table.rs 単体は呼出スレッド局所の捕捉窓で足りるが、統合テストは warn! が**別スレッド**
-/// （アクター）で発火するため、共有機構の全スレッド窓口 `install_global_capture_all()` を使う。
-/// 据え付けは 1 度きり・冪等で、他所が先に全体設定を置いていれば黙って縮退せず明示的に panic する。共有 buffer から `-2` warn 行のみを filter する
-/// ため、並行実行時の他ログ混入は判別に影響しない（`-2` warn を出すのは本檻のみ）。
-///
-/// 行文字列は `format_line(_, LineFormat::LevelTargetFields)` で組む（`level=… target=…` に続けて
-/// 訪問順の ` {name}={value:?}`）。
-mod warn_capture {
-    use log_capture_kit::{CapturedEvent, install_global_capture_all};
-    use std::sync::{Arc, Mutex};
-
-    /// プロセス広域の捕捉先を 1 度だけ据え付け、共有捕捉 buffer を返す。
-    pub fn buffer() -> Arc<Mutex<Vec<CapturedEvent>>> {
-        install_global_capture_all()
-    }
-}
-
 /// `-2`（他負 surface）コマは自アニメのみ停止（`-1` と同様ベース復帰）し `warn!` を **1 回だけ**発火する
 /// （2 度目の `-2` 走査では dedup で再 warn しない）。かつ `-2` は**他アニメを停止させない**——同時再生の
 /// 別アニメ（id 1）が id 0 の停止・再発火・再停止を跨いで生存し続けることを発行列で示す（要件 8.2/9.4）。
@@ -589,7 +559,8 @@ mod warn_capture {
 /// `-2` の warn-once 分岐を、本統合檻がアクター全経路で確かめる。
 #[test]
 fn other_negative_surface_warns_once_and_spares_others_full_path() {
-    let buffer = warn_capture::buffer(); // 設置はアクター起動前に済ませる（別スレッド warn! を捕捉）
+    // warn! はアクターのスレッドで出るので、全スレッドの捕捉をアクターを起こす前に据える。
+    let buffer = install_global_capture_all();
 
     let empty = BindSet::from_ids([]);
     // anim id 0: 2106(w0)/-2(w40) ⇒ t=[0,40]。elapsed>=40 で `-2` → Stopped（自アニメ停止・warn once）。
