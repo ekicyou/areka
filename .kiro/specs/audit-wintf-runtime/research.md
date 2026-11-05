@@ -765,3 +765,111 @@
 - 4 は推奨と違い、5・94・101 番の本番もこの spec で直すと確定した（持ち主の `audit-wintf-layout-widget` は次のウェーブで並走が無い）。30・35 番の本番は `audit-wintf-graphics-world`。
 - 6 は推奨（2 本に切る）を採らず、開発者「1 本のまま」で確定した。
 - ほかは推奨案で確定した。確定の正本は `requirements.md` の「指摘の扱い」。
+
+---
+
+## 11. 設計の段の調べ（2026-11-05・`/kiro-spec-design -y`）
+
+### 要約
+
+- **Feature**: `audit-wintf-runtime`
+- **調べの型**: 既存の仕組みの手直し（Extension）＝軽い調べ。新しい依存は無い。外の資料は、`windows` 0.62.2 の型の在り処を手元の registry の源（`windows-0.62.2/src/Windows/Win32/Graphics/Imaging/mod.rs`）で確かめただけ。
+- **使ったスキル**: `ponytail`（いちばん小さな完全な変更・消す前に grep・呼び出し元まで直す）。直し方は全部この物差しで選んだ。
+- **主な見つけ**:
+  1. 15 番の「`has_alpha` ごと消す」案と 29 番の「見本を写す」案は、完了した `emo-atlas-palette-alpha` の要件 3（wintf の読み込みも読む前の α の有無を返し、emo-atlas と同じ答え）と、同じ spec の設計の討議の議題 1（見本は 1 か所・wintf は相対パスで読む・2026-10-31 開発者の一括承認）を覆す。要件 4.5 に従い、どちらも覆さない形を選んだ（下の「設計の決め」）。
+  2. 33 番の「MTA か」の確かめは、テストのプロセスがプロセスの寿命の MTA を持つと、初期化していないスレッドでも `APTTYPE_MTA`（暗黙の MTA）と答えるので、それだけでは壊しても緑のまま。限定子が `APTTYPEQUALIFIER_IMPLICIT_MTA` でないことまで見る。
+  3. 30・35 番の本番と、`audit-wintf-graphics-world` が書き換えてよいテストのファイル 12 本に触る指摘は、あちらの着地の後に回す。こちらの削除があちらのファイルの注記に古い名前を残すもの（72・73・101・61）も、あちらの着地の後にまとめて合わせる。
+
+### 調べの記録
+
+#### 消す前の参照の確かめ（要件 4.3）
+
+`git grep -n -w <名前> -- . ':!vendors'`（`.kiro/` の文書は除いて数えた・基点は main `88eb0a43` と同じ木）。「定義の外」は、定義のファイルと、いっしょに消すテストのファイルを除いた数。
+
+| 番号 | 消すもの | 定義の外の参照 | 補足 |
+|---|---|---:|---|
+| 1・13・24 | `RecCommandSink`・`command_sink`・`command_types`・`dup_com` | 0 | 言及は `tests/com/d2d_ext_test.rs` の 6-7・117・216-219・325-367 行だけ（いっしょに消す・直す） |
+| 12 | `drain_dispatcher_queue`・`drain_step`・`pump_current_thread_messages` | 0 | `wuc.rs:65`・`:105` の `wuc_spike` への言及も同じ所で消える |
+| 14 | `com::animation`・根の `Win32_UI_Animation` | 0 | `UI::Animation`・`UIAnimation` は `animation.rs` と `tests/com/animation_test.rs` だけ。`.kiro/steering/structure.md:37` の行も直す |
+| 16 | `D2D1CommandListExt::open` | 0 | `close` は `areka-emo-present/src/display.rs:31` ほかが使うので残す |
+| 17 | `WinState`・`SimpleWinState`・`win_state` | 0 | 言及は `lib.rs:8`・`:14` と `.kiro/steering/structure.md:121` だけ（どちらも直す） |
+| 18 | `WinStyle`・`set_style`・`set_ex` | 0 | `set_style` の 1 件（`ecs/layout/systems/taffy_systems.rs:77`）は taffy の別の関数。`apply_click_through`・`apply_layered_companion` は `ecs/clickthrough/controller.rs:28` が使うので残す |
+| 19 | `nonmax` | 0 | `Cargo.toml` 2 か所と `THIRD-PARTY-NOTICES.md` だけ。謝辞は完了の全体テスト（`-License`）が作り直す |
+| 19 | wintf の開発用の `rand` | 0 | 根の宣言は `dola` が使うので残す |
+| 19 | `bevy_app`（本番から開発用へ） | `src/` で 0 | `tests/graphics/surface_optimization_test.rs:24`・`:26`・`:68` だけ。根の宣言は残す |
+| 20 | `ambassador`・`#[delegatable_trait]` | 0 | `#[delegate(` は 0。印は `win_state.rs:8`・`d2d/mod.rs:94` の 2 か所だけ。根の `[workspace.dependencies]` の行も消す（ほかに使う crate が無い） |
+| 69 | `D2D1FactoryExt`（trait ごと）・`create_bitmap_from_wic_bitmap`・`draw_text`・`fill_geometry`・`draw_image`・`D3D11DeviceExt`（trait ごと）・`DWriteTextFormatExt`（trait ごと）・`get_cluster_count`・`hit_test_text_position` | 0 | `draw_image` の 1 件は `ecs/widget/bitmap_source/systems.rs:186` のコメント |
+| 69 | `D2D1DeviceExt::create_command_list` | **3** | `tests/graphics/command_list_test.rs:22`・`:35`・`:45`。ギャップ分析の「`tests/com/` の外で 0」は誤り。そのテストは装置の文脈から `CreateCommandList()` を呼ぶ形へ直す |
+| 71 | `MessageLoopDriver::run`・`default_filter` | 0 | 同じファイルのテスト（`:203-213`）だけ |
+| 73 | `MessageLoopDriver`・`AsyncTickTask` | 0（本番の呼び手は `runtime/` の中だけ） | 名前の言及が `ecs/world/mod.rs:143`・`:784`・`ecs/world/vsync.rs:18`・`:60`・`:74`（`audit-wintf-graphics-world` の持ち物）と `message_loop.rs:166` に在る。あちらの着地の後に言及ごと直す |
+| 72 | `notify_shutdown`（`request_exit` へ畳む） | 0 | 言及が `ecs/app.rs:51`（あちらの持ち物）に在る。同上 |
+| 74 | `WinApp::spawn_ui_local` | 1 | `examples/dcomp_demo.rs:76` だけ（112 番でファイルごと消す） |
+| 60・61・62・65・89・112 | example と資産 | 0 | `dcomp_demo.jpg`・`demo_checker_64x64.png`・`seikatu_0_1`／`0_2`／`1_0`／`1_1`／`1_2.webp` は 0。`seikatu.webp` は `split_image.rs:7` だけ。`multi_window_test` は `.kiro/steering/logging.md:118` だけ。`wuc_spike` は `com/wuc.rs:65`・`:105`（12 番で消える）と `ecs/world/mod.rs:152`（あちらの持ち物の注記）。`seikatu_0_0.webp` と `demo_region_colormap_64x64.png` は example が読むので残す |
+| 94 | `FlexContainer`・`FlexItem` | 0 | 型としての利用は 0（ほかの一致は example の文字列と `Name`） |
+| 101 | `Opacity`（`ecs/layout/metrics.rs`） | 0 | 型としての利用は 0。`ecs/graphics/visual.rs:140` の注記が名前を引く（あちらの持ち物）。あちらの着地の後に注記を直す |
+
+#### 繰り延べた調べの答え
+
+- **15 番（WIC の α）**: `windows` 0.62.2 は `IWICImagingFactory::CreateComponentInfo`（`Imaging/mod.rs:3486`）と `IWICPixelFormatInfo2::SupportsTransparency`（`:5614`）を持ち、機能 `Win32_Graphics_Imaging_D2D`（根の `Cargo.toml:74`）が既に入っている＝依存も機能も足さない。WIC の文書は「番号つきの形式は透明度を持ちえても TRUE を返さない」と言うので、パレットの道（`palette_has_alpha`）は残る。手書きの 12 の一覧には `16bppBGRA5551`・`64bppRGBAHalf`・`40bppCMYKAlpha` などの α つきの形式が入っていない（TIFF・JPEG XR の読み手が返しうる）。
+- **25・34・49・50・53 番**: 本番を読んで、確かめを直しても緑の見込みと判断した。25＝`ecs/common/tree_system.rs:54-79` は bevy の写しで祖先へ `set_changed` を伝える。34＝`ecs/graphics/systems/init.rs:117-120` は有効な装置なら早く戻る。49＝`ecs/layout/systems/window_pos_systems.rs:52-59` に大きさ 0 以下の守りがある。50・53 も守りがある（ギャップ分析の行）。実際には直したテストを回して決める（下の「決め」）。
+- **45 番**: `tests/graphics/common/mod.rs` の説明（別のスレッドに 2 つ目の MTA の Compositor を作ると落ちる・同じスレッドで作り直すのは安全）は、完了した `wintf-gpu-test-crash` の根本原因の記録が正本で、統制実験で確かめられている。`tests/visual/common/mod.rs` の「慣らしの描画面で DispatcherQueue が安定する」は実測の回避で、持ち主のスレッドは常駐の DispatcherQueueController を 1 つ持つので、こちらの説明の効き目も含む。持ち主のスレッドへ寄せれば、どちらの説明が正しくても落ちる形が無くなる。
+- **30 番**: 本番の口は `audit-wintf-graphics-world` が持つ（requirements の「指摘の扱い」）。こちらは古いテストを消すだけ。
+- **84 番**: `w!("Static")` は `crates/wintf/src` の 19 ファイル。範囲の中は `api.rs`・`api_owner_chain_probe_tests.rs`・`win_style.rs`（2 か所）・`win_style_accept_files_tests.rs` の 4 ファイル 5 か所。残りの 15 ファイルは `ecs/clickthrough/`・`ecs/window/`（ほかの見直しの持ち物）。
+- **2・8 番**: `vsync_loop` の形は `wintf-dwmflush-wait-compensation` の brief の Approach をそのまま写す。
+
+#### そのほかに確かめたこと
+
+- **66 番**: crates.io の keywords は 1 語 20 文字まで。`windows-ui-composition` は 22 文字で入らないので、`directcomposition` を外すだけにする（4 語になる）。
+- **3 番**: `to_window_coords_for_creation`（`ecs/window/window_pos/mod.rs:362-380`）は、片方が既定値のとき両方を素通しで返し、その形は `ecs/window/window_pos/tests.rs:234` が固定している。直しは生成の側（`window_factory.rs`）だけで足りる（与えられた側だけを `SWP_NOMOVE`／`SWP_NOSIZE` で反映）。枠の厚みの換算を片側にも効かせるのは、その固定を変えるので、この spec では変えない。
+- **6 番**: `create_windows`（`ecs/window/window_system.rs:35`）の問い合わせは `With<Window>, Without<WindowHandle>`。失敗の印を 1 つ足して問い合わせから外す。`Window` を外すと窓の片付けのフックが動きうるので採らない。
+- **65 番**: `logging.md:118` の差し替え先は、`tracing_subscriber` を立てる example のうち同じ節で使っていない `tooltip_demo`。
+- **依存を外すと**: `Cargo.lock` から `nonmax`・`ambassador`（と、それだけが引く木）が消える。`THIRD-PARTY-NOTICES.md` は完了の全体テストが作り直す。C17 の約束は「足さない」だけで、C17 で `Cargo.lock` を触るのはこの spec だけ。
+- **`crates/wintf/` は `doc/`・`docs/` を名指す行が 0**（`git grep -n "doc/\|docs/" -- crates/wintf`＝0 件）。直しでも足さない。
+
+### 設計の決め
+
+#### 決め: 15 番は `SupportsTransparency` に置き換え、emo-atlas の写しも同じに直す
+- **背景**: 本番の唯一の呼び手が `has_alpha` を捨てる。手書きの一覧が 2 か所にある。
+- **案**: ① `has_alpha` ごと消す ② 手書きの一覧を `IWICPixelFormatInfo2::SupportsTransparency` に置き換える ③ 今のまま
+- **採った案**: ②。wintf の `pixel_format_has_alpha` を「工場から形式の情報を取り `SupportsTransparency` を聞く」に替え、areka-emo-atlas の `decode/wic_arm.rs` の写しも同じに替える。パレットの道（番号つきの形式）は両方とも今のまま。
+- **理由**: ① は完了した `emo-atlas-palette-alpha` の要件 3（wintf の読み込みも読む前の α の有無を返す・emo-atlas と同じ答え）を覆す（要件 4.5）。② はその spec の「写しを保ち、同じ答えをテストで見張る」の決めのまま、手書きの一覧（ずれていくもの）を無くし、一覧から漏れていた α つきの形式を正しく答える。片方だけ替えると 2 つの読み手の答えが分かれる（同じ spec の要件 3.5）ので、emo-atlas の写しも替える（`audit-emo-atlas` は C19 の見込みで今は走っていない）。
+- **残るもの**: 本番の呼び手が `has_alpha` を捨てる無駄（番号つきの絵でだけパレットを 1 回写す）は、上の要件 3 が求める形なので残す。完了した spec の要件 3.3（パレットでない形式の答えを今と変えない）は、その spec の直しが巻き添えで答えを変えないための約束と読み、今回の直し（漏れていた形式を正しく答える）はそれを覆さないと判断した。設計の討議で確かめる。
+- **判定の規則（実測が要る所）**: 実装のとき、今の一覧の 12 の形式に `SupportsTransparency` が TRUE を返すことをテストで確かめる。どれかが FALSE なら、その形式だけを名前つきの定数に残して「WIC の答え または 定数」にし、理由を 1 行の注記に書く。
+
+#### 決め: 29 番は、見本が無いときだけ 6 本のテストを「無視」にする（見本は写さない）
+- **背景**: wintf のテストが areka-emo-atlas の中の見本を相対パスで読むので、ワークスペースの外（crates.io の荷）では 6 本とも落ちる。
+- **案**: ① 6 つの見本を wintf へ写す（ギャップ分析の案） ② 見本の在る無しを `build.rs` で調べて設定（cfg）を立て、無いときは 6 本を `#[ignore]` にする ③ 今のまま（⑴ として残す）
+- **採った案**: ②。`build.rs` が `CARGO_MANIFEST_DIR/../areka-emo-atlas/src/testdata/palette` の在る無しを見て `cfg(areka_palette_samples)` を出す（`rustc-check-cfg` で名を宣言する）。6 本は `cfg_attr(not(areka_palette_samples), ignore = "...")`。
+- **理由**: ① は 2026-10-31 の設計の討議の議題 1（見本は 1 か所・写しのずれを見張るものが無いので二重に持たない）を覆す（要件 4.5）。② は見本を 1 か所のまま、ワークスペースの中では今と同じに 6 本が回り、外では「無視」と名乗って黙って緑にならない。
+- **残るもの**: wintf を組むたびに `build.rs` が 1 つの道の在る無しを見る（読むだけ）。
+- **確かめ**: ワークスペースの中で 6 本が「無視」にならずに回ること（テストの結果の数で見る）。
+
+#### 決め: 25・34・49・50・53 番は「直したテストを回して決める」
+- 直したテストが緑なら終わり。赤なら、今の本番の後退が初めて見えたということ。そのときは赤のテストを `#[ignore]` で隠さず、新しい指摘として開発者に報告し、本番の直しの持ち主を決めてもらう（要件 8.2 の扱い＝要件 3 の裁定を経る）。本番を読んだ見立ては 5 件とも緑。
+
+#### 決め: 45 番は見た目のテストを全部 GPU の持ち主のスレッドへ寄せ、慣らしの描画面を外して確かめる
+- `tests/visual.rs` に `#[path = "graphics/common/mod.rs"] mod gpu;` を足して同じファイルを使う（写さない）。27 本の本体を `gpu::on_gpu_owner_thread(|| ..)` で包み、`visual/common/mod.rs` の `init_com_mta` と慣らしの描画面を消す。
+- **判定の規則**: 実 GPU で見た目の実行ファイルを 2 回回して 2 回とも緑なら確定。落ちる（プロセスの死を含む）なら、慣らしの描画面を持ち主のスレッドの中に戻して同じく 2 回回し、緑なら「慣らしが要る」を `visual/common/mod.rs` の注記に 1 行で残す。それでも落ちるなら止めて報告する。
+- 自己テスト（`fixture_self_tests` のうち 114 番の後に残る 1 本）は 2 つの実行ファイルで回る。数 ms で、写しを持つより安いので受け入れる。
+
+#### 決め: 84 番の試験の窓の補助は `src/api.rs` に置く
+- `api.rs` の `#[cfg(test)]` に `create_test_window(ex, style, parent, title) -> HWND` と `with_test_window(ex, style, parent, f) -> R`（作る・`catch_unwind` で本体を回す・必ず壊す・panic を投げ直す）を置く。今の `api.rs` のテストの中の `create_test_window`（`:370-399`）を外へ出して、拡張の形の引数を足す。
+- 使う所: `api.rs` のテスト・`win_style.rs` のテスト 2 本（18 番の後に残る `apply_click_through`・`apply_layered_companion`）・`win_style_accept_files_tests.rs`・`api_owner_chain_probe_tests.rs` の `create_probe_window`（作った後に `SW_SHOWNOACTIVATE` で見せる所だけ自分で持つ）。
+- 理由: 範囲の中に置けて、`ecs/test_support.rs`（あちらの持ち物・形を変えない約束）に触らない。`ecs/` の 15 ファイルはそれぞれの見直しが使うかを決める。`audit-wintf-graphics-world` へ知らせる。
+- 調べの窓の位置: 今の `(10,10)` を `(0,0)` にそろえる（大きさ 0×0 なので重なりの順の答えに効かない）。調べのテストが緑のままなことで確かめる。
+
+#### 決め: 刻みの土台の名前の変更は、あちらの着地の後にまとめる（72・73）
+- `AsyncTickTask`・`MessageLoopDriver` を消し（73）、`notify_shutdown` を `request_exit` へ畳む（72）と、`ecs/world/`・`ecs/app.rs` の注記に古い名前が残る。そのファイルは `audit-wintf-graphics-world` の持ち物で、あちらは 13 番で `try_tick_on_vsync` を消すか名前を変える。両方を、あちらの着地の後に `tick_bridge.rs` の説明の行（申し合わせでこちらの持ち物）と合わせて 1 回で直す。
+
+### まとめ方（synthesis）
+
+- **まとめ（一般化）**: 「試験の窓を作って必ず壊す」（84）・「GPU の持ち主のスレッドで回す」（45・113）・「1 回分の処理に時間と待ち方を差し込む」（2）は、どれも今ある形を 1 か所に寄せるだけで、新しい抽象は作らない。
+- **作るか使うか**: α の判定は手書きの一覧をやめて WIC の `SupportsTransparency` を使う（15）。待ちの補いは `std::thread::sleep`（brief どおり）。ログの確かめは既存の `log-capture-kit` の `count_levels`。試験の口は既存の `drain_window_pos_commands()`（39）・bevy の `DeferredWorld::from`（36）・WUC の `Visual::Opacity()`／`Offset()`／`ContainerVisual::Children()`（40・41）。
+- **減らす**: 115 件のうち約 7 割が「消す」。新しく足す本番のコードは、`compensation`・`vsync_once`・`join_vsync`（2・8）・`initial_pos_flags`・生成の失敗の印（3・6）・`init_ui_com`（7）・中継の関数（11）・塊の数の問い合わせの判定（4）・`build.rs` の数行（29）だけ。
+
+### 危うさと手当て
+
+- 直したテストが今の本番の後退を初めて見せる（25・34・49・50・53）→ 上の「回して決める」。
+- 見た目のテストを持ち主のスレッドへ寄せると直列になり時間が延びる → 27 本は小さく、graphics の実行ファイルで既に同じ形。実 GPU で 2 回だけ回す（高負荷テストを何度も回さない）。
+- `audit-wintf-graphics-world` の着地が遅れる → 後回しの組だけが待つ。先の組は独立に進む。
+- 公開の口を消す → 一覧（`design.md` の「公開の口の変化」）を次の版の知らせへ。`#[deprecated]` は挟まない（討議の裁定 3）。
