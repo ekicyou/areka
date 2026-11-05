@@ -4,7 +4,7 @@
 //! [`text_playback_duration`] は「このテキストを喋り終えるのに何秒かかるか」を、実時間・
 //! レイアウト・描画状態に一切依存せず **文字数だけ** から決定的に算出する純関数（no I/O・
 //! GPU/窓/COM 非依存・R3.1/3.2/3.5）。compile 層はこの D を各テキスト cue の envelope
-//! duration へ焼き込み、`offset += D` で後続 cue の絶対時刻を整列する（合成は compile の
+//! duration へ焼き込み、offset を D の整数 ms だけ進めて後続 cue の絶対時刻を整列する（合成は compile の
 //! 責務・本関数は明示 `\_w` を畳まない・R3.4）。
 //!
 //! per-char ノミナルウェイト定数 [`CHAR_NOMINAL_MS`] は **本モジュールが唯一の定義箇所**
@@ -91,24 +91,5 @@ mod tests {
 
         let expected = Duration::from_millis(CHAR_NOMINAL_MS).as_secs_f64();
         assert_eq!(text_playback_duration(family), expected);
-    }
-
-    /// 決定的: 同一入力を再計算しても常にビット同一の値を返す（R3.2・実時間非依存）。
-    #[test]
-    fn is_deterministic_for_identical_input() {
-        let text = "同じ入力 aあ🦆";
-        let first = text_playback_duration(text);
-        let second = text_playback_duration(text);
-        assert_eq!(first.to_bits(), second.to_bits(), "再計算で値が異なる");
-    }
-
-    /// 事後条件（NaN/∞/負の放電）: 代表的入力について戻り値は有限・非負。
-    #[test]
-    fn result_is_finite_and_non_negative() {
-        for text in ["", "a", "こんにちは", "aあ🦆", "  ", "\n\t"] {
-            let d = text_playback_duration(text);
-            assert!(d.is_finite(), "{text:?} の D が非有限");
-            assert!(d >= 0.0, "{text:?} の D が負");
-        }
     }
 }

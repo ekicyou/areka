@@ -9,7 +9,7 @@
 //! 4. 指定の有無と値（読めない値を含む）で、区切りの値以外の cue の内容と時刻が変わらないこと
 //!    （選択肢の無い台本では区切りも出ない・転記はそのまま）。
 
-use super::test_support::{barrier_of, compile, cue_eq};
+use super::test_support::{assert_cues_eq, barrier_of, compile};
 use super::{
     BarrierKind, ChoiceTimeoutDirective, Cue, CueCommand, CuePayload, parse_choice_timeout,
 };
@@ -149,14 +149,6 @@ fn without_directive(cues: &[Cue]) -> Vec<Cue> {
             c
         })
         .collect()
-}
-
-/// cue 列が `cue_eq` で 1 つずつ同一であることを確かめる（内容と時刻）。
-fn assert_cues_eq(a: &[Cue], b: &[Cue], what: &str) {
-    assert_eq!(a.len(), b.len(), "{what}: cue の数");
-    for (i, (x, y)) in a.iter().zip(b).enumerate() {
-        assert!(cue_eq(x, y), "{what}: cue[{i}] が違う: {x:?} vs {y:?}");
-    }
 }
 
 /// 台本の文字列 → 区切りの値の表（9.1・2.4・3.1〜3.3・6.1・6.2・1.5・2.2）。

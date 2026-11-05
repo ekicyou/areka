@@ -51,18 +51,19 @@ pub(super) fn recv_done(
 // ── テスト用 CueSink 群（broadcast: 登録された全 sink が全 cue を受ける） ──
 
 /// broadcast で届いた全 cue を共有蓄積へ FIFO 追記する記録 sink（`Clone` で観測ハンドル取得）。
+/// compile の strict の檻も使う（指摘 90）。
 #[derive(Clone)]
-pub(super) struct RecordingSink {
+pub(crate) struct RecordingSink {
     records: Arc<Mutex<Vec<TalkCue>>>,
 }
 
 impl RecordingSink {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             records: Arc::new(Mutex::new(Vec::new())),
         }
     }
-    pub(super) fn records(&self) -> Arc<Mutex<Vec<TalkCue>>> {
+    pub(crate) fn records(&self) -> Arc<Mutex<Vec<TalkCue>>> {
         Arc::clone(&self.records)
     }
 }

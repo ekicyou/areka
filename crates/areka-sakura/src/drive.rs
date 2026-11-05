@@ -650,4 +650,4 @@ mod lifecycle_tests;
 mod strict_tests;
 #[cfg(test)]
 #[path = "drive_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;

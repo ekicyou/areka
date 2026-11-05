@@ -1,24 +1,8 @@
 use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 use super::*;
 use crate::duration::text_playback_duration;
-use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
+use areka_parsers::sakura::SurfaceArg;
 use std::time::Duration;
-
-/// 多様な variant を織り交ぜた代表的な命令列（決定性・不変条件の両テストで共用）。
-/// 終端命令は含めず全命令を走査させる（末尾到達で end=Ended）。
-fn representative_instructions() -> Vec<Instruction> {
-    vec![
-        Instruction::SpeakerScope { n: 1 },
-        Instruction::Text("a".into()),
-        Instruction::Wait(Duration::from_millis(50)),
-        Instruction::Surface(SurfaceArg::new("10".into())),
-        Instruction::Wait(Duration::from_millis(100)),
-        Instruction::NewLine(NewLineRatio::new(1.5)),
-        Instruction::Clear,
-        Instruction::SpeakerScope { n: 0 },
-        Instruction::Text("b".into()),
-    ]
-}
 
 /// 先頭に待ち命令がある場合でもその待ち時間が 0 へ潰れず保存される（R2.4）。
 /// min 正規化（先頭待ちを 0 へ食う旧実装）を使っていないことの固定。第一級化後は、先頭待ちが
@@ -135,17 +119,6 @@ fn start_times_sit_on_the_millisecond_grid() {
     assert_eq!(cues[5].start_time.to_bits(), (150_f64 / 1000.0).to_bits());
 }
 
-/// 末尾到達で end=Ended（R6.3・task 3.1 の既定）。
-#[test]
-fn end_defaults_to_ended() {
-    let compiled = compile(&[Instruction::Text("hi".into())]);
-    assert_eq!(compiled.end, TalkEndReason::Ended);
-
-    let compiled = compile(&[]);
-    assert_eq!(compiled.end, TalkEndReason::Ended);
-    assert!(compiled.sheet.is_empty());
-}
-
 /// `End` 検出で終端理由 `Ended` を確定し、以降の命令を発火列へ含めず破棄する
 /// （終端切詰め・R6.1/6.5）。ukadoc `\e` = この後のスクリプトは実行・表示されない。
 #[test]
@@ -191,36 +164,6 @@ fn no_terminal_keeps_all_instructions_and_ends() {
     assert_eq!(cues.len(), 2);
     assert_eq!(compiled.end, TalkEndReason::Ended);
     assert_ne!(compiled.end, TalkEndReason::Quit);
-}
-
-/// 先行 cue のない `[Quit]` でも Quit が検出され、空 sheet＋end=Quit となる
-/// （空 sheet でも Ended と判別可能なことの固定・下流 R6.2 の区別根拠）。
-#[test]
-fn bare_quit_yields_empty_sheet_with_quit_end() {
-    let compiled = compile(&[Instruction::Quit]);
-    assert!(compiled.sheet.is_empty());
-    assert_eq!(compiled.end, TalkEndReason::Quit);
-}
-
-/// 決定的コンパイル: 同一命令列を複数回コンパイルすると常に同一の発火列・終端理由を得る
-/// （R2.5・R9.4）。cue 数・各 index の actor/start_time（ビット同一）/payload・end が一致する。
-#[test]
-fn compile_is_deterministic_for_identical_input() {
-    let instructions = representative_instructions();
-
-    let first = compile(&instructions);
-    let second = compile(&instructions);
-
-    let a = first.sheet.cues();
-    let b = second.sheet.cues();
-    assert_eq!(a.len(), b.len(), "cue 数が回によって異なる");
-    for (i, (ca, cb)) in a.iter().zip(b.iter()).enumerate() {
-        assert!(
-            cue_eq(ca, cb),
-            "index {i} の cue が回によって異なる: {ca:?} != {cb:?}"
-        );
-    }
-    assert_eq!(first.end, second.end, "終端理由が回によって異なる");
 }
 
 /// 不変条件（純粋コンパイル層 Postconditions/Invariants・NaN 放電）:
@@ -394,51 +337,27 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     );
 }
 
-/// 内容を持つ台本の先頭へ ClearAll を単一前置する（#6・R6.1/6.2）。書き込むスコープ数に
-/// 依らず ClearAll はちょうど 1 件（compile は残存スコープを列挙できないため全消し 1 件で表現）。
-#[test]
-fn clear_all_is_prepended_once_regardless_of_scope_count() {
-    // 3 スコープへ書き込む talk。
-    let compiled = compile(&[
-        Instruction::SpeakerScope { n: 0 },
-        Instruction::Text("a".into()),
-        Instruction::SpeakerScope { n: 1 },
-        Instruction::Text("b".into()),
-        Instruction::SpeakerScope { n: 2 },
-        Instruction::Text("c".into()),
-    ]);
-    let cues = compiled.sheet.cues();
-    // 先頭に単一 ClearAll@0.0/duration0。
-    assert_eq!(
-        command_of(&cues[0]),
-        &CueCommand::ClearAll,
-        "先頭 cue は ClearAll"
-    );
-    assert_eq!(cues[0].start_time, 0.0);
-    assert_eq!(cues[0].duration, 0.0);
-    // スコープ数（ここでは 3）に依らず ClearAll はちょうど 1 件。
-    let clear_all_count = cues
-        .iter()
-        .filter(|c| command_of(c) == &CueCommand::ClearAll)
-        .count();
-    assert_eq!(
-        clear_all_count, 1,
-        "ClearAll はスコープ数に依らず単一前置（6.1/6.2）"
-    );
-}
-
 /// 内容 cue を生成しない台本（リテラル空・裸の終端・無視タグのみ）は空 sheet のままで
 /// ClearAll を前置しない——drive の `is_empty()` 即時 TalkDone 契約を保ち、ドライブ配線
 /// （task 7.x）を本 task で先取りしない（消すべき前 talk のテキストも存在しない）。
 #[test]
 fn empty_content_talk_gets_no_clear_all_prepended() {
+    let empty = compile(&[]);
     assert!(
-        compile(&[]).sheet.is_empty(),
+        empty.sheet.is_empty(),
         "リテラル空 script は空 sheet（ClearAll 前置なし）"
     );
+    assert_eq!(empty.end, TalkEndReason::Ended, "末尾到達は Ended（R6.3）");
+    // 空 sheet でも Quit は Ended と判別できる（下流 R6.2 の区別根拠）。
+    let bare_quit = compile(&[Instruction::Quit]);
     assert!(
-        compile(&[Instruction::Quit]).sheet.is_empty(),
+        bare_quit.sheet.is_empty(),
         "先行 cue のない裸 Quit は空 sheet（ClearAll 前置なし）"
+    );
+    assert_eq!(
+        bare_quit.end,
+        TalkEndReason::Quit,
+        "裸の Quit は Quit（R6.2）"
     );
     assert!(
         compile(&[

@@ -4,8 +4,8 @@
 //! 上流 [`areka_parsers::sakura::parse`] の出力 `Instruction` 列を走査し、
 //!
 //! - `Text` に対し [`crate::duration::text_playback_duration`] で暗黙 per-char 再生時間 D を
-//!   算出して当該テキスト cue の envelope `duration` へ焼き込み、直後 `offset += D` で後続 cue の
-//!   発火時刻をテキスト再生完了後へ確定させる（R4.1/4.2/4.3）、
+//!   算出して当該テキスト cue の envelope `duration` へ焼き込み、直後 offset を D の整数 ms だけ
+//!   進めて後続 cue の発火時刻をテキスト再生完了後へ確定させる（R4.1/4.2/4.3）、
 //! - `Wait(Duration)` を offset へ吸収して消さず、**action を持たず duration のみを持つ第一級
 //!   `CueCommand::Wait` cue** として当該 offset へ発行し、直後 offset を整数 ms で進めて
 //!   後続整列を進める（`\w`×50ms を再導出せず上流正規化済み `Duration` を唯一の真実とし、末尾・
@@ -158,6 +158,8 @@ fn scan<'a>(
     };
     // 閉じの無い開きがある（走査の終わりで閉じを補う）。
     let mut anchor_unclosed = false;
+    // 選択肢の合図を 1 つでも出した（走査の後で選択待ちの区切りを出す・指摘 91）。
+    let mut has_choice = false;
 
     for (index, instruction) in instructions.enumerate() {
         let offset = crate::duration::ms_to_secs(offset_ms);
@@ -180,7 +182,7 @@ fn scan<'a>(
                 scope = *n;
             }
             // テキスト表示（→Balloon・R4.1）。暗黙 per-char 再生時間 D を envelope duration へ焼き込み、
-            // 直後 offset += D で後続 cue をテキスト再生完了後へ整列する（R4.1/4.2/4.3）。
+            // 直後 offset を D の整数 ms だけ進めて後続 cue をテキスト再生完了後へ整列する（R4.1/4.2/4.3）。
             Instruction::Text(text) => {
                 let d = crate::duration::text_playback_duration(text);
                 cues.push(emit(scope, offset, d, CueCommand::Text(text.clone())));
@@ -231,6 +233,7 @@ fn scan<'a>(
             // 選択待ち barrier（choice ⩾1 の台本へ最終 offset に 1 個）は走査終了後に append する
             // （下記 `has_choice` 分岐・R2.1/2.2）。
             Instruction::Choice(choice) => {
+                has_choice = true;
                 cues.push(emit(
                     scope,
                     offset,
@@ -304,8 +307,8 @@ fn scan<'a>(
             // システム変数 `%username` 等（→Text・R7.1/7.2/7.4/7.5）。値源は所有せず、talk 起動時
             // 手渡しの凍結スナップショット `vars` を純粋展開（`resolve_system_var`・no I/O）。展開値
             // （スナップショット値／既定値／未対応名の素通し `%名前`）はいずれも通常テキストと同格の
-            // Text cue へ写像し、`duration = text_playback_duration(展開文字列)` を焼き込み offset += D
-            // で後続を整列する。独立 cue とし隣接 Text と併合しない（純粋走査・観測同一）。
+            // Text cue へ写像し、`duration = text_playback_duration(展開文字列)` を焼き込み offset を
+            // D の整数 ms だけ進めて後続を整列する。独立 cue とし隣接 Text と併合しない（純粋走査・観測同一）。
             Instruction::SystemVar(name) => {
                 let expanded = match crate::sysvar::resolve_system_var(name, vars) {
                     crate::sysvar::ResolvedVar::Text(s) => s,
@@ -439,14 +442,12 @@ fn scan<'a>(
     // ＝未指定＝下流の既定値へ委譲する・DD-8。値の解釈は kanade だけが行う）を最終 offset へ
     // ちょうど 1 個 append する。選択肢が無ければ barrier を出さず、読んだ値は捨てる（要件 3.4）。
     // 同一 at の FIFO 挿入により全 cue より後に配送される（全 choice cue の後・R2.2）。`\q` の無い台本は barrier を発行せず既存完了挙動を変えない（R2.5）。barrier は
-    // presentation でなく `emit`（CueCommand 専用）とは別の Barrier 用発行ヘルパで組む。
-    let has_choice = cues
-        .iter()
-        .any(|cue| matches!(&cue.payload, CuePayload::Command(CueCommand::Choice { .. })));
+    // presentation でないので duration は 0。
     if has_choice {
-        cues.push(emit_barrier(
+        cues.push(emit(
             scope,
             offset,
+            0.0,
             BarrierKind::WaitForChoice {
                 timeout: last_choice_timeout,
             },
@@ -476,31 +477,18 @@ fn scan<'a>(
     }
 }
 
-/// 現在 scope・累積 offset・再生時間 duration・演出コマンドから 1 発火 [`Cue`] を構築する。
+/// 現在 scope・発火時刻・再生時間 duration・中身（演出コマンドか区切り）から 1 発火 [`Cue`] を
+/// 構築する。合図を組むのはここ 1 か所だけ（指摘 87）。
 ///
 /// `actor` はその発火時点の有効 scope の転写（`ActorKey::from(n.to_string())`・既定 "0"・R5.2/5.3）。
-/// `duration` は当該 cue の presentation 占有時間（テキストは D、Wait は明示待ち、他の瞬時は 0.0）。
-fn emit(scope: u32, offset: f64, duration: f64, command: CueCommand) -> Cue {
+/// `duration` は当該 cue の presentation 占有時間（テキストは D、Wait は明示待ち、ほかの瞬時の
+/// 合図と区切りは 0.0）。
+fn emit(scope: u32, start: f64, duration: f64, payload: impl Into<CuePayload>) -> Cue {
     Cue {
         actor: ActorKey::from(scope.to_string()),
-        start_time: offset,
-        payload: CuePayload::Command(command),
+        start_time: start,
+        payload: payload.into(),
         duration,
-    }
-}
-
-/// 現在 scope・発火 offset・バリア種別から 1 発火 [`Cue`]（`CuePayload::Barrier`）を構築する。
-///
-/// `emit`（`CueCommand` 専用）とは別の Barrier 用発行口。barrier は presentation でなく占有時間を
-/// 持たないため `duration=0.0` 固定（envelope としては一律にフィールドを持ち値は 0）。`start_time`
-/// は呼び出し側が最終 offset を渡す（全 choice cue より後・同一 at の FIFO で末尾配送・R2.2）。
-/// `actor` は発行時点の scope の転写（barrier は演者振分の対象外だが emit と同じ scope 規律に従う）。
-fn emit_barrier(scope: u32, offset: f64, kind: BarrierKind) -> Cue {
-    Cue {
-        actor: ActorKey::from(scope.to_string()),
-        start_time: offset,
-        payload: CuePayload::Barrier(kind),
-        duration: 0.0,
     }
 }
 
@@ -568,25 +556,19 @@ pub(crate) fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> 
     }
 
     // 既存 cues の占有 horizon（max(start_time + duration)・空 sheet は 0.0）を末尾 offset とする。
-    let horizon = sheet
-        .cues()
-        .iter()
-        .map(|cue| cue.start_time + cue.duration)
-        .fold(0.0_f64, f64::max);
+    // 呼び手（drive）はアンカーを刻む前に呼ぶので、絶対の終わりは相対の horizon と同じ（指摘 88）。
+    let horizon = sheet.absolute_end_time();
 
     // 既存 cues を保ったまま epilogue を末尾へ push し、CueSheet::new の安定ソートで再構築する
     // （同一 at の既存末尾要素より後に並ぶ＝FIFO）。zero-duration ゆえ horizon は不変。
     let mut cues: Vec<Cue> = sheet.cues().to_vec();
     for command in epilogue {
-        cues.push(Cue {
-            actor: ActorKey::from("0".to_string()),
-            start_time: horizon,
-            payload: CuePayload::Command(CueCommand::command_carrier(
-                command.name.clone(),
-                command.tokens.clone(),
-            )),
-            duration: 0.0,
-        });
+        cues.push(emit(
+            0,
+            horizon,
+            0.0,
+            CueCommand::command_carrier(command.name.clone(), command.tokens.clone()),
+        ));
     }
     CueSheet::new(cues)
 }

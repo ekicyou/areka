@@ -115,7 +115,7 @@
   - `strict_tests.rs` の表のテスト（読みの印の全部・6 通り）と `unreadable_choice_timeout_warns_once_readable_none` が緑
   - _Depends: 3.3_
   - _Requirements: 2.1, 2.6, 3.1, 4.1, 4.5, 7.1, 7.11_
-- [ ] 5.4 compile の写しとテストの道具を整える（T17）
+- [x] 5.4 compile の写しとテストの道具を整える（T17）
   - 写しのテストを消し、2 つの確かめを sysvar の決定論のテストへ移す（44）・使われないテストと道具を消す（45）
   - 合図の出し口を 1 つにする（87）・後始末の終わりの時刻を表から読む（88）・比べの道具と記録の受け手を共有の道具へ（89・90）・選択の腕で選択ありの印を立てる（91）
   - `areka-sakura` のテストが緑で、確かめの本数は消した写しの分のほかは減らない
@@ -209,3 +209,5 @@
 - 4.2: 上限は `shell::model::RANGE_WIDTH_CAP: u64 = 8193`（シェル全体の範囲の幅の合計・`Range` だけ・番号の値と `!a-b` にはかけない）。`ShellIssue` は `model.rs` へ移った（公開の道は同じ）。箱の側も同じ上限で読み、崩れは画像の側の 1 回だけ返す。記述子が残らないブレスと `surface.alias` は箱にも並べない。
 - 5.4 への申し送り（5.1 のレビュー）: `areka-sakura/src/compile.rs` の 7・186・309 行あたりの注釈「`offset += D`」が古い（今は `offset_ms` に整数 ms で積む）。言い回しを合わせる。1 ms 未満の待ちを作る所は今は無い（`\wN` と `\_w[ms]` だけ）。
 - 5.4 への申し送り（5.2 のレビュー）: `areka-sakura/src/contract.rs:56-59` の `cue_target_of` の注釈が `pub use dola::cue` から離れて sysvar の行の上にある（rustfmt の並べ替え）。注釈を `pub use dola::cue` の直前へ戻し、間に空行を入れる。
+- 7.1 への申し送り（2026-11-06 audit-emo-compose の知らせ）: 相手は枝 `claude/kiro-start-audit-emo-compose-cb01ad` で `areka-emo-compose/src/boxes.rs` の `distribute`（211〜250 行あたり）を直した（`retain` を消し `lines.entry(id).or_default().extend(&surface.elements)`・引数の型は同じ）。指摘 76 の `ShellBoxes` → `Vec<BoxDefinition>` は相手の後に着地するなら rebase でこちらが合わせる。fold は `fold.rs` の `add_lines` 1 つになり、compose から `Animation::interval_written` の読み手は 0（欄を消すのはこちら）。`RANGE_WIDTH_CAP` の知らせは相手に届いた。
+- 5.4: `append_epilogue` は `sheet.absolute_end_time()` を使う。drive.rs が起点を刻む前（`with_absolute_start_time` の前）に呼ぶので答えは前と同じ。この順を固めるテストは無く、drive.rs の注釈だけが守る。テストの記録の受け手は `drive::test_support::RecordingSink`（cfg(test)・pub(crate)）、比べの道具は `compile_test_support::assert_cues_eq`。
