@@ -145,18 +145,11 @@ fn prefix_chain_head_is_scope_canonical_name_for_any_scope() {
 }
 
 /// R1.9（縮退シーム）/R7.1(c): 装飾族の**一段深い旧名**（`arrows` → `arrow`）も、
-/// 同じ表構造（可変長の旧名候補列）で構造改変なしに表現できる。本仕様は吹き出し族のみ
-/// 実装するが、表データが族でパラメタ化されている事実をここで固定する。
+/// 同じ表構造（可変長の旧名候補列）で構造改変なしに表現できる（本物の矢印の族の表で固定する）。
 #[test]
 fn series_family_table_expresses_deeper_legacy_names() {
-    const ARROW_FAMILY: SeriesFamily = SeriesFamily {
-        base: "arrow",
-        scope0_legacy: &["arrows", "arrow"],
-        scope1_legacy: &["arrowk"],
-    };
-
     assert_eq!(
-        chain_pairs(&ARROW_FAMILY, 0),
+        chain_pairs(&crate::balloon_marker::ARROW_FAMILY, 0),
         vec![
             ("arrowp0def".to_string(), ChainTier::Own),
             ("arrows".to_string(), ChainTier::Own),
@@ -165,7 +158,7 @@ fn series_family_table_expresses_deeper_legacy_names() {
         "scope 0 の旧名候補が 2 段でも構造改変なしに連鎖へ載る"
     );
     assert_eq!(
-        chain_pairs(&ARROW_FAMILY, 2),
+        chain_pairs(&crate::balloon_marker::ARROW_FAMILY, 2),
         vec![
             ("arrowp2def".to_string(), ChainTier::Own),
             ("arrowk".to_string(), ChainTier::KeroNamed),

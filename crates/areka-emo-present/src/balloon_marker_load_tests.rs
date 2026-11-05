@@ -142,6 +142,27 @@ fn broken_image_warns_path_and_reason_and_drops_only_that_number() {
     assert!(field(debugs[0], "down").ends_with("arrow1.png unreadable"));
 }
 
+/// 無いフォルダは読めない旨の warn 1 件だけで、印の対は既定（両方 `None`）。
+#[test]
+fn missing_dir_warns_once_and_returns_default_pair() {
+    let dir = TempDir::new();
+    let missing = dir.path().join("missing");
+    let dec = MemoryDecoder::new();
+
+    let (pair, events) = log_capture_kit::capture(|| {
+        resolve_marker_pair(&[missing.as_path()], &ARROW_FAMILY, 0, None, &dec, ALPHA)
+    });
+
+    assert_eq!(pair, MarkerPair::default());
+    let warns = marker_events(&events, Level::WARN);
+    assert_eq!(warns.len(), 1);
+    assert_eq!(
+        warns[0].message(),
+        "balloon_marker: フォルダが読めない（印の絵は無いものとする）"
+    );
+    assert_eq!(field(warns[0], "dir"), missing.display().to_string());
+}
+
 /// フォルダの列は番号ごとに先頭から探す（先のフォルダに無い番号だけ次のフォルダ・要件 7.3）。
 #[test]
 fn dirs_are_searched_in_order_per_number() {

@@ -5,6 +5,7 @@
 use super::*;
 
 use areka_emo_atlas::MemoryDecoder;
+use areka_emo_compose::{BindSet, Composer, PatternState};
 use temp_path_kit::TempPath;
 
 use super::test_support::{CapturedEvent, capture_events, write_descript};
@@ -63,6 +64,18 @@ fn take_world_first_and_second_return_same_surfaces() {
     let ids: Vec<u32> = first.surface_ids().collect();
     assert_eq!(ids, vec![0, 10, 20]);
     assert_eq!(ids, second.surface_ids().collect::<Vec<u32>>());
+
+    // 1 度目の表にも atlas が装着されている（合成すると外形が 0 でない）。
+    let composed = Composer::new()
+        .compose(
+            &first,
+            target.atlas(),
+            20,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
+        .expect("1 度目の表から面 20 を合成できる");
+    assert!(composed.width() > 0 && composed.height() > 0);
 }
 
 /// 読み込みで形の誤りが 1 件 1 行の `warn!` で出て、他の `warn!`／`error!` は 0 行。
