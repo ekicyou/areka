@@ -339,7 +339,8 @@ impl EcsWorld {
                     crate::ecs::graphics::insert_graphics_parts_on_window_join.before(
                         crate::ecs::graphics::visual_manager::visual_resource_management_system,
                     ),
-                    crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                    crate::ecs::graphics::visual_manager::visual_resource_management_system
+                        .run_if(crate::ecs::graphics::graphics_core_ready),
                     crate::ecs::graphics::deferred_surface_creation_system.after(
                         crate::ecs::graphics::visual_manager::visual_resource_management_system,
                     ),

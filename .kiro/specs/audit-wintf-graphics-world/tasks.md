@@ -91,7 +91,7 @@
   - 完了の状態: wintf がビルドでき、例が組み立ち、窓の部品のテストが緑
   - _Requirements: 3.1, 3.3, 3.4_
 
-- [ ] 4.3 見た目の資源の係を、装置が使える回だけ回す
+- [x] 4.3 見た目の資源の係を、装置が使える回だけ回す
   - 係が装置を `Option` で受け、無いか無効なら戻る。本番の登録は装置が使える回だけ回す条件で包む
   - 根を付ける失敗は `error!`、外すときの失敗は `debug!` にし、返す先が無いので記録だけと 1 行書く。使わない引数を消す
   - 使われない `insert_visual` の 2 つの関数と、そのテストのファイルとつなぐ `mod` の 2 行を消す（消す前にツリー全体で使い手 0 を確かめる）
@@ -203,3 +203,4 @@
 - 3.1: `is_device_lost` と `GraphicsCore::note_draw_failure` は `#[cfg_attr(not(test), expect(dead_code, ...))]` 付き。4.5 で `render.rs` から呼ぶときに両方の属性を消す（消さないと満たされない expect の警告）。工場は `ID2D1Factory1`・装置は `d2d_factory.CreateDevice(&dxgi)`。`graphics/components.rs:100` の `let _ = parent…` が誤りを捨てている（前から・審査の指摘）＝ 4.4 か 6.4 で触るなら見る。
 - 3.2: 失いの知らせは `DeviceLostWatch`（`GraphicsCoreInner._lost_watch`）。`invalidate()` で inner ごと落ちて後始末が走る。`check_device_removed` は `GraphicsSetup` の先頭に `(check_device_removed, init_window_graphics).chain()` で仮に置いた＝4.1 で並べ直す。`world/mod.rs` は 956 行で 1,000 に近い＝4.1 以降で足すときは 6.1 の削りを先に見込む。
 - 4.1: WUC を作る・捨てるテストのスケジュールは必ず `set_executor(SingleThreadedExecutor::new())`（`Schedule::default()` は多スレッドで GPU の持ち主のスレッドを外れうる）。`tests/graphics/dcomp_integration_test.rs:108` の無効化も `Schedule::default()` のまま（前から）＝ 4.7 で同じファイルの群を触るときに直す。描画面の無効化は `SurfaceGraphics::clear()` に寄せたので 4.4 で `invalidate` を消せる。
+- 4.3: `tests/graphics/device_lost_recovery_test.rs` を新しく置いた（見た目の係 1 本）。描画面を作る係の「装置なしで落ちない」は 4.4、残りの立ち直りは 4.7 が同じファイルに足す。外すときの `debug!`（`graphics/components.rs:78-86` の `let _ = ... Remove`）は 6.4 の持ち分。
