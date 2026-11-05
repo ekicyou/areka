@@ -275,11 +275,13 @@ fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
 }
 
 /// 部品でも、`-1` と `-2` のすぐ後に待ち 0 の働きのコマがあるとき、warn の番号は止めた描くコマの番号:
-/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する（要件 4.1・re-audit R1）。
+/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
+/// 同じ（要件 4.1・re-audit R1・S2）。
 #[test]
 fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
-    let table = table_of(
-        "surface0\n{\nelement0,overlay,40,0,0\n}\n\
+    for tail in ["insert,0,0,0,0", "overlay,42,0,0,0"] {
+        let table = table_of(
+            &"surface0\n{\nelement0,overlay,40,0,0\n}\n\
          surface40\n{\nanimation0.interval,random,2\n\
          animation0.pattern0,overlay,42,0,0,0\n\
          animation0.pattern1,overlay,-1,50,0,0\n\
@@ -288,21 +290,23 @@ fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
          animation1.pattern0,overlay,42,0,0,0\n\
          animation1.pattern1,overlay,-2,50,0,0\n\
          animation1.pattern2,insert,0,0,0,0\n}\n\
-         surface42\n{\n}\n",
-    );
-    let (mut rng, _probe) = counting_rng(&[0, 0]);
-    let mut clocks = PartClocks::default();
-    let lines = crate::test_support::capture_logs(|| {
-        tick(&mut clocks, &table, 0, 1000, true, &mut rng);
-        tick(&mut clocks, &table, 0, 1050, false, &mut rng);
-    });
-    assert_eq!(clocks.clock(&scope(), 40, 0), None, "-1 で止まる");
-    assert_eq!(clocks.clock(&scope(), 40, 1), None, "-2 で止まる");
-    let warned: Vec<_> = lines
-        .iter()
-        .filter(|l| l.contains("以外の負 surface"))
-        .collect();
-    assert_eq!(warned.len(), 1, "{warned:?}");
-    assert!(warned[0].contains("animation_id=1"), "{warned:?}");
-    assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+         surface42\n{\n}\n"
+                .replace("insert,0,0,0,0", tail),
+        );
+        let (mut rng, _probe) = counting_rng(&[0, 0]);
+        let mut clocks = PartClocks::default();
+        let lines = crate::test_support::capture_logs(|| {
+            tick(&mut clocks, &table, 0, 1000, true, &mut rng);
+            tick(&mut clocks, &table, 0, 1050, false, &mut rng);
+        });
+        assert_eq!(clocks.clock(&scope(), 40, 0), None, "-1 で止まる");
+        assert_eq!(clocks.clock(&scope(), 40, 1), None, "-2 で止まる");
+        let warned: Vec<_> = lines
+            .iter()
+            .filter(|l| l.contains("以外の負 surface"))
+            .collect();
+        assert_eq!(warned.len(), 1, "{warned:?}");
+        assert!(warned[0].contains("animation_id=1"), "{warned:?}");
+        assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+    }
 }

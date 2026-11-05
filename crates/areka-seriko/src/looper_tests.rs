@@ -570,7 +570,7 @@ fn absent_scope_balloon_table_is_inert() {
 /// 除去後は再抽選対象へ戻る（rng が再消費される）。
 #[test]
 fn on_surface_changed_removes_playback() {
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);
+    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 1500)]);
     let (rng, probe) = counting_rng(&[0, 0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, scope) = shown_shell(10);

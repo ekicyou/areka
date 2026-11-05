@@ -445,10 +445,12 @@ fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
 }
 
 /// `-1` と `-2` のすぐ後に待ち 0 の働きのコマがあっても、warn の番号は止めた描くコマの番号:
-/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する（要件 4.1・re-audit R1）。
+/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
+/// 同じ（要件 4.1・re-audit R1・S2）。
 #[test]
 fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
-    let text = "surface0\n{\n\
+    for tail in ["insert,0,0,0,0", "overlay,110,0,0,0"] {
+        let text = "surface0\n{\n\
         animation0.interval,random,2\n\
         animation0.pattern0,overlay,100,0,0,0\n\
         animation0.pattern1,overlay,-1,50,0,0\n\
@@ -456,20 +458,49 @@ fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
         animation1.interval,random,2\n\
         animation1.pattern0,overlay,101,0,0,0\n\
         animation1.pattern1,overlay,-2,50,0,0\n\
-        animation1.pattern2,insert,0,0,0,0\n}\n";
-    let (lottery, _probe) = counting_rng(&[0, 0]);
+        animation1.pattern2,insert,0,0,0,0\n}\n"
+            .replace("insert,0,0,0,0", tail);
+        let (lottery, _probe) = counting_rng(&[0, 0]);
+        let (picker, _) = pick_rng(0);
+        let (mut rt, mut states) = shell_shown(&text, lottery, picker);
+        let lines = crate::test_support::capture_logs(|| {
+            rt.on_tick(0, &mut states);
+            rt.on_tick(1000, &mut states);
+            rt.on_tick(1050, &mut states);
+        });
+        let warned: Vec<_> = lines
+            .iter()
+            .filter(|l| l.contains("以外の負 surface"))
+            .collect();
+        assert_eq!(warned.len(), 1, "{warned:?}");
+        assert!(warned[0].contains("animation_id=1"), "{warned:?}");
+        assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+    }
+}
+
+/// 再生が末尾に着く刻みに抽選が当たっても、その刻みまでの古い再生の働きのコマを先に当てる:
+/// 当て残しがあるうちは再生中なので、抽選は次の境目まで待つ（seriko-pattern-calls 要件 3.1・
+/// re-audit S1）。
+#[test]
+fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
+    let text = "surface0\n{\n\
+        animation0.interval,random,2\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,101,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n}\n";
+    let (lottery, probe) = counting_rng(&[0, 0]);
     let (picker, _) = pick_rng(0);
     let (mut rt, mut states) = shell_shown(text, lottery, picker);
-    let lines = crate::test_support::capture_logs(|| {
-        rt.on_tick(0, &mut states);
-        rt.on_tick(1000, &mut states);
-        rt.on_tick(1050, &mut states);
-    });
-    let warned: Vec<_> = lines
-        .iter()
-        .filter(|l| l.contains("以外の負 surface"))
-        .collect();
-    assert_eq!(warned.len(), 1, "{warned:?}");
-    assert!(warned[0].contains("animation_id=1"), "{warned:?}");
-    assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
+    rt.on_tick(2000, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(2000));
+    assert_eq!(
+        probe.lock().unwrap().calls,
+        1,
+        "2000 は再生中ゆえ抽選しない"
+    );
 }

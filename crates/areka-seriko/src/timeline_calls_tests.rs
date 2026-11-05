@@ -104,3 +104,16 @@ fn minus_one_followed_by_zero_wait_action_frame_stops() {
     let frames = vec![act(start(3), 0, 0), draw(101, 50)];
     assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
 }
+
+/// `-1` のすぐ後に待ち 0 の描くコマがあっても、`-1` に着いた時点で止まる（後ろの描くコマへ進まない・
+/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・要件 4.3・re-audit S2）。
+#[test]
+fn minus_one_followed_by_a_zero_wait_draw_frame_stops() {
+    let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 0)];
+    assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
+    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
+    assert_eq!(frame_at(&frames, u64::MAX), FrameStatus::Stopped, "恒久");
+    // 刻みが `-1` の短い窓 [50,55) を飛び越えても止まる。
+    let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 5)];
+    assert_eq!(frame_at(&frames, 60), FrameStatus::Stopped);
+}

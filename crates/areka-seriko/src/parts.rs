@@ -39,13 +39,13 @@ use std::num::{NonZeroU32, NonZeroU64};
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
-use crate::calls::CallOutcome;
+use crate::calls::{CallOutcome, has_due_acts};
 use crate::looper::{log_play_end, pattern_frame};
 use crate::state::Slot;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
 use crate::timeline::{
     AlwaysView, FrameStatus, LoopRng, always_visible, current_frame_index, frame_at, should_fire,
-    visible_frame,
+    stop_frame, visible_frame,
 };
 use crate::trigger::{Armed, TalkWindow};
 
@@ -144,7 +144,7 @@ fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now_ms: u64) -> Look {
                 FrameStatus::FinishedResidual(i) => Look::Finished(i),
                 FrameStatus::Stopped => Look::Stopped {
                     surface_id: current_frame_index(&anim.frames, elapsed)
-                        .and_then(|i| visible_frame(&anim.frames, i))
+                        .and_then(|i| stop_frame(&anim.frames, i))
                         .map_or(-1, |i| anim.frames[i].surface_id),
                 },
             }
@@ -652,10 +652,18 @@ impl PartClocks {
                 };
                 // 境界を跨いだ刻みで再生中でなければ抽選（保っているコマは当たれば捨てる）。
                 // 窓が閉じている間は時計を作らないので抽選もしない。見えない間に終わっていた再生は
-                // 再生中と見なさない（見え直した刻みで抽選に戻る）。
+                // 再生中と見なさない（見え直した刻みで抽選に戻る）。当て残しの働きのコマが在るうちは再生中。
                 let clock = clocks.get(&key).copied();
-                let playing = matches!(clock, Some(PartAnim::Playing { .. }))
-                    && matches!(look(anim, clock, now_ms), Look::Nothing | Look::Frame(_));
+                let playing = match clock {
+                    Some(PartAnim::Playing {
+                        started_at_ms,
+                        acts_through,
+                    }) => {
+                        matches!(look(anim, clock, now_ms), Look::Nothing | Look::Frame(_))
+                            || has_due_acts(anim, started_at_ms, acts_through, now_ms)
+                    }
+                    _ => false,
+                };
                 if crossed && open && !playing && should_fire(k, rng) {
                     clocks.insert(
                         key,

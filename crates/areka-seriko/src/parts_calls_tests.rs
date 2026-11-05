@@ -228,3 +228,25 @@ fn move_inside_a_part_becomes_the_character_shift() {
         }]
     );
 }
+
+/// 部品の再生が末尾に着く刻みに抽選が当たっても、その刻みまでの働きのコマを先に当てる
+/// （seriko-pattern-calls 要件 3.1・3.8・re-audit S1）。
+#[test]
+fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
+    const ENDING: &str = "animation0.interval,random,2\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,102,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n";
+    let (lottery, _probe) = counting_rng(&[0, 0]);
+    let (mut rt, mut states) = shown(ENDING, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
+    rt.on_tick(2000, &mut states);
+    assert_eq!(
+        part_cell(&states, 1),
+        Some(110),
+        "2000 に animation1 が始まる"
+    );
+}

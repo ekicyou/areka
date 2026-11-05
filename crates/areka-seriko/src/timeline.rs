@@ -88,7 +88,7 @@ pub enum FrameStatus {
     Pending,
     /// `frames[i]` が現在コマ（4.2 現在コマ 1 枚）。
     Active(usize),
-    /// `i` 以下で最後の描くコマの surface_id が負（`-1` 等）→ 停止・ベース復帰（4.3）。
+    /// `i` 以下に surface_id が負（`-1` 等）の描くコマが在る → 停止・ベース復帰（4.3）。
     Stopped,
     /// `-1` なし末尾到達 → `frames[i]`（最終コマ）残留・終了状態（4.4/9.4）。
     FinishedResidual(usize),
@@ -98,8 +98,8 @@ pub enum FrameStatus {
 ///
 /// コマ k のデッドライン `t_k = Σ_{j<=k} wait_ms[j]`（`wait_k` は前コマからコマ k へ切り替わる遅延）。
 /// 現在 index は `t_k <= elapsed_ms` を満たす最大の k。誰も満たさない（`elapsed < t_0`）なら
-/// [`FrameStatus::Pending`]。i 以下で最後の描くコマ（[`visible_frame`]）の `surface_id < 0` なら
-/// [`FrameStatus::Stopped`]（`-1` の後に待ち 0 の働きのコマが続いても止まる・method/x/y 無視・
+/// [`FrameStatus::Pending`]。i 以下に負の描くコマ（[`stop_frame`]）が在れば [`FrameStatus::Stopped`]
+/// （`-1` の後に待ち 0 のコマが続いても、刻みが `-1` の短い窓を飛び越えても止まる・method/x/y 無視・
 /// 4.3。`-1` と他負値の区別＋warn! は LoopRuntime 責務）。末尾かつ非負なら [`FrameStatus::FinishedResidual`]
 /// （末尾残留・恒久・4.4/9.4）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
 /// 走査を打ち切れる（`wait == 0` 連鎖は同一デッドラインを共有し末尾 index が現在コマになる）。
@@ -107,7 +107,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
     match current_frame_index(frames, elapsed_ms) {
         None => FrameStatus::Pending,
         Some(i) => {
-            if visible_frame(frames, i).is_some_and(|d| frames[d].surface_id < 0) {
+            if stop_frame(frames, i).is_some() {
                 FrameStatus::Stopped
             } else if i == frames.len() - 1 {
                 FrameStatus::FinishedResidual(i)
@@ -139,6 +139,15 @@ pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Opti
         }
     }
     current
+}
+
+/// `i` 以下で最初の負の番号の描くコマ（`-1` 等・再生はそこで止まる・無ければ `None`）。`always` は
+/// 通らない（途中の `-1` の先へ進む・4.5）。
+pub(crate) fn stop_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
+    let end = frames.len().min(i.saturating_add(1));
+    frames[..end]
+        .iter()
+        .position(|f| f.act == FrameAct::Draw && f.surface_id < 0)
 }
 
 /// `i` 以下で最後の描くコマ（無ければ `None`＝欄を外す・spec: seriko-pattern-calls 1.3/7.7）。
@@ -549,11 +558,10 @@ mod tests {
             FrameStatus::Stopped,
             "-2 も負値ゆえ Stopped"
         );
-        // -2 コマで停止（frame_at は現在コマのみ見るので、その先の 80 でも 101 が現在コマ）。
         assert_eq!(
             frame_at(&frames, 80),
-            FrameStatus::FinishedResidual(2),
-            "80 で末尾 101 残留"
+            FrameStatus::Stopped,
+            "-2 の先の 101 へは進まない"
         );
     }
 

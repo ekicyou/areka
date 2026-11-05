@@ -33,6 +33,7 @@ use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 
 use crate::actor::SerikoClock;
+use crate::calls::has_due_acts;
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
@@ -40,7 +41,7 @@ use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
 use crate::talk::{TalkEpoch, TalkFeed};
 use crate::timeline::{
     FrameStatus, LoopRng, LotteryBoundary, current_frame_index, frame_at, seeded_rng, should_fire,
-    visible_frame,
+    stop_frame,
 };
 use crate::trigger::{Armed, TalkWindow};
 
@@ -283,8 +284,8 @@ fn put_top_play(
         // 負 surface（`-1` 等）→ コマ除去＋playback 除去でベース復帰（4.3）。
         FrameStatus::Stopped => {
             // `-1` は正典駆動、それ以外の負値は初回のみ warn!（自アニメ停止扱い・他アニメ停止は非駆動・8.2）。
-            if let Some(i) = current_frame_index(&anim.frames, elapsed)
-                .and_then(|i| visible_frame(&anim.frames, i))
+            if let Some(i) =
+                current_frame_index(&anim.frames, elapsed).and_then(|i| stop_frame(&anim.frames, i))
             {
                 let sid_val = anim.frames[i].surface_id;
                 if sid_val != -1 {
@@ -480,7 +481,8 @@ impl LoopRuntime {
                 for anim in anims {
                     let key = (scope.clone(), *slot);
                     // (a) 非再生中のみ対象（再生中は再抽選しない・乱数も消費しない・要件 2.3）。
-                    //     この刻みで `-1` か末尾に着いた再生は再生中と見なさない（部品と同じ見方）。
+                    //     この刻みで `-1` か末尾に着いた再生は、当て残しの働きのコマが無ければ再生中と
+                    //     見なさない（部品と同じ見方）。
                     let is_playing = playback
                         .get(&key)
                         .and_then(|pb| pb.get(&anim.id))
@@ -488,7 +490,7 @@ impl LoopRuntime {
                             matches!(
                                 frame_at(&anim.frames, now_ms.saturating_sub(p.started_at_ms)),
                                 FrameStatus::Pending | FrameStatus::Active(_)
-                            )
+                            ) || has_due_acts(anim, p.started_at_ms, p.acts_through, now_ms)
                         });
                     if is_playing {
                         continue;
