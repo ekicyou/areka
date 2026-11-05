@@ -106,8 +106,8 @@ pub fn mark_dirty_surfaces(
 /// 見た目が作り直された部品（`Changed<VisualGraphics>`）も対象にする。立ち直りでは描画面も
 /// 空になっているので、大きさが同じでも作り直して新しい見た目に筆を付ける。
 ///
-/// 本番では装置が使える回だけ回す（`graphics_core_ready`）。装置が無いか無効なら戻るのは、
-/// 使う人が係を直に登録したときの守り。
+/// 本番では装置と WUC の資源が使える回だけ回す（`wuc_ready`・使えない回に印を食べない）。
+/// 装置か WUC の資源が使えなければ戻るのは、使う人が係を直に登録したときの守り。
 pub fn deferred_surface_creation_system(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<Res<WucGraphicsResource>>,

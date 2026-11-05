@@ -95,7 +95,7 @@ pub(crate) fn graphics_core_ready(gc: Option<Res<GraphicsCore>>) -> bool {
     gc.is_some_and(|gc| gc.is_valid())
 }
 
-/// 装置と WUC の資源がどちらも在って有効か（窓の係の実行の条件）。
+/// 装置と WUC の資源がどちらも在って有効か（窓・見た目・描画面を作る係の実行の条件）。
 pub(crate) fn wuc_ready(
     gc: Option<Res<GraphicsCore>>,
     wuc: Option<Res<WucGraphicsResource>>,

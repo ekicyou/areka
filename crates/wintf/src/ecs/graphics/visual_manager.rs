@@ -47,8 +47,8 @@ fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, compositor: &Comp
 /// Changed: Added<Visual> から Changed<VisualGraphics> + !is_valid() パターンに移行
 /// Visual.on_add で VisualGraphics::default() が挿入され、このシステムがGPUリソースを作成
 ///
-/// 本番では装置が使える回だけ回す（`graphics_core_ready`）。装置が無いか無効なら戻るのは、
-/// 使う人が係を直に登録したときの守り。
+/// 本番では装置と WUC の資源が使える回だけ回す（`wuc_ready`・使えない回に印を食べない）。
+/// 装置か WUC の資源が使えなければ戻るのは、使う人が係を直に登録したときの守り。
 pub fn visual_resource_management_system(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<Res<WucGraphicsResource>>,
