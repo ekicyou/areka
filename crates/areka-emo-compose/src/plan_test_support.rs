@@ -101,6 +101,32 @@ pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animati
     }
 }
 
+/// bind animation を「指定 index の pattern 1 本だけ」で組む（pattern0=index0 の有無を制御する）。
+///
+/// `bind_anim` は index=0 と index=5 を持つが、本ヘルパは **単一 index** の pattern のみを載せる。
+/// index を 1 以上にすれば「pattern0（index==0）を持たない再生アニメ」（まばたき相当）を作れる。
+pub(crate) fn single_pattern_anim(
+    id: u32,
+    interval: Interval,
+    index: u32,
+    ref_surface_id: i64,
+) -> Animation {
+    Animation {
+        id,
+        interval,
+        interval_written: true,
+        patterns: vec![Pattern {
+            index,
+            method: DrawMethod::new("overlay".to_string()),
+            surface_id: ref_surface_id,
+            target: ref_surface_id.to_string(),
+            wait: 0,
+            x: 0,
+            y: 0,
+        }],
+    }
+}
+
 /// 与えた surface 群を登場順 definitions（plain のみ）で包む `Shell`（animation-sort 未指定＝既定 descend）。
 pub(crate) fn shell_of(surfaces: Vec<Surface>) -> Shell {
     shell_of_with_sort(surfaces, None)

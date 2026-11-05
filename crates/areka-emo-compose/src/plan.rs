@@ -690,6 +690,10 @@ pub(crate) fn surface_and_binding(
 mod ops_tests;
 
 #[cfg(test)]
+#[path = "plan_frame_merge_tests.rs"]
+mod frame_merge_tests;
+
+#[cfg(test)]
 #[path = "plan_nesting_tests.rs"]
 mod nesting_tests;
 

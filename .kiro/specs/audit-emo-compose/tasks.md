@@ -15,7 +15,7 @@
   - 写しごとに違った所（例: 無い面 999999 を持つ pattern5）は、使うテストを確かめてから 1 つに揃える
   - 終わった姿: 写しの部品の定義がクレートの中に 1 つずつしか無く（grep で確かめる）、クレートのテストが全部緑
   - _Requirements: 2.1, 2.3, 5.3_
-- [ ] 1.3 命令列のテストの大きすぎるファイルを分け、1,000 行の番人の例外を消す（指摘 13）
+- [x] 1.3 命令列のテストの大きすぎるファイルを分け、1,000 行の番人の例外を消す（指摘 13）
   - 命令列のテストの後半（コマの合流の門）を新しい兄弟のテストのファイルへ移し、命令列から宣言する
   - 1,000 行の番人の例外表から、分けたファイルの 1 行を消す（範囲の外の唯一の直し・その行だけ）
   - 終わった姿: 分けた 2 つのファイルがどちらも 1,000 行の下で、例外表にそのファイルの行が無く、1,000 行の番人のテストとクレートのテストが緑
@@ -151,3 +151,4 @@
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）
 - 申し合わせ（11-05）: audit-emo-present＝`ExtentTooLarge` は表示の側で `EmptyComposition` と同じく隠す・match の腕は後から着いた側が足す。audit-seriko＝`parts_tests.rs` の bind+random の期待はこちらで直す（向こうは先頭の use だけ触る・後着が rebase）
 - 1.2: `plan_nesting_extent_tests` は `build_plan` を直に呼ぶ（2.4 で形が変わるときに直す）。`opaque_wxh` は α=255 の単色（前は全バイト 64）。`append_def` は fold_tests（4 引数）と base_image_tests（2 引数）で別物として残る
+- 1.3: 番人の例外を消すと件数の宣言 `OVER_LIMIT_ALLOWED_COUNT` も 1 減らす（番人自身が 2 か所の編集を求める）。コマの合流の門のテストは `plan_frame_merge_tests.rs`
