@@ -35,30 +35,13 @@ pub struct Visual {
 /// - エンティティ自身が `Window` の場合は即座に `true`
 /// - `ChildOf` を辿って祖先に `Window` があれば `true`
 /// - 見つからない場合（orphan Visual）は `false`
+/// - 祖先の走査は上限つき（`ancestors`）。上限を越えたら「見つからない」として `false`
 pub fn owner_window_exists(world: &DeferredWorld, entity: Entity) -> bool {
-    // 自身が Window の場合
-    if world.get::<crate::ecs::window::Window>(entity).is_some() {
-        return true;
-    }
-
-    // ChildOf チェーンを辿る
-    // NOTE(W3b-V): bevy の Relationship 管理は自己参照 ChildOf（A→A）を警告付きで
-    // 除去するが、間接巡回（A→B→A）は構築可能であり、その場合このループは終了しない
-    // （on_visual_add フックから同期的に呼ばれるため影響大）。通常の API 使用では
-    // 巡回は生成されないため前提の明文化に留める（巡回ガードの追加は P48 に記録）。
-    let mut current = entity;
-    loop {
-        let parent = world.get::<ChildOf>(current).map(|c| c.parent());
-        match parent {
-            Some(p) => {
-                if world.get::<crate::ecs::window::Window>(p).is_some() {
-                    return true;
-                }
-                current = p;
-            }
-            None => return false,
-        }
-    }
+    use crate::ecs::window::Window;
+    // 親の輪（A→B→A）があっても上限で止まる（on_visual_add から同期的に呼ばれる）。
+    world.get::<Window>(entity).is_some()
+        || crate::ecs::common::ancestors(entity, |e| world.get::<ChildOf>(e).map(|c| c.parent()))
+            .any(|p| world.get::<Window>(p).is_some())
 }
 
 /// Visualコンポーネントが追加されたときに呼ばれるフック
