@@ -595,6 +595,20 @@ fn script_without_choices_never_notifies_choice_waiting() {
 /// kanade が同じ束で続けて送る Close（次のトークの Start が古いトークを閉じる）はもう終わったトークに届く。
 #[test]
 fn resolved_choice_flushes_due_epilogue_before_following_close() {
+    // 選ぶまでに来る Tick（本番の流れ）。
+    assert_resolve_flushes_epilogue(TalkId(830), Some(0.6));
+}
+
+/// **指摘 7（形 B）**: 解決が次の Tick より先に来る（`last_tick` が区切りの時刻のまま）ときも、
+/// 解決の処理の中で後始末が出る。dola の `notify_barrier_resolved` が集めを空にするので、
+/// 同じ時刻の `tick` が冪等の守りに止められない。
+#[test]
+fn resolved_choice_before_next_tick_flushes_due_epilogue() {
+    assert_resolve_flushes_epilogue(TalkId(832), None);
+}
+
+/// 形 A・B の共通の手順。区切りの Tick(0.5) の後に `tick_before_resolve` があれば送ってから解決する。
+fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<f64>) {
     let sink = RecordingSink::new();
     let records = sink.records();
     let (mut driver, rx) = driver(one_sink(sink), None);
@@ -603,15 +617,16 @@ fn resolved_choice_flushes_due_epilogue_before_following_close() {
             name: "areka.prop.set".into(),
             tokens: vec!["areka.boot.count".into(), "1".into()],
         }],
-        ..StartTalk::new(TalkId(830), MENU_SCRIPT)
+        ..StartTalk::new(talk_id, MENU_SCRIPT)
     };
 
     assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
     assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
     // 区切り（0.35）に着いて選択待ち。
     assert!(driver.handle(SakuraMsg::Tick(0.5)).is_continue());
-    // 選ぶまでに来る Tick（本番の流れ）。
-    assert!(driver.handle(SakuraMsg::Tick(0.6)).is_continue());
+    if let Some(t) = tick_before_resolve {
+        assert!(driver.handle(SakuraMsg::Tick(t)).is_continue());
+    }
     assert!(
         driver
             .handle(SakuraMsg::ResolveChoice {
@@ -632,7 +647,7 @@ fn resolved_choice_flushes_due_epilogue_before_following_close() {
     assert_eq!(
         dones(&rx),
         [TalkDone {
-            talk_id: TalkId(830),
+            talk_id,
             reason: TalkEndReason::Ended,
             quit_reserved: false,
         }],

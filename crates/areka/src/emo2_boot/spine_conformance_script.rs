@@ -374,8 +374,8 @@ pub(super) const LABEL_MOVE_APPLY: &str = "調整";
 ///
 /// 起動系列の利用者名の先取り照会（`crates/areka-kanade/src/schedule/boot.rs:64-66`）の応答が
 /// プロパティ機構へ着地し、台本中の `%username` がこの値へ展開される
-/// （`crates/areka-sakura/src/sysvar.rs:65-68`）。台本が値を与えるので、値なしの既定
-/// （同 `:45` の `DEFAULT_USERNAME`）へは落ちない。
+/// （`areka_sakura::sysvar::resolve_system_var`）。台本が値を与えるので、値なしの既定
+/// （同じモジュールの `DEFAULT_USERNAME`）へは落ちない。
 pub(super) const USERNAME: &str = "アヒル";
 
 /// 起動挨拶（`OnBoot` の応答）。**生の `%username` を含む**のが要点である（R3.10）。

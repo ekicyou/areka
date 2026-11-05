@@ -85,7 +85,7 @@ fn no_declaration_uses_ansi_default_as_shift_jis() {
 /// R2.6: 宣言エンコードとして不正な並びを代替文字で吸収し、破棄も panic もしない。
 ///
 /// 宣言 UTF-8 のあとに単独の不正 UTF-8 バイト（`0xFF`）を含める。プリスキャンは
-/// 非 ASCII で走査を打ち切るが宣言 `charset,UTF-8` は先に検出されるため、最終
+/// 読めない行を飛ばし、宣言 `charset,UTF-8` を検出するため、最終
 /// デコードは UTF-8 として全体を走査し、不正部を U+FFFD で置換して String を返す。
 #[test]
 fn malformed_bytes_absorbed_without_panic() {

@@ -167,7 +167,7 @@
   - `balloon_definitions_tests.rs` が緑で、範囲の上限を越えるシェルで ERROR が 1 件・閉じていないブレスで WARN が 1 件出るテストが緑。`shell_target.rs` は 1,000 行以下
   - _Depends: 1.3, 4.1, 4.2, 7.1_
   - _Requirements: 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 7.1, 7.6, 7.10_
-- [ ] 7.5 charset の宣言を全体から探し、dola の 1 行・台帳の 2 行・古い行の番号を直す（T24）
+- [x] 7.5 charset の宣言を全体から探し、dola の 1 行・台帳の 2 行・古い行の番号を直す（T24）
   - charset の先読みを窓でなくファイル全体の行で見て、位置を問わず宣言を見つける（7.11(b)・58・設計の討議の議題 5）。`areka-nar` の `manifest_tests.rs` を「宣言が使われる」へ直し、`audit-ghost-catalog` に伝える
   - dola の `notify_barrier_resolved` で集めを空にする 1 行を入れ、解決が次の Tick より先に来る形（B）のテストを足す（7・設計の討議の議題 4）
   - 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 2 行を 4 の直しの事実に合わせる・`spine_conformance_script.rs` の古い行の番号を名で指す（86）
@@ -219,3 +219,5 @@
 - 7.5 への申し送り（7.2 のレビュー）: `doc/ukadoc-coverage/ledger/assets.toml:4754` の note が、7.2 で消えた `BindGroupDefaults::kero_default_on` の綴りを書いたまま（守るテストは無い）。7.5 で台帳を直すときに今の形（`BindGroupDefaults` の表の 1＝kero の `default_on`）へ書き換える。`doc/` の差分はこれで台帳の 3 行になる。
 - 完了の棚卸への申し送り（7.3 のレビュー・範囲の外の doc）: `doc/ukadoc-coverage/briefing-assets.md` の 255・367・369・432・448・533 行が、消えた `package::resolve` を今の姿として書いている。design は `doc/` の変更を台帳に限るので 7.3 では直していない。ほかの本番の `join("ghost").join("master")` 8 か所はネイティブの区切りで組んでおり欠陥は無い（`shiori_dir` へ寄せるなら別の起票）。
 - 7.4: `shell_target.rs` は 953 行（相手の +2 で約 955）。544 行あたりの doc のリンク `[parse_boxes](areka_parsers::shell::parse_boxes)` は相手（audit-emo-present）の括弧を外す直しと同じ行（後から着地する側が合わせる）。balloon の数の鍵の崩れの文は「数の鍵の値が数として読めない」に改めた（頭と欄は同じ）。
+- 8.1 への申し送り（7.5 のレビュー・4 件目の起票）: 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の bindgroup の既定の欄が事実と違う。kero（4754 行）は `vocabulary-only`・「黙って壊れる」と書くが、本番は `areka/src/emo2_boot/assets.rs:414` の `DefaultBinds::from_groups`（`areka-seriko/src/bind.rs:59`）でスコープ 1 の `default_on` を当てている。消えた関数 `emo2_boot::assets::default_bind_ids` を名指す行が台帳に約 55 か所（4284 の `char*`・5598 の `sakura`・4417〜5995 の決まり文句・8050）と `doc/ukadoc-coverage/briefing-assets.md:344` にある。状態を `implemented` にすると briefing と survey の数えも動く。briefing の `prescan.rs:57`（今は :43）も名で指す形へ。1 本にまとめて起票する。
+- 7.5: areka-nar の `manifest_tests.rs` のテストをこの木で `a_charset_line_after_a_non_ascii_line_is_used` へ改名し、UTF-8 の「狛犬」を `charset,UTF-8` の前に書いて `name == "狛犬"`・`charset_declared == Some("UTF-8")` を見る形にした（相手の消す assert と `treats_an_empty_charset_line_as_no_declaration` は残した＝後から着地する側が相手の削除とこちらの期待を合わせる）。audit-ghost-catalog へ知らせた。

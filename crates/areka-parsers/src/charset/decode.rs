@@ -15,7 +15,7 @@ use super::prescan;
 /// panic しない（R2.7/R6.1）。
 ///
 /// 手順（design decode フロー・D6）:
-/// 1. 冒頭プリスキャンで `charset,<name>` を抽出する（`prescan::prescan_charset`）。
+/// 1. charset 宣言の先読み（ファイル全体の行）で `charset,<name>` を抽出する（`prescan::prescan_charset`）。
 /// 2. 宣言ありなら `encoding_rs::Encoding::for_label` で解決。解決可＝宣言エンコード採用、
 ///    未対応／解釈不能（R2.5）と ASCII と互換でないもの（UTF-16LE／UTF-16BE／replacement）＝
 ///    呼び出し側指定の既定へ寛容フォールバックし、`warn!` を 1 件残す。
@@ -24,7 +24,7 @@ use super::prescan;
 ///    encoding_rs が sniff して吸収・R5.2）。不正並びは U+FFFD 等で吸収され破棄しない（R2.6）が、
 ///    名前などが化けたことが既定の記録の段で見えるよう `warn!` を 1 件残す。
 pub fn decode(bytes: &[u8], default: DefaultEncoding) -> String {
-    // 1. 冒頭プリスキャンで charset 宣言名を抽出（実エンコード非依存・BOM 寛容）。
+    // 1. charset 宣言の先読み（ファイル全体の行）で charset 宣言名を抽出（実エンコード非依存・BOM 寛容）。
     let declared = prescan::prescan_charset(bytes);
 
     // 2/3. 宣言ラベルを解決し、選定エンコードを確定する。
