@@ -2,7 +2,7 @@
 
 ## Overview
 
-**目的**: 面の合成のクレート（`crates/areka-emo-compose/`）に `/ponytail:ponytail-audit` をかけて出た 20 件の指摘のうち、要件の討議で「直す」と決めた 18 件（1⑴⑵・2〜4・6〜19）を、いちばん小さな完全な直しで直す。指摘 5 と 20 は裁定で残す。指摘 1⑶ は `audit-parsers-sakura` が読む側で受け持つ。
+**目的**: 面の合成のクレート（`crates/areka-emo-compose/`）に `/ponytail:ponytail-audit` をかけて出た 20 件の指摘のうち、要件の討議で「直す」と決めた 18 件（1・2〜4・6〜19）を、いちばん小さな完全な直しで直す。指摘 5 と 20 は裁定で残す。指摘 1 は `audit-parsers-sakura` が読む側の上限で覆う（fold は変えない）。
 
 **使う人**: 開発者。壊れたシェル・意地の悪いシェルを入れても、合成でアプリが落ちない・固まらないこと、同じ規則が 2 か所で食い違わないこと、テストが守っているつもりの分岐を本当に守っていることを得る。
 
@@ -13,7 +13,7 @@
 - 確定した 18 件を全部直し、直したバグと危ない所（1・2・3・4・19）の 1 件ずつに、壊れたら落ちる決定論のテストを置く。
 - 入れ子をたどる走査を全部、明示のスタックで回す（深さの上限は置かない）。菱形の広がりは 1 つの予算で打ち切る。
 - 直し終えたら同じ作法で audit をかけ直して新しい指摘 0 件・全体テスト緑。
-- タスクは 21 前後（1 本の spec のまま）。
+- タスクは 20 前後（1 本の spec のまま）。
 
 ### Non-Goals
 
@@ -54,7 +54,6 @@
 - `NestTable::visible_parts` の答えから、コマの無い `bind+random` の先が抜ける → `areka-seriko` の部品の時計と `parts_tests.rs` の期待。
 - `hit::hit_region`・`hit::hit_region_scaled` が消える（ツリー全体の呼び手は 0。説明の文 2 行が `areka-emo-present/src/presenter_read_accessor_tests.rs:373,383` に残る＝壊れない）。
 - 外形を求める時点が合成のたびから `bind_atlas` のときへ移る → `bind_atlas` を呼ぶ前に合成すると外形 0×0（`EmptyComposition`）になる。これは今の前提（束縛の後に合成）と同じ。
-- `SurfaceIndex` の中身が `HashMap` から `BTreeMap` へ変わる（公開の欄だが、ツリー全体でこのクレートの外の使い手は 0）。
 
 ## Architecture
 
@@ -126,7 +125,6 @@ graph TB
 crates/areka-emo-compose/src/
 ├── budget.rs                    # 新: 広がりの予算（Budget）。6 か所の走査が共有する（指摘 3）
 ├── plan_frame_merge_tests.rs    # 新: plan_ops_tests.rs の 857 行目から後（コマの合流の門）を移す（指摘 13）
-├── fold_range_tests.rs          # 新: 1⑴⑵ の壊れたら落ちるテスト（面と箱の追記の範囲・除外）。fold_tests.rs が 976 行のため（fold.rs で宣言）
 ├── walk_limits_tests.rs         # 新: 3 の深い鎖・菱形・insert の連鎖のテスト。5 つの走査へ同じ検体を通すので 1 つにまとめる（lib.rs で宣言）
 └── （ほかは既存ファイルの変更だけ）
 ```
@@ -137,9 +135,9 @@ crates/areka-emo-compose/src/
 - `src/lib.rs` — `mod budget;` を足す。`plan_test_support` をクレートの直下の `#[cfg(test)] pub(crate) mod` に上げる（12）。`hit_region`・`hit_region_scaled` の再公開を消す（6）。`Composer` の作業場 `visited` を `PlanScratch` に替える（3・8）。`Composer::new` を `Self::default()` に（16）。「確保なし」の説明を事実に合わせる（8・15）。
 - `src/error.rs` — `ComposeError::ExtentTooLarge { surface: u32, w: u32, h: u32 }` を足す（2）。
 - `src/composed.rs` — `stride` 欄を消し `stride()` は `width * 4` を返す（18）。長さの掛け算を `usize` で（2）。
-- `src/fold.rs` — 追記の範囲は「今ある番号」だけを引く・除外は範囲のまま比べる（1⑴⑵）。`upsert_surface` を `pub(crate)` に（17）。`fold_shell` を消す（16）。指摘 9 の測りの結果に従う直し（9）。古い説明（15）。
-- `src/boxes.rs` — 追記の範囲は `existing` の範囲引き（1⑴）。指摘 9 の結果に従う（9）。
-- `src/world.rs` — `SurfaceIndex` を `BTreeMap` に（1⑴の範囲引きのため）。`surface_ids` の並べ直しを消す。`SurfaceExtents` を `bind_atlas` の最後で作る口と `extent(id)` の引き口（8）。古い説明（15）。
+- `src/fold.rs` — `upsert_surface` を `pub(crate)` に（17）。`fold_shell` を消す（16）。指摘 9 の規則の直し（9・議題 7）。古い説明（15）。範囲の展開（`expand_targets`）は変えない＝上限は読む側（指摘 1 は下の「指摘 1 の扱い」）。
+- `src/boxes.rs` — 指摘 9 の規則の直し（9・議題 7）。
+- `src/world.rs` — `SurfaceExtents` を `bind_atlas` の最後で作る口と `extent(id)` の引き口（8）。古い説明（15）。`SurfaceIndex` は `HashMap` のまま。
 - `src/base_image.rs` — 面の新設を `fold::upsert_surface` へ寄せる（17）。
 - `src/plan.rs` — 命令列の走査を明示のスタックへ（3）。`PlanScratch`（3・8⑷）。外形は表から引き、上限を見る（2・8⑴）。毎回の並べ直しを消す（8⑶）。`animation_sort` は走査の頭で 1 度だけ読む（8⑸）。古い説明（15）。
 - `src/plan_extent.rs` — 外形の走査を明示のスタックへ（3）。外形を飽和で `u32` へ（2）。上限の定数 `MAX_EXTENT`（2）。全部の面の外形の表を作る `build_extents`（8）。
@@ -161,7 +159,7 @@ crates/areka-emo-compose/src/
 - 写しを持つテスト（`composer_tests.rs`・`log_firing_tests.rs`・`atlas_bind.rs` のテスト・`film_tests.rs`・`fold_tests.rs`・`base_image_tests.rs`・`nesting_kind_tests.rs`・`nesting_visible_tests.rs`・`pattern_cell_tests.rs`・`plan_always_tests.rs`・`nesting_film_tests.rs`・`pattern.rs` のテスト・`plan_bind_tests.rs`・`plan_nesting_tests.rs`・`plan_nesting_extent_tests.rs`・`pattern_parts_tests.rs`・`hit_in_tests.rs`・`hit_import_tests.rs`・`blit.rs` のテスト・`plan_extent_film_tests.rs`・`golden_tests_frame_extent_tests.rs`・`nesting_fixture_tests.rs`・`plan_extent_tests.rs`・`plan_bounds_tests.rs`・`plan_bind_random_tests.rs`）— 写しを消して `plan_test_support` から引く（12）。
 - 失敗しえないテスト・名前と違うテスト・2 度確かめるテスト・古い説明（10・11・14・15）は `research.md` 3 節の行のまま直す。
 - `tests/fixtures/animated-playback/README.md` — 27 行目の説明（`charset,UTF-8`）を事実に（15）。
-- 1,000 行の番人の見通し（要件 6.1・着手のときの行数）: テストを足す先のうち上限に近いのは `fold_tests.rs`（976）・`composer_tests.rs`（897）・`nesting_visible_tests.rs`（837）・`boxes_tests.rs`（792）・`blit.rs`（782）。1⑴⑵ のテストは `fold_range_tests.rs`、3 のテストは `walk_limits_tests.rs`、19 のテストは `blit_rect_tests.rs`（536）に置き、この 5 つには指摘 4・11 の数行の直しだけを入れる。指摘 16 の `fold_shell` の書き換え（23 か所）は行を増やさない。各タスクは直した後の行数を確かめ、越えるなら兄弟のファイルへ分ける。
+- 1,000 行の番人の見通し（要件 6.1・着手のときの行数）: テストを足す先のうち上限に近いのは `fold_tests.rs`（976）・`composer_tests.rs`（897）・`nesting_visible_tests.rs`（837）・`boxes_tests.rs`（792）・`blit.rs`（782）。3 のテストは `walk_limits_tests.rs`、19 のテストは `blit_rect_tests.rs`（536）に置き、この 5 つには指摘 4・11 の数行の直しだけを入れる（指摘 9 の規則のテストは `fold_tests.rs` に足さず、兄弟のファイルへ）。指摘 16 の `fold_shell` の書き換え（23 か所）は行を増やさない。各タスクは直した後の行数を確かめ、越えるなら兄弟のファイルへ分ける。
 
 範囲の外:
 - `crates/log-capture-kit/tests/file_length_guard_test.rs` — 63 行目（`plan_ops_tests.rs` の例外）を消す（13）。
@@ -236,7 +234,7 @@ flowchart TD
 | 2.3 | 使う所まで直し切る | 各件の「波及」欄・File Structure Plan のテストと範囲の外 |
 | 3.1 | 3 種類は議題に | 5・20 は討議で裁定済み。9 は種類 3＝SSP の測りに従う（指摘 9 の節） |
 | 3.2 | ukadoc で確かめてから | 指摘 9 の ukadoc の引用（`research.md` 3 節の 9） |
-| 3.3 | 3 種類でなければ直す | 1⑴⑵・2〜4・6〜8・10〜19 は議題にせず直す |
+| 3.3 | 3 種類でなければ直す | 1（読む側の上限で）・2〜4・6〜8・10〜19 は議題にせず直す |
 | 3.4 | 裁定と理由を残す | `requirements.md` に済み。0 件の数から 5・20 を外す（確かめの節） |
 | 4.1 | もう一度 audit | 確かめの節（タスクの最後の 2 つ） |
 | 4.2 | 0 件まで直す | 同上 |
@@ -247,7 +245,7 @@ flowchart TD
 | 5.2 | 走っている spec と申し合わせ | 「並走の兄弟との申し合わせ」 |
 | 5.3 | 消す前に使われていないか | 指摘 6・16・12 の確かめ（grep 済み・実装でもう一度） |
 | 5.4 | 要らない所を直さない | 範囲の外は 3 ファイルの決めた行だけ |
-| 6.1 | 1,000 行の番人 | 指摘 13 の分割・例外表の行を消す。`plan.rs` は明示のスタックにしても 1,000 行の下（古い説明を消して減る）。上限に近いテストのファイルへは足さず `fold_range_tests.rs`・`walk_limits_tests.rs` へ（File Structure Plan の見通し） |
+| 6.1 | 1,000 行の番人 | 指摘 13 の分割・例外表の行を消す。`plan.rs` は明示のスタックにしても 1,000 行の下（古い説明を消して減る）。上限に近いテストのファイルへは足さず `walk_limits_tests.rs` ほか兄弟のファイルへ（File Structure Plan の見通し） |
 | 6.2 | 記録の無い失敗を作らない | 予算切れ・外形の上限・uv のはみ出しはどれも記録を出す（Error Handling） |
 | 6.3 | 終了の道は正規 | 終了の道に触らない |
 | 6.4 | 実機の根は `target` の下 | 実機の根を使わない（SSP の試しのシェルは SSP の側に置く・開発者の許可） |
@@ -257,7 +255,7 @@ flowchart TD
 | 6.8 | 要る依存は議題に | 要る依存は無い（全部 std と既存の依存） |
 | 6.9 | `doc/`・`docs/` の行 | 足さない・変えない（説明の直しでも名指さない） |
 | 6.10 | emo-text に新しいファイルなし | 触らない |
-| 7.1 | 20 タスクを越えそうなら議題 | 討議で「切らない」と確定済み。見込み 21（「タスクの見込み」） |
+| 7.1 | 20 タスクを越えそうなら議題 | 討議で「切らない」と確定済み。見込み 20（「タスクの見込み」） |
 
 ## Components and Interfaces
 
@@ -265,7 +263,6 @@ flowchart TD
 
 | 部品 | 層 | 役目 | 指摘 | 契約 |
 |---|---|---|---|---|
-| 追記の範囲引き（`fold.rs`・`boxes.rs`） | 畳み込み | 範囲を広げずに今ある番号を引く | 1⑴⑵ | Service |
 | 外形の上限（`plan_extent.rs`・`plan.rs`・`error.rs`・`composed.rs`） | 命令列 | 大きすぎる外形を `Err` にする | 2・18 | Service・型 |
 | 明示のスタックの走査と予算（`budget.rs` ほか 6 か所） | 命令列・読み込みの表 | 深さであふれず・広がりで固まらない | 3 | Service・State |
 | 着せ替えの手順（`bind_steps.rs`） | 読み込み | `bind+random` の手順を作らない＝見える部品と合成を揃える | 4 | 振る舞い |
@@ -277,26 +274,13 @@ flowchart TD
 
 ### 畳み込み
 
-#### 追記の範囲引き（指摘 1⑴⑵）
+#### 指摘 1 の扱い（範囲の展開・設計の討議で改め）
 
-| 欄 | 中身 |
-|---|---|
-| 役目 | `surface.append` の範囲を番号の列に広げず、今ある番号のうち範囲に入るものだけを引く。除外は範囲のまま比べる |
-| 要件 | 2.1, 3.3, 4.4, 5.1 |
-
-**決め**
-- `SurfaceIndex` を `BTreeMap<u32, Entity>` に替え、範囲引き（`range(lo..=hi)`）で「今ある番号」を昇順に引く。画像だけの面（`SurfaceImages`・もとから `BTreeMap`）も同じ範囲で引き、2 つの昇順の列を重ねて重複を除く。`surface_ids` は並べ直しが要らなくなる。
-  - 引きの手間は O(1) から O(log 面の数) に変わる。毎フレームの引き（`surface_and_binding`）は数百の面で 8〜9 回の比べ。`HashMap` のままだと追記 1 つごとに全部の面をなめ、追記の行が多いシェルで読み込みが二乗になる。
-- 展開の口を 2 つにする（どちらも `fold.rs`・`pub(crate)`）。
-  - `expand_targets(targets) -> Vec<u32>`: 新設（plain の `surface*` と箱の `surface*`）用。今のまま範囲を広げる（1⑶ は `audit-parsers-sakura` が読む側で上限をかける）。除外だけは集合に広げず、記述子を順に見て「入るか」を比べる。
-  - `expand_existing(targets, existing) -> Vec<u32>`: 追記用。単一の番号はそのまま積む（無ければ今どおり呼び手が「未存在」の `warn!` を出す）。範囲は `existing` の範囲引き。除外は上と同じ比べ方。記述順と重複の扱いは今と同じ（範囲の中は昇順）。
-- 箱（`boxes.rs` の `distribute`）は、手元の `existing: BTreeSet<u32>` をそのまま `expand_existing` に渡す。
-
-**事前・事後の条件**
-- 結果は今の `expand_targets` の結果から「無い番号」を除いたものと同じ並び（範囲の中の無い番号は、もともと追記では何もしなかった）。
-- 範囲の中の無い番号ごとの `warn!`（「surface.append 対象 id が未存在」）は出なくなる。単一の番号の `warn!` は今のまま（範囲 40 億の分だけ記録を出すのは、それ自体が固まる元なので）。範囲の外のテスト `crates/areka/src/placement/measure_bake_log_tests.rs:30,234,255` は単一の番号だけを使うので数は変わらない。
-
-**波及**: `expand_targets` の呼び手は `fold.rs` と `boxes.rs` だけ（ツリー全体を grep 済み）。`audit-parsers-sakura` の指摘 76 が `boxes.rs:226,236` の同じ行に触る＝後から着いた側が rebase で合わせる。
+- 範囲の展開の上限は、読む側（`areka-parsers`・`audit-parsers-sakura`）が「シェル全体の範囲の幅の合計 8193」でかける（越えた記述子は parsers で飛ばし、`shell_target.rs` が `error!` を出す・`research.md` 9 節）。これで fold の展開（追記・除外・新設とも）は最悪 8193 個で済み、16 GB の確保は起きない＝fold は変えない（1⑴⑵ の直しと `SurfaceIndex` の `BTreeMap` 化は取りやめ・議題 4）。
+- `expand_targets` の頭に、上限を読む側に任せている理由を 1 行の説明で書く（`doc/` は名指さない）。
+- 面の番号そのものには上限を置かない（`u32` のまま・開発者「今u32なんだったらu32でよい」）。SSP は 0〜2,147,483,647 を受け、2^31 以上で落ちる（`research.md` 13 節）が、areka は `u32` の全部を受けて落ちない。
+- 壊れたら落ちるテストは読む側（`audit-parsers-sakura`）が持つ。こちらの要件 4.4 は、その着地を確かめる（下の確かめの段）。
+- 範囲の追記の中の無い番号は、今のまま 1 つずつ報告する（`warn!`・`BoxIssue::AppendTargetMissing`）。最悪 8193 件で、固まる元にはならない（議題 5 は取りやめ）。
 
 #### 追記の規則（指摘 9）
 
@@ -501,7 +485,6 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 |---|---|
 | `ComposeError` | `ExtentTooLarge { surface, w, h }` を足す |
 | `ComposedSurface` | `stride` 欄を消す（公開の口は同じ） |
-| `SurfaceIndex` | `HashMap<u32, Entity>` → `BTreeMap<u32, Entity>`（面の集合と一対一の不変条件は同じ） |
 | `SurfaceExtents`（新・`pub(crate)`） | 面の番号 → 外形。`bind_atlas` で 1 度作る。以後は読むだけ |
 | `BindSteps` | `bind+random` の行を持たなくなる |
 | `PlanScratch`（新・`pub(crate)`） | 命令列の走査の作業場。`Composer` が持つ（絵は持たない約束のまま） |
@@ -514,7 +497,7 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 | 外形が `MAX_EXTENT` を越える | `error!`（面・幅・高さ・上限）。合成のたびに出す（`SurfaceNotFound`・`EmptyComposition` と同じ） | `Err(ExtentTooLarge)`。絵は確保しない |
 | 広がりの予算が尽きた | `error!` を範囲で 1 行（走査の名前・根の面・予算） | 部分の結果（`Ok`）。シェルは全体として読む |
 | uv が頁に収まらない | `warn!`（element・頁・uv）を命令ごと（頁の欠けと同じ扱い） | その命令だけ飛ばす |
-| 範囲の追記の中の無い番号 | 出さない（単一の番号は今どおり `warn!`） | 何もしない（今と同じ） |
+| 範囲の追記の中の無い番号 | 今のまま 1 つずつ `warn!`（最悪 8193 件・範囲の幅の合計の上限は読む側） | 何もしない（今と同じ） |
 | 循環 | 今のまま（`debug!`） | 今のまま |
 
 - どの失敗もパニックしない（今の非パニックの約束を、深さ・広がり・uv にまで広げる）。
@@ -527,9 +510,6 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 
 | 指摘 | テスト（置き場） | 直す前の結果 |
 |---|---|---|
-| 1⑴ | 面 0・1・5 が在るシェルに `surface.append0-4294967295` の追記。3 つに行が届き、ほかは新設されず、結果が単一の番号で書いたときと同じ（`fold_range_tests.rs`） | 約 16 GB の確保で落ちる |
-| 1⑴ 箱 | 箱の `surface.append0-4294967295`（`fold_range_tests.rs`） | 同上 |
-| 1⑵ | `!0-4294967295` を含む plain の `surface0,!0-4294967295` が何も新設しない・追記の除外も同じ（`fold_range_tests.rs`） | `BTreeSet` に 40 億を入れて固まる・落ちる |
 | 2 | pattern を (100000, 100000) に置く純 `bind` の面が `Err(ExtentTooLarge)` を返し、`out.bytes_capacity()` が 0 のまま・`error!` が 1 行（`plan_extent_tests.rs`） | 約 40 GB の確保で落ちる |
 | 2 | element定義の子を `u32::MAX + 10` の位置に置く面が、小さな外形に化けず `Err(ExtentTooLarge)`（同） | `as u32` で小さな外形に化けて通る |
 | 3 深さ | 面 0 → 1 → … → 10000 の element定義の鎖を、スタックを 256 KiB にしたスレッドの中で、合成・外形・シェルの外形・当たり判定の持ち込み・見える部品の 5 つに通して終わる（`walk_limits_tests.rs`）。確かめるのは「落ちずに終わる」ことだけで、予算の記録が出るかは見ない（予算の値に依らないため） | 小さいスタックがあふれて落ちる |
@@ -573,11 +553,11 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 | 組 | 中身 | 見込み |
 |---|---|---|
 | 準備 | 12 テストの部品の置き場（2）・13 分割（1） | 3 |
-| 必ず直す | 1⑴⑵（1）・2＋18（1）・3 走査（命令列 1・ほか 5 か所 1・予算と値 1）（3）・4（1） | 6 |
+| 必ず直す | 1 の確かめ（読む側の着地・下の確かめの段に含める）・2＋18（1）・3 走査（命令列 1・ほか 5 か所 1・予算と値 1）（3）・4（1） | 5 |
 | 直したほうがよい | 6（1）・7＋19（1）・8（1）・9 測り（1）・9 直し（1）・10（1）・11（1） | 7 |
 | できれば | 14（1）・15（1）・16＋17（1） | 3 |
 | 確かめ | audit のかけ直し（1）・全体テスト（1） | 2 |
-| 計 | | **21** |
+| 計 | | **20** |
 
 並べる順: 12 → 13 → 1 → 2＋18 → 4 → 3 → 8 → 7＋19 → 6 → 9 測り → 9 直し → 10・11 → 14・15・16＋17 → 確かめ。12 を先に置くと、3 の `build_plan` の形の変更を `ops()` 1 か所で受けられる。2 を 3 と 8 の前に置くと、外形の上限の確かめが表へ移るときに同じテストで守れる。
 
@@ -586,8 +566,9 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 - **議題 1（推奨案で確定）**: 予算の値は、実装の段で `tools/perf` を使って「1 フレーム（16.667 ms）で回りきれる面の数」を測り、2 のべき乗に切り下げた定数にする。範囲は根の面 1 つ（`reaches` は呼び出し 1 回）につき 1 つ（上の表）。
 - **議題 2（推奨案で確定）**: 外形の上限は定数 `MAX_EXTENT = 16_384`。
 - **議題 3（推奨案で確定）**: `ExtentTooLarge` は、表示の側で `EmptyComposition` と同じく面を隠す。実装の前に `audit-emo-present` と申し合わせる。
-- **議題 5（推奨案で確定）**: 面でも箱でも、範囲の追記の中の無い番号は報告しない（`warn!` も `BoxIssue::AppendTargetMissing` も積まない）。単一の番号は今どおり報告する。`boxes_tests.rs:775-792` の期待を直し、`areka-emo-present/src/shell_target.rs:804` の `warn!` が出なくなることを `audit-emo-present` に伝える。
-- **議題 4**: 個別に議論する。
+- **議題 5（取りやめ・もとは推奨案で確定）**: 範囲引きをしなくなったので、範囲の追記の中の無い番号は今のまま 1 つずつ報告する（最悪 8193 件）。以下はもとの決め（経緯）: 面でも箱でも、範囲の追記の中の無い番号は報告しない（`warn!` も `BoxIssue::AppendTargetMissing` も積まない）。単一の番号は今どおり報告する。`boxes_tests.rs:775-792` の期待を直し、`areka-emo-present/src/shell_target.rs:804` の `warn!` が出なくなることを `audit-emo-present` に伝える。
+- **議題 4（取りやめ）**: 読む側の範囲の幅の合計の上限で展開が 8193 個までになったので、`SurfaceIndex` は `HashMap` のまま（1⑴⑵ の直しも取りやめ）。
+- **面の番号の上限（議題 4 の議論から）**: 置かない。開発者「うーん、別に今u32なんだったらu32でよいけど？」＝`u32` のまま全部を受ける。
 - **議題 6（確定・測り済み）**: 開発者「都度計るのは困る。計りはまとめるか、今行え」＝指摘 9 の SSP の測りは設計の段で 1 回にまとめて行った（`research.md` 12 節・SSP 2.9.29）。実装の段の測りのタスクは無くす。SSP は追記と 2 つ目の波括弧を同じ規則で扱う＝element は同じ番号でも両方を足す（警告）・animation はすでにある番号の後の行を捨てる（先勝ち）・collision は測れなかった。直し方は議題 7。
 - **議題 7（測りの結果で生まれた議題・開発者の答え待ち）**: 波括弧の「同じ名前の行は後勝ち」（完了した `areka-P0-emily-ghost-verification` の規則）を SSP に合わせて変えるか。
 
