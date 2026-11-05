@@ -130,7 +130,7 @@
 
 ## `areka-ghost`（`tests/`）
 
-- [ ] 15. 共有ゴーストに錠を付け、その根を `target\` の下へ移す（T15）
+- [x] 15. 共有ゴーストに錠を付け、その根を `target\` の下へ移す（T15）
   - 着手の前に `main` を取り込み、一時フォルダの番人の例外表の行から件数を数え直す
   - #45 の共有ゴーストを錠つきの持ち物で渡し、取った後で前の記録を消す。I1・I2 と組みの確かめはその持ち物を終了の確かめまで持つ
   - #5 の共有ゴーストの根を `<ワークスペース>\target\test-roots\areka_shiori4_test_ghost_shared` へ移す。#4 の I3 の一時フォルダを `TempPath` にする。例外表の 2 行と使われなくなる種別とその件数を消し、較正で外す 1 件を `crates/areka/src/install/fetch_url.rs` へ替える
@@ -192,3 +192,4 @@
 - 12: #56 は直さない。research の「本番に呼び手が無い」は事実と違い、`crates/areka/src/main.rs:623` が `BasewareRoot::ghost_dir` を本番で呼ぶ。テストの呼び手も約 60 ファイル（範囲の外の表に無い）ある。設計の「消すなら」の条件が成り立たないので、`ghost_dir`・`balloon_dir` は残し、`boot_resolve*_tests.rs` は触らない（進行役の判断・audit 系は推奨案で進めてよいという開発者の方針による）。18.2 のかけ直しでは直さない件として数える。
 - 13: 範囲の外の `crates/shiori-host32-helper/src/shiori_proxy.rs` は今も素の `LoadLibraryW`（作業フォルダと PATH を探す）。設計の範囲に無いので触っていない。完了の棚卸で起票を考える（持ち主は `audit-shiori-host32`）。
 - 14: #53 の欄の改名（`target`→`lane`）は `tools/perf/judge-perf.py` が欄の名で追いつきの系統を分けていたので、範囲を `tools/perf` へ広げた（`lane` を読み、無ければ `target`・生成器と生成した fixture 3 つを更新・記録済みの実ログは触らない）。設計の「範囲の外で触るファイル」に無かった触り。
+- 15: `inproc_e2e_test.rs` は 1,160→1,148 行（まだ 1,000 行の番人の例外表に要る）。一時フォルダの番人の表は 15 行（一意化 13・読むだけ 2）。

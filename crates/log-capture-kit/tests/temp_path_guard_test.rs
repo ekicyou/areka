@@ -104,8 +104,6 @@ enum Why {
     ProcessUnique,
     /// 入口から**読み出す**だけで、書込も削除もしない＝原理的に衝突し得ない。
     ReadOnly,
-    /// **固定名であること自体が仕掛けの仕様**。一意名にすると仕掛けが成立しない。
-    IntentionallyFixed,
 }
 
 /// 窓口を通さずに入口を叩いてよいファイル（相対パス・種別・理由）。
@@ -137,7 +135,7 @@ enum Why {
 /// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs:58-60`
 /// が同じ理由で行数を書かないのと同型）。
 const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
-    // ── ⒜ 既にプロセス識別子で一意化している 13 件 ───────────────────────────
+    // ── ⒜ 既にプロセス識別子で一意化している 10 件 ───────────────────────────
     //
     // 設計 C8 が「例外表に載せるか窓口へ寄せるかを実装時に決め、根拠を記録する」と
     // 定めた当の項目。**載せる**を採った。根拠は 3 点。
@@ -156,11 +154,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "crates/areka-emo-present/src/balloon_test_support.rs",
         Why::ProcessUnique,
         "プロセス識別子＋単調連番＋Drop の再帰削除を自前で持つ（窓口の移植元と同型）。要件 12.2 の移行対象外",
-    ),
-    (
-        "crates/areka-ghost/tests/ghost/inproc_e2e_test.rs",
-        Why::ProcessUnique,
-        "プロセス識別子で一意化済み。要件 12.2 の移行対象外",
     ),
     (
         "crates/areka-ghost/tests/ghost/spine_e2e_test_s7_second_boot_record_present.rs",
@@ -258,34 +251,24 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "helper の作業ディレクトリとして一時ディレクトリの根をそのまま渡すだけで、その下に何も作らず \
          何も消さない（設計 C8 が名指しで対象外と定めた 2 件の 1 つ）",
     ),
-    // ── ⒞ 固定名であること自体が仕様の 1 件（タスク 10.3 の申し送り）──────────────
-    (
-        "crates/areka-ghost/tests/ghost/inproc_fixture.rs",
-        Why::IntentionallyFixed,
-        "OnceLock の static が保持する**プロセスを跨いで共有される fixture**。前プロセスが残した実体が \
-         健全ならそのまま再利用して再組立を丸ごと省くのが仕掛けの目的で、**固定であることがその仕様**。 \
-         窓口が配る一意名にすると再利用の判定が原理的に成立せず、リーク（static は Drop されない）だけが \
-         毎プロセス積み上がる。窓口を迂回する唯一の意図的な箇所（タスク 10.3 の申し送り）",
-    ),
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 17;
+const ALLOWED_COUNT: usize = 15;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
-/// という書き換えが通ってしまう。3 つに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 14;
+/// という書き換えが通ってしまう。種別ごとに割っておけば分類の移動も明示的な編集になる。
+const PROCESS_UNIQUE_COUNT: usize = 13;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 2;
-/// 同上（固定名が仕様）。
-const INTENTIONALLY_FIXED_COUNT: usize = 1;
 
 /// 要件 12.5 の自己テストで表から外す 1 件。表の項目でなければならない。
 ///
-/// 窓口を迂回する唯一の意図的な箇所＝この見張りが本来鳴るべき当の形を選ぶ。
-const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka-ghost/tests/ghost/inproc_fixture.rs";
+/// 本番の落とし場所で、走っている spec の持ち物でない項目を選ぶ（並走する spec の直しで当たりが
+/// 消えても較正が巻き込まれない）。
+const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka/src/install/fetch_url.rs";
 
 /// 窓口の 2 ファイル（[`the_gateway_is_scanned_and_holds_no_entry_point`] が名指しで確かめる）。
 const GATEWAY_FILES: [&str; 2] = [
@@ -433,20 +416,12 @@ fn the_allow_table_declares_the_size_of_each_category() {
             .count()
     };
     assert_eq!(
-        (
-            count(Why::ProcessUnique),
-            count(Why::ReadOnly),
-            count(Why::IntentionallyFixed)
-        ),
-        (
-            PROCESS_UNIQUE_COUNT,
-            READ_ONLY_COUNT,
-            INTENTIONALLY_FIXED_COUNT
-        ),
+        (count(Why::ProcessUnique), count(Why::ReadOnly)),
+        (PROCESS_UNIQUE_COUNT, READ_ONLY_COUNT),
         "種別ごとの件数が宣言と食い違う。分類の移動も明示的な編集として行うこと（要件 12.4）"
     );
     assert_eq!(
-        PROCESS_UNIQUE_COUNT + READ_ONLY_COUNT + INTENTIONALLY_FIXED_COUNT,
+        PROCESS_UNIQUE_COUNT + READ_ONLY_COUNT,
         ALLOWED_COUNT,
         "種別ごとの件数の合計が総数と合わない"
     );
@@ -502,7 +477,7 @@ fn each_exception_declares_whether_it_uniquifies_by_process_identifier() {
             (Why::ProcessUnique, false) => wrong.push(format!(
                 "  {path} は ProcessUnique を名乗るがプロセス識別子を使っていない"
             )),
-            (Why::ReadOnly | Why::IntentionallyFixed, true) => wrong.push(format!(
+            (Why::ReadOnly, true) => wrong.push(format!(
                 "  {path} は {why:?} を名乗るがプロセス識別子を使っている（分類が誤り）"
             )),
             _ => {}
