@@ -289,7 +289,19 @@ flowchart TD
 | 役目 | 同じ番号の行を追記で書いたときの勝ち負けを、SSP に合わせるか、今のままにして規則を書き残す |
 | 要件 | 2.1, 3.1, 3.2 |
 
-**測り済み（設計の討議の議題 6・`research.md` 12 節）**: SSP 2.9.29 は、追記と 2 つ目の波括弧を同じ規則で扱った。element は同じ番号でも両方を足す（警告）。animation はすでにある番号の後の行を捨てる（先勝ち）。collision は測れなかった（今のまま規則を説明に書く）。下の表のどちらの列も SSP と一致しなかったので、直し方は設計の討議の議題 7 で決める。以下は測る前に置いた表（経緯として残す）。
+**測り済み（設計の討議の議題 6・`research.md` 12 節）**: SSP 2.9.29 は、追記と 2 つ目の波括弧を同じ規則で扱った。element は同じ番号でも両方を足す（警告）。animation はすでにある番号の後の行を捨てる（先勝ち）。collision は測れなかった（今のまま規則を説明に書く）。下の表のどちらの列も SSP と一致しなかったので、設計の討議の議題 7 で「案 A＝追記も 2 つ目の波括弧も SSP に揃える」と決めた（開発者「案 A で確定」）。
+
+**決め（議題 7・案 A）**
+- 追記（`fold_append`）と 2 つ目の波括弧（`merge_brace`）は、同じ 1 つの足し方を通す（1 本にまとめる）。箱（`boxes.rs` の `distribute`）の追記と波括弧も同じ足し方。
+  - **element**: 同じ element番号でも前の行を除かず、両方を足す（描く順は書いた順＝element番号の昇順への安定ソートで、同じ番号の中は前の行が先）。同じ番号が重なったときだけ `warn!`（面・element番号・SSP と同じく「二重定義」と分かる文言）。違う番号を足すのは定めた振る舞いなので、今どおり `debug!`。
+  - **animation**: すでにある animation番号の後の行（interval も pattern も）は全部捨てる（先勝ち）。捨てたときは `warn!`（面・animation番号）。無い番号の animation は足す（今と同じ）。`merge_animations`（追記の丸ごと置き換え）と、その `warn!`「append が既存 animation id を再定義」は消す。
+  - **collision**: 測れなかったので今のまま（波括弧は同じ collision番号の前の行を除いて末尾へ・追記は重ねて足す）。この違いを足し方の説明に「SSP で測れなかった・今のまま」と書き残す。
+- 変わるテスト: `fold_merge_tests.rs` の `same_named_line_in_a_later_brace_wins`（両方を足す・`warn!` が 1 行に直す）と `later_brace_without_interval_line_keeps_the_earlier_interval`（後のブレスの animation の行は捨てる、に直す）。箱のテスト（`boxes_tests.rs`）の同じ形。新しいテストは `fold_tests.rs`（976 行）に足さず兄弟のファイルへ（SSP の測りの 0・1・2・3・5・6・8・9 の形を固定入力で写す）。
+- 範囲の外: `crates/areka/src/placement/measure_bake_log_tests.rs` の `ANIM_REDEFINED`（31・234〜255 行）を新しい文言に直す（直しに要る最小・要件 5.4。その範囲の見直しの spec が走っていれば申し合わせる）。
+- 完了した spec との関わり: `areka-P0-emily-ghost-verification` の「同じ名前の行は後勝ち」を、開発者の裁定（議題 7）で SSP に揃えて改める。「足し合わせる」（2026-10-17 の開発者の決め）はそのまま。手元の 6 体で波括弧の同じ番号の書き直しは 0 件、追記の animation は `emo` の 1 件（`research.md` 12 節）。
+- `areka-parsers` の `Animation::interval_written` は、これで読み手（`merge_brace`）が無くなる。欄を消すかは parsers の持ち物＝`audit-parsers-sakura` に伝える（このクレートからは消さない。組み立てる所の `interval_written: true` は残る）。
+
+以下は測る前に置いた表（経緯として残す）。
 
 | 種類 | 測ること | SSP が波括弧と同じ（後勝ち）なら | SSP が今の areka と同じなら |
 |---|---|---|---|
@@ -570,7 +582,7 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 - **議題 4（取りやめ）**: 読む側の範囲の幅の合計の上限で展開が 8193 個までになったので、`SurfaceIndex` は `HashMap` のまま（1⑴⑵ の直しも取りやめ）。
 - **面の番号の上限（議題 4 の議論から）**: 置かない。開発者「うーん、別に今u32なんだったらu32でよいけど？」＝`u32` のまま全部を受ける。
 - **議題 6（確定・測り済み）**: 開発者「都度計るのは困る。計りはまとめるか、今行え」＝指摘 9 の SSP の測りは設計の段で 1 回にまとめて行った（`research.md` 12 節・SSP 2.9.29）。実装の段の測りのタスクは無くす。SSP は追記と 2 つ目の波括弧を同じ規則で扱う＝element は同じ番号でも両方を足す（警告）・animation はすでにある番号の後の行を捨てる（先勝ち）・collision は測れなかった。直し方は議題 7。
-- **議題 7（測りの結果で生まれた議題・開発者の答え待ち）**: 波括弧の「同じ名前の行は後勝ち」（完了した `areka-P0-emily-ghost-verification` の規則）を SSP に合わせて変えるか。
+- **議題 7（確定・案 A）**: 開発者「案 A で確定」＝追記も 2 つ目の波括弧も SSP 2.9.29 に揃える（element は同じ番号でも両方を足して `warn!`・animation はすでにある番号の後の行を捨てて `warn!`・collision は今のまま説明に書く）。完了した `areka-P0-emily-ghost-verification` の「同じ名前の行は後勝ち」を改める。中身は指摘 9 の節。
 
 ## 設計の議題（設計の討議へ）
 

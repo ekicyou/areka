@@ -127,7 +127,7 @@
 | 4 | 必ず直す | 直す（「見える部品」の表を、2026-10-31 の件 26 の決めに揃える）。`crates/areka-seriko/src/parts_tests.rs` の期待が変わるので、触る前に `audit-seriko` と申し合わせる |
 | 5 | 必ず直す | **残す**（裁定・種類 1）。この件の持ち主の spec `extent-element-offset` が「和集合に揃えるか、ベースで切るか」の開発者の裁定待ちで、ここで直すとその裁定を先取りするため |
 | 6〜8 | 直したほうがよい | 直す |
-| 9 | 直したほうがよい | 直す。設計の段で SSP の MCP を使って同じ番号の行の勝ち負けを測り、SSP に合わせる（試しのシェルを SSP に入れることと reload は、そのつど開発者の許可を取る）。測れなければ今の振る舞いのままにし、規則を説明に書き残す |
+| 9 | 直したほうがよい | 直す。設計の段で SSP 2.9.29 を 1 回にまとめて測った（開発者「計りはまとめるか、今行え」・`research.md` 12 節）。設計の討議の議題 7 で「案 A＝追記も 2 つ目の波括弧も SSP に揃える」と確定（element は同じ番号でも両方を足す・animation はすでにある番号の後の行を捨てる・collision は測れず今のまま説明に書く）。完了した `areka-P0-emily-ghost-verification` の「同じ名前の行は後勝ち」を開発者の裁定で改める |
 | 10〜13 | 直したほうがよい | 直す |
 | 14〜19 | できれば | 直す |
 | 20 | できれば | **残す**（裁定・種類 2・3）。`BlitOp.method`・`Transform.linear`・`RegionPriority` は、合成メソッドを D2D の全部へ広げる予定（`draw-methods-canon`・`draw-methods-blend`・`element-clipping-option`）と SSP の `collision-sort` の口として使うため |
