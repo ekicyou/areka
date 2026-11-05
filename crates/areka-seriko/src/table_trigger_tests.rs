@@ -5,18 +5,8 @@
 
 use std::num::{NonZeroU32, NonZeroU64};
 
-use areka_emo_compose::EmoWorld;
-use log_capture_kit::{LineFormat, capture_lines};
-
 use super::{AnimationTable, LoopTrigger};
-
-/// 本文から表を組み、同じ走行の `tracing` 出力を 1 イベント 1 行で添えて返す。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
+use crate::test_support::{table_and_logs, warns};
 
 /// 間隔の語 1 つだけを差し替えた面 0 の animation 3（コマ 2 本）。
 fn surface0_with(interval: &str) -> String {
@@ -25,10 +15,6 @@ fn surface0_with(interval: &str) -> String {
          animation3.pattern0,overlay,10,0,0,0\n\
          animation3.pattern1,overlay,-1,50,0,0\n}}\n"
     )
-}
-
-fn warns(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
 /// 採録の記録（表を組むときの `debug!`）。

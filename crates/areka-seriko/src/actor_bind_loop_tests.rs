@@ -1226,7 +1226,7 @@ mod tick_loop_tests {
     /// (C・R7.5/6.3) アクター停止後の send_tick は debug! を残し panic しない（shutdown 期待事象）。
     ///
     /// spawn_seriko→close→join でアクター完全停止（inbox 受信端消失）→その後テストスレッドで
-    /// send_tick を capture_logs 直下で呼ぶ。send 失敗が debug!（error! でない）として観測でき、
+    /// send_tick を capture_text 直下で呼ぶ。send 失敗が debug!（error! でない）として観測でき、
     /// send_tick が panic せず戻る（本行到達＝処理系が異常終了しない）ことを固定する。
     #[test]
     fn send_tick_after_actor_stopped_logs_debug_no_panic() {
@@ -1241,7 +1241,7 @@ mod tick_loop_tests {
         sink.close().expect("Close を送れること");
         handle.join().expect("Close で正常終了する");
 
-        let logs = capture_logs(|| {
+        let logs = capture_text(|| {
             sink.send_tick(1234); // 停止後の tick 送出。
         });
         assert!(

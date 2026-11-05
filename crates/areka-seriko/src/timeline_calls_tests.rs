@@ -8,18 +8,8 @@ use crate::table::FrameAct;
 use areka_emo_compose::ComposeMethod;
 use std::num::NonZeroU64;
 
-/// 描くコマ。
-fn draw(surface_id: i64, wait_ms: u32) -> LoopFrame {
-    LoopFrame {
-        surface_id,
-        picture: None,
-        method: ComposeMethod::Overlay,
-        act: FrameAct::Draw,
-        wait_ms,
-        x: 0,
-        y: 0,
-    }
-}
+// 描くコマ。
+use crate::test_support::draw_frame as draw;
 
 /// 働きのコマ（番号の欄は読み込みのまま残る）。
 fn act(act: FrameAct, surface_id: i64, wait_ms: u32) -> LoopFrame {

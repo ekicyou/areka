@@ -7,21 +7,14 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{BindSet, Cell, EmoWorld, PartKey, PatternState};
+use areka_emo_compose::{BindSet, Cell, PartKey, PatternState};
 
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::parts::PartAnim;
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::resolve::SurfaceTarget;
-
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
+use crate::test_support::{scope, table_of};
 
 /// アクターの面の切り替えと同じ順で踏み、出す指令（無ければ `None`）を返す。
 fn switch(

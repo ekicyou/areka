@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, scope, started, switch, table_of};
+use super::test_support::{cell, started, switch};
 use super::tests::counting_rng;
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::{scope, table_of};
 
 /// 絵の面（中身は空）。
 const SURFACES: &str = "surface100\n{\n}\nsurface101\n{\n}\nsurface110\n{\n}\n\

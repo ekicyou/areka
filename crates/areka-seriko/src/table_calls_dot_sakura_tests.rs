@@ -11,16 +11,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use super::FrameAct;
 use crate::sample_test_support::dot_sakura_shell_root;
 use crate::table::AnimationTable;
-
-/// `check_calls` の 6 種の記録の目印（要件の番号）。
-const KINDS: [&str; 6] = [
-    "要件 2.5",
-    "要件 5.1",
-    "要件 5.3",
-    "要件 6.6",
-    "要件 6.5",
-    "要件 6.4",
-];
+use crate::test_support::KINDS;
 
 /// 8 語の綴り（合成の「未知の合成メソッド名」の記録から 8 語の分を見分ける）。
 const WORDS: [&str; 8] = [

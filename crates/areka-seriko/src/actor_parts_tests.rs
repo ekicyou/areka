@@ -9,7 +9,8 @@ use super::*;
 use crate::bind::BindOptionDecls;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_emo_compose::{BindSet, EmoWorld};
+use crate::test_support::table_of;
+use areka_emo_compose::BindSet;
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -61,8 +62,7 @@ struct Rig {
 
 impl Rig {
     fn new(text: &str, static_binds: BindSet) -> Self {
-        let table =
-            AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)));
+        let table = table_of(text);
         assert!(table.has_animated_parts(), "前提: 動く部品の在る表");
         // (目, 閉) → 5（既定のポリシー＝着衣は排他置換・脱衣は除去）。
         let sakura = BTreeMap::from([(("目".to_string(), "閉".to_string()), 5)]);

@@ -6,6 +6,7 @@
 
 use super::test_support::*;
 use super::*;
+use crate::test_support::one_frame_pattern as pat;
 
 fn note(scope: &ActorKey, open: bool, face: u32) -> StageNote {
     StageNote::Balloon {
@@ -14,20 +15,6 @@ fn note(scope: &ActorKey, open: bool, face: u32) -> StageNote {
         face,
         generation: 0,
     }
-}
-
-fn pat(id: u32, sid: u32) -> PatternState {
-    let mut p = PatternState::default();
-    p.set(
-        id,
-        areka_emo_compose::PatternFrame {
-            surface_id: sid,
-            method: areka_emo_compose::ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
-    p
 }
 
 fn balloon_slots(states: &ScopeStates) -> Vec<(ActorKey, u32, bool)> {

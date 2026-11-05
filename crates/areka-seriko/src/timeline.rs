@@ -229,20 +229,8 @@ mod calls_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_emo_compose::ComposeMethod;
-
-    /// テスト用 1 コマ（method/x/y は frame_at では無視されるため既定 Overlay/0）。
-    fn frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
-        LoopFrame {
-            surface_id,
-            picture: None,
-            method: ComposeMethod::Overlay,
-            act: crate::table::FrameAct::Draw,
-            wait_ms,
-            x: 0,
-            y: 0,
-        }
-    }
+    // 1 コマ（method/x/y は frame_at では無視されるため既定 Overlay/0）。
+    use crate::test_support::draw_frame as frame;
 
     // ── seeded_rng / should_fire ─────────────────────────────────────────────
 

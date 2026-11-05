@@ -4,23 +4,15 @@
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
 //! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
 
-use areka_emo_compose::{Cell, EmoWorld, PartKey, PatternState};
-use areka_sakura::ActorKey;
+use areka_emo_compose::{Cell, PartKey, PatternState};
 use log_capture_kit::{LineFormat, capture_lines};
 
-use super::{PartAnim, PartClocks};
+use super::PartClocks;
 use crate::looper::tests::counting_rng;
 use crate::state::Slot;
 use crate::table::AnimationTable;
+use crate::test_support::{part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
-
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
 
 /// 一番上 `top` のシェルの面で刻みを 1 回回し、部品の欄を作り直した絵を返す。
 fn tick(
@@ -57,13 +49,6 @@ fn cell_of(p: &PatternState, part: u32) -> Option<Option<u32>> {
         Cell::Blank => Some(None),
         Cell::Picture(_) => unreachable!("作者のサーフェスの部品は絵を指さない"),
     }
-}
-
-fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// 一番上 0 と 1 が子 100 を置き、2 は何も置かない。100 の `always` は 101（待ち 0＝経過 0）→

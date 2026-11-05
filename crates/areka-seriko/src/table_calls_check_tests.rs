@@ -5,14 +5,14 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_compose::BindSet;
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::FrameAct;
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
-use crate::table::AnimationTable;
+use crate::test_support::{KINDS, table_and_logs};
 
 /// 6 種の誤りを 1 件ずつ持つ面 10。
 const SIX_KINDS: &str = "surface10\n{\n\
@@ -28,23 +28,6 @@ const SIX_KINDS: &str = "surface10\n{\n\
     animation2.interval,bind\n\
     animation2.pattern0,overlay,102,0,0,0\n\
     animation2.pattern1,insert,2\n}\n";
-
-/// 6 種の記録の目印（要件の番号）。
-const KINDS: [&str; 6] = [
-    "要件 2.5",
-    "要件 5.1",
-    "要件 5.3",
-    "要件 6.6",
-    "要件 6.5",
-    "要件 6.4",
-];
-
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
 
 fn count(logs: &[String], needle: &str) -> usize {
     logs.iter().filter(|l| l.contains(needle)).count()

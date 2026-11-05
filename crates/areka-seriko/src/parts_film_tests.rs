@@ -17,6 +17,7 @@ use super::{PartAnim, PartClocks};
 use crate::looper::tests::counting_rng;
 use crate::state::Slot;
 use crate::table::AnimationTable;
+use crate::test_support::{part_playing as playing, scope};
 use crate::timeline::LoopRng;
 
 /// 終わりなしの子（コマ 10・11・12、各 100ms・周期 300）。
@@ -64,10 +65,6 @@ pub(crate) fn table() -> AnimationTable {
         sheet(ONCE, &[100, 100], Some(1)),
     ];
     AnimationTable::from_world_and_films(&world, sheets.iter(), &[])
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
 }
 
 /// `scope` の `slot` の面、一番上 `top` で刻みを 1 回回し、部品の欄を作り直した絵を返す。
@@ -120,13 +117,6 @@ fn picture(p: &PatternState, film: FilmId) -> Option<u32> {
 
 fn clock(clocks: &PartClocks, slot: Slot, film: FilmId) -> Option<PartAnim> {
     clocks.clock_at(&scope(), slot, PartKey::Film(film), 0)
-}
-
-fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// 見えた刻みの時刻で、乱数を引かずに時計が生まれる。経過 0（1 枚目）は欄に載らない（要件 3.1・7.4）。

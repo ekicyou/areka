@@ -11,6 +11,7 @@ use areka_emo_compose::EmoWorld;
 
 use super::AnimationTable;
 use crate::sample_test_support::emo2_root;
+use crate::test_support::table_of;
 
 /// 入れ子の検体（compose の検体フォルダの本文をそのまま読む・design.md「解決したこと」）。
 const FIXTURE: &str =
@@ -18,10 +19,6 @@ const FIXTURE: &str =
 
 fn world_of(text: &str) -> EmoWorld {
     EmoWorld::build(&areka_parsers::shell::parse(text))
-}
-
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&world_of(text))
 }
 
 /// 空の表と、入れ子も動く部品も無い本文では偽（要件 7.2・7.3）。

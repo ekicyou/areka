@@ -13,12 +13,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use areka_emo_compose::{BindSet, PartKey};
 
-use super::test_support::{capture_logs, cell, count, scope, started, switch, table_of};
+use super::test_support::{cell, count, started, switch};
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::state::StageNote;
+use crate::test_support::{capture_logs, part_playing, scope, table_of};
 
 /// 偽の時計つきのランタイムと、まだ何も表示していない状態。
 struct Stage {
@@ -610,13 +611,6 @@ fn part_clock(st: &Stage, slot: Slot, id: u32) -> Option<PartAnim> {
     st.rt
         .parts
         .clock_at(&scope(), slot, PartKey::Surface(100), id)
-}
-
-fn part_playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// `\0` のシェルの面の部品 100 の欄（animation の番号, 絵）。

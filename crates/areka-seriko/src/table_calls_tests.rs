@@ -3,19 +3,11 @@
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 
-use areka_emo_compose::{ComposeMethod, EmoWorld};
-use log_capture_kit::{LineFormat, capture_lines};
+use areka_emo_compose::ComposeMethod;
 
 use super::FrameAct;
-use crate::table::{AnimationTable, LoopTrigger};
-
-/// 本文から表を組み、同じ走行の `tracing` 出力を 1 イベント 1 行で添えて返す。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
+use crate::table::LoopTrigger;
+use crate::test_support::table_and_logs;
 
 /// 8 語を 1 本の animation に並べた面 10（相手の animation 3・4 も同じ面に置く）。
 const EIGHT_WORDS: &str = "surface10\n{\n\

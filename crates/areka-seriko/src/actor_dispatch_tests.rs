@@ -72,7 +72,7 @@ fn emit_after_receiver_gone_logs_no_panic() {
     drop(rx);
 
     // emit は infallible。send 失敗経路（Err）を通り、panic せず戻ること自体が合格条件。
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         CueSink::emit(&mut sink, emote_cue(0.0, "0", "smile"));
     });
 
@@ -143,11 +143,11 @@ fn single_cue_emits_one_display_command() {
 // 設計要点（cross-thread log の決定論化）:
 // - handler スレッドで発火する log（Unresolved の error!／非 Shell・EntityRef の warn!）は
 //   `spawn_seriko` の別スレッドで出るため、テストスレッドに張った thread-local
-//   `capture_logs` では捕捉できない。よってその種の log 表明は `handle_message` を
-//   **テストスレッド上で同期呼び出し**して `capture_logs` 直下で発火させる。
+//   `capture_text` では捕捉できない。よってその種の log 表明は `handle_message` を
+//   **テストスレッド上で同期呼び出し**して `capture_text` 直下で発火させる。
 // - Close／disconnect／emit-after-stop の lifecycle は `spawn_seriko`＋`join()` を
 //   唯一の同期点として決定論化する（sleep/polling 不使用）。emit-after-stop の error! は
-//   `join()` 後にテストスレッドで `emit` を呼ぶため thread-local `capture_logs` で捕捉できる。
+//   `join()` 後にテストスレッドで `emit` を呼ぶため thread-local `capture_text` で捕捉できる。
 // ─────────────────────────────────────────────────────────────────────
 
 use areka_emo_compose::{BindSet, PatternState};
@@ -244,7 +244,7 @@ fn disconnect_stops_normally() {
 
 /// ケース3（6.2/6.3/7.4）: 分類不能／防御枝の入力が記録を残して読み飛ばされ、処理が継続する。
 ///
-/// (a) 同期 `handle_message`＋`capture_logs`（テストスレッド発火）で EntityRef 防御枝が
+/// (a) 同期 `handle_message`＋`capture_text`（テストスレッド発火）で EntityRef 防御枝が
 ///     `warn!` を残し・状態不変・`Continue`（skip して継続）を決定論的に固定する。
 /// (b) spawn 経由の observable: EntityRef cue を先に、有効 cue を後に emit→close→join し、
 ///     mock 記録が有効 Show 1 件のみ＝bad cue は skip され、その後もアクターが処理継続したこと
@@ -320,7 +320,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
 /// ケース4（2.1/2.4/7.4）: 数値解釈の境界値が解決不能として扱われる（handler 経路＋解決失敗ログ）。
 ///
 /// 非表示指定以外の負値（`"-2"`）と許容範囲超（`"4294967296"`＝`u32::MAX+1`）を
-/// 同期 `handle_message`＋`capture_logs`（テストスレッド発火）で流し、`Unresolved` の
+/// 同期 `handle_message`＋`capture_text`（テストスレッド発火）で流し、`Unresolved` の
 /// `error!` が残り・状態不変・発行なし・`Continue` を決定論的に固定する。解決層単体は
 /// resolve.rs の 2.1 で檻済み。ここは **アクター handler 経路の解決失敗ログ**（7.4）を実行檻化。
 #[test]
@@ -369,9 +369,9 @@ fn numeric_boundary_is_unresolved() {
 ///
 /// design の emit-after-stop シナリオ（`emit_after_receiver_gone` を **実アクター停止**の
 /// setup で行う）: `spawn_seriko`→`close()`→`join()`（アクター完全停止＝inbox 受信端消失）→
-/// その後テストスレッドで `emit` を `capture_logs` 直下で呼ぶ。send 失敗が `error!` として
+/// その後テストスレッドで `emit` を `capture_text` 直下で呼ぶ。send 失敗が `error!` として
 /// 観測でき、かつ `emit` が panic せず戻る（＝処理系全体が異常終了しない）ことを固定する。
-/// emit-after-stop の error! はテストスレッドで発火するため thread-local `capture_logs` で捕捉可。
+/// emit-after-stop の error! はテストスレッドで発火するため thread-local `capture_text` で捕捉可。
 #[test]
 fn emit_after_actor_stopped_logs_no_panic() {
     let out = MockSurfaceOutput::new();
@@ -388,7 +388,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
     handle.join().expect("Close で正常終了する");
 
     // 停止後の emit: send は Err だが panic せず error! を残して戻る（infallible 契約・6.3/6.4）。
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
     });
 

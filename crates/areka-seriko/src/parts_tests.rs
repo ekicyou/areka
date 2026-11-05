@@ -8,23 +8,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use areka_emo_compose::{BindSet, ComposeMethod, EmoWorld, PatternFrame, PatternState};
+use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
-use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
 use crate::state::Slot;
 use crate::table::AnimationTable;
+use crate::test_support::{capture_logs, scope, table_of};
 use crate::timeline::LoopRng;
-
-pub(super) fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
-
-pub(super) fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
 
 pub(super) fn no_binds() -> BindSet {
     BindSet::from_ids([])
@@ -35,14 +27,7 @@ pub(super) fn calls(probe: &Arc<Mutex<RngProbe>>) -> usize {
 }
 
 /// overlay・位置 0,0 のコマ（一番上の欄に手で置く用）。
-pub(super) fn overlay(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
-}
+pub(super) use crate::test_support::overlay_frame as overlay;
 
 /// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
 pub(super) fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
@@ -661,10 +646,6 @@ fn clear_drops_clocks_of_every_scope() {
     assert_eq!(clocks.clock(&scope(), 100, 0), None);
     assert_eq!(clocks.clock(&other, 100, 0), None);
     assert!(peek_at(&mut clocks, &table, 0, &b, 1060, &PatternState::default()).is_empty());
-}
-
-pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    capture_lines(LineFormat::LevelTargetFields, f).1
 }
 
 pub(super) fn count(lines: &[String], needles: &[&str]) -> usize {

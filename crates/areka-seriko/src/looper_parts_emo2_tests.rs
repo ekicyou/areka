@@ -76,7 +76,7 @@ use super::*;
 use crate::bind::build_static_bindset;
 use crate::resolve::SurfaceTarget;
 use crate::state::ApplyOutcome;
-use areka_emo_compose::{ComposeMethod, EmoWorld, PatternState};
+use areka_emo_compose::{ComposeMethod, PatternState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -95,7 +95,7 @@ pub(crate) fn emo2_shell_table() -> AnimationTable {
         .join("surfaces.txt");
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(&content)))
+    crate::test_support::table_of(&content)
 }
 
 /// `seeded_rng` を包み、呼ばれた回数を数える乱数。

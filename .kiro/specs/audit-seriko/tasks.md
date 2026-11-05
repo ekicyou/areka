@@ -7,7 +7,7 @@
 > design.md の行番号は設計の時点のもの。前のタスクで行がずれるので、直す相手はテストや関数の名で探し直す。
 
 - [ ] 1. テストの道具を受け口へまとめる（指摘 6）
-- [ ] 1.1 層をまたぐテストの道具の受け口を作り、`src/` の写しを寄せる
+- [x] 1.1 層をまたぐテストの道具の受け口を作り、`src/` の写しを寄せる
   - 最初に、着手の `HEAD` でクレートのテストの数と、後のタスクで移す・消すテストの名の一覧を記録に残す（1〜5 のタスクの「同じ数・同じ期待値」の比べる元）
   - `lib_test_support.rs` を新しく置き、`lib.rs` からテストのときだけ繋ぐ。表を読んで組む道具・既定のスコープ・記録の捕まえ（行の列とつないだ文字列）・表と記録の組・警告の抜き出し・`check_calls` の 6 種・部品の再生中・1 コマの状態を置く
   - research.md 3 節の 6 に挙げた `src/` の写し（`table.rs` の中の写し、`looper_test_support.rs`・`state_test_support.rs` を含む）を消して受け口を使う。道具の名が本番の項目と同じなら明示の `use` で受ける
@@ -136,3 +136,8 @@
   - 完了: 全体テストが緑で、`git diff main -- Cargo.lock` が空
   - _Boundary: ワークスペース全体（確かめ）_
   - _Requirements: 4.3, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
+
+## Implementation Notes
+- 1.1（着手 HEAD `b64c6f68`）: クレートのテストは 550 件（lib 523・balloon_face_e2e 5・bind_e2e 9・cue_sequence 1・loop_integration 9・regression 3）。直した後も同じ 550 件・同じ名。寄せた先は `crate::test_support`（`src/lib_test_support.rs`）の `table_of`・`scope`・`capture_logs`（行の列）・`capture_text`（つないだ文字列。文字列を返していた `capture_logs` の新しい名）・`table_and_logs`・`warns`・`KINDS`・`part_playing`・`overlay_frame`・`one_frame_pattern`・`draw_frame`。中身の違う写しは名で分けた（`actor_trigger_fixture_tests` の `table_and_all_logs`＝畳み込みの記録も捕まえる・`table_interval_words_tests` の `table_and_text`）。`rg` で `src/` に写しが残らないことを確かめた（名が当たる本番の `bind.rs` の `fn scope`・トレイトの `fn playing` は別物）。
+- 1.1 で記録した、後で移す・消すテストの名: タスク 3（移すだけ）＝`tick_with_no_shown_slot_is_complete_no_op`・`tick_boundary_cross_emits_show_carrying_pattern`・`send_tick_after_actor_stopped_logs_debug_no_panic`・`emote_surface_change_resets_loop_playback`。5.3（消す）＝`r_post_and_komainu_shell_root_holds_surfaces_txt`。5.4 指摘 13（消す）＝`resolve_is_deterministic_same_input_same_output`・`balloon_resolve_is_deterministic`・`same_input_same_answer`・`settling_twice_gives_the_same_state`、（中の確かめだけ消す）＝`balloon_display_commands_construct_and_match`・`frame_at_sakura_real_sequence_finishes_residual_permanently`。5.4 指摘 14（消す）＝`empty_resolver_resolves_all_none`・`accumulate_on_off_round_trip`・`accumulate_off_absent_is_noop`・`show_command_carries_static_binds`・`show_carries_static_default_when_no_dynamic_bind_applied`。消し終えた見込みは 540 件。
+- clippy: toolchain が固定されておらず、今の clippy（0.1.99）では着手の時点から areka-seriko に 4 件の警告がある（`actor.rs:91` large_enum_variant・`looper.rs:433`・`looper_talk_tests.rs:597`・`looper_trigger_tests.rs:504` の collapsible_if）。依存の dola にも出る。各タスクは `cargo clippy -p areka-seriko --all-targets --no-deps` で警告が増えないことを見る。この 4 件は完了の棚卸で扱う。

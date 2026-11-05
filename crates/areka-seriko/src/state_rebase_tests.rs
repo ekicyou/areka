@@ -3,22 +3,7 @@
 use super::test_support::*;
 use super::*;
 use crate::resolve::SurfaceTarget;
-use areka_emo_compose::{ComposeMethod, PatternFrame};
-
-/// animation `anim_id` に surface `surf` のコマ 1 枚を持つ pattern。
-fn pattern_of(anim_id: u32, surf: u32) -> PatternState {
-    let mut p = PatternState::default();
-    p.set(
-        anim_id,
-        PatternFrame {
-            surface_id: surf,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
-    p
-}
+use crate::test_support::one_frame_pattern as pattern_of;
 
 /// シェル面・バルーン面を表示し、動的な着せ替えと両 slot のパターンの進行を積んだ状態。
 /// scope 0 は Shown(5)／バルーン Shown(2)、scope 1 は Hidden。

@@ -9,18 +9,8 @@ use super::*;
 use areka_emo_compose::ComposeMethod;
 use std::num::{NonZeroU32, NonZeroU64};
 
-/// 手書きの `always` の 1 コマ（作者のサーフェスを指す）。
-fn frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
-    LoopFrame {
-        surface_id,
-        picture: None,
-        method: ComposeMethod::Overlay,
-        act: crate::table::FrameAct::Draw,
-        wait_ms,
-        x: 0,
-        y: 0,
-    }
-}
+// 手書きの `always` の 1 コマ（作者のサーフェスを指す）。
+use crate::test_support::draw_frame as frame;
 
 /// 手書きの `always` のコマ列と周期（＝待ち時間の合計）。
 fn written(spec: &[(i64, u32)]) -> (Vec<LoopFrame>, NonZeroU64) {

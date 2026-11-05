@@ -6,16 +6,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use areka_emo_compose::{BindSet, EmoWorld, PatternState};
+use areka_emo_compose::{BindSet, PatternState};
 
 use super::test_support::{shell_runtime, switch};
 use super::tests::{always_fire, cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
-
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
+use crate::test_support::{part_playing as playing, table_of};
 
 fn no_binds() -> BindSet {
     BindSet::from_ids([])
@@ -234,13 +231,6 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
         assert_eq!(part_frames(pattern, 100), vec![(1, 50), (2, 201)]);
         assert_eq!(part_frames(pattern, 50), vec![(0, 202)]);
     }
-}
-
-fn playing(at: u64) -> Option<crate::parts::PartAnim> {
-    Some(crate::parts::PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// 面が隠れた（`\s[-1]`）ら、部品の 3 語の時計も引き金の状態も捨てる。面が戻ると、見えた部品の

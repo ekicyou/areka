@@ -13,11 +13,12 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::{PartKey, PatternState};
 
-use super::tests::{calls, capture_logs, count, no_binds, overlay, part_frames, scope, table_of};
+use super::tests::{calls, count, no_binds, overlay, part_frames};
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
 use crate::state::Slot;
 use crate::table::AnimationTable;
+use crate::test_support::{capture_logs, part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
 use crate::trigger::TalkWindow;
 
@@ -141,13 +142,6 @@ impl Rig {
             })
             .collect()
     }
-}
-
-fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// 一番上 0 が子 100 を置き、一番上 1 は何も置かない。100 の `runonce`（animation 0）は頭のコマで

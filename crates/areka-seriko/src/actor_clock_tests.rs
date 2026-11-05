@@ -9,7 +9,8 @@ use super::*;
 use crate::bind::BindOptionDecls;
 use crate::looper::tests::{always_fire, cfg, pattern_of};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_emo_compose::{BindSet, EmoWorld, PatternState};
+use crate::test_support::table_of;
+use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use dola::cue::CueSink;
 use std::collections::BTreeMap;
@@ -32,10 +33,6 @@ const BIND_ALWAYS: &str = "surface0\n{\nanimation5.interval,bind\n\
     animation0.pattern1,overlay,102,100,0,0\n\
     animation0.pattern2,overlay,103,100,0,0\n}\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
-
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
 
 /// テストが値を書き替えられる時計。
 fn manual_clock(start: u64) -> (SerikoClock, Arc<AtomicU64>) {

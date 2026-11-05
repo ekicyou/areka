@@ -342,22 +342,7 @@ fn apply_bind_exclusive_target_in_category_ids_stays_present() {
 
 // ---- commit_pattern / current_pattern（per-(scope, slot) PatternState・要件 5.1/6.1/6.2） ----
 
-use areka_emo_compose::{ComposeMethod, PatternFrame};
-
-/// テスト用の非空 PatternState（単一コマ・Overlay）。
-fn pat(anim_id: u32, surface_id: u32) -> PatternState {
-    let mut p = PatternState::default();
-    p.set(
-        anim_id,
-        PatternFrame {
-            surface_id,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
-    p
-}
+use crate::test_support::{one_frame_pattern as pat, overlay_frame as frame};
 
 /// current_pattern 既定（要件 5.1）: 未格納の (scope, slot) は空 PatternState を返す（両 slot）。
 #[test]
@@ -561,16 +546,6 @@ fn apply_bind_reemit_carries_current_pattern() {
 
 // ---- 残留コマの掃除（bind から外れた ID の保持コマ除去・bindopt 7.1/7.2/7.4/7.5） ----
 
-/// テスト用のコマ 1 枚（`Overlay`・オフセットなし）。
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
-}
-
 /// 排他置換で外れたパーツの保持コマが**同じ発行で**消える（bindopt 7.1/7.2）。
 ///
 /// 実機の固着そのものの再現形: まばたき 1402（`-1` 終端なし＝末尾到達後もコマを保持・
@@ -728,7 +703,7 @@ fn residual_frame_removal_emits_info_marker() {
     residual.set(9000, frame(9001));
     states.commit_pattern(&scope, Slot::Shell, residual);
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
     });
 
@@ -773,7 +748,7 @@ fn no_removal_log_when_dropped_id_has_no_residual_frame() {
     unrelated.set(9000, frame(9001));
     states.commit_pattern(&without_frame, Slot::Shell, unrelated.clone());
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         states.apply_bind_exclusive(&with_frame, &[1400, 1401, 1402, 1403], 1400);
         states.apply_bind_exclusive(&without_frame, &[1400, 1401, 1402, 1403], 1400);
     });

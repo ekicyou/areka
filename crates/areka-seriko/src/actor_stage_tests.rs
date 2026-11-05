@@ -11,13 +11,10 @@ use crate::looper::parts_emo2_tests::emo2_shell_table;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
+use crate::test_support::scope;
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::{CueCommand, TalkCue};
 use std::sync::{Arc, Mutex};
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
 
 fn stage(open: bool, generation: u64, at_ms: u64) -> SerikoMsg {
     SerikoMsg::Stage {
@@ -292,7 +289,7 @@ fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
         "時計は知らせの時刻 1000 で始まる（直前の刻み 900 なら 1050 で出ている）"
     );
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         sink.send_stage(StageNote::Balloon {
             scope: scope(),
             open: false,

@@ -12,6 +12,7 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
+use crate::test_support::table_of;
 use areka_emo_compose::{BindSet, EmoWorld};
 use dola::cue::CueSink;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -29,14 +30,13 @@ const CHEEK: u32 = 2;
 const PART: u32 = 9102;
 
 /// 本文を本番と同じ順（読み手 → 畳み込み → 表）で表にし、その走行の記録を 1 件 1 行で添える。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-    })
+/// 共有の `table_and_logs` と違い、読み手と畳み込みの記録も含む。
+fn table_and_all_logs(text: &str) -> (AnimationTable, Vec<String>) {
+    capture_lines(LineFormat::LevelTargetFields, || table_of(text))
 }
 
 fn config() -> SerikoLoopConfig {
-    cfg(table_and_logs(FIXTURE).0, always_fire())
+    cfg(table_and_all_logs(FIXTURE).0, always_fire())
 }
 
 fn count(lines: &[String], needle: &str) -> usize {
@@ -53,7 +53,7 @@ fn count(lines: &[String], needle: &str) -> usize {
 /// 採らなかった animation は表に無い（要件 1.5・7.1・7.2）。
 #[test]
 fn fixture_table_logs_five_adoptions_and_exactly_three_warnings() {
-    let (table, logs) = table_and_logs(FIXTURE);
+    let (table, logs) = table_and_all_logs(FIXTURE);
 
     assert_eq!(count(&logs, "引き金の語を採録"), 5, "{logs:#?}");
     assert_eq!(count(&logs, "level=WARN"), 3, "{logs:#?}");
@@ -250,7 +250,7 @@ fn fixture_appended_to_emo2_keeps_the_counts_and_finds_every_picture() {
     let emo2 = std::fs::read_to_string(shell.join("surfaces.txt")).expect("emo2 の surfaces.txt");
     let ours = [9100, 9101, PART, 9103, 9104];
 
-    let (_, alone) = table_and_logs(&emo2);
+    let (_, alone) = table_and_all_logs(&emo2);
     assert_eq!(count(&alone, "level=WARN"), 0, "{alone:#?}");
     assert_eq!(count(&alone, "引き金の語を採録"), 0, "{alone:#?}");
     let emo2_world = EmoWorld::build(&areka_parsers::shell::parse(&emo2));
@@ -259,7 +259,7 @@ fn fixture_appended_to_emo2_keeps_the_counts_and_finds_every_picture() {
     }
 
     let joined = format!("{emo2}\r\n{FIXTURE}");
-    let (_, logs) = table_and_logs(&joined);
+    let (_, logs) = table_and_all_logs(&joined);
     assert_eq!(count(&logs, "level=WARN"), 3, "{logs:#?}");
     assert_eq!(count(&logs, "引き金の語を採録"), 5, "{logs:#?}");
 

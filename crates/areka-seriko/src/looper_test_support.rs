@@ -1,21 +1,13 @@
 //! 一番上の面の引き金の檻（`looper_trigger_tests.rs`・`looper_talk_tests.rs`）が共有する足場
 //! （spec: areka-P0-seriko-trigger-intervals）。
 
-use areka_emo_compose::{BindSet, EmoWorld};
-use log_capture_kit::{LineFormat, capture_lines};
+use areka_emo_compose::BindSet;
 
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::state::ApplyOutcome;
-
-pub(super) fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
-
-pub(super) fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
+use crate::test_support::{scope, table_of};
 
 /// シェルの表が `text` のランタイムと、まだ何も表示していない状態。
 pub(super) fn shell_runtime(text: &str) -> (LoopRuntime, ScopeStates) {
@@ -57,10 +49,6 @@ pub(super) fn cell(states: &ScopeStates, slot: Slot, id: u32) -> Option<u32> {
         .current_pattern(&scope(), slot)
         .get(id)
         .map(|f| f.surface_id)
-}
-
-pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    capture_lines(LineFormat::LevelTargetFields, f).1
 }
 
 /// `needle` を含む行の数。

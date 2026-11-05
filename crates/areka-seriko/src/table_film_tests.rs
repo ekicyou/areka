@@ -13,6 +13,7 @@ use areka_emo_compose::{
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
+use crate::test_support::warns;
 
 const FIXTURE: &str =
     include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
@@ -70,10 +71,6 @@ fn build(
     capture_lines(LineFormat::LevelTargetFields, || {
         AnimationTable::from_world_and_films(world, sheets.iter(), skips)
     })
-}
-
-fn warns(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
 /// 子 1 つにつき `always` を 1 本（animation の番号 0）。周期はコマの待ち時間の合計、回数はファイルの

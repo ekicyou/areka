@@ -15,10 +15,7 @@ use crate::parts::PartAnim;
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::resolve::SurfaceTarget;
 use crate::state::StageNote;
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
+use crate::test_support::{part_playing as playing, scope, table_of};
 
 fn note(states: &mut ScopeStates, open: bool, face: u32) {
     states.note_stage(&StageNote::Balloon {
@@ -42,13 +39,6 @@ fn runtime(shell: AnimationTable) -> LoopRuntime {
 
 fn clock(rt: &LoopRuntime, slot: Slot, film: FilmId) -> Option<PartAnim> {
     rt.parts.clock_at(&scope(), slot, PartKey::Film(film), 0)
-}
-
-fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// `slot` の面の子 `film` の欄の絵（`None`＝載っていない＝経過 0）。
@@ -217,9 +207,7 @@ fn shell_and_balloon_clocks_do_not_mix() {
 
 /// バルーンの表が `text` だけのランタイム（シェルの表は空・乱数は `rng`）。
 fn runtime_of(text: &str, rng: LoopRng) -> LoopRuntime {
-    let table = AnimationTable::from_world(&areka_emo_compose::EmoWorld::build(
-        &areka_parsers::shell::parse(text),
-    ));
+    let table = table_of(text);
     LoopRuntime::new(SerikoLoopConfig {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(scope(), table)]),

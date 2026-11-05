@@ -5,21 +5,13 @@
 use std::num::NonZeroU64;
 
 use areka_emo_compose::{EmoWorld, PartKey};
-use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
+use crate::test_support::{table_and_logs, warns};
 
 /// 動く絵と手書きの `always` を置いた検体のシェル（中身は同じフォルダの README）。
 const FIXTURE: &str =
     include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
-
-/// 本文から表を組み、同じ走行の `tracing` 出力を 1 イベント 1 行で添えて返す。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
 
 /// 間隔の語 1 つだけを差し替えた面 0（待ち 0・50・30）。
 fn surface0_with(interval: &str) -> String {
@@ -33,10 +25,6 @@ fn surface0_with(interval: &str) -> String {
 
 fn period(ms: u64) -> NonZeroU64 {
     NonZeroU64::new(ms).expect("正")
-}
-
-fn warns(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
 /// `always` の単独（小文字の完全一致）だけを、回数なし・周期＝待ちの合計で採る。コマは pattern の

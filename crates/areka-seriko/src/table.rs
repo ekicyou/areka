@@ -568,26 +568,11 @@ mod trigger_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::capture_text;
     use areka_emo_compose::{BlendKind, BlendMode};
     use areka_parsers::shell::{
         Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
     };
-    use log_capture_kit::{LineFormat, capture_lines};
-
-    /// テスト専用 tracing 捕捉ハーネス（硬化機構の唯一の定義元 `log-capture-kit` へ委譲）。
-    /// 1 イベント 1 行へ level／target／各フィールド（`name=value`）を整形し、改行連結で返す。
-    ///
-    /// **「`with_default` はスレッドローカルゆえ並行テスト安全」は誤り**である。差し替わるのは
-    /// スレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-    /// interest キャッシュはプロセス全体で 1 つしかなく、その発行点を最初に踏んだスレッドの
-    /// 判定が焼き付く。捕捉窓を持たないスレッド（既定は `NoSubscriber`）が先に踏むと `never`
-    /// が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。共有機構は
-    /// ⑴ probe 常駐 ⑵ 窓内の interest 再計算 ⑶ 番兵による空振り検出でこれを塞ぐ。機序の
-    /// 逐条解説は `log_capture_kit` の crate doc および同 crate の `src/probe.rs` にある。
-    fn capture_logs<F: FnOnce()>(f: F) -> String {
-        let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-        lines.join("\n")
-    }
 
     /// コマ 1 本（index/method/surface_id/wait/x/y）。
     fn pat(index: u32, method: &str, surface_id: i64, wait: u32, x: i64, y: i64) -> Pattern {
@@ -688,7 +673,7 @@ mod tests {
         let world = world_of(vec![kero, sakura, non_driven]);
 
         let mut table = None;
-        let logs = capture_logs(|| {
+        let logs = capture_text(|| {
             table = Some(AnimationTable::from_world(&world));
         });
         let table = table.unwrap();
@@ -777,7 +762,7 @@ mod tests {
 
         let world = world_of(vec![degenerate]);
         let mut table = None;
-        let logs = capture_logs(|| {
+        let logs = capture_text(|| {
             table = Some(AnimationTable::from_world(&world));
         });
         let table = table.unwrap();

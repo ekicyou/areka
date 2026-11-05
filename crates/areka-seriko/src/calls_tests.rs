@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::table::{LoopFrame, LoopTrigger};
+use crate::test_support::draw_frame as draw;
 use areka_emo_compose::ComposeMethod;
 use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroU64};
@@ -44,13 +45,6 @@ fn frame(act: FrameAct, wait_ms: u32, x: i64, y: i64) -> LoopFrame {
         wait_ms,
         x,
         y,
-    }
-}
-
-fn draw(surface_id: i64, wait_ms: u32) -> LoopFrame {
-    LoopFrame {
-        surface_id,
-        ..frame(FrameAct::Draw, wait_ms, 0, 0)
     }
 }
 

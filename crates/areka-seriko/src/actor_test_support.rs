@@ -7,6 +7,9 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+// 捕捉の道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
+pub(super) use crate::test_support::capture_text;
+
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
 pub(super) fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
     TalkCue {
@@ -154,28 +157,11 @@ pub(super) fn top_frames(pattern: &PatternState) -> Vec<(u32, u32)> {
     pattern.iter().map(|(id, f)| (id, f.surface_id)).collect()
 }
 
-/// `capture_logs` の変種: `f` の戻り値も併せて返す（同期 handler の `ControlFlow` 表明用）。
+/// `capture_text` の変種: `f` の戻り値も併せて返す（同期 handler の `ControlFlow` 表明用）。
 ///
-/// 捕捉層は `capture_logs` と同一（共有機構 `log-capture-kit` へ委譲）で、`f` が発火した
+/// 捕捉層は `capture_text` と同一（共有機構 `log-capture-kit` へ委譲）で、`f` が発火した
 /// log 文字列と `f` の戻り値を組で返す。重複ハーネスを作らない。
 pub(super) fn capture_logs_flow<T, F: FnOnce() -> T>(f: F) -> (String, T) {
     let (ret, lines) = capture_lines(LineFormat::LevelTargetFields, f);
     (lines.join("\n"), ret)
-}
-
-/// テスト専用 tracing 捕捉ハーネス（硬化機構の唯一の定義元 `log-capture-kit` へ委譲）。
-/// 1 イベント 1 行へ level／target／各フィールド（`name=value`）を整形し、改行連結で返す。
-///
-/// **「`with_default` はスレッドローカルだから並行実行でも干渉しない」は誤り**である。
-/// 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
-/// callsite の interest キャッシュはプロセス全体で 1 つしかなく、その発行点をプロセス内で
-/// 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッド（既定は `NoSubscriber`）が
-/// 先に踏むと `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
-/// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 番兵イベントに
-/// よる空振り検出（捕捉できなければ panic）の 3 点でこれを塞ぐ。機序の逐条解説と
-/// `tracing-core` の実コード引用は `log_capture_kit` の crate doc および同 crate の
-/// `src/probe.rs` にある。
-pub(super) fn capture_logs<F: FnOnce()>(f: F) -> String {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines.join("\n")
 }

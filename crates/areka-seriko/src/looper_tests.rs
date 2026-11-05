@@ -1,10 +1,10 @@
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::capture_text;
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_parsers::shell::{
     Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
 };
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::{Arc, Mutex};
 
 // ── テスト用の表構築（from_world 経由＝実構築パスを通す） ──────────────────
@@ -798,7 +798,7 @@ fn progress_phase_bind_drop_emits_info_marker() {
     rt.on_tick(1000, &mut states); // 発火・再生中
     states.apply_bind(&scope, 7, false);
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         rt.on_tick(1100, &mut states);
     });
 
@@ -834,7 +834,7 @@ fn progress_phase_emits_no_drop_marker_while_bind_holds() {
 
     rt.on_tick(0, &mut states);
     // 捕捉区間に境界跨ぎ（＝発火）を含める。bind は終始 ON のまま。
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         rt.on_tick(1000, &mut states); // 抽選発火 → 進行相（bind 所属のまま）
         rt.on_tick(1100, &mut states); // 再生継続（Active・末尾未到達）
     });
@@ -861,19 +861,6 @@ fn progress_phase_emits_no_drop_marker_while_bind_holds() {
 }
 
 // ── 補助 ────────────────────────────────────────────────────────────────
-
-/// テスト専用 tracing 捕捉ハーネス（state/actor/table の同名ヘルパと同一＝硬化機構の唯一の
-/// 定義元 `log-capture-kit` へ委譲）。1 イベント 1 行へ level／target／各フィールド
-/// （`name=value`）を整形し、改行連結で返す。
-///
-/// 「`with_default` はスレッドローカルゆえ並行テスト安全」は誤りである（callsite の interest
-/// キャッシュはプロセス全体で 1 つ・先着スレッドの判定が焼き付く）。共有機構が probe 常駐・
-/// 窓内の interest 再計算・番兵による空振り検出で塞ぐ。機序は `log_capture_kit` の crate doc
-/// と同 crate の `src/probe.rs` を参照。
-fn capture_logs<F: FnOnce()>(f: F) -> String {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines.join("\n")
-}
 
 pub(crate) fn pattern_of(cmd: &DisplayCommand) -> &PatternState {
     match cmd {

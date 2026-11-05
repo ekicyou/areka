@@ -50,6 +50,10 @@ mod trigger;
 // 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
 #[cfg(test)]
 mod sample_test_support;
+// 層をまたぐテストの道具の受け口（spec: audit-seriko 指摘 6）。
+#[cfg(test)]
+#[path = "lib_test_support.rs"]
+mod test_support;
 
 pub use actor::{BIND_COMMAND, BIND_NOEVENT_COMMAND};
 pub use actor::{

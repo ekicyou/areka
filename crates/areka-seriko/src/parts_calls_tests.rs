@@ -4,14 +4,14 @@
 //! 一番上 0 が element定義で部品 100 を置き、1 は何も置かない。刻みは `on_tick(now_ms)`、乱数は
 //! 注入列で、どちらも決定論。
 
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_sakura::ActorKey;
+use areka_emo_compose::BindSet;
 
 use crate::looper::LoopRuntime;
 use crate::looper::tests::{cfg, counting_rng};
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
 use crate::table::AnimationTable;
+use crate::test_support::{scope, table_of};
 use crate::timeline::LoopRng;
 
 /// 部品の中の絵の面（中身は空）。
@@ -23,11 +23,7 @@ fn shell(anims: &str) -> AnimationTable {
     let text = format!(
         "surface0\n{{\nelement0,overlay,100,0,0\n}}\nsurface100\n{{\n{anims}}}\n{SURFACES}"
     );
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(&text)))
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
+    table_of(&text)
 }
 
 /// シェルの面 0 を出した状態のランタイム（選びの乱数は `pick` を返し続ける）。
