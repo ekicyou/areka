@@ -56,10 +56,11 @@
   - _Depends: 1.2, 2.3_
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11_
 
-- [ ] 4. 全体テストと、触らない約束を確かめる
+- [x] 4. 全体テストと、触らない約束を確かめる
   - `tools/test-all.ps1` の全体テストを 1 回回し、緑になる（照合テストが `cargo test --workspace` の中で走り、`doc/ukadoc-coverage/`・`doc/ssp-mcp/`・`doc/release-notes/` を読む試験と道具の自己検査も緑）
   - `git diff --name-only main...HEAD` に `Cargo.lock`・`Cargo.toml`・`crates/*/Cargo.toml`・`crates/areka-emo-text/`・見直し 7 本の受け持つクレート・`doc/COMPAT_ARCHITECTURE.md`・`doc/ssp-mcp/` が 1 つも無いことを確かめて記録する
   - _Depends: 2.1, 3_
+  - 記録（2026-11-05）: `tools/test-all.ps1` を commit 2ccb865a で 1 回回し、13 段すべて緑（x64 workspace tests 1921 秒・`doc_tree_guard_test` の 8 本もこの中で緑）。`git diff --name-only main...HEAD` に `Cargo.lock`・`Cargo.toml`・`crates/*/Cargo.toml`・`crates/areka-emo-text/`・見直し 7 本の受け持つクレート・`doc/COMPAT_ARCHITECTURE.md`・`doc/ssp-mcp/` は 0 件（`crates/` の下で変わったのは `crates/log-capture-kit/tests/doc_tree_guard_test.rs` だけ）
   - _Requirements: 4.11, 5.5, 6.1, 6.2, 6.3, 6.4_
 
 - [ ] 5. 完了の手当て（最後の検索・後続の起票・知らせ）
