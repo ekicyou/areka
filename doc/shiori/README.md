@@ -50,7 +50,7 @@ doc/Web 派生レンダリングは、正本フラグメント群の正準ビュ
 ## 非破壊移行の証拠（一回限り・最小エビデンス）
 
 - 旧 `shiori_protocol.toml` からフラグメント群への移行は **契約内容を一切変更しない非破壊リファクタ**であり、その証拠は移行時の一回限りの意味的同値ゲートで与えられた。`parse(旧 TOML)` と `parse(merge(fragments))` が 8 要素（entry 集合／field 集合／共有テーブル／silence_ruling／全 description／全 provenance／封筒マッピング／予約ヘッダ集合）で順序非依存に過不足なく一致し、残差キーがゼロであることを確認した（PASS）。
-- 合否結果と旧ファイルの pre-deletion blob への軽量ポインタを `equivalence_evidence.toml` に最小エビデンスとして残す。変換前 baseline は削除コミットが旧ファイル blob を git 履歴へ恒久保存するため、別途の正規化ダンプは同梱しない。
+- 合否結果と旧ファイルの pre-deletion blob への軽量ポインタを `equivalence-evidence.toml` に最小エビデンスとして残す。変換前 baseline は削除コミットが旧ファイル blob を git 履歴へ恒久保存するため、別途の正規化ダンプは同梱しない。
 - 同値ゲートは移行時の一回限りゲート（削除を認可する関門）であり、完全移行後はフラグメント群が唯一の正本ゆえ旧形の再監査は想定しない。
 
 ## 典拠スナップショット
@@ -81,7 +81,7 @@ doc/Web 派生レンダリングは、正本フラグメント群の正準ビュ
 | `fragments/_shared.toml` | 共有フラグメント。`[meta]`／`[mapping]`／`[envelope]`／`[reserved_headers]`＋全 silence_ruling を集約 |
 | `fragments/events/NN.{category}[.NN].toml` | kind=event のカテゴリ別フラグメント群（≤600 行・カテゴリ純度） |
 | `fragments/resources/NN.{category}[.NN].toml` | kind=resource のカテゴリ別フラグメント群（≤600 行・カテゴリ純度） |
-| `equivalence_evidence.toml` | 非破壊移行の最小エビデンス（同値ゲート合否＋旧ファイル blob ポインタ） |
+| `equivalence-evidence.toml` | 非破壊移行の最小エビデンス（同値ゲート合否＋旧ファイル blob ポインタ） |
 | `README.md` | 本ファイル。正本（フラグメント群）／派生の関係の宣言 |
 
 > 旧 `shiori_protocol.toml`（単一正本）は本仕様完了に伴い tree から削除された。正準ビューはフラグメント群からのオンデマンド merge で得る。

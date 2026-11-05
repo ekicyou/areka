@@ -38,7 +38,7 @@
   - 案内に 3 つの見出し「直下のファイルとフォルダ」「名前の決まりの例外」「動かした名前の対応」がこの順で並び、例外の表が 2 行・対応の表が 4 行ある
   - _Boundary: C2 案内_
   - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 3.1, 3.2, 3.4, 6.1_
-- [ ] 2.3 4 つを動かし、直下の表と古いパスの名指しを同じコミットで直す（C1・C2 の直下の表・C5 の結合）
+- [x] 2.3 4 つを動かし、直下の表と古いパスの名指しを同じコミットで直す（C1・C2 の直下の表・C5 の結合）
   - `git mv` で `docs/click_through.md` → `doc/click-through.md`、`doc/CONSTITUTION.md` → `doc/constitution.md`、`doc/PASTA_PROFILE.md` → `doc/pasta-profile.md`、`doc/shiori/equivalence_evidence.toml` → `doc/shiori/equivalence-evidence.toml` を行い、ディスクに空の `docs/` が残っていれば消す
   - 中身は変えない。直すのは `equivalence-evidence.toml` の 1 行目の自分の名前だけ（見出しの語 CONSTITUTION は残す）
   - 直下の表の 2 行の名前を新しい名前へ直し、`click-through.md` の行を足し、`ssp-mcp/` の行の役目に試験が読む `areka-tools.md` を足し、`pasta-real-run.md` の行を v0.1.0 が出た今の書き方へ直す

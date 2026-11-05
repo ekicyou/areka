@@ -1718,7 +1718,7 @@ Opus
   - 素材 ID の規則は areka が先に決め、外の U1 が後で写す。メタデータは正典のキーを使い、足りない分だけ areka の独自キーで descript に足す。
   - 音は正典のタグから・再生の土台は Media Foundation。
   - 利用統計の要件は「利用者を秘匿しつつ利用者ごとに識別し、1 日単位で集計し、GitHub Pages で公開する」。暗号化の包み・利用日・HMAC の控え・Secrets の持ち方は実装のときの候補（`doc/ideas/usage-stats.md` の A〜G）。U1〜U3 は外の新しいリポジトリで、その文書を持って `/kiro-discovery` を回す。
-  - その場で直した: `doc/PASTA_PROFILE.md` の作例の `\w[N]` 6 か所を `\_w[N]` に、「pasta が出す `\w[N]` は上流の欠陥」の注記を正しい出どころに（pasta の `novel-areka-contract` の brief「依頼に添える訂正」）。
+  - その場で直した: `doc/pasta-profile.md` の作例の `\w[N]` 6 か所を `\_w[N]` に、「pasta が出す `\w[N]` は上流の欠陥」の注記を正しい出どころに（pasta の `novel-areka-contract` の brief「依頼に添える訂正」）。
 - **下流の brief へ足したこと**: `extra-character-windows`（3 人目からの土台を `shell-multi-compose` とどちらが持つか）・`parallel-visual-script` と `sakura-time-directives`（音を鳴らす所＝`sound-canon-tags`）・`property-catalog-lists`（音のプロパティの値＝`sound-canon-tags`・`rateofuselist.*`）・`install-package-type`（単体のフリーシェルの置き場＝`ghost-material-metadata`）に 1 行ずつ。
 
 #### 受け口（pasta の `novel-areka-contract` の依頼書を待つもの・brief なし）
@@ -1731,7 +1731,7 @@ pasta（SHIORI のエンジン・`C:\home\maz\git\pasta`）の `novel-areka-cont
 - 演劇のパッケージ（M2）: 種別（`type,ghost`＋印か、`/play/` の置き場か）は依頼書の「起動の形」で決める。新しい種別なら `shiori4-api` に「演劇から SHIORI を選ぶ書き方」を足しに戻る。SSP に入れられたときの知らせ方（「areka で遊んでね」の台詞）は pasta への申し送り。演劇の信号（再生の開始・場面への到達・再生の完了）は `areka-usage-stats` へ。
 - 制作と配布の導線（M3）: lint・プレビュー・サンプルの演劇・配布の手引き・登記簿への登録の手順（M2 の後）。
 - pasta の P2（`pasta_check validate` の検査）: `ghost-material-metadata` がウェーブに載ったら、その要件の段の最初に pasta のセッションへ相談して決める。
-- 申し送り: `ALLOWED_EVENT_IDS`（`crates/areka-kanade/src/schedule/events.rs`）は「ukadoc の固定名だけ・各行に ukadoc の URL」の決まり＝ノベル用の独自イベントを足すには表の決まりを広げる。`doc/PASTA_PROFILE.md` の訂正は済み、と返す。
+- 申し送り: `ALLOWED_EVENT_IDS`（`crates/areka-kanade/src/schedule/events.rs`）は「ukadoc の固定名だけ・各行に ukadoc の URL」の決まり＝ノベル用の独自イベントを足すには表の決まりを広げる。`doc/pasta-profile.md` の訂正は済み、と返す。
 
 - [ ] doc-tree-tidy -- `doc/` と `docs/` の置き場をまとめ、名前の書き方をそろえ、案内の表と実物の突き合わせを試験にする（v0.2.0・区分 A）。Dependencies: none
 - [ ] sound-canon-tags -- 正典の音のタグとプロパティを Media Foundation で鳴らす（ノベルゲーム基盤の先頭・区分 C）。Dependencies: talk-script-metadata
