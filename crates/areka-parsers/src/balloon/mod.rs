@@ -2,9 +2,10 @@
 //!
 //! 公開面集約層。内訳:
 //! - `model` : バルーンモデル型（`BalloonModel`＋幾何・フォント sub-struct・I/O 契約の正本）
+//! - `marker`: 矢印の鍵（`ArrowKeys`）・印の絵の名前の読みと、読めなかった鍵（`KeyIssue`）
 //! - `parse` : 公開 facade（2 層マージ＋KV→型写像＋符号保持＋整数パース）
 //!
-//! 依存方向は `model ← parse`。本 `mod.rs` は `model` のモデル型と
+//! 依存方向は `marker ← model ← parse`。本 `mod.rs` は `marker`・`model` の型と
 //! `parse`/`parse_str` facade を公開面へ `pub use` で集約する（`sakura/mod.rs`・`kv/mod.rs` 流儀）。
 
 mod marker;

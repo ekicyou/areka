@@ -16,7 +16,7 @@ use super::parse::{parse, parse_str};
 use std::collections::BTreeMap;
 
 /// テスト用: `&[(k, v)]` からフラット KV `BTreeMap` を組む小ヘルパ。
-fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+pub(super) fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
         .iter()
         .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))

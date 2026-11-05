@@ -39,7 +39,7 @@
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
 
-use super::marker::ArrowKeys;
+use super::marker::{ArrowKeys, KeyIssue};
 
 /// バルーンの幾何＋フォント subset モデル（クロスエンジン I/O 契約の正本）。
 ///
@@ -63,30 +63,15 @@ pub struct BalloonModel {
     disable_font: DisableFont,
     arrow_keys: ArrowKeys,
     marker_filename: Option<String>,
+    key_issues: Vec<KeyIssue>,
 }
 
 impl BalloonModel {
     /// 各 sub-struct を束ねて集約ルートを構築する（同クレート写像・テスト用）。
     ///
-    /// `cursor` は additive 追加フィールドのため、既存呼び出し互換のため本コンストラクタでは
-    /// `BalloonCursor::default()`（全キー未指定）で初期化する。cursor.* を持つ写像は
-    /// [`BalloonModel::with_cursor`] で相乗り上書きする（`balloon::parse` が使用・要件 4.2）。
-    ///
-    /// `windowposition_raw` も同様に additive 追加フィールドであり、本コンストラクタでは
-    /// `WindowPositionRaw::default()`（両項未指定）で初期化する。生値を持つ写像は
-    /// [`BalloonModel::with_windowposition_raw`] で相乗りさせる
-    /// （windowposition-limit 要件 1.1/4.1・既存呼び出し側は無改変＝要件 5.1）。
-    ///
-    /// SSP 正典キー `vertical` の生値 `vertical_raw` も同様に additive 追加フィールドであり、
-    /// 本コンストラクタでは `None`（未宣言）で初期化する。生値を持つ写像は
-    /// [`BalloonModel::with_vertical_raw`] で相乗りさせる
-    /// （balloon-vertical-canon 要件 1.4/1.8・既存 30 呼出箇所は無改変）。
-    ///
-    /// 書体 5 本 `font_decoration_raw`・影 4 本 `font_shadow_raw`・無効表示層 `disable_font` も
-    /// 同様に additive 追加フィールドであり、本コンストラクタでは各 `Default`（全キー未指定）で
-    /// 初期化する。宣言を持つ写像は [`BalloonModel::with_font_decoration_raw`]／
-    /// [`BalloonModel::with_font_shadow_raw`]／[`BalloonModel::with_disable_font`] で相乗りさせる
-    /// （balloon-font-descript-keys 要件 2.1〜2.4/2.8・既存呼び出し側は無改変＝要件 5.1）。
+    /// 後から足した欄（`cursor`・`windowposition_raw`・`vertical_raw`・書体・影・無効表示・矢印・
+    /// 印の絵の名前・読めなかった鍵）はここでは未指定（各 `Default`・`None`・空）で初期化し、
+    /// `balloon::parse` が `with_*` で重ねる。
     pub fn new(
         windowposition: WindowPosition,
         origin: Origin,
@@ -112,6 +97,7 @@ impl BalloonModel {
             disable_font: DisableFont::default(),
             arrow_keys: ArrowKeys::default(),
             marker_filename: None,
+            key_issues: Vec::new(),
         }
     }
 
@@ -128,7 +114,7 @@ impl BalloonModel {
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が `windowposition.x`/`.limit` の
     /// マージ済み生値を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 5.1）。
-    pub fn with_windowposition_raw(mut self, windowposition_raw: WindowPositionRaw) -> Self {
+    pub(crate) fn with_windowposition_raw(mut self, windowposition_raw: WindowPositionRaw) -> Self {
         self.windowposition_raw = windowposition_raw;
         self
     }
@@ -149,7 +135,10 @@ impl BalloonModel {
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの生値を相乗りさせる
     /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 5.1）。
-    pub fn with_font_decoration_raw(mut self, font_decoration_raw: FontDecorationRaw) -> Self {
+    pub(crate) fn with_font_decoration_raw(
+        mut self,
+        font_decoration_raw: FontDecorationRaw,
+    ) -> Self {
         self.font_decoration_raw = font_decoration_raw;
         self
     }
@@ -159,7 +148,7 @@ impl BalloonModel {
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの生値を相乗りさせる
     /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 5.1）。
-    pub fn with_font_shadow_raw(mut self, font_shadow_raw: FontShadowRaw) -> Self {
+    pub(crate) fn with_font_shadow_raw(mut self, font_shadow_raw: FontShadowRaw) -> Self {
         self.font_shadow_raw = font_shadow_raw;
         self
     }
@@ -169,7 +158,7 @@ impl BalloonModel {
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの値を相乗りさせる
     /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 2.8/5.1）。
-    pub fn with_disable_font(mut self, disable_font: DisableFont) -> Self {
+    pub(crate) fn with_disable_font(mut self, disable_font: DisableFont) -> Self {
         self.disable_font = disable_font;
         self
     }
@@ -183,8 +172,14 @@ impl BalloonModel {
 
     /// 印の絵の名前 `marker.filename` を差し替えた値を返す additive ビルダ（`with_arrow_keys` 流儀・
     /// script-small-tags 要件 5.2）。`new` では `None`（書いていない）。
-    pub fn with_marker_filename(mut self, marker_filename: Option<String>) -> Self {
+    pub(crate) fn with_marker_filename(mut self, marker_filename: Option<String>) -> Self {
         self.marker_filename = marker_filename;
+        self
+    }
+
+    /// 読めなかった数の鍵を差し替えた値を返す（`balloon::parse` が使う）。`new` では空。
+    pub(crate) fn with_key_issues(mut self, key_issues: Vec<KeyIssue>) -> Self {
+        self.key_issues = key_issues;
         self
     }
 
@@ -292,6 +287,12 @@ impl BalloonModel {
     /// （script-small-tags 要件 5.2）。面ごとの書き換えは 2 層の後勝ちで効いた後の値。
     pub fn marker_filename(&self) -> Option<&str> {
         self.marker_filename.as_deref()
+    }
+
+    /// 鍵が在って数として読めなかった値（空を含む）を読む順に返す。読み込む側が記録する
+    /// （矢印の座標の鍵は [`ArrowKeys::issues`] の側）。
+    pub fn key_issues(&self) -> &[KeyIssue] {
+        &self.key_issues
     }
 }
 

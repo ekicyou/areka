@@ -19,7 +19,7 @@
   - `unresolved_label_and_malformed_bytes_warn` が WARN を捕まえ、`non_ascii_compatible_labels_fall_back` が緑
   - _Boundary: parsers charset, areka-parsers Cargo.toml_
   - _Requirements: 2.1, 2.7, 3.1, 4.4, 5.6, 7.1, 7.3, 7.4, 7.6_
-- [ ] 1.3 (P) balloon の数の鍵の崩れをデータで返し、写しと公開を減らす（T3）
+- [x] 1.3 (P) balloon の数の鍵の崩れをデータで返し、写しと公開を減らす（T3）
   - 鍵が在って読めない数の値（空を含む）を 1 件ずつ集め、バルーンのモデルから読めるようにする。`windowposition.x` の語は積まない（18 の parsers 側）
   - 矢印のファイル名の空を「無し」にする（21）・写しのテストを消す（23 の balloon）・テストを `Ansi` で非 ASCII を確かめる形へ（54）
   - 写しの読みを減らし生の値の読みを 1 つの口に寄せる（56・57）・内部だけの組み立ての口を `pub(crate)` に（61）・テストの道具の写しを消す（62）・balloon の doc を今の姿へ（63 の balloon）
