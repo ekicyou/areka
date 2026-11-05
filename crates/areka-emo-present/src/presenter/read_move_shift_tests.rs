@@ -26,21 +26,9 @@ fn two_targets(world: &mut World) -> EmoPresenter {
     for (id, salt) in [(0u32, 0x41u8), (1, 0x42)] {
         let window = spawn_window_with_dpi(world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(3, 2, salt);
-        presenter
-            .attach_target(world, TargetId(id), window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(TargetId(id), window, emo_world, atlas, 96);
     }
     presenter
-}
-
-/// 未登録の対象と、まだ合図を受けていない対象は (0, 0)。
-#[test]
-fn move_shift_is_zero_before_any_shift() {
-    let mut world = World::new();
-    let presenter = two_targets(&mut world);
-    assert_eq!(presenter.move_shift(TargetId(0)), (0, 0));
-    assert_eq!(presenter.move_shift(TargetId(1)), (0, 0));
-    assert_eq!(presenter.move_shift(TargetId(9)), (0, 0), "未登録は (0, 0)");
 }
 
 /// ずれは対象ごとに覚えられ、同じ対象への後の合図が勝つ。0 で元へ戻る。
@@ -90,9 +78,7 @@ fn move_shift_leaves_composition_memory_untouched() {
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x43);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let before = (

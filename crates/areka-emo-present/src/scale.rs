@@ -38,15 +38,14 @@ pub const DEFAULT_AUTHOR_DPI: u16 = 96;
 ///
 /// `author_dpi == 0` は k の分母ゼロ＝導出不能ゆえ、[`ScalePolicy::new`] が構築時に
 /// [`DEFAULT_AUTHOR_DPI`] へ正規化して `warn!` を出す（設計「Error Handling」の
-/// 「author_dpi 不正・0」行）。フィールドは design の Service Interface どおり公開のままとし、
-/// 構造体リテラル直書きで正規化を迂回されても [`derive_scale`] が同じ正規化を再度行う
-/// （**多層防御**——どちらの入口から入っても k=0 やゼロ除算にはならない）。
+/// 「author_dpi 不正・0」行）。欄は私有ゆえ、作る口は [`ScalePolicy::new`] と `Default` だけで、
+/// どちらも分母を 0 にしない（正規化はこの 1 か所・[`derive_scale`] は正規化し直さない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScalePolicy {
     /// 作者基準 DPI（既定 [`DEFAULT_AUTHOR_DPI`]・k の分母）。
-    pub author_dpi: u16,
+    author_dpi: u16,
     /// アプリ管理拡大率（本仕様は [`ScaleRatio::ONE`] 固定の縮退シーム・要件 1.6）。
-    pub app_scale: ScaleRatio,
+    app_scale: ScaleRatio,
 }
 
 impl Default for ScalePolicy {
@@ -70,6 +69,11 @@ impl ScalePolicy {
             author_dpi: normalize_author_dpi(author_dpi),
             app_scale,
         }
+    }
+
+    /// 作者基準 DPI（正規化済み・必ず 0 でない）。
+    pub(crate) fn author_dpi(&self) -> u16 {
+        self.author_dpi
     }
 }
 
@@ -97,11 +101,11 @@ fn normalize_author_dpi(author_dpi: u16) -> u16 {
 /// この構造体を直接検査する in-crate テストで檻に入れる（戻り値だけでは
 /// 「正常経路が偶然 1/1 を返した」場合と区別できない）。
 ///
-/// なお `error!`／`warn!` が**実際に発火するか**も、本ファイル `mod tests` の
-/// ログ捕捉ハーネス（`tracing` 単体で手書き・`tracing-subscriber` の dev 依存は不要）で
-/// 別途檻に入れてある（task 6.2）。分岐選択とログ発火は独立した 2 つの契約である。
+/// なお `error!`／`warn!` が**実際に発火するか**も、`scale_tests.rs` で共有の
+/// `log_capture_kit::capture` を使って別途檻に入れてある。分岐選択とログ発火は独立した
+/// 2 つの契約である。
 ///
-/// 各フラグは独立に立ち得る（例: `author_dpi == 0` かつ `dpi_x != dpi_y`）。
+/// 各フラグは独立に立ち得る（例: `dpi_x == 0` かつ `dpi_x != dpi_y`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ScaleDecision {
     /// 実適用 k（縮退経路でも常に有効値＝表示を失わない）。
@@ -112,8 +116,6 @@ struct ScaleDecision {
     window_dpi_invalid: bool,
     /// `dpi_x != dpi_y`（設計 D2: `dpi_x` を採用）。
     anisotropic: bool,
-    /// `author_dpi == 0` を [`DEFAULT_AUTHOR_DPI`] へ正規化した。
-    author_dpi_normalized: bool,
 }
 
 /// 政策と窓 DPI から k と縮退分岐を決める**ログ無しの純粋関数**。
@@ -121,14 +123,6 @@ struct ScaleDecision {
 /// 縮退の事後条件（要件 1.4）: どの分岐でも `scale` は有効な有理数であり、最悪でも
 /// `policy.app_scale`（＝アプリ管理拡大率のみ・DPI 由来 k は 1/1）へ落ちる。表示は失われない。
 fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
-    let author_dpi_normalized = policy.author_dpi == 0;
-    // 0 のときのみ既定へ寄せる（以降 author_dpi は必ず非ゼロ＝分母として有効）。
-    let author_dpi = if author_dpi_normalized {
-        DEFAULT_AUTHOR_DPI
-    } else {
-        policy.author_dpi
-    };
-
     let Some((dpi_x, dpi_y)) = dpi else {
         // DPI component 不在＝取得不能: DPI 由来 k を 1/1 とみなす（要件 1.4 の k=1.0 縮退）。
         return ScaleDecision {
@@ -136,30 +130,27 @@ fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
             dpi_missing: true,
             window_dpi_invalid: false,
             anisotropic: false,
-            author_dpi_normalized,
         };
     };
 
     // 単一スカラー規約（設計 D2）: 軸ごとに DPI が異なる環境では dpi_x を採用する。
     let anisotropic = dpi_x != dpi_y;
 
-    match ScaleRatio::new(dpi_x as u32, author_dpi as u32) {
+    match ScaleRatio::new(dpi_x as u32, policy.author_dpi as u32) {
         // 正常経路: 最終拡大率＝アプリ管理拡大率 × DPI 由来 k（要件 1.6 の 2 因子乗算）。
         Some(k) => ScaleDecision {
             scale: policy.app_scale.mul(k),
             dpi_missing: false,
             window_dpi_invalid: false,
             anisotropic,
-            author_dpi_normalized,
         },
-        // 分母は正規化済みゆえ非ゼロ——ここへ来るのは dpi_x == 0（窓 DPI の値そのものが不正）。
+        // 分母は `new` で正規化済みゆえ非ゼロ——ここへ来るのは dpi_x == 0（窓 DPI の値そのものが不正）。
         // 比を構築できないため DPI 不在と同じ縮退（app_scale × 1/1）を採る。
         None => ScaleDecision {
             scale: policy.app_scale,
             dpi_missing: false,
             window_dpi_invalid: true,
             anisotropic,
-            author_dpi_normalized,
         },
     }
 }
@@ -172,7 +163,6 @@ fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
 /// - **`dpi == None`**（`DPI` component 不在＝窓 DPI 取得不能）: `error!` ＋ `app_scale × 1/1`
 ///   （要件 1.4 の k=1.0 縮退・表示を失わない）。
 /// - **`dpi_x != dpi_y`**: `warn!` ＋ `dpi_x` 採用（設計 D2 の単一スカラー規約）。
-/// - **`author_dpi == 0`**: `warn!` ＋ 96 採用（[`ScalePolicy::new`] を迂回した場合の最終防衛）。
 /// - **`dpi_x == 0`**（窓 DPI の値が不正）: `error!` ＋ `app_scale × 1/1`。
 ///
 /// # 不変条件
@@ -187,13 +177,6 @@ fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
 pub fn derive_scale(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleRatio {
     let decision = classify(policy, dpi);
 
-    if decision.author_dpi_normalized {
-        tracing::warn!(
-            author_dpi = policy.author_dpi,
-            normalized = DEFAULT_AUTHOR_DPI,
-            "derive_scale: author_dpi=0 は k の分母に使えない: 既定 96 へ正規化"
-        );
-    }
     if decision.dpi_missing {
         tracing::error!(
             author_dpi = policy.author_dpi,

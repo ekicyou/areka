@@ -7,7 +7,7 @@
 //! | T-N4 | 当たり判定で点が **1 回だけ** 縮約されること（二重縮約なし） |
 //! | T-N5 | 同値の書き込みでは変更検知が立たないこと |
 //!
-//! z 順・非表示切替の檻は本ファイルと `mount_visibility_tests.rs` に分かれて残る。
+//! z 順の檻は本ファイル、非表示切替の檻は `mount_visibility_tests.rs` に残る。
 
 use super::*;
 
@@ -72,57 +72,6 @@ fn text_slot_is_higher_z_sibling_with_name() {
             .get::<GraphicsCommandList>(mount.text_slot())
             .is_none(),
         "予約スロットは表示記録を持たない seam であること"
-    );
-}
-
-/// R3.3: 非表示切替で surface entity の `HitTest` が `None`（当たり判定停止）＋ `Visual` 不可視へ、
-/// 再表示で `AlphaMask`（α判定）＋可視へ戻ること。表示記録/キャッシュは呼び手保持ゆえ触れない。
-#[test]
-fn hide_toggle_switches_hittest_and_visibility() {
-    let (mut world, _window, mount) = attach_fixture(4, 4);
-
-    // 初期状態: 可視 ＋ αマスクヒットテスト。
-    assert!(
-        world
-            .get::<Visual>(mount.surface_entity())
-            .unwrap()
-            .is_visible,
-        "装着直後は可視"
-    );
-    assert_eq!(
-        world.get::<HitTest>(mount.surface_entity()).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "装着直後は αマスクヒットテスト"
-    );
-
-    // 非表示へ。
-    mount.set_visible(&mut world, false);
-    assert!(
-        !world
-            .get::<Visual>(mount.surface_entity())
-            .unwrap()
-            .is_visible,
-        "非表示後は Visual 不可視"
-    );
-    assert_eq!(
-        world.get::<HitTest>(mount.surface_entity()).unwrap().mode,
-        HitTestMode::None,
-        "非表示後は当たり判定停止（HitTest::none）"
-    );
-
-    // 再表示へ。
-    mount.set_visible(&mut world, true);
-    assert!(
-        world
-            .get::<Visual>(mount.surface_entity())
-            .unwrap()
-            .is_visible,
-        "再表示後は可視へ復帰"
-    );
-    assert_eq!(
-        world.get::<HitTest>(mount.surface_entity()).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "再表示後は αマスクヒットテストへ復帰"
     );
 }
 
@@ -491,4 +440,36 @@ fn despawn_removes_both_children_from_the_window() {
         "文字層スロットが残っている"
     );
     assert!(world.get_entity(window).is_ok(), "窓そのものは消さない");
+}
+
+/// 指摘 19: 面と文字層の entity が先に消えた装着へ 4 つの口（`set_visible`・`set_layout`・
+/// `set_display`・`despawn`）を呼ぶと、装着契約の破綻の記録 5 つがそれぞれ 1 件以上残る
+/// （沈黙する失敗経路を作らない）。
+#[test]
+fn operations_on_a_mount_whose_entities_are_gone_each_leave_a_warn() {
+    let (mut world, _window, mount) = attach_fixture(3, 2);
+    world.despawn(mount.surface_entity());
+    world.despawn(mount.text_slot());
+
+    let ((), events) = log_capture_kit::capture(|| {
+        mount.set_visible(&mut world, false);
+        mount.set_layout(&mut world, (3, 2), ScaleRatio::ONE);
+        mount.set_display(&mut world, &GraphicsCommandList::empty());
+        mount.despawn(&mut world);
+    });
+
+    for want in [
+        "set_visible: Visual が無い（装着が未完了）",
+        "set_visible: HitTest が無い（装着が未完了・ポインタ透過が成立しない）",
+        "set_layout: surface entity に Arrangement が無い（装着が未完了）",
+        "set_display: surface entity が無い（装着が未完了）",
+        "despawn: 装着の子が既に居ない",
+    ] {
+        assert!(
+            events
+                .iter()
+                .any(|e| e.level == tracing::Level::WARN && e.message() == want),
+            "記録「{want}」が warn で残っていない: {events:?}"
+        );
+    }
 }

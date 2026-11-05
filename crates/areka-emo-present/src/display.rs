@@ -122,15 +122,25 @@ fn fault_point(
 }
 
 /// テスト専用: 次の一致点で 1 回だけ失敗させる（同一スレッド）。
+///
+/// 返す守りを落とすと（正常終了・panic による巻き戻しの双方で）武装を解く。`fault_point` は
+/// 一致した点でしか武装を解かないので、届かなかった注入が後続の記録で発火しないようにする。
 #[cfg(test)]
-pub(crate) fn arm_display_fault(at: DisplayFault) {
+pub(crate) fn arm_display_fault(at: DisplayFault) -> DisplayFaultGuard {
     ARMED_DISPLAY_FAULT.with(|armed| armed.set(Some(at)));
+    DisplayFaultGuard
 }
 
-/// テスト専用: 武装を解除する（未消費のまま残った旗を次のテストへ持ち越さない）。
+/// テスト専用: [`arm_display_fault`] の守り（落とすと武装を解く）。
 #[cfg(test)]
-pub(crate) fn clear_display_fault() {
-    ARMED_DISPLAY_FAULT.with(|armed| armed.set(None));
+#[must_use = "守りをすぐ落とすと武装もすぐ解ける"]
+pub(crate) struct DisplayFaultGuard;
+
+#[cfg(test)]
+impl Drop for DisplayFaultGuard {
+    fn drop(&mut self) {
+        ARMED_DISPLAY_FAULT.with(|armed| armed.set(None));
+    }
 }
 
 /// 原寸の合成結果 → 閉じたコマンドリスト（GPU 呼び出しは本関数の内側だけ）。

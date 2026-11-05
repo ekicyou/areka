@@ -39,7 +39,7 @@ use areka_emo_compose::{BlendKind, BlendMode, ComposeMethod, PatternFrame};
 
 // ── 捕捉窓（硬化機構は共有 crate に 1 箇所だけ） ────────────────────────────────────
 
-use log_capture_kit::{CapturedEvent, capture};
+use super::super::test_support::{CapturedEvent, capture, field, pattern_overlay_at};
 
 /// 捕捉列から perf サマリ行だけを抜く（固定文言 [`PERF_LINE_MESSAGE`] の完全一致）。
 fn perf_lines(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
@@ -48,13 +48,6 @@ fn perf_lines(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
         .filter(|e| e.field("message").is_some_and(|m| m == PERF_LINE_MESSAGE))
         .cloned()
         .collect()
-}
-
-/// フィールドを引く（無ければ全フィールドを添えて落とす＝欠落が判る形）。
-fn field(ev: &CapturedEvent, name: &str) -> String {
-    ev.field(name)
-        .unwrap_or_else(|| panic!("perf サマリ行にフィールド `{name}` が無い: {:?}", ev.fields))
-        .to_string()
 }
 
 /// perf サマリ行スキーマの全段フィールド名（design.md §Data Models・`judge-perf.py` の契約面）。
@@ -88,9 +81,6 @@ fn expected_field_names() -> Vec<&'static str> {
     names.sort_unstable();
     names
 }
-
-/// 撤去済みフィールド名（T-N6: 行に現れないことを固定する）。
-const REMOVED_FIELDS: [&str; 3] = ["t_resample_us", "alloc_resample_dst", "alloc_xmap"];
 
 fn ctx() -> EmitContext {
     EmitContext {
@@ -160,14 +150,6 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         "perf サマリ行は開発者向け詳細水準（debug）の常設ログであること（Requirement 1.2）"
     );
 
-    // 全段フィールドが常に出る（Requirement 2.5 の行単位欠落検出の前提）。
-    for name in STAGE_FIELDS {
-        assert!(
-            ev.field(name).is_some(),
-            "全段フィールドが常時出現していない: `{name}` が無い（{:?}）",
-            ev.fields
-        );
-    }
     assert_eq!(field(ev, "t_cache_us"), "1000", "キャッシュ照会段の区間");
     assert_eq!(
         field(ev, "t_compose_us"),
@@ -193,39 +175,23 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     assert_eq!(field(ev, "key_hash"), format!("{}", 0xdead_beef_u64));
 
     // 確保計数（Requirement 1.3 の供給先・値は呼び手から素通し）。
-    for name in ALLOC_FIELDS {
-        assert!(
-            ev.field(name).is_some(),
-            "確保計数フィールドが無い: `{name}`（{:?}）",
-            ev.fields
-        );
-    }
     assert_eq!(field(ev, "alloc_compose_dst"), "1");
     assert_eq!(field(ev, "alloc_mask"), "4");
 
     // T-N6: フィールド名の集合を「ちょうど」で固定する（部分一致でなく名前集合の等価・
-    // Requirement 3.4／6.5／6.8）。`message` は tracing の既定フィールドなので比較対象から除く。
-    let mut actual_names: Vec<&str> = ev
+    // Requirement 3.4／6.5／6.8）。全段・確保計数の常時出現と撤去済みフィールドの不在もこれが
+    // 見る。`message` は tracing の既定フィールドなので比較対象から除く。
+    let actual_names: Vec<&str> = ev
         .field_names_sorted()
         .into_iter()
         .filter(|name| *name != "message")
         .collect();
-    actual_names.sort_unstable();
     assert_eq!(
         actual_names,
         expected_field_names(),
         "perf サマリ行のフィールド集合が段 4・フィールド 11(+frame) と一致しない（{:?})",
         ev.fields
     );
-
-    // 撤去済みフィールド（リサンプル段・その確保計数）が行に現れないこと（T-N6）。
-    for removed in REMOVED_FIELDS {
-        assert!(
-            ev.field(removed).is_none(),
-            "撤去済みフィールド `{removed}` が perf サマリ行に残っている（{:?})",
-            ev.fields
-        );
-    }
 }
 
 /// Requirement 1.1 観測完了: **1 段も記録されなかった適用**でも 4 段すべてのフィールドが 0 で
@@ -322,19 +288,7 @@ fn marking_the_same_stage_twice_is_rejected() {
 #[test]
 fn compose_key_hash_is_stable_and_separates_every_key_element() {
     let binds = BindSet::from_ids([1, 2, 3]);
-    let pattern = {
-        let mut p = PatternState::default();
-        p.set(
-            5,
-            PatternFrame {
-                surface_id: 20,
-                method: ComposeMethod::Overlay,
-                x: 3,
-                y: -4,
-            },
-        );
-        p
-    };
+    let pattern = pattern_overlay_at(5, 20, 3, -4);
 
     let base = compose_key_hash(1000, &binds, &pattern);
 
@@ -362,37 +316,13 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
         compose_key_hash(1000, &BindSet::from_ids([1, 2]), &pattern),
         "binds 差が key_hash に現れていない"
     );
-    let other_pattern = {
-        let mut p = PatternState::default();
-        p.set(
-            5,
-            PatternFrame {
-                surface_id: 21,
-                method: ComposeMethod::Overlay,
-                x: 3,
-                y: -4,
-            },
-        );
-        p
-    };
+    let other_pattern = pattern_overlay_at(5, 21, 3, -4);
     assert_ne!(
         base,
         compose_key_hash(1000, &binds, &other_pattern),
         "pattern 差（コマの surface_id）が key_hash に現れていない"
     );
-    let shifted_pattern = {
-        let mut p = PatternState::default();
-        p.set(
-            5,
-            PatternFrame {
-                surface_id: 20,
-                method: ComposeMethod::Overlay,
-                x: 3,
-                y: -5,
-            },
-        );
-        p
-    };
+    let shifted_pattern = pattern_overlay_at(5, 20, 3, -5);
     assert_ne!(
         base,
         compose_key_hash(1000, &binds, &shifted_pattern),
@@ -545,3 +475,32 @@ fn compose_key_hash_mixes_part_film_and_blank_cells_and_keeps_top_only_keys() {
 const TOP_ONLY_KEY_BEFORE_4_1: u64 = 14_085_681_545_705_343_205;
 /// 同じく、空の pattern の鍵。
 const EMPTY_KEY_BEFORE_4_1: u64 = 15_420_910_580_374_833_391;
+
+/// 未知の描画メソッドは名前まで鍵に混ぜる——判別子だけだと名前の違う `Unknown` が同じ
+/// `key_hash` になり、perf の行の異なり鍵の数を少なく数える（`Blend` の内側と同じ穴）。
+#[test]
+fn compose_key_hash_separates_unknown_methods_by_name() {
+    let key = |name: &str| {
+        let mut pattern = PatternState::default();
+        pattern.set(
+            5,
+            PatternFrame {
+                surface_id: 20,
+                method: ComposeMethod::Unknown(name.into()),
+                x: 0,
+                y: 0,
+            },
+        );
+        compose_key_hash(1000, &BindSet::from_ids([1]), &pattern)
+    };
+    assert_ne!(
+        key("future"),
+        key("other"),
+        "名前の違う未知のメソッドが同じ鍵"
+    );
+    assert_eq!(
+        key("future"),
+        key("future"),
+        "同じ名前の未知のメソッドで鍵が揺れる"
+    );
+}

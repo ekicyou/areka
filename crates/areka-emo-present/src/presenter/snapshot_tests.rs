@@ -10,28 +10,21 @@
 //! `cache_tests.rs` と同じ扱い）、**本物の `ShowSurface` 指令**を当たりの経路で通す。
 //! `last_show`・`current_surface_id`・`visible` を書くのは本番の表示成立点そのものである。
 
-use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
+use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
-use areka_parsers::shell::{
-    AliasKey, Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
-    SurfaceAlias,
-};
+use areka_parsers::shell::{AliasKey, DefRef, Shell, SurfaceAlias};
 use bevy_ecs::world::World;
 use tracing::Level;
 use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::super::test_support::{
-    capture, elem, native_golden, native_golden_with, pattern_overlay_at, spawn_window_with_dpi,
+    bake_world, bind_overlay_surface, capture, elem, hide_ok, invalidate_ok, native_golden,
+    native_golden_with, pattern_overlay_at, show_with_ok, spawn_window_with_dpi, surface,
 };
-use super::super::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
+use super::super::{EmoPresenter, TargetId};
 
 const SHOWN: TargetId = TargetId(0);
 const NEVER_SHOWN: TargetId = TargetId(1);
@@ -51,35 +44,9 @@ const ABSENT: u32 = 9999;
 /// surface 1000（4×3 全不透明・着せ替え 2000 が surface 5000 を (0,0) に重ねる）と surface 5000
 /// （1×1 白）に、別名の表 `7000 → [1000]` を足したシェルの `(EmoWorld, AtlasTable)`。
 fn build_assets() -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
     let surfaces = vec![
-        Surface {
-            id: BASE,
-            targets: vec![AppendTarget::Single(BASE)],
-            elements: vec![elem("p.png", 0, 0)],
-            collisions: Vec::new(),
-            animations: vec![Animation {
-                id: BIND,
-                interval: Interval::Bind,
-                interval_written: true,
-                patterns: vec![Pattern {
-                    index: 0,
-                    method: DrawMethod::new("overlay".to_string()),
-                    surface_id: i64::from(PART),
-                    target: i64::from(PART).to_string(),
-                    wait: 0,
-                    x: 0,
-                    y: 0,
-                }],
-            }],
-        },
-        Surface {
-            id: PART,
-            targets: vec![AppendTarget::Single(PART)],
-            elements: vec![elem("q.png", 0, 0)],
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        },
+        bind_overlay_surface(0, 0),
+        surface(PART, vec![elem("q.png", 0, 0)]),
     ];
 
     let (w, h) = (4u32, 3u32);
@@ -89,20 +56,6 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
             img.extend_from_slice(&[(x * 40) as u8, (y * 60) as u8, 0x30, 0xFF]);
         }
     }
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, w * 4, img, true);
-    dec.insert(base.join("q.png"), 1, 1, 4, vec![0xFF; 4], true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake は失敗しない");
-
     let shell = Shell {
         surfaces,
         appends: Vec::new(),
@@ -114,9 +67,10 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
         collision_sort: None,
         definitions: vec![DefRef::Surface(0), DefRef::Surface(1), DefRef::Alias(0)],
     };
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell,
+        vec![("p.png", w, h, img), ("q.png", 1, 1, vec![0xFF; 4])],
+    )
 }
 
 /// `SHOWN` と `NEVER_SHOWN` の 2 target を登録した presenter と World。
@@ -126,9 +80,7 @@ fn setup() -> (EmoPresenter, World) {
     for target in [SHOWN, NEVER_SHOWN] {
         let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas) = build_assets();
-        presenter
-            .attach_target(&mut world, target, window, emo_world, atlas, 96)
-            .expect("attach_target 失敗");
+        presenter.attach_target(target, window, emo_world, atlas, 96);
     }
     (presenter, world)
 }
@@ -161,36 +113,7 @@ fn show(
         GraphicsCommandList::empty(),
     );
 
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id,
-            binds,
-            pattern,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "ShowSurface（surface {surface_id}）が Ok でない"
-    );
-}
-
-fn hide(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
+    show_with_ok(presenter, world, target, surface_id, binds, pattern);
 }
 
 fn bound() -> BindSet {
@@ -264,7 +187,7 @@ fn last_shown_returns_id_and_picture_and_keeps_them_after_hide() {
     let before = bytes_of(picture.expect("表示の後はメモに絵が在る"));
     assert_eq!(before, (dressed, 4, 3), "最後に表示した入力の絵が返る");
 
-    hide(&mut presenter, &mut world, SHOWN);
+    hide_ok(&mut presenter, &mut world, SHOWN);
     assert_eq!(
         presenter.current_surface_id(SHOWN),
         None,
@@ -279,6 +202,35 @@ fn last_shown_returns_id_and_picture_and_keeps_them_after_hide() {
     let (id, picture) = presenter.last_shown(SHOWN).expect("隠した後も Some");
     assert_eq!(id, BASE);
     assert_eq!(bytes_of(picture.expect("隠した後も絵が在る")), before);
+    assert_eq!(
+        presenter.last_binds(SHOWN),
+        Some(&bound()),
+        "隠した後も最後の着せ替えが返る"
+    );
+    assert_eq!(presenter.last_binds(NEVER_SHOWN), None, "未表示は無し");
+    assert_eq!(presenter.last_binds(UNREGISTERED), None, "未登録は無し");
+}
+
+/// ⑵' 合成メモを捨てた後も、最後に表示した ID は返り、絵だけが無い（`Some((id, None))`）。
+#[test]
+fn last_shown_after_invalidate_cache_keeps_id_without_picture() {
+    let (mut presenter, mut world) = setup();
+    show(
+        &mut presenter,
+        &mut world,
+        SHOWN,
+        BASE,
+        bound(),
+        PatternState::default(),
+    );
+    invalidate_ok(&mut presenter, &mut world, SHOWN);
+
+    let shown = presenter.last_shown(SHOWN);
+    assert!(
+        matches!(shown, Some((BASE, None))),
+        "メモを捨てた後は ID だけが返る: {:?}",
+        shown.map(|(id, c)| (id, c.is_some()))
+    );
 }
 
 /// ⑶ 「surface の有無」は生の ID にだけ真で、別名の表にだけ在る番号と無い番号は偽、未登録は無し。
@@ -343,54 +295,6 @@ fn compose_alone_uses_last_shown_binds_and_no_animation() {
     );
 }
 
-/// ⑸ 単体の合成の前後で、今の surface・可視の状態・最後に表示した surface の答えが変わらず、
-/// 合成メモにも入らない。
-#[test]
-fn compose_alone_leaves_display_state_unchanged() {
-    let (mut presenter, mut world) = setup();
-    show(
-        &mut presenter,
-        &mut world,
-        SHOWN,
-        BASE,
-        bound(),
-        PatternState::default(),
-    );
-
-    let snapshot = |p: &EmoPresenter| {
-        let (id, picture) = p.last_shown(SHOWN).expect("表示の後");
-        (
-            p.current_surface_id(SHOWN),
-            p.target_visible(SHOWN),
-            id,
-            picture.map(bytes_of),
-        )
-    };
-    let before = snapshot(&presenter);
-    assert_eq!(before.0, Some(BASE), "前提: 表示している");
-    assert_eq!(before.1, Some(true), "前提: 可視");
-
-    for id in [PART, BASE, PART] {
-        presenter
-            .compose_alone(SHOWN, id)
-            .expect("登録済み")
-            .expect("合成は Ok");
-    }
-
-    assert_eq!(snapshot(&presenter), before);
-    let cache = &presenter
-        .targets
-        .get(&SHOWN)
-        .expect("登録済み target")
-        .cache;
-    assert!(
-        cache
-            .get(PART, &bound(), &PatternState::default())
-            .is_none(),
-        "単体の合成は合成メモに入れない"
-    );
-}
-
 /// ⑹ 3 本とも記録を出さない。`has_surface`／`last_shown` は全水準で 0 件。`compose_alone` は
 /// 合成の層が正常な経路でも `trace!`／`debug!` を出しうるため ERROR／WARN の 0 件で判定する。
 #[test]
@@ -440,7 +344,7 @@ fn reads_emit_no_records() {
 }
 
 /// ⑺ 別名の表と面の ID の集合の写し（spec `areka-P0-mcp-author-tools` タスク 2.2）は、組んだ資産
-/// どおりに返り、未登録は無し。写しを取っても表示の状態が変わらず、記録も出さない。
+/// どおりに返り、未登録は無し。記録も出さない（表示の状態を変えないことは `&self` の型が保証する）。
 #[test]
 fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     let (mut presenter, mut world) = setup();
@@ -452,18 +356,6 @@ fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
         bound(),
         PatternState::default(),
     );
-
-    let state = |p: &EmoPresenter| {
-        let (id, picture) = p.last_shown(SHOWN).expect("表示の後");
-        (
-            p.current_surface_id(SHOWN),
-            p.target_visible(SHOWN),
-            id,
-            picture.map(bytes_of),
-        )
-    };
-    let before = state(&presenter);
-    assert_eq!(before.0, Some(BASE), "前提: 表示している");
 
     let (copies, records) = capture(|| {
         (
@@ -491,5 +383,4 @@ fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     assert_eq!(no_aliases, None);
     assert_eq!(no_ids, None);
     assert!(records.is_empty(), "写しが記録を出した: {records:?}");
-    assert_eq!(state(&presenter), before, "写しで表示の状態が変わった");
 }

@@ -181,7 +181,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         return;
     }
 
-    // GhostWindows は Clone（小さな Entity 写像）。attach_target/apply が `&mut World` を要するため、
+    // GhostWindows は Clone（小さな Entity 写像）。apply が `&mut World` を要するため、
     // 窓写像を先に clone して world の不変借用をループへ跨がせない（借用衝突回避）。
     let ghost_windows = world
         .get_resource::<GhostWindows>()
@@ -298,8 +298,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             )
         });
 
-        if let Err(e) = wiring.presenter.attach_target(
-            world,
+        wiring.presenter.attach_target(
             item.shell_target,
             shell_window,
             shell_world,
@@ -307,10 +306,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             // author_dpi は attach 対象 target と同じ式で引く（`item.shell_target` を両方に書く）＝
             // shell/balloon の取り違えが 1 行の中で目視可能になる（両者 u16 で型は守ってくれない）。
             author_dpis.for_target(item, item.shell_target),
-        ) {
-            error!(scope, error = %e, "emo2 attach: シェル target の attach に失敗（log-first・継続）");
-            continue;
-        }
+        );
         // シェルは初回 ShowSurface を attach で発行しない（defect #5・2026-07-13 実機#5）。SSP 互換の
         // 既定は「シェル表示なし（surface -1）」であり、attach 時に surface0/surface10 を焼き付けると
         // ゴースト起動の一瞬に規定面がちらつく（実機#5 の欠陥）。初回シェル表示は、最初のさくら
@@ -371,24 +367,20 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             );
             continue;
         };
-        if let Err(e) = wiring.presenter.attach_target(
-            world,
+        wiring.presenter.attach_target(
             item.balloon_target,
             balloon_window,
             balloon_world,
             balloon_atlas,
             // shell 側と同型: attach 対象 target と同じ式（`item.balloon_target`）で引き当てる。
             author_dpis.for_target(item, item.balloon_target),
-        ) {
-            error!(scope, error = %e, "emo2 attach: バルーン target の attach に失敗（log-first・継続）");
-            continue;
-        }
+        );
         // バルーンの可視性は areka-P0-balloon-visibility の可視性制御ただ一つが所有する
         // （Requirement 6.8）。装着直後・初回指令の**前**に外部所有へ移す——後に置くと直下の
         // ShowSurface が先に可視化してしまい、起動時の不可視（Requirement 1.1）が成立しない。
         // 移した後の ShowSurface は表示状態の確立（合成・表示記録・文字スロット・面 id・寸法）だけを
         // 行って可視化しないため、面 0 は「不可視のままの確立」として維持される。
-        // 未装着 target のみが失敗し得る（直上の attach_target 成功後ゆえ通常は起こらない）が、
+        // 未装着 target のみが失敗し得る（直上で attach_target 済みゆえ通常は起こらない）が、
         // 沈黙させると以降のバルーンが理由の記録なく不可視で放置されるため error!＋skip する
         // （Requirement 1.5・log-first。他 scope は巻き込まない）。
         if let Err(e) = wiring.presenter.set_visibility_ownership(

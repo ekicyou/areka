@@ -1,13 +1,9 @@
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-use areka_emo_compose::BindSet;
-
 use super::test_support::{
     attach_hit_target, build_target_assets, build_two_face_assets, force_applied,
-    force_current_surface, make_world_with_gpu, spawn_window_with_dpi,
+    force_current_surface, hide_ok, invalidate_ok, make_world_with_gpu, show_ok,
+    spawn_window_with_dpi,
 };
 
 // ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・R3.1-3.4）───────────
@@ -25,9 +21,7 @@ fn current_surface_id_is_none_before_first_show() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x10);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
@@ -41,42 +35,6 @@ fn current_surface_id_is_none_before_first_show() {
     );
 }
 
-/// テスト 11・R3.1 観測完了（表示後→直近 id）: 有効 `ShowSurface(1000)` 適用後、`current_surface_id`
-/// が `Some(1000)`（直近に表示が成立したサーフェス id）。
-#[test]
-fn current_surface_id_is_last_shown_after_display() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x11);
-
-    let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
-
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
-
-    assert_eq!(
-        presenter.current_surface_id(TargetId(0)),
-        Some(1000),
-        "表示成立後は直近に表示した id（3.1）"
-    );
-}
-
 /// テスト 12・R3.3 観測完了（切替→新 id）: 面 1000 表示中に同寸の別 id 3000 を `ShowSurface` すると、
 /// `current_surface_id` が `Some(3000)` へ追随する（以後の問い合わせは新 id）。
 #[test]
@@ -86,36 +44,16 @@ fn current_surface_id_follows_surface_switch() {
     let (emo_world, atlas, _g1, _g3) = build_two_face_assets(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let show = |presenter: &mut EmoPresenter, world: &mut World, id: u32| {
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
-            world,
-            PresentCommand::ShowSurface {
-                target: TargetId(0),
-                surface_id: id,
-                binds: BindSet::default(),
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
-        );
-        assert!(
-            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-            "ShowSurface が Ok でない"
-        );
-    };
-
-    show(&mut presenter, &mut world, 1000);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(1000),
         "初回表示成立後は Some(1000)"
     );
 
-    show(&mut presenter, &mut world, 3000);
+    show_ok(&mut presenter, &mut world, TargetId(0), 3000);
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(3000),
@@ -132,43 +70,16 @@ fn current_surface_id_is_none_after_hide() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x13);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(1000),
         "Hide 前は Some(1000)（前提）"
     );
 
-    let (txh, rxh) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::Hide {
-            target: TargetId(0),
-            reply: Some(txh),
-        },
-    );
-    assert!(
-        matches!(rxh.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
+    hide_ok(&mut presenter, &mut world, TargetId(0));
 
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
@@ -182,53 +93,49 @@ fn current_surface_id_is_none_after_hide() {
     );
 }
 
-/// テスト 14 観測完了（InvalidateCache→不変）: 有効表示後に `InvalidateCache` を適用しても
-/// `current_surface_id` は不変（キャッシュ無効化は表示を変えない）。単一真実源が `ComposeKey` 由来では
-/// なくフィールドであることの回帰檻（`invalidate_all` でキーが消えても現サーフェス id は残る）。
+/// 一度も表示していない target の読み戻しは、装着済みなので「未装着」でなく「一度も表示していない」を
+/// 返す（`audit-emo-present` 指摘 2）。
 #[test]
-fn current_surface_id_unchanged_by_invalidate_cache() {
+fn read_back_before_first_show_is_not_shown() {
+    let mut world = World::new();
+    let mut presenter = EmoPresenter::new();
+    attach_hit_target(&mut presenter, &mut world, TargetId(0));
+
+    let result = presenter.read_back(TargetId(0));
+    assert!(
+        matches!(result, Err(PresentError::NotShown(TargetId(0)))),
+        "未表示の読み戻しが NotShown でない: {result:?}"
+    );
+}
+
+/// 表示した後に合成メモを捨てると、表示中の絵がメモから追い出されたことを面の番号つきで返す
+/// （`audit-emo-present` 指摘 2）。
+#[test]
+fn read_back_after_invalidate_cache_is_entry_evicted() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
-
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
-
-    let (txi, rxi) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::InvalidateCache {
-            target: TargetId(0),
-            reply: Some(txi),
-        },
-    );
-    assert!(
-        matches!(rxi.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "InvalidateCache が Ok でない"
-    );
-
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    invalidate_ok(&mut presenter, &mut world, TargetId(0));
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(1000),
         "InvalidateCache は表示を変えないため現サーフェス id は不変（ComposeKey 由来案の棄却根拠）"
+    );
+
+    let result = presenter.read_back(TargetId(0));
+    assert!(
+        matches!(
+            result,
+            Err(PresentError::EntryEvicted {
+                target: TargetId(0),
+                surface_id: 1000
+            })
+        ),
+        "メモを捨てた後の読み戻しが EntryEvicted でない: {result:?}"
     );
 }
 
@@ -370,17 +277,18 @@ fn client_entry_matches_native_entry_at_identity_scale() {
 ///
 /// # なぜ既存 3 檻と別に要るのか（継ぎ目の封鎖）
 ///
-/// 本ファイルの既存 3 檻はいずれも `hit_region_scaled(master, x, y, k, …)` の `k` を固定しない——
+/// 既存の 3 檻はいずれも `hit_region_scaled_in(regions, x, y, k, …)` の `k` を固定しない——
+/// `presenter_refresh_and_log_tests.rs` の
 /// `applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent` は warn 述語が
 /// 主語で k は**不在**、`unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point`
-/// は k=2 を与えるが `master` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
+/// は k=2 を与えるが `regions` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
 /// を通り、`client_entry_matches_native_entry_at_identity_scale` は k=1.0 ゆえ縮約が恒等へ退化する。
 /// ゆえに「面あり × k≠1.0」の合流点は一度も実行されておらず、実適用 k が合成純関数へ本当に
 /// 渡っているかは決定論テストで固定されていなかった。本檻の主語はその 1 点のみである。
 ///
 /// # 殺す誤実装（反証可能性）
 ///
-/// `hit_region_scaled` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
+/// `hit_region_scaled_in` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
 /// client 点をそのまま照合する）と、下の 3 点は `surface_point`・`region` の**双方**で割れる。
 /// とくに (210,310) は恒等なら `Some("Arm")`・k=2 なら `None` と**逆向きに**割れるため、
 /// 「両方そろって `None`」の空虚な一致では緑にならない。

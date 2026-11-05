@@ -58,96 +58,6 @@ use areka_emo_compose::{BindSet, PatternState};
 
 use crate::cache::ComposeCache;
 
-/// 発生点の全数（design.md §FrameBudget の席一覧と 1:1・T-N7）。
-///
-/// 2 つから増減したら perf サマリ行のフィールド集合が変わり、判定スクリプトの契約が壊れる。
-#[test]
-fn every_allocation_site_is_enumerated() {
-    assert_eq!(
-        AllocSite::ALL.len(),
-        2,
-        "確保発生点は 2 つ（合成先・当たり判定マスク）"
-    );
-}
-
-/// Requirement 1.3 観測完了: 新品の器は増分・累積とも全て 0。
-///
-/// 「初期値が 0 でない」実装は、定常状態ゼロの主張（Requirement 3.1）を最初から成立不能にする。
-#[test]
-fn a_fresh_budget_counts_nothing() {
-    let budget = FrameBudget::new();
-
-    assert_eq!(
-        *budget.cumulative(),
-        BudgetCounters::default(),
-        "新品の累積は全て 0"
-    );
-    for site in AllocSite::ALL {
-        assert_eq!(
-            budget.cumulative().count(site),
-            0,
-            "{site:?} の累積が 0 でない"
-        );
-    }
-}
-
-/// Requirement 1.3 観測完了: **確保が起きたときだけ**カウンタが増える。
-///
-/// 申告のない適用（＝是正後の定常状態が目指す形）では、何度増分を取り出しても全フィールドが
-/// 0 のままである。これは「呼ばれるたびに数える」誤実装（例: 取得シームの入口で無条件に
-/// 増やす）を殺す——それでは再利用の成立・不成立が区別できず、計数が判定材料にならない。
-#[test]
-fn nothing_is_counted_without_an_allocation() {
-    let mut budget = FrameBudget::new();
-
-    for _ in 0..8 {
-        assert_eq!(
-            budget.take_delta(),
-            BudgetDelta::default(),
-            "確保の申告が無い適用の増分は 0（定常状態の形）"
-        );
-    }
-    assert_eq!(
-        *budget.cumulative(),
-        BudgetCounters::default(),
-        "確保の申告が無ければ累積も動かない"
-    );
-}
-
-/// Requirement 1.3 観測完了: 発生点とフィールドが 1:1 で対応する（取り違えを殺す）。
-///
-/// 各発生点を 1 回だけ申告し、⑴対応する**名前つきフィールド**が 1 になる ⑵もう一方のフィールドが
-/// 0 のままである、を全発生点について確認する。フィールドの割り当てを入れ替えると
-/// （例: `Mask` が `alloc_compose_dst` を増やす）、この檻は必ず赤になる。
-#[test]
-fn each_site_increments_only_its_own_field() {
-    for site in AllocSite::ALL {
-        let mut budget = FrameBudget::new();
-        budget.note_alloc(site);
-        let delta = budget.take_delta();
-
-        // 名前つきフィールドで直接受ける（`count` の実装が壊れていても素通ししない）。
-        let named = match site {
-            AllocSite::ComposeDst => delta.alloc_compose_dst,
-            AllocSite::Mask => delta.alloc_mask,
-        };
-        assert_eq!(
-            named, 1,
-            "{site:?} の申告が対応フィールドへ載っていない: {delta:?}"
-        );
-
-        for other in AllocSite::ALL {
-            if other != site {
-                assert_eq!(
-                    delta.count(other),
-                    0,
-                    "{site:?} の申告が無関係な発生点 {other:?} を動かした: {delta:?}"
-                );
-            }
-        }
-    }
-}
-
 /// Requirement 1.3 観測完了: 増分は取り出しでリセットされ、累積はリセットされない。
 ///
 /// 適用 3 回分を演じる:
@@ -258,14 +168,6 @@ fn the_sum_of_per_apply_deltas_equals_the_cumulative() {
 // 席の再利用（Requirement 3.1/3.2・design.md D2/D3・Flow 2）
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 席の外形を `w×h` へ合わせる。
-///
-/// 本物の合成（`compose_into` → `blit`）が合成先席に対して通すのと**同じメソッド**を呼ぶ。
-/// ゆえに確保の起こり方と容量の引き継ぎ方——本檻が観測する唯一のもの——は本番と一致する。
-fn fill_extent(dst: &mut ComposedSurface, w: u32, h: u32) {
-    dst.resize_and_clear(w, h);
-}
-
 /// 1 適用で観測した値（計数の増分・回る実体の番地）。
 ///
 /// ポインタは**同一性の主張にのみ**使う（読み出しはしない）。再利用が成立していれば同じ
@@ -337,14 +239,14 @@ impl Flow2 {
         );
         // (1) 合成: 常設席へ native 外形の結果を書く（`compose_into` 相当）。
         self.budget.native_scratch(|dst| {
-            fill_extent(dst, native_w, native_h);
+            dst.resize_and_clear(native_w, native_h);
         });
 
         // (2) 容量回収は**合成成功後にのみ**（Flow 2 の規律）。
         let recycled = self.cache.take_recycled();
 
         // (3) 表示バッファ席と、輪番へ返すマスク。
-        let (mut display, retired) = self.budget.display_buffer(recycled);
+        let (mut display, retired) = FrameBudget::display_buffer(recycled);
 
         // (4) 交代（複写も確保も起きない）。**拡大率に依らず常にこの経路**（要件 1.3／7.3）。
         self.budget.swap_native_scratch(&mut display);
@@ -387,10 +289,8 @@ impl Flow2 {
 ///
 /// ウォームアップ（交代で回る 4 本・マスク 4 枚の立ち上げ）が済んだ後は、同一寸法の反復で
 /// 1 件の確保も起きない。累積も据え置きであることを同時に見る（増分だけ 0 で累積が伸びる
-/// 片肺実装を通さない）。
-///
-/// 立ち上がりの内訳（交代する 4 本＋マスク 4 本）も併せて主張する——交代経路では全ての伸長が
-/// 合成先席の側で起きるため、バッファの代金は `alloc_compose_dst` に集まる。
+/// 片肺実装を通さない）。立ち上がりの内訳は `the_warm_up_allocates_once_per_rotating_buffer_then_settles`
+/// が持つ。
 #[test]
 fn a_steady_run_allocates_nothing_at_all() {
     let mut rig = Flow2::new();
@@ -412,14 +312,6 @@ fn a_steady_run_allocates_nothing_at_all() {
         *rig.budget.cumulative(),
         warm,
         "定常状態で累積が伸びた（増分だけ 0 に見せる実装を通さない）"
-    );
-    assert_eq!(
-        warm.alloc_compose_dst, 4,
-        "立ち上がりは交代する 4 本（キャッシュの 3 本＋合成先席 1 本）ぶんのはず: {warm:?}"
-    );
-    assert_eq!(
-        warm.alloc_mask, 4,
-        "マスクはキャッシュの 3 本＋輪番の空き 1 枚ぶんのはず: {warm:?}"
     );
 }
 
@@ -446,16 +338,6 @@ fn the_warm_up_allocates_once_per_rotating_buffer_then_settles() {
         shape,
         vec![[1, 1], [1, 1], [1, 1], [1, 1], [0, 0], [0, 0], [0, 0]],
         "立ち上がりが「実体ごとに一度」の形から外れている（Requirement 3.2）"
-    );
-    // 実体の本数として読み直す（形の丸暗記ではなく由来を主張する）。
-    let total = *rig.budget.cumulative();
-    assert_eq!(
-        total.alloc_compose_dst, 4,
-        "交代で回る本数はキャッシュの 3 本＋合成先席 1 本のはず"
-    );
-    assert_eq!(
-        total.alloc_mask, 4,
-        "マスクはキャッシュの 3 本＋輪番の空き 1 枚ぶん"
     );
 }
 
@@ -516,7 +398,7 @@ fn the_steady_state_keeps_handing_back_the_same_allocations() {
 ///
 /// `AlphaMask::regenerate_from_pbgra32` は `clear`＋`resize(詰め長, 0)` であり、詰め長が
 /// そのバッファの容量を超えれば `resize` は**確実に確保する**（40×20 → 60×30 で詰め長
-/// 100 → 225 バイト）。回る実体は 1 適用ずつずれて再生成されるため、全部が伸びるまでに本数ぶんの
+/// 100 → 240 バイト・行はバイト境界まで詰める）。回る実体は 1 適用ずつずれて再生成されるため、全部が伸びるまでに本数ぶんの
 /// 適用がかかり、各適用でちょうど 1 件ずつ計数される。
 ///
 /// 以前この檻は拡大時の `alloc_mask` を 0 と書いていた。それは「in-place なら確保なし」という
@@ -714,7 +596,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
 
     // 回収エントリ相当（外形は「新品の 0×0」と紛れない値にする）。
     let mut composed = ComposedSurface::default();
-    fill_extent(&mut composed, 7, 3);
+    composed.resize_and_clear(7, 3);
     let bytes = composed.bytes().len();
     let mask = Arc::new(AlphaMask::from_pbgra32(
         composed.bytes(),
@@ -724,7 +606,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     ));
     let mask_ptr = Arc::as_ptr(&mask);
 
-    let (display, retired) = budget.display_buffer(Some(CacheEntry {
+    let (display, retired) = FrameBudget::display_buffer(Some(CacheEntry {
         composed,
         mask,
         display: wintf::ecs::GraphicsCommandList::empty(),
@@ -753,7 +635,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     );
 
     // 回収不成立は新品（0×0）から始まり、マスクも渡されない。
-    let (fresh, none) = budget.display_buffer(None);
+    let (fresh, none) = FrameBudget::display_buffer(None);
     assert_eq!(fresh.width(), 0, "回収不成立の表示バッファは空から始まる");
     assert_eq!(
         fresh.bytes().len(),
@@ -772,7 +654,7 @@ fn the_compose_destination_seat_is_allocated_once_and_then_lent_again() {
     let mut budget = FrameBudget::new();
 
     let first = budget.native_scratch(|dst| {
-        fill_extent(dst, 40, 20);
+        dst.resize_and_clear(40, 20);
         dst.bytes().as_ptr()
     });
     assert_eq!(
@@ -783,7 +665,7 @@ fn the_compose_destination_seat_is_allocated_once_and_then_lent_again() {
 
     for i in 0..6 {
         let again = budget.native_scratch(|dst| {
-            fill_extent(dst, 40, 20);
+            dst.resize_and_clear(40, 20);
             dst.bytes().as_ptr()
         });
         assert_eq!(

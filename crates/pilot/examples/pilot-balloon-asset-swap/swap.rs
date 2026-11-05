@@ -399,7 +399,7 @@ impl Driver {
         let removed = despawn_mounts(world, self.window);
         self.current_id = BASE_TARGET;
         let r = self
-            .attach(world, BASE_TARGET, face.balloon())
+            .attach(BASE_TARGET, face.balloon())
             .and_then(|()| self.show(world, BASE_TARGET, face.surface()));
         self.fit(world, BASE_TARGET);
         match r {
@@ -457,12 +457,12 @@ impl Driver {
         let r = match method {
             // 基準（5.1）: 同じ id へ再登録するだけ（古い子は残る）。
             Method::Reattach => self
-                .attach(world, self.current_id, to)
+                .attach(self.current_id, to)
                 .and_then(|()| self.show(world, self.current_id, 0)),
             // 本命（5.2）: 窓のバルーンの子を名前で探して消し、同じ呼び出しの中で再登録・表示（5.7）。
             Method::RemoveThenAttach => {
                 let removed = despawn_mounts(world, self.window);
-                self.attach(world, self.current_id, to)
+                self.attach(self.current_id, to)
                     .and_then(|()| self.show(world, self.current_id, 0))
                     .and_then(|()| match removed {
                         2 => Ok(()),
@@ -474,7 +474,7 @@ impl Driver {
                 let (old, new) = (self.current_id, TargetId(self.next_id));
                 self.next_id += 1;
                 self.current_id = new;
-                self.attach(world, new, to)
+                self.attach(new, to)
                     .and_then(|()| self.show(world, new, 0))
                     .map(|()| self.hide(world, old))
             }
@@ -533,7 +533,7 @@ impl Driver {
             // （`Visual` は触らない）。
             Calib::Mixed => {
                 self.calib_a = mounts(world, self.window);
-                self.attach(world, CALIB_TARGET, Balloon::B)
+                self.attach(CALIB_TARGET, Balloon::B)
                     .and_then(|()| self.show(world, CALIB_TARGET, 0))
                     .map(|()| self.hide(world, CALIB_TARGET))
                     .and_then(|()| {
@@ -561,7 +561,7 @@ impl Driver {
                 self.hide(world, BASE_TARGET);
                 self.current_id = CALIB_TARGET;
                 let r = self
-                    .attach(world, CALIB_TARGET, Balloon::B)
+                    .attach(CALIB_TARGET, Balloon::B)
                     .and_then(|()| self.show(world, CALIB_TARGET, 0));
                 self.fit(world, CALIB_TARGET);
                 self.after_change(&name, Face::B0);
@@ -660,7 +660,7 @@ impl Driver {
         }
     }
 
-    fn attach(&mut self, world: &mut World, id: TargetId, b: Balloon) -> Result<(), String> {
+    fn attach(&mut self, id: TargetId, b: Balloon) -> Result<(), String> {
         let pool = match b {
             Balloon::A => &mut self.pool_a,
             Balloon::B => &mut self.pool_b,
@@ -669,8 +669,8 @@ impl Driver {
             .pop()
             .ok_or_else(|| format!("{b:?} の作り置きの資産が尽きた"))?;
         self.presenter
-            .attach_target(world, id, self.window, w, a, DEFAULT_AUTHOR_DPI)
-            .map_err(|e| format!("attach_target({id:?}, {b:?}) が失敗: {e}"))
+            .attach_target(id, self.window, w, a, DEFAULT_AUTHOR_DPI);
+        Ok(())
     }
 
     /// `ShowSurface`。`apply` は戻り値を持たないので、今の面が要求どおりになったかで成否を見る。

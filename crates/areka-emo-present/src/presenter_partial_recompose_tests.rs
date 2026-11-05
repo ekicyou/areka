@@ -7,28 +7,22 @@
 
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use wintf::ecs::GraphicsCommandList;
 
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, capture, elem, make_world_with_gpu, mount_entities, native_golden_with,
-    pattern_overlay_at, shell_of, spawn_window_with_dpi, surface,
+    CapturedEvent, INFO_LINE_MESSAGE, RANGE_LINE_MESSAGE, bake_world, capture, elem, gradient,
+    invalidate_ok, make_world_with_gpu, mount_entities, native_golden_with, pattern_overlay_at,
+    shell_of, show_ok, show_with_armed_fault, show_with_ok, spawn_window_with_dpi, surface,
 };
 use super::timing::PERF_LINE_MESSAGE;
-
-const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
-const SHOW_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
 const TARGET: TargetId = TargetId(0);
 /// 下の面（動かない・16×12）。
 const BASE_ID: u32 = 1000;
+/// 同じ寸の 2 つ目の下の面（同じコマのまま面を替える回に使う・別のバイト）。
+const OTHER_BASE_ID: u32 = 1001;
 /// 動く絵のコマの面（4×3）。
 const CELL_ID: u32 = 3000;
 const BASE_SIZE: (u32, u32) = (16, 12);
@@ -36,56 +30,22 @@ const CELL_SIZE: (u32, u32) = (4, 3);
 /// 動く絵の行（コマは `(x, CELL_Y)` に重なる）。
 const CELL_Y: i64 = 2;
 
-/// 下の面とコマの面の `(EmoWorld, AtlasTable)`（どちらも全不透明・別のバイト）。
+/// 下の面 2 つとコマの面の `(EmoWorld, AtlasTable)`（どれも全不透明・別のバイト）。
 fn build_assets() -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(BASE_ID, vec![elem("p.png", 0, 0)]),
-        surface(CELL_ID, vec![elem("q.png", 0, 0)]),
-    ];
-    let gradient = |(w, h): (u32, u32), salt: u8| -> Vec<u8> {
-        let mut img = Vec::with_capacity((w * h * 4) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let b = (x as u8).wrapping_mul(13).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(17).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.extend_from_slice(&[b, g, r, 0xFF]);
-            }
-        }
-        img
-    };
-    let mut dec = MemoryDecoder::new();
     let (bw, bh) = BASE_SIZE;
     let (cw, ch) = CELL_SIZE;
-    dec.insert(
-        base.join("p.png"),
-        bw,
-        bh,
-        bw * 4,
-        gradient(BASE_SIZE, 0x11),
-        true,
-    );
-    dec.insert(
-        base.join("q.png"),
-        cw,
-        ch,
-        cw * 4,
-        gradient(CELL_SIZE, 0x80),
-        true,
-    );
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake: {:?}", baked.errors);
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            surface(BASE_ID, vec![elem("p.png", 0, 0)]),
+            surface(CELL_ID, vec![elem("q.png", 0, 0)]),
+            surface(OTHER_BASE_ID, vec![elem("r.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", bw, bh, gradient(bw, bh, 0x11)),
+            ("q.png", cw, ch, gradient(cw, ch, 0x80)),
+            ("r.png", bw, bh, gradient(bw, bh, 0x45)),
+        ],
+    )
 }
 
 /// コマ `x`（コマの面を `(x, CELL_Y)` に重ねる現在コマ）。
@@ -98,50 +58,21 @@ fn setup() -> (World, EmoPresenter, EmoWorld, AtlasTable) {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas) = build_assets();
-    presenter
-        .attach_target(&mut world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     // 正解の絵を作るための同じ入力（attach は値を取るので作り直す）。
     let (emo_world, atlas) = build_assets();
     (world, presenter, emo_world, atlas)
 }
 
-fn send(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id: BASE_ID,
-            binds: BindSet::default(),
-            pattern,
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("reply を受信できない")
-}
-
 fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) {
-    assert!(
-        matches!(send(presenter, world, pattern), Ok(())),
-        "ShowSurface が Ok でない"
-    );
-}
-
-fn invalidate(presenter: &mut EmoPresenter, world: &mut World) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with_ok(
+        presenter,
         world,
-        PresentCommand::InvalidateCache {
-            target: TARGET,
-            reply: Some(tx),
-        },
+        TARGET,
+        BASE_ID,
+        BindSet::default(),
+        pattern,
     );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
 }
 
 /// 表示中の絵が、同じ入力を新しい合成器でいちから合成した絵と同じこと（要件 3.3・4.1）。
@@ -173,7 +104,7 @@ fn num(ev: &CapturedEvent, name: &str) -> u32 {
 fn ranges(events: &[CapturedEvent]) -> Vec<Range> {
     let misses = events
         .iter()
-        .filter(|e| e.message() == SHOW_LINE_MESSAGE && e.field("cache_hit") == Some("false"))
+        .filter(|e| e.message() == INFO_LINE_MESSAGE && e.field("cache_hit") == Some("false"))
         .count();
     let out: Vec<Range> = events
         .iter()
@@ -184,7 +115,7 @@ fn ranges(events: &[CapturedEvent]) -> Vec<Range> {
             let next = events.get(i + 1).expect("範囲の行の後に行が無い");
             assert_eq!(
                 next.message(),
-                SHOW_LINE_MESSAGE,
+                INFO_LINE_MESSAGE,
                 "範囲の行の直後が表示の行でない"
             );
             assert_eq!(next.field("cache_hit"), Some("false"));
@@ -252,6 +183,48 @@ fn animated_frame_changes_recompose_partially_after_the_first() {
     }
 }
 
+/// 要件 3.3・4.1: 下敷きの印が真のまま、同じコマで下の面を替えた回の絵も、新しい合成器でいちから
+/// 合成した絵と同じ（矩形がコマの帯の外の下の面の画素を覆い損ねると前の面の画素が残る）。
+#[test]
+fn switching_the_surface_on_the_same_frame_matches_a_from_scratch_compose() {
+    let (mut world, mut presenter, emo_world, atlas) = setup();
+    let ((), events) = capture(|| {
+        show(&mut presenter, &mut world, frame(0));
+        show(&mut presenter, &mut world, frame(2));
+        assert!(
+            presenter.targets[&TARGET].partial_base,
+            "前提: 下敷きの印が真"
+        );
+        show_with_ok(
+            &mut presenter,
+            &mut world,
+            TARGET,
+            OTHER_BASE_ID,
+            BindSet::default(),
+            frame(2),
+        );
+    });
+    let (golden, _) = native_golden_with(
+        &emo_world,
+        &atlas,
+        OTHER_BASE_ID,
+        &BindSet::default(),
+        &frame(2),
+    );
+    assert_eq!(
+        presenter.read_back(TARGET).expect("read_back"),
+        golden,
+        "同じコマで面を替えた絵がいちから合成と違う"
+    );
+    let got = ranges(&events);
+    assert_eq!(got.len(), 3, "外れは 3 回: {got:?}");
+    // 空の道で緑にしない: 面を替えた回も下敷き形（`partial`）の道を通っている。
+    assert!(
+        matches!(got[2], Range::Partial { .. }),
+        "面を替えた回が下敷き形の道を通らない: {got:?}"
+    );
+}
+
 /// 要件 3.4: 動きの無い面（`pattern` が空）は毎回いちからで、合成の回数（外れの回数）は前と同じ
 /// ——違う入力の数だけ。控えに当たる回は範囲の行を出さない。
 #[test]
@@ -260,7 +233,9 @@ fn static_surface_always_recomposes_from_scratch() {
     let ((), events) = capture(|| {
         // 面 1000 → 面 3000 → 面 1000（当たり）→ 面 3000（当たり）。
         for id in [BASE_ID, CELL_ID, BASE_ID, CELL_ID] {
-            show_ok_static(&mut presenter, &mut world, id);
+            show_ok(&mut presenter, &mut world, TARGET, id);
+            // 動きの無い面の合成は下敷きの印を立てない（各回の直後に見る。当たりの回も印を立てない）。
+            assert!(!presenter.targets[&TARGET].partial_base, "面 {id} の後");
         }
     });
     let misses: Vec<&CapturedEvent> = events
@@ -273,29 +248,9 @@ fn static_surface_always_recomposes_from_scratch() {
     }
     let hits = events
         .iter()
-        .filter(|e| e.message() == SHOW_LINE_MESSAGE && e.field("cache_hit") == Some("true"))
+        .filter(|e| e.message() == INFO_LINE_MESSAGE && e.field("cache_hit") == Some("true"))
         .count();
     assert_eq!(hits, 2, "控えに当たる回が 2 回");
-    // 動きの無い面の合成は下敷きの印を立てない。
-    assert!(!presenter.targets[&TARGET].partial_base);
-}
-
-fn show_ok_static(presenter: &mut EmoPresenter, world: &mut World, id: u32) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id: id,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
 }
 
 /// 要件 3.1・3.5: 控えに当たった次の外れはいちから（当たりの回は下敷きの印を立てない）。
@@ -330,7 +285,7 @@ fn miss_after_invalidate_recomposes_from_scratch() {
         show(&mut presenter, &mut world, frame(0));
         show(&mut presenter, &mut world, frame(2));
         assert!(presenter.targets[&TARGET].partial_base);
-        invalidate(&mut presenter, &mut world);
+        invalidate_ok(&mut presenter, &mut world, TARGET);
         assert!(
             !presenter.targets[&TARGET].partial_base,
             "控えを捨てる指令で下敷きの印は偽"
@@ -351,13 +306,6 @@ fn miss_after_invalidate_recomposes_from_scratch() {
 /// 次の適用は前のコマの絵を、失敗したコマの命令列との違いで重ね直し、絵が崩れる。
 #[test]
 fn miss_after_display_record_failure_recomposes_from_scratch() {
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-
     let (mut world, mut presenter, emo_world, atlas) = setup();
     let ((), events) = capture(|| {
         show(&mut presenter, &mut world, frame(0));
@@ -371,15 +319,19 @@ fn miss_after_display_record_failure_recomposes_from_scratch() {
             presenter.targets[&TARGET].last_show.clone(),
         );
 
-        {
-            let _disarm = Disarm;
-            arm_display_fault(DisplayFault::CreateBitmap);
-            let outcome = send(&mut presenter, &mut world, frame(12));
-            assert!(
-                matches!(outcome, Err(PresentError::Device { .. })),
-                "注入した失敗が返らない: {outcome:?}"
-            );
-        }
+        let outcome = show_with_armed_fault(
+            &mut presenter,
+            &mut world,
+            TARGET,
+            BASE_ID,
+            BindSet::default(),
+            frame(12),
+            DisplayFault::CreateBitmap,
+        );
+        assert!(
+            matches!(outcome, Err(PresentError::Device { .. })),
+            "注入した失敗が返らない: {outcome:?}"
+        );
         assert!(
             !presenter.targets[&TARGET].partial_base,
             "失敗した適用のあと下敷きの印は偽"

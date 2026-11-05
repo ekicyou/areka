@@ -5,64 +5,10 @@
 
 use super::*;
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use areka_emo_atlas::{MemoryDecoder, UseSelfAlpha};
-use log_capture_kit::CapturedEvent;
+use areka_emo_atlas::MemoryDecoder;
 use tracing::Level;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-/// ワークツリーの `target\` の下の一時フォルダ（Drop で消す）。
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new() -> Self {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/test-tmp")
-            .join(format!("balloon-marker-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&path).expect("一時フォルダ");
-        TempDir(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-
-    /// 名前だけのファイルを置く（中身は偽の読み手が返すので空）。
-    fn touch(&self, name: &str) {
-        std::fs::File::create(self.0.join(name)).expect("ファイル");
-    }
-
-    /// 名前だけのファイルを置き、偽の読み手に `w`×`h` の絵を登録する。
-    fn image(&self, dec: &mut MemoryDecoder, name: &str, w: u32, h: u32) {
-        self.touch(name);
-        dec.insert(
-            self.0.join(name),
-            w,
-            h,
-            w * 4,
-            vec![0x80; (w * h * 4) as usize],
-            true,
-        );
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-const ALPHA: AlphaParams = AlphaParams {
-    use_self_alpha: UseSelfAlpha::On,
-};
-
-fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
-    img.as_ref().map(|i| (i.width, i.height))
-}
+use crate::balloon::test_support::{ALPHA, CapturedEvent, FieldUnquoted, TempDir, size};
 
 fn marker_events(events: &[CapturedEvent], level: Level) -> Vec<&CapturedEvent> {
     events
@@ -72,7 +18,7 @@ fn marker_events(events: &[CapturedEvent], level: Level) -> Vec<&CapturedEvent> 
 }
 
 fn field<'a>(e: &'a CapturedEvent, name: &str) -> &'a str {
-    e.field(name).expect(name).trim_matches('"')
+    e.field_unquoted(name).expect(name)
 }
 
 fn resolve(
@@ -196,6 +142,27 @@ fn broken_image_warns_path_and_reason_and_drops_only_that_number() {
     assert!(field(debugs[0], "down").ends_with("arrow1.png unreadable"));
 }
 
+/// 無いフォルダは読めない旨の warn 1 件だけで、印の対は既定（両方 `None`）。
+#[test]
+fn missing_dir_warns_once_and_returns_default_pair() {
+    let dir = TempDir::new();
+    let missing = dir.path().join("missing");
+    let dec = MemoryDecoder::new();
+
+    let (pair, events) = log_capture_kit::capture(|| {
+        resolve_marker_pair(&[missing.as_path()], &ARROW_FAMILY, 0, None, &dec, ALPHA)
+    });
+
+    assert_eq!(pair, MarkerPair::default());
+    let warns = marker_events(&events, Level::WARN);
+    assert_eq!(warns.len(), 1);
+    assert_eq!(
+        warns[0].message(),
+        "balloon_marker: フォルダが読めない（印の絵は無いものとする）"
+    );
+    assert_eq!(field(warns[0], "dir"), missing.display().to_string());
+}
+
 /// フォルダの列は番号ごとに先頭から探す（先のフォルダに無い番号だけ次のフォルダ・要件 7.3）。
 #[test]
 fn dirs_are_searched_in_order_per_number() {
@@ -245,7 +212,14 @@ fn resolve_single(
     dec: &MemoryDecoder,
 ) -> (SingleMarker, Vec<CapturedEvent>) {
     log_capture_kit::capture(|| {
-        resolve_single_marker(&[dir.path()], &MARKER_FAMILY, scope, explicit, dec, ALPHA)
+        resolve_single_marker_listed(
+            &list_dirs(&[dir.path()]),
+            &MARKER_FAMILY,
+            scope,
+            explicit,
+            dec,
+            ALPHA,
+        )
     })
 }
 
@@ -314,8 +288,8 @@ fn single_marker_dirs_are_searched_in_order() {
     first.image(&mut dec, "marker.png", 2, 2);
     second.image(&mut dec, "markers.png", 6, 6);
 
-    let got = resolve_single_marker(
-        &[first.path(), second.path()],
+    let got = resolve_single_marker_listed(
+        &list_dirs(&[first.path(), second.path()]),
         &MARKER_FAMILY,
         0,
         None,

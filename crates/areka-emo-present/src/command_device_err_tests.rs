@@ -21,7 +21,7 @@ fn log_of(
     assert_eq!(events.len(), 1, "失敗 1 回につき行はちょうど 1 行");
     let line = events.remove(0);
     assert_eq!(line.target, "areka_emo_present::command");
-    assert_eq!(line.message(), "D3D/DXGI 呼び出しが失敗");
+    assert_eq!(line.message(), "D2D 呼び出しが失敗");
     assert_eq!(line.field("hresult"), Some(E_FAIL.to_string().as_str()));
     assert_eq!(line.field_str("context"), Some(context));
     line

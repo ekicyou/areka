@@ -1,7 +1,7 @@
 //! 表示の記録（`display::record_display`）が失敗したときに **presenter 側の状態が 1 つも書き換わらない**
 //! ことを、**4 注入点 × 3 場面**で固定する実行テスト（要件 7.1／7.2・設計 Flow 1・付録 A′ #19）。
 //!
-//! # 前身との違い（`presenter_upload_failure_tests.rs` からの導き直し）
+//! # 前身との違い（撤去した供給面の失敗注入のテストからの導き直し）
 //!
 //! 前身は自前 swap chain 供給面の `upload` 7 点を注入し、presenter 側 5 項目の保持を見ていた。供給面が
 //! 消えて失敗点が「記録」の 4 点（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）になり、その
@@ -40,21 +40,15 @@
 
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, Arrangement, GraphicsCommandList, Offset, Visual};
 
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, capture, elem, make_world_with_gpu, mount_entities, set_window_dpi, shell_of,
-    show_ok, spawn_window_with_dpi, surface,
+    CapturedEvent, bake_world, capture, elem, gradient, gradient_with_alpha, hide_ok,
+    make_world_with_gpu, mount_entities, set_window_dpi, shell_of, show_ok, show_with_armed_fault,
+    spawn_window_with_dpi, surface,
 };
 
 /// 検査対象の target（全テストで 1 つ）。
@@ -79,7 +73,7 @@ const SENTINEL_OFFSET: (f32, f32) = (99.0, 77.0);
 /// `record_display` が失敗し得る 4 点（`DisplayFault` の全 variant）。
 ///
 /// variant が増えたらここに足さなければ被覆が黙って減る。列挙の網羅は [`fault_marker`] の `match` が
-/// コンパイルで、本表の重複と件数は [`the_matrix_covers_four_fault_points`] が実行時に見張る。
+/// コンパイルで、本表の重複は [`the_matrix_covers_four_fault_points`] が実行時に見張る（件数は配列の型が決める）。
 const ALL_DISPLAY_FAULTS: [DisplayFault; 4] = [
     DisplayFault::CreateBitmap,
     DisplayFault::CreateCommandList,
@@ -114,52 +108,21 @@ fn fault_marker(at: DisplayFault) -> &'static str {
 /// 作り方（atlas bake → `EmoWorld` → `bind_atlas`）は共有ヘルパと同一である。
 fn build_two_face_assets_with_hole() -> (EmoWorld, AtlasTable) {
     let (w, h) = FACE_SIZE;
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(ESTABLISHED_ID, vec![elem("p.png", 0, 0)]),
-        surface(ATTEMPTED_ID, vec![elem("q.png", 0, 0)]),
-    ];
-
-    let gradient = |salt: u8, hole: bool| -> Vec<u8> {
-        let mut img: Vec<u8> = Vec::with_capacity((w * h * 4) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                // 内側（外周でない画素）だけを透明にする＝トリム後の外形は変わらない。
-                let inner = x > 0 && y > 0 && x + 1 < w && y + 1 < h;
-                if hole && inner {
-                    img.extend_from_slice(&[0, 0, 0, 0]);
-                    continue;
-                }
-                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.extend_from_slice(&[b, g, r, 0xFF]);
-            }
-        }
-        img
+    // 内側（外周でない画素）だけを透明にする＝トリム後の外形は変わらない。
+    let hole = |x: u32, y: u32| {
+        let inner = x > 0 && y > 0 && x + 1 < w && y + 1 < h;
+        if inner { 0 } else { 0xFF }
     };
-
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, w * 4, gradient(0x11, false), true);
-    dec.insert(base.join("q.png"), w, h, w * 4, gradient(0x77, true), true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない: {:?}",
-        baked.errors
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            surface(ESTABLISHED_ID, vec![elem("p.png", 0, 0)]),
+            surface(ATTEMPTED_ID, vec![elem("q.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w, h, gradient(w, h, 0x11)),
+            ("q.png", w, h, gradient_with_alpha(w, h, 0x77, hole)),
+        ],
+    )
 }
 
 // ── 観測（前状態 8 項目）────────────────────────────────────────────────
@@ -263,52 +226,33 @@ fn plant_sentinel_offset(presenter: &EmoPresenter, world: &mut World, target: Ta
 
 // ── 注入（武装と解除を 1 つの不可分な操作に閉じる）──────────────────────
 
-/// 注入 → `ShowSurface` → 武装解除 を **1 つの不可分な操作**として閉じる唯一の入口。
-///
-/// `display.rs` の `fault_point` は**一致した点でしか武装を解かない**ので、届かなかった注入は旗が
-/// 立ったまま残り、同一スレッドの後続の記録で発火する。解除を `Drop` に持たせ `arm_display_fault` の
-/// 呼出を本関数の内側 1 箇所だけに限ることで、「解除の書き忘れ」も「assert の panic で解除を飛び越す
-/// こと」も**構造的に起こり得ない**（`display_fault_tests.rs` の `record_with_armed_fault` と同じ規律）。
-fn show_with_armed_fault(
+/// 失敗点 `at` を注入した `ShowSurface`（注入と解除は支えの `show_with_armed_fault` が閉じる）を
+/// 記録を捕捉しながら流し、返った失敗と記録を返す。注入が届かず `Ok` が返ったら落とす。
+fn failed_show(
     presenter: &mut EmoPresenter,
     world: &mut World,
     target: TargetId,
     surface_id: u32,
     at: DisplayFault,
 ) -> (PresentError, Vec<CapturedEvent>) {
-    /// 生存期間の終わり（正常終了・panic による巻き戻しの双方）で必ず武装を降ろす番人。
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-
-    let _disarm = Disarm;
-    arm_display_fault(at);
-
     let (outcome, events) = capture(|| {
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
+        show_with_armed_fault(
+            presenter,
             world,
-            PresentCommand::ShowSurface {
-                target,
-                surface_id,
-                binds: BindSet::default(),
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
-        );
-        rx.recv_timeout(Duration::from_secs(10))
+            target,
+            surface_id,
+            BindSet::default(),
+            PatternState::default(),
+            at,
+        )
     });
 
     let err = match outcome {
         // 要件 7.1／7.2: 呼出元へ失敗が返る（`display.rs` が `device_err` 経由で error! 済み）。
-        Ok(Err(e)) => e,
-        Ok(Ok(())) => panic!(
+        Err(e) => e,
+        Ok(()) => panic!(
             "注入した失敗点 {at:?} で ShowSurface が Ok を返した（注入が届いていない＝前状態維持を判定できない）"
         ),
-        Err(e) => panic!("reply（ShowSurface）を受信できない: {e}"),
     };
     (err, events)
 }
@@ -351,9 +295,7 @@ fn attached_presenter(world: &mut World, dpi: u16) -> (EmoPresenter, Entity) {
     let (emo_world, atlas) = build_two_face_assets_with_hole();
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TARGET, window, emo_world, atlas, AUTHOR_DPI)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, AUTHOR_DPI);
     (presenter, window)
 }
 
@@ -409,22 +351,6 @@ fn assert_established_baseline(before: &PresenterState, visible: bool, current: 
     assert!(before.mask.is_some(), "前提: 確立でαマスクが供給済み");
 }
 
-/// `Hide` を適用し、reply が `Ok(())` であることを確認する。
-fn hide_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
-}
-
 // ── 場面 ⑴ 初回（装着・メモが無から生じる場面）──────────────────────────
 
 /// 要件 7.1／7.2: **初回の適用**が 4 注入点のどこで失敗しても、装着も配置もマスクもメモも生じない。
@@ -455,8 +381,7 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
     );
 
     for at in ALL_DISPLAY_FAULTS {
-        let (err, events) =
-            show_with_armed_fault(&mut presenter, &mut world, TARGET, ESTABLISHED_ID, at);
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ESTABLISHED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
             snapshot(&presenter, &world, TARGET),
@@ -506,8 +431,7 @@ fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
     assert_established_baseline(&before, true, Some(ESTABLISHED_ID));
 
     for at in ALL_DISPLAY_FAULTS {
-        let (err, events) =
-            show_with_armed_fault(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
             snapshot(&presenter, &world, TARGET),
@@ -586,8 +510,7 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
 
     let (surface_entity, slot) = mount_entities(&presenter, TARGET);
     for at in ALL_DISPLAY_FAULTS {
-        let (err, events) =
-            show_with_armed_fault(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
             snapshot(&presenter, &world, TARGET),
@@ -633,13 +556,13 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
 
 // ── 被覆の番人 ─────────────────────────────────────────────────────────
 
-/// 4 注入点 × 3 場面の「4」を実行時に固定する（「3」は上の `#[test]` 3 本そのものである）。
+/// 4 注入点 × 3 場面の「4」が互いに異なる 4 点であることを実行時に固定する（「3」は上の `#[test]`
+/// 3 本そのもの・件数は配列の型 `[_; 4]` が決める）。
 ///
-/// variant の追加は [`fault_marker`] の `match` がコンパイルで捕まえるが、[`ALL_DISPLAY_FAULTS`] から
-/// 1 つ落とす／重複させる改変はコンパイルを通ってしまい、被覆だけが静かに減る。
+/// variant の追加は [`fault_marker`] の `match` がコンパイルで捕まえるが、[`ALL_DISPLAY_FAULTS`] の
+/// 1 つを別の点の重複に替える改変はコンパイルを通ってしまい、被覆だけが静かに減る。
 #[test]
 fn the_matrix_covers_four_fault_points() {
-    assert_eq!(ALL_DISPLAY_FAULTS.len(), 4, "記録が失敗し得るのは 4 点");
     for (i, at) in ALL_DISPLAY_FAULTS.iter().enumerate() {
         assert!(
             !ALL_DISPLAY_FAULTS[..i].contains(at),

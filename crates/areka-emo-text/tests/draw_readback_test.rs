@@ -314,8 +314,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     presenter
         // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
         // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+        .attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_surface(&mut presenter, &mut world, TargetId(0));
     let view = presenter
         .text_slot_view(TargetId(0))

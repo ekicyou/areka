@@ -9,15 +9,13 @@
 
 use super::*;
 
-use std::time::Duration;
-
 use tracing::Level as L;
 
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, build_two_face_assets, capture, make_world_with_gpu, show_ok,
-    spawn_window_with_dpi,
+    CapturedEvent, build_two_face_assets, capture, make_world_with_gpu, show_ok, show_with,
+    show_with_armed_fault, spawn_window_with_dpi,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -25,7 +23,7 @@ const FACE_A: u32 = 1000;
 const FACE_B: u32 = 3000;
 
 /// 記録の失敗の行の文言（`command.rs` の `device_err`）。
-const DEVICE_LINE: &str = "D3D/DXGI 呼び出しが失敗";
+const DEVICE_LINE: &str = "D2D 呼び出しが失敗";
 /// `GraphicsCore` が無い道の行の文言（`show.rs`）。
 const NO_GFX_LINE: &str =
     "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）";
@@ -34,40 +32,33 @@ fn attached(world: &mut World) -> EmoPresenter {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas, _a, _b) = build_two_face_assets(4, 3);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TARGET, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TARGET, window, emo_world, atlas, 96);
     presenter
 }
 
 /// `ShowSurface` を 1 本流し、reply を返す。
 fn show(presenter: &mut EmoPresenter, world: &mut World, surface_id: u32) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with(
+        presenter,
         world,
-        PresentCommand::ShowSurface {
-            target: TARGET,
-            surface_id,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("reply を受信できない")
+        TARGET,
+        surface_id,
+        BindSet::default(),
+        PatternState::default(),
+    )
 }
 
-/// `CreateBitmap` へ失敗を注入して 1 本流す（武装の解除は `Drop` で必ず行う）。
+/// `CreateBitmap` へ失敗を注入して 1 本流す。
 fn show_with_fault(presenter: &mut EmoPresenter, world: &mut World, surface_id: u32) {
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-    let _disarm = Disarm;
-    arm_display_fault(DisplayFault::CreateBitmap);
-    let outcome = show(presenter, world, surface_id);
+    let outcome = show_with_armed_fault(
+        presenter,
+        world,
+        TARGET,
+        surface_id,
+        BindSet::default(),
+        PatternState::default(),
+        DisplayFault::CreateBitmap,
+    );
     assert!(
         matches!(
             outcome,
@@ -177,10 +168,8 @@ fn the_graphics_core_less_path_is_coalesced_the_same_way() {
 /// 面 1000（有効）と面 7000（定義層皆無＝合成が `EmptyComposition`）を載せた対象を `target` に装着する。
 fn attach_valid_and_empty(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
     let window = spawn_window_with_dpi(world, 96);
-    let (emo_world, atlas) = super::display_tests::build_assets_with_valid_and_empty(4, 3, 0x5A);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    let (emo_world, atlas) = super::test_support::build_assets_with_valid_and_empty(4, 3, 0x5A);
+    presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
 /// 合成の失敗（無い面）をはさむと原因を忘れる＝次の同じ装置の失敗は ERROR（装置以外の失敗）。
@@ -231,26 +220,15 @@ fn each_target_logs_its_own_first_error() {
     attach_valid_and_empty(&mut presenter, &mut world, TARGET);
     attach_valid_and_empty(&mut presenter, &mut world, other);
     let fault_on = |presenter: &mut EmoPresenter, world: &mut World, target: TargetId| {
-        struct Disarm;
-        impl Drop for Disarm {
-            fn drop(&mut self) {
-                clear_display_fault();
-            }
-        }
-        let _disarm = Disarm;
-        arm_display_fault(DisplayFault::CreateBitmap);
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        presenter.apply(
+        let outcome = show_with_armed_fault(
+            presenter,
             world,
-            PresentCommand::ShowSurface {
-                target,
-                surface_id: FACE_A,
-                binds: BindSet::default(),
-                pattern: PatternState::default(),
-                reply: Some(tx),
-            },
+            target,
+            FACE_A,
+            BindSet::default(),
+            PatternState::default(),
+            DisplayFault::CreateBitmap,
         );
-        let outcome = rx.recv_timeout(Duration::from_secs(10)).expect("reply");
         assert!(
             matches!(outcome, Err(PresentError::Device { .. })),
             "{outcome:?}"
