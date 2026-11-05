@@ -492,3 +492,35 @@ fn despawn_removes_both_children_from_the_window() {
     );
     assert!(world.get_entity(window).is_ok(), "窓そのものは消さない");
 }
+
+/// 指摘 19: 面と文字層の entity が先に消えた装着へ 4 つの口（`set_visible`・`set_layout`・
+/// `set_display`・`despawn`）を呼ぶと、装着契約の破綻の記録 5 つがそれぞれ 1 件以上残る
+/// （沈黙する失敗経路を作らない）。
+#[test]
+fn operations_on_a_mount_whose_entities_are_gone_each_leave_a_warn() {
+    let (mut world, _window, mount) = attach_fixture(3, 2);
+    world.despawn(mount.surface_entity());
+    world.despawn(mount.text_slot());
+
+    let ((), events) = log_capture_kit::capture(|| {
+        mount.set_visible(&mut world, false);
+        mount.set_layout(&mut world, (3, 2), ScaleRatio::ONE);
+        mount.set_display(&mut world, &GraphicsCommandList::empty());
+        mount.despawn(&mut world);
+    });
+
+    for want in [
+        "set_visible: Visual が無い（装着が未完了）",
+        "set_visible: HitTest が無い（装着が未完了・ポインタ透過が成立しない）",
+        "set_layout: surface entity に Arrangement が無い（装着が未完了）",
+        "set_display: surface entity が無い（装着が未完了）",
+        "despawn: 装着の子が既に居ない",
+    ] {
+        assert!(
+            events
+                .iter()
+                .any(|e| e.level == tracing::Level::WARN && e.message() == want),
+            "記録「{want}」が warn で残っていない: {events:?}"
+        );
+    }
+}

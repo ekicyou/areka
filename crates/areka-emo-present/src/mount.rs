@@ -129,6 +129,8 @@ impl VisualMount {
 
     /// 1 つの entity へ可視性（`Visual`）とポインタ判定（`HitTest`）を同時に適用する。
     ///
+    /// **現値と同値なら書かない**（`set_layout`・`set_display` と同じ守り）——書けば `Changed<Visual>`／
+    /// `Changed<HitTest>` が立ち、wintf が毎コマ COM を呼ぶ。
     /// 未装着（component 不在）は装着契約の破綻ゆえ warn で記録する（沈黙する失敗経路を作らない）。
     fn apply_visibility(
         world: &mut World,
@@ -138,13 +140,15 @@ impl VisualMount {
         role: &'static str,
     ) {
         if let Some(mut v) = world.get_mut::<Visual>(entity) {
-            v.set_visible(visible);
+            if v.is_visible != visible {
+                v.set_visible(visible);
+            }
         } else {
             tracing::warn!(?entity, role, "set_visible: Visual が無い（装着が未完了）");
         }
 
         if let Some(mut ht) = world.get_mut::<HitTest>(entity) {
-            *ht = mode;
+            ht.set_if_neq(mode);
         } else {
             tracing::warn!(
                 ?entity,

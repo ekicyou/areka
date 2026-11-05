@@ -12,8 +12,8 @@
 //! 2. 文字層スロットが**実際に描画内容を持つ**状態でも同じ非表示が及び、内容を壊さずに再表示で
 //!    双方が復帰すること。予約スロットへ内容（`VisualGraphics`）を挿す形は emo-text の
 //!    `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs:249-262`）と同一である。
-//! 3. 外部所有の不可視構築を**指令経由**で行ったとき、`Visual` が可視の値で挿入される瞬間が一度も
-//!    無いこと（Requirement 1.2 の「同一フレーム内の往復も禁止」）。装着 API を直接叩く
+//! 3. 外部所有の不可視構築を**指令経由**で行ったとき、1 回目は `Visual` が可視の値で挿入されず、
+//!    2 回目からは `Visual` が書き換えられないこと（Requirement 1.2 の「同一フレーム内の往復も禁止」）。装着 API を直接叩く
 //!    `mount_visibility_tests.rs` の検査は初期可視性を引数で渡すため、初期可視性を
 //!    `presenter/show.rs` が所有権から導出する側の往復は覆えない。
 
@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use areka_actor::reply_channel;
-use bevy_ecs::prelude::{Insert, On, Query};
+use bevy_ecs::prelude::{DetectChanges, Insert, On, Query};
 
 use windows::UI::Composition::Visual as WucVisual;
 use windows::core::Interface;
@@ -302,4 +302,20 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
         Layers::Hidden,
         "外部所有の初回表示指令の直後",
     );
+
+    // 2 回目からは書き換え無し: 同じ呼び出しの中で見える→消えるの往復があれば変更の印が立つ
+    // （同値は書かないので、印は値を書いた証拠になる）。
+    world.clear_trackers();
+    world.increment_change_tick();
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    for (e, what) in [(surface, "枠の面"), (slot, "文字層スロット")] {
+        assert!(
+            !world
+                .entity(e)
+                .get_ref::<Visual>()
+                .expect("Visual")
+                .is_changed(),
+            "2 回目の表示指令で{what} entity の Visual が書き換えられた（Requirement 1.2）"
+        );
+    }
 }

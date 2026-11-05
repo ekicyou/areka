@@ -109,6 +109,44 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
     );
 }
 
+/// 指摘 5: 見えている装着へもう一度 `set_visible(true)` しても、面と文字層の両 entity とも
+/// `Visual`・`HitTest` に変更の印が立たない（同値は書かない・毎コマの COM 呼び出しを引かない）。
+///
+/// 恒真にならないよう、続けて `set_visible(false)` で両方の印が立つこと（陽性対照）も見る。
+#[test]
+fn showing_a_visible_mount_again_sets_no_change_flag() {
+    let (mut world, _window, mount) = attach_fixture(4, 4);
+    let entities = [
+        (mount.surface_entity(), "surface entity"),
+        (mount.text_slot(), "text-layer slot"),
+    ];
+    let changed = |world: &World, want: bool, ctx: &str| {
+        for (e, what) in entities {
+            let r = world.entity(e);
+            assert_eq!(
+                r.get_ref::<Visual>().expect("Visual").is_changed(),
+                want,
+                "{ctx}: {what} の Visual の変更の印"
+            );
+            assert_eq!(
+                r.get_ref::<HitTest>().expect("HitTest").is_changed(),
+                want,
+                "{ctx}: {what} の HitTest の変更の印"
+            );
+        }
+    };
+
+    mount.set_visible(&mut world, true);
+    world.clear_trackers();
+    world.increment_change_tick();
+
+    mount.set_visible(&mut world, true);
+    changed(&world, false, "同値の set_visible(true)");
+
+    mount.set_visible(&mut world, false);
+    changed(&world, true, "陽性対照の set_visible(false)");
+}
+
 /// 1.2: 不可視構築（`initially_visible=false`）では、surface entity・text-layer slot の
 /// いずれの `Visual` も **可視の値で挿入されない**こと。
 ///
