@@ -215,3 +215,18 @@
    - 向こうの指摘 36 で `resolve.rs` の別名の引きを、38 で `Surface.id` の字面を触る。どちらも向こうの実装の最後の段で行う。行がぶつかったら、後から着地するほうが main を取り込んで揃える。
    - 新しい表の型を parsers の外から組めるかは、向こうに頼み、**受けてもらえた**（向こうの要件 7.10）。新しい bindgroup の表の型には `#[non_exhaustive]` を付けないので、seriko のテストから組める。指摘 3 の ⒜ のテストはその型で組む（調べ 1 は、向こうの着地を待てば解ける。こちらが先に着地するなら、今の型のまま descript の文字列を読む口で組む）。
 4. 指摘 11: `ScopeStates` を `BTreeMap` にしたとき、抽選の順のテスト（`looper_tests.rs`・`looper_always_tests.rs`・`looper_trigger_tests.rs` の乱数の列を焼き込んだもの）がそのまま緑か。
+
+## 9. 設計の段の調べと決め（2026-11-05・kiro-spec-design）
+
+- **調べの種類:** 軽い調べ（今あるクレートの中の直し・新しい依存も外の API も無い）。外の資料は引いていない。使った作法は ponytail（最も小さな完全な変更・消せるものは消す）と、steering の `structure.md`（兄弟のテストファイル・`<stem>_test_support.rs`・1,000 行）。
+- **8 節の調べ 1（descript の文字列から着せ替えの読みを作る口）: 在る。** `areka_parsers::package::resolve_with_shell(根, DefaultEncoding::Utf8, None).bindgroups` を、`sample_ghost_kit::WorkDir` の下に書いた descript.txt で呼ぶ形が、もう `src/bind_tests.rs:443-459` の `groups_of` と `crates/areka/src/emo2_boot/shell_carry_tests.rs` の `char2_names` で使われている。`BindGroupName` を手で組む必要は無い。
+- **指摘 3 の順の決め:** どちらが先に着地しても、テストは descript の文字列を読む口（本番と同じ読み → `from_groups`）で組む。向こう（`audit-parsers-sakura`）が先なら、`groups_of` の戻りの型の名だけが新しい型の名に変わる（型の名を書いているのは `bind_tests.rs` と `tests/common/mod.rs` の 2 行）。こちらが先なら何も待たない。向こうが受けてくれた「新しい表の型を外から組める」（向こうの要件 7.10）には頼らない。
+- **8 節の調べ 4（`BTreeMap` にしても抽選の順が変わらないか）: 変わらない。** 今は `shown_slots()` の答えを `looper.rs:476-481` が（スコープ, シェル→バルーン）で並べ替えている。(スコープ, 段) の組は重ならないので並べ替えの答えは 1 通りで、`ActorKey` の `Ord`（中の文字列の辞書順・`crates/dola/src/cue/command.rs:21`）は並べ替えと `BTreeMap` で同じ。だから「スコープの昇順 → シェル → バルーン」で組んだ列は今の並べ替えの答えと同じ列になり、乱数を焼き込んだテストの期待値は変わらない。`state.rs:338` の `shown.sort()` も、鍵が重ならない `BTreeMap` を回した列と同じ。
+- **8 節の調べ 2（指摘 20 の起きる頻度）: 測らない。** 指摘 20 は残すと決まった（要件 8.3）。
+- **指摘 7 の 4 本目（`word_warns` の 2 つ目の枝）: 較正する（消さない）。** `areka_emo_compose::ComposeMethod::from_name("start")` を記録の捕まえの中で呼ぶと、`method.rs:159` の `warn!(method = %name, "未知の合成メソッド名…")` が 1 行出る。これを `word_warns` が 1 件と数えることを確かめれば、欄の形（`method=start`）が変わったときに赤になる。
+- **指摘 4 の形:** 一番上は `HashMap`、部品は `BTreeMap` で、入口（`Entry`）の型が違う。だから「在れば窓を写す」の中身を `Armed` の関数 1 つにし、無いときの構えと記録は今の場所に残す。鳴らした記録は 1 つの関数にまとめ、出る行の文字（段・欄・文言）は今と 1 字も変えない（`part` の欄は部品のときだけ出す。`tracing` は `None` の欄を書かない）。
+- **指摘 5 の形:** 「印を戻さない」を `calls.rs` の `run_calls` の最後の 1 か所へ移し、2 つの貸し口は渡された値をそのまま置くだけにする（偽の表 `FakePlays` はもうその形）。「止めた相手が `always` か」は `run_calls` が表から引いて `stop` に渡す。2 つの貸し口の `anims` の欄は使われなくなるので消す。
+- **指摘 19 の上限:** 刻み 37,500 回（＝16ms × 37,500 ＝ 600,000ms ＝ 10 分）。実在のシェルの `runonce` は数秒の長さで、10 分は 100 倍を越える余裕。越えても 1 面あたり `handle_message` 37,500 回で止まる。
+- **指摘 6 のまとめ先:** 層をまたぐ道具はクレートに 1 つの `src/lib_test_support.rs`（`lib.rs` が `#[cfg(test)] #[path] mod test_support;` で繋ぐ・`structure.md` の `<stem>_test_support.rs` の形）、役者の道具は今の `actor_test_support.rs`、`tests/` は `tests/common/mod.rs`。
+- **範囲の外の古びる説明（直さない）:** `crates/log-capture-kit/src/event_tests.rs:15・102` と `src/event.rs:145` は「`areka-seriko/src/table.rs` の `capture_logs` が出所」と書いている。指摘 6 でその写しは `lib_test_support.rs` へ移るが、文は「出所」の記録で、呼び出し元でも 1,000 行の例外表でもないので、要件 7.4 に従って触らない。
+- **1,000 行の見積もり:** `actor_bind_loop_tests.rs` は `mod tick_loop_tests`（1012〜1375 行）を移すと 1,010 行で、まだ越える。指摘 3 で名前の表の組み方（4 つの関数と 2 か所の中書き）を descript の文字列にすると約 20 行減り、1,000 行の下に入る。だから指摘 3 を指摘 2 より先に行う。
