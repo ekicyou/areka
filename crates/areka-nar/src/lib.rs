@@ -42,7 +42,7 @@ use crate::container::{
     MAX_TOTAL_DECLARED_SIZE, TAIL_WINDOW, archive_too_large, inflate_entry,
     locate_central_directory, read_central_directory, read_central_headers,
 };
-use crate::install::{WorkArea, area_for, commit_all, stage_placement};
+use crate::install::{WorkArea, commit_all, stage_placement};
 use crate::names::{EntryName, same_name, validate_entry_names};
 use crate::plan::build_plan;
 use std::io::{Read, Seek, SeekFrom};
@@ -210,8 +210,8 @@ impl NarArchive {
 
     /// 計画 → 組み上げ → 確定。記録は出さない（出口は [`NarArchive::install`] 1 つ）。
     ///
-    /// 作業フォルダは配置の根ごとに 1 つ掘り（綴りが同じ根は 1 つ）、掘った順に `work` へ
-    /// 積む（呼び手が記録の欄として出す。途中で失敗しても掘った分は載る）。
+    /// 作業フォルダは本体の根に 1 つ掘り（同梱も本体の根に置く）、`work` へ積む
+    /// （呼び手が記録の欄として出す。途中で失敗しても掘った分は載る）。
     /// `rolled_back` が偽のとき、利用者の元の木が残っている場所は失敗の値の
     /// `survivors` が持ち、いずれも `work` のどれかの作業フォルダの配下に在る。
     /// 書庫の `balloon/<dir>/` を本体から除いた同梱の名前は `overridden` へ積む（同じく記録の材料）。
@@ -229,38 +229,32 @@ impl NarArchive {
             build_plan(&self.manifest, &self.names, request).map_err(refused)?;
         *overridden = dropped;
 
-        // 棚の掃除は掘るときに行うので、触るのはこの `.nar` の根の棚だけ。同じ根に 2 度
-        // 掘ると 2 度目の掃除が 1 度目の作業フォルダを消すので、綴りが同じ根は 1 つにする。
-        let mut areas: Vec<WorkArea> = Vec::new();
-        for placement in &plan {
-            if areas.iter().any(|area| area.root() == placement.root) {
-                continue;
-            }
-            let area = WorkArea::create(&placement.root)
-                .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
-            work.push(area.path().to_path_buf());
-            areas.push(area);
-        }
+        // 棚の掃除は掘るときに行うので、触るのはこの `.nar` の根の棚だけ。計画の先頭は
+        // 必ず本体で、同梱も本体の根に置く（`build_plan`）。
+        debug_assert!(
+            plan.iter().all(|placement| placement.root == plan[0].root),
+            "計画の配置は全て本体の根に置く"
+        );
+        let area = WorkArea::create(&plan[0].root)
+            .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
+        work.push(area.path().to_path_buf());
 
         // 全部を組み終えてから確定へ進む（どの根にもまだ 1 バイトも書いていない）。
         let mut states = Vec::with_capacity(plan.len());
         for (k, placement) in plan.iter().enumerate() {
-            let area = area_for(&areas, &placement.root);
             let state = stage_placement(&area.stage(k), placement, &self.contents)
                 .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
             states.push(state);
         }
 
-        commit_all(&areas, &self.manifest, &plan, skipped, &states).map_err(|failure| {
-            NarError::Io {
-                archive: self.archive.clone(),
-                phase: failure.phase,
-                path: failure.path,
-                source: failure.source,
-                committed: failure.committed,
-                rolled_back: failure.rolled_back,
-                survivors: failure.survivors.into_boxed_slice(),
-            }
+        commit_all(&area, &self.manifest, &plan, skipped, &states).map_err(|failure| NarError::Io {
+            archive: self.archive.clone(),
+            phase: failure.phase,
+            path: failure.path,
+            source: failure.source,
+            committed: failure.committed,
+            rolled_back: failure.rolled_back,
+            survivors: failure.survivors.into_boxed_slice(),
         })
     }
 

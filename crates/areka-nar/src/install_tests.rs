@@ -269,7 +269,7 @@ fn takes_in_the_whole_existing_tree_and_overwrites_only_same_named_files_when_re
 
 // ---- 全消去＋マスク残し（`refresh,1`） ----
 
-/// `refresh,1` では除外マスクに挙がったファイル名だけが残る（全階層・ASCII 大小無視）
+/// `refresh,1` では除外マスクに挙がったファイル名だけが残る（全階層・大小を無視（`same_name`））
 /// （要件 6.2）。
 ///
 /// 3 つの形を同時に見る。⑴ 何段も深いところの同名は残る。⑵ 綴りが大小だけ違う名前も
@@ -595,6 +595,79 @@ fn a_link_inside_an_existing_destination_fails_the_stage_with_its_path() {
     assert_eq!(error.path, link, "リンクのパスを名指す");
     assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidInput);
     assert_eq!(tree(&outside), before, "リンクの先は触られていない");
+}
+
+/// 宛先そのものがリンク（ジャンクション）でもたどらず、宛先のパスを添えて組み上げの段で
+/// 失敗する（#8 と同じ決まり）。たどると、リンクの先を写した木で入れ替え、リンクを消す。
+#[test]
+fn a_destination_that_is_itself_a_link_fails_the_stage_with_its_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let outside = work.path().join("outside");
+    make_tree(&outside, &[("secret.txt", b"outside")]);
+    let before = tree(&outside);
+    let destination = work.path().join("balloon").join("test-balloon");
+    fs::create_dir_all(work.path().join("balloon")).expect("格納先を作れる");
+    junction(&destination, &outside);
+
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("宛先のリンクはたどらない");
+
+    assert_eq!(error.path, destination, "宛先のパスを名指す");
+    assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(tree(&outside), before, "リンクの先は触られていない");
+}
+
+/// 既存のファイルと書庫のフォルダが同じ名前でぶつかったら、作業フォルダでなく**宛先**の
+/// パスを名指す（作業フォルダは次の走行の片付けで消えるので、利用者が直す場所にならない）。
+#[test]
+fn a_file_folder_clash_names_the_destination_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    // 書庫は `balloon/` をフォルダとして持つ。既存では同じ名前がファイル。
+    make_tree(&destination, &[("balloon", b"a file")]);
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("ファイルの場所にフォルダは作れない");
+
+    assert_eq!(
+        error.path,
+        destination.join("balloon"),
+        "宛先の側のパスを名指す"
+    );
+}
+
+/// 既存のフォルダと書庫のファイルが同じ名前でぶつかったときも、宛先のパスを名指す。
+#[test]
+fn a_folder_file_clash_names_the_destination_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    // 書庫は `descript.txt` をファイルとして持つ。既存では同じ名前がフォルダ。
+    make_tree(&destination, &[("descript.txt/inner.txt", b"inner")]);
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("フォルダの場所にファイルは書けない");
+
+    assert_eq!(
+        error.path,
+        destination.join("descript.txt"),
+        "宛先の側のパスを名指す"
+    );
 }
 
 /// `link` に `target` を指すジャンクションを作る（`cmd /c mklink /J`・管理者は要らない）。

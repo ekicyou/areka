@@ -59,7 +59,7 @@ fn install(root: &Path, prepared: &Prepared) -> (PathBuf, Result<InstallOutcome,
     let states = stage_into(&area, prepared);
     let work = area.path().to_path_buf();
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -404,7 +404,7 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
     });
 
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -455,7 +455,7 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
     // 組み上げた木を掴む＝2 手目の `rename` だけが失敗する。
     let handle = hold(&area.stage(0).join("descript.txt"));
     let failure = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -625,6 +625,62 @@ fn a_new_placement_whose_destination_appeared_meanwhile_does_not_schedule_it_for
     );
 }
 
+/// 退避の後、新しい木を置く前に宛先が生え直したら、巻き戻しはその木を消さない。
+///
+/// 2 手目の「作業フォルダ → 宛先」を掴みで 1 度拒ませ、拒みを観測した継ぎ目の中で掴みを
+/// 放して宛先に他人の木を作る。試し直しは中身の在る宛先を上書きできずに失敗する。
+/// 置いていない宛先を「新しく置いた木」として消すと、他人の木が消える。戻せないので
+/// 元の木は退避先に生き残りとして残る。
+#[test]
+fn a_destination_recreated_before_the_new_tree_is_placed_is_not_removed_by_the_rollback() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(&destination, &[("descript.txt", b"old descript")]);
+    let original = tree(&destination);
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let states = stage_into(&area, &prepared);
+    // 組み上げた木を掴む＝2 手目だけが拒まれ、継ぎ目が呼ばれる。
+    let mut handle = Some(hold(&area.stage(0).join("descript.txt")));
+    let someone = destination.clone();
+    crate::install::ON_RENAME_REFUSED.with(|seam| {
+        *seam.borrow_mut() = Some(Box::new(move || {
+            drop(handle.take());
+            make_tree(&someone, &[("someone-elses.txt", b"not ours")]);
+        }));
+    });
+    let failure = commit_all(
+        &area,
+        &prepared.manifest,
+        &prepared.plan,
+        Vec::new(),
+        &states,
+    );
+    crate::install::ON_RENAME_REFUSED.with(|seam| *seam.borrow_mut() = None);
+    let failure = failure.expect_err("生え直した宛先は上書きできない");
+
+    assert!(!failure.rolled_back, "他人の木が居るので戻せない");
+    assert_eq!(
+        tree(&destination),
+        expect_tree(&[("someone-elses.txt", b"not ours")]),
+        "他人の木は 1 バイトも変わらない"
+    );
+    let retired = area.path().join("old-0");
+    assert_eq!(
+        failure.survivors,
+        vec![SurvivingTree {
+            destination: destination.clone(),
+            path: retired.clone(),
+        }],
+        "元の木の在りかを返す"
+    );
+    assert_eq!(tree(&retired), original, "元の木は退避先にそのまま残る");
+}
+
 // ---- ⑷ 残り物 ----
 
 /// 後片付けが失敗しても確定は取り消さず、片付かなかった場所を残り物として返す。
@@ -649,7 +705,7 @@ fn leftovers_name_the_work_folder_when_the_cleanup_cannot_finish() {
     fs::write(&stuck, b"stuck").expect("仕掛けを置ける");
     let handle = hold(&stuck);
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -719,10 +775,12 @@ fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
             Undo::Restore {
                 old: missing_old.clone(),
                 dest: first_stuck.clone(),
+                placed: true,
             },
             Undo::Restore {
                 old: missing_old,
                 dest: last_stuck.clone(),
+                placed: true,
             },
         ],
         committed.clone(),
@@ -782,6 +840,7 @@ fn a_rollback_that_cannot_restore_reports_where_the_original_tree_survives() {
         vec![Undo::Restore {
             old: old.clone(),
             dest: destination.clone(),
+            placed: true,
         }],
         vec![],
         StageError {
@@ -828,7 +887,7 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
     );
     let states = stage_into(&area, &prepared);
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),

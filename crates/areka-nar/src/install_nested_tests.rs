@@ -10,8 +10,8 @@ use super::*;
 
 /// 同梱を `<ゴースト>\balloon\test-balloon` へ入れ子に置く形へ組み替え、その宛先を返す。
 ///
-/// 計画も同じ形に組むが、ここでは外す綴りの大小を変えて上書きし、比べ方が ASCII の
-/// 大小を無視することも同時に踏む。
+/// 計画も同じ形に組むが、ここでは外す綴りの大小を変えて上書きし、比べ方が大小を無視
+/// （`same_name`）することも同時に踏む。
 fn nest(prepared: &mut Prepared, ghost: &Path) -> PathBuf {
     let inner = ghost.join("balloon").join("test-balloon");
     prepared.plan[0].carve_out = vec![r"Balloon\Test-Balloon".to_owned()];
@@ -73,7 +73,7 @@ fn a_nested_companion_survives_a_refreshing_body() {
         "本体の下敷きに古い同梱を写さない"
     );
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -224,7 +224,7 @@ fn a_failing_nested_companion_rolls_the_whole_ghost_back() {
     );
     let handle = hold(&area.stage(1).join("descript.txt"));
     let failure = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -297,7 +297,7 @@ fn a_later_failure_removes_the_nested_companion_before_restoring_the_body() {
     let states = stage_into(&area, &prepared);
     let handle = hold(&area.stage(2).join("descript.txt"));
     let failure = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
