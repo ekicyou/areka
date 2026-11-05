@@ -185,7 +185,7 @@
   - 59・60 を残した理由（要件 2.2 の ①・完了 spec の要件 5.1）を検証の記録に書く
   - 検証の記録に、新しい指摘の件数「0」と残した 2 件が明示されている
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.2, 2.3, 2.5, 4.7, 6.1, 6.2, 6.3, 7.2_
-- [ ] 8.3 全体テストを回して緑を確かめる（T27）
+- [x] 8.3 全体テストを回して緑を確かめる（T27）
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（GPU のテストは実 GPU のまま・足していない）。範囲の外の「警告 0 件」を数えるテストが 17・29 の新しい `warn!` で赤になれば、検体を見て直す
   - 全体テストが緑で、本 spec が触ったファイルがどれも 1,000 行以下
   - _Requirements: 2.8, 5.1, 5.5, 6.4_
@@ -223,3 +223,4 @@
 - 7.5: areka-nar の `manifest_tests.rs` のテストをこの木で `a_charset_line_after_a_non_ascii_line_is_used` へ改名し、UTF-8 の「狛犬」を `charset,UTF-8` の前に書いて `name == "狛犬"`・`charset_declared == Some("UTF-8")` を見る形にした（相手の消す assert と `treats_an_empty_charset_line_as_no_declaration` は残した＝後から着地する側が相手の削除とこちらの期待を合わせる）。audit-ghost-catalog へ知らせた。
 - 8.1: 起票の 4 件はどれも既存の brief へ追記した（`audit-dola`＝1 ulp と `CuePlayer::stop`・`range-choice-tag`＝旧形の `\q`・`seriko-legacy-pattern-format`＝ウェイトの範囲のランダム・`coverage-roadmap-refresh`＝台帳の bindgroup の欄と古い名指し）。roadmap の末尾の節「audit-parsers-sakura の申し送り」に 4 行。spec の数と版の席は次の棚卸で組む。
 - 8.2（途中・2026-11-06）: かけ直しで範囲の中の新しい指摘 R1〜R19。R1・R4〜R16・R19 は直した（R19 は完了 spec `areka-P0-mayuna-compose` の D2 を改めた・推奨案で承認）。R3 と R17 は範囲の外へ（R17 は `audit-emo-text-layout-draw` の brief へ追記）。R2（`shiori`／`readme` の外を指す値）と R18（`\w9[x]` ほか）は開発者の裁定待ちで、コードは今の振る舞いのまま。裁定が出たら直し、2 周目をかけて 8.2 を閉じる（research.md §13.6）。8.2 の実装係が机なしで `cargo test -p areka` の結合テスト（実機の起動を含む）を回してしまった（i686 の部品が無く早々に落ちた）。
+- 8.3（2026-11-06・コミット 28e30598）: `tools/test-all.ps1` を排他テストの机で 1 回＝all steps green（x64 workspace tests 543 s・i686 43 s ほか）。本 spec が触って 1,000 行を越えるのは前から越えていた 3 本だけ（`areka-emo-present/src/cache_tests.rs` 1301→1300・`areka-ghost/tests/ghost/inproc_e2e_test.rs` 1160→1160・`areka-seriko/src/actor_bind_loop_tests.rs` 1375→1374＝どれも範囲の外で型の追随だけ）。R2・R18 の裁定でコードが変われば、触ったクレートのテストと全体テストを回し直す。
