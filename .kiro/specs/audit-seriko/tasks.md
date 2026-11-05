@@ -229,3 +229,6 @@
   - T13: 消したテストは 3 本（`cue_sink_emit_forwards_cue_to_inbox`・`emit_after_receiver_gone_logs_no_panic`・`bind_noncanonical_addressee_severity_split`）。後半は `noncanonical_custom_for_another_name_is_debug_only` として移した。
   - T14・T15: 道具を `lib_test_support` へ寄せ、空の状態の手書きを `empty_states()`／`fresh_states()` に替えた。
   - テストは 575 → 573 件。
+- 6.1 かけ直し 4 回目（HEAD `f80f6437`）: 新しい指摘は 20 件（必ず直す 0・直したほうがよい 13・できれば 7）。詳しくは `reaudit-4.md`。件数は 26 → 24 → 15 → 20 で、必ず直すは 1 → 2 → 4 → 0。本番の振る舞いの指摘は U1 の 1 件だけで、ほかはテストの確かめ・説明・写し。3 種類に当たるものは無い。直す組は次のとおり。
+  - D4＝U1・U7・U8・U14（本番のコードと doc）
+  - E4＝U2〜U6・U9〜U13・U15〜U20（テストと説明）
