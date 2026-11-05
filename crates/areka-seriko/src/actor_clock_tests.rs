@@ -8,7 +8,7 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::{always_fire, cfg, pattern_of};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use crate::test_support::table_of;
+use crate::test_support::{part_frames, table_of};
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
@@ -138,27 +138,27 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
     );
     rig.tick(0);
     let cmds = rig.hear(1030, carrier_cue("0", "bind", &["目", "閉", "1"]));
-    let part = |p: &PatternState| {
-        p.part(100)
-            .map(|(id, f)| (id, f.surface_id))
-            .collect::<Vec<_>>()
-    };
-    assert!(part(single_pattern(&cmds)).is_empty(), "最初の指令は経過 0");
+    assert!(
+        part_frames(single_pattern(&cmds), 100).is_empty(),
+        "最初の指令は経過 0"
+    );
 
     rig.tick(1100);
     assert!(
-        part(
+        part_frames(
             rig.states
-                .current_pattern(&ActorKey::from("0"), Slot::Shell)
+                .current_pattern(&ActorKey::from("0"), Slot::Shell),
+            100
         )
         .is_empty(),
         "経過 70＝経過 0 のコマ（刻み 0 から数えれば 102）"
     );
     rig.tick(1130);
     assert_eq!(
-        part(
+        part_frames(
             rig.states
-                .current_pattern(&ActorKey::from("0"), Slot::Shell)
+                .current_pattern(&ActorKey::from("0"), Slot::Shell),
+            100
         ),
         vec![(0, 102)],
         "1030 から 100ms"

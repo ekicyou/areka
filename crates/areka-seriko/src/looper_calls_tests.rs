@@ -10,7 +10,7 @@ use super::test_support::{cell, started, switch};
 use super::tests::counting_rng;
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::test_support::{scope, table_of};
+use crate::test_support::{empty_states, scope, table_of};
 
 /// 絵の面（中身は空）。
 const SURFACES: &str = "surface100\n{\n}\nsurface101\n{\n}\nsurface110\n{\n}\n\
@@ -51,13 +51,9 @@ fn config(text: &str, rng: LoopRng, pick_rng: LoopRng) -> SerikoLoopConfig {
     }
 }
 
-fn no_binds() -> ScopeStates {
-    ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()))
-}
-
 /// シェルの面 0 を出した状態のランタイム。
 fn shell_shown(text: &str, rng: LoopRng, pick_rng: LoopRng) -> (LoopRuntime, ScopeStates) {
-    let mut states = no_binds();
+    let mut states = empty_states();
     states.apply(&scope(), SurfaceTarget::Show(0));
     (LoopRuntime::new(config(text, rng, pick_rng)), states)
 }
@@ -198,7 +194,7 @@ fn refresh_applies_calls_at_the_event_time_and_always_lap_head_keeps_last_draw()
         animation1.pattern1,overlay,111,500,0,0\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(CALLER, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     let shown = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40).expect("Show");
     assert_eq!(started(&rt, Slot::Shell, 1), Some(40));
     let DisplayCommand::Show { pattern, .. } = shown else {
@@ -232,7 +228,7 @@ fn periodic_start_applies_its_head_call_in_the_same_tick() {
 ";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
     assert_eq!(started(&rt, Slot::Shell, 1), None, "切り替えでは鳴らない");
@@ -253,7 +249,7 @@ fn balloon_surface_applies_calls_the_same_way() {
         rng: lottery,
         pick_rng: picker,
     });
-    let mut states = no_binds();
+    let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
     rt.on_tick(0, &mut states);
     rt.on_tick(1000, &mut states);
@@ -352,7 +348,7 @@ fn balloon_surface_emits_the_balloon_shift() {
         rng: lottery,
         pick_rng: seeded_rng(0),
     });
-    let mut states = no_binds();
+    let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
     rt.on_tick(0, &mut states);
     rt.on_tick(1000, &mut states);
@@ -384,7 +380,7 @@ fn runonce_move_applied_at_the_event_time_is_queued() {
         animation0.pattern1,overlay,100,100,0,0\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(RUNONCE, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40);
     assert_eq!(
         rt.take_shifts(),
@@ -519,7 +515,7 @@ fn last_action_frame_on_the_periodic_restart_tick_is_not_lost() {
         animation1.pattern1,overlay,111,500,0,0\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
     rt.on_tick(1100, &mut states); // periodic は 1030 に鳴る。start,1 は 2030。
@@ -545,7 +541,7 @@ fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
     let (lottery, _probe) = counting_rng(&[]);
     let (picker, bounds) = pick_rng(0);
     let mut rt = LoopRuntime::new(config(SELF_CALL, lottery, picker));
-    let mut states = no_binds();
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
     rt.on_tick(1100, &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
@@ -576,7 +572,7 @@ fn trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
         animation2.pattern1,stop,1\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(LATE, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
     assert_eq!(started(&rt, Slot::Shell, 2), Some(30));
@@ -598,7 +594,7 @@ fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
         animation2.pattern1,stop,0\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(STOPPED, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
     rt.on_tick(1100, &mut states); // 0 は 1030 に鳴る（2530 まで続く見込み）。

@@ -76,7 +76,7 @@ impl SurfaceResolver {
 /// バルーン面 key 解決結果（seriko バルーン専用・シェルの [`SurfaceTarget`] とは別型ゆえ
 /// 既存シェル経路に非干渉・要件 4.6）。名前形と破損数値をログ水準のために類別する。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BalloonResolve {
+pub(crate) enum BalloonResolve {
     /// `0..=u32::MAX` の数値 id（→ 後段 [`SurfaceTarget::Show`] で `apply_balloon`・要件 4.1/4.4）。
     Show(u32),
     /// 非表示センチネル `-1`（→ 後段 [`SurfaceTarget::Hide`] で `apply_balloon`・要件 4.2）。
@@ -101,7 +101,7 @@ pub enum BalloonResolve {
 ///    - 成功かつ非負で `u32` に収まる → [`BalloonResolve::Show`]（要件 4.1）
 ///    - 成功だが負の非 `-1`（`-2` 等）・`u32` 範囲外（`4294967296` 等）→ [`BalloonResolve::Invalid`]（破損入力・要件 4.5）
 /// 2. parse 失敗（非数値・名前形）→ [`BalloonResolve::NameForm`]（要件 4.5・alias 非適用）
-pub fn resolve_balloon_key(key: &str) -> BalloonResolve {
+pub(crate) fn resolve_balloon_key(key: &str) -> BalloonResolve {
     // 数値枝: `-1` は i64 で受けて判定し、それ以外の非負を u32 へ写す
     //（SurfaceResolver::resolve の数値枝と同型の判定・ただし帰結の型が異なる）。
     if let Ok(value) = key.parse::<i64>() {

@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{BindSet, Cell, FilmId, PartKey};
+use areka_emo_compose::{FilmId, PartKey};
 
 use super::test_support::started;
 use super::tests::counting_rng;
@@ -16,7 +16,7 @@ use crate::parts::PartAnim;
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::resolve::SurfaceTarget;
 use crate::state::StageNote;
-use crate::test_support::{part_playing as playing, scope, table_of};
+use crate::test_support::{empty_states, film_picture, part_playing as playing, scope, table_of};
 
 fn note(states: &mut ScopeStates, open: bool, face: u32) {
     states.note_stage(&StageNote::Balloon {
@@ -44,14 +44,7 @@ fn clock(rt: &LoopRuntime, slot: Slot, film: FilmId) -> Option<PartAnim> {
 
 /// `slot` の面の子 `film` の欄の絵（`None`＝載っていない＝経過 0）。
 fn film_cell(states: &ScopeStates, slot: Slot, film: FilmId) -> Option<u32> {
-    match states
-        .current_pattern(&scope(), slot)
-        .cell(Some(PartKey::Film(film)), 0)
-    {
-        Cell::Picture(id) => Some(id),
-        Cell::Rest => None,
-        other => panic!("子の欄に {other:?}"),
-    }
+    film_picture(states.current_pattern(&scope(), slot), film)
 }
 
 /// 窓が開いている面（`\b` を受けていないので知らせの面 0）で、子の時計が刻みの時刻で生まれ、
@@ -59,7 +52,7 @@ fn film_cell(states: &ScopeStates, slot: Slot, film: FilmId) -> Option<u32> {
 #[test]
 fn open_window_births_child_clock_on_noted_face() {
     let mut rt = runtime(AnimationTable::empty());
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     rt.on_tick(500, &mut states);
 
     note(&mut states, true, 0);
@@ -92,7 +85,7 @@ fn open_window_births_child_clock_on_noted_face() {
 #[test]
 fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     let mut rt = runtime(AnimationTable::empty());
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
 
     note(&mut states, false, 1);
     assert!(rt.on_tick(1000, &mut states).is_empty());
@@ -161,7 +154,7 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
 #[test]
 fn balloon_hide_cue_drops_finite_clocks() {
     let mut rt = runtime(AnimationTable::empty());
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     states.apply_balloon(&scope(), SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope(), Slot::Balloon);
@@ -182,7 +175,7 @@ fn balloon_hide_cue_drops_finite_clocks() {
 #[test]
 fn shell_and_balloon_clocks_do_not_mix() {
     let mut rt = runtime(film_table());
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     states.apply(&scope(), SurfaceTarget::Show(0));
     rt.on_tick(1000, &mut states);
     assert_eq!(clock(&rt, Slot::Shell, ENDLESS), playing(1000));
@@ -230,7 +223,7 @@ const BALLOON_TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
 fn closed_window_births_no_top_always_playback() {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = runtime_of(BALLOON_TOP_ALWAYS, rng);
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
 
     note(&mut states, false, 0);
     rt.on_tick(1000, &mut states);
@@ -256,7 +249,7 @@ fn closed_window_births_no_top_always_playback() {
 
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = runtime_of(BALLOON_TOP_ALWAYS, rng);
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     note(&mut states, true, 0);
     rt.on_tick(1000, &mut states);
     assert_eq!(
@@ -278,7 +271,7 @@ const BALLOON_PART_RANDOM: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 fn closed_window_draws_no_part_lottery() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = runtime_of(BALLOON_PART_RANDOM, rng);
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     let part_clock = |rt: &LoopRuntime| {
         rt.parts
             .clock_at(&scope(), Slot::Balloon, PartKey::Surface(100), 0)

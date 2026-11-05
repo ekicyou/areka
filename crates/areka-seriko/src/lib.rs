@@ -20,8 +20,6 @@
 //!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
 //! - bind ポリシー層 [`BindChoicePolicy`]／[`BindResolver::policy`]:
 //!   `bindoption` 宣言からカテゴリの 3 値ポリシー（mustselect／既定／複数可）を導く純関数群。
-//! - bind 類別層 [`BindDirective`]／[`parse_bind_directive`]: `\![bind,...]` トークン列を
-//!   Apply／Toggle／CategoryWide／Malformed へ類別する純関数（severity 付与は actor 責務）。
 
 mod actor;
 mod bind;
@@ -60,12 +58,12 @@ pub use actor::{
     SerikoClock, SerikoMsg, SerikoReplace, SerikoSink, spawn_seriko, spawn_seriko_clocked,
 };
 pub use bind::{
-    BindChoicePolicy, BindDirective, BindNamespace, BindResolver, DefaultBinds, NamedBindResult,
-    apply_named_bind, build_static_bindset, parse_bind_directive, scope_namespace,
+    BindChoicePolicy, BindNamespace, BindResolver, DefaultBinds, NamedBindResult, apply_named_bind,
+    build_static_bindset, scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
-pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
+pub use resolve::{SurfaceResolver, SurfaceTarget};
 pub use settle::{settle_surface, settle_time};
 pub use shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback};
 pub use skin_facts::{SkinFacts, SkinLookup, balloon_missing, surface_missing};

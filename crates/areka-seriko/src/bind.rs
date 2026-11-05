@@ -347,7 +347,7 @@ pub fn scope_namespace(scope: &ActorKey) -> Option<BindNamespace> {
 /// 着脱の反対・カテゴリ単位の形は定義の順に 1 つずつ）で、`Malformed` の `error!`＋skip は
 /// アクター（`actor_bind`）が出す（D8）。derive した `PartialEq`/`Eq` はテストの区分照合用。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BindDirective {
+pub(crate) enum BindDirective {
     /// 名前キー＋明示 on/off（`on` 欄が `"1"`/`"0"`）。実導出する（R4.1）。
     Apply {
         /// bindgroup カテゴリ名（trim 済み）。
@@ -393,7 +393,7 @@ pub enum BindDirective {
 ///
 /// 第 4 トークン以降は無視する（正典に第 4 引数なし・不透明）。副作用なし・純粋。
 /// 区分を当てるのは `apply_bind_directive`、`Malformed` の `error!` はアクターが出す（D8）。
-pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
+pub(crate) fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
     // トークンを trim して取り出す。不在または trim 後空を「空」とみなす（`None` へ畳む）。
     let trimmed =
         |i: usize| -> Option<&str> { tokens.get(i).map(|t| t.trim()).filter(|t| !t.is_empty()) };

@@ -1,4 +1,4 @@
-//! 統合テストの共有の道具（`cue_sequence`・`regression`・`balloon_face_e2e`・`bind_e2e`・`loop_integration` が `mod common;` で使う）。
+//! 統合テストの共有の道具（`regression`・`balloon_face_e2e`・`bind_e2e`・`loop_integration` が `mod common;` で使う）。
 //!
 //! 各テストは別のクレートとして組まれ、使う道具がテストごとに違うので、使わない道具の警告を許す。
 #![allow(dead_code)]

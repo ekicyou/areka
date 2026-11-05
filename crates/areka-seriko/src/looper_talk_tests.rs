@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use areka_emo_compose::{BindSet, PartKey};
+use areka_emo_compose::PartKey;
 
 use super::test_support::{cell, count, started, switch};
 use super::tests::{cfg, counting_rng};
@@ -19,7 +19,7 @@ use super::*;
 use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::state::StageNote;
-use crate::test_support::{capture_logs, part_playing, scope, table_of};
+use crate::test_support::{capture_logs, empty_states, part_playing, scope, table_of};
 
 /// 偽の時計つきのランタイムと、まだ何も表示していない状態。
 struct Stage {
@@ -35,7 +35,7 @@ impl Stage {
         Stage {
             rt: LoopRuntime::new(config)
                 .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),
-            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default())),
+            states: empty_states(),
             clock,
         }
     }

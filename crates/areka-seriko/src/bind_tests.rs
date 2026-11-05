@@ -69,39 +69,10 @@ fn mustselect_resolver() -> BindResolver {
     ))
 }
 
-/// ポリシー導出は名前空間ごと・`mustselect` 宣言カテゴリのみ MustSelect（bindopt 設計 D2）。
-#[test]
-fn policy_mustselect_only_declared_category_per_namespace() {
-    let r = mustselect_resolver();
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "目"),
-        BindChoicePolicy::MustSelect,
-        "sakura で mustselect 宣言されたカテゴリは MustSelect（bindopt 設計 D2）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "紅"),
-        BindChoicePolicy::Default,
-        "非宣言カテゴリ（紅）は正典の既定（Default）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "未知"),
-        BindChoicePolicy::Default,
-        "未知カテゴリも正典の既定（Default）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Kero, "目"),
-        BindChoicePolicy::Default,
-        "kero では sakura の mustselect を引かない（名前空間隔離）"
-    );
-}
-
-/// 空リゾルバ・`bindoption` 宣言なしの表は全カテゴリ既定（bindopt 設計 D3）。
+/// `bindoption` 宣言なしの表は全カテゴリ既定（bindopt 設計 D3）。空リゾルバは
+/// `empty_resolver_is_default_policy_and_never_reaches_apply` が見る。
 #[test]
 fn policy_empty_or_absent_is_default() {
-    assert_eq!(
-        BindResolver::empty().policy(BindNamespace::Sakura, "目"),
-        BindChoicePolicy::Default
-    );
     assert_eq!(
         tiny_resolver().policy(BindNamespace::Sakura, "腕"),
         BindChoicePolicy::Default,

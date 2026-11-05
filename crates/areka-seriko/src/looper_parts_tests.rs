@@ -12,7 +12,7 @@ use super::test_support::{shell_runtime, switch};
 use super::tests::{always_fire, cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::test_support::{part_playing as playing, table_of};
+use crate::test_support::{empty_states, part_frames, part_playing as playing, table_of};
 
 fn no_binds() -> BindSet {
     BindSet::from_ids([])
@@ -37,14 +37,6 @@ fn show_of(cmd: &DisplayCommand) -> (u32, &PatternState) {
     }
 }
 
-/// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
-fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
-    pattern
-        .part(part)
-        .map(|(id, f)| (id, f.surface_id))
-        .collect()
-}
-
 /// 一番上 0 が子 100 を置き、1 は何も置かない。100 の animation0 は 101（すぐ）→ 102（500ms 後）
 /// → `-1`（さらに 500ms 後）。
 const CHILD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
@@ -61,24 +53,24 @@ const CHILD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 #[test]
 fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     let mut rt = LoopRuntime::new(cfg(table_of(CHILD), always_fire()));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
+    let mut states = empty_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(0));
 
     rt.on_tick(0, &mut states);
     let cmds = rt.on_tick(1000, &mut states);
-    let playing = Some(crate::parts::PartAnim::Playing {
-        started_at_ms: 1000,
-        acts_through: None,
-    });
-    assert_eq!(rt.parts.clock(&scope, 100, 0), playing, "境界で部品が発火");
+    assert_eq!(
+        rt.parts.clock(&scope, 100, 0),
+        playing(1000),
+        "境界で部品が発火"
+    );
     assert_eq!(cmds.len(), 1, "部品のコマが載った Show が 1 件");
     assert_eq!(part_frames(show_of(&cmds[0]).1, 100), vec![(0, 101)]);
 
     // 面の切り替え: 一番上の再生だけ捨て、部品の時計はそのまま。
     states.apply(&scope, SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope, Slot::Shell);
-    assert_eq!(rt.parts.clock(&scope, 100, 0), playing);
+    assert_eq!(rt.parts.clock(&scope, 100, 0), playing(1000));
 
     // シェルの表の差し替え: 部品の時計を捨てる。
     states.rebase_shell(crate::DefaultBinds::uniform(no_binds()));
@@ -92,7 +84,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
 fn refresh_reloads_part_frames_at_last_tick_time() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table_of(CHILD), rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
+    let mut states = empty_states();
     let scope = ActorKey::from("0");
 
     assert_eq!(
@@ -128,10 +120,7 @@ fn refresh_reloads_part_frames_at_last_tick_time() {
     assert_eq!(part_frames(pattern, 100), vec![(0, 102)]);
     assert_eq!(
         rt.parts.clock(&scope, 100, 0),
-        Some(crate::parts::PartAnim::Playing {
-            started_at_ms: 1000,
-            acts_through: None,
-        }),
+        playing(1000),
         "時計は書き換えない"
     );
     assert_eq!(probe.lock().unwrap().calls, 1, "乱数を呼ばない");
@@ -158,7 +147,7 @@ fn table_without_animated_parts_never_enters_part_path() {
     assert!(!table.has_animated_parts(), "前提: 動く部品が無い表");
     let (rng, probe) = counting_rng(&[0; 16]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
+    let mut states = empty_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(0));
 
@@ -214,7 +203,7 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
         0
     });
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(no_binds()));
+    let mut states = empty_states();
     let sakura = ActorKey::from("0");
     let kero = ActorKey::from("1");
     states.apply(&kero, SurfaceTarget::Show(0));

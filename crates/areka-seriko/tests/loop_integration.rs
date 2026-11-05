@@ -11,7 +11,7 @@
 //!
 //! 全ステップ（cue と tick）は seriko の単一 inbox を FIFO 共有する。送り終えたら `close()`→`join()`
 //! の 1 点のみで同期する。`join` 復帰時点で全ステップは単一スレッドで処理済みゆえ、`records()` の
-//! 発行列を決定論的に照合できる（cue_sequence.rs・regression.rs と同じ技法）。
+//! 発行列を決定論的に照合できる（regression.rs と同じ技法）。
 //!
 //! # 表の構築（looper 単体・table.rs と同一経路）
 //!

@@ -104,7 +104,7 @@ fn empty_always_keeps_the_existing_empty_warn() {
 
 /// 門 `is_continuous()`: 一番上の `random` だけの表は偽、`always` を 1 本採れば真。
 #[test]
-fn is_continuous_is_true_only_when_always_or_animated_parts_exist() {
+fn random_only_is_not_continuous_always_is() {
     let (random_only, _) = table_and_logs(&surface0_with("random,2"));
     assert!(!random_only.has_animated_parts());
     assert!(!random_only.is_continuous());
@@ -147,10 +147,10 @@ fn fixture_table_carries_hand_written_always() {
     assert!(w[0].contains("surface_id=10") && w[0].contains("animation_id=0"));
 }
 
-/// 実物の emo2 の表: `always` を持たず、門 `is_continuous()` は今の門
-/// （`has_animated_parts` ＝ 2110／2210 が自分のアニメーションを持つので真）と同じ値。
+/// 実物の emo2 の表: `always` を持たず、門 `is_continuous()` は `has_animated_parts`
+/// （2110／2210 が自分のアニメーションを持つので真）と同じ値。
 #[test]
-fn emo2_table_is_continuous_equals_current_gate() {
+fn emo2_table_is_continuous_through_animated_parts() {
     let path = crate::sample_test_support::emo2_root()
         .join("shell")
         .join("master")
@@ -159,7 +159,10 @@ fn emo2_table_is_continuous_equals_current_gate() {
     let world = EmoWorld::build(&areka_parsers::shell::parse(&content));
     let table = AnimationTable::from_world(&world);
 
-    assert!(table.has_animated_parts(), "本 spec の前と同じ（真）");
+    assert!(
+        table.has_animated_parts(),
+        "2110／2210 が自分のアニメーションを持つ"
+    );
     assert_eq!(table.is_continuous(), table.has_animated_parts());
     for id in world.surface_ids() {
         assert!(

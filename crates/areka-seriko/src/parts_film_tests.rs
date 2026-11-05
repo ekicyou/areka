@@ -8,7 +8,7 @@
 use std::num::NonZeroU32;
 
 use areka_emo_compose::{
-    BindSet, Cell, ElementKind, EmoWorld, FilmId, FilmSheet, PartKey, PatternState, SurfaceMaster,
+    BindSet, ElementKind, EmoWorld, FilmId, FilmSheet, PartKey, PatternState, SurfaceMaster,
 };
 use areka_sakura::ActorKey;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -17,7 +17,7 @@ use super::{PartAnim, PartClocks};
 use crate::looper::tests::counting_rng;
 use crate::state::Slot;
 use crate::table::AnimationTable;
-use crate::test_support::{part_playing as playing, scope};
+use crate::test_support::{film_picture, part_playing as playing, scope};
 use crate::timeline::LoopRng;
 
 /// 終わりなしの子（コマ 10・11・12、各 100ms・周期 300）。
@@ -106,15 +106,6 @@ fn tick(
     tick_at(clocks, table, &scope(), Slot::Shell, top, now_ms, rng)
 }
 
-/// 子の欄の絵の番号（載っていなければ `None`＝経過 0）。
-fn picture(p: &PatternState, film: FilmId) -> Option<u32> {
-    match p.cell(Some(PartKey::Film(film)), 0) {
-        Cell::Picture(id) => Some(id),
-        Cell::Rest => None,
-        other => panic!("子の欄に {other:?}"),
-    }
-}
-
 fn clock(clocks: &PartClocks, slot: Slot, film: FilmId) -> Option<PartAnim> {
     clocks.clock_at(&scope(), slot, PartKey::Film(film), 0)
 }
@@ -134,7 +125,7 @@ fn film_clock_is_born_when_it_becomes_visible() {
     assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(1000));
     assert!(p.is_empty(), "1 枚目は経過 0 と同じ");
     let p = tick(&mut clocks, &table, 0, 1100, &mut rng);
-    assert_eq!(picture(&p, ENDLESS), Some(11));
+    assert_eq!(film_picture(&p, ENDLESS), Some(11));
     let p = tick(&mut clocks, &table, 0, 1300, &mut rng);
     assert!(p.is_empty(), "2 周目の頭は 1 枚目");
     assert_eq!(probe.lock().unwrap().calls, 0, "子は乱数を引かない");
@@ -151,7 +142,7 @@ fn endless_film_continues_across_surfaces_and_while_hidden() {
     tick(&mut clocks, &table, 0, 1000, &mut rng);
     let p = tick(&mut clocks, &table, 1, 1150, &mut rng);
     assert_eq!(
-        picture(&p, ENDLESS),
+        film_picture(&p, ENDLESS),
         Some(11),
         "同じ絵を置く別のサーフェスで続き"
     );
@@ -164,7 +155,11 @@ fn endless_film_continues_across_surfaces_and_while_hidden() {
         "終わりなしは捨てない"
     );
     let p = tick(&mut clocks, &table, 0, 1250, &mut rng);
-    assert_eq!(picture(&p, ENDLESS), Some(12), "見えなかった間も進んでいる");
+    assert_eq!(
+        film_picture(&p, ENDLESS),
+        Some(12),
+        "見えなかった間も進んでいる"
+    );
 }
 
 /// 子のサーフェスに置いた絵も、親の切り替えで巻き戻らない（要件 1.9・4.4）。
@@ -178,9 +173,13 @@ fn film_in_child_surface_does_not_rewind() {
     assert!(p.is_empty());
     assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(1000));
     let p = tick(&mut clocks, &table, 4, 1100, &mut rng);
-    assert_eq!(picture(&p, ENDLESS), Some(11));
+    assert_eq!(film_picture(&p, ENDLESS), Some(11));
     let p = tick(&mut clocks, &table, 0, 1200, &mut rng);
-    assert_eq!(picture(&p, ENDLESS), Some(12), "子から一番上へ移っても続き");
+    assert_eq!(
+        film_picture(&p, ENDLESS),
+        Some(12),
+        "子から一番上へ移っても続き"
+    );
 }
 
 /// 回数つき: 見えなくなった評価で捨てられ、戻ると頭から（要件 2.3）。生まれた・捨てたは `debug!`。
@@ -193,7 +192,7 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
     let (_, lines) = capture_lines(LineFormat::LevelTargetFields, || {
         tick(&mut clocks, &table, 3, 1000, &mut rng);
         let p = tick(&mut clocks, &table, 3, 1100, &mut rng);
-        assert_eq!(picture(&p, ONCE), Some(21));
+        assert_eq!(film_picture(&p, ONCE), Some(21));
 
         let p = tick(&mut clocks, &table, 2, 1150, &mut rng);
         assert!(p.is_empty());
@@ -211,7 +210,7 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
         );
         assert!(p.is_empty(), "頭＝経過 0");
         let p = tick(&mut clocks, &table, 3, 1600, &mut rng);
-        assert_eq!(picture(&p, ONCE), Some(21));
+        assert_eq!(film_picture(&p, ONCE), Some(21));
     });
     let debug = |needle: &str| {
         lines
@@ -243,14 +242,14 @@ fn finite_film_continuously_visible_keeps_going_and_stays_stopped() {
 
     tick(&mut clocks, &table, 3, 1000, &mut rng);
     let p = tick(&mut clocks, &table, 1, 1100, &mut rng);
-    assert_eq!(picture(&p, ONCE), Some(21));
+    assert_eq!(film_picture(&p, ONCE), Some(21));
     assert_eq!(
         clock(&clocks, Slot::Shell, ONCE),
         playing(1000),
         "始め直さない"
     );
     let p = tick(&mut clocks, &table, 3, 5000, &mut rng);
-    assert_eq!(picture(&p, ONCE), Some(21), "最後のコマで止まったまま");
+    assert_eq!(film_picture(&p, ONCE), Some(21), "最後のコマで止まったまま");
     assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(1000));
 }
 
@@ -313,7 +312,7 @@ fn clocks_are_separate_per_scope_and_face_kind() {
         1180,
         &mut rng,
     );
-    assert_eq!(picture(&p, ONCE), Some(21));
+    assert_eq!(film_picture(&p, ONCE), Some(21));
 }
 
 /// 入れ物 1 つの回数つきの時計を全部捨てる口（窓の新しい出番用）。終わりなしと、ほかの入れ物は残す。

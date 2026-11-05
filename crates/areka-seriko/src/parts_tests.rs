@@ -8,14 +8,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use areka_emo_compose::{BindSet, PatternState};
+use areka_emo_compose::{BindSet, Cell, PartKey, PatternState};
 use areka_sakura::ActorKey;
 
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
 use crate::state::Slot;
 use crate::table::AnimationTable;
-use crate::test_support::{capture_logs, scope, table_of};
+use crate::test_support::{capture_logs, part_frames, part_playing, scope, table_of};
 use crate::timeline::LoopRng;
 
 pub(super) fn no_binds() -> BindSet {
@@ -29,14 +29,6 @@ pub(super) fn calls(probe: &Arc<Mutex<RngProbe>>) -> usize {
 /// overlay・位置 0,0 のコマ（一番上の欄に手で置く用）。
 pub(super) use crate::test_support::overlay_frame as overlay;
 
-/// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
-pub(super) fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
-    pattern
-        .part(part)
-        .map(|(id, f)| (id, f.surface_id))
-        .collect()
-}
-
 /// 部品の欄に載っている部品の番号（昇順）。
 fn parts_in_field(pattern: &PatternState) -> Vec<u32> {
     (0..1000)
@@ -46,7 +38,7 @@ fn parts_in_field(pattern: &PatternState) -> Vec<u32> {
 
 /// 刻み 1 回を回す（一番上 `top`・一番上の欄 `top_pattern` から始めて、部品の欄を作り直した結果を返す）。
 #[allow(clippy::too_many_arguments)]
-fn tick(
+pub(super) fn tick(
     clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
@@ -128,13 +120,7 @@ fn lottery_only_at_visible_boundary_ticks_then_progress() {
     // 次の境界: 1 回だけ抽選して当たる。経過 0 は先頭の待ちの前なのでコマ無し。
     let p = tick(&mut clocks, &table, 0, &b, 2000, true, &mut rng, &top);
     assert_eq!(calls(&probe), 1);
-    assert_eq!(
-        clocks.clock(&scope(), 100, 0),
-        Some(PartAnim::Playing {
-            started_at_ms: 2000,
-            acts_through: None,
-        })
-    );
+    assert_eq!(clocks.clock(&scope(), 100, 0), part_playing(2000));
     assert!(part_frames(&p, 100).is_empty(), "Pending はコマ無し");
 
     // 経過 60: 101。境界を跨がないので乱数は増えない。
@@ -203,13 +189,7 @@ fn playing_part_resumes_from_elapsed_after_being_hidden() {
     // 子を置いていない面へ: 触らない（時計はそのまま）。
     let p = tick(&mut clocks, &table, 1, &b, 1200, false, &mut rng, &top);
     assert!(p.is_empty());
-    assert_eq!(
-        clocks.clock(&scope(), 100, 0),
-        Some(PartAnim::Playing {
-            started_at_ms: 1000,
-            acts_through: None,
-        })
-    );
+    assert_eq!(clocks.clock(&scope(), 100, 0), part_playing(1000));
 
     // 戻った刻み: 経過 250 → 102（101 からやり直さない）。
     let p = tick(&mut clocks, &table, 0, &b, 1250, false, &mut rng, &top);
@@ -321,13 +301,7 @@ fn frame_pointing_to_another_surface_is_evaluated_in_the_same_tick() {
     assert_eq!(calls(&probe), 2, "100 の後に、そのコマが指した 200 を引く");
     assert_eq!(part_frames(&p, 100), vec![(0, 200)]);
     assert_eq!(part_frames(&p, 200), vec![(0, 201)]);
-    assert_eq!(
-        clocks.clock(&scope(), 200, 0),
-        Some(PartAnim::Playing {
-            started_at_ms: 1000,
-            acts_through: None,
-        })
-    );
+    assert_eq!(clocks.clock(&scope(), 200, 0), part_playing(1000));
 }
 
 /// element定義で置いた子と、一番上のコマ（pattern定義）が指した同じ番号は 1 つの時計を使う
@@ -370,13 +344,7 @@ fn element_child_and_pattern_target_share_one_clock() {
         &mut rng,
         &PatternState::default(),
     );
-    assert_eq!(
-        clocks.clock(&scope(), 100, 0),
-        Some(PartAnim::Playing {
-            started_at_ms: 1000,
-            acts_through: None,
-        })
-    );
+    assert_eq!(clocks.clock(&scope(), 100, 0), part_playing(1000));
 }
 
 /// 同じ子を 1 つの親の何か所にも、内側の子からも置いても、抽選は 1 回・欄は 1 つ（要件 5.2・5.4）。
@@ -467,10 +435,7 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     );
     assert_eq!(
         clocks.clock(&scope(), 40, 0),
-        Some(PartAnim::Playing {
-            started_at_ms: 3000,
-            acts_through: None,
-        }),
+        part_playing(3000),
         "絵に出ていない 40 の時計が動き出す"
     );
     assert_eq!(part_frames(&p, 100), vec![(5, 41)]);
@@ -487,12 +452,12 @@ const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
 
 /// 時計を書き換えない口（出来事の直後の `refresh`・抽選の時計は書き換えない）で部品の欄を作り直した
 /// 結果を返す。
-fn peek_at(
+pub(super) fn refresh_at(
     clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
     binds: &BindSet,
-    now_ms: u64,
+    at_ms: Option<u64>,
     top_pattern: &PatternState,
 ) -> PatternState {
     let mut pattern = top_pattern.clone();
@@ -502,7 +467,7 @@ fn peek_at(
         top,
         binds,
         table,
-        Some(now_ms),
+        at_ms,
         true,
         &mut crate::seeded_rng(0),
         &mut pattern,
@@ -531,32 +496,39 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     // 時計が 1 本も無いうちは欄が空になる（前の写しの欄も消える）。
     let mut stale = PatternState::default();
     stale.set_part(100, 0, overlay(999));
-    assert!(peek_at(&mut clocks, &table, 0, &b, 900, &stale).is_empty());
+    assert!(refresh_at(&mut clocks, &table, 0, &b, Some(900), &stale).is_empty());
 
     tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
     assert_eq!(calls(&probe), 1);
-    let playing = Some(PartAnim::Playing {
-        started_at_ms: 1000,
-        acts_through: None,
-    });
+    let playing = part_playing(1000);
 
     for _ in 0..3 {
         assert!(
-            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1000, &top), 100).is_empty(),
+            part_frames(
+                &refresh_at(&mut clocks, &table, 0, &b, Some(1000), &top),
+                100
+            )
+            .is_empty(),
             "Pending はコマ無し"
         );
         assert_eq!(
-            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1060, &stale), 100),
+            part_frames(
+                &refresh_at(&mut clocks, &table, 0, &b, Some(1060), &stale),
+                100
+            ),
             vec![(0, 101)],
             "前の写しの欄は作り直される"
         );
         // 末尾の時刻: コマは出すが時計は `Playing` のまま。
         assert_eq!(
-            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1100, &top), 100),
+            part_frames(
+                &refresh_at(&mut clocks, &table, 0, &b, Some(1100), &top),
+                100
+            ),
             vec![(0, 102)]
         );
         // 見えない面では何も書かない。
-        assert!(peek_at(&mut clocks, &table, 1, &b, 1100, &stale).is_empty());
+        assert!(refresh_at(&mut clocks, &table, 1, &b, Some(1100), &stale).is_empty());
         assert_eq!(clocks.clock(&scope(), 100, 0), playing);
     }
     assert_eq!(calls(&probe), 1, "時計を書き換えない口は乱数を呼ばない");
@@ -573,7 +545,10 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     // 保っている間も同じ。
     for _ in 0..3 {
         assert_eq!(
-            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1500, &top), 100),
+            part_frames(
+                &refresh_at(&mut clocks, &table, 0, &b, Some(1500), &top),
+                100
+            ),
             vec![(0, 102)]
         );
     }
@@ -604,22 +579,22 @@ fn peek_does_not_write_inactive_bind_random_frames() {
 
     tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
     assert_eq!(
-        part_frames(&peek_at(&mut clocks, &table, 0, &on, 1050, &top), 100),
+        part_frames(
+            &refresh_at(&mut clocks, &table, 0, &on, Some(1050), &top),
+            100
+        ),
         vec![(5, 101), (6, 103)]
     );
 
     // 外した直後: 5 のコマは書かず、`random` の 6 は書く。5 の時計は残る。
     assert_eq!(
-        part_frames(&peek_at(&mut clocks, &table, 0, &off, 1050, &top), 100),
+        part_frames(
+            &refresh_at(&mut clocks, &table, 0, &off, Some(1050), &top),
+            100
+        ),
         vec![(6, 103)]
     );
-    assert_eq!(
-        clocks.clock(&scope(), 100, 5),
-        Some(PartAnim::Playing {
-            started_at_ms: 1000,
-            acts_through: None,
-        })
-    );
+    assert_eq!(clocks.clock(&scope(), 100, 5), part_playing(1000));
 
     // 次の刻みで消える。
     tick(&mut clocks, &table, 0, &off, 1100, false, &mut rng, &top);
@@ -662,7 +637,17 @@ fn clear_drops_clocks_of_every_scope() {
     clocks.clear(Slot::Shell);
     assert_eq!(clocks.clock(&scope(), 100, 0), None);
     assert_eq!(clocks.clock(&other, 100, 0), None);
-    assert!(peek_at(&mut clocks, &table, 0, &b, 1060, &PatternState::default()).is_empty());
+    assert!(
+        refresh_at(
+            &mut clocks,
+            &table,
+            0,
+            &b,
+            Some(1060),
+            &PatternState::default()
+        )
+        .is_empty()
+    );
 }
 
 pub(super) fn count(lines: &[String], needles: &[&str]) -> usize {
@@ -776,8 +761,8 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
     let lines = capture_logs(|| {
         tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
         for _ in 0..3 {
-            peek_at(&mut clocks, &table, 0, &on, 1100, &top);
-            peek_at(&mut clocks, &table, 0, &off, 1100, &top);
+            refresh_at(&mut clocks, &table, 0, &on, Some(1100), &top);
+            refresh_at(&mut clocks, &table, 0, &off, Some(1100), &top);
         }
         tick(&mut clocks, &table, 0, &on, 1100, false, &mut rng, &top);
         tick(&mut clocks, &table, 0, &off, 1150, false, &mut rng, &top);
@@ -881,20 +866,95 @@ fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself()
     // 着せ替えに無くても消さずに経過から進める。
     let p = tick(&mut clocks, &table, 0, &b, 1060, true, &mut rng, &top);
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
-    assert_eq!(
-        clocks.clock(&scope(), 100, 0),
-        Some(PartAnim::Playing {
-            started_at_ms: 1000,
-            acts_through: None,
-        })
-    );
+    assert_eq!(clocks.clock(&scope(), 100, 0), part_playing(1000));
 
     // 抽選も作り直しも同じ時計を読む（`refresh` も欄を書く）。
-    let p = peek_at(&mut clocks, &table, 0, &b, 1110, &top);
+    let p = refresh_at(&mut clocks, &table, 0, &b, Some(1110), &top);
     assert_eq!(part_frames(&p, 100), vec![(0, 102)]);
     assert_eq!(
         calls(&probe),
         0,
         "呼ばれるだけの animation は乱数を引かない"
     );
+}
+
+/// 部品 `part` の animation 0 の欄の読み（サーフェスを指すコマは番号）。
+pub(super) fn cell_of(p: &PatternState, part: u32) -> Option<Option<u32>> {
+    match p.cell(Some(PartKey::Surface(part)), 0) {
+        Cell::Rest => None,
+        Cell::Frame(f) => Some(Some(f.surface_id)),
+        Cell::Blank => Some(None),
+        Cell::Picture(_) => unreachable!("作者のサーフェスの部品は絵を指さない"),
+    }
+}
+
+/// 一番上 0 が子 40 を置き、2 は何も置かない。40 の animation0 は random,2 で 42（すぐ）→ 1000ms で `-1`。
+const HIDDEN_END: &str = "surface0\n{\nelement0,overlay,40,0,0\n}\n\
+    surface2\n{\n}\n\
+    surface40\n{\nanimation0.interval,random,2\n\
+    animation0.pattern0,overlay,42,0,0,0\n\
+    animation0.pattern1,overlay,-1,1000,0,0\n}\n\
+    surface42\n{\n}\n";
+
+/// 見えない間に実は終わっていた再生は、見え直した境目の刻みで抽選に戻る（1 回分遅れない・
+/// 時刻は正確に扱う）。
+#[test]
+fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
+    let table = table_of(HIDDEN_END);
+    let (mut rng, probe) = counting_rng(&[0, 0]);
+    let mut clocks = PartClocks::default();
+    let (b, top) = (BindSet::default(), PatternState::default());
+
+    tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
+    assert_eq!(clocks.clock(&scope(), 40, 0), part_playing(1000));
+    tick(&mut clocks, &table, 2, &b, 1100, false, &mut rng, &top); // 40 が見えなくなる。
+    tick(&mut clocks, &table, 2, &b, 2000, true, &mut rng, &top); // 実際の時間ではここで終わる。
+    assert_eq!(
+        clocks.clock(&scope(), 40, 0),
+        part_playing(1000),
+        "見えない間は残る"
+    );
+
+    let p = tick(&mut clocks, &table, 0, &b, 3000, true, &mut rng, &top);
+    assert_eq!(probe.lock().unwrap().calls, 2, "見え直した刻みで抽選する");
+    assert_eq!(clocks.clock(&scope(), 40, 0), part_playing(3000));
+    assert_eq!(cell_of(&p, 40), Some(Some(42)), "新しい再生の頭のコマ");
+}
+
+/// 部品でも、`-1` と `-2` のすぐ後に待ち 0 の働きのコマがあるとき、warn の番号は止めた描くコマの番号:
+/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
+/// 同じ（spec: audit-seriko 要件 4.1）。
+#[test]
+fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
+    for tail in ["insert,0,0,0,0", "overlay,42,0,0,0"] {
+        let table = table_of(
+            &"surface0\n{\nelement0,overlay,40,0,0\n}\n\
+         surface40\n{\nanimation0.interval,random,2\n\
+         animation0.pattern0,overlay,42,0,0,0\n\
+         animation0.pattern1,overlay,-1,50,0,0\n\
+         animation0.pattern2,insert,0,0,0,0\n\
+         animation1.interval,random,2\n\
+         animation1.pattern0,overlay,42,0,0,0\n\
+         animation1.pattern1,overlay,-2,50,0,0\n\
+         animation1.pattern2,insert,0,0,0,0\n}\n\
+         surface42\n{\n}\n"
+                .replace("insert,0,0,0,0", tail),
+        );
+        let (mut rng, _probe) = counting_rng(&[0, 0]);
+        let mut clocks = PartClocks::default();
+        let (b, top) = (BindSet::default(), PatternState::default());
+        let lines = capture_logs(|| {
+            tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
+            tick(&mut clocks, &table, 0, &b, 1050, false, &mut rng, &top);
+        });
+        assert_eq!(clocks.clock(&scope(), 40, 0), None, "-1 で止まる");
+        assert_eq!(clocks.clock(&scope(), 40, 1), None, "-2 で止まる");
+        let warned: Vec<_> = lines
+            .iter()
+            .filter(|l| l.contains("以外の負 surface"))
+            .collect();
+        assert_eq!(warned.len(), 1, "{warned:?}");
+        assert!(warned[0].contains("animation_id=1"), "{warned:?}");
+        assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+    }
 }

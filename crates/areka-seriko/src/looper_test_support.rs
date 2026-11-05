@@ -1,20 +1,15 @@
 //! looper のテストが共有する足場（spec: areka-P0-seriko-trigger-intervals）。
 
-use areka_emo_compose::BindSet;
-
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::state::ApplyOutcome;
-use crate::test_support::{scope, table_of};
+use crate::test_support::{empty_states, scope, table_of};
 
 /// シェルの表が `text` のランタイムと、まだ何も表示していない状態。
 pub(super) fn shell_runtime(text: &str) -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
-    (
-        LoopRuntime::new(cfg(table_of(text), rng)),
-        ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default())),
-    )
+    (LoopRuntime::new(cfg(table_of(text), rng)), empty_states())
 }
 
 /// アクターの面の切り替えと同じ順で踏む（出来事の時刻は `at_ms`）。面が変わらなければ `None`。

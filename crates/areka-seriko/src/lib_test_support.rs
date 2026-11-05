@@ -1,7 +1,9 @@
 //! 層をまたぐテストの道具の受け口（spec: audit-seriko 指摘 6）。`lib.rs` がテストのときだけ
 //! `crate::test_support` として繋ぐ。表・役者・状態・部品・時刻の各テストが同じ定義を使う。
 
-use areka_emo_compose::{ComposeMethod, EmoWorld, PatternFrame, PatternState};
+use areka_emo_compose::{
+    Cell, ComposeMethod, EmoWorld, FilmId, PartKey, PatternFrame, PatternState,
+};
 use areka_sakura::ActorKey;
 use log_capture_kit::{LineFormat, capture_lines};
 
@@ -21,6 +23,13 @@ pub(crate) const KINDS: [&str; 6] = [
 /// 本文を本番と同じ順（読み手 → 畳み込み → 表）で表にする。
 pub(crate) fn table_of(text: &str) -> AnimationTable {
     AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
+}
+
+/// 着せ替えの無い空のスコープ状態。
+pub(crate) fn empty_states() -> crate::state::ScopeStates {
+    crate::state::ScopeStates::new(crate::DefaultBinds::uniform(
+        areka_emo_compose::BindSet::default(),
+    ))
 }
 
 /// 静的な着せ替え {1100, 1207} を持つ空のスコープ状態（役者と状態のテストが使う）。
@@ -103,5 +112,22 @@ pub(crate) fn draw_frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
         wait_ms,
         x: 0,
         y: 0,
+    }
+}
+
+/// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
+pub(crate) fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
+    pattern
+        .part(part)
+        .map(|(id, f)| (id, f.surface_id))
+        .collect()
+}
+
+/// 子 `film` の欄の絵（`None`＝載っていない＝経過 0）。
+pub(crate) fn film_picture(pattern: &PatternState, film: FilmId) -> Option<u32> {
+    match pattern.cell(Some(PartKey::Film(film)), 0) {
+        Cell::Picture(id) => Some(id),
+        Cell::Rest => None,
+        other => panic!("子の欄に {other:?}"),
     }
 }

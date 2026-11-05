@@ -12,7 +12,7 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use crate::test_support::table_of;
+use crate::test_support::{part_frames, table_of};
 use areka_emo_compose::{BindSet, EmoWorld};
 use dola::cue::CueSink;
 use log_capture_kit::{LineFormat, capture_lines};

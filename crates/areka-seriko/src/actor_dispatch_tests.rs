@@ -1,7 +1,7 @@
 use super::test_support::*;
 use super::*;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
 
 /// 受信端が生きていれば `emit` が `SerikoMsg::Cue` を inbox へ橋渡しする（R1.1/1.2）。
@@ -46,7 +46,10 @@ fn cue_sink_emit_forwards_cue_to_inbox() {
 
     // 担当外の Text cue（broadcast 受信）でも sink は無変形で inbox へ橋渡しする
     // （担当判定は handler の演者側 relevance の領分・sink は選別しない）。
-    dola::cue::CueSink::emit(&mut sink, text_cue(2.5, "1", "アヒル"));
+    dola::cue::CueSink::emit(
+        &mut sink,
+        cue(2.5, "1", CueCommand::Text("アヒル".into()), 0.0),
+    );
 
     match rx.recv() {
         Ok(SerikoMsg::Cue(cue)) => {
@@ -148,36 +151,6 @@ fn single_cue_emits_one_display_command() {
 
 use areka_emo_compose::{BindSet, PatternState};
 
-/// EntityRef 系の TalkCue（Shell 分類だが今の台本の変換は作らない防御枝・6.2）を組む。
-fn entityref_cue(at: f64, scope: &str, entity: u64) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::EntityRef(entity),
-        duration: 0.0,
-    }
-}
-
-/// 非 Shell（Balloon 担当＝emo-text 行き）の TalkCue（`Text`）を組む——broadcast 受信の担当外例（6.2）。
-fn text_cue(at: f64, scope: &str, text: &str) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Text(text.into()),
-        duration: 0.0,
-    }
-}
-
-/// 純粋な待ち（どの演者の担当でもない・action なし・duration のみ）の TalkCue（`Wait`）を組む。
-fn wait_cue(at: f64, scope: &str, duration: f64) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Wait,
-        duration,
-    }
-}
-
 /// ケース1（1.4/7.4）: 停止指令 Close による正常終了を独立実行テストで確認する。
 ///
 /// `spawn_seriko`→`close()`→`join()` で `Break` 経由の正常終了（`Ok`）を決定論的に固定する。
@@ -251,7 +224,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(entityref_cue(0.0, "0", 42)),
+            SerikoMsg::Cue(cue(0.0, "0", CueCommand::EntityRef(42), 0.0)),
         )
     });
 
@@ -285,7 +258,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
         SerikoLoopConfig::disabled(),
         out2,
     );
-    CueSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
+    CueSink::emit(&mut sink, cue(0.0, "0", CueCommand::EntityRef(7), 0.0)); // 防御枝＝skip
     CueSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
@@ -745,7 +718,12 @@ fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(text_cue(0.0, "0", "アヒルやアヒル")),
+            SerikoMsg::Cue(cue(
+                0.0,
+                "0",
+                CueCommand::Text("アヒルやアヒル".into()),
+                0.0,
+            )),
         )
     });
 
@@ -799,7 +777,7 @@ fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(wait_cue(0.0, "0", 0.5)),
+            SerikoMsg::Cue(cue(0.0, "0", CueCommand::Wait, 0.5)),
         )
     });
 
@@ -847,8 +825,11 @@ fn non_shell_and_wait_are_no_op_then_shell_cue_still_emits() {
         out,
     );
 
-    CueSink::emit(&mut sink, text_cue(0.0, "0", "担当外テキスト")); // 非 Shell＝skip
-    CueSink::emit(&mut sink, wait_cue(0.5, "0", 1.0)); // Wait＝skip
+    CueSink::emit(
+        &mut sink,
+        cue(0.0, "0", CueCommand::Text("担当外テキスト".into()), 0.0),
+    ); // 非 Shell＝skip
+    CueSink::emit(&mut sink, cue(0.5, "0", CueCommand::Wait, 1.0)); // Wait＝skip
     CueSink::emit(&mut sink, emote_cue(1.5, "0", "2100")); // 担当＝発行
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");

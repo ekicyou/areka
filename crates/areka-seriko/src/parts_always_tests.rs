@@ -4,17 +4,17 @@
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
 //! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
 
-use areka_emo_compose::{Cell, PartKey, PatternState};
+use areka_emo_compose::{BindSet, PatternState};
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::PartClocks;
+use super::tests::cell_of;
 use crate::looper::tests::counting_rng;
-use crate::state::Slot;
 use crate::table::AnimationTable;
 use crate::test_support::{part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
 
-/// 一番上 `top` のシェルの面で刻みを 1 回回し、部品の欄を作り直した絵を返す。
+/// 一番上 `top` のシェルの面で刻みを 1 回回し、部品の欄を作り直した絵を返す（着せ替えも一番上の欄も空）。
 fn tick(
     clocks: &mut PartClocks,
     table: &AnimationTable,
@@ -23,22 +23,17 @@ fn tick(
     crossed: bool,
     rng: &mut LoopRng,
 ) -> PatternState {
-    let mut p = PatternState::default();
-    clocks.advance(
-        &scope(),
-        Slot::Shell,
-        top,
-        &areka_emo_compose::BindSet::default(),
+    let empty = PatternState::default();
+    super::tests::tick(
+        clocks,
         table,
+        top,
+        &BindSet::default(),
         now_ms,
         crossed,
-        true,
-        None,
         rng,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
-    p
+        &empty,
+    )
 }
 
 /// 一番上 `top` のシェルの面で出来事の直後の `refresh` を時刻 `at_ms` で回し、部品の欄を作り直した絵を返す。
@@ -48,29 +43,8 @@ fn refresh(
     top: u32,
     at_ms: Option<u64>,
 ) -> PatternState {
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        top,
-        &areka_emo_compose::BindSet::default(),
-        table,
-        at_ms,
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
-    p
-}
-
-/// 部品 `part` の animation 0 の欄の読み（サーフェスを指すコマは番号）。
-fn cell_of(p: &PatternState, part: u32) -> Option<Option<u32>> {
-    match p.cell(Some(PartKey::Surface(part)), 0) {
-        Cell::Rest => None,
-        Cell::Frame(f) => Some(Some(f.surface_id)),
-        Cell::Blank => Some(None),
-        Cell::Picture(_) => unreachable!("作者のサーフェスの部品は絵を指さない"),
-    }
+    let empty = PatternState::default();
+    super::tests::refresh_at(clocks, table, top, &BindSet::default(), at_ms, &empty)
 }
 
 /// 一番上 0 と 1 が子 100 を置き、2 は何も置かない。100 の `always` は 101（待ち 0＝経過 0）→
@@ -240,73 +214,4 @@ fn always_clock_birth_is_debug_logged_once() {
         .collect();
     assert_eq!(born.len(), 1, "{lines:#?}");
     assert!(born[0].contains("part=100"), "{born:?}");
-}
-
-/// 一番上 0 が子 40 を置き、2 は何も置かない。40 の animation0 は random,2 で 42（すぐ）→ 1000ms で `-1`。
-const HIDDEN_END: &str = "surface0\n{\nelement0,overlay,40,0,0\n}\n\
-    surface2\n{\n}\n\
-    surface40\n{\nanimation0.interval,random,2\n\
-    animation0.pattern0,overlay,42,0,0,0\n\
-    animation0.pattern1,overlay,-1,1000,0,0\n}\n\
-    surface42\n{\n}\n";
-
-/// 見えない間に実は終わっていた再生は、見え直した境目の刻みで抽選に戻る（1 回分遅れない・
-/// 時刻は正確に扱う）。
-#[test]
-fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
-    let table = table_of(HIDDEN_END);
-    let (mut rng, probe) = counting_rng(&[0, 0]);
-    let mut clocks = PartClocks::default();
-
-    tick(&mut clocks, &table, 0, 1000, true, &mut rng);
-    assert_eq!(clocks.clock(&scope(), 40, 0), playing(1000));
-    tick(&mut clocks, &table, 2, 1100, false, &mut rng); // 40 が見えなくなる。
-    tick(&mut clocks, &table, 2, 2000, true, &mut rng); // 実際の時間ではここで終わる。
-    assert_eq!(
-        clocks.clock(&scope(), 40, 0),
-        playing(1000),
-        "見えない間は残る"
-    );
-
-    let p = tick(&mut clocks, &table, 0, 3000, true, &mut rng);
-    assert_eq!(probe.lock().unwrap().calls, 2, "見え直した刻みで抽選する");
-    assert_eq!(clocks.clock(&scope(), 40, 0), playing(3000));
-    assert_eq!(cell_of(&p, 40), Some(Some(42)), "新しい再生の頭のコマ");
-}
-
-/// 部品でも、`-1` と `-2` のすぐ後に待ち 0 の働きのコマがあるとき、warn の番号は止めた描くコマの番号:
-/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
-/// 同じ（要件 4.1）。
-#[test]
-fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
-    for tail in ["insert,0,0,0,0", "overlay,42,0,0,0"] {
-        let table = table_of(
-            &"surface0\n{\nelement0,overlay,40,0,0\n}\n\
-         surface40\n{\nanimation0.interval,random,2\n\
-         animation0.pattern0,overlay,42,0,0,0\n\
-         animation0.pattern1,overlay,-1,50,0,0\n\
-         animation0.pattern2,insert,0,0,0,0\n\
-         animation1.interval,random,2\n\
-         animation1.pattern0,overlay,42,0,0,0\n\
-         animation1.pattern1,overlay,-2,50,0,0\n\
-         animation1.pattern2,insert,0,0,0,0\n}\n\
-         surface42\n{\n}\n"
-                .replace("insert,0,0,0,0", tail),
-        );
-        let (mut rng, _probe) = counting_rng(&[0, 0]);
-        let mut clocks = PartClocks::default();
-        let lines = crate::test_support::capture_logs(|| {
-            tick(&mut clocks, &table, 0, 1000, true, &mut rng);
-            tick(&mut clocks, &table, 0, 1050, false, &mut rng);
-        });
-        assert_eq!(clocks.clock(&scope(), 40, 0), None, "-1 で止まる");
-        assert_eq!(clocks.clock(&scope(), 40, 1), None, "-2 で止まる");
-        let warned: Vec<_> = lines
-            .iter()
-            .filter(|l| l.contains("以外の負 surface"))
-            .collect();
-        assert_eq!(warned.len(), 1, "{warned:?}");
-        assert!(warned[0].contains("animation_id=1"), "{warned:?}");
-        assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
-    }
 }

@@ -183,14 +183,6 @@ pub(super) fn single_show(mut cmds: Vec<DisplayCommand>) -> (u32, BindSet, Patte
     }
 }
 
-/// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
-pub(super) fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
-    pattern
-        .part(part)
-        .map(|(id, f)| (id, f.surface_id))
-        .collect()
-}
-
 /// 一番上の欄を (animation の番号, コマの番号) の列で読む。
 pub(super) fn top_frames(pattern: &PatternState) -> Vec<(u32, u32)> {
     pattern.iter().map(|(id, f)| (id, f.surface_id)).collect()

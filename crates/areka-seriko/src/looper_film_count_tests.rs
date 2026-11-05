@@ -8,11 +8,12 @@
 
 use std::num::NonZeroU32;
 
-use areka_emo_compose::{BindSet, ElementKind, EmoWorld, FilmId, FilmSheet, SurfaceMaster};
+use areka_emo_compose::{ElementKind, EmoWorld, FilmId, FilmSheet, SurfaceMaster};
 
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::empty_states;
 
 const FILM: FilmId = FilmId(10);
 /// 1 コマの待ち時間。
@@ -48,7 +49,7 @@ fn one_film_table() -> AnimationTable {
 fn shown() -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(one_film_table(), rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     let scope = ActorKey::from("0");
     assert!(rt.on_tick(0, &mut states).is_empty());
     let crate::state::ApplyOutcome::Changed(_) = states.apply(&scope, SurfaceTarget::Show(0))

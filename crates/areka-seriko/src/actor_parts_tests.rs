@@ -7,7 +7,7 @@
 use super::test_support::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::DisplayCommand;
-use crate::test_support::table_of;
+use crate::test_support::{part_frames, table_of};
 use areka_emo_compose::BindSet;
 
 /// 一番上 0・2 は子 100 を置き、自分の animation9（200 → 201 → `-1`）を持つ。1 は何も置かない。

@@ -185,3 +185,13 @@
   - 前からある穴（読みだけ）: 合図の経路では periodic・talk を判定しない。抽選と `always` の再生は now に始まって呼び出しより先に置かれる。
 - 並走からの知らせ（2026-11-06・audit-ghost-catalog）: `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` が 1,000 行を割り、1,000 行の例外表からその 1 行を消す。着地の順で、件数を表の行から数え直して合わせる。
 - 6.1 組 B2（S6〜S13・S19〜S22 と、A3 の審査から来た doc 3 件）: 偽の説明と符牒（re-audit R/S・討議 #N・5.3・檻 10・design の行番号）を、今のコードに合う文に直した。`cargo doc -p areka-seriko --no-deps` の警告は 20 → 0 件。記録の行の文字列は変えていない。assert の文言は 3 つだけ変え、「討議 #N」を外した。逆斜線が減ったのは、S21 で消した手順の `\e` の 2 つだけ。申し送り（組 A4 へ）: `parts.rs` の `refresh` の doc が「回数つきの時計を全部捨てる」とだけ書いているが、3 語の時計も捨てる。
+- 6.1 組 C2（S14〜S18・S23）
+  - S14: 外に使い手の無い再輸出 4 つ（BindDirective・parse_bind_directive・BalloonResolve・resolve_balloon_key）を `pub(crate)` にした。外で名が出るのは文中の名とコメントだけ。
+  - S15: 写しの道具を寄せた（`part_frames`・`film_picture`・`empty_states` ほか）。
+  - S16: 消したテストは `bind::tests::policy_mustselect_only_declared_category_per_namespace`。
+  - S17: 名を変えたテストは 2 本。
+    - `is_continuous_is_true_only_when_always_or_animated_parts_exist` → `random_only_is_not_continuous_always_is`
+    - `emo2_table_is_continuous_equals_current_gate` → `emo2_table_is_continuous_through_animated_parts`
+  - S18: 2 本を `parts::always_tests::` から `parts::tests::` へ移した。
+  - S23: `tests/cue_sequence.rs` を `regression.rs` のケース 4 に畳んだ。
+  - テストは 561 → 560 件。

@@ -13,12 +13,12 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::{PartKey, PatternState};
 
-use super::tests::{calls, count, no_binds, overlay, part_frames};
+use super::tests::{calls, count, no_binds, overlay, refresh_at};
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
 use crate::state::Slot;
 use crate::table::AnimationTable;
-use crate::test_support::{capture_logs, part_playing as playing, scope, table_of};
+use crate::test_support::{capture_logs, part_frames, part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
 use crate::trigger::TalkWindow;
 
@@ -112,19 +112,15 @@ impl Rig {
 
     /// 面の切り替えの直後の評価（出来事の時刻 `at_ms`・窓は開いている）。
     fn refresh(&mut self, top: u32, at_ms: Option<u64>) -> PatternState {
-        let mut pattern = PatternState::default();
-        self.clocks.refresh(
-            &scope(),
-            Slot::Shell,
+        let empty = PatternState::default();
+        refresh_at(
+            &mut self.clocks,
+            &self.table,
             top,
             &no_binds(),
-            &self.table,
             at_ms,
-            true,
-            &mut crate::seeded_rng(0),
-            &mut pattern,
-        );
-        pattern
+            &empty,
+        )
     }
 
     fn clock(&self, part: u32, animation_id: u32) -> Option<PartAnim> {

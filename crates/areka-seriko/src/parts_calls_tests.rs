@@ -4,14 +4,12 @@
 //! 一番上 0 が element定義で部品 100 を置き、1 は何も置かない。刻みは `on_tick(now_ms)`、乱数は
 //! 注入列で、どちらも決定論。
 
-use areka_emo_compose::BindSet;
-
 use crate::looper::LoopRuntime;
 use crate::looper::tests::{cfg, counting_rng};
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
 use crate::table::AnimationTable;
-use crate::test_support::{scope, table_of};
+use crate::test_support::{empty_states, scope, table_of};
 use crate::timeline::LoopRng;
 
 /// 部品の中の絵の面（中身は空）。
@@ -30,18 +28,14 @@ fn shell(anims: &str) -> AnimationTable {
 fn shown(anims: &str, lottery: LoopRng, pick: u32) -> (LoopRuntime, ScopeStates) {
     let mut config = cfg(shell(anims), lottery);
     config.pick_rng = Box::new(move |_bound| pick);
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     states.apply(&scope(), SurfaceTarget::Show(0));
     (LoopRuntime::new(config), states)
 }
 
 /// 部品 100 の animation `id` の欄の絵（載っていなければ `None`）。
 fn part_cell(states: &ScopeStates, id: u32) -> Option<u32> {
-    states
-        .current_pattern(&scope(), Slot::Shell)
-        .part(100)
-        .find(|&(a, _)| a == id)
-        .map(|(_, f)| f.surface_id)
+    part_cell_of(states.current_pattern(&scope(), Slot::Shell), id)
 }
 
 /// 面を `sid` へ切り替える（アクターと同じ順・出来事の時刻は `at_ms`）。

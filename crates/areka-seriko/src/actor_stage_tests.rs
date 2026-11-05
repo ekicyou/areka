@@ -11,8 +11,8 @@ use crate::looper::parts_emo2_tests::emo2_shell_table;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
-use crate::test_support::scope;
-use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};
+use crate::test_support::{film_picture, scope};
+use areka_emo_compose::{BindSet, FilmId};
 use areka_sakura::CueCommand;
 use std::sync::Arc;
 
@@ -60,15 +60,7 @@ fn film(cmd: &DisplayCommand, film: FilmId) -> Option<u32> {
     else {
         panic!("面 1 の ShowBalloon を期待: {cmd:?}");
     };
-    cell(pattern, film)
-}
-
-fn cell(pattern: &PatternState, film: FilmId) -> Option<u32> {
-    match pattern.cell(Some(PartKey::Film(film)), 0) {
-        Cell::Picture(id) => Some(id),
-        Cell::Rest => None,
-        other => panic!("子の欄に {other:?}"),
-    }
+    film_picture(pattern, film)
 }
 
 fn count_acks(cmds: &[DisplayCommand]) -> usize {
