@@ -6,7 +6,7 @@
 //! `replace`・`add`・`bind`・ukadoc に無い語）は本転記。転記だけを行い、展開・検証・記録はしない
 //! （失敗しない）。記録は入口（`load_shell_target`）が出す。
 
-use super::decode::is_image_element_method;
+use super::decode::{is_box_element_method, is_image_element_method};
 use super::parse::parse_all;
 
 /// areka が描けない描画メソッドの element定義 1 行（欄は原文のまま）。
@@ -47,7 +47,7 @@ pub(crate) fn undrawn_lines(
             continue;
         };
         let method = fields.get(1).map(String::as_str).unwrap_or("");
-        if is_image_element_method(method) || method == "balloon" {
+        if is_image_element_method(method) || is_box_element_method(method) {
             continue;
         }
         out.push(UndrawnElementLine {

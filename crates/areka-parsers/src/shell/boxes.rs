@@ -12,7 +12,7 @@
 //! - 箱の element定義 `elementN,balloon,名前,X,Y` は番号・名前・X・Y を文字列のまま持ち、
 //!   欠けた欄は空文字列にする。
 
-use super::decode::{Reading, parse_targets};
+use super::decode::{Reading, field_string, is_box_element_method, parse_targets};
 use super::model::AppendTarget;
 use super::parse::parse_all;
 
@@ -119,17 +119,16 @@ fn surface_lines(
     if targets.is_empty() {
         return None;
     }
-    let field = |fields: &[String], i: usize| fields.get(i).cloned().unwrap_or_default();
     let elements = body
         .iter()
-        .filter(|fields| fields.get(1).map(String::as_str) == Some("balloon"))
+        .filter(|fields| is_box_element_method(fields.get(1).map_or("", String::as_str)))
         .filter_map(|fields| {
             let element = fields.first()?.strip_prefix("element")?.to_string();
             Some(BoxElementLine {
                 element,
-                name: field(fields, 2),
-                x: field(fields, 3),
-                y: field(fields, 4),
+                name: field_string(fields, 2),
+                x: field_string(fields, 3),
+                y: field_string(fields, 4),
             })
         })
         .collect();

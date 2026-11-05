@@ -5,37 +5,24 @@
 //! 不要なのは、この層が値を decode しきるため（要件 1.2）。sakura 同様に `Result` を
 //! 返さず・パニックせず・空入力で空を返す寛容決定的パスを採る（要件 2.x）。
 //!
-//! 本ファイル（タスク 4.1）が担うのは **decode スケルトンの枠組みのみ**:
-//! - トップレベルのトークン走査と、ブロックヘッダによる**ブロックディスパッチ**
-//!   （設計 System Flows「iterate top level tokens → 各ブロック種別」）。
-//! - charset 行の寛容スキップ（要件 3.1）・descript ブロックの寛容スキップ（要件 3.2）。
-//!   いずれもモデルに保持しない（`Shell` に charset/descript フィールドは存在しない）。
-//! - `surfaceNNN` ブロックからヘッダ記述子（多 id 形 `N,M`／`N-M` 含む）を append と共通の
-//!   ターゲットパーサで捕捉し、代表 id ＋構成要素枠を持つ `Surface` を積む（要件 4.1/12.5(b)）。
-//!   読めない記述子・番号は 0 にせず飛ばして崩れ（`ShellIssue`）を積む（指摘 36）。範囲の幅は
-//!   シェル全体の合計で上限 `RANGE_WIDTH_CAP` をかける（指摘 6）。
-//! - 空入力・ヘッダのみ・ヘッダ欠落・未知ブロック・未知行を寛容吸収し
-//!   走査を中断しない（要件 3.3/9.2）。
-//!
-//! **ディスパッチ優先順位（重要）**: `kero.surface.alias` と `surface.append10` は
-//! いずれも部分文字列 "surface" を含むため、素朴な `surfaceNNN` 判定より**先**に
-//! これらを分類する。優先順位は
-//! `descript` → `kero.surface.alias` → `surface.append*` → `surfaceNNN` → 未知。
-//!
-//! **スコープ境界（タスク 4.3〜4.6 のシーム）**: 本ファイルは surface の element/collision/
-//! animation まで decode する（タスク 4.2 で element/collision・タスク 4.3 で animation 実装済み）。
-//! animationN 集約は `decode_animations`（再利用可能ヘルパ）が担い、`decode_surface_body`
-//! から呼ぶ。残りはシーム:
-//! - `surface.append*` ターゲット捕捉＋追記 collision/animation → タスク 4.4 が
-//!   `decode_append_block` を実装し `Shell.appends` を充填する。append の animation 群は
-//!   `decode_animations` を再利用する（同一集約規則ゆえヘルパを共用）。
-//! - `kero.surface.alias` 写像 → タスク 4.5 が `decode_alias_block` を実装し
-//!   `Shell.aliases` を充填する（不透明キー・順序付き ID・重複保持）。
-//! - subset 外・不正の寛容吸収の最終化 → タスク 4.6 が確定。overlay・base（element）以外の
-//!   element/pattern メソッド・3 種以外の interval・collisionex・非数/欠損フィールドは
-//!   いずれも本ファイルの既存シーム（`.get()` ＋ `unwrap_or`・method/kind 判定による
-//!   スキップ）で値化せず passthrough 吸収し、既定値へ倒す。新規実装は不要で、4.6 は
-//!   この寛容挙動を確認テストで確定させる（要件 2.3/4.5/5.7/6.3/9.2/10.4）。
+//! 入口は `decode_token`（`parse_all` が字句の列を登場順に 1 つずつ渡す）。読む途中の状態
+//! （範囲の幅の合計・今の見出し・積んだ崩れ）は `Reading` が持つ。
+//! - 閉じたブレス（`Token::Brace`）は見出しで振り分ける。優先順位は
+//!   `descript` → `kero.surface.alias` → `surface.alias` → `surface.append*` → `surfaceNNN` → 未知。
+//!   alias／append は "surface" を含むので、`surfaceNNN` より**先**に判定する。
+//! - descriptブレスとトップレベル行（`Token::TopLevel`）からは `animation-sort`／`collision-sort`
+//!   だけを読む。charset・version など他の行は保持しない（要件 3.1/3.2）。
+//! - `surfaceNNN`・`surface.append*` は見出しの記述子（`N,M`・`N-M`・`!N`）を `parse_targets` で
+//!   展開せずに捕捉し、本体の element（`overlay`・`base`）・collision・animation を共有の
+//!   `decode_elements`・`decode_collisions`・`decode_animations` で読む（要件 4.1/7.3/12.5）。
+//! - `kero.surface.alias` は `KEY,[id,...]` を不透明キー＋順序付き ID へ写す（重複も保持・要件 8）。
+//! - 読めない番号は 0 にせず飛ばして崩れ（`ShellIssue`）を積む（指摘 36）。範囲の幅は
+//!   シェル全体の合計に上限 `RANGE_WIDTH_CAP` をかける（指摘 6）。崩れの知らせ
+//!   （`Token::Unclosed`／`Token::Reopened`）は `parse_all` が写すので、ここでは読まない。
+//! - それ以外のメソッド・interval の語・collisionex・未知のブレスや行は、値にしないか原文のまま
+//!   運び、走査を中断しない（要件 2.3/4.5/5.7/6.3/9.2/10.4）。
+
+use std::collections::HashMap;
 
 use super::lexer::Token;
 use super::model::{
@@ -123,7 +110,7 @@ pub(crate) fn decode_token(shell: &mut Shell, token: &Token, reading: &mut Readi
 
 /// ブレスの見出し（CSV フィールド列）でブロック種別を判定し振り分ける。
 ///
-/// 優先順位は `descript` → `kero.surface.alias` → `surface.append*` → `surfaceNNN` → 未知。
+/// 優先順位は `descript` → `kero.surface.alias` → `surface.alias` → `surface.append*` → `surfaceNNN` → 未知。
 /// alias/append は "surface" を含むため plain `surfaceNNN` より先に判定する（誤分類回避）。
 ///
 /// `body` は閉じたブレスの本体行（CSV フィールド列）。surface ブロックの
@@ -171,48 +158,23 @@ fn dispatch_block(
         }
         // 代表 id は先頭ターゲットの値（`surface1-3`→1・`surface0,5`→0・design Postcondition）。
         let id = representative_id(&targets);
-        let (elements, collisions, animations) = decode_surface_body(body, reading);
         // 定義ストリームへ登場順に push（index は push 前の len＝これから積む位置・要件 12.5(d)）。
         shell
             .definitions
             .push(DefRef::Surface(shell.surfaces.len()));
+        // element・collision・animation は surface・append で同じ表現ゆえ共有ヘルパで読む（要件 12.5(c)/7.3）。
+        // overlay・base 以外の element メソッド・collisionex 等は値にしない（要件 4.5/9.2）。
         shell.surfaces.push(Surface {
             id,
             targets,
-            elements,
-            collisions,
-            animations,
+            elements: decode_elements(body, reading),
+            collisions: decode_collisions(body, reading),
+            animations: decode_animations(body, reading),
         });
         // 末尾分岐ゆえ早期 return は不要（この後は未知ブロック吸収コメントのみ）。
     }
 
     // 未知ブロック（未対応ヘッダ）は寛容に吸収する（要件 9.2）。何も積まない。
-}
-
-/// surface ブロック本体（element/collision/animation 行）を対応型へ decode する。
-///
-/// タスク 4.2 が element overlay ＋ collision（レイヤ昇順・矩形）を充填する。
-/// - element overlay・base: `elementN,overlay,PATH,X,Y`（`base` も同じ）を `Element` へ
-///   （画像パスは無加工・レイヤ昇順で安定ソート・要件 4.2/4.3/4.4）。
-/// - collision: `collisionN,始点X,始点Y,終点X,終点Y,ID` を `Collision` へ（left/top/
-///   right/bottom ＋不透明領域名・出現順・要件 6.1/6.2）。
-///
-/// animation 行（`animationN.interval` / `animationN.patternM`）は `decode_animations`
-/// が animation ID で集約する（タスク 4.3）。overlay・base 以外の element メソッド・
-/// collisionex 等は値化せず読み飛ばして passthrough 吸収する（タスク 4.6 が確認・
-/// パニックしない・要件 4.5/9.2）。
-fn decode_surface_body(
-    body: &[Vec<String>],
-    reading: &mut Reading,
-) -> (Vec<Element>, Vec<Collision>, Vec<Animation>) {
-    // element overlay・base は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 12.5(c)）。
-    let elements: Vec<Element> = decode_elements(body, reading);
-    // collision は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 6.1/6.2/7.3）。
-    let collisions: Vec<Collision> = decode_collisions(body, reading);
-    // animation は本体行全体を走査する `decode_animations` で集約する（要件 5.6）。
-    let animations: Vec<Animation> = decode_animations(body, reading);
-
-    (elements, collisions, animations)
 }
 
 /// 本体行群の `elementN,overlay,PATH,X,Y`・`elementN,base,PATH,X,Y` を `Element` へ decode する
@@ -268,6 +230,12 @@ pub(super) fn is_image_element_method(word: &str) -> bool {
     matches!(word, "overlay" | "base")
 }
 
+/// 箱の転記（`boxes.rs`）が拾う element定義の描画メソッドの語か（完全一致・`balloon`）。
+/// 描けない行の転記（`undrawn.rs`）は、これと `is_image_element_method` のどちらも偽の行を拾う。
+pub(super) fn is_box_element_method(word: &str) -> bool {
+    word == "balloon"
+}
+
 /// 本体行群の `collisionN,始点X,始点Y,終点X,終点Y,ID` を `Collision` へ decode する（要件 6.1/6.2）。
 ///
 /// surface 本体・`surface.append` 本体（タスク 4.4）双方から呼べる **再利用可能ヘルパ**。
@@ -307,7 +275,7 @@ fn decode_collisions(body: &[Vec<String>], reading: &mut Reading) -> Vec<Collisi
 }
 
 /// 本体行の `idx` フィールドを無加工の `String` として取り出す（欠落は空文字列）。
-fn field_string(fields: &[String], idx: usize) -> String {
+pub(super) fn field_string(fields: &[String], idx: usize) -> String {
     fields.get(idx).cloned().unwrap_or_default()
 }
 
@@ -369,9 +337,9 @@ fn field_u32(fields: &[String], idx: usize) -> u32 {
 ///
 /// 失敗しない（`Vec` を返す・パニックしない・空/崩れ入力に寛容・要件 2.x/9.2）。
 fn decode_animations(body: &[Vec<String>], reading: &mut Reading) -> Vec<Animation> {
-    // ID の初出順を保つため Vec で管理し、線形探索で既存 animation を引く
-    // （emo2 subset の animation 数は小さく、決定性と初出順保持を優先する）。
+    // 並びは初出順の Vec、引きは番号 → 位置の表（指摘 72）。
     let mut animations: Vec<Animation> = Vec::new();
+    let mut slots: HashMap<u32, usize> = HashMap::new();
 
     for fields in body {
         let key = fields.first().map(String::as_str).unwrap_or("");
@@ -399,7 +367,7 @@ fn decode_animations(body: &[Vec<String>], reading: &mut Reading) -> Vec<Animati
             // `Interval::Other` へ転記する（fallback-Bind は撤去済み＝語彙を落とさない・
             // 黙らない）。interval 行は当該 ID の slot を確定させる（初出順保持）。
             let interval = normalize_interval(fields);
-            let anim = animation_slot(&mut animations, id);
+            let anim = animation_slot(&mut animations, &mut slots, id);
             anim.interval = interval;
             anim.interval_written = true;
             continue;
@@ -428,7 +396,7 @@ fn decode_animations(body: &[Vec<String>], reading: &mut Reading) -> Vec<Animati
                 x: field_i64(fields, tail + 1),
                 y: field_i64(fields, tail + 2),
             };
-            let anim = animation_slot(&mut animations, id);
+            let anim = animation_slot(&mut animations, &mut slots, id);
             anim.patterns.push(pattern);
             continue;
         }
@@ -457,20 +425,23 @@ fn pattern_target(fields: &[String]) -> (String, usize) {
 
 /// `animations` 内の ID `id` の `Animation` への可変参照を返す。無ければ既定 `Interval::Bind`
 /// ＋空 pattern の枠を初出順で末尾に積んでから返す（interval が pattern より後に来ても
-/// 同一 ID へ束ねられるようにする・要件 5.6）。
-fn animation_slot(animations: &mut Vec<Animation>, id: u32) -> &mut Animation {
-    if let Some(pos) = animations.iter().position(|a| a.id == id) {
-        return &mut animations[pos];
-    }
-    animations.push(Animation {
-        id,
-        // 認識可能な interval 行を見るまでの暫定既定（要件 5.1 の既定挙動）。
-        interval: Interval::Bind,
-        interval_written: false,
-        patterns: Vec::new(),
+/// 同一 ID へ束ねられるようにする・要件 5.6）。`slots` は番号 → `animations` の位置の表。
+fn animation_slot<'a>(
+    animations: &'a mut Vec<Animation>,
+    slots: &mut HashMap<u32, usize>,
+    id: u32,
+) -> &'a mut Animation {
+    let pos = *slots.entry(id).or_insert_with(|| {
+        animations.push(Animation {
+            id,
+            // 認識可能な interval 行を見るまでの暫定既定（要件 5.1 の既定挙動）。
+            interval: Interval::Bind,
+            interval_written: false,
+            patterns: Vec::new(),
+        });
+        animations.len() - 1
     });
-    let last = animations.len() - 1;
-    &mut animations[last]
+    &mut animations[pos]
 }
 
 /// `animationN.interval,KIND[,K]` 行を `Interval` へ忠実転記する（要件 5.1/5.2/5.3/8.2）。
@@ -720,5 +691,5 @@ mod interval_trigger_tests;
 /// pattern定義の欄 2 の原文（`(` で始まる並びの継ぎ直しを含む）を固定する兄弟テスト
 /// （seriko-pattern-calls 要件 2.2・2.3・2.6・2.7）。
 #[cfg(test)]
-#[path = "decode_tests_pattern_target_tests.rs"]
+#[path = "decode_pattern_target_tests.rs"]
 mod pattern_target_tests;

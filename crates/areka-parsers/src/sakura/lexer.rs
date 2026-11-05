@@ -52,10 +52,9 @@ pub(crate) enum Token {
     Bare(String),
     /// 短縮形 `\<word>N`（`word` は短縮対象語・`N` は 1 桁）。
     ///
-    /// 待ち短縮 `\wN`（`word='w'`）・バルーン面短縮 `\bN`（`word='b'`）・話者スコープ
-    /// 括弧なし形 `\pN`（`word='p'`・ukadoc `\pID`＝任意番号 0〜9）を語に依らず同一規律で
-    /// 表す一般化トークン。意味写像（`'w'`→待ち／`'b'`→バルーン面／`'p'`→話者スコープ）は
-    /// `decode` の責務（→ 対象語は `ShorthandWord` の 3 つだけ）。
+    /// 待ち短縮 `\wN`（`ShorthandWord::Wait`）・バルーン面短縮 `\bN`（`ShorthandWord::Balloon`）・
+    /// 話者スコープ括弧なし形 `\pN`（`ShorthandWord::Scope`・ukadoc `\pID`＝任意番号 0〜9）を
+    /// 語に依らず同一規律で表す一般化トークン。語ごとの意味写像は `decode` の責務。
     Shorthand { word: ShorthandWord, n: u8 },
     /// `%keyword`（システム変数・`%` を除いたキーワードを保持）。
     SysVar(String),

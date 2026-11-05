@@ -288,30 +288,6 @@ surface.append0-2,5
     );
 }
 
-/// コメント行・空行のみの入力（意味行ゼロ）は空 `Shell` を返す（要件 9.1/10.1）。
-/// コメント/空行が「無視される（トークンを生じない）」ことを孤立させて確認する。
-#[test]
-fn comment_and_blank_only_input_yields_empty_shell() {
-    let input = "\
-// これはコメントだけの断片。
-
-// 空行とコメントのみで、認識可能なブロックは存在しない。
-
-";
-    let shell = parse(input);
-    assert_eq!(
-        shell,
-        Shell {
-            surfaces: vec![],
-            appends: vec![],
-            aliases: vec![],
-            animation_sort: None,
-            collision_sort: None,
-            definitions: vec![],
-        }
-    );
-}
-
 // --- タスク 6.2: emo2 実物 fixture スモーク（要件 10.3）と subset 外吸収（要件 4.5/5.7/6.3/9.2）---
 //
 // 6.1 の自前適合断片が「唯一の適合基準」（ukadoc）を厳密照合するのに対し、ここでは

@@ -5,7 +5,7 @@
 //! `model ← lexer ← decode`）。下流が再パース不要なのは、この層が値を
 //! decode しきるため（要件 1.2）。
 //!
-//! 本ファイル（タスク 4.1）が担うのは **emo2 subset の値正規化のみ**:
+//! 本ファイルが担うのは **emo2 subset の値正規化**と、それ以外のトークンの素通し:
 //! - 待ち時間 `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
 //!   （`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。正典に無い括弧形
 //!   `\w[n]` は待ちにしない（未知タグと同じ `Raw` 素通し・要件 18.1）。
@@ -21,18 +21,12 @@
 //!   `AnchorEnd`（意味を読まない転記・開きと閉じの対応は消費側）。
 //! - 裸の `\+`／`\_+` → `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ `GenericCommand`（別名の転記）。
 //! - システム変数 `%keyword` → `SystemVar`（展開なし・要件 8）、テキスト → `Text`（要件 9）。
+//! - subset 外タグ・不正トークンは `decode_passthrough_*` の関数が `GenericCommand` / `Raw` へ
+//!   素通しする。`\q` 旧 2 連形はシーケンス依存ゆえ `fold_legacy_q` が捕捉する。
+//!   印 `\![*]` は汎用の `\!` の道、`%*` は同じ印の命令になる（script-small-tags 要件 4）。
 //!
-//! **スコープ境界（タスク 4.1 / 4.2 シーム）**: 本ファイルは emo2 subset の
-//! 値正規化のみを行う。subset 外タグ・`\!`・`\q` 旧 2 連形・
-//! 不正トークンの吸収（`GenericCommand` / `Raw`）は
-//! **タスク 4.2 の領分**であり、ここでは `decode_passthrough_*` という明示的な
-//! シーム関数へ委ねる（`\q` 旧 2 連形はシーケンス依存ゆえ `fold_legacy_q` が捕捉する）。
-//! 印 `\![*]` は汎用の `\!` の道、`%*` は同じ印の命令になる（script-small-tags 要件 4）。
-
-// 本体 `decode_noted` は `parse_noted`（→ `parse`）から非テスト経路で結線済み
-// （範囲なしの `decode` はその上に載せた、テストだけの入口）。タスク 4.2 の
-// シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag`
-// 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
+//! 本体の入口は `decode_noted`（`parse_noted`→`parse` から呼ぶ）。範囲なしの `decode` は
+//! その上に載せた、テストだけの入口。
 
 use super::char_code::{CharCodeRead, read_char_code};
 use super::lexer::{ShorthandWord, Token};
@@ -73,7 +67,7 @@ pub(crate) fn decode(tokens: Vec<Token>) -> Vec<Instruction> {
 /// - 各 `Read::span` は元のトークンの範囲。畳んだ命令は畳んだ全部を覆う。
 /// - 失敗しない（`Vec` を返す・`Result` でない・要件 10.2）。
 ///
-/// **シーケンス認識（タスク 4.2）**: 大半のトークンは 1:1 写像だが、
+/// **シーケンス認識**: 大半のトークンは 1:1 写像だが、
 /// 一部は隣接トークンを見て局所的に畳む（design L421）:
 /// - 旧 2 連 `\q[ID][タイトル]`（`Tag{q|q*,[1]}` ＋ 直後 `Text("[...]")`）→ 単一 `Raw`
 ///   （Choice 化せず丸ごと吸収・要件 5.3）。
@@ -210,8 +204,7 @@ fn fold_legacy_q(
 
 /// 単一の構文トークンを `Instruction` へ写像する。
 ///
-/// emo2 subset（本タスク 4.1）に該当するものはここで値正規化し、それ以外は
-/// `decode_passthrough_*`（タスク 4.2 のシーム）へ委ねる。
+/// emo2 subset に該当するものはここで値正規化し、それ以外は `decode_passthrough_*` へ委ねる。
 fn decode_token(token: Token, notes: &mut Vec<ReadNote>) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
@@ -302,15 +295,14 @@ fn decode_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
             name: super::model::RAISE_TAG_CARRIER.to_owned(),
             raw_args: Vec::new(),
         },
-        // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_n` `\__q` 等）は
-        // タスク 4.2 のパススルー領分。
+        // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_n` `\__q` 等）は素通しする。
         other => decode_passthrough_bare(other, notes),
     }
 }
 
 /// 正準タグ `\word[args]` を写像する。
 ///
-/// word ごとに emo2 subset の値正規化を施す。subset 外 word はタスク 4.2 のシームへ。
+/// word ごとに emo2 subset の値正規化を施す。subset 外 word は素通しする。
 fn decode_tag(word: String, args: Vec<String>, notes: &mut Vec<ReadNote>) -> Instruction {
     match word.as_str() {
         // 待ち時間（要件 3.3）: `\_w[ms]` = 絶対 ms。
@@ -379,7 +371,7 @@ fn decode_tag(word: String, args: Vec<String>, notes: &mut Vec<ReadNote>) -> Ins
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_a_5bID_2cr2_2cr3..._5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_a_5bOnID_2cr0_2cr1..._5d:1
         "_a" => decode_anchor(args),
-        // subset 外タグ（`\i` 等）はタスク 4.2 のパススルー領分。
+        // subset 外タグ（`\i` 等）は素通しする。
         _ => decode_passthrough_tag(word, args, notes),
     }
 }
@@ -467,9 +459,9 @@ fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// タスク 4.2 寛容パススルー規則（要件 10/11.2/13.8）
+// 寛容パススルー規則（要件 10/11.2/13.8）
 //
-// emo2 subset 外タグ・`move` 以外の `\!`・不正トークンの吸収先。`move` 以外の
+// emo2 subset 外タグ・`\!`・不正トークンの吸収先。
 // `\!` は `GenericCommand`（種別＋生引数保持）、それ以外（subset 外正準タグ・
 // subset 外 bare＝**正典スコープ bare `\0`/`\1`/`\h`/`\u` を除く**・lexer Raw 断片）は
 // 生情報を失わない `Raw` へ。いずれもエラーを
@@ -491,7 +483,7 @@ fn decode_passthrough_tag(
     Instruction::Raw(reconstruct_tag(&word, &args))
 }
 
-/// 【タスク 4.2】`move` 以外の `\!` → `GenericCommand { name, raw_args }`（要件 7.2/7.3）。
+/// `\!` → `GenericCommand { name, raw_args }`（要件 7.2/7.3）。
 ///
 /// 第 1 引数をコマンド種別 `name`、残りを生引数 `raw_args` として保持する
 /// （意味解釈・構造化はしない・design L426/L517）。引数が空（`\![]`）の場合は

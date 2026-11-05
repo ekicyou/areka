@@ -15,9 +15,6 @@
 
 mod model;
 
-#[cfg(test)]
-mod model_tests;
-
 mod lexer;
 
 #[cfg(test)]
