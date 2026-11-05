@@ -1,4 +1,4 @@
-//! 外形に動く絵の子と `always` を数える（task 2.6・要件 1.2・1.7・6.2・7.1）。
+//! 外形に動く絵の子と `always` を数える（要件 1.2・1.7・6.2・7.1）。
 //!
 //! 動く絵の子は画像の element と同じ 1 行で原寸を数え、`always` は全部の pattern の先を着せ替えの
 //! pattern0 と同じやり方で数える。外形はコマ（[`PatternState`]）に依らない静的な量のまま。
@@ -9,11 +9,10 @@ use areka_emo_atlas::{AnimationFrame, AtlasTable, LoopCount, MemoryDecoder};
 
 use super::compute_extent;
 use crate::bind::BindSet;
-use crate::method::ComposeMethod;
 use crate::nesting::FilmId;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{Extent, build_plan};
-use crate::plan_test_support::{bake_films_and_bind, insert_film, solid};
+use crate::pattern::PatternState;
+use crate::plan::Extent;
+use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, plan_of, solid};
 use crate::world::EmoWorld;
 
 const BASE: &str = "shell";
@@ -54,10 +53,6 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     bake_films_and_bind(&dec, Path::new(BASE), rels, text, images)
 }
 
-fn extent(world: &EmoWorld, atlas: &AtlasTable, id: u32) -> Extent {
-    compute_extent(world, atlas, id)
-}
-
 /// 要件 1.7・6.2: 動く絵を置いたサーフェスの外形は、同じ寸法の静止画を置いたときと同じ。
 #[test]
 fn film_element_extent_equals_same_sized_still() {
@@ -68,8 +63,8 @@ fn film_element_extent_equals_same_sized_still() {
     assert_eq!(world.film_sheets().count(), 1, "動く絵は子へ分解されている");
     let (still_world, still_atlas) = build_with(&text("still.png"), &[]);
 
-    let film = extent(&world, &atlas, 0);
-    assert_eq!(film, extent(&still_world, &still_atlas, 0));
+    let film = compute_extent(&world, &atlas, 0);
+    assert_eq!(film, compute_extent(&still_world, &still_atlas, 0));
     assert_eq!(film, Extent { w: 30, h: 20 });
 }
 
@@ -86,16 +81,8 @@ fn animated_base_image_only_surface_is_not_empty() {
         "surface1.png は子へ分解されている"
     );
 
-    assert_eq!(extent(&world, &atlas, 1), Extent { w: 30, h: 20 });
-    let got = build_plan(
-        &mut Vec::new(),
-        &mut Default::default(),
-        &world,
-        &atlas,
-        1,
-        &BindSet::default(),
-        &Default::default(),
-    );
+    assert_eq!(compute_extent(&world, &atlas, 1), Extent { w: 30, h: 20 });
+    let got = plan_of(&world, &atlas, 1, &BindSet::default(), &Default::default()).1;
     assert_eq!(got, Ok(Extent { w: 30, h: 20 }));
 }
 
@@ -119,7 +106,7 @@ const ALWAYS: &str = "surface0\n{\nelement0,overlay,body.png,0,0\n\
 fn hand_written_always_extent_is_union_of_all_patterns() {
     let (world, atlas) = build_with(ALWAYS, &[]);
     // wide (2+40)×5・tall 5×(4+50)・body 10×10 の和集合。
-    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
+    assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
 }
 
 /// seriko-pattern-calls 6.8・M6: 純 `bind` は `always` と同じく全部の pattern の先を数える（負の番号と
@@ -142,7 +129,7 @@ fn pure_bind_extent_is_union_of_all_patterns() {
                 surface31\n{\nelement0,overlay,tall.png,0,0\n}\n\
                 surface99\n{\nelement0,overlay,big.png,0,0\n}\n";
     let (world, atlas) = build_with(text, &[]);
-    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 60 });
+    assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 60 });
 }
 
 /// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ・消えている・動く絵の子のコマ）。
@@ -158,15 +145,7 @@ fn cells_do_not_change_extent() {
 
     let mut cells = vec![PatternState::default()];
     let mut p = PatternState::default();
-    p.set(
-        0,
-        PatternFrame {
-            surface_id: 31,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 4,
-        },
-    );
+    p.set(0, frame(31, 0, 4));
     cells.push(p);
     let mut p = PatternState::default();
     p.set_blank(0);
@@ -176,20 +155,12 @@ fn cells_do_not_change_extent() {
     cells.push(p);
 
     for top in [0, 2] {
-        let want = extent(&world, &atlas, top);
+        let want = compute_extent(&world, &atlas, top);
         for pattern in &cells {
-            let got = build_plan(
-                &mut Vec::new(),
-                &mut Default::default(),
-                &world,
-                &atlas,
-                top,
-                &BindSet::default(),
-                pattern,
-            );
+            let got = plan_of(&world, &atlas, top, &BindSet::default(), pattern).1;
             assert_eq!(got, Ok(want), "top={top} pattern={pattern:?}");
         }
     }
-    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
-    assert_eq!(extent(&world, &atlas, 2), Extent { w: 30, h: 20 });
+    assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
+    assert_eq!(compute_extent(&world, &atlas, 2), Extent { w: 30, h: 20 });
 }

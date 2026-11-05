@@ -8,13 +8,13 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry,
-    AtlasKey, MemoryDecoder, PackConfig, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
+    AlphaParams, AnimationFrame, AnimationInfo, AnimationLimits, AtlasEntry, AtlasKey,
+    MemoryDecoder, PackConfig, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
 };
 use areka_parsers::shell::Shell;
 
 use super::*;
-use crate::plan_test_support::{elem, shell_of, solid, surface};
+use crate::plan_test_support::{elem, insert_film, shell_of, solid, surface};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -52,16 +52,7 @@ impl Pics {
             None => LoopCount::Infinite,
             Some(n) => LoopCount::Finite(NonZeroU32::new(n).unwrap()),
         };
-        self.dec.insert_animated(
-            Self::path(rel),
-            AnimationInfo {
-                width: 2,
-                height: 2,
-                frame_count: delays.len() as u32,
-            },
-            Ok(solid(2, 2, 10)),
-            Ok(AnimatedImage { frames, loop_count }),
-        );
+        insert_film(&mut self.dec, Self::path(rel), frames, loop_count);
         self.rels.push(rel.to_string());
         self
     }

@@ -35,6 +35,7 @@ animation4.pattern4,start,2
 animation4.pattern5,move,0,0,10,10
 animation4.pattern6,unknownmethod,40,0,0,0
 animation4.pattern7,overlay,41,0,0,0
+animation4.pattern8,insert,3
 
 animation5.interval,random,3
 animation5.pattern0,overlay,50,0,0,0
@@ -81,7 +82,7 @@ fn bind_random_has_no_steps() {
     assert!(world().bind_steps(0, 3).is_empty());
 }
 
-/// 相手が無い・`bind` でない・読めない `insert`、負の番号、8 語、描かない語は手順に入らない（6.5）。
+/// 相手が無い・`bind` でない（`random` も `bind+random` も）・読めない `insert`、負の番号、8 語、描かない語は手順に入らない（6.5）。
 #[test]
 fn unusable_patterns_are_left_out() {
     assert_eq!(

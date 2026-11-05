@@ -3,7 +3,7 @@
 //! `NestReport::from_world` の振り分けは `_` の腕で「無い番号」に落ちるので、`ElementKind::Film`
 //! の扱いを書き漏らしてもコンパイラは教えない。ここを檻にする。
 //!
-//! 後半は見える部品と見える子（task 2.4・要件 1.9・3.7）: `SurfaceParts` の `films`・`always_rest`、
+//! 後半は見える部品と見える子（要件 1.9・3.7）: `SurfaceParts` の `films`・`always_rest`、
 //! `walk` の経過 0 の辺（欄が「載っていない」ときだけ・「消えている」では進まない）、`visible_films`。
 
 use std::collections::BTreeMap;
@@ -91,7 +91,7 @@ fn nest_report_counts_film_as_neither_missing_nor_cycle() {
     assert_eq!(world.nest_report().issues, vec![]);
 }
 
-// ---- 見える部品と見える子（task 2.4） ----
+// ---- 見える部品と見える子 ----
 
 const FIXTURE: &str = include_str!("../tests/fixtures/animated-playback/shell/surfaces.txt");
 const BASE: &str = "shell";
@@ -338,7 +338,7 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
     }
 }
 
-// ---- 合成がたどった先との突き合わせ（task 2.7・要件 1.9・3.7） ----
+// ---- 合成がたどった先との突き合わせ（要件 1.9・3.7） ----
 //
 // 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`plan_always::film_op`）は
 // 別々に書いてあるので、片方だけを変えるとずれる。nesting_visible_tests の一致の檻と同じ型で、検体の

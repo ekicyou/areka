@@ -170,7 +170,7 @@
 - [x] 6.4 説明の直し（指摘 34〜44）
   - `doc/`・`docs/` のパスを名指す行は足さず変えない
   - _Requirements: 2.1, 5.3, 6.9_
-- [ ] 6.5 テストの直し（指摘 45〜74）
+- [x] 6.5 テストの直し（指摘 45〜74）
   - 足すテストは守る分岐を戻すと落ちることを確かめる。消すテストの固有の確かめは残る側へ移す。写しは `plan_test_support` から引く
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
@@ -200,3 +200,4 @@
 - 6.2: `linear_lookup_tests.rs` の 5 本は大きな検体で答えと記録を確かめる回帰で、2 乗へ戻しても遅くなるだけで赤にはならない（research 15 節の「遅い所」・要件 4.5 のため時間の上限を置かない）。`visible_parts` は 64 個まで線形・越えたら呼び出しの中で 1 度だけ集合。areka-parsers の `animation_slot`（decode.rs:395）が 1 ブレスの animation の数の 2 乗＝audit-parsers-sakura へ伝え済み
 - 6.3: 除外の範囲は `(lo, hi)` の組を並べてまとめ二分探索で引く（単独の除外の大量でも 2 乗にしない）。`ComposedSurface` の入口は `debug_assert`（本番は `build_plan` の `ExtentTooLarge` が先に断る）
 - 6.4: 残った昔のタスク番号（`golden_tests_frame_extent_tests.rs:152,192`・`golden_tests_surface0_base_tests.rs:63`・`golden_tests_surface1000_bind_tests.rs:74,107,132`・`golden_tests_trim_equivalence_tests.rs`・`nesting_visible_tests.rs:356`）と `plan_bounds_tests.rs:165` の「bind の pattern0」は 6.5 で拾う
+- 6.5: テスト 443→434（消したのは重なるだけ・外れない 9 本）。部品に `plan_of`（`build_plan` の口）・`pattern` を足し、`px` は外形の外を assert。昔のタスク番号の名指しは 0 件。範囲の外（要件 6.9 で触らない）: `doc/COMPAT_ARCHITECTURE.md:276` と `doc/ukadoc-coverage/ledger/assets.toml:6137` がもう無いテスト名 `later_brace_without_interval_line_keeps_the_earlier_interval` を名指す（3.5 の前から）＝完了の棚卸で起票

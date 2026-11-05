@@ -105,21 +105,15 @@ use areka_parsers::shell::parse_boxes;
 
 use crate::{BoxIssue, BoxReport, EmoWorld, fold_boxes};
 
-/// 文面を転記して畳む（面の画像は 0 件・画像の World は同じ文面から組む）。
-fn fold(text: &str) -> (BoxLayout, BoxReport) {
+/// 文面を転記して畳む（面の画像は 0 件・画像の World は同じ文面から組む）。`nesting_tests` も引く。
+pub(super) fn fold(text: &str) -> (BoxLayout, BoxReport) {
     let world = EmoWorld::build(&areka_parsers::shell::parse(text));
     fold_boxes(&parse_boxes(text), &BTreeMap::new(), &world)
 }
 
 /// `balloon.名前`ブレス 1 つの文面（本体は行の列）。
 fn brace(name: &str, lines: &[&str]) -> String {
-    let mut text = format!("balloon.{name}\n{{\n");
-    for line in lines {
-        text.push_str(line);
-        text.push('\n');
-    }
-    text.push_str("}\n");
-    text
+    block(&format!("balloon.{name}"), lines)
 }
 
 #[test]

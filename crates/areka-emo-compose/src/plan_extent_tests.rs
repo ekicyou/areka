@@ -11,7 +11,7 @@ use std::path::Path;
 // クリップ）。`original` は bake が「登録画像の原寸」をそのまま記録する（trim.rs）ため、各 element
 // の寄与サイズは register 時の (w,h) で制御できる。以下の土台ヘルパはサイズ可変・全透明を扱う。
 
-/// テスト5.4-①（**受入基準**・要件 6.5）: 同一 surface へ空／部分／全 BindSet を渡しても
+/// **受入基準**・要件 6.5: 同一 surface へ空／部分／全 BindSet を渡しても
 /// [`build_plan`] が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。
 ///
 /// host=1000 は静的 element base(40×30) を持ち、bind id=1→part1(200×10)、id=2→part2(10×150)、
@@ -52,16 +52,9 @@ fn extent_is_independent_of_bindset() {
     let expected = Extent { w: 200, h: 150 };
 
     let extent_with = |binds: BindSet| {
-        build_plan(
-            &mut Vec::new(),
-            &mut Default::default(),
-            &world,
-            &atlas,
-            1000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("合成できる")
+        plan_of(&world, &atlas, 1000, &binds, &PatternState::default())
+            .1
+            .expect("合成できる")
     };
     assert_eq!(
         extent_with(BindSet::default()),
@@ -80,7 +73,7 @@ fn extent_is_independent_of_bindset() {
     );
 }
 
-/// テスト5.4-②（要件 6.5・全 bind 母集合）: 非活性 bind（どの BindSet にも入れない）の
+/// 要件 6.5・全 bind 母集合: 非活性 bind（どの BindSet にも入れない）の
 /// pattern0 が参照する巨大入れ子 surface が、それでも外形を支配する。
 ///
 /// host=2000 の静的 element は小さい tiny(4×4) のみ。bind id=9 は**一度も activate されない**が、
@@ -116,7 +109,7 @@ fn extent_unions_inactive_bind_contribution() {
     );
 }
 
-/// テスト5.4-③（要件 6.3＋6.5）: placement None（全透明）element は命令からスキップされるが、
+/// 要件 6.3＋6.5: placement None（全透明）element は命令からスキップされるが、
 /// 外形には原寸で寄与する。
 ///
 /// surface=3000 は静的 element を 2 本持つ: solid(20×20・不透明) と ghost(300×300・**全透明**＝
@@ -176,7 +169,7 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
     );
 }
 
-/// テスト5.4-④（要件 6.5・原点固定／負方向クリップ）: 負オフセットの入れ子層は原点 (0,0) を
+/// 要件 6.5・原点固定／負方向クリップ: 負オフセットの入れ子層は原点 (0,0) を
 /// 上へ動かさず、外形を基底より縮めない。
 ///
 /// host=4000 の静的 base(50×40)。bind id=1 の pattern0 が small(10×10) を **(-100,-100)** で参照。
@@ -212,7 +205,7 @@ fn negative_offset_is_clipped_and_origin_stays_fixed() {
     );
 }
 
-/// テスト5.4-⑤（要件 6.5・基底一致）: (0,0) 原寸 (W,H) の単一 element・より大きい層なし→
+/// 要件 6.5・基底一致: (0,0) 原寸 (W,H) の単一 element・より大きい層なし→
 /// 外形は原寸ちょうど。
 #[test]
 fn extent_equals_base_original_when_no_larger_layers() {
@@ -232,9 +225,9 @@ fn extent_equals_base_original_when_no_larger_layers() {
     );
 }
 
-/// テスト5.4-⑥（要件 10.1・決定性）: 同一入力で 2 回算出→ [`Extent`] が同値。
+/// 着せ替えの pattern の位置 (5,7) に置いた部品の原寸まで外形が広がる。
 #[test]
-fn extent_is_deterministic() {
+fn extent_reaches_the_bind_part_at_its_offset() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(
         base,
@@ -253,11 +246,11 @@ fn extent_is_deterministic() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
 
-    let e1 = compute_extent(&world, &atlas, 6000);
-    let e2 = compute_extent(&world, &atlas, 6000);
-    assert_eq!(e1, e2, "同一入力→同一 Extent（決定的）");
-    // 参考: part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
-    assert_eq!(e1, Extent { w: 205, h: 157 });
+    // part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
+    assert_eq!(
+        compute_extent(&world, &atlas, 6000),
+        Extent { w: 205, h: 157 }
+    );
 }
 
 // ── 命令ゼロ時の 3 分類（正常空合成／対象不在／退化データ）─────────────────
@@ -272,7 +265,7 @@ fn extent_is_deterministic() {
 
 use crate::error::ComposeError;
 
-/// テスト5.5-①（要件 10.5）: 対象 surface 不在 → `Err(SurfaceNotFound)`・ops 空・非パニック。
+/// 要件 10.5: 対象 surface 不在 → `Err(SurfaceNotFound)`・ops 空・非パニック。
 #[test]
 fn build_plan_absent_surface_is_surface_not_found() {
     // surface を一切持たない World（9999 は不在）。
@@ -280,16 +273,7 @@ fn build_plan_absent_surface_is_surface_not_found() {
     let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
 
     let binds = BindSet::default();
-    let mut ops = Vec::new();
-    let result = build_plan(
-        &mut ops,
-        &mut Default::default(),
-        &world,
-        &atlas,
-        9999,
-        &binds,
-        &PatternState::default(),
-    );
+    let (ops, result) = plan_of(&world, &atlas, 9999, &binds, &PatternState::default());
 
     assert_eq!(
         result,
@@ -299,7 +283,7 @@ fn build_plan_absent_surface_is_surface_not_found() {
     assert!(ops.is_empty(), "不在 surface では命令を積まない");
 }
 
-/// テスト5.5-②（**受入基準**・要件 6.6）: 全 element が全透明の surface → `Ok(非ゼロ Extent)`＋空 ops。
+/// **受入基準**・要件 6.6: 全 element が全透明の surface → `Ok(非ゼロ Extent)`＋空 ops。
 ///
 /// surface=3000 は element を 2 本持つがいずれも全透明（α=0 → placement None）。描画可能命令は
 /// ゼロだが、外形は原寸（300×300 が支配）で非ゼロ。これはエラーでなく **正常系**（議題2裁定）。
@@ -323,16 +307,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
     world.bind_atlas(&atlas, SetId(0));
 
     let binds = BindSet::default();
-    let mut ops = Vec::new();
-    let result = build_plan(
-        &mut ops,
-        &mut Default::default(),
-        &world,
-        &atlas,
-        3000,
-        &binds,
-        &PatternState::default(),
-    );
+    let (ops, result) = plan_of(&world, &atlas, 3000, &binds, &PatternState::default());
 
     // 描画可能命令ゼロでも Err にしない（要件 6.6・議題2裁定）。
     let extent = result.expect("全透明でもエラーにせず Ok（要件 6.6）");
@@ -348,7 +323,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
     );
 }
 
-/// テスト5.5-③（要件 6.6）: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。
+/// 要件 6.6: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。
 ///
 /// host=1000 は静的 element なし・全パーツ bind。空 BindSet ゆえ有効 bind ゼロ＝命令ゼロだが、
 /// 外形は全 bind の描くコマ 母集合（有効 bind 非依存）ゆえ非ゼロ。エラーでなく正常空合成。
@@ -377,16 +352,7 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
 
     // 空 BindSet → 有効 bind ゼロ＝描画可能命令ゼロ。
     let binds = BindSet::default();
-    let mut ops = Vec::new();
-    let result = build_plan(
-        &mut ops,
-        &mut Default::default(),
-        &world,
-        &atlas,
-        1000,
-        &binds,
-        &PatternState::default(),
-    );
+    let (ops, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
 
     let extent = result.expect("空 BindSet でも正常（描画可能命令ゼロは失敗でない・要件 6.6）");
     assert!(
@@ -401,7 +367,7 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     );
 }
 
-/// テスト5.5-④（要件 10.5・議題2裁定）: 定義層皆無で外形 0×0 → `Err(EmptyComposition)`。
+/// 要件 10.5・議題2裁定: 定義層皆無で外形 0×0 → `Err(EmptyComposition)`。
 ///
 /// surface=7000 は EXISTS するが element ゼロ・bind ゼロ（外形へ寄与する層が皆無）。
 /// compute_extent が {0,0} を返す唯一の真の失敗退化ケース。
@@ -423,16 +389,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
     );
 
     let binds = BindSet::default();
-    let mut ops = Vec::new();
-    let result = build_plan(
-        &mut ops,
-        &mut Default::default(),
-        &world,
-        &atlas,
-        7000,
-        &binds,
-        &PatternState::default(),
-    );
+    let (ops, result) = plan_of(&world, &atlas, 7000, &binds, &PatternState::default());
 
     assert_eq!(
         result,
@@ -442,10 +399,10 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
     assert!(ops.is_empty());
 }
 
-/// テスト5.5-⑤（要件 6.6・10.3・10.1）: 可視 element を持つ通常 surface → `Ok`＋非空 ops。out_ops は
-/// エントリで clear される（スクラッチ再利用）・決定的。
+/// 要件 6.6・10.3: 可視 element を持つ通常 surface → `Ok`＋非空 ops。out_ops は
+/// エントリで clear される（スクラッチ再利用）。
 #[test]
-fn build_plan_clears_scratch_and_is_deterministic() {
+fn build_plan_clears_scratch() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), Some((64, 64, 64)))]);
     let visible_id = atlas
@@ -484,21 +441,6 @@ fn build_plan_clears_scratch_and_is_deterministic() {
     );
     assert_eq!(ops[0].element, visible_id, "ゴミは残らない");
     assert_eq!(e1, Extent { w: 80, h: 60 }, "外形＝element 原寸");
-
-    // 2 回目（別スクラッチ）→ バイト等価・同一 Extent（決定性）。
-    let mut ops2 = Vec::new();
-    let e2 = build_plan(
-        &mut ops2,
-        &mut Default::default(),
-        &world,
-        &atlas,
-        5000,
-        &binds,
-        &PatternState::default(),
-    )
-    .expect("Ok");
-    assert_eq!(ops, ops2, "同一入力→同一 ops（バイト等価）");
-    assert_eq!(e1, e2, "同一入力→同一 Extent");
 }
 
 // ── audit-emo-compose 指摘 2: 外形が GPU の面の最大寸（一辺 16,384）を越えたら確保せずに失敗する ──
@@ -511,15 +453,16 @@ fn plan_with_errors(
 ) -> (Result<Extent, ComposeError>, usize) {
     let mut result = None;
     let logs = crate::log_capture::capture_logs(|| {
-        result = Some(build_plan(
-            &mut Vec::new(),
-            &mut Default::default(),
-            world,
-            atlas,
-            top,
-            &BindSet::default(),
-            &PatternState::default(),
-        ));
+        result = Some(
+            plan_of(
+                world,
+                atlas,
+                top,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+            .1,
+        );
     });
     (result.unwrap(), logs.matches("level=ERROR").count())
 }

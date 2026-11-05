@@ -70,14 +70,19 @@ fn single_words_read_one_number() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
         assert_eq!(call_targets(word, "3"), ok(&[3]), "{word:?}");
         assert_eq!(call_targets(word, " 12 "), ok(&[12]), "{word:?}");
+        assert_eq!(
+            call_targets(word, "4294967295"),
+            ok(&[u32::MAX]),
+            "{word:?}"
+        );
     }
 }
 
-/// 番号 1 つの語で、空・名前・負の数・並びは読めない（要件 2.5）。
+/// 番号 1 つの語で、空・名前・負の数・並び・u32 を越える数は読めない（要件 2.5）。
 #[test]
 fn single_words_reject_unreadable_columns() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
-        for target in ["", "  ", "abc", "1a", "-1", "(0,1)", "1.5"] {
+        for target in ["", "  ", "abc", "1a", "-1", "(0,1)", "1.5", "4294967296"] {
             assert_eq!(
                 call_targets(word, target),
                 Err(UnreadableTarget),
@@ -112,12 +117,21 @@ fn list_words_read_every_list_form() {
     }
 }
 
-/// 並びの 4 語で、空・空の並び・空の項・名前・負の数・閉じない括弧は読めない（要件 2.5）。
+/// 並びの 4 語で、空・空の並び・空の項・名前・負の数・閉じない括弧・u32 を越える数は読めない（要件 2.5）。
 #[test]
 fn list_words_reject_unreadable_columns() {
     for word in LISTS {
         for target in [
-            "", "()", "[]", "(0,,1)", "(0,a)", "(0,-1)", "(0,1", "[0,1)", "abc",
+            "",
+            "()",
+            "[]",
+            "(0,,1)",
+            "(0,a)",
+            "(0,-1)",
+            "(0,1",
+            "[0,1)",
+            "abc",
+            "(0,4294967296)",
         ] {
             assert_eq!(
                 call_targets(word, target),

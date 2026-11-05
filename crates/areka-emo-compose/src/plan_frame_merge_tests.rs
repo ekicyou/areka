@@ -2,7 +2,7 @@ use super::*;
 use crate::plan_test_support::*;
 use crate::world::EmoWorld;
 use areka_emo_atlas::{AtlasTable, SetId};
-use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern};
+use areka_parsers::shell::{Animation, Interval};
 use std::path::Path;
 
 // ── PatternState 合流と method ゲート（層(ii) の transient コマ合流・要件 4.2/4.6/5.3/8.4）─────
@@ -18,10 +18,8 @@ use crate::pattern::PatternFrame;
 /// 現在コマ（PatternFrame）を 1 本組む（テスト補助・任意 method／オフセット）。
 fn koma(surface_id: u32, method: ComposeMethod, x: i64, y: i64) -> PatternFrame {
     PatternFrame {
-        surface_id,
         method,
-        x,
-        y,
+        ..frame(surface_id, x, y)
     }
 }
 
@@ -31,19 +29,11 @@ fn bind_anim_method(id: u32, ref_surface_id: i64, method: &str) -> Animation {
         id,
         interval: Interval::Bind,
         interval_written: true,
-        patterns: vec![Pattern {
-            index: 0,
-            method: DrawMethod::new(method.to_string()),
-            surface_id: ref_surface_id,
-            target: ref_surface_id.to_string(),
-            wait: 0,
-            x: 0,
-            y: 0,
-        }],
+        patterns: vec![pattern(0, method, ref_surface_id)],
     }
 }
 
-/// テスト7.2-①（**受入基準**・要件 8.4）: 非 Overlay method の現在コマは debug!（method 名込み）＋
+/// **受入基準**・要件 8.4: 非 Overlay method の現在コマは debug!（method 名込み）＋
 /// 不描画。かつコマは同 id の pattern0 静的寄与を置換するゆえ、その pattern0 も現れない（4.2）。
 ///
 /// host=1000 は静的 base ＋ bind id=1 pattern0→part1(overlay)。id=1 の現在コマは surface 1500
@@ -95,7 +85,7 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     );
 }
 
-/// テスト7.2-②（要件 8.4）: 非 Overlay の **bind pattern0**（静的経路）も不描画。parser は
+/// 要件 8.4: 非 Overlay の **bind pattern0**（静的経路）も不描画。parser は
 /// 非 overlay の pattern も渡すため。
 ///
 /// host=1000 は静的 base ＋ bind id=1 の pattern0 method="replace"→part1。空 PatternState。
@@ -138,7 +128,7 @@ fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     );
 }
 
-/// テスト7.2-③（**受入基準**・要件 4.2）: Overlay の現在コマは描画され、同 id の pattern0 静的
+/// **受入基準**・要件 4.2: Overlay の現在コマは描画され、同 id の pattern0 静的
 /// 寄与を**置換**する（pattern0 の surface は現れず、コマの surface が現れる）。
 ///
 /// host=1000 は bind id=1 pattern0→open(1100)。id=1 の現在コマは closed(1200) method=Overlay。
@@ -170,7 +160,7 @@ fn overlay_koma_is_drawn_and_replaces_same_id_pattern0() {
     );
 }
 
-/// テスト7.2-④（要件 5.3・画家のアルゴリズム）: 合流後も id 昇順描画順が保たれる（既定 descend）。
+/// 要件 5.3・画家のアルゴリズム: 合流後も id 昇順描画順が保たれる（既定 descend）。
 ///
 /// bind id=1 pattern0→partA(1100)、**コマのみ** id=2→partB(1200)（bind animation なし）、
 /// bind id=3 pattern0→partC(1300)。合流集合 {1,3}∪{2}={1,2,3}。id 昇順描画で partA→partB→partC。
@@ -209,7 +199,7 @@ fn merged_ids_preserve_id_ascending_painter_order() {
     );
 }
 
-/// テスト7.2-⑤（要件 4.6・5.3）: bind pattern0 を持たない id の Overlay コマ単独でも描画される
+/// 要件 4.6・5.3: bind pattern0 を持たない id の Overlay コマ単独でも描画される
 /// （合流集合が union ゆえ・コマ専用 id）。まばたき再生（pattern0 なし bind の再生コマ）を突く。
 ///
 /// 注（bindopt D9-3）: 本フィクスチャの host は animation を 1 本も持たないため、id=1400 は当 surface の
@@ -287,7 +277,7 @@ fn build_last_stand_world() -> (EmoWorld, AtlasTable, Vec<(ElementId, &'static s
     (world, atlas, map)
 }
 
-/// テスト8.3-①（**RED 核**・受入基準・bindopt 7.1・D9-3）: bind 集合から外れた **bind 種**アニメの
+/// **RED 核**・受入基準・bindopt 7.1・D9-3: bind 集合から外れた **bind 種**アニメの
 /// 保持コマは、合成計画にその層を作らない（最後の砦）。
 ///
 /// binds={1300} に対し `PatternState` は 1402（`bind+random`・bind 非所属＝外れたジト目の残留コマ）と
@@ -323,7 +313,7 @@ fn bind_kind_koma_outside_bindset_is_not_merged() {
     );
 }
 
-/// テスト8.3-②（bindopt 7.4）: **bind に属さない**アニメ（純 `random` の `interval`）のコマは、
+/// bindopt 7.4: **bind に属さない**アニメ（純 `random` の `interval`）のコマは、
 /// bind 集合が空でも従来どおり無条件で合流する。
 ///
 /// 補強したゲートが bind 種を超えて効いていないことの錨。①の陽性対照を単独条件（空 BindSet）で
@@ -346,7 +336,7 @@ fn non_bind_koma_merges_regardless_of_bindset() {
     );
 }
 
-/// テスト8.3-③（回帰の錨・bindopt 7.4／要件 4.6）: bind 集合に**属している** bind 種アニメの
+/// 回帰の錨・bindopt 7.4／要件 4.6: bind 集合に**属している** bind 種アニメの
 /// コマは従来どおり合流し、pattern0 を持たない再生アニメ（まばたき相当）も描画される。
 ///
 /// ①の裏返し。ゲートが「bind 種なら常に落とす」へ振れていないことを固定し、合流の可否が

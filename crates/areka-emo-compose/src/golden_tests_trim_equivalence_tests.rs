@@ -1,4 +1,4 @@
-//! task 8.3（要件 11.3・6.2）: トリム等価の pixel テーマ。
+//! トリム等価の pixel テーマ（要件 11.3・6.2）。
 
 use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
@@ -7,7 +7,7 @@ use super::{
 };
 
 // ============================================================================
-// task 8.3: トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
+// トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
 //
 // bake は透明マージンを α-bbox トリムで切り落とし、原画像内の bbox 左上を
 // `Placement.trim_offset`・原寸を `AtlasEntry.original` として記録する（`trim.rs`）。
@@ -95,13 +95,13 @@ fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec
     (table, bgra)
 }
 
-/// task 8.3（要件 11.3・6.2）: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
+/// 要件 11.3・6.2: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
 ///
 /// surface0 の element0 は配置 (0,0)（実 fixture・既存テストで固定）。透明マージン付き 40×40 を
 /// 挿入すると bake はトリム（trim_offset=(12,15)・original=40×40・uv=10×10）する。合成では
 /// dest = 配置 (0,0) ＋ trim_offset (12,15) = (12,15) へ不透明コアが着弾し、その他は透明のまま。
 /// これは原画像（コアが (12,15) に premultiplied・残り 0）とバイト単位で一致する。
-/// あわせて外形が**原寸 40×40**（トリム後コア 10×10 ではない・task 5.4/要件 6.5）であることを固定する。
+/// あわせて外形が**原寸 40×40**（トリム後コア 10×10 ではない・要件 6.5）であることを固定する。
 #[test]
 fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let shell = parse_emo2_shell();
@@ -131,7 +131,7 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
             w: ORIG_W,
             h: ORIG_H
         },
-        "original は原寸 40×40（トリム後コアではない・task 5.4 の外形母集合）"
+        "original は原寸 40×40（トリム後コアではない・外形の母集合）"
     );
     let placement = entry
         .placement
@@ -184,21 +184,5 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
         out.bytes(),
         original_bytes.as_slice(),
         "トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価（要件 6.2/11.3）"
-    );
-
-    // 着弾位置の要点確認: コア左上 (12,15) は不透明・素の配置 (0,0) は透明。
-    let core_tl = (
-        (INNER_Y * out.stride() + INNER_X * 4) as usize,
-        [CORE_B, CORE_G, CORE_R, 255u8],
-    );
-    assert_eq!(
-        &out.bytes()[core_tl.0..core_tl.0 + 4],
-        &core_tl.1,
-        "配置+trim=(12,15) に不透明コアが着弾"
-    );
-    assert_eq!(
-        &out.bytes()[0..4],
-        &[0, 0, 0, 0],
-        "素の配置 (0,0)（trim を足さない位置）は透明のまま（トリムが見た目を変えない）"
     );
 }

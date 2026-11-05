@@ -216,7 +216,7 @@ fn only_the_missing_element_is_dropped() {
     assert!(!logs.contains("level=WARN"), "合成の中は debug!: {logs}");
 }
 
-// ── 部品の段のコマの合流（task 4.2・要件 5.1・5.2・5.10・5.12・5.13） ──
+// ── 部品の段のコマの合流（要件 5.1・5.2・5.10・5.12・5.13） ──
 
 /// 子 10 を (20,30) に置く親 0。子と親は同じ番号の animation0 を持つ。
 const PART_TEXT: &str = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n\

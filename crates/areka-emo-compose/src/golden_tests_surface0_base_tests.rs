@@ -37,8 +37,6 @@ fn register_surface0_image(dec: &mut MemoryDecoder, base: &Path) -> (u32, u32, V
     // emo2 の実 surface0.png 寸法に縛られない任意の決定的サイズ（合成は挿入画像で駆動される）。
     let (w, h, stride, bgra, has_alpha) = distinctive_opaque(37, 29);
     dec.insert(base.join(rel), w, h, stride, bgra.clone(), has_alpha);
-    // stride==w*4（tightly-packed）を担保。
-    assert_eq!(stride, w * 4);
     (w, h, bgra)
 }
 
@@ -60,7 +58,7 @@ fn build_atlas_for_surface0(shell: &Shell, base: &Path) -> (AtlasTable, u32, u32
     (result.table, w, h, bgra)
 }
 
-/// task 8.1 受入基準（要件 11.1・11.4）: emo2 surface0 の element0 単層合成が挿入画像とバイト等価。
+/// 受入基準（要件 11.1・11.4）: emo2 surface0 の element0 単層合成が挿入画像とバイト等価。
 ///
 /// 経路: surfaces.txt を parse → `EmoWorld::build`（fold）→ `MemoryDecoder`+`bake` で `AtlasTable`
 /// 構築（COM/WIC/表示なし）→ `bind_atlas` → `Composer::compose(surface0, EMPTY BindSet)`。

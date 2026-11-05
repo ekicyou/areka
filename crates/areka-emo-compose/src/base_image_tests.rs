@@ -1,8 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, DrawMethod, Element, Interval, Pattern, Shell, Surface,
-    SurfaceAppend,
+    Animation, AppendTarget, DefRef, Element, Interval, Pattern, Shell, Surface, SurfaceAppend,
 };
 use bevy_ecs::world::World;
 
@@ -10,7 +9,9 @@ use crate::base_image::BaseImageReport;
 use crate::fold::fold_shell_with;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
-use crate::plan_test_support::{elem, shell_mixed, shell_of, surface_def};
+use crate::plan_test_support::{
+    elem, pattern, shell_mixed, shell_of, surface_def, surface_with_anims,
+};
 use crate::world::{AliasMap, EmoWorld, Records, ShellSettings, SurfaceIndex};
 
 /// 番号 → ファイル名の対応を組み立てる。
@@ -361,33 +362,15 @@ fn brace_after_append_merges_into_the_image_only_face() {
     );
 }
 
-/// コマ 1 本（描画メソッドの綴りは原文のまま・位置とウェイトは判定に使わないので 0）。
-fn pattern(index: u32, method: &str, surface_id: i64) -> Pattern {
-    Pattern {
-        index,
-        method: DrawMethod::new(method.to_string()),
-        surface_id,
-        target: surface_id.to_string(),
-        wait: 0,
-        x: 0,
-        y: 0,
-    }
-}
-
 /// コマ群を持つアニメーション 1 本だけを載せた面の定義（element は 0 本）。
 fn surface_with_patterns(id: u32, patterns: Vec<Pattern>) -> Surface {
-    Surface {
-        id,
-        targets: vec![AppendTarget::Single(id)],
-        elements: Vec::new(),
-        collisions: Vec::new(),
-        animations: vec![Animation {
-            id: 0,
-            interval: Interval::Random { k: 2 },
-            interval_written: true,
-            patterns,
-        }],
-    }
+    let animation = Animation {
+        id: 0,
+        interval: Interval::Random { k: 2 },
+        interval_written: true,
+        patterns,
+    };
+    surface_with_anims(id, Vec::new(), vec![animation])
 }
 
 /// コマ群を持つ面 0 だけの面の表を、渡した画像の対応で組む。

@@ -145,6 +145,24 @@ impl PlanScratch {
         }
     }
 
+    /// 作業場の全部の列と集合の容量（テスト用・繰り返しの合成で増えないことを見る）。
+    #[cfg(test)]
+    pub(crate) fn capacities(&self) -> [(&'static str, usize); 11] {
+        [
+            ("visited", self.visited.capacity()),
+            ("on_path", self.on_path.capacity()),
+            ("steps", self.steps.capacity()),
+            ("frames", self.frames.capacity()),
+            ("merged_ids", self.merged_ids.capacity()),
+            ("anims", self.anims.capacity()),
+            ("claims", self.claims.capacity()),
+            ("done", self.done.capacity()),
+            ("expanded", self.expanded.capacity()),
+            ("chain", self.chain.capacity()),
+            ("reported", self.reported.capacity()),
+        ]
+    }
+
     /// 面の段を開く: 祖先に積み、段の積み荷（層 (i) → 層 (ii)）を作る。
     fn open(&mut self, level: &Level<'_>) {
         self.visited.push(level.surface_id);

@@ -222,7 +222,7 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
     let mut world = EmoWorld::build(&parse(text));
     world.bind_atlas(&atlas, SetId(0));
     let ids: Vec<u32> = world.surface_ids().collect();
-    let mut hits = 0;
+    let mut hits = [0; 3];
     for limit in 0..=40 {
         let (mut extent_memo, mut bounds_memo, mut hit_memo) = Default::default();
         let mut scratch = BoundsScratch::default();
@@ -260,11 +260,20 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
             assert_eq!(memo, again, "予算 {limit}・根 {id}");
             assert_eq!(memo_logs, again_logs, "予算 {limit}・根 {id}");
         }
-        // 循環の下（面 4・5）は覚えない。
-        assert!(!hit_memo.contains_key(&4) && !hit_memo.contains_key(&5));
-        hits += usize::from(hit_memo.contains_key(&1));
+        // 循環の下（面 4・5）は 3 つの覚えのどれにも入らない。
+        for cyc in [4, 5] {
+            assert!(!extent_memo.contains_key(&cyc), "外形・面 {cyc}");
+            assert!(!bounds_memo.contains_key(&cyc), "シェルの外形・面 {cyc}");
+            assert!(!hit_memo.contains_key(&cyc), "持ち込み・面 {cyc}");
+        }
+        hits[0] += usize::from(extent_memo.contains_key(&1));
+        hits[1] += usize::from(bounds_memo.contains_key(&1));
+        hits[2] += usize::from(hit_memo.contains_key(&1));
     }
-    assert!(hits > 0, "予算が足りれば覚える");
+    assert!(
+        hits.iter().all(|&n| n > 0),
+        "予算が足りれば 3 つとも覚える: {hits:?}"
+    );
 }
 
 /// 面 0 … `last - 1` がそれぞれ次の面を 2 か所に置き（菱形）、面 `last` が絵 `s.png` を `leaves` 枚持つシェル。

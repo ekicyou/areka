@@ -12,7 +12,7 @@ use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan_test_support::bake_atlas_sized;
+use crate::plan_test_support::{bake_atlas_sized, frame};
 use crate::world::EmoWorld;
 
 /// 循環（面 10 の bind が自分を指す）・描かないメソッド（面 0 の `replace` が面 20 を指す）を 1 つずつ
@@ -85,10 +85,8 @@ fn composing_repeatedly_adds_no_warn() {
     pattern.set(
         2,
         PatternFrame {
-            surface_id: 20,
             method: ComposeMethod::Replace,
-            x: 0,
-            y: 0,
+            ..frame(20, 0, 0)
         },
     );
     let mut composer = Composer::new();
@@ -106,12 +104,6 @@ fn composing_repeatedly_adds_no_warn() {
     assert!(
         !logs.contains("level=WARN"),
         "合成は warn を出さない: {logs}"
-    );
-    // 描かない語の pattern0 は読み込みのときに着せ替えの手順から外れ、合成のたびには知らせない
-    // （seriko-pattern-calls 5.5 で「非 Overlay method の bind pattern0」を外した）。
-    assert!(
-        !logs.contains("非 Overlay method の bind pattern0"),
-        "合成のたびに語を引き直さない: {logs}"
     );
     for kind in ["循環", "非 Overlay method の現在コマ"] {
         assert!(

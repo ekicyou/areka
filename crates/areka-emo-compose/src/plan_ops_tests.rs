@@ -2,7 +2,7 @@ use super::*;
 use crate::plan_test_support::*;
 use crate::world::EmoWorld;
 use areka_emo_atlas::{AtlasTable, SetId};
-use areka_parsers::shell::{Animation, DrawMethod, Element, Interval, Pattern, SortOrder, Surface};
+use areka_parsers::shell::{Animation, Element, Interval, SortOrder, Surface};
 use std::path::Path;
 
 /// テスト①（受入基準・要件 4.1）: layer [2,0,1]（登場順）→ ops は layer 昇順 0,1,2。
@@ -65,43 +65,6 @@ fn same_layer_keeps_appearance_order() {
     );
 
     assert_eq!(ops_to_paths(&ops, &map), vec!["first.png", "second.png"]);
-}
-
-/// テスト③（要件 4.5/10.1）: 同一 World／surface から2回導出→命令列がバイト等価。
-#[test]
-fn derivation_is_deterministic() {
-    let base = Path::new("shell/master");
-    let rels = ["a.png", "b.png", "c.png"];
-    let atlas = bake_atlas(base, &rels);
-
-    let shell = shell_of(vec![surface(
-        1000,
-        vec![
-            elem(2, "a.png", 1, 2),
-            elem(0, "b.png", 3, 4),
-            elem(1, "c.png", 5, 6),
-        ],
-    )]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
-
-    let ops1 = ops(
-        &world,
-        &atlas,
-        1000,
-        &BindSet::default(),
-        &PatternState::default(),
-    );
-    let ops2 = ops(
-        &world,
-        &atlas,
-        1000,
-        &BindSet::default(),
-        &PatternState::default(),
-    );
-
-    assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
-    assert_eq!(ops1.len(), 3);
 }
 
 /// テスト④（要件 4.3/6.3 前段）: 未束縛（None）element は命令化されずスキップされる（非パニック）。
@@ -206,7 +169,7 @@ fn missing_surface_pushes_nothing() {
     assert!(ops.is_empty());
 }
 
-// ── task 5.2: 有効 bind pattern0 の合成対象化＋animation-sort→ID 順の2段規則 ──────────
+// ── 有効 bind の合成対象化＋animation-sort→ID 順の2段規則 ──────────
 
 /// 各 bind パーツ surface（element 1 本・path で識別可能）を持つ Shell を組む共通土台。
 ///
@@ -347,10 +310,6 @@ fn bind_only_surface_produces_layers_from_nonempty_bindset() {
     // 非空 bind 集合 → 可視層が生成される（空白にしない）。
     let binds = BindSet::from_ids([1, 2]);
     let ops_full = ops(&world, &atlas, 1000, &binds, &PatternState::default());
-    assert!(
-        !ops_full.is_empty(),
-        "全 bind surface でも非空 bind 集合から可視層を生む"
-    );
     assert_eq!(
         ops_to_paths(&ops_full, &map),
         vec!["part1.png", "part2.png"]
@@ -412,30 +371,6 @@ fn sentinel_pattern0_is_skipped() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png"]);
 }
 
-/// テスト⑦（要件 4.5/10.1）: 同一入力で 2 回導出→命令列がバイト等価（bind 経路の決定性）。
-#[test]
-fn bind_derivation_is_deterministic() {
-    let (world, atlas) = build_bind_world(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        &["base.png"],
-        &[
-            (3, 1300, "part3.png"),
-            (1, 1100, "part1.png"),
-            (2, 1200, "part2.png"),
-        ],
-        None,
-    );
-
-    let binds = BindSet::from_ids([1, 2, 3]);
-    let ops1 = ops(&world, &atlas, 1000, &binds, &PatternState::default());
-    let ops2 = ops(&world, &atlas, 1000, &binds, &PatternState::default());
-
-    assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
-    // base(静的1) ＋ bind 3 本＝4 命令。
-    assert_eq!(ops1.len(), 4);
-}
-
 /// pattern0 の (x,y) が入れ子参照 element の配置へオフセット加算される（要件 5.2・1 段 inline 展開）。
 #[test]
 fn nested_pattern0_offset_is_applied_to_element_transform() {
@@ -459,9 +394,9 @@ fn nested_pattern0_offset_is_applied_to_element_transform() {
     assert_eq!(ops[0].transform.offset(), (35, -14));
 }
 
-// ── task 5.3: 入れ子 surface 参照の多段 flatten と循環検出（visited 集合） ─────────────
+// ── 入れ子 surface 参照の多段 flatten と循環検出（visited 集合） ─────────────
 
-/// テスト5.3-①（受入基準・要件 7.1/7.2/7.3）: 自己参照 bind はスタックオーバーフローせず、
+/// 受入基準・要件 7.1/7.2/7.3: 自己参照 bind はスタックオーバーフローせず、
 /// 部分結果（自 surface の静的 element）が得られ、循環枝は打ち切られる（debug・非パニック）。
 ///
 /// surface 1000 は静的 element `self.png` を持ち、かつ自身の bind pattern0 が **surface 1000
@@ -488,7 +423,6 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
 
     // 静的層 self.png は積まれる（部分結果）。
-    assert!(!ops.is_empty(), "自己参照でも静的層の部分結果が得られる");
     // ops は有界（自己参照枝は打ち切られる）。静的 self.png（1本）＋ bind pattern0 が
     // surface 1000 を参照→ visited で 1000 は既訪問ゆえ枝打ち切り＝追加 element なし。
     // よって self.png 1本のみ。
@@ -496,7 +430,7 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
     assert_eq!(paths, vec!["self.png"], "自己参照枝は打ち切り＝静的層のみ");
 }
 
-/// テスト5.3-②（要件 7.2）: 相互参照（A→B→A）はスタックオーバーフローせず、A 再入で
+/// 要件 7.2: 相互参照（A→B→A）はスタックオーバーフローせず、A 再入で
 /// 打ち切られ部分結果が得られる（非パニック）。
 ///
 /// surface A=1000 の bind→B=1100、B の bind→A=1000。A から derive すると
@@ -537,7 +471,7 @@ fn mutual_reference_cycle_is_pruned_without_overflow() {
     );
 }
 
-/// テスト5.3-③（要件 7.1・オフセット累積）: 非循環の多段入れ子 A→B→C でオフセットが累積する。
+/// 要件 7.1・オフセット累積: 非循環の多段入れ子 A→B→C でオフセットが累積する。
 ///
 /// A=1000 の bind→B=1100 を (10,5)、B=1100 の bind→C=1200 を (100,50)、C=1200 の element は
 /// 自 (2,3)。C の element の最終オフセット＝(10+100+2, 5+50+3)＝(112, 58)。多段累積を検証。
@@ -570,7 +504,7 @@ fn offset_accumulates_across_multilevel_nesting() {
     assert_eq!(ops[0].transform.offset(), (112, 58), "多段オフセット累積");
 }
 
-/// テスト5.3-④（要件 7.1・ancestor-stack 規律）: 非循環で同一 surface を2回参照すると、
+/// 要件 7.1・ancestor-stack 規律: 非循環で同一 surface を2回参照すると、
 /// 双方とも展開される（visited は祖先スタックゆえ枝離脱で pop・偽陽性打ち切りをしない）。
 ///
 /// A=1000 の bind id=1 → 共有子 S=1300 at (10,0)、bind id=2 → 中間 B=1100（B の bind→S=1300 at
@@ -612,36 +546,6 @@ fn noncyclic_shared_child_expands_on_each_path() {
         offsets,
         vec![(10, 0), (0, 20)],
         "各経路で別オフセット＝重複展開"
-    );
-}
-
-/// テスト5.3-⑤（要件 4.5/10.1）: 循環を含む入力でも 2 回導出→バイト等価（決定性・有界）。
-#[test]
-fn cyclic_derivation_is_deterministic() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, &["a.png", "b.png"]);
-
-    let a = surface_with_anims(
-        1000,
-        vec![elem(0, "a.png", 0, 0)],
-        vec![bind_anim(1, 1100, 0, 0)],
-    );
-    let b = surface_with_anims(
-        1100,
-        vec![elem(0, "b.png", 0, 0)],
-        vec![bind_anim(1, 1000, 0, 0)], // B→A 相互参照。
-    );
-    let shell = shell_of(vec![a, b]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
-
-    let binds = BindSet::from_ids([1]);
-    let ops1 = ops(&world, &atlas, 1000, &binds, &PatternState::default());
-    let ops2 = ops(&world, &atlas, 1000, &binds, &PatternState::default());
-
-    assert_eq!(
-        ops1, ops2,
-        "循環入力でも同一入力→同一 ops（バイト等価・有界）"
     );
 }
 
@@ -694,26 +598,7 @@ fn coexisting_patterns_bind_random_draws_none_pure_bind_draws_all() {
         id: 1,
         interval,
         interval_written: true,
-        patterns: vec![
-            Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 1100,
-                target: "1100".into(),
-                wait: 0,
-                x: 0,
-                y: 0,
-            },
-            Pattern {
-                index: 1,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 1200,
-                target: "1200".into(),
-                wait: 0,
-                x: 0,
-                y: 0,
-            },
-        ],
+        patterns: vec![pattern(0, "overlay", 1100), pattern(1, "overlay", 1200)],
     };
     let paths = |interval| {
         let host = surface_with_anims(1000, Vec::new(), vec![anim(interval)]);

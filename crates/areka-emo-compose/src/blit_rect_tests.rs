@@ -16,6 +16,7 @@ use crate::composed::ComposedSurface;
 use crate::method::ComposeMethod;
 use crate::normalized::Transform;
 use crate::plan::{BlitOp, Extent};
+use crate::plan_test_support::{elem, shell_of, surface};
 
 /// 見本の絵 1 枚（大きさ・切り詰めのずれ・模様の種）。`None` は全透明（placement 無し）。
 type Part = Option<(u32, u32, (i32, i32), u32)>;
@@ -393,21 +394,11 @@ fn unchanged_layer_between_movers_240_frames() {
 /// 面 1 枚（不透明の背景 8×6 と半透明の小物 3×2）を fold・bind 済みの world と atlas。
 fn composer_world() -> (crate::EmoWorld, AtlasTable) {
     use areka_emo_atlas::{AlphaParams, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake};
-    use areka_parsers::shell::{DefRef, Element, ElementPath, Shell, Surface};
 
-    let el = |layer, path: &str, x, y| Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    };
-    let surfaces = vec![Surface {
-        id: 0,
-        targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
-        elements: vec![el(0, "a.png", 0, 0), el(1, "b.png", 2, 1)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
+    let surfaces = vec![surface(
+        0,
+        vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 2, 1)],
+    )];
     let base = std::path::Path::new("shell/master");
     let mut dec = MemoryDecoder::new();
     dec.insert(
@@ -435,15 +426,7 @@ fn composer_world() -> (crate::EmoWorld, AtlasTable) {
     };
     let baked = bake(&[set], &dec, PackConfig::default());
     assert!(baked.errors.is_empty(), "bake は失敗しない");
-    let shell = Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions: vec![DefRef::Surface(0)],
-    };
-    let mut world = crate::EmoWorld::build(&shell);
+    let mut world = crate::EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
     (world, baked.table)
 }
@@ -523,8 +506,6 @@ fn composer_failure_keeps_previous_ops() {
 
 /// 面 0（背景 a）と面 1（背景 a＋小物 b）を束縛した world と、b の uv が頁の右へ 1 画素はみ出す表。
 fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
-    use areka_parsers::shell::{DefRef, Element, ElementPath, Shell, Surface};
-
     let key = |p: &str| AtlasKey {
         set: SetId(0),
         rel_path: p.into(),
@@ -562,30 +543,10 @@ fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
         ],
         vec![pattern_page(8, 6, 1), pattern_page(3, 2, 2)],
     );
-    let el = |layer, path: &str, x, y| Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    };
-    let surface = |id: u32, elements| Surface {
-        id,
-        targets: vec![areka_parsers::shell::AppendTarget::Single(id)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    };
-    let shell = Shell {
-        surfaces: vec![
-            surface(0, vec![el(0, "a.png", 0, 0)]),
-            surface(1, vec![el(0, "a.png", 0, 0), el(1, "b.png", 2, 1)]),
-        ],
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions: vec![DefRef::Surface(0), DefRef::Surface(1)],
-    };
+    let shell = shell_of(vec![
+        surface(0, vec![elem(0, "a.png", 0, 0)]),
+        surface(1, vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 2, 1)]),
+    ]);
     let mut world = crate::EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
     (world, atlas)

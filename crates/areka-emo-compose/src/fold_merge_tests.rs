@@ -171,34 +171,6 @@ animation9.pattern1,overlay,201,60,0,0
     assert_eq!(pattern_surfaces(&world, 7, 9), vec![100, 101]);
 }
 
-/// interval 行を書かない後のブレスも、すでにある animation番号なら pattern の行ごと捨てる。
-#[test]
-fn later_brace_without_interval_line_is_dropped_for_an_existing_animation() {
-    let text = "\
-surface8
-{
-animation1.interval,always
-animation1.pattern0,overlay,100,50,0,0
-animation1.pattern1,overlay,101,50,0,0
-}
-
-surface8
-{
-animation1.pattern1,overlay,201,60,0,0
-animation1.pattern2,overlay,202,70,0,0
-}
-";
-    let world = EmoWorld::build(&parse(text));
-    let face = world.surface(8).expect("面 8");
-
-    assert_eq!(face.animations.len(), 1);
-    assert_eq!(
-        face.animations[0].interval,
-        Interval::Other("always".into())
-    );
-    assert_eq!(pattern_surfaces(&world, 8, 1), vec![100, 101]);
-}
-
 fn pattern_surfaces(world: &EmoWorld, id: u32, anim: u32) -> Vec<i64> {
     world
         .surface(id)
@@ -317,7 +289,7 @@ fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
             "形 {id}: 同じ element番号は両方を足す"
         );
     }
-    // 形 1・5（追記）・形 6（波括弧）: すでにある animation1 の後の行を捨てる。
+    // 形 1・5（追記）・形 6（波括弧）: すでにある animation1 の後の行を、interval 行が無くても捨てる。
     assert_eq!(pattern_surfaces(&world, 1, 1), vec![100, 101], "形 1");
     assert_eq!(pattern_surfaces(&world, 5, 1), vec![100], "形 5");
     assert_eq!(pattern_surfaces(&world, 6, 1), vec![100, 101], "形 6");
@@ -354,8 +326,4 @@ fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
             "{line}"
         );
     }
-    assert!(
-        !logs.contains("append が既存 animation id を再定義"),
-        "追記の丸ごとの置き換えの記録は無くなった: {logs}"
-    );
 }

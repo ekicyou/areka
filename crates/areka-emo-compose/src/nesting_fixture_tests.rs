@@ -1,4 +1,4 @@
-//! 検体を読み手から合成まで通す（要件 8.2・8.3・タスク 8.1）。
+//! 検体を読み手から合成まで通す（要件 8.2・8.3）。
 //!
 //! `tests/fixtures/surface-nesting/` の surfaces.txt を 解析 → 面の表 → 焼く → 合成 の順に通す。
 //! 焼く一覧は本番の入口（`areka-emo-present` の `build_shell_target_with_boxes`）と同じ形
@@ -12,11 +12,11 @@ use std::path::PathBuf;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse, parse_boxes};
+use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
-use crate::plan_test_support::png_size;
+use crate::plan_test_support::{elem, opaque_wxh, png_size, px, surface};
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -95,32 +95,21 @@ fn load(text: &str) -> Loaded {
         s.elements
             .retain(|e| element_kind(&e.path) == ElementKind::Image);
     }
-    surfaces.extend(world.base_images().used.iter().map(|(&id, name)| Surface {
-        id,
-        targets: vec![AppendTarget::Single(id)],
-        elements: vec![Element {
-            layer: 0,
-            path: ElementPath::new(name.clone()),
-            x: 0,
-            y: 0,
-        }],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }));
+    surfaces.extend(
+        world
+            .base_images()
+            .used
+            .iter()
+            .map(|(&id, name)| surface(id, vec![elem(0, name, 0, 0)])),
+    );
 
     let dir = fixture_dir();
     let mut dec = MemoryDecoder::new();
     for &(name, _, _, _) in FILES {
         let (w, h) = png_size(&dir.join(name));
-        let px = color(name);
-        dec.insert(
-            dir.join(name),
-            w,
-            h,
-            w * 4,
-            px.repeat((w * h) as usize),
-            true,
-        );
+        let [b, g, r, _] = color(name);
+        let (w, h, stride, bgra, has_alpha) = opaque_wxh(w, h, b, g, r);
+        dec.insert(dir.join(name), w, h, stride, bgra, has_alpha);
     }
     let set = SurfaceSet {
         surfaces: &surfaces,
@@ -163,12 +152,6 @@ fn compose(loaded: &Loaded, top: u32) -> ComposedSurface {
             &PatternState::default(),
         )
         .unwrap_or_else(|e| panic!("surface{top} の合成に失敗した: {e:?}"))
-}
-
-fn pixel(s: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    assert!(x < s.width() && y < s.height(), "({x},{y}) は外形の外");
-    let at = (y * s.stride() + x * 4) as usize;
-    s.bytes()[at..at + 4].try_into().unwrap()
 }
 
 /// 検体の PNG は冒頭の説明どおりの原寸を見出しに持つ（以下の画素の座標はこの原寸で数える）。
@@ -216,23 +199,19 @@ fn every_parent_contains_the_shared_child_image() {
     let loaded = load(FIXTURE);
     // 親 A: 子 10 を (20,30)。
     let s0 = compose(&loaded, 0);
-    assert_eq!(pixel(&s0, 25, 35), color("eye.png"));
-    assert_eq!(pixel(&s0, 19, 35), color("body.png"));
+    assert_eq!(px(&s0, 25, 35), color("eye.png"));
+    assert_eq!(px(&s0, 19, 35), color("body.png"));
     // 親 B: 子 10 を (90,50)。親の画像（幅 100）の右へはみ出した所も描かれる。
     let s1 = compose(&loaded, 1);
     assert_eq!((s1.width(), s1.height()), (110, 200));
-    assert_eq!(pixel(&s1, 105, 55), color("eye.png"));
-    assert_eq!(pixel(&s1, 89, 55), color("body.png"));
+    assert_eq!(px(&s1, 105, 55), color("eye.png"));
+    assert_eq!(px(&s1, 89, 55), color("body.png"));
     // 親 C: element0 が子 10（surface2.png は使われない）・ブレスの無い子 11 を (50,50)。
     let s2 = compose(&loaded, 2);
     assert_eq!((s2.width(), s2.height()), (62, 62));
-    assert_eq!(pixel(&s2, 5, 5), color("eye.png"));
-    assert_eq!(pixel(&s2, 55, 55), color("surface11.png"));
-    assert_eq!(
-        pixel(&s2, 30, 30),
-        [0, 0, 0, 0],
-        "surface2.png は描かれない"
-    );
+    assert_eq!(px(&s2, 5, 5), color("eye.png"));
+    assert_eq!(px(&s2, 55, 55), color("surface11.png"));
+    assert_eq!(px(&s2, 30, 30), [0, 0, 0, 0], "surface2.png は描かれない");
 }
 
 /// 3 段目（32）の絵は各段の位置の和に出る（要件 2.3）。part.png（10x10）の右下の角で見る:
@@ -242,10 +221,10 @@ fn third_level_image_is_at_the_sum_of_every_offset() {
     let loaded = load(FIXTURE);
     // 親 A: 30 を (5,5)・31 を (3,4)・32 を (2,1) → 32 は (10,10)〜(20,20)。
     let s0 = compose(&loaded, 0);
-    assert_eq!(pixel(&s0, 19, 19), color("part.png"));
-    assert_eq!(pixel(&s0, 20, 20), color("body.png"));
+    assert_eq!(px(&s0, 19, 19), color("part.png"));
+    assert_eq!(px(&s0, 20, 20), color("body.png"));
     // 親 B: surface.append1 が 30 を (60,100) → 32 は (65,105)〜(75,115)。
     let s1 = compose(&loaded, 1);
-    assert_eq!(pixel(&s1, 74, 114), color("part.png"));
-    assert_eq!(pixel(&s1, 75, 115), color("body.png"));
+    assert_eq!(px(&s1, 74, 114), color("part.png"));
+    assert_eq!(px(&s1, 75, 115), color("body.png"));
 }

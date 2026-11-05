@@ -20,7 +20,7 @@ use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::BlitOp;
-use crate::plan_test_support::{bake_atlas, frame, ops};
+use crate::plan_test_support::{bake_atlas, frame, ops, skipped};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -353,7 +353,7 @@ fn out_is_cleared_and_reused() {
     assert!(out.is_empty());
 }
 
-// ── 合成との一致の檻（task 4.4・要件 3.2・5.11・5.12・5.13・8.3） ──
+// ── 合成との一致の檻（要件 3.2・5.11・5.12・5.13・8.3） ──
 //
 // 規則（`visible_parts`）と合成の平坦化（`derive_ops` → `flatten_surface`）は別々に書いてあるので、
 // 片方だけを変えるとずれる。ここでは両者を同じ面の表・同じ着せ替えの集合・同じコマの状態で動かし、
@@ -736,22 +736,14 @@ fn inactive_bind_random_frames_change_neither_ops_nor_parts() {
 
 /// 合成が先祖へ戻るとして切った element定義の辺（`debug!` の行から）を (親, element, 子) で返す。
 fn cut_element_edges(logs: &str) -> Vec<(u32, u32, u32)> {
-    logs.lines()
-        .filter(|l| l.contains("level=DEBUG") && l.contains("子のサーフェスを置かない"))
+    let cut: String = logs
+        .lines()
         .filter(|l| l.contains("先祖へ戻る参照"))
-        .map(|l| {
-            let field = |name: &str| -> u32 {
-                let start = l.find(&format!(" {name}=")).expect(name) + name.len() + 2;
-                l[start..]
-                    .split(' ')
-                    .next()
-                    .unwrap()
-                    .trim_matches('"')
-                    .parse()
-                    .unwrap()
-            };
-            (field("surface_id"), field("element"), field("child"))
-        })
+        .map(|l| format!("{l}\n"))
+        .collect();
+    skipped(&cut)
+        .into_iter()
+        .map(|(parent, element, child)| (parent, element, child.parse().expect("子の番号")))
         .collect()
 }
 

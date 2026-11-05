@@ -576,6 +576,15 @@ fn compose_error_display_strings_are_exact() {
         ComposeError::EmptyComposition(7).to_string(),
         "surface 7 has no layers at all (extent 0x0)",
     );
+    assert_eq!(
+        ComposeError::ExtentTooLarge {
+            surface: 7,
+            w: 16_385,
+            h: 2
+        }
+        .to_string(),
+        "surface 7 extent 16385x2 exceeds the GPU surface limit",
+    );
 }
 
 // ── Part 3-10: blit uv_rect.x/y != 0（6.1 review が直接未カバーと指摘した源矩形オフセット）──

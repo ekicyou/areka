@@ -12,7 +12,7 @@ use areka_parsers::shell::{Shell, SortOrder};
 use std::path::Path;
 
 use crate::plan_test_support::{
-    bake_atlas_sized, bind_anim, elem, px, shell_of, shell_of_with_sort, surface,
+    bake_atlas_sized, bind_anim, elem, frame, px, shell_of, shell_of_with_sort, surface,
     surface_with_anims,
 };
 
@@ -21,6 +21,49 @@ fn build_bound(shell: Shell, atlas: &AtlasTable) -> EmoWorld {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(atlas, SetId(0));
     world
+}
+
+/// 40×30 の base（不透明青）を (0,0) に置き、有効 bind 1 が 200×10 の part（不透明赤）を (0,0) に置く面 1000。
+fn blue_base_red_part() -> (EmoWorld, AtlasTable) {
+    let atlas = bake_atlas_sized(
+        Path::new("shell/master"),
+        &[
+            ("base.png", (40, 30), Some((200, 0, 0))),  // 不透明青。
+            ("part.png", (200, 10), Some((0, 0, 200))), // 不透明赤。
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        vec![elem(0, "base.png", 0, 0)],
+        vec![bind_anim(1, 1100, 0, 0)],
+    );
+    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
+    (build_bound(shell_of(vec![host, part]), &atlas), atlas)
+}
+
+/// 静的 element の無い面 1000 に bind 1（面 1100・青 4×4）と bind 2（面 1200・緑 2×2）。面 1300（赤 4×4）は
+/// pattern0 を持たない、コマの参照先。
+fn two_binds_and_a_frame() -> (EmoWorld, AtlasTable) {
+    let atlas = bake_atlas_sized(
+        Path::new("shell/master"),
+        &[
+            ("p1.png", (4, 4), Some((200, 0, 0))), // 青＝id=1 pattern0（surface1100）。
+            ("p2.png", (2, 2), Some((0, 200, 0))), // 緑＝id=2 pattern0（surface1200・小さめ）。
+            ("p3.png", (4, 4), Some((0, 0, 200))), // 赤＝id=1 の現在コマ（surface1300）。
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        Vec::new(),
+        vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
+    );
+    let s1100 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
+    let s1200 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
+    let s1300 = surface(1300, vec![elem(0, "p3.png", 0, 0)]);
+    (
+        build_bound(shell_of(vec![host, s1100, s1200, s1300]), &atlas),
+        atlas,
+    )
 }
 
 // ── テスト1（受入基準・要件 5.1/9.1）: 有効入力で Ok(ComposedSurface)・premultiplied BGRA・外形一致 ──
@@ -32,22 +75,7 @@ fn build_bound(shell: Shell, atlas: &AtlasTable) -> EmoWorld {
 /// 全 element＋全部の bind の描くコマの和集合＝w=max(40,200)=200・h=max(30,10)=30。
 #[test]
 fn compose_returns_ok_composed_surface_for_valid_input() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (40, 30), Some((200, 0, 0))),  // 不透明青。
-            ("part.png", (200, 10), Some((0, 0, 200))), // 不透明赤。
-        ],
-    );
-
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 0, 0)],
-    );
-    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, part]), &atlas);
+    let (world, atlas) = blue_base_red_part();
 
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
@@ -211,21 +239,7 @@ fn compose_into_reuses_buffer_across_calls() {
 /// 残留の主張を立てる。
 #[test]
 fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (40, 30), Some((200, 0, 0))),  // 不透明青。
-            ("part.png", (200, 10), Some((0, 0, 200))), // 不透明赤。
-        ],
-    );
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 0, 0)],
-    );
-    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, part]), &atlas);
+    let (world, atlas) = blue_base_red_part();
 
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
@@ -400,46 +414,6 @@ fn compose_equals_compose_into_fresh_buffer() {
         via_compose.bytes(),
         fresh.bytes(),
         "compose と compose_into は等価"
-    );
-}
-
-// ── テスト6（要件 10.1）: 決定性 — 同一入力の 2 回合成はバイト等価 ──
-
-#[test]
-fn compose_is_deterministic() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (40, 30), Some((10, 20, 30))),
-            ("p1.png", (60, 20), Some((1, 2, 3))),
-            ("p2.png", (20, 60), Some((4, 5, 6))),
-        ],
-    );
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
-    );
-    let p1 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
-    let p2 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, p1, p2]), &atlas);
-
-    let binds = BindSet::from_ids([1, 2]);
-    let mut c1 = Composer::new();
-    let mut c2 = Composer::new();
-    let a = c1
-        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
-        .expect("Ok");
-    let b = c2
-        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
-        .expect("Ok");
-    assert_eq!(a.width(), b.width());
-    assert_eq!(a.height(), b.height());
-    assert_eq!(
-        a.bytes(),
-        b.bytes(),
-        "同一入力→バイト等価（決定性・要件 10.1）"
     );
 }
 
@@ -631,38 +605,13 @@ fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
 ///   (b) 整列不変: id 昇順描画で id=2(緑) が id=1(コマ赤) の**上**＝(0,0) は緑・緑外側 (2,2) は赤。
 #[test]
 fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("p1.png", (4, 4), Some((200, 0, 0))), // 青＝id=1 pattern0（surface1100）。
-            ("p2.png", (2, 2), Some((0, 200, 0))), // 緑＝id=2 pattern0（surface1200・小さめ）。
-            ("p3.png", (4, 4), Some((0, 0, 200))), // 赤＝id=1 の現在コマ（surface1300）。
-        ],
-    );
-    let host = surface_with_anims(
-        1000,
-        Vec::new(), // 静的 element なし（全パーツ bind＋コマ）。
-        vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
-    );
-    let s1100 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
-    let s1200 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
-    let s1300 = surface(1300, vec![elem(0, "p3.png", 0, 0)]); // コマ参照先（pattern0 を持たない transient）。
-    let world = build_bound(shell_of(vec![host, s1100, s1200, s1300]), &atlas);
+    let (world, atlas) = two_binds_and_a_frame();
 
     let binds = BindSet::from_ids([1, 2]);
 
     // id=1 の現在コマ = surface1300（赤）を (0,0) へ。method=Overlay ゆえ駆動される。
     let mut pattern = PatternState::default();
-    pattern.set(
-        1,
-        PatternFrame {
-            surface_id: 1300,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
+    pattern.set(1, frame(1300, 0, 0));
 
     let mut composer = Composer::new();
     let out = composer
@@ -700,24 +649,7 @@ fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
 /// 「赤が置換」が pattern 由来であること（元々赤ではない）を対比で固定する。
 #[test]
 fn transient_merge_is_pattern_driven_not_static() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("p1.png", (4, 4), Some((200, 0, 0))),
-            ("p2.png", (2, 2), Some((0, 200, 0))),
-            ("p3.png", (4, 4), Some((0, 0, 200))),
-        ],
-    );
-    let host = surface_with_anims(
-        1000,
-        Vec::new(),
-        vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
-    );
-    let s1100 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
-    let s1200 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
-    let s1300 = surface(1300, vec![elem(0, "p3.png", 0, 0)]);
-    let world = build_bound(shell_of(vec![host, s1100, s1200, s1300]), &atlas);
+    let (world, atlas) = two_binds_and_a_frame();
 
     // 空 PatternState → id=1 は青 pattern0(1100) のまま。緑外側 (2,2) は青（赤ではない）。
     let out = Composer::new()

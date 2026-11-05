@@ -19,10 +19,11 @@ use areka_parsers::shell::{
 
 use crate::bind::BindSet;
 use crate::composed::ComposedSurface;
+use crate::error::ComposeError;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{BlitOp, PlanScratch, derive_ops};
+use crate::plan::{BlitOp, Extent, PlanScratch, build_plan, derive_ops};
 use crate::world::EmoWorld;
 
 // ---- 合成モデルビルダ（正規化モデルを直に組む・実 fixture のパースは golden_tests）----
@@ -68,6 +69,19 @@ pub(crate) fn surface_with_anims(
     }
 }
 
+/// pattern 1 本（位置 (0,0)・ウェイト 0・相手の欄は面の番号の綴り）。
+pub(crate) fn pattern(index: u32, method: &str, surface_id: i64) -> Pattern {
+    Pattern {
+        index,
+        method: DrawMethod::new(method.to_string()),
+        surface_id,
+        target: surface_id.to_string(),
+        wait: 0,
+        x: 0,
+        y: 0,
+    }
+}
+
 /// bind animation 1 本（interval=`Interval::Bind`・pattern0 が入れ子 surface_id を x,y で参照）。
 ///
 /// pattern index は 0 を pattern0（先頭）とし、index=5 の余分な pattern（面の表に無い 999999）も加える。
@@ -79,23 +93,15 @@ pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animati
         interval_written: true,
         patterns: vec![
             Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: ref_surface_id,
-                target: ref_surface_id.to_string(),
-                wait: 0,
                 x,
                 y,
+                ..pattern(0, "overlay", ref_surface_id)
             },
             // 面の表に無い先（たどっても何も積まない）。
             Pattern {
-                index: 5,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 999_999,
-                target: "999999".into(),
-                wait: 0,
                 x: 7,
                 y: 7,
+                ..pattern(5, "overlay", 999_999)
             },
         ],
     }
@@ -115,15 +121,7 @@ pub(crate) fn single_pattern_anim(
         id,
         interval,
         interval_written: true,
-        patterns: vec![Pattern {
-            index,
-            method: DrawMethod::new("overlay".to_string()),
-            surface_id: ref_surface_id,
-            target: ref_surface_id.to_string(),
-            wait: 0,
-            x: 0,
-            y: 0,
-        }],
+        patterns: vec![pattern(index, "overlay", ref_surface_id)],
     }
 }
 
@@ -277,7 +275,34 @@ pub(crate) fn ops(
     out
 }
 
-/// `surface_id` を (x,y) に置く Overlay のコマ。
+/// 計画を引く口（[`ops`] と並ぶ）: `surface_id` の計画を新しい命令列と作業場で建て、命令列と結果
+/// （外形か失敗）を返す。
+pub(crate) fn plan_of(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
+) -> (Vec<BlitOp>, Result<Extent, ComposeError>) {
+    let mut out = Vec::new();
+    let mut scratch = PlanScratch::default();
+    let result = build_plan(
+        &mut out,
+        &mut scratch,
+        world,
+        atlas,
+        surface_id,
+        binds,
+        pattern,
+    );
+    assert!(
+        scratch.visited.is_empty(),
+        "先祖の積み上げは走査後に空へ戻る"
+    );
+    (out, result)
+}
+
+/// `surface_id` を (x,y) に置く Overlay のコマ（ほかの描き方は `PatternFrame { method, ..frame(..) }`）。
 pub(crate) fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
     PatternFrame {
         surface_id,
@@ -343,8 +368,9 @@ pub(crate) fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> Atla
     AtlasTable::new(keys, entries, vec![page])
 }
 
-/// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提）。
+/// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提・外形の外は読まない）。
 pub(crate) fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
+    assert!(x < out.width() && y < out.height(), "({x},{y}) は外形の外");
     let i = (y * out.stride() + x * 4) as usize;
     let b = out.bytes();
     [b[i], b[i + 1], b[i + 2], b[i + 3]]

@@ -158,10 +158,6 @@ pub fn hit_region_scaled_in<'a>(
 }
 
 #[cfg(test)]
-#[path = "hit_in_tests.rs"]
-mod hit_in_tests;
-
-#[cfg(test)]
 mod tests {
     use super::{RegionPriority, hit_region_in, hit_region_scaled_in};
     use crate::normalized::SurfaceMaster;
@@ -299,19 +295,6 @@ mod tests {
             hit_region_in(&master.collisions, 75, 75, RegionPriority::Painter),
             Some("Appended")
         );
-    }
-
-    #[test]
-    fn deterministic_repeated_calls() {
-        let m = master_with(vec![coll(0, 93, 62, 271, 130, "Head")]);
-        let first = hit_region_in(&m.collisions, 180, 96, RegionPriority::Painter);
-        for _ in 0..5 {
-            assert_eq!(
-                hit_region_in(&m.collisions, 180, 96, RegionPriority::Painter),
-                first
-            );
-        }
-        assert_eq!(first, Some("Head"));
     }
 
     /// 要件 1.5/3.4（no-op 保存の檻・R3.4 の正本）: k=1.0 では [`hit_region_scaled_in`] が
@@ -710,32 +693,5 @@ mod tests {
             None,
             "k=5/4: i64 極値（panic なし）",
         );
-    }
-
-    /// 要件 2.1（決定性の k≠1.0 版・既存 `deterministic_repeated_calls` の流儀）:
-    /// 同一 `(master, x, y, k, priority)` の反復呼出は常に同一の `ScaledHit` を返す。
-    #[test]
-    fn scaled_deterministic_repeated_calls_at_nonidentity_k() {
-        let m = head_and_bust();
-        for (k, client, surface, region) in [
-            (k2(), (360, 192), (180, 96), Some("Head")),
-            (k2(), (360, 600), (180, 300), Some("Bust")),
-            (k2(), (186, 124), (93, 62), Some("Head")),
-            (k125(), (120, 90), (96, 72), Some("Head")),
-            (k125(), (116, 77), (93, 62), Some("Head")),
-            (k125(), (225, 250), (180, 200), None),
-        ] {
-            let (x, y) = client;
-            let first = hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter);
-            for _ in 0..5 {
-                assert_eq!(
-                    hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter),
-                    first,
-                    "反復呼出で結果が変わってはならない: client=({x},{y})"
-                );
-            }
-            assert_eq!(first.surface_point, surface, "client=({x},{y})");
-            assert_eq!(first.region, region, "client=({x},{y})");
-        }
     }
 }

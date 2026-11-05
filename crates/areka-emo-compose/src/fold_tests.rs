@@ -457,12 +457,8 @@ fn shell_with_aliases(
     defs: Vec<DefRef>,
 ) -> Shell {
     Shell {
-        surfaces,
-        appends: Vec::new(),
         aliases,
-        animation_sort: None,
-        collision_sort: None,
-        definitions: defs,
+        ..shell_mixed(surfaces, Vec::new(), defs)
     }
 }
 

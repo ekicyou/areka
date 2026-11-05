@@ -1,4 +1,4 @@
-//! # surface_nesting_fixture_test — 入れ子の検体が今の読み手で読めること（areka-P0-surface-element-nesting task 1.2・要件 8.2）
+//! # surface_nesting_fixture_test — 入れ子の検体が今の読み手で読めること（areka-P0-surface-element-nesting 要件 8.2）
 //!
 //! 検体 `tests/fixtures/surface-nesting/` を、今ある読み手（`parse`・`parse_boxes`）→ 面の表
 //! （`EmoWorld::build_with_images`）→ 箱の畳み込み（`fold_boxes`）へ通し、読み手が検体を

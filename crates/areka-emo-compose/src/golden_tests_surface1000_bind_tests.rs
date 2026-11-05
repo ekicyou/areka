@@ -13,21 +13,16 @@
 //!      固定画像でなく bind 集合を反映していることを証明する。
 //! すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
 
+use super::BindSet;
 use super::test_support::{
     build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,
     shell_master_dir, surface1000_bind_parts,
 };
-use super::{BindSet, ComposedSurface};
-
-/// 合成結果の (x,y) 画素の α バイト（BGRA の index+3）を読む。
-fn alpha_at(s: &ComposedSurface, x: u32, y: u32) -> u8 {
-    let i = (y * s.stride() + x * 4 + 3) as usize;
-    s.bytes()[i]
-}
+use crate::plan_test_support::px;
 
 /// surface1000 が「静的 element ゼロ・全パーツ bind」の着せ替え base surface であることを実データで確認する。
 ///
-/// これは 8.2 の前提（要件 5.4 の対象 surface である）を fixture で固定する診断テスト。
+/// 下の 3 本の前提（要件 5.4 の対象 surface である）を fixture で固定する診断テスト。
 #[test]
 fn surface1000_is_all_bind_no_static_elements() {
     let shell = parse_emo2_shell();
@@ -44,7 +39,7 @@ fn surface1000_is_all_bind_no_static_elements() {
         !s1000.animations.is_empty(),
         "surface1000 は bind animation 群を持つ"
     );
-    // 本テストが使う代表 bind（1100/1200/1302）が実データに `interval,bind` として存在する。
+    // 本テストが使う代表 bind（1100/1200/1302）が実データに着せ替え（`bind` か `bind+random`）として存在する。
     use areka_parsers::shell::Interval;
     for p in surface1000_bind_parts() {
         let anim = s1000
@@ -71,7 +66,7 @@ fn surface1000_is_all_bind_no_static_elements() {
     }
 }
 
-/// task 8.2 ①（要件 5.4・11.2）: 空 BindSet → 全透明（α==0）だが外形は非ゼロ。
+/// ①（要件 5.4・11.2）: 空 BindSet → 全透明（α==0）だが外形は非ゼロ。
 ///
 /// surface1000 は静的 element ゼロゆえ、空 BindSet では描画可能命令が一切生まれず、合成結果は
 /// 全画素 α==0（全透明）になる。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全部の bind
@@ -104,7 +99,7 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
     );
 }
 
-/// task 8.2 ②（要件 5.4・11.2）: 非空 BindSet → 非空（α>0 の画素が存在する）。
+/// ②（要件 5.4・11.2）: 非空 BindSet → 非空（α>0 の画素が存在する）。
 ///
 /// 静的 element ゼロの surface1000 でも、有効 bind 集合を与えれば参照パーツ画像が合成され、
 /// 少なくとも 1 画素が α>0 になる（要件 5.4「静的 element ゼロ＋非空 bind 集合 → 可視ビットマップ・
@@ -125,11 +120,11 @@ fn surface1000_nonempty_bindset_is_non_blank() {
         "非空 BindSet では α>0 の画素が存在する（非空・要件 5.4）"
     );
     // 腕パーツ（80×20 全不透明）が原点 (0,0) に着弾するので、その内側の代表画素が不透明。
-    assert!(alpha_at(&out, 0, 0) > 0, "パーツ左上 (0,0) は不透明");
-    assert!(alpha_at(&out, 40, 10) > 0, "腕パーツ内部の代表画素は不透明");
+    assert!(px(&out, 0, 0)[3] > 0, "パーツ左上 (0,0) は不透明");
+    assert!(px(&out, 40, 10)[3] > 0, "腕パーツ内部の代表画素は不透明");
 }
 
-/// task 8.2 ③（要件 11.2・5.4）: bind 数に応じた重なりを要点サンプリング。
+/// ③（要件 11.2・5.4）: bind 数に応じた重なりを要点サンプリング。
 ///
 /// 各パーツに **判別可能な色・サイズ**を与え、特定パーツだけが覆う画素を「その bind が有効な
 /// ときだけ不透明・無効なら透明」であることでサンプリング検証する。合成が固定画像でなく
@@ -151,11 +146,11 @@ fn surface1000_bind_count_overlap_point_sampling() {
     // (a) 腕 1100 のみ有効 → 腕専用画素は不透明・目専用画素は透明。
     let out_arm = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100]));
     assert!(
-        alpha_at(&out_arm, ARM_ONLY.0, ARM_ONLY.1) > 0,
+        px(&out_arm, ARM_ONLY.0, ARM_ONLY.1)[3] > 0,
         "腕 1100 有効 → 腕専用画素 (70,5) は不透明"
     );
     assert_eq!(
-        alpha_at(&out_arm, EYE_ONLY.0, EYE_ONLY.1),
+        px(&out_arm, EYE_ONLY.0, EYE_ONLY.1)[3],
         0,
         "目 1302 無効 → 目専用画素 (5,80) は透明（合成は bind 集合を反映）"
     );
@@ -163,11 +158,11 @@ fn surface1000_bind_count_overlap_point_sampling() {
     // (b) 目 1302 のみ有効 → 目専用画素は不透明・腕専用画素は透明（対称の反証）。
     let out_eye = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1302]));
     assert!(
-        alpha_at(&out_eye, EYE_ONLY.0, EYE_ONLY.1) > 0,
+        px(&out_eye, EYE_ONLY.0, EYE_ONLY.1)[3] > 0,
         "目 1302 有効 → 目専用画素 (5,80) は不透明"
     );
     assert_eq!(
-        alpha_at(&out_eye, ARM_ONLY.0, ARM_ONLY.1),
+        px(&out_eye, ARM_ONLY.0, ARM_ONLY.1)[3],
         0,
         "腕 1100 無効 → 腕専用画素 (70,5) は透明"
     );
@@ -175,8 +170,8 @@ fn surface1000_bind_count_overlap_point_sampling() {
     // (c) 腕＋目 両方有効 → 両専用画素とも不透明。
     let out_both = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1302]));
     assert!(
-        alpha_at(&out_both, ARM_ONLY.0, ARM_ONLY.1) > 0
-            && alpha_at(&out_both, EYE_ONLY.0, EYE_ONLY.1) > 0,
+        px(&out_both, ARM_ONLY.0, ARM_ONLY.1)[3] > 0
+            && px(&out_both, EYE_ONLY.0, EYE_ONLY.1)[3] > 0,
         "腕＋目 有効 → 両専用画素とも不透明"
     );
 
@@ -190,11 +185,12 @@ fn surface1000_bind_count_overlap_point_sampling() {
     assert!(n_both > n_arm, "腕＋目 は腕単独より真に多い不透明画素");
     assert!(n_both > n_eye, "腕＋目 は目単独より真に多い不透明画素");
 
-    // 3 bind（腕＋口＋目）→ 2 bind 以上（口 1200 追加で不透明画素が減らない）。
+    // 3 bind（腕＋口＋目）→ 2 bind より真に多い（口 1200 の 30×30 は (20..30, 20..30) を腕にも目にも
+    // 覆われずに足す）。
     let out_three = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1200, 1302]));
     let n_three = opaque_pixel_count(&out_three);
     assert!(
-        n_three >= n_both,
-        "3 bind の不透明画素数は 2 bind 以上（単調・要件 11.2）"
+        n_three > n_both,
+        "3 bind の不透明画素数は 2 bind より真に多い（要件 11.2）"
     );
 }

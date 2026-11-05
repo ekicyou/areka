@@ -109,7 +109,6 @@ pub struct NormalizedElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_parsers::shell::ElementPath;
 
     /// `translate` は平行移動成分を保持し、M1 では純平行移動と判定される。
     #[test]
@@ -126,29 +125,5 @@ mod tests {
         assert_eq!(t.offset(), (0, 0));
         assert!(t.is_translation());
         assert_eq!(t, Transform::default());
-    }
-
-    /// `SurfaceMaster` / `NormalizedElement` を構築しフィールドを読み取れる。
-    #[test]
-    fn surface_master_construct_and_read() {
-        let elem = NormalizedElement {
-            layer: 0,
-            path: ElementPath::new("surface0.png".to_string()),
-            transform: Transform::translate(10, 20),
-            method: ComposeMethod::Overlay,
-            kind: ElementKind::Image,
-        };
-        let master = SurfaceMaster {
-            id: 1000,
-            elements: vec![elem],
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        };
-        assert_eq!(master.id, 1000);
-        assert_eq!(master.elements.len(), 1);
-        assert_eq!(master.elements[0].layer, 0);
-        assert_eq!(master.elements[0].path.as_str(), "surface0.png");
-        assert_eq!(master.elements[0].transform.offset(), (10, 20));
-        assert_eq!(master.elements[0].method, ComposeMethod::Overlay);
     }
 }

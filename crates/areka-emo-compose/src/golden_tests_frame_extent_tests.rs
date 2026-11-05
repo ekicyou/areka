@@ -149,7 +149,7 @@ fn assert_frames_fit_base(
     (base_extent, measured)
 }
 
-/// task 7.3 ③（要件 5.4・design compute_extent 外形前提）: kero まばたき（`animation0`・
+/// 要件 5.4・design compute_extent 外形前提: kero まばたき（`animation0`・
 /// フレーム 2106/2110）の全コマが原寸＋(x,y) で base surface2100 の Extent 内に収まる。
 ///
 /// kero の採録まばたき（`surface.append10,2100` の `animation0.interval,random,4`）は立ち絵ベース
@@ -189,7 +189,7 @@ fn kero_blink_frames_fit_within_base_extent() {
     }
 }
 
-/// task 7.3 ③（要件 5.4）: sakura まばたき（`animation1400`・フレーム 1410/1411/1412）の全コマが
+/// 要件 5.4: sakura まばたき（`animation1400`・フレーム 1410/1411/1412）の全コマが
 /// 原寸＋(x,y) で base surface1000 の Extent 内に収まる。
 ///
 /// sakura の採録まばたき（surface1000 内 `animation1400.interval,bind+random,4`）はフレーム

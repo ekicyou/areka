@@ -6,9 +6,9 @@
 use std::path::Path;
 
 use areka_emo_atlas::{AtlasTable, SetId};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_parsers::shell::parse;
 
-use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement, fold_boxes};
+use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement};
 use crate::Composer;
 use crate::bind::BindSet;
 use crate::pattern::PatternState;
@@ -21,8 +21,7 @@ const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.t
 const PLACE_70: &str = "element1,overlay,70,10,10";
 
 fn fold(text: &str) -> (BoxLayout, Vec<BoxIssue>) {
-    let world = EmoWorld::build(&parse(text));
-    let (layout, report) = fold_boxes(&parse_boxes(text), &Default::default(), &world);
+    let (layout, report) = super::tests::fold(text);
     (layout, report.issues)
 }
 

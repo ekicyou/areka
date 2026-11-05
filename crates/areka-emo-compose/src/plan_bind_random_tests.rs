@@ -8,22 +8,10 @@
 use super::*;
 use crate::plan_test_support::*;
 use areka_emo_atlas::{AtlasTable, SetId};
-use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern};
+use areka_parsers::shell::{Animation, Interval};
 use std::path::Path;
 
 const RELS: [&str; 3] = ["eyebase.png", "closed.png", "half.png"];
-
-fn overlay(index: u32, surface_id: i64) -> Pattern {
-    Pattern {
-        index,
-        method: DrawMethod::new("overlay".to_string()),
-        surface_id,
-        target: surface_id.to_string(),
-        wait: 0,
-        x: 0,
-        y: 0,
-    }
-}
 
 /// host 1000 に純 bind の 1300（pattern0→1301 の目の土台）と、ぱすたの 1400 と同じ形の
 /// `bind+random`（pattern0→1410 閉じた目・pattern1→1411 半目・pattern2→-1）を置く。
@@ -34,7 +22,11 @@ fn build() -> (EmoWorld, AtlasTable, Vec<(ElementId, &'static str)>) {
         id: 1400,
         interval: Interval::BindRandom { k: 4 },
         interval_written: true,
-        patterns: vec![overlay(0, 1410), overlay(1, 1411), overlay(2, -1)],
+        patterns: vec![
+            pattern(0, "overlay", 1410),
+            pattern(1, "overlay", 1411),
+            pattern(2, "overlay", -1),
+        ],
     };
     let host = surface_with_anims(1000, Vec::new(), vec![bind_anim(1300, 1301, 0, 0), blink]);
     let shell = shell_of(vec![

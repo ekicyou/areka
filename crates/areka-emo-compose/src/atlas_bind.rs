@@ -133,9 +133,15 @@ mod tests {
             );
             // 全て bake 済みゆえ Some（index 対応の実挙動確認）。
             for (i, e) in master.elements.iter().enumerate() {
+                let resolved = atlas.resolve(SetId(0), e.path.as_str());
+                assert!(
+                    resolved.is_some(),
+                    "index {i}（{}）は焼いてある",
+                    e.path.as_str()
+                );
                 assert_eq!(
                     binding.0[i],
-                    atlas.resolve(SetId(0), e.path.as_str()),
+                    resolved,
                     "index {i}（{}）が resolve と一致",
                     e.path.as_str(),
                 );

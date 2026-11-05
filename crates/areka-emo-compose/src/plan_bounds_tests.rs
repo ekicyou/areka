@@ -162,10 +162,10 @@ fn nesting_adds_offsets_and_skips_non_drawing() {
     assert!(logs.trim().is_empty(), "外形は記録を出さない: {logs}");
 }
 
-/// bind の pattern0 は描画メソッドを問わず面の絵の大きさに数えられる（`compute_extent`）。`overlayfast` で
+/// 純 `bind` の pattern は描画メソッドを問わず面の絵の大きさ（外形の表）に数えられる。`overlayfast` で
 /// 外へはみ出しても、外形はその絵を収める（Invariants）。
 #[test]
-fn bind_pattern0_non_overlay_still_fits() {
+fn pure_bind_pattern_non_overlay_still_fits() {
     let (world, atlas) = world_of(
         "charset,UTF-8\r\n\
          surface0\r\n{\r\nelement0,overlay,base16.png,0,0\r\n\
@@ -190,7 +190,7 @@ fn always_pattern_non_overlay_still_fits() {
     assert_every_surface_fits(&world, &atlas, b);
 }
 
-/// bind の pattern が循環するシェルでも、外形は記録を出さない（`shell_bounds` は面ごとの外形を表から
+/// 着せ替えの pattern が循環するシェルでも、外形は記録を出さない（`shell_bounds` は面ごとの外形を表から
 /// 引くだけ・表を作るときの循環の知らせは束縛のときの debug）。
 #[test]
 fn bind_cycle_emits_no_warn() {
@@ -203,10 +203,7 @@ fn bind_cycle_emits_no_warn() {
     );
     let mut b = None;
     let logs = capture_logs(|| b = Some(shell_bounds(&world, &atlas)));
-    assert!(
-        !logs.contains("level=WARN"),
-        "外形は warn を出さない: {logs}"
-    );
+    assert!(logs.trim().is_empty(), "外形は記録を出さない: {logs}");
     assert_every_surface_fits(&world, &atlas, b.expect("外形"));
 }
 

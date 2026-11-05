@@ -77,8 +77,8 @@ fn surface1000_compose_is_byte_deterministic() {
 ///   ② out.bytes() の**長さが不変**（外形一定ゆえ resize が伸長を起こさない。バッファは
 ///      `bytes()` がスライスを返すため容量は観測できないが、①のポインタ不変が realloc 不在を担保する）、
 ///   ③ Composer 内部 `ops` スクラッチの**容量が単調・非成長**（毎フレーム clear+push で再利用）、
-///   ④ Composer 内部 `visited`・`steps`・`merged_ids` スクラッチの**容量が非成長**（入れ子 flatten の
-///      祖先スタック・段の積み荷・層 (ii) の id の再利用）、
+///   ④ Composer の作業場（`PlanScratch`）の全部の列と集合の**容量が非成長**（入れ子 flatten の
+///      祖先スタック・段の積み荷・層 (ii) の id などの再利用。この検体で使う 6 つは 0 でないことも見る）、
 ///   ⑤ 絵のバイトと命令数が初回と同じ（同じ Composer の繰り返しでも決定的・要件 10.1）、
 /// を反復ループ全域で固定する。外形は束縛のときの表から引くので、合成の中で外形をたどらない（指摘 8）。
 /// realloc する実装ならポインタ／容量が動いて破れる。入力が変わるときの確保の有無は確かめていない。
@@ -112,13 +112,15 @@ fn surface1000_recompose_steady_state_zero_allocation() {
     let bytes0 = out.bytes().to_vec();
     let ops_len0 = composer.ops.len();
     let ops_cap0 = composer.ops.capacity();
-    let visited_cap0 = composer.scratch.visited.capacity();
-    let steps_cap0 = composer.scratch.steps.capacity();
-    let merged_cap0 = composer.scratch.merged_ids.capacity();
-    assert!(
-        steps_cap0 > 0 && merged_cap0 > 0,
-        "作業場を使っている（空虚でない）"
-    );
+    let caps0 = composer.scratch.capacities();
+    for (name, cap) in caps0 {
+        if matches!(
+            name,
+            "visited" | "on_path" | "steps" | "frames" | "merged_ids" | "anims"
+        ) {
+            assert!(cap > 0, "作業場の {name} を使っている（空虚でない）");
+        }
+    }
 
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {
@@ -154,19 +156,9 @@ fn surface1000_recompose_steady_state_zero_allocation() {
             "反復 {iter}: ops スクラッチ容量が非成長（clear+push 再利用・要件 10.3）"
         );
         assert_eq!(
-            composer.scratch.visited.capacity(),
-            visited_cap0,
-            "反復 {iter}: visited スクラッチ容量が非成長（祖先スタック再利用・要件 10.3）"
-        );
-        assert_eq!(
-            composer.scratch.steps.capacity(),
-            steps_cap0,
-            "反復 {iter}: 段の積み荷の容量が非成長（要件 10.3）"
-        );
-        assert_eq!(
-            composer.scratch.merged_ids.capacity(),
-            merged_cap0,
-            "反復 {iter}: 層 (ii) の id の容量が非成長（要件 10.3）"
+            composer.scratch.capacities(),
+            caps0,
+            "反復 {iter}: 作業場の全部の列と集合の容量が非成長（再利用・要件 10.3）"
         );
     }
 
@@ -208,7 +200,6 @@ fn extent_comes_from_the_table_made_by_bind_atlas() {
     world.bind_atlas(&atlas, SetId(0));
     let extent = plan(&world, &mut ops, &mut scratch).expect("束縛の後は合成できる");
     assert_eq!(extent, compute_extent(&world, &atlas, 1000));
-    assert_eq!(extent, world.extent(1000));
     assert!(extent.w > 0 && extent.h > 0);
 }
 
@@ -231,7 +222,6 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     let base = shell_master_dir();
     let atlas = build_atlas_for_surface1000(&shell, &base);
     let binds = surface1000_full_bindset();
-    let active_bind_count = binds.ids().len(); // 解決する有効 bind 数（＝描画層数）。
 
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
@@ -249,13 +239,7 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     )
     .expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
 
-    // 命令数 == 描画層数（有効 bind 数）。線形＝非二次・非画素比例。
-    assert_eq!(
-        ops.len(),
-        active_bind_count,
-        "surface1000＋全有効 bind の命令数 == 描画層数（O(elements)・要件 10.3）"
-    );
-    // 具体値の固定（回帰検出）: 3 有効 bind → 3 命令。数十命令規模（design 記述）の下端。
+    // 命令数 == 描画層数（有効 bind 数）。線形＝非二次・非画素比例（O(elements)・要件 10.3）。
     assert_eq!(
         ops.len(),
         3,
