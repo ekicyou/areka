@@ -110,8 +110,6 @@ fn child_shown_as_top_keeps_its_boxes() {
             y: 0,
         }]
     );
-    let (unplaced, _) = fold(&without(FIXTURE, PLACE_70));
-    assert_eq!(unplaced.placements(70), layout.placements(70));
 }
 
 /// 親に直接書いた箱の置き場所は、子を置いているかどうかで変わらない（要件 6.4）。

@@ -1,8 +1,8 @@
 //! 要件 11.2・5.4・11.4: surface1000（全パーツ MAYUNA bind の本体 surface）＋有効 bind 集合の
 //! golden テーマ。
 //!
-//! emo2 の surface1000 は静的 element を一切持たず、可視パーツが全て `interval,bind` の
-//! animation（各 pattern0 が 1100 系パーツ surface を overlay 参照）で構成される「着せ替え
+//! emo2 の surface1000 は静的 element を一切持たず、可視パーツが着せ替えの animation（`interval,bind`
+//! の各 pattern0 が 1100 系パーツ surface を overlay 参照・まばたきの 1400 は `bind+random`）で構成される「着せ替え
 //! base surface」である。これは要件 5.4 の中核ケース＝静的 element ゼロでも有効 bind 集合が
 //! あれば非空ビットマップになる surface。ここでは:
 //!   ① 空 BindSet → 描画命令ゼロ → 全画素 α==0（全透明）だが、外形は bind 非依存の静的量

@@ -132,7 +132,8 @@ fn pure_bind_extent_is_union_of_all_patterns() {
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 60 });
 }
 
-/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ・消えている・動く絵の子のコマ）。
+/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ・動く絵の子のコマ）。外形は束縛のときの表を
+/// 引くだけでコマを受け取らないので、両方を替えた計画 1 回で足りる（指摘 118）。
 #[test]
 fn cells_do_not_change_extent() {
     let text = format!(
@@ -143,23 +144,14 @@ fn cells_do_not_change_extent() {
     let film_id: FilmId = film.id;
     let other_picture = film.frames[1];
 
-    let mut cells = vec![PatternState::default()];
-    let mut p = PatternState::default();
-    p.set(0, frame(31, 0, 4));
-    cells.push(p);
-    let mut p = PatternState::default();
-    p.set_blank(0);
-    cells.push(p);
-    let mut p = PatternState::default();
-    p.set_film(film_id, other_picture);
-    cells.push(p);
+    let mut pattern = PatternState::default();
+    pattern.set(0, frame(31, 0, 4));
+    pattern.set_film(film_id, other_picture);
 
     for top in [0, 2] {
         let want = compute_extent(&world, &atlas, top);
-        for pattern in &cells {
-            let got = plan_of(&world, &atlas, top, &BindSet::default(), pattern).1;
-            assert_eq!(got, Ok(want), "top={top} pattern={pattern:?}");
-        }
+        let got = plan_of(&world, &atlas, top, &BindSet::default(), &pattern).1;
+        assert_eq!(got, Ok(want), "top={top}");
     }
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
     assert_eq!(compute_extent(&world, &atlas, 2), Extent { w: 30, h: 20 });

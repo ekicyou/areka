@@ -3,8 +3,8 @@
 //! 検体 `tests/fixtures/surface-nesting/` を、今ある読み手（`parse`・`parse_boxes`）→ 面の表
 //! （`EmoWorld::build_with_images`）→ 箱の畳み込み（`fold_boxes`）へ通し、読み手が検体を
 //! 取りこぼさないことと、検体が自分の冒頭の説明どおりの形をしていることを確かめる。
-//! 入れ子の意味（数字だけの element定義の読み分け・報告の件数・合成）を確かめるのは後続の
-//! タスクの `src/nesting_*_tests.rs` で、ここは検体そのものの番をするだけである。
+//! 入れ子の意味（数字だけの element定義の読み分け・報告の件数・合成）を確かめるのは
+//! `src/nesting_*_tests.rs` で、ここは検体そのものの番をするだけである。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

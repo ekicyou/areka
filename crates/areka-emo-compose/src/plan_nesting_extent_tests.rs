@@ -40,17 +40,17 @@ fn atlas() -> AtlasTable {
     bake_atlas_sized(Path::new("shell/master"), &specs)
 }
 
-/// 文面を面の表にして `top` の計画を建てる。命令列と記録も返す。
+/// 文面を面の表にして `top` の計画を建てる。命令列と記録（外形をたどる束縛から計画まで）も返す。
 fn plan(
     text: &str,
     top: u32,
     pattern: &PatternState,
 ) -> (Result<Extent, ComposeError>, Vec<BlitOp>, String) {
     let atlas = atlas();
-    let mut world = EmoWorld::build_with_images(&parse(text), &Default::default());
-    world.bind_atlas(&atlas, SetId(0));
     let mut planned = None;
     let logs = capture_logs(|| {
+        let mut world = EmoWorld::build_with_images(&parse(text), &Default::default());
+        world.bind_atlas(&atlas, SetId(0));
         planned = Some(plan_of(&world, &atlas, top, &BindSet::default(), pattern));
     });
     let (ops, result) = planned.unwrap();
@@ -100,20 +100,19 @@ fn parent_with_only_children_builds_a_plan() {
     assert_eq!(ops.len(), 1, "子の画像 1 枚が命令になる");
 }
 
-/// 部品のコマが進んでも外形は動かない（コマに依らない静的な量・要件 2.6）。
+/// 部品のコマが進んでも外形は動かない（コマに依らない静的な量・要件 2.6）。外形は束縛のときの表を
+/// 引くだけでコマを受け取らないので、コマを進めた計画 1 回で足りる（指摘 118）。
 #[test]
 fn part_frames_do_not_move_extent() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,5,5\n}\n\
                 surface10\n{\nelement0,overlay,part.png,0,0\n\
                 animation0.interval,random,2\nanimation0.pattern0,overlay,12,50,0,0\n}\n\
                 surface12\n{\nelement0,overlay,big.png,0,0\n}\n";
-    let (still, still_ops, _) = plan(text, 0, &PatternState::default());
     let mut moving = PatternState::default();
     moving.set_part(10, 0, frame(12, 40, 40));
     let (moved, moved_ops, _) = plan(text, 0, &moving);
-    assert_eq!(still, Ok(Extent { w: 100, h: 200 }));
-    assert_eq!(moved, still, "部品のコマで外形が変わらない");
-    assert_ne!(moved_ops, still_ops, "コマは命令には効いている");
+    assert_eq!(moved, Ok(Extent { w: 100, h: 200 }), "big は外形に入らない");
+    assert_eq!(moved_ops.len(), 3, "コマは命令には効いている（big を積む）");
 }
 
 /// 飛ばす element定義（無い番号・範囲を超える数・自分自身・相互の循環）は外形に数えず、記録は
@@ -128,6 +127,10 @@ fn skipped_children_do_not_count_and_log_once_per_compose() {
     let (result, _, logs) = plan(text, 0, &PatternState::default());
     assert_eq!(result, Ok(Extent { w: 100, h: 200 }));
     assert!(!logs.contains("level=WARN"), "{logs}");
+    assert!(
+        !logs.contains("外形算出"),
+        "外形の経路は黙って飛ばす: {logs}"
+    );
     let skips = logs
         .lines()
         .filter(|l| l.contains("子のサーフェスを置かない"))

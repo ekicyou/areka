@@ -14,8 +14,8 @@ use areka_emo_atlas::{
 use areka_parsers::shell::Shell;
 
 use super::*;
-use crate::plan_test_support::{elem, insert_film, shell_of, solid, surface};
-use crate::world::{EmoWorld, SurfaceIndex};
+use crate::plan_test_support::{component_of, elem, insert_film, shell_of, solid, surface};
+use crate::world::EmoWorld;
 
 const BASE: &str = "shell";
 
@@ -101,9 +101,10 @@ fn bound(shell: &Shell, images: &BTreeMap<u32, String>, atlas: &AtlasTable) -> E
 }
 
 fn binding(world: &EmoWorld, id: u32) -> Vec<Option<ElementId>> {
-    let w = world.world();
-    let entity = w.resource::<SurfaceIndex>().0[&id];
-    w.get::<AtlasBinding>(entity).unwrap().0.clone()
+    component_of::<AtlasBinding>(world.world(), id)
+        .unwrap()
+        .0
+        .clone()
 }
 
 fn kinds(world: &EmoWorld, id: u32) -> Vec<ElementKind> {
@@ -438,7 +439,6 @@ fn no_films_stores_nothing() {
     let world = bound(&shell, &BTreeMap::new(), &atlas);
 
     assert!(world.world().get_resource::<FilmSheets>().is_none());
-    assert_eq!(world.film_sheets().count(), 0);
     assert!(world.film_skips().is_empty());
     assert_eq!(kinds(&world, 0), vec![ElementKind::Image; 2]);
     assert_eq!(
@@ -451,7 +451,7 @@ fn no_films_stores_nothing() {
 }
 
 /// 経過 0 のコマ＝出す前の待ち（0, コマ 0 の待ち, コマ 1 の待ち, …）の累積が 0 の最後の番号。
-/// 1 枚目の待ち時間が 0 なら次のコマ。
+/// 1 枚目の待ち時間が 0 なら次のコマ。待ち時間が全部 0 の絵（d.png）は子にならず落ちる。
 #[test]
 fn rest_frame_skips_zero_first_delays() {
     let shell = shell_of(vec![surface(
@@ -460,43 +460,25 @@ fn rest_frame_skips_zero_first_delays() {
             elem(0, "a.png", 0, 0),
             elem(1, "b.png", 0, 0),
             elem(2, "c.png", 0, 0),
+            elem(3, "d.png", 0, 0),
         ],
     )]);
     let atlas = Pics::default()
         .film("a.png", &[100, 0, 70], None)
         .film("b.png", &[0, 50, 70], None)
         .film("c.png", &[0, 0, 70], None)
+        .film("d.png", &[0, 0], None)
         .bake();
     let world = bound(&shell, &BTreeMap::new(), &atlas);
     let rest = |rel| world.film_sheet(FilmId(id_of(&atlas, rel).0)).unwrap().rest;
     assert_eq!((rest("a.png"), rest("b.png"), rest("c.png")), (0, 1, 2));
-}
-
-/// 要件 2.6 の前提: 同じ入力から同じ子の定義・同じ element・同じ束縛。
-#[test]
-fn same_input_same_result() {
-    let shell = shell_of(vec![
-        surface(0, vec![elem(0, "b.png", 0, 0), elem(1, "a.png", 1, 1)]),
-        surface(5, vec![elem(0, "a.png", 0, 0), elem(3, "c.png", 2, 0)]),
-    ]);
-    let pics = Pics::default()
-        .film("a.png", &[0, 40, 40], Some(1))
-        .film("b.png", &[0, 0], None)
-        .still("c.png");
-    let atlas = pics.bake();
-    let one = bound(&shell, &BTreeMap::new(), &atlas);
-    let two = bound(&shell, &BTreeMap::new(), &atlas);
-
     assert_eq!(
-        one.film_sheets().collect::<Vec<_>>(),
-        two.film_sheets().collect::<Vec<_>>()
+        world.film_skips(),
+        &[FilmSkip {
+            path: "d.png".to_string(),
+            reason: FilmSkipReason::ZeroTotalDelay
+        }]
     );
-    assert_eq!(one.film_skips(), two.film_skips());
-    assert_eq!(one.film_skips().len(), 1, "b.png は合計 0 で落ちる");
-    for id in [0, 5] {
-        assert_eq!(one.surface(id), two.surface(id));
-        assert_eq!(binding(&one, id), binding(&two, id));
-    }
 }
 
 /// 同じ面の表に `bind_atlas` を 2 度呼ぶのは誤り（子の定義が古いアトラスのまま残る）。

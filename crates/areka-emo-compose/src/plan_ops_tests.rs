@@ -5,7 +5,7 @@ use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::{Animation, Element, Interval, SortOrder, Surface};
 use std::path::Path;
 
-/// テスト①（受入基準・要件 4.1）: layer [2,0,1]（登場順）→ ops は layer 昇順 0,1,2。
+/// 受入基準・要件 4.1: layer [2,0,1]（登場順）→ ops は layer 昇順 0,1,2。
 ///
 /// 各 op を ElementId 経由で element path へ逆写像し、命令列が layer 昇順に整列することを
 /// 検証する（登場順は 2→0→1 だが、layer 昇順で 0(b)→1(c)→2(a)）。
@@ -40,7 +40,7 @@ fn ops_ordered_by_layer_ascending() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["b.png", "c.png", "a.png"]);
 }
 
-/// テスト②（要件 4.1）: 同一 layer は登場（定義）順を保つ。
+/// 要件 4.1: 同一 layer は登場（定義）順を保つ。
 #[test]
 fn same_layer_keeps_appearance_order() {
     let base = Path::new("shell/master");
@@ -67,7 +67,7 @@ fn same_layer_keeps_appearance_order() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["first.png", "second.png"]);
 }
 
-/// テスト④（要件 4.3/6.3 前段）: 未束縛（None）element は命令化されずスキップされる（非パニック）。
+/// 要件 4.3/6.3 前段: 未束縛（None）element は命令化されずスキップされる（非パニック）。
 #[test]
 fn unresolved_binding_is_skipped() {
     let base = Path::new("shell/master");
@@ -95,7 +95,7 @@ fn unresolved_binding_is_skipped() {
     assert_eq!(ops[0].element, known_id);
 }
 
-/// テスト⑤（要件 4.2）: 命令の Transform は element の translate(x,y) と一致し、純平行移動である。
+/// 要件 4.2: 命令の Transform は element の translate(x,y) と一致し、純平行移動である。
 #[test]
 fn transform_propagates_as_translation() {
     let base = Path::new("shell/master");
@@ -114,10 +114,9 @@ fn transform_propagates_as_translation() {
     );
 
     assert_eq!(ops.len(), 1);
-    assert_eq!(ops[0].transform, Transform::translate(12, -8));
-    assert_eq!(ops[0].transform.offset(), (12, -8));
-    assert!(
-        ops[0].transform.is_translation(),
+    assert_eq!(
+        ops[0].transform,
+        Transform::translate(12, -8),
         "M1 は単位行列＋平行移動（要件 4.2）"
     );
     assert_eq!(ops[0].method, ComposeMethod::Overlay);
@@ -214,7 +213,7 @@ fn build_bind_world(
     (world, atlas)
 }
 
-/// テスト①（受入基準・要件 5.2/5.3/5.6）: 複数有効 bind・sort 既定（descend）→ ID 昇順に描画。
+/// 受入基準・要件 5.2/5.3/5.6: 複数有効 bind・sort 既定（descend）→ ID 昇順に描画。
 ///
 /// animation id [3,1,2]（登場順）の各 pattern0 が別 surface（part3/part1/part2）を参照。
 /// animation-sort 未指定（既定 descend）ゆえ ID 昇順描画で bind 層は part1→part2→part3 の順。
@@ -244,7 +243,7 @@ fn active_binds_descend_default_draws_in_id_ascending_order() {
     );
 }
 
-/// テスト②（要件 5.3）: animation-sort=ascend → ID 降順に描画（小 ID が上）。
+/// 要件 5.3: animation-sort=ascend → ID 降順に描画（小 ID が上）。
 #[test]
 fn active_binds_ascend_draws_in_id_descending_order() {
     let (world, atlas) = build_bind_world(
@@ -270,7 +269,7 @@ fn active_binds_ascend_draws_in_id_descending_order() {
     );
 }
 
-/// テスト③（要件 5.2）: BindSet に含まれない bind animation は合成対象から除外される。
+/// 要件 5.2: BindSet に含まれない bind animation は合成対象から除外される。
 #[test]
 fn only_binds_in_bindset_are_included() {
     let (world, atlas) = build_bind_world(
@@ -294,7 +293,7 @@ fn only_binds_in_bindset_are_included() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["part2.png"]);
 }
 
-/// テスト④（要件 5.4）: 静的 element ゼロ・全パーツ bind の surface でも非空 bind 集合→非空 ops。
+/// 要件 5.4: 静的 element ゼロ・全パーツ bind の surface でも非空 bind 集合→非空 ops。
 /// 空 bind 集合では bind 命令ゼロ（非パニック・全透明処理は 5.5/6.6）。
 #[test]
 fn bind_only_surface_produces_layers_from_nonempty_bindset() {
@@ -324,7 +323,7 @@ fn bind_only_surface_produces_layers_from_nonempty_bindset() {
     );
 }
 
-/// テスト⑤（要件 5.2・design 層列挙 i/ii）: 静的 element 層が bind 層の**前（下）**に来る。
+/// 要件 5.2・design 層列挙 i/ii: 静的 element 層が bind 層の**前（下）**に来る。
 #[test]
 fn static_elements_precede_bind_layers() {
     let (world, atlas) = build_bind_world(
@@ -343,7 +342,7 @@ fn static_elements_precede_bind_layers() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["base.png", "part1.png"]);
 }
 
-/// テスト⑥（要件 5.5 前段）: pattern0 の surface_id<0 はセンチネル＝命令を積まず skip（非パニック）。
+/// 要件 5.5 前段: pattern0 の surface_id<0 はセンチネル＝命令を積まず skip（非パニック）。
 #[test]
 fn sentinel_pattern0_is_skipped() {
     let base = Path::new("shell/master");
@@ -556,7 +555,7 @@ fn noncyclic_shared_child_expands_on_each_path() {
 // animated-surface-log-flood 件 26）。実機サインオフ#2（むらさきの目が常時閉じている）は、まばたきの
 // `bind+random`（emo2 1400）の閉じ目フレーム（surface 1412）が静的土台に積まれてベースの目を覆った件。
 
-/// テスト①（要件 9.1/9.2）: pattern0（index==0）を持たない有効な純 `bind` も、持っているコマを
+/// 要件 9.1/9.2: pattern0（index==0）を持たない有効な純 `bind` も、持っているコマを
 /// 静的に積む（純 `bind` は全部のコマを番号の順に重ねる・seriko-pattern-calls 6.8・SSP の測り M6 で
 /// 期待を直した）。pattern0 で絞ると閉じ目（surface 1412）が消える。`bind+random` がコマの無いあいだ
 /// 何も積まないことは次のテストが見る。
@@ -584,7 +583,7 @@ fn pattern0_less_pure_bind_draws_its_patterns() {
     );
 }
 
-/// テスト②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
+/// 要件 9.2: index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
 /// 静的に積まない（animated-surface-log-flood 件 26 の決めで期待を直した）。純 `bind` は全部のコマを
 /// 番号の順に重ねる（seriko-pattern-calls 6.8・SSP の測り M6 で期待を直した）。
 #[test]

@@ -8,8 +8,8 @@ use areka_parsers::shell::ElementPath;
 
 use super::{ElementKind, element_kind};
 use crate::log_capture::capture_logs;
-use crate::plan_test_support::bake_atlas;
-use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
+use crate::plan_test_support::{bake_atlas, component_of};
+use crate::world::{AtlasBinding, EmoWorld};
 
 fn kind_of(s: &str) -> ElementKind {
     element_kind(&ElementPath::new(s.to_string()))
@@ -139,9 +139,7 @@ fn number_elements_are_not_bound_and_emit_no_warning() {
 }
 
 fn binding_of(world: &EmoWorld, id: u32) -> AtlasBinding {
-    let w = world.world();
-    let entity = w.resource::<SurfaceIndex>().0[&id];
-    w.get::<AtlasBinding>(entity)
+    component_of::<AtlasBinding>(world.world(), id)
         .expect("AtlasBinding が入っている")
         .clone()
 }

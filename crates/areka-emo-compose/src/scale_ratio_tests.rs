@@ -97,17 +97,20 @@ fn mul_composes_and_reduces() {
 /// 要件 1.6: 積は u64 中間で計算され、u32 域の桁溢れでラップしない。
 #[test]
 fn mul_uses_wide_intermediate_without_wrapping() {
-    // u32 積が溢れる大きさでも約分で恒等へ戻る（中間が u32 なら破綻する）。
-    let a = ScaleRatio::new(4_000_000_000, 1).unwrap();
-    let b = ScaleRatio::new(1, 4_000_000_000).unwrap();
-    assert_eq!(a.mul(b), ScaleRatio::ONE);
-    // 縮退が起きない大きさでは近似も警告も起こらない（陰性確認）。
-    assert_eq!(
-        ScaleRatio::new(65_535, 1)
-            .unwrap()
-            .mul(ScaleRatio::new(65_535, 1).unwrap()),
-        ScaleRatio::new(4_294_836_225, 1).unwrap()
-    );
+    use crate::log_capture::capture_logs;
+
+    // 分子・分母の積がどちらも u32 を越え（約 77 億と約 39 億）、約分で 2/1 へ戻る（中間が u32 なら
+    // 分子だけラップして破綻する）。
+    let a = ScaleRatio::new(100_000, 77_777).unwrap();
+    let b = ScaleRatio::new(77_777, 50_000).unwrap();
+    // 縮退の境目のすぐ内（65535² は u32 に収まる）も、そのままの値を返す。
+    let edge = ScaleRatio::new(65_535, 1).unwrap();
+    let mut products = (ScaleRatio::ONE, ScaleRatio::ONE);
+    let logs = capture_logs(|| products = (a.mul(b), edge.mul(edge)));
+    assert_eq!(products.0, ScaleRatio::new(2, 1).unwrap());
+    assert_eq!(products.1, ScaleRatio::new(4_294_836_225, 1).unwrap());
+    // どちらも約分の後は u32 に収まるので、近似も警告も起こらない（陰性確認）。
+    assert!(!logs.contains("level=WARN"), "{logs}");
 }
 
 /// 要件 1.4（ログ規律・フォールバック発生＝`warn!`）: 近似縮退は縮退前後の値つきで

@@ -1,7 +1,8 @@
 //! 命令列ほかのテストが引く部品（クレートの直下・`#[cfg(test)]` 限定）。
 //!
 //! 面の組み立て・コマ・当たり判定の領域・頁と表・塗りの絵・画素の読み・PNG の原寸・焼き・記録の
-//! 読み取り・命令の名前引き・命令列を引く口（[`ops`]）を 1 か所に置く。
+//! 読み取り・命令の名前引き・命令列を引く口（[`ops`]）・見える部品を引く口・面の entity の部品引き・
+//! 畳み込みだけを通した素の World を 1 か所に置く。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -16,15 +17,18 @@ use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
     Interval, Pattern, Shell, SortOrder, Surface, SurfaceAppend, parse,
 };
+use bevy_ecs::component::Component;
+use bevy_ecs::world::World;
 
 use crate::bind::BindSet;
 use crate::composed::ComposedSurface;
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
+use crate::nesting::NestTable;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{BlitOp, Extent, PlanScratch, build_plan, derive_ops};
-use crate::world::EmoWorld;
+use crate::world::{AliasMap, EmoWorld, SurfaceIndex};
 
 // ---- 合成モデルビルダ（正規化モデルを直に組む・実 fixture のパースは golden_tests）----
 
@@ -275,6 +279,29 @@ pub(crate) fn ops(
     out
 }
 
+/// 入れ子の目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。見える部品と合成の
+/// 一致の檻（nesting_visible_tests・nesting_film_tests）が引く。
+pub(crate) const MARKER: u32 = 900;
+/// 目印のコマを置く animation の番号（どの文面にも無い番号）。
+pub(crate) const MARK_ANIM: u32 = 9999;
+
+/// `top` を一番上にしたときの見える部品（着せ替えは `binds`）。
+pub(crate) fn visible_parts_of(
+    table: &NestTable,
+    top: u32,
+    binds: &[u32],
+    pattern: &PatternState,
+) -> Vec<u32> {
+    let mut out = Vec::new();
+    table.visible_parts(
+        top,
+        &BindSet::from_ids(binds.iter().copied()),
+        pattern,
+        &mut out,
+    );
+    out
+}
+
 /// 計画を引く口（[`ops`] と並ぶ）: `surface_id` の計画を新しい命令列と作業場で建て、命令列と結果
 /// （外形か失敗）を返す。
 pub(crate) fn plan_of(
@@ -520,4 +547,52 @@ pub(crate) fn skipped(logs: &str) -> Vec<(u32, u32, String)> {
             )
         })
         .collect()
+}
+
+// ---- 畳み込みだけを通した素の World（fold_tests・base_image_tests）----
+
+/// 畳み込みが必ず読むリソース（`SurfaceIndex`・`AliasMap`）だけを備えた空 World を用意する
+/// （`SurfaceImages` は無ければ画像だけの面が無いものとして読む）。
+pub(crate) fn fresh_world() -> World {
+    let mut world = World::new();
+    world.insert_resource(SurfaceIndex::default());
+    world.insert_resource(AliasMap::default());
+    world
+}
+
+/// 指定 id をキーに登録済み entity の `SurfaceMaster` を引く。
+pub(crate) fn master_of(world: &World, id: u32) -> Option<&SurfaceMaster> {
+    component_of(world, id)
+}
+
+/// 面 `id` の entity に付いた部品 `T` を引く（面が無いか部品が付いていなければ `None`）。
+pub(crate) fn component_of<T: Component>(world: &World, id: u32) -> Option<&T> {
+    let entity = *world.resource::<SurfaceIndex>().0.get(&id)?;
+    world.get::<T>(entity)
+}
+
+/// fold 結果の観測可能内容スナップショット（`EmoWorld` は derive Eq を持たないため手組み）。
+///
+/// (1) surface id 昇順（`SurfaceIndex` のキーを整列＝`EmoWorld::surface_ids` と同じ決定的順）に
+/// `(id, SurfaceMaster)` を集める。`SurfaceMaster` は `PartialEq`（element/collision/animation の
+/// 深い等価）。(2) alias は `AliasMap`（`BTreeMap`＝キー順が決定的）を丸ごと複製する。
+/// この2値が等しければ、公開クエリ（`surface(id)`／`resolve_alias(key)`／`surface_ids()`）越しに
+/// 観測できる内容がバイト等価であることを意味する（要件 1.5/10.1）。
+pub(crate) type FoldSnapshot = (
+    Vec<(u32, SurfaceMaster)>,
+    std::collections::BTreeMap<String, Vec<u32>>,
+);
+
+/// 素の `World`（`fold_shell_with` 直呼び）から決定性比較用スナップショットを抽出する。
+pub(crate) fn snapshot_world(world: &World) -> FoldSnapshot {
+    // surface id を昇順に整列（`SurfaceIndex` の HashMap 反復順に依らず決定的）。
+    let mut ids: Vec<u32> = world.resource::<SurfaceIndex>().0.keys().copied().collect();
+    ids.sort_unstable();
+    let surfaces: Vec<(u32, SurfaceMaster)> = ids
+        .into_iter()
+        .map(|id| (id, master_of(world, id).expect("id が常駐する").clone()))
+        .collect();
+    // alias は BTreeMap ゆえ複製すればキー順まで決定的。
+    let aliases = world.resource::<AliasMap>().0.clone();
+    (surfaces, aliases)
 }

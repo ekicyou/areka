@@ -294,46 +294,7 @@ fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
     );
 }
 
-// ── テスト4（要件 10.5・6.6）: 失敗経路の伝播と正常空合成 ──
-
-/// 不在 surface → `Err(SurfaceNotFound)`（error ログ済み・要件 10.5・非パニック）。
-#[test]
-fn absent_surface_propagates_surface_not_found() {
-    let world = EmoWorld::build(&shell_of(Vec::new()));
-    let atlas = bake_atlas_sized(
-        Path::new("shell/master"),
-        &[("dummy.png", (2, 2), Some((1, 2, 3)))],
-    );
-
-    let binds = BindSet::default();
-    let mut composer = Composer::new();
-    let result = composer.compose(&world, &atlas, 9999, &binds, &PatternState::default());
-    assert_eq!(
-        result.err(),
-        Some(ComposeError::SurfaceNotFound(9999)),
-        "不在 surface は SurfaceNotFound（要件 10.5）"
-    );
-}
-
-/// 定義層皆無で外形 0×0 の退化 → `Err(EmptyComposition)`（要件 10.5）。
-#[test]
-fn no_layers_degenerate_propagates_empty_composition() {
-    let surf = surface(7000, Vec::new()); // element ゼロ・animation ゼロ。
-    let atlas = bake_atlas_sized(
-        Path::new("shell/master"),
-        &[("dummy.png", (2, 2), Some((1, 2, 3)))],
-    );
-    let world = build_bound(shell_of(vec![surf]), &atlas);
-
-    let binds = BindSet::default();
-    let mut composer = Composer::new();
-    let result = composer.compose(&world, &atlas, 7000, &binds, &PatternState::default());
-    assert_eq!(
-        result.err(),
-        Some(ComposeError::EmptyComposition(7000)),
-        "定義層皆無で 0×0 は EmptyComposition（要件 10.5）"
-    );
-}
+// ── テスト4（要件 6.6）: 正常空合成（失敗経路の伝播と記録は `log_firing_tests`・指摘 93）──
 
 /// 全 element 全透明 → `Ok`・全透明バッファ・非ゼロ外形（要件 6.6・議題2裁定）。
 #[test]
@@ -365,6 +326,37 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
     assert!(
         out.bytes().iter().all(|&b| b == 0),
         "全透明 surface → 全透明バッファ（要件 6.6）"
+    );
+}
+
+/// ComposeError の Display（thiserror `#[error]`）が正準文字列と厳密一致する（決定論的）。
+#[test]
+fn compose_error_display_strings_are_exact() {
+    assert_eq!(
+        ComposeError::SurfaceNotFound(7).to_string(),
+        "surface 7 not found",
+    );
+    assert_eq!(
+        ComposeError::EmptyComposition(7).to_string(),
+        "surface 7 has an empty extent (width or height 0)",
+    );
+    assert_eq!(
+        ComposeError::ExtentTooLarge {
+            surface: 7,
+            w: 16_385,
+            h: 2
+        }
+        .to_string(),
+        "surface 7 extent 16385x2 exceeds the size limit (side 16384 or area 2^25)",
+    );
+    assert_eq!(
+        ComposeError::ExtentTooLarge {
+            surface: 7,
+            w: 8_192,
+            h: 4_097
+        }
+        .to_string(),
+        "surface 7 extent 8192x4097 exceeds the size limit (side 16384 or area 2^25)",
     );
 }
 
@@ -417,7 +409,7 @@ fn compose_equals_compose_into_fresh_buffer() {
     );
 }
 
-// ── テスト7（要件 4.3・hot path resolve-free）: multi-layer 実データの end-to-end 結線 ──
+// ── テスト6（要件 4.3・hot path resolve-free）: multi-layer 実データの end-to-end 結線 ──
 
 /// animation-sort=ascend の多層 + 複数 bind を実データ構造で end-to-end（fold→bind→plan→blit）合成し、
 /// 描画順（ascend ゆえ ID 降順）が画素へ反映されることで結線を証明する。
@@ -514,6 +506,10 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
     let lib = include_str!("lib.rs");
     let composer_area = lib.split("#[cfg(test)]").next().unwrap_or(lib);
     assert!(
+        composer_area.contains("fn compose_into"),
+        "lib.rs: 検査の的 fn compose_into が在る"
+    );
+    assert!(
         !composer_area.contains(".resolve("),
         "lib.rs の Composer hot path は atlas.resolve を呼ばない（要件 4.3）"
     );
@@ -541,7 +537,7 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
 /// 期待バッファと byte-for-byte 一致することを固定する。空 PatternState は no-op ゆえ、この一致は
 /// 「PatternState の配線が空 pattern の出力を一切摂動しない」ことの回帰檻になる。
 #[test]
-fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
+fn empty_pattern_state_compose_is_byte_identical_to_the_rebuilt_golden() {
     let base = Path::new("shell/master");
     // base(青 4×4 全不透明) を (0,0)、有効 bind pattern0（赤 2×2）を (1,1) へ overlay。全不透明ゆえ
     // SourceOver は上層優先＝期待バッファを独立再構成できる（tautology でない golden）。

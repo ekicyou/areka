@@ -182,7 +182,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 6.2_
 - [x] 7.2 実装の側の小さな直しと説明（指摘 85〜89）
   - _Requirements: 2.1, 5.3_
-- [ ] 7.3 テストの直し（指摘 90〜128）
+- [x] 7.3 テストの直し（指摘 90〜128）
   - 足す・強める確かめは守る分岐を戻すと落ちる。消すテストの固有の確かめは残る側へ移す。写しは `plan_test_support` から引く
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
@@ -214,3 +214,4 @@
 - 6.4: 残った昔のタスク番号（`golden_tests_frame_extent_tests.rs:152,192`・`golden_tests_surface0_base_tests.rs:63`・`golden_tests_surface1000_bind_tests.rs:74,107,132`・`golden_tests_trim_equivalence_tests.rs`・`nesting_visible_tests.rs:356`）と `plan_bounds_tests.rs:165` の「bind の pattern0」は 6.5 で拾う
 - 6.5: テスト 443→434（消したのは重なるだけ・外れない 9 本）。部品に `plan_of`（`build_plan` の口）・`pattern` を足し、`px` は外形の外を assert。昔のタスク番号の名指しは 0 件。範囲の外（要件 6.9 で触らない）: `doc/COMPAT_ARCHITECTURE.md:276` と `doc/ukadoc-coverage/ledger/assets.toml:6137` がもう無いテスト名 `later_brace_without_interval_line_keeps_the_earlier_interval` を名指す（3.5 の前から）＝完了の棚卸で起票
 - 7.1: 予算の単位はさらに「入る 1＋なめる行（element＋animation）＋積み荷」（根は外・1 面あたり約 5 単位＝`VISIT_BUDGET` は測り直しの候補・道具は `diamond13`／`per_unit_ns`）。重ねる画素の上限 `blit::PIXEL_FACTOR`（外形の面積×64・`build_plan` で命令列の頭を残す・根の層も切る）・写す行の上限 `fold::MAX_COPIED_LINES = 2^20`（`body_lines` は pattern の行も数える）・根をまたぐ持ち込み `hit_import::IMPORT_BUDGET = 2^20`。どれも仮の値。外形とシェルの外形のたどり方は `outline_walk.rs` の 1 本。幅か高さが 0 は `EmptyComposition`（Display の文も変えた・他クレートのテストは緑）
+- 7.3: テスト 441→437。深い鎖の `nest_report` は 1000 段（`NestReport::from_world` が element定義ごとに `reaches` で深さの 2 乗＝design の「未解決（reaches も同じ型）」の内・10000 段で debug 約 65 秒）＝完了の棚卸で「強連結成分で 1 度に引く」直しの起票を検討。部品に `bake_emo2`・`component_of`・`visible_parts_of`・`MARKER`/`MARK_ANIM`・`fresh_world`/`master_of`/`snapshot_world`

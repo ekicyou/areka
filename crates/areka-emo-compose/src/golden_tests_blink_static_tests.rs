@@ -2,11 +2,8 @@
 
 use crate::plan::{PlanScratch, build_plan};
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
-use super::{
-    AtlasTable, BindSet, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId, Shell,
-    SurfaceSet, bake,
-};
+use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
+use super::{AtlasTable, BindSet, EmoWorld, MemoryDecoder, Path, PatternState, SetId, Shell};
 use crate::plan_test_support::opaque_wxh;
 
 // ============================================================================
@@ -45,12 +42,7 @@ fn build_atlas_for_blink_cage(shell: &Shell, base: &Path) -> AtlasTable {
         let (w, h, s, b, a) = opaque_wxh(20, 90, 128, 128, 128);
         dec.insert(base.join(rel), w, h, s, b, a);
     }
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    bake(std::slice::from_ref(&set), &dec, PackConfig::default()).table
+    bake_emo2(shell, base, &dec)
 }
 
 /// 要件 9.1・9.5・11.2: emo2 まばたき bind+random（1400・pattern0 なし）は静的合成へ寄与しない＝
@@ -69,10 +61,10 @@ fn emo2_blink_binds_are_statically_inactive() {
 
     // [1302] のみ（目/通常・pattern0 あり）。
     let mut ops_base = Vec::new();
-    let mut vis_base = PlanScratch::default();
+    let mut scratch_base = PlanScratch::default();
     build_plan(
         &mut ops_base,
-        &mut vis_base,
+        &mut scratch_base,
         &world,
         &atlas,
         1000,
@@ -83,10 +75,10 @@ fn emo2_blink_binds_are_statically_inactive() {
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
     let mut ops_blink = Vec::new();
-    let mut vis_blink = PlanScratch::default();
+    let mut scratch_blink = PlanScratch::default();
     build_plan(
         &mut ops_blink,
-        &mut vis_blink,
+        &mut scratch_blink,
         &world,
         &atlas,
         1000,
@@ -97,10 +89,10 @@ fn emo2_blink_binds_are_statically_inactive() {
 
     // [1302,1403]（純 `bind` の 1403 だけを足す）。
     let mut ops_pure = Vec::new();
-    let mut vis_pure = PlanScratch::default();
+    let mut scratch_pure = PlanScratch::default();
     build_plan(
         &mut ops_pure,
-        &mut vis_pure,
+        &mut scratch_pure,
         &world,
         &atlas,
         1000,

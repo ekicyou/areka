@@ -9,15 +9,17 @@ use std::path::Path;
 // 外形は `compute_extent` が全定義層（全 element ＋全 bind・`always` animation の描くコマ＝有効 bind
 // 非依存）の「配置オフセット＋原寸」の和集合として算出する（要件 6.5・原点 (0,0) 固定・負方向
 // クリップ）。`original` は bake が「登録画像の原寸」をそのまま記録する（trim.rs）ため、各 element
-// の寄与サイズは register 時の (w,h) で制御できる。以下の土台ヘルパはサイズ可変・全透明を扱う。
+// の寄与サイズは register 時の (w,h) で制御できる。サイズ可変・全透明の焼きは `plan_test_support` の
+// [`bake_atlas_sized`] を引く。
 
-/// **受入基準**・要件 6.5: 同一 surface へ空／部分／全 BindSet を渡しても
-/// [`build_plan`] が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。
+/// **受入基準**・要件 6.5: 空の BindSet でも [`build_plan`] が返す [`Extent`] は全 bind の描くコマを
+/// 数える（有効 bind 集合に依存しない静的量）。外形は束縛のときの表を引くだけで BindSet を受け取らない
+/// ので、空の BindSet の 1 回で足りる（指摘 118）。
 ///
 /// host=1000 は静的 element base(40×30) を持ち、bind id=1→part1(200×10)、id=2→part2(10×150)、
 /// id=3→part3(60×60) を各 pattern0 で参照。外形は全 element＋**全 bind の描くコマ**の和集合ゆえ
-/// max(base.w, part1.w)=200・max(base.h, part2.h)=150＝Extent{200,150}。BindSet を空/部分/全に
-/// 変えても同一でなければ「有効 bind 依存」バグ（6.5 違反）。
+/// max(base.w, part1.w)=200・max(base.h, part2.h)=150＝Extent{200,150}。空の BindSet で 40×30 なら
+/// 「有効 bind 依存」バグ（6.5 違反）。
 #[test]
 fn extent_is_independent_of_bindset() {
     let base = Path::new("shell/master");
@@ -51,25 +53,18 @@ fn extent_is_independent_of_bindset() {
     // 全 element＋全 bind の描くコマ の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
     let expected = Extent { w: 200, h: 150 };
 
-    let extent_with = |binds: BindSet| {
-        plan_of(&world, &atlas, 1000, &binds, &PatternState::default())
-            .1
-            .expect("合成できる")
-    };
+    let extent = plan_of(
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+    )
+    .1;
     assert_eq!(
-        extent_with(BindSet::default()),
-        expected,
+        extent,
+        Ok(expected),
         "空 BindSet でも全 bind の描くコマ を母集合に外形算出"
-    );
-    assert_eq!(
-        extent_with(BindSet::from_ids([2])),
-        expected,
-        "部分 BindSet でも外形不変"
-    );
-    assert_eq!(
-        extent_with(BindSet::from_ids([1, 2, 3])),
-        expected,
-        "全 BindSet でも外形不変"
     );
 }
 

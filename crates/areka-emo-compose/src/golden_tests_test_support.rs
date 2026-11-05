@@ -110,12 +110,18 @@ pub(super) fn build_atlas_for_surface1000(shell: &Shell, base: &Path) -> AtlasTa
             crate::plan_test_support::opaque_wxh(p.w, p.h, p.b, p.g, p.r);
         dec.insert(base.join(p.rel), w, h, stride, bgra, has_alpha);
     }
+    bake_emo2(shell, base, &dec)
+}
+
+/// `shell` の全部の面を `dec` の絵で焼いて表を返す（`use_self_alpha` は On・焼けない絵は errors に
+/// 残るだけ）。
+pub(super) fn bake_emo2(shell: &Shell, base: &Path, dec: &MemoryDecoder) -> AtlasTable {
     let set = SurfaceSet {
         surfaces: &shell.surfaces,
         base_dir: base,
         alpha_params: on_params(),
     };
-    bake(std::slice::from_ref(&set), &dec, PackConfig::default()).table
+    bake(std::slice::from_ref(&set), dec, PackConfig::default()).table
 }
 
 /// surface1000 を有効 bind 集合で合成した結果を得る（world 構築＋bind_atlas＋compose）。

@@ -3,16 +3,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::shell::{
     Animation, AppendTarget, DefRef, Element, Interval, Pattern, Shell, Surface, SurfaceAppend,
 };
-use bevy_ecs::world::World;
 
 use crate::base_image::BaseImageReport;
 use crate::fold::fold_shell_with;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{
-    elem, pattern, shell_mixed, shell_of, surface_def, surface_with_anims,
+    elem, fresh_world, pattern, shell_mixed, shell_of, snapshot_world, surface_def,
+    surface_with_anims,
 };
-use crate::world::{AliasMap, EmoWorld, Records, ShellSettings, SurfaceIndex};
+use crate::world::{EmoWorld, Records};
 
 /// 番号 → ファイル名の対応を組み立てる。
 fn images(entries: &[(u32, &str)]) -> BTreeMap<u32, String> {
@@ -24,24 +24,12 @@ fn images(entries: &[(u32, &str)]) -> BTreeMap<u32, String> {
 
 /// 画像を足す前の面の表（畳み込みだけを通した素の結果）を id 昇順で取り出す。
 fn folded_masters(shell: &Shell) -> Vec<SurfaceMaster> {
-    let mut world = World::new();
-    world.insert_resource(SurfaceIndex::default());
-    world.insert_resource(AliasMap::default());
-    world.insert_resource(ShellSettings::default());
+    let mut world = fresh_world();
     fold_shell_with(&mut world, shell, Records::Emit);
-
-    let index = world.resource::<SurfaceIndex>();
-    let mut ids: Vec<u32> = index.0.keys().copied().collect();
-    ids.sort_unstable();
-    let entities: Vec<_> = ids.iter().map(|id| index.0[id]).collect();
-    entities
+    snapshot_world(&world)
+        .0
         .into_iter()
-        .map(|e| {
-            world
-                .get::<SurfaceMaster>(e)
-                .expect("SurfaceIndex が指す entity は SurfaceMaster を持つ")
-                .clone()
-        })
+        .map(|(_, m)| m)
         .collect()
 }
 
@@ -103,9 +91,6 @@ fn no_images_leaves_the_folded_table_untouched() {
     let world = EmoWorld::build_with_images(&shell, &BTreeMap::new());
     assert_eq!(masters_of(&world), folded_masters(&shell));
     assert_eq!(*world.base_images(), BaseImageReport::default());
-
-    // 既存の呼び手（`build`）も同じ結果であること（呼び手の変更 0 件の裏取り）。
-    assert_eq!(masters_of(&EmoWorld::build(&shell)), folded_masters(&shell));
 }
 
 /// `used` と `shadowed` はキーが重ならず、和は渡した画像の全体に等しい（design「Invariants」）。
@@ -140,23 +125,8 @@ fn used_and_shadowed_partition_the_images() {
     ]);
     let world = EmoWorld::build_with_images(&shell, &given);
 
+    // 下の 2 つの厳密な一致で、キーが重ならず和が渡した画像の全体であることも決まる。
     let report = world.base_images();
-    assert!(
-        report
-            .used
-            .keys()
-            .all(|id| !report.shadowed.contains_key(id)),
-        "used と shadowed のキーは重ならない: used={:?} shadowed={:?}",
-        report.used,
-        report.shadowed,
-    );
-    let union: BTreeMap<u32, String> = report
-        .used
-        .iter()
-        .chain(report.shadowed.iter())
-        .map(|(id, file)| (*id, file.clone()))
-        .collect();
-    assert_eq!(union, given, "used と shadowed の和は渡した画像の全体");
     assert_eq!(
         report.shadowed,
         images(&[(0, "surface0.png")]),

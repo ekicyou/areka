@@ -38,16 +38,7 @@ fn table_of(text: &str) -> NestTable {
     EmoWorld::build(&parse(text)).nest_table()
 }
 
-fn visible(table: &NestTable, top: u32, binds: &[u32], pattern: &PatternState) -> Vec<u32> {
-    let mut out = Vec::new();
-    table.visible_parts(
-        top,
-        &BindSet::from_ids(binds.iter().copied()),
-        pattern,
-        &mut out,
-    );
-    out
-}
+use crate::plan_test_support::visible_parts_of as visible;
 
 fn listed(world: &EmoWorld, table: &NestTable) -> BTreeSet<u32> {
     world
@@ -359,12 +350,9 @@ fn out_is_cleared_and_reused() {
 // 片方だけを変えるとずれる。ここでは両者を同じ面の表・同じ着せ替えの集合・同じコマの状態で動かし、
 // 結論が一致することを全ての（一番上, 部品）の組で確かめる。
 
-/// 目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。
-const MARKER: u32 = 900;
-/// 目印のコマを置く animation の番号（どの文面にも無い番号）。
-const MARK_ANIM: u32 = 9999;
+use crate::plan_test_support::{MARK_ANIM, MARKER};
 
-/// 検体と小さな文面で使う画像の名前（どれも 1×1 の不透明）。
+/// 検体と小さな文面で使う画像の名前（どれも 2×2 の不透明）。
 const RELS: &[&str] = &[
     "a.png",
     "b.png",

@@ -1,10 +1,10 @@
 //! 要件 11.1・11.4: emo2 surface0 の単層 base surface 合成が、`MemoryDecoder` へ
 //! 挿入した既知画像とバイト等価であることを固定する golden テーマ。
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
+use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{
-    AtlasTable, BindSet, ComposedSurface, Composer, EmoWorld, MemoryDecoder, PackConfig, Path,
-    PatternState, SetId, Shell, SurfaceSet, bake,
+    AtlasTable, BindSet, ComposedSurface, Composer, EmoWorld, MemoryDecoder, Path, PatternState,
+    SetId, Shell,
 };
 
 /// 決定的な既知画像を tightly-packed premultiplied BGRA で生成する。
@@ -49,13 +49,7 @@ fn build_atlas_for_surface0(shell: &Shell, base: &Path) -> (AtlasTable, u32, u32
     let mut dec = MemoryDecoder::new();
     let (w, h, bgra) = register_surface0_image(&mut dec, base);
 
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
-    (result.table, w, h, bgra)
+    (bake_emo2(shell, base, &dec), w, h, bgra)
 }
 
 /// 受入基準（要件 11.1・11.4）: emo2 surface0 の element0 単層合成が挿入画像とバイト等価。

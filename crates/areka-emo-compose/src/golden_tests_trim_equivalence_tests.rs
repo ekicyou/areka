@@ -1,9 +1,8 @@
 //! トリム等価の pixel テーマ（要件 11.3・6.2）。
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
+use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{
-    AtlasTable, BindSet, Composer, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId,
-    Shell, SurfaceSet, bake,
+    AtlasTable, BindSet, Composer, EmoWorld, MemoryDecoder, Path, PatternState, SetId, Shell,
 };
 
 // ============================================================================
@@ -86,13 +85,7 @@ fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec
         bgra.clone(),
         has_alpha,
     );
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    let table = bake(std::slice::from_ref(&set), &dec, PackConfig::default()).table;
-    (table, bgra)
+    (bake_emo2(shell, base, &dec), bgra)
 }
 
 /// 要件 11.3・6.2: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
@@ -123,8 +116,11 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let (atlas, original_bytes) = build_atlas_margined_surface0(&shell, &base);
 
     // bake が現に記録したトリム情報を診断的に固定する（trim_offset/original/uv が期待どおり）。
-    // element0 は fold 後の登場順で ElementId(0)（surface0 単層・既存 8.1 harness と同一束縛）。
-    let entry = atlas.entry(areka_emo_atlas::ElementId(0));
+    // element0 の絵は名前から引く（焼きの番号の振り方に依らない）。
+    let id = atlas
+        .resolve(SetId(0), "surface0.png")
+        .expect("surface0.png は焼いてある");
+    let entry = atlas.entry(id);
     assert_eq!(
         entry.original,
         areka_emo_atlas::Size {

@@ -7,8 +7,8 @@ use areka_parsers::shell::parse;
 
 use super::HitRegions;
 use crate::hit::{RegionPriority, hit_region_in};
-use crate::plan_test_support::coll;
-use crate::world::{EmoWorld, SurfaceIndex};
+use crate::plan_test_support::{coll, component_of};
+use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -23,8 +23,7 @@ fn hit(world: &EmoWorld, id: u32, x: i64, y: i64) -> Option<String> {
 
 /// 面の表で `id` に [`HitRegions`] が付いているか。
 fn has_regions(world: &EmoWorld, id: u32) -> bool {
-    let entity = world.world().resource::<SurfaceIndex>().0[&id];
-    world.world().get::<HitRegions>(entity).is_some()
+    component_of::<HitRegions>(world.world(), id).is_some()
 }
 
 /// 子の領域が element定義の X,Y だけずれた位置で当たり、元の位置では当たらない（要件 4.1・4.2）。
@@ -209,10 +208,7 @@ fn pattern_targets_import_nothing() {
 /// ままの `SurfaceMaster.collisions`（要件 7.1）。無い番号は `None`。
 #[test]
 fn shell_without_nesting_gets_no_hit_regions() {
-    let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-    let w = world_of(&text);
+    let w = EmoWorld::build(&crate::sample_test_support::emo2_shell());
     let ids: Vec<u32> = w.surface_ids().collect();
     assert!(
         ids.iter()

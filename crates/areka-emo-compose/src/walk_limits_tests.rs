@@ -34,9 +34,17 @@ fn on_small_stack(f: impl FnOnce() + Send) {
 
 /// 面 0 … `last - 1` がそれぞれ次の面を `places` か所に置き、面 `last` が絵 `s.png` を持つシェル。
 fn world_of(last: u32, places: u32) -> (EmoWorld, AtlasTable) {
+    world_with(last, places, "")
+}
+
+/// [`world_of`] の面 0 の頭に `head`（面 0 のブレスの中の行）を足したシェル。
+fn world_with(last: u32, places: u32, head: &str) -> (EmoWorld, AtlasTable) {
     let mut text = String::from("charset,UTF-8\n");
     for i in 0..last {
         text.push_str(&format!("surface{i}\n{{\n"));
+        if i == 0 {
+            text.push_str(head);
+        }
         for p in 0..places {
             text.push_str(&format!("element{p},overlay,{},{p},0\n", i + 1));
         }
@@ -61,7 +69,11 @@ fn compose(composer: &mut Composer, world: &EmoWorld, atlas: &AtlasTable) -> Vec
     composer.ops.clone()
 }
 
-/// 深さ: 面 0 → 1 → … → 10000 の element定義の鎖を 5 つの走査が小さなスタックで回りきる。
+/// 入れ子の報告を回す鎖の深さ（256 KiB のスタックでは再帰なら落ちる深さ）。
+const NEST_REPORT_LAST: u32 = 1_000;
+
+/// 深さ: 面 0 → 1 → … → 10000 の element定義の鎖を 7 つの走査が小さなスタックで回りきる（入れ子の
+/// 報告だけは [`NEST_REPORT_LAST`] の鎖）。
 #[test]
 fn deep_chain_walks_finish_on_a_small_stack() {
     const LAST: u32 = 10_000;
@@ -81,6 +93,14 @@ fn deep_chain_walks_finish_on_a_small_stack() {
             &mut parts,
         );
         assert_eq!(parts.len(), LAST as usize, "面 1 … 10000 が部品");
+        // 到達の確かめ（形の誤り・入れ子の報告）も鎖をたどりきる（指摘 125）。面 0 の pattern が面 1 を
+        // 指すので、形の誤りは面 1 から面 0 へ戻るかを鎖の端まで 1 度見る。
+        let pattern0 = "animation0.interval,bind\nanimation0.pattern0,overlay,1,0,0,0\n";
+        let (world, _) = world_with(LAST, 1, pattern0);
+        assert_eq!(crate::shape_issues(&world), Vec::new());
+        // 入れ子の報告は element定義ごとに鎖の残りをたどる（深さの 2 乗）ので、短い鎖で回す。
+        let (world, _) = world_with(NEST_REPORT_LAST, 1, pattern0);
+        assert_eq!(world.nest_report().issues, Vec::new());
     });
 }
 
@@ -356,7 +376,8 @@ fn hit_import_counts_the_imported_regions_against_the_budget() {
 }
 
 /// 面積の上限（指摘 23）: 一辺は上限の内でも、面積が 2^25 画素を越える外形は `ExtentTooLarge`。
-/// ちょうど 2^25 画素（8192×4096）は通る。
+/// ちょうど 2^25 画素（8192×4096）は通る。一辺の上限（指摘 90）: 面積は上限の内の 16385×2 も
+/// `ExtentTooLarge`、16384×2 は通る。
 #[test]
 fn extent_over_the_area_limit_is_too_large() {
     let plan = |w: i64, h: i64| {
@@ -371,10 +392,17 @@ fn extent_over_the_area_limit_is_too_large() {
         let mut world = EmoWorld::build(&parse(&text));
         world.bind_atlas(&atlas, SetId(0));
         let (binds, pattern) = (BindSet::default(), PatternState::default());
-        let mut scratch = crate::plan::PlanScratch::default();
-        let mut ops = Vec::new();
-        crate::plan::build_plan(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern)
+        crate::plan_test_support::plan_of(&world, &atlas, 0, &binds, &pattern).1
     };
+    assert_eq!(plan(16384, 2), Ok(crate::plan::Extent { w: 16384, h: 2 }));
+    assert_eq!(
+        plan(16385, 2),
+        Err(crate::ComposeError::ExtentTooLarge {
+            surface: 0,
+            w: 16385,
+            h: 2
+        })
+    );
     assert_eq!(
         plan(8192, 4096),
         Ok(crate::plan::Extent { w: 8192, h: 4096 })

@@ -98,8 +98,7 @@ const BASE: &str = "shell";
 
 /// 見える部品と見える子（着せ替えは無し）。
 fn visible(table: &NestTable, top: u32, pattern: &PatternState) -> (Vec<u32>, Vec<FilmId>) {
-    let mut parts = Vec::new();
-    table.visible_parts(top, &BindSet::default(), pattern, &mut parts);
+    let parts = visible_parts_of(table, top, &[], pattern);
     let mut films = vec![FilmId(u32::MAX)]; // 先に空にすることも確かめる。
     table.visible_films(top, &parts, &mut films);
     (parts, films)
@@ -345,10 +344,7 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
 // 全サーフェスを一番上にし、欄の組ごとに「部品 X に目印のコマを足すと命令列が変わる」⇔「X が見える
 // 部品に在る」、「子 F のコマを替えると命令列が変わる」⇔「F が見える子に在る」を確かめる。
 
-/// 目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。
-const MARKER: u32 = 900;
-/// 目印のコマを置く animation の番号（検体に無い番号）。
-const MARK_ANIM: u32 = 9999;
+use crate::plan_test_support::{MARK_ANIM, MARKER, visible_parts_of};
 
 /// 欄の組: 空・経過 0 と違うコマ・子を置くサーフェスを指すコマ・消えている・部品の経過 0 と
 /// 部品の消えている・子のコマ（一番上は今までの欄、20 と 10 は部品の欄）。

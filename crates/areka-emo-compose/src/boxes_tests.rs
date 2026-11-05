@@ -83,13 +83,6 @@ fn hand_built_layout_answers_lookups() {
     assert_eq!(layout.placements(3), &[place(2, "main", -4, 100)]);
     assert!(layout.placements(1).is_empty());
     assert!(layout.placements(u32::MAX).is_empty());
-
-    // 置き場所の名前はすべて定義の表で引ける（設計の事後条件）。
-    for id in [0, 3] {
-        for p in layout.placements(id) {
-            assert!(layout.def(&p.name).is_some(), "{}", p.name.as_str());
-        }
-    }
 }
 
 #[test]
@@ -456,7 +449,6 @@ fn box_text_folds_to_expected_table_in_ascending_element_order() {
     .concat();
     let (layout, report, _) = fold_images(&text, &[]);
     assert_eq!(report.issues, vec![]);
-    assert!(!layout.is_empty());
     assert_eq!(
         layout.placements(0),
         &[place(1, "a", 10, 20), place(2, "b", -5, 30)]
@@ -520,7 +512,6 @@ fn later_surface_brace_adds_to_the_placements() {
         &[place(1, "a", 0, 0), place(3, "b", 0, 0)]
     );
     assert_eq!(layout.placements(1), &[place(1, "a", 0, 0)]);
-    assert!(!layout.is_empty());
 }
 
 #[test]
@@ -559,8 +550,9 @@ fn faces_and_boxes_fold_the_same_description_to_the_same_lines() {
         .iter()
         .map(|p| (p.element, Transform::translate(p.x, p.y)))
         .collect();
-    assert_eq!(faces.len(), 3);
-    assert_eq!(faces, boxes);
+    let written: Vec<(u32, Transform)> = (1..=3).map(|n| (1, Transform::translate(n, n))).collect();
+    assert_eq!(faces, written, "面は書いた順");
+    assert_eq!(boxes, written, "箱も書いた順");
 }
 
 #[test]

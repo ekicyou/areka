@@ -7,18 +7,12 @@ use bevy_ecs::world::World;
 use crate::fold::{expand_targets, fold_shell_with};
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
-use crate::plan_test_support::{coll, elem, shell_mixed, shell_of, surface_def};
+use crate::plan_test_support::{
+    FoldSnapshot, coll, elem, fresh_world, master_of, shell_mixed, shell_of, snapshot_world,
+    surface_def,
+};
 use crate::sample_test_support::emo2_shell;
 use crate::world::{AliasMap, Records, SurfaceIndex};
-
-/// 畳み込みが必ず読むリソース（`SurfaceIndex`・`AliasMap`）だけを備えた空 World を用意する
-/// （`SurfaceImages` は無ければ画像だけの面が無いものとして読む）。
-fn fresh_world() -> World {
-    let mut world = World::new();
-    world.insert_resource(SurfaceIndex::default());
-    world.insert_resource(AliasMap::default());
-    world
-}
 
 /// alias キーの解決（`EmoWorld::resolve_alias` と同じ AliasMap 参照経路）。
 fn resolve_alias<'w>(world: &'w World, key: &str) -> Option<&'w [u32]> {
@@ -31,12 +25,6 @@ fn alias_def(key: &str, ids: Vec<u32>) -> SurfaceAlias {
         key: AliasKey::new(key.to_string()),
         ids,
     }
-}
-
-/// 指定 id をキーに登録済み entity の `SurfaceMaster` を引く。
-fn master_of(world: &World, id: u32) -> Option<&SurfaceMaster> {
-    let entity = *world.resource::<SurfaceIndex>().0.get(&id)?;
-    world.get::<SurfaceMaster>(entity)
 }
 
 /// animation 1 本（interval=bind・pattern 群空・id と識別のみに用いる）。
@@ -323,12 +311,11 @@ fn append_animation_first_wins_and_new_id_added() {
     // id=1 は 1 本のみ（重複しない）＝先勝ち。
     let id1: Vec<&Animation> = m.animations.iter().filter(|a| a.id == 1).collect();
     assert_eq!(id1.len(), 1, "id=1 は 1 本");
-    assert_ne!(
+    assert_eq!(
         id1[0].interval,
-        Interval::Random { k: 5 },
-        "append 版の interval は捨てる"
+        anim(1).interval,
+        "前の interval のまま（append 版の random,5 は捨てる）"
     );
-    assert_eq!(id1[0].interval, anim(1).interval, "前の interval のまま");
     // id=2 が追加されている。
     assert!(
         m.animations.iter().any(|a| a.id == 2),
@@ -378,7 +365,6 @@ fn append_only_sees_earlier_defined_surfaces() {
     // id=2 は append の後に定義 → 遡及されない（base のみ 1 本）。
     let m2 = master_of(&world, 2).expect("id=2 が常駐する");
     assert_eq!(m2.elements.len(), 1);
-    assert!(!m2.elements.iter().any(|e| e.path.as_str() == "x.png"));
     assert_eq!(m2.elements[0].path.as_str(), "b.png");
 }
 
@@ -392,9 +378,7 @@ fn expand_targets_subtracts_single_exclude() {
         AppendTarget::Single(5),
         AppendTarget::Exclude(5),
     ]);
-    assert!(ids.contains(&0), "id=0 は残る");
-    assert!(!ids.contains(&5), "id=5 は除外される");
-    assert_eq!(ids, vec![0]);
+    assert_eq!(ids, vec![0], "id=0 は残り、id=5 は除外される");
 }
 
 /// (2) 範囲除外: `Range{1,5}, ExcludeRange{2,4}` は両端含みで 2,3,4 を減算し {1,5}（要件 2.5）。
@@ -596,32 +580,6 @@ fn alias_out_of_range_index_is_skipped() {
 
 // ── 決定性（バイト等価）・登場順 single-pass の固定（要件 1.5/1.7/2.3/10.1）──
 
-/// fold 結果の観測可能内容スナップショット（`EmoWorld` は derive Eq を持たないため手組み）。
-///
-/// (1) surface id 昇順（`SurfaceIndex` のキーを整列＝`EmoWorld::surface_ids` と同じ決定的順）に
-/// `(id, SurfaceMaster)` を集める。`SurfaceMaster` は `PartialEq`（element/collision/animation の
-/// 深い等価）。(2) alias は `AliasMap`（`BTreeMap`＝キー順が決定的）を丸ごと複製する。
-/// この2値が等しければ、公開クエリ（`surface(id)`／`resolve_alias(key)`／`surface_ids()`）越しに
-/// 観測できる内容がバイト等価であることを意味する（要件 1.5/10.1）。
-type FoldSnapshot = (
-    Vec<(u32, SurfaceMaster)>,
-    std::collections::BTreeMap<String, Vec<u32>>,
-);
-
-/// 素の `World`（`fold_shell_with` 直呼び）から決定性比較用スナップショットを抽出する。
-fn snapshot_world(world: &World) -> FoldSnapshot {
-    // surface id を昇順に整列（`SurfaceIndex` の HashMap 反復順に依らず決定的）。
-    let mut ids: Vec<u32> = world.resource::<SurfaceIndex>().0.keys().copied().collect();
-    ids.sort_unstable();
-    let surfaces: Vec<(u32, SurfaceMaster)> = ids
-        .into_iter()
-        .map(|id| (id, master_of(world, id).expect("id が常駐する").clone()))
-        .collect();
-    // alias は BTreeMap ゆえ複製すればキー順まで決定的。
-    let aliases = world.resource::<AliasMap>().0.clone();
-    (surfaces, aliases)
-}
-
 /// 同一 `Shell` を素の `World` へ2回 fold し、スナップショットが一致することを確かめるヘルパ。
 fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
     let mut w1 = fresh_world();
@@ -752,25 +710,13 @@ fn emo2_fixture_folds_byte_equal_twice() {
             .surface_ids()
             .map(|id| (id, w.surface(id).expect("列挙 id は常駐する").clone()))
             .collect();
-        // alias は既知キーのうち代表を安定順で引く（BTreeMap 実体の全複製は非公開のため
-        // 公開 resolve_alias 経路で決定性を観測する）。
-        let mut aliases = std::collections::BTreeMap::new();
-        for key in ["0", "通常", "100", "200", "10"] {
-            if let Some(ids) = w.resolve_alias(key) {
-                aliases.insert(key.to_string(), ids.to_vec());
-            }
-        }
-        (surfaces, aliases)
+        (surfaces, w.alias_snapshot())
     };
     assert_eq!(
         snap(&a),
         snap(&b),
         "実 emo2 の2回 fold はバイト等価（要件 10.1）"
     );
-
-    // sort 順も決定的（emo2 は sort 未指定＝既定）。
-    assert_eq!(a.animation_sort(), b.animation_sort());
-    assert_eq!(a.collision_sort(), b.collision_sort());
 
     // 非自明性: 既知 id が常駐し、重複 alias `100` が後勝ちで一意解決する。
     let ids: Vec<u32> = a.surface_ids().collect();
@@ -783,12 +729,8 @@ fn emo2_fixture_folds_byte_equal_twice() {
         Some(&[2100][..]),
         "重複 alias 100 は後勝ち一意"
     );
-    // 多 id range append は既存 2100-2110 へ collision を届けるが、範囲外の未存在は新設しない。
-    assert!(
-        !ids.contains(&2211),
-        "append 範囲外の未存在 id は新設されない"
-    );
-    // append 対象 2100 に collision（Head/Bust）が届く（append の重なりが観測できる）。
+    // append 対象 2100 に collision（Head/Bust）が届く（append の重なりが観測できる・範囲内でも未存在の
+    // id を新設しないことは手組みの検体で見る）。
     let m2100 = a.surface(2100).expect("surface2100 常駐");
     assert!(
         m2100.collisions.iter().any(|c| c.name.as_str() == "Head"),
@@ -875,9 +817,9 @@ fn forward_reference_append_does_not_apply_and_is_stable() {
         1,
         "前方参照 append は適用されない（single-pass）"
     );
-    assert_eq!(m.elements[0].path.as_str(), "base3.png");
-    assert!(
-        !m.elements.iter().any(|e| e.path.as_str() == "ghost.png"),
+    assert_eq!(
+        m.elements[0].path.as_str(),
+        "base3.png",
         "後定義 id を狙う前方参照 append は遡及しない"
     );
 }
@@ -909,7 +851,7 @@ fn expand_targets_full_u32_exclude_range_is_not_expanded() {
 
 /// 指摘 75（重ね）: 単独の除外を 10 万個並べても、組をまとめて二分探索で引くので短く終わり、結果は正しい。
 #[test]
-fn expand_targets_many_single_excludes_stay_linearithmic() {
+fn expand_targets_many_single_excludes_subtract_correctly() {
     let mut targets = vec![AppendTarget::Range {
         start: 0,
         end: 8000,

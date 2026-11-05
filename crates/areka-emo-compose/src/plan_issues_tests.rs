@@ -52,6 +52,33 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
     assert!(logs.trim().is_empty(), "集める関数は記録を出さない: {logs}");
 }
 
+/// 1 つの pattern が循環と描かないメソッドの両方に当たる（面 10 の `replace` が自分を指す）と、`Cycle`
+/// が先（指摘 124）。
+#[test]
+fn cycle_comes_before_undrawn_for_the_same_pattern() {
+    let world = EmoWorld::build(&parse(
+        "charset,UTF-8\r\nsurface10\r\n{\r\nelement0,overlay,part.png,0,0\r\n\
+         animation0.interval,bind\r\nanimation0.pattern0,replace,10,0,0,0\r\n}\r\n",
+    ));
+    assert_eq!(
+        shape_issues(&world),
+        vec![
+            ShapeIssue::Cycle {
+                surface: 10,
+                animation: 0,
+                pattern: 0,
+                target: 10,
+            },
+            ShapeIssue::UndrawnPattern {
+                surface: 10,
+                animation: 0,
+                pattern: 0,
+                method: "replace".to_string(),
+            },
+        ]
+    );
+}
+
 /// 誤りの無いシェルは空。
 #[test]
 fn clean_shell_has_no_issues() {

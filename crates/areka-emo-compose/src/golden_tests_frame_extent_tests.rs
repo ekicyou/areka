@@ -1,9 +1,7 @@
 //! 要件 5.4: 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
-use super::{
-    AtlasTable, EmoWorld, MemoryDecoder, PackConfig, Path, SetId, Shell, SurfaceSet, bake,
-};
+use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
+use super::{AtlasTable, EmoWorld, MemoryDecoder, Path, SetId, Shell};
 
 // ============================================================================
 // 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
@@ -56,12 +54,7 @@ fn build_atlas_real_sizes(shell: &Shell, base: &Path) -> AtlasTable {
             dec.insert(abs, w, h, stride, bgra, true);
         }
     }
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    bake(std::slice::from_ref(&set), &dec, PackConfig::default()).table
+    bake_emo2(shell, base, &dec)
 }
 
 /// 採録アニメ 1 本の全コマ（surface_id>=0 のみ・センチネル -1 は非描画で除外）を
@@ -197,6 +190,8 @@ fn kero_blink_frames_fit_within_base_extent() {
 /// surface は eye パーツ 2 枚（いずれも実原寸 382×547 の全身キャンバス）の (0,0) 和集合＝382×547。
 /// base surface1000（全パーツ MAYUNA bind の本体・外形は全部の bind の描くコマの原寸の和集合）は 382×547 を
 /// 含むため、各コマはオフセット (0,0) で base 外形内に収まる（越境クリップは発生しない）。
+/// `bind+random` の外形は番号の最も小さい pattern（pattern1 の 1412）を数えるので 1412 は規則で必ず
+/// 収まり、確かめになるのは外形に数えない 1411・1410（指摘 99）。
 #[test]
 fn sakura_blink_frames_fit_within_base_extent() {
     let shell = parse_emo2_shell();

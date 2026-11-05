@@ -221,16 +221,15 @@ fn inactive_pure_bind_frame_is_drawn() {
     );
 }
 
-/// `bind+random` の外れた保持コマは今のまま描かない（D9-3 の門）。
+/// 有効の `bind+random` もコマが無いときは pattern0 を積まない（件 26・コマがあるときだけ描く）。外れた
+/// 保持コマを描かない門は `plan_frame_merge_tests` が見る。
 #[test]
-fn inactive_bind_random_frame_stays_hidden() {
+fn active_bind_random_without_frame_stacks_nothing() {
     let anims = "\
 animation4.interval,bind+random,4
 animation4.pattern0,overlay,30,0,0,0
 ";
-    let mut pattern = PatternState::default();
-    pattern.set(4, frame(30, 0, 0));
-    assert_eq!(compose(anims, &[], &pattern).0, [("body.png", 0, 0)]);
+    assert_eq!(ops(anims, &[4]), [("body.png", 0, 0)]);
 }
 
 /// 有効の純 `bind` はコマが静的な寄与を置き換え、コマが消えれば（`stop`）静的な寄与に戻る（5.7・M5）。

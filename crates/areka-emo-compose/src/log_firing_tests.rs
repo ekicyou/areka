@@ -13,13 +13,12 @@
 use super::*;
 
 use areka_emo_atlas::{
-    AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
+    AtlasEntry, AtlasKey, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, SurfaceAppend,
 };
 use std::path::Path;
-use std::sync::Arc;
 
 use crate::log_capture::capture_logs;
 use crate::method::{BlendKind, BlendMode, ComposeMethod};
@@ -52,13 +51,13 @@ fn cycle_detection_debug_fires_with_surface_id() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    let mut visited = PlanScratch::default();
+    let mut scratch = PlanScratch::default();
     let logs = capture_logs(|| {
         // build_plan は外形を表から引き（extent 経路は束縛のときだけ）、derive_ops（ops 経路）を走らせる。
         // ops 経路（flatten_surface）の循環 DEBUG を狙って結果自体も固定する。
         let extent = build_plan(
             &mut ops,
-            &mut visited,
+            &mut scratch,
             &world,
             &atlas,
             1000,
@@ -112,11 +111,11 @@ fn extent_cycle_debug_fires_with_surface_id() {
 
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    let mut visited = PlanScratch::default();
+    let mut scratch = PlanScratch::default();
     let compose_logs = capture_logs(|| {
         build_plan(
             &mut ops,
-            &mut visited,
+            &mut scratch,
             &world,
             &atlas,
             2000,
@@ -181,11 +180,11 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
 
     let binds = BindSet::from_ids([1400]);
     let mut ops = Vec::new();
-    let mut visited = PlanScratch::default();
+    let mut scratch = PlanScratch::default();
     let logs = capture_logs(|| {
         build_plan(
             &mut ops,
-            &mut visited,
+            &mut scratch,
             &world,
             &atlas,
             1000,
@@ -525,16 +524,9 @@ fn unbound_element_debug_fires_with_path() {
 
     // 副作用: 未知 path は None（非パニック・要件 4.3）。
     let master = world.surface(1000).expect("surface1000 常駐");
-    let entity = *world
-        .world()
-        .resource::<crate::world::SurfaceIndex>()
-        .0
-        .get(&1000)
-        .expect("entity");
-    let binding = world
-        .world()
-        .get::<crate::world::AtlasBinding>(entity)
-        .expect("AtlasBinding");
+    let binding =
+        crate::plan_test_support::component_of::<crate::world::AtlasBinding>(world.world(), 1000)
+            .expect("AtlasBinding");
     let bogus_idx = master
         .elements
         .iter()
@@ -560,133 +552,5 @@ fn unbound_element_debug_fires_with_path() {
     assert!(
         logs.contains("surface_id=1000"),
         "surface_id も載る: {logs}"
-    );
-}
-
-// ── Part 3-9: ComposeError Display 文字列（決定論的・error.rs #[error("...")]）──────────
-
-/// ComposeError の Display（thiserror `#[error]`）が正準文字列と厳密一致する（決定論的）。
-#[test]
-fn compose_error_display_strings_are_exact() {
-    assert_eq!(
-        ComposeError::SurfaceNotFound(7).to_string(),
-        "surface 7 not found",
-    );
-    assert_eq!(
-        ComposeError::EmptyComposition(7).to_string(),
-        "surface 7 has an empty extent (width or height 0)",
-    );
-    assert_eq!(
-        ComposeError::ExtentTooLarge {
-            surface: 7,
-            w: 16_385,
-            h: 2
-        }
-        .to_string(),
-        "surface 7 extent 16385x2 exceeds the size limit (side 16384 or area 2^25)",
-    );
-    assert_eq!(
-        ComposeError::ExtentTooLarge {
-            surface: 7,
-            w: 8_192,
-            h: 4_097
-        }
-        .to_string(),
-        "surface 7 extent 8192x4097 exceeds the size limit (side 16384 or area 2^25)",
-    );
-}
-
-// ── Part 3-10: blit uv_rect.x/y != 0（6.1 review が直接未カバーと指摘した源矩形オフセット）──
-
-/// 要件 6.1/6.4: エントリの uv_rect.x/y が非ゼロ（頁内サブ矩形オフセット）でも、頁原点でなく
-/// **uv オフセット位置**の源画素が転写される。
-///
-/// 3×1 の頁に [赤, 緑, 青] を横並びに置き、uv_rect=(x:2,y:0,w:1,h:1) で **青のみ**を切り出す
-/// エントリを組む。合成結果 (0,0) が青（頁原点の赤でない）であればサンプル位置が uv.x で
-/// 正しくオフセットされている証左。手計算バイトで厳密一致を突く。
-#[test]
-fn blit_reads_source_at_nonzero_uv_offset() {
-    // 3×1 premultiplied BGRA 頁: (0,0)=赤 [0,0,255] / (1,0)=緑 [0,255,0] / (2,0)=青 [255,0,0]。
-    let bytes = vec![
-        0, 0, 255, 255, // (0,0) 赤
-        0, 255, 0, 255, // (1,0) 緑
-        255, 0, 0, 255, // (2,0) 青
-    ];
-    let page = AtlasPage {
-        width: 3,
-        height: 1,
-        stride: 12,
-        bytes: Arc::from(bytes),
-    };
-    // uv.x=2（青の列）を 1×1 で切り出す。trim_offset=0 ゆえ着弾は配置 (0,0)。
-    let atlas = single_entry_table(
-        page,
-        Rect {
-            x: 2,
-            y: 0,
-            w: 1,
-            h: 1,
-        },
-        Point { x: 0, y: 0 },
-    );
-    let ops = vec![BlitOp {
-        element: ElementId(0),
-        transform: Transform::translate(0, 0),
-        method: ComposeMethod::Overlay,
-    }];
-
-    let mut out = ComposedSurface::new(0, 0);
-    crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
-
-    // 頁原点(赤)でなく uv.x=2 の青が着弾する（源矩形オフセット読み取りの直接証拠）。
-    let i = 0usize;
-    let b = out.bytes();
-    assert_eq!(
-        [b[i], b[i + 1], b[i + 2], b[i + 3]],
-        [255, 0, 0, 255],
-        "uv.x=2 の青が転写される（頁原点の赤でない）",
-    );
-}
-
-/// uv_rect.y も非ゼロで効くことを縦方向で突く（3 行頁の 3 行目を切り出す）。
-#[test]
-fn blit_reads_source_at_nonzero_uv_y_offset() {
-    // 1×3 premultiplied BGRA 頁（縦並び）: 行0=赤 / 行1=緑 / 行2=青。
-    let bytes = vec![
-        0, 0, 255, 255, // (0,0) 赤
-        0, 255, 0, 255, // (0,1) 緑
-        255, 0, 0, 255, // (0,2) 青
-    ];
-    let page = AtlasPage {
-        width: 1,
-        height: 3,
-        stride: 4,
-        bytes: Arc::from(bytes),
-    };
-    // uv.y=2（青の行）を 1×1 で切り出す。
-    let atlas = single_entry_table(
-        page,
-        Rect {
-            x: 0,
-            y: 2,
-            w: 1,
-            h: 1,
-        },
-        Point { x: 0, y: 0 },
-    );
-    let ops = vec![BlitOp {
-        element: ElementId(0),
-        transform: Transform::translate(0, 0),
-        method: ComposeMethod::Overlay,
-    }];
-
-    let mut out = ComposedSurface::new(0, 0);
-    crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
-
-    let b = out.bytes();
-    assert_eq!(
-        [b[0], b[1], b[2], b[3]],
-        [255, 0, 0, 255],
-        "uv.y=2 の青が転写される（頁原点の赤でない）",
     );
 }

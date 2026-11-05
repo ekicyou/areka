@@ -818,9 +818,5 @@ mod frame_merge_tests;
 mod nesting_tests;
 
 #[cfg(test)]
-#[path = "plan_bind_random_tests.rs"]
-mod bind_random_tests;
-
-#[cfg(test)]
 #[path = "plan_bind_tests.rs"]
 mod bind_tests;

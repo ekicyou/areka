@@ -208,14 +208,11 @@ fn extent_comes_from_the_table_made_by_bind_atlas() {
 /// surface1000 は静的 element ゼロ・全パーツ bind の本体 surface。有効 bind 集合を
 /// [`surface1000_full_bindset`]（解決する 3 パーツ 1100/1200/1302）にすると、build_plan は各有効
 /// bind の pattern0 入れ子参照を 1 層ずつ flatten し、**有効 bind ごとに厳密に 1 命令**を生む。
-/// よって `ops.len() == 有効 bind 数`（＝描画層数）であり、命令数は **surface 数・画素数でなく
-/// 描画層数に線形（O(elements)）**である。
+/// よって `ops.len() == 有効 bind 数`（＝描画層数）を固定する。
 ///
-/// ## なぜこの assert が O(elements) の証明になるか
-/// - 上界を有効 bind 数（3）に固定する。二次（層×層）や画素比例（外形 w*h ≈ 数万）で命令を生む
-///   実装なら `ops.len()` はこの上界を大きく超え、この等値 assert が破れる。
-/// - 各 bind パーツ surface（1100/1200/1302）は element 1 本の単純 surface で、入れ子 flatten は
-///   1 段。ゆえに命令数 = Σ(有効 bind の可視層数) = 有効 bind 数。線形係数 1。
+/// 1 つの検体の等値なので線形の証明ではないが、二次（層×層）や画素比例（外形 w*h ≈ 数万）で命令を
+/// 生む実装ならこの等値が破れる。各 bind パーツ surface（1100/1200/1302）は element 1 本の単純
+/// surface で、入れ子 flatten は 1 段。ゆえに命令数 = Σ(有効 bind の可視層数) = 有効 bind 数。
 #[test]
 fn surface1000_instruction_count_is_linear_in_layers() {
     let shell = parse_emo2_shell();
@@ -227,10 +224,10 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    let mut visited = PlanScratch::default();
-    let extent = build_plan(
+    let mut scratch = PlanScratch::default();
+    build_plan(
         &mut ops,
-        &mut visited,
+        &mut scratch,
         &world,
         &atlas,
         1000,
@@ -246,14 +243,6 @@ fn surface1000_instruction_count_is_linear_in_layers() {
         "解決した 3 有効 bind（1100/1200/1302）→ 3 命令"
     );
 
-    // 命令数が「画素数」に比例しないことの直接反証: 外形は数千〜数万画素だが命令は 3 本のみ。
-    let pixels = extent.w as usize * extent.h as usize;
-    assert!(
-        pixels > ops.len() * 100,
-        "外形画素数（{pixels}）≫ 命令数（{}）＝命令は画素比例でない（O(elements)）",
-        ops.len()
-    );
-
     // 各命令の method は overlay（M1 実装対象）で、命令は実描画層（センチネル skip 済み）。
     for op in &ops {
         assert_eq!(
@@ -266,10 +255,10 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     // 有効 bind を 1 本に絞ると命令も 1 本（層数に厳密比例＝線形係数 1 の追加確証）。
     let one = BindSet::from_ids([surface1000_bind_parts()[0].anim_id]);
     let mut ops1 = Vec::new();
-    let mut visited1 = PlanScratch::default();
+    let mut scratch1 = PlanScratch::default();
     build_plan(
         &mut ops1,
-        &mut visited1,
+        &mut scratch1,
         &world,
         &atlas,
         1000,
@@ -281,10 +270,10 @@ fn surface1000_instruction_count_is_linear_in_layers() {
 
     // 空 bind 集合 → 命令ゼロ（静的 element ゼロゆえ描画層皆無・外形は非ゼロで Ok）。
     let mut ops0 = Vec::new();
-    let mut visited0 = PlanScratch::default();
+    let mut scratch0 = PlanScratch::default();
     build_plan(
         &mut ops0,
-        &mut visited0,
+        &mut scratch0,
         &world,
         &atlas,
         1000,
