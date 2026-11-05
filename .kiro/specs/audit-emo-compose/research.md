@@ -329,3 +329,17 @@
 - **測れなかったもの**: collision（当たり判定）。画素に出ず、画面のクリック無しで読む口が MCP に無い。要件の討議の決めにより、collision は今のまま規則を説明に書き残す。
 - **実在のシェルでの当たり**（`C:\wintools\ssp\ghost\` の 6 体を数えた・使い捨ての数え上げ）: 波括弧の同じ番号の element・animation の書き直しは `emily4`・`emo`・`claudia`・`R_POST_and_KOMAINU`・`dot_sakura`・`pasta-in-windows` のどれも 0 件。追記の同じ番号の animation は `emo` に 1 件（今 areka は丸ごと置き換え、SSP は捨てる＝見た目が違う）。
 - **完了した spec との関わり**: 波括弧の「同じ名前の行は後勝ち」は `areka-P0-emily-ghost-verification`（2026-10-17・開発者の決め「足し合わせる」を受けた設計とタスク 6.1・`fold_merge_tests.rs` の `same_named_line_in_a_later_brace_wins`）で入った。「足し合わせる」は SSP と同じだが、「後勝ち」は SSP と違う＝SSP に合わせるなら、完了した spec の規則（種類 1）を変える。設計の討議の議題にする。
+
+## 13. 面の番号の上限の SSP の測り（2026-11-05・開発者「SSPを確認してみて」）
+
+- 測った SSP: `SSP/2.9.29`（`--ghost emo`・試しのシェル `areka_id_probe`・`dump_surface` に番号を渡して描けるかで読んだ）。終わったら元のシェルへ戻し、試しのシェルを消し、SSP を降ろした。
+
+| 回 | 書いた面の番号 | SSP の結果 |
+|---|---|---|
+| 1 | 0・10・8192・8193・65535・65536・999999・1000000・2147483647・**2147483648・4294967295・4294967296・99999999999**、範囲 `surface3000000-3000002`・`surface.append2000000-2000002` | シェルを読む途中で**落ちた**（「Uncontinuable Exception Raised」・`STACKTRC.TXT`＝`ACCESS_VIOLATION` の書き込み・`SPSeriko::ProcessMultipleSurfaceArray` ← `ProcessMultipleSurfaceDef` ← `LoadSurfacePropertiesImpl`・落ちる前に約 1.5 GB を確保・スタックに文字列 `4294967295`） |
+| 2 | 0・10・8193・65536・999999・1000000・9999999・100000000・**2147483647** | 落ちない。どの番号も `dump_surface` で描けた（比べに定義していない 12345 は「No such surface ID」） |
+| 3 | 範囲 `surface3000000-3000002` と `surface.append3000000-3000002` だけ | 落ちない。3000001 を描けた |
+
+- **読み**: SSP は面の番号を符号つき 32 ビット（0〜2,147,483,647）で受ける。2^31 以上の番号（回 1 の 4 つのどれか・切り分けていない）を書くと、読み込みで落ちる。100 万台・300 万台の範囲は普通に受ける。
+- **測らなかったもの**: とても幅の広い範囲（例 `surface0-100000000`）を SSP がどう扱うか（固まる・落ちるおそれがあり、利用者の SSP で試すのは控えた）。
+- 後始末: SSP が `C:\wintools\ssp\STACKTRC.TXT`（2026-11-05 20:07・約 100 KB）を残した。中に環境変数（認証の値を含む）が入っているので、消すかは開発者に任せる。
