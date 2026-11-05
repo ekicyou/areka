@@ -435,3 +435,68 @@
 - 74. `plan_extent_film_tests.rs:57-59` — `compute_extent` をそのまま呼ぶだけの包み。
 - 範囲の外: なし（5 人とも）。
 - 75.（11-06 audit-parsers-sakura からの知らせ・必ず直す）`fold.rs:321` 付近の `expand_targets_with` が除外の範囲 `!a-b` を番号 1 つずつ集合へ広げる。読む側の上限 `RANGE_WIDTH_CAP` は包含の範囲だけにかかり、除外にはかからない（下流が除外を広げない前提）。`surface0,!0-4294967295` の 1 行で約 43 億件の展開。直し: 除外を `(lo, hi)` の組で持ち、包含を広げた後に範囲で引く（6.3 で直す）。
+
+## 16. audit のかけ直し 2 回目（2026-11-06・タスク 5.1）
+
+- 測った時点: 枝の `6dfca5b5`（タスク 6.1〜6.5 の後）。物差し・作法・読み手（5 人・範囲の全ファイルを全行）は 15 節と同じ。1 回目の指摘の直し残りも見た（割り当てのファイルの中では 21〜75 はどれも直っていた）。
+- 新しい指摘: **53 件**（番号 76〜128）。直しは 3 つのタスク（tasks.md 7.1〜7.3）にまとめた＝audit 系は推奨案で承認（開発者 11-04）。
+- 範囲の外（数に入れない）: `crates/areka-emo-text/src/actor_box.rs:236-237,427` が箱の位置（i64）に大きさを飽和させずに足す（`elementN,balloon,名前,9223372036854775807,0` で debug は panic）＝完了の棚卸で起票。
+
+### 7.1 予算が数えない仕事の量（必ず直す・直したほうがよい）
+- 76.（必ず直す）`plan.rs:421-431,167-174,235-240,466-481` — 予算は「入る 1＋積み荷」だけで、入った面の element と animation を全部なめる手間を数えない。積み荷を作らない大きな面（element 6 万＋積み荷を作らない animation 1 万）で合成 1 回に約 6 億回。直し: 段を開く前に `elements.len() + animations.len()` を予算から引く。
+- 77.（必ず直す）`blit.rs:217-232`・`blit_rect.rs:101-103` — 予算は命令の数を抑えるが、重ねる画素の数は抑えない（根の層は予算の外）。2000×2000 の画像の element 1 万行で合成 1 回に 4×10^10 画素。直し: 切り取った後の面積を足し、上限（外形の面積×64 など）を越えたら残りの命令を捨てて `error!`（合成器ごとに 1 度）。
+- 78.（必ず直す）`fold.rs:129-130,244-296,408-419`・`boxes.rs:227-243` — 範囲の見出しを番号ごとに展開するとき本体の全行を番号の数だけ写す。読む側の上限は番号の数だけを抑える。`surface0-8192{ collision 6 万行 }` で約 4.9 億個の写し（約 35 GB）。直し: 畳み込み 1 回で写す行の数の合計に上限を置き、越えた記述子は `error!` で捨てる（この crate の中で直す・parsers の上限の持ち分とは別）。
+- 79.（必ず直す）`hit_import.rs:36-60,168` — 持ち込みの予算は根ごとなので、持ち込んだ列が根ごとに予算いっぱいまで伸びて面ごとに持ち続ける（覚えも同じ列を持つ）。collision 6 万の面を 1,000 の面が持ち込むと 6,000 万本（約 5 GB）。直し: 根をまたいで持ち込む領域の数を 1 つの予算で数え、尽きたら `error!` を 1 行出して以後の面に持ち込みを付けない。
+- 80.（直したほうがよい）`hit_import.rs:188-205` — `import` が持ち込む 1 本ごとに親の直接の全領域と名前を比べる（予算は 1 本 1 つ）。直し: 段ごとに親の名前の集合を 1 度作って引く。
+- 81.（直したほうがよい）`examples/compose_timing.rs:4-6,156-167` — 6.1 の後は積み荷も数えるので、15 段の菱形は今の予算で切れ、1 面あたりの時間と `budget_pow2` が今の単位と違う単位で出る。直し: 割る数を今の単位にするか段の数を下げ、説明を直す。
+- 82.（できれば）`plan.rs:697`（`plan_extent.rs:313-318` から）— 片方の辺だけ 0 の外形が `Ok` になり幅 0 の絵を返す。直し: `w == 0 || h == 0` を `EmptyComposition` に。
+- 83.（できれば）`plan_extent.rs:287-288` — `targets_animation_id(m) || is_move_name(m)` は `pattern_word(m) != Draw` と同じで 2 度見分ける。
+- 84.（できれば）`plan_bounds.rs:79-255` と `plan_extent.rs:73-319` — 明示のスタック・`Level{clean,spent}`・覚え・先引き・重ね合わせがほぼ写しのまま 2 本ある。直し: たどる部分を 1 本にし、面ごとの寄与を渡す形に。
+
+### 7.2 実装の側の小さな直しと説明（できれば・直したほうがよい）
+- 85.（直したほうがよい）`error.rs:36-38`・`log_firing_tests.rs:568-588` — `ExtentTooLarge` の文言は「GPU の面の上限」だけだが面積の上限でも出る。直し: 文言を「一辺 16384 か面積 2^25 の上限」にし、テストに面積の例を 1 行。
+- 86. `method.rs:287-290,340-343` — 手で書いた配列の長さと定数の文字列が空でないことを見る外れない assert。
+- 87. `nesting.rs:8` — 「記録は出さない」と言い切るが `reaches` は予算の `error!` を出す。
+- 88. `blit_rect.rs:28,34` — `.take(shorter - p)` は外れない（zip の長さと同じ）。
+- 89. `plan.rs:506` の debug の文言「bind 集合に属さない bind 種アニメ」（今の門は bind+random だけ）。
+
+### 7.3 テストの直し（直したほうがよい・できれば）
+- 90.（直したほうがよい）`plan.rs:708-710` の一辺の上限を単独で踏むテストが無い（今のテストはどれも面積の上限も越える）。`walk_limits_tests` に 16385×2 を 1 行。
+- 91.（直したほうがよい）`scale_ratio_tests.rs:97-111` — 積が u32 に収まる入力で「u64 中間でラップしない」を名乗る。104 行の説明も記録を見ていない。
+- 92.（直したほうがよい）`plan_nesting_extent_tests.rs:4-5,119-136` — 外形の経路の記録を見ると言うが、外形をたどる `bind_atlas` が記録の窓の外。
+- 93.（直したほうがよい）`composer_tests.rs:298-336` — `log_firing_tests` の 2 本と同じ入力・同じ確かめ（向こうは記録も見る）。
+- 94.（直したほうがよい）`fold_tests.rs:786-790` — 外れない `!ids.contains(&2211)`。
+- 95.（直したほうがよい）`fold_tests.rs:755-762,771-773` — 古い「非公開」の説明（`alias_snapshot()` がある）と外れない比べ。
+- 96.（直したほうがよい）`golden_tests_test_support.rs:106-119` ほか 4 か所 — bake して table を返す同じ処理の写し 5 か所。
+- 97. `hit_import_tests.rs:212-215` — `emo2_shell()` の写し。
+- 98. `nesting_film_tests.rs:100-106,349-351`・`nesting_visible_tests.rs:41-50,363-365`（`MARKER`・`MARK_ANIM`・`visible`）と `hit_import_tests.rs:25-28`・`nesting_kind_tests.rs:141-147`・`log_firing_tests.rs:528-537`（entity を引く写し）。
+- 99. `golden_tests_frame_extent_tests.rs:192-231` — 1412 は外形の規則で必ず収まる（確かめになるのは 1411・1410）の説明。
+- 100. `golden_tests_determinism_budget_tests.rs:249-255,214-218` — 外れない画素の assert と言い過ぎの説明。
+- 101. `golden_tests_trim_equivalence_tests.rs:126-127` — `ElementId(0)` の決めつけと古い説明。
+- 102. `nesting_visible_tests.rs:367` — 「1×1」は 2×2。
+- 103. `log_firing_tests.rs:566-683` — 記録を見ない 3 本（Display・uv 2 本）が記録の檻のファイルにある。
+- 104. `PlanScratch` を入れた変数が `visited`／`vis_*` のまま（blink_static・determinism_budget・log_firing）と `golden_tests_surface1000_bind_tests.rs:4-5` の「全て interval,bind」。
+- 105. `composer_tests.rs:513-519` — lib.rs の検査だけ「的の関数が切った領域に在る」確かめが無い。
+- 106. `composer_tests.rs:544` ほか — テスト名の `pre_extension_golden` と見出しの飛び番（6 が抜け）。
+- 107. `base_image_tests.rs:107-108` — `EmoWorld::build` は `build_with_images(.., 空)` そのもの。
+- 108. `base_image_tests.rs:144-159` — 直後の厳密な一致から導ける 2 度目の確かめ。
+- 109. `base_image_tests.rs:26-54` — `fold_tests` の `fresh_world`＋`snapshot_world` の写し。
+- 110. `boxes_tests.rs:87-92` — 手で組んだ表そのものを調べるだけ。
+- 111. `boxes_tests.rs:459,523` — 厳密な一致の後の空でない確かめ。
+- 112. `boxes_tests.rs:526-564` — 「書いた順」と言うが面と箱が等しいことだけ（決まった値と比べる）。
+- 113. `boxes_nesting_tests.rs:113-114` — 67 行の繰り返し。
+- 114. `film_tests.rs:475-500` — 同じ表を 2 度組んで比べるだけ（固有の 495 行は寄せる）。
+- 115. `film_tests.rs:440-441` — 2 度の確かめ。
+- 116. `fold_tests.rs:326-331,380-382,395-396,879-882` — 厳密な一致の前の確かめ。
+- 117. `fold_tests.rs:912` — 名前 `_stay_linearithmic` は時間を見ない（`_subtract_correctly` に）。
+- 118. `plan_extent_tests.rs:54-73`・`plan_extent_film_tests.rs:157-163`・`plan_nesting_extent_tests.rs:105-117` — `build_plan` は表を引くだけなので何度呼んでも同じ（1 回に減らし理由を 1 行）。
+- 119. `plan_bind_tests.rs:224-234` — `plan_frame_merge_tests` と同じ門の 2 度目。
+- 120. `plan_bind_random_tests.rs` — 2 本とも他の所と重なる（ファイルと mod を消す）。
+- 121. `plan_frame_merge_tests.rs:249-253,280-281` とテスト名 `bind_kind_koma_*` の「bind 種」（今は bind+random だけ）。
+- 122. `plan_frame_merge_tests.rs:19-34` — `koma` と `bind_anim_method` の写し（指摘 71・72 の直し残り）。
+- 123. `walk_limits_tests.rs:370-373` — `plan_of` の写し（指摘 73 の直し残り）。
+- 124. `plan_issues.rs:44-45` の「Cycle が先」を守るテストが無い（`plan_issues_tests` に両方に当たる pattern）。
+- 125. `walk_limits_tests.rs:3,64-85` — 深い鎖で `nest_report()`・`shape_issues` を小さなスタックで回していない。
+- 126. `plan_ops_tests.rs` の「テスト①②④⑤」の重なりと③の抜け。
+- 127. `plan_extent_tests.rs:12-13` — 部品はもう `plan_test_support` にある。
+- 128. `plan_ops_tests.rs:116-123`・`plan_frame_merge_tests.rs:303-307` の 2 度目の確かめと `tests/surface_nesting_fixture_test.rs:6-7` の作業の経緯。

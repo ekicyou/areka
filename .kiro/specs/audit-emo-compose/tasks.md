@@ -174,6 +174,18 @@
   - 足すテストは守る分岐を戻すと落ちることを確かめる。消すテストの固有の確かめは残る側へ移す。写しは `plan_test_support` から引く
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
+- [ ] 7. かけ直し 2 回目の指摘の直し（research.md 16 節の 76〜128・audit 系は推奨案で承認）
+- [ ] 7.1 予算が数えない仕事の量（指摘 76〜84）
+  - 面に入るたびになめる element と animation の数・重ねる画素の数（上限を越えたら残りを捨てて合成器ごとに 1 度 `error!`）・範囲の見出しで写す行の数の合計（越えた記述子は `error!` で捨てる）・根をまたいで持ち込む領域の数（1 つの予算）を数える。持ち込みの名前の比べは集合で引く
+  - 測りの道具の単位・幅か高さが 0 の外形・語の見分けの 2 度目・外形とシェルの外形のたどり方の写し
+  - 壊れたら落ちるテスト: 各上限の小さな版で、仕事が上限で止まり記録が 1 度だけ出る
+  - _Requirements: 2.1, 4.4, 4.5, 6.2_
+- [ ] 7.2 実装の側の小さな直しと説明（指摘 85〜89）
+  - _Requirements: 2.1, 5.3_
+- [ ] 7.3 テストの直し（指摘 90〜128）
+  - 足す・強める確かめは守る分岐を戻すと落ちる。消すテストの固有の確かめは残る側へ移す。写しは `plan_test_support` から引く
+  - _Requirements: 2.1, 4.4, 4.5, 5.3_
+
 ## Implementation Notes
 
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）
