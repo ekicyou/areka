@@ -60,10 +60,11 @@
 
 ### 範囲の外で触るファイル
 
-C17 で並走しているのは `audit-parsers-sakura` だけ。ほかの持ち主は C17 に居ない（要件 6.1 の申し合わせは要らない）。
+下の表のファイルの持ち主は、どれも C17 に居ない（要件 6.1 の申し合わせは要らない）。C17 で並走する相手と分け合う所は 3 つ: `audit-parsers-sakura`（「申し合わせと順」の節）・一時フォルダの番人の例外表（`audit-emo-present` も行を持つ）・1,000 行の番人の例外表（`audit-emo-compose`・`audit-emo-present`・`audit-seriko` も行を持つ）。どちらの表も、件数は着地の前に表の行から数え直す。
 
 | ファイル | 指摘 | 持ち主 | 変える中身 |
 |---|---|---|---|
+| `crates/log-capture-kit/tests/file_length_guard_test.rs`（条件つき） | `inproc_e2e_test.rs` が 1,000 行以下になったときだけ | `audit-test-kits` | 例外表から `inproc_e2e_test.rs` の 1 行を消し、件数 9→8（「1,000 行の番人」の節） |
 | `crates/log-capture-kit/tests/temp_path_guard_test.rs` | #4・#5 | `audit-test-kits` | 例外表の 5 行を消す・`ALLOWED_COUNT` 19→14・`PROCESS_UNIQUE_COUNT` 16→12・`IntentionallyFixed` の種別と `INTENTIONALLY_FIXED_COUNT` を消す（使う項目が 0 になり、組まれない種別が警告になるため）・`CALIBRATION_DROPPED_ENTRY` を `crates/areka/src/install/fetch_url.rs` へ替える・それに合う doc の文言。C17 で並走する `audit-emo-present` も同じ表に行を持つ（`crates/areka-emo-present/src/balloon_test_support.rs`）ので、件数はここに書いた数を写さず、各タスク（T10・T15・T17）の前に `main` を取り込んで表の行から数え直す。この 5 行は未着手の `temp-path-exceptions-to-target`（この表の行を `target\test-roots` へ移す spec）の受け持ちを先に取るので、完了のときに roadmap の同 spec の行へ残りの行数と、本 spec が 5 行を取ったことを書く。行は消すタスクごとに消し、件数もそのタスクで合わせる（T10 で 2 行＝17・14、T15 で 2 行＝15・13 と種別の削除と較正の替え、T17 で 1 行＝14・12。読み出しのみの 2 は変わらない） |
 | `crates/areka-sylphya/src/persist/io.rs` | #40 | `audit-sylphya-actor` | `impl<T: PersistIo + Sync + ?Sized> PersistIo for Arc<T>`（3 つの口をすべて中身へ渡す）とそのテスト 1 本（同じファイルの `mod tests`） |
 | `crates/shiori-host32-host/src/client.rs`・`lib.rs` | #27 | `audit-shiori-host32` | `map_get_reply` を `pub` にして `lib.rs` から出す |
@@ -473,7 +474,7 @@ pub(crate) fn read_central_directory(bytes: &[u8]) -> Result<Vec<RawEntry>, Refu
 
 | ファイル | 今 | 直しの後の見立て | 守り方 |
 |---|---|---|---|
-| `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` | 1,160 | **約 1,045 行**（1,030〜1,070）＝#4 −12・#45 +2・#42 −58・#44 −13・#85 −20・#86 −12 | 例外表に載る。**分けない**。1,000 以下になる直しはしない（番人の `every_over_limit_exception_is_still_over_the_limit` が赤になる）。T15・T16 の終わりに行数を測る |
+| `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` | 1,160 | **約 1,045 行**（1,030〜1,070）＝#4 −12・#45 +2・#42 −58・#44 −13・#85 −20・#86 −12 | 例外表に載る。**分けない**。直しは全部入れる。T15・T16 の終わりに行数を測り、1,000 行以下になったときに限り、例外表 `OVER_LIMIT_ALLOWED` からこの 1 行を消して件数を 9→8 にする（番人の `every_over_limit_exception_is_still_over_the_limit` が求める直し・2026-11-05 設計の討議で承認）。消す前に、同じ表に行を持つ C17 の `audit-emo-compose`・`audit-emo-present`・`audit-seriko` へ知らせ、件数は着地のときに表の行から数え直す |
 | `crates/areka-ghost/src/runtime_tests.rs` | 993 | 約 780 | T12・T13 で先に減らす。足す直しはその後 |
 | `crates/areka-nar/src/plan_tests.rs` | 977 | 約 930 | T1 で先に減らす（#14）。足りなければ兄弟のファイルへ |
 | `crates/areka-ghost/src/dispatcher_choice_tests.rs` | 936 | 約 790 | T14 の中で #75 を #31 より先に |
