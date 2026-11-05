@@ -339,6 +339,8 @@ fn all_three_existing_states_are_judged_before_the_swap() {
 /// その場で失敗するので、宛先は 1 バイトも動かない。
 #[test]
 fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let destination = work.path().join("balloon").join("test-balloon");
     make_tree(
@@ -370,7 +372,7 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
 /// 再現（spec: `areka-P0-ghost-session-test-load-flake` の負荷の再現 4.6）。⑴と同じ
 /// 掴み方で 1 手目の退避を確かに拒ませ、拒みを観測した継ぎ目（`ON_RENAME_REFUSED`）
 /// の中で放す。眠りも放す側のスレッドも無いので、負荷で放すのが遅れて上限を越すことが
-/// ない。ずっと掴んだままの⑴は今までどおり失敗する（待つ分だけ約 2 秒遅くなる）。
+/// ない。ずっと掴んだままの⑴は今までどおり失敗する（⑴は待ちの長さを 0 にして眠らない）。
 #[test]
 fn a_destination_held_briefly_by_another_process_still_commits() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -436,6 +438,8 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
 /// 失敗する。宛先が空のまま残る経路が無いことを、呼ぶ前のバイト列で確かめる。
 #[test]
 fn a_failing_second_rename_puts_the_retired_tree_back() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let destination = work.path().join("balloon").join("test-balloon");
     make_tree(&destination, &[("descript.txt", b"old descript")]);
@@ -476,6 +480,8 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
 /// 挙げ、`rolled_back` がそれを戻せたかを言う。
 #[test]
 fn a_failure_on_the_second_placement_rolls_the_first_one_back() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
     let balloon = work.path().join("balloon").join("test-balloon");
@@ -529,6 +535,8 @@ fn a_failure_on_the_second_placement_rolls_the_first_one_back() {
 /// で、書きかけの木が根に残らないことがここで決まる。
 #[test]
 fn a_placement_that_was_new_is_removed_again_when_a_later_one_fails() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
     let balloon = work.path().join("balloon").join("test-balloon");
@@ -730,9 +738,10 @@ fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
         "逆順に解くので、最後に積んだ宛先が最初に躓く"
     );
     assert!(!failure.rolled_back, "元には戻っていない");
-    assert_eq!(
-        failure.committed, committed,
-        "確定したまま残っている配置が分かる"
+    assert_eq!(failure.committed, committed, "確定した配置が分かる");
+    assert!(
+        !first_stuck.exists(),
+        "退避先の無い戻しの手は新しい木を先に消すので、確定した宛先は残っていない"
     );
     assert!(
         !removable.exists(),

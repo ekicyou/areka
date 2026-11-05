@@ -48,7 +48,7 @@
   - 完了の状態: `superscript_com_and_lpt_names_are_reserved`・`a_file_collides_with_a_folder_another_entry_implies`・`an_explicit_folder_entry_and_its_children_do_not_collide`・`a_full_width_companion_folder_is_carved_out_case_insensitively`・`refresh_keep_matches_non_ascii_names_case_insensitively` が緑
   - _Requirements: 3.1, 4.1, 9.1_
 
-- [ ] 6. 同梱の宛先・宛先の中のリンク・確定のテストを直す（T6）
+- [x] 6. 同梱の宛先・宛先の中のリンク・確定のテストを直す（T6）
   - #7 の 2 つの同梱が大小を無視して同じ宛先を指す書庫を、宛先の名前の拒みとして書庫ごと断る（語彙は増やさない）
   - #8 の既に在る宛先の中のリンク（ジャンクションを含む）をたどらず、そのパスを添えた段の失敗にする
   - #62 の doc と確かめの 1 行、#63 の書き換えの拒みの待ちをテストのときだけ 0 にする差し替え（本番の 2 秒は変えない）
@@ -184,3 +184,4 @@
 ## Implementation Notes
 
 - 4（8f34d3fc）: 判定の末尾の窓のうち zip64 の位置記録ぶんの 20 バイトはテストで縛っていない（窓を 20 バイト以内で縮めても緑）。18.2 のかけ直しで指摘が出れば直す。
+- 6: `cargo clippy -p areka --all-targets -- -D warnings` は範囲の外の `dola`・`areka-kanade` の clippy の誤り（新しい clippy の lint と見られる）で赤。本 spec の変更とは無関係。完了の棚卸で確かめる。

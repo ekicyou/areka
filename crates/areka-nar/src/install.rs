@@ -363,6 +363,8 @@ pub(crate) fn stage_placement(
 ///
 /// `carve` に挙がったフォルダ（絶対パス）の下は、空フォルダも含めて写さない。突き合わせは
 /// 残す名前と同じく大小を無視する（[`same_name`]）。
+///
+/// 木の中のリンク（ジャンクションを含む）はたどらず、そのパスを添えて失敗する。
 fn copy_existing(
     from: &Path,
     to: &Path,
@@ -373,7 +375,16 @@ fn copy_existing(
         let child = at(from, child)?;
         let source = child.path();
         let target = to.join(child.file_name());
-        if at(&source, child.file_type())?.is_dir() {
+        let kind = at(&source, child.file_type())?;
+        // Windows の std はジャンクションも `is_symlink` に数える。リンクはたどらない
+        // （`areka-user-data` の写しと同じ決まり・#8）。
+        if kind.is_symlink() {
+            return Err(StageError {
+                path: source,
+                source: io::Error::new(io::ErrorKind::InvalidInput, "リンクはたどらない"),
+            });
+        }
+        if kind.is_dir() {
             let spelled = source.to_string_lossy();
             if carve
                 .iter()
@@ -493,7 +504,8 @@ enum Undo {
 /// # Errors
 ///
 /// どれかの配置の入れ替えに失敗したとき [`CommitError`]。`rolled_back` が真なら宛先は
-/// 全て呼ぶ前の内容で、偽なら `committed` に挙げた配置が確定したまま残っている。
+/// 全て呼ぶ前の内容。偽なら `committed` は確定した配置の一覧で、その宛先は巻き戻しの
+/// 途中で消えて無いことがある——元の木の在りかは `survivors` を見る。
 ///
 /// `skipped` は計画の段が飛ばした同梱で、判断せずに結果へ写すだけ。
 pub(crate) fn commit_all(
@@ -667,7 +679,14 @@ thread_local! {
     // 短い掴みの檻が、拒まれたのを見てから掴みを放すのに使う（要件 5.1〜5.4）。
     pub(crate) static ON_RENAME_REFUSED: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
         const { std::cell::RefCell::new(None) };
+    // テストだけの待ちの長さ（既定は本番と同じ）。掴みっぱなしの檻が 0 にして眠らずに
+    // 同じ失敗を見る（#63）。
+    pub(crate) static RENAME_PATIENCE: std::cell::Cell<Duration> =
+        const { std::cell::Cell::new(RENAME_PATIENCE_LIMIT) };
 }
+
+/// [`rename_patiently`] が短い掴みを待ち切る上限。
+const RENAME_PATIENCE_LIMIT: Duration = Duration::from_secs(2);
 
 /// フォルダを `rename` する。外のプロセスの**短い**掴みだけは待ち切る。
 ///
@@ -679,8 +698,11 @@ thread_local! {
 /// 最後の失敗をそのまま返す——解放は試みない（要件 6.6）。他の失敗は待たずに返す。
 fn rename_patiently(from: &Path, to: &Path) -> io::Result<()> {
     const STEP: Duration = Duration::from_millis(50);
-    const PATIENCE: Duration = Duration::from_secs(2);
-    let deadline = Instant::now() + PATIENCE;
+    #[cfg(not(test))]
+    let patience = RENAME_PATIENCE_LIMIT;
+    #[cfg(test)]
+    let patience = RENAME_PATIENCE.get();
+    let deadline = Instant::now() + patience;
     loop {
         match std::fs::rename(from, to) {
             Err(err) if matches!(err.raw_os_error(), Some(5 | 32)) && Instant::now() < deadline => {

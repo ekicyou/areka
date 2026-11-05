@@ -203,6 +203,8 @@ fn a_first_time_ghost_gets_its_nested_companion() {
 /// 逆順（同梱 → 本体）で、本体の退避ごと古い同梱がバイト列まで元へ戻る。
 #[test]
 fn a_failing_nested_companion_rolls_the_whole_ghost_back() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
     plant_old_ghost(&ghost);
@@ -259,6 +261,8 @@ fn a_failing_nested_companion_rolls_the_whole_ghost_back() {
 /// 古い同梱を消してしまう。逆順なら古い同梱がバイト列まで元へ戻る。
 #[test]
 fn a_later_failure_removes_the_nested_companion_before_restoring_the_body() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
     plant_old_ghost(&ghost);

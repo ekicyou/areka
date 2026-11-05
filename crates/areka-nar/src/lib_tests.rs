@@ -401,6 +401,8 @@ pub(super) fn hold(path: &Path) -> fs::File {
 /// 現れたときに別々の欄の食い違いが同じ綴りへ潰れる。
 #[test]
 fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("根を借りられる");
     let root = work.path();
     let destination = root.join("ghost").join("tester");

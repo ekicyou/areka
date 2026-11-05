@@ -157,7 +157,6 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(emo2.kind, InstallKind::Ghost);
     assert_eq!(emo2.name, EMO2_GHOST_NAME);
     assert_eq!(emo2.directory, "emo2");
-    assert_eq!(emo2.charset_declared.as_deref(), Some("UTF-8"));
     assert_eq!(emo2.accept, None);
     assert_eq!(emo2.existing, ExistingPolicy::Overlay);
     assert_eq!(
@@ -176,7 +175,6 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(r_post.kind, InstallKind::Ghost);
     assert_eq!(r_post.name, R_POST_NAME);
     assert_eq!(r_post.directory, "R_POST_and_KOMAINU");
-    assert_eq!(r_post.charset_declared.as_deref(), Some("Shift_JIS"));
     assert_eq!(r_post.companions, vec![]);
     assert_eq!(r_post.warnings, vec![]);
 
@@ -190,7 +188,6 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(pasta.kind, InstallKind::Ghost);
     assert_eq!(pasta.name, "hello-pasta");
     assert_eq!(pasta.directory, "hello-pasta");
-    assert_eq!(pasta.charset_declared, None);
     assert_eq!(pasta.accept, None, "空の accept は「指定なし」");
     assert_eq!(pasta.warnings, vec![]);
 }
@@ -268,7 +265,6 @@ fn does_not_take_a_top_level_folder_named_install_txt() {
 fn reads_the_uppercase_charset_key_like_the_emo2_sample() {
     let manifest = parse_manifest(EMO2_GHOST).expect("受理される");
     assert_eq!(manifest.name, EMO2_GHOST_NAME, "UTF-8 として読めている");
-    assert_eq!(manifest.charset_declared.as_deref(), Some("UTF-8"));
 }
 
 /// 値の前の空白は無視する。検体 R_POST_and_KOMAINU の綴り（要件 3.3）。
@@ -276,11 +272,6 @@ fn reads_the_uppercase_charset_key_like_the_emo2_sample() {
 fn reads_the_charset_value_with_a_leading_space_like_the_r_post_sample() {
     let manifest = parse_manifest(R_POST).expect("受理される");
     assert_eq!(manifest.name, R_POST_NAME, "Shift_JIS として読めている");
-    assert_eq!(
-        manifest.charset_declared.as_deref(),
-        Some("Shift_JIS"),
-        "値の前後の空白は落とす"
-    );
 }
 
 /// `charset` 行が無ければ既存層の ANSI 既定（＝CP932）で読む（要件 3.3）。
@@ -293,18 +284,11 @@ fn falls_back_to_the_ansi_default_when_no_charset_line_is_present() {
 
     let manifest = parse_manifest(&bytes).expect("受理される");
     assert_eq!(manifest.name, "狛犬", "宣言が無ければ Shift_JIS で読む");
-    assert_eq!(manifest.charset_declared, None);
-}
-
-/// 空の `charset` 行は「宣言なし」として返す（要件 3.3）。
-#[test]
-fn treats_an_empty_charset_line_as_no_declaration() {
-    assert_eq!(parsed_ghost(&["charset,"]).charset_declared, None);
 }
 
 /// **既知の盲点**——`charset` 行より前に非 ASCII の行があると、既存層の先読みが
-/// そこで打ち切られて宣言に届かない。本文は ANSI 既定で読まれるのに、
-/// `charset_declared` にはファイルに書かれた値が載る（要件 3.3 の境界）。
+/// そこで打ち切られて宣言に届かない。本文は ANSI 既定で読まれ、書かれた宣言は
+/// 使われない（要件 3.3 の境界）。
 ///
 /// 検体 5 つはいずれも `charset` を 1 行目に置くのでこの形には当たらない。
 /// 直すには既存層（`areka-parsers::charset`）の先読みを変えることになり、
@@ -317,11 +301,6 @@ fn a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used() {
     bytes.extend_from_slice(b"\r\ncharset,UTF-8\r\ndirectory,komainu\r\n");
 
     let manifest = parse_manifest(&bytes).expect("受理される");
-    assert_eq!(
-        manifest.charset_declared.as_deref(),
-        Some("UTF-8"),
-        "書かれている宣言はそのまま記録する"
-    );
     assert_eq!(
         manifest.name, "狛犬",
         "実際に使われたのは ANSI 既定のほう（宣言には届いていない）"

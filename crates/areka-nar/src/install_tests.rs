@@ -569,6 +569,48 @@ fn a_read_only_existing_file_does_not_block_the_archive_from_replacing_it() {
     set_read_only(&protected, false);
 }
 
+/// 既に在る宛先の中のリンク（ジャンクション）はたどらず、そのパスを添えて組み上げの段で
+/// 失敗する（#8・要件 9.6）。写しの決まりは `areka-user-data` の写しとそろえる。
+/// リンクの先は 1 バイトも触られない。
+#[test]
+fn a_link_inside_an_existing_destination_fails_the_stage_with_its_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(&destination, &[("descript.txt", b"old descript")]);
+    let outside = work.path().join("outside");
+    make_tree(&outside, &[("secret.txt", b"outside")]);
+    let before = tree(&outside);
+    let link = destination.join("link");
+    junction(&link, &outside);
+
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("リンクはたどらない");
+
+    assert_eq!(error.path, link, "リンクのパスを名指す");
+    assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(tree(&outside), before, "リンクの先は触られていない");
+}
+
+/// `link` に `target` を指すジャンクションを作る（`cmd /c mklink /J`・管理者は要らない）。
+fn junction(link: &Path, target: &Path) {
+    let out = std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .expect("cmd を起こせる");
+    assert!(
+        out.status.success() && link.exists(),
+        "ジャンクションを作れない"
+    );
+}
+
 /// 読み取り専用の属性を付け外しする。
 fn set_read_only(path: &Path, on: bool) {
     let mut mode = fs::metadata(path).expect("属性を読める").permissions();

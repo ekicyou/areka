@@ -499,3 +499,16 @@ fn warnings_come_back_as_an_ordered_sequence_with_no_duplicates() {
         ]
     );
 }
+
+/// 2 つの同梱が大小だけ違う同じ宛先を指す書庫は、2 つ目の宛先の名前の拒みとして
+/// 書庫ごと断る（#7・要件 9.9）。黙って片方で上書きすると、もう片方の中身が消える。
+#[test]
+fn two_companions_naming_the_same_folder_refuse_the_archive() {
+    assert_eq!(
+        refused_ghost(&["balloon.directory,foo", "balloon0.directory,FOO"]),
+        RefuseReason::InvalidDirectoryName {
+            key: "balloon0.directory".to_owned(),
+            value: "FOO".to_owned(),
+        }
+    );
+}

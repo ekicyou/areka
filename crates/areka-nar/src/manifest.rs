@@ -34,7 +34,7 @@
 
 use crate::error::{ManifestWarning, RefuseReason};
 use crate::names::{
-    EntryName, MAX_ENTRY_PATH_UTF16, bounded_value, is_valid_one_level_name, utf16_len,
+    EntryName, MAX_ENTRY_PATH_UTF16, bounded_value, fold, is_valid_one_level_name, utf16_len,
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
@@ -132,8 +132,6 @@ pub struct InstallManifest {
     /// `kind` が `Ghost`／`Shell` のときだけ非空。探索の順（無印 → 0 → 1…）に並ぶ。
     pub companions: Vec<Companion>,
     pub warnings: Vec<ManifestWarning>,
-    /// ファイルに書かれていた `charset` の値（実際に使われた文字コードではない）。
-    pub charset_declared: Option<String>,
 }
 
 /// 最上位の `install.txt` を 1 つ選ぶ（要件 3.1・3.2）。
@@ -199,7 +197,6 @@ pub(crate) fn parse_manifest(bytes: &[u8]) -> Result<InstallManifest, RefuseReas
         existing,
         companions,
         warnings,
-        charset_declared: non_empty(&keys, "charset"),
     })
 }
 
@@ -424,9 +421,18 @@ fn collect_companions(
     }
 
     let mut companions = Vec::with_capacity(found.len());
+    let mut destinations = BTreeSet::new();
     for prefix in found {
-        let directory = keys[&format!("{prefix}.directory")].clone();
-        check_one_level(&format!("{prefix}.directory"), &directory)?;
+        let key = format!("{prefix}.directory");
+        let directory = keys[&key].clone();
+        check_one_level(&key, &directory)?;
+        // 大小だけ違う同じ宛先の 2 つ目は、片方の中身を黙って潰すので書庫ごと断る（#7）。
+        if !destinations.insert(fold(&directory)) {
+            return Err(RefuseReason::InvalidDirectoryName {
+                key,
+                value: bounded_value(&directory),
+            });
+        }
         let source_key = format!("{prefix}.source.directory");
         // `*.source.directory` が無い（または空）なら宛先と同じ名前を取り出し元にする。
         let written = non_empty(keys, &source_key);
