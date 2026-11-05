@@ -1,8 +1,8 @@
 //! HitCore — 座標→当たり判定領域名を決定論で解く純関数コア（wintf 非依存・`std` のみ）。
 //!
-//! `SurfaceMaster.collisions`（`areka_parsers::shell::Collision` の転記列）に対し、
-//! サーフェス px 座標 `(x, y)` が属する領域名を返す。α（`AlphaMask`）・`collision-sort`・
-//! DPI・wintf 型を一切参照しない（design「正典確定表」C3/C8・要件 2.2/6.1/6.2）。
+//! 当たり判定の領域の列（`areka_parsers::shell::Collision` の列・本番は子から持ち込んだ領域を
+//! 含む `EmoWorld::hit_regions`）に対し、サーフェス px 座標 `(x, y)` が属する領域名を返す。
+//! α（`AlphaMask`）・`collision-sort`・DPI・wintf 型を一切参照しない（design「正典確定表」C3/C8・要件 2.2/6.1/6.2）。
 //!
 //! - 含端規則は**閉区間**（4辺すべて含端・C2・要件 1.4）。
 //! - 重なりは**画家のアルゴリズム**（後に定義された矩形が手前・C3・要件 2.1）で、
@@ -12,19 +12,19 @@
 //! # DPI 非参照の宣言（維持・`collision-dpi-hittest` 要件 5.3/6.1）
 //!
 //! 本モジュールは **DPI を一切参照しない**（この宣言は表示スケール追従の実装後も不変である）。
-//! [`hit_region_scaled`] が受け取る `k`（[`ScaleRatio`]）は **DPI そのものではなく表示比**であり、
+//! [`hit_region_scaled_in`] が受け取る `k`（[`ScaleRatio`]）は **DPI そのものではなく表示比**であり、
 //! 「窓の実モニタ DPI ÷ 作者基準 DPI」から k を導出する責務は上流（`areka-emo-present` の
 //! 表示ターゲット）に留まる。本モジュールは与えられた k を消費するだけで、DPI 値・モニタ・
 //! 窓のいずれにも問い合わせない（純関数性の維持）。
 //!
-//! - [`hit_region`]: サーフェス px の点を照合する**素の純照合関数**（÷k は呼び手責務・契約不変）。
-//! - [`hit_region_scaled`]: 窓 client 物理 px の点を k で縮約してから [`hit_region`] へ
+//! - [`hit_region_in`]: サーフェス px の点を照合する**素の純照合関数**（÷k は呼び手責務・契約不変）。
+//! - [`hit_region_scaled_in`]: 窓 client 物理 px の点を k で縮約してから [`hit_region_in`] へ
 //!   **完全委譲**する合成純関数。重なり・反転・閉区間の意味論を再実装しない。
-//! - [`hit_region_in`]・[`hit_region_scaled_in`]: 上の 2 関数の本体で、サーフェスの代わりに
-//!   領域の列を直に受ける（子から持ち込んだ列＝`EmoWorld::hit_regions` を渡すための形）。
-//!   持ち込んだ列は 256 矩形を超えうるが、線形走査のままでよい。
+//!
+//! どちらも領域の列を直に受ける。転記のままの `SurfaceMaster.collisions` を受ける形は持たない
+//! （子から持ち込んだ領域を素通りする口になるため）。持ち込んだ列は 256 矩形を超えうるが、
+//! 線形走査のままでよい。
 
-use crate::normalized::SurfaceMaster;
 use crate::scale::ScaleRatio;
 use areka_parsers::shell::Collision;
 
@@ -47,7 +47,8 @@ pub enum RegionPriority {
     Painter,
 }
 
-/// サーフェス px 座標 `(x, y)` が属する当たり判定の領域名を返す。
+/// 領域の列 `collisions` を直に受けて、サーフェス px 座標 `(x, y)` が属する領域名を返す
+/// （`surface-element-nesting` 要件 4.2）。
 ///
 /// - 含端規則: 閉区間（`left <= x <= right && top <= y <= bottom`・正典確定表 C2・要件 1.4）。
 ///   反転/退化矩形（`left > right` 等）は正規化せず、そのまま比較する結果として何にも当たらない
@@ -57,9 +58,9 @@ pub enum RegionPriority {
 /// - α（透明画素）・`collision-sort`・DPI は参照しない（要件 6.1/6.2/2.2）。
 ///
 /// # Preconditions
-/// `(x, y)` は `master` と同一座標空間（サーフェス px・原点＝サーフェス画像左上）であること。
+/// `(x, y)` は `collisions` と同一座標空間（サーフェス px・原点＝サーフェス画像左上）であること。
 /// すなわち**呼び手が ÷k 済みの座標を渡す**（表示スケール k の吸収は本関数より上流の責務）。
-/// 窓 client 物理 px の点しか持たない呼び手は、代わりに合成純関数 [`hit_region_scaled`] を
+/// 窓 client 物理 px の点しか持たない呼び手は、代わりに合成純関数 [`hit_region_scaled_in`] を
 /// 使うこと——k の縮約と本関数への委譲をまとめて行う（`collision-dpi-hittest` 要件 5.3/6.1）。
 ///
 /// 本関数自身は k を受け取らず縮約も行わない（DPI・表示比のいずれも参照しない・要件 6.1）。
@@ -67,33 +68,15 @@ pub enum RegionPriority {
 ///
 /// # Postconditions
 /// 当たりがあれば最前面矩形の [`CollisionName::as_str`] を返す。無ければ `None`（要件 1.2/1.3）。
-/// 戻り値の寿命は `master` に従う（割当なし）。
+/// 戻り値の寿命は `collisions` に従う（割当なし）。
 ///
 /// # Invariants
-/// 同一 `(master, x, y, priority)` に対し常に同一結果（要件 1.5）。`master` を変更しない。
-///
-/// 戻り値の寿命は `master` に従う（借用の生存＝`master` の生存・lifetime elision で自動導出。
-/// design Service Interface が示す `<'a>` 明示形と同一契約）。
-///
-/// [`CollisionName::as_str`]: areka_parsers::shell::CollisionName::as_str
-pub fn hit_region(
-    master: &SurfaceMaster,
-    x: i64,
-    y: i64,
-    priority: RegionPriority,
-) -> Option<&str> {
-    hit_region_in(&master.collisions, x, y, priority)
-}
-
-/// 領域の列 `collisions` を直に受けて、サーフェス px 座標 `(x, y)` が属する領域名を返す
-/// （`surface-element-nesting` 要件 4.2）。
-///
-/// [`hit_region`] の照合の本体であり、規則（閉区間・画家則・反転/退化矩形は当たらない・
-/// α／`collision-sort`／DPI を参照しない）は [`hit_region`] の doc のとおり。サーフェスを
-/// 受ける [`hit_region`] は `&master.collisions` を渡して本関数へ委譲するだけである。
+/// 同一 `(collisions, x, y, priority)` に対し常に同一結果（要件 1.5）。`collisions` を変更しない。
 ///
 /// 子のサーフェスから持ち込んだ領域を含む列（転記のままの `SurfaceMaster.collisions` では
-/// ない列）で判定する呼び手のための形。戻り値の寿命は `collisions` に従う（割当なし）。
+/// ない列）で判定する呼び手のための形。
+///
+/// [`CollisionName::as_str`]: areka_parsers::shell::CollisionName::as_str
 pub fn hit_region_in(
     collisions: &[Collision],
     x: i64,
@@ -115,10 +98,10 @@ pub fn hit_region_in(
 
 /// ÷k 縮約済みの照合結果（`collision-dpi-hittest` 要件 1.1/1.8）。
 ///
-/// `region` は `master` 内の collision 名への借用ゆえ、寿命は `master` に従う（割当なし）。
+/// `region` は `collisions` 内の collision 名への借用ゆえ、寿命は `collisions` に従う（割当なし）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScaledHit<'a> {
-    /// 当たった領域名（[`hit_region`] の戻り値そのもの・無ければ `None`）。
+    /// 当たった領域名（[`hit_region_in`] の戻り値そのもの・無ければ `None`）。
     pub region: Option<&'a str>,
     /// 縮約後のサーフェス px 座標（SHIORI へ配信する「ローカル座標」の正準値・要件 1.8）。
     ///
@@ -127,15 +110,16 @@ pub struct ScaledHit<'a> {
     pub surface_point: (i64, i64),
 }
 
-/// 窓 client 物理 px の点を表示スケール `k` で縮約してから [`hit_region`] へ委譲する合成純関数
-/// （要件 1.1/1.2/1.3・design DD-2 × DD-6）。
+/// 領域の列 `collisions` を直に受け、窓 client 物理 px の点を表示スケール `k` で縮約してから
+/// [`hit_region_in`] へ委譲する合成純関数（要件 1.1/1.2/1.3・design DD-2 × DD-6・
+/// `surface-element-nesting` 要件 2.8・4.2）。
 ///
 /// 「÷k の呼び忘れ」が本増分の欠陥クラスそのものであるため、縮約単体でなく
 /// **縮約＋照合の合成**が公開単位（＝檻の最小単位）である。
 ///
 /// - **縮約**: 2 軸それぞれへ [`ScaleRatio::unscale_coord`] を適用する（除算方向の丸め権威は
 ///   当該メソッド 1 箇所・画素中心逆写像。丸めの式を本関数へ持ち込まない・要件 2.2）。
-/// - **照合**: 縮約後の点で [`hit_region`] を呼ぶだけで、閉区間の含端・画家則の重なり優先・
+/// - **照合**: 縮約後の点で [`hit_region_in`] を呼ぶだけで、閉区間の含端・画家則の重なり優先・
 ///   反転/退化矩形の扱いを**一切再実装しない**（完全委譲ゆえ意味論は k によらず保存される・
 ///   要件 2.3/2.4/2.6/6.1）。
 /// - **k は DPI ではない**: k は表示比であり、DPI から k を導出する責務は上流にある
@@ -147,29 +131,14 @@ pub struct ScaledHit<'a> {
 /// であること——DPI から独立に再導出した値を渡してはならない（要件 1.4）。
 ///
 /// # Postconditions
-/// `k == ScaleRatio::ONE` のとき `region` は `hit_region(master, x, y, priority)` と完全一致し、
-/// `surface_point == (x, y)` となる（no-op 保存・要件 1.5/1.9/3.4）。
+/// `k == ScaleRatio::ONE` のとき `region` は `hit_region_in(collisions, x, y, priority)` と
+/// 完全一致し、`surface_point == (x, y)` となる（no-op 保存・要件 1.5/1.9/3.4）。
 ///
 /// # Invariants
-/// 同一 `(master, x, y, k, priority)` に対し常に同一結果（決定論・要件 2.1）。`master` を
-/// 変更しない不変借用のみ。負値・窓外・i64 極値でもパニックしない（[`ScaleRatio::unscale_coord`]
-/// の飽和縮小規約に依拠・要件 2.5）。
-pub fn hit_region_scaled<'a>(
-    master: &'a SurfaceMaster,
-    x: i64,
-    y: i64,
-    k: ScaleRatio,
-    priority: RegionPriority,
-) -> ScaledHit<'a> {
-    hit_region_scaled_in(&master.collisions, x, y, k, priority)
-}
-
-/// 領域の列 `collisions` を直に受け、窓 client 物理 px の点を表示スケール `k` で縮約してから
-/// [`hit_region_in`] へ委譲する合成純関数（`surface-element-nesting` 要件 2.8・4.2）。
+/// 同一 `(collisions, x, y, k, priority)` に対し常に同一結果（決定論・要件 2.1）。
+/// `collisions` を変更しない不変借用のみ。負値・窓外・i64 極値でもパニックしない
+/// （[`ScaleRatio::unscale_coord`] の飽和縮小規約に依拠・要件 2.5）。
 ///
-/// [`hit_region_scaled`] の本体であり、縮約（[`ScaleRatio::unscale_coord`] の単一権威）・
-/// 照合の完全委譲・事前／事後条件は [`hit_region_scaled`] の doc のとおり。サーフェスを
-/// 受ける [`hit_region_scaled`] は `&master.collisions` を渡して本関数へ委譲するだけである。
 /// `region` の寿命は `collisions` に従う（割当なし）。
 pub fn hit_region_scaled_in<'a>(
     collisions: &'a [Collision],
@@ -194,7 +163,7 @@ mod hit_in_tests;
 
 #[cfg(test)]
 mod tests {
-    use super::{RegionPriority, hit_region, hit_region_scaled};
+    use super::{RegionPriority, hit_region_in, hit_region_scaled_in};
     use crate::normalized::SurfaceMaster;
     use crate::plan_test_support::{coll, master_with};
     use crate::scale::ScaleRatio;
@@ -206,11 +175,11 @@ mod tests {
             coll(1, 133, 270, 229, 326, "Bust"),
         ]);
         assert_eq!(
-            hit_region(&m, 180, 96, RegionPriority::Painter),
+            hit_region_in(&m.collisions, 180, 96, RegionPriority::Painter),
             Some("Head")
         );
         assert_eq!(
-            hit_region(&m, 180, 300, RegionPriority::Painter),
+            hit_region_in(&m.collisions, 180, 300, RegionPriority::Painter),
             Some("Bust")
         );
     }
@@ -221,27 +190,45 @@ mod tests {
             coll(0, 93, 62, 271, 130, "Head"),
             coll(1, 133, 270, 229, 326, "Bust"),
         ]);
-        assert_eq!(hit_region(&m, 0, 0, RegionPriority::Painter), None);
-        assert_eq!(hit_region(&m, 500, 500, RegionPriority::Painter), None);
+        assert_eq!(
+            hit_region_in(&m.collisions, 0, 0, RegionPriority::Painter),
+            None
+        );
+        assert_eq!(
+            hit_region_in(&m.collisions, 500, 500, RegionPriority::Painter),
+            None
+        );
     }
 
     #[test]
     fn no_collisions_returns_none() {
         let m = master_with(Vec::new());
-        assert_eq!(hit_region(&m, 100, 100, RegionPriority::Painter), None);
+        assert_eq!(
+            hit_region_in(&m.collisions, 100, 100, RegionPriority::Painter),
+            None
+        );
     }
 
     #[test]
     fn closed_interval_edges_and_corners() {
         let m = master_with(vec![coll(0, 93, 62, 271, 130, "Head")]);
         for (x, y) in [(93, 62), (271, 62), (93, 130), (271, 130)] {
-            assert_eq!(hit_region(&m, x, y, RegionPriority::Painter), Some("Head"));
+            assert_eq!(
+                hit_region_in(&m.collisions, x, y, RegionPriority::Painter),
+                Some("Head")
+            );
         }
         for (x, y) in [(180, 62), (180, 130), (93, 96), (271, 96)] {
-            assert_eq!(hit_region(&m, x, y, RegionPriority::Painter), Some("Head"));
+            assert_eq!(
+                hit_region_in(&m.collisions, x, y, RegionPriority::Painter),
+                Some("Head")
+            );
         }
         for (x, y) in [(92, 96), (272, 96), (180, 61), (180, 131), (92, 61)] {
-            assert_eq!(hit_region(&m, x, y, RegionPriority::Painter), None);
+            assert_eq!(
+                hit_region_in(&m.collisions, x, y, RegionPriority::Painter),
+                None
+            );
         }
     }
 
@@ -251,7 +238,10 @@ mod tests {
             coll(1, 0, 0, 100, 100, "A"),
             coll(2, 50, 50, 150, 150, "B"),
         ]);
-        assert_eq!(hit_region(&m, 75, 75, RegionPriority::Painter), Some("B"));
+        assert_eq!(
+            hit_region_in(&m.collisions, 75, 75, RegionPriority::Painter),
+            Some("B")
+        );
     }
 
     #[test]
@@ -260,7 +250,10 @@ mod tests {
             coll(0, 100, 100, 0, 0, "InvBoth"),
             coll(1, 0, 100, 100, 0, "InvY"),
         ]);
-        assert_eq!(hit_region(&m, 50, 50, RegionPriority::Painter), None);
+        assert_eq!(
+            hit_region_in(&m.collisions, 50, 50, RegionPriority::Painter),
+            None
+        );
     }
 
     #[test]
@@ -270,7 +263,7 @@ mod tests {
             coll(2, 50, 50, 150, 150, "Hand"),
         ]);
         assert_eq!(
-            hit_region(&m, 75, 75, RegionPriority::Painter),
+            hit_region_in(&m.collisions, 75, 75, RegionPriority::Painter),
             Some("Hand")
         );
     }
@@ -303,7 +296,7 @@ mod tests {
         let world = crate::world::EmoWorld::build(&shell);
         let master = world.surface(1000).expect("surface 1000 は fold 済み");
         assert_eq!(
-            hit_region(master, 75, 75, RegionPriority::Painter),
+            hit_region_in(&master.collisions, 75, 75, RegionPriority::Painter),
             Some("Appended")
         );
     }
@@ -311,15 +304,18 @@ mod tests {
     #[test]
     fn deterministic_repeated_calls() {
         let m = master_with(vec![coll(0, 93, 62, 271, 130, "Head")]);
-        let first = hit_region(&m, 180, 96, RegionPriority::Painter);
+        let first = hit_region_in(&m.collisions, 180, 96, RegionPriority::Painter);
         for _ in 0..5 {
-            assert_eq!(hit_region(&m, 180, 96, RegionPriority::Painter), first);
+            assert_eq!(
+                hit_region_in(&m.collisions, 180, 96, RegionPriority::Painter),
+                first
+            );
         }
         assert_eq!(first, Some("Head"));
     }
 
-    /// 要件 1.5/3.4（no-op 保存の檻・R3.4 の正本）: k=1.0 では [`hit_region_scaled`] が
-    /// 既存純関数 [`hit_region`] と `region` 完全一致し、`surface_point` が入力そのものになる。
+    /// 要件 1.5/3.4（no-op 保存の檻・R3.4 の正本）: k=1.0 では [`hit_region_scaled_in`] が
+    /// 既存純関数 [`hit_region_in`] と `region` 完全一致し、`surface_point` が入力そのものになる。
     ///
     /// 点は「領域内」「別領域内」「背景」「閉区間の端（内側/外側 1px）」「負値・窓外」を含み、
     /// **軸の取り違え**（非対称点ゆえ `surface_point` が `(y, x)` になり検出できる）を落とす。
@@ -349,10 +345,10 @@ mod tests {
                 (-7, -13, "負値（panic なし・R2.5）"),
                 (i64::MIN, 0, "i64 極値（飽和経路でも panic しない）"),
             ] {
-                let got = hit_region_scaled(&m, x, y, k, RegionPriority::Painter);
+                let got = hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter);
                 assert_eq!(
                     got.region,
-                    hit_region(&m, x, y, RegionPriority::Painter),
+                    hit_region_in(&m.collisions, x, y, RegionPriority::Painter),
                     "k=1.0 の region は無縮約と完全一致すること: {what} ({x}, {y})"
                 );
                 assert_eq!(
@@ -363,7 +359,13 @@ mod tests {
             }
         }
         // 非空虚性: 上の一致検証が「両方 None」で成立しているのではないことを固定する。
-        let hit = hit_region_scaled(&m, 180, 96, ScaleRatio::ONE, RegionPriority::Painter);
+        let hit = hit_region_scaled_in(
+            &m.collisions,
+            180,
+            96,
+            ScaleRatio::ONE,
+            RegionPriority::Painter,
+        );
         assert_eq!(hit.region, Some("Head"));
         assert_eq!(hit.surface_point, (180, 96));
     }
@@ -412,7 +414,7 @@ mod tests {
         what: &str,
     ) {
         let (x, y) = client;
-        let got = hit_region_scaled(m, x, y, k, RegionPriority::Painter);
+        let got = hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter);
         assert_eq!(
             got.surface_point, want_surface,
             "surface_point: {what} / client=({x},{y})"
@@ -519,19 +521,22 @@ mod tests {
             coll(0, 30, 30, 70, 70, "Torso"),
             coll(1, 200, 200, 260, 260, "Foot"),
         ]);
-        let got = hit_region_scaled(&m, 100, 100, k2(), RegionPriority::Painter);
+        let got = hit_region_scaled_in(&m.collisions, 100, 100, k2(), RegionPriority::Painter);
         assert_eq!(got.surface_point, (50, 50), "R3.2: (100,100) ÷ 2 = (50,50)");
         assert_eq!(got.region, Some("Torso"), "R3.2: surface (50,50) の領域");
         assert_eq!(
             got.region,
-            hit_region(&m, 50, 50, RegionPriority::Painter),
+            hit_region_in(&m.collisions, 50, 50, RegionPriority::Painter),
             "R3.2: k=2.0 の client (100,100) は surface (50,50) の無縮約照合と同一結果"
         );
         // 反トートロジーの明示: 素通し (100,100) は `None`・×k (200,200) は別領域
         // `Some("Foot")` となり、いずれも上の `Some("Torso")` 期待とは一致しない。
-        assert_eq!(hit_region(&m, 100, 100, RegionPriority::Painter), None);
         assert_eq!(
-            hit_region(&m, 200, 200, RegionPriority::Painter),
+            hit_region_in(&m.collisions, 100, 100, RegionPriority::Painter),
+            None
+        );
+        assert_eq!(
+            hit_region_in(&m.collisions, 200, 200, RegionPriority::Painter),
             Some("Foot")
         );
     }
@@ -569,7 +574,7 @@ mod tests {
 
     /// 要件 2.4（重なり優先の k 非依存）: k≠1.0 でも画家則（後定義が手前）が保存される。
     ///
-    /// [`hit_region_scaled`] は照合を [`hit_region`] へ完全委譲するため構造的に保存されるが、
+    /// [`hit_region_scaled_in`] は照合を [`hit_region_in`] へ完全委譲するため構造的に保存されるが、
     /// 「縮約後の点が重なり域へ落ちる」ことを含めて 1 本の檻で固定する。
     #[test]
     fn scaled_overlap_prefers_later_defined_at_nonidentity_k() {
@@ -721,10 +726,10 @@ mod tests {
             (k125(), (225, 250), (180, 200), None),
         ] {
             let (x, y) = client;
-            let first = hit_region_scaled(&m, x, y, k, RegionPriority::Painter);
+            let first = hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter);
             for _ in 0..5 {
                 assert_eq!(
-                    hit_region_scaled(&m, x, y, k, RegionPriority::Painter),
+                    hit_region_scaled_in(&m.collisions, x, y, k, RegionPriority::Painter),
                     first,
                     "反復呼出で結果が変わってはならない: client=({x},{y})"
                 );

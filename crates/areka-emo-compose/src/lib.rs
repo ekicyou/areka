@@ -70,7 +70,7 @@ pub mod blit;
 mod blit_rect;
 pub use blit_rect::Recompose;
 pub mod hit;
-pub use hit::{RegionPriority, ScaledHit, hit_region, hit_region_scaled};
+pub use hit::{RegionPriority, ScaledHit};
 mod hit_import;
 pub use hit_import::HitRegions;
 pub mod scale;
