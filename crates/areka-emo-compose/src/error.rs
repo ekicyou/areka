@@ -1,7 +1,7 @@
 //! 合成コアの構造化エラー型 `ComposeError`（thiserror）。
 //!
 //! 失敗は `error` ログ＋戻り値で表現し、`Err` は surface 不在・定義層皆無の退化データ・
-//! 外形が上限（一辺 16,384）を越える（[`ComposeError::ExtentTooLarge`]）場合に限定する。
+//! 外形が上限（一辺 16,384 か面積 2^25 画素）を越える（[`ComposeError::ExtentTooLarge`]）場合に限定する。
 //! 全 element 全透明・空の有効 bind 集合などの非退化な空結果は失敗とせず、
 //! surface 外形どおりの全透明 `ComposedSurface` を正常返却する（議題2裁定）。
 //!
@@ -33,7 +33,7 @@ pub enum ComposeError {
     /// 「描画可能命令ゼロだが定義層あり」は正常系＝全透明返却であり本 variant を使わない。
     #[error("surface {0} has no layers at all (extent 0x0)")]
     EmptyComposition(u32),
-    /// 外形が GPU の面の最大寸（一辺 16,384）を越える。命令は積まず、絵も確保しない。
+    /// 外形が GPU の面の最大寸（一辺 16,384）か面積の上限（2^25 画素）を越える。命令は積まず、絵も確保しない。
     #[error("surface {surface} extent {w}x{h} exceeds the GPU surface limit")]
     ExtentTooLarge { surface: u32, w: u32, h: u32 },
 }

@@ -268,8 +268,9 @@ fn fixture_parents_hit_child_names_at_placed_position() {
     assert_eq!(with, vec![0, 1, 2]);
 }
 
-/// 広がりの予算（指摘 3）: 予算 2 の持ち込みは element定義の子 3 つのうち 2 つ目まで入って 3 つ目を
-/// 持ち込まず、`error!` を 1 行だけ出す。黙らせる組み方の予算は同じく断って記録を出さない。
+/// 広がりの予算（指摘 3・22）: 予算は入る面と持ち込む領域を数える（子 1 つで 2）。予算 4 の持ち込みは
+/// element定義の子 3 つのうち 2 つ目まで入って 3 つ目を持ち込まず、`error!` を 1 行だけ出す。黙らせる
+/// 組み方の予算は同じく断って記録を出さない。
 #[test]
 fn spent_budget_does_not_import_children_not_yet_entered() {
     use crate::budget::Budget;
@@ -284,7 +285,7 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
     );
     let master = w.surface(0).expect("面 0");
     let mut list = Vec::new();
-    let logs = capture_logs(|| list = super::regions_of(&w, master, &mut Budget::new(2), None));
+    let logs = capture_logs(|| list = super::regions_of(&w, master, &mut Budget::new(4), None));
     assert_eq!(
         list,
         [coll(0, 0, 0, 5, 5, "One"), coll(0, 0, 0, 5, 5, "Two")]
@@ -298,7 +299,7 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
         list = super::regions_of(
             &w,
             master,
-            &mut Budget::with_records(2, Records::Quiet),
+            &mut Budget::with_records(4, Records::Quiet),
             None,
         )
     });

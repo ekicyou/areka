@@ -77,10 +77,12 @@ struct Level<'a> {
 }
 
 /// `master` を根にした持ち込み済みの列。段のスタックで回し（先祖の確かめは経路の集合）、子の段が終わったら
-/// 親に直接書かれた領域と同じ名前を除き、element定義の X,Y を飽和で足して親の列へ足す。
+/// 親に直接書かれた領域と同じ名前を除き、element定義の X,Y を飽和で足して親の列へ足す。予算は入る面 1 つに
+/// 1 つと、子の段から親へ渡す列の長さ（名前で除く前）を数える。
 ///
 /// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた
-/// 数」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと同じ）。
+/// 数＋覚えた列の長さ」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は
+/// 覚えが無いときと同じ）。
 pub(crate) fn regions_of(
     world: &EmoWorld,
     master: &SurfaceMaster,
@@ -115,9 +117,9 @@ pub(crate) fn regions_of(
             };
             let (dx, dy) = element.transform.offset();
             if let Some((n, list)) = memo.as_deref().and_then(|m| m.get(&c))
-                && budget.take(n + 1)
+                && budget.take(n + 1 + list.len())
             {
-                level.spent += n + 1;
+                level.spent += n + 1 + list.len();
                 import(
                     &mut level.out,
                     &parent.collisions,
@@ -148,7 +150,18 @@ pub(crate) fn regions_of(
             break;
         };
         on_path.remove(&done.master.id);
-        done.out.extend(done.master.collisions.iter().cloned());
+        // 根でなければ親へ渡す領域の数も予算から引き、足りない分は渡さない（指摘 22）。
+        let own = &done.master.collisions;
+        let total = done.out.len() + own.len();
+        let carried = if levels.is_empty() {
+            total
+        } else {
+            budget.take_up_to(total, "hit_import", root)
+        };
+        done.clean &= carried == total;
+        done.out.truncate(carried);
+        let rest = carried - done.out.len();
+        done.out.extend(own.iter().take(rest).cloned());
         if done.clean
             && let Some(m) = memo.as_deref_mut()
         {
@@ -157,7 +170,7 @@ pub(crate) fn regions_of(
         let Some(up) = levels.last_mut() else {
             return done.out;
         };
-        up.spent += done.spent + 1;
+        up.spent += done.spent + 1 + carried;
         up.clean &= done.clean;
         import(
             &mut up.out,

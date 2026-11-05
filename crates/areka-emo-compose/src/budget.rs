@@ -1,11 +1,13 @@
-//! 広がりの予算（指摘 3）: 入れ子をたどる走査が 1 回の範囲でたどってよい面の数を数え、
+//! 広がりの予算（指摘 3・21・22）: 入れ子をたどる走査が 1 回の範囲でたどってよい仕事の量を数え、
 //! 尽きたら入るのを断る。菱形の参照（1 つの面が同じ面を何度も insert する）で広がりが
-//! 指数になっても、走査が固まらないようにする。深さではなく「たどった面の総数」を数える。
+//! 指数になっても、走査が固まらないようにする。深さではなく「入る面と積み荷の数」を数える
+//! （積み荷＝命令列の段の命令と子へ入る印・当たり判定の持ち込みで親へ渡す領域。外形とシェルの外形は入る面だけ）。
 
 use crate::world::Records;
 
-/// 1 回の走査の範囲でたどってよい面の数。
-/// 根拠（3.2・2026-11-06）: release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
+/// 1 回の走査の範囲で数えてよい「入る面と積み荷」の数。
+/// 根拠（3.2・2026-11-06）: 面の数だけを数えていたときの測り。release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
+/// 6.1 で積み荷も数える単位に変えた（同じ菱形で 1 面あたり約 3 つ＝1 つあたり約 75 ns の見積もり）ので、測り直しの候補（見積もりは 2^17）。
 pub(crate) const VISIT_BUDGET: usize = 1 << 16;
 
 /// 走査 1 回の範囲の残りの数と、報告済みの印。
@@ -34,11 +36,15 @@ impl Budget {
     /// 面に 1 つ入る前に呼ぶ。残りがあれば減らして true。尽きていれば、範囲で初めての
     /// ときだけ `error!`（`walk`＝走査の名前・`root`＝根の面・予算）を出して false。
     pub(crate) fn enter(&mut self, walk: &'static str, root: u32) -> bool {
-        if self.left > 0 {
-            self.left -= 1;
-            return true;
-        }
-        if !self.reported {
+        self.take_up_to(1, walk, root) == 1
+    }
+
+    /// 積み荷 `n` 個を積む前に呼ぶ（指摘 21・22）。残りの内の数（`n` 以下）を引いて返し、足りなければ
+    /// [`Budget::enter`] と同じく範囲で初めてのときだけ `error!` を出す。呼び手は返った数だけ積む。
+    pub(crate) fn take_up_to(&mut self, n: usize, walk: &'static str, root: u32) -> usize {
+        let granted = n.min(self.left);
+        self.left -= granted;
+        if granted < n && !self.reported {
             self.reported = true;
             tracing::error!(
                 target: "areka_emo_compose",
@@ -48,7 +54,12 @@ impl Budget {
                 "入れ子の広がりが予算を越えた: まだ入っていない枝を捨てる"
             );
         }
-        false
+        granted
+    }
+
+    /// 尽きたことを記録したか（黙らせる組み方では初めから true）。
+    pub(crate) fn reported(&self) -> bool {
+        self.reported
     }
 
     /// 覚えた子の分 `n`（子に入る 1 と子の下で数えた数）をまとめて引く。足りなければ何も引かず、

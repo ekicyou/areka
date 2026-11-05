@@ -17,6 +17,10 @@ use super::*;
 /// 機能水準 11 の 2D テクスチャの一辺の最大（`D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION`）を写す。
 pub(crate) const MAX_EXTENT: u32 = 16_384;
 
+/// 外形の面積の上限（画素・指摘 23）。合成のたびに幅×高さ×4 バイトを 0 で埋めて転写するので、一辺の上限の
+/// 内でも 1 GiB 近い絵を作らない。2^25 画素＝128 MiB で、8K の画面（7680×4320≒3,300 万画素）より大きい。
+pub(crate) const MAX_AREA: u64 = 1 << 25;
+
 /// キャンバス外形（[`Extent`]）を**有効 bind 集合に依存せず静的に**算出する（要件 6.5・議題2裁定 (A)）。
 ///
 /// 母集合は **surface の全定義層**＝全 element ＋**全 bind・`always` animation の描くコマ**（`always` と
@@ -49,7 +53,8 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
 }
 
 /// 全部の面の外形の表を作る（指摘 8・[`EmoWorld::bind_atlas`] の最後に 1 度だけ）。予算は根の面 1 つにつき
-/// [`VISIT_BUDGET`]（合成 1 回と同じ範囲・同じ打ち切り位置）。きれいに終わった面の覚えは根の間で共有する
+/// [`VISIT_BUDGET`]（範囲は合成 1 回と同じ。この表は入る面だけを数え、命令列は段の積み荷も数えるので、命令列は
+/// この表より先に切れることがある）。きれいに終わった面の覚えは根の間で共有する
 /// （覚えの有る無しで答えと記録は変わらない）。
 pub(crate) fn build_extents(world: &EmoWorld, atlas: &AtlasTable) -> SurfaceExtents {
     let (mut on_path, mut memo) = (HashSet::new(), ExtentMemo::new());

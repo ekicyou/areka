@@ -105,7 +105,13 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
         "合成は外形をたどらない: {logs}"
     );
     let mut second = Vec::new();
-    capture_logs(|| second = compose(&mut composer, &world, &atlas));
+    let logs = capture_logs(|| second = compose(&mut composer, &world, &atlas));
+    assert_eq!(
+        errors(&logs, "plan", 0),
+        0,
+        "同じ合成器の 2 回目は記録を増やさない（指摘 24）: {}",
+        errors_only(&logs)
+    );
     assert!(!first.is_empty());
     assert_eq!(first, second, "2 回の合成の命令列が同じ");
 
@@ -259,4 +265,114 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
         hits += usize::from(hit_memo.contains_key(&1));
     }
     assert!(hits > 0, "予算が足りれば覚える");
+}
+
+/// 面 0 … `last - 1` がそれぞれ次の面を 2 か所に置き（菱形）、面 `last` が絵 `s.png` を `leaves` 枚持つシェル。
+fn diamond_with_leaves(last: u32, leaves: u32) -> (EmoWorld, AtlasTable) {
+    let mut text = String::from("charset,UTF-8\n");
+    for i in 0..last {
+        text.push_str(&format!(
+            "surface{i}\n{{\nelement0,overlay,{0},0,0\nelement1,overlay,{0},1,0\n}}\n",
+            i + 1
+        ));
+    }
+    text.push_str(&format!("surface{last}\n{{\n"));
+    for p in 0..leaves {
+        text.push_str(&format!("element{p},overlay,s.png,{p},0\n"));
+    }
+    text.push_str("}\n");
+    let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
+    let mut world = EmoWorld::build(&parse(&text));
+    world.bind_atlas(&atlas, SetId(0));
+    (world, atlas)
+}
+
+/// 段の積み荷（指摘 21）: 小さな予算の命令列は、葉の絵の多い菱形でも命令の数が予算を越えない
+/// （根の面 0 は子へ入る積み荷だけ）。`error!` は 1 行。
+#[test]
+fn plan_counts_the_layer_payload_against_the_budget() {
+    let (world, atlas) = diamond_with_leaves(6, 50);
+    let mut ops = Vec::new();
+    let logs = capture_logs(|| {
+        let mut scratch = crate::plan::PlanScratch::with_limit(64);
+        let (binds, pattern) = (BindSet::default(), PatternState::default());
+        crate::plan::derive_ops(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern);
+    });
+    assert!(!ops.is_empty());
+    assert!(ops.len() <= 64, "命令 {} 個は予算 64 以下", ops.len());
+    assert_eq!(errors(&logs, "plan", 0), 1, "{}", errors_only(&logs));
+}
+
+/// 段の積み荷（指摘 21）: 葉に絵 1,000 枚の 15 段の菱形（入る面は予算の内側）でも、本番の予算の合成の
+/// 命令の数は予算以下（直しが無いと約 3,200 万個）。
+#[test]
+fn diamond_with_many_leaf_images_composes_within_the_budget() {
+    let (world, atlas) = diamond_with_leaves(15, 1_000);
+    let ops = compose(&mut Composer::new(), &world, &atlas);
+    assert!(!ops.is_empty());
+    assert!(
+        ops.len() <= crate::budget::VISIT_BUDGET,
+        "命令 {} 個は予算以下",
+        ops.len()
+    );
+}
+
+/// 持ち込みの数（指摘 22）: 面 0 が子 1（当たり判定 300 個）を 300 行置くと、直しが無ければ 9 万個を
+/// 持ち込む。取り込む領域も予算から引くので、持ち込みの列は予算で止まり `error!` は 1 行。
+#[test]
+fn hit_import_counts_the_imported_regions_against_the_budget() {
+    const N: u32 = 300;
+    let mut text = String::from("charset,UTF-8\nsurface0\n{\n");
+    for p in 0..N {
+        text.push_str(&format!("element{p},overlay,1,{p},0\n"));
+    }
+    text.push_str("}\nsurface1\n{\n");
+    for c in 0..N {
+        text.push_str(&format!("collision{c},0,0,5,5,R{c}\n"));
+    }
+    text.push_str("}\n");
+    let mut world = None;
+    let logs = capture_logs(|| world = Some(EmoWorld::build(&parse(&text))));
+    let world = world.expect("組める");
+    let imported = world.hit_regions(0).map_or(0, <[_]>::len);
+    assert!(imported > 0, "持ち込みはある");
+    assert!(
+        imported <= crate::budget::VISIT_BUDGET,
+        "持ち込み {imported} 個は予算以下"
+    );
+    assert_eq!(errors(&logs, "hit_import", 0), 1, "{}", errors_only(&logs));
+}
+
+/// 面積の上限（指摘 23）: 一辺は上限の内でも、面積が 2^25 画素を越える外形は `ExtentTooLarge`。
+/// ちょうど 2^25 画素（8192×4096）は通る。
+#[test]
+fn extent_over_the_area_limit_is_too_large() {
+    let plan = |w: i64, h: i64| {
+        // 2×2 の絵を (w-2, h-2) に置く子で、外形を w×h にする。
+        let text = format!(
+            "charset,UTF-8\nsurface0\n{{\nelement0,overlay,1,{},{}\n}}\n\
+             surface1\n{{\nelement0,overlay,s.png,0,0\n}}\n",
+            w - 2,
+            h - 2
+        );
+        let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
+        let mut world = EmoWorld::build(&parse(&text));
+        world.bind_atlas(&atlas, SetId(0));
+        let (binds, pattern) = (BindSet::default(), PatternState::default());
+        let mut scratch = crate::plan::PlanScratch::default();
+        let mut ops = Vec::new();
+        crate::plan::build_plan(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern)
+    };
+    assert_eq!(
+        plan(8192, 4096),
+        Ok(crate::plan::Extent { w: 8192, h: 4096 })
+    );
+    assert_eq!(
+        plan(8192, 4097),
+        Err(crate::ComposeError::ExtentTooLarge {
+            surface: 0,
+            w: 8192,
+            h: 4097
+        })
+    );
 }

@@ -19,7 +19,7 @@
 //! - **外形**: 束縛のときに 1 度だけ求めた表（[`build_extents`]・[`EmoWorld::extent`]）から引く。有効 bind に
 //!   依存しない静的量（要件 6.5・議題2裁定 (A)）で、合成のたびにはたどらない（指摘 8）。
 //! - **分類**（[`build_plan`]）: 対象 surface 不在→[`ComposeError::SurfaceNotFound`]・外形 0×0→
-//!   [`ComposeError::EmptyComposition`]・外形が上限越え→[`ComposeError::ExtentTooLarge`]・それ以外は
+//!   [`ComposeError::EmptyComposition`]・外形が上限（一辺か面積）越え→[`ComposeError::ExtentTooLarge`]・それ以外は
 //!   描ける命令がゼロでも `Ok(Extent)`（要件 6.6/10.5）。非パニック・`error` ログ＋`Err`。
 //!
 //! 作業場は呼び手（Composer）が持ち、走査の入口で空へ戻して使い回す。同じ入力の合成を繰り返すとき、
@@ -41,11 +41,11 @@ use crate::nesting::{ElementKind, PartKey, is_always_interval};
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_always::{always_rest_target, film_op};
-use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
+use crate::world::{AtlasBinding, EmoWorld, Records, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
 mod extent;
-pub(crate) use extent::{MAX_EXTENT, build_extents};
+pub(crate) use extent::{MAX_AREA, MAX_EXTENT, build_extents};
 #[cfg(test)]
 pub(crate) use extent::{compute_extent, compute_extent_limited};
 
@@ -109,6 +109,9 @@ pub(crate) struct PlanScratch {
     pub(crate) chain: Vec<(u32, usize)>,
     /// 合成 1 回の広がりの予算（本番は [`VISIT_BUDGET`]）。
     limit: usize,
+    /// 予算が尽きたことを記録済みの根の面（指摘 24）。同じ根の合成はコマ替えのたびに同じ所で切れるので、
+    /// 合成器 1 つにつき根ごとに 1 度だけ記録する。
+    reported: HashSet<u32>,
 }
 
 impl Default for PlanScratch {
@@ -124,6 +127,7 @@ impl Default for PlanScratch {
             expanded: Vec::new(),
             chain: Vec::new(),
             limit: VISIT_BUDGET,
+            reported: HashSet::new(),
         }
     }
 }
@@ -310,8 +314,9 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
 /// 入れ子は明示のスタック（[`PlanScratch`]）で回す（[`flatten_surface`]）。既に**現在の祖先経路**に
 /// 存在する surface へ入ろうとすると（自己参照・相互参照の循環）、`debug!` の上その枝のみを打ち切って
 /// 部分結果を残す。祖先は段を出るときに外すので、非循環の重複参照（DAG の共有子）は各経路で正しく
-/// 展開される。合成 1 回に予算 1 つを渡し、尽きたらまだ入っていない枝を捨てる（根の面の自分の層は
-/// 必ず描く・`error!` は 1 度だけ）。
+/// 展開される。合成 1 回に予算 1 つを渡し、入る面と子の段の積み荷を数えて、尽きたらまだ積んでいない
+/// 積み荷とまだ入っていない枝を捨てる（根の面の自分の層は必ず描く・`error!` は合成器 1 つにつき根ごとに
+/// 1 度だけ・指摘 21・24）。
 ///
 /// # 決定性（要件 4.5/10.1）
 ///
@@ -348,7 +353,12 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
     s.on_path.clear();
     s.steps.clear();
     s.frames.clear();
-    let mut budget = Budget::new(s.limit);
+    let records = if s.reported.contains(&root) {
+        Records::Quiet
+    } else {
+        Records::Emit
+    };
+    let mut budget = Budget::with_records(s.limit, records);
     // 根の面は予算に数えない（自分の層は必ず描く）。一番上は今までの欄のコマを層 (ii) へ合流させる。
     if let Some(level) = walk.level(root, 0, 0, true) {
         s.open(&level);
@@ -389,8 +399,15 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
         }
         // 部品の段（element定義の子・pattern定義の先）は部品の欄を読む。
         if let Some(level) = walk.level(surface, x, y, false) {
+            let start = s.steps.len();
             s.open(&level);
+            // 段の積み荷（命令と子へ入る印）も予算から引き、足りない分は積まない（指摘 21）。
+            let kept = budget.take_up_to(s.steps.len() - start, "plan", root);
+            s.steps.truncate(start + kept);
         }
+    }
+    if records.emits() && budget.reported() {
+        s.reported.insert(root);
     }
 }
 
@@ -640,16 +657,20 @@ pub(crate) fn build_plan(
         return Err(ComposeError::EmptyComposition(surface_id));
     }
 
-    // 外形が GPU の面の最大寸を越える → 命令を積まず、絵も確保させずに失敗を返す（壊れたシェルで
-    // 巨大な確保を試みて落ちない）。
-    if extent.w > MAX_EXTENT || extent.h > MAX_EXTENT {
+    // 外形が GPU の面の最大寸か面積の上限を越える → 命令を積まず、絵も確保させずに失敗を返す（壊れた
+    // シェルで巨大な確保を試みて落ちない）。
+    if extent.w > MAX_EXTENT
+        || extent.h > MAX_EXTENT
+        || u64::from(extent.w) * u64::from(extent.h) > MAX_AREA
+    {
         tracing::error!(
             target: "areka_emo_compose",
             surface_id,
             w = extent.w,
             h = extent.h,
             max = MAX_EXTENT,
-            "外形が GPU の面の最大寸を越える: ExtentTooLarge"
+            max_area = MAX_AREA,
+            "外形が GPU の面の最大寸か面積の上限を越える: ExtentTooLarge"
         );
         return Err(ComposeError::ExtentTooLarge {
             surface: surface_id,
