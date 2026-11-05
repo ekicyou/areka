@@ -622,3 +622,41 @@ fn child_beyond_u32_does_not_wrap_to_small_extent() {
     );
     assert_eq!(errors, 1, "error! は 1 行");
 }
+
+/// 広がりの予算（指摘 3）: 予算 2 の外形は element定義の子 3 つのうち 2 つ目まで入って 3 つ目を数えず、
+/// `error!` を 1 行だけ出す。予算 3 なら 3 つとも数える。
+#[test]
+fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
+    let text = "surface0\n{\nelement0,overlay,10,0,0\nelement1,overlay,10,10,0\n\
+                element2,overlay,10,20,0\n}\n\
+                surface10\n{\nelement0,overlay,eye.png,0,0\n}\n";
+    let atlas = bake_atlas_sized(
+        Path::new("shell/master"),
+        &[("eye.png", (4, 4), Some((64, 64, 64)))],
+    );
+    let mut world = EmoWorld::build(&areka_parsers::shell::parse(text));
+    world.bind_atlas(&atlas, SetId(0));
+    let run = |limit| {
+        let mut extent = None;
+        let logs = crate::log_capture::capture_logs(|| {
+            extent = Some(compute_extent_limited(
+                &mut Vec::new(),
+                &world,
+                &atlas,
+                0,
+                limit,
+            ));
+        });
+        (extent.expect("外形"), logs)
+    };
+    let (extent, logs) = run(2);
+    assert_eq!(extent, Extent { w: 14, h: 4 });
+    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert!(
+        logs.contains("walk=\"extent\"") && logs.contains("root=0"),
+        "{logs}"
+    );
+    let (extent, logs) = run(3);
+    assert_eq!(extent, Extent { w: 24, h: 4 });
+    assert!(!logs.contains("level=ERROR"), "{logs}");
+}

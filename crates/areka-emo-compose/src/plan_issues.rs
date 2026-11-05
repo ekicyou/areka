@@ -5,13 +5,14 @@
 //! 読み込みの側がシェルごとに 1 度だけ warn で出す。判定は合成と読み込みの報告が使う関数
 //! （[`pattern_edge`]・[`nest_edges`]・[`reaches`]・[`is_implemented_name`]）から引き、写さない。
 //! element定義の辺の循環は [`crate::NestReport`] が既に持つので、ここは pattern定義の辺だけを見る。
-//! 記録は出さない。
+//! 記録は出さない（広がりの予算が尽きたときの `error!` だけ出す）。
 //!
 //! `animation-sort` の知らない値は転記層が原文のまま [`SortOrder::Other`] で運ぶので、その 1 つを
 //! シェル全体の誤りとして集める（合成は既定 `descend` として組む）。
 
 use areka_parsers::shell::SortOrder;
 
+use crate::budget::VISIT_BUDGET;
 use crate::method::is_implemented_name;
 use crate::nesting::{nest_edges, pattern_edge, reaches};
 use crate::world::EmoWorld;
@@ -60,7 +61,7 @@ pub fn shape_issues(world: &EmoWorld) -> Vec<ShapeIssue> {
                 let Some(target) = pattern_edge(p) else {
                     continue;
                 };
-                if reaches(&edges, target, surface) {
+                if reaches(&edges, target, surface, VISIT_BUDGET) {
                     issues.push(ShapeIssue::Cycle {
                         surface,
                         animation: anim.id,

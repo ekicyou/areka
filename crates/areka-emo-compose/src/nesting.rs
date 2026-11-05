@@ -13,6 +13,7 @@ use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
 use crate::bind_steps::BindStep;
+use crate::budget::{Budget, VISIT_BUDGET};
 use crate::method::{is_implemented_name, is_move_name};
 use crate::pattern::{Cell, PatternState};
 use crate::plan::is_bind_interval;
@@ -201,8 +202,10 @@ impl NestTable {
     /// に在るもの、の先を部品に数えてその先へ進む（`flatten_surface` と同じ辺）。先祖へ戻る辺は進まない。
     ///
     /// 辺は「一番上か部品か」と番号だけで決まるので、たどれる番号の集合は「一番上から届く番号」と
-    /// 同じになる。そこで `out` 自身を訪れた印に使い（二分探索で昇順に差し込む）、一番上と既に入った
-    /// 番号へは進まない。先祖は必ずそのどちらかなので、先祖へ戻る辺も進まない。確保は `out` の伸びだけ。
+    /// 同じになる。そこで `out` 自身を「これから見る面」の列と訪れた印に使い（見つけた順に足し、
+    /// 前から順に見る）、一番上と既に入った番号へは進まない。先祖は必ずそのどちらかなので、先祖へ戻る
+    /// 辺も進まない。各面を 1 度しか見ないので広がりの予算は要らない。最後に昇順へ並べる。確保は
+    /// `out` の伸びだけ。
     pub fn visible_parts(
         &self,
         top: u32,
@@ -212,9 +215,15 @@ impl NestTable {
     ) {
         out.clear();
         self.walk(top, top, binds, pattern, out);
+        let mut next = 0;
+        while let Some(&surface) = out.get(next) {
+            next += 1;
+            self.walk(surface, top, binds, pattern, out);
+        }
+        out.sort_unstable();
     }
 
-    /// `surface` から出る辺をたどる（`surface == top` なら一番上の欄、それ以外は部品の欄）。
+    /// `surface` から出る辺の先を `out` へ足す（`surface == top` なら一番上の欄、それ以外は部品の欄）。
     fn walk(
         &self,
         surface: u32,
@@ -235,19 +244,19 @@ impl NestTable {
         if let Some(p) = parts {
             // ① element定義の子。
             for &child in &p.children {
-                self.enter(child, top, binds, pattern, out);
+                Self::enter(child, top, out);
             }
             // ② 有効な着せ替えの描くコマ（コマが在ればコマが置き換える＝③で数える）。
             for &(id, target) in &p.bind_targets {
                 if binds.contains(id) && frame_of(id).is_none() {
-                    self.enter(target, top, binds, pattern, out);
+                    Self::enter(target, top, out);
                 }
             }
             // ②' `always` の経過 0（欄が「載っていない」ときだけ）。
             let key = (!is_top).then_some(PartKey::Surface(surface));
             for &(id, target) in &p.always_rest {
                 if pattern.cell(key, id) == Cell::Rest {
-                    self.enter(target, top, binds, pattern, out);
+                    Self::enter(target, top, out);
                 }
             }
         }
@@ -257,7 +266,7 @@ impl NestTable {
         let part_frames = pattern.part(surface).filter(|_| !is_top);
         for (id, frame) in top_frames.chain(part_frames) {
             if frame.method.is_implemented() && (!is_bind(id) || binds.contains(id)) {
-                self.enter(frame.surface_id, top, binds, pattern, out);
+                Self::enter(frame.surface_id, top, out);
             }
         }
     }
@@ -275,23 +284,11 @@ impl NestTable {
         out.dedup();
     }
 
-    /// `target` を部品に数えて進む（一番上・既に数えた番号へは進まない）。
-    fn enter(
-        &self,
-        target: u32,
-        top: u32,
-        binds: &BindSet,
-        pattern: &PatternState,
-        out: &mut Vec<u32>,
-    ) {
-        if target == top {
-            return;
+    /// `target` を部品に数え、これから見る面の列へ足す（一番上・既に数えた番号は足さない）。
+    fn enter(target: u32, top: u32, out: &mut Vec<u32>) {
+        if target != top && !out.contains(&target) {
+            out.push(target);
         }
-        let Err(at) = out.binary_search(&target) else {
-            return;
-        };
-        out.insert(at, target);
-        self.walk(target, top, binds, pattern, out);
     }
 }
 
@@ -312,7 +309,7 @@ pub enum NestIssue {
     },
 }
 
-/// 無い番号と循環の報告（面の表から 1 度作る・記録は出さない）。
+/// 無い番号と循環の報告（面の表から 1 度作る・記録は出さない。広がりの予算が尽きたときの `error!` だけ出す）。
 ///
 /// 並びは親の番号の昇順 → element定義の番号の昇順。同じ番号の element定義が複数あるときは
 /// 書いた順（`SurfaceMaster.elements` の並び＝畳み込みの安定ソートのまま）。
@@ -350,7 +347,7 @@ impl NestReport {
                         continue;
                     }
                 };
-                if reaches(&edges, child, id) {
+                if reaches(&edges, child, id, VISIT_BUDGET) {
                     issues.push(NestIssue::Cycle {
                         surface: id,
                         element: e.layer,
@@ -397,12 +394,18 @@ pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
     u32::try_from(p.surface_id).ok()
 }
 
-/// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。
+/// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。`limit` は呼び出し 1 回の
+/// 広がりの予算（本番は [`VISIT_BUDGET`]）。取り出した面を `from` の他は 1 つずつ数え、尽きたら
+/// 着かないと答える（残りの辺は循環として報告しない・合成の祖先の確かめが循環を止める）。
 // ponytail: 辺 1 本ごとに全体をなめる（辺 × 面）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
-pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32) -> bool {
+pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32, limit: usize) -> bool {
+    let mut budget = Budget::new(limit);
     let mut seen = BTreeSet::from([from]);
     let mut stack = vec![from];
     while let Some(s) = stack.pop() {
+        if s != from && !budget.enter("reaches", from) {
+            return false;
+        }
         if s == to {
             return true;
         }

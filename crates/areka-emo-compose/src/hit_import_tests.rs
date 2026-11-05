@@ -258,3 +258,38 @@ fn fixture_parents_hit_child_names_at_placed_position() {
     let with: Vec<u32> = w.surface_ids().filter(|&id| has_regions(&w, id)).collect();
     assert_eq!(with, vec![0, 1, 2]);
 }
+
+/// 広がりの予算（指摘 3）: 予算 2 の持ち込みは element定義の子 3 つのうち 2 つ目まで入って 3 つ目を
+/// 持ち込まず、`error!` を 1 行だけ出す。黙らせる組み方の予算は同じく断って記録を出さない。
+#[test]
+fn spent_budget_does_not_import_children_not_yet_entered() {
+    use crate::budget::Budget;
+    use crate::log_capture::capture_logs;
+    use crate::world::Records;
+
+    let w = world_of(
+        "surface0\n{\nelement1,overlay,1,0,0\nelement2,overlay,2,0,0\nelement3,overlay,3,0,0\n}\n\
+         surface1\n{\ncollision0,0,0,5,5,One\n}\n\
+         surface2\n{\ncollision0,0,0,5,5,Two\n}\n\
+         surface3\n{\ncollision0,0,0,5,5,Three\n}\n",
+    );
+    let master = w.surface(0).expect("面 0");
+    let mut list = Vec::new();
+    let logs = capture_logs(|| list = super::regions_of(&w, master, &mut Budget::new(2)));
+    assert_eq!(
+        list,
+        [coll(0, 0, 0, 5, 5, "One"), coll(0, 0, 0, 5, 5, "Two")]
+    );
+    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert!(
+        logs.contains("walk=\"hit_import\"") && logs.contains("root=0"),
+        "{logs}"
+    );
+    let logs = capture_logs(|| {
+        list = super::regions_of(&w, master, &mut Budget::with_records(2, Records::Quiet))
+    });
+    assert_eq!(list.len(), 2);
+    assert!(logs.is_empty(), "{logs}");
+    // 予算が足りれば 3 つとも持ち込む（本番の組み方）。
+    assert_eq!(w.hit_regions(0).map(<[_]>::len), Some(3));
+}

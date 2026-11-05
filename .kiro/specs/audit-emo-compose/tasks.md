@@ -53,7 +53,7 @@
   - 命令列の形の変更は 1.1 の口 1 か所で受ける
   - 終わった姿: 命令列・入れ子・着せ替え・`bind+random`・golden のテストが期待を変えずに緑
   - _Requirements: 2.1, 2.3, 3.3, 6.2_
-- [ ] 2.5 ほかの入れ子の走査 4 か所を明示のスタックで回し、予算を通す（指摘 3）
+- [x] 2.5 ほかの入れ子の走査 4 か所を明示のスタックで回し、予算を通す（指摘 3）
   - 外形・シェルの外形・当たり判定の持ち込み・見える部品の 4 か所（5 か所目の `claim_from` は 2.4）を、それぞれのファイルの中で `Vec` のスタックに置き換える。結果は今と同じ順・同じ値
   - 当たり判定の持ち込みは、子の段が終わったら親の直接の領域と同じ名前を除き、element定義の X,Y を飽和で足して親へ渡す（今と同じ規則）
   - 予算の範囲は、外形の表・シェルの外形・当たり判定の持ち込みが根の面 1 つにつき 1 つ、到達の確かめが呼び出し 1 回につき 1 つ。到達の確かめで尽きたら残りの辺は循環として報告しない。見える部品は予算を使わない
@@ -156,3 +156,4 @@
 - 2.2: `areka-seriko/src/parts_tests.rs` のテストを `part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock` に改名（期待と説明も）＝audit-seriko へ伝え済み。見えない部品の抽選の時計が残り後で一度に進むのは seriko の今の振る舞い（範囲外）
 - 2.3: `budget.rs` は `Budget::new`／`with_records(limit, Records)`／`enter(walk, root)`。頭の `#![allow(dead_code)]` とその説明は 2.4 で走査に繋いだら消す。`VISIT_BUDGET` は仮の `1 << 20`（3.2 で測る）
 - 2.4: 作業場は `plan::PlanScratch`（`Composer.scratch`）、テストの小さな予算は `PlanScratch::with_limit`。残る確保は `push_static_element_ops` の `order: Vec<usize>`（3.1 で消す）。3.1 の容量の確かめで `steps`・`merged_ids` の容量も見るとよい。親の層 (ii) の `debug!` が子の段より先に出る（並びだけ変わった）。`nesting_film_tests.rs:343` の説明に旧名 `push_film_op`（今は `plan_always::film_op`）が残る＝4.1 で直す
+- 2.5: 小さな予算の口は `compute_extent_limited`・`shell_bounds_limited`・`reaches(.., limit)`・`regions_of(.., &mut Budget)`。`Records::Quiet` が予算へ通るのは `attach_hit_regions` だけ（`NestReport`・`shape_issues` は `Records` を持たない別の入口）。外形の走査は呼び出しごとに積み荷の `Vec` を確保（3.1 で表になれば合成のたびには呼ばれない）。3.2 で測るとき `moving_visible`（`visible_parts` の `contains`）も見るとよい

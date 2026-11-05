@@ -51,7 +51,7 @@ use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
 mod extent;
-pub(crate) use extent::{MAX_EXTENT, compute_extent};
+pub(crate) use extent::{MAX_EXTENT, compute_extent, compute_extent_limited};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
 ///
@@ -621,8 +621,14 @@ pub(crate) fn build_plan(
     }
 
     // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。祖先の列は
-    // compute_extent 入口で clear される（要件 10.3・共有スクラッチ）。
-    let extent = compute_extent(&mut scratch.visited, world, atlas, surface_id);
+    // compute_extent 入口で clear される（要件 10.3・共有スクラッチ）。予算は命令列と同じ範囲・同じ値。
+    let extent = compute_extent_limited(
+        &mut scratch.visited,
+        world,
+        atlas,
+        surface_id,
+        scratch.limit,
+    );
 
     // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
     // 命令列は元々ゼロ（外形へ寄与する層＝命令の母集合が皆無）ゆえ out_ops は空のまま返す。

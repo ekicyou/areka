@@ -126,7 +126,7 @@ impl EmoWorld {
         let report = crate::base_image::apply_base_images(&mut emo.world, images, records);
         emo.world.insert_resource(report);
         // 子の当たり判定の領域を親へ持ち込む（持ち込みが在るサーフェスにだけ付く・要件 4.1〜4.10）。
-        crate::hit_import::attach_hit_regions(&mut emo);
+        crate::hit_import::attach_hit_regions(&mut emo, records);
         // 着せ替えの描く手順は面の表が出来上がった後に 1 度だけ作る（seriko-pattern-calls 6.8）。
         let steps = crate::bind_steps::BindSteps::build(&emo);
         emo.world.insert_resource(steps);
