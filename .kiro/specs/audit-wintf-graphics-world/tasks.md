@@ -215,3 +215,4 @@
 - 7.1: 2 度目の audit で 36〜39 番を直した（39 番＝窓の的の作り直しが一度失敗すると次の装置の失いまで試し直さなかった＝ `init_window_graphics` は印で絞らず全部の窓を見て、失敗の回は `GRAPHICS` を立てる）。作れない窓は毎回の画面更新で `error!` を出し続ける（vblank に縛られ空回りはしない）。
 - 7.2: 2026-11-06 `tools/test-all.ps1` を 1 回（commit `1e698f0a`・始めの未コミット 0）＝ 13 段すべて緑（x64 workspace tests 1522 s）。回の数を決め打ちするテストの合わせは要らなかった。
 - 最後の検証（11-06）: `render_surface` の `EndDraw` の失敗は `error!` だけで失いの判定に通さない（design の決め＝ WUC では失いは `BeginDraw` で返る）。次の audit の候補として完了の棚卸に載せる。
+- 完了の棚卸（11-06）: その場で解決 0 件・起票 0 件。残りは持ち主が決まっている＝`dola` の clippy の赤は `audit-dola`、`apply_show` の `None` は `audit-emo-present`、`tick_bridge.rs` の説明 2 行は `audit-wintf-runtime`。`EndDraw` の失敗を失いと見ないのは design の決め（WUC では失いは `BeginDraw` で返る）で、直す件ではない。ほかの覚え書き（`type_complexity`・`components.rs` の `let _`・`dcomp_integration_test.rs:108`・`visual_manager.rs:13`）は実装の中で済んでいる。
