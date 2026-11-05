@@ -162,3 +162,4 @@
   - `accumulate_off_absent_is_noop` → `accumulate_idempotent_off_off`
   - `accumulate_on_off_round_trip` → `accumulate_basic_on_then_off`・`accumulate_on_preserves_existing`・`accumulate_off_removes_only_target`
   - state_surface の 2 本 → `scope_isolation_does_not_touch_other_scope`
+- 6.1 かけ直し 1 回目（2026-11-06・HEAD `b4f39286`＝origin/main `8eb8758c` を取り込んだ後。取り込んだのは doc-tree-tidy の 1 コミットで、seriko と例外表は変わっていない）: 新しい指摘は 26 件（必ず直す 1・直したほうがよい 11・できれば 14）。詳しくは `reaudit-1.md`。種類 (1)〜(3) に触れるのは R1（(3)・直すと ukadoc の「-1 で終了」に寄る）と R12（(1)・surface-element-nesting 5.7 の裁定の延長）。audit 系の議題は推奨案で承認してよい、という開発者の決め（11-04）に従い、どちらも推奨どおり「直す」とした。直す組は A＝R1・R12（振る舞い）、B＝説明の直し（R2・R4〜R7・R9・R10・R23〜R25）、C＝テストの確かめ（R3・R8・R17・R18）、D＝テストの整理（R11・R15・R16・R19〜R22・R26）、E＝R13（clippy）・R14（pub use）。範囲の外の申し送り: `log-capture-kit/src/event_tests.rs:15`・`:18` の古い名は持ち主の `audit-test-kits` へ渡す。
