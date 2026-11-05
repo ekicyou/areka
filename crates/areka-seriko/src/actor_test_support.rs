@@ -6,13 +6,26 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-// 捕捉の道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
+// テストの道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
 pub(super) use crate::test_support::{capture_text, clear_all, cue, fresh_states, text};
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
 pub(super) fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
     // 表情切替は瞬時（明示的 0）。
     cue(at, scope, CueCommand::Emote { key: key.into() }, 0.0)
+}
+
+/// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
+/// `bindoption` 宣言なし）。
+pub(super) fn arm_bind_resolver() -> BindResolver {
+    BindResolver::from_groups(&crate::bind::tests::groups_of(
+        "charset,UTF-8\r\nsakura.bindgroup1302.name,腕,伸び\r\n",
+    ))
+}
+
+/// 判定に使わない空の差し替えの事実。
+pub(super) fn no_facts() -> crate::SkinFacts {
+    crate::SkinFacts::new(BTreeMap::new(), BTreeMap::new(), BTreeMap::new())
 }
 
 /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。

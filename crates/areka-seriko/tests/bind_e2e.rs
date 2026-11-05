@@ -90,7 +90,7 @@ fn show(surface_id: u32, ids: impl IntoIterator<Item = u32>) -> DisplayCommand {
     }
 }
 
-/// 既存シナリオの既定注入で貫通駆動する薄いラッパ。
+/// シナリオの既定の注入で貫通駆動する薄いラッパ。
 ///
 /// 非空の静的既定集合 `{1100,1207}` と test-local [`test_bind_resolver`]（bindoption 宣言ゼロ＝
 /// 全カテゴリ既定・1 カテゴリ 1 パーツ）を注入する。broadcast の 2 つ目のスロットは呼び手指定の

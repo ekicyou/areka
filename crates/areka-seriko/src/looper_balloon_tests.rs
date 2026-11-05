@@ -9,23 +9,12 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::{FilmId, PartKey};
 
-use super::test_support::started;
+use super::test_support::{film_clock as clock, note_balloon as note, started};
 use super::tests::counting_rng;
 use super::*;
-use crate::parts::PartAnim;
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::resolve::SurfaceTarget;
-use crate::state::StageNote;
 use crate::test_support::{empty_states, film_picture, part_playing as playing, scope, table_of};
-
-fn note(states: &mut ScopeStates, open: bool, face: u32) {
-    states.note_stage(&StageNote::Balloon {
-        scope: scope(),
-        open,
-        face,
-        generation: 0,
-    });
-}
 
 /// シェルの表は `shell`、バルーンの表はスコープ 0 に子の表。
 fn runtime(shell: AnimationTable) -> LoopRuntime {
@@ -36,10 +25,6 @@ fn runtime(shell: AnimationTable) -> LoopRuntime {
         rng,
         pick_rng: crate::seeded_rng(0),
     })
-}
-
-fn clock(rt: &LoopRuntime, slot: Slot, film: FilmId) -> Option<PartAnim> {
-    rt.parts.clock_at(&scope(), slot, PartKey::Film(film), 0)
 }
 
 /// `slot` の面の子 `film` の欄の絵（`None`＝載っていない＝経過 0）。

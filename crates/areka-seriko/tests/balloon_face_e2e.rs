@@ -104,7 +104,7 @@ fn bare_balloon_matches_bracket_form_end_to_end() {
 /// シナリオ4（要件 4.3）: 同一面への冪等な再指定は表示指令を再発行しない。
 ///
 /// `\b[2]\b[2]\e`（両 cue とも at=0.0）→ Tick(0.0) で両 cue が発火するが、2 件目は per-scope
-/// 状態不変ゆえ発行が抑止され、`ShowBalloon{2}` はちょうど 1 件のみ観測される（既存冪等ガード）。
+/// 状態不変ゆえ発行が抑止され、`ShowBalloon{2}` はちょうど 1 件のみ観測される（per-scope の冪等ガード）。
 #[test]
 fn same_balloon_twice_emits_once_end_to_end() {
     let records = run_scenario(r"\b[2]\b[2]\e", &[0.0]);

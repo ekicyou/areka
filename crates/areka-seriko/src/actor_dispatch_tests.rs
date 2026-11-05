@@ -1,3 +1,10 @@
+//! 受け口（`SerikoSink`）と受信の役者（`handle_message`）の結合テスト。
+//!
+//! 番号の出どころ: 無印と R の番号は areka-P0-seriko-engine の要件。R11.6・D4 と、duration を守る
+//! 2.3・R5.4 は areka-P0-cue-playback-duration、バルーンの面のケース 6〜11 の 4.x は
+//! areka-P0-balloon-face-cue の要件。「ケース N」は spec の番号ではなく、このファイル（1〜14）と
+//! `actor_bind_loop_tests.rs`（15〜21）の通し番号。
+
 use super::test_support::*;
 use super::*;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
@@ -11,37 +18,18 @@ fn emit_forwards_cue_to_inbox() {
     let (tx, rx) = std::sync::mpsc::channel::<SerikoMsg>();
     let mut sink = SerikoSink::new(tx);
 
-    CueSink::emit(&mut sink, emote_cue(1.5, "0", "smile"));
+    let emote = emote_cue(1.5, "0", "smile");
     // 担当外の Text cue（broadcast 受信）でも sink は無変形で inbox へ橋渡しする
-    // （担当判定は handler の演者側 relevance の領分・sink は選別しない）。
-    CueSink::emit(
-        &mut sink,
-        cue(2.5, "1", CueCommand::Text("アヒル".into()), 0.0),
-    );
+    // （担当判定は handler の演者側 relevance の領分・sink は選別しない）。`duration` も守る中身。
+    let text = cue(2.5, "1", CueCommand::Text("アヒル".into()), 0.75);
+    CueSink::emit(&mut sink, emote.clone());
+    CueSink::emit(&mut sink, text.clone());
 
-    match rx.recv() {
-        Ok(SerikoMsg::Cue(cue)) => {
-            assert_eq!(cue.at, 1.5, "at が保たれる");
-            assert_eq!(cue.actor, ActorKey::from("0"), "actor が保たれる");
-            assert!(
-                matches!(cue.command, CueCommand::Emote { ref key } if key == "smile"),
-                "Emote{{key}} が保たれる: {:?}",
-                cue.command
-            );
+    for expected in [emote, text] {
+        match rx.recv() {
+            Ok(SerikoMsg::Cue(got)) => assert_eq!(got, expected, "合図を丸ごと保つ"),
+            other => panic!("Cue が inbox へ届くこと: {other:?}"),
         }
-        other => panic!("Cue が inbox へ届くこと: {other:?}"),
-    }
-    match rx.recv() {
-        Ok(SerikoMsg::Cue(cue)) => {
-            assert_eq!(cue.at, 2.5, "at が保たれる");
-            assert_eq!(cue.actor, ActorKey::from("1"), "actor が保たれる");
-            assert!(
-                matches!(cue.command, CueCommand::Text(ref t) if t == "アヒル"),
-                "Text が保たれる: {:?}",
-                cue.command
-            );
-        }
-        other => panic!("Text の Cue も inbox へ届くこと: {other:?}"),
     }
 }
 
@@ -330,7 +318,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
 // 早期分岐（key 抽出 match の前段）は解決→適用→発行を arm 内で完結し値を返さないため、
 // 同期 `handle_message`＋`MockSurfaceOutput` の records 照合で発行を、`capture_logs_flow` で
 // NameForm=debug!（文字の層へ譲る）／Invalid=error! の severity split を、いずれもテストスレッド上で決定論的に
-// 檻化する（cross-thread log 問題を回避）。既存 `emote_cue` 経路（シェル面）は無改変。
+// 檻化する（cross-thread log 問題を回避）。
 // ─────────────────────────────────────────────────────────────────────
 
 /// ケース6（4.1）: 数値 key はバルーン面表示指令を単一発行点から発行する。
@@ -539,7 +527,7 @@ fn balloon_invalid_numeric_errors_once_no_emit() {
 /// ケース10（4.3・冪等）: 同一バルーン面への再指定は指令を再発行しない。
 ///
 /// `\b[2]` を 2 回流すと、2 回目は状態不変ゆえ `ShowBalloon` が 1 件のみ記録される
-/// （既存 per-scope 冪等ガードと同一挙動・単一発行点の冪等抑止）。
+/// （per-scope の冪等ガード・単一発行点の冪等抑止）。
 #[test]
 fn balloon_same_surface_twice_emits_once() {
     let resolver = tiny_resolver();

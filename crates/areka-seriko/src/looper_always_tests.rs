@@ -7,9 +7,9 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{BindSet, Cell, PartKey, PatternState};
+use areka_emo_compose::{BindSet, Cell, PatternState};
 
-use super::test_support::{cell, switch_at};
+use super::test_support::{cell, film_clock, switch_at};
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::parts::PartAnim;
@@ -164,10 +164,7 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
 
     rt.on_tick(0, &mut states);
     switch_at(&mut rt, &mut states, SurfaceTarget::Show(3), None);
-    let once = |rt: &LoopRuntime| {
-        rt.parts
-            .clock_at(&scope(), Slot::Shell, PartKey::Film(ONCE), 0)
-    };
+    let once = |rt: &LoopRuntime| film_clock(rt, Slot::Shell, ONCE);
     assert_eq!(
         once(&rt),
         Some(PartAnim::Playing {
@@ -212,10 +209,7 @@ fn hiding_top_drops_finite_shell_clocks_only() {
     rt.on_tick(0, &mut states);
     switch_at(&mut rt, &mut states, SurfaceTarget::Show(1), None);
     rt.on_tick(50, &mut states);
-    let clock = |rt: &LoopRuntime, film| {
-        rt.parts
-            .clock_at(&scope(), Slot::Shell, PartKey::Film(film), 0)
-    };
+    let clock = |rt: &LoopRuntime, film| film_clock(rt, Slot::Shell, film);
     assert!(clock(&rt, ONCE).is_some() && clock(&rt, ENDLESS).is_some());
 
     switch_at(&mut rt, &mut states, SurfaceTarget::Hide, None).expect("Hide");
@@ -261,8 +255,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
         &mut crate::seeded_rng(0),
         &mut PatternState::default(),
     );
-    let clock =
-        |rt: &LoopRuntime, slot| rt.parts.clock_at(&scope(), slot, PartKey::Film(ENDLESS), 0);
+    let clock = |rt: &LoopRuntime, slot| film_clock(rt, slot, ENDLESS);
     assert!(clock(&rt, Slot::Shell).is_some() && clock(&rt, Slot::Balloon).is_some());
 
     rt.replace_balloon_tables(BTreeMap::from([(scope(), film_table())]));

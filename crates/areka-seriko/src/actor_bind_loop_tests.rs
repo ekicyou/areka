@@ -1,3 +1,9 @@
+//! `\![bind]` の合図を役者が捌く道の檻。
+//!
+//! 番号の出どころ: R・D・①〜⑤ は areka-P0-mayuna-compose（D8 は縮退の severity split）、「bindopt」は
+//! areka-P0-bindoption-exclusivity、要件 14.2 は areka-P0-offline-surface-dump の要件。「ケース 15〜21」は
+//! spec の番号ではなく、`actor_dispatch_tests.rs`（1〜14）から続く通し番号。
+
 use super::test_support::*;
 use super::*;
 use crate::bind::tests::groups_of;
@@ -12,18 +18,11 @@ use areka_sakura::ActorKey;
 // scope 写像（scope_namespace）→ 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）
 // → 適用（apply_bind_exclusive／apply_bind／mustselect 脱衣は無視・bindopt 2.1/3.1/3.2）→ 単一発行点
 // （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide は当てる（script-small-tags 3.8・3.9）／
-// ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug／⑤scope 写像なし（数でない scope）=warn）を
+// ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug（④ は `actor_bind_noevent_tests.rs`）／
+// ⑤scope 写像なし（数でない scope）=warn）を
 // 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で決定論的に檻化する。
 // 全 severity 枝は正カウント assert（優しい縮退の非空虚化）。
 // ─────────────────────────────────────────────────────────────────────
-
-/// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
-/// `bindoption` 宣言なし）。
-pub(super) fn arm_bind_resolver() -> BindResolver {
-    BindResolver::from_groups(&groups_of(
-        "charset,UTF-8\r\nsakura.bindgroup1302.name,腕,伸び\r\n",
-    ))
-}
 
 /// 複数可（Multiple）宣言カテゴリ「髪飾り」を持つ sakura 解決層（bindopt 3.3・actor 経路の
 /// 加算検証用）。(髪飾り,花)→1600 / (髪飾り,リボン)→1601。static={1100,1207} と交わらない新 id。
@@ -178,8 +177,8 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
 /// 最小再現の反転檻（bindopt 4.1/2.1）: `bindoption` 非宣言＝正典の既定（Default＝高々 1 個）の
 /// カテゴリで 2 パーツを続けて着衣（on）すると、後勝ちの 1 個だけが残る。
 ///
-/// emo2 のまばたきカテゴリ（1400 通常／1402 ジトー）を模した構成。是正前は非宣言カテゴリが
-/// 加算扱いだったため {1400,1402} が共存し、集合が飽和して以後の是正指示を握り潰していた。
+/// emo2 のまばたきカテゴリ（1400 通常／1402 ジトー）を模した構成。非宣言カテゴリを加算で扱うと
+/// {1400,1402} が共存する。
 #[test]
 fn bind_default_category_second_on_replaces_prior_part() {
     let resolver = tiny_resolver();
@@ -277,7 +276,7 @@ fn bind_mustselect_off_is_ignored_with_warn() {
 // | false | Default    | 除去                 | bind_default_category_off_removes_part            |
 // | false | Multiple   | 除去                 | bind_multiple_category_off_removes_only_that_part |
 //
-// 既存流儀（排他置換経路でも維持されること）: 変更時のみ発行＋info マーカー（bindopt 2.4）＝
+// 排他置換の経路でも守る決まり: 変更時のみ発行＋info マーカー（bindopt 2.4）＝
 // bind_default_exclusive_replace_emits_show_and_info_marker／同値適用は非発行（bindopt 2.5）＝
 // bind_default_same_part_re_on_is_unchanged_no_emit／非表示 scope は状態のみ更新（bindopt 2.6）＝
 // bind_apply_on_hidden_scope_state_only_no_emit（状態の無い scope は
@@ -322,7 +321,7 @@ fn bind_multiple_category_two_parts_coexist_via_actor() {
     );
 }
 
-/// 複数可×脱衣（bindopt 3.3）: 明示 `multiple` 宣言カテゴリの脱衣は従来どおり当該パーツのみを
+/// 複数可×脱衣（bindopt 3.3）: 明示 `multiple` 宣言カテゴリの脱衣は当該パーツのみを
 /// 除去し、同カテゴリの他パーツは残る。
 #[test]
 fn bind_multiple_category_off_removes_only_that_part() {
@@ -408,7 +407,7 @@ fn bind_default_category_off_removes_part() {
     );
 }
 
-/// 既存流儀の維持（bindopt 2.4）: 既定カテゴリの**排他置換**でも、集合が変わったときは従来の
+/// 排他置換でも変わったときだけ出す（bindopt 2.4）: 既定カテゴリの**排他置換**でも、集合が変わったときは
 /// 単一発行点から Show を再発行し、実機 grep マーカー `seriko: bind 適用`（info）を発火する。
 ///
 /// `bind_apply_on_shown_emits_show_and_info_marker` は 1 カテゴリ 1 パーツ構成ゆえ「置換が
@@ -477,7 +476,7 @@ fn bind_default_exclusive_replace_emits_show_and_info_marker() {
     );
 }
 
-/// 既存流儀の維持（bindopt 2.5）: 排他置換経路でも同値適用（同一パーツの再着衣）は結果集合が
+/// 排他置換でも同値は出さない（bindopt 2.5）: 排他置換経路でも同値適用（同一パーツの再着衣）は結果集合が
 /// 変わらず Unchanged＝再発行しない（冪等）。
 #[test]
 fn bind_default_same_part_re_on_is_unchanged_no_emit() {
@@ -840,51 +839,5 @@ fn bind_unresolvable_errors_no_emit() {
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
         "解決不能では発行しない（状態不変・R3.7）"
-    );
-}
-
-/// ケース22（D1・R2.5）: 名前ゲート——正準キャリアだが name!="bind"（例 "move"）は
-/// 良性 debug! で読み飛ばし、発行なし・WARN/ERROR なし（名前自己選別）。
-#[test]
-fn bind_name_gate_other_name_is_benign_debug_no_emit() {
-    let resolver = tiny_resolver();
-    let bind_resolver = arm_bind_resolver();
-    let mut states = fresh_states();
-    let mut out = MockSurfaceOutput::new();
-    let mut loop_runtime = inert_runtime();
-    let records = out.records();
-
-    let flow = capture_logs_flow(|| {
-        handle_message(
-            &resolver,
-            &bind_resolver,
-            &mut states,
-            &mut loop_runtime,
-            &mut out,
-            SerikoMsg::Cue(carrier_cue("0", "move", &["-353", "", "", "0"])),
-        )
-    });
-
-    assert_eq!(flow.1, ControlFlow::Continue(()));
-    assert_eq!(
-        flow.0.matches("level=WARN").count(),
-        0,
-        "担当外コマンド名は warn! を出さない（名前自己選別・R2.5）: {}",
-        flow.0
-    );
-    assert_eq!(
-        flow.0.matches("level=ERROR").count(),
-        0,
-        "担当外コマンド名は error! を出さない: {}",
-        flow.0
-    );
-    assert!(
-        flow.0.contains("level=DEBUG"),
-        "担当外コマンド名は良性 debug! として観測できる（R2.5）: {}",
-        flow.0
-    );
-    assert!(
-        records.lock().expect("records mutex poisoned").is_empty(),
-        "担当外コマンド名では発行しない"
     );
 }

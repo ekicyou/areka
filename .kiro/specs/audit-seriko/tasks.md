@@ -236,3 +236,15 @@
   - U1: refresh で鳴り直した一番上の再生の頭が Pending か Stopped のとき、古い残りのコマを外すようにした。新しいテストを 1 本足して 574 件。Stopped の頭の記録と後片付けは、次の刻みの `put_top_play` が出す。refresh が FinishedResidual で前からそうしているのと同じ分け方で、抽選と引き金の判定には響かない。
   - U7: `arm_part` の通らない枝を消した。
   - U8・U14: doc を今の作りに合わせた。
+- 6.1 組 E4（U2〜U6・U9〜U13・U15〜U20）: テストの確かめを足した。U2・U3・U4・U9・U10・U11・U19 は、どれも壊すと赤になることを確かめた。
+  - テストの時計を単調にした（U5・U6）。
+  - U12: 重なった `bind_name_gate_other_name_is_benign_debug_no_emit` を消した。同じ道は `prefix_alike_name_is_not_bind` が見ている。
+  - U13・U20: `film_world`・`film_clock`・`note_balloon` ほかへ寄せた。
+  - spec の番号・出どころを直した（U15・U16）。古い見出しと文言も直した（U18・U19）。
+  - U17 は進行役の判断で本番の残りにも広げ、「既存」「従来」「旧」など前の版と比べる語を、本番とテストのコメントから外した。「旧パーツ」のように 1 回の当てはめの前の状態を指す語は残した。本番の変更はコメントと doc だけ。
+  - 名を変えたテストは 4 本。
+    - `wait_at_the_cap_settles_as_before` → `wait_at_the_cap_keeps_the_last_frame`
+    - `empty_always_keeps_the_existing_empty_warn` → `empty_always_falls_to_the_empty_warn`
+    - `empty_frames_keep_the_existing_empty_warn` → `empty_frames_fall_to_the_empty_warn`
+    - `talk_elsewhere_in_the_table_arms_without_top_judgement` → `talk_elsewhere_in_the_table_arms_and_plays_nothing`
+  - テストは 574 → 573 件。

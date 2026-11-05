@@ -7,17 +7,15 @@
 
 use std::num::NonZeroU32;
 
-use areka_emo_compose::{
-    BindSet, ElementKind, EmoWorld, FilmId, FilmSheet, PartKey, PatternState, SurfaceMaster,
-};
+use areka_emo_compose::{BindSet, FilmId, FilmSheet, PartKey, PatternState};
 use areka_sakura::ActorKey;
-use log_capture_kit::{LineFormat, capture_lines};
 
+use super::tests::count;
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::counting_rng;
 use crate::state::Slot;
 use crate::table::AnimationTable;
-use crate::test_support::{film_picture, part_playing as playing, scope};
+use crate::test_support::{capture_logs, film_picture, film_world, part_playing as playing, scope};
 use crate::timeline::LoopRng;
 
 /// 終わりなしの子（コマ 10・11・12、各 100ms・周期 300）。
@@ -47,19 +45,7 @@ fn sheet(id: FilmId, delays_ms: &[u32], laps: Option<u32>) -> FilmSheet {
 }
 
 pub(crate) fn table() -> AnimationTable {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(SHELL));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            let film = match e.path.as_str() {
-                "a.png" => ENDLESS,
-                "b.png" => ONCE,
-                _ => continue,
-            };
-            e.kind = ElementKind::Film(film);
-        }
-    }
+    let world = film_world(SHELL, &[("a.png", ENDLESS), ("b.png", ONCE)]);
     let sheets = [
         sheet(ENDLESS, &[100, 100, 100], None),
         sheet(ONCE, &[100, 100], Some(1)),
@@ -189,7 +175,7 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    let (_, lines) = capture_lines(LineFormat::LevelTargetFields, || {
+    let lines = capture_logs(|| {
         tick(&mut clocks, &table, 3, 1000, &mut rng);
         let p = tick(&mut clocks, &table, 3, 1100, &mut rng);
         assert_eq!(film_picture(&p, ONCE), Some(21));
@@ -212,14 +198,7 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
         let p = tick(&mut clocks, &table, 3, 1600, &mut rng);
         assert_eq!(film_picture(&p, ONCE), Some(21));
     });
-    let debug = |needle: &str| {
-        lines
-            .iter()
-            .filter(|l| {
-                l.contains("level=DEBUG") && l.contains(needle) && l.contains("part=film:20")
-            })
-            .count()
-    };
+    let debug = |needle: &str| count(&lines, &["level=DEBUG", needle, "part=film:20"]);
     assert_eq!(
         debug("seriko: part always の時計が生まれた"),
         2,

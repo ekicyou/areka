@@ -13,7 +13,7 @@ repository.workspace = true
 # 単一の出力契約 `dola::cue::CueSink` を実装するための workspace パス依存
 # （emo-text と同型・循環なし: dola は seriko に依存しない）。
 # `TalkCue`/`CueCommand`/`CueTarget`/`cue_target_of` は元々 dola 型で、areka-sakura は re-export。
-# ghost live-path も `CueSink` 注入で結線する（旧 `SurfaceSink` 経路は撤去して一本化）。
+# ghost live-path も `CueSink` 注入で結線する。
 dola = { path = "../dola" }
 areka-sakura = { path = "../areka-sakura" }
 areka-emo-compose = { path = "../areka-emo-compose" }

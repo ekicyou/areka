@@ -102,7 +102,7 @@ fn invalid_number_is_not_adopted_and_warns_once() {
 
 /// コマ列が空の 3 語は空の検査（`warn!`）で採らず、採録の記録も残さない。
 #[test]
-fn empty_frames_keep_the_existing_empty_warn() {
+fn empty_frames_fall_to_the_empty_warn() {
     for interval in ["runonce", "periodic,3", "talk,2"] {
         let text = format!("surface7\n{{\nanimation2.interval,{interval}\n}}\n");
         let (table, logs) = table_and_logs(&text);

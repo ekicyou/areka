@@ -3,6 +3,8 @@
 //!
 //! 同じ初めの状態から 2 つの名前で同じ引数を当て、着せ替えの集合・出た表示の指令・記録（`name` の
 //! 欄を除く）が等しいことを見る。出力の先は表示の指令の受け口だけ（SHIORI への道は無い・3.6）。
+//! 名前が `bind`・`bind-noevent` のどちらでもない運び物（他人宛）を debug で読み飛ばし何も出さない檻と、
+//! 宛名が自分で中身の壊れた運び物の warn の檻（areka-P0-mayuna-compose D8④）もここに置く。
 
 use super::test_support::*;
 use super::*;
@@ -280,7 +282,7 @@ fn noncanonical_bind_noevent_warns_like_bind() {
 /// 宛名が他人（"noexist"）の壊れた運び物は warn! を出さず debug! で素通しし、発行しない（D8④）。
 #[test]
 fn noncanonical_custom_for_another_name_is_debug_only() {
-    let bind_resolver = super::bind_loop_tests::arm_bind_resolver();
+    let bind_resolver = arm_bind_resolver();
     let mut states = fresh_states();
     let mut out = MockSurfaceOutput::new();
     let mut loop_runtime = inert_runtime();

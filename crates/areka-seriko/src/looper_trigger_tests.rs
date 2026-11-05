@@ -9,11 +9,11 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, shell_runtime, started, switch};
+use super::test_support::{cell, note_balloon, shell_runtime, started, switch};
 use super::tests::{always_fire, cfg, counting_rng, pattern_of};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::state::{BindApplyOutcome, StageNote};
+use crate::state::BindApplyOutcome;
 use crate::test_support::count;
 use crate::test_support::{capture_logs, empty_states, scope, table_of};
 
@@ -67,17 +67,24 @@ fn runonce_plays_once_from_the_event_time_on_first_show() {
     assert_eq!(cell(&states, Slot::Shell, 0), None, "`-1` で消す");
     assert_eq!(started(&rt, Slot::Shell, 0), None, "`-1` で終える");
 
-    let mut now = 1250;
-    while now <= 4000 {
-        rt.on_tick(now, &mut states);
-        assert_eq!(
-            started(&rt, Slot::Shell, 0),
-            None,
-            "{now}: 2 回目は鳴らない"
-        );
-        assert_eq!(cell(&states, Slot::Shell, 0), None, "{now}");
-        now += 50;
-    }
+    let logs = capture_logs(|| {
+        let mut now = 1250;
+        while now <= 4000 {
+            rt.on_tick(now, &mut states);
+            assert_eq!(
+                started(&rt, Slot::Shell, 0),
+                None,
+                "{now}: 2 回目は鳴らない"
+            );
+            assert_eq!(cell(&states, Slot::Shell, 0), None, "{now}");
+            now += 50;
+        }
+    });
+    assert_eq!(
+        count(&logs, "trigger runonce を鳴らした"),
+        0,
+        "2 回目は鳴らない（鳴らしてすぐ捨てる再生も無い）"
+    );
     assert_eq!(probe.lock().unwrap().calls, 0, "3 語は乱数を引かない");
 }
 
@@ -538,9 +545,9 @@ const TALK_ELSEWHERE: &str = "surface0\n{\n}\n\
     surface501\n{\n}\n";
 
 /// 表に `talk` が在れば、一番上に 3 語の無い面でも構える（文字の数えの置き場）。その面では再生も
-/// 刻みごとの一番上の判定も生まれない。
+/// 表示の指令も生まれない。
 #[test]
-fn talk_elsewhere_in_the_table_arms_without_top_judgement() {
+fn talk_elsewhere_in_the_table_arms_and_plays_nothing() {
     let (mut rt, mut states) = shell_runtime(TALK_ELSEWHERE);
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
@@ -568,14 +575,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
         pick_rng: crate::seeded_rng(0),
     });
     let mut states = empty_states();
-    let note = |states: &mut ScopeStates, open: bool| {
-        states.note_stage(&StageNote::Balloon {
-            scope: scope(),
-            open,
-            face: 0,
-            generation: 0,
-        });
-    };
+    let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
 
     note(&mut states, true);
     rt.on_tick(1000, &mut states);
@@ -647,14 +647,7 @@ fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
-    let note = |states: &mut ScopeStates, open: bool| {
-        states.note_stage(&StageNote::Balloon {
-            scope: scope(),
-            open,
-            face: 0,
-            generation: 0,
-        });
-    };
+    let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
     note(&mut states, false);
     let logs = capture_logs(|| {
         rt.on_tick(0, &mut states);

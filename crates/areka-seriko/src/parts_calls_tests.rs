@@ -10,7 +10,7 @@ use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
 use crate::table::AnimationTable;
-use crate::test_support::{empty_states, part_frames, scope, table_of};
+use crate::test_support::{capture_logs, empty_states, part_frames, scope, table_of};
 use crate::timeline::LoopRng;
 
 /// 部品の中の絵の面（中身は空）。
@@ -360,7 +360,7 @@ fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
         animation2.pattern1,overlay,120,5000,0,0\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(AT_ARM, lottery, 0);
-    let lines = crate::test_support::capture_logs(|| {
+    let lines = capture_logs(|| {
         for t in [0, 500, 1000] {
             rt.on_tick(t, &mut states);
         }
@@ -440,7 +440,18 @@ fn part_refresh_judges_periodic_before_applying_calls() {
     let (mut rt, mut states) = shown(ANIMS, lottery, 0);
     rt.on_tick(0, &mut states);
     rt.on_tick(500, &mut states);
-    rt.refresh(&scope(), Slot::Shell, Some(1010), &mut states);
+    let logs = capture_logs(|| {
+        rt.refresh(&scope(), Slot::Shell, Some(1010), &mut states);
+    });
+    let fired: Vec<_> = logs
+        .iter()
+        .filter(|l| l.contains("part trigger periodic を鳴らした"))
+        .collect();
+    assert_eq!(fired.len(), 1, "{logs:?}");
+    assert!(
+        fired[0].contains("animation_id=1") && fired[0].contains("started_at_ms=1000"),
+        "境目 1000 に始まった（始まらなかったのではない）: {fired:?}"
+    );
     rt.on_tick(1100, &mut states);
     assert_eq!(part_cell(&states, 1), None, "1000 に始まり 1005 に止まる");
 }

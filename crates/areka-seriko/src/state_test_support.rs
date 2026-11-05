@@ -1,6 +1,6 @@
 use super::*;
 
-// 捕捉の道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
+// テストの道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
 pub(super) use crate::test_support::{capture_text, fresh_states};
 
 /// テスト用 bind 集合（非空・emo2 実測相当の任意 id）。

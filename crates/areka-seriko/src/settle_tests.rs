@@ -5,12 +5,11 @@
 
 use std::num::NonZeroU32;
 
-use areka_emo_compose::{
-    BindSet, Cell, ElementKind, EmoWorld, FilmId, FilmSheet, PartKey, PatternState, SurfaceMaster,
-};
+use areka_emo_compose::{BindSet, Cell, FilmId, FilmSheet, PartKey, PatternState};
 
 use super::{settle_surface, settle_time};
 use crate::table::AnimationTable;
+use crate::test_support::film_world;
 
 /// 0: runonce 赤→緑→青（各 100）。1: 0 の最後に `-1`。2: always だけ（8 コマ×50）。
 /// 3: runonce 3 コマ×1000＋`random,1`（T までに 1 秒の境を 3 度越える）。
@@ -69,18 +68,9 @@ const SHELL: &str = "surface0\n{\nanimation0.interval,runonce\n\
 /// 動く絵の子（コマの絵 10・11・12、各 100ms・周期 300）。
 const FILM: FilmId = FilmId(10);
 
-/// [`SHELL`] の表。`a.png` は分解と同じに子を置く element へ替える（`parts_film_tests.rs` と同じ組み方）。
+/// [`SHELL`] の表。`a.png` は分解と同じに子を置く element へ替える。
 fn table() -> AnimationTable {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(SHELL));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            if e.path.as_str() == "a.png" {
-                e.kind = ElementKind::Film(FILM);
-            }
-        }
-    }
+    let world = film_world(SHELL, &[("a.png", FILM)]);
     let sheet = FilmSheet {
         id: FILM,
         path: "a.png".to_string(),
@@ -195,7 +185,7 @@ const LONG: &str = "surface10\n{\nanimation0.interval,runonce\n\
 
 /// 待ちが上限ちょうどの面は `warn!` 0 行で、最後のコマが残る。
 #[test]
-fn wait_at_the_cap_settles_as_before() {
+fn wait_at_the_cap_keeps_the_last_frame() {
     let t = crate::test_support::table_of(LONG);
     let mut p = None;
     let logs = crate::test_support::capture_logs(|| p = Some(settle(&t, 10)));

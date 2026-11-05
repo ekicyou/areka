@@ -60,7 +60,7 @@ fn rarely_records_the_same_entry_as_random_4() {
     assert_eq!(rewritten[0].trigger, LoopTrigger::Random { k: 4 });
 }
 
-/// 他の語と、大文字の `Sometimes` は今日どおり採らず、元の語を `debug!` に残す（要件 11.4）。
+/// 他の語と、大文字の `Sometimes` は採らず、元の語を `debug!` に残す（要件 11.4）。
 /// 比べ方は小文字の完全一致なので、大文字は読み替えの対象にならない。
 #[test]
 fn other_interval_words_are_not_recorded_and_keep_their_original_vocab() {

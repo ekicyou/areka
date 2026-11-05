@@ -26,8 +26,8 @@ use areka_sakura::ActorKey;
 
 /// スコープの番号ごとの既定の着せ替えの組（spec: areka-P0-offline-surface-dump 要件 14.3）。
 ///
-/// [`DefaultBinds::uniform`] はどのスコープにも同じ組を返す（1 組を全スコープで共有する今の
-/// 振る舞い）。[`DefaultBinds::single`] は 1 つのスコープだけに組を持つ。[`DefaultBinds::for_scope`]
+/// [`DefaultBinds::uniform`] はどのスコープにも同じ組を返す（1 組を全スコープで共有する）。
+/// [`DefaultBinds::single`] は 1 つのスコープだけに組を持つ。[`DefaultBinds::for_scope`]
 /// は書かれていないスコープ・数でないスコープに空の組（`uniform` なら共有の組）を返す。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DefaultBinds {
@@ -38,7 +38,7 @@ pub struct DefaultBinds {
 }
 
 impl DefaultBinds {
-    /// どのスコープにも同じ組（今の振る舞い）。
+    /// どのスコープにも同じ組。
     pub fn uniform(binds: areka_emo_compose::BindSet) -> Self {
         Self {
             by_scope: BTreeMap::new(),
@@ -502,7 +502,7 @@ pub struct AppliedBind {
     pub result: NamedBindResult,
 }
 
-/// 読んだ着せ替えの指令を、パーツ 1 つずつ今の当て方（[`apply_named_bind`]）で当てる。返す列は当てた順。
+/// 読んだ着せ替えの指令を、パーツ 1 つずつ [`apply_named_bind`] で当てる。返す列は当てた順。
 ///
 /// SSP の測り（research.md 2.11）に合わせ、トグル形は今の着脱の反対を 1 回、カテゴリ単位形は定義の順
 /// （[`BindResolver::category_parts_in_order`]）に `0`／`1`／その時点の反対を 1 つずつ当てる（要件 3.8〜3.10）。
@@ -580,7 +580,7 @@ pub(crate) fn accumulate(
     on: bool,
 ) -> areka_emo_compose::BindSet {
     if on {
-        // 既存 ID に id を連結。from_ids が整列＋dedup するため重複適用は集合として no-op。
+        // 今着ている ID に id を足す。from_ids が整列＋dedup するため重複適用は集合として no-op。
         areka_emo_compose::BindSet::from_ids(
             current.ids().iter().copied().chain(std::iter::once(id)),
         )

@@ -19,9 +19,9 @@ const EIGHT_WORDS: &str = "surface10\n{\n\
     animation0.pattern4,stop,3\n\
     animation0.pattern5,parallelstop,(3)\n\
     animation0.pattern6,AlternativeStop,(3,4)\n\
-    animation0.pattern7,insert,3\n\
+    animation0.pattern7,insert,3,70,5,6\n\
     animation0.pattern8,move,-1,40,0,10\n\
-    animation0.pattern9,start,abc\n\
+    animation0.pattern9,start,abc,70,5,6\n\
     animation3.interval,never\n\
     animation3.pattern0,overlay,103,10,0,0\n\
     animation4.interval,never\n\
@@ -99,7 +99,7 @@ fn act_frames_draw_nothing_and_log_nothing() {
     );
 }
 
-/// `never` と純 `bind` は「呼ばれるだけ」として表に載り、未知の interval は今のまま載らない。
+/// `never` と純 `bind` は「呼ばれるだけ」として表に載り、未知の interval は載らない。
 #[test]
 fn never_and_pure_bind_are_call_only_unknown_stays_out() {
     let text = "surface10\n{\n\
@@ -121,7 +121,7 @@ fn never_and_pure_bind_are_call_only_unknown_stays_out() {
     );
     assert!(
         logs.iter().any(|l| l.contains("vocab=\"yen-e\"")),
-        "未知の interval の記録は今のまま: {logs:?}"
+        "未知の interval は語を添えて記録する: {logs:?}"
     );
     assert!(
         !table.is_continuous(),

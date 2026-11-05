@@ -92,7 +92,7 @@ fn zero_total_always_is_not_adopted_and_warns_once() {
 
 /// コマが空の `always` は空の検査（`warn!`）に落ち、合計 0 の `warn!` は重ねない。
 #[test]
-fn empty_always_keeps_the_existing_empty_warn() {
+fn empty_always_falls_to_the_empty_warn() {
     let (table, logs) = table_and_logs("surface7\n{\nanimation2.interval,always\n}\n");
     assert!(table.is_empty());
     let w = warns(&logs);

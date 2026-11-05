@@ -113,7 +113,7 @@ fn shell_replace_resets_the_shift_after_the_rebased() {
             shell_table: table_of(MOVE),
             fallback: crate::ShellSurfaceFallback::default(),
         },
-        crate::SkinFacts::new(BTreeMap::new(), BTreeMap::new(), BTreeMap::new())
+        no_facts()
     ));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");

@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, started, switch};
+use super::test_support::{cell, note_balloon, started, switch};
 use super::tests::counting_rng;
 use super::*;
 use crate::resolve::SurfaceTarget;
@@ -640,14 +640,7 @@ fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
-    let note = |states: &mut ScopeStates, open: bool| {
-        states.note_stage(&crate::state::StageNote::Balloon {
-            scope: scope(),
-            open,
-            face: 0,
-            generation: 0,
-        });
-    };
+    let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
     note(&mut states, false);
     rt.on_tick(0, &mut states);
     rt.on_tick(1000, &mut states);
@@ -674,7 +667,7 @@ fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
 
 /// 抽選の境目の刻みより前の時刻に別の再生の `start,1` が抽選の 1 を始めていたら、抽選は 1 を再生中と
 /// 見て乱数を引かない（`runonce` の 0 が 30 に鳴り、`start,1` は 1010・刻みは 1050・
-/// seriko-pattern-calls 要件 3.1・要件 2.3）。
+/// seriko-pattern-calls 要件 3.1・areka-P0-seriko-loop 要件 2.3）。
 #[test]
 fn lottery_sees_a_play_started_by_an_earlier_call_in_the_same_tick() {
     const TEXT: &str = "surface0\n{\n\

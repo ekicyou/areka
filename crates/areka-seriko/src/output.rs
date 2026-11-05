@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 pub enum DisplayCommand {
     /// 表示: 解決済み surface id・現在の bind 集合・pattern 進行状態を伴う（要件 5.1）。
     /// `pattern` は「1 面の完全な合成入力」の第一級要素（PatternState・要件 5.1）。cue 由来の
-    /// Show は空 pattern（`PatternState::default()`）を載せ、ループ不活性時は従来と観測等価（要件 5.4）。
+    /// Show は空 pattern（`PatternState::default()`）を載せる＝ループ不活性時は pattern を何も足さない（要件 5.4）。
     Show {
         scope: ActorKey,
         surface_id: u32,

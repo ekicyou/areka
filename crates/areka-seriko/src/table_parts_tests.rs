@@ -52,7 +52,9 @@ fn each_part_path_decides_has_animated_parts() {
         )
     };
     let child = "surface0\n{\nelement0,overlay,200,0,0\n}\n";
-    let bind = "surface0\n{\nanimation5.interval,bind\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
+    // `bind+random,0` は `k == 0` で表に採らないが、入れ子の表は pattern0 の先を着せ替えの先として持つ
+    // ので、この経路だけが立つ（素の `bind` は呼ばれるだけの animation として表に載り、コマの経路も立つ）。
+    let bind = "surface0\n{\nanimation5.interval,bind+random,0\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
     let frame = "surface0\n{\nanimation1.interval,random,2\n\
                  animation1.pattern0,overlay,200,40,0,0\n}\n";
     // 合計 0 の `always`（採らない）の経過 0 の pattern（pattern1）だけが 200 を指す（spec:

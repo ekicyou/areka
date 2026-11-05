@@ -98,7 +98,11 @@ fn runonce_fires_once_and_starts_at_visible_since() {
     let (a, b) = (runonce(1), runonce(2));
 
     assert_eq!(poll(&mut armed, &a, 1250, |_| false, None), Some(1234));
-    assert_eq!(poll(&mut armed, &a, 1266, |_| true, None), None, "再生中");
+    assert_eq!(
+        poll(&mut armed, &a, 1266, |_| false, None),
+        None,
+        "鳴らし済み"
+    );
     assert_eq!(
         poll(&mut armed, &a, 9000, |_| false, None),
         None,

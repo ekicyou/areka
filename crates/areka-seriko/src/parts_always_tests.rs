@@ -5,13 +5,12 @@
 //! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
 
 use areka_emo_compose::{BindSet, PatternState};
-use log_capture_kit::{LineFormat, capture_lines};
 
 use super::PartClocks;
-use super::tests::cell_of;
+use super::tests::{cell_of, count};
 use crate::looper::tests::counting_rng;
 use crate::table::AnimationTable;
-use crate::test_support::{part_playing as playing, scope, table_of};
+use crate::test_support::{capture_logs, part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
 
 /// 一番上 `top` のシェルの面で刻みを 1 回回し、部品の欄を作り直した絵を返す（着せ替えも一番上の欄も空）。
@@ -203,15 +202,16 @@ fn always_clock_birth_is_debug_logged_once() {
     let table = table_of(ALWAYS);
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
-    let (_, lines) = capture_lines(LineFormat::LevelTargetFields, || {
+    let lines = capture_logs(|| {
         for at in [1000u64, 1100, 1200] {
             tick(&mut clocks, &table, 0, at, false, &mut rng);
         }
     });
-    let born: Vec<&String> = lines
-        .iter()
-        .filter(|l| l.contains("level=DEBUG") && l.contains("seriko: part always の時計が生まれた"))
-        .collect();
-    assert_eq!(born.len(), 1, "{lines:#?}");
-    assert!(born[0].contains("part=100"), "{born:?}");
+    let born = ["level=DEBUG", "seriko: part always の時計が生まれた"];
+    assert_eq!(count(&lines, &born), 1, "{lines:#?}");
+    assert_eq!(
+        count(&lines, &[born[0], born[1], "part=100"]),
+        1,
+        "{lines:#?}"
+    );
 }

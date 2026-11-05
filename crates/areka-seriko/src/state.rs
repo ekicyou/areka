@@ -144,14 +144,14 @@ pub struct ScopeStates {
     /// scope は `static_binds`（既定・初期値）を Show の bind 供給源とする（[`current_binds`]）。
     ///
     /// 起動時は空（書き込むのは `apply_bind`）。空である限り
-    /// [`current_binds`] は全 scope で `static_binds` を返し、Show 発行は従来と byte 同値
-    /// （要件 3.8 非退行）。[`current_binds`]: ScopeStates::current_binds
+    /// [`current_binds`] は全 scope で `static_binds` を返し、Show の着せ替えは
+    /// `static_binds` だけになる（要件 3.8）。[`current_binds`]: ScopeStates::current_binds
     dynamic_binds: HashMap<ActorKey, BindSet>,
     /// per-(scope, slot) の pattern 進行状態（`dynamic_binds` と同居・要件 5.1）。エントリを持つ
     /// (scope, slot) はその [`PatternState`] を、持たない (scope, slot) は空（[`PatternState::default`]）を
     /// Show/ShowBalloon の pattern 供給源とする（[`current_pattern`]）。SERIKO ループ評価
     /// が `commit_pattern` 経由で書き込み、surface 切替時に当該 slot が空へリセットされる。
-    /// 空である限り Show/ShowBalloon の pattern は空＝ループ不活性時は従来と観測等価（要件 5.4）。
+    /// 空である限り Show/ShowBalloon の pattern は空＝ループ不活性時は pattern を何も足さない（要件 5.4）。
     ///
     /// [`current_pattern`]: ScopeStates::current_pattern
     pattern_states: HashMap<(ActorKey, Slot), PatternState>,
@@ -174,7 +174,7 @@ impl ScopeStates {
             // 「初期値」はここを pre-populate するのではなく current_binds のフォールバックで実現。
             dynamic_binds: HashMap::new(),
             // 空で起動。pattern の書き込みは SERIKO ループ評価（commit_pattern）の責務。未格納の
-            // (scope, slot) は current_pattern が空を返す（従来と観測等価・要件 5.4）。
+            // (scope, slot) は current_pattern が空を返す（要件 5.4）。
             pattern_states: HashMap::new(),
             balloon_windows: HashMap::new(),
         }
@@ -193,7 +193,7 @@ impl ScopeStates {
     ///     は新規挿入・design「未知 scope への Show は新規挿入」）し、
     ///     [`ApplyOutcome::Changed`]`(DisplayCommand::Show { scope, surface_id: id, binds })` を返す
     ///     （scope の現在 bind 集合 [`current_binds`](Self::current_binds) を同梱・要件 5.1。動的 bind
-    ///     未適用なら `static_binds`＝従来同値・要件 3.8）。
+    ///     未適用なら `static_binds`・要件 3.8）。
     /// - [`SurfaceTarget::Hide`]:
     ///   - 現状が既に `Hidden` → [`ApplyOutcome::Unchanged`]（非表示保持・要件 3.4）。
     ///   - それ以外（表示中、または未知 scope）→ 状態を `Hidden` に設定し
@@ -222,7 +222,7 @@ impl ScopeStates {
                     surface_id: id,
                     // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds＝非退行・R3.8）。
                     binds: self.current_binds(scope).clone(),
-                    // pattern 進行状態は cue 由来 Show では空（ループ非活性＝従来と観測等価・R5.4）。
+                    // pattern 進行状態は cue 由来 Show では空（ループ非活性なら pattern を何も足さない・R5.4）。
                     // 直上で格納 pattern をクリア済み＝空 pattern と一貫（実 pattern は commit_pattern 経由）。
                     pattern: PatternState::default(),
                 })
@@ -408,7 +408,7 @@ impl ScopeStates {
     /// `dynamic_binds` にエントリを持つ scope はその動的集合を、持たない scope は静的既定集合
     /// `static_binds`（起動直後 default on/off を初期値とする）を返す純粋な読み取り。Show 発行の
     /// bind 供給源はこのアクセサであり、動的 bind が未適用（`dynamic_binds` が空）の間は全 scope で
-    /// `static_binds` を返す＝従来の発行結果と byte 同値（要件 3.8 非退行）。
+    /// `static_binds` を返す（要件 3.8）。
     pub fn current_binds(&self, scope: &ActorKey) -> &BindSet {
         match self.dynamic_binds.get(scope) {
             Some(binds) => binds,
@@ -532,7 +532,7 @@ impl ScopeStates {
                 let sid = *sid;
                 // bind 変化の Show 再発行は現在コマ（`current_pattern`）を保ったまま再合成する
                 // （空 default ではない・design「ScopeStates 拡張」）。bind はシェル面に適用される
-                // ため Shell slot の pattern を同梱。ループ不活性（未 commit）なら空＝従来と同値（R5.4）。
+                // ため Shell slot の pattern を同梱。ループ不活性（未 commit）なら空（R5.4）。
                 let pattern = self.current_pattern(scope, Slot::Shell).clone();
                 BindApplyOutcome::Changed(DisplayCommand::Show {
                     scope: scope.clone(),
@@ -580,7 +580,7 @@ impl ScopeStates {
     /// (scope, slot) は空（[`PatternState::default`] 相当）を返す純粋な読み取り。`current_binds` が
     /// 未束縛 scope で `static_binds`（既定）を返すのと同型で、pattern は「既定＝空」（pattern 寄与なし）。
     /// Show/ShowBalloon 発行の pattern 供給源はこのアクセサであり、未格納（ループ不活性）の間は空を
-    /// 返す＝従来の発行結果と観測等価（要件 5.4）。
+    /// 返す（要件 5.4）。
     ///
     /// 不在時は静的な空 [`PatternState`]（プロセス共有・`OnceLock`）への参照を返す（`&self` の寿命へ
     /// 縮約される `&'static`）。

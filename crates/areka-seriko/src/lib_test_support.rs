@@ -29,6 +29,22 @@ pub(crate) fn table_of(text: &str) -> AnimationTable {
     AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
 }
 
+/// 本文を読み手 → 畳み込みで組み、`films` のパスの element を、分解と同じに動く絵の子を置く element へ
+/// 替えた世界（表は `AnimationTable::from_world_and_films` に絵の列と一緒に渡す）。
+pub(crate) fn film_world(text: &str, films: &[(&str, FilmId)]) -> EmoWorld {
+    let mut world = EmoWorld::build(&areka_parsers::shell::parse(text));
+    let w = world.world_mut();
+    let mut q = w.query::<&mut areka_emo_compose::SurfaceMaster>();
+    for mut master in q.iter_mut(w) {
+        for e in &mut master.elements {
+            if let Some(&(_, film)) = films.iter().find(|(path, _)| e.path.as_str() == *path) {
+                e.kind = areka_emo_compose::ElementKind::Film(film);
+            }
+        }
+    }
+    world
+}
+
 /// 着せ替えの無い空のスコープ状態。
 pub(crate) fn empty_states() -> crate::state::ScopeStates {
     crate::state::ScopeStates::new(crate::DefaultBinds::uniform(

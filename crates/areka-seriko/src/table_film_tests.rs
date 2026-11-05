@@ -7,13 +7,11 @@
 
 use std::num::{NonZeroU32, NonZeroU64};
 
-use areka_emo_compose::{
-    ElementKind, EmoWorld, FilmId, FilmSheet, FilmSkip, FilmSkipReason, PartKey, SurfaceMaster,
-};
+use areka_emo_compose::{EmoWorld, FilmId, FilmSheet, FilmSkip, FilmSkipReason, PartKey};
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
-use crate::test_support::warns;
+use crate::test_support::{film_world, warns};
 
 use crate::test_support::ANIMATED_PLAYBACK_SHELL as FIXTURE;
 
@@ -45,21 +43,14 @@ fn fixture_sheets() -> Vec<FilmSheet> {
 
 /// 検体の面の表を組み、動く絵の element を分解と同じに子を置く element へ替える。
 fn fixture_world() -> EmoWorld {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(FIXTURE));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            let film = match e.path.as_str() {
-                "rgb.apng" => RGB_APNG,
-                "alpha.webp" => ALPHA_WEBP,
-                "rgb.webp" => RGB_WEBP,
-                _ => continue,
-            };
-            e.kind = ElementKind::Film(FilmId(film));
-        }
-    }
-    world
+    film_world(
+        FIXTURE,
+        &[
+            ("rgb.apng", FilmId(RGB_APNG)),
+            ("alpha.webp", FilmId(ALPHA_WEBP)),
+            ("rgb.webp", FilmId(RGB_WEBP)),
+        ],
+    )
 }
 
 fn build(
@@ -125,7 +116,11 @@ fn film_rows_do_not_collide_with_surface_numbers() {
     let (table, _) = build(&world, &sheets, &[]);
     let surface0 = table.part_animations(PartKey::Surface(0));
     let film0 = table.part_animations(PartKey::Film(FilmId(0)));
-    assert_eq!(surface0, table.animations(0), "作者のサーフェスは今の列");
+    assert_eq!(
+        surface0,
+        table.animations(0),
+        "作者のサーフェスの列は一番上の面の列と同じ"
+    );
     assert_eq!(surface0[0].frames[0].picture, None);
     assert_eq!(film0[0].frames[0].picture, Some(0));
     assert!(table.part_animations(PartKey::Film(FilmId(99))).is_empty());
@@ -156,14 +151,10 @@ fn fixture_table_carries_film_rows_and_counts_film_parts() {
 /// 子だけ（手書きの `always` も `random` も無い）でも門は真。
 #[test]
 fn film_only_table_is_continuous() {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(
+    let world = film_world(
         "surface0\n{\nelement0,overlay,rgb.apng,0,0\n}\n",
-    ));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        master.elements[0].kind = ElementKind::Film(FilmId(RGB_APNG));
-    }
+        &[("rgb.apng", FilmId(RGB_APNG))],
+    );
     let (table, logs) = build(
         &world,
         &[sheet(RGB_APNG, "rgb.apng", &[100, 100], None)],

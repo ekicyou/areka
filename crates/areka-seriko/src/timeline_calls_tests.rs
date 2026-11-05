@@ -106,7 +106,7 @@ fn minus_one_followed_by_zero_wait_action_frame_stops() {
 }
 
 /// `-1` のすぐ後に待ち 0 の描くコマがあっても、`-1` に着いた時点で止まる（後ろの描くコマへ進まない・
-/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・要件 4.3）。
+/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・areka-P0-seriko-loop 要件 4.3）。
 #[test]
 fn minus_one_followed_by_a_zero_wait_draw_frame_stops() {
     let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 0)];

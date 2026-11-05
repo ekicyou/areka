@@ -8,7 +8,7 @@ use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, Interval};
 
-// 刻みの道の役者テスト（spec: audit-seriko 指摘 2・actor_bind_loop_tests.rs から 1,000 行を越えないよう移した）。
+// 刻みの道の役者テスト（spec: audit-seriko 指摘 2）。R の番号は areka-P0-seriko-loop の要件。
 // ─────────────────────────────────────────────────────────────────────
 // Tick 経路（SerikoMsg::Tick・send_tick・handle_message Tick 腕・on_surface_changed
 // 連動）の網羅檻（R1.1/6.1/6.3/7.1/7.5/8.3）。
@@ -17,7 +17,7 @@ use areka_parsers::shell::{Animation, Interval};
 // - (A) 表示中 slot が 1 つもない Tick は完全 no-op（無発行）——on_tick が空を返す 2.1 表示中
 //       ゲートの自然帰結。
 // - (B) live な loop_config（実表＋注入 rng）＋表示中 slot で境界跨ぎ Tick が pattern を載せた
-//       Show を**既存 emit_display 単一発行点**から発行する（handle_message→on_tick→emit_display
+//       Show を**単一発行点 emit_display** から発行する（handle_message→on_tick→emit_display
 //       の end-to-end 配線・looper の層で on_tick をじかに呼ぶ檻とは別の配線証明）。
 // - (C) アクター停止後の send_tick は debug!（shutdown 期待事象）で panic しない（7.5/6.3）。
 // - (D) Emote の Changed で on_surface_changed が呼ばれ、切替後の Tick が旧アニメの残再生を
@@ -61,7 +61,7 @@ fn tick_with_no_shown_slot_is_complete_no_op() {
 }
 
 /// (B・R1.1/6.3/7.1) 表示中 slot＋live config で境界跨ぎ Tick が pattern を載せた Show を
-/// 既存 emit_display 単一発行点から発行する（handle_message→on_tick→emit_display の end-to-end）。
+/// 単一発行点 emit_display から発行する（handle_message→on_tick→emit_display の end-to-end）。
 ///
 /// looper の層で on_tick をじかに呼ぶ檻と異なり、**Tick メッセージが handle_message を貫通**して発行に至る
 /// 配線を固定する。注入 rng（always_fire）＋注入 Tick 列で決定論（sleep 不使用）。

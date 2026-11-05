@@ -712,7 +712,7 @@ fn accumulate_order_insensitive() {
     assert_eq!(result_a.ids(), &[1100, 1207], "両順序とも昇順正準形へ収束");
 }
 
-/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（今の振る舞い・要件 14.3）。
+/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（要件 14.3）。
 #[test]
 fn default_binds_uniform_returns_same_set_for_every_scope() {
     let set = areka_emo_compose::BindSet::from_ids([1100, 1207]);

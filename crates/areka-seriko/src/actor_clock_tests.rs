@@ -162,7 +162,8 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
     );
 }
 
-/// 実のアクターへ `\s[0]` → 刻み 1100 → `\s[1]` を流し、記録を返す（刻み 0 で始める）。
+/// 実のアクターへ `\s[0]` → 刻み 1100 を流し、記録を返す（刻み 0 で始める・時計つきの回で時計が
+/// 刻みを追い越さないよう、刻み 1100 の後に合図を流さない）。
 fn run_actor(
     spawn: impl FnOnce(MockSurfaceOutput) -> (SerikoSink, areka_actor::ActorHandle),
 ) -> Vec<DisplayCommand> {
@@ -172,7 +173,6 @@ fn run_actor(
     sink.send_tick(0);
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "0"));
     sink.send_tick(1100);
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "1"));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
     records.lock().unwrap().clone()
@@ -219,7 +219,7 @@ fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_ti
     });
     assert_eq!(
         show_surfaces(&legacy),
-        vec![(0, None), (0, Some(102)), (1, None)],
+        vec![(0, None), (0, Some(102))],
         "時計なし: 刻み 0 から 1100ms で 102"
     );
     assert_eq!(
@@ -231,7 +231,7 @@ fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_ti
     let clock: SerikoClock = Arc::new(|| 1030);
     assert_eq!(
         show_surfaces(&run_actor(spawn(Some(clock)))),
-        vec![(0, None), (1, None)],
+        vec![(0, None)],
         "時計つき: 1030 から 70ms はまだ経過 0"
     );
 }

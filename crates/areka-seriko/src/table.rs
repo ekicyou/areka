@@ -450,6 +450,7 @@ impl AnimationTable {
             p.children
                 .iter()
                 .copied()
+                // 表に採らない `bind+random,0` のための経路。
                 .chain(p.bind_targets.iter().map(|&(_, target)| target))
                 .chain(p.always_rest.iter().map(|&(_, target)| target))
         });
@@ -932,14 +933,10 @@ mod tests {
     /// 動く絵の子の待ちの合計が 0 なら子の行を採らず、パスを添えて `warn!` を 1 行出す（周期を作れない）。
     #[test]
     fn film_with_zero_total_wait_is_warned_and_not_recorded() {
-        let mut world = EmoWorld::build(&areka_parsers::shell::parse(
+        let world = crate::test_support::film_world(
             "surface0\n{\nelement0,overlay,still.apng,0,0\n}\n",
-        ));
-        let w = world.world_mut();
-        let mut q = w.query::<&mut areka_emo_compose::SurfaceMaster>();
-        for mut master in q.iter_mut(w) {
-            master.elements[0].kind = areka_emo_compose::ElementKind::Film(FilmId(3));
-        }
+            &[("still.apng", FilmId(3))],
+        );
         let sheet = FilmSheet {
             id: FilmId(3),
             path: "still.apng".to_string(),

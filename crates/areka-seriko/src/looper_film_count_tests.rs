@@ -8,12 +8,12 @@
 
 use std::num::NonZeroU32;
 
-use areka_emo_compose::{ElementKind, EmoWorld, FilmId, FilmSheet, SurfaceMaster};
+use areka_emo_compose::{FilmId, FilmSheet};
 
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::test_support::empty_states;
+use crate::test_support::{empty_states, film_world};
 
 const FILM: FilmId = FilmId(10);
 /// 1 コマの待ち時間。
@@ -21,18 +21,12 @@ const DELAY_MS: u64 = 100;
 /// 画面の更新の刻み。
 const TICK_MS: u64 = 16;
 
-/// 面 0 に動く絵 `a.png` を 1 つ置いた表（分解と同じ形を手で組む＝`parts_film_tests.rs` と同じ組み方）。
+/// 面 0 に動く絵 `a.png` を 1 つ置いた表（分解と同じ形を手で組む）。
 fn one_film_table() -> AnimationTable {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(
+    let world = film_world(
         "surface0\n{\nelement0,overlay,a.png,0,0\n}\n",
-    ));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            e.kind = ElementKind::Film(FILM);
-        }
-    }
+        &[("a.png", FILM)],
+    );
     let sheet = FilmSheet {
         id: FILM,
         path: "a.png".into(),

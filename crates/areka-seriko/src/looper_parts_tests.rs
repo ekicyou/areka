@@ -12,7 +12,9 @@ use super::test_support::{shell_runtime, switch};
 use super::tests::{always_fire, cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::test_support::{empty_states, part_frames, part_playing as playing, table_of};
+use crate::test_support::{
+    capture_logs, count, empty_states, part_frames, part_playing as playing, table_of,
+};
 
 /// 部品の欄を外した写しと等しい＝部品の欄が空。
 fn has_no_parts(pattern: &PatternState) -> bool {
@@ -274,7 +276,11 @@ fn part_visible_across_a_surface_switch_keeps_its_runonce_used() {
     assert_eq!(rt.parts.clock(&scope, 100, 0), playing(1000));
     assert_eq!(rt.parts.clock(&scope, 101, 0), playing(1000));
 
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(1), 1100).expect("1 へ");
+    let mut cmd = None;
+    let logs = capture_logs(|| {
+        cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(1), 1100);
+    });
+    let cmd = cmd.expect("1 へ");
     assert_eq!(
         rt.parts.clock(&scope, 100, 0),
         playing(1000),
@@ -288,7 +294,15 @@ fn part_visible_across_a_surface_switch_keeps_its_runonce_used() {
     );
 
     // 再生を終えた後も、構え直していないのでもう鳴らない。
-    rt.on_tick(1400, &mut states);
-    rt.on_tick(1500, &mut states);
+    let later = capture_logs(|| {
+        rt.on_tick(1400, &mut states);
+        rt.on_tick(1500, &mut states);
+    });
     assert_eq!(rt.parts.clock(&scope, 100, 0), None);
+    assert_eq!(
+        count(&logs, "part trigger runonce を鳴らした")
+            + count(&later, "part trigger runonce を鳴らした"),
+        0,
+        "1100・1400・1500 のどの刻みでも鳴らし直さない（鳴らしてすぐ捨てる再生も無い）"
+    );
 }

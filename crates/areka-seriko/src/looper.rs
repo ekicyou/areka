@@ -78,7 +78,7 @@ pub struct SerikoLoopConfig {
     /// バルーン表示エントリ用の scope 別アニメ表（surface ID 名前空間: balloon・要件 5.6）。
     ///
     /// キーは `ActorKey`（boot 側の `u32` scope は転送時に `ActorKey::from(scope.to_string())` で
-    /// 変換する＝attach／再追従と同一の既存写像語彙）。**不在 scope は空表意味論**（抽選対象ゼロ・
+    /// 変換する＝attach／再追従と同じ写像の語彙）。**不在 scope は空表意味論**（抽選対象ゼロ・
     /// 乱数非消費・panic なし）。emo2 は全 scope 空。
     pub balloon_tables: BTreeMap<ActorKey, AnimationTable>,
     /// 1/N 抽選の乱数注入シーム（本番は `seeded_rng(seed)`・テストは注入列）。
@@ -89,7 +89,7 @@ pub struct SerikoLoopConfig {
 }
 
 impl SerikoLoopConfig {
-    /// 空表＋ダミー乱数（ループ完全不活性）。既存テスト・非 emo2 経路の非退行用。
+    /// 空表＋ダミー乱数（ループ完全不活性）。ループを使わないテストと非 emo2 経路の足場。
     ///
     /// シェル表が空・バルーン表の写像も空ゆえ抽選対象アニメが常にゼロ＝`should_fire` は決して
     /// 呼ばれず乱数は消費されない（ダミー種は観測に現れない）。`on_tick` は常に空を返す（非退行）。
@@ -718,7 +718,7 @@ impl LoopRuntime {
                 // **これが無いと「再生中に外れた」場合に次 tick でコマが復活する**——状態側の除去
                 // （`commit_bind` の `drop_residual_frames`・bindopt 7.1）は playback を触らないため、
                 // playback が残る限り下の [`frame_at`] が同じコマを置き直す（2026-08-11 実機で確定）。
-                // `Random`（bind に属さない interval アニメ）はこの判定を通らず従来どおり（bindopt 7.4）。
+                // `Random`（bind に属さない interval アニメ）はこの判定で外さない（bindopt 7.4）。
                 let dropped_by_bind = matches!(anim.trigger, LoopTrigger::BindRandom { .. })
                     && !states.current_binds(scope).contains(anim_id);
                 if dropped_by_bind {

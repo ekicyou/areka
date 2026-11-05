@@ -442,7 +442,7 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     assert_eq!(parts_in_field(&p), vec![100], "40 のコマは欄に載らない");
 }
 
-// ── 7.3: 時計を書き換えない口・時計を捨てる口・記録 ─────────────────────────────
+// ── areka-P0-surface-element-nesting tasks.md 7.3: 時計を書き換えない口・時計を捨てる口・記録 ──
 
 /// 子 100 は 50ms で 101 → さらに 50ms で 102（`-1` の無い末尾＝保つ）。
 const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
@@ -503,6 +503,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     assert_eq!(calls(&probe), 1);
     let playing = part_playing(1000);
 
+    // 同じ時刻で 3 回ずつ呼ぶ（時刻は戻さない）。
     for _ in 0..3 {
         assert!(
             part_frames(
@@ -512,6 +513,9 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
             .is_empty(),
             "Pending はコマ無し"
         );
+        assert_eq!(clocks.clock(&scope(), 100, 0), playing);
+    }
+    for _ in 0..3 {
         assert_eq!(
             part_frames(
                 &refresh_at(&mut clocks, &table, 0, &b, Some(1060), &stale),
@@ -520,6 +524,9 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
             vec![(0, 101)],
             "前の写しの欄は作り直される"
         );
+        assert_eq!(clocks.clock(&scope(), 100, 0), playing);
+    }
+    for _ in 0..3 {
         // 末尾の時刻: コマは出すが時計は `Playing` のまま。
         assert_eq!(
             part_frames(

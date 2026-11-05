@@ -21,8 +21,8 @@
 //!
 //! 演者非依存の**単一の出力契約** [`dola::cue::CueSink`] を実装する [`SerikoSink`] が
 //! 差し込み口となる。`emit` は届いた [`TalkCue`] を [`SerikoMsg::Cue`] として専用 inbox（std mpsc）
-//! へ橋渡しする。ghost live-path も `CueSink` 注入で結線する（旧 `SurfaceSink` 経路は
-//! 撤去して `CueSink` 一本へ集約・broadcast＋演者側 relevance ゆえ役割別トレイトは不要）。
+//! へ橋渡しする。ghost live-path も `CueSink` 注入で結線する（受け口は `CueSink` 1 つ・
+//! broadcast＋演者側 relevance ゆえ役割別トレイトは要らない）。
 //!
 //! # 停止経路の形
 //!
@@ -70,7 +70,7 @@ pub enum SerikoMsg {
     /// 時間駆動ループの 1 tick（絶対時刻 ms・素の `u64`＝新規依存なし・D-1）。
     ///
     /// cue と同一 inbox を FIFO 共有し、`SerikoSink::send_tick` が橋渡しする。`handle_message` の
-    /// Tick 腕が `LoopRuntime::on_tick` を回し、既存 `emit_display` 単一発行点から発行する（R1.1/6.3）。
+    /// Tick 腕が `LoopRuntime::on_tick` を回し、単一発行点 `emit_display` から発行する（R1.1/6.3）。
     Tick { now_ms: u64 },
     /// 定義の差し替えの依頼（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
     ///
@@ -237,8 +237,8 @@ impl SerikoSink {
 /// `CuePlayer` は登録された全 sink へ全 cue を **broadcast** し、seriko は担当（Shell）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
 /// （担当外 cue も本 sink 経由で inbox へ届き、`handle_message` が良性に読み飛ばす・R2.2/R2.3）。
-/// 配送先スロットの 2 分割（旧 `SurfaceSink`/`TextSink`）は broadcast＋演者側 relevance ゆえ廃した
-/// （暫定並存の `SurfaceSink` 実装は撤去して `CueSink` 一本へ集約）。
+/// 配送先は broadcast＋演者側 relevance で選ぶので、出力の契約は `CueSink` 1 つで、役割ごとの
+/// 受け口は持たない。
 impl dola::cue::CueSink for SerikoSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(cue);
@@ -285,8 +285,8 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// `handle_message` へ `&` 手渡し）・`out` を単独所有し、[`areka_actor::run_inbox`] で発火を
 /// 到着順（FIFO）に処理する。
 ///
-/// bind 名前表を供給しない経路は
-/// [`BindResolver::empty`] を渡せば従来と byte 同値。その根拠は宣言集合が空であることではなく、
+/// bind 名前表を供給しない経路は [`BindResolver::empty`] を渡せば、着せ替えの合図は表示の指令を
+/// 出さない。その根拠は宣言集合が空であることではなく、
 /// **名前表が空＝[`BindResolver::resolve`] が常に `None`** であること——空リゾルバは
 /// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`](crate::BindChoicePolicy::Default)＝着衣は排他置換）になるが、そもそも
 /// 着せ替え ID を解決できず適用へ到達しないため発行に影響しない（bindopt 設計 D3）。
@@ -571,8 +571,8 @@ fn dispatch_message<O: SurfaceOutput>(
     let cue = match msg {
         // 正常停止（1.4）。積み残しは run_inbox の即時 return で破棄される。
         SerikoMsg::Close => return ControlFlow::Break(()),
-        // 時間駆動ループの 1 tick（1.1/6.3）: LoopRuntime へ委譲し、返る指令列を**既存**の
-        // `emit_display` 単一発行点のみで発行する（新発行点を作らない・R6.3）。表示中 slot が 1 つも
+        // 時間駆動ループの 1 tick（1.1/6.3）: LoopRuntime へ委譲し、返る指令列を
+        // 単一発行点 `emit_display` だけで発行する（新発行点を作らない・R6.3）。表示中 slot が 1 つも
         // ない tick は on_tick が空を返す＝完全 no-op（無発行・2.1 の表示中ゲートの自然帰結）。
         SerikoMsg::Tick { now_ms } => {
             for cmd in loop_runtime.on_tick(now_ms, states) {
@@ -620,7 +620,7 @@ fn dispatch_message<O: SurfaceOutput>(
         None => {
             // `cue_target_of==None` は Wait（純粋な待ち・action なし）と Custom（`\!` 汎用キャリア）。
             // bind 消費分岐（D1）: Wait 判定より前に `\![bind]` を名前自己選別で捌く。キャリアを
-            // 開封し `name` が `bind` か `bind-noevent` のキャリアだけが着せ替えの腕へ入る。非該当・非キャリアは既存の
+            // 開封し `name` が `bind` か `bind-noevent` のキャリアだけが着せ替えの腕へ入る。非該当・非キャリアは
             // 良性 skip へフォールスルー（dola の名前写像 API は退役ゆえ参照しない・D1/D10）。
             match cue.command.as_command_carrier() {
                 // 非キャリア（純粋 Wait・非正準 params の Custom・その他）。
@@ -686,7 +686,7 @@ fn dispatch_message<O: SurfaceOutput>(
         }
     }
 
-    // バルーン面切替は早期分岐で処理する（key 抽出 match の前段・既存 Emote 経路の形に触れない・R4.6）。
+    // バルーン面切替は早期分岐で処理する（key 抽出 match の前段・Emote の経路とは別の腕・R4.6）。
     // 解決→適用→発行を arm 内で完結し値を返さないため、値を返す key 抽出 match には混ぜず早期 return する。
     if let CueCommand::BalloonSurface { key } = &cue.command {
         let target = match resolve_balloon_key(key) {

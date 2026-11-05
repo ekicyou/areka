@@ -74,7 +74,7 @@ impl SurfaceResolver {
 }
 
 /// バルーン面 key 解決結果（seriko バルーン専用・シェルの [`SurfaceTarget`] とは別型ゆえ
-/// 既存シェル経路に非干渉・要件 4.6）。名前形と破損数値をログ水準のために類別する。
+/// シェルの経路に干渉しない・要件 4.6）。名前形と破損数値をログ水準のために類別する。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum BalloonResolve {
     /// `0..=u32::MAX` の数値 id（→ 後段 [`SurfaceTarget::Show`] で `apply_balloon`・要件 4.1/4.4）。
@@ -91,7 +91,7 @@ pub(crate) enum BalloonResolve {
 
 /// バルーン面 key の数値解決（alias／名前解決なし・要件 4.4/4.5）。
 ///
-/// 純関数（`self` 不要・alias 表を一切引かない・決定論）。既存 [`SurfaceResolver::resolve`] は
+/// 純関数（`self` 不要・alias 表を一切引かない・決定論）。[`SurfaceResolver::resolve`] は
 /// 非数値を alias 表で引くが、本関数は**引かず** [`BalloonResolve::NameForm`] で止める
 /// （名前の形は文字の層が読む。seriko は数だけを読む）。
 ///

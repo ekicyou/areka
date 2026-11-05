@@ -13,12 +13,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use areka_emo_compose::PartKey;
 
-use super::test_support::{cell, started, switch};
+use super::test_support::{cell, note_balloon, started, switch};
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
-use crate::state::StageNote;
 use crate::test_support::{
     capture_logs, clear_all, count, cue, empty_states, part_frames, part_playing, scope, table_of,
     text,
@@ -245,12 +244,7 @@ fn hidden_scope_keeps_no_state_and_counts_from_its_return() {
 /// 時計が `ms` のときに、バルーンの窓が開いた（`open`）か閉じたことを知らせ、その場で評価する。
 fn note(st: &mut Stage, open: bool, ms: u64) {
     st.clock.store(ms, Ordering::SeqCst);
-    st.states.note_stage(&StageNote::Balloon {
-        scope: scope(),
-        open,
-        face: 0,
-        generation: 0,
-    });
+    note_balloon(&mut st.states, open, 0);
     st.rt
         .refresh(&scope(), Slot::Balloon, Some(ms), &mut st.states);
 }
