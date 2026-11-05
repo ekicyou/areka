@@ -162,16 +162,6 @@ fn entityref_cue(at: f64, scope: &str, entity: u64) -> TalkCue {
     }
 }
 
-/// バルーン面切替の TalkCue（`\b[key]` 相当・Shell 分類だが早期分岐で消費・4.1–4.5）を組む。
-fn balloon_cue(at: f64, scope: &str, key: &str) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::BalloonSurface { key: key.into() },
-        duration: 0.0,
-    }
-}
-
 /// 非 Shell（Balloon 担当＝emo-text 行き）の TalkCue（`Text`）を組む——broadcast 受信の担当外例（6.2）。
 fn text_cue(at: f64, scope: &str, text: &str) -> TalkCue {
     TalkCue {
@@ -431,7 +421,12 @@ fn balloon_numeric_key_emits_showballoon() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
+        SerikoMsg::Cue(cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        )),
     );
 
     assert_eq!(flow, ControlFlow::Continue(()), "消費後も処理継続（4.1）");
@@ -462,7 +457,12 @@ fn balloon_minus_one_emits_hideballoon() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(balloon_cue(0.0, "0", "-1")),
+        SerikoMsg::Cue(cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "-1".into() },
+            0.0,
+        )),
     );
 
     assert_eq!(flow, ControlFlow::Continue(()), "消費後も処理継続（4.2）");
@@ -497,7 +497,14 @@ fn balloon_name_form_is_debug_only_no_emit() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(balloon_cue(0.0, "0", "バルーン１")),
+            SerikoMsg::Cue(cue(
+                0.0,
+                "0",
+                CueCommand::BalloonSurface {
+                    key: "バルーン１".into(),
+                },
+                0.0,
+            )),
         )
     });
 
@@ -555,7 +562,12 @@ fn balloon_invalid_numeric_errors_once_no_emit() {
                 &mut states,
                 &mut loop_runtime,
                 &mut out,
-                SerikoMsg::Cue(balloon_cue(0.0, "0", bad)),
+                SerikoMsg::Cue(cue(
+                    0.0,
+                    "0",
+                    CueCommand::BalloonSurface { key: bad.into() },
+                    0.0,
+                )),
             )
         });
 
@@ -611,7 +623,12 @@ fn balloon_same_surface_twice_emits_once() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
+        SerikoMsg::Cue(cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        )),
     );
     let f2 = handle_message(
         &resolver,
@@ -619,7 +636,12 @@ fn balloon_same_surface_twice_emits_once() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
+        SerikoMsg::Cue(cue(
+            1.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        )),
     );
 
     assert_eq!(f1, ControlFlow::Continue(()));
@@ -665,7 +687,12 @@ fn shell_and_balloon_recorded_independently() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
+        SerikoMsg::Cue(cue(
+            1.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        )),
     );
 
     assert_eq!(shell, ControlFlow::Continue(()));

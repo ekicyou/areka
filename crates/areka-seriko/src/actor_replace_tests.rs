@@ -45,16 +45,6 @@ fn arm_on_cue(scope: &str) -> TalkCue {
     }
 }
 
-/// `\b[key]` の cue。
-fn balloon_cue(scope: &str, key: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::BalloonSurface { key: key.into() },
-        duration: 0.0,
-    }
-}
-
 /// 記録の中の `Rebased` の位置をすべて返す。
 fn rebased_positions(records: &[DisplayCommand]) -> Vec<usize> {
     records
@@ -187,7 +177,15 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
     );
 
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常"));
-    CueSink::emit(&mut sink, balloon_cue("0", "5"));
+    CueSink::emit(
+        &mut sink,
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "5".into() },
+            0.0,
+        ),
+    );
     CueSink::emit(&mut sink, emote_cue(0.0, "1", "-1")); // scope 1 はシェルだけ（非表示）
     sink.send_tick(0);
     sink.send_tick(1000); // シェルのループが発火（2106）

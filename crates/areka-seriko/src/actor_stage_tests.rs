@@ -13,8 +13,8 @@ use crate::output::{DisplayCommand, MockSurfaceOutput};
 use crate::parts::film_tests::{ENDLESS, ONCE, table as film_table};
 use crate::test_support::scope;
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};
-use areka_sakura::{CueCommand, TalkCue};
-use std::sync::{Arc, Mutex};
+use areka_sakura::CueCommand;
+use std::sync::Arc;
 
 fn stage(open: bool, generation: u64, at_ms: u64) -> SerikoMsg {
     SerikoMsg::Stage {
@@ -35,67 +35,18 @@ fn ack(generation: u64) -> DisplayCommand {
     }
 }
 
-/// 同期 `handle_message` に知らせ・cue・刻みを流す足場。
-struct Rig {
-    resolver: SurfaceResolver,
-    states: ScopeStates,
-    rt: LoopRuntime,
-    out: MockSurfaceOutput,
-    records: Arc<Mutex<Vec<DisplayCommand>>>,
-}
+/// この檻の足場（本体は兄弟の足場 `ClockRig`）。
+type Rig = ClockRig;
 
 impl Rig {
-    fn new(config: SerikoLoopConfig) -> Self {
-        let out = MockSurfaceOutput::new();
-        let records = out.records();
-        Self {
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([]))),
-            rt: LoopRuntime::new(config),
-            out,
-            records,
-        }
-    }
-
     /// バルーンのスコープ 0 だけに子の表。
     fn films() -> Self {
-        Self::new(SerikoLoopConfig {
+        Self::with_config(SerikoLoopConfig {
             shell_table: AnimationTable::empty(),
             balloon_tables: BTreeMap::from([(scope(), film_table())]),
             rng: always_fire(),
             pick_rng: crate::seeded_rng(0),
         })
-    }
-
-    fn send(&mut self, msg: SerikoMsg) -> Vec<DisplayCommand> {
-        let before = self.records.lock().unwrap().len();
-        let flow = handle_message(
-            &self.resolver,
-            &BindResolver::empty(),
-            &mut self.states,
-            &mut self.rt,
-            &mut self.out,
-            msg,
-        );
-        assert_eq!(flow, ControlFlow::Continue(()));
-        self.records.lock().unwrap()[before..].to_vec()
-    }
-
-    fn tick(&mut self, now_ms: u64) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Tick { now_ms })
-    }
-
-    fn cue(&mut self, command: CueCommand) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Cue(TalkCue {
-            at: 0.0,
-            actor: scope(),
-            command,
-            duration: 0.0,
-        }))
-    }
-
-    fn all(&self) -> Vec<DisplayCommand> {
-        self.records.lock().unwrap().clone()
     }
 }
 
@@ -130,7 +81,7 @@ fn count_acks(cmds: &[DisplayCommand]) -> usize {
 fn rig_running() -> Rig {
     let mut rig = Rig::films();
     assert_eq!(
-        rig.send(stage(true, 1, 1000)),
+        rig.send(1000, stage(true, 1, 1000)),
         vec![ack(1)],
         "最初の出番: 合図だけ（経過 0 は欄に載らない）"
     );
@@ -147,7 +98,7 @@ fn rig_running() -> Rig {
 fn newer_generation_acks_first_then_restarts_finite_clocks_at_the_note_time() {
     let mut rig = rig_running();
 
-    let cmds = rig.send(stage(true, 2, 1150));
+    let cmds = rig.send(1150, stage(true, 2, 1150));
     assert_eq!(cmds.len(), 2, "合図と指令の 2 件: {cmds:?}");
     assert_eq!(cmds[0], ack(2), "合図が先");
     assert_eq!(film(&cmds[1], ONCE), None, "回数つきは経過 0 へ戻る");
@@ -167,17 +118,17 @@ fn newer_generation_acks_first_then_restarts_finite_clocks_at_the_note_time() {
 fn same_or_older_generation_sends_no_ack_and_keeps_finite_clocks() {
     let mut rig = rig_running();
 
-    assert!(rig.send(stage(true, 1, 1150)).is_empty(), "同じ世代");
-    assert!(rig.send(stage(true, 0, 1160)).is_empty(), "古い世代");
+    assert!(rig.send(1150, stage(true, 1, 1150)).is_empty(), "同じ世代");
+    assert!(rig.send(1160, stage(true, 0, 1160)).is_empty(), "古い世代");
     let cmds = rig.tick(1200);
     assert_eq!(cmds.len(), 1, "{cmds:?}");
     assert_eq!(film(&cmds[0], ENDLESS), Some(12));
     assert_eq!(film(&cmds[0], ONCE), Some(21), "回数つきは 1000 からの続き");
 
     // 古い知らせで覚えた世代が戻らない: 1 を飛ばして 2 が来たら合図が出る。
-    assert_eq!(rig.send(stage(true, 2, 1210))[0], ack(2));
-    assert!(rig.send(stage(true, 1, 1220)).is_empty());
-    assert!(rig.send(stage(true, 2, 1230)).is_empty());
+    assert_eq!(rig.send(1210, stage(true, 2, 1210))[0], ack(2));
+    assert!(rig.send(1220, stage(true, 1, 1220)).is_empty());
+    assert!(rig.send(1230, stage(true, 2, 1230)).is_empty());
 }
 
 /// 閉じた知らせは合図を出さず回数つきを捨てる。知らせだけでは `HideBalloon`・`Hide` を出さない
@@ -186,20 +137,20 @@ fn same_or_older_generation_sends_no_ack_and_keeps_finite_clocks() {
 fn closed_note_drops_finite_clocks_and_notes_never_hide() {
     let mut rig = rig_running();
 
-    let cmds = rig.send(stage(false, 1, 1150));
+    let cmds = rig.send(1150, stage(false, 1, 1150));
     assert_eq!(count_acks(&cmds), 0, "閉じた知らせに合図は無い: {cmds:?}");
     assert_eq!(cmds.len(), 1, "回数つきの欄が経過 0 へ戻る 1 件: {cmds:?}");
     assert_eq!(film(&cmds[0], ONCE), None);
     assert_eq!(film(&cmds[0], ENDLESS), Some(11), "終わりなしは残る");
 
-    let cmds = rig.send(stage(true, 2, 1500));
+    let cmds = rig.send(1500, stage(true, 2, 1500));
     assert_eq!(cmds.first(), Some(&ack(2)), "次の出番は合図が先: {cmds:?}");
     let cmds = rig.tick(1650);
     assert_eq!(film(&cmds[0], ONCE), Some(21), "回数つきは 1500 から");
 
-    rig.send(stage(false, 2, 1700));
-    rig.send(stage(true, 3, 1800));
-    rig.send(stage(true, 3, 1900));
+    rig.send(1700, stage(false, 2, 1700));
+    rig.send(1800, stage(true, 3, 1800));
+    rig.send(1900, stage(true, 3, 1900));
     assert!(
         rig.all().iter().all(|c| !matches!(
             c,
@@ -214,15 +165,23 @@ fn closed_note_drops_finite_clocks_and_notes_never_hide() {
 /// 出ない（要件 6.7）。
 #[test]
 fn flows_without_notes_emit_no_stage_ack() {
-    let mut rig = Rig::new(SerikoLoopConfig {
+    let mut rig = Rig::with_config(SerikoLoopConfig {
         shell_table: emo2_shell_table(),
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
     });
     rig.tick(0);
-    rig.cue(CueCommand::Emote { key: "0".into() });
-    rig.cue(CueCommand::BalloonSurface { key: "1".into() });
+    rig.hear(0, cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0));
+    rig.hear(
+        0,
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "1".into() },
+            0.0,
+        ),
+    );
     for i in 1..=100 {
         rig.tick(i * 40);
     }
@@ -239,9 +198,9 @@ fn flows_without_notes_emit_no_stage_ack() {
     assert_eq!(count_acks(&all), 0, "知らせが無ければ合図は 0 件");
 
     // emo2 のシェルだけの流れも同じ。
-    let mut rig = Rig::new(cfg(emo2_shell_table(), always_fire()));
+    let mut rig = Rig::with_config(cfg(emo2_shell_table(), always_fire()));
     rig.tick(0);
-    rig.cue(CueCommand::Emote { key: "0".into() });
+    rig.hear(0, cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0));
     for i in 1..=100 {
         rig.tick(i * 40);
     }

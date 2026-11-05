@@ -23,15 +23,6 @@ fn facts(shell: &[u32], balloon: &[u32]) -> SkinFacts {
     )
 }
 
-fn balloon_cue(scope: &str, key: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::BalloonSurface { key: key.into() },
-        duration: 0.0,
-    }
-}
-
 /// 届いた知らせを検出点の名前で控える口。
 fn probe() -> (CueProbe, Arc<Mutex<Vec<&'static str>>>) {
     let got = Arc::new(Mutex::new(Vec::new()));
@@ -67,7 +58,15 @@ fn no_facts_judges_nothing_and_still_delivers() {
     let (mut sink, handle, out) = spawn();
     let (probe, got) = probe();
     sink.emit_with(emote_cue(0.0, "0", "-2"), &probe);
-    sink.emit_with(balloon_cue("0", "99"), &probe);
+    sink.emit_with(
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "99".into() },
+            0.0,
+        ),
+        &probe,
+    );
     sink.emit_with(emote_cue(0.0, "0", "通常"), &probe);
     sink.close().unwrap();
     handle.join().unwrap();
@@ -88,17 +87,49 @@ fn judges_surface_and_numeric_balloon_by_facts() {
     sink.set_facts(facts(&[0, 3], &[0]));
     let (probe, got) = probe();
     for cue in [
-        emote_cue(0.0, "0", "笑顔"),    // 別名で在る
-        emote_cue(0.0, "0", "-1"),      // 非表示
-        emote_cue(0.0, "0", "-2"),      // 範囲外
-        emote_cue(0.0, "0", "99999"),   // シェルに無い
-        balloon_cue("0", "0"),          // 在る
-        balloon_cue("0", "-1"),         // 非表示
-        balloon_cue("0", "-2"),         // 範囲外
-        balloon_cue("0", "99"),         // バルーンに無い
-        balloon_cue("0", "バルーン１"), // 名前の形（文字の層の持ち分）
-        emote_cue(0.0, "1", "-2"),      // スコープ 1 に絵が無い
-        balloon_cue("1", "99"),         // スコープ 1 にバルーンが無い
+        emote_cue(0.0, "0", "笑顔"),  // 別名で在る
+        emote_cue(0.0, "0", "-1"),    // 非表示
+        emote_cue(0.0, "0", "-2"),    // 範囲外
+        emote_cue(0.0, "0", "99999"), // シェルに無い
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "0".into() },
+            0.0,
+        ), // 在る
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "-1".into() },
+            0.0,
+        ), // 非表示
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "-2".into() },
+            0.0,
+        ), // 範囲外
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "99".into() },
+            0.0,
+        ), // バルーンに無い
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface {
+                key: "バルーン１".into(),
+            },
+            0.0,
+        ), // 名前の形（文字の層の持ち分）
+        emote_cue(0.0, "1", "-2"),    // スコープ 1 に絵が無い
+        cue(
+            0.0,
+            "1",
+            CueCommand::BalloonSurface { key: "99".into() },
+            0.0,
+        ), // スコープ 1 にバルーンが無い
     ] {
         sink.emit_with(cue, &probe);
     }
@@ -122,7 +153,15 @@ fn replace_swaps_facts_between_cues() {
     sink.set_facts(facts(&[0], &[0]));
     let (probe, got) = probe();
     sink.emit_with(emote_cue(0.0, "0", "5"), &probe); // 古いシェルに 5 は無い
-    sink.emit_with(balloon_cue("0", "2"), &probe); // 古いバルーンに 2 は無い
+    sink.emit_with(
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        ),
+        &probe,
+    ); // 古いバルーンに 2 は無い
     let old = facts(&[0], &[0]);
     let shell_ids = BTreeMap::from([(0, BTreeSet::from([0, 5]))]);
     assert!(sink.send_replace(
@@ -138,7 +177,15 @@ fn replace_swaps_facts_between_cues() {
     ));
     sink.emit_with(emote_cue(0.0, "0", "5"), &probe); // 新しいシェルに 5 は在る
     sink.emit_with(emote_cue(0.0, "0", "笑顔"), &probe); // 新しい別名表に笑顔は無い
-    sink.emit_with(balloon_cue("0", "2"), &probe); // バルーンは前のまま
+    sink.emit_with(
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        ),
+        &probe,
+    ); // バルーンは前のまま
     let shell_now = SkinFacts::new(
         BTreeMap::new(),
         BTreeMap::from([(0, BTreeSet::from([0, 5]))]),
@@ -151,7 +198,15 @@ fn replace_swaps_facts_between_cues() {
         },
         shell_now.with_balloons(BTreeMap::from([(0, BTreeSet::from([0, 2]))])),
     ));
-    sink.emit_with(balloon_cue("0", "2"), &probe); // 新しいバルーンに 2 は在る
+    sink.emit_with(
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "2".into() },
+            0.0,
+        ),
+        &probe,
+    ); // 新しいバルーンに 2 は在る
     sink.emit_with(emote_cue(0.0, "0", "5"), &probe); // シェルは前のまま
     sink.close().unwrap();
     handle.join().unwrap();

@@ -41,12 +41,17 @@ pub(super) fn inert_runtime() -> LoopRuntime {
     LoopRuntime::new(SerikoLoopConfig::disabled())
 }
 
+/// 着せ替えの名前の表（sakura の (目, 閉) → 5・既定のポリシー＝着衣は排他置換・脱衣は除去）。
+pub(super) fn eye_names() -> BTreeMap<(String, String), u32> {
+    BTreeMap::from([(("目".to_string(), "閉".to_string()), 5)])
+}
+
 /// 同期 `handle_message` に cue と刻みを流す足場（統括器に手で進める偽の時計を注入する）。どの
 /// メッセージもその直前に時計を合わせる（観測を追い越さない）。
 pub(super) struct ClockRig {
     resolver: SurfaceResolver,
     bind_resolver: BindResolver,
-    states: ScopeStates,
+    pub(super) states: ScopeStates,
     rt: LoopRuntime,
     out: MockSurfaceOutput,
     records: Arc<Mutex<Vec<DisplayCommand>>>,
@@ -56,14 +61,27 @@ pub(super) struct ClockRig {
 impl ClockRig {
     /// 別名の表なし・着せ替えなしで、統括器を `config` から組む。
     pub(super) fn with_config(config: SerikoLoopConfig) -> Self {
+        Self::configured(config, BTreeMap::new(), BindSet::from_ids([]))
+    }
+
+    /// 統括器の設定・sakura の着せ替えの名前の表・静的な着せ替えから組む（面の別名の表は空）。
+    pub(super) fn configured(
+        config: SerikoLoopConfig,
+        names: BTreeMap<(String, String), u32>,
+        static_binds: BindSet,
+    ) -> Self {
         let clock = Arc::new(AtomicU64::new(0));
         let read = Arc::clone(&clock);
         let out = MockSurfaceOutput::new();
         let records = out.records();
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
-            bind_resolver: BindResolver::empty(),
-            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([]))),
+            bind_resolver: BindResolver::new(
+                names,
+                BTreeMap::new(),
+                crate::bind::BindOptionDecls::default(),
+            ),
+            states: ScopeStates::new(crate::DefaultBinds::uniform(static_binds)),
             rt: LoopRuntime::new(config)
                 .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),
             out,
@@ -95,6 +113,11 @@ impl ClockRig {
     /// 時計が `ms` のときに cue が届く。
     pub(super) fn hear(&mut self, ms: u64, cue: TalkCue) -> Vec<DisplayCommand> {
         self.send(ms, SerikoMsg::Cue(cue))
+    }
+
+    /// これまでに出た指令の全部。
+    pub(super) fn all(&self) -> Vec<DisplayCommand> {
+        self.records.lock().unwrap().clone()
     }
 }
 

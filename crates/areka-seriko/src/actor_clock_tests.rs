@@ -6,16 +6,15 @@
 
 use super::test_support::*;
 use super::*;
-use crate::bind::BindOptionDecls;
 use crate::looper::tests::{always_fire, cfg, pattern_of};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use crate::test_support::table_of;
 use areka_emo_compose::{BindSet, PatternState};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 
 /// 一番上 0 の `always`: 101（待ち 0＝経過 0）→ 100ms で 102 → 100ms で 103（周期 200）。1 は何も持たない。
 const TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
@@ -41,57 +40,9 @@ fn manual_clock(start: u64) -> (SerikoClock, Arc<AtomicU64>) {
     (Arc::new(move || read.load(Ordering::SeqCst)), now)
 }
 
-/// 同期 `handle_message` に cue と刻みを流す足場（統括器に時計を注入する）。
-struct Rig {
-    resolver: SurfaceResolver,
-    bind_resolver: BindResolver,
-    states: ScopeStates,
-    rt: LoopRuntime,
-    out: MockSurfaceOutput,
-    records: Arc<Mutex<Vec<DisplayCommand>>>,
-}
-
-impl Rig {
-    fn new(config: SerikoLoopConfig, clock: Option<SerikoClock>) -> Self {
-        let sakura = BTreeMap::from([(("目".to_string(), "閉".to_string()), 5)]);
-        let out = MockSurfaceOutput::new();
-        let records = out.records();
-        Self {
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            bind_resolver: BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default()),
-            states: ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([]))),
-            rt: LoopRuntime::new(config).with_clock(clock),
-            out,
-            records,
-        }
-    }
-
-    fn send(&mut self, msg: SerikoMsg) -> Vec<DisplayCommand> {
-        let before = self.records.lock().unwrap().len();
-        let flow = handle_message(
-            &self.resolver,
-            &self.bind_resolver,
-            &mut self.states,
-            &mut self.rt,
-            &mut self.out,
-            msg,
-        );
-        assert_eq!(flow, ControlFlow::Continue(()));
-        self.records.lock().unwrap()[before..].to_vec()
-    }
-
-    fn tick(&mut self, now_ms: u64) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Tick { now_ms })
-    }
-
-    fn cue(&mut self, command: CueCommand) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Cue(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command,
-            duration: 0.0,
-        }))
-    }
+/// この檻の足場（本体は兄弟の足場 `ClockRig`・着せ替えの名前は (目, 閉) → 5）。
+fn rig(config: SerikoLoopConfig) -> ClockRig {
+    ClockRig::configured(config, eye_names(), BindSet::from_ids([]))
 }
 
 /// ただ 1 件の指令の欄。
@@ -106,16 +57,16 @@ fn top(pattern: &PatternState) -> Option<u32> {
 }
 
 /// `\s` の時計の開始は合図を処理した時刻（時計 1030）で、直前の刻み（0）でも合図の後に時計が
-/// 進んだ値（5000）でもない（要件 1.6・3.1）。
+/// 進んだ値（刻みの 1100）でもない（要件 1.6・3.1）。
 #[test]
 fn surface_cue_starts_always_at_the_clock_time_of_processing() {
-    let (clock, now) = manual_clock(0);
-    let mut rig = Rig::new(cfg(table_of(TOP_ALWAYS), always_fire()), Some(clock));
+    let mut rig = rig(cfg(table_of(TOP_ALWAYS), always_fire()));
     rig.tick(0);
-    now.store(1030, Ordering::SeqCst);
-    let cmds = rig.cue(CueCommand::Emote { key: "0".into() });
+    let cmds = rig.hear(
+        1030,
+        cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
+    );
     assert_eq!(top(single_pattern(&cmds)), None, "最初の指令は経過 0");
-    now.store(5000, Ordering::SeqCst);
 
     assert!(
         rig.tick(1100).is_empty(),
@@ -131,10 +82,12 @@ fn surface_cue_starts_always_at_the_clock_time_of_processing() {
 /// 刻みの時刻が開始の時刻より僅かに前でも経過は負にならず 0 で止まる（design「時計の開始の時刻」）。
 #[test]
 fn tick_slightly_before_the_start_clamps_elapsed_to_zero() {
-    let (clock, _now) = manual_clock(1030);
-    let mut rig = Rig::new(cfg(table_of(TOP_ALWAYS), always_fire()), Some(clock));
+    let mut rig = rig(cfg(table_of(TOP_ALWAYS), always_fire()));
     rig.tick(0);
-    rig.cue(CueCommand::Emote { key: "0".into() });
+    rig.hear(
+        1030,
+        cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
+    );
 
     assert!(rig.tick(1020).is_empty(), "開始の 10ms 前の刻みは経過 0");
     assert_eq!(
@@ -153,16 +106,23 @@ fn tick_slightly_before_the_start_clamps_elapsed_to_zero() {
 /// `\b` の時計の開始も合図を処理した時刻（要件 3.1）。
 #[test]
 fn balloon_cue_starts_always_at_the_clock_time_of_processing() {
-    let (clock, _now) = manual_clock(1030);
     let config = SerikoLoopConfig {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), table_of(TOP_ALWAYS))]),
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
     };
-    let mut rig = Rig::new(config, Some(clock));
+    let mut rig = rig(config);
     rig.tick(0);
-    let cmds = rig.cue(CueCommand::BalloonSurface { key: "0".into() });
+    let cmds = rig.hear(
+        1030,
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "0".into() },
+            0.0,
+        ),
+    );
     assert_eq!(top(single_pattern(&cmds)), None, "最初の指令は経過 0");
 
     assert!(rig.tick(1100).is_empty(), "経過 70＝経過 0 のコマ");
@@ -177,16 +137,19 @@ fn balloon_cue_starts_always_at_the_clock_time_of_processing() {
 /// 着せ替えで見えた部品の `always` の時計も合図を処理した時刻で始まる（要件 3.1）。
 #[test]
 fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
-    let (clock, _now) = manual_clock(1030);
     let table = table_of(BIND_ALWAYS);
     assert!(table.has_animated_parts(), "前提: 動く部品の在る表");
-    let mut rig = Rig::new(cfg(table, always_fire()), Some(clock));
-    rig.cue(CueCommand::Emote { key: "0".into() });
+    let mut rig = rig(cfg(table, always_fire()));
+    rig.hear(
+        1030,
+        cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
+    );
     rig.tick(0);
-    let cmds = rig.cue(CueCommand::command_carrier(
+    let bind = CueCommand::command_carrier(
         "bind",
         vec!["目".to_string(), "閉".to_string(), "1".to_string()],
-    ));
+    );
+    let cmds = rig.hear(1030, cue(0.0, "0", bind, 0.0));
     let part = |p: &PatternState| {
         p.part(100)
             .map(|(id, f)| (id, f.surface_id))

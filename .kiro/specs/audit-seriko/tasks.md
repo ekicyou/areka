@@ -15,7 +15,7 @@
   - 完了: クレートのテストが記録した数・同じ期待値で緑。`src/` に写しの道具が残っていないことを `rg` で示した記録がある
   - _Boundary: areka-seriko の src のテストと受け口_
   - _Requirements: 2.3, 6.1, 8.1_
-- [ ] 1.2 役者の時計つきの組みと吹き出しの合図の写しを `actor_test_support.rs` へ寄せる
+- [x] 1.2 役者の時計つきの組みと吹き出しの合図の写しを `actor_test_support.rs` へ寄せる
   - 4 本の Rig を、統括器の設定・名前の表・静的な着せ替えを構築の引数に受ける 1 つの組みにまとめ、3 本の吹き出しの合図を 1 つの道具にする
   - 時計を持たない `actor_stage_tests.rs` の Rig は、時計に揃えて期待値が変わるなら寄せずに止めて報告する
   - 完了: 役者のテストが記録した期待値で緑。Rig と合図の定義が受け口の 1 か所だけにある
@@ -141,3 +141,4 @@
 - 1.1（着手 HEAD `b64c6f68`）: クレートのテストは 550 件（lib 523・balloon_face_e2e 5・bind_e2e 9・cue_sequence 1・loop_integration 9・regression 3）。直した後も同じ 550 件・同じ名。寄せた先は `crate::test_support`（`src/lib_test_support.rs`）の `table_of`・`scope`・`capture_logs`（行の列）・`capture_text`（つないだ文字列。文字列を返していた `capture_logs` の新しい名）・`table_and_logs`・`warns`・`KINDS`・`part_playing`・`overlay_frame`・`one_frame_pattern`・`draw_frame`。中身の違う写しは名で分けた（`actor_trigger_fixture_tests` の `table_and_all_logs`＝畳み込みの記録も捕まえる・`table_interval_words_tests` の `table_and_text`）。`rg` で `src/` に写しが残らないことを確かめた（名が当たる本番の `bind.rs` の `fn scope`・トレイトの `fn playing` は別物）。
 - 1.1 で記録した、後で移す・消すテストの名: タスク 3（移すだけ）＝`tick_with_no_shown_slot_is_complete_no_op`・`tick_boundary_cross_emits_show_carrying_pattern`・`send_tick_after_actor_stopped_logs_debug_no_panic`・`emote_surface_change_resets_loop_playback`。5.3（消す）＝`r_post_and_komainu_shell_root_holds_surfaces_txt`。5.4 指摘 13（消す）＝`resolve_is_deterministic_same_input_same_output`・`balloon_resolve_is_deterministic`・`same_input_same_answer`・`settling_twice_gives_the_same_state`、（中の確かめだけ消す）＝`balloon_display_commands_construct_and_match`・`frame_at_sakura_real_sequence_finishes_residual_permanently`。5.4 指摘 14（消す）＝`empty_resolver_resolves_all_none`・`accumulate_on_off_round_trip`・`accumulate_off_absent_is_noop`・`show_command_carries_static_binds`・`show_carries_static_default_when_no_dynamic_bind_applied`。消し終えた見込みは 540 件。
 - clippy: toolchain が固定されておらず、今の clippy（0.1.99）では着手の時点から areka-seriko に 4 件の警告がある（`actor.rs:91` large_enum_variant・`looper.rs:433`・`looper_talk_tests.rs:597`・`looper_trigger_tests.rs:504` の collapsible_if）。依存の dola にも出る。各タスクは `cargo clippy -p areka-seriko --all-targets --no-deps` で警告が増えないことを見る。この 4 件は完了の棚卸で扱う。
+- 1.2: Rig 4 本は `ClockRig::configured(config, names, static_binds)`（`with_config` はこれを呼ぶ）にまとめ、parts・stage・talk は `type Rig = ClockRig;` と檻ごとの impl。`send(ms, msg)` に時刻の引数が増えた。時計を持たない stage と parts の Rig も時計に揃えて寄せたが期待値は不変（parts の 4 本は最初の `\s` で時計が刻み 0 でなく合図の時刻 0 で生まれる。開始は同じ 0 で、時計の無い道は looper の `refresh(.., None, ..)` のテストが見張る）。`balloon_cue` は `cue(.., CueCommand::BalloonSurface{..}, ..)` へ。範囲の外の同名の `looper_talk_tests.rs` の `fn cue`・`parts_trigger_tests.rs` の `struct Rig` は写しでないので残した。`BindResolver::new` の呼び出しが `actor_test_support.rs` に入った（2.1 で消す相手）。
