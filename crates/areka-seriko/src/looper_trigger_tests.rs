@@ -774,3 +774,33 @@ fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
     );
     assert_eq!(count(&logs, "trigger periodic を鳴らした"), 1, "{logs:?}");
 }
+
+/// 合図の更新（2010）で境目 2000 に鳴り直した `periodic` が先頭の待ちの前（経過 10）なら、前の周が
+/// 残した最後のコマを刻みと同じく外す（古い絵を 1 刻み残さない・areka-P0-seriko-loop 要件 4.2・
+/// areka-P0-seriko-trigger-intervals 要件 6.2）。
+#[test]
+fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,301,50,0,0\n\
+        animation0.pattern1,overlay,302,50,0,0\n}\n\
+        surface301\n{\n}\nsurface302\n{\n}\n";
+    let (mut rt, mut states) = shell_runtime(TEXT);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 0).expect("Show");
+    rt.on_tick(1150, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 0), Some(302), "前の周の残り");
+    assert_eq!(started(&rt, Slot::Shell, 0), None);
+
+    rt.refresh(&scope(), Slot::Shell, Some(2010), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(2000),
+        "境目 2000 で鳴り直す"
+    );
+    assert_eq!(
+        cell(&states, Slot::Shell, 0),
+        None,
+        "先頭の待ちの前は欄が空"
+    );
+}

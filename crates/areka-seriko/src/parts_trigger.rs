@@ -4,7 +4,6 @@
 //! [`fire_part_triggers`]（判定して時計を作る）を置く。「いつ始めるか」の判定は `trigger.rs`、始まった
 //! 時計のコマの進み方は親（抽選の時計と同じ経路）が持ち、ここは配線だけ。
 
-use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use areka_emo_compose::{PartKey, PatternState};
@@ -19,8 +18,8 @@ use crate::timeline::{FrameStatus, LoopRng, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
 /// `runonce`・`periodic`・`talk` を持つ部品なら引き金の状態を返す（無ければ `at_ms` を見え始めの時刻と
-/// して構える・在れば窓の開け閉めを写す）。3 語を持たない部品は `None`＝状態も記録も生まれない（spec:
-/// areka-P0-seriko-trigger-intervals 要件 5.4・5.6・5.9・8.1）。
+/// して構える。呼び手は構えてある部品を先に外す）。3 語を持たない部品は `None`＝状態も記録も生まれない
+/// （spec: areka-P0-seriko-trigger-intervals 要件 5.4・5.6・5.9・8.1）。
 pub(super) fn arm_part<'s>(
     armed: &'s mut BTreeMap<PartKey, Armed>,
     anims: &[LoopAnimation],
@@ -33,23 +32,16 @@ pub(super) fn arm_part<'s>(
     if !anims.iter().any(|a| a.trigger.is_word()) {
         return None;
     }
-    Some(match armed.entry(part) {
-        Entry::Occupied(entry) => {
-            let state = entry.into_mut();
-            state.follow(open, at_ms, None);
-            state
-        }
-        Entry::Vacant(entry) => {
-            tracing::debug!(
-                scope = scope.as_str(),
-                slot = ?slot,
-                part = %Label(part),
-                at_ms,
-                "seriko: part trigger 部品が見えた（引き金を構えた）"
-            );
-            entry.insert(Armed::arm(at_ms, open, None))
-        }
-    })
+    Some(armed.entry(part).or_insert_with(|| {
+        tracing::debug!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            part = %Label(part),
+            at_ms,
+            "seriko: part trigger 部品が見えた（引き金を構えた）"
+        );
+        Armed::arm(at_ms, open, None)
+    }))
 }
 
 /// 部品 `part` の 3 語の animation を開始の時刻の順（同じ時刻は番号の順）に、その時刻までの部品の
@@ -146,7 +138,7 @@ pub(super) fn fire_part_triggers<'a>(
     (started, outcome, called)
 }
 
-/// 2 段目（見えると決まった部品 1 つ）: [`arm_part`] で構え、[`fire_part_triggers`] で判定し、何か
+/// 2 段目（新しく見えた部品 1 つ）: [`arm_part`] で構え、[`fire_part_triggers`] で判定し、何か
 /// 始まったら働きのコマを `at_ms` まで当てる。始まった animation と呼び出しで始まった animation（呼び手が
 /// 欄へ置く）と、働きのコマの結果を返す。何も始まらなければ `None`。
 #[allow(clippy::too_many_arguments)]

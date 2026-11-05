@@ -22,7 +22,7 @@ impl LoopRuntime {
     /// 進行の対象（[`ScopeStates::stage_slots`]・バルーンは知らせの面も）なら、保持している
     /// [`PatternState`] の写しを出来事の時刻 `at_ms`（無ければ直前の刻みの時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
     /// [`PartClocks::refresh`]（見えている `always` の時計を作る・回数つきの見えなくなった時計を捨てる・
-    /// 抽選の時計と乱数は触らない）で作り直す。`commit_pattern` が変化を返したらその `Show` を返す。
+    /// 抽選の時計と抽選の乱数は触らない（働きのコマの始め・止めと選びの乱数を除く））で作り直す。`commit_pattern` が変化を返したらその `Show` を返す。
     /// 面が無い（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計と、部品の 3 語の時計・引き金の
     /// 状態を捨てて何も返さない（[`PartClocks::drop_hidden`]）。
     /// バルーンの窓が閉じていれば時計を作らない（回数つきは捨てる）。
@@ -154,11 +154,16 @@ impl LoopRuntime {
                 let elapsed = at.saturating_sub(p.started_at_ms);
                 if matches!(anim.trigger, LoopTrigger::Always { .. }) {
                     put_top_always(&mut pattern, anim, elapsed);
-                } else if heads.contains(&anim.id)
-                    && let FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) =
-                        frame_at(&anim.frames, elapsed)
-                {
-                    put_visible(&mut pattern, anim, i);
+                } else if heads.contains(&anim.id) {
+                    // 刻みの進行と同じく、先頭の待ちの前と止まった頭は前の再生の残りのコマを外す。
+                    match frame_at(&anim.frames, elapsed) {
+                        FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) => {
+                            put_visible(&mut pattern, anim, i);
+                        }
+                        _ => {
+                            pattern.remove(anim.id);
+                        }
+                    }
                 }
             }
         }

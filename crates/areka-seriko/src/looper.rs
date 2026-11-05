@@ -2,9 +2,9 @@
 //!
 //! [`LoopRuntime`] はアクター本体が単独所有し（スレッド内・ロック不要）、per-(scope, slot) の
 //! 再生状態（`SlotPlayback`）と 1 個の [`LotteryBoundary`] を保持する。1 tick ごとに
-//! [`LoopRuntime::on_tick`] が (1) 単調性ガード → (2) 境界跨ぎ時のみ抽選 → (3) 全再生中アニメの
-//! 進行（[`frame_at`]）→ (4) `commit_pattern` への差分反映、を統括し、発行すべき
-//! [`DisplayCommand`] 列を返す（発行自体は actor の `emit_display` 単一点が行う・要件 6.3）。
+//! [`LoopRuntime::on_tick`] が (1) 単調性ガードと、抽選の前に引き金と働きのコマを今の時刻まで当てる輪 →
+//! (2) 境界跨ぎ時のみ抽選 → (3) 全再生中アニメの進行（[`frame_at`]）→ (4) `commit_pattern` への差分反映、
+//! を統括し、発行すべき [`DisplayCommand`] 列を返す（発行自体は actor の `emit_display` 単一点が行う・要件 6.3）。
 //!
 //! # 状態機械（per (scope, slot, animation)・design 状態図）
 //!

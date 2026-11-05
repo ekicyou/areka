@@ -15,7 +15,7 @@
 //! - タイムラインの乱数 [`seeded_rng`]／[`LoopRng`]: 1/N 抽選に使う決定論の純粋 PRNG
 //!   （現在コマの判定と抽選そのものは crate 内）。
 //! - ループ統括層 [`SerikoLoopConfig`]／`LoopRuntime`（crate 内）: 二層時間（毎秒抽選×サブ秒進行）の
-//!   統括・per-(scope, slot) 再生状態・`on_tick`（抽選→進行→PatternState 差分）・`on_surface_changed`。
+//!   統括・per-(scope, slot) 再生状態・`on_tick`（引き金と働きのコマを今の時刻まで当てる→抽選→進行→PatternState 差分）・`on_surface_changed`。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
 //!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
 //! - bind ポリシー層 [`BindChoicePolicy`]／[`BindResolver::policy`]:
