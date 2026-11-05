@@ -3,7 +3,6 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush, Visual};
-use windows::Win32::Graphics::Direct2D::*;
 
 /// GPUリソースを使用するエンティティを宣言するマーカーコンポーネント
 ///
@@ -21,36 +20,27 @@ use windows::Win32::Graphics::Direct2D::*;
 #[derive(Component, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HasGraphicsResources;
 
-#[derive(Debug)]
-struct WindowGraphicsInner {
-    pub target: DesktopWindowTarget,
-    pub device_context: ID2D1DeviceContext,
-}
-
 /// ウィンドウごとのグラフィックスリソース
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct WindowGraphics {
-    inner: Option<WindowGraphicsInner>,
+    inner: Option<DesktopWindowTarget>,
     generation: u32,
 }
 
-// SAFETY 条件: 保持する COM/WinRT ポインタの跨スレッド移動（Send）・参照共有（Sync）は
+// SAFETY 条件: 保持する WinRT ポインタの跨スレッド移動（Send）・参照共有（Sync）は
 // 「同一オブジェクトへの呼び出しが同時に実行されない」ことを前提とする。
-// device_context（D2D）は GraphicsCore の MULTI_THREADED の工場から作った装置に属するため内部同期されるが、
-// target（WUC DesktopWindowTarget）は UI スレッドアフィニティを持ち、ECS スケジュール構成
-// （&mut 排他または同一コンポーネントへ並行アクセスしないシステム配置）が安全性条件を担う。
+// target（WUC DesktopWindowTarget）は UI スレッドアフィニティを持ち、内部同期は無い。
+// 安全性は ECS スケジュール構成（&mut 排他または同一コンポーネントへ並行アクセスしないシステム配置）が担う。
 unsafe impl Send for WindowGraphics {}
 unsafe impl Sync for WindowGraphics {}
 
 impl WindowGraphics {
-    pub fn new(target: DesktopWindowTarget, device_context: ID2D1DeviceContext) -> Self {
+    /// `generation` は作り直しの回数。初回は 0、作り直しでは前の番号 + 1 を渡す。
+    pub fn new(target: DesktopWindowTarget, generation: u32) -> Self {
         Self {
-            inner: Some(WindowGraphicsInner {
-                target,
-                device_context,
-            }),
-            generation: 0,
+            inner: Some(target),
+            generation,
         }
     }
 
@@ -66,16 +56,8 @@ impl WindowGraphics {
         self.generation
     }
 
-    pub fn increment_generation(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
-    }
-
     pub fn get_target(&self) -> Option<&DesktopWindowTarget> {
-        self.inner.as_ref().map(|i| &i.target)
-    }
-
-    pub fn get_dc(&self) -> Option<&ID2D1DeviceContext> {
-        self.inner.as_ref().map(|i| &i.device_context)
+        self.inner.as_ref()
     }
 }
 

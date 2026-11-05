@@ -1,6 +1,5 @@
 // ========== ヘルパー関数 ==========
 
-use crate::com::d2d::D2D1DeviceExt;
 use crate::com::wuc::CompositorDesktopInteropExt;
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::{GraphicsCore, HasGraphicsResources, WindowGraphics};
@@ -73,27 +72,20 @@ fn create_window_graphics_for_hwnd(
     graphics: &GraphicsCore,
     wuc_resource: &WucGraphicsResource,
     hwnd: HWND,
+    generation: u32,
 ) -> windows::core::Result<WindowGraphics> {
-    use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
-
     if !graphics.is_valid() || !wuc_resource.is_valid() {
         return Err(windows::core::Error::from(E_FAIL));
     }
 
-    // 1. DesktopWindowTarget作成（WucGraphicsResource の Compositor から interop 経由で取得）
+    // DesktopWindowTarget作成（WucGraphicsResource の Compositor から interop 経由で取得）
     let compositor = wuc_resource
         .compositor()
         .ok_or(windows::core::Error::from(E_FAIL))?;
     let desktop_interop = compositor.cast::<ICompositorDesktopInterop>()?;
     let target = desktop_interop.create_desktop_window_target(hwnd, true)?;
 
-    // 2. DeviceContext作成
-    let d2d = graphics
-        .d2d_device()
-        .ok_or(windows::core::Error::from(E_FAIL))?;
-    let device_context = d2d.create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
-
-    Ok(WindowGraphics::new(target, device_context))
+    Ok(WindowGraphics::new(target, generation))
 }
 
 // ========== 新しい再初期化システム ==========
@@ -238,7 +230,7 @@ pub fn init_window_graphics(
                     entity = %entity_name,
                     "[init_window_graphics] WindowGraphics creating new"
                 );
-                match create_window_graphics_for_hwnd(&graphics, &wuc_res, handle.hwnd) {
+                match create_window_graphics_for_hwnd(&graphics, &wuc_res, handle.hwnd, 0) {
                     Ok(wg) => {
                         debug!(
                             frame = frame_count.0,
@@ -266,15 +258,14 @@ pub fn init_window_graphics(
                         "[init_window_graphics] WindowGraphics re-initializing"
                     );
                     let old_generation = wg.generation();
-                    match create_window_graphics_for_hwnd(&graphics, &wuc_res, handle.hwnd) {
+                    match create_window_graphics_for_hwnd(
+                        &graphics,
+                        &wuc_res,
+                        handle.hwnd,
+                        old_generation.wrapping_add(1),
+                    ) {
                         Ok(new_wg) => {
-                            // 古いgenerationを引き継いでインクリメント
-                            let new_generation = old_generation.wrapping_add(1);
                             *wg = new_wg;
-                            // generation を手動で設定（newのデフォルトは0なので）
-                            while wg.generation() < new_generation {
-                                wg.increment_generation();
-                            }
                             debug!(
                                 frame = frame_count.0,
                                 entity = %entity_name,
