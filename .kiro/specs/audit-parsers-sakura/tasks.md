@@ -160,7 +160,7 @@
   - `shiori_dir_uses_native_separators`・`load_restored_state_survives_missing_default_shell` が緑で、`areka-ghost` のテストが緑
   - _Depends: 2.1_
   - _Requirements: 2.1, 2.7, 3.1, 4.1, 4.2, 4.3, 7.1, 7.6, 7.10_
-- [ ] 7.4 emo-present の読み込みを 1 回読みへ替え、崩れを記録する（T23）
+- [x] 7.4 emo-present の読み込みを 1 回読みへ替え、崩れを記録する（T23）
   - 頭で `shell_target.rs` の行数を測り直す。1,000 行を越える見込みなら新しいファイルを足さずに収まる形を進行役と決める（設計の討議の議題 7）
   - `shell_target.rs` の 4 回の読みを 1 回読みの口へ替え、崩れを記録の重さどおりに出す（範囲の上限は `error!`・ほかは `warn!`・記録を出すときだけ）（35・33・34・36・5・6・相手の 40）
   - `balloon_definitions.rs` の今の矢印の `warn!` の輪へ数の鍵の崩れを足す（18・文の頭と欄は変えない）
@@ -218,3 +218,4 @@
 - 8.2 への申し送り（2026-11-06 audit-emo-compose の知らせ）: `areka_parsers::shell::parse` が 1 つの面の animation の数の 2 乗に伸びる（debug で 15,000 本 1.37 s・30,000 本 6.6 s）。4.3 の 72（番号→位置の表）の後でも残っているかを測り、残っていれば範囲の中の指摘として直す。相手は fold の除外の範囲を `(lo, hi)` で引く形に直す（相手の指摘 75・タスク 6.3）。
 - 7.5 への申し送り（7.2 のレビュー）: `doc/ukadoc-coverage/ledger/assets.toml:4754` の note が、7.2 で消えた `BindGroupDefaults::kero_default_on` の綴りを書いたまま（守るテストは無い）。7.5 で台帳を直すときに今の形（`BindGroupDefaults` の表の 1＝kero の `default_on`）へ書き換える。`doc/` の差分はこれで台帳の 3 行になる。
 - 完了の棚卸への申し送り（7.3 のレビュー・範囲の外の doc）: `doc/ukadoc-coverage/briefing-assets.md` の 255・367・369・432・448・533 行が、消えた `package::resolve` を今の姿として書いている。design は `doc/` の変更を台帳に限るので 7.3 では直していない。ほかの本番の `join("ghost").join("master")` 8 か所はネイティブの区切りで組んでおり欠陥は無い（`shiori_dir` へ寄せるなら別の起票）。
+- 7.4: `shell_target.rs` は 953 行（相手の +2 で約 955）。544 行あたりの doc のリンク `[parse_boxes](areka_parsers::shell::parse_boxes)` は相手（audit-emo-present）の括弧を外す直しと同じ行（後から着地する側が合わせる）。balloon の数の鍵の崩れの文は「数の鍵の値が数として読めない」に改めた（頭と欄は同じ）。

@@ -76,7 +76,7 @@ impl ScopeBalloonDefinitions {
 
 /// 採用した面ごとの定義の束を作る（fs と記録の入口・読み込みの時だけ呼ぶ）。
 ///
-/// 矢印の絵は `arrow.filename` ごとに 1 回だけ解いて面どうしで共有する。読めなかった座標の鍵は
+/// 矢印の絵は `arrow.filename` ごとに 1 回だけ解いて面どうしで共有する。読めなかった数の鍵（矢印の座標を含む）は
 /// `(鍵, 値)` で重複を除き、スコープにつき 1 回ずつ `warn!`（descript.txt の値は全部の面に重なる）。
 pub fn load_scope_balloon_definitions(
     balloon_dir: &Path,
@@ -98,6 +98,7 @@ pub fn load_scope_balloon_definitions(
         let model = load_scope_balloon_model(balloon_dir, scope, face);
         let keys = model.arrow_keys();
         issues.extend(keys.issues.iter().map(|i| (i.key, i.value.clone())));
+        issues.extend(model.key_issues().iter().map(|i| (i.key, i.value.clone())));
         let arrows = arrows_by_name
             .entry(keys.filename.clone())
             .or_insert_with(|| {
@@ -151,7 +152,7 @@ pub fn load_scope_balloon_definitions(
             scope,
             key,
             value = %value,
-            "balloon_definitions: 矢印の座標の値が数として読めない（書かれていないものとして扱う）"
+            "balloon_definitions: 数の鍵の値が数として読めない（書かれていないものとして扱う）"
         );
     }
 

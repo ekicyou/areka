@@ -342,3 +342,24 @@ fn inline_marker_none_records_info_once() {
         "面 2 の書いた名前 other が無い"
     );
 }
+
+/// 矢印でない数の鍵の読めない値も同じ `warn!` の輪で (鍵, 値) ごとに 1 回（audit-parsers-sakura 指摘 18）。
+#[test]
+fn unreadable_numeric_key_warns_once() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+    dir.write("descript.txt", "font.height,28px\r\n");
+    dir.write("balloons0.png", "");
+
+    let (_, events) = load(&dir, &dec);
+
+    let warns: Vec<(String, String)> = events
+        .iter()
+        .filter(|e| e.level == Level::WARN && e.message().starts_with("balloon_definitions:"))
+        .map(|e| {
+            let f = |n: &str| e.field(n).expect(n).trim_matches('"').to_string();
+            (f("key"), f("value"))
+        })
+        .collect();
+    assert_eq!(warns, vec![("font.height".to_string(), "28px".to_string())]);
+}

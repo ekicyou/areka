@@ -302,3 +302,44 @@ fn quiet_load_silences_bake_and_fold_records() {
         "戻り値が両入口で違う"
     );
 }
+
+/// 読み込みの記録のうち、重さが `level` で文言が `needle` を含む行の数。
+fn count_level(events: &[CapturedEvent], level: tracing::Level, needle: &str) -> usize {
+    load_records(events)
+        .iter()
+        .filter(|e| e.level == level && e.message().contains(needle))
+        .count()
+}
+
+/// spec: audit-parsers-sakura 指摘 6・34: 範囲の上限を越える記述子は `error!` 1 行、終わりで
+/// 閉じていないブレスは `warn!` 1 行を出す入口だけが出す。
+#[test]
+fn shell_issues_are_recorded_by_severity() {
+    let dir = TempPath::new("shell-quiet-shell-issues");
+    std::fs::write(
+        dir.child("surfaces.txt"),
+        concat!(
+            "charset,UTF-8\n",
+            "surface0\n{\nelement0,overlay,base.png,0,0\n}\n",
+            "surface1-9000\n{\nelement0,overlay,base.png,0,0\n}\n",
+            "surface2\n{\nelement0,overlay,base.png,0,0\n",
+        ),
+    )
+    .expect("記述ファイル作成");
+    write_descript(dir.path());
+    let dec = decoder_with(dir.path(), &["base.png"]);
+
+    let (_, events) = capture_events(|| load_shell_target(dir.path(), &dec).expect("読める"));
+
+    assert_eq!(
+        count_level(&events, tracing::Level::ERROR, "上限"),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        count_level(&events, tracing::Level::WARN, "閉じていない"),
+        1,
+        "{events:?}"
+    );
+    assert_quiet_matches_emit(dir.path(), &dec, "上限");
+}
