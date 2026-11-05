@@ -95,7 +95,7 @@ updated_at: 2026-10-23
 - 代表的なコンポーネント: `DolaAnimator`（`DolaRuntime` を内部所有、`unsafe impl Send + Sync`）
 - 主要システム: `tick_dola_animators`（`Query<&mut DolaAnimator>` + `Res<FrameTime>` で全エンティティ一括tick）
 - 安全性保証: `Query<&mut>` の排他アクセスにより1 tick 1回・単一スレッドでの更新を型レベルで保証
-- 消費パターン: 後続システムが `Query<&DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る
+- 消費パターン: 後続システムが `Query<&mut DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る（読む口は `&mut self`・`Query<&DolaAnimator>` では組み立たない・返す値の中の `Rc` を外へ持ち出さない）
 
 **7. World Scheduling** (`world/`)
 - 責務: schedule label、vsync、フレーム時間管理
