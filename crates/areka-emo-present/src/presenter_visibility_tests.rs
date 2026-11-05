@@ -12,39 +12,17 @@
 
 use super::*;
 
-use wintf::ecs::{Arrangement, HitTest, HitTestMode, Visual};
+use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    attach_hit_target, build_target_assets, build_two_face_assets, hide_ok, make_world_with_gpu,
-    mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
+    arrangement_of, attach_hit_target, build_target_assets, build_two_face_assets, hide_ok,
+    make_world_with_gpu, mask_dims, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
 // ── テスト補助（装着実体の実値を読む）──────────────────────────────────────────────────
 // presenter の私有状態（`visible`）だけを見ると「照会は false を返すが entity は可視」という
 // 食い違いを見逃す。可視性の主張は必ず **entity の実 component 値**でも裏を取る
 // （`mount_entities` は `presenter_test_support.rs` の共有補助）。
-
-/// 枠の面 entity の `Arrangement` 寸（＝**論理寸＝原寸**。k は寸へ焼かず `scale` の係数になる）。
-fn arrangement_size(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<Arrangement>(surface_entity)
-        .map(|a| (a.size.width as u32, a.size.height as u32))
-}
-
-/// 枠の面 entity の `Arrangement.scale`（＝実適用 k の係数・wintf の `SetTransform` が掛ける）。
-fn arrangement_scale(world: &World, surface_entity: Entity) -> Option<f32> {
-    world.get::<Arrangement>(surface_entity).map(|a| {
-        assert_eq!(a.scale.x, a.scale.y, "x/y で異なる係数は本経路に無い");
-        a.scale.x
-    })
-}
-
-/// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
-fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
-}
 
 /// 枠の面・文字層スロットの双方が不可視かつポインタ透過であること（Requirement 1.2/1.4/1.8）。
 fn assert_entities_hidden(world: &World, presenter: &EmoPresenter, target: TargetId, ctx: &str) {
@@ -263,13 +241,13 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
         "不可視確立でもメモは原寸の合成バイトで満たされる"
     );
     assert_eq!(
-        arrangement_size(&world, surface),
-        Some(native_size),
+        arrangement_of(&world, surface).0,
+        native_size,
         "配置の論理寸が原寸でない（寸へ k を焼き込んでいる）"
     );
     assert_eq!(
-        arrangement_scale(&world, surface),
-        Some(2.0),
+        arrangement_of(&world, surface).1,
+        (2.0, 2.0),
         "配置の係数に k が届いていない（等倍のまま確立した）"
     );
     assert_eq!(
@@ -368,13 +346,13 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
 
     // 遷移の起点: 確立時は k=1/1。配置は原寸・係数 1.0 で、マスクも原寸。
     assert_eq!(
-        arrangement_size(&world, surface),
-        Some(native_size),
+        arrangement_of(&world, surface).0,
+        native_size,
         "前提: 確立時の配置の論理寸は原寸"
     );
     assert_eq!(
-        arrangement_scale(&world, surface),
-        Some(1.0),
+        arrangement_of(&world, surface).1,
+        (1.0, 1.0),
         "前提: 確立時の係数は等倍"
     );
     assert_eq!(
@@ -410,8 +388,8 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
     );
     // 本題: 可視化以外の手順が可視性でゲートされていないこと。
     assert_eq!(
-        arrangement_scale(&world, surface),
-        Some(2.0),
+        arrangement_of(&world, surface).1,
+        (2.0, 2.0),
         "配置の係数が可視性でゲートされている（不可視期間中の変化を取りこぼす・Requirement 6.6 の土台）"
     );
     assert_eq!(
@@ -426,8 +404,8 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
         "k 変化でメモの原寸バイトが書き換わった（k を含む面を作っている）"
     );
     assert_eq!(
-        arrangement_size(&world, surface),
-        Some(native_size),
+        arrangement_of(&world, surface).0,
+        native_size,
         "配置の論理寸へ k を焼き込んでいる（拡大は変換行列の仕事）"
     );
     assert_eq!(

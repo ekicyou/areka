@@ -1,17 +1,12 @@
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
 
 use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    build_target_assets, capture, elem, hide_ok, make_world_with_gpu, mount_entities, shell_of,
-    show_ok, show_with, spawn_window_with_dpi, surface,
+    bake_world, build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu,
+    mount_entities, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
 };
 
 /// R2.4/R3.2/R8.2 観測完了（golden 一致）: `attach_target` → `apply(ShowSurface 有効 id)` で reply が
@@ -66,46 +61,14 @@ pub(super) fn build_assets_with_valid_and_empty(
     h: u32,
     salt: u8,
 ) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
     // surface 1000: 全不透明 element 1 本。surface 7000: element/animation ゼロ（定義層皆無）。
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        surface(7000, Vec::new()),
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let a: u8 = 0xFF;
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.push(b);
-            img.push(g);
-            img.push(r);
-            img.push(a);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(7000, Vec::new()),
+        ]),
+        vec![("p.png", w, h, gradient(w, h, salt))],
+    )
 }
 
 /// R3.4 観測完了（skip＋表示不変の回帰檻）: 有効 id で表示・マスクを確立後、**解決不能 id** の
@@ -129,12 +92,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // 表示器の適用前状態を捕捉（bytes ＋ HitTest ＋ mask 寸法/有無）。
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("有効表示後は mount が生成済み")
-        .surface_entity();
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
 
     let bytes_before = presenter
         .read_back(TargetId(0))
@@ -258,12 +216,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
 
     // 有効 1000 で mount と表示記録を確立し可視化。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("有効表示後は mount が生成済み")
-        .surface_entity();
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
         "有効表示後は可視"
@@ -339,12 +292,7 @@ fn hide_then_reshow_recovers_display_from_cache() {
 
     // 初回表示（可視・αマスク判定確立）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("初回表示後は mount が生成済み")
-        .surface_entity();
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     let bytes_shown = presenter
         .read_back(TargetId(0))
         .expect("read_back（初回）失敗");

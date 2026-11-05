@@ -18,12 +18,11 @@ use areka_emo_compose::FilmSheet;
 use areka_parsers::shell::{Collision, CollisionName, Element, ElementPath, Surface};
 
 use super::test_support::{
-    CapturedEvent, build_target_assets, capture, make_world_with_gpu, mount_entities,
-    native_golden_with, shell_of, spawn_window_with_dpi,
+    CapturedEvent, INFO_LINE_MESSAGE, build_target_assets, capture, make_world_with_gpu,
+    mount_entities, native_golden_with, shell_of, spawn_window_with_dpi,
 };
 
 const BASE: &str = "balloon";
-const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 pub(super) const T: TargetId = TargetId(7);
 
 fn element(layer: u32, path: &str, x: i64) -> Element {

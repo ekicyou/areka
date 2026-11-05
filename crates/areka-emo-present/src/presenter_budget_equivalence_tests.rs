@@ -48,18 +48,13 @@
 
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
 
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::test_support::{
-    elem, make_world_with_gpu, native_golden_with, shell_of, show_ok, spawn_window_with_dpi,
-    surface,
+    bake_world, elem, gradient_with_alpha, make_world_with_gpu, mask_bit_counts,
+    native_golden_with, shell_of, show_ok, spawn_window_with_dpi, surface,
 };
 
 // ── fixture ────────────────────────────────────────────────────────────────────────────
@@ -108,7 +103,6 @@ fn face_at(i: usize) -> u32 {
 ///   （マスクの相異なりは位相が、バイトの相異なりは色が担う）。
 /// - 色は α を掛けた premultiplied 値で焼く（`B,G,R ≤ A` の不変条件を崩さない）。
 fn build_alpha_varying_faces(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
     let names = ["p.png", "q.png", "r.png", "s.png"];
     let salts = [0x13_u8, 0x8B, 0x4D, 0xC1];
     let surfaces: Vec<_> = FACES
@@ -116,55 +110,22 @@ fn build_alpha_varying_faces(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
         .zip(names)
         .map(|(id, name)| surface(*id, vec![elem(name, 0, 0)]))
         .collect();
-
-    let stride = w * 4;
-    let image = |salt: u8, phase: u32| -> Vec<u8> {
-        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let a: u8 = if (x + y + phase).is_multiple_of(2) {
+    let images = names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let phase = (i % 2) as u32;
+            let checker = move |x: u32, y: u32| {
+                if (x + y + phase).is_multiple_of(2) {
                     0xFF
                 } else {
                     0x20
-                };
-                let pm = |c: u8| ((c as u16 * a as u16) / 255) as u8;
-                img.push(pm((x as u8).wrapping_mul(3).wrapping_add(salt)));
-                img.push(pm((y as u8).wrapping_mul(5).wrapping_add(salt)));
-                img.push(pm(((x + y) as u8).wrapping_mul(7).wrapping_add(salt)));
-                img.push(a);
-            }
-        }
-        img
-    };
-
-    let mut dec = MemoryDecoder::new();
-    for (i, name) in names.iter().enumerate() {
-        dec.insert(
-            base.join(name),
-            w,
-            h,
-            stride,
-            image(salts[i], (i % 2) as u32),
-            true,
-        );
-    }
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+                }
+            };
+            (*name, w, h, gradient_with_alpha(w, h, salts[i], checker))
+        })
+        .collect();
+    bake_world(shell_of(surfaces), images)
 }
 
 // ── 便宜経路（「まっさらな出力先」で辿る対照）──────────────────────────────────────────
@@ -203,22 +164,6 @@ fn expected_faces() -> Vec<Expected> {
         .iter()
         .map(|id| expected_of(&probe_world, &probe_atlas, *id))
         .collect()
-}
-
-/// マスクの立っているビット数・落ちているビット数。
-fn mask_bit_counts(mask: &AlphaMask) -> (usize, usize) {
-    let mut hits = 0;
-    let mut misses = 0;
-    for y in 0..mask.height() {
-        for x in 0..mask.width() {
-            if mask.is_hit(x, y) {
-                hits += 1;
-            } else {
-                misses += 1;
-            }
-        }
-    }
-    (hits, misses)
 }
 
 /// 期待値そのものが「中身のある絵」であることを主張する（等価主張の非空虚性）。

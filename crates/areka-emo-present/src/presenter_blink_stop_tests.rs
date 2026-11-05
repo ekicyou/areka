@@ -13,23 +13,17 @@
 
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::{ComposeMethod, PatternFrame};
 
 use super::test_support::{
-    capture, make_world_with_gpu, native_golden_with, pattern_overlay_at, show_with,
-    spawn_window_with_dpi,
+    RANGE_LINE_MESSAGE, bake_world, capture, make_world_with_gpu, native_golden_with,
+    pattern_overlay_at, show_with, solid, spawn_window_with_dpi,
 };
 
 const TARGET: TargetId = TargetId(0);
 const BASE_ID: u32 = 1000;
 const BLINK: u32 = 1400;
 const MOVER: u32 = 1500;
-const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
 
 const SHELL: &str = "surface1000\n{\nelement0,overlay,p.png,0,0\n\
 animation1400.interval,bind+random,4\n\
@@ -43,41 +37,16 @@ surface1410\n{\nelement0,overlay,closed.png,0,0\n}\n\
 surface1411\n{\nelement0,overlay,half.png,0,0\n}\n";
 
 fn build_assets() -> (EmoWorld, AtlasTable) {
-    let shell = areka_parsers::shell::parse(SHELL);
-    let base = Path::new("shell/master");
-    let solid = |(w, h): (u32, u32), bgr: [u8; 3]| -> Vec<u8> {
-        (0..w * h)
-            .flat_map(|_| [bgr[0], bgr[1], bgr[2], 0xFF])
-            .collect()
-    };
-    let mut dec = MemoryDecoder::new();
-    for (name, size, bgr) in [
+    let images = [
         ("p.png", (16, 12), [0x20, 0x40, 0x60]),
         ("closed.png", (4, 3), [0x00, 0x00, 0xF0]),
         ("half.png", (4, 3), [0x00, 0xF0, 0x00]),
         ("move.png", (3, 2), [0xF0, 0x00, 0x00]),
-    ] {
-        dec.insert(
-            base.join(name),
-            size.0,
-            size.1,
-            size.0 * 4,
-            solid(size, bgr),
-            true,
-        );
-    }
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake: {:?}", baked.errors);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    ]
+    .into_iter()
+    .map(|(name, (w, h), bgr)| (name, w, h, solid(w, h, bgr)))
+    .collect();
+    bake_world(areka_parsers::shell::parse(SHELL), images)
 }
 
 fn binds() -> BindSet {

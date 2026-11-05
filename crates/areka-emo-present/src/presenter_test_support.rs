@@ -18,7 +18,8 @@ use areka_emo_compose::{BindSet, ComposeMethod, PatternFrame};
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::{GraphicsCore, WucGraphicsResource};
+use wintf::ecs::widget::bitmap_source::AlphaMask;
+use wintf::ecs::{Arrangement, GraphicsCore, WucGraphicsResource};
 
 // ── GPU/WUC フィクスチャ（mount.rs / wuc_resource.rs テストと同一方針）────────────────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
@@ -213,6 +214,50 @@ pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Ent
     (mount.surface_entity(), mount.text_slot())
 }
 
+/// 枠の面 entity の `Arrangement` を `(寸, 係数)` で読む（**論理寸＝原寸・係数＝拡大率 k**）。
+///
+/// 両方を 1 つの値で読むのは、片方だけを見ると「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と
+/// 区別できないためである。物理寸そのもの（`GlobalArrangement.bounds`）は wintf の伝播段
+/// （`PostLayout`）が導くので、丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
+pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
+    let arr = world
+        .get::<Arrangement>(surface_entity)
+        .expect("surface entity に Arrangement が無い");
+    (
+        (arr.size.width as u32, arr.size.height as u32),
+        (arr.scale.x, arr.scale.y),
+    )
+}
+
+/// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
+pub(super) fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
+    world
+        .get::<AlphaMaskResource>(surface_entity)
+        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
+}
+
+/// マスクの立っているビット数・落ちているビット数。
+pub(super) fn mask_bit_counts(mask: &AlphaMask) -> (usize, usize) {
+    let mut hits = 0;
+    let mut misses = 0;
+    for y in 0..mask.height() {
+        for x in 0..mask.width() {
+            if mask.is_hit(x, y) {
+                hits += 1;
+            } else {
+                misses += 1;
+            }
+        }
+    }
+    (hits, misses)
+}
+
+/// 表示成立点の行の固定文言（`show.rs` の `info!`・実機サインオフ契約）。
+pub(super) const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
+
+/// 重ね直しの範囲の行の固定文言（`show.rs`・要件 3.5）。
+pub(super) const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
+
 // ── ComposedSurface 生成補助 ────────────────────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
 // 上流公開 API（atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。
@@ -248,34 +293,55 @@ pub(crate) fn shell_of(surfaces: Vec<Surface>) -> Shell {
     }
 }
 
-/// surface 1000 = 単一 element（`w×h` 全不透明・座標由来グラデーション）の `(EmoWorld, AtlasTable)`
-/// と、同一入力を `Composer::compose` で直接合成した golden バイト列を返す。
-///
-/// α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は正確に `w×h`。golden は presenter が
-/// 内部で辿るのと同一の world/atlas から作るため、readback とのバイト一致が二重に決定論的になる。
-pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable, Vec<u8>) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![surface(1000, vec![elem("p.png", 0, 0)])];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
+/// 座標由来のグラデーション（premultiplied BGRA）。α は画素ごとに `alpha(x, y)` で、色は α を掛けて
+/// 焼く（`B,G,R ≤ A` の不変条件を崩さない）。α=255 なら色はそのまま、α=0 なら画素は 0。
+pub(super) fn gradient_with_alpha(
+    w: u32,
+    h: u32,
+    salt: u8,
+    alpha: impl Fn(u32, u32) -> u8,
+) -> Vec<u8> {
+    let mut img: Vec<u8> = Vec::with_capacity((w * h * 4) as usize);
     for y in 0..h {
         for x in 0..w {
-            let a: u8 = 0xFF;
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.push(b);
-            img.push(g);
-            img.push(r);
-            img.push(a);
+            let a = alpha(x, y);
+            let pm = |c: u8| ((c as u16 * a as u16) / 255) as u8;
+            img.extend_from_slice(&[
+                pm((x as u8).wrapping_mul(3).wrapping_add(salt)),
+                pm((y as u8).wrapping_mul(5).wrapping_add(salt)),
+                pm(((x + y) as u8).wrapping_mul(7).wrapping_add(salt)),
+                a,
+            ]);
         }
     }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
+    img
+}
 
+/// 全不透明の [`gradient_with_alpha`]。
+pub(super) fn gradient(w: u32, h: u32, salt: u8) -> Vec<u8> {
+    gradient_with_alpha(w, h, salt, |_, _| 0xFF)
+}
+
+/// `w×h` の単色不透明（BGR を与える）。
+pub(super) fn solid(w: u32, h: u32, bgr: [u8; 3]) -> Vec<u8> {
+    (0..w * h)
+        .flat_map(|_| [bgr[0], bgr[1], bgr[2], 0xFF])
+        .collect()
+}
+
+/// `shell/master` に置いた絵 `(名前, 幅, 高さ, BGRA)` で `shell` の面を atlas に焼き、
+/// `EmoWorld` へ組んで束ねる（atlas bake → `EmoWorld` → `bind_atlas`）。
+pub(super) fn bake_world(
+    shell: Shell,
+    images: Vec<(&str, u32, u32, Vec<u8>)>,
+) -> (EmoWorld, AtlasTable) {
+    let base = Path::new("shell/master");
+    let mut dec = MemoryDecoder::new();
+    for (name, w, h, bgra) in images {
+        dec.insert(base.join(name), w, h, w * 4, bgra, true);
+    }
     let set = SurfaceSet {
-        surfaces: &surfaces,
+        surfaces: &shell.surfaces,
         base_dir: base,
         alpha_params: AlphaParams {
             use_self_alpha: UseSelfAlpha::On,
@@ -284,27 +350,26 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
     let baked = bake(&[set], &dec, PackConfig::default());
     assert!(
         baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
+        "atlas bake セットアップは失敗しない: {:?}",
+        baked.errors
     );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
+    let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&baked.table, SetId(0));
-    let atlas = baked.table;
+    (world, baked.table)
+}
 
-    // golden: presenter と同一入力を直接合成（move 前に計算する）。
-    let mut composer = Composer::new();
-    let golden = composer
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("静的 element 単体の合成は Ok");
-    let golden_bytes = golden.bytes().to_vec();
-
-    (world, atlas, golden_bytes)
+/// surface 1000 = 単一 element（`w×h` 全不透明・座標由来グラデーション）の `(EmoWorld, AtlasTable)`
+/// と、同一入力を `Composer::compose` で直接合成した golden バイト列を返す。
+///
+/// α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は正確に `w×h`。golden は presenter が
+/// 内部で辿るのと同一の world/atlas から作るため、readback とのバイト一致が二重に決定論的になる。
+pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable, Vec<u8>) {
+    let (world, atlas) = bake_world(
+        shell_of(vec![surface(1000, vec![elem("p.png", 0, 0)])]),
+        vec![("p.png", w, h, gradient(w, h, salt))],
+    );
+    let golden = native_golden(&world, &atlas, 1000).0;
+    (world, atlas, golden)
 }
 
 /// surface 1000／3000 = 同 `w×h`・全不透明・**別バイト**（別 element・別 salt）を持つ単一
@@ -316,70 +381,18 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
 /// golden は presenter が内部で辿るのと同一 world/atlas から作るため readback とのバイト一致が
 /// 二重に決定論的。2 面の golden が別物であることを fixture 自身が assert する（R6.1 の回帰檻前提）。
 pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        surface(3000, vec![elem("q.png", 0, 0)]),
-    ];
-
-    let stride = w * 4;
-    let gradient = |salt: u8| -> Vec<u8> {
-        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.extend_from_slice(&[b, g, r, 0xFF]);
-            }
-        }
-        img
-    };
-
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, stride, gradient(0x11), true);
-    dec.insert(base.join("q.png"), w, h, stride, gradient(0x77), true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
+    let (world, atlas) = bake_world(
+        shell_of(vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(3000, vec![elem("q.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w, h, gradient(w, h, 0x11)),
+            ("q.png", w, h, gradient(w, h, 0x77)),
+        ],
     );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    let atlas = baked.table;
-
-    let mut composer = Composer::new();
-    let golden_1000 = composer
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("面 1000 の合成は Ok")
-        .bytes()
-        .to_vec();
-    let golden_3000 = composer
-        .compose(
-            &world,
-            &atlas,
-            3000,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("面 3000 の合成は Ok")
-        .bytes()
-        .to_vec();
+    let golden_1000 = native_golden(&world, &atlas, 1000).0;
+    let golden_3000 = native_golden(&world, &atlas, 3000).0;
     assert_ne!(
         golden_1000, golden_3000,
         "fixture 前提: 同寸でも 2 面のバイトが異ならなければ再表示の回帰檻にならない"
@@ -435,35 +448,20 @@ fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str
 /// （本節は判定だけを見るので画素は不要）。矩形は `hit.rs` の檻と同一の Head/Bust に、
 /// **Bust と重なる Arm**（後定義＝画家則で手前）を足した 3 件で、重なり点の檻を成立させる。
 fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        id: 1000,
-        targets: vec![AppendTarget::Single(1000)],
-        elements: Vec::new(),
-        collisions: vec![
-            hit_coll(0, 93, 62, 271, 130, "Head"),
-            hit_coll(1, 133, 270, 229, 326, "Bust"),
-            hit_coll(2, 200, 300, 400, 400, "Arm"),
-        ],
-        animations: Vec::new(),
-    }];
-
-    let dec = MemoryDecoder::new();
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "element 無し surface の atlas bake は失敗しない: {:?}",
-        baked.errors
-    );
-
-    (EmoWorld::build(&shell_of(surfaces)), baked.table)
+    bake_world(
+        shell_of(vec![Surface {
+            id: 1000,
+            targets: vec![AppendTarget::Single(1000)],
+            elements: Vec::new(),
+            collisions: vec![
+                hit_coll(0, 93, 62, 271, 130, "Head"),
+                hit_coll(1, 133, 270, 229, 326, "Bust"),
+                hit_coll(2, 200, 300, 400, 400, "Arm"),
+            ],
+            animations: Vec::new(),
+        }]),
+        Vec::new(),
+    )
 }
 
 /// `attach_target` 済み（未表示）の target を 1 つ登録する。

@@ -1,17 +1,13 @@
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::{Arrangement, GraphicsCommandList};
+use wintf::ecs::GraphicsCommandList;
 
 use super::test_support::{
-    build_target_assets, build_two_face_assets, elem, make_world_with_gpu, mount_entities,
-    native_golden, set_window_dpi, shell_of, show_ok, spawn_window_with_dpi, surface,
+    arrangement_of, bake_world, build_target_assets, build_two_face_assets, elem, gradient,
+    make_world_with_gpu, mount_entities, native_golden, set_window_dpi, shell_of, show_ok,
+    spawn_window_with_dpi, surface,
 };
 
 // ── DPI 追従（k 適用の単一漏斗）: タスク 3.2／3.3 の檻 ────────────────────────────────────
@@ -26,17 +22,6 @@ use super::test_support::{
 // 照会値＝丸め権威 `scaled_extent`」の 3 点で書く。物理寸そのもの（`GlobalArrangement.bounds`）は
 // wintf の伝播段（`PostLayout`）が導くため
 // 本ファイルでは走らせず、丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
-
-/// surface entity の `Arrangement` を `(寸, 係数)` で読む（**論理寸＝原寸・係数＝拡大率 k**）。
-fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
-    let arr = world
-        .get::<Arrangement>(surface_entity)
-        .expect("surface entity に Arrangement が無い");
-    (
-        (arr.size.width as u32, arr.size.height as u32),
-        (arr.scale.x, arr.scale.y),
-    )
-}
 
 /// タスク 3.2・要件 1.5 観測完了（窓ごとの k 基底）: `attach_target` は target ごとに拡大政策を
 /// 保持し、**別窓・別 author_dpi の 2 target が互いの政策を汚さない**。同一の窓 DPI（192）を与えて
@@ -579,59 +564,16 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
 /// 「照会契約の native 原寸が**表示中の面**を指しているか」を弁別するために寸法を変えてある
 /// （同寸では取り違えが観測できない）。両面とも α=255 ゆえトリムは全域を残し、合成外形は宣言どおり。
 fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        surface(3000, vec![elem("q.png", 0, 0)]),
-    ];
-
-    let gradient = |w: u32, h: u32, salt: u8| -> Vec<u8> {
-        let mut img: Vec<u8> = Vec::with_capacity((w * h * 4) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.extend_from_slice(&[b, g, r, 0xFF]);
-            }
-        }
-        img
-    };
-
-    let mut dec = MemoryDecoder::new();
-    dec.insert(
-        base.join("p.png"),
-        w1,
-        h1,
-        w1 * 4,
-        gradient(w1, h1, 0x21),
-        true,
-    );
-    dec.insert(
-        base.join("q.png"),
-        w2,
-        h2,
-        w2 * 4,
-        gradient(w2, h2, 0x5C),
-        true,
-    );
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(3000, vec![elem("q.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w1, h1, gradient(w1, h1, 0x21)),
+            ("q.png", w2, h2, gradient(w2, h2, 0x5C)),
+        ],
+    )
 }
 
 /// 要件 1.2/4.4/5.3 観測完了（**キャッシュヒットで成立した表示でも照会契約が正しい**）: 別の面を

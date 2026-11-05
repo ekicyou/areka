@@ -33,6 +33,8 @@ use std::time::Instant;
 
 use areka_emo_compose::{BindSet, PatternState};
 
+use bevy_ecs::entity::Entity;
+
 use super::super::EmoPresenter;
 use super::super::test_support::{
     CapturedEvent, build_target_assets, capture, hide_ok, make_world_with_gpu, set_window_dpi,
@@ -480,11 +482,17 @@ fn gpu_world_with_frame() -> World {
     world
 }
 
-/// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作る（`author_dpi` は 96 固定）。
-fn attach(presenter: &mut EmoPresenter, world: &mut World, target: TargetId, window_dpi: u16) {
+/// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作り、窓を返す（`author_dpi` は 96 固定）。
+fn attach(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    window_dpi: u16,
+) -> Entity {
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
     presenter.attach_target(target, window, emo_world, atlas, 96);
+    window
 }
 
 /// `ShowSurface` を 1 回適用する。
@@ -616,9 +624,7 @@ fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
 fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter.attach_target(TargetId(1), window, emo_world, atlas, 96);
+    let window = attach(&mut presenter, &mut world, TargetId(1), 96);
     assert!(
         show(&mut presenter, &mut world, TargetId(1)).is_ok(),
         "前提: k=1/1 の初回表示は成立する"
@@ -656,9 +662,7 @@ fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
 fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter.attach_target(TargetId(2), window, emo_world, atlas, 96);
+    let window = attach(&mut presenter, &mut world, TargetId(2), 96);
     assert!(
         show(&mut presenter, &mut world, TargetId(2)).is_ok(),
         "前提: 初回表示は成立する"

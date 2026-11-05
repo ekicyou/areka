@@ -64,24 +64,14 @@
 
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::Surface;
-
 use super::test_support::{
-    CapturedEvent, build_target_assets, capture, elem, shell_of, spawn_window_with_dpi, surface,
+    CapturedEvent, INFO_LINE_MESSAGE, build_target_assets, capture, show_with,
+    show_with_armed_fault, spawn_window_with_dpi,
 };
 use super::timing::{PERF_LINE_MESSAGE, compose_key_hash};
-use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+use crate::display::DisplayFault;
 
-// ── 契約面の正本（この 3 つの定数がコード側と乖離したら RED）───────────────────────────
-
-/// 既存の表示成立点の行の固定文言（show.rs の `info!`・実機サインオフ契約）。
-const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
+// ── 契約面の正本（この 2 つの定数と支えの `INFO_LINE_MESSAGE` がコード側と乖離したら RED）──
 
 /// 表示成立点の行のフィールド集合（show.rs の `info!` から逐語で写した**全項目**）。
 ///
@@ -273,79 +263,6 @@ fn heavy_binds() -> BindSet {
     BindSet::from_ids(1..=BIND_COUNT)
 }
 
-/// 有効 surface 1000（`w×h` 全不透明）＋ 定義層皆無で外形 0×0 に退化する surface 7000 を
-/// 同一 target へ載せる `(EmoWorld, AtlasTable)`。
-///
-/// surface 7000 は `Composer::compose` が `Err(ComposeError::EmptyComposition(7000))` を返す
-/// （presenter_display_tests.rs の同型 fixture と同じ構成）。show.rs の早期復帰 8 経路のうち
-/// EmptyComposition 縮退（warn! ＋ Hide 縮退）へ到達する唯一の手段である。
-fn build_assets_with_empty_surface(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        Surface {
-            id: 7000,
-            targets: vec![areka_parsers::shell::AppendTarget::Single(7000)],
-            elements: Vec::new(),
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        },
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.extend_from_slice(&[b, g, r, 0xFF]);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// `ShowSurface` を 1 回適用し、reply の結果を返す（成功・失敗のどちらも呼び手が判定する）。
-fn show(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    target: TargetId,
-    surface_id: u32,
-    binds: BindSet,
-) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id,
-            binds,
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("ShowSurface の reply を受信できない")
-}
-
 /// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作る（`author_dpi` は 96 固定）。
 fn attach(
     presenter: &mut EmoPresenter,
@@ -385,12 +302,13 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
 
     let ((), events) = capture(|| {
         assert!(
-            show(
+            show_with(
                 &mut presenter,
                 &mut world,
                 TargetId(0),
                 1000,
-                BindSet::default()
+                BindSet::default(),
+                PatternState::default()
             )
             .is_ok(),
             "前提: k=2/1 の初回表示は成立する"
@@ -482,8 +400,28 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 
     let ((), events) = capture(|| {
         // 1 回目＝ミス（スロットを埋める）、2 回目＝完全一致ヒット。
-        assert!(show(&mut presenter, &mut world, TargetId(0), 1000, heavy_binds()).is_ok());
-        assert!(show(&mut presenter, &mut world, TargetId(0), 1000, heavy_binds()).is_ok());
+        assert!(
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                heavy_binds(),
+                PatternState::default()
+            )
+            .is_ok()
+        );
+        assert!(
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                heavy_binds(),
+                PatternState::default()
+            )
+            .is_ok()
+        );
     });
 
     let infos = info_line_indices(&events);
@@ -587,42 +525,47 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     let mut world = super::test_support::make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas) = build_assets_with_empty_surface(NATIVE_W, NATIVE_H, 0xA4);
+    let (emo_world, atlas) =
+        super::display_tests::build_assets_with_valid_and_empty(NATIVE_W, NATIVE_H, 0xA4);
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let ((ok, not_attached, compose_err, empty), events) = capture(|| {
         // 陽性: 表示が成立する適用 1 本（両 callsite が有効であることの証明）。
-        let ok = show(
+        let ok = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
         // 陰性 1: 未装着 target（show.rs 冒頭の早期復帰）。
-        let a = show(
+        let a = show_with(
             &mut presenter,
             &mut world,
             TargetId(9),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
         // 陰性 2: 解決不能 id（合成失敗の早期復帰）。
-        let b = show(
+        let b = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             9999,
             BindSet::default(),
+            PatternState::default(),
         );
         // 陰性 3: 定義層皆無で外形 0×0（全透明退化 → Hide 縮退の早期復帰）。
-        let c = show(
+        let c = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             7000,
             BindSet::default(),
+            PatternState::default(),
         );
         (ok, a, b, c)
     });
@@ -709,44 +652,38 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
 
     let ((ok, no_gfx, record_failed), events) = capture(|| {
         // 陽性: 資源が揃った target の成立適用（両 callsite の有効性の証明）。
-        let ok = show(
+        let ok = show_with(
             &mut presenter,
             &mut world,
             TargetId(0),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
 
         // 陰性 1: GraphicsCore 不在（＝DeviceContext を借りられず記録に入れない）。
         let gfx = world
             .remove_resource::<GraphicsCore>()
             .expect("前提: GraphicsCore が載っている");
-        let a = show(
+        let a = show_with(
             &mut presenter,
             &mut world,
             TargetId(1),
             1000,
             BindSet::default(),
+            PatternState::default(),
         );
         world.insert_resource(gfx);
 
         // 陰性 2: 記録の失敗（`record_display` の 1 点目＝`CreateBitmap` へ注入）。
-        // 解除は `Drop` に持たせる——assert の panic で飛び越すと旗が同一スレッドの
-        // 後続テストを巻き添えにする（`display_fault_tests.rs` と同じ流儀）。
-        struct Disarm;
-        impl Drop for Disarm {
-            fn drop(&mut self) {
-                clear_display_fault();
-            }
-        }
-        let _disarm = Disarm;
-        arm_display_fault(DisplayFault::CreateBitmap);
-        let b = show(
+        let b = show_with_armed_fault(
             &mut presenter,
             &mut world,
             TargetId(2),
             1000,
             BindSet::default(),
+            PatternState::default(),
+            DisplayFault::CreateBitmap,
         );
 
         (ok, a, b)
@@ -824,24 +761,26 @@ fn display_result_is_independent_of_log_configuration() {
     // (a) 捕捉 subscriber あり。
     let ((), events) = capture(|| {
         assert!(
-            show(
+            show_with(
                 &mut presenter,
                 &mut world,
                 TargetId(0),
                 1000,
-                BindSet::default()
+                BindSet::default(),
+                PatternState::default()
             )
             .is_ok()
         );
     });
     // (b) subscriber なし（既定の NoSubscriber ＝ perf 行も表示成立点の行も一切出ない）。
     assert!(
-        show(
+        show_with(
             &mut presenter,
             &mut world,
             TargetId(1),
             1000,
-            BindSet::default()
+            BindSet::default(),
+            PatternState::default()
         )
         .is_ok()
     );

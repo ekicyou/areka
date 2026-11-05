@@ -1,21 +1,16 @@
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, AppendTarget, DrawMethod, Interval, Pattern, Surface};
 
+use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{Arrangement, GraphicsCommandList};
 
 use super::test_support::{
-    build_target_assets, elem, make_world_with_gpu, native_golden, native_golden_with,
-    pattern_overlay_at, set_window_dpi, shell_of, show_ok, spawn_window_with_dpi, surface,
+    arrangement_of, bake_world, build_target_assets, elem, gradient, gradient_with_alpha,
+    make_world_with_gpu, mask_bit_counts, mask_dims, mount_entities, native_golden,
+    native_golden_with, pattern_overlay_at, set_window_dpi, shell_of, show_ok, show_with, solid,
+    spawn_window_with_dpi, surface,
 };
 
 // ── task 6.3: 端数 k（5/4）の表示の作り方・αマスクの由来・縮小方向の自動追従 ───────────────
@@ -30,37 +25,6 @@ use super::test_support::{
 // 絵・マスク・表示記録は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
 // 決定論 golden に取らない（要件 6.6・見た目は実機 2 水準サインオフが担う）。
 
-/// target の surface entity（表示器＝visual/αマスク/bounds の宿主）を取り出す。
-fn surface_entity_of(presenter: &EmoPresenter, target: TargetId) -> Entity {
-    presenter
-        .targets
-        .get(&target)
-        .and_then(|t| t.mount.as_ref())
-        .expect("表示成立後は mount が生成済み")
-        .surface_entity()
-}
-
-/// surface entity に供給済みの αマスク寸（未供給なら `None`）。
-fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
-}
-
-/// surface entity の `Arrangement` を `(寸, 係数)` で読む（**論理寸＝原寸・係数＝拡大率 k**）。
-///
-/// 物理寸そのもの（`GlobalArrangement.bounds`）は wintf の伝播段（`PostLayout`）が導くので、
-/// 本ファイルのテストは走らせない。丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
-fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
-    let arr = world
-        .get::<Arrangement>(surface_entity)
-        .expect("surface entity に Arrangement が無い");
-    (
-        (arr.size.width as u32, arr.size.height as u32),
-        (arr.scale.x, arr.scale.y),
-    )
-}
-
 /// surface 1000 ＝ **α が画素ごとに変わる** `w×h` element の `(EmoWorld, AtlasTable)`。
 ///
 /// α は市松に `0xFF`（マスク hit）と `0x20`（閾値 128 未満＝非 hit）を置く。**α=0 を含まない**ため
@@ -70,40 +34,17 @@ fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f
 /// 全不透明の `build_target_assets` では αマスクが**全ビット 1 の一様マスク**になり、
 /// 「マスク内容が表示に渡した原寸バイト由来か」の検査が空虚になる（寸法しか弁別できない）。
 fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![surface(1000, vec![elem("p.png", 0, 0)])];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let a: u8 = if (x + y) % 2 == 0 { 0xFF } else { 0x20 };
-            let pm = |c: u8| ((c as u16 * a as u16) / 255) as u8;
-            img.push(pm((x as u8).wrapping_mul(3).wrapping_add(salt)));
-            img.push(pm((y as u8).wrapping_mul(5).wrapping_add(salt)));
-            img.push(pm(((x + y) as u8).wrapping_mul(7).wrapping_add(salt)));
-            img.push(a);
+    let checker = |x: u32, y: u32| {
+        if (x + y).is_multiple_of(2) {
+            0xFF
+        } else {
+            0x20
         }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
     };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![surface(1000, vec![elem("p.png", 0, 0)])]),
+        vec![("p.png", w, h, gradient_with_alpha(w, h, salt, checker))],
+    )
 }
 
 /// タスク 6.3 の名指し受け入れ基準・要件 2.1/2.5/3.1/3.2 観測完了（**端数を伴う k=5/4 の表示の
@@ -142,7 +83,7 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // (a) 配置＝原寸の寸 × 端数を伴う係数（拡大は wintf の変換行列が掛ける）。
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     assert_eq!(
         arrangement_of(&world, surface_entity),
         (native_size, (1.25, 1.25)),
@@ -227,17 +168,7 @@ fn alpha_mask_bits_come_from_native_bytes() {
         native_size.0 * 4,
     );
     // 非空虚性の前提: hit と非 hit が両方在る（全ビット 1 のマスクでは内容比較が空虚になる）。
-    let mut hits = 0usize;
-    let mut misses = 0usize;
-    for y in 0..native_size.1 {
-        for x in 0..native_size.0 {
-            if expected.is_hit(x, y) {
-                hits += 1;
-            } else {
-                misses += 1;
-            }
-        }
-    }
+    let (hits, misses) = mask_bit_counts(&expected);
     assert!(
         hits > 0 && misses > 0,
         "fixture 前提が崩れた: 期待マスクが一様（hit={hits} miss={misses}）＝内容比較が空虚"
@@ -254,7 +185,7 @@ fn alpha_mask_bits_come_from_native_bytes() {
         "読み戻しが原寸の合成バイトと一致しない"
     );
 
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     let mask_res = world
         .get::<AlphaMaskResource>(surface_entity)
         .expect("surface entity に AlphaMaskResource が無い");
@@ -327,7 +258,7 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     assert_eq!(
         arrangement_of(&world, surface_entity),
         (native_size, (2.0, 2.0)),
@@ -424,7 +355,6 @@ const LAYERED_PART_SIZE: (u32, u32) = (6, 4);
 /// 両 part とも base 内（`(2,3)+(6,4)=(8,7)`・`(5,5)+(6,4)=(11,9)` ≤ `(16,12)`）
 /// ゆえ合成外形は base の `w×h` のまま——外形変化ではなく**中身の相対配置**だけを観測できる。
 fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
     let (pw, ph) = LAYERED_PART_SIZE;
     let base_surface = Surface {
         id: 1000,
@@ -446,66 +376,20 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
             }],
         }],
     };
-    let surfaces = vec![
-        base_surface,
-        surface(5000, vec![elem("q.png", 0, 0)]),
-        surface(6000, vec![elem("r.png", 0, 0)]),
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.extend_from_slice(&[b, g, r, 0xFF]);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
     // 2 part は単色不透明で互いに異色（重なり順と相対配置を画素で弁別できる）。α=255 ゆえ
     // premultiplied 不変条件は自明に成立する。
-    let solid = |bgr: [u8; 3]| {
-        let mut v = Vec::with_capacity((pw * ph * 4) as usize);
-        for _ in 0..(pw * ph) {
-            v.extend_from_slice(&[bgr[0], bgr[1], bgr[2], 0xFF]);
-        }
-        v
-    };
-    dec.insert(
-        base.join("q.png"),
-        pw,
-        ph,
-        pw * 4,
-        solid([0x11, 0x99, 0x22]),
-        true,
-    );
-    dec.insert(
-        base.join("r.png"),
-        pw,
-        ph,
-        pw * 4,
-        solid([0xEE, 0x33, 0xCC]),
-        true,
-    );
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            base_surface,
+            surface(5000, vec![elem("q.png", 0, 0)]),
+            surface(6000, vec![elem("r.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w, h, gradient(w, h, salt)),
+            ("q.png", pw, ph, solid(pw, ph, [0x11, 0x99, 0x22])),
+            ("r.png", pw, ph, solid(pw, ph, [0xEE, 0x33, 0xCC])),
+        ],
+    )
 }
 
 /// 要件 2.3 観測完了（**多層コンテンツの単一 k**・k=3/2）: ベース surface ＋ mayuna 着せ替え相当の
@@ -594,24 +478,21 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    let outcome = show_with(
+        &mut presenter,
         &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: binds.clone(),
-            pattern: pattern.clone(),
-            reply: Some(tx),
-        },
+        TargetId(0),
+        1000,
+        binds.clone(),
+        pattern.clone(),
     );
     assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "3 層 ShowSurface（k=3/2）が Ok でない"
+        matches!(outcome, Ok(())),
+        "3 層 ShowSurface（k=3/2）が Ok でない: {outcome:?}"
     );
 
     // (a) 配置＝原寸の寸 × **1 対の**係数。x と y に別々の倍率が入る余地が無いことを明示する。
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     let (arr_size, arr_scale) = arrangement_of(&world, surface_entity);
     assert_eq!(arr_size, native_size, "配置の寸は 3 層合成の原寸");
     assert_eq!(

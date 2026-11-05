@@ -10,12 +10,9 @@
 //! `cache_tests.rs` と同じ扱い）、**本物の `ShowSurface` 指令**を当たりの経路で通す。
 //! `last_show`・`current_surface_id`・`visible` を書くのは本番の表示成立点そのものである。
 
-use std::path::Path;
 use std::sync::Arc;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
+use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 use areka_parsers::shell::{
     AliasKey, Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
@@ -27,8 +24,8 @@ use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::super::test_support::{
-    capture, elem, hide_ok, invalidate_ok, native_golden, native_golden_with, pattern_overlay_at,
-    show_with, spawn_window_with_dpi,
+    bake_world, capture, elem, hide_ok, invalidate_ok, native_golden, native_golden_with,
+    pattern_overlay_at, show_with, spawn_window_with_dpi,
 };
 use super::super::{EmoPresenter, TargetId};
 
@@ -50,7 +47,6 @@ const ABSENT: u32 = 9999;
 /// surface 1000（4×3 全不透明・着せ替え 2000 が surface 5000 を (0,0) に重ねる）と surface 5000
 /// （1×1 白）に、別名の表 `7000 → [1000]` を足したシェルの `(EmoWorld, AtlasTable)`。
 fn build_assets() -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
     let surfaces = vec![
         Surface {
             id: BASE,
@@ -88,20 +84,6 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
             img.extend_from_slice(&[(x * 40) as u8, (y * 60) as u8, 0x30, 0xFF]);
         }
     }
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, w * 4, img, true);
-    dec.insert(base.join("q.png"), 1, 1, 4, vec![0xFF; 4], true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake は失敗しない");
-
     let shell = Shell {
         surfaces,
         appends: Vec::new(),
@@ -113,9 +95,10 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
         collision_sort: None,
         definitions: vec![DefRef::Surface(0), DefRef::Surface(1), DefRef::Alias(0)],
     };
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell,
+        vec![("p.png", w, h, img), ("q.png", 1, 1, vec![0xFF; 4])],
+    )
 }
 
 /// `SHOWN` と `NEVER_SHOWN` の 2 target を登録した presenter と World。

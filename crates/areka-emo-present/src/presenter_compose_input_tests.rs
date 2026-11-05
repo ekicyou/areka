@@ -1,18 +1,14 @@
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, AppendTarget, DrawMethod, Interval, Pattern, Surface};
 
 use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    build_two_face_assets, elem, make_world_with_gpu, pattern_overlay_at, shell_of, show_ok,
-    show_with, spawn_window_with_dpi, surface,
+    bake_world, build_two_face_assets, elem, gradient, make_world_with_gpu, mount_entities,
+    native_golden, native_golden_with, pattern_overlay_at, shell_of, show_ok, show_with,
+    spawn_window_with_dpi, surface,
 };
 
 /// surface 1000（`w×h` 全不透明 element ＋ bind animation 2000 が surface 5000 を (0,0) に重ねる）
@@ -25,7 +21,6 @@ fn build_target_assets_with_bind(
     h: u32,
     salt: u8,
 ) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
-    let base = Path::new("shell/master");
     let bind_part = Surface {
         id: 5000,
         targets: vec![AppendTarget::Single(5000)],
@@ -53,70 +48,24 @@ fn build_target_assets_with_bind(
             }],
         }],
     };
-    let surfaces = vec![base_surface, bind_part];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.extend_from_slice(&[b, g, r, 0xFF]);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-    // 1×1 の不透明 part（base 左上と必ず異なる色 → bind 有無でバイトが必ず変わる）。
-    dec.insert(
-        base.join("q.png"),
-        1,
-        1,
-        4,
-        vec![0xFF, 0xFF, 0xFF, 0xFF],
-        true,
+    // 5000 は 1×1 の不透明 part（base 左上と必ず異なる色 → bind 有無でバイトが必ず変わる）。
+    let (world, atlas) = bake_world(
+        shell_of(vec![base_surface, bind_part]),
+        vec![
+            ("p.png", w, h, gradient(w, h, salt)),
+            ("q.png", 1, 1, vec![0xFF, 0xFF, 0xFF, 0xFF]),
+        ],
     );
 
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    let atlas = baked.table;
-
-    let mut composer = Composer::new();
-    let golden_plain = composer
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("bind 無し合成は Ok")
-        .bytes()
-        .to_vec();
-    let golden_bound = composer
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::from_ids([2000]),
-            &PatternState::default(),
-        )
-        .expect("bind 有り合成は Ok")
-        .bytes()
-        .to_vec();
+    let golden_plain = native_golden(&world, &atlas, 1000).0;
+    let golden_bound = native_golden_with(
+        &world,
+        &atlas,
+        1000,
+        &BindSet::from_ids([2000]),
+        &PatternState::default(),
+    )
+    .0;
     assert_ne!(
         golden_plain, golden_bound,
         "fixture 前提: bind 有無で合成バイトが異ならなければ回帰檻にならない"
@@ -213,12 +162,7 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         "初回表示が面 1000 の golden と一致しない（前提が崩れている）"
     );
 
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("初回表示後は mount が生成済み")
-        .surface_entity();
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
 
     // 切替前の文字スロット表示スナップショット（TextSlotView は Copy＝値で退避）。
     let slot_before = presenter
@@ -283,76 +227,29 @@ fn build_target_assets_with_pattern(
     h: u32,
     salt: u8,
 ) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
-    let base = Path::new("shell/master");
     // surface 1000: 全不透明 element 1 本（animation は持たない＝bind 非依存）。
-    // surface 5000: 1×1 不透明 part（pattern の現在コマが参照する overlay 源）。
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        surface(5000, vec![elem("q.png", 0, 0)]),
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.extend_from_slice(&[b, g, r, 0xFF]);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-    // 1×1 の不透明 part（base 左上と必ず異なる色 → pattern 有無でバイトが必ず変わる）。
-    dec.insert(
-        base.join("q.png"),
-        1,
-        1,
-        4,
-        vec![0xFF, 0xFF, 0xFF, 0xFF],
-        true,
+    // surface 5000: 1×1 不透明 part（pattern の現在コマが参照する overlay 源・base 左上と必ず異なる色
+    // → pattern 有無でバイトが必ず変わる）。
+    let (world, atlas) = bake_world(
+        shell_of(vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(5000, vec![elem("q.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w, h, gradient(w, h, salt)),
+            ("q.png", 1, 1, vec![0xFF, 0xFF, 0xFF, 0xFF]),
+        ],
     );
 
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    let atlas = baked.table;
-
-    let mut composer = Composer::new();
-    let golden_plain = composer
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("空 pattern 合成は Ok")
-        .bytes()
-        .to_vec();
-    let golden_pattern = composer
-        .compose(
-            &world,
-            &atlas,
-            1000,
-            &BindSet::default(),
-            &pattern_overlay(2000, 5000),
-        )
-        .expect("非空 pattern 合成は Ok")
-        .bytes()
-        .to_vec();
+    let golden_plain = native_golden(&world, &atlas, 1000).0;
+    let golden_pattern = native_golden_with(
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &pattern_overlay(2000, 5000),
+    )
+    .0;
     assert_ne!(
         golden_plain, golden_pattern,
         "fixture 前提: pattern 有無で合成バイトが異ならなければ回帰檻にならない"

@@ -7,24 +7,16 @@
 
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use wintf::ecs::GraphicsCommandList;
 
 use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, capture, elem, invalidate_ok, make_world_with_gpu, mount_entities,
-    native_golden_with, pattern_overlay_at, shell_of, show_ok, show_with, show_with_armed_fault,
-    spawn_window_with_dpi, surface,
+    CapturedEvent, INFO_LINE_MESSAGE, RANGE_LINE_MESSAGE, bake_world, capture, elem, invalidate_ok,
+    make_world_with_gpu, mount_entities, native_golden_with, pattern_overlay_at, shell_of, show_ok,
+    show_with, show_with_armed_fault, spawn_window_with_dpi, surface,
 };
 use super::timing::PERF_LINE_MESSAGE;
-
-const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
-const SHOW_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
 const TARGET: TargetId = TargetId(0);
 /// 下の面（動かない・16×12）。
@@ -40,12 +32,6 @@ const CELL_Y: i64 = 2;
 
 /// 下の面 2 つとコマの面の `(EmoWorld, AtlasTable)`（どれも全不透明・別のバイト）。
 fn build_assets() -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(BASE_ID, vec![elem("p.png", 0, 0)]),
-        surface(CELL_ID, vec![elem("q.png", 0, 0)]),
-        surface(OTHER_BASE_ID, vec![elem("r.png", 0, 0)]),
-    ];
     let gradient = |(w, h): (u32, u32), salt: u8| -> Vec<u8> {
         let mut img = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h {
@@ -58,45 +44,20 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
         }
         img
     };
-    let mut dec = MemoryDecoder::new();
     let (bw, bh) = BASE_SIZE;
     let (cw, ch) = CELL_SIZE;
-    dec.insert(
-        base.join("p.png"),
-        bw,
-        bh,
-        bw * 4,
-        gradient(BASE_SIZE, 0x11),
-        true,
-    );
-    dec.insert(
-        base.join("q.png"),
-        cw,
-        ch,
-        cw * 4,
-        gradient(CELL_SIZE, 0x80),
-        true,
-    );
-    dec.insert(
-        base.join("r.png"),
-        bw,
-        bh,
-        bw * 4,
-        gradient(BASE_SIZE, 0x45),
-        true,
-    );
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake: {:?}", baked.errors);
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            surface(BASE_ID, vec![elem("p.png", 0, 0)]),
+            surface(CELL_ID, vec![elem("q.png", 0, 0)]),
+            surface(OTHER_BASE_ID, vec![elem("r.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", bw, bh, gradient(BASE_SIZE, 0x11)),
+            ("q.png", cw, ch, gradient(CELL_SIZE, 0x80)),
+            ("r.png", bw, bh, gradient(BASE_SIZE, 0x45)),
+        ],
+    )
 }
 
 /// コマ `x`（コマの面を `(x, CELL_Y)` に重ねる現在コマ）。
@@ -171,7 +132,7 @@ fn num(ev: &CapturedEvent, name: &str) -> u32 {
 fn ranges(events: &[CapturedEvent]) -> Vec<Range> {
     let misses = events
         .iter()
-        .filter(|e| e.message() == SHOW_LINE_MESSAGE && e.field("cache_hit") == Some("false"))
+        .filter(|e| e.message() == INFO_LINE_MESSAGE && e.field("cache_hit") == Some("false"))
         .count();
     let out: Vec<Range> = events
         .iter()
@@ -182,7 +143,7 @@ fn ranges(events: &[CapturedEvent]) -> Vec<Range> {
             let next = events.get(i + 1).expect("範囲の行の後に行が無い");
             assert_eq!(
                 next.message(),
-                SHOW_LINE_MESSAGE,
+                INFO_LINE_MESSAGE,
                 "範囲の行の直後が表示の行でない"
             );
             assert_eq!(next.field("cache_hit"), Some("false"));
@@ -312,7 +273,7 @@ fn static_surface_always_recomposes_from_scratch() {
     }
     let hits = events
         .iter()
-        .filter(|e| e.message() == SHOW_LINE_MESSAGE && e.field("cache_hit") == Some("true"))
+        .filter(|e| e.message() == INFO_LINE_MESSAGE && e.field("cache_hit") == Some("true"))
         .count();
     assert_eq!(hits, 2, "控えに当たる回が 2 回");
     // 動きの無い面の合成は下敷きの印を立てない。

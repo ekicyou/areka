@@ -13,12 +13,10 @@ use areka_actor::reply_channel;
 use tracing::Level;
 
 use super::test_support::{
-    CapturedEvent, build_two_face_assets, capture, hide_ok, make_world_with_gpu,
+    CapturedEvent, INFO_LINE_MESSAGE, build_two_face_assets, capture, hide_ok, make_world_with_gpu,
     pattern_overlay_at, set_window_dpi, show_with, spawn_window_with_dpi,
 };
 use super::timing::PERF_LINE_MESSAGE;
-
-const SHOW_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
 /// 小さい外形（4×3）。DPI 96→100 で物理寸が 4×3 のまま変わらないので、拡大率だけの替わりを作れる。
 const W: u32 = 4;
@@ -65,7 +63,7 @@ fn show_lines(events: &[CapturedEvent]) -> Vec<(Level, String)> {
     let idx: Vec<usize> = events
         .iter()
         .enumerate()
-        .filter(|(_, e)| e.message() == SHOW_LINE_MESSAGE)
+        .filter(|(_, e)| e.message() == INFO_LINE_MESSAGE)
         .map(|(i, _)| i)
         .collect();
     let perfs = events

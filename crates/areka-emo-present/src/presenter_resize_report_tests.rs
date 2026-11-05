@@ -2,28 +2,10 @@ use super::*;
 
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::Arrangement;
-
 use super::test_support::{
-    build_target_assets, build_two_face_assets, make_world_with_gpu, mount_entities,
-    set_window_dpi, show_ok, show_with, spawn_window_with_dpi,
+    arrangement_of, build_target_assets, build_two_face_assets, make_world_with_gpu,
+    mount_entities, set_window_dpi, show_ok, show_with, spawn_window_with_dpi,
 };
-
-/// surface entity の `Arrangement`（**論理寸＝原寸・係数＝拡大率 k**）を `(寸, 係数)` で読む。
-///
-/// 表示の作り方が「原寸の絵＋変換の係数」になったため、報告値の裏取りはここと照会値
-/// （`target_physical_size`＝丸め権威）で行う。物理寸そのもの（`GlobalArrangement.bounds`）は
-/// wintf の伝播段が導くので、本ファイルのテストは走らせない（丸めの一致は `display_tests.rs`
-/// の T-N3 が表で固定する）。
-fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
-    let arr = world
-        .get::<Arrangement>(surface_entity)
-        .expect("surface entity に Arrangement が無い");
-    (
-        (arr.size.width as u32, arr.size.height as u32),
-        (arr.scale.x, arr.scale.y),
-    )
-}
 
 // ── 表示成立点の状態照合＝窓寸 reconcile 報告（タスク 3.4・議題 #2 裁定）────────────────────
 // design Flow 1 キー決定「表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を

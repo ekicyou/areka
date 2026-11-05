@@ -40,20 +40,15 @@
 
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, Arrangement, GraphicsCommandList, Offset, Visual};
 
 use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, capture, elem, hide_ok, make_world_with_gpu, mount_entities, set_window_dpi,
-    shell_of, show_ok, show_with_armed_fault, spawn_window_with_dpi, surface,
+    CapturedEvent, bake_world, capture, elem, gradient, gradient_with_alpha, hide_ok,
+    make_world_with_gpu, mount_entities, set_window_dpi, shell_of, show_ok, show_with_armed_fault,
+    spawn_window_with_dpi, surface,
 };
 
 /// 検査対象の target（全テストで 1 つ）。
@@ -113,52 +108,21 @@ fn fault_marker(at: DisplayFault) -> &'static str {
 /// 作り方（atlas bake → `EmoWorld` → `bind_atlas`）は共有ヘルパと同一である。
 fn build_two_face_assets_with_hole() -> (EmoWorld, AtlasTable) {
     let (w, h) = FACE_SIZE;
-    let base = Path::new("shell/master");
-    let surfaces = vec![
-        surface(ESTABLISHED_ID, vec![elem("p.png", 0, 0)]),
-        surface(ATTEMPTED_ID, vec![elem("q.png", 0, 0)]),
-    ];
-
-    let gradient = |salt: u8, hole: bool| -> Vec<u8> {
-        let mut img: Vec<u8> = Vec::with_capacity((w * h * 4) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                // 内側（外周でない画素）だけを透明にする＝トリム後の外形は変わらない。
-                let inner = x > 0 && y > 0 && x + 1 < w && y + 1 < h;
-                if hole && inner {
-                    img.extend_from_slice(&[0, 0, 0, 0]);
-                    continue;
-                }
-                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.extend_from_slice(&[b, g, r, 0xFF]);
-            }
-        }
-        img
+    // 内側（外周でない画素）だけを透明にする＝トリム後の外形は変わらない。
+    let hole = |x: u32, y: u32| {
+        let inner = x > 0 && y > 0 && x + 1 < w && y + 1 < h;
+        if inner { 0 } else { 0xFF }
     };
-
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, w * 4, gradient(0x11, false), true);
-    dec.insert(base.join("q.png"), w, h, w * 4, gradient(0x77, true), true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない: {:?}",
-        baked.errors
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            surface(ESTABLISHED_ID, vec![elem("p.png", 0, 0)]),
+            surface(ATTEMPTED_ID, vec![elem("q.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w, h, gradient(w, h, 0x11)),
+            ("q.png", w, h, gradient_with_alpha(w, h, 0x77, hole)),
+        ],
+    )
 }
 
 // ── 観測（前状態 8 項目）────────────────────────────────────────────────

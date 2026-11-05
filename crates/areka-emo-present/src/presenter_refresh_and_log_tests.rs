@@ -1,27 +1,13 @@
 use super::*;
 
 use areka_emo_compose::BindSet;
-use wintf::ecs::{Arrangement, GraphicsCommandList};
+use wintf::ecs::GraphicsCommandList;
 
 use super::test_support::{
-    CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
-    force_current_surface, hide_ok, make_world_with_gpu, mount_entities, set_window_dpi, show_ok,
-    spawn_window_with_dpi,
+    CapturedEvent, INFO_LINE_MESSAGE, arrangement_of, attach_hit_target, build_target_assets,
+    build_two_face_assets, capture, force_current_surface, hide_ok, make_world_with_gpu,
+    mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
-
-/// surface entity の配置＝`(論理寸, 変換の係数)`。
-///
-/// 論理寸は**原寸**（k を焼き込まない）で、k は `scale` の係数としてだけ現れる
-/// （`mount.rs` の `logical_arrangement`）。両方を 1 つの値で読むのは、片方だけを見ると
-/// 「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と区別できないためである。
-fn arrangement_of(world: &World, surface_entity: Entity) -> Option<((u32, u32), f32)> {
-    world.get::<Arrangement>(surface_entity).map(|a| {
-        ((a.size.width as u32, a.size.height as u32), {
-            assert_eq!(a.scale.x, a.scale.y, "x/y で異なる係数は本経路に無い");
-            a.scale.x
-        })
-    })
-}
 
 // ── 表示成立点の行（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
 // 実機サインオフ（R6.3）は有界 auto-exit で起動して `RUST_LOG` を grep し、**このログのフィールド名と
@@ -60,7 +46,7 @@ fn display_success_emits_d10_observation_log_at_info() {
         .iter()
         .find(|e| {
             e.field("message")
-                .is_some_and(|m| m.contains("表示・マスクを更新"))
+                .is_some_and(|m| m.contains(INFO_LINE_MESSAGE))
         })
         .unwrap_or_else(|| panic!("表示成立点のログが出ていない: {events:?}"));
 
@@ -121,7 +107,7 @@ fn display_success_emits_d10_observation_log_at_info() {
 fn has_display_success_log(events: &[CapturedEvent]) -> bool {
     events.iter().any(|e| {
         e.field("message")
-            .is_some_and(|m| m.contains("表示・マスクを更新"))
+            .is_some_and(|m| m.contains(INFO_LINE_MESSAGE))
     })
 }
 
@@ -203,7 +189,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
     assert_eq!(
         arrangement_of(&world, surface_entity),
-        Some((native_size, 1.0)),
+        (native_size, (1.0, 1.0)),
         "前提: 確立時の配置は原寸・係数 1.0"
     );
     // 表示記録は k を含まない＝k 変化で作り直されないことを後段で突き合わせる。
@@ -238,7 +224,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         .iter()
         .find(|e| {
             e.field("message")
-                .is_some_and(|m| m.contains("表示・マスクを更新"))
+                .is_some_and(|m| m.contains(INFO_LINE_MESSAGE))
         })
         .unwrap_or_else(|| panic!("再表示の成立点ログが出ていない: {events:?}"));
     assert_eq!(
@@ -249,7 +235,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     // (d) 配置は原寸のまま係数だけが動く（拡大は wintf の変換行列が掛ける）。
     assert_eq!(
         arrangement_of(&world, surface_entity),
-        Some((native_size, 2.0)),
+        (native_size, (2.0, 2.0)),
         "配置が新 k を映していない（原寸のままか、寸へ k を焼き込んでいる）"
     );
     assert_eq!(
