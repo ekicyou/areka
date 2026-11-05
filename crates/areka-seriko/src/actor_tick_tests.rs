@@ -1,92 +1,14 @@
-use super::bind_loop_tests::arm_bind_resolver;
 use super::test_support::*;
 use super::*;
 use crate::looper::tests::{
-    always_fire, cfg, pat, shell_table, shown_shell_with_binds, surface_with, table_single,
+    always_fire, cfg, counting_rng, pat, shell_table, shown_shell_with_binds, surface_with,
+    table_single,
 };
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use crate::timeline::LoopRng;
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, Interval};
 
 // 刻みの道の役者テスト（spec: audit-seriko 指摘 2・actor_bind_loop_tests.rs から 1,000 行を越えないよう移した）。
-// 前半は bind 消費分岐の網羅檻の最後の組（宛名規律）、後半は Tick 経路の網羅檻。
-
-/// ケース23（D8④・宛名規律）: 非正準 params の Custom で宛名が自分（"bind"）＝warn! ；
-/// 宛名が他人（"noexist"）＝warn! を出さず debug! 素通し。いずれも発行なし。
-#[test]
-fn bind_noncanonical_addressee_severity_split() {
-    // (a) 宛名 "bind"（自分宛の壊れ物）→ warn!。
-    {
-        let resolver = tiny_resolver();
-        let bind_resolver = arm_bind_resolver();
-        let mut states = fresh_states();
-        let mut out = MockSurfaceOutput::new();
-        let mut loop_runtime = inert_runtime();
-        let records = out.records();
-
-        let flow = capture_logs_flow(|| {
-            handle_message(
-                &resolver,
-                &bind_resolver,
-                &mut states,
-                &mut loop_runtime,
-                &mut out,
-                SerikoMsg::Cue(noncanonical_custom_cue("0", "bind")),
-            )
-        });
-
-        assert_eq!(flow.1, ControlFlow::Continue(()));
-        assert_eq!(
-            flow.0.matches("level=WARN").count(),
-            1,
-            "宛名 bind の非正準 params は warn! を 1 回残す（自分宛の壊れ物・D8④）: {}",
-            flow.0
-        );
-        assert!(
-            records.lock().expect("records mutex poisoned").is_empty(),
-            "非正準 params では発行しない"
-        );
-    }
-    // (b) 宛名 "noexist"（他人宛/未知名）→ warn! を出さず debug! 素通し。
-    {
-        let resolver = tiny_resolver();
-        let bind_resolver = arm_bind_resolver();
-        let mut states = fresh_states();
-        let mut out = MockSurfaceOutput::new();
-        let mut loop_runtime = inert_runtime();
-        let records = out.records();
-
-        let flow = capture_logs_flow(|| {
-            handle_message(
-                &resolver,
-                &bind_resolver,
-                &mut states,
-                &mut loop_runtime,
-                &mut out,
-                SerikoMsg::Cue(noncanonical_custom_cue("0", "noexist")),
-            )
-        });
-
-        assert_eq!(flow.1, ControlFlow::Continue(()));
-        assert_eq!(
-            flow.0.matches("level=WARN").count(),
-            0,
-            "他人宛/未知名の非正準 params は warn! を出さない（報告責任は宛名の担当者・D8④）: {}",
-            flow.0
-        );
-        assert!(
-            flow.0.contains("level=DEBUG"),
-            "他人宛/未知名は良性 debug! として観測できる（D8④）: {}",
-            flow.0
-        );
-        assert!(
-            records.lock().expect("records mutex poisoned").is_empty(),
-            "非正準 params では発行しない"
-        );
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // Tick 経路（SerikoMsg::Tick・send_tick・handle_message Tick 腕・on_surface_changed
 // 連動）の網羅檻（R1.1/6.1/6.3/7.1/7.5/8.3）。
@@ -105,15 +27,6 @@ fn bind_noncanonical_addressee_severity_split() {
 // from_world 実構築パスを通す。
 // ─────────────────────────────────────────────────────────────────────
 
-/// 1 度だけ発火し以後発火しない rng（境界 1 回だけ抽選を通す）。
-fn fire_once() -> LoopRng {
-    let mut calls: u32 = 0;
-    Box::new(move |_bound: u32| {
-        calls += 1;
-        if calls == 1 { 0 } else { 1 }
-    })
-}
-
 /// (A・R6.1/2.1) 表示中 slot が 1 つもない Tick は完全 no-op（無発行）。
 ///
 /// live な表（常時発火 rng）でも Show 前は表示中 slot ゼロ＝on_tick は評価対象なし＝空を返す。
@@ -125,9 +38,7 @@ fn tick_with_no_shown_slot_is_complete_no_op() {
     // 表は live（surface 10 に常時発火アニメ）だが、Show していない＝表示中 slot 皆無。
     let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
     let mut loop_runtime = LoopRuntime::new(cfg(table, always_fire()));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
-        1100, 1207,
-    ]))); // Show なし
+    let mut states = fresh_states(); // Show なし
     let mut out = MockSurfaceOutput::new();
     let records = out.records();
 
@@ -283,7 +194,7 @@ fn emote_surface_change_resets_loop_playback() {
         ),
     ]);
     // 境界 1 回だけ発火（切替後の非跨ぎ Tick では再抽選しない）。
-    let mut loop_runtime = LoopRuntime::new(cfg(table, fire_once()));
+    let mut loop_runtime = LoopRuntime::new(cfg(table, counting_rng(&[0]).0));
     let (mut states, _scope) = shown_shell_with_binds(10, BindSet::from_ids([1100, 1207]));
     let mut out = MockSurfaceOutput::new();
     let records = out.records();

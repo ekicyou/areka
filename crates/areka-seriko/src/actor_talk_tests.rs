@@ -218,7 +218,7 @@ fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
     assert_eq!(
         ours.len(),
         2,
-        "cue 1 件につき今までの読み飛ばしの 1 行だけ: {ours:?}"
+        "cue 1 件につき読み飛ばしの 1 行だけ: {ours:?}"
     );
     assert!(
         ours.iter()

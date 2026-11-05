@@ -9,11 +9,12 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, count, shell_runtime, started, switch};
+use super::test_support::{cell, shell_runtime, started, switch};
 use super::tests::{always_fire, cfg, counting_rng, pattern_of};
 use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::state::{BindApplyOutcome, StageNote};
+use crate::test_support::count;
 use crate::test_support::{capture_logs, empty_states, scope, table_of};
 
 /// 面 0 の一番上: `runonce`（animation 0＝301 → 100ms で 302 → 100ms で `-1`・全部で 200ms）と

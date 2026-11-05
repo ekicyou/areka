@@ -14,10 +14,6 @@ use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::test_support::{empty_states, part_frames, part_playing as playing, table_of};
 
-fn no_binds() -> BindSet {
-    BindSet::from_ids([])
-}
-
 /// 部品の欄を外した写しと等しい＝部品の欄が空。
 fn has_no_parts(pattern: &PatternState) -> bool {
     let mut stripped = pattern.clone();
@@ -73,7 +69,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     assert_eq!(rt.parts.clock(&scope, 100, 0), playing(1000));
 
     // シェルの表の差し替え: 部品の時計を捨てる。
-    states.rebase_shell(crate::DefaultBinds::uniform(no_binds()));
+    states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
     rt.replace_shell_table(table_of(CHILD));
     assert!(rt.parts.is_empty(), "差し替えの後に部品の時計が空");
 }

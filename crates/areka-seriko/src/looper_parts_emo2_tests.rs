@@ -246,7 +246,7 @@ fn scripted_rng(values: &'static [u32]) -> (LoopRng, Arc<AtomicUsize>) {
 fn run_kero(ticks: &[u64], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, usize) {
     let (rng, calls) = rng;
     let mut rt = LoopRuntime::new(cfg(emo2_shell_table(), rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(build_static_bindset(&[])));
+    let mut states = crate::test_support::empty_states();
     states.apply(&ActorKey::from("1"), SurfaceTarget::Show(10));
     let mut lines = Vec::new();
     for &now in ticks {

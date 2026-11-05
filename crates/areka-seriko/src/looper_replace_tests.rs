@@ -14,7 +14,7 @@ fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     // 古い表: 2106 → 150ms 後に 2110（再生が続く）。
     let old = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);
     let mut rt = LoopRuntime::new(cfg(old, always_fire()));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(10));
 
@@ -51,7 +51,7 @@ fn replace_balloon_tables_keeps_shell_loop() {
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     states.apply(&scope, SurfaceTarget::Show(10));
     states.apply_balloon(&scope, SurfaceTarget::Show(20));
 
@@ -74,7 +74,7 @@ fn replace_balloon_tables_keeps_shell_loop() {
         other => panic!("シェルの Show を期待: {other:?}"),
     }
 
-    // (b)(c) 次の境界: シェルは今までどおり再抽選で 2106 から、バルーンは新しい表の 50 で始まる。
+    // (b)(c) 次の境界: シェルは再抽選で 2106 から、バルーンは新しい表の 50 で始まる。
     let cmds = rt.on_tick(2000, &mut states);
     assert_eq!(cmds.len(), 2, "シェルとバルーンが発火: {cmds:?}");
     match &cmds[0] {

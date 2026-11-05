@@ -35,7 +35,7 @@ fn move_with_minus_one_does_not_stop() {
     // 末尾の働きのコマも止まらず残る。
     let frames = vec![draw(10, 0), act(FrameAct::Move, -1, 50)];
     assert_eq!(frame_at(&frames, 50), FrameStatus::FinishedResidual(1));
-    // 描くコマの -1 は今までどおり止まる。
+    // 描くコマの -1 は止まる。
     let frames = vec![draw(10, 0), draw(-1, 50)];
     assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
 }

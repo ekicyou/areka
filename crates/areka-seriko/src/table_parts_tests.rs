@@ -28,7 +28,7 @@ fn table_without_nesting_or_animated_parts_is_false() {
     assert!(!empty.has_animated_parts());
     assert!(empty.nest_table().is_empty());
 
-    // 一番上 0 のまばたきのコマが 100 を指すが、100 は自分の animation を持たない（今までのシェルの形）。
+    // 一番上 0 のまばたきのコマが 100 を指すが、100 は自分の animation を持たない。
     let plain = table_of(
         "surface0\n{\nanimation0.interval,random,4\n\
          animation0.pattern0,overlay,100,40,0,0\n\

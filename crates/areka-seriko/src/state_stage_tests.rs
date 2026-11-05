@@ -117,7 +117,7 @@ fn without_notes_stage_slots_match_shown_slots() {
 }
 
 /// 出ている面の列（`shown_slots`）もスコープの昇順 → シェル → バルーン（抽選で乱数を引く順・
-/// 指摘 11）。スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
+/// audit-seriko 指摘 11）。スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
 #[test]
 fn shown_slots_go_scope_ascending_then_shell_then_balloon() {
     let mut states = fresh_states();

@@ -58,7 +58,7 @@ pub(crate) fn run_calls<'a>(
     now_ms: u64,
     pick: &mut LoopRng,
 ) -> CallOutcome {
-    // 再生ごとに次の 1 件だけを入れ、取り出したらその次を入れる（入れる数は当てる数と同じ・S3）。
+    // 再生ごとに次の 1 件だけを入れ、取り出したらその次を入れる（入れる数は当てる数と同じ）。
     let mut queue = BTreeSet::new();
     for id in plays.playing_ids() {
         push_next(&mut queue, &*plays, &animation_of, id, None, now_ms);

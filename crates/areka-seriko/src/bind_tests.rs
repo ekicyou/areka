@@ -331,7 +331,7 @@ fn scope_namespace_maps_two_and_above_to_char() {
     assert_eq!(
         scope_namespace(&ActorKey::from("balloon0")),
         None,
-        "非数値 scope も写像なし（明示 \"0\"/\"1\" のみ・一般 parse でない・D7）"
+        "非数値 scope は写像なし（D7・要件 14.2）"
     );
     assert_eq!(
         scope_namespace(&ActorKey::from("x")),

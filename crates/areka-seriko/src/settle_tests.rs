@@ -193,7 +193,7 @@ const LONG: &str = "surface10\n{\nanimation0.interval,runonce\n\
     animation0.pattern1,overlay,101,1,0,0\n}\n\
     surface100\n{\n}\nsurface101\n{\n}\n";
 
-/// 待ちが上限ちょうどの面は `warn!` 0 行で、最後のコマが残る（今と同じ）。
+/// 待ちが上限ちょうどの面は `warn!` 0 行で、最後のコマが残る。
 #[test]
 fn wait_at_the_cap_settles_as_before() {
     let t = crate::test_support::table_of(LONG);

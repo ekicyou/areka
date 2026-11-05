@@ -68,12 +68,12 @@ fn each_word_gets_its_act_and_wait() {
     assert_eq!(
         (draw.surface_id, draw.method.clone(), draw.x, draw.y),
         (100, ComposeMethod::Overlay, 1, 2),
-        "描くコマは今と同じ"
+        "描くコマは面・合成メソッド・位置を持つ"
     );
 }
 
 /// 働きのコマは描く面を持たない（絵の番号は無し・合成メソッドは記録なしの未知）。8 語以外の
-/// 未知の語は今と同じに「未知の合成メソッド名」を記録する。
+/// 未知の語は「未知の合成メソッド名」を記録する。
 #[test]
 fn act_frames_draw_nothing_and_log_nothing() {
     let text = format!(
@@ -132,7 +132,7 @@ fn never_and_pure_bind_are_call_only_unknown_stays_out() {
 /// 働きのコマの欄 2 は面の番号として数えず、呼ばれるだけの animation しか無い面は動く部品に数えない。
 #[test]
 fn act_frames_and_call_only_parts_are_not_moving_parts() {
-    // 面 10 の `move` の欄 2 は 20、面 20 には抽選の animation がある（今までは動く部品に数えた）。
+    // 面 10 の `move` の欄 2 は 20、面 20 には抽選の animation がある。
     let moved = "surface10\n{\nanimation0.interval,random,2\n\
         animation0.pattern0,move,20,10,0,5\n}\n\
         surface20\n{\nanimation0.interval,random,2\n\

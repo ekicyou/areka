@@ -100,7 +100,7 @@ fn invalid_number_is_not_adopted_and_warns_once() {
     }
 }
 
-/// コマ列が空の 3 語は今までの空の検査（`warn!`）で採らず、採録の記録も残さない。
+/// コマ列が空の 3 語は空の検査（`warn!`）で採らず、採録の記録も残さない。
 #[test]
 fn empty_frames_keep_the_existing_empty_warn() {
     for interval in ["runonce", "periodic,3", "talk,2"] {
@@ -122,7 +122,7 @@ fn empty_frames_keep_the_existing_empty_warn() {
     }
 }
 
-/// `+` の組み合わせ・大文字混じり・範囲外の語は今までどおり採らず、元の綴りつきの `debug!` だけを
+/// `+` の組み合わせ・大文字混じり・範囲外の語は採らず、元の綴りつきの `debug!` だけを
 /// 残す（`warn!` は出さない。先頭の語が `talk`／`periodic` そのものでなければ無効の数値の扱いにしない）。
 #[test]
 fn combinations_and_out_of_scope_words_keep_the_debug_arm() {
@@ -160,5 +160,5 @@ fn tables_without_the_three_words_have_false_marks() {
 
     let (always, _) = table_and_logs(&surface0_with("always"));
     assert!(!always.has_triggers && !always.has_talk());
-    assert!(always.is_continuous(), "always の門は今までどおり");
+    assert!(always.is_continuous(), "always の表は連続");
 }

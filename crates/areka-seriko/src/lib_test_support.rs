@@ -4,7 +4,7 @@
 use areka_emo_compose::{
     Cell, ComposeMethod, EmoWorld, FilmId, PartKey, PatternFrame, PatternState,
 };
-use areka_sakura::ActorKey;
+use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
 
 use crate::parts::PartAnim;
@@ -19,6 +19,10 @@ pub(crate) const KINDS: [&str; 6] = [
     "要件 6.5",
     "要件 6.4",
 ];
+
+/// 動く絵と手書きの `always` を置いた検体のシェル（中身は同じフォルダの README）。
+pub(crate) const ANIMATED_PLAYBACK_SHELL: &str =
+    include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
 
 /// 本文を本番と同じ順（読み手 → 畳み込み → 表）で表にする。
 pub(crate) fn table_of(text: &str) -> AnimationTable {
@@ -72,9 +76,35 @@ pub(crate) fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
     })
 }
 
+/// `needle` を含む行の数。
+pub(crate) fn count(lines: &[String], needle: &str) -> usize {
+    lines.iter().filter(|l| l.contains(needle)).count()
+}
+
 /// `warn!` の行だけ。
 pub(crate) fn warns(logs: &[String]) -> Vec<&String> {
     logs.iter().filter(|l| l.contains("level=WARN")).collect()
+}
+
+/// 台本の `at` 秒の、スコープ `scope` への合図（再生時間は `duration` 秒）。
+pub(crate) fn cue(at: f64, scope: &str, command: CueCommand, duration: f64) -> TalkCue {
+    TalkCue {
+        at,
+        actor: ActorKey::from(scope),
+        command,
+        duration,
+    }
+}
+
+/// 台本の `at` 秒に始まる文字の cue（1 字 50 ms）。
+pub(crate) fn text(at: f64, scope: &str, s: &str) -> TalkCue {
+    let duration = s.chars().count() as f64 * 0.05;
+    cue(at, scope, CueCommand::Text(s.into()), duration)
+}
+
+/// 台詞の頭に前置される全消去（台本の 0 秒）。
+pub(crate) fn clear_all() -> TalkCue {
+    cue(0.0, "0", CueCommand::ClearAll, 0.0)
 }
 
 /// 時刻 `at` に始まった部品の再生中。

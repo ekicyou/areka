@@ -9,9 +9,7 @@ use areka_emo_compose::{EmoWorld, PartKey};
 use super::{AnimationTable, LoopTrigger};
 use crate::test_support::{table_and_logs, warns};
 
-/// 動く絵と手書きの `always` を置いた検体のシェル（中身は同じフォルダの README）。
-const FIXTURE: &str =
-    include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
+use crate::test_support::ANIMATED_PLAYBACK_SHELL as FIXTURE;
 
 /// 間隔の語 1 つだけを差し替えた面 0（待ち 0・50・30）。
 fn surface0_with(interval: &str) -> String {
@@ -55,7 +53,7 @@ fn exact_always_is_adopted_with_period_and_no_laps() {
     assert_eq!(table.part_animations(PartKey::Surface(0)), anims);
 }
 
-/// 組み合わせ・大文字・ほかの語は今までどおり採らず、元の綴りつきの `debug!` を残す（要件 4.8・4.9）。
+/// 組み合わせ・大文字・ほかの語は採らず、元の綴りつきの `debug!` を残す（要件 4.8・4.9）。
 /// `never` は呼ばれるだけとして採る（spec: seriko-pattern-calls 要件 11.1・`table_calls_tests.rs`）。
 #[test]
 fn combinations_and_other_words_keep_the_debug_arm() {
@@ -92,7 +90,7 @@ fn zero_total_always_is_not_adopted_and_warns_once() {
     assert!(w[0].contains("待ち時間の合計が 0"), "理由が載る: {}", w[0]);
 }
 
-/// コマが空の `always` は今までの空の検査（`warn!`）に落ち、合計 0 の `warn!` は重ねない。
+/// コマが空の `always` は空の検査（`warn!`）に落ち、合計 0 の `warn!` は重ねない。
 #[test]
 fn empty_always_keeps_the_existing_empty_warn() {
     let (table, logs) = table_and_logs("surface7\n{\nanimation2.interval,always\n}\n");

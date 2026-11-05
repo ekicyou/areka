@@ -14,7 +14,7 @@ use areka_sakura::ActorKey;
 // （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide は当てる（script-small-tags 3.8・3.9）／
 // ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug／⑤scope 写像なし（数でない scope）=warn）を
 // 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で決定論的に檻化する。
-// 全 severity 枝は正カウント assert（優しい縮退の非空虚化・deterministic-test-coverage mandate）。
+// 全 severity 枝は正カウント assert（優しい縮退の非空虚化）。
 // ─────────────────────────────────────────────────────────────────────
 
 /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
@@ -280,7 +280,8 @@ fn bind_mustselect_off_is_ignored_with_warn() {
 // 既存流儀（排他置換経路でも維持されること）: 変更時のみ発行＋info マーカー（bindopt 2.4）＝
 // bind_default_exclusive_replace_emits_show_and_info_marker／同値適用は非発行（bindopt 2.5）＝
 // bind_default_same_part_re_on_is_unchanged_no_emit／非表示 scope は状態のみ更新（bindopt 2.6）＝
-// bind_apply_on_hidden_scope_state_only_no_emit（未知 scope は bind_scope_unmapped_warns_no_emit）／
+// bind_apply_on_hidden_scope_state_only_no_emit（状態の無い scope は
+// state::bind_pattern_tests::apply_bind_exclusive_hidden_or_unknown_is_state_only）／
 // 解決不能は読み飛ばし（bindopt 2.7）＝bind_unresolvable_errors_no_emit。
 // ─────────────────────────────────────────────────────────────────────
 

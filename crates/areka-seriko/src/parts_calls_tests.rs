@@ -5,11 +5,12 @@
 //! 注入列で、どちらも決定論。
 
 use crate::looper::LoopRuntime;
-use crate::looper::tests::{cfg, counting_rng};
+use crate::looper::tests::{cfg, counting_rng, part_clock};
+use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
 use crate::table::AnimationTable;
-use crate::test_support::{empty_states, scope, table_of};
+use crate::test_support::{empty_states, part_frames, scope, table_of};
 use crate::timeline::LoopRng;
 
 /// 部品の中の絵の面（中身は空）。
@@ -112,10 +113,10 @@ fn stop_inside_a_part_looks_the_same_as_minus_one() {
 }
 
 fn part_cell_of(pattern: &areka_emo_compose::PatternState, id: u32) -> Option<u32> {
-    pattern
-        .part(100)
+    part_frames(pattern, 100)
+        .into_iter()
         .find(|&(a, _)| a == id)
-        .map(|(_, f)| f.surface_id)
+        .map(|(_, f)| f)
 }
 
 /// 部品の中で止めた `always` も、面を出すまで始め直さない。面を出したら印が消え、次の刻みの時刻で
@@ -287,6 +288,14 @@ fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
     rt.on_tick(3100, &mut states); // 1 は 2000・stop,1 は 2470・0 は 3000。
     assert_eq!(part_cell(&states, 1), None, "2470 に止まる");
     assert_eq!(part_cell(&states, 0), Some(120), "0 は 3000 に始まる");
+    assert_eq!(
+        part_clock(&rt, 100, 0),
+        Some(PartAnim::Playing {
+            started_at_ms: 3000,
+            acts_through: Some(3100)
+        }),
+        "3000 に始め、3100 まで当てた"
+    );
 }
 
 /// 部品の引き金の「再生中か」も、開始の時刻までの働きのコマを当てた後で測る（1970 に止められた 0 は
@@ -306,6 +315,14 @@ fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary(
     assert_eq!(part_cell(&states, 0), Some(120));
     rt.on_tick(2100, &mut states); // stop,0 は 1970・次の周は 2000。
     assert_eq!(part_cell(&states, 0), Some(120), "2000 に頭から");
+    assert_eq!(
+        part_clock(&rt, 100, 0),
+        Some(PartAnim::Playing {
+            started_at_ms: 2000,
+            acts_through: Some(2100)
+        }),
+        "2000 に始め、2100 まで当てた"
+    );
 }
 
 /// 遅れた刻みで鳴った部品の再生の働きのコマも、ほかの再生の後の時刻のコマより先に当たる: 1000 に

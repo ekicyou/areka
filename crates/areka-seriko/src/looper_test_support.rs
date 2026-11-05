@@ -54,8 +54,3 @@ pub(super) fn cell(states: &ScopeStates, slot: Slot, id: u32) -> Option<u32> {
         .get(id)
         .map(|f| f.surface_id)
 }
-
-/// `needle` を含む行の数。
-pub(super) fn count(lines: &[String], needle: &str) -> usize {
-    lines.iter().filter(|l| l.contains(needle)).count()
-}

@@ -13,7 +13,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use super::FrameAct;
 use crate::sample_test_support::dot_sakura_shell_root;
 use crate::table::AnimationTable;
-use crate::test_support::KINDS;
+use crate::test_support::{KINDS, warns};
 
 /// 8 語の綴り（合成の「未知の合成メソッド名」の記録から 8 語の分を見分ける）。
 const WORDS: [&str; 8] = [
@@ -43,9 +43,8 @@ fn build(text: &str) -> (AnimationTable, Vec<u32>, Vec<ShapeIssue>, Vec<String>)
 
 /// 8 語に由来する WARN の行（`check_calls` の 6 種と、8 語を語にした「未知の合成メソッド名」）。
 fn word_warns(lines: &[String]) -> Vec<&String> {
-    lines
-        .iter()
-        .filter(|l| l.contains("WARN"))
+    warns(lines)
+        .into_iter()
         .filter(|l| {
             KINDS.iter().any(|k| l.contains(k))
                 || (l.contains("未知の合成メソッド名")

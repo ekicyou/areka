@@ -259,7 +259,8 @@ fn noncanonical_bind_noevent_warns_like_bind() {
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
         let mut loop_runtime = inert_runtime();
-        let (logs, _) = capture_logs_flow(|| {
+        let records = out.records();
+        let (logs, flow) = capture_logs_flow(|| {
             handle_message(
                 &tiny_resolver(),
                 &BindResolver::empty(),
@@ -269,7 +270,47 @@ fn noncanonical_bind_noevent_warns_like_bind() {
                 SerikoMsg::Cue(noncanonical_custom_cue("0", name)),
             )
         });
+        assert_eq!(flow, ControlFlow::Continue(()), "{name}");
         assert_eq!(logs.matches("level=WARN").count(), 1, "{name}: {logs}");
         assert!(logs.contains(&format!("name=\"{name}\"")), "{name}: {logs}");
+        assert!(records.lock().unwrap().is_empty(), "{name}: 発行しない");
     }
+}
+
+/// 宛名が他人（"noexist"）の壊れた運び物は warn! を出さず debug! で素通しし、発行しない（D8④）。
+#[test]
+fn noncanonical_custom_for_another_name_is_debug_only() {
+    let bind_resolver = super::bind_loop_tests::arm_bind_resolver();
+    let mut states = fresh_states();
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+    let records = out.records();
+
+    let flow = capture_logs_flow(|| {
+        handle_message(
+            &tiny_resolver(),
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(noncanonical_custom_cue("0", "noexist")),
+        )
+    });
+
+    assert_eq!(flow.1, ControlFlow::Continue(()));
+    assert_eq!(
+        flow.0.matches("level=WARN").count(),
+        0,
+        "他人宛/未知名の非正準 params は warn! を出さない（報告責任は宛名の担当者・D8④）: {}",
+        flow.0
+    );
+    assert!(
+        flow.0.contains("level=DEBUG"),
+        "他人宛/未知名は良性 debug! として観測できる（D8④）: {}",
+        flow.0
+    );
+    assert!(
+        records.lock().expect("records mutex poisoned").is_empty(),
+        "非正準 params では発行しない"
+    );
 }

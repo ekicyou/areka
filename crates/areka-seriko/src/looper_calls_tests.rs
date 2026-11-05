@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, count, started, switch};
+use super::test_support::{cell, started, switch};
 use super::tests::counting_rng;
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::count;
 use crate::test_support::{capture_logs, empty_states, scope, table_of};
 
 /// 絵の面（中身は空）。
@@ -91,7 +92,7 @@ fn alternativestart_starts_the_pick_from_head_at_call_time_in_the_same_show() {
     }
 }
 
-/// `never` を足しても、同じ種なら抽選の結果は今と同じ（3.6・11.3）。
+/// `never` を足しても、同じ種なら抽選の結果は変わらない（3.6・11.3）。
 #[test]
 fn adding_a_never_animation_keeps_the_lottery() {
     const PLAIN: &str = "surface0\n{\n\

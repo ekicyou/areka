@@ -215,7 +215,7 @@ pub(crate) fn log_fired(
     part: Option<&dyn std::fmt::Display>,
 ) {
     let who = if part.is_some() { "part " } else { "" };
-    // None の欄は記録されない（一番上の行は今までどおり part の欄を持たない）。
+    // None の欄は記録されない（一番上の行は part の欄を持たない）。
     let part = part.map(tracing::field::display);
     match anim.trigger {
         LoopTrigger::Runonce => tracing::info!(

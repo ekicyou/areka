@@ -720,7 +720,7 @@ impl ScopeStates {
     /// 要件 6.1）。
     ///
     /// シェルは [`ScopeStates::shown_slots`] と同じ（見えている＝真）。バルーンは面の番号が分かる
-    /// スコープの全部で、見えているかは知らせの窓（知らせが 1 度も無ければ、今までどおり `\b` で
+    /// スコープの全部で、見えているかは知らせの窓（知らせが 1 度も無ければ、`\b` で
     /// 表示中の面を開いた窓とみなす）。並びはスコープの昇順 → シェル → バルーン。
     pub fn stage_slots(&self) -> Vec<(ActorKey, Slot, u32, bool)> {
         let scopes: BTreeSet<&ActorKey> = self

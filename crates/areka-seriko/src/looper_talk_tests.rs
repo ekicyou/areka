@@ -13,13 +13,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use areka_emo_compose::PartKey;
 
-use super::test_support::{cell, count, started, switch};
+use super::test_support::{cell, started, switch};
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::state::StageNote;
-use crate::test_support::{capture_logs, empty_states, part_playing, scope, table_of};
+use crate::test_support::{
+    capture_logs, clear_all, count, cue, empty_states, part_frames, part_playing, scope, table_of,
+    text,
+};
 
 /// 偽の時計つきのランタイムと、まだ何も表示していない状態。
 struct Stage {
@@ -80,26 +83,6 @@ impl Stage {
             .get(&(scope(), slot))
             .and_then(|state| state.talk_window_bounds())
     }
-}
-
-fn cue(at: f64, scope: &str, command: CueCommand, duration: f64) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command,
-        duration,
-    }
-}
-
-/// 台本の `at` 秒に始まる文字の cue（1 字 50 ms）。
-fn text(at: f64, scope: &str, s: &str) -> TalkCue {
-    let duration = s.chars().count() as f64 * 0.05;
-    cue(at, scope, CueCommand::Text(s.into()), duration)
-}
-
-/// 台詞の頭に前置される全消去（台本の 0 秒）。
-fn clear_all() -> TalkCue {
-    cue(0.0, "0", CueCommand::ClearAll, 0.0)
 }
 
 const NINE: &str = "あいうえおかきくけ";
@@ -616,11 +599,7 @@ fn part_clock(st: &Stage, slot: Slot, id: u32) -> Option<PartAnim> {
 
 /// `\0` のシェルの面の部品 100 の欄（animation の番号, 絵）。
 fn part_cells(st: &Stage) -> Vec<(u32, u32)> {
-    st.states
-        .current_pattern(&scope(), Slot::Shell)
-        .part(100)
-        .map(|(id, f)| (id, f.surface_id))
-        .collect()
+    part_frames(st.states.current_pattern(&scope(), Slot::Shell), 100)
 }
 
 /// 時計 1000 を台本の 0 秒にして 9 文字（1000・1050・…・1400 に現れる）を届ける。

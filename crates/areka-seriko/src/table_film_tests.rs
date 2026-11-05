@@ -15,8 +15,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use super::{AnimationTable, LoopTrigger};
 use crate::test_support::warns;
 
-const FIXTURE: &str =
-    include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
+use crate::test_support::ANIMATED_PLAYBACK_SHELL as FIXTURE;
 
 /// 検体の動く絵の親の絵の番号（アトラスの番号の代わり）。
 const RGB_APNG: u32 = 3;
@@ -206,8 +205,7 @@ fn film_skips_warn_once_per_cause() {
     );
 }
 
-/// `from_world` は面の表の `film_sheets()`・`film_skips()` を渡すだけ: アトラスを束縛していない
-/// 面の表では子の行も記録も無い。
+/// アトラスの無い世界では、`from_world` の表に子の行が無く、ほかの行は子の定義を渡さない表と同じ。
 #[test]
 fn from_world_without_atlas_has_no_film_rows() {
     let world = fixture_world();

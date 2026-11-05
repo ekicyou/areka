@@ -83,7 +83,7 @@ pub(crate) struct RngProbe {
 }
 
 /// 指定した値列を順に返し、呼ばれた回数を計数する rng を作る（尽きたら 1 を返す＝非発火）。
-/// 返す `Arc` から消費回数・残量を照合できる（bind OFF での**非消費**の檻・要件 3.1）。
+/// 返す `Arc` から消費回数を照合できる（bind OFF での**非消費**の檻・要件 3.1）。
 pub(crate) fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
     let probe = Arc::new(Mutex::new(RngProbe {
         calls: 0,
@@ -122,6 +122,11 @@ pub(crate) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig
         rng,
         pick_rng: crate::seeded_rng(0),
     }
+}
+
+/// スコープ `"0"` のシェルの面の (部品, animation の番号) の時計（部品のテストが見る）。
+pub(crate) fn part_clock(rt: &LoopRuntime, part: u32, id: u32) -> Option<crate::parts::PartAnim> {
+    rt.parts.clock(&ActorKey::from("0"), part, id)
 }
 
 // ── 抽選ゲート: 表示中×非再生中×bind ゲート ───────────────────────────────
@@ -209,7 +214,7 @@ fn hidden_slot_consumes_no_rng() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     // Show せず（未知 scope）＝表示中 slot が 1 つも無い。
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
 
     rt.on_tick(0, &mut states);
     let cmds = rt.on_tick(1000, &mut states);
@@ -429,7 +434,7 @@ fn lottery_consumes_in_scope_ascending_order() {
     // [1, 0]: 先頭消費（scope "0"）は非発火、2 番目（scope "1"）は発火。
     let (rng, probe) = counting_rng(&[1, 0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply(&s0, SurfaceTarget::Show(10));
@@ -465,7 +470,7 @@ fn lottery_consumes_shell_before_balloon() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     states.apply(&scope, SurfaceTarget::Show(10)); // Shell shown surface 10
     states.apply_balloon(&scope, SurfaceTarget::Show(20)); // Balloon shown surface 20
 
@@ -495,7 +500,7 @@ fn balloon_tables_are_looked_up_per_scope() {
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply_balloon(&s0, SurfaceTarget::Show(20));
@@ -545,7 +550,7 @@ fn absent_scope_balloon_table_is_inert() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let s1 = ActorKey::from("1");
     states.apply_balloon(&s1, SurfaceTarget::Show(20));
 
@@ -716,15 +721,21 @@ fn playing_bind_anim_removed_from_binds_stops_and_does_not_revive() {
         c2.is_empty(),
         "復活しない＝pattern 不変ゆえ無発行（要件 6.2）"
     );
+    assert!(
+        rt.playback
+            .get(&(scope.clone(), Slot::Shell))
+            .is_none_or(|pb| !pb.contains_key(&7)),
+        "bind から外れた ID の再生も捨てる（bindopt 7.3）"
+    );
 
-    // playback も除去されている＝Idle へ戻っている反証: bind を戻すと次の境界で再抽選対象になる
-    // （再生中のままなら再抽選されず rng は消費されない・要件 2.3）。
+    // bind を戻すと次の境界で再び抽選の対象になる（2000 では経過 1000 で末尾を過ぎるので、
+    // 再生が残っていても引く。再生を捨てたことは上の確かめが見る）。
     states.apply_bind(&scope, 7, true);
     rt.on_tick(2000, &mut states); // 境界跨ぎ
     assert_eq!(
         probe.lock().unwrap().calls,
         2,
-        "停止相当で playback も除去＝再抽選対象へ戻る（bindopt 7.3）"
+        "bind を戻すと再抽選の対象へ戻る（bindopt 7.3）"
     );
 }
 

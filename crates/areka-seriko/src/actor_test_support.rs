@@ -1,23 +1,18 @@
 use super::*;
 use crate::output::MockSurfaceOutput;
 use areka_emo_compose::{BindSet, PatternState};
-use areka_sakura::ActorKey;
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 // 捕捉の道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
-pub(super) use crate::test_support::{capture_text, fresh_states};
+pub(super) use crate::test_support::{capture_text, clear_all, cue, fresh_states, text};
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
 pub(super) fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Emote { key: key.into() },
-        duration: 0.0, // 表情切替は瞬時（明示的 0）。
-    }
+    // 表情切替は瞬時（明示的 0）。
+    cue(at, scope, CueCommand::Emote { key: key.into() }, 0.0)
 }
 
 /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。
@@ -28,8 +23,8 @@ pub(super) fn tiny_resolver() -> SurfaceResolver {
 }
 
 /// 不活性なループ統括器（空表＋ダミー乱数）。cue/bind/balloon の同期 `handle_message` 檻で
-/// tick 経路を触らない既存挙動を保つための足場（`disabled()` は on_tick 常時空・on_surface_changed
-/// は空 playback への no-op ゆえ、既存の発行/ログ挙動と byte 同値）。
+/// tick 経路を触らないための足場（`disabled()` は on_tick 常時空・on_surface_changed は空 playback
+/// への no-op で、発行も記録も足さない）。
 pub(super) fn inert_runtime() -> LoopRuntime {
     LoopRuntime::new(SerikoLoopConfig::disabled())
 }
@@ -120,41 +115,21 @@ pub(super) fn carrier_cue(scope: &str, name: &str, tokens: &[&str]) -> TalkCue {
 
 /// 非正準 params の `Custom` cue（`params` が非 Array＝`as_command_carrier()==None`・宛名規律検証用）。
 pub(super) fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Custom {
+    let cue = cue(
+        0.0,
+        scope,
+        CueCommand::Custom {
             command: command.to_string(),
             params: dola::DynamicValue::Null,
         },
-        duration: 0.0,
-    };
+        0.0,
+    );
     // 前提: この構成は必ずキャリア開封に失敗する（宛名規律 D8④ の入口条件）。
     assert!(
         cue.command.as_command_carrier().is_none(),
         "非 Array params の Custom は as_command_carrier() が None（宛名規律の入口）"
     );
     cue
-}
-
-pub(super) fn cue(at: f64, scope: &str, command: CueCommand, duration: f64) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command,
-        duration,
-    }
-}
-
-/// 台本の `at` 秒に始まる文字の cue（1 字 50 ms）。
-pub(super) fn text(at: f64, scope: &str, s: &str) -> TalkCue {
-    let duration = s.chars().count() as f64 * 0.05;
-    cue(at, scope, CueCommand::Text(s.into()), duration)
-}
-
-/// 台詞の頭に前置される全消去（台本の 0 秒）。
-pub(super) fn clear_all() -> TalkCue {
-    cue(0.0, "0", CueCommand::ClearAll, 0.0)
 }
 
 /// 指令（どれも `Show`）ごとの（スコープ, animation `anim` の欄の絵）。

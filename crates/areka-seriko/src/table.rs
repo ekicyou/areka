@@ -22,7 +22,7 @@
 //! # `runonce`・`periodic,数値`・`talk,数値`（spec: areka-P0-seriko-trigger-intervals 要件 1.5・7.1・7.2・7.4）
 //!
 //! 読み手が型へ写した 3 語（`Interval::Runonce`／`Periodic{secs}`／`Talk{n}`）は [`LoopTrigger`] の
-//! 後ろ 3 種として採り、採ったときに面の番号・animation の番号・語・数値を `debug!` に 1 回残す。
+//! `Runonce`・`Periodic`・`Talk` として採り、採ったときに面の番号・animation の番号・語・数値を `debug!` に 1 回残す。
 //! 読み手が数値を読めなかった `talk`／`periodic`（`Other` の先頭の語がその 2 語）は採らず、元の綴りを
 //! 添えた `warn!` を 1 回残す。コマ列が空なら下の縮退ガードの `warn!`。`+` の組み合わせ
 //! （`bind+runonce` など）と大文字混じりは「それ以外の `Other`」のまま `debug!` だけ。
@@ -63,7 +63,7 @@ pub use crate::table_calls::FrameAct;
 /// 駆動トリガ（採録はこの 7 種のみ・要件 8.1）。
 ///
 /// `k` は 1/N 抽選の頻度パラメータ（`k == 0` は構築時ガードで弾かれるため、採録済み値は常に `k >= 1`）。
-/// 後ろの 3 つ（`runonce`・`periodic,数値`・`talk,数値`）は抽選しない（乱数を引かない・spec:
+/// `runonce`・`periodic,数値`・`talk,数値` は抽選しない（乱数を引かない・spec:
 /// areka-P0-seriko-trigger-intervals）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopTrigger {
@@ -253,7 +253,7 @@ impl AnimationTable {
                         // 採録する（小文字の完全一致・spec: areka-P0-shell-implicit-surface
                         // 要件 11.1/11.2）。先頭の語が `talk`／`periodic` のもの（読み手が数値を
                         // 読めなかった綴り）は `warn!` で非採録（spec: areka-P0-seriko-trigger-intervals
-                        // 要件 1.5・7.2）。他の語は今までどおり元語彙込みで記録して非採録＝
+                        // 要件 1.5・7.2）。他の語は元語彙込みで記録して非採録＝
                         // 「yen-e と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
                         let rewritten = match &**vocab {
                             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#sometimes:1

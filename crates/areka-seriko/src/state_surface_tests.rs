@@ -164,7 +164,7 @@ fn binds_accessor_returns_static_set() {
     );
 
     // 空 bind でも accessor は静的値を返す。
-    let empty = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let empty = crate::test_support::empty_states();
     assert_eq!(
         empty.binds(),
         &crate::DefaultBinds::uniform(BindSet::from_ids([]))

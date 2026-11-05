@@ -52,7 +52,7 @@ fn names(points: &[DetectionPoint]) -> Vec<&'static str> {
     points.iter().map(|p| p.finding().point).collect()
 }
 
-/// 事実が無い（装着の前）ときは判定しないが、合図は今と同じに届ける。
+/// 事実が無い（装着の前）ときは判定しないが、合図は届ける。
 #[test]
 fn no_facts_judges_nothing_and_still_delivers() {
     let (mut sink, handle, out) = spawn();
@@ -76,7 +76,7 @@ fn no_facts_judges_nothing_and_still_delivers() {
             .unwrap()
             .iter()
             .any(|c| matches!(c, DisplayCommand::Show { .. })),
-        "通常（2100）は今と同じに表示される"
+        "通常（2100）は表示される"
     );
 }
 

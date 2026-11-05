@@ -12,7 +12,7 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use crate::test_support::{part_frames, table_of};
+use crate::test_support::{count, part_frames, table_of};
 use areka_emo_compose::{BindSet, EmoWorld};
 use dola::cue::CueSink;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -39,16 +39,12 @@ fn config() -> SerikoLoopConfig {
     cfg(table_and_all_logs(FIXTURE).0, always_fire())
 }
 
-fn count(lines: &[String], needle: &str) -> usize {
-    lines.iter().filter(|l| l.contains(needle)).count()
-}
-
 /// 表を組むときの記録の件数を、検体を手で数えた数と比べる。
 ///
 /// - 採録の `debug!` は 5 件＝9100 の 3 本（`talk,3`・`runonce`・`periodic,2`）＋ 9102 の 2 本
 ///   （`talk,2`・`runonce`）。
 /// - `warn!` は検体の全体でちょうど 3 件＝9103 の無効な数値 2 件（`talk,abc`・`periodic,0`）＋ 9104 の
-///   空のコマ列 1 件。9103 の `Talk,3`（大文字混じり）は今までどおり `debug!` だけ。
+///   空のコマ列 1 件。9103 の `Talk,3`（大文字混じり）は `debug!` だけ。
 ///
 /// 採らなかった animation は表に無い（要件 1.5・7.1・7.2）。
 #[test]

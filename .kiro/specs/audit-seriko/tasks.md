@@ -221,3 +221,11 @@
     - `refresh_arms_at_the_event_time_and_fires_only_runonce` → `refresh_arms_at_the_event_time_and_judges_up_to_it`（T3 そのもの）。
   - 選びの乱数（pick_rng）を引く順が、同じ刻みで面をまたぐときだけ変わる。この順に頼る決めやテストは無い。
   - テストは 575 件。
+- 6.1 組 B3＋C3（T5・T6・T8〜T15）: 本番の変更はコメントと doc だけ。
+  - T5・T6: 確かめを足した。外すと赤になる。
+  - T8: 時計を単調にした。
+  - T9・T10・T12: 名前・文言・doc を、確かめている中身に合わせた。
+  - T11: 符牒と「今まで」の類を消した。
+  - T13: 消したテストは 3 本（`cue_sink_emit_forwards_cue_to_inbox`・`emit_after_receiver_gone_logs_no_panic`・`bind_noncanonical_addressee_severity_split`）。後半は `noncanonical_custom_for_another_name_is_debug_only` として移した。
+  - T14・T15: 道具を `lib_test_support` へ寄せ、空の状態の手書きを `empty_states()`／`fresh_states()` に替えた。
+  - テストは 575 → 573 件。

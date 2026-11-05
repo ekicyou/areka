@@ -132,10 +132,7 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
     let table = table_of(BIND_ALWAYS);
     assert!(table.has_animated_parts(), "前提: 動く部品の在る表");
     let mut rig = rig(cfg(table, always_fire()));
-    rig.hear(
-        1030,
-        cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
-    );
+    rig.hear(0, cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0));
     rig.tick(0);
     let cmds = rig.hear(1030, carrier_cue("0", "bind", &["目", "閉", "1"]));
     assert!(
@@ -195,8 +192,8 @@ fn show_surfaces(records: &[DisplayCommand]) -> Vec<(u32, Option<u32>)> {
         .collect()
 }
 
-/// 時計なしの起動（`spawn_seriko`・`spawn_seriko_clocked(None)`）は今と同じ指令の列（出来事の時刻は
-/// 直前の刻み 0）。時計つきは合図を処理した時刻 1030 で始まり、刻み 1100 では指令が出ない。
+/// 時計なしの起動（`spawn_seriko`・`spawn_seriko_clocked(None)`）は同じ指令の列で、出来事の時刻は
+/// 直前の刻み 0。時計つきは合図を処理した時刻 1030 で始まり、刻み 1100 では指令が出ない。
 #[test]
 fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_time() {
     let spawn = |clock: Option<SerikoClock>| {

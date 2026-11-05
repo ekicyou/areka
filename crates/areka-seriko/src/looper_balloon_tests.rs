@@ -150,7 +150,7 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(2000));
 }
 
-/// `\b[-1]` の後の評価で、バルーンの面の回数つきの時計を捨てる（終わりなしは残す・3.4 の道）。
+/// `\b[-1]` の後の評価で、バルーンの面の回数つきの時計を捨てる（終わりなしは残す）。
 #[test]
 fn balloon_hide_cue_drops_finite_clocks() {
     let mut rt = runtime(AnimationTable::empty());

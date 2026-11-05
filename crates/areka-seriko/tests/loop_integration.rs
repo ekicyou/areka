@@ -277,7 +277,7 @@ fn kero_negative_tail_restores_base_full_path() {
     assert_eq!(
         probe.lock().unwrap().calls,
         1,
-        "発火判定は最初の境界で 1 回のみ（-1 到達までは再生中で再抽選しない）"
+        "発火判定は最初の境界で 1 回"
     );
 }
 
