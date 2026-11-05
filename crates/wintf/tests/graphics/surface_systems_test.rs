@@ -487,16 +487,19 @@ fn render_surface_ordinary_draw_does_not_mark_graphics_core_changed() {
         let mut world = setup_world();
         let surface = create_real_surface(&world, 64, 64);
         let cmd = make_filled_command_list(world.resource::<GraphicsCore>(), 64.0, 64.0);
-        world.spawn((
-            surface,
-            make_global_arrangement(64.0, 64.0),
-            SurfaceGraphicsDirty::default(),
-            cmd,
-        ));
+        let entity = world
+            .spawn((
+                surface,
+                make_global_arrangement(64.0, 64.0),
+                SurfaceGraphicsDirty::default(),
+                cmd,
+            ))
+            .id();
         let before = world
             .get_resource_change_ticks::<GraphicsCore>()
             .unwrap()
             .changed;
+        let dirty_before = dirty_changed_tick(&world, entity);
         world.increment_change_tick();
 
         single_system_schedule(render_surface).run(&mut world);
@@ -509,28 +512,53 @@ fn render_surface_ordinary_draw_does_not_mark_graphics_core_changed() {
             before, after,
             "ふだんの描画で GraphicsCore の変化の印が立った"
         );
+        assert_eq!(
+            dirty_before,
+            dirty_changed_tick(&world, entity),
+            "ふだんの描画で描き直しの印が立った"
+        );
         assert!(world.resource::<GraphicsCore>().is_valid());
     });
 }
 
-/// 失いでない BeginDraw の失敗（大きさ 0 の面）では変化の印を立てず、装置も有効のまま
+/// 描き直しの印の変化の時刻
+fn dirty_changed_tick(world: &World, entity: Entity) -> bevy_ecs::change_detection::Tick {
+    world
+        .entity(entity)
+        .get_change_ticks::<SurfaceGraphicsDirty>()
+        .unwrap()
+        .changed
+}
+
+/// 失いでない BeginDraw の失敗（大きさ 0 の面）では装置の資源に変化の印を立てず、装置も有効のまま。
+/// その面は描き直しの印を立て直し、次の回の描画の係に拾わせる（41 番）
 #[test]
 fn render_surface_non_loss_begin_draw_failure_does_not_mark_graphics_core_changed() {
     crate::common::on_gpu_owner_thread(move || {
         let mut world = setup_world();
         let surface = create_real_surface(&world, 0, 0);
-        world.spawn((
-            surface,
-            make_global_arrangement(0.0, 0.0),
-            SurfaceGraphicsDirty::default(),
-        ));
+        let entity = world
+            .spawn((
+                surface,
+                make_global_arrangement(0.0, 0.0),
+                SurfaceGraphicsDirty::default(),
+            ))
+            .id();
         let before = world
             .get_resource_change_ticks::<GraphicsCore>()
             .unwrap()
             .changed;
         world.increment_change_tick();
+        // 描画の係のこの回の時刻。係が自分で立てた印（時刻＝この回）は次の回の自分に見えないので、
+        // 立て直しはこれより後の時刻でなければならない
+        let this_run = world.change_tick();
 
         single_system_schedule(render_surface).run(&mut world);
+
+        assert!(
+            dirty_changed_tick(&world, entity).get() > this_run.get(),
+            "失いでない描画の失敗で、描き直しの印が次の回に見える形で立て直されていない"
+        );
 
         let after = world
             .get_resource_change_ticks::<GraphicsCore>()

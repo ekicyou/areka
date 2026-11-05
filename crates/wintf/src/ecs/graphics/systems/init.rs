@@ -103,13 +103,12 @@ pub(crate) fn wuc_ready(
     graphics_core_ready(gc) && wuc.is_some_and(|w| w.is_valid())
 }
 
-/// GraphicsCore初期化・再初期化・一括マーキング
+/// GraphicsCore初期化・再初期化
 ///
 /// GraphicsCoreが無いか無効な場合に作り、在れば同じ場所で入れ替え、無ければ命令で入れる。
-/// 作れたら HasGraphicsResources を持つ全エンティティに Changed を立てて作り直しを促す。
+/// 入れ替えで `Res<GraphicsCore>` に変化の印が立ち、それが下流の作り直しの合図になる。
 pub fn init_graphics_core(
     graphics: Option<ResMut<GraphicsCore>>,
-    mut query: Query<&mut HasGraphicsResources>,
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
@@ -130,15 +129,10 @@ pub fn init_graphics_core(
                 Some(mut gc) => *gc = new_gc,
                 None => commands.insert_resource(new_gc),
             }
-            let count = query.iter().count();
             info!(
                 frame = frame_count.0,
-                count = count,
-                "[init_graphics_core] GraphicsCore initialization completed; marking entities"
+                "[init_graphics_core] GraphicsCore initialization completed"
             );
-            for mut res in query.iter_mut() {
-                res.set_changed();
-            }
         }
         Err(e) => {
             error!(
@@ -153,8 +147,7 @@ pub fn init_graphics_core(
 /// WucGraphicsResource 初期化・再初期化
 ///
 /// 窓が 1 つでも在り、WUC の資源が無いか無効なら作る。在れば同じ場所で入れ替え（同じ回の
-/// 窓の係から使える）、無ければ命令で入れる。窓の係から切り出したのは、作った回に窓の係が
-/// 早く戻って `Changed<HasGraphicsResources>` を食べ、窓が作り直されなくなるのを防ぐため。
+/// 窓の係から使える）、無ければ命令で入れる。
 pub fn init_wuc_resource(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<ResMut<WucGraphicsResource>>,
@@ -195,6 +188,15 @@ pub fn init_wuc_resource(
     }
 }
 
+/// 窓の的を作る係が読む部品
+type WindowGraphicsData = (
+    Entity,
+    &'static crate::ecs::window::Window,
+    &'static crate::ecs::window::WindowHandle,
+    Option<&'static mut WindowGraphics>,
+    Option<&'static Name>,
+);
+
 /// WindowGraphics初期化・再初期化（Window エンティティに対し WUC バックエンドで作成）
 ///
 /// 本番では装置と WUC の資源が使える回だけ回す（`wuc_ready`）。中の早い戻りは、
@@ -206,16 +208,7 @@ pub fn init_wuc_resource(
 pub fn init_window_graphics(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<Res<WucGraphicsResource>>,
-    mut query: Query<
-        (
-            Entity,
-            &crate::ecs::window::Window,
-            &crate::ecs::window::WindowHandle,
-            Option<&mut WindowGraphics>,
-            Option<&Name>,
-        ),
-        With<HasGraphicsResources>,
-    >,
+    mut query: Query<WindowGraphicsData, With<HasGraphicsResources>>,
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {

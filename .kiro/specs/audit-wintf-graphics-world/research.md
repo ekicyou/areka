@@ -496,4 +496,19 @@ wintf の描画の芯である。ECS の World と 13 本のスケジュール�
 - `cargo clippy -p wintf --lib --tests --no-deps`: 直したファイルに警告なし（ほかのファイルの前からある警告は `clippy-199-lints` の持ち物）。
 - `cargo build --workspace`: 緑。
 
-**最後の audit（12.3）の新しい指摘は 0 件。**
+### 12.6 最終検証（`/kiro-validate-impl`）で見つかった 2 巡目の追加の指摘（2 件）と直し
+
+| 番号 | 組 | 指摘 | 場所 | 直し |
+|---|---|---|---|---|
+| 40 | 直したほうがよい | 39 番の直しで窓の係が `Changed<HasGraphicsResources>` を見なくなった後も、`init_graphics_core` は作り直しのたびに全部の `HasGraphicsResources` へ変化の印を立てていた。その印を読む所は木の全体（`crates/areka*`・`emo-*`・テスト・例）に無い。部品の説明も「変化の印で作り直しを起こす」と古いまま | `graphics/systems/init.rs`（`init_graphics_core`）・`graphics/components.rs`（`HasGraphicsResources` の説明） | `init_graphics_core` から `Query<&mut HasGraphicsResources>` と印を立てる繰り返しを消し、記録の「marking entities」を外した。説明は「GPU 資源を使う窓の印（在ることだけに意味がある）・作り直しの合図は `Res<GraphicsCore>` の変化の印」に書き直した。`init_wuc_resource` の説明の古い理由（印を食べる）も消した。テスト `failed_recreation_is_retried_without_a_new_mark` が立てていた意味の無い印も外した。design.md の作り直しの順の節も合わせた。振る舞いは変わらないのでテストは足さない |
+| 41 | 直したほうがよい | `render_surface` で失いでない `BeginDraw` の失敗は `continue` するだけ。4.4 で `drawn_scale` を印を立てた時に書くようにしたので、拡大率が同じ面は中身が変わるまで描き直されない（4.4 の前は位置が動くだけで描き直していた） | `graphics/systems/render.rs`（`render_surface`） | 失いでない失敗のときだけ、その面の `SurfaceGraphicsDirty` の変化の印を命令で立て直し、`GRAPHICS` の旗を立てて次の画面更新を回す。係が自分で立てた印は次の回の自分に見えない（bevy の変化の印は「前の回より後」で比べる）ので、命令で係の回より後に立てる。ふだんの描画では `SurfaceGraphicsDirty` も `GraphicsCore` も触らない。旗を立てる所が 1 つ増えたので、生産者の名簿（`world/tick_gate_tests.rs` の `WINTF_PRODUCERS`）に `render.rs` を足し、`tick_wake.rs` の `GRAPHICS` の説明に「作り直しや描画の失敗の試し直し」を足した。テスト `tests/graphics/surface_systems_test.rs` の `render_surface_non_loss_begin_draw_failure_does_not_mark_graphics_core_changed`（大きさ 0 の面で、描き直しの印が係の回より後に立て直されること）と、`render_surface_ordinary_draw_does_not_mark_graphics_core_changed`（ふだんの描画で描き直しの印が立たないこと）。直す前は「描き直しの印が次の回に見える形で立て直されていない」で赤 |
+
+- ついでに、`init.rs` の `init_window_graphics` の引数（39 番で可変の部品が入り clippy の `type_complexity` に掛かっていた）に、同じ形の型の別名 `WindowGraphicsData` を置いた。
+- 限界: 失いでない失敗が続く面（直らない E_INVALIDARG 等）では、画面更新のたびに描き直しを試し、`error!` を 1 行ずつ残す。12.2 の 39 番の限界と同じ扱い。
+- 直さずに残してよい 3 種類に当たる件は 0 件。開発者の裁定が要る議題も 0 件。
+
+### 12.7 3 巡目（40・41 番を直した後）
+
+直したファイル（`graphics/systems/init.rs`・`graphics/systems/render.rs`・`graphics/components.rs`・`world/tick_wake.rs`・`world/tick_gate_tests.rs`・`tests/graphics/surface_systems_test.rs`・`tests/graphics/init_window_graphics_test.rs`）を読み直し、同じ物差しでもう一度見た。**新しい指摘 0 件**。
+
+**最後の audit（12.7）の新しい指摘は 0 件。**

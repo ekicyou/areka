@@ -25,7 +25,7 @@
 //! - [`PRESENT`] — 表示指令の到着（areka 側の `PresentBridge`／`MoveCueSink`／lifecycle 送信端）
 //! - [`ANIM`] — dola アニメータに活性がある
 //! - [`REARM`] — 「まだ仕事がある」ので次の画面更新を予約する（talk 進行中の文字層など）
-//! - [`GRAPHICS`] — 描画基盤が無効・初期化待ち
+//! - [`GRAPHICS`] — 描画基盤が無効・初期化待ち、作り直しや描画の失敗の試し直し
 //! - [`FORCE`] — 明示の全走要求（起動直後・テスト・素性の分からない入来）
 //!
 //! 立てる側はどのスレッドからでもよく、何度立てても同じ（冪等）。錠は取らない。
@@ -135,7 +135,7 @@ pub const PRESENT: WakeBits = WakeBits(1 << 5);
 pub const ANIM: WakeBits = WakeBits(1 << 6);
 /// 次の画面更新の予約（「まだ仕事がある」系）。
 pub const REARM: WakeBits = WakeBits(1 << 7);
-/// 描画基盤が無効・初期化待ち。
+/// 描画基盤が無効・初期化待ち、作り直しや描画の失敗の試し直し。
 pub const GRAPHICS: WakeBits = WakeBits(1 << 8);
 /// 明示の全走要求（起動直後・テスト・素性の分からない入来）。
 pub const FORCE: WakeBits = WakeBits(1 << 9);

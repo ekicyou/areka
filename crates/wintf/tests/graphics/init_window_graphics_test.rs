@@ -161,20 +161,16 @@ fn failed_recreation_is_retried_without_a_new_mark() {
         assert!(wg.is_valid());
         assert_eq!(wg.generation(), 0);
 
-        // 装置の失いと同じく的を倒して合図を立て、壊れた HWND で作り直しを失敗させる
+        // 装置の失いと同じく的を倒し、壊れた HWND で作り直しを失敗させる
         world
             .get_mut::<WindowGraphics>(entity)
             .unwrap()
             .invalidate();
-        world
-            .get_mut::<HasGraphicsResources>(entity)
-            .unwrap()
-            .set_changed();
         world.get_mut::<WindowHandle>(entity).unwrap().hwnd = HWND(std::ptr::null_mut());
         schedule.run(&mut world);
         assert!(!world.get::<WindowGraphics>(entity).unwrap().is_valid());
 
-        // HWND を本物へ戻すだけ（合図は立て直さない）
+        // HWND を本物へ戻すだけ（変化の印は立てない）
         world.get_mut::<WindowHandle>(entity).unwrap().hwnd = hwnd;
         schedule.run(&mut world);
 

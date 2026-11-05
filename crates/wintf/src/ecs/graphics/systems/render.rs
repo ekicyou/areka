@@ -31,9 +31,11 @@ type RenderSurfaceData = (
 /// - GlobalArrangementのスケール成分を適用（DPIスケール対応）
 /// - 装置が無い・無効なら何も描かずに戻る（描画面は作り直しで全部作り直される）
 /// - `GraphicsCore` を可変で触るのは装置の失いのときだけ（ふだんの描画で変化の印を立てない）
+/// - 失いでない BeginDraw の失敗は、その面の描き直しの印を命令で立て直し、次の回で描き直す
 pub fn render_surface(
     surfaces: Query<RenderSurfaceData, Changed<SurfaceGraphicsDirty>>,
     graphics_core: Option<ResMut<GraphicsCore>>,
+    mut commands: Commands,
 ) {
     use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
     use windows::Win32::Graphics::Direct2D::Common::D2D1_COMPOSITE_MODE_SOURCE_OVER;
@@ -83,6 +85,16 @@ pub fn render_surface(
                     hresult = format_args!("0x{:08X}", err.code().0),
                     "BeginDraw failed"
                 );
+                // 次の回で描き直す（41 番）。係が自分で立てた変化の印は次の回の自分に見えないので
+                // 命令で立てる。部品ごと消えていれば描き直しも要らない。
+                commands
+                    .entity(entity)
+                    .queue_silenced(|mut e: EntityWorldMut| {
+                        if let Some(mut dirty) = e.get_mut::<SurfaceGraphicsDirty>() {
+                            dirty.set_changed();
+                        }
+                    });
+                crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
                 continue;
             }
         };

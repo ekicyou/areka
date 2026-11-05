@@ -4,19 +4,9 @@ use bevy_ecs::world::DeferredWorld;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush, Visual};
 
-/// GPUリソースを使用するエンティティを宣言するマーカーコンポーネント
+/// GPU 資源を使う窓の印（在ることだけに意味がある）
 ///
-/// このコンポーネントは以下の役割を持つ：
-/// 1. GPUリソースを使用するエンティティを宣言（存在自体がマーカー）
-/// 2. `Changed<HasGraphicsResources>` でGPUリソース再初期化をトリガー
-///
-/// デバイスロスト時は `set_changed()` を呼び出すことで、
-/// 各GPUリソースコンポーネント（VisualGraphics, WindowGraphics等）の
-/// 再初期化システムをトリガーする。
-///
-/// # メモリ戦略
-/// - **Table戦略**: 多数のエンティティに付与されるGPUリソース宣言マーカー
-/// - デバイスロスト時にset_changed()で一括再初期化をトリガー
+/// 変化の印は見ない。作り直しの合図は `Res<GraphicsCore>` の変化の印。
 #[derive(Component, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HasGraphicsResources;
 

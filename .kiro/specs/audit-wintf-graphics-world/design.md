@@ -281,7 +281,7 @@ pub(crate) fn is_device_lost(draw_error: HRESULT, removed_reason: HRESULT) -> bo
 #### 作り直しの順（`systems/window_pos.rs`・`systems/init.rs`・`world/mod.rs`）
 
 - `invalidate_dependent_components`（`GraphicsSetup` の先頭）: 装置が在って無効なとき、有効な `WindowGraphics`・`VisualGraphics`・`SurfaceGraphics`・`BitmapSourceGraphics` を倒し、`GraphicsCommandList` を全部外し（命令で）、最後に `WucGraphicsResource` を倒す（合成の木の部品を先に捨て、合成器を最後に捨てる）。今の「古いまま有効」の注記（W3b-V）は消す。
-- `init_graphics_core`（次）: 2 つの枝を 1 本にする（18 番）。作れたら、資源が在れば入れ替え、無ければ命令で入れる。どちらでも全部の `HasGraphicsResources` に印を立てる。装置が無効か無い間は `GRAPHICS` を立てる（今のまま）。
+- `init_graphics_core`（次）: 2 つの枝を 1 本にする（18 番）。作れたら、資源が在れば入れ替え、無ければ命令で入れる。`HasGraphicsResources` には印を立てない（見る係が無い・作り直しの合図は資源の変化の印・最終検証の 40 番）。装置が無効か無い間は `GRAPHICS` を立てる（今のまま）。
 - `init_wuc_resource`（新・次）: `run_if(graphics_core_ready)`。窓が 1 つでも在り、WUC の資源が無いか無効なら作る。在れば入れ替え、無ければ命令で入れる。失敗は `error!`。今の `init_window_graphics` の中の塊を移すだけ。
 - `init_window_graphics`（次）: `run_if(wuc_ready)`。引数は `Option<Res<GraphicsCore>>`（1 番）。中の WUC の塊と `unwrap` は消える。
 - 4 本は `.chain()` で並べる（命令の後の反映を bevy が間に挟む）。
