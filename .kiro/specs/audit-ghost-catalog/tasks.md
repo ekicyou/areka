@@ -90,7 +90,7 @@
   - _Depends: 9_
   - _Requirements: 3.1, 3.2, 5.1, 5.3, 6.2, 9.1, 9.5, 9.12_
 
-- [ ] 11. (P) dispatcher のテストを減らし、刻みのテストを的に合わせる（T14）
+- [x] 11. (P) dispatcher のテストを減らし、刻みのテストを的に合わせる（T14）
   - #75 の話の組み立てと畳みを道具に置き換えてから、#31 の刻みのテストを同期の檻で `Tick(7_000)`→`Tick(7_500)` の形に直し、競る受け取りの 1 本を直す
   - #76 の必ず真の assert を消す
   - #79: `audit-parsers-sakura` の `areka-sakura` の警告のテストが `main` に在れば、ここで自分の側の写しとそれだけが使う道具を消す。無ければ 18.1 へ回す
@@ -188,3 +188,4 @@
 - 7: `deep_trees_copy_on_a_small_stack` は設計の 2,000 段でなく 300 段（2,000 段は fixture の作りに約 115 秒）。256 KiB のスタックで debug ビルドなら再帰は 100 段で溢れるので縛れている。`finish_rename` は `CopyStats` を返すため引数が 4 つ。
 - 8: 範囲の外の `crates/areka-mcp-bridge/src/config.rs:105` は中継の置き場（`mcp-bridge` の cache）を生の `AREKA_PROFILE_DIR` から作る＝空の値で作業フォルダからの相対になる。設計の「範囲の外で触るファイル」に無いので触っていない。完了の棚卸で起票する（持ち主は `audit-mcp-update-crates`）。
 - 8: `cargo test -p areka` の結合テスト `mcp_get_log_real_run` は 32bit の helper（`target\i686-pc-windows-msvc`）が未ビルドだと panic する。lib/bins は緑。18.3 の全体テストで見る。
+- 11: `dispatcher_choice_tests.rs` は 936→925 行で、見立ての約 790 行に届かない。research #75 の「StartTalk 18 か所・Close＋join 10 か所」は dispatcher のテスト 4 ファイルを合わせた数で、choice の中は 3 か所・2 か所だけ（3 ファイル合わせて −84 行）。`dispatcher_begin_talk_tests.rs` の 3 か所は T14 の表に無く残した。#79 は `audit-parsers-sakura` が未着地なので 18.1 へ回した。

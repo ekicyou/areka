@@ -1,6 +1,7 @@
+use super::choice_tests::close_and_join;
 use super::*;
-use crate::test_support::{RecordingSink, run_bounded, test_system_vars};
-use areka_sakura::contract::{CueCommand, ScriptOrigin, TalkCue, TalkEndReason};
+use crate::test_support::{RecordingSink, test_system_vars};
+use areka_sakura::contract::{CueCommand, TalkCue, TalkEndReason};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -27,13 +28,7 @@ fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
     use areka_sakura::contract::TalkCommand;
 
     // Start: StartTalk を情報無損失で包み直すだけ。
-    let start = StartTalk {
-        talk_id: TalkId(101),
-        script: r"\s[0]hi\e".to_string(),
-        epilogue: Vec::new(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    };
+    let start = StartTalk::new(TalkId(101), r"\s[0]hi\e");
     match DispatcherMsg::from(TalkCommand::Start(start.clone())) {
         DispatcherMsg::Start(got) => {
             assert_eq!(got.talk_id, start.talk_id);
@@ -118,23 +113,17 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     let talk_b = TalkId(2);
 
     // A: 長い待ちを持つ script（差し替えまで一切 Tick を送らないので自然完了しない）。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_a,
-        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_a,
+        r"\s[1]A\_w[2500]A_END\e",
+    )))
     .expect("send Start(A)");
 
     // B: 短い script（差し替え後にこれを完走させる）。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_b,
-        script: r"\s[2]B\_w[100]B_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_b,
+        r"\s[2]B\_w[100]B_END\e",
+    )))
     .expect("send Start(B)");
 
     // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\_w[100] を含む占有 horizon=0.40 を跨ぐ
@@ -169,16 +158,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         "no further KanadeMsg (in particular no stale TalkDone for A) should reach kanade"
     );
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
 
 /// シナリオ2: 明示的な stale `Done` の棄却。A→B へ差し替え済みの状態で、A の
@@ -200,21 +180,15 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     let talk_a = TalkId(11);
     let talk_b = TalkId(12);
 
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_a,
-        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_a,
+        r"\s[1]A\_w[2500]A_END\e",
+    )))
     .expect("send Start(A)");
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_b,
-        script: r"\s[2]B\_w[100]B_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_b,
+        r"\s[2]B\_w[100]B_END\e",
+    )))
     .expect("send Start(B)");
 
     // 手動で A の stale Done（自然発生分に加えた明示的な追験）を投函する。
@@ -254,16 +228,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
         "the stale Done(A) must never surface to kanade as a KanadeMsg::TalkDone"
     );
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
 
 /// シナリオ3: 停止時のクリーンアップ。稼働中の talk がある状態で `Close` を送ると、
@@ -285,33 +250,72 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
     );
 
     // 長い待ちを持つ script（Close 時点では自然完了していない）。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: TalkId(21),
-        script: r"\s[1]X\_w[2500]X_END\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        TalkId(21),
+        r"\s[1]X\_w[2500]X_END\e",
+    )))
     .expect("send Start");
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
+    close_and_join(&tx, handle);
+}
 
-    run_bounded(
-        "dispatcher join after Close with active talk",
-        Duration::from_secs(5),
-        move || {
-            handle.join().expect(
-                "dispatcher (and therefore its active talk, joined synchronously beforehand) \
-                 terminates normally after Close",
-            );
-        },
+/// \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
+///   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \_w[200]=0.20）/
+///   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \_w[300]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
+const THREE_TEXTS: &str = r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e";
+
+/// `THREE_TEXTS` を起動して刻み `ticks` を送り、dispatcher を閉じて join してから届いた Text を順に返す。
+/// Close は talk を join してから dispatcher を止めるので、join の後は送られた刻みの発火が出揃っている
+/// （直後の `try_recv` の競りに頼らずに「まだ出ない」を見られる）。
+fn texts_after_ticks(ticks: &[u64]) -> Vec<String> {
+    let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
+    let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
+    let (tx, handle) = spawn_dispatcher(
+        kanade_tx,
+        vec![
+            Box::new(RecordingSink::new()),
+            Box::new(ChannelSink { tx: text_tx }),
+        ],
+        test_system_vars(),
+        None,
+    );
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        TalkId(32),
+        THREE_TEXTS,
+    )))
+    .expect("send Start");
+    for &now in ticks {
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(now),
+        })
+        .expect("send Tick");
+    }
+    close_and_join(&tx, handle);
+    text_rx
+        .try_iter()
+        .filter_map(|cue| match cue.command {
+            CueCommand::Text(text) => Some(text),
+            _ => None,
+        })
+        .collect()
+}
+
+/// シナリオ4 の保留: 各 Tick は対応する発火群だけを解放する（elapsed 0.0 で FIRST・0.5 で SECOND まで・
+/// 1.1 で THIRD まで）。
+#[test]
+fn tick_relay_releases_only_the_cues_due_at_each_elapsed_time() {
+    assert_eq!(texts_after_ticks(&[5_000]), ["FIRST"]);
+    assert_eq!(texts_after_ticks(&[5_000, 5_500]), ["FIRST", "SECOND"]);
+    assert_eq!(
+        texts_after_ticks(&[5_000, 5_500, 6_100]),
+        ["FIRST", "SECOND", "THIRD"]
     );
 }
 
 /// シナリオ4: 経過時間換算を伴う Tick 中継。複数の `Tick{now}` を送ると、dispatcher は
 /// 最初の tick を経過秒 0.0 の起点として記録し、以降 `(now - base) / 1000.0` 秒を
-/// `SakuraMsg::Tick(f64)` として active talk へ中継する（要件 5.2）。barrier 技法
-/// （sakura drive.rs 流儀）で、各 Tick が対応する発火群のみを解放することを決定的に確認する。
+/// `SakuraMsg::Tick(f64)` として active talk へ中継する（要件 5.2）。換算の値そのものは
+/// 同期の檻（`choice_tests` の `resolve_choice_relays_id_…`）が縛る。ここは実 talk で順と自然終端を見る。
 #[test]
 fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -326,16 +330,10 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         None,
     );
 
-    // \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
-    //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \_w[200]=0.20）/
-    //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \_w[300]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: TalkId(31),
-        script: r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        TalkId(31),
+        THREE_TEXTS,
+    )))
     .expect("send Start");
 
     // broadcast: text sink には Emote/Wait 等の担当外 cue も届く。本テストは Text 発火の
@@ -356,33 +354,21 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         now: MonotonicMs(5_000),
     })
     .expect("send first Tick (anchors base_now)");
-    let first = recv_text("FIRST");
-    assert_eq!(first.command, CueCommand::Text("FIRST".into()));
-    // FIRST まで drain した時点で Wait@0.25/SECOND@0.45/THIRD は未 due（保留の決定的証明）。
-    assert!(
-        text_rx.try_recv().is_err(),
-        "SECOND/THIRD must not fire before their elapsed time is reached"
-    );
+    recv_text("FIRST");
 
     // 2 回目 tick: now - base = 500ms → elapsed=0.5 → Wait@0.25・SECOND@0.45 due（THIRD@1.05 はまだ）。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(5_500),
     })
     .expect("send second Tick (elapsed 0.5)");
-    let second = recv_text("SECOND");
-    assert_eq!(second.command, CueCommand::Text("SECOND".into()));
-    assert!(
-        text_rx.try_recv().is_err(),
-        "THIRD must not fire before elapsed 1.05 is reached"
-    );
+    recv_text("SECOND");
 
     // 3 回目 tick: now - base = 1100ms → elapsed=1.1 → Wait@0.75・THIRD@1.05 due。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(6_100),
     })
     .expect("send third Tick (elapsed 1.1)");
-    let third = recv_text("THIRD");
-    assert_eq!(third.command, CueCommand::Text("THIRD".into()));
+    recv_text("THIRD");
 
     // 4 回目 tick: elapsed=1.4 → 占有 horizon=1.30 到達で自然終端（末尾テキストの D を落とさない）。
     tx.send(DispatcherMsg::Tick {
@@ -401,16 +387,7 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         _ => unreachable!("dispatcher only forwards KanadeMsg::TalkDone"),
     }
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
 
 /// シナリオ5: 完了通知の転送（happy path）。talk が自然完了すると `KanadeMsg::TalkDone`
@@ -432,13 +409,10 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
     );
 
     let talk_c = TalkId(41);
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_c,
-        script: r"\s[9]hello\_w[100]world\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_c,
+        r"\s[9]hello\_w[100]world\e",
+    )))
     .expect("send Start(C)");
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(9_000),
@@ -463,13 +437,10 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
 
     // slot は解放済み: 後続 Start は Close を要さず新規 talk をそのまま再生できる。
     let talk_d = TalkId(42);
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: talk_d,
-        script: r"\s[8]again\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        talk_d,
+        r"\s[8]again\e",
+    )))
     .expect("send Start(D)");
     // D（`again`＝5 char・D=0.25）の占有 horizon=0.25 を跨ぐため base(10_000)＋elapsed 0.3 の 2 tick。
     tx.send(DispatcherMsg::Tick {
@@ -513,16 +484,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         "broadcast 経由でも Emote 発火は C(scope9)→D(scope8) の 1 件ずつ"
     );
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
 
 /// シナリオ6（task 6.2・凍結像の刻印点）: `system_vars` provider が talk 起動ごとに
@@ -582,25 +544,18 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
     };
 
     // talk 1: `%username`（→ 起動時点で凍結された provider 値 `user1` へ展開）。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: TalkId(61),
-        script: r"\s[0]%username\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        TalkId(61),
+        r"\s[0]%username\e",
+    )))
     .expect("send Start(1)");
     // 初回 Tick で base_now 刻印＋elapsed=0.0 群（ClearAll/Emote/Text@0.0）を発火。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
     })
     .expect("send Tick for talk 1");
-    let first = recv_text("user1");
-    assert_eq!(
-        first.command,
-        CueCommand::Text("user1".into()),
-        "talk 1 の %username は起動時点で凍結された provider 値 user1 へ展開される（既定値でない）"
-    );
+    // talk 1 の %username は起動時点で凍結された provider 値 user1 へ展開される（既定値でない）。
+    recv_text("user1");
     assert_eq!(
         calls.load(Ordering::SeqCst),
         1,
@@ -608,38 +563,22 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
     );
 
     // talk 2: 差し替え起動（talk 1 は Close funnel で終了）。provider の次の呼出＝`user2`。
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: TalkId(62),
-        script: r"\s[0]%username\e".to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+    tx.send(DispatcherMsg::Start(StartTalk::new(
+        TalkId(62),
+        r"\s[0]%username\e",
+    )))
     .expect("send Start(2)");
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(2_000),
     })
     .expect("send Tick for talk 2");
-    let second = recv_text("user2");
-    assert_eq!(
-        second.command,
-        CueCommand::Text("user2".into()),
-        "talk 2 は自分の起動時点で凍結された provider 値 user2 を見る（talk ごと独立凍結）"
-    );
+    // talk 2 は自分の起動時点で凍結された provider 値 user2 を見る（talk ごと独立凍結）。
+    recv_text("user2");
     assert_eq!(
         calls.load(Ordering::SeqCst),
         2,
         "provider の呼出回数が talk 起動数と一致（per-talk 刻印・boot 時 1 回固定でない）"
     );
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }

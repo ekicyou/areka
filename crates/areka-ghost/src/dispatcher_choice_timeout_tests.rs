@@ -1,7 +1,7 @@
+use super::choice_tests::close_and_join;
 use super::*;
 use crate::test_log_capture::{CapturedEvent, assert_logged_event, capture};
-use crate::test_support::{RecordingSink, run_bounded, test_system_vars};
-use areka_sakura::contract::ScriptOrigin;
+use crate::test_support::{RecordingSink, test_system_vars};
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
@@ -90,13 +90,10 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
     );
 
     let talk_id = TalkId(951);
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
+    tx.send(DispatcherMsg::Start(StartTalk::new(
         talk_id,
-        script: script_with_choice_timeout("1234"),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
+        script_with_choice_timeout("1234"),
+    )))
     .expect("send Start(choicetimeout 1234)");
     // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。
     tx.send(DispatcherMsg::Tick {
@@ -134,14 +131,5 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
         _ => unreachable!("区切りで最初に届くのは ChoiceWaiting"),
     }
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
