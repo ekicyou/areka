@@ -434,3 +434,4 @@
 - 73. `plan_extent_tests.rs`（8 か所）・`plan_extent_film_tests.rs`（2）・`plan_nesting_extent_tests.rs:242-250` — `build_plan` の 9 行の塊が 11 回（`ops()` と並べて 1 つの口に）。
 - 74. `plan_extent_film_tests.rs:57-59` — `compute_extent` をそのまま呼ぶだけの包み。
 - 範囲の外: なし（5 人とも）。
+- 75.（11-06 audit-parsers-sakura からの知らせ・必ず直す）`fold.rs:321` 付近の `expand_targets_with` が除外の範囲 `!a-b` を番号 1 つずつ集合へ広げる。読む側の上限 `RANGE_WIDTH_CAP` は包含の範囲だけにかかり、除外にはかからない（下流が除外を広げない前提）。`surface0,!0-4294967295` の 1 行で約 43 億件の展開。直し: 除外を `(lo, hi)` の組で持ち、包含を広げた後に範囲で引く（6.3 で直す）。
