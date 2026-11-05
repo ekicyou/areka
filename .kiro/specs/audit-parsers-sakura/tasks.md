@@ -108,7 +108,7 @@
   - 契約の 8 つの再輸出を消す（42）・選択待ちの区切りの doc を書く（92）・後始末の付け足しを `pub(crate)` に（93）
   - `non_finite_tick_is_ignored_and_playback_survives` が ERROR 2 件の `tick` を捕まえて緑
   - _Requirements: 2.1, 2.7, 3.1, 4.4, 5.2, 7.1, 7.4, 7.5_
-- [ ] 5.3 strict の判定を 1 か所にし、choicetimeout の警告のテストを足す（T16・範囲の外の呼び手まで）
+- [x] 5.3 strict の判定を 1 か所にし、choicetimeout の警告のテストを足す（T16・範囲の外の呼び手まで）
   - `choicetimeout` を 1 回だけ読む関数と、読みの印と命令から検出の位置を決める 2 つの関数を置き、compile の 2 か所と `check_script_judge.rs` から使う（43）
   - 読めない `choicetimeout` が WARN を 1 回出して値が無いことを確かめるテストを足す（7.11(a)）
   - `strict.rs` の 5・15 行目の名指しは変えない

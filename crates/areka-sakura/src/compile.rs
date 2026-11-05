@@ -29,10 +29,10 @@ use crate::anchor_pair::{AnchorIssue, pair_anchors};
 use crate::contract::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, FONT_TAG_CARRIER, TalkEndReason,
 };
-use crate::strict::{DetectionPoint, StrictJudges};
+use crate::strict::{self, DetectionPoint, StrictJudges};
 use crate::strict_tap::StrictTrace;
 use crate::sysvar::SystemVarSnapshot;
-use areka_parsers::sakura::{Instruction, Read, ReadNote};
+use areka_parsers::sakura::{Instruction, Read};
 use areka_talk::EpilogueCommand;
 use std::ops::Range;
 
@@ -106,25 +106,22 @@ impl Tracer<'_> {
     fn head(&mut self, index: usize, next_cue: usize) {
         (self.index, self.at) = (index, next_cue);
         for note in &self.reads[index].notes {
-            let point = match note {
-                ReadNote::UnknownTag => DetectionPoint::ReadUnknownTag,
-                ReadNote::Unclosed => DetectionPoint::ReadUnclosed,
-                ReadNote::ArgumentDefaulted => DetectionPoint::ReadDefaulted,
-            };
-            self.find(point);
+            self.find(strict::read_note_point(note));
         }
     }
 
-    /// `\!` の腕: 誰も拾わない組と、読めない `choicetimeout`。
-    fn command(&mut self, name: &str, raw_args: &[String]) {
-        let first = raw_args.first().map(String::as_str);
-        if !self.judges.command_handled(name, first) {
-            self.find(DetectionPoint::CommandUnhandled);
-        } else if name == "set"
-            && first == Some("choicetimeout")
-            && parse_choice_timeout(raw_args) == ChoiceTimeoutDirective::Unreadable
-        {
-            self.find(DetectionPoint::ChoiceTimeoutUnreadable);
+    /// `\!` の腕: 誰も拾わない組と、読めない `choicetimeout`（`choice_timeout` は 1 回だけ読んだ答え）。
+    fn command(
+        &mut self,
+        name: &str,
+        raw_args: &[String],
+        choice_timeout: Option<ChoiceTimeoutDirective>,
+    ) {
+        let handled = self
+            .judges
+            .command_handled(name, raw_args.first().map(String::as_str));
+        if let Some(point) = strict::command_point(handled, choice_timeout) {
+            self.find(point);
         }
     }
 
@@ -285,11 +282,12 @@ fn scan<'a>(
                     0.0,
                     CueCommand::command_carrier(name.clone(), raw_args.clone()),
                 ));
+                let choice_timeout = choice_timeout_of(name, raw_args);
                 if let Some(t) = tracer.as_deref_mut() {
-                    t.command(name, raw_args);
+                    t.command(name, raw_args, choice_timeout);
                 }
-                if name == "set" && raw_args.first().is_some_and(|a| a == "choicetimeout") {
-                    last_choice_timeout = match parse_choice_timeout(raw_args) {
+                if let Some(directive) = choice_timeout {
+                    last_choice_timeout = match directive {
                         ChoiceTimeoutDirective::Default => None,
                         ChoiceTimeoutDirective::Secs(secs) => Some(secs),
                         ChoiceTimeoutDirective::Unreadable => {
@@ -504,6 +502,12 @@ fn emit_barrier(scope: u32, offset: f64, kind: BarrierKind) -> Cue {
         payload: CuePayload::Barrier(kind),
         duration: 0.0,
     }
+}
+
+/// `\![set,choicetimeout,…]` のときだけ時間の欄を 1 回読む（compile と strict と `check_script` が使う）。
+pub fn choice_timeout_of(name: &str, raw_args: &[String]) -> Option<ChoiceTimeoutDirective> {
+    (name == "set" && raw_args.first().is_some_and(|a| a == "choicetimeout"))
+        .then(|| parse_choice_timeout(raw_args))
 }
 
 /// `\![set,choicetimeout,時間]` の時間の欄の読み取りの結果（design `parse_choice_timeout`）。

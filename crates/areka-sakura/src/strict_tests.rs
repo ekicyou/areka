@@ -269,3 +269,40 @@ fn hooks_bundle_ghost_and_judges() {
         Some(DetectionPoint::FontIgnored)
     );
 }
+
+/// 読みの印の全部から点へ（`compile` と `check_script` が同じ写しを使う）。
+#[test]
+fn read_note_point_every_note() {
+    use areka_parsers::sakura::ReadNote;
+    let rows = [
+        (ReadNote::UnknownTag, DetectionPoint::ReadUnknownTag),
+        (ReadNote::Unclosed, DetectionPoint::ReadUnclosed),
+        (ReadNote::ArgumentDefaulted, DetectionPoint::ReadDefaulted),
+    ];
+    for (note, point) in rows {
+        assert_eq!(read_note_point(&note), point, "{note:?}");
+    }
+}
+
+/// `\!` の点の 6 通り: 誰も拾わなければ値によらず `CommandUnhandled`、拾われて読めない
+/// `choicetimeout` だけが `ChoiceTimeoutUnreadable`、ほかは点なし。
+#[test]
+fn command_point_six_cases() {
+    use crate::compile::ChoiceTimeoutDirective::{Default, Secs, Unreadable};
+    use DetectionPoint::{ChoiceTimeoutUnreadable, CommandUnhandled};
+    let rows = [
+        (false, None, Some(CommandUnhandled)),
+        (false, Some(Unreadable), Some(CommandUnhandled)),
+        (true, None, None),
+        (true, Some(Default), None),
+        (true, Some(Secs(0.5)), None),
+        (true, Some(Unreadable), Some(ChoiceTimeoutUnreadable)),
+    ];
+    for (handled, choice_timeout, point) in rows {
+        assert_eq!(
+            command_point(handled, choice_timeout),
+            point,
+            "{handled} {choice_timeout:?}"
+        );
+    }
+}

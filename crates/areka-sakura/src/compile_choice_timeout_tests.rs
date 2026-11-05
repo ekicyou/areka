@@ -295,3 +295,23 @@ fn reader_is_reachable_from_the_crate_root() {
     assert_eq!(root_parse(&args(&[])), Root::Default);
     assert_eq!(root_parse(&args(&["500"])), Root::Secs(0.5));
 }
+
+/// **警告（要件 7.11(a)）**: 読めない時間の欄は compile の中で WARN `choice_timeout_unreadable` を
+/// ちょうど 1 行（元の綴りを `raw` に）残し、読める値では 0 行。
+#[test]
+fn unreadable_choice_timeout_warns_once_readable_none() {
+    let warns = |value: &str| {
+        let script = format!(r"{CHOICES}\![set,choicetimeout,{value}]");
+        let (_, events) = log_capture_kit::capture(|| cues_of(&script));
+        events
+            .into_iter()
+            .filter(|e| {
+                e.level == tracing::Level::WARN
+                    && e.field_str("event") == Some("choice_timeout_unreadable")
+            })
+            .map(|e| e.field("raw").map(str::to_string))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(warns("abc"), [Some("abc".to_string())]);
+    assert!(warns("500").is_empty());
+}
