@@ -79,7 +79,7 @@ const SENTINEL_OFFSET: (f32, f32) = (99.0, 77.0);
 /// `record_display` が失敗し得る 4 点（`DisplayFault` の全 variant）。
 ///
 /// variant が増えたらここに足さなければ被覆が黙って減る。列挙の網羅は [`fault_marker`] の `match` が
-/// コンパイルで、本表の重複と件数は [`the_matrix_covers_four_fault_points`] が実行時に見張る。
+/// コンパイルで、本表の重複は [`the_matrix_covers_four_fault_points`] が実行時に見張る（件数は配列の型が決める）。
 const ALL_DISPLAY_FAULTS: [DisplayFault; 4] = [
     DisplayFault::CreateBitmap,
     DisplayFault::CreateCommandList,
@@ -631,13 +631,13 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
 
 // ── 被覆の番人 ─────────────────────────────────────────────────────────
 
-/// 4 注入点 × 3 場面の「4」を実行時に固定する（「3」は上の `#[test]` 3 本そのものである）。
+/// 4 注入点 × 3 場面の「4」が互いに異なる 4 点であることを実行時に固定する（「3」は上の `#[test]`
+/// 3 本そのもの・件数は配列の型 `[_; 4]` が決める）。
 ///
-/// variant の追加は [`fault_marker`] の `match` がコンパイルで捕まえるが、[`ALL_DISPLAY_FAULTS`] から
-/// 1 つ落とす／重複させる改変はコンパイルを通ってしまい、被覆だけが静かに減る。
+/// variant の追加は [`fault_marker`] の `match` がコンパイルで捕まえるが、[`ALL_DISPLAY_FAULTS`] の
+/// 1 つを別の点の重複に替える改変はコンパイルを通ってしまい、被覆だけが静かに減る。
 #[test]
 fn the_matrix_covers_four_fault_points() {
-    assert_eq!(ALL_DISPLAY_FAULTS.len(), 4, "記録が失敗し得るのは 4 点");
     for (i, at) in ALL_DISPLAY_FAULTS.iter().enumerate() {
         assert!(
             !ALL_DISPLAY_FAULTS[..i].contains(at),

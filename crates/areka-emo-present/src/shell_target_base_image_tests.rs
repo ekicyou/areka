@@ -301,8 +301,9 @@ fn case_d_surface_without_image_stays_empty() {
 
 /// 土台の絵の決定の全体像（要件 2.1 の表の 4 通りが 1 枚のシェルで同時に成り立つ）。
 ///
-/// `used` と `shadowed` が重ならず、和が「認めた画像」の全体に等しいことも併せて見る
-/// （[`BaseImageReport`] の不変条件・`crates/areka-emo-compose/src/base_image.rs`）。
+/// `used` と `shadowed` をそれぞれ値の一致で確かめるので、両者が重ならず和が「認めた画像」の
+/// 全体に等しいこと（[`BaseImageReport`] の不変条件・`crates/areka-emo-compose/src/base_image.rs`）も
+/// この 2 つの一致に含まれる。
 #[test]
 fn every_image_is_either_used_or_shadowed_exactly_once() {
     let world = build_table_target().build_world();
@@ -319,23 +320,6 @@ fn every_image_is_either_used_or_shadowed_exactly_once() {
         shadowed,
         vec![2],
         "使わなかったのは `element0` を持つ面 2 だけ"
-    );
-
-    // 重なり 0 件と、和が「認めた画像」の全体であること（引き算で導かずそのまま判定する）。
-    assert!(
-        used.iter().all(|id| !shadowed.contains(id)),
-        "同じ番号が使った側と使わなかった側の両方に居る: used={used:?} shadowed={shadowed:?}"
-    );
-    let mut both: Vec<u32> = used.iter().chain(shadowed.iter()).copied().collect();
-    both.sort_unstable();
-    assert_eq!(
-        both,
-        select_surface_images(&FILE_NAMES)
-            .images
-            .keys()
-            .copied()
-            .collect::<Vec<_>>(),
-        "認めた画像のうち、使いも隠れもしなかったものが在る"
     );
 
     assert!(

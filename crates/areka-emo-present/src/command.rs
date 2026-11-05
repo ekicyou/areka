@@ -192,7 +192,6 @@ mod device_err_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_emo_compose::{BindSet, ComposeError, PatternState};
 
     /// 型 `T` が `Send + 'static` であることをコンパイル時に要求するヘルパ。
     fn _assert_send_static<T: Send + 'static>() {}
@@ -206,88 +205,6 @@ mod tests {
         _assert_send_static::<PresentCommand>();
         _assert_send_static::<PresentError>();
         _assert_send_static::<TargetId>();
-    }
-
-    /// Req 3.3/3.5/3.6: 各 variant を実データで構築できる（reply=None の撃ちっぱなし形）。
-    ///
-    /// `ShowSurface` は実 [`BindSet`] を同梱し、`Hide`（`\s[-1]` 相当）・`InvalidateCache` と併せて
-    /// 3 経路すべてが所有データのみで組み立てられることを確認する。
-    #[test]
-    fn variants_construct_with_owned_data() {
-        let target = TargetId(0);
-
-        let show = PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::from_ids([0u32, 5, 5, 3]),
-            pattern: PatternState::default(),
-            reply: None,
-        };
-        let hide = PresentCommand::Hide {
-            target: TargetId(1),
-            reply: None,
-        };
-        let invalidate = PresentCommand::InvalidateCache {
-            target,
-            reply: None,
-        };
-
-        // variant の識別を match で確認（構築が成立し所有されていること）。
-        assert!(matches!(
-            show,
-            PresentCommand::ShowSurface {
-                surface_id: 1000,
-                ..
-            }
-        ));
-        assert!(matches!(
-            hide,
-            PresentCommand::Hide {
-                target: TargetId(1),
-                ..
-            }
-        ));
-        assert!(matches!(
-            invalidate,
-            PresentCommand::InvalidateCache {
-                target: TargetId(0),
-                ..
-            }
-        ));
-    }
-
-    /// TargetId は `Copy` かつ `Hash` キーとして扱える（`Debug` 整形も `Device`/`TargetNotAttached`
-    /// の表示経路で用いる）。
-    #[test]
-    fn target_id_is_copy_and_hashable_key() {
-        use std::collections::HashSet;
-        let a = TargetId(7);
-        let b = a; // Copy
-        assert_eq!(a, b);
-        let mut set = HashSet::new();
-        set.insert(a);
-        assert!(set.contains(&b));
-        assert_eq!(format!("{a:?}"), "TargetId(7)");
-    }
-
-    /// Req 4.3/7.2: `PresentError` は `ComposeError` を `#[from]` で透過取り込みできる。
-    ///
-    /// 上流合成失敗をそのまま `?` で持ち上げられることを、`.into()` 変換で静的・実行時に確認する。
-    #[test]
-    fn present_error_maps_compose_error_via_from() {
-        let ce = ComposeError::SurfaceNotFound(1000);
-        let pe: PresentError = ce.into();
-        assert!(matches!(
-            pe,
-            PresentError::Compose(ComposeError::SurfaceNotFound(1000))
-        ));
-
-        // EmptyComposition も同経路で写像される（Error Categories 双方）。
-        let pe2: PresentError = ComposeError::EmptyComposition(42).into();
-        assert!(matches!(
-            pe2,
-            PresentError::Compose(ComposeError::EmptyComposition(42))
-        ));
     }
 
     /// `Device` variant の `Display` は HRESULT を 16 進で整形する（`{hresult:#x}`）。

@@ -223,7 +223,7 @@ fn same_cause_passed_as_repeat_logs_debug_not_error() {
 }
 
 /// 被覆の番人: `DisplayFault` に variant が増えたら [`ALL_FAULTS`] の欠落をコンパイルで気づかせ、
-/// 4 本の `#[test]` が全 variant を覆っていることを実行時にも固定する。
+/// 表に重複が無いことを実行時に固定する（件数は配列の型 `[_; 4]` が決める）。
 #[test]
 fn every_display_fault_variant_has_a_case() {
     for at in ALL_FAULTS {
@@ -239,7 +239,6 @@ fn every_display_fault_variant_has_a_case() {
             DisplayFault::Close => "close_failure_logs_once_and_leaves_no_side_effect",
         };
     }
-    assert_eq!(ALL_FAULTS.len(), 4, "失敗し得るのは 4 点");
     for (i, at) in ALL_FAULTS.iter().enumerate() {
         assert!(
             !ALL_FAULTS[..i].contains(at),

@@ -11,13 +11,8 @@ use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, capture_events}
 /// `online*`・非数字・非 png）はどの系列から見ても面でない。
 #[test]
 fn face_judgment_is_series_explicit_not_fixed_prefix() {
-    // 相方側の面: scope 0 の連鎖では採用されず、scope 1 の連鎖では面 0 になる。
-    assert!(
-        selected(&["balloonk0.png", "balloons0.png"], 0)
-            .iter()
-            .all(|f| f.3 != "balloonk0.png"),
-        "scope 0 の連鎖に balloonk は無く相方側の面を採用しない"
-    );
+    // 相方側の面: scope 1 の連鎖では面 0 になる（scope 0 の連鎖に balloonk が無いことは檻 1 の
+    // 連鎖の導出が値の一致で確かめる）。
     assert_eq!(
         selected(&["balloonk0.png"], 1),
         vec![(

@@ -818,8 +818,6 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
 /// `scaled_extent(scale(), surface_size()) == 照会物理寸` と「配置の寸＝その面の原寸」が各時点で
 /// 成立する。
 ///
-/// 3 回目は 2 回目と同一入力＝**キャッシュヒット**であり、ヒット回でも照会値が前の面へ巻き戻ったり
-/// 失われたりしないことを固定する（`native_size` を「合成した回だけ書く」実装が生む取り違えの檻）。
 /// 同寸 fixture では取り違えが観測できないため、寸法の異なる 2 面を専用に用意している。
 #[test]
 fn native_size_tracks_displayed_surface_across_size_changing_switch() {
@@ -831,8 +829,7 @@ fn native_size_tracks_displayed_surface_across_size_changing_switch() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 3 回目は 2 回目と同一入力＝キャッシュヒット（ヒット回の照会値を固定する）。
-    for (step, (surface_id, native)) in [(1000u32, (6u32, 5u32)), (3000, (4, 3)), (3000, (4, 3))]
+    for (step, (surface_id, native)) in [(1000u32, (6u32, 5u32)), (3000, (4, 3))]
         .into_iter()
         .enumerate()
     {

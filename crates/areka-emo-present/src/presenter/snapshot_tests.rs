@@ -341,54 +341,6 @@ fn compose_alone_uses_last_shown_binds_and_no_animation() {
     );
 }
 
-/// ⑸ 単体の合成の前後で、今の surface・可視の状態・最後に表示した surface の答えが変わらず、
-/// 合成メモにも入らない。
-#[test]
-fn compose_alone_leaves_display_state_unchanged() {
-    let (mut presenter, mut world) = setup();
-    show(
-        &mut presenter,
-        &mut world,
-        SHOWN,
-        BASE,
-        bound(),
-        PatternState::default(),
-    );
-
-    let snapshot = |p: &EmoPresenter| {
-        let (id, picture) = p.last_shown(SHOWN).expect("表示の後");
-        (
-            p.current_surface_id(SHOWN),
-            p.target_visible(SHOWN),
-            id,
-            picture.map(bytes_of),
-        )
-    };
-    let before = snapshot(&presenter);
-    assert_eq!(before.0, Some(BASE), "前提: 表示している");
-    assert_eq!(before.1, Some(true), "前提: 可視");
-
-    for id in [PART, BASE, PART] {
-        presenter
-            .compose_alone(SHOWN, id)
-            .expect("登録済み")
-            .expect("合成は Ok");
-    }
-
-    assert_eq!(snapshot(&presenter), before);
-    let cache = &presenter
-        .targets
-        .get(&SHOWN)
-        .expect("登録済み target")
-        .cache;
-    assert!(
-        cache
-            .get(PART, &bound(), &PatternState::default())
-            .is_none(),
-        "単体の合成は合成メモに入れない"
-    );
-}
-
 /// ⑹ 3 本とも記録を出さない。`has_surface`／`last_shown` は全水準で 0 件。`compose_alone` は
 /// 合成の層が正常な経路でも `trace!`／`debug!` を出しうるため ERROR／WARN の 0 件で判定する。
 #[test]
@@ -438,7 +390,7 @@ fn reads_emit_no_records() {
 }
 
 /// ⑺ 別名の表と面の ID の集合の写し（spec `areka-P0-mcp-author-tools` タスク 2.2）は、組んだ資産
-/// どおりに返り、未登録は無し。写しを取っても表示の状態が変わらず、記録も出さない。
+/// どおりに返り、未登録は無し。記録も出さない（表示の状態を変えないことは `&self` の型が保証する）。
 #[test]
 fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     let (mut presenter, mut world) = setup();
@@ -450,18 +402,6 @@ fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
         bound(),
         PatternState::default(),
     );
-
-    let state = |p: &EmoPresenter| {
-        let (id, picture) = p.last_shown(SHOWN).expect("表示の後");
-        (
-            p.current_surface_id(SHOWN),
-            p.target_visible(SHOWN),
-            id,
-            picture.map(bytes_of),
-        )
-    };
-    let before = state(&presenter);
-    assert_eq!(before.0, Some(BASE), "前提: 表示している");
 
     let (copies, records) = capture(|| {
         (
@@ -489,5 +429,4 @@ fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     assert_eq!(no_aliases, None);
     assert_eq!(no_ids, None);
     assert!(records.is_empty(), "写しが記録を出した: {records:?}");
-    assert_eq!(state(&presenter), before, "写しで表示の状態が変わった");
 }

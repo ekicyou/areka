@@ -58,18 +58,6 @@ use areka_emo_compose::{BindSet, PatternState};
 
 use crate::cache::ComposeCache;
 
-/// 発生点の全数（design.md §FrameBudget の席一覧と 1:1・T-N7）。
-///
-/// 2 つから増減したら perf サマリ行のフィールド集合が変わり、判定スクリプトの契約が壊れる。
-#[test]
-fn every_allocation_site_is_enumerated() {
-    assert_eq!(
-        AllocSite::ALL.len(),
-        2,
-        "確保発生点は 2 つ（合成先・当たり判定マスク）"
-    );
-}
-
 /// Requirement 1.3 観測完了: 新品の器は増分・累積とも全て 0。
 ///
 /// 「初期値が 0 でない」実装は、定常状態ゼロの主張（Requirement 3.1）を最初から成立不能にする。

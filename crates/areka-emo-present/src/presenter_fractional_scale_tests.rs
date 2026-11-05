@@ -135,10 +135,6 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
         (8, 6),
         "6×5/4=7.5→8・5×5/4=6.25→6（両軸とも端数・切り捨て実装なら 7×6 になる）"
     );
-    assert_ne!(
-        physical, native_size,
-        "前提: k≠1 ゆえ原寸と物理寸は弁別可能"
-    );
 
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
@@ -170,11 +166,6 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
         mask_dims(&world, surface_entity),
         Some(native_size),
         "αマスク寸が原寸でない（k 倍バイト由来のマスクを載せている）"
-    );
-    assert_ne!(
-        mask_dims(&world, surface_entity),
-        Some(physical),
-        "前提: k≠1 ゆえ原寸と物理寸は弁別可能（マスクが物理寸なら旧 canon）"
     );
 
     // (d)(e) 照会契約・窓寸 reconcile 要求は丸め権威の物理寸。
@@ -269,16 +260,11 @@ fn alpha_mask_bits_come_from_native_bytes() {
         .expect("surface entity に AlphaMaskResource が無い");
     let mask = mask_res.mask().expect("表示成立後は αマスクが供給済み");
 
-    // (a) 寸法は native 原寸。物理寸（10×8）と弁別できる。
+    // (a) 寸法は native 原寸（物理寸は 10×8）。
     assert_eq!(
         (mask.width(), mask.height()),
         native_size,
         "αマスク寸が原寸でない"
-    );
-    assert_ne!(
-        (mask.width(), mask.height()),
-        physical,
-        "αマスクが k 適用後の物理寸で作られている（旧 canon）"
     );
 
     // (b) 全ビット一致（別解像度のバイト由来・引き伸ばし／縮めをここで弾く）。
@@ -335,10 +321,6 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         shrunk,
         (8, 6),
         "前提: k=5/4 の物理寸（両軸とも端数・遷移先が遷移元より小さい）"
-    );
-    assert!(
-        shrunk.0 < grown.0 && shrunk.1 < grown.1,
-        "前提: 縮小方向の遷移"
     );
 
     let mut presenter = EmoPresenter::new();
@@ -571,10 +553,6 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     );
     let physical = k32.scaled_extent(16, 12);
     assert_eq!(physical, (24, 18), "丸め権威が返す k=3/2 の物理寸");
-    assert_ne!(
-        physical, native_size,
-        "前提: k≠1 ゆえ原寸と物理寸は弁別可能"
-    );
 
     // 前提（層の非空虚性）: 3 層の golden は「層なし」「bind のみ」「pattern のみ」と全て区別できる。
     // ここが縮退すると、presenter が層を握り潰しても (b) がすり抜けてしまう。
@@ -640,10 +618,6 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
         arr_scale,
         (1.5, 1.5),
         "配置の係数が k（3/2）の 1 対になっていない"
-    );
-    assert_eq!(
-        arr_scale.0, arr_scale.1,
-        "単一の拡大率＝x と y が同一の係数（層ごと・軸ごとに別の倍率が入っていない）"
     );
     assert_eq!(
         presenter.target_physical_size(TargetId(0)),
