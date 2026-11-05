@@ -592,12 +592,9 @@ fn stale_work_folders_are_swept_before_staging_starts() {
     let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
 
     assert!(!stale.exists(), "残骸は残らない");
-    assert_eq!(
-        tree(&work.path().join(".nar-work"))
-            .keys()
-            .filter(|key| key.starts_with("999999-0"))
-            .count(),
-        0,
+    // 棚を丸ごと `tree` で読むと、持っている錠（共有なし）を開けずに落ちる。
+    assert!(
+        !work.path().join(".nar-work").join("999999-0").exists(),
         "残骸の枝は 1 つも残らない"
     );
     assert!(area.path().is_dir(), "自分の作業フォルダは在る");
@@ -735,6 +732,50 @@ fn the_own_address_skips_a_candidate_that_is_being_kept() {
         shelf.join(format!("{pid}-1")),
         "保持中の番地を避ける"
     );
+}
+
+/// 同じ根へ同時に入れる 2 本目は棚の錠で断り、1 本目の作業フォルダを消さない。
+#[test]
+fn a_second_work_area_on_the_same_root_fails_and_leaves_the_first_intact() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let first = WorkArea::create(work.path()).expect("1 本目は作れる");
+
+    let failure = WorkArea::create(work.path()).expect_err("錠を持たれているので断る");
+
+    assert_eq!(failure.path, work.path().join(".nar-work").join(".lock"));
+    assert!(first.path().is_dir(), "1 本目の作業フォルダは在る");
+}
+
+/// 作業場を捨てると錠が閉じ、`.lock` は消え、同じ根でもう 1 本作れる。
+#[test]
+fn the_shelf_lock_is_released_when_the_work_area_is_dropped() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let lock = work.path().join(".nar-work").join(".lock");
+    let first = WorkArea::create(work.path()).expect("1 本目は作れる");
+    assert!(lock.is_file(), "持っている間は錠のファイルが在る");
+
+    drop(first);
+
+    assert!(!lock.exists(), "捨てた後に錠のファイルは残らない");
+    let second = WorkArea::create(work.path()).expect("捨てた後はもう 1 本作れる");
+    assert_eq!(
+        second.residue(),
+        &[] as &[std::path::PathBuf],
+        "錠は残り物に数えない"
+    );
+}
+
+/// 棚に紛れたファイルも片付け、残り物には載せない。
+#[test]
+fn a_stray_file_on_the_shelf_is_swept() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let stray = work.path().join(".nar-work").join("junk.txt");
+    make_tree(&work.path().join(".nar-work"), &[("junk.txt", b"junk")]);
+
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+
+    assert!(!stray.exists(), "紛れたファイルは消えている");
+    assert_eq!(area.residue(), &[] as &[std::path::PathBuf], "残り物は無い");
 }
 
 /// 棚の場所がフォルダでなければ、黙って続けずに失敗を返す。

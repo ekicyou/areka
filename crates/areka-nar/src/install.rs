@@ -33,6 +33,12 @@ use std::time::{Duration, Instant, SystemTime};
 /// 根の直下に掘る作業フォルダの棚。入れ替えが `rename` で済むよう根と同じボリュームに置く。
 const WORK: &str = ".nar-work";
 
+/// 棚の直下の錠。同じ根へ同時に入れる 2 本目を断る（片付けが 1 本目の作業フォルダを消すため）。
+const SHELF_LOCK: &str = ".lock";
+
+/// `FILE_FLAG_DELETE_ON_CLOSE`。`areka-nar` は `windows` に依存しないので値で書く。
+const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 
@@ -103,6 +109,8 @@ pub(crate) struct WorkArea {
     /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
     /// [`InstallOutcome::leftovers`] に合流する。
     residue: Vec<PathBuf>,
+    /// 棚の錠。共有なしで開いて持ち、捨てると閉じて `.lock` も消える。
+    _lock: std::fs::File,
 }
 
 impl WorkArea {
@@ -110,7 +118,8 @@ impl WorkArea {
     ///
     /// # Errors
     ///
-    /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、この走行の番地を
+    /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、棚を作れないとき、
+    /// 棚の錠を開けないとき（同じ根へ別の展開が入っている）、この走行の番地を
     /// 空にできないとき、作業フォルダを作れないとき [`StageError`]。
     pub(crate) fn create(root: &Path) -> Result<WorkArea, StageError> {
         WorkArea::create_at(root, SystemTime::now())
@@ -130,6 +139,8 @@ impl WorkArea {
             });
         }
         let shelf = root.join(WORK);
+        at(&shelf, std::fs::create_dir_all(&shelf))?;
+        let lock = open_shelf_lock(&shelf.join(SHELF_LOCK))?;
         let dir = next_address(&shelf, now, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed));
         let residue = prepare_shelf(&shelf, &dir, now)?;
         at(&dir, std::fs::create_dir_all(&dir))?;
@@ -137,6 +148,7 @@ impl WorkArea {
             root: root.to_path_buf(),
             dir,
             residue,
+            _lock: lock,
         })
     }
 
@@ -167,6 +179,21 @@ impl WorkArea {
     pub(crate) fn residue(&self) -> &[PathBuf] {
         &self.residue
     }
+}
+
+/// 棚の錠を共有なしで開く。待たずに失敗を返す（2 つの根を逆の順で掘っても止まらない）。
+fn open_shelf_lock(path: &Path) -> Result<std::fs::File, StageError> {
+    use std::os::windows::fs::OpenOptionsExt;
+    at(
+        path,
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .share_mode(0)
+            .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+            .open(path),
+    )
 }
 
 /// 配置の根に掘った作業フォルダ。呼び手は計画の全部の根に 1 つずつ掘ってから渡す。
@@ -245,6 +272,9 @@ fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBu
             residue.push(shelf.to_path_buf());
             continue;
         };
+        if entry.file_name().eq_ignore_ascii_case(SHELF_LOCK) {
+            continue;
+        }
         let path = entry.path();
         if is_retained(&path, now) {
             residue.push(path);
