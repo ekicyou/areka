@@ -8,7 +8,7 @@ use areka_sakura::ActorKey;
 // ─────────────────────────────────────────────────────────────────────
 // bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
 //
-// `\![bind]` キャリアの名前自己選別（name=="bind"）→ 引数解釈（parse_bind_directive）→
+// `\![bind]` キャリアの名前自己選別（`name` が `bind` か `bind-noevent`）→ 引数解釈（parse_bind_directive）→
 // scope 写像（scope_namespace）→ 名前解決（BindResolver）→ ポリシー導出（BindResolver::policy）
 // → 適用（apply_bind_exclusive／apply_bind／mustselect 脱衣は無視・bindopt 2.1/3.1/3.2）→ 単一発行点
 // （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide は当てる（script-small-tags 3.8・3.9）／

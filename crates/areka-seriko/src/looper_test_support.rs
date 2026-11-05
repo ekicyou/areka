@@ -1,5 +1,4 @@
-//! 一番上の面の引き金の檻（`looper_trigger_tests.rs`・`looper_talk_tests.rs`）が共有する足場
-//! （spec: areka-P0-seriko-trigger-intervals）。
+//! looper のテストが共有する足場（spec: areka-P0-seriko-trigger-intervals）。
 
 use areka_emo_compose::BindSet;
 

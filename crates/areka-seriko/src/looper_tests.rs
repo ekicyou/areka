@@ -320,7 +320,7 @@ fn sakura_residual_keeps_frame_and_is_relotteriable() {
     );
 }
 
-/// 残留→再発火の**即時クリア**（討議 #2）: 先頭 wait>0 の合成テーブルで、末尾非負の残留状態から
+/// 残留→再発火の**即時クリア**: 先頭 wait>0 の合成テーブルで、末尾非負の残留状態から
 /// 再発火した tick に残留コマが即消えベース復帰し、先頭コマ deadline で改めて表示される。
 #[test]
 fn residual_is_immediately_cleared_on_refire() {
@@ -344,7 +344,7 @@ fn residual_is_immediately_cleared_on_refire() {
     assert_eq!(c2.len(), 1, "再発火 tick で残留クリアの再発行");
     assert!(
         pattern_of(&c2[0]).is_empty(),
-        "再発火の瞬間に残留コマが即時クリア＝ベース露出（討議 #2）"
+        "再発火の瞬間に残留コマが即時クリア＝ベース露出"
     );
 
     // 先頭コマ deadline（started_at 2000＋50＝2050）で先頭コマ 700 が表示される。
@@ -479,7 +479,7 @@ fn lottery_consumes_shell_before_balloon() {
     );
 }
 
-// ── scope キー表引き（バルーン表・檻 10・要件 5.6） ──────────────────────
+// ── scope キー表引き（バルーン表・要件 5.6） ──────────────────────
 
 /// バルーン表は scope ごとに独立に引かれる（要件 5.6）。同一 surface id・同一 animation id でも、
 /// scope 0 は自 scope の表のコマ、scope 1 は自 scope の表のコマで駆動される

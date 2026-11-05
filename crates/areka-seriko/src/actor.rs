@@ -12,7 +12,7 @@
 //! `cue_target_of` で分類され、Shell 系 `Emote{key}` のみが「解決（[`SurfaceResolver`]）→
 //! 状態確定（[`ScopeStates::apply`]）→発行（[`emit_display`]）」の一本経路を通る。状態確定から
 //! 表示指令発行までは単一関数 [`emit_display`] に集約され、時間駆動ループ（`seriko-loop`）の刻みも
-//! 同じ発行点を使う（5.3）。broadcast（D4）で seriko は全 cue を受け取るため、担当外
+//! 同じ発行点を使う。broadcast（D4）で seriko は全 cue を受け取るため、担当外
 //! （非 Shell）・純粋 Wait の受信は「正常な担当外受信」＝良性 `debug!`＋skip（action を無視し
 //! duration を honor・R2.2/2.3/5.4）、名前形バルーン key（NameForm）は文字の層が読むので `debug!`＋skip、
 //! 破損入力（Unresolved/Invalid=`error!`／EntityRef=`warn!`）のみが真の異常。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
@@ -74,14 +74,14 @@ pub enum SerikoMsg {
     Tick { now_ms: u64 },
     /// 定義の差し替えの依頼（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
     ///
-    /// [`spawn_seriko`] の受信の閉包が [`handle_message`] より先に捌く（定義を所有する殻の仕事）。
+    /// [`spawn_seriko`] の受信の閉包が `handle_message` より先に捌く（定義を所有する殻の仕事）。
     Replace(Box<SerikoReplace>),
     /// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
     ///
     /// `at_ms` は送り手が送るときに読んだ時計の値（時計が無ければ `None`＝直前の刻みの時刻）。
     /// [`SerikoSink::send_stage`] が橋渡しする。
     Stage { note: StageNote, at_ms: Option<u64> },
-    /// kanade 由来の停止指令（areka-actor 停止規約の Close 相当・正常終了させる）。
+    /// 明示の停止の口（[`SerikoSink::close`]・今はテストが使う）。本番は送り手を全部 drop して止める。
     Close,
 }
 
@@ -125,7 +125,7 @@ impl std::fmt::Debug for SerikoReplace {
 /// 単一の出力契約 [`dola::cue::CueSink`] を実装する送出ブリッジ（cue 再生ランタイムが保持する結線契約）。
 ///
 /// inbox（std mpsc）の `Sender` を内包し、届いた発火を [`SerikoMsg::Cue`] として橋渡しする。
-/// broadcast された全 cue が本 sink へ届き、担当（Shell）選別は [`handle_message`] の演者側
+/// broadcast された全 cue が本 sink へ届き、担当（Shell）選別は `handle_message` の演者側
 /// relevance（`cue_target_of`）が行う。
 ///
 /// `Clone` を導出する（内側 `mpsc::Sender<SerikoMsg>` は常に `Clone`）。全 clone は単一の
@@ -236,7 +236,7 @@ impl SerikoSink {
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を **broadcast** し、seriko は担当（Shell）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
-/// （担当外 cue も本 sink 経由で inbox へ届き、[`handle_message`] が良性に読み飛ばす・R2.2/R2.3）。
+/// （担当外 cue も本 sink 経由で inbox へ届き、`handle_message` が良性に読み飛ばす・R2.2/R2.3）。
 /// 配送先スロットの 2 分割（旧 `SurfaceSink`/`TextSink`）は broadcast＋演者側 relevance ゆえ廃した
 /// （暫定並存の `SurfaceSink` 実装は撤去して `CueSink` 一本へ集約）。
 impl dola::cue::CueSink for SerikoSink {
@@ -266,7 +266,7 @@ fn judge(facts: &SkinFacts, cue: &TalkCue) -> Option<DetectionPoint> {
     }
 }
 
-/// 単一発行点（5.3）— 状態確定結果 [`DisplayCommand`] を発行先へ渡す**唯一**の関数。
+/// 単一発行点 — 状態確定結果 [`DisplayCommand`] を発行先へ渡す**唯一**の関数。
 ///
 /// `SurfaceOutput::send` を呼ぶのはこの関数だけであり、cue 適用駆動でも
 /// 時間駆動ループ（`seriko-loop`）の刻みでも、状態確定→表示指令発行はこの一点を通す。分岐ごとに
@@ -282,13 +282,13 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// （span `actor="seriko"` は spawn 原語が付与する）、返した `Sender` から組んだ [`SerikoSink`] を
 /// 第 1 要素に、[`areka_actor::ActorHandle`] を第 2 要素に返す。`body` は `resolver`・
 /// `static_binds`（[`ScopeStates::new`] へ move）・`bind_resolver`（`\![bind]` の名前解決層・
-/// [`handle_message`] へ `&` 手渡し）・`out` を単独所有し、[`areka_actor::run_inbox`] で発火を
+/// `handle_message` へ `&` 手渡し）・`out` を単独所有し、[`areka_actor::run_inbox`] で発火を
 /// 到着順（FIFO）に処理する。
 ///
 /// bind 名前表を供給しない経路は
 /// [`BindResolver::empty`] を渡せば従来と byte 同値。その根拠は宣言集合が空であることではなく、
 /// **名前表が空＝[`BindResolver::resolve`] が常に `None`** であること——空リゾルバは
-/// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`]＝着衣は排他置換）になるが、そもそも
+/// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`](crate::BindChoicePolicy::Default)＝着衣は排他置換）になるが、そもそも
 /// 着せ替え ID を解決できず適用へ到達しないため発行に影響しない（bindopt 設計 D3）。
 ///
 /// # 停止（1.4）
@@ -620,7 +620,7 @@ fn dispatch_message<O: SurfaceOutput>(
         None => {
             // `cue_target_of==None` は Wait（純粋な待ち・action なし）と Custom（`\!` 汎用キャリア）。
             // bind 消費分岐（D1）: Wait 判定より前に `\![bind]` を名前自己選別で捌く。キャリアを
-            // 開封し `name == "bind"` のみが bind パイプラインへ入る。非該当・非キャリアは既存の
+            // 開封し `name` が `bind` か `bind-noevent` のキャリアだけが着せ替えの腕へ入る。非該当・非キャリアは既存の
             // 良性 skip へフォールスルー（dola の名前写像 API は退役ゆえ参照しない・D1/D10）。
             match cue.command.as_command_carrier() {
                 // 非キャリア（純粋 Wait・非正準 params の Custom・その他）。

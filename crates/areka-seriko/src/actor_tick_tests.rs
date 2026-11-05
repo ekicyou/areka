@@ -96,7 +96,7 @@ fn bind_noncanonical_addressee_severity_split() {
 //       ゲートの自然帰結。
 // - (B) live な loop_config（実表＋注入 rng）＋表示中 slot で境界跨ぎ Tick が pattern を載せた
 //       Show を**既存 emit_display 単一発行点**から発行する（handle_message→on_tick→emit_display
-//       の end-to-end 配線・5.3 の直接 on_tick 檻とは別の配線証明）。
+//       の end-to-end 配線・looper の層で on_tick をじかに呼ぶ檻とは別の配線証明）。
 // - (C) アクター停止後の send_tick は debug!（shutdown 期待事象）で panic しない（7.5/6.3）。
 // - (D) Emote の Changed で on_surface_changed が呼ばれ、切替後の Tick が旧アニメの残再生を
 //       復活させない（playback リセット・R2.3 表示従属）。
@@ -152,7 +152,7 @@ fn tick_with_no_shown_slot_is_complete_no_op() {
 /// (B・R1.1/6.3/7.1) 表示中 slot＋live config で境界跨ぎ Tick が pattern を載せた Show を
 /// 既存 emit_display 単一発行点から発行する（handle_message→on_tick→emit_display の end-to-end）。
 ///
-/// 5.3 の直接 on_tick 檻と異なり、**Tick メッセージが handle_message を貫通**して発行に至る
+/// looper の層で on_tick をじかに呼ぶ檻と異なり、**Tick メッセージが handle_message を貫通**して発行に至る
 /// 配線を固定する。注入 rng（always_fire）＋注入 Tick 列で決定論（sleep 不使用）。
 #[test]
 fn tick_boundary_cross_emits_show_carrying_pattern() {

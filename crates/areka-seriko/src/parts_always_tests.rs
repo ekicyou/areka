@@ -251,7 +251,7 @@ const HIDDEN_END: &str = "surface0\n{\nelement0,overlay,40,0,0\n}\n\
     surface42\n{\n}\n";
 
 /// 見えない間に実は終わっていた再生は、見え直した境目の刻みで抽選に戻る（1 回分遅れない・
-/// 時刻は正確に扱う・re-audit R12）。
+/// 時刻は正確に扱う）。
 #[test]
 fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
     let table = table_of(HIDDEN_END);
@@ -276,7 +276,7 @@ fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
 
 /// 部品でも、`-1` と `-2` のすぐ後に待ち 0 の働きのコマがあるとき、warn の番号は止めた描くコマの番号:
 /// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
-/// 同じ（要件 4.1・re-audit R1・S2）。
+/// 同じ（要件 4.1）。
 #[test]
 fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
     for tail in ["insert,0,0,0,0", "overlay,42,0,0,0"] {

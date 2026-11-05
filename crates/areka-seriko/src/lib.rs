@@ -11,7 +11,7 @@
 //! - アクター層 [`SerikoMsg`]／[`SerikoReplace`]／[`SerikoSink`]／[`spawn_seriko`]／[`spawn_seriko_clocked`]／[`SerikoClock`]: 独立スレッド稼働・単一発行点・定義の差し替え。
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
 //! - アニメ定義表 [`AnimationTable`]／[`LoopAnimation`]／[`LoopTrigger`]／[`LoopFrame`]: `EmoWorld`
-//!   からの boot 時不変スナップショット（`Random`/`BindRandom` のみ採録・method 構築時 1 回解決）。
+//!   からの boot 時不変スナップショット（[`LoopTrigger`] の 7 種を採る・method 構築時 1 回解決）。
 //! - タイムラインの乱数 [`seeded_rng`]／[`LoopRng`]: 1/N 抽選に使う決定論の純粋 PRNG
 //!   （現在コマの判定と抽選そのものは crate 内）。
 //! - ループ統括層 [`SerikoLoopConfig`]／`LoopRuntime`（crate 内）: 二層時間（毎秒抽選×サブ秒進行）の

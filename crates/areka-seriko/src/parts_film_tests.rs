@@ -316,7 +316,7 @@ fn clocks_are_separate_per_scope_and_face_kind() {
     assert_eq!(picture(&p, ONCE), Some(21));
 }
 
-/// 入れ物 1 つの回数つきの時計を全部捨てる口（面が隠れたとき用）。終わりなしと、ほかの入れ物は残す。
+/// 入れ物 1 つの回数つきの時計を全部捨てる口（窓の新しい出番用）。終わりなしと、ほかの入れ物は残す。
 #[test]
 fn drop_finite_drops_only_finite_clocks_of_that_container() {
     let table = table();

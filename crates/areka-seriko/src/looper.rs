@@ -13,7 +13,7 @@
 //! `Stopped` を辿る。`Stopped`（`-1` 等の負 surface）はコマ除去＋playback 除去でベース復帰（4.3）、
 //! `FinishedResidual`（`-1` なし末尾）は最終コマを残したまま playback のみ除去＝`IdleResidual`（4.4）で
 //! 再抽選対象へ戻る。**再発火の瞬間、残留コマは即時クリアされ**、以降の表示は [`frame_at`] の結果
-//! のみで決まる（討議 #2 裁定：表示を直前 PatternState に依存させない・`Pending` 中はエントリなし＝
+//! のみで決まる（表示を直前 PatternState に依存させない・`Pending` 中はエントリなし＝
 //! ベース露出）。surface 切替／Hide は当該 slot の playback を全除去する（PatternState クリアは
 //! ScopeStates 側 apply の責務）。**bind 種（`BindRandom`）の再生中 ID が bind 集合から外れたときは、
 //! 進行相で停止相当（コマ除去＋playback 除去）へ落とす**（bindopt 7.3・D9-2）。発火ゲートは発火を
@@ -58,7 +58,7 @@ mod top_calls;
 use top_calls::{Shifts, StoppedAlways, put_top_always, put_visible, run_top_calls};
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
-/// [`LoopRuntime`] へ値渡しする。
+/// `LoopRuntime` へ値渡しする。
 ///
 /// `shell_table`／`balloon_tables` は **surface ID 名前空間の別**であり能力の仕切りではない
 /// （面種非依存・裁定 (a)）。emo2 は `balloon_tables` が全 scope 空（データ事実）。`rng` は
@@ -108,7 +108,8 @@ struct Playback {
     acts_through: Option<u64>,
 }
 
-/// per-slot の再生中アニメ表（animation id → [`Playback`]）。エントリを持つ id が「再生中」＝抽選対象外。
+/// per-slot の再生中アニメ表（animation id → [`Playback`]）。`frame_at` が `Pending`/`Active` のエントリと、
+/// 当て残しの働きのコマが在るエントリが再生中（抽選しない）。この刻みで終わったエントリは抽選に戻る。
 type SlotPlayback = HashMap<u32, Playback>;
 
 /// 二層時間の統括と per-(scope, slot) 再生状態の所有者（アクター本体が単独所有・要件 1.2/2.x/3.x/6.x）。
@@ -119,7 +120,7 @@ pub(crate) struct LoopRuntime {
     /// 1000ms 絶対グリッド境界（毎秒抽選の写像・catch-up 1 回）。最初に観測した tick で遅延初期化する
     /// （`starting_at(now)` は now より厳密未来の次境界を起点にするため、起動直後 tick では発火しない）。
     boundary: Option<LotteryBoundary>,
-    /// per-(scope, slot) の再生中アニメ表。エントリの有無が Idle/Playing を分ける。
+    /// per-(scope, slot) の再生中アニメ表（どのエントリが再生中かは [`SlotPlayback`] のとおり）。
     playback: HashMap<(ActorKey, Slot), SlotPlayback>,
     /// 直前 tick の `now_ms`（単調性ガード用・非単調 tick は無視する）。
     last_seen: Option<u64>,
@@ -257,7 +258,7 @@ fn put_top_play(
     let (scope, slot, anim_id) = (&key.0, key.1, anim.id);
     let is_talk = matches!(anim.trigger, LoopTrigger::Talk { .. });
     match frame_at(&anim.frames, elapsed) {
-        // 先頭デッドライン未到達＝ベース露出。再発火時はここで残留コマが即時クリアされる（討議 #2）。
+        // 先頭デッドライン未到達＝ベース露出。再発火時はここで残留コマが即時クリアされる。
         FrameStatus::Pending => {
             new_pattern.remove(anim_id);
         }

@@ -5,16 +5,7 @@
 //! `SakuraMsg::Tick` のみで（sleep/polling を一切用いず）決定論的に観測する統合テスト。
 //! 公開 API のみで組む（test-only）。
 //!
-//! # 同期チェーン（sleep/polling ゼロ・要件 5.3）
-//!
-//! 1. talk アクター（`spawn_talk`）へ fixture script を直入力し、`TalkHandle::inbox` へ
-//!    必要な `SakuraMsg::Tick(t)` を注入する。
-//! 2. `done_rx.recv_timeout(5s)` で `TalkDone` を受領する（talk が `\e` で自然終端）。
-//! 3. talk スレッド終了で、CuePlayer へ move 済みの `SerikoSink`（seriko inbox の**唯一**の
-//!    `Sender`）が drop され、seriko inbox が **disconnect** する → seriko の `run_inbox` が正常終了。
-//! 4. seriko `ActorHandle::join()`（唯一の同期点）でスレッド終了を待つ。先に送った `Cue` は
-//!    FIFO 単一スレッドゆえ join 復帰時には処理済みである。
-//! 5. `MockSurfaceOutput::records()` ハンドルから発行列を照合する（決定論）。
+//! 同期は `common::run_core` のとおり（sleep/polling なし・要件 5.3）。
 //!
 //! # bind パイプラインの要所（期待値の根拠）
 //!
@@ -251,7 +242,7 @@ fn unresolvable_bind_does_not_grow_display_list_end_to_end() {
 /// シナリオ5（要件 2.3）: bind と文字表示が混在しても、両ストリームが交差汚染しない。
 ///
 /// `\s[1000]\![bind,腕,伸び,0]アヒルやアヒル\e` を注入 Tick で駆動すると:
-/// (a) seriko 側は bind の再発行を反映（`Show{1000,{1100,1207}}` → `Show{1000,{1207}}}`）——テキスト
+/// (a) seriko 側は bind の再発行を反映（`Show{1000,{1100,1207}}` → `Show{1000,{1207}}`）——テキスト
 ///     cue は seriko では担当外ゆえ発行に影響しない、
 /// (b) text 側 sink は `Text("アヒルやアヒル")` cue を無変形で受信する——間に割り込んだ bind の
 ///     `Custom` cue が text ストリームを差し替え・破壊していない（R2.3）。

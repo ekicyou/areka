@@ -357,14 +357,14 @@ pub enum BindDirective {
         /// `"1"`→`true`・`"0"`→`false`。
         on: bool,
     },
-    /// 数値欄が空欄／省略のトグル形。今の着脱の反対を当てる（[`apply_bind_directive`]・script-small-tags 3.9）。
+    /// 数値欄が空欄／省略のトグル形。今の着脱の反対を当てる（`apply_bind_directive`・script-small-tags 3.9）。
     Toggle {
         /// bindgroup カテゴリ名（trim 済み）。
         category: String,
         /// bindgroup パーツ名（trim 済み）。
         part: String,
     },
-    /// パーツ名が空欄のカテゴリ単位形。定義の順にパーツを 1 つずつ当てる（[`apply_bind_directive`]・script-small-tags 3.8）。
+    /// パーツ名が空欄のカテゴリ単位形。定義の順にパーツを 1 つずつ当てる（`apply_bind_directive`・script-small-tags 3.8）。
     ///
     /// `on` は `"1"`→`Some(true)`・`"0"`→`Some(false)`・欠落/空/その他→`None`（`None` はパーツごとのトグル）。
     /// 不正値でも `Malformed` にはしない。
@@ -382,7 +382,7 @@ pub enum BindDirective {
 ///
 /// 各トークンは trim してから判定し、返る文字列にも trim 済みの値を格納する（parsers D2
 /// の trim 規律に整合）。トークンは「不在」または「trim 後に空」のとき空とみなす。分岐は
-/// design（`parse_bind_directive` 分岐・行 ~326）の順に厳密に従う:
+/// design（spec: areka-P0-mayuna-compose・`parse_bind_directive` の分岐）の順に厳密に従う:
 ///
 /// 1. カテゴリ欠落/空 → [`BindDirective::Malformed`]。
 /// 2. パーツ欠落/空 → [`BindDirective::CategoryWide`]（`on` は `"1"`/`"0"` のみ写し他は `None`）。
@@ -560,7 +560,7 @@ pub fn apply_bind_directive(
     }
 }
 
-/// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・design 行 322）。
+/// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・spec: areka-P0-mayuna-compose）。
 ///
 /// 現在の着せ替え集合 `current` に対し、対象 animation ID `id` を `on` に従って積算した
 /// 新しい [`BindSet`] を返す。状態を持たず、同一入力に常に同一出力（純粋・副作用/ログ/panic

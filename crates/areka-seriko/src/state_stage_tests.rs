@@ -93,7 +93,7 @@ fn balloon_hide_cue_leaves_no_face() {
     );
 }
 
-/// 知らせの無い流れ（`emo2`・今のテスト）では、`\b` で表示中の面を開いた窓として扱い、シェルは
+/// 知らせを送らない流れ（知らせを使わないテストなど）では、`\b` で表示中の面を開いた窓として扱い、シェルは
 /// `shown_slots` と同じ（見えている＝真）。並びはスコープの昇順 → シェル → バルーン。
 #[test]
 fn without_notes_stage_slots_match_shown_slots() {

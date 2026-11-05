@@ -17,7 +17,7 @@
 //!
 //! アニメ表は合成 `EmoWorld`（`Surface`＋`Animation`＋`Pattern`）から `AnimationTable::from_world`
 //! で構築する（実構築パスを通す）。kero 型（末尾 `-1`）・sakura 型（末尾非負・bind ゲート）の実形と、
-//! 討議 #2 の「先頭 wait>0」合成形、`-2`（他負 surface）を注入して全経路を網羅する。
+//! 「先頭 wait>0」の合成形、`-2`（他負 surface）を注入して全経路を網羅する。
 //!
 //! # 網羅する 9 檻
 //!
@@ -29,7 +29,7 @@
 //! 6. 変化なし tick 無発行（R6.2）: PatternState 不変の tick は発行しない。
 //! 7. surface 切替でコマ消滅: 表示 surface 切替で当該 slot の playback＋PatternState がクリアされ、
 //!    後続 tick が陳腐コマを蘇生させない。
-//! 8. 残留→再発火の即時クリア（討議 #2）: IdleResidual が再発火した瞬間に残留コマが即消えベース復帰し、
+//! 8. 残留→再発火の即時クリア: IdleResidual が再発火した瞬間に残留コマが即消えベース復帰し、
 //!    先頭コマは自身のデッドラインで現れる。
 //! 9. `-2`（他負 surface）warn-once: `-2` コマで自アニメのみ停止（`-1` と同様
 //!    ベース復帰）し `warn!` が **1 回だけ**発火（2 度目の走査では dedup で再 warn しない）。かつ `-2` は
@@ -511,12 +511,12 @@ fn surface_switch_clears_playback_and_frame_full_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 檻 8: 残留→再発火の即時クリア（討議 #2）
+// 檻 8: 残留→再発火の即時クリア
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// 先頭 wait>0 の合成テーブルで、末尾非負の残留状態から再発火した瞬間に残留コマが**即消え**ベース
 /// 復帰し（`Pending` 中はエントリなし＝表示は直前 PatternState に依存しない）、先頭コマは自身の
-/// デッドラインで改めて現れる（討議 #2 裁定の檻・emo2 実測は wait=0 ゆえ合成 fixture で網羅）。
+/// デッドラインで改めて現れる（emo2 実測は wait=0 ゆえ合成 fixture で網羅）。
 #[test]
 fn residual_immediately_cleared_on_refire_full_path() {
     let empty = BindSet::from_ids([]);
@@ -544,7 +544,7 @@ fn residual_immediately_cleared_on_refire_full_path() {
             show("0", 10, &empty, PatternState::default()), // 2000: 再発火の瞬間に残留即時クリア＝ベース露出
             show("0", 10, &empty, pattern(&[(0, 700)])),    // 2050: 先頭コマ 700 が deadline で表示
         ],
-        "残留は再発火の瞬間に即時クリアされ、表示は frame_at のみで決まる（討議 #2 裁定）"
+        "残留は再発火の瞬間に即時クリアされ、表示は frame_at のみで決まる"
     );
 }
 

@@ -15,7 +15,7 @@
 //! （要件 11.7）。純 `Interval::Bind`（静的着せ替え）と `Other("never")` は呼ばれるだけ
 //! （[`LoopTrigger::CallOnly`]・spec: seriko-pattern-calls 要件 11.1）として載せる。**それ以外の**
 //! `Other` の語彙・`#[non_exhaustive]` の将来 variant は**採録せず `debug!` で記録**する。非採録の `Other` は**元語彙文字列込み**で記録
-//! するため、「`yen-e` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
+//! するため、「`yen-e` と書いたのに動かない」が診断可能になる（要件 11.4）。
 //! `\i[N]`・動的 bind・talk cue は構造的に interval アニメではないため、この採録フィルタが自然に
 //! 除外する（要件 8.3）。
 //!
@@ -183,9 +183,9 @@ impl AnimationTable {
 
     /// [`EmoWorld`] から read-only スナップショットを一度きり構築する（要件 8.1-8.4）。
     ///
-    /// 全 surface を昇順に走査し、各 surface の SERIKO animation 群から `Random`/`BindRandom` と、
-    /// `random,2`／`random,4` へ読み替える `Other("sometimes")`／`Other("rarely")` を採録する
-    /// （要件 11.1/11.2）。純 `Bind` と `Other("never")` は呼ばれるだけ（`CallOnly`）として載せ、
+    /// 全 surface を昇順に走査し、各 surface の SERIKO animation 群から [`LoopTrigger`] の 7 種を採る
+    /// （`random,2`／`random,4` へ読み替える `Other("sometimes")`／`Other("rarely")` を含む・要件
+    /// 11.1/11.2）。純 `Bind` と `Other("never")` は呼ばれるだけ（`CallOnly`）として載せ、
     /// それ以外の `Other`・将来 variant は `debug!` で記録して非採録（`Other` は元語彙込み）。
     /// `k == 0`・コマ列空は `warn!` で記録して非採録。method は [`ComposeMethod::from_name`] で構築時
     /// 1 回解決し、コマ列は pattern index 昇順へ整列する。面種非依存（シェル/バルーン双方に同型適用）。
@@ -208,7 +208,7 @@ impl AnimationTable {
             };
 
             for anim in &master.animations {
-                // 採録は Random/BindRandom・always の単独と、読み替える Other("sometimes")／Other("rarely") のみ。
+                // 採録は LoopTrigger の 7 種（読み替える Other("sometimes")／Other("rarely") を含む）。
                 // 純 Bind と never は呼ばれるだけ。それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
                 // match は Bind/Other 明示腕＋catch-all で将来 additive シームを保つ）。
                 // `always` の単独は周期が要るので、コマを並べた後で引き金を作る（下・`None`）。
@@ -627,7 +627,7 @@ mod tests {
     /// (1) kero(`interval,random,4`)＋sakura(`interval,bind+random,4`)＋非駆動(Bind/Other) を含む
     /// 世界から、抽選で動くのは Random/BindRandom の 2 アニメのみ。純 Bind は呼ばれるだけ（`CallOnly`）
     /// として載り（spec: seriko-pattern-calls 要件 11.1）、**読み替えの対象でない** `Other` は非採録
-    /// かつ `debug!` で記録され、元語彙 `yen-e` を含む（要件 8.1/8.2・討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
+    /// かつ `debug!` で記録され、元語彙 `yen-e` を含む（要件 8.1/8.2）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
     /// `table_interval_words_tests.rs` が留める（要件 11.1/11.2/11.4）。
     #[test]
     fn random_and_bindrandom_draw_bind_is_call_only_others_debug_logged() {
@@ -738,7 +738,7 @@ mod tests {
         );
         assert!(
             logs.contains("yen-e"),
-            "Other の元語彙 yen-e が debug! に記録される（討議 #1）: {logs}"
+            "Other の元語彙 yen-e が debug! に記録される: {logs}"
         );
         assert!(
             logs.contains("vocab=\"yen-e\""),

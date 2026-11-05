@@ -25,7 +25,7 @@ use common::*;
 /// 6. 数値 `"2200"`       → `Show{scope:"0", surface_id:2200}`（Hidden→別 surface・Changed）
 ///
 /// よって発行列は「初回 Show(2100)・Hide・別 Show(2200)」の 3 件のみで、連続重複（2,3,5）は
-/// 一切発行されない。単一発行点（5.3）ゆえ発行列がそのまま観測点になる。
+/// 一切発行されない。単一発行点ゆえ発行列がそのまま観測点になる。
 /// 同期は `close()`→`join()` の 1 点のみ。sleep/polling/表示なし（要件 7.2）。
 #[test]
 fn idempotent_repeat_surface_no_reemit() {

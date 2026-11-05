@@ -408,7 +408,7 @@ fn settled_surface_carries_no_shift() {
         ));
         crate::settle_surface(&table, 0, &BindSet::default(), 0)
     };
-    // 最後の `-1` を外し、最後に描くコマ（101）が欄に残る形で比べる（re-audit R8）。
+    // 最後の `-1` を外し、最後に描くコマ（101）が欄に残る形で比べる。
     let kept = MOVES.replace("animation0.pattern6,overlay,-1,100,0,0\n", "");
     assert_ne!(kept, MOVES, "`-1` のコマを外せた");
     let zeroed = kept
@@ -425,7 +425,7 @@ fn settled_surface_carries_no_shift() {
 }
 
 /// `-1` のコマのすぐ後に待ち 0 の働きのコマがあっても、経過 50 で止まり欄が外れる（面 4294967295 を
-/// 欄に置かない・ukadoc pattern の項・re-audit R1）。
+/// 欄に置かない・ukadoc pattern の項）。
 #[test]
 fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
     let text = "surface0\n{\n\
@@ -446,7 +446,7 @@ fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
 
 /// `-1` と `-2` のすぐ後に待ち 0 の働きのコマがあっても、warn の番号は止めた描くコマの番号:
 /// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
-/// 同じ（要件 4.1・re-audit R1・S2）。
+/// 同じ（要件 4.1）。
 #[test]
 fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
     for tail in ["insert,0,0,0,0", "overlay,110,0,0,0"] {
@@ -479,8 +479,7 @@ fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
 }
 
 /// 再生が末尾に着く刻みに抽選が当たっても、その刻みまでの古い再生の働きのコマを先に当てる:
-/// 当て残しがあるうちは再生中なので、抽選は次の境目まで待つ（seriko-pattern-calls 要件 3.1・
-/// re-audit S1）。
+/// 当て残しがあるうちは再生中なので、抽選は次の境目まで待つ（seriko-pattern-calls 要件 3.1）。
 #[test]
 fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
     let text = "surface0\n{\n\

@@ -172,9 +172,10 @@ fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
     assert!(top_frames(&p).is_empty());
 }
 
-/// 9103（無効な数値・大文字混じり）と 9104（空のコマ列）: 採らなかった animation はどれもコマを
-/// 持つか `runonce` なので、採っていれば切り替え・文字・2 秒のどこかで指令が出る。出るのは切り替えの
-/// 空の `Show` 1 件だけ。
+/// 9103（無効な数値・大文字混じり）と 9104（空のコマ列）: 出るのは切り替えの空の `Show` 1 件だけ。
+/// 9103 は採っていれば切り替え・文字・2 秒のどこかで指令が出る。9104（コマの無い `runonce`）は採っても
+/// 何も出ないので、採らないことは表のテスト（`fixture_table_logs_five_adoptions_and_exactly_three_warnings`）
+/// が見ている。
 #[test]
 fn surfaces_whose_words_were_refused_stay_still() {
     for (key, surface) in [("9103", 9103), ("9104", 9104)] {

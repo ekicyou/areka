@@ -87,7 +87,7 @@ fn always_action_frame_with_minus_one_is_a_frame() {
 }
 
 /// 描くコマの `-1` のすぐ後に待ち 0 の働きのコマが続いても、`-1` で止まる（今のコマは働きのコマでも、
-/// 欄に置くはずのコマが `-1` だから・ukadoc pattern の項・re-audit R1）。
+/// 欄に置くはずのコマが `-1` だから・ukadoc pattern の項）。
 #[test]
 fn minus_one_followed_by_zero_wait_action_frame_stops() {
     let frames = vec![draw(100, 0), draw(-1, 50), act(FrameAct::Inert, 0, 0)];
@@ -106,7 +106,7 @@ fn minus_one_followed_by_zero_wait_action_frame_stops() {
 }
 
 /// `-1` のすぐ後に待ち 0 の描くコマがあっても、`-1` に着いた時点で止まる（後ろの描くコマへ進まない・
-/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・要件 4.3・re-audit S2）。
+/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・要件 4.3）。
 #[test]
 fn minus_one_followed_by_a_zero_wait_draw_frame_stops() {
     let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 0)];

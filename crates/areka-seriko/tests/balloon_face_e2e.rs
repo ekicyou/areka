@@ -4,16 +4,7 @@
 //! までの貫通経路を、注入した `SakuraMsg::Tick` のみで（sleep/polling を一切用いず）決定論的に
 //! 観測する統合テスト。公開 API のみで組む。
 //!
-//! # 同期チェーン（sleep/polling ゼロ・要件 5.3）
-//!
-//! 1. talk アクター（`spawn_talk`）へ fixture script を直入力し、`TalkHandle::inbox` へ
-//!    必要な `SakuraMsg::Tick(t)` を注入する。
-//! 2. `done_rx.recv_timeout(5s)` で `TalkDone` を受領する（talk が `\e` で自然終端）。
-//! 3. talk スレッド終了で、surface_sink へ move 済みの `SerikoSink`（seriko inbox の**唯一**の
-//!    `Sender`）が drop され、seriko inbox が **disconnect** する → seriko の `run_inbox` が正常終了。
-//! 4. seriko `ActorHandle::join()`（唯一の同期点）でスレッド終了を待つ。先に送った `Cue` は
-//!    FIFO 単一スレッドゆえ join 復帰時には処理済みである。
-//! 5. `MockSurfaceOutput::records()` ハンドルから発行列を照合する（決定論）。
+//! 同期は `common::run_core` のとおり（sleep/polling なし・要件 5.3）。
 //!
 //! # 経路の要所
 //!

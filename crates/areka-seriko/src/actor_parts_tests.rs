@@ -172,7 +172,7 @@ fn switch_back_onto_a_negative_frame_carries_no_part_frame() {
 }
 
 /// 一番上と子が同じ境界で始まり、同じ次の境界でそろって `-1` に着くと、その境界の抽選で両方とも
-/// 最初のコマから始まる（一番上も部品も、終わった刻みの抽選を 1 回分待たない・re-audit R12）。
+/// 最初のコマから始まる（一番上も部品も、終わった刻みの抽選を 1 回分待たない）。
 #[test]
 fn top_and_child_ending_on_a_boundary_both_restart_on_it() {
     let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));

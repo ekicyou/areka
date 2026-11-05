@@ -230,7 +230,7 @@ fn move_inside_a_part_becomes_the_character_shift() {
 }
 
 /// 部品の再生が末尾に着く刻みに抽選が当たっても、その刻みまでの働きのコマを先に当てる
-/// （seriko-pattern-calls 要件 3.1・3.8・re-audit S1）。
+/// （seriko-pattern-calls 要件 3.1・3.8）。
 #[test]
 fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
     const ENDING: &str = "animation0.interval,random,2\n\

@@ -350,7 +350,7 @@ fn always_lap_boundary_tie_keeps_pattern_order() {
 }
 
 /// 長く空いた刻みでも、`always` が別の `always` をやり直し続ける仕事は当てる数に比例する（周を全部
-/// 前もって入れない・re-audit S3）。時刻は丸めず、最後の開始と move は予定の時刻のまま。
+/// 前もって入れない）。時刻は丸めず、最後の開始と move は予定の時刻のまま。
 #[test]
 fn long_gap_always_restarting_always_does_work_in_proportion_to_hits() {
     let period = NonZeroU64::new(10).unwrap();
@@ -372,7 +372,7 @@ fn long_gap_always_restarting_always_does_work_in_proportion_to_hits() {
 }
 
 /// ずれを合わせるとき、先の時刻の `next` は負け、同じ時刻なら `next` が勝ち、`next` が無ければ元のまま
-/// （一番上と部品が同じ刻みで両方 move したとき・7.2・7.3・re-audit S5）。
+/// （一番上と部品が同じ刻みで両方 move したとき・7.2・7.3）。
 #[test]
 fn then_prefers_the_later_shift_and_next_on_a_tie() {
     let at = |t, x| CallOutcome {

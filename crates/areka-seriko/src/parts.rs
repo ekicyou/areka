@@ -518,8 +518,8 @@ fn write(pattern: &mut PatternState, part: PartKey, anim: &LoopAnimation, i: usi
 impl PartClocks {
     /// 刻み 1 回。`scope` の `slot` の面の見える部品を抽選（境界を跨いだ刻みだけ）・進行させ、
     /// `pattern` の部品の欄を今の絵の分で作り直す。`open` が偽（バルーンの窓が閉じている）なら
-    /// 時計を作らず（抽選もしない）、回数つきの時計を全部捨てる＝今ある終わりなしの時計だけが進む
-    /// （spec: areka-P0-animated-image-playback 要件 6.1）。
+    /// 時計を作らず（抽選もしない）、今ある抽選の再生と終わりなしの `always` は進み、回数つきの時計と
+    /// 3 語の時計は捨て、引き金の状態は隠す（spec: areka-P0-animated-image-playback 要件 6.1）。
     ///
     /// `talk` はこの面の文字の窓（一番上の配線が刻み 1 回につき 1 つ作る。表に `talk` が無い面・
     /// 窓が閉じている面では `None`）。見えると決まった部品の `talk` は、この窓を一番上と同じ判定に
@@ -947,8 +947,7 @@ impl PartClocks {
             .copied()
     }
 
-    /// 最後の `clear` の後（または作ってから）`advance` がどのスコープでも 1 度も走っていないか
-    /// （テストの観測用・`advance` はスコープの入れ物を先に作る）。
+    /// どのスコープ・面の種類にも入れ物が無いか（入れ物は `advance`・`refresh` が作る・テストの観測用）。
     #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.clocks.is_empty()

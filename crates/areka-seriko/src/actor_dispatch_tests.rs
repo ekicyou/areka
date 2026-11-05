@@ -230,7 +230,7 @@ fn disconnect_stops_normally() {
 
 /// ケース3（6.2/6.3/7.4）: 分類不能／防御枝の入力が記録を残して読み飛ばされ、処理が継続する。
 ///
-/// (a) 同期 `handle_message`＋`capture_text`（テストスレッド発火）で EntityRef 防御枝が
+/// (a) 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で EntityRef 防御枝が
 ///     `warn!` を残し・状態不変・`Continue`（skip して継続）を決定論的に固定する。
 /// (b) spawn 経由の observable: EntityRef cue を先に、有効 cue を後に emit→close→join し、
 ///     mock 記録が有効 Show 1 件のみ＝bad cue は skip され、その後もアクターが処理継続したこと
@@ -306,7 +306,7 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
 /// ケース4（2.1/2.4/7.4）: 数値解釈の境界値が解決不能として扱われる（handler 経路＋解決失敗ログ）。
 ///
 /// 非表示指定以外の負値（`"-2"`）と許容範囲超（`"4294967296"`＝`u32::MAX+1`）を
-/// 同期 `handle_message`＋`capture_text`（テストスレッド発火）で流し、`Unresolved` の
+/// 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で流し、`Unresolved` の
 /// `error!` が残り・状態不変・発行なし・`Continue` を決定論的に固定する。解決層単体は
 /// resolve.rs の 2.1 で檻済み。ここは **アクター handler 経路の解決失敗ログ**（7.4）を実行檻化。
 #[test]
