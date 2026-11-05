@@ -2,24 +2,24 @@
 //!
 //! シェルのフォルダを読んで「焼いた絵（[`AtlasTable`]）＋面の表を必要な数だけ組める値」
 //! （[`ShellTarget`]）を作る唯一の入口である。fs を触るのは [`load_shell_target`] だけで、
-//! 触らない核は [`build_shell_target`] に分かれている（テストはメモリ上の復号器で核を通せる）。
+//! 触らない核は `build_shell_target` に分かれている（テストはメモリ上の復号器で核を通せる）。
 //!
 //! 本モジュールはまず「シェルのフォルダ直下のファイル名から、どの番号の面の画像がどれか」を
-//! 決める純粋な判定 [`select_surface_images`] を持つ（R1.1〜R1.6・R1.8）。正典は
+//! 決める純粋な判定 `select_surface_images` を持つ（R1.1〜R1.6・R1.8）。正典は
 //! `surface<数字>.png` というファイル名の慣習だけで置かれた絵を、その番号の面の画像として
 //! 認める——`surfaces.txt` に `element` 行が 1 本も無いシェル（里々・YAYA の標準テンプレート）は
 //! この慣習にすべてを委ねている。
 //!
-//! 名前の判定そのものはバルーン側と**同じ 1 つの実装**（[`crate::balloon::face_digits_of`]・
+//! 名前の判定そのものはバルーン側と**同じ 1 つの実装**（`crate::balloon::face_digits_of`・
 //! 接頭辞を大小無視で外す → `.png` を外す → 残りが空でなく全部 ASCII 数字）を接頭辞
 //! `surface` で呼ぶ。ゆえに「バルーンの `face_id_of` と同じ扱いにそろえる」（R1.4）は申し合わせ
 //! ではなく構造で成り立つ。
 //!
 //! # 記録を出す場所（要件 6）
 //!
-//! [`select_surface_images`] は fs にも記録にも触れない純粋な関数であり、重複（R1.5 の `warn!`）
+//! `select_surface_images` は fs にも記録にも触れない純粋な関数であり、重複（R1.5 の `warn!`）
 //! と桁溢れ（R1.6 の `debug!`）は**事実として戻り値に載せるだけ**である。同じく
-//! [`build_shell_target`] も記録を出さない（結果を [`ShellTarget`] に載せるだけ）。
+//! `build_shell_target` も記録を出さない（結果を [`ShellTarget`] に載せるだけ）。
 //!
 //! **記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
 //! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
@@ -150,8 +150,8 @@ pub(crate) fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageS
 /// シェルの読み込みの失敗（R1.7・既存の 2 つの失敗）。
 ///
 /// 呼び手はこの 3 つを既存の失敗へ写すだけでよい（新しい枝は要らない）——起動は
-/// `BootWiringError::ShellRead`／`ShellEmpty`、採寸は `PlacementError::Measure` である
-/// （写し替えはタスク 5.1）。
+/// `BootWiringError::ShellRead`／`ShellEmpty`、採寸は
+/// `PlacementError::Measure` である。
 #[derive(Debug, thiserror::Error)]
 pub enum ShellLoadError {
     /// シェルのフォルダの一覧が取れなかった（R1.7）。「画像 0 件」として先へ進まない。
@@ -199,7 +199,7 @@ pub struct ShellTarget {
     bake_errors: Vec<BakeError>,
     /// 土台の絵の決定の結果（R6.1 の数と R6.2 の一覧の出どころ）。
     ///
-    /// 決めるのに要る面の表は [`build_shell_target`] が既に 1 つ組んでいるので、その結果を
+    /// 決めるのに要る面の表は `build_shell_target` が既に 1 つ組んでいるので、その結果を
     /// ここへ写して持つ。入口が記録のために面の表を組み直さないためである（design
     /// 「頻度の単位」の回数が増えない）。
     base_images: BaseImageReport,
@@ -539,7 +539,7 @@ pub(crate) fn build_shell_target(
     )
 }
 
-/// [`build_shell_target`] に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
+/// `build_shell_target` に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
 ///
 /// 箱の表は [`fold_boxes`] が作り、読み捨てた事実は報告として [`ShellTarget`] に載せるだけで
 /// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。入れ子の

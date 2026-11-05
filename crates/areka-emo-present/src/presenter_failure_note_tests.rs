@@ -23,7 +23,7 @@ const FACE_A: u32 = 1000;
 const FACE_B: u32 = 3000;
 
 /// 記録の失敗の行の文言（`command.rs` の `device_err`）。
-const DEVICE_LINE: &str = "D3D/DXGI 呼び出しが失敗";
+const DEVICE_LINE: &str = "D2D 呼び出しが失敗";
 /// `GraphicsCore` が無い道の行の文言（`show.rs`）。
 const NO_GFX_LINE: &str =
     "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）";

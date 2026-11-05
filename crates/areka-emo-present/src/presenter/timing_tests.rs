@@ -545,3 +545,32 @@ fn compose_key_hash_mixes_part_film_and_blank_cells_and_keeps_top_only_keys() {
 const TOP_ONLY_KEY_BEFORE_4_1: u64 = 14_085_681_545_705_343_205;
 /// 同じく、空の pattern の鍵。
 const EMPTY_KEY_BEFORE_4_1: u64 = 15_420_910_580_374_833_391;
+
+/// 未知の描画メソッドは名前まで鍵に混ぜる——判別子だけだと名前の違う `Unknown` が同じ
+/// `key_hash` になり、perf の行の異なり鍵の数を少なく数える（`Blend` の内側と同じ穴）。
+#[test]
+fn compose_key_hash_separates_unknown_methods_by_name() {
+    let key = |name: &str| {
+        let mut pattern = PatternState::default();
+        pattern.set(
+            5,
+            PatternFrame {
+                surface_id: 20,
+                method: ComposeMethod::Unknown(name.into()),
+                x: 0,
+                y: 0,
+            },
+        );
+        compose_key_hash(1000, &BindSet::from_ids([1]), &pattern)
+    };
+    assert_ne!(
+        key("future"),
+        key("other"),
+        "名前の違う未知のメソッドが同じ鍵"
+    );
+    assert_eq!(
+        key("future"),
+        key("future"),
+        "同じ名前の未知のメソッドで鍵が揺れる"
+    );
+}

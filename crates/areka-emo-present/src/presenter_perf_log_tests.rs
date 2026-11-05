@@ -13,7 +13,7 @@
 //!    同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
 //!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
 //! 2. **既存の表示成立点の行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
-//!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・12 フィールド
+//!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・全フィールド
 //!    **ちょうど**。本ファイルはこの契約の防波堤であり、表示成立点の行を 1 文字でも触ると RED になる
 //! 3. **mark の設置位置**（Requirement 1.4）: 段が実行される入力では非 0、実行されない入力では
 //!    **厳密に 0**。どの段が 0 になるかは mark をどの分岐へ置いたかの構造的帰結であり、
@@ -516,7 +516,7 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 /// 陽性として観測することで示す——これが無いと「そもそも経路へ到達していないから行が
 /// 増えなかった」だけの空虚な緑になる。
 ///
-/// # カバーする早期復帰（show.rs の 8 経路のうち 3 つ）
+/// # カバーする早期復帰（show.rs の早期復帰のうち 3 つ）
 ///
 /// - 未装着 target（`TargetNotAttached`）
 /// - 合成失敗（`SurfaceNotFound`）
@@ -737,7 +737,7 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
     );
     assert!(
         events.iter().any(|e| e.level == tracing::Level::ERROR
-            && e.message() == "D3D/DXGI 呼び出しが失敗"
+            && e.message() == "D2D 呼び出しが失敗"
             && e.field_str("context") == Some("<injected:CreateBitmap>")),
         "記録の失敗経路を通っていない（陰性が空虚）: {events:?}"
     );

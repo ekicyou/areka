@@ -11,7 +11,7 @@
 //!    双方が可視であることを実 component 値で先に主張する。
 //! 2. 文字層スロットが**実際に描画内容を持つ**状態でも同じ非表示が及び、内容を壊さずに再表示で
 //!    双方が復帰すること。予約スロットへ内容（`VisualGraphics`）を挿す形は emo-text の
-//!    `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs:249-262`）と同一である。
+//!    `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs`）と同一である。
 //! 3. 外部所有の不可視構築を**指令経由**で行ったとき、1 回目は `Visual` が可視の値で挿入されず、
 //!    2 回目からは `Visual` が書き換えられないこと（Requirement 1.2 の「同一フレーム内の往復も禁止」）。装着 API を直接叩く
 //!    `mount_visibility_tests.rs` の検査は初期可視性を引数で渡すため、初期可視性を
@@ -112,7 +112,7 @@ fn command_driven_target_after_first_show(salt: u8) -> (World, EmoPresenter, Tar
 }
 
 /// 予約スロットへ描画内容（`VisualGraphics`）を装着する（emo-text の
-/// `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs:249-262`）と同じ形）。
+/// `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs`）と同じ形）。
 ///
 /// 本 crate は emo-text へ依存できない（依存方向は emo-compose → emo-present）ため、装着の形だけを
 /// 同型に再現する。文字の**絵**は要らない——ここで問うのは「内容を持つスロットにも非表示が及ぶか」

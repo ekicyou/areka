@@ -1,7 +1,7 @@
 //! 表示の記録（`display::record_display`）が失敗したときに **presenter 側の状態が 1 つも書き換わらない**
 //! ことを、**4 注入点 × 3 場面**で固定する実行テスト（要件 7.1／7.2・設計 Flow 1・付録 A′ #19）。
 //!
-//! # 前身との違い（`presenter_upload_failure_tests.rs` からの導き直し）
+//! # 前身との違い（撤去した供給面の失敗注入のテストからの導き直し）
 //!
 //! 前身は自前 swap chain 供給面の `upload` 7 点を注入し、presenter 側 5 項目の保持を見ていた。供給面が
 //! 消えて失敗点が「記録」の 4 点（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）になり、その

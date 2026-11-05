@@ -392,7 +392,7 @@ fn text_slot_view_is_none_before_display_established() {
 /// R9.1/9.2 観測完了（表示確立後の正値）: 有効 `ShowSurface` で表示確立後、`text_slot_view` が
 /// `Some` を返し、(a) `slot()` ＝ mount の予約スロット（`Name("emo-text-layer-slot")` を持つ）、
 /// (b) `window()` ＝ 装着先窓 Entity、(c) `surface_size()` ＝ バルーン/シェル surface の物理 px 原寸、
-/// (d) `scale()` ＝ 現行の物理 1:1 表示契約の恒常値 1.0、をすべて満たす。
+/// (d) `scale()` ＝ この入力（窓 DPI 96・author_dpi 96）での 1.0、をすべて満たす。
 #[test]
 fn text_slot_view_returns_slot_window_size_scale_after_display() {
     let mut world = make_world_with_gpu();
@@ -465,8 +465,8 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 ///
 /// # 「引き当てで済む」の観測形
 ///
-/// `apply_show` が `cache_hit` を決めるのは `cache.get(surface_id, &binds, &pattern, k)` ちょうど
-/// その呼び出しであり、k は窓 DPI と政策から導出される（本檻では窓 DPI 不変ゆえ `applied` と同一）。
+/// `apply_show` が `cache_hit` を決めるのは `cache.get(surface_id, &binds, &pattern)` ちょうど
+/// その呼び出しである（鍵に k は入らない）。
 /// よって同じ引数での `get` が `Some` であることは「次の同一入力の適用が引き当てで済む」ことと同値である。
 #[test]
 fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits() {
@@ -527,7 +527,9 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         .cache
         .get(1000, &BindSet::default(), &PatternState::default());
     let entry = entry.expect(
-        "合成失敗でキャッシュスロットが空になった＝`take_recycled` が合成の成否判定より手前に         置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は         引き当てに失敗して毎回再合成へ落ちる",
+        "合成失敗でキャッシュスロットが空になった＝`take_recycled` が合成の成否判定より手前に\
+         置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は\
+         引き当てに失敗して毎回再合成へ落ちる",
     );
     // 中身も適用前のまま（対の片側だけ差し替わっていない）。
     assert_eq!(

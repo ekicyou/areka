@@ -7,7 +7,7 @@ use crate::display::record_display;
 
 use super::scale_change::{AppliedScale, ScaleChange};
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
-use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
+use super::transition_record::{SurfaceRecord, SurfaceStage, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
     PresentError, PresentOutcome, Recompose, TargetId, VisibilityOwnership, VisualMount, World,
@@ -526,9 +526,9 @@ impl EmoPresenter {
                 surface_id,
                 cache_hit,
                 key_hash,
-                // 遷移観測と**同じ資源**から読む（Requirement 2.8・D12）。供給元が 2 つになると
+                // 遷移観測の刻印そのものから読む（Requirement 2.8・D12）。供給元が 2 つになると
                 // 「perf 行と surface 行が同一フレームで突合できる」が静かに壊れる。
-                frame: frame_of(world),
+                frame: stamp_of(world).frame,
             },
             allocs,
         );

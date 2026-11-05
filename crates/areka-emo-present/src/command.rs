@@ -162,9 +162,9 @@ pub enum PresentError {
 /// `windows_core::Error` を [`PresentError::Device`]（ログ＋`HRESULT`＋文脈）へ写像するクロージャ。
 ///
 /// 失敗経路はログ規律（`error!` ＋ `Err` 戻り値・パニック禁止）に従い、発生箇所の静的文脈を添えて
-/// 構造化エラーへ畳む。`.map_err(device_err("<where>", repeat))?` の形で D2D/D3D/DXGI 呼び出しを包む。
+/// 構造化エラーへ畳む。`.map_err(device_err("<where>", repeat))?` の形で D2D 呼び出しを包む。
 ///
-/// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`chain`）
+/// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`presenter`）
 /// からも同一の形で使える（同形の写像を各モジュールへ複写しないため）。
 ///
 /// `repeat` は前に記録した同じ対象の失敗の原因（`context`・`hresult`）。今の原因と同じなら同じ
@@ -177,9 +177,9 @@ pub(crate) fn device_err(
     move |e| {
         let hresult = e.code().0;
         if repeat == Some((context, hresult)) {
-            tracing::debug!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+            tracing::debug!(hresult, context, "D2D 呼び出しが失敗");
         } else {
-            tracing::error!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+            tracing::error!(hresult, context, "D2D 呼び出しが失敗");
         }
         PresentError::Device { hresult, context }
     }
@@ -212,10 +212,10 @@ mod tests {
     fn device_error_displays_hex_hresult() {
         let err = PresentError::Device {
             hresult: 0x8899_AABBu32 as i32,
-            context: "CreateSwapChain",
+            context: "CreateBitmap",
         };
         let text = err.to_string();
         assert!(text.contains("0x8899aabb"), "unexpected: {text}");
-        assert!(text.contains("CreateSwapChain"));
+        assert!(text.contains("CreateBitmap"));
     }
 }

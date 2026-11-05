@@ -223,16 +223,6 @@ pub(super) fn stamp_of(world: &World) -> Stamp {
     }
 }
 
-/// 段階別計時（perf サマリ行）へ載せるフレーム番号（Requirement 2.8・D12）。
-///
-/// 刻印と**同じ資源**から読む——perf 行と `surface` 行が同一フレーム番号で突合できることが
-/// 本フィールドの唯一の存在理由であり、供給元が 2 つになると突合が静かに壊れる。
-pub(super) fn frame_of(world: &World) -> u32 {
-    world
-        .get_resource::<FrameCount>()
-        .map_or(0, |frame| frame.0)
-}
-
 #[cfg(test)]
 #[path = "transition_record_tests.rs"]
 mod transition_record_tests;

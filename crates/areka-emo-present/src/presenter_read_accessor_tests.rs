@@ -296,7 +296,8 @@ fn client_entry_matches_native_entry_at_identity_scale() {
 ///
 /// # なぜ既存 3 檻と別に要るのか（継ぎ目の封鎖）
 ///
-/// 本ファイルの既存 3 檻はいずれも `hit_region_scaled(master, x, y, k, …)` の `k` を固定しない——
+/// 既存の 3 檻はいずれも `hit_region_scaled(master, x, y, k, …)` の `k` を固定しない——
+/// `presenter_refresh_and_log_tests.rs` の
 /// `applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent` は warn 述語が
 /// 主語で k は**不在**、`unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point`
 /// は k=2 を与えるが `master` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）

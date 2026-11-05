@@ -102,7 +102,7 @@
   - `descript.txt` の無いバルーンで上書きを持つ面が 2 つのとき、descript が読めない `warn!` が 1 件だけのテストが緑
   - _Requirements: 4.1, 4.2, 7.2, 9.1, 9.6_
 
-- [ ] 16. 古いコメントと記録の文言を直し、dev 依存の重複と小さな抜けを片づける（指摘 35〜39）
+- [x] 16. 古いコメントと記録の文言を直し、dev 依存の重複と小さな抜けを片づける（指摘 35〜39）
   - 本番とテストの古いコメント・数・タスク番号を直す。装置の失敗の記録の文言を `D2D 呼び出しが失敗` に変え、照合する 4 つのテストも同じ文言にする。テストの文脈の `"CreateSwapChain"` を今の呼び出しの名前へ替える
   - dev 依存の `windows` の重複 1 行と誤ったコメントを消し、`cargo build -p areka-emo-present --tests` の後に `git diff --exit-code -- Cargo.lock` が差分 0 であることを記録に残す
   - 合成の鍵の hash に未知の合成メソッドの名前を混ぜ、名前の違う未知のメソッドは違う鍵・同じ名前は同じ鍵になるテストを足す
@@ -137,3 +137,4 @@
 - タスク 12 → 13 の申し送り: 支えの `presenter_test_support.rs` に `show_with`・`show_ok`・`hide_ok`・`invalidate_ok`・`show_with_armed_fault` を置いた。research.md 29 番の 4 つの組に名が無いので残した写しが 3 つある（`presenter_perf_log_tests.rs:327` の `fn show`、`presenter_fractional_scale_tests.rs` 600 行付近の手組みの ShowSurface、`presenter_perf_log_tests.rs` 736 行付近の `Disarm`＋`arm_display_fault`＋`show`）。どれもタスク 13 の範囲のファイルなので、タスク 13 で支えの口へ寄せる。`presenter_film_tests.rs:444` の `Disarm`（show_target を包む）と film の `try_recv`（応答がちょうど 1 本）は意味が違うので残す
 - タスク 13: 境界の欄に無い `presenter_frame_log_tests.rs`・`presenter_film_tests.rs` から、支えの `INFO_LINE_MESSAGE` と同じ文言の定数の写しを 1 つずつ消した（research.md 29 番の範囲の中・「写しが残っていない」のため）。`surface_entity_of` は支えに足さず、research の「＝`mount_entities(..).0`」どおり既存の口を使った。`build_assets_with_valid_and_empty` は `display_tests` に残り、`perf_log` と `failure_note` が借りる（`failure_note` が範囲の外のため）
 - タスク 14: research.md 33 番の渡すだけの手伝い 8 つは全部消えた（`transparent_surface` はタスク 7、残り 7 つはここ）。境界の外の `balloon_alpha/model/quiet/series_tests.rs` は `capture_events`→`capture` の取り込みと呼び名だけ、`presenter_test_support.rs` は消した `pattern_overlay` を指す doc の 1 文だけを直した（やむを得ない追随）
+- タスク 16: 境界の表に無い `lib.rs` の 28 行目は、タスク 6 の申し送りが名指ししていたので直した（リンクの括弧を外しただけ）。`cargo build -p areka-emo-present --tests` の後の `git diff --exit-code -- Cargo.lock` は出力なし・exit 0。rustdoc の警告は 29→14 本。残るのは範囲の外の `presenter/hit.rs:56・57`・`read.rs:144`・`refresh.rs:155・158` と、`balloon.rs`・`shell_target.rs` のモジュールの要約のリンク 8 本（タスク 17 のかけ直しで拾う）。`presenter_read_accessor_tests.rs` の `hit_region` の説明 2 行は `audit-emo-compose` の着地待ち。`crates/areka-emo-text/src/surface.rs:54` の `D3D/DXGI/WUC 呼び出しが失敗` は別クレートで触っていない

@@ -3,8 +3,7 @@
 //!
 //! # 撤去済みの供給面の失敗注入との対応（移設の実体）
 //!
-//! `chain_fault_tests.rs`（spec `areka-P0-test-cage-determinism` の **④ 失敗注入**——同 spec
-//! design.md `## C4` ④ が `chain.rs` の `UploadFault`／`fault_point` と当該テストを一体で指す）は、
+//! 撤去した供給面の失敗注入のテスト（spec `areka-P0-test-cage-determinism` の **④ 失敗注入**）は、
 //! 注入点ごとに ⑴ `Err(PresentError::Device{context, hresult})` が返り `context` が注入点と一致
 //! すること ⑵ 失敗の後も供給面が自己整合で、次の成功呼出で回復すること、を観測していた。
 //! 本ファイルはその 2 つの観測点を、供給面の消えた新しい形（記録＝`record_display`）へ移したもの
@@ -13,7 +12,7 @@
 //!
 //! # ここで新しく増える観測点
 //!
-//! `error!` が**ちょうど 1 行**出ることは `chain_fault_tests.rs` は見ていなかった（`Err` の形しか
+//! `error!` が**ちょうど 1 行**出ることは前身のテストは見ていなかった（`Err` の形しか
 //! 見ていない）。要件 7.1／7.2 が求めるのは「ログ無しで縮退しない」ことなので、本ファイルでは
 //! ログ捕捉（`log-capture-kit`）を併せて掛け、行の重複・欠落の双方を赤にする。
 //!
@@ -67,8 +66,7 @@ fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
     (core, dc)
 }
 
-/// 注入 → 記録 → 武装解除 を **1 つの不可分な操作**として閉じる唯一の入口
-/// （`chain_fault_tests.rs` の `upload_with_armed_fault` と同型）。
+/// 注入 → 記録 → 武装解除 を **1 つの不可分な操作**として閉じる唯一の入口。
 ///
 /// 解除を `Drop` に持たせ `arm_display_fault` の呼出をここ 1 箇所に限ることで、「解除の書き忘れ」
 /// も「assert の panic で解除を飛び越すこと」も構造的に起こり得なくする（注入旗はスレッド局所
@@ -138,7 +136,7 @@ fn run_case(at: DisplayFault) {
     );
     assert_eq!(
         line.message(),
-        "D3D/DXGI 呼び出しが失敗",
+        "D2D 呼び出しが失敗",
         "error! の本文が device_err の字面と違う（{at:?}）"
     );
     assert_eq!(
@@ -218,7 +216,7 @@ fn same_cause_passed_as_repeat_logs_debug_not_error() {
         .filter(|e| e.level == tracing::Level::DEBUG && e.target == "areka_emo_present::command")
         .collect();
     assert_eq!(debugs.len(), 1, "同じ原因の続きは debug! ちょうど 1 行");
-    assert_eq!(debugs[0].message(), "D3D/DXGI 呼び出しが失敗");
+    assert_eq!(debugs[0].message(), "D2D 呼び出しが失敗");
     assert_eq!(debugs[0].field_str("context"), Some(injected_context(at)));
 }
 

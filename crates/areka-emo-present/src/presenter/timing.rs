@@ -101,7 +101,7 @@ pub(super) struct EmitContext {
     ///
     /// 遷移観測チャネルの全レコード（窓書込・モニタ表更新・サーフェス更新）が同じ番号を持つため、
     /// この 1 フィールドで「段階別計時の行」と「遷移の時系列」が突合できる。供給元は
-    /// `transition_record::frame_of`（World 資源 `FrameCount`）1 箇所である。
+    /// 刻印と同じ `transition_record::stamp_of` の `frame` 1 箇所である。
     pub(super) frame: u32,
 }
 
@@ -316,9 +316,14 @@ fn hash_frame(frame: &PatternFrame, hasher: &mut Fnv1a) {
     // （`Blend(Multiply)` と `Blend(Screen)` が同一値になる系統的衝突＝異なりキー数を
     // 過少に見積もる向き）。`BlendKind` も `#[non_exhaustive]` ゆえ判別子で混ぜ、
     // 直交軸の `fast` を併せて流す。
-    if let ComposeMethod::Blend(mode) = &frame.method {
-        std::mem::discriminant(&mode.kind).hash(hasher);
-        mode.fast.hash(hasher);
+    match &frame.method {
+        ComposeMethod::Blend(mode) => {
+            std::mem::discriminant(&mode.kind).hash(hasher);
+            mode.fast.hash(hasher);
+        }
+        // 未知のメソッドも名前が意味を分ける（同じ理由で判別子だけでは足りない）。
+        ComposeMethod::Unknown(name) => name.hash(hasher),
+        _ => {}
     }
     frame.x.hash(hasher);
     frame.y.hash(hasher);

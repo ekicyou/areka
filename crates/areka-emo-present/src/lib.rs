@@ -25,7 +25,7 @@
 //! ## 構成
 //!
 //! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・シェルの読み込み（[`shell_target`]）・
-//! 合成キャッシュ（[`cache`]）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
+//! 合成キャッシュ（`cache`）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
 //! 提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 

@@ -697,18 +697,17 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     );
 }
 
-/// 刻印資源を持たない World（`EcsWorld::new` 以外で組まれた World）でもフィールドは落ちない。
+/// 刻印資源を持たない World（`EcsWorld::new` 以外で組まれた World）では刻印を捏造せず 0 を返し、
+/// 両資源が在れば `FrameCount` の番号を載せる（perf の行の `frame` もここから読む）。
 #[test]
-fn a_world_without_the_stamp_resources_still_produces_a_complete_line() {
+fn stamp_of_is_zero_without_the_resources_and_the_frame_count_with_them() {
     let world = World::new();
     let stamp = stamp_of(&world);
     assert_eq!(stamp.frame, 0, "資源不在で値を捏造しない（0 を返す）");
     assert_eq!(stamp.t_us, 0);
-    assert_eq!(frame_of(&world), 0);
 
     let mut with_frame = World::new();
     with_frame.insert_resource(FrameCount(11));
     with_frame.insert_resource(TickStart(Instant::now()));
-    assert_eq!(frame_of(&with_frame), 11);
     assert_eq!(stamp_of(&with_frame).frame, 11);
 }

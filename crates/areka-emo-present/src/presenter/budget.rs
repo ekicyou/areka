@@ -140,13 +140,13 @@ enum AllocSite {
 }
 
 impl AllocSite {
-    /// 全発生点（走査の正本。檻はこれを回して「2 つある」ことごと固定する）。
+    /// 全発生点（走査の正本。檻はこれを回して発生点ごとの計数を確かめる）。
     ///
     /// 読み手は本モジュールのテスト（`budget_tests.rs`）のみである。**製品コードにも presenter 側の
     /// 檻にも走査の消費者は無い**——本列挙は本モジュール私有ゆえ外へ持ち出せず、presenter 経由の檻
     /// （`presenter_budget_steady_state_tests.rs`）は [`BudgetCounters`] の名前つき 2 フィールドを
-    /// 直接読む。列挙を増減させると perf サマリ行のフィールド集合が変わるため、「2 つある」ことを
-    /// 固定する走査は本モジュール内に置く。
+    /// 直接読む。発生点を回す走査は本モジュール内に置く（増減は perf サマリ行のフィールド集合の
+    /// 照合が捕まえる）。
     #[cfg(test)]
     const ALL: [AllocSite; 2] = [AllocSite::ComposeDst, AllocSite::Mask];
 }
@@ -371,7 +371,7 @@ pub(super) struct FrameBudget {
     total: BudgetCounters,
     /// 合成先の常設席（A1・`compose_into` の出力先）。
     native: seat::SurfaceSeat,
-    /// マスクの輪番（A4/A7・2 スロット＋各バッファの到達済み詰めバイト長）。
+    /// マスクの輪番（A4/A7・下流が手放した空き 1 枚）。
     mask: seat::MaskRotation,
 }
 

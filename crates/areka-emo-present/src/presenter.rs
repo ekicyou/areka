@@ -1,7 +1,7 @@
 //! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・マスクの一点結線）。
 //!
-//! 上流が組んだ部品（[`ComposeCache`]・`display::record_display`・[`VisualMount`]・emo-compose の
-//! [`Composer`]）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。合成そのもの
+//! 上流が組んだ部品（`ComposeCache`・`display::record_display`・`VisualMount`・emo-compose の
+//! `Composer`）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。合成そのもの
 //! は emo-compose、表示の記録（原寸 D2D bitmap → 描画命令）は `display.rs`、面の生成・変換・描画は
 //! wintf のコマンドリスト経路、当たり判定マスクは wintf hit-test が担い、本型は「指令を受けて、
 //! キャッシュ引き当て or 合成＋記録 → 表示記録・配置の書き込み → AlphaMask 同期 → 可視制御」を
@@ -58,7 +58,7 @@ mod timing;
 mod transition_record;
 mod visibility;
 
-// 分割前の `use` 一式はここに残す。テストファイル 8 本は `use super::*;` で本モジュールの束縛から
+// 分割前の `use` 一式はここに残す。テストファイルは `use super::*;` で本モジュールの束縛から
 // 外部クレート型を拾っており、子モジュールへ分配してここから落とすと test ビルドが壊れるためである。
 // 子モジュールも同じ束縛を `use super::{…};` 経由で引くので、非 test ビルドでも全 import が消費され、
 // 未使用インポートの抑止指示は 1 つも要らない。

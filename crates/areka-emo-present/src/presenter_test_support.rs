@@ -21,7 +21,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{Arrangement, GraphicsCore, WucGraphicsResource};
 
-// ── GPU/WUC フィクスチャ（mount.rs / wuc_resource.rs テストと同一方針）────────────────────
+// ── GPU/WUC フィクスチャ（wintf の wuc_resource.rs のテストと同一方針）────────────────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
 // DQTAT_COM_NONE（apartment 不変）でディスパッチャを組むため、COM を MTA 初期化してから呼ぶ。
 
@@ -419,7 +419,7 @@ pub(super) fn pattern_overlay_at(anim_id: u32, surf: u32, x: i64, y: i64) -> Pat
     p
 }
 
-// ── hit_region_client の配線と縮退の檻（タスク 3.2・要件 1.4-1.7・DD-5）─────────────────
+// ── hit_region_client の配線と縮退の檻（要件 1.4-1.7・DD-5）─────────────────
 //
 // 本節はすべて **GPU 非依存**である。`attach_target` は skeleton 登録のみで World にも GPU にも
 // 触れないため素の `World::new()` で足り、判定に必要な状態（表示中サーフェス・実適用 k）は

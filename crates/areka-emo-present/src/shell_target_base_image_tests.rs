@@ -22,7 +22,7 @@
 //!
 //! イの 6×12 は幅が `element1` から・高さが画像から来ている——どちらか一方しか数えていなければ
 //! この値にならない。外形は層ごとの**原寸**の軸ごとの最大で決まり、層の位置は寄与しない
-//! （`compute_extent`・`crates/areka-emo-compose/src/plan.rs`）ので、位置は画素の重なりを
+//! （`compute_extent`・`crates/areka-emo-compose/src/plan_extent.rs`）ので、位置は画素の重なりを
 //! 見るためだけに与えてある。
 //!
 //! ウの画像を**わざと大きく別の絵**にしてあるのが較正である——`apply_base_images` の

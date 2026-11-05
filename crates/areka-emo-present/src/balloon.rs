@@ -12,7 +12,7 @@
 //!
 //! - **面画像のみ入力**（R5.3）: 列挙対象は当該 scope の連鎖に載る接頭辞の `{接頭辞}{ID}.png` に
 //!   限る（scope 0 は `balloonp0def`/`balloons`、scope 1 はそれらに先立つ `balloonp1def`/`balloonk`）。
-//!   `balloonc*`（入力ボックス）・`arrow*`（スクロール矢印）・`marker`（`\![*]` マーカー）・
+//!   `balloonc*`（入力ボックス）・`arrow*`（スクロール矢印）・`marker*`（行の中の印）・
 //!   `online*`（受信アニメ）はどの連鎖にも載らず列挙されない。相方側 `balloonk*` は
 //!   **scope 1 以上でのみ**採用される正規の面系列であり、scope 0 の連鎖には現れない。
 //! - **透過の宣言**（spec: areka-P0-self-alpha-declaration 要件 2）: 基層の `descript.txt` の
@@ -104,7 +104,7 @@ pub struct SeriesFamily {
     pub scope1_legacy: &'static [&'static str],
 }
 
-/// 吹き出し族（本仕様で唯一実装する族）。
+/// 吹き出し族。
 pub(crate) const BALLOON_FAMILY: SeriesFamily = SeriesFamily {
     base: "balloon",
     scope0_legacy: &["balloons"],
@@ -396,8 +396,8 @@ fn enumerate_file_names(
 
 /// `balloon_dir` から当該 `scope` の**採用面列**を解決する（全消費者共通の単一施行点）。
 ///
-/// 手順は 3 段——[`prefix_chain`] で連鎖を導出し、[`enumerate_file_names`] で
-/// ディレクトリを **1 回だけ**走査し、純核 [`select_faces`] で面 ID 単位の連鎖探索を行う
+/// 手順は 3 段——[`prefix_chain`] で連鎖を導出し、`enumerate_file_names` で
+/// ディレクトリを **1 回だけ**走査し、純核 `select_faces` で面 ID 単位の連鎖探索を行う
 /// （R1.2/R1.3）。面 ID は連鎖内の全接頭辞にまたがる ID 集合の和であり、戻りは
 /// **surface id 昇順**・同一入力に対し決定論的（ディレクトリ走査順に依存しない）。
 ///
@@ -573,7 +573,7 @@ fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<
 ///
 /// `parse_str` は `Result` を返さず panic しない寛容写像ゆえ、本関数も常に [`BalloonModel`] を
 /// 返す（読取失敗は空層で継続＝欠落キーは当該スカラ `None`）。層ごとのログレベルは
-/// [`read_descript_layer`]／[`read_face_override_layer`] のとおりで、上書き層の**不在のみ**が
+/// `read_descript_layer`／`read_face_override_layer` のとおりで、上書き層の**不在のみ**が
 /// `debug!`（正常縮退）である。
 ///
 /// # scope 引数について
@@ -687,8 +687,8 @@ pub fn build_balloon_target(
 /// `warn!` を 1 行出す（要件 5.7）。`.pna` は表示に使わない。数には areka が読まない絵（矢印など）に
 /// 添えた物も含む。
 ///
-/// `descript.txt` が読めないときは [`read_descript_layer`] の `warn!` を通して宣言なしとし、
-/// 一覧が取れないときは [`enumerate_file_names`] の `error!` を通して `.pna` の数を 0 として続ける
+/// `descript.txt` が読めないときは `read_descript_layer` の `warn!` を通して宣言なしとし、
+/// 一覧が取れないときは `enumerate_file_names` の `error!` を通して `.pna` の数を 0 として続ける
 /// （続く系列の解決が同じ理由で失敗を返す）。
 pub fn load_balloon_use_self_alpha(balloon_dir: &Path) -> UseSelfAlpha {
     load_balloon_use_self_alpha_with(balloon_dir, LoadRecords::Emit)

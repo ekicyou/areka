@@ -551,7 +551,7 @@ fn show_target_without_dpi_change_only_adds_visibility() {
 }
 
 /// Requirement 6.6 の成立経路を固定する: 不可視の間の表示倍率変化は**DPI 追従の相では拾われず**
-/// （`refresh_scale` の可視ゲート・`crates/areka-emo-present/src/presenter/refresh.rs:74-80`）、
+/// （`refresh_scale` の可視ゲート・`presenter/refresh.rs` の `if !visible` の枝）、
 /// 可視化の入口が同じ経路を再通過することで埋め合わされる。
 ///
 /// この 2 段の役割分担を明示的に固定しておかないと、可視ゲートを外す是正（不可視の target まで
