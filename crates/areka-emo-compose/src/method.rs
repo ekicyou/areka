@@ -271,23 +271,8 @@ mod tests {
                 ComposeMethod::Unknown(_) => "unknown",
             }
         }
-        // 代表値で全 variant を踏む。
-        let all = [
-            ComposeMethod::Overlay,
-            ComposeMethod::OverlayFast,
-            ComposeMethod::Interpolate,
-            ComposeMethod::Replace,
-            ComposeMethod::Asis,
-            ComposeMethod::Base,
-            ComposeMethod::Reduce,
-            ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)),
-            ComposeMethod::Auto,
-            ComposeMethod::Unknown("future".into()),
-        ];
-        assert_eq!(all.len(), 10);
-        for m in &all {
-            assert!(!name(m).is_empty());
-        }
+        // 呼ばれなくても型検査で網羅が確かめられる。
+        let _ = name;
     }
 
     /// 網羅 match ガード（Req 8.1）: `BlendKind` の全 19 種を名指しする。
@@ -316,31 +301,7 @@ mod tests {
                 BlendKind::Luminosity => "luminosity",
             }
         }
-        let all = [
-            BlendKind::Add,
-            BlendKind::Multiply,
-            BlendKind::Screen,
-            BlendKind::Overlay,
-            BlendKind::Darken,
-            BlendKind::Lighten,
-            BlendKind::DarkerColor,
-            BlendKind::LighterColor,
-            BlendKind::ColorBurn,
-            BlendKind::ColorDodge,
-            BlendKind::HardLight,
-            BlendKind::HardMix,
-            BlendKind::Difference,
-            BlendKind::Exclusion,
-            BlendKind::Divide,
-            BlendKind::Hue,
-            BlendKind::Saturation,
-            BlendKind::Color,
-            BlendKind::Luminosity,
-        ];
-        assert_eq!(all.len(), 19);
-        for k in all {
-            assert!(!name(k).is_empty());
-        }
+        let _ = name;
     }
 
     /// Req 8.2/8.3: `Overlay` のみ実装済み・他はすべて型シーム（未実装）。

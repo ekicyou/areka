@@ -513,7 +513,7 @@ fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
                 target: "areka_emo_compose",
                 surface_id,
                 animation_id = id,
-                "bind 集合に属さない bind 種アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
+                "bind 集合に属さない bind+random アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
             );
             continue;
         }

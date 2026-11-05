@@ -34,6 +34,6 @@ pub enum ComposeError {
     #[error("surface {0} has an empty extent (width or height 0)")]
     EmptyComposition(u32),
     /// 外形が GPU の面の最大寸（一辺 16,384）か面積の上限（2^25 画素）を越える。命令は積まず、絵も確保しない。
-    #[error("surface {surface} extent {w}x{h} exceeds the GPU surface limit")]
+    #[error("surface {surface} extent {w}x{h} exceeds the size limit (side 16384 or area 2^25)")]
     ExtentTooLarge { surface: u32, w: u32, h: u32 },
 }

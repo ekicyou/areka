@@ -25,13 +25,11 @@ pub enum Recompose {
 
 /// 前 `prev` と今 `cur` の命令列の違う所の矩形（合成の絵の範囲 `canvas` で切ったもの）。
 fn dirty_area(prev: &[BlitOp], cur: &[BlitOp], canvas: Area, atlas: &AtlasTable) -> Area {
-    let shorter = prev.len().min(cur.len());
     let p = prev.iter().zip(cur).take_while(|(a, b)| a == b).count();
     let s = prev[p..]
         .iter()
         .rev()
         .zip(cur[p..].iter().rev())
-        .take(shorter - p)
         .take_while(|(a, b)| a == b)
         .count();
     prev[p..prev.len() - s]
