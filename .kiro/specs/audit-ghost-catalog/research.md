@@ -230,3 +230,94 @@
 - 同じ宛先を指す 2 つの `*.directory` を SSP がどう扱うか（#7）。
 - #45（I1／I2 の競り）と #1（2 つのプロセスの同時のインストール）は、コードを読んでの推定で、走らせての再現はしていない。直しのテストで再現の形（錠を外すと赤）を作る。
 - #2 の部分読みで、中央ディレクトリのオフセットが書庫の大きさを越える壊れた書庫の拒み方（今の `read_central_directory` の語彙を変えずに済むか）。
+
+## 10. 設計の段の調べと決め（2026-11-05・`/kiro-spec-design -y`）
+
+### 要約
+
+- **調べの種類**: 既存の仕組みの直し（軽い調べ・`design-discovery-light`）。新しいライブラリは無い。外の文書は引かず、コードを読んで決めた（ukadoc の確かめは要件の討議で済み＝要件 9.2・9.8・9.9）。
+- **使った手引き**: `kiro-spec-design` の `design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`、ponytail の「いちばん小さい完全な変更」（利用者全体のプラグイン）。
+- **大事な見つけ**:
+  - #2 の判定は今 `read_central_directory` を通るので、目次の各件でローカルの頭も読む（全体のバイト列が要る）。目次の読みを「ローカルの頭を見るか」の引数つきに分ければ、`open` の断る順を変えずに判定だけ末尾と目次で済む。
+  - #1 の錠は `std` の `share_mode(0)`＋`FILE_FLAG_DELETE_ON_CLOSE` で足りる（依存は増えない）。待たずに失敗にすれば、根が 2 つの書庫で 2 つのプロセスが待ち合って止まることが無い。
+  - #45 の競りは、錠を取ってから消す口と `try_lock` の口を並べれば、1 つのスレッドの順で再現できる（時間待ちを使わない）。
+  - 一時フォルダの番人は、#4・#5 の 5 行を消すと「固定名が仕様」の種別を使う項目が 0 になり、組まれない種別が警告になる＝種別ごと消す。較正で外す 1 件は C17 で走っている spec の持ち物でない `crates/areka/src/install/fetch_url.rs` へ替える。
+  - `audit-parsers-sakura` の要件 7.10 は「`lowercased` を parsers の kv の隣へ置き package で使う」まで。乗り換えと `config.rs` は本 spec。
+
+### 調べたこと
+
+#### #1 棚の錠
+
+- **きっかけ**: `prepare_shelf` は自分の番地以外の項目を、保持の期限の内側でなければ全部消す。
+- **見たもの**: `crates/areka-nar/src/install.rs`（`WorkArea::create_at`・`next_address`・`prepare_shelf`）・`lib.rs`（`place` が根ごとに `WorkArea` を掘り、終わるまで持つ）・`.nar-work` を名指すテスト（`install_tests.rs`・`lib_tests.rs`・`crates/areka/src/install/destination_tests.rs` ほか）。
+- **分かったこと**: `WorkArea` の寿命が「組み上げ・確定・後片付け」の全部を覆うので、錠をそこに持たせれば足りる。棚は展開の後も残るので、錠のファイルは閉じたら消える形にして、根の木を比べるテストの期待を変えない。
+- **影響**: `prepare_shelf` は `.lock` を飛ばす。2 本目は `StageError`→`NarError::Io{Stage}`→`log_failure` の `error!`（新しい記録の名前は要らない）。
+
+#### #2 部分読み
+
+- **見たもの**: `container.rs`（`find_eocd`・`read_eocd`・`read_central_header`・`locate_entry_data`）・`lib.rs`（`peek_install_txt`・`read_archive_bytes`）・`crates/areka/src/input_events/file_drop.rs`（読めない書庫は `warn!` してインストール対象でないファイルとして扱う）・`lib_peek_tests.rs`。
+- **分かったこと**: `find_eocd` は「署名の位置＋22＋コメント長＝バイト列の長さ」で探すので、ファイルの末尾の窓の上でもそのまま動く。範囲の検査だけファイル全体の長さが要る。ローカルの頭の壊れは判定では見えなくなるが、`install.txt` 在り＝インストール対象（入らなければ `OnInstallFailure`）の決めに沿う。
+- **影響**: `open` の大きさの上限は、宣言の総和の上限 1 GiB の 2 倍（2 GiB）。越える書庫は中身を全部読んでも必ず断る。語彙は `Unsupported::TooLarge` を使い、増やさない。
+
+#### #15・#16 写しの守り
+
+- **見たもの**: `crates/areka-user-data/src/copy.rs`・呼び手 3 つ（`establish.rs` の `migrate`・`crates/areka/src/roots/user_root.rs`・`crates/real-run-kit/src/evidence.rs`）。
+- **分かったこと**: 呼び手はどれも失敗を記録する（`error!` か標準エラー）。`real-run-kit` の写しの行き先は走りのフォルダで、写す元の外。
+- **影響**: 番地の取り直しと片付けは `areka-nar` の `next_address`／保持の期限と同じく、連番と時刻を引数で受ける形にしてテストする。片付けに錠は使わない（今の「先を越されたら `Raced`」の決めを変えないため）。
+
+#### #45 I1・I2
+
+- **見たもの**: `inproc_fixture.rs`（`shared_test_ghost` は呼ぶたびに `profile\areka` を消す）・`inproc_e2e_test.rs`（I1・I2 の頭で呼ぶ）。
+- **影響**: 消去を錠の内側へ移し、I1・I2 は終わるまで錠を持つ。
+
+#### #28・#29
+
+- **見たもの**: `shiori_inproc.rs`（`load_library_quiet`・`inproc_connect`）・`shiori_wiring.rs`（`helper_load_dir`）・`areka-ghost/Cargo.toml`（`windows` の `LibraryLoader` は既に使える）。
+- **影響**: `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` は絶対パスを要るので、#29 の整えと組みで直す。縛るテストは「相対の DLL パスは読めない」（`LoadLibraryW` へ戻すと今の作業フォルダから読めて赤）。
+
+### 寄せ方の見比べ
+
+| 案 | 中身 | 良い | 悪い | 決め |
+|---|---|---|---|---|
+| 今のファイルを直す（`research.md` §7 の案 A） | 指摘ごとに今のファイルで直し、道具はクレートと組み立ての単位ごとに 1 か所 | 層と決まりのまま・差分が小さい | 1,000 行の近いファイルは先に減らす順が要る | 採る |
+| 道具を先に新しいファイルへ（案 B） | 共有の道具を新しい `*_test_support.rs` に先に作る | 行の心配が早く消える | ファイルが増える | 採らない（新しいのは `src/test_support.rs` 2 つだけ） |
+| 組ごと（案 C） | Must → Should → Nice の順に 3 段 | 危ない所が早い | 同じファイルに 3 回触る | 採らない（要件 9.13 がファイルのまとまりで束ねると決めた） |
+
+### 決め
+
+#### 決め: 棚の錠は待たずに失敗にする
+
+- **見比べ**: ⑴ 待つ（取れるまで繰り返す） ⑵ すぐ失敗にする。
+- **採る**: ⑵。根が 2 つの書庫を 2 つのプロセスが逆の順で掘ると、⑴ は互いに待って止まる。失敗は `OnInstallFailure` で利用者に届き、入れ直せば入る。
+- **引き換え**: ほぼ同時の 2 回のインストールの片方が失敗する（今は片方が他方の作業を壊す）。
+
+#### 決め: 判定の目次の読みはローカルの頭を見ない
+
+- **見比べ**: ⑴ 目次の各件でローカルの頭だけを小さく読みに行く（答えは今と同じ） ⑵ 目次だけを読む。
+- **採る**: ⑵。⑴ は件の数だけ読みに行き、読みの口を抽象にする手間がかかる。⑵ で食い違うのは「ローカルの頭だけが壊れた書庫」だけで、それは `open` が断り `OnInstallFailure` になる（「install.txt 在り＝インストール対象」の決めどおり）。
+
+#### 決め: 名前の比べ方は `to_lowercase` 1 つ
+
+- **見比べ**: ⑴ ASCII の大小無視へそろえる ⑵ 名前の検証と同じ `to_lowercase` へそろえる ⑶ OS の比べ方（`CompareStringOrdinal`）。
+- **採る**: ⑵。名前の検証が既に Unicode の規則で衝突を止めているので、計画と展開を合わせるのが小さい。⑶ は `catalog_roots.rs` の `ponytail:` の注にある上げ先で、食い違いの報告はまだ無い。
+
+#### 決め: テストの道具の置き場は組み立ての単位ごとに 1 つ
+
+- **理由**: 単体テスト（`src`）と結合テスト（`tests/`）は別の組み立ての単位で、互いのコードが見えない。`src/test_support.rs` と `tests/ghost/common.rs` の 2 つは写しでなく、それぞれの単位の唯一の置き場。
+
+#### 決め: #22 の乗り換えは相手の着地の後・本 spec の完了の前
+
+- **理由**: 要件 9.10 は本 spec が乗り換えると決めた。相手の関数が無い間は自前の `lowercased` で直し（バグはその場で直る）、T18 の頭で乗り換える。自前の写しを残したまま完了しない。#79 の削除も同じ順。
+
+### 寄せて小さくしたもの（統合の 3 つの目）
+
+- **共通化**: 「棚の番地を取る・古い物を片付ける」は `areka-nar` と `areka-user-data` で同じ形だが、クレートをまたぐ path の依存は `Cargo.lock` を変えるので作らない。形（連番と時刻を引数で受ける）だけそろえる。
+- **作るか借りるか**: zip の部分読みは今の自前の読み手を分けて使う（新しいライブラリは足さない・依存 0 の約束）。錠は `std` の共有の口。
+- **削り**: 錠の待ち・目次の大きさの別の上限・新しい拒みの語彙・新しい記録の名前（`profile_dir_env_unusable` の 1 つだけを足す）は持たない。
+
+### 危うさと手当て
+
+- `FILE_FLAG_DELETE_ON_CLOSE` で錠のファイルが消えない作りだったとき — 縛るテスト `the_shelf_lock_is_released_when_the_work_area_is_dropped` が見つける。そのときは `WorkArea` の `Drop` で消す 1 手を置く（根の木を比べるテストの期待は変えない）。
+- `inproc_e2e_test.rs` が 1,000 行を割る — 見立ては約 1,045 行。T15・T16 の終わりに測り、割る直しはしない。
+- 相手（`audit-parsers-sakura`）の着地が遅れる — #22 のバグは T9 で自前の読みで直る。T18 の乗り換えと #79 の削除だけが待つ。
+- #28 の縛るテストは「相対の DLL パスを拒む」で旗の効きを間接に見る（依存の DLL を持つテスト用の DLL は無く、作ると新しいクレート＝`Cargo.lock` が変わる）。
