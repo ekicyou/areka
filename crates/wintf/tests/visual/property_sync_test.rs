@@ -32,87 +32,97 @@ fn setup() -> Result<(World, WucVisualFactory)> {
 /// GlobalArrangement を連鎖挿入するため、クエリの全要求コンポーネントが揃う。
 #[test]
 fn syncs_offset_and_opacity_for_non_window_entity() -> Result<()> {
-    let (mut world, factory) = setup()?;
-    let visual = factory.create_visual()?;
+    crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
+        let (mut world, factory) = setup()?;
+        let visual = factory.create_visual()?;
 
-    world.spawn((
-        Visual {
-            opacity: 0.5,
-            ..Default::default()
-        },
-        VisualGraphics::new(visual),
-    ));
-    world.flush();
+        world.spawn((
+            Visual {
+                opacity: 0.5,
+                ..Default::default()
+            },
+            VisualGraphics::new(visual),
+        ));
+        world.flush();
 
-    run_sync(&mut world);
-    Ok(())
+        run_sync(&mut world);
+        Ok(())
+    })
 }
 
 /// 無効な VisualGraphics（COM Visual なし）はスキップされる
 #[test]
 fn skips_entity_with_invalid_visual_graphics() -> Result<()> {
-    let (mut world, _factory) = setup()?;
+    crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
+        let (mut world, _factory) = setup()?;
 
-    world.spawn((Visual::default(), VisualGraphics::default()));
-    world.flush();
+        world.spawn((Visual::default(), VisualGraphics::default()));
+        world.flush();
 
-    // visual() が None のため continue する経路。パニックしないこと。
-    run_sync(&mut world);
-    Ok(())
+        // visual() が None のため continue する経路。パニックしないこと。
+        run_sync(&mut world);
+        Ok(())
+    })
 }
 
 /// Window エンティティは offset 設定がスキップされ opacity のみ設定される
 #[test]
 fn window_entity_skips_offset_branch() -> Result<()> {
-    let (mut world, factory) = setup()?;
-    let visual = factory.create_visual()?;
+    crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
+        let (mut world, factory) = setup()?;
+        let visual = factory.create_visual()?;
 
-    world.spawn((
-        Window::default(),
-        Visual::default(),
-        VisualGraphics::new(visual),
-    ));
-    world.flush();
+        world.spawn((
+            Window::default(),
+            Visual::default(),
+            VisualGraphics::new(visual),
+        ));
+        world.flush();
 
-    run_sync(&mut world);
-    Ok(())
+        run_sync(&mut world);
+        Ok(())
+    })
 }
 
 /// is_visible=false は opacity 0.0 の分岐を通る
 #[test]
 fn invisible_visual_takes_zero_opacity_branch() -> Result<()> {
-    let (mut world, factory) = setup()?;
-    let visual = factory.create_visual()?;
+    crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
+        let (mut world, factory) = setup()?;
+        let visual = factory.create_visual()?;
 
-    world.spawn((
-        Visual {
-            is_visible: false,
-            opacity: 1.0,
-            ..Default::default()
-        },
-        VisualGraphics::new(visual),
-    ));
-    world.flush();
+        world.spawn((
+            Visual {
+                is_visible: false,
+                opacity: 1.0,
+                ..Default::default()
+            },
+            VisualGraphics::new(visual),
+        ));
+        world.flush();
 
-    run_sync(&mut world);
-    Ok(())
+        run_sync(&mut world);
+        Ok(())
+    })
 }
 
 /// 範囲外 opacity は clamped_opacity() 経由でクランプされる分岐を通る
 #[test]
 fn out_of_range_opacity_is_clamped_before_set() -> Result<()> {
-    let (mut world, factory) = setup()?;
-    let visual = factory.create_visual()?;
+    crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
+        let (mut world, factory) = setup()?;
+        let visual = factory.create_visual()?;
 
-    world.spawn((
-        Visual {
-            opacity: 5.0, // SetOpacity(5.0) は DComp 的に不正だが clamp(1.0) で安全
-            ..Default::default()
-        },
-        VisualGraphics::new(visual),
-    ));
-    world.flush();
+        world.spawn((
+            Visual {
+                opacity: 5.0, // SetOpacity(5.0) は DComp 的に不正だが clamp(1.0) で安全
+                ..Default::default()
+            },
+            VisualGraphics::new(visual),
+        ));
+        world.flush();
 
-    run_sync(&mut world);
-    Ok(())
+        run_sync(&mut world);
+        Ok(())
+    })
 }
