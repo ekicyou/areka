@@ -27,7 +27,7 @@ use super::EmoWorld;
 
 pub(super) use log_capture_kit::CapturedEvent;
 
-/// COM を初期化して `f` を走らせる（`WicDecoderArm` の前提・`display_gpu_tests.rs` と同型）。
+/// COM を初期化して `f` を走らせる（`WicDecoderArm` の前提）。
 pub(super) fn with_com_initialized<F: FnOnce()>(f: F) {
     unsafe {
         // 既に初期化済みでも `RPC_E_CHANGED_MODE` を許容して続行する。
@@ -52,7 +52,48 @@ pub(super) fn write_descript(dir: &std::path::Path) {
 /// 本モジュールが出す記録の宛先（既定の target＝モジュールパス）。
 pub(super) const SHELL_TARGET: &str = "areka_emo_present::shell_target";
 
+/// 宛先が権威のもので、水準が `level` の記録。
+pub(super) fn from_shell_target(
+    events: &[CapturedEvent],
+    level: tracing::Level,
+) -> Vec<&CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.target == SHELL_TARGET && e.level == level)
+        .collect()
+}
+
 /// 不透明 1×1 PBGRA の絵を `names` の名前で入れた復号器（bake が placement を必ず産む＝非退化）。
+/// 重複・桁溢れ・使わなかった画像・相手の無いコマ・焼く段で落ちる絵を同居させた検体を `dir` に書き、
+/// 復号器を返す。面 0 は `element0` を持つ（画像を使わない）、面 1 は画像を土台に使い相手の居ない
+/// コマ（面 777）を持つ。焼けるのは 2 枚だけ——`parts1.png` を入れないので、その 1 枚が焼く段で落ちる。
+pub(super) fn write_records_fixture(dir: &Path) -> MemoryDecoder {
+    let child = |name: &str| dir.join(name);
+    std::fs::write(
+        child("surfaces.txt"),
+        concat!(
+            "charset,UTF-8\n",
+            "surface0\n{\nelement0,overlay,base0.png,0,0\n}\n",
+            "surface1\n{\nelement1,overlay,parts1.png,0,0\n",
+            "animation0.interval,random,4\n",
+            "animation0.pattern0,overlay,777,0,0,0\n}\n",
+        ),
+    )
+    .expect("記述ファイル作成");
+    write_descript(dir);
+    for name in [
+        "surface0.png",
+        "surface0000.png",
+        "surface1.png",
+        "surface99999999999.png",
+        "base0.png",
+        "parts1.png",
+    ] {
+        std::fs::File::create(child(name)).expect("プレースホルダ作成");
+    }
+    decoder_with(dir, &["base0.png", "surface1.png"])
+}
+
 pub(super) fn decoder_with(dir: &Path, names: &[&str]) -> MemoryDecoder {
     let mut dec = MemoryDecoder::new();
     for name in names {
@@ -61,8 +102,8 @@ pub(super) fn decoder_with(dir: &Path, names: &[&str]) -> MemoryDecoder {
     dec
 }
 
-/// 全画素が同じ色の不透明な絵を復号器へ登録する。
-pub(super) fn insert_solid(
+/// 全画素が同じ色の絵を復号器へ登録する（バルーンの檻も使う）。
+pub(crate) fn insert_solid(
     dec: &mut MemoryDecoder,
     dir: &Path,
     name: &str,
@@ -107,6 +148,15 @@ pub(super) fn describe(e: &CapturedEvent) -> String {
     line
 }
 
+/// 水準が `warn` 以上（`warn!`／`error!`）の記録を [`describe`] の文字列にする（宛先は問わない）。
+pub(super) fn warn_lines(events: &[CapturedEvent]) -> Vec<String> {
+    events
+        .iter()
+        .filter(|e| e.level <= tracing::Level::WARN)
+        .map(describe)
+        .collect()
+}
+
 // ── 他クレートの検体（書き換えずに読む）────────────────────────────────────────
 
 /// 入れ子の検体のフォルダ（`areka-emo-compose/tests/fixtures/surface-nesting/`）。
@@ -119,7 +169,7 @@ pub(super) fn nesting_fixture_dir() -> PathBuf {
         .join("surface-nesting")
 }
 
-/// 入れ子の検体のフォルダに在る画像（`surfaces.txt` 以外の全部）。
+/// 入れ子の検体のフォルダに在る画像（`surfaces.txt`・`descript.txt` 以外の全部）。
 pub(super) const NESTING_FIXTURE_IMAGES: [&str; 8] = [
     "body.png",
     "eye.png",

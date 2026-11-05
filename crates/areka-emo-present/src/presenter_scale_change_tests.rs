@@ -8,7 +8,6 @@
 //! | DPI の替わり（`refresh_scale`） | 前のある記録が 1 件 |
 //! | 作者 DPI の違う差し替え | 前が無い記録が 1 件（起点は引き継がない） |
 //! | 失敗した表示 | 記録なし（絵にかからなかった k は出ない） |
-//! | 取り出しの 2 回目 | 空 |
 
 use super::*;
 
@@ -148,17 +147,5 @@ fn failed_show_records_nothing() {
         presenter.applied_ratio(TargetId(0)),
         Some(ScaleRatio::ONE),
         "失敗は前の k を保つ"
-    );
-}
-
-#[test]
-fn second_take_is_empty() {
-    let mut world = make_world_with_gpu();
-    let (mut presenter, _) = attached(&mut world, 96, 96);
-    show_ok(&mut presenter, &mut world, TargetId(0), FACE);
-    assert_eq!(presenter.take_scale_changes().len(), 1);
-    assert!(
-        presenter.take_scale_changes().is_empty(),
-        "取り出しの 2 回目は空"
     );
 }

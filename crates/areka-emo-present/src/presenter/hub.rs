@@ -41,7 +41,8 @@ impl EmoPresenter {
     ///
     /// 装着（`VisualMount`）は**初回 `ShowSurface` で原寸が確定してから遅延生成**するため、本メソッドは
     /// skeleton（`mount=None`/`visible=false`）を組んで登録するのみで World には触れない。既存 id への
-    /// 再登録は表示コンテキストごと置換する。
+    /// 再登録は登録の値を差し替えるだけで、前の装着（窓の子の Visual）は窓に残る——差し替えは
+    /// `ReplaceTarget` を使う（外から取り外す公開の口は無い）。
     ///
     /// # `author_dpi`（作者基準 DPI・要件 1.1/1.5）
     ///

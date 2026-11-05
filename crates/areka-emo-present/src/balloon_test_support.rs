@@ -62,7 +62,7 @@ pub(crate) use log_capture_kit::CapturedEvent;
 ///
 /// `%`（Display）記録は素の文字列・`?`（Debug）記録は引用符付きになり得るため、両表記に
 /// 依存しない比較にする。値は必ず Debug 表現（[`CapturedEvent::field`]）から取る——
-/// [`CapturedEvent::field_str`] は `record_str` 経路の生値だけを返すので、本ファイルの檻が
+/// [`CapturedEvent::field_str`] は `record_str` 経路の生値だけを返すので、バルーン系の檻が
 /// 見る `%expr` のシジル形では `None` になり、判定が黙って空振りする。
 ///
 /// メソッド名を `field` にしないのは、[`CapturedEvent`] の固有メソッド `field`（引用符付きの
@@ -76,6 +76,14 @@ impl FieldUnquoted for CapturedEvent {
     fn field_unquoted(&self, name: &str) -> Option<&str> {
         self.field(name).map(|v| v.trim_matches('"'))
     }
+}
+
+/// `needle` を文言に含む記録の行の数（宛先まるごとでなく文言ごとに数える）。
+pub(crate) fn count_message(events: &[CapturedEvent], needle: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| e.message().contains(needle))
+        .count()
 }
 
 // ── emo2 のバルーンのフォルダ ─────────────────────────────────────────────────────────

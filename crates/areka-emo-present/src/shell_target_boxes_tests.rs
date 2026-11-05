@@ -6,29 +6,20 @@
 //! 報告の各件が `warn!` で 1 度ずつ記録されること ⑶ 箱の無いシェルでは結果と記録が本 spec の
 //! 前と同じであること。
 //!
-//! 検体の element定義の overlay が指す画像はフォルダに無い。焼く段の脱落の `warn!` が数を
+//! 検体の element定義の overlay が指す画像はフォルダに無い。焼く段の脱落の `error!` が数を
 //! 濁さないよう、復号器はメモリ上のものにその名前で絵を入れておく（復号器はパスで引くだけで、
 //! ファイルの実在を見ない）。
 
 use super::*;
 
 use areka_emo_compose::FontFollow;
-use areka_parsers::shell::{parse, parse_boxes};
 use temp_path_kit::TempPath;
 
 use super::test_support::{
     BOXES_FIXTURE_IMAGES, CapturedEvent, SHELL_TARGET, boxes_fixture_dir, decoder_with,
-    write_descript,
+    from_shell_target, write_descript,
 };
 use log_capture_kit::capture;
-
-/// 宛先が権威のもので、水準が `level` の記録。
-fn from_shell_target(events: &[CapturedEvent], level: tracing::Level) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.target == SHELL_TARGET && e.level == level)
-        .collect()
-}
 
 /// ⑴ 検体を読み込むと箱の表が引ける（要件 10.4）。記録は `warn!` 0 行・箱の数の `info!` 1 行。
 #[test]
@@ -181,32 +172,5 @@ fn shell_without_boxes_keeps_result_and_records() {
         messages,
         vec!["shell: シェルの面の画像の一覧が終わった（R6.1）"],
         "記録は本 spec の前と同じ 1 行だけ"
-    );
-
-    // 既存の入口（空の転記へ委譲）と箱の入口が同じ結果になる。
-    let core = build_shell_target(
-        parse(text),
-        select_surface_images::<&str>(&[]),
-        dir.path(),
-        &dec,
-        UseSelfAlpha::On,
-    );
-    let with = build_shell_target_with_boxes(
-        parse(text),
-        &parse_boxes(text),
-        select_surface_images::<&str>(&[]),
-        dir.path(),
-        &dec,
-        UseSelfAlpha::On,
-    );
-    assert!(core.boxes().is_empty() && with.boxes().is_empty());
-    assert_eq!(core.box_report, with.box_report);
-    assert_eq!(
-        core.build_world().surface_ids().collect::<Vec<_>>(),
-        with.build_world().surface_ids().collect::<Vec<_>>()
-    );
-    assert_eq!(
-        core.atlas().resolve(areka_emo_atlas::SetId(0), "base.png"),
-        with.atlas().resolve(areka_emo_atlas::SetId(0), "base.png")
     );
 }

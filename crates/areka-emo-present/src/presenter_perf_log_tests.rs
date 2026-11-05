@@ -9,8 +9,8 @@
 //! 固定する契約は 4 つである。
 //!
 //! 1. **perf サマリ行のスキーマ**（Requirement 1.1/1.3/1.4・design.md §Data Models）:
-//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（段 4・確保 2 ＋
-//!    同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
+//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（時間 5（段 4＋合計）・
+//!    確保 2 ＋ 同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
 //!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
 //! 2. **既存の表示成立点の行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
 //!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・全フィールド
@@ -65,8 +65,8 @@
 use super::*;
 
 use super::test_support::{
-    CapturedEvent, INFO_LINE_MESSAGE, build_target_assets, capture, show_with,
-    show_with_armed_fault, spawn_window_with_dpi,
+    CapturedEvent, INFO_LINE_MESSAGE, build_target_assets, capture, field, show_ok, show_with,
+    show_with_armed_fault, show_with_ok, spawn_window_with_dpi,
 };
 use super::timing::{PERF_LINE_MESSAGE, compose_key_hash};
 use crate::display::DisplayFault;
@@ -141,13 +141,6 @@ fn info_line_indices(events: &[CapturedEvent]) -> Vec<usize> {
         .filter(|(_, e)| e.message() == INFO_LINE_MESSAGE)
         .map(|(i, _)| i)
         .collect()
-}
-
-/// フィールドを引く（無ければ全フィールドを添えて落とす＝欠落が判る形）。
-fn field(ev: &CapturedEvent, name: &str) -> String {
-    ev.field(name)
-        .unwrap_or_else(|| panic!("行にフィールド `{name}` が無い: {:?}", ev.fields))
-        .to_string()
 }
 
 /// µs フィールドを数値で引く（0／非 0 の構造判定に使う。値の**大きさ**は一切見ない）。
@@ -233,7 +226,7 @@ const NATIVE_H: u32 = 180;
 
 /// キャッシュ照会段の非 0 を入力の大きさで担保するための bind 集合の要素数。
 ///
-/// `ComposeCache::get` はヒット時に `key.binds == *binds` を逐語比較する（`Vec<u32>` ＝
+/// `ComposeCache::touch` はヒット時に `key.binds == *binds` を逐語比較する（`Vec<u32>` ＝
 /// 400KB）。surface 1000 は `animations` を 1 件も持たないため、この集合は**合成の内容にも
 /// 所要にも影響しない**（`build_plan` は surface の animation 側から `binds.contains` を引く
 /// だけ）——純粋に「照会段が舐める入力量」だけを増やす仕掛けである。
@@ -280,39 +273,29 @@ fn attach(
 
 /// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ミス経路**）: 実際の `apply_show` が
 /// 表示成立点の行と perf 行を**隣接する対**として各 1 本出し、perf 行が固定文言・
-/// debug 水準・13 フィールドちょうどを備え、4 段すべてに mark が効いていて、`alloc_*` が
+/// debug 水準・13 フィールドちょうどを備え、照会段を除く 3 段と合計に mark が効いていて、`alloc_*` が
 /// 実 `FrameBudget` の値（発生点 2）で埋まる。
 ///
 /// 引き当てミスの初回適用は **4 段すべてが実行される唯一の入力**である（k の値では段が
 /// 増減しない——拡大は wintf の変換行列が掛けるため経路が分岐しない）。ゆえに
-/// どれか 1 つの `timing.mark(..)` を削ると、その段が 0 になって RED になる。同様に
+/// 合成・マスク・表示の記録の段の `timing.mark(..)` を 1 つ削ると、その段が 0 になって RED になる
+/// （照会段の mark は [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が固定する）。同様に
 /// `note_alloc` を 1 つ削ると該当 `alloc_*` が 0 になって RED になる。
 ///
 /// # 殺す誤実装
 ///
-/// - `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
-/// - `target.budget.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
+/// - 合成・マスク・表示の記録の段の `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
+/// - `presenter/budget.rs` の `self.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
 /// - `timing.emit` を成立点から引き剥がす → 隣接判定で RED
 /// - 表示成立点の行の文言・水準・フィールドの変更 → [`assert_info_line_contract`] で RED
 #[test]
-fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired() {
+fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
     let mut world = super::test_support::make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     attach(&mut presenter, &mut world, TargetId(0), 192, 0xA1);
 
     let ((), events) = capture(|| {
-        assert!(
-            show_with(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                BindSet::default(),
-                PatternState::default()
-            )
-            .is_ok(),
-            "前提: k=2/1 の初回表示は成立する"
-        );
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     });
 
     let (info, perf) = expect_single_adjacent_pair(&events);
@@ -400,27 +383,21 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
 
     let ((), events) = capture(|| {
         // 1 回目＝ミス（スロットを埋める）、2 回目＝完全一致ヒット。
-        assert!(
-            show_with(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                heavy_binds(),
-                PatternState::default()
-            )
-            .is_ok()
+        show_with_ok(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            1000,
+            heavy_binds(),
+            PatternState::default(),
         );
-        assert!(
-            show_with(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                heavy_binds(),
-                PatternState::default()
-            )
-            .is_ok()
+        show_with_ok(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            1000,
+            heavy_binds(),
+            PatternState::default(),
         );
     });
 
@@ -526,7 +503,7 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     let mut world = super::test_support::make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
     let (emo_world, atlas) =
-        super::display_tests::build_assets_with_valid_and_empty(NATIVE_W, NATIVE_H, 0xA4);
+        super::test_support::build_assets_with_valid_and_empty(NATIVE_W, NATIVE_H, 0xA4);
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
@@ -760,30 +737,10 @@ fn display_result_is_independent_of_log_configuration() {
 
     // (a) 捕捉 subscriber あり。
     let ((), events) = capture(|| {
-        assert!(
-            show_with(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                BindSet::default(),
-                PatternState::default()
-            )
-            .is_ok()
-        );
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     });
     // (b) subscriber なし（既定の NoSubscriber ＝ perf 行も表示成立点の行も一切出ない）。
-    assert!(
-        show_with(
-            &mut presenter,
-            &mut world,
-            TargetId(1),
-            1000,
-            BindSet::default(),
-            PatternState::default()
-        )
-        .is_ok()
-    );
+    show_ok(&mut presenter, &mut world, TargetId(1), 1000);
 
     // 前提: (a) では行が出ている（(b) との差がログ設定だけであることの担保）。
     assert_eq!(

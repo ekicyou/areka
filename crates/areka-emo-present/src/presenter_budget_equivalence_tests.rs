@@ -24,10 +24,10 @@
 //! 「直前の内容を持つ器へ合成しても結果が変わらない」（`compose_into` の全面上書き）が崩れた
 //! 瞬間、両者は食い違う。
 //!
-//! 残留が実際に在ることは檻自身が確かめる: ⑴交互に適用する 2 面の**表示バイトとマスクが互いに
-//! 異なる**こと ⑵暖機後の表示バッファの番地が回り続けている（＝いま書いている器に直前の別の面の
-//! 絵が入っていた）こと——の 2 点を主張する。どちらかが崩れたら残留の観測は空虚であり、檻は
-//! そこで止まる。
+//! 残留が実際に在ることは 2 点で確かめる: ⑴巡回して適用する 4 面の**表示バイトが互いに異なり、
+//! 続けて適用する 2 面のマスクも異なる**こと（検体の檻 `the_rotating_face_fixture_differs_in_bytes`）
+//! ⑵暖機後の表示バッファの番地が回り続けている（＝いま書いている器に直前の別の面の絵が入って
+//! いた）こと（本檻）。⑵ が崩れたら本檻はそこで止まり、⑴ が崩れたら検体の檻が赤になる。
 //!
 //! # 本檻が捕まえられない残留の形（実測で判明した限界）
 //!
@@ -39,8 +39,8 @@
 //!
 //! # 空の実装で偽の合格を出さない
 //!
-//! 表示バイトに不透明画素が実在すること・マスクに立っているビットと落ちているビットが**両方**
-//! 在ることを毎回確かめる。全透明や一様マスクを回す実装は「バイト等価」を空虚に満たしてしまう。
+//! 表示バイトに不透明画素が実在することを適用のたびに確かめる。マスクに立っているビットと
+//! 落ちているビットが**両方**在ることは検体の檻（`the_rotating_face_fixture_differs_in_bytes`）が確かめる。全透明や一様マスクを回す実装は「バイト等価」を空虚に満たしてしまう。
 //!
 //! # 実時間を合否条件に使わない（要件 6.2）／純 x64 常設（要件 6.3）
 //!
@@ -202,7 +202,7 @@ fn assert_expected_is_not_empty(e: &Expected, at: &str) {
 /// 5. 非空虚性: 不透明画素が在る（期待値の側の hit と非 hit の同居は fixture の檻が持つ）
 /// 6. 残留の実在: 暖機後の表示バッファの番地が
 ///    交代する 4 本の中で回り続けている（＝使い回しが成立している）
-/// 7. **ミス経路であることの陽性対照**: 定常の各適用でマスクの実体が動く（ヒットなら動かない）
+/// 7. **ミス経路であることの陽性対照**: 定常の各適用の前に、その面がスロットに無い（在ればヒットになる）
 #[test]
 fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_path() {
     // 便宜経路は presenter が握るのと別の実体で辿る（内部値の追認にしない）。**窓 DPI に依らず
@@ -219,14 +219,30 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
         let mut presenter = EmoPresenter::new();
         presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-        // 暖機後の表示バッファ・マスクの番地（使い回しとミス経路の証拠として集める）。
+        // 暖機後の表示バッファの番地（使い回しの証拠として集める）。
         let mut steady_display_ptrs: Vec<*const u8> = Vec::new();
-        let mut steady_mask_ptrs: Vec<*const AlphaMask> = Vec::new();
 
         for i in 0..WARMUP + STEADY {
             let id = face_at(i);
             let want = &want[i % ROTATING_FACES];
             let at = format!("{at_dpi} の {i} 回目（面 {id}）");
+            // ⑺ ミス経路であることの陽性対照: 定常の各適用の前に、その面がスロットに無い。
+            // 巡回長がキャッシュ容量以下へ縮むと本檻は静かにヒット経路の檻へ化けるので、ここで
+            // 止める（本 spec は「ミスしか踏まない／ヒットしか踏まない」取り違えを 2 度踏んだ）。
+            if i >= WARMUP {
+                let target = presenter
+                    .targets
+                    .get(&TargetId(0))
+                    .expect("装着済み target");
+                assert!(
+                    target
+                        .cache
+                        .get(id, &BindSet::default(), &PatternState::default())
+                        .is_none(),
+                    "{at}: 適用の前から面がスロットに在る＝引き当てがヒットする（本檻はミス経路＝\
+                     使い回しバッファの上を走る経路を観測するものである）"
+                );
+            }
             show_ok(&mut presenter, &mut world, TargetId(0), id);
 
             let target = presenter
@@ -284,7 +300,6 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
 
             if i >= WARMUP {
                 steady_display_ptrs.push(entry.composed.bytes().as_ptr());
-                steady_mask_ptrs.push(std::sync::Arc::as_ptr(&entry.mask));
             }
         }
 
@@ -315,24 +330,6 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
              使い回しの上での等価を観測できていない）",
             distinct.len()
         );
-        assert!(
-            steady_display_ptrs.len() > distinct.len(),
-            "{at_dpi}: 定常状態で同じ器が一度も再登場しない（別の面の絵が残った器へ書く経路を\
-             踏めていない）"
-        );
-
-        // ⑺ ミス経路であることの陽性対照: 定常の各適用でマスクの実体が動く。
-        //
-        // ヒットなら合成もマスク再生成も走らず、スロットのマスクは**同じ実体のまま**である。
-        // 巡回長がキャッシュ容量以下へ縮むと本檻は静かにヒット経路の檻へ化けるので、ここで
-        // 止める（本 spec は「ミスしか踏まない／ヒットしか踏まない」取り違えを 2 度踏んだ）。
-        for w in steady_mask_ptrs.windows(2) {
-            assert_ne!(
-                w[0], w[1],
-                "{at_dpi}: 定常の連続する適用でマスクの実体が動かない＝引き当てがヒットしている\
-                 （本檻はミス経路＝使い回しバッファの上を走る経路を観測するものである）"
-            );
-        }
     }
 }
 
@@ -348,15 +345,16 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
 /// 巡回長がキャッシュ容量より大きいので、暖機の一巡で面 [`FACE_A`] は既に追い出されている。
 #[test]
 fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
+    // 期待値は窓 DPI に依らず 1 組（裁定 D）。
+    let (probe_world, probe_atlas) = build_alpha_varying_faces(NATIVE_W, NATIVE_H);
+    let want = expected_of(&probe_world, &probe_atlas, FACE_A);
+    assert_expected_is_not_empty(&want, &format!("面 {FACE_A}"));
     for window_dpi in [192_u16, 120] {
         let at_dpi = format!("窓 DPI {window_dpi}");
 
         let mut world = make_world_with_gpu();
         let window = spawn_window_with_dpi(&mut world, window_dpi);
         let (emo_world, atlas) = build_alpha_varying_faces(NATIVE_W, NATIVE_H);
-        let (probe_world, probe_atlas) = build_alpha_varying_faces(NATIVE_W, NATIVE_H);
-        let want = expected_of(&probe_world, &probe_atlas, FACE_A);
-        assert_expected_is_not_empty(&want, &format!("{at_dpi} 面 {FACE_A}"));
 
         let mut presenter = EmoPresenter::new();
         presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
@@ -365,22 +363,17 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
         for i in 0..WARMUP {
             show_ok(&mut presenter, &mut world, TargetId(0), face_at(i));
         }
-        // 暖機の最後に出た面のマスク（この後の適用がミスであることの対照）。
-        let mask_before_miss = {
-            let target = presenter
+        // 1 回目の適用がミスであることの対照: 適用の前に面がスロットに無い（暖機で追い出し済み）。
+        assert!(
+            presenter
                 .targets
                 .get(&TargetId(0))
-                .expect("装着済み target");
-            let entry = target
+                .expect("装着済み target")
                 .cache
-                .get(
-                    face_at(WARMUP - 1),
-                    &BindSet::default(),
-                    &PatternState::default(),
-                )
-                .expect("暖機の最後の面はスロットに在る");
-            std::sync::Arc::as_ptr(&entry.mask)
-        };
+                .get(FACE_A, &BindSet::default(), &PatternState::default())
+                .is_none(),
+            "{at_dpi}: 1 回目の適用の前から面がスロットに在る（ヒットとの対照が空虚になる）"
+        );
         show_ok(&mut presenter, &mut world, TargetId(0), FACE_A);
         let missed_mask = {
             let target = presenter
@@ -393,11 +386,6 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
                 .expect("直前の適用がスロットを埋めている");
             std::sync::Arc::as_ptr(&entry.mask)
         };
-        assert_ne!(
-            missed_mask, mask_before_miss,
-            "{at_dpi}: 1 回目の適用がミスになっていない（ヒットとの対照が空虚になる）"
-        );
-
         show_ok(&mut presenter, &mut world, TargetId(0), FACE_A);
         let target = presenter
             .targets

@@ -33,10 +33,9 @@
 
 use super::*;
 
+use crate::presenter::test_support::pattern_overlay_at;
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{
-    BindSet, ComposeMethod, ComposedSurface, Composer, PatternFrame, PatternState,
-};
+use areka_emo_compose::{BindSet, ComposedSurface, Composer, PatternState};
 
 use super::test_support::{
     konnoyayame_shell_dir, pixel, r_post_and_komainu_shell_dir, with_com_initialized,
@@ -194,16 +193,7 @@ fn konnoyayame_blink_frame_changes_pixels_only_inside_the_frame_rect() {
 
         let base = compose(&target, &world, 0, &PatternState::default());
 
-        let mut patterns = PatternState::default();
-        patterns.set(
-            BLINK_ANIMATION,
-            PatternFrame {
-                surface_id: BLINK_SURFACE,
-                method: ComposeMethod::Overlay,
-                x: BLINK_AT.0,
-                y: BLINK_AT.1,
-            },
-        );
+        let patterns = pattern_overlay_at(BLINK_ANIMATION, BLINK_SURFACE, BLINK_AT.0, BLINK_AT.1);
         let blinked = compose(&target, &world, 0, &patterns);
 
         assert_eq!(
@@ -215,11 +205,6 @@ fn konnoyayame_blink_frame_changes_pixels_only_inside_the_frame_rect() {
         // 差が収まるべき矩形（コマの位置＋コマの絵の実寸）。
         let (left, top) = (BLINK_AT.0 as u32, BLINK_AT.1 as u32);
         let (right, bottom) = (left + BLINK_SIZE.0, top + BLINK_SIZE.1);
-        assert_eq!(
-            (left, top, right, bottom),
-            (93, 103, 165, 133),
-            "前提: 矩形は tasks 6.1 と design が挙げる (93,103)〜(165,133) でなければならない"
-        );
 
         let mut differing = 0usize;
         let mut outside: Vec<(u32, u32)> = Vec::new();

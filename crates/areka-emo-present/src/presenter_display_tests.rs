@@ -5,71 +5,9 @@ use areka_emo_compose::BindSet;
 use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    bake_world, build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu,
-    mount_entities, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
+    INFO_LINE_MESSAGE, build_assets_with_valid_and_empty, build_target_assets, capture, hide_ok,
+    make_world_with_gpu, mask_dims, mount_entities, show_ok, show_with, spawn_window_with_dpi,
 };
-
-/// R2.4/R3.2/R8.2 観測完了（golden 一致）: `attach_target` → `apply(ShowSurface 有効 id)` で reply が
-/// `Ok(())`、かつ `read_back` が同一入力の直接合成 golden と**全バイト一致**する。
-///
-/// `read_back` は合成メモの原寸バイトを返すため、`ComposedSurface.bytes()` とのバイト一致は
-/// GPU を経由しない配線検査として決定論的に成立する（供給の成功経路は T-G1 が引き継ぐ）。
-#[test]
-fn golden_match_read_back_equals_direct_compose() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-
-    let (emo_world, atlas, golden) = build_target_assets(3, 2, 0x11);
-    assert!(
-        golden.iter().any(|&b| b != 0),
-        "golden は非退化（全 0 でない）"
-    );
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-
-    let outcome = show_with(
-        &mut presenter,
-        &mut world,
-        TargetId(0),
-        1000,
-        BindSet::default(),
-        PatternState::default(),
-    );
-    assert!(
-        matches!(outcome, Ok(())),
-        "有効 id の ShowSurface は Ok を返す: {outcome:?}"
-    );
-
-    let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
-    assert_eq!(
-        rb, golden,
-        "readback が直接合成 golden とバイト一致しない（合成メモの原寸バイト列が壊れている）"
-    );
-}
-
-/// 有効 surface 1000（`w×h` 全不透明 element）＋ 定義層皆無で外形 0×0 に退化する surface 7000
-/// （element/animation ゼロ）を**同一 target**へ載せる `(EmoWorld, AtlasTable)` を返す。
-///
-/// surface 7000 は composer_tests.rs の `no_layers_degenerate_propagates_empty_composition`
-/// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::compose` が
-/// `Err(ComposeError::EmptyComposition(7000))` を返す。単なる全透明 element は非ゼロ外形の
-/// `Ok`（`all_transparent_surface_is_ok_transparent_nonzero_extent`）で EmptyComposition では
-/// ないため、退化は「定義層皆無 → 0×0」の経路で作る。
-pub(super) fn build_assets_with_valid_and_empty(
-    w: u32,
-    h: u32,
-    salt: u8,
-) -> (EmoWorld, AtlasTable) {
-    // surface 1000: 全不透明 element 1 本。surface 7000: element/animation ゼロ（定義層皆無）。
-    bake_world(
-        shell_of(vec![
-            surface(1000, vec![elem("p.png", 0, 0)]),
-            surface(7000, Vec::new()),
-        ]),
-        vec![("p.png", w, h, gradient(w, h, salt))],
-    )
-}
 
 /// R3.4 観測完了（skip＋表示不変の回帰檻）: 有効 id で表示・マスクを確立後、**解決不能 id** の
 /// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイトと
@@ -117,9 +55,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         HitTestMode::AlphaMask,
         "有効表示後は αマスク判定"
     );
-    let mask_dims_before = world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())));
+    let mask_dims_before = mask_dims(&world, surface_entity);
     assert!(
         mask_dims_before.is_some(),
         "有効表示後は AlphaMask が供給済み"
@@ -167,9 +103,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         "無効 id の skip で HitTest が変化した（マスク/当たり判定を乱している）"
     );
     // (c) AlphaMaskResource 不変（供給済みマスクが消えていない）。
-    let mask_dims_after = world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())));
+    let mask_dims_after = mask_dims(&world, surface_entity);
     assert_eq!(
         mask_dims_before, mask_dims_after,
         "無効 id の skip で AlphaMaskResource が変化した（マスクを乱している）"
@@ -225,6 +159,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         .read_back(TargetId(0))
         .expect("read_back（前）失敗")
         .len();
+    let display_before = world.get::<GraphicsCommandList>(surface_entity).cloned();
 
     // EmptyComposition 退化: warn! ＋ Hide 縮退 ＋ reply Ok（skip でも Err でもない）。
     let outcome = show_with(
@@ -263,6 +198,11 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     assert_eq!(
         bytes_len_before, bytes_len_after,
         "EmptyComposition で 0×0 のメモへ差し替わった（既存メモ保持の不変条件違反）"
+    );
+    assert_eq!(
+        world.get::<GraphicsCommandList>(surface_entity).cloned(),
+        display_before,
+        "EmptyComposition で表示記録が差し替わった（既存の表示記録保持の不変条件違反）"
     );
     // 7000 は非合成ゆえキャッシュへ載らない（0×0 を挿入しない）。
     assert!(
@@ -336,7 +276,17 @@ fn hide_then_reshow_recovers_display_from_cache() {
     }
 
     // 再 ShowSurface（同一有効 id）: キャッシュヒットで再合成せず表示復帰。
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
+    let hits: Vec<_> = events
+        .iter()
+        .filter(|e| e.message() == INFO_LINE_MESSAGE)
+        .map(|e| e.field("cache_hit"))
+        .collect();
+    assert_eq!(
+        hits,
+        vec![Some("true")],
+        "再表示は表示の行 1 行・控えに当たる（Hide の後に合成し直していない）"
+    );
 
     // 表示復帰: 可視 ＋ αマスク判定へ戻る。
     assert!(
@@ -465,9 +415,9 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 ///
 /// # 「引き当てで済む」の観測形
 ///
-/// `apply_show` が `cache_hit` を決めるのは `cache.get(surface_id, &binds, &pattern)` ちょうど
-/// その呼び出しである（鍵に k は入らない）。
-/// よって同じ引数での `get` が `Some` であることは「次の同一入力の適用が引き当てで済む」ことと同値である。
+/// `apply_show` が `cache_hit` を決めるのは `target.cache.touch(surface_id, &binds, &pattern)` で
+/// ある（鍵に k は入らない）。`touch` と `get` は同じ `position` で引くので、同じ引数での `get` が
+/// `Some` であることは「次の同一入力の適用が引き当てで済む」ことと同値である。
 #[test]
 fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits() {
     let mut world = make_world_with_gpu();

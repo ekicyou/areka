@@ -8,8 +8,8 @@
 //!   タイミングに成否を委ねない）。
 //!
 //! 文字層スロットが従来 `HitTest` component を持たなかったことは、`wintf` 側で
-//! 「未付与＝既定 `HitTestMode::Bounds`」（`ecs/layout/hit_test/mod.rs:367-371`）と扱われ、
-//! `Bounds` 判定の合成 α は `Visual::clamped_opacity()`（`ecs/graphics/visual.rs:140-142`）＝
+//! 「未付与＝既定 `HitTestMode::Bounds`」（`ecs/layout/hit_test/mod.rs`）と扱われ、
+//! `Bounds` 判定の合成 α は `Visual::clamped_opacity()`（`ecs/graphics/visual.rs`）＝
 //! `is_visible` を見ないため、可視性を落としてもポインタが透過しない。ゆえに本層で
 //! スロットへも明示的に `HitTest` を付与して切り替える。
 

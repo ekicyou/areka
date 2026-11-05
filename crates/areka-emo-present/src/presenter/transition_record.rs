@@ -54,7 +54,7 @@ pub const KIND_SURFACE: &str = "surface";
 /// この寸で表示記録を載せた（外れでは原寸 D2D bitmap 生成＋描画命令の記録を伴い、ヒットでは
 /// 合成メモが保持する記録をそのまま載せる）。原寸の外形の変化を含み得る。
 pub const SURFACE_STAGE_UPLOAD: &str = "upload";
-/// 新しい寸で可視化した（`set_bounds`・可視性付与の後）。
+/// 新しい寸で可視化した（`set_layout`・可視性付与の後）。
 pub const SURFACE_STAGE_VISUALIZE: &str = "visualize";
 /// 再表示を見送った（拡大率不変・不可視）。
 pub const SURFACE_STAGE_SKIPPED: &str = "skipped";

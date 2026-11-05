@@ -114,9 +114,9 @@ fn command_driven_target_after_first_show(salt: u8) -> (World, EmoPresenter, Tar
 /// 予約スロットへ描画内容（`VisualGraphics`）を装着する（emo-text の
 /// `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs`）と同じ形）。
 ///
-/// 本 crate は emo-text へ依存できない（依存方向は emo-compose → emo-present）ため、装着の形だけを
-/// 同型に再現する。文字の**絵**は要らない——ここで問うのは「内容を持つスロットにも非表示が及ぶか」
-/// であって描かれた画素の内容ではない。
+/// 本 crate は emo-text へ依存できない（emo-text が本 crate に依存しており、逆向きは循環になる）
+/// ため、装着の形だけを同型に再現する。文字の**絵**は要らない——ここで問うのは「内容を持つ
+/// スロットにも非表示が及ぶか」であって描かれた画素の内容ではない。
 fn attach_content_to_slot(world: &mut World, slot: Entity) {
     let compositor = world
         .get_resource::<WucGraphicsResource>()

@@ -1,9 +1,9 @@
-//! `BalloonFrameSource`（balloon.rs）: バルーン枠画像を **シェルと同一の** compose/present 経路へ
+//! balloon.rs: バルーン枠画像を **シェルと同一の** compose/present 経路へ
 //! 載せる入力適合層（R5.1）。
 //!
 //! バルーンの入力は **scope 別に解決した面画像**である（R1.1/R1.2）。本モジュールは scope 番号から
-//! 接頭辞優先連鎖（[`prefix_chain`]）を導出し、面 ID 単位で連鎖を辿って採用面列
-//! （[`ResolvedFace`]）を決め、そこから **synthetic surfaces.txt テキスト**（`surface{ID}` に単一
+//! 接頭辞優先連鎖（`prefix_chain`）を導出し、面 ID 単位で連鎖を辿って採用面列
+//! （`ResolvedFace`）を決め、そこから **synthetic surfaces.txt テキスト**（`surface{ID}` に単一
 //! overlay element＝採用面の実ファイル名）を生成 → `areka_parsers::shell::parse` →
 //! `areka_emo_atlas::bake` → `EmoWorld::build`＋`bind_atlas` と、シェルが辿るのと**寸分違わぬ
 //! 公開 API 経路**で `(EmoWorld, AtlasTable)` を組み上げる。直 WIC バイパスは設けない（R5.1）。
@@ -16,7 +16,7 @@
 //!   `online*`（受信アニメ）はどの連鎖にも載らず列挙されない。相方側 `balloonk*` は
 //!   **scope 1 以上でのみ**採用される正規の面系列であり、scope 0 の連鎖には現れない。
 //! - **透過の宣言**（spec: areka-P0-self-alpha-declaration 要件 2）: 基層の `descript.txt` の
-//!   `use_self_alpha` を [`load_balloon_use_self_alpha`] がバルーン 1 つにつき 1 回読み、焼く関数
+//!   `use_self_alpha` を `load_balloon_use_self_alpha` がバルーン 1 つにつき 1 回読み、焼く関数
 //!   [`build_balloon_target_from_faces`] が値を引数で受ける。面ごとの設定ファイルでは上書きしない。
 //!   `.pna` は表示に使わず、フォルダ直下の数を記録するだけである。
 //! - **surface id = ID**（`{接頭辞}{ID}` の ID をそのまま採用）。`balloon.defaultsurface` 既定 0 と整合。
@@ -113,7 +113,7 @@ pub(crate) const BALLOON_FAMILY: SeriesFamily = SeriesFamily {
 
 /// 連鎖内の 1 接頭辞（採用時の分類タグ付き）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SeriesPrefix {
+pub(crate) struct SeriesPrefix {
     /// 探索に用いる接頭辞（例: `"balloonp1def"` / `"balloonk"`）。
     pub prefix: String,
     /// この接頭辞が連鎖内で担う役割。
@@ -176,7 +176,7 @@ impl SeriesFamily {
 /// scope は最後まで**数値のみ**で扱う。`Sakura`/`Kero` 等の 2 値列挙も、さくらスクリプト側の
 /// 別語彙（`\h`/`\u`）も内部の正準表現としない（R1.9）。ゆえに解決規則は M1 の実行時 scope
 /// （0 と 1）に閉じず、scope 番号一般（n≧2 を含む）で定義される（R1.6）。
-pub fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefix> {
+pub(crate) fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefix> {
     let mut chain: Vec<SeriesPrefix> = Vec::new();
 
     // (i) 当該 scope 自身の候補: 正規名を先頭に、当該 scope の旧名を後続に置く。
@@ -396,7 +396,7 @@ fn enumerate_file_names(
 
 /// `balloon_dir` から当該 `scope` の**採用面列**を解決する（全消費者共通の単一施行点）。
 ///
-/// 手順は 3 段——[`prefix_chain`] で連鎖を導出し、`enumerate_file_names` で
+/// 手順は 3 段——`prefix_chain` で連鎖を導出し、`enumerate_file_names` で
 /// ディレクトリを **1 回だけ**走査し、純核 `select_faces` で面 ID 単位の連鎖探索を行う
 /// （R1.2/R1.3）。面 ID は連鎖内の全接頭辞にまたがる ID 集合の和であり、戻りは
 /// **surface id 昇順**・同一入力に対し決定論的（ディレクトリ走査順に依存しない）。
@@ -586,8 +586,9 @@ fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<
 /// # 観測（R6.3）
 ///
 /// 確定した `windowposition` / `validrect` の実値を scope・採用上書きファイル名とともに `info!`
-/// で記録する。placement／boot の 2 呼出点から scope あたり 2 行出るが、**値が一致すること自体**が
-/// 権威一元化の生き証人になる。
+/// で記録する。placement からは scope あたり 1 行出る。boot は `load_scope_balloon_definitions` から面ごとに
+/// （面 0 と、自前の設定ファイルを持つ面）1 行ずつ出し、面 0 の行は placement の行と**値が一致する**——
+/// それが権威一元化の生き証人になる。
 pub fn load_scope_balloon_model(
     balloon_dir: &Path,
     scope: u32,

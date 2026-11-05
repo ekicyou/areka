@@ -52,7 +52,6 @@ impl EmoPresenter {
     /// `reveal` は「呼び手がこの適用の後に窓を見えるようにする」こと。見えていなかった外から所有される
     /// 窓を出し直す [`EmoPresenter::show_target`] だけが真を渡し、表示の行の水準の判定（コマ送りだけの
     /// 適用か）に使う（`animated-surface-log-flood` 要件 1.5）。
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_show(
         &mut self,
         world: &mut World,
@@ -199,8 +198,8 @@ impl EmoPresenter {
                             }
                             target.failure_note = Some(NO_GFX);
                             return Err(PresentError::Device {
-                                hresult: 0,
-                                context: "GraphicsCore resource",
+                                hresult: NO_GFX.1,
+                                context: NO_GFX.0,
                             });
                         };
                         // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
@@ -211,7 +210,7 @@ impl EmoPresenter {
                             .native_scratch(|scratch| record_display(dc, scratch, repeat))
                         {
                             Ok(list) => list,
-                            // record_display は内部で記録済み（display.rs device_err・同じ原因の続きは debug!）。
+                            // record_display は内部で記録済み（command.rs の device_err・同じ原因の続きは debug!）。
                             Err(e) => {
                                 if let PresentError::Device { hresult, context } = &e {
                                     target.failure_note = Some((*context, *hresult));

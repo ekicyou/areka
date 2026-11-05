@@ -69,6 +69,9 @@ fn field_value<'a>(line: &'a str, name: &str) -> &'a str {
 // ── 語彙の逐語固定（Requirement 2.7）────────────────────────────────────────────────────
 
 /// `stage=upload` の行は寸と `resized` を持ち、`reason` は番兵で埋まる。
+///
+/// 下の 3 本の逐語は `target_id` が `Debug` 表現（`TargetId(3)`）でなく内側の u32 で出ることも
+/// 固定する（判定側は `target_id` から scope を算術で写像し、括弧は 1 トークンに切れない）。
 #[test]
 fn the_upload_line_carries_the_size_and_the_resize_verdict() {
     let line = surface_line(&SurfaceRecord {
@@ -128,33 +131,10 @@ fn the_skipped_line_carries_the_reason_and_keeps_the_size_fields_as_sentinels() 
     );
 }
 
-/// `target_id` は `Debug` 表現（`TargetId(3)`）ではなく**内側の u32** で出る。
-///
-/// 判定側は `target_id` から scope を規則「shell = 2·scope ／ balloon = 2·scope+1」で写像する
-/// ため、値が算術で読めなければ判定が組み立たない。加えて `TargetId(3)` の字面は
-/// `judge-perf.py` と同じ辞書化規則で 1 トークンに切れない形（括弧）を持ち込む。
-#[test]
-fn the_target_id_is_written_as_a_bare_number() {
-    let line = surface_line(&SurfaceRecord {
-        stamp: fixed_stamp(1, 1),
-        stage: SurfaceStage::Upload,
-        target_id: TargetId(7),
-        size: Some((1, 1)),
-        resized: Some(false),
-        reason: None,
-    });
-
-    assert_eq!(field_value(&line, SURFACE_FIELD_TARGET_ID), "7");
-    assert!(
-        !line.contains("TargetId"),
-        "`TargetId` の Debug 表現が行へ漏れている: {line}"
-    );
-}
-
 /// 3 段階のどの行も**同じフィールド名を同じ順序で 1 度ずつ**持つ。
 ///
 /// 辞書化は後勝ちなので、1 行に同じ名前が 2 度出ると先の値が黙って消える
-/// （`tools/perf/judge-perf.py:562,588-596`）。段階でフィールドを落とさないことと併せて、
+/// （`tools/perf/judge-perf.py` の `parse_fields`）。段階でフィールドを落とさないことと併せて、
 /// 「記録が出ていない」と「その段階にはその値が無い」の区別を字面の上で保つ。
 #[test]
 fn every_surface_line_repeats_no_field_name_and_drops_none() {
@@ -482,14 +462,9 @@ fn gpu_world_with_frame() -> World {
     world
 }
 
-/// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作り、窓を返す（`author_dpi` は 96 固定）。
-fn attach(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    target: TargetId,
-    window_dpi: u16,
-) -> Entity {
-    let window = spawn_window_with_dpi(world, window_dpi);
+/// DPI 96 の窓 ＋ 装着済み target を 1 組作り、窓を返す（`author_dpi` も 96。別の DPI は後から `set_window_dpi`）。
+fn attach(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) -> Entity {
+    let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
     presenter.attach_target(target, window, emo_world, atlas, 96);
     window
@@ -535,7 +510,7 @@ fn perf_line(events: &[CapturedEvent]) -> CapturedEvent {
 fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    attach(&mut presenter, &mut world, TargetId(3), 96);
+    attach(&mut presenter, &mut world, TargetId(3));
 
     let ((), events) = capture(|| {
         assert!(
@@ -594,7 +569,7 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
 fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    attach(&mut presenter, &mut world, TargetId(0), 96);
+    attach(&mut presenter, &mut world, TargetId(0));
     assert!(
         show(&mut presenter, &mut world, TargetId(0)).is_ok(),
         "前提: 初回表示は成立する（ここまでは捕捉の外）"
@@ -624,7 +599,7 @@ fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
 fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    let window = attach(&mut presenter, &mut world, TargetId(1), 96);
+    let window = attach(&mut presenter, &mut world, TargetId(1));
     assert!(
         show(&mut presenter, &mut world, TargetId(1)).is_ok(),
         "前提: k=1/1 の初回表示は成立する"
@@ -662,7 +637,7 @@ fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
 fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    let window = attach(&mut presenter, &mut world, TargetId(2), 96);
+    let window = attach(&mut presenter, &mut world, TargetId(2));
     assert!(
         show(&mut presenter, &mut world, TargetId(2)).is_ok(),
         "前提: 初回表示は成立する"

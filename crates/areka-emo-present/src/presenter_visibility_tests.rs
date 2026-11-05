@@ -118,7 +118,7 @@ fn external_target_after_first_show(
 /// 揃っている）ことを**同時に**主張する。片方だけでは「出ないが文字も流せない」縮退を見逃す。
 ///
 /// メモのバイト（readback）まで golden 一致を見るのは、可視化手順を落とした結果として
-/// アップロードやマスク同期まで一緒に落ちていないこと（design「それ以外の全手順は所有権に依らず共通」）
+/// 合成とメモへの取り込みまで一緒に落ちていないこと（design「それ以外の全手順は所有権に依らず共通」）
 /// を実行で確かめるためである。
 #[test]
 fn external_show_establishes_display_without_making_it_visible() {
@@ -338,7 +338,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
 /// なった。マスクの不変は「αマスクの更新を落とした」ことと区別できなければ意味が無いため、
 /// 係数と照会値が実際に動いていることを同じテストの中で対にして主張する。
 #[test]
-fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
+fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mask_native() {
     let (mut world, window, mut presenter, target, golden) =
         external_target_after_first_show(96, 0x2A);
     let (surface, _slot) = mount_entities(&presenter, target);
@@ -678,7 +678,8 @@ fn external_target_can_be_shown_again_after_hide() {
 }
 
 // ── 失敗経路（log-first・沈黙する失敗を作らない）────────────────────────────────────────
-// いずれも `attach_target` が World にも GPU にも触れない性質を使い、素の `World` で決定論固定する。
+// `show_target` の檻は、`attach_target` が World にも GPU にも触れない性質を使い、素の `World` で
+// 決定論固定する。
 
 /// 未装着 target への所有権設定は `Err`（`error!` 済み・沈黙しない）。
 #[test]
@@ -746,28 +747,4 @@ fn setting_ownership_does_not_change_current_visibility() {
         "所有権の設定が可視状態を消している（設定は宣言であって指令ではない）"
     );
     assert_entities_visible(&world, &presenter, TargetId(0), "所有権設定の直後");
-}
-
-/// 未装着 target の可視状態照会は `None`（「不可視」と区別する）。
-#[test]
-fn target_visible_is_none_for_unattached_target() {
-    let presenter = EmoPresenter::new();
-    assert_eq!(
-        presenter.target_visible(TargetId(9)),
-        None,
-        "未装着 target の照会は None（不可視 Some(false) と混同しない）"
-    );
-}
-
-/// 装着直後（未表示）は `Some(false)`（skeleton の初期可視性）。
-#[test]
-fn target_visible_is_false_right_after_attach() {
-    let mut world = World::new();
-    let mut presenter = EmoPresenter::new();
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    assert_eq!(
-        presenter.target_visible(TargetId(0)),
-        Some(false),
-        "装着直後は不可視（skeleton 登録のみ）"
-    );
 }

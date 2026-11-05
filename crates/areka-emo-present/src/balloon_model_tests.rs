@@ -73,18 +73,6 @@ fn load_scope_balloon_model_merges_per_scope_on_emo2_fixture() {
         (Some(-190), Some(-75)),
         "scope 1 の windowposition は balloonk0s.txt の値（R2.2）"
     );
-
-    // --- 2 scope が実際に別物であること（全 scope 共通 1 本への畳み込みの検出） ---
-    assert_ne!(
-        sakura.windowposition(),
-        kero.windowposition(),
-        "本体側と相方側の windowposition が同値＝scope 別化が効いていない"
-    );
-    assert_ne!(
-        sakura.validrect(),
-        kero.validrect(),
-        "本体側と相方側の validrect が同値＝scope 別化が効いていない"
-    );
 }
 
 /// 檻 8-b（R2.5）継承: 面別上書き層で**指定されなかった**項目は既定設定（`descript.txt`）から

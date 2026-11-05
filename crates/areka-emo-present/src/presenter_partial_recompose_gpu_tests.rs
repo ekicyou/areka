@@ -18,8 +18,9 @@ use wintf::ecs::widget::bitmap_source::AlphaMask;
 use crate::display::gpu_tests::replay_and_read_back;
 
 use super::test_support::{
-    RANGE_LINE_MESSAGE, bake_world, capture, elem, make_world_with_gpu, mount_entities,
-    native_golden_with, pattern_overlay_at, shell_of, show_with, spawn_window_with_dpi, surface,
+    RANGE_LINE_MESSAGE, bake_world, capture, elem, gradient_with_alpha, make_world_with_gpu,
+    mount_entities, native_golden_with, pattern_overlay_at, shell_of, show_with_ok,
+    spawn_window_with_dpi, surface,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -29,33 +30,17 @@ const BASE_SIZE: (u32, u32) = (16, 12);
 const CELL_SIZE: (u32, u32) = (4, 3);
 const CELL_Y: i64 = 2;
 
-/// premultiplied BGRA（成分は straight 色に α を掛けるので α 以下）。
-fn image((w, h): (u32, u32), salt: u8, alpha: impl Fn(u32, u32) -> u8) -> Vec<u8> {
-    let mut img = Vec::with_capacity((w * h * 4) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let a = alpha(x, y);
-            let pm = |v: u8| ((v as u16 * a as u16) / 255) as u8;
-            img.push(pm((x as u8).wrapping_mul(37).wrapping_add(salt)));
-            img.push(pm((y as u8).wrapping_mul(53).wrapping_add(salt)));
-            img.push(pm(((x + y) as u8).wrapping_mul(71).wrapping_add(salt)));
-            img.push(a);
-        }
-    }
-    img
-}
-
 /// 下の面（左半分は不透明・右半分は透明と半透明の混ざり）とコマの面（四隅が透明・縁が半透明）。
 fn build_assets() -> (EmoWorld, AtlasTable) {
     let (bw, bh) = BASE_SIZE;
     let (cw, ch) = CELL_SIZE;
-    let base = image(BASE_SIZE, 11, |x, y| match (x < bw / 2, (x + y) % 3) {
+    let base = gradient_with_alpha(bw, bh, 11, |x, y| match (x < bw / 2, (x + y) % 3) {
         (true, _) => 255,
         (false, 0) => 0,
         (false, 1) => 96,
         _ => 255,
     });
-    let cell = image(CELL_SIZE, 0x80, |x, y| {
+    let cell = gradient_with_alpha(cw, ch, 0x80, |x, y| {
         let edge_x = x == 0 || x == cw - 1;
         let edge_y = y == 0 || y == ch - 1;
         match (edge_x, edge_y) {
@@ -74,19 +59,13 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
 }
 
 fn show(presenter: &mut EmoPresenter, world: &mut World, x: i64) {
-    assert!(
-        matches!(
-            show_with(
-                presenter,
-                world,
-                TARGET,
-                BASE_ID,
-                BindSet::default(),
-                pattern_overlay_at(2000, CELL_ID, x, CELL_Y)
-            ),
-            Ok(())
-        ),
-        "コマ x={x} の ShowSurface が Ok でない"
+    show_with_ok(
+        presenter,
+        world,
+        TARGET,
+        BASE_ID,
+        BindSet::default(),
+        pattern_overlay_at(2000, CELL_ID, x, CELL_Y),
     );
 }
 

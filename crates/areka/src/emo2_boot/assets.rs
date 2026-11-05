@@ -1,7 +1,7 @@
 //! 構築入力（BootAssets）の組立と shell descript からの static bindset 抽出。
 //!
 //! `build_boot_assets`（shell: `areka_emo_present::shell_target::load_shell_target` を 1 回→scope
-//! ごとに `ShellTarget::build_world`／balloon: scope ごとに `resolve_balloon_faces`→
+//! ごとに `ShellTarget::take_world`（1 つ目は読み込みで組んだ表・2 つ目から組み直し）／balloon: scope ごとに `resolve_balloon_faces`→
 //! `build_balloon_target_from_faces`＋`load_scope_balloon_definitions`＝[`BalloonScopeAssets`]／
 //! `SurfaceResolver`＝`alias_snapshot()`／既定の着せ替えと名前の表＝シェルの着せ替えの読みから
 //! スコープごとに `DefaultBinds::from_groups`・`BindResolver::from_groups`）を所有する。
@@ -39,7 +39,7 @@ const DESCRIPT_TXT: &str = "descript.txt";
 
 /// 1 scope 分のシェル表示資産（`attach_target` へ手渡す 1 組）。
 ///
-/// `emo_world` は scope 専用に `ShellTarget::build_world` で組んだ非 Clone World（装着で move 消費）。
+/// `emo_world` は scope 専用に `ShellTarget::take_world` で受け取った非 Clone World（装着で move 消費）。
 /// `atlas` は読み込みを 1 回で済ませた共有アトラス（`AtlasTable` は内部 Arc の安価 Clone）。
 pub struct ScopeAssets {
     /// この資産が対応する scope 番号。
@@ -177,8 +177,8 @@ pub struct BootAssets {
 ///
 /// 組立経路は `resolve_with_shell`（shell dir・名前なしは既定の解決）→ シェル読み込みの権威
 /// `load_shell_target` を **1 回**（フォルダの一覧・`surfaces.txt` の読取と解析・面の画像の決定・bake をすべて権威が行う）→
-/// scope ごとに `ShellTarget::build_world`（`EmoWorld` は非 Clone・装着で move 消費ゆえ scope 数だけ
-/// 組む。`AtlasTable` は安価 Clone）。
+/// scope ごとに `ShellTarget::take_world`（`EmoWorld` は非 Clone・装着で move 消費ゆえ scope 数だけ
+/// 受け取る。`AtlasTable` は安価 Clone）。
 /// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
 /// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_definitions`）を行い
 /// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・Req 2.1）。
@@ -340,19 +340,20 @@ pub fn build_shell_assets(
     // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
     // （`areka_emo_present::shell_target`）。採寸（`placement::measure`）も同じ入口を通るので、
     // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
-    let target = load_shell_target(&shell_dir, decoder)?;
+    let mut target = load_shell_target(&shell_dir, decoder)?;
     let atlas = target.atlas().clone();
     let bake_failures = target.bake_errors().iter().map(|e| e.to_string()).collect();
 
-    // scope ごとに FRESH な EmoWorld を組む（`build_world` が面の表の構築とアトラス装着を行う。
-    // EmoWorld は非 Clone・装着で move 消費ゆえ scope 数だけ組む。AtlasTable は Clone 共有）。
-    // 同じ `ShellTarget` から組むので内容は毎回同じである。resolver 用 alias スナップショットは
+    // scope ごとに EmoWorld を受け取る（`take_world` が面の表の受け渡しとアトラス装着を行う。
+    // 1 つ目は読み込みで組んだ表・2 つ目から組み直し。EmoWorld は非 Clone・装着で move 消費ゆえ
+    // scope 数だけ要る。AtlasTable は Clone 共有）。同じ `ShellTarget` から作るので内容は毎回同じである。resolver 用 alias スナップショットは
     // scope 非依存ゆえ最初に組んだ World から一度だけ採る。
     let mut shells = Vec::with_capacity(scopes.len());
     let mut resolver_snapshot: Option<BTreeMap<String, Vec<u32>>> = None;
     let mut surface_ids = BTreeSet::new();
     for &scope in scopes {
-        let emo_world = target.build_world();
+        // 1 つ目は読み込みで組んだ面の表を受け取る（組み直さない）。2 つ目からは `build_world` と同じ。
+        let emo_world = target.take_world();
         if resolver_snapshot.is_none() {
             resolver_snapshot = Some(emo_world.alias_snapshot());
             surface_ids = emo_world.surface_ids().collect();

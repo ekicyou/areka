@@ -12,7 +12,7 @@
 //!
 //! # 受け口の置き場所
 //!
-//! 検体の受け口・COM 初期化・ログの捕捉窓は、`shell_target` の檻が共有する
+//! 検体の受け口・COM 初期化・記録の手伝い（describe・warn_lines）は、`shell_target` の檻が共有する
 //! `shell_target_test_support.rs`（[`super::test_support`]）に在る。一時フォルダは共有窓口
 //! [`temp_path_kit::TempPath`] をその場で呼ぶ。
 
@@ -25,8 +25,8 @@ use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    CapturedEvent, SHELL_TARGET, decoder_with, emo2_shell_dir, layer0_path, with_com_initialized,
-    write_descript,
+    CapturedEvent, SHELL_TARGET, decoder_with, emo2_shell_dir, from_shell_target, layer0_path,
+    with_com_initialized, write_descript, write_records_fixture,
 };
 use log_capture_kit::capture;
 
@@ -131,23 +131,15 @@ fn directories_are_not_taken_as_surface_images() {
 
 // ── 記録（要件 1.5・1.6・3.5・6.1・6.2・6.4・6.5）──────────────────────────────
 
-/// 宛先が権威のものである記録だけを数える。
-fn count_from_shell_target(events: &[CapturedEvent], level: tracing::Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.target == SHELL_TARGET && e.level == level)
-        .count()
-}
-
 /// 宛先が権威のもので、本文に `needle` を含む記録を 1 件だけ取り出す。
 fn only_from_shell_target<'a>(
     events: &'a [CapturedEvent],
     level: tracing::Level,
     needle: &str,
 ) -> &'a CapturedEvent {
-    let hits: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.target == SHELL_TARGET && e.level == level && e.message().contains(needle))
+    let hits: Vec<&CapturedEvent> = from_shell_target(events, level)
+        .into_iter()
+        .filter(|e| e.message().contains(needle))
         .collect();
     assert_eq!(
         hits.len(),
@@ -186,31 +178,7 @@ fn only_shell_self_alpha_info(events: &[CapturedEvent]) -> String {
 #[test]
 fn every_record_is_emitted_once_per_load() {
     let dir = TempPath::new("shell-target-records");
-    std::fs::write(
-        dir.child("surfaces.txt"),
-        concat!(
-            "charset,UTF-8\n",
-            "surface0\n{\nelement0,overlay,base0.png,0,0\n}\n",
-            "surface1\n{\nelement1,overlay,parts1.png,0,0\n",
-            "animation0.interval,random,4\n",
-            "animation0.pattern0,overlay,777,0,0,0\n}\n",
-        ),
-    )
-    .expect("記述ファイル作成");
-    write_descript(dir.path());
-    for name in [
-        "surface0.png",
-        "surface0000.png",
-        "surface1.png",
-        "surface99999999999.png",
-        "base0.png",
-        "parts1.png",
-    ] {
-        std::fs::File::create(dir.child(name)).expect("プレースホルダ作成");
-    }
-
-    // 焼けるのは 2 枚だけ——`parts1.png` を入れないので、その 1 枚が焼く段で落ちる。
-    let dec = decoder_with(dir.path(), &["base0.png", "surface1.png"]);
+    let dec = write_records_fixture(dir.path());
 
     let (target, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
@@ -233,7 +201,7 @@ fn every_record_is_emitted_once_per_load() {
         "どのシェルの結果かが読み取れる"
     );
     assert_eq!(
-        count_from_shell_target(&events, tracing::Level::INFO),
+        from_shell_target(&events, tracing::Level::INFO).len(),
         1,
         "読み込み 1 回につき `info!` は 1 行だけ"
     );
@@ -250,7 +218,7 @@ fn every_record_is_emitted_once_per_load() {
     assert_eq!(overflow.field_str("file"), Some("surface99999999999.png"));
 
     assert_eq!(
-        count_from_shell_target(&events, tracing::Level::DEBUG),
+        from_shell_target(&events, tracing::Level::DEBUG).len(),
         2,
         "`debug!` は使わなかった画像 1 行＋桁溢れ 1 行だけ"
     );
@@ -285,7 +253,7 @@ fn every_record_is_emitted_once_per_load() {
     assert_eq!(target.bake_errors().len(), 1, "落ちた絵は 1 枚（前提）");
 
     assert_eq!(
-        count_from_shell_target(&events, tracing::Level::WARN),
+        from_shell_target(&events, tracing::Level::WARN).len(),
         2,
         "`warn!` は重複・相手の無いコマの 2 行だけ（脱落は `error!`）"
     );
@@ -293,10 +261,10 @@ fn every_record_is_emitted_once_per_load() {
     // `build_world` は新しい記録を 0 本出す（design「Monitoring」）。
     let (world, again) = capture(|| target.build_world());
     assert_eq!(
-        count_from_shell_target(&again, tracing::Level::WARN)
-            + count_from_shell_target(&again, tracing::Level::INFO)
-            + count_from_shell_target(&again, tracing::Level::DEBUG)
-            + count_from_shell_target(&again, tracing::Level::ERROR),
+        from_shell_target(&again, tracing::Level::WARN).len()
+            + from_shell_target(&again, tracing::Level::INFO).len()
+            + from_shell_target(&again, tracing::Level::DEBUG).len()
+            + from_shell_target(&again, tracing::Level::ERROR).len(),
         0,
         "面の表を組み直しても権威は記録を出さない: {again:?}"
     );
@@ -402,7 +370,7 @@ fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
 
         // 重複・相手の無いコマ・脱落はどれも 0 件。上の `info!`／`debug!` が同じ走行で
         // 実在することが、この 0 件が空振りでないことの対照である。
-        assert_eq!(count_from_shell_target(&events, tracing::Level::WARN), 0);
+        assert_eq!(from_shell_target(&events, tracing::Level::WARN).len(), 0);
     });
 }
 

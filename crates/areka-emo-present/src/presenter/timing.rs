@@ -61,9 +61,9 @@ pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 /// 費やされた時間があれば差として現れ、内訳の取りこぼしが判る）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Stage {
-    /// キャッシュ照会（`ComposeCache::get`）。
+    /// キャッシュ照会（`ComposeCache::touch`）。
     CacheLookup,
-    /// 合成（`Composer::compose` / `compose_into`）。
+    /// 合成（`Composer::compose_into` / `compose_into_reusing`）。
     Compose,
     /// 当たり判定マスク生成（`AlphaMask` 生成・引き当て時は実行されない）。
     MaskGen,

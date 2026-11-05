@@ -87,7 +87,7 @@ fn surfaces_txt() -> String {
     )
 }
 
-/// フォルダ直下に在ることにするファイル名の一覧（面の画像 4 枚＋画像でない 3 件）。
+/// フォルダ直下に在ることにするファイル名の一覧（面の画像 4 枚＋部品の画像 2 枚＋surfaces.txt）。
 const FILE_NAMES: [&str; 7] = [
     "surface0.png",
     "surface1.png",
@@ -187,13 +187,6 @@ fn case_b_empty_layer_zero_merges_the_image_underneath() {
     let composed = compose(&target, &world, 0).expect("面 0 は合成できる");
     let expected = (BASE0.0.max(PARTS.0), BASE0.1.max(PARTS.1));
     assert_eq!(
-        expected,
-        (6, 12),
-        "前提: 期待する外形はどちらか一方の実寸と一致しない"
-    );
-    assert_ne!(expected, BASE0, "前提: 画像だけを数えた外形とは違う");
-    assert_ne!(expected, PARTS, "前提: `element1` だけを数えた外形とは違う");
-    assert_eq!(
         (composed.width(), composed.height()),
         expected,
         "イ: 外形は画像と `element1` を合わせたものでなければならない"
@@ -291,11 +284,6 @@ fn every_image_is_either_used_or_shadowed_exactly_once() {
         shadowed,
         vec![2],
         "使わなかったのは `element0` を持つ面 2 だけ"
-    );
-
-    assert!(
-        world.surface(7).is_none(),
-        "宣言も画像も無い面 7 が作られている"
     );
 }
 

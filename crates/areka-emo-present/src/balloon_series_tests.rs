@@ -364,30 +364,9 @@ fn select_faces_preserves_original_file_name_case() {
 }
 
 // ── 檻 6: 採用接頭辞からの面別上書きファイル名導出（R2.2/R2.3・R7.1）─────────────
+// R2.3（後段へ縮退した面は後段接頭辞の上書き層）は `resolve_balloon_faces_falls_back_per_face_id_on_real_directory` が持つ。
 
-/// 檻 6（R2.2/R2.3）: 面別上書きファイル名は**採用接頭辞に対応して**導出され、ID 単位
-/// フォールバックで後段へ落ちた面ではその後段接頭辞の名前になる。scope 1 が `balloonk0`
-/// を採ったなら `balloonk0s.txt`・面 1 が `balloons1` へ縮退したなら `balloons1s.txt`
-/// （連鎖の他の接頭辞の上書き層を引かない）。
-#[test]
-fn override_file_name_follows_adopted_prefix_per_face() {
-    let names = ["balloonk0.png", "balloons0.png", "balloons1.png"];
-    let faces = select_faces(&names, &prefix_chain(&BALLOON_FAMILY, 1));
-
-    assert_eq!(faces.len(), 2, "面 0/1 の 2 面が解決される");
-    assert_eq!(
-        faces[0].override_file_name(),
-        "balloonk0s.txt",
-        "採用面 balloonk0 の上書き層は balloonk0s.txt（balloons0s.txt を引かない・R2.2）"
-    );
-    assert_eq!(
-        faces[1].override_file_name(),
-        "balloons1s.txt",
-        "デフォルト段へ縮退した面 1 の上書き層は後段接頭辞の balloons1s.txt（R2.3）"
-    );
-}
-
-/// 檻 6（続き・R2.2）: 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
+/// 檻 6（R2.2）: 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
 /// 依らず**連鎖上の接頭辞**（小文字正準形）から導出される。
 #[test]
 fn override_file_name_uses_chain_prefix_not_file_case() {

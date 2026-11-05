@@ -5,7 +5,7 @@
 //! シェルを本物の読み手 [`WicDecoderArm`] と [`load_shell_target`] で、バルーンの面を
 //! [`resolve_balloon_faces`] → [`build_balloon_target_from_faces`] で読み、失敗も `warn!` も
 //! 出ないことと、写した絵が README のとおりのコマ・待ち時間・繰り返しで焼けることを確かめる。
-//! 再生の意味を確かめるのは後続のタスクで、ここは検体そのものの番をするだけである。
+//! あわせて、動く絵の element が子を置く element に替わることも確かめる。
 
 use super::*;
 

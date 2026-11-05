@@ -212,7 +212,14 @@ fn resolve_single(
     dec: &MemoryDecoder,
 ) -> (SingleMarker, Vec<CapturedEvent>) {
     log_capture_kit::capture(|| {
-        resolve_single_marker(&[dir.path()], &MARKER_FAMILY, scope, explicit, dec, ALPHA)
+        resolve_single_marker_listed(
+            &list_dirs(&[dir.path()]),
+            &MARKER_FAMILY,
+            scope,
+            explicit,
+            dec,
+            ALPHA,
+        )
     })
 }
 
@@ -281,8 +288,8 @@ fn single_marker_dirs_are_searched_in_order() {
     first.image(&mut dec, "marker.png", 2, 2);
     second.image(&mut dec, "markers.png", 6, 6);
 
-    let got = resolve_single_marker(
-        &[first.path(), second.path()],
+    let got = resolve_single_marker_listed(
+        &list_dirs(&[first.path(), second.path()]),
         &MARKER_FAMILY,
         0,
         None,

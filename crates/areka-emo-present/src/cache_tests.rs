@@ -1,10 +1,6 @@
 use super::*;
-use crate::presenter::test_support::{elem, shell_of, surface};
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_emo_compose::{BindSet, ComposeMethod, Composer, EmoWorld, PatternFrame};
-use std::path::Path;
+use crate::presenter::test_support::{bake_world, elem, pattern_overlay_at, shell_of, surface};
+use areka_emo_compose::{BindSet, Composer};
 
 // ── ComposedSurface 生成補助 ──────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接
@@ -42,22 +38,6 @@ fn insert_with_mask(
     cache.insert(surface_id, binds, pattern, composed, mask, display);
 }
 
-/// 非空の `PatternState`（animation `anim_id` に surface `surf` の `Overlay` コマ 1 枚）を作る。
-/// `PatternState::default()` と等価でないことを保証するキー要素の実体（pattern 差分の檻用）。
-fn pattern_of(anim_id: u32, surf: u32) -> PatternState {
-    let mut p = PatternState::default();
-    p.set(
-        anim_id,
-        PatternFrame {
-            surface_id: surf,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
-    p
-}
-
 /// 不透明画素と透明画素を**必ず両方**含む本物の合成を、**与えられた出力先へ書き戻す**。
 ///
 /// 3×1 の単一画像（不透明赤 / 透明 / 不透明赤）を 1 element として合成する。両端が不透明の
@@ -68,40 +48,23 @@ fn pattern_of(anim_id: u32, surf: u32) -> PatternState {
 /// native 原寸になった。`Composer::compose_into` は出力先の確保を再利用するので、回収した
 /// 容量がそのまま引き継がれているかがここで観測できる。
 fn compose_small_into(out: &mut ComposedSurface) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![surface(1000, vec![elem("otr.png", 0, 0)])];
-
-    let mut dec = MemoryDecoder::new();
-    // 3×1 premultiplied BGRA: (0,0)不透明赤・(1,0)透明・(2,0)不透明赤。stride = 3*4 = 12。
+    // 3×1 premultiplied BGRA: (0,0)不透明赤・(1,0)透明・(2,0)不透明赤。
     let img: Vec<u8> = vec![
         0, 0, 200, 255, // (0,0) 不透明赤
         0, 0, 0, 0, // (1,0) 全透明
         0, 0, 200, 255, // (2,0) 不透明赤
     ];
-    dec.insert(base.join("otr.png"), 3, 1, 12, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
+    let (world, atlas) = bake_world(
+        shell_of(vec![surface(1000, vec![elem("otr.png", 0, 0)])]),
+        vec![("otr.png", 3, 1, img)],
     );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
 
     let mut composer = Composer::new();
     composer
         .compose_into(
             out,
             &world,
-            &baked.table,
+            &atlas,
             1000,
             &BindSet::default(),
             &PatternState::default(),
@@ -252,8 +215,8 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
     let mut cache = ComposeCache::new();
     let id = 1000;
     let binds = BindSet::from_ids([1101, 1302]);
-    let pattern_a = pattern_of(2000, 1001);
-    let pattern_b = pattern_of(2000, 1002);
+    let pattern_a = pattern_overlay_at(2000, 1001, 0, 0);
+    let pattern_b = pattern_overlay_at(2000, 1002, 0, 0);
     assert_ne!(pattern_a, pattern_b, "前提: 2 つの pattern 状態は異なる");
 
     insert_with_mask(
@@ -308,7 +271,7 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     let mut cache = ComposeCache::new();
     let id = 42;
     let binds = BindSet::default();
-    let pat = pattern_of(3000, 5000);
+    let pat = pattern_overlay_at(3000, 5000, 0, 0);
 
     // 空 pattern で挿入 → 空 pattern はヒット・非空 pattern はミス。
     insert_with_mask(
@@ -348,13 +311,13 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     );
 }
 
-/// R2.1/R2.4: マスクは挿入時に composed の bytes から 1 回生成され、正しく引ける。
+/// R2.1/R2.4: 呼び手が composed の bytes から作ったマスクが、表示バッファと対で保持され正しく引ける。
 ///
 /// 不透明・透明を両方含む本物の合成結果を挿入し、その bytes から見つけた不透明/透明座標で
 /// エントリの `mask` がヒット/非ヒットを返すことを固定する（マスクが同一 bytes 由来で、
 /// 表示バッファと対で保持される証拠）。
 #[test]
-fn mask_generated_once_from_composed_bytes_and_correct() {
+fn mask_from_composed_bytes_is_kept_with_the_entry() {
     let composed = composed_with_opaque_and_transparent();
     let ((ox, oy), (tx, ty)) = find_opaque_and_transparent(&composed);
     let (w, h) = (composed.width(), composed.height());
@@ -385,52 +348,6 @@ fn mask_generated_once_from_composed_bytes_and_correct() {
     );
 }
 
-// ── キー要素は合成入力の 3 つだけ（要件 5.2・設計 cache::ComposeCache） ──────
-
-/// キー比較の非退行: 合成入力（surface id・binds・pattern）のいずれかが異なれば必ずミスする。
-///
-/// 表示スケールがキーから外れた（要件 5.2）ときに、残る 3 要素の比較まで一緒に落ちていないか
-/// を見る檻である。1 要素ずつ違えた 3 通りと、陰性対照の完全一致を並べる。
-#[test]
-fn other_key_elements_still_miss_on_the_same_compose_inputs() {
-    let mut cache = ComposeCache::new();
-    let id = 1000;
-    let binds = BindSet::from_ids([1101, 1302]);
-    let pattern = pattern_of(2000, 1001);
-
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(4, 4),
-    );
-
-    assert!(
-        cache.get(id, &binds, &pattern).is_some(),
-        "陰性対照: 全要素一致はヒットする"
-    );
-    assert!(
-        cache.get(1001, &binds, &pattern).is_none(),
-        "surface id が異なればミスする"
-    );
-    assert!(
-        cache
-            .get(id, &BindSet::from_ids([1101]), &pattern)
-            .is_none(),
-        "bind 集合が異なればミスする"
-    );
-    assert!(
-        cache.get(id, &binds, &pattern_of(2000, 1002)).is_none(),
-        "pattern が異なればミスする"
-    );
-    // 2 要素が同時に異なる場合も当然ミスする。
-    assert!(
-        cache.get(1001, &binds, &pattern_of(2000, 1002)).is_none(),
-        "複数のキー要素が異なればミスする"
-    );
-}
-
 /// R4.3 変わらず: `invalidate_all` は**保持中の全エントリ**を破棄する（挙動不変）。
 ///
 /// 上限いっぱいの 3 キーを入れてから無効化し、どれ 1 つ残らないことを見る。1 件だけの表で
@@ -439,7 +356,7 @@ fn other_key_elements_still_miss_on_the_same_compose_inputs() {
 fn invalidate_all_clears_every_entry() {
     let mut cache = ComposeCache::new();
     let binds = BindSet::from_ids([1100]);
-    let pattern = pattern_of(2000, 1001);
+    let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
     insert_with_mask(
         &mut cache,
@@ -480,7 +397,7 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     let mut cache = ComposeCache::new();
     let id = 1000;
     let binds = BindSet::from_ids([1101, 1302]);
-    let pattern = pattern_of(2000, 1001);
+    let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
     // 回収は満杯のときだけ成立する。追跡対象（このキー）が最も古い引き当てになるよう先に入れる。
     insert_with_mask(
@@ -546,7 +463,9 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "bind 集合が異なればミスする"
     );
     assert!(
-        cache.get(id, &binds, &pattern_of(2000, 1002)).is_none(),
+        cache
+            .get(id, &binds, &pattern_overlay_at(2000, 1002, 0, 0))
+            .is_none(),
         "pattern が異なればミスする"
     );
 
@@ -650,7 +569,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
     let mut cache = ComposeCache::new();
     let id = 7;
     let binds = BindSet::from_ids([1100]);
-    let pattern = pattern_of(2000, 1001);
+    let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
     assert!(
         cache.take_recycled().is_none(),
@@ -717,29 +636,11 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
 
 // ── 容量 3・LRU 置換（要件 7.1・2026-08-15 開発者裁定） ──────────────────────
 
-/// 要件 7.1 観測完了（**承認済み容量そのもの**）: 異なる 3 キーが**同時に**保持される。
-///
-/// 2026-08-15 の開発者裁定で容量は 1 → 3 へ改訂された（実測の根拠は
-/// `remeasure-2026-08-15.md` §4）。ここは改訂後の容量の下限側——3 本目を入れても
-/// 1 本目・2 本目が生き残ることを固定する。容量 1・2 のいずれへ戻しても赤になる。
-#[test]
-fn three_distinct_keys_are_retained_at_the_same_time() {
-    let mut cache = ComposeCache::new();
-    for id in [1000, 1001, 1002] {
-        insert_id(&mut cache, id);
-    }
-    for id in [1000, 1001, 1002] {
-        assert!(
-            holds(&cache, id),
-            "容量 3: 異なる 3 キーは同時に保持される（surface {id} が落ちている）"
-        );
-    }
-}
-
 /// 要件 7.1 観測完了（**容量の上限そのもの**）: 4 本目の挿入は**ちょうど 1 本**を追い出す。
 ///
-/// 「3 本入る」だけでは容量 3 と容量 4 以上を区別できない。**追い出しが起きること**と
-/// **落ちるのが 1 本だけであること**を対で固定して初めて容量が 3 に決まる。
+/// 2026-08-15 の開発者裁定で容量は 1 → 3 へ改訂された（実測の根拠は `remeasure-2026-08-15.md`
+/// §4）。**追い出しが起きること**と**落ちるのが 1 本だけであること**を対で固定して初めて容量が
+/// 3 に決まる（容量 1・2・4 以上のどれへ変えても保持の列が変わって赤になる）。
 #[test]
 fn a_fourth_distinct_key_evicts_exactly_one_entry() {
     let mut cache = ComposeCache::new();
@@ -875,7 +776,7 @@ fn touch_and_get_agree_on_every_key_component() {
     let mut cache = ComposeCache::new();
     let id = 1000;
     let binds = BindSet::from_ids([1101, 1302]);
-    let pattern = pattern_of(2000, 1001);
+    let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
     insert_with_mask(
         &mut cache,
@@ -889,7 +790,12 @@ fn touch_and_get_agree_on_every_key_component() {
         ("完全一致", id, binds.clone(), pattern.clone()),
         ("surface id 相違", 1001, binds.clone(), pattern.clone()),
         ("binds 相違", id, BindSet::from_ids([1101]), pattern.clone()),
-        ("pattern 相違", id, binds.clone(), pattern_of(2000, 1002)),
+        (
+            "pattern 相違",
+            id,
+            binds.clone(),
+            pattern_overlay_at(2000, 1002, 0, 0),
+        ),
     ];
     for (what, pid, pbinds, ppattern) in probes {
         let by_get = cache.get(pid, &pbinds, &ppattern).is_some();

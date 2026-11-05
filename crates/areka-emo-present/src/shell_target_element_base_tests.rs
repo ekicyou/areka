@@ -32,7 +32,8 @@ use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    CapturedEvent, claudia_shell_dir, describe, insert_solid, with_com_initialized, write_descript,
+    CapturedEvent, claudia_shell_dir, insert_solid, warn_lines, with_com_initialized,
+    write_descript,
 };
 use log_capture_kit::capture;
 
@@ -128,7 +129,6 @@ fn base_element_zero_underlays_the_overlay_part() {
         "前提: 登録済みの絵だけを焼くので脱落は 0 件: {:?}",
         target.bake_errors()
     );
-    assert_ne!(BODY, SURFACE26, "前提: 土台の絵と面の画像は大きさが違う");
 
     let composed = snapshot(&target, 26).expect("面 26 は合成できる");
     assert_eq!(
@@ -240,7 +240,7 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
 /// ⑷（要件 1.7）: 読み込めない `element0,base,missing.png` は、`,overlay,` に書き替えた文面と
 /// 同じ脱落の記録（`missing.png` を名指す 1 件）を残し、同じ面の部品は描かれ、合成結果も等しい。
 ///
-/// 記録の `warn!` はこの `bake_errors` を `load_shell_target` が出すので、中身の一致で足りる。
+/// 記録の `error!` はこの `bake_errors` を `load_shell_target` が出すので、中身の一致で足りる。
 /// 較正として、`missing.png` を復号器に入れると脱落が 0 件になる（＝1 件は `missing.png` の分）。
 #[test]
 fn unreadable_base_image_is_recorded_like_overlay_and_the_part_is_drawn() {
@@ -296,7 +296,7 @@ fn unreadable_base_image_is_recorded_like_overlay_and_the_part_is_drawn() {
 // ── 入口の警告（要件 2.1・2.2・2.3・2.6・4.2）──────────────────────────────────────
 //
 // ここから先は `load_shell_target` を通すので fs に触れる。surfaces.txt は `TempPath` に置き、
-// 描ける行が指す絵（`body.png`・`face.png`）はすべて復号器に入れる——焼く段の脱落の `warn!` が
+// 描ける行が指す絵（`body.png`・`face.png`）はすべて復号器に入れる——焼く段の脱落の `error!` が
 // 混ざると、本 spec の警告の数が数えられなくなるためである。
 
 /// 本 spec の警告の本文。
@@ -341,15 +341,6 @@ fn load_events(text: &str, times: usize) -> Vec<CapturedEvent> {
     events
 }
 
-/// `warn` 以上の記録を「本文|欄=値…」の文字列にする（`message` 以外の欄は名前の昇順）。
-fn warn_or_worse(events: &[CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .map(describe)
-        .collect()
-}
-
 /// 本 spec の警告の件数。
 fn undrawn_count(events: &[CapturedEvent]) -> usize {
     events
@@ -364,7 +355,7 @@ fn undrawn_count(events: &[CapturedEvent]) -> usize {
 fn undrawable_line_warns_once_with_heading_element_and_method() {
     let events = load_events(WITH_UNDRAWN, 1);
     assert_eq!(
-        warn_or_worse(&events),
+        warn_lines(&events),
         vec![format!(
             "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"replace\""
         )]
@@ -375,7 +366,7 @@ fn undrawable_line_warns_once_with_heading_element_and_method() {
 #[test]
 fn drawable_only_shell_warns_nothing() {
     let events = load_events(DRAWABLE_ONLY, 1);
-    assert_eq!(warn_or_worse(&events), Vec::<String>::new());
+    assert_eq!(warn_lines(&events), Vec::<String>::new());
 }
 
 /// 要件 4.2: 警告は読み込み 1 回につき 1 行 1 件——2 回読むとちょうど 2 倍になる。

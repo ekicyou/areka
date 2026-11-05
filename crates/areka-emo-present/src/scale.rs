@@ -101,9 +101,9 @@ fn normalize_author_dpi(author_dpi: u16) -> u16 {
 /// この構造体を直接検査する in-crate テストで檻に入れる（戻り値だけでは
 /// 「正常経路が偶然 1/1 を返した」場合と区別できない）。
 ///
-/// なお `error!`／`warn!` が**実際に発火するか**も、本ファイル `mod tests` の
-/// ログ捕捉ハーネス（`tracing` 単体で手書き・`tracing-subscriber` の dev 依存は不要）で
-/// 別途檻に入れてある（task 6.2）。分岐選択とログ発火は独立した 2 つの契約である。
+/// なお `error!`／`warn!` が**実際に発火するか**も、`scale_tests.rs` で共有の
+/// `log_capture_kit::capture` を使って別途檻に入れてある。分岐選択とログ発火は独立した
+/// 2 つの契約である。
 ///
 /// 各フラグは独立に立ち得る（例: `dpi_x == 0` かつ `dpi_x != dpi_y`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

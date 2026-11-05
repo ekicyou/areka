@@ -17,7 +17,7 @@ use areka_emo_compose::{ComposeMethod, PatternFrame};
 
 use super::test_support::{
     RANGE_LINE_MESSAGE, bake_world, capture, make_world_with_gpu, native_golden_with,
-    pattern_overlay_at, show_with, solid, spawn_window_with_dpi,
+    pattern_overlay_at, show_with_ok, solid, spawn_window_with_dpi,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -54,10 +54,7 @@ fn binds() -> BindSet {
 }
 
 fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) {
-    assert!(matches!(
-        show_with(presenter, world, TARGET, BASE_ID, binds(), pattern),
-        Ok(())
-    ));
+    show_with_ok(presenter, world, TARGET, BASE_ID, binds(), pattern);
 }
 
 /// 閉じる → 半目 → 外す を 2 周（2 周目は控えに当たる）。外した後の絵は、まばたきの重ねの無い絵

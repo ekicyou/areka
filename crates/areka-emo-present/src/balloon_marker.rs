@@ -1,10 +1,10 @@
 //! 印の族（スクロールの矢印・クリック待ち）の表と名前の連鎖、番号ごとの絵の選び（balloon_marker.rs）。
 //!
-//! 族の表は吹き出しの族と同じ [`SeriesFamily`] で持ち、連鎖は [`prefix_chain`] がそのまま作る
+//! 族の表は吹き出しの族と同じ `SeriesFamily` で持ち、連鎖は `prefix_chain` がそのまま作る
 //! （旧名 `arrow`／`clickwait` が最後）。descript の名前の鍵（`arrow.filename` など）で書かれた
 //! 名前は連鎖の先頭に置く。番号 `0`（上・縦書きでは右）と `1`（下・縦書きでは左）は、それぞれ
 //! 別に連鎖の先頭から辿る（番号ごと・要件 2.1）。名前の判定はバルーンの面と同じ
-//! [`face_digits_of`]（大小無視・`.png`・全数字）を共有する（要件 2.6）。
+//! `face_digits_of`（大小無視・`.png`・全数字）を共有する（要件 2.6）。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -258,7 +258,7 @@ fn load_marker_image(
 }
 
 /// 行の中の印の族（`markerp{n}def`・`markers`／`markerk`・旧名 `marker` が最後・script-small-tags 要件 5.2）。
-pub const MARKER_FAMILY: SeriesFamily = SeriesFamily {
+pub(crate) const MARKER_FAMILY: SeriesFamily = SeriesFamily {
     base: "marker",
     scope0_legacy: &["markers", "marker"],
     scope1_legacy: &["markerk"],
@@ -295,25 +295,11 @@ pub(crate) struct SingleMarker {
     pub explicit_missing: bool,
 }
 
-/// 行の中の印の絵を順の付いたフォルダの列から 1 枚選んで読む（fs の入口・読み込みの時だけ呼ぶ）。
+/// 行の中の印の絵を順の付いたフォルダの列から 1 枚選んで読む（読み込みの時だけ呼ぶ）。
 ///
 /// 列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（矢印と同じ）。読みは矢印と同じ
-/// 手順で、読めない絵は `warn!` して次の候補へは進まず「絵なし」とする。
-// 本番は定義の読み込みが核を直に呼ぶ（一覧を 1 回取る）ので、包みはテストの口だけ。
-#[cfg(test)]
-pub(crate) fn resolve_single_marker(
-    dirs: &[&Path],
-    family: &SeriesFamily,
-    scope: u32,
-    explicit: Option<&str>,
-    decoder: &impl ElementDecoder,
-    alpha: AlphaParams,
-) -> SingleMarker {
-    let listed = list_dirs(dirs);
-    resolve_single_marker_listed(&listed, family, scope, explicit, decoder, alpha)
-}
-
-/// [`resolve_single_marker`] の核。フォルダの一覧は呼び手が 1 回取って渡す（指摘 40）。
+/// 手順で、読めない絵は `warn!` して次の候補へは進まず「絵なし」とする。フォルダの一覧は呼び手が
+/// [`list_dirs`] で 1 回取って渡す（指摘 40）。
 pub(crate) fn resolve_single_marker_listed(
     listed: &[(&Path, Vec<String>)],
     family: &SeriesFamily,

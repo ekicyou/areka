@@ -12,9 +12,9 @@ use wintf::ecs::GraphicsCommandList;
 use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, INFO_LINE_MESSAGE, RANGE_LINE_MESSAGE, bake_world, capture, elem, invalidate_ok,
-    make_world_with_gpu, mount_entities, native_golden_with, pattern_overlay_at, shell_of, show_ok,
-    show_with, show_with_armed_fault, spawn_window_with_dpi, surface,
+    CapturedEvent, INFO_LINE_MESSAGE, RANGE_LINE_MESSAGE, bake_world, capture, elem, gradient,
+    invalidate_ok, make_world_with_gpu, mount_entities, native_golden_with, pattern_overlay_at,
+    shell_of, show_ok, show_with_armed_fault, show_with_ok, spawn_window_with_dpi, surface,
 };
 use super::timing::PERF_LINE_MESSAGE;
 
@@ -32,18 +32,6 @@ const CELL_Y: i64 = 2;
 
 /// 下の面 2 つとコマの面の `(EmoWorld, AtlasTable)`（どれも全不透明・別のバイト）。
 fn build_assets() -> (EmoWorld, AtlasTable) {
-    let gradient = |(w, h): (u32, u32), salt: u8| -> Vec<u8> {
-        let mut img = Vec::with_capacity((w * h * 4) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let b = (x as u8).wrapping_mul(13).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(17).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.extend_from_slice(&[b, g, r, 0xFF]);
-            }
-        }
-        img
-    };
     let (bw, bh) = BASE_SIZE;
     let (cw, ch) = CELL_SIZE;
     bake_world(
@@ -53,9 +41,9 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
             surface(OTHER_BASE_ID, vec![elem("r.png", 0, 0)]),
         ]),
         vec![
-            ("p.png", bw, bh, gradient(BASE_SIZE, 0x11)),
-            ("q.png", cw, ch, gradient(CELL_SIZE, 0x80)),
-            ("r.png", bw, bh, gradient(BASE_SIZE, 0x45)),
+            ("p.png", bw, bh, gradient(bw, bh, 0x11)),
+            ("q.png", cw, ch, gradient(cw, ch, 0x80)),
+            ("r.png", bw, bh, gradient(bw, bh, 0x45)),
         ],
     )
 }
@@ -76,30 +64,14 @@ fn setup() -> (World, EmoPresenter, EmoWorld, AtlasTable) {
     (world, presenter, emo_world, atlas)
 }
 
-fn send(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) -> PresentOutcome {
-    send_on(presenter, world, BASE_ID, pattern)
-}
-
-fn send_on(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    surface_id: u32,
-    pattern: PatternState,
-) -> PresentOutcome {
-    show_with(
+fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) {
+    show_with_ok(
         presenter,
         world,
         TARGET,
-        surface_id,
+        BASE_ID,
         BindSet::default(),
         pattern,
-    )
-}
-
-fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) {
-    assert!(
-        matches!(send(presenter, world, pattern), Ok(())),
-        "ShowSurface が Ok でない"
     );
 }
 
@@ -223,12 +195,13 @@ fn switching_the_surface_on_the_same_frame_matches_a_from_scratch_compose() {
             presenter.targets[&TARGET].partial_base,
             "前提: 下敷きの印が真"
         );
-        assert!(
-            matches!(
-                send_on(&mut presenter, &mut world, OTHER_BASE_ID, frame(2)),
-                Ok(())
-            ),
-            "面を替えた ShowSurface が Ok でない"
+        show_with_ok(
+            &mut presenter,
+            &mut world,
+            TARGET,
+            OTHER_BASE_ID,
+            BindSet::default(),
+            frame(2),
         );
     });
     let (golden, _) = native_golden_with(
@@ -261,6 +234,8 @@ fn static_surface_always_recomposes_from_scratch() {
         // 面 1000 → 面 3000 → 面 1000（当たり）→ 面 3000（当たり）。
         for id in [BASE_ID, CELL_ID, BASE_ID, CELL_ID] {
             show_ok(&mut presenter, &mut world, TARGET, id);
+            // 動きの無い面の合成は下敷きの印を立てない（各回の直後に見る。当たりの回も印を立てない）。
+            assert!(!presenter.targets[&TARGET].partial_base, "面 {id} の後");
         }
     });
     let misses: Vec<&CapturedEvent> = events
@@ -276,8 +251,6 @@ fn static_surface_always_recomposes_from_scratch() {
         .filter(|e| e.message() == INFO_LINE_MESSAGE && e.field("cache_hit") == Some("true"))
         .count();
     assert_eq!(hits, 2, "控えに当たる回が 2 回");
-    // 動きの無い面の合成は下敷きの印を立てない。
-    assert!(!presenter.targets[&TARGET].partial_base);
 }
 
 /// 要件 3.1・3.5: 控えに当たった次の外れはいちから（当たりの回は下敷きの印を立てない）。

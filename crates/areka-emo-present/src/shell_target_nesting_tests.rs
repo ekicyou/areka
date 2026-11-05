@@ -16,8 +16,8 @@ use super::*;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    CapturedEvent, NESTING_FIXTURE_IMAGES, SHELL_TARGET, decoder_with, describe,
-    nesting_fixture_dir, write_descript,
+    NESTING_FIXTURE_IMAGES, SHELL_TARGET, decoder_with, describe, nesting_fixture_dir, warn_lines,
+    write_descript,
 };
 use log_capture_kit::capture;
 
@@ -35,14 +35,6 @@ const DIGIT_FIELDS: [&str; 11] = [
     "62",
     "70",
 ];
-
-/// 水準が `warn` 以上（`warn!`／`error!`）の記録。宛先は問わない。
-fn warn_or_worse(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .collect()
-}
 
 /// ⑴ 数字だけの欄は、その名前の絵が在っても焼かない（要件 1.5・3.5）。
 #[test]
@@ -81,7 +73,7 @@ fn digit_only_fields_are_not_baked_even_when_such_images_exist() {
 /// （画像の読み込みの失敗を含む）は 0 行（要件 3.1・3.2・3.5・6.1・8.1）。
 ///
 /// 数字だけの欄の名前の絵は復号器に**入れない**——焼く一覧に入っていれば、ここで脱落の
-/// `warn!` が出て数が合わなくなる。
+/// `error!` が出て数が合わなくなる。
 #[test]
 fn fixture_load_warns_once_per_planted_issue_and_nothing_else() {
     let dir = nesting_fixture_dir();
@@ -89,11 +81,10 @@ fn fixture_load_warns_once_per_planted_issue_and_nothing_else() {
 
     let (target, events) = capture(|| load_shell_target(&dir, &dec).expect("検体のシェルは読める"));
 
-    let mut got: Vec<String> = warn_or_worse(&events)
-        .into_iter()
-        .inspect(|e| assert_eq!(e.target, SHELL_TARGET, "宛先が権威でない: {}", describe(e)))
-        .map(describe)
-        .collect();
+    for e in events.iter().filter(|e| e.level <= tracing::Level::WARN) {
+        assert_eq!(e.target, SHELL_TARGET, "宛先が権威でない: {}", describe(e));
+    }
+    let mut got = warn_lines(&events);
     got.sort();
 
     let missing = "shell: element定義が指したサーフェスが無いので置かない";
@@ -110,8 +101,9 @@ fn fixture_load_warns_once_per_planted_issue_and_nothing_else() {
     want.sort();
     assert_eq!(got, want);
 
-    // 報告そのものも件数どおり（記録と報告の 1 対 1）。
+    // 報告そのものも件数どおり（記録と報告の 1 対 1・入れ子の 5 件＋箱の 1 件）。
     assert_eq!(target.nest_report.issues.len(), 5);
+    assert_eq!(target.box_report.issues.len(), 1);
     assert!(target.bake_errors().is_empty());
 }
 
@@ -144,7 +136,7 @@ fn balloon_element_with_digit_only_field_is_a_box_name() {
         target.nest_report
     );
     assert!(target.atlas().resolve(SetId(0), "8888").is_none());
-    let got: Vec<String> = warn_or_worse(&events).into_iter().map(describe).collect();
+    let got: Vec<String> = warn_lines(&events);
     assert_eq!(
         got,
         vec![

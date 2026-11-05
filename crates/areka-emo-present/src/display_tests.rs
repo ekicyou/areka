@@ -56,8 +56,8 @@ fn recipe_uses_native_size_stride_full_dest_and_linear() {
 /// `ceil ≥ round` ゆえ差は負にならず、小数部が (0, 0.5) のときだけ wintf が 1 px 大きい。
 /// その 1 px は窓 client（`scaled_extent` 寸）の外にあり見えない（要件 2.1・4.3 の許容）。
 ///
-/// 表の 4 行目までは設計 §丸めの一致の表そのもの。5 行目以降は端数 0.5 ちょうど（両者とも
-/// 切り上げ＝差 0）と、小数部 (0, 0.5) の追加例（差 +1）を足した較正である。
+/// 表の 4 行目までは設計 §丸めの一致の表そのもの。5 行目は整数の拡大率 k=1（差 0）、6 行目は
+/// 端数 0.5 ちょうど（両者とも切り上げ＝差 0）、7 行目は小数部 (0, 0.5) の追加例（差 +1）である。
 #[test]
 fn surface_size_matches_scaled_extent_within_one_pixel() {
     // (原寸 w, 原寸 h, k の分子, k の分母, 期待する差 (w, h))
@@ -117,18 +117,11 @@ fn surface_size_matches_scaled_extent_within_one_pixel() {
                  wintf={wintf_size:?} scaled_extent={scaled:?}"
             );
             let diff = (wintf_size.0 - scaled.0, wintf_size.1 - scaled.1);
-            assert!(
-                diff.0 <= 1 && diff.1 <= 1,
-                "差は 1 px 以内: {w}x{h} k={num}/{den} diff={diff:?}"
-            );
             assert_eq!(
                 diff, expected_diff,
                 "丸めの一致表と一致すべき: {w}x{h} k={num}/{den} \
                  wintf={wintf_size:?} scaled_extent={scaled:?}"
             );
-            if den == 1 {
-                assert_eq!(diff, (0, 0), "整数の拡大率では差 0: {w}x{h} k={num}/{den}");
-            }
         }
     }
 }

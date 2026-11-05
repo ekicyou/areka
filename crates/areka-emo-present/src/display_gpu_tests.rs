@@ -17,13 +17,8 @@
 
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+use crate::presenter::test_support::{bake_world, elem, shell_of, surface};
+use areka_emo_compose::{BindSet, Composer, PatternState};
 
 use windows::Win32::Graphics::Direct2D::Common::{D2D1_COLOR_F, D2D1_COMPOSITE_MODE_SOURCE_OVER};
 use windows::Win32::Graphics::Direct2D::{
@@ -37,7 +32,7 @@ use wintf::ecs::GraphicsCore;
 ///
 /// `GraphicsCore` を戻り値に含めるのは DC の寿命がそれに縛られるため。GPU が無ければ
 /// `expect` で赤くなる（黙って緑にする skip は置かない）。
-fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
+pub(super) fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
     // 各テストは専用スレッドで走る。MTA を初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -58,20 +53,6 @@ fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
 /// `ComposedSurface::bytes_mut` は emo-compose の `pub(crate)` ゆえ画素を直接焼けない。
 /// 各成分は straight 色に α を掛けて作るので premultiplied 不変（成分 ≤ α）を自明に満たす。
 fn composed_with_alpha_edges(w: u32, h: u32) -> ComposedSurface {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        id: 1000,
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![Element {
-            layer: 0,
-            path: ElementPath::new("p.png".to_string()),
-            x: 0,
-            y: 0,
-        }],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-
     let stride = w * 4;
     let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
     for y in 0..h {
@@ -89,39 +70,15 @@ fn composed_with_alpha_edges(w: u32, h: u32) -> ComposedSurface {
             img.push(a);
         }
     }
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない: {:?}",
-        baked.errors
+    let (world, atlas) = bake_world(
+        shell_of(vec![surface(1000, vec![elem("p.png", 0, 0)])]),
+        vec![("p.png", w, h, img)],
     );
-
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    let shell = Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    };
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
 
     Composer::new()
         .compose(
             &world,
-            &baked.table,
+            &atlas,
             1000,
             &BindSet::default(),
             &PatternState::default(),

@@ -93,29 +93,6 @@ fn current_surface_id_is_none_after_hide() {
     );
 }
 
-/// テスト 14 観測完了（InvalidateCache→不変）: 有効表示後に `InvalidateCache` を適用しても
-/// `current_surface_id` は不変（キャッシュ無効化は表示を変えない）。単一真実源が `ComposeKey` 由来では
-/// なくフィールドであることの回帰檻（`invalidate_all` でキーが消えても現サーフェス id は残る）。
-#[test]
-fn current_surface_id_unchanged_by_invalidate_cache() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-
-    invalidate_ok(&mut presenter, &mut world, TargetId(0));
-
-    assert_eq!(
-        presenter.current_surface_id(TargetId(0)),
-        Some(1000),
-        "InvalidateCache は表示を変えないため現サーフェス id は不変（ComposeKey 由来案の棄却根拠）"
-    );
-}
-
 /// 一度も表示していない target の読み戻しは、装着済みなので「未装着」でなく「一度も表示していない」を
 /// 返す（`audit-emo-present` 指摘 2）。
 #[test]
@@ -143,7 +120,11 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     invalidate_ok(&mut presenter, &mut world, TargetId(0));
-    assert_eq!(presenter.current_surface_id(TargetId(0)), Some(1000));
+    assert_eq!(
+        presenter.current_surface_id(TargetId(0)),
+        Some(1000),
+        "InvalidateCache は表示を変えないため現サーフェス id は不変（ComposeKey 由来案の棄却根拠）"
+    );
 
     let result = presenter.read_back(TargetId(0));
     assert!(
@@ -296,18 +277,18 @@ fn client_entry_matches_native_entry_at_identity_scale() {
 ///
 /// # なぜ既存 3 檻と別に要るのか（継ぎ目の封鎖）
 ///
-/// 既存の 3 檻はいずれも `hit_region_scaled(master, x, y, k, …)` の `k` を固定しない——
+/// 既存の 3 檻はいずれも `hit_region_scaled_in(regions, x, y, k, …)` の `k` を固定しない——
 /// `presenter_refresh_and_log_tests.rs` の
 /// `applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent` は warn 述語が
 /// 主語で k は**不在**、`unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point`
-/// は k=2 を与えるが `master` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
+/// は k=2 を与えるが `regions` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
 /// を通り、`client_entry_matches_native_entry_at_identity_scale` は k=1.0 ゆえ縮約が恒等へ退化する。
 /// ゆえに「面あり × k≠1.0」の合流点は一度も実行されておらず、実適用 k が合成純関数へ本当に
 /// 渡っているかは決定論テストで固定されていなかった。本檻の主語はその 1 点のみである。
 ///
 /// # 殺す誤実装（反証可能性）
 ///
-/// `hit_region_scaled` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
+/// `hit_region_scaled_in` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
 /// client 点をそのまま照合する）と、下の 3 点は `surface_point`・`region` の**双方**で割れる。
 /// とくに (210,310) は恒等なら `Some("Arm")`・k=2 なら `None` と**逆向きに**割れるため、
 /// 「両方そろって `None`」の空虚な一致では緑にならない。

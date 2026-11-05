@@ -14,18 +14,15 @@ use std::sync::Arc;
 
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
-use areka_parsers::shell::{
-    AliasKey, Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
-    SurfaceAlias,
-};
+use areka_parsers::shell::{AliasKey, DefRef, Shell, SurfaceAlias};
 use bevy_ecs::world::World;
 use tracing::Level;
 use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::super::test_support::{
-    bake_world, capture, elem, hide_ok, invalidate_ok, native_golden, native_golden_with,
-    pattern_overlay_at, show_with, spawn_window_with_dpi,
+    bake_world, bind_overlay_surface, capture, elem, hide_ok, invalidate_ok, native_golden,
+    native_golden_with, pattern_overlay_at, show_with_ok, spawn_window_with_dpi, surface,
 };
 use super::super::{EmoPresenter, TargetId};
 
@@ -48,33 +45,8 @@ const ABSENT: u32 = 9999;
 /// （1×1 白）に、別名の表 `7000 → [1000]` を足したシェルの `(EmoWorld, AtlasTable)`。
 fn build_assets() -> (EmoWorld, AtlasTable) {
     let surfaces = vec![
-        Surface {
-            id: BASE,
-            targets: vec![AppendTarget::Single(BASE)],
-            elements: vec![elem("p.png", 0, 0)],
-            collisions: Vec::new(),
-            animations: vec![Animation {
-                id: BIND,
-                interval: Interval::Bind,
-                interval_written: true,
-                patterns: vec![Pattern {
-                    index: 0,
-                    method: DrawMethod::new("overlay".to_string()),
-                    surface_id: i64::from(PART),
-                    target: i64::from(PART).to_string(),
-                    wait: 0,
-                    x: 0,
-                    y: 0,
-                }],
-            }],
-        },
-        Surface {
-            id: PART,
-            targets: vec![AppendTarget::Single(PART)],
-            elements: vec![elem("q.png", 0, 0)],
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        },
+        bind_overlay_surface(0, 0),
+        surface(PART, vec![elem("q.png", 0, 0)]),
     ];
 
     let (w, h) = (4u32, 3u32);
@@ -141,13 +113,7 @@ fn show(
         GraphicsCommandList::empty(),
     );
 
-    assert!(
-        matches!(
-            show_with(presenter, world, target, surface_id, binds, pattern),
-            Ok(())
-        ),
-        "ShowSurface（surface {surface_id}）が Ok でない"
-    );
+    show_with_ok(presenter, world, target, surface_id, binds, pattern);
 }
 
 fn bound() -> BindSet {

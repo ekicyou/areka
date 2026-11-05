@@ -107,7 +107,7 @@ use std::sync::Arc;
 
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
-use super::test_support::{build_target_assets, show_with, spawn_window_with_dpi};
+use super::test_support::{build_target_assets, show_with_ok, spawn_window_with_dpi};
 
 // ── fixture ────────────────────────────────────────────────────────────────────────────
 
@@ -153,24 +153,6 @@ fn attach(presenter: &mut EmoPresenter, world: &mut World, window_dpi: u16, salt
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, salt);
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-}
-
-/// `ShowSurface` を 1 回適用する（成立しなければ即座に落とす＝以後の観測を空虚にしない）。
-fn show(presenter: &mut EmoPresenter, world: &mut World, binds: BindSet) {
-    assert!(
-        matches!(
-            show_with(
-                presenter,
-                world,
-                TargetId(0),
-                1000,
-                binds,
-                PatternState::default()
-            ),
-            Ok(())
-        ),
-        "前提: ShowSurface が成立すること（成立しない適用の観測は意味を持たない）"
-    );
 }
 
 // ── 観測 ───────────────────────────────────────────────────────────────────────────────
@@ -248,7 +230,15 @@ fn observe(presenter: &EmoPresenter, world: &World, binds: &BindSet) -> Seen {
 /// 1 適用してその直後を観測する。
 fn apply_and_observe(presenter: &mut EmoPresenter, world: &mut World, i: usize) -> Seen {
     let binds = binds_at(i);
-    show(presenter, world, binds.clone());
+    // 成立しなければ即座に落とす（以後の観測を空虚にしない）。
+    show_with_ok(
+        presenter,
+        world,
+        TargetId(0),
+        1000,
+        binds.clone(),
+        PatternState::default(),
+    );
     observe(presenter, world, &binds)
 }
 
@@ -308,9 +298,10 @@ fn assert_not_empty(seen: &Seen, at: &str) {
 /// # 殺す誤実装（変異を実際に当てて、鳴った主張を書き取った）
 ///
 /// 推測で書かない——本 spec は「同じ寸法の反復では再利用を主張できない」を 4 度踏んでいる。
-/// 目を引くのは、**全件が定常の番地主張ではなく暖機の形（計数の指紋）で落ちる**ことである。
-/// 裏を返せば、**定常の番地主張が単独で仕留めた変異は 1 件も無い**——これが上の「番地は傍証」
-/// という位置づけの実測上の根拠である。
+/// 多くは暖機の形（計数の指紋）で落ちるが、**計数が鳴らない変異が 4 件ある**——変異 B・
+/// `swap_native_scratch` の複写化（どちらも交代関係で落ちる）と、`set` への差し戻し・ヒット経路だけの
+/// `set` への差し戻し（どちらも番地の側で落ちる）。ゆえに番地・交代関係の主張は計数の傍証ではなく、計数では捕まらない形を仕留める
+/// 独立の檻である。
 ///
 /// - `seat::SurfaceSeat::lend` の冒頭で席を丸ごと作り直す（容量の読み取りより**前**に差し替える
 ///   ので計数へ現れる形）→ 「暖機の確保の形が……から外れている」で RED
@@ -324,7 +315,8 @@ fn assert_not_empty(seen: &Seen, at: &str) {
 ///   で RED
 /// - 下流供給を `set`（実体の複製）へ戻す → [`assert_mask_is_shared_not_copied`] の番地の側で RED
 /// - 下流供給を**ヒット経路のときだけ** `set` へ戻す → 末尾のヒット 1 適用の
-///   [`assert_mask_is_shared_not_copied`] の番地の側で RED（ミスの適用は緑のまま）
+///   [`assert_mask_is_shared_not_copied`] の番地の側で RED（ミスの適用は緑のまま。2026-11-06 に
+///   当てて、2 水準とも「…のヒット経路」で赤になることを確かめた）
 fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     let level = format!("窓 DPI {window_dpi}");
     let mut world = super::test_support::make_world_with_gpu();
@@ -418,9 +410,8 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
             seen.cumulative, cumulative,
             "{at}: 累積計数が動いた（定常状態で確保が起きている）"
         );
-        // 次の 3 本は計数の主張と**対で**読む（上の §番地の主張はどこまで効くか）。実体を作り
-        // 直す変異は計数側で決定論的に死ぬようになったが、番地は解放直後の再確保で偶然一致し
-        // 得るため単独では証拠にならない——独立な裏取りとして残している。
+        // 次の番地と交代関係の主張は、計数では捕まらない変異 B（席の実体だけの差し替え）を
+        // 仕留める（上の §番地の主張はどこまで効くか）。計数の裏取りではない。
         assert!(
             known_buffers.contains(&seen.native),
             "{at}: 合成先席が既知の {WARMUP} 本のどれでもない（確保し直している）"
@@ -452,7 +443,9 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     // 走るので、ミスしか踏まないとこの経路を 1 度も動かさない。ヒットの成立はマスクの実体が
     // 動かないことで示す（ミスなら輪番が 1 つ進んで同時に生きている別の実体へ移る）。確保増分 0
     // は単独ではヒットの証拠にならない（定常状態ではミスも 0 件）。次の番号のキーを渡して
-    // ミスにすると「マスクの実体が動いた」で赤になることを較正で確かめた。
+    // ミスにすると「マスクの実体が動いた」で赤になることを較正で確かめた。下流供給をヒット経路の
+    // ときだけ `set` へ戻すと、下の `assert_mask_is_shared_not_copied` が 2 水準とも赤になることも
+    // 当てて確かめた（2026-11-06）。
     let hit = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + STEADY - 1);
     let at = format!("{level} のヒット経路");
     assert_eq!(

@@ -1,8 +1,8 @@
 //! `shell_target`: シェルのフォルダから面の絵を組み立てる**読み込みの権威**。
 //!
-//! シェルのフォルダを読んで「焼いた絵（[`AtlasTable`]）＋面の表を必要な数だけ組める値」
-//! （[`ShellTarget`]）を作る唯一の入口である。fs を触るのは [`load_shell_target`] だけで、
-//! 触らない核は `build_shell_target` に分かれている（テストはメモリ上の復号器で核を通せる）。
+//! シェルのフォルダを読んで「焼いた絵（`AtlasTable`）＋面の表を必要な数だけ組める値」
+//! （[`ShellTarget`]）を作る入口である。fs を触るのは [`load_shell_target`] と [`load_shell_target_quiet`]（中身は 1 つ）だけで、
+//! 触らない核は `build_core` に分かれている（テストは `build_shell_target` 経由でメモリ上の復号器で核を通せる）。
 //!
 //! 本モジュールはまず「シェルのフォルダ直下のファイル名から、どの番号の面の画像がどれか」を
 //! 決める純粋な判定 `select_surface_images` を持つ（R1.1〜R1.6・R1.8）。正典は
@@ -18,10 +18,11 @@
 //! # 記録を出す場所（要件 6）
 //!
 //! `select_surface_images` は fs にも記録にも触れない純粋な関数であり、重複（R1.5 の `warn!`）
-//! と桁溢れ（R1.6 の `debug!`）は**事実として戻り値に載せるだけ**である。同じく
-//! `build_shell_target` も記録を出さない（結果を [`ShellTarget`] に載せるだけ）。
+//! と桁溢れ（R1.6 の `debug!`）は**事実として戻り値に載せるだけ**である。`build_core` は自分では記録を
+//! 足さず（結果を [`ShellTarget`] に載せるだけ）、受け取った `records` を面の表の組み立てと
+//! 焼く段へ渡すだけである（畳み込み・土台の画像・1 枚ごとの絵の記録はそちらが出す）。
 //!
-//! **記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
+//! **本モジュールの記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
 //! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
 //! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
 //! 焼く段で落ちた絵の `error!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
@@ -31,8 +32,8 @@
 //! descript.txt が読めない `warn!` と添えてあった `.pna` の数の `warn!`
 //! （spec: areka-P0-self-alpha-declaration 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の
 //! 宛先で 1 行）、画像だけで面を組んだ `info!`（同 要件 7.3）である。一覧の 1 件だけが
-//! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
-//! 形の誤り（[`shape_issues`]）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
+//! 取れないときは `warn!` を出してその 1 件を飛ばす（`list_file_names`）。
+//! 形の誤り（`shape_issues`）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
 //! ここで 1 度だけ出す。[`ShellTarget::build_world`] は新しい記録を出さず、畳み込みと面の画像の記録も
 //! 出さない（読み込みの核が 1 度だけ出す・emo-bake-log-overlap 要件 2.2）。装着の記録は組むたびに出る。
 //!
@@ -199,7 +200,7 @@ pub struct ShellTarget {
     bake_errors: Vec<BakeError>,
     /// 土台の絵の決定の結果（R6.1 の数と R6.2 の一覧の出どころ）。
     ///
-    /// 決めるのに要る面の表は `build_shell_target` が既に 1 つ組んでいるので、その結果を
+    /// 決めるのに要る面の表は `build_core` が既に 1 つ組んでいるので、その結果を
     /// ここへ写して持つ。入口が記録のために面の表を組み直さないためである（design
     /// 「頻度の単位」の回数が増えない）。
     base_images: BaseImageReport,
@@ -215,7 +216,7 @@ pub struct ShellTarget {
     nest_report: NestReport,
     /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
     /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
-    pub(crate) ignored_pna: usize,
+    ignored_pna: usize,
     /// cursorブレスの転記（[`load_shell_target`] が 1 度だけ転記する・検証は下流）。
     cursor_braces: Vec<CursorBrace>,
     /// 透過の宣言（面の絵を焼いたのと同じ値・箱の矢印の絵も同じ扱いで読む）。
@@ -272,7 +273,7 @@ impl ShellTarget {
         self.use_self_alpha
     }
 
-    /// 面の表を 1 つ組む（[`EmoWorld::build_with_images`] → `bind_atlas(SetId(0))`）。
+    /// 面の表を 1 つ組む（`EmoWorld::build_with_images_quiet` → `bind_atlas(SetId(0))`）。
     ///
     /// スコープの数だけ呼んでよい。同じ入力から組むので、返る面の表の内容は毎回同じである。
     /// 本仕様が足す記録はここでは出さない（0 本・要件 6 の記録はすべて [`load_shell_target`]
@@ -284,8 +285,8 @@ impl ShellTarget {
         world
     }
 
-    /// 1 度目は読み込みで組んだ面の表に atlas を装着して渡す（組み直さないので畳み込みの記録が
-    /// 重ならない・要件 7.5）。2 度目からは [`ShellTarget::build_world`] と同じ。
+    /// 1 度目は読み込みで組んだ面の表に atlas を装着して渡す（組み直さない＝読み込みで組んだ表を
+    /// そのまま渡し、同じ表をもう一度組む手間を省く）。2 度目からは [`ShellTarget::build_world`] と同じ。
     pub fn take_world(&mut self) -> EmoWorld {
         match self.world.take() {
             Some(mut world) => {
@@ -297,7 +298,7 @@ impl ShellTarget {
     }
 }
 
-/// シェルのフォルダを読んで [`ShellTarget`] を作る（fs を触る唯一の入口）。
+/// シェルのフォルダを読んで [`ShellTarget`] を作る（fs を触る入口・記録を黙らせた版は [`load_shell_target_quiet`]）。
 ///
 /// 順序は「一覧 → `surfaces.txt` の読取と解析 → 面の表 → 使う画像を聞く → 焼く」である。
 /// 焼くのを最後に回すのは、どの面の画像を土台に**使う**かが面の表を組んでみないと決まらない
@@ -351,7 +352,7 @@ fn load_shell_target_with(
     let names = list_file_names(shell_dir, records)?;
     let selection = select_surface_images(&names);
 
-    // 重複と桁溢れは [`build_shell_target`] へ渡すと消えるので、渡す前に記録する。
+    // 重複と桁溢れは `build_core` へ渡すと消えるので、渡す前に記録する。
     if records.emits() {
         for (id, adopted, dropped) in &selection.duplicates {
             tracing::warn!(
@@ -828,7 +829,7 @@ fn log_box_issue(issue: &BoxIssue) {
 /// 1 件ごとの取得失敗（種別が読めない場合を含む）は致命ではなく、その 1 件を飛ばして続ける。
 ///
 /// バルーンの `enumerate_file_names` を流用しないのは、失敗の型がバルーン専用
-/// （`PresentError`）で、フォルダを除かないためである。
+/// （`BalloonLoadError`）で、フォルダを除かないためである。
 fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>, ShellLoadError> {
     let read_dir = std::fs::read_dir(shell_dir).map_err(|source| {
         tracing::error!(

@@ -6,8 +6,8 @@ use wintf::ecs::GraphicsCommandList;
 
 use super::test_support::{
     arrangement_of, bake_world, build_target_assets, build_two_face_assets, elem, gradient,
-    make_world_with_gpu, mount_entities, native_golden, set_window_dpi, shell_of, show_ok,
-    spawn_window_with_dpi, surface,
+    make_world_with_gpu, mount_entities, set_window_dpi, shell_of, show_ok, spawn_window_with_dpi,
+    surface, tamper_face_1000_slot,
 };
 
 // ── DPI 追従（k 適用の単一漏斗）: タスク 3.2／3.3 の檻 ────────────────────────────────────
@@ -95,12 +95,10 @@ fn show_surface_scales_display_to_scaled_extent_at_k2() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
 
-    let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x81);
-    // 同一入力を独立に再現して原寸 golden を作る（presenter の内部値の追認ではない）。
-    let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x81);
+    // golden は同一入力を直接合成した原寸バイト（presenter の内部値の追認ではない）。
+    let (emo_world, atlas, golden) = build_target_assets(3, 2, 0x81);
     let k2 = ScaleRatio::new(2, 1).unwrap();
-    let (golden, native_size) = native_golden(&probe_world, &probe_atlas, 1000);
-    assert_eq!(native_size, (3, 2), "fixture の native 原寸");
+    let native_size = (3, 2);
     let physical = k2.scaled_extent(3, 2);
     assert_eq!(physical, (6, 4), "丸め権威が返す k=2/1 の物理寸");
     assert_ne!(
@@ -161,59 +159,6 @@ fn show_surface_scales_display_to_scaled_extent_at_k2() {
         t.last_show.as_ref().map(|(id, _, _)| *id),
         Some(1000),
         "last_show は最後に成立した show 入力を保持する"
-    );
-}
-
-/// タスク 3.2・要件 1.2 観測完了（照会契約の更新）: k=2/1 の表示確立後、`TextSlotView::scale()` は
-/// **実適用 k（2.0）**を返し（恒常 1.0 の廃止）、`surface_size()` は **native 原寸**を返す
-/// （配置の係数を掛けた後の物理寸ではない）。物理寸との関係は
-/// `scaled_extent(scale(), surface_size()) == target_physical_size()` として成立する。
-#[test]
-fn text_slot_view_reports_applied_scale_and_native_surface_size() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x82);
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-
-    let view = presenter
-        .text_slot_view(TargetId(0))
-        .expect("表示確立後の text_slot_view は Some");
-    assert_eq!(
-        view.scale(),
-        2.0,
-        "scale() が実適用 k を返さない（恒常 1.0 の定数返しが残っている）"
-    );
-    assert_eq!(
-        view.surface_size(),
-        (3, 2),
-        "surface_size() は native 原寸（k を掛けた後の物理寸ではない）"
-    );
-
-    // 契約式: 物理寸 == scaled_extent(k, native)。照会口と実際の配置の両方で裏取りする。
-    let k = ScaleRatio::new(2, 1).unwrap();
-    let physical = presenter
-        .target_physical_size(TargetId(0))
-        .expect("表示確立後は Some");
-    assert_eq!(
-        k.scaled_extent(view.surface_size().0, view.surface_size().1),
-        physical,
-        "物理寸 = scaled_extent(scale(), surface_size()) の契約が成立しない"
-    );
-    assert_ne!(
-        view.surface_size(),
-        physical,
-        "k≠1 では native 原寸と物理寸が一致しない（原寸をそのまま物理寸として返していれば同値になる）"
-    );
-    // 実表示の作り方（配置の寸＝原寸・係数＝k）とも一致する——照会値だけが正しくて画面が
-    // 原寸のまま、という食い違いをここで弾く。
-    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
-    assert_eq!(
-        arrangement_of(&world, surface_entity),
-        (view.surface_size(), (view.scale(), view.scale())),
-        "照会値（原寸・k）と実際の配置が食い違う"
     );
 }
 
@@ -300,34 +245,6 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
     );
 }
 
-/// 要件 1.3/7.2（恒等 k の等価）: k=1/1 では `target_physical_size` が native 原寸と一致し、
-/// `TextSlotView::physical_size()` とも揃う（恒等ゆえ既存挙動と等価）。
-#[test]
-fn target_physical_size_equals_native_at_identity_scale() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0xA4);
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-
-    let view = presenter
-        .text_slot_view(TargetId(0))
-        .expect("表示確立後の text_slot_view は Some");
-    assert_eq!(view.scale(), 1.0, "前提: 恒等 k");
-    assert_eq!(
-        presenter.target_physical_size(TargetId(0)),
-        Some((3, 2)),
-        "k=1/1 では物理寸＝native 原寸（恒等・既存等価）"
-    );
-    assert_eq!(
-        presenter.target_physical_size(TargetId(0)),
-        Some(view.physical_size()),
-        "恒等 k でも 2 つの照会口は一致する"
-    );
-}
-
 /// 要件 1.4 観測完了（DPI 取得不能の縮退・専用檻）: 窓 entity に `DPI` component が**無い**target
 /// でも表示は成立し、k は 1.0 へ縮退する（表示を失わない）。
 ///
@@ -343,8 +260,9 @@ fn target_physical_size_equals_native_at_identity_scale() {
 /// **読み戻しは弁別に使えない**（`areka-P0-present-gpu-transform-scale` 裁定 D）——提示段が抱える
 /// 絵は k に依らず原寸だからである。ゆえに捏造の弁別は上の 4 つが担い、読み戻しは「縮退しても
 /// 絵は等倍の native 合成そのもの」という別の主張として残す。`scale()` は 1.0 を返す。
-/// 他テストは `DPI` を明示挿入する規律ゆえ、この分岐は本テストだけが踏む（縮退が「正常系のふり」で
-/// 通らないことの保証）。`derive_scale` 側の `error!` 発火自体は同関数の in-crate テストが檻に入れる。
+/// 他テストは `DPI` を明示挿入する規律ゆえ、表示の適用でこの分岐を踏むのは本テストだけである
+/// （縮退が「正常系のふり」で通らないことの保証。`refresh_scale` 側の不在は
+/// `refresh_scale_does_not_fabricate_dpi_when_component_is_absent` が見る）。`derive_scale` 側の `error!` 発火自体は同関数の in-crate テストが檻に入れる。
 #[test]
 fn show_surface_without_dpi_component_degrades_to_identity() {
     let mut world = make_world_with_gpu();
@@ -408,9 +326,7 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
 
-    let (emo_world, atlas, golden_1000, _golden_3000) = build_two_face_assets(6, 5);
-    // 改竄プローブ用に同一 fixture を独立生成（決定論ゆえ同一資産）。
-    let (probe_world, probe_atlas, _, _) = build_two_face_assets(6, 5);
+    let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(6, 5);
     let k2 = ScaleRatio::new(2, 1).unwrap();
     let native_size = (6u32, 5u32);
     assert_ne!(
@@ -453,51 +369,18 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     // 改竄プローブ: 同一キーのスロットの**絵とマスクだけ**を別の絵（面 3000 の native 合成）へ
     // 差し替える。表示記録は差し替えない——記録を据え置くことで、末尾の「記録が作り直されて
     // いない」主張が同一 COM ポインタの比較として成立する。
-    let tampered = {
-        let mut composer = Composer::new();
-        composer
-            .compose(
-                &probe_world,
-                &probe_atlas,
-                3000,
-                &BindSet::default(),
-                &PatternState::default(),
-            )
-            .expect("面 3000 の合成は Ok")
-    };
-    let tampered_bytes = tampered.bytes().to_vec();
-    // 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった（署名追随）。改竄した絵と
-    // **同一 bytes 由来**のマスクを渡し、スロットの原子対をプローブ側でも崩さない。
-    let tampered_mask =
-        std::sync::Arc::new(wintf::ecs::widget::bitmap_source::AlphaMask::from_pbgra32(
-            tampered.bytes(),
-            tampered.width(),
-            tampered.height(),
-            tampered.stride(),
-        ));
-    assert_ne!(
-        tampered_bytes, golden_1000,
-        "プローブ前提: 別の絵であること"
+    tamper_face_1000_slot(
+        &mut presenter,
+        TargetId(0),
+        native_size,
+        display_before.clone(),
     );
-    presenter
-        .targets
-        .get_mut(&TargetId(0))
-        .unwrap()
-        .cache
-        .insert(
-            1000,
-            BindSet::default(),
-            PatternState::default(),
-            tampered,
-            tampered_mask,
-            display_before.clone(),
-        );
 
     // 2 回目（同一入力・同一 k）: ヒットゆえ再合成せず、改竄された絵がそのまま表示される。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        tampered_bytes,
+        golden_3000,
         "同一入力・同一 k の再 show でキャッシュを引いていない（無駄な再合成）"
     );
 
@@ -507,7 +390,7 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        tampered_bytes,
+        golden_3000,
         "k が変わっただけでミスして再合成している（k がキー要素に残っている・要件 5.2/5.3）"
     );
 
@@ -552,7 +435,7 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     );
     assert_eq!(
         entry.composed.bytes(),
-        tampered_bytes.as_slice(),
+        golden_3000.as_slice(),
         "k 変化でエントリの絵が差し替わっている（再合成が走った）"
     );
 }

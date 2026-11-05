@@ -56,7 +56,7 @@ fn face_override_lands_only_in_its_face() {
         "validrect.top,20\r\nfont.height,22\r\narrow0.x,-7\r\narrow.filename,two\r\n",
     );
     for name in ["balloons0.png", "balloons1.png", "balloons2.png"] {
-        dir.write(name, "");
+        dir.touch(name);
     }
     dir.image(&mut dec, "arrow0.png", 3, 3);
     dir.image(&mut dec, "arrow1.png", 4, 4);
@@ -102,7 +102,7 @@ fn faces_without_own_settings_equal_face0() {
     dir.write("descript.txt", "validrect.top,1\r\n");
     dir.write("balloons0s.txt", "validrect.top,3\r\nfont.height,12\r\n");
     for name in ["balloons0.png", "balloons1.png", "balloons2.png"] {
-        dir.write(name, "");
+        dir.touch(name);
     }
     dir.image(&mut dec, "arrow0.png", 3, 3);
 
@@ -122,7 +122,7 @@ fn arrow_images_resolved_once_per_name_and_shared() {
     let mut dec = MemoryDecoder::new();
     dir.write("descript.txt", "validrect.top,1\r\n");
     for face in 0..=5 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons2s.txt", "validrect.top,2\r\n");
     dir.write("balloons3s.txt", "validrect.top,3\r\n");
@@ -165,7 +165,7 @@ fn unreadable_coordinate_warns_once_per_key_and_value() {
     dir.write("balloons2s.txt", "arrow1.y,zz\r\n");
     dir.write("balloons3s.txt", "arrow1.y,zz\r\n");
     for name in ["balloons0.png", "balloons2.png", "balloons3.png"] {
-        dir.write(name, "");
+        dir.touch(name);
     }
 
     let (defs, events) = load(&dir, &dec);
@@ -195,7 +195,7 @@ fn missing_face_falls_back_to_face0_with_debug() {
     let dir = TempDir::new();
     let dec = MemoryDecoder::new();
     dir.write("descript.txt", "");
-    dir.write("balloons0.png", "");
+    dir.touch("balloons0.png");
     let (defs, _) = load(&dir, &dec);
 
     let (def, events) = log_capture_kit::capture(|| defs.for_face(5).clone());
@@ -224,7 +224,7 @@ fn inline_marker_per_face_and_face0_fallback() {
     let mut dec = MemoryDecoder::new();
     dir.write("descript.txt", "marker.filename,mine\r\n");
     for face in 0..=3 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons2s.txt", "marker.filename,two\r\n");
     dir.write("balloons3s.txt", "marker.filename,two\r\n");
@@ -266,7 +266,7 @@ fn inline_marker_missing_explicit_warns_and_falls_back() {
     let dir = TempDir::new();
     let mut dec = MemoryDecoder::new();
     dir.write("descript.txt", "marker.filename,nothere\r\n");
-    dir.write("balloons0.png", "");
+    dir.touch("balloons0.png");
     dir.image(&mut dec, "markers.png", 4, 4);
 
     let (defs, events) = load(&dir, &dec);
@@ -292,7 +292,7 @@ fn inline_marker_none_records_info_once() {
     let dec = MemoryDecoder::new();
     dir.write("descript.txt", "");
     for face in 0..=2 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons1s.txt", "validrect.top,1\r\n");
     dir.write("balloons2s.txt", "marker.filename,other\r\n");
@@ -321,7 +321,7 @@ fn missing_descript_warns_once_across_overriding_faces() {
     let dir = TempDir::new();
     let dec = MemoryDecoder::new();
     for face in 0..=2 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons1s.txt", "validrect.top,1\r\n");
     dir.write("balloons2s.txt", "validrect.top,2\r\n");

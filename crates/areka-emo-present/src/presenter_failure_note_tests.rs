@@ -168,7 +168,7 @@ fn the_graphics_core_less_path_is_coalesced_the_same_way() {
 /// 面 1000（有効）と面 7000（定義層皆無＝合成が `EmptyComposition`）を載せた対象を `target` に装着する。
 fn attach_valid_and_empty(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
     let window = spawn_window_with_dpi(world, 96);
-    let (emo_world, atlas) = super::display_tests::build_assets_with_valid_and_empty(4, 3, 0x5A);
+    let (emo_world, atlas) = super::test_support::build_assets_with_valid_and_empty(4, 3, 0x5A);
     presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 

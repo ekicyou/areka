@@ -14,7 +14,7 @@ use tracing::Level;
 
 use super::test_support::{
     CapturedEvent, INFO_LINE_MESSAGE, build_two_face_assets, capture, hide_ok, make_world_with_gpu,
-    pattern_overlay_at, set_window_dpi, show_with, spawn_window_with_dpi,
+    pattern_overlay_at, set_window_dpi, show_with_ok, spawn_window_with_dpi,
 };
 use super::timing::PERF_LINE_MESSAGE;
 
@@ -48,13 +48,7 @@ fn show(
     binds: BindSet,
     pattern: PatternState,
 ) {
-    assert!(
-        matches!(
-            show_with(presenter, world, TargetId(0), surface_id, binds, pattern),
-            Ok(())
-        ),
-        "ShowSurface（面 {surface_id}）が Ok でない"
-    );
+    show_with_ok(presenter, world, TargetId(0), surface_id, binds, pattern);
 }
 
 /// 表示の行を順に `(水準, size_changed)` で返す。どの行も直後が perf の行で、欄の集合はすべて同じ

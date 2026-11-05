@@ -128,7 +128,7 @@ struct ComposeKey {
 /// 保持するエントリ数の上限（**開発者裁定 2026-08-15**・要件 7.1）。
 ///
 /// 実測の根拠は本モジュール冒頭 §容量は 1 → 3 と `remeasure-2026-08-15.md` §4。命中率の膝が
-/// ここにあり、4 以上へ広げても伸びは 1 ポイント未満である（3→64 でも 12 ポイント）。
+/// ここにあり、4 へ広げても伸びは 0.3 ポイント（8 でも 1.4・64 でも 12 ポイント）である。
 ///
 /// **この定数の変更は要件 7.1 の裁定ゲートを通す。** 自律ループが単独で動かしてよい値ではない。
 pub(crate) const CAPACITY: usize = 3;
@@ -162,12 +162,6 @@ pub(crate) const CAPACITY: usize = 3;
 pub struct ComposeCache {
     /// キー（合成入力）と結果の対を**最近使用の昇順**で持つ（先頭＝次の追い出し）。
     entries: Vec<(ComposeKey, CacheEntry)>,
-}
-
-impl Default for ComposeCache {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl ComposeCache {

@@ -152,10 +152,10 @@ impl EmoPresenter {
     /// client を新物理寸へ合わせる（design Flow 2／Flow 3 手順 5・議題 #2 裁定）。未登録 target・
     /// 要求なしは `None`。
     ///
-    /// # なぜ `reply`（[`PresentOutcome`]）ではなくここに置くのか
+    /// # なぜ `reply`（`PresentOutcome`）ではなくここに置くのか
     ///
     /// 本番の drain 経路（`run_drain_phase`）は指令へ `reply` を**同梱しない**（撃ちっぱなし）ため、
-    /// [`PresentOutcome`] を太らせても報告は呼び手へ届かない。加えて報告は「表示が成立したという
+    /// `PresentOutcome` を太らせても報告は呼び手へ届かない。加えて報告は「表示が成立したという
     /// **状態**」であり、エッジ（`Changed<DPI>`）の消費順序に依存してはならない（議題 #2 裁定）。
     /// ゆえに target ごとの**取り出し可能な状態**として置く。
     ///

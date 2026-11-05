@@ -8,7 +8,7 @@ use areka_emo_atlas::MemoryDecoder;
 use areka_emo_compose::{BindSet, Composer, PatternState};
 use temp_path_kit::TempPath;
 
-use super::test_support::{decoder_with, describe, write_descript};
+use super::test_support::{decoder_with, warn_lines, write_descript};
 use log_capture_kit::capture;
 
 /// 知らない `animation-sort`・描かないメソッドの pattern（面 0 の animation0）・循環（面 10）・
@@ -73,11 +73,7 @@ fn load_warns_each_shape_issue_once() {
     let (_target, events) =
         capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
-    let mut got: Vec<String> = events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .map(describe)
-        .collect();
+    let mut got = warn_lines(&events);
     got.sort();
 
     let sort = "shell: animation-sort の値が ascend／descend でないので descend として組む";

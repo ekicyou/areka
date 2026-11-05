@@ -12,7 +12,7 @@
 
 use super::*;
 
-use super::test_support::{CapturedEvent, TempDir};
+use super::test_support::{CapturedEvent, TempDir, count_message};
 use log_capture_kit::capture;
 
 /// 読み込みの記録の宛先（バルーンの権威と、透過の宣言の記録）。
@@ -140,14 +140,6 @@ fn quiet_missing_folder_still_records_the_error() {
 const KEY_COLOR: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
 /// 焼く段の脱落の `error!` の文言。
 const BAKE_FAILED: &str = "balloon: 面画像の bake に失敗";
-
-/// `needle` を文言に含む記録の行の数（宛先まるごとでなく文言ごとに数える）。
-fn count_message(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .count()
-}
 
 /// 組んだ組の比べられる写し（索引表の鍵と配置・面の表の面の番号）。
 fn target_fingerprint((world, table): &(EmoWorld, AtlasTable)) -> String {

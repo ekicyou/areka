@@ -16,8 +16,9 @@ use temp_path_kit::TempPath;
 
 use super::test_support::{
     BOXES_FIXTURE_IMAGES, CapturedEvent, NESTING_FIXTURE_IMAGES, boxes_fixture_dir, decoder_with,
-    nesting_fixture_dir, write_descript,
+    nesting_fixture_dir, write_descript, write_records_fixture,
 };
+use crate::balloon::test_support::count_message;
 use log_capture_kit::capture;
 
 /// 読み込みの記録の宛先（シェルの権威と、透過の宣言の記録）。
@@ -87,35 +88,12 @@ fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needles: &[&str]) 
 #[test]
 fn records_fixture_is_silent_and_equal() {
     let dir = TempPath::new("shell-quiet-records");
-    std::fs::write(
-        dir.child("surfaces.txt"),
-        concat!(
-            "charset,UTF-8\n",
-            "surface0\n{\nelement0,overlay,base0.png,0,0\n}\n",
-            "surface1\n{\nelement1,overlay,parts1.png,0,0\n",
-            "animation0.interval,random,4\n",
-            "animation0.pattern0,overlay,777,0,0,0\n}\n",
-        ),
-    )
-    .expect("記述ファイル作成");
-    write_descript(dir.path());
-    for name in [
-        "surface0.png",
-        "surface0000.png",
-        "surface1.png",
-        "surface99999999999.png",
-        "base0.png",
-        "parts1.png",
-    ] {
-        std::fs::File::create(dir.child(name)).expect("プレースホルダ作成");
-    }
-    // `parts1.png` を入れないので、その 1 枚が焼く段で落ちる（`error!` も黙らせる側）。
-    let dec = decoder_with(dir.path(), &["base0.png", "surface1.png"]);
+    let dec = write_records_fixture(dir.path());
 
     assert_quiet_matches_emit(dir.path(), &dec, &["同じ番号", "コマの相手", "脱落"]);
 }
 
-/// 入れ子の検体（無い番号・循環・descript.txt が無い）。
+/// 入れ子の検体（無い番号・循環）。
 #[test]
 fn nesting_fixture_is_silent_and_equal() {
     let dir = nesting_fixture_dir();
@@ -212,14 +190,6 @@ fn quiet_empty_failure_still_records_the_error() {
 const ZERO_SIZED: &str = "bake: element の元画像が 0 寸です";
 /// 畳み込み（`areka_emo_compose`）の追記の相手の無い面の記録の文言。
 const APPEND_NO_TARGET: &str = "surface.append 対象 id が未存在";
-
-/// `needle` を文言に含む記録の行の数（宛先まるごとでなく文言ごとに数える）。
-fn count_message(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .count()
-}
 
 /// spec: emo-bake-log-overlap 要件 1.1・2.1・3.3: 出す読み込みは焼く段と畳み込みの記録を 1 行ずつ
 /// 出し、出さない読み込みはその文言が 0 行・戻り値は等しい。

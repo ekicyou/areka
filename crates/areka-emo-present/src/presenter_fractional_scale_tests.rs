@@ -1,16 +1,15 @@
 use super::*;
 
 use areka_emo_compose::BindSet;
-use areka_parsers::shell::{Animation, AppendTarget, DrawMethod, Interval, Pattern, Surface};
 
 use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::test_support::{
-    arrangement_of, bake_world, build_target_assets, elem, gradient, gradient_with_alpha,
-    make_world_with_gpu, mask_bit_counts, mask_dims, mount_entities, native_golden,
-    native_golden_with, pattern_overlay_at, set_window_dpi, shell_of, show_ok, show_with, solid,
-    spawn_window_with_dpi, surface,
+    arrangement_of, bake_world, bind_overlay_surface, build_target_assets, elem, gradient,
+    gradient_with_alpha, make_world_with_gpu, mask_bit_counts, mask_dims, mount_entities,
+    native_golden, native_golden_with, pattern_overlay_at, set_window_dpi, shell_of, show_ok,
+    show_with_ok, solid, spawn_window_with_dpi, surface,
 };
 
 // ── task 6.3: 端数 k（5/4）の表示の作り方・αマスクの由来・縮小方向の自動追従 ───────────────
@@ -64,12 +63,10 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 120);
 
-    let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x71);
-    // 同一入力を独立に再現して原寸 golden を作る（presenter の内部値の追認ではない）。
-    let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x71);
+    // golden は presenter へ渡す前に同じ入力から合成したもの（presenter の内部値の追認ではない）。
+    let (emo_world, atlas, golden) = build_target_assets(6, 5, 0x71);
+    let native_size = (6, 5);
     let k54 = ScaleRatio::new(5, 4).unwrap();
-    let (golden, native_size) = native_golden(&probe_world, &probe_atlas, 1000);
-    assert_eq!(native_size, (6, 5), "fixture の native 原寸");
     let physical = k54.scaled_extent(6, 5);
     assert_eq!(
         physical,
@@ -229,9 +226,9 @@ fn alpha_mask_bits_come_from_native_bytes() {
 ///
 /// # 既存 `refresh_scale_after_dpi_change_reapplies_new_k` との差
 ///
-/// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** のみで、観測は戻り値・照会値・読み戻しに閉じている。
-/// 本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**、(3) `refresh_scale` 経由でも
-/// **配置の係数が追従し、かつマスクと表示記録が作り直されないこと**——を足す。
+/// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** で、配置の係数の追従と表示記録の据え置きもそこで
+/// 見ている。本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**、(3) **αマスクの寸が原寸の
+/// まま**であること——を足す。
 ///
 /// 係数の更新を落とす変異（`set_layout` を再表示経路で呼ばない）は本テストが落とす——初回表示では
 /// `VisualMount::attach` が配置を組むため、`set_layout` が load-bearing なのは再表示経路だけである。
@@ -239,12 +236,10 @@ fn alpha_mask_bits_come_from_native_bytes() {
 fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x73);
-    let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x73);
+    let (emo_world, atlas, golden) = build_target_assets(6, 5, 0x73);
+    let native_size = (6, 5);
     let k2 = ScaleRatio::new(2, 1).unwrap();
     let k54 = ScaleRatio::new(5, 4).unwrap();
-    let (golden, native_size) = native_golden(&probe_world, &probe_atlas, 1000);
-    assert_eq!(native_size, (6, 5));
     let grown = k2.scaled_extent(6, 5);
     let shrunk = k54.scaled_extent(6, 5);
     assert_eq!(grown, (12, 10), "前提: k=2/1 の物理寸");
@@ -356,26 +351,7 @@ const LAYERED_PART_SIZE: (u32, u32) = (6, 4);
 /// ゆえ合成外形は base の `w×h` のまま——外形変化ではなく**中身の相対配置**だけを観測できる。
 fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
     let (pw, ph) = LAYERED_PART_SIZE;
-    let base_surface = Surface {
-        id: 1000,
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![elem("p.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: vec![Animation {
-            id: 2000,
-            interval: Interval::Bind,
-            interval_written: true,
-            patterns: vec![Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 5000,
-                target: "5000".into(),
-                wait: 0,
-                x: LAYERED_BIND_AT.0,
-                y: LAYERED_BIND_AT.1,
-            }],
-        }],
-    };
+    let base_surface = bind_overlay_surface(LAYERED_BIND_AT.0, LAYERED_BIND_AT.1);
     // 2 part は単色不透明で互いに異色（重なり順と相対配置を画素で弁別できる）。α=255 ゆえ
     // premultiplied 不変条件は自明に成立する。
     bake_world(
@@ -418,7 +394,7 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
 #[test]
 fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     let mut world = make_world_with_gpu();
-    // 窓 DPI 144 / author_dpi 96 → k=3/2（150%・実機水準・両軸とも端数を伴う倍率）。
+    // 窓 DPI 144 / author_dpi 96 → k=3/2（150%・実機水準）。
     let window = spawn_window_with_dpi(&mut world, 144);
     let k32 = ScaleRatio::new(3, 2).unwrap();
 
@@ -478,17 +454,13 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let outcome = show_with(
+    show_with_ok(
         &mut presenter,
         &mut world,
         TargetId(0),
         1000,
         binds.clone(),
         pattern.clone(),
-    );
-    assert!(
-        matches!(outcome, Ok(())),
-        "3 層 ShowSurface（k=3/2）が Ok でない: {outcome:?}"
     );
 
     // (a) 配置＝原寸の寸 × **1 対の**係数。x と y に別々の倍率が入る余地が無いことを明示する。

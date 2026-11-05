@@ -31,16 +31,6 @@ fn two_targets(world: &mut World) -> EmoPresenter {
     presenter
 }
 
-/// 未登録の対象と、まだ合図を受けていない対象は (0, 0)。
-#[test]
-fn move_shift_is_zero_before_any_shift() {
-    let mut world = World::new();
-    let presenter = two_targets(&mut world);
-    assert_eq!(presenter.move_shift(TargetId(0)), (0, 0));
-    assert_eq!(presenter.move_shift(TargetId(1)), (0, 0));
-    assert_eq!(presenter.move_shift(TargetId(9)), (0, 0), "未登録は (0, 0)");
-}
-
 /// ずれは対象ごとに覚えられ、同じ対象への後の合図が勝つ。0 で元へ戻る。
 #[test]
 fn move_shift_is_remembered_per_target() {

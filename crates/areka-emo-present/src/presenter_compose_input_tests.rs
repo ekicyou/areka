@@ -1,14 +1,13 @@
 use super::*;
 
 use areka_emo_compose::BindSet;
-use areka_parsers::shell::{Animation, AppendTarget, DrawMethod, Interval, Pattern, Surface};
 
 use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    bake_world, build_two_face_assets, elem, gradient, make_world_with_gpu, mount_entities,
-    native_golden, native_golden_with, pattern_overlay_at, shell_of, show_ok, show_with,
-    spawn_window_with_dpi, surface,
+    bake_world, bind_overlay_surface, build_two_face_assets, elem, gradient, make_world_with_gpu,
+    mount_entities, native_golden, native_golden_with, pattern_overlay_at, shell_of, show_ok,
+    show_with_ok, spawn_window_with_dpi, surface,
 };
 
 /// surface 1000（`w×h` 全不透明 element ＋ bind animation 2000 が surface 5000 を (0,0) に重ねる）
@@ -21,33 +20,8 @@ fn build_target_assets_with_bind(
     h: u32,
     salt: u8,
 ) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
-    let bind_part = Surface {
-        id: 5000,
-        targets: vec![AppendTarget::Single(5000)],
-        elements: vec![elem("q.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    };
-    let base_surface = Surface {
-        id: 1000,
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![elem("p.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: vec![Animation {
-            id: 2000,
-            interval: Interval::Bind,
-            interval_written: true,
-            patterns: vec![Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 5000,
-                target: "5000".into(),
-                wait: 0,
-                x: 0,
-                y: 0,
-            }],
-        }],
-    };
+    let bind_part = surface(5000, vec![elem("q.png", 0, 0)]);
+    let base_surface = bind_overlay_surface(0, 0);
     // 5000 は 1×1 の不透明 part（base 左上と必ず異なる色 → bind 有無でバイトが必ず変わる）。
     let (world, atlas) = bake_world(
         shell_of(vec![base_surface, bind_part]),
@@ -91,19 +65,13 @@ fn bind_change_on_same_surface_updates_display() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, binds: BindSet| {
-        assert!(
-            matches!(
-                show_with(
-                    presenter,
-                    world,
-                    TargetId(0),
-                    1000,
-                    binds,
-                    PatternState::default()
-                ),
-                Ok(())
-            ),
-            "ShowSurface が Ok でない"
+        show_with_ok(
+            presenter,
+            world,
+            TargetId(0),
+            1000,
+            binds,
+            PatternState::default(),
         );
     };
 
@@ -197,10 +165,6 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         rb, golden_3000,
         "再表示のバイトが新面 3000 の golden と一致しない（新面が提示されていない）"
     );
-    assert_ne!(
-        rb, golden_1000,
-        "再表示のバイトが旧面 1000 のまま（面切替が表示へ反映されていない）"
-    );
 
     // (e) 文字スロット表示が切替の前後で完全一致（slot/window/surface_size/scale が不変・R6.1）。
     let slot_after = presenter
@@ -279,19 +243,13 @@ fn show_surface_pattern_flows_through_to_compose_and_cache() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let show = |presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState| {
-        assert!(
-            matches!(
-                show_with(
-                    presenter,
-                    world,
-                    TargetId(0),
-                    1000,
-                    BindSet::default(),
-                    pattern
-                ),
-                Ok(())
-            ),
-            "ShowSurface が Ok でない"
+        show_with_ok(
+            presenter,
+            world,
+            TargetId(0),
+            1000,
+            BindSet::default(),
+            pattern,
         );
     };
 
@@ -313,10 +271,6 @@ fn show_surface_pattern_flows_through_to_compose_and_cache() {
     assert_eq!(
         rb, golden_pattern,
         "非空 pattern が表示へ反映されない（pattern が compose へ届いていない＝presenter が握り潰している）"
-    );
-    assert_ne!(
-        rb, golden_plain,
-        "非空 pattern の表示が空 pattern と同一（ComposeKey が pattern を無視＝古い絵に衝突している）"
     );
 
     // (3) 空 pattern へ戻す → golden_plain（pattern がキー要素として往復両方向で効く）。

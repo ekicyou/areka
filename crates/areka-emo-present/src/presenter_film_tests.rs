@@ -3,282 +3,15 @@
 //!
 //! 面 0 は 8×4 の全透明の枠に 2 つの動く絵（回数つき `fin.png`・終わりなし `end.png`）を横に
 //! 並べたもの、面 1 は静止画 1 枚の 8×4。絵は `MemoryDecoder` へ登録して本物の焼き・分解・合成を通す。合成の回数は
-//! 表示成立点の行（`cache_hit=false` が合成した回）を数える。
+//! 表示成立点の行（`cache_hit=false` が合成した回）を数える。面の表と指令の送り方は
+//! `presenter_test_support.rs` のバルーンの節にある（`presenter_stage*_tests.rs` と共有）。
 
 use super::*;
 
-use std::num::NonZeroU32;
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, DecodedImage,
-    LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake_with_limits,
-};
-use areka_emo_compose::FilmSheet;
-use areka_parsers::shell::{Collision, CollisionName, Element, ElementPath, Surface};
-
 use super::test_support::{
-    CapturedEvent, INFO_LINE_MESSAGE, build_target_assets, capture, make_world_with_gpu,
-    mount_entities, native_golden_with, shell_of, spawn_window_with_dpi,
+    T, applies, attach, build_balloon, build_target_assets, capture, established, frames, golden,
+    hide, make_world_with_gpu, mount_entities, send, shown, spawn_window_with_dpi,
 };
-
-const BASE: &str = "balloon";
-pub(super) const T: TargetId = TargetId(7);
-
-fn element(layer: u32, path: &str, x: i64) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y: 0,
-    }
-}
-
-/// 4×4 の不透明な単色。
-fn solid(c: u8) -> DecodedImage {
-    DecodedImage {
-        width: 4,
-        height: 4,
-        stride: 16,
-        bgra: [c, c / 2, 255 - c, 255].repeat(16),
-        has_alpha: true,
-    }
-}
-
-/// 4×4 の不透明な単色で、内側の 2×2（(1,1)〜(2,2)）だけが透明。
-fn holed(c: u8) -> DecodedImage {
-    let mut img = solid(c);
-    for (x, y) in [(1, 1), (2, 1), (1, 2), (2, 2)] {
-        let at = (y * 16 + x * 4) as usize;
-        img.bgra[at..at + 4].copy_from_slice(&[0, 0, 0, 0]);
-    }
-    img
-}
-
-fn film(dec: &mut MemoryDecoder, rel: &str, frames: Vec<DecodedImage>, laps: Option<u32>) {
-    let loop_count = match laps {
-        None => LoopCount::Infinite,
-        Some(n) => LoopCount::Finite(NonZeroU32::new(n).unwrap()),
-    };
-    let first = frames[0].clone();
-    let frames: Vec<AnimationFrame> = frames
-        .into_iter()
-        .map(|image| AnimationFrame {
-            image,
-            delay_ms: 100,
-        })
-        .collect();
-    dec.insert_animated(
-        Path::new(BASE).join(rel),
-        AnimationInfo {
-            width: 4,
-            height: 4,
-            frame_count: frames.len() as u32,
-        },
-        Ok(first),
-        Ok(AnimatedImage { frames, loop_count }),
-    );
-}
-
-/// 面 0（回数つき＋終わりなし・当たり判定 1 つ）と面 1（静止画）の面の表。
-pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
-    let surfaces = vec![
-        Surface {
-            id: 0,
-            targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
-            elements: vec![
-                element(0, "frame.png", 0),
-                element(1, "fin.png", 0),
-                element(2, "end.png", 4),
-            ],
-            collisions: vec![Collision {
-                index: 0,
-                left: 4,
-                top: 0,
-                right: 8,
-                bottom: 4,
-                name: CollisionName::new("Body".to_string()),
-            }],
-            animations: Vec::new(),
-        },
-        Surface {
-            id: 1,
-            targets: vec![areka_parsers::shell::AppendTarget::Single(1)],
-            elements: vec![element(0, "s1.png", 0)],
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        },
-    ];
-    let mut dec = MemoryDecoder::new();
-    // 外形は element の原寸で決まる（置いた X は足さない）ので、8×4 の全透明の枠を敷いて横に並べる。
-    dec.insert(
-        Path::new(BASE).join("frame.png"),
-        8,
-        4,
-        32,
-        vec![0; 128],
-        true,
-    );
-    film(
-        &mut dec,
-        "fin.png",
-        vec![solid(20), solid(90), solid(160)],
-        Some(1),
-    );
-    film(&mut dec, "end.png", vec![solid(200), holed(240)], None);
-    // 8×4 の不透明な単色（色が 1 つなので 4×4 の 2 枚ぶんをそのまま並べてよい）。
-    let still = solid(60).bgra.repeat(2);
-    dec.insert(Path::new(BASE).join("s1.png"), 8, 4, 32, still, true);
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
-        &dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// (回数つきの子, 終わりなしの子)。
-fn sheets(world: &EmoWorld) -> (FilmSheet, FilmSheet) {
-    let all: Vec<&FilmSheet> = world.film_sheets().collect();
-    assert_eq!(
-        all.len(),
-        2,
-        "前提: 面 0 の動く絵が 2 つとも子へ分解されている"
-    );
-    let fin = all.iter().find(|s| s.laps.is_some()).expect("回数つき");
-    let end = all.iter().find(|s| s.laps.is_none()).expect("終わりなし");
-    ((*fin).clone(), (*end).clone())
-}
-
-/// 回数つきのコマ `fin`・終わりなしのコマ `end` を欄に載せたコマ（`None` は載せない＝経過 0）。
-pub(super) fn frames(world: &EmoWorld, fin: Option<usize>, end: Option<usize>) -> PatternState {
-    let (f, e) = sheets(world);
-    let mut p = PatternState::default();
-    if let Some(i) = fin {
-        p.set_film(f.id, f.frames[i]);
-    }
-    if let Some(i) = end {
-        p.set_film(e.id, e.frames[i]);
-    }
-    p
-}
-
-pub(super) fn golden(surface_id: u32, binds: &BindSet, pattern: &PatternState) -> Vec<u8> {
-    let (world, atlas) = build_balloon();
-    native_golden_with(&world, &atlas, surface_id, binds, pattern).0
-}
-
-pub(super) fn attach(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    ownership: VisibilityOwnership,
-) {
-    let window = spawn_window_with_dpi(world, 96);
-    let (emo_world, atlas) = build_balloon();
-    presenter.attach_target(T, window, emo_world, atlas, 96);
-    presenter
-        .set_visibility_ownership(T, ownership)
-        .expect("set_visibility_ownership");
-}
-
-/// 指令を 1 つ適用し、応答がちょうど 1 回 `Ok` で返ることを確かめる。
-pub(super) fn send(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    surface_id: u32,
-    binds: BindSet,
-    pattern: PatternState,
-) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: T,
-            surface_id,
-            binds,
-            pattern,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.try_recv(), Ok(Some(Ok(())))),
-        "応答が 1 回 Ok で返っていない"
-    );
-    assert!(
-        matches!(rx.try_recv(), Err(areka_actor::ReplyError::Dropped)),
-        "応答が 2 回以上返る（または送り手が残っている）"
-    );
-}
-
-/// (表示が成立した回数, そのうち合成した回数)。
-pub(super) fn applies(events: &[CapturedEvent]) -> (usize, usize) {
-    let infos: Vec<_> = events
-        .iter()
-        .filter(|e| e.message() == INFO_LINE_MESSAGE)
-        .collect();
-    let composed = infos
-        .iter()
-        .filter(|e| e.field("cache_hit").map(|v| v.to_string()) == Some("false".to_string()))
-        .count();
-    (infos.len(), composed)
-}
-
-/// 外から所有されるバルーンを面 0（経過 0）で確立する（見えないまま）。
-pub(super) fn established(world: &mut World) -> EmoPresenter {
-    let mut presenter = EmoPresenter::new();
-    attach(&mut presenter, world, VisibilityOwnership::External);
-    send(
-        &mut presenter,
-        world,
-        0,
-        BindSet::default(),
-        PatternState::default(),
-    );
-    assert_eq!(presenter.target_visible(T), Some(false));
-    presenter
-}
-
-/// 外から所有されるバルーンを面 0（経過 0）で出し、合図を今の出番の世代に追い付かせる
-/// （seriko が新しい出番を知った後の状態・task 4.3）。
-pub(super) fn shown(world: &mut World) -> EmoPresenter {
-    let mut presenter = established(world);
-    presenter.show_target(world, T).expect("show_target");
-    assert_eq!(presenter.target_visible(T), Some(true));
-    let generation = presenter.stage_generation(T).expect("装着済み");
-    ack(&mut presenter, world, T, generation);
-    presenter
-}
-
-/// 合図 `StageAck` を 1 つ適用する（応答なし）。
-pub(super) fn ack(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    target: TargetId,
-    generation: u64,
-) {
-    presenter.apply(world, PresentCommand::StageAck { target, generation });
-}
-
-pub(super) fn hide(presenter: &mut EmoPresenter, world: &mut World) {
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target: T,
-            reply: None,
-        },
-    );
-}
 
 /// 隠れている対象へコマだけ違う指令を 3 回送ると合成 0 回で、出した絵は最後の指令のコマ。
 /// その間も `last_shown`・`read_back` は成立済みの絵を返す（要件 6.4・3.7・3.3）。
@@ -412,7 +145,7 @@ fn frame_changes_right_after_the_real_hide_command_are_held() {
 /// 通し直しが失敗したら預かったコマは残り、次の `show_target` がそれで出す。
 #[test]
 fn show_target_clears_the_held_frame_on_success_and_keeps_it_on_failure() {
-    use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
+    use crate::display::{DisplayFault, arm_display_fault};
 
     let mut world = make_world_with_gpu();
     let (w, _) = build_balloon();
@@ -440,12 +173,6 @@ fn show_target_clears_the_held_frame_on_success_and_keeps_it_on_failure() {
     );
 
     // 失敗: 預けたコマの通し直しの表示の記録を 1 回だけ失敗させる。
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
     let mut presenter = established(&mut world);
     let held = frames(&w, None, Some(1));
     send(
@@ -456,8 +183,7 @@ fn show_target_clears_the_held_frame_on_success_and_keeps_it_on_failure() {
         held.clone(),
     );
     {
-        let _disarm = Disarm;
-        arm_display_fault(DisplayFault::CreateBitmap);
+        let _armed = arm_display_fault(DisplayFault::CreateBitmap);
         assert!(
             presenter.show_target(&mut world, T).is_err(),
             "前提: 通し直しが失敗する"

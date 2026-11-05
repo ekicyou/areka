@@ -30,8 +30,7 @@
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
 /// scope 別バルーン系列解決の**単一権威**であり、解決した面画像を **シェルと同一の**
-/// compose/present 経路へ載せる入力適合層（`BalloonFrameSource`）。scope 番号→接頭辞優先連鎖
-/// （`prefix_chain`）・面 ID 単位の連鎖探索（`resolve_balloon_faces`）・scope 別バルーン定義の
+/// compose/present 経路へ載せる入力適合層。面 ID 単位の連鎖探索（`resolve_balloon_faces`）・scope 別バルーン定義の
 /// 2 層マージ（`load_scope_balloon_model`）を公開し、`build_balloon_target` が
 /// `attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
 pub mod balloon;
@@ -59,8 +58,8 @@ pub mod scale;
 /// 採った扱いを記録する。シェルとバルーンの入口が共用する `pub(crate)` 内部モジュール。
 pub(crate) mod self_alpha;
 /// シェルの読み込みの権威（`shell_target`）。シェルのフォルダから「焼いた絵＋面の表を必要な数だけ
-/// 組める値」（`ShellTarget`）を作る唯一の入口（`load_shell_target`）と、fs を触らない核
-/// （`build_shell_target`）を持つ。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を決める
+/// 組める値」（`ShellTarget`）を作る入口（`load_shell_target`・記録を黙らせた `load_shell_target_quiet`）と、fs を触らない核
+/// （`build_core`・テストは `build_shell_target` 経由）を持つ。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を決める
 /// 純粋な判定（`select_surface_images`）の名前の判定は、バルーンの系列解決と同じ 1 つの実装
 /// （`balloon::face_digits_of`）を接頭辞 `surface` で共有する。
 pub mod shell_target;

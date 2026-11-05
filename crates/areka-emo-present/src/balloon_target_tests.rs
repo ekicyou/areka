@@ -1,6 +1,7 @@
 use super::*;
 
 use super::test_support::{TempDir, emo2_balloon_root};
+use crate::shell_target::test_support::insert_solid;
 use areka_emo_atlas::{AnimationInfo, DecodedImage, ElementId, MemoryDecoder};
 use areka_parsers::shell::parse;
 
@@ -65,22 +66,19 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
 
     // 両面をデコーダへ登録（MemoryDecoder 経路・実 PNG 不要）。
     let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque(1, 1);
-    dec.insert(
-        dir.path().join("balloons0.png"),
-        w,
-        h,
-        stride,
-        bytes.clone(),
-        has_alpha,
+    insert_solid(
+        &mut dec,
+        dir.path(),
+        "balloons0.png",
+        (1, 1),
+        [10, 20, 30, 255],
     );
-    dec.insert(
-        dir.path().join("balloons2.png"),
-        w,
-        h,
-        stride,
-        bytes,
-        has_alpha,
+    insert_solid(
+        &mut dec,
+        dir.path(),
+        "balloons2.png",
+        (1, 1),
+        [10, 20, 30, 255],
     );
 
     let (world, table) =
@@ -109,63 +107,6 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
     );
     // 飛び番の欠番 id 1 は列挙対象に無いゆえ常駐しない（面 id=N の同一性を固定）。
     assert!(world.surface(1).is_none(), "欠番 id 1 は World に無い");
-}
-
-/// R1.1/R1.2/R7.2（本タスクの観測可能な完了状態）: 実 fixture `emo2-kakukaku` は本体側
-/// `balloons0.png` と相方側 `balloonk0.png` を**両方**持つ。`build_balloon_target` に
-/// scope を渡すと、**scope 1 の構築 World は相方側系列の面から成り**・scope 0 の構築 World は
-/// 本体側系列の面から成る。
-///
-/// 全 scope が同一枠へ畳み込まれていれば scope 1 でも `balloons0.png` がアトラスへ載るため、
-/// この檻は「単一接頭辞固定」の残存をそのまま検出する。デコードは MemoryDecoder（実 PNG
-/// デコード不要・決定論）だが**列挙は実ディレクトリを走る**ゆえ、どの scope がどのファイルを
-/// 採るかという主張そのものが檻になる。
-#[test]
-fn build_balloon_target_composes_scope_series_on_emo2_fixture() {
-    let dir = emo2_balloon_root();
-
-    // 実 fixture の面画像 2 枚をデコーダへ登録する（列挙が採った面だけがアトラスへ載る）。
-    let mut dec = MemoryDecoder::new();
-    let (w, h, stride, bytes, has_alpha) = opaque(1, 1);
-    for name in ["balloons0.png", "balloonk0.png"] {
-        dec.insert(dir.join(name), w, h, stride, bytes.clone(), has_alpha);
-    }
-
-    // --- scope 1（相方側）: World は相方側系列の面から成る ---
-    let (kero_world, kero_table) =
-        build_balloon_target(&dir, &dec, 1).expect("scope 1 の面 0 は balloonk0 で解決する");
-    assert!(
-        kero_table.resolve(SetId(0), "balloonk0.png").is_some(),
-        "scope 1 のアトラスは相方側系列の面 balloonk0.png から成る"
-    );
-    assert_eq!(
-        kero_table.resolve(SetId(0), "balloons0.png"),
-        None,
-        "scope 1 は面 0 を相方側で解決済みゆえ本体側系列の面を採らない"
-    );
-    assert_eq!(kero_table.len(), 1, "解決された面は 1 枚（面 0）のみ");
-    assert!(
-        kero_world.surface(0).is_some(),
-        "面 0 が World に常駐する（初期表示面・R2.6）"
-    );
-
-    // --- scope 0（本体側）: 同一ディレクトリでも本体側系列の面から成る ---
-    let (sakura_world, sakura_table) =
-        build_balloon_target(&dir, &dec, 0).expect("scope 0 の面 0 は balloons0 で解決する");
-    assert!(
-        sakura_table.resolve(SetId(0), "balloons0.png").is_some(),
-        "scope 0 のアトラスは本体側系列の面 balloons0.png から成る"
-    );
-    assert_eq!(
-        sakura_table.resolve(SetId(0), "balloonk0.png"),
-        None,
-        "scope 0 の連鎖に balloonk は無く相方側の面を採らない"
-    );
-    assert_eq!(sakura_table.len(), 1, "解決された面は 1 枚（面 0）のみ");
-    assert!(
-        sakura_world.surface(0).is_some(),
-        "面 0 が World に常駐する"
-    );
 }
 
 /// 面が 1 枚も解決できなければ log-first で `NoFace0` を返す
@@ -300,18 +241,6 @@ fn pre_spec_faces(dir: &Path) -> Vec<(u32, String)> {
     faces
 }
 
-/// 指定寸の**不透明** PBGRA スペック（bake が trim せず原寸のまま placement を産む）。
-/// 面ごとに別寸を与えると、アトラス要約 [`scope_digest`] が「どの画像が載ったか」を
-/// ファイル名だけでなく**中身の寸**でも判別できるようになる。
-fn opaque(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
-    let stride = w * 4;
-    let mut bytes = Vec::with_capacity((stride * h) as usize);
-    for _ in 0..(w * h) {
-        bytes.extend_from_slice(&[10u8, 20, 30, 255]);
-    }
-    (w, h, stride, bytes, true)
-}
-
 /// 当該 scope の解決＋構築を行い、**scope 間で比較可能な要約**へ畳む。
 ///
 /// 要約は 3 点——(1) 面集合 `(面 ID, 実ファイル名)`、(2) World に常駐する surface id、
@@ -383,8 +312,7 @@ fn balloonk_absent_converges_to_pre_spec_faces_and_target_for_all_scopes() {
         ("balloons1.png", (5, 3)),
         ("balloons2.png", (9, 4)),
     ] {
-        let (w, h, stride, bytes, has_alpha) = opaque(w, h);
-        dec.insert(dir.path().join(name), w, h, stride, bytes, has_alpha);
+        insert_solid(&mut dec, dir.path(), name, (w, h), [10, 20, 30, 255]);
     }
 
     // 神託（適用前の固定接頭辞列挙）。
@@ -440,8 +368,7 @@ fn scope0_faces_and_target_match_pre_spec_enumeration_on_emo2_fixture() {
         ("balloons0.png", (40u32, 22u32)),
         ("balloonk0.png", (28, 20)),
     ] {
-        let (w, h, stride, bytes, has_alpha) = opaque(w, h);
-        dec.insert(dir.join(name), w, h, stride, bytes, has_alpha);
+        insert_solid(&mut dec, &dir, name, (w, h), [10, 20, 30, 255]);
     }
 
     let oracle = pre_spec_faces(&dir);
@@ -464,14 +391,30 @@ fn scope0_faces_and_target_match_pre_spec_enumeration_on_emo2_fixture() {
     );
 
     // 判別力（この等式が空虚でないことの自己検証）: 同一ディレクトリの scope 1 は別物になる。
-    let (faces1, _, atlas1) = scope_digest(&dir, &dec, 1);
+    let (faces1, resident1, atlas1) = scope_digest(&dir, &dec, 1);
     assert_ne!(
         faces1, oracle,
         "scope 1 まで神託と一致するなら本 fixture は判別力を持たない"
     );
     assert_eq!(
+        resident1,
+        vec![0],
+        "scope 1 の World にも面 0 が常駐する（初期表示面・R2.6）"
+    );
+    assert_eq!(
         atlas1,
         vec![("balloonk0.png".to_string(), (28, 20), true)],
         "scope 1 のアトラスは相方側系列の面（本体側の 40×22 ではない）"
+    );
+
+    // 入口の `build_balloon_target` も scope をそのまま系列の解決へ渡す（scope 1 は相方側の面）。
+    let (world1, table1) = build_balloon_target(&dir, &dec, 1).expect("scope 1 から Ok が返る");
+    assert!(
+        table1.resolve(SetId(0), "balloonk0.png").is_some(),
+        "scope 1 のアトラスは balloonk0.png を持つ"
+    );
+    assert!(
+        world1.surface(0).is_some(),
+        "scope 1 の World に面 0 がある"
     );
 }

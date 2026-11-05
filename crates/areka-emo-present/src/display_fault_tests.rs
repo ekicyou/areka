@@ -22,73 +22,41 @@
 //! に残るもの（`BeginDraw` 開きっぱなし・ターゲットや変換の残留）だけであり、それは「同じ DC で
 //! 次の記録が成功して空でないリストを返す」ことで検出できる。
 //!
-//! 注入旗の後始末は**観測ではなく保証**である。[`record_with_armed_fault`] の `Disarm` が
+//! 注入旗の後始末は**観測ではなく保証**である。`arm_display_fault` の返す守りが
 //! どの経路（正常終了・assert の panic）でも旗を降ろし、`fault_point` も一致した時点で旗を
 //! 消費するので、旗が次の記録や次のテストへ漏れることは構造的に起こり得ない。テストはその
 //! 漏れを検出しているのではなく、漏れない形で書かれている。
 
 use super::*;
 
+use super::gpu_tests::gpu_dc;
 use log_capture_kit::capture;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::GraphicsCore;
 
 /// 注入が載せる HRESULT（`display.rs` の `fault_point` と同値＝E_FAIL）。
 const INJECTED_HRESULT: i32 = 0x8000_4005u32 as i32;
 
-/// `record_display` が失敗し得る 4 点（`DisplayFault` の全 variant）。
-///
-/// variant が増えたらここに足さなければ被覆が黙って減る。列挙の網羅は
-/// [`every_display_fault_variant_has_a_case`] が `match` で見張る。
-const ALL_FAULTS: [DisplayFault; 4] = [
-    DisplayFault::CreateBitmap,
-    DisplayFault::CreateCommandList,
-    DisplayFault::EndDraw,
-    DisplayFault::Close,
-];
-
-/// 実 GPU（HARDWARE デバイス）を組んで共有 DC を借りる（`display_gpu_tests.rs` の `gpu_dc` と
-/// 同型。画素は読まないので DPI の固定は要らない）。
-///
-/// `GraphicsCore` を戻り値に含めるのは DC の寿命がそれに縛られるため。GPU が無ければ `expect`
-/// で赤くなる（黙って緑にする skip は置かない）。
-fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
-    // 各テストは専用スレッドで走り COM 未初期化ゆえ MTA を初期化する
-    // （S_FALSE／RPC_E_CHANGED_MODE は無視してよい）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
-    let dc = core
-        .device_context()
-        .expect("GraphicsCore::device_context が None")
-        .clone();
-    (core, dc)
-}
-
 /// 注入 → 記録 → 武装解除 を **1 つの不可分な操作**として閉じる唯一の入口。
 ///
-/// 解除を `Drop` に持たせ `arm_display_fault` の呼出をここ 1 箇所に限ることで、「解除の書き忘れ」
-/// も「assert の panic で解除を飛び越すこと」も構造的に起こり得なくする（注入旗はスレッド局所
-/// ゆえ、解け残ると同一スレッドの後続テストを巻き添えにする）。
+/// 解除は `arm_display_fault` の返す守りの `Drop` が持つので、「解除の書き忘れ」も「assert の
+/// panic で解除を飛び越すこと」も構造的に起こり得ない（注入旗はスレッド局所ゆえ、解け残ると
+/// 同一スレッドの後続テストを巻き添えにする）。
 fn record_with_armed_fault(
     dc: &ID2D1DeviceContext,
     at: DisplayFault,
     surface: &ComposedSurface,
     repeat: Option<(&'static str, i32)>,
 ) -> Result<GraphicsCommandList, PresentError> {
-    /// 生存期間の終わり（正常終了・panic による巻き戻しの双方）で必ず武装を降ろす番人。
-    struct Disarm;
-    impl Drop for Disarm {
-        fn drop(&mut self) {
-            clear_display_fault();
-        }
-    }
-
-    let _disarm = Disarm;
-    arm_display_fault(at);
+    let _armed = arm_display_fault(at);
     record_display(dc, surface, repeat)
 }
+
+/// 注入点を足したら下の `run_case` の檻も 1 本足す（足し忘れをここのコンパイルで止める）。
+const _: fn(DisplayFault) = |at| match at {
+    DisplayFault::CreateBitmap
+    | DisplayFault::CreateCommandList
+    | DisplayFault::EndDraw
+    | DisplayFault::Close => (),
+};
 
 /// 1 点の検査本体: 注入して記録 → `Err` の形・`error!` 1 行 → 同じ DC で次の記録が成功する。
 fn run_case(at: DisplayFault) {
@@ -218,29 +186,4 @@ fn same_cause_passed_as_repeat_logs_debug_not_error() {
     assert_eq!(debugs.len(), 1, "同じ原因の続きは debug! ちょうど 1 行");
     assert_eq!(debugs[0].message(), "D2D 呼び出しが失敗");
     assert_eq!(debugs[0].field_str("context"), Some(injected_context(at)));
-}
-
-/// 被覆の番人: `DisplayFault` に variant が増えたら [`ALL_FAULTS`] の欠落をコンパイルで気づかせ、
-/// 表に重複が無いことを実行時に固定する（件数は配列の型 `[_; 4]` が決める）。
-#[test]
-fn every_display_fault_variant_has_a_case() {
-    for at in ALL_FAULTS {
-        // variant が増えると非網羅で**コンパイルが落ちる**（テストの追加漏れが静かに通らない）。
-        let _: &str = match at {
-            DisplayFault::CreateBitmap => {
-                "create_bitmap_failure_logs_once_and_leaves_no_side_effect"
-            }
-            DisplayFault::CreateCommandList => {
-                "create_command_list_failure_logs_once_and_leaves_no_side_effect"
-            }
-            DisplayFault::EndDraw => "end_draw_failure_logs_once_and_leaves_no_side_effect",
-            DisplayFault::Close => "close_failure_logs_once_and_leaves_no_side_effect",
-        };
-    }
-    for (i, at) in ALL_FAULTS.iter().enumerate() {
-        assert!(
-            !ALL_FAULTS[..i].contains(at),
-            "被覆表に重複がある: {at:?}（4 点は互いに異なる）"
-        );
-    }
 }

@@ -245,6 +245,7 @@ fn derive_scale_never_panics_and_always_yields_usable_scale() {
 // 捕捉は共有 crate の [`log_capture_kit::capture`] をそのまま使う（硬化の機序は同 crate の
 // crate doc にあり、ここには写さない）。
 
+use crate::balloon::test_support::count_message;
 use log_capture_kit::{CapturedEvent, capture};
 
 /// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
@@ -259,14 +260,6 @@ fn expect_one<'a>(events: &'a [CapturedEvent], needle: &str) -> &'a CapturedEven
         "`{needle}` を含むログがちょうど 1 件ではない: {events:?}"
     );
     hits[0]
-}
-
-/// メッセージに `needle` を含むイベント数。
-fn count_msg(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .count()
 }
 
 /// 要件 1.4／設計「Error Handling」: DPI 不在縮退は **`error!`** を発火する。
@@ -323,7 +316,7 @@ fn derive_scale_zero_window_dpi_emits_error_log() {
     assert_eq!(ev.field("author_dpi"), Some("96"));
     assert_eq!(ev.field("k"), Some("1.0"));
     assert_eq!(
-        count_msg(&events, "取得できない"),
+        count_message(&events, "取得できない"),
         0,
         "DPI 不在の文言と混ざらない（分岐の識別子が別）: {events:?}"
     );
@@ -395,8 +388,8 @@ fn derive_scale_emits_each_degradation_log_independently() {
     // dpi_x=0 かつ dpi_y=96 → error（窓 DPI 不正）＋ warn（異軸）の 2 本。
     let (k, events) = capture(|| derive_scale(policy_96(), Some((0, 96))));
     assert_eq!(k, ScaleRatio::ONE);
-    assert_eq!(count_msg(&events, "窓 DPI が不正"), 1);
-    assert_eq!(count_msg(&events, "異軸 DPI"), 1);
+    assert_eq!(count_message(&events, "窓 DPI が不正"), 1);
+    assert_eq!(count_message(&events, "異軸 DPI"), 1);
     assert_eq!(events.len(), 2, "{events:?}");
 }
 
@@ -414,7 +407,7 @@ fn derive_scale_repeats_degradation_log_on_every_call() {
         }
     });
     assert_eq!(
-        count_msg(&events, "異軸 DPI"),
+        count_message(&events, "異軸 DPI"),
         3,
         "抑止状態（once / 初回のみ）を持たない: {events:?}"
     );
@@ -424,5 +417,9 @@ fn derive_scale_repeats_degradation_log_on_every_call() {
             derive_scale(p, None);
         }
     });
-    assert_eq!(count_msg(&events, "窓 DPI を取得できない"), 3, "{events:?}");
+    assert_eq!(
+        count_message(&events, "窓 DPI を取得できない"),
+        3,
+        "{events:?}"
+    );
 }
