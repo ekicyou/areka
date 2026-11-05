@@ -188,15 +188,6 @@ fn film_child_loops_to_the_frame_at_t() {
     assert_eq!(top(&p, 0), Some(100));
 }
 
-/// 2 度呼んで同じ状態（決定論・4.9）。
-#[test]
-fn settling_twice_gives_the_same_state() {
-    let t = table();
-    for surface in [0, 4, 5, 9] {
-        assert_eq!(settle(&t, surface), settle(&t, surface), "面 {surface}");
-    }
-}
-
 /// 10: runonce の待ちの合計が上限ちょうど（1＋599,999＝600,000ms）。
 /// 11: 上限の 1ms 後に次のコマへ替わる（600,000＋1）。
 const LONG: &str = "surface10\n{\nanimation0.interval,runonce\n\

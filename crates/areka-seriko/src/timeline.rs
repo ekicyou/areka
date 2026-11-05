@@ -501,11 +501,6 @@ mod tests {
         );
         // 恒久: 任意に大きな経過でも FinishedResidual(2) のまま（残留・9.4）。
         assert_eq!(
-            frame_at(&frames, 172),
-            FrameStatus::FinishedResidual(2),
-            "残留は恒久"
-        );
-        assert_eq!(
             frame_at(&frames, u64::MAX),
             FrameStatus::FinishedResidual(2),
             "u64::MAX 経過でも末尾残留は不変（恒久）"

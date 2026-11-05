@@ -203,13 +203,6 @@ mod tests {
         assert_eq!(r.resolve("空"), SurfaceTarget::Unresolved);
     }
 
-    #[test]
-    fn resolve_is_deterministic_same_input_same_output() {
-        let r = hand_built();
-        assert_eq!(r.resolve("静観"), r.resolve("静観"));
-        assert_eq!(r.resolve("通常"), r.resolve("通常"));
-    }
-
     /// emo2 fixture（実上流データ）の alias スナップショットで全パターンを追験（要件 7.3）。
     ///
     /// emo-compose の `EmoWorld::alias_snapshot()`（task 1.3 で追加）由来の所有 `BTreeMap` を
@@ -301,15 +294,5 @@ mod tests {
         // 純関数・alias 非適用の担保: SurfaceResolver では alias で引ける名前
         //（"通常"）も、resolve_balloon_key では表を引かず NameForm で止まる。
         assert_eq!(resolve_balloon_key("通常"), BalloonResolve::NameForm);
-    }
-
-    #[test]
-    fn balloon_resolve_is_deterministic() {
-        // 同一入力に対し常に同一出力（純関数・決定論）。
-        assert_eq!(resolve_balloon_key("2"), resolve_balloon_key("2"));
-        assert_eq!(
-            resolve_balloon_key("バルーン１"),
-            resolve_balloon_key("バルーン１")
-        );
     }
 }

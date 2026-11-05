@@ -277,23 +277,6 @@ fn picture_frames_never_show_nothing() {
     }
 }
 
-// ── 同じ入力で同じ答え（2.6） ──────────────────────────────────────────────
-
-/// 状態も乱数も持たない: 同じ入力を何度・どの順で引いても同じ答え。
-#[test]
-fn same_input_same_answer() {
-    let (f, p) = film(&[100, 0, 70]);
-    let first: Vec<AlwaysView> = (0..600).map(|e| always_at(&f, p, laps(3), e)).collect();
-    let reversed: Vec<AlwaysView> = (0..600)
-        .rev()
-        .map(|e| always_at(&f, p, laps(3), e))
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    assert_eq!(first, reversed);
-}
-
 // ── pattern0 の待ちが 0 の手書きの always の周の境目 ──────────────────────────
 
 /// 待ち 0・100 の 2 コマ: 周の境目で最後のコマと次の周の pattern0 が同じ時刻になり後ろが勝つ

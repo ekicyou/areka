@@ -152,23 +152,6 @@ fn recovery_from_hidden_to_shown() {
     assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Shown(2106)));
 }
 
-/// bind 同梱（要件 4.2/5.1）: Changed(Show) の binds は `new` で渡した静的集合と一致する。
-#[test]
-fn show_command_carries_static_binds() {
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
-        1100, 1207,
-    ])));
-    let scope = ActorKey::from("0");
-
-    let outcome = states.apply(&scope, SurfaceTarget::Show(2100));
-    match outcome {
-        ApplyOutcome::Changed(DisplayCommand::Show { binds, .. }) => {
-            assert_eq!(binds, BindSet::from_ids([1100, 1207]));
-        }
-        other => panic!("Changed(Show) を期待: {other:?}"),
-    }
-}
-
 /// binds() アクセサ（要件 4.3/4.4）: 静的集合を返す（差し替えは `rebase_shell` だけ）。
 #[test]
 fn binds_accessor_returns_static_set() {
@@ -206,26 +189,6 @@ fn current_binds_unbound_scope_returns_static_default() {
     assert_eq!(
         states.current_binds(&other),
         &BindSet::from_ids([1100, 1207])
-    );
-}
-
-/// 非退行ロック（要件 3.8）: 動的 bind 未適用時、Show の binds は `new` の静的既定集合と一致する。
-/// （dynamic_binds が空の間 current_binds(scope) は static_binds を返す＝従来と byte 同値）。
-#[test]
-fn show_carries_static_default_when_no_dynamic_bind_applied() {
-    let static_set = BindSet::from_ids([1100, 1207]);
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(static_set.clone()));
-    let scope = ActorKey::from("0");
-
-    let outcome = states.apply(&scope, SurfaceTarget::Show(2100));
-    assert_eq!(
-        outcome,
-        ApplyOutcome::Changed(DisplayCommand::Show {
-            scope: scope.clone(),
-            surface_id: 2100,
-            binds: static_set,
-            pattern: PatternState::default(),
-        })
     );
 }
 

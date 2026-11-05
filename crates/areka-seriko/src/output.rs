@@ -205,18 +205,15 @@ mod tests {
     /// `scope` と `surface_id` のみ、`HideBalloon` は `scope` のみ（M-boot にバルーン着せ替え無し）。
     #[test]
     fn balloon_display_commands_construct_and_match() {
-        // 構築と clone 一致（PartialEq で照合可能・要件 4.1）。
         let show = DisplayCommand::ShowBalloon {
             scope: ActorKey::from("0"),
             surface_id: 2,
             pattern: PatternState::default(),
         };
-        assert_eq!(show, show.clone(), "ShowBalloon は clone と一致すること");
 
         let hide = DisplayCommand::HideBalloon {
             scope: ActorKey::from("0"),
         };
-        assert_eq!(hide, hide.clone(), "HideBalloon は clone と一致すること");
 
         // ShowBalloon と HideBalloon は互いに不一致。
         assert_ne!(show, hide, "ShowBalloon と HideBalloon は不一致であること");

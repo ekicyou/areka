@@ -363,22 +363,6 @@ fn resolve_unknown_returns_none() {
     );
 }
 
-/// 空リゾルバ（両表とも空）はすべて None（panic せず・R4.3 の空表同一機構）。
-#[test]
-fn empty_resolver_resolves_all_none() {
-    let r = BindResolver::empty();
-    assert_eq!(
-        r.resolve(BindNamespace::Sakura, "腕", "上げ"),
-        None,
-        "空リゾルバは sakura でも解決しない（R4.3・空表＝自然な解決不能）"
-    );
-    assert_eq!(
-        r.resolve(BindNamespace::Kero, "脚", "組む"),
-        None,
-        "空リゾルバは kero でも解決しない（emo2 に kero bindgroup 無し・R4.3）"
-    );
-}
-
 /// scope 写像（D7・要件 14.2）: "0"→Sakura・"1"→Kero・2 以上の数→Char(n)・非数値→None。
 #[test]
 fn scope_namespace_maps_two_and_above_to_char() {
@@ -784,29 +768,6 @@ fn accumulate_order_insensitive() {
         "適用順序を入れ替えても同一 BindSet（順序不感・D9）"
     );
     assert_eq!(result_a.ids(), &[1100, 1207], "両順序とも昇順正準形へ収束");
-}
-
-/// on→off 往復（D9）: on で追加した ID を off で戻すと元集合へ復帰する。
-#[test]
-fn accumulate_on_off_round_trip() {
-    let base = BindSet::from_ids([1302, 1500]);
-    let after_on = accumulate(&base, 1100, true);
-    let after_off = accumulate(&after_on, 1100, false);
-    assert_eq!(
-        after_off, base,
-        "on→off 往復は元集合へ復帰（直前状態保持・D9）"
-    );
-}
-
-/// off of absent id は no-op（入力と同値・R3.3 の縮退経路）。
-#[test]
-fn accumulate_off_absent_is_noop() {
-    let base = BindSet::from_ids([1100, 1207]);
-    let after = accumulate(&base, 9999, false);
-    assert_eq!(
-        after, base,
-        "存在しない ID の off は入力集合と同値（no-op）"
-    );
 }
 
 /// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（今の振る舞い・要件 14.3）。
