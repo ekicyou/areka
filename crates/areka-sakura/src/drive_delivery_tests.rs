@@ -200,12 +200,10 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
         None,
     );
 
-    let d_hello = text_playback_duration("hello"); // 0.25
-    let d_probe = text_playback_duration("probeA"); // 0.30
-    let w = Duration::from_millis(100).as_secs_f64(); // \_w[100] = 0.10
-    let at_a = d_hello + w; // probeA: 0.35
-    let at_b = at_a + d_probe + w; // probeB: 0.75
-    let at_w = at_b + d_probe + w; // world:  1.15
+    // 開始時刻は整数 ms の格子（hello 250 ms・probe 300 ms・\_w[100]）を秒にしたもの（指摘 8）。
+    let at_a = 350.0 / 1000.0; // probeA: 0.35
+    let at_b = 750.0 / 1000.0; // probeB: 0.75
+    let at_w = 1150.0 / 1000.0; // world:  1.15
 
     let recv = |rx: &mpsc::Receiver<TalkCue>| {
         rx.recv_timeout(Duration::from_secs(5))

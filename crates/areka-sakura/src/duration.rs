@@ -11,8 +11,6 @@
 //! （R3.3）。parser の `WAIT_UNIT_MS`（`\w` 単位）・emo-text の旧 `char_wait`（task 6.1 で
 //! 撤去）とは**別概念**であり、混同・統合・相互参照しない。
 
-use std::time::Duration;
-
 use crate::cluster::cluster_count;
 
 /// per-char ノミナルウェイト（ミリ秒・**唯一の定義箇所**・R3.3）。
@@ -29,8 +27,8 @@ pub const CHAR_NOMINAL_MS: u64 = 50;
 /// UTF-16 単位でも `char` でもない）。ZWJ 列のような複数スカラー値の絵文字も 1 つ 50 ms。
 ///
 /// 実時間・レイアウト・描画状態に依存せず、同一入力へ常に同一値を返す（決定的・R3.2）。
-/// FP 決定性のため整数 ms 算術＋単一変換（`Duration::from_millis(N*CHAR_NOMINAL_MS)
-/// .as_secs_f64()`）で既存の `Duration→f64` 規律（compile.rs）に揃える。
+/// FP 決定性のため整数 ms 算術＋単一変換（[`ms_to_secs`]）で、compile の開始時刻の積みと同じ
+/// 格子に乗せる（50 ms の倍では `Duration::as_secs_f64` と同じビット）。
 ///
 /// 明示ウェイト（`\_w`/`\w`）は**畳まない**（R3.4）——それらは parser が `Instruction::Wait`
 /// へ分離済みで、暗黙 per-char との合成は compile のタイムライン累積が担う（二重計上回避）。
@@ -38,13 +36,25 @@ pub const CHAR_NOMINAL_MS: u64 = 50;
 /// 事前条件: なし（任意の `&str`）。
 /// 事後条件: 戻り値は有限・非負。空文字列は 0.0。
 pub fn text_playback_duration(text: &str) -> f64 {
-    let count = cluster_count(text) as u64;
-    Duration::from_millis(count * CHAR_NOMINAL_MS).as_secs_f64()
+    ms_to_secs(text_playback_ms(text))
+}
+
+/// テキスト 1 チャンクの暗黙再生時間（整数 ms）＝`cluster_count × CHAR_NOMINAL_MS`。compile が
+/// 開始時刻を整数 ms で積むのに使う（指摘 8）。
+pub(crate) fn text_playback_ms(text: &str) -> u64 {
+    (cluster_count(text) as u64).saturating_mul(CHAR_NOMINAL_MS)
+}
+
+/// 整数 ms を秒にする唯一の式。dispatcher の Tick の式 `(now-base) as f64 / 1000.0` と同じにして、
+/// 開始時刻と Tick の時刻を同じ格子に乗せる（`Duration::as_secs_f64` は 1118 ms などで 1 ulp ずれる）。
+pub(crate) fn ms_to_secs(ms: u64) -> f64 {
+    ms as f64 / 1000.0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     /// 空文字列は再生時間 0.0（事後条件・R3.2）。
     #[test]

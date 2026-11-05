@@ -98,7 +98,7 @@
   - _Requirements: 2.1, 2.7, 3.3, 7.1_
 
 - [ ] 5. 台本の組み立て（areka-sakura compile）を直す
-- [ ] 5.1 合図の開始時刻を整数 ms で積む（T14）
+- [x] 5.1 合図の開始時刻を整数 ms で積む（T14）
   - 開始時刻を整数 ms で `saturating_add` して積み、各命令の頭で 1 回だけ秒にする。字の再生の長さの公開の関数は形も値も変えない（8）
   - `shortcut:` の注釈（1 ms 未満の待ちを足すときに見直す）を置く
   - `start_times_sit_on_the_millisecond_grid` が緑で、期待値が変わるのは design の挙げる 2 本だけ
@@ -207,3 +207,4 @@
 - 4.1: `Token::Brace` に design の `line` は置かなかった（読む人がいない）。崩れの行は当のブレスの見出しの行。ブレスの外の迷子の `}` と見出しの無い `{` は前と同じく黙って捨てる（前は誰も読まない Raw）。8.2 のかけ直しで指摘になれば、`ShellIssue` に腕を足す（Revalidation Trigger）。4 つの公開の関数はそれぞれ `parse_all` を回す（7.4 で 1 回読みへ）。
 - 4.3 への申し送り（4.1 のレビュー）: `shell/decode_tests_skeleton_tests.rs:91` の「lexer は TopLevel/Raw に落とし」の `Raw` が古い。
 - 4.2: 上限は `shell::model::RANGE_WIDTH_CAP: u64 = 8193`（シェル全体の範囲の幅の合計・`Range` だけ・番号の値と `!a-b` にはかけない）。`ShellIssue` は `model.rs` へ移った（公開の道は同じ）。箱の側も同じ上限で読み、崩れは画像の側の 1 回だけ返す。記述子が残らないブレスと `surface.alias` は箱にも並べない。
+- 5.4 への申し送り（5.1 のレビュー）: `areka-sakura/src/compile.rs` の 7・186・309 行あたりの注釈「`offset += D`」が古い（今は `offset_ms` に整数 ms で積む）。言い回しを合わせる。1 ms 未満の待ちを作る所は今は無い（`\wN` と `\_w[ms]` だけ）。

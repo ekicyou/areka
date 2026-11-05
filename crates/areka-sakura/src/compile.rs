@@ -7,7 +7,7 @@
 //!   算出して当該テキスト cue の envelope `duration` へ焼き込み、直後 `offset += D` で後続 cue の
 //!   発火時刻をテキスト再生完了後へ確定させる（R4.1/4.2/4.3）、
 //! - `Wait(Duration)` を offset へ吸収して消さず、**action を持たず duration のみを持つ第一級
-//!   `CueCommand::Wait` cue** として当該 offset へ発行し、直後 `offset += d`（`as_secs_f64()`）で
+//!   `CueCommand::Wait` cue** として当該 offset へ発行し、直後 offset を整数 ms で進めて
 //!   後続整列を進める（`\w`×50ms を再導出せず上流正規化済み `Duration` を唯一の真実とし、末尾・
 //!   単独の待ちも台本に残る自己完結した楽譜・R5.1/5.3/4.4・D3）、
 //! - 話者スコープ `SpeakerScope{n}` を現在 scope として保持し各 `Cue::actor` へ転写（R5）、
@@ -15,7 +15,8 @@
 //! - 内容 cue を持つ台本の先頭へ **`ClearAll` cue を単一前置**（`start_time=0.0`・`duration=0.0`）し、
 //!   新 talk が全バルーン空から始まるようにする（#6・R6.1/6.2）、
 //!
-//! して発火時刻付きの [`CueSheet`] を構築する。
+//! して発火時刻付きの [`CueSheet`] を構築する。offset は整数 ms で積み、各命令の頭で 1 回だけ
+//! Tick と同じ式 `ms as f64 / 1000.0` で秒にする（秒の足し算は ms の格子から外れる・指摘 8）。
 //!
 //! # 先頭待ちの保存（R2.4）
 //!
@@ -139,7 +140,8 @@ fn scan<'a>(
     vars: &SystemVarSnapshot,
     mut tracer: Option<&mut Tracer<'_>>,
 ) -> CompiledTalk {
-    let mut offset: f64 = 0.0;
+    // 開始時刻は整数 ms で積み、各命令の頭で 1 回だけ秒にする（秒の足し算は ms の格子から外れる・指摘 8）。
+    let mut offset_ms: u64 = 0;
     let mut scope: u32 = 0;
     let mut cues: Vec<Cue> = Vec::new();
     // 終端命令なしで末尾到達なら通常終了（R6.3）。End/Quit 検出で確定・走査打切り。
@@ -161,6 +163,7 @@ fn scan<'a>(
     let mut anchor_unclosed = false;
 
     for (index, instruction) in instructions.enumerate() {
+        let offset = crate::duration::ms_to_secs(offset_ms);
         if let Some(t) = tracer.as_deref_mut() {
             t.head(index, cues.len());
         }
@@ -171,7 +174,9 @@ fn scan<'a>(
             Instruction::Wait(duration) => {
                 let d = duration.as_secs_f64();
                 cues.push(emit(scope, offset, d, CueCommand::Wait));
-                offset += d;
+                // shortcut: 待ちは整数 ms（parser が from_millis で作る）、1 ms 未満の Duration は切り捨て、そういう待ちを足すときに見直す
+                let ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
+                offset_ms = offset_ms.saturating_add(ms);
             }
             // scope 状態更新（cue を生成しない・R5.1）。転写のみ。
             Instruction::SpeakerScope { n } => {
@@ -182,7 +187,7 @@ fn scan<'a>(
             Instruction::Text(text) => {
                 let d = crate::duration::text_playback_duration(text);
                 cues.push(emit(scope, offset, d, CueCommand::Text(text.clone())));
-                offset += d;
+                offset_ms = offset_ms.saturating_add(crate::duration::text_playback_ms(text));
             }
             // サーフェス切替（不透明転写・→Shell・R3.1/3.2）。引数を解釈・変換しない。瞬時（duration 0）。
             Instruction::Surface(arg) => {
@@ -309,8 +314,8 @@ fn scan<'a>(
                     crate::sysvar::ResolvedVar::PassThrough(s) => s,
                 };
                 let d = crate::duration::text_playback_duration(&expanded);
+                offset_ms = offset_ms.saturating_add(crate::duration::text_playback_ms(&expanded));
                 cues.push(emit(scope, offset, d, CueCommand::Text(expanded)));
-                offset += d;
             }
             // 文字装飾 `\f[key,args...]`（→汎用キャリア・R2.3/2.4/14.4）。キーごとに typed variant を
             // 新設せず、`\!` と同じ 1 本の汎用キャリア（名前 `FONT_TAG_CARRIER`）へ載せる。引数
@@ -418,6 +423,7 @@ fn scan<'a>(
         }
     }
 
+    let offset = crate::duration::ms_to_secs(offset_ms);
     // 閉じの無いアンカーは走査の終わり（`\e`・`\-`・末尾）で閉じる（anchor-tag-canon 要件 1.8）。
     // 選択待ちの区切りを出す台本でも、閉じはその前に並ぶ。アンカーは下の区切りの判定に関わらない
     // （`Choice` だけを数える・要件 2.5）。

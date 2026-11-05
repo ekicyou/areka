@@ -52,7 +52,7 @@ fn leading_wait_is_preserved_not_collapsed() {
 
 /// 暗黙 per-char D と明示ウェイトの累積で発火時刻が単調に進む（R2.2/2.4/4.4）。
 /// テキスト D 焼き込み・Wait 第一級化の後も、明示ウェイト累積が退行しない（4.4 非退行）。
-/// 期待値は SAME `text_playback_duration`/`as_secs_f64()` 累積で計算（IEEE-754 加算を一致させる）。
+/// duration の期待値は SAME `text_playback_duration`/`as_secs_f64()`、開始時刻は ms の格子で計算する。
 #[test]
 fn wait_accumulation_is_monotonic() {
     let compiled = compile(&[
@@ -71,11 +71,12 @@ fn wait_accumulation_is_monotonic() {
     let d_b = text_playback_duration("b");
     let w100 = Duration::from_millis(100).as_secs_f64();
 
+    // 開始時刻は整数 ms で積んでから秒にした値（秒の足し算ではない・指摘 8）。
     let t_text_a = 0.0_f64;
-    let t_wait1 = t_text_a + d_a; // Text("a") の再生完了後
-    let t_text_b = t_wait1 + w50; // 明示 \_w[50] の累積
-    let t_wait2 = t_text_b + d_b; // Text("b") の再生完了後
-    let t_emote = t_wait2 + w100; // 明示 \_w[100] の累積
+    let t_wait1 = 50.0 / 1000.0; // Text("a") の再生完了後（50 ms）
+    let t_text_b = 100.0 / 1000.0; // 明示 \_w[50] の累積
+    let t_wait2 = 150.0 / 1000.0; // Text("b") の再生完了後
+    let t_emote = 250.0 / 1000.0; // 明示 \_w[100] の累積
 
     // Text("a")
     assert_eq!(command_of(&cues[0]), &CueCommand::Text("a".into()));
@@ -102,6 +103,36 @@ fn wait_accumulation_is_monotonic() {
     for pair in cues.windows(2) {
         assert!(pair[0].start_time <= pair[1].start_time);
     }
+}
+
+/// 開始時刻は整数 ms を積んでから 1 回だけ秒にする（指摘 8・要件 7.1）。`a\s[0]b\s[0]c\s[1]` の
+/// 面の合図は、秒の足し算（0.05+0.05+0.05＝0.15000000000000002）でなく、Tick の式と同じ
+/// `ms as f64 / 1000.0` のビットに乗る。
+#[test]
+fn start_times_sit_on_the_millisecond_grid() {
+    let compiled = compile(&[
+        Instruction::Text("a".into()),
+        Instruction::Surface(SurfaceArg::new("0".into())),
+        Instruction::Text("b".into()),
+        Instruction::Surface(SurfaceArg::new("0".into())),
+        Instruction::Text("c".into()),
+        Instruction::Surface(SurfaceArg::new("1".into())),
+    ]);
+    let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+    let emote_starts: Vec<u64> = cues
+        .iter()
+        .filter(|cue| matches!(command_of(cue), CueCommand::Emote { .. }))
+        .map(|cue| cue.start_time.to_bits())
+        .collect();
+    let grid: Vec<u64> = [50_u64, 100, 150]
+        .iter()
+        .map(|&ms| (ms as f64 / 1000.0).to_bits())
+        .collect();
+    assert_eq!(
+        emote_starts, grid,
+        "面の合図の開始時刻が ms の格子から外れている"
+    );
+    assert_eq!(cues[5].start_time.to_bits(), (150_f64 / 1000.0).to_bits());
 }
 
 /// 末尾到達で end=Ended（R6.3・task 3.1 の既定）。
