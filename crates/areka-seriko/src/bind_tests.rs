@@ -516,6 +516,29 @@ fn category_parts_follow_written_order() {
     );
 }
 
+/// 番号から名前への引き: 宣言の無い番号は `None`。同じ番号に名前が 2 つあれば表の順（カテゴリ・パーツの
+/// 名の順）で最初の名前を返す（`帽子` は `服` より後に書いたが名の順では先）。同じキーの 2 行目は前の行を
+/// 上書きするので、重なりは番号の綴りの違い（`08` と `8`）で書く。
+#[test]
+fn name_of_undeclared_is_none_and_overlap_takes_first_in_table_order() {
+    let r = BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup7.name,服,X\r\n\
+         sakura.bindgroup08.name,服,Z\r\n\
+         sakura.bindgroup8.name,帽子,Y\r\n",
+    ));
+    assert_eq!(r.resolve(BindNamespace::Sakura, "帽子", "Y"), Some(8));
+    assert_eq!(r.resolve(BindNamespace::Sakura, "服", "Z"), Some(8));
+    assert_eq!(r.name_of(BindNamespace::Sakura, 7), Some(("服", "X")));
+    assert_eq!(r.name_of(BindNamespace::Sakura, 9), None, "宣言の無い番号");
+    assert_eq!(
+        r.name_of(BindNamespace::Kero, 7),
+        None,
+        "ほかのスコープの宣言"
+    );
+    assert_eq!(r.name_of(BindNamespace::Sakura, 8), Some(("帽子", "Y")));
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Task 3.2: bind コマンド引数の類別（parse_bind_directive）純関数。
 // Observable = 正常形（Apply）/トグル形（Toggle）/カテゴリ単位形（CategoryWide）/

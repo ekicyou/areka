@@ -309,3 +309,20 @@ fn acts_through_mark_never_moves_back() {
     );
     assert_eq!(p.playing(0), Some((0, Some(600))));
 }
+
+/// `always` を印のある状態で続けて回す: 周の終わりのコマ（累積の待ち＝周期）は次の周の頭の時刻に来るが、
+/// 境い目の刻みで 1 度だけ当たり、続く刻みでは当て直さない。
+#[test]
+fn always_lap_end_frame_is_hit_exactly_once_across_ticks() {
+    let endless = LoopTrigger::Always {
+        period_ms: NonZeroU64::new(100).unwrap(),
+        laps: None,
+    };
+    let table = [anim(0, endless, vec![draw(10, 50), mv(50, 1, 1)])];
+    let mut p = plays(&[(0, 0)]);
+    let shifts: Vec<_> = [150, 199, 200, 250, 300]
+        .into_iter()
+        .map(|now| run(&table, &mut p, now).shift.map(|s| s.0))
+        .collect();
+    assert_eq!(shifts, vec![Some(100), None, Some(200), None, Some(300)]);
+}

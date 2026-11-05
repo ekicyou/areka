@@ -409,3 +409,29 @@ fn shell_fallback_outcomes_log_one_warn_each() {
         "{logs}"
     );
 }
+
+/// 役者を止めた後の差し替えの依頼は受け手が無いので偽を返す（呼び手が `error!` を残す）。
+#[test]
+fn replace_after_actor_stopped_returns_false() {
+    let (sink, handle) = spawn_seriko(
+        resolver_of("通常", 2100),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100])),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        MockSurfaceOutput::new(),
+    );
+    sink.close().expect("Close を送れること");
+    handle.join().expect("Close で正常終了する");
+
+    assert!(!sink.send_replace(
+        SerikoReplace::Shell {
+            epoch: 1,
+            resolver: resolver_of("通常", 2100),
+            static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([1100])),
+            bind_resolver: BindResolver::empty(),
+            shell_table: AnimationTable::empty(),
+            fallback: crate::ShellSurfaceFallback::default(),
+        },
+        no_facts()
+    ));
+}

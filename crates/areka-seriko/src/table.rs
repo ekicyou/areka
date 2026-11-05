@@ -906,6 +906,68 @@ mod tests {
         }
     }
 
+    /// 型で組んだ `periodic,0`・`talk,0` は採らず、語ごとに `warn!` を 1 行出す（読み手は 0 を型へ写さないが
+    /// 型は 0 を持てる・要件 1.5・7.2）。
+    #[test]
+    fn zero_periodic_and_talk_are_warned_and_not_recorded() {
+        let one = || vec![pat(0, "overlay", 2106, 0, 0, 0)];
+        let s = surface_with(
+            10,
+            vec![
+                anim(0, Interval::Periodic { secs: 0 }, one()),
+                anim(1, Interval::Talk { n: 0 }, one()),
+            ],
+        );
+        let world = world_of(vec![s]);
+        let mut table = None;
+        let logs = capture_text(|| table = Some(AnimationTable::from_world(&world)));
+        assert!(table.unwrap().animations(10).is_empty(), "0 は採らない");
+        assert_eq!(logs.matches("数値が無効ゆえ非採録").count(), 2, "{logs}");
+        assert!(
+            logs.contains("periodic,0") && logs.contains("talk,0"),
+            "{logs}"
+        );
+    }
+
+    /// 動く絵の子の待ちの合計が 0 なら子の行を採らず、パスを添えて `warn!` を 1 行出す（周期を作れない）。
+    #[test]
+    fn film_with_zero_total_wait_is_warned_and_not_recorded() {
+        let mut world = EmoWorld::build(&areka_parsers::shell::parse(
+            "surface0\n{\nelement0,overlay,still.apng,0,0\n}\n",
+        ));
+        let w = world.world_mut();
+        let mut q = w.query::<&mut areka_emo_compose::SurfaceMaster>();
+        for mut master in q.iter_mut(w) {
+            master.elements[0].kind = areka_emo_compose::ElementKind::Film(FilmId(3));
+        }
+        let sheet = FilmSheet {
+            id: FilmId(3),
+            path: "still.apng".to_string(),
+            frames: vec![3, 4],
+            delays_ms: vec![0, 0],
+            laps: None,
+            original: (2, 2),
+            rest: 0,
+        };
+        let mut table = None;
+        let logs = capture_text(|| {
+            table = Some(AnimationTable::from_world_and_films(
+                &world,
+                std::iter::once(&sheet),
+                &[],
+            ))
+        });
+        let table = table.unwrap();
+        assert!(table.part_animations(PartKey::Film(FilmId(3))).is_empty());
+        assert!(!table.has_animated_parts() && !table.is_continuous());
+        assert_eq!(
+            logs.matches("待ち時間の合計が 0 ゆえ非採録").count(),
+            1,
+            "{logs}"
+        );
+        assert!(logs.contains("still.apng"), "{logs}");
+    }
+
     /// `AnimationTable` がスレッド越え所有に耐える（`Send`・design Postconditions）。
     #[test]
     fn table_is_send() {

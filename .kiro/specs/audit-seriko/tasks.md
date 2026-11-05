@@ -104,7 +104,7 @@
   - 完了: 各テストが緑で、確かめる相手（番人・`debug!`・余分な animation・刻みの道・欄の形）を外すと赤になることを 1 つずつ確かめた記録がある
   - _Boundary: looper_tests.rs・actor_bind_noevent_tests.rs・table.rs・table_calls_check_tests.rs・table_calls_dot_sakura_tests.rs_
   - _Requirements: 4.1, 4.2, 8.1_
-- [ ] 5.2 試されていない分岐にテストを足す（指摘 8）
+- [x] 5.2 試されていない分岐にテストを足す（指摘 8）
   - 本番は変えず 6 本足す: 間隔 0 の警告と、動く絵の子の待ち 0 の警告（どちらも `table.rs` の中のテスト）、名前の引きの未宣言と重なり（`bind_tests.rs`）、スコープ 2 の名前の着せ替えの排他と `mustselect`（`bind_named_tests.rs`）、`always` の前の周の終わりのコマを 1 度だけ当てる（`calls_tests.rs`）、役者を止めた後の差し替えが偽（`actor_replace_tests.rs`）
   - `table.rs` は足した後も 1,000 行未満であることを確かめる（越えるなら兄弟のテストファイルへ置く）
   - 完了: 6 本が緑で、試す分岐を外すと赤になることを 1 本ずつ確かめた記録がある
@@ -155,3 +155,4 @@
 - 4.5（着手 HEAD `a1e49f73`）: 消す前のツリー全体の rg は、全体／areka-seriko の中の順に accumulate 18／18・SETTLE_TICK_MS 6／6・lap_of 14／14・always_at 63／61・AlwaysView 24／24・LotteryBoundary 16／16・ScopeState 74／71。外れの分は、always_at が `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` の文中の名前、ScopeState が `crates/areka/src/placement/spawn_cleanup_tests.rs` の同じ名の別の型で、使い手ではない。7 つを `pub(crate)` にし（`bind.rs` は `accumulate` の可視性だけ）、`cargo build --workspace --all-targets` は通った。`PartClocks::advance` は get_mut が None のときだけ写して入れる match 1 つにした。
 - 4.6（着手 HEAD `9dae36f6`）: `SETTLE_MAX_TICKS = 37_500` を置き、終わりの時刻を `wait_ms.min(上限)` にした（上限の内は丸めない）。越えたら `warn!`（欄は `surface_id`・`max_ticks`・`wait_ms`）を 1 行出す。テストを 2 本足して 555 件。上限ちょうどの面は warn 0 行で 101、上限を 1ms 越える面は warn 1 行で 100。`until = wait_ms` に戻すと warn が 0 行で赤、`min` だけ外すと `Some(101)` で赤になった。
 - 5.1（着手 HEAD `d29e7b41`）: 5 本を直して 555 件のまま。赤の確かめは次のとおり。① `non_monotonic_tick_is_ignored` のコマは 3 枚（`(2106,0),(2110,100),(2120,1000)`）にした。design の指摘 1 の行は「コマ 2 枚」だが、2 枚だと 2150 で再生が終わって消え、番人が無くても 2050 で何も出ないので、指令 0 件の確かめが何も見ていないことになる。番人を外すと 2050 で 2106 へ巻き戻る `Show` が出て赤。② `debug!` を消すと赤。③ surface50 に Random を 1 本足すと 4≠3 で赤。④ 刻みの範囲を空にすると赤。⑤ は新しいテストを足さず、もとからある較正のテスト `word_warn_filter_catches_an_unreadable_target` に入れた。`method.rs` の `%name` を `?name` にすると赤。摂動で触った範囲の外のファイル（`areka-emo-compose/src/method.rs` など）は HEAD のバイトに戻した。
+- 5.2（着手 HEAD `3f3febb3`）: テストを 6 本足して 561 件。本番のコードは HEAD のバイトのまま。⑴⑵ は読み手から届かない分岐なので、design のとおり型で組んだ。⑶ の重なりは、同じキーの 2 行目が前の行を上書きするため、`bindgroup08` と `bindgroup8` の綴りの違いで作った。⑷ には、本体側の同じ名前（`sakura` の 1303）を引かないことの確かめも足した。どれも、試す分岐を外すと赤になることを確かめた。申し送り（6.1 の audit で見る）: `calls.rs` の `(lo / period).saturating_sub(1)` の `-1` は外しても緑のまま。累積の待ちは周期以下なので、前の周のコマは窓に入りえない。上のコメント「1 つ前の周の終わりのコマも窓に入りうる」も事実と合わない。

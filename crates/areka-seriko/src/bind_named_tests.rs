@@ -81,3 +81,31 @@ fn mustselect_off_is_kept() {
     assert_eq!(result, NamedBindResult::MustSelectKept { id: 1500 });
     assert_eq!(states.current_binds(&scope).ids(), &[1500]);
 }
+
+/// スコープ 2（`char2`）も自分の表で当てる: 既定のカテゴリは排他で、`mustselect` の OFF は外さない
+/// （要件 14.2）。本体側の同じ名前は引かない。
+#[test]
+fn scope_two_applies_exclusive_and_keeps_mustselect() {
+    let r = BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1303.name,目,閉じ\r\n\
+         char2.bindgroup41.name,目,開き\r\n\
+         char2.bindgroup43.name,目,閉じ\r\n\
+         char2.bindgroup50.name,服,制服\r\n\
+         char2.bindoption0.group,服,mustselect\r\n",
+    ));
+    let mut states = ScopeStates::new(DefaultBinds::uniform(build_static_bindset(&[41, 50])));
+    let scope = ActorKey::from("2");
+    states.apply(&scope, SurfaceTarget::Show(10));
+
+    let result = apply_named_bind(&mut states, &r, &scope, "目", "閉じ", true);
+    assert!(
+        matches!(result, NamedBindResult::Applied { id: 43, .. }),
+        "本体側の 1303 でなく char2 の 43 を引く: {result:?}"
+    );
+    assert_eq!(states.current_binds(&scope).ids(), &[43, 50], "41 が外れる");
+
+    let result = apply_named_bind(&mut states, &r, &scope, "服", "制服", false);
+    assert_eq!(result, NamedBindResult::MustSelectKept { id: 50 });
+    assert_eq!(states.current_binds(&scope).ids(), &[43, 50]);
+}
