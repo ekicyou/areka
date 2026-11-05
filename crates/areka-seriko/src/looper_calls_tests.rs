@@ -6,11 +6,11 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, started, switch};
+use super::test_support::{cell, count, started, switch};
 use super::tests::counting_rng;
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::test_support::{empty_states, scope, table_of};
+use crate::test_support::{capture_logs, empty_states, scope, table_of};
 
 /// 絵の面（中身は空）。
 const SURFACES: &str = "surface100\n{\n}\nsurface101\n{\n}\nsurface110\n{\n}\n\
@@ -542,16 +542,24 @@ fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
     let (picker, bounds) = pick_rng(0);
     let mut rt = LoopRuntime::new(config(SELF_CALL, lottery, picker));
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    rt.on_tick(1100, &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
-    assert_eq!(bounds.lock().unwrap().len(), 1);
-    rt.on_tick(2030, &mut states); // 前の回の start,0 と次の回が 2030 で重なる。
+    let logs = capture_logs(|| {
+        rt.on_tick(0, &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+        rt.on_tick(1100, &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
+        assert_eq!(bounds.lock().unwrap().len(), 1);
+        rt.on_tick(2030, &mut states); // 前の回の start,0 と次の回が 2030 で重なる。
+    });
     assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
     assert_eq!(
         bounds.lock().unwrap().len(),
         2,
         "2030 の頭の選びは 1 度だけ"
+    );
+    // 呼び出しが始めた再生を「再生中」と見て見送らず、2030 の回も鳴らした記録を残す。
+    assert_eq!(
+        count(&logs, "seriko: trigger periodic を鳴らした"),
+        2,
+        "{logs:?}"
     );
 }
 

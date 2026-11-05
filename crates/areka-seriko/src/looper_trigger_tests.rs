@@ -620,6 +620,59 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
     assert_eq!(started(&rt, Slot::Balloon, 0), None);
 }
 
+/// 見え始めの時刻にもう再生中だった `runonce` は、その回を見送って印を付ける。再生が終わって表から
+/// 外れた後に、過ぎた見え始めの時刻で鳴り直して働きのコマ（`start,2`）を 2 度当てることは無い
+/// （窓が閉じている間に抽選の `start,0` が 0 を 1000 に始め、窓は 1050 に開く・
+/// areka-P0-seriko-trigger-intervals 要件 2.1・2.2・5.3）。
+#[test]
+fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
+    const PLAYING: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,overlay,301,100,0,0\n\
+        animation0.pattern1,start,2\n\
+        animation0.pattern2,overlay,-1,400,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,401,0,0,0\n\
+        animation1.pattern1,start,0\n\
+        animation2.interval,never\n\
+        animation2.pattern0,overlay,111,0,0,0\n\
+        animation2.pattern1,overlay,112,5000,0,0\n}\n";
+    let (rng, _probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(SerikoLoopConfig {
+        shell_table: AnimationTable::empty(),
+        balloon_tables: BTreeMap::from([(scope(), table_of(PLAYING))]),
+        rng,
+        pick_rng: crate::seeded_rng(0),
+    });
+    let mut states = empty_states();
+    states.apply_balloon(&scope(), SurfaceTarget::Show(0));
+    let note = |states: &mut ScopeStates, open: bool| {
+        states.note_stage(&StageNote::Balloon {
+            scope: scope(),
+            open,
+            face: 0,
+            generation: 0,
+        });
+    };
+    note(&mut states, false);
+    let logs = capture_logs(|| {
+        rt.on_tick(0, &mut states);
+        rt.on_tick(1000, &mut states); // 抽選の 1 が鳴り、start,0 が 0 を 1000 に始める。
+        assert_eq!(started(&rt, Slot::Balloon, 0), Some(1000), "前提");
+        note(&mut states, true);
+        for now in [1050, 1200, 1600, 1700] {
+            rt.on_tick(now, &mut states); // 0 の start,2 は 1100・0 は 1500 に終わる。
+        }
+    });
+    assert_eq!(
+        started(&rt, Slot::Balloon, 2),
+        Some(1100),
+        "start,2 は 1 度だけ"
+    );
+    assert_eq!(started(&rt, Slot::Balloon, 0), None, "鳴り直さない");
+    assert_eq!(count(&logs, "trigger runonce を鳴らした"), 0, "{logs:?}");
+}
+
 /// 記録: 面に入ったら `debug!` を 1 件、`runonce`・`periodic` の開始は `info!`。始めない経路（境目の前・
 /// 面を離れた・3 語の無い面）は何も記録しない（要件 7.5）。
 #[test]

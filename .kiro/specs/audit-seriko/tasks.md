@@ -206,3 +206,4 @@
   - A6＝T2・T3（刻みと合図の順・looper.rs は 993 行なので兄弟へ分ける）
   - B3＝T5・T6・T8〜T12（テストの確かめと説明）
   - C3＝T13〜T15（テストの整理）
+- 6.1 組 A5（T1・T4・T7）: T1 は `Armed::commit` が runonce に印を付けてから再生中かを見るようにした。見送った回は後から鳴らさない。完了 spec `areka-P0-seriko-trigger-intervals` の要件 2.1・5.3 と ukadoc の「サーフェスに切り替わった瞬間に1回のみ再生。」に合う。同じ spec の design.md:513 の「`playing_at(since)` が真なら入れずに None（構えた直後は再生中でありえない）」は、前提が崩れていて古い。完了した spec の文書なので直していない。T4 は talk の開始を `wall_ms(glyph).max(since)` にした。T7 は一番上のテストに「鳴らした」の記録が 2 件であることの確かめを足した。部品の側は、もとからあるテストが守っている。期待を変えたテストは `runonce_polled_while_playing_keeps_its_one_shot` → `runonce_polled_while_playing_is_skipped_for_good`（Some(100)→None）の 1 本だけ。talk のテスト 1 本は、偽の時計の矛盾を直すために入力だけ変えた。テストは 567 件。

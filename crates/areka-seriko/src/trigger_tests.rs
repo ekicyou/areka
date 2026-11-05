@@ -109,14 +109,15 @@ fn runonce_fires_once_and_starts_at_visible_since() {
     assert_eq!(poll(&mut armed, &b, 9016, |_| false, None), None);
 }
 
-/// 再生中の判定は印を付けない（鳴らしていないものを鳴らしたことにしない）。
+/// 見え始めの時刻に再生中だった回は見送り、印を付ける（再生が終わった後に、過ぎた見え始めの時刻で
+/// 鳴り直さない・`periodic` が見送った周を後から鳴らさないのと同じ・要件 2.1・5.3）。
 #[test]
-fn runonce_polled_while_playing_keeps_its_one_shot() {
+fn runonce_polled_while_playing_is_skipped_for_good() {
     let mut armed = armed_at(100);
     let a = runonce(1);
 
     assert_eq!(poll(&mut armed, &a, 100, |_| true, None), None);
-    assert_eq!(poll(&mut armed, &a, 116, |_| false, None), Some(100));
+    assert_eq!(poll(&mut armed, &a, 116, |_| false, None), None);
 }
 
 // ── periodic ─────────────────────────────────────────────────────────────
@@ -340,7 +341,8 @@ fn talk_counts_from_the_glyphs_visible_when_armed_and_recounts_on_show() {
     );
 
     armed.hide();
-    armed.show(5000, Some(8));
+    // 8 文字目（序数 7）が現れた 1350 に現し直す。
+    armed.show(1350, Some(8));
     assert_eq!(armed.talk_window_bounds(), Some((8, 8)));
     assert_eq!(
         talk_tick(&mut armed, &t, 10, false, &every_50ms),

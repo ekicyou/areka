@@ -16,7 +16,8 @@
 //!   起点になる。`runonce` の印は残る（開き直しでは鳴らない・要件 3.2・5.9）。`talk` の数えは隠すと
 //!   捨て、現すときに渡された数から数え直す。
 //! - `talk`: 数え始めから数値分の文字ごとの区切りを、刻み 1 回分の文字の窓（[`TalkWindow`]）が
-//!   越えた判定で鳴る。開始の時刻は区切りの文字が現れた時刻そのもの（判定の時刻ではない）。
+//!   越えた判定で鳴る。開始の時刻は区切りの文字が現れた時刻そのもの（判定の時刻ではない・見え始め
+//!   より前なら見え始め）。
 //!   1 回の窓で区切りを 2 つ以上越えても最新の 1 つだけ（要件 4.1・4.5・4.6）。数えは判定の後に
 //!   [`Armed::advance_talk`] で進め、再生中に越えた区切りは後から鳴らない（要件 4.7）。
 
@@ -103,8 +104,8 @@ impl Armed {
     /// 今の判定で `anim` を始めるなら、何時に始まったことにするかを返す（再生中かは見ず、状態も変えない）。
     ///
     /// 隠れている間は始めない。返すのは判定の時刻 `now_ms` でなく開始の時刻（`runonce` は見え始め・
-    /// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻）。呼び手は開始の時刻の順に並べ、その時刻
-    /// までの働きのコマを当ててから、その時刻に再生中かを測って [`Armed::commit`] で決める。その時刻
+    /// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、見え始めより前なら見え始め）。
+    /// 呼び手は開始の時刻の順に並べ、その時刻までの働きのコマを当ててから、その時刻に再生中かを測って [`Armed::commit`] で決める。その時刻
     /// ちょうどに終わった再生は再生中でないので、長さが周期ちょうどの animation も毎周鳴り、遅れた刻みが
     /// 見た境目も、その時刻に再生中だったなら飛ばす（要件 3.1・3.3・3.5・4.7）。`talk` は `talk`（文字の
     /// 窓）が無ければ始めず、数えはここでは進めない（窓 1 つを一番上と部品の何本もの animation が読むので、
@@ -135,8 +136,9 @@ impl Armed {
                 }
                 // 越えた区切りのうち最新の文字の序数（今見えている数を超えない）。前の判定までに
                 // 数え済みなら鳴らし済みか見送り済み。今見えている数が減った刻みも、ここで外れる。
+                // 見え始めより前には始めない（その刻みで新しく見えた部品は、見えた時刻に始まる）。
                 let glyph = window.base + crossed * every - 1;
-                (glyph >= window.prev_seen).then(|| (window.wall_ms)(glyph))
+                (glyph >= window.prev_seen).then(|| (window.wall_ms)(glyph).max(since))
             }
             LoopTrigger::Random { .. }
             | LoopTrigger::BindRandom { .. }
@@ -145,8 +147,9 @@ impl Armed {
         }
     }
 
-    /// [`Armed::next_start`] が返した `at` で決める（`playing` はその時刻に同じ animation が再生中か）。`periodic` は再生中でも周の
-    /// 数えを進め（飛ばした周が後から鳴らない）、再生中でなければ `runonce` に印を付けて真を返す。
+    /// [`Armed::next_start`] が返した `at` で決める（`playing` はその時刻に同じ animation が再生中か）。
+    /// 再生中でなければ真を返す。再生中でも `periodic` は周の数えを進め、`runonce` は印を付ける（見送った
+    /// 回は後から鳴らない＝過ぎた時刻で鳴り直して働きのコマを 2 度当てない・要件 2.1・5.3）。
     pub(crate) fn commit(&mut self, anim: &LoopAnimation, at: u64, playing: bool) -> bool {
         if let (LoopTrigger::Periodic { period_ms }, Some(since)) =
             (anim.trigger, self.visible_since)
@@ -154,13 +157,10 @@ impl Armed {
             self.last_lap
                 .insert(anim.id, at.saturating_sub(since) / period_ms.get());
         }
-        if playing {
-            return false;
-        }
         if anim.trigger == LoopTrigger::Runonce {
             self.fired.insert(anim.id);
         }
-        true
+        !playing
     }
 
     /// `talk` の判定の後に、数えた序数を進める（面の窓 1 つにつき刻み 1 回）。
