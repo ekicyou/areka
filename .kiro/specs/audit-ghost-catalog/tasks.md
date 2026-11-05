@@ -53,6 +53,7 @@
   - #8 の既に在る宛先の中のリンク（ジャンクションを含む）をたどらず、そのパスを添えた段の失敗にする
   - #62 の doc と確かめの 1 行、#63 の書き換えの拒みの待ちをテストのときだけ 0 にする差し替え（本番の 2 秒は変えない）
   - #71 の読み手の無い `charset_declared` を消し、縛る assert と範囲の外の `crates/areka/src/install/judge_tests.rs` の 1 か所を直す
+  - `manifest_tests.rs` の charset の先読みのテスト（302〜329 行目あたり）は、`audit-parsers-sakura` が自分の最後の段で期待を「宣言が使われる」へ直す（2026-11-05 の知らせ）。ここで `charset_declared` の assert を消すためにそのテストを書き換えるなら、書き換える前に同 spec へ伝言で知らせる。期待の中身（宣言が使われるか）は変えない
   - 完了の状態: `two_companions_naming_the_same_folder_refuse_the_archive`・`a_link_inside_an_existing_destination_fails_the_stage_with_its_path` が緑で、掴みっぱなしのテストが 2 秒待たずに同じ結果で通り、`cargo test -p areka` の install のテストも緑
   - _Requirements: 3.1, 3.2, 4.1, 5.2, 6.2, 9.1, 9.6, 9.7, 9.8, 9.9_
 
@@ -162,6 +163,7 @@
   - `main` を取り込み、parsers の小文字の表と `areka-sakura` の警告のテストが入っているかを確かめる。入っていなければ、ここで止めて開発者へ報告する（自前の写しを残したまま完了しない）
   - #22 の自前の小文字の表を消して、一覧とシェル名の読みの両方を parsers の表へ乗り換える。#79 が 11 で済んでいなければ、ここで自分の側の写しを消す
   - 先方の `resolve` の撤去と行がぶつかっていれば、取り込みの中で合わせる
+  - 乗り換えの差: parsers の小文字の表は、同じ鍵が大小の綴りで 2 回出たとき後の行が勝つ（今の自前の版は表の順で決まる）。この差で期待が変わるテストがあれば、後の行が勝つ形へ直す
   - 完了の状態: `catalog.rs` に自前の小文字の表が無く、`shell_name_key_is_read_case_insensitively` が乗り換えの後も緑で、`dispatcher_choice_timeout_tests.rs` に移した警告のテストが無い
   - _Depends: 11, 12_
   - _Requirements: 6.1, 9.10, 9.14_
