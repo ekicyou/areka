@@ -267,5 +267,41 @@
 3. ukadoc の外形の定義（指摘 5・`extent-element-offset` の議題 1 と同じ）。
 4. 指摘 8 の前計算の効き目（`tools/perf/perf-loop.ps1` で、動く絵のあるシェルの合成の時間と確保の回数を前後で測る）。
 
+## 11. 設計の段の調べと決め（2026-11-05・`/kiro-spec-design -y`）
+
+- 使ったもの: `kiro-spec-design` の決まり（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と設計のひな形。ponytail（いちばん小さな完全な直し）の物差し。発見の段は「既存の仕組みの拡張」として軽い型（light）で行い、下請けは使わず進行役がコードを読んだ。
+- 測った時点: 枝 `claude/kiro-start-audit-emo-compose-cb01ad`（`56720f79`）。`88eb0a43` から後にこのクレートと `log-capture-kit` への変更は 0（`git log` で確かめた）＝3 節の行の番号は今も使える。ただし次の行は 3 節の番号がずれていた（設計ではこちらを使う）。
+  - `plan_extent.rs`（202 行のファイル）: 外形の `as u32` は 45〜46 行、画像の原寸の枝は 116〜128 行、着せ替えの id の列は 136〜143 行、描画メソッドの語の確かめは 162〜165 行、再帰は 68〜190 行（3 節の 138-142・222-223・163-285・207-223・257-259 は誤り）。指摘 5 の「element定義の X,Y を足さない」は 127〜128 行。
+  - ほか（`fold.rs`・`boxes.rs`・`composed.rs`・`blit.rs`・`blit_rect.rs`・`plan.rs`・`plan_bounds.rs`・`hit_import.rs`・`nesting.rs`・`bind_steps.rs`・`method.rs`・`world.rs`）は 3 節の番号どおり。
+
+### 11.1 調べたこと
+
+| 問い | 分かったこと | 設計への効き目 |
+|---|---|---|
+| GPU の面の最大寸の定数がツリーに在るか | 無い（`16384`・`MAX_TEXTURE`・`D3D11_REQ_*`・`GetMaximumBitmapSize` を grep して 0 件）。GPU の機器は `crates/wintf/src/ecs/graphics/core.rs` の `create_device_3d` が機能水準を指定せずハードウェアで作る。合成の絵は `areka-emo-present/src/display.rs` が `CreateBitmap` で原寸のまま上げる | 上限は機能水準 11 の一辺 16,384 を定数で写す（このクレートは `windows` に依存しない）。議題 2 |
+| 広がりの予算に使える元からの頭打ち | 見つからない。近いもの: `areka-emo-atlas/src/limits.rs` の動く絵の画素の上限（2^28 画素）・`pack.rs` の頁 2048・`transition_judge_verdict.rs` の 1 フレーム 16,667 µs。ukadoc にも入れ子の深さ・数の決まりは無い（`insert` は「insert先でのinsert（入れ子）も可能」と書く＝https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#insert ） | 予算の値は議題 1。推す案は 1 フレームの長さから測って決める |
+| シェルの大きさから予算を導けるか | 面の数 × 参照の行の数は、30 段の菱形（31 × 60＝1,860）は切るが、ダミーの面を 10 万足すと 10^10 に膨らむ。読み込みの 2 か所（`reaches`・`regions_of`）は根ごと・辺ごとに全体をたどるので、長い鎖（10 万）で二乗＝10^10 になり、この予算では覆えない | 議題 1 の案イの欠点として書いた |
+| 外形を前計算すると読み込みが重くなるか | 前計算は全部の面を根に外形をたどる＝ `shell_bounds` が今すでに行っている形と同じ。長い鎖では二乗になるが、表 1 回の予算の範囲に入れるので覆える | 外形の表は `bind_atlas` の最後で作り、予算は表 1 回の範囲 |
+| 指摘 4 の直しの最小の場所 | 食い違いの根は `BindSteps::build` が `bind+random` に pattern0 の手順を作ること。`NestTable` はその手順を読むだけ・合成は早い戻りで使わない | `bind_steps.rs` の 1 か所を直せば `nesting.rs` のコードは変わらない（説明だけ） |
+| 追記の範囲引きに要る形 | `SurfaceIndex` は `HashMap`（範囲引きができない）。このクレートの外の使い手は 0（grep）。`SurfaceImages` は `BTreeMap` | `SurfaceIndex` を `BTreeMap` に替える（議題 4） |
+| 範囲の外で「未存在」の記録を数えるテスト | `crates/areka/src/placement/measure_bake_log_tests.rs` は単一の番号の追記だけを使う | 範囲の中の無い番号の `warn!` を出さなくしても数は変わらない（議題 5） |
+| `ComposeError` を名指しで比べる範囲の外 | `EmptyComposition` だけ（`areka-emo-present/src/balloon.rs` ほか・`crates/areka/src/emo2_boot/assets.rs`・`offline_dump_tests.rs`・examples） | 足しても壊れない |
+| 指摘 4 で期待が変わる seriko のテスト | `areka-seriko/src/parts_tests.rs` の `bind+random` を持つテストは 245・400〜460・576・777 行の付近（3 節の 395〜460 より広い） | `audit-seriko` との申し合わせの範囲を広げて書いた |
+| 入れ子の再帰の在りか | 命令列（`plan.rs` の `flatten_surface` ⇄ `push_static_element_ops` ⇄ `push_contribution` ⇄ `bind_steps::push_bind_contribution`・`Level::flatten`）・外形・シェルの外形・当たり判定の持ち込み・見える部品・`claim_from` の 6 か所。`reaches` はもとから反復 | 6 か所を明示のスタックに。予算は広がりが指数になりうる 5 つの範囲（見える部品は各面 1 度なので要らない） |
+
+### 11.2 合わせ方（design-synthesis）
+
+- **まとめ（一般化）**: 深さと広がりの 2 つの危なさは 6 か所の走査で同じ形をしている。予算は 1 つの型（`budget.rs` の `Budget`）にまとめ、6 か所が同じ口で数える。走査そのものは、たどる辺と積み荷が違うので 1 つにまとめない。
+- **作るか借りるか**: 依存を足さない約束なので、明示のスタックは `Vec` で書く（`stacker` などのクレートで深い再帰を逃がす手は取らない＝依存が増え、広がりも防げない）。上限の値は `windows` の定数を引かず写す（依存を増やさない）。
+- **削る**: 当たり判定の 2 関数・`fold_shell`・`scale_test_support.rs`・`stride` 欄・`blit_rect.rs` の式の写し・`merge_animations`（指摘 9 で SSP が波括弧と同じなら）を消す。`PlanScratch` 以外の新しい型は足さない。外形の表は `BindSteps` と同じ形のリソースで、合成器は絵を持たない約束のまま。
+- **案の選び方**: ギャップ分析 5 節の案 C。命令列の走査だけ作業場を 1 つの型にまとめる（明示のスタックにすると、まとめないと引数が増えるため）。
+
+### 11.3 危うさ
+
+- 命令列の走査を明示のスタックにすると、命令の並びを崩す恐れがある。今の命令列のテスト（`plan_ops_tests.rs`・`plan_nesting_tests.rs`・`plan_bind_tests.rs`・golden）を形を変えずに先に緑にしておき、直しの前後で同じ並びを確かめる。
+- 1 つの段の中の `contains` の二乗（animation の数）は指摘に無い。かけ直しの audit が指したら直す（要件 4.2）。
+- 予算の値は議題 1 の決めを待つ。決まるまで 3 の予算のタスクは値を置けない（走査の明示のスタックは先に入れられる）。
+- 指摘 9 は開発者の許可が要る測りを待つ。許可が出なければ規則を書き残す形で閉じる。
+
 ---
 読まなかった所は無い（範囲の 97 ファイルを全部読んだ）。テストもビルドも走らせていない（「今のテストは緑」は読みからの前提）。
